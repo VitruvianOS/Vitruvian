@@ -174,7 +174,7 @@ void	debugger(const char *message)
 
 
 status_t
-set_timezone(char *timezone)
+set_timezone(const char *timezone)
 {
 	/* FIXME */
 	return B_ERROR;

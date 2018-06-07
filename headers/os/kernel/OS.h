@@ -278,13 +278,19 @@ extern status_t		_get_team_usage_info(team_id team, int32 who,
 
 /* Threads */
 
+//TODO needed?
+typedef int32 (*thread_func) (void *);
+
 typedef enum {
 	B_THREAD_RUNNING	= 1,
 	B_THREAD_READY,
 	B_THREAD_RECEIVING,
 	B_THREAD_ASLEEP,
 	B_THREAD_SUSPENDED,
-	B_THREAD_WAITING
+	B_THREAD_WAITING,
+
+	// TODO: needed?
+	B_THREAD_SPAWNED
 } thread_state;
 
 typedef struct {
@@ -298,6 +304,14 @@ typedef struct {
 	bigtime_t		kernel_time;
 	void			*stack_base;
 	void			*stack_end;
+
+	/* Cosmoe additions */
+	thread_func		func;
+	void			*data;
+	pthread_t		pth;
+	int32			code;
+	thread_id		sender;
+	void			*buffer;
 } thread_info;
 
 #define B_IDLE_PRIORITY					0

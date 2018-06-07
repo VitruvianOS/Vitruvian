@@ -43,8 +43,8 @@ DIR* opendirfd(int fd)
 	** is all set up for us.  If an OS does not have an int representing
 	** the file descriptor as the first argument, things could get ugly
 	*/
-	if (dir)
-		((DIR_STRUCT*)dir)->fd = fd;
+	//if (dir)
+	//	((DIR_STRUCT*)dir)->fd = fd;
 
 	return dir;
 }

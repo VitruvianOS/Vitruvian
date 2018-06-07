@@ -776,14 +776,14 @@ port_count(port_id id)
 	return count;
 }
 
-status_t
+ssize_t
 read_port(port_id port, int32 *msgCode, void *msgBuffer, size_t bufferSize)
 {
 	return read_port_etc(port, msgCode, msgBuffer, bufferSize, 0, 0);
 }
 
 
-status_t
+ssize_t
 read_port_etc(port_id id, int32 *_msgCode, void *msgBuffer, size_t bufferSize,
 	uint32 flags, bigtime_t timeout)
 {

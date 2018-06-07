@@ -6,11 +6,6 @@
 # broken apps:
 # cterm desktop
 
-SUBPROJECTS =	bedate \
-				calc \
-				pulse \
-				testharness \
-				guido \
-				osutils
+SUBPROJECTS = osutils
 
 include @top_srcdir@/Makefile.common

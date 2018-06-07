@@ -3,11 +3,10 @@
 # Part of the Cosmoe project
 # http://www.cosmoe.com
 
-SUBPROJECTS =	headers \
+# NOTE: Order matters
+SUBPROJECTS =	\
+				headers \
 				src/kits \
-				src/servers/app \
-				src/servers/registrar \
-				src/apps \
-				src/add-ons
+				src/apps
 
 include Makefile.common

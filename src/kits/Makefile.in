@@ -1,0 +1,97 @@
+prefix=@prefix@
+libdir=${prefix}/lib
+
+CFLAGS   = -Wall -Wpointer-arith -Wcast-align -Wsign-compare -Wno-multichar -c -g -O2 -pipe `cat @top_srcdir@/cosmoe.specs` -fPIC
+CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-dtor -fexceptions
+
+LIBNAME = libcosmoe.@LIBEXT@
+
+VPATH += ./ app interface storage support translation kernel interface/BTextView storage/mime storage/sniffer
+
+CC	= @CC@
+
+OBJS =	Alert.o AppDefs.o AppFileInfo.o Application.o AppServerLink.o \
+			AppMisc.o Archivable.o area.o AreaLink.o atomic.o \
+		Beep.o Bitmap.o BitmapStream.o BlockCache.o BMCPrivate.o Box.o BufferIO.o \
+			Button.o ByteOrder.o \
+		CheckBox.o Clipboard.o ColorControl.o ColorUtils.o Control.o Cursor.o \
+		DataBuffer.o DataIO.o Deskbar.o Directory.o Dragger.o \
+		Entry.o EntryList.o \
+		File.o FindDirectory.o Flattenable.o Font.o fs.o FuncTranslator.o \
+		GraphicsDefs.o \
+		Handler.o \
+		image.o InitTerminateLibBe.o InlineInput.o Input.o \
+			InterfaceDefs.o Invoker.o \
+		kernel_interface.POSIX.o \
+		LineBuffer.o LinkMsgReader.o LinkMsgSender.o List.o Locker.o Looper.o LooperList.o \
+		Message.o Messenger.o MessageQueue.o MessageUtils.o MessageRunner.o \
+			MessageBody.o MessageField.o MessageFilter.o Menu.o MenuBar.o \
+			MenuField.o MenuItem.o Mime.o MimeType.o misc.o \
+		Node.o NodeInfo.o NodeMonitor.o \
+		OffsetFile.o \
+		parsedate.o Path.o Picture.o PictureButton.o Point.o Polygon.o \
+		PopUpMenu.o PortLink.o PrivateScreen.o PropertyInfo.o port.o \
+		Query.o QueryPredicate.o \
+		RadioButton.o real_time_clock.o Rect.o Region.o RegionSupport.o \
+			RegistrarDefs.o RegistrarThread.o RegistrarThreadManager.o \
+			Resources.o ResourcesContainer.o ResourceFile.o \
+			ResourceItem.o ResourceStrings.o Roster.o RosterPrivate.o \
+		Screen.o ScrollBar.o ScrollView.o sem.o \
+			Shape.o Shelf.o Slider.o Statable.o StatusBar.o StopWatch.o \
+			storage_support.o String.o @STRCASESTROBJ@ \
+			StringView.o StyleBuffer.o SymLink.o  \
+		TabView.o TextControl.o TextGapBuffer.o TextInput.o TextView.o \
+			thread.o TokenSpace.o TPicture.o translator.o TranslationUtils.o \
+			TranslatorRoster.o  \
+		UndoBuffer.o \
+		View.o Volume.o VolumeRoster.o \
+		WidthBuffer.o Window.o \
+		ZombieReplicantView.o \
+		\
+		AssociatedTypes.o Database.o SnifferRules.o \
+		CreateAppMetaMimeThread.o  database_support.o  Supertype.o \
+		InstalledTypes.o SupportingApps.o database_access.o \
+		MimeUpdateThread.o UpdateMimeInfoThread.o \
+		\
+		CharStream.o Err.o Pattern.o Range.o RPatternList.o DisjList.o \
+		Parser.o PatternList.o RPattern.o Rule.o
+
+
+OBJDIR	:= objs
+
+include @top_srcdir@/makefile.rules
+
+all :	$(OBJDIR) $(OBJDIR)/$(LIBNAME)
+
+$(OBJDIR):
+	mkdir $(OBJDIR)
+
+$(OBJDIR)/$(LIBNAME): $(OBJS)
+	$(CC) @SHAREDLINK@ $(OBJS) -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
+
+install: $(OBJDIR)/$(LIBNAME) $(libdir)
+	cp -f $< $(libdir)/$(LIBNAME)
+
+uninstall:
+	rm -f $(libdir)/$(LIBNAME)
+
+$(libdir):
+	mkdir -p $(libdir)
+
+doc:
+	-rm -R docs/*
+	doxygen libcosmoe.dox
+
+deps: $(OBJDIR) $(DEPS)
+
+clean:
+	rm -f $(OBJS) $(OBJDIR)/$(LIBNAME) $(OBJDIR)/*.d *~ */*~ core*
+	rm -rf docs/*
+
+distclean: clean
+	rm -f Makefile
+	rm -rf autom4te.cache
+
+-include $(OBJDIR)/*.d
+
+.PHONY: clean distclean deps doc install uninstall all

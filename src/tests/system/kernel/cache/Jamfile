@@ -1,0 +1,32 @@
+SubDir HAIKU_TOP src tests system kernel cache ;
+
+UsePrivateSystemHeaders ;
+UsePrivateKernelHeaders ;
+
+SEARCH_SOURCE += [ FDirName $(HAIKU_TOP) src system kernel cache ] ;
+SEARCH_SOURCE += [ FDirName $(HAIKU_TOP) src system kernel util ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src system kernel cache ] ;
+
+StdBinCommands
+	cache_control.cpp
+	: libroot.so ;
+
+SimpleTest BlockMapTest :
+	BlockMapTest.cpp
+	BlockMap.cpp
+	khash.cpp
+	: libkernelland_emu.so ;
+
+SimpleTest block_cache_test :
+	block_cache_test.cpp
+	: libkernelland_emu.so ;
+
+SimpleTest file_map_test :
+	file_map_test.cpp
+	file_map.cpp
+	: libkernelland_emu.so ;
+
+SimpleTest pages_io_test :
+	pages_io_test.cpp
+;
+

@@ -1,0 +1,39 @@
+SubDir HAIKU_TOP src tests system kernel file_corruption fs userland ;
+
+
+UsePrivateKernelHeaders ;
+UsePrivateHeaders shared ;
+
+UseHeaders [ FDirName $(SUBDIR) $(DOTDOT) $(DOTDOT) ] ;
+
+UseHeaders [ FDirName $(HAIKU_TOP) src add-ons kernel file_systems ] ;
+	# We use packagefs's DebugSupport.h header, but we don't want to add that
+	# header to avoid clashes with other headers.
+
+
+DEFINES += DEBUG_APP="\\\"checksumfs\\\"" ;
+
+
+SEARCH_SOURCE += [ FDirName $(SUBDIR) $(DOTDOT) ] ;
+
+
+SubDirC++Flags -Werror ;
+
+
+Addon <userland>checksumfs :
+	$(HAIKU_CHECKSUM_FS_SOURCES)
+
+	# from packagefs
+	DebugSupport.cpp
+
+	# from src/kits/shared
+	SHA256.cpp
+
+	: libuserlandfs_haiku_kernel.so $(TARGET_LIBSUPC++)
+;
+
+
+SEARCH on [ FGristFiles DebugSupport.cpp ]
+	= [ FDirName $(HAIKU_TOP) src add-ons kernel file_systems packagefs ] ;
+SEARCH on [ FGristFiles SHA256.cpp ]
+	= [ FDirName $(HAIKU_TOP) src kits shared ] ;

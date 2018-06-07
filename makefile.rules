@@ -1,0 +1,42 @@
+
+#
+# Makefile standard rules and default targets
+#
+# This makefile is supposed to be included by the main
+# makefile after the following variables have been set:
+#
+# OBJDIR   - The directory where all temporary files will be placed.
+# CFLAGS   - Options given to the compiler when compiling C files
+# CPPFLAGS - Options given to the compiler when compiling C++ files
+# OBJS     - List of object files.
+#
+# The $(OBJDIR) varaiable will be prepended to all elements in
+# the $(OBJS) list and then a new variable named DEPS will be
+# initiated with all the elements from $(OBJS) with all ".o" prefixes
+# replaced with ".d".
+
+
+OBJS	:= $(addprefix $(OBJDIR)/,$(OBJS))
+DEPS	:= $(addsuffix .d, $(foreach name, $(OBJS), $(basename $(name))))
+
+$(OBJDIR)/%.o : %.c
+	$(CC) $(CFLAGS) $< -o $@
+$(OBJDIR)/%.o : %.cpp
+	$(CC) $(CPPFLAGS) $< -o $@
+$(OBJDIR)/%.o : %.cc
+	$(CC) $(CPPFLAGS) $< -o $@
+$(OBJDIR)/%.o : %.s
+	$(CC) $(AFLAGS) -x assembler-with-cpp $< -o $@
+$(OBJDIR)/%.o : %.S
+	$(CC) $(CFLAGS) -x assembler-with-cpp $< -o $@
+
+
+$(OBJDIR)/%.d : %.c
+	$(CC) $(CFLAGS) -M $< | sed 's%^\(.*\):%$(OBJDIR)\/\1:%' > $@
+$(OBJDIR)/%.d : %.cpp
+	$(CC) $(CPPFLAGS) -M $< | sed 's%^\(.*\):%$(OBJDIR)\/\1:%' > $@
+$(OBJDIR)/%.d : %.s
+	touch $@
+$(OBJDIR)/%.d : %.S
+	touch $@
+

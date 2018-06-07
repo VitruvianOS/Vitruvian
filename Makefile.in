@@ -1,0 +1,13 @@
+# Recursively build the Cosmoe source tree
+# Copyright 2002-2004, Bill Hayden
+# Part of the Cosmoe project
+# http://www.cosmoe.com
+
+SUBPROJECTS =	headers \
+				src/kits \
+				src/servers/app \
+				src/servers/registrar \
+				src/apps \
+				src/add-ons
+
+include Makefile.common

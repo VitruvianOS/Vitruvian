@@ -1,0 +1,88 @@
+SubDir HAIKU_TOP src tests kits support ;
+
+SetSubDirSupportedPlatformsBeOSCompatible ;
+AddSubDirSupportedPlatforms libbe_test ;
+
+# Let Jam know where to find some of our source files
+SEARCH_SOURCE += [ FDirName $(SUBDIR) barchivable ] ;
+SEARCH_SOURCE += [ FDirName $(SUBDIR) bautolock ] ;
+SEARCH_SOURCE += [ FDirName $(SUBDIR) blocker ] ;
+SEARCH_SOURCE += [ FDirName $(SUBDIR) bmemoryio ] ;
+SEARCH_SOURCE += [ FDirName $(SUBDIR) bstring ] ;
+SEARCH_SOURCE += [ FDirName $(SUBDIR) bblockcache ] ;
+
+UnitTestLib libsupporttest.so
+	: SupportKitTestAddon.cpp
+
+		ByteOrderTest.cpp
+
+		# BArchivable
+		ArchivableTest.cpp
+		BArchivableTester.cpp
+		FindInstantiationFuncTester.cpp
+		InstantiateObjectTester.cpp
+		LocalTestObject.cpp
+		ValidateInstantiationTester.cpp
+		
+		# BAutolock
+		AutolockTest.cpp
+		AutolockLockerTest.cpp
+		AutolockLooperTest.cpp
+
+		# BLocker (all in ./blocker)
+		LockerTest.cpp
+		BenaphoreLockCountTest1.cpp
+		ConcurrencyTest1.cpp
+		ConcurrencyTest2.cpp
+		ConstructionTest1.cpp
+		DestructionTest1.cpp
+		DestructionTest2.cpp
+		LockerTestCase.cpp
+		SemaphoreLockCountTest1.cpp
+
+		# BMemoryIO
+		MemoryIOTest.cpp
+		ConstTest.cpp
+		SeekTest.cpp
+		WriteTest.cpp
+		ReadTest.cpp
+		SetSizeTest.cpp
+
+		# BMallocIO
+		MallocIOTest.cpp
+		MallocSeekTest.cpp
+		MallocWriteTest.cpp
+		MallocBufferLengthTest.cpp
+		
+		#BString
+		StringTest.cpp
+		StringConstructionTest.cpp
+		StringAccessTest.cpp
+		StringAssignTest.cpp
+		StringAppendTest.cpp
+		StringSubCopyTest.cpp
+		StringPrependTest.cpp
+		StringCaseTest.cpp
+		StringInsertTest.cpp
+		StringEscapeTest.cpp
+		StringRemoveTest.cpp
+		StringCompareTest.cpp
+		StringFormatAppendTest.cpp
+		StringCharAccessTest.cpp
+		StringSearchTest.cpp
+		StringReplaceTest.cpp
+
+		#BBlockCache
+		BlockCacheTest.cpp
+		BlockCacheExerciseTest.cpp
+		BlockCacheConcurrencyTest.cpp
+
+	: be $(TARGET_LIBSTDC++) libsupporttest_RemoteTestObject.so
+;
+
+SimpleTest string_utf8_tests : string_utf8_tests.cpp : be ;
+
+SubInclude HAIKU_TOP src tests kits support barchivable ;
+#SubInclude HAIKU_TOP src tests kits support bautolock ;
+#SubInclude HAIKU_TOP src tests kits support blocker ;
+

@@ -12,6 +12,8 @@
 #include <BeBuild.h>
 #include <Errors.h>
 
+//TODO remove it
+#include <config/types.h>
 #include <inttypes.h>
 #include <sys/types.h>
 

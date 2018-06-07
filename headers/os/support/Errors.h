@@ -123,6 +123,7 @@
 #	define B_FROM_POSIX_ERROR(error)	(error)
 #endif
 
+#if 0
 #define B_POSIX_ENOMEM	B_TO_POSIX_ERROR(B_POSIX_ERROR_BASE + 0)
 #define E2BIG			B_TO_POSIX_ERROR(B_POSIX_ERROR_BASE + 1)
 #define ECHILD			B_TO_POSIX_ERROR(B_POSIX_ERROR_BASE + 2)
@@ -184,6 +185,7 @@
 #define ETIME			B_TO_POSIX_ERROR(B_POSIX_ERROR_BASE + 58)
 #define ETXTBSY			B_TO_POSIX_ERROR(B_POSIX_ERROR_BASE + 59)
 #define ENOATTR			B_TO_POSIX_ERROR(B_POSIX_ERROR_BASE + 60)
+#endif
 
 /* B_NO_MEMORY (0x80000000) can't be negated, so it needs special handling */
 #ifdef B_USE_POSITIVE_POSIX_ERRORS
@@ -192,6 +194,8 @@
 #	define ENOMEM		B_NO_MEMORY
 #endif
 
+//TODO fix this
+#if 0
 /* POSIX errors that can be mapped to BeOS error codes */
 #define EACCES			B_TO_POSIX_ERROR(B_PERMISSION_DENIED)
 #define EINTR			B_TO_POSIX_ERROR(B_INTERRUPTED)
@@ -217,6 +221,7 @@
 #define ELOOP			B_TO_POSIX_ERROR(B_LINK_LIMIT)
 #define ENOEXEC			B_TO_POSIX_ERROR(B_NOT_AN_EXECUTABLE)
 #define EPIPE			B_TO_POSIX_ERROR(B_BUSTED_PIPE)
+#endif
 
 /* new error codes that can be mapped to POSIX errors */
 #define	B_BUFFER_OVERFLOW			B_FROM_POSIX_ERROR(EOVERFLOW)

@@ -7,6 +7,8 @@
 
 #include <Beep.h>
 
+// TODO
+#if 0
 #include <stdio.h>
 
 #include <DataExchange.h>
@@ -58,3 +60,4 @@ add_system_beep_event(const char* name, uint32 flags)
 	return status;
 }
 
+#endif

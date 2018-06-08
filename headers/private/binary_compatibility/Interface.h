@@ -7,7 +7,7 @@
 #define _BINARY_COMPATIBILITY_INTERFACE_H_
 
 
-#include <private/binary_compatibility/Global.h>
+#include <binary_compatibility/Global.h>
 
 
 struct perform_data_min_size {

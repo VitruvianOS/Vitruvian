@@ -1,16 +1,47 @@
-/*
- * Copyright 2001-2007, Haiku Inc. All Rights Reserved.
- * Distributed under the terms of the MIT License.
- *
- * Authors:
- *      Erik Jaesler (erik@cgsoftware.com)
- */
+//------------------------------------------------------------------------------
+//	Copyright (c) 2001-2002, OpenBeOS
+//
+//	Permission is hereby granted, free of charge, to any person obtaining a
+//	copy of this software and associated documentation files (the "Software"),
+//	to deal in the Software without restriction, including without limitation
+//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
+//	and/or sell copies of the Software, and to permit persons to whom the
+//	Software is furnished to do so, subject to the following conditions:
+//
+//	The above copyright notice and this permission notice shall be included in
+//	all copies or substantial portions of the Software.
+//
+//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+//	DEALINGS IN THE SOFTWARE.
+//
+//	File Name:		AppDefs.h
+//	Author:			Erik Jaesler (erik@cgsoftware.com)
+//	Description:	Message codes and the global cursors.
+//------------------------------------------------------------------------------
+
 #ifndef _APP_DEFS_H
 #define _APP_DEFS_H
 
+// Standard Includes -----------------------------------------------------------
 
+// System Includes -------------------------------------------------------------
 #include <BeBuild.h>
 
+// Project Includes ------------------------------------------------------------
+
+// Local Includes --------------------------------------------------------------
+
+// Local Defines ---------------------------------------------------------------
+
+// Globals ---------------------------------------------------------------------
+
+
+// Global Cursors --------------------------------------------------------------
 
 // Old-style cursors
 extern const unsigned char B_HAND_CURSOR[];
@@ -23,8 +54,8 @@ extern const BCursor *B_CURSOR_SYSTEM_DEFAULT;
 extern const BCursor *B_CURSOR_I_BEAM;
 #endif
 
+// System Message Codes --------------------------------------------------------
 
-// System Message Codes
 enum {
 	B_ABOUT_REQUESTED			= '_ABR',
 	B_WINDOW_ACTIVATED			= '_ACT',
@@ -33,18 +64,15 @@ enum {
 	B_QUIT_REQUESTED 			= '_QRQ',
 	B_CLOSE_REQUESTED 			= '_QRQ',	// Obsolete; use B_QUIT_REQUESTED
 	B_CANCEL					= '_CNC',
-	B_INVALIDATE				= '_IVL',
 	B_KEY_DOWN 					= '_KYD',
 	B_KEY_UP 					= '_KYU',
 	B_UNMAPPED_KEY_DOWN 		= '_UKD',
 	B_UNMAPPED_KEY_UP 			= '_UKU',
-	B_LAYOUT_WINDOW				= '_LAY',
 	B_MODIFIERS_CHANGED			= '_MCH',
 	B_MINIMIZE					= '_WMN',
 	B_MOUSE_DOWN 				= '_MDN',
 	B_MOUSE_MOVED 				= '_MMV',
 	B_MOUSE_ENTER_EXIT			= '_MEX',
-	B_MOUSE_IDLE				= '_MSI',
 	B_MOUSE_UP 					= '_MUP',
 	B_MOUSE_WHEEL_CHANGED		= '_MWC',
 	B_OPEN_IN_WORKSPACE			= '_OWS',
@@ -56,8 +84,6 @@ enum {
 	B_ACQUIRE_OVERLAY_LOCK		= '_AOV',
 	B_SCREEN_CHANGED 			= '_SCH',
 	B_VALUE_CHANGED 			= '_VCH',
-	B_TRANSLATOR_ADDED			= '_ART',
-	B_TRANSLATOR_REMOVED		= '_RRT',
 	B_VIEW_MOVED 				= '_VMV',
 	B_VIEW_RESIZED 				= '_VRS',
 	B_WINDOW_MOVED 				= '_WMV',
@@ -65,10 +91,8 @@ enum {
 	B_WORKSPACES_CHANGED		= '_WCG',
 	B_WORKSPACE_ACTIVATED		= '_WAC',
 	B_ZOOM						= '_WZM',
-	_COLORS_UPDATED				= '_CLU',
-		// Currently internal-use only. Later, public as B_COLORS_UPDATED
-	_FONTS_UPDATED				= '_FNU',
-		// Currently internal-use only. Later, public as B_FONTS_UPDATED
+	_COLORS_UPDATED				= '_CLU',	// Currently internal-use only. Later, public as B_COLORS_UPDATED
+	_FONTS_UPDATED				= '_FNU',	// Currently internal-use only. Later, public as B_FONTS_UPDATED
 	_APP_MENU_					= '_AMN',
 	_BROWSER_MENUS_				= '_BRM',
 	_MENU_EVENT_ 				= '_MEV',
@@ -90,7 +114,8 @@ enum {
 };
 
 
-// Other Commands
+// Other Commands --------------------------------------------------------------
+
 enum {
 	B_SET_PROPERTY				= 'PSET',
 	B_GET_PROPERTY				= 'PGET',
@@ -132,5 +157,14 @@ enum {
 
 	// Media Kit reserves all reserved codes starting in 'TRI'
 };
+//------------------------------------------------------------------------------
 
 #endif	// _APP_DEFS_H
+
+/*
+ * $Log $
+ *
+ * $Id  $
+ *
+ */
+

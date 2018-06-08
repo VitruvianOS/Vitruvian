@@ -1,15 +1,16 @@
 prefix=@prefix@
 libdir=${prefix}/lib
 
-CFLAGS   = -include build/BeOSBuildCompatibility.h \
+CFLAGS = -include build/BeOSBuildCompatibility.h \
 -Wall -Wpointer-arith -Wcast-align -Wsign-compare -Wno-multichar \
 -c -g -O2 -pipe `cat @top_srcdir@/cosmoe.specs` -fPIC
 
-CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-dtor -fexceptions
+#TODO remove -fpermissive
+CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-dtor -fexceptions -fpermissive
 
 LIBNAME = libcosmoe.@LIBEXT@
 
-VPATH += ./ support kernel storage
+VPATH += ./ support kernel storage storage/mime storage/sniffer app interface interface/BTextView shared
 
 KERNEL_KIT_OBJS = area.o direntfd.o misc.o	real_time_clock.o \
 atomic.o fs.o parsedate.o sem.o dirent.o image.o \
@@ -24,14 +25,50 @@ Directory.o Node.o Resources.o Entry.o NodeInfo.o	ResourceStrings.o \
 EntryList.o NodeMonitor.o File.o OffsetFile.o Statable.o \
 FilePanel.o Path.o storage_support.o FindDirectory.o Query.o \
 SymLink.o kernel_interface.POSIX.o  QueryPredicate.o	Volume.o \
-mime ResourceFile.o VolumeRoster.o Mime.o ResourceItem.o
+ResourceFile.o VolumeRoster.o Mime.o ResourceItem.o \
+AssociatedTypes.o	     database_support.o  Supertype.o \
+CreateAppMetaMimeThread.o  InstalledTypes.o    SupportingApps.o \
+database_access.o	     MimeUpdateThread.o  UpdateMimeInfoThread.o \
+Database.o		     SnifferRules.o CharStream.o	Err.o \
+Pattern.o      Range.o	   RPatternList.o \
+DisjList.o	Parser.o  PatternList.o  RPattern.o  Rule.o
+
+APP_KIT_OBJS = AppDefs.o Looper.o PortQueue.o \
+Application.o LooperList.o PropertyInfo.o \
+AppMisc.o	MessageBody.o RegistrarDefs.o \
+AppServerLink.o Message.o RegistrarThread.o \
+AreaLink.o MessageField.o RegistrarThreadManager.o \
+Clipboard.o MessageFilter.o Roster.o \
+Cursor.o MessageQueue.o	RosterPrivate.o \
+Handler.o MessageRunner.o \
+InitTerminateLibBe.o MessageUtils.o Session.o \
+Invoker.o Messenger.o TokenSpace.o \
+LinkMsgReader.o PortLink.o \
+LinkMsgSender.o PortMessage.o
+
+INTERFACE_KIT_OBJS = Alert.o ColorUtils.o ListView.o Point.o ScrollBar.o TextControl.o \
+Bitmap.o Control.o MenuBar.o Polygon.o ScrollView.o TextInput.o \
+BMCPrivate.o Deskbar.o Menu.o PopUpMenu.o Shape.o TPicture.o \
+Box.o Dragger.o MenuField.o PrivateScreen.o Shelf.o View.o \
+Font.o MenuItem.o RadioButton.o Slider.o Window.o \
+Button.o GraphicsDefs.o OptionControl.o Rect.o StatusBar.o ZombieReplicantView.o \
+CheckBox.o Input.o OutlineListView.o Region.o \
+ClientFontList.o InterfaceDefs.o PictureButton.o StringView.o \
+ColorControl.o ListItem.o Picture.o Screen.o TabView.o \
+InlineInput.o TextView.o WidthBuffer.o \
+LineBuffer.o TextGapBuffer.o UndoBuffer.o StyleBuffer.o RegionSupport.o
+
+SHARED_KIT_OBJS = DataBuffer.o
 
 
-CC	= @CC@
+CC = @CC@
 
 OBJS += $(KERNEL_KIT_OBJS)
 OBJS += $(SUPPORT_KIT_OBJS)
 OBJS += $(STORAGE_KIT_OBJS)
+OBJS += $(APP_KIT_OBJS)
+OBJS += $(INTERFACE_KIT_OBJS)
+OBJS += $(SHARED_KIT_OBJS)
 
 OBJDIR	:= objs
 

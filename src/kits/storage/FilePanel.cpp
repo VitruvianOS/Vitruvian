@@ -133,22 +133,22 @@ BFilePanel::BFilePanel( file_panel_mode   nMode,
 			}
 		}
 	}
-	m_pcDirView      = new DirectoryView( Bounds(), cPath );
+	//m_pcDirView      = new DirectoryView( Bounds(), cPath );
 	m_pcPathView     = new BTextView( BRect(0,0,1,1), "path_edit", BRect(0,0,1,1), 0 );
 	m_pcCancelButton = new BButton( BRect(0,0,1,1), "cancel", pzCancelLabel, new BMessage( ID_CANCEL ) );
 	m_pcOkButton     = new BButton( BRect(0,0,1,1), "ok", pzOkLabel, new BMessage( ID_OK ) );
 
-	AddChild( m_pcDirView );
+	//AddChild( m_pcDirView );
 	AddChild( m_pcPathView );
 	AddChild( m_pcCancelButton );
 	AddChild( m_pcOkButton );
 
-	m_pcDirView->SetMultiSelect( bMultiSelect );
-	m_pcDirView->SetSelChangeMsg( new BMessage( ID_SEL_CHANGED ) );
-	m_pcDirView->SetInvokeMsg( new BMessage( ID_INVOKED ) );
-	m_pcDirView->SetDirChangeMsg( new BMessage( ID_PATH_CHANGED ) );
-	m_pcDirView->MakeFocus();
-	SetTitle( m_pcDirView->GetPath().c_str() );
+	//m_pcDirView->SetMultiSelect( bMultiSelect );
+	//m_pcDirView->SetSelChangeMsg( new BMessage( ID_SEL_CHANGED ) );
+	//m_pcDirView->SetInvokeMsg( new BMessage( ID_INVOKED ) );
+	//m_pcDirView->SetDirChangeMsg( new BMessage( ID_PATH_CHANGED ) );
+	//m_pcDirView->MakeFocus();
+	//SetTitle( m_pcDirView->GetPath().c_str() );
 
 	Unlock();
 }
@@ -207,11 +207,11 @@ void BFilePanel::MessageReceived( BMessage* pcMessage )
 {
 	switch( pcMessage->what )
 	{
-		case ID_PATH_CHANGED:
-			SetTitle( m_pcDirView->GetPath().c_str() );
-			break;
+		//case ID_PATH_CHANGED:
+		//	SetTitle( m_pcDirView->GetPath().c_str() );
+		//	break;
 
-		case ID_SEL_CHANGED:
+		/*case ID_SEL_CHANGED:
 		{
 			int nSel = m_pcDirView->GetFirstSelected();
 			if ( nSel >= 0 )
@@ -225,14 +225,14 @@ void BFilePanel::MessageReceived( BMessage* pcMessage )
 //                m_pcPathView->SetText( "" );
 //            }
 			break;
-		}
+		}*/
 		case ID_ALERT: // User has answered the "Are you sure..." requester
 		{
 			int32 nButton;
 			if ( pcMessage->FindInt32( "which", &nButton ) != 0 )
 			{
-				dbprintf( "BFilePanel::MessageReceived() message from alert "
-						"requester does not contain a 'which' element!\n" );
+				//dbprintf( "BFilePanel::MessageReceived() message from alert "
+				//		"requester does not contain a 'which' element!\n" );
 				break;
 			}
 
@@ -252,13 +252,13 @@ void BFilePanel::MessageReceived( BMessage* pcMessage )
 			}
 			else
 			{
-				pcMsg = new BMessage( (m_nMode == B_OPEN_PANEL) ? M_LOAD_REQUESTED : M_SAVE_REQUESTED );
+				//pcMsg = new BMessage( (m_nMode == B_OPEN_PANEL) ? M_LOAD_REQUESTED : M_SAVE_REQUESTED );
 			}
 			pcMsg->AddPointer( "source", this );
 
 			if ( m_nMode == B_OPEN_PANEL )
 			{
-				for ( int i = m_pcDirView->GetFirstSelected() ; i <= m_pcDirView->GetLastSelected() ; ++i ) {
+				/*for ( int i = m_pcDirView->GetFirstSelected() ; i <= m_pcDirView->GetLastSelected() ; ++i ) {
 					if ( m_pcDirView->IsSelected( i ) == false )
 					{
 						continue;
@@ -267,15 +267,15 @@ void BFilePanel::MessageReceived( BMessage* pcMessage )
 					cPath.Append( m_pcDirView->GetFile(i)->GetName().c_str() );
 					pcMsg->AddString( "file/path", cPath.Path() );
 				}
-				m_pcTarget->SendMessage( pcMsg );
+				m_pcTarget->SendMessage( pcMsg );*/
 				Hide();
 			}
 			else
 			{
-				BPath cPath( m_pcDirView->GetPath().c_str() );
-				cPath.Append( m_pcPathView->Text() );
+				//BPath cPath( m_pcDirView->GetPath().c_str() );
+				//cPath.Append( m_pcPathView->Text() );
 
-				struct stat sStat;
+				/*struct stat sStat;
 				if ( pcMessage->what != ID_ALERT && stat( cPath.Path(), &sStat ) >= 0 )
 				{
 					std::string cMsg("The file ");
@@ -290,7 +290,7 @@ void BFilePanel::MessageReceived( BMessage* pcMessage )
 					pcMsg->AddString( "file/path", cPath.Path() );
 					m_pcTarget->SendMessage( pcMsg );
 					Hide();
-				}
+				}*/
 			}
 			delete pcMsg;
 			break;
@@ -351,10 +351,10 @@ void BFilePanel::SetPath( const std::string& a_cPath )
 	}
 
 	m_pcPathView->SetText( cFile.c_str() );
-	m_pcDirView->SetPath( cPath );
+	//m_pcDirView->SetPath( cPath );
 }
 
 std::string BFilePanel::GetPath() const
 {
-	return( m_pcDirView->GetPath() );
+	//return( m_pcDirView->GetPath() );
 }

@@ -6,6 +6,6 @@
 # broken apps:
 # cterm desktop
 
-SUBPROJECTS = osutils
+SUBPROJECTS = osutils testharness
 
 include @top_srcdir@/Makefile.common

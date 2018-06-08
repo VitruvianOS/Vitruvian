@@ -1,88 +1,118 @@
-/*
- * Copyright 2001-2009, Haiku, Inc. All rights reserved.
- * Distributed under the terms of the MIT License.
- */
+//------------------------------------------------------------------------------
+//	Copyright (c) 2001-2002, OpenBeOS
+//
+//	Permission is hereby granted, free of charge, to any person obtaining a
+//	copy of this software and associated documentation files (the "Software"),
+//	to deal in the Software without restriction, including without limitation
+//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
+//	and/or sell copies of the Software, and to permit persons to whom the
+//	Software is furnished to do so, subject to the following conditions:
+//
+//	The above copyright notice and this permission notice shall be included in
+//	all copies or substantial portions of the Software.
+//
+//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+//	DEALINGS IN THE SOFTWARE.
+//
+//	File Name:		Point.h
+//	Author:			Frans van Nispen
+//	Description:	BPoint represents a single x,y coordinate.
+//------------------------------------------------------------------------------
 #ifndef	_POINT_H
 #define	_POINT_H
 
+// Standard Includes -----------------------------------------------------------
 
+// System Includes -------------------------------------------------------------
+#include <BeBuild.h>
 #include <SupportDefs.h>
+
+// Project Includes ------------------------------------------------------------
+
+// Local Includes --------------------------------------------------------------
+
+// Local Defines ---------------------------------------------------------------
+
+// Globals ---------------------------------------------------------------------
 
 
 class BRect;
 
-
+// BPoint class ----------------------------------------------------------------
 class BPoint {
 public:
-			float				x;
-			float				y;
+	float x;
+	float y;
 
-								BPoint();
-								BPoint(float x, float y);
-								BPoint(const BPoint& p);
-		
-			BPoint&				operator=(const BPoint& other);
-			void				Set(float x, float y);
+	BPoint();
+	BPoint(float X, float Y);
+	BPoint(const BPoint &p);
 
-			void				ConstrainTo(BRect rect);
-			void				PrintToStream() const;
-			
-			BPoint				operator-() const;
-			BPoint				operator+(const BPoint& other) const;
-			BPoint				operator-(const BPoint& other) const;
-			BPoint&				operator+=(const BPoint& other);
-			BPoint&				operator-=(const BPoint& other);
+	BPoint	&operator=(const BPoint &p);
+	void	Set(float X, float Y);
 
-			bool				operator!=(const BPoint& other) const;
-			bool				operator==(const BPoint& other) const;
+	void	ConstrainTo(BRect r);
+	void	PrintToStream() const;
+
+	BPoint	operator+(const BPoint &p) const;
+	BPoint	operator-(const BPoint &p) const;
+	BPoint&	operator+=(const BPoint &p);
+	BPoint&	operator-=(const BPoint &p);
+
+	bool	operator!=(const BPoint &p) const;
+	bool	operator==(const BPoint &p) const;
+
+	//Cosmoe Addition
+
+	BPoint	 		operator-( void ) const;
 };
+//------------------------------------------------------------------------------
 
+extern const BPoint B_ORIGIN;	// returns (0,0)
 
-extern const BPoint B_ORIGIN;
-	// returns (0, 0)
-
-
-inline
-BPoint::BPoint()
-	:
-	x(0.0f),
-	y(0.0f)
+//------------------------------------------------------------------------------
+inline BPoint::BPoint()
 {
+	x = y = 0;
 }
-
-
-inline
-BPoint::BPoint(float x, float y)
-	:
-	x(x),
-	y(y)
+//------------------------------------------------------------------------------
+inline BPoint::BPoint(float X, float Y)
 {
+	x = X;
+	y = Y;
 }
-
-
-inline
-BPoint::BPoint(const BPoint& other)
-	:
-	x(other.x),
-	y(other.y)
+//------------------------------------------------------------------------------
+inline BPoint::BPoint(const BPoint& pt)
 {
+	x = pt.x;
+	y = pt.y;
 }
-
-
-inline BPoint&
-BPoint::operator=(const BPoint& other)
+//------------------------------------------------------------------------------
+inline BPoint &BPoint::operator=(const BPoint& from)
 {
-	x = other.x;
-	y = other.y;
+	x = from.x;
+	y = from.y;
 	return *this;
 }
-
-
-inline void
-BPoint::Set(float x, float y)
+//------------------------------------------------------------------------------
+inline void BPoint::Set(float X, float Y)
 {
-	this->x = x;
-	this->y = y;
+	x = X;
+	y = Y;
 }
+//------------------------------------------------------------------------------
 
-#endif // _POINT_H
+#endif	// _POINT_H
+
+/*
+ * $Log $
+ *
+ * $Id  $
+ *
+ */
+

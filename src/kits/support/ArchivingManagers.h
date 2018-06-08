@@ -47,16 +47,18 @@ public:
 			return NULL;
 
 		BMessage* archive = const_cast<BMessage*>(constArchive);
-
-		return static_cast<BManagerBase*>(
-			BMessage::Private(archive).ArchivingPointer());
+		return NULL;
+		// TODO
+		//return static_cast<BManagerBase*>(
+		//	BMessage::Private(archive).ArchivingPointer());
 	}
 
 
 	static void
 	SetManagerPointer(BMessage* archive, BManagerBase* manager)
 	{
-		BMessage::Private(archive).SetArchivingPointer(manager);
+		//TODO
+		//BMessage::Private(archive).SetArchivingPointer(manager);
 	}
 
 

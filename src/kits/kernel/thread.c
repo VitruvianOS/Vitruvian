@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-//#define TRACE_THREAD
+#define TRACE_THREAD 1
 #ifdef TRACE_THREAD
 #	define TRACE(x) dprintf x
 #else
@@ -58,7 +58,7 @@ init_thread(void)
 		return;
 
 	/* grab a (hopefully) unique key for our table */
-	table_key = ftok("/usr/local/bin/appserver", (int)'T');
+	table_key = ftok("/usr/local/bin/", (int)'T');
 
 	/* create and initialize a new semaphore table in shared memory */
 	thread_shm = shmget(table_key, size, IPC_CREAT | IPC_EXCL | 0700);

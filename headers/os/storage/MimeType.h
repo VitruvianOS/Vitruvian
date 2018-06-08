@@ -1,10 +1,13 @@
-/*
- * Copyright 2002-2006, Haiku, Inc. All Rights Reserved.
- * Distributed under the terms of the MIT License.
- */
+//----------------------------------------------------------------------
+//  This software is part of the OpenBeOS distribution and is covered 
+//  by the OpenBeOS license.
+//---------------------------------------------------------------------
+/*!
+	\file MimeType.h
+	BMimeType interface declarations.
+*/
 #ifndef _MIME_TYPE_H
 #define _MIME_TYPE_H
-
 
 #include <SupportDefs.h>
 #include <StorageDefs.h>
@@ -21,11 +24,6 @@ class BMessenger;
 
 namespace BPrivate {
 	class MimeDatabase;
-	namespace Storage {
-		namespace Mime {
-			class CreateAppMetaMimeThread;
-		}
-	}
 }
 
 enum app_verb {
@@ -70,115 +68,156 @@ enum {
 	B_META_MIME_DELETED 	= 'MMDL',
 };
 
+/* ------------------------------------------------------------- */
+
+//!		File typing functionality.
+/*! 	The BMimeType class provides access to the file typing system, which
+		provides the following functionality:		
+			- Basic MIME string manipulation 
+			- Access to file type information in the MIME database
+			- Ways to receive notifications when parts of the MIME database are updated
+			- Methods to determine/help determine the types of untyped files
+		
+		\author <a href='mailto:tylerdauwalder@users.sf.net'>Tyler Dauwalder</a>
+		\author <a href='bonefish@users.sf.net'>Ingo Weinhold</a>
+		\version 0.0.0
+*/
 class BMimeType	{
-	public:
-		BMimeType();
-		BMimeType(const char *mimeType);
-		virtual ~BMimeType();
+public:
+	BMimeType();
+	BMimeType(const char *mimeType);
+	virtual ~BMimeType();
 
-		status_t SetTo(const char *mimeType);
-		void Unset();
-		status_t InitCheck() const;
+	status_t SetTo(const char *mimeType);
+	void Unset();
+	status_t InitCheck() const;
 
-		/* these functions simply perform string manipulations*/
-		const char *Type() const;
-		bool IsValid() const;
-		bool IsSupertypeOnly() const;
-		status_t GetSupertype(BMimeType *superType) const;
+	/* these functions simply perform string manipulations*/
+	const char *Type() const;
+	bool IsValid() const;
+	bool IsSupertypeOnly() const;
+	status_t GetSupertype(BMimeType *superType) const;
 
-		bool operator==(const BMimeType &type) const;
-		bool operator==(const char *type) const;
+	bool operator==(const BMimeType &type) const;
+	bool operator==(const char *type) const;
 
-		bool Contains(const BMimeType *type) const;
+	bool Contains(const BMimeType *type) const;
 
-		/* These functions are for managing data in the meta mime file */
-		status_t Install();
-		status_t Delete();
-		bool IsInstalled() const;
-		status_t GetIcon(BBitmap* icon, icon_size size) const;
-		status_t GetIcon(uint8** _data, size_t* _size) const;
-		status_t GetPreferredApp(char *signature, app_verb verb = B_OPEN) const;
-		status_t GetAttrInfo(BMessage *info) const;
-		status_t GetFileExtensions(BMessage *extensions) const;
-		status_t GetShortDescription(char *description) const;
-		status_t GetLongDescription(char *description) const;
-		status_t GetSupportingApps(BMessage *signatures) const;
+	/* These functions are for managing data in the meta mime file*/
+	status_t Install();
+	status_t Delete();
+	bool IsInstalled() const;
+	status_t GetIcon(BBitmap *icon, icon_size size) const;
+	status_t GetPreferredApp(char *signature, app_verb verb = B_OPEN) const;
+	status_t GetAttrInfo(BMessage *info) const;
+	status_t GetFileExtensions(BMessage *extensions) const;
+	status_t GetShortDescription(char *description) const;
+	status_t GetLongDescription(char *description) const;
+	status_t GetSupportingApps(BMessage *signatures) const;
 
-		status_t SetIcon(const BBitmap *icon, icon_size size);
-		status_t SetIcon(const uint8* data, size_t size);
-		status_t SetPreferredApp(const char *signature, app_verb verb = B_OPEN);
-		status_t SetAttrInfo(const BMessage *info);
-		status_t SetFileExtensions(const BMessage *extensions);
-		status_t SetShortDescription(const char *description);
-		status_t SetLongDescription(const char *description);
+	status_t SetIcon(const BBitmap *icon, icon_size size);
+	status_t SetPreferredApp(const char *signature, app_verb verb = B_OPEN);
+	status_t SetAttrInfo(const BMessage *info);
+	status_t SetFileExtensions(const BMessage *extensions);
+	status_t SetShortDescription(const char *description);
+	status_t SetLongDescription(const char *description);
 
-		static status_t GetInstalledSupertypes(BMessage *supertypes);
-		static status_t GetInstalledTypes(BMessage *types);
-		static status_t GetInstalledTypes(const char* supertype,
-							BMessage* subtypes);
-		static status_t GetWildcardApps(BMessage* wildcardApps);
-		static bool IsValid(const char *mimeType);
+	static status_t GetInstalledSupertypes(BMessage *supertypes);
+	static status_t GetInstalledTypes(BMessage *types);
+	static status_t GetInstalledTypes(const char *supertype,
+									  BMessage *subtypes);
+	static status_t GetWildcardApps(BMessage *wild_ones);
+	static bool IsValid(const char *mimeType);
 
-		status_t GetAppHint(entry_ref *ref) const;
-		status_t SetAppHint(const entry_ref *ref);
+	status_t GetAppHint(entry_ref *ref) const;
+	status_t SetAppHint(const entry_ref *ref);
 
-		/* for application signatures only. */
-		status_t GetIconForType(const char* type, BBitmap* icon,
+	/* for application signatures only.*/
+	status_t GetIconForType(const char *type, BBitmap *icon,
 							icon_size which) const;
-		status_t GetIconForType(const char* type, uint8** _data,
-							size_t* _size) const;
-		status_t SetIconForType(const char* type, const BBitmap* icon,
+	status_t SetIconForType(const char *type, const BBitmap *icon,
 							icon_size which);
-		status_t SetIconForType(const char* type, const uint8* data,
-							size_t size);
 
-		/* sniffer rule manipulation */
-		status_t GetSnifferRule(BString *result) const;
-		status_t SetSnifferRule(const char *);
-		static status_t CheckSnifferRule(const char *rule, BString *parseError);
+	/* sniffer rule manipulation */
+	status_t GetSnifferRule(BString *result) const;
+	status_t SetSnifferRule(const char *);
+	static status_t CheckSnifferRule(const char *rule, BString *parseError);
 
-		/* calls to ask the sniffer to identify the MIME type of a file or data in
-		   memory */
-		static status_t GuessMimeType(const entry_ref *file, BMimeType *type);
-		static status_t GuessMimeType(const void *buffer, int32 length,
-							BMimeType *type);
-		static status_t GuessMimeType(const char *filename, BMimeType *type);
+	/* calls to ask the sniffer to identify the MIME type of a file or data in
+	   memory */
+	static status_t GuessMimeType(const entry_ref *file, BMimeType *type);
+	static status_t GuessMimeType(const void *buffer, int32 length,
+								  BMimeType *type);
+	static status_t GuessMimeType(const char *filename, BMimeType *type);
 
-		static status_t StartWatching(BMessenger target);
-		static status_t StopWatching(BMessenger target);
+	static status_t StartWatching(BMessenger target);
+	static status_t StopWatching(BMessenger target);
 
-		/* Deprecated. Use SetTo() instead. */
-		status_t SetType(const char *mimeType);
+	/* Deprecated  Use SetTo instead. */
+	status_t SetType(const char *mimeType);
 
-	private:
-		BMimeType(const char* mimeType, const char* mimePath);
-			// if mimePath is NULL, defaults to "/boot/home/config/settings/beos_mime/"
+	/* Brand new Delete() methods */
+	status_t DeleteAppHint();
+	status_t DeleteAttrInfo();
+	status_t DeleteShortDescription();
+	status_t DeleteLongDescription();
+	status_t DeleteFileExtensions();
+	status_t DeleteIcon(icon_size size);
+	status_t DeleteIconForType(const char *type, icon_size which);
+	status_t DeletePreferredApp(app_verb verb = B_OPEN);
+	status_t DeleteSnifferRule();
+	status_t DeleteSupportedTypes(bool fullSync = true);
 
-		friend class MimeTypeTest;
-			// for testing only
+private:
+	BMimeType(const char *mimeType, const char *mimePath);
+		// if mimePath is NULL, defaults to "/boot/home/config/settings/beos_mime/"
+		
+	friend class MimeTypeTest;
 
-		friend class BAppFileInfo;
-		friend class BPrivate::Storage::Mime::CreateAppMetaMimeThread;
+// Uncomment, when needed...
 
-		virtual void _ReservedMimeType1();
-		virtual void _ReservedMimeType2();
-		virtual void _ReservedMimeType3();
+	friend class BAppFileInfo;
+//	friend class BRoster;
+//	friend class TRosterApp;
+//	friend class TMimeWorker;
 
-		BMimeType& operator=(const BMimeType& source);
-		BMimeType(const BMimeType& source);
+//	friend status_t _update_mime_info_(const char *, int32);
+//	friend status_t _real_update_app_(BAppFileInfo *, const char *, bool);
 
-		status_t GetSupportedTypes(BMessage* types);
-		status_t SetSupportedTypes(const BMessage* types, bool fullSync = true);
+//	static void _set_local_dispatch_target_(BMessenger *, void (*)(BMessage *));
+//	void _touch_(); 
 
-		static status_t GetAssociatedTypes(const char* extension, BMessage* types);
+	virtual void _ReservedMimeType1();
+	virtual void _ReservedMimeType2();
+	virtual void _ReservedMimeType3();
 
-	private:
-		char*		fType;
-		BFile*		fMeta;
-		void*		_unused;
-		entry_ref	fRef;
-		status_t	fCStatus;
-		uint32		_reserved[4];
+	BMimeType &operator=(const BMimeType &);
+	BMimeType(const BMimeType &);
+
+
+//	void InitData(const char *type);
+//	void InitData(const char *type);
+//	status_t OpenFile(bool create_file = false, dev_t dev = -1) const;
+//	status_t CloseFile() const;
+	status_t GetSupportedTypes(BMessage *types);
+	status_t SetSupportedTypes(const BMessage *types, bool fullSync = true);
+	
+	static status_t GetAssociatedTypes(const char *extension, BMessage *types);
+	
+//	void MimeChanged(int32 w, const char *type = NULL,
+//					 bool large = true) const;
+
+
+	char		*fType;
+	BFile		*fMeta;
+	void		*_unused;
+	entry_ref	fRef;
+	int			fWhere;
+	status_t	fCStatus;
+	uint32		_reserved[3];
 };
 
+
 #endif	// _MIME_TYPE_H
+
+

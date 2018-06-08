@@ -5,16 +5,21 @@
 -I@ABS_TOPDIR@/headers/os/kernel
 -I@ABS_TOPDIR@/headers/os/storage
 -I@ABS_TOPDIR@/headers/os/app
+-I@ABS_TOPDIR@/headers/os/add-ons/file_system/
+-I@ABS_TOPDIR@/headers/os/add-ons/graphics/
+
+-I@ABS_TOPDIR@/headers/cosmoe/
 
 -I@ABS_TOPDIR@/headers/private/
 -I@ABS_TOPDIR@/headers/private/app/
--I@ABS_TOPDIR@/headers/private/cosmoe/
 -I@ABS_TOPDIR@/headers/private/support/
 -I@ABS_TOPDIR@/headers/private/binary_compatibility/
 -I@ABS_TOPDIR@/headers/private/config/
 -I@ABS_TOPDIR@/headers/private/interface/
 -I@ABS_TOPDIR@/headers/private/storage/
 -I@ABS_TOPDIR@/headers/private/kernel/
+-I@ABS_TOPDIR@/headers/private/shared/
+-I@ABS_TOPDIR@/headers/private/servers/app/
 
 -I@ABS_TOPDIR@/headers/build/
 -I@ABS_TOPDIR@/headers/build/config_headers/

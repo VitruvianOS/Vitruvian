@@ -92,10 +92,11 @@ swap_data(type_code type, void *_data, size_t length, swap_action action)
 			while (messenger < end) {
 				BMessenger::Private messengerPrivate(messenger);
 				// ToDo: if the additional fields change, this function has to be updated!
-				messengerPrivate.SetTo(
-					__swap_int32(messengerPrivate.Team()),
-					__swap_int32(messengerPrivate.Port()),
-					__swap_int32(messengerPrivate.Token()));
+				//messengerPrivate.SetTo(
+				//	__swap_int32(messengerPrivate.Team()),
+				//	__swap_int32(messengerPrivate.Port()),
+				//	__swap_int32(messengerPrivate.Token()));
+				// TODO
 				messenger++;
 			}
 			break;
@@ -151,4 +152,64 @@ is_type_swapped(type_code type)
 	}
 
 	return false;
+}
+
+//TODO
+export double __swap_double(double arg)
+{
+	// FIXME: unimplemented
+	return arg;
+}
+
+export float  __swap_float(float arg)
+{
+	// FIXME: unimplemented
+	return arg;
+}
+
+export uint64 __swap_int64(uint64 uarg)
+{
+	unsigned char	b1, b2, b3, b4, b5, b6, b7, b8;
+
+	// Separate out each of the 8-bytes of this uint64
+	b1 = (uarg >> 56) & 0xff;
+	b2 = (uarg >> 48) & 0xff;
+	b3 = (uarg >> 40) & 0xff;
+	b4 = (uarg >> 32) & 0xff;
+	b5 = (uarg >> 24) & 0xff;
+	b6 = (uarg >> 16) & 0xff;
+	b7 = (uarg >>  8) & 0xff;
+	b8 =  uarg        & 0xff;
+
+	// Return them reassembled in reverse order
+	return ((uint64)b8 << 56) | ((uint64)b7 << 48) |
+		   ((uint64)b6 << 40) | ((uint64)b5 << 32) |
+		   ((uint64)b4 << 24) | ((uint64)b3 << 16) |
+		   ((uint64)b2 << 8)  |  (uint64)b1;
+}
+
+export uint32 __swap_int32(uint32 uarg)
+{
+	unsigned char	b1, b2, b3, b4;
+
+	// Separate out each of the 4-bytes of this uint32
+	b1 = (uarg >> 24) & 0xff;
+	b2 = (uarg >> 16) & 0xff;
+	b3 = (uarg >>  8) & 0xff;
+	b4 =  uarg        & 0xff;
+
+	// Return them reassembled in reverse order
+	return ((uint32)b4 << 24) | ((uint32)b3 << 16) | ((uint32)b2 << 8) | (uint32)b1;
+}
+
+export uint16 __swap_int16(uint16 uarg)
+{
+	unsigned char	b1, b2;
+
+	// Separate out the 2-bytes of this uint16
+	b1 = (uarg >>  8) & 0xff;
+	b2 =  uarg        & 0xff;
+
+	// Return them reassembled in reverse order
+	return (b2 << 8) | b1;
 }

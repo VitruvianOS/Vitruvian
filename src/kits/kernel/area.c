@@ -66,7 +66,7 @@ void init_area_map(void)
 	int created = 1;
 
 	/* create a unique key for our system-wide sem table */
-	key_t table_key = ftok("/usr/local/bin/appserver", (int)'A');
+	key_t table_key = ftok("/usr/local/bin/", (int)'A');
 
 	TRACE(("Master area table key is 0x%x.\n", table_key));
 

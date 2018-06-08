@@ -106,7 +106,7 @@ OffsetFile::Seek(off_t position, uint32 seekMode)
 			case SEEK_END:
 			{
 				off_t size;
-				error = GetSize(&size);
+				error = BPositionIO::GetSize(&size);
 				if (error == B_OK) {
 					if (size + position >= 0)
 						result = fCurrentPosition = size + position;
@@ -151,7 +151,7 @@ OffsetFile::GetSize(off_t *size)
 	if (error == B_OK)
 		error = InitCheck();
 	if (error == B_OK)
-		error = fFile->GetSize(size);
+		error = fFile->BPositionIO::GetSize(size);
 	if (error == B_OK) {
 		*size -= fOffset;
 		if (*size < 0)

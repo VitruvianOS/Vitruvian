@@ -49,8 +49,8 @@ static const int32 kLargeIconForTypeResourceID	= 0;
 // type codes
 enum {
 	B_APP_FLAGS_TYPE	= 'APPF',
-	B_MINI_ICON_TYPE	= 'MICN',
-	B_LARGE_ICON_TYPE	= 'ICON',
+//	B_MINI_ICON_TYPE	= 'MICN',
+//	B_LARGE_ICON_TYPE	= 'ICON',
 	B_VERSION_INFO_TYPE	= 'APPV',
 };
 

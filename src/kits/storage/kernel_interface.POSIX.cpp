@@ -241,10 +241,11 @@ BPrivate::Storage::get_position(int fd)
 	return result;
 }
 
-int
-BPrivate::Storage::dup(int file)
+int32
+BPrivate::Storage::dup(int32 file)
 {
 	return ::dup(file);
+	return 0;
 }
 
 /*!	If the supplied file descriptor is -1, the copy will be -1 as well and
@@ -254,8 +255,9 @@ BPrivate::Storage::dup(int file)
 	\return B_OK, if everything went fine, or an error code.
 */
 status_t
-BPrivate::Storage::dup( int file, int& result )
+BPrivate::Storage::dup( int32 file, int32& result )
 {
+	// TODO
 	status_t error = B_OK;
 	if (file == -1)
 		result = -1;
@@ -265,6 +267,7 @@ BPrivate::Storage::dup( int file, int& result )
 			error = errno;
 	}
 	return error;
+	return B_ERROR;
 }
 
 status_t
@@ -782,8 +785,9 @@ BPrivate::Storage::find_dir( int dir, const char *name, entry_ref *result )
 }
 
 status_t
-BPrivate::Storage::dup_dir( int dir, int &result )
+BPrivate::Storage::dup_dir( int32 dir, int32& result )
 {
+	// TODO
 	return BPrivate::Storage::dup(dir, result);
 }
 

@@ -112,9 +112,9 @@ calculate_checksum(const void *data, uint32 size)
 	const uint8 *current = csData;
 	for (; current < dataEnd; current += 4) {
 		uint32 word = 0;
-		int32 bytes = min(4L, (int32)(dataEnd - current));
+		/*int32 bytes = min(4L, (int32)(dataEnd - current));
 		for (int32 i = 0; i < bytes; i++)
-			word = (word << 8) + current[i];
+			word = (word << 8) + current[i];*/
 		checkSum += word;
 	}
 	return checkSum;
@@ -295,7 +295,7 @@ ResourceFile::InitContainer(ResourcesContainer &container)
 		parseInfo.info_table_size = 0;
 		try {
 			// get the file size
-			error = fFile.GetSize(&parseInfo.file_size);
+			error = fFile.BPositionIO::GetSize(&parseInfo.file_size);
 			if (error != B_OK)
 				throw Exception(error, "Failed to get the file size.");
 			_ReadHeader(parseInfo);
@@ -382,7 +382,7 @@ ResourceFile::_InitFile(BFile &file, bool clobber)
 	fFile.Unset();
 	// get the file size first
 	off_t fileSize = 0;
-	error = file.GetSize(&fileSize);
+	error = file.BPositionIO::GetSize(&fileSize);
 	if (error != B_OK)
 		throw Exception(error, "Failed to get the file size.");
 	// read the first four bytes, and check, if they identify a resource file
@@ -460,7 +460,7 @@ ResourceFile::_InitELFFile(BFile &file)
 	status_t error = B_OK;
 	// get the file size
 	off_t fileSize = 0;
-	error = file.GetSize(&fileSize);
+	error = file.BPositionIO::GetSize(&fileSize);
 	if (error != B_OK)
 		throw Exception(error, "Failed to get the file size.");
 	// read ELF header
@@ -614,7 +614,7 @@ ResourceFile::_InitPEFFile(BFile &file, const PEFContainerHeader &pefHeader)
 	status_t error = B_OK;
 	// get the file size
 	off_t fileSize = 0;
-	error = file.GetSize(&fileSize);
+	error = file.BPositionIO::GetSize(&fileSize);
 	if (error != B_OK)
 		throw Exception(error, "Failed to get the file size.");
 	// check architecture -- we support PPC only

@@ -33,10 +33,10 @@ static const char *kNIMiniIconAttribute		= NI_BEOS ":M:STD_ICON";
 static const char *kNILargeIconAttribute	= NI_BEOS ":L:STD_ICON";
 
 // icon types
-enum {
-	B_MINI_ICON_TYPE	= 'MICN',
-	B_LARGE_ICON_TYPE	= 'ICON',
-};
+//enum {
+//	B_MINI_ICON_TYPE	= 'MICN',
+//	B_LARGE_ICON_TYPE	= 'ICON',
+//};
 
 // constructor
 /*!	\brief Creates an uninitialized BNodeInfo object.

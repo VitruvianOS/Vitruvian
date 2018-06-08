@@ -48,7 +48,7 @@ int main(void)
 	aList.DoForEach(Prepend);
 	puts("\" - Appended\" appended to each item\n");
 
-	printf("An item at an invalid index returned %ld\n", (int32)aList.ItemAt(10));
+	printf("An item at an invalid index returned %ld\n", aList.ItemAt(10));
 
 	for (x = 0; x < 10; x++)
 	{

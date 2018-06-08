@@ -482,7 +482,7 @@ int get_sem_id()
 	if (sem_admin_group == -1)
 	{
 		sem_union_t semopts;
-		key_t key = ftok("/usr/local/bin/appserver", 's');
+		key_t key = ftok("/usr/local/bin/", 's');
 		
 		// Try to create a new administrative sem group
 		sem_admin_group = semget(key, 3, IPC_CREAT | IPC_EXCL | 0700);

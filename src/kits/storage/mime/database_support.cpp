@@ -28,10 +28,10 @@
 #define OUT printf
 
 // icon types (which really ought to be publicly or semi-publicly declared somewhere...)
-enum {
-	B_MINI_ICON_TYPE	= 'MICN',
-	B_LARGE_ICON_TYPE	= 'ICON',
-};
+//enum {
+//	B_MINI_ICON_TYPE	= 'MICN',
+//	B_LARGE_ICON_TYPE	= 'ICON',
+//};
 
 namespace BPrivate {
 namespace Storage {

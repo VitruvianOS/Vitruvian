@@ -6,7 +6,7 @@ CFLAGS = -include build/BeOSBuildCompatibility.h \
 -c -g -O2 -pipe `cat @top_srcdir@/cosmoe.specs` -fPIC
 
 #TODO remove -fpermissive
-CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-dtor -fexceptions -fpermissive
+CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-dtor -fexceptions
 
 LIBNAME = libcosmoe.@LIBEXT@
 

@@ -484,9 +484,7 @@ BFile::operator=(const BFile &file)
 		if (file.InitCheck() == B_OK) {
 			// duplicate the file descriptor
 			int fd = -1;
-			// TODO
-			//status_t status = BPrivate::Storage::dup(file.get_fd(), fd);
-			status_t status = BPrivate::Storage::dup(file.get_fd());
+			status_t status = BPrivate::Storage::dup(file.get_fd(), fd);
 			// set it
 			if (status == B_OK) {
 				status = set_fd(fd);

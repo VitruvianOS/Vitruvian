@@ -257,7 +257,6 @@ BPrivate::Storage::dup(int32 file)
 status_t
 BPrivate::Storage::dup( int32 file, int32& result )
 {
-	// TODO
 	status_t error = B_OK;
 	if (file == -1)
 		result = -1;
@@ -787,7 +786,6 @@ BPrivate::Storage::find_dir( int dir, const char *name, entry_ref *result )
 status_t
 BPrivate::Storage::dup_dir( int32 dir, int32& result )
 {
-	// TODO
 	return BPrivate::Storage::dup(dir, result);
 }
 

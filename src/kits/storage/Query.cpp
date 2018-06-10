@@ -1,46 +1,53 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
-/*!
-	\file Query.cpp
-	BQuery implementation.
-*/
+/*
+ * Copyright 2002-2009, Haiku, Inc. All Rights Reserved.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Tyler Dauwalder
+ *		Ingo Weinhold
+ *		Axel Dörfler, axeld@pinc-software.de.
+ */
 
-#include <fs_query.h>
+
+#include <Query.h>
+
+#include <fcntl.h>
 #include <new>
-#include <parsedate.h>
 #include <time.h>
 
 #include <Entry.h>
-#include <Query.h>
+#include <fs_query.h>
+#include <parsedate.h>
 #include <Volume.h>
 
-#include "kernel_interface.h"
+#include <MessengerPrivate.h>
+#include <syscalls.h>
+#include <query_private.h>
+
 #include "QueryPredicate.h"
+#include "storage_support.h"
+
 
 using namespace std;
 using namespace BPrivate::Storage;
 
 
-// BQuery
-
-// constructor
 /*!	\brief Creates an uninitialized BQuery.
 */
 BQuery::BQuery()
-	  : BEntryList(),
-		fStack(NULL),
-		fPredicate(NULL),
-		fDevice((dev_t)B_ERROR),
-		fLive(false),
-		fPort(B_ERROR),
-		fToken(0),
-		fQueryFd(-1)
+	:
+	BEntryList(),
+	fStack(NULL),
+	fPredicate(NULL),
+	fDevice((dev_t)B_ERROR),
+	fLive(false),
+	fPort(B_ERROR),
+	fToken(0),
+	fQueryFd(-1)
 {
 }
 
-// destructor
+
 /*!	\brief Frees all resources associated with the object.
 */
 BQuery::~BQuery()
@@ -48,7 +55,7 @@ BQuery::~BQuery()
 	Clear();
 }
 
-// Clear
+
 /*!	\brief Resets the object to a uninitialized state.
 	\return \c B_OK
 */
@@ -58,7 +65,7 @@ BQuery::Clear()
 	// close the currently open query
 	status_t error = B_OK;
 	if (fQueryFd >= 0) {
-		error = close_query(fQueryFd);
+		error = _kern_close(fQueryFd);
 		fQueryFd = -1;
 	}
 	// delete the predicate stack and the predicate
@@ -74,7 +81,7 @@ BQuery::Clear()
 	return error;
 }
 
-// PushAttr
+
 /*!	\brief Pushes an attribute name onto the BQuery's predicate stack.
 	\param attrName the attribute name
 	\return
@@ -90,12 +97,12 @@ BQuery::Clear()
 		  to be called and Clear() also deletes the predicate.
 */
 status_t
-BQuery::PushAttr(const char *attrName)
+BQuery::PushAttr(const char* attrName)
 {
 	return _PushNode(new(nothrow) AttributeNode(attrName), true);
 }
 
-// PushOp
+
 /*!	\brief Pushes an operator onto the BQuery's predicate stack.
 	\param op the code representing the operator
 	\return
@@ -138,7 +145,7 @@ BQuery::PushOp(query_op op)
 	return error;
 }
 
-// PushUInt32
+
 /*!	\brief Pushes a uint32 value onto the BQuery's predicate stack.
 	\param value the value
 	\return
@@ -159,7 +166,7 @@ BQuery::PushUInt32(uint32 value)
 	return _PushNode(new(nothrow) UInt32ValueNode(value), true);
 }
 
-// PushInt32
+
 /*!	\brief Pushes an int32 value onto the BQuery's predicate stack.
 	\param value the value
 	\return
@@ -180,7 +187,7 @@ BQuery::PushInt32(int32 value)
 	return _PushNode(new(nothrow) Int32ValueNode(value), true);
 }
 
-// PushUInt64
+
 /*!	\brief Pushes a uint64 value onto the BQuery's predicate stack.
 	\param value the value
 	\return
@@ -201,7 +208,7 @@ BQuery::PushUInt64(uint64 value)
 	return _PushNode(new(nothrow) UInt64ValueNode(value), true);
 }
 
-// PushInt64
+
 /*!	\brief Pushes an int64 value onto the BQuery's predicate stack.
 	\param value the value
 	\return
@@ -222,7 +229,7 @@ BQuery::PushInt64(int64 value)
 	return _PushNode(new(nothrow) Int64ValueNode(value), true);
 }
 
-// PushFloat
+
 /*!	\brief Pushes a float value onto the BQuery's predicate stack.
 	\param value the value
 	\return
@@ -243,7 +250,7 @@ BQuery::PushFloat(float value)
 	return _PushNode(new(nothrow) FloatValueNode(value), true);
 }
 
-// PushDouble
+
 /*!	\brief Pushes a double value onto the BQuery's predicate stack.
 	\param value the value
 	\return
@@ -264,7 +271,7 @@ BQuery::PushDouble(double value)
 	return _PushNode(new(nothrow) DoubleValueNode(value), true);
 }
 
-// PushString
+
 /*!	\brief Pushes a string value onto the BQuery's predicate stack.
 	\param value the value
 	\param caseInsensitive \c true, if the case of the string should be
@@ -282,12 +289,12 @@ BQuery::PushDouble(double value)
 		  to be called and Clear() also deletes the predicate.
 */
 status_t
-BQuery::PushString(const char *value, bool caseInsensitive)
+BQuery::PushString(const char* value, bool caseInsensitive)
 {
 	return _PushNode(new(nothrow) StringNode(value, caseInsensitive), true);
 }
 
-// PushDate
+
 /*!	\brief Pushes a date value onto the BQuery's predicate stack.
 	The supplied date can be any string understood by the POSIX function
 	parsedate().
@@ -303,22 +310,15 @@ BQuery::PushString(const char *value, bool caseInsensitive)
 		  to be called and Clear() also deletes the predicate.
 */
 status_t
-BQuery::PushDate(const char *date)
+BQuery::PushDate(const char* date)
 {
-	status_t error = (date ? B_OK : B_BAD_VALUE);
-	if (error == B_OK) {
-		time_t t;
-		time(&t);
-		t = parsedate(date, t);
-		if (t < 0)
-			error = B_BAD_VALUE;
-	}
-	if (error == B_OK)
-		error =  _PushNode(new(nothrow) DateNode(date), true);
-	return error;
+	if (date == NULL || !date[0] || parsedate(date, time(NULL)) < 0)
+		return B_BAD_VALUE;
+
+	return _PushNode(new(nothrow) DateNode(date), true);
 }
 
-// SetVolume
+
 /*!	\brief Sets the BQuery's volume.
 	A query is restricted to one volume. This method sets this volume. It
 	fails, if called after Fetch(). To reuse a BQuery object it has to be
@@ -329,21 +329,22 @@ BQuery::PushDate(const char *date)
 	- \c B_NOT_ALLOWED: SetVolume() was called after Fetch().
 */
 status_t
-BQuery::SetVolume(const BVolume *volume)
+BQuery::SetVolume(const BVolume* volume)
 {
-	status_t error = (volume ? B_OK : B_BAD_VALUE);
-	if (error == B_OK && _HasFetched())
-		error = B_NOT_ALLOWED;
-	if (error == B_OK) {
-		if (volume->InitCheck() == B_OK)
-			fDevice = volume->Device();
-		else
-			fDevice = (dev_t)B_ERROR;
-	}
-	return error;
+	if (volume == NULL)
+		return B_BAD_VALUE;
+	if (_HasFetched())
+		return B_NOT_ALLOWED;
+
+	if (volume->InitCheck() == B_OK)
+		fDevice = volume->Device();
+	else
+		fDevice = (dev_t)B_ERROR;
+
+	return B_OK;
 }
 
-// SetPredicate
+
 /*!	\brief Sets the BQuery's predicate.
 	A predicate can be set either using this method or constructing one on
 	the predicate stack. The two methods can not be mixed. The letter one
@@ -357,7 +358,7 @@ BQuery::SetVolume(const BVolume *volume)
 	- \c B_NO_MEMORY: Insufficient memory to store the predicate.
 */
 status_t
-BQuery::SetPredicate(const char *expression)
+BQuery::SetPredicate(const char* expression)
 {
 	status_t error = (expression ? B_OK : B_BAD_VALUE);
 	if (error == B_OK && _HasFetched())
@@ -367,7 +368,7 @@ BQuery::SetPredicate(const char *expression)
 	return error;
 }
 
-// SetTarget
+
 /*!	\brief Sets the BQuery's target and makes the query live.
 	The query update messages are sent to the specified target. They might
 	roll in immediately after calling Fetch().
@@ -385,14 +386,16 @@ BQuery::SetTarget(BMessenger messenger)
 	if (error == B_OK && _HasFetched())
 		error = B_NOT_ALLOWED;
 	if (error == B_OK) {
-		fPort = messenger.fPort;
-		fToken = messenger.fHandlerToken;
+		BMessenger::Private messengerPrivate(messenger);
+		fPort = messengerPrivate.Port();
+		fToken = (messengerPrivate.IsPreferredTarget()
+			? -1 : messengerPrivate.Token());
 		fLive = true;
 	}
 	return error;
 }
 
-// IsLive
+
 /*!	\brief Returns whether the query associated with this object is live.
 	\return \c true, if the query is live, \c false otherwise
 */
@@ -402,7 +405,7 @@ BQuery::IsLive() const
 	return fLive;
 }
 
-// GetPredicate
+
 /*!	\brief Returns the BQuery's predicate.
 	Regardless of whether the predicate has been constructed using the
 	predicate stack or set via SetPredicate(), this method returns a
@@ -418,7 +421,7 @@ BQuery::IsLive() const
 		  You can't interleave Push*() and GetPredicate() calls.
 */
 status_t
-BQuery::GetPredicate(char *buffer, size_t length)
+BQuery::GetPredicate(char* buffer, size_t length)
 {
 	status_t error = (buffer ? B_OK : B_BAD_VALUE);
 	if (error == B_OK)
@@ -432,7 +435,7 @@ BQuery::GetPredicate(char *buffer, size_t length)
 	return error;
 }
 
-// GetPredicate
+
 /*!	\brief Returns the BQuery's predicate.
 	Regardless of whether the predicate has been constructed using the
 	predicate stack or set via SetPredicate(), this method returns a
@@ -447,7 +450,7 @@ BQuery::GetPredicate(char *buffer, size_t length)
 		  You can't interleave Push*() and GetPredicate() calls.
 */
 status_t
-BQuery::GetPredicate(BString *predicate)
+BQuery::GetPredicate(BString* predicate)
 {
 	status_t error = (predicate ? B_OK : B_BAD_VALUE);
 	if (error == B_OK)
@@ -459,7 +462,7 @@ BQuery::GetPredicate(BString *predicate)
 	return error;
 }
 
-// PredicateLength
+
 /*!	\brief Returns the length of the BQuery's predicate string.
 	Regardless of whether the predicate has been constructed using the
 	predicate stack or set via SetPredicate(), this method returns the length
@@ -482,11 +485,10 @@ BQuery::PredicateLength()
 	return size;
 }
 
-// TargetDevice
+
 /*!	\brief Returns the device ID identifying the BQuery's volume.
 	\return the device ID of the BQuery's volume or \c B_NO_INIT, if the
 			volume isn't set.
-	
 */
 dev_t
 BQuery::TargetDevice() const
@@ -494,7 +496,7 @@ BQuery::TargetDevice() const
 	return fDevice;
 }
 
-// Fetch
+
 /*!	\brief Tells the BQuery to start fetching entries satisfying the predicate.
 	After Fetch() has been called GetNextEntry(), GetNextRef() and
 	GetNextDirents() can be used to retrieve the enties. Live query updates
@@ -512,23 +514,30 @@ BQuery::Fetch()
 {
 	if (_HasFetched())
 		return B_NOT_ALLOWED;
+
 	_EvaluateStack();
+
 	if (!fPredicate || fDevice < 0)
 		return B_NO_INIT;
-	if (fLive) {
-		fQueryFd = open_live_query(fDevice, fPredicate, B_LIVE_QUERY, fPort,
-								fToken, fQueryFd);
-	} else
-		fQueryFd = open_query(fDevice, fPredicate, 0, fQueryFd);
+
+	BString parsedPredicate;
+	_ParseDates(parsedPredicate);
+
+	fQueryFd = _kern_open_query(fDevice, parsedPredicate.String(),
+		parsedPredicate.Length(), fLive ? B_LIVE_QUERY : 0, fPort, fToken);
 	if (fQueryFd < 0)
 		return fQueryFd;
+
+	// set close on exec flag
+	fcntl(fQueryFd, F_SETFD, FD_CLOEXEC);
+
 	return B_OK;
 }
 
 
-// BEntryList interface
+//	#pragma mark - BEntryList interface
 
-// GetNextEntry
+
 /*!	\brief Returns the BQuery's next entry as a BEntry.
 	Places the next entry in the list in \a entry, traversing symlinks if
 	\a traverse is \c true.
@@ -544,7 +553,7 @@ BQuery::Fetch()
 	- \c B_FILE_ERROR: Fetch() has not been called before.
 */
 status_t
-BQuery::GetNextEntry(BEntry *entry, bool traverse)
+BQuery::GetNextEntry(BEntry* entry, bool traverse)
 {
 	status_t error = (entry ? B_OK : B_BAD_VALUE);
 	if (error == B_OK) {
@@ -556,7 +565,7 @@ BQuery::GetNextEntry(BEntry *entry, bool traverse)
 	return error;
 }
 
-// GetNextRef
+
 /*!	\brief Returns the BQuery's next entry as an entry_ref.
 	Places an entry_ref to the next entry in the list into \a ref.
 	\param ref a pointer to an entry_ref to be filled in with the data of the
@@ -570,8 +579,9 @@ BQuery::GetNextEntry(BEntry *entry, bool traverse)
 	- \c B_FILE_ERROR: Fetch() has not been called before.
 */
 status_t
-BQuery::GetNextRef(entry_ref *ref)
+BQuery::GetNextRef(entry_ref* ref)
 {
+	#ifdef __HAIKU__
 	status_t error = (ref ? B_OK : B_BAD_VALUE);
 	if (error == B_OK && !_HasFetched())
 		error = B_FILE_ERROR;
@@ -587,17 +597,19 @@ BQuery::GetNextRef(entry_ref *ref)
 			}
 		}
 		if (error == B_OK) {
-#if 0
 			ref->device = entry.d_pdev;
 			ref->directory = entry.d_pino;
 			error = ref->set_name(entry.d_name);
-#endif
 		}
 	}
 	return error;
+	#elseif
+	printf("BQuery::GetNextRef UNIMPLEMENTED\n");
+	return B_ERROR;
+	#endif
 }
 
-// GetNextDirents
+
 /*!	\brief Returns the BQuery's next entries as dirent structures.
 	Reads a number of entries into the array of dirent structures pointed to by
 	\a buf. Reads as many but no more than \a count entries, as many entries as
@@ -615,26 +627,33 @@ BQuery::GetNextRef(entry_ref *ref)
 	- \c B_FILE_ERROR: Fetch() has not been called before.
 */
 int32
-BQuery::GetNextDirents(struct dirent *buf, size_t length, int32 count)
+BQuery::GetNextDirents(struct dirent* buffer, size_t length, int32 count)
 {
-	if (!buf)
+	if (!buffer)
 		return B_BAD_VALUE;
 	if (!_HasFetched())
 		return B_FILE_ERROR;
-	return read_query(fQueryFd, buf, length, count);
+	return _kern_read_dir(fQueryFd, buffer, length, count);
 }
 
-// Rewind
-/*!	\brief Unimplemented method of the BEntryList interface.
-	\return \c B_ERROR.
+
+/*!	\brief Rewinds the entry list back to the first entry.
+
+	Unlike R5 Haiku implements this method for BQuery.
+
+	\return
+	- \c B_OK on success,
+	- \c B_FILE_ERROR, if Fetch() has not yet been called.
 */
 status_t
 BQuery::Rewind()
 {
-	return B_ERROR;
+	if (!_HasFetched())
+		return B_FILE_ERROR;
+	return _kern_rewind_dir(fQueryFd);
 }
 
-// CountEntries
+
 /*!	\brief Unimplemented method of the BEntryList interface.
 	\return 0.
 */
@@ -644,7 +663,7 @@ BQuery::CountEntries()
 	return B_ERROR;
 }
 
-// _HasFetched
+
 /*!	Returns whether Fetch() has already been called on this object.
 	\return \c true, if Fetch() has successfully been invoked, \c false
 			otherwise.
@@ -652,10 +671,10 @@ BQuery::CountEntries()
 bool
 BQuery::_HasFetched() const
 {
-	return (fQueryFd >= 0);
+	return fQueryFd >= 0;
 }
 
-// _PushNode
+
 /*!	\brief Pushs a node onto the predicate stack.
 	If the stack has not been allocate until this time, this method does
 	allocate it.
@@ -665,7 +684,7 @@ BQuery::_HasFetched() const
 	node and thus is responsible for deleting it, if \a deleteOnError is
 	\c false. If it is \c true, the node is deleted, if an error occurs.
 	\param node the node to be pushed
-	\param deleteOnError 
+	\param deleteOnError
 	\return
 	- \c B_OK: Everything went fine.
 	- \c B_NO_MEMORY: \c NULL \a node or insuffient memory to allocate the
@@ -673,7 +692,7 @@ BQuery::_HasFetched() const
 	- \c B_NOT_ALLOWED: _PushNode() was called after Fetch().
 */
 status_t
-BQuery::_PushNode(QueryNode *node, bool deleteOnError)
+BQuery::_PushNode(QueryNode* node, bool deleteOnError)
 {
 	status_t error = (node ? B_OK : B_NO_MEMORY);
 	if (error == B_OK && _HasFetched())
@@ -691,7 +710,7 @@ BQuery::_PushNode(QueryNode *node, bool deleteOnError)
 	return error;
 }
 
-// _SetPredicate
+
 /*!	\brief Helper method to set the BQuery's predicate.
 	It is not checked whether Fetch() has already been invoked.
 	\param predicate the predicate string
@@ -700,7 +719,7 @@ BQuery::_PushNode(QueryNode *node, bool deleteOnError)
 	- \c B_NO_MEMORY: Insufficient memory to store the predicate.
 */
 status_t
-BQuery::_SetPredicate(const char *expression)
+BQuery::_SetPredicate(const char* expression)
 {
 	status_t error = B_OK;
 	// unset the old predicate
@@ -717,7 +736,7 @@ BQuery::_SetPredicate(const char *expression)
 	return error;
 }
 
-// _EvaluateStack
+
 /*!	Evaluates the query's predicate stack.
 	The method does nothing (and returns \c B_OK), if the stack is \c NULL.
 	If the stack is non-null and Fetch() has already been called, the method
@@ -737,7 +756,7 @@ BQuery::_EvaluateStack()
 		if (_HasFetched())
 			error = B_NOT_ALLOWED;
 		// convert the stack to a tree and evaluate it
-		QueryNode *node = NULL;
+		QueryNode* node = NULL;
 		if (error == B_OK)
 			error = fStack->ConvertToTree(node);
 		BString predicate;
@@ -752,6 +771,41 @@ BQuery::_EvaluateStack()
 }
 
 
+void
+BQuery::_ParseDates(BString& parsedPredicate)
+{
+	const char* start = fPredicate;
+	const char* pos = start;
+	bool quotes = false;
+
+	while (pos[0]) {
+		if (pos[0] == '\\') {
+			pos++;
+			continue;
+		}
+		if (pos[0] == '"')
+			quotes = !quotes;
+		else if (!quotes && pos[0] == '%') {
+			const char* end = strchr(pos + 1, '%');
+			if (end == NULL)
+				continue;
+
+			parsedPredicate.Append(start, pos - start);
+			start = end + 1;
+
+			// We have a date string
+			BString date(pos + 1, start - 1 - pos);
+			parsedPredicate << parsedate(date.String(), time(NULL));
+
+			pos = end;
+		}
+		pos++;
+	}
+
+	parsedPredicate.Append(start, pos - start);
+}
+
+
 // FBC
 void BQuery::_QwertyQuery1() {}
 void BQuery::_QwertyQuery2() {}
@@ -759,6 +813,4 @@ void BQuery::_QwertyQuery3() {}
 void BQuery::_QwertyQuery4() {}
 void BQuery::_QwertyQuery5() {}
 void BQuery::_QwertyQuery6() {}
-
-
 

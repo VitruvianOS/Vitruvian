@@ -8,30 +8,26 @@ CFLAGS = -include build/BeOSBuildCompatibility.h \
 #TODO remove -fpermissive
 CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-dtor -fexceptions
 
-LIBNAME = libcosmoe.@LIBEXT@
+LIBNAME = libbe.@LIBEXT@
 
-VPATH += ./ support kernel storage storage/mime storage/sniffer app interface interface/BTextView shared
-
-KERNEL_KIT_OBJS = area.o direntfd.o misc.o	real_time_clock.o \
-atomic.o fs.o parsedate.o sem.o dirent.o image.o \
-port.o thread.o
+VPATH += ./ support storage storage/mime storage/sniffer app interface interface/BTextView shared locale
 
 SUPPORT_KIT_OBJS = Archivable.o BufferedDataIO.o  Flattenable.o  Referenceable.o \
 ArchivingManagers.o BufferIO.o	StopWatch.o ByteOrder.o List.o String.o \
 Beep.o DataIO.o Locker.o StringList.o BlockCache.o DateTime.o PointerList.o Url.o
 
-STORAGE_KIT_OBJS = AppFileInfo.o MimeType.o	ResourcesContainer.o \
-Directory.o Node.o Resources.o Entry.o NodeInfo.o	ResourceStrings.o \
+#FilePanel.o kernel_interface.POSIX.o
+
+STORAGE_KIT_OBJS = AppFileInfo.o NodeInfo.o MimeType.o	ResourcesContainer.o \
+Directory.o Node.o Resources.o Entry.o	ResourceStrings.o \
 EntryList.o NodeMonitor.o File.o OffsetFile.o Statable.o \
-FilePanel.o Path.o storage_support.o FindDirectory.o Query.o \
-SymLink.o kernel_interface.POSIX.o  QueryPredicate.o	Volume.o \
+ Path.o storage_support.o FindDirectory.o Query.o \
+SymLink.o  QueryPredicate.o	Volume.o \
 ResourceFile.o VolumeRoster.o Mime.o ResourceItem.o \
-AssociatedTypes.o	     database_support.o  Supertype.o \
-CreateAppMetaMimeThread.o  InstalledTypes.o    SupportingApps.o \
-database_access.o	     MimeUpdateThread.o  UpdateMimeInfoThread.o \
-Database.o		     SnifferRules.o CharStream.o	Err.o \
-Pattern.o      Range.o	   RPatternList.o \
+database_access.o database_support.o \
+CharStream.o	Err.o     Pattern.o      Range.o	   RPatternList.o \
 DisjList.o	Parser.o  PatternList.o  RPattern.o  Rule.o
+
 
 APP_KIT_OBJS = AppDefs.o Looper.o PortQueue.o \
 Application.o LooperList.o PropertyInfo.o \
@@ -60,17 +56,19 @@ LineBuffer.o TextGapBuffer.o UndoBuffer.o StyleBuffer.o RegionSupport.o
 
 SHARED_KIT_OBJS = DataBuffer.o
 
+LOCALE_KIT_OBJS = UnicodeChar.o
 
 CC = @CC@
 
-OBJS += $(KERNEL_KIT_OBJS)
 OBJS += $(SUPPORT_KIT_OBJS)
 OBJS += $(STORAGE_KIT_OBJS)
 OBJS += $(APP_KIT_OBJS)
 OBJS += $(INTERFACE_KIT_OBJS)
 OBJS += $(SHARED_KIT_OBJS)
+OBJS += $(LOCALE_KIT_OBJS)
 
-OBJDIR	:= objs
+OBJDIR	:= @top_srcdir@/objs
+ROOTLIBDIR = @top_srcdir@/objs
 
 include @top_srcdir@/makefile.rules
 
@@ -79,8 +77,10 @@ all :	$(OBJDIR) $(OBJDIR)/$(LIBNAME)
 $(OBJDIR):
 	mkdir $(OBJDIR)
 
+# TODO licon is just stubbed
+
 $(OBJDIR)/$(LIBNAME): $(OBJS)
-	$(CC) @SHAREDLINK@ $(OBJS) -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
+	$(CC) @SHAREDLINK@ $(OBJS) -L$(OBJDIR) -lroot -licon -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
 
 install: $(OBJDIR)/$(LIBNAME) $(libdir)
 	cp -f $< $(libdir)/$(LIBNAME)
@@ -93,7 +93,7 @@ $(libdir):
 
 doc:
 	-rm -R docs/*
-	doxygen libcosmoe.dox
+	doxygen libbe.dox
 
 deps: $(OBJDIR) $(DEPS)
 

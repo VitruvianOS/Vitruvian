@@ -1,14 +1,10 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
-/*!
-	\file database_support.h
-	Private mime database function and constant declarations
-*/
-
+/*
+ * Copyright 2002-2007, Haiku, Inc. All Rights Reserved.
+ * Distributed under the terms of the MIT License.
+ */
 #ifndef _MIME_DATABASE_SUPPORT_H
 #define _MIME_DATABASE_SUPPORT_H
+
 
 #include <StorageDefs.h>
 
@@ -16,19 +12,22 @@
 
 class BNode;
 class BMessage;
+class BString;
+
 
 namespace BPrivate {
 namespace Storage {
 namespace Mime {
 
 // Database directory
-extern const std::string kDatabaseDir;
-extern const std::string kApplicationDatabaseDir;
-	
+const std::string get_database_directory();
+const std::string get_application_database_directory();
+
 // Attribute Prefixes
 extern const char *kMiniIconAttrPrefix;
-extern const char *kLargeIconAttrPrefix; 
-	
+extern const char *kLargeIconAttrPrefix;
+extern const char *kIconAttrPrefix;
+
 // Attribute names
 extern const char *kFileTypeAttr;
 extern const char *kTypeAttr;
@@ -39,11 +38,12 @@ extern const char *kLongDescriptionAttr;
 extern const char *kFileExtensionsAttr;
 extern const char *kMiniIconAttr;
 extern const char *kLargeIconAttr;
+extern const char *kIconAttr;
 extern const char *kPreferredAppAttr;
 extern const char *kSnifferRuleAttr;
 extern const char *kSupportedTypesAttr;
 
-// Attribute Datatypes	
+// Attribute Datatypes
 extern const int32 kFileTypeType;
 extern const int32 kTypeType;
 extern const int32 kAppHintType;
@@ -53,6 +53,7 @@ extern const int32 kLongDescriptionType;
 extern const int32 kFileExtensionsType;
 extern const int32 kMiniIconType;
 extern const int32 kLargeIconType;
+extern const int32 kIconType;
 extern const int32 kPreferredAppType;
 extern const int32 kSnifferRuleType;
 extern const int32 kSupportedTypesType;
@@ -84,9 +85,9 @@ ssize_t read_mime_attr(const char *type, const char *attr, void *data,
 status_t read_mime_attr_message(const char *type, const char *attr, BMessage *msg);
 status_t read_mime_attr_string(const char *type, const char *attr, BString *str);
 status_t write_mime_attr(const char *type, const char *attr, const void *data,
-						     size_t len, type_code datatype, bool *didCreate);	
+						     size_t len, type_code datatype, bool *didCreate);
 status_t write_mime_attr_message(const char *type, const char *attr,
-									const BMessage *msg, bool *didCreate);	
+									const BMessage *msg, bool *didCreate);
 
 status_t delete_attribute(const char *type, const char *attr);
 

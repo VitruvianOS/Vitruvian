@@ -6,6 +6,8 @@
 # NOTE: Order matters
 SUBPROJECTS =	\
 				headers \
+				src/libs/icon \
+				src/system \
 				src/kits \
 				src/apps
 

@@ -1,59 +1,66 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
+/*
+ * Copyright 2002-2008, Haiku Inc.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Tyler Dauwalder
+ */
+
 /*!
 	\file QueryPredicate.cpp
 	BQuery predicate helper classes implementation.
 */
+
 #include "QueryPredicate.h"
 
 #include <ctype.h>
 
+#include <UnicodeChar.h>
+
+
 namespace BPrivate {
 namespace Storage {
 
-// QueryNode
+// #pragma mark - QueryNode
 
-// constructor
+
 QueryNode::QueryNode()
 {
 }
 
-// destructor
+
 QueryNode::~QueryNode()
 {
 }
 
 
-// LeafNode
+// #pragma mark - LeafNode
 
-// constructor
+
 LeafNode::LeafNode()
-		: QueryNode()
 {
 }
 
-// destructor
+
 LeafNode::~LeafNode()
 {
 }
 
-// Arity
+
 uint32
 LeafNode::Arity() const
 {
 	return 0;
 }
 
-// SetChildAt
+
 status_t
 LeafNode::SetChildAt(QueryNode *child, int32 index)
 {
 	return B_BAD_VALUE;
 }
 
-// ChildAt
+
 QueryNode *
 LeafNode::ChildAt(int32 index)
 {
@@ -61,29 +68,29 @@ LeafNode::ChildAt(int32 index)
 }
 
 
-// UnaryNode
+// #pragma mark - UnaryNode
 
-// constructor
+
 UnaryNode::UnaryNode()
-		 : QueryNode(),
-		   fChild(NULL)
+	:
+	fChild(NULL)
 {
 }
 
-// destructor
+
 UnaryNode::~UnaryNode()
 {
 	delete fChild;
 }
 
-// Arity
+
 uint32
 UnaryNode::Arity() const
 {
 	return 1;
 }
 
-// SetChildAt
+
 status_t
 UnaryNode::SetChildAt(QueryNode *child, int32 index)
 {
@@ -96,7 +103,7 @@ UnaryNode::SetChildAt(QueryNode *child, int32 index)
 	return error;
 }
 
-// ChildAt
+
 QueryNode *
 UnaryNode::ChildAt(int32 index)
 {
@@ -107,31 +114,31 @@ UnaryNode::ChildAt(int32 index)
 }
 
 
-// BinaryNode
+// #pragma mark - BinaryNode
 
-// constructor
+
 BinaryNode::BinaryNode()
-		  : QueryNode(),
-			fChild1(NULL),
-			fChild2(NULL)
+	:
+	fChild1(NULL),
+	fChild2(NULL)
 {
 }
 
-// destructor
+
 BinaryNode::~BinaryNode()
 {
 	delete fChild1;
 	delete fChild2;
 }
 
-// Arity
+
 uint32
 BinaryNode::Arity() const
 {
 	return 2;
 }
 
-// SetChildAt
+
 status_t
 BinaryNode::SetChildAt(QueryNode *child, int32 index)
 {
@@ -147,7 +154,7 @@ BinaryNode::SetChildAt(QueryNode *child, int32 index)
 	return error;
 }
 
-// ChildAt
+
 QueryNode *
 BinaryNode::ChildAt(int32 index)
 {
@@ -160,16 +167,16 @@ BinaryNode::ChildAt(int32 index)
 }
 
 
-// AttributeNode
+// #pragma mark - AttributeNode
 
-// constructor
+
 AttributeNode::AttributeNode(const char *attribute)
-			 : LeafNode(),
-			   fAttribute(attribute)
+	:
+	fAttribute(attribute)
 {
 }
 
-// GetString
+
 status_t
 AttributeNode::GetString(BString &predicate)
 {
@@ -178,34 +185,47 @@ AttributeNode::GetString(BString &predicate)
 }
 
 
-// StringNode
+// #pragma mark - StringNode
 
-// constructor
+
 StringNode::StringNode(const char *value, bool caseInsensitive)
-		  : LeafNode(),
-			fValue()
 {
-	if (value) {
-		if (caseInsensitive) {
-			int32 len = strlen(value);
-			for (int32 i = 0; i < len; i++) {
-				char c = value[i];
-				if (isalpha(c)) {
-					int lower = tolower(c);
-					int upper = toupper(c);
-					if (lower < 0 || upper < 0)
-						fValue << c;
-					else
-						fValue << "[" << (char)lower << (char)upper << "]";
-				} else
-					fValue << c;
+	if (value == NULL)
+		return;
+
+	if (caseInsensitive) {
+		while (uint32 codePoint = BUnicodeChar::FromUTF8(&value)) {
+			char utf8Buffer[4];
+			char *utf8 = utf8Buffer;
+			if (BUnicodeChar::IsAlpha(codePoint)) {
+				uint32 lower = BUnicodeChar::ToLower(codePoint);
+				uint32 upper = BUnicodeChar::ToUpper(codePoint);
+				if (lower == upper) {
+					BUnicodeChar::ToUTF8(codePoint, &utf8);
+					fValue.Append(utf8Buffer, utf8 - utf8Buffer);
+				} else {
+					fValue << "[";
+					BUnicodeChar::ToUTF8(lower, &utf8);
+					fValue.Append(utf8Buffer, utf8 - utf8Buffer);
+					utf8 = utf8Buffer;
+					BUnicodeChar::ToUTF8(upper, &utf8);
+					fValue.Append(utf8Buffer, utf8 - utf8Buffer);
+					fValue << "]";
+				}
+			} else if (codePoint == L' ') {
+				fValue << '*';
+			} else {
+				BUnicodeChar::ToUTF8(codePoint, &utf8);
+				fValue.Append(utf8Buffer, utf8 - utf8Buffer);
 			}
-		} else
-			fValue = value;
+		}
+	} else {
+		fValue = value;
+		fValue.ReplaceAll(' ', '*');
 	}
 }
 
-// GetString
+
 status_t
 StringNode::GetString(BString &predicate)
 {
@@ -217,16 +237,16 @@ StringNode::GetString(BString &predicate)
 }
 
 
-// DateNode
+// #pragma mark - DateNode
 
-// constructor
+
 DateNode::DateNode(const char *value)
-		: LeafNode(),
-		  fValue(value)
+	:
+	fValue(value)
 {
 }
 
-// GetString
+
 status_t
 DateNode::GetString(BString &predicate)
 {
@@ -238,45 +258,53 @@ DateNode::GetString(BString &predicate)
 }
 
 
-// ValueNode
+// #pragma mark - ValueNode
 
-// GetString
-//
-// float specialization
+
 template<>
 status_t
 ValueNode<float>::GetString(BString &predicate)
 {
 	char buffer[32];
-	sprintf(buffer, "0x%08lx", *(int32*)&fValue);
+	union {
+		int32 asInteger;
+		float asFloat;
+	} value;
+	value.asFloat = fValue;
+//	int32 value = *reinterpret_cast<int32*>(&fValue);
+	sprintf(buffer, "0x%08lx", value.asInteger);
 	predicate.SetTo(buffer);
 	return B_OK;
 }
 
-// GetString
-//
-// double specialization
+
 template<>
 status_t
 ValueNode<double>::GetString(BString &predicate)
 {
 	char buffer[32];
-	sprintf(buffer, "0x%016Lx", *(int64*)&fValue);
+	union {
+		int64 asInteger;
+		double asFloat;
+	} value;
+//	int64 value = *reinterpret_cast<int64*>(&fValue);
+	value.asFloat = fValue;
+	sprintf(buffer, "0x%016Lx", value.asInteger);
 	predicate.SetTo(buffer);
 	return B_OK;
 }
 
 
-// SpecialOpNode
+// #pragma mark - SpecialOpNode
 
-// constructor
+
 SpecialOpNode::SpecialOpNode(query_op op)
-			 : LeafNode(),
-			   fOp(op)
+	:
+	fOp(op)
 {
 }
 
-// GetString
+
 status_t
 SpecialOpNode::GetString(BString &predicate)
 {
@@ -284,16 +312,16 @@ SpecialOpNode::GetString(BString &predicate)
 }
 
 
-// UnaryOpNode
+// #pragma mark - UnaryOpNode
 
-// constructor
+
 UnaryOpNode::UnaryOpNode(query_op op)
-		   : UnaryNode(),
-			 fOp(op)
+	:
+	fOp(op)
 {
 }
 
-// GetString
+
 status_t
 UnaryOpNode::GetString(BString &predicate)
 {
@@ -311,16 +339,16 @@ UnaryOpNode::GetString(BString &predicate)
 }
 
 
-// BinaryOpNode
+// #pragma mark - BinaryOpNode
 
-// constructor
+
 BinaryOpNode::BinaryOpNode(query_op op)
-			: BinaryNode(),
-			  fOp(op)
+	:
+	fOp(op)
 {
 }
 
-// GetString
+
 status_t
 BinaryOpNode::GetString(BString &predicate)
 {
@@ -336,27 +364,27 @@ BinaryOpNode::GetString(BString &predicate)
 		switch (fOp) {
 			case B_EQ:
 				predicate << "(" << childString1 << "=="
-						  << childString2 << ")";
+					<< childString2 << ")";
 				break;
 			case B_GT:
 				predicate << "(" << childString1 << ">"
-						  << childString2 << ")";
+					<< childString2 << ")";
 				break;
 			case B_GE:
 				predicate << "(" << childString1 << ">="
-						  << childString2 << ")";
+					<< childString2 << ")";
 				break;
 			case B_LT:
 				predicate << "(" << childString1 << "<"
-						  << childString2 << ")";
+					<< childString2 << ")";
 				break;
 			case B_LE:
 				predicate << "(" << childString1 << "<="
-						  << childString2 << ")";
+					<< childString2 << ")";
 				break;
 			case B_NE:
 				predicate << "(" << childString1 << "!="
-						  << childString2 << ")";
+					<< childString2 << ")";
 				break;
 			case B_CONTAINS:
 				if (StringNode *strNode = dynamic_cast<StringNode*>(fChild2)) {
@@ -366,7 +394,7 @@ BinaryOpNode::GetString(BString &predicate)
 				}
 				if (error == B_OK) {
 					predicate << "(" << childString1 << "=="
-							  << childString2 << ")";
+						<< childString2 << ")";
 				}
 				break;
 			case B_BEGINS_WITH:
@@ -377,7 +405,7 @@ BinaryOpNode::GetString(BString &predicate)
 				}
 				if (error == B_OK) {
 					predicate << "(" << childString1 << "=="
-							  << childString2 << ")";
+						<< childString2 << ")";
 				}
 				break;
 			case B_ENDS_WITH:
@@ -388,16 +416,16 @@ BinaryOpNode::GetString(BString &predicate)
 				}
 				if (error == B_OK) {
 					predicate << "(" << childString1 << "=="
-							  << childString2 << ")";
+						<< childString2 << ")";
 				}
 				break;
 			case B_AND:
 				predicate << "(" << childString1 << "&&"
-						  << childString2 << ")";
+					<< childString2 << ")";
 				break;
 			case B_OR:
 				predicate << "(" << childString1 << "||"
-						  << childString2 << ")";
+					<< childString2 << ")";
 				break;
 			default:
 				error = B_BAD_VALUE;
@@ -408,22 +436,21 @@ BinaryOpNode::GetString(BString &predicate)
 }
 
 
-// QueryStack
+// #pragma mark - QueryStack
 
-// constructor
+
 QueryStack::QueryStack()
-		  : fNodes()
 {
 }
 
-// destructor
+
 QueryStack::~QueryStack()
 {
 	for (int32 i = 0; QueryNode *node = (QueryNode*)fNodes.ItemAt(i); i++)
 		delete node;
 }
 
-// PushNode
+
 status_t
 QueryStack::PushNode(QueryNode *node)
 {
@@ -435,14 +462,14 @@ QueryStack::PushNode(QueryNode *node)
 	return error;
 }
 
-// PopNode
+
 QueryNode *
 QueryStack::PopNode()
 {
 	return (QueryNode*)fNodes.RemoveItem(fNodes.CountItems() - 1);
 }
 
-// ConvertToTree
+
 status_t
 QueryStack::ConvertToTree(QueryNode *&rootNode)
 {
@@ -455,7 +482,7 @@ QueryStack::ConvertToTree(QueryNode *&rootNode)
 	return error;
 }
 
-// _GetSubTree
+
 status_t
 QueryStack::_GetSubTree(QueryNode *&rootNode)
 {
@@ -483,8 +510,5 @@ QueryStack::_GetSubTree(QueryNode *&rootNode)
 }
 
 
-};	// namespace Storage
-};	// namespace BPrivate
-
-
-
+}	// namespace Storage
+}	// namespace BPrivate

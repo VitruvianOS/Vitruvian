@@ -1,60 +1,40 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
-/*!
-	\file FindDirectory.h
-	Declarations of find_directory() functions and associated types.	
-*/
-
+/*
+ * Copyright 2002-2009, Haiku Inc. All Rights Reserved.
+ * Distributed under the terms of the MIT License.
+ */
 #ifndef _FIND_DIRECTORY_H
 #define _FIND_DIRECTORY_H
 
+
 #include <SupportDefs.h>
 
-#ifdef USE_OPENBEOS_NAMESPACE
-namespace OpenBeOS {
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 typedef enum {
-	/* ---
-		Per volume directories.  When asking for these
-		directories, a volume must be specified, or the call will assume
-		the boot volume.
-	--- */
-
-	B_DESKTOP_DIRECTORY				= 0,
+	/* Per volume directories */
+	B_DESKTOP_DIRECTORY					= 0,
 	B_TRASH_DIRECTORY,
 
-	/* ---
-		BeOS directories.  These are mostly accessed read-only.
-	--- */
+	/* System directories */
+	B_SYSTEM_DIRECTORY					= 1000,
+	B_SYSTEM_ADDONS_DIRECTORY			= 1002,
+	B_SYSTEM_BOOT_DIRECTORY,
+	B_SYSTEM_FONTS_DIRECTORY,
+	B_SYSTEM_LIB_DIRECTORY,
+ 	B_SYSTEM_SERVERS_DIRECTORY,
+	B_SYSTEM_APPS_DIRECTORY,
+	B_SYSTEM_BIN_DIRECTORY,
+	B_SYSTEM_DOCUMENTATION_DIRECTORY	= 1010,
+	B_SYSTEM_PREFERENCES_DIRECTORY,
+	B_SYSTEM_TRANSLATORS_DIRECTORY,
+	B_SYSTEM_MEDIA_NODES_DIRECTORY,
+	B_SYSTEM_SOUNDS_DIRECTORY,
+	B_SYSTEM_DATA_DIRECTORY,
+	B_SYSTEM_DEVELOP_DIRECTORY,
+	B_SYSTEM_PACKAGES_DIRECTORY,
+	B_SYSTEM_HEADERS_DIRECTORY,
 
-	B_BEOS_DIRECTORY				= 1000,
-	B_BEOS_SYSTEM_DIRECTORY,
-	B_BEOS_ADDONS_DIRECTORY,
-	B_BEOS_BOOT_DIRECTORY,
-	B_BEOS_FONTS_DIRECTORY,
-	B_BEOS_LIB_DIRECTORY,
- 	B_BEOS_SERVERS_DIRECTORY,
-	B_BEOS_APPS_DIRECTORY,
-	B_BEOS_BIN_DIRECTORY,
-	B_BEOS_ETC_DIRECTORY,
-	B_BEOS_DOCUMENTATION_DIRECTORY,
-	B_BEOS_PREFERENCES_DIRECTORY,
-	B_BEOS_TRANSLATORS_DIRECTORY,
-	B_BEOS_MEDIA_NODES_DIRECTORY,
-	B_BEOS_SOUNDS_DIRECTORY,
-
-	/* ---
-		Common directories, shared among all users.
-	--- */
-
-	B_COMMON_DIRECTORY				= 2000,
+	/* Common directories, shared among all users. */
+	B_COMMON_DIRECTORY					= 2000,
 	B_COMMON_SYSTEM_DIRECTORY,
 	B_COMMON_ADDONS_DIRECTORY,
 	B_COMMON_BOOT_DIRECTORY,
@@ -73,14 +53,25 @@ typedef enum {
 	B_COMMON_TRANSLATORS_DIRECTORY,
 	B_COMMON_MEDIA_NODES_DIRECTORY,
 	B_COMMON_SOUNDS_DIRECTORY,
+	B_COMMON_DATA_DIRECTORY,
+	B_COMMON_CACHE_DIRECTORY,
+	B_COMMON_PACKAGES_DIRECTORY,
+	B_COMMON_HEADERS_DIRECTORY,
+	B_COMMON_NONPACKAGED_DIRECTORY,
+	B_COMMON_NONPACKAGED_ADDONS_DIRECTORY,
+	B_COMMON_NONPACKAGED_TRANSLATORS_DIRECTORY,
+	B_COMMON_NONPACKAGED_MEDIA_NODES_DIRECTORY,
+	B_COMMON_NONPACKAGED_BIN_DIRECTORY,
+	B_COMMON_NONPACKAGED_DATA_DIRECTORY,
+	B_COMMON_NONPACKAGED_FONTS_DIRECTORY,
+	B_COMMON_NONPACKAGED_SOUNDS_DIRECTORY,
+	B_COMMON_NONPACKAGED_DOCUMENTATION_DIRECTORY,
+	B_COMMON_NONPACKAGED_LIB_DIRECTORY,
+	B_COMMON_NONPACKAGED_HEADERS_DIRECTORY,
 
-
-	/* ---
-		User directories.  These are interpreted in the context
-		of the user making the find_directory call.
-	--- */
-
-	B_USER_DIRECTORY				= 3000,
+	/* User directories. These are interpreted in the context
+	   of the user making the find_directory call. */
+	B_USER_DIRECTORY					= 3000,
 	B_USER_CONFIG_DIRECTORY,
 	B_USER_ADDONS_DIRECTORY,
 	B_USER_BOOT_DIRECTORY,
@@ -92,46 +83,67 @@ typedef enum {
 	B_USER_TRANSLATORS_DIRECTORY,
 	B_USER_MEDIA_NODES_DIRECTORY,
 	B_USER_SOUNDS_DIRECTORY,
+	B_USER_DATA_DIRECTORY,
+	B_USER_CACHE_DIRECTORY,
+	B_USER_PACKAGES_DIRECTORY,
+	B_USER_HEADERS_DIRECTORY,
+	B_USER_NONPACKAGED_DIRECTORY,
+	B_USER_NONPACKAGED_ADDONS_DIRECTORY,
+	B_USER_NONPACKAGED_TRANSLATORS_DIRECTORY,
+	B_USER_NONPACKAGED_MEDIA_NODES_DIRECTORY,
+	B_USER_NONPACKAGED_BIN_DIRECTORY,
+	B_USER_NONPACKAGED_DATA_DIRECTORY,
+	B_USER_NONPACKAGED_FONTS_DIRECTORY,
+	B_USER_NONPACKAGED_SOUNDS_DIRECTORY,
+	B_USER_NONPACKAGED_DOCUMENTATION_DIRECTORY,
+	B_USER_NONPACKAGED_LIB_DIRECTORY,
+	B_USER_NONPACKAGED_HEADERS_DIRECTORY,
 
-	/* ---
-		Global directories.
-	--- */
-
-	B_APPS_DIRECTORY				= 4000,
+	/* Global directories. */
+	B_APPS_DIRECTORY					= 4000,
 	B_PREFERENCES_DIRECTORY,
-	B_UTILITIES_DIRECTORY
+	B_UTILITIES_DIRECTORY,
+	B_PACKAGE_LINKS_DIRECTORY,
 
+	/* Obsolete: Legacy BeOS definition to be phased out */
+	B_BEOS_DIRECTORY					= 1000,
+	B_BEOS_SYSTEM_DIRECTORY,
+	B_BEOS_ADDONS_DIRECTORY,
+	B_BEOS_BOOT_DIRECTORY,
+	B_BEOS_FONTS_DIRECTORY,
+	B_BEOS_LIB_DIRECTORY,
+ 	B_BEOS_SERVERS_DIRECTORY,
+	B_BEOS_APPS_DIRECTORY,
+	B_BEOS_BIN_DIRECTORY,
+	B_BEOS_ETC_DIRECTORY,
+	B_BEOS_DOCUMENTATION_DIRECTORY,
+	B_BEOS_PREFERENCES_DIRECTORY,
+	B_BEOS_TRANSLATORS_DIRECTORY,
+	B_BEOS_MEDIA_NODES_DIRECTORY,
+	B_BEOS_SOUNDS_DIRECTORY,
+	B_BEOS_DATA_DIRECTORY,
 } directory_which;
 
-/* ---
-	The C interface
---- */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* C interface */
 
 status_t find_directory(directory_which which, dev_t volume, bool createIt,
-						char *pathString, int32 length);
+	char* pathString, int32 length);
 
 #ifdef __cplusplus
 }
-#endif
 
-#ifdef __cplusplus
+/* C++ interface */
 
 class BVolume;
 class BPath;
 
-/* ---
-	C++ interface
---- */
+status_t find_directory(directory_which which, BPath* path,
+	bool createIt = false, BVolume* volume = NULL);
 
-status_t find_directory(directory_which which, BPath *path,
-						bool createIt = false, BVolume *volume = NULL);
+#endif	/* __cplusplus */
 
-#endif
-
-#ifdef USE_OPENBEOS_NAMESPACE
-};		// namespace OpenBeOS
-#endif
-
-#endif	// _FIND_DIRECTORY_H
-
-
+#endif	/* _FIND_DIRECTORY_H */

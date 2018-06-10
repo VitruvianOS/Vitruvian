@@ -8,6 +8,9 @@
 
 #include <limits.h>
 
+#ifndef __HAIKU__
+#include <errno.h>
+#endif
 
 /* Error baselines */
 #define B_GENERAL_ERROR_BASE		INT_MIN
@@ -188,11 +191,11 @@
 #endif
 
 /* B_NO_MEMORY (0x80000000) can't be negated, so it needs special handling */
-#ifdef B_USE_POSITIVE_POSIX_ERRORS
-#	define ENOMEM		B_POSIX_ENOMEM
-#else
-#	define ENOMEM		B_NO_MEMORY
-#endif
+//#ifdef B_USE_POSITIVE_POSIX_ERRORS
+//#	define ENOMEM		B_POSIX_ENOMEM
+//#else
+//#	define ENOMEM		B_NO_MEMORY
+//#endif
 
 //TODO fix this
 #if 0

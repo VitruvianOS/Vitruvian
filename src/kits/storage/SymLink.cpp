@@ -1,89 +1,81 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
-/*!
-	\file SymLink.cpp
+/*
+ * Copyright 2002-2009, Haiku Inc.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Tyler Dauwalder
+ *		Ingo Weinhold, ingo_weinhold@gmx.de
+ */
+
+
+/*!	\file SymLink.cpp
 	BSymLink implementation.
 */
 
+
 #include <new>
+#include <string.h>
 
 #include <SymLink.h>
 #include <Directory.h>
 #include <Entry.h>
 #include <Path.h>
 
-#include "kernel_interface.h"
+#include <syscalls.h>
 
 #include "storage_support.h"
 
 using namespace std;
 
-#ifdef USE_OPENBEOS_NAMESPACE
-namespace OpenBeOS {
-#endif
 
-// constructor
 //! Creates an uninitialized BSymLink object.
 BSymLink::BSymLink()
-		: BNode()
-	// WORKAROUND
-		, fSecretEntry(new(nothrow) BEntry)
 {
 }
 
-// copy constructor
+
 //! Creates a copy of the supplied BSymLink.
 /*!	\param link the BSymLink object to be copied
 */
 BSymLink::BSymLink(const BSymLink &link)
-		: BNode()
-	// WORKAROUND
-		, fSecretEntry(new(nothrow) BEntry)
+	:
+	BNode(link)
 {
-	*this = link;
 }
 
-// constructor
+
 /*! \brief Creates a BSymLink and initializes it to the symbolic link referred
 	to by the supplied entry_ref.
 	\param ref the entry_ref referring to the symbolic link
 */
 BSymLink::BSymLink(const entry_ref *ref)
-		: BNode()
-	// WORKAROUND
-		, fSecretEntry(new(nothrow) BEntry)
+	:
+	BNode(ref)
 {
 }
 
-// constructor
+
 /*! \brief Creates a BSymLink and initializes it to the symbolic link referred
 	to by the supplied BEntry.
 	\param entry the BEntry referring to the symbolic link
 */
 BSymLink::BSymLink(const BEntry *entry)
-		: BNode()
-	// WORKAROUND
-		, fSecretEntry(new(nothrow) BEntry)
+		: BNode(entry)
 {
-	SetTo(entry);
 }
 
-// constructor
+
 /*! \brief Creates a BSymLink and initializes it to the symbolic link referred
 	to by the supplied path name.
 	\param path the symbolic link's path name 
 */
 BSymLink::BSymLink(const char *path)
-		: BNode()
-	// WORKAROUND
-		, fSecretEntry(new(nothrow) BEntry)
+	:
+	BNode(path)
 {
-	SetTo(path);
 }
 
-// constructor
+
 /*! \brief Creates a BSymLink and initializes it to the symbolic link referred
 	to by the supplied path name relative to the specified BDirectory.
 	\param dir the BDirectory, relative to which the symbolic link's path name
@@ -91,93 +83,24 @@ BSymLink::BSymLink(const char *path)
 	\param path the symbolic link's path name relative to \a dir
 */
 BSymLink::BSymLink(const BDirectory *dir, const char *path)
-		: BNode()
-	// WORKAROUND
-		, fSecretEntry(new(nothrow) BEntry)
+	:
+	BNode(dir, path)
 {
-	SetTo(dir, path);
 }
 
-// destructor
+
 //! Frees all allocated resources.
 /*! If the BSymLink is properly initialized, the symbolic link's file
 	descriptor is closed.
 */
 BSymLink::~BSymLink()
 {
-	// WORKAROUND
-	delete fSecretEntry;
-}
-
-// WORKAROUND
-status_t
-BSymLink::SetTo(const entry_ref *ref)
-{
-	status_t error = BNode::SetTo(ref);
-	if (fSecretEntry) {
-		fSecretEntry->Unset();
-		if (error == B_OK)
-			fSecretEntry->SetTo(ref);
-	} else
-		error = B_NO_MEMORY;
-	return error;
-}
-
-// WORKAROUND
-status_t
-BSymLink::SetTo(const BEntry *entry)
-{
-	status_t error = BNode::SetTo(entry);
-	if (fSecretEntry) {
-		fSecretEntry->Unset();
-		if (error == B_OK)
-			*fSecretEntry = *entry;
-	} else
-		error = B_NO_MEMORY;
-	return error;
-}
-
-// WORKAROUND
-status_t
-BSymLink::SetTo(const char *path)
-{
-	status_t error = BNode::SetTo(path);
-	if (fSecretEntry) {
-		fSecretEntry->Unset();
-		if (error == B_OK)
-			fSecretEntry->SetTo(path);
-	} else
-		error = B_NO_MEMORY;
-	return error;
-}
-
-// WORKAROUND
-status_t
-BSymLink::SetTo(const BDirectory *dir, const char *path)
-{
-	status_t error = BNode::SetTo(dir, path);
-	if (fSecretEntry) {
-		fSecretEntry->Unset();
-		if (error == B_OK)
-			fSecretEntry->SetTo(dir, path);
-	} else
-		error = B_NO_MEMORY;
-	return error;
-}
-
-// WORKAROUND
-void
-BSymLink::Unset()
-{
-	BNode::Unset();
-	if (fSecretEntry)
-		fSecretEntry->Unset();
 }
 
 
-// ReadLink
 //! Reads the contents of the symbolic link into a buffer.
-/*!	\param buf the buffer
+/*!	The string written to the buffer will be null-terminated.
+	\param buf the buffer
 	\param size the size of the buffer
 	\return
 	- the number of bytes written into the buffer
@@ -187,35 +110,27 @@ BSymLink::Unset()
 	- some other error code
 */
 ssize_t
-BSymLink::ReadLink(char *buf, size_t size)
+BSymLink::ReadLink(char *buffer, size_t size)
 {
-/*
-	status_t error = (buf ? B_OK : B_BAD_VALUE);
-	if (error == B_OK && InitCheck() != B_OK)
-		error = B_FILE_ERROR;
-	if (error == B_OK)
-		error = BPrivate::Storage::read_link(get_fd(), buf, size);
-	return error;
-*/
-// WORKAROUND
-	status_t error = (buf ? B_OK : B_BAD_VALUE);
-	if (error == B_OK && (InitCheck() != B_OK
-		|| !fSecretEntry
-		|| fSecretEntry->InitCheck() != B_OK)) {
-		error = B_FILE_ERROR;
-	}
-	entry_ref ref;
-	if (error == B_OK)
-		error = fSecretEntry->GetRef(&ref);
-	char path[B_PATH_NAME_LENGTH];
-	if (error == B_OK)
-		error = BPrivate::Storage::entry_ref_to_path(&ref, path, sizeof(path));
-	if (error == B_OK)
-		error = BPrivate::Storage::read_link(path, buf, size);
-	return error;
+	if (!buffer)
+		return B_BAD_VALUE;
+	if (InitCheck() != B_OK)
+		return B_FILE_ERROR;
+
+	size_t linkLen = size;
+	status_t error = _kern_read_link(get_fd(), NULL, buffer, &linkLen);
+	if (error < B_OK)
+		return error;
+
+	// null-terminate
+	if (linkLen >= size)
+		return B_BUFFER_OVERFLOW;
+	buffer[linkLen] = '\0';
+
+	return linkLen;
 }
 
-// MakeLinkedPath
+
 /*!	\brief Combines a directory path and the contents of this symbolic link to
 	an absolute path.
 	\param dirPath the path name of the directory
@@ -231,9 +146,9 @@ BSymLink::ReadLink(char *buf, size_t size)
 ssize_t
 BSymLink::MakeLinkedPath(const char *dirPath, BPath *path)
 {
-	// R5 seems to convert the dirPath to a BDirectory, which causes links to
-	// be resolved, i.e. a "/tmp" dirPath expands to "/boot/var/tmp".
-	// That does also mean, that the dirPath must exists!
+	// BeOS seems to convert the dirPath to a BDirectory, which causes links to
+	// be resolved.
+	// This does also mean that the dirPath must exist!
 	if (!dirPath || !path)
 		return B_BAD_VALUE;
 	BDirectory dir(dirPath);
@@ -243,7 +158,7 @@ BSymLink::MakeLinkedPath(const char *dirPath, BPath *path)
 	return result;
 }
 
-// MakeLinkedPath
+
 /*!	\brief Combines a directory path and the contents of this symbolic link to
 	an absolute path.
 	\param dir the BDirectory referring to the directory
@@ -274,7 +189,7 @@ BSymLink::MakeLinkedPath(const BDirectory *dir, BPath *path)
 	return result;
 }
 
-// IsAbsolute
+
 //!	Returns whether this BSymLink refers to an absolute link.
 /*!	/return
 	- \c true, if the object is properly initialized and the symbolic link it
@@ -291,19 +206,6 @@ BSymLink::IsAbsolute()
 	return result;
 }
 
-// WORKAROUND
-BSymLink &
-BSymLink::operator=(const BSymLink &link)
-{
-	if (&link != this) {	// no need to assign us to ourselves
-		Unset();
-		static_cast<BNode&>(*this) = link;
-		if (fSecretEntry && link.fSecretEntry)
-			*fSecretEntry = *link.fSecretEntry;
-	}
-	return *this;
-}
-
 
 void BSymLink::_MissingSymLink1() {}
 void BSymLink::_MissingSymLink2() {}
@@ -311,6 +213,7 @@ void BSymLink::_MissingSymLink3() {}
 void BSymLink::_MissingSymLink4() {}
 void BSymLink::_MissingSymLink5() {}
 void BSymLink::_MissingSymLink6() {}
+
 
 //! Returns the BSymLink's file descriptor.
 /*! To be used instead of accessing the BNode's private \c fFd member directly.
@@ -321,11 +224,3 @@ BSymLink::get_fd() const
 {
 	return fFd;
 }
-
-
-#ifdef USE_OPENBEOS_NAMESPACE
-};		// namespace OpenBeOS
-#endif
-
-
-

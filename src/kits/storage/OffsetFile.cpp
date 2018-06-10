@@ -16,7 +16,7 @@ namespace Storage {
 
 // constructor
 OffsetFile::OffsetFile()
-	: fFile(),
+	: fFile(NULL),
 	  fOffset(0),
 	  fCurrentPosition(0)
 {
@@ -106,7 +106,7 @@ OffsetFile::Seek(off_t position, uint32 seekMode)
 			case SEEK_END:
 			{
 				off_t size;
-				error = BPositionIO::GetSize(&size);
+				error = GetSize(&size);
 				if (error == B_OK) {
 					if (size + position >= 0)
 						result = fCurrentPosition = size + position;
@@ -145,13 +145,13 @@ OffsetFile::SetSize(off_t size)
 
 // GetSize
 status_t
-OffsetFile::GetSize(off_t *size)
+OffsetFile::GetSize(off_t *size) const
 {
 	status_t error = (size ? B_OK : B_BAD_VALUE );
 	if (error == B_OK)
 		error = InitCheck();
 	if (error == B_OK)
-		error = fFile->BPositionIO::GetSize(size);
+		error = fFile->GetSize(size);
 	if (error == B_OK) {
 		*size -= fOffset;
 		if (*size < 0)
@@ -169,7 +169,3 @@ OffsetFile::Offset() const
 
 };	// namespace Storage
 };	// namespace BPrivate
-
-
-
-

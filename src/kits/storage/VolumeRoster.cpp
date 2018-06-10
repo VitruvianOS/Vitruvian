@@ -17,12 +17,11 @@
 #include <Bitmap.h>
 #include <Directory.h>
 #include <fs_info.h>
-#include <kernel_interface.h>
 #include <Node.h>
 #include <NodeMonitor.h>
 #include <VolumeRoster.h>
 
-static const char kBootVolumePath[] = "/";
+static const char kBootVolumePath[] = "/boot";
 
 using namespace std;
 
@@ -67,28 +66,7 @@ BVolumeRoster::BVolumeRoster()
 	: fCookie(0),
 	  fTarget(NULL)
 {
-#ifndef __APPLE__
-	struct mntent*	aMountEntry;
-	FILE*			fstab;
-
-	fstab = setmntent (_PATH_MOUNTED, "r");
-
-	while ((aMountEntry = getmntent(fstab)))
-	{
-		mMountList.AddItem(new BVolume(aMountEntry));
-	}
-
-	if (endmntent(fstab) == 0)
-	{
-		int saved_errno = errno;
-
-		_DeallocateMountList();
-
-		errno = saved_errno;
-	}
-#endif
 }
-
 
 // destructor
 /*!	\brief Frees all resources associated with this object.
@@ -98,9 +76,7 @@ BVolumeRoster::BVolumeRoster()
 BVolumeRoster::~BVolumeRoster()
 {
 	StopWatching();
-	_DeallocateMountList();
 }
-
 
 // GetNextVolume
 /*!	\brief Returns the next volume in the list of available volumes.
@@ -116,25 +92,17 @@ BVolumeRoster::GetNextVolume(BVolume *volume)
 	// check parameter
 	status_t error = (volume ? B_OK : B_BAD_VALUE);
 	// get next device
-	BVolume*	aMount;
-
-	if (!error)
-	{
-		aMount = (BVolume*)(mMountList.ItemAt(fCookie++));
-
-		if (aMount != NULL)
-		{
-			*volume = *aMount;
-		}
-		else
-		{
-			error = B_ERROR;
-		}
+	dev_t device;
+	if (error == B_OK) {
+		device = next_dev(&fCookie);
+		if (device < 0)
+			error = device;
 	}
-
+	// init volume
+	if (error == B_OK)
+		error = volume->SetTo(device);
 	return error;
 }
-
 
 // Rewind
 /*! \brief Rewinds the list of available volumes such that the next call to
@@ -145,7 +113,6 @@ BVolumeRoster::Rewind()
 {
 	fCookie = 0;
 }
-
 
 // GetBootVolume
 /*!	\brief Returns the boot volume.
@@ -166,19 +133,16 @@ BVolumeRoster::GetBootVolume(BVolume *volume)
 	// check parameter
 	status_t error = (volume ? B_OK : B_BAD_VALUE);
 	// get device
-
-	return error;
-}
-
-
-void	BVolumeRoster::_DeallocateMountList()
-{
-	BVolume *aMount;
-
-	while ((aMount = (BVolume*)(mMountList.RemoveItem(1L))) != NULL)
-	{
-		delete aMount;
+	dev_t device;
+	if (error == B_OK) {
+		device = dev_for_path(kBootVolumePath);
+		if (device < 0)
+			error = device;
 	}
+	// init volume
+	if (error == B_OK)
+		error = volume->SetTo(device);
+	return error;
 }
 
 // StartWatching
@@ -213,11 +177,9 @@ BVolumeRoster::StartWatching(BMessenger messenger)
 		if (!fTarget)
 			error = B_NO_MEMORY;
 	}
-
 	// start watching
 	if (error == B_OK)
 		error = watch_node(NULL, B_WATCH_MOUNT, messenger);
-
 	// cleanup on failure
 	if (error != B_OK && fTarget) {
 		delete fTarget;
@@ -258,4 +220,3 @@ void BVolumeRoster::_SeveredVRoster2() {}
 #ifdef USE_OPENBEOS_NAMESPACE
 }
 #endif
-

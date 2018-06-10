@@ -142,9 +142,7 @@ ResourceItem::SetName(const char *name)
 const char *
 ResourceItem::Name() const
 {
-	if (fName.Length() > 0)
-		return fName.String();
-	return NULL;
+	return fName.String();
 }
 
 // Data

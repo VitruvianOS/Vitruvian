@@ -13,9 +13,12 @@
 
 #include <StorageDefs.h>
 #include <SupportDefs.h>
+
+#include <syscalls.h>
+
 #include "storage_support.h"
 
-using namespace std;
+using std::nothrow;
 
 namespace BPrivate {
 namespace Storage {
@@ -118,9 +121,9 @@ parse_path(const char *fullPath, char *dirPath, char *leaf)
 	}
 	// copy the result strings
 	if (dirPath)
-		strncpy(dirPath, fullPath, dirEnd + 1);
+		strlcpy(dirPath, fullPath, dirEnd + 1);
 	if (leaf)
-		strncpy(leaf, fullPath + leafStart, leafEnd - leafStart + 1);
+		strlcpy(leaf, fullPath + leafStart, leafEnd - leafStart + 1);
 	return B_OK;
 }
 
@@ -488,6 +491,15 @@ bool
 device_is_root_device(dev_t device)
 {
 	return device == 1;
+}
+
+// Close
+void
+FDCloser::Close()
+{
+	if (fFD >= 0)
+		_kern_close(fFD);
+	fFD = -1;
 }
 
 };	// namespace Storage

@@ -1,11 +1,12 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
-/*!
-	\file NodeInfo.cpp
-	BNodeInfo implementation.
-*/
+/*
+ * Copyright 2002-2006, Haiku Inc.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Ingo Weinhold, bonefish@users.sf.net
+ *		Axel Dörfler, axeld@pinc-software.de
+ */
+
 
 #include <NodeInfo.h>
 
@@ -15,12 +16,15 @@
 #include <MimeTypes.h>
 #include <Bitmap.h>
 #include <Entry.h>
+#include <IconUtils.h>
 #include <Node.h>
 #include <Path.h>
 #include <Rect.h>
 
 #include <fs_attr.h>
 #include <fs_info.h>
+
+#define B_BITMAP_NO_SERVER_LINK 0
 
 using namespace std;
 
@@ -31,14 +35,9 @@ static const char *kNIPreferredAppAttribute	= NI_BEOS ":PREF_APP";
 static const char *kNIAppHintAttribute		= NI_BEOS ":PPATH";
 static const char *kNIMiniIconAttribute		= NI_BEOS ":M:STD_ICON";
 static const char *kNILargeIconAttribute	= NI_BEOS ":L:STD_ICON";
+static const char *kNIIconAttribute			= NI_BEOS ":ICON";
 
-// icon types
-//enum {
-//	B_MINI_ICON_TYPE	= 'MICN',
-//	B_LARGE_ICON_TYPE	= 'ICON',
-//};
 
-// constructor
 /*!	\brief Creates an uninitialized BNodeInfo object.
 
 	After created a BNodeInfo with this, you should call SetTo().
@@ -46,8 +45,9 @@ static const char *kNILargeIconAttribute	= NI_BEOS ":L:STD_ICON";
 	\see SetTo(BNode *node)
 */
 BNodeInfo::BNodeInfo()
-		 : fNode(NULL),
-		   fCStatus(B_NO_INIT)
+	:
+	fNode(NULL),
+	fCStatus(B_NO_INIT)
 {
 }
 
@@ -59,8 +59,9 @@ BNodeInfo::BNodeInfo()
 	\see SetTo(BNode *node)
 */
 BNodeInfo::BNodeInfo(BNode *node)
-		 : fNode(NULL),
-		   fCStatus(B_NO_INIT)
+	:
+	fNode(NULL),
+	fCStatus(B_NO_INIT)
 {
 	fCStatus = SetTo(node);
 }
@@ -145,7 +146,8 @@ BNodeInfo::GetType(char *type) const
 	if (error == B_OK && attrInfo.type != B_MIME_STRING_TYPE)
 		error = B_BAD_TYPE;
 	if (error == B_OK && attrInfo.size > B_MIME_TYPE_LENGTH)
-		error = B_BAD_VALUE;	// TODO: B_BAD_DATA?
+		error = B_BAD_DATA;
+
 	// read the data
 	if (error == B_OK) {
 		ssize_t read = fNode->ReadAttr(kNITypeAttribute, attrInfo.type, 0,
@@ -154,9 +156,11 @@ BNodeInfo::GetType(char *type) const
 			error = read;
 		else if (read != attrInfo.size)
 			error = B_ERROR;
-		// to be save, null terminate the string at the very end
-		if (error == B_OK)
-			type[B_MIME_TYPE_LENGTH - 1] = '\0';
+
+		if (error == B_OK) {
+			// attribute strings doesn't have to be null terminated
+			type[min_c(attrInfo.size, B_MIME_TYPE_LENGTH - 1)] = '\0';
+		}
 	}
 	return error;
 }
@@ -186,6 +190,7 @@ BNodeInfo::SetType(const char *type)
 		error = B_BAD_VALUE;
 	if (error == B_OK && InitCheck() != B_OK)
 		error = B_NO_INIT;
+
 	// write/remove the attribute
 	if (error == B_OK) {
 		if (type) {
@@ -224,78 +229,88 @@ BNodeInfo::SetType(const char *type)
 status_t
 BNodeInfo::GetIcon(BBitmap *icon, icon_size k) const
 {
-	status_t error = B_OK;
-	// set some icon size related variables
-	const char *attribute = NULL;
-	BRect bounds;
-	uint32 attrType = 0;
-	size_t attrSize = 0;
-	switch (k) {
-		case B_MINI_ICON:
-			attribute = kNIMiniIconAttribute;
-			bounds.Set(0, 0, 15, 15);
-			attrType = B_MINI_ICON_TYPE;
-			attrSize = 16 * 16;
-			break;
-		case B_LARGE_ICON:
-			attribute = kNILargeIconAttribute;
-			bounds.Set(0, 0, 31, 31);
-			attrType = B_LARGE_ICON_TYPE;
-			attrSize = 32 * 32;
-			break;
-		default:
-			error = B_BAD_VALUE;
-			break;
-	}
-	// check parameter and initialization
-	if (error == B_OK
-		&& (!icon || icon->InitCheck() != B_OK || icon->Bounds() != bounds)) {
-		error = B_BAD_VALUE;
-	}
-	if (error == B_OK && InitCheck() != B_OK)
-		error = B_NO_INIT;
-	// get the attribute info and check type and size of the attr contents
-	attr_info attrInfo;
-	if (error == B_OK)
-		error = fNode->GetAttrInfo(attribute, &attrInfo);
-	if (error == B_OK && attrInfo.type != attrType)
-		error = B_BAD_TYPE;
-	if (error == B_OK && attrInfo.size != attrSize)
-		error = B_BAD_VALUE;	// TODO: B_BAD_DATA?
-	// read the attribute
-	if (error == B_OK) {
-		bool otherColorSpace = (icon->ColorSpace() != B_CMAP8);
-		char *buffer = NULL;
-		ssize_t read;
-		if (otherColorSpace) {
-			// other color space than stored in attribute
-			buffer = new(nothrow) char[attrSize];
-			if (!buffer)
-				error = B_NO_MEMORY;
-			if (error == B_OK) {
-				read = fNode->ReadAttr(attribute, attrType, 0, buffer,
-									   attrSize);
-			}
-		} else {
-			read = fNode->ReadAttr(attribute, attrType, 0, icon->Bits(), 
-								   attrSize);
-		}
-		if (error == B_OK) {
-			if (read < 0)
-				error = read;
-			else if (read != attrInfo.size)
-				error = B_ERROR;
-		}
-		if (otherColorSpace) {
-			// other color space than stored in attribute
-			if (error == B_OK) {
-				error = icon->ImportBits(buffer, attrSize, B_ANY_BYTES_PER_ROW,
-										 0, B_CMAP8);
-			}
-			delete[] buffer;
-		}
-	}
-	return error;
+	const char* iconAttribute = kNIIconAttribute;
+	const char* miniIconAttribute = kNIMiniIconAttribute;
+	const char* largeIconAttribute = kNILargeIconAttribute;
+
+	return BIconUtils::GetIcon(fNode, iconAttribute, miniIconAttribute,
+							   largeIconAttribute, k, icon);
+
+//	status_t error = B_OK;
+//	// set some icon size related variables
+//	const char *attribute = NULL;
+//	BRect bounds;
+//	uint32 attrType = 0;
+//	size_t attrSize = 0;
+//	switch (k) {
+//		case B_MINI_ICON:
+//			attribute = kNIMiniIconAttribute;
+//			bounds.Set(0, 0, 15, 15);
+//			attrType = B_MINI_ICON_TYPE;
+//			attrSize = 16 * 16;
+//			break;
+//		case B_LARGE_ICON:
+//			attribute = kNILargeIconAttribute;
+//			bounds.Set(0, 0, 31, 31);
+//			attrType = B_LARGE_ICON_TYPE;
+//			attrSize = 32 * 32;
+//			break;
+//		default:
+//			error = B_BAD_VALUE;
+//			break;
+//	}
+//
+//	// check parameter and initialization
+//	if (error == B_OK
+//		&& (!icon || icon->InitCheck() != B_OK || icon->Bounds() != bounds)) {
+//		error = B_BAD_VALUE;
+//	}
+//	if (error == B_OK && InitCheck() != B_OK)
+//		error = B_NO_INIT;
+//
+//	// get the attribute info and check type and size of the attr contents
+//	attr_info attrInfo;
+//	if (error == B_OK)
+//		error = fNode->GetAttrInfo(attribute, &attrInfo);
+//	if (error == B_OK && attrInfo.type != attrType)
+//		error = B_BAD_TYPE;
+//	if (error == B_OK && attrInfo.size != attrSize)
+//		error = B_BAD_DATA;
+//
+//	// read the attribute
+//	if (error == B_OK) {
+//		bool otherColorSpace = (icon->ColorSpace() != B_CMAP8);
+//		char *buffer = NULL;
+//		ssize_t read;
+//		if (otherColorSpace) {
+//			// other color space than stored in attribute
+//			buffer = new(nothrow) char[attrSize];
+//			if (!buffer)
+//				error = B_NO_MEMORY;
+//			if (error == B_OK) {
+//				read = fNode->ReadAttr(attribute, attrType, 0, buffer,
+//									   attrSize);
+//			}
+//		} else {
+//			read = fNode->ReadAttr(attribute, attrType, 0, icon->Bits(), 
+//								   attrSize);
+//		}
+//		if (error == B_OK) {
+//			if (read < 0)
+//				error = read;
+//			else if (read != attrInfo.size)
+//				error = B_ERROR;
+//		}
+//		if (otherColorSpace) {
+//			// other color space than stored in attribute
+//			if (error == B_OK) {
+//				error = icon->ImportBits(buffer, attrSize, B_ANY_BYTES_PER_ROW,
+//										 0, B_CMAP8);
+//			}
+//			delete[] buffer;
+//		}
+//	}
+//	return error;
 }
 
 // SetIcon
@@ -343,6 +358,7 @@ BNodeInfo::SetIcon(const BBitmap *icon, icon_size k)
 			error = B_BAD_VALUE;
 			break;
 	}
+
 	// check parameter and initialization
 	if (error == B_OK && icon
 		&& (icon->InitCheck() != B_OK || icon->Bounds() != bounds)) {
@@ -350,13 +366,14 @@ BNodeInfo::SetIcon(const BBitmap *icon, icon_size k)
 	}
 	if (error == B_OK && InitCheck() != B_OK)
 		error = B_NO_INIT;
+
 	// write/remove the attribute
 	if (error == B_OK) {
 		if (icon) {
 			bool otherColorSpace = (icon->ColorSpace() != B_CMAP8);
 			ssize_t written = 0;
 			if (otherColorSpace) {
-				BBitmap bitmap(bounds, B_CMAP8);
+				BBitmap bitmap(bounds, B_BITMAP_NO_SERVER_LINK, B_CMAP8);
 				error = bitmap.InitCheck();
 				if (error == B_OK)
 					error = bitmap.ImportBits(icon);
@@ -377,6 +394,106 @@ BNodeInfo::SetIcon(const BBitmap *icon, icon_size k)
 		} else	// no icon given => remove
 			error = fNode->RemoveAttr(attribute);
 	}
+	return error;
+}
+
+
+// GetIcon
+/*!	\brief Gets the node's icon.
+
+	The icon stored in the node's "BEOS:ICON" attribute is retrieved.
+	The caller is responsible to \c delete[] the returned data if the
+	function was successful.
+
+	\param data A pointer in which a pointer to the icon data
+		   will be returned.
+	\param size A pointer in which the size of the found icon data
+		   will be returned.
+	\param type A pointer in which the type of the found icon data
+		   will be returned.
+	\return
+	- \c B_OK: Everything went fine.
+	- \c B_NO_INIT: The object is not properly initialized.
+	- \c B_BAD_VALUE: \c NULL \a data, \c NULL size or \c NULL \a type.
+	- \c B_NO_MEMORY: No memory to allocate the data buffer.
+	- other error codes
+*/
+status_t
+BNodeInfo::GetIcon(uint8** data, size_t* size, type_code* type) const
+{
+	// check params
+	if (!data || !size || !type)
+		return B_BAD_VALUE;
+
+	// check initialization
+	if (InitCheck() != B_OK)
+		return B_NO_INIT;
+
+	// get the attribute info and check type and size of the attr contents
+	attr_info attrInfo;
+	status_t ret = fNode->GetAttrInfo(kNIIconAttribute, &attrInfo);
+	if (ret < B_OK)
+		return ret;
+
+	// chicken out on unrealisticly large attributes
+	if (attrInfo.size > 128 * 1024)
+		return B_ERROR;
+
+	// fill the params
+	*type = attrInfo.type;
+	*size = attrInfo.size;
+	*data = new (nothrow) uint8[*size];
+
+	if (!*data)
+		return B_NO_MEMORY;
+
+	// featch the data
+	ssize_t read = fNode->ReadAttr(kNIIconAttribute, *type, 0, *data, *size);
+	if (read != attrInfo.size) {
+		delete[] *data;
+		*data = NULL;
+		return B_ERROR;
+	}
+
+	return B_OK;
+}
+
+// SetIcon
+/*!	\brief Sets the node's icon.
+
+	The icon is stored in the node's "BEOS:ICON" attribute.
+
+	If \a data is \c NULL, the respective attribute is removed.
+
+	\param data A pointer to valid vector icon data.
+		   May be \c NULL.
+	\param size Specifies the size of the provided data buffer.
+	\return
+	- \c B_OK: Everything went fine.
+	- \c B_NO_INIT: The object is not properly initialized.
+	- other error codes
+*/
+status_t 
+BNodeInfo::SetIcon(const uint8* data, size_t size)
+{
+	// check initialization
+	if (InitCheck() != B_OK)
+		return B_NO_INIT;
+
+	status_t error = B_OK;
+
+	// write/remove the attribute
+	if (data && size > 0) {
+		ssize_t written = fNode->WriteAttr(kNIIconAttribute,
+										   B_VECTOR_ICON_TYPE,
+										   0, data, size);
+		if (written < 0)
+			error = (status_t)written;
+		else if (written != (ssize_t)size)
+			error = B_ERROR;
+	} else	// no icon given => remove
+		error = fNode->RemoveAttr(kNIIconAttribute);
+
 	return error;
 }
 
@@ -405,6 +522,7 @@ BNodeInfo::GetPreferredApp(char *signature, app_verb verb) const
 	status_t error = (signature && verb == B_OPEN ? B_OK : B_BAD_VALUE);
 	if (error == B_OK && InitCheck() != B_OK)
 		error = B_NO_INIT;
+
 	// get the attribute info and check type and length of the attr contents
 	attr_info attrInfo;
 	if (error == B_OK)
@@ -412,7 +530,8 @@ BNodeInfo::GetPreferredApp(char *signature, app_verb verb) const
 	if (error == B_OK && attrInfo.type != B_MIME_STRING_TYPE)
 		error = B_BAD_TYPE;
 	if (error == B_OK && attrInfo.size > B_MIME_TYPE_LENGTH)
-		error = B_BAD_VALUE;	// TODO: B_BAD_DATA?
+		error = B_BAD_DATA;
+
 	// read the data
 	if (error == B_OK) {
 		ssize_t read = fNode->ReadAttr(kNIPreferredAppAttribute, attrInfo.type,
@@ -421,9 +540,11 @@ BNodeInfo::GetPreferredApp(char *signature, app_verb verb) const
 			error = read;
 		else if (read != attrInfo.size)
 			error = B_ERROR;
-		// to be save, null terminate the string at the very end
-		if (error == B_OK)
-			signature[B_MIME_TYPE_LENGTH - 1] = '\0';
+
+		if (error == B_OK) {
+			// attribute strings doesn't have to be null terminated
+			signature[min_c(attrInfo.size, B_MIME_TYPE_LENGTH - 1)] = '\0';
+		}
 	}
 	return error;
 }
@@ -456,6 +577,7 @@ BNodeInfo::SetPreferredApp(const char *signature, app_verb verb)
 		error = B_BAD_VALUE;
 	if (error == B_OK && InitCheck() != B_OK)
 		error = B_NO_INIT;
+
 	// write/remove the attribute
 	if (error == B_OK) {
 		if (signature) {
@@ -495,6 +617,7 @@ BNodeInfo::GetAppHint(entry_ref *ref) const
 	status_t error = (ref ? B_OK : B_BAD_VALUE);
 	if (error == B_OK && InitCheck() != B_OK)
 		error = B_NO_INIT;
+
 	// get the attribute info and check type and length of the attr contents
 	attr_info attrInfo;
 	if (error == B_OK)
@@ -504,7 +627,8 @@ BNodeInfo::GetAppHint(entry_ref *ref) const
 	if (error == B_OK && attrInfo.type != B_MIME_STRING_TYPE)
 		error = B_BAD_TYPE;
 	if (error == B_OK && attrInfo.size > B_PATH_NAME_LENGTH)
-		error = B_BAD_VALUE;	// TODO: B_BAD_DATA?
+		error = B_BAD_DATA;
+
 	// read the data
 	if (error == B_OK) {
 		char path[B_PATH_NAME_LENGTH];
@@ -516,8 +640,8 @@ BNodeInfo::GetAppHint(entry_ref *ref) const
 			error = B_ERROR;
 		// get the entry_ref for the path
 		if (error == B_OK) {
-			// to be save, null terminate the path at the very end
-			path[B_PATH_NAME_LENGTH - 1] = '\0';
+			// attribute strings doesn't have to be null terminated
+			path[min_c(attrInfo.size, B_PATH_NAME_LENGTH - 1)] = '\0';
 			error = get_ref_for_path(path, ref);
 		}
 	}
@@ -547,6 +671,7 @@ BNodeInfo::SetAppHint(const entry_ref *ref)
 	status_t error = B_OK;
 	if (error == B_OK && InitCheck() != B_OK)
 		error = B_NO_INIT;
+
 	// write/remove the attribute
 	if (error == B_OK) {
 		if (ref) {
@@ -601,8 +726,10 @@ BNodeInfo::SetAppHint(const entry_ref *ref)
 status_t 
 BNodeInfo::GetTrackerIcon(BBitmap *icon, icon_size iconSize) const
 {
+	if (!icon)
+		return B_BAD_VALUE;
+
 	// set some icon size related variables
-	status_t error = B_OK;
 	BRect bounds;
 	switch (iconSize) {
 		case B_MINI_ICON:
@@ -612,89 +739,104 @@ BNodeInfo::GetTrackerIcon(BBitmap *icon, icon_size iconSize) const
 			bounds.Set(0, 0, 31, 31);
 			break;
 		default:
-			error = B_BAD_VALUE;
+//			error = B_BAD_VALUE;
+			// NOTE: added to be less strict and support scaled icons
+			bounds = icon->Bounds();
 			break;
 	}
+
 	// check parameters and initialization
-	if (error == B_OK
-		&& (!icon || icon->InitCheck() != B_OK || icon->Bounds() != bounds)) {
-		error = B_BAD_VALUE;
-	}
-	if (error == B_OK && InitCheck() != B_OK)
-		error = B_NO_INIT;
+	if (icon->InitCheck() != B_OK || icon->Bounds() != bounds)
+		return B_BAD_VALUE;
 
-	bool success = false;
+	if (InitCheck() != B_OK)
+		return B_NO_INIT;
 
-	// get node MIME type, and, if that fails, the generic icon
+	// Ask GetIcon() first.
+	if (GetIcon(icon, iconSize) == B_OK)
+		return B_OK;
+
+	// If not successful, see if the node has a type available at all. If no type
+	// is available, use one of the standard types depending on 
+	status_t error = B_OK;
 	char mimeString[B_MIME_TYPE_LENGTH];
-	if (error == B_OK) {
-		if (GetType(mimeString) != B_OK) {
-			struct stat stat;
-			error = fNode->GetStat(&stat) == B_OK;
-			if (error == B_OK) {
-				// no type available -- get the icon for the appropriate type (file/dir/etc.)
-				BMimeType type;
-				if (S_ISREG(stat.st_mode)) {
-					// is it an application (executable) or just a regular file?
-					if ((stat.st_mode & S_IXUSR) != 0)
-						type.SetTo(B_APP_MIME_TYPE);
-					else
-						type.SetTo(B_FILE_MIME_TYPE);
-				} else if (S_ISDIR(stat.st_mode)) {
-					// it's either a volume or just a standard directory
-					fs_info info;
-					if (fs_stat_dev(stat.st_dev, &info) == 0 && stat.st_ino == info.root)
-						type.SetTo(B_VOLUME_MIME_TYPE);
-					else
-						type.SetTo(B_DIRECTORY_MIME_TYPE);
-				} else if (S_ISLNK(stat.st_mode))
-					type.SetTo(B_SYMLINK_MIME_TYPE);
-
-				error = type.GetIcon(icon, iconSize);
-				success = (error == B_OK);
-			}
+	if (GetType(mimeString) != B_OK) {
+		// Get the icon from a mime type...
+		BMimeType type;
+	
+		struct stat stat;
+		error = fNode->GetStat(&stat);
+		if (error == B_OK) {
+			// no type available -- get the icon for the appropriate type (file/dir/etc.)
+			if (S_ISREG(stat.st_mode)) {
+				// is it an application (executable) or just a regular file?
+				if ((stat.st_mode & S_IXUSR) != 0)
+					type.SetTo(B_APP_MIME_TYPE);
+				else
+					type.SetTo(B_FILE_MIME_TYPE);
+			} else if (S_ISDIR(stat.st_mode)) {
+				// it's either a volume or just a standard directory
+				fs_info info;
+				if (fs_stat_dev(stat.st_dev, &info) == 0 && stat.st_ino == info.root)
+					type.SetTo(B_VOLUME_MIME_TYPE);
+				else
+					type.SetTo(B_DIRECTORY_MIME_TYPE);
+			} else if (S_ISLNK(stat.st_mode))
+				type.SetTo(B_SYMLINK_MIME_TYPE);
+		} else {
+			// GetStat() failed.
+			// Return the icon for "application/octet-stream" from the MIME database.
+			type.SetTo(B_FILE_MIME_TYPE);
 		}
-	}
 
-	// Ask GetIcon().
-	if (error == B_OK && !success)
-		success = (GetIcon(icon, iconSize) == B_OK);
+		return type.GetIcon(icon, iconSize);
 
-	// Get the preferred application and ask the MIME database, if that
-	// application has a special icon for the node's file type.
-	if (error == B_OK && !success) {
+	} else {
+		// We know the mimetype of the node.
+		bool success = false;
+
+		// Get the preferred application and ask the MIME database, if that
+		// application has a special icon for the node's file type.
 		char signature[B_MIME_TYPE_LENGTH];
 		if (GetPreferredApp(signature) == B_OK) {
 			BMimeType type(signature);
-			success = (type.GetIconForType(mimeString, icon, iconSize) == B_OK);
+			success = type.GetIconForType(mimeString, icon, iconSize) == B_OK;
 		}
-	}
 
-	// Ask the MIME database whether there is an icon for the node's file type.
-	BMimeType nodeType;
-	if (error == B_OK && !success) {
-		nodeType.SetTo(mimeString);
-		success = (nodeType.GetIcon(icon, iconSize) == B_OK);
-	}
+		// TODO: Confirm Tracker asks preferred app icons before asking mime icons.
 
-	// Ask the MIME database for the preferred application for the node's
-	// file type and whether this application has a special icon for the type.
-	if (error == B_OK && !success) {
-		char signature[B_MIME_TYPE_LENGTH];
-		if (nodeType.GetPreferredApp(signature) == B_OK) {
+		BMimeType nodeType(mimeString);
+
+		// Ask the MIME database for the preferred application for the node's
+		// file type and whether this application has a special icon for the type.
+		if (!success && nodeType.GetPreferredApp(signature) == B_OK) {
 			BMimeType type(signature);
-			success = (type.GetIconForType(mimeString, icon, iconSize) == B_OK);
+			success = type.GetIconForType(mimeString, icon, iconSize) == B_OK;
 		}
+
+		// Ask the MIME database whether there is an icon for the node's file type.
+		if (!success)
+			success = nodeType.GetIcon(icon, iconSize) == B_OK;
+
+		// Get the super type if still no success.
+		BMimeType superType;
+		if (!success && nodeType.GetSupertype(&superType) == B_OK) {
+			// Ask the MIME database for the preferred application for the node's
+			// super type and whether this application has a special icon for the type.
+			if (superType.GetPreferredApp(signature) == B_OK) {
+				BMimeType type(signature);
+				success = type.GetIconForType(superType.Type(), icon, iconSize) == B_OK;
+			}
+			// Get the icon of the super type itself.
+			if (!success)
+				success = superType.GetIcon(icon, iconSize) == B_OK;
+		}
+		
+		if (success)
+			return B_OK;
 	}
 
-	// Return the icon for "application/octet-stream" from the MIME database.
-	if (error == B_OK && !success) {
-		// get the "application/octet-stream" icon
-		BMimeType type(B_FILE_MIME_TYPE);
-		error = type.GetIcon(icon, iconSize);
-		success = (error == B_OK);
-	}
-	return error;
+	return B_ERROR;
 }
 
 // GetTrackerIcon
@@ -723,18 +865,33 @@ BNodeInfo::GetTrackerIcon(const entry_ref *ref, BBitmap *icon, icon_size iconSiz
 {
 	// check ref param
 	status_t error = (ref ? B_OK : B_BAD_VALUE);
+
 	// init a BNode
 	BNode node;
 	if (error == B_OK)
 		error = node.SetTo(ref);
+
 	// init a BNodeInfo
 	BNodeInfo nodeInfo;
 	if (error == B_OK)
 		error = nodeInfo.SetTo(&node);
+
 	// let the non-static GetTrackerIcon() do the dirty work
 	if (error == B_OK)
 		error = nodeInfo.GetTrackerIcon(icon, iconSize);
 	return error;
+}
+
+// TODO: just here for providing binary compatibility
+// (for example "Guido" needs this)
+extern "C"
+status_t
+GetTrackerIcon__9BNodeInfoP9entry_refP7BBitmap9icon_size(
+	BNodeInfo *nodeInfo, entry_ref* ref,
+	BBitmap* bitmap, icon_size iconSize)
+{
+	// NOTE: nodeInfo is ignored - maybe that's wrong!
+	return BNodeInfo::GetTrackerIcon(ref, bitmap, iconSize);
 }
 
 void 
@@ -768,3 +925,25 @@ BNodeInfo::BNodeInfo(const BNodeInfo &)
 {
 }
 
+
+//	#pragma mark -
+
+namespace BPrivate {
+
+/*!
+	Private function used by Tracker. Should be moved into the Tracker sources.
+*/
+extern bool
+CheckNodeIconHintPrivate(const BNode *node, bool checkMiniIconOnly)
+{
+	attr_info info;
+	if (node->GetAttrInfo(kNIMiniIconAttribute, &info) != B_OK && checkMiniIconOnly)
+		return false;
+
+	if (node->GetAttrInfo(kNILargeIconAttribute, &info) != B_OK)
+		return false;
+
+	return true;
+}
+
+}	// namespace BPrivate

@@ -8,9 +8,8 @@
 */
 
 #include <sniffer/Err.h>
-
-#include <string.h>
 #include <new>
+#include <string.h>
 
 using namespace BPrivate::Storage::Sniffer;
 

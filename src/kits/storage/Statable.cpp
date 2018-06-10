@@ -1,19 +1,52 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
+/*
+ * Copyright 2002-2009, Haiku, Inc. All Rights Reserved.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Tyler Dauwalder
+ *		Ingo Weinhold, bonefish@users.sf.net
+ */
+
 /*!
 	\file Statable.cpp
 	BStatable implementation.
 */
 
 #include <Statable.h>
-#include <Node.h>
-#include <Volume.h>
 
 #include <sys/stat.h>
 
-#include "fsproto.h"
+#include <compat/sys/stat.h>
+
+#include <Node.h>
+#include <NodeMonitor.h>
+#include <Volume.h>
+
+
+class BStatable::Private {
+public:
+	Private(const BStatable* object)
+		:
+		fObject(object)
+	{
+	}
+
+	status_t GetStatBeOS(struct stat_beos* st)
+	{
+		return fObject->_GetStat(st);
+	}
+
+private:
+	const BStatable*	fObject;
+};
+
+
+#if __GNUC__ > 3
+BStatable::~BStatable()
+{
+}
+#endif
+
 
 /*!	\fn status_t GetStat(struct stat *st) const
 	\brief Returns the stat stucture for the node.
@@ -25,6 +58,7 @@
 	- \c B_NOT_ALLOWED: Read only node or volume.
 */
 
+
 /*!	\brief Returns if the current node is a file.
 	\return \c true, if the BNode is properly initialized and is a file,
 			\c false otherwise.
@@ -33,9 +67,9 @@ bool
 BStatable::IsFile() const
 {
 	struct stat statData;
-	if ( GetStat(&statData) == B_OK )
+	if (GetStat(&statData) == B_OK)
 		return S_ISREG(statData.st_mode);
-	else 
+	else
 		return false;
 }
 
@@ -47,9 +81,9 @@ bool
 BStatable::IsDirectory() const
 {
 	struct stat statData;
-	if ( GetStat(&statData) == B_OK )
+	if (GetStat(&statData) == B_OK)
 		return S_ISDIR(statData.st_mode);
-	else 
+	else
 		return false;
 }
 
@@ -61,9 +95,9 @@ bool
 BStatable::IsSymLink() const
 {
 	struct stat statData;
-	if ( GetStat(&statData) == B_OK )
+	if (GetStat(&statData) == B_OK)
 		return S_ISLNK(statData.st_mode);
-	else 
+	else
 		return false;
 }
 
@@ -71,7 +105,7 @@ BStatable::IsSymLink() const
 	\param ref the node_ref structure to be filled in
 	\see GetStat() for return codes
 */
-status_t 
+status_t
 BStatable::GetNodeRef(node_ref *ref) const
 {
 	status_t error = (ref ? B_OK : B_BAD_VALUE);
@@ -89,7 +123,7 @@ BStatable::GetNodeRef(node_ref *ref) const
 	\param owner a pointer to a uid_t variable to be set to the result
 	\see GetStat() for return codes
 */
-status_t 
+status_t
 BStatable::GetOwner(uid_t *owner) const
 {
 	status_t error = (owner ? B_OK : B_BAD_VALUE);
@@ -105,14 +139,14 @@ BStatable::GetOwner(uid_t *owner) const
 	\param owner the new owner
 	\see GetStat() for return codes
 */
-status_t 
+status_t
 BStatable::SetOwner(uid_t owner)
 {
 	struct stat statData;
 	statData.st_uid = owner;
-	return set_stat(statData, WSTAT_UID);
+	return set_stat(statData, B_STAT_UID);
 }
-	
+
 /*!	\brief Returns the group owner of the node.
 	\param group a pointer to a gid_t variable to be set to the result
 	\see GetStat() for return codes
@@ -138,9 +172,9 @@ BStatable::SetGroup(gid_t group)
 {
 	struct stat statData;
 	statData.st_gid = group;
-	return set_stat(statData, WSTAT_GID);
+	return set_stat(statData, B_STAT_GID);
 }
-	
+
 /*!	\brief Returns the permissions of the node.
 	\param perms a pointer to a mode_t variable to be set to the result
 	\see GetStat() for return codes
@@ -168,7 +202,7 @@ BStatable::SetPermissions(mode_t perms)
 	// the FS should do the correct masking -- only the S_IUMSK part is
 	// modifiable
 	statData.st_mode = perms;
-	return set_stat(statData, WSTAT_MODE);
+	return set_stat(statData, B_STAT_MODE);
 }
 
 /*!	\brief Get the size of the node's data (not counting attributes).
@@ -212,7 +246,7 @@ BStatable::SetModificationTime(time_t mtime)
 {
 	struct stat statData;
 	statData.st_mtime = mtime;
-	return set_stat(statData, WSTAT_MTIME);
+	return set_stat(statData, B_STAT_MODIFICATION_TIME);
 }
 
 /*!	\brief Returns the time the node was created.
@@ -222,13 +256,18 @@ BStatable::SetModificationTime(time_t mtime)
 status_t
 BStatable::GetCreationTime(time_t *ctime) const
 {
+	#ifdef __HAIKU__
 	status_t error = (ctime ? B_OK : B_BAD_VALUE);
 	struct stat statData;
 	if (error == B_OK)
 		error = GetStat(&statData);
 	if (error == B_OK)
-		*ctime = statData.st_ctime;
+		*ctime = statData.st_crtime;
 	return error;
+	#elseif
+	printf("GetCreationTime UNIMPLEMENTED\n");
+	return B_ERROR;
+	#endif
 }
 
 /*!	\brief Sets the time the node was created.
@@ -238,9 +277,14 @@ BStatable::GetCreationTime(time_t *ctime) const
 status_t
 BStatable::SetCreationTime(time_t ctime)
 {
+	#ifdef __HAIKU__
 	struct stat statData;
-	statData.st_ctime = ctime;
-	return set_stat(statData, WSTAT_CRTIME);
+	statData.st_crtime = ctime;
+	return set_stat(statData, B_STAT_CREATION_TIME);
+	#elseif
+	printf("GetCreationTime UNIMPLEMENTED\n");
+	return B_ERROR;
+	#endif
 }
 
 /*!	\brief Returns the time the node was accessed.
@@ -270,7 +314,7 @@ BStatable::SetAccessTime(time_t atime)
 {
 	struct stat statData;
 	statData.st_atime = atime;
-	return set_stat(statData, WSTAT_ATIME);
+	return set_stat(statData, B_STAT_ACCESS_TIME);
 }
 
 /*!	\brief Returns the volume the node lives on.
@@ -290,9 +334,25 @@ BStatable::GetVolume(BVolume *vol) const
 	return error;
 }
 
-void BStatable::_OhSoStatable1() {}
+
+// _OhSoStatable1() -> GetStat()
+extern "C" status_t
+#if __GNUC__ == 2
+_OhSoStatable1__9BStatable(const BStatable *self, struct stat *st)
+#else
+_ZN9BStatable14_OhSoStatable1Ev(const BStatable *self, struct stat *st)
+#endif
+{
+	// No Perform() method -- we have to use the old GetStat() method instead.
+	struct stat_beos oldStat;
+	status_t error = BStatable::Private(self).GetStatBeOS(&oldStat);
+	if (error != B_OK)
+		return error;
+
+	convert_from_stat_beos(&oldStat, st);
+	return B_OK;
+}
+
+
 void BStatable::_OhSoStatable2() {}
 void BStatable::_OhSoStatable3() {}
-
-
-

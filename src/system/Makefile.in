@@ -1,0 +1,66 @@
+prefix=@prefix@
+libdir=${prefix}/lib
+
+CFLAGS = -include build/BeOSBuildCompatibility.h \
+-Wall -Wpointer-arith -Wcast-align -Wsign-compare -Wno-multichar \
+-c -g -O2 -pipe `cat @top_srcdir@/cosmoe.specs` -fPIC
+
+#TODO remove -fpermissive?
+CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-dtor -fexceptions -fpermissive
+
+LIBNAME = libroot.@LIBEXT@
+
+VPATH += libroot/os linux_kernel/os
+
+LIBROOT_OBJS = area.o 
+#find_directory.o  fs_attr.o  fs_info.o \
+#fs_query.o  fs_volume.o  image.o  port.o  sem.o  team.o  thread.o
+
+LINUX_KERNEL_OBJS = area.o direntfd.o misc.o	real_time_clock.o \
+atomic.o fs.o parsedate.o sem.o dirent.o image.o \
+port.o thread.o
+
+
+CC = @CC@
+
+OBJS += $(LIBROOT_OBJS)
+#OBJS += $(LINUX_KERNEL_OBJS)
+
+OBJDIR	:= @top_srcdir@/objs
+
+include @top_srcdir@/makefile.rules
+
+all :	$(OBJDIR) $(OBJDIR)/$(LIBNAME)
+
+$(OBJDIR):
+	mkdir $(OBJDIR)
+
+$(OBJDIR)/$(LIBNAME): $(OBJS)
+	$(CC) @SHAREDLINK@ $(OBJS) -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
+
+install: $(OBJDIR)/$(LIBNAME) $(libdir)
+	cp -f $< $(libdir)/$(LIBNAME)
+
+uninstall:
+	rm -f $(libdir)/$(LIBNAME)
+
+$(libdir):
+	mkdir -p $(libdir)
+
+doc:
+	-rm -R docs/*
+	doxygen libroot.dox
+
+deps: $(OBJDIR) $(DEPS)
+
+clean:
+	rm -f $(OBJS) $(OBJDIR)/$(LIBNAME) $(OBJDIR)/*.d *~ */*~ core*
+	rm -rf docs/*
+
+distclean: clean
+	rm -f Makefile
+	rm -rf autom4te.cache
+
+-include $(OBJDIR)/*.d
+
+.PHONY: clean distclean deps doc install uninstall all

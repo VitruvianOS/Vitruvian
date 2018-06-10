@@ -1,92 +1,89 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
-/*!
-	\file File.cpp
-	BFile implementation.
-*/
+/*
+ * Copyright 2002-2009, Haiku Inc.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Tyler Dauwalder
+ *		Ingo Weinhold, bonefish@users.sf.net
+ */
 
-#include <fsproto.h>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <Directory.h>
 #include <Entry.h>
 #include <File.h>
+#include <fs_interface.h>
+#include <NodeMonitor.h>
+#include "storage_support.h"
 
-#include "kernel_interface.h"
+#include <syscalls.h>
+#include <umask.h>
 
-#ifdef USE_OPENBEOS_NAMESPACE
-namespace OpenBeOS {
-#endif
 
-// constructor
 //! Creates an uninitialized BFile.
 BFile::BFile()
-	 : BNode(),
-	   BPositionIO(),
-	   fMode(0)
+	:
+	fMode(0)
 {
 }
 
-// copy constructor
+
 //! Creates a copy of the supplied BFile.
 /*! If \a file is uninitialized, the newly constructed BFile will be, too.
 	\param file the BFile object to be copied
 */
-BFile::BFile(const BFile &file)
-	 : BNode(),
-	   BPositionIO(),
-	   fMode(0)
+BFile::BFile(const BFile& file)
+	:
+	fMode(0)
 {
 	*this = file;
 }
 
-// constructor
+
 /*! \brief Creates a BFile and initializes it to the file referred to by
 		   the supplied entry_ref and according to the specified open mode.
 	\param ref the entry_ref referring to the file
 	\param openMode the mode in which the file should be opened
 	\see SetTo() for values for \a openMode
 */
-BFile::BFile(const entry_ref *ref, uint32 openMode)
-	 : BNode(),
-	   BPositionIO(),
-	   fMode(0)
+BFile::BFile(const entry_ref* ref, uint32 openMode)
+	:
+	fMode(0)
 {
 	SetTo(ref, openMode);
 }
 
-// constructor
+
 /*! \brief Creates a BFile and initializes it to the file referred to by
 		   the supplied BEntry and according to the specified open mode.
 	\param entry the BEntry referring to the file
 	\param openMode the mode in which the file should be opened
 	\see SetTo() for values for \a openMode
 */
-BFile::BFile(const BEntry *entry, uint32 openMode)
-	 : BNode(),
-	   BPositionIO(),
-	   fMode(0)
+BFile::BFile(const BEntry* entry, uint32 openMode)
+	:
+	fMode(0)
 {
 	SetTo(entry, openMode);
 }
 
-// constructor
+
 /*! \brief Creates a BFile and initializes it to the file referred to by
 		   the supplied path name and according to the specified open mode.
-	\param path the file's path name 
+	\param path the file's path name
 	\param openMode the mode in which the file should be opened
 	\see SetTo() for values for \a openMode
 */
-BFile::BFile(const char *path, uint32 openMode)
-	 : BNode(),
-	   BPositionIO(),
-	   fMode(0)
+BFile::BFile(const char* path, uint32 openMode)
+	:
+	fMode(0)
 {
 	SetTo(path, openMode);
 }
 
-// constructor
+
 /*! \brief Creates a BFile and initializes it to the file referred to by
 		   the supplied path name relative to the specified BDirectory and
 		   according to the specified open mode.
@@ -96,17 +93,16 @@ BFile::BFile(const char *path, uint32 openMode)
 	\param openMode the mode in which the file should be opened
 	\see SetTo() for values for \a openMode
 */
-BFile::BFile(const BDirectory *dir, const char *path, uint32 openMode)
-	 : BNode(),
-	   BPositionIO(),
-	   fMode(0)
+BFile::BFile(const BDirectory *dir, const char* path, uint32 openMode)
+	:
+	fMode(0)
 {
 	SetTo(dir, path, openMode);
 }
 
-// destructor
-//! Frees all allocated resources.
-/*!	If the file is properly initialized, the file's file descriptor is closed.
+
+/*! \brief Frees all allocated resources.
+	If the file is properly initialized, the file's file descriptor is closed.
 */
 BFile::~BFile()
 {
@@ -118,7 +114,7 @@ BFile::~BFile()
 	close_fd();
 }
 
-// SetTo
+
 /*! \brief Re-initializes the BFile to the file referred to by the
 		   supplied entry_ref and according to the specified open mode.
 	\param ref the entry_ref referring to the file
@@ -145,26 +141,34 @@ BFile::~BFile()
 	- \c B_BUSY: A node was busy.
 	- \c B_FILE_ERROR: A general file error.
 	- \c B_NO_MORE_FDS: The application has run out of file descriptors.
-	\todo Currently implemented using BPrivate::Storage::entry_ref_to_path().
-		  Reimplement!
 */
 status_t
-BFile::SetTo(const entry_ref *ref, uint32 openMode)
+BFile::SetTo(const entry_ref* ref, uint32 openMode)
 {
 	Unset();
-	char path[B_PATH_NAME_LENGTH];
-	status_t error = (ref ? B_OK : B_BAD_VALUE);
-	if (error == B_OK) {
-		error = BPrivate::Storage::entry_ref_to_path(ref, path,
-													 B_PATH_NAME_LENGTH);
-	}
-	if (error == B_OK)
-		error = SetTo(path, openMode);
-	set_status(error);
-	return error;
+
+	if (!ref)
+		return (fCStatus = B_BAD_VALUE);
+
+	// if ref->name is absolute, let the path-only SetTo() do the job
+	if (BPrivate::Storage::is_absolute_path(ref->name))
+		return SetTo(ref->name, openMode);
+
+	openMode |= O_CLOEXEC;
+
+	int fd = _kern_open_entry_ref(ref->device, ref->directory, ref->name,
+		openMode, DEFFILEMODE & ~__gUmask);
+	if (fd >= 0) {
+		set_fd(fd);
+		fMode = openMode;
+		fCStatus = B_OK;
+	} else
+		fCStatus = fd;
+
+	return fCStatus;
 }
 
-// SetTo
+
 /*! \brief Re-initializes the BFile to the file referred to by the
 		   supplied BEntry and according to the specified open mode.
 	\param entry the BEntry referring to the file
@@ -184,27 +188,33 @@ BFile::SetTo(const entry_ref *ref, uint32 openMode)
 		  to reimplement!
 */
 status_t
-BFile::SetTo(const BEntry *entry, uint32 openMode)
+BFile::SetTo(const BEntry* entry, uint32 openMode)
 {
 	Unset();
+
 	if (!entry)
 		return (fCStatus = B_BAD_VALUE);
 	if (entry->InitCheck() != B_OK)
 		return (fCStatus = entry->InitCheck());
-	entry_ref ref;
-	status_t error;
 
-	error = entry->GetRef(&ref);
-	if (error == B_OK)
-		error = SetTo(&ref, openMode);
-	set_status(error);
-	return error;
+	openMode |= O_CLOEXEC;
+
+	int fd = _kern_open(entry->fDirFd, entry->fName, openMode | O_CLOEXEC,
+		DEFFILEMODE & ~__gUmask);
+	if (fd >= 0) {
+		set_fd(fd);
+		fMode = openMode;
+		fCStatus = B_OK;
+	} else
+		fCStatus = fd;
+
+	return fCStatus;
 }
 
-// SetTo
+
 /*! \brief Re-initializes the BFile to the file referred to by the
 		   supplied path name and according to the specified open mode.
-	\param path the file's path name 
+	\param path the file's path name
 	\param openMode the mode in which the file should be opened
 	\return
 	- \c B_OK: Everything went fine.
@@ -219,60 +229,27 @@ BFile::SetTo(const BEntry *entry, uint32 openMode)
 	- \c B_NO_MORE_FDS: The application has run out of file descriptors.
 */
 status_t
-BFile::SetTo(const char *path, uint32 openMode)
+BFile::SetTo(const char* path, uint32 openMode)
 {
 	Unset();
-	status_t result = B_OK;
-	int newFd = -1;
-	if (path) {
-		// analyze openMode
-		// Well, it's a bit schizophrenic to convert the B_* style openMode
-		// to POSIX style openFlags, but to use O_RWMASK to filter openMode.
-		BPrivate::Storage::OpenFlags openFlags = 0;
-		switch (openMode & O_RWMASK) {
-			case B_READ_ONLY:
- 				openFlags = O_RDONLY;
-				break;
-			case B_WRITE_ONLY:
- 				openFlags = O_WRONLY;
-				break;
-			case B_READ_WRITE:
- 				openFlags = O_RDWR;
-				break;
-			default:
-				result = B_BAD_VALUE;
-				break;
-		}
-		if (result == B_OK) {
-			if (openMode & B_ERASE_FILE)
-				openFlags |= O_TRUNC;
-			if (openMode & B_OPEN_AT_END)
-				openFlags |= O_APPEND;
-			if (openMode & B_CREATE_FILE) {
-				openFlags |= O_CREAT;
-				if (openMode & B_FAIL_IF_EXISTS)
-					openFlags |= O_EXCL;
-				result = BPrivate::Storage::open(path, openFlags, S_IREAD | S_IWRITE,
-										  newFd);
-			} else
-				result = BPrivate::Storage::open(path, openFlags, newFd);
-			if (result == B_OK)
-				fMode = openFlags;
-		}
+
+	if (!path)
+		return (fCStatus = B_BAD_VALUE);
+
+	openMode |= O_CLOEXEC;
+
+	int fd = _kern_open(-1, path, openMode, DEFFILEMODE & ~__gUmask);
+	if (fd >= 0) {
+		set_fd(fd);
+		fMode = openMode;
+		fCStatus = B_OK;
 	} else
-		result = B_BAD_VALUE;
-	// set the new file descriptor
-	if (result == B_OK) {
-		result = set_fd(newFd);
-		if (result != B_OK)
-			BPrivate::Storage::close(newFd);
-	}
-	// finally set the BNode status
-	set_status(result);
-	return result;
+		fCStatus = fd;
+
+	return fCStatus;
 }
 
-// SetTo
+
 /*! \brief Re-initializes the BFile to the file referred to by the
 		   supplied path name relative to the specified BDirectory and
 		   according to the specified open mode.
@@ -294,22 +271,29 @@ BFile::SetTo(const char *path, uint32 openMode)
 		  to reimplement!
 */
 status_t
-BFile::SetTo(const BDirectory *dir, const char *path, uint32 openMode)
+BFile::SetTo(const BDirectory* dir, const char* path, uint32 openMode)
 {
 	Unset();
-	status_t error = (dir && path ? B_OK : B_BAD_VALUE);
-	BEntry entry;
-	if (error == B_OK)
-		error = entry.SetTo(dir, path);
-	if (error == B_OK)
-		error = SetTo(&entry, openMode);
-	set_status(error);
-	return error;
+
+	if (!dir)
+		return (fCStatus = B_BAD_VALUE);
+
+	openMode |= O_CLOEXEC;
+
+	int fd = _kern_open(dir->fDirFd, path, openMode, DEFFILEMODE & ~__gUmask);
+	if (fd >= 0) {
+		set_fd(fd);
+		fMode = openMode;
+		fCStatus = B_OK;
+	} else
+		fCStatus = fd;
+
+	return fCStatus;
 }
 
-// IsReadable
-//! Returns whether the file is readable.
-/*!	\return
+
+/*! \brief Returns whether the file is readable.
+	\return
 	- \c true, if the BFile has been initialized properly and the file has
 	  been been opened for reading,
 	- \c false, otherwise.
@@ -317,14 +301,13 @@ BFile::SetTo(const BDirectory *dir, const char *path, uint32 openMode)
 bool
 BFile::IsReadable() const
 {
-	return (InitCheck() == B_OK
-			&& ((fMode & O_RWMASK) == O_RDONLY
-				|| (fMode & O_RWMASK) == O_RDWR));
+	return InitCheck() == B_OK
+		&& ((fMode & O_RWMASK) == O_RDONLY || (fMode & O_RWMASK) == O_RDWR);
 }
 
-// IsWritable
-//!	Returns whether the file is writable.
-/*!	\return
+
+/*!	\brief Returns whether the file is writable.
+	\return
 	- \c true, if the BFile has been initialized properly and the file has
 	  been opened for writing,
 	- \c false, otherwise.
@@ -332,26 +315,25 @@ BFile::IsReadable() const
 bool
 BFile::IsWritable() const
 {
-	return (InitCheck() == B_OK
-			&& ((fMode & O_RWMASK) == O_WRONLY
-				|| (fMode & O_RWMASK) == O_RDWR));
+	return InitCheck() == B_OK
+		&& ((fMode & O_RWMASK) == O_WRONLY || (fMode & O_RWMASK) == O_RDWR);
 }
 
-// Read
-//!	Reads a number of bytes from the file into a buffer.
-/*!	\param buffer the buffer the data from the file shall be written to
+
+/*!	\brief Reads a number of bytes from the file into a buffer.
+	\param buffer the buffer the data from the file shall be written to
 	\param size the number of bytes that shall be read
 	\return the number of bytes actually read or an error code
 */
 ssize_t
-BFile::Read(void *buffer, size_t size)
+BFile::Read(void* buffer, size_t size)
 {
 	if (InitCheck() != B_OK)
 		return InitCheck();
-	return BPrivate::Storage::read(get_fd(), buffer, size);
+	return _kern_read(get_fd(), -1, buffer, size);
 }
 
-// ReadAt
+
 /*!	\brief Reads a number of bytes from a certain position within the file
 		   into a buffer.
 	\param location the position (in bytes) within the file from which the
@@ -361,30 +343,31 @@ BFile::Read(void *buffer, size_t size)
 	\return the number of bytes actually read or an error code
 */
 ssize_t
-BFile::ReadAt(off_t location, void *buffer, size_t size)
+BFile::ReadAt(off_t location, void* buffer, size_t size)
 {
 	if (InitCheck() != B_OK)
 		return InitCheck();
 	if (location < 0)
 		return B_BAD_VALUE;
-	return BPrivate::Storage::read(get_fd(), buffer, location, size);
+
+	return _kern_read(get_fd(), location, buffer, size);
 }
 
-// Write
-//!	Writes a number of bytes from a buffer into the file.
-/*!	\param buffer the buffer containing the data to be written to the file
+
+/*!	\brief Writes a number of bytes from a buffer into the file.
+	\param buffer the buffer containing the data to be written to the file
 	\param size the number of bytes that shall be written
 	\return the number of bytes actually written or an error code
 */
 ssize_t
-BFile::Write(const void *buffer, size_t size)
+BFile::Write(const void* buffer, size_t size)
 {
 	if (InitCheck() != B_OK)
 		return InitCheck();
-	return BPrivate::Storage::write(get_fd(), buffer, size);
+	return _kern_write(get_fd(), -1, buffer, size);
 }
 
-// WriteAt
+
 /*!	\brief Writes a number of bytes from a buffer at a certain position
 		   into the file.
 	\param location the position (in bytes) within the file at which the data
@@ -394,18 +377,19 @@ BFile::Write(const void *buffer, size_t size)
 	\return the number of bytes actually written or an error code
 */
 ssize_t
-BFile::WriteAt(off_t location, const void *buffer, size_t size)
+BFile::WriteAt(off_t location, const void* buffer, size_t size)
 {
 	if (InitCheck() != B_OK)
 		return InitCheck();
 	if (location < 0)
 		return B_BAD_VALUE;
-	return BPrivate::Storage::write(get_fd(), buffer, location, size);
+
+	return _kern_write(get_fd(), location, buffer, size);
 }
 
-// Seek
-//!	Seeks to another read/write position within the file.
-/*!	It is allowed to seek past the end of the file. A subsequent call to
+
+/*!	\brief Seeks to another read/write position within the file.
+	It is allowed to seek past the end of the file. A subsequent call to
 	Write() will pad the file with undefined data. Seeking before the
 	beginning of the file will fail and the behavior of subsequent Read()
 	or Write() invocations will be undefined.
@@ -425,12 +409,12 @@ BFile::Seek(off_t offset, uint32 seekMode)
 {
 	if (InitCheck() != B_OK)
 		return B_FILE_ERROR;
-	return BPrivate::Storage::seek(get_fd(), offset, seekMode);
+	return _kern_seek(get_fd(), offset, seekMode);
 }
 
-// Position
-//!	Returns the current read/write position within the file.
-/*!	\return
+
+/*!	\brief Returns the current read/write position within the file.
+	\return
 	- the current read/write position relative to the beginning of the file
 	- \c B_ERROR, after a Seek() before the beginning of the file
 	- \c B_FILE_ERROR, if the file has not been initialized
@@ -440,12 +424,12 @@ BFile::Position() const
 {
 	if (InitCheck() != B_OK)
 		return B_FILE_ERROR;
-	return BPrivate::Storage::get_position(get_fd());
+	return _kern_seek(get_fd(), 0, SEEK_CUR);
 }
 
-// SetSize
-//!	Sets the size of the file.
-/*!	If the file is shorter than \a size bytes it will be padded with
+
+/*!	\brief Sets the size of the file.
+	If the file is shorter than \a size bytes it will be padded with
 	unspecified data to the requested size. If it is larger, it will be
 	truncated.
 	Note: There's no problem with setting the size of a BFile opened in
@@ -466,12 +450,19 @@ BFile::SetSize(off_t size)
 		return B_BAD_VALUE;
 	struct stat statData;
 	statData.st_size = size;
-	return set_stat(statData, WSTAT_SIZE);
+	return set_stat(statData, B_STAT_SIZE | B_STAT_SIZE_INSECURE);
 }
 
-// =
-//!	Assigns another BFile to this BFile.
-/*!	If the other BFile is uninitialized, this one will be too. Otherwise it
+
+status_t
+BFile::GetSize(off_t* size) const
+{
+	return BStatable::GetSize(size);
+}
+
+
+/*!	\brief Assigns another BFile to this BFile.
+	If the other BFile is uninitialized, this one will be too. Otherwise it
 	will refer to the same file using the same mode, unless an error occurs.
 	\param file the original BFile
 	\return a reference to this BFile
@@ -483,17 +474,14 @@ BFile::operator=(const BFile &file)
 		Unset();
 		if (file.InitCheck() == B_OK) {
 			// duplicate the file descriptor
-			int fd = -1;
-			status_t status = BPrivate::Storage::dup(file.get_fd(), fd);
+			int fd = _kern_dup(file.get_fd());
 			// set it
-			if (status == B_OK) {
-				status = set_fd(fd);
-				if (status == B_OK)
-					fMode = file.fMode;
-				else
-					BPrivate::Storage::close(fd);
-			}
-			set_status(status);
+			if (fd >= 0) {
+				fFd = fd;
+				fMode = file.fMode;
+				fCStatus = B_OK;
+			} else
+				fCStatus = fd;
 		}
 	}
 	return *this;
@@ -509,7 +497,6 @@ void BFile::_PhiloFile5() {}
 void BFile::_PhiloFile6() {}
 
 
-// get_fd
 /*!	Returns the file descriptor.
 	To be used instead of accessing the BNode's private \c fFd member directly.
 	\return the file descriptor, or -1, if not properly initialized.
@@ -521,10 +508,11 @@ BFile::get_fd() const
 }
 
 
-#ifdef USE_OPENBEOS_NAMESPACE
-};		// namespace OpenBeOS
-#endif
-
-
-
+/*!	Overrides BNode::close_fd() solely for R5 binary compatibility.
+*/
+void
+BFile::close_fd()
+{
+	BNode::close_fd();
+}
 

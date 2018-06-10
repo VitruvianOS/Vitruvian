@@ -7,9 +7,10 @@ CXXFLAGS = $(CFLAGS)
 CC	= @CC@
 CXX	= @CXX@
 EXE	= seminfo portinfo
-COSMOELIBDIR=@top_srcdir@/src/kits/objs
 
-OBJDIR	:= objs
+LIBSDIR = @top_srcdir@/objs
+
+OBJDIR	:= @top_srcdir@/objs
 
 
 $(OBJDIR)/%.o : %.c
@@ -24,10 +25,10 @@ OBJS := seminfo.o portinfo.o
 all: $(EXE)
 
 seminfo: seminfo.o
-	$(CXX) seminfo.o -L$(COSMOELIBDIR) -lcosmoe -o seminfo
+	$(CXX) seminfo.o -L$(LIBSDIR) -lbe -lroot -o seminfo
 
 portinfo: portinfo.o
-	$(CXX) portinfo.o -L$(COSMOELIBDIR) -lcosmoe -o portinfo
+	$(CXX) portinfo.o -L$(LIBSDIR) -lbe -lroot -o portinfo
 
 objs:
 	mkdir objs

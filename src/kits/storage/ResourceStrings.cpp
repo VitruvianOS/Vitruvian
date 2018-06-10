@@ -18,7 +18,7 @@
 #include <Resources.h>
 #include <String.h>
 
-#include "kernel_interface.h"
+#include <AppMisc.h>
 
 using namespace std;
 
@@ -140,12 +140,8 @@ BResourceStrings::SetStringFile(const entry_ref *ref)
 	if (ref) {
 		fileRef = *ref;
 		fFileRef = *ref;
-	} else {
-		char appPath[B_PATH_NAME_LENGTH];
-		error = BPrivate::Storage::get_app_path(appPath);
-		if (error == B_OK)
-			error = get_ref_for_path(appPath, &fileRef);
-	}
+	} else
+		error = BPrivate::get_app_ref(&fileRef);
 	// get the BResources
 	if (error == B_OK) {
 		BFile file(&fileRef, B_READ_ONLY);

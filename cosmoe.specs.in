@@ -7,8 +7,8 @@
 -I@ABS_TOPDIR@/headers/os/app
 -I@ABS_TOPDIR@/headers/os/add-ons/file_system/
 -I@ABS_TOPDIR@/headers/os/add-ons/graphics/
-
--I@ABS_TOPDIR@/headers/cosmoe/
+-I@ABS_TOPDIR@/headers/os/drivers/
+-I@ABS_TOPDIR@/headers/os/locale/
 
 -I@ABS_TOPDIR@/headers/private/
 -I@ABS_TOPDIR@/headers/private/app/
@@ -21,5 +21,23 @@
 -I@ABS_TOPDIR@/headers/private/shared/
 -I@ABS_TOPDIR@/headers/private/servers/app/
 
+-I@ABS_TOPDIR@/headers/private/libroot/
+-I@ABS_TOPDIR@/headers/private/system/
+-I@ABS_TOPDIR@/headers/private/system/arch/x86/
+-I@ABS_TOPDIR@/headers/private/system/linux_kernel/
+
+-I@ABS_TOPDIR@/headers/posix/
+
 -I@ABS_TOPDIR@/headers/build/
 -I@ABS_TOPDIR@/headers/build/config_headers/
+
+-I@ABS_TOPDIR@/src/libs/icon/
+-I@ABS_TOPDIR@/src/libs/icon/shape/
+-I@ABS_TOPDIR@/src/libs/icon/flat_icon/
+-I@ABS_TOPDIR@/src/libs/icon/message/
+-I@ABS_TOPDIR@/src/libs/icon/style/
+-I@ABS_TOPDIR@/src/libs/icon/transformable/
+-I@ABS_TOPDIR@/src/libs/icon/transformer/
+
+-I@ABS_TOPDIR@/headers/libs/icon/
+-I@ABS_TOPDIR@/headers/libs/agg/

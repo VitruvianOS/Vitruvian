@@ -1,7 +1,7 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
+/*
+ * Copyright 2001-2006, Ingo Weinhold <bonefish@cs.tu-berlin.de>.
+ * All Rights Reserved. Distributed under the terms of the MIT License.
+ */
 /*!
 	\file Resources.cpp
 	BResources implementation.
@@ -18,6 +18,7 @@
 #include <Resources.h>
 
 #include <new>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "ResourceFile.h"
@@ -27,18 +28,20 @@
 using namespace BPrivate::Storage;
 using namespace std;
 
-enum {
-	NOT_IMPLEMENTED	= B_ERROR,
-};
+// debugging
+//#define DBG(x) x
+#define DBG(x)
+#define OUT	printf
 
 // constructor
 /*!	\brief Creates an unitialized BResources object.
 */
 BResources::BResources()
-		  : fFile(),
-			fContainer(NULL),
-			fResourceFile(NULL),
-			fReadOnly(false)
+	:
+	fFile(),
+	fContainer(NULL),
+	fResourceFile(NULL),
+	fReadOnly(false)
 {
 	fContainer = new(nothrow) ResourcesContainer;
 }
@@ -54,16 +57,59 @@ BResources::BResources()
 	The BResources object makes a copy of \a file, that is the caller remains
 	owner of the BFile object.
 	\param file the file
-	\param clobber if \c true, the \a file is truncated to size 0
+	\param clobber if \c true, the file's resources are truncated to size 0
 */
-BResources::BResources(const BFile *file, bool clobber)
-		  : fFile(),
-			fContainer(NULL),
-			fResourceFile(NULL),
-			fReadOnly(false)
+BResources::BResources(const BFile* file, bool clobber)
+	:
+	fFile(),
+	fContainer(NULL),
+	fResourceFile(NULL),
+	fReadOnly(false)
 {
 	fContainer = new(nothrow) ResourcesContainer;
 	SetTo(file, clobber);
+}
+
+// constructor
+/*!	\brief Creates a BResources object that represents the resources of the
+	supplied file.
+	If the \a clobber argument is \c true, the data of the file are erased
+	and it is turned into an empty resource file. Otherwise \a path
+	must refer either to a resource file or to an executable (ELF or PEF
+	binary).
+	\param path a path referring to the file
+	\param clobber if \c true, the file's resources are truncated to size 0
+*/
+BResources::BResources(const char* path, bool clobber)
+	:
+	fFile(),
+	fContainer(NULL),
+	fResourceFile(NULL),
+	fReadOnly(false)
+{
+	fContainer = new(nothrow) ResourcesContainer;
+	SetTo(path, clobber);
+}
+
+// constructor
+/*!	\brief Creates a BResources object that represents the resources of the
+	supplied file.
+	If the \a clobber argument is \c true, the data of the file are erased
+	and it is turned into an empty resource file. Otherwise \a ref
+	must refer either to a resource file or to an executable (ELF or PEF
+	binary).
+	\param ref an entry_ref referring to the file
+	\param clobber if \c true, the file's resources are truncated to size 0
+*/
+BResources::BResources(const entry_ref* ref, bool clobber)
+	:
+	fFile(),
+	fContainer(NULL),
+	fResourceFile(NULL),
+	fReadOnly(false)
+{
+	fContainer = new(nothrow) ResourcesContainer;
+	SetTo(ref, clobber);
 }
 
 // destructor
@@ -91,14 +137,14 @@ BResources::~BResources()
 	The BResources object makes a copy of \a file, that is the caller remains
 	owner of the BFile object.
 	\param file the file
-	\param clobber if \c true, the \a file is truncated to size 0
+	\param clobber if \c true, the file's resources are truncated to size 0
 	\return
 	- \c B_OK: Everything went fine.
 	- \c B_BAD_VALUE: \c NULL or uninitialized \a file.
 	- \c B_ERROR: Failed to initialize the object (for whatever reason).
 */
 status_t
-BResources::SetTo(const BFile *file, bool clobber)
+BResources::SetTo(const BFile* file, bool clobber)
 {
 	Unset();
 	status_t error = B_OK;
@@ -130,6 +176,147 @@ BResources::SetTo(const BFile *file, bool clobber)
 			fContainer->MakeEmpty();
 	}
 	return error;
+}
+
+// SetTo
+/*!	\brief Re-initialized the BResources object to represent the resources of
+	the supplied file.
+	What happens, if \a clobber is \c true, depends on the type of the file.
+	If the file is capable of containing resources, that is, is a resource
+	file or an executable (ELF or PEF), its resources are removed. Otherwise
+	the file's data are erased and it is turned into an empty resource file.
+	If \a clobber is \c false, \a path must refer to a file that is capable
+	of containing resources.
+	\param path a path referring to the file
+	\param clobber if \c true, the file's resources are truncated to size 0
+	\return
+	- \c B_OK: Everything went fine.
+	- \c B_BAD_VALUE: \c NULL \a path.
+	- \c B_ENTRY_NOT_FOUND: The file couldn't be found.
+	- \c B_ERROR: Failed to initialize the object (for whatever reason).
+*/
+status_t
+BResources::SetTo(const char* path, bool clobber)
+{
+	if (!path)
+		return B_BAD_VALUE;
+
+	// open file
+	BFile file;
+	status_t error = file.SetTo(path, B_READ_WRITE);
+	if (error != B_OK) {
+		Unset();
+		return error;
+	}
+
+	// delegate the actual work
+	return SetTo(&file, clobber);
+}
+
+// SetTo
+/*!	\brief Re-initialized the BResources object to represent the resources of
+	the supplied file.
+	What happens, if \a clobber is \c true, depends on the type of the file.
+	If the file is capable of containing resources, that is, is a resource
+	file or an executable (ELF or PEF), its resources are removed. Otherwise
+	the file's data are erased and it is turned into an empty resource file.
+	If \a clobber is \c false, \a ref must refer to a file that is capable
+	of containing resources.
+	\param ref an entry_ref referring to the file
+	\param clobber if \c true, the file's resources are truncated to size 0
+	\return
+	- \c B_OK: Everything went fine.
+	- \c B_BAD_VALUE: \c NULL \a ref.
+	- \c B_ENTRY_NOT_FOUND: The file couldn't be found.
+	- \c B_ERROR: Failed to initialize the object (for whatever reason).
+*/
+status_t
+BResources::SetTo(const entry_ref* ref, bool clobber)
+{
+	if (!ref)
+		return B_BAD_VALUE;
+
+	// open file
+	BFile file;
+	status_t error = file.SetTo(ref, B_READ_WRITE);
+	if (error != B_OK) {
+		Unset();
+		return error;
+	}
+
+	// delegate the actual work
+	return SetTo(&file, clobber);
+}
+
+// SetToImage
+/*!	\brief Re-initialized the BResources object to represent the resources of
+	the file from which the specified image has been loaded.
+	If \a clobber is \c true, the file's resources are removed.
+	\param image ID of a loaded image
+	\param clobber if \c true, the file's resources are truncated to size 0
+	\return
+	- \c B_OK: Everything went fine.
+	- \c B_ENTRY_NOT_FOUND: The file couldn't be found.
+	- \c B_ERROR: Failed to initialize the object (for whatever reason).
+*/
+status_t
+BResources::SetToImage(image_id image, bool clobber)
+{
+#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+	// get an image info
+	image_info info;
+	status_t error = get_image_info(image, &info);
+	if (error != B_OK) {
+		Unset();
+		return error;
+	}
+
+	// delegate the actual work
+	return SetTo(info.name, clobber);
+#else	// HAIKU_TARGET_PLATFORM_HAIKU
+	return B_NOT_SUPPORTED;
+#endif
+}
+
+/*!	\brief Re-initialized the BResources object to represent the resources of
+	the file from which the specified image has been loaded.
+	The image belongs to the current team and is identified by a pointer into
+	it's code (aka text) or data segment, i.e. any pointer to a function or a
+	static (or global) variable will do.
+	If \a clobber is \c true, the file's resources are removed.
+	\param codeOrDataPointer pointer into the text or data segment of the image
+	\param clobber if \c true, the file's resources are truncated to size 0
+	\return
+	- \c B_OK: Everything went fine.
+	- \c B_BAD_VALUE: \c NULL \a ref.
+	- \c B_ENTRY_NOT_FOUND: The image or the file couldn't be found.
+	- \c B_ERROR: Failed to initialize the object (for whatever reason).
+*/
+status_t
+BResources::SetToImage(const void* codeOrDataPointer, bool clobber)
+{
+#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+	if (!codeOrDataPointer)
+		return B_BAD_VALUE;
+
+	// iterate through the images and find the one in question
+	addr_t address = (addr_t)codeOrDataPointer;
+	image_info info;
+	int32 cookie = 0;
+
+	while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
+		if (((addr_t)info.text <= address
+				&& address - (addr_t)info.text < (addr_t)info.text_size)
+			|| ((addr_t)info.data <= address
+				&& address - (addr_t)info.data < (addr_t)info.data_size)) {
+			return SetTo(info.name, clobber);
+		}
+	}
+
+	return B_ENTRY_NOT_FOUND;
+#else	// HAIKU_TARGET_PLATFORM_HAIKU
+	return B_NOT_SUPPORTED;
+#endif
 }
 
 // Unset
@@ -174,7 +361,7 @@ BResources::InitCheck() const
 /*!	\brief Returns a reference to the BResources' BFile object.
 	\return a reference to the object's BFile.
 */
-const BFile &
+const BFile&
 BResources::File() const
 {
 	return fFile;
@@ -194,12 +381,12 @@ BResources::File() const
 			\c NULL, if the file does not have a resource that matchs the
 			parameters or an error occured.
 */
-const void *
-BResources::LoadResource(type_code type, int32 id, size_t *outSize)
+const void*
+BResources::LoadResource(type_code type, int32 id, size_t* outSize)
 {
 	// find the resource
 	status_t error = InitCheck();
-	ResourceItem *resource = NULL;
+	ResourceItem* resource = NULL;
 	if (error == B_OK) {
 		resource = fContainer->ResourceAt(fContainer->IndexOf(type, id));
 		if (!resource)
@@ -236,11 +423,11 @@ BResources::LoadResource(type_code type, int32 id, size_t *outSize)
 		  parameters, that is the one with the least index.
 */
 const void *
-BResources::LoadResource(type_code type, const char *name, size_t *outSize)
+BResources::LoadResource(type_code type, const char* name, size_t* outSize)
 {
 	// find the resource
 	status_t error = InitCheck();
-	ResourceItem *resource = NULL;
+	ResourceItem* resource = NULL;
 	if (error == B_OK) {
 		resource = fContainer->ResourceAt(fContainer->IndexOf(type, name));
 		if (!resource)
@@ -250,7 +437,7 @@ BResources::LoadResource(type_code type, const char *name, size_t *outSize)
 	if (error == B_OK && !resource->IsLoaded() && fResourceFile)
 		error = fResourceFile->ReadResource(*resource);
 	// return the result
-	const void *result = NULL;
+	const void* result = NULL;
 	if (error == B_OK) {
 		result = resource->Data();
 		if (outSize)
@@ -340,7 +527,7 @@ BResources::Sync()
 	- \c B_IO_ERROR: An error occured while writing the resources.
 */
 status_t
-BResources::MergeFrom(BFile *fromFile)
+BResources::MergeFrom(BFile* fromFile)
 {
 	status_t error = (fromFile ? B_OK : B_BAD_VALUE);
 	if (error == B_OK)
@@ -371,7 +558,7 @@ BResources::MergeFrom(BFile *fromFile)
 		  remains unmodified.
 */
 status_t
-BResources::WriteTo(BFile *file)
+BResources::WriteTo(BFile* file)
 {
 	status_t error = (file ? B_OK : B_BAD_VALUE);
 	if (error == B_OK)
@@ -417,8 +604,8 @@ BResources::WriteTo(BFile *file)
 	- \c B_NO_MEMORY: Not enough memory for that operation.
 */
 status_t
-BResources::AddResource(type_code type, int32 id, const void *data,
-						size_t length, const char *name)
+BResources::AddResource(type_code type, int32 id, const void* data,
+						size_t length, const char* name)
 {
 	status_t error = (data ? B_OK : B_BAD_VALUE);
 	if (error == B_OK)
@@ -426,7 +613,7 @@ BResources::AddResource(type_code type, int32 id, const void *data,
 	if (error == B_OK)
 		error = (fReadOnly ? B_NOT_ALLOWED : B_OK);
 	if (error == B_OK) {
-		ResourceItem *item = new(nothrow) ResourceItem;
+		ResourceItem* item = new(nothrow) ResourceItem;
 		if (!item)
 			error = B_NO_MEMORY;
 		if (error == B_OK) {
@@ -468,7 +655,7 @@ BResources::HasResource(type_code type, int32 id)
 	\return \c true, if the file contains a matching resource, \false otherwise
 */
 bool
-BResources::HasResource(type_code type, const char *name)
+BResources::HasResource(type_code type, const char* name)
 {
 	return (InitCheck() == B_OK && fContainer->IndexOf(type, name) >= 0);
 }
@@ -487,11 +674,11 @@ BResources::HasResource(type_code type, const char *name)
 	\return \c true, if a matching resource could be found, false otherwise
 */
 bool
-BResources::GetResourceInfo(int32 byIndex, type_code *typeFound,
-							int32 *idFound, const char **nameFound,
-							size_t *lengthFound)
+BResources::GetResourceInfo(int32 byIndex, type_code* typeFound,
+							int32* idFound, const char** nameFound,
+							size_t* lengthFound)
 {
-	ResourceItem *item = NULL;
+	ResourceItem* item = NULL;
 	if (InitCheck() == B_OK)
 		item = fContainer->ResourceAt(byIndex);
 	if (item) {
@@ -521,10 +708,10 @@ BResources::GetResourceInfo(int32 byIndex, type_code *typeFound,
 	\return \c true, if a matching resource could be found, false otherwise
 */
 bool
-BResources::GetResourceInfo(type_code byType, int32 andIndex, int32 *idFound,
-							const char **nameFound, size_t *lengthFound)
+BResources::GetResourceInfo(type_code byType, int32 andIndex, int32* idFound,
+							const char** nameFound, size_t* lengthFound)
 {
-	ResourceItem *item = NULL;
+	ResourceItem* item = NULL;
 	if (InitCheck() == B_OK) {
 		item = fContainer->ResourceAt(fContainer->IndexOfType(byType,
 															  andIndex));
@@ -552,9 +739,9 @@ BResources::GetResourceInfo(type_code byType, int32 andIndex, int32 *idFound,
 */
 bool
 BResources::GetResourceInfo(type_code byType, int32 andID,
-							const char **nameFound, size_t *lengthFound)
+							const char** nameFound, size_t* lengthFound)
 {
-	ResourceItem *item = NULL;
+	ResourceItem* item = NULL;
 	if (InitCheck() == B_OK)
 		item = fContainer->ResourceAt(fContainer->IndexOf(byType, andID));
 	if (item) {
@@ -578,10 +765,10 @@ BResources::GetResourceInfo(type_code byType, int32 andID,
 	\return \c true, if a matching resource could be found, false otherwise
 */
 bool
-BResources::GetResourceInfo(type_code byType, const char *andName,
-							int32 *idFound, size_t *lengthFound)
+BResources::GetResourceInfo(type_code byType, const char* andName,
+							int32* idFound, size_t* lengthFound)
 {
-	ResourceItem *item = NULL;
+	ResourceItem* item = NULL;
 	if (InitCheck() == B_OK)
 		item = fContainer->ResourceAt(fContainer->IndexOf(byType, andName));
 	if (item) {
@@ -608,11 +795,11 @@ BResources::GetResourceInfo(type_code byType, const char *andName,
 	\return \c true, if a matching resource could be found, false otherwise
 */
 bool
-BResources::GetResourceInfo(const void *byPointer, type_code *typeFound,
-							int32 *idFound, size_t *lengthFound,
-							const char **nameFound)
+BResources::GetResourceInfo(const void* byPointer, type_code* typeFound,
+							int32* idFound, size_t* lengthFound,
+							const char** nameFound)
 {
-	ResourceItem *item = NULL;
+	ResourceItem* item = NULL;
 	if (InitCheck() == B_OK)
 		item = fContainer->ResourceAt(fContainer->IndexOf(byPointer));
 	if (item) {
@@ -641,7 +828,7 @@ BResources::GetResourceInfo(const void *byPointer, type_code *typeFound,
 	- \c B_ERROR: An error occured while removing the resource.
 */
 status_t
-BResources::RemoveResource(const void *resource)
+BResources::RemoveResource(const void* resource)
 {
 	status_t error = (resource ? B_OK : B_BAD_VALUE);
 	if (error == B_OK)
@@ -649,7 +836,7 @@ BResources::RemoveResource(const void *resource)
 	if (error == B_OK)
 		error = (fReadOnly ? B_NOT_ALLOWED : B_OK);
 	if (error == B_OK) {
-		ResourceItem *item
+		ResourceItem* item
 			= fContainer->RemoveResource(fContainer->IndexOf(resource));
 		if (item)
 			delete item;
@@ -677,7 +864,7 @@ BResources::RemoveResource(type_code type, int32 id)
 	if (error == B_OK)
 		error = (fReadOnly ? B_NOT_ALLOWED : B_OK);
 	if (error == B_OK) {
-		ResourceItem *item
+		ResourceItem* item
 			= fContainer->RemoveResource(fContainer->IndexOf(type, id));
 		if (item)
 			delete item;
@@ -710,7 +897,7 @@ BResources::RemoveResource(type_code type, int32 id)
 	\deprecated Always use AddResource().
 */
 status_t
-BResources::WriteResource(type_code type, int32 id, const void *data,
+BResources::WriteResource(type_code type, int32 id, const void* data,
 						  off_t offset, size_t length)
 {
 	status_t error = (data && offset >= 0 ? B_OK : B_BAD_VALUE);
@@ -759,13 +946,13 @@ BResources::WriteResource(type_code type, int32 id, const void *data,
 	\deprecated Use LoadResource() only.
 */
 status_t
-BResources::ReadResource(type_code type, int32 id, void *data, off_t offset,
+BResources::ReadResource(type_code type, int32 id, void* data, off_t offset,
 						 size_t length)
 {
 	status_t error = (data && offset >= 0 ? B_OK : B_BAD_VALUE);
 	if (error == B_OK)
 		error = InitCheck();
-	ResourceItem *item = NULL;
+	ResourceItem* item = NULL;
 	if (error == B_OK) {
 		item = fContainer->ResourceAt(fContainer->IndexOf(type, id));
 		if (!item)
@@ -796,12 +983,13 @@ BResources::ReadResource(type_code type, int32 id, void *data, off_t offset,
 	- \c NULL, if an error occured.
 	\deprecated Use LoadResource().
 */
-void *
-BResources::FindResource(type_code type, int32 id, size_t *lengthFound)
+void*
+BResources::FindResource(type_code type, int32 id, size_t* lengthFound)
 {
-	void *result = NULL;
+	void* result = NULL;
 	size_t size = 0;
-	if (const void *data = LoadResource(type, id, &size)) {
+	const void* data = LoadResource(type, id, &size);
+	if (data != NULL) {
 		if ((result = malloc(size)))
 			memcpy(result, data, size);
 	}
@@ -822,12 +1010,13 @@ BResources::FindResource(type_code type, int32 id, size_t *lengthFound)
 	- \c NULL, if an error occured.
 	\deprecated Use LoadResource().
 */
-void *
-BResources::FindResource(type_code type, const char *name, size_t *lengthFound)
+void*
+BResources::FindResource(type_code type, const char* name, size_t* lengthFound)
 {
-	void *result = NULL;
+	void* result = NULL;
 	size_t size = 0;
-	if (const void *data = LoadResource(type, name, &size)) {
+	const void *data = LoadResource(type, name, &size);
+	if (data != NULL) {
 		if ((result = malloc(size)))
 			memcpy(result, data, size);
 	}

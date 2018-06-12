@@ -219,8 +219,8 @@ extern void*	get_stack_frame(void);
 
 
 /* Use the built-in atomic functions, if requested and available. */
-//TODO
-//#if defined(B_USE_BUILTIN_ATOMIC_FUNCTIONS) && __GNUC__ >= 4
+
+#if defined(B_USE_BUILTIN_ATOMIC_FUNCTIONS) && __GNUC__ >= 4
 
 #define atomic_test_and_set(valuePointer, newValue, testAgainst)	\
 	__sync_val_compare_and_swap(valuePointer, testAgainst, newValue)
@@ -240,7 +240,7 @@ extern void*	get_stack_frame(void);
 // get + atomic test and set loop, but calling the atomic_set() implementation
 // might be faster.
 
-//#endif	// B_USE_BUILTIN_ATOMIC_FUNCTIONS && __GNUC__ >= 4
+#endif	// B_USE_BUILTIN_ATOMIC_FUNCTIONS && __GNUC__ >= 4
 
 
 #endif	/* _SUPPORT_DEFS_H */

@@ -16,25 +16,25 @@ LL	= @CXX@
 all: $(EXE)
 
 testharness: main.o Makefile
-	$(LL) main.o -L$(BELIBDIR) -lbe -o testharness
+	$(LL) main.o -L$(BELIBDIR) -lbe -lroot -o testharness
 
 testlist: testlist.o Makefile
-	$(LL) testlist.o -L$(BELIBDIR) -lbe -o testlist
+	$(LL) testlist.o -L$(BELIBDIR) -lbe -lroot -o testlist
 	
 teststopwatch: teststopwatch.o Makefile
-	$(LL) teststopwatch.o -L$(BELIBDIR) -lbe -o teststopwatch
+	$(LL) teststopwatch.o -L$(BELIBDIR) -lbe -lroot -o teststopwatch
 
 testoskit: testoskit.o Makefile
-	$(LL) testoskit.o -L$(BELIBDIR) -lbe -o testoskit
+	$(LL) testoskit.o -L$(BELIBDIR) -lbe -lroot -o testoskit
 
 testports: testports.o Makefile
-	$(LL) testports.o -L$(BELIBDIR) -lbe -o testports
+	$(LL) testports.o -L$(BELIBDIR) -lbe -lroot -o testports
 
 testsem: testsem.o Makefile
-	$(LL) testsem.o -L$(BELIBDIR) -lbe -o testsem
+	$(LL) testsem.o -L$(BELIBDIR) -lbe -lroot -o testsem
 
 testsempingpong: testsempingpong.o Makefile
-	$(LL) testsempingpong.o -L$(BELIBDIR) -lbe -lrt -o testsempingpong
+	$(LL) testsempingpong.o -L$(BELIBDIR) -lbe -lroot -lrt -o testsempingpong
 
 install:
 	cp -f clean_shm.sh $(bindir)

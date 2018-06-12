@@ -25,6 +25,7 @@
 -I@ABS_TOPDIR@/headers/private/system/
 -I@ABS_TOPDIR@/headers/private/system/arch/x86/
 -I@ABS_TOPDIR@/headers/private/system/linux_kernel/
+-I@ABS_TOPDIR@/headers/private/runtime_loader/
 
 -I@ABS_TOPDIR@/headers/posix/
 

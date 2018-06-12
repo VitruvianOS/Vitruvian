@@ -10,21 +10,32 @@ CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-d
 
 LIBNAME = libroot.@LIBEXT@
 
-VPATH += libroot/os linux_kernel/os
+VPATH += libroot libroot/os libroot/posix linux_kernel/os linux_kernel/os/fs linux_kernel/os/fs/volume/ linux_kernel/os/fs2
 
-LIBROOT_OBJS = area.o 
-#find_directory.o  fs_attr.o  fs_info.o \
-#fs_query.o  fs_volume.o  image.o  port.o  sem.o  team.o  thread.o
+#fs_attr.o
+LIBROOT_OBJS = libroot_init.o area.o image.o  port.o  sem.o  team.o  thread.o \
+fs_query.o  fs_volume.o fs_info.o  fs_index.o find_directory.o \
+stat.o
 
-LINUX_KERNEL_OBJS = area.o direntfd.o misc.o	real_time_clock.o \
-atomic.o fs.o parsedate.o sem.o dirent.o image.o \
-port.o thread.o
+#kernel_fs_attr.o
+LINUX_KERNEL_OBJS = kernel_area.o kernel_sem.o  \
+kernel_port.o kernel_thread.o kernel_image.o kernel_watch.o kernel_team.o \
+kernel_missing_imp.o  \
+parsedate.o real_time_clock.o \
+libc.o system.o atomic.o byteorder.o LinuxVolume.o
 
+#kernel_fs_attr.o fs2.o fs_pos.o
+LINUX_KERNEL_FS_OBJS = kernel_fs_volume.o kernel_fs_query.o kernel_fs_index.o \
+kernel_fs_info.o dir.o
+
+LINUX_KERNEL_FS2_OBJS = fs.o fs_attr_untyped.o fs_descriptors.o
 
 CC = @CC@
 
 OBJS += $(LIBROOT_OBJS)
-#OBJS += $(LINUX_KERNEL_OBJS)
+OBJS += $(LINUX_KERNEL_OBJS)
+OBJS += $(LINUX_KERNEL_FS_OBJS)
+OBJS += $(LINUX_KERNEL_FS2_OBJS)
 
 OBJDIR	:= @top_srcdir@/objs
 
@@ -36,7 +47,7 @@ $(OBJDIR):
 	mkdir $(OBJDIR)
 
 $(OBJDIR)/$(LIBNAME): $(OBJS)
-	$(CC) @SHAREDLINK@ $(OBJS) -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
+	$(CC) @SHAREDLINK@ $(OBJS) -I./ -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
 
 install: $(OBJDIR)/$(LIBNAME) $(libdir)
 	cp -f $< $(libdir)/$(LIBNAME)

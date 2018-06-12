@@ -148,8 +148,9 @@ extern pid_t		_kern_setpgid(pid_t process, pid_t group);
 extern pid_t		_kern_setsid(void);
 extern status_t		_kern_change_root(const char *path);
 
-extern thread_id	_kern_spawn_thread(
-						struct thread_creation_attributes* attributes);
+// TODO
+//extern thread_id	_kern_spawn_thread(
+//						struct thread_creation_attributes* attributes);
 extern thread_id	_kern_find_thread(const char *name);
 extern status_t		_kern_suspend_thread(thread_id thread);
 extern status_t		_kern_resume_thread(thread_id thread);

@@ -3,6 +3,8 @@
 
 #define _IMPEXP_BE
 
+#define UNIMPLEMENTED()		printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
+
 #if defined(HAIKU_HOST_PLATFORM_CYGWIN)
 #	ifndef __addr_t_defined
 #		define __addr_t_defined
@@ -187,10 +189,10 @@ int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 #	define openat(fd, path, openMode...) \
 		_haiku_build_openat(fd, path, openMode)*/
 //#	define fcntl(fd, op...)				_haiku_build_fcntl(fd, op)
-#include <fcntl.h>
+//#include <fcntl.h>
 
-#	define renameat(fromFD, from, toFD, to) \
-		_haiku_build_renameat(fromFD, from, toFD, to)
+//#	define renameat(fromFD, from, toFD, to) \
+//		_haiku_build_renameat(fromFD, from, toFD, to)*/
 
 /*#	if defined(HAIKU_HOST_USE_XATTR) && defined(HAIKU_HOST_PLATFORM_HAIKU)
 #		define fs_read_attr			_haiku_build_fs_read_attr

@@ -10,7 +10,8 @@ CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-d
 
 LIBNAME = libroot.@LIBEXT@
 
-VPATH += libroot libroot/os libroot/posix linux_kernel/os linux_kernel/os/fs linux_kernel/os/fs/volume/ linux_kernel/os/fs2
+VPATH += libroot/ libroot/os libroot/posix \
+kernel_linux/os kernel_linux/os/fs kernel_linux/os/fs/volume/ kernel_linux/os/fs2
 
 #fs_attr.o
 LIBROOT_OBJS = libroot_init.o area.o image.o  port.o  sem.o  team.o  thread.o \

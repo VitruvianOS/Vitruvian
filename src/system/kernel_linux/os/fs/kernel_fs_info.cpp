@@ -12,20 +12,20 @@
 
 #include <mntent.h>
 
+#include "../debug.h"
 #include "volume/LinuxVolume.h"
-
 
 BList mMountList = NULL;
 
-void _DeallocateMountList()
+void _uninit_devices_list()
 {
 	LinuxVolume* aMount;
 
-	while (((aMount = mMountList.RemoveItem(1L))) != NULL)
-	{
+	while (((aMount = mMountList.RemoveItem(1L))) != NULL) {
 		delete aMount;
 	}
 }
+
 
 void
 _init_devices_list()
@@ -37,16 +37,16 @@ _init_devices_list()
 
 	fstab = setmntent (_PATH_MOUNTED, "r");
 
-	while ((aMountEntry = getmntent(fstab)))
-	{
-		mMountList.AddItem(new LinuxVolume(aMountEntry));
+	int i = 1;
+
+	while ((aMountEntry = getmntent(fstab))) {
+		mMountList.AddItem(new LinuxVolume(aMountEntry, i++));
 	}
 
-	if (endmntent(fstab) == 0)
-	{
+	if (endmntent(fstab) == 0) {
 		int saved_errno = errno;
 
-		_DeallocateMountList();
+		_uninit_devices_list();
 
 		errno = saved_errno;
 	}
@@ -54,14 +54,12 @@ _init_devices_list()
 
 
 dev_t
-_kern_next_device(int32 *_cookie)
+_kern_next_device(int32 *cookie)
 {
 	if (mMountList == NULL)
 		_init_devices_list();
 
-	// get next device
-	status_t error = B_ERROR;
-	LinuxVolume* aMount = (LinuxVolume*)(mMountList.ItemAt(_cookie++));
+	LinuxVolume* aMount = (LinuxVolume*)(mMountList.ItemAt(cookie++));
 
 	if (aMount == NULL)
 		return B_ERROR;
@@ -73,5 +71,14 @@ _kern_next_device(int32 *_cookie)
 status_t
 _kern_write_fs_info(dev_t device, const struct fs_info* info, int mask)
 {
+	UNIMPLEMENTED();
 	return B_ERROR;
+}
+
+
+int
+_kern_read_fs_info(dev_t device, fs_info *info)
+{
+	UNIMPLEMENTED();
+	return 0;
 }

@@ -17,7 +17,7 @@
 #include <Node.h>
 
 
-LinuxVolume::LinuxVolume(struct mntent* inMountEntry)
+LinuxVolume::LinuxVolume(struct mntent* inMountEntry, int32 id)
 {
 	char* deviceOptionsList;
 
@@ -27,6 +27,7 @@ LinuxVolume::LinuxVolume(struct mntent* inMountEntry)
 
 	deviceOptionsList = strstr(inMountEntry->mnt_opts, "dev=");
 
+	#if 0
 	if (deviceOptionsList)
 	{
 		int offset = 4;
@@ -38,6 +39,9 @@ LinuxVolume::LinuxVolume(struct mntent* inMountEntry)
 	}
 	else
 		fDevice = (dev_t) -1;
+	#else
+	fDevice = (dev_t) id;
+	#endif
 
 	fCStatus = (fDevice == -1) ? -1 : 0;
 }

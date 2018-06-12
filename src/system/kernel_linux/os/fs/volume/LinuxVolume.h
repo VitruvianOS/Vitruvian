@@ -24,7 +24,7 @@
 
 class LinuxVolume {
 public:
-	LinuxVolume(struct mntent* inMountEntry);
+	LinuxVolume(struct mntent* inMountEntry, int32 id);
 	virtual ~LinuxVolume();
 
 	status_t InitCheck() const;

@@ -29,7 +29,6 @@
 #define __gcc_noalias__(x) (*(volatile struct { int value; } *)x)
 
 
-
 static inline int32 atomic_exchange(vint32 *value, int32 old, int32 new)
 {
 	__asm__ __volatile__(

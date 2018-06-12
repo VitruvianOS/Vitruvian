@@ -16,13 +16,12 @@ kernel_linux/os kernel_linux/os/fs kernel_linux/os/fs/volume/ kernel_linux/os/fs
 #fs_attr.o
 LIBROOT_OBJS = libroot_init.o area.o image.o  port.o  sem.o  team.o  thread.o \
 fs_query.o  fs_volume.o fs_info.o  fs_index.o find_directory.o \
-stat.o
+stat.o parsedate.o
 
 #kernel_fs_attr.o
 LINUX_KERNEL_OBJS = kernel_area.o kernel_sem.o  \
 kernel_port.o kernel_thread.o kernel_image.o kernel_watch.o kernel_team.o \
-kernel_missing_imp.o  \
-parsedate.o real_time_clock.o \
+kernel_missing_imp.o real_time_clock.o \
 libc.o system.o atomic.o byteorder.o LinuxVolume.o
 
 #kernel_fs_attr.o fs2.o fs_pos.o

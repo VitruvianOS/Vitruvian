@@ -264,6 +264,7 @@ status_t _kern_delete_area( area_id hArea )
 
 status_t _kern_resize_area(area_id id, size_t new_size)
 {
+	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
@@ -284,6 +285,7 @@ status_t _kern_get_area_info( area_id hArea, area_info* psInfo, size_t size )
 status_t
 _kern_get_next_area_info(team_id team, int32 *cookie, area_info *areaInfo, size_t size)
 {
+	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
@@ -291,5 +293,6 @@ _kern_get_next_area_info(team_id team, int32 *cookie, area_info *areaInfo, size_
 status_t
 _kern_set_area_protection(area_id id, uint32 protection)
 {
+	UNIMPLEMENTED();
 	return B_OK;
 }

@@ -438,7 +438,7 @@ status_t _kern_set_sem_owner(sem_id id,
 status_t
 _kern_switch_sem(sem_id releaseSem, sem_id id, int32 count)
 {
-	TRACE("_kernel_switch_sem UNIMPLEMENTED\n");
+	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
@@ -446,7 +446,7 @@ _kern_switch_sem(sem_id releaseSem, sem_id id, int32 count)
 status_t
 _kern_switch_sem_etc(sem_id releaseSem, sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 {
-	TRACE("_kernel_switch_sem_etc UNIMPLEMENTED\n");
+	UNIMPLEMENTED();
 	return B_ERROR;
 }
 

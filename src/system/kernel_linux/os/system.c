@@ -101,12 +101,14 @@ static void get_cpu_info( system_info* psInfo )
 /* helper for get_system_info */
 static void get_mem_info( system_info* psInfo )
 {
+	UNIMPLEMENTED();
 }
 
 
 /* helper for get_system_info */
 static void get_fs_info( system_info* psInfo )
 {
+	UNIMPLEMENTED();
 }
 
 

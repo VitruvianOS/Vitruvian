@@ -10,6 +10,7 @@
 status_t
 _kern_get_team_usage_info(team_id team, int32 who, team_usage_info *info, size_t size)
 {
+	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
@@ -39,6 +40,7 @@ status_t _kern_get_team_info(team_id id, team_info *info)
 status_t
 _kern_get_next_team_info(int32 *cookie, team_info *info)
 {
+	UNIMPLEMENTED();
 	return B_ERROR;
 }
 

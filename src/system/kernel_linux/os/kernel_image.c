@@ -81,7 +81,7 @@ status_t _kern_get_image_symbol(image_id imid, const char* name, int32 sclass, v
 status_t
 _kern_get_image_info(image_id id, image_info *info, size_t infoSize)
 {
-	printf("_kern_get_image_info(): UNIMPLEMENTED\n");
+	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
@@ -89,7 +89,7 @@ _kern_get_image_info(image_id id, image_info *info, size_t infoSize)
 status_t
 _kern_get_next_image_info(team_id teamID, int32 *cookie, image_info *info, size_t size)
 {
-	printf("_kern_get_next_image_info(): UNIMPLEMENTED\n");
+	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
@@ -97,6 +97,6 @@ _kern_get_next_image_info(team_id teamID, int32 *cookie, image_info *info, size_
 void
 _kern_clear_caches(void* address, size_t length, uint32 flags)
 {
-	printf("_kern_clear_caches(): UNIMPLEMENTED\n");
+	UNIMPLEMENTED();
 	return B_ERROR;
 }

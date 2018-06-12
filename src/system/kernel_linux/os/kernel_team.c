@@ -1,3 +1,7 @@
+/*
+ ** Copyright 2004, Bill Hayden. All rights reserved
+ ** Distributed under the terms of the MIT License.
+ */
 
 #include <OS.h>
 #include "syscalls.h"

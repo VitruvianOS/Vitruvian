@@ -1,5 +1,3 @@
-/* Threading routines */
-
 /*
 ** Copyright 2004, Bill Hayden. All rights reserved.
 ** Copyright 2002-2004, The OpenBeOS Team. All rights reserved.
@@ -8,6 +6,8 @@
 ** Copyright 2001-2002, Travis Geiselbrecht. All rights reserved.
 ** Distributed under the terms of the NewOS License.
 */
+
+/* Threading routines */
 
 #include <OS.h>
 

@@ -14,6 +14,8 @@
 
 #include "volume/LinuxVolume.h"
 
+// TODO: Finish Haiku volume emulation under linux
+
 BList mMountList = NULL;
 
 void _uninit_devices_list()
@@ -71,6 +73,7 @@ status_t
 _kern_write_fs_info(dev_t device, const struct fs_info* info, int mask)
 {
 	UNIMPLEMENTED();
+
 	return B_ERROR;
 }
 
@@ -79,5 +82,6 @@ int
 _kern_read_fs_info(dev_t device, fs_info *info)
 {
 	UNIMPLEMENTED();
+	// TODO fill fs_info with data from the fs
 	return 0;
 }

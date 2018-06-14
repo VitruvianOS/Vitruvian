@@ -13,6 +13,7 @@ and binaries that can be used on Linux distributions to run the system as a mult
 Supported:
 * XServer (to be eventually replaced by Wayland)
 * DirectFB (planned to be deprecated in favor of the linuxfb driver)
+
 Unsupported:
 * Linux direct framebuffer
 * Wayland

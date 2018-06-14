@@ -12,7 +12,7 @@
 #include <syscall_utils.h>
 
 
-int
+status_t
 _kern_create_index(dev_t device, const char *name, uint32 type, uint32 flags)
 {
 	UNIMPLEMENTED();
@@ -20,7 +20,7 @@ _kern_create_index(dev_t device, const char *name, uint32 type, uint32 flags)
 }
 
 
-int
+status_t
 _kern_remove_index(dev_t device, const char *name)
 {
 	UNIMPLEMENTED();

@@ -78,7 +78,7 @@ _kern_write_fs_info(dev_t device, const struct fs_info* info, int mask)
 }
 
 
-int
+status_t
 _kern_read_fs_info(dev_t device, fs_info *info)
 {
 	UNIMPLEMENTED();

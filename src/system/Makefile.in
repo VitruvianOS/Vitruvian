@@ -11,13 +11,17 @@ CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-d
 LIBNAME = libroot.@LIBEXT@
 
 
-VPATH += libroot/ libroot/os libroot/posix \
+VPATH += libroot/ libroot/os libroot/os/locks libroot/posix \
 kernel_linux/os kernel_linux/os/fs kernel_linux/os/fs/volume/
 
 #fs_attr.o
-LIBROOT_OBJS = libroot_init.o area.o image.o  port.o  sem.o  team.o  thread.o \
-fs_query.o  fs_volume.o fs_info.o  fs_index.o find_directory.o \
-stat.o parsedate.o
+LIBROOT_OBJS = libroot_init.o \
+area.o fs_info.o parsedate.o team.o \
+atomic.o fs_query.o port.o thread.o \
+debug.o fs_volume.o scheduler.o time.o \
+find_directory.o image.o sem.o wait_for_objects.o \
+fs_attr.o system_info.o \
+fs_index.o memory.o system_revision.o
 
 LINUX_KERNEL_OBJS = kernel_area.o kernel_sem.o kernel_port.o kernel_thread.o \
 kernel_image.o kernel_watch.o kernel_team.o kernel_missing_imp.o real_time_clock.o \

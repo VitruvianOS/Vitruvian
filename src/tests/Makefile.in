@@ -1,0 +1,66 @@
+prefix=@prefix@
+bindir=${prefix}/bin
+
+COPTS	= `cat @top_srcdir@/cosmoe.specs` -g -Wall -Wno-multichar -c
+
+OBJS	= main.o testlist.o teststopwatch.o testoskit.o testports.o testsem.o testsempingpong.o
+
+EXE	= testharness testlist teststopwatch testoskit testports testsem testsempingpong
+
+BELIBDIR = @top_srcdir@/objs
+
+OBJDIR	:= @top_srcdir@/objs
+
+CC	= @CXX@
+LL	= @CXX@
+
+all: $(EXE)
+
+testharness: main.o Makefile
+	$(LL) main.o -L$(BELIBDIR) -lbe -lroot -o testharness
+
+testlist: testlist.o Makefile
+	$(LL) testlist.o -L$(BELIBDIR) -lbe -lroot -o testlist
+	
+teststopwatch: teststopwatch.o Makefile
+	$(LL) teststopwatch.o -L$(BELIBDIR) -lbe -lroot -o teststopwatch
+
+testoskit: testoskit.o Makefile
+	$(LL) testoskit.o -L$(BELIBDIR) -lbe -lroot -o testoskit
+
+testports: testports.o Makefile
+	$(LL) testports.o -L$(BELIBDIR) -lbe -lroot -o testports
+
+testsem: testsem.o Makefile
+	$(LL) testsem.o -L$(BELIBDIR) -lbe -lroot -o testsem
+
+testsempingpong: testsempingpong.o Makefile
+	$(LL) testsempingpong.o -L$(BELIBDIR) -lbe -lroot -lrt -o testsempingpong
+
+install:
+	cp -f clean_shm.sh $(bindir)
+
+clean:
+	-rm $(EXE) $(OBJS) *~
+
+distclean: clean
+	-rm -f Makefile
+
+.cpp.o:
+	$(CC) $(COPTS) $< -o $@
+
+teststopwatch.o : teststopwatch.cpp
+
+testlist.o : testlist.cpp
+
+testoskit.o : testoskit.cpp
+
+testports.o : testports.cpp
+
+testsem.o : testsem.cpp
+
+testsempingpong.o : testsempingpong.cpp
+
+main.o : main.cpp
+
+.PHONY: clean distclean deps doc install uninstall all

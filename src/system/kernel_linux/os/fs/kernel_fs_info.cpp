@@ -86,6 +86,7 @@ _kern_read_fs_info(dev_t device, fs_info *info)
 
 	info->dev = device;
 	strcpy(info->volume_name, volume->Name());
+	strcpy(info->device_name, volume->DeviceName());
 
 	return B_OK;
 }

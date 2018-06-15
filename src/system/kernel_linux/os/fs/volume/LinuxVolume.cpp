@@ -12,7 +12,8 @@
 
 LinuxVolume::LinuxVolume(struct mntent* mountEntry, dev_t id)
 	:
-	fName(mountEntry->mnt_fsname)
+	fName(mountEntry->mnt_dir),
+	fDeviceName(mountEntry->mnt_fsname)
 {
 	//printf("%s\n", mountEntry->mnt_opts);
 
@@ -45,4 +46,11 @@ const char*
 LinuxVolume::Name() const
 {
 	return fName.String();
+}
+
+
+const char*
+LinuxVolume::DeviceName() const
+{
+	return fDeviceName.String();
 }

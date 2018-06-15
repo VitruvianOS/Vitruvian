@@ -21,12 +21,14 @@ public:
 	status_t	InitCheck() const;
 
 	const char* Name() const;
+	const char* DeviceName() const;
 
 	dev_t		Device() const;
 
 private:
 	dev_t		fDevice;
 	BString		fName;
+	BString		fDeviceName;
 
 	status_t	fCStatus;
 };

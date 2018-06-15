@@ -1,71 +1,58 @@
+/*
+ * Copyright 2018, Dario Casalinuovo.
+ * Distributed under the terms of the MIT License.
+ */
 
 #include <fs_info.h>
-
-#include <List.h>
-
-#include <stdlib.h>
-#include <fcntl.h>
+#include <ObjectList.h>
 #include <errno.h>
-
-#include <errno_private.h>
-#include <syscalls.h>
 
 #include <mntent.h>
 
+#include "syscalls.h"
 #include "volume/LinuxVolume.h"
 
-// TODO: Finish Haiku volume emulation under linux
 
-BList mMountList = NULL;
-
-void _uninit_devices_list()
-{
-	LinuxVolume* aMount;
-
-	while (((aMount = mMountList.RemoveItem(1L))) != NULL) {
-		delete aMount;
-	}
-}
+BObjectList<LinuxVolume> sVolumesList = NULL;
 
 
 void
 _init_devices_list()
 {
-	mMountList = new BList();
+	sVolumesList = BObjectList<LinuxVolume>(true);
 	
-	struct mntent*	aMountEntry;
-	FILE*			fstab;
+	struct mntent* mtEntry = NULL;
+	FILE* fstab = setmntent(_PATH_MOUNTED, "r");
 
-	fstab = setmntent (_PATH_MOUNTED, "r");
+	int32 i = 0;
+	while ((mtEntry = getmntent(fstab)) != NULL)
+		sVolumesList.AddItem(new LinuxVolume(mtEntry, i++));
 
-	int i = 1;
-
-	while ((aMountEntry = getmntent(fstab))) {
-		mMountList.AddItem(new LinuxVolume(aMountEntry, i++));
-	}
-
-	if (endmntent(fstab) == 0) {
-		int saved_errno = errno;
-
-		_uninit_devices_list();
-
-		errno = saved_errno;
-	}
+	// TODO: Check errno on fail?
+	if (endmntent(fstab) == 0)
+		sVolumesList.MakeEmpty();
 }
 
 
 dev_t
 _kern_next_device(int32 *cookie)
 {
-	if (mMountList == NULL)
+	if (sVolumesList.CountItems() == 0)
 		_init_devices_list();
 
-	LinuxVolume* aMount = (LinuxVolume*)(mMountList.ItemAt(cookie++));
+	if(*cookie >= sVolumesList.CountItems())
+		return -1;
 
-	if (aMount == NULL)
-		return B_ERROR;
-	else
-		return aMount->Device();
+	printf("dev_t: %d\n", *cookie);
+
+	LinuxVolume* volume = sVolumesList.ItemAt(*cookie);
+
+	if (volume == NULL)
+		return -1;
+
+	(*cookie)++;
+
+	return volume->Device();
 }
 
 
@@ -73,7 +60,6 @@ status_t
 _kern_write_fs_info(dev_t device, const struct fs_info* info, int mask)
 {
 	UNIMPLEMENTED();
-
 	return B_ERROR;
 }
 
@@ -81,7 +67,25 @@ _kern_write_fs_info(dev_t device, const struct fs_info* info, int mask)
 status_t
 _kern_read_fs_info(dev_t device, fs_info *info)
 {
-	UNIMPLEMENTED();
+	// The mntent structure is defined in <mntent.h> as follows:
+	//
+	//    struct mntent {
+	//       char *mnt_fsname;   /* name of mounted filesystem */
+	//        char *mnt_dir;      /* filesystem path prefix */
+	//        char *mnt_type;     /* mount type (see mntent.h) */
+	//       char *mnt_opts;     /* mount options (see mntent.h) */
+	//        int   mnt_freq;     /* dump frequency in days */
+	//        int   mnt_passno;   /* pass number on parallel fsck */
+	//    };
+
 	// TODO fill fs_info with data from the fs
-	return 0;
+
+	LinuxVolume* volume = sVolumesList.ItemAt((int32)device);
+	if (volume == NULL)
+		return B_ERROR;
+
+	info->dev = device;
+	strcpy(info->volume_name, volume->Name());
+
+	return B_OK;
 }

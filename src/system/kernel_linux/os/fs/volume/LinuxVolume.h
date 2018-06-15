@@ -1,38 +1,33 @@
-// ----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//
-//  File Name:		Directory.cpp
-//
-//	Description:	BVolume class
-// ----------------------------------------------------------------------
+/*
+ * Copyright 2018, Dario Casalinuovo.
+ * Distributed under the terms of the MIT License.
+ */
 
 #ifndef _LINUX_VOLUME_H
 #define _LINUX_VOLUME_H
 
 #include <sys/types.h>
-#include <string>
 
-#include <fs_info.h>
-#include <Mime.h>
 #include <StorageDefs.h>
+#include <String.h>
 #include <SupportDefs.h>
-#include <Path.h>
-
-#include <mntent.h>
 
 
 class LinuxVolume {
 public:
-	LinuxVolume(struct mntent* inMountEntry, int32 id);
-	virtual ~LinuxVolume();
+				LinuxVolume(struct mntent* mountEntry, dev_t id);
+	virtual 	~LinuxVolume();
 
-	status_t InitCheck() const;
+	status_t	InitCheck() const;
 
-	dev_t Device() const;
-	
+	const char* Name() const;
+
+	dev_t		Device() const;
+
 private:
 	dev_t		fDevice;
+	BString		fName;
+
 	status_t	fCStatus;
 };
 

@@ -1,147 +1,181 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2002, OpenBeOS
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		TokenSpace.cpp
-//	Author(s):		Erik Jaesler <erik@cgsoftware.com>
-//	Description:	Class for creating tokens
-//------------------------------------------------------------------------------
+/*
+ * Copyright 2001-2011, Haiku.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Erik Jaesler (erik@cgsoftware.com)
+ *		Axel Dörfler, axeld@pinc-software.de
+ */
 
-// Standard Includes -----------------------------------------------------------
-#include <map>
-#include <stack>
 
-// System Includes -------------------------------------------------------------
+#include <DirectMessageTarget.h>
+#include <TokenSpace.h>
+
 #include <Autolock.h>
 
-// Project Includes ------------------------------------------------------------
-
-// Local Includes --------------------------------------------------------------
-#include "TokenSpace.h"
-
-// Local Defines ---------------------------------------------------------------
-
-// Globals ---------------------------------------------------------------------
 
 namespace BPrivate {
 
 BTokenSpace gDefaultTokens;
+	// the default token space - all handlers will go into that one
 
 
-//------------------------------------------------------------------------------
 BTokenSpace::BTokenSpace()
+	:
+	BLocker("token space"),
+	fTokenCount(1)
 {
 }
-//------------------------------------------------------------------------------
+
+
 BTokenSpace::~BTokenSpace()
 {
 }
-//------------------------------------------------------------------------------
-int32 BTokenSpace::NewToken(int16 type, void* object,
-							new_token_callback callback)
+
+
+int32
+BTokenSpace::NewToken(int16 type, void* object)
 {
-	BAutolock Lock(fLocker);
-	TTokenInfo ti = { type, object };
-	int32 token;
-	if (fTokenBin.empty())
-	{
-		token = fTokenCount;
-		++fTokenCount;
-	}
-	else
-	{
-		token = fTokenBin.top();
-		fTokenBin.pop();
+	BAutolock locker(this);
+
+	token_info tokenInfo = { type, object, NULL };
+	int32 token = fTokenCount;
+
+	try {
+		fTokenMap[token] = tokenInfo;
+	} catch (std::bad_alloc& exception) {
+		return -1;
 	}
 
-	fTokenMap[token] = ti;
-
-	if (callback)
-	{
-		callback(type, object);
-	}
+	fTokenCount++;
 
 	return token;
 }
-//------------------------------------------------------------------------------
-bool BTokenSpace::RemoveToken(int32 token, remove_token_callback callback)
+
+
+/*!
+	Inserts the specified token into the token space. If that token
+	already exists, it will be overwritten.
+	Don't mix NewToken() and this method unless you know what you're
+	doing.
+*/
+bool
+BTokenSpace::SetToken(int32 token, int16 type, void* object)
 {
-	BAutolock Lock(fLocker);
-	TTokenMap::iterator iter = fTokenMap.find(token);
-	if (iter == fTokenMap.end())
-	{
+	BAutolock locker(this);
+
+	token_info tokenInfo = { type, object, NULL };
+
+	try {
+		fTokenMap[token] = tokenInfo;
+	} catch (std::bad_alloc& exception) {
 		return false;
 	}
 
-	if (callback)
-	{
-		callback(iter->second.type, iter->second.object);
-	}
-
-	fTokenMap.erase(iter);
-	fTokenBin.push(token);
+	// this makes sure SetToken() plays more or less nice with NewToken()
+	if (token >= fTokenCount)
+		fTokenCount = token + 1;
 
 	return true;
 }
-//------------------------------------------------------------------------------
-bool BTokenSpace::CheckToken(int32 token, int16 type) const
+
+
+bool
+BTokenSpace::RemoveToken(int32 token)
 {
-	BAutolock Locker(const_cast<BLocker&>(fLocker));
-	TTokenMap::const_iterator iter = fTokenMap.find(token);
-	if (iter != fTokenMap.end() && iter->second.type == type)
-	{
+	BAutolock locker(this);
+
+	TokenMap::iterator iterator = fTokenMap.find(token);
+	if (iterator == fTokenMap.end())
+		return false;
+
+	fTokenMap.erase(iterator);
+	return true;
+}
+
+
+/*!	Checks whether or not the \a token exists with the specified
+	\a type in the token space or not.
+*/
+bool
+BTokenSpace::CheckToken(int32 token, int16 type) const
+{
+	BAutolock locker(const_cast<BTokenSpace&>(*this));
+
+	TokenMap::const_iterator iterator = fTokenMap.find(token);
+	if (iterator != fTokenMap.end() && iterator->second.type == type)
 		return true;
-	}
 
 	return false;
 }
-//------------------------------------------------------------------------------
-status_t BTokenSpace::GetToken(int32 token, int16 type, void** object,
-							   get_token_callback callback) const
+
+
+status_t
+BTokenSpace::GetToken(int32 token, int16 type, void** _object) const
 {
-	BAutolock Locker(const_cast<BLocker&>(fLocker));
-	TTokenMap::const_iterator iter = fTokenMap.find(token);
-	if (iter == fTokenMap.end())
-	{
-		*object = NULL;
-		return B_ERROR;
-	}
+	if (token < 1)
+		return B_ENTRY_NOT_FOUND;
 
-	if (callback && !callback(iter->second.type, iter->second.object))
-	{
-		*object = NULL;
-		return B_ERROR;
-	}
+	BAutolock locker(const_cast<BTokenSpace&>(*this));
 
-	*object = iter->second.object;
+	TokenMap::const_iterator iterator = fTokenMap.find(token);
+	if (iterator == fTokenMap.end() || iterator->second.type != type)
+		return B_ENTRY_NOT_FOUND;
+
+	*_object = iterator->second.object;
+	return B_OK;
+}
+
+
+status_t
+BTokenSpace::SetHandlerTarget(int32 token, BDirectMessageTarget* target)
+{
+	if (token < 1)
+		return B_ENTRY_NOT_FOUND;
+
+	BAutolock locker(const_cast<BTokenSpace&>(*this));
+
+	TokenMap::iterator iterator = fTokenMap.find(token);
+	if (iterator == fTokenMap.end() || iterator->second.type != B_HANDLER_TOKEN)
+		return B_ENTRY_NOT_FOUND;
+
+	if (iterator->second.target != NULL)
+		iterator->second.target->Release();
+
+	iterator->second.target = target;
+	if (target != NULL)
+		target->Acquire();
 
 	return B_OK;
 }
-//------------------------------------------------------------------------------
+
+
+status_t
+BTokenSpace::AcquireHandlerTarget(int32 token, BDirectMessageTarget** _target)
+{
+	if (token < 1)
+		return B_ENTRY_NOT_FOUND;
+
+	BAutolock locker(const_cast<BTokenSpace&>(*this));
+
+	TokenMap::const_iterator iterator = fTokenMap.find(token);
+	if (iterator == fTokenMap.end() || iterator->second.type != B_HANDLER_TOKEN)
+		return B_ENTRY_NOT_FOUND;
+
+	if (iterator->second.target != NULL)
+		iterator->second.target->Acquire();
+
+	*_target = iterator->second.target;
+	return B_OK;
+}
+
+
+void
+BTokenSpace::InitAfterFork()
+{
+	// We need to reinitialize the locker to get a new semaphore
+	new (this) BTokenSpace();
+}
+
 
 }	// namespace BPrivate
-
-/*
- * $Log $
- *
- * $Id  $
- *
- */
-

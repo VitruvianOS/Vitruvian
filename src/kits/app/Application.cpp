@@ -1,170 +1,162 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2004, Haiku, inc.
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		Application.cpp
-//	Author:			Erik Jaesler (erik@cgsoftware.com)
-//	Description:	BApplication class is the center of the application
-//					universe.  The global be_app and be_app_messenger 
-//					variables are defined here as well.
-//------------------------------------------------------------------------------
+/*
+ * Copyright 2001-2012, Haiku.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Erik Jaesler (erik@cgsoftware.com)
+ * 		Jerome Duval
+ *		Axel Dörfler, axeld@pinc-software.de
+ */
 
-// Standard Includes -----------------------------------------------------------
+
+#include <Application.h>
+
 #include <new>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-// System Includes -------------------------------------------------------------
 #include <Alert.h>
 #include <AppFileInfo.h>
-#include <Application.h>
-#include <AppMisc.h>
 #include <Cursor.h>
+#include <Debug.h>
 #include <Entry.h>
 #include <File.h>
-#include <InterfaceDefs.h>
 #include <Locker.h>
+#include <MessageRunner.h>
+#include <ObjectList.h>
 #include <Path.h>
 #include <PropertyInfo.h>
 #include <RegistrarDefs.h>
 #include <Resources.h>
 #include <Roster.h>
-#include <RosterPrivate.h>
 #include <Window.h>
 
-// Project Includes ------------------------------------------------------------
-#include <LooperList.h>
-#include <ObjectLocker.h>
+#include <AppMisc.h>
 #include <AppServerLink.h>
-#include <ServerProtocol.h>
+#include <AutoLocker.h>
+#include <BitmapPrivate.h>
+#include <DraggerPrivate.h>
+#include <LooperList.h>
+#include <MenuWindow.h>
+#include <PicturePrivate.h>
 #include <PortLink.h>
-#include <PrivateScreen.h>
+#include <RosterPrivate.h>
+#include <ServerMemoryAllocator.h>
+#include <ServerProtocol.h>
 
-using namespace std;
 
-// Local Includes --------------------------------------------------------------
+using namespace BPrivate;
 
-// Local Defines ---------------------------------------------------------------
 
-// Globals ---------------------------------------------------------------------
-BApplication*	be_app = NULL;
-BMessenger		be_app_messenger;
+BApplication *be_app = NULL;
+BMessenger be_app_messenger;
 
-BResources*	BApplication::_app_resources = NULL;
-BLocker		BApplication::_app_resources_lock("_app_resources_lock");
+pthread_once_t sAppResourcesInitOnce = PTHREAD_ONCE_INIT;
+BResources *BApplication::sAppResources = NULL;
 
-BPrivateScreen *gPrivateScreen = NULL;
 
-property_info gApplicationPropInfo[] =
-{
+enum {
+	kWindowByIndex,
+	kWindowByName,
+	kLooperByIndex,
+	kLooperByID,
+	kLooperByName,
+	kApplication
+};
+
+static property_info sPropertyInfo[] = {
 	{
 		"Window",
-			{},
-			{B_INDEX_SPECIFIER, B_REVERSE_INDEX_SPECIFIER},
-			NULL, 0,
-			{},
-			{},
-			{}
+		{},
+		{B_INDEX_SPECIFIER, B_REVERSE_INDEX_SPECIFIER},
+		NULL, kWindowByIndex,
+		{},
+		{},
+		{}
 	},
 	{
 		"Window",
-			{},
-			{B_NAME_SPECIFIER},
-			NULL, 1,
-			{},
-			{},
-			{}
+		{},
+		{B_NAME_SPECIFIER},
+		NULL, kWindowByName,
+		{},
+		{},
+		{}
 	},
 	{
 		"Looper",
-			{},
-			{B_INDEX_SPECIFIER, B_REVERSE_INDEX_SPECIFIER},
-			NULL, 2,
-			{},
-			{},
-			{}
+		{},
+		{B_INDEX_SPECIFIER, B_REVERSE_INDEX_SPECIFIER},
+		NULL, kLooperByIndex,
+		{},
+		{},
+		{}
 	},
 	{
 		"Looper",
-			{},
-			{B_ID_SPECIFIER},
-			NULL, 3,
-			{},
-			{},
-			{}
+		{},
+		{B_ID_SPECIFIER},
+		NULL, kLooperByID,
+		{},
+		{},
+		{}
 	},
 	{
 		"Looper",
-			{},
-			{B_NAME_SPECIFIER},
-			NULL, 4,
-			{},
-			{},
-			{}
+		{},
+		{B_NAME_SPECIFIER},
+		NULL, kLooperByName,
+		{},
+		{},
+		{}
 	},
 	{
 		"Name",
-			{B_GET_PROPERTY},
-			{B_DIRECT_SPECIFIER},
-			NULL, 5,
-			{B_STRING_TYPE},
-			{},
-			{}
+		{B_GET_PROPERTY},
+		{B_DIRECT_SPECIFIER},
+		NULL, kApplication,
+		{B_STRING_TYPE},
+		{},
+		{}
 	},
 	{
 		"Window",
-			{B_COUNT_PROPERTIES},
-			{B_DIRECT_SPECIFIER},
-			NULL, 5,
-			{B_INT32_TYPE},
-			{},
-			{}
+		{B_COUNT_PROPERTIES},
+		{B_DIRECT_SPECIFIER},
+		NULL, kApplication,
+		{B_INT32_TYPE},
+		{},
+		{}
 	},
 	{
 		"Loopers",
-			{B_GET_PROPERTY},
-			{B_DIRECT_SPECIFIER},
-			NULL, 5,
-			{B_MESSENGER_TYPE},
-			{},
-			{}
+		{B_GET_PROPERTY},
+		{B_DIRECT_SPECIFIER},
+		NULL, kApplication,
+		{B_MESSENGER_TYPE},
+		{},
+		{}
 	},
 	{
 		"Windows",
-			{B_GET_PROPERTY},
-			{B_DIRECT_SPECIFIER},
-			NULL, 5,
-			{B_MESSENGER_TYPE},
-			{},
-			{}
+		{B_GET_PROPERTY},
+		{B_DIRECT_SPECIFIER},
+		NULL, kApplication,
+		{B_MESSENGER_TYPE},
+		{},
+		{}
 	},
 	{
 		"Looper",
-			{B_COUNT_PROPERTIES},
-			{B_DIRECT_SPECIFIER},
-			NULL, 5,
-			{B_INT32_TYPE},
-			{},
-			{}
+		{B_COUNT_PROPERTIES},
+		{B_DIRECT_SPECIFIER},
+		NULL, kApplication,
+		{B_INT32_TYPE},
+		{},
+		{}
 	},
 	{}
 };
@@ -173,176 +165,360 @@ property_info gApplicationPropInfo[] =
 extern const int __libc_argc;
 extern const char * const *__libc_argv;
 
-class BMenuWindow : public BWindow
-{
-public:
-	BMenuWindow() :
-		BWindow(BRect(), "Menu", B_NO_BORDER_WINDOW_LOOK, B_MODAL_APP_WINDOW_FEEL,
-			B_NOT_ZOOMABLE)
-	{
-	}
-
-	virtual ~BMenuWindow() {}
-
-	virtual void WindowActivated(bool active) {}
-};
-//------------------------------------------------------------------------------
 
 // debugging
 //#define DBG(x) x
 #define DBG(x)
 #define OUT	printf
 
-enum {
-	NOT_IMPLEMENTED	= B_ERROR
-};
 
 // prototypes of helper functions
 static const char* looper_name_for(const char *signature);
 static status_t check_app_signature(const char *signature);
+static void fill_argv_message(BMessage &message);
 
-//------------------------------------------------------------------------------
-BApplication::BApplication(const char* signature)
-			: BLooper(looper_name_for(signature)),
-			  fAppName(NULL),
-			  fServerFrom(-1),
-			  fServerTo(-1),
-			  fServerHeap(NULL),
-			  fPulseRate(500000),
-			  fInitialWorkspace(0),
-			  fDraggedMessage(NULL),
-			  fPulseRunner(NULL),
-			  fInitError(B_NO_INIT),
-			  fReadyToRunCalled(false)
+
+BApplication::BApplication(const char *signature)
+	: BLooper(looper_name_for(signature))
 {
-	printf("BApplication 1 called\n");
-
-	InitData(signature, NULL);
+	_InitData(signature, true, NULL);
 }
-//------------------------------------------------------------------------------
-BApplication::BApplication(const char* signature, status_t* error)
-			: BLooper(looper_name_for(signature)),
-			  fAppName(NULL),
-			  fServerFrom(-1),
-			  fServerTo(-1),
-			  fServerHeap(NULL),
-			  fPulseRate(500000),
-			  fInitialWorkspace(0),
-			  fDraggedMessage(NULL),
-			  fPulseRunner(NULL),
-			  fInitError(B_NO_INIT),
-			  fReadyToRunCalled(false)
+
+
+BApplication::BApplication(const char *signature, status_t *_error)
+	: BLooper(looper_name_for(signature))
 {
-	printf("BApplication 2 called\n");
-
-	InitData(signature, error);
+	_InitData(signature, true, _error);
 }
-//------------------------------------------------------------------------------
+
+
+BApplication::BApplication(const char *signature, bool initGUI,
+		status_t *_error)
+	: BLooper(looper_name_for(signature))
+{
+	_InitData(signature, initGUI, _error);
+}
+
+
+BApplication::BApplication(BMessage *data)
+	// Note: BeOS calls the private BLooper(int32, port_id, const char *)
+	// constructor here, test if it's needed
+	: BLooper(looper_name_for(NULL))
+{
+	const char *signature = NULL;
+	data->FindString("mime_sig", &signature);
+
+	_InitData(signature, true, NULL);
+
+	bigtime_t pulseRate;
+	if (data->FindInt64("_pulse", &pulseRate) == B_OK)
+		SetPulseRate(pulseRate);
+}
+
+
+BApplication::BApplication(uint32 signature)
+{
+}
+
+
+BApplication::BApplication(const BApplication &rhs)
+{
+}
+
+
 BApplication::~BApplication()
 {
-	printf("~BApplication called\n");
+	Lock();
 
 	// tell all loopers(usually windows) to quit. Also, wait for them.
-	
-	// TODO: As Axel suggested, this functionality should probably be moved
-	// to quit_all_windows(), and that function should be called from both 
-	// here and QuitRequested().
-
-	BWindow*	window = NULL;
-	BList		looperList;
-	{
-		using namespace BPrivate;
-		BObjectLocker<BLooperList> ListLock(gLooperList);
-		if (ListLock.IsLocked())
-			gLooperList.GetLooperList(&looperList);
-	}
-
-	for (int32 i = 0; i < looperList.CountItems(); i++)
-	{
-		window	= dynamic_cast<BWindow*>((BLooper*)looperList.ItemAt(i));
-		if (window)
-		{
-			window->Lock();
-			window->Quit();
-		}
-	}
+	_QuitAllWindows(true);
 
 	// unregister from the roster
 	BRoster::Private().RemoveApp(Team());
 
 #ifndef RUN_WITHOUT_APP_SERVER
 	// tell app_server we're quitting...
-	BPortLink link(fServerFrom);
-	link.StartMessage(B_QUIT_REQUESTED);
-	link.Flush();
+	if (be_app) {
+		// be_app can be NULL here if the application fails to initialize
+		// correctly. For example, if it's already running and it's set to
+		// exclusive launch.
+		BPrivate::AppServerLink link;
+		link.StartMessage(B_QUIT_REQUESTED);
+		link.Flush();
+	}
+	delete_port(fServerLink->SenderPort());
+	delete_port(fServerLink->ReceiverPort());
+	delete fServerLink;
 #endif	// RUN_WITHOUT_APP_SERVER
 
-	// uninitialize be_app and be_app_messenger
+	delete fServerAllocator;
+
+	// uninitialize be_app, the be_app_messenger is invalidated automatically
 	be_app = NULL;
-	
-	// R5 doesn't uninitialize be_app_messenger.
-	//be_app_messenger = BMessenger();
 }
-//------------------------------------------------------------------------------
-BApplication::BApplication(BMessage* data)
-			: BLooper(looper_name_for(NULL)),
-			  fAppName(NULL),
-			  fServerFrom(-1),
-			  fServerTo(-1),
-			  fServerHeap(NULL),
-			  fPulseRate(500000),
-			  fInitialWorkspace(0),
-			  fDraggedMessage(NULL),
-			  fPulseRunner(NULL),
-			  fInitError(B_NO_INIT),
-			  fReadyToRunCalled(false)
+
+
+BApplication &
+BApplication::operator=(const BApplication &rhs)
 {
+	return *this;
 }
-//------------------------------------------------------------------------------
-BArchivable* BApplication::Instantiate(BMessage* data)
+
+
+void
+BApplication::_InitData(const char *signature, bool initGUI, status_t *_error)
+{
+	DBG(OUT("BApplication::InitData(`%s', %p)\n", signature, _error));
+	// check whether there exists already an application
+	if (be_app)
+		debugger("2 BApplication objects were created. Only one is allowed.");
+
+	fServerLink = new BPrivate::PortLink(-1, -1);
+	fServerAllocator = NULL;
+	fInitialWorkspace = 0;
+	//fDraggedMessage = NULL;
+	fReadyToRunCalled = false;
+
+	// initially, there is no pulse
+	fPulseRunner = NULL;
+	fPulseRate = 0;
+
+	// check signature
+	fInitError = check_app_signature(signature);
+	fAppName = signature;
+
+#ifndef RUN_WITHOUT_REGISTRAR
+	bool isRegistrar = signature
+		&& !strcasecmp(signature, kRegistrarSignature);
+	// get team and thread
+	team_id team = Team();
+	thread_id thread = BPrivate::main_thread_for(team);
+#endif
+
+	// get app executable ref
+	entry_ref ref;
+	if (fInitError == B_OK) {
+		fInitError = BPrivate::get_app_ref(&ref);
+		if (fInitError != B_OK) {
+			DBG(OUT("BApplication::InitData(): Failed to get app ref: %s\n",
+				strerror(fInitError)));
+		}
+	}
+
+	// get the BAppFileInfo and extract the information we need
+	uint32 appFlags = B_REG_DEFAULT_APP_FLAGS;
+	if (fInitError == B_OK) {
+		BAppFileInfo fileInfo;
+		BFile file(&ref, B_READ_ONLY);
+		fInitError = fileInfo.SetTo(&file);
+		if (fInitError == B_OK) {
+			fileInfo.GetAppFlags(&appFlags);
+			char appFileSignature[B_MIME_TYPE_LENGTH];
+			// compare the file signature and the supplied signature
+			if (fileInfo.GetSignature(appFileSignature) == B_OK
+				&& strcasecmp(appFileSignature, signature) != 0) {
+				printf("Signature in rsrc doesn't match constructor arg. (%s, %s)\n",
+					signature, appFileSignature);
+			}
+		} else {
+			DBG(OUT("BApplication::InitData(): Failed to get info from: "
+				"BAppFileInfo: %s\n", strerror(fInitError)));
+		}
+	}
+
+#ifndef RUN_WITHOUT_REGISTRAR
+	// check whether be_roster is valid
+	if (fInitError == B_OK && !isRegistrar
+		&& !BRoster::Private().IsMessengerValid(false)) {
+		printf("FATAL: be_roster is not valid. Is the registrar running?\n");
+		fInitError = B_NO_INIT;
+	}
+
+	// check whether or not we are pre-registered
+	bool preRegistered = false;
+	app_info appInfo;
+	if (fInitError == B_OK && !isRegistrar) {
+		if (BRoster::Private().IsAppRegistered(&ref, team, 0, &preRegistered,
+				&appInfo) != B_OK) {
+			preRegistered = false;
+		}
+	}
+	if (preRegistered) {
+		// we are pre-registered => the app info has been filled in
+		// Check whether we need to replace the looper port with a port
+		// created by the roster.
+		if (appInfo.port >= 0 && appInfo.port != fMsgPort) {
+			delete_port(fMsgPort);
+			fMsgPort = appInfo.port;
+		} else
+			appInfo.port = fMsgPort;
+		// check the signature and correct it, if necessary, also the case
+		if (strcmp(appInfo.signature, fAppName))
+			BRoster::Private().SetSignature(team, fAppName);
+		// complete the registration
+		fInitError = BRoster::Private().CompleteRegistration(team, thread,
+						appInfo.port);
+	} else if (fInitError == B_OK) {
+		// not pre-registered -- try to register the application
+		team_id otherTeam = -1;
+		// the registrar must not register
+		if (!isRegistrar) {
+			fInitError = BRoster::Private().AddApplication(signature, &ref,
+				appFlags, team, thread, fMsgPort, true, NULL, &otherTeam);
+			if (fInitError != B_OK) {
+				DBG(OUT("BApplication::InitData(): Failed to add app: %s\n",
+					strerror(fInitError)));
+			}
+		}
+		if (fInitError == B_ALREADY_RUNNING) {
+			// An instance is already running and we asked for
+			// single/exclusive launch. Send our argv to the running app.
+			// Do that only, if the app is NOT B_ARGV_ONLY.
+			if (otherTeam >= 0) {
+				BMessenger otherApp(NULL, otherTeam);
+				app_info otherAppInfo;
+				if (__libc_argc > 1
+					&& be_roster->GetRunningAppInfo(otherTeam, &otherAppInfo) == B_OK
+					&& !(otherAppInfo.flags & B_ARGV_ONLY)) {
+					// create an B_ARGV_RECEIVED message
+					BMessage argvMessage(B_ARGV_RECEIVED);
+					fill_argv_message(argvMessage);
+
+					// replace the first argv string with the path of the
+					// other application
+					BPath path;
+					if (path.SetTo(&otherAppInfo.ref) == B_OK)
+						argvMessage.ReplaceString("argv", 0, path.Path());
+
+					// send the message
+					otherApp.SendMessage(&argvMessage);
+				} else
+					otherApp.SendMessage(B_SILENT_RELAUNCH);
+			}
+		} else if (fInitError == B_OK) {
+			// the registrations was successful
+			// Create a B_ARGV_RECEIVED message and send it to ourselves.
+			// Do that even, if we are B_ARGV_ONLY.
+			// TODO: When BLooper::AddMessage() is done, use that instead of
+			// PostMessage().
+
+			DBG(OUT("info: BApplication successfully registered.\n"));
+
+			if (__libc_argc > 1) {
+				BMessage argvMessage(B_ARGV_RECEIVED);
+				fill_argv_message(argvMessage);
+				PostMessage(&argvMessage, this);
+			}
+			// send a B_READY_TO_RUN message as well
+			PostMessage(B_READY_TO_RUN, this);
+		} else if (fInitError > B_ERRORS_END) {
+			// Registrar internal errors shouldn't fall into the user's hands.
+			fInitError = B_ERROR;
+		}
+	}
+#else
+	// We need to have ReadyToRun called even when we're not using the registrar
+	PostMessage(B_READY_TO_RUN, this);
+#endif	// ifndef RUN_WITHOUT_REGISTRAR
+
+	if (fInitError == B_OK) {
+		// TODO: Not completely sure about the order, but this should be close.
+
+		// init be_app and be_app_messenger
+		be_app = this;
+		be_app_messenger = BMessenger(NULL, this);
+
+		// set the BHandler's name
+		SetName(ref.name);
+
+		// create meta MIME
+		BPath path;
+		if (path.SetTo(&ref) == B_OK)
+			create_app_meta_mime(path.Path(), false, true, false);
+
+#ifndef RUN_WITHOUT_APP_SERVER
+		// app server connection and IK initialization
+		if (initGUI)
+			fInitError = _InitGUIContext();
+#endif	// RUN_WITHOUT_APP_SERVER
+	}
+
+	// Return the error or exit, if there was an error and no error variable
+	// has been supplied.
+	if (_error) {
+		*_error = fInitError;
+	} else if (fInitError != B_OK) {
+		DBG(OUT("BApplication::InitData() failed: %s\n", strerror(fInitError)));
+		exit(0);
+	}
+DBG(OUT("BApplication::InitData() done\n"));
+}
+
+
+BArchivable *
+BApplication::Instantiate(BMessage *data)
 {
 	if (validate_instantiation(data, "BApplication"))
 		return new BApplication(data);
-	
-	return NULL;	
+
+	return NULL;
 }
-//------------------------------------------------------------------------------
-status_t BApplication::Archive(BMessage* data, bool deep) const
+
+
+status_t
+BApplication::Archive(BMessage *data, bool deep) const
 {
-	return NOT_IMPLEMENTED;
+	status_t status = BLooper::Archive(data, deep);
+	if (status < B_OK)
+		return status;
+
+	app_info info;
+	status = GetAppInfo(&info);
+	if (status < B_OK)
+		return status;
+
+	status = data->AddString("mime_sig", info.signature);
+	if (status < B_OK)
+		return status;
+
+	return data->AddInt64("_pulse", fPulseRate);
 }
-//------------------------------------------------------------------------------
-status_t BApplication::InitCheck() const
+
+
+status_t
+BApplication::InitCheck() const
 {
 	return fInitError;
 }
-//------------------------------------------------------------------------------
-thread_id BApplication::Run()
+
+
+thread_id
+BApplication::Run()
 {
+	if (fInitError != B_OK)
+		return fInitError;
+
 	AssertLocked();
 
-	if (fRunCalled)	
+	if (fRunCalled)
 		debugger("BApplication::Run was already called. Can only be called once.");
 
-	// Note: We need a local variable too (for the return value), since
-	// fTaskID is cleared by Quit().
-	thread_id thread = fTaskID = find_thread(NULL);
-
-	if (fMsgPort < B_OK)
-		return fMsgPort;
-
+	fThread = find_thread(NULL);
 	fRunCalled = true;
 
-	run_task();
+	task_looper();
 
-	return thread;
+	delete fPulseRunner;
+	return fThread;
 }
-//------------------------------------------------------------------------------
-void BApplication::Quit()
+
+
+void
+BApplication::Quit()
 {
 	bool unlock = false;
 	if (!IsLocked()) {
-		const char* name = Name();
+		const char *name = Name();
 		if (!name)
 			name = "no-name";
 		printf("ERROR - you must Lock the application object before calling "
@@ -354,7 +530,8 @@ void BApplication::Quit()
 	// Delete the object, if not running only.
 	if (!fRunCalled) {
 		delete this;
-	} else if (find_thread(NULL) != fTaskID) {
+	} else if (find_thread(NULL) != fThread) {
+// ToDo: why shouldn't we set fTerminating to true directly in this case?
 		// We are not the looper thread.
 		// We push a _QUIT_ into the queue.
 		// TODO: When BLooper::AddMessage() is done, use that instead of
@@ -376,669 +553,1005 @@ void BApplication::Quit()
 	if (unlock)
 		Unlock();
 }
-//------------------------------------------------------------------------------
-bool BApplication::QuitRequested()
+
+
+bool
+BApplication::QuitRequested()
 {
-	// No windows -- nothing to do.
-	// TODO: Au contraire, we can have opened windows, and we have
-	// to quit them.
-	
-	return BLooper::QuitRequested();
+	return _QuitAllWindows(false);
 }
-//------------------------------------------------------------------------------
-void BApplication::Pulse()
+
+
+void
+BApplication::Pulse()
 {
+	// supposed to be implemented by subclasses
 }
-//------------------------------------------------------------------------------
-void BApplication::ReadyToRun()
+
+
+void
+BApplication::ReadyToRun()
 {
+	// supposed to be implemented by subclasses
 }
-//------------------------------------------------------------------------------
-void BApplication::MessageReceived(BMessage* msg)
+
+
+void
+BApplication::MessageReceived(BMessage *message)
 {
-	switch (msg->what) {
-		// TODO: Handle these
-		
-		// Bebook says: B_SILENT_RELAUNCH
-		// Sent to a single-launch application when it's activated by being launched
-		// (for example, if the user double-clicks its icon in Tracker).
-		case B_SILENT_RELAUNCH:		
+	switch (message->what) {
 		case B_COUNT_PROPERTIES:
 		case B_GET_PROPERTY:
 		case B_SET_PROPERTY:
+		{
+			int32 index;
+			BMessage specifier;
+			int32 what;
+			const char *property = NULL;
+			if (message->GetCurrentSpecifier(&index, &specifier, &what, &property) < B_OK
+				|| !ScriptReceived(message, index, &specifier, what, property))
+				BLooper::MessageReceived(message);
+			break;
+		}
+
+		case B_SILENT_RELAUNCH:
+			// Sent to a B_SINGLE_LAUNCH application when it's launched again
+			// (see _InitData())
+			be_roster->ActivateApp(Team());
 			break;
 
+		case kMsgAppServerRestarted:
+			_ReconnectToServer();
+			break;
+
+		case kMsgDeleteServerMemoryArea:
+		{
+			int32 serverArea;
+			if (message->FindInt32("server area", &serverArea) == B_OK) {
+				// The link is not used, but we currently borrow its lock
+				BPrivate::AppServerLink link;
+				fServerAllocator->RemoveArea(serverArea);
+			}
+			break;
+		}
+
 		default:
-			BLooper::MessageReceived(msg);
+			BLooper::MessageReceived(message);
 			break;
 	}
-	
 }
-//------------------------------------------------------------------------------
-void BApplication::ArgvReceived(int32 argc, char** argv)
+
+
+void
+BApplication::ArgvReceived(int32 argc, char **argv)
 {
+	// supposed to be implemented by subclasses
 }
-//------------------------------------------------------------------------------
-void BApplication::AppActivated(bool active)
+
+
+void
+BApplication::AppActivated(bool active)
 {
+	// supposed to be implemented by subclasses
 }
-//------------------------------------------------------------------------------
-void BApplication::RefsReceived(BMessage* a_message)
+
+
+void
+BApplication::RefsReceived(BMessage *message)
 {
+	// supposed to be implemented by subclasses
 }
-//------------------------------------------------------------------------------
-void BApplication::AboutRequested()
+
+
+void
+BApplication::AboutRequested()
 {
 	thread_info info;
 	if (get_thread_info(Thread(), &info) == B_OK) {
 		BAlert *alert = new BAlert("_about_", info.name, "OK");
+		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 		alert->Go(NULL);
 	}
 }
-//------------------------------------------------------------------------------
-BHandler* BApplication::ResolveSpecifier(BMessage* msg, int32 index,
-										 BMessage* specifier, int32 form,
-										 const char* property)
+
+
+BHandler *
+BApplication::ResolveSpecifier(BMessage *message, int32 index,
+	BMessage *specifier, int32 what, const char *property)
 {
-	return NULL; // TODO: implement? not implemented?
+	BPropertyInfo propInfo(sPropertyInfo);
+	status_t err = B_OK;
+	uint32 data;
+
+	if (propInfo.FindMatch(message, 0, specifier, what, property, &data) >= 0) {
+		switch (data) {
+			case kWindowByIndex:
+			{
+				int32 index;
+				err = specifier->FindInt32("index", &index);
+				if (err != B_OK)
+					break;
+
+				if (what == B_REVERSE_INDEX_SPECIFIER)
+					index = CountWindows() - index;
+
+				BWindow *window = WindowAt(index);
+				if (window != NULL) {
+					message->PopSpecifier();
+					BMessenger(window).SendMessage(message);
+				} else
+					err = B_BAD_INDEX;
+				break;
+			}
+
+			case kWindowByName:
+			{
+				const char *name;
+				err = specifier->FindString("name", &name);
+				if (err != B_OK)
+					break;
+
+				for (int32 i = 0;; i++) {
+					BWindow *window = WindowAt(i);
+					if (window == NULL) {
+						err = B_NAME_NOT_FOUND;
+						break;
+					}
+					if (window->Title() != NULL && !strcmp(window->Title(), name)) {
+						message->PopSpecifier();
+						BMessenger(window).SendMessage(message);
+						break;
+					}
+				}
+				break;
+			}
+
+			case kLooperByIndex:
+			{
+				int32 index;
+				err = specifier->FindInt32("index", &index);
+				if (err != B_OK)
+					break;
+
+				if (what == B_REVERSE_INDEX_SPECIFIER)
+					index = CountLoopers() - index;
+
+				BLooper *looper = LooperAt(index);
+				if (looper != NULL) {
+					message->PopSpecifier();
+					BMessenger(looper).SendMessage(message);
+				} else
+					err = B_BAD_INDEX;
+				break;
+			}
+
+			case kLooperByID:
+				// TODO: implement getting looper by ID!
+				break;
+
+			case kLooperByName:
+			{
+				const char *name;
+				err = specifier->FindString("name", &name);
+				if (err != B_OK)
+					break;
+
+				for (int32 i = 0;; i++) {
+					BLooper *looper = LooperAt(i);
+					if (looper == NULL) {
+						err = B_NAME_NOT_FOUND;
+						break;
+					}
+					if (looper->Name() != NULL && !strcmp(looper->Name(), name)) {
+						message->PopSpecifier();
+						BMessenger(looper).SendMessage(message);
+						break;
+					}
+				}
+				break;
+			}
+
+			case kApplication:
+				return this;
+		}
+	} else {
+		return BLooper::ResolveSpecifier(message, index, specifier, what,
+			property);
+	}
+
+	if (err != B_OK) {
+		BMessage reply(B_MESSAGE_NOT_UNDERSTOOD);
+		reply.AddInt32("error", err);
+		reply.AddString("message", strerror(err));
+		message->SendReply(&reply);
+	}
+
+	return NULL;
+
 }
-//------------------------------------------------------------------------------
-void BApplication::ShowCursor()
+
+
+void
+BApplication::ShowCursor()
 {
-	BPrivate::BAppServerLink link;
+	BPrivate::AppServerLink link;
 	link.StartMessage(AS_SHOW_CURSOR);
 	link.Flush();
 }
-//------------------------------------------------------------------------------
-void BApplication::HideCursor()
+
+
+void
+BApplication::HideCursor()
 {
-	BPrivate::BAppServerLink link;
+	BPrivate::AppServerLink link;
 	link.StartMessage(AS_HIDE_CURSOR);
 	link.Flush();
 }
-//------------------------------------------------------------------------------
-void BApplication::ObscureCursor()
+
+
+void
+BApplication::ObscureCursor()
 {
-	BPrivate::BAppServerLink link;
+	BPrivate::AppServerLink link;
 	link.StartMessage(AS_OBSCURE_CURSOR);
 	link.Flush();
 }
-//------------------------------------------------------------------------------
-bool BApplication::IsCursorHidden() const
+
+
+bool
+BApplication::IsCursorHidden() const
 {
-	BPrivate::BAppServerLink link;
-	int32 code = SERVER_FALSE;
+	BPrivate::AppServerLink link;
+	int32 status = B_ERROR;
 	link.StartMessage(AS_QUERY_CURSOR_HIDDEN);
-	link.FlushWithReply(&code);
-	return (code==SERVER_TRUE)?true:false;
+	link.FlushWithReply(status);
+
+	return status == B_OK;
 }
-//------------------------------------------------------------------------------
-void BApplication::SetCursor(const void* cursor)
+
+
+void
+BApplication::SetCursor(const void *cursorData)
 {
-	// BeBook sez: If you want to call SetCursor() without forcing an immediate
-	//				sync of the Application Server, you have to use a BCursor.
-	// By deductive reasoning, this function forces a sync. =)
-	BCursor Cursor(cursor);
-	SetCursor(&Cursor, true);
+	BCursor cursor(cursorData);
+	SetCursor(&cursor, true);
+		// forces the cursor to be sync'ed
 }
-//------------------------------------------------------------------------------
-void BApplication::SetCursor(const BCursor* cursor, bool sync)
+
+
+void
+BApplication::SetCursor(const BCursor *cursor, bool sync)
 {
-	BPrivate::BAppServerLink link;
-	int32 code=SERVER_FALSE;
-	
-	link.StartMessage(AS_SET_CURSOR_BCURSOR);
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SET_CURSOR);
 	link.Attach<bool>(sync);
-	link.Attach<int32>(cursor->m_serverToken);
-	if(sync)
-		link.FlushWithReply(&code);
-	else
+	link.Attach<int32>(cursor->fServerToken);
+
+	if (sync) {
+		int32 code;
+		link.FlushWithReply(code);
+	} else
 		link.Flush();
 }
-//------------------------------------------------------------------------------
-int32 BApplication::CountWindows() const
+
+
+int32
+BApplication::CountWindows() const
 {
-	// BeBook sez: The windows list includes all windows explicitely created by
-	//				the app ... but excludes private windows create by Be
-	//				classes.
-	// I'm taking this to include private menu windows, thus the incl_menus
-	// param is false.
-	return count_windows(false);
+	return _CountWindows(false);
+		// we're ignoring menu windows
 }
-//------------------------------------------------------------------------------
-BWindow* BApplication::WindowAt(int32 index) const
+
+
+BWindow *
+BApplication::WindowAt(int32 index) const
 {
-	// BeBook sez: The windows list includes all windows explicitely created by
-	//				the app ... but excludes private windows create by Be
-	//				classes.
-	// I'm taking this to include private menu windows, thus the incl_menus
-	// param is false.
-	return window_at(index, false);
+	return _WindowAt(index, false);
+		// we're ignoring menu windows
 }
-//------------------------------------------------------------------------------
-int32 BApplication::CountLoopers() const
+
+
+int32
+BApplication::CountLoopers() const
 {
-	using namespace BPrivate;
-	BObjectLocker<BLooperList> ListLock(gLooperList);
+	AutoLocker<BLooperList> ListLock(gLooperList);
 	if (ListLock.IsLocked())
-	{
 		return gLooperList.CountLoopers();
-	}
 
-	return B_ERROR;	// Some bad, non-specific thing has happened
+	// Some bad, non-specific thing has happened
+	return B_ERROR;
 }
-//------------------------------------------------------------------------------
-BLooper* BApplication::LooperAt(int32 index) const
+
+
+BLooper *
+BApplication::LooperAt(int32 index) const
 {
-	using namespace BPrivate;
-	BLooper* Looper = NULL;
-	BObjectLocker<BLooperList> ListLock(gLooperList);
-	if (ListLock.IsLocked())
-	{
-		Looper = gLooperList.LooperAt(index);
-	}
+	BLooper *looper = NULL;
+	AutoLocker<BLooperList> listLock(gLooperList);
+	if (listLock.IsLocked())
+		looper = gLooperList.LooperAt(index);
 
-	return Looper;
+	return looper;
 }
-//------------------------------------------------------------------------------
-bool BApplication::IsLaunching() const
+
+
+bool
+BApplication::IsLaunching() const
 {
 	return !fReadyToRunCalled;
 }
-//------------------------------------------------------------------------------
-status_t BApplication::GetAppInfo(app_info* info) const
+
+
+status_t
+BApplication::GetAppInfo(app_info *info) const
 {
+	if (be_app == NULL || be_roster == NULL)
+		return B_NO_INIT;
 	return be_roster->GetRunningAppInfo(be_app->Team(), info);
 }
-//------------------------------------------------------------------------------
-BResources* BApplication::AppResources()
+
+
+BResources *
+BApplication::AppResources()
 {
-	return NULL;	// not implemented
+	if (sAppResources == NULL)
+		pthread_once(&sAppResourcesInitOnce, &_InitAppResources);
+
+	return sAppResources;
 }
-//------------------------------------------------------------------------------
-void BApplication::DispatchMessage(BMessage* message, BHandler* handler)
+
+
+void
+BApplication::DispatchMessage(BMessage *message, BHandler *handler)
 {
+	if (handler != this) {
+		// it's not ours to dispatch
+		BLooper::DispatchMessage(message, handler);
+		return;
+	}
+
 	switch (message->what) {
 		case B_ARGV_RECEIVED:
+			_ArgvReceived(message);
+			break;
+
+		case B_REFS_RECEIVED:
 		{
-			// build the argv vector
-			status_t error = B_OK;
-			int32 argc;
-			char **argv = NULL;
-			if (message->FindInt32("argc", &argc) == B_OK && argc > 0) {
-				argv = new char*[argc];
-				for (int32 i = 0; error == B_OK && i < argc; i++)
-					argv[i] = NULL;
-				// copy the arguments
-				for (int32 i = 0; error == B_OK && i < argc; i++) {
-					const char *arg = NULL;
-					error = message->FindString("argv", i, &arg);
-					if (error == B_OK && arg) {
-						argv[i] = new(std::nothrow) char[strlen(arg) + 1];
-						if (argv[i])
-							strcpy(argv[i], arg);
-						else
-							error = B_NO_MEMORY;
-					}
+			// this adds the refs that are part of this message to the recent
+			// lists, but only folders and documents are handled here
+			entry_ref ref;
+			int32 i = 0;
+			while (message->FindRef("refs", i++, &ref) == B_OK) {
+				BEntry entry(&ref, true);
+				if (entry.InitCheck() != B_OK)
+					continue;
+
+				if (entry.IsDirectory())
+					BRoster().AddToRecentFolders(&ref);
+				else {
+					// filter out applications, we only want to have documents
+					// in the recent files list
+					BNode node(&entry);
+					BNodeInfo info(&node);
+
+					char mimeType[B_MIME_TYPE_LENGTH];
+					if (info.GetType(mimeType) != B_OK
+						|| strcasecmp(mimeType, B_APP_MIME_TYPE))
+						BRoster().AddToRecentDocuments(&ref);
 				}
 			}
-			// call the hook
-			if (error == B_OK)
-				ArgvReceived(argc, argv);
-			// cleanup
-			if (argv) {
-				for (int32 i = 0; i < argc; i++)
-					delete[] argv[i];
-				delete[] argv;
-			}
-			break;
-		}
-		case B_REFS_RECEIVED:
+
 			RefsReceived(message);
 			break;
+		}
+
 		case B_READY_TO_RUN:
-			ReadyToRun();
-			fReadyToRunCalled = true;
+			if (!fReadyToRunCalled) {
+				ReadyToRun();
+				fReadyToRunCalled = true;
+			}
 			break;
-		
+
 		case B_ABOUT_REQUESTED:
 			AboutRequested();
 			break;
-		
-		// TODO: Handle these as well
-		/*
-		// These two are handled by BTextView, don't know if also
-		// by other classes
-		case _DISPOSE_DRAG_: 
-		case _PING_:
-		
-		case _SHOW_DRAG_HANDLES_:
-		case B_QUIT_REQUESTED:
-			
+
+		case B_PULSE:
+			Pulse();
 			break;
-		*/
+
+		case B_APP_ACTIVATED:
+		{
+			bool active;
+			if (message->FindBool("active", &active) == B_OK)
+				AppActivated(active);
+			break;
+		}
+
+		case _SHOW_DRAG_HANDLES_:
+		{
+			bool show;
+			if (message->FindBool("show", &show) != B_OK)
+				break;
+
+			BDragger::Private::UpdateShowAllDraggers(show);
+			break;
+		}
+
+		// TODO: Handle these as well
+		case _DISPOSE_DRAG_:
+		case _PING_:
+			puts("not yet handled message:");
+			DBG(message->PrintToStream());
+			break;
+
 		default:
 			BLooper::DispatchMessage(message, handler);
 			break;
 	}
 }
-//------------------------------------------------------------------------------
-void BApplication::SetPulseRate(bigtime_t rate)
+
+
+void
+BApplication::SetPulseRate(bigtime_t rate)
 {
+	if (rate < 0)
+		rate = 0;
+
+	// BeBook states that we have only 100,000 microseconds granularity
+	rate -= rate % 100000;
+
+	if (!Lock())
+		return;
+
+	if (rate != 0) {
+		// reset existing pulse runner, or create new one
+		if (fPulseRunner == NULL) {
+			BMessage pulse(B_PULSE);
+			fPulseRunner = new BMessageRunner(be_app_messenger, &pulse, rate);
+		} else
+			fPulseRunner->SetInterval(rate);
+	} else {
+		// turn off pulse messages
+		delete fPulseRunner;
+		fPulseRunner = NULL;
+	}
+
 	fPulseRate = rate;
+	Unlock();
 }
-//------------------------------------------------------------------------------
-status_t BApplication::GetSupportedSuites(BMessage* data)
+
+
+status_t
+BApplication::GetSupportedSuites(BMessage *data)
 {
-	status_t err = B_OK;
 	if (!data)
-	{
-		err = B_BAD_VALUE;
+		return B_BAD_VALUE;
+
+	status_t status = data->AddString("suites", "suite/vnd.Be-application");
+	if (status == B_OK) {
+		BPropertyInfo propertyInfo(sPropertyInfo);
+		status = data->AddFlat("messages", &propertyInfo);
+		if (status == B_OK)
+			status = BLooper::GetSupportedSuites(data);
 	}
 
-	if (!err)
-	{
-		err = data->AddString("Suites", "suite/vnd.Be-application");
-		if (!err)
-		{
-			BPropertyInfo PropertyInfo(gApplicationPropInfo);
-			err = data->AddFlat("message", &PropertyInfo);
-			if (!err)
-			{
-				err = BHandler::GetSupportedSuites(data);
+	return status;
+}
+
+
+status_t
+BApplication::Perform(perform_code d, void *arg)
+{
+	return BLooper::Perform(d, arg);
+}
+
+
+void BApplication::_ReservedApplication1() {}
+void BApplication::_ReservedApplication2() {}
+void BApplication::_ReservedApplication3() {}
+void BApplication::_ReservedApplication4() {}
+void BApplication::_ReservedApplication5() {}
+void BApplication::_ReservedApplication6() {}
+void BApplication::_ReservedApplication7() {}
+void BApplication::_ReservedApplication8() {}
+
+
+bool
+BApplication::ScriptReceived(BMessage *message, int32 index,
+	BMessage *specifier, int32 what, const char *property)
+{
+	BMessage reply(B_REPLY);
+	status_t err = B_BAD_SCRIPT_SYNTAX;
+
+	switch (message->what) {
+		case B_GET_PROPERTY:
+			if (strcmp("Loopers", property) == 0) {
+				int32 count = CountLoopers();
+				err = B_OK;
+				for (int32 i=0; err == B_OK && i<count; i++) {
+					BMessenger messenger(LooperAt(i));
+					err = reply.AddMessenger("result", messenger);
+				}
+			} else if (strcmp("Windows", property) == 0) {
+				int32 count = CountWindows();
+				err = B_OK;
+				for (int32 i=0; err == B_OK && i<count; i++) {
+					BMessenger messenger(WindowAt(i));
+					err = reply.AddMessenger("result", messenger);
+				}
+			} else if (strcmp("Window", property) == 0) {
+				switch (what) {
+					case B_INDEX_SPECIFIER:
+					case B_REVERSE_INDEX_SPECIFIER:
+					{
+						int32 index = -1;
+						err = specifier->FindInt32("index", &index);
+						if (err != B_OK)
+							break;
+						if (what == B_REVERSE_INDEX_SPECIFIER)
+							index = CountWindows() - index;
+						err = B_BAD_INDEX;
+						BWindow *win = WindowAt(index);
+						if (!win)
+							break;
+						BMessenger messenger(win);
+						err = reply.AddMessenger("result", messenger);
+						break;
+					}
+					case B_NAME_SPECIFIER:
+					{
+						const char *name;
+						err = specifier->FindString("name", &name);
+						if (err != B_OK)
+							break;
+						err = B_NAME_NOT_FOUND;
+						for (int32 i = 0; i < CountWindows(); i++) {
+							BWindow* window = WindowAt(i);
+							if (window && window->Name() != NULL
+								&& !strcmp(window->Name(), name)) {
+								BMessenger messenger(window);
+								err = reply.AddMessenger("result", messenger);
+								break;
+							}
+						}
+						break;
+					}
+				}
+			} else if (strcmp("Looper", property) == 0) {
+				switch (what) {
+					case B_INDEX_SPECIFIER:
+					case B_REVERSE_INDEX_SPECIFIER:
+					{
+						int32 index = -1;
+						err = specifier->FindInt32("index", &index);
+						if (err != B_OK)
+							break;
+						if (what == B_REVERSE_INDEX_SPECIFIER)
+							index = CountLoopers() - index;
+						err = B_BAD_INDEX;
+						BLooper *looper = LooperAt(index);
+						if (!looper)
+							break;
+						BMessenger messenger(looper);
+						err = reply.AddMessenger("result", messenger);
+						break;
+					}
+					case B_NAME_SPECIFIER:
+					{
+						const char *name;
+						err = specifier->FindString("name", &name);
+						if (err != B_OK)
+							break;
+						err = B_NAME_NOT_FOUND;
+						for (int32 i = 0; i < CountLoopers(); i++) {
+							BLooper *looper = LooperAt(i);
+							if (looper && looper->Name()
+								&& !strcmp(looper->Name(), name)) {
+								BMessenger messenger(looper);
+								err = reply.AddMessenger("result", messenger);
+								break;
+							}
+						}
+						break;
+					}
+					case B_ID_SPECIFIER:
+					{
+						// TODO
+						debug_printf("Looper's ID specifier used but not implemented.\n");
+						break;
+					}
+				}
+			} else if (strcmp("Name", property) == 0) {
+				err = reply.AddString("result", Name());
 			}
-		}
+			break;
+		case B_COUNT_PROPERTIES:
+			if (strcmp("Looper", property) == 0) {
+				err = reply.AddInt32("result", CountLoopers());
+			} else if (strcmp("Window", property) == 0) {
+				err = reply.AddInt32("result", CountWindows());
+			}
+			break;
 	}
+	if (err == B_BAD_SCRIPT_SYNTAX)
+		return false;
 
-	return err;
-}
-//------------------------------------------------------------------------------
-status_t BApplication::Perform(perform_code d, void* arg)
-{
-	return NOT_IMPLEMENTED;
-}
-//------------------------------------------------------------------------------
-BApplication::BApplication(uint32 signature)
-{
-}
-//------------------------------------------------------------------------------
-BApplication::BApplication(const BApplication& rhs)
-{
-}
-//------------------------------------------------------------------------------
-BApplication& BApplication::operator=(const BApplication& rhs)
-{
-	return *this;
-}
-//------------------------------------------------------------------------------
-void BApplication::_ReservedApplication1()
-{
-}
-//------------------------------------------------------------------------------
-void BApplication::_ReservedApplication2()
-{
-}
-//------------------------------------------------------------------------------
-void BApplication::_ReservedApplication3()
-{
-}
-//------------------------------------------------------------------------------
-void BApplication::_ReservedApplication4()
-{
-}
-//------------------------------------------------------------------------------
-void BApplication::_ReservedApplication5()
-{
-}
-//------------------------------------------------------------------------------
-void BApplication::_ReservedApplication6()
-{
-}
-//------------------------------------------------------------------------------
-void BApplication::_ReservedApplication7()
-{
-}
-//------------------------------------------------------------------------------
-void BApplication::_ReservedApplication8()
-{
-}
-//------------------------------------------------------------------------------
-bool BApplication::ScriptReceived(BMessage* msg, int32 index, BMessage* specifier, int32 form, const char* property)
-{
-	return false; // TODO: Implement? Not implemented?
-}
-//------------------------------------------------------------------------------
-void BApplication::run_task()
-{
-	task_looper();
-}
-//------------------------------------------------------------------------------
-void BApplication::InitData(const char* signature, status_t* error)
-{
-	// check whether there exists already an application
-	if (be_app)
-		debugger("2 BApplication objects were created. Only one is allowed.");
-	// check signature
-	fInitError = check_app_signature(signature);
-	fAppName = signature;
-
-#ifndef RUN_WITHOUT_REGISTRAR
-	bool isRegistrar
-		= (signature && !strcasecmp(signature, kRegistrarSignature));
-	// get team and thread
-	team_id team = Team();
-	thread_id thread = BPrivate::main_thread_for(team);
-#endif
-	// get app executable ref
-	entry_ref ref;
-	// get the BAppFileInfo and extract the information we need
-	uint32 appFlags = B_REG_DEFAULT_APP_FLAGS;
-#ifndef RUN_WITHOUT_REGISTRAR
-	// check whether be_roster is valid
-	if (fInitError == B_OK && !isRegistrar
-		&& !BRoster::Private().IsMessengerValid(false)) {
-		printf("FATAL: be_roster is not valid. Is the registrar running?\n");
-		fInitError = B_NO_INIT;
+	if (err < B_OK) {
+		reply.what = B_MESSAGE_NOT_UNDERSTOOD;
+		reply.AddString("message", strerror(err));
 	}
-
-	// check whether or not we are pre-registered
-	app_info appInfo;
-	if (fInitError == B_OK) {
-		// not pre-registered -- try to register the application
-		team_id otherTeam = -1;
-		// the registrar must not register
-		if (!isRegistrar) {
-			/*fInitError =*/ BRoster::Private().AddApplication(signature, &ref,
-				appFlags, team, thread, fMsgPort, true, NULL, &otherTeam);
-		}
-		if (fInitError == B_OK) {
-			// the registrations was successful
-			// Create a B_ARGV_RECEIVED message and send it to ourselves.
-			// Do that even, if we are B_ARGV_ONLY.
-			// TODO: When BLooper::AddMessage() is done, use that instead of
-			// PostMessage().
-			//if (__libc_argc > 1) {
-			//	BMessage argvMessage(B_ARGV_RECEIVED);
-			//	do_argv(&argvMessage);
-			//	PostMessage(&argvMessage, this);
-			//}
-			// send a B_READY_TO_RUN message as well
-			PostMessage(B_READY_TO_RUN, this);
-		} else if (fInitError > B_ERRORS_END) {
-			// Registrar internal errors shouldn't fall into the user's hands.
-			fInitError = B_ERROR;
-		}
-	}
-#endif	// ifdef RUN_WITHOUT_REGISTRAR
-
-	// TODO: Not completely sure about the order, but this should be close.
-	
-#ifndef RUN_WITHOUT_APP_SERVER
-	// An app_server connection is necessary for a lot of stuff, so get that first.
-printf("1: fInitError = %ld\n", fInitError);
-	if (fInitError == B_OK)
-		connect_to_app_server();
-printf("2: fInitError = %ld\n", fInitError);
-	if (fInitError == B_OK)
-		setup_server_heaps();
-printf("3: fInitError = %ld\n", fInitError);
-	if (fInitError == B_OK)
-		get_scs();
-printf("4: fInitError = %ld\n", fInitError);
-#endif	// RUN_WITHOUT_APP_SERVER
-
-	
-	// init be_app and be_app_messenger
-	if (fInitError == B_OK) {
-		be_app = this;
-		be_app_messenger = BMessenger(NULL, this);
-	}
-	
-printf("5: be_app and be_app_messenger\n");
-	
-#ifndef RUN_WITHOUT_APP_SERVER
-	// Initialize the IK after we have set be_app because of a construction of a
-	// BAppServerLink (which depends on be_app) nested inside the call to get_menu_info.
-	if (fInitError == B_OK)
-		fInitError = _init_interface_kit_();
-#endif	// RUN_WITHOUT_APP_SERVER
-	// set the BHandler's name
-
-printf("6: _init_interface_kit_\n");
-	
-	// create meta MIME
-	if (fInitError == B_OK) {
-	}
-
-#ifndef RUN_WITHOUT_APP_SERVER
-	// create global system cursors
-	// ToDo: these could have a predefined server token to safe the communication!
-	B_CURSOR_SYSTEM_DEFAULT = new BCursor(B_HAND_CURSOR);
-	B_CURSOR_I_BEAM = new BCursor(B_I_BEAM_CURSOR);
-#endif	// RUN_WITHOUT_APP_SERVER
-
-printf("7: cursors created\n");
-	
-	// Return the error or exit, if there was an error and no error variable
-	// has been supplied.
-	if (error)
-		*error = fInitError;
-	else if (fInitError != B_OK)
-	{
-		printf("App could not initialize due to error (%ld)\n", fInitError);
-		fflush(NULL);
-		exit(0);
-	}
-	
-printf("8: fInitError = %ld\n", fInitError);
+	reply.AddInt32("error", err);
+	message->SendReply(&reply);
+	return true;
 }
-//------------------------------------------------------------------------------
-void BApplication::BeginRectTracking(BRect r, bool trackWhole)
+
+
+void
+BApplication::BeginRectTracking(BRect rect, bool trackWhole)
 {
-	BPrivate::BAppServerLink link;
+	BPrivate::AppServerLink link;
 	link.StartMessage(AS_BEGIN_RECT_TRACKING);
-	link.Attach<BRect>(r);
+	link.Attach<BRect>(rect);
 	link.Attach<int32>(trackWhole);
 	link.Flush();
 }
-//------------------------------------------------------------------------------
-void BApplication::EndRectTracking()
+
+
+void
+BApplication::EndRectTracking()
 {
-	BPrivate::BAppServerLink link;
+	BPrivate::AppServerLink link;
 	link.StartMessage(AS_END_RECT_TRACKING);
 	link.Flush();
 }
-//------------------------------------------------------------------------------
-void BApplication::get_scs()
-{
-	gPrivateScreen = new BPrivateScreen();
-}
-//------------------------------------------------------------------------------
-void BApplication::setup_server_heaps()
-{
-	// TODO: implement?
 
-	// We may not need to implement this function or the XX_offs_to_ptr functions.
-	// R5 sets up a couple of areas for various tasks having to do with the
-	// app_server. Currently (7/29/04), the R1 app_server does not do this and
-	// may never do this unless a significant need is found for it. --DW
-}
-//------------------------------------------------------------------------------
-void* BApplication::rw_offs_to_ptr(uint32 offset)
-{
-	return NULL;	// TODO: implement
-}
-//------------------------------------------------------------------------------
-void* BApplication::ro_offs_to_ptr(uint32 offset)
-{
-	return NULL;	// TODO: implement
-}
-//------------------------------------------------------------------------------
-void* BApplication::global_ro_offs_to_ptr(uint32 offset)
-{
-	return NULL;	// TODO: implement
-}
-//------------------------------------------------------------------------------
-void BApplication::connect_to_app_server()
-{
-	fServerFrom = find_port(SERVER_PORT_NAME);
-	if (fServerFrom >= 0) {
-		// Create the port so that the app_server knows where to send messages
-		fServerTo = create_port(100, "a<fServerTo");
-		if (fServerTo >= 0) {
-			
-			//We can't use BAppServerLink because be_app == NULL
-			
-			// AS_CREATE_APP:
-	
-			// Attach data:
-			// 1) port_id - receiver port of a regular app
-			// 2) port_id - looper port for this BApplication
-			// 3) team_id - team identification field
-			// 4) int32 - handler ID token of the app
-			// 5) char * - signature of the regular app
-			BPortLink link(fServerFrom,fServerTo);
-			int32 code=SERVER_FALSE;
-		
-			link.StartMessage(AS_CREATE_APP);
-			link.Attach<port_id>(fServerTo);
-			link.Attach<port_id>(_get_looper_port_(this));
-			link.Attach<team_id>(Team());
-			link.Attach<int32>(_get_object_token_(this));
-			link.AttachString(fAppName);
-			link.Flush();
-			link.GetNextReply(&code);
 
-			// Reply code: SERVER_TRUE
-			// Reply data:
-			//	1) port_id server-side application port (fServerFrom value)
-			if(code==SERVER_TRUE)
-				link.Read<port_id>(&fServerFrom);
-			else
-				debugger("BApplication: couldn't obtain new app_server comm port");
-		
-		} else
-			fInitError = fServerTo;
-	} else
-		fInitError = fServerFrom;
+status_t
+BApplication::_SetupServerAllocator()
+{
+	fServerAllocator = new (std::nothrow) BPrivate::ServerMemoryAllocator();
+	if (fServerAllocator == NULL)
+		return B_NO_MEMORY;
+
+	return fServerAllocator->InitCheck();
 }
-//------------------------------------------------------------------------------
-void BApplication::send_drag(BMessage* msg, int32 vs_token, BPoint offset, BRect drag_rect, BHandler* reply_to)
+
+
+status_t
+BApplication::_InitGUIContext()
+{
+	// An app_server connection is necessary for a lot of stuff, so get that first.
+	status_t error = _ConnectToServer();
+	if (error != B_OK)
+		return error;
+
+	// Initialize the IK after we have set be_app because of a construction
+	// of a AppServerLink (which depends on be_app) nested inside the call
+	// to get_menu_info.
+	error = _init_interface_kit_();
+	if (error != B_OK)
+		return error;
+
+	// create global system cursors
+	B_CURSOR_SYSTEM_DEFAULT = new BCursor(B_HAND_CURSOR);
+	B_CURSOR_I_BEAM = new BCursor(B_I_BEAM_CURSOR);
+
+	// TODO: would be nice to get the workspace at launch time from the registrar
+	fInitialWorkspace = current_workspace();
+
+	return B_OK;
+}
+
+
+status_t
+BApplication::_ConnectToServer()
+{
+	status_t status
+		= create_desktop_connection(fServerLink, "a<app_server", 100);
+	if (status != B_OK)
+		return status;
+
+	// AS_CREATE_APP:
+	//
+	// Attach data:
+	// 1) port_id - receiver port of a regular app
+	// 2) port_id - looper port for this BApplication
+	// 3) team_id - team identification field
+	// 4) int32 - handler ID token of the app
+	// 5) char * - signature of the regular app
+
+	fServerLink->StartMessage(AS_CREATE_APP);
+	fServerLink->Attach<port_id>(fServerLink->ReceiverPort());
+	fServerLink->Attach<port_id>(_get_looper_port_(this));
+	fServerLink->Attach<team_id>(Team());
+	fServerLink->Attach<int32>(_get_object_token_(this));
+	fServerLink->AttachString(fAppName);
+
+	area_id sharedReadOnlyArea;
+	team_id serverTeam;
+	port_id serverPort;
+
+	int32 code;
+	if (fServerLink->FlushWithReply(code) == B_OK
+		&& code == B_OK) {
+		// We don't need to contact the main app_server anymore
+		// directly; we now talk to our server alter ego only.
+		fServerLink->Read<port_id>(&serverPort);
+		fServerLink->Read<area_id>(&sharedReadOnlyArea);
+		fServerLink->Read<team_id>(&serverTeam);
+	} else {
+		fServerLink->SetSenderPort(-1);
+		debugger("BApplication: couldn't obtain new app_server comm port");
+		return B_ERROR;
+	}
+	fServerLink->SetTargetTeam(serverTeam);
+	fServerLink->SetSenderPort(serverPort);
+
+	status = _SetupServerAllocator();
+	if (status != B_OK)
+		return status;
+
+	area_id area;
+	uint8* base;
+	status = fServerAllocator->AddArea(sharedReadOnlyArea, area, base, true);
+	if (status < B_OK)
+		return status;
+
+	fServerReadOnlyMemory = base;
+	return B_OK;
+}
+
+
+void
+BApplication::_ReconnectToServer()
+{
+	delete_port(fServerLink->SenderPort());
+	delete_port(fServerLink->ReceiverPort());
+	invalidate_server_port();
+
+	if (_ConnectToServer() != B_OK)
+		debugger("Can't reconnect to app server!");
+
+	AutoLocker<BLooperList> listLock(gLooperList);
+	if (!listLock.IsLocked())
+		return;
+
+	uint32 count = gLooperList.CountLoopers();
+	for (uint32 i = 0; i < count ; i++) {
+		BWindow* window = dynamic_cast<BWindow*>(gLooperList.LooperAt(i));
+		if (window == NULL)
+			continue;
+		BMessenger windowMessenger(window);
+		windowMessenger.SendMessage(kMsgAppServerRestarted);
+	}
+
+	reconnect_bitmaps_to_app_server();
+	reconnect_pictures_to_app_server();
+}
+
+
+#if 0
+void
+BApplication::send_drag(BMessage *message, int32 vs_token, BPoint offset,
+	BRect dragRect, BHandler *replyTo)
 {
 	// TODO: implement
 }
-//------------------------------------------------------------------------------
-void BApplication::send_drag(BMessage* msg, int32 vs_token, BPoint offset, int32 bitmap_token, drawing_mode dragMode, BHandler* reply_to)
+
+
+void
+BApplication::send_drag(BMessage *message, int32 vs_token, BPoint offset,
+	int32 bitmapToken, drawing_mode dragMode, BHandler *replyTo)
 {
 	// TODO: implement
 }
-//------------------------------------------------------------------------------
-void BApplication::write_drag(_BSession_* session, BMessage* a_message)
+
+
+void
+BApplication::write_drag(_BSession_ *session, BMessage *message)
 {
 	// TODO: implement
 }
-//------------------------------------------------------------------------------
-bool BApplication::quit_all_windows(bool force)
+#endif
+
+bool
+BApplication::_WindowQuitLoop(bool quitFilePanels, bool force)
 {
-	return false;	// TODO: implement?
+	int32 index = 0;
+	while (true) {
+		 BWindow *window = WindowAt(index);
+		 if (window == NULL)
+		 	break;
+
+		// NOTE: the window pointer might be stale, in case the looper
+		// was already quit by quitting an earlier looper... but fortunately,
+		// we can still call Lock() on the invalid pointer, and it
+		// will return false...
+		if (!window->Lock())
+			continue;
+
+		// don't quit file panels if we haven't been asked for it
+		if (!quitFilePanels && window->IsFilePanel()) {
+			window->Unlock();
+			index++;
+			continue;
+		}
+
+		if (!force && !window->QuitRequested()
+			&& !(quitFilePanels && window->IsFilePanel())) {
+			// the window does not want to quit, so we don't either
+			window->Unlock();
+			return false;
+		}
+
+		// Re-lock, just to make sure that the user hasn't done nasty
+		// things in QuitRequested(). Quit() unlocks fully, thus
+		// double-locking is harmless.
+		if (window->Lock())
+			window->Quit();
+
+		index = 0;
+			// we need to continue at the start of the list again - it
+			// might have changed
+	}
+	return true;
 }
-//------------------------------------------------------------------------------
-bool BApplication::window_quit_loop(bool, bool)
+
+
+bool
+BApplication::_QuitAllWindows(bool force)
 {
-	// TODO: Implement and use in BApplication::QuitRequested()
-	return false;
+	AssertLocked();
+
+	// We need to unlock here because BWindow::QuitRequested() must be
+	// allowed to lock the application - which would cause a deadlock
+	Unlock();
+
+	bool quit = _WindowQuitLoop(false, force);
+	if (quit)
+		quit = _WindowQuitLoop(true, force);
+
+	Lock();
+
+	return quit;
 }
-//------------------------------------------------------------------------------
-void BApplication::do_argv(BMessage* message)
+
+
+void
+BApplication::_ArgvReceived(BMessage *message)
 {
-	if (message) {
-		// add current working directory
-		char cwd[B_PATH_NAME_LENGTH + 1];
-		if (getcwd(cwd, B_PATH_NAME_LENGTH + 1))
-			message->AddString("cwd", cwd);
+	ASSERT(message != NULL);
+
+	// build the argv vector
+	status_t error = B_OK;
+	int32 argc = 0;
+	char **argv = NULL;
+	if (message->FindInt32("argc", &argc) == B_OK && argc > 0) {
+		// allocate a NULL terminated array
+		argv = new(std::nothrow) char*[argc + 1];
+		if (argv == NULL)
+			return;
+
+		// copy the arguments
+		for (int32 i = 0; error == B_OK && i < argc; i++) {
+			const char *arg = NULL;
+			error = message->FindString("argv", i, &arg);
+			if (error == B_OK && arg) {
+				argv[i] = strdup(arg);
+				if (argv[i] == NULL)
+					error = B_NO_MEMORY;
+			} else
+				argc = i;
+		}
+
+		argv[argc] = NULL;
+	}
+
+	// call the hook
+	if (error == B_OK && argc > 0)
+		ArgvReceived(argc, argv);
+
+	if (error != B_OK) {
+		printf("Error parsing B_ARGV_RECEIVED message. Message:\n");
+		message->PrintToStream();
+	}
+
+	// cleanup
+	if (argv) {
+		for (int32 i = 0; i < argc; i++)
+			free(argv[i]);
+		delete[] argv;
 	}
 }
-//------------------------------------------------------------------------------
-uint32 BApplication::InitialWorkspace()
+
+
+uint32
+BApplication::InitialWorkspace()
 {
 	return fInitialWorkspace;
 }
-//------------------------------------------------------------------------------
-int32 BApplication::count_windows(bool incl_menus) const
-{
-	using namespace BPrivate;
 
-	// Windows are BLoopers, so we can just check each BLooper to see if it's
-	// a BWindow (or BMenuWindow)
-	int32 count = 0;
-	BObjectLocker<BLooperList> ListLock(gLooperList);
-	if (ListLock.IsLocked())
-	{
-		BLooper* Looper = NULL;
-		for (int32 i = 0; i < gLooperList.CountLoopers(); ++i)
-		{
-			Looper = gLooperList.LooperAt(i);
-			if (dynamic_cast<BWindow*>(Looper))
-			{
-				if (incl_menus || dynamic_cast<BMenuWindow*>(Looper) == NULL)
-				{
-					++count;
-				}
-			}
+
+int32
+BApplication::_CountWindows(bool includeMenus) const
+{
+	uint32 count = 0;
+	for (int32 i = 0; i < gLooperList.CountLoopers(); i++) {
+		BWindow* window = dynamic_cast<BWindow*>(gLooperList.LooperAt(i));
+		if (window != NULL && !window->fOffscreen && (includeMenus
+				|| dynamic_cast<BMenuWindow *>(window) == NULL)) {
+			count++;
 		}
 	}
 
 	return count;
 }
-//------------------------------------------------------------------------------
-BWindow* BApplication::window_at(uint32 index, bool incl_menus) const
-{
-	using namespace BPrivate;
 
-	// Windows are BLoopers, so we can just check each BLooper to see if it's
-	// a BWindow (or BMenuWindow)
-	uint32 count = 0;
-	BWindow* Window = NULL;
-	BObjectLocker<BLooperList> ListLock(gLooperList);
-	if (ListLock.IsLocked())
-	{
-		BLooper* Looper = NULL;
-		for (int32 i = 0; i < gLooperList.CountLoopers() && !Window; ++i)
-		{
-			Looper = gLooperList.LooperAt(i);
-			if (dynamic_cast<BWindow*>(Looper))
-			{
-				if (incl_menus || dynamic_cast<BMenuWindow*>(Looper) == NULL)
-				{
-					if (count == index)
-					{
-						Window = dynamic_cast<BWindow*>(Looper);
-					}
-					else
-					{
-						++count;
-					}
-				}
-			}
+
+BWindow *
+BApplication::_WindowAt(uint32 index, bool includeMenus) const
+{
+	AutoLocker<BLooperList> listLock(gLooperList);
+	if (!listLock.IsLocked())
+		return NULL;
+
+	uint32 count = gLooperList.CountLoopers();
+	for (uint32 i = 0; i < count && index < count; i++) {
+		BWindow* window = dynamic_cast<BWindow*>(gLooperList.LooperAt(i));
+		if (window == NULL || (window != NULL && window->fOffscreen)
+			|| (!includeMenus && dynamic_cast<BMenuWindow *>(window) != NULL)) {
+			index++;
+			continue;
 		}
+
+		if (i == index)
+			return window;
 	}
 
-	return Window;
+	return NULL;
 }
-//------------------------------------------------------------------------------
-status_t BApplication::get_window_list(BList* list, bool incl_menus) const
-{
-	return NOT_IMPLEMENTED;
-}
-//------------------------------------------------------------------------------
-int32 BApplication::async_quit_entry(void* data)
-{
-	return 0;	// TODO: implement? not implemented?
-}
-//------------------------------------------------------------------------------
 
-// check_app_signature
-/*!	\brief Checks whether the supplied string is a valid application signature.
+
+/*static*/ void
+BApplication::_InitAppResources()
+{
+	entry_ref ref;
+	bool found = false;
+
+	// App is already running. Get its entry ref with
+	// GetAppInfo()
+	app_info appInfo;
+	if (be_app && be_app->GetAppInfo(&appInfo) == B_OK) {
+		ref = appInfo.ref;
+		found = true;
+	} else {
+		// Run() hasn't been called yet
+		found = BPrivate::get_app_ref(&ref) == B_OK;
+	}
+
+	if (!found)
+		return;
+
+	BFile file(&ref, B_READ_ONLY);
+	if (file.InitCheck() != B_OK)
+		return;
+
+	BResources* resources = new (std::nothrow) BResources(&file, false);
+	if (resources == NULL || resources->InitCheck() != B_OK) {
+		delete resources;
+		return;
+	}
+
+	sAppResources = resources;
+}
+
+
+//	#pragma mark -
+
+
+/*!
+	\brief Checks whether the supplied string is a valid application signature.
 
 	An error message is printed, if the string is no valid app signature.
 
@@ -1047,8 +1560,7 @@ int32 BApplication::async_quit_entry(void* data)
 	- \c B_OK: \a signature is a valid app signature.
 	- \c B_BAD_VALUE: \a signature is \c NULL or no valid app signature.
 */
-static
-status_t
+static status_t
 check_app_signature(const char *signature)
 {
 	bool isValid = false;
@@ -1065,28 +1577,47 @@ check_app_signature(const char *signature)
 	return (isValid ? B_OK : B_BAD_VALUE);
 }
 
-// looper_name_for
-/*!	\brief Returns the looper name for a given signature.
+
+/*!
+	\brief Returns the looper name for a given signature.
 
 	Normally this is "AppLooperPort", but in case of the registrar a
 	special name.
 
 	\return The looper name.
 */
-static
-const char*
+static const char *
 looper_name_for(const char *signature)
 {
 	if (signature && !strcasecmp(signature, kRegistrarSignature))
-		return kRosterPortName;
+		return BPrivate::get_roster_port_name();
 	return "AppLooperPort";
 }
 
 
-/*
- * $Log $
- *
- * $Id  $
- *
- */
+/*!
+	\brief Fills the passed BMessage with B_ARGV_RECEIVED infos.
+*/
+static void
+fill_argv_message(BMessage &message)
+{
+   	message.what = B_ARGV_RECEIVED;
+
+	int32 argc = __libc_argc;
+	const char * const *argv = __libc_argv;
+
+	// add argc
+	message.AddInt32("argc", argc);
+
+	// add argv
+	for (int32 i = 0; i < argc; i++) {
+		if (argv[i] != NULL)
+			message.AddString("argv", argv[i]);
+	}
+
+	// add current working directory
+	char cwd[B_PATH_NAME_LENGTH];
+	if (getcwd(cwd, B_PATH_NAME_LENGTH))
+		message.AddString("cwd", cwd);
+}
 

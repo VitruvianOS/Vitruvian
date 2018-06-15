@@ -1,90 +1,75 @@
-//------------------------------------------------------------------------------
-//	TokenSpace.h
-//
-//------------------------------------------------------------------------------
+/*
+ * Copyright 2001-2011, Haiku.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Erik Jaesler (erik@cgsoftware.com)
+ *		Axel Dörfler, axeld@pinc-software.de
+ */
+#ifndef _TOKEN_SPACE_H
+#define _TOKEN_SPACE_H
 
-#ifndef TOKENSPACE_H
-#define TOKENSPACE_H
 
-// Standard Includes -----------------------------------------------------------
 #include <map>
 #include <stack>
 
-// System Includes -------------------------------------------------------------
-#include <BeBuild.h>
 #include <Locker.h>
 #include <SupportDefs.h>
 
-// Project Includes ------------------------------------------------------------
 
-// Local Includes --------------------------------------------------------------
-
-// Local Defines ---------------------------------------------------------------
+// token types as specified in targets
 #define B_PREFERRED_TOKEN	-2		/* A little bird told me about this one */
 #define B_NULL_TOKEN		-1
 #define B_ANY_TOKEN			0
-#define B_HANDLER_TOKEN		1
 
-// Globals ---------------------------------------------------------------------
+// token types in the token list
+#define B_HANDLER_TOKEN		1
+#define B_SERVER_TOKEN		2
+
 
 namespace BPrivate {
 
-typedef void (*new_token_callback)(int16, void*);
-typedef void (*remove_token_callback)(int16, void*);
-typedef bool (*get_token_callback)(int16, void*);
 
-class BTokenSpace
-{
-	public:
-		BTokenSpace();
-		~BTokenSpace();
+class BDirectMessageTarget;
 
-		int32		NewToken(int16 type, void* object,
-							 new_token_callback callback= NULL);
-		bool		RemoveToken(int32 token, remove_token_callback callback = NULL);
-		bool		CheckToken(int32, int16) const;
-		status_t	GetToken(int32, int16, void**,
-							 get_token_callback callback = NULL) const;
 
-// Possible expansion
-//		void Dump(BDataIO&, bool) const;
-//		int32 NewToken(void*, BDirectMessageTarget*, void (*)(short, void*));
-//		bool SetTokenTarget(uint32, BDirectMessageTarget*);
-//		BDirectMessageTarget* TokenTarget(uint32 token, int16 type);
+class BTokenSpace : public BLocker {
+public:
+								BTokenSpace();
+								~BTokenSpace();
 
-	private:
-		struct TTokenInfo
-		{
-			int16 type;
-			void* object;
-		};
+			int32				NewToken(int16 type, void* object);
+			bool				SetToken(int32 token, int16 type, void* object);
 
-		typedef std::map<int32, TTokenInfo>	TTokenMap;
+			bool				RemoveToken(int32 token);
+			bool				CheckToken(int32 token, int16 type) const;
+			status_t			GetToken(int32 token, int16 type,
+									void** _object) const;
 
-		TTokenMap			fTokenMap;
-		std::stack<int32>	fTokenBin;
-		int32				fTokenCount;
-		BLocker				fLocker;
+			status_t			SetHandlerTarget(int32 token,
+									BDirectMessageTarget* target);
+			status_t			AcquireHandlerTarget(int32 token,
+									BDirectMessageTarget** _target);
+
+			void				InitAfterFork();
+
+private:
+	struct token_info {
+		int16	type;
+		void*	object;
+		BDirectMessageTarget* target;
+	};
+	typedef std::map<int32, token_info> TokenMap;
+
+			TokenMap			fTokenMap;
+			int32				fTokenCount;
 };
 
-// Possible expansion
-//_delete_tokens_();
-//_init_tokens_();
-//get_handler_token(short, void*);
-//get_token_list(long, long*);
-//new_handler_token(short, void*);
-//remove_handler_token(short, void*);
 
-extern  BTokenSpace gDefaultTokens;
+extern BTokenSpace gDefaultTokens;
+
 
 }	// namespace BPrivate
 
-#endif	//TOKENSPACE_H
 
-/*
- * $Log $
- *
- * $Id  $
- *
- */
-
+#endif	// _TOKEN_SPACE_H

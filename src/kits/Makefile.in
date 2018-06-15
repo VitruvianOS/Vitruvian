@@ -1,12 +1,12 @@
 prefix=@prefix@
 libdir=${prefix}/lib
 
-CFLAGS = -include build/BeOSBuildCompatibility.h \
+CFLAGS = -include build/BeOSBuildCompatibility.h -include os/support/SupportDefs.h \
 -Wall -Wpointer-arith -Wcast-align -Wsign-compare -Wno-multichar \
--c -g -O2 -pipe `cat @top_srcdir@/cosmoe.specs` -fPIC
+-c -g -O2 -pipe `cat @top_srcdir@/cosmoe.specs` -fPIC -fpermissive
 
 #TODO remove -fpermissive
-CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-dtor -fexceptions
+CPPFLAGS = $(CFLAGS) -fexceptions
 
 LIBNAME = libbe.@LIBEXT@
 
@@ -21,7 +21,7 @@ Beep.o DataIO.o Locker.o StringList.o BlockCache.o DateTime.o PointerList.o Url.
 STORAGE_KIT_OBJS = AppFileInfo.o NodeInfo.o MimeType.o	ResourcesContainer.o \
 Directory.o Node.o Resources.o Entry.o	ResourceStrings.o \
 EntryList.o NodeMonitor.o File.o OffsetFile.o Statable.o \
- Path.o storage_support.o FindDirectory.o Query.o \
+Path.o storage_support.o FindDirectory.o Query.o \
 SymLink.o  QueryPredicate.o	Volume.o \
 ResourceFile.o VolumeRoster.o Mime.o ResourceItem.o \
 database_access.o database_support.o \
@@ -29,30 +29,27 @@ CharStream.o	Err.o     Pattern.o      Range.o	   RPatternList.o \
 DisjList.o	Parser.o  PatternList.o  RPattern.o  Rule.o
 
 
-APP_KIT_OBJS = AppDefs.o Looper.o PortQueue.o \
+APP_KIT_OBJS = AppDefs.o Looper.o \
 Application.o LooperList.o PropertyInfo.o \
-AppMisc.o	MessageBody.o RegistrarDefs.o \
-AppServerLink.o Message.o RegistrarThread.o \
-AreaLink.o MessageField.o RegistrarThreadManager.o \
+AppMisc.o RegistrarDefs.o \
+AppServerLink.o Message.o \
 Clipboard.o MessageFilter.o Roster.o \
 Cursor.o MessageQueue.o	RosterPrivate.o \
 Handler.o MessageRunner.o \
-InitTerminateLibBe.o MessageUtils.o Session.o \
+InitTerminateLibBe.o MessageUtils.o \
 Invoker.o Messenger.o TokenSpace.o \
-LinkMsgReader.o PortLink.o \
-LinkMsgSender.o PortMessage.o
+PortLink.o
 
-INTERFACE_KIT_OBJS = Alert.o ColorUtils.o ListView.o Point.o ScrollBar.o TextControl.o \
+INTERFACE_KIT_OBJS = Alert.o ListView.o Point.o ScrollBar.o TextControl.o \
 Bitmap.o Control.o MenuBar.o Polygon.o ScrollView.o TextInput.o \
-BMCPrivate.o Deskbar.o Menu.o PopUpMenu.o Shape.o TPicture.o \
+BMCPrivate.o Deskbar.o Menu.o PopUpMenu.o Shape.o \
 Box.o Dragger.o MenuField.o PrivateScreen.o Shelf.o View.o \
 Font.o MenuItem.o RadioButton.o Slider.o Window.o \
 Button.o GraphicsDefs.o OptionControl.o Rect.o StatusBar.o ZombieReplicantView.o \
 CheckBox.o Input.o OutlineListView.o Region.o \
-ClientFontList.o InterfaceDefs.o PictureButton.o StringView.o \
+InterfaceDefs.o PictureButton.o StringView.o \
 ColorControl.o ListItem.o Picture.o Screen.o TabView.o \
-InlineInput.o TextView.o WidthBuffer.o \
-LineBuffer.o TextGapBuffer.o UndoBuffer.o StyleBuffer.o RegionSupport.o
+TextView.o RegionSupport.o
 
 SHARED_KIT_OBJS = DataBuffer.o
 

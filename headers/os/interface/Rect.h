@@ -1,171 +1,189 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2002, OpenBeOS
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		Rect.h
-//	Author:			Frans van Nispen (xlr8@tref.nl)
-//	Description:	BRect represents a rectangular area.
-//------------------------------------------------------------------------------
-
+/*
+ * Copyright 2001-2012, Haiku, Inc. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
 #ifndef	_RECT_H
 #define	_RECT_H
 
-// Standard Includes -----------------------------------------------------------
+
 #include <math.h>
 
-// System Includes -------------------------------------------------------------
-#include <SupportDefs.h>
 #include <Point.h>
-
-// Project Includes ------------------------------------------------------------
-
-// Local Includes --------------------------------------------------------------
-
-// Local Defines ---------------------------------------------------------------
-
-// Globals ---------------------------------------------------------------------
+#include <Size.h>
 
 
-// BRect class -----------------------------------------------------------------
 class BRect {
 public:
-	float	left;
-	float	top;
-	float	right;
-	float	bottom;
+			float				left;
+			float				top;
+			float				right;
+			float				bottom;
 
-	BRect();
-	BRect(const BRect &r);
-	BRect(float l, float t, float r, float b);
-	BRect(BPoint lt, BPoint rb);
+								BRect();
+								BRect(const BRect& other);
+								BRect(float left, float top, float right,
+									float bottom);
+								BRect(BPoint leftTop, BPoint rightBottom);
+								BRect(BPoint leftTop, BSize size);
+								BRect(float side);
 
-	BRect	&operator=(const BRect &r);
-	void	Set(float l, float t, float r, float b);
+			BRect&				operator=(const BRect& other);
+			void				Set(float left, float top, float right,
+									float bottom);
 
-	void	PrintToStream() const;
+			void				PrintToStream() const;
 
-	BPoint	LeftTop() const;
-	BPoint	RightBottom() const;
-	BPoint	LeftBottom() const;
-	BPoint	RightTop() const;
+			BPoint				LeftTop() const;
+			BPoint				RightBottom() const;
+			BPoint				LeftBottom() const;
+			BPoint				RightTop() const;
 
-	void	SetLeftTop(const BPoint p);
-	void	SetRightBottom(const BPoint p);
-	void	SetLeftBottom(const BPoint p);
-	void	SetRightTop(const BPoint p);
+			void				SetLeftTop(const BPoint leftTop);
+			void				SetRightBottom(const BPoint rightBottom);
+			void				SetLeftBottom(const BPoint leftBottom);
+			void				SetRightTop(const BPoint rightTop);
 
-	// transformation
-	void	InsetBy(BPoint p);
-	void	InsetBy(float dx, float dy);
-	void	OffsetBy(BPoint p);
-	void	OffsetBy(float dx, float dy);
-	void	OffsetTo(BPoint p);
-	void	OffsetTo(float x, float y);
+	// Transformation
+			void				InsetBy(BPoint inset);
+			void				InsetBy(float dx, float dy);
+			void				OffsetBy(BPoint delta);
+			void				OffsetBy(float dx, float dy);
+			void				OffsetTo(BPoint offset);
+			void				OffsetTo(float x, float y);
 
-	// expression transformations
-	BRect &	InsetBySelf(BPoint);
-	BRect &	InsetBySelf(float dx, float dy);
-	BRect	InsetByCopy(BPoint);
-	BRect	InsetByCopy(float dx, float dy);
-	BRect &	OffsetBySelf(BPoint);
-	BRect &	OffsetBySelf(float dx, float dy);
-	BRect	OffsetByCopy(BPoint);
-	BRect	OffsetByCopy(float dx, float dy);
-	BRect &	OffsetToSelf(BPoint);
-	BRect &	OffsetToSelf(float dx, float dy);
-	BRect	OffsetToCopy(BPoint);
-	BRect	OffsetToCopy(float dx, float dy);
+	// Expression transformations
+			BRect&				InsetBySelf(BPoint inset);
+			BRect&				InsetBySelf(float dx, float dy);
+			BRect				InsetByCopy(BPoint inset) const;
+			BRect				InsetByCopy(float dx, float dy) const;
+			BRect&				OffsetBySelf(BPoint offset);
+			BRect&				OffsetBySelf(float dx, float dy);
+			BRect				OffsetByCopy(BPoint offset) const;
+			BRect				OffsetByCopy(float dx, float dy) const;
+			BRect&				OffsetToSelf(BPoint offset);
+			BRect&				OffsetToSelf(float dx, float dy);
+			BRect				OffsetToCopy(BPoint offset) const;
+			BRect				OffsetToCopy(float dx, float dy) const;
 
-	// comparison
-	bool	operator==(BRect r) const;
-	bool	operator!=(BRect r) const;
+	// Comparison
+			bool				operator==(BRect r) const;
+			bool				operator!=(BRect r) const;
 
-	// intersection and union
-	BRect	operator&(BRect r) const;
-	BRect	operator|(BRect r) const;
+	// Intersection and union
+			BRect				operator&(BRect r) const;
+			BRect				operator|(BRect r) const;
 
-	bool	Intersects(BRect r) const;
-	bool	IsValid() const;
-	float	Width() const;
-	int32	IntegerWidth() const;
-	float	Height() const;
-	int32	IntegerHeight() const;
-	bool	Contains(BPoint p) const;
-	bool	Contains(BRect r) const;
+			bool				IsValid() const;
+			float				Width() const;
+			int32				IntegerWidth() const;
+			float				Height() const;
+			int32				IntegerHeight() const;
+			BSize				Size() const;
 
+			bool				Intersects(BRect r) const;
+			bool				Contains(BPoint p) const;
+			bool				Contains(BRect r) const;
 };
-//------------------------------------------------------------------------------
 
-// inline definitions ----------------------------------------------------------
 
-inline BPoint BRect::LeftTop() const
+// #pragma mark - inline definitions
+
+inline BPoint
+BRect::LeftTop() const
 {
-	return(*((const BPoint*)&left));
+	return *(const BPoint*)&left;
 }
 
-inline BPoint BRect::RightBottom() const
+
+inline BPoint
+BRect::RightBottom() const
 {
-	return(*((const BPoint*)&right));
+	return *(const BPoint*)&right;
 }
 
-inline BPoint BRect::LeftBottom() const
+
+inline BPoint
+BRect::LeftBottom() const
 {
-	return(BPoint(left, bottom));
+	return BPoint(left, bottom);
 }
 
-inline BPoint BRect::RightTop() const
+
+inline BPoint
+BRect::RightTop() const
 {
-	return(BPoint(right, top));
+	return BPoint(right, top);
 }
 
-inline BRect::BRect()
+
+inline
+BRect::BRect()
+	:
+	left(0),
+	top(0),
+	right(-1),
+	bottom(-1)
 {
-	top = left = 0;
-	bottom = right = -1;
 }
 
-inline BRect::BRect(float l, float t, float r, float b)
+
+inline
+BRect::BRect(float l, float t, float r, float b)
+	:
+	left(l),
+	top(t),
+	right(r),
+	bottom(b)
 {
-	left = l;
-	top = t;
-	right = r;
-	bottom = b;
 }
 
-inline BRect::BRect(const BRect &r)
+
+inline
+BRect::BRect(const BRect& r)
+	:
+	left(r.left),
+	top(r.top),
+	right(r.right),
+	bottom(r.bottom)
 {
-	left = r.left;
-	top = r.top;
-	right = r.right;
-	bottom = r.bottom;
 }
 
-inline BRect::BRect(BPoint leftTop, BPoint rightBottom)
+
+inline
+BRect::BRect(BPoint leftTop, BPoint rightBottom)
+	:
+	left(leftTop.x),
+	top(leftTop.y),
+	right(rightBottom.x),
+	bottom(rightBottom.y)
 {
-	left = leftTop.x;
-	top = leftTop.y;
-	right = rightBottom.x;
-	bottom = rightBottom.y;
 }
 
-inline BRect &BRect::operator=(const BRect& from)
+
+inline
+BRect::BRect(BPoint leftTop, BSize size)
+	:
+	left(leftTop.x),
+	top(leftTop.y),
+	right(leftTop.x + size.width),
+	bottom(leftTop.y + size.height)
+{
+}
+
+
+inline
+BRect::BRect(float side)
+	:
+	left(0),
+	top(0),
+	right(side - 1),
+	bottom(side - 1)
+{
+}
+
+
+inline BRect&
+BRect::operator=(const BRect& from)
 {
 	left = from.left;
 	top = from.top;
@@ -174,7 +192,9 @@ inline BRect &BRect::operator=(const BRect& from)
 	return *this;
 }
 
-inline void BRect::Set(float l, float t, float r, float b)
+
+inline void
+BRect::Set(float l, float t, float r, float b)
 {
 	left = l;
 	top = t;
@@ -182,42 +202,47 @@ inline void BRect::Set(float l, float t, float r, float b)
 	bottom = b;
 }
 
-inline bool BRect::IsValid() const
+
+inline bool
+BRect::IsValid() const
 {
-	if (left <= right && top <= bottom)
-		return true;
-	else
-		return false;
+	return left <= right && top <= bottom;
 }
 
-inline int32 BRect::IntegerWidth() const
+
+inline int32
+BRect::IntegerWidth() const
 {
-	return((int32)ceil(right - left));
+	return (int32)ceil(right - left);
 }
 
-inline float BRect::Width() const
+
+inline float
+BRect::Width() const
 {
-	return(right - left);
+	return right - left;
 }
 
-inline int32 BRect::IntegerHeight() const
+
+inline int32
+BRect::IntegerHeight() const
 {
-	return((int32)ceil(bottom - top));
+	return (int32)ceil(bottom - top);
 }
 
-inline float BRect::Height() const
+
+inline float
+BRect::Height() const
 {
-	return(bottom - top);
+	return bottom - top;
 }
 
-//------------------------------------------------------------------------------
+
+inline BSize
+BRect::Size() const
+{
+	return BSize(right - left, bottom - top);
+}
+
 
 #endif	// _RECT_H
-
-/*
- * $Log $
- *
- * $Id  $
- *
- */
-

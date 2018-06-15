@@ -1,121 +1,309 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2004, Haiku, Inc.
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		TextControl.cpp
-//	Author:			Frans van Nispen (xlr8@tref.nl)
-//	Description:	BTextControl displays text that can act like a control.
-//------------------------------------------------------------------------------
-#include <stdio.h>
+/*
+ * Copyright 2001-2012, Haiku Inc.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Frans van Nispen (xlr8@tref.nl)
+ *		Stephan Aßmus <superstippi@gmx.de>
+ *		Ingo Weinhold <bonefish@cs.tu-berlin.de>
+ */
 
-#include <Message.h>
+
+/*!	BTextControl displays text that can act like a control. */
+
+
 #include <TextControl.h>
+
+#include <string.h>
+
+#include <AbstractLayoutItem.h>
+#include <ControlLook.h>
+#include <LayoutUtils.h>
+#include <Message.h>
+#include <PropertyInfo.h>
+#include <Region.h>
 #include <Window.h>
+
+#include <binary_compatibility/Interface.h>
+#include <binary_compatibility/Support.h>
 
 #include "TextInput.h"
 
 
-BTextControl::BTextControl(BRect frame, const char *name, const char *label,
-						   const char *text, BMessage *message, uint32 mask,
-						   uint32 flags)
-	:	BControl(frame, name, label, message, mask, flags | B_FRAME_EVENTS)
+//#define TRACE_TEXT_CONTROL
+#ifdef TRACE_TEXT_CONTROL
+#	include <stdio.h>
+#	include <FunctionTracer.h>
+	static int32 sFunctionDepth = -1;
+#	define CALLED(x...)	FunctionTracer _ft("BTextControl", __FUNCTION__, \
+							sFunctionDepth)
+#	define TRACE(x...)	{ BString _to; \
+							_to.Append(' ', (sFunctionDepth + 1) * 2); \
+							printf("%s", _to.String()); printf(x); }
+#else
+#	define CALLED(x...)
+#	define TRACE(x...)
+#endif
+
+
+namespace {
+	const char* const kFrameField = "BTextControl:layoutitem:frame";
+	const char* const kTextViewItemField = "BTextControl:textViewItem";
+	const char* const kLabelItemField = "BMenuField:labelItem";
+}
+
+
+static property_info sPropertyList[] = {
+	{
+		"Value",
+		{ B_GET_PROPERTY, B_SET_PROPERTY },
+		{ B_DIRECT_SPECIFIER },
+		NULL, 0,
+		{ B_STRING_TYPE }
+	},
+	{}
+};
+
+
+class BTextControl::LabelLayoutItem : public BAbstractLayoutItem {
+public:
+								LabelLayoutItem(BTextControl* parent);
+								LabelLayoutItem(BMessage* from);
+
+	virtual	bool				IsVisible();
+	virtual	void				SetVisible(bool visible);
+
+	virtual	BRect				Frame();
+	virtual	void				SetFrame(BRect frame);
+
+			void				SetParent(BTextControl* parent);
+	virtual	BView*				View();
+
+	virtual	BSize				BaseMinSize();
+	virtual	BSize				BaseMaxSize();
+	virtual	BSize				BasePreferredSize();
+	virtual	BAlignment			BaseAlignment();
+
+			BRect				FrameInParent() const;
+
+	virtual status_t			Archive(BMessage* into, bool deep = true) const;
+	static	BArchivable*		Instantiate(BMessage* from);
+
+private:
+			BTextControl*		fParent;
+			BRect				fFrame;
+};
+
+
+class BTextControl::TextViewLayoutItem : public BAbstractLayoutItem {
+public:
+								TextViewLayoutItem(BTextControl* parent);
+								TextViewLayoutItem(BMessage* from);
+
+	virtual	bool				IsVisible();
+	virtual	void				SetVisible(bool visible);
+
+	virtual	BRect				Frame();
+	virtual	void				SetFrame(BRect frame);
+
+			void				SetParent(BTextControl* parent);
+	virtual	BView*				View();
+
+	virtual	BSize				BaseMinSize();
+	virtual	BSize				BaseMaxSize();
+	virtual	BSize				BasePreferredSize();
+	virtual	BAlignment			BaseAlignment();
+
+			BRect				FrameInParent() const;
+
+	virtual status_t			Archive(BMessage* into, bool deep = true) const;
+	static	BArchivable*		Instantiate(BMessage* from);
+private:
+			BTextControl*		fParent;
+			BRect				fFrame;
+};
+
+
+struct BTextControl::LayoutData {
+	LayoutData(float width, float height)
+		:
+		label_layout_item(NULL),
+		text_view_layout_item(NULL),
+		previous_width(width),
+		previous_height(height),
+		valid(false)
+	{
+	}
+
+	LabelLayoutItem*	label_layout_item;
+	TextViewLayoutItem*	text_view_layout_item;
+	float				previous_width;		// used in FrameResized() for
+	float				previous_height;	// invalidation
+	font_height			font_info;
+	float				label_width;
+	float				label_height;
+	BSize				min;
+	BSize				text_view_min;
+	bool				valid;
+};
+
+
+// #pragma mark -
+
+
+static const int32 kFrameMargin = 2;
+static const int32 kLabelInputSpacing = 3;
+
+
+BTextControl::BTextControl(BRect frame, const char* name, const char* label,
+		const char* text, BMessage* message, uint32 mask, uint32 flags)
+	:
+	BControl(frame, name, label, message, mask, flags | B_FRAME_EVENTS)
 {
-	InitData(label, text);
+	_InitData(label);
+	_InitText(text);
+	_ValidateLayout();
+}
 
-	BRect bounds(Bounds());
-	
-	font_height fh;
-	GetFontHeight(&fh);
 
-	float height = (float)ceil(fh.ascent + fh.descent + fh.leading);
-	float lineHeight = fText->LineHeight(0);
+BTextControl::BTextControl(const char* name, const char* label,
+		const char* text, BMessage* message, uint32 flags)
+	:
+	BControl(name, label, message, flags | B_FRAME_EVENTS)
+{
+	_InitData(label);
+	_InitText(text);
+	_ValidateLayout();
+}
 
-	ResizeTo(bounds.Width(), height + 8);
 
-	BRect textBounds(fText->Bounds());
-
-	fText->ResizeTo(textBounds.Width(), lineHeight + 4);
-	fText->MoveBy(0, (bounds.Height() - height) / 2.0f);
+BTextControl::BTextControl(const char* label, const char* text,
+		BMessage* message)
+	:
+	BControl(NULL, label, message,
+		B_WILL_DRAW | B_NAVIGABLE | B_FRAME_EVENTS)
+{
+	_InitData(label);
+	_InitText(text);
+	_ValidateLayout();
 }
 
 
 BTextControl::~BTextControl()
 {
 	SetModificationMessage(NULL);
+	delete fLayoutData;
 }
 
 
-BTextControl::BTextControl(BMessage *data)
-	:	BControl(data)
+BTextControl::BTextControl(BMessage* archive)
+	:
+	BControl(BUnarchiver::PrepareArchive(archive))
 {
-	InitData(Label(), NULL, data);
+	BUnarchiver unarchiver(archive);
 
-	int32 _a_label = B_ALIGN_LEFT;
-	int32 _a_text = B_ALIGN_LEFT;
+	_InitData(Label(), archive);
 
-	if (data->HasInt32("_a_label"))
-		data->FindInt32("_a_label", &_a_label);
+	if (!BUnarchiver::IsArchiveManaged(archive))
+		_InitText(NULL, archive);
 
-	if (data->HasInt32("_a_text"))
-		data->FindInt32("_a_text", &_a_text);
-	
-	SetAlignment((alignment)_a_label, (alignment)_a_text);
+	status_t err = B_OK;
+	if (archive->HasFloat("_divide"))
+		err = archive->FindFloat("_divide", &fDivider);
 
-	if (data->HasFloat("_divide"))
-		data->FindFloat("_a_text", &fDivider);
-
-	if (data->HasMessage("_mod_msg")) {
-		BMessage *_mod_msg = new BMessage;
-		data->FindMessage("_mod_msg", _mod_msg);
-		SetModificationMessage(_mod_msg);
+	if (err == B_OK && archive->HasMessage("_mod_msg")) {
+		BMessage* message = new BMessage;
+		err = archive->FindMessage("_mod_msg", message);
+		SetModificationMessage(message);
 	}
+
+	unarchiver.Finish(err);
 }
 
 
-BArchivable *
-BTextControl::Instantiate(BMessage *archive)
+BArchivable*
+BTextControl::Instantiate(BMessage* archive)
 {
 	if (validate_instantiation(archive, "BTextControl"))
 		return new BTextControl(archive);
-	else
-		return NULL;
+
+	return NULL;
 }
 
 
 status_t
 BTextControl::Archive(BMessage *data, bool deep) const
 {
-	BView::Archive(data, deep);
-
+	BArchiver archiver(data);
+	status_t ret = BControl::Archive(data, deep);
 	alignment labelAlignment, textAlignment;
 
 	GetAlignment(&labelAlignment, &textAlignment);
 
-	data->AddInt32("_a_label", labelAlignment);
-	data->AddInt32("_a_text", textAlignment);
-	data->AddFloat("_divide", Divider());
+	if (ret == B_OK)
+		ret = data->AddInt32("_a_label", labelAlignment);
+	if (ret == B_OK)
+		ret = data->AddInt32("_a_text", textAlignment);
+	if (ret == B_OK)
+		ret = data->AddFloat("_divide", Divider());
 
-	if (ModificationMessage())
-		data->AddMessage("_mod_msg", ModificationMessage());
+	if (ModificationMessage() && (ret == B_OK))
+		ret = data->AddMessage("_mod_msg", ModificationMessage());
 
-	return B_OK;
+	return archiver.Finish(ret);
+}
+
+
+status_t
+BTextControl::AllArchived(BMessage* into) const
+{
+	BArchiver archiver(into);
+	status_t err = B_OK;
+
+	if (archiver.IsArchived(fLayoutData->text_view_layout_item)) {
+		err = archiver.AddArchivable(kTextViewItemField,
+			fLayoutData->text_view_layout_item);
+	}
+
+	if (err == B_OK && archiver.IsArchived(fLayoutData->label_layout_item)) {
+		err = archiver.AddArchivable(kLabelItemField,
+			fLayoutData->label_layout_item);
+	}
+
+	return err;
+}
+
+
+status_t
+BTextControl::AllUnarchived(const BMessage* from)
+{
+	status_t err;
+	if ((err = BControl::AllUnarchived(from)) != B_OK)
+		return err;
+
+	_InitText(NULL, from);
+
+	BUnarchiver unarchiver(from);
+	if (unarchiver.IsInstantiated(kTextViewItemField)) {
+		err = unarchiver.FindObject(kTextViewItemField,
+			BUnarchiver::B_DONT_ASSUME_OWNERSHIP,
+			fLayoutData->text_view_layout_item);
+
+		if (err == B_OK)
+			fLayoutData->text_view_layout_item->SetParent(this);
+		else
+			return err;
+	}
+
+	if (unarchiver.IsInstantiated(kLabelItemField)) {
+		err = unarchiver.FindObject(kLabelItemField,
+			BUnarchiver::B_DONT_ASSUME_OWNERSHIP,
+			fLayoutData->label_layout_item);
+
+		if (err == B_OK)
+			fLayoutData->label_layout_item->SetParent(this);
+	}
+	return err;
 }
 
 
@@ -125,10 +313,14 @@ BTextControl::SetText(const char *text)
 	if (InvokeKind() != B_CONTROL_INVOKED)
 		return;
 
+	CALLED();
+
 	fText->SetText(text);
 
-	if (IsFocus())
+	if (fText->IsFocus()) {
 		fText->SetInitialText();
+		fText->SelectAll();
+	}
 
 	fText->Invalidate();
 }
@@ -165,9 +357,7 @@ BTextControl::TextView() const
 void
 BTextControl::SetModificationMessage(BMessage *message)
 {
-	if (fModificationMessage)
-		delete fModificationMessage;
-
+	delete fModificationMessage;
 	fModificationMessage = message;
 }
 
@@ -193,24 +383,21 @@ BTextControl::SetAlignment(alignment labelAlignment, alignment textAlignment)
 
 
 void
-BTextControl::GetAlignment(alignment *label, alignment *text) const
+BTextControl::GetAlignment(alignment* _label, alignment* _text) const
 {
-	if (label)
-		*label = fLabelAlign;
-	if (text)
-		*text = fText->Alignment();
+	if (_label)
+		*_label = fLabelAlign;
+	if (_text)
+		*_text = fText->Alignment();
 }
 
 
 void
 BTextControl::SetDivider(float dividingLine)
 {
-	float dx = fDivider - dividingLine;
+	fDivider = floorf(dividingLine + 0.5);
 
-	fDivider = dividingLine;
-
-	fText->MoveBy(-dx, 0.0f);
-	fText->ResizeBy(dx, 0.0f);
+	_LayoutTextView();
 
 	if (Window()) {
 		fText->Invalidate();
@@ -229,49 +416,50 @@ BTextControl::Divider() const
 void
 BTextControl::Draw(BRect updateRect)
 {
-	rgb_color no_tint = ui_color(B_PANEL_BACKGROUND_COLOR),
-	lighten1 = tint_color(no_tint, B_LIGHTEN_1_TINT),
-	lighten2 = tint_color(no_tint, B_LIGHTEN_2_TINT),
-	lightenmax = tint_color(no_tint, B_LIGHTEN_MAX_TINT),
-	darken1 = tint_color(no_tint, B_DARKEN_1_TINT),
-	darken2 = tint_color(no_tint, B_DARKEN_2_TINT),
-	darken4 = tint_color(no_tint, B_DARKEN_4_TINT),
-	darkenmax = tint_color(no_tint, B_DARKEN_MAX_TINT),
-	nav = ui_color(B_KEYBOARD_NAVIGATION_COLOR);
-
 	bool enabled = IsEnabled();
-	bool active = false;
+	bool active = fText->IsFocus() && Window()->IsActive();
 
-	if (fText->IsFocus() && Window()->IsActive())
-		active = true;
+	BRect rect = fText->Frame();
+	rect.InsetBy(-2, -2);
 
-	BRect rect(fText->Frame());
-	rect.InsetBy(-1.0f, -1.0f);
+	if (be_control_look != NULL) {
+		rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+		uint32 flags = 0;
+		if (!enabled)
+			flags |= BControlLook::B_DISABLED;
+		if (active)
+			flags |= BControlLook::B_FOCUSED;
+		be_control_look->DrawTextControlBorder(this, rect, updateRect, base,
+			flags);
 
-	if (active) {
-		SetHighColor(nav);
-		StrokeRect(rect);
+		if (Label() != NULL) {
+			if (fLayoutData->label_layout_item != NULL) {
+				rect = fLayoutData->label_layout_item->FrameInParent();
+			} else {
+				rect = Bounds();
+				rect.right = fDivider - kLabelInputSpacing;
+			}
 
-	} else {
-		if (enabled)
-			SetHighColor(darken4);
-		else
-			SetHighColor(darken2);
-
-		StrokeLine(rect.LeftTop(), rect.LeftBottom());
-		StrokeLine(rect.LeftTop(), rect.RightTop());
-
-		SetHighColor(no_tint);
-		StrokeLine(BPoint(rect.left + 1.0f, rect.bottom), rect.RightBottom());
-		StrokeLine(BPoint(rect.right, rect.top + 1.0f));
+			be_control_look->DrawLabel(this, Label(), rect, updateRect,
+				base, flags, BAlignment(fLabelAlign, B_ALIGN_MIDDLE));
+		}
+		return;
 	}
 
-	rect.InsetBy(-1.0f, -1.0f);
+	// outer bevel
+
+	rgb_color noTint = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color lighten1 = tint_color(noTint, B_LIGHTEN_1_TINT);
+	rgb_color lighten2 = tint_color(noTint, B_LIGHTEN_2_TINT);
+	rgb_color darken1 = tint_color(noTint, B_DARKEN_1_TINT);
+	rgb_color darken2 = tint_color(noTint, B_DARKEN_2_TINT);
+	rgb_color darken4 = tint_color(noTint, B_DARKEN_4_TINT);
+	rgb_color navigationColor = ui_color(B_KEYBOARD_NAVIGATION_COLOR);
 
 	if (enabled)
 		SetHighColor(darken1);
 	else
-		SetHighColor(no_tint);
+		SetHighColor(noTint);
 
 	StrokeLine(rect.LeftBottom(), rect.LeftTop());
 	StrokeLine(rect.RightTop());
@@ -284,30 +472,62 @@ BTextControl::Draw(BRect updateRect)
 	StrokeLine(BPoint(rect.left + 1.0f, rect.bottom), rect.RightBottom());
 	StrokeLine(BPoint(rect.right, rect.top + 1.0f), rect.RightBottom());
 
-	if (Label()) {
-		font_height fh;
-		GetFontHeight(&fh);
+	// inner bevel
 
-		float y = (float)ceil(fh.ascent + fh.descent + fh.leading) + 2.0f;
+	rect.InsetBy(1.0f, 1.0f);
+
+	if (active) {
+		SetHighColor(navigationColor);
+		StrokeRect(rect);
+	} else {
+		if (enabled)
+			SetHighColor(darken4);
+		else
+			SetHighColor(darken2);
+
+		StrokeLine(rect.LeftTop(), rect.LeftBottom());
+		StrokeLine(rect.LeftTop(), rect.RightTop());
+
+		SetHighColor(noTint);
+		StrokeLine(BPoint(rect.left + 1.0f, rect.bottom), rect.RightBottom());
+		StrokeLine(BPoint(rect.right, rect.top + 1.0f));
+	}
+
+	// label
+
+	if (Label()) {
+		_ValidateLayoutData();
+		font_height& fontHeight = fLayoutData->font_info;
+
+		float y = Bounds().top + (Bounds().Height() + 1 - fontHeight.ascent
+			- fontHeight.descent) / 2 + fontHeight.ascent;
 		float x;
 
+		float labelWidth = StringWidth(Label());
 		switch (fLabelAlign) {
 			case B_ALIGN_RIGHT:
-				x = fDivider - StringWidth(Label()) - 3.0f;
+				x = fDivider - labelWidth - kLabelInputSpacing;
 				break;
 
 			case B_ALIGN_CENTER:
-				x = fDivider - StringWidth(Label()) / 2.0f;
+				x = fDivider - labelWidth / 2.0;
 				break;
 
 			default:
-				x = 3.0f;
+				x = 0.0;
 				break;
 		}
-		
-		SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-					 IsEnabled() ? B_DARKEN_MAX_TINT : B_DISABLED_LABEL_TINT));
-		DrawString(Label(), BPoint(x, y));
+
+		BRect labelArea(x, Bounds().top, x + labelWidth, Bounds().bottom);
+		if (x < fDivider && updateRect.Intersects(labelArea)) {
+			labelArea.right = fText->Frame().left - kLabelInputSpacing;
+
+			BRegion clipRegion(labelArea);
+			ConstrainClippingRegion(&clipRegion);
+			SetHighColor(IsEnabled() ? ui_color(B_CONTROL_TEXT_COLOR)
+				: tint_color(noTint, B_DISABLED_LABEL_TINT));
+			DrawString(Label(), BPoint(x, y));
+		}
 	}
 }
 
@@ -315,10 +535,8 @@ BTextControl::Draw(BRect updateRect)
 void
 BTextControl::MouseDown(BPoint where)
 {
-	if (!fText->IsFocus()) {
+	if (!fText->IsFocus())
 		fText->MakeFocus(true);
-		fText->SelectAll();
-	}
 }
 
 
@@ -327,165 +545,153 @@ BTextControl::AttachedToWindow()
 {
 	BControl::AttachedToWindow();
 
-	bool enabled = IsEnabled();
-	rgb_color textColor;
-	rgb_color color = HighColor();
-	BFont font;
-
-	fText->GetFontAndColor(0, &font, &color);
-
-	if (enabled)
-		textColor = color;
-	else
-		textColor = tint_color(color, B_LIGHTEN_2_TINT);
-
-	fText->SetFontAndColor(&font, B_FONT_ALL, &textColor);
-
-	if (enabled) {
-		color.red = 255;
-		color.green = 255;
-		color.blue = 255;
-	} else
-		color = tint_color(color, B_LIGHTEN_2_TINT);
-
-	fText->SetViewColor(color);
-	fText->SetLowColor(color);
-
-	fText->MakeEditable(enabled);
+	_UpdateTextViewColors(IsEnabled());
+	fText->MakeEditable(IsEnabled());
 }
 
 
 void
 BTextControl::MakeFocus(bool state)
 {
-	fText->MakeFocus(state);
+	if (state != fText->IsFocus()) {
+		fText->MakeFocus(state);
 
-	if (state)
-		fText->SelectAll();
+		if (state)
+			fText->SelectAll();
+	}
 }
 
 
 void
-BTextControl::SetEnabled(bool state)
+BTextControl::SetEnabled(bool enabled)
 {
-	if (IsEnabled() == state)
+	if (IsEnabled() == enabled)
 		return;
 
 	if (Window()) {
-		fText->MakeEditable(state);
-
-		rgb_color textColor;
-		rgb_color color = {0, 0, 0, 255};
-		BFont font;
-
-		fText->GetFontAndColor(0, &font, &color);
-
-		if (state)
-			textColor = color;
+		fText->MakeEditable(enabled);
+		if (enabled)
+			fText->SetFlags(fText->Flags() | B_NAVIGABLE);
 		else
-			textColor = tint_color(color, B_DISABLED_LABEL_TINT);
+			fText->SetFlags(fText->Flags() & ~B_NAVIGABLE);
 
-		fText->SetFontAndColor(&font, B_FONT_ALL, &textColor);
-
-		if (state) {
-			color.red = 255;
-			color.green = 255;
-			color.blue = 255;
-		} else
-			color = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-				B_LIGHTEN_2_TINT);
-
-		fText->SetViewColor(color);
-		fText->SetLowColor(color);
+		_UpdateTextViewColors(enabled);
 
 		fText->Invalidate();
 		Window()->UpdateIfNeeded();
 	}
 
-	BControl::SetEnabled(state);
+	BControl::SetEnabled(enabled);
 }
 
 
 void
-BTextControl::GetPreferredSize(float *width, float *height)
+BTextControl::GetPreferredSize(float *_width, float *_height)
 {
-	BFont font;
-	GetFont(&font);
-	font_height fh;
-	font.GetHeight(&fh);
+	CALLED();
 
-	if (height)
-		*height = (float)ceil(fh.ascent + fh.descent + fh.leading) + 7.0f;
+	_ValidateLayoutData();
 
-	// TODO: this one I need to find out
-	if (width)
-		*width = 4.0f + (float)ceil(font.StringWidth(Label()))*2.0f;
+	if (_width) {
+		float minWidth = fLayoutData->min.width;
+		if (Label() == NULL && !(Flags() & B_SUPPORTS_LAYOUT)) {
+			// Indeed, only if there is no label! BeOS backwards compatible
+			// behavior:
+			minWidth = max_c(minWidth, Bounds().Width());
+		}
+		*_width = minWidth;
+	}
+
+	if (_height)
+		*_height = fLayoutData->min.height;
 }
 
 
 void
 BTextControl::ResizeToPreferred()
 {
-	float width, height;
-	GetPreferredSize(&width, &height);
-	BView::ResizeTo(width, height);
+	BView::ResizeToPreferred();
+
+	fDivider = 0.0;
+	const char* label = Label();
+	if (label)
+		fDivider = ceil(StringWidth(label)) + 2.0;
+
+	_LayoutTextView();
 }
 
 
 void
 BTextControl::SetFlags(uint32 flags)
 {
-	if (!fSkipSetFlags) {
-		// If the textview is navigable, set it to not navigable if needed
-		// Else if it is not navigable, set it to navigable if needed
-		if (fText->Flags() & B_NAVIGABLE) {
-			if (!(flags & B_NAVIGABLE))
-				fText->SetFlags(fText->Flags() & ~B_NAVIGABLE);
+	// If the textview is navigable, set it to not navigable if needed
+	// Else if it is not navigable, set it to navigable if needed
+	if (fText->Flags() & B_NAVIGABLE) {
+		if (!(flags & B_NAVIGABLE))
+			fText->SetFlags(fText->Flags() & ~B_NAVIGABLE);
 
-		} else {
-			if (flags & B_NAVIGABLE)
-				fText->SetFlags(fText->Flags() | B_NAVIGABLE);
-		}
-
-		// Don't make this one navigable
-		flags &= ~B_NAVIGABLE;
+	} else {
+		if (flags & B_NAVIGABLE)
+			fText->SetFlags(fText->Flags() | B_NAVIGABLE);
 	}
+
+	// Don't make this one navigable
+	flags &= ~B_NAVIGABLE;
 
 	BView::SetFlags(flags);
 }
 
 
 void
-BTextControl::MessageReceived(BMessage *msg)
+BTextControl::MessageReceived(BMessage *message)
 {
-	switch(msg->what) {
-		case B_SET_PROPERTY:
-		case B_GET_PROPERTY:
-			// TODO
-			break;
-		default:
-			BControl::MessageReceived(msg);
-			break;
+	if (message->what == B_GET_PROPERTY || message->what == B_SET_PROPERTY) {
+		BMessage reply(B_REPLY);
+		bool handled = false;
+
+		BMessage specifier;
+		int32 index;
+		int32 form;
+		const char *property;
+		if (message->GetCurrentSpecifier(&index, &specifier, &form, &property) == B_OK) {
+			if (strcmp(property, "Value") == 0) {
+				if (message->what == B_GET_PROPERTY) {
+					reply.AddString("result", fText->Text());
+					handled = true;
+				} else {
+					const char *value = NULL;
+					// B_SET_PROPERTY
+					if (message->FindString("data", &value) == B_OK) {
+						fText->SetText(value);
+						reply.AddInt32("error", B_OK);
+						handled = true;
+					}
+				}
+			}
+		}
+
+		if (handled) {
+			message->SendReply(&reply);
+			return;
+		}
 	}
+
+	BControl::MessageReceived(message);
 }
 
 
 BHandler *
-BTextControl::ResolveSpecifier(BMessage *msg, int32 index,
-										 BMessage *specifier, int32 form,
+BTextControl::ResolveSpecifier(BMessage *message, int32 index,
+										 BMessage *specifier, int32 what,
 										 const char *property)
 {
-	/*
-	BPropertyInfo propInfo(prop_list);
-	BHandler *target = NULL;
+	BPropertyInfo propInfo(sPropertyList);
 
-	if (propInfo.FindMatch(message, 0, specifier, what, property) < B_OK)
-		return BControl::ResolveSpecifier(message, index, specifier, what,
-			property);
-	else
+	if (propInfo.FindMatch(message, 0, specifier, what, property) >= B_OK)
 		return this;
-	*/
-	return BControl::ResolveSpecifier(msg, index, specifier, form, property);
+
+	return BControl::ResolveSpecifier(message, index, specifier, what,
+		property);
 }
 
 
@@ -539,24 +745,269 @@ BTextControl::FrameMoved(BPoint newPosition)
 
 
 void
-BTextControl::FrameResized(float newWidth, float newHeight)
+BTextControl::FrameResized(float width, float height)
 {
-	BControl::FrameResized(newWidth, newHeight);
+	CALLED();
+
+	BControl::FrameResized(width, height);
+
+	// TODO: this causes flickering still...
+
+	// changes in width
+
+	BRect bounds = Bounds();
+
+	if (bounds.Width() > fLayoutData->previous_width) {
+		// invalidate the region between the old and the new right border
+		BRect rect = bounds;
+		rect.left += fLayoutData->previous_width - kFrameMargin;
+		rect.right--;
+		Invalidate(rect);
+	} else if (bounds.Width() < fLayoutData->previous_width) {
+		// invalidate the region of the new right border
+		BRect rect = bounds;
+		rect.left = rect.right - kFrameMargin;
+		Invalidate(rect);
+	}
+
+	// changes in height
+
+	if (bounds.Height() > fLayoutData->previous_height) {
+		// invalidate the region between the old and the new bottom border
+		BRect rect = bounds;
+		rect.top += fLayoutData->previous_height - kFrameMargin;
+		rect.bottom--;
+		Invalidate(rect);
+		// invalidate label area
+		rect = bounds;
+		rect.right = fDivider;
+		Invalidate(rect);
+	} else if (bounds.Height() < fLayoutData->previous_height) {
+		// invalidate the region of the new bottom border
+		BRect rect = bounds;
+		rect.top = rect.bottom - kFrameMargin;
+		Invalidate(rect);
+		// invalidate label area
+		rect = bounds;
+		rect.right = fDivider;
+		Invalidate(rect);
+	}
+
+	fLayoutData->previous_width = bounds.Width();
+	fLayoutData->previous_height = bounds.Height();
+
+	TRACE("width: %.2f, height: %.2f\n", bounds.Width(), bounds.Height());
 }
 
 
 void
 BTextControl::WindowActivated(bool active)
 {
-	if (fText->IsFocus())
-		Draw(Bounds());
+	if (fText->IsFocus()) {
+		// invalidate to remove/show focus indication
+		BRect rect = fText->Frame();
+		rect.InsetBy(-1, -1);
+		Invalidate(rect);
+
+		// help out embedded text view which doesn't
+		// get notified of this
+		fText->Invalidate();
+	}
 }
 
 
-status_t
-BTextControl::Perform(perform_code d, void *arg)
+BSize
+BTextControl::MinSize()
 {
-	return BControl::Perform(d, arg);
+	CALLED();
+
+	_ValidateLayoutData();
+	return BLayoutUtils::ComposeSize(ExplicitMinSize(), fLayoutData->min);
+}
+
+
+BSize
+BTextControl::MaxSize()
+{
+	CALLED();
+
+	_ValidateLayoutData();
+
+	BSize max = fLayoutData->min;
+	max.width = B_SIZE_UNLIMITED;
+
+	return BLayoutUtils::ComposeSize(ExplicitMaxSize(), max);
+}
+
+
+BSize
+BTextControl::PreferredSize()
+{
+	CALLED();
+
+	_ValidateLayoutData();
+	return BLayoutUtils::ComposeSize(ExplicitPreferredSize(), fLayoutData->min);
+}
+
+
+BLayoutItem*
+BTextControl::CreateLabelLayoutItem()
+{
+	if (!fLayoutData->label_layout_item)
+		fLayoutData->label_layout_item = new LabelLayoutItem(this);
+	return fLayoutData->label_layout_item;
+}
+
+
+BLayoutItem*
+BTextControl::CreateTextViewLayoutItem()
+{
+	if (!fLayoutData->text_view_layout_item)
+		fLayoutData->text_view_layout_item = new TextViewLayoutItem(this);
+	return fLayoutData->text_view_layout_item;
+}
+
+
+void
+BTextControl::LayoutInvalidated(bool descendants)
+{
+	CALLED();
+
+	fLayoutData->valid = false;
+}
+
+
+void
+BTextControl::DoLayout()
+{
+	// Bail out, if we shan't do layout.
+	if (!(Flags() & B_SUPPORTS_LAYOUT))
+		return;
+
+	CALLED();
+
+	// If the user set a layout, we let the base class version call its
+	// hook.
+	if (GetLayout()) {
+		BView::DoLayout();
+		return;
+	}
+
+	_ValidateLayoutData();
+
+	// validate current size
+	BSize size(Bounds().Size());
+	if (size.width < fLayoutData->min.width)
+		size.width = fLayoutData->min.width;
+	if (size.height < fLayoutData->min.height)
+		size.height = fLayoutData->min.height;
+
+	BRect dirty(fText->Frame());
+	BRect textFrame;
+
+	// divider
+	float divider = 0;
+	if (fLayoutData->text_view_layout_item != NULL) {
+		if (fLayoutData->label_layout_item != NULL) {
+			// We have layout items. They define the divider location.
+			divider = fabs(fLayoutData->text_view_layout_item->Frame().left
+				- fLayoutData->label_layout_item->Frame().left);
+		}
+		textFrame = fLayoutData->text_view_layout_item->FrameInParent();
+	} else {
+		if (fLayoutData->label_width > 0) {
+			divider = fLayoutData->label_width
+				+ be_control_look->DefaultLabelSpacing();
+		}
+		textFrame.Set(divider, 0, size.width, size.height);
+	}
+
+	// place the text view and set the divider
+	textFrame.InsetBy(kFrameMargin, kFrameMargin);
+	BLayoutUtils::AlignInFrame(fText, textFrame);
+
+	fDivider = divider;
+
+	// invalidate dirty region
+	dirty = dirty | fText->Frame();
+	dirty.InsetBy(-kFrameMargin, -kFrameMargin);
+
+	Invalidate(dirty);
+}
+
+
+// #pragma mark -
+
+
+status_t
+BTextControl::Perform(perform_code code, void* _data)
+{
+	switch (code) {
+		case PERFORM_CODE_MIN_SIZE:
+			((perform_data_min_size*)_data)->return_value
+				= BTextControl::MinSize();
+			return B_OK;
+		case PERFORM_CODE_MAX_SIZE:
+			((perform_data_max_size*)_data)->return_value
+				= BTextControl::MaxSize();
+			return B_OK;
+		case PERFORM_CODE_PREFERRED_SIZE:
+			((perform_data_preferred_size*)_data)->return_value
+				= BTextControl::PreferredSize();
+			return B_OK;
+		case PERFORM_CODE_LAYOUT_ALIGNMENT:
+			((perform_data_layout_alignment*)_data)->return_value
+				= BTextControl::LayoutAlignment();
+			return B_OK;
+		case PERFORM_CODE_HAS_HEIGHT_FOR_WIDTH:
+			((perform_data_has_height_for_width*)_data)->return_value
+				= BTextControl::HasHeightForWidth();
+			return B_OK;
+		case PERFORM_CODE_GET_HEIGHT_FOR_WIDTH:
+		{
+			perform_data_get_height_for_width* data
+				= (perform_data_get_height_for_width*)_data;
+			BTextControl::GetHeightForWidth(data->width, &data->min, &data->max,
+				&data->preferred);
+			return B_OK;
+}
+		case PERFORM_CODE_SET_LAYOUT:
+		{
+			perform_data_set_layout* data = (perform_data_set_layout*)_data;
+			BTextControl::SetLayout(data->layout);
+			return B_OK;
+		}
+		case PERFORM_CODE_LAYOUT_INVALIDATED:
+		{
+			perform_data_layout_invalidated* data
+				= (perform_data_layout_invalidated*)_data;
+			BTextControl::LayoutInvalidated(data->descendants);
+			return B_OK;
+		}
+		case PERFORM_CODE_DO_LAYOUT:
+		{
+			BTextControl::DoLayout();
+			return B_OK;
+		}
+		case PERFORM_CODE_ALL_UNARCHIVED:
+		{
+			perform_data_all_unarchived* data
+				= (perform_data_all_unarchived*)_data;
+
+			data->return_value = BTextControl::AllUnarchived(data->archive);
+			return B_OK;
+		}
+		case PERFORM_CODE_ALL_ARCHIVED:
+		{
+			perform_data_all_archived* data
+				= (perform_data_all_archived*)_data;
+
+			data->return_value = BTextControl::AllArchived(data->archive);
+			return B_OK;
+		}
+	}
+
+	return BControl::Perform(code, _data);
 }
 
 
@@ -574,64 +1025,514 @@ BTextControl::operator=(const BTextControl&)
 
 
 void
-BTextControl::CommitValue()
+BTextControl::_UpdateTextViewColors(bool enabled)
+{
+	rgb_color textColor;
+	rgb_color color;
+	BFont font;
+
+	fText->GetFontAndColor(0, &font);
+
+	if (enabled)
+		textColor = ui_color(B_DOCUMENT_TEXT_COLOR);
+	else {
+		textColor = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+			B_DISABLED_LABEL_TINT);
+	}
+
+	fText->SetFontAndColor(&font, B_FONT_ALL, &textColor);
+
+	if (enabled) {
+		color = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+	} else {
+		color = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+			B_LIGHTEN_2_TINT);
+	}
+
+	fText->SetViewColor(color);
+	fText->SetLowColor(color);
+}
+
+
+void
+BTextControl::_CommitValue()
 {
 }
 
 
 void
-BTextControl::InitData(const char *label, const char *initial_text,
-							BMessage *data)
+BTextControl::_InitData(const char* label, const BMessage* archive)
 {
 	BRect bounds(Bounds());
 
 	fText = NULL;
-	//fLabel = NULL;
 	fModificationMessage = NULL;
 	fLabelAlign = B_ALIGN_LEFT;
 	fDivider = 0.0f;
-	fPrevWidth = 0;
-	fPrevHeight = 0;
-	//fClean = true;
-	fSkipSetFlags = false;
+	fLayoutData = new LayoutData(bounds.Width(), bounds.Height());
 
 	int32 flags = 0;
 
-	BFont font(be_bold_font);
+	BFont font(be_plain_font);
 
-	if (!data || !data->HasString("_fname"))
+	if (!archive || !archive->HasString("_fname"))
 		flags |= B_FONT_FAMILY_AND_STYLE;
 
-	if (!data || !data->HasFloat("_fflt"))
+	if (!archive || !archive->HasFloat("_fflt"))
 		flags |= B_FONT_SIZE;
 
 	if (flags != 0)
 		SetFont(&font, flags);
 
 	if (label)
-		fDivider = bounds.Width() / 2.0f;
+		fDivider = floorf(bounds.Width() / 2.0f);
+}
 
-	if (Flags() & B_NAVIGABLE) {
-		fSkipSetFlags = true;
-		SetFlags(Flags() & ~B_NAVIGABLE);
-		fSkipSetFlags = false;
-	}
 
-	if (data)
-		fText = static_cast<_BTextInput_ *>(FindView("_input_"));
-	else {
-		BRect frame(fDivider, bounds.top + 2.0f, bounds.right - 2.0f,
-			bounds.bottom - 2.0f);
-		BRect textRect(frame.OffsetToCopy(0.0f, 0.0f));
-	
-		fText = new _BTextInput_(frame, textRect,
-			B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP, B_WILL_DRAW | B_FRAME_EVENTS |
-			B_NAVIGABLE);
+void
+BTextControl::_InitText(const char* initialText, const BMessage* archive)
+{
+	if (archive)
+		fText = static_cast<BPrivate::_BTextInput_*>(FindView("_input_"));
 
+	if (fText == NULL) {
+		BRect bounds(Bounds());
+		BRect frame(fDivider, bounds.top, bounds.right, bounds.bottom);
+		// we are stroking the frame around the text view, which
+		// is 2 pixels wide
+		frame.InsetBy(kFrameMargin, kFrameMargin);
+		BRect textRect(frame.OffsetToCopy(B_ORIGIN));
+
+		fText = new BPrivate::_BTextInput_(frame, textRect,
+			B_FOLLOW_ALL, B_WILL_DRAW | B_FRAME_EVENTS
+			| (Flags() & B_NAVIGABLE));
 		AddChild(fText);
-		
-		SetText(initial_text);
+
+		SetText(initialText);
 		fText->SetAlignment(B_ALIGN_LEFT);
 		fText->AlignTextRect();
 	}
+
+	// Although this is not strictly initializing the text view,
+	// it cannot be done while fText is NULL, so it resides here.
+	if (archive) {
+		int32 labelAlignment = B_ALIGN_LEFT;
+		int32 textAlignment = B_ALIGN_LEFT;
+
+		status_t err = B_OK;
+		if (archive->HasInt32("_a_label"))
+			err = archive->FindInt32("_a_label", &labelAlignment);
+
+		if (err == B_OK && archive->HasInt32("_a_text"))
+			err = archive->FindInt32("_a_text", &textAlignment);
+
+		SetAlignment((alignment)labelAlignment, (alignment)textAlignment);
+	}
+
+	uint32 navigableFlags = Flags() & B_NAVIGABLE;
+	if (navigableFlags != 0)
+		BView::SetFlags(Flags() & ~B_NAVIGABLE);
 }
+
+
+void
+BTextControl::_ValidateLayout()
+{
+	CALLED();
+
+	_ValidateLayoutData();
+
+	ResizeTo(Bounds().Width(), fLayoutData->min.height);
+
+	_LayoutTextView();
+}
+
+
+void
+BTextControl::_LayoutTextView()
+{
+	CALLED();
+
+	BRect frame;
+	if (fLayoutData->text_view_layout_item != NULL) {
+		frame = fLayoutData->text_view_layout_item->FrameInParent();
+	} else {
+		frame = Bounds();
+		frame.left = fDivider;
+	}
+
+	// we are stroking the frame around the text view, which
+	// is 2 pixels wide
+	frame.InsetBy(kFrameMargin, kFrameMargin);
+	fText->MoveTo(frame.left, frame.top);
+	fText->ResizeTo(frame.Width(), frame.Height());
+	fText->AlignTextRect();
+
+	TRACE("width: %.2f, height: %.2f\n", Frame().Width(), Frame().Height());
+	TRACE("fDivider: %.2f\n", fDivider);
+	TRACE("fText frame: (%.2f, %.2f, %.2f, %.2f)\n",
+		frame.left, frame.top, frame.right, frame.bottom);
+}
+
+
+void
+BTextControl::_UpdateFrame()
+{
+	CALLED();
+
+	if (fLayoutData->text_view_layout_item != NULL) {
+		BRect textFrame = fLayoutData->text_view_layout_item->Frame();
+		BRect labelFrame;
+		if (fLayoutData->label_layout_item != NULL)
+			labelFrame = fLayoutData->label_layout_item->Frame();
+
+		BRect frame;
+		if (labelFrame.IsValid()) {
+			frame = textFrame | labelFrame;
+
+			// update divider
+			fDivider = fabs(textFrame.left - labelFrame.left);
+		} else {
+			frame = textFrame;
+			fDivider = 0;
+		}
+
+		MoveTo(frame.left, frame.top);
+		BSize oldSize = Bounds().Size();
+		ResizeTo(frame.Width(), frame.Height());
+		BSize newSize = Bounds().Size();
+
+		// If the size changes, ResizeTo() will trigger a relayout, otherwise
+		// we need to do that explicitly.
+		if (newSize != oldSize)
+			Relayout();
+	}
+}
+
+
+void
+BTextControl::_ValidateLayoutData()
+{
+	CALLED();
+
+	if (fLayoutData->valid)
+		return;
+
+	// cache font height
+	font_height& fh = fLayoutData->font_info;
+	GetFontHeight(&fh);
+
+	if (Label() != NULL) {
+		fLayoutData->label_width = ceilf(StringWidth(Label()));
+		fLayoutData->label_height = ceilf(fh.ascent) + ceilf(fh.descent);
+	} else {
+		fLayoutData->label_width = 0;
+		fLayoutData->label_height = 0;
+	}
+
+	// compute the minimal divider
+	float divider = 0;
+	if (fLayoutData->label_width > 0) {
+		divider = fLayoutData->label_width
+			+ be_control_look->DefaultLabelSpacing();
+	}
+
+	// If we shan't do real layout, we let the current divider take influence.
+	if (!(Flags() & B_SUPPORTS_LAYOUT))
+		divider = max_c(divider, fDivider);
+
+	// get the minimal (== preferred) text view size
+	fLayoutData->text_view_min = fText->MinSize();
+
+	TRACE("text view min width: %.2f\n", fLayoutData->text_view_min.width);
+
+	// compute our minimal (== preferred) size
+	BSize min(fLayoutData->text_view_min);
+	min.width += 2 * kFrameMargin;
+	min.height += 2 * kFrameMargin;
+
+	if (divider > 0)
+		min.width += divider;
+	if (fLayoutData->label_height > min.height)
+		min.height = fLayoutData->label_height;
+
+	fLayoutData->min = min;
+
+	fLayoutData->valid = true;
+	ResetLayoutInvalidation();
+
+	TRACE("width: %.2f, height: %.2f\n", min.width, min.height);
+}
+
+
+// #pragma mark -
+
+
+BTextControl::LabelLayoutItem::LabelLayoutItem(BTextControl* parent)
+	:
+	fParent(parent),
+	fFrame()
+{
+}
+
+
+BTextControl::LabelLayoutItem::LabelLayoutItem(BMessage* from)
+	:
+	BAbstractLayoutItem(from),
+	fParent(NULL),
+	fFrame()
+{
+	from->FindRect(kFrameField, &fFrame);
+}
+
+
+bool
+BTextControl::LabelLayoutItem::IsVisible()
+{
+	return !fParent->IsHidden(fParent);
+}
+
+
+void
+BTextControl::LabelLayoutItem::SetVisible(bool visible)
+{
+	// not allowed
+}
+
+
+BRect
+BTextControl::LabelLayoutItem::Frame()
+{
+	return fFrame;
+}
+
+
+void
+BTextControl::LabelLayoutItem::SetFrame(BRect frame)
+{
+	fFrame = frame;
+	fParent->_UpdateFrame();
+}
+
+
+void
+BTextControl::LabelLayoutItem::SetParent(BTextControl* parent)
+{
+	fParent = parent;
+}
+
+
+BView*
+BTextControl::LabelLayoutItem::View()
+{
+	return fParent;
+}
+
+
+BSize
+BTextControl::LabelLayoutItem::BaseMinSize()
+{
+	fParent->_ValidateLayoutData();
+
+	if (!fParent->Label())
+		return BSize(-1, -1);
+
+	return BSize(fParent->fLayoutData->label_width
+			+ be_control_look->DefaultLabelSpacing(),
+		fParent->fLayoutData->label_height);
+}
+
+
+BSize
+BTextControl::LabelLayoutItem::BaseMaxSize()
+{
+	return BaseMinSize();
+}
+
+
+BSize
+BTextControl::LabelLayoutItem::BasePreferredSize()
+{
+	return BaseMinSize();
+}
+
+
+BAlignment
+BTextControl::LabelLayoutItem::BaseAlignment()
+{
+	return BAlignment(B_ALIGN_USE_FULL_WIDTH, B_ALIGN_USE_FULL_HEIGHT);
+}
+
+
+BRect
+BTextControl::LabelLayoutItem::FrameInParent() const
+{
+	return fFrame.OffsetByCopy(-fParent->Frame().left, -fParent->Frame().top);
+}
+
+
+status_t
+BTextControl::LabelLayoutItem::Archive(BMessage* into, bool deep) const
+{
+	BArchiver archiver(into);
+	status_t err = BAbstractLayoutItem::Archive(into, deep);
+	if (err == B_OK)
+		err = into->AddRect(kFrameField, fFrame);
+
+	return archiver.Finish(err);
+}
+
+
+BArchivable*
+BTextControl::LabelLayoutItem::Instantiate(BMessage* from)
+{
+	if (validate_instantiation(from, "BTextControl::LabelLayoutItem"))
+		return new LabelLayoutItem(from);
+	return NULL;
+}
+
+
+// #pragma mark -
+
+
+BTextControl::TextViewLayoutItem::TextViewLayoutItem(BTextControl* parent)
+	:
+	fParent(parent),
+	fFrame()
+{
+	// by default the part right of the divider shall have an unlimited maximum
+	// width
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+}
+
+
+BTextControl::TextViewLayoutItem::TextViewLayoutItem(BMessage* from)
+	:
+	BAbstractLayoutItem(from),
+	fParent(NULL),
+	fFrame()
+{
+	from->FindRect(kFrameField, &fFrame);
+}
+
+
+bool
+BTextControl::TextViewLayoutItem::IsVisible()
+{
+	return !fParent->IsHidden(fParent);
+}
+
+
+void
+BTextControl::TextViewLayoutItem::SetVisible(bool visible)
+{
+	// not allowed
+}
+
+
+BRect
+BTextControl::TextViewLayoutItem::Frame()
+{
+	return fFrame;
+}
+
+
+void
+BTextControl::TextViewLayoutItem::SetFrame(BRect frame)
+{
+	fFrame = frame;
+	fParent->_UpdateFrame();
+}
+
+
+void
+BTextControl::TextViewLayoutItem::SetParent(BTextControl* parent)
+{
+	fParent = parent;
+}
+
+
+BView*
+BTextControl::TextViewLayoutItem::View()
+{
+	return fParent;
+}
+
+
+BSize
+BTextControl::TextViewLayoutItem::BaseMinSize()
+{
+	fParent->_ValidateLayoutData();
+
+	BSize size = fParent->fLayoutData->text_view_min;
+	size.width += 2 * kFrameMargin;
+	size.height += 2 * kFrameMargin;
+
+	return size;
+}
+
+
+BSize
+BTextControl::TextViewLayoutItem::BaseMaxSize()
+{
+	BSize size(BaseMinSize());
+	size.width = B_SIZE_UNLIMITED;
+	return size;
+}
+
+
+BSize
+BTextControl::TextViewLayoutItem::BasePreferredSize()
+{
+	BSize size(BaseMinSize());
+	// puh, no idea...
+	size.width = 100;
+	return size;
+}
+
+
+BAlignment
+BTextControl::TextViewLayoutItem::BaseAlignment()
+{
+	return BAlignment(B_ALIGN_USE_FULL_WIDTH, B_ALIGN_USE_FULL_HEIGHT);
+}
+
+
+BRect
+BTextControl::TextViewLayoutItem::FrameInParent() const
+{
+	return fFrame.OffsetByCopy(-fParent->Frame().left, -fParent->Frame().top);
+}
+
+
+status_t
+BTextControl::TextViewLayoutItem::Archive(BMessage* into, bool deep) const
+{
+	BArchiver archiver(into);
+	status_t err = BAbstractLayoutItem::Archive(into, deep);
+	if (err == B_OK)
+		err = into->AddRect(kFrameField, fFrame);
+
+	return archiver.Finish(err);
+}
+
+
+BArchivable*
+BTextControl::TextViewLayoutItem::Instantiate(BMessage* from)
+{
+	if (validate_instantiation(from, "BTextControl::TextViewLayoutItem"))
+		return new TextViewLayoutItem(from);
+	return NULL;
+}
+
+
+extern "C" void
+B_IF_GCC_2(InvalidateLayout__12BTextControlb,
+	_ZN12BTextControl16InvalidateLayoutEb)(BView* view, bool descendants)
+{
+	perform_data_layout_invalidated data;
+	data.descendants = descendants;
+
+	view->Perform(PERFORM_CODE_LAYOUT_INVALIDATED, &data);
+}
+

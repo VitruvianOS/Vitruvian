@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-//	Copyright (c) 2001-2004, Haiku
+//	Copyright (c) 2001-2010, Haiku
 //
 //	Permission is hereby granted, free of charge, to any person obtaining a
 //	copy of this software and associated documentation files (the "Software"),
@@ -31,24 +31,31 @@
 #include <Box.h>
 
 
+const static rgb_color kZombieColor = {220, 220, 220, 255};
+
+
 // _BZombieReplicantView_ class ------------------------------------------------
 class _BZombieReplicantView_ : public BBox {
 
 public:
-				_BZombieReplicantView_(BRect frame, status_t error);
-virtual			~_BZombieReplicantView_();
+								_BZombieReplicantView_(BRect frame, 
+									status_t error);
+	virtual						~_BZombieReplicantView_();
 
-virtual	void	MessageReceived(BMessage *msg);
+	virtual	void				MessageReceived(BMessage*msg);
 
-virtual	void	Draw(BRect updateRect);
+	virtual	void				Draw(BRect updateRect);
 
-virtual	void	MouseDown(BPoint);
+	virtual	void				MouseDown(BPoint);
 
-		void	SetArchive(BMessage *);
+	virtual status_t			Archive(BMessage* archive,
+									bool deep = true) const;
+
+			void				SetArchive(BMessage*);
 
 private:
-		status_t	fError;
-		BMessage	*fArchive;
+			status_t			fError;
+			BMessage*			fArchive;
 };
 
 #endif /* _ZOMBIE_REPLICANT_VIEW_H */

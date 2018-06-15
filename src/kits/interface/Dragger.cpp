@@ -1,28 +1,20 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2004, Haiku
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		Dragger.cpp
-//	Author:			Marc Flerackers (mflerackers@androme.be)
-//	Description:	BDragger represents a replicant "handle".
-//------------------------------------------------------------------------------
+/*
+ * Copyright 2001-2012, Haiku.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Marc Flerackers (mflerackers@androme.be)
+ *		Rene Gollent (rene@gollent.com)
+ *		Alexandre Deckner (alex@zappotek.com)
+ */
+
+
+//!	BDragger represents a replicant "handle".
+
+
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <Alert.h>
 #include <Beep.h>
@@ -32,126 +24,207 @@
 #include <Message.h>
 #include <PopUpMenu.h>
 #include <Shelf.h>
+#include <SystemCatalog.h>
 #include <Window.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <AutoLocker.h>
 
-// Globals ---------------------------------------------------------------------
-bool BDragger::sVisible;
-bool BDragger::sInited;
-BLocker BDragger::sLock;
-BList BDragger::sList;
+#include <AppServerLink.h>
+#include <DragTrackingFilter.h>
+#include <binary_compatibility/Interface.h>
+#include <ServerProtocol.h>
+#include <ViewPrivate.h>
 
-static rgb_color kZombieColor = {220, 220, 220, 255};
+#include "ZombieReplicantView.h"
 
-const unsigned char kHandBitmap[] = {	255, 255,   0,   0,   0, 255, 255, 255,
-										255, 255,   0, 131, 131,   0, 255, 255,
-										  0,   0,   0,   0, 131, 131,   0,   0,
-										  0, 131,   0,   0, 131, 131,   0,   0,
-										  0, 131, 131, 131, 131, 131,   0,   0,
-										255,   0, 131, 131, 131, 131,   0,   0,
-										255, 255,   0,   0,   0,   0,   0,   0,
-										255, 255, 255, 255, 255, 255,   0,   0};
+using BPrivate::gSystemCatalog;
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Dragger"
+
+#undef B_TRANSLATE
+#define B_TRANSLATE(str) \
+	gSystemCatalog.GetString(B_TRANSLATE_MARK(str), "Dragger")
 
 
-BDragger::BDragger(BRect bounds, BView *target, uint32 rmask, uint32 flags)
-	:	BView(bounds, "_dragger_", rmask, flags),
-		fTarget(target),
-		fRelation(TARGET_UNKNOWN),
-		fShelf(NULL),
-		fTransition(false),
-		fIsZombie(false),
-		fErrCount(0),
-		fPopUp(NULL)
+static const uint32 kMsgDragStarted = 'Drgs';
+
+static const unsigned char kHandBitmap[] = {
+	255, 255,   0,   0,   0, 255, 255, 255,
+	255, 255,   0, 131, 131,   0, 255, 255,
+	  0,   0,   0,   0, 131, 131,   0,   0,
+	  0, 131,   0,   0, 131, 131,   0,   0,
+	  0, 131, 131, 131, 131, 131,   0,   0,
+	255,   0, 131, 131, 131, 131,   0,   0,
+	255, 255,   0,   0,   0,   0,   0,   0,
+	255, 255, 255, 255, 255, 255,   0,   0
+};
+
+
+namespace {
+
+struct DraggerManager {
+	bool	visible;
+	bool	visibleInitialized;
+	BList	list;
+
+	DraggerManager()
+		:
+		visible(false),
+		visibleInitialized(false),
+		fLock("BDragger static")
+	{
+	}
+
+	bool Lock()
+	{
+		return fLock.Lock();
+	}
+
+	void Unlock()
+	{
+		fLock.Unlock();
+	}
+
+	static DraggerManager* Default()
+	{
+		if (sDefaultInstance == NULL)
+			pthread_once(&sDefaultInitOnce, &_InitSingleton);
+
+		return sDefaultInstance;
+	}
+
+private:
+	static void _InitSingleton()
+	{
+		sDefaultInstance = new DraggerManager;
+	}
+
+private:
+	BLocker					fLock;
+
+	static pthread_once_t	sDefaultInitOnce;
+	static DraggerManager*	sDefaultInstance;
+};
+
+pthread_once_t DraggerManager::sDefaultInitOnce = PTHREAD_ONCE_INIT;
+DraggerManager* DraggerManager::sDefaultInstance = NULL;
+
+}	// unnamed namespace
+
+
+BDragger::BDragger(BRect bounds, BView* target, uint32 resizeMask, uint32 flags)
+	:
+	BView(bounds, "_dragger_", resizeMask, flags),
+	fTarget(target),
+	fRelation(TARGET_UNKNOWN),
+	fShelf(NULL),
+	fTransition(false),
+	fIsZombie(false),
+	fErrCount(0),
+	fPopUpIsCustom(false),
+	fPopUp(NULL)
 {
-	fBitmap = new BBitmap(BRect(0.0f, 0.0f, 7.0f, 7.0f), B_CMAP8, false, false);
-	fBitmap->SetBits(kHandBitmap, fBitmap->BitsLength(), 0, B_CMAP8);
+	_InitData();
 }
 
 
-BDragger::BDragger(BMessage *data)
-	:	BView(data),
-		fTarget(NULL),
-		fRelation(TARGET_UNKNOWN),
-		fShelf(NULL),
-		fTransition(false),
-		fIsZombie(false),
-		fErrCount(0),
-		fPopUp(NULL)
+BDragger::BDragger(BMessage* data)
+	:
+	BView(data),
+	fTarget(NULL),
+	fRelation(TARGET_UNKNOWN),
+	fShelf(NULL),
+	fTransition(false),
+	fIsZombie(false),
+	fErrCount(0),
+	fPopUpIsCustom(false),
+	fPopUp(NULL)
 {
 	data->FindInt32("_rel", (int32*)&fRelation);
 
-	fBitmap = new BBitmap(BRect(0.0f, 0.0f, 7.0f, 7.0f), B_CMAP8, false, false);
-	fBitmap->SetBits(kHandBitmap, fBitmap->BitsLength(), 0, B_CMAP8);
+	_InitData();
 
 	BMessage popupMsg;
-
 	if (data->FindMessage("_popup", &popupMsg) == B_OK) {
-		BArchivable *archivable = instantiate_object(&popupMsg);
+		BArchivable* archivable = instantiate_object(&popupMsg);
 
-		if (archivable)
+		if (archivable) {
 			fPopUp = dynamic_cast<BPopUpMenu*>(archivable);
+			fPopUpIsCustom = true;
+		}
 	}
 }
 
 
 BDragger::~BDragger()
 {
-	SetPopUp(NULL);
-	
+	delete fPopUp;
 	delete fBitmap;
 }
 
 
 BArchivable	*
-BDragger::Instantiate(BMessage *data)
+BDragger::Instantiate(BMessage* data)
 {
 	if (validate_instantiation(data, "BDragger"))
 		return new BDragger(data);
-	else
-		return NULL;
+	return NULL;
 }
 
 
-status_t 
-BDragger::Archive(BMessage *data, bool deep) const
+status_t
+BDragger::Archive(BMessage* data, bool deep) const
 {
+	status_t ret = BView::Archive(data, deep);
+	if (ret != B_OK)
+		return ret;
+
 	BMessage popupMsg;
 
-	if (fPopUp) {
-		fPopUp->Archive(&popupMsg);
-		data->AddMessage("_popup", &popupMsg);
+	if (fPopUp != NULL && fPopUpIsCustom) {
+		bool windowLocked = fPopUp->Window()->Lock();
+
+		ret = fPopUp->Archive(&popupMsg, deep);
+
+		if (windowLocked) {
+			fPopUp->Window()->Unlock();
+				// TODO: Investigate, in some (rare) occasions the menu window
+				//		 has already been unlocked
+		}
+
+		if (ret == B_OK)
+			ret = data->AddMessage("_popup", &popupMsg);
 	}
 
-	data->AddInt32("_rel", fRelation);
-
-	return BView::Archive(data, deep);
+	if (ret == B_OK)
+		ret = data->AddInt32("_rel", fRelation);
+	return ret;
 }
 
 
 void
-BDragger::AttachedToWindow() 
+BDragger::AttachedToWindow()
 {
 	if (fIsZombie) {
 		SetLowColor(kZombieColor);
 		SetViewColor(kZombieColor);
-	
 	} else {
 		SetLowColor(B_TRANSPARENT_COLOR);
 		SetViewColor(B_TRANSPARENT_COLOR);
 	}
 
-	determine_relationship();
-	ListManage(true);
+	_DetermineRelationship();
+	_AddToList();
+
+	AddFilter(new DragTrackingFilter(this, kMsgDragStarted));
 }
 
 
 void
 BDragger::DetachedFromWindow()
 {
-	ListManage(false);
+	_RemoveFromList();
 }
 
 
@@ -160,19 +233,33 @@ BDragger::Draw(BRect update)
 {
 	BRect bounds(Bounds());
 
-	if (AreDraggersDrawn() && (!fShelf || fShelf->AllowsDragging())) {
+	if (AreDraggersDrawn() && (fShelf == NULL || fShelf->AllowsDragging())) {
+		if (Parent() != NULL && (Parent()->Flags() & B_DRAW_ON_CHILDREN) == 0) {
+			uint32 flags = Parent()->Flags();
+			Parent()->SetFlags(flags | B_DRAW_ON_CHILDREN);
+			Parent()->Draw(Frame() & ConvertToParent(update));
+			Parent()->Flush();
+			Parent()->SetFlags(flags);
+		}
+
+		BPoint where = bounds.RightBottom() - BPoint(fBitmap->Bounds().Width(),
+			fBitmap->Bounds().Height());
 		SetDrawingMode(B_OP_OVER);
-		DrawBitmap(fBitmap, bounds.LeftTop());
+		DrawBitmap(fBitmap, where);
 		SetDrawingMode(B_OP_COPY);
 
 		if (fIsZombie) {
 			// TODO: should draw it differently ?
 		}
 	} else if (IsVisibilityChanging()) {
-		if (Parent())
-			Parent()->Invalidate(Frame());
-		
-		else {
+		if (Parent() != NULL) {
+			if ((Parent()->Flags() & B_DRAW_ON_CHILDREN) == 0) {
+				uint32 flags = Parent()->Flags();
+				Parent()->SetFlags(flags | B_DRAW_ON_CHILDREN);
+				Parent()->Invalidate(Frame() & ConvertToParent(update));
+				Parent()->SetFlags(flags);
+			}
+		} else {
 			SetHighColor(255, 255, 255);
 			FillRect(bounds);
 		}
@@ -183,181 +270,244 @@ BDragger::Draw(BRect update)
 void
 BDragger::MouseDown(BPoint where)
 {
-	if (!fTarget || !AreDraggersDrawn())
+	if (fTarget == NULL || !AreDraggersDrawn())
 		return;
 
-	int32 buttons;
+	uint32 buttons;
+	Window()->CurrentMessage()->FindInt32("buttons", (int32*)&buttons);
 
-	Window()->CurrentMessage()->FindInt32("buttons", &buttons);
+	if (fShelf != NULL && (buttons & B_SECONDARY_MOUSE_BUTTON) != 0)
+		_ShowPopUp(fTarget, where);
+}
 
-	if (buttons & B_SECONDARY_MOUSE_BUTTON) {
-		if (!fShelf || !fTarget) {
-			beep();
-			return;
-		}
 
-		ShowPopUp(fTarget, where);
-	
-	} else {
-		// TODO code to determine drag or menu
-		/*bigtime_t time = system_time();
-		bigtime_t click_speed = 0;
+void
+BDragger::MouseUp(BPoint point)
+{
+	BView::MouseUp(point);
+}
 
-		get_click_speed(&click_speed);*/
 
-		bool drag = false;
+void
+BDragger::MouseMoved(BPoint point, uint32 code, const BMessage* msg)
+{
+	BView::MouseMoved(point, code, msg);
+}
 
-		while (true) {
-			BPoint where2;
-			uint32 buttons;
 
-			GetMouse(&where2, &buttons);
-			
-			if (!buttons)
-				break;
-			
-			if (where2 != where) {
-				drag = true;
-				break;
-			}
-
-			snooze(40000);
-		}
-
-		if (drag) {
-			BMessage archive(B_ARCHIVED_OBJECT);
-
-			if (fRelation == TARGET_IS_PARENT)
-				fTarget->Archive(&archive);
-			else if (fRelation == TARGET_IS_CHILD)
-				Archive(&archive);
+void
+BDragger::MessageReceived(BMessage* msg)
+{
+	switch (msg->what) {
+		case B_TRASH_TARGET:
+			if (fShelf != NULL)
+				Window()->PostMessage(kDeleteReplicant, fTarget, NULL);
 			else {
-				if (fTarget->Archive(&archive)) {
-					BMessage widget(B_ARCHIVED_OBJECT);
+				BAlert* alert = new BAlert(B_TRANSLATE("Warning"),
+					B_TRANSLATE("Can't delete this replicant from its original "
+					"application. Life goes on."),
+					B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_FROM_WIDEST,
+					B_WARNING_ALERT);
+				alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+				alert->Go(NULL);
+			}
+			break;
 
-					if (Archive(&widget))
-						archive.AddMessage("__widget", &widget);
+		case _SHOW_DRAG_HANDLES_:
+			// This code is used whenever the "are draggers drawn" option is
+			// changed.
+			if (fRelation == TARGET_IS_CHILD) {
+				fTransition = true;
+				Draw(Bounds());
+				Flush();
+				fTransition = false;
+			} else {
+				if ((fShelf != NULL && fShelf->AllowsDragging()
+						&& AreDraggersDrawn())
+					|| AreDraggersDrawn()) {
+					Show();
+				} else
+					Hide();
+			}
+			break;
+
+		case kMsgDragStarted:
+			if (fTarget != NULL) {
+				BMessage archive(B_ARCHIVED_OBJECT);
+
+				if (fRelation == TARGET_IS_PARENT)
+					fTarget->Archive(&archive);
+				else if (fRelation == TARGET_IS_CHILD)
+					Archive(&archive);
+				else if (fTarget->Archive(&archive)) {
+					BMessage archivedSelf(B_ARCHIVED_OBJECT);
+
+					if (Archive(&archivedSelf))
+						archive.AddMessage("__widget", &archivedSelf);
+				}
+
+				archive.AddInt32("be:actions", B_TRASH_TARGET);
+				BPoint offset;
+				drawing_mode mode;
+				BBitmap* bitmap = DragBitmap(&offset, &mode);
+				if (bitmap != NULL)
+					DragMessage(&archive, bitmap, mode, offset, this);
+				else {
+					DragMessage(&archive, ConvertFromScreen(
+						fTarget->ConvertToScreen(fTarget->Bounds())), this);
 				}
 			}
+			break;
 
-			archive.AddInt32("be:actions", B_TRASH_TARGET);
-
-			
-			BPoint offset;
-			drawing_mode mode;		
-			BBitmap *bitmap = DragBitmap(&offset, &mode);
-			if (bitmap)
-				DragMessage(&archive, bitmap, mode, offset, this);
-			else
-				DragMessage(&archive,
-					ConvertFromScreen(fTarget->ConvertToScreen(fTarget->Bounds())),
-					this);
-		} else
-			ShowPopUp(fTarget, where);
+		default:
+			BView::MessageReceived(msg);
+			break;
 	}
 }
 
 
 void
-BDragger::MouseUp(BPoint pt)
+BDragger::FrameMoved(BPoint newPosition)
 {
-	BView::MouseUp(pt);
+	BView::FrameMoved(newPosition);
 }
 
 
 void
-BDragger::MouseMoved(BPoint pt, uint32 code, const BMessage *msg)
+BDragger::FrameResized(float newWidth, float newHeight)
 {
-	BView::MouseMoved(pt, code, msg);
-}
-
-
-void
-BDragger::MessageReceived(BMessage *msg)
-{
-	if (msg->what == B_TRASH_TARGET) {
-		if (fShelf)
-			Window()->PostMessage('JAHA', fTarget, NULL);
-		else
-			(new BAlert("??",
-				"Can't delete this replicant from its original application. Life goes on.",
-				"OK", NULL, NULL, B_WIDTH_FROM_WIDEST, B_WARNING_ALERT))->Go(NULL);
-	
-	} else if (msg->what == B_SCREEN_CHANGED) {
-		if (fRelation == TARGET_IS_CHILD) {
-			fTransition = true;
-			Draw(BRect());
-			fTransition = false;
-		
-		} else {
-			if ((fShelf && (fShelf->AllowsDragging() && AreDraggersDrawn()))
-				|| AreDraggersDrawn())
-				Show();
-			else
-				Hide();
-		}
-	} else
-		BView::MessageReceived(msg);
-}
-
-
-void
-BDragger::FrameMoved(BPoint new_position)
-{
-	BView::FrameMoved(new_position);
-}
-
-
-void
-BDragger::FrameResized(float new_width, float new_height)
-{
-	BView::FrameResized(new_width, new_height);
+	BView::FrameResized(newWidth, newHeight);
 }
 
 
 status_t
 BDragger::ShowAllDraggers()
 {
-	// TODO: Implement. Should ask the registrar or the app server
-	return B_OK;
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SET_SHOW_ALL_DRAGGERS);
+	link.Attach<bool>(true);
+
+	status_t status = link.Flush();
+	if (status == B_OK) {
+		DraggerManager* manager = DraggerManager::Default();
+		AutoLocker<DraggerManager> locker(manager);
+		manager->visible = true;
+		manager->visibleInitialized = true;
+	}
+
+	return status;
 }
 
 
 status_t
 BDragger::HideAllDraggers()
 {
-	// TODO: Implement. Should ask the registrar or the app server
-	return B_OK;
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SET_SHOW_ALL_DRAGGERS);
+	link.Attach<bool>(false);
+
+	status_t status = link.Flush();
+	if (status == B_OK) {
+		DraggerManager* manager = DraggerManager::Default();
+		AutoLocker<DraggerManager> locker(manager);
+		manager->visible = false;
+		manager->visibleInitialized = true;
+	}
+
+	return status;
 }
 
 
 bool
 BDragger::AreDraggersDrawn()
 {
-	// TODO: Implement. Should ask the registrar or the app server
-	return true;
+	DraggerManager* manager = DraggerManager::Default();
+	AutoLocker<DraggerManager> locker(manager);
+
+	if (!manager->visibleInitialized) {
+		BPrivate::AppServerLink link;
+		link.StartMessage(AS_GET_SHOW_ALL_DRAGGERS);
+
+		status_t status;
+		if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+			link.Read<bool>(&manager->visible);
+			manager->visibleInitialized = true;
+		} else
+			return false;
+	}
+
+	return manager->visible;
 }
 
 
-BHandler *BDragger::ResolveSpecifier(BMessage *msg, int32 index,
-									 BMessage *specifier, int32 form,
-									 const char *property)
+BHandler*
+BDragger::ResolveSpecifier(BMessage* message, int32 index, BMessage* specifier,
+	int32 form, const char* property)
 {
-	return BView::ResolveSpecifier(msg, index, specifier, form, property);
+	return BView::ResolveSpecifier(message, index, specifier, form, property);
 }
 
 
 status_t
-BDragger::GetSupportedSuites(BMessage *data)
+BDragger::GetSupportedSuites(BMessage* data)
 {
-	return GetSupportedSuites(data);
+	return BView::GetSupportedSuites(data);
 }
 
 
 status_t
-BDragger::Perform(perform_code d, void *arg)
+BDragger::Perform(perform_code code, void* _data)
 {
-	return Perform(d, arg);
+	switch (code) {
+		case PERFORM_CODE_MIN_SIZE:
+			((perform_data_min_size*)_data)->return_value
+				= BDragger::MinSize();
+			return B_OK;
+		case PERFORM_CODE_MAX_SIZE:
+			((perform_data_max_size*)_data)->return_value
+				= BDragger::MaxSize();
+			return B_OK;
+		case PERFORM_CODE_PREFERRED_SIZE:
+			((perform_data_preferred_size*)_data)->return_value
+				= BDragger::PreferredSize();
+			return B_OK;
+		case PERFORM_CODE_LAYOUT_ALIGNMENT:
+			((perform_data_layout_alignment*)_data)->return_value
+				= BDragger::LayoutAlignment();
+			return B_OK;
+		case PERFORM_CODE_HAS_HEIGHT_FOR_WIDTH:
+			((perform_data_has_height_for_width*)_data)->return_value
+				= BDragger::HasHeightForWidth();
+			return B_OK;
+		case PERFORM_CODE_GET_HEIGHT_FOR_WIDTH:
+		{
+			perform_data_get_height_for_width* data
+				= (perform_data_get_height_for_width*)_data;
+			BDragger::GetHeightForWidth(data->width, &data->min, &data->max,
+				&data->preferred);
+			return B_OK;
+}
+		case PERFORM_CODE_SET_LAYOUT:
+		{
+			perform_data_set_layout* data = (perform_data_set_layout*)_data;
+			BDragger::SetLayout(data->layout);
+			return B_OK;
+		}
+		case PERFORM_CODE_LAYOUT_INVALIDATED:
+		{
+			perform_data_layout_invalidated* data
+				= (perform_data_layout_invalidated*)_data;
+			BDragger::LayoutInvalidated(data->descendants);
+			return B_OK;
+		}
+		case PERFORM_CODE_DO_LAYOUT:
+		{
+			BDragger::DoLayout();
+			return B_OK;
+		}
+	}
+
+	return BView::Perform(code, _data);
 }
 
 
@@ -369,9 +519,9 @@ BDragger::ResizeToPreferred()
 
 
 void
-BDragger::GetPreferredSize(float *width, float *height)
+BDragger::GetPreferredSize(float* _width, float* _height)
 {
-	BView::GetPreferredSize(width, height);
+	BView::GetPreferredSize(_width, _height);
 }
 
 
@@ -397,22 +547,24 @@ BDragger::AllDetached()
 
 
 status_t
-BDragger::SetPopUp(BPopUpMenu *context_menu)
+BDragger::SetPopUp(BPopUpMenu* menu)
 {
-	if (fPopUp && fPopUp != context_menu)
+	if (menu != NULL && menu != fPopUp) {
 		delete fPopUp;
-
-	fPopUp = context_menu;
-	return B_OK;
+		fPopUp = menu;
+		fPopUpIsCustom = true;
+		return B_OK;
+	}
+	return B_ERROR;
 }
 
 
-BPopUpMenu *
+BPopUpMenu*
 BDragger::PopUp() const
 {
-	if (!fPopUp && fTarget)
-		const_cast<BDragger*>(this)->BuildDefaultPopUp();
-	
+	if (fPopUp == NULL && fTarget)
+		const_cast<BDragger*>(this)->_BuildDefaultPopUp();
+
 	return fPopUp;
 }
 
@@ -424,15 +576,15 @@ BDragger::InShelf() const
 }
 
 
-BView *
+BView*
 BDragger::Target() const
 {
 	return fTarget;
 }
 
 
-BBitmap *
-BDragger::DragBitmap(BPoint *offset, drawing_mode *mode)
+BBitmap*
+BDragger::DragBitmap(BPoint* offset, drawing_mode* mode)
 {
 	return NULL;
 }
@@ -450,45 +602,72 @@ void BDragger::_ReservedDragger3() {}
 void BDragger::_ReservedDragger4() {}
 
 
-BDragger &
-BDragger::operator=(const BDragger &)
+BDragger&
+BDragger::operator=(const BDragger&)
 {
 	return *this;
 }
 
 
-void
-BDragger::ListManage(bool add)
+/*static*/ void
+BDragger::_UpdateShowAllDraggers(bool visible)
 {
-	if (sLock.Lock()) {
-		bool drawn = AreDraggersDrawn();
+	DraggerManager* manager = DraggerManager::Default();
+	AutoLocker<DraggerManager> locker(manager);
 
-		if (add) {
-			bool dragging = true;
+	manager->visibleInitialized = true;
+	manager->visible = visible;
 
-			sList.AddItem(this);
-
-			if (fShelf)
-				dragging = fShelf->AllowsDragging();
-
-			if (!drawn && !dragging) {
-				if (fRelation != TARGET_IS_CHILD)
-					Hide();
-			}
-		} else
-			sList.RemoveItem(this);
-
-		sLock.Unlock();
+	for (int32 i = manager->list.CountItems(); i-- > 0;) {
+		BDragger* dragger = (BDragger*)manager->list.ItemAt(i);
+		BMessenger target(dragger);
+		target.SendMessage(_SHOW_DRAG_HANDLES_);
 	}
 }
 
 
-status_t
-BDragger::determine_relationship()
+void
+BDragger::_InitData()
 {
-	status_t err = B_OK;
+	fBitmap = new BBitmap(BRect(0.0f, 0.0f, 7.0f, 7.0f), B_CMAP8, false, false);
+	fBitmap->SetBits(kHandBitmap, fBitmap->BitsLength(), 0, B_CMAP8);
+}
 
-	if (fTarget) {
+
+void
+BDragger::_AddToList()
+{
+	DraggerManager* manager = DraggerManager::Default();
+	AutoLocker<DraggerManager> locker(manager);
+	manager->list.AddItem(this);
+
+	bool allowsDragging = true;
+	if (fShelf)
+		allowsDragging = fShelf->AllowsDragging();
+
+	if (!AreDraggersDrawn() || !allowsDragging) {
+		// The dragger is not shown - but we can't hide us in case we're the
+		// parent of the actual target view (because then you couldn't see
+		// it anymore).
+		if (fRelation != TARGET_IS_CHILD && !IsHidden())
+			Hide();
+	}
+}
+
+
+void
+BDragger::_RemoveFromList()
+{
+	DraggerManager* manager = DraggerManager::Default();
+	AutoLocker<DraggerManager> locker(manager);
+	manager->list.RemoveItem(this);
+}
+
+
+status_t
+BDragger::_DetermineRelationship()
+{
+	if (fTarget != NULL) {
 		if (fTarget == Parent())
 			fRelation = TARGET_IS_PARENT;
 		else if (fTarget == ChildAt(0))
@@ -501,85 +680,105 @@ BDragger::determine_relationship()
 		else if (fRelation == TARGET_IS_CHILD)
 			fTarget = ChildAt(0);
 		else
-			err = B_ERROR;
+			return B_ERROR;
 	}
 
-	return err;
+	if (fRelation == TARGET_IS_PARENT) {
+		BRect bounds(Frame());
+		BRect parentBounds(Parent()->Bounds());
+		if (!parentBounds.Contains(bounds)) {
+			MoveTo(parentBounds.right - bounds.Width(),
+				parentBounds.bottom - bounds.Height());
+		}
+	}
+
+	return B_OK;
 }
 
 
 status_t
-BDragger::SetViewToDrag(BView *target)
+BDragger::_SetViewToDrag(BView* target)
 {
 	if (target->Window() != Window())
 		return B_ERROR;
 
 	fTarget = target;
 
-	if (Window())
-		determine_relationship();
+	if (Window() != NULL)
+		_DetermineRelationship();
 
 	return B_OK;
 }
 
 
 void
-BDragger::SetShelf(BShelf *shelf)
+BDragger::_SetShelf(BShelf* shelf)
 {
 	fShelf = shelf;
 }
 
 
 void
-BDragger::SetZombied(bool state)
+BDragger::_SetZombied(bool state)
 {
 	fIsZombie = state;
 
-	SetLowColor(kZombieColor);
-	SetViewColor(kZombieColor);
+	if (state) {
+		SetLowColor(kZombieColor);
+		SetViewColor(kZombieColor);
+	}
 }
 
 
 void
-BDragger::BuildDefaultPopUp()
+BDragger::_BuildDefaultPopUp()
 {
 	fPopUp = new BPopUpMenu("Shelf", false, false, B_ITEMS_IN_COLUMN);
 
 	// About
-	BMessage *msg = new BMessage(B_ABOUT_REQUESTED);
+	BMessage* msg = new BMessage(B_ABOUT_REQUESTED);
 
-	const char *name = fTarget->Name();
-
-	if (name)
+	const char* name = fTarget->Name();
+	if (name != NULL)
 		msg->AddString("target", name);
 
-	// TODO: Fix this
-	char *about = (char*)malloc(6 + (name ? strlen(name) : 0) + 1);
-	sprintf(about, "About %s", name);
+	BString about(B_TRANSLATE("About %app" B_UTF8_ELLIPSIS));
+	about.ReplaceFirst("%app", name);
 
-	fPopUp->AddItem(new BMenuItem(about, msg));
-
-	free(about);
-
-	// Seperator
-	fPopUp->AddItem(new BSeparatorItem());
-
-	// Delete
-	msg = new BMessage('JAHA');
-
-	fPopUp->AddItem(new BMenuItem("Delete", msg));
+	fPopUp->AddItem(new BMenuItem(about.String(), msg));
+	fPopUp->AddSeparatorItem();
+	fPopUp->AddItem(new BMenuItem(B_TRANSLATE("Remove replicant"),
+		new BMessage(kDeleteReplicant)));
 }
 
 
 void
-BDragger::ShowPopUp(BView *target, BPoint where)
+BDragger::_ShowPopUp(BView* target, BPoint where)
 {
 	BPoint point = ConvertToScreen(where);
 
-	if (!fPopUp && fTarget)
-		BuildDefaultPopUp();
+	if (fPopUp == NULL && fTarget != NULL)
+		_BuildDefaultPopUp();
 
 	fPopUp->SetTargetForItems(fTarget);
 
-	fPopUp->Go(point, true, false, /*BRect(), */true);
+	float menuWidth, menuHeight;
+	fPopUp->GetPreferredSize(&menuWidth, &menuHeight);
+	BRect rect(0, 0, menuWidth, menuHeight);
+	rect.InsetBy(-0.5, -0.5);
+	rect.OffsetTo(point);
+
+	fPopUp->Go(point, true, false, rect, true);
 }
+
+
+#if __GNUC__ < 3
+
+extern "C" BBitmap*
+_ReservedDragger1__8BDragger(BDragger* dragger, BPoint* offset,
+	drawing_mode* mode)
+{
+	return dragger->BDragger::DragBitmap(offset, mode);
+}
+
+#endif

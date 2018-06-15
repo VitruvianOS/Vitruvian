@@ -1,43 +1,24 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2004, Haiku
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		Cursor.cpp
-//	Author:			Frans van Nispen (xlr8@tref.nl)
-//					Gabe Yoder (gyoder@stny.rr.com)
-//	Description:	BCursor describes a view-wide or application-wide cursor.
-//------------------------------------------------------------------------------
-/**
-	@note:	As BeOS only supports 16x16 monochrome cursors, and I would like
-			to see a nice shadowed one, we will need to extend this one.
+/*
+ * Copyright 2001-2006, Haiku.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Frans van Nispen (xlr8@tref.nl)
+ *		Gabe Yoder (gyoder@stny.rr.com)
+ *		Axel Dörfler, axeld@pinc-software.de
  */
 
-// Standard Includes -----------------------------------------------------------
+/**	BCursor describes a view-wide or application-wide cursor. */
 
-// System Includes -------------------------------------------------------------
+/**
+	@note:	As BeOS only supports 16x16 monochrome cursors, and I would like
+			to see a nice shadowes one, we will need to extend this one.
+ */
+
 #include <AppDefs.h>
 #include <Cursor.h>
-#include <PortLink.h>
-#include <AppServerLink.h>
 
-// Project Includes ------------------------------------------------------------
+#include <AppServerLink.h>
 #include <ServerProtocol.h>
 
 
@@ -45,11 +26,21 @@ const BCursor *B_CURSOR_SYSTEM_DEFAULT;
 const BCursor *B_CURSOR_I_BEAM;
 	// these are initialized in BApplication::InitData()
 
-
 BCursor::BCursor(const void *cursorData)
+	:
+	fServerToken(-1),
+	fNeedToFree(false)
 {
-	int8 *data = (int8 *)cursorData;
-	m_serverToken = 0;
+	const uint8 *data = (const uint8 *)cursorData;
+
+	if (data == B_HAND_CURSOR || data == B_I_BEAM_CURSOR) {
+		// just use the default cursors from the app_server
+		fServerToken = data == B_HAND_CURSOR ?
+			B_CURSOR_ID_SYSTEM_DEFAULT : B_CURSOR_ID_I_BEAM;
+		return;
+	}
+
+	// Create a new cursor in the app_server
 
 	if (data == NULL
 		|| data[0] != 16	// size
@@ -58,54 +49,103 @@ BCursor::BCursor(const void *cursorData)
 		return;
 
 	// Send data directly to server
-	BPrivate::BAppServerLink serverlink;
-	int32 code=SERVER_FALSE;
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_CREATE_CURSOR);
+	link.Attach(cursorData, 68);
 
-	serverlink.StartMessage(AS_CREATE_BCURSOR);
-	serverlink.Attach(cursorData, 68);
-	serverlink.FlushWithReply(&code);
-	if(code==SERVER_TRUE)
-		serverlink.Read<int32>(&m_serverToken);
+	status_t status;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		link.Read<int32>(&fServerToken);
+		fNeedToFree = true;
+	}
 }
 
 
-// undefined on BeOS
+BCursor::BCursor(BCursorID id)
+	:
+	fServerToken(id),
+	fNeedToFree(false)
+{
+}
+
+
+BCursor::BCursor(const BCursor& other)
+	:
+	fServerToken(-1),
+	fNeedToFree(false)
+{
+	*this = other;
+}
+
+
 BCursor::BCursor(BMessage *data)
 {
-	m_serverToken = 0;
+	// undefined on BeOS
+	fServerToken = -1;
+	fNeedToFree = false;
 }
 
 
 BCursor::~BCursor()
 {
-	// Notify server to deallocate server-side objects for this cursor
-	BPrivate::BAppServerLink serverlink;
-	serverlink.StartMessage(AS_DELETE_BCURSOR);
-	serverlink.Attach<int32>(m_serverToken);
-	serverlink.Flush();
+	_FreeCursorData();
 }
 
 
-// not implemented on BeOS
-status_t BCursor::Archive(BMessage *into, bool deep) const
+status_t
+BCursor::Archive(BMessage *into, bool deep) const
 {
+	// not implemented on BeOS
 	return B_OK;
 }
 
 
-// not implemented on BeOS
-BArchivable	*BCursor::Instantiate(BMessage *data)
+BArchivable	*
+BCursor::Instantiate(BMessage *data)
 {
+	// not implemented on BeOS
 	return NULL;
+}
+
+
+BCursor&
+BCursor::operator=(const BCursor& other)
+{
+	if (&other != this && other != *this) {
+		_FreeCursorData();
+
+		fServerToken = other.fServerToken;
+		fNeedToFree = other.fNeedToFree;
+
+		if (fNeedToFree) {
+			// Tell app_server that there is another reference for this
+			// cursor data!
+			BPrivate::AppServerLink link;
+			link.StartMessage(AS_REFERENCE_CURSOR);
+			link.Attach<int32>(fServerToken);
+		}
+	}
+	return *this;
+}
+
+
+bool
+BCursor::operator==(const BCursor& other) const
+{
+	return fServerToken == other.fServerToken;
+}
+
+
+bool
+BCursor::operator!=(const BCursor& other) const
+{
+	return fServerToken != other.fServerToken;
 }
 
 
 status_t
 BCursor::Perform(perform_code d, void *arg)
 {
-  /*
-	printf("perform %d\n", (int)d);
-  */
 	return B_OK;
 }
 
@@ -114,3 +154,17 @@ void BCursor::_ReservedCursor1() {}
 void BCursor::_ReservedCursor2() {}
 void BCursor::_ReservedCursor3() {}
 void BCursor::_ReservedCursor4() {}
+
+
+void
+BCursor::_FreeCursorData()
+{
+	// Notify server to deallocate server-side objects for this cursor
+	if (fNeedToFree) {
+		BPrivate::AppServerLink link;
+		link.StartMessage(AS_DELETE_CURSOR);
+		link.Attach<int32>(fServerToken);
+		link.Flush();
+	}
+}
+

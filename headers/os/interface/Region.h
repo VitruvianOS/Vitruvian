@@ -1,102 +1,102 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2003, OpenBeOS
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		Region.h
-//	Author:			Stefano Ceccherini (burton666@libero.it)
-//	Description:	Region class consisting of multiple rectangles
-//
-//------------------------------------------------------------------------------
-
+/*
+ * Copyright 2007, Haiku, Inc. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
 
 #ifndef	_REGION_H
 #define	_REGION_H
 
-#include <BeBuild.h>
 #include <Rect.h>
 
-/* Integer rect used to define a cliping rectangle. All bounds are included */
+namespace BPrivate {
+	class ServerLink;
+	class LinkReceiver;
+};
+
+/* Integer rect used to define a clipping rectangle. All bounds are inclusive. */
 /* Moved from DirectWindow.h */
 typedef struct {
-	int32		left;
-	int32		top;
-	int32		right;
-	int32		bottom;
+	int32	left;
+	int32	top;
+	int32	right;
+	int32	bottom;
 } clipping_rect;
 
 
-/*----------------------------------------------------------------*/
-/*----- BRegion class --------------------------------------------*/
-
 class BRegion {
-
 public:
-				BRegion();
-				BRegion(const BRegion &region);
-				BRegion(const BRect rect);
-virtual			~BRegion();	
+								BRegion();
+								BRegion(const BRegion& region);
+								BRegion(const BRect rect);
+	virtual						~BRegion();
 
-		BRegion	&operator=(const BRegion &from);
+			BRegion&			operator=(const BRegion& from);
+			bool				operator==(const BRegion& other) const;
 
-		BRect	Frame() const;
-clipping_rect	FrameInt() const;
-		BRect	RectAt(int32 index);
-clipping_rect	RectAtInt(int32 index);
-		int32	CountRects();
-		void	Set(BRect newBounds);
-		void	Set(clipping_rect newBounds);
-		bool	Intersects(BRect r) const;
-		bool	Intersects(clipping_rect r) const;
-		bool	Contains(BPoint pt) const;
-		bool	Contains(int32 x, int32 y);
-		void	PrintToStream() const;
-		void	OffsetBy(int32 dh, int32 dv);
-		void	MakeEmpty();
-		void	Include(BRect r);
-		void	Include(clipping_rect r);
-		void	Include(const BRegion*);
-		void	Exclude(BRect r);
-		void	Exclude(clipping_rect r);
-		void	Exclude(const BRegion*);
-		void	IntersectWith(const BRegion*);
+			void				Set(BRect newBounds);
+			void				Set(clipping_rect newBounds);
 
-/*----- Private or reserved -----------------------------------------*/
-		class Support;
+			BRect				Frame() const;
+			clipping_rect		FrameInt() const;
+
+			BRect				RectAt(int32 index);
+			BRect				RectAt(int32 index) const;
+			clipping_rect		RectAtInt(int32 index);
+			clipping_rect		RectAtInt(int32 index) const;
+
+			int32				CountRects();
+			int32				CountRects() const;
+
+			bool				Intersects(BRect rect) const;
+			bool				Intersects(clipping_rect rect) const;
+
+			bool				Contains(BPoint point) const;
+			bool				Contains(int32 x, int32 y);
+			bool				Contains(int32 x, int32 y) const;
+
+			void				PrintToStream() const;
+
+			void				OffsetBy(const BPoint& point);
+			void				OffsetBy(int32 x, int32 y);
+
+			void				MakeEmpty();
+
+			void				Include(BRect rect);
+			void				Include(clipping_rect rect);
+			void				Include(const BRegion* region);
+
+			void				Exclude(BRect r);
+			void				Exclude(clipping_rect r);
+			void				Exclude(const BRegion* region);
+
+			void				IntersectWith(const BRegion* region);
+
+			void				ExclusiveInclude(const BRegion* region);
 
 private:
+	friend class BDirectWindow;
+	friend class BPrivate::ServerLink;
+	friend class BPrivate::LinkReceiver;
 
-friend class BView;
-friend class BDirectWindow;
-friend class Support;
-
-		void	_AddRect(clipping_rect r);
-		void	set_size(long new_size);
+	class Support;
+	friend class Support;
 
 private:
-		long	count;
-		long	data_size;
-		clipping_rect	bound;
-		clipping_rect	*data;
+								BRegion(const clipping_rect& rect);
+
+			void				_AdoptRegionData(BRegion& region);
+			bool				_SetSize(long newSize);
+
+			clipping_rect		_Convert(const BRect& rect) const;
+			clipping_rect		_ConvertToInternal(const BRect& rect) const;
+			clipping_rect		_ConvertToInternal(
+									const clipping_rect& rect) const;
+
+private:
+			long				fCount;
+			long				fDataSize;
+			clipping_rect		fBounds;
+			clipping_rect*		fData;
 };
 
-/*-------------------------------------------------------------*/
-/*-------------------------------------------------------------*/
-
-#endif /* _REGION_H */
+#endif // _REGION_H

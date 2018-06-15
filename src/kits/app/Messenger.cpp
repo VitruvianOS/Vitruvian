@@ -1,83 +1,58 @@
- //------------------------------------------------------------------------------
-//	Copyright (c) 2001-2002, OpenBeOS
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		Messenger.cpp
-//	Author:			Ingo Weinhold (bonefish@users.sf.net)
-//	Description:	BMessenger delivers messages to local or remote targets.
-//------------------------------------------------------------------------------
+/*
+ * Copyright 2001-2011, Haiku.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Ingo Weinhold (bonefish@users.sf.net)
+ */
+
+
+#include <AppMisc.h>
+#include <AutoLocker.h>
+#include <MessageUtils.h>
+#include "TokenSpace.h"
+
+#include <Application.h>
+#include <Handler.h>
+#include <Looper.h>
+#include <LooperList.h>
+#include <Message.h>
+#include <MessagePrivate.h>
+#include <Messenger.h>
+#include <OS.h>
+#include <Roster.h>
+#include <TokenSpace.h>
+
+#include <new>
+#include <stdio.h>
+#include <string.h>
+
 
 // debugging
 //#define DBG(x) x
 #define DBG(x)
 #define OUT	printf
 
-// Standard Includes -----------------------------------------------------------
-#include <new>
-#include <stdio.h>
-#include <string.h>
-
-// System Includes -------------------------------------------------------------
-#include <Application.h>
-#include <Handler.h>
-#include <Looper.h>
-#include <LooperList.h>
-#include <Message.h>
-#include <Messenger.h>
-#include <OS.h>
-#include <Roster.h>
-
-// Project Includes ------------------------------------------------------------
-#include <AppMisc.h>
-#include <MessageUtils.h>
-#include "ObjectLocker.h"
-#include <TokenSpace.h>
-
-// Local Includes --------------------------------------------------------------
-
-// Local Defines ---------------------------------------------------------------
-
-// Globals ---------------------------------------------------------------------
-
 using BPrivate::gDefaultTokens;
 using BPrivate::gLooperList;
 using BPrivate::BLooperList;
-using BPrivate::BObjectLocker;
 
 enum {
 	NOT_IMPLEMENTED	= B_ERROR,
 };
 
 
-// constructor
 /*!	\brief Creates an unitialized BMessenger.
 */
 BMessenger::BMessenger()
-		  : fPort(-1),
-			fHandlerToken(-1),
-			fTeam(-1),
-			fPreferredTarget(false)
+	:
+	fPort(-1),
+	fHandlerToken(B_NULL_TOKEN),
+	fTeam(-1)
 {
 }
 
-// constructor
+
 /*!	\brief Creates a BMessenger and initializes it to target the already
 	running application identified by its signature and/or team ID.
 
@@ -93,15 +68,15 @@ BMessenger::BMessenger()
 		   the result of the initialization is written.
 */
 BMessenger::BMessenger(const char *signature, team_id team, status_t *result)
-		  : fPort(-1),
-			fHandlerToken(-1),
-			fTeam(-1),
-			fPreferredTarget(false)
+	:
+	fPort(-1),
+	fHandlerToken(B_NULL_TOKEN),
+	fTeam(-1)
 {
-	InitData(signature, team, result);
+	_InitData(signature, team, result);
 }
 
-// constructor
+
 /*!	\brief Creates a BMessenger and initializes it to target the local
 	BHandler and/or BLooper.
 
@@ -116,12 +91,12 @@ BMessenger::BMessenger(const char *signature, team_id team, status_t *result)
 	\param result An optional pointer to a pre-allocated status_t into which
 		   the result of the initialization is written.
 */
-BMessenger::BMessenger(const BHandler *handler, const BLooper *looper,
-					   status_t *result)
-		  : fPort(-1),
-			fHandlerToken(-1),
-			fTeam(-1),
-			fPreferredTarget(false)
+BMessenger::BMessenger(const BHandler* handler, const BLooper* looper,
+	status_t* _result)
+	:
+	fPort(-1),
+	fHandlerToken(B_NULL_TOKEN),
+	fTeam(-1)
 {
 	status_t error = (handler || looper ? B_OK : B_BAD_VALUE);
 	if (error == B_OK) {
@@ -138,35 +113,35 @@ BMessenger::BMessenger(const BHandler *handler, const BLooper *looper,
 		}
 		// set port, token,...
 		if (error == B_OK) {
-			BObjectLocker<BLooperList> locker(gLooperList);
+			AutoLocker<BLooperList> locker(gLooperList);
 			if (locker.IsLocked() && gLooperList.IsLooperValid(looper)) {
 				fPort = looper->fMsgPort;
-				fHandlerToken = (handler ? _get_object_token_(handler) : -1);
-				fPreferredTarget = !handler;
+				fHandlerToken = (handler
+					? _get_object_token_(handler) : B_PREFERRED_TOKEN);
 				fTeam = looper->Team();
 			} else
 				error = B_BAD_VALUE;
 		}
 	}
-	if (result)
-		*result = error;
+	if (_result)
+		*_result = error;
 }
 
-// copy constructor
+
 /*!	\brief Creates a BMessenger and initializes it to have the same target
 	as the supplied messemger.
 
 	\param from The messenger to be copied.
 */
-BMessenger::BMessenger(const BMessenger &from)
-		  : fPort(from.fPort),
-			fHandlerToken(from.fHandlerToken),
-			fTeam(from.fTeam),
-			fPreferredTarget(from.fPreferredTarget)
+BMessenger::BMessenger(const BMessenger& from)
+	:
+	fPort(from.fPort),
+	fHandlerToken(from.fHandlerToken),
+	fTeam(from.fTeam)
 {
 }
 
-// destructor
+
 /*!	\brief Frees all resources associated with this object.
 */
 BMessenger::~BMessenger()
@@ -174,9 +149,9 @@ BMessenger::~BMessenger()
 }
 
 
-// Target
+//	#pragma mark - Target
 
-// IsTargetLocal
+
 /*!	\brief Returns whether or not the messenger's target lives within the team
 	of the caller.
 
@@ -186,12 +161,10 @@ BMessenger::~BMessenger()
 bool
 BMessenger::IsTargetLocal() const
 {
-	thread_info info;
-	return (get_thread_info(find_thread(NULL), &info) == B_OK
-			&& fTeam == info.team);
+	return BPrivate::current_team() == fTeam;
 }
 
-// Target
+
 /*!	\brief Returns the handler and looper targeted by the messenger, if the
 	target is local.
 
@@ -206,22 +179,23 @@ BMessenger::IsTargetLocal() const
 	\return The BHandler targeted by the messenger.
 */
 BHandler *
-BMessenger::Target(BLooper **looper) const
+BMessenger::Target(BLooper** _looper) const
 {
 	BHandler *handler = NULL;
-	if (IsTargetLocal()) {
-		if (!fPreferredTarget) {
-			gDefaultTokens.GetToken(fHandlerToken, B_HANDLER_TOKEN,
-									(void**)&handler);
-		}
-		if (looper)
-			*looper = BPrivate::gLooperList.LooperForPort(fPort);
-	} else if (looper)
-		*looper = NULL;
+	if (IsTargetLocal()
+		&& (fHandlerToken > B_NULL_TOKEN
+			|| fHandlerToken == B_PREFERRED_TOKEN)) {
+		gDefaultTokens.GetToken(fHandlerToken, B_HANDLER_TOKEN,
+			(void**)&handler);
+		if (_looper)
+			*_looper = BPrivate::gLooperList.LooperForPort(fPort);
+	} else if (_looper)
+		*_looper = NULL;
+
 	return handler;
 }
 
-// LockTarget
+
 /*!	\brief Locks the BLooper targeted by the messenger, if the target is local.
 
 	This method is a shorthand for retrieving the targeted looper via
@@ -229,7 +203,7 @@ BMessenger::Target(BLooper **looper) const
 
 	\see BLooper::Lock() for details.
 
-	\return \c true, if the looper could be locked sucessfully, \c false, if
+	\return \c true, if the looper could be locked successfully, \c false, if
 			the messenger is not properly initialized, the target is remote,
 			or the targeted looper is invalid.
 */
@@ -238,10 +212,18 @@ BMessenger::LockTarget() const
 {
 	BLooper *looper = NULL;
 	Target(&looper);
-	return (looper && looper->Lock());
+	if (looper != NULL && looper->Lock()) {
+		if (looper->fMsgPort == fPort)
+			return true;
+
+		looper->Unlock();
+		return false;
+	}
+
+	return false;
 }
 
-// LockTargetWithTimeout
+
 /*!	\brief Locks the BLooper targeted by the messenger, if the target is local.
 
 	This method is a shorthand for retrieving the targeted looper via
@@ -250,7 +232,7 @@ BMessenger::LockTarget() const
 	\see BLooper::LockWithTimeout() for details.
 
 	\return
-	- \c B_OK, if the looper could be locked sucessfully,
+	- \c B_OK, if the looper could be locked successfully,
 	- \c B_BAD_VALUE, if the messenger is not properly initialized,
 	  the target is remote, or the targeted looper is invalid,
 	- other error codes returned by BLooper::LockWithTimeout().
@@ -260,19 +242,30 @@ BMessenger::LockTargetWithTimeout(bigtime_t timeout) const
 {
 	BLooper *looper = NULL;
 	Target(&looper);
-	status_t error = (looper ? B_OK : B_BAD_VALUE);
-	if (error == B_OK)
-		error = looper->LockWithTimeout(timeout);
+	if (looper == NULL)
+		return B_BAD_VALUE;
+
+	status_t error = looper->LockWithTimeout(timeout);
+
+	if (error == B_OK && looper->fMsgPort != fPort) {
+		looper->Unlock();
+		return B_BAD_PORT_ID;
+	}
+
 	return error;
 }
 
 
-// Message sending
+//	#pragma mark - Message sending
 
-// SendMessage
-/*! \brief Delivers a BMessage synchronously to the messenger's target.
 
-	The method does not wait for a reply. The message is sent asynchronously.
+/*! \brief Delivers a BMessage synchronously to the messenger's target,
+		   without waiting for a reply.
+
+	If the target's message port is full, the method waits indefinitely, until
+	space becomes available in the port. After delivery the method returns
+	immediately. It does not wait until the target processes the message or
+	even sends a reply.
 
 	\param command The what field of the message to deliver.
 	\param replyTo The handler to which a reply to the message shall be sent.
@@ -289,13 +282,17 @@ BMessenger::SendMessage(uint32 command, BHandler *replyTo) const
 	return SendMessage(&message, replyTo);
 }
 
-// SendMessage
-/*! \brief Delivers a BMessage synchronously to the messenger's target.
+
+/*! \brief Delivers a BMessage synchronously to the messenger's target,
+		   without waiting for a reply.
 
 	A copy of the supplied message is sent and the caller retains ownership
 	of \a message.
 
-	The method does not wait for a reply. The message is sent asynchronously.
+	If the target's message port is full, the method waits until space becomes
+	available in the port or the specified timeout occurs (whichever happens
+	first). After delivery the method returns immediately. It does not wait
+	until the target processes the message or even sends a reply.
 
 	\param message The message to be sent.
 	\param replyTo The handler to which a reply to the message shall be sent.
@@ -312,25 +309,29 @@ BMessenger::SendMessage(uint32 command, BHandler *replyTo) const
 */
 status_t
 BMessenger::SendMessage(BMessage *message, BHandler *replyTo,
-						bigtime_t timeout) const
+	bigtime_t timeout) const
 {
-DBG(OUT("BMessenger::SendMessage2(%.4s)\n", (char*)&message->what));
+	DBG(OUT("BMessenger::SendMessage2(%.4s)\n", (char*)&message->what));
 	status_t error = (message ? B_OK : B_BAD_VALUE);
 	if (error == B_OK) {
 		BMessenger replyMessenger(replyTo);
 		error = SendMessage(message, replyMessenger, timeout);
 	}
-DBG(OUT("BMessenger::SendMessage2() done: %lx\n", error));
+	DBG(OUT("BMessenger::SendMessage2() done: %lx\n", error));
 	return error;
 }
 
-// SendMessage
-/*! \brief Delivers a BMessage synchronously to the messenger's target.
+
+/*! \brief Delivers a BMessage synchronously to the messenger's target,
+		   without waiting for a reply.
 
 	A copy of the supplied message is sent and the caller retains ownership
 	of \a message.
 
-	The method does not wait for a reply. The message is sent asynchronously.
+	If the target's message port is full, the method waits until space becomes
+	available in the port or the specified timeout occurs (whichever happens
+	first). After delivery the method returns immediately. It does not wait
+	until the target processes the message or even sends a reply.
 
 	\param message The message to be sent.
 	\param replyTo A messenger specifying the target for a reply to \a message.
@@ -346,20 +347,16 @@ DBG(OUT("BMessenger::SendMessage2() done: %lx\n", error));
 */
 status_t
 BMessenger::SendMessage(BMessage *message, BMessenger replyTo,
-						bigtime_t timeout) const
+	bigtime_t timeout) const
 {
-	status_t error = (message ? B_OK : B_BAD_VALUE);
-	if (error == B_OK) {
-		// If the reply messenger is invalid use the app messenger.
-		if (!replyTo.IsValid())
-			replyTo = be_app_messenger;
-		error = message->_send_(fPort, fHandlerToken, fPreferredTarget,
-								timeout, false, replyTo);
-	}
-	return error;
+	if (!message)
+		return B_BAD_VALUE;
+
+	return BMessage::Private(message).SendMessage(fPort, fTeam, fHandlerToken,
+		timeout, false, replyTo);
 }
 
-// SendMessage
+
 /*! \brief Delivers a BMessage synchronously to the messenger's target and
 	waits for a reply.
 
@@ -383,7 +380,7 @@ BMessenger::SendMessage(uint32 command, BMessage *reply) const
 	return SendMessage(&message, reply);
 }
 
-// SendMessage
+
 /*! \brief Delivers a BMessage synchronously to the messenger's target and
 	waits for a reply.
 
@@ -411,24 +408,25 @@ BMessenger::SendMessage(uint32 command, BMessage *reply) const
 */
 status_t
 BMessenger::SendMessage(BMessage *message, BMessage *reply,
-						bigtime_t deliveryTimeout, bigtime_t replyTimeout) const
+	bigtime_t deliveryTimeout, bigtime_t replyTimeout) const
 {
-	status_t error = (message && reply ? B_OK : B_BAD_VALUE);
-	if (error == B_OK) {
-		error = message->send_message(fPort, fTeam, fHandlerToken,
-									  fPreferredTarget, reply, deliveryTimeout,
-									  replyTimeout);
-		// Map this error for now:
-		if (error == B_BAD_TEAM_ID)
-			error = B_BAD_PORT_ID;
-	}
+	if (message == NULL || reply == NULL)
+		return B_BAD_VALUE;
+
+	status_t error = BMessage::Private(message).SendMessage(fPort, fTeam,
+		fHandlerToken, reply, deliveryTimeout, replyTimeout);
+
+	// Map this error for now:
+	if (error == B_BAD_TEAM_ID)
+		error = B_BAD_PORT_ID;
+
 	return error;
 }
 
 
-// Operators and misc
+//	#pragma mark - Operators and misc
 
-// =
+
 /*!	\brief Makes this BMessenger a copy of the supplied one.
 
 	\param from the messenger to be copied.
@@ -441,12 +439,11 @@ BMessenger::operator=(const BMessenger &from)
 		fPort = from.fPort;
 		fHandlerToken = from.fHandlerToken;
 		fTeam = from.fTeam;
-		fPreferredTarget = from.fPreferredTarget;
 	}
 	return *this;
 }
 
-// ==
+
 /*!	\brief Returns whether this and the supplied messenger have the same
 	target.
 
@@ -458,12 +455,11 @@ bool
 BMessenger::operator==(const BMessenger &other) const
 {
 	// Note: The fTeam fields are not compared.
-	return (fPort == other.fPort
-			&& fHandlerToken == other.fHandlerToken
-			&& fPreferredTarget == other.fPreferredTarget);
+	return fPort == other.fPort
+		&& fHandlerToken == other.fHandlerToken;
 }
 
-// IsValid
+
 /*!	\brief Returns whether the messenger's target looper does still exist.
 
 	It is not checked whether the target handler is also still existing.
@@ -475,10 +471,10 @@ bool
 BMessenger::IsValid() const
 {
 	port_info info;
-	return (fPort >= 0 && get_port_info(fPort, &info) == B_OK);
+	return fPort >= 0 && get_port_info(fPort, &info) == B_OK;
 }
 
-// Team
+
 /*!	\brief Returns the ID of the team the messenger's target lives in.
 
 	\return The team of the messenger's target.
@@ -490,33 +486,26 @@ BMessenger::Team() const
 }
 
 
-//----- Private or reserved -----------------------------------------
+//	#pragma mark - Private or reserved
 
-// constructor
-/*!	\brief Creates a BMessenger and initializes it to team, target looper port
-	and handler token.
 
-	If \a preferred is \c true, \a token is ignored.
+/*!	\brief Sets the messenger's team, target looper port and handler token.
+
+	To target the preferred handler, use B_PREFERRED_TOKEN as token.
 
 	\param team The target's team.
 	\param port The target looper port.
 	\param token The target handler token.
-	\param preferred \c true to rather use the looper's preferred handler
-		   instead of the one specified by \a token.
 */
-BMessenger::BMessenger(team_id team, port_id port, int32 token, bool preferred)
-		  : fPort(-1),
-			fHandlerToken(-1),
-			fTeam(-1),
-			fPreferredTarget(false)
+void
+BMessenger::_SetTo(team_id team, port_id port, int32 token)
 {
 	fTeam = team;
 	fPort = port;
 	fHandlerToken = token;
-	fPreferredTarget = preferred;
 }
 
-// InitData
+
 /*!	\brief Initializes the BMessenger object's data given the signature and/or
 	team ID of a target.
 
@@ -532,22 +521,49 @@ BMessenger::BMessenger(team_id team, port_id port, int32 token, bool preferred)
 		   the result of the initialization is written.
 */
 void
-BMessenger::InitData(const char *signature, team_id team, status_t *result)
+BMessenger::_InitData(const char* signature, team_id team, status_t* _result)
 {
 	status_t error = B_OK;
-
+	// get an app_info
+	app_info info;
+	if (team < 0) {
+		// no team ID given
+		if (signature) {
+			error = be_roster->GetAppInfo(signature, &info);
+			team = info.team;
+			// B_ERROR means that no application with the given signature
+			// is running. But we are supposed to return B_BAD_VALUE.
+			if (error == B_ERROR)
+				error = B_BAD_VALUE;
+		} else
+			error = B_BAD_TYPE;
+	} else {
+		// a team ID is given
+		error = be_roster->GetRunningAppInfo(team, &info);
+		// Compare the returned signature with the supplied one.
+		if (error == B_OK && signature && strcasecmp(signature, info.signature))
+			error = B_MISMATCHED_VALUES;
+	}
+	// check whether the app flags say B_ARGV_ONLY
+	if (error == B_OK && (info.flags & B_ARGV_ONLY)) {
+		error = B_BAD_TYPE;
+		// Set the team ID nevertheless -- that's what Be's implementation
+		// does. Don't know, if that is a bug, but at least it doesn't harm.
+		fTeam = team;
+	}
 	// init our members
 	if (error == B_OK) {
 		fTeam = team;
-		fHandlerToken = 0;
-		fPreferredTarget = true;
+		fPort = info.port;
+		fHandlerToken = B_PREFERRED_TOKEN;
 	}
+
 	// return the error
-	if (result)
-		*result = error;
+	if (_result)
+		*_result = error;
 }
 
-// <
+
 /*!	\brief Returns whether the first one of two BMessengers is less than the
 	second one.
 
@@ -559,22 +575,25 @@ BMessenger::InitData(const char *signature, team_id team, status_t *result)
 	\return \c true, if \a a is less than \a b, \c false otherwise.
 */
 bool
-operator<(const BMessenger &a, const BMessenger &b)
+operator<(const BMessenger &_a, const BMessenger &_b)
 {
+	BMessenger::Private a(const_cast<BMessenger&>(_a));
+	BMessenger::Private b(const_cast<BMessenger&>(_b));
+
 	// significance:
 	// 1. fPort
 	// 2. fHandlerToken
 	// 3. fPreferredTarget
 	// fTeam is insignificant
-	return (a.fPort < b.fPort
-			|| a.fPort == b.fPort
-				&& (a.fHandlerToken < b.fHandlerToken
-					|| a.fHandlerToken == b.fHandlerToken
-						&& !a.fPreferredTarget
-						&& b.fPreferredTarget));
+	return (a.Port() < b.Port()
+			|| (a.Port() == b.Port()
+				&& (a.Token() < b.Token()
+					|| (a.Token() == b.Token()
+						&& !a.IsPreferredTarget()
+						&& b.IsPreferredTarget()))));
 }
 
-// !=
+
 /*!	\brief Returns whether two BMessengers have not the same target.
 
 	\param a The first messenger.
@@ -587,4 +606,3 @@ operator!=(const BMessenger &a, const BMessenger &b)
 {
 	return !(a == b);
 }
-

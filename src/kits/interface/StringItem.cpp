@@ -1,148 +1,165 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-//  File:           StringItem.cpp
-//
-//  Description:    BListView represents a one-dimensional list view.
-//
-//  Copyright 2001, Ulrich Wimboeck
-//
-////////////////////////////////////////////////////////////////////////////////
+/*
+ * Copyright 2001-2009, Haiku, Inc. All Rights Reserved.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Ulrich Wimboeck
+ *		Marc Flerackers (mflerackers@androme.be)
+ *		Rene Gollent
+ */
 
-#include "StringItem.h"
-#include <Font.h>
+
+#include <StringItem.h>
+
+#include <stdlib.h>
+#include <string.h>
+
 #include <Message.h>
 #include <View.h>
 
-#ifdef USE_OPENBEOS_NAMESPACE
-using namespace OpenBeOS
-#endif
 
-/*----------------------------------------------------------------*/
-/*----- BStringItem class ----------------------------------------*/
-
-
-BStringItem::BStringItem(const char* text, uint32 outlineLevel /* = 0 */,
-                         bool expanded /* = true */)
- : BListItem(outlineLevel, expanded), fBaselineOffset(0),
-   fText(new char[strlen(text) + 1])
+BStringItem::BStringItem(const char* text, uint32 level, bool expanded)
+	: BListItem(level, expanded),
+	fText(NULL),
+	fBaselineOffset(0)
 {
-  // copy the text !!!!!
-  strcpy(fText, text) ;
+	SetText(text);
 }
+
+
+BStringItem::BStringItem(BMessage* archive)
+	: BListItem(archive),
+	fText(NULL),
+	fBaselineOffset(0)
+{
+	const char* string;
+	if (archive->FindString("_label", &string) == B_OK)
+		SetText(string);
+}
+
 
 BStringItem::~BStringItem()
 {
-  if (fText != NULL) {
-    delete fText ;
-    fText = NULL ;
-  }
+	free(fText);
 }
 
-BStringItem::BStringItem(BMessage* data)
- : BListItem(data) //First call the contructor of the base class
-{
-  char* text ;
-  if (data->FindString("_label", const_cast<const char**>(&text)) == B_OK)
-  {
-    fText = new char[strlen(text) + 1] ;
-    strcpy(fText, text) ;
-  }
-
-}
 
 BArchivable*
-BStringItem::Instantiate(BMessage* data)
+BStringItem::Instantiate(BMessage* archive)
 {
-  if (validate_instantiation(data, "BStringItem"))
-    return new BStringItem(data) ;
+	if (validate_instantiation(archive, "BStringItem"))
+		return new BStringItem(archive);
 
-  return NULL ;
+	return NULL;
 }
+
 
 status_t
-BStringItem::Archive(BMessage* data, bool deep /* = true */) const
+BStringItem::Archive(BMessage *archive, bool deep) const
 {
-  status_t tReturn (BListItem::Archive(data, deep)) ;
+	status_t status = BListItem::Archive(archive);
 
-  if (tReturn != B_OK)
-    return tReturn ;
+	if (status == B_OK && fText != NULL)
+		status = archive->AddString("_label", fText);
 
-  if (data->AddString("class", "BStringItem") != B_OK)
-    return tReturn ;
-
-  return tReturn = data->AddString("_label", fText) ;
+	return status;
 }
 
-// The colors need to be set correct
-void
-BStringItem::DrawItem(BView* owner, BRect frame, bool complete /* = false */)
-{
-  if (IsSelected() || complete)
-  {
-    if (IsSelected())
-    {
-      owner->SetHighColor(
-        tint_color(ui_color(B_PANEL_BACKGROUND_COLOR), B_HIGHLIGHT_BACKGROUND_TINT)) ;
-      owner->SetLowColor(owner->HighColor()) ;
-    }
-    else {
-      owner->SetHighColor(owner->ViewColor()) ;
-      owner->SetLowColor(owner->ViewColor()) ;
-    }
-
-    owner->FillRect(frame) ;
-  }
-
-  BFont font ;
-  owner->GetFont(&font) ;
-
-  // Get the height of the font to place the pen to
-  // the right position
-  font_height height ;
-  font.GetHeight(&height) ;
-
-  owner->MovePenTo(frame.left + 4, frame.bottom - height.descent) ;
-  owner->SetHighColor(IsEnabled() ? ui_color(B_MENU_ITEM_TEXT_COLOR)
-    : tint_color(ui_color(B_PANEL_BACKGROUND_COLOR), B_DISABLED_LABEL_TINT)) ;
-
-  owner->DrawString(fText) ;
-}
 
 void
-BStringItem::SetText(const char* text)
+BStringItem::DrawItem(BView *owner, BRect frame, bool complete)
 {
-  if (fText != NULL)
-    delete fText ;
+	if (fText == NULL)
+		return;
 
-  if (text != NULL)
-  {
-    fText = new char[strlen(text) + 1] ;
-    strcpy(fText, text) ; // copy text
-  }
-  else {
-    fText = NULL ;
-  }
+	rgb_color highColor = owner->HighColor();
+	rgb_color lowColor = owner->LowColor();
+
+	if (IsSelected() || complete) {
+		if (IsSelected()) {
+			owner->SetHighColor(tint_color(lowColor, B_DARKEN_2_TINT));
+			owner->SetLowColor(owner->HighColor());
+		} else
+			owner->SetHighColor(lowColor);
+
+		owner->FillRect(frame);
+	}
+
+	owner->MovePenTo(frame.left, frame.top + fBaselineOffset);
+
+	rgb_color black = {0, 0, 0, 255};
+
+	if (!IsEnabled())
+		owner->SetHighColor(tint_color(black, B_LIGHTEN_2_TINT));
+	else
+		owner->SetHighColor(black);
+
+	owner->DrawString(fText);
+
+	owner->SetHighColor(highColor);
+	owner->SetLowColor(lowColor);
 }
 
-inline const char*
+
+void
+BStringItem::SetText(const char *text)
+{
+	free(fText);
+	fText = NULL;
+
+	if (text)
+		fText = strdup(text);
+}
+
+
+const char *
 BStringItem::Text() const
 {
-  return fText ;
+	return fText;
 }
+
 
 void
-BStringItem::Update(BView* owner, const BFont* font)
+BStringItem::Update(BView *owner, const BFont *font)
 {
-  BListItem::Update(owner, font) ;
+	if (fText)
+		SetWidth(font->StringWidth(fText));
 
-  // Set the width to the width of the string
-  SetWidth(font->StringWidth(fText)) ;
+	font_height fheight;
+	font->GetHeight(&fheight);
+
+	fBaselineOffset = 2 + ceilf(fheight.ascent + fheight.leading / 2);
+
+	SetHeight(ceilf(fheight.ascent) + ceilf(fheight.descent)
+		+ ceilf(fheight.leading) + 4);
 }
+
 
 status_t
-BStringItem::Perform(perform_code d, void* arg)
+BStringItem::Perform(perform_code d, void *arg)
 {
-  status_t retval = B_OK ;
-  return retval ;
+	return BListItem::Perform(d, arg);
 }
 
+
+float
+BStringItem::BaselineOffset() const
+{
+	return fBaselineOffset;
+}
+
+
+void BStringItem::_ReservedStringItem1() {}
+void BStringItem::_ReservedStringItem2() {}
+
+
+BStringItem::BStringItem(const BStringItem &)
+{
+}
+
+
+BStringItem	&
+BStringItem::operator=(const BStringItem &)
+{
+	return *this;
+}

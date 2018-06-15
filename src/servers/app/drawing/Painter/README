@@ -1,0 +1,23 @@
+About:
+
+Painter is a class implementing the BView drawing functions with the Anti-Grain Geometry 2D engine. It can be attached to a frame buffer and used just like a BView that is attached to a BBitmap and does full anti-aliased drawing.
+
+
+
+Status:
+
+1) Only 32 bit frame buffers are support yet.
+
+Most of the work in supporting other color spaces is only in the drawing_mode classes. Other colorspaces are currently handled by drawing into a 32 bit "back buffer" and doing the color space conversion when blitting it into the visible frame buffer. It may or may not be beneficial to add code working directly in other color spaces. Older computers would benefit. When improving or redesigning the accelerant API, it may make this obsolete though.
+
+2) Only 32 bit Bitmaps are supported for drawing yet.
+
+Currently, there is a generic fallback bitmap drawing routine that handles all cases. Faster codepaths handle unscaled bitmaps and B_CMAP8 bitmaps are also supported by fast shortcuts. The AGG based codepath is too generic for what the app_server needs to implement, so that it will be beneficial to make a faster implementation as well. It may be easier to support other bitmap color spaces than by doing the conversion somewhere in the AGG pipeline.
+
+3) Article
+
+I have written a Newsletter article, that explains the concepts of AGG, how Painter is therefor designed and how it can be improved with the knowledge of AGG inner workings.
+
+<http://www.haiku-os.org/documents/dev/painter_and_how_agg_works>
+
+

@@ -1,57 +1,44 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2004, Haiku, Inc.
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		TextInput.cpp
-//	Authors:		Frans van Nispen (xlr8@tref.nl)
-//					Marc Flerackers (mflerackers@androme.be)
-//	Description:	The BTextView derivative owned by an instance of
-//					BTextControl.
-//------------------------------------------------------------------------------
+/*
+ * Copyright 2001-2008, Haiku Inc. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Frans van Nispen (xlr8@tref.nl)
+ *		Marc Flerackers (mflerackers@androme.be)
+ */
+
+
+#include "TextInput.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <ControlLook.h>
 #include <InterfaceDefs.h>
+#include <LayoutUtils.h>
 #include <Message.h>
+#include <String.h>
 #include <TextControl.h>
 #include <TextView.h>
 #include <Window.h>
 
-#include "TextInput.h"
+
+namespace BPrivate {
 
 
 _BTextInput_::_BTextInput_(BRect frame, BRect textRect, uint32 resizeMask,
-						   uint32 flags)
-	:	BTextView(frame, "_input_", textRect, resizeMask, flags),
-		fPreviousText(NULL),
-		fBool(false)
+		uint32 flags)
+	: BTextView(frame, "_input_", textRect, resizeMask, flags),
+	fPreviousText(NULL)
 {
 	MakeResizable(true);
 }
 
 
-_BTextInput_::_BTextInput_(BMessage *archive)
-	:	BTextView(archive),
-		fPreviousText(NULL),
-		fBool(false)
+_BTextInput_::_BTextInput_(BMessage* archive)
+	: BTextView(archive),
+	fPreviousText(NULL)
 {
 	MakeResizable(true);
 }
@@ -59,25 +46,37 @@ _BTextInput_::_BTextInput_(BMessage *archive)
 
 _BTextInput_::~_BTextInput_()
 {
-	if (fPreviousText)
-		free(fPreviousText);
+	free(fPreviousText);
 }
 
 
-BArchivable *
-_BTextInput_::Instantiate(BMessage *archive)
+BArchivable*
+_BTextInput_::Instantiate(BMessage* archive)
 {
 	if (validate_instantiation(archive, "_BTextInput_"))
 		return new _BTextInput_(archive);
-	else
-		return NULL;
+
+	return NULL;
 }
 
 
 status_t
-_BTextInput_::Archive(BMessage *data, bool deep) const
+_BTextInput_::Archive(BMessage* data, bool deep) const
 {
 	return BTextView::Archive(data, true);
+}
+
+
+void
+_BTextInput_::MouseDown(BPoint where)
+{
+	if (!IsFocus()) {
+		MakeFocus(true);
+		return;
+	}
+
+	// only pass through to base class if we already have focus
+	BTextView::MouseDown(where);
 }
 
 
@@ -85,6 +84,7 @@ void
 _BTextInput_::FrameResized(float width, float height)
 {
 	BTextView::FrameResized(width, height);
+
 	AlignTextRect();
 }
 
@@ -97,8 +97,8 @@ _BTextInput_::KeyDown(const char* bytes, int32 numBytes)
 		{
 			if (!TextControl()->IsEnabled())
 				break;
-			
-			if(strcmp(Text(), fPreviousText) != 0) {
+
+			if (fPreviousText == NULL || strcmp(Text(), fPreviousText) != 0) {
 				TextControl()->Invoke();
 				free(fPreviousText);
 				fPreviousText = strdup(Text());
@@ -106,18 +106,17 @@ _BTextInput_::KeyDown(const char* bytes, int32 numBytes)
 
 			SelectAll();
 			break;
-		}		
+		}
 
 		case B_TAB:
 			BView::KeyDown(bytes, numBytes);
 			break;
-	
+
 		default:
 			BTextView::KeyDown(bytes, numBytes);
 			break;
 	}
 }
-
 
 void
 _BTextInput_::MakeFocus(bool state)
@@ -129,52 +128,65 @@ _BTextInput_::MakeFocus(bool state)
 
 	if (state) {
 		SetInitialText();
-
-		fBool = true;
-
-		if (Window()) {
-			BMessage *message = Window()->CurrentMessage();
-
-			if (message && message->what == B_KEY_DOWN)
-				SelectAll();
-		}
+		SelectAll();
 	} else {
 		if (strcmp(Text(), fPreviousText) != 0)
 			TextControl()->Invoke();
 
 		free(fPreviousText);
 		fPreviousText = NULL;
-		fBool = false;
+	}
 
-		if (Window()) {
-			BMessage *message = Window()->CurrentMessage();
-
-			if (message && message->what == B_MOUSE_DOWN)
-				Select(0, 0);
+//	if (Window()) {
+// TODO: why do we have to invalidate here?
+// I'm leaving this in, but it looks suspicious... :-)
+//		Invalidate(Bounds());
+		if (BTextControl* parent = dynamic_cast<BTextControl*>(Parent())) {
+			BRect frame = Frame();
+			frame.InsetBy(-1.0, -1.0);
+			parent->Invalidate(frame);
 		}
-	}
+//	}
+}
 
-	if (Window()) {
-		Draw(Bounds());
-		Flush();
-	}
+
+BSize
+_BTextInput_::MinSize()
+{
+	BSize min;
+	min.height = ceilf(LineHeight(0) + 2.0);
+		// we always add at least one pixel vertical inset top/bottom for
+		// the text rect.
+	min.width = min.height * 3;
+	return BLayoutUtils::ComposeSize(ExplicitMinSize(), min);
 }
 
 
 void
 _BTextInput_::AlignTextRect()
 {
-	// TODO
+	// the label font could require the control to be higher than
+	// necessary for the text view, we compensate this by layouting
+	// the text rect to be in the middle, normally this means there
+	// is one pixel spacing on each side
+	BRect textRect(Bounds());
+	textRect.left = 0.0;
+	float vInset = max_c(1, floorf((textRect.Height() - LineHeight(0)) / 2.0));
+	float hInset = 2;
+
+	if (be_control_look != NULL)
+		hInset = be_control_look->DefaultLabelSpacing();
+
+	textRect.InsetBy(hInset, vInset);
+	SetTextRect(textRect);
 }
 
 
 void
 _BTextInput_::SetInitialText()
 {
-	if (fPreviousText) {
-		free(fPreviousText);
-		fPreviousText = NULL;
-	}
+	free(fPreviousText);
+	fPreviousText = NULL;
 
 	if (Text())
 		fPreviousText = strdup(Text());
@@ -182,7 +194,7 @@ _BTextInput_::SetInitialText()
 
 
 void
-_BTextInput_::Paste(BClipboard *clipboard)
+_BTextInput_::Paste(BClipboard* clipboard)
 {
 	BTextView::Paste(clipboard);
 	Invalidate();
@@ -190,31 +202,25 @@ _BTextInput_::Paste(BClipboard *clipboard)
 
 
 void
-_BTextInput_::InsertText(const char *inText, int32 inLength,
-							  int32 inOffset, const text_run_array *inRuns)
+_BTextInput_::InsertText(const char* inText, int32 inLength,
+	int32 inOffset, const text_run_array* inRuns)
 {
-	char *buffer = NULL;
-
-	if (strpbrk(inText, "\r\n") && inLength <= 1024) {
-		buffer = (char *)malloc(inLength);
-
-		if (buffer) {
-			strcpy(buffer, inText);
-
-			for (int32 i = 0; i < inLength; i++)
-				if (buffer[i] == '\r' || buffer[i] == '\n')
-					buffer[i] = ' ';
-		}
+	// Filter all line breaks, note that inText is not terminated.
+	if (inLength == 1) {
+		if (*inText == '\n' || *inText == '\r')
+			BTextView::InsertText(" ", 1, inOffset, inRuns);
+		else
+			BTextView::InsertText(inText, 1, inOffset, inRuns);
+	} else {
+		BString filteredText(inText, inLength);
+		filteredText.ReplaceAll('\n', ' ');
+		filteredText.ReplaceAll('\r', ' ');
+		BTextView::InsertText(filteredText.String(), inLength, inOffset,
+			inRuns);
 	}
-
-	BTextView::InsertText(buffer ? buffer : inText, inLength, inOffset,
-		inRuns);
 
 	TextControl()->InvokeNotify(TextControl()->ModificationMessage(),
 		B_CONTROL_MODIFIED);
-
-	if (buffer)
-		free(buffer);
 }
 
 
@@ -228,10 +234,10 @@ _BTextInput_::DeleteText(int32 fromOffset, int32 toOffset)
 }
 
 
-BTextControl *
+BTextControl*
 _BTextInput_::TextControl()
 {
-	BTextControl *textControl = NULL;
+	BTextControl* textControl = NULL;
 
 	if (Parent())
 		textControl = dynamic_cast<BTextControl*>(Parent());
@@ -241,3 +247,7 @@ _BTextInput_::TextControl()
 
 	return textControl;
 }
+
+
+}	// namespace BPrivate
+

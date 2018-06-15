@@ -1,47 +1,36 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2004, Haiku
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		Clipboard.cpp
-//	Author:			Gabe Yoder (gyoder@stny.rr.com)
-//	Description:	BClipboard provides an interface to a system-wide clipboard
-//                  storage area.
-//------------------------------------------------------------------------------
+/*
+ * Copyright 2001-2009, Haiku Inc.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Gabe Yoder (gyoder@stny.rr.com)
+ */
 
-// Standard Includes -----------------------------------------------------------
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-// System Includes -------------------------------------------------------------
 #include <Clipboard.h>
+
 #include <Application.h>
 #include <RegistrarDefs.h>
 #include <RosterPrivate.h>
 
-// Globals ---------------------------------------------------------------------
-BClipboard *be_clipboard;
-	// ToDo: this has to be initialized!
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef RUN_WITHOUT_REGISTRAR
+	static BClipboard sClipboard(NULL);
+	BClipboard *be_clipboard = &sClipboard;
+#else
+	BClipboard *be_clipboard = NULL;
+#endif
+
+
+using namespace BPrivate;
 
 
 BClipboard::BClipboard(const char *name, bool transient)
+	:
+	fLock("clipboard")
 {
 	if (name != NULL)
 		fName = strdup(name);
@@ -50,7 +39,6 @@ BClipboard::BClipboard(const char *name, bool transient)
 
 	fData = new BMessage();
 	fCount = 0;
-	fSystemCount = 0;
 
 	BMessage message(B_REG_GET_CLIPBOARD_MESSENGER), reply;
 	if (BRoster::Private().SendTo(&message, &reply, false) == B_OK
@@ -79,17 +67,34 @@ BClipboard::Name() const
 }
 
 
+/*!	\brief Returns the (locally cached) number of commits to the clipboard.
+
+	The returned value is the number of successful Commit() invocations for
+	the clipboard represented by this object, either invoked on this object
+	or another (even from another application). This method returns a locally
+	cached value, which might already be obsolete. For an up-to-date value
+	SystemCount() can be invoked.
+
+	\return The number of commits to the clipboard.
+*/
 uint32
 BClipboard::LocalCount() const
 {
-	/* fSystemCount contains the total number of writes to the clipboard.
-	 * fCount contains the number of writes to the clipboard done by this
-	 * BClipboard.
-	 */
-	return fSystemCount;
+	return fCount;
 }
 
 
+/*!	\brief Returns the number of commits to the clipboard.
+
+	The returned value is the number of successful Commit() invocations for
+	the clipboard represented by this object, either invoked on this object
+	or another (even from another application). This method retrieves the
+	value directly from the system service managing the clipboards, so it is
+	more expensive, but more up-to-date than LocalCount(), which returns a
+	locally cached value.
+
+	\return The number of commits to the clipboard.
+*/
 uint32
 BClipboard::SystemCount() const
 {
@@ -107,6 +112,9 @@ BClipboard::SystemCount() const
 status_t
 BClipboard::StartWatching(BMessenger target)
 {
+	if (!target.IsValid())
+		return B_BAD_VALUE;
+
 	BMessage message(B_REG_CLIPBOARD_START_WATCHING), reply;
 	if (message.AddString("name", fName) == B_OK
 		&& message.AddMessenger("target", target) == B_OK
@@ -122,13 +130,16 @@ BClipboard::StartWatching(BMessenger target)
 status_t
 BClipboard::StopWatching(BMessenger target)
 {
+	if (!target.IsValid())
+		return B_BAD_VALUE;
+
 	BMessage message(B_REG_CLIPBOARD_STOP_WATCHING), reply;
 	if (message.AddString("name", fName) == B_OK
 		&& message.AddMessenger("target", target) == B_OK
 		&& fClipHandler.SendMessage(&message, &reply) == B_OK) {
 		int32 result;
-		reply.FindInt32("result", &result);
-		return result;
+		if (reply.FindInt32("result", &result) == B_OK)
+			return result;
 	}
 	return B_ERROR;
 }
@@ -140,10 +151,13 @@ BClipboard::Lock()
 	// Will this work correctly if clipboard is deleted while still waiting on
 	// fLock.Lock() ?
 	bool locked = fLock.Lock();
-	if (locked && DownloadFromSystem() != B_OK) {
+
+#ifndef RUN_WITHOUT_REGISTRAR
+	if (locked && _DownloadFromSystem() != B_OK) {
 		locked = false;
 		fLock.Unlock();
 	}
+#endif
 
 	return locked;
 }
@@ -166,7 +180,7 @@ BClipboard::IsLocked() const
 status_t
 BClipboard::Clear()
 {
-	if (!AssertLocked())
+	if (!_AssertLocked())
 		return B_NOT_ALLOWED;
 
 	return fData->MakeEmpty();
@@ -176,22 +190,44 @@ BClipboard::Clear()
 status_t
 BClipboard::Commit()
 {
-	if (!AssertLocked())
+	return Commit(false);
+}
+
+
+status_t
+BClipboard::Commit(bool failIfChanged)
+{
+	if (!_AssertLocked())
 		return B_NOT_ALLOWED;
 
-	return UploadToSystem();
+	status_t status = B_ERROR;
+	BMessage message(B_REG_UPLOAD_CLIPBOARD), reply;
+	if (message.AddString("name", fName) == B_OK
+		&& message.AddMessage("data", fData) == B_OK
+		&& message.AddMessenger("data source", be_app_messenger) == B_OK
+		&& message.AddInt32("count", fCount) == B_OK
+		&& message.AddBool("fail if changed", failIfChanged) == B_OK)
+		status = fClipHandler.SendMessage(&message, &reply);
+
+	if (status == B_OK) {
+		int32 count;
+		if (reply.FindInt32("count", &count) == B_OK)
+			fCount = count;
+	}
+
+	return status;
 }
 
 
 status_t
 BClipboard::Revert()
 {
-	if (!AssertLocked())
+	if (!_AssertLocked())
 		return B_NOT_ALLOWED;
-		
+
 	status_t status = fData->MakeEmpty();
 	if (status == B_OK)
-		status = DownloadFromSystem();
+		status = _DownloadFromSystem();
 
 	return status;
 }
@@ -207,15 +243,14 @@ BClipboard::DataSource() const
 BMessage *
 BClipboard::Data() const
 {
-	if (!AssertLocked())
+	if (!_AssertLocked())
 		return NULL;
 
     return fData;
 }
 
 
-//	#pragma mark -
-//	Private methods
+//	#pragma mark - Private methods
 
 
 BClipboard::BClipboard(const BClipboard &)
@@ -237,7 +272,7 @@ void BClipboard::_ReservedClipboard3() {}
 
 
 bool
-BClipboard::AssertLocked() const
+BClipboard::_AssertLocked() const
 {
 	// This function is for jumping to the debugger if not locked
 	if (!fLock.IsLocked()) {
@@ -249,7 +284,7 @@ BClipboard::AssertLocked() const
 
 
 status_t
-BClipboard::DownloadFromSystem(bool force)
+BClipboard::_DownloadFromSystem(bool force)
 {
 	// Apparently, the force paramater was used in some sort of
 	// optimization in R5. Currently, we ignore it.
@@ -258,25 +293,8 @@ BClipboard::DownloadFromSystem(bool force)
 		&& fClipHandler.SendMessage(&message, &reply) == B_OK
 		&& reply.FindMessage("data", fData) == B_OK
 		&& reply.FindMessenger("data source", &fDataSource) == B_OK
-		&& reply.FindInt32("count", (int32 *)&fSystemCount) == B_OK)
+		&& reply.FindInt32("count", (int32 *)&fCount) == B_OK)
 		return B_OK;
 
 	return B_ERROR;
 }
-
-
-status_t
-BClipboard::UploadToSystem()
-{
-	BMessage message(B_REG_UPLOAD_CLIPBOARD), reply;
-	if (message.AddString("name", fName) == B_OK
-		&& message.AddMessage("data", fData) == B_OK
-		&& message.AddMessenger("data source", be_app_messenger) == B_OK
-		&& fClipHandler.SendMessage(&message, &reply) == B_OK
-		&& reply.FindInt32("count", (int32 *)&fSystemCount) == B_OK) {
-		fCount++;
-		return B_OK;
-	}
-	return B_ERROR;
-}
-

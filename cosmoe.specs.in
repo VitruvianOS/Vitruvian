@@ -20,6 +20,10 @@
 -I@ABS_TOPDIR@/headers/private/kernel/
 -I@ABS_TOPDIR@/headers/private/shared/
 -I@ABS_TOPDIR@/headers/private/servers/app/
+-I@ABS_TOPDIR@/headers/private/locale/
+-I@ABS_TOPDIR@/headers/private/tracker/
+-I@ABS_TOPDIR@/headers/private/input/
+-I@ABS_TOPDIR@/headers/private/print/
 
 -I@ABS_TOPDIR@/headers/private/libroot/
 -I@ABS_TOPDIR@/headers/private/system/
@@ -39,6 +43,8 @@
 -I@ABS_TOPDIR@/src/libs/icon/style/
 -I@ABS_TOPDIR@/src/libs/icon/transformable/
 -I@ABS_TOPDIR@/src/libs/icon/transformer/
+
+-I@ABS_TOPDIR@/src/kits/interface/textview_support/
 
 -I@ABS_TOPDIR@/headers/libs/icon/
 -I@ABS_TOPDIR@/headers/libs/agg/

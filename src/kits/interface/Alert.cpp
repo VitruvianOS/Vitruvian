@@ -1,89 +1,83 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2002, OpenBeOS
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		Alert.cpp
-//	Author:			Erik Jaesler (erik@cgsoftware.com)
-//	Description:	BAlert displays a modal alert window.
-//------------------------------------------------------------------------------
+/*
+ * Copyright 2001-2008, Haiku.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Erik Jaesler (erik@cgsoftware.com)
+ *		Axel Dörfler, axeld@pinc-software.de
+ */
 
-// Standard Includes -----------------------------------------------------------
+//!	BAlert displays a modal alert window.
+
+#include <new>
+#include <stdio.h>
 #include <string.h>
 
-// System Includes -------------------------------------------------------------
+#include <Alert.h>
+#include <Autolock.h>
+#include <Beep.h>
+#include <Bitmap.h>
+#include <Button.h>
+#include <File.h>
+#include <FindDirectory.h>
+#include <Font.h>
+#include <IconUtils.h>
 #include <Invoker.h>
 #include <Looper.h>
 #include <Message.h>
 #include <MessageFilter.h>
-
-#include <Alert.h>
-#include <Bitmap.h>
-#include <Button.h>
+#include <Path.h>
+#include <Resources.h>
 #include <Screen.h>
 #include <TextView.h>
 #include <View.h>
 
-#include <File.h>
-#include <FindDirectory.h>
-#include <Path.h>
-#include <Resources.h>
-#include <Beep.h>
+#include <binary_compatibility/Interface.h>
 
-#include <Autolock.h>
 
-// Project Includes ------------------------------------------------------------
+//#define DEBUG_ALERT
+#ifdef DEBUG_ALERT
+#	define FTRACE(x) fprintf(x)
+#else
+#	define FTRACE(x) /* nothing */
+#endif
 
-// Local Includes --------------------------------------------------------------
-
-// Local Defines ---------------------------------------------------------------
-#define DEFAULT_RECT	BRect(100, 100, 100, 100)
+// Default size of the Alert window.
+#define DEFAULT_RECT	BRect(0, 0, 310, 75)
 #define max(LHS, RHS)	((LHS) > (RHS) ? (LHS) : (RHS))
 
-// Globals ---------------------------------------------------------------------
-const unsigned int kAlertButtonMsg	= 'ALTB';
-const int kSemTimeOut				= 50000;
+static const unsigned int kAlertButtonMsg = 'ALTB';
+static const int kSemTimeOut = 50000;
 
-const int kButtonBottomOffset		=   9;
-const int kDefButtonBottomOffset	=   6;
-const int kButtonRightOffset		=   6;
-const int kButtonSpaceOffset		=   6;
-const int kButtonOffsetSpaceOffset	=  26;
-const int kButtonLeftOffset			=  62;
-const int kButtonUsualWidth			=  75;
+static const int kLeftOffset = 10;
+static const int kTopOffset = 6;
+static const int kBottomOffset = 8;
+static const int kRightOffset = 8;
 
-const int kWindowIconOffset			=  27;
-const int kWindowMinWidth			= 310;
-const int kWindowMinOffset			=  12;
-const int kWindowOffsetMinWidth		= 335;
+static const int kButtonSpacing = 6;
+static const int kButtonOffsetSpacing = 62;
+static const int kButtonUsualWidth = 75;
 
-const int kIconStripeWidth			=  30;
+static const int kWindowIconOffset = 27;
+static const int kWindowMinOffset = 12;
+static const int kWindowMinWidth = 310;
+static const int kWindowOffsetMinWidth = 335;
 
-const int kTextLeftOffset			=  10;
-const int kTextIconOffset			=  kWindowIconOffset + kIconStripeWidth - 2;
-const int kTextTopOffset			=   6;
-const int kTextRightOffset			=  10;
-const int kTextBottomOffset			=  45;
+static const int kIconStripeWidth = 30;
 
-//------------------------------------------------------------------------------
-class TAlertView : public BView
+static const int kTextButtonOffset = 10;
+
+static inline int32
+icon_layout_scale()
 {
+#ifdef __HAIKU__
+	return max_c(1, ((int32)be_plain_font->Size() + 15) / 16);
+#endif
+	return 1;
+}
+
+
+class TAlertView : public BView {
 	public:
 		TAlertView(BRect frame);
 		TAlertView(BMessage* archive);
@@ -104,13 +98,8 @@ class TAlertView : public BView
 	private:
 		BBitmap*	fIconBitmap;
 };
-//------------------------------------------------------------------------------
-// I'm making a guess based on the name and TextEntryAlert's implementation that
-// this is a BMessageFilter.  I'm not sure, but I think I actually prefer how
-// TextEntryAlert does it, but there are clearly no message filtering functions
-// on BAlert so here we go.
-class _BAlertFilter_ : public BMessageFilter
-{
+
+class _BAlertFilter_ : public BMessageFilter {
 	public:
 		_BAlertFilter_(BAlert* Alert);
 		~_BAlertFilter_();
@@ -120,677 +109,701 @@ class _BAlertFilter_ : public BMessageFilter
 	private:
 		BAlert*	fAlert;
 };
-//------------------------------------------------------------------------------
 
 
-//------------------------------------------------------------------------------
+//	#pragma mark - BAlert
+
+
 BAlert::BAlert(const char *title, const char *text, const char *button1,
-			   const char *button2, const char *button3, button_width width,
-			   alert_type type)
-	:	BWindow(DEFAULT_RECT, title, B_MODAL_WINDOW,
-				B_NOT_CLOSABLE | B_NOT_RESIZABLE)
+		const char *button2, const char *button3, button_width width,
+		alert_type type)
+	: BWindow(DEFAULT_RECT, title, B_MODAL_WINDOW,
+		B_NOT_CLOSABLE | B_NOT_RESIZABLE | B_ASYNCHRONOUS_CONTROLS)
 {
-	InitObject(text, button1, button2, button3, width, B_EVEN_SPACING, type);
+	_InitObject(text, button1, button2, button3, width, B_EVEN_SPACING, type);
 }
-//------------------------------------------------------------------------------
+
+
 BAlert::BAlert(const char *title, const char *text, const char *button1,
-			   const char *button2, const char *button3, button_width width,
-			   button_spacing spacing, alert_type type)
-	:	BWindow(DEFAULT_RECT, title, B_MODAL_WINDOW,
-				B_NOT_CLOSABLE | B_NOT_RESIZABLE)
+		const char *button2, const char *button3, button_width width,
+		button_spacing spacing, alert_type type)
+	: BWindow(DEFAULT_RECT, title, B_MODAL_WINDOW,
+		B_NOT_CLOSABLE | B_NOT_RESIZABLE | B_ASYNCHRONOUS_CONTROLS)
 {
-	InitObject(text, button1, button2, button3, width, spacing, type);
+	_InitObject(text, button1, button2, button3, width, spacing, type);
 }
-//------------------------------------------------------------------------------
+
+
 BAlert::~BAlert()
 {
 	// Probably not necessary, but it makes me feel better.
 	if (fAlertSem >= B_OK)
-	{
 		delete_sem(fAlertSem);
-	}
 }
-//------------------------------------------------------------------------------
+
+
 BAlert::BAlert(BMessage* data)
-	:	BWindow(data)
+	: BWindow(data)
 {
-	BAutolock Autolock(this);
-	if (Autolock.IsLocked())
-	{
-		fInvoker = NULL;
-		fAlertSem = -1;
-		fAlertVal = -1;
+	fInvoker = NULL;
+	fAlertSem = -1;
+	fAlertValue = -1;
 
-		fTextView = (BTextView*)FindView("_tv_");
+	fTextView = (BTextView*)FindView("_tv_");
 
-		fButtons[0] = (BButton*)FindView("_b0_");
-		fButtons[1] = (BButton*)FindView("_b1_");
-		fButtons[2] = (BButton*)FindView("_b2_");
+	fButtons[0] = (BButton*)FindView("_b0_");
+	fButtons[1] = (BButton*)FindView("_b1_");
+	fButtons[2] = (BButton*)FindView("_b2_");
 
-		if (fButtons[2])
-			SetDefaultButton(fButtons[2]);
-		else if (fButtons[1])
-			SetDefaultButton(fButtons[1]);
-		else if (fButtons[0])
-			SetDefaultButton(fButtons[0]);
+	if (fButtons[2])
+		SetDefaultButton(fButtons[2]);
+	else if (fButtons[1])
+		SetDefaultButton(fButtons[1]);
+	else if (fButtons[0])
+		SetDefaultButton(fButtons[0]);
 
-		TAlertView* Master = (TAlertView*)FindView("_master_");
-		if (Master)
-		{
-			Master->SetBitmap(InitIcon());
-		}
+	TAlertView* view = (TAlertView*)FindView("_master_");
+	if (view)
+		view->SetBitmap(_InitIcon());
 
-		// Get keys
-		char key;
-		for (int32 i = 0; i < 3; ++i)
-		{
-			if (data->FindInt8("_but_key", i, (int8*)&key) == B_OK)
-				fKeys[i] = key;
-		}
-
-		int32 temp;
-		// Get alert type
-		if (data->FindInt32("_atype", &temp) == B_OK)
-			fMsgType = (alert_type)temp;
-
-		// Get button width
-		if (data->FindInt32("_but_width", &temp) == B_OK)
-			fButtonWidth = (button_width)temp;
-
-		AddCommonFilter(new _BAlertFilter_(this));
+	// Get keys
+	char key;
+	for (int32 i = 0; i < 3; ++i) {
+		if (data->FindInt8("_but_key", i, (int8*)&key) == B_OK)
+			fKeys[i] = key;
 	}
+
+	int32 temp;
+	// Get alert type
+	if (data->FindInt32("_atype", &temp) == B_OK)
+		fMsgType = (alert_type)temp;
+
+	// Get button width
+	if (data->FindInt32("_but_width", &temp) == B_OK)
+		fButtonWidth = (button_width)temp;
+
+	AddCommonFilter(new(std::nothrow) _BAlertFilter_(this));
 }
-//------------------------------------------------------------------------------
-BArchivable* BAlert::Instantiate(BMessage* data)
+
+
+BArchivable*
+BAlert::Instantiate(BMessage* data)
 {
 	if (!validate_instantiation(data, "BAlert"))
-	{
 		return NULL;
-	}
 
-	return new BAlert(data);
+	return new(std::nothrow) BAlert(data);
 }
-//------------------------------------------------------------------------------
-status_t BAlert::Archive(BMessage* data, bool deep) const
+
+
+status_t
+BAlert::Archive(BMessage* data, bool deep) const
 {
-	BWindow::Archive(data, deep);
+	status_t ret = BWindow::Archive(data, deep);
 
 	// Stow the text
-	data->AddString("_text", fTextView->Text());
+	if (ret == B_OK)
+		ret = data->AddString("_text", fTextView->Text());
 
 	// Stow the alert type
-	data->AddInt32("_atype", fMsgType);
+	if (ret == B_OK)
+		ret = data->AddInt32("_atype", fMsgType);
 
 	// Stow the button width
-	data->AddInt32("_but_width", fButtonWidth);
+	if (ret == B_OK)
+		ret = data->AddInt32("_but_width", fButtonWidth);
 
 	// Stow the shortcut keys
-	if (fKeys[0] || fKeys[1] || fKeys[2])
-	{
+	if (fKeys[0] || fKeys[1] || fKeys[2]) {
 		// If we have any to save, we must save something for everyone so it
 		// doesn't get confusing on the unarchive.
-		data->AddInt8("_but_key", fKeys[0]);
-		data->AddInt8("_but_key", fKeys[1]);
-		data->AddInt8("_but_key", fKeys[2]);
+		if (ret == B_OK)
+			ret = data->AddInt8("_but_key", fKeys[0]);
+		if (ret == B_OK)
+			ret = data->AddInt8("_but_key", fKeys[1]);
+		if (ret == B_OK)
+			ret = data->AddInt8("_but_key", fKeys[2]);
 	}
 
-	return B_OK;
+	return ret;
 }
-//------------------------------------------------------------------------------
-void BAlert::SetShortcut(int32 index, char key)
+
+
+void
+BAlert::SetShortcut(int32 index, char key)
 {
 	if (index >= 0 && index < 3)
 		fKeys[index] = key;
 }
-//------------------------------------------------------------------------------
-char BAlert::Shortcut(int32 index) const
+
+
+char
+BAlert::Shortcut(int32 index) const
 {
 	if (index >= 0 && index < 3)
 		return fKeys[index];
 
 	return 0;
 }
-//------------------------------------------------------------------------------
-int32 BAlert::Go()
+
+
+int32
+BAlert::Go()
 {
-	system_beep(NULL);	// forces the "beep" event
-	
 	fAlertSem = create_sem(0, "AlertSem");
-	if (fAlertSem < B_OK)
-	{
+	if (fAlertSem < B_OK) {
 		Quit();
 		return -1;
 	}
 
 	// Get the originating window, if it exists
-	BWindow* Window =
+	BWindow* window =
 		dynamic_cast<BWindow*>(BLooper::LooperForThread(find_thread(NULL)));
 
 	Show();
 
 	// Heavily modified from TextEntryAlert code; the original didn't let the
 	// blocked window ever draw.
-	if (Window)
-	{
+	if (window) {
 		status_t err;
-		for (;;)
-		{
-			do
-			{
+		for (;;) {
+			do {
 				err = acquire_sem_etc(fAlertSem, 1, B_RELATIVE_TIMEOUT,
 									  kSemTimeOut);
 				// We've (probably) had our time slice taken away from us
 			} while (err == B_INTERRUPTED);
-			if (err == B_BAD_SEM_ID)
-			{
+
+			if (err == B_BAD_SEM_ID) {
 				// Semaphore was finally nuked in MessageReceived
 				break;
 			}
-			Window->UpdateIfNeeded();
+			window->UpdateIfNeeded();
 		}
-	}
-	else
-	{
+	} else {
 		// No window to update, so just hang out until we're done.
-		while (acquire_sem(fAlertSem) == B_INTERRUPTED)
-		{
-			;
+		while (acquire_sem(fAlertSem) == B_INTERRUPTED) {
 		}
 	}
 
 	// Have to cache the value since we delete on Quit()
-	int32 value = fAlertVal;
+	int32 value = fAlertValue;
 	if (Lock())
-	{
 		Quit();
-	}
 
 	return value;
 }
-//------------------------------------------------------------------------------
-status_t BAlert::Go(BInvoker* invoker)
+
+
+status_t
+BAlert::Go(BInvoker* invoker)
 {
-	// TODO: Add sound?
-	// It would be cool if we triggered a system sound depending on the type of
-	// alert.
 	fInvoker = invoker;
 	Show();
 	return B_OK;
 }
-//------------------------------------------------------------------------------
-void BAlert::MessageReceived(BMessage* msg)
-{
-	if (msg->what == kAlertButtonMsg)
-	{
-		int32 which;
-		if (msg->FindInt32("which", &which) == B_OK)
-		{
-			if (fAlertSem < B_OK)
-			{
-				// Semaphore hasn't been created; we're running asynchronous
-				if (fInvoker)
-				{
-					BMessage* out = fInvoker->Message();
-					if (out && (out->AddInt32("which", which) == B_OK ||
-						out->ReplaceInt32("which", which) == B_OK))
-					{
-						fInvoker->Invoke();
-					}
-				}
-			}
-			else
-			{
-				// Created semaphore means were running synchronously
-				fAlertVal = which;
 
-				// TextAlertVar does release_sem() below, and then sets the
-				// member var.  That doesn't make much sense to me, since we
-				// want to be able to clean up at some point.  Better to just
-				// nuke the semaphore now; we don't need it any more and this
-				// lets synchronous Go() continue just as well.
-				delete_sem(fAlertSem);
-				fAlertSem = -1;
+
+void
+BAlert::MessageReceived(BMessage* msg)
+{
+	if (msg->what != kAlertButtonMsg)
+		return BWindow::MessageReceived(msg);
+
+	int32 which;
+	if (msg->FindInt32("which", &which) == B_OK) {
+		if (fAlertSem < B_OK) {
+			// Semaphore hasn't been created; we're running asynchronous
+			if (fInvoker) {
+				BMessage* out = fInvoker->Message();
+				if (out && (out->ReplaceInt32("which", which) == B_OK
+							|| out->AddInt32("which", which) == B_OK))
+					fInvoker->Invoke();
 			}
+			PostMessage(B_QUIT_REQUESTED);
+		} else {
+			// Created semaphore means were running synchronously
+			fAlertValue = which;
+
+			// TextAlertVar does release_sem() below, and then sets the
+			// member var.  That doesn't make much sense to me, since we
+			// want to be able to clean up at some point.  Better to just
+			// nuke the semaphore now; we don't need it any more and this
+			// lets synchronous Go() continue just as well.
+			delete_sem(fAlertSem);
+			fAlertSem = -1;
 		}
 	}
 }
-//------------------------------------------------------------------------------
-void BAlert::FrameResized(float new_width, float new_height)
-{
-	// DW: BAlerts are, by nature, not resizable. Do nothing.
-	
-	BWindow::FrameResized(new_width, new_height);
-}
-//------------------------------------------------------------------------------
-BButton* BAlert::ButtonAt(int32 index) const
-{
-	BButton* Button = NULL;
-	if (index >= 0 && index < 3)
-		Button = fButtons[index];
 
-	return Button;
+
+void
+BAlert::FrameResized(float newWidth, float newHeight)
+{
+	BWindow::FrameResized(newWidth, newHeight);
 }
-//------------------------------------------------------------------------------
-BTextView* BAlert::TextView() const
+
+
+BButton*
+BAlert::ButtonAt(int32 index) const
+{
+	if (index >= 0 && index < 3)
+		return fButtons[index];
+
+	return NULL;
+}
+
+
+BTextView*
+BAlert::TextView() const
 {
 	return fTextView;
 }
-//------------------------------------------------------------------------------
-BHandler* BAlert::ResolveSpecifier(BMessage* msg, int32 index,
-								   BMessage* specifier, int32 form,
-								   const char* property)
+
+
+BHandler*
+BAlert::ResolveSpecifier(BMessage* msg, int32 index,
+	BMessage* specifier, int32 form, const char* property)
 {
-	// DW: Undocumented. A disassembly reveals that it calls the BWindow version
 	return BWindow::ResolveSpecifier(msg, index, specifier, form, property);
 }
-//------------------------------------------------------------------------------
-status_t BAlert::GetSupportedSuites(BMessage* data)
+
+
+status_t
+BAlert::GetSupportedSuites(BMessage* data)
 {
-	// DW: Undocumented, but testing reveals that it calls the BWindow version
 	return BWindow::GetSupportedSuites(data);
 }
-//------------------------------------------------------------------------------
-void BAlert::DispatchMessage(BMessage* msg, BHandler* handler)
+
+
+void
+BAlert::DispatchMessage(BMessage* msg, BHandler* handler)
 {
-	// DW: Undocumented. A disassembly reveals that it calls the BWindow version
 	BWindow::DispatchMessage(msg, handler);
 }
-//------------------------------------------------------------------------------
-void BAlert::Quit()
+
+
+void
+BAlert::Quit()
 {
-	// DW: Undocumented. A disassembly reveals that it calls the BWindow version
 	BWindow::Quit();
 }
-//------------------------------------------------------------------------------
-bool BAlert::QuitRequested()
+
+
+bool
+BAlert::QuitRequested()
 {
-	// DW: Undocumented. A disassembly reveals that it calls the BWindow version
 	return BWindow::QuitRequested();
 }
-//------------------------------------------------------------------------------
-BPoint BAlert::AlertPosition(float width, float height)
+
+
+BPoint
+BAlert::AlertPosition(float width, float height)
 {
 	BPoint result(100, 100);
 
-	BWindow* Window =
+	BWindow* window =
 		dynamic_cast<BWindow*>(BLooper::LooperForThread(find_thread(NULL)));
 
-	BScreen Screen(Window);
- 	BRect screenRect(0, 0, 640, 480);
- 	if (Screen.IsValid())
- 		screenRect = Screen.Frame();
+	BScreen screen(window);
+ 	BRect screenFrame(0, 0, 640, 480);
+ 	if (screen.IsValid())
+ 		screenFrame = screen.Frame();
 
 	// Horizontally, we're smack in the middle
-	result.x = (screenRect.Width() / 2.0) - (width / 2.0);
+	result.x = screenFrame.left + (screenFrame.Width() / 2.0) - (width / 2.0);
 
 	// This is probably sooo wrong, but it looks right on 1024 x 768
-	result.y = (screenRect.Height() / 4.0) - ceil(height / 3.0);
+	result.y = screenFrame.top + (screenFrame.Height() / 4.0) - ceil(height / 3.0);
 
 	return result;
 }
-//------------------------------------------------------------------------------
-status_t BAlert::Perform(perform_code d, void* arg)
+
+
+status_t
+BAlert::Perform(perform_code code, void* _data)
 {
-	return BWindow::Perform(d, arg);
+	switch (code) {
+		case PERFORM_CODE_SET_LAYOUT:
+		{
+			perform_data_set_layout* data = (perform_data_set_layout*)_data;
+			BAlert::SetLayout(data->layout);
+			return B_OK;
 }
-//------------------------------------------------------------------------------
-void BAlert::_ReservedAlert1()
-{
-	;
-}
-//------------------------------------------------------------------------------
-void BAlert::_ReservedAlert2()
-{
-	;
-}
-//------------------------------------------------------------------------------
-void BAlert::_ReservedAlert3()
-{
-	;
-}
-//------------------------------------------------------------------------------
-void BAlert::InitObject(const char* text, const char* button0,
-						const char* button1, const char* button2,
-						button_width width, button_spacing spacing,
-						alert_type type)
-{
-	BAutolock Autolock(this);
-	if (Autolock.IsLocked())
-	{
-		fInvoker = NULL;
-		fAlertSem = -1;
-		fAlertVal = -1;
-		fButtons[0] = fButtons[1] = fButtons[2] = NULL;
-		fTextView = NULL;
-		fKeys[0] = fKeys[1] = fKeys[2] = 0;
-		fMsgType = type;
-		fButtonWidth = width;
-	
-		// Set up the "_master_" view
-		TAlertView* MasterView = new TAlertView(Bounds());
-		MasterView->SetBitmap(InitIcon());
-	
-		// Set up the buttons
-		int buttonCount = 0;
-	
-		// Have to have at least one button
-		if (button0 == NULL)
-		{
-			debugger("BAlert's must have at least one button.");
-			button0 = "";
-		}
-	
-		BMessage ProtoMsg(kAlertButtonMsg);
-		ProtoMsg.AddInt32("which", 0);
-		fButtons[0] = new BButton(BRect(0, 0, 0, 0), "_b0_", button0,
-								  new BMessage(ProtoMsg),
-								  B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM);
-		++buttonCount;
-	
-		if (button1)
-		{
-			ProtoMsg.ReplaceInt32("which", 1);
-			fButtons[buttonCount] = new BButton(BRect(0, 0, 0, 0), "_b1_", button1,
-												new BMessage(ProtoMsg),
-												B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM);
-			++buttonCount;
-		}
-	
-		if (button2)
-		{
-			ProtoMsg.ReplaceInt32("which", 2);
-			fButtons[buttonCount] = new BButton(BRect(0, 0, 0, 0), "_b2_", button2,
-												new BMessage(ProtoMsg),
-												B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM);
-			++buttonCount;
-		}
-	
-		SetDefaultButton(fButtons[buttonCount - 1]);
-
-		float buttonWidth = 0;
-		float buttonHeight = 0;
-		for (int i = 0; i < buttonCount; ++i)
-		{
-			float temp;
-			fButtons[i]->GetPreferredSize(&temp, &buttonHeight);
-			buttonWidth = max(buttonWidth, temp);
-		}
-	
-		// Add first, because the buttons will ResizeToPreferred()
-		// in AttachedToWindow()
-		for (int i = 0; i < buttonCount; ++i)
-		{
-			MasterView->AddChild(fButtons[i]);
-		}
-
-		for (int i = buttonCount - 1; i >= 0; --i)
-		{
-			switch (fButtonWidth)
-			{
-				case B_WIDTH_FROM_WIDEST:
-					fButtons[i]->ResizeTo(buttonWidth, buttonHeight);
-					break;
-					
-				case B_WIDTH_FROM_LABEL:
-					fButtons[i]->ResizeToPreferred();
-					break;
-	
-				default:	// B_WIDTH_AS_USUAL
-					fButtons[i]->GetPreferredSize(&buttonWidth, &buttonHeight);
-					buttonWidth = max(buttonWidth, kButtonUsualWidth);
-					fButtons[i]->ResizeTo(buttonWidth, buttonHeight);
-					break;
-			}
-
-			float buttonX;
-			float buttonY;
-			float temp;
-
-			fButtons[i]->GetPreferredSize(&temp, &buttonHeight);
-			buttonY = Bounds().bottom - buttonHeight;
-
-			if (i == buttonCount - 1)	// the right-most button
-			{
-				buttonX = Bounds().right - fButtons[i]->Frame().Width() -
-						  kButtonRightOffset;
-				buttonY -= kDefButtonBottomOffset;
-			}
-			else
-			{
-				buttonX = fButtons[i + 1]->Frame().left -
-						  fButtons[i]->Frame().Width() -
-						  kButtonSpaceOffset;
-	
-				if (i == 0)
-				{
-					if (spacing == B_OFFSET_SPACING)
-					{
-						buttonX -= kButtonOffsetSpaceOffset;
-					}
-					else if (buttonCount == 3)
-					{
-						buttonX -= 3;
-					}
-				}
-				buttonY -= kButtonBottomOffset;
-			}
-	
-			fButtons[i]->MoveTo(buttonX, buttonY);
-		}
-	
-	
-		// Resize the window, if necessary
-		float totalWidth = kButtonRightOffset;
-		totalWidth += fButtons[buttonCount - 1]->Frame().right -
-					  fButtons[0]->Frame().left;
-		if (MasterView->Bitmap())
-		{
-			totalWidth += kIconStripeWidth + kWindowIconOffset;
-		}
-		else
-		{
-			totalWidth += kWindowMinOffset;
-		}
-
-		if (spacing == B_OFFSET_SPACING)
-		{
-			totalWidth = max(kWindowOffsetMinWidth, totalWidth);
-		}
-		else
-		{
-			totalWidth += 5;
-			totalWidth = max(kWindowMinWidth, totalWidth);
-		}
-		ResizeTo(totalWidth, Bounds().Height());
-	
-		// Set up the text view
-		BRect TextViewRect(kTextLeftOffset, kTextTopOffset,
-						   Bounds().right - kTextRightOffset,
-						   Bounds().bottom - kTextBottomOffset);
-		if (MasterView->Bitmap())
-		{
-			TextViewRect.left = kTextIconOffset;
-		}
-	
-		fTextView = new BTextView(TextViewRect, "_tv_",
-								  TextViewRect,
-								  B_FOLLOW_LEFT | B_FOLLOW_TOP, B_WILL_DRAW);
- 		AddChild(MasterView);
- 		MasterView->AddChild(fTextView);
-		
-		fTextView->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-		fTextView->SetText(text, strlen(text));
-		fTextView->MakeEditable(false);
-		fTextView->MakeSelectable(false);
-		fTextView->SetWordWrap(true);
-	
-		// Now resize the window vertically so that all the text is visible
-		float textHeight = fTextView->TextHeight(0, fTextView->CountLines());
-		TextViewRect.OffsetTo(0, 0);
-		textHeight -= TextViewRect.Height();
-		ResizeBy(0, textHeight);
-		fTextView->ResizeBy(0, textHeight);
-		TextViewRect.bottom += textHeight;
-		fTextView->SetTextRect(TextViewRect);
-	
-		AddCommonFilter(new _BAlertFilter_(this));
-
-		MoveTo(AlertPosition(Frame().Width(), Frame().Height()));
 	}
+
+	return BWindow::Perform(code, _data);
 }
-//------------------------------------------------------------------------------
-BBitmap* BAlert::InitIcon()
+
+
+void BAlert::_ReservedAlert1() {}
+void BAlert::_ReservedAlert2() {}
+void BAlert::_ReservedAlert3() {}
+
+
+void
+BAlert::_InitObject(const char* text, const char* button0, const char* button1,
+	const char* button2, button_width buttonWidth, button_spacing spacing,
+	alert_type type)
 {
+	fInvoker = NULL;
+	fAlertSem = -1;
+	fAlertValue = -1;
+	fButtons[0] = fButtons[1] = fButtons[2] = NULL;
+	fTextView = NULL;
+	fKeys[0] = fKeys[1] = fKeys[2] = 0;
+	fMsgType = type;
+	fButtonWidth = buttonWidth;
+
+	// Set up the "_master_" view
+	TAlertView* view = new(std::nothrow) TAlertView(Bounds());
+	if (view == NULL)
+		return;
+
+	AddChild(view);
+	view->SetBitmap(_InitIcon());
+
+	// Must have at least one button
+	if (button0 == NULL) {
+		debugger("BAlerts must have at least one button.");
+		button0 = "";
+	}
+
+	// Set up the buttons
+
+	int32 buttonCount = 1;
+	view->AddChild(fButtons[0] = _CreateButton(0, button0));
+
+	if (button1 != NULL) {
+		view->AddChild(fButtons[1] = _CreateButton(1, button1));
+		buttonCount++;
+	}
+
+	if (button2 != NULL) {
+		view->AddChild(fButtons[2] = _CreateButton(2, button2));
+		buttonCount++;
+	}
+
+	// Find the widest button only if the widest value needs to be known.
+
+	if (fButtonWidth == B_WIDTH_FROM_WIDEST) {
+		float maxWidth = 0;
+		for (int i = 0; i < buttonCount; i++) {
+			float width = fButtons[i]->Bounds().Width();
+			if (width > maxWidth)
+				maxWidth = width;
+		}
+
+		// resize buttons
+		for (int i = 0; i < buttonCount; i++) {
+			fButtons[i]->ResizeTo(maxWidth, fButtons[i]->Bounds().Height());
+		}
+	}
+
+	float defaultButtonFrameWidth = -fButtons[buttonCount - 1]->Bounds().Width() / 2.0f;
+	SetDefaultButton(fButtons[buttonCount - 1]);
+	defaultButtonFrameWidth += fButtons[buttonCount - 1]->Bounds().Width() / 2.0f;
+
+	// Layout buttons
+
+	float fontFactor = be_plain_font->Size() / 11.0f;
+
+	for (int i = buttonCount - 1; i >= 0; --i) {
+		float x = -fButtons[i]->Bounds().Width();
+		if (i + 1 == buttonCount)
+			x += Bounds().right - kRightOffset + defaultButtonFrameWidth;
+		else
+			x += fButtons[i + 1]->Frame().left - kButtonSpacing;
+
+		if (buttonCount > 1 && i == 0 && spacing == B_OFFSET_SPACING)
+			x -= kButtonOffsetSpacing * fontFactor;
+
+		fButtons[i]->MoveTo(x, fButtons[i]->Frame().top);
+	}
+
+	// Adjust the window's width, if necessary
+
+	int32 iconLayoutScale = icon_layout_scale();
+	float totalWidth = kRightOffset + fButtons[buttonCount - 1]->Frame().right
+		- defaultButtonFrameWidth - fButtons[0]->Frame().left;
+	if (view->Bitmap()) {
+		totalWidth += (kIconStripeWidth + kWindowIconOffset) * iconLayoutScale;
+	} else
+		totalWidth += kWindowMinOffset;
+
+	float width = (spacing == B_OFFSET_SPACING
+		? kWindowOffsetMinWidth : kWindowMinWidth) * fontFactor;
+
+	ResizeTo(max_c(totalWidth, width), Bounds().Height());
+
+	// Set up the text view
+
+	BRect textViewRect(kLeftOffset, kTopOffset,
+		Bounds().right - kRightOffset,
+		fButtons[0]->Frame().top - kTextButtonOffset);
+	if (view->Bitmap())
+		textViewRect.left = (kWindowIconOffset
+			+ kIconStripeWidth) * iconLayoutScale - 2;
+
+	fTextView = new(std::nothrow) BTextView(textViewRect, "_tv_",
+		textViewRect.OffsetByCopy(B_ORIGIN),
+		B_FOLLOW_LEFT | B_FOLLOW_TOP, B_WILL_DRAW);
+	if (fTextView == NULL)
+		return;
+
+	fTextView->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+	rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
+	fTextView->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
+	fTextView->SetText(text, strlen(text));
+	fTextView->MakeEditable(false);
+	fTextView->MakeSelectable(false);
+	fTextView->SetWordWrap(true);
+	view->AddChild(fTextView);
+
+	// Now resize the TextView vertically so that all the text is visible
+	float textHeight = fTextView->TextHeight(0, fTextView->CountLines());
+	textViewRect.OffsetTo(0, 0);
+	textHeight -= textViewRect.Height();
+	ResizeBy(0, textHeight);
+	fTextView->ResizeBy(0, textHeight);
+	textViewRect.bottom += textHeight;
+	fTextView->SetTextRect(textViewRect);
+
+	AddCommonFilter(new(std::nothrow) _BAlertFilter_(this));
+
+	MoveTo(AlertPosition(Frame().Width(), Frame().Height()));
+}
+
+
+BBitmap*
+BAlert::_InitIcon()
+{
+	// Save the desired alert type and set it to "empty" until
+	// loading the icon was successful
+	alert_type alertType = fMsgType;
+	fMsgType = B_EMPTY_ALERT;
+
 	// After a bit of a search, I found the icons in app_server. =P
-	BBitmap* Icon = NULL;
-	BPath Path;
-	if (find_directory(B_BEOS_SERVERS_DIRECTORY, &Path) == B_OK)
-	{
-		Path.Append("app_server");
-		BFile File;
-		if (File.SetTo(Path.Path(), B_READ_ONLY) == B_OK)
-		{
-			BResources Resources;
-			if (Resources.SetTo(&File) == B_OK)
-			{
-				// Which icon are we trying to load?
-				const char* iconName = "";	// Don't want any seg faults
-				switch (fMsgType)
-				{
-					case B_INFO_ALERT:
-						iconName = "info";
-						break;
-
-					case B_IDEA_ALERT:
-						iconName = "idea";
-						break;
-
-					case B_WARNING_ALERT:
-						iconName = "warn";
-						break;
-
-					case B_STOP_ALERT:
-						iconName = "stop";
-						break;
-
-					default:
-						// Alert type is either invalid or B_EMPTY_ALERT;
-						// either way, we're not going to load an icon
-						return Icon;
-				}
-
-				// Load the raw icon data
-				size_t size;
-				const void* rawIcon =
-					Resources.LoadResource('ICON', iconName, &size);
-
-				if (rawIcon)
-				{
-					// Now build the bitmap
-					Icon = new BBitmap(BRect(0, 0, 31, 31), B_CMAP8);
-					Icon->SetBits(rawIcon, size, 0, B_CMAP8);
-				}
-			}
-		}
+	BBitmap* icon = NULL;
+	BPath path;
+	status_t status = find_directory(B_BEOS_SERVERS_DIRECTORY, &path);
+	if (status < B_OK) {
+		FTRACE((stderr, "BAlert::_InitIcon() - find_directory failed: %s\n",
+			strerror(status)));
+		return NULL;
 	}
 
-	if (!Icon)
-	{
-		// If there's no icon, it's an empty alert indeed.
-		fMsgType = B_EMPTY_ALERT;
+	path.Append("app_server");
+	BFile file;
+	status = file.SetTo(path.Path(), B_READ_ONLY);
+	if (status < B_OK) {
+		FTRACE((stderr, "BAlert::_InitIcon() - BFile init failed: %s\n",
+			strerror(status)));
+		return NULL;
 	}
 
-	return Icon;
+	BResources resources;
+	status = resources.SetTo(&file);
+	if (status < B_OK) {
+		FTRACE((stderr, "BAlert::_InitIcon() - BResources init failed: %s\n",
+			strerror(status)));
+		return NULL;
+	}
+
+	// Which icon are we trying to load?
+	const char* iconName = "";	// Don't want any seg faults
+	switch (alertType) {
+		case B_INFO_ALERT:
+			iconName = "info";
+			break;
+		case B_IDEA_ALERT:
+			iconName = "idea";
+			break;
+		case B_WARNING_ALERT:
+			iconName = "warn";
+			break;
+		case B_STOP_ALERT:
+			iconName = "stop";
+			break;
+
+		default:
+			// Alert type is either invalid or B_EMPTY_ALERT;
+			// either way, we're not going to load an icon
+			return NULL;
+	}
+
+	int32 iconSize = 32 * icon_layout_scale();
+	// Allocate the icon bitmap
+	icon = new(std::nothrow) BBitmap(BRect(0, 0, iconSize - 1, iconSize - 1),
+		0, B_RGBA32);
+	if (icon == NULL || icon->InitCheck() < B_OK) {
+		FTRACE((stderr, "BAlert::_InitIcon() - No memory for bitmap\n"));
+		delete icon;
+		return NULL;
+	}
+
+	// Load the raw icon data
+	size_t size = 0;
+	const uint8* rawIcon;
+
+#ifdef __HAIKU__
+	// Try to load vector icon
+	rawIcon = (const uint8*)resources.LoadResource(B_VECTOR_ICON_TYPE,
+		iconName, &size);
+	if (rawIcon != NULL
+		&& BIconUtils::GetVectorIcon(rawIcon, size, icon) == B_OK) {
+		// We have an icon, restore the saved alert type
+		fMsgType = alertType;
+		return icon;
+	}
+#endif
+
+	// Fall back to bitmap icon
+	rawIcon = (const uint8*)resources.LoadResource(B_LARGE_ICON_TYPE,
+		iconName, &size);
+	if (rawIcon == NULL) {
+		FTRACE((stderr, "BAlert::_InitIcon() - Icon resource not found\n"));
+		delete icon;
+		return NULL;
+	}
+
+	// Handle color space conversion
+#ifdef __HAIKU__
+	if (icon->ColorSpace() != B_CMAP8) {
+		BIconUtils::ConvertFromCMAP8(rawIcon, iconSize, iconSize,
+			iconSize, icon);
+	}
+#else
+	icon->SetBits(rawIcon, iconSize, 0, B_CMAP8);
+#endif
+
+	// We have an icon, restore the saved alert type
+	fMsgType = alertType;
+
+	return icon;
 }
-//------------------------------------------------------------------------------
 
 
-//------------------------------------------------------------------------------
-//	#pragma mark -
-//	#pragma mark TAlertView
-//	#pragma mark -
-//------------------------------------------------------------------------------
+BButton*
+BAlert::_CreateButton(int32 which, const char* label)
+{
+	BMessage* message = new BMessage(kAlertButtonMsg);
+	if (message == NULL)
+		return NULL;
+
+	message->AddInt32("which", which);
+
+	BRect rect;
+	rect.top = Bounds().bottom - kBottomOffset;
+	rect.bottom = rect.top;
+
+	char name[32];
+	snprintf(name, sizeof(name), "_b%ld_", which);
+
+	BButton* button = new(std::nothrow) BButton(rect, name, label, message,
+		B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM);
+	if (button == NULL)
+		return NULL;
+
+	float width, height;
+	button->GetPreferredSize(&width, &height);
+
+	if (fButtonWidth == B_WIDTH_AS_USUAL) {
+		float fontFactor = be_plain_font->Size() / 11.0f;
+		width = max_c(width, kButtonUsualWidth * fontFactor);
+	}
+
+	button->ResizeTo(width, height);
+	button->MoveBy(0.0f, -height);
+	return button;
+}
+
+
+//	#pragma mark - TAlertView
+
+
 TAlertView::TAlertView(BRect frame)
 	:	BView(frame, "TAlertView", B_FOLLOW_ALL_SIDES, B_WILL_DRAW),
 		fIconBitmap(NULL)
 {
 	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 }
-//------------------------------------------------------------------------------
+
+
 TAlertView::TAlertView(BMessage* archive)
 	:	BView(archive),
 		fIconBitmap(NULL)
 {
 }
-//------------------------------------------------------------------------------
+
+
 TAlertView::~TAlertView()
 {
-	if (fIconBitmap)
-	{
-		delete fIconBitmap;
-	}
+	delete fIconBitmap;
 }
-//------------------------------------------------------------------------------
-TAlertView* TAlertView::Instantiate(BMessage* archive)
+
+
+TAlertView*
+TAlertView::Instantiate(BMessage* archive)
 {
 	if (!validate_instantiation(archive, "TAlertView"))
-	{
 		return NULL;
-	}
 
-	return new TAlertView(archive);
+	return new(std::nothrow) TAlertView(archive);
 }
-//------------------------------------------------------------------------------
-status_t TAlertView::Archive(BMessage* archive, bool deep) const
+
+
+status_t
+TAlertView::Archive(BMessage* archive, bool deep) const
 {
 	return BView::Archive(archive, deep);
 }
-//------------------------------------------------------------------------------
-void TAlertView::Draw(BRect updateRect)
+
+
+void
+TAlertView::Draw(BRect updateRect)
 {
+	if (!fIconBitmap)
+		return;
+
 	// Here's the fun stuff
-	if (fIconBitmap)
-	{
-		BRect StripeRect = Bounds();
-		StripeRect.right = kIconStripeWidth;
-		SetHighColor(tint_color(ViewColor(), B_DARKEN_1_TINT));
-		FillRect(StripeRect);
+	BRect stripeRect = Bounds();
+	int32 iconLayoutScale = icon_layout_scale();
+	stripeRect.right = kIconStripeWidth * iconLayoutScale;
+	SetHighColor(tint_color(ViewColor(), B_DARKEN_1_TINT));
+	FillRect(stripeRect);
 
-		SetDrawingMode(B_OP_OVER);
-		DrawBitmapAsync(fIconBitmap, BPoint(18, 6));
-		SetDrawingMode(B_OP_COPY);
-	}
+	SetDrawingMode(B_OP_ALPHA);
+	SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
+	DrawBitmapAsync(fIconBitmap, BPoint(18 * iconLayoutScale,
+		6 * iconLayoutScale));
+
 }
-//------------------------------------------------------------------------------
 
 
 //------------------------------------------------------------------------------
-//	#pragma mark -
-//	#pragma mark _BAlertFilter_
-//	#pragma mark -
-//------------------------------------------------------------------------------
-_BAlertFilter_::_BAlertFilter_(BAlert* Alert)
-	:	BMessageFilter(B_KEY_DOWN),
-		fAlert(Alert)
+//	#pragma mark - _BAlertFilter_
+
+
+_BAlertFilter_::_BAlertFilter_(BAlert* alert)
+	: BMessageFilter(B_KEY_DOWN),
+	fAlert(alert)
 {
 }
-//------------------------------------------------------------------------------
+
+
 _BAlertFilter_::~_BAlertFilter_()
 {
-	;
 }
-//------------------------------------------------------------------------------
-filter_result _BAlertFilter_::Filter(BMessage* msg, BHandler** target)
+
+
+filter_result
+_BAlertFilter_::Filter(BMessage* msg, BHandler** target)
 {
-	if (msg->what == B_KEY_DOWN)
-	{
+	if (msg->what == B_KEY_DOWN) {
 		char byte;
-		if (msg->FindInt8("byte", (int8*)&byte) == B_OK)
-		{
-			for (int i = 0; i < 3; ++i)
-			{
-				if (byte == fAlert->Shortcut(i) && fAlert->ButtonAt(i))
-				{
+		if (msg->FindInt8("byte", (int8*)&byte) == B_OK) {
+			for (int i = 0; i < 3; ++i) {
+				if (byte == fAlert->Shortcut(i) && fAlert->ButtonAt(i)) {
 					char space = ' ';
 					fAlert->ButtonAt(i)->KeyDown(&space, 1);
 
@@ -802,12 +815,4 @@ filter_result _BAlertFilter_::Filter(BMessage* msg, BHandler** target)
 
 	return B_DISPATCH_MESSAGE;
 }
-//------------------------------------------------------------------------------
-
-/*
- * $Log $
- *
- * $Id  $
- *
- */
 

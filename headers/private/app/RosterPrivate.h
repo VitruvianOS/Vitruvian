@@ -1,73 +1,92 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
-//---------------------------------------------------------------------
-
+/*
+ * Copyright 2001-2007, Haiku.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Ingo Weinhold (bonefish@users.sf.net)
+ */
 #ifndef _ROSTER_PRIVATE_H
 #define _ROSTER_PRIVATE_H
+
 
 #include <Messenger.h>
 #include <Roster.h>
 
+
+const int32 kMsgAppServerRestarted = 'ASRe';
+const int32 kMsgRestartAppServer = 'ReAS';
+
+
 class BRoster::Private {
-public:
-	Private() : fRoster(const_cast<BRoster*>(be_roster)) {}
-	Private(BRoster &roster) : fRoster(&roster) {}
-	Private(BRoster *roster) : fRoster(roster) {}
+	public:
+		Private() : fRoster(const_cast<BRoster*>(be_roster)) {}
+		Private(BRoster &roster) : fRoster(&roster) {}
+		Private(BRoster *roster) : fRoster(roster) {}
 
-	void SetTo(BMessenger mainMessenger, BMessenger mimeMessenger);
+		void SetTo(BMessenger mainMessenger, BMessenger mimeMessenger);
 
-	status_t SendTo(BMessage *message, BMessage *reply, bool mime);
-	bool IsMessengerValid(bool mime) const;
+		status_t SendTo(BMessage *message, BMessage *reply, bool mime);
+		bool IsMessengerValid(bool mime) const;
 
-	// needed by BApplication
+		status_t ShutDown(bool reboot, bool confirm, bool synchronous)
+			{ return fRoster->_ShutDown(reboot, confirm, synchronous); }
 
-	status_t AddApplication(const char *mimeSig, const entry_ref *ref,
-							uint32 flags, team_id team, thread_id thread,
-							port_id port, bool fullReg, uint32 *token,
-							team_id *otherTeam) const
-		{ return fRoster->AddApplication(mimeSig, ref, flags, team, thread,
-										 port, fullReg, token, otherTeam); }
+		// needed by BApplication
 
-	status_t SetSignature(team_id team, const char *mimeSig) const
-		{ return fRoster->SetSignature(team, mimeSig); }
+		status_t AddApplication(const char *mimeSig, const entry_ref *ref,
+					uint32 flags, team_id team, thread_id thread,
+					port_id port, bool fullReg, uint32 *token,
+					team_id *otherTeam) const
+			{ return fRoster->_AddApplication(mimeSig, ref, flags, team, thread,
+					port, fullReg, token, otherTeam); }
 
-	status_t CompleteRegistration(team_id team, thread_id thread,
-								  port_id port) const
-		{ return fRoster->CompleteRegistration(team, thread, port); }
+		status_t SetSignature(team_id team, const char *mimeSig) const
+			{ return fRoster->_SetSignature(team, mimeSig); }
 
-	bool IsAppPreRegistered(const entry_ref *ref, team_id team,
-							app_info *info) const
-		{ return fRoster->IsAppPreRegistered(ref, team, info); }
+		status_t CompleteRegistration(team_id team, thread_id thread,
+					port_id port) const
+			{ return fRoster->_CompleteRegistration(team, thread, port); }
 
-	status_t RemoveApp(team_id team) const
-		{ return fRoster->RemoveApp(team); }
+		status_t IsAppRegistered(const entry_ref *ref, team_id team,
+					uint32 token, bool *preRegistered, app_info *info) const
+			{ return fRoster->_IsAppRegistered(ref, team, token, preRegistered,
+					info); }
 
-	// needed by GetRecentTester
+		status_t RemoveApp(team_id team) const
+			{ return fRoster->_RemoveApp(team); }
 
-	void AddToRecentApps(const char *appSig) const
-		{ fRoster->AddToRecentApps(appSig); }
+		// needed by GetRecentTester
 
-	void ClearRecentDocuments() const
-		{ fRoster->ClearRecentDocuments(); }
+		void AddToRecentApps(const char *appSig) const
+			{ fRoster->_AddToRecentApps(appSig); }
 
-	void ClearRecentFolders() const
-		{ fRoster->ClearRecentFolders(); }
+		void ClearRecentDocuments() const
+			{ fRoster->_ClearRecentDocuments(); }
 
-	void ClearRecentApps() const
-		{ fRoster->ClearRecentApps(); }
+		void ClearRecentFolders() const
+			{ fRoster->_ClearRecentFolders(); }
 
-	void LoadRecentLists(const char *file) const
-		{ fRoster->LoadRecentLists(file); }
+		void ClearRecentApps() const
+			{ fRoster->_ClearRecentApps(); }
 
-	void SaveRecentLists(const char *file) const
-		{ fRoster->SaveRecentLists(file); }
+		void LoadRecentLists(const char *file) const
+			{ fRoster->_LoadRecentLists(file); }
 
-private:
-	BRoster	*fRoster;
+		void SaveRecentLists(const char *file) const
+			{ fRoster->_SaveRecentLists(file); }
+
+		// needed by the debug server
+		void ApplicationCrashed(team_id team) const
+			{ fRoster->_ApplicationCrashed(team); }
+
+		void UpdateActiveApp(team_id team) const
+			{ fRoster->_UpdateActiveApp(team); }
+
+		static void InitBeRoster();
+		static void DeleteBeRoster();
+
+	private:
+		BRoster	*fRoster;
 };
-
-extern "C" int	_init_roster_();
-extern "C" int	_delete_roster_();
 
 #endif	// _ROSTER_PRIVATE_H

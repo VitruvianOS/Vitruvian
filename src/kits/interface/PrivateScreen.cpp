@@ -1,96 +1,218 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2002-2004, Haiku
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		PrivateScreen.cpp
-//	Author:			Stefano Ceccherini (burton666@libero.it)
-//	Description:	BPrivateScreen is the class which does the real work
-//					for the proxy class BScreen (it interacts with the app server).
-//------------------------------------------------------------------------------
+/*
+ * Copyright 2002-2009, Haiku Inc.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Stefano Ceccherini (burton666@libero.it)
+ *		Axel Dörfler, axeld@pinc-software.de
+ */
 
-#include <Window.h>
+
+/*!	BPrivateScreen is the class which does the real work for
+	the proxy class BScreen (it interacts with the app_server).
+*/
+
+
+#include <PrivateScreen.h>
+
+#include <new>
+#include <pthread.h>
 #include <stdlib.h>
 
-#include "PrivateScreen.h"
+#include <Application.h>
+#include <Autolock.h>
+#include <Bitmap.h>
+#include <Locker.h>
+#include <ObjectList.h>
+#include <Window.h>
 
-// TODO: As you'll have seen, we sometimes include the screen_id to the app server
-// request, sometimes not. I think the screen_id is not needed if we send the workspace
-// index.
+#include <AutoLocker.h>
+
+#include <AppMisc.h>
+#include <AppServerLink.h>
+#include <ServerProtocol.h>
 
 
-// TODO: We should define this somewhere else
-// We could find how R5 defines this, though it's not strictly necessary
-// AFAIK, R5 here keeps also the screen width, height, colorspace, and some other things
-// (it's 48 bytes big)
-struct screen_desc {
-	void *base_address;
-	uint32 bytes_per_row;
+using namespace BPrivate;
+
+
+namespace {
+
+struct Screens {
+	BObjectList<BPrivateScreen>	list;
+
+	Screens()
+		:
+		list(2, true),
+		fLock("screen list")
+	{
+	}
+
+	bool Lock()
+	{
+		return fLock.Lock();
+	}
+
+	void Unlock()
+	{
+		fLock.Unlock();
+	}
+
+	static Screens* Default()
+	{
+		if (sDefaultInstance == NULL)
+			pthread_once(&sDefaultInitOnce, &_InitSingleton);
+
+		return sDefaultInstance;
+	}
+
+private:
+	static void _InitSingleton()
+	{
+		sDefaultInstance = new Screens;
+	}
+
+private:
+	BLocker					fLock;
+
+	static pthread_once_t	sDefaultInitOnce;
+	static Screens*			sDefaultInstance;
 };
 
+pthread_once_t Screens::sDefaultInitOnce = PTHREAD_ONCE_INIT;
+Screens* Screens::sDefaultInstance = NULL;
 
-// Defined in Application.cpp
-extern BPrivateScreen *gPrivateScreen;
+}	// unnamed namespace
 
 
-BPrivateScreen *
-BPrivateScreen::CheckOut(BWindow *win)
+BPrivateScreen*
+BPrivateScreen::Get(BWindow* window)
 {
-	// TODO: If we start supporting multiple monitors, we
-	// should return the right screen for the passed BWindow
-	return gPrivateScreen;
+	int32 id = B_MAIN_SCREEN_ID.id;
+
+	if (window != NULL) {
+		BPrivate::AppServerLink link;
+		link.StartMessage(AS_GET_SCREEN_ID_FROM_WINDOW);
+		link.Attach<int32>(_get_object_token_(window));
+
+		status_t status;
+		if (link.FlushWithReply(status) == B_OK && status == B_OK)
+			link.Read<int32>(&id);
+	}
+
+	return _Get(id, false);
 }
 
 
-BPrivateScreen *
-BPrivateScreen::CheckOut(screen_id id)
+BPrivateScreen*
+BPrivateScreen::Get(int32 id)
 {
-	// TODO: If we start supporting multiple monitors, we
-	// should return the right object for the given screen_id
-	return gPrivateScreen;
+	return _Get(id, true);
+}
+
+
+BPrivateScreen*
+BPrivateScreen::_Get(int32 id, bool check)
+{
+	// Nothing works without an app_server connection
+	if (be_app == NULL)
+		return NULL;
+
+	Screens* screens = Screens::Default();
+	AutoLocker<Screens> locker(screens);
+
+	// search for the screen ID
+
+	for (int32 i = screens->list.CountItems(); i-- > 0;) {
+		BPrivateScreen* screen = screens->list.ItemAt(i);
+
+		if (screen->ID() == id) {
+			screen->_Acquire();
+			return screen;
+		}
+	}
+
+	if (check) {
+		// check if ID is valid
+		if (!_IsValid(id))
+			return NULL;
+	}
+
+	// we need to allocate a new one
+
+	BPrivateScreen* screen = new (std::nothrow) BPrivateScreen(id);
+	if (screen == NULL)
+		return NULL;
+
+	screens->list.AddItem(screen);
+	return screen;
 }
 
 
 void
-BPrivateScreen::Return(BPrivateScreen *screen)
+BPrivateScreen::Put(BPrivateScreen* screen)
 {
-	// Not much to do here. I guess it's some legacy from pre-R5,
-	// where BScreen could not be used for long time,
-	// as they blocked the BApplication
+	if (screen == NULL)
+		return;
+
+	Screens* screens = Screens::Default();
+	AutoLocker<Screens> locker(screens);
+
+	if (screen->_Release()) {
+		if (screen->ID() != B_MAIN_SCREEN_ID.id) {
+			// we always keep the main screen object around - it will
+			// never go away, even if you disconnect all monitors.
+			screens->list.RemoveItem(screen);
+		}
+	}
 }
 
-	
-status_t
-BPrivateScreen::SetToNext()
+
+BPrivateScreen*
+BPrivateScreen::GetNext(BPrivateScreen* screen)
 {
-	// This function always returns B_ERROR
-	return B_ERROR;
+	Screens* screens = Screens::Default();
+	AutoLocker<Screens> locker(screens);
+
+	int32 id;
+	status_t status = screen->GetNextID(id);
+	if (status != B_OK)
+		return NULL;
+
+	BPrivateScreen* nextScreen = Get(id);
+	if (nextScreen == NULL)
+		return NULL;
+
+	Put(screen);
+	return nextScreen;
 }
 
-	
+
+bool
+BPrivateScreen::_IsValid(int32 id)
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_VALID_SCREEN_ID);
+	link.Attach<int32>(id);
+
+	status_t status;
+	if (link.FlushWithReply(status) != B_OK || status < B_OK)
+		return false;
+
+	return true;
+}
+
+
+//	#pragma mark -
+
+
 color_space
 BPrivateScreen::ColorSpace()
 {
 	display_mode mode;
-	if (GetMode(B_ALL_WORKSPACES, &mode) == B_OK)
+	if (GetMode(B_CURRENT_WORKSPACE_INDEX, &mode) == B_OK)
 		return (color_space)mode.space;
-		
+
 	return B_NO_COLOR_SPACE;
 }
 
@@ -98,33 +220,62 @@ BPrivateScreen::ColorSpace()
 BRect
 BPrivateScreen::Frame()
 {
-	// If something goes wrong, we just return this rectangle.
-	BRect rect(0, 0, 0, 0);
-	display_mode mode;
-	if (GetMode(B_ALL_WORKSPACES, &mode) == B_OK)
-		rect.Set(0, 0, (float)mode.virtual_width - 1, (float)mode.virtual_height - 1);
-		
-	return rect;
+	if (system_time() > fLastUpdate + 10000) {
+		// invalidate the settings after 10 msecs
+		BPrivate::AppServerLink link;
+		link.StartMessage(AS_GET_SCREEN_FRAME);
+		link.Attach<int32>(ID());
+		link.Attach<uint32>(B_CURRENT_WORKSPACE_INDEX);
+
+		status_t status = B_ERROR;
+		if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+			link.Read<BRect>(&fFrame);
+			fLastUpdate = system_time();
+		}
+	}
+
+	return fFrame;
 }
 
 
-screen_id 
-BPrivateScreen::ID()
+bool
+BPrivateScreen::IsValid() const
 {
-	// TODO: Change this if we start supporting multiple screens
-	return B_MAIN_SCREEN_ID;
+	return BPrivateScreen::_IsValid(ID());
 }
-	
-	
+
+
+status_t
+BPrivateScreen::GetNextID(int32& id)
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_NEXT_SCREEN_ID);
+	link.Attach<int32>(ID());
+
+	status_t status;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		link.Read<int32>(&id);
+		return B_OK;
+	}
+
+	return status;
+}
+
+
 status_t
 BPrivateScreen::WaitForRetrace(bigtime_t timeout)
 {
-	// Get the retrace semaphore if it's the first time 
+	// Get the retrace semaphore if it's the first time
 	// we are called. Cache the value then.
-	status_t status;
-	if (fRetraceSem == -1)
-		fRetraceSem = RetraceSemaphore();
+	if (!fRetraceSemValid)
+		fRetraceSem = _RetraceSemaphore();
 
+	if (fRetraceSem < 0) {
+		// syncing to retrace is not supported by the accelerant
+		return fRetraceSem;
+	}
+
+	status_t status;
 	do {
 		status = acquire_sem_etc(fRetraceSem, 1, B_RELATIVE_TIMEOUT, timeout);
 	} while (status == B_INTERRUPTED);
@@ -132,38 +283,20 @@ BPrivateScreen::WaitForRetrace(bigtime_t timeout)
 	return status;
 }
 
-	
-sem_id
-BPrivateScreen::RetraceSemaphore()
-{
-	sem_id id = B_BAD_SEM_ID;
-	// TODO: Implement
-	/*
-	BAppServerLink link;
-	PortMessage reply;
-	link.SetOpCode(AS_GET_RETRACE_SEMAPHORE);
-	link.Attach<screen_id>(ID());
-	link.FlushWithReply(&reply);
-	reply.Read<sem_id>(&id);
-	*/
-	return id;
-}
-
-
 
 uint8
 BPrivateScreen::IndexForColor(uint8 red, uint8 green, uint8 blue, uint8 alpha)
 {
 	// Looks like this check is necessary
-	if (red == B_TRANSPARENT_COLOR.red && green == B_TRANSPARENT_COLOR.green &&
-		blue == B_TRANSPARENT_COLOR.blue && alpha == B_TRANSPARENT_COLOR.alpha)
+	if (red == B_TRANSPARENT_COLOR.red
+		&& green == B_TRANSPARENT_COLOR.green
+		&& blue == B_TRANSPARENT_COLOR.blue
+		&& alpha == B_TRANSPARENT_COLOR.alpha)
 		return B_TRANSPARENT_8_BIT;
 
-	
-	if (fColorMap)
-		return fColorMap->index_map[((red & 0xf8) << 7)
-								| ((green & 0xf8) << 2)
-								| (blue >> 3)];
+	uint16 index = ((red & 0xf8) << 7) | ((green & 0xf8) << 2) | (blue >> 3);
+	if (ColorMap())
+		return fColorMap->index_map[index];
 
 	return 0;
 }
@@ -172,7 +305,7 @@ BPrivateScreen::IndexForColor(uint8 red, uint8 green, uint8 blue, uint8 alpha)
 rgb_color
 BPrivateScreen::ColorForIndex(const uint8 index)
 {
-	if (fColorMap)
+	if (ColorMap())
 		return fColorMap->color_list[index];
 
 	return rgb_color();
@@ -182,119 +315,234 @@ BPrivateScreen::ColorForIndex(const uint8 index)
 uint8
 BPrivateScreen::InvertIndex(uint8 index)
 {
-	if (fColorMap)
+	if (ColorMap())
 		return fColorMap->inversion_map[index];
 
 	return 0;
 }
-	
 
-const color_map *
+
+const color_map*
 BPrivateScreen::ColorMap()
 {
+	if (fColorMap == NULL) {
+		Screens* screens = Screens::Default();
+		AutoLocker<Screens> locker(screens);
+
+		if (fColorMap != NULL) {
+			// someone could have been faster than us
+			return fColorMap;
+		}
+
+		// TODO: BeOS R5 here gets the colormap pointer
+		// (with BApplication::ro_offset_to_ptr() ?)
+		// which is contained in a shared area created by the server.
+		BPrivate::AppServerLink link;
+		link.StartMessage(AS_SCREEN_GET_COLORMAP);
+		link.Attach<int32>(ID());
+
+		status_t status;
+		if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+			fColorMap = (color_map*)malloc(sizeof(color_map));
+			fOwnsColorMap = true;
+			link.Read<color_map>(fColorMap);
+		}
+	}
+
 	return fColorMap;
 }
 
 
 status_t
-BPrivateScreen::GetBitmap(BBitmap **bitmap, bool drawCursor, BRect *bound)
+BPrivateScreen::GetBitmap(BBitmap**_bitmap, bool drawCursor, BRect* bounds)
 {
-	// TODO: Implement
-	return B_ERROR;
+	if (_bitmap == NULL)
+		return B_BAD_VALUE;
+
+	BRect rect;
+	if (bounds != NULL)
+		rect = *bounds;
+	else
+		rect = Frame();
+
+	BBitmap* bitmap = new (std::nothrow) BBitmap(rect, ColorSpace());
+	if (bitmap == NULL)
+		return B_NO_MEMORY;
+
+	status_t status = bitmap->InitCheck();
+	if (status == B_OK)
+		status = ReadBitmap(bitmap, drawCursor, &rect);
+	if (status != B_OK) {
+		delete bitmap;
+		return status;
+	}
+
+	*_bitmap = bitmap;
+	return B_OK;
 }
 
 
 status_t
-BPrivateScreen::ReadBitmap(BBitmap *bitmap, bool drawCursor, BRect *bound)
+BPrivateScreen::ReadBitmap(BBitmap* bitmap, bool drawCursor, BRect* bounds)
 {
-	// TODO: Implement
-	return B_ERROR;
+	if (bitmap == NULL)
+		return B_BAD_VALUE;
+
+	BRect rect;
+	if (bounds != NULL)
+		rect = *bounds;
+	else
+		rect = Frame();
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_READ_BITMAP);
+	link.Attach<int32>(bitmap->_ServerToken());
+	link.Attach<bool>(drawCursor);
+	link.Attach<BRect>(rect);
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) < B_OK || status != B_OK)
+		return status;
+
+	return B_OK;
 }
 
-		
+
 rgb_color
 BPrivateScreen::DesktopColor(uint32 workspace)
 {
-	rgb_color color;
-	/*
-	BAppServerLink link;
-	PortMessage reply;
-	link.SetOpCode(AS_GET_DESKTOP_COLOR);
-	link.Attach<int32>(workspace);
-	link.FlushWithReply(&reply);
-	reply.Read<rgb_color>(&color);
-	*/
+	rgb_color color = { 51, 102, 152, 255 };
+	BPrivate::AppServerLink link;
+
+	link.StartMessage(AS_GET_DESKTOP_COLOR);
+	link.Attach<uint32>(workspace);
+
+	int32 code;
+	if (link.FlushWithReply(code) == B_OK
+		&& code == B_OK)
+		link.Read<rgb_color>(&color);
+
 	return color;
 }
 
 
 void
-BPrivateScreen::SetDesktopColor(rgb_color color, uint32 workspace, bool makeDefault)
+BPrivateScreen::SetDesktopColor(rgb_color color, uint32 workspace,
+	bool makeDefault)
 {
-	/*
-	BAppServerLink link;
-	link.SetOpCode(AS_SET_DESKTOP_COLOR);
+	BPrivate::AppServerLink link;
+
+	link.StartMessage(AS_SET_DESKTOP_COLOR);
 	link.Attach<rgb_color>(color);
-	link.Attach<int32>(workspace);
+	link.Attach<uint32>(workspace);
 	link.Attach<bool>(makeDefault);
 	link.Flush();
-	*/
 }
 
 
 status_t
-BPrivateScreen::ProposeMode(display_mode *target, const display_mode *low, const display_mode *high)
+BPrivateScreen::ProposeMode(display_mode* target,
+	const display_mode* low, const display_mode* high)
 {
-	// TODO: Implement
-	return B_ERROR;
+	// We can't return B_BAD_VALUE here, because it's used to indicate
+	// that the mode returned is supported, but it doesn't fall
+	// within the limit (see ProposeMode() documentation)
+	if (target == NULL || low == NULL || high == NULL)
+		return B_ERROR;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_PROPOSE_MODE);
+	link.Attach<int32>(ID());
+	link.Attach<display_mode>(*target);
+	link.Attach<display_mode>(*low);
+	link.Attach<display_mode>(*high);
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		link.Read<display_mode>(target);
+
+		bool withinLimits;
+		link.Read<bool>(&withinLimits);
+		if (!withinLimits)
+			status = B_BAD_VALUE;
+	}
+
+	return status;
 }
-		
+
 
 status_t
-BPrivateScreen::GetModeList(display_mode **mode_list, uint32 *count)
+BPrivateScreen::GetModeList(display_mode** _modeList, uint32* _count)
 {
-	// TODO: Implement
-	return B_ERROR;
+	if (_modeList == NULL || _count == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_MODE_LIST);
+	link.Attach<int32>(ID());
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		uint32 count;
+		if (link.Read<uint32>(&count) < B_OK)
+			return B_ERROR;
+
+		// TODO: this could get too big for the link
+		int32 size = count * sizeof(display_mode);
+		display_mode* modeList = (display_mode *)malloc(size);
+		if (modeList == NULL)
+			return B_NO_MEMORY;
+
+		if (link.Read(modeList, size) < B_OK) {
+			free(modeList);
+			return B_ERROR;
+		}
+
+		*_modeList = modeList;
+		*_count = count;
+	}
+
+	return status;
 }
 
 
 status_t
 BPrivateScreen::GetMode(uint32 workspace, display_mode *mode)
 {
-	// TODO: Implement
-	status_t status = B_ERROR;
-	/*
-	BAppServerLink link;
-	PortMessage reply;
-	display_mode currentMode;
-	link.SetOpCode(AS_GET_MODE);
+	if (mode == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SCREEN_GET_MODE);
+	link.Attach<int32>(ID());
 	link.Attach<uint32>(workspace);
-	
-	link.FlushWithReply(&reply);
-	reply.Read<display_mode>(&currentMode);
-	reply.Read<status_t>(&status);
-	if (status == B_OK && mode)
-		*mode = currentMode; 
-	*/
-	return status;
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) != B_OK
+		|| status != B_OK)
+		return status;
+
+	link.Read<display_mode>(mode);
+	return B_OK;
 }
 
 
 status_t
 BPrivateScreen::SetMode(uint32 workspace, display_mode *mode, bool makeDefault)
 {
-	// TODO: Implement
-	status_t status = B_ERROR;
-	/*
-	BAppServerLink link;
-	PortMessage reply;
-	link.SetOpCode(AS_SET_MODE);
+	if (mode == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SCREEN_SET_MODE);
+	link.Attach<int32>(ID());
 	link.Attach<uint32>(workspace);
 	link.Attach<display_mode>(*mode);
 	link.Attach<bool>(makeDefault);
-	link.FlushWithReply(&reply);
-	reply.Read<status_t>(&status);
-	*/
+
+	status_t status = B_ERROR;
+	link.FlushWithReply(status);
+
 	return status;
 }
 
@@ -302,40 +550,96 @@ BPrivateScreen::SetMode(uint32 workspace, display_mode *mode, bool makeDefault)
 status_t
 BPrivateScreen::GetDeviceInfo(accelerant_device_info *info)
 {
-	// TODO: Implement
-	return B_ERROR;
+	if (info == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_ACCELERANT_INFO);
+	link.Attach<int32>(ID());
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		link.Read<accelerant_device_info>(info);
+		return B_OK;
+	}
+
+	return status;
+}
+
+
+status_t
+BPrivateScreen::GetMonitorInfo(monitor_info* info)
+{
+	if (info == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_MONITOR_INFO);
+	link.Attach<int32>(ID());
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		link.Read<monitor_info>(info);
+		return B_OK;
+	}
+
+	return status;
 }
 
 
 status_t
 BPrivateScreen::GetPixelClockLimits(display_mode *mode, uint32 *low, uint32 *high)
 {
-	// TODO: Implement
-	return B_ERROR;
+	if (mode == NULL || low == NULL || high == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_PIXEL_CLOCK_LIMITS);
+	link.Attach<int32>(ID());
+	link.Attach<display_mode>(*mode);
+
+	status_t status;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		link.Read<uint32>(low);
+		link.Read<uint32>(high);
+		return B_OK;
+	}
+
+	return status;
 }
 
 
 status_t
-BPrivateScreen::GetTimingConstraints(display_timing_constraints *dtc)
+BPrivateScreen::GetTimingConstraints(display_timing_constraints *constraints)
 {
-	// TODO: Implement
-	return B_ERROR;
+	if (constraints == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_TIMING_CONSTRAINTS);
+	link.Attach<int32>(ID());
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		link.Read<display_timing_constraints>(constraints);
+		return B_OK;
+	}
+
+	return status;
 }
 
 
 status_t
 BPrivateScreen::SetDPMS(uint32 dpmsState)
 {
-	status_t status = B_ERROR;
-	/*
-	BAppServerLink link;
-	PortMessage reply;
-	link.SetOpCode(AS_SET_DPMS);
-	link.Attach<screen_id>(ID());
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SET_DPMS);
+	link.Attach<int32>(ID());
 	link.Attach<uint32>(dpmsState);
-	link.FlushWithReply(&reply);
-	reply.Read<status_t>(&status);
-	*/
+
+	status_t status = B_ERROR;
+	link.FlushWithReply(status);
+
 	return status;
 }
 
@@ -343,16 +647,16 @@ BPrivateScreen::SetDPMS(uint32 dpmsState)
 uint32
 BPrivateScreen::DPMSState()
 {
-	// TODO: Implement
 	uint32 state = 0;
-	/*
-	BAppServerLink link;
-	PortMessage reply;
-	link.SetOpCode(AS_GET_DPMS_STATE);
-	link.Attach<screen_id>(ID());
-	link.FlushWithReply(&reply);
-	reply.Read<uint32>(&state);
-	*/
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_DPMS_STATE);
+	link.Attach<int32>(ID());
+
+	status_t status;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK)
+		link.Read<uint32>(&state);
+
 	return state;
 }
 
@@ -360,16 +664,16 @@ BPrivateScreen::DPMSState()
 uint32
 BPrivateScreen::DPMSCapabilites()
 {
-	// TODO: Implement
 	uint32 capabilities = 0;
-	/*
-	BAppServerLink link;
-	PortMessage reply;
-	link.SetOpCode(AS_GET_DPMS_CAPABILITIES);
-	link.Attach<screen_id>(ID());
-	link.FlushWithReply(&reply);
-	reply.Read<uint32>(&capabilities);
-	*/
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_DPMS_CAPABILITIES);
+	link.Attach<int32>(ID());
+
+	status_t status;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK)
+		link.Read<uint32>(&capabilities);
+
 	return capabilities;
 }
 
@@ -377,53 +681,91 @@ BPrivateScreen::DPMSCapabilites()
 void *
 BPrivateScreen::BaseAddress()
 {
-	screen_desc desc;
-	if (get_screen_desc(&desc) == B_OK)
-		return desc.base_address;
-	
-	return NULL;
+	frame_buffer_config config;
+	if (_GetFrameBufferConfig(config) != B_OK)
+		return NULL;
+
+	return config.frame_buffer;
 }
 
 
 uint32
 BPrivateScreen::BytesPerRow()
 {
-	screen_desc desc;
-	if (get_screen_desc(&desc) == B_OK)
-		return desc.bytes_per_row;
-	return 0;
+	frame_buffer_config config;
+	if (_GetFrameBufferConfig(config) != B_OK)
+		return 0;
+
+	return config.bytes_per_row;
 }
 
-	
-status_t
-BPrivateScreen::get_screen_desc(screen_desc *desc)
+
+// #pragma mark - private methods
+
+
+void
+BPrivateScreen::_Acquire()
 {
+	fReferenceCount++;
+
+	fLastUpdate = 0;
+		// force an update for the new BScreen object
+}
+
+
+bool
+BPrivateScreen::_Release()
+{
+	return --fReferenceCount == 0;
+}
+
+
+sem_id
+BPrivateScreen::_RetraceSemaphore()
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_RETRACE_SEMAPHORE);
+	link.Attach<int32>(ID());
+
+	sem_id id = B_BAD_SEM_ID;
 	status_t status = B_ERROR;
-	/*
-	BAppServerLink link;
-	PortMessage reply;
-	link.SetOpCode(AS_GET_SCREEN_DESC);
-	link.Attach<screen_id>(ID());
-	link.FlushWithReply(&reply);
-	reply.Read<screen_desc>(*desc);
-	reply.Read<status_t>(&status);
-	*/
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		link.Read<sem_id>(&id);
+		fRetraceSemValid = true;
+	}
+
+	return id;
+}
+
+
+status_t
+BPrivateScreen::_GetFrameBufferConfig(frame_buffer_config& config)
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_GET_FRAME_BUFFER_CONFIG);
+	link.Attach<int32>(ID());
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK) {
+		link.Read<frame_buffer_config>(&config);
+		return B_OK;
+	}
+
 	return status;
 }
 
-	
-// Private, called by BApplication::get_scs()
-BPrivateScreen::BPrivateScreen()
+
+BPrivateScreen::BPrivateScreen(int32 id)
 	:
+	fID(id),
+	fReferenceCount(0),
 	fColorMap(NULL),
 	fRetraceSem(-1),
-	fOwnsColorMap(false)
+	fRetraceSemValid(false),
+	fOwnsColorMap(false),
+	fFrame(0, 0, 0, 0),
+	fLastUpdate(0)
 {
-	// TODO: Get a pointer or a copy of the colormap from the app server
-	// if we only have one screen (one card, one monitor),
-	// it's better to get only a pointer (with BApplication::ro_offset_to_ptr() ?)
-	// otherwise every BApplication will keep a copy of the same colormap,
-	// and we would waste memory for nothing
 }
 
 

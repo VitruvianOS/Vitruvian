@@ -3,15 +3,15 @@
  * Distributed under the terms of the MIT License.
  */
 
-#include <OS.h>
+#include <scheduler.h>
 
 #include <syscalls.h>
 
 
-status_t
-_kern_get_memory_properties(team_id teamID, const void* address, uint32* _protected,
-	 uint32* _lock)
+bigtime_t
+_kern_estimate_max_scheduling_latency(thread_id thread)
 {
 	UNIMPLEMENTED();
-	return B_ERROR;
+	return 0;
 }
+

@@ -112,7 +112,7 @@ static void get_fs_info( system_info* psInfo )
 }
 
 
-status_t _get_system_info( system_info* psInfo, size_t size )
+status_t _kern_get_system_info(system_info* psInfo, size_t size )
 {
 	struct utsname unamebuffer;
 
@@ -137,15 +137,16 @@ status_t _get_system_info( system_info* psInfo, size_t size )
 }
 
 
-int32	is_computer_on(void)
+status_t
+_kern_get_system_info_etc(int32 id, system_info* psInfo, size_t size)
 {
-	return 1L;
+
 }
 
 
-double	is_computer_on_fire(void)
+int32	_kern_is_computer_on(void)
 {
-	return 3.1415926536;
+	return 1L;
 }
 
 
@@ -211,4 +212,22 @@ _kern_snooze_etc(bigtime_t amount, int timeBase, uint32 flags)
 {
 	// TODO: determine what timeBase and flags do
 	return snooze(amount);
+}
+
+
+status_t
+_kern_start_watching_system(int32 object, uint32 flags,
+	port_id port, int32 token)
+{
+	UNIMPLEMENTED();
+	return B_ERROR;
+}
+
+
+status_t
+_kern_stop_watching_system(int32 object, uint32 flags,
+	port_id port, int32 token)
+{
+	UNIMPLEMENTED();
+	return B_ERROR;
 }

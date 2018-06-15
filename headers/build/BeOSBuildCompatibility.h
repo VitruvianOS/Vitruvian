@@ -3,6 +3,8 @@
 
 #define _IMPEXP_BE
 
+#define ATOMIC_FUNCS_ARE_SYSCALLS 1
+
 #define UNIMPLEMENTED()		printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
 
 #if defined(HAIKU_HOST_PLATFORM_CYGWIN)

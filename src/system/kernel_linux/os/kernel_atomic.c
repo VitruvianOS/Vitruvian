@@ -74,6 +74,20 @@ int32 _kern_atomic_get(vint32 *value)
 }
 
 
+int32 _kern_atomic_set(vint32 *value)
+{
+	UNIMPLEMENTED();
+	return 0;
+}
+
+
+int32 _kern_atomic_test_and_set(vint32 *value)
+{
+	UNIMPLEMENTED();
+	return 0;
+}
+
+
 int64 _kern_atomic_add64(vint64 *value, int64 addvalue)
 {
       __asm__ volatile("lock; xaddq %0, %1"

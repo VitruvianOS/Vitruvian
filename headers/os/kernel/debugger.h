@@ -19,9 +19,9 @@
 #include <arch/arm/arch_debugger.h>
 
 
-#ifdef __INTEL__
+//#ifdef __INTEL__
 	typedef struct x86_debug_cpu_state debug_cpu_state;
-#elif __POWERPC__
+/*#elif __POWERPC__
 	typedef struct ppc_debug_cpu_state debug_cpu_state;
 #elif __M68K__
 	typedef struct m68k_debug_cpu_state debug_cpu_state;
@@ -31,7 +31,7 @@
 	typedef struct arm_debug_cpu_state debug_cpu_state;
 #else
 	#error unsupported architecture
-#endif
+#endif*/
 
 
 #ifdef __cplusplus

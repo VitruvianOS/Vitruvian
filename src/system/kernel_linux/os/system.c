@@ -150,6 +150,7 @@ int32	_kern_is_computer_on(void)
 }
 
 
+#if 0
 // debugger
 void
 debugger(const char *message)
@@ -167,6 +168,8 @@ _debuggerAssert(const char *file, int line, const char *expression)
 	debugger(buffer);
 	return 0;
 }
+#endif
+
 
 // system_time
 bigtime_t

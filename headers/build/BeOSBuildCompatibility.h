@@ -3,9 +3,12 @@
 
 #define _IMPEXP_BE
 
-#define __HAIKU_BEOS_COMPATIBLE_TYPES
+#define __HAIKU_BEOS_COMPATIBLE_TYPES 1
+
+#include <config/types.h>
 
 #define ATOMIC_FUNCS_ARE_SYSCALLS
+#define __x86_64__ 1
 
 #define UNIMPLEMENTED()		printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
 
@@ -111,11 +114,11 @@ extern ssize_t	writev_pos(int fd, off_t pos, const struct iovec* vec,
 #undef strerror
 #define strerror(errnum)	_haiku_build_strerror(errnum)
 
-#endif	// BUILDING_HAIKU_ERROR_MAPPER*/
+#endif	// BUILDING_HAIKU_ERROR_MAPPER
 
 
 // remap file descriptor functions
-/*int		_haiku_build_fchmod(int fd, mode_t mode);
+int		_haiku_build_fchmod(int fd, mode_t mode);
 int		_haiku_build_fchmodat(int fd, const char* path, mode_t mode, int flag);
 int		_haiku_build_fstat(int fd, struct stat* st);
 int		_haiku_build_fstatat(int fd, const char* path, struct stat* st,
@@ -155,9 +158,9 @@ int		_haiku_build_openat(int fd, const char* path, int openMode,
 int		_haiku_build_fcntl(int fd, int op, int argument);
 #endif
 int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
-			const char* to);*/
+			const char* to);
 
-/*#ifndef _HAIKU_BUILD_DONT_REMAP_FD_FUNCTIONS
+#ifndef _HAIKU_BUILD_DONT_REMAP_FD_FUNCTIONS
 #	define fchmod(fd, mode)				_haiku_build_fchmod(fd, mode)
 #	define fchmodat(fd, path, mode, flag) \
 		_haiku_build_fchmodat(fd, path, mode, flag)
@@ -191,14 +194,14 @@ int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 #	define creat(path, mode)			_haiku_build_creat(path, mode)
 #	define open(path, openMode...)		_haiku_build_open(path, openMode)
 #	define openat(fd, path, openMode...) \
-		_haiku_build_openat(fd, path, openMode)*/
+		_haiku_build_openat(fd, path, openMode)
 //#	define fcntl(fd, op...)				_haiku_build_fcntl(fd, op)
 //#include <fcntl.h>
 
 //#	define renameat(fromFD, from, toFD, to) \
-//		_haiku_build_renameat(fromFD, from, toFD, to)*/
+//		_haiku_build_renameat(fromFD, from, toFD, to)
 
-/*#	if defined(HAIKU_HOST_USE_XATTR) && defined(HAIKU_HOST_PLATFORM_HAIKU)
+#	if defined(HAIKU_HOST_USE_XATTR) && defined(HAIKU_HOST_PLATFORM_HAIKU)
 #		define fs_read_attr			_haiku_build_fs_read_attr
 #		define fs_write_attr		_haiku_build_fs_write_attr
 #		define fs_remove_attr		_haiku_build_fs_remove_attr
@@ -213,8 +216,8 @@ int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 #		define fs_rewind_attr_dir	_haiku_build_fs_rewind_attr_dir
 #	endif
 
-#endif	// _HAIKU_BUILD_DONT_REMAP_FD_FUNCTIONS*/
-
+#endif	// _HAIKU_BUILD_DONT_REMAP_FD_FUNCTIONS
+*/
 
 #ifdef __cplusplus
 } // extern "C"

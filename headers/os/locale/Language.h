@@ -15,10 +15,11 @@ class BBitmap;
 
 // We must not include the icu headers in there as it could mess up binary
 // compatibility.
-namespace icu {
+namespace icu_57 {
 	class Locale;
 }
 
+namespace icu = icu_57;
 
 enum script_direction {
 	B_LEFT_TO_RIGHT = 0,

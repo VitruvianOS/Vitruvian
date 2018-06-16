@@ -12,9 +12,11 @@
 
 class BString;
 
-namespace icu {
+namespace icu_57 {
 	class TimeUnitFormat;
 }
+
+namespace icu = icu_57;
 
 
 enum time_unit_style {

@@ -9,10 +9,13 @@
 #include <String.h>
 
 
-namespace icu {
+namespace icu_57 {
 	class Locale;
 	class TimeZone;
 }
+
+namespace icu = icu_57;
+
 class BLanguage;
 
 

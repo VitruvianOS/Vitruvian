@@ -1,16 +1,17 @@
 prefix=@prefix@
 libdir=${prefix}/lib
 
-CFLAGS = -include build/BeOSBuildCompatibility.h -include os/support/SupportDefs.h \
+CFLAGS = -include build/BeOSBuildCompatibility.h \
 -Wall -Wpointer-arith -Wcast-align -Wsign-compare -Wno-multichar \
 -c -g -O2 -pipe `cat @top_srcdir@/cosmoe.specs` -fPIC -fpermissive
 
 #TODO remove -fpermissive
-CPPFLAGS = $(CFLAGS) -fexceptions
+CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-dtor -fexceptions
 
 LIBNAME = libbe.@LIBEXT@
 
-VPATH += ./ support storage storage/mime storage/sniffer app interface interface/BTextView shared locale
+VPATH += ./ support storage storage/mime storage/sniffer app \
+interface interface/layouter interface/textview_support shared locale
 
 SUPPORT_KIT_OBJS = Archivable.o BufferedDataIO.o  Flattenable.o  Referenceable.o \
 ArchivingManagers.o BufferIO.o	StopWatch.o ByteOrder.o List.o String.o \
@@ -29,31 +30,58 @@ CharStream.o	Err.o     Pattern.o      Range.o	   RPatternList.o \
 DisjList.o	Parser.o  PatternList.o  RPattern.o  Rule.o
 
 
-APP_KIT_OBJS = AppDefs.o Looper.o \
-Application.o LooperList.o PropertyInfo.o \
-AppMisc.o RegistrarDefs.o \
-AppServerLink.o Message.o \
-Clipboard.o MessageFilter.o Roster.o \
-Cursor.o MessageQueue.o	RosterPrivate.o \
-Handler.o MessageRunner.o \
-InitTerminateLibBe.o MessageUtils.o \
-Invoker.o Messenger.o TokenSpace.o \
-PortLink.o
+APP_KIT_OBJS = AppDefs.o	   DesktopLink.o \
+LinkSender.o	MessageQueue.o \
+PropertyInfo.o   ServerMemoryAllocator.o \
+Application.o    DirectMessageTarget.o  Looper.o \
+MessageRunner.o  RegistrarDefs.o  TokenSpace.o \
+AppMisc.o	   Handler.o		    LooperList.o \
+MessageUtils.o   Roster.o	      TypeConstants.o \
+AppServerLink.o  InitTerminateLibBe.o \
+MessageAdapter.o	Messenger.o	   RosterPrivate.o \
+Clipboard.o	   Invoker.o		    Message.o \
+Notification.o   Server.o \
+Cursor.o	   LinkReceiver.o	    MessageFilter.o \
+PortLink.o	   ServerLink.o
 
-INTERFACE_KIT_OBJS = Alert.o ListView.o Point.o ScrollBar.o TextControl.o \
-Bitmap.o Control.o MenuBar.o Polygon.o ScrollView.o TextInput.o \
-BMCPrivate.o Deskbar.o Menu.o PopUpMenu.o Shape.o \
-Box.o Dragger.o MenuField.o PrivateScreen.o Shelf.o View.o \
-Font.o MenuItem.o RadioButton.o Slider.o Window.o \
-Button.o GraphicsDefs.o OptionControl.o Rect.o StatusBar.o ZombieReplicantView.o \
-CheckBox.o Input.o OutlineListView.o Region.o \
-InterfaceDefs.o PictureButton.o StringView.o \
-ColorControl.o ListItem.o Picture.o Screen.o TabView.o \
-TextView.o RegionSupport.o
+INTERFACE_KIT_OBJS = AbstractLayout.o	ControlLook.o		 InterfaceDefs.o	PicturePlayer.o  SpaceLayoutItem.o \
+AbstractLayoutItem.o	DecorInfo.o		 LayoutContext.o	Point.o	   SplitLayoutBuilder.o \
+AffineTransform.o	Deskbar.o		 Layout.o		Polygon.o	   SplitLayout.o \
+Alert.o		Dragger.o		 LayoutItem.o		PopUpMenu.o	   SplitView.o \
+Alignment.o		Font.o		 LayoutUtils.o	PrintJob.o	   StatusBar.o \
+Bitmap.o		GradientConic.o	 ListItem.o		PrivateScreen.o  StringItem.o \
+BMCPrivate.o		Gradient.o		 ListView.o		RadioButton.o    StringView.o \
+Box.o			GradientDiamond.o	 MenuBar.o		Rect.o	   TabView.o \
+Button.o		GradientLinear.o	 Menu.o		Region.o	   TextControl.o \
+CardLayout.o		GradientRadial.o	 MenuField.o		RegionSupport.o  TextInput.o \
+ChannelControl.o	GradientRadialFocus.o  MenuItem.o		Screen.o	   TextView.o \
+ChannelSlider.o	GraphicsDefs.o	 MenuPrivate.o	ScrollBar.o	   ToolTip.o \
+CheckBox.o		GridLayoutBuilder.o	 MenuWindow.o		ScrollView.o	   ToolTipManager.o \
+ColorControl.o	GridLayout.o		 OptionControl.o	SeparatorItem.o  TwoDimensionalLayout.o \
+ColorConversion.o	GridView.o		 OptionPopUp.o	SeparatorView.o  View.o \
+ColorTools.o		GroupLayoutBuilder.o	 OutlineListView.o	Shape.o	   ViewLayoutItem.o \
+ColumnListView.o	GroupLayout.o		 PictureButton.o	Shelf.o	   Window.o \
+ColumnTypes.o		GroupView.o		 Picture.o		Size.o	   WindowStack.o \
+Control.o		Input.o		 PictureDataWriter.o	Slider.o	   ZombieReplicantView.o \
+InlineInput.o  LineBuffer.o  StyleBuffer.o  TextGapBuffer.o  UndoBuffer.o  WidthBuffer.o \
+CollapsingLayouter.o	ComplexLayouter.o  Layouter.o LayoutOptimizer.o	OneElementLayouter.o \
+SimpleLayouter.o
 
-SHARED_KIT_OBJS = DataBuffer.o
+SHARED_KIT_OBJS = DataBuffer.o DragTrackingFilter.o
 
-LOCALE_KIT_OBJS = UnicodeChar.o
+LOCALE_KIT_OBJS = Catalog.o	     FloatFormat.o		IntegerFormatParameters.o \
+CatalogData.o      FloatFormatImpl.o	Language.o \
+CatalogStub.o      FloatFormatParameters.o	Locale.o \
+cat.o		     Format.o			LocaleRoster.o \
+Collator.o	     FormatImpl.o		MutableLocaleRoster.o \
+Country.o	     FormatParameters.o	NumberFormat.o \
+Currency.o	     FormattingConventions.o	NumberFormatImpl.o \
+DateFormat.o	     GenericNumberFormat.o	NumberFormatParameters.o \
+DateTimeFormat.o   HashMapCatalog.o		TimeFormat.o \
+DefaultCatalog.o   InitLocaleKit.o		TimeUnitFormat.o \
+DurationFormat.o   IntegerFormat.o		TimeZone.o \
+EditableCatalog.o  IntegerFormatImpl.o	UnicodeChar.o
+
 
 CC = @CC@
 
@@ -77,7 +105,7 @@ $(OBJDIR):
 # TODO licon is just stubbed
 
 $(OBJDIR)/$(LIBNAME): $(OBJS)
-	$(CC) @SHAREDLINK@ $(OBJS) -L$(OBJDIR) -lroot -licon -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
+	$(CC) @SHAREDLINK@ $(OBJS) -L$(OBJDIR) -licui18n -lroot -licon -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
 
 install: $(OBJDIR)/$(LIBNAME) $(libdir)
 	cp -f $< $(libdir)/$(LIBNAME)

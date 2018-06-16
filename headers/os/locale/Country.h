@@ -16,10 +16,12 @@ class BBitmap;
 class BLanguage;
 class BMessage;
 
-namespace icu {
+namespace icu_57 {
 	class DateFormat;
 	class Locale;
 }
+
+namespace icu = icu_57;
 
 
 class BCountry {

@@ -12,7 +12,7 @@
 #include <Locker.h>
 
 
-namespace icu {
+namespace icu_57 {
 	class DateFormat;
 }
 

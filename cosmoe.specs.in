@@ -30,11 +30,14 @@
 -I@ABS_TOPDIR@/headers/private/system/arch/x86/
 -I@ABS_TOPDIR@/headers/private/system/linux_kernel/
 -I@ABS_TOPDIR@/headers/private/runtime_loader/
+-I@ABS_TOPDIR@/headers/private/syslog_daemon/
 
 -I@ABS_TOPDIR@/headers/posix/
 
 -I@ABS_TOPDIR@/headers/build/
 -I@ABS_TOPDIR@/headers/build/config_headers/
+
+-I@ABS_TOPDIR@/src/system/libroot/posix/
 
 -I@ABS_TOPDIR@/src/libs/icon/
 -I@ABS_TOPDIR@/src/libs/icon/shape/
@@ -45,6 +48,8 @@
 -I@ABS_TOPDIR@/src/libs/icon/transformer/
 
 -I@ABS_TOPDIR@/src/kits/interface/textview_support/
+-I@ABS_TOPDIR@/src/kits/interface/layouter/
+-I@ABS_TOPDIR@/src/kits/tracker/
 
 -I@ABS_TOPDIR@/headers/libs/icon/
 -I@ABS_TOPDIR@/headers/libs/agg/

@@ -1,91 +1,153 @@
-SubDir HAIKU_TOP src kits storage ;
+SubDir HAIKU_TOP src kits interface ;
+
+# If defined allows to run applications without the registrar
+# -- for development only, of course.
+if $(RUN_WITHOUT_REGISTRAR) {
+	local defines = [ FDefines RUN_WITHOUT_REGISTRAR ] ;
+	SubDirCcFlags $(defines) ;
+	SubDirC++Flags $(defines) ;
+}
+
+# If defined allows to run applications without the app server
+# -- needed until the app server runs on our kernel.
+RUN_WITHOUT_APP_SERVER ?= 0 ;
+if $(RUN_WITHOUT_APP_SERVER) != 0 {
+	local defines = [ FDefines RUN_WITHOUT_APP_SERVER ] ;
+	SubDirCcFlags $(defines) ;
+	SubDirC++Flags $(defines) ;
+}
+
+if ! $(TARGET_PLATFORM_HAIKU_COMPATIBLE) {
+	SubDirCcFlags $(defines) ;
+	SubDirC++Flags $(defines) ;
+}
 
 SetSubDirSupportedPlatforms haiku libbe_test ;
 
-UsePrivateHeaders app libroot shared storage ;
-UsePrivateSystemHeaders ;
+UseLibraryHeaders agg ;
+UsePrivateHeaders app input print interface locale shared support tracker ;
 
-# for libbe_test
-UsePublicHeaders [ FDirName add-ons registrar ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src kits tracker ] ;
 
-SEARCH_SOURCE += [ FDirName $(SUBDIR) disk_device ] ;
-SEARCH_SOURCE += [ FDirName $(SUBDIR) disk_device jobs ] ;
-SEARCH_SOURCE += [ FDirName $(SUBDIR) mime ] ;
-SEARCH_SOURCE += [ FDirName $(SUBDIR) sniffer ] ;
 
-MergeObject <libbe>storage_kit.o :
-	AppFileInfo.cpp
-	Directory.cpp
-	Entry.cpp
-	EntryList.cpp
-	File.cpp
-	FileDescriptorIO.cpp
-	FileIO.cpp
-	FindDirectory.cpp
-	Mime.cpp
-	MimeType.cpp
-	Node.cpp
-	NodeInfo.cpp
-	NodeMonitor.cpp
-	OffsetFile.cpp
-	Path.cpp
-	PathMonitor.cpp
-	Query.cpp
-	QueryPredicate.cpp
-	ResourceFile.cpp
-	ResourceItem.cpp
-	Resources.cpp
-	ResourcesContainer.cpp
-	ResourceStrings.cpp
-	Statable.cpp
-	SymLink.cpp
-	Volume.cpp
-	VolumeRoster.cpp
-	storage_support.cpp
+SEARCH_SOURCE += [ FDirName $(SUBDIR) textview_support ] ;
+SEARCH_SOURCE += [ FDirName $(SUBDIR) layouter ] ;
 
-	# mime
-	database_access.cpp
-	database_support.cpp
+MergeObject <libbe>interface_kit.o :
+	AbstractLayout.cpp
+	AbstractLayoutItem.cpp
+	AffineTransform.cpp
+	Alert.cpp
+	Alignment.cpp
+	Bitmap.cpp
+	BMCPrivate.cpp
+	Box.cpp
+	Button.cpp
+	CardLayout.cpp
+	ChannelControl.cpp
+	ChannelSlider.cpp
+	CheckBox.cpp
+	ColorConversion.cpp
+	ColorControl.cpp
+	ColorTools.cpp
+	Control.cpp
+	ControlLook.cpp
+	DecorInfo.cpp
+	Deskbar.cpp
+	Dragger.cpp
+	Font.cpp
+	Gradient.cpp
+	GradientLinear.cpp
+	GradientRadial.cpp
+	GradientRadialFocus.cpp
+	GradientDiamond.cpp
+	GradientConic.cpp
+	GraphicsDefs.cpp
+	GridLayout.cpp
+	GridLayoutBuilder.cpp
+	GridView.cpp
+	GroupLayout.cpp
+	GroupLayoutBuilder.cpp
+	GroupView.cpp
+	Input.cpp
+	InterfaceDefs.cpp
+	Layout.cpp
+	LayoutContext.cpp
+	LayoutItem.cpp
+	LayoutUtils.cpp
+	ListItem.cpp
+	ListView.cpp
+	Menu.cpp
+	MenuBar.cpp
+	MenuField.cpp
+	MenuItem.cpp
+	MenuPrivate.cpp
+	MenuWindow.cpp
+	OptionControl.cpp
+	OptionPopUp.cpp
+	OutlineListView.cpp
+	Picture.cpp
+	PictureButton.cpp
+	PictureDataWriter.cpp
+	PicturePlayer.cpp
+	Point.cpp
+	Polygon.cpp
+	PopUpMenu.cpp
+	PrintJob.cpp
+	PrivateScreen.cpp
+	RadioButton.cpp
+	Rect.cpp
+	Region.cpp
+	RegionSupport.cpp
+	Screen.cpp
+	ScrollBar.cpp
+	ScrollView.cpp
+	SeparatorItem.cpp
+	SeparatorView.cpp
+	Shape.cpp
+	Shelf.cpp
+	Size.cpp
+	Slider.cpp
+	SpaceLayoutItem.cpp
+	SplitLayout.cpp
+	SplitLayoutBuilder.cpp
+	SplitView.cpp
+	StatusBar.cpp
+	StringItem.cpp
+	StringView.cpp
+	TabView.cpp
+	TextControl.cpp
+	TextInput.cpp
+	TextView.cpp
+	ToolTip.cpp
+	ToolTipManager.cpp
+	TwoDimensionalLayout.cpp
+	View.cpp
+	ViewLayoutItem.cpp
+	Window.cpp
+	WindowStack.cpp
+	ZombieReplicantView.cpp
 
-	# sniffer
-	CharStream.cpp
-	Err.cpp
-	DisjList.cpp
-	Pattern.cpp
-	PatternList.cpp
-	Parser.cpp
-	Range.cpp
-	RPattern.cpp
-	RPatternList.cpp
-	Rule.cpp
+	# BTextView support
+	InlineInput.cpp
+	LineBuffer.cpp
+	StyleBuffer.cpp
+	TextGapBuffer.cpp
+	UndoBuffer.cpp
+	WidthBuffer.cpp
 
-	# disk device API
-	DiskDevice.cpp
-	DiskDeviceJob.cpp
-	DiskDeviceJobGenerator.cpp
-	DiskDeviceJobQueue.cpp
-	DiskDeviceList.cpp
-	DiskDevicePrivate.cpp
-	DiskDeviceRoster.cpp
-	DiskDeviceTypes.cpp
-	DiskDeviceVisitor.cpp
-	DiskSystem.cpp
-	DiskSystemAddOn.cpp
-	DiskSystemAddOnManager.cpp
-	MutablePartition.cpp
-	Partition.cpp
-	PartitionDelegate.cpp
-	PartitioningInfo.cpp
-	PartitionParameterEditor.cpp
-	PartitionReference.cpp
+	# layouter
+	CollapsingLayouter.cpp
+	ComplexLayouter.cpp
+	Layouter.cpp
+	LayoutOptimizer.cpp
+	OneElementLayouter.cpp
+	SimpleLayouter.cpp
 
-	CreateChildJob.cpp
-	DeleteChildJob.cpp
-	DefragmentJob.cpp
-	InitializeJob.cpp
-	MoveJob.cpp
-	RepairJob.cpp
-	ResizeJob.cpp
-	SetStringJob.cpp
-	UninitializeJob.cpp
+	: libshared.a
+;
+
+StaticLibrary libcolumnlistview.a :
+	ColumnListView.cpp
+	ColumnTypes.cpp
 ;

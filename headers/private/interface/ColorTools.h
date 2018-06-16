@@ -76,6 +76,17 @@ inline rgb_color make_color(uint8 red, uint8 green, uint8 blue, uint8 alpha=255)
 	c.alpha = alpha;
 	return c;
 }
+
+inline rgb_color make_color(int red, int green, int blue, int alpha=255)
+{
+	rgb_color c;
+	c.red = red;
+	c.green = green;
+	c.blue = blue;
+	c.alpha = alpha;
+	return c;
+}
+
 #endif
 
 // Mix two colors together, ignoring their relative alpha channels.

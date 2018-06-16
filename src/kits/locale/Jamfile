@@ -1,0 +1,62 @@
+SubDir HAIKU_TOP src kits locale ;
+
+AddSubDirSupportedPlatforms libbe_test ;
+
+UsePrivateHeaders locale shared ;
+UsePublicHeaders locale storage ;
+
+local sources =
+	cat.cpp
+	Catalog.cpp
+	CatalogData.cpp
+	Collator.cpp
+	Country.cpp
+	DefaultCatalog.cpp
+	EditableCatalog.cpp
+	FormattingConventions.cpp
+	HashMapCatalog.cpp
+	InitLocaleKit.cpp
+	Language.cpp
+	Locale.cpp
+	LocaleRoster.cpp
+	MutableLocaleRoster.cpp
+	TimeZone.cpp
+
+	# in progress
+	DateFormat.cpp
+	DateTimeFormat.cpp
+	DurationFormat.cpp
+	TimeFormat.cpp
+	TimeUnitFormat.cpp
+	Format.cpp # Used by some of the above.
+	UnicodeChar.cpp # Already used in ReadOnlyBootPrompt.
+
+	# old, needs investigation
+	# Currency.cpp
+	# FloatFormat.cpp
+	# FloatFormatImpl.cpp
+	# FloatFormatParameters.cpp
+	# FormatImpl.cpp
+	# FormatParameters.cpp
+	# GenericNumberFormat.cpp
+	# IntegerFormat.cpp
+	# IntegerFormatImpl.cpp
+	# IntegerFormatParameters.cpp
+	# NumberFormat.cpp
+	# NumberFormatImpl.cpp
+	# NumberFormatParameters.cpp
+	;
+
+
+SubDirSysHdrs $(HAIKU_ICU_HEADERS) ;
+Includes [ FGristFiles $(sources) ] : $(HAIKU_ICU_HEADERS_DEPENDENCY) ;
+	# Dependency needed to trigger downloading/unzipping the package before
+	# compiling the files.
+
+MergeObject <libbe>locale_kit.o :
+	$(sources)
+	;
+
+StaticLibrary liblocalestub.a
+	: CatalogStub.cpp
+	;

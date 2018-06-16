@@ -12,7 +12,7 @@ LIBNAME = libroot.@LIBEXT@
 
 
 VPATH += libroot/ libroot/os libroot/os/locks libroot/posix \
-kernel_linux/os kernel_linux/os/fs kernel_linux/os/fs/volume/
+kernel_linux/os kernel_linux/os/fs kernel_linux/os/fs/volume/ kernel_linux/messaging/
 
 #fs_attr.o 
 LIBROOT_OBJS = libroot_init.o \
@@ -26,6 +26,7 @@ LINUX_KERNEL_OBJS = kernel_area.o kernel_sem.o kernel_port.o kernel_thread.o \
 kernel_image.o kernel_watch.o kernel_team.o kernel_missing_imp.o real_time_clock.o \
 kernel_memory.o kernel_scheduler.o kernel_time.o kernel_wait_for_objects.o \
 kernel_debug.o libc.o system.o kernel_atomic.o byteorder.o LinuxVolume.o \
+KMessage.o
 
 LINUX_KERNEL_FS_OBJS = kernel_fs_volume.o kernel_fs_query.o kernel_fs_index.o \
 kernel_fs_info.o fs.o fs_attr_untyped.o fs_descriptors.o dir.o

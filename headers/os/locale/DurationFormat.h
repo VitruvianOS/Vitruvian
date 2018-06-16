@@ -13,9 +13,11 @@
 
 class BTimeZone;
 
-namespace icu {
+namespace icu_57 {
 	class GregorianCalendar;
 }
+
+namespace icu = icu_57;
 
 
 class BDurationFormat : public BFormat {

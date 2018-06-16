@@ -9,8 +9,9 @@
 #include <Archivable.h>
 #include <SupportDefs.h>
 
+#include <unicode/coll.h>
 
-namespace icu {
+namespace icu_57 {
 	class Collator;
 	class RuleBasedCollator;
 };

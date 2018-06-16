@@ -50,7 +50,10 @@ initialize_before()
 	BMessage::Private::StaticInit();
 	BRoster::Private::InitBeRoster();
 
-	atfork(initialize_forked_child);
+	// TODO
+	#ifdef __HAIKU__
+		atfork(initialize_forked_child);	
+	#endif
 
 	DBG(OUT("initialize_before() done\n"));
 }

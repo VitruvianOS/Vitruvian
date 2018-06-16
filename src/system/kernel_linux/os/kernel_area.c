@@ -296,3 +296,20 @@ _kern_set_area_protection(area_id id, uint32 protection)
 	UNIMPLEMENTED();
 	return B_OK;
 }
+
+
+area_id
+_kern_transfer_area(area_id area, void **_address, uint32 addressSpec,
+	team_id target)
+{
+	UNIMPLEMENTED();
+	return -1;
+}
+
+
+status_t
+_kern_reserve_address_range(addr_t* _address,
+	uint32 addressSpec, addr_t size)
+{
+
+}

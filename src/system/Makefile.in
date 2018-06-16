@@ -20,7 +20,8 @@ area.o fs_info.o parsedate.o team.o \
 atomic.o fs_query.o port.o thread.o \
 scheduler.o memory.o time.o fs_volume.o \
 find_directory.o image.o sem.o wait_for_objects.o \
-fs_index.o system_revision.o stat.o system_info.o debug.o
+fs_index.o system_revision.o stat.o system_info.o debug.o \
+init_once.o
 
 LINUX_KERNEL_OBJS = kernel_area.o kernel_sem.o kernel_port.o kernel_thread.o \
 kernel_image.o kernel_watch.o kernel_team.o kernel_missing_imp.o real_time_clock.o \

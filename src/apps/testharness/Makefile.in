@@ -1,7 +1,7 @@
 prefix=@prefix@
 bindir=${prefix}/bin
 
-COPTS	= `cat @top_srcdir@/cosmoe.specs` -g -Wall -Wno-multichar -c
+COPTS	= `cat @top_srcdir@/cosmoe.specs` -g -Wall -Wno-multichar -c -include build/BeOSBuildCompatibility.h
 
 OBJS	= main.o testlist.o teststopwatch.o testoskit.o testports.o testsem.o testsempingpong.o
 EXE	= testharness testlist teststopwatch testoskit testports testsem testsempingpong

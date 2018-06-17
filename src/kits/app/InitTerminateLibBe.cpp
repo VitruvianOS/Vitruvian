@@ -42,7 +42,7 @@ initialize_forked_child()
 }
 
 
-extern "C" void
+static void __attribute__ ((constructor))
 initialize_before()
 {
 	DBG(OUT("initialize_before()\n"));
@@ -53,13 +53,15 @@ initialize_before()
 	// TODO
 	#ifdef __HAIKU__
 		atfork(initialize_forked_child);	
+	#else
+		pthread_atfork(initialize_forked_child, NULL, NULL);
 	#endif
 
 	DBG(OUT("initialize_before() done\n"));
 }
 
 
-extern "C" void
+static void __attribute__ ((destructor))
 initialize_after()
 {
 	DBG(OUT("initialize_after()\n"));

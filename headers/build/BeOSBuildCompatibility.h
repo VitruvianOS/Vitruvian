@@ -5,8 +5,6 @@
 
 #define __HAIKU_BEOS_COMPATIBLE_TYPES 1
 
-#include <config/types.h>
-
 #define ATOMIC_FUNCS_ARE_SYSCALLS
 #define __x86_64__ 1
 

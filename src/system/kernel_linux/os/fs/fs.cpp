@@ -664,7 +664,11 @@ _kern_write(int fd, off_t pos, const void *buffer, size_t bufferSize)
 status_t
 _kern_close(int fd)
 {
-	return delete_descriptor(fd);
+	#if 0
+		return delete_descriptor(fd);
+	#else
+		return (::close(fd) == -1) ? errno : B_OK ;
+	#endif
 }
 
 // _kern_dup

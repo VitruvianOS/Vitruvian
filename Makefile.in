@@ -9,6 +9,8 @@ SUBPROJECTS =	\
 				src/libs/icon \
 				src/system \
 				src/kits \
+				src/servers/app \
+				src/servers/registrar \
 				src/apps
 
 include Makefile.common

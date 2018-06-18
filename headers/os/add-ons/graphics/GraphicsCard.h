@@ -153,7 +153,7 @@ int32 control_graphics_card(uint32, void*);
 extern "C" {
 #endif
 
-void dprintf(const char *format, ...);
+//void dprintf(const char *format, ...);
 bool set_dprintf_enabled(bool);
 	/* returns old enable flag */
 

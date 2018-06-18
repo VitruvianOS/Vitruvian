@@ -1,0 +1,63 @@
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+bindir=@bindir@
+fontdir=@FONTDIR@
+
+CFLAGS  = -include build/BeOSBuildCompatibility.h \
+-pipe -O2 -g `freetype-config --cflags` @VIDEODRVCFLAGS@ -c \
+-Wall -Wno-multichar `cat @top_srcdir@/cosmoe.specs`
+CPPFLAGS= $(CFLAGS) -Woverloaded-virtual -Wnon-virtual-dtor
+
+CC	= @CC@
+EXE = appserver
+COSMOELIBDIR = @top_srcdir@/src/kits/objs
+
+VPATH += decorator drawing font stackandtile
+
+OBJS =	Angle.o		   CursorSet.o	 EventStream.o    OffscreenServerWindow.o  ScreenManager.o  SystemPalette.o \
+AppServer.o		   Desktop.o		 HashTable.o	    OffscreenWindow.o ServerApp.o	  View.o \
+BitmapDrawingEngine.o    DesktopListener.o	 InputManager.o   ProfileMessageSupport.o ServerBitmap.o   VirtualScreen.o \
+BitmapManager.o	   DesktopSettings.o	 IntPoint.o	    RegionPool.o	       ServerCursor.o Window.o \
+ClientMemoryAllocator.o  DirectWindowInfo.o  IntRect.o	    RGBColor.o	       ServerFont.o	  WindowList.o \
+CursorData.o		   DrawState.o	 MessageLooper.o  ScreenConfigurations.o   ServerPicture.o  Workspace.o \
+CursorManager.o	   EventDispatcher.o	 MultiLocker.o    Screen.o		       ServerWindow.o   WorkspacesView.o \
+@VIDEODRVOBJ@
+
+OBJDIR	:= objs
+
+include @top_srcdir@/makefile.rules
+
+all :	$(OBJDIR) $(OBJDIR)/$(EXE)
+
+$(OBJDIR):
+	mkdir $(OBJDIR)
+
+$(OBJDIR)/$(EXE): $(OBJS) $(COSMOELIBDIR)/libcosmoe.@LIBEXT@ Makefile
+	$(CC) -g -rdynamic $(OBJS) -o $(OBJDIR)/$(EXE) `freetype-config --libs` @VIDEODRVLIB@ -L$(COSMOELIBDIR) -lcosmoe -lpng -lz -lm -lstdc++ -lpthread
+
+install: $(OBJDIR)/$(EXE) $(bindir) $(fontdir)
+	cp -f $(OBJDIR)/$(EXE) $(bindir)
+	cp -f fonts/ttfonts/*.ttf $(fontdir)
+
+uninstall:
+	rm -f $(bindir)/$(EXE)
+	rm -rf $(fontdir)
+
+$(bindir):
+	mkdir -p $(bindir)
+
+$(fontdir):
+	mkdir -p $(fontdir)
+
+deps: $(OBJDIR) $(DEPS)
+
+clean:
+	rm -f $(OBJS) $(OBJDIR)/*.d $(OBJDIR)/$(EXE) *~
+
+distclean: clean
+	rm -f Makefile
+
+-include $(OBJDIR)/*.d
+
+.PHONY: clean distclean deps doc install uninstall all

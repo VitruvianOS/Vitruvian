@@ -166,6 +166,8 @@ headers/Makefile
 src/kits/Makefile
 src/system/Makefile
 src/libs/icon/Makefile
+src/servers/app/Makefile
+src/servers/registrar/Makefile
 src/apps/Makefile
 src/apps/testharness/Makefile
 src/apps/osutils/Makefile

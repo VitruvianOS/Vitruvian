@@ -1,0 +1,61 @@
+prefix=@prefix@
+bindir=$(prefix)/bin
+
+CFLAGS   = -g -c -Wall -Wno-multichar `cat @top_srcdir@/cosmoe.specs`
+CXXFLAGS = $(CFLAGS) -Woverloaded-virtual -Wnon-virtual-dtor
+
+CC	= @CC@
+CXX	= @CXX@
+EXE	= registrar
+COSMOELIBDIR=@top_srcdir@/src/kits/objs
+
+OBJDIR	:= objs
+
+
+$(OBJDIR)/%.o : %.c
+	$(CC) $(CFLAGS) $< -o $@
+
+$(OBJDIR)/%.o : %.cpp
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+
+OBJS := AppInfoList.o \
+		ClipboardHandler.o \
+		ClipboardTree.o \
+		Event.o \
+		EventMaskWatcher.o \
+		EventQueue.o \
+		MessageEvent.o \
+		MessageHandler.o \
+		MessageRunnerManager.o \
+		MIMEManager.o \
+		RecentApps.o \
+		RecentEntries.o \
+		Registrar.o \
+		RosterAppInfo.o \
+		RosterSettingsCharStream.o \
+		TRoster.o \
+		Watcher.o \
+		WatchingService.o
+
+OBJS := $(addprefix $(OBJDIR)/,$(OBJS))
+
+
+$(EXE): objs $(OBJS)
+	$(CXX) -g $(OBJS) -lstdc++ -L$(COSMOELIBDIR) -lcosmoe -o $(EXE)
+
+objs:
+	mkdir objs
+
+install: $(EXE) $(bindir)
+	cp -f $(EXE) $(bindir)
+	strip --strip-all $(bindir)/$(EXE)
+
+$(bindir):
+	mkdir -p $(bindir)
+
+clean:
+	-rm $(EXE) $(OBJS) *~
+
+distclean: clean
+	-rm -f Makefile

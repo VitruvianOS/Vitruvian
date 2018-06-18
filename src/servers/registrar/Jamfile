@@ -1,0 +1,68 @@
+SubDir HAIKU_TOP src servers registrar ;
+
+UsePrivateHeaders app ;
+UsePrivateHeaders kernel ;
+	# for <util/KMessage.h>
+UsePrivateHeaders libroot ;
+UsePrivateHeaders shared ;
+UsePrivateHeaders storage ;
+UsePrivateHeaders tracker ;
+UsePrivateSystemHeaders ;
+
+SEARCH_SOURCE += [ FDirName $(SUBDIR) mime ] ;
+
+Server registrar
+ 	:
+	AppInfoList.cpp
+	AppInfoListMessagingTargetSet.cpp
+	AuthenticationManager.cpp
+	Clipboard.cpp
+	ClipboardHandler.cpp
+	Event.cpp
+	EventMaskWatcher.cpp
+	EventQueue.cpp
+	MessageDeliverer.cpp
+	MessageEvent.cpp
+	MessageHandler.cpp
+	MessageRunnerManager.cpp
+	MessagingService.cpp
+	MIMEManager.cpp
+	PriorityMessageQueue.cpp
+	RecentApps.cpp
+	RecentEntries.cpp
+	Registrar.cpp
+	RosterAppInfo.cpp
+	RosterSettingsCharStream.cpp
+	ShutdownProcess.cpp
+	TextSnifferAddon.cpp
+	TRoster.cpp
+	Watcher.cpp
+	WatchingService.cpp
+
+	# mime
+	AssociatedTypes.cpp
+	CreateAppMetaMimeThread.cpp
+	Database.cpp
+	InstalledTypes.cpp
+	MimeSnifferAddon.cpp
+	MimeSnifferAddonManager.cpp
+	MimeUpdateThread.cpp
+	RegistrarThread.cpp
+	RegistrarThreadManager.cpp
+	SnifferRules.cpp
+	Supertype.cpp
+	SupportingApps.cpp
+	UpdateMimeInfoThread.cpp
+	:
+	be
+	$(TARGET_LIBSTDC++)
+	$(HAIKU_LOCALE_LIBS)
+	:
+	registrar.rdef
+;
+
+DoCatalogs registrar :
+	x-vnd.haiku-registrar
+	:
+	ShutdownProcess.cpp
+;

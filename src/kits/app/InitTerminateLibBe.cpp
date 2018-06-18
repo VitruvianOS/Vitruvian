@@ -42,7 +42,7 @@ initialize_forked_child()
 }
 
 
-static void __attribute__ ((constructor))
+static void __attribute__ ((constructor(1)))
 initialize_before()
 {
 	DBG(OUT("initialize_before()\n"));
@@ -61,7 +61,7 @@ initialize_before()
 }
 
 
-static void __attribute__ ((destructor))
+static void __attribute__ ((constructor(2)))
 initialize_after()
 {
 	DBG(OUT("initialize_after()\n"));
@@ -72,7 +72,7 @@ initialize_after()
 }
 
 
-extern "C" void
+static void __attribute__ ((destructor))
 terminate_after()
 {
 	DBG(OUT("terminate_after()\n"));

@@ -1,5 +1,6 @@
 /*
  ** Copyright 2004, Bill Hayden. All rights reserved
+ ** Copyright 2018, Dario Casalinuovo. All rights reserved
  ** Distributed under the terms of the MIT License.
  */
 
@@ -44,3 +45,9 @@ _kern_get_next_team_info(int32 *cookie, team_info *info)
 	return B_ERROR;
 }
 
+
+int
+atfork(void (*func)(void))
+{
+	return pthread_atfork(func, NULL, NULL);
+}

@@ -174,7 +174,9 @@ ScreenManager::_ScanDrivers()
 //		  interface = new ViewHWInterface();
 //#endif
 
+#if 0
 		  interface = new XServerHWInterface();
+#endif
 
 		_AddHWInterface(interface);
 		initDrivers = false;

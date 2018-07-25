@@ -12,7 +12,7 @@
 #include <stdio.h>
 
 #include "PathContainer.h"
-#include "Shape.h"
+#include "IconShape.h"
 #include "Style.h"
 #include "StyleContainer.h"
 

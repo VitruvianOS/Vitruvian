@@ -9,6 +9,8 @@
 
 /*!	Manages font families and styles */
 
+#include <SupportDefs.h>
+#include <config/types.h>
 
 #include "FontFamily.h"
 #include "FontManager.h"
@@ -162,8 +164,8 @@ FontManager::MessageReceived(BMessage* message)
 				{
 					const char* name;
 					node_ref nodeRef;
-					if (message->FindInt32("device", &nodeRef.device) != B_OK
-						|| message->FindInt64("directory", &nodeRef.node) != B_OK
+					if (message->FindUInt32("device", &nodeRef.device) != B_OK
+						|| message->FindUInt32("directory", &nodeRef.node) != B_OK
 						|| message->FindString("name", &name) != B_OK)
 						break;
 
@@ -199,10 +201,10 @@ FontManager::MessageReceived(BMessage* message)
 					node_ref nodeRef;
 					uint64 fromNode;
 					uint64 node;
-					if (message->FindInt32("device", &nodeRef.device) != B_OK
-						|| message->FindInt64("to directory", &nodeRef.node) != B_OK
-						|| message->FindInt64("from directory", (int64 *)&fromNode) != B_OK
-						|| message->FindInt64("node", (int64 *)&node) != B_OK
+					if (message->FindUInt32("device", &nodeRef.device) != B_OK
+						|| message->FindUInt32("to directory", &nodeRef.node) != B_OK
+						|| message->FindUInt64("from directory", (uint64 *)&fromNode) != B_OK
+						|| message->FindUInt64("node", (uint64 *)&node) != B_OK
 						|| message->FindString("name", &name) != B_OK)
 						break;
 
@@ -273,9 +275,9 @@ FontManager::MessageReceived(BMessage* message)
 				{
 					node_ref nodeRef;
 					uint64 directoryNode;
-					if (message->FindInt32("device", &nodeRef.device) != B_OK
-						|| message->FindInt64("directory", (int64 *)&directoryNode) != B_OK
-						|| message->FindInt64("node", &nodeRef.node) != B_OK)
+					if (message->FindUInt32("device", &nodeRef.device) != B_OK
+						|| message->FindUInt64("directory", (uint64 *)&directoryNode) != B_OK
+						|| message->FindUInt64("node", &nodeRef.node) != B_OK)
 						break;
 
 					font_directory* directory = _FindDirectory(nodeRef);

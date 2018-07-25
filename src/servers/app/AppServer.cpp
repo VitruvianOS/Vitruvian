@@ -24,7 +24,7 @@
 #include <syslog.h>
 
 
-//#define DEBUG_SERVER
+#define DEBUG_SERVER
 #ifdef DEBUG_SERVER
 #	include <stdio.h>
 #	define STRACE(x) printf x
@@ -77,6 +77,7 @@ AppServer::AppServer()
 
 	// Create the bitmap allocator. Object declared in BitmapManager.cpp
 	gBitmapManager = new BitmapManager();
+	printf("run\n");
 }
 
 
@@ -258,9 +259,12 @@ AppServer::_DispatchMessage(int32 code, BPrivate::LinkReceiver& msg)
 int
 main(int argc, char** argv)
 {
+	printf("main\n");
 	// There can be only one....
-	if (find_port(SERVER_PORT_NAME) >= B_OK)
-		return -1;
+	//if (find_port(SERVER_PORT_NAME) >= B_OK)
+	//	return -1;
+
+	printf("port\n");
 
 	srand(real_time_clock_usecs());
 

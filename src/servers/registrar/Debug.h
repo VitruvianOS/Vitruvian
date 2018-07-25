@@ -6,7 +6,7 @@
 ** This file may be used under the terms of the OpenBeOS License.
 */
 #ifndef DEBUG
-#	define DEBUG 0
+#	define DEBUG 3
 #endif
 
 #include <stdio.h>

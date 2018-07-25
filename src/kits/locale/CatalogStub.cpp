@@ -3,6 +3,7 @@
  * Distributed under the terms of the MIT License.
  */
 
+#include <SupportDefs.h>
 
 #include <Catalog.h>
 #include <LocaleRoster.h>
@@ -15,10 +16,12 @@ static vint32 sCatalogInitOnce = false;
 BCatalog*
 BLocaleRoster::GetCatalog()
 {
+	#ifdef __HAIKU__
 	#if (__GNUC__ < 3)
 		asm volatile(".hidden GetCatalog__13BLocaleRoster");
 	#else
 		asm volatile(".hidden _ZN13BLocaleRoster10GetCatalogEv");
+	#endif
 	#endif
 
 	return _GetCatalog(&sCatalog, &sCatalogInitOnce);

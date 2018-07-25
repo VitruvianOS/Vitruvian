@@ -20,7 +20,7 @@
 #include "Defines.h"
 #include "Icon.h"
 #include "PathContainer.h"
-#include "Shape.h"
+#include "IconShape.h"
 #include "Style.h"
 #include "StyleContainer.h"
 #include "VectorPath.h"

@@ -1,14 +1,32 @@
 #ifndef BEOS_BUILD_COMPATIBILITY_H
 #define BEOS_BUILD_COMPATIBILITY_H
 
+
 #define _IMPEXP_BE
 
 #define __HAIKU_BEOS_COMPATIBLE_TYPES 1
-
-#define ATOMIC_FUNCS_ARE_SYSCALLS
+#define ATOMIC_FUNCS_ARE_SYSCALLS 1
 #define __x86_64__ 1
 
 #define UNIMPLEMENTED()		printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
+
+#define ULONGLONG_MAX   (0xffffffffffffffffULL)
+#define LONGLONG_MAX	(9223372036854775807LL)
+#define LONGLONG_MIN    (-9223372036854775807LL - 1)  /* these are Be specific */
+
+#ifndef _ALIGNBYTES
+#	define _ALIGNBYTES 7
+#endif
+#ifndef _ALIGN
+#	define _ALIGN(p) (((unsigned)(p) + _ALIGNBYTES) & ~_ALIGNBYTES)
+#endif
+
+#include <config/HaikuConfig.h>
+#include <config/types.h>
+#include <SupportDefs.h>
+
+#define DEBUG_SERVER
+#define SERVER_TRUE 0
 
 #if defined(HAIKU_HOST_PLATFORM_CYGWIN)
 #	ifndef __addr_t_defined

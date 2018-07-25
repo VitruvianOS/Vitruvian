@@ -11,6 +11,8 @@
 
 /*! BShape encapsulates a Postscript-style "path" */
 
+#include <SupportDefs.h>
+
 #include <Shape.h>
 
 #include <Message.h>
@@ -22,8 +24,6 @@
 #include <new>
 #include <stdlib.h>
 #include <string.h>
-
-
 
 
 BShapeIterator::BShapeIterator()

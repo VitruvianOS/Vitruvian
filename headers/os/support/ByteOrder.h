@@ -118,7 +118,7 @@ extern status_t swap_data(type_code type, void *data, size_t length,
 extern bool is_type_swapped(type_code type);
 
 
-/* Private implementations */
+// Private implementations 
 extern double __swap_double(double arg);
 extern float  __swap_float(float arg);
 extern uint64 __swap_int64(uint64 arg);

@@ -12,8 +12,32 @@ LIBNAME = libicon.@LIBEXT@
 
 VPATH += ./ flat_icon message style transformer shape transformable
 
-#IconRenderer.o Icon.o
-ICON_LIB_OBJS = IconUtils.o
+
+ICON_LIB_OBJS = \
+FlatIconFormat.o \
+FlatIconImporter.o \
+LittleEndianBuffer.o \
+PathCommandQueue.o \
+Defines.o \
+MessageImporter.o \
+PathContainer.o \
+Shape.o \
+ShapeContainer.o \
+VectorPath.o \
+GradientTransformable.o \
+Style.o \
+StyleContainer.o \
+Transformable.o \
+AffineTransformer.o \
+ContourTransformer.o \
+PathSource.o \
+PerspectiveTransformer.o \
+StrokeTransformer.o \
+Transformer.o \
+TransformerFactory.o \
+Icon.o \
+IconRenderer.o \
+IconUtils.o
 
 CC = @CC@
 

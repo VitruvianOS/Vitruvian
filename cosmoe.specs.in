@@ -7,9 +7,14 @@
 -I@ABS_TOPDIR@/headers/os/app
 -I@ABS_TOPDIR@/headers/os/add-ons/file_system/
 -I@ABS_TOPDIR@/headers/os/add-ons/graphics/
--I@ABS_TOPDIR@/headers/os/drivers/
+-I@ABS_TOPDIR@/headers/os/add-ons/registrar/
 -I@ABS_TOPDIR@/headers/os/locale/
 -I@ABS_TOPDIR@/headers/os/game/
+-I@ABS_TOPDIR@/headers/os/drivers/
+-I@ABS_TOPDIR@/headers/os/drivers/bus/
+-I@ABS_TOPDIR@/headers/os/device/
+-I@ABS_TOPDIR@/headers/os/mail/
+-I@ABS_TOPDIR@/headers/os/net/
 
 -I@ABS_TOPDIR@/headers/private/
 -I@ABS_TOPDIR@/headers/private/app/
@@ -33,6 +38,7 @@
 -I@ABS_TOPDIR@/headers/private/runtime_loader/
 -I@ABS_TOPDIR@/headers/private/syslog_daemon/
 -I@ABS_TOPDIR@/headers/private/graphics/
+-I@ABS_TOPDIR@/headers/private/graphics/common/
 
 -I@ABS_TOPDIR@/headers/posix/
 
@@ -58,7 +64,12 @@
 -I@ABS_TOPDIR@/src/servers/app/stackandtile/
 -I@ABS_TOPDIR@/src/servers/app/drawing/
 -I@ABS_TOPDIR@/src/servers/app/drawing/Painter/
+-I@ABS_TOPDIR@/src/servers/app/drawing/Painter/drawing_modes/
 -I@ABS_TOPDIR@/src/servers/app/decorator/
+
+-I@ABS_TOPDIR@/src/servers/registrar/
+-I@ABS_TOPDIR@/src/servers/registrar/mime/
 
 -I@ABS_TOPDIR@/headers/libs/icon/
 -I@ABS_TOPDIR@/headers/libs/agg/
+-I@ABS_TOPDIR@/headers/libs/linprog/

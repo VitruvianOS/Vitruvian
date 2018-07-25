@@ -13,7 +13,7 @@
 
 #include <OS.h>
 
-#include "Shape.h"
+#include "IconShape.h"
 
 #ifdef ICON_O_MATIC
 // constructor

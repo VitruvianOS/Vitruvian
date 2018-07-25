@@ -115,10 +115,10 @@ ScreenManager::AcquireScreens(ScreenOwner* owner, int32* wishList,
 		if (strncmp(target, "vnc:", 4) == 0)
 			interface = new(nothrow) VNCHWInterface(target);
 		else*/
-		if (strncmp(target, "html5:", 6) == 0)
-			interface = new(nothrow) HTML5HWInterface(target);
-		else
-			interface = new(nothrow) RemoteHWInterface(target);
+		//if (strncmp(target, "html5:", 6) == 0)
+		//	interface = new(nothrow) HTML5HWInterface(target);
+		//else
+		//	interface = new(nothrow) RemoteHWInterface(target);
 		if (interface != NULL) {
 			screen_item* item = _AddHWInterface(interface);
 			if (item != NULL && list.AddItem(item->screen)) {
@@ -166,13 +166,15 @@ ScreenManager::_ScanDrivers()
 	bool initDrivers = true;
 	while (initDrivers) {
 
-#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
-		  interface = new AccelerantHWInterface();
-#elif defined(USE_DIRECT_WINDOW_TEST_MODE)
-		  interface = new DWindowHWInterface();
-#else
-		  interface = new ViewHWInterface();
-#endif
+//#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+//		  interface = new AccelerantHWInterface();
+//#elif defined(USE_DIRECT_WINDOW_TEST_MODE)
+//		  interface = new DWindowHWInterface();
+//#else
+//		  interface = new ViewHWInterface();
+//#endif
+
+		  interface = new XServerHWInterface();
 
 		_AddHWInterface(interface);
 		initDrivers = false;

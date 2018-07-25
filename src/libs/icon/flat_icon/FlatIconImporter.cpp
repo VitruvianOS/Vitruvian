@@ -25,7 +25,7 @@
 #include "PathCommandQueue.h"
 #include "PathContainer.h"
 #include "PerspectiveTransformer.h"
-#include "Shape.h"
+#include "IconShape.h"
 #include "StrokeTransformer.h"
 #include "Style.h"
 #include "StyleContainer.h"

@@ -9,6 +9,7 @@
  *		Stephan Aßmus <superstippi@gmx.de>
  */
 
+#include <SupportDefs.h>
 
 #include "ServerFont.h"
 

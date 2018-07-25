@@ -11,11 +11,11 @@ CPPFLAGS = $(CFLAGS) -Woverloaded-virtual -Wno-ctor-dtor-privacy -Wnon-virtual-d
 LIBNAME = libbe.@LIBEXT@
 
 VPATH += ./ support storage storage/mime storage/sniffer app \
-interface interface/layouter interface/textview_support shared locale
+interface interface/layouter interface/textview_support shared locale network/libnetapi
 
 SUPPORT_KIT_OBJS = Archivable.o BufferedDataIO.o  Flattenable.o  Referenceable.o \
 ArchivingManagers.o BufferIO.o	StopWatch.o ByteOrder.o List.o String.o \
-Beep.o DataIO.o Locker.o StringList.o BlockCache.o DateTime.o PointerList.o Url.o
+Beep.o DataIO.o Locker.o StringList.o BlockCache.o DateTime.o PointerList.o
 
 #FilePanel.o kernel_interface.POSIX.o
 
@@ -67,7 +67,8 @@ InlineInput.o  LineBuffer.o  StyleBuffer.o  TextGapBuffer.o  UndoBuffer.o  Width
 CollapsingLayouter.o	ComplexLayouter.o  Layouter.o LayoutOptimizer.o	OneElementLayouter.o \
 SimpleLayouter.o
 
-SHARED_KIT_OBJS = DataBuffer.o DragTrackingFilter.o
+SHARED_KIT_OBJS = CalendarView.o  DragTrackingFilter.o  NaturalCompare.o \
+DataBuffer.o	  HashString.o
 
 LOCALE_KIT_OBJS = Catalog.o	     FloatFormat.o		IntegerFormatParameters.o \
 CatalogData.o      FloatFormatImpl.o	Language.o \
@@ -82,6 +83,7 @@ DefaultCatalog.o   InitLocaleKit.o		TimeUnitFormat.o \
 DurationFormat.o   IntegerFormat.o		TimeZone.o \
 EditableCatalog.o  IntegerFormatImpl.o	UnicodeChar.o
 
+NETWORK_KIT_OBJS = Url.o
 
 CC = @CC@
 
@@ -91,6 +93,7 @@ OBJS += $(APP_KIT_OBJS)
 OBJS += $(INTERFACE_KIT_OBJS)
 OBJS += $(SHARED_KIT_OBJS)
 OBJS += $(LOCALE_KIT_OBJS)
+OBJS += $(NETWORK_KIT_OBJS)
 
 OBJDIR	:= @top_srcdir@/objs
 ROOTLIBDIR = @top_srcdir@/objs
@@ -105,7 +108,7 @@ $(OBJDIR):
 # TODO licon is just stubbed
 
 $(OBJDIR)/$(LIBNAME): $(OBJS)
-	$(CC) @SHAREDLINK@ $(OBJS) -L$(OBJDIR) -licui18n -lroot -licon -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
+	$(CC) @SHAREDLINK@ $(OBJS) -L$(OBJDIR) -lroot -licon -llinprog -lagg -licui18n -lstdc++ -lm -lpthread -ldl -o $(OBJDIR)/$(LIBNAME)
 
 install: $(OBJDIR)/$(LIBNAME) $(libdir)
 	cp -f $< $(libdir)/$(LIBNAME)

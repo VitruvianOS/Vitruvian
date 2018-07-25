@@ -7,13 +7,13 @@ fontdir=@FONTDIR@
 CFLAGS  = -include build/BeOSBuildCompatibility.h \
 -pipe -O2 -g `freetype-config --cflags` @VIDEODRVCFLAGS@ -c \
 -Wall -Wno-multichar `cat @top_srcdir@/cosmoe.specs`
-CPPFLAGS= $(CFLAGS) -Woverloaded-virtual -Wnon-virtual-dtor
+CPPFLAGS= $(CFLAGS) -Woverloaded-virtual -Wnon-virtual-dtor -fpermissive
 
 CC	= @CC@
 EXE = appserver
-COSMOELIBDIR = @top_srcdir@/src/kits/objs
+COSMOELIBDIR = @top_srcdir@/objs
 
-VPATH += decorator drawing font stackandtile
+VPATH += decorator drawing font stackandtile drawing/Painter drawing/Painter/drawing_modes/  drawing/html5/
 
 OBJS =	Angle.o		   CursorSet.o	 EventStream.o    OffscreenServerWindow.o  ScreenManager.o  SystemPalette.o \
 AppServer.o		   Desktop.o		 HashTable.o	    OffscreenWindow.o ServerApp.o	  View.o \
@@ -22,8 +22,21 @@ BitmapManager.o	   DesktopSettings.o	 IntPoint.o	    RegionPool.o	       ServerC
 ClientMemoryAllocator.o  DirectWindowInfo.o  IntRect.o	    RGBColor.o	       ServerFont.o	  WindowList.o \
 CursorData.o		   DrawState.o	 MessageLooper.o  ScreenConfigurations.o   ServerPicture.o  Workspace.o \
 CursorManager.o	   EventDispatcher.o	 MultiLocker.o    Screen.o		       ServerWindow.o   WorkspacesView.o \
-@VIDEODRVOBJ@
+Decorator.o  DecorManager.o  DefaultDecorator.o  DefaultWindowBehaviour.o  MagneticBorder.o  WindowBehaviour.o \
+AccelerantBuffer.o	   BitmapBuffer.o	  drawing_support.o	  HWInterface.o   PatternHandler.o \
+AccelerantHWInterface.o  BitmapHWInterface.o  DWindowBuffer.o	  MallocBuffer.o  UpdateQueue.o \
+BBitmapBuffer.o	   DrawingEngine.o	  DWindowHWInterface.o  Overlay.o	    ViewHWInterface.o \
+FontCache.o  FontCacheEntry.o  FontEngine.o  FontFamily.o    FontStyle.o \
+SATDecorator.o  SATGroup.o	SATWindow.o  StackAndTile.o  Stacking.o  Tiling.o \
+Painter.o GlobalSubpixelSettings.o PixelFormat.o AGGTextRenderer.o FontManager.o
 
+#CanvasEventStream.o	NetSender.o		 WebWorker.o \
+#CanvasMessage.o	StreamingRingBuffer.o \
+#HTML5DrawingEngine.o	WebHandler.o
+# WebServer.o base64.o		HTML5HWInterface.o	  
+
+#@VIDEODRVOBJ@
+#@VIDEODRVLIB@
 OBJDIR	:= objs
 
 include @top_srcdir@/makefile.rules
@@ -33,8 +46,8 @@ all :	$(OBJDIR) $(OBJDIR)/$(EXE)
 $(OBJDIR):
 	mkdir $(OBJDIR)
 
-$(OBJDIR)/$(EXE): $(OBJS) $(COSMOELIBDIR)/libcosmoe.@LIBEXT@ Makefile
-	$(CC) -g -rdynamic $(OBJS) -o $(OBJDIR)/$(EXE) `freetype-config --libs` @VIDEODRVLIB@ -L$(COSMOELIBDIR) -lcosmoe -lpng -lz -lm -lstdc++ -lpthread
+$(OBJDIR)/$(EXE): $(OBJS) $(COSMOELIBDIR)/libbe.@LIBEXT@ Makefile
+	$(CC) -g -rdynamic $(OBJS) -lbe -o $(OBJDIR)/$(EXE) `freetype-config --libs` -L$(COSMOELIBDIR) -licon -llinprog -lagg -lroot -lpng -lz -lm -lstdc++ -lpthread
 
 install: $(OBJDIR)/$(EXE) $(bindir) $(fontdir)
 	cp -f $(OBJDIR)/$(EXE) $(bindir)

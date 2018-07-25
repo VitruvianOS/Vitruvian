@@ -5,7 +5,7 @@
 #ifndef _SHAPE_H
 #define _SHAPE_H
 
-
+#include <SupportDefs.h>
 #include <Archivable.h>
 
 class BPoint;

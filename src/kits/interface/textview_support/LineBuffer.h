@@ -9,7 +9,7 @@
 #define __LINE_BUFFER_H
 
 
-#include <SupportDefs.h>
+//#include <SupportDefs.h>
 #include <TextView.h>
 
 #include "TextViewSupportBuffer.h"

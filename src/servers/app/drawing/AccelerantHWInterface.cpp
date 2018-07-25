@@ -49,6 +49,7 @@
 using std::nothrow;
 
 
+#define DEBUG_DRIVER_MODULE 1
 #ifdef DEBUG_DRIVER_MODULE
 #	include <stdio.h>
 #	define ATRACE(x) printf x
@@ -451,13 +452,13 @@ AccelerantHWInterface::_FindBestMode(const display_mode& compareMode,
 		int32 diff
 			= 1000 * abs(mode.timing.h_display - compareMode.timing.h_display)
 			+ 1000 * abs(mode.timing.v_display - compareMode.timing.v_display)
-			+ abs(mode.timing.h_total * mode.timing.v_total
-					- compareMode.timing.h_total * compareMode.timing.v_total)
+			+ abs((int)(mode.timing.h_total * mode.timing.v_total
+					- compareMode.timing.h_total * compareMode.timing.v_total))
 				/ 100
-			+ abs(mode.timing.pixel_clock - compareMode.timing.pixel_clock)
+			+ abs((int)(mode.timing.pixel_clock - compareMode.timing.pixel_clock))
 				/ 100
 			+ (int32)(500 * fabs(aspectRatio - compareAspectRatio))
-			+ 100 * abs(mode.space - compareMode.space);
+			+ 100 * abs((int)(mode.space - compareMode.space));
 
 		if (bestIndex == -1 || diff < bestDiff) {
 			bestDiff = diff;

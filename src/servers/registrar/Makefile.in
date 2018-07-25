@@ -1,16 +1,18 @@
 prefix=@prefix@
 bindir=$(prefix)/bin
 
-CFLAGS   = -g -c -Wall -Wno-multichar `cat @top_srcdir@/cosmoe.specs`
-CXXFLAGS = $(CFLAGS) -Woverloaded-virtual -Wnon-virtual-dtor
+CFLAGS   = -include build/BeOSBuildCompatibility.h \
+-g -c -Wall -Wno-multichar `cat @top_srcdir@/cosmoe.specs`
+CXXFLAGS = $(CFLAGS) -Woverloaded-virtual -Wnon-virtual-dtor -fpermissive
 
 CC	= @CC@
 CXX	= @CXX@
 EXE	= registrar
-COSMOELIBDIR=@top_srcdir@/src/kits/objs
+COSMOELIBDIR = @top_srcdir@/objs
 
 OBJDIR	:= objs
 
+VPATH += mime
 
 $(OBJDIR)/%.o : %.c
 	$(CC) $(CFLAGS) $< -o $@
@@ -21,7 +23,6 @@ $(OBJDIR)/%.o : %.cpp
 
 OBJS := AppInfoList.o \
 		ClipboardHandler.o \
-		ClipboardTree.o \
 		Event.o \
 		EventMaskWatcher.o \
 		EventQueue.o \
@@ -36,13 +37,22 @@ OBJS := AppInfoList.o \
 		RosterSettingsCharStream.o \
 		TRoster.o \
 		Watcher.o \
-		WatchingService.o
+		WatchingService.o \
+		AssociatedTypes.o	     RegistrarThread.o \
+		CreateAppMetaMimeThread.o  RegistrarThreadManager.o \
+		Database.o		     SnifferRules.o \
+		InstalledTypes.o	     Supertype.o \
+		MimeSnifferAddon.o	     SupportingApps.o \
+		MimeSnifferAddonManager.o  UpdateMimeInfoThread.o \
+		MimeUpdateThread.o Clipboard.o MessageDeliverer.o AuthenticationManager.o \
+		ShutdownProcess.o AppInfoListMessagingTargetSet.o TextSnifferAddon.o MessagingService.o
+
 
 OBJS := $(addprefix $(OBJDIR)/,$(OBJS))
 
 
 $(EXE): objs $(OBJS)
-	$(CXX) -g $(OBJS) -lstdc++ -L$(COSMOELIBDIR) -lcosmoe -o $(EXE)
+	$(CXX) -g $(OBJS) -lstdc++ -L$(COSMOELIBDIR) -lbe -lroot -o $(EXE)
 
 objs:
 	mkdir objs

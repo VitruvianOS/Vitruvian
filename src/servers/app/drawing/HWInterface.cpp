@@ -23,6 +23,7 @@
 #include "SystemPalette.h"
 #include "UpdateQueue.h"
 
+#include "syscalls.h"
 
 using std::nothrow;
 
@@ -813,7 +814,7 @@ HWInterface::_CopyToFront(uint8* src, uint32 srcBPR, int32 x, int32 y,
 					args.top = y;
 					args.right = right;
 					args.bottom = bottom;
-					if (ioctl(fVGADevice, VGA_PLANAR_BLIT, &args, sizeof(args))
+					if (_kern_ioctl(fVGADevice, VGA_PLANAR_BLIT, &args, sizeof(args))
 							== 0)
 						break;
 				}

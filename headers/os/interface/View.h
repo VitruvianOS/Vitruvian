@@ -5,6 +5,7 @@
 #ifndef	_VIEW_H
 #define	_VIEW_H
 
+#include <SupportDefs.h>
 
 #include <Alignment.h>
 #include <Font.h>

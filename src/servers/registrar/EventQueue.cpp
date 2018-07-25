@@ -6,6 +6,7 @@
  *		Ingo Weinhold (bonefish@users.sf.net)
  */
 
+#include <SupportDefs.h>
 
 #include "EventQueue.h"
 
@@ -114,7 +115,7 @@ EventQueue::EventQueue(const char *name)
 EventQueue::~EventQueue()
 {
 	Die();
-	while (Event *event = (Event*)fEvents.RemoveItem(0L)) {
+	while (Event *event = (Event*)fEvents.RemoveItem((int32)0)) {
 		if (event->IsAutoDelete())
 			delete event;
 	}
@@ -347,7 +348,7 @@ EventQueue::_EventLooper()
 				// do events, that are supposed to go off
 				while (!fTerminating && Lock() && !fEvents.IsEmpty()
 					   && system_time() >= _EventAt(0)->Time()) {
-					Event *event = (Event*)fEvents.RemoveItem(0L);
+					Event *event = (Event*)fEvents.RemoveItem((int32)0);
 					Unlock();
 					bool autoDeleteEvent = event->IsAutoDelete();
 					bool deleteEvent = event->Do(this) || autoDeleteEvent;

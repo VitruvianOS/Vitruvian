@@ -9,6 +9,7 @@
  *		Stephan Aßmus <superstippi@gmx.de>
  */
 
+#include <SupportDefs.h>
 
 #include <Menu.h>
 
@@ -2883,7 +2884,7 @@ bool
 BMenu::_OkToProceed(BMenuItem* item, bool keyDown)
 {
 	BPoint where;
-	ulong buttons;
+	uint32 buttons;
 	GetMouse(&where, &buttons, false);
 	bool stickyMode = _IsStickyMode();
 	// Quit if user clicks the mouse button in sticky mode

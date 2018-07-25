@@ -23,6 +23,8 @@
 // Known Bugs:
 // - Double buffering doesn't work well (disabled by default)
 
+#include <SupportDefs.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <new>
@@ -739,7 +741,7 @@ BTextView::WindowActivated(bool state)
 	}
 
 	BPoint where;
-	ulong buttons;
+	uint32 buttons;
 	GetMouse(&where, &buttons, false);
 
 	if (Bounds().Contains(where))

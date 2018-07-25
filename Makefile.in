@@ -7,6 +7,8 @@
 SUBPROJECTS =	\
 				headers \
 				src/libs/icon \
+				src/libs/linprog \
+				src/libs/agg \
 				src/system \
 				src/kits \
 				src/servers/app \

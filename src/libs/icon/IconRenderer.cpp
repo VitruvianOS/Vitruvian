@@ -19,7 +19,7 @@
 
 #include "GradientTransformable.h"
 #include "Icon.h"
-#include "Shape.h"
+#include "IconShape.h"
 #include "ShapeContainer.h"
 #include "Style.h"
 #include "VectorPath.h"

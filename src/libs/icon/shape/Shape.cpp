@@ -6,7 +6,7 @@
  *		Stephan Aßmus <superstippi@gmx.de>
  */
 
-#include "Shape.h"
+#include "IconShape.h"
 
 #include <Message.h>
 #include <TypeConstants.h>

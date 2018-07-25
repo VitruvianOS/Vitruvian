@@ -10,11 +10,10 @@ and binaries that can be used on Linux distributions to run the system as a mult
 
 #### Video backends
 
-Supported:
-* XServer (to be eventually replaced by Wayland)
-* DirectFB (planned to be deprecated in favor of the linuxfb driver)
+There's no app_server backend at this moment.
 
-Unsupported:
+Planned to be supported:
+* XServer (to be eventually replaced by Wayland)
 * Linux direct framebuffer
 * Wayland
 

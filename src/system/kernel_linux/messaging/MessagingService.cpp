@@ -11,7 +11,7 @@
 
 #include <AutoDeleter.h>
 #include <KernelExport.h>
-#include <KMessage.h>
+#include <util/KMessage.h>
 #include <messaging.h>
 #include <MessagingServiceDefs.h>
 
@@ -559,7 +559,7 @@ init_messaging_service()
 	- an error code otherwise.
 */
 area_id
-_user_register_messaging_service(sem_id lockSem, sem_id counterSem)
+_kern_register_messaging_service(sem_id lockSem, sem_id counterSem)
 {
 	// check, if init_messaging_service() has been called yet
 	if (!sMessagingService)
@@ -579,7 +579,7 @@ _user_register_messaging_service(sem_id lockSem, sem_id counterSem)
 
 
 status_t
-_user_unregister_messaging_service()
+_kern_unregister_messaging_service()
 {
 	// check, if init_messaging_service() has been called yet
 	if (!sMessagingService)

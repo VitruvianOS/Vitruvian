@@ -21,13 +21,13 @@ atomic.o fs_query.o port.o thread.o \
 scheduler.o memory.o time.o fs_volume.o \
 find_directory.o image.o sem.o wait_for_objects.o \
 fs_index.o system_revision.o stat.o system_info.o debug.o \
-init_once.o
+init_once.o user_group_common.o mutex.o recursive_lock.o
 
 LINUX_KERNEL_OBJS = kernel_area.o kernel_sem.o kernel_port.o kernel_thread.o \
 kernel_image.o kernel_watch.o kernel_team.o kernel_missing_imp.o real_time_clock.o \
 kernel_memory.o kernel_scheduler.o kernel_time.o kernel_wait_for_objects.o \
 kernel_debug.o libc.o system.o kernel_atomic.o byteorder.o LinuxVolume.o \
-KMessage.o
+KMessage.o MessagingService.o system_ioctl.o framebuffer.o kernel_mutex.o shutdown.o
 
 LINUX_KERNEL_FS_OBJS = kernel_fs_volume.o kernel_fs_query.o kernel_fs_index.o \
 kernel_fs_info.o fs.o fs_attr_untyped.o fs_descriptors.o dir.o

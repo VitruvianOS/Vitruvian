@@ -1,0 +1,29 @@
+target_sources(root PRIVATE
+	area.c
+	atomic.c
+	debug.c
+	find_directory.cpp
+	#fs_attr.cpp
+	fs_index.c
+	fs_info.c
+	fs_query.cpp
+	fs_volume.c
+	image.cpp
+	locks
+	memory.cpp
+	parsedate.cpp
+	port.c
+	scheduler.c
+	sem.c
+	system_info.c
+	system_revision.c
+	team.c
+	thread.c
+	time.cpp
+	wait_for_objects.cpp
+
+	locks/init_once.cpp
+	locks/mutex.cpp
+	locks/recursive_lock.cpp
+	locks/rw_lock.cpp
+)

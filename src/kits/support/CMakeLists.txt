@@ -1,0 +1,22 @@
+target_sources(be PRIVATE
+	Archivable.cpp
+	ArchivingManagers.cpp
+	ArchivingManagers.h
+	Beep.cpp
+	BlockCache.cpp
+	BufferedDataIO.cpp
+	BufferIO.cpp
+	ByteOrder.cpp
+	CMakeLists.txt
+	DataIO.cpp
+	DateTime.cpp
+	Flattenable.cpp
+	List.cpp
+	Locker.cpp
+	PointerList.cpp
+	Referenceable.cpp
+	StopWatch.cpp
+	String.cpp
+	StringList.cpp
+	#Url2.cpp
+)

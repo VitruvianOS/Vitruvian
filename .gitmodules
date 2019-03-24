@@ -1,0 +1,3 @@
+[submodule "external/icu-cmake"]
+	path = external/icu-cmake
+	url = https://github.com/viaduck/icu-cmake.git

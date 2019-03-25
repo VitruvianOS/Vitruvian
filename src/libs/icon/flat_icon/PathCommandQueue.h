@@ -8,18 +8,15 @@
 #ifndef PATH_COMMAND_QUEUE_H
 #define PATH_COMMAND_QUEUE_H
 
+#include <Point.h>
 
 #include "IconBuild.h"
 #include "LittleEndianBuffer.h"
-
-
-class BPoint;
+#include "VectorPath.h"
 
 
 _BEGIN_ICON_NAMESPACE
 
-
-class VectorPath;
 
 class PathCommandQueue {
  public:

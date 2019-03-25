@@ -11,6 +11,8 @@
 #include "PathContainer.h"
 #include "VectorPath.h"
 
+_BEGIN_ICON_NAMESPACE
+
 // constructor
 PathSource::PathSource(PathContainer* paths)
 	: VertexSource()
@@ -83,3 +85,4 @@ PathSource::SetGlobalScale(double scale)
 	fAGGCurvedPath.approximation_scale(fLastTransformerScale * fGlobalScale);
 }
 
+_END_ICON_NAMESPACE

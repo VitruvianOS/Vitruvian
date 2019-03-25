@@ -6,7 +6,7 @@
  *		Stephan Aßmus <superstippi@gmx.de>
  */
 
-#include "IconShape.h"
+#include "Shape.h"
 
 #include <Message.h>
 #include <TypeConstants.h>
@@ -185,7 +185,7 @@ Shape::Unarchive(const BMessage* archive)
 	}
 
 	// read transformation
-	int32 size = Transformable::matrix_size;
+	int32 size = 6;
 	const void* matrix;
 	ssize_t dataSize = size * sizeof(double);
 	ret = archive->FindData("transformation", B_DOUBLE_TYPE,
@@ -335,7 +335,7 @@ Shape::ObjectChanged(const Observable* object)
 void
 Shape::PathAdded(VectorPath* path, int32 index)
 {
-	path->Acquire();
+	path->AcquireReference();
 	path->AddListener(this);
 	_NotifyRerender();
 }
@@ -346,7 +346,7 @@ Shape::PathRemoved(VectorPath* path)
 {
 	path->RemoveListener(this);
 	_NotifyRerender();
-	path->Release();
+	path->ReleaseReference();
 }
 
 // #pragma mark -
@@ -417,7 +417,7 @@ Shape::SetStyle(::Style* style)
 #ifdef ICON_O_MATIC
 	if (fStyle) {
 		fStyle->RemoveObserver(this);
-		fStyle->Release();
+		fStyle->ReleaseReference();
 	}
 	::Style* oldStyle = fStyle;
 #endif
@@ -426,7 +426,7 @@ Shape::SetStyle(::Style* style)
 
 #ifdef ICON_O_MATIC
 	if (fStyle) {
-		fStyle->Acquire();
+		fStyle->AcquireReference();
 		fStyle->AddObserver(this);
 	}
 

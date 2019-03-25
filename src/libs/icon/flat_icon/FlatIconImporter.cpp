@@ -25,13 +25,16 @@
 #include "PathCommandQueue.h"
 #include "PathContainer.h"
 #include "PerspectiveTransformer.h"
-#include "IconShape.h"
+#include "Shape.h"
 #include "StrokeTransformer.h"
 #include "Style.h"
 #include "StyleContainer.h"
 #include "VectorPath.h"
 
 using std::nothrow;
+using BPrivate::Icon::Shape;
+
+_BEGIN_ICON_NAMESPACE
 
 // constructor
 FlatIconImporter::FlatIconImporter()
@@ -143,7 +146,7 @@ FlatIconImporter::_ParseSections(LittleEndianBuffer& buffer, Icon* icon)
 static bool
 _ReadTransformable(LittleEndianBuffer& buffer, Transformable* transformable)
 {
-	int32 matrixSize = Transformable::matrix_size;
+	int32 matrixSize = 6;
 	double matrix[matrixSize];
 	for (int32 i = 0; i < matrixSize; i++) {
 		float value;
@@ -238,7 +241,7 @@ _ReadGradientStyle(LittleEndianBuffer& buffer)
 
 		if (!buffer.Read(stopOffset))
 			return NULL;
-		
+
 		if (alpha) {
 			if (gray) {
 				if (!buffer.Read(color.red)
@@ -543,7 +546,7 @@ FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
 	}
 
 	// create the shape
-	Shape* shape = new (nothrow) Shape(style);
+	BPrivate::Icon::Shape* shape = new (nothrow) BPrivate::Icon::Shape(style);
 	ObjectDeleter<Shape> shapeDeleter(shape);
 
 	if (!shape || shape->InitCheck() < B_OK)
@@ -654,5 +657,5 @@ FlatIconImporter::_ParseShapes(LittleEndianBuffer& buffer,
 }
 
 
-
+_END_ICON_NAMESPACE
 

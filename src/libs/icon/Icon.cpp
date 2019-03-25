@@ -12,9 +12,10 @@
 #include <stdio.h>
 
 #include "PathContainer.h"
-#include "IconShape.h"
+#include "Shape.h"
 #include "Style.h"
 #include "StyleContainer.h"
+#include "VectorPath.h"
 
 using std::nothrow;
 

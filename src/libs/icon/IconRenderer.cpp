@@ -19,7 +19,7 @@
 
 #include "GradientTransformable.h"
 #include "Icon.h"
-#include "IconShape.h"
+#include "Shape.h"
 #include "ShapeContainer.h"
 #include "Style.h"
 #include "VectorPath.h"
@@ -316,7 +316,7 @@ IconRenderer::Demultiply()
 
 // #pragma mark -
 
-typedef agg::conv_transform<VertexSource, Transformation> ScaledPath;
+typedef agg::conv_transform<BPrivate::Icon::VertexSource, Transformation> ScaledPath;
 typedef agg::conv_transform<ScaledPath, HintingTransformer> HintedPath;
 
 // _Render

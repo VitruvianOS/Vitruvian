@@ -8,8 +8,8 @@
 
 #include "VectorPath.h"
 
-#include <malloc.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <agg_basics.h>
@@ -38,13 +38,13 @@
 
 #include "Transformable.h"
 
+_BEGIN_ICON_NAMESPACE
 
 #define obj_new(type, n)		((type *)malloc ((n) * sizeof(type)))
 #define obj_renew(p, type, n)	((type *)realloc (p, (n) * sizeof(type)))
 #define obj_free				free
 
 #define ALLOC_CHUNKS 20
-
 
 bool
 get_path_storage(agg::path_storage& path, const control_point* points,
@@ -976,7 +976,7 @@ void
 VectorPath::PrintToStream() const
 {
 	for (int32 i = 0; i < fPointCount; i++) {
-		printf("point %ld: (%f, %f) -> (%f, %f) -> (%f, %f) (%d)\n", i,
+		printf("point %" B_PRId32 ": (%f, %f) -> (%f, %f) -> (%f, %f) (%d)\n", i,
 			fPath[i].point_in.x, fPath[i].point_in.y,
 			fPath[i].point.x, fPath[i].point.y,
 			fPath[i].point_out.x, fPath[i].point_out.y, fPath[i].connected);
@@ -1085,7 +1085,7 @@ VectorPath::_SetPointCount(int32 count)
 		// reallocation might have failed
 		fPointCount = 0;
 		fAllocCount = 0;
-		fprintf(stderr, "VectorPath::_SetPointCount(%ld) - allocation failed!\n",
+		fprintf(stderr, "VectorPath::_SetPointCount(%" B_PRId32 ") - allocation failed!\n",
 			count);
 	}
 
@@ -1172,3 +1172,5 @@ VectorPath::_NotifyPathReversed() const
 }
 
 #endif // ICON_O_MATIC
+
+_END_ICON_NAMESPACE

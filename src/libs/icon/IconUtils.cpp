@@ -1,11 +1,12 @@
 /*
- * Copyright 2006-2011, Haiku. All rights reserved.
+ * Copyright 2006-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Stephan Aßmus <superstippi@gmx.de>
- *		Ingo Weinhold <bonefish@cs.tu-berlin.de>
- * 		John Scipione <jscipione@gmail.com>
+ *		Stephan Aßmus, superstippi@gmx.de
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		John Scipione, jscipione@gmail.com
+ *		Ingo Weinhold, bonefish@cs.tu-berlin.de
  */
 
 
@@ -21,18 +22,23 @@
 #include <TypeConstants.h>
 
 #include "AutoDeleter.h"
-//#include "Icon.h"
-//#include "IconRenderer.h"
-//#include "FlatIconImporter.h"
-//#include "MessageImporter.h"
+#include "Icon.h"
+#include "IconRenderer.h"
+#include "FlatIconImporter.h"
+#include "MessageImporter.h"
+
 
 #ifndef HAIKU_TARGET_PLATFORM_HAIKU
 #	define B_MINI_ICON_TYPE		'MICN'
 #	define B_LARGE_ICON_TYPE	'ICON'
 #endif
 
-//_USING_ICON_NAMESPACE;
+
+_USING_ICON_NAMESPACE;
 using std::nothrow;
+
+
+//	#pragma mark - Scaling functions
 
 
 static void
@@ -102,19 +108,82 @@ scale_bilinear(uint8* bits, int32 srcWidth, int32 srcHeight, int32 dstWidth,
 
 
 static void
+scale_down(const uint8* srcBits, uint8* dstBits, int32 srcWidth, int32 srcHeight,
+	int32 dstWidth, int32 dstHeight)
+{
+	int32 l;
+	int32 c;
+	float t;
+	float u;
+	float tmp;
+	float d1, d2, d3, d4;
+		// coefficients
+	rgb_color p1, p2, p3, p4;
+		// nearby pixels
+	rgb_color out;
+		// color components
+
+	for (int32 i = 0; i < dstHeight; i++) {
+		for (int32 j = 0; j < dstWidth; j++) {
+			tmp = (float)(i) / (float)(dstHeight - 1) * (srcHeight - 1);
+			l = (int32)floorf(tmp);
+			if (l < 0)
+				l = 0;
+			else if (l >= srcHeight - 1)
+				l = srcHeight - 2;
+			u = tmp - l;
+
+			tmp = (float)(j) / (float)(dstWidth - 1) * (srcWidth - 1);
+			c = (int32)floorf(tmp);
+			if (c < 0)
+				c = 0;
+			else if (c >= srcWidth - 1)
+				c = srcWidth - 2;
+			t = tmp - c;
+
+			// coefficients
+			d1 = (1 - t) * (1 - u);
+			d2 = t * (1 - u);
+			d3 = t * u;
+			d4 = (1 - t) * u;
+
+			// nearby pixels
+			p1 = *((rgb_color*)srcBits + (l * srcWidth) + c);
+			p2 = *((rgb_color*)srcBits + (l * srcWidth) + c + 1);
+			p3 = *((rgb_color*)srcBits + ((l + 1)* srcWidth) + c + 1);
+			p4 = *((rgb_color*)srcBits + ((l + 1)* srcWidth) + c);
+
+			// color components
+			out.blue = (uint8)(p1.blue * d1 + p2.blue * d2 + p3.blue * d3
+				+ p4.blue * d4);
+			out.green = (uint8)(p1.green * d1 + p2.green * d2 + p3.green * d3
+				+ p4.green * d4);
+			out.red = (uint8)(p1.red * d1 + p2.red * d2 + p3.red * d3
+				+ p4.red * d4);
+			out.alpha = (uint8)(p1.alpha * d1 + p2.alpha * d2 + p3.alpha * d3
+				+ p4.alpha * d4);
+
+			// destination RGBA pixel
+			*((rgb_color*)dstBits + (i * dstWidth) + j) = out;
+		}
+	}
+}
+
+
+static void
 scale2x(const uint8* srcBits, uint8* dstBits, int32 srcWidth, int32 srcHeight,
 	int32 srcBPR, int32 dstBPR)
 {
 	/*
 	 * This implements the AdvanceMAME Scale2x algorithm found on:
 	 * http://scale2x.sourceforge.net/
-	 * 
+	 *
 	 * It is an incredibly simple and powerful image doubling routine that does
 	 * an astonishing job of doubling game graphic data while interpolating out
 	 * the jaggies.
 	 *
 	 * Derived from the (public domain) SDL version of the library by Pete
-	 * Shinners
+	 * Shinners.
 	 */
 
 	// Assume that both src and dst are 4 BPP (B_RGBA32)
@@ -152,13 +221,13 @@ scale3x(const uint8* srcBits, uint8* dstBits, int32 srcWidth, int32 srcHeight,
 	/*
 	 * This implements the AdvanceMAME Scale3x algorithm found on:
 	 * http://scale2x.sourceforge.net/
-	 * 
+	 *
 	 * It is an incredibly simple and powerful image tripling routine that does
 	 * an astonishing job of tripling game graphic data while interpolating out
 	 * the jaggies.
 	 *
 	 * Derived from the (public domain) SDL version of the library by Pete
-	 * Shinners
+	 * Shinners.
 	 */
 
 	// Assume that both src and dst are 4 BPP (B_RGBA32)
@@ -228,91 +297,109 @@ scale4x(const uint8* srcBits, uint8* dstBits, int32 srcWidth, int32 srcHeight,
 }
 
 
-//	#pragma mark -
+//	#pragma mark - GetIcon()
 
 
 status_t
 BIconUtils::GetIcon(BNode* node, const char* vectorIconAttrName,
 	const char* smallIconAttrName, const char* largeIconAttrName,
-	icon_size size, BBitmap* result)
+	icon_size which, BBitmap* icon)
 {
-	if (!result || result->InitCheck())
+	if (node == NULL || icon == NULL)
 		return B_BAD_VALUE;
 
-	status_t ret = B_ERROR;
+	status_t result = node->InitCheck();
+	if (result != B_OK)
+		return result;
 
-	switch (result->ColorSpace()) {
+	result = icon->InitCheck();
+	if (result != B_OK)
+		return result;
+
+	switch (icon->ColorSpace()) {
 		case B_RGBA32:
 		case B_RGB32:
 			// prefer vector icon
-			ret = GetVectorIcon(node, vectorIconAttrName, result);
-			if (ret < B_OK) {
+			result = GetVectorIcon(node, vectorIconAttrName, icon);
+			if (result != B_OK) {
 				// try to fallback to B_CMAP8 icons
 				// (converting to B_RGBA32 is handled)
 
 				// override size
-				if (result->Bounds().IntegerWidth() + 1 >= 32)
-					size = B_LARGE_ICON;
+				if (icon->Bounds().IntegerWidth() + 1 >= 32)
+					which = B_LARGE_ICON;
 				else
-					size = B_MINI_ICON;
+					which = B_MINI_ICON;
 
-				ret = GetCMAP8Icon(node, smallIconAttrName, largeIconAttrName,
-					size, result);
+				result = GetCMAP8Icon(node, smallIconAttrName,
+					largeIconAttrName, which, icon);
 			}
 			break;
 
 		case B_CMAP8:
 			// prefer old B_CMAP8 icons
-			ret = GetCMAP8Icon(node, smallIconAttrName, largeIconAttrName,
-				size, result);
-			if (ret < B_OK) {
+			result = GetCMAP8Icon(node, smallIconAttrName, largeIconAttrName,
+				which, icon);
+			if (result != B_OK) {
 				// try to fallback to vector icon
 #ifdef HAIKU_TARGET_PLATFORM_HAIKU
-				BBitmap temp(result->Bounds(), B_BITMAP_NO_SERVER_LINK,
+				BBitmap temp(icon->Bounds(), B_BITMAP_NO_SERVER_LINK,
 					B_RGBA32);
 #else
-				BBitmap temp(result->Bounds(), B_RGBA32);
+				BBitmap temp(icon->Bounds(), B_RGBA32);
 #endif
-				ret = temp.InitCheck();
-				if (ret < B_OK)
+				result = temp.InitCheck();
+				if (result != B_OK)
 					break;
-				ret = GetVectorIcon(node, vectorIconAttrName, &temp);
-				if (ret < B_OK)
+
+				result = GetVectorIcon(node, vectorIconAttrName, &temp);
+				if (result != B_OK)
 					break;
+
 				uint32 width = temp.Bounds().IntegerWidth() + 1;
 				uint32 height = temp.Bounds().IntegerHeight() + 1;
 				uint32 bytesPerRow = temp.BytesPerRow();
-				ret = ConvertToCMAP8((uint8*)temp.Bits(), width, height,
-					bytesPerRow, result);
+				result = ConvertToCMAP8((uint8*)temp.Bits(), width, height,
+					bytesPerRow, icon);
 			}
 			break;
+
 		default:
 			printf("BIconUtils::GetIcon() - unsupported colorspace\n");
+			result = B_ERROR;
 			break;
 	}
 
-	return ret;
+	return result;
 }
 
 
-// #pragma mark -
+//	#pragma mark - GetVectorIcon()
 
 
 status_t
-BIconUtils::GetVectorIcon(BNode* node, const char* attrName, BBitmap* result)
+BIconUtils::GetVectorIcon(BNode* node, const char* attrName, BBitmap* icon)
 {
-	if (!node || node->InitCheck() < B_OK || !attrName)
+	if (node == NULL || attrName == NULL || *attrName == '\0' || icon == NULL)
 		return B_BAD_VALUE;
 
+	status_t result = node->InitCheck();
+	if (result != B_OK)
+		return result;
+
+	result = icon->InitCheck();
+	if (result != B_OK)
+		return result;
+
 #if TIME_VECTOR_ICONS
-bigtime_t startTime = system_time();
+	bigtime_t startTime = system_time();
 #endif
 
 	// get the attribute info and check type and size of the attr contents
 	attr_info attrInfo;
-	status_t ret = node->GetAttrInfo(attrName, &attrInfo);
-	if (ret < B_OK)
-		return ret;
+	result = node->GetAttrInfo(attrName, &attrInfo);
+	if (result != B_OK)
+		return result;
 
 	type_code attrType = B_VECTOR_ICON_TYPE;
 
@@ -320,25 +407,32 @@ bigtime_t startTime = system_time();
 		return B_BAD_TYPE;
 
 	// chicken out on unrealisticly large attributes
-	if (attrInfo.size > 16 * 1024)
+	if (attrInfo.size > 512 * 1024)
 		return B_BAD_VALUE;
 
-	uint8 buffer[attrInfo.size];
-	ssize_t read = node->ReadAttr(attrName, attrType, 0, buffer, attrInfo.size);
-	if (read != attrInfo.size)
+	uint8* buffer = new(std::nothrow) uint8[attrInfo.size];
+	if (buffer == NULL)
+		return B_NO_MEMORY;
+
+	ArrayDeleter<uint8> deleter(buffer);
+
+	ssize_t bytesRead = node->ReadAttr(attrName, attrType, 0, buffer,
+		attrInfo.size);
+	if (bytesRead != attrInfo.size)
 		return B_ERROR;
 
 #if TIME_VECTOR_ICONS
-bigtime_t importTime = system_time();
+	bigtime_t importTime = system_time();
 #endif
 
-	ret = GetVectorIcon(buffer, attrInfo.size, result);
-	if (ret < B_OK)
-		return ret;
+	result = GetVectorIcon(buffer, attrInfo.size, icon);
+	if (result != B_OK)
+		return result;
 
 #if TIME_VECTOR_ICONS
-bigtime_t finishTime = system_time();
-printf("read: %lld, import: %lld\n", importTime - startTime, finishTime - importTime);
+	bigtime_t finishTime = system_time();
+	printf("read: %lld, import: %lld\n", importTime - startTime,
+		finishTime - importTime);
 #endif
 
 	return B_OK;
@@ -346,55 +440,53 @@ printf("read: %lld, import: %lld\n", importTime - startTime, finishTime - import
 
 
 status_t
-BIconUtils::GetVectorIcon(const uint8* buffer, size_t size, BBitmap* result)
+BIconUtils::GetVectorIcon(const uint8* buffer, size_t size, BBitmap* icon)
 {
-	if (!result)
+	if (buffer == NULL || size <= 0 || icon == NULL)
 		return B_BAD_VALUE;
 
-	status_t ret = result->InitCheck();
-	if (ret < B_OK)
-		return ret;
+	status_t result = icon->InitCheck();
+	if (result != B_OK)
+		return result;
 
-	BBitmap* temp = result;
+	BBitmap* temp = icon;
 	ObjectDeleter<BBitmap> deleter;
 
-	#define B_BITMAP_NO_SERVER_LINK 0
-
-	if (result->ColorSpace() != B_RGBA32 && result->ColorSpace() != B_RGB32) {
-		temp = new (nothrow) BBitmap(result->Bounds(),
+	if (icon->ColorSpace() != B_RGBA32 && icon->ColorSpace() != B_RGB32) {
+		temp = new (nothrow) BBitmap(icon->Bounds(),
 			B_BITMAP_NO_SERVER_LINK, B_RGBA32);
 		deleter.SetTo(temp);
-		if (!temp || temp->InitCheck() != B_OK)
+		if (temp == NULL || temp->InitCheck() != B_OK)
 			return B_NO_MEMORY;
 	}
 
-	//Icon icon;
-	//ret = icon.InitCheck();
-	//if (ret < B_OK)
-	//	return ret;
+	Icon vector;
+	result = vector.InitCheck();
+	if (result != B_OK)
+		return result;
 
-	/*FlatIconImporter importer;
-	ret = importer.Import(&icon, const_cast<uint8*>(buffer), size);
-	if (ret < B_OK) {
+	FlatIconImporter importer;
+	result = importer.Import(&vector, const_cast<uint8*>(buffer), size);
+	if (result != B_OK) {
 		// try the message based format used by Icon-O-Matic
 		MessageImporter messageImporter;
 		BMemoryIO memoryIO(const_cast<uint8*>(buffer), size);
-		ret = messageImporter.Import(&icon, &memoryIO);
-		if (ret < B_OK)
-			return ret;
-	}*/
-	// TODO
-	//IconRenderer renderer(temp);
-	//renderer.SetIcon(&icon);
-	//renderer.SetScale((temp->Bounds().Width() + 1.0) / 64.0);
-	//renderer.Render();
+		result = messageImporter.Import(&vector, &memoryIO);
+		if (result != B_OK)
+			return result;
+	}
 
-	if (temp != result) {
+	IconRenderer renderer(temp);
+	renderer.SetIcon(&vector);
+	renderer.SetScale((temp->Bounds().Width() + 1.0) / 64.0);
+	renderer.Render();
+
+	if (temp != icon) {
 		uint8* src = (uint8*)temp->Bits();
 		uint32 width = temp->Bounds().IntegerWidth() + 1;
 		uint32 height = temp->Bounds().IntegerHeight() + 1;
 		uint32 srcBPR = temp->BytesPerRow();
-		ret = ConvertToCMAP8(src, width, height, srcBPR, result);
+		result = ConvertToCMAP8(src, width, height, srcBPR, icon);
 	}
 
 	// TODO: would be nice to get rid of this
@@ -403,69 +495,83 @@ BIconUtils::GetVectorIcon(const uint8* buffer, size_t size, BBitmap* result)
 	// transparent colors are "black" in all existing icons
 	// lighter transparent colors should be too dark if
 	// app_server uses correct blending
-//	renderer.Demultiply();
+	//renderer.Demultiply();
 
-	return ret;
+	return result;
 }
 
 
-// #pragma mark -
+//	#pragma mark - GetCMAP8Icon()
 
 
 status_t
 BIconUtils::GetCMAP8Icon(BNode* node, const char* smallIconAttrName,
-	const char* largeIconAttrName, icon_size size, BBitmap* icon)
+	const char* largeIconAttrName, icon_size which, BBitmap* icon)
 {
-	// check parameters and initialization
-	if (!icon || icon->InitCheck() != B_OK
-		|| !node || node->InitCheck() != B_OK
-		|| !smallIconAttrName || !largeIconAttrName)
-		return B_BAD_VALUE;
-
-	status_t ret = B_OK;
-
 	// NOTE: this might be changed if other icon
 	// sizes are supported in B_CMAP8 attributes,
 	// but this is currently not the case, so we
 	// relax the requirement to pass an icon
 	// of just the right size
-	if (size < B_LARGE_ICON)
-		size = B_MINI_ICON;
+	if (which < B_LARGE_ICON)
+		which = B_MINI_ICON;
 	else
-		size = B_LARGE_ICON;
+		which = B_LARGE_ICON;
+
+	// check parameters and initialization
+	if (node == NULL || icon == NULL
+		|| (which == B_MINI_ICON
+			&& (smallIconAttrName == NULL || *smallIconAttrName == '\0'))
+		|| (which == B_LARGE_ICON
+			&& (largeIconAttrName == NULL || *largeIconAttrName == '\0'))) {
+		return B_BAD_VALUE;
+	}
+
+	status_t result;
+	result = node->InitCheck();
+	if (result != B_OK)
+		return result;
+
+	result = icon->InitCheck();
+	if (result != B_OK)
+		return result;
 
 	// set some icon size related variables
-	const char *attribute = NULL;
+	const char* attribute = NULL;
 	BRect bounds;
 	uint32 attrType = 0;
-	size_t attrSize = 0;
-	switch (size) {
+	off_t attrSize = 0;
+	switch (which) {
 		case B_MINI_ICON:
 			attribute = smallIconAttrName;
 			bounds.Set(0, 0, 15, 15);
 			attrType = B_MINI_ICON_TYPE;
 			attrSize = 16 * 16;
 			break;
+
 		case B_LARGE_ICON:
 			attribute = largeIconAttrName;
 			bounds.Set(0, 0, 31, 31);
 			attrType = B_LARGE_ICON_TYPE;
 			attrSize = 32 * 32;
 			break;
+
 		default:
 			// can not happen, see above
-			ret = B_BAD_VALUE;
+			result = B_BAD_VALUE;
 			break;
 	}
 
 	// get the attribute info and check type and size of the attr contents
 	attr_info attrInfo;
-	if (ret == B_OK)
-		ret = node->GetAttrInfo(attribute, &attrInfo);
-	if (ret == B_OK && attrInfo.type != attrType)
-		ret = B_BAD_TYPE;
-	if (ret == B_OK && attrInfo.size != attrSize)
-		ret = B_BAD_DATA;
+	if (result == B_OK)
+		result = node->GetAttrInfo(attribute, &attrInfo);
+
+	if (result == B_OK && attrInfo.type != attrType)
+		result = B_BAD_TYPE;
+
+	if (result == B_OK && attrInfo.size != attrSize)
+		result = B_BAD_DATA;
 
 	// check parameters
 	// currently, scaling B_CMAP8 icons is not supported
@@ -473,118 +579,140 @@ BIconUtils::GetCMAP8Icon(BNode* node, const char* smallIconAttrName,
 		return B_BAD_VALUE;
 
 	// read the attribute
-	if (ret == B_OK) {
-		bool tempBuffer = (icon->ColorSpace() != B_CMAP8
+	if (result == B_OK) {
+		bool useBuffer = (icon->ColorSpace() != B_CMAP8
 			|| icon->Bounds() != bounds);
 		uint8* buffer = NULL;
-		ssize_t read;
-		if (tempBuffer) {
+		ssize_t bytesRead;
+		if (useBuffer) {
 			// other color space or bitmap size than stored in attribute
 			buffer = new(nothrow) uint8[attrSize];
-			if (!buffer) {
-				ret = B_NO_MEMORY;
-			} else {
-				read = node->ReadAttr(attribute, attrType, 0, buffer, attrSize);
-			}
+			if (buffer == NULL)
+				result = B_NO_MEMORY;
+			else
+				bytesRead = node->ReadAttr(attribute, attrType, 0, buffer, attrSize);
 		} else {
-			read = node->ReadAttr(attribute, attrType, 0, icon->Bits(),
+			bytesRead = node->ReadAttr(attribute, attrType, 0, icon->Bits(),
 				attrSize);
 		}
-		if (ret == B_OK) {
-			if (read < 0)
-				ret = read;
-			else if (read != (ssize_t)attrSize)
-				ret = B_ERROR;
+
+		if (result == B_OK) {
+			if (bytesRead < 0)
+				result = (status_t)bytesRead;
+			else if (bytesRead != (ssize_t)attrSize)
+				result = B_ERROR;
 		}
-		if (tempBuffer) {
+
+		if (useBuffer) {
 			// other color space than stored in attribute
-			if (ret == B_OK) {
-				ret = ConvertFromCMAP8(buffer, (uint32)size, (uint32)size,
-					(uint32)size, icon);
+			if (result == B_OK) {
+				result = ConvertFromCMAP8(buffer, (uint32)which, (uint32)which,
+					(uint32)which, icon);
 			}
 			delete[] buffer;
 		}
 	}
-	return ret;
+
+	return result;
 }
 
 
-// #pragma mark -
+//	#pragma mark - ConvertFromCMAP8() and ConvertToCMAP8()
 
 
 status_t
-BIconUtils::ConvertFromCMAP8(BBitmap* source, BBitmap* result)
+BIconUtils::ConvertFromCMAP8(BBitmap* source, BBitmap* destination)
 {
 	if (source == NULL || source->ColorSpace() != B_CMAP8)
 		return B_BAD_VALUE;
 
-	status_t status = source->InitCheck();
-	if (status < B_OK)
-		return status;
+	status_t result = source->InitCheck();
+	if (result != B_OK)
+		return result;
 
-	status = result->InitCheck();
-	if (status < B_OK)
-		return status;
+	result = destination->InitCheck();
+	if (result != B_OK)
+		return result;
 
 	uint8* src = (uint8*)source->Bits();
 	uint32 srcBPR = source->BytesPerRow();
 	uint32 width = source->Bounds().IntegerWidth() + 1;
 	uint32 height = source->Bounds().IntegerHeight() + 1;
 
-	return ConvertFromCMAP8(src, width, height, srcBPR, result);
+	return ConvertFromCMAP8(src, width, height, srcBPR, destination);
 }
 
 
 status_t
-BIconUtils::ConvertToCMAP8(BBitmap* source, BBitmap* result)
+BIconUtils::ConvertToCMAP8(BBitmap* source, BBitmap* destination)
 {
 	if (source == NULL || source->ColorSpace() != B_RGBA32
-		|| result->ColorSpace() != B_CMAP8)
+		|| destination->ColorSpace() != B_CMAP8) {
 		return B_BAD_VALUE;
+	}
 
-	status_t status = source->InitCheck();
-	if (status < B_OK)
-		return status;
+	status_t result = source->InitCheck();
+	if (result != B_OK)
+		return result;
 
-	status = result->InitCheck();
-	if (status < B_OK)
-		return status;
+	result = destination->InitCheck();
+	if (result != B_OK)
+		return result;
 
 	uint8* src = (uint8*)source->Bits();
 	uint32 srcBPR = source->BytesPerRow();
 	uint32 width = source->Bounds().IntegerWidth() + 1;
 	uint32 height = source->Bounds().IntegerHeight() + 1;
 
-	return ConvertToCMAP8(src, width, height, srcBPR, result);
+	return ConvertToCMAP8(src, width, height, srcBPR, destination);
 }
 
 
 status_t
 BIconUtils::ConvertFromCMAP8(const uint8* src, uint32 width, uint32 height,
-	uint32 srcBPR, BBitmap* result)
+	uint32 srcBPR, BBitmap* icon)
 {
-	if (src == NULL || result == NULL || srcBPR == 0)
+	if (src == NULL || icon == NULL || srcBPR == 0)
 		return B_BAD_VALUE;
 
-	status_t ret = result->InitCheck();
-	if (ret < B_OK)
-		return ret;
+	status_t result = icon->InitCheck();
+	if (result != B_OK)
+		return result;
 
-	if (result->ColorSpace() != B_RGBA32 && result->ColorSpace() != B_RGB32) {
+	if (icon->ColorSpace() != B_RGBA32 && icon->ColorSpace() != B_RGB32) {
 		// TODO: support other color spaces
 		return B_BAD_VALUE;
 	}
 
-	uint32 dstWidth = result->Bounds().IntegerWidth() + 1;
-	uint32 dstHeight = result->Bounds().IntegerHeight() + 1;
+	uint32 dstWidth = icon->Bounds().IntegerWidth() + 1;
+	uint32 dstHeight = icon->Bounds().IntegerHeight() + 1;
 
-	if (dstWidth < width || dstHeight < height) {
-		// TODO: implement down scaling
-		return B_ERROR;
+	uint8* dst = (uint8*)icon->Bits();
+	uint32 dstBPR = icon->BytesPerRow();
+
+	// check for downscaling or integer multiple scaling
+	if (dstWidth < width || dstHeight < height
+		|| (dstWidth == 2 * width && dstHeight == 2 * height)
+		|| (dstWidth == 3 * width && dstHeight == 3 * height)
+		|| (dstWidth == 4 * width && dstHeight == 4 * height)) {
+		BBitmap* converted = new BBitmap(BRect(0, 0, width - 1, height - 1),
+			icon->ColorSpace());
+		converted->ImportBits(src, height * srcBPR, srcBPR, 0, B_CMAP8);
+		uint8* convertedBits = (uint8*)converted->Bits();
+		int32 convertedBPR = converted->BytesPerRow();
+
+		if (dstWidth < width || dstHeight < height)
+			scale_down(convertedBits, dst, width, height, dstWidth, dstHeight);
+		else if (dstWidth == 2 * width && dstHeight == 2 * height)
+			scale2x(convertedBits, dst, width, height, convertedBPR, dstBPR);
+		else if (dstWidth == 3 * width && dstHeight == 3 * height)
+			scale3x(convertedBits, dst, width, height, convertedBPR, dstBPR);
+		else if (dstWidth == 4 * width && dstHeight == 4 * height)
+			scale4x(convertedBits, dst, width, height, convertedBPR, dstBPR);
+
+		delete converted;
+		return B_OK;
 	}
-
-	uint8* dst = (uint8*)result->Bits();
-	uint32 dstBPR = result->BytesPerRow();
 
 	const rgb_color* colorMap = system_colors()->color_list;
 	if (colorMap == NULL)
@@ -593,6 +721,7 @@ BIconUtils::ConvertFromCMAP8(const uint8* src, uint32 width, uint32 height,
 	const uint8* srcStart = src;
 	uint8* dstStart = dst;
 
+	// convert from B_CMAP8 to B_RGB(A)32 without scaling
 	for (uint32 y = 0; y < height; y++) {
 		uint32* d = (uint32*)dst;
 		const uint8* s = src;
@@ -607,35 +736,56 @@ BIconUtils::ConvertFromCMAP8(const uint8* src, uint32 width, uint32 height,
 		dst += dstBPR;
 	}
 
+	if (width == dstWidth && height == dstHeight)
+		return B_OK;
+
 	// reset src and dst back to their original locations
 	src = srcStart;
 	dst = dstStart;
 
-	if ((dstWidth == 2 * width && dstHeight == 2 * height)
-		|| (dstWidth == 3 * width && dstHeight == 3 * height)
-		|| (dstWidth == 4 * width && dstHeight == 4 * height)) {
-		// we can do some special scaling here
-
-		// first convert to B_RGBA32
-		BBitmap* converted
-			= new BBitmap(BRect(0, 0, width - 1, height - 1),
-				result->ColorSpace());
-		converted->ImportBits(src, height * srcBPR, srcBPR, 0, B_CMAP8);
-		uint8* convertedBits = (uint8*)converted->Bits();
-		int32 convertedBPR = converted->BytesPerRow();
-
-		// scale using the scale2x/scale3x/scale4x algorithm
-		if (dstWidth == 2 * width && dstHeight == 2 * height)
-			scale2x(convertedBits, dst, width, height, convertedBPR, dstBPR);
-		else if (dstWidth == 3 * width && dstHeight == 3 * height)
-			scale3x(convertedBits, dst, width, height, convertedBPR, dstBPR);
-		else if (dstWidth == 4 * width && dstHeight == 4 * height)
-			scale4x(convertedBits, dst, width, height, convertedBPR, dstBPR);
-
-		// cleanup
-		delete converted;
+	if (dstWidth > width && dstHeight > height
+		&& dstWidth < 2 * width && dstHeight < 2 * height) {
+		// scale2x then downscale
+		BBitmap* temp = new BBitmap(BRect(0, 0, width * 2 - 1, height * 2 - 1),
+			icon->ColorSpace());
+		uint8* tempBits = (uint8*)temp->Bits();
+		uint32 tempBPR = temp->BytesPerRow();
+		scale2x(dst, tempBits, width, height, dstBPR, tempBPR);
+		scale_down(tempBits, dst, width * 2, height * 2, dstWidth, dstHeight);
+		delete temp;
+	} else if (dstWidth > 2 * width && dstHeight > 2 * height
+		&& dstWidth < 3 * width && dstHeight < 3 * height) {
+		// scale3x then downscale
+		BBitmap* temp = new BBitmap(BRect(0, 0, width * 3 - 1, height * 3 - 1),
+			icon->ColorSpace());
+		uint8* tempBits = (uint8*)temp->Bits();
+		uint32 tempBPR = temp->BytesPerRow();
+		scale3x(dst, tempBits, width, height, dstBPR, tempBPR);
+		scale_down(tempBits, dst, width * 3, height * 3, dstWidth, dstHeight);
+		delete temp;
+	} else if (dstWidth > 3 * width && dstHeight > 3 * height
+		&& dstWidth < 4 * width && dstHeight < 4 * height) {
+		// scale4x then downscale
+		BBitmap* temp = new BBitmap(BRect(0, 0, width * 4 - 1, height * 4 - 1),
+			icon->ColorSpace());
+		uint8* tempBits = (uint8*)temp->Bits();
+		uint32 tempBPR = temp->BytesPerRow();
+		scale4x(dst, tempBits, width, height, dstBPR, tempBPR);
+		scale_down(tempBits, dst, width * 3, height * 3, dstWidth, dstHeight);
+		delete temp;
+	} else if (dstWidth > 4 * width && dstHeight > 4 * height) {
+		// scale4x then bilinear
+		BBitmap* temp = new BBitmap(BRect(0, 0, width * 4 - 1, height * 4 - 1),
+			icon->ColorSpace());
+		uint8* tempBits = (uint8*)temp->Bits();
+		uint32 tempBPR = temp->BytesPerRow();
+		scale4x(dst, tempBits, width, height, dstBPR, tempBPR);
+		icon->ImportBits(tempBits, height * tempBPR, tempBPR, 0,
+			temp->ColorSpace());
+		scale_bilinear(dst, width, height, dstWidth, dstHeight, dstBPR);
+		delete temp;
 	} else {
-		// bilinear scaling
+		// fall back to bilinear scaling
 		scale_bilinear(dst, width, height, dstWidth, dstHeight, dstBPR);
 	}
 
@@ -645,38 +795,35 @@ BIconUtils::ConvertFromCMAP8(const uint8* src, uint32 width, uint32 height,
 
 status_t
 BIconUtils::ConvertToCMAP8(const uint8* src, uint32 width, uint32 height,
-	uint32 srcBPR, BBitmap* result)
+	uint32 srcBPR, BBitmap* icon)
 {
-	if (!src || !result || srcBPR == 0)
+	if (src == NULL || icon == NULL || srcBPR == 0)
 		return B_BAD_VALUE;
 
-	status_t ret = result->InitCheck();
-	if (ret < B_OK)
-		return ret;
+	status_t result = icon->InitCheck();
+	if (result != B_OK)
+		return result;
 
-	if (result->ColorSpace() != B_CMAP8)
+	if (icon->ColorSpace() != B_CMAP8)
 		return B_BAD_VALUE;
 
-	uint32 dstWidth = result->Bounds().IntegerWidth() + 1;
-	uint32 dstHeight = result->Bounds().IntegerHeight() + 1;
+	uint32 dstWidth = icon->Bounds().IntegerWidth() + 1;
+	uint32 dstHeight = icon->Bounds().IntegerHeight() + 1;
 
 	if (dstWidth < width || dstHeight < height) {
 		// TODO: down scaling
 		return B_ERROR;
 	} else if (dstWidth > width || dstHeight > height) {
 		// TODO: up scaling
-		// (currently copies bitmap into result at left-top)
-memset(result->Bits(), 255, result->BitsLength());
+		// (currently copies bitmap into icon at left-top)
+		memset(icon->Bits(), 255, icon->BitsLength());
 	}
 
 //#if __HAIKU__
-//
-//	return result->ImportBits(src, height * srcBPR, srcBPR, 0, B_RGBA32);
-//
+//	return icon->ImportBits(src, height * srcBPR, srcBPR, 0, B_RGBA32);
 //#else
-
-	uint8* dst = (uint8*)result->Bits();
-	uint32 dstBPR = result->BytesPerRow();
+	uint8* dst = (uint8*)icon->Bits();
+	uint32 dstBPR = icon->BytesPerRow();
 
 	const color_map* colorMap = system_colors();
 	if (colorMap == NULL)
@@ -703,16 +850,14 @@ memset(result->Bits(), 255, result->BitsLength());
 	}
 
 	return B_OK;
-
 //#endif // __HAIKU__
 }
 
 
-// #pragma mark - forbidden
+//	#pragma mark - Forbidden
 
 
 BIconUtils::BIconUtils() {}
 BIconUtils::~BIconUtils() {}
 BIconUtils::BIconUtils(const BIconUtils&) {}
 BIconUtils& BIconUtils::operator=(const BIconUtils&) { return *this; }
-

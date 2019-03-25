@@ -17,11 +17,14 @@
 #  include "support.h"
 #endif
 
+_BEGIN_ICON_NAMESPACE
+
 // constructor
 Gradient::Gradient(bool empty)
 #ifdef ICON_O_MATIC
 	: BArchivable(),
 	  Observable(),
+	  BReferenceable(),
 	  Transformable(),
 #else
 	: Transformable(),
@@ -43,6 +46,7 @@ Gradient::Gradient(BMessage* archive)
 #ifdef ICON_O_MATIC
 	: BArchivable(archive),
 	  Observable(),
+	  BReferenceable(),
 	  Transformable(),
 #else
 	: Transformable(),
@@ -57,7 +61,7 @@ Gradient::Gradient(BMessage* archive)
 		return;
 
 	// read transformation
-	int32 size = Transformable::matrix_size;
+	int32 size = 6;
 	const void* matrix;
 	ssize_t dataSize = size * sizeof(double);
 	if (archive->FindData("transformation", B_DOUBLE_TYPE,
@@ -89,6 +93,7 @@ Gradient::Gradient(const Gradient& other)
 #ifdef ICON_O_MATIC
 	: BArchivable(other),
 	  Observable(),
+	  BReferenceable(),
 	  Transformable(other),
 #else
 	: Transformable(other),
@@ -163,7 +168,7 @@ Gradient::operator=(const Gradient& other)
 	AutoNotificationSuspender _(this);
 #endif
 
-	SetTransform(other);
+	//SetTransform(other);
 	SetColors(other);
 	SetType(other.fType);
 	SetInterpolation(other.fInterpolation);
@@ -591,7 +596,7 @@ Gradient::PrintToStream() const
 		   string_for_interpolation(fInterpolation),
 		   fInheritTransformation);
 	for (int32 i = 0; BGradient::ColorStop* step = ColorAt(i); i++) {
-		printf("  %ld: offset: %.1f -> color(%d, %d, %d, %d)\n",
+		printf("  %" B_PRId32 ": offset: %.1f -> color(%d, %d, %d, %d)\n",
 			   i, step->offset,
 			   step->color.red,
 			   step->color.green,
@@ -609,3 +614,5 @@ Gradient::_MakeEmpty()
 		delete ColorAtFast(i);
 	fColors.MakeEmpty();
 }
+
+_END_ICON_NAMESPACE

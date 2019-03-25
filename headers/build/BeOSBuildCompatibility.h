@@ -123,7 +123,7 @@ extern ssize_t	writev_pos(int fd, off_t pos, const struct iovec* vec,
 
 #include <string.h>
 // remap strerror()
-/*extern char* _haiku_build_strerror(int errnum);
+extern char* _haiku_build_strerror(int errnum);
 
 #ifndef BUILDING_HAIKU_ERROR_MAPPER
 
@@ -192,8 +192,8 @@ int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 #	define fchdir(fd)					_haiku_build_fchdir(fd)
 #	define close(fd)					_haiku_build_close(fd)
 //TODO
-//#	define dup(fd)						_haiku_build_dup(fd)
-//#	define dup2(fd1, fd2)				_haiku_build_dup2(fd1, fd2)
+/*#	define dup(fd)						_haiku_build_dup(fd)
+#	define dup2(fd1, fd2)				_haiku_build_dup2(fd1, fd2)*/
 #	define linkat(toFD, toPath, pathFD, path, flag) \
 		_haiku_build_linkat(toFD, toPath, pathFD, path, flag)
 #	define unlinkat(fd, path, flag)		_haiku_build_unlinkat(fd, path, flag)
@@ -211,11 +211,11 @@ int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 #	define open(path, openMode...)		_haiku_build_open(path, openMode)
 #	define openat(fd, path, openMode...) \
 		_haiku_build_openat(fd, path, openMode)
-//#	define fcntl(fd, op...)				_haiku_build_fcntl(fd, op)
-//#include <fcntl.h>
+/*#	define fcntl(fd, op...)				_haiku_build_fcntl(fd, op)
+#include <fcntl.h>
 
-//#	define renameat(fromFD, from, toFD, to) \
-//		_haiku_build_renameat(fromFD, from, toFD, to)
+#	define renameat(fromFD, from, toFD, to) \
+		_haiku_build_renameat(fromFD, from, toFD, to)*/
 
 #	if defined(HAIKU_HOST_USE_XATTR) && defined(HAIKU_HOST_PLATFORM_HAIKU)
 #		define fs_read_attr			_haiku_build_fs_read_attr
@@ -233,7 +233,6 @@ int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 #	endif
 
 #endif	// _HAIKU_BUILD_DONT_REMAP_FD_FUNCTIONS
-*/
 
 #ifdef __cplusplus
 } // extern "C"

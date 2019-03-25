@@ -456,43 +456,6 @@ AttrDirDescriptor::GetNodeRef(NodeRef &ref)
 	return B_OK;
 }
 
-
-// get_descriptor
-Descriptor *
-get_descriptor(int fd)
-{
-	if (!sDescriptors)
-		return NULL;
-	DescriptorMap::iterator it = sDescriptors->find(fd);
-	if (it == sDescriptors->end())
-		return NULL;
-	return it->second;
-}
-
-// add_descriptor
-int
-add_descriptor(Descriptor *descriptor)
-{
-	if (!sDescriptors)
-		sDescriptors = new DescriptorMap;
-
-	int fd = -1;
-	if (FileDescriptor *file = dynamic_cast<FileDescriptor*>(descriptor)) {
-		fd = file->fd;
-	} else {
-		// find a free slot
-		for (fd = kVirtualDescriptorStart;
-			sDescriptors->find(fd) != sDescriptors->end();
-			fd++) {
-		}
-	}
-
-	(*sDescriptors)[fd] = descriptor;
-	descriptor->fd = fd;
-
-	return fd;
-}
-
 // delete_descriptor
 status_t
 delete_descriptor(int fd)
@@ -512,13 +475,49 @@ delete_descriptor(int fd)
 	return error;
 }
 
+} // namespace BPrivate
+
+
+// get_descriptor
+BPrivate::Descriptor *
+get_descriptor(int fd)
+{
+	if (!sDescriptors)
+		return NULL;
+	DescriptorMap::iterator it = sDescriptors->find(fd);
+	if (it == sDescriptors->end())
+		return NULL;
+	return it->second;
+}
+
+// add_descriptor
+int
+add_descriptor(BPrivate::Descriptor *descriptor)
+{
+	if (!sDescriptors)
+		sDescriptors = new DescriptorMap;
+
+	int fd = -1;
+	if (BPrivate::FileDescriptor *file = dynamic_cast<BPrivate::FileDescriptor*>(descriptor)) {
+		fd = file->fd;
+	} else {
+		// find a free slot
+		for (fd = kVirtualDescriptorStart;
+			sDescriptors->find(fd) != sDescriptors->end();
+			fd++) {
+		}
+	}
+
+	(*sDescriptors)[fd] = descriptor;
+	descriptor->fd = fd;
+
+	return fd;
+}
+
 
 bool
 is_unknown_or_system_descriptor(int fd)
 {
-	Descriptor* descriptor = get_descriptor(fd);
+	BPrivate::Descriptor* descriptor = get_descriptor(fd);
 	return descriptor == NULL || descriptor->IsSystemFD();
 }
-
-
-} // namespace BPrivate

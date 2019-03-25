@@ -12,6 +12,8 @@
 #include <StorageDefs.h>
 #include <SupportDefs.h>
 
+#include <sys/time.h>
+
 #include "NodeRef.h"
 
 using std::string;
@@ -118,12 +120,11 @@ struct AttrDirDescriptor : DirectoryDescriptor {
 	virtual status_t GetNodeRef(NodeRef &ref);
 };
 
+}	// namespace BPrivate
 
-Descriptor*	get_descriptor(int fd);
-int			add_descriptor(Descriptor *descriptor);
+int			add_descriptor(BPrivate::Descriptor *descriptor);
 status_t	delete_descriptor(int fd);
 bool		is_unknown_or_system_descriptor(int fd);
-
-}	// namespace BPrivate
+BPrivate::Descriptor* get_descriptor(int fd);
 
 #endif	// FS_DESCRIPTORS_H

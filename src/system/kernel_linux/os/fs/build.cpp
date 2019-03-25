@@ -1,3 +1,10 @@
+#include <BeOSBuildCompatibility.h>
+#include <NodeMonitor.h>
+#include <syscalls.h>
+#include <syscall_utils.h>
+
+#include "fs_descriptors.h"
+
 #if defined(_HAIKU_BUILD_NO_FUTIMENS) || defined(_HAIKU_BUILD_NO_FUTIMENS)
 
 template<typename File>
@@ -180,7 +187,7 @@ _haiku_build_mkfifoat(int fd, const char* path, mode_t mode)
 
 	// TODO: Handle non-system FDs.
 }
-
+/*
 
 int
 _haiku_build_utimensat(int fd, const char* path, const struct timespec times[2],
@@ -246,7 +253,7 @@ _haiku_build_futimens(int fd, const struct timespec times[2])
 {
 	return _haiku_build_utimensat(fd, NULL, times, AT_SYMLINK_NOFOLLOW);
 }
-
+*/
 
 int
 _haiku_build_faccessat(int fd, const char* path, int accessMode, int flag)

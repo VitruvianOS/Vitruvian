@@ -21,7 +21,7 @@
 using namespace std;
 using namespace BPrivate;
 
-static const char *sAttributeDirBasePath = HAIKU_BUILD_ATTRIBUTES_DIR;
+static const char *sAttributeDirBasePath = "/tmp/attr";
 
 
 // init_attribute_dir_base_dir

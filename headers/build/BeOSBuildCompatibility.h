@@ -85,15 +85,6 @@ extern size_t   strlcpy(char* dest, const char* source, size_t length);
 extern size_t	strlcat(char* dest, const char* source, size_t length);
 #endif
 
-#if defined(HAIKU_HOST_PLATFORM_FREEBSD) || defined(HAIKU_HOST_PLATFORM_DARWIN)
-extern size_t	strnlen(const char* string, size_t length);
-#endif
-
-#if defined(HAIKU_HOST_PLATFORM_CYGWIN) || defined(HAIKU_HOST_PLATFORM_SUNOS)
-extern char*	stpcpy(char* dest, const char* src);
-extern char*	strcasestr(const char* s, const char* find);
-#endif
-
 // BeOS only
 extern ssize_t  read_pos(int fd, off_t pos, void* buffer, size_t count);
 extern ssize_t  write_pos(int fd, off_t pos, const void* buffer, size_t count);
@@ -122,16 +113,7 @@ extern ssize_t	writev_pos(int fd, off_t pos, const struct iovec* vec,
 #endif
 
 #include <string.h>
-// remap strerror()
 extern char* _haiku_build_strerror(int errnum);
-
-#ifndef BUILDING_HAIKU_ERROR_MAPPER
-
-#undef strerror
-#define strerror(errnum)	_haiku_build_strerror(errnum)
-
-#endif	// BUILDING_HAIKU_ERROR_MAPPER
-
 
 // remap file descriptor functions
 int		_haiku_build_fchmod(int fd, mode_t mode);
@@ -163,59 +145,14 @@ int		_haiku_build_fchownat(int fd, const char* path, uid_t owner,
 			gid_t group, int flag);
 int		_haiku_build_mknodat(int fd, const char* name, mode_t mode, dev_t dev);
 int		_haiku_build_creat(const char* path, mode_t mode);
-#ifndef _HAIKU_BUILD_DONT_REMAP_FD_FUNCTIONS
-int		_haiku_build_open(const char* path, int openMode, ...);
-int		_haiku_build_openat(int fd, const char* path, int openMode, ...);
-int		_haiku_build_fcntl(int fd, int op, ...);
-#else
 int		_haiku_build_open(const char* path, int openMode, mode_t permissions);
 int		_haiku_build_openat(int fd, const char* path, int openMode,
 			mode_t permissions);
 int		_haiku_build_fcntl(int fd, int op, int argument);
-#endif
 int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 			const char* to);
 
 #ifndef _HAIKU_BUILD_DONT_REMAP_FD_FUNCTIONS
-#	define fchmod(fd, mode)				_haiku_build_fchmod(fd, mode)
-#	define fchmodat(fd, path, mode, flag) \
-		_haiku_build_fchmodat(fd, path, mode, flag)
-#	define fstat(fd, st)				_haiku_build_fstat(fd, st)
-#	define fstatat(fd, path, st, flag)	_haiku_build_fstatat(fd, path, st, flag)
-#	define mkdirat(fd, path, mode)		_haiku_build_mkdirat(fd, path, mode)
-#	define mkfifoat(fd, path, mode)		_haiku_build_mkfifoat(fd, path, mode)
-#	define utimensat(fd, path, times, flag) \
-		_haiku_build_utimensat(fd, path, times, flag)
-#	define futimens(fd, times)			_haiku_build_futimens(fd, times)
-#	define faccessat(fd, path, accessMode, flag) \
-		_haiku_build_faccessat(fd, path, accessMode, flag)
-#	define fchdir(fd)					_haiku_build_fchdir(fd)
-#	define close(fd)					_haiku_build_close(fd)
-//TODO
-/*#	define dup(fd)						_haiku_build_dup(fd)
-#	define dup2(fd1, fd2)				_haiku_build_dup2(fd1, fd2)*/
-#	define linkat(toFD, toPath, pathFD, path, flag) \
-		_haiku_build_linkat(toFD, toPath, pathFD, path, flag)
-#	define unlinkat(fd, path, flag)		_haiku_build_unlinkat(fd, path, flag)
-#	define readlinkat(fd, path, buffer, bufferSize) \
-		_haiku_build_readlinkat(fd, path, buffer, bufferSize)
-#	define symlinkat(toPath, fd, symlinkPath) \
-		_haiku_build_symlinkat(toPath, fd, symlinkPath)
-#	define ftruncate(fd, newSize)		_haiku_build_ftruncate(fd, newSize)
-#	define fchown(fd, owner, group)		_haiku_build_fchown(fd, owner, group)
-#	define fchownat(fd, path, owner, group, flag) \
-		_haiku_build_fchownat(fd, path, owner, group, flag)
-#	define mknodat(fd, name, mode, dev) \
-		_haiku_build_mknodat(fd, name, mode, dev)
-#	define creat(path, mode)			_haiku_build_creat(path, mode)
-#	define open(path, openMode...)		_haiku_build_open(path, openMode)
-#	define openat(fd, path, openMode...) \
-		_haiku_build_openat(fd, path, openMode)
-/*#	define fcntl(fd, op...)				_haiku_build_fcntl(fd, op)
-#include <fcntl.h>
-
-#	define renameat(fromFD, from, toFD, to) \
-		_haiku_build_renameat(fromFD, from, toFD, to)*/
 
 #	if defined(HAIKU_HOST_USE_XATTR) && defined(HAIKU_HOST_PLATFORM_HAIKU)
 #		define fs_read_attr			_haiku_build_fs_read_attr

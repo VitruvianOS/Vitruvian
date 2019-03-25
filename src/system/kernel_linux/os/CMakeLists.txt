@@ -36,4 +36,6 @@ target_sources(root PRIVATE
 	fs/kernel_fs_volume.c
 	#fs/kernel_interface.POSIX.cpp
 	fs/volume/LinuxVolume.cpp
+
+	tls.cpp
 )

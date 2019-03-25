@@ -12,7 +12,7 @@ target_include_directories(
 	"transformer/"
 )
 
-target_sources(icon PUBLIC
+target_sources(icon PRIVATE
 	Icon.cpp
 	IconRenderer.cpp
 	IconUtils.cpp

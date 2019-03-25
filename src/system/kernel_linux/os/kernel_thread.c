@@ -488,6 +488,20 @@ _kern_resume_thread(thread_id id)
 }
 
 
+status_t
+_kern_block_thread(uint32 flags, bigtime_t timeout)
+{
+	UNIMPLEMENTED();
+}
+
+
+status_t
+_kern_unblock_thread(thread_id thread, status_t status)
+{
+	UNIMPLEMENTED();
+}
+
+
 // TODO WTF
 void __allocate_pthread(int32 foo, void* data)
 {

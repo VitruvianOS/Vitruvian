@@ -5,6 +5,8 @@
 
 #include "fs_descriptors.h"
 
+using namespace BPrivate;
+
 #if defined(_HAIKU_BUILD_NO_FUTIMENS) || defined(_HAIKU_BUILD_NO_FUTIMENS)
 
 template<typename File>

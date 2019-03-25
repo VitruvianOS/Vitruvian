@@ -475,11 +475,8 @@ delete_descriptor(int fd)
 	return error;
 }
 
-} // namespace BPrivate
-
-
 // get_descriptor
-BPrivate::Descriptor *
+Descriptor *
 get_descriptor(int fd)
 {
 	if (!sDescriptors)
@@ -492,7 +489,7 @@ get_descriptor(int fd)
 
 // add_descriptor
 int
-add_descriptor(BPrivate::Descriptor *descriptor)
+add_descriptor(Descriptor *descriptor)
 {
 	if (!sDescriptors)
 		sDescriptors = new DescriptorMap;
@@ -518,6 +515,9 @@ add_descriptor(BPrivate::Descriptor *descriptor)
 bool
 is_unknown_or_system_descriptor(int fd)
 {
-	BPrivate::Descriptor* descriptor = get_descriptor(fd);
+	Descriptor* descriptor = get_descriptor(fd);
 	return descriptor == NULL || descriptor->IsSystemFD();
 }
+
+} // namespace BPrivate
+

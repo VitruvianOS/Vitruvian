@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
 project(VOS VERSION 0.1.0 LANGUAGES CXX C)
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_CXX_STANDARD 98)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 11)
 
 # Defaults
 set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
@@ -10,7 +10,7 @@ set(CMAKE_COLOR_MAKEFILE ON)
 
 # Ensure env
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
-    message(FATAL_ERROR "Create a separate build directory and run 'cmake path_to_libb2 [options]' there.")
+    message(FATAL_ERROR "Create a separate build directory and run 'cmake path_to_vos [options]' there.")
 endif()
 if(NOT CMAKE_GENERATOR STREQUAL "Ninja")
     message(FATAL_ERROR "Only Ninja generator is supported: cmake ... -GNinja")
@@ -53,7 +53,7 @@ include_directories(
 	"headers/build/config_headers"
 	"headers/config"
 	"headers/util"
-	"headers/libs/agg/"
+	"headers/posix"
 
 	"headers/os"
 	"headers/os/app"
@@ -61,14 +61,6 @@ include_directories(
 	"headers/os/kernel"
 	"headers/os/support"
 	"headers/os/storage"
-
-	"headers/private/kernel"
-	"headers/private/libroot"
-	"headers/private/shared"
-	"headers/private/system"
-	"headers/private/system/arch/x86_64"
-
-	"headers/posix"
 
 	"headers/os/config"
 	"headers/os/libs/agg/dbg_new"
@@ -92,6 +84,13 @@ include_directories(
 	"headers/os/storage"
 	"headers/os/support"
 	"headers/os/posix/compat/sys"
+
+	"headers/private/kernel"
+	"headers/private/libroot"
+	"headers/private/shared"
+	"headers/private/system"
+	"headers/private/system/arch/x86_64"
+
 	"headers/private/"
 	"headers/private/app"
 	"headers/private/binary_compatibility"
@@ -116,21 +115,11 @@ include_directories(
 	"headers/private/system/arch/x86"
 	"headers/private/tracker"
 
-	"headers/headers/os/private/system/arch/x86_64private/tracker"
-
 	"src/kits/tracker/"
 
 	"src/kits/storage/mime"
 	"src/kits/interface/layouter/"
 	"src/kits/interface/textview_support/"
-
-	"src/servers/app"
-	"src/servers/app/drawing"
-	"src/servers/app/font"
-	"src/servers/app/stackandtile"
-	"src/servers/app/decorator"
-	"src/servers/app/drawing/Painter"
-	"src/servers/app/drawing/Painter/drawing_modes"
 
 	"headers/libs/icon/"
 	"headers/libs/agg/"
@@ -144,7 +133,6 @@ include_directories(
 	"build/config_headers"
 
     #${PUBLIC_HEADERS}
-    #${INTERFACE_HEADERS_DIR}
 )
 
 # Set flags.

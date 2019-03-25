@@ -1,7 +1,22 @@
 find_package(Freetype REQUIRED)
 include_directories(${FREETYPE_INCLUDE_DIRS})
 
-add_executable(app_server
+add_executable(app_server)
+
+target_include_directories(app_server PRIVATE
+	"./"
+	"./drawing"
+	"./font"
+	"./stackandtile"
+	"./decorator"
+	"./drawing/Painter"
+	"./drawing/Painter/drawing_modes"
+)
+
+target_sources(
+	app_server
+	PRIVATE
+
 	Angle.cpp
 	AppServer.cpp
 	BitmapDrawingEngine.cpp
@@ -105,10 +120,4 @@ add_executable(app_server
 	drawing/Painter/drawing_modes/PixelFormat.cpp
 )
 
-
-target_link_libraries(app_server PUBLIC root)
-target_link_libraries(app_server PUBLIC be)
-target_link_libraries(app_server PUBLIC freetype)
-target_link_libraries(app_server PUBLIC agg)
-target_link_libraries(app_server PUBLIC icon)
-target_link_libraries(app_server PUBLIC linprog)
+target_link_libraries(app_server PRIVATE be root freetype agg icon linprog)

@@ -15,7 +15,7 @@ target_sources(be PRIVATE
 	Node.cpp
 	NodeInfo.cpp
 	NodeMonitor.cpp
-	#NodeMonitorHandler.cpp
+	NodeMonitorHandler.cpp
 	OffsetFile.cpp
 	Path.cpp
 	#PathMonitor.cpp
@@ -33,7 +33,9 @@ target_sources(be PRIVATE
 	VolumeRoster.cpp
 
 	mime/database_support.cpp
+	mime/database_access.cpp
 
+	sniffer/CharStream.cpp
 	sniffer/DisjList.cpp
 	sniffer/Err.cpp
 	sniffer/Parser.cpp

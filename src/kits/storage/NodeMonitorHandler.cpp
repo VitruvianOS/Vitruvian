@@ -145,6 +145,7 @@ NodeMonitorHandler::DeviceUnmounted(dev_t new_device)
 status_t
 NodeMonitorHandler::HandleEntryCreated(BMessage * msg)
 {
+	#ifdef __HAIKU__
 	const char *name;
 	ino_t directory;
 	dev_t device;
@@ -156,6 +157,7 @@ NodeMonitorHandler::HandleEntryCreated(BMessage * msg)
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
 	EntryCreated(name, directory, device, node);
+	#endif
 	return B_OK;
 }
 
@@ -163,6 +165,7 @@ NodeMonitorHandler::HandleEntryCreated(BMessage * msg)
 status_t
 NodeMonitorHandler::HandleEntryRemoved(BMessage * msg)
 {
+	#ifdef __HAIKU__
 	const char *name;
 	ino_t directory;
 	dev_t device;
@@ -174,6 +177,7 @@ NodeMonitorHandler::HandleEntryRemoved(BMessage * msg)
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
 	EntryRemoved(name, directory, device, node);
+	#endif
 	return B_OK;
 }
 
@@ -181,6 +185,7 @@ NodeMonitorHandler::HandleEntryRemoved(BMessage * msg)
 status_t
 NodeMonitorHandler::HandleEntryMoved(BMessage * msg)
 {
+	#ifdef __HAIKU__
 	const char *name;
 	const char *fromName;
 	ino_t fromDirectory;
@@ -199,6 +204,7 @@ NodeMonitorHandler::HandleEntryMoved(BMessage * msg)
 	}
 	EntryMoved(name, fromName, fromDirectory, toDirectory, device, node,
 		deviceNode);
+	#endif
 	return B_OK;
 }
 
@@ -206,6 +212,7 @@ NodeMonitorHandler::HandleEntryMoved(BMessage * msg)
 status_t
 NodeMonitorHandler::HandleStatChanged(BMessage * msg)
 {
+	#ifdef __HAIKU__
 	ino_t node;
 	dev_t device;
 	int32 statFields;
@@ -215,6 +222,7 @@ NodeMonitorHandler::HandleStatChanged(BMessage * msg)
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
 	StatChanged(node, device, statFields);
+	#endif
 	return B_OK;
 }
 
@@ -222,6 +230,7 @@ NodeMonitorHandler::HandleStatChanged(BMessage * msg)
 status_t
 NodeMonitorHandler::HandleAttrChanged(BMessage * msg)
 {
+	#ifdef __HAIKU__
 	ino_t node;
 	dev_t device;
 	if ((msg->FindInt64("node", &node) != B_OK) ||
@@ -230,12 +239,14 @@ NodeMonitorHandler::HandleAttrChanged(BMessage * msg)
 	}
 	AttrChanged(node, device);
 	return B_OK;
+	#endif
 }
 
 
 status_t
 NodeMonitorHandler::HandleDeviceMounted(BMessage * msg)
 {
+	#ifdef __HAIKU__
 	dev_t new_device;
 	dev_t device;
 	ino_t directory;
@@ -245,6 +256,7 @@ NodeMonitorHandler::HandleDeviceMounted(BMessage * msg)
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
 	DeviceMounted(new_device, device, directory);
+	#endif
 	return B_OK;
 }
 
@@ -252,10 +264,12 @@ NodeMonitorHandler::HandleDeviceMounted(BMessage * msg)
 status_t
 NodeMonitorHandler::HandleDeviceUnmounted(BMessage * msg)
 {
+	#ifdef __HAIKU__
 	dev_t new_device;
 	if (msg->FindInt32("new device", &new_device) != B_OK) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
 	DeviceUnmounted(new_device);
+	#endif
 	return B_OK;
 }

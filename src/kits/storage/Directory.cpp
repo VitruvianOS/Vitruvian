@@ -495,6 +495,13 @@ BDirectory::operator=(const BDirectory& dir)
 
 
 status_t
+BDirectory::GetStatFor(const char* path, struct stat* st) const
+{
+	return _GetStatFor(path, st);
+}
+
+
+status_t
 BDirectory::_GetStatFor(const char* path, struct stat* st) const
 {
 	if (!st)
@@ -611,7 +618,7 @@ create_directory(const char* path, mode_t mode)
 
 
 // #pragma mark - symbol versions
-
+#if 0
 #ifdef __HAIKU__
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	if __GNUC__ == 2	// gcc 2
@@ -648,4 +655,5 @@ create_directory(const char* path, mode_t mode)
 
 #	endif	// gcc 4
 #endif	// !HAIKU_TARGET_PLATFORM_LIBBE_TEST
+#endif
 #endif

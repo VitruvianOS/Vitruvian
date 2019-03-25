@@ -26,6 +26,8 @@
 
 using std::nothrow;
 
+_BEGIN_ICON_NAMESPACE
+
 class IconRenderer::StyleHandler {
 	struct StyleItem {
 		Style*			style;
@@ -424,6 +426,4 @@ IconRenderer::_CommitRenderPass(StyleHandler& styleHandler, bool reset)
 		fRasterizer.reset();
 }
 
-
-
-
+_END_ICON_NAMESPACE

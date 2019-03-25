@@ -27,6 +27,8 @@
 
 using std::nothrow;
 
+_BEGIN_ICON_NAMESPACE
+
 #ifdef ICON_O_MATIC
 // constructor
 ShapeListener::ShapeListener()
@@ -687,3 +689,4 @@ Shape::_NotifyRerender() const
 
 #endif // ICON_O_MATIC
 
+_END_ICON_NAMESPACE

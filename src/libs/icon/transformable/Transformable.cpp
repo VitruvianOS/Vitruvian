@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <string.h>
 
+_BEGIN_ICON_NAMESPACE
+
 // constructor
 Transformable::Transformable()
 	: agg::trans_affine()
@@ -319,3 +321,4 @@ Transformable::TransformationChanged()
 	// default implementation doesn't care
 }
 
+_END_ICON_NAMESPACE

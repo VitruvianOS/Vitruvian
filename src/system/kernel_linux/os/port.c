@@ -32,7 +32,9 @@
 #	define TRACE(x)
 #endif
 
-#define DEBUG
+#ifndef DEBUG
+#define DEBUG 1
+#endif
 
 #define PORT_MAX_MESSAGE_SIZE 4096
 

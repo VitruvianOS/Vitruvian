@@ -1,21 +1,21 @@
 target_sources(root PRIVATE
 	byteorder.cpp
 	framebuffer.cpp
-	kernel_area.c
-	kernel_atomic.c
-	kernel_debug.c
-	kernel_image.c
-	kernel_memory.cpp
-	kernel_missing_imp.c
-	kernel_mutex.cpp
-	kernel_port.c
-	kernel_scheduler.cpp
-	kernel_sem.c
-	kernel_team.c
-	kernel_thread.c
-	kernel_time.cpp
-	kernel_wait_for_objects.cpp
-	kernel_watch.c
+	area.c
+	atomic.c
+	debug.c
+	image.c
+	memory.cpp
+	missing_imp.c
+	mutex.cpp
+	port.c
+	scheduler.cpp
+	sem.c
+	team.c
+	thread.c
+	time.cpp
+	wait_for_objects.cpp
+	watch.c
 	libc.c
 	real_time_clock.c
 	shutdown.cpp
@@ -30,10 +30,10 @@ target_sources(root PRIVATE
 	fs/fs.cpp
 	fs/fs_descriptors.cpp
 	fs/fs_impl.h
-	fs/kernel_fs_index.c
-	fs/kernel_fs_info.cpp
-	fs/kernel_fs_query.c
-	fs/kernel_fs_volume.c
+	fs/fs_index.c
+	fs/fs_info.cpp
+	fs/fs_query.c
+	fs/fs_volume.c
 	#fs/kernel_interface.POSIX.cpp
 	fs/volume/LinuxVolume.cpp
 

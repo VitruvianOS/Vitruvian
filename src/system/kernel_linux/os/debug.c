@@ -14,7 +14,8 @@
 void
 _kern_debugger(const char *message)
 {
-	UNIMPLEMENTED();
+	printf("debugger() called: %s\n", message);
+	exit(1);
 }
 
 
@@ -103,7 +104,7 @@ _kern_clear_debugger_watchpoint(void *address)
 void
 _kern_debug_output(const char* message)
 {
-	UNIMPLEMENTED();
+	printf("%s", message);
 }
 
 

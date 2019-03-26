@@ -151,27 +151,6 @@ int32 _kern_is_computer_on(void)
 }
 
 
-#if 0
-// debugger
-void
-debugger(const char *message)
-{
-	fprintf(stderr, "debugger() called: %s\n", message);
-	exit(1);
-}
-
-// _debuggerAssert
-int
-_debuggerAssert(const char *file, int line, const char *expression)
-{
-	char buffer[2048];
-	snprintf(buffer, sizeof(buffer), "%s:%d: %s\n", file, line, expression);
-	debugger(buffer);
-	return 0;
-}
-#endif
-
-
 // system_time
 bigtime_t
 system_time(void)

@@ -1,4 +1,3 @@
-
 add_library(linprog STATIC "")
 
 target_sources(linprog PRIVATE

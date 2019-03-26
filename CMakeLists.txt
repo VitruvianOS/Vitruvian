@@ -27,15 +27,28 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 # Build type flags.
-set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -ggdb -include build/BeOSBuildCompatibility.h")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g0- include build/BeOSBuildCompatibility.h")
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -include build/BeOSBuildCompatibility.h")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -include build/BeOSBuildCompatibility.h")
+set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -ggdb")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g0")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 # Common compiler flags.
-set(COMMON_FLAGS "-include build/BeOSBuildCompatibility.h -Wall   \
+set(COMMON_FLAGS "-include BeOSBuildCompatibility.h -Wall \
 	-Wpointer-arith -Wcast-align -Wsign-compare -Wstrict-aliasing \
 	-Wno-multichar -fPIC ${DIAG_FLAGS}")
+
+# Set flags.
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} \
+	-Woverloaded-virtual -Wno-ctor-dtor-privacy \
+	-Wnon-virtual-dtor -fexceptions -fpermissive")
+
+# Goal is to work without libctdc++ installed
+set(CMAKE_CXX_IMPLICIT_LINK_LIBRARIES "libc")
+set(CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES "")
+
+# Compute platform bits.
+math(EXPR PLATFORM_BITS "8*${CMAKE_SIZEOF_VOID_P}")
 
 # V\OS defines
 set(GLOBAL_CFLAGS
@@ -43,17 +56,8 @@ set(GLOBAL_CFLAGS
 
 set(SOURCE_HEADERS_DIR "headers")
 
-file(GLOB_RECURSE PUBLIC_HEADERS "headers/*.h")
-
-# Default include directories.
-include_directories(
-	"headers"
-
-	"headers/build"
-	"headers/build/config_headers"
-	"headers/config"
-	"headers/util"
-	"headers/posix"
+set(
+	PUBLIC_HEADERS
 
 	"headers/os"
 	"headers/os/app"
@@ -85,11 +89,11 @@ include_directories(
 	"headers/os/support"
 	"headers/os/posix/compat/sys"
 
-	"headers/private/kernel"
-	"headers/private/libroot"
-	"headers/private/shared"
-	"headers/private/system"
-	"headers/private/system/arch/x86_64"
+	"headers/posix"
+)
+
+set(
+	PRIVATE_HEADERS
 
 	"headers/private/"
 	"headers/private/app"
@@ -99,7 +103,8 @@ include_directories(
 	"headers/private/graphics/vesa"
 	"headers/private/input"
 	"headers/private/interface"
-	"headers/private/kernel/util"
+	"headers/private/libroot"
+	"headers/private/kernel"
 	"headers/private/libroot"
 	"headers/private/locale"
 	"headers/private/mount"
@@ -112,41 +117,31 @@ include_directories(
 	"headers/private/storage/sniffer"
 	"headers/private/support"
 	"headers/private/syslog_daemon"
+	"headers/private/system"
 	"headers/private/system/arch/x86"
 	"headers/private/tracker"
-
-	"src/kits/tracker/"
-
-	"src/kits/storage/mime"
-	"src/kits/interface/layouter/"
-	"src/kits/interface/textview_support/"
 
 	"headers/libs/icon/"
 	"headers/libs/agg/"
 	"headers/libs/linprog/"
 
-	"src/servers/registrar/"
-	"src/servers/registrar/mime/"
-
-	"src/libs/icon/shape/"
-
-	"build/config_headers"
-
-    #${PUBLIC_HEADERS}
+	"src/kits/tracker/"
 )
 
-# Set flags.
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} \
-	-Woverloaded-virtual -Wno-ctor-dtor-privacy \
-	-Wnon-virtual-dtor -fexceptions -fpermissive")
+set(
+	BUILD_HEADERS
+	"headers/build"
+	"headers/build/config_headers"
+	"headers/config"
+)
 
-# Goal is to work without libctdc++ installed
-set(CMAKE_CXX_IMPLICIT_LINK_LIBRARIES "libc")
-set(CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES "")
-
-# Compute platform bits.
-math(EXPR PLATFORM_BITS "8*${CMAKE_SIZEOF_VOID_P}")
+# Default include directories.
+include_directories(
+	"headers"
+	${BUILD_HEADERS}
+	${PUBLIC_HEADERS}
+	${PRIVATE_HEADERS}
+)
 
 # Log some information.
 message(STATUS "")

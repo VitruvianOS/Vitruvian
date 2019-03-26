@@ -18,5 +18,4 @@ target_sources(be PRIVATE
 	StopWatch.cpp
 	String.cpp
 	StringList.cpp
-	#Url2.cpp
 )

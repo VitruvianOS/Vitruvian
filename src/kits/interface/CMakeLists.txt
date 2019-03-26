@@ -1,3 +1,9 @@
+target_include_directories(be PRIVATE
+	"./"
+	"layouter"
+	"textview_support"
+)
+
 target_sources(be PRIVATE
 	AbstractLayout.cpp
 	AbstractLayoutItem.cpp

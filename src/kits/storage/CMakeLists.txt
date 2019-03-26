@@ -1,3 +1,8 @@
+target_include_directories(be PRIVATE
+	"./"
+	"mime"
+)
+
 target_sources(be PRIVATE
 	AddOnImage.cpp
 	AddOnMonitor.cpp

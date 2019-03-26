@@ -33,7 +33,7 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 # Common compiler flags.
-set(COMMON_FLAGS "-include BeOSBuildCompatibility.h -Wall \
+set(COMMON_FLAGS "-include LinuxBuildCompatibility.h -Wall \
 	-Wpointer-arith -Wcast-align -Wsign-compare -Wstrict-aliasing \
 	-Wno-multichar -fPIC ${DIAG_FLAGS}")
 

@@ -17,7 +17,7 @@
 #	define B_ENTRY_NOT_FOUND	ENOENT
 #	define B_NO_MEMORY			ENOMEM
 #else
-#	include <BeOSBuildCompatibility.h>
+#	include <LinuxBuildCompatibility.h>
 #	include <syscalls.h>
 
 #	include "fs_impl.h"

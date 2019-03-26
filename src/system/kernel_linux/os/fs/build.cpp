@@ -1,4 +1,4 @@
-#include <BeOSBuildCompatibility.h>
+#include <LinuxBuildCompatibility.h>
 #include <NodeMonitor.h>
 #include <syscalls.h>
 #include <syscall_utils.h>

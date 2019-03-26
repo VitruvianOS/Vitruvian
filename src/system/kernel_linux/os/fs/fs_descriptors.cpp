@@ -9,7 +9,7 @@
 #	define B_OK			0
 #	define B_FILE_ERROR	EBADF
 #else
-#	include <BeOSBuildCompatibility.h>
+#	include <LinuxBuildCompatibility.h>
 #endif
 
 #include "fs_descriptors.h"

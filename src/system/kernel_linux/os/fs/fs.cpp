@@ -4,7 +4,7 @@
  */
 
 
-#include <BeOSBuildCompatibility.h>
+#include <LinuxBuildCompatibility.h>
 
 #include "fs_impl.h"
 

@@ -19,7 +19,7 @@
 #include <Debug.h>
 #include <SupportDefs.h>
 
-#include <BeOSBuildCompatibility.h>
+#include <LinuxBuildCompatibility.h>
 
 #if defined(linux)
 #include <sys/sysinfo.h>

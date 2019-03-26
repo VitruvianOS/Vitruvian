@@ -1,4 +1,4 @@
-#include <BeOSBuildCompatibility.h>
+#include <LinuxBuildCompatibility.h>
 
 #include <ByteOrder.h>
 

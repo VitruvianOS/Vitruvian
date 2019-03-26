@@ -140,11 +140,12 @@ status_t _kern_get_system_info(system_info* psInfo, size_t size )
 status_t
 _kern_get_system_info_etc(int32 id, system_info* psInfo, size_t size)
 {
-
+	UNIMPLEMENTED();
+	return B_ERROR;
 }
 
 
-int32	_kern_is_computer_on(void)
+int32 _kern_is_computer_on(void)
 {
 	return 1L;
 }

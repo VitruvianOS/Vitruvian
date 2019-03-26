@@ -34,8 +34,6 @@
 
 #include <string.h>
 
-//#include "../../config.h"
-
 #include <SupportDefs.h>
 #include <StorageDefs.h>	/* Just because BeOS apps expect this here */
 #include <OS.h>
@@ -294,7 +292,7 @@ status_t
 _kern_set_area_protection(area_id id, uint32 protection)
 {
 	UNIMPLEMENTED();
-	return B_OK;
+	return B_ERROR;
 }
 
 
@@ -311,5 +309,6 @@ status_t
 _kern_reserve_address_range(addr_t* _address,
 	uint32 addressSpec, addr_t size)
 {
-
+	UNIMPLEMENTED();
+	return B_ERROR;
 }

@@ -61,6 +61,7 @@ _kern_debug_thread(thread_id thread)
 void
 _kern_wait_for_debugger(void)
 {
+	UNIMPLEMENTED();
 }
 
 

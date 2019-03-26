@@ -8,7 +8,7 @@ status_t
 system_ioctl(int fd, uint32 cmd, void *data, size_t length)
 {
 	UNIMPLEMENTED();
-	return B_OK;
+	return B_ERROR;
 }
 
 

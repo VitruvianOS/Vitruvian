@@ -505,11 +505,11 @@ _kern_unblock_thread(thread_id thread, status_t status)
 // TODO WTF
 void __allocate_pthread(int32 foo, void* data)
 {
-
+	UNIMPLEMENTED();
 }
 
 
 void __pthread_destroy_thread()
 {
-
+	UNIMPLEMENTED();
 }

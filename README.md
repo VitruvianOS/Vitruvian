@@ -15,10 +15,12 @@ Planned to be supported:
 
 From the sources directory:
 
+```
 mkdir build/
 cd build/
 cmake -GNinja ..
 ninja -j2
+```
 
 #### Contributing
 

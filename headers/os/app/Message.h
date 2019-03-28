@@ -1,9 +1,9 @@
 /*
- * Copyright 2005-2012, Haiku Inc. All Rights Reserved.
+ * Copyright 2005-2017 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *	Michael Lotz <mmlr@mlotz.ch>
+ *		Michael Lotz, mmlr@mlotz.ch
  */
 #ifndef _MESSAGE_H
 #define _MESSAGE_H
@@ -27,7 +27,9 @@ class BBlockCache;
 class BMessenger;
 class BHandler;
 class BString;
+class BStringList;
 struct entry_ref;
+struct rgb_color;
 
 
 // Name lengths and Scripting specifiers
@@ -140,6 +142,8 @@ public:
 			status_t			AddString(const char* name, const char* string);
 			status_t			AddString(const char* name,
 									const BString& string);
+			status_t			AddStrings(const char* name,
+									const BStringList& list);
 			status_t			AddInt8(const char* name, int8 value);
 			status_t			AddUInt8(const char* name, uint8 value);
 			status_t			AddInt16(const char* name, int16 value);
@@ -151,6 +155,7 @@ public:
 			status_t			AddBool(const char* name, bool value);
 			status_t			AddFloat(const char* name, float value);
 			status_t			AddDouble(const char* name, double value);
+			status_t			AddColor(const char* name, rgb_color value);
 			status_t			AddPointer(const char* name,
 									const void* pointer);
 			status_t			AddMessenger(const char* name,
@@ -160,6 +165,8 @@ public:
 									const BMessage* message);
 			status_t			AddFlat(const char* name, BFlattenable* object,
 									int32 count = 1);
+			status_t			AddFlat(const char* name,
+									const BFlattenable* object, int32 count = 1);
 			status_t			AddData(const char* name, type_code type,
 									const void* data, ssize_t numBytes,
 									bool isFixedSize = true, int32 count = 1);
@@ -197,6 +204,8 @@ public:
 									BString* string) const;
 			status_t			FindString(const char* name, int32 index,
 									BString* string) const;
+			status_t			FindStrings(const char* name,
+									BStringList* list) const;
 			status_t			FindInt8(const char* name, int8* value) const;
 			status_t			FindInt8(const char* name, int32 index,
 									int8* value) const;
@@ -234,6 +243,10 @@ public:
 									double* value) const;
 			status_t			FindDouble(const char* name, int32 index,
 									double* value) const;
+			status_t			FindColor(const char* name,
+									rgb_color* value) const;
+			status_t			FindColor(const char* name, int32 index,
+									rgb_color* value) const;
 			status_t			FindPointer(const char* name,
 									void** pointer) const;
 			status_t			FindPointer(const char* name, int32 index,
@@ -317,6 +330,10 @@ public:
 			status_t			ReplaceDouble(const char* name, double value);
 			status_t			ReplaceDouble(const char* name, int32 index,
 									double value);
+			status_t			ReplaceColor(const char* name,
+									rgb_color value);
+			status_t			ReplaceColor(const char* name, int32 index,
+									rgb_color value);
 			status_t			ReplacePointer(const char* name,
 									const void* pointer);
 			status_t			ReplacePointer(const char* name, int32 index,
@@ -372,6 +389,7 @@ public:
 			bool				HasBool(const char* name, int32 n = 0) const;
 			bool				HasFloat(const char* name, int32 n = 0) const;
 			bool				HasDouble(const char* name, int32 n = 0) const;
+			bool				HasColor(const char* name, int32 n = 0) const;
 			bool				HasPointer(const char* name, int32 n = 0) const;
 			bool				HasMessenger(const char* name,
 									int32 n = 0) const;
@@ -396,7 +414,7 @@ public:
 
 	// Convenience methods
 			bool				GetBool(const char* name,
-									bool defaultValue) const;
+									bool defaultValue = false) const;
 			bool				GetBool(const char* name, int32 index,
 									bool defaultValue) const;
 			int8				GetInt8(const char* name,
@@ -439,12 +457,16 @@ public:
 									double defaultValue) const;
 			double				GetDouble(const char* name, int32 index,
 									double defaultValue) const;
-			void*				GetPointer(const char* name,
-									const void* defaultValue) const;
-			void*				GetPointer(const char* name, int32 index,
-									const void* defaultValue) const;
+			rgb_color			GetColor(const char* name,
+									rgb_color defaultValue) const;
+			rgb_color			GetColor(const char* name, int32 index,
+									rgb_color defaultValue) const;
+			const void*			GetPointer(const char* name, int32 index,
+									const void* defaultValue = NULL) const;
+			const void*			GetPointer(const char* name,
+									const void* defaultValue = NULL) const;
 			const char*			GetString(const char* name,
-									const char* defaultValue) const;
+									const char* defaultValue = NULL) const;
 			const char*			GetString(const char* name, int32 index,
 									const char* defaultValue) const;
 			BAlignment			GetAlignment(const char* name, int32 index,
@@ -474,7 +496,11 @@ public:
 			status_t			SetUInt32(const char* name, uint32 value);
 			status_t			SetInt64(const char* name, int64 value);
 			status_t			SetUInt64(const char* name, uint64 value);
+			status_t			SetColor(const char* name, rgb_color value);
 			status_t			SetPointer(const char* name, const void* value);
+			status_t			SetString(const char* name, const char* string);
+			status_t			SetString(const char* name,
+									const BString& string);
 			status_t			SetFloat(const char* name, float value);
 			status_t			SetDouble(const char* name, double value);
 			status_t			SetAlignment(const char* name,
@@ -483,7 +509,8 @@ public:
 			status_t			SetRect(const char* name, const BRect& value);
 			status_t			SetSize(const char* name, const BSize& value);
 			status_t			SetData(const char* name, type_code type,
-									const void* data, ssize_t numBytes);
+									const void* data, ssize_t numBytes,
+									bool fixedSize = true, int count = 1);
 
 	class Private;
 	struct message_header;
@@ -504,6 +531,7 @@ private:
 
 			status_t			_ValidateMessage();
 
+			void				_UpdateOffsets(uint32 offset, int32 change);
 			status_t			_ResizeData(uint32 offset, int32 change);
 
 			uint32				_HashName(const char* name) const;

@@ -32,6 +32,8 @@ names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
 
+// generic setting handler classes
+
 
 #include <Debug.h>
 
@@ -44,16 +46,19 @@ All rights reserved.
 
 Settings* settings = NULL;
 
-// generic setting handler classes
+
+//	#pragma mark - StringValueSetting
+
 
 StringValueSetting::StringValueSetting(const char* name,
 	const char* defaultValue, const char* valueExpectedErrorString,
 	const char* wrongValueErrorString)
-	:	SettingsArgvDispatcher(name),
-		fDefaultValue(defaultValue),
-		fValueExpectedErrorString(valueExpectedErrorString),
-		fWrongValueErrorString(wrongValueErrorString),
-		fValue(defaultValue)
+	:
+	SettingsArgvDispatcher(name),
+	fDefaultValue(defaultValue),
+	fValueExpectedErrorString(valueExpectedErrorString),
+	fWrongValueErrorString(wrongValueErrorString),
+	fValue(defaultValue)
 {
 }
 
@@ -97,21 +102,22 @@ StringValueSetting::Handle(const char* const* argv)
 {
 	if (!*++argv)
 		return fValueExpectedErrorString;
-	
+
 	ValueChanged(*argv);
 	return 0;
 }
 
 
-//	#pragma mark -
+//	#pragma mark - EnumeratedStringValueSetting
 
 
 EnumeratedStringValueSetting::EnumeratedStringValueSetting(const char* name,
 	const char* defaultValue, const char* const* values,
 	const char* valueExpectedErrorString, const char* wrongValueErrorString)
-	:	StringValueSetting(name, defaultValue, valueExpectedErrorString,
-			wrongValueErrorString),
-		fValues(values)
+	:
+	StringValueSetting(name, defaultValue, valueExpectedErrorString,
+		wrongValueErrorString),
+	fValues(values)
 {
 }
 
@@ -123,7 +129,7 @@ EnumeratedStringValueSetting::ValueChanged(const char* newValue)
 	// must be one of the enumerated values
 	bool found = false;
 	for (int32 index = 0; ; index++) {
-		if (!fValues[index])
+		if (fValues[index] == NULL)
 			break;
 
 		if (strcmp(fValues[index], newValue) != 0)
@@ -146,7 +152,7 @@ EnumeratedStringValueSetting::Handle(const char* const* argv)
 
 	bool found = false;
 	for (int32 index = 0; ; index++) {
-		if (!fValues[index])
+		if (fValues[index] == NULL)
 			break;
 
 		if (strcmp(fValues[index], *argv) != 0)
@@ -164,19 +170,20 @@ EnumeratedStringValueSetting::Handle(const char* const* argv)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - ScalarValueSetting
 
 
 ScalarValueSetting::ScalarValueSetting(const char* name, int32 defaultValue,
 	const char* valueExpectedErrorString, const char* wrongValueErrorString,
 	int32 min, int32 max)
-	:	SettingsArgvDispatcher(name),
-		fDefaultValue(defaultValue),
-		fValue(defaultValue),
-		fMax(max),
-		fMin(min),
-		fValueExpectedErrorString(valueExpectedErrorString),
-		fWrongValueErrorString(wrongValueErrorString)
+	:
+	SettingsArgvDispatcher(name),
+	fDefaultValue(defaultValue),
+	fValue(defaultValue),
+	fMax(max),
+	fMin(min),
+	fValueExpectedErrorString(valueExpectedErrorString),
+	fWrongValueErrorString(wrongValueErrorString)
 {
 }
 
@@ -200,7 +207,7 @@ ScalarValueSetting::Value() const
 void
 ScalarValueSetting::GetValueAsString(char* buffer) const
 {
-	sprintf(buffer, "%ld", fValue);
+	sprintf(buffer, "%" B_PRId32, fValue);
 }
 
 
@@ -212,7 +219,7 @@ ScalarValueSetting::Handle(const char* const* argv)
 
 	int32 newValue;
 	if ((*argv)[0] == '0' && (*argv)[1] == 'x')
-		sscanf(*argv,"%lx",&newValue);
+		sscanf(*argv, "%" B_PRIx32, &newValue);
 	else
 		newValue = atoi(*argv);
 
@@ -238,14 +245,15 @@ ScalarValueSetting::NeedsSaving() const
 }
 
 
-//	#pragma mark -
+//	#pragma mark - HexScalarValueSetting
 
 
 HexScalarValueSetting::HexScalarValueSetting(const char* name,
 	int32 defaultValue, const char* valueExpectedErrorString,
 	const char* wrongValueErrorString, int32 min, int32 max)
-		:	ScalarValueSetting(name, defaultValue, valueExpectedErrorString,
-					wrongValueErrorString, min, max)
+	:
+	ScalarValueSetting(name, defaultValue, valueExpectedErrorString,
+		wrongValueErrorString, min, max)
 {
 }
 
@@ -253,18 +261,18 @@ HexScalarValueSetting::HexScalarValueSetting(const char* name,
 void
 HexScalarValueSetting::GetValueAsString(char* buffer) const
 {
-	sprintf(buffer, "0x%08lx", fValue);
+	sprintf(buffer, "0x%08" B_PRIx32, fValue);
 }
 
 
 void
 HexScalarValueSetting::SaveSettingValue(Settings* settings)
 {
-	settings->Write("0x%08lx", fValue);
+	settings->Write("0x%08" B_PRIx32, fValue);
 }
 
 
-//	#pragma mark -
+//	#pragma mark - BooleanValueSetting
 
 
 BooleanValueSetting::BooleanValueSetting(const char* name, bool defaultValue)

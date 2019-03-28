@@ -45,17 +45,20 @@ All rights reserved.
 #include <Alert.h>
 #include <Button.h>
 #include <Catalog.h>
+#include <GroupView.h>
+#include <GridView.h>
 #include <Locale.h>
 #include <Mime.h>
 #include <NodeInfo.h>
 #include <Path.h>
 #include <Roster.h>
+#include <SpaceLayoutItem.h>
 #include <Volume.h>
 #include <VolumeRoster.h>
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
+#include <strings.h>
 
 
 const char* kDefaultOpenWithTemplate = "OpenWithSettings";
@@ -73,13 +76,17 @@ const int32 kOpenAndMakeDefault = 'OpDf';
 const rgb_color kOpenWithDefaultColor = { 0xFF, 0xFF, 0xCC, 255};
 
 
+//	#pragma mark - OpenWithContainerWindow
+
+
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "OpenWithWindow"
 
+
 OpenWithContainerWindow::OpenWithContainerWindow(BMessage* entriesToOpen,
-		LockingList<BWindow>* windowList, window_look look, window_feel feel,
-		uint32 flags, uint32 workspace)
-	: BContainerWindow(windowList, 0, look, feel, flags, workspace),
+	LockingList<BWindow>* windowList)
+	:
+	BContainerWindow(windowList, 0),
 	fEntriesToOpen(entriesToOpen)
 {
 	AutoLock<BWindow> lock(this);
@@ -88,57 +95,28 @@ OpenWithContainerWindow::OpenWithContainerWindow(BMessage* entriesToOpen,
 	MoveTo(windowRect.LeftTop());
 	ResizeTo(windowRect.Width(), windowRect.Height());
 
-	// add a background view; use the standard BackgroundView here, the same
-	// as the file panel is using
-	BRect rect(Bounds());
-	BackgroundView* backgroundView = new BackgroundView(rect);
-	AddChild(backgroundView);
+	// Create controls
+	fButtonContainer = new BGroupView(B_HORIZONTAL, B_USE_ITEM_SPACING);
+	fButtonContainer->GroupLayout()->SetInsets(0, B_USE_ITEM_INSETS,
+		B_USE_ITEM_INSETS, 0);
 
-	rect = Bounds();
-
-	// add buttons
-
-	fLaunchButton = new BButton(rect, "ok",	B_TRANSLATE("Open"),
-		new BMessage(kDefaultButton), B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM);
-	fLaunchButton->ResizeToPreferred();
-	fLaunchButton->MoveTo(rect.right - 10 - kDocumentKnobWidth
-		- fLaunchButton->Bounds().Width(),
-		rect.bottom - 10 - fLaunchButton->Bounds().Height());
-	backgroundView->AddChild(fLaunchButton);
-
-	BRect buttonRect = fLaunchButton->Frame();
-	fLaunchAndMakeDefaultButton = new BButton(buttonRect, "make default",
-		B_TRANSLATE("Open and make preferred"),	new BMessage(kOpenAndMakeDefault),
-		B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM);
-	// wide button, have to resize to fit text
-	fLaunchAndMakeDefaultButton->ResizeToPreferred();
-	fLaunchAndMakeDefaultButton->MoveBy(
-		- 10 - fLaunchAndMakeDefaultButton->Bounds().Width(), 0);
-	backgroundView->AddChild(fLaunchAndMakeDefaultButton);
-	fLaunchAndMakeDefaultButton->SetEnabled(false);
-
-	buttonRect = fLaunchAndMakeDefaultButton->Frame();
-	BButton* button = new BButton(buttonRect, "cancel",	B_TRANSLATE("Cancel"),
-		new BMessage(kCancelButton), B_FOLLOW_RIGHT | B_FOLLOW_BOTTOM);
-	button->ResizeToPreferred();
-	button->MoveBy(- 10 - button->Bounds().Width(), 0);
-	backgroundView->AddChild(button);
-
-	fMinimalWidth = button->Bounds().Width() + fLaunchButton->Bounds().Width()
-		+ fLaunchAndMakeDefaultButton->Bounds().Width() + kDocumentKnobWidth + 40;
+	fLaunchButton = new BButton("ok", B_TRANSLATE("Open"),
+		new BMessage(kDefaultButton));
 
 	fLaunchButton->MakeDefault(true);
 
-	// add pose view
+	fLaunchAndMakeDefaultButton = new BButton("make default",
+		B_TRANSLATE("Open and make preferred"),
+		new BMessage(kOpenAndMakeDefault));
+	// wide button, have to resize to fit text
+	fLaunchAndMakeDefaultButton->SetEnabled(false);
 
-	rect.OffsetTo(10, 10);
-	rect.bottom = buttonRect.top - 15;
+	fCancelButton = new BButton("cancel", B_TRANSLATE("Cancel"),
+		new BMessage(kCancelButton));
 
-	rect.right -= B_V_SCROLL_BAR_WIDTH + 20;
-	rect.bottom -= B_H_SCROLL_BAR_HEIGHT;
-		// make room for scrollbars and a margin
-	fPoseView = NewPoseView(0, rect, kListMode);
-	backgroundView->AddChild(fPoseView);
+	// Add pose view
+	fPoseView = NewPoseView(NULL, kListMode);
+	fBorderedView->GroupLayout()->AddView(fPoseView);
 
 	fPoseView->SetFlags(fPoseView->Flags() | B_NAVIGABLE);
 	fPoseView->SetPoseEditing(false);
@@ -152,11 +130,13 @@ OpenWithContainerWindow::OpenWithContainerWindow(BMessage* entriesToOpen,
 		buffer.ReplaceFirst("%name", ref.name);
 
 		SetTitle(buffer.String());
-	} else
+	} else {
 		// use generic title
 		SetTitle(B_TRANSLATE("Open selection with:"));
+	}
 
-	AddCommonFilter(new BMessageFilter(B_KEY_DOWN, &OpenWithContainerWindow::KeyDownFilter));
+	AddCommonFilter(new BMessageFilter(B_KEY_DOWN,
+		&OpenWithContainerWindow::KeyDownFilter));
 }
 
 
@@ -167,16 +147,17 @@ OpenWithContainerWindow::~OpenWithContainerWindow()
 
 
 BPoseView*
-OpenWithContainerWindow::NewPoseView(Model*, BRect rect, uint32)
+OpenWithContainerWindow::NewPoseView(Model*, uint32)
 {
-	return new OpenWithPoseView(rect);
+	return new OpenWithPoseView;
 }
 
 
 OpenWithPoseView*
 OpenWithContainerWindow::PoseView() const
 {
-	ASSERT(dynamic_cast<OpenWithPoseView*>(fPoseView));
+	ASSERT(dynamic_cast<OpenWithPoseView*>(fPoseView) != NULL);
+
 	return static_cast<OpenWithPoseView*>(fPoseView);
 }
 
@@ -193,7 +174,7 @@ OpenWithContainerWindow::OpenWithSelection()
 {
 	int32 count = PoseView()->SelectionList()->CountItems();
 	ASSERT(count == 1);
-	if (!count)
+	if (count == 0)
 		return;
 
 	PoseView()->OpenSelection(PoseView()->SelectionList()->FirstItem(), 0);
@@ -234,6 +215,7 @@ AddOneUniqueDocumentType(const entry_ref* ref, void* castToList)
 
 	// add type to list
 	list->AddItem(new BString(type));
+
 	return 0;
 }
 
@@ -285,12 +267,12 @@ OpenWithContainerWindow::MakeDefaultAndOpen()
 {
 	int32 count = PoseView()->SelectionList()->CountItems();
 	ASSERT(count == 1);
-	if (!count)
+	if (count == 0)
 		return;
 
 	BPose* selectedAppPose = PoseView()->SelectionList()->FirstItem();
-	ASSERT(selectedAppPose);
-	if (!selectedAppPose)
+	ASSERT(selectedAppPose != NULL);
+	if (selectedAppPose == NULL)
 		return;
 
 	// collect all the types of all the opened documents into a list
@@ -333,6 +315,7 @@ OpenWithContainerWindow::MessageReceived(BMessage* message)
 			ResizeToFit();
 			break;
 	}
+
 	_inherited::MessageReceived(message);
 }
 
@@ -345,9 +328,9 @@ OpenWithContainerWindow::KeyDownFilter(BMessage* message, BHandler**,
 	if (message->FindInt8("byte", (int8*)&key) != B_OK)
 		return B_DISPATCH_MESSAGE;
 
-	int32 modifier=0;
-	message->FindInt32("modifiers", &modifier);
-	if (!modifier && key == B_ESCAPE) {
+	int32 modifiers = 0;
+	message->FindInt32("modifiers", &modifiers);
+	if (modifiers == 0 && key == B_ESCAPE) {
 		filter->Looper()->PostMessage(kCancelButton);
 		return B_SKIP_MESSAGE;
 	}
@@ -381,24 +364,29 @@ void
 OpenWithContainerWindow::NewAttributeMenu(BMenu* menu)
 {
 	_inherited::NewAttributeMenu(menu);
+
 	BMessage* message = new BMessage(kAttributeItem);
 	message->AddString("attr_name", kAttrOpenWithRelation);
 	message->AddInt32("attr_type", B_STRING_TYPE);
-	message->AddInt32("attr_hash", (int32)AttrHashString(kAttrOpenWithRelation, B_STRING_TYPE));
+	message->AddInt32("attr_hash",
+		(int32)AttrHashString(kAttrOpenWithRelation, B_STRING_TYPE));
 	message->AddFloat("attr_width", 180);
 	message->AddInt32("attr_align", B_ALIGN_LEFT);
 	message->AddBool("attr_editable", false);
 	message->AddBool("attr_statfield", false);
+
 	BMenuItem* item = new BMenuItem(B_TRANSLATE("Relation"), message);
 	menu->AddItem(item);
 	message = new BMessage(kAttributeItem);
 	message->AddString("attr_name", kAttrAppVersion);
 	message->AddInt32("attr_type", B_STRING_TYPE);
-	message->AddInt32("attr_hash", (int32)AttrHashString(kAttrAppVersion, B_STRING_TYPE));
+	message->AddInt32("attr_hash",
+		(int32)AttrHashString(kAttrAppVersion, B_STRING_TYPE));
 	message->AddFloat("attr_width", 70);
 	message->AddInt32("attr_align", B_ALIGN_LEFT);
 	message->AddBool("attr_editable", false);
 	message->AddBool("attr_statfield", false);
+
 	item = new BMenuItem(B_TRANSLATE("Version"), message);
 	menu->AddItem(item);
 }
@@ -432,10 +420,32 @@ OpenWithContainerWindow::Init(const BMessage* message)
 
 
 void
+OpenWithContainerWindow::InitLayout()
+{
+	_inherited::InitLayout();
+
+	// Remove the menu container, since we don't have a menu bar
+	fMenuContainer->RemoveSelf();
+
+	// Reset insets
+	fRootLayout->SetInsets(B_USE_ITEM_INSETS);
+	fPoseContainer->GridLayout()->SetInsets(0);
+	fVScrollBarContainer->GroupLayout()->SetInsets(-1, 0, 0, 0);
+
+	fRootLayout->AddView(fButtonContainer);
+	fButtonContainer->GroupLayout()->AddItem(BSpaceLayoutItem::CreateGlue());
+	fButtonContainer->GroupLayout()->AddView(fCancelButton);
+	fButtonContainer->GroupLayout()->AddView(fLaunchAndMakeDefaultButton);
+	fButtonContainer->GroupLayout()->AddView(fLaunchButton);
+}
+
+
+void
 OpenWithContainerWindow::RestoreState()
 {
 	BNode defaultingNode;
-	if (DefaultStateSourceNode(kDefaultOpenWithTemplate, &defaultingNode, false)) {
+	if (DefaultStateSourceNode(kDefaultOpenWithTemplate, &defaultingNode,
+			false)) {
 		AttributeStreamFileNode streamNodeSource(&defaultingNode);
 		RestoreWindowState(&streamNodeSource);
 		fPoseView->Init(&streamNodeSource);
@@ -443,6 +453,7 @@ OpenWithContainerWindow::RestoreState()
 		RestoreWindowState(NULL);
 		fPoseView->Init(NULL);
 	}
+	InitLayout();
 }
 
 
@@ -456,14 +467,13 @@ OpenWithContainerWindow::RestoreState(const BMessage &message)
 void
 OpenWithContainerWindow::RestoreWindowState(AttributeStreamNode* node)
 {
-	SetSizeLimits(fMinimalWidth, 10000, 160, 10000);
-	if (!node)
+	if (node == NULL)
 		return;
 
 	const char* rectAttributeName = kAttrWindowFrame;
 	BRect frame(Frame());
 	if (node->Read(rectAttributeName, 0, B_RECT_TYPE, sizeof(BRect), &frame)
-		== sizeof(BRect)) {
+			== sizeof(BRect)) {
 		MoveTo(frame.LeftTop());
 		ResizeTo(frame.Width(), frame.Height());
 	}
@@ -518,13 +528,15 @@ OpenWithContainerWindow::SetCanOpen(bool on)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - OpenWithPoseView
 
 
-OpenWithPoseView::OpenWithPoseView(BRect frame, uint32 resizeMask)
-	: BPoseView(0, frame, kListMode, resizeMask),
+OpenWithPoseView::OpenWithPoseView()
+	:
+	BPoseView(new Model(), kListMode),
 	fHaveCommonPreferredApp(false),
-	fIterator(NULL)
+	fIterator(NULL),
+	fRefFilter(NULL)
 {
 	fSavePoseLocations = false;
 	fMultipleSelection = false;
@@ -532,11 +544,21 @@ OpenWithPoseView::OpenWithPoseView(BRect frame, uint32 resizeMask)
 }
 
 
+OpenWithPoseView::~OpenWithPoseView()
+{
+	delete fRefFilter;
+	delete fIterator;
+}
+
+
 OpenWithContainerWindow*
 OpenWithPoseView::ContainerWindow() const
 {
-	ASSERT(dynamic_cast<OpenWithContainerWindow*>(Window()));
-	return static_cast<OpenWithContainerWindow*>(Window());
+	OpenWithContainerWindow* window
+		= dynamic_cast<OpenWithContainerWindow*>(Window());
+	ASSERT(window != NULL);
+
+	return window;
 }
 
 
@@ -544,6 +566,7 @@ void
 OpenWithPoseView::AttachedToWindow()
 {
 	_inherited::AttachedToWindow();
+
 	SetViewColor(kOpenWithDefaultColor);
 	SetLowColor(kOpenWithDefaultColor);
 }
@@ -602,7 +625,8 @@ AddOneRefSignatures(const entry_ref* ref, void* castToIterator)
 	// add preferred app for file, if any
 	if (model.PreferredAppSignature()[0]) {
 		// got one, mark it as preferred for this node
-		if (be_roster->FindApp(model.PreferredAppSignature(), &preferredRef) == B_OK) {
+		if (be_roster->FindApp(model.PreferredAppSignature(), &preferredRef)
+				== B_OK) {
 			queryIterator->PushUniqueSignature(model.PreferredAppSignature());
 			queryIterator->TrySettingPreferredAppForFile(&preferredRef);
 		}
@@ -611,7 +635,7 @@ AddOneRefSignatures(const entry_ref* ref, void* castToIterator)
 	mimeType = model.MimeType();
 	mimeType.ToLower();
 
-	if (mimeType.Length() && !mimeType.ICompare(B_FILE_MIMETYPE) == 0)
+	if (mimeType.Length() && mimeType.ICompare(B_FILE_MIMETYPE) != 0)
 		queryIterator->NonGenericFileFound();
 
 	// get supporting apps for type
@@ -648,9 +672,19 @@ OpenWithPoseView::InitDirentIterator(const entry_ref*)
 		HideBarberPole();
 		return NULL;
 	}
-	SetRefFilter(new OpenWithRefFilter(fIterator, entryList,
-		(fHaveCommonPreferredApp ? &fPreferredRef : 0)));
+
+	fRefFilter = new OpenWithRefFilter(fIterator, entryList,
+		fHaveCommonPreferredApp ? &fPreferredRef : 0);
+	SetRefFilter(fRefFilter);
+
 	return fIterator;
+}
+
+
+void
+OpenWithPoseView::ReturnDirentIterator(EntryListBase* iterator)
+{
+	// Do nothing. We keep our fIterator around as it is used by fRefFilter.
 }
 
 
@@ -660,13 +694,13 @@ OpenWithPoseView::OpenSelection(BPose* pose, int32*)
 	OpenWithContainerWindow* window = ContainerWindow();
 
 	int32 count = fSelectionList->CountItems();
-	if (!count)
+	if (count == 0)
 		return;
 
-	if (!pose)
+	if (pose == NULL)
 		pose = fSelectionList->FirstItem();
 
-	ASSERT(pose);
+	ASSERT(pose != NULL);
 
 	BEntry entry(pose->TargetModel()->EntryRef());
 	if (entry.InitCheck() != B_OK) {
@@ -710,9 +744,8 @@ OpenWithPoseView::OpenSelection(BPose* pose, int32*)
 	message.AddRef("handler", pose->TargetModel()->EntryRef());
 		// add ref of the selected handler
 
-	ASSERT(fSelectionHandler);
-
-	if (fSelectionHandler)
+	ASSERT(fSelectionHandler != NULL);
+	if (fSelectionHandler != NULL)
 		fSelectionHandler->PostMessage(&message);
 
 	window->PostMessage(B_QUIT_REQUESTED);
@@ -772,7 +805,7 @@ OpenWithPoseView::SetUpDefaultColumnsIfNeeded()
 	if (fColumnList->CountItems() != 0)
 		return;
 
-	BColumn* nameColumn = new BColumn(B_TRANSLATE("Name"), kColumnStart, 125,
+	BColumn* nameColumn = new BColumn(B_TRANSLATE("Name"), StartOffset(), 125,
 		B_ALIGN_LEFT, kAttrStatName, B_STRING_TYPE, true, true);
 	fColumnList->AddItem(nameColumn);
 	BColumn* relationColumn = new BColumn(B_TRANSLATE("Relation"), 180, 100,
@@ -797,20 +830,21 @@ OpenWithPoseView::AddPosesThreadValid(const entry_ref*) const
 
 
 void
-OpenWithPoseView::CreatePoses(Model** models, PoseInfo* poseInfoArray, int32 count,
-	BPose** resultingPoses, bool insertionSort, int32* lastPoseIndexPtr,
-	BRect* boundsPtr, bool forceDraw)
+OpenWithPoseView::CreatePoses(Model** models, PoseInfo* poseInfoArray,
+	int32 count, BPose** resultingPoses, bool insertionSort,
+	int32* lastPoseIndexPtr, BRect* boundsPtr, bool forceDraw)
 {
 	// overridden to try to select the preferred handling app
-	_inherited::CreatePoses(models, poseInfoArray, count, resultingPoses, insertionSort,
-		lastPoseIndexPtr, boundsPtr, forceDraw);
+	_inherited::CreatePoses(models, poseInfoArray, count, resultingPoses,
+		insertionSort, lastPoseIndexPtr, boundsPtr, forceDraw);
 
-	if (resultingPoses) {
+	if (resultingPoses != NULL) {
 		for (int32 index = 0; index < count; index++) {
 			if (resultingPoses[index] && fHaveCommonPreferredApp
 				&& *(models[index]->EntryRef()) == fPreferredRef) {
 				// this is our preferred app, select it's pose
-				SelectPose(resultingPoses[index], IndexOfPose(resultingPoses[index]));
+				SelectPose(resultingPoses[index],
+					IndexOfPose(resultingPoses[index]));
 			}
 		}
 	}
@@ -861,7 +895,6 @@ OpenWithPoseView::RestoreState(const BMessage &message)
 void
 OpenWithPoseView::SavePoseLocations(BRect*)
 {
-	// do nothing
 }
 
 
@@ -903,9 +936,10 @@ OpenWithPoseView::HandleMessageDropped(BMessage* DEBUG_ONLY(message))
 #if DEBUG
 	// in debug mode allow tweaking the colors
 	const rgb_color* color;
-	int32 size;
+	ssize_t size;
 	// handle roColour-style color drops
-	if (message->FindData("RGBColor", 'RGBC', (const void**)&color, &size) == B_OK) {
+	if (message->FindData("RGBColor", 'RGBC', (const void**)&color, &size)
+			== B_OK) {
 		SetViewColor(*color);
 		SetLowColor(*color);
 		Invalidate();
@@ -937,7 +971,7 @@ OpenWithPoseView::OpenWithRelationDescription(const Model* model,
 }
 
 
-//  #pragma mark -
+//  #pragma mark - OpenWithRefFilter
 
 
 OpenWithRefFilter::OpenWithRefFilter(SearchForSignatureEntryList* iterator,
@@ -955,7 +989,11 @@ OpenWithRefFilter::Filter(const entry_ref* ref, BNode* node, stat_beos* st,
 	const char* filetype)
 {
 	Model *model = new Model(ref, true, true);
-	return fIterator->CanOpenWithFilter(model, fEntryList, fPreferredRef);
+	bool canOpen = fIterator->CanOpenWithFilter(model, fEntryList,
+		fPreferredRef);
+	delete model;
+
+	return canOpen;
 }
 
 
@@ -987,12 +1025,13 @@ RelationCachingModelProxy::Relation(SearchForSignatureEntryList* iterator,
 }
 
 
-//	#pragma mark -
+//	#pragma mark - OpenWithMenu
 
 
 OpenWithMenu::OpenWithMenu(const char* label, const BMessage* entriesToOpen,
-		BWindow* parentWindow, BHandler* target)
-	: BSlowMenu(label),
+	BWindow* parentWindow, BHandler* target)
+	:
+	BSlowMenu(label),
 	fEntriesToOpen(*entriesToOpen),
 	target(target),
 	fIterator(NULL),
@@ -1009,8 +1048,9 @@ OpenWithMenu::OpenWithMenu(const char* label, const BMessage* entriesToOpen,
 
 
 OpenWithMenu::OpenWithMenu(const char* label, const BMessage* entriesToOpen,
-		BWindow* parentWindow, const BMessenger &messenger)
-	: BSlowMenu(label),
+	BWindow* parentWindow, const BMessenger &messenger)
+	:
+	BSlowMenu(label),
 	fEntriesToOpen(*entriesToOpen),
 	target(NULL),
 	fMessenger(messenger),
@@ -1086,10 +1126,9 @@ OpenWithMenu::AddNextItem()
 	Model* model = new Model(&entry, true);
 	if (model->InitCheck() != B_OK
 		|| !fIterator->CanOpenWithFilter(model, &fEntriesToOpen,
-				fHaveCommonPreferredApp ? &fPreferredRef : 0)) {
-		// only allow executables, filter out multiple copies of the
-		// Tracker, filter out version that don't list the correct types,
-		// etc.
+			(fHaveCommonPreferredApp ? &fPreferredRef : 0))) {
+		// only allow executables, filter out multiple copies of the Tracker,
+		// filter out version that don't list the correct types, etc.
 		delete model;
 	} else
 		fSupportingAppList->AddItem(new RelationCachingModelProxy(model));
@@ -1105,13 +1144,13 @@ OpenWithMenu::DoneBuildingItemList()
 	fSupportingAppList->SortItems(SortByRelationAndName, this);
 
 	// check if each app is unique
-	bool unique = true;
+	bool isUnique = true;
 	int32 count = fSupportingAppList->CountItems();
 	for (int32 index = 0; index < count - 1; index++) {
 		// the list is sorted, just compare two adjacent models
 		if (strcmp(fSupportingAppList->ItemAt(index)->fModel->Name(),
 			fSupportingAppList->ItemAt(index + 1)->fModel->Name()) == 0) {
-			unique = false;
+			isUnique = false;
 			break;
 		}
 	}
@@ -1119,20 +1158,24 @@ OpenWithMenu::DoneBuildingItemList()
 	// add apps as menu items
 	BFont font;
 	GetFont(&font);
+	float scaling = font.Size() / 12.0f;
 
 	int32 lastRelation = -1;
 	for (int32 index = 0; index < count ; index++) {
-		RelationCachingModelProxy* modelProxy = fSupportingAppList->ItemAt(index);
+		RelationCachingModelProxy* modelProxy
+			= fSupportingAppList->ItemAt(index);
 		Model* model = modelProxy->fModel;
 		BMessage* message = new BMessage(fEntriesToOpen);
 		message->AddRef("handler", model->EntryRef());
-		BContainerWindow* window = dynamic_cast<BContainerWindow*>(fParentWindow);
-		if (window)
-			message->AddData("nodeRefsToClose", B_RAW_TYPE, window->TargetModel()->NodeRef(),
-				sizeof (node_ref));
+		BContainerWindow* window
+			= dynamic_cast<BContainerWindow*>(fParentWindow);
+		if (window != NULL) {
+			message->AddData("nodeRefsToClose", B_RAW_TYPE,
+				window->TargetModel()->NodeRef(), sizeof(node_ref));
+		}
 
 		BString result;
-		if (unique) {
+		if (isUnique) {
 			// just use the app name
 			result = model->Name();
 		} else {
@@ -1145,7 +1188,8 @@ OpenWithMenu::DoneBuildingItemList()
 				continue;
 			}
 			result = path.Path();
-			font.TruncateString(&result, B_TRUNCATE_MIDDLE, kMaxMenuWidth);
+			font.TruncateString(&result, B_TRUNCATE_MIDDLE,
+				kMaxMenuWidth * scaling);
 		}
 #if DEBUG
 		BString relationDescription;
@@ -1161,7 +1205,8 @@ OpenWithMenu::DoneBuildingItemList()
 			AddSeparatorItem();
 		lastRelation = relation;
 
-		ModelMenuItem* item = new ModelMenuItem(model, result.String(), message);
+		ModelMenuItem* item = new ModelMenuItem(model, result.String(),
+			message);
 		AddItem(item);
 		// mark item if it represents the preferred app
 		if (fHaveCommonPreferredApp && *(model->EntryRef()) == fPreferredRef) {
@@ -1171,12 +1216,12 @@ OpenWithMenu::DoneBuildingItemList()
 	}
 
 	// target the menu
-	if (target)
+	if (target != NULL)
 		SetTargetForItems(target);
 	else
 		SetTargetForItems(fMessenger);
 
-	if (!CountItems()) {
+	if (CountItems() == 0) {
 		BMenuItem* item = new BMenuItem(B_TRANSLATE("no supporting apps"), 0);
 		item->SetEnabled(false);
 		AddItem(item);
@@ -1194,7 +1239,7 @@ OpenWithMenu::ClearMenuBuildingState()
 }
 
 
-//	#pragma mark -
+//	#pragma mark - SearchForSignatureEntryList
 
 
 SearchForSignatureEntryList::SearchForSignatureEntryList(bool canAddAllApps)
@@ -1254,6 +1299,7 @@ struct AddOneTermParams {
 	bool first;
 };
 
+
 static const BString*
 AddOnePredicateTerm(const BString* item, void* castToParams)
 {
@@ -1293,7 +1339,7 @@ SearchForSignatureEntryList::Rewind()
 	fSignatures.EachElement(AddOnePredicateTerm, &params);
 
 	ASSERT(predicateString.Length());
-// 	PRINT(("query predicate %s\n", predicateString.String()));
+//	PRINT(("query predicate %s\n", predicateString.String()));
 	fIteratorList->AddItem(new TWalkerWrapper(
 		new BTrackerPrivate::TQueryWalker(predicateString.String())));
 	fIteratorList->AddItem(new ConditionalAllAppsIterator(this));
@@ -1325,9 +1371,10 @@ SearchForSignatureEntryList::TrySettingPreferredApp(const entry_ref* ref)
 	if (!fPreferredAppCount) {
 		fPreferredRef = *ref;
 		fPreferredAppCount++;
-	} else if (fPreferredRef != *ref)
+	} else if (fPreferredRef != *ref) {
 		// if more than one, will not return any
 		fPreferredAppCount++;
+	}
 }
 
 
@@ -1369,7 +1416,9 @@ int32
 SearchForSignatureEntryList::Relation(const Model* nodeModel,
 	const Model* applicationModel)
 {
- 	switch (applicationModel->SupportsMimeType(nodeModel->MimeType(), 0, true)) {
+	int32 supportsMimeType = applicationModel->SupportsMimeType(
+		nodeModel->MimeType(), 0, true);
+	switch (supportsMimeType) {
 		case kDoesNotSupportType:
 			return kNoRelation;
 
@@ -1418,8 +1467,8 @@ SearchForSignatureEntryList::Relation(const BMessage* entriesToOpen,
 		if (entriesToOpen->FindRef("refs", index, &ref) != B_OK)
 			break;
 
-		// need to init a model so that typeless folders etc. will still appear to
-		// have a mime type
+		// need to init a model so that typeless folders etc. will still
+		// appear to have a mime type
 
 		Model model(&ref, true, true);
 		if (model.InitCheck())
@@ -1428,13 +1477,15 @@ SearchForSignatureEntryList::Relation(const BMessage* entriesToOpen,
 		int32 result = Relation(&model, applicationModel);
 		if (result != kNoRelation) {
 			if (preferredAppForFile
-				&& *applicationModel->EntryRef() == *preferredAppForFile)
+				&& *applicationModel->EntryRef() == *preferredAppForFile) {
 				return kPreferredForFile;
+			}
 
 			if (result == kSupportsType && preferredApp
-				&& *applicationModel->EntryRef() == *preferredApp)
+				&& *applicationModel->EntryRef() == *preferredApp) {
 				// application matches cached preferred app, we are done
 				return kPreferredForType;
+			}
 
 			return result;
 		}
@@ -1480,13 +1531,13 @@ SearchForSignatureEntryList::RelationDescription(const BMessage* entriesToOpen,
 
 				char* type = (char*)mimeType.Type();
 				char* tmp = strchr(type, '/');
-				if (tmp)
+				if (tmp != NULL)
 					*tmp = '\0';
 
 				//PRINT(("getting supertype for %s, result %s, got %s\n",
 				//	model.MimeType(), strerror(result), mimeType.Type()));
 				description->SetTo(B_TRANSLATE("Handles any %type"));
-				// *description += mimeType.Type();
+				//*description += mimeType.Type();
 				description->ReplaceFirst("%type", type);
 				return;
 			}
@@ -1495,7 +1546,7 @@ SearchForSignatureEntryList::RelationDescription(const BMessage* entriesToOpen,
 			{
 				mimeType.SetTo(model.MimeType());
 
-				if (preferredApp
+				if (preferredApp != NULL
 					&& *applicationModel->EntryRef() == *preferredApp) {
 					// application matches cached preferred app, we are done
 					description->SetTo(B_TRANSLATE("Preferred for %type"));
@@ -1507,6 +1558,7 @@ SearchForSignatureEntryList::RelationDescription(const BMessage* entriesToOpen,
 					description->ReplaceFirst("%type", shortDescription);
 				else
 					description->ReplaceFirst("%type", mimeType.Type());
+
 				return;
 			}
 		}
@@ -1520,6 +1572,8 @@ bool
 SearchForSignatureEntryList::CanOpenWithFilter(const Model* appModel,
 	const BMessage* entriesToOpen, const entry_ref* preferredApp)
 {
+	ThrowOnAssert(appModel != NULL);
+
 	if (!appModel->IsExecutable() || !appModel->Node()) {
 		// weed out non-executable
 #if xDEBUG
@@ -1536,31 +1590,31 @@ SearchForSignatureEntryList::CanOpenWithFilter(const Model* appModel,
 		return false;
 	}
 
-	ASSERT(dynamic_cast<BFile*>(appModel->Node()));
-	char signature[B_MIME_TYPE_LENGTH];
-	status_t result = GetAppSignatureFromAttr(
-		dynamic_cast<BFile*>(appModel->Node()), signature);
+	BFile* file = dynamic_cast<BFile*>(appModel->Node());
+	ASSERT(file != NULL);
 
-	if (result == B_OK && strcasecmp(signature, kTrackerSignature) == 0) {
+	char signature[B_MIME_TYPE_LENGTH];
+	if (GetAppSignatureFromAttr(file, signature) == B_OK
+		&& strcasecmp(signature, kTrackerSignature) == 0) {
 		// special case the Tracker - make sure only the running copy is
 		// in the list
 		app_info trackerInfo;
-		result = be_roster->GetActiveAppInfo(&trackerInfo);
 		if (*appModel->EntryRef() != trackerInfo.ref) {
 			// this is an inactive copy of the Tracker, remove it
 
 #if xDEBUG
-			BPath path, path2;
+			BPath path1;
+			BPath path2;
 			BEntry entry(appModel->EntryRef());
-			entry.GetPath(&path);
+			entry.GetPath(&path1);
 
 			BEntry entry2(&trackerInfo.ref);
 			entry2.GetPath(&path2);
 
-			PRINT(
-				("filtering out %s, sig %s, active Tracker at %s, "
-				 "result %s, refName %s\n",
-				path.Path(), signature, path2.Path(), strerror(result),
+			PRINT(("filtering out %s, sig %s, active Tracker at %s, "
+				   "result %s, refName %s\n",
+				path1.Path(), signature, path2.Path(),
+				strerror(be_roster->GetActiveAppInfo(&trackerInfo)),
 				trackerInfo.ref.name));
 #endif
 			return false;
@@ -1610,11 +1664,11 @@ SearchForSignatureEntryList::CanOpenWithFilter(const Model* appModel,
 }
 
 
-//	#pragma mark -
+//	#pragma mark - ConditionalAllAppsIterator
 
 
 ConditionalAllAppsIterator::ConditionalAllAppsIterator(
-		SearchForSignatureEntryList* parent)
+	SearchForSignatureEntryList* parent)
 	:
 	fParent(parent),
 	fWalker(NULL)
@@ -1625,7 +1679,7 @@ ConditionalAllAppsIterator::ConditionalAllAppsIterator(
 void
 ConditionalAllAppsIterator::Instantiate()
 {
-	if (fWalker)
+	if (fWalker != NULL)
 		return;
 
 	BString lookForAppsPredicate;

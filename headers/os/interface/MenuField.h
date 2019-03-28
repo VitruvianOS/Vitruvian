@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2011, Haiku, Inc. All rights reserved.
+ * Copyright 2006-2016 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _MENU_FIELD_H
@@ -10,18 +10,19 @@
 
 
 class BMenuBar;
+class BMessageFilter;
 
 
 class BMenuField : public BView {
 public:
 								BMenuField(BRect frame, const char* name,
 									const char* label, BMenu* menu,
-									uint32 resize = B_FOLLOW_LEFT|B_FOLLOW_TOP,
+									uint32 resizingMode = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_WILL_DRAW | B_NAVIGABLE);
 								BMenuField(BRect frame, const char* name,
 									const char* label, BMenu* menu,
 									bool fixed_size,
-									uint32 resize = B_FOLLOW_LEFT|B_FOLLOW_TOP,
+									uint32 resizingMode = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_WILL_DRAW | B_NAVIGABLE);
 								BMenuField(const char* name,
 									const char* label, BMenu* menu,
@@ -35,14 +36,14 @@ public:
 	virtual	status_t			Archive(BMessage* archive,
 									bool deep = true) const;
 
-	virtual	void				Draw(BRect update);
+	virtual	void				Draw(BRect updateRect);
 	virtual	void				AttachedToWindow();
 	virtual	void				AllAttached();
 	virtual	void				MouseDown(BPoint where);
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
-	virtual	void				MakeFocus(bool state);
-	virtual void				MessageReceived(BMessage* message);
-	virtual void				WindowActivated(bool state);
+	virtual	void				MakeFocus(bool focused);
+	virtual	void				MessageReceived(BMessage* message);
+	virtual	void				WindowActivated(bool active);
 	virtual	void				MouseUp(BPoint where);
 	virtual	void				MouseMoved(BPoint where, uint32 transit,
 									const BMessage* dragMessage);
@@ -58,24 +59,24 @@ public:
 	virtual	void				SetLabel(const char* label);
 			const char*			Label() const;
 
-	virtual void				SetEnabled(bool on);
+	virtual	void				SetEnabled(bool on);
 			bool				IsEnabled() const;
 
 	virtual	void				SetAlignment(alignment label);
 			alignment			Alignment() const;
-	virtual	void				SetDivider(float dividing_line);
+	virtual	void				SetDivider(float position);
 			float				Divider() const;
 
 			void				ShowPopUpMarker();
 			void				HidePopUpMarker();
 
-	virtual BHandler*			ResolveSpecifier(BMessage* message,
+	virtual	BHandler*			ResolveSpecifier(BMessage* message,
 									int32 index, BMessage* specifier,
 									int32 form, const char* property);
-	virtual status_t			GetSupportedSuites(BMessage* data);
+	virtual	status_t			GetSupportedSuites(BMessage* data);
 
-	virtual void				ResizeToPreferred();
-	virtual void				GetPreferredSize(float* width, float* height);
+	virtual	void				ResizeToPreferred();
+	virtual	void				GetPreferredSize(float* width, float* height);
 
 	virtual	BSize				MinSize();
 	virtual	BSize				MaxSize();
@@ -87,8 +88,8 @@ public:
 	virtual status_t			Perform(perform_code d, void* arg);
 
 protected:
-	virtual status_t			AllArchived(BMessage* into) const;
-	virtual status_t			AllUnarchived(const BMessage* from);
+	virtual	status_t			AllArchived(BMessage* into) const;
+	virtual	status_t			AllUnarchived(const BMessage* from);
 
 	virtual	void				LayoutInvalidated(bool descendants);
 	virtual	void				DoLayout();
@@ -110,7 +111,7 @@ private:
 	friend class _BMCMenuBar_;
 	friend class LabelLayoutItem;
 	friend class MenuBarLayoutItem;
-	friend class LayoutData;
+	friend struct LayoutData;
 
 								BMenuField(const char* name,
 									const char* label, BMenu* menu,
@@ -119,9 +120,12 @@ private:
 								BMenuField(const char* label,
 									BMenu* menu, BMessage* message);
 
+			void				_DrawLabel(BRect updateRect);
+			void				_DrawMenuBar(BRect updateRect);
+
 			void				InitObject(const char* label);
 			void				InitObject2();
-			void				DrawLabel(BRect bounds, BRect update);
+
 	static	void				InitMenu(BMenu* menu);
 
 			int32				_MenuTask();
@@ -131,10 +135,14 @@ private:
 			void				_InitMenuBar(BMenu* menu,
 									BRect frame, bool fixedSize);
 			void				_InitMenuBar(const BMessage* archive);
+			void				_AddMenu(BMenu* menu);
 
 			void				_ValidateLayoutData();
 			float				_MenuBarOffset() const;
 			float				_MenuBarWidth() const;
+
+			void				_DoneTracking(BPoint point);
+			void				_Track(BPoint point, uint32);
 
 private:
 			char*				fLabel;
@@ -143,14 +151,14 @@ private:
 			alignment			fAlign;
 			float				fDivider;
 			bool				fEnabled;
-			bool				fSelected;
-			bool				fTransition;
 			bool				fFixedSizeMB;
 			thread_id			fMenuTaskID;
 
 			LayoutData*			fLayoutData;
+			BMessageFilter*		fMouseDownFilter;
 
-			uint32				_reserved[3];
+			uint32				_reserved[2];
 };
+
 
 #endif // _MENU_FIELD_H

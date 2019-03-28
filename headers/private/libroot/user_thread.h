@@ -12,35 +12,29 @@
 #include <user_thread_defs.h>
 
 
-static inline user_thread*
+static inline struct user_thread*
 get_user_thread()
 {
-	return (user_thread*)tls_get(TLS_USER_THREAD_SLOT);
+	return (struct user_thread*)tls_get(TLS_USER_THREAD_SLOT);
 }
 
 
 static void inline
 defer_signals()
 {
-	#ifdef __HAIKU__
 	get_user_thread()->defer_signals++;
-	#endif
-	UNIMPLEMENTED();
 }
 
 
 static void inline
 undefer_signals()
 {
-	#ifdef __HAIKU__
-	user_thread* thread = get_user_thread();
+	struct user_thread* thread = get_user_thread();
 	if (--thread->defer_signals == 0 && thread->pending_signals != 0) {
 		// signals shall no longer be deferred -- call a dummy syscall to handle
 		// the pending ones
 		is_computer_on();
 	}
-	#endif
-	UNIMPLEMENTED();
 }
 
 

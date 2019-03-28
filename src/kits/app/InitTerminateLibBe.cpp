@@ -12,12 +12,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <AppMisc.h>
 #include <LooperList.h>
 #include <MessagePrivate.h>
 #include <RosterPrivate.h>
 #include <TokenSpace.h>
-
-#include <pthread.h>
 
 
 extern void __initialize_locale_kit();
@@ -37,32 +36,28 @@ initialize_forked_child()
 	BMessage::Private::StaticReInitForkedChild();
 	BPrivate::gLooperList.InitAfterFork();
 	BPrivate::gDefaultTokens.InitAfterFork();
+	BPrivate::init_team_after_fork();
 
 	DBG(OUT("initialize_forked_child() done\n"));
 }
 
 
-static void __attribute__ ((constructor(1)))
-initialize_before()
+extern "C" void
+initialize_before(image_id)
 {
 	DBG(OUT("initialize_before()\n"));
 
 	BMessage::Private::StaticInit();
 	BRoster::Private::InitBeRoster();
 
-	// TODO
-	#ifdef __HAIKU__
-		atfork(initialize_forked_child);	
-	#else
-		pthread_atfork(initialize_forked_child, NULL, NULL);
-	#endif
+	atfork(initialize_forked_child);
 
 	DBG(OUT("initialize_before() done\n"));
 }
 
 
-static void __attribute__ ((constructor(2)))
-initialize_after()
+extern "C" void
+initialize_after(image_id)
 {
 	DBG(OUT("initialize_after()\n"));
 
@@ -72,8 +67,8 @@ initialize_after()
 }
 
 
-static void __attribute__ ((destructor))
-terminate_after()
+extern "C" void
+terminate_after(image_id)
 {
 	DBG(OUT("terminate_after()\n"));
 

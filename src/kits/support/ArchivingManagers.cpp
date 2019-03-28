@@ -1,15 +1,18 @@
 /*
- * Copyright (c) 2010, Haiku, Inc.
+ * Copyright 2010 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Alex Wilson (yourpalal2@gmail.com)
+ *		Alex Wilson, yourpalal2@gmail.com
  */
+
 
 #include "ArchivingManagers.h"
 
 #include <syslog.h>
 #include <typeinfo>
+
+#include <StackOrHeapArray.h>
 
 
 namespace BPrivate {
@@ -163,7 +166,7 @@ BArchiveManager::ArchiverLeaving(const BArchiver* archiver, status_t err)
 	if (archiver == fCreator && fError == B_OK) {
 		// first, we must sort the objects into the order they were archived in
 		typedef std::pair<BMessage*, const BArchivable*> ArchivePair;
-		ArchivePair pairs[fTokenMap.size()];
+		BStackOrHeapArray<ArchivePair, 64> pairs(fTokenMap.size());
 
 		for(TokenMap::iterator it = fTokenMap.begin(), end = fTokenMap.end();
 				it != end; it++) {

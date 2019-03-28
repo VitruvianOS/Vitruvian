@@ -42,57 +42,58 @@ All rights reserved.
 
 
 class TTrackerState : public Settings {
-	public:
-		static TTrackerState* Get();
-		void Release();
+public:
+	static TTrackerState* Get();
+	void Release();
 
-		void LoadSettingsIfNeeded();
-		void SaveSettings(bool onlyIfNonDefault = true);
+	void LoadSettingsIfNeeded();
+	void SaveSettings(bool onlyIfNonDefault = true);
 
-		TTrackerState();
-		~TTrackerState();
+	TTrackerState();
+	~TTrackerState();
 
-	private:
-		friend class BPrivate::TrackerSettings;
+private:
+	friend class BPrivate::TrackerSettings;
 
-		static void InitIfNeeded();
-		TTrackerState(const TTrackerState&);
+	static void InitIfNeeded();
+	TTrackerState(const TTrackerState&);
 
-		BooleanValueSetting* fShowDisksIcon;
-		BooleanValueSetting* fMountVolumesOntoDesktop;
-		BooleanValueSetting* fDesktopFilePanelRoot;
-		BooleanValueSetting* fMountSharedVolumesOntoDesktop;
-		BooleanValueSetting* fEjectWhenUnmounting;
+	BooleanValueSetting* fShowDisksIcon;
+	BooleanValueSetting* fMountVolumesOntoDesktop;
+	BooleanValueSetting* fDesktopFilePanelRoot;
+	BooleanValueSetting* fMountSharedVolumesOntoDesktop;
+	BooleanValueSetting* fEjectWhenUnmounting;
 
-		BooleanValueSetting* fShowFullPathInTitleBar;
-		BooleanValueSetting* fSingleWindowBrowse;
-		BooleanValueSetting* fShowNavigator;
-		BooleanValueSetting* fShowSelectionWhenInactive;
-		BooleanValueSetting* fTransparentSelection;
-		BooleanValueSetting* fSortFolderNamesFirst;
-		BooleanValueSetting* fHideDotFiles;
-		BooleanValueSetting* fTypeAheadFiltering;
+	BooleanValueSetting* fShowFullPathInTitleBar;
+	BooleanValueSetting* fSingleWindowBrowse;
+	BooleanValueSetting* fShowNavigator;
+	BooleanValueSetting* fShowSelectionWhenInactive;
+	BooleanValueSetting* fTransparentSelection;
+	BooleanValueSetting* fSortFolderNamesFirst;
+	BooleanValueSetting* fHideDotFiles;
+	BooleanValueSetting* fTypeAheadFiltering;
 
-		ScalarValueSetting* fRecentApplicationsCount;
-		ScalarValueSetting* fRecentDocumentsCount;
-		ScalarValueSetting* fRecentFoldersCount;
+	ScalarValueSetting* fRecentApplicationsCount;
+	ScalarValueSetting* fRecentDocumentsCount;
+	ScalarValueSetting* fRecentFoldersCount;
 
-		BooleanValueSetting* fShowVolumeSpaceBar;
-		HexScalarValueSetting* fUsedSpaceColor;
-		HexScalarValueSetting* fFreeSpaceColor;
-		HexScalarValueSetting* fWarningSpaceColor;
+	BooleanValueSetting* fShowVolumeSpaceBar;
+	HexScalarValueSetting* fUsedSpaceColor;
+	HexScalarValueSetting* fFreeSpaceColor;
+	HexScalarValueSetting* fWarningSpaceColor;
 
-		BooleanValueSetting* fDontMoveFilesToTrash;
-		BooleanValueSetting* fAskBeforeDeleteFile;
+	BooleanValueSetting* fDontMoveFilesToTrash;
+	BooleanValueSetting* fAskBeforeDeleteFile;
 
-		Benaphore fInitLock;
-		bool fInited;
-		bool fSettingsLoaded;
+	Benaphore fInitLock;
+	bool fInited;
+	bool fSettingsLoaded;
 
-		int32 fUseCounter;
+	int32 fUseCounter;
 
-		typedef Settings _inherited;
+	typedef Settings _inherited;
 };
+
 
 static TTrackerState gTrackerState;
 
@@ -111,26 +112,72 @@ rgb_color ValueToColor(int32 value)
 
 int32 ColorToValue(rgb_color color)
 {
-	return	color.alpha << 24L
-			| color.red << 16L
-			| color.green << 8L
-			| color.blue;
+	return color.alpha << 24L | color.red << 16L | color.green << 8L
+		| color.blue;
 }
 
 
-//	#pragma mark -
+//	#pragma mark - TTrackerState
 
 
 TTrackerState::TTrackerState()
-	:	Settings("TrackerSettings", "Tracker"),
-		fInited(false),
-		fSettingsLoaded(false)
+	:
+	Settings("TrackerSettings", "Tracker"),
+	fShowDisksIcon(NULL),
+	fMountVolumesOntoDesktop(NULL),
+	fDesktopFilePanelRoot(NULL),
+	fMountSharedVolumesOntoDesktop(NULL),
+	fEjectWhenUnmounting(NULL),
+	fShowFullPathInTitleBar(NULL),
+	fSingleWindowBrowse(NULL),
+	fShowNavigator(NULL),
+	fShowSelectionWhenInactive(NULL),
+	fTransparentSelection(NULL),
+	fSortFolderNamesFirst(NULL),
+	fHideDotFiles(NULL),
+	fTypeAheadFiltering(NULL),
+	fRecentApplicationsCount(NULL),
+	fRecentDocumentsCount(NULL),
+	fRecentFoldersCount(NULL),
+	fShowVolumeSpaceBar(NULL),
+	fUsedSpaceColor(NULL),
+	fFreeSpaceColor(NULL),
+	fWarningSpaceColor(NULL),
+	fDontMoveFilesToTrash(NULL),
+	fAskBeforeDeleteFile(NULL),
+	fInited(false),
+	fSettingsLoaded(false)
 {
 }
 
 
 TTrackerState::TTrackerState(const TTrackerState&)
-	:	Settings("", "")
+	:
+	Settings("", ""),
+	fShowDisksIcon(NULL),
+	fMountVolumesOntoDesktop(NULL),
+	fDesktopFilePanelRoot(NULL),
+	fMountSharedVolumesOntoDesktop(NULL),
+	fEjectWhenUnmounting(NULL),
+	fShowFullPathInTitleBar(NULL),
+	fSingleWindowBrowse(NULL),
+	fShowNavigator(NULL),
+	fShowSelectionWhenInactive(NULL),
+	fTransparentSelection(NULL),
+	fSortFolderNamesFirst(NULL),
+	fHideDotFiles(NULL),
+	fTypeAheadFiltering(NULL),
+	fRecentApplicationsCount(NULL),
+	fRecentDocumentsCount(NULL),
+	fRecentFoldersCount(NULL),
+	fShowVolumeSpaceBar(NULL),
+	fUsedSpaceColor(NULL),
+	fFreeSpaceColor(NULL),
+	fWarningSpaceColor(NULL),
+	fDontMoveFilesToTrash(NULL),
+	fAskBeforeDeleteFile(NULL),
+	fInited(false),
+	fSettingsLoaded(false)
 {
 	// Placeholder copy constructor to prevent others from accidentally using
 	// the default copy constructor.  Note, the DEBUGGER call is for the off
@@ -181,7 +228,7 @@ TTrackerState::LoadSettingsIfNeeded()
 	Add(fHideDotFiles = new BooleanValueSetting("HideDotFiles", false));
 	Add(fTypeAheadFiltering
 		= new BooleanValueSetting("TypeAheadFiltering", false));
- 	Add(fSingleWindowBrowse
+	Add(fSingleWindowBrowse
 		= new BooleanValueSetting("SingleWindowBrowse", false));
 	Add(fShowNavigator = new BooleanValueSetting("ShowNavigator", false));
 
@@ -218,7 +265,7 @@ TTrackerState::LoadSettingsIfNeeded()
 }
 
 
-//	#pragma mark -
+//	#pragma mark - TrackerSettings
 
 
 TrackerSettings::TrackerSettings()
@@ -478,11 +525,13 @@ void
 TrackerSettings::RecentCounts(int32* applications, int32* documents,
 	int32* folders)
 {
-	if (applications)
+	if (applications != NULL)
 		*applications = gTrackerState.fRecentApplicationsCount->Value();
-	if (documents)
+
+	if (documents != NULL)
 		*documents = gTrackerState.fRecentDocumentsCount->Value();
-	if (folders)
+
+	if (folders != NULL)
 		*folders = gTrackerState.fRecentFoldersCount->Value();
 }
 

@@ -52,8 +52,8 @@ public:
 	virtual const DesktopListenerList& GetDesktopListeners();
 
 protected:
-	virtual Decorator*			_AllocateDecorator(DesktopSettings& settings,
-									BRect rect);
+	virtual	Decorator*			_AllocateDecorator(DesktopSettings& settings,
+									BRect rect, Desktop* desktop);
 
 			DesktopListenerList	fDesktopListeners;
 

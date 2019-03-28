@@ -144,7 +144,7 @@ BitmapHWInterface::ProposeMode(display_mode* candidate, const display_mode* low,
 sem_id
 BitmapHWInterface::RetraceSemaphore()
 {
-	return B_ERROR;
+	return -1;
 }
 
 
@@ -173,6 +173,20 @@ uint32
 BitmapHWInterface::DPMSCapabilities()
 {
 	return 0;
+}
+
+
+status_t
+BitmapHWInterface::SetBrightness(float)
+{
+	return B_UNSUPPORTED;
+}
+
+
+status_t
+BitmapHWInterface::GetBrightness(float*)
+{
+	return B_UNSUPPORTED;
 }
 
 

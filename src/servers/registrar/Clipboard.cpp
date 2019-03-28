@@ -1,7 +1,5 @@
 // Clipboard.cpp
 
-#include <SupportDefs.h>
-
 #include <app/Clipboard.h>
 
 #include "Clipboard.h"

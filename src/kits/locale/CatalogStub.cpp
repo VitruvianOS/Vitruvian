@@ -1,27 +1,27 @@
 /*
- * Copyright 2010, Adrien Destugues <pulkomandy@pulkomandy.ath.cx>.
+ * Copyright 2010-2016, Adrien Destugues <pulkomandy@pulkomandy.tk>.
  * Distributed under the terms of the MIT License.
  */
 
-#include <SupportDefs.h>
 
 #include <Catalog.h>
 #include <LocaleRoster.h>
 
+#include <locks.h>
 
-static BCatalog sCatalog;
-static vint32 sCatalogInitOnce = false;
+
+static int32 sCatalogInitOnce = INIT_ONCE_UNINITIALIZED;
 
 
 BCatalog*
 BLocaleRoster::GetCatalog()
 {
-	#ifdef __HAIKU__
+	static BCatalog sCatalog;
+
 	#if (__GNUC__ < 3)
 		asm volatile(".hidden GetCatalog__13BLocaleRoster");
 	#else
 		asm volatile(".hidden _ZN13BLocaleRoster10GetCatalogEv");
-	#endif
 	#endif
 
 	return _GetCatalog(&sCatalog, &sCatalogInitOnce);
@@ -31,7 +31,7 @@ BLocaleRoster::GetCatalog()
 namespace BPrivate{
 	void ForceUnloadCatalog()
 	{
-		sCatalogInitOnce = false;
+		sCatalogInitOnce = INIT_ONCE_UNINITIALIZED;
 	}
 }
 

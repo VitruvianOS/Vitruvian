@@ -1,10 +1,12 @@
 /*
- * Copyright 2001-2010, Haiku.
+ * Copyright 2001-2019, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		DarkWyrm <bpmagic@columbus.rr.com>
  *		Stefano Ceccherini <stefano.ceccherini@gmail.com>
+ *		Julian Harnath <julian.harnath@rwth-aachen.de>
+ *		Stephan Aßmus <superstippi@gmx.de>
  */
 #ifndef SERVER_PICTURE_H
 #define SERVER_PICTURE_H
@@ -17,9 +19,11 @@
 #include <Referenceable.h>
 
 
-class ServerApp;
-class View;
 class BFile;
+class Canvas;
+class ServerApp;
+class ServerFont;
+class View;
 
 namespace BPrivate {
 	class LinkReceiver;
@@ -34,7 +38,7 @@ public:
 								ServerPicture(const ServerPicture& other);
 								ServerPicture(const char* fileName,
 									int32 offset);
-								~ServerPicture();
+	virtual						~ServerPicture();
 
 			int32				Token() { return fToken; }
 			bool				SetOwner(ServerApp* owner);
@@ -45,10 +49,11 @@ public:
 			void				EnterStateChange();
 			void				ExitStateChange();
 
-			void				SyncState(View* view);
-			void				SetFontFromLink(BPrivate::LinkReceiver& link);
+			void				SyncState(Canvas* canvas);
+			void				WriteFontState(const ServerFont& font,
+									uint16 mask);
 
-			void				Play(View* view);
+			void				Play(Canvas* target);
 
 			void 				PushPicture(ServerPicture* picture);
 			ServerPicture*		PopPicture();
@@ -62,6 +67,8 @@ public:
 			status_t			ExportData(BPrivate::PortLink& link);
 
 private:
+	friend class PictureBoundingBoxPlayer;
+
 			typedef BObjectList<ServerPicture> PictureList;
 
 			int32				fToken;

@@ -1,9 +1,10 @@
 /*
- * Copyright 2010, Haiku.
+ * Copyright 2010-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Clemens Zeidler <haiku@clemens-zeidler.de>
+ *		John Scipione, jscipione@gmail.com
+ *		Clemens Zeidler, haiku@clemens-zeidler.de
  */
 
 
@@ -19,7 +20,23 @@
 #include "Window.h"
 
 
+static const int32 kRightOptionKey	= 0x67;
+static const int32 kTabKey			= 0x26;
+static const int32 kPageUpKey		= 0x21;
+static const int32 kPageDownKey		= 0x36;
+static const int32 kLeftArrowKey	= 0x61;
+static const int32 kUpArrowKey		= 0x57;
+static const int32 kRightArrowKey	= 0x63;
+static const int32 kDownArrowKey	= 0x62;
+
+static const int32 kModifiers = B_SHIFT_KEY | B_COMMAND_KEY
+	| B_CONTROL_KEY | B_OPTION_KEY | B_MENU_KEY;
+
+
 using namespace std;
+
+
+//	#pragma mark - StackAndTile
 
 
 StackAndTile::StackAndTile()
@@ -115,14 +132,13 @@ StackAndTile::WindowRemoved(Window* window)
 bool
 StackAndTile::KeyPressed(uint32 what, int32 key, int32 modifiers)
 {
-	const int32 kRightOptionKey = 103;
 	if (what == B_MODIFIERS_CHANGED
 		|| (what == B_UNMAPPED_KEY_DOWN && key == kRightOptionKey)
 		|| (what == B_UNMAPPED_KEY_UP && key == kRightOptionKey)) {
 		// switch to and from stacking and snapping mode
 		bool wasPressed = fSATKeyPressed;
 		fSATKeyPressed = (what == B_MODIFIERS_CHANGED
-			&& modifiers & B_OPTION_KEY)
+				&& (modifiers & kModifiers) == B_OPTION_KEY)
 			|| (what == B_UNMAPPED_KEY_DOWN && key == kRightOptionKey);
 		if (wasPressed && !fSATKeyPressed)
 			_StopSAT();
@@ -133,31 +149,36 @@ StackAndTile::KeyPressed(uint32 what, int32 key, int32 modifiers)
 	if (!SATKeyPressed() || what != B_KEY_DOWN)
 		return false;
 
-	const int kArrowKeyUp = 87;
-	const int kArrowKeyDown = 98;
-	const int kArrowKeyLeft = 97;
-	const int kArrowKeyRight = 99;
+	SATWindow* frontWindow = GetSATWindow(fDesktop->FocusWindow());
+	SATGroup* currentGroup = _GetSATGroup(frontWindow);
 
 	switch (key) {
-		case kArrowKeyLeft:
-		case kArrowKeyRight:
+		case kLeftArrowKey:
+		case kRightArrowKey:
+		case kTabKey:
 		{
-			SATWindow* frontWindow = GetSATWindow(fDesktop->FocusWindow());
-			SATGroup* currentGroup = NULL;
-			if (frontWindow)
-				currentGroup = frontWindow->GetGroup();
+			// go to previous or next window tab in current window group
+			if (currentGroup == NULL)
+				return false;
+
 			int32 groupSize = currentGroup->CountItems();
-			if (!currentGroup || groupSize <= 1)
+			if (groupSize <= 1)
 				return false;
 
 			for (int32 i = 0; i < groupSize; i++) {
 				SATWindow* targetWindow = currentGroup->WindowAt(i);
 				if (targetWindow == frontWindow) {
-					if (key == kArrowKeyLeft && i > 0) {
-						targetWindow = currentGroup->WindowAt(i - 1);
-					} else if (key == kArrowKeyRight && i < groupSize - 1) {
-						targetWindow = currentGroup->WindowAt(i + 1);
+					if (key == kLeftArrowKey
+						|| (key == kTabKey && (modifiers & B_SHIFT_KEY) != 0)) {
+						// Go to previous window tab (wrap around)
+						int32 previousIndex = i > 0 ? i - 1 : groupSize - 1;
+						targetWindow = currentGroup->WindowAt(previousIndex);
+					} else {
+						// Go to next window tab (wrap around)
+						int32 nextIndex = i < groupSize - 1 ? i + 1 : 0;
+						targetWindow = currentGroup->WindowAt(nextIndex);
 					}
+
 					_ActivateWindow(targetWindow);
 					return true;
 				}
@@ -165,75 +186,76 @@ StackAndTile::KeyPressed(uint32 what, int32 key, int32 modifiers)
 			break;
 		}
 
-		case kArrowKeyDown:
+		case kUpArrowKey:
+		case kPageUpKey:
 		{
-			SATWindow* frontWindow = GetSATWindow(fDesktop->FocusWindow());
-			SATGroup* currentGroup = NULL;
-			if (frontWindow)
-				currentGroup = frontWindow->GetGroup();
-			if (currentGroup && currentGroup->CountItems() <= 1)
-				currentGroup = NULL;
-
+			// go to previous window group
 			GroupIterator groups(this, fDesktop);
-			bool currentFound = false;
-			while (true) {
-				SATGroup* group = groups.NextGroup();
-				if (group == NULL)
-					break;
-				if (group->CountItems() <= 1)
-					continue;
-
-				if (currentGroup == NULL)
-					currentFound = true;
-						// if no group is selected just activate the first one
-				else if (currentGroup == group) {
-					currentFound = true;
-					continue;
-				}
-				if (currentFound) {
-					_ActivateWindow(group->WindowAt(0));
-					if (currentGroup) {
-						Window* window = currentGroup->WindowAt(0)->GetWindow();
-						fDesktop->SendWindowBehind(window);
-						WindowSentBehind(window, NULL);
-					}
-					return true;
-				}
-			}
-			break;
-		}
-
-		case kArrowKeyUp:
-		{
-			SATWindow* frontWindow = GetSATWindow(fDesktop->FocusWindow());
-			SATGroup* currentGroup = NULL;
-			if (frontWindow)
-				currentGroup = frontWindow->GetGroup();
-			if (currentGroup && currentGroup->CountItems() <= 1)
-				currentGroup = NULL;
-
+			groups.SetCurrentGroup(currentGroup);
 			SATGroup* backmostGroup = NULL;
-			GroupIterator groups(this, fDesktop);
+
 			while (true) {
 				SATGroup* group = groups.NextGroup();
-				if (group == NULL)
+				if (group == NULL || group == currentGroup)
 					break;
-				if (group->CountItems() <= 1)
+				else if (group->CountItems() < 1)
 					continue;
-				// if no group is selected just activate the first one
+
 				if (currentGroup == NULL) {
-					_ActivateWindow(group->WindowAt(0));
+					SATWindow* activeWindow = group->ActiveWindow();
+					if (activeWindow != NULL)
+						_ActivateWindow(activeWindow);
+					else
+						_ActivateWindow(group->WindowAt(0));
+
 					return true;
 				}
 				backmostGroup = group;
 			}
-			if (backmostGroup && backmostGroup != currentGroup) {
-				_ActivateWindow(backmostGroup->WindowAt(0));
+			if (backmostGroup != NULL && backmostGroup != currentGroup) {
+				SATWindow* activeWindow = backmostGroup->ActiveWindow();
+				if (activeWindow != NULL)
+					_ActivateWindow(activeWindow);
+				else
+					_ActivateWindow(backmostGroup->WindowAt(0));
+
+				return true;
+			}
+
+			break;
+		}
+
+		case kDownArrowKey:
+		case kPageDownKey:
+		{
+			// go to next window group
+			GroupIterator groups(this, fDesktop);
+			groups.SetCurrentGroup(currentGroup);
+
+			while (true) {
+				SATGroup* group = groups.NextGroup();
+				if (group == NULL || group == currentGroup)
+					break;
+				else if (group->CountItems() < 1)
+					continue;
+
+				SATWindow* activeWindow = group->ActiveWindow();
+				if (activeWindow != NULL)
+					_ActivateWindow(activeWindow);
+				else
+					_ActivateWindow(group->WindowAt(0));
+
+				if (currentGroup != NULL && frontWindow != NULL) {
+					Window* window = frontWindow->GetWindow();
+					fDesktop->SendWindowBehind(window);
+					WindowSentBehind(window, NULL);
+				}
 				return true;
 			}
 			break;
 		}
 	}
+
 	return false;
 }
 
@@ -322,11 +344,12 @@ StackAndTile::WindowResized(Window* window)
 
 
 void
-StackAndTile::WindowActitvated(Window* window)
+StackAndTile::WindowActivated(Window* window)
 {
 	SATWindow* satWindow = GetSATWindow(window);
 	if (satWindow == NULL)
 		return;
+
 	_ActivateWindow(satWindow);
 }
 
@@ -337,9 +360,11 @@ StackAndTile::WindowSentBehind(Window* window, Window* behindOf)
 	SATWindow* satWindow = GetSATWindow(window);
 	if (satWindow == NULL)
 		return;
+
 	SATGroup* group = satWindow->GetGroup();
 	if (group == NULL)
 		return;
+
 	Desktop* desktop = satWindow->GetWindow()->Desktop();
 	if (desktop == NULL)
 		return;
@@ -361,9 +386,11 @@ StackAndTile::WindowWorkspacesChanged(Window* window, uint32 workspaces)
 	SATWindow* satWindow = GetSATWindow(window);
 	if (satWindow == NULL)
 		return;
+
 	SATGroup* group = satWindow->GetGroup();
 	if (group == NULL)
 		return;
+
 	Desktop* desktop = satWindow->GetWindow()->Desktop();
 	if (desktop == NULL)
 		return;
@@ -385,9 +412,11 @@ StackAndTile::WindowHidden(Window* window, bool fromMinimize)
 	SATWindow* satWindow = GetSATWindow(window);
 	if (satWindow == NULL)
 		return;
+
 	SATGroup* group = satWindow->GetGroup();
 	if (group == NULL)
 		return;
+
 	if (fromMinimize == false && group->CountItems() > 1)
 		group->RemoveWindow(satWindow, false);
 }
@@ -399,9 +428,11 @@ StackAndTile::WindowMinimized(Window* window, bool minimize)
 	SATWindow* satWindow = GetSATWindow(window);
 	if (satWindow == NULL)
 		return;
+
 	SATGroup* group = satWindow->GetGroup();
 	if (group == NULL)
 		return;
+
 	Desktop* desktop = satWindow->GetWindow()->Desktop();
 	if (desktop == NULL)
 		return;
@@ -453,11 +484,13 @@ StackAndTile::WindowFeelChanged(Window* window, window_feel feel)
 	if (feel == B_NORMAL_WINDOW_FEEL)
 		return;
 	SATWindow* satWindow = GetSATWindow(window);
-	if (!satWindow)
+	if (satWindow == NULL)
 		return;
+
 	SATGroup* group = satWindow->GetGroup();
-	if (!group)
+	if (group == NULL)
 		return;
+
 	if (group->CountItems() > 1)
 		group->RemoveWindow(satWindow, false);
 }
@@ -519,8 +552,12 @@ StackAndTile::FindSATWindow(uint64 id)
 		if (window->Id() == id)
 			return window;
 	}
+
 	return NULL;
 }
+
+
+//	#pragma mark - StackAndTile private methods
 
 
 void
@@ -532,7 +569,7 @@ StackAndTile::_StartSAT()
 
 	// Remove window from the group.
 	SATGroup* group = fCurrentSATWindow->GetGroup();
-	if (!group)
+	if (group == NULL)
 		return;
 
 	group->RemoveWindow(fCurrentSATWindow, false);
@@ -558,22 +595,38 @@ StackAndTile::_StopSAT()
 void
 StackAndTile::_ActivateWindow(SATWindow* satWindow)
 {
+	if (satWindow == NULL)
+		return;
+
 	SATGroup* group = satWindow->GetGroup();
-	if (!group)
+	if (group == NULL)
 		return;
+
 	Desktop* desktop = satWindow->GetWindow()->Desktop();
-	if (!desktop)
+	if (desktop == NULL)
 		return;
+
 	WindowArea* area = satWindow->GetWindowArea();
-	if (!area)
+	if (area == NULL)
 		return;
+
 	area->MoveToTopLayer(satWindow);
 
-	const WindowAreaList& areas = group->GetAreaList() ;
-	for (int32 i = 0; i < areas.CountItems(); i++) {
+	// save the active window of the current group
+	SATWindow* frontWindow = GetSATWindow(fDesktop->FocusWindow());
+	SATGroup* currentGroup = _GetSATGroup(frontWindow);
+	if (currentGroup != NULL && currentGroup != group && frontWindow != NULL)
+		currentGroup->SetActiveWindow(frontWindow);
+	else
+		group->SetActiveWindow(satWindow);
+
+	const WindowAreaList& areas = group->GetAreaList();
+	int32 areasCount = areas.CountItems();
+	for (int32 i = 0; i < areasCount; i++) {
 		WindowArea* currentArea = areas.ItemAt(i);
 		if (currentArea == area)
 			continue;
+
 		desktop->ActivateWindow(currentArea->TopWindow()->GetWindow());
 	}
 
@@ -640,6 +693,26 @@ StackAndTile::_HandleMessage(BPrivate::LinkReceiver& link,
 }
 
 
+SATGroup*
+StackAndTile::_GetSATGroup(SATWindow* window)
+{
+	if (window == NULL)
+		return NULL;
+
+	SATGroup* group = window->GetGroup();
+	if (group == NULL)
+		return NULL;
+
+	if (group->CountItems() < 1)
+		return NULL;
+
+	return group;
+}
+
+
+//	#pragma mark - GroupIterator
+
+
 GroupIterator::GroupIterator(StackAndTile* sat, Desktop* desktop)
 	:
 	fStackAndTile(sat),
@@ -668,11 +741,12 @@ GroupIterator::NextGroup()
 			break;
 		}
 		fCurrentWindow = fCurrentWindow->PreviousWindow(
-				fCurrentWindow->CurrentWorkspace());
+			fCurrentWindow->CurrentWorkspace());
 		if (window->IsHidden()
 			|| strcmp(window->Title(), "Deskbar") == 0
-			|| strcmp(window->Title(), "Desktop") == 0)
+			|| strcmp(window->Title(), "Desktop") == 0) {
 			continue;
+		}
 
 		SATWindow* satWindow = fStackAndTile->GetSATWindow(window);
 		group = satWindow->GetGroup();
@@ -681,6 +755,9 @@ GroupIterator::NextGroup()
 	fCurrentGroup = group;
 	return fCurrentGroup;
 }
+
+
+//	#pragma mark - WindowIterator
 
 
 WindowIterator::WindowIterator(SATGroup* group, bool reverseLayerOrder)
@@ -723,6 +800,9 @@ WindowIterator::NextWindow()
 }
 
 
+//	#pragma mark - WindowIterator private methods
+
+
 SATWindow*
 WindowIterator::_ReverseNextWindow()
 {
@@ -745,10 +825,4 @@ WindowIterator::_ReverseRewind()
 	Rewind();
 	if (fCurrentArea)
 		fWindowIndex = fCurrentArea->LayerOrder().CountItems() - 1;
-}
-
-
-SATSnappingBehaviour::~SATSnappingBehaviour()
-{
-
 }

@@ -66,7 +66,8 @@ ToolTipView::ToolTipView(BToolTip* tip)
 	fHidden(false)
 {
 	fToolTip->AcquireReference();
-	SetViewColor(ui_color(B_TOOL_TIP_BACKGROUND_COLOR));
+	SetViewUIColor(B_TOOL_TIP_BACKGROUND_COLOR);
+	SetHighUIColor(B_TOOL_TIP_TEXT_COLOR);
 
 	BGroupLayout* layout = new BGroupLayout(B_VERTICAL);
 	layout->SetInsets(5, 5, 5, 5);
@@ -239,12 +240,19 @@ ToolTipView::ResetWindowFrame(BPoint where)
 			&& alignment.horizontal == B_ALIGN_CENTER))
 		alignment.vertical = B_ALIGN_BOTTOM;
 
+	// Adjust the tooltip position in cases where it would be partly out of the
+	// screen frame. Try to fit the tooltip on the requested side of the
+	// cursor, if that fails, try the opposite side, and if that fails again,
+	// give up and leave the tooltip under the mouse cursor.
+	bool firstTry = true;
 	while (true) {
 		switch (alignment.vertical) {
 			case B_ALIGN_TOP:
 				location.y = where.y - size.height - offset.y;
 				if (location.y < screenFrame.top) {
-					alignment.vertical = B_ALIGN_BOTTOM;
+					alignment.vertical = firstTry ? B_ALIGN_BOTTOM
+						: B_ALIGN_MIDDLE;
+					firstTry = false;
 					continue;
 				}
 				break;
@@ -260,7 +268,9 @@ ToolTipView::ResetWindowFrame(BPoint where)
 			default:
 				location.y = where.y + offset.y;
 				if (location.y + size.height > screenFrame.bottom) {
-					alignment.vertical = B_ALIGN_TOP;
+					alignment.vertical = firstTry ? B_ALIGN_TOP
+						: B_ALIGN_MIDDLE;
+					firstTry = false;
 					continue;
 				}
 				break;

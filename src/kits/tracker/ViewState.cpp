@@ -78,6 +78,9 @@ static const int32 kColumnStateMinArchiveVersion = 21;
 	// bump version when layout changes
 
 
+//	#pragma mark - BColumn
+
+
 BColumn::BColumn(const char* title, float offset, float width,
 	alignment align, const char* attributeName, uint32 attrType,
 	const char* displayAs, bool statField, bool editable)
@@ -119,7 +122,7 @@ BColumn::BColumn(BMallocIO* stream, int32 version, bool endianSwap)
 		PRINT(("endian swapping column\n"));
 		fOffset = B_SWAP_FLOAT(fOffset);
 		fWidth = B_SWAP_FLOAT(fWidth);
-		STATIC_ASSERT(sizeof(BColumn::fAlignment) == sizeof(int32));
+		STATIC_ASSERT(sizeof(alignment) == sizeof(int32));
 		fAlignment = (alignment)B_SWAP_INT32(fAlignment);
 		fAttrHash = B_SWAP_INT32(fAttrHash);
 		fAttrType = B_SWAP_INT32(fAttrType);
@@ -129,16 +132,42 @@ BColumn::BColumn(BMallocIO* stream, int32 version, bool endianSwap)
 
 BColumn::BColumn(const BMessage &message, int32 index)
 {
-	message.FindString(kColumnTitleName, index, &fTitle);
-	message.FindFloat(kColumnOffsetName, index, &fOffset);
-	message.FindFloat(kColumnWidthName, index, &fWidth);
-	message.FindInt32(kColumnAlignmentName, index, (int32*)&fAlignment);
-	message.FindString(kColumnAttrName, index, &fAttrName);
-	message.FindInt32(kColumnAttrHashName, index, (int32*)&fAttrHash);
-	message.FindInt32(kColumnAttrTypeName, index, (int32*)&fAttrType);
-	message.FindString(kColumnDisplayAsName, index, &fDisplayAs);
-	message.FindBool(kColumnStatFieldName, index, &fStatField);
-	message.FindBool(kColumnEditableName, index, &fEditable);
+	if (message.FindString(kColumnTitleName, index, &fTitle) != B_OK)
+		fTitle.SetTo(B_EMPTY_STRING);
+
+	if (message.FindFloat(kColumnOffsetName, index, &fOffset) != B_OK)
+		fOffset = -1.0f;
+
+	if (message.FindFloat(kColumnWidthName, index, &fWidth) != B_OK)
+		fWidth = -1.0f;
+
+	if (message.FindInt32(kColumnAlignmentName, index, (int32*)&fAlignment)
+			!= B_OK) {
+		fAlignment = B_ALIGN_LEFT;
+	}
+
+	if (message.FindString(kColumnAttrName, index, &fAttrName) != B_OK)
+		fAttrName = BString(B_EMPTY_STRING);
+
+	if (message.FindInt32(kColumnAttrHashName, index, (int32*)&fAttrHash)
+			!= B_OK) {
+		fAttrHash = 0;
+	}
+
+	if (message.FindInt32(kColumnAttrTypeName, index, (int32*)&fAttrType)
+			!= B_OK) {
+		fAttrType = 0;
+	}
+
+	if (message.FindString(kColumnDisplayAsName, index, &fDisplayAs) != B_OK)
+		fDisplayAs.SetTo(B_EMPTY_STRING);
+
+	if (message.FindBool(kColumnStatFieldName, index, &fStatField) != B_OK)
+		fStatField = false;
+
+	if (message.FindBool(kColumnEditableName, index, &fEditable) != B_OK)
+		fEditable = false;
+
 }
 
 
@@ -244,7 +273,7 @@ BColumn::ArchiveToMessage(BMessage &message) const
 }
 
 
-BColumn *
+BColumn*
 BColumn::_Sanitize(BColumn* column)
 {
 	if (column == NULL)
@@ -273,7 +302,7 @@ BColumn::_Sanitize(BColumn* column)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - BViewState
 
 
 BViewState::BViewState()
@@ -431,8 +460,8 @@ BViewState::_Init()
 {
 	fViewMode = kListMode;
 	fLastIconMode = 0;
-	fIconSize = 32;
-	fLastIconSize = 32;
+	fIconSize = B_LARGE_ICON;
+	fLastIconSize = B_LARGE_ICON;
 	fListOrigin.Set(0, 0);
 	fIconOrigin.Set(0, 0);
 	fPrimarySortAttr = AttrHashString(kAttrStatName, B_STRING_TYPE);
@@ -469,15 +498,19 @@ BViewState::_Sanitize(BViewState* state, bool fixOnly)
 	if (state->fViewMode == kListMode) {
 		if (state->fListOrigin.x < 0)
 			state->fListOrigin.x = 0;
+
 		if (state->fListOrigin.y < 0)
 			state->fListOrigin.y = 0;
 	}
 	if (state->fIconSize < 16)
 		state->fIconSize = 16;
+
 	if (state->fIconSize > 128)
 		state->fIconSize = 128;
+
 	if (state->fLastIconSize < 16)
 		state->fLastIconSize = 16;
+
 	if (state->fLastIconSize > 128)
 		state->fLastIconSize = 128;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2009, Haiku, Inc. All rights reserved.
+ * Copyright 2002-2015 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _LIST_VIEW_H
@@ -14,6 +14,7 @@
 
 struct track_data;
 
+
 enum list_view_type {
 	B_SINGLE_SELECTION_LIST,
 	B_MULTIPLE_SELECTION_LIST
@@ -25,8 +26,7 @@ public:
 								BListView(BRect frame, const char* name,
 									list_view_type type
 										= B_SINGLE_SELECTION_LIST,
-									uint32 resizeMask = B_FOLLOW_LEFT
-										| B_FOLLOW_TOP,
+									uint32 resizeMask = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_WILL_DRAW
 										| B_FRAME_EVENTS | B_NAVIGABLE);
 								BListView(const char* name,
@@ -52,19 +52,19 @@ public:
 	virtual void				AllDetached();
 	virtual void				FrameResized(float newWidth, float newHeight);
 	virtual void				FrameMoved(BPoint newPosition);
-	virtual void				TargetedByScrollView(BScrollView* scroller);
-	virtual void				WindowActivated(bool state);
+	virtual void				TargetedByScrollView(BScrollView* view);
+	virtual void				WindowActivated(bool active);
 
 	virtual void				MessageReceived(BMessage* message);
 	virtual void				KeyDown(const char* bytes, int32 numBytes);
 	virtual void				MouseDown(BPoint where);
-	virtual void				MouseUp(BPoint point);
-	virtual void				MouseMoved(BPoint point, uint32 code,
+	virtual void				MouseUp(BPoint where);
+	virtual void				MouseMoved(BPoint where, uint32 code,
 									const BMessage* dragMessage);
 
 	virtual void				ResizeToPreferred();
-	virtual void				GetPreferredSize(float* _width,
-									float* _height);
+	virtual void				GetPreferredSize(float *_width,
+									float *_height);
 
 	virtual	BSize				MinSize();
 	virtual	BSize				MaxSize();
@@ -126,8 +126,8 @@ public:
 
 	virtual void				SelectionChanged();
 
-	virtual bool				InitiateDrag(BPoint point, int32 itemIndex,
-									bool initialySelected);
+	virtual bool				InitiateDrag(BPoint where, int32 index,
+									bool wasSelected);
 
 			void				SortItems(int (*cmp)(const void*,
 									const void*));
@@ -141,7 +141,7 @@ public:
 
 	virtual BHandler*			ResolveSpecifier(BMessage* message,
 									int32 index, BMessage* specifier,
-									int32 form, const char* property);
+									int32 what, const char* property);
 	virtual status_t			GetSupportedSuites(BMessage* data);
 
 	virtual status_t			Perform(perform_code code, void* arg);
@@ -171,7 +171,7 @@ private:
 			void				_FixupScrollBar();
 			void				_InvalidateFrom(int32 index);
 			status_t			_PostMessage(BMessage* message);
-			void				_FontChanged();
+			void				_UpdateItems();
 			int32				_RangeCheck(int32 index);
 			bool				_Select(int32 index, bool extend);
 			bool				_Select(int32 from, int32 to, bool extend);
@@ -188,6 +188,9 @@ private:
 			bool				_MoveItem(int32 from, int32 to);
 			bool				_ReplaceItem(int32 index, BListItem* item);
 			void				_RescanSelection(int32 from, int32 to);
+
+			void				_DoneTracking(BPoint where);
+			void				_Track(BPoint where, uint32);
 
 private:
 			BList				fList;

@@ -1,9 +1,10 @@
 /*
- * Copyright 2010, Haiku.
+ * Copyright 2010-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Clemens Zeidler <haiku@clemens-zeidler.de>
+ *		John Scipione, jscipione@gmail.com
+ *		Clemens Zeidler, haiku@clemens-zeidler.de
  */
 
 
@@ -67,7 +68,7 @@ WindowArea::Init(SATGroup* group)
 {
 	_UninitConstraints();
 
-	if (group != NULL && group->fWindowAreaList.AddItem(this) == false)
+	if (group == NULL || group->fWindowAreaList.AddItem(this) == false)
 		return false;
 
 	fGroup = group;
@@ -376,14 +377,18 @@ WindowArea::MoveToTopLayer(SATWindow* window)
 void
 WindowArea::_UninitConstraints()
 {
-	LinearSpec* linearSpec = fGroup->GetLinearSpec();
+	if (fGroup != NULL) {
+		LinearSpec* linearSpec = fGroup->GetLinearSpec();
 
-	linearSpec->RemoveConstraint(fMinWidthConstraint, true);
-	linearSpec->RemoveConstraint(fMinHeightConstraint, true);
-	linearSpec->RemoveConstraint(fMaxWidthConstraint, true);
-	linearSpec->RemoveConstraint(fMaxHeightConstraint, true);
-	linearSpec->RemoveConstraint(fWidthConstraint, true);
-	linearSpec->RemoveConstraint(fHeightConstraint, true);
+		if (linearSpec != NULL) {
+			linearSpec->RemoveConstraint(fMinWidthConstraint, true);
+			linearSpec->RemoveConstraint(fMinHeightConstraint, true);
+			linearSpec->RemoveConstraint(fMaxWidthConstraint, true);
+			linearSpec->RemoveConstraint(fMaxHeightConstraint, true);
+			linearSpec->RemoveConstraint(fWidthConstraint, true);
+			linearSpec->RemoveConstraint(fHeightConstraint, true);
+		}
+	}
 
 	fMinWidthConstraint = NULL;
 	fMinHeightConstraint = NULL;
@@ -786,18 +791,23 @@ Tab::CompareFunction(const Tab* tab1, const Tab* tab2)
 
 SATGroup::SATGroup()
 	:
+	fLinearSpec(new(std::nothrow) LinearSpec()),
 	fHorizontalTabsSorted(false),
-	fVerticalTabsSorted(false)
+	fVerticalTabsSorted(false),
+	fActiveWindow(NULL)
 {
-	
 }
 
 
 SATGroup::~SATGroup()
 {
 	// Should be empty
+	if (fSATWindowList.CountItems() > 0)
+		debugger("Deleting a SATGroup which is not empty");
 	//while (fSATWindowList.CountItems() > 0)
 	//	RemoveWindow(fSATWindowList.ItemAt(0));
+	
+	fLinearSpec->ReleaseReference();
 }
 
 
@@ -811,37 +821,37 @@ SATGroup::AddWindow(SATWindow* window, Tab* left, Tab* top, Tab* right,
 	BReference<Tab> leftRef, rightRef, topRef, bottomRef;
 	BReference<Crossing> leftTopRef, rightTopRef, leftBottomRef, rightBottomRef;
 
-	if (left && top)
+	if (left != NULL && top != NULL)
 		leftTopRef = left->FindCrossing(top);
-	if (right && top)
+	if (right != NULL && top != NULL)
 		rightTopRef = right->FindCrossing(top);
-	if (left && bottom)
+	if (left != NULL && bottom != NULL)
 		leftBottomRef = left->FindCrossing(bottom);
-	if (right && bottom)
+	if (right != NULL && bottom != NULL)
 		rightBottomRef = right->FindCrossing(bottom);
 
-	if (!left) {
+	if (left == NULL) {
 		leftRef = _AddVerticalTab();
 		left = leftRef.Get();
 	}
-	if (!top) {
+	if (top == NULL) {
 		topRef = _AddHorizontalTab();
 		top = topRef.Get();
 	}
-	if (!right) {
+	if (right == NULL) {
 		rightRef = _AddVerticalTab();
 		right = rightRef.Get();
 	}
-	if (!bottom) {
+	if (bottom == NULL) {
 		bottomRef = _AddHorizontalTab();
 		bottom = bottomRef.Get();
 	}
-	if (!left || !top || !right || !bottom)
+	if (left == NULL || top == NULL || right == NULL || bottom == NULL)
 		return false;
 
-	if (!leftTopRef) {
+	if (leftTopRef == NULL) {
 		leftTopRef = left->AddCrossing(top);
-		if (!leftTopRef)
+		if (leftTopRef == NULL)
 			return false;
 	}
 	if (!rightTopRef) {
@@ -862,7 +872,7 @@ SATGroup::AddWindow(SATWindow* window, Tab* left, Tab* top, Tab* right,
 
 	WindowArea* area = new(std::nothrow) WindowArea(leftTopRef, rightTopRef,
 		leftBottomRef, rightBottomRef);
-	if (!area)
+	if (area == NULL)
 		return false;
 	// the area register itself in our area list
 	if (area->Init(this) == false) {
@@ -922,13 +932,27 @@ int32
 SATGroup::CountItems()
 {
 	return fSATWindowList.CountItems();
-};
+}
 
 
 SATWindow*
 SATGroup::WindowAt(int32 index)
 {
 	return fSATWindowList.ItemAt(index);
+}
+
+
+SATWindow*
+SATGroup::ActiveWindow() const
+{
+	return fActiveWindow;
+}
+
+
+void
+SATGroup::SetActiveWindow(SATWindow* window)
+{
+	fActiveWindow = window;
 }
 
 
@@ -980,7 +1004,7 @@ SATGroup::RestoreGroup(const BMessage& archive, StackAndTile* sat)
 {
 	// create new group
 	SATGroup* group = new (std::nothrow)SATGroup;
-	if (!group)
+	if (group == NULL)
 		return B_NO_MEMORY;
 	BReference<SATGroup> groupRef;
 	groupRef.SetTo(group, true);
@@ -1085,12 +1109,14 @@ SATGroup::ArchiveGroup(BMessage& archive)
 BReference<Tab>
 SATGroup::_AddHorizontalTab(float position)
 {
-	Variable* variable = fLinearSpec.AddVariable();
-	if (!variable)
+	if (fLinearSpec == NULL)
+		return NULL;
+	Variable* variable = fLinearSpec->AddVariable();
+	if (variable == NULL)
 		return NULL;
 
 	Tab* tab = new (std::nothrow)Tab(this, variable, Tab::kHorizontal);
-	if (!tab)
+	if (tab == NULL)
 		return NULL;
 	BReference<Tab> tabRef(tab, true);
 
@@ -1106,12 +1132,14 @@ SATGroup::_AddHorizontalTab(float position)
 BReference<Tab>
 SATGroup::_AddVerticalTab(float position)
 {
-	Variable* variable = fLinearSpec.AddVariable();
-	if (!variable)
+	if (fLinearSpec == NULL)
+		return NULL;
+	Variable* variable = fLinearSpec->AddVariable();
+	if (variable == NULL)
 		return NULL;
 
 	Tab* tab = new (std::nothrow)Tab(this, variable, Tab::kVertical);
-	if (!tab)
+	if (tab == NULL)
 		return NULL;
 	BReference<Tab> tabRef(tab, true);
 
@@ -1161,7 +1189,7 @@ void
 SATGroup::_SplitGroupIfNecessary(WindowArea* removedArea)
 {
 	// if there are windows stacked in the area we don't need to split
-	if (!removedArea || removedArea->WindowList().CountItems() > 1)
+	if (removedArea == NULL || removedArea->WindowList().CountItems() > 1)
 		return;
 
 	WindowAreaList neighbourWindows;
@@ -1333,8 +1361,7 @@ SATGroup::_FollowSeed(WindowArea* area, WindowArea* veto,
 			newGroup.AddItem(currentArea);
 			// if we get a area from the seed list it is not a seed any more
 			seedList.RemoveItem(currentArea);
-		}
-		else {
+		} else {
 			// don't _FollowSeed of invalid areas
 			neighbours.RemoveItemAt(i);
 			i--;
@@ -1351,7 +1378,7 @@ SATGroup::_SpawnNewGroup(const WindowAreaList& newGroup)
 {
 	STRACE_SAT("SATGroup::_SpawnNewGroup\n");
 	SATGroup* group = new (std::nothrow)SATGroup;
-	if (!group)
+	if (group == NULL)
 		return;
 	BReference<SATGroup> groupRef;
 	groupRef.SetTo(group, true);
@@ -1371,15 +1398,12 @@ void
 SATGroup::_EnsureGroupIsOnScreen(SATGroup* group)
 {
 	STRACE_SAT("SATGroup::_EnsureGroupIsOnScreen\n");
-	if (!group)
-		return;
-
-	if (group->CountItems() < 1)
+	if (group == NULL || group->CountItems() < 1)
 		return;
 
 	SATWindow* window = group->WindowAt(0);
 	Desktop* desktop = window->GetWindow()->Desktop();
-	if (!desktop)
+	if (desktop == NULL)
 		return;
 
 	const float kBigDistance = 1E+10;
@@ -1408,8 +1432,7 @@ SATGroup::_EnsureGroupIsOnScreen(SATGroup* group)
 			if (dist < minLeftDistance) {
 				minLeftDistance = dist;
 				leftRect = frame;
-			}
-			else if (dist == minLeftDistance)
+			} else if (dist == minLeftDistance)
 				leftRect = leftRect | frame;
 		}
 		if (frame.top > screen.bottom - kMinOverlap) {
@@ -1417,8 +1440,7 @@ SATGroup::_EnsureGroupIsOnScreen(SATGroup* group)
 			if (dist < minBottomDistance) {
 				minBottomDistance = dist;
 				bottomRect = frame;
-			}
-			else if (dist == minBottomDistance)
+			} else if (dist == minBottomDistance)
 				bottomRect = bottomRect | frame;
 		}
 		if (frame.left > screen.right - kMinOverlap) {
@@ -1426,8 +1448,7 @@ SATGroup::_EnsureGroupIsOnScreen(SATGroup* group)
 			if (dist < minRightDistance) {
 				minRightDistance = dist;
 				rightRect = frame;
-			}
-			else if (dist == minRightDistance)
+			} else if (dist == minRightDistance)
 				rightRect = rightRect | frame;
 		}
 		if (frame.bottom < screen.top + kMinOverlap) {
@@ -1435,8 +1456,7 @@ SATGroup::_EnsureGroupIsOnScreen(SATGroup* group)
 			if (dist < minTopDistance) {
 				minTopDistance = dist;
 				topRect = frame;
-			}
-			else if (dist == minTopDistance)
+			} else if (dist == minTopDistance)
 				topRect = topRect | frame;
 		}
 	}
@@ -1445,16 +1465,13 @@ SATGroup::_EnsureGroupIsOnScreen(SATGroup* group)
 	if (minLeftDistance < kBigDistance) {
 		offset.x = screen.left - leftRect.right + kMoveToScreen;
 		_CallculateYOffset(offset, leftRect, screen);
-	}
-	else if (minTopDistance < kBigDistance) {
+	} else if (minTopDistance < kBigDistance) {
 		offset.y = screen.top - topRect.bottom + kMoveToScreen;
 		_CallculateXOffset(offset, topRect, screen);
-	}
-	else if (minRightDistance < kBigDistance) {
+	} else if (minRightDistance < kBigDistance) {
 		offset.x = screen.right - rightRect.left - kMoveToScreen;
 		_CallculateYOffset(offset, rightRect, screen);
-	}
-	else if (minBottomDistance < kBigDistance) {
+	} else if (minBottomDistance < kBigDistance) {
 		offset.y = screen.bottom - bottomRect.top - kMoveToScreen;
 		_CallculateXOffset(offset, bottomRect, screen);
 	}

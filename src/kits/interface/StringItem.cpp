@@ -14,12 +14,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <ControlLook.h>
 #include <Message.h>
 #include <View.h>
 
 
 BStringItem::BStringItem(const char* text, uint32 level, bool expanded)
-	: BListItem(level, expanded),
+	:
+	BListItem(level, expanded),
 	fText(NULL),
 	fBaselineOffset(0)
 {
@@ -28,7 +30,8 @@ BStringItem::BStringItem(const char* text, uint32 level, bool expanded)
 
 
 BStringItem::BStringItem(BMessage* archive)
-	: BListItem(archive),
+	:
+	BListItem(archive),
 	fText(NULL),
 	fBaselineOffset(0)
 {
@@ -55,7 +58,7 @@ BStringItem::Instantiate(BMessage* archive)
 
 
 status_t
-BStringItem::Archive(BMessage *archive, bool deep) const
+BStringItem::Archive(BMessage* archive, bool deep) const
 {
 	status_t status = BListItem::Archive(archive);
 
@@ -67,42 +70,36 @@ BStringItem::Archive(BMessage *archive, bool deep) const
 
 
 void
-BStringItem::DrawItem(BView *owner, BRect frame, bool complete)
+BStringItem::DrawItem(BView* owner, BRect frame, bool complete)
 {
 	if (fText == NULL)
 		return;
 
-	rgb_color highColor = owner->HighColor();
 	rgb_color lowColor = owner->LowColor();
 
 	if (IsSelected() || complete) {
-		if (IsSelected()) {
-			owner->SetHighColor(tint_color(lowColor, B_DARKEN_2_TINT));
-			owner->SetLowColor(owner->HighColor());
-		} else
-			owner->SetHighColor(lowColor);
+		rgb_color color;
+		if (IsSelected())
+			color = ui_color(B_LIST_SELECTED_BACKGROUND_COLOR);
+		else
+			color = owner->ViewColor();
 
-		owner->FillRect(frame);
-	}
+		owner->SetLowColor(color);
+		owner->FillRect(frame, B_SOLID_LOW);
+	} else
+		owner->SetLowColor(owner->ViewColor());
 
-	owner->MovePenTo(frame.left, frame.top + fBaselineOffset);
-
-	rgb_color black = {0, 0, 0, 255};
-
-	if (!IsEnabled())
-		owner->SetHighColor(tint_color(black, B_LIGHTEN_2_TINT));
-	else
-		owner->SetHighColor(black);
+	owner->MovePenTo(frame.left + be_control_look->DefaultLabelSpacing(),
+		frame.top + fBaselineOffset);
 
 	owner->DrawString(fText);
 
-	owner->SetHighColor(highColor);
 	owner->SetLowColor(lowColor);
 }
 
 
 void
-BStringItem::SetText(const char *text)
+BStringItem::SetText(const char* text)
 {
 	free(fText);
 	fText = NULL;
@@ -112,7 +109,7 @@ BStringItem::SetText(const char *text)
 }
 
 
-const char *
+const char*
 BStringItem::Text() const
 {
 	return fText;
@@ -120,10 +117,12 @@ BStringItem::Text() const
 
 
 void
-BStringItem::Update(BView *owner, const BFont *font)
+BStringItem::Update(BView* owner, const BFont* font)
 {
-	if (fText)
-		SetWidth(font->StringWidth(fText));
+	if (fText != NULL) {
+		SetWidth(font->StringWidth(fText)
+			+ be_control_look->DefaultLabelSpacing());
+	}
 
 	font_height fheight;
 	font->GetHeight(&fheight);
@@ -136,7 +135,7 @@ BStringItem::Update(BView *owner, const BFont *font)
 
 
 status_t
-BStringItem::Perform(perform_code d, void *arg)
+BStringItem::Perform(perform_code d, void* arg)
 {
 	return BListItem::Perform(d, arg);
 }

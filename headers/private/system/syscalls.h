@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2011, Haiku, Inc. All rights reserved.
+ * Copyright 2004-2015, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _SYSTEM_SYSCALLS_H
@@ -8,7 +8,9 @@
 
 #include <arch_config.h>
 #include <DiskDeviceDefs.h>
+#include <elf_private.h>
 #include <image.h>
+#include <image_defs.h>
 #include <OS.h>
 
 #include <signal.h>
@@ -21,10 +23,8 @@ extern "C" {
 
 struct attr_info;
 struct dirent;
-struct Elf32_Sym;
 struct fd_info;
-//TODO
-//struct fd_set;
+struct fd_set;
 struct fs_info;
 struct iovec;
 struct msqid_ds;
@@ -80,6 +80,9 @@ extern status_t		_kern_mutex_lock(int32* mutex, const char* name,
 extern status_t		_kern_mutex_unlock(int32* mutex, uint32 flags);
 extern status_t		_kern_mutex_switch_lock(int32* fromMutex, int32* toMutex,
 						const char* name, uint32 flags, bigtime_t timeout);
+extern status_t		_kern_mutex_sem_acquire(int32* sem, const char* name,
+						uint32 flags, bigtime_t timeout);
+extern status_t		_kern_mutex_sem_release(int32* sem);
 
 /* sem functions */
 extern sem_id		_kern_create_sem(int count, const char *name);
@@ -138,7 +141,7 @@ extern status_t		_kern_kill_team(team_id team);
 extern team_id		_kern_get_current_team();
 extern status_t		_kern_wait_for_team(team_id team, status_t *_returnCode);
 extern pid_t		_kern_wait_for_child(thread_id child, uint32 flags,
-						siginfo_t* info);
+						siginfo_t* info, team_usage_info* usageInfo);
 extern status_t		_kern_exec(const char *path, const char* const* flatArgs,
 						size_t flatArgsSize, int32 argCount, int32 envCount,
 						mode_t umask);
@@ -148,9 +151,8 @@ extern pid_t		_kern_setpgid(pid_t process, pid_t group);
 extern pid_t		_kern_setsid(void);
 extern status_t		_kern_change_root(const char *path);
 
-// TODO
-//extern thread_id	_kern_spawn_thread(
-//						struct thread_creation_attributes* attributes);
+extern thread_id	_kern_spawn_thread(
+						struct thread_creation_attributes* attributes);
 extern thread_id	_kern_find_thread(const char *name);
 extern status_t		_kern_suspend_thread(thread_id thread);
 extern status_t		_kern_resume_thread(thread_id thread);
@@ -194,6 +196,9 @@ extern status_t		_kern_unblock_threads(thread_id* threads, uint32 count,
 
 extern bigtime_t	_kern_estimate_max_scheduling_latency(thread_id thread);
 
+extern status_t		_kern_set_scheduler_mode(int32 mode);
+extern int32		_kern_get_scheduler_mode(void);
+
 // user/group functions
 extern gid_t		_kern_getgid(bool effective);
 extern uid_t		_kern_getuid(bool effective);
@@ -219,7 +224,8 @@ extern status_t		_kern_set_signal_stack(const stack_t *newStack,
 						stack_t *oldStack);
 
 // image functions
-extern image_id		_kern_register_image(image_info *info, size_t size);
+extern image_id		_kern_register_image(extended_image_info *info,
+						size_t size);
 extern status_t		_kern_unregister_image(image_id id);
 extern void			_kern_image_relocated(image_id id);
 extern void			_kern_loading_app_failed(status_t error);
@@ -228,7 +234,7 @@ extern status_t		_kern_get_image_info(image_id id, image_info *info,
 extern status_t		_kern_get_next_image_info(team_id team, int32 *cookie,
 						image_info *info, size_t size);
 extern status_t		_kern_read_kernel_image_symbols(image_id id,
-						struct Elf32_Sym* symbolTable, int32* _symbolCount,
+						elf_sym* symbolTable, int32* _symbolCount,
 						char* stringTable, size_t* _stringTableSize,
 						addr_t* _imageDelta);
 
@@ -255,7 +261,7 @@ extern int			_kern_open_dir_entry_ref(dev_t device, ino_t inode,
 extern int			_kern_open_dir(int fd, const char *path);
 extern int			_kern_open_parent_dir(int fd, char *name,
 						size_t nameLength);
-extern status_t		_kern_fcntl(int fd, int op, uint32 argument);
+extern status_t		_kern_fcntl(int fd, int op, size_t argument);
 extern status_t		_kern_fsync(int fd);
 extern status_t		_kern_flock(int fd, int op);
 extern off_t		_kern_seek(int fd, off_t pos, int seekType);
@@ -276,8 +282,8 @@ extern status_t		_kern_create_fifo(int fd, const char *path, mode_t perms);
 extern status_t		_kern_create_pipe(int *fds);
 extern status_t		_kern_access(int fd, const char *path, int mode,
 						bool effectiveUserGroup);
-extern ssize_t		_kern_select(int numfds, fd_set *readSet,
-						fd_set *writeSet, fd_set *errorSet,
+extern ssize_t		_kern_select(int numfds, struct fd_set *readSet,
+						struct fd_set *writeSet, struct fd_set *errorSet,
 						bigtime_t timeout, const sigset_t *sigMask);
 extern ssize_t		_kern_poll(struct pollfd *fds, int numFDs,
 						bigtime_t timeout);
@@ -413,7 +419,7 @@ extern status_t		_kern_delete_area(area_id area);
 extern area_id		_kern_area_for(void *address);
 extern area_id		_kern_find_area(const char *name);
 extern status_t		_kern_get_area_info(area_id area, area_info *info);
-extern status_t		_kern_get_next_area_info(team_id team, int32 *cookie,
+extern status_t		_kern_get_next_area_info(team_id team, ssize_t *cookie,
 						area_info *info);
 extern status_t		_kern_resize_area(area_id area, size_t newSize);
 extern area_id		_kern_transfer_area(area_id area, void **_address,
@@ -447,7 +453,7 @@ extern status_t		_kern_close_port(port_id id);
 extern status_t		_kern_delete_port(port_id id);
 extern port_id		_kern_find_port(const char *port_name);
 extern status_t		_kern_get_port_info(port_id id, struct port_info *info);
-extern status_t	 	_kern_get_next_port_info(team_id team, int32 *cookie,
+extern status_t		_kern_get_next_port_info(team_id team, int32 *cookie,
 						struct port_info *info);
 extern ssize_t		_kern_port_buffer_size_etc(port_id port, uint32 flags,
 						bigtime_t timeout);
@@ -468,6 +474,7 @@ extern status_t		_kern_get_port_message_info_etc(port_id port,
 
 // debug support functions
 extern status_t		_kern_kernel_debugger(const char *message);
+extern void			_kern_register_syslog_daemon(port_id port);
 extern void			_kern_debugger(const char *message);
 extern int			_kern_disable_debugger(int state);
 
@@ -493,29 +500,35 @@ extern status_t		_kern_system_profiler_recorded(
 
 /* atomic_* ops (needed for CPUs that don't support them directly) */
 #ifdef ATOMIC_FUNCS_ARE_SYSCALLS
-extern int32		_kern_atomic_set(vint32 *value, int32 newValue);
-extern int32		_kern_atomic_test_and_set(vint32 *value, int32 newValue,
+extern void		_kern_atomic_set(int32 *value, int32 newValue);
+extern int32		_kern_atomic_get_and_set(int32 *value, int32 newValue);
+extern int32		_kern_atomic_test_and_set(int32 *value, int32 newValue,
 						int32 testAgainst);
-extern int32		_kern_atomic_add(vint32 *value, int32 addValue);
-extern int32		_kern_atomic_and(vint32 *value, int32 andValue);
-extern int32		_kern_atomic_or(vint32 *value, int32 orValue);
-extern int32		_kern_atomic_get(vint32 *value);
+extern int32		_kern_atomic_add(int32 *value, int32 addValue);
+extern int32		_kern_atomic_and(int32 *value, int32 andValue);
+extern int32		_kern_atomic_or(int32 *value, int32 orValue);
+extern int32		_kern_atomic_get(int32 *value);
 #endif	// ATOMIC_FUNCS_ARE_SYSCALLS
 
 #ifdef ATOMIC64_FUNCS_ARE_SYSCALLS
-extern int64		_kern_atomic_set64(vint64 *value, int64 newValue);
-extern int64		_kern_atomic_test_and_set64(vint64 *value, int64 newValue,
+extern void		_kern_atomic_set64(int64 *value, int64 newValue);
+extern int64		_kern_atomic_get_and_set64(int64 *value, int64 newValue);
+extern int64		_kern_atomic_test_and_set64(int64 *value, int64 newValue,
 						int64 testAgainst);
-extern int64		_kern_atomic_add64(vint64 *value, int64 addValue);
-extern int64		_kern_atomic_and64(vint64 *value, int64 andValue);
-extern int64		_kern_atomic_or64(vint64 *value, int64 orValue);
-extern int64		_kern_atomic_get64(vint64 *value);
+extern int64		_kern_atomic_add64(int64 *value, int64 addValue);
+extern int64		_kern_atomic_and64(int64 *value, int64 andValue);
+extern int64		_kern_atomic_or64(int64 *value, int64 orValue);
+extern int64		_kern_atomic_get64(int64 *value);
 #endif	// ATOMIC64_FUNCS_ARE_SYSCALLS
 
 /* System informations */
-extern status_t		_kern_get_system_info(system_info *info, size_t size);
-extern status_t		_kern_get_system_info_etc(int32 id, void *buffer,
-						size_t bufferSize);
+extern status_t		_kern_get_system_info(system_info* info);
+extern status_t		_kern_get_cpu_info(uint32 firstCPU, uint32 cpuCount,
+						cpu_info* info);
+extern status_t		_kern_get_cpu_topology_info(
+						cpu_topology_node_info* topologyInfos,
+						uint32* topologyInfoCount);
+
 extern status_t		_kern_analyze_scheduling(bigtime_t from, bigtime_t until,
 						void* buffer, size_t size,
 						struct scheduling_analysis* analysis);
@@ -536,7 +549,7 @@ extern void			_kern_clear_caches(void *address, size_t length,
 extern bool			_kern_cpu_enabled(int32 cpu);
 extern status_t		_kern_set_cpu_enabled(int32 cpu, bool enabled);
 
-#ifdef __INTEL__
+#if defined(__INTEL__) || defined(__x86_64__)
 // our only x86 only syscall
 extern status_t		_kern_get_cpuid(cpuid_info *info, uint32 eax, uint32 cpu);
 #endif
@@ -604,7 +617,8 @@ extern status_t		_kern_initialize_partition(partition_id partitionID,
 						int32* changeCounter, const char* diskSystemName,
 						const char* name, const char* parameters);
 extern status_t		_kern_uninitialize_partition(partition_id partitionID,
-						int32* changeCounter);
+						int32* changeCounter, partition_id parentID,
+						int32* parentChangeCounter);
 extern status_t		_kern_create_child_partition(partition_id partitionID,
 						int32* changeCounter, off_t offset, off_t size,
 						const char* type, const char* name,

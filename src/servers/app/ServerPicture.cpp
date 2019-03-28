@@ -1,11 +1,13 @@
 /*
- * Copyright 2001-2010, Haiku.
+ * Copyright 2001-2019, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Marc Flerackers (mflerackers@androme.be)
  *		Stefano Ceccherini (stefano.ceccherini@gmail.com)
  *		Marcus Overhagen <marcus@overhagen.de>
+ *		Julian Harnath <julian.harnath@rwth-aachen.de>
+ *		Stephan Aßmus <superstippi@gmx.de>
  */
 
 #include "ServerPicture.h"
@@ -14,9 +16,11 @@
 #include <stdio.h>
 #include <stack>
 
+#include "AlphaMask.h"
 #include "DrawingEngine.h"
 #include "DrawState.h"
 #include "FontManager.h"
+#include "Layer.h"
 #include "ServerApp.h"
 #include "ServerBitmap.h"
 #include "ServerFont.h"
@@ -44,7 +48,7 @@ using std::stack;
 
 class ShapePainter : public BShapeIterator {
 public:
-	ShapePainter(View* view);
+	ShapePainter(Canvas* canvas);
 	virtual ~ShapePainter();
 
 	status_t Iterate(const BShape* shape);
@@ -59,15 +63,15 @@ public:
 	void Draw(BRect frame, bool filled);
 
 private:
-	View*			fView;
+	Canvas*	fCanvas;
 	stack<uint32>	fOpStack;
 	stack<BPoint>	fPtStack;
 };
 
 
-ShapePainter::ShapePainter(View* view)
+ShapePainter::ShapePainter(Canvas* canvas)
 	:
-	fView(view)
+	fCanvas(canvas)
 {
 }
 
@@ -91,7 +95,7 @@ ShapePainter::IterateMoveTo(BPoint* point)
 	try {
 		fOpStack.push(OP_MOVETO);
 		fPtStack.push(*point);
-	} catch (std::bad_alloc) {
+	} catch (std::bad_alloc&) {
 		return B_NO_MEMORY;
 	}
 
@@ -106,7 +110,7 @@ ShapePainter::IterateLineTo(int32 lineCount, BPoint* linePts)
 		fOpStack.push(OP_LINETO | lineCount);
 		for (int32 i = 0; i < lineCount; i++)
 			fPtStack.push(linePts[i]);
-	} catch (std::bad_alloc) {
+	} catch (std::bad_alloc&) {
 		return B_NO_MEMORY;
 	}
 
@@ -122,7 +126,7 @@ ShapePainter::IterateBezierTo(int32 bezierCount, BPoint* bezierPts)
 		fOpStack.push(OP_BEZIERTO | bezierCount);
 		for (int32 i = 0; i < bezierCount; i++)
 			fPtStack.push(bezierPts[i]);
-	} catch (std::bad_alloc) {
+	} catch (std::bad_alloc&) {
 		return B_NO_MEMORY;
 	}
 
@@ -152,7 +156,7 @@ ShapePainter::IterateArcTo(float& rx, float& ry,
 		fPtStack.push(BPoint(rx, ry));
 		fPtStack.push(BPoint(angle, 0));
 		fPtStack.push(point);
-	} catch (std::bad_alloc) {
+	} catch (std::bad_alloc&) {
 		return B_NO_MEMORY;
 	}
 
@@ -165,7 +169,7 @@ ShapePainter::IterateClose()
 {
 	try {
 		fOpStack.push(OP_CLOSE);
-	} catch (std::bad_alloc) {
+	} catch (std::bad_alloc&) {
 		return B_NO_MEMORY;
 	}
 
@@ -203,10 +207,10 @@ ShapePainter::Draw(BRect frame, bool filled)
 			fPtStack.pop();
 		}
 
-		BPoint offset(fView->CurrentState()->PenLocation());
-		fView->ConvertToScreenForDrawing(&offset);
-		fView->Window()->GetDrawingEngine()->DrawShape(frame, opCount,
-			opList, ptCount, ptList, filled, offset, fView->Scale());
+		BPoint offset(fCanvas->CurrentState()->PenLocation());
+		fCanvas->PenToScreenTransform().Apply(&offset);
+		fCanvas->GetDrawingEngine()->DrawShape(frame, opCount, opList,
+			ptCount, ptList, filled, offset, fCanvas->Scale());
 
 		delete[] opList;
 		delete[] ptList;
@@ -218,7 +222,7 @@ ShapePainter::Draw(BRect frame, bool filled)
 
 
 static void
-get_polygon_frame(const BPoint* points, int32 numPoints, BRect* _frame)
+get_polygon_frame(const BPoint* points, uint32 numPoints, BRect* _frame)
 {
 	ASSERT(numPoints > 0);
 
@@ -247,29 +251,27 @@ get_polygon_frame(const BPoint* points, int32 numPoints, BRect* _frame)
 
 
 static void
-nop()
+move_pen_by(void* _canvas, const BPoint& delta)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetPenLocation(
+		canvas->CurrentState()->PenLocation() + delta);
 }
 
 
 static void
-move_pen_by(View* view, BPoint delta)
+stroke_line(void* _canvas, const BPoint& _start, const BPoint& _end)
 {
-	view->CurrentState()->SetPenLocation(
-		view->CurrentState()->PenLocation() + delta);
-}
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	BPoint start = _start;
+	BPoint end = _end;
 
+	const SimpleTransform transform = canvas->PenToScreenTransform();
+	transform.Apply(&start);
+	transform.Apply(&end);
+	canvas->GetDrawingEngine()->StrokeLine(start, end);
 
-static void
-stroke_line(View* view, BPoint start, BPoint end)
-{
-	BPoint penPos = end;
-
-	view->ConvertToScreenForDrawing(&start);
-	view->ConvertToScreenForDrawing(&end);
-	view->Window()->GetDrawingEngine()->StrokeLine(start, end);
-
-	view->CurrentState()->SetPenLocation(penPos);
+	canvas->CurrentState()->SetPenLocation(_end);
 	// the DrawingEngine/Painter does not need to be updated, since this
 	// effects only the view->screen coord conversion, which is handled
 	// by the view only
@@ -277,216 +279,133 @@ stroke_line(View* view, BPoint start, BPoint end)
 
 
 static void
-stroke_rect(View* view, BRect rect)
+draw_rect(void* _canvas, const BRect& _rect, bool fill)
 {
-	view->ConvertToScreenForDrawing(&rect);
-	view->Window()->GetDrawingEngine()->StrokeRect(rect);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	BRect rect = _rect;
+
+	canvas->PenToScreenTransform().Apply(&rect);
+	if (fill)
+		canvas->GetDrawingEngine()->FillRect(rect);
+	else
+		canvas->GetDrawingEngine()->StrokeRect(rect);
 }
 
 
 static void
-fill_rect(View* view, BRect rect)
+draw_round_rect(void* _canvas, const BRect& _rect, const BPoint& radii,
+	bool fill)
 {
-	view->ConvertToScreenForDrawing(&rect);
-	view->Window()->GetDrawingEngine()->FillRect(rect);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	BRect rect = _rect;
+
+	canvas->PenToScreenTransform().Apply(&rect);
+	float scale = canvas->CurrentState()->CombinedScale();
+	canvas->GetDrawingEngine()->DrawRoundRect(rect, radii.x * scale,
+		radii.y * scale, fill);
 }
 
 
 static void
-stroke_round_rect(View* view, BRect rect, BPoint radii)
+draw_bezier(void* _canvas, size_t numPoints, const BPoint viewPoints[],
+	bool fill)
 {
-	view->ConvertToScreenForDrawing(&rect);
-	view->Window()->GetDrawingEngine()->DrawRoundRect(rect, radii.x,
-		radii.y, false);
-}
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
 
-
-static void
-fill_round_rect(View* view, BRect rect, BPoint radii)
-{
-	view->ConvertToScreenForDrawing(&rect);
-	view->Window()->GetDrawingEngine()->DrawRoundRect(rect, radii.x,
-		radii.y, true);
-}
-
-
-static void
-stroke_bezier(View* view, const BPoint* viewPoints)
-{
-	BPoint points[4];
-	view->ConvertToScreenForDrawing(points, viewPoints, 4);
-
-	view->Window()->GetDrawingEngine()->DrawBezier(points, false);
-}
-
-
-static void
-fill_bezier(View* view, const BPoint* viewPoints)
-{
-	BPoint points[4];
-	view->ConvertToScreenForDrawing(points, viewPoints, 4);
-
-	view->Window()->GetDrawingEngine()->DrawBezier(points, true);
-}
-
-
-static void
-stroke_arc(View* view, BPoint center, BPoint radii, float startTheta,
-	float arcTheta)
-{
-	BRect rect(center.x - radii.x, center.y - radii.y,
-		center.x + radii.x - 1, center.y + radii.y - 1);
-	view->ConvertToScreenForDrawing(&rect);
-	view->Window()->GetDrawingEngine()->DrawArc(rect, startTheta,
-		arcTheta, false);
-}
-
-
-static void
-fill_arc(View* view, BPoint center, BPoint radii, float startTheta,
-	float arcTheta)
-{
-	BRect rect(center.x - radii.x, center.y - radii.y,
-		center.x + radii.x - 1, center.y + radii.y - 1);
-	view->ConvertToScreenForDrawing(&rect);
-	view->Window()->GetDrawingEngine()->DrawArc(rect, startTheta,
-		arcTheta, true);
-}
-
-
-static void
-stroke_ellipse(View* view, BPoint center, BPoint radii)
-{
-	BRect rect(center.x - radii.x, center.y - radii.y,
-		center.x + radii.x - 1, center.y + radii.y - 1);
-	view->ConvertToScreenForDrawing(&rect);
-	view->Window()->GetDrawingEngine()->DrawEllipse(rect, false);
-}
-
-
-static void
-fill_ellipse(View* view, BPoint center, BPoint radii)
-{
-	BRect rect(center.x - radii.x, center.y - radii.y,
-		center.x + radii.x - 1, center.y + radii.y - 1);
-	view->ConvertToScreenForDrawing(&rect);
-	view->Window()->GetDrawingEngine()->DrawEllipse(rect, true);
-}
-
-
-static void
-stroke_polygon(View* view, int32 numPoints, const BPoint* viewPoints,
-	bool isClosed)
-{
-	if (numPoints <= 0)
+	const size_t kSupportedPoints = 4;
+	if (numPoints != kSupportedPoints)
 		return;
 
-	if (numPoints <= 200) {
-		// fast path: no malloc/free, also avoid
-		// constructor/destructor calls
-		char data[200 * sizeof(BPoint)];
-		BPoint* points = (BPoint*)data;
-
-		view->ConvertToScreenForDrawing(points, viewPoints, numPoints);
-
-		BRect polyFrame;
-		get_polygon_frame(points, numPoints, &polyFrame);
-
-		view->Window()->GetDrawingEngine()->DrawPolygon(points,
-			numPoints, polyFrame, false, isClosed && numPoints > 2);
-	} else {
-		 // avoid constructor/destructor calls by
-		 // using malloc instead of new []
-		BPoint* points = (BPoint*)malloc(numPoints * sizeof(BPoint));
-		if (points == NULL)
-			return;
-
-		view->ConvertToScreenForDrawing(points, viewPoints, numPoints);
-
-		BRect polyFrame;
-		get_polygon_frame(points, numPoints, &polyFrame);
-
-		view->Window()->GetDrawingEngine()->DrawPolygon(points,
-			numPoints, polyFrame, false, isClosed && numPoints > 2);
-		free(points);
-	}
+	BPoint points[kSupportedPoints];
+	canvas->PenToScreenTransform().Apply(points, viewPoints, kSupportedPoints);
+	canvas->GetDrawingEngine()->DrawBezier(points, fill);
 }
 
 
 static void
-fill_polygon(View* view, int32 numPoints, const BPoint* viewPoints)
+draw_arc(void* _canvas, const BPoint& center, const BPoint& radii,
+	float startTheta, float arcTheta, bool fill)
 {
-	if (numPoints <= 0)
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+
+	BRect rect(center.x - radii.x, center.y - radii.y,
+		center.x + radii.x - 1, center.y + radii.y - 1);
+	canvas->PenToScreenTransform().Apply(&rect);
+	canvas->GetDrawingEngine()->DrawArc(rect, startTheta, arcTheta, fill);
+}
+
+
+static void
+draw_ellipse(void* _canvas, const BRect& _rect, bool fill)
+{
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+
+	BRect rect = _rect;
+	canvas->PenToScreenTransform().Apply(&rect);
+	canvas->GetDrawingEngine()->DrawEllipse(rect, fill);
+}
+
+
+static void
+draw_polygon(void* _canvas, size_t numPoints, const BPoint viewPoints[],
+	bool isClosed, bool fill)
+{
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+
+	if (numPoints == 0)
 		return;
 
-	if (numPoints <= 200) {
-		// fast path: no malloc/free, also avoid
-		// constructor/destructor calls
-		char data[200 * sizeof(BPoint)];
-		BPoint* points = (BPoint*)data;
-
-		view->ConvertToScreenForDrawing(points, viewPoints, numPoints);
-
-		BRect polyFrame;
-		get_polygon_frame(points, numPoints, &polyFrame);
-
-		view->Window()->GetDrawingEngine()->DrawPolygon(points,
-			numPoints, polyFrame, true, true);
-	} else {
-		 // avoid constructor/destructor calls by
-		 // using malloc instead of new []
-		BPoint* points = (BPoint*)malloc(numPoints * sizeof(BPoint));
+	const size_t kMaxStackCount = 200;
+	char stackData[kMaxStackCount * sizeof(BPoint)];
+	BPoint* points = (BPoint*)stackData;
+	if (numPoints > kMaxStackCount) {
+		points = (BPoint*)malloc(numPoints * sizeof(BPoint));
 		if (points == NULL)
 			return;
-
-		view->ConvertToScreenForDrawing(points, viewPoints, numPoints);
-
-		BRect polyFrame;
-		get_polygon_frame(points, numPoints, &polyFrame);
-
-		view->Window()->GetDrawingEngine()->DrawPolygon(points,
-			numPoints, polyFrame, true, true);
-		free(points);
 	}
+
+	canvas->PenToScreenTransform().Apply(points, viewPoints, numPoints);
+
+	BRect polyFrame;
+	get_polygon_frame(points, numPoints, &polyFrame);
+
+	canvas->GetDrawingEngine()->DrawPolygon(points, numPoints, polyFrame,
+		fill, isClosed && numPoints > 2);
+
+	if (numPoints > kMaxStackCount)
+		free(points);
 }
 
 
 static void
-stroke_shape(View* view, const BShape* shape)
+draw_shape(void* _canvas, const BShape& shape, bool fill)
 {
-	ShapePainter drawShape(view);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	ShapePainter drawShape(canvas);
 
-	drawShape.Iterate(shape);
-	drawShape.Draw(shape->Bounds(), false);
+	drawShape.Iterate(&shape);
+	drawShape.Draw(shape.Bounds(), fill);
 }
 
 
 static void
-fill_shape(View* view, const BShape* shape)
-{
-	ShapePainter drawShape(view);
-
-	drawShape.Iterate(shape);
-	drawShape.Draw(shape->Bounds(), true);
-}
-
-
-static void
-draw_string(View* view, const char* string, float deltaSpace,
+draw_string(void* _canvas, const char* string, size_t length, float deltaSpace,
 	float deltaNonSpace)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+
 	// NOTE: the picture data was recorded with a "set pen location"
 	// command inserted before the "draw string" command, so we can
 	// use PenLocation()
-	BPoint location = view->CurrentState()->PenLocation();
+	BPoint location = canvas->CurrentState()->PenLocation();
 
-	escapement_delta delta = {deltaSpace, deltaNonSpace };
-	view->ConvertToScreenForDrawing(&location);
-	view->Window()->GetDrawingEngine()->DrawString(string,
-		strlen(string), location, &delta);
+	escapement_delta delta = { deltaSpace, deltaNonSpace };
+	canvas->PenToScreenTransform().Apply(&location);
+	location = canvas->GetDrawingEngine()->DrawString(string, length,
+		location, &delta);
 
-	view->ConvertFromScreenForDrawing(&location);
-	view->CurrentState()->SetPenLocation(location);
+	canvas->PenToScreenTransform().Apply(&location);
+	canvas->CurrentState()->SetPenLocation(location);
 	// the DrawingEngine/Painter does not need to be updated, since this
 	// effects only the view->screen coord conversion, which is handled
 	// by the view only
@@ -494,122 +413,168 @@ draw_string(View* view, const char* string, float deltaSpace,
 
 
 static void
-draw_pixels(View* view, BRect src, BRect dest, int32 width,
-	int32 height, int32 bytesPerRow, int32 pixelFormat, int32 options,
-	const void* data)
+draw_string_locations(void* _canvas, const char* string, size_t length,
+	const BPoint* locations, size_t locationsCount)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+
+	BPoint location = canvas->GetDrawingEngine()->DrawString(string, length,
+		locations);
+
+	canvas->PenToScreenTransform().Apply(&location);
+	canvas->CurrentState()->SetPenLocation(location);
+	// the DrawingEngine/Painter does not need to be updated, since this
+	// effects only the view->screen coord conversion, which is handled
+	// by the view only
+}
+
+
+static void
+draw_pixels(void* _canvas, const BRect& src, const BRect& _dest, uint32 width,
+	uint32 height, size_t bytesPerRow, color_space pixelFormat, uint32 options,
+	const void* data, size_t length)
+{
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+
 	UtilityBitmap bitmap(BRect(0, 0, width - 1, height - 1),
 		(color_space)pixelFormat, 0, bytesPerRow);
 
 	if (!bitmap.IsValid())
 		return;
 
-	memcpy(bitmap.Bits(), data, height * bytesPerRow);
+	memcpy(bitmap.Bits(), data, std::min(height * bytesPerRow, length));
 
-	view->ConvertToScreenForDrawing(&dest);
-	view->Window()->GetDrawingEngine()->DrawBitmap(&bitmap, src, dest, options);
+	BRect dest = _dest;
+	canvas->PenToScreenTransform().Apply(&dest);
+	canvas->GetDrawingEngine()->DrawBitmap(&bitmap, src, dest, options);
 }
 
 
 static void
-draw_picture(View* view, BPoint where, int32 token)
+draw_picture(void* _canvas, const BPoint& where, int32 token)
 {
-	ServerPicture* picture
-		= view->Window()->ServerWindow()->App()->GetPicture(token);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+
+	ServerPicture* picture = canvas->GetPicture(token);
 	if (picture != NULL) {
-		view->PushState();
-		view->SetDrawingOrigin(where);
+		canvas->PushState();
+		canvas->SetDrawingOrigin(where);
 
-		view->PushState();
-		picture->Play(view);
-		view->PopState();
+		canvas->PushState();
+		picture->Play(canvas);
+		canvas->PopState();
 
-		view->PopState();
+		canvas->PopState();
 		picture->ReleaseReference();
 	}
 }
 
 
 static void
-set_clipping_rects(View* view, const BRect* rects, uint32 numRects)
+set_clipping_rects(void* _canvas, size_t numRects, const BRect rects[])
 {
-	// TODO: This might be too slow, we should copy the rects
-	// directly to BRegion's internal data
-	BRegion region;
-	for (uint32 c = 0; c < numRects; c++)
-		region.Include(rects[c]);
-	view->SetUserClipping(&region);
-	view->Window()->ServerWindow()->UpdateCurrentDrawingRegion();
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+
+	if (numRects == 0)
+		canvas->SetUserClipping(NULL);
+	else {
+		// TODO: This might be too slow, we should copy the rects
+		// directly to BRegion's internal data
+		BRegion region;
+		for (uint32 c = 0; c < numRects; c++)
+			region.Include(rects[c]);
+		canvas->SetUserClipping(&region);
+	}
+	canvas->UpdateCurrentDrawingRegion();
 }
 
 
 static void
-clip_to_picture(View* view, BPicture* picture, BPoint pt, bool clipToInverse)
+clip_to_picture(void* _canvas, int32 pictureToken, const BPoint& where,
+	bool clipToInverse)
 {
-	printf("ClipToPicture(picture, BPoint(%.2f, %.2f), %s)\n",
-		pt.x, pt.y, clipToInverse ? "inverse" : "");
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+
+	ServerPicture* picture = canvas->GetPicture(pictureToken);
+	if (picture == NULL)
+		return;
+	AlphaMask* mask = new(std::nothrow) PictureAlphaMask(canvas->GetAlphaMask(), 
+		picture, *canvas->CurrentState(), where, clipToInverse);
+	canvas->SetAlphaMask(mask);
+	canvas->CurrentState()->GetAlphaMask()->SetCanvasGeometry(BPoint(0, 0),
+		canvas->Bounds());
+	canvas->ResyncDrawState();
+	if (mask != NULL)
+		mask->ReleaseReference();
+
+	picture->ReleaseReference();
 }
 
 
 static void
-push_state(View* view)
+push_state(void* _canvas)
 {
-	view->PushState();
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->PushState();
 }
 
 
 static void
-pop_state(View* view)
+pop_state(void* _canvas)
 {
-	view->PopState();
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->PopState();
 
 	BPoint p(0, 0);
-	view->ConvertToScreenForDrawing(&p);
-	view->Window()->GetDrawingEngine()->SetDrawState(
-		view->CurrentState(), (int32)p.x, (int32)p.y);
+	canvas->PenToScreenTransform().Apply(&p);
+	canvas->GetDrawingEngine()->SetDrawState(canvas->CurrentState(),
+		(int32)p.x, (int32)p.y);
 }
 
 
 // TODO: Be smart and actually take advantage of these methods:
 // only apply state changes when they are called
 static void
-enter_state_change(View* view)
+enter_state_change(void* _canvas)
 {
 }
 
 
 static void
-exit_state_change(View* view)
+exit_state_change(void* _canvas)
 {
-	view->Window()->ServerWindow()->ResyncDrawState();
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->ResyncDrawState();
 }
 
 
 static void
-enter_font_state(View* view)
+enter_font_state(void* _canvas)
 {
 }
 
 
 static void
-exit_font_state(View* view)
+exit_font_state(void* _canvas)
 {
-	view->Window()->GetDrawingEngine()->SetFont(
-		view->CurrentState()->Font());
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->GetDrawingEngine()->SetFont(canvas->CurrentState()->Font());
 }
 
 
 static void
-set_origin(View* view, BPoint pt)
+set_origin(void* _canvas, const BPoint& pt)
 {
-	view->CurrentState()->SetOrigin(pt);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetOrigin(pt);
 }
 
 
 static void
-set_pen_location(View* view, BPoint pt)
+set_pen_location(void* _canvas, const BPoint& pt)
 {
-	view->CurrentState()->SetPenLocation(pt);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetPenLocation(pt);
 	// the DrawingEngine/Painter does not need to be updated, since this
 	// effects only the view->screen coord conversion, which is handled
 	// by the view only
@@ -617,66 +582,72 @@ set_pen_location(View* view, BPoint pt)
 
 
 static void
-set_drawing_mode(View* view, drawing_mode mode)
+set_drawing_mode(void* _canvas, drawing_mode mode)
 {
-	view->CurrentState()->SetDrawingMode(mode);
-	view->Window()->GetDrawingEngine()->SetDrawingMode(mode);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	if (canvas->CurrentState()->SetDrawingMode(mode))
+		canvas->GetDrawingEngine()->SetDrawingMode(mode);
 }
 
 
 static void
-set_line_mode(View* view, cap_mode capMode, join_mode joinMode,
+set_line_mode(void* _canvas, cap_mode capMode, join_mode joinMode,
 	float miterLimit)
 {
-	DrawState* state = view->CurrentState();
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	DrawState* state = canvas->CurrentState();
 	state->SetLineCapMode(capMode);
 	state->SetLineJoinMode(joinMode);
 	state->SetMiterLimit(miterLimit);
-	view->Window()->GetDrawingEngine()->SetStrokeMode(capMode, joinMode,
-		miterLimit);
+	canvas->GetDrawingEngine()->SetStrokeMode(capMode, joinMode, miterLimit);
 }
 
 
 static void
-set_pen_size(View* view, float size)
+set_pen_size(void* _canvas, float size)
 {
-	view->CurrentState()->SetPenSize(size);
-	view->Window()->GetDrawingEngine()->SetPenSize(
-		view->CurrentState()->PenSize());
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetPenSize(size);
+	canvas->GetDrawingEngine()->SetPenSize(
+		canvas->CurrentState()->PenSize());
 		// DrawState::PenSize() returns the scaled pen size, so we
 		// need to use that value to set the drawing engine pen size.
 }
 
 
 static void
-set_fore_color(View* view, rgb_color color)
+set_fore_color(void* _canvas, const rgb_color& color)
 {
-	view->CurrentState()->SetHighColor(color);
-	view->Window()->GetDrawingEngine()->SetHighColor(color);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetHighColor(color);
+	canvas->GetDrawingEngine()->SetHighColor(color);
 }
 
 
 static void
-set_back_color(View* view, rgb_color color)
+set_back_color(void* _canvas, const rgb_color& color)
 {
-	view->CurrentState()->SetLowColor(color);
-	view->Window()->GetDrawingEngine()->SetLowColor(color);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetLowColor(color);
+	canvas->GetDrawingEngine()->SetLowColor(color);
 }
 
 
 static void
-set_stipple_pattern(View* view, pattern p)
+set_stipple_pattern(void* _canvas, const pattern& pattern)
 {
-	view->CurrentState()->SetPattern(Pattern(p));
-	view->Window()->GetDrawingEngine()->SetPattern(p);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetPattern(Pattern(pattern));
+	canvas->GetDrawingEngine()->SetPattern(pattern);
 }
 
 
 static void
-set_scale(View* view, float scale)
+set_scale(void* _canvas, float scale)
 {
-	view->CurrentState()->SetScale(scale);
-	view->Window()->ServerWindow()->ResyncDrawState();
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetScale(scale);
+	canvas->ResyncDrawState();
 
 	// Update the drawing engine draw state, since some stuff
 	// (for example the pen size) needs to be recalculated.
@@ -684,153 +655,252 @@ set_scale(View* view, float scale)
 
 
 static void
-set_font_family(View* view, const char* family)
+set_font_family(void* _canvas, const char* _family, size_t length)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	BString family(_family, length);
+
 	FontStyle* fontStyle = gFontManager->GetStyleByIndex(family, 0);
 	ServerFont font;
 	font.SetStyle(fontStyle);
-	view->CurrentState()->SetFont(font, B_FONT_FAMILY_AND_STYLE);
+	canvas->CurrentState()->SetFont(font, B_FONT_FAMILY_AND_STYLE);
 }
 
 
 static void
-set_font_style(View* view, const char* style)
+set_font_style(void* _canvas, const char* _style, size_t length)
 {
-	ServerFont font(view->CurrentState()->Font());
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	BString style(_style, length);
+
+	ServerFont font(canvas->CurrentState()->Font());
 
 	FontStyle* fontStyle = gFontManager->GetStyle(font.Family(), style);
 
 	font.SetStyle(fontStyle);
-	view->CurrentState()->SetFont(font, B_FONT_FAMILY_AND_STYLE);
+	canvas->CurrentState()->SetFont(font, B_FONT_FAMILY_AND_STYLE);
 }
 
 
 static void
-set_font_spacing(View* view, int32 spacing)
+set_font_spacing(void* _canvas, uint8 spacing)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
 	ServerFont font;
 	font.SetSpacing(spacing);
-	view->CurrentState()->SetFont(font, B_FONT_SPACING);
+	canvas->CurrentState()->SetFont(font, B_FONT_SPACING);
 }
 
 
 static void
-set_font_size(View* view, float size)
+set_font_size(void* _canvas, float size)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
 	ServerFont font;
 	font.SetSize(size);
-	view->CurrentState()->SetFont(font, B_FONT_SIZE);
+	canvas->CurrentState()->SetFont(font, B_FONT_SIZE);
 }
 
 
 static void
-set_font_rotate(View* view, float rotation)
+set_font_rotation(void* _canvas, float rotation)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
 	ServerFont font;
 	font.SetRotation(rotation);
-	view->CurrentState()->SetFont(font, B_FONT_ROTATION);
+	canvas->CurrentState()->SetFont(font, B_FONT_ROTATION);
 }
 
 
 static void
-set_font_encoding(View* view, int32 encoding)
+set_font_encoding(void* _canvas, uint8 encoding)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
 	ServerFont font;
 	font.SetEncoding(encoding);
-	view->CurrentState()->SetFont(font, B_FONT_ENCODING);
+	canvas->CurrentState()->SetFont(font, B_FONT_ENCODING);
 }
 
 
 static void
-set_font_flags(View* view, int32 flags)
+set_font_flags(void* _canvas, uint32 flags)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
 	ServerFont font;
 	font.SetFlags(flags);
-	view->CurrentState()->SetFont(font, B_FONT_FLAGS);
+	canvas->CurrentState()->SetFont(font, B_FONT_FLAGS);
 }
 
 
 static void
-set_font_shear(View* view, float shear)
+set_font_shear(void* _canvas, float shear)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
 	ServerFont font;
 	font.SetShear(shear);
-	view->CurrentState()->SetFont(font, B_FONT_SHEAR);
+	canvas->CurrentState()->SetFont(font, B_FONT_SHEAR);
 }
 
 
 static void
-set_font_face(View* view, int32 face)
+set_font_face(void* _canvas, uint16 face)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
 	ServerFont font;
 	font.SetFace(face);
-	view->CurrentState()->SetFont(font, B_FONT_FACE);
+	canvas->CurrentState()->SetFont(font, B_FONT_FACE);
 }
 
 
 static void
-set_blending_mode(View* view, int16 alphaSrcMode, int16 alphaFncMode)
+set_blending_mode(void* _canvas, source_alpha alphaSrcMode,
+	alpha_function alphaFncMode)
 {
-	view->CurrentState()->SetBlendingMode((source_alpha)alphaSrcMode,
-		(alpha_function)alphaFncMode);
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetBlendingMode(alphaSrcMode, alphaFncMode);
 }
 
 
 static void
-reserved()
+set_transform(void* _canvas, const BAffineTransform& transform)
 {
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->CurrentState()->SetTransform(transform);
+	canvas->GetDrawingEngine()->SetTransform(transform);
 }
 
 
-const static void* kTableEntries[] = {
-	(const void*)nop,					//	0
-	(const void*)move_pen_by,
-	(const void*)stroke_line,
-	(const void*)stroke_rect,
-	(const void*)fill_rect,
-	(const void*)stroke_round_rect,	//	5
-	(const void*)fill_round_rect,
-	(const void*)stroke_bezier,
-	(const void*)fill_bezier,
-	(const void*)stroke_arc,
-	(const void*)fill_arc,				//	10
-	(const void*)stroke_ellipse,
-	(const void*)fill_ellipse,
-	(const void*)stroke_polygon,
-	(const void*)fill_polygon,
-	(const void*)stroke_shape,			//	15
-	(const void*)fill_shape,
-	(const void*)draw_string,
-	(const void*)draw_pixels,
-	(const void*)draw_picture,
-	(const void*)set_clipping_rects,	//	20
-	(const void*)clip_to_picture,
-	(const void*)push_state,
-	(const void*)pop_state,
-	(const void*)enter_state_change,
-	(const void*)exit_state_change,	//	25
-	(const void*)enter_font_state,
-	(const void*)exit_font_state,
-	(const void*)set_origin,
-	(const void*)set_pen_location,
-	(const void*)set_drawing_mode,		//	30
-	(const void*)set_line_mode,
-	(const void*)set_pen_size,
-	(const void*)set_fore_color,
-	(const void*)set_back_color,
-	(const void*)set_stipple_pattern,	//	35
-	(const void*)set_scale,
-	(const void*)set_font_family,
-	(const void*)set_font_style,
-	(const void*)set_font_spacing,
-	(const void*)set_font_size,		//	40
-	(const void*)set_font_rotate,
-	(const void*)set_font_encoding,
-	(const void*)set_font_flags,
-	(const void*)set_font_shear,
-	(const void*)reserved,				//	45
-	(const void*)set_font_face,
-	(const void*)set_blending_mode		//	47
+static void
+translate_by(void* _canvas, double x, double y)
+{
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	BAffineTransform transform = canvas->CurrentState()->Transform();
+	transform.PreTranslateBy(x, y);
+	canvas->CurrentState()->SetTransform(transform);
+	canvas->GetDrawingEngine()->SetTransform(transform);
+}
+
+
+static void
+scale_by(void* _canvas, double x, double y)
+{
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	BAffineTransform transform = canvas->CurrentState()->Transform();
+	transform.PreScaleBy(x, y);
+	canvas->CurrentState()->SetTransform(transform);
+	canvas->GetDrawingEngine()->SetTransform(transform);
+}
+
+
+static void
+rotate_by(void* _canvas, double angleRadians)
+{
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	BAffineTransform transform = canvas->CurrentState()->Transform();
+	transform.PreRotateBy(angleRadians);
+	canvas->CurrentState()->SetTransform(transform);
+	canvas->GetDrawingEngine()->SetTransform(transform);
+}
+
+
+static void
+blend_layer(void* _canvas, Layer* layer)
+{
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	canvas->BlendLayer(layer);
+}
+
+
+static void
+clip_to_rect(void* _canvas, const BRect& rect, bool inverse)
+{
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	bool needDrawStateUpdate = canvas->ClipToRect(rect, inverse);
+	if (needDrawStateUpdate) {
+		canvas->CurrentState()->GetAlphaMask()->SetCanvasGeometry(BPoint(0, 0),
+			canvas->Bounds());
+		canvas->ResyncDrawState();
+	}
+	canvas->UpdateCurrentDrawingRegion();
+}
+
+
+static void
+clip_to_shape(void* _canvas, int32 opCount, const uint32 opList[],
+	int32 ptCount, const BPoint ptList[], bool inverse)
+{
+	Canvas* const canvas = reinterpret_cast<Canvas*>(_canvas);
+	shape_data shapeData;
+
+	// TODO: avoid copies
+	shapeData.opList = (uint32*)malloc(opCount * sizeof(uint32));
+	memcpy(shapeData.opList, opList, opCount * sizeof(uint32));
+	shapeData.ptList = (BPoint*)malloc(ptCount * sizeof(BPoint));
+	memcpy(shapeData.ptList, ptList, ptCount * sizeof(BPoint));
+
+	shapeData.opCount = opCount;
+	shapeData.opSize = opCount * sizeof(uint32);
+	shapeData.ptCount = ptCount;
+	shapeData.ptSize = ptCount * sizeof(BPoint);
+
+	canvas->ClipToShape(&shapeData, inverse);
+	canvas->CurrentState()->GetAlphaMask()->SetCanvasGeometry(BPoint(0, 0),
+		canvas->Bounds());
+	canvas->ResyncDrawState();
+
+	free(shapeData.opList);
+	free(shapeData.ptList);
+}
+
+
+static const BPrivate::picture_player_callbacks kPicturePlayerCallbacks = {
+	move_pen_by,
+	stroke_line,
+	draw_rect,
+	draw_round_rect,
+	draw_bezier,
+	draw_arc,
+	draw_ellipse,
+	draw_polygon,
+	draw_shape,
+	draw_string,
+	draw_pixels,
+	draw_picture,
+	set_clipping_rects,
+	clip_to_picture,
+	push_state,
+	pop_state,
+	enter_state_change,
+	exit_state_change,
+	enter_font_state,
+	exit_font_state,
+	set_origin,
+	set_pen_location,
+	set_drawing_mode,
+	set_line_mode,
+	set_pen_size,
+	set_fore_color,
+	set_back_color,
+	set_stipple_pattern,
+	set_scale,
+	set_font_family,
+	set_font_style,
+	set_font_spacing,
+	set_font_size,
+	set_font_rotation,
+	set_font_encoding,
+	set_font_flags,
+	set_font_shear,
+	set_font_face,
+	set_blending_mode,
+	set_transform,
+	translate_by,
+	scale_by,
+	rotate_by,
+	blend_layer,
+	clip_to_rect,
+	clip_to_shape,
+	draw_string_locations
 };
 
 
@@ -972,91 +1042,69 @@ ServerPicture::ExitStateChange()
 
 
 void
-ServerPicture::SyncState(View* view)
+ServerPicture::SyncState(Canvas* canvas)
 {
 	// TODO: Finish this
 	EnterStateChange();
 
-	WriteSetOrigin(view->CurrentState()->Origin());
-	WriteSetPenLocation(view->CurrentState()->PenLocation());
-	WriteSetPenSize(view->CurrentState()->PenSize());
-	WriteSetScale(view->CurrentState()->Scale());
-	WriteSetLineMode(view->CurrentState()->LineCapMode(),
-		view->CurrentState()->LineJoinMode(),
-		view->CurrentState()->MiterLimit());
-	//WriteSetPattern(*view->CurrentState()->GetPattern().GetInt8());
-	WriteSetDrawingMode(view->CurrentState()->GetDrawingMode());
+	WriteSetOrigin(canvas->CurrentState()->Origin());
+	WriteSetPenLocation(canvas->CurrentState()->PenLocation());
+	WriteSetPenSize(canvas->CurrentState()->UnscaledPenSize());
+	WriteSetScale(canvas->CurrentState()->Scale());
+	WriteSetLineMode(canvas->CurrentState()->LineCapMode(),
+		canvas->CurrentState()->LineJoinMode(),
+		canvas->CurrentState()->MiterLimit());
+	//WriteSetPattern(*canvas->CurrentState()->GetPattern().GetInt8());
+	WriteSetDrawingMode(canvas->CurrentState()->GetDrawingMode());
 
-	WriteSetHighColor(view->CurrentState()->HighColor());
-	WriteSetLowColor(view->CurrentState()->LowColor());
+	WriteSetHighColor(canvas->CurrentState()->HighColor());
+	WriteSetLowColor(canvas->CurrentState()->LowColor());
 
 	ExitStateChange();
 }
 
 
 void
-ServerPicture::SetFontFromLink(BPrivate::LinkReceiver& link)
+ServerPicture::WriteFontState(const ServerFont& font, uint16 mask)
 {
 	BeginOp(B_PIC_ENTER_FONT_STATE);
 
-	uint16 mask;
-	link.Read<uint16>(&mask);
-
 	if (mask & B_FONT_FAMILY_AND_STYLE) {
-		uint32 fontID;
-		link.Read<uint32>(&fontID);
-		ServerFont font;
-		font.SetFamilyAndStyle(fontID);
 		WriteSetFontFamily(font.Family());
 		WriteSetFontStyle(font.Style());
 	}
 
 	if (mask & B_FONT_SIZE) {
-		float size;
-		link.Read<float>(&size);
-		WriteSetFontSize(size);
+		WriteSetFontSize(font.Size());
 	}
 
 	if (mask & B_FONT_SHEAR) {
-		float shear;
-		link.Read<float>(&shear);
-		WriteSetFontShear(shear);
+		WriteSetFontShear(font.Shear());
 	}
 
 	if (mask & B_FONT_ROTATION) {
-		float rotation;
-		link.Read<float>(&rotation);
-		WriteSetFontRotation(rotation);
+		WriteSetFontRotation(font.Rotation());
 	}
 
 	if (mask & B_FONT_FALSE_BOLD_WIDTH) {
-		float falseBoldWidth;
-		link.Read<float>(&falseBoldWidth);
-		//SetFalseBoldWidth(falseBoldWidth);
+		// TODO: Implement
+//		WriteSetFalseBoldWidth(font.FalseBoldWidth());
 	}
 
 	if (mask & B_FONT_SPACING) {
-		uint8 spacing;
-		link.Read<uint8>(&spacing);
-		WriteSetFontSpacing(spacing);
+		WriteSetFontSpacing(font.Spacing());
 	}
 
 	if (mask & B_FONT_ENCODING) {
-		uint8 encoding;
-		link.Read<uint8>((uint8*)&encoding);
-		WriteSetFontEncoding(encoding);
+		WriteSetFontEncoding(font.Encoding());
 	}
 
 	if (mask & B_FONT_FACE) {
-		uint16 face;
-		link.Read<uint16>(&face);
-		WriteSetFontFace(face);
+		WriteSetFontFace(font.Face());
 	}
 
 	if (mask & B_FONT_FLAGS) {
-		uint32 flags;
-		link.Read<uint32>(&flags);
-		WriteSetFontFlags(flags);
+		WriteSetFontFlags(font.Flags());
 	}
 
 	EndOp();
@@ -1064,7 +1112,7 @@ ServerPicture::SetFontFromLink(BPrivate::LinkReceiver& link)
 
 
 void
-ServerPicture::Play(View* view)
+ServerPicture::Play(Canvas* target)
 {
 	// TODO: for now: then change PicturePlayer
 	// to accept a BPositionIO object
@@ -1074,8 +1122,8 @@ ServerPicture::Play(View* view)
 
 	BPrivate::PicturePlayer player(mallocIO->Buffer(),
 		mallocIO->BufferLength(), PictureList::Private(fPictures).AsBList());
-	player.Play(const_cast<void**>(kTableEntries),
-		sizeof(kTableEntries) / sizeof(void*), view);
+	player.Play(kPicturePlayerCallbacks, sizeof(kPicturePlayerCallbacks),
+		target);
 }
 
 

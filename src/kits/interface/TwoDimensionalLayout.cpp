@@ -21,8 +21,6 @@
 #include "CollapsingLayouter.h"
 
 
-
-
 // Some words of explanation:
 //
 // This class is the base class for BLayouts that organize their items
@@ -56,7 +54,7 @@
 // CompoundLayouter
 class BTwoDimensionalLayout::CompoundLayouter : public BReferenceable {
 public:
-								CompoundLayouter(enum orientation orientation);
+								CompoundLayouter(orientation orientation);
 	virtual						~CompoundLayouter();
 
 			orientation			Orientation();
@@ -167,7 +165,7 @@ public:
 									float* preferredHeight);
 
 			void				AlignWith(LocalLayouter* other,
-									enum orientation orientation);
+									orientation orientation);
 
 	// Archiving stuff
 			status_t			AddAlignedLayoutsToArchive(BArchiver* archiver);
@@ -203,7 +201,7 @@ public:
 
 			void				SetCompoundLayouter(
 									CompoundLayouter* compoundLayouter,
-									enum orientation orientation);
+									orientation orientation);
 
 			void				InternalInvalidateLayout(
 									CompoundLayouter* compoundLayouter);
@@ -336,7 +334,7 @@ BTwoDimensionalLayout::GetInsets(float* left, float* top, float* right,
 
 void
 BTwoDimensionalLayout::AlignLayoutWith(BTwoDimensionalLayout* other,
-	enum orientation orientation)
+	orientation orientation)
 {
 	if (!other || other == this)
 		return;
@@ -573,7 +571,7 @@ BTwoDimensionalLayout::SubtractInsets(BSize size)
 
 
 void
-BTwoDimensionalLayout::PrepareItems(enum orientation orientation)
+BTwoDimensionalLayout::PrepareItems(orientation orientation)
 {
 }
 
@@ -603,7 +601,7 @@ BTwoDimensionalLayout::_ValidateMinMax()
 
 
 BTwoDimensionalLayout::CompoundLayouter::CompoundLayouter(
-	enum orientation orientation)
+	orientation orientation)
 	:
 	fLayouter(NULL),
 	fLayoutInfo(NULL),
@@ -617,6 +615,8 @@ BTwoDimensionalLayout::CompoundLayouter::CompoundLayouter(
 
 BTwoDimensionalLayout::CompoundLayouter::~CompoundLayouter()
 {
+	delete fLayouter;
+	delete fLayoutInfo;
 }
 
 
@@ -921,13 +921,6 @@ BTwoDimensionalLayout::VerticalCompoundLayouter::InternalGetHeightForWidth(
 		}
 
 		updateCachedInfo = true;
-
-		// get the height for width info
-		fCachedMinHeightForWidth = fHeightForWidthLayouter->MinSize();
-		fCachedMaxHeightForWidth = fHeightForWidthLayouter->MaxSize();
-		fCachedPreferredHeightForWidth
-			= fHeightForWidthLayouter->PreferredSize();
-
 	} else if (localLayouter->HasHeightForWidth()) {
 		// There is a height for width layouter and it has been initialized
 		// in the current layout context. So we just add the height for width
@@ -1154,7 +1147,7 @@ BTwoDimensionalLayout::LocalLayouter::InternalGetHeightForWidth(float width,
 
 void
 BTwoDimensionalLayout::LocalLayouter::AlignWith(LocalLayouter* other,
-	enum orientation orientation)
+	orientation orientation)
 {
 	if (orientation == B_HORIZONTAL)
 		other->fHLayouter->AbsorbCompoundLayouter(fHLayouter);
@@ -1365,7 +1358,7 @@ BTwoDimensionalLayout::LocalLayouter::SetHeightForWidthConstraintsAdded(
 
 void
 BTwoDimensionalLayout::LocalLayouter::SetCompoundLayouter(
-	CompoundLayouter* compoundLayouter, enum orientation orientation)
+	CompoundLayouter* compoundLayouter, orientation orientation)
 {
 	CompoundLayouter* oldCompoundLayouter;
 	if (orientation == B_HORIZONTAL) {

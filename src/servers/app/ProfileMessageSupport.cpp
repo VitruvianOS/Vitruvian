@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2009, Haiku Inc. All rights reserved.
+ * Copyright 2007-2016, Haiku Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -125,6 +125,8 @@ string_for_message_code(uint32 code, BString& string)
 		CODE(AS_GET_HAS_GLYPHS);
 		CODE(AS_GET_GLYPH_SHAPES);
 		CODE(AS_GET_TRUNCATED_STRINGS);
+		CODE(AS_GET_UNICODE_BLOCKS);
+		CODE(AS_GET_HAS_UNICODE_BLOCK);
 
 		// Screen methods
 		CODE(AS_VALID_SCREEN_ID);
@@ -152,6 +154,9 @@ string_for_message_code(uint32 code, BString& string)
 		CODE(AS_SET_DPMS);
 		CODE(AS_GET_DPMS_STATE);
 		CODE(AS_GET_DPMS_CAPABILITIES);
+
+		CODE(AS_SCREEN_SET_BRIGHTNESS);
+		CODE(AS_SCREEN_GET_BRIGHTNESS);
 
 		// Misc stuff
 		CODE(AS_GET_ACCELERANT_PATH);
@@ -256,6 +261,8 @@ string_for_message_code(uint32 code, BString& string)
 		CODE(AS_VIEW_SCROLL);
 		CODE(AS_VIEW_SET_LINE_MODE);
 		CODE(AS_VIEW_GET_LINE_MODE);
+		CODE(AS_VIEW_SET_FILL_RULE);
+		CODE(AS_VIEW_GET_FILL_RULE);
 		CODE(AS_VIEW_PUSH_STATE);
 		CODE(AS_VIEW_POP_STATE);
 		CODE(AS_VIEW_SET_SCALE);
@@ -269,11 +276,17 @@ string_for_message_code(uint32 code, BString& string)
 		CODE(AS_VIEW_SET_PEN_SIZE);
 		CODE(AS_VIEW_GET_PEN_SIZE);
 		CODE(AS_VIEW_SET_HIGH_COLOR);
+		CODE(AS_VIEW_SET_HIGH_UI_COLOR);
 		CODE(AS_VIEW_SET_LOW_COLOR);
+		CODE(AS_VIEW_SET_LOW_UI_COLOR);
 		CODE(AS_VIEW_SET_VIEW_COLOR);
+		CODE(AS_VIEW_SET_VIEW_UI_COLOR);
 		CODE(AS_VIEW_GET_HIGH_COLOR);
+		CODE(AS_VIEW_GET_HIGH_UI_COLOR);
 		CODE(AS_VIEW_GET_LOW_COLOR);
+		CODE(AS_VIEW_GET_LOW_UI_COLOR);
 		CODE(AS_VIEW_GET_VIEW_COLOR);
+		CODE(AS_VIEW_GET_VIEW_UI_COLOR);
 		CODE(AS_VIEW_PRINT_ALIASING);
 		CODE(AS_VIEW_CLIP_TO_PICTURE);
 		CODE(AS_VIEW_GET_CLIP_REGION);
@@ -290,6 +303,7 @@ string_for_message_code(uint32 code, BString& string)
 		CODE(AS_VIEW_COPY_BITS);
 		CODE(AS_VIEW_DRAW_PICTURE);
 		CODE(AS_VIEW_INVALIDATE_RECT);
+		CODE(AS_VIEW_DELAYED_INVALIDATE_RECT);
 		CODE(AS_VIEW_INVALIDATE_REGION);
 		CODE(AS_VIEW_INVERT_RECT);
 		CODE(AS_VIEW_MOVE_TO);
@@ -304,6 +318,9 @@ string_for_message_code(uint32 code, BString& string)
 		// BDirectWindow codes
 		CODE(AS_DIRECT_WINDOW_GET_SYNC_DATA);
 		CODE(AS_DIRECT_WINDOW_SET_FULLSCREEN);
+
+		// Internal messages
+		CODE(AS_COLOR_MAP_UPDATED);
 
 		default:
 			string << "unkown code: " << code;

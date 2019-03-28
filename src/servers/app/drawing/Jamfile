@@ -10,15 +10,16 @@ UseHeaders [ FDirName $(HAIKU_TOP) src servers app font ] ;
 UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing Painter ] ;
 UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing Painter drawing_modes ] ;
 UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing Painter font_support ] ;
-UseHeaders $(HAIKU_FREETYPE_HEADERS) : true ;
+UseBuildFeatureHeaders freetype ;
 
-Includes [ FGristFiles DrawingEngine.cpp ]
-	: $(HAIKU_FREETYPE_HEADERS_DEPENDENCY) ;
+Includes [ FGristFiles AlphaMask.cpp AlphaMaskCache.cpp DrawingEngine.cpp ]
+	: [ BuildFeatureAttribute freetype : headers ] ;
 
 StaticLibrary libasdrawing.a :
-	AccelerantBuffer.cpp
-	AccelerantHWInterface.cpp
+	AlphaMask.cpp
+	AlphaMaskCache.cpp
 	BitmapBuffer.cpp
+	BitmapDrawingEngine.cpp
 	drawing_support.cpp
 	DrawingEngine.cpp
 	MallocBuffer.cpp
@@ -32,5 +33,4 @@ StaticLibrary libasdrawing.a :
 ;
 
 SubInclude HAIKU_TOP src servers app drawing Painter ;
-SubInclude HAIKU_TOP src servers app drawing remote ;
-SubInclude HAIKU_TOP src servers app drawing html5 ;
+SubInclude HAIKU_TOP src servers app drawing interface ;

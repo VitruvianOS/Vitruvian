@@ -11,9 +11,9 @@
 
 class BPopUpMenu : public BMenu {
 public:
-								BPopUpMenu(const char* title,
+								BPopUpMenu(const char* name,
 									bool radioMode = true,
-									bool autoRename = true,
+									bool labelFromMarked = true,
 									menu_layout layout = B_ITEMS_IN_COLUMN);
 								BPopUpMenu(BMessage* data);
 	virtual						~BPopUpMenu();
@@ -43,7 +43,7 @@ public:
 									int32 form, const char* property);
 	virtual status_t			GetSupportedSuites(BMessage* data);
 
-	virtual status_t			Perform(perform_code code, void* data);
+	virtual status_t			Perform(perform_code code, void* _data);
 
 	virtual void				ResizeToPreferred();
 	virtual void				GetPreferredSize(float* _width,
@@ -52,7 +52,7 @@ public:
 	virtual void				AllAttached();
 	virtual void				AllDetached();
 
-			void				SetAsyncAutoDestruct(bool state);
+			void				SetAsyncAutoDestruct(bool on);
 			bool				AsyncAutoDestruct() const;
 
 protected:
@@ -66,13 +66,13 @@ protected:
 
 private:
 			BMenuItem*			_Go(BPoint where, bool autoInvoke,
-									bool startOpened, BRect* specialRect,
+									bool startOpened, BRect* _specialRect,
 									bool async);
 			BMenuItem*			_StartTrack(BPoint where, bool autoInvoke,
-									bool startOpened, BRect* specialRect);
-			BMenuItem*			_WaitMenu(void* data);
+									bool startOpened, BRect* _specialRect);
+			BMenuItem*			_WaitMenu(void* _data);
 
-	static	int32				_thread_entry(void* data);
+	static	int32				_thread_entry(void* menuData);
 
 private:
 			BPoint				fWhere;

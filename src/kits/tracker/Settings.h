@@ -31,8 +31,8 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef _SETTINGS_H_
-#define _SETTINGS_H_
+#ifndef _SETTINGS_H
+#define _SETTINGS_H
 
 
 #include <String.h>
@@ -86,8 +86,8 @@ class ScalarValueSetting : public SettingsArgvDispatcher {
 public:
 	ScalarValueSetting(const char* name, int32 defaultValue,
 		const char* valueExpectedErrorString,
-		const char* wrongValueErrorString, int32 min = LONG_MIN,
-		int32 max = LONG_MAX);
+		const char* wrongValueErrorString, int32 min = INT32_MIN,
+		int32 max = INT32_MAX);
 
 	void ValueChanged(int32 newValue);
 	int32 Value() const;
@@ -112,8 +112,8 @@ class HexScalarValueSetting : public ScalarValueSetting {
 public:
 	HexScalarValueSetting(const char* name, int32 defaultValue,
 		const char* valueExpectedErrorString,
-		const char* wrongValueErrorString, int32 min = LONG_MIN,
-		int32 max = LONG_MAX);
+		const char* wrongValueErrorString, int32 min = INT32_MIN,
+		int32 max = INT32_MAX);
 
 	void GetValueAsString(char* buffer) const;
 
@@ -138,4 +138,5 @@ protected:
 
 using namespace BPrivate;
 
-#endif	// _SETTINGS_H_
+
+#endif	// _SETTINGS_H

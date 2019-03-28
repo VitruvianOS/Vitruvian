@@ -37,7 +37,7 @@
 
 
 #define	MAX_SHADOW_PWD_NAME_LEN			(32)
-#define	MAX_SHADOW_PWD_PASSWORD_LEN		(128)
+#define	MAX_SHADOW_PWD_PASSWORD_LEN		(137)
 
 #define MAX_SHADOW_PWD_BUFFER_SIZE	(	\
 	MAX_SHADOW_PWD_NAME_LEN				\
@@ -89,6 +89,7 @@ public:
 
 
 port_id		get_registrar_authentication_port();
+void		set_registrar_authentication_port(port_id port);
 status_t	send_authentication_request_to_registrar(KMessage& request,
 				KMessage& reply);
 

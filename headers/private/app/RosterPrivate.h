@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2007, Haiku.
+ * Copyright 2001-2015, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -28,6 +28,15 @@ class BRoster::Private {
 		status_t SendTo(BMessage *message, BMessage *reply, bool mime);
 		bool IsMessengerValid(bool mime) const;
 
+		status_t Launch(const char* mimeType, const entry_ref* ref,
+					const BList* messageList, int argc, const char* const* args,
+					const char** environment, team_id* appTeam,
+					thread_id* appThread, port_id* appPort, uint32* appToken,
+					bool launchSuspended)
+			{ return fRoster->_LaunchApp(mimeType, ref, messageList, argc,
+					args, environment, appTeam, appThread, appPort, appToken,
+					launchSuspended); }
+
 		status_t ShutDown(bool reboot, bool confirm, bool synchronous)
 			{ return fRoster->_ShutDown(reboot, confirm, synchronous); }
 
@@ -51,6 +60,9 @@ class BRoster::Private {
 					uint32 token, bool *preRegistered, app_info *info) const
 			{ return fRoster->_IsAppRegistered(ref, team, token, preRegistered,
 					info); }
+
+		void SetWithoutRegistrar(bool noRegistrar) const
+			{ fRoster->_SetWithoutRegistrar(noRegistrar); }
 
 		status_t RemoveApp(team_id team) const
 			{ return fRoster->_RemoveApp(team); }

@@ -1,12 +1,13 @@
 /*
- * Copyright 2007, Haiku, Inc. All rights reserved.
+ * Copyright 2003-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
-
 #ifndef	_REGION_H
 #define	_REGION_H
 
+
 #include <Rect.h>
+
 
 namespace BPrivate {
 	class ServerLink;
@@ -26,15 +27,15 @@ typedef struct {
 class BRegion {
 public:
 								BRegion();
-								BRegion(const BRegion& region);
+								BRegion(const BRegion& other);
 								BRegion(const BRect rect);
 	virtual						~BRegion();
 
-			BRegion&			operator=(const BRegion& from);
+			BRegion&			operator=(const BRegion& other);
 			bool				operator==(const BRegion& other) const;
 
-			void				Set(BRect newBounds);
-			void				Set(clipping_rect newBounds);
+			void				Set(BRect rect);
+			void				Set(clipping_rect clipping);
 
 			BRect				Frame() const;
 			clipping_rect		FrameInt() const;
@@ -48,7 +49,7 @@ public:
 			int32				CountRects() const;
 
 			bool				Intersects(BRect rect) const;
-			bool				Intersects(clipping_rect rect) const;
+			bool				Intersects(clipping_rect clipping) const;
 
 			bool				Contains(BPoint point) const;
 			bool				Contains(int32 x, int32 y);
@@ -58,15 +59,17 @@ public:
 
 			void				OffsetBy(const BPoint& point);
 			void				OffsetBy(int32 x, int32 y);
+			void				ScaleBy(BSize scale);
+			void				ScaleBy(float x, float y);
 
 			void				MakeEmpty();
 
 			void				Include(BRect rect);
-			void				Include(clipping_rect rect);
+			void				Include(clipping_rect clipping);
 			void				Include(const BRegion* region);
 
-			void				Exclude(BRect r);
-			void				Exclude(clipping_rect r);
+			void				Exclude(BRect rect);
+			void				Exclude(clipping_rect clipping);
 			void				Exclude(const BRegion* region);
 
 			void				IntersectWith(const BRegion* region);
@@ -82,10 +85,10 @@ private:
 	friend class Support;
 
 private:
-								BRegion(const clipping_rect& rect);
+								BRegion(const clipping_rect& clipping);
 
 			void				_AdoptRegionData(BRegion& region);
-			bool				_SetSize(long newSize);
+			bool				_SetSize(int32 newSize);
 
 			clipping_rect		_Convert(const BRect& rect) const;
 			clipping_rect		_ConvertToInternal(const BRect& rect) const;
@@ -93,10 +96,11 @@ private:
 									const clipping_rect& rect) const;
 
 private:
-			long				fCount;
-			long				fDataSize;
+			int32				fCount;
+			int32				fDataSize;
 			clipping_rect		fBounds;
 			clipping_rect*		fData;
 };
+
 
 #endif // _REGION_H

@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2011, Haiku.
+ * Copyright 2001-2016, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -10,6 +10,7 @@
  *		Brecht Machiels <brecht@mos6581.org>
  *		Clemens Zeidler <haiku@clemens-zeidler.de>
  *		Ingo Weinhold <ingo_weinhold@gmx.de>
+ *		Joseph Groover <looncraz@looncraz.net>
  */
 
 
@@ -17,6 +18,7 @@
 
 
 #include "Desktop.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
@@ -184,9 +186,10 @@ KeyboardFilter::Filter(BMessage* message, EventTarget** _target,
 	message->FindInt32("modifiers", &modifiers);
 
 	if ((message->what == B_KEY_DOWN || message->what == B_UNMAPPED_KEY_DOWN)) {
-		// Check for safe video mode (cmd + ctrl + escape)
+		// Check for safe video mode (shift + cmd + ctrl + escape)
 		if (key == 0x01 && (modifiers & B_COMMAND_KEY) != 0
-			&& (modifiers & B_CONTROL_KEY) != 0) {
+			&& (modifiers & B_CONTROL_KEY) != 0
+			&& (modifiers & B_SHIFT_KEY) != 0) {
 			system("screenmode --fall-back &");
 			return B_SKIP_MESSAGE;
 		}
@@ -203,7 +206,7 @@ KeyboardFilter::Filter(BMessage* message, EventTarget** _target,
 			if ((modifiers & B_CONTROL_KEY) != 0)
 #endif
 			{
-				STRACE(("Set Workspace %ld\n", key - 1));
+				STRACE(("Set Workspace %" B_PRId32 "\n", key - 1));
 
 				fDesktop->SetWorkspaceAsync(key - B_F1_KEY, takeWindow);
 				return B_SKIP_MESSAGE;
@@ -479,6 +482,8 @@ Desktop::RegisterListener(DesktopListener* listener)
 }
 
 
+/*!	This method is allowed to throw exceptions.
+*/
 status_t
 Desktop::Init()
 {
@@ -574,12 +579,40 @@ Desktop::BroadcastToAllApps(int32 code)
 void
 Desktop::BroadcastToAllWindows(int32 code)
 {
-	AutoWriteLocker _(fWindowLock);
+	AutoReadLocker _(fWindowLock);
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
 		window->ServerWindow()->PostMessage(code);
 	}
+}
+
+
+int32
+Desktop::GetAllWindowTargets(DelayedMessage& message)
+{
+	AutoReadLocker _(fWindowLock);
+	int32 count = 0;
+
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		message.AddTarget(window->ServerWindow()->MessagePort());
+		++count;
+	}
+
+	return count;
+}
+
+
+int32
+Desktop::GetAllAppTargets(DelayedMessage& message)
+{
+	BAutolock _(fApplicationsLock);
+
+	for (int32 index = 0; index < fApplications.CountItems(); ++index)
+		message.AddTarget(fApplications.ItemAt(index)->MessagePort());
+
+	return fApplications.CountItems();
 }
 
 
@@ -1017,7 +1050,7 @@ Desktop::RemoveWorkspacesView(WorkspacesView* view)
 void
 Desktop::SelectWindow(Window* window)
 {
-	if (fSettings->MouseMode() == B_CLICK_TO_FOCUS_MOUSE) {
+	if (fSettings->ClickToFocusMouse()) {
 		// Only bring the window to front when it is not the window under the
 		// mouse pointer. This should result in sensible behaviour.
 		if (window != fWindowUnderMouse
@@ -1051,7 +1084,7 @@ Desktop::ActivateWindow(Window* window)
 	if (window->Workspaces() == 0 && window->IsNormal())
 		return;
 
-	AutoWriteLocker _(fWindowLock);
+	AutoWriteLocker allWindowLocker(fWindowLock);
 
 	NotifyWindowActivated(window);
 
@@ -1123,6 +1156,7 @@ Desktop::ActivateWindow(Window* window)
 
 	WindowList windows(kWorkingList);
 	Window* frontmost = window->Frontmost();
+	const Window* lastWindowUnderMouse = fWindowUnderMouse;
 
 	CurrentWindows().RemoveWindow(window);
 	windows.AddWindow(window);
@@ -1152,6 +1186,13 @@ Desktop::ActivateWindow(Window* window)
 
 	if ((window->Flags() & B_AVOID_FOCUS) == 0)
 		SetFocusWindow(window);
+
+	bool sendFakeMouseMoved = _CheckSendFakeMouseMoved(lastWindowUnderMouse);
+
+	allWindowLocker.Unlock();
+
+	if (sendFakeMouseMoved)
+		_SendFakeMouseMoved();
 }
 
 
@@ -1184,6 +1225,7 @@ Desktop::SendWindowBehind(Window* window, Window* behindOf, bool sendStack)
 	BRegion dirty(window->VisibleRegion());
 
 	Window* backmost = window->Backmost(behindOf);
+	const Window* lastWindowUnderMouse = fWindowUnderMouse;
 
 	CurrentWindows().RemoveWindow(window);
 	CurrentWindows().AddWindow(window, backmost
@@ -1201,14 +1243,10 @@ Desktop::SendWindowBehind(Window* window, Window* behindOf, bool sendStack)
 	}
 
 	_UpdateFronts();
-	if (fSettings->MouseMode() == B_FOCUS_FOLLOWS_MOUSE)
+	if (fSettings->FocusFollowsMouse())
 		SetFocusWindow(WindowAt(fLastMousePosition));
-	else if (fSettings->MouseMode() == B_NORMAL_MOUSE)
+	else if (fSettings->NormalMouse())
 		SetFocusWindow(NULL);
-
-	bool sendFakeMouseMoved = false;
-	if (FocusWindow() != window)
-		sendFakeMouseMoved = true;
 
 	_WindowChanged(window);
 
@@ -1221,6 +1259,7 @@ Desktop::SendWindowBehind(Window* window, Window* behindOf, bool sendStack)
 		}
 	}
 
+	bool sendFakeMouseMoved = _CheckSendFakeMouseMoved(lastWindowUnderMouse);
 	NotifyWindowSentBehind(orgWindow, behindOf);
 
 	UnlockAllWindows();
@@ -1556,7 +1595,7 @@ Desktop::SetWindowWorkspaces(Window* window, uint32 workspaces)
 
 
 /*!	\brief Adds the window to the desktop.
-	At this point, the window is still hidden and must be shown explicetly
+	At this point, the window is still hidden and must be shown explicitly
 	via ShowWindow().
 */
 void
@@ -1637,6 +1676,31 @@ Desktop::FontsChanged(Window* window)
 	BRegion dirty;
 	window->FontsChanged(&dirty);
 
+	RebuildAndRedrawAfterWindowChange(window, dirty);
+}
+
+
+void
+Desktop::ColorUpdated(Window* window, color_which which, rgb_color color)
+{
+	AutoWriteLocker _(fWindowLock);
+
+	window->TopView()->ColorUpdated(which, color);
+
+	switch (which) {
+		case B_WINDOW_TAB_COLOR:
+		case B_WINDOW_TEXT_COLOR:
+		case B_WINDOW_INACTIVE_TAB_COLOR:
+		case B_WINDOW_INACTIVE_TEXT_COLOR:
+		case B_WINDOW_BORDER_COLOR:
+		case B_WINDOW_INACTIVE_BORDER_COLOR:
+			break;
+		default:
+			return;
+	}
+
+	BRegion dirty;
+	window->ColorsChanged(&dirty);
 	RebuildAndRedrawAfterWindowChange(window, dirty);
 }
 
@@ -1868,24 +1932,24 @@ Desktop::KeyboardEventTarget()
 	is any window at all, that is.
 */
 void
-Desktop::SetFocusWindow(Window* focus)
+Desktop::SetFocusWindow(Window* nextFocus)
 {
 	if (!LockAllWindows())
 		return;
 
 	// test for B_LOCK_WINDOW_FOCUS
-	if (fLockedFocusWindow && focus != fLockedFocusWindow) {
+	if (fLockedFocusWindow && nextFocus != fLockedFocusWindow) {
 		UnlockAllWindows();
 		return;
 	}
 
-	bool hasModal = _WindowHasModal(focus);
+	bool hasModal = _WindowHasModal(nextFocus);
 	bool hasWindowScreen = false;
 
-	if (!hasModal && focus != NULL) {
+	if (!hasModal && nextFocus != NULL) {
 		// Check whether or not a window screen is in front of the window
 		// (if it has a modal, the right thing is done, anyway)
-		Window* window = focus;
+		Window* window = nextFocus;
 		while (true) {
 			window = window->NextWindow(fCurrentWorkspace);
 			if (window == NULL || window->Feel() == kWindowScreenFeel)
@@ -1895,35 +1959,41 @@ Desktop::SetFocusWindow(Window* focus)
 			hasWindowScreen = true;
 	}
 
-	if (focus == fFocus && focus != NULL && !focus->IsHidden()
-		&& (focus->Flags() & B_AVOID_FOCUS) == 0
+	if (nextFocus == fFocus && nextFocus != NULL && !nextFocus->IsHidden()
+		&& (nextFocus->Flags() & B_AVOID_FOCUS) == 0
 		&& !hasModal && !hasWindowScreen) {
 		// the window that is supposed to get focus already has focus
 		UnlockAllWindows();
 		return;
 	}
 
-	uint32 list = /*fCurrentWorkspace;
-	if (fSettings->FocusFollowsMouse())
-		list = */kFocusList;
+	uint32 listIndex = fCurrentWorkspace;
+	WindowList* list = &_Windows(fCurrentWorkspace);
+	if (!fSettings->NormalMouse()) {
+		listIndex = kFocusList;
+		list = &fFocusList;
+	}
 
-	if (focus == NULL || hasModal || hasWindowScreen) {
-		/*if (!fSettings->FocusFollowsMouse())
-			focus = CurrentWindows().LastWindow();
-		else*/
-			focus = fFocusList.LastWindow();
+	if (nextFocus == NULL || hasModal || hasWindowScreen) {
+		nextFocus = list->LastWindow();
+
+		if (fSettings->NormalMouse()) {
+			// If the last window having focus is a window that cannot make it
+			// to the front, we use that as the next focus
+			Window* lastFocus = fFocusList.LastWindow();
+			if (lastFocus != NULL && !lastFocus->SupportsFront()
+				&& _WindowCanHaveFocus(lastFocus)) {
+				nextFocus = lastFocus;
+			}
+		}
 	}
 
 	// make sure no window is chosen that doesn't want focus or cannot have it
-	while (focus != NULL
-		&& (!focus->InWorkspace(fCurrentWorkspace)
-			|| (focus->Flags() & B_AVOID_FOCUS) != 0
-			|| _WindowHasModal(focus)
-			|| focus->IsHidden())) {
-		focus = focus->PreviousWindow(list);
+	while (nextFocus != NULL && !_WindowCanHaveFocus(nextFocus)) {
+		nextFocus = nextFocus->PreviousWindow(listIndex);
 	}
 
-	if (fFocus == focus) {
+	if (fFocus == nextFocus) {
 		// turns out the window that is supposed to get focus now already has it
 		UnlockAllWindows();
 		return;
@@ -1937,7 +2007,7 @@ Desktop::SetFocusWindow(Window* focus)
 		oldActiveApp = fFocus->ServerWindow()->App()->ClientTeam();
 	}
 
-	fFocus = focus;
+	fFocus = nextFocus;
 
 	if (fFocus != NULL) {
 		fFocus->SetFocus(true);
@@ -2050,7 +2120,7 @@ Desktop::RedrawBackground()
 	BRegion redraw;
 
 	Window* window = CurrentWindows().FirstWindow();
-	if (window->Feel() == kDesktopWindowFeel) {
+	if (window != NULL && window->Feel() == kDesktopWindowFeel) {
 		redraw = window->VisibleContentRegion();
 
 		// look for desktop background view, and update its background color
@@ -2059,7 +2129,7 @@ Desktop::RedrawBackground()
 		if (view != NULL)
 			view = view->FirstChild();
 
-		while (view) {
+		while (view != NULL) {
 			if (view->IsDesktopBackground()) {
 				view->SetViewColor(fWorkspaces[fCurrentWorkspace].Color());
 				break;
@@ -2472,10 +2542,16 @@ Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (link.ReadString(&appSignature) != B_OK)
 				break;
 
-			ServerApp* app = new ServerApp(this, clientReplyPort,
+			ServerApp* app = new (std::nothrow) ServerApp(this, clientReplyPort,
 				clientLooperPort, clientTeamID, htoken, appSignature);
-			if (app->InitCheck() == B_OK
-				&& app->Run()) {
+			status_t status = B_OK;
+			if (app == NULL)
+				status = B_NO_MEMORY;
+			if (status == B_OK)
+				status = app->InitCheck();
+			if (status == B_OK)
+				status = app->Run();
+			if (status == B_OK) {
 				// add the new ServerApp to the known list of ServerApps
 				fApplicationsLock.Lock();
 				fApplications.AddItem(app);
@@ -2486,7 +2562,7 @@ Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				// if everything went well, ServerApp::Run() will notify
 				// the client - but since it didn't, we do it here
 				BPrivate::LinkSender reply(clientReplyPort);
-				reply.StartMessage(B_ERROR);
+				reply.StartMessage(status);
 				reply.Flush();
 			}
 
@@ -2642,6 +2718,56 @@ Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
+		case AS_SET_UI_COLOR:
+		{
+			color_which which;
+			rgb_color color;
+
+			if (link.Read<color_which>(&which) == B_OK
+					&& link.Read<rgb_color>(&color) == B_OK) {
+
+				const char* colorName = ui_color_name(which);
+				fPendingColors.SetColor(colorName, color);
+
+				DelayedMessage delayed(AS_SET_UI_COLORS, DM_60HZ_DELAY);
+				delayed.AddTarget(MessagePort());
+				delayed.SetMerge(DM_MERGE_CANCEL);
+
+				delayed.Attach<bool>(true);
+				delayed.Flush();
+			}
+
+			break;
+		}
+
+		case AS_SET_UI_COLORS:
+		{
+			bool flushPendingOnly = false;
+
+			if (link.Read<bool>(&flushPendingOnly) != B_OK
+				|| (flushPendingOnly &&
+						fPendingColors.CountNames(B_RGB_32_BIT_TYPE) == 0)) {
+				break;
+			}
+
+			if (!flushPendingOnly) {
+				// Client wants to set a color map
+				color_which which = B_NO_COLOR;
+				rgb_color color;
+
+				do {
+					if (link.Read<color_which>(&which) != B_OK
+						|| link.Read<rgb_color>(&color) != B_OK)
+						break;
+
+					fPendingColors.SetColor(ui_color_name(which), color);
+				} while (which != B_NO_COLOR);
+			}
+
+			_FlushPendingColors();
+			break;
+		}
+
 		// ToDo: Remove this again. It is a message sent by the
 		// invalidate_on_exit kernel debugger add-on to trigger a redraw
 		// after exiting a kernel debugger session.
@@ -2654,8 +2780,8 @@ Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		}
 
 		default:
-			printf("Desktop %d:%s received unexpected code %ld\n", 0, "baron",
-				code);
+			printf("Desktop %d:%s received unexpected code %" B_PRId32 "\n", 0,
+				"baron", code);
 
 			if (link.NeedsReply()) {
 				// the client is now blocking and waiting for a reply!
@@ -2698,7 +2824,56 @@ Desktop::WindowForClientLooperPort(port_id port)
 WindowList&
 Desktop::_Windows(int32 index)
 {
+	ASSERT(index >= 0 && index < kMaxWorkspaces);
 	return fWorkspaces[index].Windows();
+}
+
+
+void
+Desktop::_FlushPendingColors()
+{
+	// Update all windows while we are holding the write lock.
+
+	int32 count = fPendingColors.CountNames(B_RGB_32_BIT_TYPE);
+	if (count == 0)
+		return;
+
+	bool changed[count];
+	LockedDesktopSettings settings(this);
+	settings.SetUIColors(fPendingColors, &changed[0]);
+
+	int32 index = 0;
+	char* name = NULL;
+	type_code type = B_RGB_32_BIT_TYPE;
+	rgb_color color;
+	color_which which = B_NO_COLOR;
+	BMessage clientMessage(B_COLORS_UPDATED);
+
+	while (fPendingColors.GetInfo(type, index, &name, &type) == B_OK) {
+		which = which_ui_color(name);
+		if (which == B_NO_COLOR || fPendingColors.FindColor(name,
+				&color) != B_OK || !changed[index]) {
+			++index;
+			continue;
+		}
+
+		for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+				window = window->NextWindow(kAllWindowList)) {
+			ColorUpdated(window, which, color);
+		}
+
+		// Ensure client only gets list of changed colors
+		clientMessage.AddColor(name, color);
+		++index;
+	}
+
+	// Notify client applications
+	BAutolock appListLock(fApplicationsLock);
+	for (int32 index = 0; index < fApplications.CountItems(); ++index) {
+		fApplications.ItemAt(index)->SendMessageToClient(&clientMessage);
+	}
+
+	fPendingColors.MakeEmpty();
 }
 
 
@@ -2811,7 +2986,7 @@ Desktop::_UpdateFronts(bool updateFloating)
 
 
 bool
-Desktop::_WindowHasModal(Window* window)
+Desktop::_WindowHasModal(Window* window) const
 {
 	if (window == NULL)
 		return false;
@@ -2827,6 +3002,19 @@ Desktop::_WindowHasModal(Window* window)
 	}
 
 	return false;
+}
+
+
+/*!	Determines whether or not the specified \a window can have focus at all.
+*/
+bool
+Desktop::_WindowCanHaveFocus(Window* window) const
+{
+	return window != NULL
+		&& window->InWorkspace(fCurrentWorkspace)
+		&& (window->Flags() & B_AVOID_FOCUS) == 0
+		&& !_WindowHasModal(window)
+		&& !window->IsHidden();
 }
 
 
@@ -3038,8 +3226,7 @@ Desktop::_ChangeWindowWorkspaces(Window* window, uint32 oldWorkspaces,
 
 
 void
-Desktop::_BringWindowsToFront(WindowList& windows, int32 list,
-	bool wereVisible)
+Desktop::_BringWindowsToFront(WindowList& windows, int32 list, bool wereVisible)
 {
 	// we don't need to redraw what is currently
 	// visible of the window
@@ -3098,11 +3285,27 @@ Desktop::_LastFocusSubsetWindow(Window* window)
 }
 
 
+/*!	\brief Checks whether or not a fake mouse moved message needs to be sent
+	to the previous mouse window.
+
+	You need to have the all window lock held when calling this method.
+*/
+bool
+Desktop::_CheckSendFakeMouseMoved(const Window* lastWindowUnderMouse)
+{
+	Window* window = WindowAt(fLastMousePosition);
+	return window != lastWindowUnderMouse;
+}
+
+
 /*!	\brief Sends a fake B_MOUSE_MOVED event to the window under the mouse,
 		and also updates the current view under the mouse.
 
-	This has only to be done in case the view changed without user interaction,
-	ie. because of a workspace change or a closing window.
+	This has only to be done in case the view changed without mouse movement,
+	ie. because of a workspace change, a closing window, or programmatic window
+	movement.
+
+	You must not have locked any windows when calling this method.
 */
 void
 Desktop::_SendFakeMouseMoved(Window* window)
@@ -3112,8 +3315,6 @@ Desktop::_SendFakeMouseMoved(Window* window)
 
 	LockAllWindows();
 
-	if (window == NULL)
-		window = MouseEventWindow();
 	if (window == NULL)
 		window = WindowAt(fLastMousePosition);
 
@@ -3293,6 +3494,19 @@ Desktop::_ResumeDirectFrameBufferAccess()
 
 
 void
+Desktop::ScreenChanged(Screen* screen)
+{
+	AutoWriteLocker windowLocker(fWindowLock);
+
+	AutoWriteLocker screenLocker(fScreenLock);
+	screen->SetPreferredMode();
+	screenLocker.Unlock();
+
+	_ScreenChanged(screen);
+}
+
+
+void
 Desktop::_ScreenChanged(Screen* screen)
 {
 	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
@@ -3380,8 +3594,8 @@ Desktop::_SetCurrentWorkspaceConfiguration()
 	if (status != B_OK) {
 		// The application having the direct screen lock didn't give it up in
 		// time, make it crash
-		syslog(LOG_ERR, "Team %ld did not give up its direct screen lock.\n",
-			fDirectScreenTeam);
+		syslog(LOG_ERR, "Team %" B_PRId32 " did not give up its direct screen "
+			"lock.\n", fDirectScreenTeam);
 
 		debug_thread(fDirectScreenTeam);
 		fDirectScreenTeam = -1;

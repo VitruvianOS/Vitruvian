@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2010, Haiku, Inc. All rights reserved.
+ * Copyright 2005-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _DATA_IO_H
@@ -14,14 +14,20 @@ public:
 								BDataIO();
 	virtual						~BDataIO();
 
-	virtual	ssize_t				Read(void* buffer, size_t size) = 0;
-	virtual	ssize_t				Write(const void* buffer, size_t size) = 0;
+	virtual	ssize_t				Read(void* buffer, size_t size);
+	virtual	ssize_t				Write(const void* buffer, size_t size);
+
+	virtual	status_t			Flush();
+
+			status_t			ReadExactly(void* buffer, size_t size,
+									size_t* _bytesRead = NULL);
+			status_t			WriteExactly(const void* buffer, size_t size,
+									size_t* _bytesWritten = NULL);
 
 private:
 								BDataIO(const BDataIO&);
 			BDataIO&			operator=(const BDataIO&);
 
-	virtual	void				_ReservedDataIO1();
 	virtual	void				_ReservedDataIO2();
 	virtual	void				_ReservedDataIO3();
 	virtual	void				_ReservedDataIO4();
@@ -53,6 +59,12 @@ public:
 									size_t size) = 0;
 	virtual	ssize_t				WriteAt(off_t position, const void* buffer,
 									size_t size) = 0;
+
+			status_t			ReadAtExactly(off_t position, void* buffer,
+									size_t size, size_t* _bytesRead = NULL);
+			status_t			WriteAtExactly(off_t position,
+									const void* buffer, size_t size,
+									size_t* _bytesWritten = NULL);
 
 	virtual	off_t				Seek(off_t position, uint32 seekMode) = 0;
 	virtual	off_t				Position() const = 0;

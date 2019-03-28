@@ -15,11 +15,13 @@ class BBitmap;
 
 // We must not include the icu headers in there as it could mess up binary
 // compatibility.
-namespace icu_57 {
+#ifndef U_ICU_NAMESPACE
+  #define U_ICU_NAMESPACE icu
+#endif
+namespace U_ICU_NAMESPACE {
 	class Locale;
 }
 
-namespace icu = icu_57;
 
 enum script_direction {
 	B_LEFT_TO_RIGHT = 0,
@@ -65,7 +67,7 @@ private:
 	friend	class Private;
 
 			uint8				fDirection;
-			icu::Locale*		fICULocale;
+			U_ICU_NAMESPACE::Locale*		fICULocale;
 };
 
 

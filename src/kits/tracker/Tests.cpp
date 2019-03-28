@@ -43,6 +43,7 @@ All rights reserved.
 #include <String.h>
 #include <Window.h>
 
+#include <directories.h>
 
 #include "EntryIterator.h"
 #include "IconCache.h"
@@ -54,13 +55,9 @@ All rights reserved.
 
 const char* pathsToSearch[] = {
 //	"/boot/home/config/settings/NetPositive/Bookmarks/",
-#ifdef __HAIKU__
-	"/boot/system",
-#else
-	"/boot/beos",
-#endif
-	"/boot/apps",
-	"/boot/home",
+	kSystemDirectory,
+	kAppsDirectory,
+	kUserDirectory,
 	0
 };
 
@@ -110,15 +107,19 @@ private:
 }	// namespace BTrackerPrivate
 
 
+//	#pragma mark - IconSpewer
+
+
 IconSpewer::IconSpewer(bool newCache)
-	:	quitting(false),
-		cachingIterator(0),
-		searchPathIndex(0),
-		cycleTime(0),
-		lastCycleLap(0),
-		numDrawn(0),
-		watch("", true),
-		newCache(newCache)
+	:
+	quitting(false),
+	cachingIterator(0),
+	searchPathIndex(0),
+	cycleTime(0),
+	lastCycleLap(0),
+	numDrawn(0),
+	watch("", true),
+	newCache(newCache)
 {
 	walker = new TNodeWalker(pathsToSearch[searchPathIndex++]);
 	if (newCache)
@@ -179,12 +180,12 @@ IconSpewer::DrawSomeNew()
 	view->SetHighColor(Color(0, 0, 0));
 	char buffer[256];
 	if (cycleTime) {
-		sprintf(buffer, "last cycle time %Ld ms", cycleTime/1000);
+		sprintf(buffer, "last cycle time %" B_PRId64 " ms", cycleTime/1000);
 		view->DrawString(buffer, BPoint(20, bounds.bottom - 20));
 	}
 
 	if (numDrawn) {
-		sprintf(buffer, "average draw time %Ld us per icon",
+		sprintf(buffer, "average draw time %" B_PRId64 " us per icon",
 			watch.ElapsedTime() / numDrawn);
 		view->DrawString(buffer, BPoint(20, bounds.bottom - 30));
 	}
@@ -310,13 +311,14 @@ IconSpewer::NextRef()
 }
 
 
-//	#pragma mark -
+//	#pragma mark - IconTestWindow
 
 
 IconTestWindow::IconTestWindow()
-	:	BWindow(BRect(100, 100, 500, 600), "icon cache test",
-			B_TITLED_WINDOW_LOOK, B_NORMAL_WINDOW_FEEL, 0),
-		iconSpewer(modifiers() == 0)
+	:
+	BWindow(BRect(100, 100, 500, 600), "icon cache test",
+		B_TITLED_WINDOW_LOOK, B_NORMAL_WINDOW_FEEL, 0),
+	iconSpewer(modifiers() == 0)
 {
 	iconSpewer.SetTarget(this);
 	BView* view = new BView(Bounds(), "iconView", B_FOLLOW_ALL, B_WILL_DRAW);
@@ -339,4 +341,4 @@ RunIconCacheTests()
 	(new IconTestWindow())->Show();
 }
 
-#endif
+#endif	// DEBUG

@@ -96,14 +96,16 @@ public:
 
 	GlyphCache* CacheGlyph(uint32 glyphIndex,
 		uint32 dataSize, glyph_data_type dataType, const agg::rect_i& bounds,
-		float advanceX, float advanceY, float insetLeft, float insetRight)
+		float advanceX, float advanceY, float preciseAdvanceX,
+		float preciseAdvanceY, float insetLeft, float insetRight)
 	{
 		GlyphCache* glyph = fGlyphTable.Lookup(glyphIndex);
 		if (glyph != NULL)
 			return NULL;
 
 		glyph = new(std::nothrow) GlyphCache(glyphIndex, dataSize, dataType,
-			bounds, advanceX, advanceY, insetLeft, insetRight);
+			bounds, advanceX, advanceY, preciseAdvanceX, preciseAdvanceY,
+			insetLeft, insetRight);
 		if (glyph == NULL || glyph->data == NULL) {
 			delete glyph;
 			return NULL;
@@ -146,12 +148,12 @@ FontCacheEntry::~FontCacheEntry()
 
 
 bool
-FontCacheEntry::Init(const ServerFont& font)
+FontCacheEntry::Init(const ServerFont& font, bool forceVector)
 {
 	if (fGlyphCache == NULL)
 		return false;
 
-	glyph_rendering renderingType = _RenderTypeFor(font);
+	glyph_rendering renderingType = _RenderTypeFor(font, forceVector);
 
 	// TODO: encoding from font
 	FT_Encoding charMap = FT_ENCODING_NONE;
@@ -293,7 +295,7 @@ FontCacheEntry::CreateGlyph(uint32 glyphCode, FontCacheEntry* fallbackEntry)
 		if (render_as_zero_width(glyphCode)) {
 			// cache and return a zero width glyph
 			return fGlyphCache->CacheGlyph(glyphCode, 0, glyph_data_invalid,
-				agg::rect_i(0, 0, -1, -1), 0, 0, 0, 0);
+				agg::rect_i(0, 0, -1, -1), 0, 0, 0, 0, 0, 0);
 		}
 
 		// reset to our engine
@@ -302,7 +304,8 @@ FontCacheEntry::CreateGlyph(uint32 glyphCode, FontCacheEntry* fallbackEntry)
 			// get the normal space glyph
 			glyphIndex = engine->GlyphIndexForGlyphCode(0x20 /* space */);
 		} else {
-			// render the "missing glyph box" (by simply keeping glyphIndex 0)
+			// The glyph was not found anywhere.
+			return NULL;
 		}
 	}
 
@@ -310,6 +313,7 @@ FontCacheEntry::CreateGlyph(uint32 glyphCode, FontCacheEntry* fallbackEntry)
 		glyph = fGlyphCache->CacheGlyph(glyphCode,
 			engine->DataSize(), engine->DataType(), engine->Bounds(),
 			engine->AdvanceX(), engine->AdvanceY(),
+			engine->PreciseAdvanceX(), engine->PreciseAdvanceY(),
 			engine->InsetLeft(), engine->InsetRight());
 
 		if (glyph != NULL)
@@ -326,7 +330,7 @@ FontCacheEntry::InitAdaptors(const GlyphCache* glyph,
 	GlyphGray8Adapter& gray8Adapter, GlyphPathAdapter& pathAdapter,
 	double scale)
 {
-	if (!glyph)
+	if (glyph == NULL)
 		return;
 
 	switch(glyph->data_type) {
@@ -362,16 +366,16 @@ FontCacheEntry::GetKerning(uint32 glyphCode1, uint32 glyphCode2,
 
 /*static*/ void
 FontCacheEntry::GenerateSignature(char* signature, size_t signatureSize,
-	const ServerFont& font)
+	const ServerFont& font, bool forceVector)
 {
-	glyph_rendering renderingType = _RenderTypeFor(font);
+	glyph_rendering renderingType = _RenderTypeFor(font, forceVector);
 
 	// TODO: read more of these from the font
 	FT_Encoding charMap = FT_ENCODING_NONE;
 	bool hinting = font.Hinting();
 	uint8 averageWeight = gSubpixelAverageWeight;
 
-	snprintf(signature, signatureSize, "%ld,%u,%d,%d,%.1f,%d,%d",
+	snprintf(signature, signatureSize, "%" B_PRId32 ",%u,%d,%d,%.1f,%d,%d",
 		font.GetFamilyAndStyle(), charMap,
 		font.Face(), int(renderingType), font.Size(), hinting, averageWeight);
 }
@@ -393,12 +397,12 @@ FontCacheEntry::UpdateUsage()
 
 
 /*static*/ glyph_rendering
-FontCacheEntry::_RenderTypeFor(const ServerFont& font)
+FontCacheEntry::_RenderTypeFor(const ServerFont& font, bool forceVector)
 {
 	glyph_rendering renderingType = gSubpixelAntialiasing ?
 		glyph_ren_subpix : glyph_ren_native_gray8;
 
-	if (font.Rotation() != 0.0 || font.Shear() != 90.0
+	if (forceVector || font.Rotation() != 0.0 || font.Shear() != 90.0
 		|| font.FalseBoldWidth() != 0.0
 		|| (font.Flags() & B_DISABLE_ANTIALIASING) != 0
 		|| font.Size() > 30

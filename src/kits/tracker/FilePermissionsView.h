@@ -31,8 +31,8 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef FILE_PERMISSIONS_VIEW_H
-#define FILE_PERMISSIONS_VIEW_H
+#ifndef _FILE_PERMISSIONS_VIEW_H
+#define _FILE_PERMISSIONS_VIEW_H
 
 
 #include <CheckBox.h>
@@ -42,25 +42,6 @@ All rights reserved.
 
 
 namespace BPrivate {
-
-class FocusCheckBox : public BCheckBox {
-	public:
-		FocusCheckBox(BRect rect, const char* name, const char* label,
-			BMessage* message)
-			:	BCheckBox(rect, name, label, message)
-			{
-			}
-
-		virtual void Draw(BRect rect)
-		{
-			BCheckBox::Draw(rect);
-
-			if (IsFocus()) {
-				SetHighColor(0, 0, 255);
-				StrokeRect(BRect(2 , 4, 12, 14));
-			}
-		}
-};
 
 
 class FilePermissionsView : public BView {
@@ -76,17 +57,17 @@ class FilePermissionsView : public BView {
 	private:
 		Model* fModel;
 
-		FocusCheckBox* fReadUserCheckBox;
-		FocusCheckBox* fReadGroupCheckBox;
-		FocusCheckBox* fReadOtherCheckBox;
+		BCheckBox* fReadUserCheckBox;
+		BCheckBox* fReadGroupCheckBox;
+		BCheckBox* fReadOtherCheckBox;
 
-		FocusCheckBox* fWriteUserCheckBox;
-		FocusCheckBox* fWriteGroupCheckBox;
-		FocusCheckBox* fWriteOtherCheckBox;
+		BCheckBox* fWriteUserCheckBox;
+		BCheckBox* fWriteGroupCheckBox;
+		BCheckBox* fWriteOtherCheckBox;
 
-		FocusCheckBox* fExecuteUserCheckBox;
-		FocusCheckBox* fExecuteGroupCheckBox;
-		FocusCheckBox* fExecuteOtherCheckBox;
+		BCheckBox* fExecuteUserCheckBox;
+		BCheckBox* fExecuteGroupCheckBox;
+		BCheckBox* fExecuteOtherCheckBox;
 
 		BTextControl* fOwnerTextControl;
 		BTextControl* fGroupTextControl;
@@ -94,9 +75,9 @@ class FilePermissionsView : public BView {
 		typedef BView _inherited;
 };
 
-
 } // namespace BPrivate
 
 using namespace BPrivate;
 
-#endif	// FILE_PERMISSIONS_VIEW_H
+
+#endif	// _FILE_PERMISSIONS_VIEW_H

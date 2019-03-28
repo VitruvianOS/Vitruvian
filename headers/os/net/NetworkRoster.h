@@ -8,7 +8,7 @@
 
 #include <Locker.h>
 #include <NetworkNotifications.h>
-
+#include <ObjectList.h>
 
 class BMessenger;
 class BNetworkInterface;

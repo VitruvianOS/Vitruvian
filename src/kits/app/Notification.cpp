@@ -1,10 +1,11 @@
 /*
- * Copyright 2010, Haiku, Inc. All Rights Reserved.
+ * Copyright 2010-2017, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Pier Luigi Fiorini, pierluigi.fiorini@gmail.com
  *		Stephan Aßmus, superstippi@gmx.de
+ *		Brian Hill, supernova@tycho.email
  */
 
 
@@ -19,6 +20,9 @@
 
 #include <Bitmap.h>
 #include <Message.h>
+#include <NodeInfo.h>
+#include <Path.h>
+#include <Roster.h>
 
 
 BNotification::BNotification(notification_type type)
@@ -30,7 +34,26 @@ BNotification::BNotification(notification_type type)
 	fFile(NULL),
 	fBitmap(NULL)
 {
+	team_info teamInfo;
+	get_team_info(B_CURRENT_TEAM, &teamInfo);
+	app_info appInfo;
+	be_roster->GetRunningAppInfo(teamInfo.team, &appInfo);
+
+	int32 iconSize = B_LARGE_ICON;
+	fBitmap = new BBitmap(BRect(0, 0, iconSize - 1, iconSize - 1), 0, B_RGBA32);
+	if (fBitmap) {
+		if (BNodeInfo::GetTrackerIcon(&appInfo.ref, fBitmap,
+			icon_size(iconSize)) != B_OK) {
+			delete fBitmap;
+			fBitmap = NULL;
+		}
+	}
+	fSourceSignature = appInfo.signature;
+	BPath path(&appInfo.ref);
+	if (path.InitCheck() == B_OK)
+		fSourceName = path.Leaf();
 }
+
 
 BNotification::BNotification(BMessage* archive)
 	:
@@ -40,6 +63,14 @@ BNotification::BNotification(BMessage* archive)
 	fFile(NULL),
 	fBitmap(NULL)
 {
+	BString appName;
+	if (archive->FindString("_appname", &appName) == B_OK)
+		fSourceName = appName;
+
+	BString signature;
+	if (archive->FindString("_signature", &signature) == B_OK)
+		fSourceSignature = signature;
+
 	int32 type;
 	if (archive->FindInt32("_type", &type) == B_OK)
 		fType = (notification_type)type;
@@ -151,6 +182,12 @@ BNotification::Archive(BMessage* archive, bool deep) const
 	status_t status = BArchivable::Archive(archive, deep);
 
 	if (status == B_OK)
+		status = archive->AddString("_appname", fSourceName);
+
+	if (status == B_OK)
+		status = archive->AddString("_signature", fSourceSignature);
+
+	if (status == B_OK)
 		status = archive->AddInt32("_type", (int32)fType);
 
 	if (status == B_OK && Group() != NULL)
@@ -201,6 +238,28 @@ BNotification::Archive(BMessage* archive, bool deep) const
 	}
 
 	return status;
+}
+
+
+/*! \brief Returns source application signature.
+
+	\return Source application signature.
+*/
+const char*
+BNotification::SourceSignature() const
+{
+	return fSourceSignature;
+}
+
+
+/*! \brief Returns source application name.
+
+	\return Source application name.
+*/
+const char*
+BNotification::SourceName() const
+{
+	return fSourceName;
 }
 
 
@@ -407,7 +466,7 @@ BNotification::CountOnClickRefs() const
 const entry_ref*
 BNotification::OnClickRefAt(int32 index) const
 {
-	return (entry_ref*)fArgv.ItemAt(index);
+	return (entry_ref*)fRefs.ItemAt(index);
 }
 
 
@@ -450,7 +509,7 @@ BNotification::Icon() const
 /*! \brief Sets notification's icon.
 
 	Sets notification's icon.
-	This method takes ownership of @icon.
+	This method does not assume ownership of @icon.
 
 	\param icon Icon
 	\return
@@ -507,3 +566,13 @@ BNotification::Send(bigtime_t timeout)
 
 	return ret;
 }
+
+
+void BNotification::_ReservedNotification1() {}
+void BNotification::_ReservedNotification2() {}
+void BNotification::_ReservedNotification3() {}
+void BNotification::_ReservedNotification4() {}
+void BNotification::_ReservedNotification5() {}
+void BNotification::_ReservedNotification6() {}
+void BNotification::_ReservedNotification7() {}
+void BNotification::_ReservedNotification8() {}

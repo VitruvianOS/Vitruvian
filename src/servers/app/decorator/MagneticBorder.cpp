@@ -12,8 +12,8 @@
 #include "MagneticBorder.h"
 
 #include "Decorator.h"
-#include "../Window.h"
-#include "../Screen.h"
+#include "Window.h"
+#include "Screen.h"
 
 
 MagneticBorder::MagneticBorder()

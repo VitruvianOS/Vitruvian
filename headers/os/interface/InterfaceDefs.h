@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2008, Haiku, Inc. All rights reserved.
+ * Copyright 2001-2015, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef	_INTERFACE_DEFS_H
@@ -11,6 +11,7 @@
 
 
 class BBitmap;
+class BMessage;
 class BPoint;
 class BRect;
 
@@ -26,11 +27,9 @@ class BRect;
 #define B_UTF8_TRADEMARK	"\xE2\x84\xA2"
 #define B_UTF8_SMILING_FACE	"\xE2\x98\xBB"
 #define B_UTF8_HIROSHI		"\xE5\xBC\x98"
-#ifdef COMPILE_FOR_R5
-	#define B_MAX_MOUSE_BUTTONS 3
-#else
-	#define B_MAX_MOUSE_BUTTONS 16
-#endif
+
+
+#define B_MAX_MOUSE_BUTTONS 16
 
 
 // Key definitions
@@ -63,9 +62,11 @@ enum {
 
 	B_FUNCTION_KEY		= 0x10,
 
-	// for Japanese keyboards
+	// for Japanese and Korean keyboards
 	B_KATAKANA_HIRAGANA	= 0xf2,
-	B_HANKAKU_ZENKAKU	= 0xf3
+	B_HANKAKU_ZENKAKU	= 0xf3,
+	B_HANGUL			= 0xf0,
+	B_HANGUL_HANJA		= 0xf1
 };
 
 enum {
@@ -228,17 +229,17 @@ enum vertical_alignment {
 
 
 enum {
-	B_USE_DEFAULT_SPACING = -2,
-	B_USE_ITEM_SPACING = -3,
-	B_USE_ITEM_INSETS = -3,
-	B_USE_HALF_ITEM_SPACING = -4,
-	B_USE_HALF_ITEM_INSETS = -4,
-	B_USE_WINDOW_INSETS = -5,
-	B_USE_WINDOW_SPACING = -5,
-	B_USE_SMALL_INSETS = -6,
-	B_USE_SMALL_SPACING = -6,
-	B_USE_BIG_INSETS = -7,
-	B_USE_BIG_SPACING = -7
+	B_USE_DEFAULT_SPACING = -1002,
+	B_USE_ITEM_SPACING = -1003,
+	B_USE_ITEM_INSETS = -1003,
+	B_USE_HALF_ITEM_SPACING = -1004,
+	B_USE_HALF_ITEM_INSETS = -1004,
+	B_USE_WINDOW_INSETS = -1005,
+	B_USE_WINDOW_SPACING = -1005,
+	B_USE_SMALL_INSETS = -1006,
+	B_USE_SMALL_SPACING = -1006,
+	B_USE_BIG_INSETS = -1007,
+	B_USE_BIG_SPACING = -1007
 };
 
 
@@ -259,6 +260,14 @@ enum cap_mode {
 };
 
 const float B_DEFAULT_MITER_LIMIT = 10.0F;
+
+
+// Polygon filling rules
+
+enum {
+	B_EVEN_ODD = 0,
+	B_NONZERO
+};
 
 
 // Bitmap and overlay constants
@@ -286,6 +295,7 @@ enum bitmap_drawing_options {
 // Default UI Colors
 
 enum color_which {
+	B_NO_COLOR = 0,
 	B_PANEL_BACKGROUND_COLOR = 1,
 	B_PANEL_TEXT_COLOR = 10,
 	B_DOCUMENT_BACKGROUND_COLOR = 11,
@@ -300,25 +310,31 @@ enum color_which {
 	B_SHINE_COLOR = 18,
 	B_SHADOW_COLOR = 19,
 
+	B_LINK_TEXT_COLOR = 33,
+	B_LINK_HOVER_COLOR = 34,
+	B_LINK_VISITED_COLOR = 35,
+	B_LINK_ACTIVE_COLOR = 36,
+
 	B_MENU_BACKGROUND_COLOR = 2,
 	B_MENU_SELECTED_BACKGROUND_COLOR = 6,
 	B_MENU_ITEM_TEXT_COLOR = 7,
 	B_MENU_SELECTED_ITEM_TEXT_COLOR = 8,
 	B_MENU_SELECTED_BORDER_COLOR = 9,
 
+	B_LIST_BACKGROUND_COLOR = 28,
+	B_LIST_SELECTED_BACKGROUND_COLOR = 29,
+	B_LIST_ITEM_TEXT_COLOR = 30,
+	B_LIST_SELECTED_ITEM_TEXT_COLOR = 31,
+
+	B_SCROLL_BAR_THUMB_COLOR = 32,
+
 	B_TOOL_TIP_BACKGROUND_COLOR = 20,
 	B_TOOL_TIP_TEXT_COLOR = 21,
 
+	B_STATUS_BAR_COLOR = 37,
+
 	B_SUCCESS_COLOR = 100,
 	B_FAILURE_COLOR = 101,
-
-	// Old name synonyms.
-	B_KEYBOARD_NAVIGATION_COLOR = B_NAVIGATION_BASE_COLOR,
-	B_MENU_SELECTION_BACKGROUND_COLOR = B_MENU_SELECTED_BACKGROUND_COLOR,
-
-	// These are deprecated -- do not use in new code.  See BScreen for
-	// the replacement for B_DESKTOP_COLOR.
-	B_DESKTOP_COLOR = 5,
 
 	B_WINDOW_TAB_COLOR = 3,
 	B_WINDOW_TEXT_COLOR = 22,
@@ -326,7 +342,15 @@ enum color_which {
 	B_WINDOW_INACTIVE_TEXT_COLOR = 24,
 
 	B_WINDOW_BORDER_COLOR = 25,
-	B_WINDOW_INACTIVE_BORDER_COLOR = 26
+	B_WINDOW_INACTIVE_BORDER_COLOR = 26,
+
+	// Old name synonyms.
+	B_KEYBOARD_NAVIGATION_COLOR = B_NAVIGATION_BASE_COLOR,
+	B_MENU_SELECTION_BACKGROUND_COLOR = B_MENU_SELECTED_BACKGROUND_COLOR,
+
+	// The following constants are deprecated, do not use in new code.
+	B_DESKTOP_COLOR = 5
+		// see BScreen class for B_DESKTOP_COLOR replacement
 };
 
 
@@ -348,6 +372,39 @@ const float B_DARKEN_MAX_TINT	= 2.0f;		// 216 -->   0.0   (0)
 const float B_DISABLED_LABEL_TINT		= B_DARKEN_3_TINT;
 const float B_HIGHLIGHT_BACKGROUND_TINT	= B_DARKEN_2_TINT;
 const float B_DISABLED_MARK_TINT		= B_LIGHTEN_2_TINT;
+
+
+// Icon related constants
+
+// Values for [Set]IconBitmap() of various view classes. Not all types are
+// applicable for all views.
+enum {
+	B_INACTIVE_ICON_BITMAP					= 0x00,
+	B_ACTIVE_ICON_BITMAP					= 0x01,
+	B_PARTIALLY_ACTIVATE_ICON_BITMAP		= 0x02,
+
+	// flag, can be combined with any of the above
+	B_DISABLED_ICON_BITMAP					= 0x80,
+		// disabled version of the specified bitmap
+};
+
+// flags for SetIconBitmap() of various view classes
+enum {
+	B_KEEP_ICON_BITMAP						= 0x0001,
+		// transfer bitmap ownership to the view
+};
+
+// flags for SetIcon() of various view classes
+enum {
+	B_TRIM_ICON_BITMAP						= 0x0100,
+		// crop the bitmap to the not fully transparent area; may change the
+		// icon size
+	B_TRIM_ICON_BITMAP_KEEP_ASPECT			= 0x0200,
+		// like B_TRIM_BITMAP, but keeps the aspect ratio
+	B_CREATE_ACTIVE_ICON_BITMAP				= 0x0400,
+	B_CREATE_PARTIALLY_ACTIVE_ICON_BITMAP	= 0x0800,
+	B_CREATE_DISABLED_ICON_BITMAPS			= 0x1000,
+};
 
 
 status_t		get_deskbar_frame(BRect* frame);
@@ -413,7 +470,10 @@ void			set_accept_first_click(bool acceptFirstClick);
 bool			accept_first_click();
 
 rgb_color		ui_color(color_which which);
+const char*		ui_color_name(color_which which);
+color_which		which_ui_color(const char* name);
 void			set_ui_color(const color_which& which, const rgb_color& color);
+void			set_ui_colors(const BMessage* colors);
 rgb_color		tint_color(rgb_color color, float tint);
 
 extern "C" status_t _init_interface_kit_();

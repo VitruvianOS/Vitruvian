@@ -1,12 +1,14 @@
 /*
- * Copyright 2001-2011, Haiku.
+ * Copyright 2001-2015 Haiku, Inc.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		DarkWyrm <bpmagic@columbus.rr.com>
- *		Stephan Aßmus <superstippi@gmx.de>
- *		Clemens Zeidler <haiku@clemens-zeidler.de>
- *		Ingo Weinhold <ingo_weinhold@gmx.de>
+ *		Stephan Aßmus, superstippi@gmx.de
+ *		DarkWyrm, bpmagic@columbus.rr.com
+ *		John Scipione, jscipione@gmail.com
+ *		Ingo Weinhold, ingo_weinhold@gmx.de
+ *		Clemens Zeidler, haiku@clemens-zeidler.de
+ *		Joseph Groover <looncraz@looncraz.net>
  */
 
 
@@ -19,11 +21,15 @@
 
 #include <Region.h>
 
+#include "Desktop.h"
+#include "DesktopSettings.h"
 #include "DrawingEngine.h"
 
 
 Decorator::Tab::Tab()
 	:
+	tabRect(),
+
 	zoomRect(),
 	closeRect(),
 	minimizeRect(),
@@ -35,9 +41,25 @@ Decorator::Tab::Tab()
 	look(B_TITLED_WINDOW_LOOK),
 	flags(0),
 	isFocused(false),
-	title("")
-{
+	title(""),
 
+	tabOffset(0),
+	tabLocation(0.0f),
+	textOffset(10.0f),
+
+	truncatedTitle(""),
+	truncatedTitleLength(0),
+
+	buttonFocus(false),
+	isHighlighted(false),
+
+	minTabSize(0.0f),
+	maxTabSize(0.0f)
+{
+	closeBitmaps[0] = closeBitmaps[1] = closeBitmaps[2] = closeBitmaps[3]
+		= minimizeBitmaps[0] = minimizeBitmaps[1] = minimizeBitmaps[2]
+		= minimizeBitmaps[3] = zoomBitmaps[0] = zoomBitmaps[1] = zoomBitmaps[2]
+		= zoomBitmaps[3] = NULL;
 }
 
 
@@ -46,31 +68,37 @@ Decorator::Tab::Tab()
 	Does general initialization of internal data members and creates a colorset
 	object.
 
-	\param rect Size of client area
-	\param wlook style of window look. See Window.h
-	\param wfeel style of window feel. See Window.h
-	\param wflags various window flags. See Window.h
+	\param settings DesktopSettings pointer.
+	\param frame Decorator frame rectangle
 */
-Decorator::Decorator(DesktopSettings& settings, BRect rect)
+Decorator::Decorator(DesktopSettings& settings, BRect frame,
+					Desktop* desktop)
 	:
 	fDrawingEngine(NULL),
 	fDrawState(),
 
 	fTitleBarRect(),
-	fFrame(rect),
+	fFrame(frame),
 	fResizeRect(),
 	fBorderRect(),
 
+	fLeftBorder(),
+	fTopBorder(),
+	fBottomBorder(),
+	fRightBorder(),
+
+	fBorderWidth(-1),
+
 	fTopTab(NULL),
 
+	fDesktop(desktop),
 	fFootprintValid(false)
 {
 	memset(&fRegionHighlights, HIGHLIGHT_NONE, sizeof(fRegionHighlights));
 }
 
 
-/*!
-	\brief Destructor
+/*!	\brief Destructor
 
 	Frees the color set and the title string
 */
@@ -174,7 +202,7 @@ Decorator::SetDrawingEngine(DrawingEngine* engine)
 	fDrawingEngine = engine;
 	// lots of subclasses will depend on the driver for text support, so call
 	// _DoLayout() after we have it
-	if (fDrawingEngine)
+	if (fDrawingEngine != NULL)
 		_DoLayout();
 }
 
@@ -211,8 +239,23 @@ Decorator::SetFlags(int32 tab, uint32 flags, BRegion* updateRegion)
 void
 Decorator::FontsChanged(DesktopSettings& settings, BRegion* updateRegion)
 {
+
 	_FontsChanged(settings, updateRegion);
 	_InvalidateFootprint();
+}
+
+
+/*!	\brief Called when a system colors change.
+*/
+void
+Decorator::ColorsChanged(DesktopSettings& settings, BRegion* updateRegion)
+{
+	UpdateColors(settings);
+
+	if (updateRegion != NULL)
+		updateRegion->Include(&GetFootprint());
+
+	_InvalidateBitmaps();
 }
 
 
@@ -226,6 +269,7 @@ Decorator::SetLook(int32 tab, DesktopSettings& settings, window_look look,
 	Decorator::Tab* decoratorTab = fTabList.ItemAt(tab);
 	if (decoratorTab == NULL)
 		return;
+
 	_SetLook(decoratorTab, settings, look, updateRect);
 	_InvalidateFootprint();
 		// the border very likely changed
@@ -294,7 +338,8 @@ Decorator::TabRect(Decorator::Tab* tab) const
 	Note that this does not update the button's look - it just updates the
 	internal button value
 
-	\param is_down Whether the button is down or not
+	\param tab The tab index
+	\param pressed Whether the button is down or not
 */
 void
 Decorator::SetClose(int32 tab, bool pressed)
@@ -308,6 +353,7 @@ Decorator::SetClose(int32 tab, bool pressed)
 		DrawClose(tab);
 	}
 }
+
 
 /*!	\brief Sets the minimize button's value.
 
@@ -379,6 +425,7 @@ Decorator::Title(int32 tab) const
 	Decorator::Tab* decoratorTab = fTabList.ItemAt(tab);
 	if (decoratorTab == NULL)
 		return "";
+
 	return decoratorTab->title;
 }
 
@@ -387,6 +434,17 @@ const char*
 Decorator::Title(Decorator::Tab* tab) const
 {
 	return tab->title;
+}
+
+
+float
+Decorator::TabLocation(int32 tab) const
+{
+	Decorator::Tab* decoratorTab = _TabAt(tab);
+	if (decoratorTab == NULL)
+		return 0.0f;
+
+	return (float)decoratorTab->tabOffset;
 }
 
 
@@ -431,6 +489,7 @@ Decorator::IsFocus(int32 tab) const
 	Decorator::Tab* decoratorTab = fTabList.ItemAt(tab);
 	if (decoratorTab == NULL)
 		return false;
+
 	return decoratorTab->isFocused;
 };
 
@@ -439,13 +498,6 @@ bool
 Decorator::IsFocus(Decorator::Tab* tab) const
 {
 	return tab->isFocused;
-}
-
-
-void
-Decorator::GetSizeLimits(int32* minWidth, int32* minHeight, int32* maxWidth,
-	int32* maxHeight) const
-{
 }
 
 
@@ -462,6 +514,15 @@ Decorator::GetFootprint()
 		fFootprintValid = true;
 	}
 	return fFootprint;
+}
+
+
+/*!	\brief Returns our Desktop object pointer
+*/
+::Desktop*
+Decorator::GetDesktop()
+{
+	return fDesktop;
 }
 
 
@@ -571,6 +632,76 @@ Decorator::ResizeBy(BPoint offset, BRegion* dirty)
 }
 
 
+void
+Decorator::ExtendDirtyRegion(Region region, BRegion& dirty)
+{
+	switch (region) {
+		case REGION_TAB:
+			dirty.Include(fTitleBarRect);
+			break;
+
+		case REGION_CLOSE_BUTTON:
+			if ((fTopTab->flags & B_NOT_CLOSABLE) == 0) {
+				for (int32 i = 0; i < fTabList.CountItems(); i++)
+					dirty.Include(fTabList.ItemAt(i)->closeRect);
+			}
+			break;
+
+		case REGION_MINIMIZE_BUTTON:
+			if ((fTopTab->flags & B_NOT_MINIMIZABLE) == 0) {
+				for (int32 i = 0; i < fTabList.CountItems(); i++)
+					dirty.Include(fTabList.ItemAt(i)->minimizeRect);
+			}
+			break;
+
+		case REGION_ZOOM_BUTTON:
+			if ((fTopTab->flags & B_NOT_ZOOMABLE) == 0) {
+				for (int32 i = 0; i < fTabList.CountItems(); i++)
+					dirty.Include(fTabList.ItemAt(i)->zoomRect);
+			}
+			break;
+
+		case REGION_LEFT_BORDER:
+			if (fLeftBorder.IsValid()) {
+				// fLeftBorder doesn't include the corners, so we have to add
+				// them manually.
+				BRect rect(fLeftBorder);
+				rect.top = fTopBorder.top;
+				rect.bottom = fBottomBorder.bottom;
+				dirty.Include(rect);
+			}
+			break;
+
+		case REGION_RIGHT_BORDER:
+			if (fRightBorder.IsValid()) {
+				// fRightBorder doesn't include the corners, so we have to add
+				// them manually.
+				BRect rect(fRightBorder);
+				rect.top = fTopBorder.top;
+				rect.bottom = fBottomBorder.bottom;
+				dirty.Include(rect);
+			}
+			break;
+
+		case REGION_TOP_BORDER:
+			dirty.Include(fTopBorder);
+			break;
+
+		case REGION_BOTTOM_BORDER:
+			dirty.Include(fBottomBorder);
+			break;
+
+		case REGION_RIGHT_BOTTOM_CORNER:
+			if ((fTopTab->flags & B_NOT_RESIZABLE) == 0)
+				dirty.Include(fResizeRect);
+			break;
+
+		default:
+			break;
+	}
+}
+
+
 /*!	\brief Sets a specific highlight for a decorator region.
 
 	Can be overridden by derived classes, but the base class version must be
@@ -615,38 +746,43 @@ Decorator::SetSettings(const BMessage& settings, BRegion* updateRegion)
 bool
 Decorator::GetSettings(BMessage* settings) const
 {
-	return false;
+	if (!fTitleBarRect.IsValid())
+		return false;
+
+	if (settings->AddRect("tab frame", fTitleBarRect) != B_OK)
+		return false;
+
+	if (settings->AddFloat("border width", fBorderWidth) != B_OK)
+		return false;
+
+	// TODO only add the location of the tab of the window who requested the
+	// settings
+	for (int32 i = 0; i < fTabList.CountItems(); i++) {
+		Decorator::Tab* tab = _TabAt(i);
+		if (settings->AddFloat("tab location", (float)tab->tabOffset) != B_OK)
+			return false;
+	}
+
+	return true;
 }
 
 
-/*!	\brief Updates the decorator's look in the area \a rect
-
-	The default version updates all areas which intersect the frame and tab.
-
-	\param rect The area to update.
-*/
 void
-Decorator::Draw(BRect rect)
+Decorator::GetSizeLimits(int32* minWidth, int32* minHeight,
+	int32* maxWidth, int32* maxHeight) const
 {
-	_DrawFrame(rect & fFrame);
-	_DrawTabs(rect & fTitleBarRect);
-}
+	float minTabSize = 0;
+	if (CountTabs() > 0)
+		minTabSize = _TabAt(0)->minTabSize;
 
-
-//! Forces a complete decorator update
-void
-Decorator::Draw()
-{
-	_DrawFrame(fFrame);
-	_DrawTabs(fTitleBarRect);
-}
-
-
-//! draws the frame
-void
-Decorator::DrawFrame()
-{
-	_DrawFrame(fFrame);
+	if (fTitleBarRect.IsValid()) {
+		*minWidth = (int32)roundf(max_c(*minWidth,
+			minTabSize - 2 * fBorderWidth));
+	}
+	if (fResizeRect.IsValid()) {
+		*minHeight = (int32)roundf(max_c(*minHeight,
+			fResizeRect.Height() - fBorderWidth));
+	}
 }
 
 
@@ -666,6 +802,17 @@ Decorator::DrawTab(int32 tabIndex)
 }
 
 
+//! draws the title
+void
+Decorator::DrawTitle(int32 tab)
+{
+	Decorator::Tab* decoratorTab = fTabList.ItemAt(tab);
+	if (decoratorTab == NULL)
+		return;
+	_DrawTitle(decoratorTab, decoratorTab->tabRect);
+}
+
+
 //! Draws the close button
 void
 Decorator::DrawClose(int32 tab)
@@ -673,6 +820,7 @@ Decorator::DrawClose(int32 tab)
 	Decorator::Tab* decoratorTab = fTabList.ItemAt(tab);
 	if (decoratorTab == NULL)
 		return;
+
 	_DrawClose(decoratorTab, true, decoratorTab->closeRect);
 }
 
@@ -684,18 +832,8 @@ Decorator::DrawMinimize(int32 tab)
 	Decorator::Tab* decoratorTab = fTabList.ItemAt(tab);
 	if (decoratorTab == NULL)
 		return;
+
 	_DrawTab(decoratorTab, decoratorTab->minimizeRect);
-}
-
-
-//! draws the title
-void
-Decorator::DrawTitle(int32 tab)
-{
-	Decorator::Tab* decoratorTab = fTabList.ItemAt(tab);
-	if (decoratorTab == NULL)
-		return;
-	_DrawTitle(decoratorTab, decoratorTab->tabRect);
 }
 
 
@@ -713,40 +851,43 @@ Decorator::DrawZoom(int32 tab)
 rgb_color
 Decorator::UIColor(color_which which)
 {
-	// TODO: for now - calling ui_color() from within the app_server
-	//	will always return the default colors (as there is no be_app)
-	return ui_color(which);
+	DesktopSettings settings(fDesktop);
+	return settings.UIColor(which);
 }
 
 
-/*!	\brief Extends a dirty region by a decorator region.
-
-	Must be implemented by derived classes.
-
-	\param region The decorator region.
-	\param dirty The dirty region to be extended.
-*/
-void
-Decorator::ExtendDirtyRegion(Region region, BRegion& dirty)
+float
+Decorator::BorderWidth()
 {
+	return fBorderWidth;
 }
 
 
-//! Function for calculating layout for the decorator
-void
-Decorator::_DoLayout()
+float
+Decorator::TabHeight()
 {
+	if (fTitleBarRect.IsValid())
+		return fTitleBarRect.Height();
+
+	return fBorderWidth;
 }
 
 
-/*!	\brief Actually draws the frame
-	\param rect Area of the frame to update
-*/
-void
-Decorator::_DrawFrame(BRect rect)
+// #pragma mark - Protected methods
+
+
+Decorator::Tab*
+Decorator::_AllocateNewTab()
 {
-}
+	Decorator::Tab* tab = new(std::nothrow) Decorator::Tab;
+	if (tab == NULL)
+		return NULL;
 
+	// Set appropriate colors based on the current focus value. In this case,
+	// each decorator defaults to not having the focus.
+	_SetFocus(tab);
+	return tab;
+}
 
 
 void
@@ -761,74 +902,15 @@ Decorator::_DrawTabs(BRect rect)
 		}
 		_DrawTab(tab, rect);
 	}
+
 	if (focusTab != NULL)
 		_DrawTab(focusTab, rect);
 }
 
 
-/*!	\brief Actually draws the tab
-
-	This function is called when the tab itself needs drawn. Other items,
-	like the window title or buttons, should not be drawn here.
-
-	\param rect Area of the tab to update
-*/
+//! Hook function called when the decorator changes focus
 void
-Decorator::_DrawTab(Decorator::Tab* tab, BRect rect)
-{
-}
-
-
-/*!	\brief Actually draws the close button
-
-	Unless a subclass has a particularly large button, it is probably
-	unnecessary to check the update rectangle.
-
-	\param rect Area of the button to update
-*/
-void
-Decorator::_DrawClose(Decorator::Tab* tab, bool direct, BRect rect)
-{
-}
-
-
-/*!	\brief Actually draws the title
-
-	The main tasks for this function are to ensure that the decorator draws
-	the title only in its own area and drawing the title itself.
-	Using B_OP_COPY for drawing the title is recommended because of the marked
-	performance hit of the other drawing modes, but it is not a requirement.
-
-	\param rect area of the title to update
-*/
-void
-Decorator::_DrawTitle(Decorator::Tab* tab, BRect rect)
-{
-}
-
-
-/*!	\brief Actually draws the zoom button
-
-	Unless a subclass has a particularly large button, it is probably
-	unnecessary to check the update rectangle.
-
-	\param rect Area of the button to update
-*/
-void
-Decorator::_DrawZoom(Decorator::Tab* tab, bool direct, BRect rect)
-{
-}
-
-/*!
-	\brief Actually draws the minimize button
-
-	Unless a subclass has a particularly large button, it is probably
-	unnecessary to check the update rectangle.
-
-	\param rect Area of the button to update
-*/
-void
-Decorator::_DrawMinimize(Decorator::Tab* tab, bool direct, BRect rect)
+Decorator::_SetFocus(Decorator::Tab* tab)
 {
 }
 
@@ -841,31 +923,67 @@ Decorator::_SetTabLocation(Decorator::Tab* tab, float location, bool isShifting,
 }
 
 
-//! Hook function called when the decorator changes focus
-void
-Decorator::_SetFocus(Decorator::Tab* tab)
+Decorator::Tab*
+Decorator::_TabAt(int32 index) const
 {
+	return static_cast<Decorator::Tab*>(fTabList.ItemAt(index));
 }
 
 
 void
 Decorator::_FontsChanged(DesktopSettings& settings, BRegion* updateRegion)
 {
+	// get previous extent
+	if (updateRegion != NULL)
+		updateRegion->Include(&GetFootprint());
+
+	_InvalidateBitmaps();
+
+	_UpdateFont(settings);
+	_DoLayout();
+
+	_InvalidateFootprint();
+	if (updateRegion != NULL)
+		updateRegion->Include(&GetFootprint());
 }
 
 
 void
 Decorator::_SetLook(Decorator::Tab* tab, DesktopSettings& settings,
-	window_look look, BRegion* updateRect)
+	window_look look, BRegion* updateRegion)
 {
+	// TODO: we could be much smarter about the update region
+
+	// get previous extent
+	if (updateRegion != NULL)
+		updateRegion->Include(&GetFootprint());
+
 	tab->look = look;
+
+	_UpdateFont(settings);
+	_DoLayout();
+
+	_InvalidateFootprint();
+	if (updateRegion != NULL)
+		updateRegion->Include(&GetFootprint());
 }
 
 
 void
 Decorator::_SetFlags(Decorator::Tab* tab, uint32 flags, BRegion* updateRegion)
 {
+	// TODO: we could be much smarter about the update region
+
+	// get previous extent
+	if (updateRegion != NULL)
+		updateRegion->Include(&GetFootprint());
+
 	tab->flags = flags;
+	_DoLayout();
+
+	_InvalidateFootprint();
+	if (updateRegion != NULL)
+		updateRegion->Include(&GetFootprint());
 }
 
 
@@ -911,4 +1029,18 @@ void
 Decorator::_InvalidateFootprint()
 {
 	fFootprintValid = false;
+}
+
+
+void
+Decorator::_InvalidateBitmaps()
+{
+	for (int32 i = 0; i < fTabList.CountItems(); i++) {
+		Decorator::Tab* tab = static_cast<Decorator::Tab*>(_TabAt(i));
+		for (int32 index = 0; index < 4; index++) {
+			tab->closeBitmaps[index] = NULL;
+			tab->minimizeBitmaps[index] = NULL;
+			tab->zoomBitmaps[index] = NULL;
+		}
+	}
 }

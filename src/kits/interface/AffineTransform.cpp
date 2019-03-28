@@ -98,7 +98,7 @@ BAffineTransform::FlattenedSize() const
 status_t
 BAffineTransform::Flatten(void* _buffer, ssize_t size) const
 {
-	if (_buffer == NULL || size < FlattenedSize())
+	if (_buffer == NULL || size < BAffineTransform::FlattenedSize())
 		return B_BAD_VALUE;
 
 	double* buffer = reinterpret_cast<double*>(_buffer);
@@ -117,8 +117,10 @@ BAffineTransform::Flatten(void* _buffer, ssize_t size) const
 status_t
 BAffineTransform::Unflatten(type_code code, const void* _buffer, ssize_t size)
 {
-	if (_buffer == NULL || size < FlattenedSize() || code != TypeCode())
+	if (_buffer == NULL || size < BAffineTransform::FlattenedSize()
+			|| code != BAffineTransform::TypeCode()) {
 		return B_BAD_VALUE;
+	}
 
 	const double* buffer = reinterpret_cast<const double*>(_buffer);
 
@@ -510,6 +512,14 @@ BAffineTransform::IsIdentity(double epsilon) const
 		&& IsEqualEpsilon(sy, 1.0, epsilon)
 		&& IsEqualEpsilon(tx, 0.0, epsilon)
 		&& IsEqualEpsilon(ty, 0.0, epsilon);
+}
+
+
+bool
+BAffineTransform::IsDilation(double epsilon) const
+{
+	return IsEqualEpsilon(shy, 0.0, epsilon)
+		&& IsEqualEpsilon(shx, 0.0, epsilon);
 }
 
 

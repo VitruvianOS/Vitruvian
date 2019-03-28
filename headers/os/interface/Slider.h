@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku, Inc. All rights reserved.
+ * Copyright 2001-2016 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _SLIDER_H
@@ -30,8 +30,7 @@ public:
 									const char* label, BMessage* message,
 									int32 minValue, int32 maxValue,
 									thumb_style thumbType = B_BLOCK_THUMB,
-									uint32 resizingMode
-										= B_FOLLOW_LEFT | B_FOLLOW_TOP,
+									uint32 resizingMode = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_NAVIGABLE | B_WILL_DRAW
 										| B_FRAME_EVENTS);
 
@@ -40,8 +39,7 @@ public:
 									int32 minValue, int32 maxValue,
 									orientation posture,
 									thumb_style thumbType = B_BLOCK_THUMB,
-									uint32 resizingMode
-										= B_FOLLOW_LEFT | B_FOLLOW_TOP,
+									uint32 resizingMode = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_NAVIGABLE | B_WILL_DRAW
 										| B_FRAME_EVENTS);
 
@@ -82,15 +80,14 @@ public:
 									const char* maxLabel);
 			const char*			MinLimitLabel() const;
 			const char*			MaxLimitLabel() const;
-	virtual	void				SetValue(int32);
-	virtual int32				ValueForPoint(BPoint) const;
+	virtual	void				SetValue(int32 value);
+	virtual int32				ValueForPoint(BPoint point) const;
 	virtual void				SetPosition(float);
 			float				Position() const;
 	virtual void				SetEnabled(bool on);
-			void				GetLimits(int32* minimum,
-									int32* maximum) const;
+			void				GetLimits(int32* minimum, int32* maximum) const;
 
-	virtual	void				Draw(BRect);
+	virtual	void				Draw(BRect updateRect);
 	virtual void				DrawSlider();
 	virtual void				DrawBar();
 	virtual void				DrawHashMarks();
@@ -120,7 +117,7 @@ public:
 	virtual	void				SetModificationMessage(BMessage* message);
 			BMessage*			ModificationMessage() const;
 
-	virtual void				SetSnoozeAmount(int32);
+	virtual void				SetSnoozeAmount(int32 microSeconds);
 			int32				SnoozeAmount() const;
 
 	virtual	void				SetKeyIncrementValue(int32 value);
@@ -159,6 +156,8 @@ public:
 	virtual	BSize				MinSize();
 	virtual	BSize				MaxSize();
 	virtual	BSize				PreferredSize();
+
+	virtual	status_t			SetIcon(const BBitmap* icon, uint32 flags = 0);
 
 protected:
 	virtual	void				LayoutInvalidated(bool descendants);
@@ -228,5 +227,6 @@ private:
 
 			uint32				_reserved[4];
 };
+
 
 #endif	// _SLIDER_H

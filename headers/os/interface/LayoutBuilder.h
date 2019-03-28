@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2012, Haiku, Inc. All rights reserved.
+ * Copyright 2009-2015, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef	_LAYOUT_BUILDER_H
@@ -8,6 +8,8 @@
 
 #include <new>
 
+#include <CardLayout.h>
+#include <CardView.h>
 #include <GridLayout.h>
 #include <GridView.h>
 #include <GroupLayout.h>
@@ -27,6 +29,7 @@ template<typename ParentBuilder> class Base;
 template<typename ParentBuilder = void*> class Group;
 template<typename ParentBuilder = void*> class Grid;
 template<typename ParentBuilder = void*> class Split;
+template<typename ParentBuilder = void*> class Cards;
 template<typename ParentBuilder = void*> class Menu;
 template<typename ParentBuilder = void*> class MenuItem;
 
@@ -53,16 +56,16 @@ public:
 	typedef Group<ThisBuilder>		GroupBuilder;
 	typedef Grid<ThisBuilder>		GridBuilder;
 	typedef Split<ThisBuilder>		SplitBuilder;
+	typedef Cards<ThisBuilder>		CardBuilder;
 
 public:
-	inline						Group(enum orientation orientation
-										= B_HORIZONTAL,
+	inline						Group(orientation orientation = B_HORIZONTAL,
 									float spacing = B_USE_DEFAULT_SPACING);
 	inline						Group(BWindow* window,
-									enum orientation orientation = B_HORIZONTAL,
+									orientation orientation = B_HORIZONTAL,
 									float spacing = B_USE_DEFAULT_SPACING);
 	inline						Group(BView* view,
-									enum orientation orientation = B_HORIZONTAL,
+									orientation orientation = B_HORIZONTAL,
 									float spacing = B_USE_DEFAULT_SPACING);
 	inline						Group(BGroupLayout* layout);
 	inline						Group(BGroupView* view);
@@ -77,7 +80,7 @@ public:
 	inline	ThisBuilder&		Add(BLayoutItem* item);
 	inline	ThisBuilder&		Add(BLayoutItem* item, float weight);
 
-	inline	GroupBuilder		AddGroup(enum orientation orientation,
+	inline	GroupBuilder		AddGroup(orientation orientation,
 									float spacing = B_USE_DEFAULT_SPACING,
 									float weight = 1.0f);
 	inline	GroupBuilder		AddGroup(BGroupView* groupView,
@@ -94,10 +97,16 @@ public:
 	inline	GridBuilder			AddGrid(BGridView* gridView,
 									float weight = 1.0f);
 
-	inline	SplitBuilder		AddSplit(enum orientation orientation,
+	inline	SplitBuilder		AddSplit(orientation orientation,
 									float spacing = B_USE_DEFAULT_SPACING,
 									float weight = 1.0f);
 	inline	SplitBuilder		AddSplit(BSplitView* splitView,
+									float weight = 1.0f);
+
+	inline	CardBuilder			AddCards(float weight = 1.0f);
+	inline	CardBuilder			AddCards(BCardLayout* cardLayout,
+									float weight = 1.0f);
+	inline	CardBuilder			AddCards(BCardView* cardView,
 									float weight = 1.0f);
 
 	inline	ThisBuilder&		AddGlue(float weight = 1.0f);
@@ -127,6 +136,7 @@ public:
 	typedef Group<ThisBuilder>		GroupBuilder;
 	typedef Grid<ThisBuilder>		GridBuilder;
 	typedef Split<ThisBuilder>		SplitBuilder;
+	typedef Cards<ThisBuilder>		CardBuilder;
 
 public:
 	inline						Grid(float horizontal
@@ -165,7 +175,7 @@ public:
 									int32 textColumnCount = 1,
 									int32 rowCount = 1);
 
-	inline	GroupBuilder		AddGroup(enum orientation orientation,
+	inline	GroupBuilder		AddGroup(orientation orientation,
 									float spacing, int32 column, int32 row,
 									int32 columnCount = 1, int32 rowCount = 1);
 	inline	GroupBuilder		AddGroup(BGroupView* groupView,	int32 column,
@@ -186,15 +196,28 @@ public:
 									int32 column, int32 row,
 									int32 columnCount = 1, int32 rowCount = 1);
 
-	inline	SplitBuilder		AddSplit(enum orientation orientation,
+	inline	SplitBuilder		AddSplit(orientation orientation,
 									float spacing, int32 column, int32 row,
 									int32 columnCount = 1, int32 rowCount = 1);
 	inline	SplitBuilder		AddSplit(BSplitView* splitView, int32 column,
 									int32 row, int32 columnCount = 1,
 									int32 rowCount = 1);
 
+	inline	CardBuilder			AddCards(int32 column, int32 row,
+									int32 columnCount = 1, int32 rowCount = 1);
+	inline	CardBuilder			AddCards(BCardLayout* cardLayout, int32 column,
+									int32 row, int32 columnCount = 1,
+									int32 rowCount = 1);
+	inline	CardBuilder			AddCards(BCardView* cardView, int32 column,
+									int32 row, int32 columnCount = 1,
+									int32 rowCount = 1);
+
 	inline	ThisBuilder&		AddGlue(int32 column, int32 row,
 									int32 columnCount = 1, int32 rowCount = 1);
+
+	inline	ThisBuilder&		SetHorizontalSpacing(float spacing);
+	inline	ThisBuilder&		SetVerticalSpacing(float spacing);
+	inline	ThisBuilder&		SetSpacing(float horizontal, float vertical);
 
 	inline	ThisBuilder&		SetColumnWeight(int32 column, float weight);
 	inline	ThisBuilder&		SetRowWeight(int32 row, float weight);
@@ -223,10 +246,10 @@ public:
 	typedef Group<ThisBuilder>		GroupBuilder;
 	typedef Grid<ThisBuilder>		GridBuilder;
 	typedef Split<ThisBuilder>		SplitBuilder;
+	typedef Cards<ThisBuilder>		CardBuilder;
 
 public:
-	inline						Split(enum orientation orientation
-										= B_HORIZONTAL,
+	inline						Split(orientation orientation = B_HORIZONTAL,
 									float spacing = B_USE_DEFAULT_SPACING);
 	inline						Split(BSplitView* view);
 
@@ -239,7 +262,7 @@ public:
 	inline	ThisBuilder&		Add(BLayoutItem* item);
 	inline	ThisBuilder&		Add(BLayoutItem* item, float weight);
 
-	inline	GroupBuilder		AddGroup(enum orientation orientation,
+	inline	GroupBuilder		AddGroup(orientation orientation,
 									float spacing = B_USE_DEFAULT_SPACING,
 									float weight = 1.0f);
 	inline	GroupBuilder		AddGroup(BGroupView* groupView,
@@ -256,10 +279,16 @@ public:
 	inline	GridBuilder			AddGrid(BGridLayout* gridLayout,
 									float weight = 1.0f);
 
-	inline	SplitBuilder		AddSplit(enum orientation orientation,
+	inline	SplitBuilder		AddSplit(orientation orientation,
 									float spacing = B_USE_DEFAULT_SPACING,
 									float weight = 1.0f);
 	inline	SplitBuilder		AddSplit(BSplitView* splitView,
+									float weight = 1.0f);
+
+	inline	CardBuilder			AddCards(float weight = 1.0f);
+	inline	CardBuilder			AddCards(BCardLayout* cardLayout,
+									float weight = 1.0f);
+	inline	CardBuilder			AddCards(BCardView* cardView,
 									float weight = 1.0f);
 
 	inline	ThisBuilder&		SetCollapsible(bool collapsible);
@@ -276,6 +305,62 @@ public:
 
 private:
 			BSplitView*			fView;
+};
+
+template<typename ParentBuilder>
+class Cards : public Base<ParentBuilder> {
+public:
+	typedef Cards<ParentBuilder>	ThisBuilder;
+	typedef Group<ThisBuilder>		GroupBuilder;
+	typedef Grid<ThisBuilder>		GridBuilder;
+	typedef Split<ThisBuilder>		SplitBuilder;
+	typedef Cards<ThisBuilder>		CardBuilder;
+
+public:
+	inline						Cards();
+	inline						Cards(BWindow* window);
+	inline						Cards(BView* view);
+	inline						Cards(BCardLayout* layout);
+	inline						Cards(BCardView* view);
+
+	inline	BCardLayout*		Layout() const;
+	inline	BView*				View() const;
+	inline	ThisBuilder&		GetLayout(BCardLayout** _layout);
+	inline	ThisBuilder&		GetView(BView** _view);
+
+	inline	ThisBuilder&		Add(BView* view);
+	inline	ThisBuilder&		Add(BLayoutItem* item);
+
+	inline	GroupBuilder		AddGroup(orientation orientation,
+									float spacing = B_USE_DEFAULT_SPACING);
+	inline	GroupBuilder		AddGroup(BGroupView* groupView);
+	inline	GroupBuilder		AddGroup(BGroupLayout* groupLayout);
+
+	inline	GridBuilder			AddGrid(float horizontal
+										= B_USE_DEFAULT_SPACING,
+									float vertical = B_USE_DEFAULT_SPACING);
+	inline	GridBuilder			AddGrid(BGridLayout* gridLayout);
+	inline	GridBuilder			AddGrid(BGridView* gridView);
+
+	inline	SplitBuilder		AddSplit(orientation orientation,
+									float spacing = B_USE_DEFAULT_SPACING);
+	inline	SplitBuilder		AddSplit(BSplitView* splitView);
+
+	inline	CardBuilder			AddCards();
+	inline	CardBuilder			AddCards(BCardLayout* cardLayout);
+	inline	CardBuilder			AddCards(BCardView* cardView);
+
+	inline	ThisBuilder&		SetExplicitMinSize(BSize size);
+	inline	ThisBuilder&		SetExplicitMaxSize(BSize size);
+	inline	ThisBuilder&		SetExplicitPreferredSize(BSize size);
+	inline	ThisBuilder&		SetExplicitAlignment(BAlignment alignment);
+
+	inline	ThisBuilder&		SetVisibleItem(int32 index);
+
+	inline						operator BCardLayout*();
+
+private:
+			BCardLayout*		fLayout;
 };
 
 
@@ -358,7 +443,7 @@ Base<ParentBuilder>::End()
 
 
 template<typename ParentBuilder>
-Group<ParentBuilder>::Group(enum orientation orientation, float spacing)
+Group<ParentBuilder>::Group(orientation orientation, float spacing)
 	:
 	fLayout((new BGroupView(orientation, spacing))->GroupLayout())
 {
@@ -366,27 +451,27 @@ Group<ParentBuilder>::Group(enum orientation orientation, float spacing)
 
 
 template<typename ParentBuilder>
-Group<ParentBuilder>::Group(BWindow* window, enum orientation orientation,
-	float spacing)
+Group<ParentBuilder>::Group(BWindow* window, orientation orientation,
+		float spacing)
 	:
 	fLayout(new BGroupLayout(orientation, spacing))
 {
 	window->SetLayout(fLayout);
-
-	fLayout->Owner()->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-		// TODO: we get a white background if we don't do this
+	fLayout->Owner()->AdoptSystemColors();
 }
 
 
 template<typename ParentBuilder>
-Group<ParentBuilder>::Group(BView* view, enum orientation orientation,
-	float spacing)
+Group<ParentBuilder>::Group(BView* view, orientation orientation,
+		float spacing)
 	:
 	fLayout(new BGroupLayout(orientation, spacing))
 {
+
+	if (view->HasDefaultColors())
+		view->AdoptSystemColors();
+
 	view->SetLayout(fLayout);
-	view->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-		// TODO: we get a white background if we don't do this
 }
 
 
@@ -478,8 +563,8 @@ Group<ParentBuilder>::Add(BLayoutItem* item, float weight)
 
 template<typename ParentBuilder>
 typename Group<ParentBuilder>::GroupBuilder
-Group<ParentBuilder>::AddGroup(enum orientation orientation, float spacing,
-	float weight)
+Group<ParentBuilder>::AddGroup(orientation orientation, float spacing,
+		float weight)
 {
 	GroupBuilder builder(new BGroupLayout(orientation, spacing));
 	builder.SetParent(this);
@@ -546,8 +631,8 @@ Group<ParentBuilder>::AddGrid(BGridView* gridView, float weight)
 
 template<typename ParentBuilder>
 typename Group<ParentBuilder>::SplitBuilder
-Group<ParentBuilder>::AddSplit(enum orientation orientation, float spacing,
-	float weight)
+Group<ParentBuilder>::AddSplit(orientation orientation, float spacing,
+		float weight)
 {
 	SplitBuilder builder(orientation, spacing);
 	builder.SetParent(this);
@@ -561,6 +646,39 @@ typename Group<ParentBuilder>::SplitBuilder
 Group<ParentBuilder>::AddSplit(BSplitView* splitView, float weight)
 {
 	SplitBuilder builder(splitView);
+	builder.SetParent(this);
+	fLayout->AddView(builder.View(), weight);
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Group<ParentBuilder>::CardBuilder
+Group<ParentBuilder>::AddCards(float weight)
+{
+	CardBuilder builder;
+	builder.SetParent(this);
+	fLayout->AddView(builder.View(), weight);
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Group<ParentBuilder>::CardBuilder
+Group<ParentBuilder>::AddCards(BCardLayout* cardLayout, float weight)
+{
+	CardBuilder builder(cardLayout);
+	builder.SetParent(this);
+	fLayout->AddView(builder.View(), weight);
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Group<ParentBuilder>::CardBuilder
+Group<ParentBuilder>::AddCards(BCardView* cardView, float weight)
+{
+	CardBuilder builder(cardView);
 	builder.SetParent(this);
 	fLayout->AddView(builder.View(), weight);
 	return builder;
@@ -678,9 +796,7 @@ Grid<ParentBuilder>::Grid(BWindow* window, float horizontalSpacing,
 	fLayout(new BGridLayout(horizontalSpacing, verticalSpacing))
 {
 	window->SetLayout(fLayout);
-
-	fLayout->Owner()->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-		// TODO: we get a white background if we don't do this
+	fLayout->Owner()->AdoptSystemColors();
 }
 
 
@@ -690,9 +806,10 @@ Grid<ParentBuilder>::Grid(BView* view, float horizontalSpacing,
 	:
 	fLayout(new BGridLayout(horizontalSpacing, verticalSpacing))
 {
+	if (view->HasDefaultColors())
+		view->AdoptSystemColors();
+
 	view->SetLayout(fLayout);
-	view->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-		// TODO: we get a white background if we don't do this
 }
 
 
@@ -800,8 +917,8 @@ Grid<ParentBuilder>::AddTextControl(BTextControl* textControl, int32 column,
 
 template<typename ParentBuilder>
 typename Grid<ParentBuilder>::GroupBuilder
-Grid<ParentBuilder>::AddGroup(enum orientation orientation, float spacing,
-	int32 column, int32 row, int32 columnCount, int32 rowCount)
+Grid<ParentBuilder>::AddGroup(orientation orientation, float spacing,
+		int32 column, int32 row, int32 columnCount, int32 rowCount)
 {
 	GroupBuilder builder(new BGroupLayout(orientation, spacing));
 	builder.SetParent(this);
@@ -860,7 +977,7 @@ Grid<ParentBuilder>::AddGrid(BGridView* gridView, int32 column, int32 row,
 
 template<typename ParentBuilder>
 typename Grid<ParentBuilder>::SplitBuilder
-Grid<ParentBuilder>::AddSplit(enum orientation orientation, float spacing,
+Grid<ParentBuilder>::AddSplit(orientation orientation, float spacing,
 	int32 column, int32 row, int32 columnCount, int32 rowCount)
 {
 	SplitBuilder builder(orientation, spacing);
@@ -883,12 +1000,75 @@ Grid<ParentBuilder>::AddSplit(BSplitView* splitView, int32 column, int32 row,
 
 
 template<typename ParentBuilder>
+typename Grid<ParentBuilder>::CardBuilder
+Grid<ParentBuilder>::AddCards(int32 column, int32 row, int32 columnCount,
+	int32 rowCount)
+{
+	CardBuilder builder;
+	builder.SetParent(this);
+	fLayout->AddView(builder.View(), column, row, columnCount, rowCount);
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Grid<ParentBuilder>::CardBuilder
+Grid<ParentBuilder>::AddCards(BCardLayout* cardLayout, int32 column, int32 row,
+	int32 columnCount, int32 rowCount)
+{
+	CardBuilder builder(cardLayout);
+	builder.SetParent(this);
+	fLayout->AddView(builder.View(), column, row, columnCount, rowCount);
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Grid<ParentBuilder>::CardBuilder
+Grid<ParentBuilder>::AddCards(BCardView* cardView, int32 column, int32 row,
+	int32 columnCount, int32 rowCount)
+{
+	CardBuilder builder(cardView);
+	builder.SetParent(this);
+	fLayout->AddView(builder.View(), column, row, columnCount, rowCount);
+	return builder;
+}
+
+
+template<typename ParentBuilder>
 typename Grid<ParentBuilder>::ThisBuilder&
 Grid<ParentBuilder>::AddGlue(int32 column, int32 row, int32 columnCount,
 	int32 rowCount)
 {
 	fLayout->AddItem(BSpaceLayoutItem::CreateGlue(), column, row, columnCount,
 		rowCount);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Grid<ParentBuilder>::ThisBuilder&
+Grid<ParentBuilder>::SetHorizontalSpacing(float spacing)
+{
+	fLayout->SetHorizontalSpacing(spacing);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Grid<ParentBuilder>::ThisBuilder&
+Grid<ParentBuilder>::SetVerticalSpacing(float spacing)
+{
+	fLayout->SetVerticalSpacing(spacing);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Grid<ParentBuilder>::ThisBuilder&
+Grid<ParentBuilder>::SetSpacing(float horizontal, float vertical)
+{
+	fLayout->SetSpacing(horizontal, vertical);
 	return *this;
 }
 
@@ -986,7 +1166,7 @@ Grid<ParentBuilder>::operator BGridLayout*()
 
 
 template<typename ParentBuilder>
-Split<ParentBuilder>::Split(enum orientation orientation, float spacing)
+Split<ParentBuilder>::Split(orientation orientation, float spacing)
 	:
 	fView(new BSplitView(orientation, spacing))
 {
@@ -1065,8 +1245,8 @@ Split<ParentBuilder>::Add(BLayoutItem* item, float weight)
 
 template<typename ParentBuilder>
 typename Split<ParentBuilder>::GroupBuilder
-Split<ParentBuilder>::AddGroup(enum orientation orientation, float spacing,
-	float weight)
+Split<ParentBuilder>::AddGroup(orientation orientation, float spacing,
+		float weight)
 {
 	GroupBuilder builder(new BGroupLayout(orientation, spacing));
 	builder.SetParent(this);
@@ -1133,10 +1313,43 @@ Split<ParentBuilder>::AddGrid(BGridLayout* layout, float weight)
 
 template<typename ParentBuilder>
 typename Split<ParentBuilder>::SplitBuilder
-Split<ParentBuilder>::AddSplit(enum orientation orientation, float spacing,
-	float weight)
+Split<ParentBuilder>::AddSplit(orientation orientation, float spacing,
+		float weight)
 {
 	SplitBuilder builder(orientation, spacing);
+	builder.SetParent(this);
+	fView->AddChild(builder.View(), weight);
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Split<ParentBuilder>::CardBuilder
+Split<ParentBuilder>::AddCards(float weight)
+{
+	CardBuilder builder;
+	builder.SetParent(this);
+	fView->AddChild(builder.View(), weight);
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Split<ParentBuilder>::CardBuilder
+Split<ParentBuilder>::AddCards(BCardLayout* cardLayout, float weight)
+{
+	CardBuilder builder(cardLayout);
+	builder.SetParent(this);
+	fView->AddChild(builder.View(), weight);
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Split<ParentBuilder>::CardBuilder
+Split<ParentBuilder>::AddCards(BCardView* cardView, float weight)
+{
+	CardBuilder builder(cardView);
 	builder.SetParent(this);
 	fView->AddChild(builder.View(), weight);
 	return builder;
@@ -1202,6 +1415,278 @@ template<typename ParentBuilder>
 Split<ParentBuilder>::operator BSplitView*()
 {
 	return fView;
+}
+
+
+// #pragma mark - Cards
+
+
+template<typename ParentBuilder>
+Cards<ParentBuilder>::Cards()
+	:
+	fLayout((new BCardView())->CardLayout())
+{
+}
+
+
+template<typename ParentBuilder>
+Cards<ParentBuilder>::Cards(BWindow* window)
+	:
+	fLayout(new BCardLayout())
+{
+	window->SetLayout(fLayout);
+
+	fLayout->Owner()->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+}
+
+
+template<typename ParentBuilder>
+Cards<ParentBuilder>::Cards(BView* view)
+	:
+	fLayout(new BCardLayout())
+{
+	view->SetLayout(fLayout);
+	view->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+}
+
+
+template<typename ParentBuilder>
+Cards<ParentBuilder>::Cards(BCardLayout* layout)
+	:
+	fLayout(layout)
+{
+}
+
+
+template<typename ParentBuilder>
+Cards<ParentBuilder>::Cards(BCardView* view)
+	:
+	fLayout(view->CardLayout())
+{
+}
+
+
+template<typename ParentBuilder>
+BCardLayout*
+Cards<ParentBuilder>::Layout() const
+{
+	return fLayout;
+}
+
+
+template<typename ParentBuilder>
+BView*
+Cards<ParentBuilder>::View() const
+{
+	return fLayout->Owner();
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::ThisBuilder&
+Cards<ParentBuilder>::GetLayout(BCardLayout** _layout)
+{
+	*_layout = fLayout;
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::ThisBuilder&
+Cards<ParentBuilder>::GetView(BView** _view)
+{
+	*_view = fLayout->Owner();
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::ThisBuilder&
+Cards<ParentBuilder>::Add(BView* view)
+{
+	fLayout->AddView(view);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::ThisBuilder&
+Cards<ParentBuilder>::Add(BLayoutItem* item)
+{
+	fLayout->AddItem(item);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::GroupBuilder
+Cards<ParentBuilder>::AddGroup(orientation orientation, float spacing)
+{
+	GroupBuilder builder(new BGroupLayout(orientation, spacing));
+	builder.SetParent(this);
+	fLayout->AddItem(builder.Layout());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::GroupBuilder
+Cards<ParentBuilder>::AddGroup(BGroupView* groupView)
+{
+	GroupBuilder builder(groupView);
+	builder.SetParent(this);
+	fLayout->AddItem(builder.Layout());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::GroupBuilder
+Cards<ParentBuilder>::AddGroup(BGroupLayout* groupLayout)
+{
+	GroupBuilder builder(groupLayout);
+	builder.SetParent(this);
+	fLayout->AddItem(builder.Layout());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::GridBuilder
+Cards<ParentBuilder>::AddGrid(float horizontal, float vertical)
+{
+	GridBuilder builder(horizontal, vertical);
+	builder.SetParent(this);
+	fLayout->AddItem(builder.Layout());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::GridBuilder
+Cards<ParentBuilder>::AddGrid(BGridLayout* gridLayout)
+{
+	GridBuilder builder(gridLayout);
+	builder.SetParent(this);
+	fLayout->AddItem(builder.Layout());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::GridBuilder
+Cards<ParentBuilder>::AddGrid(BGridView* gridView)
+{
+	GridBuilder builder(gridView);
+	builder.SetParent(this);
+	fLayout->AddItem(builder.Layout());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::SplitBuilder
+Cards<ParentBuilder>::AddSplit(orientation orientation, float spacing)
+{
+	SplitBuilder builder(orientation, spacing);
+	builder.SetParent(this);
+	fLayout->AddView(builder.View());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::SplitBuilder
+Cards<ParentBuilder>::AddSplit(BSplitView* splitView)
+{
+	SplitBuilder builder(splitView);
+	builder.SetParent(this);
+	fLayout->AddView(builder.View());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::CardBuilder
+Cards<ParentBuilder>::AddCards()
+{
+	CardBuilder builder;
+	builder.SetParent(this);
+	fLayout->AddView(builder.View());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::CardBuilder
+Cards<ParentBuilder>::AddCards(BCardLayout* cardLayout)
+{
+	CardBuilder builder(cardLayout);
+	builder.SetParent(this);
+	fLayout->AddView(builder.View());
+	return builder;
+}
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::CardBuilder
+Cards<ParentBuilder>::AddCards(BCardView* cardView)
+{
+	CardBuilder builder(cardView);
+	builder.SetParent(this);
+	fLayout->AddView(builder.View());
+	return builder;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::ThisBuilder&
+Cards<ParentBuilder>::SetExplicitMinSize(BSize size)
+{
+	fLayout->SetExplicitMinSize(size);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::ThisBuilder&
+Cards<ParentBuilder>::SetExplicitMaxSize(BSize size)
+{
+	fLayout->SetExplicitMaxSize(size);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::ThisBuilder&
+Cards<ParentBuilder>::SetExplicitPreferredSize(BSize size)
+{
+	fLayout->SetExplicitPreferredSize(size);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::ThisBuilder&
+Cards<ParentBuilder>::SetExplicitAlignment(BAlignment alignment)
+{
+	fLayout->SetExplicitAlignment(alignment);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+typename Cards<ParentBuilder>::ThisBuilder&
+Cards<ParentBuilder>::SetVisibleItem(int32 item)
+{
+	fLayout->SetVisibleItem(item);
+	return *this;
+}
+
+
+template<typename ParentBuilder>
+Cards<ParentBuilder>::operator BCardLayout*()
+{
+	return fLayout;
 }
 
 
@@ -1328,7 +1813,7 @@ MenuItem<ParentBuilder>::MenuItem(ParentBuilder* parentBuilder, BMenu* menu,
 	Menu<ParentBuilder>(menu),
 	fMenuItem(item)
 {
-	SetParent(parentBuilder);
+	this->SetParent(parentBuilder);
 }
 
 

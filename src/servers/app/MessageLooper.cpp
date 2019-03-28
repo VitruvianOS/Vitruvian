@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2007, Haiku.
+ * Copyright 2005-2016, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -30,7 +30,7 @@ MessageLooper::~MessageLooper()
 }
 
 
-bool
+status_t
 MessageLooper::Run()
 {
 	BAutolock locker(this);
@@ -44,17 +44,17 @@ MessageLooper::Run()
 	fThread = spawn_thread(_message_thread, name, B_DISPLAY_PRIORITY, this);
 	if (fThread < B_OK) {
 		fQuitting = true;
-		return false;
+		return fThread;
 	}
 
 	if (resume_thread(fThread) != B_OK) {
 		fQuitting = true;
 		kill_thread(fThread);
 		fThread = -1;
-		return false;
+		return B_BAD_THREAD_ID;
 	}
 
-	return true;
+	return B_OK;
 }
 
 
@@ -147,16 +147,16 @@ MessageLooper::_MessageLooper()
 			// that shouldn't happen, it's our port
 			char name[256];
 			_GetLooperName(name, 256);
-			printf("MessageLooper \"%s\": Someone deleted our message port %ld, %s!\n",
-				name, receiver.Port(), strerror(status));
+			printf("MessageLooper \"%s\": Someone deleted our message port %"
+				B_PRId32 ", %s!\n", name, receiver.Port(), strerror(status));
 			break;
 		}
 
 		Lock();
 
-		if (code == kMsgQuitLooper) {
+		if (code == kMsgQuitLooper)
 			Quit();
-		} else
+		else
 			_DispatchMessage(code, receiver);
 
 		Unlock();

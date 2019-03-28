@@ -31,8 +31,8 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef __NU_ICON_CACHE__
-#define __NU_ICON_CACHE__
+#ifndef _NU_ICON_CACHE_H
+#define _NU_ICON_CACHE_H
 
 
 // Icon cache is used for drawing node icons; it caches icons
@@ -40,11 +40,11 @@ All rights reserved.
 
 
 #include <Bitmap.h>
+#include <ObjectList.h>
 #include <Mime.h>
 #include <String.h>
 
 #include "AutoLock.h"
-#include "ObjectList.h"
 #include "OpenHashTable.h"
 #include "Utilities.h"
 
@@ -126,15 +126,16 @@ class IconCacheEntry {
 public:
 	IconCacheEntry();
 	~IconCacheEntry();
-	
-	void SetAliasFor(const SharedIconCache*, const SharedCacheEntry*);
-	static IconCacheEntry* ResolveIfAlias(const SharedIconCache*,
-		IconCacheEntry*);
-	IconCacheEntry* ResolveIfAlias(const SharedIconCache*);
-	
+
+	void SetAliasFor(const SharedIconCache* sharedCache,
+		const SharedCacheEntry* entry);
+	static IconCacheEntry* ResolveIfAlias(const SharedIconCache* sharedCache,
+		IconCacheEntry* entry);
+	IconCacheEntry* ResolveIfAlias(const SharedIconCache* sharedCache);
+
 	void SetIcon(BBitmap* bitmap, IconDrawMode mode, icon_size size,
 		bool create = false);
-	
+
 	bool HaveIconBitmap(IconDrawMode mode, icon_size size) const;
 	bool CanConstructBitmap(IconDrawMode mode, icon_size size) const;
 	static bool AlternateModeForIconConstructing(IconDrawMode requestedMode,
@@ -159,19 +160,18 @@ public:
 		// while we are drawing them, shouldn't be a practical problem
 
 protected:
-
 	BBitmap* IconForMode(IconDrawMode mode, icon_size size) const;
 	void SetIconForMode(BBitmap* bitmap, IconDrawMode mode, icon_size size);
 
 	// list of most common icons
 	BBitmap* fLargeIcon;
+	BBitmap* fHighlightedLargeIcon;
 	BBitmap* fMiniIcon;
-	BBitmap* fHilitedLargeIcon;
-	BBitmap* fHilitedMiniIcon;
+	BBitmap* fHighlightedMiniIcon;
 	int32 fAliasForIndex;
-	
+
 	// list of other icon kinds would be added here
-	
+
 	friend class SharedIconCache;
 	friend class NodeIconCache;
 };
@@ -191,7 +191,7 @@ public:
 	bool Lock();
 	void Unlock();
 	bool IsLocked() const;
-	
+
 private:
 	Benaphore fLock;
 };
@@ -210,7 +210,7 @@ public:
 
 	const char* FileType() const;
 	const char* AppSignature() const;
-	
+
 	// hash table support
 	uint32 Hash() const;
 	static uint32 Hash(const char* fileType, const char* appSignature = 0);
@@ -254,7 +254,7 @@ public:
 		// because adding to the hash table makes any pending pointer invalid
 	void IconChanged(SharedCacheEntry*);
 
-	void SetAliasFor(IconCacheEntry* alias,
+	void SetAliasFor(IconCacheEntry* entry,
 		const SharedCacheEntry* original) const;
 	IconCacheEntry* ResolveIfAlias(IconCacheEntry* entry) const;
 	int32 EntryIndex(const SharedCacheEntry* entry) const;
@@ -262,8 +262,8 @@ public:
 	void RemoveAliasesTo(int32 index);
 
 private:
-	OpenHashTable<SharedCacheEntry, SharedCacheEntryArray> fHashTable;
 	SharedCacheEntryArray fElementArray;
+	OpenHashTable<SharedCacheEntry, SharedCacheEntryArray> fHashTable;
 	BObjectList<BBitmap> fRetiredBitmaps;
 		// icons are drawn asynchronously, can't just delete them right away,
 		// instead have to place them onto the retired bitmap list and wait
@@ -277,19 +277,19 @@ public:
 	NodeCacheEntry(const node_ref*, bool permanent = false);
 	void Draw(BView*, BPoint, IconDrawMode mode, icon_size size,
 		bool async = false);
-	
+
 	void Draw(BView*, BPoint, IconDrawMode, icon_size,
 		void (*)(BView*, BPoint, BBitmap*, void*), void* = NULL);
 
 	const node_ref* Node() const;
-	
+
 	uint32 Hash() const;
 	static uint32 Hash(const node_ref*);
 	bool operator==(const NodeCacheEntry&) const;
 	void SetTo(const node_ref*);
 	void MakePermanent();
 	bool Permanent() const;
-	
+
 	int32 fNext;
 private:
 	node_ref fRef;
@@ -333,12 +333,11 @@ public:
 	void Deleting(const BView*);
 	void IconChanged(const Model*);
 
-
 	void RemoveAliasesTo(int32 index);
 
 private:
-	OpenHashTable<NodeCacheEntry, NodeCacheEntryArray> fHashTable;
 	NodeCacheEntryArray fElementArray;
+	OpenHashTable<NodeCacheEntry, NodeCacheEntryArray> fHashTable;
 };
 
 
@@ -348,7 +347,7 @@ const int32 kColorTransformTableSize = 256;
 class IconCache {
 public:
 	IconCache();
-	
+
 	void Draw(Model*, BView*, BPoint where, IconDrawMode mode,
 		icon_size size, bool async = false);
 		// draw an icon for a model, load the icon from the appropriate
@@ -376,13 +375,13 @@ public:
 	void Deleting(const BView*);
 		// hook to manage deleting draw view caches for views that are
 		// going away
-	
+
 	// icon changed calls, used when a node or a file type has an icon changed
 	// the icons for the node/file type will be flushed and re-cached during
 	// the next draw
 	void IconChanged(Model*);
 	void IconChanged(const char* mimeType, const char* appSignature);
-	
+
 	bool IsIconFrom(const Model*, const char* mimeType,
 		const char* appSignature) const;
 		// called when metamime database changed to figure out which models
@@ -455,20 +454,20 @@ private:
 	NodeIconCache fNodeCache;
 	SharedIconCache fSharedCache;
 
-	void InitHiliteTable();
+	void InitHighlightTable();
 
-	int32 fHiliteTable[kColorTransformTableSize];
-	bool fInitHiliteTable;
-		// on if we still need to initialize the hilite table
+	int32 fHighlightTable[kColorTransformTableSize];
+	bool fInitHighlightTable;
+		// whether or not we need to initialize the highlight table
 };
 
 
 class LazyBitmapAllocator {
-// Utility class used when we aren't sure that we will keep a bitmap,
-// need a bitmap or be able to construct it properly
+	// Utility class used when we aren't sure that we will keep a bitmap,
+	// need a bitmap or be able to construct it properly
 public:
 	LazyBitmapAllocator(icon_size size,
-						color_space colorSpace = kDefaultIconDepth,
+		color_space colorSpace = kDefaultIconDepth,
 		bool preallocate = false);
 	~LazyBitmapAllocator();
 
@@ -510,7 +509,7 @@ SharedIconCache::ResolveIfAlias(IconCacheEntry* entry) const
 {
 	if (entry->fAliasForIndex < 0)
 		return entry;
-	
+
 	return fHashTable.ElementAt(entry->fAliasForIndex);
 }
 
@@ -525,4 +524,5 @@ SharedIconCache::EntryIndex(const SharedCacheEntry* entry) const
 
 using namespace BPrivate;
 
-#endif
+
+#endif	// _NU_ICON_CACHE_H

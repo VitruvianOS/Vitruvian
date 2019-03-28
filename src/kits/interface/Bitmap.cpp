@@ -124,9 +124,12 @@ get_raw_bytes_per_row(color_space colorSpace, int32 width)
 		case B_YCbCr420: case B_YUV420:
 			bpr = (width + 3) / 4 * 6;
 			break;
+		case B_YUV9:
+			bpr = (width + 15) / 16 * 18;
+			break;
 		// unsupported
 		case B_NO_COLOR_SPACE:
-		case B_YUV9: case B_YUV12:
+		case B_YUV12:
 			break;
 	}
 	return bpr;
@@ -426,16 +429,15 @@ BBitmap::Archive(BMessage* data, bool deep) const
 					break;
 			}
 		}
-		// Note: R5 does not archive the data if B_BITMAP_IS_CONTIGUOUS is
-		// true and it does save all formats as B_RAW_TYPE and it does save
-		// the data even if B_BITMAP_ACCEPTS_VIEWS is set (as opposed to
-		// the BeBook)
-		if (ret == B_OK) {
-			const_cast<BBitmap*>(this)->_AssertPointer();
-			ret = data->AddData("_data", B_RAW_TYPE, fBasePointer, fSize);
-		}
 	}
-
+	// Note: R5 does not archive the data if B_BITMAP_IS_CONTIGUOUS is
+	// true and it does save all formats as B_RAW_TYPE and it does save
+	// the data even if B_BITMAP_ACCEPTS_VIEWS is set (as opposed to
+	// the BeBook)
+	if (ret == B_OK) {
+		const_cast<BBitmap*>(this)->_AssertPointer();
+		ret = data->AddData("_data", B_RAW_TYPE, fBasePointer, fSize);
+	}
 	return ret;
 }
 
@@ -644,10 +646,10 @@ BBitmap::SetBits(const void* data, int32 length, int32 offset,
 			// ignore source data row padding.
 			inBPR = width;
 		}
-	}
-	// call the sane method, which does the actual work
-	if (error == B_OK)
+
+		// call the sane method, which does the actual work
 		error = ImportBits(data, length, inBPR, offset, colorSpace);
+	}
 }
 
 

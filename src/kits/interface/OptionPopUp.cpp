@@ -107,7 +107,7 @@ BOptionPopUp::GetOptionAt(int32 index, const char** outName, int32* outValue)
 		if (item != NULL) {
 			if (outName != NULL)
 				*outName = item->Label();
-			if (outValue != NULL)
+			if (outValue != NULL && item->Message() != NULL)
 				item->Message()->FindInt32("be:value", outValue);
 
 			result = true;
@@ -184,16 +184,27 @@ BOptionPopUp::AddOptionAt(const char* name, int32 value, int32 index)
 }
 
 
-/*! \brief Called to take special actions when the child views are attached.
-	It's used to set correctly the divider for the BMenuField.
-*/
+// BeOS R5 compatibility, do not remove
 void
 BOptionPopUp::AllAttached()
 {
+	BOptionControl::AllAttached();
+}
+
+
+/*! \brief Sets the divider for the BMenuField and target the menu items to ourselves.
+*/
+void
+BOptionPopUp::AttachedToWindow()
+{
+	BOptionControl::AttachedToWindow();
+
 	BMenu* menu = fMenuField->Menu();
 	if (menu != NULL) {
 		float labelWidth = fMenuField->StringWidth(fMenuField->Label());
-		fMenuField->SetDivider(labelWidth + kLabelSpace);
+		if (labelWidth > 0.f)
+			labelWidth += kLabelSpace;
+		fMenuField->SetDivider(labelWidth);
 		menu->SetTargetForItems(this);
 	}
 }
@@ -217,7 +228,9 @@ BOptionPopUp::SetLabel(const char* text)
 	// We are not sure the menu can keep the whole
 	// string as label, so we check against the current label
 	float newWidth = fMenuField->StringWidth(fMenuField->Label());
-	fMenuField->SetDivider(newWidth + kLabelSpace);
+	if (newWidth > 0.f)
+		newWidth += kLabelSpace;
+	fMenuField->SetDivider(newWidth);
 }
 
 
@@ -255,6 +268,8 @@ void
 BOptionPopUp::SetEnabled(bool state)
 {
 	BOptionControl::SetEnabled(state);
+	if (fMenuField)
+		fMenuField->SetEnabled(state);
 }
 
 

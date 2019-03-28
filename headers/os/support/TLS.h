@@ -1,9 +1,9 @@
 /*
- * Copyright 2003-2007, Haiku, Inc. All Rights Reserved.
+ * Copyright 2003-2007 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _TLS_H
-#define	_TLS_H
+#define _TLS_H
 
 
 #include <BeBuild.h>
@@ -19,7 +19,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif	/* __cplusplus */
 
 extern int32 tls_allocate(void);
 
@@ -30,8 +30,8 @@ tls_get(int32 index)
 {
 	void *ret;
 	__asm__ __volatile__ ( 
-		"movl	%%fs:(,%%edx, 4), %%eax \n\t"
-		: "=a"(ret) : "d"(index) );
+		"movl	%%fs:(, %1, 4), %0"
+		: "=r" (ret) : "r" (index));
 	return ret;
 }
 
@@ -40,9 +40,9 @@ tls_address(int32 index)
 {
 	void **ret;
 	__asm__ __volatile__ ( 
-		"movl	%%fs:0, %%eax \n\t"
-		"leal	(%%eax, %%edx, 4), %%eax \n\t"
-		: "=a"(ret) : "d"(index) );
+		"movl	%%fs:0, %0\n\t"
+		"leal	(%0, %1, 4), %0\n\t"
+		: "=&r" (ret) : "r" (index));
 	return ret;
 }
 
@@ -50,20 +50,20 @@ static inline void
 tls_set(int32 index, void *value)
 {
 	__asm__ __volatile__ ( 
-		"movl	%%eax, %%fs:(,%%edx, 4) \n\t"
-		: : "d"(index), "a"(value) );
+		"movl	%1, %%fs:(, %0, 4)"
+		: : "r" (index), "r" (value));
 }
 
-#else
+#else	/* !_NO_INLINE_ASM && __INTEL__ && __GNUC__ */
 
 extern void *tls_get(int32 index);
 extern void **tls_address(int32 index);
 extern void tls_set(int32 index, void *value);
 
-#endif
+#endif	/* !_NO_INLINE_ASM && __INTEL__ && __GNUC__ */
 
 #ifdef __cplusplus
 }
-#endif
+#endif	/* __cplusplus */
 
 #endif	/* _TLS_H */

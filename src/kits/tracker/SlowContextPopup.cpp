@@ -54,26 +54,33 @@ All rights reserved.
 #include "FSUtils.h"
 #include "FunctionObject.h"
 #include "IconMenuItem.h"
-#include "NavMenu.h"
 #include "PoseView.h"
 #include "QueryPoseView.h"
 #include "SlowContextPopup.h"
 #include "Thread.h"
 #include "Tracker.h"
+#include "VirtualDirectoryEntryList.h"
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "SlowContextPopup"
 
+
+//	#pragma mark - BSlowContextMenu
+
+
 BSlowContextMenu::BSlowContextMenu(const char* title)
-	:	BPopUpMenu(title, false, false),
-		fMenuBuilt(false),
-		fMessage(B_REFS_RECEIVED),
-		fParentWindow(NULL),
-		fItemList(NULL),
-		fContainer(NULL),
-		fTypesList(NULL),
-		fIsShowing(false)
+	:
+	BPopUpMenu(title, false, false),
+	fMenuBuilt(false),
+	fMessage(B_REFS_RECEIVED),
+	fParentWindow(NULL),
+	fVolsOnly(false),
+	fItemList(NULL),
+	fContainer(NULL),
+	fIteratingDesktop(false),
+	fTypesList(NULL),
+	fIsShowing(false)
 {
 	InitIconPreloader();
 
@@ -134,7 +141,7 @@ BSlowContextMenu::SetNavDir(const entry_ref* ref)
 {
 	ForceRebuild();
 		// reset the slow menu building mechanism so we can add more stuff
-	
+
 	fNavDir = *ref;
 }
 
@@ -188,7 +195,7 @@ BSlowContextMenu::AddDynamicItem(add_state state)
 {
 	if (fMenuBuilt)
 		return false;
-	
+
 	if (state == B_ABORT) {
 		ClearMenuBuildingState();
 		return false;
@@ -213,7 +220,8 @@ BSlowContextMenu::AddDynamicItem(add_state state)
 			break;
 	}
 
-	return true;	// call me again, got more to show
+	return true;
+		// call me again, got more to show
 }
 
 
@@ -229,7 +237,7 @@ BSlowContextMenu::StartBuildingItemList()
 	}
 
 	fIteratingDesktop = false;
-	
+
 	BDirectory parent;
 	status_t err = entry.GetParent(&parent);
 	fItemList = new BObjectList<BMenuItem>(50);
@@ -247,6 +255,8 @@ BSlowContextMenu::StartBuildingItemList()
 
 		if (startModel.IsQuery())
 			fContainer = new QueryEntryListCollection(&startModel);
+		else if (startModel.IsVirtualDirectory())
+			fContainer = new VirtualDirectoryEntryList(&startModel);
 		else if (startModel.IsDesktop()) {
 			fIteratingDesktop = true;
 			fContainer = DesktopPoseView::InitDesktopDirentIterator(0,
@@ -254,8 +264,13 @@ BSlowContextMenu::StartBuildingItemList()
 			AddRootItemsIfNeeded();
 			AddTrashItem();
 		} else {
-			fContainer = new DirectoryEntryList(*dynamic_cast<BDirectory*>
-				(startModel.Node()));
+			BDirectory* directory = dynamic_cast<BDirectory*>(
+				startModel.Node());
+
+			ASSERT(directory != NULL);
+
+			if (directory != NULL)
+				fContainer = new DirectoryEntryList(*directory);
 		}
 
 		if (fContainer->InitCheck() != B_OK)
@@ -308,7 +323,7 @@ BSlowContextMenu::AddNextItem()
 		BuildVolumeMenu();
 		return false;
 	}
-	
+
 	// limit nav menus to 500 items only
 	if (fItemList->CountItems() > 500)
 		return false;
@@ -332,7 +347,7 @@ BSlowContextMenu::AddNextItem()
 	}
 
 	model.CloseNode();
-	
+
 	if (!BPoseView::PoseVisible(&model, &poseInfo)) {
 		return true;
 	}
@@ -346,11 +361,9 @@ void
 BSlowContextMenu::AddOneItem(Model* model)
 {
 	BMenuItem* item = NewModelItem(model, &fMessage, fMessenger, false,
-		dynamic_cast<BContainerWindow*>(fParentWindow) ?
-		dynamic_cast<BContainerWindow*>(fParentWindow) : 0,
-		fTypesList, &fTrackingHook);
-
-	if (item)
+		dynamic_cast<BContainerWindow*>(fParentWindow), fTypesList,
+		&fTrackingHook);
+	if (item != NULL)
 		fItemList->AddItem(item);
 }
 
@@ -367,7 +380,7 @@ BSlowContextMenu::NewModelItem(Model* model, const BMessage* invokeMessage,
 	entry_ref ref;
 	bool container = false;
 	if (model->IsSymLink()) {
-	
+
 		Model* newResolvedModel = NULL;
 		Model* result = model->LinkTo();
 
@@ -379,21 +392,21 @@ BSlowContextMenu::NewModelItem(Model* model, const BMessage* invokeMessage,
 				delete newResolvedModel;
 				newResolvedModel = NULL;
 			}
-			
+
 			result = newResolvedModel;
 		}
 
 		if (result) {
 			BModelOpener opener(result);
 				// open the model, if it ain't open already
-					
+
 			PoseInfo poseInfo;
-			
+
 			if (result->Node()) {
 				result->Node()->ReadAttr(kAttrPoseInfo, B_RAW_TYPE, 0,
 					&poseInfo, sizeof(poseInfo));
 			}
-	
+
 			result->CloseNode();
 
 			ref = *result->EntryRef();
@@ -421,7 +434,7 @@ BSlowContextMenu::NewModelItem(Model* model, const BMessage* invokeMessage,
 	} else {
 		BNavMenu* menu = new BNavMenu(truncatedString.String(),
 			invokeMessage->what, target, parentWindow, typeslist);
-		
+
 		menu->SetNavDir(&ref);
 		if (hook)
 			menu->InitTrackingHook(hook->fTrackingHook, &(hook->fTarget),
@@ -443,10 +456,10 @@ BSlowContextMenu::BuildVolumeMenu()
 
 	roster.Rewind();
 	while (roster.GetNextVolume(&volume) == B_OK) {
-		
+
 		if (!volume.IsPersistent())
 			continue;
-		
+
 		BDirectory startDir;
 		if (volume.GetRootDirectory(&startDir) == B_OK) {
 			BEntry entry;
@@ -457,7 +470,7 @@ BSlowContextMenu::BuildVolumeMenu()
 				delete model;
 				continue;
 			}
-			
+
 			BNavMenu* menu = new BNavMenu(model->Name(), fMessage.what,
 				fMessenger, fParentWindow, fTypesList);
 

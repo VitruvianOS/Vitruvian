@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2009, Haiku Inc.
+ * Copyright 2002-2012, Haiku Inc.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -191,6 +191,16 @@ BEntry::Exists() const
 }
 
 
+const char*
+BEntry::Name() const
+{
+	if (fCStatus != B_OK)
+		return NULL;
+
+	return fName;
+}
+
+
 status_t
 BEntry::SetTo(const BDirectory* dir, const char* path, bool traverse)
 {
@@ -360,18 +370,13 @@ BEntry::GetParent(BDirectory* dir) const
 status_t
 BEntry::GetName(char* buffer) const
 {
-	status_t result = B_ERROR;
+	if (fCStatus != B_OK)
+		return B_NO_INIT;
+	if (buffer == NULL)
+		return B_BAD_VALUE;
 
-	if (fCStatus != B_OK) {
-		result = B_NO_INIT;
-	} else if (buffer == NULL) {
-		result = B_BAD_VALUE;
-	} else {
-		strcpy(buffer, fName);
-		result = B_OK;
-	}
-
-	return result;
+	strcpy(buffer, fName);
+	return B_OK;
 }
 
 
@@ -497,6 +502,16 @@ void BEntry::_PennyEntry5(){}
 void BEntry::_PennyEntry6(){}
 
 
+/*!	Updates the BEntry with the data from the stat structure according
+	to the \a what mask.
+
+	\param st The stat structure to set.
+	\param what A mask
+
+	\returns A status code.
+	\retval B_OK Everything went fine.
+	\retval B_FILE_ERROR There was an error writing to the BEntry object.
+*/
 status_t
 BEntry::set_stat(struct stat& st, uint32 what)
 {
@@ -508,6 +523,30 @@ BEntry::set_stat(struct stat& st, uint32 what)
 }
 
 
+/*!	Sets the entry to point to the entry specified by the path \a path
+	relative to the given directory.
+
+	If \a traverse is \c true and the given entry is a symbolic link, the
+	object is recursively set to point to the entry pointed to by the symlink.
+
+	If \a path is an absolute path, \a dirFD is ignored.
+
+	If \a dirFD is -1, \a path is considered relative to the current directory
+	(unless it is an absolute path).
+
+	The ownership of the file descriptor \a dirFD is transferred to the
+	method, regardless of whether it succeeds or fails. The caller must not
+	close the FD afterwards.
+
+	\param dirFD File descriptor of a directory relative to which path is to
+		be considered. May be -1 if the current directory shall be considered.
+	\param path Pointer to a path relative to the given directory.
+	\param traverse If \c true and the given entry is a symbolic link, the
+		object is recursively set to point to the entry linked to by the
+		symbolic link.
+
+	\returns \c B_OK on success, or an error code on failure.
+*/
 status_t
 BEntry::_SetTo(int dirFD, const char* path, bool traverse)
 {
@@ -638,6 +677,16 @@ BEntry::_SetTo(int dirFD, const char* path, bool traverse)
 }
 
 
+/*!	Handles string allocation, deallocation, and copying for the
+	leaf name of the entry.
+
+	\param name The leaf \a name of the entry.
+
+	\returns A status code.
+	\retval B_OK Everything went fine.
+	\retval B_BAD_VALUE \a name is \c NULL.
+	\retval B_NO_MEMORY Ran out of memory trying to allocate \a name.
+*/
 status_t
 BEntry::_SetName(const char* name)
 {
@@ -654,6 +703,22 @@ BEntry::_SetName(const char* name)
 }
 
 
+/*!	Renames the entry referred to by this object to the location
+	specified by \a target.
+
+	If an entry exists at the target location, the method fails, unless
+	\a clobber is \c true, in which case that entry is overwritten (doesn't
+	work for non-empty directories, though).
+
+	If the operation was successful, this entry is made a clone of the
+	supplied one and the supplied one is uninitialized.
+
+	\param target The entry specifying the target location.
+	\param clobber If \c true, the an entry existing at the target location
+		   will be overwritten.
+
+	\return \c B_OK, if everything went fine, another error code otherwise.
+*/
 status_t
 BEntry::_Rename(BEntry& target, bool clobber)
 {
@@ -675,6 +740,11 @@ BEntry::_Rename(BEntry& target, bool clobber)
 }
 
 
+/*!	Debugging function, dumps the given entry to stdout.
+
+	\param name A pointer to a string to be printed along with the dump for
+		   identification purposes.
+*/
 void
 BEntry::_Dump(const char* name)
 {
@@ -684,14 +754,14 @@ BEntry::_Dump(const char* name)
 		printf("------------------------------------------------------------\n");
 	}
 
-	printf("fCStatus == %ld\n", fCStatus);
+	printf("fCStatus == %" B_PRId32 "\n", fCStatus);
 
 	struct stat st;
 	if (fDirFd != -1
 		&& _kern_read_stat(fDirFd, NULL, false, &st,
 				sizeof(struct stat)) == B_OK) {
-		printf("dir.device == %ld\n", st.st_dev);
-		printf("dir.inode  == %lld\n", st.st_ino);
+		printf("dir.device == %" B_PRIdDEV "\n", st.st_dev);
+		printf("dir.inode  == %" B_PRIdINO "\n", st.st_ino);
 	} else {
 		printf("dir == NullFd\n");
 	}
@@ -757,7 +827,7 @@ operator<(const entry_ref& a, const entry_ref& b)
 
 // #pragma mark - symbol versions
 
-#ifdef __HAIKU__
+
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	if __GNUC__ == 2	// gcc 2
 
@@ -794,10 +864,3 @@ operator<(const entry_ref& a, const entry_ref& b)
 
 #	endif	// gcc 4
 #endif	// !HAIKU_TARGET_PLATFORM_LIBBE_TEST
-#endif
-status_t
-BEntry::GetStat(struct stat* st) const
-{
-	return _GetStat(st);
-}
-

@@ -33,21 +33,21 @@ All rights reserved.
 */
 
 
-#include "Attributes.h"
-#include "MimeTypes.h"
-#include "Model.h"
-#include "PoseView.h"
 #include "Utilities.h"
-#include "ContainerWindow.h"
 
-#include <IconUtils.h>
-
-#include <Bitmap.h>
-#include <Catalog.h>
-#include <Debug.h>
-#include <Directory.h>
+#include <ctype.h>
 #include <fs_attr.h>
 #include <fs_info.h>
+#include <stdarg.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#include <BitmapStream.h>
+#include <Catalog.h>
+#include <Debug.h>
+#include <Font.h>
+#include <IconUtils.h>
 #include <MenuItem.h>
 #include <OS.h>
 #include <PopUpMenu.h>
@@ -58,11 +58,11 @@ All rights reserved.
 #include <VolumeRoster.h>
 #include <Window.h>
 
-#include <ctype.h>
-#include <string.h>
-#include <stdlib.h>
-#include <time.h>
-#include <stdarg.h>
+#include "Attributes.h"
+#include "ContainerWindow.h"
+#include "MimeTypes.h"
+#include "Model.h"
+#include "PoseView.h"
 
 
 #ifndef _IMPEXP_BE
@@ -86,19 +86,28 @@ const float kExactMatchScore = INFINITY;
 bool gLocalizedNamePreferred;
 
 
+bool
+SecondaryMouseButtonDown(int32 modifiers, int32 buttons)
+{
+	return (buttons & B_SECONDARY_MOUSE_BUTTON) != 0
+		|| ((buttons & B_PRIMARY_MOUSE_BUTTON) != 0
+			&& (modifiers & B_CONTROL_KEY) != 0);
+}
+
+
 uint32
 HashString(const char* string, uint32 seed)
 {
 	char ch;
-	uint32 result = seed;
+	uint32 hash = seed;
 
 	while((ch = *string++) != 0) {
-		result = (result << 7) ^ (result >> 24);
-		result ^= ch;
+		hash = (hash << 7) ^ (hash >> 24);
+		hash ^= ch;
 	}
+	hash ^= hash << 12;
 
-	result ^= result << 12;
-	return result;
+	return hash;
 }
 
 
@@ -112,7 +121,6 @@ AttrHashString(const char* string, uint32 type)
 		hash = (hash << 7) ^ (hash >> 24);
 		hash ^= c;
 	}
-
 	hash ^= hash << 12;
 
 	hash &= ~0xff;
@@ -129,8 +137,9 @@ ValidateStream(BMallocIO* stream, uint32 key, int32 version)
 	int32 testVersion;
 
 	if (stream->Read(&testKey, sizeof(uint32)) <= 0
-		|| stream->Read(&testVersion, sizeof(int32)) <=0)
+		|| stream->Read(&testVersion, sizeof(int32)) <= 0) {
 		return false;
+	}
 
 	return testKey == key && testVersion == version;
 }
@@ -218,9 +227,8 @@ PeriodicUpdatePoses::DoPeriodicUpdate(bool forceRedraw)
 	int32 count = fPoseList.CountItems();
 	for (int32 index = 0; index < count; index++) {
 		periodic_pose* periodic = fPoseList.ItemAt(index);
-		if (periodic->callback(periodic->pose, periodic->cookie)
-			|| forceRedraw) {
-			periodic->pose_view->LockLooper();
+		if ((periodic->callback(periodic->pose, periodic->cookie)
+			|| forceRedraw) && periodic->pose_view->LockLooper()) {
 			periodic->pose_view->UpdateIcon(periodic->pose);
 			periodic->pose_view->UnlockLooper();
 		}
@@ -231,7 +239,6 @@ PeriodicUpdatePoses::DoPeriodicUpdate(bool forceRedraw)
 
 
 PeriodicUpdatePoses gPeriodicUpdatePoses;
-
 
 }	// namespace BPrivate
 
@@ -261,13 +268,13 @@ PoseInfo::EndianSwap(void* castToThis)
 void
 PoseInfo::PrintToStream()
 {
-	PRINT(("%s, inode:%Lx, location %f %f\n",
+	PRINT(("%s, inode:%" B_PRIx64 ", location %f %f\n",
 		fInvisible ? "hidden" : "visible",
 		fInitedDirectory, fLocation.x, fLocation.y));
 }
 
 
-// #pragma mark -
+// #pragma mark - ExtendedPoseInfo
 
 
 size_t
@@ -287,8 +294,7 @@ ExtendedPoseInfo::Size(int32 count)
 size_t
 ExtendedPoseInfo::SizeWithHeadroom() const
 {
-	return sizeof(ExtendedPoseInfo) + (fNumFrames + 1)
-		* sizeof(FrameLocation);
+	return sizeof(ExtendedPoseInfo) + (fNumFrames + 1) * sizeof(FrameLocation);
 }
 
 
@@ -347,6 +353,7 @@ ExtendedPoseInfo::SetLocationForFrame(BPoint newLocation, BRect frame)
 	fLocations[fNumFrames].fLocation = newLocation;
 	fLocations[fNumFrames].fWorkspaces = 0xffffffff;
 	fNumFrames++;
+
 	return true;
 }
 
@@ -385,7 +392,7 @@ ExtendedPoseInfo::PrintToStream()
 }
 
 
-// #pragma mark -
+// #pragma mark - OffscreenBitmap
 
 
 OffscreenBitmap::OffscreenBitmap(BRect frame)
@@ -466,7 +473,7 @@ OffscreenBitmap::View() const
 }
 
 
-// #pragma mark -
+// #pragma mark - BPrivate functions
 
 
 namespace BPrivate {
@@ -544,26 +551,26 @@ FadeRGBA32Vertical(uint32* bits, int32 width, int32 height, int32 from,
 }	// namespace BPrivate
 
 
-// #pragma mark -
+// #pragma mark - DraggableIcon
 
 
 DraggableIcon::DraggableIcon(BRect rect, const char* name,
-		const char* mimeType, icon_size size, const BMessage* message,
-		BMessenger target, uint32 resizeMask, uint32 flags)
+	const char* mimeType, icon_size which, const BMessage* message,
+	BMessenger target, uint32 resizingMode, uint32 flags)
 	:
-	BView(rect, name, resizeMask, flags),
+	BView(rect, name, resizingMode, flags),
 	fMessage(*message),
 	fTarget(target)
 {
 	fBitmap = new BBitmap(Bounds(), kDefaultIconDepth);
 	BMimeType mime(mimeType);
-	status_t error = mime.GetIcon(fBitmap, size);
+	status_t result = mime.GetIcon(fBitmap, which);
 	ASSERT(mime.IsValid());
-	if (error != B_OK) {
-		PRINT(("failed to get icon for %s, %s\n", mimeType, strerror(error)));
+	if (result != B_OK) {
+		PRINT(("failed to get icon for %s, %s\n", mimeType, strerror(result)));
 		BMimeType mime(B_FILE_MIMETYPE);
 		ASSERT(mime.IsInstalled());
-		mime.GetIcon(fBitmap, size);
+		mime.GetIcon(fBitmap, which);
 	}
 }
 
@@ -582,22 +589,18 @@ DraggableIcon::SetTarget(BMessenger target)
 
 
 BRect
-DraggableIcon::PreferredRect(BPoint offset, icon_size size)
+DraggableIcon::PreferredRect(BPoint offset, icon_size which)
 {
-	BRect result(0, 0, size - 1, size - 1);
-	result.OffsetTo(offset);
-	return result;
+	BRect rect(0, 0, which - 1, which - 1);
+	rect.OffsetTo(offset);
+	return rect;
 }
 
 
 void
 DraggableIcon::AttachedToWindow()
 {
-	BView* parent = Parent();
-	if (parent != NULL) {
-		SetViewColor(parent->ViewColor());
-		SetLowColor(parent->LowColor());
-	}
+	AdoptParentColors();
 }
 
 
@@ -648,25 +651,29 @@ DraggableIcon::Draw(BRect)
 }
 
 
-// #pragma mark -
+// #pragma mark - FlickerFreeStringView
 
 
 FlickerFreeStringView::FlickerFreeStringView(BRect bounds, const char* name,
-		const char* text, uint32 resizeFlags, uint32 flags)
+	const char* text, uint32 resizingMode, uint32 flags)
 	:
-	BStringView(bounds, name, text, resizeFlags, flags),
+	BStringView(bounds, name, text, resizingMode, flags),
 	fBitmap(NULL),
-	fOrigBitmap(NULL)
+	fViewColor(ViewColor()),
+	fLowColor(LowColor()),
+	fOriginalBitmap(NULL)
 {
 }
 
 
 FlickerFreeStringView::FlickerFreeStringView(BRect bounds, const char* name,
-		const char* text, BBitmap* inBitmap, uint32 resizeFlags, uint32 flags)
+	const char* text, BBitmap* inBitmap, uint32 resizingMode, uint32 flags)
 	:
-	BStringView(bounds, name, text, resizeFlags, flags),
+	BStringView(bounds, name, text, resizingMode, flags),
 	fBitmap(NULL),
-	fOrigBitmap(inBitmap)
+	fViewColor(ViewColor()),
+	fLowColor(LowColor()),
+	fOriginalBitmap(inBitmap)
 {
 }
 
@@ -681,12 +688,12 @@ void
 FlickerFreeStringView::Draw(BRect)
 {
 	BRect bounds(Bounds());
-	if (!fBitmap)
+	if (fBitmap == NULL)
 		fBitmap = new OffscreenBitmap(Bounds());
 
 	BView* offscreen = fBitmap->BeginUsing(bounds);
 
-	if (Parent()) {
+	if (Parent() != NULL) {
 		fViewColor = Parent()->ViewColor();
 		fLowColor = Parent()->ViewColor();
 	}
@@ -696,16 +703,16 @@ FlickerFreeStringView::Draw(BRect)
 	offscreen->SetLowColor(fLowColor);
 
 	BFont font;
-    GetFont(&font);
+	GetFont(&font);
 	offscreen->SetFont(&font);
 
 	offscreen->Sync();
-	if (fOrigBitmap)
-		offscreen->DrawBitmap(fOrigBitmap, Frame(), bounds);
+	if (fOriginalBitmap != NULL)
+		offscreen->DrawBitmap(fOriginalBitmap, Frame(), bounds);
 	else
 		offscreen->FillRect(bounds, B_SOLID_LOW);
 
-	if (Text()) {
+	if (Text() != NULL) {
 		BPoint loc;
 
 		font_height	height;
@@ -753,7 +760,7 @@ void
 FlickerFreeStringView::AttachedToWindow()
 {
 	_inherited::AttachedToWindow();
-	if (Parent()) {
+	if (Parent() != NULL) {
 		fViewColor = Parent()->ViewColor();
 		fLowColor = Parent()->ViewColor();
 	}
@@ -784,7 +791,7 @@ FlickerFreeStringView::SetLowColor(rgb_color color)
 }
 
 
-// #pragma mark -
+// #pragma mark - TitledSeparatorItem
 
 
 TitledSeparatorItem::TitledSeparatorItem(const char* label)
@@ -827,7 +834,7 @@ TitledSeparatorItem::Draw()
 	BRect frame(Frame());
 
 	BMenu* parent = Menu();
-	ASSERT(parent);
+	ASSERT(parent != NULL);
 
 	menu_info minfo;
 	get_menu_info(&minfo);
@@ -897,7 +904,7 @@ TitledSeparatorItem::Draw()
 
 	parent->EndLineArray();
 
-	font_height	finfo;
+	font_height finfo;
 	parent->GetFontHeight(&finfo);
 
 	parent->SetLowColor(parent->ViewColor());
@@ -916,11 +923,11 @@ TitledSeparatorItem::Draw()
 }
 
 
-// #pragma mark -
+// #pragma mark - ShortcutFilter
 
 
 ShortcutFilter::ShortcutFilter(uint32 shortcutKey, uint32 shortcutModifier,
-		uint32 shortcutWhat, BHandler* target)
+	uint32 shortcutWhat, BHandler* target)
 	:
 	BMessageFilter(B_KEY_DOWN),
 	fShortcutKey(shortcutKey),
@@ -943,8 +950,9 @@ ShortcutFilter::Filter(BMessage* message, BHandler**)
 		if (message->FindInt32("modifiers", (int32*)&modifiers) != B_OK
 			|| message->FindInt32("raw_char", (int32*)&rawKeyChar) != B_OK
 			|| message->FindInt8("byte", (int8*)&byte) != B_OK
-			|| message->FindInt32("key", &key) != B_OK)
+			|| message->FindInt32("key", &key) != B_OK) {
 			return B_DISPATCH_MESSAGE;
+		}
 
 		modifiers &= B_SHIFT_KEY | B_COMMAND_KEY | B_CONTROL_KEY
 			| B_OPTION_KEY | B_MENU_KEY;
@@ -961,11 +969,10 @@ ShortcutFilter::Filter(BMessage* message, BHandler**)
 }
 
 
-// #pragma mark -
+// #pragma mark - BPrivate functions
 
 
 namespace BPrivate {
-
 
 void
 EmbedUniqueVolumeInfo(BMessage* message, const BVolume* volume)
@@ -977,7 +984,7 @@ EmbedUniqueVolumeInfo(BMessage* message, const BVolume* volume)
 	if (volume->GetRootDirectory(&rootDirectory) == B_OK
 		&& rootDirectory.GetCreationTime(&created) == B_OK
 		&& fs_stat_dev(volume->Device(), &info) == 0) {
-		message->AddInt32("creationDate", created);
+		message->AddInt64("creationDate", created);
 		message->AddInt64("capacity", volume->Capacity());
 		message->AddString("deviceName", info.device_name);
 		message->AddString("volumeName", info.volume_name);
@@ -987,18 +994,28 @@ EmbedUniqueVolumeInfo(BMessage* message, const BVolume* volume)
 
 
 status_t
-MatchArchivedVolume(BVolume* result, const BMessage* message, int32 index)
+MatchArchivedVolume(BVolume* volume, const BMessage* message, int32 index)
 {
-	time_t created;
+	int64 created64;
 	off_t capacity;
 
-	if (message->FindInt32("creationDate", index, &created) != B_OK
-		|| message->FindInt64("capacity", index, &capacity) != B_OK)
+	if (message->FindInt64("creationDate", index, &created64) != B_OK) {
+		int32 created32;
+		if (message->FindInt32("creationDate", index, &created32) != B_OK)
+			return B_ERROR;
+		created64 = created32;
+	}
+
+	time_t created = created64;
+
+	if (message->FindInt64("capacity", index, &capacity) != B_OK)
 		return B_ERROR;
 
 	BVolumeRoster roster;
-	BVolume volume;
-	BString deviceName, volumeName, fshName;
+	BVolume tempVolume;
+	BString deviceName;
+	BString volumeName;
+	BString fshName;
 
 	if (message->FindString("deviceName", &deviceName) == B_OK
 		&& message->FindString("volumeName", &volumeName) == B_OK
@@ -1011,59 +1028,64 @@ MatchArchivedVolume(BVolume* result, const BMessage* message, int32 index)
 		dev_t foundDevice = -1;
 		int foundScore = -1;
 		roster.Rewind();
-		while (roster.GetNextVolume(&volume) == B_OK) {
-			if (volume.IsPersistent() && volume.KnowsQuery()) {
+		while (roster.GetNextVolume(&tempVolume) == B_OK) {
+			if (tempVolume.IsPersistent() && tempVolume.KnowsQuery()) {
 				// get creation time and fs_info
 				BDirectory root;
-				volume.GetRootDirectory(&root);
+				tempVolume.GetRootDirectory(&root);
 				time_t cmpCreated;
 				fs_info info;
 				if (root.GetCreationTime(&cmpCreated) == B_OK
-					&& fs_stat_dev(volume.Device(), &info) == 0) {
+					&& fs_stat_dev(tempVolume.Device(), &info) == 0) {
 					// compute the score
 					int score = 0;
 
 					// creation time
 					if (created == cmpCreated)
 						score += 5;
+
 					// capacity
-					if (capacity == volume.Capacity())
+					if (capacity == tempVolume.Capacity())
 						score += 4;
+
 					// device name
 					if (deviceName == info.device_name)
 						score += 3;
+
 					// volume name
 					if (volumeName == info.volume_name)
 						score += 2;
+
 					// fsh name
 					if (fshName == info.fsh_name)
 						score += 1;
 
 					// check score
 					if (score >= 9 && score > foundScore) {
-						foundDevice = volume.Device();
+						foundDevice = tempVolume.Device();
 						foundScore = score;
 					}
 				}
 			}
 		}
 		if (foundDevice >= 0)
-			return result->SetTo(foundDevice);
+			return volume->SetTo(foundDevice);
 	} else {
 		// Old style volume identifiers: We have only creation time and
 		// capacity. Both must match.
 		roster.Rewind();
-		while (roster.GetNextVolume(&volume) == B_OK)
-			if (volume.IsPersistent() && volume.KnowsQuery()) {
+		while (roster.GetNextVolume(&tempVolume) == B_OK) {
+			if (tempVolume.IsPersistent() && tempVolume.KnowsQuery()) {
 				BDirectory root;
-				volume.GetRootDirectory(&root);
+				tempVolume.GetRootDirectory(&root);
 				time_t cmpCreated;
 				root.GetCreationTime(&cmpCreated);
-				if (created == cmpCreated && capacity == volume.Capacity()) {
-					*result = volume;
+				if (created == cmpCreated && capacity == tempVolume.Capacity()) {
+					*volume = tempVolume;
 					return B_OK;
 				}
 			}
+		}
 	}
 
 	return B_DEV_BAD_DRIVE_NUM;
@@ -1132,9 +1154,9 @@ EachEntryRefCommon(BMessage* message, entry_ref *(*func)(entry_ref*, void*),
 	for (int32 index = 0; index < count; index++) {
 		entry_ref ref;
 		message->FindRef("refs", index, &ref);
-		entry_ref* result = (func)(&ref, passThru);
-		if (result)
-			return result;
+		entry_ref* newRef = (func)(&ref, passThru);
+		if (newRef != NULL)
+			return newRef;
 	}
 
 	return NULL;
@@ -1229,24 +1251,33 @@ StringToScalar(const char* text)
 		// no suffix, try plain byte conversion
 		val = strtoll(buffer, &end, 10);
 	}
+	delete[] buffer;
 
-	delete [] buffer;
 	return val;
+}
+
+
+int32
+ListIconSize()
+{
+	static int32 sIconSize = std::max((int32)B_MINI_ICON,
+		(int32)ceilf(B_MINI_ICON * be_plain_font->Size() / 12));
+	return sIconSize;
 }
 
 
 static BRect
 LineBounds(BPoint where, float length, bool vertical)
 {
-	BRect result;
-	result.SetLeftTop(where);
-	result.SetRightBottom(where + BPoint(2, 2));
+	BRect rect;
+	rect.SetLeftTop(where);
+	rect.SetRightBottom(where + BPoint(2, 2));
 	if (vertical)
-		result.bottom = result.top + length;
+		rect.bottom = rect.top + length;
 	else
-		result.right = result.left + length;
+		rect.right = rect.left + length;
 
-	return result;
+	return rect;
 }
 
 
@@ -1256,8 +1287,8 @@ SeparatorLine::SeparatorLine(BPoint where, float length, bool vertical,
 	BView(LineBounds(where, length, vertical), name,
 		B_FOLLOW_LEFT | B_FOLLOW_TOP, B_WILL_DRAW)
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
 }
 
 
@@ -1324,7 +1355,7 @@ void
 EnableNamedMenuItem(BMenu* menu, const char* itemName, bool on)
 {
 	BMenuItem* item = menu->FindItem(itemName);
-	if (item)
+	if (item != NULL)
 		item->SetEnabled(on);
 }
 
@@ -1333,7 +1364,7 @@ void
 MarkNamedMenuItem(BMenu* menu, const char* itemName, bool on)
 {
 	BMenuItem* item = menu->FindItem(itemName);
-	if (item)
+	if (item != NULL)
 		item->SetMarked(on);
 }
 
@@ -1342,7 +1373,7 @@ void
 EnableNamedMenuItem(BMenu* menu, uint32 commandName, bool on)
 {
 	BMenuItem* item = menu->FindItem(commandName);
-	if (item)
+	if (item != NULL)
 		item->SetEnabled(on);
 }
 
@@ -1351,7 +1382,7 @@ void
 MarkNamedMenuItem(BMenu* menu, uint32 commandName, bool on)
 {
 	BMenuItem* item = menu->FindItem(commandName);
-	if (item)
+	if (item != NULL)
 		item->SetMarked(on);
 }
 
@@ -1359,16 +1390,16 @@ MarkNamedMenuItem(BMenu* menu, uint32 commandName, bool on)
 void
 DeleteSubmenu(BMenuItem* submenuItem)
 {
-	if (!submenuItem)
+	if (submenuItem == NULL)
 		return;
 
 	BMenu* menu = submenuItem->Submenu();
-	if (!menu)
+	if (menu == NULL)
 		return;
 
 	for (;;) {
 		BMenuItem* item = menu->RemoveItem((int32)0);
-		if (!item)
+		if (item == NULL)
 			return;
 
 		delete item;
@@ -1377,7 +1408,7 @@ DeleteSubmenu(BMenuItem* submenuItem)
 
 
 status_t
-GetAppSignatureFromAttr(BFile* file, char* result)
+GetAppSignatureFromAttr(BFile* file, char* attr)
 {
 	// This call is a performance improvement that
 	// avoids using the BAppFileInfo API when retrieving the
@@ -1386,21 +1417,21 @@ GetAppSignatureFromAttr(BFile* file, char* result)
 
 #ifdef B_APP_FILE_INFO_IS_FAST
 	BAppFileInfo appFileInfo(file);
-	return appFileInfo.GetSignature(result);
+	return appFileInfo.GetSignature(attr);
 #else
 	ssize_t readResult = file->ReadAttr(kAttrAppSignature, B_MIME_STRING_TYPE,
-		0, result, B_MIME_TYPE_LENGTH);
+		0, attr, B_MIME_TYPE_LENGTH);
 
 	if (readResult <= 0)
 		return (status_t)readResult;
 
 	return B_OK;
-#endif	// B_APP_FILE_INFO_IS_FAST
+#endif // B_APP_FILE_INFO_IS_FAST
 }
 
 
 status_t
-GetAppIconFromAttr(BFile* file, BBitmap* result, icon_size size)
+GetAppIconFromAttr(BFile* file, BBitmap* icon, icon_size which)
 {
 	// This call is a performance improvement that
 	// avoids using the BAppFileInfo API when retrieving the
@@ -1409,7 +1440,7 @@ GetAppIconFromAttr(BFile* file, BBitmap* result, icon_size size)
 
 //#ifdef B_APP_FILE_INFO_IS_FAST
 	BAppFileInfo appFileInfo(file);
-	return appFileInfo.GetIcon(result, size);
+	return appFileInfo.GetIcon(icon, which);
 //#else
 //
 //	const char* attrName = kAttrIcon;
@@ -1417,25 +1448,25 @@ GetAppIconFromAttr(BFile* file, BBitmap* result, icon_size size)
 //
 //	// try vector icon
 //	attr_info ainfo;
-//	status_t ret = file->GetAttrInfo(attrName, &ainfo);
+//	status_t result = file->GetAttrInfo(attrName, &ainfo);
 //
-//	if (ret == B_OK) {
+//	if (result == B_OK) {
 //		uint8 buffer[ainfo.size];
 //		ssize_t readResult = file->ReadAttr(attrName, type, 0, buffer,
-//											ainfo.size);
+//			ainfo.size);
 //		if (readResult == ainfo.size) {
-//			if (BIconUtils::GetVectorIcon(buffer, ainfo.size, result) == B_OK)
+//			if (BIconUtils::GetVectorIcon(buffer, ainfo.size, icon) == B_OK)
 //				return B_OK;
 //		}
 //	}
 //
 //	// try again with R5 icons
-//	attrName = size == B_LARGE_ICON ? kAttrLargeIcon : kAttrMiniIcon;
-//	type = size == B_LARGE_ICON ? LARGE_ICON_TYPE : MINI_ICON_TYPE;
+//	attrName = which == B_LARGE_ICON ? kAttrLargeIcon : kAttrMiniIcon;
+//	type = which == B_LARGE_ICON ? LARGE_ICON_TYPE : MINI_ICON_TYPE;
 //
-//	ret = file->GetAttrInfo(attrName, &ainfo);
-//	if (ret < B_OK)
-//		return ret;
+//	result = file->GetAttrInfo(attrName, &ainfo);
+//	if (result < B_OK)
+//		return result;
 //
 //	uint8 buffer[ainfo.size];
 //
@@ -1443,22 +1474,21 @@ GetAppIconFromAttr(BFile* file, BBitmap* result, icon_size size)
 //	if (readResult <= 0)
 //		return (status_t)readResult;
 //
-//	if (result->ColorSpace() != B_CMAP8) {
-//		ret = BIconUtils::ConvertFromCMAP8(buffer, size, size, size, result);
-//	} else {
-//		result->SetBits(buffer, result->BitsLength(), 0, B_CMAP8);
-//	}
+//	if (icon->ColorSpace() != B_CMAP8)
+//		result = BIconUtils::ConvertFromCMAP8(buffer, which, which, which, icon);
+//	else
+//		icon->SetBits(buffer, icon->BitsLength(), 0, B_CMAP8);
 //
-//	return ret;
+//	return result;
 //#endif	// B_APP_FILE_INFO_IS_FAST
 }
 
 
 status_t
-GetFileIconFromAttr(BNode* file, BBitmap* result, icon_size size)
+GetFileIconFromAttr(BNode* node, BBitmap* icon, icon_size which)
 {
-	BNodeInfo fileInfo(file);
-	return fileInfo.GetIcon(result, size);
+	BNodeInfo fileInfo(node);
+	return fileInfo.GetIcon(icon, which);
 }
 
 
@@ -1476,13 +1506,13 @@ EachMenuItem(BMenu* menu, bool recursive, BMenuItem* (*func)(BMenuItem *))
 	int32 count = menu->CountItems();
 	for (int32 index = 0; index < count; index++) {
 		BMenuItem* item = menu->ItemAt(index);
-		BMenuItem* result = (func)(item);
-		if (result)
-			return result;
+		BMenuItem* newItem = (func)(item);
+		if (newItem != NULL)
+			return newItem;
 
 		if (recursive) {
 			BMenu* submenu = menu->SubmenuAt(index);
-			if (submenu)
+			if (submenu != NULL)
 				return EachMenuItem(submenu, true, func);
 		}
 	}
@@ -1498,13 +1528,13 @@ EachMenuItem(const BMenu* menu, bool recursive,
 	int32 count = menu->CountItems();
 	for (int32 index = 0; index < count; index++) {
 		BMenuItem* item = menu->ItemAt(index);
-		BMenuItem* result = (func)(item);
-		if (result)
-			return result;
+		BMenuItem* newItem = (func)(item);
+		if (newItem != NULL)
+			return newItem;
 
 		if (recursive) {
 			BMenu* submenu = menu->SubmenuAt(index);
-			if (submenu)
+			if (submenu != NULL)
 				return EachMenuItem(submenu, true, func);
 		}
 	}
@@ -1513,8 +1543,11 @@ EachMenuItem(const BMenu* menu, bool recursive,
 }
 
 
+//	#pragma mark - PositionPassingMenuItem
+
+
 PositionPassingMenuItem::PositionPassingMenuItem(const char* title,
-		BMessage* message, char shortcut, uint32 modifiers)
+	BMessage* message, char shortcut, uint32 modifiers)
 	:
 	BMenuItem(title, message, shortcut, modifiers)
 {
@@ -1528,19 +1561,36 @@ PositionPassingMenuItem::PositionPassingMenuItem(BMenu* menu, BMessage* message)
 }
 
 
+PositionPassingMenuItem::PositionPassingMenuItem(BMessage* data)
+	:
+	BMenuItem(data)
+{
+}
+
+
+BArchivable*
+PositionPassingMenuItem::Instantiate(BMessage* data)
+{
+	if (validate_instantiation(data, "PositionPassingMenuItem"))
+		return new PositionPassingMenuItem(data);
+
+	return NULL;
+}
+
+
 status_t
 PositionPassingMenuItem::Invoke(BMessage* message)
 {
-	if (!Menu())
+	if (Menu() == NULL)
 		return B_ERROR;
 
 	if (!IsEnabled())
 		return B_ERROR;
 
-	if (!message)
+	if (message == NULL)
 		message = Message();
 
-	if (!message)
+	if (message == NULL)
 		return B_BAD_VALUE;
 
 	BMessage clone(*message);
@@ -1555,6 +1605,7 @@ PositionPassingMenuItem::Invoke(BMessage* message)
 	for (;;) {
 		if (!menu->Supermenu())
 			break;
+
 		menu = menu->Supermenu();
 	}
 
@@ -1570,6 +1621,9 @@ PositionPassingMenuItem::Invoke(BMessage* message)
 
 	return BInvoker::Invoke(&clone);
 }
+
+
+//	#pragma mark - BPrivate functions
 
 
 bool
@@ -1629,13 +1683,16 @@ ComputeTypeAheadScore(const char* text, const char* match, bool wordMode)
 }
 
 
+//	#pragma mark - throw on error functions.
+
+
 void
-_ThrowOnError(status_t error, const char* DEBUG_ONLY(file),
+_ThrowOnError(status_t result, const char* DEBUG_ONLY(file),
 	int32 DEBUG_ONLY(line))
 {
-	if (error != B_OK) {
-		PRINT(("failing %s at %s:%d\n", strerror(error), file, (int)line));
-		throw error;
+	if (result != B_OK) {
+		PRINT(("%s at %s:%d\n", strerror(result), file, (int)line));
+		throw result;
 	}
 }
 
@@ -1645,20 +1702,19 @@ _ThrowIfNotSize(ssize_t size, const char* DEBUG_ONLY(file),
 	int32 DEBUG_ONLY(line))
 {
 	if (size < B_OK) {
-		PRINT(("failing %s at %s:%d\n", strerror(size), file, (int)line));
+		PRINT(("%s at %s:%d\n", strerror((status_t)size), file, (int)line));
 		throw (status_t)size;
 	}
 }
 
 
 void
-_ThrowOnError(status_t error, const char* DEBUG_ONLY(debugString),
-	const char* DEBUG_ONLY(file), int32 DEBUG_ONLY(line))
+_ThrowOnAssert(bool success, const char* DEBUG_ONLY(file),
+	int32 DEBUG_ONLY(line))
 {
-	if (error != B_OK) {
-		PRINT(("failing %s, %s at %s:%d\n", debugString, strerror(error), file,
-			(int)line));
-		throw error;
+	if (!success) {
+		PRINT(("Assert failed at %s:%d\n", file, (int)line));
+		throw B_ERROR;
 	}
 }
 

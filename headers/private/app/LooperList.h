@@ -43,6 +43,7 @@ public:
 
 			void				InitAfterFork();
 
+private:
 	struct LooperData {
 		LooperData();
 		LooperData(BLooper* looper);
@@ -51,6 +52,7 @@ public:
 
 		BLooper*	looper;
 	};
+	typedef std::vector<BLooperList::LooperData>::iterator LooperDataIterator;
 	struct FindLooperPred {
 		FindLooperPred(const BLooper* loop) : looper(loop) {}
 		bool operator()(LooperData& Data);
@@ -72,7 +74,6 @@ public:
 		port_id port;
 	};
 
-private:
 	static	bool				EmptySlotPred(LooperData& Data);
 			void				AssertLocked();
 

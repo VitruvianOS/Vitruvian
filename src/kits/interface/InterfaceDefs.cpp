@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2010, Haiku, Inc.
+ * Copyright 2001-2015, Haiku, Inc.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -8,6 +8,7 @@
  *		Axel Dörfler, axeld@pinc-software.de
  *		Michael Lotz <mmlr@mlotz.ch>
  *		Wim van der Meer <WPJvanderMeer@gmail.com>
+ *		Joseph Groover <looncraz@looncraz.net>
  */
 
 
@@ -39,6 +40,8 @@
 #include <ColorConversion.h>
 #include <DecorInfo.h>
 #include <DefaultColors.h>
+#include <DesktopLink.h>
+#include <HaikuControlLook.h>
 #include <InputServerTypes.h>
 #include <input_globals.h>
 #include <InterfacePrivate.h>
@@ -69,7 +72,7 @@ menu_info *_menu_info_ptr_;
 
 extern "C" const char B_NOTIFICATION_SENDER[] = "be:sender";
 
-static const rgb_color _kDefaultColors[kNumColors] = {
+static const rgb_color _kDefaultColors[kColorWhichCount] = {
 	{216, 216, 216, 255},	// B_PANEL_BACKGROUND_COLOR
 	{216, 216, 216, 255},	// B_MENU_BACKGROUND_COLOR
 	{255, 203, 0, 255},		// B_WINDOW_TAB_COLOR
@@ -84,7 +87,7 @@ static const rgb_color _kDefaultColors[kNumColors] = {
 	{0, 0, 0, 255},			// B_DOCUMENT_TEXT_COLOR
 	{245, 245, 245, 255},	// B_CONTROL_BACKGROUND_COLOR
 	{0, 0, 0, 255},			// B_CONTROL_TEXT_COLOR
-	{0, 0, 0, 255},			// B_CONTROL_BORDER_COLOR
+	{172, 172, 172, 255},	// B_CONTROL_BORDER_COLOR
 	{102, 152, 203, 255},	// B_CONTROL_HIGHLIGHT_COLOR
 	{0, 0, 0, 255},			// B_NAVIGATION_PULSE_COLOR
 	{255, 255, 255, 255},	// B_SHINE_COLOR
@@ -97,12 +100,67 @@ static const rgb_color _kDefaultColors[kNumColors] = {
 	{224, 224, 224, 255},	// B_WINDOW_BORDER_COLOR
 	{232, 232, 232, 255},	// B_WINDOW_INACTIVE_BORDER_COLOR
 	{27, 82, 140, 255},     // B_CONTROL_MARK_COLOR
+	{255, 255, 255, 255},	// B_LIST_BACKGROUND_COLOR
+	{190, 190, 190, 255},	// B_LIST_SELECTED_BACKGROUND_COLOR
+	{0, 0, 0, 255},			// B_LIST_ITEM_TEXT_COLOR
+	{0, 0, 0, 255},			// B_LIST_SELECTED_ITEM_TEXT_COLOR
+	{216, 216, 216, 255},	// B_SCROLL_BAR_THUMB_COLOR
+	{51, 102, 187, 255},	// B_LINK_TEXT_COLOR
+	{102, 152, 203, 255},	// B_LINK_HOVER_COLOR
+	{145, 112, 155, 255},	// B_LINK_VISITED_COLOR
+	{121, 142, 203, 255},	// B_LINK_ACTIVE_COLOR
+	{50, 150, 255, 255},	// B_STATUS_BAR_COLOR
 	// 100...
-	{0, 255, 0, 255},		// B_SUCCESS_COLOR
-	{255, 0, 0, 255},		// B_FAILURE_COLOR
+	{46, 204, 64, 255},		// B_SUCCESS_COLOR
+	{255, 65, 54, 255},		// B_FAILURE_COLOR
 	{}
 };
 const rgb_color* BPrivate::kDefaultColors = &_kDefaultColors[0];
+
+
+static const char* kColorNames[kColorWhichCount] = {
+	"B_PANEL_BACKGROUND_COLOR",
+	"B_MENU_BACKGROUND_COLOR",
+	"B_WINDOW_TAB_COLOR",
+	"B_KEYBOARD_NAVIGATION_COLOR",
+	"B_DESKTOP_COLOR",
+	"B_MENU_SELECTED_BACKGROUND_COLOR",
+	"B_MENU_ITEM_TEXT_COLOR",
+	"B_MENU_SELECTED_ITEM_TEXT_COLOR",
+	"B_MENU_SELECTED_BORDER_COLOR",
+	"B_PANEL_TEXT_COLOR",
+	"B_DOCUMENT_BACKGROUND_COLOR",
+	"B_DOCUMENT_TEXT_COLOR",
+	"B_CONTROL_BACKGROUND_COLOR",
+	"B_CONTROL_TEXT_COLOR",
+	"B_CONTROL_BORDER_COLOR",
+	"B_CONTROL_HIGHLIGHT_COLOR",
+	"B_NAVIGATION_PULSE_COLOR",
+	"B_SHINE_COLOR",
+	"B_SHADOW_COLOR",
+	"B_TOOLTIP_BACKGROUND_COLOR",
+	"B_TOOLTIP_TEXT_COLOR",
+	"B_WINDOW_TEXT_COLOR",
+	"B_WINDOW_INACTIVE_TAB_COLOR",
+	"B_WINDOW_INACTIVE_TEXT_COLOR",
+	"B_WINDOW_BORDER_COLOR",
+	"B_WINDOW_INACTIVE_BORDER_COLOR",
+	"B_CONTROL_MARK_COLOR",
+	"B_LIST_BACKGROUND_COLOR",
+	"B_LIST_SELECTED_BACKGROUND_COLOR",
+	"B_LIST_ITEM_TEXT_COLOR",
+	"B_LIST_SELECTED_ITEM_TEXT_COLOR",
+	"B_SCROLL_BAR_THUMB_COLOR",
+	"B_LINK_TEXT_COLOR",
+	"B_LINK_HOVER_COLOR",
+	"B_LINK_VISITED_COLOR",
+	"B_LINK_ACTIVE_COLOR",
+	"B_STATUS_BAR_COLOR",
+	// 100...
+	"B_SUCCESS_COLOR",
+	"B_FAILURE_COLOR",
+	NULL
+};
 
 
 namespace BPrivate {
@@ -942,7 +1000,7 @@ get_mouse(BPoint* screenWhere, uint32* buttons)
 
 	BPrivate::AppServerLink link;
 	link.StartMessage(AS_GET_CURSOR_POSITION);
-	
+
 	int32 code;
 	status_t ret = link.FlushWithReply(code);
 	if (ret != B_OK)
@@ -975,21 +1033,21 @@ get_mouse_bitmap(BBitmap** bitmap, BPoint* hotspot)
 {
 	if (bitmap == NULL && hotspot == NULL)
 		return B_BAD_VALUE;
-	
+
 	BPrivate::AppServerLink link;
 	link.StartMessage(AS_GET_CURSOR_BITMAP);
-	
+
 	int32 code;
 	status_t status = link.FlushWithReply(code);
 	if (status != B_OK)
 		return status;
 	if (code != B_OK)
 		return code;
-	
+
 	uint32 size = 0;
 	uint32 cursorWidth = 0;
 	uint32 cursorHeight = 0;
-	
+
 	// if link.Read() returns an error, the same error will be returned on
 	// subsequent calls, so we'll check only the return value of the last call
 	link.Read<uint32>(&size);
@@ -1006,16 +1064,16 @@ get_mouse_bitmap(BBitmap** bitmap, BPoint* hotspot)
 		data = malloc(size);
 	if (data == NULL)
 		return B_NO_MEMORY;
-	
+
 	status = link.Read(data, size);
 	if (status != B_OK) {
 		free(data);
 		return status;
 	}
-	
+
 	BBitmap* cursorBitmap = new (std::nothrow) BBitmap(BRect(0, 0,
 		cursorWidth - 1, cursorHeight - 1), B_RGBA32);
-	
+
 	if (cursorBitmap == NULL) {
 		free(data);
 		return B_NO_MEMORY;
@@ -1025,12 +1083,12 @@ get_mouse_bitmap(BBitmap** bitmap, BPoint* hotspot)
 		cursorBitmap->SetBits(data, size, 0, B_RGBA32);
 
 	free(data);
-	
+
 	if (status == B_OK && bitmap != NULL)
 		*bitmap = cursorBitmap;
 	else
 		delete cursorBitmap;
-	
+
 	return status;
 }
 
@@ -1066,18 +1124,56 @@ rgb_color
 ui_color(color_which which)
 {
 	int32 index = color_which_to_index(which);
-	if (index < 0 || index >= kNumColors) {
+	if (index < 0 || index >= kColorWhichCount) {
 		fprintf(stderr, "ui_color(): unknown color_which %d\n", which);
 		return make_color(0, 0, 0);
 	}
 
-	if (be_app) {
+	if (be_app != NULL) {
 		server_read_only_memory* shared
 			= BApplication::Private::ServerReadOnlyMemory();
-		return shared->colors[index];
+		if (shared != NULL) {
+			// check for unset colors
+			if (shared->colors[index] == B_TRANSPARENT_COLOR)
+				shared->colors[index] = kDefaultColors[index];
+
+			return shared->colors[index];
+		}
 	}
 
 	return kDefaultColors[index];
+}
+
+
+const char*
+ui_color_name(color_which which)
+{
+	// Suppress warnings for B_NO_COLOR.
+	if (which == B_NO_COLOR)
+		return NULL;
+
+	int32 index = color_which_to_index(which);
+	if (index < 0 || index >= kColorWhichCount) {
+		fprintf(stderr, "ui_color_name(): unknown color_which %d\n", which);
+		return NULL;
+	}
+
+	return kColorNames[index];
+}
+
+
+color_which
+which_ui_color(const char* name)
+{
+	if (name == NULL)
+		return B_NO_COLOR;
+
+	for (int32 index = 0; index < kColorWhichCount; ++index) {
+		if (!strcmp(kColorNames[index], name))
+			return index_to_color_which(index);
+	}
+
+	return B_NO_COLOR;
 }
 
 
@@ -1085,16 +1181,61 @@ void
 set_ui_color(const color_which &which, const rgb_color &color)
 {
 	int32 index = color_which_to_index(which);
-	if (index < 0 || index >= kNumColors) {
+	if (index < 0 || index >= kColorWhichCount) {
 		fprintf(stderr, "set_ui_color(): unknown color_which %d\n", which);
 		return;
 	}
 
-	BPrivate::AppServerLink link;
+	if (ui_color(which) == color)
+		return;
+
+	BPrivate::DesktopLink link;
 	link.StartMessage(AS_SET_UI_COLOR);
 	link.Attach<color_which>(which);
 	link.Attach<rgb_color>(color);
 	link.Flush();
+}
+
+
+void
+set_ui_colors(const BMessage* colors)
+{
+	if (colors == NULL)
+		return;
+
+	int32 count = 0;
+	int32 index = 0;
+	char* name = NULL;
+	type_code type;
+	rgb_color color;
+	color_which which = B_NO_COLOR;
+
+	BPrivate::DesktopLink desktop;
+	if (desktop.InitCheck() != B_OK)
+		return;
+
+	desktop.StartMessage(AS_SET_UI_COLORS);
+	desktop.Attach<bool>(false);
+
+	// Only colors with names that map to system colors will get through.
+	while (colors->GetInfo(B_RGB_32_BIT_TYPE, index, &name, &type) == B_OK) {
+
+		which = which_ui_color(name);
+		++index;
+
+		if (which == B_NO_COLOR || colors->FindColor(name, &color) != B_OK)
+			continue;
+
+		desktop.Attach<color_which>(which);
+		desktop.Attach<rgb_color>(color);
+		++count;
+	}
+
+	if (count == 0)
+		return;
+
+	desktop.Attach<color_which>(B_NO_COLOR);
+	desktop.Flush();
 }
 
 
@@ -1146,7 +1287,7 @@ _init_interface_kit_()
 		be_clipboard = new BClipboard(NULL);
 
 	// TODO: Could support different themes here in the future.
-	be_control_look = new BControlLook();
+	be_control_look = new HaikuControlLook();
 
 	_init_global_fonts_();
 
@@ -1162,7 +1303,7 @@ _init_interface_kit_()
 		return status;
 
 	general_info.background_color = ui_color(B_PANEL_BACKGROUND_COLOR);
-	general_info.mark_color.set_to(0, 0, 0);
+	general_info.mark_color = ui_color(B_CONTROL_MARK_COLOR);
 	general_info.highlight_color = ui_color(B_CONTROL_HIGHLIGHT_COLOR);
 	general_info.window_frame_color = ui_color(B_WINDOW_TAB_COLOR);
 	general_info.color_frame = true;
@@ -1417,7 +1558,7 @@ truncate_string(BString& string, uint32 mode, float width,
 {
 	// add a tiny amount to the width to make floating point inaccuracy
 	// not drop chars that would actually fit exactly
-	width += 0.00001;
+	width += 1.f / 128;
 
 	switch (mode) {
 		case B_TRUNCATE_BEGINNING:

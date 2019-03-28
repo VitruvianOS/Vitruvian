@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2010, Haiku, Inc. All Rights Reserved.
+ * Copyright 2004-2010 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Author:
@@ -12,7 +12,6 @@
 #include <BeBuild.h>
 #include <Errors.h>
 
-#include <config/types.h>
 #include <inttypes.h>
 #include <sys/types.h>
 
@@ -28,7 +27,7 @@ typedef	__haiku_int64			int64;
 typedef __haiku_uint64			uint64;
 
 /* shorthand types */
-typedef volatile int8   		vint8;
+typedef volatile int8			vint8;
 typedef volatile uint8			vuint8;
 typedef volatile int16			vint16;
 typedef volatile uint16			vuint16;
@@ -48,7 +47,7 @@ typedef volatile unsigned short	vushort;
 typedef volatile unsigned char	vuchar;
 
 typedef unsigned char			uchar;
-typedef unsigned short          unichar;
+typedef unsigned short			unichar;
 
 /* descriptive types */
 typedef int32					status_t;
@@ -90,63 +89,112 @@ typedef	generic_addr_t			generic_size_t;
 #define B_PRIx64		__HAIKU_PRI_PREFIX_64 "x"
 #define B_PRIX64		__HAIKU_PRI_PREFIX_64 "X"
 
-#define B_SCNd8 		"hhd"
-#define B_SCNi8 		"hhi"
+#define B_SCNd8			"hhd"
+#define B_SCNi8			"hhi"
 #define B_SCNd16		"hd"
-#define B_SCNi16	 	"hi"
-#define B_SCNd32 		__HAIKU_PRI_PREFIX_32 "d"
-#define B_SCNi32	 	__HAIKU_PRI_PREFIX_32 "i"
+#define B_SCNi16		"hi"
+#define B_SCNd32		__HAIKU_PRI_PREFIX_32 "d"
+#define B_SCNi32		__HAIKU_PRI_PREFIX_32 "i"
 #define B_SCNd64		__HAIKU_PRI_PREFIX_64 "d"
-#define B_SCNi64 		__HAIKU_PRI_PREFIX_64 "i"
-#define B_SCNu8 		"hhu"
-#define B_SCNo8 		"hho"
-#define B_SCNx8 		"hhx"
+#define B_SCNi64		__HAIKU_PRI_PREFIX_64 "i"
+#define B_SCNu8			"hhu"
+#define B_SCNo8			"hho"
+#define B_SCNx8			"hhx"
 #define B_SCNu16		"hu"
 #define B_SCNo16		"ho"
 #define B_SCNx16		"hx"
-#define B_SCNu32 		__HAIKU_PRI_PREFIX_32 "u"
-#define B_SCNo32 		__HAIKU_PRI_PREFIX_32 "o"
-#define B_SCNx32 		__HAIKU_PRI_PREFIX_32 "x"
+#define B_SCNu32		__HAIKU_PRI_PREFIX_32 "u"
+#define B_SCNo32		__HAIKU_PRI_PREFIX_32 "o"
+#define B_SCNx32		__HAIKU_PRI_PREFIX_32 "x"
 #define B_SCNu64		__HAIKU_PRI_PREFIX_64 "u"
 #define B_SCNo64		__HAIKU_PRI_PREFIX_64 "o"
 #define B_SCNx64		__HAIKU_PRI_PREFIX_64 "x"
 
-/* printf() format strings for some standard types */
+/* printf()/scanf() format strings for some standard types */
 /* size_t */
 #define B_PRIuSIZE		__HAIKU_PRI_PREFIX_ADDR "u"
 #define B_PRIoSIZE		__HAIKU_PRI_PREFIX_ADDR "o"
 #define B_PRIxSIZE		__HAIKU_PRI_PREFIX_ADDR "x"
 #define B_PRIXSIZE		__HAIKU_PRI_PREFIX_ADDR "X"
+
+#define B_SCNuSIZE		__HAIKU_PRI_PREFIX_ADDR "u"
+#define B_SCNoSIZE		__HAIKU_PRI_PREFIX_ADDR "o"
+#define B_SCNxSIZE		__HAIKU_PRI_PREFIX_ADDR "x"
+
 /* ssize_t */
 #define B_PRIdSSIZE		__HAIKU_PRI_PREFIX_ADDR "d"
 #define B_PRIiSSIZE		__HAIKU_PRI_PREFIX_ADDR "i"
+
+#define B_SCNdSSIZE		__HAIKU_PRI_PREFIX_ADDR "d"
+#define B_SCNiSSIZE		__HAIKU_PRI_PREFIX_ADDR "i"
+
 /* addr_t */
 #define B_PRIuADDR		__HAIKU_PRI_PREFIX_ADDR "u"
 #define B_PRIoADDR		__HAIKU_PRI_PREFIX_ADDR "o"
 #define B_PRIxADDR		__HAIKU_PRI_PREFIX_ADDR "x"
 #define B_PRIXADDR		__HAIKU_PRI_PREFIX_ADDR "X"
+
+#define B_SCNuADDR		__HAIKU_PRI_PREFIX_ADDR "u"
+#define B_SCNoADDR		__HAIKU_PRI_PREFIX_ADDR "o"
+#define B_SCNxADDR		__HAIKU_PRI_PREFIX_ADDR "x"
+
 /* phys_addr_t */
 #define B_PRIuPHYSADDR	__HAIKU_PRI_PREFIX_PHYS_ADDR "u"
 #define B_PRIoPHYSADDR	__HAIKU_PRI_PREFIX_PHYS_ADDR "o"
 #define B_PRIxPHYSADDR	__HAIKU_PRI_PREFIX_PHYS_ADDR "x"
 #define B_PRIXPHYSADDR	__HAIKU_PRI_PREFIX_PHYS_ADDR "X"
+
+#define B_SCNuPHYSADDR	__HAIKU_PRI_PREFIX_PHYS_ADDR "u"
+#define B_SCNoPHYSADDR	__HAIKU_PRI_PREFIX_PHYS_ADDR "o"
+#define B_SCNxPHYSADDR	__HAIKU_PRI_PREFIX_PHYS_ADDR "x"
+
 /* generic_addr_t */
 #define B_PRIuGENADDR	__HAIKU_PRI_PREFIX_GENERIC_ADDR "u"
 #define B_PRIoGENADDR	__HAIKU_PRI_PREFIX_GENERIC_ADDR "o"
 #define B_PRIxGENADDR	__HAIKU_PRI_PREFIX_GENERIC_ADDR "x"
 #define B_PRIXGENADDR	__HAIKU_PRI_PREFIX_GENERIC_ADDR "X"
+
+#define B_SCNuGENADDR	__HAIKU_PRI_PREFIX_GENERIC_ADDR "u"
+#define B_SCNoGENADDR	__HAIKU_PRI_PREFIX_GENERIC_ADDR "o"
+#define B_SCNxGENADDR	__HAIKU_PRI_PREFIX_GENERIC_ADDR "x"
+
 /* off_t */
 #define B_PRIdOFF		B_PRId64
 #define B_PRIiOFF		B_PRIi64
+#define B_PRIxOFF		B_PRIx64
+
+#define B_SCNdOFF		B_SCNd64
+#define B_SCNiOFF		B_SCNi64
+#define B_SCNxOFF		B_SCNx64
+
 /* dev_t */
 #define B_PRIdDEV		B_PRId32
 #define B_PRIiDEV		B_PRIi32
+
 /* ino_t */
 #define B_PRIdINO		B_PRId64
 #define B_PRIiINO		B_PRIi64
+
 /* time_t */
-#define B_PRIdTIME		B_PRId32
-#define B_PRIiTIME		B_PRIi32
+#if defined(__i386__) && !defined(__x86_64__)
+#	define B_PRIdTIME	B_PRId32
+#	define B_PRIiTIME	B_PRIi32
+#else
+#	define B_PRIdTIME	B_PRId64
+#	define B_PRIiTIME	B_PRIi64
+#endif
+
+/* bigtime_t */
+#define B_PRIdBIGTIME	B_PRId64
+#define B_PRIiBIGTIME	B_PRIi64
+
+
+/* Printed width of a pointer with the %p format (minus 0x prefix). */
+#ifdef B_HAIKU_64_BIT
+#	define B_PRINTF_POINTER_WIDTH	16
+#else
+#	define B_PRINTF_POINTER_WIDTH	8
+#endif
 
 
 /* Empty string ("") */
@@ -184,27 +232,15 @@ extern const char *B_EMPTY_STRING;
 extern "C" {
 #endif
 
-/* Atomic functions; previous value is returned */
-extern int32	atomic_set(vint32 *value, int32 newValue);
-extern int32	atomic_test_and_set(vint32 *value, int32 newValue, int32 testAgainst);
-extern int32	atomic_add(vint32 *value, int32 addValue);
-extern int32	atomic_and(vint32 *value, int32 andValue);
-extern int32	atomic_or(vint32 *value, int32 orValue);
-extern int32	atomic_get(vint32 *value);
-
-extern int64	atomic_set64(vint64 *value, int64 newValue);
-extern int64	atomic_test_and_set64(vint64 *value, int64 newValue, int64 testAgainst);
-extern int64	atomic_add64(vint64 *value, int64 addValue);
-extern int64	atomic_and64(vint64 *value, int64 andValue);
-extern int64	atomic_or64(vint64 *value, int64 orValue);
-extern int64	atomic_get64(vint64 *value);
-
 /* Other stuff */
 extern void*	get_stack_frame(void);
 
 #ifdef __cplusplus
 }
 #endif
+
+/* Count items in an array, count_of is a common define */
+#define B_COUNT_OF(a) (sizeof(a) / sizeof(a[0]))
 
 /* Obsolete or discouraged API */
 
@@ -219,27 +255,139 @@ extern void*	get_stack_frame(void);
 
 /* Use the built-in atomic functions, if requested and available. */
 
-#if defined(B_USE_BUILTIN_ATOMIC_FUNCTIONS) && __GNUC__ >= 4
+#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 7) || defined(__clang__)
 
-#define atomic_test_and_set(valuePointer, newValue, testAgainst)	\
-	__sync_val_compare_and_swap(valuePointer, testAgainst, newValue)
-#define atomic_add(valuePointer, addValue)	\
-	__sync_fetch_and_add(valuePointer, addValue)
-#define atomic_and(valuePointer, andValue)	\
-	__sync_fetch_and_and(valuePointer, andValue)
-#define atomic_or(valuePointer, orValue)	\
-	__sync_fetch_and_or(valuePointer, orValue)
-#define atomic_get(valuePointer)	\
-	__sync_fetch_and_or(valuePointer, 0)
-	// No equivalent to atomic_get(). We simulate it via atomic or. On most
-	// (all?) 32+ bit architectures aligned 32 bit reads will be atomic anyway,
-	// though.
 
-// Note: No equivalent for atomic_set(). It could be simulated by a
-// get + atomic test and set loop, but calling the atomic_set() implementation
-// might be faster.
+static __inline__ void
+atomic_set(int32* value, int32 newValue)
+{
+	__atomic_store_n(value, newValue, __ATOMIC_RELEASE);
+}
 
-#endif	// B_USE_BUILTIN_ATOMIC_FUNCTIONS && __GNUC__ >= 4
+
+static __inline__ int32
+atomic_get_and_set(int32* value, int32 newValue)
+{
+	return __atomic_exchange_n(value, newValue, __ATOMIC_SEQ_CST);
+}
+
+
+static __inline__ int32
+atomic_test_and_set(int32* value, int32 newValue, int32 testAgainst)
+{
+	__atomic_compare_exchange_n(value, &testAgainst, newValue, 1,
+		__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+	return testAgainst;
+}
+
+
+static __inline__ int32
+atomic_add(int32* value, int32 addValue)
+{
+	return __atomic_fetch_add(value, addValue, __ATOMIC_SEQ_CST);
+}
+
+
+static __inline__ int32
+atomic_and(int32* value, int32 andValue)
+{
+	return __atomic_fetch_and(value, andValue, __ATOMIC_SEQ_CST);
+}
+
+
+static __inline__ int32
+atomic_or(int32* value, int32 orValue)
+{
+	return __atomic_fetch_or(value, orValue, __ATOMIC_SEQ_CST);
+}
+
+
+static __inline__ int32
+atomic_get(int32* value)
+{
+	return __atomic_load_n(value, __ATOMIC_ACQUIRE);
+}
+
+
+static __inline__ void
+atomic_set64(int64* value, int64 newValue)
+{
+	__atomic_store_n(value, newValue, __ATOMIC_RELEASE);
+}
+
+
+static __inline__ int64
+atomic_get_and_set64(int64* value, int64 newValue)
+{
+	return __atomic_exchange_n(value, newValue, __ATOMIC_SEQ_CST);
+}
+
+
+static __inline__ int64
+atomic_test_and_set64(int64* value, int64 newValue, int64 testAgainst)
+{
+	__atomic_compare_exchange_n(value, &testAgainst, newValue, 1,
+		__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+	return testAgainst;
+}
+
+
+static __inline__ int64
+atomic_add64(int64* value, int64 addValue)
+{
+	return __atomic_fetch_add(value, addValue, __ATOMIC_SEQ_CST);
+}
+
+
+static __inline__ int64
+atomic_and64(int64* value, int64 andValue)
+{
+	return __atomic_fetch_and(value, andValue, __ATOMIC_SEQ_CST);
+}
+
+
+static __inline__ int64
+atomic_or64(int64* value, int64 orValue)
+{
+	return __atomic_fetch_or(value, orValue, __ATOMIC_SEQ_CST);
+}
+
+
+static __inline__ int64
+atomic_get64(int64* value)
+{
+	return __atomic_load_n(value, __ATOMIC_ACQUIRE);
+}
+
+
+#else	/* __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 7) */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Atomic functions; previous value is returned */
+extern void		atomic_set(int32* value, int32 newValue);
+extern int32	atomic_get_and_set(int32* value, int32 newValue);
+extern int32	atomic_test_and_set(int32 *value, int32 newValue, int32 testAgainst);
+extern int32	atomic_add(int32 *value, int32 addValue);
+extern int32	atomic_and(int32 *value, int32 andValue);
+extern int32	atomic_or(int32 *value, int32 orValue);
+extern int32	atomic_get(int32 *value);
+
+extern void		atomic_set64(int64* value, int64 newValue);
+extern int64	atomic_get_and_set64(int64* value, int64 newValue);
+extern int64	atomic_test_and_set64(int64 *value, int64 newValue, int64 testAgainst);
+extern int64	atomic_add64(int64 *value, int64 addValue);
+extern int64	atomic_and64(int64 *value, int64 andValue);
+extern int64	atomic_or64(int64 *value, int64 orValue);
+extern int64	atomic_get64(int64 *value);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
 
 
 #endif	/* _SUPPORT_DEFS_H */

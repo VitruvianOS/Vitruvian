@@ -113,9 +113,26 @@ DraggerManager* DraggerManager::sDefaultInstance = NULL;
 }	// unnamed namespace
 
 
-BDragger::BDragger(BRect bounds, BView* target, uint32 resizeMask, uint32 flags)
+BDragger::BDragger(BRect frame, BView* target, uint32 resizingMode,
+	uint32 flags)
 	:
-	BView(bounds, "_dragger_", resizeMask, flags),
+	BView(frame, "_dragger_", resizingMode, flags),
+	fTarget(target),
+	fRelation(TARGET_UNKNOWN),
+	fShelf(NULL),
+	fTransition(false),
+	fIsZombie(false),
+	fErrCount(0),
+	fPopUpIsCustom(false),
+	fPopUp(NULL)
+{
+	_InitData();
+}
+
+
+BDragger::BDragger(BView* target, uint32 flags)
+	:
+	BView("_dragger_", flags),
 	fTarget(target),
 	fRelation(TARGET_UNKNOWN),
 	fShelf(NULL),
@@ -237,6 +254,8 @@ BDragger::Draw(BRect update)
 		if (Parent() != NULL && (Parent()->Flags() & B_DRAW_ON_CHILDREN) == 0) {
 			uint32 flags = Parent()->Flags();
 			Parent()->SetFlags(flags | B_DRAW_ON_CHILDREN);
+			SetHighColor(Parent()->ViewColor());
+			FillRect(Bounds());
 			Parent()->Draw(Frame() & ConvertToParent(update));
 			Parent()->Flush();
 			Parent()->SetFlags(flags);

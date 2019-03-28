@@ -70,35 +70,11 @@ public:
 	bool MatchesRegExp(const char*, bool caseSensitivity = true) const;
 	bool MatchesRegExp(const RegExp&) const;
 	bool MatchesRegExp(const RegExp*) const;
-	
+
 	bool MatchesGlob(const char*, bool caseSensitivity = false) const;
 	bool EndsWith(const char*, bool caseSensitivity = false) const;
 	bool StartsWith(const char*, bool caseSensitivity = false) const;
 	bool Contains(const char*, bool caseSensitivity = false) const;
-
-	int32 FindFirst(const BString&) const;
-	int32 FindFirst(const char*) const;
-	int32 FindFirst(const BString&, int32 fromOffset) const;
-	int32 FindFirst(const char*, int32 fromOffset) const;
-	int32 FindFirst(char) const;
-	int32 FindFirst(char, int32 fromOffset) const;
-
-	int32 FindLast(const BString&) const;
-	int32 FindLast(const char*) const;
-	int32 FindLast(const BString&, int32 beforeOffset) const;
-	int32 FindLast(const char*, int32 beforeOffset) const;
-	int32 FindLast(char) const;
-	int32 FindLast(char, int32 beforeOffset) const;
-
-	int32 IFindFirst(const BString&) const;
-	int32 IFindFirst(const char*) const;
-	int32 IFindFirst(const BString&, int32 fromOffset) const;
-	int32 IFindFirst(const char*, int32 fromOffset) const;
-
-	int32 IFindLast(const BString&) const;
-	int32 IFindLast(const char*) const;
-	int32 IFindLast(const BString&, int32 beforeOffset) const;
-	int32 IFindLast(const char*, int32 beforeOffset) const;
 
 private:
 	bool IsGlyph(char) const;
@@ -106,13 +82,13 @@ private:
 		// Not counting start!
 	bool IsStartOfGlyph(char) const;
 	const char* MoveToEndOfGlyph(const char*) const;
-	
+
 	// Functions for Glob matching:
 	bool MatchesBracketExpression(const char* string, const char* pattern,
 		bool caseSensitivity) const;
 	bool StringMatchesPattern(const char* string, const char* pattern,
 		bool caseSensitivity) const;
-		
+
 	char ConditionalToLower(char c, bool toLower) const;
 	bool CharsAreEqual(char char1, char char2, bool toLower) const;
 	bool UTF8CharsAreEqual(const char* string1, const char* string2) const;
@@ -124,7 +100,7 @@ TrackerString::MatchesRegExp(const RegExp* expression) const
 {
 	if (expression == NULL || expression->InitCheck() != B_OK)
 		return false;
-				
+
 	return expression->Matches(*this);
 }
 
@@ -134,7 +110,7 @@ TrackerString::MatchesRegExp(const RegExp &expression) const
 {
 	if (expression.InitCheck() != B_OK)
 		return false;
-				
+
 	return expression.Matches(*this);
 }
 
@@ -157,5 +133,6 @@ TrackerString::CharsAreEqual(char char1, char char2,
 } // namespace BPrivate
 
 using namespace BPrivate;
+
 
 #endif	// _TRACKER_STRING_H

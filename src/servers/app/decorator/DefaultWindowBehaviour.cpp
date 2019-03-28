@@ -232,7 +232,7 @@ struct DefaultWindowBehaviour::DragState : MouseTrackingState {
 
 	virtual void MouseMovedAction(BPoint& delta, bigtime_t now)
 	{
-		if (!(fWindow->Flags() & B_NOT_MOVABLE)) {
+		if ((fWindow->Flags() & B_NOT_MOVABLE) == 0) {
 			BPoint oldLeftTop = fWindow->Frame().LeftTop();
 
 			fBehavior.AlterDeltaForSnap(fWindow, delta, now);
@@ -259,10 +259,10 @@ struct DefaultWindowBehaviour::ResizeState : MouseTrackingState {
 
 	virtual void MouseMovedAction(BPoint& delta, bigtime_t now)
 	{
-		if (!(fWindow->Flags() & B_NOT_RESIZABLE)) {
-			if (fWindow->Flags() & B_NOT_V_RESIZABLE)
+		if ((fWindow->Flags() & B_NOT_RESIZABLE) == 0) {
+			if ((fWindow->Flags() & B_NOT_V_RESIZABLE) != 0)
 				delta.y = 0;
-			if (fWindow->Flags() & B_NOT_H_RESIZABLE)
+			if ((fWindow->Flags() & B_NOT_H_RESIZABLE) != 0)
 				delta.x = 0;
 
 			BPoint oldRightBottom = fWindow->Frame().RightBottom();
@@ -328,15 +328,17 @@ struct DefaultWindowBehaviour::SlideTabState : MouseTrackingState {
 			return;
 
 		if (movingTab->tabOffset > location) {
-			if (location >
-				neighbourTab->tabOffset + neighbourTab->tabRect.Width() / 2)
+			if (location > neighbourTab->tabOffset
+					+ neighbourTab->tabRect.Width() / 2) {
 				return;
+			}
 		} else {
-			if (location + movingTab->tabRect.Width() <
-				neighbourTab->tabOffset + neighbourTab->tabRect.Width() / 2)
+			if (location + movingTab->tabRect.Width() < neighbourTab->tabOffset
+					+ neighbourTab->tabRect.Width() / 2) {
 				return;
+			}
 		}
-		
+
 		fWindow->MoveToStackPosition(neighbourIndex, isShifting);
 	}
 };
@@ -602,8 +604,8 @@ struct DefaultWindowBehaviour::ManageWindowState : State {
 
 	virtual bool MouseDown(BMessage* message, BPoint where, bool& _unhandled)
 	{
-		// We're only interested, if the secondary mouse button was pressed.
-		// Othewise let the our caller handle the event.
+		// We're only interested if the secondary mouse button was pressed,
+		// otherwise let the caller handle the event.
 		int32 buttons = message->FindInt32("buttons");
 		if ((buttons & B_SECONDARY_MOUSE_BUTTON) == 0) {
 			_unhandled = true;
@@ -915,7 +917,7 @@ DefaultWindowBehaviour::MouseMoved(BMessage* message, BPoint where, bool isFake)
 	// change focus in FFM mode
 	DesktopSettings desktopSettings(fDesktop);
 	if (desktopSettings.FocusFollowsMouse()
-		&& !fWindow->IsFocus() && !(fWindow->Flags() & B_AVOID_FOCUS)) {
+		&& !fWindow->IsFocus() && (fWindow->Flags() & B_AVOID_FOCUS) == 0) {
 		// If the mouse move is a fake one, we set the focus to NULL, which
 		// will cause the window that had focus last to retrieve it again - this
 		// makes FFM much nicer to use with the keyboard.

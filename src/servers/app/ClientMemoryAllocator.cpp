@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2012, Haiku, Inc. All Rights Reserved.
+ * Copyright 2006-2013, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -66,6 +66,10 @@ ClientMemoryAllocator::~ClientMemoryAllocator()
 void*
 ClientMemoryAllocator::Allocate(size_t size, block** _address, bool& newArea)
 {
+	// A detached allocator no longer allows any further allocations
+	if (fApplication == NULL)
+		return NULL;
+
 	BAutolock locker(fLock);
 
 	// Search best matching free block from the list
@@ -179,7 +183,9 @@ ClientMemoryAllocator::Free(block* freeBlock)
 
 		fChunks.Remove(chunk);
 		delete_area(chunk->area);
-		fApplication->NotifyDeleteClientArea(chunk->area);
+
+		if (fApplication != NULL)
+			fApplication->NotifyDeleteClientArea(chunk->area);
 
 		free(chunk);
 	}
@@ -187,16 +193,26 @@ ClientMemoryAllocator::Free(block* freeBlock)
 
 
 void
+ClientMemoryAllocator::Detach()
+{
+	BAutolock locker(fLock);
+	fApplication = NULL;
+}
+
+
+void
 ClientMemoryAllocator::Dump()
 {
-	debug_printf("Application %ld, %s: chunks:\n", fApplication->ClientTeam(),
-		fApplication->Signature());
+	if (fApplication != NULL) {
+		debug_printf("Application %" B_PRId32 ", %s: chunks:\n",
+			fApplication->ClientTeam(), fApplication->Signature());
+	}
 
 	chunk_list::Iterator iterator = fChunks.GetIterator();
 	int32 i = 0;
 	while (struct chunk* chunk = iterator.Next()) {
-		debug_printf("  [%4ld] %p, area %ld, base %p, size %lu\n", i++, chunk,
-			chunk->area, chunk->base, chunk->size);
+		debug_printf("  [%4" B_PRId32 "] %p, area %" B_PRId32 ", base %p, "
+			"size %lu\n", i++, chunk, chunk->area, chunk->base, chunk->size);
 	}
 
 	debug_printf("free blocks:\n");
@@ -204,8 +220,8 @@ ClientMemoryAllocator::Dump()
 	block_list::Iterator blockIterator = fFreeBlocks.GetIterator();
 	i = 0;
 	while (struct block* block = blockIterator.Next()) {
-		debug_printf("  [%6ld] %p, chunk %p, base %p, size %lu\n", i++, block,
-			block->chunk, block->base, block->size);
+		debug_printf("  [%6" B_PRId32 "] %p, chunk %p, base %p, size %lu\n",
+			i++, block, block->chunk, block->base, block->size);
 	}
 }
 
@@ -254,8 +270,8 @@ ClientMemoryAllocator::_AllocateChunk(size_t size, bool& newArea)
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 		strcpy(name, "client heap");
 #else
-		snprintf(name, sizeof(name), "heap:%ld:%s", fApplication->ClientTeam(),
-			fApplication->SignatureLeaf());
+		snprintf(name, sizeof(name), "heap:%" B_PRId32 ":%s",
+			fApplication->ClientTeam(), fApplication->SignatureLeaf());
 #endif
 		area_id area = create_area(name, (void**)&address, B_ANY_ADDRESS, size,
 			B_NO_LOCK, B_READ_AREA | B_WRITE_AREA);
@@ -300,6 +316,7 @@ ClientMemoryAllocator::_AllocateChunk(size_t size, bool& newArea)
 
 ClientMemory::ClientMemory()
 	:
+	fAllocator(NULL),
 	fBlock(NULL)
 {
 }
@@ -309,6 +326,8 @@ ClientMemory::~ClientMemory()
 {
 	if (fBlock != NULL)
 		fAllocator->Free(fBlock);
+	if (fAllocator != NULL)
+		fAllocator->ReleaseReference();
 }
 
 
@@ -317,6 +336,8 @@ ClientMemory::Allocate(ClientMemoryAllocator* allocator, size_t size,
 	bool& newArea)
 {
 	fAllocator = allocator;
+	fAllocator->AcquireReference();
+
 	return fAllocator->Allocate(size, &fBlock, newArea);
 }
 

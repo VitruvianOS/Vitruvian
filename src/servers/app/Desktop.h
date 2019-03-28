@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2010, Haiku.
+ * Copyright 2001-2015, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -9,6 +9,7 @@
  *		Andrej Spielmann, <andrej.spielmann@seh.ox.ac.uk>
  *		Brecht Machiels <brecht@mos6581.org>
  *		Clemens Zeidler <haiku@clemens-zeidler.de>
+ *		Joseph Groover <looncraz@looncraz.net>
  */
 #ifndef DESKTOP_H
 #define DESKTOP_H
@@ -22,7 +23,10 @@
 #include <Region.h>
 #include <Window.h>
 
+#include <ServerProtocolStructs.h>
+
 #include "CursorManager.h"
+#include "DelayedMessage.h"
 #include "DesktopListener.h"
 #include "DesktopSettings.h"
 #include "EventDispatcher.h"
@@ -56,7 +60,8 @@ namespace BPrivate {
 class Desktop : public DesktopObservable, public MessageLooper,
 	public ScreenOwner {
 public:
-								Desktop(uid_t userID, const char* targetScreen);
+								Desktop(uid_t userID,
+									const char* targetScreen);
 	virtual						~Desktop();
 
 			void				RegisterListener(DesktopListener* listener);
@@ -73,6 +78,9 @@ public:
 
 			void				BroadcastToAllApps(int32 code);
 			void				BroadcastToAllWindows(int32 code);
+
+			int32				GetAllWindowTargets(DelayedMessage& message);
+			int32				GetAllAppTargets(DelayedMessage& message);
 
 			filter_result		KeyEvent(uint32 what, int32 key,
 									int32 modifiers);
@@ -137,6 +145,7 @@ public:
 	// ScreenOwner implementation
 	virtual	void				ScreenRemoved(Screen* screen) {}
 	virtual	void				ScreenAdded(Screen* screen) {}
+	virtual	void				ScreenChanged(Screen* screen);
 	virtual	bool				ReleaseScreen(Screen* screen) { return false; }
 
 	// Workspace methods
@@ -191,6 +200,8 @@ public:
 									Window* window);
 
 			void				FontsChanged(Window* window);
+			void				ColorUpdated(Window* window, color_which which,
+									rgb_color color);
 
 			void				SetWindowLook(Window* window, window_look look);
 			void				SetWindowFeel(Window* window, window_feel feel);
@@ -253,6 +264,8 @@ public:
 private:
 			WindowList&			_Windows(int32 index);
 
+			void				_FlushPendingColors();
+
 			void				_LaunchInputServer();
 			void				_GetLooperName(char* name, size_t size);
 			void				_PrepareQuit();
@@ -265,7 +278,8 @@ private:
 			void				_UpdateBack();
 			void				_UpdateFront(bool updateFloating = true);
 			void				_UpdateFronts(bool updateFloating = true);
-			bool				_WindowHasModal(Window* window);
+			bool				_WindowHasModal(Window* window) const;
+			bool				_WindowCanHaveFocus(Window* window) const;
 
 			void				_WindowChanged(Window* window);
 			void				_WindowRemoved(Window* window);
@@ -282,6 +296,8 @@ private:
 			void				_BringWindowsToFront(WindowList& windows,
 									int32 list, bool wereVisible);
 			Window*				_LastFocusSubsetWindow(Window* window);
+			bool				_CheckSendFakeMouseMoved(
+									const Window* lastWindowUnderMouse);
 			void				_SendFakeMouseMoved(Window* window = NULL);
 
 			Screen*				_DetermineScreenFor(BRect frame);
@@ -356,6 +372,8 @@ private:
 			Window*				fBack;
 
 			StackAndTile		fStackAndTile;
+
+			BMessage			fPendingColors;
 };
 
 #endif	// DESKTOP_H

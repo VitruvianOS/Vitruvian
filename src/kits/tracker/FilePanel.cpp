@@ -40,6 +40,9 @@ All rights reserved.
 #include <BeBuild.h>
 #include <Debug.h>
 #include <FilePanel.h>
+#include <Looper.h>
+#include <Screen.h>
+#include <Window.h>
 
 #include "AutoLock.h"
 #include "Commands.h"
@@ -50,30 +53,9 @@ All rights reserved.
 #ifndef _IMPEXP_ROOT
 #	define _IMPEXP_ROOT
 #endif
-#ifndef _IMPEXP_TRACKER
-#	define _IMPEXP_TRACKER
-#endif
-
-// these two calls are deprecated
-extern _IMPEXP_TRACKER void run_open_panel();
-extern _IMPEXP_TRACKER void run_save_panel();
 
 
-void
-run_open_panel()
-{
-	(new TFilePanel())->Show();
-}
-
-
-void
-run_save_panel()
-{
-	(new TFilePanel(B_SAVE_PANEL))->Show();
-}
-
-
-//	#pragma mark -
+//	#pragma mark - BFilePanel
 
 
 BFilePanel::BFilePanel(file_panel_mode mode, BMessenger* target,
@@ -118,10 +100,18 @@ BFilePanel::Show()
 	// just pull it to us
 	uint32 workspace = 1UL << (uint32)current_workspace();
 	uint32 windowWorkspaces = fWindow->Workspaces();
-	if (!(windowWorkspaces & workspace))
+	if (!(windowWorkspaces & workspace)) {
 		// window in a different workspace, reopen in current
 		fWindow->SetWorkspaces(workspace);
+	}
 
+	// Position the file panel like an alert
+	BWindow* parent = dynamic_cast<BWindow*>(
+		BLooper::LooperForThread(find_thread(NULL)));
+	const BRect frame = parent != NULL ? parent->Frame()
+		: BScreen(fWindow).Frame();
+
+	fWindow->MoveTo(fWindow->AlertPosition(frame));
 	if (!IsShowing())
 		fWindow->Show();
 
@@ -249,6 +239,17 @@ BFilePanel::SetButtonLabel(file_panel_button button, const char* text)
 		return;
 
 	static_cast<TFilePanel*>(fWindow)->SetButtonLabel(button, text);
+}
+
+
+void
+BFilePanel::SetNodeFlavors(uint32 flavors)
+{
+	AutoLock<BWindow> lock(fWindow);
+	if (!lock)
+		return;
+
+	static_cast<TFilePanel*>(fWindow)->SetNodeFlavors(flavors);
 }
 
 

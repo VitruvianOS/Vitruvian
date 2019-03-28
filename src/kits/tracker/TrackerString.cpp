@@ -36,6 +36,11 @@ All rights reserved.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
+
+
+//	#pragma mark - TrackerString
+
 
 TrackerString::TrackerString()
 {
@@ -43,19 +48,22 @@ TrackerString::TrackerString()
 
 
 TrackerString::TrackerString(const char* string)
-	:	BString(string)
+	:
+	BString(string)
 {
 }
 
 
 TrackerString::TrackerString(const TrackerString &string)
-	:	BString(string)
+	:
+	BString(string)
 {
 }
 
 
 TrackerString::TrackerString(const char* string, int32 maxLength)
-	:	BString(string, maxLength)
+	:
+	BString(string, maxLength)
 {
 }
 
@@ -73,13 +81,13 @@ TrackerString::Matches(const char* string, bool caseSensitivity,
 		default:
 		case kNone:
 			return false;
-	
+
 		case kStartsWith:
 			return StartsWith(string, caseSensitivity);
-			
+
 		case kEndsWith:
 			return EndsWith(string, caseSensitivity);
-	
+
 		case kContains:
 			return Contains(string, caseSensitivity);
 
@@ -97,14 +105,14 @@ TrackerString::MatchesRegExp(const char* pattern, bool caseSensitivity) const
 {
 	BString patternString(pattern);
 	BString textString(String());
-	
+
 	if (caseSensitivity == false) {
 		patternString.ToLower();
 		textString.ToLower();
 	}
-	
+
 	RegExp expression(patternString);
-	
+
 	if (expression.InitCheck() != B_OK)
 		return false;
 
@@ -127,7 +135,7 @@ TrackerString::EndsWith(const char* string, bool caseSensitivity) const
 	int32 position = Length() - (int32)strlen(string);
 	if (position < 0)
 		return false;
-		
+
 	if (caseSensitivity)
 		return FindLast(string) == position;
 	else
@@ -155,275 +163,6 @@ TrackerString::Contains(const char* string, bool caseSensitivity) const
 }
 
 
-// About the ?Find* functions:
-// The leading star here has been compliance with BString,
-// simplicity and performance. Therefore unncessary copying
-// has been avoided, as unncessary function calls.
-// The copying has been avoided by implementing the
-// ?Find*(const char*) functions rather than
-// the ?Find*(TrackerString &) functions.
-// The function calls has been avoided by
-// inserting a check on the first character
-// before calling the str*cmp functions.
-
-
-int32
-TrackerString::FindFirst(const BString &string) const
-{
-	return FindFirst(string.String(), 0);
-}
-
-
-int32
-TrackerString::FindFirst(const char* string) const
-{
-	return FindFirst(string, 0);
-}
-
-
-int32
-TrackerString::FindFirst(const BString &string, int32 fromOffset) const
-{
-	return FindFirst(string.String(), fromOffset);
-}
-
-
-int32
-TrackerString::FindFirst(const char* string, int32 fromOffset) const
-{
-	if (!string)
-		return -1;
-
-	int32 length = Length();
-	uint32 stringLength = strlen(string);
-
-	// The following two checks are required to be compatible
-	// with BString:
-	if (length <= 0)
-		return -1;
-
-	if (stringLength == 0)
-		return fromOffset;
-
-	int32 stop = length - static_cast<int32>(stringLength);
-	int32 start = MAX(0, MIN(fromOffset, stop));
-	int32 position = -1;
-
-	for (int32 i = start; i <= stop; i++) {
-		if (string[0] == ByteAt(i)) {
-			// This check is to avoid mute str*cmp() calls. Performance.
-			if (strncmp(string, String() + i, stringLength) == 0) {
-				position = i;
-				break;
-			}
-		}
-	}
-
-	return position;
-}
-
-
-int32
-TrackerString::FindFirst(char ch) const
-{
-	char string[2] = {ch, '\0'};
-	return FindFirst(string, 0);
-}
-
-
-int32
-TrackerString::FindFirst(char ch, int32 fromOffset) const
-{
-	char string[2] = {ch, '\0'};
-	return FindFirst(string, fromOffset);
-}
-
-
-int32
-TrackerString::FindLast(const BString &string) const
-{
-	return FindLast(string.String(), Length() - 1);
-}
-
-
-int32
-TrackerString::FindLast(const char* string) const
-{
-	return FindLast(string, Length() - 1);
-}
-
-
-int32
-TrackerString::FindLast(const BString &string, int32 beforeOffset) const
-{
-	return FindLast(string.String(), beforeOffset);
-}
-
-
-int32
-TrackerString::FindLast(const char* string, int32 beforeOffset) const
-{
-	if (!string)
-		return -1;
-
-	int32 length = Length();
-	uint32 stringLength = strlen(string);
-
-	// The following two checks are required to be compatible
-	// with BString:
-	if (length <= 0)
-		return -1;
-
-	if (stringLength == 0)
-		return beforeOffset;
-
-	int32 start = MIN(beforeOffset,
-		length - static_cast<int32>(stringLength));
-	int32 stop = 0;
-	int32 position = -1;
-
-	for (int32 i = start; i >= stop; i--) {
-		if (string[0] == ByteAt(i)) {
-			// This check is to avoid mute str*cmp() calls. Performance.
-			if (strncmp(string, String() + i, stringLength) == 0) {
-				position = i;
-				break;
-			}
-		}
-	}
-
-	return position;
-}
-
-
-int32
-TrackerString::FindLast(char ch) const
-{
-	char string[2] = {ch, '\0'};
-	return FindLast(string, Length() - 1);
-}
-
-
-int32
-TrackerString::FindLast(char ch, int32 beforeOffset) const
-{
-	char string[2] = {ch, '\0'};
-	return FindLast(string, beforeOffset);
-}
-
-
-int32
-TrackerString::IFindFirst(const BString &string) const
-{
-	return IFindFirst(string.String(), 0);
-}
-
-
-int32
-TrackerString::IFindFirst(const char* string) const
-{
-	return IFindFirst(string, 0);
-}
-
-
-int32
-TrackerString::IFindFirst(const BString &string, int32 fromOffset) const
-{
-	return IFindFirst(string.String(), fromOffset);
-}
-
-
-int32
-TrackerString::IFindFirst(const char* string, int32 fromOffset) const
-{
-	if (!string)
-		return -1;
-
-	int32 length = Length();
-	uint32 stringLength = strlen(string);
-
-	// The following two checks are required to be compatible
-	// with BString:
-	if (length <= 0)
-		return -1;
-
-	if (stringLength == 0)
-		return fromOffset;
-
-	int32 stop = length - static_cast<int32>(stringLength);
-	int32 start = MAX(0, MIN(fromOffset, stop));
-	int32 position = -1;
-
-	for (int32 i = start; i <= stop; i++) {
-		if (tolower(string[0]) == tolower(ByteAt(i))) {
-			// This check is to avoid mute str*cmp() calls. Performance.
-			if (strncasecmp(string, String() + i, stringLength) == 0) {
-				position = i;
-				break;
-			}
-		}
-	}
-
-	return position;
-}
-
-
-int32
-TrackerString::IFindLast(const BString &string) const
-{
-	return IFindLast(string.String(), Length() - 1);
-}
-
-
-int32
-TrackerString::IFindLast(const char* string) const
-{
-	return IFindLast(string, Length() - 1);
-}
-
-
-int32
-TrackerString::IFindLast(const BString &string, int32 beforeOffset) const
-{
-	return IFindLast(string.String(), beforeOffset);
-}
-
-
-int32
-TrackerString::IFindLast(const char* string, int32 beforeOffset) const
-{
-	if (!string)
-		return -1;
-
-	int32 length = Length();
-	uint32 stringLength = strlen(string);
-
-	// The following two checks are required to be compatible
-	// with BString:
-	if (length <= 0)
-		return -1;
-
-	if (stringLength == 0)
-		return beforeOffset;
-
-	int32 start = MIN(beforeOffset, length - static_cast<int32>(stringLength));
-	int32 stop = 0;
-	int32 position = -1;
-
-	for (int32 i = start; i >= stop; i--) {
-		if (tolower(string[0]) == tolower(ByteAt(i))) {
-			// This check is to avoid mute str*cmp() calls. Performance.
-			if (strncasecmp(string, String() + i, stringLength) == 0) {
-				position = i;
-				break;
-			}
-		}
-	}
-
-	return position;
-}
-
-
 // MatchesBracketExpression() assumes 'pattern' to point to the
 // character following the initial '[' in a bracket expression.
 // The reason is that an encountered '[' will be taken literally.
@@ -442,7 +181,7 @@ TrackerString::MatchesBracketExpression(const char* string,
 
 	bool inverse = *pattern == '^' || *pattern == '!';
 		// We allow both ^ and ! as a initial inverting character.
-	
+
 	if (inverse)
 		pattern++;
 
@@ -519,7 +258,6 @@ TrackerString::StringMatchesPattern(const char* string, const char* pattern,
 				string++;
 				if (IsInsideGlyph(string[0]))
 					string = MoveToEndOfGlyph(string);
-
 				break;
 
 			case '*':
@@ -527,13 +265,13 @@ TrackerString::StringMatchesPattern(const char* string, const char* pattern,
 				// Collapse any ** and *? constructions:
 				while (*pattern == '*' || *pattern == '?') {
 					pattern++;
-					if (*pattern == '?' && string != '\0') {
+					if (*pattern == '?' && *string != '\0') {
 						string++;
 						if (IsInsideGlyph(string[0]))
 							string = MoveToEndOfGlyph(string);
 					}
 				}
-				
+
 				if (*pattern == '\0') {
 					// An ending * matches all strings.
 					return true;
@@ -588,7 +326,7 @@ TrackerString::StringMatchesPattern(const char* string, const char* pattern,
 				}
 				break;
 			}
-	
+
 			case '[':
 				pattern++;
 
@@ -603,7 +341,7 @@ TrackerString::StringMatchesPattern(const char* string, const char* pattern,
 					// Skip the rest of the bracket:
 					while (*pattern != ']' && *pattern != '\0')
 						pattern++;
-	
+
 					// Failure if no closing bracket;
 					if (*pattern == '\0')
 						return false;
@@ -635,7 +373,6 @@ TrackerString::StringMatchesPattern(const char* string, const char* pattern,
 						string = sStorage[patternLevel];
 				} else
 					return false;
-
 				break;
 			}
 		}

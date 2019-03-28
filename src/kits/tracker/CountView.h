@@ -31,8 +31,8 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef __COUNT_VIEW__
-#define __COUNT_VIEW__
+#ifndef _COUNT_VIEW_H
+#define _COUNT_VIEW_H
 
 
 #include <String.h>
@@ -43,18 +43,20 @@ namespace BPrivate {
 
 class BPoseView;
 
+const int32 kCountViewWidth = 76;
+
+
 class BCountView : public BView {
 	// displays the item count and a barber pole while the view is updating
 
 public:
-	BCountView(BRect, BPoseView*);
+	BCountView(BPoseView*);
 	~BCountView();
 
-	virtual	void Draw(BRect);
-	virtual	void MouseDown(BPoint);
-	virtual	void AttachedToWindow();
+	virtual void Draw(BRect);
+	virtual void MouseDown(BPoint);
+	virtual void AttachedToWindow();
 	virtual void Pulse();
-	virtual void WindowActivated(bool active);
 
 	void CheckCount();
 	void StartBarberPole();
@@ -70,8 +72,6 @@ public:
 	const char* Filter() const;
 	bool IsFiltering() const;
 
-	void SetBorderHighlighted(bool highlighted);
-
 private:
 	BRect BarberPoleInnerRect() const;
 	BRect BarberPoleOuterRect() const;
@@ -82,7 +82,6 @@ private:
 	int32 fLastCount;
 	BPoseView* fPoseView;
 	bool fShowingBarberPole : 1;
-	bool fBorderHighlighted : 1;
 	BBitmap* fBarberPoleMap;
 	float fLastBarberPoleOffset;
 	bigtime_t fStartSpinningAfter;
@@ -94,4 +93,5 @@ private:
 
 using namespace BPrivate;
 
-#endif
+
+#endif	// _COUNT_VIEW_H

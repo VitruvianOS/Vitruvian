@@ -6,6 +6,7 @@
  */
 
 
+#include <unicode/uversion.h>
 #include <FormattingConventions.h>
 
 #include <AutoDeleter.h>
@@ -205,14 +206,19 @@ BFormattingConventions::BFormattingConventions(
 	fUseStringsFromPreferredLanguage(other.fUseStringsFromPreferredLanguage),
 	fICULocale(new icu::Locale(*other.fICULocale))
 {
-	for (int s = 0; s < B_DATE_FORMAT_STYLE_COUNT; ++s)
+	for (int s = 0; s < B_DATE_FORMAT_STYLE_COUNT; ++s) {
 		fCachedDateFormats[s] = other.fCachedDateFormats[s];
-	for (int s = 0; s < B_TIME_FORMAT_STYLE_COUNT; ++s)
-		fCachedTimeFormats[s] = other.fCachedTimeFormats[s];
-	for (int s = 0; s < B_DATE_FORMAT_STYLE_COUNT; ++s)
 		fExplicitDateFormats[s] = other.fExplicitDateFormats[s];
-	for (int s = 0; s < B_TIME_FORMAT_STYLE_COUNT; ++s)
+
+		for (int t = 0; t < B_TIME_FORMAT_STYLE_COUNT; ++t) {
+			fCachedDateTimeFormats[s][t] = other.fCachedDateFormats[s][t];
+			fExplicitDateTimeFormats[s][t] = other.fExplicitDateFormats[s][t];
+		}
+	}
+	for (int s = 0; s < B_TIME_FORMAT_STYLE_COUNT; ++s) {
+		fCachedTimeFormats[s] = other.fCachedTimeFormats[s];
 		fExplicitTimeFormats[s] = other.fExplicitTimeFormats[s];
+	}
 }
 
 
@@ -259,18 +265,23 @@ BFormattingConventions::operator=(const BFormattingConventions& other)
 	if (this == &other)
 		return *this;
 
-	for (int s = 0; s < B_DATE_FORMAT_STYLE_COUNT; ++s)
+	for (int s = 0; s < B_DATE_FORMAT_STYLE_COUNT; ++s) {
 		fCachedDateFormats[s] = other.fCachedDateFormats[s];
-	for (int s = 0; s < B_TIME_FORMAT_STYLE_COUNT; ++s)
+		fExplicitDateFormats[s] = other.fExplicitDateFormats[s];
+		for (int t = 0; t < B_TIME_FORMAT_STYLE_COUNT; ++t) {
+			fCachedDateTimeFormats[s][t] = other.fCachedDateTimeFormats[s][t];
+			fExplicitDateTimeFormats[s][t]
+				= other.fExplicitDateTimeFormats[s][t];
+		}
+	}
+	for (int s = 0; s < B_TIME_FORMAT_STYLE_COUNT; ++s) {
 		fCachedTimeFormats[s] = other.fCachedTimeFormats[s];
+		fExplicitTimeFormats[s] = other.fExplicitTimeFormats[s];
+	}
 	fCachedNumericFormat = other.fCachedNumericFormat;
 	fCachedMonetaryFormat = other.fCachedMonetaryFormat;
 	fCachedUse24HourClock = other.fCachedUse24HourClock;
 
-	for (int s = 0; s < B_DATE_FORMAT_STYLE_COUNT; ++s)
-		fExplicitDateFormats[s] = other.fExplicitDateFormats[s];
-	for (int s = 0; s < B_TIME_FORMAT_STYLE_COUNT; ++s)
-		fExplicitTimeFormats[s] = other.fExplicitTimeFormats[s];
 	fExplicitNumericFormat = other.fExplicitNumericFormat;
 	fExplicitMonetaryFormat = other.fExplicitMonetaryFormat;
 	fExplicitUse24HourClock = other.fExplicitUse24HourClock;
@@ -464,19 +475,7 @@ BFormattingConventions::GetTimeFormat(BTimeFormatStyle style,
 	BStringByteSink stringConverter(&outFormat);
 	icuString.toUTF8(stringConverter);
 
-	int8 use24HourClock = fExplicitUse24HourClock != CLOCK_HOURS_UNSET
-		? fExplicitUse24HourClock : fCachedUse24HourClock;
-	if (use24HourClock != CLOCK_HOURS_UNSET) {
-		// adjust to 12/24-hour clock as requested
-		bool localeUses24HourClock = !FormatUsesAmPm(outFormat);
-		if (localeUses24HourClock) {
-			if (use24HourClock == CLOCK_HOURS_12)
-				CoerceFormatTo12HourClock(outFormat);
-		} else {
-			if (use24HourClock == CLOCK_HOURS_24)
-				CoerceFormatTo24HourClock(outFormat);
-		}
-	}
+	CoerceFormatForClock(outFormat);
 
 	if (style != B_FULL_TIME_FORMAT) {
 		// use abbreviated timezone in short timezone format
@@ -484,6 +483,50 @@ BFormattingConventions::GetTimeFormat(BTimeFormatStyle style,
 	}
 
 	fCachedTimeFormats[style] = outFormat;
+
+	return B_OK;
+}
+
+
+status_t
+BFormattingConventions::GetDateTimeFormat(BDateFormatStyle dateStyle,
+	BTimeFormatStyle timeStyle, BString& outFormat) const
+{
+	if (dateStyle < 0 || dateStyle >= B_DATE_FORMAT_STYLE_COUNT)
+		return B_BAD_VALUE;
+
+	if (timeStyle < 0 || timeStyle >= B_TIME_FORMAT_STYLE_COUNT)
+		return B_BAD_VALUE;
+
+	outFormat = fExplicitDateTimeFormats[dateStyle][timeStyle].Length()
+		? fExplicitDateTimeFormats[dateStyle][timeStyle]
+		: fCachedDateTimeFormats[dateStyle][timeStyle];
+
+	if (outFormat.Length() > 0)
+		return B_OK;
+
+	ObjectDeleter<DateFormat> dateFormatter(
+		DateFormat::createDateTimeInstance((DateFormat::EStyle)dateStyle,
+			(DateFormat::EStyle)timeStyle, *fICULocale));
+	if (dateFormatter.Get() == NULL)
+		return B_NO_MEMORY;
+
+	SimpleDateFormat* dateFormatterImpl
+		= static_cast<SimpleDateFormat*>(dateFormatter.Get());
+
+	UnicodeString icuString;
+	dateFormatterImpl->toPattern(icuString);
+	BStringByteSink stringConverter(&outFormat);
+	icuString.toUTF8(stringConverter);
+
+	CoerceFormatForClock(outFormat);
+
+	if (dateStyle != B_FULL_DATE_FORMAT) {
+		// use abbreviated timezone in short timezone format
+		CoerceFormatToAbbreviatedTimezone(outFormat);
+	}
+
+	fCachedDateTimeFormats[dateStyle][timeStyle] = outFormat;
 
 	return B_OK;
 }
@@ -518,6 +561,14 @@ BFormattingConventions::SetExplicitTimeFormat(BTimeFormatStyle style,
 	const BString& format)
 {
 	fExplicitTimeFormats[style] = format;
+}
+
+
+void
+BFormattingConventions::SetExplicitDateTimeFormat(BDateFormatStyle dateStyle,
+	BTimeFormatStyle timeStyle, const BString& format)
+{
+	fExplicitDateTimeFormats[dateStyle][timeStyle] = format;
 }
 
 
@@ -609,3 +660,23 @@ BFormattingConventions::Archive(BMessage* archive, bool deep) const
 
 	return status;
 }
+
+
+void
+BFormattingConventions::CoerceFormatForClock(BString& outFormat) const
+{
+	int8 use24HourClock = fExplicitUse24HourClock != CLOCK_HOURS_UNSET
+		? fExplicitUse24HourClock : fCachedUse24HourClock;
+	if (use24HourClock != CLOCK_HOURS_UNSET) {
+		// adjust to 12/24-hour clock as requested
+		bool localeUses24HourClock = !FormatUsesAmPm(outFormat);
+		if (localeUses24HourClock) {
+			if (use24HourClock == CLOCK_HOURS_12)
+				CoerceFormatTo12HourClock(outFormat);
+		} else {
+			if (use24HourClock == CLOCK_HOURS_24)
+				CoerceFormatTo24HourClock(outFormat);
+		}
+	}
+}
+

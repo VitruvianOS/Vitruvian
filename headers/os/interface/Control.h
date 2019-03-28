@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku, Inc. All rights reserved.
+ * Copyright 2001-2013, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _CONTROL_H
@@ -12,10 +12,16 @@
 
 enum {
 	B_CONTROL_OFF = 0,
-	B_CONTROL_ON = 1
+	B_CONTROL_ON = 1,
+	B_CONTROL_PARTIALLY_ON = 2
 };
 
+class BBitmap;
 class BWindow;
+
+namespace BPrivate {
+	class BIcon;
+};
 
 
 class BControl : public BView, public BInvoker {
@@ -27,10 +33,9 @@ public:
 									BMessage* message, uint32 flags);
 	virtual						~BControl();
 
-								BControl(BMessage* archive);
-	static	BArchivable*		Instantiate(BMessage* archive);
-	virtual	status_t			Archive(BMessage* archive,
-									bool deep = true) const;
+								BControl(BMessage* data);
+	static	BArchivable*		Instantiate(BMessage* data);
+	virtual	status_t			Archive(BMessage* data, bool deep = true) const;
 
 	virtual	void				WindowActivated(bool active);
 
@@ -40,13 +45,13 @@ public:
 	virtual	void				AllDetached();
 
 	virtual	void				MessageReceived(BMessage* message);
-	virtual	void				MakeFocus(bool focused = true);
+	virtual	void				MakeFocus(bool focus = true);
 
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
-	virtual	void				MouseDown(BPoint point);
-	virtual	void				MouseUp(BPoint point);
-	virtual	void				MouseMoved(BPoint point, uint32 transit,
-									const BMessage *message);
+	virtual	void				MouseDown(BPoint where);
+	virtual	void				MouseUp(BPoint where);
+	virtual	void				MouseMoved(BPoint where, uint32 code,
+									const BMessage* dragMessage);
 
 	virtual	void				SetLabel(const char* string);
 			const char*			Label() const;
@@ -69,6 +74,12 @@ public:
 
 	virtual	status_t			Perform(perform_code d, void* arg);
 
+	virtual	status_t			SetIcon(const BBitmap* bitmap,
+									uint32 flags = 0);
+			status_t			SetIconBitmap(const BBitmap* bitmap,
+									uint32 which, uint32 flags = 0);
+			const BBitmap*		IconBitmap(uint32 which) const;
+
 protected:
 			bool				IsFocusChanging() const;
 			bool				IsTracking() const;
@@ -77,7 +88,9 @@ protected:
 			void				SetValueNoUpdate(int32 value);
 
 private:
-	virtual	void				_ReservedControl1();
+			struct IconData;
+
+private:
 	virtual	void				_ReservedControl2();
 	virtual	void				_ReservedControl3();
 	virtual	void				_ReservedControl4();
@@ -86,14 +99,20 @@ private:
 
 			void				InitData(BMessage* data = NULL);
 
+private:
 			char*				fLabel;
 			int32				fValue;
 			bool				fEnabled;
 			bool				fFocusChanging;
 			bool				fTracking;
 			bool				fWantsNav;
+			BPrivate::BIcon*	fIcon;
 
-			uint32				_reserved[4];
+#ifdef B_HAIKU_64_BIT
+			uint32				_reserved[2];
+#else
+			uint32				_reserved[3];
+#endif
 };
 
 #endif // _CONTROL_H

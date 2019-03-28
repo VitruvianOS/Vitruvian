@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku, Inc. All Rights Reserved.
+ * Copyright 2001-2015, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -18,15 +18,20 @@
 
 namespace BPrivate {
 
+
 // names
-extern const char* kRegistrarSignature;
-extern const char* kRosterThreadName;
 extern const char* kRAppLooperPortName;
 
-extern const char* get_roster_port_name();
 
+#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+#	define B_REGISTRAR_SIGNATURE "application/x-vnd.haiku-registrar"
+#	define B_REGISTRAR_PORT_NAME "system:roster"
+#else
+#	define B_REGISTRAR_SIGNATURE "application/x-vnd.test-registrar"
+#	define B_REGISTRAR_PORT_NAME "haiku-test:roster"
+#endif
 
-#define REGISTRAR_AUTHENTICATION_PORT_NAME	"system:registrar:auth manager"
+#define B_REGISTRAR_AUTHENTICATION_PORT_NAME	"auth"
 
 
 // message constants
@@ -91,7 +96,6 @@ enum {
 	B_REG_GET_MESSAGE_RUNNER_INFO			= 'rgri',
 
 	// internal registrar messages
-	B_REG_ROSTER_SANITY_EVENT				= 'rgir',
 	B_REG_SHUTDOWN_FINISHED					= 'rgsf',
 	B_REG_ROSTER_DEVICE_RESCAN				= 'rgrs',
 
@@ -121,7 +125,13 @@ enum {
 	B_REG_GET_GROUP							= 'rggr',
 	B_REG_GET_USER_GROUPS					= 'rgug',
 	B_REG_UPDATE_USER						= 'ruus',
+	B_REG_DELETE_USER						= 'rdus',
 	B_REG_UPDATE_GROUP						= 'rugr',
+	B_REG_DELETE_GROUP						= 'rdgr',
+
+	// package watching requests
+	B_REG_PACKAGE_START_WATCHING			= 'rgPw',
+	B_REG_PACKAGE_STOP_WATCHING				= 'rgPx',
 };
 
 // B_REG_MIME_SET_PARAM "which" constants
@@ -169,11 +179,19 @@ enum {
 
 // a flat app_info -- to be found in B_REG_APP_INFO_TYPE message fields
 struct flat_app_info {
-	app_info	info;
+	thread_id	thread;
+	team_id		team;
+	port_id		port;
+	uint32		flags;
+	dev_t		ref_device;
+	ino_t		ref_directory;
+	char		signature[B_MIME_TYPE_LENGTH];
 	char		ref_name[B_FILE_NAME_LENGTH + 1];
-};
+} _PACKED;
+
 
 }	// namespace BPrivate
+
 
 #endif	// REGISTRAR_DEFS_H
 

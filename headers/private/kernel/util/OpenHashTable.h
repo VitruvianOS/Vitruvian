@@ -13,6 +13,10 @@
 #ifdef _KERNEL_MODE
 #	include <KernelExport.h>
 #	include <util/kernel_cpp.h>
+#	include <util/TypeOperation.h>
+#else
+#	include <new>
+#	include <TypeOperation.h>
 #endif
 
 
@@ -31,22 +35,22 @@
 		typedef int		KeyType;
 		typedef	Foo		ValueType;
 
-		size_t HashKey(int key) const
+		size_t HashKey(KeyType key) const
 		{
 			return key >> 1;
 		}
 
-		size_t Hash(Foo* value) const
+		size_t Hash(ValueType* value) const
 		{
 			return HashKey(value->bar);
 		}
 
-		bool Compare(int key, Foo* value) const
+		bool Compare(KeyType key, ValueType* value) const
 		{
 			return value->bar == key;
 		}
 
-		Foo*& GetLink(Foo* value) const
+		ValueType*& GetLink(ValueType* value) const
 		{
 			return value->fNext;
 		}
@@ -67,6 +71,16 @@ struct MallocAllocator {
 };
 
 
+/** Implements an hash table with open hashing, that is, colliding entries are
+ * stored in a linked list. The table may be made to adjust its number of slots
+ * depending on the load factor (this should be enabled unless the object is to
+ * be used at times where memory allocations aren't possible, such as code
+ * called by the memory allocator).
+ *
+ * The link between entries is part of the ValueType stored items, which makes
+ * sure the table can always accept new items and will never fail because it is
+ * out of memory (except at Init time).
+ */
 template<typename Definition, bool AutoExpand = true,
 	bool CheckDuplicates = false, typename Allocator = MallocAllocator>
 class BOpenHashTable {
@@ -126,12 +140,17 @@ public:
 		return fTableSize;
 	}
 
+	bool IsEmpty() const
+	{
+		return fItemCount == 0;
+	}
+
 	size_t CountElements() const
 	{
 		return fItemCount;
 	}
 
-	ValueType* Lookup(const KeyType& key) const
+	ValueType* Lookup(typename TypeOperation<KeyType>::ConstRefT key) const
 	{
 		if (fTableSize == 0)
 			return NULL;
@@ -160,6 +179,11 @@ public:
 		return B_OK;
 	}
 
+	/*! \brief Inserts a value without resizing the table.
+
+		Use this method if you need to insert a value into the table while
+		iterating it, as regular insertion can invalidate iterators.
+	*/
 	void InsertUnchecked(ValueType* value)
 	{
 		if (CheckDuplicates && _ExhaustiveSearch(value)) {
@@ -188,6 +212,15 @@ public:
 		return true;
 	}
 
+	/*! \brief Removes a value without resizing the table.
+
+		Use this method if you need to remove a value from the table while
+		iterating it, as Remove can invalidate iterators.
+
+		Also use this method if you know you are going to reinsert the item soon
+		(possibly with a different hash) to avoid shrinking then growing the
+		table again.
+	*/
 	bool RemoveUnchecked(ValueType* value)
 	{
 		size_t index = fDefinition.Hash(value) & (fTableSize - 1);
@@ -224,13 +257,15 @@ public:
 		return true;
 	}
 
-	/*!	Removes all elements from the hash table. No resizing happens. The
-		elements are not deleted. If \a returnElements is \c true, the method
-		returns all elements chained via their hash table link.
+	/*!	\brief Removes all elements from the hash table.
+
+		No resizing happens. The elements are not deleted. If \a returnElements
+		is \c true, the method returns all elements chained via their hash table
+		link.
 	*/
 	ValueType* Clear(bool returnElements = false)
 	{
-		if (this->fItemCount == 0)
+		if (fItemCount == 0)
 			return NULL;
 
 		ValueType* result = NULL;
@@ -256,6 +291,7 @@ public:
 		}
 
 		memset(this->fTable, 0, sizeof(ValueType*) * this->fTableSize);
+		fItemCount = 0;
 
 		return result;
 	}
@@ -287,7 +323,7 @@ public:
 	}
 
 	/*!	Resizes the table using the given allocation. The allocation must not
-		be \c NULL. It must be of size \a size, which must a value returned
+		be \c NULL. It must be of size \a size, which must be a value returned
 		earlier by ResizeNeeded(). If the size requirements have changed in the
 		meantime, the method free()s the given allocation and returns \c false,
 		unless \a force is \c true, in which case the supplied allocation is
@@ -308,6 +344,11 @@ public:
 		return true;
 	}
 
+	/*! \brief Iterator for BOpenHashMap
+
+		The iterator is not invalidated when removing the current element from
+		the table, unless the removal triggers a resize.
+	*/
 	class Iterator {
 	public:
 		Iterator(const HashTable* table)
@@ -358,7 +399,7 @@ public:
 		return Iterator(this);
 	}
 
-	Iterator GetIterator(const KeyType& key) const
+	Iterator GetIterator(typename TypeOperation<KeyType>::ConstRefT key) const
 	{
 		if (fTableSize == 0)
 			return Iterator(this, fTableSize, NULL);

@@ -31,12 +31,13 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef __MIME_TYPE_LIST__
-#define __MIME_TYPE_LIST__
+#ifndef _MIME_TYPE_LIST_H
+#define _MIME_TYPE_LIST_H
 
 
+#include <ObjectList.h>
 #include <String.h>
-#include "ObjectList.h"
+
 #include "Utilities.h"
 
 
@@ -46,13 +47,13 @@ class MimeTypeList;
 
 class ShortMimeInfo {
 public:
-	ShortMimeInfo(const BMimeType &);
+	ShortMimeInfo(const BMimeType& mimeType);
 
 	const char* InternalName() const;
 	const char* ShortDescription() const;
 	bool IsCommonMimeType() const;
-	static int CompareShortDescription(const ShortMimeInfo*,
-		const ShortMimeInfo*);
+	static int CompareShortDescription(const ShortMimeInfo* a,
+		const ShortMimeInfo* b);
 
 private:
 	ShortMimeInfo(const char* shortDescription);
@@ -90,4 +91,5 @@ private:
 
 using namespace BPrivate;
 
-#endif	// __MIME_TYPE_LIST__
+
+#endif	// _MIME_TYPE_LIST_H

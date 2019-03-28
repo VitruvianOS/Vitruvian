@@ -19,7 +19,6 @@ target_sources(
 
 	Angle.cpp
 	AppServer.cpp
-	BitmapDrawingEngine.cpp
 	BitmapManager.cpp
 	ClientMemoryAllocator.cpp
 	CursorData.cpp
@@ -59,65 +58,6 @@ target_sources(
 	WindowList.cpp
 	Workspace.cpp
 	WorkspacesView.cpp
-
-	font/FontCache.cpp
-	font/FontCacheEntry.cpp
-	font/FontEngine.cpp
-	font/FontFamily.cpp
-	font/FontManager.cpp
-	font/FontStyle.cpp
-	
-	decorator/Decorator.cpp
-	decorator/DecorManager.cpp
-	decorator/DefaultDecorator.cpp
-	decorator/DefaultWindowBehaviour.cpp
-	decorator/MagneticBorder.cpp
-	decorator/WindowBehaviour.cpp
-	
-	drawing/AccelerantHWInterface.cpp
-	drawing/BBitmapBuffer.cpp
-	drawing/BitmapBuffer.cpp
-	drawing/BitmapHWInterface.cpp
-	drawing/DrawingEngine.cpp
-	drawing/drawing_support.cpp
-	drawing/DWindowBuffer.cpp
-	drawing/DWindowHWInterface.cpp
-	drawing/HWInterface.cpp
-	drawing/MallocBuffer.cpp
-	drawing/Overlay.cpp
-	drawing/PatternHandler.cpp
-	drawing/UpdateQueue.cpp
-	drawing/ViewHWInterface.cpp
-
-	drawing/Painter/AGGTextRenderer.cpp
-	drawing/Painter/GlobalSubpixelSettings.cpp
-	drawing/Painter/Painter.cpp
-	drawing/Painter/Transformable.cpp
-
-	drawing/AccelerantBuffer.cpp
-	drawing/AccelerantHWInterface.cpp
-	drawing/BBitmapBuffer.cpp
-	drawing/BitmapBuffer.cpp
-	drawing/BitmapHWInterface.cpp
-	drawing/DrawingEngine.cpp
-	drawing/drawing_support.cpp
-	drawing/DWindowBuffer.cpp
-	drawing/DWindowHWInterface.cpp
-	drawing/HWInterface.cpp
-	drawing/MallocBuffer.cpp
-	drawing/Overlay.cpp
-	drawing/PatternHandler.cpp
-	drawing/UpdateQueue.cpp
-	drawing/ViewHWInterface.cpp
-
-	stackandtile/SATDecorator.cpp
-	stackandtile/SATGroup.cpp
-	stackandtile/SATWindow.cpp
-	stackandtile/StackAndTile.cpp
-	stackandtile/Stacking.cpp
-	stackandtile/Tiling.cpp
-
-	drawing/Painter/drawing_modes/PixelFormat.cpp
 )
 
 target_link_libraries(app_server PRIVATE be root freetype agg icon linprog)

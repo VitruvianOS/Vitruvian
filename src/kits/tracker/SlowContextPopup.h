@@ -31,8 +31,8 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef SLOW_CONTEXT_POPUP_H
-#define SLOW_CONTEXT_POPUP_H
+#ifndef _SLOW_CONTEXT_POPUP_H
+#define _SLOW_CONTEXT_POPUP_H
 
 
 #include <PopUpMenu.h>
@@ -50,9 +50,9 @@ public:
 	virtual	void DetachedFromWindow();
 
 	void SetNavDir(const entry_ref*);
-	
+
 	void ClearMenu();
-	
+
 	void ForceRebuild();
 	bool NeedsToRebuild() const;
 		// will cause menu to get rebuilt next time it is shown
@@ -135,4 +135,5 @@ BSlowContextMenu::IsShowing() const
 	return fIsShowing;
 }
 
-#endif	// SLOW_CONTEXT_POPUP_H
+
+#endif	// _SLOW_CONTEXT_POPUP_H

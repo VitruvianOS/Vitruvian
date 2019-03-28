@@ -1,10 +1,11 @@
 /*
- * Copyright 2005-2009, Haiku.
+ * Copyright 2005-2015, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Axel Dörfler, axeld@pinc-software.de
  *		Andrej Spielmann, <andrej.spielmann@seh.ox.ac.uk>
+ *		Joseph Groover <looncraz@looncraz.net>
  */
 #ifndef DESKTOP_SETTINGS_PRIVATE_H
 #define DESKTOP_SETTINGS_PRIVATE_H
@@ -48,7 +49,14 @@ public:
 			void				SetFocusFollowsMouseMode(
 									mode_focus_follows_mouse mode);
 			mode_focus_follows_mouse FocusFollowsMouseMode() const;
-			bool				FocusFollowsMouse() const;
+			bool				NormalMouse() const
+									{ return MouseMode() == B_NORMAL_MOUSE; }
+			bool				FocusFollowsMouse() const
+									{ return MouseMode()
+										== B_FOCUS_FOLLOWS_MOUSE; }
+			bool				ClickToFocusMouse() const
+									{ return MouseMode()
+										== B_CLICK_TO_FOCUS_MOUSE; }
 			void				SetAcceptFirstClick(bool acceptFirstClick);
 			bool				AcceptFirstClick() const;
 
@@ -65,7 +73,13 @@ public:
 			const BMessage*		WorkspacesMessage(int32 index) const;
 
 			void				SetUIColor(color_which which,
-									const rgb_color color);
+									const rgb_color color,
+									bool* changed = NULL);
+			void				SetUIColors(const BMessage& colors,
+									bool* changed = NULL);
+									// changed must be boolean array equal in
+									// size to colors' size
+
 			rgb_color			UIColor(color_which which) const;
 
 			void				SetSubpixelAntialiasing(bool subpix);

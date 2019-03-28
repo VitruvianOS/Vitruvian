@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku, Inc. All Rights Reserved.
+ * Copyright 2001-2015, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -16,9 +16,11 @@
 #include <Application.h>
 #include <Clipboard.h>
 #include <Message.h>
+#include <MessengerPrivate.h>
 #include <OS.h>
 #include <RegistrarDefs.h>
 #include <RosterPrivate.h>
+#include <system_info.h>
 
 #include "AuthenticationManager.h"
 #include "ClipboardHandler.h"
@@ -29,6 +31,7 @@
 #include "MessageRunnerManager.h"
 #include "MessagingService.h"
 #include "MIMEManager.h"
+#include "PackageWatchingManager.h"
 #include "ShutdownProcess.h"
 #include "TRoster.h"
 
@@ -46,25 +49,22 @@ using namespace BPrivate;
 //! Name of the event queue.
 static const char *kEventQueueName = "timer_thread";
 
-//! Time interval between two roster sanity checks (1 s).
-static const bigtime_t kRosterSanityEventInterval = 1000000LL;
-
 
 /*!	\brief Creates the registrar application class.
 	\param error Passed to the BApplication constructor for returning an
 		   error code.
 */
-Registrar::Registrar(status_t *error)
+Registrar::Registrar(status_t* _error)
 	:
-	BServer(kRegistrarSignature, false, error),
+	BServer(B_REGISTRAR_SIGNATURE, B_REGISTRAR_PORT_NAME, -1, false, _error),
 	fRoster(NULL),
 	fClipboardHandler(NULL),
 	fMIMEManager(NULL),
 	fEventQueue(NULL),
 	fMessageRunnerManager(NULL),
-	fSanityEvent(NULL),
 	fShutdownProcess(NULL),
-	fAuthenticationManager(NULL)
+	fAuthenticationManager(NULL),
+	fPackageWatchingManager(NULL)
 {
 	FUNCTION_START();
 
@@ -83,9 +83,9 @@ Registrar::~Registrar()
 	Lock();
 	fEventQueue->Die();
 	delete fAuthenticationManager;
+	delete fPackageWatchingManager;
 	delete fMessageRunnerManager;
 	delete fEventQueue;
-	delete fSanityEvent;
 	fMIMEManager->Lock();
 	fMIMEManager->Quit();
 	RemoveHandler(fClipboardHandler);
@@ -166,11 +166,18 @@ Registrar::ReadyToRun()
 			"(that's by design when running under R5): %s\n", strerror(error));
 	}
 
-	// create and schedule the sanity message event
-	fSanityEvent = new MessageEvent(system_time() + kRosterSanityEventInterval,
-		this, B_REG_ROSTER_SANITY_EVENT);
-	fSanityEvent->SetAutoDelete(false);
-	fEventQueue->AddEvent(fSanityEvent);
+	// create the package watching manager
+	fPackageWatchingManager = new PackageWatchingManager;
+
+	// Sanity check roster after team deletion
+	BMessenger target(this);
+	BMessenger::Private messengerPrivate(target);
+
+	port_id port = messengerPrivate.Port();
+	int32 token = messengerPrivate.Token();
+	__start_watching_system(-1, B_WATCH_SYSTEM_TEAM_DELETION, port, token);
+	fRoster->CheckSanity();
+		// Clean up any teams that exited before we started watching
 
 	FUNCTION_END();
 }
@@ -336,12 +343,23 @@ Registrar::_MessageReceived(BMessage *message)
 			fMessageRunnerManager->HandleGetRunnerInfo(message);
 			break;
 
-		// internal messages
-		case B_REG_ROSTER_SANITY_EVENT:
-			fRoster->CheckSanity();
-			fSanityEvent->SetTime(system_time() + kRosterSanityEventInterval);
-			fEventQueue->AddEvent(fSanityEvent);
+		// package watching requests
+		case B_REG_PACKAGE_START_WATCHING:
+		case B_REG_PACKAGE_STOP_WATCHING:
+			fPackageWatchingManager->HandleStartStopWatching(message);
 			break;
+		case B_PACKAGE_UPDATE:
+			fPackageWatchingManager->NotifyWatchers(message);
+			break;
+
+		// internal messages
+		case B_SYSTEM_OBJECT_UPDATE:
+		{
+			team_id team = (team_id)message->GetInt32("team", -1);
+			if (team >= 0 && message->GetInt32("opcode", 0) == B_TEAM_DELETED)
+				fRoster->HandleRemoveApp(message);
+			break;
+		}
 		case B_REG_SHUTDOWN_FINISHED:
 			if (fShutdownProcess) {
 				fShutdownProcess->PostMessage(B_QUIT_REQUESTED,
@@ -418,7 +436,6 @@ main()
 	// app thread.
 	be_clipboard = new BClipboard(NULL);
 
-
 	// create and run the registrar application
 	status_t error;
 	Registrar *app = new Registrar(&error);
@@ -429,7 +446,7 @@ main()
 	}
 
 	// rename the main thread
-	rename_thread(find_thread(NULL), kRosterThreadName);
+	rename_thread(find_thread(NULL), "roster");
 
 	PRINT("app->Run()...\n");
 

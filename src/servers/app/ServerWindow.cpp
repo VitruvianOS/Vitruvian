@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2010, Haiku.
+ * Copyright 2001-2019, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -11,6 +11,8 @@
  *		Artur Wyszynski <harakash@gmail.com>
  *		Philippe Saint-Pierre <stpere@gmail.com>
  *		Brecht Machiels <brecht@mos6581.org>
+ *		Julian Harnath <julian.harnath@rwth-aachen.de>
+ *		Joseph Groover <looncraz@looncraz.net>
  */
 
 
@@ -43,6 +45,7 @@
 
 #include <MessagePrivate.h>
 #include <PortLink.h>
+#include <ShapePrivate.h>
 #include <ServerProtocolStructs.h>
 #include <ViewPrivate.h>
 #include <WindowInfo.h>
@@ -51,13 +54,17 @@
 #include "clipping.h"
 #include "utf8_functions.h"
 
+#include "AlphaMask.h"
 #include "AppServer.h"
 #include "AutoDeleter.h"
+#include "BBitmapBuffer.h"
+#include "BitmapManager.h"
 #include "Desktop.h"
 #include "DirectWindowInfo.h"
 #include "DrawingEngine.h"
 #include "DrawState.h"
 #include "HWInterface.h"
+#include "Layer.h"
 #include "Overlay.h"
 #include "ProfileMessageSupport.h"
 #include "RenderingBuffer.h"
@@ -234,14 +241,14 @@ ServerWindow::~ServerWindow()
 	for (int32 i = 0; i < count; i++) {
 		profile* p = (profile*)profiles.ItemAtFast(i);
 		string_for_message_code(p->code, codeName);
-		printf("[%s] called %ld times, %g secs (%Ld usecs per call)\n",
-			codeName.String(), p->count, p->time / 1000000.0,
+		printf("[%s] called %" B_PRId32 " times, %g secs (%" B_PRId64 " usecs "
+			"per call)\n", codeName.String(), p->count, p->time / 1000000.0,
 			p->time / p->count);
 	}
 	if (sRedrawProcessingTime.count > 0) {
-		printf("average redraw processing time: %g secs, count: %ld (%lld "
-			"usecs per call)\n", sRedrawProcessingTime.time / 1000000.0,
-			sRedrawProcessingTime.count,
+		printf("average redraw processing time: %g secs, count: %" B_PRId32 " "
+			"(%" B_PRId64 " usecs per call)\n",
+			sRedrawProcessingTime.time / 1000000.0, sRedrawProcessingTime.count,
 			sRedrawProcessingTime.time / sRedrawProcessingTime.count);
 	}
 //	if (sNextMessageTime.count > 0) {
@@ -326,7 +333,7 @@ ServerWindow::_GetLooperName(char* name, size_t length)
 	if (title == NULL || !title[0])
 		title = "Unnamed Window";
 
-	snprintf(name, length, "w:%ld:%s", ClientTeam(), title);
+	snprintf(name, length, "w:%" B_PRId32 ":%s", ClientTeam(), title);
 }
 
 
@@ -348,7 +355,7 @@ ServerWindow::_Show()
 	fDesktop->ShowWindow(fWindow);
 	if (fDirectWindowInfo && fDirectWindowInfo->IsFullScreen())
 		_ResizeToFullScreen();
-		
+
 	fDesktop->LockSingleWindow();
 }
 
@@ -522,7 +529,7 @@ ServerWindow::_CreateView(BPrivate::LinkReceiver& link, View** _parent)
 	link.Read<rgb_color>(&viewColor);
 	link.Read<int32>(&parentToken);
 
-	STRACE(("ServerWindow(%s)::_CreateView()-> view %s, token %ld\n",
+	STRACE(("ServerWindow(%s)::_CreateView()-> view %s, token %" B_PRId32 "\n",
 		fTitle, name, token));
 
 	View* newView;
@@ -599,7 +606,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			int32 showLevel;
 			if (link.Read<int32>(&showLevel) == B_OK) {
 				DTRACE(("ServerWindow %s: Message AS_SHOW_OR_HIDE_WINDOW, "
-					"show level: %d\n", Title(), showLevel));
+					"show level: %" B_PRId32 "\n", Title(), showLevel));
 
 				fWindow->SetShowLevel(showLevel);
 				if (showLevel <= 0)
@@ -857,7 +864,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (link.Read<uint32>(&newWorkspaces) != B_OK)
 				break;
 
-			DTRACE(("ServerWindow %s: Message AS_SET_WORKSPACES %lx\n",
+			DTRACE(("ServerWindow %s: Message AS_SET_WORKSPACES %" B_PRIx32 "\n",
 				Title(), newWorkspaces));
 
 			fDesktop->SetWindowWorkspaces(fWindow, newWorkspaces);
@@ -938,8 +945,8 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<int32>(&maxHeight);
 */
 			DTRACE(("ServerWindow %s: Message AS_SET_SIZE_LIMITS: "
-				"x: %ld-%ld, y: %ld-%ld\n",
-				Title(), minWidth, maxWidth, minHeight, maxHeight));
+				"x: %" B_PRId32 "-%" B_PRId32 ", y: %" B_PRId32 "-%" B_PRId32
+				"\n", Title(), minWidth, maxWidth, minHeight, maxHeight));
 
 			fWindow->SetSizeLimits(minWidth, maxWidth, minHeight, maxHeight);
 
@@ -1009,7 +1016,15 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		{
 			// Has the all-window look
 			fDesktop->FontsChanged(fWindow);
-			// TODO: tell client about this, too, and relayout...
+			break;
+		}
+
+		// Forward to client
+		case B_FONTS_UPDATED:
+		{
+			// TODO: would knowing which font was changed be useful?
+			BMessage message(code);
+			SendMessageToClient(&message);
 			break;
 		}
 
@@ -1108,12 +1123,12 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				// TODO: if this happens, we probably want to kill the app and
 				// clean up
 				debug_printf("ServerWindow %s: Message "
-					"\n\n\nAS_SET_CURRENT_VIEW: view not found, token %ld\n",
-					fTitle, token);
+					"\n\n\nAS_SET_CURRENT_VIEW: view not found, token %"
+					B_PRId32 "\n", fTitle, token);
 				current = NULL;
 			} else {
 				DTRACE(("\n\n\nServerWindow %s: Message AS_SET_CURRENT_VIEW: %s, "
-					"token %ld\n", fTitle, current->Name(), token));
+					"token %" B_PRId32 "\n", fTitle, current->Name(), token));
 				_SetCurrentView(current);
 			}
 			break;
@@ -1262,8 +1277,10 @@ fDesktop->UnlockSingleWindow();
 							EventTarget(), token);
 fDesktop->LockSingleWindow();
 					}
-					if (fCurrentView == view)
+
+					if (fCurrentView == view || fCurrentView->HasParent(view))
 						_SetCurrentView(parent);
+
 					delete view;
 				} // else we don't delete the root view
 			}
@@ -1453,7 +1470,7 @@ fDesktop->LockSingleWindow();
 				break;
 
 			DTRACE(("ServerWindow %s: Message AS_VIEW_RESIZE_MODE: "
-				"View: %s -> %ld\n", Title(), fCurrentView->Name(),
+				"View: %s -> %" B_PRId32 "\n", Title(), fCurrentView->Name(),
 				resizeMode));
 
 			fCurrentView->SetResizeMode(resizeMode);
@@ -1478,8 +1495,8 @@ fDesktop->LockSingleWindow();
 			}
 
 			DTRACE(("ServerWindow %s: Message AS_VIEW_SET_FLAGS: "
-				"View: %s -> flags: %lu\n", Title(), fCurrentView->Name(),
-				flags));
+				"View: %s -> flags: %" B_PRIu32 "\n", Title(),
+				fCurrentView->Name(), flags));
 			break;
 		}
 		case AS_VIEW_HIDE:
@@ -1522,6 +1539,31 @@ fDesktop->LockSingleWindow();
 
 			fLink.StartMessage(B_OK);
 			fLink.Attach<ViewSetLineModeInfo>(info);
+			fLink.Flush();
+
+			break;
+		}
+		case AS_VIEW_SET_FILL_RULE:
+		{
+			DTRACE(("ServerWindow %s: Message AS_VIEW_SET_FILL_RULE: "
+				"View: %s\n", Title(), fCurrentView->Name()));
+			int32 fillRule;
+			if (link.Read<int32>(&fillRule) != B_OK)
+				break;
+
+			fCurrentView->CurrentState()->SetFillRule(fillRule);
+			fWindow->GetDrawingEngine()->SetFillRule(fillRule);
+
+			break;
+		}
+		case AS_VIEW_GET_FILL_RULE:
+		{
+			DTRACE(("ServerWindow %s: Message AS_VIEW_GET_FILL_RULE: "
+				"View: %s\n", Title(), fCurrentView->Name()));
+			int32 fillRule = fCurrentView->CurrentState()->FillRule();
+
+			fLink.StartMessage(B_OK);
+			fLink.Attach<int32>(fillRule);
 			fLink.Flush();
 
 			break;
@@ -1572,6 +1614,74 @@ fDesktop->LockSingleWindow();
 			fLink.Flush();
 			break;
 		}
+		case AS_VIEW_SET_TRANSFORM:
+		{
+			BAffineTransform transform;
+			if (link.Read<BAffineTransform>(&transform) != B_OK)
+				break;
+
+			DTRACE(("ServerWindow %s: Message AS_VIEW_SET_TRANSFORM: "
+				"View: %s -> transform: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f\n",
+				Title(), fCurrentView->Name(), transform.sx, transform.shy,
+				transform.shx, transform.sy, transform.tx, transform.ty));
+
+			fCurrentView->CurrentState()->SetTransform(transform);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+		case AS_VIEW_GET_TRANSFORM:
+		{
+			BAffineTransform transform
+				= fCurrentView->CurrentState()->Transform();
+
+			DTRACE(("ServerWindow %s: Message AS_VIEW_GET_TRANSFORM: "
+				"View: %s -> transform: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f\n",
+				Title(), fCurrentView->Name(), transform.sx, transform.shy,
+				transform.shx, transform.sy, transform.tx, transform.ty));
+
+			fLink.StartMessage(B_OK);
+			fLink.Attach<BAffineTransform>(transform);
+			fLink.Flush();
+			break;
+		}
+		case AS_VIEW_AFFINE_TRANSLATE:
+		{
+			double x, y;
+			link.Read<double>(&x);
+			link.Read<double>(&y);
+			BAffineTransform current =
+				fCurrentView->CurrentState()->Transform();
+			current.PreTranslateBy(x, y);
+			fCurrentView->CurrentState()->SetTransform(current);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+
+		case AS_VIEW_AFFINE_SCALE:
+		{
+			double x, y;
+			link.Read<double>(&x);
+			link.Read<double>(&y);
+			BAffineTransform current =
+				fCurrentView->CurrentState()->Transform();
+			current.PreScaleBy(x, y);
+			fCurrentView->CurrentState()->SetTransform(current);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+
+		case AS_VIEW_AFFINE_ROTATE:
+		{
+			double angleRadians;
+			link.Read<double>(&angleRadians);
+			BAffineTransform current =
+				fCurrentView->CurrentState()->Transform();
+			current.PreRotateBy(angleRadians);
+			fCurrentView->CurrentState()->SetTransform(current);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+
 		case AS_VIEW_SET_PEN_LOC:
 		{
 			BPoint location;
@@ -1667,6 +1777,116 @@ fDesktop->LockSingleWindow();
 
 			fCurrentView->CurrentState()->SetHighColor(color);
 			fWindow->GetDrawingEngine()->SetHighColor(color);
+			break;
+		}
+
+		case AS_VIEW_SET_HIGH_UI_COLOR:
+		{
+			color_which which = B_NO_COLOR;
+			float tint = B_NO_TINT;
+
+			if (link.Read<color_which>(&which) != B_OK
+				|| link.Read<float>(&tint) != B_OK )
+				break;
+
+			fCurrentView->CurrentState()->SetHighUIColor(which, tint);
+
+			// TODO: should we do more color_which validity checking?
+			if (which != B_NO_COLOR) {
+				DesktopSettings settings(fDesktop);
+				rgb_color color = tint_color(settings.UIColor(which), tint);
+
+				fCurrentView->CurrentState()->SetHighColor(color);
+				fWindow->GetDrawingEngine()->SetHighColor(color);
+			}
+			break;
+		}
+		case AS_VIEW_SET_LOW_UI_COLOR:
+		{
+			color_which which = B_NO_COLOR;
+			float tint = B_NO_TINT;
+
+			if (link.Read<color_which>(&which) != B_OK
+				|| link.Read<float>(&tint) != B_OK )
+				break;
+
+			fCurrentView->CurrentState()->SetLowUIColor(which, tint);
+
+			// TODO: should we do more color_which validity checking?
+			if (which != B_NO_COLOR) {
+				DesktopSettings settings(fDesktop);
+				rgb_color color = tint_color(settings.UIColor(which), tint);
+
+				fCurrentView->CurrentState()->SetLowColor(color);
+				fWindow->GetDrawingEngine()->SetLowColor(color);
+			}
+			break;
+		}
+		case AS_VIEW_SET_VIEW_UI_COLOR:
+		{
+			color_which which = B_NO_COLOR;
+			float tint = B_NO_TINT;
+
+			if (link.Read<color_which>(&which) != B_OK
+				|| link.Read<float>(&tint) != B_OK )
+				break;
+
+			// TODO: should we do more color_which validity checking?
+			fCurrentView->SetViewUIColor(which, tint);
+			break;
+		}
+		case AS_VIEW_GET_HIGH_UI_COLOR:
+		{
+			float tint;
+			color_which which = fCurrentView->CurrentState()->HighUIColor(&tint);
+			rgb_color color = fCurrentView->CurrentState()->HighColor();
+
+			DTRACE(("ServerWindow %s: Message AS_VIEW_GET_HIGH_UI_COLOR: "
+				"View: %s -> color_which(%i) tint(%.3f) - rgb_color(%i, %i,"
+				" %i, %i)\n", Title(), fCurrentView->Name(), which, tint,
+				color.red, color.green, color.blue, color.alpha));
+
+			fLink.StartMessage(B_OK);
+			fLink.Attach<color_which>(which);
+			fLink.Attach<float>(tint);
+			fLink.Attach<rgb_color>(color);
+			fLink.Flush();
+			break;
+		}
+		case AS_VIEW_GET_LOW_UI_COLOR:
+		{
+			float tint;
+			color_which which = fCurrentView->CurrentState()->LowUIColor(&tint);
+			rgb_color color = fCurrentView->CurrentState()->LowColor();
+
+			DTRACE(("ServerWindow %s: Message AS_VIEW_GET_LOW_UI_COLOR: "
+				"View: %s -> color_which(%i) tint(%.3f) - rgb_color(%i, %i,"
+				" %i, %i)\n", Title(), fCurrentView->Name(), which, tint,
+				color.red, color.green, color.blue, color.alpha));
+
+			fLink.StartMessage(B_OK);
+			fLink.Attach<color_which>(which);
+			fLink.Attach<float>(tint);
+			fLink.Attach<rgb_color>(color);
+			fLink.Flush();
+			break;
+		}
+		case AS_VIEW_GET_VIEW_UI_COLOR:
+		{
+			float tint;
+			color_which which = fCurrentView->ViewUIColor(&tint);
+			rgb_color color = fCurrentView->ViewColor();
+
+			DTRACE(("ServerWindow %s: Message AS_VIEW_GET_VIEW_UI_COLOR: "
+				"View: %s -> color_which(%i) tint(%.3f) - rgb_color(%i, %i,"
+				" %i, %i)\n", Title(), fCurrentView->Name(), which, tint,
+				color.red, color.green, color.blue, color.alpha));
+
+			fLink.StartMessage(B_OK);
+			fLink.Attach<color_which>(which);
+			fLink.Attach<float>(tint);
+			fLink.Attach<rgb_color>(color);
+			fLink.Flush();
 			break;
 		}
 		case AS_VIEW_GET_HIGH_COLOR:
@@ -1861,13 +2081,17 @@ fDesktop->LockSingleWindow();
 			DTRACE(("ServerWindow %s: Message AS_VIEW_CLIP_TO_PICTURE: "
 				"View: %s\n", Title(), fCurrentView->Name()));
 
-			// TODO: you are not allowed to use View regions here!!!
-
 			int32 pictureToken;
 			BPoint where;
 			bool inverse = false;
 
 			link.Read<int32>(&pictureToken);
+			if (pictureToken < 0) {
+				fCurrentView->SetAlphaMask(NULL);
+				_UpdateDrawState(fCurrentView);
+				break;
+			}
+
 			link.Read<BPoint>(&where);
 			if (link.Read<bool>(&inverse) != B_OK)
 				break;
@@ -1876,11 +2100,14 @@ fDesktop->LockSingleWindow();
 			if (picture == NULL)
 				break;
 
-			BRegion region;
-			// TODO: I think we also need the BView's token
-			// I think PictureToRegion would fit better into the View class (?)
-			if (PictureToRegion(picture, region, inverse, where) == B_OK)
-				fCurrentView->SetUserClipping(&region);
+			AlphaMask* const mask = new(std::nothrow) PictureAlphaMask(
+				fCurrentView->GetAlphaMask(), picture,
+				*fCurrentView->CurrentState(), where, inverse);
+			fCurrentView->SetAlphaMask(mask);
+			if (mask != NULL)
+				mask->ReleaseReference();
+
+			_UpdateDrawState(fCurrentView);
 
 			picture->ReleaseReference();
 			break;
@@ -1899,7 +2126,7 @@ fDesktop->LockSingleWindow();
 			} else {
 				_UpdateCurrentDrawingRegion();
 				BRegion region(fCurrentDrawingRegion);
-				fCurrentView->ConvertFromScreen(&region);
+				fCurrentView->ScreenToLocalTransform().Apply(&region);
 				fLink.AttachRegion(region);
 			}
 			fLink.Flush();
@@ -1925,7 +2152,7 @@ fDesktop->LockSingleWindow();
 					break;
 
 				DTRACE(("ServerWindow %s: Message AS_VIEW_SET_CLIP_REGION: "
-					"View: %s -> rect count: %ld, frame = "
+					"View: %s -> rect count: %" B_PRId32 ", frame = "
 					"BRect(%.1f, %.1f, %.1f, %.1f)\n",
 					Title(), fCurrentView->Name(), rectCount,
 					region.Frame().left, region.Frame().top,
@@ -1947,6 +2174,52 @@ fDesktop->LockSingleWindow();
 			break;
 		}
 
+		case AS_VIEW_CLIP_TO_RECT:
+		{
+			bool inverse;
+			BRect rect;
+
+			link.Read<bool>(&inverse);
+			link.Read<BRect>(&rect);
+
+			bool needDrawStateUpdate = fCurrentView->ClipToRect(
+				rect, inverse);
+			fCurrentDrawingRegionValid = false;
+
+			if (needDrawStateUpdate)
+				_UpdateDrawState(fCurrentView);
+
+			_UpdateCurrentDrawingRegion();
+
+			BRegion region(fCurrentDrawingRegion);
+			fCurrentView->ScreenToLocalTransform().Apply(&region);
+
+			break;
+		}
+
+		case AS_VIEW_CLIP_TO_SHAPE:
+		{
+			bool inverse;
+			link.Read<bool>(&inverse);
+
+			shape_data shape;
+			link.Read<int32>(&shape.opCount);
+			link.Read<int32>(&shape.ptCount);
+			shape.opSize = shape.opCount * sizeof(uint32);
+			shape.ptSize = shape.ptCount * sizeof(BPoint);
+			shape.opList = new(nothrow) uint32[shape.opCount];
+			shape.ptList = new(nothrow) BPoint[shape.ptCount];
+			if (link.Read(shape.opList, shape.opSize) >= B_OK
+				&& link.Read(shape.ptList, shape.ptSize) >= B_OK) {
+				fCurrentView->ClipToShape(&shape, inverse);
+				_UpdateDrawState(fCurrentView);
+			}
+
+			delete[] shape.opList;
+			delete[] shape.ptList;
+			break;
+		}
+
 		case AS_VIEW_INVALIDATE_RECT:
 		{
 			// NOTE: looks like this call is NOT affected by origin and scale
@@ -1958,11 +2231,45 @@ fDesktop->LockSingleWindow();
 					fCurrentView->Name(), invalidRect.left, invalidRect.top,
 					invalidRect.right, invalidRect.bottom));
 
+				View* view = NULL;
+				if (link.Read<View*>(&view) != B_OK)
+					view = fCurrentView;
+
+				// make sure the view is still available!
+				if (view != fCurrentView
+					&& !fWindow->TopView()->HasView(view))
+					break;
+
 				BRegion dirty(invalidRect);
-				fWindow->InvalidateView(fCurrentView, dirty);
+				fWindow->InvalidateView(view, dirty);
 			}
 			break;
 		}
+
+		case AS_VIEW_DELAYED_INVALIDATE_RECT:
+		{
+			bigtime_t time = 0;
+			BRect invalidRect;
+			if (link.Read<bigtime_t>(&time) == B_OK
+				&& link.Read<BRect>(&invalidRect) == B_OK) {
+				DTRACE(("ServerWindow %s: Message "
+					"AS_VIEW_DELAYED_INVALIDATE_RECT: "
+					"View: %s -> BRect(%.1f, %.1f, %.1f, %.1f) at time %llu\n",
+					Title(), fCurrentView->Name(), invalidRect.left,
+					invalidRect.top, invalidRect.right, invalidRect.bottom,
+					time));
+
+				DelayedMessage delayed(AS_VIEW_INVALIDATE_RECT, time, true);
+				delayed.AddTarget(MessagePort());
+				delayed.SetMerge(DM_MERGE_DUPLICATES);
+
+				if (delayed.Attach<BRect>(invalidRect) == B_OK
+						&& delayed.Attach<View*>(fCurrentView) == B_OK)
+					delayed.Flush();
+			}
+			break;
+		}
+
 		case AS_VIEW_INVALIDATE_REGION:
 		{
 			// NOTE: looks like this call is NOT affected by origin and scale
@@ -1972,8 +2279,8 @@ fDesktop->LockSingleWindow();
 				break;
 
 			DTRACE(("ServerWindow %s: Message AS_VIEW_INVALIDATE_REGION: "
-					"View: %s -> rect count: %ld, frame: BRect(%.1f, %.1f, "
-					"%.1f, %.1f)\n", Title(),
+					"View: %s -> rect count: %" B_PRId32 ", frame: BRect(%.1f, "
+					"%.1f, %.1f, %.1f)\n", Title(),
 					fCurrentView->Name(), region.CountRects(),
 					region.Frame().left, region.Frame().top,
 					region.Frame().right, region.Frame().bottom));
@@ -2009,7 +2316,8 @@ fDesktop->UnlockSingleWindow();
 						fDesktop->EventDispatcher().SetDragMessage(dragMessage,
 							bitmap, offset);
 fDesktop->LockSingleWindow();
-						bitmap->ReleaseReference();
+						if (bitmap != NULL)
+							bitmap->ReleaseReference();
 				}
 				delete[] buffer;
 			}
@@ -2119,6 +2427,29 @@ fDesktop->LockSingleWindow();
 			break;
 		}
 
+		case AS_VIEW_BEGIN_LAYER:
+		{
+			DTRACE(("ServerWindow %s: Message AS_VIEW_BEGIN_LAYER\n",
+				Title()));
+
+			uint8 opacity;
+			link.Read<uint8>(&opacity);
+
+			Layer* layer = new(std::nothrow) Layer(opacity);
+			if (layer == NULL)
+				break;
+
+			if (opacity != 255) {
+				fCurrentView->CurrentState()->SetDrawingMode(B_OP_ALPHA);
+				fCurrentView->CurrentState()->SetBlendingMode(B_PIXEL_ALPHA,
+					B_ALPHA_COMPOSITE);
+				fCurrentView->CurrentState()->SetDrawingModeLocked(true);
+			}
+
+			fCurrentView->SetPicture(layer);
+			break;
+		}
+
 		default:
 			_DispatchViewDrawingMessage(code, link);
 			break;
@@ -2137,7 +2468,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	if (!fCurrentView->IsVisible() || !fWindow->IsVisible()) {
 		if (link.NeedsReply()) {
 			debug_printf("ServerWindow::DispatchViewDrawingMessage() got "
-				"message %ld that needs a reply!\n", code);
+				"message %" B_PRId32 " that needs a reply!\n", code);
 			// the client is now blocking and waiting for a reply!
 			fLink.StartMessage(B_ERROR);
 			fLink.Flush();
@@ -2158,7 +2489,13 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	}
 
 	_UpdateCurrentDrawingRegion();
-	if (fCurrentDrawingRegion.CountRects() <= 0) {
+	if (fCurrentDrawingRegion.CountRects() <= 0 && code != AS_VIEW_END_LAYER) {
+			// If the command is AS_VIEW_END_LAYER, then we continue even if
+			// the clipping region is empty. The layer itself might set a valid
+			// clipping while its contents are drawn, and even if it doesn't,
+			// we must still play back its picture so that we don't leak
+			// nested layer instances.
+
 		DTRACE(("ServerWindow %s: _DispatchViewDrawingMessage(): View: %s, "
 			"INVALID CLIPPING!\n", Title(), fCurrentView->Name()));
 		if (link.NeedsReply()) {
@@ -2189,8 +2526,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 					info.endPoint.x, info.endPoint.y));
 
 			BPoint penPos = info.endPoint;
-			fCurrentView->ConvertToScreenForDrawing(&info.startPoint);
-			fCurrentView->ConvertToScreenForDrawing(&info.endPoint);
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&info.startPoint);
+			transform.Apply(&info.endPoint);
 			drawingEngine->StrokeLine(info.startPoint, info.endPoint);
 
 			// We update the pen here because many DrawingEngine calls which
@@ -2214,7 +2553,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				fCurrentView->Name(), rect.left, rect.top, rect.right,
 				rect.bottom));
 
-			fCurrentView->ConvertToScreenForDrawing(&rect);
+			fCurrentView->PenToScreenTransform().Apply(&rect);
 			drawingEngine->InvertRect(rect);
 			break;
 		}
@@ -2229,7 +2568,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				fCurrentView->Name(), rect.left, rect.top, rect.right,
 				rect.bottom));
 
-			fCurrentView->ConvertToScreenForDrawing(&rect);
+			fCurrentView->PenToScreenTransform().Apply(&rect);
 			drawingEngine->StrokeRect(rect);
 			break;
 		}
@@ -2244,7 +2583,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				fCurrentView->Name(), rect.left, rect.top, rect.right,
 				rect.bottom));
 
-			fCurrentView->ConvertToScreenForDrawing(&rect);
+			fCurrentView->PenToScreenTransform().Apply(&rect);
 			drawingEngine->FillRect(rect);
 			break;
 		}
@@ -2261,8 +2600,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				fCurrentView->Name(), rect.left, rect.top, rect.right,
 				rect.bottom));
 
-			fCurrentView->ConvertToScreenForDrawing(&rect);
-			fCurrentView->ConvertToScreenForDrawing(gradient);
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&rect);
+			transform.Apply(gradient);
 			drawingEngine->FillRect(rect, *gradient);
 			delete gradient;
 			break;
@@ -2281,8 +2622,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			ServerBitmap* bitmap = fServerApp->GetBitmap(info.bitmapToken);
 			if (bitmap != NULL) {
 				DTRACE(("ServerWindow %s: Message AS_VIEW_DRAW_BITMAP: "
-					"View: %s, bitmap: %ld (size %ld x %ld), "
-					"BRect(%.1f, %.1f, %.1f, %.1f) -> "
+					"View: %s, bitmap: %" B_PRId32 " (size %" B_PRId32 " x "
+					"%" B_PRId32 "), BRect(%.1f, %.1f, %.1f, %.1f) -> "
 					"BRect(%.1f, %.1f, %.1f, %.1f)\n",
 					fTitle, fCurrentView->Name(), info.bitmapToken,
 					bitmap->Width(), bitmap->Height(),
@@ -2291,7 +2632,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 					info.viewRect.left, info.viewRect.top,
 					info.viewRect.right, info.viewRect.bottom));
 
-				fCurrentView->ConvertToScreenForDrawing(&info.viewRect);
+				fCurrentView->PenToScreenTransform().Apply(&info.viewRect);
 
 // TODO: Unbreak...
 //				if ((info.options & B_WAIT_FOR_RETRACE) != 0)
@@ -2317,7 +2658,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			if (link.Read<float>(&span) != B_OK)
 				break;
 
-			fCurrentView->ConvertToScreenForDrawing(&r);
+			fCurrentView->PenToScreenTransform().Apply(&r);
 			drawingEngine->DrawArc(r, angle, span, code == AS_FILL_ARC);
 			break;
 		}
@@ -2334,8 +2675,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK)
 				break;
-			fCurrentView->ConvertToScreenForDrawing(&r);
-			fCurrentView->ConvertToScreenForDrawing(gradient);
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&r);
+			transform.Apply(gradient);
 			drawingEngine->FillArc(r, angle, span, *gradient);
 			delete gradient;
 			break;
@@ -2346,11 +2689,13 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			DTRACE(("ServerWindow %s: Message AS_STROKE/FILL_BEZIER\n",
 				Title()));
 
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
 			BPoint pts[4];
 			status_t status;
 			for (int32 i = 0; i < 4; i++) {
 				status = link.Read<BPoint>(&(pts[i]));
-				fCurrentView->ConvertToScreenForDrawing(&pts[i]);
+				transform.Apply(&pts[i]);
 			}
 			if (status != B_OK)
 				break;
@@ -2363,15 +2708,17 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			GTRACE(("ServerWindow %s: Message AS_FILL_BEZIER_GRADIENT\n",
 				Title()));
 
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
 			BPoint pts[4];
 			for (int32 i = 0; i < 4; i++) {
 				link.Read<BPoint>(&(pts[i]));
-				fCurrentView->ConvertToScreenForDrawing(&pts[i]);
+				transform.Apply(&pts[i]);
 			}
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK)
 				break;
-			fCurrentView->ConvertToScreenForDrawing(gradient);
+			transform.Apply(gradient);
 			drawingEngine->FillBezier(pts, *gradient);
 			delete gradient;
 			break;
@@ -2386,7 +2733,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			if (link.Read<BRect>(&rect) != B_OK)
 				break;
 
-			fCurrentView->ConvertToScreenForDrawing(&rect);
+			fCurrentView->PenToScreenTransform().Apply(&rect);
 			drawingEngine->DrawEllipse(rect, code == AS_FILL_ELLIPSE);
 			break;
 		}
@@ -2400,8 +2747,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK)
 				break;
-			fCurrentView->ConvertToScreenForDrawing(&rect);
-			fCurrentView->ConvertToScreenForDrawing(gradient);
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&rect);
+			transform.Apply(gradient);
 			drawingEngine->FillEllipse(rect, *gradient);
 			delete gradient;
 			break;
@@ -2413,14 +2762,16 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				Title()));
 
 			BRect rect;
-			float xrad,yrad;
+			float xRadius;
+			float yRadius;
 			link.Read<BRect>(&rect);
-			link.Read<float>(&xrad);
-			if (link.Read<float>(&yrad) != B_OK)
+			link.Read<float>(&xRadius);
+			if (link.Read<float>(&yRadius) != B_OK)
 				break;
 
-			fCurrentView->ConvertToScreenForDrawing(&rect);
-			drawingEngine->DrawRoundRect(rect, xrad, yrad,
+			fCurrentView->PenToScreenTransform().Apply(&rect);
+			float scale = fCurrentView->CurrentState()->CombinedScale();
+			drawingEngine->DrawRoundRect(rect, xRadius * scale, yRadius * scale,
 				code == AS_FILL_ROUNDRECT);
 			break;
 		}
@@ -2437,8 +2788,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK)
 				break;
-			fCurrentView->ConvertToScreenForDrawing(&rect);
-			fCurrentView->ConvertToScreenForDrawing(gradient);
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&rect);
+			transform.Apply(gradient);
 			drawingEngine->FillRoundRect(rect, xrad, yrad, *gradient);
 			delete gradient;
 			break;
@@ -2449,18 +2802,20 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			DTRACE(("ServerWindow %s: Message AS_STROKE/FILL_TRIANGLE\n",
 				Title()));
 
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
 			BPoint pts[3];
 			BRect rect;
 
 			for (int32 i = 0; i < 3; i++) {
 				link.Read<BPoint>(&(pts[i]));
-				fCurrentView->ConvertToScreenForDrawing(&pts[i]);
+				transform.Apply(&pts[i]);
 			}
 
 			if (link.Read<BRect>(&rect) != B_OK)
 				break;
 
-			fCurrentView->ConvertToScreenForDrawing(&rect);
+			transform.Apply(&rect);
 			drawingEngine->DrawTriangle(pts, rect, code == AS_FILL_TRIANGLE);
 			break;
 		}
@@ -2469,18 +2824,20 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			DTRACE(("ServerWindow %s: Message AS_FILL_TRIANGLE_GRADIENT\n",
 				Title()));
 
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
 			BPoint pts[3];
 			BRect rect;
 			for (int32 i = 0; i < 3; i++) {
 				link.Read<BPoint>(&(pts[i]));
-				fCurrentView->ConvertToScreenForDrawing(&pts[i]);
+				transform.Apply(&pts[i]);
 			}
 			link.Read<BRect>(&rect);
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK)
 				break;
-			fCurrentView->ConvertToScreenForDrawing(&rect);
-			fCurrentView->ConvertToScreenForDrawing(gradient);
+			transform.Apply(&rect);
+			transform.Apply(gradient);
 			drawingEngine->FillTriangle(pts, rect, *gradient);
 			delete gradient;
 			break;
@@ -2500,11 +2857,13 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				link.Read<bool>(&isClosed);
 			link.Read<int32>(&pointCount);
 
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
 			BPoint* pointList = new(nothrow) BPoint[pointCount];
 			if (link.Read(pointList, pointCount * sizeof(BPoint)) >= B_OK) {
 				for (int32 i = 0; i < pointCount; i++)
-					fCurrentView->ConvertToScreenForDrawing(&pointList[i]);
-				fCurrentView->ConvertToScreenForDrawing(&polyFrame);
+					transform.Apply(&pointList[i]);
+				transform.Apply(&polyFrame);
 
 				drawingEngine->DrawPolygon(pointList, pointCount, polyFrame,
 					code == AS_FILL_POLYGON, isClosed && pointCount > 2);
@@ -2523,14 +2882,16 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			link.Read<BRect>(&polyFrame);
 			link.Read<int32>(&pointCount);
 
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
 			BPoint* pointList = new(nothrow) BPoint[pointCount];
 			BGradient* gradient;
 			if (link.Read(pointList, pointCount * sizeof(BPoint)) == B_OK
 				&& link.ReadGradient(&gradient) == B_OK) {
 				for (int32 i = 0; i < pointCount; i++)
-					fCurrentView->ConvertToScreenForDrawing(&pointList[i]);
-				fCurrentView->ConvertToScreenForDrawing(&polyFrame);
-				fCurrentView->ConvertToScreenForDrawing(gradient);
+					transform.Apply(&pointList[i]);
+				transform.Apply(&polyFrame);
+				transform.Apply(gradient);
 
 				drawingEngine->FillPolygon(pointList, pointCount,
 					polyFrame, *gradient, isClosed && pointCount > 2);
@@ -2564,8 +2925,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 					= fCurrentView->CurrentState()->PenLocation();
 				shapeFrame.OffsetBy(screenOffset);
 
-				fCurrentView->ConvertToScreenForDrawing(&screenOffset);
-				fCurrentView->ConvertToScreenForDrawing(&shapeFrame);
+				const SimpleTransform transform =
+					fCurrentView->PenToScreenTransform();
+				transform.Apply(&screenOffset);
+				transform.Apply(&shapeFrame);
 
 				drawingEngine->DrawShape(shapeFrame, opCount, opList, ptCount,
 					ptList, code == AS_FILL_SHAPE, screenOffset,
@@ -2602,9 +2965,11 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 					= fCurrentView->CurrentState()->PenLocation();
 				shapeFrame.OffsetBy(screenOffset);
 
-				fCurrentView->ConvertToScreenForDrawing(&screenOffset);
-				fCurrentView->ConvertToScreenForDrawing(&shapeFrame);
-				fCurrentView->ConvertToScreenForDrawing(gradient);
+				const SimpleTransform transform =
+					fCurrentView->PenToScreenTransform();
+				transform.Apply(&screenOffset);
+				transform.Apply(&shapeFrame);
+				transform.Apply(gradient);
 				drawingEngine->FillShape(shapeFrame, opCount, opList,
 					ptCount, ptList, *gradient, screenOffset,
 					fCurrentView->Scale());
@@ -2623,7 +2988,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			if (link.ReadRegion(&region) < B_OK)
 				break;
 
-			fCurrentView->ConvertToScreenForDrawing(&region);
+			fCurrentView->PenToScreenTransform().Apply(&region);
 			drawingEngine->FillRegion(region);
 
 			break;
@@ -2640,8 +3005,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			if (link.ReadGradient(&gradient) != B_OK)
 				break;
 
-			fCurrentView->ConvertToScreenForDrawing(&region);
-			fCurrentView->ConvertToScreenForDrawing(gradient);
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&region);
+			transform.Apply(gradient);
 			drawingEngine->FillRegion(region, *gradient);
 			delete gradient;
 			break;
@@ -2680,11 +3047,11 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			}
 
 			// Convert to screen coords and draw
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
 			for (int32 i = 0; i < lineCount; i++) {
-				fCurrentView->ConvertToScreenForDrawing(
-					&lineData[i].startPoint);
-				fCurrentView->ConvertToScreenForDrawing(
-					&lineData[i].endPoint);
+				transform.Apply(&lineData[i].startPoint);
+				transform.Apply(&lineData[i].endPoint);
 			}
 			drawingEngine->StrokeLineArray(lineCount, lineData);
 
@@ -2729,11 +3096,11 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			DTRACE(("ServerWindow %s: Message AS_DRAW_STRING, View: %s "
 				"-> %s\n", Title(), fCurrentView->Name(), string));
 
-			fCurrentView->ConvertToScreenForDrawing(&info.location);
+			fCurrentView->PenToScreenTransform().Apply(&info.location);
 			BPoint penLocation = drawingEngine->DrawString(string,
 				info.stringLength, info.location, delta);
 
-			fCurrentView->ConvertFromScreenForDrawing(&penLocation);
+			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
 			fCurrentView->CurrentState()->SetPenLocation(penLocation);
 
 			if (string != stackString)
@@ -2786,13 +3153,15 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			DTRACE(("ServerWindow %s: Message AS_DRAW_STRING_WITH_OFFSETS, View: %s "
 				"-> %s\n", Title(), fCurrentView->Name(), string));
 
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
 			for (int32 i = 0; i < glyphCount; i++)
-				fCurrentView->ConvertToScreenForDrawing(&locations[i]);
+				transform.Apply(&locations[i]);
 
 			BPoint penLocation = drawingEngine->DrawString(string,
 				stringLength, locations);
 
-			fCurrentView->ConvertFromScreenForDrawing(&penLocation);
+			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
 			fCurrentView->CurrentState()->SetPenLocation(penLocation);
 
 			break;
@@ -2822,6 +3191,17 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 					picture->ReleaseReference();
 				}
 			}
+			break;
+		}
+
+		case AS_VIEW_END_LAYER:
+		{
+			DTRACE(("ServerWindow %s: Message AS_VIEW_END_LAYER\n",
+				Title()));
+
+			fCurrentView->BlendAllLayers();
+			fCurrentView->SetPicture(NULL);
+			fCurrentView->CurrentState()->SetDrawingModeLocked(false);
 			break;
 		}
 
@@ -2904,6 +3284,7 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			fCurrentView->CurrentState()->SetPenLocation(location);
 			break;
 		}
+
 		case AS_VIEW_SET_PEN_SIZE:
 		{
 			float penSize;
@@ -2936,13 +3317,75 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 		case AS_VIEW_SET_SCALE:
 		{
 			float scale;
-			link.Read<float>(&scale);
+			if (link.Read<float>(&scale) != B_OK)
+				break;
+
 			picture->WriteSetScale(scale);
 
 			fCurrentView->SetScale(scale);
 			_UpdateDrawState(fCurrentView);
 			break;
 		}
+		case AS_VIEW_SET_TRANSFORM:
+		{
+			BAffineTransform transform;
+			if (link.Read<BAffineTransform>(&transform) != B_OK)
+				break;
+
+			picture->WriteSetTransform(transform);
+
+			fCurrentView->CurrentState()->SetTransform(transform);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+
+		case AS_VIEW_AFFINE_TRANSLATE:
+		{
+			double x, y;
+			link.Read<double>(&x);
+			link.Read<double>(&y);
+
+			picture->WriteTranslateBy(x, y);
+
+			BAffineTransform current =
+				fCurrentView->CurrentState()->Transform();
+			current.PreTranslateBy(x, y);
+			fCurrentView->CurrentState()->SetTransform(current);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+
+		case AS_VIEW_AFFINE_SCALE:
+		{
+			double x, y;
+			link.Read<double>(&x);
+			link.Read<double>(&y);
+
+			picture->WriteScaleBy(x, y);
+
+			BAffineTransform current =
+				fCurrentView->CurrentState()->Transform();
+			current.PreScaleBy(x, y);
+			fCurrentView->CurrentState()->SetTransform(current);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+
+		case AS_VIEW_AFFINE_ROTATE:
+		{
+			double angleRadians;
+			link.Read<double>(&angleRadians);
+
+			picture->WriteRotateBy(angleRadians);
+
+			BAffineTransform current =
+				fCurrentView->CurrentState()->Transform();
+			current.PreRotateBy(angleRadians);
+			fCurrentView->CurrentState()->SetTransform(current);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+
 
 		case AS_VIEW_SET_PATTERN:
 		{
@@ -2954,7 +3397,11 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 
 		case AS_VIEW_SET_FONT_STATE:
 		{
-			picture->SetFontFromLink(link);
+			uint16 mask = fCurrentView->CurrentState()->ReadFontFromLink(link);
+			fWindow->GetDrawingEngine()->SetFont(
+				fCurrentView->CurrentState());
+
+			picture->WriteFontState(fCurrentView->CurrentState()->Font(), mask);
 			break;
 		}
 
@@ -3077,6 +3524,12 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<ViewStrokeLineInfo>(&info);
 
 			picture->WriteStrokeLine(info.startPoint, info.endPoint);
+
+			BPoint penPos = info.endPoint;
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&info.endPoint);
+			fCurrentView->CurrentState()->SetPenLocation(penPos);
 			break;
 		}
 
@@ -3164,7 +3617,75 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			picture->WriteDrawString(info.location, string, info.stringLength,
 				info.delta);
 
+			// We need to update the pen location
+			fCurrentView->PenToScreenTransform().Apply(&info.location);
+			BPoint penLocation = fWindow->GetDrawingEngine()->DrawStringDry(
+				string, info.stringLength, info.location, &info.delta);
+
+			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
+			fCurrentView->CurrentState()->SetPenLocation(penLocation);
+
 			free(string);
+			break;
+		}
+
+		case AS_DRAW_STRING_WITH_OFFSETS:
+		{
+			int32 stringLength;
+			if (link.Read<int32>(&stringLength) != B_OK || stringLength <= 0)
+				break;
+
+			int32 glyphCount;
+			if (link.Read<int32>(&glyphCount) != B_OK || glyphCount <= 0)
+				break;
+
+			const ssize_t kMaxStackStringSize = 512;
+			char stackString[kMaxStackStringSize];
+			char* string = stackString;
+			BPoint stackLocations[kMaxStackStringSize];
+			BPoint* locations = stackLocations;
+			MemoryDeleter stringDeleter;
+			MemoryDeleter locationsDeleter;
+			if (stringLength >= kMaxStackStringSize) {
+				// NOTE: Careful, the + 1 is for termination!
+				string = (char*)malloc((stringLength + 1 + 63) / 64 * 64);
+				if (string == NULL)
+					break;
+				stringDeleter.SetTo(string);
+			}
+			if (glyphCount > kMaxStackStringSize) {
+				locations = (BPoint*)malloc(
+					((glyphCount * sizeof(BPoint)) + 63) / 64 * 64);
+				if (locations == NULL)
+					break;
+				locationsDeleter.SetTo(locations);
+			}
+
+			if (link.Read(string, stringLength) != B_OK)
+				break;
+			// Count UTF8 glyphs and make sure we have enough locations
+			if ((int32)UTF8CountChars(string, stringLength) > glyphCount)
+				break;
+			if (link.Read(locations, glyphCount * sizeof(BPoint)) != B_OK)
+				break;
+			// Terminate the string
+			string[stringLength] = '\0';
+
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			for (int32 i = 0; i < glyphCount; i++)
+				transform.Apply(&locations[i]);
+
+			picture->WriteDrawString(string, stringLength, locations,
+				glyphCount);
+
+			// Update pen location
+			BPoint penLocation = fWindow->GetDrawingEngine()->DrawStringDry(
+				string, stringLength, locations);
+
+			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
+			fCurrentView->CurrentState()->SetPenLocation(penLocation);
+
 			break;
 		}
 
@@ -3264,6 +3785,67 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
+		case AS_VIEW_CLIP_TO_PICTURE:
+		{
+			int32 pictureToken;
+			BPoint where;
+			bool inverse = false;
+
+			link.Read<int32>(&pictureToken);
+			if (pictureToken < 0)
+				break;
+
+			link.Read<BPoint>(&where);
+			if (link.Read<bool>(&inverse) != B_OK)
+				break;
+
+			ServerPicture* pictureToClip = fServerApp->GetPicture(pictureToken);
+			if (pictureToClip != NULL) {
+				// We need to make a copy of the picture, since it can
+				// change after it has been drawn
+				ServerPicture* copy = App()->CreatePicture(pictureToClip);
+				picture->NestPicture(copy);
+				picture->WriteClipToPicture(copy->Token(), where, inverse);
+
+				pictureToClip->ReleaseReference();
+			}
+			break;
+		}
+
+		case AS_VIEW_CLIP_TO_RECT:
+		{
+			bool inverse;
+			BRect rect;
+			link.Read<bool>(&inverse);
+			link.Read<BRect>(&rect);
+			picture->WriteClipToRect(rect, inverse);
+
+			break;
+		}
+
+		case AS_VIEW_CLIP_TO_SHAPE:
+		{
+			bool inverse;
+			link.Read<bool>(&inverse);
+
+			shape_data shape;
+			link.Read<int32>(&shape.opCount);
+			link.Read<int32>(&shape.ptCount);
+			shape.opSize = shape.opCount * sizeof(uint32);
+			shape.ptSize = shape.ptCount * sizeof(BPoint);
+			shape.opList = new(nothrow) uint32[shape.opCount];
+			shape.ptList = new(nothrow) BPoint[shape.ptCount];
+			if (link.Read(shape.opList, shape.opSize) >= B_OK
+				&& link.Read(shape.ptList, shape.ptSize) >= B_OK) {
+				picture->WriteClipToShape(shape.opCount, shape.opList,
+					shape.ptCount, shape.ptList, inverse);
+			}
+
+			delete[] shape.opList;
+			delete[] shape.ptList;
+			break;
+		}
+
 		case AS_VIEW_BEGIN_PICTURE:
 		{
 			ServerPicture* newPicture = App()->CreatePicture();
@@ -3305,6 +3887,49 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			fLink.Flush();
 			return true;
 		}
+
+		case AS_VIEW_BEGIN_LAYER:
+		{
+			uint8 opacity;
+			link.Read<uint8>(&opacity);
+
+			Layer* layer = dynamic_cast<Layer*>(picture);
+			if (layer == NULL)
+				break;
+
+			Layer* nextLayer = new(std::nothrow) Layer(opacity);
+			if (nextLayer == NULL)
+				break;
+
+			if (opacity != 255) {
+				fCurrentView->CurrentState()->SetDrawingMode(B_OP_ALPHA);
+				fCurrentView->CurrentState()->SetBlendingMode(B_PIXEL_ALPHA,
+					B_ALPHA_COMPOSITE);
+				fCurrentView->CurrentState()->SetDrawingModeLocked(true);
+			}
+
+			nextLayer->PushLayer(layer);
+			fCurrentView->SetPicture(nextLayer);
+			break;
+		}
+
+		case AS_VIEW_END_LAYER:
+		{
+			Layer* layer = dynamic_cast<Layer*>(picture);
+			if (layer == NULL)
+				break;
+
+			Layer* previousLayer = layer->PopLayer();
+			if (previousLayer == NULL) {
+				// End last layer
+				return false;
+			}
+			fCurrentView->SetPicture(previousLayer);
+
+			previousLayer->WriteBlendLayer(layer);
+			break;
+		}
+
 /*
 		case AS_VIEW_SET_BLENDING_MODE:
 		{
@@ -3384,7 +4009,7 @@ ServerWindow::_MessageLooper()
 #ifdef PROFILE_MESSAGE_LOOP
 		bigtime_t diff = system_time() - start;
 		if (diff > 10000) {
-			printf("ServerWindow %s: lock acquisition took %Ld usecs\n",
+			printf("ServerWindow %s: lock acquisition took %" B_PRId64 " usecs\n",
 				Title(), diff);
 		}
 #endif
@@ -3466,8 +4091,8 @@ ServerWindow::_MessageLooper()
 				sMessageProfile[code].time += diff;
 #endif
 				if (diff > 10000) {
-					printf("ServerWindow %s: message %ld took %Ld usecs\n",
-						Title(), code, diff);
+					printf("ServerWindow %s: message %" B_PRId32 " took %"
+						B_PRId64 " usecs\n", Title(), code, diff);
 				}
 			}
 #endif
@@ -3550,8 +4175,8 @@ ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 	if (fDirectWindowInfo == NULL)
 		return;
 
-	STRACE(("HandleDirectConnection(bufferState = %ld, driverState = %ld)\n",
-		bufferState, driverState));
+	STRACE(("HandleDirectConnection(bufferState = %" B_PRId32 ", driverState = "
+		"%" B_PRId32 ")\n", bufferState, driverState));
 
 	status_t status = fDirectWindowInfo->SetState(
 		(direct_buffer_state)bufferState, (direct_driver_state)driverState,
@@ -3619,9 +4244,14 @@ ServerWindow::_UpdateDrawState(View* view)
 	// is being drawn? probably not... otherwise the
 	// "offsets" passed below would need to be updated again
 	DrawingEngine* drawingEngine = fWindow->GetDrawingEngine();
-	if (view && drawingEngine) {
+	if (view != NULL && drawingEngine != NULL) {
 		BPoint leftTop(0, 0);
-		view->ConvertToScreenForDrawing(&leftTop);
+		if (view->GetAlphaMask() != NULL) {
+			view->LocalToScreenTransform().Apply(&leftTop);
+			view->GetAlphaMask()->SetCanvasGeometry(leftTop, view->Bounds());
+			leftTop = BPoint(0, 0);
+		}
+		view->PenToScreenTransform().Apply(&leftTop);
 		drawingEngine->SetDrawState(view->CurrentState(), leftTop.x, leftTop.y);
 	}
 }
@@ -3748,14 +4378,4 @@ ServerWindow::_DirectWindowSetFullScreen(bool enable)
 	}
 
 	fDesktop->SetWindowFeel(fWindow, feel);
-}
-
-
-status_t
-ServerWindow::PictureToRegion(ServerPicture* picture, BRegion& region,
-	bool inverse, BPoint where)
-{
-	fprintf(stderr, "ServerWindow::PictureToRegion() not implemented\n");
-	region.MakeEmpty();
-	return B_ERROR;
 }

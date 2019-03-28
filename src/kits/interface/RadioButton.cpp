@@ -7,17 +7,14 @@
  *		Stephan Aßmus <superstippi@gmx.de>
  */
 
-/*!
-	BRadioButton represents a single on/off button. 
-	All sibling BRadioButton objects comprise a single
-	"multiple choice" control.
-*/
 
 #include <RadioButton.h>
 
+#include <algorithm>
+
+#include <Box.h>
 #include <ControlLook.h>
 #include <Debug.h>
-#include <Box.h>
 #include <LayoutUtils.h>
 #include <Window.h>
 
@@ -25,9 +22,10 @@
 
 
 BRadioButton::BRadioButton(BRect frame, const char* name, const char* label,
-		BMessage* message, uint32 resizMask, uint32 flags)
-	: BControl(frame, name, label, message, resizMask, flags | B_FRAME_EVENTS),
-	  fOutlined(false)
+	BMessage* message, uint32 resizingMode, uint32 flags)
+	:
+	BControl(frame, name, label, message, resizingMode, flags | B_FRAME_EVENTS),
+	fOutlined(false)
 {
 	// Resize to minimum height if needed for BeOS compatibility
 	float minHeight;
@@ -38,24 +36,26 @@ BRadioButton::BRadioButton(BRect frame, const char* name, const char* label,
 
 
 BRadioButton::BRadioButton(const char* name, const char* label,
-		BMessage* message, uint32 flags)
-	: BControl(name, label, message, flags | B_FRAME_EVENTS),
-	  fOutlined(false)
+	BMessage* message, uint32 flags)
+	:
+	BControl(name, label, message, flags | B_FRAME_EVENTS),
+	fOutlined(false)
 {
 }
 
 
 BRadioButton::BRadioButton(const char* label, BMessage* message)
-	: BControl(NULL, label, message,
-		B_WILL_DRAW | B_NAVIGABLE | B_FRAME_EVENTS),
-	  fOutlined(false)
+	:
+	BControl(NULL, label, message, B_WILL_DRAW | B_NAVIGABLE | B_FRAME_EVENTS),
+	fOutlined(false)
 {
 }
 
 
-BRadioButton::BRadioButton(BMessage* archive)
-	: BControl(archive),
-	  fOutlined(false)
+BRadioButton::BRadioButton(BMessage* data)
+	:
+	BControl(data),
+	fOutlined(false)
 {
 }
 
@@ -66,19 +66,19 @@ BRadioButton::~BRadioButton()
 
 
 BArchivable*
-BRadioButton::Instantiate(BMessage* archive)
+BRadioButton::Instantiate(BMessage* data)
 {
-	if (validate_instantiation(archive, "BRadioButton"))
-		return new BRadioButton(archive);
+	if (validate_instantiation(data, "BRadioButton"))
+		return new BRadioButton(data);
 
 	return NULL;
 }
 
 
 status_t
-BRadioButton::Archive(BMessage* archive, bool deep) const
+BRadioButton::Archive(BMessage* data, bool deep) const
 {
-	return BControl::Archive(archive, deep);
+	return BControl::Archive(data, deep);
 }
 
 
@@ -89,155 +89,41 @@ BRadioButton::Draw(BRect updateRect)
 	font_height fontHeight;
 	GetFontHeight(&fontHeight);
 
-	if (be_control_look != NULL) {
-		rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
 
-		uint32 flags = be_control_look->Flags(this);
-		if (fOutlined)
-			flags |= BControlLook::B_CLICKED;
+	uint32 flags = be_control_look->Flags(this);
+	if (fOutlined)
+		flags |= BControlLook::B_CLICKED;
 
-		BRect knobRect(_KnobFrame(fontHeight));
-		BRect rect(knobRect);
-		be_control_look->DrawRadioButton(this, rect, updateRect, base, flags);
+	BRect knobRect(_KnobFrame(fontHeight));
+	BRect rect(knobRect);
+	be_control_look->DrawRadioButton(this, rect, updateRect, base, flags);
 
-		BRect labelRect(Bounds());
-		labelRect.left = knobRect.right
-			+ be_control_look->DefaultLabelSpacing();
+	// erase the is control flag before drawing the label so that the label
+	// will get drawn using B_PANEL_TEXT_COLOR.
+	flags &= ~BControlLook::B_IS_CONTROL;
 
-		be_control_look->DrawLabel(this, Label(), labelRect, updateRect,
-			base, flags);
-		return;
-	}
+	BRect labelRect(Bounds());
+	labelRect.left = knobRect.right + 1
+		+ be_control_look->DefaultLabelSpacing();
 
-	float textHeight = ceilf(fontHeight.ascent + fontHeight.descent);
+	const BBitmap* icon = IconBitmap(
+		B_INACTIVE_ICON_BITMAP | (IsEnabled() ? 0 : B_DISABLED_ICON_BITMAP));
 
-	// layout the rect for the dot
-	BRect rect = _KnobFrame(fontHeight);
-
-	BPoint labelPos(rect.right + floorf(textHeight / 2.0),
-		floorf((rect.top + rect.bottom + textHeight) / 2.0
-			- fontHeight.descent + 0.5) + 1.0);
-
-	// if the focus is changing, just redraw the focus indicator
-	if (IsFocusChanging()) {
-		if (IsFocus())
-			SetHighColor(ui_color(B_KEYBOARD_NAVIGATION_COLOR));
-		else
-			SetHighColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-
-		BPoint underLine = labelPos;
-		underLine.y += fontHeight.descent;
-		StrokeLine(underLine, underLine + BPoint(StringWidth(Label()), 0.0));
-
-		return;
-	}
-
-	// colors
-	rgb_color bg = ui_color(B_PANEL_BACKGROUND_COLOR);
-	rgb_color lightenmax;
-	rgb_color lighten1;
-	rgb_color darken1;
-	rgb_color darken2;
-	rgb_color darken3;
-	rgb_color darkenmax;
-
-	rgb_color naviColor = ui_color(B_KEYBOARD_NAVIGATION_COLOR);
-	rgb_color knob;
-	rgb_color knobDark;
-	rgb_color knobLight;
-
-	if (IsEnabled()) {
-		lightenmax	= tint_color(bg, B_LIGHTEN_MAX_TINT);
-		lighten1	= tint_color(bg, B_LIGHTEN_1_TINT);
-		darken1		= tint_color(bg, B_DARKEN_1_TINT);
-		darken2		= tint_color(bg, B_DARKEN_2_TINT);
-		darken3		= tint_color(bg, B_DARKEN_3_TINT);
-		darkenmax	= tint_color(bg, B_DARKEN_MAX_TINT);
-
-		knob		= naviColor;
-		knobDark	= tint_color(naviColor, B_DARKEN_3_TINT);
-		knobLight	= tint_color(naviColor, 0.15);
-	} else {
-		lightenmax	= tint_color(bg, B_LIGHTEN_2_TINT);
-		lighten1	= bg;
-		darken1		= bg;
-		darken2		= tint_color(bg, B_DARKEN_1_TINT);
-		darken3		= tint_color(bg, B_DARKEN_2_TINT);
-		darkenmax	= tint_color(bg, B_DISABLED_LABEL_TINT);
-
-		knob		= tint_color(naviColor, B_LIGHTEN_2_TINT);
-		knobDark	= tint_color(naviColor, B_LIGHTEN_1_TINT);
-		knobLight	= tint_color(naviColor, (B_LIGHTEN_2_TINT
-			+ B_LIGHTEN_MAX_TINT) / 2.0);
-	}
-
-	// dot
-	if (Value() == B_CONTROL_ON) {
-		// full
-		SetHighColor(knobDark);
-		FillEllipse(rect);
-
-		SetHighColor(knob);
-		FillEllipse(BRect(rect.left + 2, rect.top + 2, rect.right - 3,
-			rect.bottom - 3));
-
-		SetHighColor(knobLight);
-		FillEllipse(BRect(rect.left + 3, rect.top + 3, rect.right - 5,
-			rect.bottom - 5));
-	} else {
-		// empty
-		SetHighColor(lightenmax);
-		FillEllipse(rect);
-	}
-
-	rect.InsetBy(-1.0, -1.0);
-
-	// outer circle
-	if (fOutlined) {
-		// indicating "about to change value"
-		SetHighColor(darken3);
-		StrokeEllipse(rect);
-	} else {
-		SetHighColor(darken1);
-		StrokeArc(rect, 45.0, 180.0);
-		SetHighColor(lightenmax);
-		StrokeArc(rect, 45.0, -180.0);
-	}
-
-	rect.InsetBy(1, 1);
-
-	// inner circle
-	SetHighColor(darken3);
-	StrokeArc(rect, 45.0, 180.0);
-	SetHighColor(bg);
-	StrokeArc(rect, 45.0, -180.0);
-
-	// for faster font rendering, we can restore B_OP_COPY
-	SetDrawingMode(B_OP_COPY);
-
-	// label
-	SetHighColor(darkenmax);
-	DrawString(Label(), labelPos);
-
-	// underline label if focused
-	if (IsFocus()) {
-		SetHighColor(naviColor);
-		BPoint underLine = labelPos;
-		underLine.y += fontHeight.descent;
-		StrokeLine(underLine, underLine + BPoint(StringWidth(Label()), 0.0));
-	}
+	be_control_look->DrawLabel(this, Label(), icon, labelRect, updateRect,
+		base, flags);
 }
 
 
 void
-BRadioButton::MouseDown(BPoint point)
+BRadioButton::MouseDown(BPoint where)
 {
 	if (!IsEnabled())
 		return;
 
 	fOutlined = true;
 
-	if (Window()->Flags() & B_ASYNCHRONOUS_CONTROLS) {
+	if ((Window()->Flags() & B_ASYNCHRONOUS_CONTROLS) != 0) {
 		Invalidate();
 		SetTracking(true);
 		SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
@@ -249,10 +135,8 @@ BRadioButton::MouseDown(BPoint point)
 
 		do {
 			snooze(40000);
-
-			GetMouse(&point, &buttons, true);
-
-			bool inside = bounds.Contains(point);
+			GetMouse(&where, &buttons, true);
+			bool inside = bounds.Contains(where);
 
 			if (fOutlined != inside) {
 				fOutlined = inside;
@@ -265,9 +149,8 @@ BRadioButton::MouseDown(BPoint point)
 			_Redraw();
 			SetValue(B_CONTROL_ON);
 			Invoke();
-		} else {
+		} else
 			_Redraw();
-		}
 	}
 }
 
@@ -294,9 +177,9 @@ BRadioButton::KeyDown(const char* bytes, int32 numBytes)
 				SetValue(B_CONTROL_ON);
 				Invoke();
 			}
-
 			break;
 		}
+
 		default:
 			BControl::KeyDown(bytes, numBytes);
 	}
@@ -311,45 +194,45 @@ BRadioButton::SetValue(int32 value)
 		Invalidate(_KnobFrame());
 	}
 
-	if (!value)
+	if (value == 0)
 		return;
 
 	BView* parent = Parent();
 	BView* child = NULL;
 
-	if (parent) {
+	if (parent != NULL) {
 		// If the parent is a BBox, the group parent is the parent of the BBox
 		BBox* box = dynamic_cast<BBox*>(parent);
 
-		if (box && box->LabelView() == this)
+		if (box != NULL && box->LabelView() == this)
 			parent = box->Parent();
 
-		if (parent) {
+		if (parent != NULL) {
 			BBox* box = dynamic_cast<BBox*>(parent);
 
 			// If the parent is a BBox, skip the label if there is one
-			if (box && box->LabelView())
+			if (box != NULL && box->LabelView())
 				child = parent->ChildAt(1);
 			else
 				child = parent->ChildAt(0);
 		} else
 			child = Window()->ChildAt(0);
-	} else if (Window())
+	} else if (Window() != NULL)
 		child = Window()->ChildAt(0);
 
-	while (child) {
+	while (child != NULL) {
 		BRadioButton* radio = dynamic_cast<BRadioButton*>(child);
 
-		if (radio && (radio != this))
+		if (radio != NULL && (radio != this))
 			radio->SetValue(B_CONTROL_OFF);
 		else {
 			// If the child is a BBox, check if the label is a radiobutton
 			BBox* box = dynamic_cast<BBox*>(child);
 
-			if (box && box->LabelView()) {
+			if (box != NULL && box->LabelView()) {
 				radio = dynamic_cast<BRadioButton*>(box->LabelView());
 
-				if (radio && (radio != this))
+				if (radio != NULL && (radio != this))
 					radio->SetValue(B_CONTROL_OFF);
 			}
 		}
@@ -367,19 +250,29 @@ BRadioButton::GetPreferredSize(float* _width, float* _height)
 	font_height fontHeight;
 	GetFontHeight(&fontHeight);
 
-	if (_width) {
-		BRect rect = _KnobFrame(fontHeight);
-		float width = rect.right + floorf(ceilf(fontHeight.ascent
-			+ fontHeight.descent) / 2.0);
+	BRect rect(_KnobFrame(fontHeight));
+	float width = rect.right + rect.left;
+	float height = rect.bottom + rect.top;
 
-		if (Label())
-			width += StringWidth(Label());
-	
-		*_width = ceilf(width);
+	const BBitmap* icon = IconBitmap(B_INACTIVE_ICON_BITMAP);
+	if (icon != NULL) {
+		width += be_control_look->DefaultLabelSpacing()
+			+ icon->Bounds().Width() + 1;
+		height = std::max(height, icon->Bounds().Height());
 	}
 
-	if (_height)
-		*_height = ceilf(fontHeight.ascent + fontHeight.descent) + 6.0;
+	if (const char* label = Label()) {
+		width += be_control_look->DefaultLabelSpacing()
+			+ ceilf(StringWidth(label));
+		height = std::max(height,
+			ceilf(6.0f + fontHeight.ascent + fontHeight.descent));
+	}
+
+	if (_width != NULL)
+		*_width = width;
+
+	if (_height != NULL)
+		*_height = height;
 }
 
 
@@ -412,16 +305,18 @@ BRadioButton::WindowActivated(bool active)
 
 
 void
-BRadioButton::MouseUp(BPoint point)
+BRadioButton::MouseUp(BPoint where)
 {
 	if (!IsTracking())
 		return;
 
-	fOutlined = Bounds().Contains(point);
+	fOutlined = Bounds().Contains(where);
 	if (fOutlined) {
 		fOutlined = false;
-		SetValue(B_CONTROL_ON);
-		Invoke();
+		if (Value() != B_CONTROL_ON) {
+			SetValue(B_CONTROL_ON);
+			Invoke();
+		}
 	}
 	Invalidate();
 
@@ -430,12 +325,13 @@ BRadioButton::MouseUp(BPoint point)
 
 
 void
-BRadioButton::MouseMoved(BPoint point, uint32 transit, const BMessage* message)
+BRadioButton::MouseMoved(BPoint where, uint32 code,
+	const BMessage* dragMessage)
 {
 	if (!IsTracking())
 		return;
 
-	bool inside = Bounds().Contains(point);
+	bool inside = Bounds().Contains(where);
 
 	if (fOutlined != inside) {
 		fOutlined = inside;
@@ -452,17 +348,17 @@ BRadioButton::DetachedFromWindow()
 
 
 void
-BRadioButton::FrameMoved(BPoint newLocation)
+BRadioButton::FrameMoved(BPoint newPosition)
 {
-	BControl::FrameMoved(newLocation);
+	BControl::FrameMoved(newPosition);
 }
 
 
 void
-BRadioButton::FrameResized(float width, float height)
+BRadioButton::FrameResized(float newWidth, float newHeight)
 {
 	Invalidate();
-	BControl::FrameResized(width, height);
+	BControl::FrameResized(newWidth, newHeight);
 }
 
 
@@ -476,9 +372,9 @@ BRadioButton::ResolveSpecifier(BMessage* message, int32 index,
 
 
 void
-BRadioButton::MakeFocus(bool focused)
+BRadioButton::MakeFocus(bool focus)
 {
-	BControl::MakeFocus(focused);
+	BControl::MakeFocus(focus);
 }
 
 
@@ -511,22 +407,27 @@ BRadioButton::Perform(perform_code code, void* _data)
 			((perform_data_min_size*)_data)->return_value
 				= BRadioButton::MinSize();
 			return B_OK;
+
 		case PERFORM_CODE_MAX_SIZE:
 			((perform_data_max_size*)_data)->return_value
 				= BRadioButton::MaxSize();
 			return B_OK;
+
 		case PERFORM_CODE_PREFERRED_SIZE:
 			((perform_data_preferred_size*)_data)->return_value
 				= BRadioButton::PreferredSize();
 			return B_OK;
+
 		case PERFORM_CODE_LAYOUT_ALIGNMENT:
 			((perform_data_layout_alignment*)_data)->return_value
 				= BRadioButton::LayoutAlignment();
 			return B_OK;
+
 		case PERFORM_CODE_HAS_HEIGHT_FOR_WIDTH:
 			((perform_data_has_height_for_width*)_data)->return_value
 				= BRadioButton::HasHeightForWidth();
 			return B_OK;
+
 		case PERFORM_CODE_GET_HEIGHT_FOR_WIDTH:
 		{
 			perform_data_get_height_for_width* data
@@ -535,12 +436,14 @@ BRadioButton::Perform(perform_code code, void* _data)
 				&data->preferred);
 			return B_OK;
 		}
+
 		case PERFORM_CODE_SET_LAYOUT:
 		{
 			perform_data_set_layout* data = (perform_data_set_layout*)_data;
 			BRadioButton::SetLayout(data->layout);
 			return B_OK;
 		}
+
 		case PERFORM_CODE_LAYOUT_INVALIDATED:
 		{
 			perform_data_layout_invalidated* data
@@ -548,10 +451,17 @@ BRadioButton::Perform(perform_code code, void* _data)
 			BRadioButton::LayoutInvalidated(data->descendants);
 			return B_OK;
 		}
+
 		case PERFORM_CODE_DO_LAYOUT:
 		{
 			BRadioButton::DoLayout();
 			return B_OK;
+		}
+
+		case PERFORM_CODE_SET_ICON:
+		{
+			perform_data_set_icon* data = (perform_data_set_icon*)_data;
+			return BRadioButton::SetIcon(data->icon, data->flags);
 		}
 	}
 
@@ -566,10 +476,23 @@ BRadioButton::MaxSize()
 	GetPreferredSize(&width, &height);
 
 	return BLayoutUtils::ComposeSize(ExplicitMaxSize(),
-		BSize(B_SIZE_UNLIMITED, height));
+		BSize(width, height));
 }
 
 
+BAlignment
+BRadioButton::LayoutAlignment()
+{
+	return BLayoutUtils::ComposeAlignment(ExplicitAlignment(),
+		BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_UNSET));
+}
+
+
+status_t
+BRadioButton::SetIcon(const BBitmap* icon, uint32 flags)
+{
+	return BControl::SetIcon(icon, flags | B_CREATE_DISABLED_ICON_BITMAPS);
+}
 
 
 void BRadioButton::_ReservedRadioButton1() {}
@@ -595,39 +518,24 @@ BRadioButton::_KnobFrame() const
 BRect
 BRadioButton::_KnobFrame(const font_height& fontHeight) const
 {
-	if (be_control_look != NULL) {
-		// Same as BCheckBox...
-		return BRect(0.0f, 2.0f, ceilf(3.0f + fontHeight.ascent),
-			ceilf(5.0f + fontHeight.ascent));
-	}
-
-	// layout the rect for the dot
-	BRect rect(Bounds());
-
-	// its size depends on the text height
-	float textHeight = ceilf(fontHeight.ascent + fontHeight.descent);
-	float inset = -floorf(textHeight / 2 - 2);
-
-	rect.left -= (inset - 1);
-	rect.top = floorf((rect.top + rect.bottom) / 2.0);
-	rect.bottom = rect.top;
-	rect.right = rect.left;
-	rect.InsetBy(inset, inset);
-
-	return rect;
+	// Same as BCheckBox...
+	return BRect(0.0f, 2.0f, ceilf(3.0f + fontHeight.ascent),
+		ceilf(5.0f + fontHeight.ascent));
 }
 
 
 void
 BRadioButton::_Redraw()
 {
-	BRect b(Bounds());
+	BRect bounds(Bounds());
+
 	// fill background with ViewColor()
 	rgb_color highColor = HighColor();
 	SetHighColor(ViewColor());
-	FillRect(b);
+	FillRect(bounds);
+
 	// restore previous HighColor()
 	SetHighColor(highColor);
-	Draw(b);
+	Draw(bounds);
 	Flush();
 }

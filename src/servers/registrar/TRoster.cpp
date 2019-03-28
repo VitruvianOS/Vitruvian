@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 
 #include <Application.h>
 #include <AutoDeleter.h>
@@ -183,7 +184,7 @@ TRoster::HandleAddApplication(BMessage* request)
 	if (request->FindBool("full_registration", &fullReg) != B_OK)
 		fullReg = false;
 
-	PRINT("team: %ld, signature: %s\n", team, signature);
+	PRINT("team: %" B_PRId32 ", signature: %s\n", team, signature);
 	PRINT("full registration: %d\n", fullReg);
 
 	if (fShuttingDown)
@@ -203,8 +204,9 @@ TRoster::HandleAddApplication(BMessage* request)
 
 	// entry_ref
 	if (error == B_OK) {
-		PRINT("flags: %lx\n", flags);
-		PRINT("ref: %ld, %lld, %s\n", ref.device, ref.directory, ref.name);
+		PRINT("flags: %" B_PRIx32 "\n", flags);
+		PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device,
+			ref.directory, ref.name);
 		// check single/exclusive launchers
 		RosterAppInfo* info = NULL;
 		if ((launchFlags == B_SINGLE_LAUNCH
@@ -253,15 +255,15 @@ TRoster::HandleAddApplication(BMessage* request)
 			// add it to the right list
 			bool addingSuccess = false;
 			if (team >= 0) {
-				PRINT("added ref: %ld, %lld, %s\n", info->ref.device,
-					info->ref.directory, info->ref.name);
+				PRINT("added ref: %" B_PRId32 ", %" B_PRId64 ", %s\n",
+					info->ref.device, info->ref.directory, info->ref.name);
 				addingSuccess = (AddApp(info) == B_OK);
 				if (addingSuccess && fullReg)
 					_AppAdded(info);
 			} else {
 				token = info->token = _NextToken();
 				addingSuccess = fEarlyPreRegisteredApps.AddInfo(info);
-				PRINT("added to early pre-regs, token: %lu\n", token);
+				PRINT("added to early pre-regs, token: %" B_PRIu32 "\n", token);
 			}
 			if (!addingSuccess)
 				SET_ERROR(error, B_NO_MEMORY);
@@ -385,8 +387,9 @@ TRoster::HandleIsAppRegistered(BMessage* request)
 	if (request->FindInt32("token", (int32*)&token) != B_OK)
 		token = 0;
 
-	PRINT("team: %ld, token: %lu\n", team, token);
-	PRINT("ref: %ld, %lld, %s\n", ref.device, ref.directory, ref.name);
+	PRINT("team: %" B_PRId32 ", token: %" B_PRIu32 "\n", team, token);
+	PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device, ref.directory,
+		ref.name);
 
 	// check the parameters
 	// entry_ref
@@ -486,7 +489,7 @@ TRoster::HandleRemoveApp(BMessage* request)
 	if (request->FindInt32("team", &team) != B_OK)
 		team = -1;
 
-	PRINT("team: %ld\n", team);
+	PRINT("team: %" B_PRId32 "\n", team);
 
 	// remove the app
 	if (error == B_OK) {
@@ -538,12 +541,15 @@ TRoster::HandleSetThreadAndTeam(BMessage* request)
 	if (error == B_OK && team < 0)
 		SET_ERROR(error, B_BAD_VALUE);
 
-	PRINT("team: %ld, thread: %ld, token: %lu\n", team, thread, token);
+	PRINT("team: %" B_PRId32 ", thread: %" B_PRId32 ", token: %" B_PRIu32 "\n",
+		team, thread, token);
+
+	port_id port = -1;
 
 	// update the app_info
 	if (error == B_OK) {
 		RosterAppInfo* info = fEarlyPreRegisteredApps.InfoForToken(token);
-		if (info) {
+		if (info != NULL) {
 			// Set thread and team, create a port for the application and
 			// move the app_info from the list of the early pre-registered
 			// apps to the list of the (pre-)registered apps.
@@ -551,8 +557,8 @@ TRoster::HandleSetThreadAndTeam(BMessage* request)
 			info->team = team;
 			info->thread = thread;
 			// create and transfer the port
-			info->port = create_port(B_REG_APP_LOOPER_PORT_CAPACITY,
-									 kRAppLooperPortName);
+			info->port = port = create_port(B_REG_APP_LOOPER_PORT_CAPACITY,
+				kRAppLooperPortName);
 			if (info->port < 0)
 				SET_ERROR(error, info->port);
 			if (error == B_OK)
@@ -591,6 +597,7 @@ TRoster::HandleSetThreadAndTeam(BMessage* request)
 	// reply to the request
 	if (error == B_OK) {
 		BMessage reply(B_REG_SUCCESS);
+		reply.AddInt32("port", port);
 		request->SendReply(&reply);
 	} else {
 		BMessage reply(B_REG_ERROR);
@@ -667,9 +674,10 @@ TRoster::HandleGetAppInfo(BMessage* request)
 		hasSignature = false;
 
 if (hasTeam)
-PRINT("team: %ld\n", team);
+PRINT("team: %" B_PRId32 "\n", team);
 if (hasRef)
-PRINT("ref: %ld, %lld, %s\n", ref.device, ref.directory, ref.name);
+PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device, ref.directory,
+	ref.name);
 if (hasSignature)
 PRINT("signature: %s\n", signature);
 
@@ -1242,7 +1250,7 @@ TRoster::Init()
 	if (error == B_OK) {
 		info->Init(be_app->Thread(), be_app->Team(),
 			BMessenger::Private(be_app_messenger).Port(),
-			B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP, &ref, kRegistrarSignature);
+			B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP, &ref, B_REGISTRAR_SIGNATURE);
 		info->state = APP_STATE_REGISTERED;
 		info->registration_time = system_time();
 		error = AddApp(info);
@@ -1425,23 +1433,19 @@ TRoster::GetShutdownApps(AppInfoList& userApps, AppInfoList& systemApps,
 		vitalSystemApps.insert(teamInfo.team);
 
 	// app server
-	port_id appServerPort = find_port(SERVER_PORT_NAME);
-	port_info portInfo;
-	if (appServerPort >= 0
-		&& get_port_info(appServerPort, &portInfo) == B_OK) {
-		vitalSystemApps.insert(portInfo.team);
-	}
+	RosterAppInfo* info
+		= fRegisteredApps.InfoFor("application/x-vnd.haiku-app_server");
+	if (info != NULL)
+		vitalSystemApps.insert(info->team);
 
 	// debug server
-	RosterAppInfo* info =
-		fRegisteredApps.InfoFor("application/x-vnd.haiku-debug_server");
-	if (info)
+	info = fRegisteredApps.InfoFor("application/x-vnd.haiku-debug_server");
+	if (info != NULL)
 		vitalSystemApps.insert(info->team);
 
 	// populate the other groups
 	for (AppInfoList::Iterator it(fRegisteredApps.It());
-		 RosterAppInfo* info = *it;
-		 ++it) {
+			RosterAppInfo* info = *it; ++it) {
 		if (vitalSystemApps.find(info->team) == vitalSystemApps.end()) {
 			RosterAppInfo* clonedInfo = info->Clone();
 			if (clonedInfo) {
@@ -1469,8 +1473,8 @@ TRoster::GetShutdownApps(AppInfoList& userApps, AppInfoList& systemApps,
 	// Special case, we add the input server to vital apps here so it is
 	// not excluded in the lists above
 	info = fRegisteredApps.InfoFor("application/x-vnd.Be-input_server");
- 	if (info)
- 		vitalSystemApps.insert(info->team);
+	if (info != NULL)
+		vitalSystemApps.insert(info->team);
 
 	// clean up on error
 	if (error != B_OK) {
@@ -1479,6 +1483,30 @@ TRoster::GetShutdownApps(AppInfoList& userApps, AppInfoList& systemApps,
 	}
 
 	return error;
+}
+
+
+status_t
+TRoster::AddAppInfo(AppInfoList& apps, team_id team)
+{
+	BAutolock _(fLock);
+
+	for (AppInfoList::Iterator it(fRegisteredApps.It());
+			RosterAppInfo* info = *it; ++it) {
+		if (info->team == team) {
+			RosterAppInfo* clonedInfo = info->Clone();
+			status_t error = B_NO_MEMORY;
+			if (clonedInfo != NULL) {
+				if (!apps.AddInfo(clonedInfo))
+					delete clonedInfo;
+				else
+					error = B_OK;
+			}
+			return error;
+		}
+	}
+
+	return B_BAD_TEAM_ID;
 }
 
 
@@ -1601,10 +1629,15 @@ TRoster::_AddMessageAppInfo(BMessage* message, const app_info* info)
 	// An app_info is not completely flat. The entry_ref contains a string
 	// pointer. Therefore we flatten the info.
 	flat_app_info flatInfo;
-	flatInfo.info = *info;
+	flatInfo.thread = info->thread;
+	flatInfo.team = info->team;
+	flatInfo.port = info->port;
+	flatInfo.flags = info->flags;
+	flatInfo.ref_device = info->ref.device;
+	flatInfo.ref_directory = info->ref.directory;
+	memcpy(flatInfo.signature, info->signature, B_MIME_TYPE_LENGTH);
 
 	// set the ref name to NULL and copy it into the flat structure
-	flatInfo.info.ref.name = NULL;
 	flatInfo.ref_name[0] = '\0';
 	if (info->ref.name)
 		strcpy(flatInfo.ref_name, info->ref.name);
@@ -1801,7 +1834,7 @@ TRoster::_HandleGetRecentEntries(BMessage* request)
 
 			default:
 				D(PRINT("WARNING: TRoster::_HandleGetRecentEntries(): "
-					"unexpected request->what value of 0x%lx\n",
+					"unexpected request->what value of 0x%" B_PRIx32 "\n",
 					request->what));
 				error = B_BAD_VALUE;
 				break;
@@ -1934,7 +1967,7 @@ TRoster::_LoadRosterSettings(const char* path)
 						char app[B_PATH_NAME_LENGTH];
 						char rank[B_PATH_NAME_LENGTH];
 						entry_ref ref;
-						uint32 index = 0;
+						ulong index = 0;
 
 						// Convert the given path to an entry ref
 						streamError = stream.GetString(path);
@@ -1963,15 +1996,17 @@ TRoster::_LoadRosterSettings(const char* path)
 							}
 							if (!streamError) {
 								D(printf("pushing entry, leaf == '%s', app == "
-									"'%s', index == %ld\n", entry->ref.name,
-									entry->sig.c_str(), entry->index));
+									"'%s', index == %" B_PRId32 "\n",
+									entry->ref.name, entry->sig.c_str(),
+									entry->index));
 
 								list->push_back(entry);
 							}
 						}
 
 						if (streamError) {
-							D(printf("entry error 0x%lx\n", streamError));
+							D(printf("entry error 0x%" B_PRIx32 "\n",
+								streamError));
 							if (streamError
 									!= RosterSettingsCharStream::kEndOfLine
 							    && streamError
@@ -2024,7 +2059,7 @@ TRoster::_LoadRosterSettings(const char* path)
 	}
 	if (error) {
 		D(PRINT("WARNING: TRoster::_LoadRosterSettings(): error loading roster "
-			"settings from '%s', 0x%lx\n", settingsPath, error));
+			"settings from '%s', 0x%" B_PRIx32 "\n", settingsPath, error));
 	}
 	return error;
 }
@@ -2047,17 +2082,17 @@ TRoster::_SaveRosterSettings(const char* path)
 		saveError = fRecentDocuments.Save(file, "Recent documents", "RecentDoc");
 		if (saveError) {
 			D(PRINT("TRoster::_SaveRosterSettings(): recent documents save "
-				"failed with error 0x%lx\n", saveError));
+				"failed with error 0x%" B_PRIx32 "\n", saveError));
 		}
 		saveError = fRecentFolders.Save(file, "Recent folders", "RecentFolder");
 		if (saveError) {
 			D(PRINT("TRoster::_SaveRosterSettings(): recent folders save "
-				"failed with error 0x%lx\n", saveError));
+				"failed with error 0x%" B_PRIx32 "\n", saveError));
 		}
 		saveError = fRecentApps.Save(file);
 		if (saveError) {
 			D(PRINT("TRoster::_SaveRosterSettings(): recent folders save "
-				"failed with error 0x%lx\n", saveError));
+				"failed with error 0x%" B_PRIx32 "\n", saveError));
 		}
 		fclose(file);
 	}

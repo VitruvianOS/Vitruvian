@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2010, Haiku, Inc. All rights reserved.
+ * Copyright 2006-2015, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef	_SPLIT_VIEW_H
@@ -13,8 +13,7 @@ class BSplitLayout;
 class BSplitView : public BView {
 public:
 								BSplitView(
-									enum orientation orientation
-										= B_HORIZONTAL,
+									orientation orientation = B_HORIZONTAL,
 									float spacing = B_USE_DEFAULT_SPACING);
 								BSplitView(BMessage* from);
 	virtual						~BSplitView();
@@ -30,7 +29,7 @@ public:
 			void				SetSpacing(float spacing);
 
 			orientation			Orientation() const;
-			void				SetOrientation(enum orientation orientation);
+			void				SetOrientation(orientation orientation);
 
 			float				SplitterSize() const;
 			void				SetSplitterSize(float size);
@@ -62,6 +61,7 @@ public:
 			bool				AddChild(int32 index, BLayoutItem* child,
 									float weight);
 
+	virtual void				AttachedToWindow();
 	virtual	void				Draw(BRect updateRect);
 	virtual	void				DrawAfterChildren(BRect updateRect);
 	virtual	void				MouseDown(BPoint where);
@@ -86,7 +86,7 @@ protected:
 
 	virtual	void				DrawSplitter(BRect frame,
 									const BRect& updateRect,
-									enum orientation orientation,
+									orientation orientation,
 									bool pressed);
 
 private:
@@ -109,7 +109,7 @@ private:
 
 	static	void				_DrawDefaultSplitter(BView* view, BRect frame,
 									const BRect& updateRect,
-									enum orientation orientation,
+									orientation orientation,
 									bool pressed);
 
 private:

@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku.
+ * Copyright 2001-2015, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -48,7 +48,7 @@ BRoster::Private::SetTo(BMessenger mainMessenger, BMessenger mimeMessenger)
 
 	\param message The message to be sent.
 	\param reply A pointer to a pre-allocated BMessage into which the reply
-		   message will be copied.
+		   message will be copied. May be \c NULL.
 	\param mime \c true, if the message should be sent to the MIME data base
 		   service, \c false for the roster.
 	\return
@@ -65,10 +65,14 @@ BRoster::Private::SendTo(BMessage *message, BMessage *reply, bool mime)
 	if (fRoster == NULL)
 		return B_NO_INIT;
 
-	if (mime)
-		return fRoster->_MimeMessenger().SendMessage(message, reply);
+	const BMessenger& messenger = mime
+		? fRoster->_MimeMessenger() : fRoster->fMessenger;
+	if (messenger.IsTargetLocal())
+		return B_BAD_VALUE;
 
-	return fRoster->fMessenger.SendMessage(message, reply);
+	return reply != NULL
+		? messenger.SendMessage(message, reply)
+		: messenger.SendMessage(message);
 }
 
 

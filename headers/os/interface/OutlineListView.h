@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2009, Haiku, Inc. All rights reserved.
+ * Copyright 2006-2015, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _OUTLINE_LIST_VIEW_H
@@ -8,16 +8,13 @@
 
 #include <ListView.h>
 
-class BListItem;
-
 
 class BOutlineListView : public BListView {
 public:
 								BOutlineListView(BRect frame, const char* name,
 									list_view_type type
 										= B_SINGLE_SELECTION_LIST,
-									uint32 resizeMode
-										= B_FOLLOW_LEFT | B_FOLLOW_TOP,
+									uint32 resizingMode = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_WILL_DRAW
 										| B_FRAME_EVENTS | B_NAVIGABLE);
 								BOutlineListView(const char* name,
@@ -26,7 +23,7 @@ public:
 									uint32 flags = B_WILL_DRAW
 										| B_FRAME_EVENTS | B_NAVIGABLE);
 								BOutlineListView(BMessage* archive);
-	virtual 					~BOutlineListView();
+	virtual						~BOutlineListView();
 
 	static	BArchivable*		Instantiate(BMessage* archive);
 	virtual	status_t			Archive(BMessage* archive,
@@ -38,20 +35,19 @@ public:
 	virtual	void				FrameResized(float newWidth, float newHeight);
 	virtual	void				MouseUp(BPoint where);
 
-	virtual bool				AddUnder(BListItem* item,
-									BListItem* underItem);
+	virtual	bool				AddUnder(BListItem* item, BListItem* superItem);
 
-	virtual bool				AddItem(BListItem* item);
-	virtual bool				AddItem(BListItem* item, int32 fullListIndex);
-	virtual bool				AddList(BList* newItems);
-	virtual bool				AddList(BList* newItems, int32 fullListIndex);
+	virtual	bool				AddItem(BListItem* item);
+	virtual	bool				AddItem(BListItem* item, int32 fullListIndex);
+	virtual	bool				AddList(BList* newItems);
+	virtual	bool				AddList(BList* newItems, int32 fullListIndex);
 
-	virtual bool				RemoveItem(BListItem* item);
-	virtual BListItem*			RemoveItem(int32 fullListIndex);
-	virtual bool				RemoveItems(int32 fullListIndex, int32 count);
+	virtual	bool				RemoveItem(BListItem* item);
+	virtual	BListItem*			RemoveItem(int32 fullListIndex);
+	virtual	bool				RemoveItems(int32 fullListIndex, int32 count);
 
 			BListItem*			FullListItemAt(int32 fullListIndex) const;
-			int32				FullListIndexOf(BPoint point) const;
+			int32				FullListIndexOf(BPoint where) const;
 			int32				FullListIndexOf(BListItem* item) const;
 			BListItem*			FullListFirstItem() const;
 			BListItem*			FullListLastItem() const;
@@ -62,11 +58,9 @@ public:
 
 	virtual	void				MakeEmpty();
 			bool				FullListIsEmpty() const;
-			void				FullListDoForEach(
-									bool (*func)(BListItem* item));
-			void				FullListDoForEach(
-									bool (*func)(BListItem* item, void*),
-									void*);
+			void				FullListDoForEach(bool (*func)(BListItem* item));
+			void				FullListDoForEach(bool (*func)(BListItem* item, void* arg),
+									void* arg);
 
 			BListItem*			Superitem(const BListItem* item);
 
@@ -75,34 +69,34 @@ public:
 
 			bool				IsExpanded(int32 fullListIndex);
 
-	virtual BHandler*			ResolveSpecifier(BMessage* message,
+	virtual	BHandler*			ResolveSpecifier(BMessage* message,
 									int32 index, BMessage* specifier,
 									int32 what, const char* property);
-	virtual status_t			GetSupportedSuites(BMessage* data);
-	virtual status_t			Perform(perform_code code, void* data);
+	virtual	status_t			GetSupportedSuites(BMessage* data);
+	virtual	status_t			Perform(perform_code code, void* data);
 
-	virtual void				ResizeToPreferred();
-	virtual void				GetPreferredSize(float* _width,
+	virtual	void				ResizeToPreferred();
+	virtual	void				GetPreferredSize(float* _width,
 									float* _height);
-	virtual void				MakeFocus(bool focus = true);
-	virtual void				AllAttached();
-	virtual void				AllDetached();
-	virtual void				DetachedFromWindow();
+	virtual	void				MakeFocus(bool focus = true);
+	virtual	void				AllAttached();
+	virtual	void				AllDetached();
+	virtual	void				DetachedFromWindow();
 
 			void				FullListSortItems(int (*compareFunc)(
 										const BListItem* first,
 										const BListItem* second));
-			void				SortItemsUnder(BListItem* underItem,
+			void				SortItemsUnder(BListItem* superItem,
 									bool oneLevelOnly, int (*compareFunc)(
 										const BListItem* first,
 										const BListItem* second));
-			int32				CountItemsUnder(BListItem* under,
+			int32				CountItemsUnder(BListItem* superItem,
 									bool oneLevelOnly) const;
-			BListItem*			EachItemUnder(BListItem* underItem,
+			BListItem*			EachItemUnder(BListItem* superItem,
 									bool oneLevelOnly, BListItem* (*eachFunc)(
 										BListItem* item, void* arg),
 									void* arg);
-			BListItem*			ItemUnderAt(BListItem* underItem,
+			BListItem*			ItemUnderAt(BListItem* superItem,
 									bool oneLevelOnly, int32 index) const;
 
 protected:
@@ -116,7 +110,7 @@ private:
 	virtual	void				_ReservedOutlineListView4();
 
 protected:
-	virtual	void				ExpandOrCollapse(BListItem* underItem,
+	virtual	void				ExpandOrCollapse(BListItem* superItem,
 									bool expand);
 	virtual BRect				LatchRect(BRect itemRect, int32 level) const;
 	virtual void				DrawLatch(BRect itemRect, int32 level,
@@ -134,7 +128,7 @@ private:
 									int (*compareFunc)(const BListItem* a,
 										const BListItem* b));
 			void				_DestructTree(BList* tree);
-			BList*				_BuildTree(BListItem* underItem, int32& index);
+			BList*				_BuildTree(BListItem* superItem, int32& index);
 
 			void				_CullInvisibleItems(BList &list);
 			bool				_SwapItems(int32 first, int32 second);

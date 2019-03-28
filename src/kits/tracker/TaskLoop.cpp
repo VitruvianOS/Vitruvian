@@ -39,19 +39,102 @@ All rights reserved.
 #include "TaskLoop.h"
 
 
+const float kIdleTreshold = 0.15f;
+
+const bigtime_t kInfinity = B_INFINITE_TIMEOUT;
+
+
+static bigtime_t
+ActivityLevel()
+{
+	// stolen from roster server
+	bigtime_t time = 0;
+	system_info	sinfo;
+	get_system_info(&sinfo);
+
+	cpu_info* cpuInfos = new cpu_info[sinfo.cpu_count];
+	get_cpu_info(0, sinfo.cpu_count, cpuInfos);
+
+	for (uint32 index = 0; index < sinfo.cpu_count; index++)
+		time += cpuInfos[index].active_time;
+
+	delete[] cpuInfos;
+	return time / ((bigtime_t) sinfo.cpu_count);
+}
+
+
+class AccumulatedOneShotDelayedTask : public OneShotDelayedTask {
+	// supports accumulating functors
+public:
+	AccumulatedOneShotDelayedTask(AccumulatingFunctionObject* functor,
+		bigtime_t delay, bigtime_t maxAccumulatingTime = 0,
+		int32 maxAccumulateCount = 0)
+		:
+		OneShotDelayedTask(functor, delay),
+		maxAccumulateCount(maxAccumulateCount),
+		accumulateCount(1),
+		maxAccumulatingTime(maxAccumulatingTime),
+		initialTime(system_time())
+	{
+	}
+
+	bool CanAccumulate(const AccumulatingFunctionObject* accumulateThis) const
+	{
+		if (maxAccumulateCount && accumulateCount > maxAccumulateCount)
+			// don't accumulate if too may accumulated already
+			return false;
+
+		if (maxAccumulatingTime && system_time() > initialTime
+				+ maxAccumulatingTime) {
+			// don't accumulate if too late past initial task
+			return false;
+		}
+
+		return static_cast<AccumulatingFunctionObject*>(fFunctor)->
+			CanAccumulate(accumulateThis);
+	}
+
+	virtual void Accumulate(AccumulatingFunctionObject* accumulateThis,
+		bigtime_t delay)
+	{
+		fRunAfter = system_time() + delay;
+			// reset fRunAfter
+		accumulateCount++;
+		static_cast<AccumulatingFunctionObject*>(fFunctor)->
+			Accumulate(accumulateThis);
+	}
+
+private:
+	int32 maxAccumulateCount;
+	int32 accumulateCount;
+	bigtime_t maxAccumulatingTime;
+	bigtime_t initialTime;
+};
+
+
+//	#pragma mark - DelayedTask
+
+
 DelayedTask::DelayedTask(bigtime_t delay)
-	:	fRunAfter(system_time() + delay)
+	:
+	fRunAfter(system_time() + delay)
 {
 }
+
 
 DelayedTask::~DelayedTask()
 {
 }
 
+
+//	#pragma mark - OneShotDelayedTask
+
+
 OneShotDelayedTask::OneShotDelayedTask(FunctionObject* functor,
 	bigtime_t delay)
-	:	DelayedTask(delay),
-		fFunctor(functor)
+	:
+	DelayedTask(delay),
+	fFunctor(functor)
 {
 }
 
@@ -73,12 +156,16 @@ OneShotDelayedTask::RunIfNeeded(bigtime_t currentTime)
 }
 
 
+//	#pragma mark - PeriodicDelayedTask
+
+
 PeriodicDelayedTask::PeriodicDelayedTask(
 	FunctionObjectWithResult<bool>* functor, bigtime_t initialDelay,
 	bigtime_t period)
-	:	DelayedTask(initialDelay),
-		fPeriod(period),
-		fFunctor(functor)
+	:
+	DelayedTask(initialDelay),
+	fPeriod(period),
+	fFunctor(functor)
 {
 }
 
@@ -92,7 +179,7 @@ PeriodicDelayedTask::~PeriodicDelayedTask()
 bool
 PeriodicDelayedTask::RunIfNeeded(bigtime_t currentTime)
 {
-	if (!currentTime < fRunAfter)
+	if (currentTime < fRunAfter)
 		return false;
 
 	fRunAfter = currentTime + fPeriod;
@@ -104,8 +191,9 @@ PeriodicDelayedTask::RunIfNeeded(bigtime_t currentTime)
 PeriodicDelayedTaskWithTimeout::PeriodicDelayedTaskWithTimeout(
 	FunctionObjectWithResult<bool>* functor, bigtime_t initialDelay,
 	bigtime_t period, bigtime_t timeout)
-	:	PeriodicDelayedTask(functor, initialDelay, period),
-		fTimeoutAfter(system_time() + timeout)
+	:
+	PeriodicDelayedTask(functor, initialDelay, period),
+	fTimeoutAfter(system_time() + timeout)
 {
 }
 
@@ -126,11 +214,18 @@ PeriodicDelayedTaskWithTimeout::RunIfNeeded(bigtime_t currentTime)
 }
 
 
+//	#pragma mark - RunWhenIdleTask
+
+
 RunWhenIdleTask::RunWhenIdleTask(FunctionObjectWithResult<bool>* functor,
 	bigtime_t initialDelay, bigtime_t idleFor, bigtime_t heartBeat)
-	:	PeriodicDelayedTask(functor, initialDelay, heartBeat),
-		fIdleFor(idleFor),
-		fState(kInitialDelay)
+	:
+	PeriodicDelayedTask(functor, initialDelay, heartBeat),
+	fIdleFor(idleFor),
+	fState(kInitialDelay),
+	fActivityLevelStart(0),
+	fActivityLevel(0),
+	fLastCPUTooBusyTime(0)
 {
 }
 
@@ -147,8 +242,8 @@ RunWhenIdleTask::RunIfNeeded(bigtime_t currentTime)
 		return false;
 
 	fRunAfter = currentTime + fPeriod;
-	// PRINT(("runWhenIdle: runAfter %Ld, current time %Ld, period %Ld\n",
-	//	fRunAfter, currentTime, fPeriod));
+//	PRINT(("runWhenIdle: runAfter %Ld, current time %Ld, period %Ld\n",
+//		fRunAfter, currentTime, fPeriod));
 
 	if (fState == kInitialDelay) {
 //		PRINT(("run when idle task - past intial delay\n"));
@@ -161,20 +256,8 @@ RunWhenIdleTask::RunIfNeeded(bigtime_t currentTime)
 		(*fFunctor)();
 		return fFunctor->Result();
 	}
+
 	return false;
-}
-
-
-static bigtime_t
-ActivityLevel()
-{
-	// stolen from roster server
-	bigtime_t time = 0;
-	system_info	sinfo;
-	get_system_info(&sinfo);
-	for (int32 index = 0; index < sinfo.cpu_count; index++)
-		time += sinfo.cpu_infos[index].active_time;
-	return time / ((bigtime_t) sinfo.cpu_count);
 }
 
 
@@ -187,9 +270,6 @@ RunWhenIdleTask::ResetIdleTimer(bigtime_t currentTime)
 	fState = kInitialIdleWait;
 }
 
-const float kTaskOverhead = 0.01f;
-	// this should really be specified by the task itself
-const float kIdleTreshold = 0.15f;
 
 bool
 RunWhenIdleTask::IsIdle(bigtime_t currentTime, float taskOverhead)
@@ -240,9 +320,13 @@ RunWhenIdleTask::StillIdle(bigtime_t currentTime)
 }
 
 
+//	#pragma mark - TaskLoop
+
+
 TaskLoop::TaskLoop(bigtime_t heartBeat)
-	:	fTaskList(10, true),
-		fHeartBeat(heartBeat)
+	:
+	fTaskList(10, true),
+	fHeartBeat(heartBeat)
 {
 }
 
@@ -291,73 +375,30 @@ TaskLoop::RunWhenIdle(FunctionObjectWithResult<bool>* functor,
 }
 
 
-class AccumulatedOneShotDelayedTask : public OneShotDelayedTask {
-	// supports accumulating functors
-public:
-	AccumulatedOneShotDelayedTask(AccumulatingFunctionObject* functor,
-		bigtime_t delay, bigtime_t maxAccumulatingTime = 0,
-		int32 maxAccumulateCount = 0)
-		:	OneShotDelayedTask(functor, delay),
-			maxAccumulateCount(maxAccumulateCount),
-			accumulateCount(1),
-			maxAccumulatingTime(maxAccumulatingTime),
-			initialTime(system_time())
-		{}
+//	#pragma mark - TaskLoop
 
-	bool CanAccumulate(const AccumulatingFunctionObject* accumulateThis) const
-		{
-			if (maxAccumulateCount && accumulateCount > maxAccumulateCount)
-				// don't accumulate if too may accumulated already
-				return false;
-
-			if (maxAccumulatingTime && system_time() > initialTime
-					+ maxAccumulatingTime) {
-				// don't accumulate if too late past initial task
-				return false;
-			}
-
-			return static_cast<AccumulatingFunctionObject*>(fFunctor)->
-				CanAccumulate(accumulateThis);
-		}
-
-	virtual void Accumulate(AccumulatingFunctionObject* accumulateThis,
-		bigtime_t delay)
-		{
-			fRunAfter = system_time() + delay;
-				// reset fRunAfter
-			accumulateCount++;
-			static_cast<AccumulatingFunctionObject*>(fFunctor)->
-				Accumulate(accumulateThis);
-		}
-
-private:
-	int32 maxAccumulateCount;
-	int32 accumulateCount;
-	bigtime_t maxAccumulatingTime;
-	bigtime_t initialTime;
-};
 
 void
 TaskLoop::AccumulatedRunLater(AccumulatingFunctionObject* functor,
 	bigtime_t delay, bigtime_t maxAccumulatingTime, int32 maxAccumulateCount)
 {
 	AutoLock<BLocker> autoLock(&fLock);
-	if (!autoLock.IsLocked()) {
+	if (!autoLock.IsLocked())
 		return;
-	}
+
 	int32 count = fTaskList.CountItems();
 	for (int32 index = 0; index < count; index++) {
 		AccumulatedOneShotDelayedTask* task
 			= dynamic_cast<AccumulatedOneShotDelayedTask*>(
 				fTaskList.ItemAt(index));
-		if (!task)
+		if (task == NULL)
 			continue;
-
-		if (task->CanAccumulate(functor)) {
+		else if (task->CanAccumulate(functor)) {
 			task->Accumulate(functor, delay);
 			return;
 		}
 	}
+
 	RunLater(new AccumulatedOneShotDelayedTask(functor, delay,
 		maxAccumulatingTime, maxAccumulateCount));
 }
@@ -385,7 +426,6 @@ TaskLoop::Pulse()
 	return count == 0 && !KeepPulsingWhenEmpty();
 }
 
-const bigtime_t kInfinity = B_INFINITE_TIMEOUT;
 
 bigtime_t
 TaskLoop::LatestRunTime() const
@@ -442,11 +482,15 @@ TaskLoop::AddTask(DelayedTask* task)
 }
 
 
+//	#pragma mark - StandAloneTaskLoop
+
+
 StandAloneTaskLoop::StandAloneTaskLoop(bool keepThread, bigtime_t heartBeat)
-	:	TaskLoop(heartBeat),
-		fNeedToQuit(false),
-		fScanThread(-1),
-		fKeepThread(keepThread)
+	:
+	TaskLoop(heartBeat),
+	fNeedToQuit(false),
+	fScanThread(-1),
+	fKeepThread(keepThread)
 {
 }
 
@@ -480,6 +524,7 @@ StandAloneTaskLoop::~StandAloneTaskLoop()
 		}
 }
 
+
 void
 StandAloneTaskLoop::StartPulsingIfNeeded()
 {
@@ -492,11 +537,13 @@ StandAloneTaskLoop::StartPulsingIfNeeded()
 	}
 }
 
+
 bool
 StandAloneTaskLoop::KeepPulsingWhenEmpty() const
 {
 	return fKeepThread;
 }
+
 
 status_t
 StandAloneTaskLoop::RunBinder(void* castToThis)
@@ -505,6 +552,7 @@ StandAloneTaskLoop::RunBinder(void* castToThis)
 	self->Run();
 	return B_OK;
 }
+
 
 void
 StandAloneTaskLoop::Run()
@@ -544,6 +592,7 @@ StandAloneTaskLoop::Run()
 	}
 }
 
+
 void
 StandAloneTaskLoop::AddTask(DelayedTask* delayedTask)
 {
@@ -561,10 +610,15 @@ StandAloneTaskLoop::AddTask(DelayedTask* delayedTask)
 	}
 }
 
+
+//	#pragma mark - PiggybackTaskLoop
+
+
 PiggybackTaskLoop::PiggybackTaskLoop(bigtime_t heartBeat)
-	:	TaskLoop(heartBeat),
-		fNextHeartBeatTime(0),
-		fPulseMe(false)
+	:
+	TaskLoop(heartBeat),
+	fNextHeartBeatTime(0),
+	fPulseMe(false)
 {
 }
 
@@ -572,6 +626,7 @@ PiggybackTaskLoop::PiggybackTaskLoop(bigtime_t heartBeat)
 PiggybackTaskLoop::~PiggybackTaskLoop()
 {
 }
+
 
 void
 PiggybackTaskLoop::PulseMe()
@@ -588,11 +643,13 @@ PiggybackTaskLoop::PulseMe()
 	}
 }
 
+
 bool
 PiggybackTaskLoop::KeepPulsingWhenEmpty() const
 {
 	return false;
 }
+
 
 void
 PiggybackTaskLoop::StartPulsingIfNeeded()

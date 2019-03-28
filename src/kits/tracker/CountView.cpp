@@ -34,12 +34,14 @@ All rights reserved.
 
 // defines the status area drawn in the bottom left corner of a Tracker window
 
+
 #include "CountView.h"
 
 #include <Application.h>
 #include <Catalog.h>
 #include <ControlLook.h>
 #include <Locale.h>
+#include <StringFormat.h>
 
 #include "AutoLock.h"
 #include "Bitmaps.h"
@@ -49,19 +51,22 @@ All rights reserved.
 #include "Utilities.h"
 
 
-const bigtime_t kBarberPoleDelay = 500000;
-
-
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "CountView"
 
-BCountView::BCountView(BRect bounds, BPoseView* view)
-	: BView(bounds, "CountVw", B_FOLLOW_LEFT + B_FOLLOW_BOTTOM,
-			B_PULSE_NEEDED | B_WILL_DRAW),
+
+const bigtime_t kBarberPoleDelay = 500000;
+
+
+//	#pragma mark - BCountView
+
+
+BCountView::BCountView(BPoseView* view)
+	:
+	BView("CountVw", B_PULSE_NEEDED | B_WILL_DRAW),
 	fLastCount(-1),
 	fPoseView(view),
 	fShowingBarberPole(false),
-	fBorderHighlighted(false),
 	fBarberPoleMap(NULL),
 	fLastBarberPoleOffset(5),
 	fStartSpinningAfter(0),
@@ -103,17 +108,6 @@ void
 BCountView::Pulse()
 {
 	TrySpinningBarberPole();
-}
-
-
-void
-BCountView::WindowActivated(bool active)
-{
-	if (fBorderHighlighted) {
-		BRect dirty(Bounds());
-		dirty.bottom = dirty.top;
-		Invalidate(dirty);
-	}
 }
 
 
@@ -165,7 +159,7 @@ BRect
 BCountView::TextInvalRect() const
 {
 	BRect result = Bounds();
-	result.InsetBy(4, 2);
+	result.InsetBy(4, 3);
 
 	// if the barber pole is not present, use its space for text
 	if (fShowingBarberPole)
@@ -179,7 +173,7 @@ BRect
 BCountView::TextAndBarberPoleRect() const
 {
 	BRect result = Bounds();
-	result.InsetBy(4, 2);
+	result.InsetBy(4, 3);
 
 	return result;
 }
@@ -204,17 +198,15 @@ BCountView::Draw(BRect updateRect)
 {
 	BRect bounds(Bounds());
 
-	if (be_control_look != NULL) {
-		rgb_color base = ViewColor();
-		if (fBorderHighlighted && Window()->IsActive())
-			SetHighColor(ui_color(B_KEYBOARD_NAVIGATION_COLOR));
-		else
-			SetHighColor(tint_color(base, B_DARKEN_2_TINT));
-		StrokeLine(bounds.LeftTop(), bounds.RightTop());
-		bounds.top++;
-		be_control_look->DrawMenuBarBackground(this, bounds, updateRect,
-			ViewColor());
-	}
+	rgb_color color = ViewColor();
+	if (IsTypingAhead())
+		color = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+
+	SetLowColor(color);
+	be_control_look->DrawBorder(this, bounds, updateRect,
+		color, B_PLAIN_BORDER, 0,
+		BControlLook::B_BOTTOM_BORDER | BControlLook::B_LEFT_BORDER);
+	be_control_look->DrawMenuBarBackground(this, bounds, updateRect, color);
 
 	BString itemString;
 	if (IsTypingAhead())
@@ -224,13 +216,11 @@ BCountView::Draw(BRect updateRect)
 	} else {
 		if (fLastCount == 0)
 			itemString << B_TRANSLATE("no items");
-		else if (fLastCount == 1)
-			itemString << B_TRANSLATE("1 item");
 		else {
-			itemString.SetTo(B_TRANSLATE("%num items"));
-			char numString[256];
-			snprintf(numString, sizeof(numString), "%ld", fLastCount);
-			itemString.ReplaceFirst("%num", numString);
+			static BStringFormat format(B_TRANSLATE_COMMENT(
+				"{0, plural, one{# item} other{# items}}",
+				"Number of selected items: \"1 item\" or \"2 items\""));
+			format.Format(itemString, fLastCount);
 		}
 	}
 
@@ -242,10 +232,9 @@ BCountView::Draw(BRect updateRect)
 
 	if (IsTypingAhead()) {
 		// use a muted gray for the typeahead
-		SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-			B_DARKEN_4_TINT));
+		SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
 	} else
-		SetHighColor(0, 0, 0);
+		SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
 
 	MovePenTo(textRect.LeftBottom());
 	DrawString(itemString.String());
@@ -254,20 +243,8 @@ BCountView::Draw(BRect updateRect)
 
 	rgb_color light = tint_color(ViewColor(), B_LIGHTEN_MAX_TINT);
 	rgb_color shadow = tint_color(ViewColor(), B_DARKEN_2_TINT);
-	rgb_color lightShadow = tint_color(ViewColor(), B_DARKEN_1_TINT);
 
 	BeginLineArray(fShowingBarberPole && !fStartSpinningAfter ? 9 : 5);
-
-	if (be_control_look == NULL) {
-		AddLine(bounds.LeftTop(), bounds.RightTop(), light);
-		AddLine(bounds.LeftTop(), bounds.LeftBottom(), light);
-		bounds.top--;
-
-		AddLine(bounds.LeftTop(), bounds.RightTop(), shadow);
-		AddLine(BPoint(bounds.right, bounds.top + 2), bounds.RightBottom(),
-			lightShadow);
-		AddLine(bounds.LeftBottom(), bounds.RightBottom(), lightShadow);
-	}
 
 	if (!fShowingBarberPole || fStartSpinningAfter) {
 		EndLineArray();
@@ -305,10 +282,12 @@ void
 BCountView::MouseDown(BPoint)
 {
 	BContainerWindow* window = dynamic_cast<BContainerWindow*>(Window());
+	ThrowOnAssert(window != NULL);
+
 	window->Activate();
 	window->UpdateIfNeeded();
 
-	if (fPoseView->IsFilePanel() || !fPoseView->TargetModel())
+	if (fPoseView->IsFilePanel() || fPoseView->TargetModel() == NULL)
 		return;
 
 	if (!window->TargetModel()->IsRoot()) {
@@ -336,8 +315,8 @@ BCountView::AttachedToWindow()
 	SetFont(be_plain_font);
 	SetFontSize(9);
 
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	SetLowColor(ViewColor());
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	SetLowUIColor(ViewUIColor());
 
 	CheckCount();
 }
@@ -400,17 +379,4 @@ bool
 BCountView::IsFiltering() const
 {
 	return fFilterString.Length() > 0;
-}
-
-
-void
-BCountView::SetBorderHighlighted(bool highlighted)
-{
-	if (fBorderHighlighted == highlighted)
-		return;
-
-	fBorderHighlighted = highlighted;
-	BRect dirty(Bounds());
-	dirty.bottom = dirty.top;
-	Invalidate(dirty);
 }

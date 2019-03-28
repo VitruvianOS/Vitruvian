@@ -1,68 +1,70 @@
 /*
- * Copyright 2010 Haiku Inc. All rights reserved.
+ * Copyright 2010-2014 Haiku Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _B_URL_REQUEST_H_
 #define _B_URL_REQUEST_H_
 
 
-#include <HttpHeaders.h>
 #include <Url.h>
-#include <UrlResult.h>
 #include <UrlContext.h>
-#include <UrlProtocol.h>
 #include <UrlProtocolListener.h>
-
-
-enum {
-	B_NO_HANDLER_FOR_PROTOCOL = B_ERROR
-};
+#include <UrlResult.h>
+#include <OS.h>
+#include <Referenceable.h>
 
 
 class BUrlRequest {
 public:
 									BUrlRequest(const BUrl& url,
-										BUrlProtocolListener* listener);
-									BUrlRequest(const BUrl& url);
-									BUrlRequest(const BUrlRequest& other);
-	virtual							~BUrlRequest() { };
+										BUrlProtocolListener* listener,
+										BUrlContext* context,
+										const char* threadName,
+										const char* protocolName);
+	virtual							~BUrlRequest();
 
-	// Request parameters modification
-			status_t				SetUrl(const BUrl& url);
-			void					SetContext(BUrlContext* context);
-			void					SetProtocolListener(
-										BUrlProtocolListener* listener);
-			bool					SetProtocolOption(int32 option, 
-										void* value);
-	// Request parameters access
-			const BUrlProtocol*		Protocol();
-			const BUrlResult&		Result();
-			const BUrl&				Url();
-			
-	// Request control
-			status_t				Identify();
-	virtual	status_t				Perform();
-		// TODO: Rename to Run() perhaps? "Perform" is used for FBC stuff.
+	// URL protocol thread management
+	virtual	thread_id				Run();
 	virtual status_t				Pause();
 	virtual status_t				Resume();
-	virtual status_t				Abort();
-			
-	// Request informations
-	virtual	bool					InitCheck() const;
+	virtual	status_t				Stop();
+	virtual void					SetTimeout(bigtime_t timeout) {}
+
+	// URL protocol parameters modification
+			status_t				SetUrl(const BUrl& url);
+			status_t				SetContext(BUrlContext* context);
+			status_t				SetListener(BUrlProtocolListener* listener);
+
+	// URL protocol parameters access
+			const BUrl&				Url() const;
+			BUrlContext*			Context() const;
+			BUrlProtocolListener*	Listener() const;
+			const BString&			Protocol() const;
+
+	// URL protocol informations
 			bool					IsRunning() const;
 			status_t				Status() const;
-			
-	// Overloaded members
-			BUrlRequest&			operator=(const BUrlRequest& other);
+	virtual const BUrlResult&		Result() const = 0;
 
 
 protected:
-			BUrlProtocolListener*	fListener;
-			BUrlProtocol*			fUrlProtocol;
-			BUrlResult				fResult;
-			BUrlContext*			fContext;
+	static	int32					_ThreadEntry(void* arg);
+	virtual	void					_ProtocolSetup() {};
+	virtual	status_t				_ProtocolLoop() = 0;
+	virtual void					_EmitDebug(BUrlProtocolDebugMessage type,
+										const char* format, ...);
+protected:
 			BUrl					fUrl;
-			bool					fReady;
+			BReference<BUrlContext>	fContext;
+			BUrlProtocolListener*	fListener;
+
+			bool					fQuit;
+			bool					fRunning;
+			status_t				fThreadStatus;
+			thread_id				fThreadId;
+			BString					fThreadName;
+			BString					fProtocol;
 };
+
 
 #endif // _B_URL_REQUEST_H_

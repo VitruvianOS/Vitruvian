@@ -37,13 +37,13 @@ All rights reserved.
 
 #include <FindDirectory.h>
 #include <List.h>
+#include <ObjectList.h>
 #include <Point.h>
 #include <StorageDefs.h>
 
 #include <vector>
 
 #include "Model.h"
-#include "ObjectList.h"
 
 
 // APIs/code in FSUtils.h and FSUtils.cpp is slated for a major cleanup
@@ -159,11 +159,13 @@ private:
 
 
 #define B_DESKTOP_DIR_NAME "Desktop"
+#define B_DISKS_DIR_NAME "Disks"
+#define B_TRASH_DIR_NAME "Trash"
 
 #ifndef _IMPEXP_TRACKER
 #define _IMPEXP_TRACKER
 #endif
-_IMPEXP_TRACKER status_t FSCopyAttributesAndStats(BNode*, BNode*);
+_IMPEXP_TRACKER status_t FSCopyAttributesAndStats(BNode*, BNode*, bool = true);
 
 _IMPEXP_TRACKER void FSDuplicate(BObjectList<entry_ref>* srcList,
 	BList* pointList);
@@ -238,32 +240,36 @@ status_t FSRecursiveCreateFolder(const char* path);
 void FSMakeOriginalName(BString &name, const BDirectory* destDir,
 	const char* suffix = 0);
 
-status_t TrackerLaunch(const entry_ref* app, bool async);
+status_t FSGetParentVirtualDirectoryAware(const BEntry& entry, entry_ref& _ref);
+status_t FSGetParentVirtualDirectoryAware(const BEntry& entry, BEntry& _entry);
+status_t FSGetParentVirtualDirectoryAware(const BEntry& entry, BNode& _node);
+
+status_t TrackerLaunch(const entry_ref* appRef, bool async);
 status_t TrackerLaunch(const BMessage* refs, bool async,
 	bool okToRunOpenWith = true);
-status_t TrackerLaunch(const entry_ref* app, const BMessage* refs, bool async,
-	bool okToRunOpenWith = true);
-status_t LaunchBrokenLink(const char*, const BMessage*);
+status_t TrackerLaunch(const entry_ref* appRef, const BMessage* refs,
+	bool async, bool okToRunOpenWith = true);
 
 status_t FSFindTrackerSettingsDir(BPath*, bool autoCreate = true);
 
 bool FSIsDeskDir(const BEntry*);
 
-// two separate ifYouDoAction and toDoAction versions are needed for
-// localization purposes. The first one is used in "If you do action..."
-// sentence, the second one in the "To do action" sentence.
+enum DestructiveAction {
+	kRename,
+	kMove
+};
+
 bool ConfirmChangeIfWellKnownDirectory(const BEntry* entry,
-	const char* ifYouDoAction, const char* toDoAction,
-	const char* toConfirmAction, bool dontAsk = false,
+	DestructiveAction action, bool dontAsk = false,
 	int32* confirmedAlready = NULL);
 
 bool CheckDevicesEqual(const entry_ref* entry, const Model* targetModel);
 
 // Deprecated calls use newer calls above instead
-_IMPEXP_TRACKER void FSLaunchItem(const entry_ref*, BMessage* = NULL,
-	int32 workspace = -1);
-_IMPEXP_TRACKER status_t FSLaunchItem(const entry_ref*, BMessage*,
-	int32 workspace, bool asynch);
+_IMPEXP_TRACKER void FSLaunchItem(const entry_ref* appRef,
+	BMessage* refs = NULL, int32 workspace = -1);
+_IMPEXP_TRACKER status_t FSLaunchItem(const entry_ref* appRef,
+	BMessage* refs, int32 workspace, bool asynch);
 _IMPEXP_TRACKER void FSOpenWithDocuments(const entry_ref* executableToLaunch,
 	BMessage* documentEntryRefs);
 _IMPEXP_TRACKER status_t FSLaunchUsing(const entry_ref* ref,

@@ -1,12 +1,13 @@
 /*
- * Copyright (c) 2001-2009, Haiku, Inc.
+ * Copyright 2001-2017 Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT license.
  *
  * Authors:
- *		Marc Flerackers (mflerackers@androme.be)
- *		Stephan Aßmus <superstippi@gmx.de>
- *		DarkWyrm <bpmagic@columbus.rr.com>
+ *		Stephan Aßmus, superstippi@gmx.de
+ *		DarkWyrm, bpmagic@columbus.rr.com
  *		Axel Dörfler, axeld@pinc-software.de
+ *		Marc Flerackers, mflerackers@androme.be
+ *		John Scipione, jscipione@gmail.com
  */
 
 
@@ -37,29 +38,26 @@ struct BBox::LayoutData {
 	BSize	min;
 	BSize	max;
 	BSize	preferred;
+	BAlignment alignment;
 	bool	valid;			// validity the other fields
 };
 
 
-BBox::BBox(BRect frame, const char *name, uint32 resizingMode, uint32 flags,
+BBox::BBox(BRect frame, const char* name, uint32 resizingMode, uint32 flags,
 		border_style border)
-	: BView(frame, name, resizingMode, flags  | B_WILL_DRAW | B_FRAME_EVENTS),
+	:
+	BView(frame, name, resizingMode, flags  | B_WILL_DRAW | B_FRAME_EVENTS),
 	  fStyle(border)
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-
 	_InitObject();
 }
 
 
 BBox::BBox(const char* name, uint32 flags, border_style border, BView* child)
-	: BView(name, flags | B_WILL_DRAW | B_FRAME_EVENTS),
-	  fStyle(border)
+	:
+	BView(name, flags | B_WILL_DRAW | B_FRAME_EVENTS),
+	fStyle(border)
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-
 	_InitObject();
 
 	if (child)
@@ -68,12 +66,10 @@ BBox::BBox(const char* name, uint32 flags, border_style border, BView* child)
 
 
 BBox::BBox(border_style border, BView* child)
-	: BView(NULL, B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE_JUMP),
-	  fStyle(border)
+	:
+	BView(NULL, B_WILL_DRAW | B_FRAME_EVENTS | B_NAVIGABLE_JUMP),
+	fStyle(border)
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-
 	_InitObject();
 
 	if (child)
@@ -81,9 +77,10 @@ BBox::BBox(border_style border, BView* child)
 }
 
 
-BBox::BBox(BMessage *archive)
-	: BView(archive),
-	  fStyle(B_FANCY_BORDER)
+BBox::BBox(BMessage* archive)
+	:
+	BView(archive),
+	fStyle(B_FANCY_BORDER)
 {
 	_InitObject(archive);
 }
@@ -97,8 +94,8 @@ BBox::~BBox()
 }
 
 
-BArchivable *
-BBox::Instantiate(BMessage *archive)
+BArchivable*
+BBox::Instantiate(BMessage* archive)
 {
 	if (validate_instantiation(archive, "BBox"))
 		return new BBox(archive);
@@ -108,15 +105,15 @@ BBox::Instantiate(BMessage *archive)
 
 
 status_t
-BBox::Archive(BMessage *archive, bool deep) const
+BBox::Archive(BMessage* archive, bool deep) const
 {
 	status_t ret = BView::Archive(archive, deep);
 
 	if (fLabel && ret == B_OK)
-		 ret = archive->AddString("_label", fLabel);
+		ret = archive->AddString("_label", fLabel);
 
 	if (fLabelView && ret == B_OK)
-		 ret = archive->AddBool("_lblview", true);
+		ret = archive->AddBool("_lblview", true);
 
 	if (fStyle != B_FANCY_BORDER && ret == B_OK)
 		ret = archive->AddInt32("_style", fStyle);
@@ -179,7 +176,7 @@ BBox::InnerFrame()
 
 
 void
-BBox::SetLabel(const char *string)
+BBox::SetLabel(const char* string)
 {
 	_ClearLabel();
 
@@ -194,7 +191,7 @@ BBox::SetLabel(const char *string)
 
 
 status_t
-BBox::SetLabel(BView *viewLabel)
+BBox::SetLabel(BView* viewLabel)
 {
 	_ClearLabel();
 
@@ -213,14 +210,14 @@ BBox::SetLabel(BView *viewLabel)
 }
 
 
-const char *
+const char*
 BBox::Label() const
 {
 	return fLabel;
 }
 
 
-BView *
+BView*
 BBox::LabelView() const
 {
 	return fLabelView;
@@ -263,7 +260,7 @@ BBox::Draw(BRect updateRect)
 		font_height fontHeight;
 		GetFontHeight(&fontHeight);
 
-		SetHighColor(0, 0, 0);
+		SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
 		DrawString(fLabel, BPoint(10.0f, ceilf(fontHeight.ascent)));
 	}
 
@@ -274,19 +271,22 @@ BBox::Draw(BRect updateRect)
 void
 BBox::AttachedToWindow()
 {
-	BView* parent = Parent();
-	if (parent != NULL) {
-		// inherit the color from parent
-		rgb_color color = parent->ViewColor();
-		if (color == B_TRANSPARENT_COLOR)
-			color = ui_color(B_PANEL_BACKGROUND_COLOR);
+	AdoptParentColors();
 
-		SetViewColor(color);
-		SetLowColor(color);
-	}
+	// Force low color to match view color for proper label drawing.
+	float viewTint = B_NO_TINT;
+	float lowTint = B_NO_TINT;
+
+	if (LowUIColor(&lowTint) != ViewUIColor(&viewTint) || viewTint != lowTint)
+		SetLowUIColor(ViewUIColor(), viewTint);
+	else if (LowColor() != ViewColor())
+		SetLowColor(ViewColor());
+
+	if (ViewColor() == B_TRANSPARENT_COLOR)
+		AdoptSystemColors();
 
 	// The box could have been resized in the mean time
-	fBounds = Bounds();
+	fBounds = Bounds().OffsetToCopy(0, 0);
 }
 
 
@@ -322,42 +322,44 @@ BBox::FrameResized(float width, float height)
 		// TODO: this must be made part of the be_control_look stuff!
 		int32 borderSize = fStyle == B_PLAIN_BORDER ? 0 : 2;
 
+		// Horizontal
 		BRect invalid(bounds);
-		if (fBounds.right < bounds.right) {
+		if (fBounds.Width() < bounds.Width()) {
 			// enlarging
-			invalid.left = fBounds.right - borderSize;
-			invalid.right = fBounds.right;
+			invalid.left = bounds.left + fBounds.right - borderSize;
+			invalid.right = bounds.left + fBounds.right;
 
 			Invalidate(invalid);
-		} else if (fBounds.right > bounds.right) {
+		} else if (fBounds.Width() > bounds.Width()) {
 			// shrinking
-			invalid.left = bounds.right - borderSize;
+			invalid.left = bounds.left + bounds.right - borderSize;
 
 			Invalidate(invalid);
 		}
 
+		// Vertical
 		invalid = bounds;
-		if (fBounds.bottom < bounds.bottom) {
+		if (fBounds.Height() < bounds.Height()) {
 			// enlarging
-			invalid.top = fBounds.bottom - borderSize;
-			invalid.bottom = fBounds.bottom;
+			invalid.top = bounds.top + fBounds.bottom - borderSize;
+			invalid.bottom = bounds.top + fBounds.bottom;
 
 			Invalidate(invalid);
-		} else if (fBounds.bottom > bounds.bottom) {
+		} else if (fBounds.Height() > bounds.Height()) {
 			// shrinking
-			invalid.top = bounds.bottom - borderSize;
+			invalid.top = bounds.top + bounds.bottom - borderSize;
 
 			Invalidate(invalid);
 		}
 	}
 
-	fBounds.right = bounds.right;
-	fBounds.bottom = bounds.bottom;
+	fBounds.right = width;
+	fBounds.bottom = height;
 }
 
 
 void
-BBox::MessageReceived(BMessage *message)
+BBox::MessageReceived(BMessage* message)
 {
 	BView::MessageReceived(message);
 }
@@ -385,7 +387,7 @@ BBox::WindowActivated(bool active)
 
 
 void
-BBox::MouseMoved(BPoint point, uint32 transit, const BMessage *message)
+BBox::MouseMoved(BPoint point, uint32 transit, const BMessage* message)
 {
 	BView::MouseMoved(point, transit, message);
 }
@@ -398,10 +400,9 @@ BBox::FrameMoved(BPoint newLocation)
 }
 
 
-BHandler *
-BBox::ResolveSpecifier(BMessage *message, int32 index,
-	BMessage *specifier, int32 what,
-	const char *property)
+BHandler*
+BBox::ResolveSpecifier(BMessage* message, int32 index, BMessage* specifier,
+	int32 what, const char* property)
 {
 	return BView::ResolveSpecifier(message, index, specifier, what, property);
 }
@@ -424,7 +425,7 @@ BBox::ResizeToPreferred()
 
 
 void
-BBox::GetPreferredSize(float *_width, float *_height)
+BBox::GetPreferredSize(float* _width, float* _height)
 {
 	_ValidateLayoutData();
 
@@ -443,7 +444,7 @@ BBox::MakeFocus(bool focused)
 
 
 status_t
-BBox::GetSupportedSuites(BMessage *message)
+BBox::GetSupportedSuites(BMessage* message)
 {
 	return BView::GetSupportedSuites(message);
 }
@@ -480,7 +481,7 @@ BBox::Perform(perform_code code, void* _data)
 			BBox::GetHeightForWidth(data->width, &data->min, &data->max,
 				&data->preferred);
 			return B_OK;
-}
+		}
 		case PERFORM_CODE_SET_LAYOUT:
 		{
 			perform_data_set_layout* data = (perform_data_set_layout*)_data;
@@ -511,6 +512,8 @@ BBox::MinSize()
 	_ValidateLayoutData();
 
 	BSize size = (GetLayout() ? GetLayout()->MinSize() : fLayoutData->min);
+	if (size.width < fLayoutData->min.width)
+		size.width = fLayoutData->min.width;
 	return BLayoutUtils::ComposeSize(ExplicitMinSize(), size);
 }
 
@@ -533,6 +536,17 @@ BBox::PreferredSize()
 	BSize size = (GetLayout() ? GetLayout()->PreferredSize()
 		: fLayoutData->preferred);
 	return BLayoutUtils::ComposeSize(ExplicitPreferredSize(), size);
+}
+
+
+BAlignment
+BBox::LayoutAlignment()
+{
+	_ValidateLayoutData();
+
+	BAlignment alignment = (GetLayout() ? GetLayout()->Alignment()
+			: fLayoutData->alignment);
+	return BLayoutUtils::ComposeAlignment(ExplicitAlignment(), alignment);
 }
 
 
@@ -567,8 +581,7 @@ BBox::DoLayout()
 				// don't trigger a relayout
 			AddChild(fLabelView, ChildAt(0));
 			EnableLayoutInvalidation();
-		} else
-			return;
+		}
 	}
 
 	_ValidateLayoutData();
@@ -587,14 +600,18 @@ BBox::DoLayout()
 		return;
 
 	// layout the child
-	if (BView* child = _Child()) {
+	BView* child = _Child();
+	if (child != NULL) {
 		BRect frame(Bounds());
 		frame.left += fLayoutData->insets.left;
 		frame.top += fLayoutData->insets.top;
 		frame.right -= fLayoutData->insets.right;
 		frame.bottom -= fLayoutData->insets.bottom;
 
-		BLayoutUtils::AlignInFrame(child, frame);
+		if ((child->Flags() & B_SUPPORTS_LAYOUT) != 0)
+			BLayoutUtils::AlignInFrame(child, frame);
+		else
+			child->MoveTo(frame.LeftTop());
 	}
 }
 
@@ -613,7 +630,7 @@ BBox::operator=(const BBox &)
 void
 BBox::_InitObject(BMessage* archive)
 {
-	fBounds = Bounds();
+	fBounds = Bounds().OffsetToCopy(0, 0);
 
 	fLabel = NULL;
 	fLabelView = NULL;
@@ -633,7 +650,7 @@ BBox::_InitObject(BMessage* archive)
 		SetFont(&font, flags);
 
 	if (archive != NULL) {
-		const char *string;
+		const char* string;
 		if (archive->FindString("_label", &string) == B_OK)
 			SetLabel(string);
 
@@ -649,6 +666,8 @@ BBox::_InitObject(BMessage* archive)
 		if (archive->FindBool("_lblview", &hasLabelView) == B_OK)
 			fLabelView = ChildAt(0);
 	}
+
+	AdoptSystemColors();
 }
 
 
@@ -660,13 +679,8 @@ BBox::_DrawPlain(BRect labelBox)
 
 	float lightTint;
 	float shadowTint;
-	if (be_control_look != NULL) {
-		lightTint = B_LIGHTEN_1_TINT;
-		shadowTint = B_DARKEN_1_TINT;
-	} else {
-		lightTint = B_LIGHTEN_MAX_TINT;
-		shadowTint = B_DARKEN_3_TINT;
-	}
+	lightTint = B_LIGHTEN_1_TINT;
+	shadowTint = B_DARKEN_1_TINT;
 
 	if (rect.Height() == 0.0 || rect.Width() == 0.0) {
 		// used as separator
@@ -699,65 +713,18 @@ BBox::_DrawFancy(BRect labelBox)
 	BRect rect = Bounds();
 	rect.top += TopBorderOffset();
 
-	if (be_control_look != NULL) {
-		rgb_color base = ViewColor();
-		if (rect.Height() == 1.0) {
-			// used as horizontal separator
-			be_control_look->DrawGroupFrame(this, rect, rect, base,
-				BControlLook::B_TOP_BORDER);
-		} else if (rect.Width() == 1.0) {
-			// used as vertical separator
-			be_control_look->DrawGroupFrame(this, rect, rect, base,
-				BControlLook::B_LEFT_BORDER);
-		} else {
-			// used as box
-			be_control_look->DrawGroupFrame(this, rect, rect, base);
-		}
-		return;
-	}
-
-	rgb_color light = tint_color(ViewColor(), B_LIGHTEN_MAX_TINT);
-	rgb_color shadow = tint_color(ViewColor(), B_DARKEN_3_TINT);
-
+	rgb_color base = ViewColor();
 	if (rect.Height() == 1.0) {
 		// used as horizontal separator
-		BeginLineArray(2);
-			AddLine(BPoint(rect.left, rect.top),
-					BPoint(rect.right, rect.top), shadow);
-			AddLine(BPoint(rect.left, rect.bottom),
-					BPoint(rect.right, rect.bottom), light);
-		EndLineArray();
+		be_control_look->DrawGroupFrame(this, rect, rect, base,
+			BControlLook::B_TOP_BORDER);
 	} else if (rect.Width() == 1.0) {
 		// used as vertical separator
-		BeginLineArray(2);
-			AddLine(BPoint(rect.left, rect.top),
-					BPoint(rect.left, rect.bottom), shadow);
-			AddLine(BPoint(rect.right, rect.top),
-					BPoint(rect.right, rect.bottom), light);
-		EndLineArray();
+		be_control_look->DrawGroupFrame(this, rect, rect, base,
+			BControlLook::B_LEFT_BORDER);
 	} else {
 		// used as box
-		BeginLineArray(8);
-			AddLine(BPoint(rect.left, rect.bottom - 1.0),
-					BPoint(rect.left, rect.top), shadow);
-			AddLine(BPoint(rect.left + 1.0, rect.top),
-					BPoint(rect.right - 1.0, rect.top), shadow);
-			AddLine(BPoint(rect.left, rect.bottom),
-					BPoint(rect.right, rect.bottom), light);
-			AddLine(BPoint(rect.right, rect.bottom - 1.0),
-					BPoint(rect.right, rect.top), light);
-
-			rect.InsetBy(1.0, 1.0);
-
-			AddLine(BPoint(rect.left, rect.bottom - 1.0),
-					BPoint(rect.left, rect.top), light);
-			AddLine(BPoint(rect.left + 1.0, rect.top),
-					BPoint(rect.right - 1.0, rect.top), light);
-			AddLine(BPoint(rect.left, rect.bottom),
-					BPoint(rect.right, rect.bottom), shadow);
-			AddLine(BPoint(rect.right, rect.bottom - 1.0),
-					BPoint(rect.right, rect.top), shadow);
-		EndLineArray();
+		be_control_look->DrawGroupFrame(this, rect, rect, base);
 	}
 }
 
@@ -765,8 +732,6 @@ BBox::_DrawFancy(BRect labelBox)
 void
 BBox::_ClearLabel()
 {
-	fBounds.top = 0;
-
 	if (fLabel) {
 		free(fLabel);
 		fLabel = NULL;
@@ -812,9 +777,8 @@ BBox::_ValidateLayoutData()
 		BSize size = fLabelView->PreferredSize();
 		fLayoutData->label_box.Set(10, 0, 10 + size.width, size.height);
 		labelHeight = size.height + 1;
-	} else {
+	} else
 		label = false;
-	}
 
 	// border
 	switch (fStyle) {
@@ -845,9 +809,11 @@ BBox::_ValidateLayoutData()
 	else
 		minWidth = addWidth - 1;
 
+	BAlignment alignment(B_ALIGN_HORIZONTAL_CENTER, B_ALIGN_VERTICAL_CENTER);
+
 	// finally consider the child constraints, if we shall support layout
 	BView* child = _Child();
-	if (child && (Flags() & B_SUPPORTS_LAYOUT)) {
+	if (child && (child->Flags() & B_SUPPORTS_LAYOUT)) {
 		BSize min = child->MinSize();
 		BSize max = child->MaxSize();
 		BSize preferred = child->PreferredSize();
@@ -866,10 +832,19 @@ BBox::_ValidateLayoutData()
 		fLayoutData->min = min;
 		fLayoutData->max = max;
 		fLayoutData->preferred = preferred;
+
+		BAlignment childAlignment = child->LayoutAlignment();
+		if (childAlignment.horizontal == B_ALIGN_USE_FULL_WIDTH)
+			alignment.horizontal = B_ALIGN_USE_FULL_WIDTH;
+		if (childAlignment.vertical == B_ALIGN_USE_FULL_HEIGHT)
+			alignment.vertical = B_ALIGN_USE_FULL_HEIGHT;
+
+		fLayoutData->alignment = alignment;
 	} else {
 		fLayoutData->min.Set(minWidth, addHeight - 1);
 		fLayoutData->max.Set(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED);
 		fLayoutData->preferred = fLayoutData->min;
+		fLayoutData->alignment = alignment;
 	}
 
 	fLayoutData->valid = true;

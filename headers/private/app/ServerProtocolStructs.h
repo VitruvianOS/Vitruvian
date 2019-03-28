@@ -9,6 +9,7 @@
 #define APP_SERVER_PROTOCOL_STRUCTS_H
 
 
+#include <AffineTransform.h>
 #include <Rect.h>
 
 
@@ -17,6 +18,10 @@ struct ViewSetStateInfo {
 	float						penSize;
 	rgb_color					highColor;
 	rgb_color					lowColor;
+	color_which					whichHighColor;
+	color_which					whichLowColor;
+	float						whichHighColorTint;
+	float						whichLowColorTint;
 	::pattern					pattern;
 	drawing_mode				drawingMode;
 	BPoint						origin;
@@ -24,6 +29,7 @@ struct ViewSetStateInfo {
 	join_mode					lineJoin;
 	cap_mode					lineCap;
 	float						miterLimit;
+	int32						fillRule;
 	source_alpha				alphaSourceMode;
 	alpha_function				alphaFunctionMode;
 	bool						fontAntialiasing;

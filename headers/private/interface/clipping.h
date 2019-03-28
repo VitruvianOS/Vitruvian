@@ -81,6 +81,16 @@ offset_rect(clipping_rect &rect, int32 x, int32 y)
 }
 
 
+static inline void
+scale_rect(clipping_rect& rect, float x, float y)
+{
+	rect.left = (int)(rect.left * x);
+	rect.top = (int)(rect.top * y);
+	rect.right = (int)((rect.right + 1) * x) - 1;
+	rect.bottom = (int)((rect.bottom + 1) * y) - 1;
+}
+
+
 // Converts the given clipping_rect to a BRect
 static inline BRect
 to_BRect(const clipping_rect &rect)

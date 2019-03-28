@@ -1,5 +1,6 @@
 /*
  * Copyright 2006, Ingo Weinhold <bonefish@cs.tu-berlin.de>.
+ * Copyright 2015, Haiku, Inc.
  * All rights reserved. Distributed under the terms of the MIT License.
  */
 
@@ -14,13 +15,12 @@
 #include "SplitLayout.h"
 
 
-BSplitView::BSplitView(enum orientation orientation, float spacing)
+BSplitView::BSplitView(orientation orientation, float spacing)
 	:
 	BView(NULL,
 		B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE | B_INVALIDATE_AFTER_LAYOUT,
 		fSplitLayout = new BSplitLayout(orientation, spacing))
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 }
 
 
@@ -97,7 +97,7 @@ BSplitView::Orientation() const
 
 
 void
-BSplitView::SetOrientation(enum orientation orientation)
+BSplitView::SetOrientation(orientation orientation)
 {
 	fSplitLayout->SetOrientation(orientation);
 }
@@ -237,6 +237,13 @@ BSplitView::AddChild(int32 index, BLayoutItem* child, float weight)
 
 
 void
+BSplitView::AttachedToWindow()
+{
+	AdoptParentColors();
+}
+
+
+void
 BSplitView::Draw(BRect updateRect)
 {
 	// draw the splitters
@@ -358,7 +365,7 @@ BSplitView::Instantiate(BMessage* from)
 
 void
 BSplitView::DrawSplitter(BRect frame, const BRect& updateRect,
-	enum orientation orientation, bool pressed)
+	orientation orientation, bool pressed)
 {
 	_DrawDefaultSplitter(this, frame, updateRect, orientation, pressed);
 }
@@ -366,7 +373,7 @@ BSplitView::DrawSplitter(BRect frame, const BRect& updateRect,
 
 void
 BSplitView::_DrawDefaultSplitter(BView* view, BRect frame,
-	const BRect& updateRect, enum orientation orientation, bool pressed)
+	const BRect& updateRect, orientation orientation, bool pressed)
 {
 	uint32 flags = pressed ? BControlLook::B_ACTIVATED : 0;
 	be_control_look->DrawSplitter(view, frame, updateRect, view->ViewColor(),

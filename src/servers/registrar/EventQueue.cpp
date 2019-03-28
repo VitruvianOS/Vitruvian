@@ -6,7 +6,6 @@
  *		Ingo Weinhold (bonefish@users.sf.net)
  */
 
-#include <SupportDefs.h>
 
 #include "EventQueue.h"
 

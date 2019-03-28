@@ -261,7 +261,7 @@ public:
 			B_FOLLOW_NONE, 0);
 		if (!fRootView)
 			return B_NO_MEMORY;
-		fRootView->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+		fRootView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 		AddChild(fRootView);
 
 		// text view
@@ -269,7 +269,7 @@ public:
 			BRect(0, 0, 10, 10), B_FOLLOW_NONE);
 		if (!fTextView)
 			return B_NO_MEMORY;
-		fTextView->SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+		fTextView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 		rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
 		fTextView->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
 		fTextView->MakeEditable(false);
@@ -593,7 +593,7 @@ private:
 ShutdownProcess::ShutdownProcess(TRoster* roster, EventQueue* eventQueue)
 	:
 	BLooper("shutdown process"),
-	EventMaskWatcher(BMessenger(this), B_REQUEST_QUIT),
+	EventMaskWatcher(BMessenger(this), B_REQUEST_QUIT | B_REQUEST_LAUNCHED),
 	fWorkerLock("worker lock"),
 	fRequest(NULL),
 	fRoster(roster),
@@ -739,8 +739,8 @@ ShutdownProcess::MessageReceived(BMessage* message)
 				return;
 			}
 
-			PRINT("ShutdownProcess::MessageReceived(): B_SOME_APP_QUIT: %ld\n",
-				team);
+			PRINT("ShutdownProcess::MessageReceived(): B_SOME_APP_QUIT: %"
+				B_PRId32 "\n", team);
 
 			// remove the app info from the respective list
 			int32 phase;
@@ -769,12 +769,33 @@ ShutdownProcess::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case B_SOME_APP_LAUNCHED:
+		{
+			// get the team
+			team_id team;
+			if (message->FindInt32("be:team", &team) != B_OK) {
+				// should not happen
+				return;
+			}
+
+			PRINT("ShutdownProcess::MessageReceived(): B_SOME_APP_LAUNCHED: %"
+				B_PRId32 "\n", team);
+
+			// add the user app info to the respective list
+			{
+				BAutolock _(fWorkerLock);
+				fRoster->AddAppInfo(fUserApps, team);
+			}
+			break;
+		}
+
 		case MSG_PHASE_TIMED_OUT:
 		{
 			// get the phase the event is intended for
 			int32 phase = TimeoutEvent::GetMessagePhase(message);
 			team_id team = TimeoutEvent::GetMessageTeam(message);;
-			PRINT("MSG_PHASE_TIMED_OUT: phase: %ld, team: %ld\n", phase, team);
+			PRINT("MSG_PHASE_TIMED_OUT: phase: %" B_PRId32 ", team: %" B_PRId32
+				"\n", phase, team);
 
 			BAutolock _(fWorkerLock);
 
@@ -837,10 +858,12 @@ ShutdownProcess::MessageReceived(BMessage* message)
 
 			BAutolock _(fWorkerLock);
 			if (open) {
-				PRINT("B_REG_TEAM_DEBUGGER_ALERT: insert %ld\n", team);
+				PRINT("B_REG_TEAM_DEBUGGER_ALERT: insert %" B_PRId32 "\n",
+					team);
 				fDebuggedTeams.insert(team);
 			} else {
-				PRINT("B_REG_TEAM_DEBUGGER_ALERT: remove %ld\n", team);
+				PRINT("B_REG_TEAM_DEBUGGER_ALERT: remove %" B_PRId32 "\n",
+					team);
 				fDebuggedTeams.erase(team);
 				_PushEvent(DEBUG_EVENT, -1, fCurrentPhase);
 			}
@@ -984,11 +1007,7 @@ ShutdownProcess::_AddShutdownWindowApps(AppInfoList& infos)
 		}
 
 		// get the application icons
-#ifdef __HAIKU__
 		color_space format = B_RGBA32;
-#else
-		color_space format = B_CMAP8;
-#endif
 
 		// mini icon
 		BBitmap* miniIcon = new(nothrow) BBitmap(BRect(0, 0, 15, 15), format);
@@ -1272,18 +1291,13 @@ ShutdownProcess::_WorkerDoShutdown()
 			throw_error(B_SHUTDOWN_CANCELLED);
 	}
 
-	// tell TRoster not to accept new applications anymore
-	fRoster->SetShuttingDown(true);
-
 	fWorkerLock.Lock();
-
 	// get a list of all applications to shut down and sort them
 	status_t status = fRoster->GetShutdownApps(fUserApps, fSystemApps,
 		fBackgroundApps, fVitalSystemApps);
 	if (status  != B_OK) {
 		fWorkerLock.Unlock();
 		fRoster->RemoveWatcher(this);
-		fRoster->SetShuttingDown(false);
 		return;
 	}
 
@@ -1305,8 +1319,15 @@ ShutdownProcess::_WorkerDoShutdown()
 
 	// phase 1: terminate the user apps
 	_SetPhase(USER_APP_TERMINATION_PHASE);
-	_QuitApps(fUserApps, false);
-	_WaitForDebuggedTeams();
+
+	// since, new apps can still be launched, loop until all are gone
+	if (!fUserApps.IsEmpty()) {
+		_QuitApps(fUserApps, false);
+		_WaitForDebuggedTeams();
+	}
+
+	// tell TRoster not to accept new applications anymore
+	fRoster->SetShuttingDown(true);
 
 	// phase 2: terminate the system apps
 	_SetPhase(SYSTEM_APP_TERMINATION_PHASE);
@@ -1355,13 +1376,10 @@ ShutdownProcess::_WorkerDoShutdown()
 
 	// either there's no GUI or reboot failed: we enter the kernel debugger
 	// instead
-#ifdef __HAIKU__
-// TODO: Introduce the syscall.
-//	while (true) {
-//		_kern_kernel_debugger("The system is shut down. It's now safe to turn "
-//			"off the computer.");
-//	}
-#endif
+	while (true) {
+		_kern_kernel_debugger("The system is shut down. It's now safe to turn "
+			"off the computer.");
+	}
 }
 
 
@@ -1397,7 +1415,7 @@ ShutdownProcess::_WaitForApp(team_id team, AppInfoList* list, bool systemApps)
 			} else {
 				// The app returned false in QuitRequested().
 				PRINT("ShutdownProcess::_WaitForApp(): shutdown cancelled "
-					"by team %ld (-1 => user)\n", eventTeam);
+					"by team %" B_PRId32 " (-1 => user)\n", eventTeam);
 
 				_DisplayAbortingApp(team);
 				throw_error(B_SHUTDOWN_CANCELLED);
@@ -1433,7 +1451,7 @@ ShutdownProcess::_QuitApps(AppInfoList& list, bool systemApps)
 
 			if (event == ABORT_EVENT) {
 				PRINT("ShutdownProcess::_QuitApps(): shutdown cancelled by "
-					"team %ld (-1 => user)\n", team);
+					"team %" B_PRId32 " (-1 => user)\n", team);
 
 				_DisplayAbortingApp(team);
 				throw_error(B_SHUTDOWN_CANCELLED);
@@ -1459,7 +1477,7 @@ ShutdownProcess::_QuitApps(AppInfoList& list, bool systemApps)
 
 			if (!systemApps && event == ABORT_EVENT) {
 				PRINT("ShutdownProcess::_QuitApps(): shutdown cancelled by "
-					"team %ld (-1 => user)\n", team);
+					"team %" B_PRId32 " (-1 => user)\n", team);
 
 				_DisplayAbortingApp(team);
 				throw_error(B_SHUTDOWN_CANCELLED);
@@ -1498,8 +1516,8 @@ ShutdownProcess::_QuitApps(AppInfoList& list, bool systemApps)
 		_SetShutdownWindowCurrentApp(team);
 
 		// send the shutdown message to the app
-		PRINT("  sending team %ld (port: %ld) a shutdown message\n", team,
-			port);
+		PRINT("  sending team %" B_PRId32 " (port: %" B_PRId32 ") a shutdown "
+			"message\n", team, port);
 		SingleMessagingTargetSet target(port, B_PREFERRED_TOKEN);
 		MessageDeliverer::Default()->DeliverMessage(&message, target);
 
@@ -1547,7 +1565,7 @@ ShutdownProcess::_QuitBackgroundApps()
 	AppInfoListMessagingTargetSet targetSet(fBackgroundApps);
 
 	if (targetSet.HasNext()) {
-		PRINT("  sending shutdown message to %ld apps\n",
+		PRINT("  sending shutdown message to %" B_PRId32 " apps\n",
 			fBackgroundApps.CountInfos());
 
 		status_t error = MessageDeliverer::Default()->DeliverMessage(
@@ -1653,15 +1671,10 @@ ShutdownProcess::_QuitNonApps()
 	team_info teamInfo;
 	while (get_next_team_info(&cookie, &teamInfo) == B_OK) {
 		if (fVitalSystemApps.find(teamInfo.team) == fVitalSystemApps.end()) {
-			PRINT("  sending team %ld TERM signal\n", teamInfo.team);
+			PRINT("  sending team %" B_PRId32 " TERM signal\n", teamInfo.team);
 
-			#ifdef __HAIKU__
-				// Note: team ID == team main thread ID under Haiku
-				send_signal(teamInfo.team, SIGTERM);
-			#else
-				// We don't want to do this when testing under R5, since it
-				// would kill all teams besides our app server and registrar.
-			#endif
+			// Note: team ID == team main thread ID under Haiku
+			send_signal(teamInfo.team, SIGTERM);
 		}
 	}
 
@@ -1674,14 +1687,9 @@ ShutdownProcess::_QuitNonApps()
 	cookie = 0;
 	while (get_next_team_info(&cookie, &teamInfo) == B_OK) {
 		if (fVitalSystemApps.find(teamInfo.team) == fVitalSystemApps.end()) {
-			PRINT("  killing team %ld\n", teamInfo.team);
+			PRINT("  killing team %" B_PRId32 "\n", teamInfo.team);
 
-			#ifdef __HAIKU__
-				kill_team(teamInfo.team);
-			#else
-				// We don't want to do this when testing under R5, since it
-				// would kill all teams besides our app server and registrar.
-			#endif
+			kill_team(teamInfo.team);
 		}
 	}
 
@@ -1735,7 +1743,8 @@ ShutdownProcess::_QuitBlockingApp(AppInfoList& list, team_id team,
 			if (event == ABORT_EVENT) {
 				if (cancelAllowed || debugged) {
 					PRINT("ShutdownProcess::_QuitBlockingApp(): shutdown "
-						"cancelled by team %ld (-1 => user)\n", eventTeam);
+						"cancelled by team %" B_PRId32 " (-1 => user)\n",
+						eventTeam);
 
 					if (!debugged)
 						_DisplayAbortingApp(eventTeam);
@@ -1757,7 +1766,7 @@ ShutdownProcess::_QuitBlockingApp(AppInfoList& list, team_id team,
 	}
 
 	// kill the app
-	PRINT("  killing team %ld\n", team);
+	PRINT("  killing team %" B_PRId32 "\n", team);
 
 	kill_team(team);
 

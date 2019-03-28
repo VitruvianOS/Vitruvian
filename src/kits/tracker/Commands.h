@@ -35,16 +35,18 @@ All rights reserved.
 #define _COMMANDS_H
 
 
-#include "PublicCommands.h"
-
 #include <MountServer.h>
+#include <SupportDefs.h>
+
+#include <tracker_private.h>
+	// public commands moved here so they may be included by other apps
+
 
 namespace BPrivate {
 
 // external app messages
 
 const uint32 kGetInfo = 'Tinf';
-const uint32 kMoveToTrash = 'Ttrs';
 const uint32 kDelete = 'Tdel';
 const uint32 kRestoreFromTrash = 'Tres';
 const uint32 kIdentifyEntry = 'Tidt';
@@ -104,7 +106,7 @@ const uint32 kPasteAttributes = 'Tpat';
 const uint32 kAttributeItem = 'Tatr';
 const uint32 kMIMETypeItem = 'Tmim';
 const uint32 kAddCurrentDir = 'Tadd';
-const uint32 kEditFavorites	= 'Tedf';
+const uint32 kEditFavorites = 'Tedf';
 const uint32 kSwitchDirectory = 'Tswd';
 const uint32 kQuitTracker = 'Tqit';
 
@@ -127,6 +129,7 @@ const uint32 kShowNavigatorChanged = 'Snvc';
 const uint32 kShowSelectionWhenInactiveChanged = 'Sswi';
 const uint32 kTransparentSelectionChanged = 'Trse';
 const uint32 kSortFolderNamesFirstChanged = 'Sfnf';
+const uint32 kHideDotFilesChanged = 'Hdfc';
 const uint32 kTypeAheadFilteringChanged = 'Tafc';
 
 const uint32 kDesktopFilePanelRootChanged = 'Dfpr';
@@ -146,4 +149,5 @@ const uint32 kAskBeforeDeleteFileChanged = 'STad';
 
 using namespace BPrivate;
 
-#endif
+
+#endif	// _COMMANDS_H

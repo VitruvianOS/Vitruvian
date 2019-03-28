@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2009, Haiku.
+ * Copyright 2005-2012, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -44,7 +44,11 @@ public:
 								HWInterfaceListener();
 	virtual						~HWInterfaceListener();
 
-	virtual	void				FrameBufferChanged() = 0;
+	virtual	void				FrameBufferChanged() {};
+		// Informs a downstream DrawingEngine of a changed framebuffer.
+
+	virtual	void				ScreenChanged(HWInterface* interface) {};
+		// Informs an upstream client of a changed screen configuration.
 };
 
 
@@ -104,6 +108,9 @@ public:
 	virtual status_t			SetDPMSMode(uint32 state) = 0;
 	virtual uint32				DPMSMode() = 0;
 	virtual uint32				DPMSCapabilities() = 0;
+
+	virtual status_t			SetBrightness(float) = 0;
+	virtual status_t			GetBrightness(float*) = 0;
 
 	virtual status_t			GetAccelerantPath(BString& path);
 	virtual status_t			GetDriverPath(BString& path);
@@ -174,7 +181,7 @@ public:
 	// It seems to me BeOS hides the cursor (in laymans words) before
 	// BView::Draw() is called (if the cursor is within that views clipping region),
 	// then, after all drawing commands that triggered have been caried out,
-	// it shows the cursor again. This approach would have the adventage of
+	// it shows the cursor again. This approach would have the advantage of
 	// the code not cluttering/slowing down DrawingEngine.
 	// For now, we hide the cursor for any drawing operation that has
 	// a bounding box containing the cursor (in DrawingEngine) so
@@ -204,6 +211,7 @@ protected:
 									const BPoint& offset);
 
 			void				_NotifyFrameBufferChanged();
+			void				_NotifyScreenChanged();
 
 	static	bool				_IsValidMode(const display_mode& mode);
 
@@ -249,6 +257,7 @@ protected:
 			ServerCursor*		fCursorAndDragBitmap;
 			bool				fCursorVisible;
 			bool				fCursorObscured;
+			bool				fHardwareCursorEnabled;
 			BPoint				fCursorLocation;
 
 			BRect				fTrackingRect;

@@ -37,7 +37,7 @@ All rights reserved.
 
 #include <ctype.h>
 #include <stdlib.h>
-#include <string.h>
+#include <strings.h>
 
 #include <fs_attr.h>
 #include <parsedate.h>
@@ -45,10 +45,14 @@ All rights reserved.
 #include <Alert.h>
 #include <AppFileInfo.h>
 #include <Catalog.h>
+#include <DateFormat.h>
+#include <DateTimeFormat.h>
 #include <Debug.h>
 #include <Locale.h>
 #include <NodeInfo.h>
 #include <Path.h>
+#include <StringFormat.h>
+#include <SupportDefs.h>
 #include <TextView.h>
 #include <Volume.h>
 #include <VolumeRoster.h>
@@ -87,51 +91,55 @@ bool RealNameAttributeText::sSortFolderNamesFirst = false;
 
 template <class View>
 float
-TruncFileSizeBase(BString* result, int64 value, const View* view, float width)
+TruncFileSizeBase(BString* outString, int64 value, const View* view,
+	float width)
 {
-	// ToDo:
-	// if slow, replace float divisions with shifts
-	// if fast enough, try fitting more decimal places
+	// ToDo: If slow, replace float divisions with shifts
+	//       if fast enough, try fitting more decimal places.
 
-	// TODO: reuse libshared's string_for_size
+	// ToDo: Update string_for_size() in libshared to be able to
+	//       handle this case.
+
+	BString buffer;
 
 	// format file size value
-	char buffer[1024];
 	if (value == kUnknownSize) {
-		*result = "-";
+		*outString = "-";
 		return view->StringWidth("-");
 	} else if (value < kKBSize) {
-		sprintf(buffer, B_TRANSLATE("%Ld bytes"), value);
-		if (view->StringWidth(buffer) > width)
-			sprintf(buffer, B_TRANSLATE("%Ld B"), value);
+		static BStringFormat format(B_TRANSLATE(
+			"{0, plural, one{# byte} other{# bytes}}"));
+		format.Format(buffer, value);
+		if (view->StringWidth(buffer.String()) > width)
+			buffer.SetToFormat(B_TRANSLATE("%Ld B"), value);
 	} else {
 		const char* suffix;
-		float floatValue;
+		float doubleValue;
 		if (value >= kTBSize) {
 			suffix = B_TRANSLATE("TiB");
-			floatValue = (float)value / kTBSize;
+			doubleValue = (double)value / kTBSize;
 		} else if (value >= kGBSize) {
 			suffix = B_TRANSLATE("GiB");
-			floatValue = (float)value / kGBSize;
+			doubleValue = (double)value / kGBSize;
 		} else if (value >= kMBSize) {
 			suffix = B_TRANSLATE("MiB");
-			floatValue = (float)value / kMBSize;
+			doubleValue = (double)value / kMBSize;
 		} else {
 			ASSERT(value >= kKBSize);
 			suffix = B_TRANSLATE("KiB");
-			floatValue = (float)value / kKBSize;
+			doubleValue = (double)value / kKBSize;
 		}
 
 		for (int32 index = 0; ; index++) {
-			if (!kSizeFormats[index])
+			if (kSizeFormats[index] == 0)
 				break;
 
-			sprintf(buffer, kSizeFormats[index], floatValue, suffix);
-
+			buffer.SetToFormat(kSizeFormats[index], doubleValue, suffix);
 			// strip off an insignificant zero so we don't get readings
 			// such as 1.00
 			char* period = 0;
-			for (char* tmp = buffer; *tmp; tmp++) {
+			for (char* tmp = const_cast<char*>(buffer.String()); *tmp != '\0';
+					tmp++) {
 				if (*tmp == '.')
 					period = tmp;
 			}
@@ -142,20 +150,20 @@ TruncFileSizeBase(BString* result, int64 value, const View* view, float width)
 
 			float resultWidth = view->StringWidth(buffer);
 			if (resultWidth <= width) {
-				*result = buffer;
+				*outString = buffer.String();
 				return resultWidth;
 			}
 		}
 	}
 
-	return TruncStringBase(result, buffer, (ssize_t)strlen(buffer), view,
+	return TruncStringBase(outString, buffer.String(), buffer.Length(), view,
 		width, (uint32)B_TRUNCATE_END);
 }
 
 
 template <class View>
 float
-TruncStringBase(BString* result, const char* str, int32 length,
+TruncStringBase(BString* outString, const char* inString, int32 length,
 	const View* view, float width, uint32 truncMode = B_TRUNCATE_MIDDLE)
 {
 	// we are using a template version of this call to make sure
@@ -163,38 +171,39 @@ TruncStringBase(BString* result, const char* str, int32 length,
 	// for max speed and flexibility
 
 	// a standard ellipsis inserting fitting algorithm
-	if (view->StringWidth(str, length) <= width)
-		*result = str;
+	if (view->StringWidth(inString, length) <= width)
+		*outString = inString;
 	else {
-		const char* srcstr[1];
+		const char* source[1];
 		char* results[1];
 
-		srcstr[0] = str;
-		results[0] = result->LockBuffer(length + 3);
+		source[0] = inString;
+		results[0] = outString->LockBuffer(length + 3);
 
 		BFont font;
 		view->GetFont(&font);
 
-	    font.GetTruncatedStrings(srcstr, 1, truncMode, width, results);
-		result->UnlockBuffer();
+		font.GetTruncatedStrings(source, 1, truncMode, width, results);
+		outString->UnlockBuffer();
 	}
-	return view->StringWidth(result->String(), result->Length());
+
+	return view->StringWidth(outString->String(), outString->Length());
 }
 
 
 template <class View>
 float
-TruncTimeBase(BString* result, int64 value, const View* view, float width)
+TruncTimeBase(BString* outString, int64 value, const View* view, float width)
 {
 	float resultWidth = width + 1;
 
 	time_t timeValue = (time_t)value;
 
+	// Find the longest possible format that will fit the available space
 	struct {
 		BDateFormatStyle dateStyle;
 		BTimeFormatStyle timeStyle;
-	} formats[5] = {
-		{ B_FULL_DATE_FORMAT, B_MEDIUM_TIME_FORMAT },
+	} formats[] = {
 		{ B_LONG_DATE_FORMAT, B_MEDIUM_TIME_FORMAT },
 		{ B_LONG_DATE_FORMAT, B_SHORT_TIME_FORMAT },
 		{ B_MEDIUM_DATE_FORMAT, B_SHORT_TIME_FORMAT },
@@ -202,25 +211,32 @@ TruncTimeBase(BString* result, int64 value, const View* view, float width)
 	};
 
 	BString date;
-	for (int i = 0; resultWidth > width && i < 5; ++i) {
-		if (BLocale::Default()->FormatDateTime(&date, timeValue,
-				formats[i].dateStyle, formats[i].timeStyle) == B_OK) {
+	BDateTimeFormat formatter;
+	for (unsigned int i = 0; i < B_COUNT_OF(formats); ++i) {
+		if (formatter.Format(date, timeValue, formats[i].dateStyle,
+				formats[i].timeStyle) == B_OK) {
 			resultWidth = view->StringWidth(date.String(), date.Length());
+			if (resultWidth <= width) {
+				// Found a format that fits the available space, stop searching
+				break;
+			}
 		}
 	}
 
+	// If we couldn't fit the date, try with just the time
+	// TODO we could use only the time for "today" dates
 	if (resultWidth > width
-		&& BLocale::Default()->FormatDate(&date, timeValue,
+		&& BDateFormat().Format(date, timeValue,
 			B_SHORT_DATE_FORMAT) == B_OK) {
 		resultWidth = view->StringWidth(date.String(), date.Length());
 	}
 
 	if (resultWidth > width) {
 		// even the shortest format string didn't do it, insert ellipsis
-		resultWidth = TruncStringBase(result, date.String(),
+		resultWidth = TruncStringBase(outString, date.String(),
 			(ssize_t)date.Length(), view, width);
 	} else
-		*result = date;
+		*outString = date;
 
 	return resultWidth;
 }
@@ -240,40 +256,54 @@ WidgetAttributeText::NewWidgetText(const Model* model,
 
 	if (strcmp(attrName, kAttrPath) == 0)
 		return new PathAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrMIMEType) == 0)
 		return new KindAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrStatName) == 0)
 		return new NameAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrRealName) == 0)
 		return new RealNameAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrStatSize) == 0)
 		return new SizeAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrStatModified) == 0)
 		return new ModificationTimeAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrStatCreated) == 0)
 		return new CreationTimeAttributeText(model, column);
+
 #ifdef OWNER_GROUP_ATTRIBUTES
 	if (strcmp(attrName, kAttrStatOwner) == 0)
 		return new OwnerAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrStatGroup) == 0)
 		return new GroupAttributeText(model, column);
 #endif
 	if (strcmp(attrName, kAttrStatMode) == 0)
 		return new ModeAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrOpenWithRelation) == 0)
 		return new OpenWithRelationAttributeText(model, column, view);
+
 	if (strcmp(attrName, kAttrAppVersion) == 0)
 		return new AppShortVersionAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrSystemVersion) == 0)
 		return new SystemShortVersionAttributeText(model, column);
+
 	if (strcmp(attrName, kAttrOriginalPath) == 0)
 		return new OriginalPathAttributeText(model, column);
 
 	if (column->DisplayAs() != NULL) {
 		if (!strncmp(column->DisplayAs(), "checkbox", 8))
 			return new CheckboxAttributeText(model, column);
+
 		if (!strncmp(column->DisplayAs(), "duration", 8))
 			return new DurationAttributeText(model, column);
+
 		if (!strncmp(column->DisplayAs(), "rating", 6))
 			return new RatingAttributeText(model, column);
 	}
@@ -283,14 +313,20 @@ WidgetAttributeText::NewWidgetText(const Model* model,
 
 
 WidgetAttributeText::WidgetAttributeText(const Model* model,
-		const BColumn* column)
+	const BColumn* column)
 	:
 	fModel(const_cast<Model*>(model)),
 	fColumn(column),
+	fOldWidth(-1.0f),
+	fTruncatedWidth(-1.0f),
 	fDirty(true),
 	fValueIsDefined(false)
 {
-	ASSERT(fColumn);
+	ASSERT(fColumn != NULL);
+
+	if (fColumn == NULL)
+		return;
+
 	ASSERT(fColumn->Width() > 0);
 }
 
@@ -304,8 +340,9 @@ const char*
 WidgetAttributeText::FittingText(const BPoseView* view)
 {
 	if (fDirty || fColumn->Width() != fOldWidth || CheckSettingsChanged()
-		|| !fValueIsDefined )
+		|| !fValueIsDefined) {
 		CheckViewChanged(view);
+	}
 
 	ASSERT(!fDirty);
 	return fText.String();
@@ -333,26 +370,26 @@ WidgetAttributeText::CheckSettingsChanged()
 
 
 float
-WidgetAttributeText::TruncString(BString* result, const char* str,
+WidgetAttributeText::TruncString(BString* outString, const char* inString,
 	int32 length, const BPoseView* view, float width, uint32 truncMode)
 {
-	return TruncStringBase(result, str, length, view, width, truncMode);
+	return TruncStringBase(outString, inString, length, view, width, truncMode);
 }
 
 
 float
-WidgetAttributeText::TruncFileSize(BString* result, int64 value,
+WidgetAttributeText::TruncFileSize(BString* outString, int64 value,
 	const BPoseView* view, float width)
 {
-	return TruncFileSizeBase(result, value, view, width);
+	return TruncFileSizeBase(outString, value, view, width);
 }
 
 
 float
-WidgetAttributeText::TruncTime(BString* result, int64 value,
+WidgetAttributeText::TruncTime(BString* outString, int64 value,
 	const BPoseView* view, float width)
 {
-	return TruncTimeBase(result, value, view, width);
+	return TruncTimeBase(outString, value, view, width);
 }
 
 
@@ -388,7 +425,7 @@ WidgetAttributeText::CommitEditedText(BTextView*)
 
 
 status_t
-WidgetAttributeText::AttrAsString(const Model* model, BString* result,
+WidgetAttributeText::AttrAsString(const Model* model, BString* outString,
 	const char* attrName, int32 attrType, float width, BView* view,
 	int64* resultingValue)
 {
@@ -409,9 +446,10 @@ WidgetAttributeText::AttrAsString(const Model* model, BString* result,
 				// not yet supported
 				return B_ERROR;
 			}
-			TruncTimeBase(result, value, view, width);
+			TruncTimeBase(outString, value, view, width);
 			if (resultingValue)
 				*resultingValue = value;
+
 			return B_OK;
 
 		case B_STRING_TYPE:
@@ -428,17 +466,18 @@ WidgetAttributeText::AttrAsString(const Model* model, BString* result,
 					tmp = "-";
 
 				if (width > 0) {
-					TruncStringBase(result, tmp.String(), tmp.Length(), view,
+					TruncStringBase(outString, tmp.String(), tmp.Length(), view,
 						width);
 				} else
-					*result = tmp.String();
+					*outString = tmp.String();
 
 				return B_OK;
 			}
 			break;
 
 		case kSizeType:
-//			TruncFileSizeBase(result, model->StatBuf()->st_size, view, width);
+//			TruncFileSizeBase(outString, model->StatBuf()->st_size, view,
+//				width);
 			return B_OK;
 			break;
 
@@ -469,7 +508,7 @@ WidgetAttributeText::SetDirty(bool value)
 }
 
 
-// #pragma mark -
+// #pragma mark - StringAttributeText
 
 
 StringAttributeText::StringAttributeText(const Model* model,
@@ -507,13 +546,13 @@ StringAttributeText::CheckAttributeChanged()
 
 
 void
-StringAttributeText::FitValue(BString* result, const BPoseView* view)
+StringAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
 	fOldWidth = fColumn->Width();
 
-	fTruncatedWidth = TruncString(result, fFullValueText.String(),
+	fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 		fFullValueText.Length(), view, fOldWidth);
 	fDirty = false;
 }
@@ -529,9 +568,8 @@ StringAttributeText::PreferredWidth(const BPoseView* pose) const
 int
 StringAttributeText::Compare(WidgetAttributeText& attr, BPoseView* view)
 {
-	StringAttributeText* compareTo
-		= dynamic_cast<StringAttributeText*>(&attr);
-	ASSERT(compareTo);
+	StringAttributeText* compareTo = dynamic_cast<StringAttributeText*>(&attr);
+	ThrowOnAssert(compareTo != NULL);
 
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
@@ -570,13 +608,14 @@ StringAttributeText::CommitEditedText(BTextView* textView)
 }
 
 
-// #pragma mark -
+// #pragma mark - ScalarAttributeText
 
 
 ScalarAttributeText::ScalarAttributeText(const Model* model,
 	const BColumn* column)
 	:
 	WidgetAttributeText(model, column),
+	fValue(0),
 	fValueDirty(true)
 {
 }
@@ -587,6 +626,7 @@ ScalarAttributeText::Value()
 {
 	if (fValueDirty)
 		fValue = ReadValue();
+
 	return fValue;
 }
 
@@ -599,7 +639,9 @@ ScalarAttributeText::CheckAttributeChanged()
 		return false;
 
 	fValue = newValue;
-	fDirty = true;		// have to redo fitted string
+	fDirty = true;
+		// have to redo fitted string
+
 	return true;
 }
 
@@ -616,10 +658,8 @@ ScalarAttributeText::PreferredWidth(const BPoseView* pose) const
 int
 ScalarAttributeText::Compare(WidgetAttributeText& attr, BPoseView*)
 {
-	ScalarAttributeText* compareTo
-		= dynamic_cast<ScalarAttributeText*>(&attr);
-	ASSERT(compareTo);
-		// make sure we're not comparing apples and oranges
+	ScalarAttributeText* compareTo = dynamic_cast<ScalarAttributeText*>(&attr);
+	ThrowOnAssert(compareTo != NULL);
 
 	if (fValueDirty)
 		fValue = ReadValue();
@@ -629,7 +669,7 @@ ScalarAttributeText::Compare(WidgetAttributeText& attr, BPoseView*)
 }
 
 
-// #pragma mark -
+// #pragma mark - PathAttributeText
 
 
 PathAttributeText::PathAttributeText(const Model* model, const BColumn* column)
@@ -640,22 +680,23 @@ PathAttributeText::PathAttributeText(const Model* model, const BColumn* column)
 
 
 void
-PathAttributeText::ReadValue(BString* result)
+PathAttributeText::ReadValue(BString* outString)
 {
 	// get the path
 	BEntry entry(fModel->EntryRef());
 	BPath path;
 
 	if (entry.InitCheck() == B_OK && entry.GetPath(&path) == B_OK) {
-		*result = path.Path();
-		TruncateLeaf(result);
+		*outString = path.Path();
+		TruncateLeaf(outString);
 	} else
-		*result = "-";
+		*outString = "-";
+
 	fValueDirty = false;
 }
 
 
-// #pragma mark -
+// #pragma mark - OriginalPathAttributeText
 
 
 OriginalPathAttributeText::OriginalPathAttributeText(const Model* model,
@@ -667,25 +708,25 @@ OriginalPathAttributeText::OriginalPathAttributeText(const Model* model,
 
 
 void
-OriginalPathAttributeText::ReadValue(BString* result)
+OriginalPathAttributeText::ReadValue(BString* outString)
 {
 	BEntry entry(fModel->EntryRef());
 	BPath path;
 
 	// get the original path
 	if (entry.InitCheck() == B_OK && FSGetOriginalPath(&entry, &path) == B_OK)
-		*result = path.Path();
+		*outString = path.Path();
 	else
-		*result = "-";
+		*outString = "-";
+
 	fValueDirty = false;
 }
 
 
-// #pragma mark -
+// #pragma mark - KindAttributeText
 
 
-KindAttributeText::KindAttributeText(const Model* model,
-		const BColumn* column)
+KindAttributeText::KindAttributeText(const Model* model, const BColumn* column)
 	:
 	StringAttributeText(model, column)
 {
@@ -693,28 +734,29 @@ KindAttributeText::KindAttributeText(const Model* model,
 
 
 void
-KindAttributeText::ReadValue(BString* result)
+KindAttributeText::ReadValue(BString* outString)
 {
 	BMimeType mime;
 	char desc[B_MIME_TYPE_LENGTH];
 
 	// get the mime type
 	if (mime.SetType(fModel->MimeType()) != B_OK)
-		*result = B_TRANSLATE("Unknown");
-	// get the short mime type description
-	else if (mime.GetShortDescription(desc) == B_OK)
-		*result = desc;
-	else
-		*result = fModel->MimeType();
+		*outString = B_TRANSLATE("Unknown");
+	else if (mime.GetShortDescription(desc) == B_OK) {
+		// get the short mime type description
+		*outString = desc;
+	} else
+		*outString = fModel->MimeType();
+
 	fValueDirty = false;
 }
 
 
-// #pragma mark -
+// #pragma mark - NameAttributeText
 
 
 NameAttributeText::NameAttributeText(const Model* model,
-		const BColumn* column)
+	const BColumn* column)
 	:
 	StringAttributeText(model, column)
 {
@@ -725,8 +767,7 @@ int
 NameAttributeText::Compare(WidgetAttributeText& attr, BPoseView* view)
 {
 	NameAttributeText* compareTo = dynamic_cast<NameAttributeText*>(&attr);
-
-	ASSERT(compareTo);
+	ThrowOnAssert(compareTo != NULL);
 
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
@@ -740,21 +781,21 @@ NameAttributeText::Compare(WidgetAttributeText& attr, BPoseView* view)
 
 
 void
-NameAttributeText::ReadValue(BString* result)
+NameAttributeText::ReadValue(BString* outString)
 {
-	*result = fModel->Name();
+	*outString = fModel->Name();
 
 	fValueDirty = false;
 }
 
 
 void
-NameAttributeText::FitValue(BString* result, const BPoseView* view)
+NameAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
 	fOldWidth = fColumn->Width();
-	fTruncatedWidth = TruncString(result, fFullValueText.String(),
+	fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 		fFullValueText.Length(), view, fOldWidth, B_TRUNCATE_END);
 	fDirty = false;
 }
@@ -791,9 +832,7 @@ NameAttributeText::CommitEditedTextFlavor(BTextView* textView)
 			B_TRANSLATE("Replace other file"),
 			B_TRANSLATE("OK"),
 			NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-
 		alert->SetShortcut(0, 'r');
-
 		if (alert->Go())
 			return false;
 
@@ -847,7 +886,7 @@ NameAttributeText::IsEditable() const
 }
 
 
-// #pragma mark -
+// #pragma mark - RealNameAttributeText
 
 
 RealNameAttributeText::RealNameAttributeText(const Model* model,
@@ -863,8 +902,7 @@ RealNameAttributeText::Compare(WidgetAttributeText& attr, BPoseView* view)
 {
 	RealNameAttributeText* compareTo
 		= dynamic_cast<RealNameAttributeText*>(&attr);
-
-	ASSERT(compareTo);
+	ThrowOnAssert(compareTo != NULL);
 
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
@@ -878,21 +916,21 @@ RealNameAttributeText::Compare(WidgetAttributeText& attr, BPoseView* view)
 
 
 void
-RealNameAttributeText::ReadValue(BString* result)
+RealNameAttributeText::ReadValue(BString* outString)
 {
-	*result = fModel->EntryRef()->name;
+	*outString = fModel->EntryRef()->name;
 
 	fValueDirty = false;
 }
 
 
 void
-RealNameAttributeText::FitValue(BString* result, const BPoseView* view)
+RealNameAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
 	fOldWidth = fColumn->Width();
-	fTruncatedWidth = TruncString(result, fFullValueText.String(),
+	fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 		fFullValueText.Length(), view, fOldWidth, B_TRUNCATE_END);
 	fDirty = false;
 }
@@ -943,7 +981,7 @@ RealNameAttributeText::CommitEditedTextFlavor(BTextView* textView)
 	// renamings
 	status_t result;
 	if (fModel->IsVolume()) {
-		BVolume	volume(fModel->NodeRef()->device);
+		BVolume volume(fModel->NodeRef()->device);
 		result = volume.InitCheck();
 		if (result == B_OK) {
 			RenameVolumeUndo undo(volume, text);
@@ -981,8 +1019,6 @@ RealNameAttributeText::SetSortFolderNamesFirst(bool enabled)
 
 
 #ifdef OWNER_GROUP_ATTRIBUTES
-
-
 OwnerAttributeText::OwnerAttributeText(const Model* model,
 	const BColumn* column)
 	:
@@ -992,7 +1028,7 @@ OwnerAttributeText::OwnerAttributeText(const Model* model,
 
 
 void
-OwnerAttributeText::ReadValue(BString* result)
+OwnerAttributeText::ReadValue(BString* outString)
 {
 	uid_t nodeOwner = fModel->StatBuf()->st_uid;
 	BString user;
@@ -1004,7 +1040,7 @@ OwnerAttributeText::ReadValue(BString* result)
 			user << "root";
 	} else
 		user << nodeOwner;
-	*result = user.String();
+	*outString = user.String();
 
 	fValueDirty = false;
 }
@@ -1019,7 +1055,7 @@ GroupAttributeText::GroupAttributeText(const Model* model,
 
 
 void
-GroupAttributeText::ReadValue(BString* result)
+GroupAttributeText::ReadValue(BString* outString)
 {
 	gid_t nodeGroup = fModel->StatBuf()->st_gid;
 	BString group;
@@ -1031,13 +1067,14 @@ GroupAttributeText::ReadValue(BString* result)
 			group << "0";
 	} else
 		group << nodeGroup;
-	*result = group.String();
+	*outString = group.String();
 
 	fValueDirty = false;
 }
-
-
 #endif  // OWNER_GROUP_ATTRIBUTES
+
+
+//	#pragma mark - ModeAttributeText
 
 
 ModeAttributeText::ModeAttributeText(const Model* model,
@@ -1049,7 +1086,7 @@ ModeAttributeText::ModeAttributeText(const Model* model,
 
 
 void
-ModeAttributeText::ReadValue(BString* result)
+ModeAttributeText::ReadValue(BString* outString)
 {
 	mode_t mode = fModel->StatBuf()->st_mode;
 	mode_t baseMask = 00400;
@@ -1074,13 +1111,13 @@ ModeAttributeText::ReadValue(BString* result)
 	}
 
 	*scanner = 0;
-	*result = buffer;
+	*outString = buffer;
 
 	fValueDirty = false;
 }
 
 
-//	#pragma mark -
+//	#pragma mark - SizeAttributeText
 
 
 SizeAttributeText::SizeAttributeText(const Model* model,
@@ -1104,8 +1141,10 @@ SizeAttributeText::ReadValue()
 	}
 
 	if (fModel->IsDirectory() || fModel->IsQuery()
-		|| fModel->IsQueryTemplate() || fModel->IsSymLink())
+		|| fModel->IsQueryTemplate() || fModel->IsSymLink()
+		|| fModel->IsVirtualDirectory()) {
 		return kUnknownSize;
+	}
 
 	fValueIsDefined = true;
 
@@ -1114,12 +1153,13 @@ SizeAttributeText::ReadValue()
 
 
 void
-SizeAttributeText::FitValue(BString* result, const BPoseView* view)
+SizeAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		fValue = ReadValue();
+
 	fOldWidth = fColumn->Width();
-	fTruncatedWidth = TruncFileSize(result, fValue, view, fOldWidth);
+	fTruncatedWidth = TruncFileSize(outString, fValue, view, fOldWidth);
 	fDirty = false;
 }
 
@@ -1132,17 +1172,21 @@ SizeAttributeText::PreferredWidth(const BPoseView* pose) const
 		TruncFileSize(&widthString, fValue, pose, 100000);
 		return pose->StringWidth(widthString.String());
 	}
+
 	return pose->StringWidth("-");
 }
 
 
-// #pragma mark - time related
+// #pragma mark - TimeAttributeText
 
 
 TimeAttributeText::TimeAttributeText(const Model* model,
 	const BColumn* column)
 	:
-	ScalarAttributeText(model, column)
+	ScalarAttributeText(model, column),
+	fLastClockIs24(false),
+	fLastDateOrder(kDateFormatEnd),
+	fLastTimeFormatSeparator(kSeparatorsEnd)
 {
 }
 
@@ -1157,12 +1201,13 @@ TimeAttributeText::PreferredWidth(const BPoseView* pose) const
 
 
 void
-TimeAttributeText::FitValue(BString* result, const BPoseView* view)
+TimeAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		fValue = ReadValue();
+
 	fOldWidth = fColumn->Width();
-	fTruncatedWidth = TruncTime(result, fValue, view, fOldWidth);
+	fTruncatedWidth = TruncTime(outString, fValue, view, fOldWidth);
 	fDirty = false;
 }
 
@@ -1173,6 +1218,9 @@ TimeAttributeText::CheckSettingsChanged(void)
 	// TODO : check against the actual locale settings
 	return false;
 }
+
+
+//	#pragma mark - CreationTimeAttributeText
 
 
 CreationTimeAttributeText::CreationTimeAttributeText(const Model* model,
@@ -1192,6 +1240,9 @@ CreationTimeAttributeText::ReadValue()
 }
 
 
+//	#pragma mark - ModificationTimeAttributeText
+
+
 ModificationTimeAttributeText::ModificationTimeAttributeText(
 	const Model* model, const BColumn* column)
 	:
@@ -1209,7 +1260,7 @@ ModificationTimeAttributeText::ReadValue()
 }
 
 
-//	#pragma mark -
+//	#pragma mark - GenericAttributeText
 
 
 GenericAttributeText::GenericAttributeText(const Model* model,
@@ -1246,7 +1297,7 @@ GenericAttributeText::PreferredWidth(const BPoseView* pose) const
 
 
 void
-GenericAttributeText::ReadValue(BString* result)
+GenericAttributeText::ReadValue(BString* outString)
 {
 	BModelOpener opener(const_cast<Model*>(fModel));
 
@@ -1272,7 +1323,7 @@ GenericAttributeText::ReadValue(BString* result)
 				// didn't read the whole attribute in or it wasn't to
 				// begin with
 
-				*result = buffer;
+				*outString = buffer;
 				fValueIsDefined = true;
 			}
 			break;
@@ -1300,7 +1351,7 @@ GenericAttributeText::ReadValue(BString* result)
 			GenericValueStruct tmp;
 			if (fModel->Node()->GetAttrInfo(fColumn->AttrName(), &info)
 					== B_OK) {
-				if (info.size && info.size <= sizeof(int64)) {
+				if (info.size && info.size <= (off_t)sizeof(int64)) {
 					length = fModel->Node()->ReadAttr(fColumn->AttrName(),
 						fColumn->AttrType(), 0, &tmp, (size_t)info.size);
 				}
@@ -1325,11 +1376,13 @@ GenericAttributeText::ReadValue(BString* result)
 
 							default:
 								TRESPASS();
+								break;
 						}
 					} else {
 						// handle the standard data types
 						switch (info.size) {
-							case sizeof(char):	// Takes care of bool too.
+							case sizeof(char):
+								// Takes care of bool too.
 								fValueIsDefined = true;
 								fValue.int8t = tmp.int8t;
 								break;
@@ -1339,18 +1392,21 @@ GenericAttributeText::ReadValue(BString* result)
 								fValue.int16t = tmp.int16t;
 								break;
 
-							case sizeof(int32):	// Takes care of time_t too.
+							case sizeof(int32):
+								// Takes care of time_t too.
 								fValueIsDefined = true;
 								fValue.int32t = tmp.int32t;
 								break;
 
-							case sizeof(int64):	// Takes care of off_t too.
+							case sizeof(int64):
+								// Takes care of off_t too.
 								fValueIsDefined = true;
 								fValue.int64t = tmp.int64t;
 								break;
 
 							default:
 								TRESPASS();
+								break;
 						}
 					}
 				}
@@ -1362,7 +1418,7 @@ GenericAttributeText::ReadValue(BString* result)
 
 
 void
-GenericAttributeText::FitValue(BString* result, const BPoseView* view)
+GenericAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
@@ -1370,8 +1426,8 @@ GenericAttributeText::FitValue(BString* result, const BPoseView* view)
 	fOldWidth = fColumn->Width();
 
 	if (!fValueIsDefined) {
-		*result = "-";
-		fTruncatedWidth = TruncString(result, fFullValueText.String(),
+		*outString = "-";
+		fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 			fFullValueText.Length(), view, fOldWidth);
 		fDirty = false;
 		return;
@@ -1381,12 +1437,12 @@ GenericAttributeText::FitValue(BString* result, const BPoseView* view)
 
 	switch (fColumn->AttrType()) {
 		case B_SIZE_T_TYPE:
-			TruncFileSizeBase(result, fValue.int32t, view, fOldWidth);
+			TruncFileSizeBase(outString, fValue.int32t, view, fOldWidth);
 			return;
 
 		case B_SSIZE_T_TYPE:
 			if (fValue.int32t > 0) {
-				TruncFileSizeBase(result, fValue.int32t, view, fOldWidth);
+				TruncFileSizeBase(outString, fValue.int32t, view, fOldWidth);
 				return;
 			}
 			sprintf(buffer, "%s", strerror(fValue.int32t));
@@ -1394,7 +1450,7 @@ GenericAttributeText::FitValue(BString* result, const BPoseView* view)
 			break;
 
 		case B_STRING_TYPE:
-			fTruncatedWidth = TruncString(result, fFullValueText.String(),
+			fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 				fFullValueText.Length(), view, fOldWidth);
 			fDirty = false;
 			return;
@@ -1403,7 +1459,7 @@ GenericAttributeText::FitValue(BString* result, const BPoseView* view)
 			// As a side effect update the fFullValueText to the string
 			// representation of value
 			TruncFileSize(&fFullValueText, fValue.off_tt, view, 100000);
-			fTruncatedWidth = TruncFileSize(result, fValue.off_tt, view,
+			fTruncatedWidth = TruncFileSize(outString, fValue.off_tt, view,
 				fOldWidth);
 			fDirty = false;
 			return;
@@ -1412,7 +1468,7 @@ GenericAttributeText::FitValue(BString* result, const BPoseView* view)
 			// As a side effect update the fFullValueText to the string
 			// representation of value
 			TruncTime(&fFullValueText, fValue.time_tt, view, 100000);
-			fTruncatedWidth = TruncTime(result, fValue.time_tt, view,
+			fTruncatedWidth = TruncTime(outString, fValue.time_tt, view,
 				fOldWidth);
 			fDirty = false;
 			return;
@@ -1428,8 +1484,8 @@ GenericAttributeText::FitValue(BString* result, const BPoseView* view)
 		case B_CHAR_TYPE:
 			// Make sure no non-printable characters are displayed:
 			if (!isprint(fValue.uint8t)) {
-				*result = "-";
-				fTruncatedWidth = TruncString(result, fFullValueText.String(),
+				*outString = "-";
+				fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 					fFullValueText.Length(), view, fOldWidth);
 				fDirty = false;
 				return;
@@ -1460,22 +1516,22 @@ GenericAttributeText::FitValue(BString* result, const BPoseView* view)
 			break;
 
 		case B_INT32_TYPE:
-			sprintf(buffer, "%ld", fValue.int32t);
+			sprintf(buffer, "%" B_PRId32, fValue.int32t);
 			fFullValueText = buffer;
 			break;
 
 		case B_UINT32_TYPE:
-			sprintf(buffer, "%ld", fValue.uint32t);
+			sprintf(buffer, "%" B_PRId32, fValue.uint32t);
 			fFullValueText = buffer;
 			break;
 
 		case B_INT64_TYPE:
-			sprintf(buffer, "%Ld", fValue.int64t);
+			sprintf(buffer, "%" B_PRId64, fValue.int64t);
 			fFullValueText = buffer;
 			break;
 
 		case B_UINT64_TYPE:
-			sprintf(buffer, "%Ld", fValue.uint64t);
+			sprintf(buffer, "%" B_PRId64, fValue.uint64t);
 			fFullValueText = buffer;
 			break;
 
@@ -1490,14 +1546,14 @@ GenericAttributeText::FitValue(BString* result, const BPoseView* view)
 			break;
 
 		default:
-			*result = "-";
-			fTruncatedWidth = TruncString(result, fFullValueText.String(),
+			*outString = "-";
+			fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 				fFullValueText.Length(), view, fOldWidth);
 			fDirty = false;
 			return;
 	}
-	fTruncatedWidth = TruncString(result, buffer, (ssize_t)strlen(buffer), view,
-		fOldWidth);
+	fTruncatedWidth = TruncString(outString, buffer, (ssize_t)strlen(buffer),
+		view, fOldWidth);
 	fDirty = false;
 }
 
@@ -1507,8 +1563,8 @@ GenericAttributeText::ValueAsText(const BPoseView* view)
 {
 	// TODO: redesign this - this is to make sure the value is valid
 	bool oldDirty = fDirty;
-	BString result;
-	FitValue(&result, view);
+	BString outString;
+	FitValue(&outString, view);
 	fDirty = oldDirty;
 
 	return fFullValueText.String();
@@ -1520,16 +1576,18 @@ GenericAttributeText::Compare(WidgetAttributeText& attr, BPoseView*)
 {
 	GenericAttributeText* compareTo
 		= dynamic_cast<GenericAttributeText*>(&attr);
-	ASSERT(compareTo);
+	ThrowOnAssert(compareTo != NULL);
 
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
+
 	if (compareTo->fValueDirty)
 		compareTo->ReadValue(&compareTo->fFullValueText);
 
-	// Sort undefined values last, regardless of the other value:
+	// sort undefined values last, regardless of the other value
 	if (!fValueIsDefined)
 		return compareTo->fValueIsDefined ? 1 : 0;
+
 	if (!compareTo->fValueIsDefined)
 		return -1;
 
@@ -1597,6 +1655,7 @@ GenericAttributeText::Compare(WidgetAttributeText& attr, BPoseView*)
 			return fValue.uint64t >= compareTo->fValue.uint64t ?
 				(fValue.uint64t == compareTo->fValue.uint64t ? 0 : 1) : -1;
 	}
+
 	return 0;
 }
 
@@ -1793,7 +1852,6 @@ GenericAttributeText::CommitEditedTextFlavor(BTextView* textView)
 
 				default:
 					TRESPASS();
-
 			}
 
 			size = fModel->WriteAttr(columnName, type, 0, &tmp, scalarSize);
@@ -1818,7 +1876,7 @@ GenericAttributeText::CommitEditedTextFlavor(BTextView* textView)
 }
 
 
-// #pragma mark - display as: duration
+// #pragma mark - DurationAttributeText (display as: duration)
 
 
 DurationAttributeText::DurationAttributeText(const Model* model,
@@ -1833,7 +1891,7 @@ DurationAttributeText::DurationAttributeText(const Model* model,
 
 
 void
-DurationAttributeText::FitValue(BString* result, const BPoseView* view)
+DurationAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
@@ -1842,8 +1900,8 @@ DurationAttributeText::FitValue(BString* result, const BPoseView* view)
 	fDirty = false;
 
 	if (!fValueIsDefined) {
-		*result = "-";
-		fTruncatedWidth = TruncString(result, fFullValueText.String(),
+		*outString = "-";
+		fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 			fFullValueText.Length(), view, fOldWidth);
 		return;
 	}
@@ -1886,21 +1944,21 @@ DurationAttributeText::FitValue(BString* result, const BPoseView* view)
 
 	char buffer[256];
 	if (hours > 0) {
-		snprintf(buffer, sizeof(buffer), "%s%ld:%02ld:%02ld",
-			negative ? "-" : "", hours, minutes, seconds);
+		snprintf(buffer, sizeof(buffer), "%s%" B_PRId32 ":%02" B_PRId32 ":%02"
+			B_PRId32, negative ? "-" : "", hours, minutes, seconds);
 	} else {
-		snprintf(buffer, sizeof(buffer), "%s%ld:%02ld",
+		snprintf(buffer, sizeof(buffer), "%s%" B_PRId32 ":%02" B_PRId32,
 			negative ? "-" : "", minutes, seconds);
 	}
 
 	fFullValueText = buffer;
 
-	fTruncatedWidth = TruncString(result, fFullValueText.String(),
+	fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 		fFullValueText.Length(), view, fOldWidth);
 }
 
 
-// #pragma mark - display as: checkbox
+// #pragma mark - CheckboxAttributeText (display as: checkbox)
 
 
 CheckboxAttributeText::CheckboxAttributeText(const Model* model,
@@ -1928,14 +1986,14 @@ void
 CheckboxAttributeText::SetUpEditing(BTextView* view)
 {
 	// TODO: support editing for real!
-	BString result;
-	GenericAttributeText::FitValue(&result, NULL);
+	BString outString;
+	GenericAttributeText::FitValue(&outString, NULL);
 	GenericAttributeText::SetUpEditing(view);
 }
 
 
 void
-CheckboxAttributeText::FitValue(BString* result, const BPoseView* view)
+CheckboxAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
@@ -1944,8 +2002,8 @@ CheckboxAttributeText::FitValue(BString* result, const BPoseView* view)
 	fDirty = false;
 
 	if (!fValueIsDefined) {
-		*result = fOffChar;
-		fTruncatedWidth = TruncString(result, fFullValueText.String(),
+		*outString = fOffChar;
+		fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 			fFullValueText.Length(), view, fOldWidth);
 		return;
 	}
@@ -1975,12 +2033,12 @@ CheckboxAttributeText::FitValue(BString* result, const BPoseView* view)
 
 	fFullValueText = checked ? fOnChar : fOffChar;
 
-	fTruncatedWidth = TruncString(result, fFullValueText.String(),
+	fTruncatedWidth = TruncString(outString, fFullValueText.String(),
 		fFullValueText.Length(), view, fOldWidth);
 }
 
 
-// #pragma mark - display as: rating
+// #pragma mark - RatingAttributeText (display as: rating)
 
 
 RatingAttributeText::RatingAttributeText(const Model* model,
@@ -1998,14 +2056,14 @@ void
 RatingAttributeText::SetUpEditing(BTextView* view)
 {
 	// TODO: support editing for real!
-	BString result;
-	GenericAttributeText::FitValue(&result, NULL);
+	BString outString;
+	GenericAttributeText::FitValue(&outString, NULL);
 	GenericAttributeText::SetUpEditing(view);
 }
 
 
 void
-RatingAttributeText::FitValue(BString* result, const BPoseView* view)
+RatingAttributeText::FitValue(BString* ratingString, const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
@@ -2013,8 +2071,7 @@ RatingAttributeText::FitValue(BString* result, const BPoseView* view)
 	fOldWidth = fColumn->Width();
 	fDirty = false;
 
-	int64 rating = 0;
-
+	int64 rating;
 	if (fValueIsDefined) {
 		switch (fColumn->AttrType()) {
 			case B_INT8_TYPE:
@@ -2028,11 +2085,17 @@ RatingAttributeText::FitValue(BString* result, const BPoseView* view)
 			case B_INT32_TYPE:
 				rating = fValue.int32t;
 				break;
+
+			default:
+				rating = 0;
+				break;
 		}
-	}
+	} else
+		rating = 0;
 
 	if (rating > fMax)
 		rating = fMax;
+
 	if (rating < 0)
 		rating = 0;
 
@@ -2040,18 +2103,19 @@ RatingAttributeText::FitValue(BString* result, const BPoseView* view)
 	fFullValueText = "";
 
 	for (int32 i = 0; i < fCount; i++) {
-		if (rating > i * steps)
+		int64 n = i * steps;
+		if (rating > n)
 			fFullValueText += "★";
 		else
 			fFullValueText += "☆";
 	}
 
-	fTruncatedWidth = TruncString(result, fFullValueText.String(),
+	fTruncatedWidth = TruncString(ratingString, fFullValueText.String(),
 		fFullValueText.Length(), view, fOldWidth);
 }
 
 
-// #pragma mark -
+// #pragma mark - OpenWithRelationAttributeText
 
 
 OpenWithRelationAttributeText::OpenWithRelationAttributeText(const Model* model,
@@ -2090,7 +2154,8 @@ OpenWithRelationAttributeText::PreferredWidth(const BPoseView* pose) const
 
 
 void
-OpenWithRelationAttributeText::FitValue(BString* result, const BPoseView* view)
+OpenWithRelationAttributeText::FitValue(BString* outString,
+	const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue();
@@ -2098,15 +2163,17 @@ OpenWithRelationAttributeText::FitValue(BString* result, const BPoseView* view)
 	ASSERT(view == fPoseView);
 	const OpenWithPoseView* launchWithView
 		= dynamic_cast<const OpenWithPoseView*>(view);
-
-	if (launchWithView)
+	if (launchWithView != NULL)
 		launchWithView->OpenWithRelationDescription(fModel, &fRelationText);
 
 	fOldWidth = fColumn->Width();
-	fTruncatedWidth = TruncString(result, fRelationText.String(),
+	fTruncatedWidth = TruncString(outString, fRelationText.String(),
 		fRelationText.Length(), view, fOldWidth, B_TRUNCATE_END);
 	fDirty = false;
 }
+
+
+// #pragma mark - VersionAttributeText
 
 
 VersionAttributeText::VersionAttributeText(const Model* model,
@@ -2119,21 +2186,22 @@ VersionAttributeText::VersionAttributeText(const Model* model,
 
 
 void
-VersionAttributeText::ReadValue(BString* result)
+VersionAttributeText::ReadValue(BString* outString)
 {
 	fValueDirty = false;
 
 	BModelOpener opener(fModel);
 	BFile* file = dynamic_cast<BFile*>(fModel->Node());
-	if (file) {
+	if (file != NULL) {
 		BAppFileInfo info(file);
 		version_info version;
 		if (info.InitCheck() == B_OK
 			&& info.GetVersionInfo(&version, fAppVersion
-					? B_APP_VERSION_KIND : B_SYSTEM_VERSION_KIND) == B_OK) {
-			*result = version.short_info;
+				? B_APP_VERSION_KIND : B_SYSTEM_VERSION_KIND) == B_OK) {
+			*outString = version.short_info;
 			return;
 		}
 	}
-	*result = "-";
+
+	*outString = "-";
 }

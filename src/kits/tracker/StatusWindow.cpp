@@ -47,6 +47,7 @@ All rights reserved.
 #include <MessageFilter.h>
 #include <StringView.h>
 #include <String.h>
+#include <TimeFormat.h>
 
 #include <string.h>
 
@@ -58,7 +59,11 @@ All rights reserved.
 #include "DeskWindow.h"
 
 
-const float	kDefaultStatusViewHeight = 50;
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "StatusWindow"
+
+
+const float kDefaultStatusViewHeight = 50;
 const bigtime_t kMaxUpdateInterval = 100000LL;
 const bigtime_t kSpeedReferenceInterval = 2000000LL;
 const bigtime_t kShowSpeedInterval = 8000000LL;
@@ -68,6 +73,7 @@ const BRect kStatusRect(200, 200, 550, 200);
 static bigtime_t sLastEstimatedFinishSpeedToggleTime = -1;
 static bool sShowSpeed = true;
 static const time_t kSecondsPerDay = 24 * 60 * 60;
+
 
 class TCustomButton : public BButton {
 public:
@@ -90,6 +96,9 @@ BStatusWindow* gStatusWindow = NULL;
 }
 
 
+//	#pragma mark - BStatusMouseFilter
+
+
 BStatusMouseFilter::BStatusMouseFilter()
 	:
 	BMessageFilter(B_ANY_DELIVERY, B_ANY_SOURCE, B_MOUSE_DOWN)
@@ -107,12 +116,16 @@ BStatusMouseFilter::Filter(BMessage* message, BHandler** target)
 		BView* view = dynamic_cast<BView*>(*target);
 		if (view != NULL)
 			view = view->Parent();
+
 		if (view != NULL)
 			*target = view;
 	}
 
 	return B_DISPATCH_MESSAGE;
 }
+
+
+//	#pragma mark - TCustomButton
 
 
 TCustomButton::TCustomButton(BRect frame, uint32 what)
@@ -154,15 +167,16 @@ TCustomButton::Draw(BRect updateRect)
 }
 
 
-// #pragma mark -
+// #pragma mark - StatusBackgroundView
 
 
 class StatusBackgroundView : public BView {
 public:
 	StatusBackgroundView(BRect frame)
-		: BView(frame, "BackView", B_FOLLOW_ALL, B_WILL_DRAW | B_PULSE_NEEDED)
+		:
+		BView(frame, "BackView", B_FOLLOW_ALL, B_WILL_DRAW | B_PULSE_NEEDED)
 	{
-		SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+		SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 	}
 
 	virtual void Pulse()
@@ -183,11 +197,7 @@ public:
 };
 
 
-// #pragma mark - BStatusWindow
-
-
-#undef B_TRANSLATION_CONTEXT
-#define B_TRANSLATION_CONTEXT "StatusWindow"
+//	#pragma mark - BStatusWindow
 
 
 BStatusWindow::BStatusWindow()
@@ -246,8 +256,9 @@ BStatusWindow::CreateStatusItem(thread_id thread, StatusWindowState type)
 		AutoLock<BLooper> lock(be_app);
 		int32 count = be_app->CountWindows();
 		for (int32 index = 0; index < count; index++) {
-			if (dynamic_cast<BDeskWindow*>(be_app->WindowAt(index))
-				&& be_app->WindowAt(index)->IsActive()) {
+			BWindow* window = be_app->WindowAt(index);
+			if (dynamic_cast<BDeskWindow*>(window) != NULL
+				&& window->IsActive()) {
 				desktopActive = true;
 				break;
 			}
@@ -424,16 +435,19 @@ BStatusWindow::WindowActivated(bool state)
 BStatusView::BStatusView(BRect bounds, thread_id thread, StatusWindowState type)
 	:
 	BView(bounds, "StatusView", B_FOLLOW_NONE, B_WILL_DRAW),
+	fStatusBar(NULL),
 	fType(type),
 	fBitmap(NULL),
+	fStopButton(NULL),
+	fPauseButton(NULL),
 	fThread(thread)
 {
 	Init();
 
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	SetLowColor(ViewColor());
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	SetLowUIColor(ViewUIColor());
 	SetHighColor(20, 20, 20);
-	SetDrawingMode(B_OP_OVER);
+	SetDrawingMode(B_OP_ALPHA);
 
 	const float buttonWidth = 22;
 	const float buttonHeight = 20;
@@ -451,23 +465,23 @@ BStatusView::BStatusView(BRect bounds, thread_id thread, StatusWindowState type)
 	switch (type) {
 		case kCopyState:
 			caption = B_TRANSLATE("Preparing to copy items" B_UTF8_ELLIPSIS);
-			id = R_CopyStatusBitmap;
+			id = R_CopyStatusIcon;
 			break;
 
 		case kMoveState:
 			caption = B_TRANSLATE("Preparing to move items" B_UTF8_ELLIPSIS);
-			id = R_MoveStatusBitmap;
+			id = R_MoveStatusIcon;
 			break;
 
 		case kCreateLinkState:
 			caption = B_TRANSLATE("Preparing to create links"
 				B_UTF8_ELLIPSIS);
-			id = R_MoveStatusBitmap;
+			id = R_MoveStatusIcon;
 			break;
 
 		case kTrashState:
 			caption = B_TRANSLATE("Preparing to empty Trash" B_UTF8_ELLIPSIS);
-			id = R_TrashStatusBitmap;
+			id = R_TrashIcon;
 			break;
 
 		case kVolumeState:
@@ -478,7 +492,7 @@ BStatusView::BStatusView(BRect bounds, thread_id thread, StatusWindowState type)
 		case kDeleteState:
 			caption = B_TRANSLATE("Preparing to delete items"
 				B_UTF8_ELLIPSIS);
-			id = R_TrashStatusBitmap;
+			id = R_TrashIcon;
 			break;
 
 		case kRestoreFromTrashState:
@@ -511,8 +525,9 @@ BStatusView::BStatusView(BRect bounds, thread_id thread, StatusWindowState type)
 	}
 
 	if (id != 0) {
-		GetTrackerResources()->GetBitmapResource(B_MESSAGE_TYPE, id,
-			&fBitmap);
+		fBitmap = new BBitmap(BRect(0, 0, 16, 16), B_RGBA32);
+		GetTrackerResources()->GetIconResource(id, B_MINI_ICON,
+			fBitmap);
 	}
 
 	rect = Bounds();
@@ -541,23 +556,20 @@ BStatusView::~BStatusView()
 void
 BStatusView::Init()
 {
-	fDestDir = "";
+	fTotalSize = fItemSize = fSizeProcessed = fLastSpeedReferenceSize
+		= fEstimatedFinishReferenceSize = 0;
 	fCurItem = 0;
-	fPendingStatusString[0] = '\0';
-	fWasCanceled = false;
-	fIsPaused = false;
-	fLastUpdateTime = 0;
-	fBytesPerSecond = 0.0;
+	fLastUpdateTime = fLastSpeedReferenceTime = fProcessStartTime
+		= fLastSpeedUpdateTime = fEstimatedFinishReferenceTime
+		= system_time();
+	fCurrentBytesPerSecondSlot = 0;
 	for (size_t i = 0; i < kBytesPerSecondSlots; i++)
 		fBytesPerSecondSlot[i] = 0.0;
-	fCurrentBytesPerSecondSlot = 0;
-	fItemSize = 0;
-	fSizeProcessed = 0;
-	fLastSpeedReferenceSize = 0;
-	fEstimatedFinishReferenceSize = 0;
 
-	fProcessStartTime = fLastSpeedReferenceTime
-		= fEstimatedFinishReferenceTime = system_time();
+	fBytesPerSecond = 0.0;
+	fShowCount = fWasCanceled = fIsPaused = false;
+	fDestDir.SetTo("");
+	fPendingStatusString[0] = '\0';
 }
 
 
@@ -571,16 +583,16 @@ BStatusView::InitStatus(int32 totalItems, off_t totalSize,
 
 	BEntry entry;
 	char name[B_FILE_NAME_LENGTH];
-	if (destDir && (entry.SetTo(destDir) == B_OK)) {
+	if (destDir != NULL && entry.SetTo(destDir) == B_OK) {
 		entry.GetName(name);
-		fDestDir = name;
+		fDestDir.SetTo(name);
 	}
 
 	BString buffer;
 	if (totalItems > 0) {
 		char totalStr[32];
 		buffer.SetTo(B_TRANSLATE("of %items"));
-		snprintf(totalStr, sizeof(totalStr), "%ld", totalItems);
+		snprintf(totalStr, sizeof(totalStr), "%" B_PRId32, totalItems);
 		buffer.ReplaceFirst("%items", totalStr);
 	}
 
@@ -611,9 +623,6 @@ BStatusView::InitStatus(int32 totalItems, off_t totalSize,
 		case kRestoreFromTrashState:
 			fStatusBar->Reset(B_TRANSLATE("Restoring: "), buffer.String());
 			break;
-
-		default:
-			break;
 	}
 
 	fStatusBar->SetMaxValue(1);
@@ -625,7 +634,7 @@ BStatusView::InitStatus(int32 totalItems, off_t totalSize,
 void
 BStatusView::Draw(BRect updateRect)
 {
-	if (fBitmap) {
+	if (fBitmap != NULL) {
 		BPoint location;
 		location.x = (fStatusBar->Frame().left
 			- fBitmap->Bounds().Width()) / 2;
@@ -756,6 +765,7 @@ BStatusView::_FullSpeedString()
 		buffer.ReplaceFirst("%BytesPerSecond",
 			string_for_size(fBytesPerSecond, sizeBuffer, sizeof(sizeBuffer)));
 	}
+
 	return buffer;
 }
 
@@ -770,6 +780,7 @@ BStatusView::_ShortSpeedString()
 		buffer.ReplaceFirst("%BytesPerSecond",
 			string_for_size(fBytesPerSecond, sizeBuffer, sizeof(sizeBuffer)));
 	}
+
 	return buffer;
 }
 
@@ -786,12 +797,11 @@ BStatusView::_TimeStatusString(float availableSpace, float* _width)
 	time_t finishTime = (time_t)(now + secondsRemaining);
 
 	char timeText[32];
-	const BLocale* locale = BLocale::Default();
 	if (finishTime - now > kSecondsPerDay) {
-		locale->FormatDateTime(timeText, sizeof(timeText), finishTime,
+		BDateTimeFormat().Format(timeText, sizeof(timeText), finishTime,
 			B_MEDIUM_DATE_FORMAT, B_MEDIUM_TIME_FORMAT);
 	} else {
-		locale->FormatTime(timeText, sizeof(timeText), finishTime,
+		BTimeFormat().Format(timeText, sizeof(timeText), finishTime,
 			B_MEDIUM_TIME_FORMAT);
 	}
 
@@ -804,6 +814,7 @@ BStatusView::_TimeStatusString(float availableSpace, float* _width)
 
 	if (_width != NULL)
 		*_width = width;
+
 	return string;
 }
 
@@ -830,10 +841,10 @@ BStatusView::_FullTimeRemainingString(time_t now, time_t finishTime,
 	BString finishStr;
 	if (finishTime - now > 60 * 60) {
 		buffer.SetTo(B_TRANSLATE("Finish: %time - Over %finishtime left"));
-		formatter.Format(now * 1000000LL, finishTime * 1000000LL, &finishStr);
+		formatter.Format(finishStr, now * 1000000LL, finishTime * 1000000LL);
 	} else {
 		buffer.SetTo(B_TRANSLATE("Finish: %time - %finishtime left"));
-		formatter.Format(now * 1000000LL, finishTime * 1000000LL, &finishStr);
+		formatter.Format(finishStr, now * 1000000LL, finishTime * 1000000LL);
 	}
 
 	buffer.ReplaceFirst("%time", timeText);

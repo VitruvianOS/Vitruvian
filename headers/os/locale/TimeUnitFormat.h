@@ -12,11 +12,12 @@
 
 class BString;
 
-namespace icu_57 {
+#ifndef U_ICU_NAMESPACE
+  #define U_ICU_NAMESPACE icu
+#endif
+namespace U_ICU_NAMESPACE {
 	class TimeUnitFormat;
 }
-
-namespace icu = icu_57;
 
 
 enum time_unit_style {
@@ -42,20 +43,21 @@ class BTimeUnitFormat : public BFormat {
 	typedef	BFormat				Inherited;
 
 public:
-								BTimeUnitFormat();
+								BTimeUnitFormat(const time_unit_style style =
+									B_TIME_UNIT_FULL);
+								BTimeUnitFormat(const BLanguage& language,
+									const BFormattingConventions& conventions,
+									const time_unit_style style = B_TIME_UNIT_FULL);
 								BTimeUnitFormat(const BTimeUnitFormat& other);
 	virtual						~BTimeUnitFormat();
 
-			BTimeUnitFormat&	operator=(const BTimeUnitFormat& other);
-
-	virtual	status_t			SetLocale(const BLocale* locale);
-			status_t			Format(int32 value, time_unit_element unit,
-									BString* buffer,
-									time_unit_style style = B_TIME_UNIT_FULL
+			status_t			Format(BString& buffer,
+									const int32 value,
+									const time_unit_element unit
 									) const;
 
 private:
-			icu::TimeUnitFormat*	fFormatter;
+			U_ICU_NAMESPACE::TimeUnitFormat*	fFormatter;
 };
 
 

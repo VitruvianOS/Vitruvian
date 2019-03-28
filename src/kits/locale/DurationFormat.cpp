@@ -7,6 +7,7 @@
  */
 
 
+#include <unicode/uversion.h>
 #include <DurationFormat.h>
 
 #include <new>
@@ -33,11 +34,13 @@ static const UCalendarDateFields skUnitMap[] = {
 };
 
 
-BDurationFormat::BDurationFormat(const BString& separator)
+BDurationFormat::BDurationFormat(const BLanguage& language,
+	const BFormattingConventions& conventions,
+	const BString& separator, const time_unit_style style)
 	:
-	Inherited(),
+	Inherited(language, conventions),
 	fSeparator(separator),
-	fTimeUnitFormat()
+	fTimeUnitFormat(language, conventions, style)
 {
 	UErrorCode icuStatus = U_ZERO_ERROR;
 	fCalendar = new GregorianCalendar(icuStatus);
@@ -45,8 +48,22 @@ BDurationFormat::BDurationFormat(const BString& separator)
 		fInitStatus = B_NO_MEMORY;
 		return;
 	}
+}
 
-	fInitStatus = SetLocale(fLocale);
+
+BDurationFormat::BDurationFormat(const BString& separator,
+	const time_unit_style style)
+	:
+	Inherited(),
+	fSeparator(separator),
+	fTimeUnitFormat(style)
+{
+	UErrorCode icuStatus = U_ZERO_ERROR;
+	fCalendar = new GregorianCalendar(icuStatus);
+	if (fCalendar == NULL) {
+		fInitStatus = B_NO_MEMORY;
+		return;
+	}
 }
 
 
@@ -69,40 +86,10 @@ BDurationFormat::~BDurationFormat()
 }
 
 
-BDurationFormat&
-BDurationFormat::operator=(const BDurationFormat& other)
-{
-	if (this == &other)
-		return *this;
-
-	fSeparator = other.fSeparator;
-	fTimeUnitFormat = other.fTimeUnitFormat;
-	delete fCalendar;
-	fCalendar = other.fCalendar != NULL
-		? new GregorianCalendar(*other.fCalendar) : NULL;
-
-	if (fCalendar == NULL && other.fCalendar != NULL)
-		fInitStatus = B_NO_MEMORY;
-
-	return *this;
-}
-
-
 void
 BDurationFormat::SetSeparator(const BString& separator)
 {
 	fSeparator = separator;
-}
-
-
-status_t
-BDurationFormat::SetLocale(const BLocale* locale)
-{
-	status_t result = Inherited::SetLocale(locale);
-	if (result != B_OK)
-		return result;
-
-	return fTimeUnitFormat.SetLocale(locale);
 }
 
 
@@ -132,12 +119,9 @@ BDurationFormat::SetTimeZone(const BTimeZone* timeZone)
 
 
 status_t
-BDurationFormat::Format(bigtime_t startValue, bigtime_t stopValue,
-	BString* buffer, time_unit_style style) const
+BDurationFormat::Format(BString& buffer, const bigtime_t startValue,
+	const bigtime_t stopValue) const
 {
-	if (buffer == NULL)
-		return B_BAD_VALUE;
-
 	UErrorCode icuStatus = U_ZERO_ERROR;
 	fCalendar->setTime((UDate)startValue / 1000, icuStatus);
 	if (!U_SUCCESS(icuStatus))
@@ -153,11 +137,11 @@ BDurationFormat::Format(bigtime_t startValue, bigtime_t stopValue,
 
 		if (delta != 0) {
 			if (needSeparator)
-				buffer->Append(fSeparator);
+				buffer.Append(fSeparator);
 			else
 				needSeparator = true;
-			status_t status = fTimeUnitFormat.Format(delta,
-				(time_unit_element)unit, buffer, style);
+			status_t status = fTimeUnitFormat.Format(buffer, delta,
+				(time_unit_element)unit);
 			if (status != B_OK)
 				return status;
 		}

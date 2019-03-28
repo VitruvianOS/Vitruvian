@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2008, Haiku, Inc. All rights reserved.
+ * Copyright 2001-2015, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef	_RADIO_BUTTON_H
@@ -14,8 +14,7 @@ class BRadioButton : public BControl {
 public:
 								BRadioButton(BRect frame, const char* name,
 									const char* label, BMessage* message,
-									uint32 resizMask
-										= B_FOLLOW_LEFT | B_FOLLOW_TOP,
+									uint32 resizingMode = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_WILL_DRAW | B_NAVIGABLE);
 								BRadioButton(const char* name,
 									const char* label, BMessage* message,
@@ -23,15 +22,14 @@ public:
 								BRadioButton(const char* label,
 									BMessage* message);
 
-								BRadioButton(BMessage* archive);
+								BRadioButton(BMessage* data);
 	virtual						~BRadioButton();
 
-	static	BArchivable*		Instantiate(BMessage* archive);
-	virtual	status_t			Archive(BMessage* archive,
-									bool deep = true) const;
+	static	BArchivable*		Instantiate(BMessage* data);
+	virtual	status_t			Archive(BMessage* data, bool deep = true) const;
 
 	virtual	void				Draw(BRect updateRect);
-	virtual	void				MouseDown(BPoint point);
+	virtual	void				MouseDown(BPoint where);
 	virtual	void				AttachedToWindow();
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 	virtual	void				SetValue(int32 value);
@@ -42,18 +40,18 @@ public:
 
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				WindowActivated(bool active);
-	virtual	void				MouseUp(BPoint point);
-	virtual	void				MouseMoved(BPoint point, uint32 transit,
+	virtual	void				MouseUp(BPoint where);
+	virtual	void				MouseMoved(BPoint where, uint32 code,
 									const BMessage* dragMessage);
 	virtual	void				DetachedFromWindow();
-	virtual	void				FrameMoved(BPoint newLocation);
-	virtual	void				FrameResized(float width, float height);
+	virtual	void				FrameMoved(BPoint newPosition);
+	virtual	void				FrameResized(float newWidth, float newHeight);
 
 	virtual	BHandler*			ResolveSpecifier(BMessage* message,
 									int32 index, BMessage* specifier,
 									int32 what, const char* property);
 
-	virtual	void				MakeFocus(bool focused = true);
+	virtual	void				MakeFocus(bool focus = true);
 	virtual	void				AllAttached();
 	virtual	void				AllDetached();
 	virtual	status_t			GetSupportedSuites(BMessage* message);
@@ -61,7 +59,9 @@ public:
 	virtual	status_t			Perform(perform_code d, void* argument);
 
 	virtual	BSize				MaxSize();
+	virtual	BAlignment			LayoutAlignment();
 
+	virtual	status_t			SetIcon(const BBitmap* icon, uint32 flags = 0);
 
 private:
 	friend	status_t			_init_interface_kit_();

@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2012, Haiku.
+ * Copyright 2001-2016, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -7,6 +7,7 @@
  *		Jérôme Duval, jerome.duval@free.fr
  *		Axel Dörfler, axeld@pinc-software.de
  *		Andrej Spielmann, <andrej.spielmann@seh.ox.ac.uk>
+ *		Julian Harnath, <julian.harnath@rwth-aachen.de>
  */
 #ifndef APP_SERVER_PROTOCOL_H
 #define APP_SERVER_PROTOCOL_H
@@ -15,18 +16,13 @@
 #include <SupportDefs.h>
 
 
-// Server port names. The input port is the port which is used to receive
-// input messages from the Input Server. The other is the "main" port for
-// the server and is utilized mostly by BApplication objects.
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
-#	define SERVER_PORT_NAME "system:app_server"
-#else
+#ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	define SERVER_PORT_NAME "haiku-test:app_server"
 #endif
 
-//#if TEST_MODE
+#if TEST_MODE
 #	define SERVER_INPUT_PORT "haiku-test:input port"
-//#endif
+#endif
 
 #define AS_PROTOCOL_VERSION	1
 
@@ -147,6 +143,8 @@ enum {
 	AS_GET_HAS_GLYPHS,
 	AS_GET_GLYPH_SHAPES,
 	AS_GET_TRUNCATED_STRINGS,
+	AS_GET_UNICODE_BLOCKS,
+	AS_GET_HAS_UNICODE_BLOCK,
 
 	// Screen methods
 	AS_VALID_SCREEN_ID,
@@ -175,6 +173,9 @@ enum {
 	AS_SET_DPMS,
 	AS_GET_DPMS_STATE,
 	AS_GET_DPMS_CAPABILITIES,
+
+	AS_SCREEN_SET_BRIGHTNESS,
+	AS_SCREEN_GET_BRIGHTNESS,
 
 	// Misc stuff
 	AS_GET_ACCELERANT_PATH,
@@ -297,11 +298,18 @@ enum {
 	AS_VIEW_SET_PEN_SIZE,
 	AS_VIEW_GET_PEN_SIZE,
 	AS_VIEW_SET_HIGH_COLOR,
+	AS_VIEW_SET_HIGH_UI_COLOR,
 	AS_VIEW_SET_LOW_COLOR,
+	AS_VIEW_SET_LOW_UI_COLOR,
 	AS_VIEW_SET_VIEW_COLOR,
+	AS_VIEW_SET_VIEW_UI_COLOR,
 	AS_VIEW_GET_HIGH_COLOR,
+	AS_VIEW_GET_HIGH_UI_COLOR,
 	AS_VIEW_GET_LOW_COLOR,
+	AS_VIEW_GET_LOW_UI_COLOR,
 	AS_VIEW_GET_VIEW_COLOR,
+	AS_VIEW_GET_VIEW_UI_COLOR,
+
 	AS_VIEW_PRINT_ALIASING,
 	AS_VIEW_CLIP_TO_PICTURE,
 	AS_VIEW_GET_CLIP_REGION,
@@ -318,6 +326,7 @@ enum {
 	AS_VIEW_COPY_BITS,
 	AS_VIEW_DRAW_PICTURE,
 	AS_VIEW_INVALIDATE_RECT,
+	AS_VIEW_DELAYED_INVALIDATE_RECT,
 	AS_VIEW_INVALIDATE_REGION,
 	AS_VIEW_INVERT_RECT,
 	AS_VIEW_MOVE_TO,
@@ -328,6 +337,8 @@ enum {
 	AS_VIEW_SET_VIEW_BITMAP,
 	AS_VIEW_SET_PATTERN,
 	AS_SET_CURRENT_VIEW,
+	AS_VIEW_BEGIN_LAYER,
+	AS_VIEW_END_LAYER,
 
 	// BDirectWindow/BWindowScreen codes
 	AS_DIRECT_WINDOW_GET_SYNC_DATA,
@@ -340,6 +351,25 @@ enum {
 	// debugging helper
 	AS_DUMP_ALLOCATOR,
 	AS_DUMP_BITMAPS,
+
+	// transformation in addition to origin/scale
+	AS_VIEW_SET_TRANSFORM,
+	AS_VIEW_GET_TRANSFORM,
+
+	AS_VIEW_AFFINE_TRANSLATE,
+	AS_VIEW_AFFINE_SCALE,
+	AS_VIEW_AFFINE_ROTATE,
+
+	// Polygon filling rules
+	AS_VIEW_SET_FILL_RULE,
+	AS_VIEW_GET_FILL_RULE,
+
+	// New clipping: cumulative, transformed
+	AS_VIEW_CLIP_TO_RECT,
+	AS_VIEW_CLIP_TO_SHAPE,
+
+	// Internal messages
+	AS_COLOR_MAP_UPDATED,
 
 	AS_LAST_CODE
 };

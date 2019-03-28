@@ -21,7 +21,6 @@ target_sources(be PRIVATE
 	CMakeLists.txt
 	ColorControl.cpp
 	ColorConversion.cpp
-	ColorTools.cpp
 	ColumnListView.cpp
 	ColumnTypes.cpp
 	Control.cpp
@@ -45,7 +44,6 @@ target_sources(be PRIVATE
 	GroupView.cpp
 	Input.cpp
 	InterfaceDefs.cpp
-	Jamfile
 	LayoutContext.cpp
 	Layout.cpp
 	layouter

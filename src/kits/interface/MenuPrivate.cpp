@@ -97,7 +97,7 @@ BBitmap* MenuPrivate::sMenuItemAlt;
 BBitmap* MenuPrivate::sMenuItemMenu;
 
 
-MenuPrivate::MenuPrivate(BMenu *menu)
+MenuPrivate::MenuPrivate(BMenu* menu)
 	:
 	fMenu(menu)
 {
@@ -112,7 +112,14 @@ MenuPrivate::Layout() const
 
 
 void
-MenuPrivate::ItemMarked(BMenuItem *item)
+MenuPrivate::SetLayout(menu_layout layout)
+{
+	fMenu->fLayout = layout;
+}
+
+
+void
+MenuPrivate::ItemMarked(BMenuItem* item)
 {
 	fMenu->_ItemMarked(item);
 }
@@ -147,22 +154,29 @@ MenuPrivate::Padding() const
 
 
 void
-MenuPrivate::GetItemMargins(float *left, float *top,
-					float *right, float *bottom) const
+MenuPrivate::GetItemMargins(float* left, float* top, float* right,
+	float* bottom) const
 {
 	fMenu->GetItemMargins(left, top, right, bottom);
 }
 
 
+void
+MenuPrivate::SetItemMargins(float left, float top, float right, float bottom)
+{
+	fMenu->SetItemMargins(left, top, right, bottom);
+}
+
+
 int
-MenuPrivate::State(BMenuItem **item) const
+MenuPrivate::State(BMenuItem** item) const
 {
 	return fMenu->_State(item);
 }
 
 
 void
-MenuPrivate::Install(BWindow *window)
+MenuPrivate::Install(BWindow* window)
 {
 	fMenu->_Install(window);
 }
@@ -176,21 +190,21 @@ MenuPrivate::Uninstall()
 
 
 void
-MenuPrivate::SetSuper(BMenu *menu)
+MenuPrivate::SetSuper(BMenu* menu)
 {
 	fMenu->fSuper = menu;
 }
 
 
 void
-MenuPrivate::SetSuperItem(BMenuItem *item)
+MenuPrivate::SetSuperItem(BMenuItem* item)
 {
 	fMenu->fSuperitem = item;
 }
 
 
 void
-MenuPrivate::InvokeItem(BMenuItem *item, bool now)
+MenuPrivate::InvokeItem(BMenuItem* item, bool now)
 {
 	fMenu->_InvokeItem(item, now);
 }
@@ -207,14 +221,15 @@ MenuPrivate::QuitTracking(bool thisMenuOnly)
 status_t
 MenuPrivate::CreateBitmaps()
 {
-	BRect smallRect(0, 0, 16, 10);
+	BRect smallRect(0.0f, 0.0f, 16.0f, 10.0f);
 
 	try {
-		sMenuItemShift = new BBitmap(BRect(0, 0, 23, 10), B_CMAP8);
-		sMenuItemControl = new BBitmap(BRect(0, 0, 21, 10), B_CMAP8);
+		sMenuItemShift = new BBitmap(BRect(0.0f, 0.0f, 23.0f, 10.0f), B_CMAP8);
+		sMenuItemControl = new BBitmap(BRect(0.0f, 0.0f, 21.0f, 10.0f),
+			B_CMAP8);
 		sMenuItemOption = new BBitmap(smallRect, B_CMAP8);
 		sMenuItemAlt = new BBitmap(smallRect, B_CMAP8);
-		sMenuItemMenu = new BBitmap(BRect(0, 0, 22, 10), B_CMAP8);
+		sMenuItemMenu = new BBitmap(BRect(0.0f, 0.0f, 22.0f, 10.0f), B_CMAP8);
 	} catch (...) {
 		return B_NO_MEMORY;
 	}
@@ -229,7 +244,7 @@ MenuPrivate::CreateBitmaps()
 		17, 0, B_CMAP8);
 	sMenuItemMenu->ImportBits(kMenuBits, sizeof(kMenuBits),
 		23, 0, B_CMAP8);
-	
+
 	return B_OK;
 }
 
@@ -262,6 +277,7 @@ MenuPrivate::MenuItemControl()
 		case 0x5d:
 		case 0x5f:
 			return sMenuItemAlt;
+
 		case 0x66:
 		case 0x67:
 			return sMenuItemOption;
@@ -279,6 +295,7 @@ MenuPrivate::MenuItemOption()
 		case 0x5c:
 		case 0x60:
 			return sMenuItemControl;
+
 		case 0x66:
 		case 0x67:
 			return sMenuItemOption;
@@ -296,6 +313,7 @@ MenuPrivate::MenuItemCommand()
 		case 0x5c:
 		case 0x60:
 			return sMenuItemControl;
+
 		case 0x66:
 		case 0x67:
 			return sMenuItemOption;

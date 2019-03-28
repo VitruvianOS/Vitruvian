@@ -27,12 +27,17 @@ public:
 		return fString.fPrivateData;
 	}
 
-	static vint32& DataRefCount(char* data)
+	bool IsShareable() const
+	{
+		return fString._IsShareable();
+	}
+
+	static int32& DataRefCount(char* data)
 	{
 		return *(((int32 *)data) - 2);
 	}
 
-	vint32& DataRefCount()
+	int32& DataRefCount()
 	{
 		return DataRefCount(Data());
 	}

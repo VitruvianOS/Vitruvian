@@ -89,7 +89,9 @@ enum {
 	REGEXP_CORRUPTED_OPCODE
 };
 
+
 const int32 kSubExpressionMax = 10;
+
 
 struct regexp {
 	const char* startp[kSubExpressionMax];
@@ -108,14 +110,14 @@ public:
 	RegExp(const char*);
 	RegExp(const BString&);
 	~RegExp();
-	
+
 	status_t InitCheck() const;
-	
+
 	status_t SetTo(const char*);
-	status_t SetTo(const BString &);
-	
+	status_t SetTo(const BString&);
+
 	bool Matches(const char* string) const;
-	bool Matches(const BString &) const;
+	bool Matches(const BString&) const;
 
 	int32 RunMatcher(regexp*, const char*) const;
 	regexp* Compile(const char*);
@@ -182,5 +184,6 @@ private:
 } // namespace BPrivate
 
 using namespace BPrivate;
+
 
 #endif	// _REG_EXP_H

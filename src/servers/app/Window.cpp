@@ -817,7 +817,7 @@ Window::InvalidateView(View* view, BRegion& viewRegion)
 		if (!fContentRegionValid)
 			_UpdateContentRegion();
 
-		view->ConvertToScreen(&viewRegion);
+		view->LocalToScreenTransform().Apply(&viewRegion);
 		viewRegion.IntersectWith(&VisibleContentRegion());
 		if (viewRegion.CountRects() > 0) {
 			viewRegion.IntersectWith(
@@ -1238,6 +1238,17 @@ Window::FontsChanged(BRegion* updateRegion)
 	if (decorator != NULL) {
 		DesktopSettings settings(fDesktop);
 		decorator->FontsChanged(settings, updateRegion);
+	}
+}
+
+
+void
+Window::ColorsChanged(BRegion* updateRegion)
+{
+	::Decorator* decorator = Decorator();
+	if (decorator != NULL) {
+		DesktopSettings settings(fDesktop);
+		decorator->ColorsChanged(settings, updateRegion);
 	}
 }
 

@@ -33,11 +33,9 @@ All rights reserved.
 */
 
 
-#include "Attributes.h"
-#include "Bitmaps.h"
-#include "FSUtils.h"
-#include "Tracker.h"
 #include "TrashWatcher.h"
+
+#include <string.h>
 
 #include <Debug.h>
 #include <Directory.h>
@@ -46,11 +44,18 @@ All rights reserved.
 #include <Volume.h>
 #include <VolumeRoster.h>
 
-#include <string.h>
+#include "Attributes.h"
+#include "Bitmaps.h"
+#include "FSUtils.h"
+#include "Tracker.h"
+
+
+//	 #pragma mark - BTrashWatcher
 
 
 BTrashWatcher::BTrashWatcher()
-	: BLooper("TrashWatcher", B_LOW_PRIORITY),
+	:
+	BLooper("TrashWatcher", B_LOW_PRIORITY),
 	fTrashNodeList(20, true)
 {
 	FSCreateTrashDirs();
@@ -109,8 +114,9 @@ BTrashWatcher::MessageReceived(BMessage* message)
 			message->FindInt64("to directory", &toDir);
 			if (fromDir == toDir)
 				break;
-		} // fall thru
-		case B_DEVICE_UNMOUNTED: // fall thru
+		}
+		// fall-through
+		case B_DEVICE_UNMOUNTED:
 		case B_ENTRY_REMOVED:
 		{
 			bool full = CheckTrashDirs();
@@ -157,38 +163,14 @@ BTrashWatcher::UpdateTrashIcons()
 		if (FSGetTrashDir(&trashDir, volume.Device()) == B_OK) {
 			// pull out the icons for the current trash state from resources
 			// and apply them onto the trash directory node
-			size_t largeSize = 0;
-			size_t smallSize = 0;
-			const void* largeData
-				= GetTrackerResources()->LoadResource('ICON',
-					fTrashFull ? R_TrashFullIcon : R_TrashIcon, &largeSize);
-
-			const void* smallData
-				= GetTrackerResources()->LoadResource('MICN',
-					fTrashFull ? R_TrashFullIcon : R_TrashIcon,  &smallSize);
-
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
 			size_t vectorSize = 0;
 			const void* vectorData = GetTrackerResources()->LoadResource(
 				B_VECTOR_ICON_TYPE,
 				fTrashFull ? R_TrashFullIcon : R_TrashIcon, &vectorSize);
-	
+
 			if (vectorData) {
 				trashDir.WriteAttr(kAttrIcon, B_VECTOR_ICON_TYPE, 0,
 					vectorData, vectorSize);
-			} else
-				TRESPASS();
-#endif
-
-			if (largeData) {
-				trashDir.WriteAttr(kAttrLargeIcon, 'ICON', 0,
-					largeData, largeSize);
-			} else
-				TRESPASS();
-	
-			if (smallData) {
-				trashDir.WriteAttr(kAttrMiniIcon, 'MICN', 0,
-					smallData, smallSize);
 			} else
 				TRESPASS();
 		}

@@ -56,6 +56,7 @@ All rights reserved.
 #include <Roster.h>
 #include <Screen.h>
 #include <ScrollView.h>
+#include <StringFormat.h>
 #include <SymLink.h>
 #include <TextView.h>
 #include <Volume.h>
@@ -89,105 +90,111 @@ enum track_state {
 	path_track,
 	icon_track,
 	size_track,
-	open_only_track		// This is for items that can be opened, but can't be
-						// drag and dropped or renamed (Trash, Desktop Folder...)
+	open_only_track
+		// This is for items that can be opened, but can't be
+		// drag and dropped or renamed (Trash, Desktop Folder...)
 };
+
 
 class TrackingView : public BControl {
-	public:
-		TrackingView(BRect, const char* str, BMessage* message);
+public:
+	TrackingView(BRect, const char* str, BMessage* message);
 
-		virtual void MouseDown(BPoint);
-		virtual void MouseMoved(BPoint, uint32 transit, const BMessage* message);
-		virtual void MouseUp(BPoint);
-		virtual void Draw(BRect);
+	virtual void MouseDown(BPoint);
+	virtual void MouseMoved(BPoint where, uint32 transit, const BMessage*);
+	virtual void MouseUp(BPoint);
+	virtual void Draw(BRect);
 
-	private:
-		bool fMouseDown;
-		bool fMouseInView;
+private:
+	bool fMouseDown;
+	bool fMouseInView;
 };
 
+
 class AttributeView : public BView {
-	public:
-		AttributeView(BRect, Model*);
-		~AttributeView();
+public:
+	AttributeView(BRect, Model*);
+	~AttributeView();
 
-		void ModelChanged(Model*, BMessage*);
-		void ReLinkTargetModel(Model*);
-		void BeginEditingTitle();
-		void FinishEditingTitle(bool);
-		float CurrentFontHeight(float size = -1);
+	void ModelChanged(Model*, BMessage*);
+	void ReLinkTargetModel(Model*);
+	void BeginEditingTitle();
+	void FinishEditingTitle(bool);
+	float CurrentFontHeight();
 
-		BTextView* TextView() const { return fTitleEditView; }
+	BTextView* TextView() const { return fTitleEditView; }
 
-		static filter_result TextViewFilter(BMessage*, BHandler**,
-			BMessageFilter*);
+	static filter_result TextViewFilter(BMessage*, BHandler**,
+		BMessageFilter*);
 
-		off_t LastSize() const;
-		void SetLastSize(off_t);
+	off_t LastSize() const;
+	void SetLastSize(off_t);
 
-		void SetSizeStr(const char*);
+	void SetSizeString(const char*);
 
-		status_t BuildContextMenu(BMenu* parent);
+	status_t BuildContextMenu(BMenu* parent);
 
-		void SetPermissionsSwitchState(int32 state);
+	void SetPermissionsSwitchState(int32 state);
 
-	protected:
-		virtual void MouseDown(BPoint);
-		virtual void MouseMoved(BPoint, uint32, const BMessage*);
-		virtual void MouseUp(BPoint);
-		virtual void MessageReceived(BMessage*);
-		virtual void AttachedToWindow();
-		virtual void Draw(BRect);
-		virtual void Pulse();
-		virtual void MakeFocus(bool);
-		virtual void WindowActivated(bool);
+protected:
+	virtual void MouseDown(BPoint where);
+	virtual void MouseMoved(BPoint where, uint32, const BMessage* dragMessage);
+	virtual void MouseUp(BPoint where);
+	virtual void MessageReceived(BMessage* message);
+	virtual void AttachedToWindow();
+	virtual void Draw(BRect);
+	virtual void Pulse();
+	virtual void MakeFocus(bool focus);
+	virtual void WindowActivated(bool active);
 
-	private:
-		void InitStrings(const Model*);
-		void CheckAndSetSize();
-		void OpenLinkSource();
-		void OpenLinkTarget();
+private:
+	void InitStrings(const Model*);
+	void CheckAndSetSize();
+	void OpenLinkSource();
+	void OpenLinkTarget();
 
-		BString fPathStr;
-		BString fLinkToStr;
-		BString fSizeStr;
-		BString fModifiedStr;
-		BString fCreatedStr;
-		BString fKindStr;
-		BString fDescStr;
+	BString fPathStr;
+	BString fLinkToStr;
+	BString fSizeString;
+	BString fModifiedStr;
+	BString fCreatedStr;
+	BString fKindStr;
+	BString fDescStr;
 
-		off_t fFreeBytes;
-		off_t fLastSize;
+	off_t fFreeBytes;
+	off_t fLastSize;
 
-		BRect fPathRect;
-		BRect fLinkRect;
-		BRect fDescRect;
-		BRect fTitleRect;
-		BRect fIconRect;
-		BRect fSizeRect;
-		BPoint fClickPoint;
-		float fDivider;
+	BRect fPathRect;
+	BRect fLinkRect;
+	BRect fDescRect;
+	BRect fTitleRect;
+	BRect fIconRect;
+	BRect fSizeRect;
+	BPoint fClickPoint;
+	float fDivider;
 
-		BMenuField* fPreferredAppMenu;
-		Model* fModel;
-		Model* fIconModel;
-		BBitmap* fIcon;
-		bool fMouseDown;
-		bool fDragging;
-		bool fDoubleClick;
-		track_state fTrackingState;
-		bool fIsDropTarget;
-		BTextView* fTitleEditView;
-		PaneSwitch* fPermissionsSwitch;
-		BWindow* fPathWindow;
-		BWindow* fLinkWindow;
-		BWindow* fDescWindow;
+	BMenuField* fPreferredAppMenu;
+	Model* fModel;
+	Model* fIconModel;
+	BBitmap* fIcon;
+	bool fMouseDown;
+	bool fDragging;
+	bool fDoubleClick;
+	track_state fTrackingState;
+	bool fIsDropTarget;
+	BTextView* fTitleEditView;
+	PaneSwitch* fPermissionsSwitch;
+	BWindow* fPathWindow;
+	BWindow* fLinkWindow;
+	BWindow* fDescWindow;
+	color_which fCurrentLinkColorWhich;
+	color_which fCurrentPathColorWhich;
 
-		typedef BView _inherited;
+	typedef BView _inherited;
 };
 
 }	// namespace BPrivate
+
 
 const float kDrawMargin = 3.0f;
 const float kBorderMargin = 15.0f;
@@ -197,17 +204,8 @@ const float kBorderWidth = 32.0f;
 const float kIconHorizOffset = 18.0f;
 const float kIconVertOffset = 6.0f;
 
-// The font height's for the two types of information we display
-const float kTitleFontHeight = 14.0f;
-const float kAttribFontHeight = 10.0f;
-
 // Amount you have to move the mouse before a drag starts
 const float kDragSlop = 3.0f;
-
-const rgb_color kAttrTitleColor = {0, 0, 0, 255};
-const rgb_color kAttrValueColor = {0, 0, 0, 255};
-const rgb_color kLinkColor = {0, 0, 220, 255};
-const rgb_color kDarkBorderColor = {184, 184, 184, 255};
 
 const uint32 kSetPreferredApp = 'setp';
 const uint32 kSelectNewSymTarget = 'snew';
@@ -276,12 +274,13 @@ OpenToolTipWindow(BScreen& screen, BRect rect, const char* name,
 }
 
 
-//	#pragma mark -
+//	#pragma mark - BInfoWindow
 
 
 BInfoWindow::BInfoWindow(Model* model, int32 group_index,
 	LockingList<BWindow>* list)
-	: BWindow(BInfoWindow::InfoWindowRect(false),
+	:
+	BWindow(BInfoWindow::InfoWindowRect(),
 		"InfoWindow", B_TITLED_WINDOW,
 		B_NOT_RESIZABLE | B_NOT_ZOOMABLE, B_CURRENT_WORKSPACE),
 	fModel(model),
@@ -293,12 +292,13 @@ BInfoWindow::BInfoWindow(Model* model, int32 group_index,
 	fFilePanel(NULL),
 	fFilePanelOpen(false)
 {
-	SetPulseRate(1000000);		// we use pulse to check freebytes on volume
+	SetPulseRate(1000000);
+		// we use pulse to check freebytes on volume
 
 	TTracker::WatchNode(model->NodeRef(), B_WATCH_ALL | B_WATCH_MOUNT, this);
 
 	// window list is Locked by Tracker around this constructor
-	if (list)
+	if (list != NULL)
 		list->AddItem(this);
 
 	AddShortcut('E', 0, new BMessage(kEditItem));
@@ -319,8 +319,9 @@ BInfoWindow::~BInfoWindow()
 
 
 BRect
-BInfoWindow::InfoWindowRect(bool)
+BInfoWindow::InfoWindowRect()
 {
+	// starting size of window
 	return BRect(70, 50, 385, 240);
 }
 
@@ -363,13 +364,24 @@ BInfoWindow::Show()
 
 	AutoLock<BWindow> lock(this);
 
+	const BFont* font = be_plain_font;
+	float width = font->StringWidth("This is a really long string which we"
+		"will use to find the window width");
+
+	// window height depends on file type
+	int lines = 9;
+	if (fModel->IsExecutable())
+		lines++;
+	float height = font->Size() * (lines * 2 + 1);
+
+	ResizeTo(width, height);
+
 	BRect attrRect(Bounds());
 	fAttributeView = new AttributeView(attrRect, TargetModel());
 	AddChild(fAttributeView);
 
 	// position window appropriately based on index
-	BRect windRect(InfoWindowRect(TargetModel()->IsSymLink()
-		|| TargetModel()->IsFile()));
+	BRect windRect(InfoWindowRect());
 	if ((fIndex + 2) % 2 == 1) {
 		windRect.OffsetBy(320, 0);
 		fIndex--;
@@ -383,13 +395,12 @@ BInfoWindow::Show()
 		windRect.OffsetTo(50, 50);
 
 	MoveTo(windRect.LeftTop());
-	ResizeTo(windRect.Width(), windRect.Height());
 
 	// volume case is handled by view
 	if (!TargetModel()->IsVolume() && !TargetModel()->IsRoot()) {
 		if (TargetModel()->IsDirectory()) {
 			// if this is a folder then spawn thread to calculate size
-			SetSizeStr(B_TRANSLATE("calculating" B_UTF8_ELLIPSIS));
+			SetSizeString(B_TRANSLATE("calculating" B_UTF8_ELLIPSIS));
 			fCalcThreadID = spawn_thread(BInfoWindow::CalcSize, "CalcSize",
 				B_NORMAL_PRIORITY, this);
 			resume_thread(fCalcThreadID);
@@ -398,7 +409,7 @@ BInfoWindow::Show()
 
 			BString sizeStr;
 			GetSizeString(sizeStr, fAttributeView->LastSize(), 0);
-			SetSizeStr(sizeStr.String());
+			SetSizeString(sizeStr.String());
 		}
 	}
 
@@ -435,16 +446,9 @@ BInfoWindow::MessageReceived(BMessage* message)
 		{
 			BEntry entry(fModel->EntryRef());
 			if (!fModel->HasLocalizedName()
-				&& ConfirmChangeIfWellKnownDirectory(&entry,
-				B_TRANSLATE_COMMENT("rename",
-					"As in 'if you rename this folder...' (en) "
-					"'Wird dieser Ordner umbenannt...' (de)"),
-				B_TRANSLATE_COMMENT("rename",
-					"As in 'to rename this folder...' (en) "
-					"'Um diesen Ordner umzubenennen...' (de)"),
-				B_TRANSLATE_COMMENT("Rename",
-					"Button label, 'Rename' (en), 'Umbenennen' (de)")));
+				&& ConfirmChangeIfWellKnownDirectory(&entry, kRename)) {
 				fAttributeView->BeginEditingTitle();
+			}
 			break;
 		}
 
@@ -470,7 +474,7 @@ BInfoWindow::MessageReceived(BMessage* message)
 
 			// Start recalculating..
 			fStopCalc = false;
-			SetSizeStr(B_TRANSLATE("calculating" B_UTF8_ELLIPSIS));
+			SetSizeString(B_TRANSLATE("calculating" B_UTF8_ELLIPSIS));
 			fCalcThreadID = spawn_thread(BInfoWindow::CalcSize, "CalcSize",
 				B_NORMAL_PRIORITY, this);
 			resume_thread(fCalcThreadID);
@@ -487,8 +491,8 @@ BInfoWindow::MessageReceived(BMessage* message)
 			if (!fModel->IsSymLink())
 				break;
 			// supposed to fall through
-
 		// An item was selected from the file panel
+		// fall-through
 		case kNewTargetSelected:
 		{
 			// Extract the BEntry, and set its full path to the string value
@@ -575,7 +579,9 @@ BInfoWindow::MessageReceived(BMessage* message)
 				BVolumeRoster().GetBootVolume(&boot);
 				BVolume volume(fModel->NodeRef()->device);
 				if (volume != boot) {
-					dynamic_cast<TTracker*>(be_app)->SaveAllPoseLocations();
+					TTracker* tracker = dynamic_cast<TTracker*>(be_app);
+					if (tracker != NULL)
+						tracker->SaveAllPoseLocations();
 
 					BMessage unmountMessage(kUnmountVolume);
 					unmountMessage.AddInt32("device_id", volume.Device());
@@ -591,15 +597,15 @@ BInfoWindow::MessageReceived(BMessage* message)
 		case B_NODE_MONITOR:
 			switch (message->FindInt32("opcode")) {
 				case B_ENTRY_REMOVED:
-					{
-						node_ref itemNode;
-						message->FindInt32("device", &itemNode.device);
-						message->FindInt64("node", &itemNode.node);
-						// our window itself may be deleted
-						if (*TargetModel()->NodeRef() == itemNode)
-							Close();
-						break;
-					}
+				{
+					node_ref itemNode;
+					message->FindInt32("device", &itemNode.device);
+					message->FindInt64("node", &itemNode.node);
+					// our window itself may be deleted
+					if (*TargetModel()->NodeRef() == itemNode)
+						Close();
+					break;
+				}
 
 				case B_ENTRY_MOVED:
 				case B_STAT_CHANGED:
@@ -615,19 +621,16 @@ BInfoWindow::MessageReceived(BMessage* message)
 					break;
 
 				case B_DEVICE_UNMOUNTED:
-					{
-						// We were watching a volume that is no longer
-						// mounted, we might as well quit
-						node_ref itemNode;
-						// Only the device information is available
-						message->FindInt32("device", &itemNode.device);
-						if (TargetModel()->NodeRef()->device
-								== itemNode.device) {
-							Close();
-						}
-
-						break;
-					}
+				{
+					// We were watching a volume that is no longer
+					// mounted, we might as well quit
+					node_ref itemNode;
+					// Only the device information is available
+					message->FindInt32("device", &itemNode.device);
+					if (TargetModel()->NodeRef()->device == itemNode.device)
+						Close();
+					break;
+				}
 
 				default:
 					break;
@@ -635,28 +638,31 @@ BInfoWindow::MessageReceived(BMessage* message)
 			break;
 
 		case kPermissionsSelected:
+		{
+			BRect permissionsBounds(kBorderWidth + 1,
+						fAttributeView->Bounds().bottom,
+						fAttributeView->Bounds().right,
+						fAttributeView->Bounds().bottom + 103);
+
 			if (fPermissionsView == NULL) {
 				// Only true on first call.
-				fPermissionsView
-					= new FilePermissionsView(BRect(kBorderWidth + 1,
-					fAttributeView->Bounds().bottom,
-					fAttributeView->Bounds().right,
-					fAttributeView->Bounds().bottom+80), fModel);
-
-				ResizeBy(0, fPermissionsView->Bounds().Height());
+				fPermissionsView = new FilePermissionsView(
+					permissionsBounds, fModel);
+				ResizeBy(0, permissionsBounds.Height());
 				fAttributeView->AddChild(fPermissionsView);
 				fAttributeView->SetPermissionsSwitchState(kPaneSwitchOpen);
 			} else if (fPermissionsView->IsHidden()) {
 				fPermissionsView->ModelChanged(fModel);
 				fPermissionsView->Show();
-				ResizeBy(0, fPermissionsView->Bounds().Height());
+				ResizeBy(0, permissionsBounds.Height());
 				fAttributeView->SetPermissionsSwitchState(kPaneSwitchOpen);
 			} else {
 				fPermissionsView->Hide();
-				ResizeBy(0, -fPermissionsView->Bounds().Height());
+				ResizeBy(0, -permissionsBounds.Height());
 				fAttributeView->SetPermissionsSwitchState(kPaneSwitchClosed);
 			}
 			break;
+		}
 
 		default:
 			_inherited::MessageReceived(message);
@@ -666,46 +672,27 @@ BInfoWindow::MessageReceived(BMessage* message)
 
 
 void
-BInfoWindow::GetSizeString(BString &result, off_t size, int32 fileCount)
+BInfoWindow::GetSizeString(BString& result, off_t size, int32 fileCount)
 {
+	static BStringFormat sizeFormat(B_TRANSLATE(
+		"{0, plural, one{(# byte)} other{(# bytes)}}"));
+	static BStringFormat countFormat(B_TRANSLATE(
+		"{0, plural, one{for # file} other{for # files}}"));
+
 	char sizeBuffer[128];
 	result << string_for_size((double)size, sizeBuffer, sizeof(sizeBuffer));
 
-	// when we show the byte size, format it with a thousands delimiter
-	// TODO: use BCountry::FormatNumber
 	if (size >= kKBSize) {
-		char numStr[128];
-		snprintf(numStr, sizeof(numStr), "%Ld", size);
-		BString bytes;
+		result << " ";
 
-		uint32 length = strlen(numStr);
-		if (length >= 4) {
-			uint32 charsTillComma = length % 3;
-			if (charsTillComma == 0)
-				charsTillComma = 3;
-
-			uint32 numberIndex = 0;
-
-			while (numStr[numberIndex]) {
-				bytes += numStr[numberIndex++];
-				if (--charsTillComma == 0 && numStr[numberIndex]) {
-					bytes += ',';
-					charsTillComma = 3;
-				}
-			}
-		}
-
-		result << " " << B_TRANSLATE("(%bytes bytes)");
+		sizeFormat.Format(result, size);
 			// "bytes" translation could come from string_for_size
 			// which could be part of the localekit itself
-		result.ReplaceFirst("%bytes", bytes);
 	}
 
 	if (fileCount != 0) {
-		result << " " << B_TRANSLATE("for %num files");
-		BString countString;
-		countString << fileCount;
-		result.ReplaceFirst("%num", countString);
+		result << " ";
+		countFormat.Format(result, fileCount);
 	}
 }
 
@@ -725,7 +712,7 @@ BInfoWindow::CalcSize(void* castToWindow)
 		if (!lock)
 			return B_ERROR;
 
-		window->SetSizeStr(B_TRANSLATE("Error calculating folder size."));
+		window->SetSizeString(B_TRANSLATE("Error calculating folder size."));
 		return B_ERROR;
 	}
 
@@ -747,8 +734,7 @@ BInfoWindow::CalcSize(void* castToWindow)
 
 		// got the size value, update the size string
 		GetSizeString(sizeString, size, fileCount);
-	}
-	else {
+	} else {
 		// in the trash case, iterate through and sum up
 		// size/counts for all present trash dirs
 		off_t totalSize = 0, currentSize;
@@ -785,19 +771,19 @@ BInfoWindow::CalcSize(void* castToWindow)
 
 	AutoLock<BWindow> lock(window);
 	if (lock.IsLocked())
-		window->SetSizeStr(sizeString.String());
+		window->SetSizeString(sizeString.String());
 
 	return B_OK;
 }
 
 
 void
-BInfoWindow::SetSizeStr(const char* sizeStr)
+BInfoWindow::SetSizeString(const char* sizeString)
 {
 	AttributeView* view
-		= dynamic_cast<AttributeView *>(FindView("attr_view"));
-	if (view)
-		view->SetSizeStr(sizeStr);
+		= dynamic_cast<AttributeView*>(FindView("attr_view"));
+	if (view != NULL)
+		view->SetSizeString(sizeString);
 }
 
 
@@ -834,11 +820,12 @@ BInfoWindow::OpenFilePanel(const entry_ref* ref)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - AttributeView
 
 
 AttributeView::AttributeView(BRect rect, Model* model)
-	: BView(rect, "attr_view", B_FOLLOW_ALL_SIDES,
+	:
+	BView(rect, "attr_view", B_FOLLOW_ALL_SIDES,
 		B_WILL_DRAW | B_PULSE_NEEDED),
 	fDivider(0),
 	fPreferredAppMenu(NULL),
@@ -852,11 +839,13 @@ AttributeView::AttributeView(BRect rect, Model* model)
 	fTitleEditView(NULL),
 	fPathWindow(NULL),
 	fLinkWindow(NULL),
-	fDescWindow(NULL)
+	fDescWindow(NULL),
+	fCurrentLinkColorWhich(B_LINK_TEXT_COLOR),
+	fCurrentPathColorWhich(fCurrentLinkColorWhich)
 {
 	// Set view color to standard background grey
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	SetFont(be_plain_font);
 	// If the model is a symlink, then we deference the model to
 	// get the targets icon
 	if (fModel->IsSymLink()) {
@@ -880,7 +869,6 @@ AttributeView::AttributeView(BRect rect, Model* model)
 	BFont currentFont;
 	font_height fontMetrics;
 	GetFont(&currentFont);
-	currentFont.SetSize(kTitleFontHeight);
 	currentFont.GetHeight(&fontMetrics);
 
 	fTitleRect.left = fIconRect.right + 5;
@@ -897,13 +885,13 @@ AttributeView::AttributeView(BRect rect, Model* model)
 	fTitleRect.InsetBy(-1, -2);
 
 	fFreeBytes = -1;
-	fSizeStr = "";
+	fSizeString = "";
 	fSizeRect.Set(0, 0, 0, 0);
 
 	// Find offset for attributes, might be overiden below if there
 	// is a prefered handle menu displayed
-	currentFont.SetSize(kAttribFontHeight);
-	fDivider = currentFont.StringWidth(B_TRANSLATE("Modified:"))
+	currentFont.SetSize(currentFont.Size() - 2);
+	fDivider = currentFont.StringWidth(B_TRANSLATE("Description:"))
 		+ kBorderMargin + kBorderWidth + 1;
 	// Add a preferred handler pop-up menu if this item
 	// is a file...This goes in place of the Link To:
@@ -914,7 +902,6 @@ AttributeView::AttributeView(BRect rect, Model* model)
 
 		// But don't add the menu if the file is executable
 		if (!fModel->IsExecutable()) {
-			SetFontSize(kAttribFontHeight);
 			float lineHeight = CurrentFontHeight();
 
 			BRect preferredAppRect(kBorderWidth + kBorderMargin,
@@ -922,12 +909,13 @@ AttributeView::AttributeView(BRect rect, Model* model)
 				Bounds().Width() - 5, fTitleRect.bottom + (lineHeight * 8));
 			fPreferredAppMenu = new BMenuField(preferredAppRect, "", "",
 				new BPopUpMenu(""));
+			currentFont.SetSize(currentFont.Size() + 2);
 			fDivider = currentFont.StringWidth(B_TRANSLATE("Opens with:"))
 				+ 5;
 			fPreferredAppMenu->SetDivider(fDivider);
 			fDivider += (preferredAppRect.left - 2);
 			fPreferredAppMenu->SetFont(&currentFont);
-			fPreferredAppMenu->SetHighColor(kAttrTitleColor);
+			fPreferredAppMenu->SetHighUIColor(B_PANEL_TEXT_COLOR);
 			fPreferredAppMenu->SetLabel(B_TRANSLATE("Opens with:"));
 
 			char prefSignature[B_MIME_TYPE_LENGTH];
@@ -1002,7 +990,7 @@ AttributeView::~AttributeView()
 	if (fDescWindow->Lock())
 		fDescWindow->Quit();
 
-	if (fModel->IsSymLink() && fIconModel != fModel)
+	if (fIconModel != fModel)
 		delete fIconModel;
 }
 
@@ -1052,8 +1040,10 @@ AttributeView::InitStrings(const Model* model)
 		char linkToPath[B_PATH_NAME_LENGTH];
 		symLink.ReadLink(linkToPath, B_PATH_NAME_LENGTH);
 		fLinkToStr = linkToPath;
-		if (!linked)
-			fLinkToStr += " (broken)";	// link points to missing object
+		if (!linked) {
+			// link points to missing object
+			fLinkToStr += B_TRANSLATE(" (broken)");
+		}
 	} else if (model->IsExecutable()) {
 		if (((Model*)model)->GetLongVersionString(fDescStr,
 				B_APP_VERSION_KIND) == B_OK) {
@@ -1129,10 +1119,11 @@ AttributeView::ModelChanged(Model* model, BMessage* message)
 					&& itemNode.node == model->NodeRef()->node)) {
 				model->UpdateEntryRef(&dirNode, name);
 				BString title;
-				title << name << " info";
+				title << name << B_TRANSLATE(" info");
 				Window()->SetTitle(title.String());
 				WidgetAttributeText::AttrAsString(model, &fPathStr, kAttrPath,
 					B_STRING_TYPE, 0, this);
+				Invalidate();
 			}
 			break;
 		}
@@ -1149,8 +1140,8 @@ AttributeView::ModelChanged(Model* model, BMessage* message)
 				// don't change the size if it's a directory
 				if (!model->IsDirectory()) {
 					fLastSize = model->StatBuf()->st_size;
-					fSizeStr = "";
-					BInfoWindow::GetSizeString(fSizeStr, fLastSize, 0);
+					fSizeString = "";
+					BInfoWindow::GetSizeString(fSizeString, fLastSize, 0);
 				}
 				model->CloseNode();
 			}
@@ -1163,11 +1154,9 @@ AttributeView::ModelChanged(Model* model, BMessage* message)
 			if (message->FindString("attr", &attrName) == B_OK) {
 				if (strcmp(attrName, kAttrLargeIcon) == 0
 					|| strcmp(attrName, kAttrIcon) == 0) {
-
 					IconCache::sIconCache->IconChanged(model->ResolveIfLink());
 					Invalidate();
 				} else if (strcmp(attrName, kAttrMIMEType) == 0) {
-
 					if (model->OpenNode() == B_OK) {
 						model->AttrChanged(attrName);
 						InitStrings(model);
@@ -1238,7 +1227,7 @@ AttributeView::ReLinkTargetModel(Model* model)
 
 
 void
-AttributeView::MouseDown(BPoint point)
+AttributeView::MouseDown(BPoint where)
 {
 	BEntry entry;
 	fModel->GetEntry(&entry);
@@ -1247,46 +1236,37 @@ AttributeView::MouseDown(BPoint point)
 	fDoubleClick = false;
 
 	// Start tracking the mouse if we are in any of the hotspots
-	if (fLinkRect.Contains(point)) {
+	if (fLinkRect.Contains(where)) {
 		InvertRect(fLinkRect);
 		fTrackingState = link_track;
-	} else if (fPathRect.Contains(point)) {
+	} else if (fPathRect.Contains(where)) {
 		InvertRect(fPathRect);
 		fTrackingState = path_track;
-	} else if (fTitleRect.Contains(point)) {
+	} else if (fTitleRect.Contains(where)) {
 		if (!fModel->HasLocalizedName()
-			&& ConfirmChangeIfWellKnownDirectory(&entry,
-				B_TRANSLATE_COMMENT("rename",
-					"As in 'if you rename this folder...' (en) "
-					"'Wird dieser Ordner umbenannt...' (de)"),
-				B_TRANSLATE_COMMENT("rename",
-					"As in 'to rename this folder...' (en) "
-					"'Um diesen Ordner umzubenennen...' (de)"),
-				B_TRANSLATE_COMMENT("Rename",
-					"Button label, 'Rename' (en), 'Umbenennen' (de)"), true)
-			&& fTitleEditView == 0);
+			&& ConfirmChangeIfWellKnownDirectory(&entry, kRename, true)) {
 			BeginEditingTitle();
+		}
 	} else if (fTitleEditView) {
 		FinishEditingTitle(true);
-	} else if (fSizeRect.Contains(point)) {
+	} else if (fSizeRect.Contains(where)) {
 		if (fModel->IsDirectory() && !fModel->IsVolume()
 			&& !fModel->IsRoot()) {
 			InvertRect(fSizeRect);
 			fTrackingState = size_track;
 		} else
 			fTrackingState = no_track;
-	} else if (fIconRect.Contains(point)) {
+	} else if (fIconRect.Contains(where)) {
 		uint32 buttons;
 		Window()->CurrentMessage()->FindInt32("buttons", (int32*)&buttons);
-		if (((modifiers() & B_CONTROL_KEY) != 0)
-			|| (buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+		if (SecondaryMouseButtonDown(modifiers(), buttons)) {
 			// Show contextual menu
 			BPopUpMenu* contextMenu
 				= new BPopUpMenu("FileContext", false, false);
 			if (contextMenu) {
 				BuildContextMenu(contextMenu);
 				contextMenu->SetAsyncAutoDestruct(true);
-				contextMenu->Go(ConvertToScreen(point), true, true,
+				contextMenu->Go(ConvertToScreen(where), true, true,
 					ConvertToScreen(fIconRect));
 			}
 		} else {
@@ -1294,8 +1274,8 @@ AttributeView::MouseDown(BPoint point)
 			// versus just in the container rect. The icons are always
 			// the large version
 			BPoint offsetPoint;
-			offsetPoint.x = point.x - fIconRect.left;
-			offsetPoint.y = point.y - fIconRect.top;
+			offsetPoint.x = where.x - fIconRect.left;
+			offsetPoint.y = where.y - fIconRect.top;
 			if (IconCache::sIconCache->IconHitTest(offsetPoint, fIconModel,
 					kNormalIcon, B_LARGE_ICON)) {
 				// Can't drag the trash anywhere..
@@ -1303,8 +1283,8 @@ AttributeView::MouseDown(BPoint point)
 					? open_only_track : icon_track;
 
 				// Check for possible double click
-				if (abs((int32)(fClickPoint.x - point.x)) < kDragSlop
-					&& abs((int32)(fClickPoint.y - point.y)) < kDragSlop) {
+				if (abs((int32)(fClickPoint.x - where.x)) < kDragSlop
+					&& abs((int32)(fClickPoint.y - where.y)) < kDragSlop) {
 					int32 clickCount;
 					Window()->CurrentMessage()->FindInt32("clicks",
 						&clickCount);
@@ -1321,21 +1301,22 @@ AttributeView::MouseDown(BPoint point)
 			}
 		}
 	}
-	fClickPoint = point;
+
+	fClickPoint = where;
 	fMouseDown = true;
 	SetMouseEventMask(B_POINTER_EVENTS, B_NO_POINTER_HISTORY);
 }
 
 
 void
-AttributeView::MouseMoved(BPoint point, uint32, const BMessage* message)
+AttributeView::MouseMoved(BPoint where, uint32, const BMessage* dragMessage)
 {
-	// Highlight Drag target
-	if (message	&& message->ReturnAddress() != BMessenger(this)
-		&& message->what == B_SIMPLE_DATA
-		&& BPoseView::CanHandleDragSelection(fModel, message,
+	if (dragMessage != NULL && dragMessage->ReturnAddress() != BMessenger(this)
+		&& dragMessage->what == B_SIMPLE_DATA
+		&& BPoseView::CanHandleDragSelection(fModel, dragMessage,
 			(modifiers() & B_CONTROL_KEY) != 0)) {
-		bool overTarget = fIconRect.Contains(point);
+		// highlight drag target
+		bool overTarget = fIconRect.Contains(where);
 		SetDrawingMode(B_OP_OVER);
 		if (overTarget != fIsDropTarget) {
 			IconCache::sIconCache->Draw(fIconModel, this, fIconRect.LeftTop(),
@@ -1344,23 +1325,26 @@ AttributeView::MouseMoved(BPoint point, uint32, const BMessage* message)
 		}
 	}
 
+	fCurrentLinkColorWhich = B_LINK_TEXT_COLOR;
+	fCurrentPathColorWhich = fCurrentLinkColorWhich;
+
 	switch (fTrackingState) {
 		case link_track:
-			if (fLinkRect.Contains(point) != fMouseDown) {
+			if (fLinkRect.Contains(where) != fMouseDown) {
 				fMouseDown = !fMouseDown;
 				InvertRect(fLinkRect);
 			}
 			break;
 
 		case path_track:
-			if (fPathRect.Contains(point) != fMouseDown) {
+			if (fPathRect.Contains(where) != fMouseDown) {
 				fMouseDown = !fMouseDown;
 				InvertRect(fPathRect);
 			}
 			break;
 
 		case size_track:
-			if (fSizeRect.Contains(point) != fMouseDown) {
+			if (fSizeRect.Contains(where) != fMouseDown) {
 				fMouseDown = !fMouseDown;
 				InvertRect(fSizeRect);
 			}
@@ -1368,14 +1352,13 @@ AttributeView::MouseMoved(BPoint point, uint32, const BMessage* message)
 
 		case icon_track:
 			if (fMouseDown && !fDragging
-				&& (abs((int32)(point.x - fClickPoint.x)) > kDragSlop
-					|| abs((int32)(point.y - fClickPoint.y)) > kDragSlop)) {
+				&& (abs((int32)(where.x - fClickPoint.x)) > kDragSlop
+					|| abs((int32)(where.y - fClickPoint.y)) > kDragSlop)) {
 				// Find the required height
 				BFont font;
 				GetFont(&font);
-				font.SetSize(kAttribFontHeight);
 
-				float height = CurrentFontHeight(kAttribFontHeight)
+				float height = CurrentFontHeight()
 					+ fIconRect.Height() + 8;
 				BRect rect(0, 0, min_c(fIconRect.Width()
 						+ font.StringWidth(fModel->Name()) + 4,
@@ -1395,8 +1378,10 @@ AttributeView::MouseMoved(BPoint point, uint32, const BMessage* message)
 				view->SetHighColor(0, 0, 0, 0);
 				view->FillRect(view->Bounds());
 				view->SetDrawingMode(B_OP_ALPHA);
-				view->SetHighColor(0, 0, 0, 128);
-					// set the level of transparency by  value
+				rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
+				textColor.alpha = 128;
+					// set transparency by value
+				view->SetHighColor(textColor);
 				view->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_COMPOSITE);
 
 				// Draw the icon
@@ -1423,19 +1408,19 @@ AttributeView::MouseMoved(BPoint point, uint32, const BMessage* message)
 				view->Sync();
 				dragBitmap->Unlock();
 
-				BMessage message(B_REFS_RECEIVED);
-				message.AddPoint("click_pt", fClickPoint);
+				BMessage dragMessage(B_REFS_RECEIVED);
+				dragMessage.AddPoint("click_pt", fClickPoint);
 				BPoint tmpLoc;
 				uint32 button;
 				GetMouse(&tmpLoc, &button);
 				if (button)
-					message.AddInt32("buttons", (int32)button);
+					dragMessage.AddInt32("buttons", (int32)button);
 
-				message.AddInt32("be:actions",
+				dragMessage.AddInt32("be:actions",
 					(modifiers() & B_OPTION_KEY) != 0
 						? B_COPY_TARGET : B_MOVE_TARGET);
-				message.AddRef("refs", fModel->EntryRef());
-				DragMessage(&message, dragBitmap, B_OP_ALPHA,
+				dragMessage.AddRef("refs", fModel->EntryRef());
+				DragMessage(&dragMessage, dragBitmap, B_OP_ALPHA,
 					BPoint((fClickPoint.x - fIconRect.left)
 					+ hIconOffset, fClickPoint.y - fIconRect.top), this);
 				fDragging = true;
@@ -1463,37 +1448,45 @@ AttributeView::MouseMoved(BPoint point, uint32, const BMessage* message)
 				BScreen screen(Window());
 				BFont font;
 				GetFont(&font);
-				font.SetSize(kAttribFontHeight);
 				float maxWidth = (Bounds().Width()
 					- (fDivider + kBorderMargin));
 
-				if (fPathRect.Contains(point)
-					&& font.StringWidth(fPathStr.String()) > maxWidth) {
-					fTrackingState = no_track;
-					BRect rect(fPathRect);
-					rect.OffsetBy(Window()->Frame().left,
-						Window()->Frame().top);
+				if (fPathRect.Contains(point)) {
+					if (fCurrentPathColorWhich != B_LINK_HOVER_COLOR)
+						fCurrentPathColorWhich = B_LINK_HOVER_COLOR;
 
-					if (!fPathWindow
-						|| BMessenger(fPathWindow).IsValid() == false) {
-						fPathWindow = OpenToolTipWindow(screen, rect,
-							"fPathWindow", fPathStr.String(),
-							BMessenger(this),
-							new BMessage(kOpenLinkSource));
+					if (font.StringWidth(fPathStr.String()) > maxWidth) {
+						fTrackingState = no_track;
+						BRect rect(fPathRect);
+						rect.OffsetBy(Window()->Frame().left,
+							Window()->Frame().top);
+
+						if (fPathWindow == NULL
+							|| BMessenger(fPathWindow).IsValid() == false) {
+							fPathWindow = OpenToolTipWindow(screen, rect,
+								"fPathWindow", fPathStr.String(),
+								BMessenger(this),
+								new BMessage(kOpenLinkSource));
+						}
 					}
-				} else if (fLinkRect.Contains(point)
-					&& font.StringWidth(fLinkToStr.String()) > maxWidth) {
-					fTrackingState = no_track;
-					BRect rect(fLinkRect);
-					rect.OffsetBy(Window()->Frame().left,
-						Window()->Frame().top);
+				} else if (fLinkRect.Contains(point)) {
 
-					if (!fLinkWindow
-						|| BMessenger(fLinkWindow).IsValid() == false) {
-						fLinkWindow = OpenToolTipWindow(screen, rect,
-							"fLinkWindow", fLinkToStr.String(),
-							BMessenger(this),
-							new BMessage(kOpenLinkTarget));
+					if (fCurrentLinkColorWhich != B_LINK_HOVER_COLOR)
+						fCurrentLinkColorWhich = B_LINK_HOVER_COLOR;
+
+					if (font.StringWidth(fLinkToStr.String()) > maxWidth) {
+						fTrackingState = no_track;
+						BRect rect(fLinkRect);
+						rect.OffsetBy(Window()->Frame().left,
+							Window()->Frame().top);
+
+						if (!fLinkWindow
+							|| BMessenger(fLinkWindow).IsValid() == false) {
+							fLinkWindow = OpenToolTipWindow(screen, rect,
+								"fLinkWindow", fLinkToStr.String(),
+								BMessenger(this),
+								new BMessage(kOpenLinkTarget));
+						}
 					}
 				} else if (fDescRect.Contains(point)
 					&& font.StringWidth(fDescStr.String()) > maxWidth) {
@@ -1513,6 +1506,9 @@ AttributeView::MouseMoved(BPoint point, uint32, const BMessage* message)
 			break;
 		}
 	}
+
+	DelayedInvalidate(16666, fPathRect);
+	DelayedInvalidate(16666, fLinkRect);
 }
 
 
@@ -1540,7 +1536,7 @@ AttributeView::OpenLinkTarget()
 	if (entry.InitCheck() != B_OK || !entry.Exists()) {
 		// Open a file dialog panel to allow the user to relink.
 		BInfoWindow* window = dynamic_cast<BInfoWindow*>(Window());
-		if (window)
+		if (window != NULL)
 			window->OpenFilePanel(fModel->EntryRef());
 	} else {
 		entry_ref ref;
@@ -1553,18 +1549,18 @@ AttributeView::OpenLinkTarget()
 
 
 void
-AttributeView::MouseUp(BPoint point)
+AttributeView::MouseUp(BPoint where)
 {
 	// Are we in the link rect?
-	if (fTrackingState == link_track && fLinkRect.Contains(point)) {
+	if (fTrackingState == link_track && fLinkRect.Contains(where)) {
 		InvertRect(fLinkRect);
 		OpenLinkTarget();
-	} else if (fTrackingState == path_track && fPathRect.Contains(point)) {
+	} else if (fTrackingState == path_track && fPathRect.Contains(where)) {
 		InvertRect(fPathRect);
 		OpenLinkSource();
 	} else if ((fTrackingState == icon_track
 			|| fTrackingState == open_only_track)
-		&& fIconRect.Contains(point)) {
+		&& fIconRect.Contains(where)) {
 		// If it was a double click, then tell Tracker to open the item
 		// The CurrentMessage() here does* not* have a "clicks" field,
 		// which is why we are tracking the clicks with this temp var
@@ -1579,7 +1575,7 @@ AttributeView::MouseUp(BPoint point)
 			be_app->PostMessage(&message);
 			fDoubleClick = false;
 		}
-	} else if (fTrackingState == size_track && fSizeRect.Contains(point)) {
+	} else if (fTrackingState == size_track && fSizeRect.Contains(where)) {
 		// Recalculate size
 		Window()->PostMessage(kRecalculateSize);
 	}
@@ -1618,15 +1614,15 @@ AttributeView::CheckAndSetSize()
 
 		fFreeBytes = freeBytes;
 
-		fSizeStr.SetTo(B_TRANSLATE("%capacity (%used used -- %free free)"));
+		fSizeString.SetTo(B_TRANSLATE("%capacity (%used used -- %free free)"));
 
 		char sizeStr[128];
 		string_for_size(capacity, sizeStr, sizeof(sizeStr));
-		fSizeStr.ReplaceFirst("%capacity", sizeStr);
+		fSizeString.ReplaceFirst("%capacity", sizeStr);
 		string_for_size(capacity - fFreeBytes, sizeStr, sizeof(sizeStr));
-		fSizeStr.ReplaceFirst("%used", sizeStr);
+		fSizeString.ReplaceFirst("%used", sizeStr);
 		string_for_size(fFreeBytes, sizeStr, sizeof(sizeStr));
-		fSizeStr.ReplaceFirst("%free", sizeStr);
+		fSizeString.ReplaceFirst("%free", sizeStr);
 
 	} else if (fModel->IsFile()) {
 		// poll for size changes because they do not get node monitored
@@ -1643,8 +1639,8 @@ AttributeView::CheckAndSetSize()
 			return;
 
 		fLastSize = statBuf.st_size;
-		fSizeStr = "";
-		BInfoWindow::GetSizeString(fSizeStr, fLastSize, 0);
+		fSizeString = "";
+		BInfoWindow::GetSizeString(fSizeString, fLastSize, 0);
 	} else
 		return;
 
@@ -1696,12 +1692,13 @@ AttributeView::MessageReceived(BMessage* message)
 
 		default:
 			_inherited::MessageReceived(message);
+			break;
 	}
 }
 
 
 void
-AttributeView::Draw(BRect updateRect)
+AttributeView::Draw(BRect)
 {
 	// Set the low color for anti-aliasing
 	SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
@@ -1710,10 +1707,13 @@ AttributeView::Draw(BRect updateRect)
 	SetHighColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 	FillRect(Bounds());
 
+	rgb_color labelColor = ui_color(B_PANEL_TEXT_COLOR);
+	rgb_color attributeColor = mix_color(HighColor(), labelColor, 192);
+
 	// Draw the dark grey area on the left
 	BRect drawBounds(Bounds());
 	drawBounds.right = kBorderWidth;
-	SetHighColor(kDarkBorderColor);
+	SetHighUIColor(B_PANEL_BACKGROUND_COLOR, B_DARKEN_2_TINT);
 	FillRect(drawBounds);
 
 	// Draw the icon, straddling the border
@@ -1729,12 +1729,12 @@ AttributeView::Draw(BRect updateRect)
 	// Draw the main title if the user is not currently editing it
 	if (fTitleEditView == NULL) {
 		SetFont(be_bold_font);
-		SetFontSize(kTitleFontHeight);
+		SetFontSize(be_bold_font->Size());
 		GetFont(&currentFont);
 		currentFont.GetHeight(&fontMetrics);
 		lineHeight = CurrentFontHeight() + 5;
 		lineBase = fTitleRect.bottom - fontMetrics.descent;
-		SetHighColor(kAttrValueColor);
+		SetHighColor(labelColor);
 		MovePenTo(BPoint(fIconRect.right + 6, lineBase));
 
 		// Recalculate the rect width
@@ -1753,7 +1753,6 @@ AttributeView::Draw(BRect updateRect)
 
 	// Draw the attribute font stuff
 	SetFont(be_plain_font);
-	SetFontSize(kAttribFontHeight);
 	GetFontHeight(&fontMetrics);
 	lineHeight = CurrentFontHeight() + 5;
 
@@ -1761,7 +1760,7 @@ AttributeView::Draw(BRect updateRect)
 	lineBase = fTitleRect.bottom + lineHeight;
 
 	// Capacity/size
-	SetHighColor(kAttrTitleColor);
+	SetHighColor(labelColor);
 	if (fModel->IsVolume() || fModel->IsRoot()) {
 		MovePenTo(BPoint(fDivider - (StringWidth(B_TRANSLATE("Capacity:"))),
 			lineBase));
@@ -1776,50 +1775,49 @@ AttributeView::Draw(BRect updateRect)
 	}
 
 	MovePenTo(BPoint(fDivider + kDrawMargin, lineBase));
-	SetHighColor(kAttrValueColor);
+	SetHighColor(attributeColor);
 	// Check for possible need of truncation
-	if (StringWidth(fSizeStr.String())
+	if (StringWidth(fSizeString.String())
 			> (Bounds().Width() - (fDivider + kBorderMargin))) {
-		BString tmpString(fSizeStr.String());
+		BString tmpString(fSizeString.String());
 		TruncateString(&tmpString, B_TRUNCATE_MIDDLE,
 			Bounds().Width() - (fDivider + kBorderMargin));
 		DrawString(tmpString.String());
 		fSizeRect.right = fSizeRect.left + StringWidth(tmpString.String())
 			+ 3;
 	} else {
-		DrawString(fSizeStr.String());
-		fSizeRect.right = fSizeRect.left + StringWidth(fSizeStr.String()) + 3;
+		DrawString(fSizeString.String());
+		fSizeRect.right = fSizeRect.left + StringWidth(fSizeString.String()) + 3;
 	}
 	lineBase += lineHeight;
 
 	// Created
-	SetHighColor(kAttrTitleColor);
+	SetHighColor(labelColor);
 	MovePenTo(BPoint(fDivider - (StringWidth(B_TRANSLATE("Created:"))),
 		lineBase));
-	SetHighColor(kAttrTitleColor);
 	DrawString(B_TRANSLATE("Created:"));
 	MovePenTo(BPoint(fDivider + kDrawMargin, lineBase));
-	SetHighColor(kAttrValueColor);
+	SetHighColor(attributeColor);
 	DrawString(fCreatedStr.String());
 	lineBase += lineHeight;
 
 	// Modified
 	MovePenTo(BPoint(fDivider - (StringWidth(B_TRANSLATE("Modified:"))),
 		lineBase));
-	SetHighColor(kAttrTitleColor);
+	SetHighColor(labelColor);
 	DrawString(B_TRANSLATE("Modified:"));
 	MovePenTo(BPoint(fDivider + kDrawMargin, lineBase));
-	SetHighColor(kAttrValueColor);
+	SetHighColor(attributeColor);
 	DrawString(fModifiedStr.String());
 	lineBase += lineHeight;
 
 	// Kind
 	MovePenTo(BPoint(fDivider - (StringWidth(B_TRANSLATE("Kind:"))),
 		lineBase));
-	SetHighColor(kAttrTitleColor);
+	SetHighColor(labelColor);
 	DrawString(B_TRANSLATE("Kind:"));
 	MovePenTo(BPoint(fDivider + kDrawMargin, lineBase));
-	SetHighColor(kAttrValueColor);
+	SetHighColor(attributeColor);
 	DrawString(fKindStr.String());
 	lineBase += lineHeight;
 
@@ -1829,11 +1827,11 @@ AttributeView::Draw(BRect updateRect)
 	// Path
 	MovePenTo(BPoint(fDivider - (StringWidth(B_TRANSLATE("Location:"))),
 		lineBase));
-	SetHighColor(kAttrTitleColor);
+	SetHighColor(labelColor);
 	DrawString(B_TRANSLATE("Location:"));
 
 	MovePenTo(BPoint(fDivider + kDrawMargin, lineBase));
-	SetHighColor(kLinkColor);
+	SetHighUIColor(fCurrentPathColorWhich);
 
 	// Check for truncation
 	if (StringWidth(fPathStr.String()) > (Bounds().Width()
@@ -1857,10 +1855,10 @@ AttributeView::Draw(BRect updateRect)
 	if (fModel->IsSymLink()) {
 		MovePenTo(BPoint(fDivider - (StringWidth(B_TRANSLATE("Link to:"))),
 			lineBase));
-		SetHighColor(kAttrTitleColor);
+		SetHighColor(labelColor);
 		DrawString(B_TRANSLATE("Link to:"));
 		MovePenTo(BPoint(fDivider + kDrawMargin, lineBase));
-		SetHighColor(kLinkColor);
+		SetHighUIColor(fCurrentLinkColorWhich);
 
 		// Check for truncation
 		if (StringWidth(fLinkToStr.String()) > (Bounds().Width()
@@ -1885,10 +1883,10 @@ AttributeView::Draw(BRect updateRect)
 		//Version
 		MovePenTo(BPoint(fDivider - (StringWidth(B_TRANSLATE("Version:"))),
 			lineBase));
-		SetHighColor(kAttrTitleColor);
+		SetHighColor(labelColor);
 		DrawString(B_TRANSLATE("Version:"));
 		MovePenTo(BPoint(fDivider + kDrawMargin, lineBase));
-		SetHighColor(kAttrValueColor);
+		SetHighColor(attributeColor);
 		BString nameString;
 		if (fModel->GetVersionString(nameString, B_APP_VERSION_KIND) == B_OK)
 			DrawString(nameString.String());
@@ -1899,10 +1897,10 @@ AttributeView::Draw(BRect updateRect)
 		// Description
 		MovePenTo(BPoint(fDivider - (StringWidth(B_TRANSLATE("Description:"))),
 			lineBase));
-		SetHighColor(kAttrTitleColor);
+		SetHighColor(labelColor);
 		DrawString(B_TRANSLATE("Description:"));
 		MovePenTo(BPoint(fDivider + kDrawMargin, lineBase));
-		SetHighColor(kAttrValueColor);
+		SetHighColor(attributeColor);
 		// Check for truncation
 		if (StringWidth(fDescStr.String()) > (Bounds().Width()
 				- (fDivider + kBorderMargin))) {
@@ -1931,9 +1929,8 @@ AttributeView::BeginEditingTitle()
 	if (fTitleEditView != NULL)
 		return;
 
-	BFont font;
-	GetFont(&font);
-	font.SetSize(kTitleFontHeight);
+	BFont font(be_plain_font);
+	font.SetSize(font.Size() + 2);
 	BRect textFrame(fTitleRect);
 	textFrame.right = Bounds().Width() - 5;
 	BRect textRect(textFrame);
@@ -2003,9 +2000,8 @@ AttributeView::FinishEditingTitle(bool commit)
 					entry.Rename(text);
 
 				// Adjust the size of the text rect
-				BFont currentFont;
-				GetFont(&currentFont);
-				currentFont.SetSize(kTitleFontHeight);
+				BFont currentFont(be_plain_font);
+				currentFont.SetSize(currentFont.Size() + 2);
 				fTitleRect.right = min_c(fTitleRect.left
 						+ currentFont.StringWidth(fTitleEditView->Text()),
 					Bounds().Width() - 5);
@@ -2033,46 +2029,44 @@ AttributeView::FinishEditingTitle(bool commit)
 
 
 void
-AttributeView::MakeFocus(bool isFocus)
+AttributeView::MakeFocus(bool focus)
 {
-	if (!isFocus && fTitleEditView != NULL)
+	if (!focus && fTitleEditView != NULL)
 		FinishEditingTitle(true);
 }
 
 
 void
-AttributeView::WindowActivated(bool isFocus)
+AttributeView::WindowActivated(bool active)
 {
-	if (!isFocus) {
-		if (fTitleEditView != NULL)
-			FinishEditingTitle(true);
+	if (active)
+		return;
 
-		if (fPathWindow->Lock()) {
-			fPathWindow->Quit();
-			fPathWindow = NULL;
-		}
+	if (fTitleEditView != NULL)
+		FinishEditingTitle(true);
 
-		if (fLinkWindow->Lock()) {
-			fLinkWindow->Quit();
-			fLinkWindow = NULL;
-		}
+	if (fPathWindow->Lock()) {
+		fPathWindow->Quit();
+		fPathWindow = NULL;
+	}
 
-		if (fDescWindow->Lock()) {
-			fDescWindow->Quit();
-			fDescWindow = NULL;
-		}
+	if (fLinkWindow->Lock()) {
+		fLinkWindow->Quit();
+		fLinkWindow = NULL;
+	}
+
+	if (fDescWindow->Lock()) {
+		fDescWindow->Quit();
+		fDescWindow = NULL;
 	}
 }
 
 
 float
-AttributeView::CurrentFontHeight(float size)
+AttributeView::CurrentFontHeight()
 {
 	BFont font;
 	GetFont(&font);
-	if (size > -1)
-		font.SetSize(size);
-
 	font_height fontHeight;
 	font.GetHeight(&fontHeight);
 
@@ -2083,6 +2077,9 @@ AttributeView::CurrentFontHeight(float size)
 status_t
 AttributeView::BuildContextMenu(BMenu* parent)
 {
+	if (parent == NULL)
+		return B_BAD_VALUE;
+
 	// Add navigation menu if this is not a symlink
 	// Symlink's to directories are OK however!
 	BEntry entry(fModel->EntryRef());
@@ -2108,7 +2105,9 @@ AttributeView::BuildContextMenu(BMenu* parent)
 		// setup a navigation menu item which will dynamically load items
 		// as menu items are traversed
 		BNavMenu* navMenu = dynamic_cast<BNavMenu*>(navigationItem->Submenu());
-		navMenu->SetNavDir(&ref);
+		if (navMenu != NULL)
+			navMenu->SetNavDir(&ref);
+
 		navigationItem->SetLabel(model.Name());
 		navigationItem->SetEntry(&entry);
 
@@ -2129,7 +2128,7 @@ AttributeView::BuildContextMenu(BMenu* parent)
 		parent->AddItem(new BMenuItem(B_TRANSLATE("Edit name"),
 			new BMessage(kEditItem), 'E'));
 		parent->AddSeparatorItem();
-	
+
 		if (fModel->IsVolume()) {
 			BMenuItem* item = new BMenuItem(B_TRANSLATE("Unmount"),
 				new BMessage(kUnmountVolume), 'U');
@@ -2232,12 +2231,12 @@ AttributeView::SetLastSize(off_t lastSize)
 
 
 void
-AttributeView::SetSizeStr(const char* sizeStr)
+AttributeView::SetSizeString(const char* sizeString)
 {
-	fSizeStr = sizeStr;
+	fSizeString = sizeString;
 
 	BRect bounds(Bounds());
-	float lineHeight = CurrentFontHeight(kAttribFontHeight) + 6;
+	float lineHeight = CurrentFontHeight() + 6;
 	bounds.Set(fDivider, fIconRect.bottom, bounds.right,
 		fIconRect.bottom + lineHeight);
 	Invalidate(bounds);
@@ -2253,7 +2252,7 @@ TrackingView::TrackingView(BRect frame, const char* str, BMessage* message)
 	fMouseDown(false),
 	fMouseInView(false)
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 	SetEventMask(B_POINTER_EVENTS, 0);
 }
 
@@ -2276,7 +2275,7 @@ TrackingView::MouseMoved(BPoint, uint32 transit, const BMessage*)
 		InvertRect(Bounds());
 
 	fMouseInView = (transit == B_ENTERED_VIEW || transit == B_INSIDE_VIEW);
-
+	DelayedInvalidate(16666, Bounds());
 	if (!fMouseInView && !fMouseDown)
 		Window()->Close();
 }
@@ -2299,9 +2298,10 @@ void
 TrackingView::Draw(BRect)
 {
 	if (Message() != NULL)
-		SetHighColor(kLinkColor);
+		SetHighUIColor(fMouseInView ? B_LINK_HOVER_COLOR
+			: B_LINK_TEXT_COLOR);
 	else
-		SetHighColor(kAttrValueColor);
+		SetHighUIColor(B_PANEL_TEXT_COLOR);
 	SetLowColor(ViewColor());
 
 	font_height fontHeight;

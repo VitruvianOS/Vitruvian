@@ -12,7 +12,7 @@
 
 class BUrlSynchronousRequest : public BUrlRequest, public BUrlProtocolListener {
 public:
-								BUrlSynchronousRequest(BUrl& url);
+								BUrlSynchronousRequest(BUrlRequest& asynchronousRequest);
 	virtual						~BUrlSynchronousRequest() { };
 								
 	// Synchronous wait
@@ -20,23 +20,26 @@ public:
 	virtual	status_t			WaitUntilCompletion();
 
 	// Protocol hooks
-	virtual	void				ConnectionOpened(BUrlProtocol* caller);
-	virtual void				HostnameResolved(BUrlProtocol* caller,
+	virtual	void				ConnectionOpened(BUrlRequest* caller);
+	virtual void				HostnameResolved(BUrlRequest* caller,
 									const char* ip);
-	virtual void				ResponseStarted(BUrlProtocol* caller);
-	virtual void				HeadersReceived(BUrlProtocol* caller);
-	virtual void				DataReceived(BUrlProtocol* caller,
-									const char* data, ssize_t size);
-	virtual	void				DownloadProgress(BUrlProtocol* caller,
+	virtual void				ResponseStarted(BUrlRequest* caller);
+	virtual void				HeadersReceived(BUrlRequest* caller,
+									const BUrlResult& result);
+	virtual void				DataReceived(BUrlRequest* caller,
+									const char* data, off_t position,
+									ssize_t size);
+	virtual	void				DownloadProgress(BUrlRequest* caller,
 									ssize_t bytesReceived, ssize_t bytesTotal);
-	virtual void				UploadProgress(BUrlProtocol* caller,
+	virtual void				UploadProgress(BUrlRequest* caller,
 									ssize_t bytesSent, ssize_t bytesTotal);
-	virtual void				RequestCompleted(BUrlProtocol* caller, 
+	virtual void				RequestCompleted(BUrlRequest* caller,
 									bool success);
 									
 									
 protected:
 			bool				fRequestComplete;
+			BUrlRequest&		fWrappedRequest;
 };
 
 

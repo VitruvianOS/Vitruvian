@@ -31,7 +31,7 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef	_DESK_WINDOW_H
+#ifndef _DESK_WINDOW_H
 #define _DESK_WINDOW_H
 
 
@@ -51,49 +51,44 @@ public:
 	BDeskWindow(LockingList<BWindow>* windowList);
 	virtual ~BDeskWindow();
 
-	virtual	void Init(const BMessage* message = NULL);
+	virtual void Init(const BMessage* message = NULL);
 
-	virtual	void Show();
-	virtual	void Quit();
-	virtual	void ScreenChanged(BRect, color_space);
+	virtual void Show();
+	virtual void Quit();
+	virtual void ScreenChanged(BRect, color_space);
 
-	virtual	void CreatePoseView(Model*);
+	virtual void CreatePoseView(Model*);
 
-	virtual	bool ShouldAddMenus() const;
-	virtual	bool ShouldAddScrollBars() const;
-	virtual	bool ShouldAddContainerView() const;
+	virtual bool ShouldAddMenus() const;
+	virtual bool ShouldAddScrollBars() const;
+	virtual bool ShouldAddContainerView() const;
 
 	DesktopPoseView* PoseView() const;
 
 	void UpdateDesktopBackgroundImages();
 		// Desktop window has special background image handling
-		
+
 	void SaveDesktopPoseLocations();
-	
+
 protected:
-	virtual	void AddWindowContextMenus(BMenu*);
-	virtual BPoseView* NewPoseView(Model*, BRect, uint32);
+	virtual void AddWindowContextMenus(BMenu*);
+	virtual BPoseView* NewPoseView(Model*, uint32);
 
 	virtual void WorkspaceActivated(int32, bool);
-	virtual	void MenusBeginning();
 	virtual void MessageReceived(BMessage*);
 
 private:
+	void InitAddonsList(bool);
+	void ApplyShortcutPreferences(bool);
+
 	BShelf* fDeskShelf;
 		// shelf for replicant support
-	BPopUpMenu* fTrashContextMenu;
 
 	BRect fOldFrame;
-	
-	// in the desktop window addon shortcuts have to be added by AddShortcut
-	// and we don't always get the MenusBeginning call to check for new
-	// addons/update the shortcuts -- instead we need to node monitor the
-	// addon directory and keep a dirty flag that triggers shortcut
-	// reinstallation
-	bool fShouldUpdateAddonShortcuts;
-	std::set<uint32> fCurrentAddonShortcuts;
-		// keeps track of which shortcuts are installed for Tracker addons
-	
+
+	node_ref* fNodeRef;
+	char* fShortcutsSettings;
+
 	typedef BContainerWindow _inherited;
 };
 
@@ -108,4 +103,5 @@ BDeskWindow::PoseView() const
 
 using namespace BPrivate;
 
-#endif
+
+#endif	// _DESK_WINDOW_H

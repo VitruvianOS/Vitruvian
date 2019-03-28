@@ -1,9 +1,10 @@
 /*
- * Copyright 2010, Haiku.
+ * Copyright 2010-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Clemens Zeidler <haiku@clemens-zeidler.de>
+ *		John Scipione, jscipione@gmail.com
+ *		Clemens Zeidler, haiku@clemens-zeidler.de
  */
 #ifndef STACK_AND_TILE_H
 #define STACK_AND_TILE_H
@@ -67,7 +68,7 @@ public:
 
 	virtual void				WindowMoved(Window* window);
 	virtual void				WindowResized(Window* window);
-	virtual void				WindowActitvated(Window* window);
+	virtual void				WindowActivated(Window* window);
 	virtual void				WindowSentBehind(Window* window,
 									Window* behindOf);
 	virtual void				WindowWorkspacesChanged(Window* window,
@@ -93,8 +94,8 @@ public:
 			bool				SATKeyPressed()
 									{ return fSATKeyPressed; }
 
-		SATWindow*				GetSATWindow(Window* window);
-		SATWindow*				FindSATWindow(uint64 id);
+			SATWindow*			GetSATWindow(Window* window);
+			SATWindow*			FindSATWindow(uint64 id);
 
 private:
 			void				_StartSAT();
@@ -102,6 +103,7 @@ private:
 			void				_ActivateWindow(SATWindow* window);
 			bool				_HandleMessage(BPrivate::LinkReceiver& link,
 									BPrivate::LinkSender& reply);
+			SATGroup*			_GetSATGroup(SATWindow* window);
 
 			Desktop*			fDesktop;
 
@@ -118,6 +120,11 @@ class GroupIterator {
 public:
 								GroupIterator(StackAndTile* sat,
 									Desktop* desktop);
+
+			SATGroup*			CurrentGroup(void) const
+									{ return fCurrentGroup; };
+			void				SetCurrentGroup(SATGroup* group)
+									{ fCurrentGroup = group; };
 
 			void				RewindToFront();
 			SATGroup*			NextGroup();
@@ -141,7 +148,6 @@ public:
 			position. If reverseLayerOrder is false the bottommost window comes
 			first. */
 			SATWindow*			NextWindow();
-		
 
 private:
 			SATWindow*			_ReverseNextWindow();
@@ -158,7 +164,7 @@ private:
 
 class SATSnappingBehaviour {
 public:
-	virtual						~SATSnappingBehaviour();
+	virtual						~SATSnappingBehaviour() {};
 
 	/*! Find all window candidates which possibly can join the group. Found
 	candidates are marked here visual. */

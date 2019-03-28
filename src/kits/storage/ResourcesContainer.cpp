@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------
 //  This software is part of the OpenBeOS distribution and is covered 
-//  by the OpenBeOS license.
+//  by the MIT License.
 //---------------------------------------------------------------------
 /*!
 	\file ResourcesContainer.cpp
@@ -44,7 +44,7 @@ ResourcesContainer::AddResource(ResourceItem *item, int32 index,
 		int32 count = CountResources();
 		if (index < 0 || index > count)
 			index = count;
-		result = fResources.AddItem(item, count);
+		result = fResources.AddItem(item, index);
 		SetModified(true);
 	}
 	return result;

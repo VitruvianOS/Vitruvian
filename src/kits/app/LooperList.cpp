@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2011, Haiku.
+ * Copyright 2001-2015, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -24,8 +24,6 @@ using std::vector;
 namespace BPrivate {
 
 BLooperList gLooperList;
-
-typedef vector<BLooperList::LooperData>::iterator LooperDataIterator;
 
 
 BLooperList::BLooperList()
@@ -192,6 +190,7 @@ BLooperList::InitAfterFork()
 {
 	// We need to reinitialize the locker to get a new semaphore
 	new (&fLock) BLocker("BLooperList lock");
+	fData.clear();
 }
 
 

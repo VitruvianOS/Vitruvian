@@ -33,17 +33,16 @@ All rights reserved.
 */
 
 
-#include "Bitmaps.h"
-#include "Commands.h"
-#include "ContainerWindow.h"
-#include "FSUtils.h"
-#include "Model.h"
 #include "Navigator.h"
-#include "Tracker.h"
 
-#include <Picture.h>
+#include <ControlLook.h>
 #include <TextControl.h>
 #include <Window.h>
+
+#include "Bitmaps.h"
+#include "Commands.h"
+#include "FSUtils.h"
+#include "Tracker.h"
 
 
 namespace BPrivate {
@@ -52,122 +51,29 @@ static const int32 kMaxHistory = 32;
 
 }
 
-// BPictureButton() will crash when giving zero pointers,
-// although we really want and have to set up the
-// pictures when we can, e.g. on a AttachedToWindow.
-static BPicture sPicture;
+
+//	#pragma mark - BNavigator
 
 
-BNavigatorButton::BNavigatorButton(BRect rect, const char* name,
-	BMessage* message, int32 resIDon, int32 resIDoff, int32 resIDdisabled)
-	:	BPictureButton(rect, name, &sPicture, &sPicture, message),
-		fResIDOn(resIDon),
-		fResIDOff(resIDoff),
-		fResIDDisabled(resIDdisabled)
-{
-	// Clear to background color to avoid ugly border on click
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	SetHighColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-	SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-}
-
-
-BNavigatorButton::~BNavigatorButton()
-{
-}
-
-
-void
-BNavigatorButton::AttachedToWindow()
-{
-	BBitmap* bmpOn = 0;
-	GetTrackerResources()->GetBitmapResource(B_MESSAGE_TYPE, fResIDOn,
-		&bmpOn);
-	SetPicture(bmpOn, true, true);
-	delete bmpOn;
-	
-	BBitmap* bmpOff = 0;
-	GetTrackerResources()->GetBitmapResource(B_MESSAGE_TYPE, fResIDOff,
-		&bmpOff);
-	SetPicture(bmpOff, true, false);
-	delete bmpOff;
-
-	BBitmap* bmpDisabled = 0;
-	GetTrackerResources()->GetBitmapResource(B_MESSAGE_TYPE, fResIDDisabled,
-		&bmpDisabled);
-	SetPicture(bmpDisabled, false, false);
-	SetPicture(bmpDisabled, false, true);
-	delete bmpDisabled;
-}
-
-
-void
-BNavigatorButton::SetPicture(BBitmap* bitmap, bool enabled, bool on)
-{
-	if (bitmap) {
-		BPicture picture;
-		BView view(bitmap->Bounds(), "", 0, 0);
-		AddChild(&view);
-		view.BeginPicture(&picture);
-		view.SetHighColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-		view.FillRect(view.Bounds());
-		view.SetDrawingMode(B_OP_OVER);
-		view.DrawBitmap(bitmap, BPoint(0, 0));
-		view.EndPicture();
-		RemoveChild(&view);
-		if (enabled)
-			if (on)
-				SetEnabledOn(&picture);
-			else
-				SetEnabledOff(&picture);
-		else
-			if (on)
-				SetDisabledOn(&picture);
-			else
-				SetDisabledOff(&picture);
-	}
-}
-
-
-BNavigator::BNavigator(const Model* model, BRect rect, uint32 resizeMask)
-	:	BView(rect, "Navigator", resizeMask, B_WILL_DRAW),
-	fBack(0),
-	fForw(0),
-	fUp(0),
+BNavigator::BNavigator(const Model* model)
+	:
+	BToolBar(),
 	fBackHistory(8, true),
 	fForwHistory(8, true)
 {
 	// Get initial path
 	model->GetPath(&fPath);
-	
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 
-	float top = 2 + (be_plain_font->Size() - 8) / 2;
-
-	// Set up widgets
-	fBack = new BNavigatorButton(BRect(3, top, 21, top + 17), "Back",
-		new BMessage(kNavigatorCommandBackward), R_ResBackNavActiveSel,
-		R_ResBackNavActive, R_ResBackNavInactive);
-	fBack->SetEnabled(false);
-	AddChild(fBack);
-
-	fForw = new BNavigatorButton(BRect(35, top, 53, top + 17), "Forw",
-		new BMessage(kNavigatorCommandForward), R_ResForwNavActiveSel,
-		R_ResForwNavActive, R_ResForwNavInactive);
-	fForw->SetEnabled(false);
-	AddChild(fForw);
-
-	fUp = new BNavigatorButton(BRect(67, top, 84, top + 17), "Up",
-		new BMessage(kNavigatorCommandUp), R_ResUpNavActiveSel,
-		R_ResUpNavActive, R_ResUpNavInactive);
-	fUp->SetEnabled(false);
-	AddChild(fUp);
-
-	fLocation = new BTextControl(BRect(97, 2, rect.Width() - 2, 21),
-		"Location", "", "", new BMessage(kNavigatorCommandLocation),
-		B_FOLLOW_LEFT_RIGHT);
+	fLocation = new BTextControl("Location", "", "",
+		new BMessage(kNavigatorCommandLocation));
 	fLocation->SetDivider(0);
-	AddChild(fLocation);
+
+	GroupLayout()->SetInsets(0.0f, 0.0f, B_USE_HALF_ITEM_INSETS, 1.0f);
+		// 1px bottom inset used for border
+
+	// Needed to draw the bottom border
+	SetFlags(Flags() | B_WILL_DRAW);
+	SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 }
 
 
@@ -179,33 +85,53 @@ BNavigator::~BNavigator()
 void
 BNavigator::AttachedToWindow()
 {
-	// Inital setup of widget states
-	UpdateLocation(0, kActionSet);
+	// Set up toolbar items
+	BBitmap* bmpBack = new BBitmap(BRect(0, 0, 19, 19), B_RGBA32);
+	GetTrackerResources()->GetIconResource(R_ResBackNav, B_MINI_ICON,
+		bmpBack);
+	AddAction(kNavigatorCommandBackward, this, bmpBack);
+	SetActionEnabled(kNavigatorCommandBackward, false);
+	delete bmpBack;
 
-	// All messages should arrive here
-	fBack->SetTarget(this);
-	fForw->SetTarget(this);
-	fUp->SetTarget(this);
+	BBitmap* bmpForw = new BBitmap(BRect(0, 0, 19, 19), B_RGBA32);
+	GetTrackerResources()->GetIconResource(R_ResForwNav, B_MINI_ICON,
+		bmpForw);
+	AddAction(kNavigatorCommandForward, this, bmpForw);
+	SetActionEnabled(kNavigatorCommandForward, false);
+	delete bmpForw;
+
+	BBitmap* bmpUp = new BBitmap(BRect(0, 0, 19, 19), B_RGBA32);
+	GetTrackerResources()->GetIconResource(R_ResUpNav, B_MINI_ICON,
+		bmpUp);
+	AddAction(kNavigatorCommandUp, this, bmpUp);
+	SetActionEnabled(kNavigatorCommandUp, false);
+	delete bmpUp;
+
+	AddView(fLocation);
 	fLocation->SetTarget(this);
 }
 
 
 void
-BNavigator::Draw(BRect)
+BNavigator::AllAttached()
 {
-	rgb_color bgColor = ui_color(B_PANEL_BACKGROUND_COLOR);
-	rgb_color shineColor = ui_color(B_SHINE_COLOR);
-	rgb_color halfDarkColor = tint_color(bgColor, B_DARKEN_1_TINT);
-	rgb_color darkColor = tint_color(bgColor, B_DARKEN_2_TINT);
-	// Draws a beveled smooth border
-	BeginLineArray(4);
-	AddLine(Bounds().LeftTop(), Bounds().RightTop(), shineColor);
-	AddLine(Bounds().LeftTop(), Bounds().LeftBottom() - BPoint(0, 1),
-		shineColor);
-	AddLine(Bounds().LeftBottom() - BPoint(-1, 1),
-		Bounds().RightBottom() - BPoint(0, 1), halfDarkColor);
-	AddLine(Bounds().LeftBottom(), Bounds().RightBottom(), darkColor);
-	EndLineArray();
+	// Inital setup of widget states
+	UpdateLocation(0, kActionSet);
+}
+
+
+void
+BNavigator::Draw(BRect updateRect)
+{
+	// Draw a 1px bottom border, like BMenuBar
+	BRect rect(Bounds());
+	rgb_color base = LowColor();
+	uint32 flags = 0;
+
+	be_control_look->DrawBorder(this, rect, updateRect, base,
+		B_PLAIN_BORDER, flags, BControlLook::B_BOTTOM_BORDER);
+
+	_inherited::Draw(rect & updateRect);
 }
 
 
@@ -227,6 +153,10 @@ BNavigator::MessageReceived(BMessage* message)
 
 		case kNavigatorCommandLocation:
 			GoTo();
+			break;
+
+		case kNavigatorCommandSetFocus:
+			fLocation->MakeFocus();
 			break;
 
 		default:
@@ -280,8 +210,7 @@ BNavigator::GoUp(bool option)
 	BEntry entry;
 	if (entry.SetTo(fPath.Path()) == B_OK) {
 		BEntry parentEntry;
-		if (entry.GetParent(&parentEntry) == B_OK
-			&& !FSIsDeskDir(&parentEntry)) {
+		if (entry.GetParent(&parentEntry) == B_OK) {
 			SendNavigationMessage(kActionUp, &parentEntry, option);
 		}
 	}
@@ -298,21 +227,21 @@ BNavigator::SendNavigationMessage(NavigationAction action, BEntry* entry,
 		BMessage message;
 		message.AddRef("refs", &ref);
 		message.AddInt32("action", action);
-		
+
 		// get the node of this folder for selecting it in the new location
 		const node_ref* nodeRef;
 		if (Window() && Window()->TargetModel())
 			nodeRef = Window()->TargetModel()->NodeRef();
 		else
 			nodeRef = NULL;
-		
+
 		// if the option key was held down, open in new window (send message
 		// to be_app) otherwise send message to this window. TTracker
 		// (be_app) understands nodeRefToSlection, BContainerWindow doesn't,
 		// so we have to select the item manually
 		if (option) {
 			message.what = B_REFS_RECEIVED;
-			if (nodeRef) {
+			if (nodeRef != NULL) {
 				message.AddData("nodeRefToSelect", B_RAW_TYPE, nodeRef,
 					sizeof(node_ref));
 			}
@@ -333,8 +262,12 @@ BNavigator::SendNavigationMessage(NavigationAction action, BEntry* entry,
 				// Todo: Change the locking behaviour of
 				// StandAloneTaskLoop::Run() and subsequently called
 				// functions.
-			if (nodeRef)
-				dynamic_cast<TTracker*>(be_app)->SelectChildInParentSoon(&ref, nodeRef);
+			if (nodeRef != NULL) {
+				TTracker* tracker = dynamic_cast<TTracker*>(be_app);
+				if (tracker != NULL)
+					tracker->SelectChildInParentSoon(&ref, nodeRef);
+			}
+
 			LockLooper();
 		}
 	}
@@ -353,7 +286,6 @@ BNavigator::GoTo()
 	entry_ref ref;
 
 	if (entry.SetTo(pathname.String()) == B_OK
-		&& !FSIsDeskDir(&entry)
 		&& entry.GetRef(&ref) == B_OK) {
 		BMessage message(kSwitchDirectory);
 		message.AddRef("refs", &ref);
@@ -361,7 +293,7 @@ BNavigator::GoTo()
 		Window()->PostMessage(&message);
 	} else {
 		BPath path;
-		
+
 		if (Window() && Window()->TargetModel()) {
 			Window()->TargetModel()->GetPath(&path);
 			fLocation->SetText(path.Path());
@@ -379,11 +311,13 @@ BNavigator::UpdateLocation(const Model* newmodel, int32 action)
 	// Modify history according to commands
 	switch (action) {
 		case kActionBackward:
-			fForwHistory.AddItem(fBackHistory.RemoveItemAt(fBackHistory.CountItems()-1));
+			fForwHistory.AddItem(fBackHistory.RemoveItemAt(
+				fBackHistory.CountItems() - 1));
 			break;
 
 		case kActionForward:
-			fBackHistory.AddItem(fForwHistory.RemoveItemAt(fForwHistory.CountItems()-1));
+			fBackHistory.AddItem(fForwHistory.RemoveItemAt(
+				fForwHistory.CountItems() - 1));
 			break;
 
 		case kActionUpdatePath:
@@ -402,24 +336,15 @@ BNavigator::UpdateLocation(const Model* newmodel, int32 action)
 	BEntry entry;
 	if (entry.SetTo(fPath.Path()) == B_OK) {
 		BEntry parentEntry;
-		fUp->SetEnabled(entry.GetParent(&parentEntry) == B_OK
-			&& !FSIsDeskDir(&parentEntry));
+		bool enable = entry.GetParent(&parentEntry) == B_OK;
+		SetActionEnabled(kNavigatorCommandUp, enable);
 	}
 
 	// Enable history buttons if history contains something
-	fForw->SetEnabled(fForwHistory.CountItems() > 0);
-	fBack->SetEnabled(fBackHistory.CountItems() > 1);
+	SetActionEnabled(kNavigatorCommandForward, fForwHistory.CountItems() > 0);
+	SetActionEnabled(kNavigatorCommandBackward, fBackHistory.CountItems() > 1);
 
 	// Avoid loss of selection and cursor position
 	if (action != kActionLocation)
 		fLocation->SetText(fPath.Path());
-}
-
-
-float
-BNavigator::CalcNavigatorHeight(void)
-{
-	// Empiric formula from how much space the textview
-	// will take once it is attached (using be_plain_font):
-	return  ceilf(11.0f + be_plain_font->Size()*(1.0f + 7.0f / 30.0f));
 }

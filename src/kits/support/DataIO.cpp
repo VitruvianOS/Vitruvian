@@ -1,9 +1,9 @@
 /*
- * Copyright 2005-2006, Haiku.
+ * Copyright 2005-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Stefano Ceccherini (burton666@libero.it)
+ *		Stefano Ceccherini, burton666@libero.it
  */
 
 
@@ -13,6 +13,15 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <Errors.h>
+
+#if defined(_KERNEL_MODE) && !defined(_BOOT_MODE)
+// for user_memcpy() and IS_USER_ADDRESS()
+#include <KernelExport.h>
+
+#include <kernel.h>
+#endif
+
 
 BDataIO::BDataIO()
 {
@@ -21,6 +30,87 @@ BDataIO::BDataIO()
 
 BDataIO::~BDataIO()
 {
+}
+
+
+ssize_t
+BDataIO::Read(void* buffer, size_t size)
+{
+	return B_NOT_SUPPORTED;
+}
+
+
+ssize_t
+BDataIO::Write(const void* buffer, size_t size)
+{
+	return B_NOT_SUPPORTED;
+}
+
+
+status_t
+BDataIO::Flush()
+{
+	return B_OK;
+}
+
+
+status_t
+BDataIO::ReadExactly(void* buffer, size_t size, size_t* _bytesRead)
+{
+	uint8* out = (uint8*)buffer;
+	size_t bytesRemaining = size;
+	status_t error = B_OK;
+
+	while (bytesRemaining > 0) {
+		ssize_t bytesRead = Read(out, bytesRemaining);
+		if (bytesRead < 0) {
+			error = bytesRead;
+			break;
+		}
+
+		if (bytesRead == 0) {
+			error = B_PARTIAL_READ;
+			break;
+		}
+
+		out += bytesRead;
+		bytesRemaining -= bytesRead;
+	}
+
+	if (_bytesRead != NULL)
+		*_bytesRead = size - bytesRemaining;
+
+	return error;
+}
+
+
+status_t
+BDataIO::WriteExactly(const void* buffer, size_t size, size_t* _bytesWritten)
+{
+	const uint8* in = (const uint8*)buffer;
+	size_t bytesRemaining = size;
+	status_t error = B_OK;
+
+	while (bytesRemaining > 0) {
+		ssize_t bytesWritten = Write(in, bytesRemaining);
+		if (bytesWritten < 0) {
+			error = bytesWritten;
+			break;
+		}
+
+		if (bytesWritten == 0) {
+			error = B_PARTIAL_WRITE;
+			break;
+		}
+
+		in += bytesWritten;
+		bytesRemaining -= bytesWritten;
+	}
+
+	if (_bytesWritten != NULL)
+		*_bytesWritten = size - bytesRemaining;
+
+	return error;
 }
 
 
@@ -40,8 +130,32 @@ BDataIO::operator=(const BDataIO &)
 }
 
 
+#if __GNUC__ == 2
+
+
+extern "C" status_t
+_ReservedDataIO1__7BDataIO(BDataIO* self)
+{
+	return self->BDataIO::Flush();
+}
+
+
+#else
+
+
+// TODO: RELEASE: Remove!
+
+extern "C" status_t
+_ZN7BDataIO16_ReservedDataIO1Ev(BDataIO* self)
+{
+	return self->BDataIO::Flush();
+}
+
+
+#endif
+
+
 // FBC
-void BDataIO::_ReservedDataIO1(){}
 void BDataIO::_ReservedDataIO2(){}
 void BDataIO::_ReservedDataIO3(){}
 void BDataIO::_ReservedDataIO4(){}
@@ -69,7 +183,7 @@ BPositionIO::~BPositionIO()
 
 
 ssize_t
-BPositionIO::Read(void *buffer, size_t size)
+BPositionIO::Read(void* buffer, size_t size)
 {
 	off_t curPos = Position();
 	ssize_t result = ReadAt(curPos, buffer, size);
@@ -81,7 +195,7 @@ BPositionIO::Read(void *buffer, size_t size)
 
 
 ssize_t
-BPositionIO::Write(const void *buffer, size_t size)
+BPositionIO::Write(const void* buffer, size_t size)
 {
 	off_t curPos = Position();
 	ssize_t result = WriteAt(curPos, buffer, size);
@@ -89,6 +203,70 @@ BPositionIO::Write(const void *buffer, size_t size)
 		Seek(result, SEEK_CUR);
 
 	return result;
+}
+
+
+status_t
+BPositionIO::ReadAtExactly(off_t position, void* buffer, size_t size,
+	size_t* _bytesRead)
+{
+	uint8* out = (uint8*)buffer;
+	size_t bytesRemaining = size;
+	status_t error = B_OK;
+
+	while (bytesRemaining > 0) {
+		ssize_t bytesRead = ReadAt(position, out, bytesRemaining);
+		if (bytesRead < 0) {
+			error = bytesRead;
+			break;
+		}
+
+		if (bytesRead == 0) {
+			error = B_PARTIAL_READ;
+			break;
+		}
+
+		out += bytesRead;
+		bytesRemaining -= bytesRead;
+		position += bytesRead;
+	}
+
+	if (_bytesRead != NULL)
+		*_bytesRead = size - bytesRemaining;
+
+	return error;
+}
+
+
+status_t
+BPositionIO::WriteAtExactly(off_t position, const void* buffer, size_t size,
+	size_t* _bytesWritten)
+{
+	const uint8* in = (const uint8*)buffer;
+	size_t bytesRemaining = size;
+	status_t error = B_OK;
+
+	while (bytesRemaining > 0) {
+		ssize_t bytesWritten = WriteAt(position, in, bytesRemaining);
+		if (bytesWritten < 0) {
+			error = bytesWritten;
+			break;
+		}
+
+		if (bytesWritten == 0) {
+			error = B_PARTIAL_WRITE;
+			break;
+		}
+
+		in += bytesWritten;
+		bytesRemaining -= bytesWritten;
+		position += bytesWritten;
+	}
+
+	if (_bytesWritten != NULL)
+		*_bytesWritten = size - bytesRemaining;
+
+	return error;
 }
 
 
@@ -140,7 +318,7 @@ void BPositionIO::_ReservedPositionIO12(){}
 //	#pragma mark -
 
 
-BMemoryIO::BMemoryIO(void *buffer, size_t length)
+BMemoryIO::BMemoryIO(void* buffer, size_t length)
 	:
 	fReadOnly(false),
 	fBuffer(static_cast<char*>(buffer)),
@@ -151,7 +329,7 @@ BMemoryIO::BMemoryIO(void *buffer, size_t length)
 }
 
 
-BMemoryIO::BMemoryIO(const void *buffer, size_t length)
+BMemoryIO::BMemoryIO(const void* buffer, size_t length)
 	:
 	fReadOnly(true),
 	fBuffer(const_cast<char*>(static_cast<const char*>(buffer))),
@@ -168,7 +346,7 @@ BMemoryIO::~BMemoryIO()
 
 
 ssize_t
-BMemoryIO::ReadAt(off_t pos, void *buffer, size_t size)
+BMemoryIO::ReadAt(off_t pos, void* buffer, size_t size)
 {
 	if (buffer == NULL || pos < 0)
 		return B_BAD_VALUE;
@@ -178,12 +356,13 @@ BMemoryIO::ReadAt(off_t pos, void *buffer, size_t size)
 		sizeRead = min_c((off_t)size, (off_t)fLength - pos);
 		memcpy(buffer, fBuffer + pos, sizeRead);
 	}
+
 	return sizeRead;
 }
 
 
 ssize_t
-BMemoryIO::WriteAt(off_t pos, const void *buffer, size_t size)
+BMemoryIO::WriteAt(off_t pos, const void* buffer, size_t size)
 {
 	if (fReadOnly)
 		return B_NOT_ALLOWED;
@@ -194,6 +373,12 @@ BMemoryIO::WriteAt(off_t pos, const void *buffer, size_t size)
 	ssize_t sizeWritten = 0;
 	if (pos < (off_t)fBufferSize) {
 		sizeWritten = min_c((off_t)size, (off_t)fBufferSize - pos);
+#if defined(_KERNEL_MODE) && !defined(_BOOT_MODE)
+		if (IS_USER_ADDRESS(fBuffer)) {
+			if (user_memcpy(fBuffer + pos, buffer, sizeWritten) != B_OK)
+				return B_BAD_ADDRESS;
+		} else
+#endif
 		memcpy(fBuffer + pos, buffer, sizeWritten);
 	}
 
@@ -220,6 +405,7 @@ BMemoryIO::Seek(off_t position, uint32 seek_mode)
 		default:
 			break;
 	}
+
 	return fPosition;
 }
 
@@ -241,6 +427,7 @@ BMemoryIO::SetSize(off_t size)
 		return B_ERROR;
 
 	fLength = size;
+
 	return B_OK;
 }
 
@@ -287,7 +474,7 @@ BMallocIO::~BMallocIO()
 
 
 ssize_t
-BMallocIO::ReadAt(off_t pos, void *buffer, size_t size)
+BMallocIO::ReadAt(off_t pos, void* buffer, size_t size)
 {
 	if (buffer == NULL)
 		return B_BAD_VALUE;
@@ -297,12 +484,13 @@ BMallocIO::ReadAt(off_t pos, void *buffer, size_t size)
 		sizeRead = min_c((off_t)size, (off_t)fLength - pos);
 		memcpy(buffer, fData + pos, sizeRead);
 	}
+
 	return sizeRead;
 }
 
 
 ssize_t
-BMallocIO::WriteAt(off_t pos, const void *buffer, size_t size)
+BMallocIO::WriteAt(off_t pos, const void* buffer, size_t size)
 {
 	if (buffer == NULL)
 		return B_BAD_VALUE;
@@ -318,6 +506,7 @@ BMallocIO::WriteAt(off_t pos, const void *buffer, size_t size)
 		if (pos + size > fLength)
 			fLength = pos + size;
 	}
+
 	return error != B_OK ? error : size;
 }
 
@@ -363,7 +552,7 @@ BMallocIO::SetSize(off_t size)
 		size_t newSize = (size + fBlockSize - 1) / fBlockSize * fBlockSize;
 		if (size != (off_t)fMallocSize) {
 			// we need to resize
-			if (char *newData = static_cast<char*>(realloc(fData, newSize))) {
+			if (char* newData = static_cast<char*>(realloc(fData, newSize))) {
 				// set the new area to 0
 				if (newSize > fMallocSize)
 					memset(newData + fMallocSize, 0, newSize - fMallocSize);
@@ -386,12 +575,13 @@ BMallocIO::SetBlockSize(size_t blockSize)
 {
 	if (blockSize == 0)
 		blockSize = 1;
+
 	if (blockSize != fBlockSize)
 		fBlockSize = blockSize;
 }
 
 
-const void *
+const void*
 BMallocIO::Buffer() const
 {
 	return fData;
@@ -424,4 +614,3 @@ BMallocIO::operator=(const BMallocIO &)
 // FBC
 void BMallocIO::_ReservedMallocIO1() {}
 void BMallocIO::_ReservedMallocIO2() {}
-

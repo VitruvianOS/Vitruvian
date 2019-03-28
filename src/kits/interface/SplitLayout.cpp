@@ -1,5 +1,6 @@
 /*
  * Copyright 2006-2009, Ingo Weinhold <ingo_weinhold@gmx.de>.
+ * Copyright 2015, Rene Gollent, rene@gollent.com.
  * All rights reserved. Distributed under the terms of the MIT License.
  */
 
@@ -153,8 +154,7 @@ private:
 // #pragma mark -
 
 
-BSplitLayout::BSplitLayout(enum orientation orientation,
-		float spacing)
+BSplitLayout::BSplitLayout(orientation orientation, float spacing)
 	:
 	fOrientation(orientation),
 	fLeftInset(0),
@@ -319,7 +319,7 @@ BSplitLayout::Orientation() const
 
 
 void
-BSplitLayout::SetOrientation(enum orientation orientation)
+BSplitLayout::SetOrientation(orientation orientation)
 {
 	if (orientation != fOrientation) {
 		fOrientation = orientation;
@@ -494,14 +494,14 @@ BSplitLayout::SetCollapsible(int32 first, int32 last, bool collapsible)
 bool
 BSplitLayout::IsItemCollapsed(int32 index) const
 {
-	return _ItemLayoutInfo(ItemAt(index))->isVisible;
+	return !_ItemLayoutInfo(ItemAt(index))->isVisible;
 }
 
 
 void
 BSplitLayout::SetItemCollapsed(int32 index, bool collapsed)
 {
-	ItemAt(index)->SetVisible(collapsed);
+	ItemAt(index)->SetVisible(!collapsed);
 
 	InvalidateLayout(true);
 }

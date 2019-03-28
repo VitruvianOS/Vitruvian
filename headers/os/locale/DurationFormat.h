@@ -7,44 +7,45 @@
 
 
 #include <Format.h>
+#include <Locale.h>
 #include <String.h>
 #include <TimeUnitFormat.h>
 
 
 class BTimeZone;
 
-namespace icu_57 {
+#ifndef U_ICU_NAMESPACE
+  #define U_ICU_NAMESPACE icu
+#endif
+namespace U_ICU_NAMESPACE {
 	class GregorianCalendar;
 }
-
-namespace icu = icu_57;
 
 
 class BDurationFormat : public BFormat {
 	typedef	BFormat				Inherited;
 
 public:
-								BDurationFormat(
-									const BString& separator = ", ");
+								BDurationFormat(const BLanguage& language,
+									const BFormattingConventions& conventions,
+									const BString& separator = ", ",
+									const time_unit_style style = B_TIME_UNIT_FULL);
+								BDurationFormat(const BString& separator = ", ",
+									const time_unit_style style = B_TIME_UNIT_FULL);
 								BDurationFormat(const BDurationFormat& other);
 	virtual						~BDurationFormat();
 
-			BDurationFormat&	operator=(const BDurationFormat& other);
-
 			void				SetSeparator(const BString& separator);
-
-	virtual	status_t			SetLocale(const BLocale* locale);
 			status_t			SetTimeZone(const BTimeZone* timeZone);
 
-			status_t			Format(bigtime_t startValue,
-									bigtime_t stopValue, BString* buffer,
-									time_unit_style style = B_TIME_UNIT_FULL
-									) const;
+			status_t			Format(BString& buffer,
+									const bigtime_t startValue,
+									const bigtime_t stopValue) const;
 
 private:
 			BString				fSeparator;
 			BTimeUnitFormat		fTimeUnitFormat;
-			icu::GregorianCalendar*	fCalendar;
+			U_ICU_NAMESPACE::GregorianCalendar*	fCalendar;
 };
 
 

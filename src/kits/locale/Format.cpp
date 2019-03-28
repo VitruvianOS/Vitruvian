@@ -2,48 +2,43 @@
 
 #include <new>
 
+#include <Autolock.h>
 #include <Locale.h>
+#include <LocaleRoster.h>
 
 
-BFormat::BFormat()
-	:
-	fInitStatus(B_NO_INIT),
-	fLocale(NULL)
+BFormat::BFormat(const BLocale* locale)
 {
+	if (locale == NULL)
+		locale = BLocaleRoster::Default()->GetDefaultLocale();
+
+	if (locale == NULL) {
+		fInitStatus = B_BAD_DATA;
+		return;
+	}
+
+	_Initialize(*locale);
+}
+
+
+BFormat::BFormat(const BLanguage& language,
+	const BFormattingConventions& conventions)
+{
+	_Initialize(language, conventions);
 }
 
 
 BFormat::BFormat(const BFormat &other)
 	:
-	fInitStatus(other.fInitStatus),
-	fLocale(other.fLocale != NULL
-		? new (std::nothrow) BLocale(*other.fLocale)
-		: NULL)
+	fConventions(other.fConventions),
+	fLanguage(other.fLanguage),
+	fInitStatus(other.fInitStatus)
 {
 }
 
 
 BFormat::~BFormat()
 {
-	delete fLocale;
-}
-
-
-BFormat &
-BFormat::operator=(const BFormat& other)
-{
-	if (this == &other)
-		return *this;
-
-	fInitStatus = other.fInitStatus;
-	delete fLocale;
-	fLocale = other.fLocale != NULL
-		? new (std::nothrow) BLocale(*other.fLocale) : NULL;
-
-	if (fLocale == NULL && other.fLocale != NULL)
-		fInitStatus = B_NO_MEMORY;
-
-	return *this;
 }
 
 
@@ -55,19 +50,29 @@ BFormat::InitCheck() const
 
 
 status_t
-BFormat::SetLocale(const BLocale* locale)
+BFormat::_Initialize(const BLocale& locale)
 {
-	if (locale != NULL) {
-		if (fLocale == NULL) {
-			fLocale = new (std::nothrow) BLocale(*locale);
-			if (fLocale == NULL)
-				return B_NO_MEMORY;
-		} else
-			*fLocale = *locale;
-	} else {
-		delete fLocale;
-		fLocale = NULL;
-	}
+	BFormattingConventions conventions;
+	BLanguage language;
 
-	return B_OK;
+	fInitStatus = locale.GetFormattingConventions(&conventions);
+	if (fInitStatus != B_OK)
+		return fInitStatus;
+
+	fInitStatus = locale.GetLanguage(&language);
+	if (fInitStatus != B_OK)
+		return fInitStatus;
+
+	return _Initialize(language, conventions);
+}
+
+
+status_t
+BFormat::_Initialize(const BLanguage& language,
+	const BFormattingConventions& conventions)
+{
+	fConventions = conventions;
+	fLanguage = language;
+	fInitStatus = B_OK;
+	return fInitStatus;
 }

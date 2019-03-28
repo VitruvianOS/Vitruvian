@@ -1,65 +1,69 @@
 /*
- * Copyright 2001-2012, Haiku, Inc. All Rights Reserved.
+ * Copyright 2001-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Frans van Nispen
+ *		John Scipione, jscipione@gmail.com
  */
 
-#include <stdio.h>
 
 #include <Rect.h>
 
+#include <algorithm>
+
+#include <stdio.h>
+
 
 void
-BRect::SetLeftTop(const BPoint p)
+BRect::SetLeftTop(const BPoint point)
 {
-	left = p.x;
-	top = p.y;
+	left = point.x;
+	top = point.y;
 }
 
 
 void
-BRect::SetRightBottom(const BPoint p)
+BRect::SetRightBottom(const BPoint point)
 {
-	right = p.x;
-	bottom = p.y;
+	right = point.x;
+	bottom = point.y;
 }
 
 
 void
-BRect::SetLeftBottom(const BPoint p)
+BRect::SetLeftBottom(const BPoint point)
 {
-	left = p.x;
-	bottom = p.y;
+	left = point.x;
+	bottom = point.y;
 }
 
 
 void
-BRect::SetRightTop(const BPoint p)
+BRect::SetRightTop(const BPoint point)
 {
-	right = p.x;
-	top = p.y;
+	right = point.x;
+	top = point.y;
 }
 
 
 void
 BRect::InsetBy(BPoint point)
 {
-	 left += point.x;
-	 right -= point.x;
-	 top += point.y;
-	 bottom -= point.y;
+	left += point.x;
+	right -= point.x;
+	top += point.y;
+	bottom -= point.y;
 }
 
 
 void
 BRect::InsetBy(float dx, float dy)
 {
-	 left += dx;
-	 right -= dx;
-	 top += dy;
-	 bottom -= dy;
+	left += dx;
+	right -= dx;
+	top += dy;
+	bottom -= dy;
 }
 
 
@@ -100,20 +104,20 @@ BRect::InsetByCopy(float dx, float dy) const
 void
 BRect::OffsetBy(BPoint point)
 {
-	 left += point.x;
-	 right += point.x;
-	 top += point.y;
-	 bottom += point.y;
+	left += point.x;
+	right += point.x;
+	top += point.y;
+	bottom += point.y;
 }
 
 
 void
 BRect::OffsetBy(float dx, float dy)
 {
-	 left += dx;
-	 right += dx;
-	 top += dy;
-	 bottom += dy;
+	left += dx;
+	right += dx;
+	top += dy;
+	bottom += dy;
 }
 
 
@@ -154,20 +158,20 @@ BRect::OffsetByCopy(float dx, float dy) const
 void
 BRect::OffsetTo(BPoint point)
 {
-	 right = (right - left) + point.x;
-	 left = point.x;
-	 bottom = (bottom - top) + point.y;
-	 top = point.y;
+	right = (right - left) + point.x;
+	left = point.x;
+	bottom = (bottom - top) + point.y;
+	top = point.y;
 }
 
 
 void
 BRect::OffsetTo(float x, float y)
 {
-	 right = (right - left) + x;
-	 left = x;
-	 bottom = (bottom - top) + y;
-	 top=y;
+	right = (right - left) + x;
+	left = x;
+	bottom = (bottom - top) + y;
+	top=y;
 }
 
 
@@ -180,9 +184,9 @@ BRect::OffsetToSelf(BPoint point)
 
 
 BRect&
-BRect::OffsetToSelf(float dx, float dy)
+BRect::OffsetToSelf(float x, float y)
 {
-	OffsetTo(dx, dy);
+	OffsetTo(x, y);
 	return *this;
 }
 
@@ -197,10 +201,10 @@ BRect::OffsetToCopy(BPoint point) const
 
 
 BRect
-BRect::OffsetToCopy(float dx, float dy) const
+BRect::OffsetToCopy(float x, float y) const
 {
 	BRect copy(*this);
-	copy.OffsetTo(dx, dy);
+	copy.OffsetTo(x, y);
 	return copy;
 }
 
@@ -213,33 +217,33 @@ BRect::PrintToStream() const
 
 
 bool
-BRect::operator==(BRect rect) const
+BRect::operator==(BRect other) const
 {
-	return left == rect.left && right == rect.right &&
-		top == rect.top && bottom == rect.bottom;
+	return left == other.left && right == other.right &&
+		top == other.top && bottom == other.bottom;
 }
 
 
 bool
-BRect::operator!=(BRect rect) const
+BRect::operator!=(BRect other) const
 {
-	return !(*this == rect);
+	return !(*this == other);
 }
 
 
 BRect
-BRect::operator&(BRect rect) const
+BRect::operator&(BRect other) const
 {
-	return BRect(max_c(left, rect.left), max_c(top, rect.top),
-		min_c(right, rect.right), min_c(bottom, rect.bottom));
+	return BRect(std::max(left, other.left), std::max(top, other.top),
+		std::min(right, other.right), std::min(bottom, other.bottom));
 }
 
 
 BRect
-BRect::operator|(BRect rect) const
+BRect::operator|(BRect other) const
 {
-	return BRect(min_c(left, rect.left), min_c(top, rect.top),
-		max_c(right, rect.right), max_c(bottom, rect.bottom));
+	return BRect(std::min(left, other.left), std::min(top, other.top),
+		std::max(right, other.right), std::max(bottom, other.bottom));
 }
 
 
@@ -328,7 +332,7 @@ OffsetToCopy__5BRectff(BRect* self, float dx, float dy)
 }
 
 
-#elif __GNUC__ == 4
+#elif __GNUC__ >= 4
 // TODO: remove this when new GCC 4 packages have to be built anyway
 
 
@@ -386,4 +390,4 @@ _ZN5BRect12OffsetToCopyEff(BRect* self, float dx, float dy)
 }
 
 
-#endif	// __GNUC__ == 4
+#endif	// __GNUC__ >= 4

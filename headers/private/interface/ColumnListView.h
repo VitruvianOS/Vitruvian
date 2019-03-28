@@ -63,10 +63,10 @@ class RecursiveOutlineIterator;
 
 }	// ns BPrivate
 
-class BField;
-class BRow;
 class BColumn;
 class BColumnListView;
+class BField;
+class BRow;
 
 enum LatchType {
 	B_NO_LATCH					= 0,
@@ -121,7 +121,8 @@ public:
 // a parent of a row, using the AddRow() function in BColumnListView().
 class BRow {
 public:
-								BRow(float height = 16.0);
+								BRow();
+								BRow(float height);
 	virtual 					~BRow();
 	virtual bool		 		HasLatch() const;
 
@@ -133,6 +134,9 @@ public:
 
 			float 				Height() const;
 			bool 				IsExpanded() const;
+			bool				IsSelected() const;
+
+			void				Invalidate();
 
 private:
 	// Blows up into the debugger if the validation fails.
@@ -326,9 +330,12 @@ public:
 	// Does not delete row or children at this time.
 	// todo: Make delete row and children
 			void				RemoveRow(BRow* row);
-
 			void				UpdateRow(BRow* row);
+			bool				SwapRows(int32 index1, int32 index2, BRow*
+									parentRow1 = NULL, BRow* parentRow2 = NULL);
 			void				Clear();
+
+			void				InvalidateRow(BRow* row);
 
 	// Appearance (DEPRECATED)
 			void				GetFont(BFont* font) const
@@ -346,6 +353,7 @@ public:
 	// Appearance (NEW STYLE)
 			void				SetColor(ColumnListViewColor colorIndex,
 									rgb_color color);
+			void				ResetColors();
 			void				SetFont(ColumnListViewFont fontIndex,
 									const BFont* font,
 									uint32 mask = B_FONT_ALL);
@@ -355,6 +363,9 @@ public:
 
 			BPoint				SuggestTextPosition(const BRow* row,
 									const BColumn* column = NULL) const;
+
+			BRect				GetFieldRect(const BRow* row,
+									const BColumn* column) const;
 
 			void				SetLatchWidth(float width);
 			float				LatchWidth() const;
@@ -386,12 +397,14 @@ protected:
 
 private:
 			void				_Init();
+			void				_UpdateColors();
 			void				_GetChildViewRects(const BRect& bounds,
 									BRect& titleRect, BRect& outlineRect,
 									BRect& vScrollBarRect,
 									BRect& hScrollBarRect);
 
 			rgb_color 			fColorList[B_COLOR_TOTAL];
+			bool				fCustomColors;
 			BPrivate::TitleView* fTitleView;
 			BPrivate::OutlineView* fOutlineView;
 			BList 				fColumns;

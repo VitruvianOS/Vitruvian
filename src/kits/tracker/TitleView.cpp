@@ -45,6 +45,8 @@ All rights reserved.
 #include <PopUpMenu.h>
 #include <Window.h>
 
+#include <algorithm>
+
 #include <stdio.h>
 #include <string.h>
 
@@ -56,23 +58,20 @@ All rights reserved.
 
 #define APP_SERVER_CLEARS_BACKGROUND 1
 
-static rgb_color sTitleBackground;
-static rgb_color sDarkTitleBackground;
-static rgb_color sShineColor;
-static rgb_color sLightShadowColor;
-static rgb_color sShadowColor;
-static rgb_color sDarkShadowColor;
 
-const rgb_color kHighlightColor = {100, 100, 210, 255};
+static const float kMinFontSize = 8.0f;
+static const float kMinTitleHeight = 13.0f;
+static const float kTitleSpacing = 1.4f;
 
 
 static void
 _DrawLine(BPoseView* view, BPoint from, BPoint to)
 {
-	rgb_color highColor = view->HighColor();
-	view->SetHighColor(tint_color(view->LowColor(), B_DARKEN_1_TINT));
+	float tint = B_NO_TINT;
+	color_which highColor = view->HighUIColor(&tint);
+	view->SetHighUIColor(view->LowUIColor(), B_DARKEN_1_TINT);
 	view->StrokeLine(from, to);
-	view->SetHighColor(highColor);
+	view->SetHighUIColor(highColor, tint);
 }
 
 
@@ -86,48 +85,46 @@ _UndrawLine(BPoseView* view, BPoint from, BPoint to)
 static void
 _DrawOutline(BView* view, BRect where)
 {
-	if (be_control_look != NULL) {
-		where.right++;
-		where.bottom--;
-	} else
-		where.InsetBy(1, 1);
-	rgb_color highColor = view->HighColor();
-	view->SetHighColor(kHighlightColor);
+	where.right++;
+	where.bottom--;
+	float tint = B_NO_TINT;
+	color_which highColor = view->HighUIColor(&tint);
+	view->SetHighUIColor(B_CONTROL_HIGHLIGHT_COLOR);
 	view->StrokeRect(where);
-	view->SetHighColor(highColor);
+	view->SetHighUIColor(highColor, tint);
 }
 
 
-//	#pragma mark -
+//	#pragma mark - BTitleView
 
 
-BTitleView::BTitleView(BRect frame, BPoseView* view)
-	: BView(frame, "TitleView", B_FOLLOW_LEFT_RIGHT, B_WILL_DRAW),
+BTitleView::BTitleView(BPoseView* view)
+	:
+	BView("TitleView", B_WILL_DRAW),
 	fPoseView(view),
 	fTitleList(10, true),
 	fHorizontalResizeCursor(B_CURSOR_ID_RESIZE_EAST_WEST),
 	fPreviouslyClickedColumnTitle(0),
+	fPreviousLeftClickTime(0),
 	fTrackingState(NULL)
 {
-	sTitleBackground = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR), 0.88f);
-		// 216 -> 220
-	sDarkTitleBackground = tint_color(sTitleBackground, B_DARKEN_1_TINT);
-	sShineColor = tint_color(sTitleBackground, B_LIGHTEN_MAX_TINT);
-	sLightShadowColor = tint_color(sTitleBackground, B_DARKEN_2_TINT);
-	sShadowColor = tint_color(sTitleBackground, B_DARKEN_4_TINT);
-	sDarkShadowColor = tint_color(sShadowColor, B_DARKEN_2_TINT);
-
-	SetHighColor(sTitleBackground);
-	SetLowColor(sTitleBackground);
+	SetHighUIColor(B_PANEL_BACKGROUND_COLOR);
+	SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
 #if APP_SERVER_CLEARS_BACKGROUND
-	SetViewColor(sTitleBackground);
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 #else
 	SetViewColor(B_TRANSPARENT_COLOR);
 #endif
 
+	float fontSize = std::max(kMinFontSize,
+		floorf(be_plain_font->Size() * 0.75f));
+
 	BFont font(be_plain_font);
-	font.SetSize(9);
+	font.SetSize(fontSize);
 	SetFont(&font);
+
+	fPreferredHeight = std::max(kMinTitleHeight,
+		ceilf(fontSize * kTitleSpacing));
 
 	Reset();
 }
@@ -192,6 +189,20 @@ BTitleView::RemoveTitle(BColumn* column)
 }
 
 
+BSize
+BTitleView::MinSize()
+{
+	return BSize(16, fPreferredHeight);
+}
+
+
+BSize
+BTitleView::MaxSize()
+{
+	return BSize(B_SIZE_UNLIMITED, fPreferredHeight);
+}
+
+
 void
 BTitleView::Draw(BRect rect)
 {
@@ -217,36 +228,19 @@ BTitleView::Draw(BRect /*updateRect*/, bool useOffscreen, bool updateOnly,
 		view->SetOrigin(-bounds.left, 0);
 		view->SetLowColor(LowColor());
 		view->SetHighColor(HighColor());
-		BFont font(be_plain_font);
-		font.SetSize(9);
+		BFont font;
+		GetFont(&font);
 		view->SetFont(&font);
 	} else
 		view = this;
 
-	if (be_control_look != NULL) {
-		rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
-		view->SetHighColor(tint_color(base, B_DARKEN_2_TINT));
-		view->StrokeLine(bounds.LeftBottom(), bounds.RightBottom());
-		bounds.bottom--;
+	view->SetHighUIColor(B_PANEL_BACKGROUND_COLOR, B_DARKEN_2_TINT);
+	view->StrokeLine(bounds.LeftBottom(), bounds.RightBottom());
+	bounds.bottom--;
 
-		be_control_look->DrawButtonBackground(view, bounds, bounds, base, 0,
-			BControlLook::B_TOP_BORDER | BControlLook::B_BOTTOM_BORDER);
-	} else {
-		// fill background with light gray background
-		if (!updateOnly)
-			view->FillRect(bounds, B_SOLID_LOW);
-	
-		view->BeginLineArray(4);
-		view->AddLine(bounds.LeftTop(), bounds.RightTop(), sShadowColor);
-		view->AddLine(bounds.LeftBottom(), bounds.RightBottom(),
-			sShadowColor);
-		// draw lighter gray and white inset lines
-		bounds.InsetBy(0, 1);
-		view->AddLine(bounds.LeftBottom(), bounds.RightBottom(),
-			sLightShadowColor);
-		view->AddLine(bounds.LeftTop(), bounds.RightTop(), sShineColor);
-		view->EndLineArray();
-	}
+	rgb_color baseColor = ui_color(B_PANEL_BACKGROUND_COLOR);
+	be_control_look->DrawButtonBackground(view, bounds, bounds, baseColor, 0,
+		BControlLook::B_TOP_BORDER | BControlLook::B_BOTTOM_BORDER);
 
 	int32 count = fTitleList.CountItems();
 	float minx = bounds.right;
@@ -261,23 +255,11 @@ BTitleView::Draw(BRect /*updateRect*/, bool useOffscreen, bool updateOnly,
 			maxx = titleBounds.right;
 	}
 
-	if (be_control_look != NULL) {
-		bounds = Bounds();
-		minx--;
-		view->SetHighColor(sLightShadowColor);
-		view->StrokeLine(BPoint(minx, bounds.top),
-			BPoint(minx, bounds.bottom - 1));
-	} else {
-		// first and last shades before and after first column
-		maxx++;
-		minx--;
-		view->BeginLineArray(2);
-		view->AddLine(BPoint(minx, bounds.top),
-					  BPoint(minx, bounds.bottom), sShadowColor);
-		view->AddLine(BPoint(maxx, bounds.top),
-					  BPoint(maxx, bounds.bottom), sShineColor);
-		view->EndLineArray();
-	}
+	bounds = Bounds();
+	minx--;
+	view->SetHighUIColor(B_PANEL_BACKGROUND_COLOR, B_DARKEN_1_TINT);
+	view->StrokeLine(BPoint(minx, bounds.top),
+		BPoint(minx, bounds.bottom - 1));
 
 #if !(APP_SERVER_CLEARS_BACKGROUND)
 	FillRect(BRect(bounds.left, bounds.top + 1, minx - 1, bounds.bottom - 1),
@@ -301,9 +283,13 @@ BTitleView::Draw(BRect /*updateRect*/, bool useOffscreen, bool updateOnly,
 void
 BTitleView::MouseDown(BPoint where)
 {
-	if (!Window()->IsActive()) {
-		// wasn't active, just activate and bail
-		Window()->Activate();
+	BContainerWindow* window = dynamic_cast<BContainerWindow*>(Window());
+	if (window == NULL)
+		return;
+
+	if (!window->IsActive()) {
+		// window wasn't active, activate it and bail
+		window->Activate();
 		return;
 	}
 
@@ -319,9 +305,7 @@ BTitleView::MouseDown(BPoint where)
 	// Check if the user clicked the secondary mouse button.
 	// if so, display the attribute menu:
 
-	if (buttons & B_SECONDARY_MOUSE_BUTTON) {
-		BContainerWindow* window = dynamic_cast<BContainerWindow*>
-			(Window());
+	if (SecondaryMouseButtonDown(modifiers(), buttons)) {
 		BPopUpMenu* menu = new BPopUpMenu("Attributes", false, false);
 		menu->SetFont(be_plain_font);
 		window->NewAttributeMenu(menu);
@@ -382,8 +366,12 @@ BTitleView::MouseUp(BPoint where)
 
 
 void
-BTitleView::MouseMoved(BPoint where, uint32 code, const BMessage* message)
+BTitleView::MouseMoved(BPoint where, uint32 code, const BMessage* dragMessage)
 {
+	BContainerWindow* window = dynamic_cast<BContainerWindow*>(Window());
+	if (window == NULL)
+		return;
+
 	if (fTrackingState != NULL) {
 		int32 buttons = 0;
 		if (Looper() != NULL && Looper()->CurrentMessage() != NULL)
@@ -394,17 +382,18 @@ BTitleView::MouseMoved(BPoint where, uint32 code, const BMessage* message)
 
 	switch (code) {
 		default:
-			if (InColumnResizeArea(where) && Window()->IsActive())
+			if (InColumnResizeArea(where) && window->IsActive())
 				SetViewCursor(&fHorizontalResizeCursor);
 			else
 				SetViewCursor(B_CURSOR_SYSTEM_DEFAULT);
 			break;
-			
+
 		case B_EXITED_VIEW:
 			SetViewCursor(B_CURSOR_SYSTEM_DEFAULT);
 			break;
 	}
-	_inherited::MouseMoved(where, code, message);
+
+	_inherited::MouseMoved(where, code, dragMessage);
 }
 
 
@@ -450,7 +439,7 @@ BTitleView::FindColumnTitle(const BColumn* column) const
 }
 
 
-//	#pragma mark -
+//	#pragma mark - BColumnTitle
 
 
 BColumnTitle::BColumnTitle(BTitleView* view, BColumn* column)
@@ -476,7 +465,7 @@ BRect
 BColumnTitle::Bounds() const
 {
 	BRect bounds(fColumn->Offset() - kTitleColumnLeftExtraMargin, 0, 0,
-		kTitleViewHeight);
+		fParent->Bounds().Height());
 	bounds.right = bounds.left + fColumn->Width() + kTitleColumnExtraMargin;
 
 	return bounds;
@@ -487,22 +476,24 @@ void
 BColumnTitle::Draw(BView* view, bool pressed)
 {
 	BRect bounds(Bounds());
-	BPoint loc(0, bounds.bottom - 4);
+
+	font_height fontHeight;
+	view->GetFontHeight(&fontHeight);
+
+	float baseline = floor(bounds.top + fontHeight.ascent
+		+ (bounds.Height() + 1 - (fontHeight.ascent + fontHeight.descent)) / 2);
+	BPoint titleLocation(0, baseline);
+
+	rgb_color baseColor = ui_color(B_PANEL_BACKGROUND_COLOR);
 
 	if (pressed) {
-		if (be_control_look != NULL) {
-			bounds.bottom--;
-			BRect rect(bounds);
-			rect.right--;
-			rgb_color base = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-				B_DARKEN_1_TINT);
+		bounds.bottom--;
+		BRect rect(bounds);
+		rect.right--;
+		baseColor = tint_color(baseColor, B_DARKEN_1_TINT);
 
-			be_control_look->DrawButtonBackground(view, rect, rect, base, 0,
-				BControlLook::B_TOP_BORDER | BControlLook::B_BOTTOM_BORDER);
-		} else {
-			view->SetLowColor(sDarkTitleBackground);
-			view->FillRect(bounds, B_SOLID_LOW);
-		}
+		be_control_look->DrawButtonBackground(view, rect, rect, baseColor, 0,
+			BControlLook::B_TOP_BORDER | BControlLook::B_BOTTOM_BORDER);
 	}
 
 	BString titleString(fColumn->Title());
@@ -513,21 +504,23 @@ BColumnTitle::Draw(BView* view, bool pressed)
 	switch (fColumn->Alignment()) {
 		case B_ALIGN_LEFT:
 		default:
-			loc.x = bounds.left + 1 + kTitleColumnLeftExtraMargin;
+			titleLocation.x = bounds.left + 1 + kTitleColumnLeftExtraMargin;
 			break;
 
 		case B_ALIGN_CENTER:
-			loc.x = bounds.left + (bounds.Width() / 2) - (resultingWidth / 2);
+			titleLocation.x = bounds.left + (bounds.Width() / 2)
+				- (resultingWidth / 2);
 			break;
 
 		case B_ALIGN_RIGHT:
-			loc.x = bounds.right - resultingWidth
+			titleLocation.x = bounds.right - resultingWidth
 				- kTitleColumnRightExtraMargin;
 			break;
 	}
 
-	view->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR), 1.75));
-	view->DrawString(titleString.String(), loc);
+	view->SetHighUIColor(B_PANEL_TEXT_COLOR, pressed ? B_DARKEN_1_TINT : 1.0f);
+	view->SetLowColor(baseColor);
+	view->DrawString(titleString.String(), titleLocation);
 
 	// show sort columns
 	bool secondary
@@ -535,7 +528,8 @@ BColumnTitle::Draw(BView* view, bool pressed)
 	if (secondary
 		|| (fColumn->AttrHash() == fParent->PoseView()->PrimarySort())) {
 
-		BPoint center(loc.x - 6, roundf((bounds.top + bounds.bottom) / 2.0));
+		BPoint center(titleLocation.x - 6,
+			roundf((bounds.top + bounds.bottom) / 2.0));
 		BPoint triangle[3];
 		if (fParent->PoseView()->ReverseSort()) {
 			triangle[0] = center + BPoint(-3.5, 1.5);
@@ -546,55 +540,31 @@ BColumnTitle::Draw(BView* view, bool pressed)
 			triangle[1] = center + BPoint(3.5, -1.5);
 			triangle[2] = center + BPoint(0.0, 2.0);
 		}
-	
+
 		uint32 flags = view->Flags();
 		view->SetFlags(flags | B_SUBPIXEL_PRECISE);
-	
+
 		if (secondary) {
-			view->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-				1.3));
+			view->SetHighUIColor(B_PANEL_BACKGROUND_COLOR, 1.3);
 			view->FillTriangle(triangle[0], triangle[1], triangle[2]);
 		} else {
-			view->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-				1.6));
+			view->SetHighUIColor(B_PANEL_BACKGROUND_COLOR, 1.6);
 			view->FillTriangle(triangle[0], triangle[1], triangle[2]);
 		}
-	
+
 		view->SetFlags(flags);
 	}
 
-	if (be_control_look != NULL) {
-		view->SetHighColor(sLightShadowColor);
-		view->StrokeLine(bounds.RightTop(), bounds.RightBottom());
-	} else {
-		BRect rect(bounds);
-
-		view->SetHighColor(sShadowColor);
-		view->StrokeRect(rect);
-
-		view->BeginLineArray(4);
-		// draw lighter gray and white inset lines
-		rect.InsetBy(1, 1);
-		view->AddLine(rect.LeftBottom(), rect.RightBottom(),
-			pressed ? sLightShadowColor : sLightShadowColor);
-		view->AddLine(rect.LeftTop(), rect.RightTop(),
-			pressed ? sDarkShadowColor : sShineColor);
-	
-		view->AddLine(rect.LeftTop(), rect.LeftBottom(),
-			pressed ? sDarkShadowColor : sShineColor);
-		view->AddLine(rect.RightTop(), rect.RightBottom(),
-			pressed ? sLightShadowColor : sLightShadowColor);
-
-		view->EndLineArray();
-	}
+	view->SetHighUIColor(B_PANEL_BACKGROUND_COLOR, B_DARKEN_1_TINT);
+	view->StrokeLine(bounds.RightTop(), bounds.RightBottom());
 }
 
 
-//	#pragma mark -
+//	#pragma mark - ColumnTrackState
 
 
 ColumnTrackState::ColumnTrackState(BTitleView* view, BColumnTitle* title,
-		BPoint where, bigtime_t pastClickTime)
+	BPoint where, bigtime_t pastClickTime)
 	:
 	fTitleView(view),
 	fTitle(title),
@@ -633,12 +603,13 @@ ColumnTrackState::MouseMoved(BPoint where, uint32 buttons)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - ColumnResizeState
 
 
 ColumnResizeState::ColumnResizeState(BTitleView* view, BColumnTitle* title,
 		BPoint where, bigtime_t pastClickTime)
-	: ColumnTrackState(view, title, where, pastClickTime),
+	:
+	ColumnTrackState(view, title, where, pastClickTime),
 	fLastLineDrawPos(-1),
 	fInitialTrackOffset((title->fColumn->Offset() + title->fColumn->Width())
 		- where.x)
@@ -728,12 +699,13 @@ ColumnResizeState::UndrawLine()
 }
 
 
-//	#pragma mark -
+//	#pragma mark - ColumnDragState
 
 
 ColumnDragState::ColumnDragState(BTitleView* view, BColumnTitle* columnTitle,
-		BPoint where, bigtime_t pastClickTime)
-	: ColumnTrackState(view, columnTitle, where, pastClickTime),
+	BPoint where, bigtime_t pastClickTime)
+	:
+	ColumnTrackState(view, columnTitle, where, pastClickTime),
 	fInitialMouseTrackOffset(where.x),
 	fTrackingRemovedColumn(false)
 {
@@ -820,7 +792,7 @@ ColumnDragState::Moved(BPoint where, uint32)
 		} else
 			drawOutline = true;
 	}
-	
+
 	if (drawOutline)
 		DrawOutline(where.x - fInitialMouseTrackOffset);
 	else if (undrawOutline)
@@ -845,7 +817,7 @@ ColumnDragState::Clicked(BPoint /*where*/)
 	uint32 primarySort = poseView->PrimarySort();
 	uint32 secondarySort = poseView->SecondarySort();
 	bool shift = (modifiers() & B_SHIFT_KEY) != 0;
-	
+
 	// For now:
 	// if we hit the primary sort field again
 	// then if shift key was down, switch primary and secondary

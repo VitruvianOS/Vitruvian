@@ -29,6 +29,7 @@ struct thread_creation_attributes;
 
 typedef struct _pthread_condattr {
 	bool		process_shared;
+	clockid_t	clock_id;
 } pthread_condattr;
 
 typedef struct _pthread_mutexattr {
@@ -36,10 +37,16 @@ typedef struct _pthread_mutexattr {
 	bool		process_shared;
 } pthread_mutexattr;
 
+typedef struct _pthread_barrierattr {
+	bool		process_shared;
+} pthread_barrierattr;
+
 typedef struct _pthread_attr {
 	int32		detach_state;
 	int32		sched_priority;
 	size_t		stack_size;
+	size_t		guard_size;
+	void		*stack_address;
 } pthread_attr;
 
 typedef struct _pthread_rwlockattr {
@@ -49,12 +56,12 @@ typedef struct _pthread_rwlockattr {
 typedef void (*pthread_key_destructor)(void *data);
 
 struct pthread_key {
-	vint32		sequence;
+	int32		sequence;
 	pthread_key_destructor destructor;
 };
 
 struct pthread_key_data {
-	vint32		sequence;
+	int32		sequence;
 	void		*value;
 };
 
@@ -84,6 +91,7 @@ status_t __pthread_init_creation_attributes(
 	status_t (*entryFunction)(void*, void*), void* argument1,
 	void* argument2, const char* name,
 	struct thread_creation_attributes* attributes);
+void __pthread_set_default_priority(int32 priority);
 
 #ifdef __cplusplus
 }

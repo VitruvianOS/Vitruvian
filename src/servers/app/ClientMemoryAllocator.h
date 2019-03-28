@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2010, Haiku, Inc. All Rights Reserved.
+ * Copyright 2006-2013, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -10,6 +10,7 @@
 
 
 #include <Locker.h>
+#include <Referenceable.h>
 
 #include <util/DoublyLinkedList.h>
 
@@ -34,7 +35,7 @@ typedef DoublyLinkedList<block> block_list;
 typedef DoublyLinkedList<chunk> chunk_list;
 
 
-class ClientMemoryAllocator {
+class ClientMemoryAllocator : public BReferenceable {
 public:
 								ClientMemoryAllocator(ServerApp* application);
 								~ClientMemoryAllocator();
@@ -42,6 +43,8 @@ public:
 			void*				Allocate(size_t size, block** _address,
 									bool& newArea);
 			void				Free(block* cookie);
+
+			void				Detach();
 
 			void				Dump();
 

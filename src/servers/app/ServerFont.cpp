@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku.
+ * Copyright 2001-2016, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -9,7 +9,6 @@
  *		Stephan Aßmus <superstippi@gmx.de>
  */
 
-#include <SupportDefs.h>
 
 #include "ServerFont.h"
 
@@ -23,14 +22,23 @@
 #include FT_GLYPH_H
 #include FT_OUTLINE_H
 
+#ifdef FONTCONFIG_ENABLED
+
+#include <fontconfig.h>
+#include <fcfreetype.h>
+
+#endif // FONTCONFIG_ENABLED
+
 #include <Shape.h>
 #include <String.h>
+#include <UnicodeBlockObjects.h>
 #include <UTF8.h>
 
 #include <agg_bounding_rect.h>
 
 #include <stdio.h>
 #include <string.h>
+
 
 // functions needed to convert a freetype vector graphics to a BShape
 inline BPoint
@@ -119,20 +127,20 @@ is_white_space(uint32 charCode)
 	\param flags Style flags as defined in <Font.h>
 	\param spacing String spacing flag as defined in <Font.h>
 */
-ServerFont::ServerFont(FontStyle& style, float size,
-					   float rotation, float shear, float falseBoldWidth,
-					   uint16 flags, uint8 spacing)
-	: fStyle(&style),
-	  fSize(size),
-	  fRotation(rotation),
-	  fShear(shear),
-	  fFalseBoldWidth(falseBoldWidth),
-	  fBounds(0, 0, 0, 0),
-	  fFlags(flags),
-	  fSpacing(spacing),
-	  fDirection(style.Direction()),
-	  fFace(style.Face()),
-	  fEncoding(B_UNICODE_UTF8)
+ServerFont::ServerFont(FontStyle& style, float size, float rotation,
+		float shear, float falseBoldWidth, uint16 flags, uint8 spacing)
+	:
+	fStyle(&style),
+	fSize(size),
+	fRotation(rotation),
+	fShear(shear),
+	fFalseBoldWidth(falseBoldWidth),
+	fBounds(0, 0, 0, 0),
+	fFlags(flags),
+	fSpacing(spacing),
+	fDirection(style.Direction()),
+	fFace(style.Face()),
+	fEncoding(B_UNICODE_UTF8)
 {
 	fStyle->Acquire();
 }
@@ -402,7 +410,7 @@ ServerFont::PutTransformedFace(FT_Face face) const
 
 status_t
 ServerFont::GetGlyphShapes(const char charArray[], int32 numChars,
-	BShape *shapeArray[]) const
+	BShape* shapeArray[]) const
 {
 	if (!charArray || numChars <= 0 || !shapeArray)
 		return B_BAD_DATA;
@@ -419,9 +427,13 @@ ServerFont::GetGlyphShapes(const char charArray[], int32 numChars,
 	funcs.shift = 0;
 	funcs.delta = 0;
 
-	const char *string = charArray;
+	const char* string = charArray;
 	for (int i = 0; i < numChars; i++) {
-		shapeArray[i] = new BShape();
+		shapeArray[i] = new (std::nothrow) BShape();
+		if (shapeArray[i] == NULL) {
+			PutTransformedFace(face);
+			return B_NO_MEMORY;
+		}
 		FT_Load_Char(face, UTF8ToCharCode(&string), FT_LOAD_NO_BITMAP);
 		FT_Outline outline = face->glyph->outline;
 		FT_Outline_Decompose(&outline, &funcs, shapeArray[i]);
@@ -433,20 +445,246 @@ ServerFont::GetGlyphShapes(const char charArray[], int32 numChars,
 }
 
 
+#ifdef FONTCONFIG_ENABLED
+
+/*!
+	\brief For a given codepoint, do a binary search of the defined unicode
+	blocks to figure out which one contains the codepoint.
+	\param codePoint is the point to find
+	\param startGuess is the starting point for the binary search (default 0)
+*/
+static
+int32
+FindBlockForCodepoint(uint32 codePoint, uint32 startGuess)
+{
+	uint32 min = 0;
+	uint32 max = kNumUnicodeBlockRanges;
+	uint32 guess = (max + min) / 2;
+
+	if (startGuess > 0)
+		guess = startGuess;
+
+	if (codePoint > kUnicodeBlockMap[max-1].end)
+		return -1;
+
+	while ((max >= min) && (guess < kNumUnicodeBlockRanges)) {
+		uint32 start = kUnicodeBlockMap[guess].start;
+		uint32 end = kUnicodeBlockMap[guess].end;
+
+		if (start <= codePoint && end >= codePoint)
+			return guess;
+
+		if (end < codePoint) {
+			min = guess + 1;
+		} else {
+			max = guess - 1;
+		}
+
+		guess = (max + min) / 2;
+	}
+
+	return -1;
+}
+
+/*!
+	\brief parses charmap from fontconfig.  See fontconfig docs for FcCharSetFirstPage
+	and FcCharSetNextPage for details on format.
+	\param charMap is a fontconfig character map
+	\param baseCodePoint is the base codepoint returned by fontconfig
+	\param blocksForMap is a unicode_block to store the bitmap of contained blocks
+*/
+static
+void
+ParseFcMap(FcChar32 charMap[], FcChar32 baseCodePoint, unicode_block& blocksForMap)
+{
+	uint32 block = 0;
+	const uint8 BITS_PER_BLOCK = 32;
+	uint32 currentCodePoint = 0;
+
+	if (baseCodePoint > kUnicodeBlockMap[kNumUnicodeBlockRanges-1].end)
+		return;
+
+	for (int i = 0; i < FC_CHARSET_MAP_SIZE; ++i) {
+		FcChar32 curMapBlock = charMap[i];
+		int32 rangeStart = -1;
+		int32 startBlock = -1;
+		int32 endBlock = -1;
+		uint32 startPoint = 0;
+
+		currentCodePoint = baseCodePoint + block;
+
+		for (int bit = 0; bit < BITS_PER_BLOCK; ++bit) {
+			if (curMapBlock == 0 && startBlock < 0)
+				// if no more bits are set then short-circuit the loop
+				break;
+
+			if ((curMapBlock & 0x1) != 0 && rangeStart < 0) {
+				rangeStart = bit;
+				startPoint = currentCodePoint + rangeStart;
+				startBlock = FindBlockForCodepoint(startPoint, 0);
+				if (startBlock >= 0) {
+					blocksForMap = blocksForMap
+						| kUnicodeBlockMap[startBlock].block;
+				}
+			} else if (rangeStart >= 0 && startBlock >= 0) {
+					// when we find an empty bit, that's the end of the range
+				uint32 endPoint = currentCodePoint + (bit - 1);
+
+				endBlock = FindBlockForCodepoint(endPoint,
+					startBlock);
+					// start the binary search at the block where we found the
+					// start codepoint to ideally find the end in the same
+					// block.
+				++startBlock;
+
+				while (startBlock <= endBlock) {
+					// if the starting codepoint is found in a different block
+					// than the ending codepoint, we should add all the blocks
+					// inbetween.
+					blocksForMap = blocksForMap
+						| kUnicodeBlockMap[startBlock].block;
+					++startBlock;
+				}
+
+				startBlock = -1;
+				endBlock = -1;
+				rangeStart = -1;
+			}
+
+			curMapBlock >>= 1;
+		}
+
+		if (rangeStart >= 0 && startBlock >= 0) {
+				// if we hit the end of the block and had
+				// found a start of the range then we
+				// should end the range at the end of the block
+			uint32 endPoint = currentCodePoint + BITS_PER_BLOCK - 1;
+
+			endBlock = FindBlockForCodepoint(endPoint,
+				startBlock);
+				// start the binary search at the block where we found the
+				// start codepoint to ideally find the end in the same
+				// block.
+			++startBlock;
+
+			while (startBlock <= endBlock) {
+				// if the starting codepoint is found in a different block
+				// than the ending codepoint, we should add all the blocks
+				// inbetween.
+				blocksForMap = blocksForMap
+					| kUnicodeBlockMap[startBlock].block;
+				++startBlock;
+			}
+		}
+
+		block += BITS_PER_BLOCK;
+	}
+}
+
+#endif // FONTCONFIG_ENABLED
+
+
+/*!
+	\brief Gets a bitmap that indicates which Unicode blocks are in the font.
+	\param unicode_block to store bitmap in
+	\return B_OK; bitmap will be empty if something went wrong
+*/
+status_t
+ServerFont::GetUnicodeBlocks(unicode_block& blocksForFont)
+{
+	blocksForFont = unicode_block();
+
+#ifdef FONTCONFIG_ENABLED
+	FT_Face face = GetTransformedFace(true, true);
+	if (face == NULL)
+		return B_ERROR;
+
+	FcCharSet *charSet = FcFreeTypeCharSet(face, NULL);
+	if (charSet == NULL) {
+		PutTransformedFace(face);
+		return B_ERROR;
+	}
+
+	FcChar32 charMap[FC_CHARSET_MAP_SIZE];
+	FcChar32 next = 0;
+	FcChar32 baseCodePoint = FcCharSetFirstPage(charSet, charMap, &next);
+
+	while ((baseCodePoint != FC_CHARSET_DONE) && (next != FC_CHARSET_DONE)) {
+		ParseFcMap(charMap, baseCodePoint, blocksForFont);
+		baseCodePoint = FcCharSetNextPage(charSet, charMap, &next);
+	}
+
+	FcCharSetDestroy(charSet);
+	PutTransformedFace(face);
+#endif // FONTCONFIG_ENABLED
+
+	return B_OK;
+}
+
+/*!
+	\brief Checks if a unicode block specified by a start and end point is defined
+	in the current font
+	\param start of unicode block
+	\param end of unicode block
+	\param hasBlock boolean to store whether the font contains the specified block
+	\return B_OK; hasBlock will be false if something goes wrong
+*/
+status_t
+ServerFont::IncludesUnicodeBlock(uint32 start, uint32 end, bool& hasBlock)
+{
+	hasBlock = false;
+
+#ifdef FONTCONFIG_ENABLED
+	FT_Face face = GetTransformedFace(true, true);
+	if (face == NULL)
+		return B_ERROR;
+
+	FcCharSet *charSet = FcFreeTypeCharSet(face, NULL);
+	if (charSet == NULL) {
+		PutTransformedFace(face);
+		return B_ERROR;
+	}
+
+	uint32 curCodePoint = start;
+
+	while (curCodePoint <= end && hasBlock == false) {
+		// loop through range; if any character in the range is in the charset
+		// then the block is represented.
+		if (FcCharSetHasChar(charSet, (FcChar32)curCodePoint) == FcTrue) {
+			hasBlock = true;
+			break;
+		}
+
+		++curCodePoint;
+	}
+
+	FcCharSetDestroy(charSet);
+	PutTransformedFace(face);
+#endif // FONTCONFIG_ENABLED
+
+	return B_OK;
+}
+
+
 class HasGlyphsConsumer {
  public:
 	HasGlyphsConsumer(bool* hasArray)
-		: fHasArray(hasArray)
+		:
+		fHasArray(hasArray)
 	{
 	}
+
+	bool NeedsVector() { return false; }
 	void Start() {}
 	void Finish(double x, double y) {}
 	void ConsumeEmptyGlyph(int32 index, uint32 charCode, double x, double y)
 	{
 		fHasArray[index] = false;
 	}
+
 	bool ConsumeGlyph(int32 index, uint32 charCode, const GlyphCache* glyph,
-		FontCacheEntry* entry, double x, double y)
+		FontCacheEntry* entry, double x, double y, double advanceX,
+			double advanceY)
 	{
 		fHasArray[index] = glyph->glyph_index != 0;
 		return true;
@@ -458,18 +696,17 @@ class HasGlyphsConsumer {
 
 
 status_t
-ServerFont::GetHasGlyphs(const char* string, int32 numBytes,
+ServerFont::GetHasGlyphs(const char* string, int32 numBytes, int32 numChars,
 	bool* hasArray) const
 {
-	if (!string || numBytes <= 0 || !hasArray)
+	if (string == NULL || numBytes <= 0 || numChars <= 0 || hasArray == NULL)
 		return B_BAD_DATA;
-
-	bool kerning = true; // TODO make this a property?
 
 	HasGlyphsConsumer consumer(hasArray);
 	if (GlyphLayoutEngine::LayoutGlyphs(consumer, *this, string, numBytes,
-		NULL, kerning, fSpacing))
+			numChars, NULL, fSpacing)) {
 		return B_OK;
+	}
 
 	return B_ERROR;
 }
@@ -478,10 +715,13 @@ ServerFont::GetHasGlyphs(const char* string, int32 numBytes,
 class EdgesConsumer {
  public:
 	EdgesConsumer(edge_info* edges, float size)
-		: fEdges(edges)
-		, fSize(size)
+		:
+		fEdges(edges),
+		fSize(size)
 	{
 	}
+
+	bool NeedsVector() { return false; }
 	void Start() {}
 	void Finish(double x, double y) {}
 	void ConsumeEmptyGlyph(int32 index, uint32 charCode, double x, double y)
@@ -489,8 +729,10 @@ class EdgesConsumer {
 		fEdges[index].left = 0.0;
 		fEdges[index].right = 0.0;
 	}
+
 	bool ConsumeGlyph(int32 index, uint32 charCode, const GlyphCache* glyph,
-		FontCacheEntry* entry, double x, double y)
+		FontCacheEntry* entry, double x, double y, double advanceX,
+			double advanceY)
 	{
 		fEdges[index].left = glyph->inset_left / fSize;
 		fEdges[index].right = glyph->inset_right / fSize;
@@ -504,18 +746,17 @@ class EdgesConsumer {
 
 
 status_t
-ServerFont::GetEdges(const char* string, int32 numBytes,
+ServerFont::GetEdges(const char* string, int32 numBytes, int32 numChars,
 	edge_info* edges) const
 {
-	if (!string || numBytes <= 0 || !edges)
+	if (string == NULL || numBytes <= 0 || numChars <= 0 || edges == NULL)
 		return B_BAD_DATA;
-
-	bool kerning = true; // TODO make this a property?
 
 	EdgesConsumer consumer(edges, fSize);
 	if (GlyphLayoutEngine::LayoutGlyphs(consumer, *this, string, numBytes,
-		NULL, kerning, fSpacing))
+			numChars, NULL, fSpacing)) {
 		return B_OK;
+	}
 
 	return B_ERROR;
 
@@ -540,16 +781,15 @@ ServerFont::GetEdges(const char* string, int32 numBytes,
 
 class BPointEscapementConsumer {
 public:
-	BPointEscapementConsumer(BPoint* escapements, BPoint* offsets,
-			int32 numChars, float size)
+	BPointEscapementConsumer(BPoint* escapements, BPoint* offsets, float size)
 		:
 		fEscapements(escapements),
 		fOffsets(offsets),
-		fNumChars(numChars),
 		fSize(size)
 	{
 	}
 
+	bool NeedsVector() { return false; }
 	void Start() {}
 	void Finish(double x, double y) {}
 	void ConsumeEmptyGlyph(int32 index, uint32 charCode, double x, double y)
@@ -558,17 +798,15 @@ public:
 	}
 
 	bool ConsumeGlyph(int32 index, uint32 charCode, const GlyphCache* glyph,
-		FontCacheEntry* entry, double x, double y)
+		FontCacheEntry* entry, double x, double y, double advanceX,
+			double advanceY)
 	{
-		return _Set(index, glyph->advance_x, glyph->advance_y);
+		return _Set(index, advanceX, advanceY);
 	}
 
 private:
 	inline bool _Set(int32 index, double x, double y)
 	{
-		if (index >= fNumChars)
-			return false;
-
 		fEscapements[index].x = x / fSize;
 		fEscapements[index].y = y / fSize;
 		if (fOffsets) {
@@ -585,8 +823,7 @@ private:
 
 	BPoint* fEscapements;
 	BPoint* fOffsets;
-	int32 fNumChars;
- 	float fSize;
+	float fSize;
 };
 
 
@@ -595,16 +832,16 @@ ServerFont::GetEscapements(const char* string, int32 numBytes, int32 numChars,
 	escapement_delta delta, BPoint escapementArray[],
 	BPoint offsetArray[]) const
 {
-	if (!string || numBytes <= 0 || !escapementArray)
+	if (string == NULL || numBytes <= 0 || numChars <= 0
+		|| escapementArray == NULL) {
 		return B_BAD_DATA;
+	}
 
-	bool kerning = true; // TODO make this a property?
-
-	BPointEscapementConsumer consumer(escapementArray, offsetArray, numChars,
-		fSize);
+	BPointEscapementConsumer consumer(escapementArray, offsetArray, fSize);
 	if (GlyphLayoutEngine::LayoutGlyphs(consumer, *this, string, numBytes,
-		&delta, kerning, fSpacing))
+			numChars, &delta, fSpacing)) {
 		return B_OK;
+	}
 
 	return B_ERROR;
 }
@@ -612,14 +849,14 @@ ServerFont::GetEscapements(const char* string, int32 numBytes, int32 numChars,
 
 class WidthEscapementConsumer {
 public:
-	WidthEscapementConsumer(float* widths, int32 numChars, float size)
+	WidthEscapementConsumer(float* widths, float size)
 		:
 		fWidths(widths),
-		fNumChars(numChars),
 		fSize(size)
 	{
 	}
 
+	bool NeedsVector() { return false; }
 	void Start() {}
 	void Finish(double x, double y) {}
 	void ConsumeEmptyGlyph(int32 index, uint32 charCode, double x, double y)
@@ -628,18 +865,15 @@ public:
 	}
 
 	bool ConsumeGlyph(int32 index, uint32 charCode, const GlyphCache* glyph,
-		FontCacheEntry* entry, double x, double y)
+		FontCacheEntry* entry, double x, double y, double advanceX,
+			double advanceY)
 	{
-		if (index >= fNumChars)
-			return false;
-
-		fWidths[index] = glyph->advance_x / fSize;
+		fWidths[index] = advanceX / fSize;
 		return true;
 	}
 
  private:
 	float* fWidths;
-	int32 fNumChars;
 	float fSize;
 };
 
@@ -649,15 +883,15 @@ status_t
 ServerFont::GetEscapements(const char* string, int32 numBytes, int32 numChars,
 	escapement_delta delta, float widthArray[]) const
 {
-	if (!string || numBytes <= 0 || !widthArray)
+	if (string == NULL || numBytes <= 0 || numChars <= 0 || widthArray == NULL)
 		return B_BAD_DATA;
 
-	bool kerning = true; // TODO make this a property?
-
-	WidthEscapementConsumer consumer(widthArray, numChars, fSize);
+	WidthEscapementConsumer consumer(widthArray, fSize);
 	if (GlyphLayoutEngine::LayoutGlyphs(consumer, *this, string, numBytes,
-		&delta, kerning, fSpacing))
+			numChars, &delta, fSpacing)) {
 		return B_OK;
+	}
+
 	return B_ERROR;
 }
 
@@ -666,22 +900,26 @@ class BoundingBoxConsumer {
  public:
 	BoundingBoxConsumer(Transformable& transform, BRect* rectArray,
 			bool asString)
-		: rectArray(rectArray)
-		, stringBoundingBox(LONG_MAX, LONG_MAX, LONG_MIN, LONG_MIN)
-		, fAsString(asString)
-		, fCurves(fPathAdaptor)
-		, fContour(fCurves)
-		, fTransformedOutline(fCurves, transform)
-		, fTransformedContourOutline(fContour, transform)
-		, fTransform(transform)
+		:
+		rectArray(rectArray),
+		stringBoundingBox(INT32_MAX, INT32_MAX, INT32_MIN, INT32_MIN),
+		fAsString(asString),
+		fCurves(fPathAdaptor),
+		fContour(fCurves),
+		fTransformedOutline(fCurves, transform),
+		fTransformedContourOutline(fContour, transform),
+		fTransform(transform)
 	{
 	}
 
+	bool NeedsVector() { return false; }
 	void Start() {}
 	void Finish(double x, double y) {}
 	void ConsumeEmptyGlyph(int32 index, uint32 charCode, double x, double y) {}
+
 	bool ConsumeGlyph(int32 index, uint32 charCode, const GlyphCache* glyph,
-		FontCacheEntry* entry, double x, double y)
+		FontCacheEntry* entry, double x, double y, double advanceX,
+			double advanceY)
 	{
 		if (glyph->data_type != glyph_data_outline) {
 			const agg::rect_i& r = glyph->bounds;
@@ -750,48 +988,48 @@ class BoundingBoxConsumer {
 
 
 status_t
-ServerFont::GetBoundingBoxes(const char* string, int32 numBytes,
+ServerFont::GetBoundingBoxes(const char* string, int32 numBytes, int32 numChars,
 	BRect rectArray[], bool stringEscapement, font_metric_mode mode,
 	escapement_delta delta, bool asString)
 {
 	// TODO: The font_metric_mode is not used
-	if (!string || numBytes <= 0 || !rectArray)
+	if (string == NULL || numBytes <= 0 || numChars <= 0 || rectArray == NULL)
 		return B_BAD_DATA;
-
-	bool kerning = true; // TODO make this a property?
 
 	Transformable transform(EmbeddedTransformation());
 
 	BoundingBoxConsumer consumer(transform, rectArray, asString);
 	if (GlyphLayoutEngine::LayoutGlyphs(consumer, *this, string, numBytes,
-		stringEscapement ? &delta : NULL, kerning, fSpacing))
+			numChars, stringEscapement ? &delta : NULL, fSpacing)) {
 		return B_OK;
+	}
 	return B_ERROR;
 }
 
 
 status_t
-ServerFont::GetBoundingBoxesForStrings(char *charArray[], int32 lengthArray[],
+ServerFont::GetBoundingBoxesForStrings(char *charArray[], size_t lengthArray[],
 	int32 numStrings, BRect rectArray[], font_metric_mode mode,
 	escapement_delta deltaArray[])
 {
 	// TODO: The font_metric_mode is never used
-	if (!charArray || !lengthArray|| numStrings <= 0 || !rectArray || !deltaArray)
+	if (charArray == NULL || lengthArray == NULL || numStrings <= 0
+		|| rectArray == NULL || deltaArray == NULL) {
 		return B_BAD_DATA;
-
-	bool kerning = true; // TODO make this a property?
+	}
 
 	Transformable transform(EmbeddedTransformation());
 
 	for (int32 i = 0; i < numStrings; i++) {
-		int32 numBytes = lengthArray[i];
+		size_t numBytes = lengthArray[i];
 		const char* string = charArray[i];
 		escapement_delta delta = deltaArray[i];
 
 		BoundingBoxConsumer consumer(transform, NULL, true);
 		if (!GlyphLayoutEngine::LayoutGlyphs(consumer, *this, string, numBytes,
-			&delta, kerning, fSpacing))
+				INT32_MAX, &delta, fSpacing)) {
 			return B_ERROR;
+		}
 
 		rectArray[i] = consumer.stringBoundingBox;
 	}
@@ -802,13 +1040,22 @@ ServerFont::GetBoundingBoxesForStrings(char *charArray[], int32 lengthArray[],
 
 class StringWidthConsumer {
  public:
-	StringWidthConsumer() : width(0.0) {}
+	StringWidthConsumer()
+		:
+		width(0.0)
+	{
+	}
+
+	bool NeedsVector() { return false; }
 	void Start() {}
 	void Finish(double x, double y) { width = x; }
 	void ConsumeEmptyGlyph(int32 index, uint32 charCode, double x, double y) {}
 	bool ConsumeGlyph(int32 index, uint32 charCode, const GlyphCache* glyph,
-		FontCacheEntry* entry, double x, double y)
-	{ return true; }
+		FontCacheEntry* entry, double x, double y, double advanceX,
+			double advanceY)
+	{
+		return true;
+	}
 
 	float width;
 };
@@ -821,12 +1068,11 @@ ServerFont::StringWidth(const char *string, int32 numBytes,
 	if (!string || numBytes <= 0)
 		return 0.0;
 
-	bool kerning = true; // TODO make this a property?
-
 	StringWidthConsumer consumer;
 	if (!GlyphLayoutEngine::LayoutGlyphs(consumer, *this, string, numBytes,
-			deltaArray, kerning, fSpacing))
+			INT32_MAX, deltaArray, fSpacing)) {
 		return 0.0;
+	}
 
 	return consumer.width;
 }
@@ -868,7 +1114,10 @@ ServerFont::TruncateString(BString* inOut, uint32 mode, float width) const
 	int32 numChars = inOut->CountChars();
 
 	// get the escapement of each glyph in font units
-	float* escapementArray = new float[numChars];
+	float* escapementArray = new (std::nothrow) float[numChars];
+	if (escapementArray == NULL)
+		return;
+
 	static escapement_delta delta = (escapement_delta){ 0.0, 0.0 };
 	if (GetEscapements(inOut->String(), inOut->Length(), numChars, delta,
 		escapementArray) == B_OK) {

@@ -33,7 +33,9 @@ AGGTextRenderer::AGGTextRenderer(renderer_subpix_type& subpixRenderer,
 		renderer_type& solidRenderer, renderer_bin_type& binRenderer,
 		scanline_unpacked_type& scanline,
 		scanline_unpacked_subpix_type& subpixScanline,
-		rasterizer_subpix_type& subpixRasterizer)
+		rasterizer_subpix_type& subpixRasterizer,
+		scanline_unpacked_masked_type*& maskedScanline,
+		agg::trans_affine& viewTransformation)
 	:
 	fPathAdaptor(),
 	fGray8Adaptor(),
@@ -51,12 +53,14 @@ AGGTextRenderer::AGGTextRenderer(renderer_subpix_type& subpixRenderer,
 	fScanline(scanline),
 	fSubpixScanline(subpixScanline),
 	fSubpixRasterizer(subpixRasterizer),
+	fMaskedScanline(maskedScanline),
+
 	fRasterizer(),
 
 	fHinted(true),
 	fAntialias(true),
-	fKerning(true),
-	fEmbeddedTransformation()
+	fEmbeddedTransformation(),
+	fViewTransformation(viewTransformation)
 {
 	fCurves.approximation_scale(2.0);
 	fContour.auto_detect_orientation(false);
@@ -131,7 +135,7 @@ public:
 		fDryRun(dryRun),
 		fSubpixelAntiAliased(subpixelAntiAliased),
 		fVector(false),
-		fBounds(LONG_MAX, LONG_MAX, LONG_MIN, LONG_MIN),
+		fBounds(INT32_MAX, INT32_MAX, INT32_MIN, INT32_MIN),
 		fNextCharPos(nextCharPos),
 
 		fTransformedGlyph(transformedGlyph),
@@ -139,6 +143,11 @@ public:
 
 		fRenderer(renderer)
 	{
+	}
+
+	bool NeedsVector()
+	{
+		return !fTransform.IsTranslationOnly();
 	}
 
 	void Start()
@@ -150,7 +159,10 @@ public:
 	void Finish(double x, double y)
 	{
 		if (fVector) {
-			if (fSubpixelAntiAliased) {
+			if (fRenderer.fMaskedScanline != NULL) {
+				agg::render_scanlines(fRenderer.fRasterizer,
+					*fRenderer.fMaskedScanline, fRenderer.fSolidRenderer);
+			} else if (fSubpixelAntiAliased) {
 				agg::render_scanlines(fRenderer.fSubpixRasterizer,
 					fRenderer.fSubpixScanline, fRenderer.fSubpixRenderer);
 			} else {
@@ -171,7 +183,8 @@ public:
 	}
 
 	bool ConsumeGlyph(int32 index, uint32 charCode, const GlyphCache* glyph,
-		FontCacheEntry* entry, double x, double y)
+		FontCacheEntry* entry, double x, double y, double advanceX,
+			double advanceY)
 	{
 		// "glyphBounds" is the bounds of the glyph transformed
 		// by the x y location of the glyph along the base line,
@@ -234,11 +247,19 @@ public:
 						break;
 
 					case glyph_data_gray8:
-						agg::render_scanlines(fRenderer.fGray8Adaptor,
-							fRenderer.fGray8Scanline, fRenderer.fSolidRenderer);
+						if (fRenderer.fMaskedScanline != NULL) {
+							agg::render_scanlines(fRenderer.fGray8Adaptor,
+								*fRenderer.fMaskedScanline,
+								fRenderer.fSolidRenderer);
+						} else {
+							agg::render_scanlines(fRenderer.fGray8Adaptor,
+								fRenderer.fGray8Scanline,
+								fRenderer.fSolidRenderer);
+						}
 						break;
 
 					case glyph_data_subpix:
+						// TODO: Handle alpha mask (fRenderer.fMaskedScanline)
 						agg::render_scanlines(fRenderer.fGray8Adaptor,
 							fRenderer.fGray8Scanline,
 							fRenderer.fSubpixRenderer);
@@ -295,7 +316,7 @@ public:
 	}
 
 private:
- 	const Transformable& fTransform;
+	const Transformable& fTransform;
 	const BPoint&		fTransformOffset;
 	const IntRect&		fClippingFrame;
 	bool				fDryRun;
@@ -320,6 +341,7 @@ AGGTextRenderer::RenderString(const char* string, uint32 length,
 
 	Transformable transform(fEmbeddedTransformation);
 	transform.TranslateBy(baseLine);
+	transform *= fViewTransformation;
 
 	fCurves.approximation_scale(transform.scale());
 
@@ -334,14 +356,15 @@ AGGTextRenderer::RenderString(const char* string, uint32 length,
 	// for when we bypass the transformation pipeline
 	BPoint transformOffset(0.0, 0.0);
 	transform.Transform(&transformOffset);
+	IntRect clippingIntFrame(clippingFrame);
 
-	StringRenderer renderer(clippingFrame, dryRun,
+	StringRenderer renderer(clippingIntFrame, dryRun,
 		gSubpixelAntialiasing && fAntialias,
 		transformedOutline, transformedContourOutline,
 		transform, transformOffset, nextCharPos, *this);
 
-	GlyphLayoutEngine::LayoutGlyphs(renderer, fFont, string, length, delta,
-		fKerning, B_BITMAP_SPACING, NULL, cacheReference);
+	GlyphLayoutEngine::LayoutGlyphs(renderer, fFont, string, length, INT32_MAX,
+		delta, fFont.Spacing(), NULL, cacheReference);
 
 	return transform.TransformBounds(renderer.Bounds());
 }
@@ -355,6 +378,7 @@ AGGTextRenderer::RenderString(const char* string, uint32 length,
 //printf("RenderString(\"%s\", length: %ld, dry: %d)\n", string, length, dryRun);
 
 	Transformable transform(fEmbeddedTransformation);
+	transform *= fViewTransformation;
 
 	fCurves.approximation_scale(transform.scale());
 
@@ -369,14 +393,15 @@ AGGTextRenderer::RenderString(const char* string, uint32 length,
 	// for when we bypass the transformation pipeline
 	BPoint transformOffset(0.0, 0.0);
 	transform.Transform(&transformOffset);
+	IntRect clippingIntFrame(clippingFrame);
 
-	StringRenderer renderer(clippingFrame, dryRun,
+	StringRenderer renderer(clippingIntFrame, dryRun,
 		gSubpixelAntialiasing && fAntialias,
 		transformedOutline, transformedContourOutline,
 		transform, transformOffset, nextCharPos, *this);
 
-	GlyphLayoutEngine::LayoutGlyphs(renderer, fFont, string, length, NULL,
-		fKerning, B_BITMAP_SPACING, offsets, cacheReference);
+	GlyphLayoutEngine::LayoutGlyphs(renderer, fFont, string, length, INT32_MAX,
+		NULL, fFont.Spacing(), offsets, cacheReference);
 
 	return transform.TransformBounds(renderer.Bounds());
 }

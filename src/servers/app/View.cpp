@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001-2008, Haiku, Inc.
+ * Copyright (c) 2001-2015, Haiku, Inc.
  * Distributed under the terms of the MIT license.
  *
  * Authors:
@@ -8,16 +8,20 @@
  *		Axel Dörfler, axeld@pinc-software.de
  *		Stephan Aßmus <superstippi@gmx.de>
  *		Marcus Overhagen <marcus@overhagen.de>
+ *		Adrien Destugues <pulkomandy@pulkomandy.tk
+ *		Julian Harnath <julian.harnath@rwth-aachen.de>
+ *		Joseph Groover <looncraz@looncraz.net>
  */
 #include "View.h"
 
 #include <new>
 #include <stdio.h>
 
-#include "BitmapManager.h"
+#include "AlphaMask.h"
 #include "Desktop.h"
 #include "DrawingEngine.h"
 #include "DrawState.h"
+#include "Layer.h"
 #include "Overlay.h"
 #include "ServerApp.h"
 #include "ServerBitmap.h"
@@ -26,6 +30,7 @@
 #include "ServerWindow.h"
 #include "Window.h"
 
+#include "BitmapHWInterface.h"
 #include "drawing_support.h"
 
 #include <List.h>
@@ -86,7 +91,8 @@ View::View(IntRect frame, IntPoint scrollingOffset, const char* name,
 	fScrollingOffset(scrollingOffset),
 
 	fViewColor((rgb_color){ 255, 255, 255, 255 }),
-	fDrawState(new (nothrow) DrawState),
+	fWhichViewColor(B_NO_COLOR),
+	fWhichViewColorTint(B_NO_TINT),
 	fViewBitmap(NULL),
 	fBitmapResizingMode(0),
 	fBitmapOptions(0),
@@ -150,16 +156,6 @@ View::~View()
 }
 
 
-status_t
-View::InitCheck() const
-{
-	if (fDrawState == NULL)
-		return B_NO_MEMORY;
-
-	return B_OK;
-}
-
-
 IntRect
 View::Bounds() const
 {
@@ -175,7 +171,8 @@ View::ConvertToVisibleInTopView(IntRect* bounds) const
 {
 	*bounds = *bounds & Bounds();
 	// NOTE: this step is necessary even if we don't have a parent!
-	ConvertToParent(bounds);
+	bounds->OffsetBy(fFrame.left - fScrollingOffset.x,
+		fFrame.top - fScrollingOffset.y);
 
 	if (fParent)
 		fParent->ConvertToVisibleInTopView(bounds);
@@ -218,6 +215,34 @@ View::DetachedFromWindow()
 
 
 // #pragma mark -
+
+
+DrawingEngine*
+View::GetDrawingEngine() const
+{
+	return Window()->GetDrawingEngine();
+}
+
+
+ServerPicture*
+View::GetPicture(int32 token) const
+{
+	return Window()->ServerWindow()->App()->GetPicture(token);
+}
+
+
+void
+View::ResyncDrawState()
+{
+	return Window()->ServerWindow()->ResyncDrawState();
+}
+
+
+void
+View::UpdateCurrentDrawingRegion()
+{
+	return Window()->ServerWindow()->UpdateCurrentDrawingRegion();
+}
 
 
 void
@@ -414,6 +439,21 @@ View::FindViews(uint32 flags, BObjectList<View>& list, int32& left)
 }
 
 
+bool
+View::HasView(View* view)
+{
+	if (view == this)
+		return true;
+
+	for (View* child = FirstChild(); child; child = child->NextSibling()) {
+		if (child->HasView(view))
+			return true;
+	}
+
+	return false;
+}
+
+
 View*
 View::ViewAt(const BPoint& where)
 {
@@ -422,7 +462,7 @@ View::ViewAt(const BPoint& where)
 
 	IntRect frame = Frame();
 	if (Parent() != NULL)
-		Parent()->ConvertToScreen(&frame);
+		Parent()->LocalToScreenTransform().Apply(&frame);
 
 	if (!frame.Contains(where))
 		return NULL;
@@ -452,58 +492,6 @@ View::SetFlags(uint32 flags)
 {
 	fFlags = flags;
 	fDrawState->SetSubPixelPrecise(fFlags & B_SUBPIXEL_PRECISE);
-}
-
-
-void
-View::SetDrawingOrigin(BPoint origin)
-{
-	fDrawState->SetOrigin(origin);
-
-	// rebuild clipping
-	if (fDrawState->HasClipping())
-		RebuildClipping(false);
-}
-
-
-BPoint
-View::DrawingOrigin() const
-{
-	BPoint origin(fDrawState->Origin());
-	float scale = Scale();
-
-	origin.x *= scale;
-	origin.y *= scale;
-
-	return origin;
-}
-
-
-void
-View::SetScale(float scale)
-{
-	fDrawState->SetScale(scale);
-
-	// rebuild clipping
-	if (fDrawState->HasClipping())
-		RebuildClipping(false);
-}
-
-
-float
-View::Scale() const
-{
-	return CurrentState()->Scale();
-}
-
-
-void
-View::SetUserClipping(const BRegion* region)
-{
-	fDrawState->SetClippingRegion(region);
-
-	// rebuild clipping (for just this view)
-	RebuildClipping(false);
 }
 
 
@@ -558,7 +546,7 @@ View::_UpdateOverlayView() const
 		return;
 
 	IntRect destination = fBitmapDestination;
-	ConvertToScreen(&destination);
+	LocalToScreenTransform().Apply(&destination);
 
 	overlay->Configure(fBitmapSource, destination);
 }
@@ -590,359 +578,34 @@ View::UpdateOverlay()
 
 
 void
-View::ConvertToParent(BPoint* point) const
+View::_LocalToScreenTransform(SimpleTransform& transform) const
 {
-	// remove scrolling offset and convert to parent coordinate space
-	point->x += fFrame.left - fScrollingOffset.x;
-	point->y += fFrame.top - fScrollingOffset.y;
+	const View* view = this;
+	int32 offsetX = 0;
+	int32 offsetY = 0;
+	do {
+		offsetX += view->fFrame.left - view->fScrollingOffset.x;
+		offsetY += view->fFrame.top  - view->fScrollingOffset.y;
+		view = view->fParent;
+	} while (view != NULL);
+
+	transform.AddOffset(offsetX, offsetY);
 }
 
 
 void
-View::ConvertToParent(IntPoint* point) const
+View::_ScreenToLocalTransform(SimpleTransform& transform) const
 {
-	// remove scrolling offset and convert to parent coordinate space
-	point->x += fFrame.left - fScrollingOffset.x;
-	point->y += fFrame.top - fScrollingOffset.y;
-}
+	const View* view = this;
+	int32 offsetX = 0;
+	int32 offsetY = 0;
+	do {
+		offsetX += view->fScrollingOffset.x - view->fFrame.left;
+		offsetY += view->fScrollingOffset.y - view->fFrame.top;
+		view = view->fParent;
+	} while (view != NULL);
 
-
-void
-View::ConvertToParent(BRect* rect) const
-{
-	// remove scrolling offset and convert to parent coordinate space
-	rect->OffsetBy(fFrame.left - fScrollingOffset.x,
-		fFrame.top - fScrollingOffset.y);
-}
-
-
-void
-View::ConvertToParent(IntRect* rect) const
-{
-	// remove scrolling offset and convert to parent coordinate space
-	rect->OffsetBy(fFrame.left - fScrollingOffset.x,
-		fFrame.top - fScrollingOffset.y);
-}
-
-
-void
-View::ConvertToParent(BRegion* region) const
-{
-	// remove scrolling offset and convert to parent coordinate space
-	region->OffsetBy(fFrame.left - fScrollingOffset.x,
-		fFrame.top - fScrollingOffset.y);
-}
-
-
-void
-View::ConvertFromParent(BPoint* point) const
-{
-	// convert from parent coordinate space amd add scrolling offset
-	point->x += fScrollingOffset.x - fFrame.left;
-	point->y += fScrollingOffset.y - fFrame.top;
-}
-
-
-void
-View::ConvertFromParent(IntPoint* point) const
-{
-	// convert from parent coordinate space amd add scrolling offset
-	point->x += fScrollingOffset.x - fFrame.left;
-	point->y += fScrollingOffset.y - fFrame.top;
-}
-
-
-void
-View::ConvertFromParent(BRect* rect) const
-{
-	// convert from parent coordinate space amd add scrolling offset
-	rect->OffsetBy(fScrollingOffset.x - fFrame.left,
-		fScrollingOffset.y - fFrame.top);
-}
-
-
-void
-View::ConvertFromParent(IntRect* rect) const
-{
-	// convert from parent coordinate space amd add scrolling offset
-	rect->OffsetBy(fScrollingOffset.x - fFrame.left,
-		fScrollingOffset.y - fFrame.top);
-}
-
-
-void
-View::ConvertFromParent(BRegion* region) const
-{
-	// convert from parent coordinate space amd add scrolling offset
-	region->OffsetBy(fScrollingOffset.x - fFrame.left,
-		fScrollingOffset.y - fFrame.top);
-}
-
-//! converts a point from local to screen coordinate system
-void
-View::ConvertToScreen(BPoint* pt) const
-{
-	ConvertToParent(pt);
-
-	if (fParent)
-		fParent->ConvertToScreen(pt);
-}
-
-
-//! converts a point from local to screen coordinate system
-void
-View::ConvertToScreen(IntPoint* pt) const
-{
-	ConvertToParent(pt);
-
-	if (fParent)
-		fParent->ConvertToScreen(pt);
-}
-
-
-//! converts a rect from local to screen coordinate system
-void
-View::ConvertToScreen(BRect* rect) const
-{
-	BPoint offset(0.0, 0.0);
-	ConvertToScreen(&offset);
-
-	rect->OffsetBy(offset);
-}
-
-
-//! converts a rect from local to screen coordinate system
-void
-View::ConvertToScreen(IntRect* rect) const
-{
-	BPoint offset(0.0, 0.0);
-	ConvertToScreen(&offset);
-
-	rect->OffsetBy(offset);
-}
-
-
-//! converts a region from local to screen coordinate system
-void
-View::ConvertToScreen(BRegion* region) const
-{
-	BPoint offset(0.0, 0.0);
-	ConvertToScreen(&offset);
-
-	region->OffsetBy((int)offset.x, (int)offset.y);
-}
-
-
-//! converts a point from screen to local coordinate system
-void
-View::ConvertFromScreen(BPoint* pt) const
-{
-	ConvertFromParent(pt);
-
-	if (fParent)
-		fParent->ConvertFromScreen(pt);
-}
-
-
-//! converts a point from screen to local coordinate system
-void
-View::ConvertFromScreen(IntPoint* pt) const
-{
-	ConvertFromParent(pt);
-
-	if (fParent)
-		fParent->ConvertFromScreen(pt);
-}
-
-
-//! converts a rect from screen to local coordinate system
-void
-View::ConvertFromScreen(BRect* rect) const
-{
-	BPoint offset(0.0, 0.0);
-	ConvertFromScreen(&offset);
-
-	rect->OffsetBy(offset.x, offset.y);
-}
-
-
-//! converts a rect from screen to local coordinate system
-void
-View::ConvertFromScreen(IntRect* rect) const
-{
-	BPoint offset(0.0, 0.0);
-	ConvertFromScreen(&offset);
-
-	rect->OffsetBy((int)offset.x, (int)offset.y);
-}
-
-
-//! converts a region from screen to local coordinate system
-void
-View::ConvertFromScreen(BRegion* region) const
-{
-	BPoint offset(0.0, 0.0);
-	ConvertFromScreen(&offset);
-
-	region->OffsetBy((int)offset.x, (int)offset.y);
-}
-
-
-//! converts a point from local *drawing* to screen coordinate system
-void
-View::ConvertToScreenForDrawing(BPoint* point) const
-{
-	fDrawState->Transform(point);
-	// NOTE: from here on, don't use the
-	// "*ForDrawing()" versions of the parent!
-	ConvertToScreen(point);
-}
-
-
-//! converts a rect from local *drawing* to screen coordinate system
-void
-View::ConvertToScreenForDrawing(BRect* rect) const
-{
-	fDrawState->Transform(rect);
-	// NOTE: from here on, don't use the
-	// "*ForDrawing()" versions of the parent!
-	ConvertToScreen(rect);
-}
-
-
-//! converts a region from local *drawing* to screen coordinate system
-void
-View::ConvertToScreenForDrawing(BRegion* region) const
-{
-	fDrawState->Transform(region);
-	// NOTE: from here on, don't use the
-	// "*ForDrawing()" versions of the parent!
-	ConvertToScreen(region);
-}
-
-
-//! converts a gradient from local *drawing* to screen coordinate system
-void
-View::ConvertToScreenForDrawing(BGradient* gradient) const
-{
-	switch(gradient->GetType()) {
-		case BGradient::TYPE_LINEAR: {
-			BGradientLinear* linear = (BGradientLinear*) gradient;
-			BPoint start = linear->Start();
-			BPoint end = linear->End();
-			fDrawState->Transform(&start);
-			ConvertToScreen(&start);
-			fDrawState->Transform(&end);
-			ConvertToScreen(&end);
-			linear->SetStart(start);
-			linear->SetEnd(end);
-			linear->SortColorStopsByOffset();
-			break;
-		}
-		case BGradient::TYPE_RADIAL: {
-			BGradientRadial* radial = (BGradientRadial*) gradient;
-			BPoint center = radial->Center();
-			fDrawState->Transform(&center);
-			ConvertToScreen(&center);
-			radial->SetCenter(center);
-			radial->SortColorStopsByOffset();
-			break;
-		}
-		case BGradient::TYPE_RADIAL_FOCUS: {
-			BGradientRadialFocus* radialFocus = (BGradientRadialFocus*) gradient;
-			BPoint center = radialFocus->Center();
-			BPoint focal = radialFocus->Focal();
-			fDrawState->Transform(&center);
-			ConvertToScreen(&center);
-			fDrawState->Transform(&focal);
-			ConvertToScreen(&focal);
-			radialFocus->SetCenter(center);
-			radialFocus->SetFocal(focal);
-			radialFocus->SortColorStopsByOffset();
-			break;
-		}
-		case BGradient::TYPE_DIAMOND: {
-			BGradientDiamond* diamond = (BGradientDiamond*) gradient;
-			BPoint center = diamond->Center();
-			fDrawState->Transform(&center);
-			ConvertToScreen(&center);
-			diamond->SetCenter(center);
-			diamond->SortColorStopsByOffset();
-			break;
-		}
-		case BGradient::TYPE_CONIC: {
-			BGradientConic* conic = (BGradientConic*) gradient;
-			BPoint center = conic->Center();
-			fDrawState->Transform(&center);
-			ConvertToScreen(&center);
-			conic->SetCenter(center);
-			conic->SortColorStopsByOffset();
-			break;
-		}
-		case BGradient::TYPE_NONE: {
-			break;
-		}
-	}
-}
-
-
-//! converts points from local *drawing* to screen coordinate system
-void
-View::ConvertToScreenForDrawing(BPoint* dst, const BPoint* src, int32 num) const
-{
-	// TODO: optimize this, it should be smarter
-	while (num--) {
-		*dst = *src;
-		fDrawState->Transform(dst);
-		// NOTE: from here on, don't use the
-		// "*ForDrawing()" versions of the parent!
-		ConvertToScreen(dst);
-		src++;
-		dst++;
-	}
-}
-
-
-//! converts rects from local *drawing* to screen coordinate system
-void
-View::ConvertToScreenForDrawing(BRect* dst, const BRect* src, int32 num) const
-{
-	// TODO: optimize this, it should be smarter
-	while (num--) {
-		*dst = *src;
-		fDrawState->Transform(dst);
-		// NOTE: from here on, don't use the
-		// "*ForDrawing()" versions of the parent!
-		ConvertToScreen(dst);
-		src++;
-		dst++;
-	}
-}
-
-
-//! converts regions from local *drawing* to screen coordinate system
-void
-View::ConvertToScreenForDrawing(BRegion* dst, const BRegion* src, int32 num) const
-{
-	// TODO: optimize this, it should be smarter
-	while (num--) {
-		*dst = *src;
-		fDrawState->Transform(dst);
-		// NOTE: from here on, don't use the
-		// "*ForDrawing()" versions of the parent!
-		ConvertToScreen(dst);
-		src++;
-		dst++;
-	}
-}
-
-
-//! converts a point from screen to local coordinate system
-void
-View::ConvertFromScreenForDrawing(BPoint* point) const
-{
-	ConvertFromScreen(point);
-	fDrawState->InverseTransform(point);
+	transform.AddOffset(offsetX, offsetY);
 }
 
 
@@ -967,7 +630,7 @@ View::MoveBy(int32 x, int32 y, BRegion* dirtyRegion)
 		// local clipping to see which parts need invalidation
 		IntRect oldVisibleBounds(newVisibleBounds);
 		oldVisibleBounds.OffsetBy(-x, -y);
-		ConvertToScreen(&oldVisibleBounds);
+		LocalToScreenTransform().Apply(&oldVisibleBounds);
 
 		ConvertToVisibleInTopView(&newVisibleBounds);
 
@@ -980,7 +643,7 @@ View::MoveBy(int32 x, int32 y, BRegion* dirtyRegion)
 		IntRect oldVisibleBounds(Bounds());
 		IntRect newVisibleBounds(oldVisibleBounds);
 		oldVisibleBounds.OffsetBy(-x, -y);
-		ConvertToScreen(&oldVisibleBounds);
+		LocalToScreenTransform().Apply(&oldVisibleBounds);
 
 		// NOTE: using ConvertToVisibleInTopView()
 		// instead of ConvertToScreen()! see below
@@ -1067,7 +730,7 @@ View::ResizeBy(int32 x, int32 y, BRegion* dirtyRegion)
 				}
 			}
 
-			ConvertToScreen(dirty);
+			LocalToScreenTransform().Apply(dirty);
 			dirtyRegion->Include(dirty);
 		}
 		fWindow->RecycleRegion(dirty);
@@ -1178,6 +841,17 @@ View::CopyBits(IntRect src, IntRect dst, BRegion& windowContentClipping)
 	if (!fVisible || !fWindow)
 		return;
 
+	// TODO: figure out what to do when we have a transform which is not
+	// a dilation
+	BAffineTransform transform = CurrentState()->CombinedTransform();
+	if (!transform.IsIdentity() && transform.IsDilation()) {
+		BPoint points[4] = { src.LeftTop(), src.RightBottom(),
+							 dst.LeftTop(), dst.RightBottom() };
+		transform.Apply(&points[0], 4);
+		src.Set(points[0].x, points[0].y, points[1].x, points[1].y);
+		dst.Set(points[2].x, points[2].y, points[3].x, points[3].y);
+	}
+
 	// TODO: confirm that in R5 this call is affected by origin and scale
 
 	// blitting version
@@ -1252,11 +926,63 @@ View::CopyBits(IntRect src, IntRect dst, BRegion& windowContentClipping)
 
 
 void
+View::ColorUpdated(color_which which, rgb_color color)
+{
+	float tint = B_NO_TINT;
+
+	if (fWhichViewColor == which)
+		SetViewColor(tint_color(color, fWhichViewColorTint));
+
+	if (CurrentState()->HighUIColor(&tint) == which)
+		CurrentState()->SetHighColor(tint_color(color, tint));
+
+	if (CurrentState()->LowUIColor(&tint) == which)
+		CurrentState()->SetLowColor(tint_color(color, tint));
+
+	for (View* child = FirstChild(); child != NULL;
+			child = child->NextSibling()) {
+
+		child->ColorUpdated(which, color);
+	}
+}
+
+
+void
+View::SetViewUIColor(color_which which, float tint)
+{
+	if (which != B_NO_COLOR) {
+		DesktopSettings settings(fWindow->Desktop());
+		SetViewColor(tint_color(settings.UIColor(which), tint));
+	}
+
+	fWhichViewColor = which;
+	fWhichViewColorTint = tint;
+}
+
+
+color_which
+View::ViewUIColor(float* tint)
+{
+	if (tint != NULL)
+		*tint = fWhichViewColorTint;
+
+	return fWhichViewColor;
+}
+
+
+// #pragma mark -
+
+
+void
 View::PushState()
 {
 	DrawState* newState = fDrawState->PushState();
 	if (newState) {
 		fDrawState = newState;
+		// In BeAPI, B_SUBPIXEL_PRECISE is a view flag, and not affected by the
+		// view state. Our implementation moves it to the draw state, but let's
+		// be compatible with the API here and make it survive accross state
+		// changes.
 		fDrawState->SetSubPixelPrecise(fFlags & B_SUBPIXEL_PRECISE);
 	}
 }
@@ -1281,6 +1007,9 @@ View::PopState()
 	if (rebuildClipping)
 		RebuildClipping(false);
 }
+
+
+// #pragma mark -
 
 
 void
@@ -1324,6 +1053,18 @@ View::SetPicture(ServerPicture* picture)
 
 
 void
+View::BlendAllLayers()
+{
+	if (fPicture == NULL)
+		return;
+	Layer* layer = dynamic_cast<Layer*>(fPicture);
+	if (layer == NULL)
+		return;
+	BlendLayer(layer);
+}
+
+
+void
 View::Draw(DrawingEngine* drawingEngine, BRegion* effectiveClipping,
 	BRegion* windowContentClipping, bool deep)
 {
@@ -1356,7 +1097,7 @@ View::Draw(DrawingEngine* drawingEngine, BRegion* effectiveClipping,
 			// draw view bitmap
 			// TODO: support other options!
 			BRect rect = fBitmapDestination;
-			ConvertToScreenForDrawing(&rect);
+			PenToScreenTransform().Apply(&rect);
 
 			align_rect_to_pixels(&rect);
 
@@ -1591,7 +1332,7 @@ View::AddTokensForViewsInRegion(BPrivate::PortLink& link, BRegion& region,
 		// This check will prevent descending the view hierarchy
 		// any further than necessary
 		IntRect screenBounds(Bounds());
-		ConvertToScreen(&screenBounds);
+		LocalToScreenTransform().Apply(&screenBounds);
 		if (!region.Intersects((clipping_rect)screenBounds))
 			return;
 
@@ -1614,9 +1355,11 @@ void
 View::PrintToStream() const
 {
 	printf("View:          %s\n", Name());
-	printf("  fToken:           %ld\n", fToken);
-	printf("  fFrame:           IntRect(%ld, %ld, %ld, %ld)\n", fFrame.left, fFrame.top, fFrame.right, fFrame.bottom);
-	printf("  fScrollingOffset: IntPoint(%ld, %ld)\n", fScrollingOffset.x, fScrollingOffset.y);
+	printf("  fToken:           %" B_PRId32 "\n", fToken);
+	printf("  fFrame:           IntRect(%" B_PRId32 ", %" B_PRId32 ", %" B_PRId32 ", %" B_PRId32 ")\n",
+		fFrame.left, fFrame.top, fFrame.right, fFrame.bottom);
+	printf("  fScrollingOffset: IntPoint(%" B_PRId32 ", %" B_PRId32 ")\n",
+		fScrollingOffset.x, fScrollingOffset.y);
 	printf("  fHidden:          %d\n", fHidden);
 	printf("  fVisible:         %d\n", fVisible);
 	printf("  fWindow:          %p\n", fWindow);
@@ -1720,7 +1463,7 @@ View::ScreenAndUserClipping(BRegion* windowContentClipping, bool force) const
 	if (fScreenAndUserClipping == NULL)
 		return fScreenClipping;
 
-	ConvertToScreen(fScreenAndUserClipping);
+	LocalToScreenTransform().Apply(fScreenAndUserClipping);
 	fScreenAndUserClipping->IntersectWith(
 		&_ScreenClipping(windowContentClipping, force));
 	return *fScreenAndUserClipping;
@@ -1761,7 +1504,7 @@ View::_ScreenClipping(BRegion* windowContentClipping, bool force) const
 {
 	if (!fScreenClippingValid || force) {
 		fScreenClipping = fLocalClipping;
-		ConvertToScreen(&fScreenClipping);
+		LocalToScreenTransform().Apply(&fScreenClipping);
 
 		// see if parts of our bounds are hidden underneath
 		// the parent, the local clipping does not account for this

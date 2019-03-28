@@ -1,5 +1,5 @@
 /*
- *	Copyright 2001-2008, Haiku Inc. All rights reserved.
+ *	Copyright 2001-2015 Haiku Inc. All rights reserved.
  *  Distributed under the terms of the MIT License.
  *
  *	Authors:
@@ -8,13 +8,16 @@
  *		Stefano Ceccherini (burton666@libero.it)
  *		Ivan Tonizza
  *		Stephan Aßmus <superstippi@gmx.de>
+ *		Ingo Weinhold, ingo_weinhold@gmx.de
  */
 
 
 #include <Button.h>
 
+#include <algorithm>
 #include <new>
 
+#include <Bitmap.h>
 #include <ControlLook.h>
 #include <Font.h>
 #include <LayoutUtils.h>
@@ -24,12 +27,26 @@
 #include <binary_compatibility/Interface.h>
 
 
+enum {
+	FLAG_DEFAULT 		= 0x01,
+	FLAG_FLAT			= 0x02,
+	FLAG_INSIDE			= 0x04,
+	FLAG_WAS_PRESSED	= 0x08,
+};
+
+
+static const float kLabelMargin = 3;
+
+
 BButton::BButton(BRect frame, const char* name, const char* label,
-		BMessage* message, uint32 resizingMode, uint32 flags)
-	: BControl(frame, name, label, message, resizingMode,
-			flags | B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
+	BMessage* message, uint32 resizingMode, uint32 flags)
+	:
+	BControl(frame, name, label, message, resizingMode,
+		flags | B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
 	fPreferredSize(-1, -1),
-	fDrawAsDefault(false)
+	fFlags(0),
+	fBehavior(B_BUTTON_BEHAVIOR),
+	fPopUpMessage(NULL)
 {
 	// Resize to minimum height if needed
 	font_height fh;
@@ -41,60 +58,72 @@ BButton::BButton(BRect frame, const char* name, const char* label,
 
 
 BButton::BButton(const char* name, const char* label, BMessage* message,
-		uint32 flags)
-	: BControl(name, label, message,
-			flags | B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
+	uint32 flags)
+	:
+	BControl(name, label, message,
+		flags | B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
 	fPreferredSize(-1, -1),
-	fDrawAsDefault(false)
+	fFlags(0),
+	fBehavior(B_BUTTON_BEHAVIOR),
+	fPopUpMessage(NULL)
 {
 }
 
 
 BButton::BButton(const char* label, BMessage* message)
-	: BControl(NULL, label, message,
-			B_WILL_DRAW | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE),
+	:
+	BControl(NULL, label, message,
+		B_WILL_DRAW | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE),
 	fPreferredSize(-1, -1),
-	fDrawAsDefault(false)
+	fFlags(0),
+	fBehavior(B_BUTTON_BEHAVIOR),
+	fPopUpMessage(NULL)
 {
 }
 
 
 BButton::~BButton()
 {
+	SetPopUpMessage(NULL);
 }
 
 
-BButton::BButton(BMessage* archive)
-	: BControl(archive),
-	fPreferredSize(-1, -1)
+BButton::BButton(BMessage* data)
+	:
+	BControl(data),
+	fPreferredSize(-1, -1),
+	fFlags(0),
+	fBehavior(B_BUTTON_BEHAVIOR),
+	fPopUpMessage(NULL)
 {
-	if (archive->FindBool("_default", &fDrawAsDefault) != B_OK)
-		fDrawAsDefault = false;
+	bool isDefault = false;
+	if (data->FindBool("_default", &isDefault) == B_OK && isDefault)
+		_SetFlag(FLAG_DEFAULT, true);
 	// NOTE: Default button state will be synchronized with the window
 	// in AttachedToWindow().
 }
 
 
 BArchivable*
-BButton::Instantiate(BMessage* archive)
+BButton::Instantiate(BMessage* data)
 {
-	if (validate_instantiation(archive, "BButton"))
-		return new(std::nothrow) BButton(archive);
+	if (validate_instantiation(data, "BButton"))
+		return new(std::nothrow) BButton(data);
 
 	return NULL;
 }
 
 
 status_t
-BButton::Archive(BMessage* archive, bool deep) const
+BButton::Archive(BMessage* data, bool deep) const
 {
-	status_t err = BControl::Archive(archive, deep);
+	status_t err = BControl::Archive(data, deep);
 
 	if (err != B_OK)
 		return err;
 
 	if (IsDefault())
-		err = archive->AddBool("_default", true);
+		err = data->AddBool("_default", true);
 
 	return err;
 }
@@ -103,297 +132,116 @@ BButton::Archive(BMessage* archive, bool deep) const
 void
 BButton::Draw(BRect updateRect)
 {
-	if (be_control_look != NULL) {
-		BRect rect(Bounds());
-		rgb_color background = LowColor();
-		rgb_color base = background;
-		uint32 flags = be_control_look->Flags(this);
-		if (IsDefault())
-			flags |= BControlLook::B_DEFAULT_BUTTON;
-		be_control_look->DrawButtonFrame(this, rect, updateRect,
-			base, background, flags);
+	BRect rect(Bounds());
+	rgb_color background = ViewColor();
+	rgb_color base = LowColor();
+	rgb_color textColor = ui_color(B_CONTROL_TEXT_COLOR);
+
+	uint32 flags = be_control_look->Flags(this);
+	if (_Flag(FLAG_DEFAULT))
+		flags |= BControlLook::B_DEFAULT_BUTTON;
+	if (_Flag(FLAG_FLAT) && !IsTracking())
+		flags |= BControlLook::B_FLAT;
+	if (_Flag(FLAG_INSIDE))
+		flags |= BControlLook::B_HOVER;
+
+	be_control_look->DrawButtonFrame(this, rect, updateRect,
+		base, background, flags);
+
+	if (fBehavior == B_POP_UP_BEHAVIOR) {
+		be_control_look->DrawButtonWithPopUpBackground(this, rect, updateRect,
+			base, flags);
+	} else {
 		be_control_look->DrawButtonBackground(this, rect, updateRect,
 			base, flags);
-
-		// always leave some room around the label
-		rect.InsetBy(3.0, 3.0);
-		be_control_look->DrawLabel(this, Label(), rect, updateRect,
-			base, flags, BAlignment(B_ALIGN_CENTER, B_ALIGN_MIDDLE));
-		return;
 	}
 
-	font_height fh;
-	GetFontHeight(&fh);
+	// always leave some room around the label
+	rect.InsetBy(kLabelMargin, kLabelMargin);
 
-	const BRect bounds = Bounds();
-	BRect rect = bounds;
+	const BBitmap* icon = IconBitmap(
+		(Value() == B_CONTROL_OFF
+				? B_INACTIVE_ICON_BITMAP : B_ACTIVE_ICON_BITMAP)
+			| (IsEnabled() ? 0 : B_DISABLED_ICON_BITMAP));
 
-	const bool enabled = IsEnabled();
-	const bool pushed = Value() == B_CONTROL_ON;
-	// Default indicator
-	if (IsDefault())
-		rect = _DrawDefault(rect, enabled);
-
-	BRect fillArea = rect;
-	fillArea.InsetBy(3.0, 3.0);
-
-	BString text = Label();
-
-#if 1
-	// Label truncation
-	BFont font;
-	GetFont(&font);
-	font.TruncateString(&text, B_TRUNCATE_END, fillArea.Width() - 4);
-#endif
-
-	// Label position
-	const float stringWidth = StringWidth(text.String());
-	const float x = (rect.right - stringWidth) / 2.0;
-	const float labelY = bounds.top
-		+ ((bounds.Height() - fh.ascent - fh.descent) / 2.0)
-		+ fh.ascent + 1.0;
-	const float focusLineY = labelY + fh.descent;
-
-	/* speed trick:
-	   if the focus changes but the button is not pressed then we can
-	   redraw only the focus line,
-	   if the focus changes and the button is pressed invert the internal rect
-	   this block takes care of all the focus changes
-	*/
-	if (IsFocusChanging()) {
-		if (pushed) {
-			rect.InsetBy(2.0, 2.0);
-			InvertRect(rect);
-		} else {
-			_DrawFocusLine(x, focusLineY, stringWidth, IsFocus()
-				&& Window()->IsActive());
-		}
-
-		return;
-	}
-
-	// colors
-	rgb_color panelBgColor = ui_color(B_PANEL_BACKGROUND_COLOR);
-	rgb_color buttonBgColor = tint_color(panelBgColor, B_LIGHTEN_1_TINT);
-	rgb_color lightColor;
-	rgb_color maxLightColor;
-
-	rgb_color dark1BorderColor;
-	rgb_color dark2BorderColor;
-
-	rgb_color bevelColor1;
-	rgb_color bevelColor2;
-	rgb_color bevelColorRBCorner;
-
-	rgb_color borderBevelShadow;
-	rgb_color borderBevelLight;
-
-	if (enabled) {
-		lightColor = tint_color(panelBgColor, B_LIGHTEN_2_TINT);
-		maxLightColor = tint_color(panelBgColor, B_LIGHTEN_MAX_TINT);
-
-		dark1BorderColor = tint_color(panelBgColor, B_DARKEN_3_TINT);
-		dark2BorderColor = tint_color(panelBgColor, B_DARKEN_4_TINT);
-
-		bevelColor1 = tint_color(panelBgColor, B_DARKEN_2_TINT);
-		bevelColor2 = panelBgColor;
-
-		if (IsDefault()) {
-			borderBevelShadow = tint_color(dark1BorderColor,
-				(B_NO_TINT + B_DARKEN_1_TINT) / 2);
-			borderBevelLight = tint_color(dark1BorderColor, B_LIGHTEN_1_TINT);
-
-			borderBevelLight.red = (borderBevelLight.red + panelBgColor.red)
-				/ 2;
-			borderBevelLight.green = (borderBevelLight.green
-				+ panelBgColor.green) / 2;
-			borderBevelLight.blue = (borderBevelLight.blue
-				+ panelBgColor.blue) / 2;
-
-			dark1BorderColor = tint_color(dark1BorderColor, B_DARKEN_3_TINT);
-			dark2BorderColor = tint_color(dark1BorderColor, B_DARKEN_4_TINT);
-
-			bevelColorRBCorner = borderBevelShadow;
-		} else {
-			borderBevelShadow = tint_color(panelBgColor,
-				(B_NO_TINT + B_DARKEN_1_TINT) / 2);
-			borderBevelLight = buttonBgColor;
-
-			bevelColorRBCorner = dark1BorderColor;
-		}
-	} else {
-		lightColor = tint_color(panelBgColor, B_LIGHTEN_2_TINT);
-		maxLightColor = tint_color(panelBgColor, B_LIGHTEN_1_TINT);
-
-		dark1BorderColor = tint_color(panelBgColor, B_DARKEN_1_TINT);
-		dark2BorderColor = tint_color(panelBgColor, B_DARKEN_2_TINT);
-
-		bevelColor1 = panelBgColor;
-		bevelColor2 = buttonBgColor;
-
-		if (IsDefault()) {
-			borderBevelShadow = dark1BorderColor;
-			borderBevelLight = panelBgColor;
-			dark1BorderColor = tint_color(dark1BorderColor, B_DARKEN_1_TINT);
-			dark2BorderColor = tint_color(dark1BorderColor, 1.16);
-
-		} else {
-			borderBevelShadow = panelBgColor;
-			borderBevelLight = panelBgColor;
-		}
-
-		bevelColorRBCorner = tint_color(panelBgColor, 1.08);;
-	}
-
-	// fill the button area
-	SetHighColor(buttonBgColor);
-	FillRect(fillArea);
-
-	BeginLineArray(22);
-	// bevel around external border
-	AddLine(BPoint(rect.left, rect.bottom),
-			BPoint(rect.left, rect.top), borderBevelShadow);
-	AddLine(BPoint(rect.left + 1, rect.top),
-			BPoint(rect.right, rect.top), borderBevelShadow);
-
-	AddLine(BPoint(rect.right, rect.top + 1),
-			BPoint(rect.right, rect.bottom), borderBevelLight);
-	AddLine(BPoint(rect.left + 1, rect.bottom),
-			BPoint(rect.right - 1, rect.bottom), borderBevelLight);
-
-	rect.InsetBy(1.0, 1.0);
-
-	// external border
-	AddLine(BPoint(rect.left, rect.bottom),
-			BPoint(rect.left, rect.top), dark1BorderColor);
-	AddLine(BPoint(rect.left + 1, rect.top),
-			BPoint(rect.right, rect.top), dark1BorderColor);
-	AddLine(BPoint(rect.right, rect.top + 1),
-			BPoint(rect.right, rect.bottom), dark2BorderColor);
-	AddLine(BPoint(rect.right - 1, rect.bottom),
-			BPoint(rect.left + 1, rect.bottom), dark2BorderColor);
-
-	rect.InsetBy(1.0, 1.0);
-
-	// Light
-	AddLine(BPoint(rect.left, rect.top),
-			BPoint(rect.left, rect.top), buttonBgColor);
-	AddLine(BPoint(rect.left, rect.top + 1),
-			BPoint(rect.left, rect.bottom - 1), lightColor);
-	AddLine(BPoint(rect.left, rect.bottom),
-			BPoint(rect.left, rect.bottom), bevelColor2);
-	AddLine(BPoint(rect.left + 1, rect.top),
-			BPoint(rect.right - 1, rect.top), lightColor);
-	AddLine(BPoint(rect.right, rect.top),
-			BPoint(rect.right, rect.top), bevelColor2);
-	// Shadow
-	AddLine(BPoint(rect.left + 1, rect.bottom),
-			BPoint(rect.right - 1, rect.bottom), bevelColor1);
-	AddLine(BPoint(rect.right, rect.bottom),
-			BPoint(rect.right, rect.bottom), bevelColorRBCorner);
-	AddLine(BPoint(rect.right, rect.bottom - 1),
-			BPoint(rect.right, rect.top + 1), bevelColor1);
-
-	rect.InsetBy(1.0, 1.0);
-
-	// Light
-	AddLine(BPoint(rect.left, rect.top),
-			BPoint(rect.left, rect.bottom - 1), maxLightColor);
-	AddLine(BPoint(rect.left, rect.bottom),
-			BPoint(rect.left, rect.bottom), buttonBgColor);
-	AddLine(BPoint(rect.left + 1, rect.top),
-			BPoint(rect.right - 1, rect.top), maxLightColor);
-	AddLine(BPoint(rect.right, rect.top),
-			BPoint(rect.right, rect.top), buttonBgColor);
-	// Shadow
-	AddLine(BPoint(rect.left + 1, rect.bottom),
-			BPoint(rect.right, rect.bottom), bevelColor2);
-	AddLine(BPoint(rect.right, rect.bottom - 1),
-			BPoint(rect.right, rect.top + 1), bevelColor2);
-
-	rect.InsetBy(1.0,1.0);
-
-	EndLineArray();
-
-	// Invert if clicked
-	if (enabled && pushed) {
-		rect.InsetBy(-2.0, -2.0);
-		InvertRect(rect);
-	}
-
-	// Label color
-	if (enabled) {
-		if (pushed) {
-			SetHighColor(maxLightColor);
-			SetLowColor(255 - buttonBgColor.red,
-						255 - buttonBgColor.green,
-						255 - buttonBgColor.blue);
-		} else {
-			SetHighColor(ui_color(B_CONTROL_TEXT_COLOR));
-			SetLowColor(buttonBgColor);
-		}
-	} else {
-		SetHighColor(tint_color(panelBgColor, B_DISABLED_LABEL_TINT));
-		SetLowColor(buttonBgColor);
-	}
-
-	// Draw the label
-	DrawString(text.String(), BPoint(x, labelY));
-
-	// Focus line
-	if (enabled && IsFocus() && Window()->IsActive() && !pushed)
-		_DrawFocusLine(x, focusLineY, stringWidth, true);
+	be_control_look->DrawLabel(this, Label(), icon, rect, updateRect, base,
+		flags, BAlignment(B_ALIGN_CENTER, B_ALIGN_MIDDLE), &textColor);
 }
 
 
 void
-BButton::MouseDown(BPoint point)
+BButton::MouseDown(BPoint where)
 {
 	if (!IsEnabled())
 		return;
 
-	SetValue(B_CONTROL_ON);
+	if (fBehavior == B_POP_UP_BEHAVIOR && _PopUpRect().Contains(where)) {
+		InvokeNotify(fPopUpMessage, B_CONTROL_MODIFIED);
+		return;
+	}
+
+	bool toggleBehavior = fBehavior == B_TOGGLE_BEHAVIOR;
+
+	if (toggleBehavior) {
+		bool wasPressed = Value() == B_CONTROL_ON;
+		_SetFlag(FLAG_WAS_PRESSED, wasPressed);
+		SetValue(wasPressed ? B_CONTROL_OFF : B_CONTROL_ON);
+		Invalidate();
+	} else
+		SetValue(B_CONTROL_ON);
 
 	if (Window()->Flags() & B_ASYNCHRONOUS_CONTROLS) {
- 		SetTracking(true);
- 		SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
- 	} else {
+		SetTracking(true);
+		SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
+	} else {
 		BRect bounds = Bounds();
 		uint32 buttons;
+		bool inside = false;
 
 		do {
 			Window()->UpdateIfNeeded();
 			snooze(40000);
 
-			GetMouse(&point, &buttons, true);
+			GetMouse(&where, &buttons, true);
+			inside = bounds.Contains(where);
 
- 			bool inside = bounds.Contains(point);
-
-			if ((Value() == B_CONTROL_ON) != inside)
-				SetValue(inside ? B_CONTROL_ON : B_CONTROL_OFF);
+			if (toggleBehavior) {
+				bool pressed = inside ^ _Flag(FLAG_WAS_PRESSED);
+				SetValue(pressed ? B_CONTROL_ON : B_CONTROL_OFF);
+			} else {
+				if ((Value() == B_CONTROL_ON) != inside)
+					SetValue(inside ? B_CONTROL_ON : B_CONTROL_OFF);
+			}
 		} while (buttons != 0);
 
-		if (Value() == B_CONTROL_ON)
+		if (inside) {
+			if (toggleBehavior) {
+				SetValue(
+					_Flag(FLAG_WAS_PRESSED) ? B_CONTROL_OFF : B_CONTROL_ON);
+			}
+
 			Invoke();
+		} else if (_Flag(FLAG_FLAT))
+			Invalidate();
 	}
 }
-
 
 void
 BButton::AttachedToWindow()
 {
 	BControl::AttachedToWindow();
-		// low color will now be the parents view color
+
+	// Tint default control background color to match default panel background.
+	SetLowUIColor(B_CONTROL_BACKGROUND_COLOR, 1.115);
+	SetHighUIColor(B_CONTROL_TEXT_COLOR);
 
 	if (IsDefault())
 		Window()->SetDefaultButton(this);
-
-	SetViewColor(B_TRANSPARENT_COLOR);
 }
 
 
 void
-BButton::KeyDown(const char *bytes, int32 numBytes)
+BButton::KeyDown(const char* bytes, int32 numBytes)
 {
 	if (*bytes == B_ENTER || *bytes == B_SPACE) {
 		if (!IsEnabled())
@@ -406,7 +254,6 @@ BButton::KeyDown(const char *bytes, int32 numBytes)
 		snooze(25000);
 
 		Invoke();
-
 	} else
 		BControl::KeyDown(bytes, numBytes);
 }
@@ -415,19 +262,17 @@ BButton::KeyDown(const char *bytes, int32 numBytes)
 void
 BButton::MakeDefault(bool flag)
 {
-	BButton *oldDefault = NULL;
-	BWindow *window = Window();
+	BButton* oldDefault = NULL;
+	BWindow* window = Window();
 
-	if (window)
+	if (window != NULL)
 		oldDefault = window->DefaultButton();
 
 	if (flag) {
-		if (fDrawAsDefault && oldDefault == this)
+		if (_Flag(FLAG_DEFAULT) && oldDefault == this)
 			return;
 
-		if (!fDrawAsDefault) {
-			fDrawAsDefault = true;
-
+		if (_SetFlag(FLAG_DEFAULT, true)) {
 			if ((Flags() & B_SUPPORTS_LAYOUT) != 0)
 				InvalidateLayout();
 			else {
@@ -439,10 +284,8 @@ BButton::MakeDefault(bool flag)
 		if (window && oldDefault != this)
 			window->SetDefaultButton(this);
 	} else {
-		if (!fDrawAsDefault)
+		if (!_SetFlag(FLAG_DEFAULT, false))
 			return;
-
-		fDrawAsDefault = false;
 
 		if ((Flags() & B_SUPPORTS_LAYOUT) != 0)
 			InvalidateLayout();
@@ -458,21 +301,69 @@ BButton::MakeDefault(bool flag)
 
 
 void
-BButton::SetLabel(const char *string)
+BButton::SetLabel(const char* label)
 {
-	BControl::SetLabel(string);
+	BControl::SetLabel(label);
 }
 
 
 bool
 BButton::IsDefault() const
 {
-	return fDrawAsDefault;
+	return _Flag(FLAG_DEFAULT);
+}
+
+
+bool
+BButton::IsFlat() const
+{
+	return _Flag(FLAG_FLAT);
 }
 
 
 void
-BButton::MessageReceived(BMessage *message)
+BButton::SetFlat(bool flat)
+{
+	if (_SetFlag(FLAG_FLAT, flat))
+		Invalidate();
+}
+
+
+BButton::BBehavior
+BButton::Behavior() const
+{
+	return fBehavior;
+}
+
+
+void
+BButton::SetBehavior(BBehavior behavior)
+{
+	if (behavior != fBehavior) {
+		fBehavior = behavior;
+		InvalidateLayout();
+		Invalidate();
+	}
+}
+
+
+BMessage*
+BButton::PopUpMessage() const
+{
+	return fPopUpMessage;
+}
+
+
+void
+BButton::SetPopUpMessage(BMessage* message)
+{
+	delete fPopUpMessage;
+	fPopUpMessage = message;
+}
+
+
+void
+BButton::MessageReceived(BMessage* message)
 {
 	BControl::MessageReceived(message);
 }
@@ -486,26 +377,38 @@ BButton::WindowActivated(bool active)
 
 
 void
-BButton::MouseMoved(BPoint point, uint32 transit, const BMessage *message)
+BButton::MouseMoved(BPoint where, uint32 code, const BMessage* dragMessage)
 {
+	bool inside = (code != B_EXITED_VIEW) && Bounds().Contains(where);
+	if (_SetFlag(FLAG_INSIDE, inside))
+		Invalidate();
+
 	if (!IsTracking())
 		return;
 
-	bool inside = Bounds().Contains(point);
-
-	if ((Value() == B_CONTROL_ON) != inside)
-		SetValue(inside ? B_CONTROL_ON : B_CONTROL_OFF);
+	if (fBehavior == B_TOGGLE_BEHAVIOR) {
+		bool pressed = inside ^ _Flag(FLAG_WAS_PRESSED);
+		SetValue(pressed ? B_CONTROL_ON : B_CONTROL_OFF);
+	} else {
+		if ((Value() == B_CONTROL_ON) != inside)
+			SetValue(inside ? B_CONTROL_ON : B_CONTROL_OFF);
+	}
 }
 
 
 void
-BButton::MouseUp(BPoint point)
+BButton::MouseUp(BPoint where)
 {
 	if (!IsTracking())
 		return;
 
-	if (Bounds().Contains(point))
+	if (Bounds().Contains(where)) {
+		if (fBehavior == B_TOGGLE_BEHAVIOR)
+			SetValue(_Flag(FLAG_WAS_PRESSED) ? B_CONTROL_OFF : B_CONTROL_ON);
+
 		Invoke();
+	} else if (_Flag(FLAG_FLAT))
+		Invalidate();
 
 	SetTracking(false);
 }
@@ -527,7 +430,7 @@ BButton::SetValue(int32 value)
 
 
 void
-BButton::GetPreferredSize(float *_width, float *_height)
+BButton::GetPreferredSize(float* _width, float* _height)
 {
 	_ValidatePreferredSize();
 
@@ -542,42 +445,43 @@ BButton::GetPreferredSize(float *_width, float *_height)
 void
 BButton::ResizeToPreferred()
 {
-	 BControl::ResizeToPreferred();
+	BControl::ResizeToPreferred();
 }
 
 
 status_t
-BButton::Invoke(BMessage *message)
+BButton::Invoke(BMessage* message)
 {
 	Sync();
 	snooze(50000);
 
 	status_t err = BControl::Invoke(message);
 
-	SetValue(B_CONTROL_OFF);
+	if (fBehavior != B_TOGGLE_BEHAVIOR)
+		SetValue(B_CONTROL_OFF);
 
 	return err;
 }
 
 
 void
-BButton::FrameMoved(BPoint newLocation)
+BButton::FrameMoved(BPoint newPosition)
 {
-	BControl::FrameMoved(newLocation);
+	BControl::FrameMoved(newPosition);
 }
 
 
 void
-BButton::FrameResized(float width, float height)
+BButton::FrameResized(float newWidth, float newHeight)
 {
-	BControl::FrameResized(width, height);
+	BControl::FrameResized(newWidth, newHeight);
 }
 
 
 void
-BButton::MakeFocus(bool focused)
+BButton::MakeFocus(bool focus)
 {
-	BControl::MakeFocus(focused);
+	BControl::MakeFocus(focus);
 }
 
 
@@ -595,17 +499,17 @@ BButton::AllDetached()
 }
 
 
-BHandler *
-BButton::ResolveSpecifier(BMessage *message, int32 index,
-									BMessage *specifier, int32 what,
-									const char *property)
+BHandler*
+BButton::ResolveSpecifier(BMessage* message, int32 index,
+	BMessage* specifier, int32 what, const char* property)
 {
-	return BControl::ResolveSpecifier(message, index, specifier, what, property);
+	return BControl::ResolveSpecifier(message, index, specifier, what,
+		property);
 }
 
 
 status_t
-BButton::GetSupportedSuites(BMessage *message)
+BButton::GetSupportedSuites(BMessage* message)
 {
 	return BControl::GetSupportedSuites(message);
 }
@@ -619,22 +523,27 @@ BButton::Perform(perform_code code, void* _data)
 			((perform_data_min_size*)_data)->return_value
 				= BButton::MinSize();
 			return B_OK;
+
 		case PERFORM_CODE_MAX_SIZE:
 			((perform_data_max_size*)_data)->return_value
 				= BButton::MaxSize();
 			return B_OK;
+
 		case PERFORM_CODE_PREFERRED_SIZE:
 			((perform_data_preferred_size*)_data)->return_value
 				= BButton::PreferredSize();
 			return B_OK;
+
 		case PERFORM_CODE_LAYOUT_ALIGNMENT:
 			((perform_data_layout_alignment*)_data)->return_value
 				= BButton::LayoutAlignment();
 			return B_OK;
+
 		case PERFORM_CODE_HAS_HEIGHT_FOR_WIDTH:
 			((perform_data_has_height_for_width*)_data)->return_value
 				= BButton::HasHeightForWidth();
 			return B_OK;
+
 		case PERFORM_CODE_GET_HEIGHT_FOR_WIDTH:
 		{
 			perform_data_get_height_for_width* data
@@ -643,12 +552,14 @@ BButton::Perform(perform_code code, void* _data)
 				&data->preferred);
 			return B_OK;
 		}
+
 		case PERFORM_CODE_SET_LAYOUT:
 		{
 			perform_data_set_layout* data = (perform_data_set_layout*)_data;
 			BButton::SetLayout(data->layout);
 			return B_OK;
 		}
+
 		case PERFORM_CODE_LAYOUT_INVALIDATED:
 		{
 			perform_data_layout_invalidated* data
@@ -656,10 +567,17 @@ BButton::Perform(perform_code code, void* _data)
 			BButton::LayoutInvalidated(data->descendants);
 			return B_OK;
 		}
+
 		case PERFORM_CODE_DO_LAYOUT:
 		{
 			BButton::DoLayout();
 			return B_OK;
+		}
+
+		case PERFORM_CODE_SET_ICON:
+		{
+			perform_data_set_icon* data = (perform_data_set_icon*)_data;
+			return BButton::SetIcon(data->icon, data->flags);
 		}
 	}
 
@@ -691,6 +609,14 @@ BButton::PreferredSize()
 }
 
 
+status_t
+BButton::SetIcon(const BBitmap* icon, uint32 flags)
+{
+	return BControl::SetIcon(icon,
+		flags | B_CREATE_ACTIVE_ICON_BITMAP | B_CREATE_DISABLED_ICON_BITMAPS);
+}
+
+
 void
 BButton::LayoutInvalidated(bool descendants)
 {
@@ -715,23 +641,55 @@ BSize
 BButton::_ValidatePreferredSize()
 {
 	if (fPreferredSize.width < 0) {
+		BControlLook::background_type backgroundType
+			= fBehavior == B_POP_UP_BEHAVIOR
+				? BControlLook::B_BUTTON_WITH_POP_UP_BACKGROUND
+				: BControlLook::B_BUTTON_BACKGROUND;
+		float left, top, right, bottom;
+		be_control_look->GetInsets(BControlLook::B_BUTTON_FRAME, backgroundType,
+			IsDefault() ? BControlLook::B_DEFAULT_BUTTON : 0,
+			left, top, right, bottom);
+
 		// width
-		float width = 20.0f + (float)ceil(StringWidth(Label()));
-		if (width < 75.0f)
-			width = 75.0f;
+		float width = left + right + 2 * kLabelMargin - 1;
 
-		if (fDrawAsDefault)
-			width += 6.0f;
+		const char* label = Label();
+		if (label != NULL) {
+			width = std::max(width, 20.0f);
+			width += (float)ceil(StringWidth(label));
+		}
 
-		fPreferredSize.width = width;
+		const BBitmap* icon = IconBitmap(B_INACTIVE_ICON_BITMAP);
+		if (icon != NULL)
+			width += icon->Bounds().Width() + 1;
+
+		if (label != NULL && icon != NULL)
+			width += be_control_look->DefaultLabelSpacing();
 
 		// height
-		font_height fontHeight;
-		GetFontHeight(&fontHeight);
+		float minHorizontalMargins = top + bottom + 2 * kLabelMargin;
+		float height = -1;
 
-		fPreferredSize.height
-			= ceilf((fontHeight.ascent + fontHeight.descent) * 1.8)
-				+ (fDrawAsDefault ? 6.0f : 0);
+		if (label != NULL) {
+			font_height fontHeight;
+			GetFontHeight(&fontHeight);
+			float textHeight = fontHeight.ascent + fontHeight.descent;
+			height = ceilf(textHeight * 1.8);
+			float margins = height - ceilf(textHeight);
+			if (margins < minHorizontalMargins)
+				height += minHorizontalMargins - margins;
+		}
+
+		if (icon != NULL) {
+			height = std::max(height,
+				icon->Bounds().Height() + minHorizontalMargins);
+		}
+
+		// force some minimum width/height values
+		width = std::max(width, label != NULL ? 75.0f : 5.0f);
+		height = std::max(height, 5.0f);
+
+		fPreferredSize.Set(width, height);
 
 		ResetLayoutInvalidation();
 	}
@@ -741,43 +699,42 @@ BButton::_ValidatePreferredSize()
 
 
 BRect
-BButton::_DrawDefault(BRect bounds, bool enabled)
+BButton::_PopUpRect() const
 {
-	rgb_color low = LowColor();
-	rgb_color focusColor = tint_color(low, enabled ?
-		(B_DARKEN_1_TINT + B_DARKEN_2_TINT) / 2
-		: (B_NO_TINT + B_DARKEN_1_TINT) / 2);
+	if (fBehavior != B_POP_UP_BEHAVIOR)
+		return BRect();
 
-	SetHighColor(focusColor);
+	float left, top, right, bottom;
+	be_control_look->GetInsets(BControlLook::B_BUTTON_FRAME,
+		BControlLook::B_BUTTON_WITH_POP_UP_BACKGROUND,
+		IsDefault() ? BControlLook::B_DEFAULT_BUTTON : 0,
+		left, top, right, bottom);
 
-	StrokeRect(bounds, B_SOLID_LOW);
-	bounds.InsetBy(1.0, 1.0);
-	StrokeRect(bounds);
-	bounds.InsetBy(1.0, 1.0);
-	StrokeRect(bounds);
-	bounds.InsetBy(1.0, 1.0);
-
-	return bounds;
+	BRect rect(Bounds());
+	rect.left = rect.right - right + 1;
+	return rect;
 }
 
 
-void
-BButton::_DrawFocusLine(float x, float y, float width, bool visible)
+inline bool
+BButton::_Flag(uint32 flag) const
 {
-	if (visible)
-		SetHighColor(ui_color(B_KEYBOARD_NAVIGATION_COLOR));
-	else {
-		SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-			B_LIGHTEN_1_TINT));
-	}
+	return (fFlags & flag) != 0;
+}
 
-	// Blue Line
-	StrokeLine(BPoint(x, y), BPoint(x + width, y));
 
-	if (visible)
-		SetHighColor(255, 255, 255);
-	// White Line
-	StrokeLine(BPoint(x, y + 1.0f), BPoint(x + width, y + 1.0f));
+inline bool
+BButton::_SetFlag(uint32 flag, bool set)
+{
+	if (((fFlags & flag) != 0) == set)
+		return false;
+
+	if (set)
+		fFlags |= flag;
+	else
+		fFlags &= ~flag;
+
+	return true;
 }
 
 
@@ -790,4 +747,3 @@ B_IF_GCC_2(InvalidateLayout__7BButtonb, _ZN7BButton16InvalidateLayoutEb)(
 
 	view->Perform(PERFORM_CODE_LAYOUT_INVALIDATED, &data);
 }
-

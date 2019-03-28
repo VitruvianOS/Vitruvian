@@ -49,14 +49,15 @@ swap_data(type_code type, void *_data, size_t length, swap_action action)
 		case B_FLOAT_TYPE:
 		case B_INT32_TYPE:
 		case B_UINT32_TYPE:
-		case B_SIZE_T_TYPE:
-		case B_SSIZE_T_TYPE:
 		case B_TIME_TYPE:
-		case B_POINTER_TYPE:
 		case B_RECT_TYPE:
 		case B_POINT_TYPE:
+#if B_HAIKU_32_BIT
+		case B_SIZE_T_TYPE:
+		case B_SSIZE_T_TYPE:
+		case B_POINTER_TYPE:
+#endif
 		{
-			// ToDo: some of these types may not be 32-bit on 64-bit platforms!
 			uint32 *data = (uint32 *)_data;
 			uint32 *end = (uint32 *)((addr_t)_data + length);
 
@@ -72,6 +73,11 @@ swap_data(type_code type, void *_data, size_t length, swap_action action)
 		case B_INT64_TYPE:
 		case B_UINT64_TYPE:
 		case B_OFF_T_TYPE:
+#if B_HAIKU_64_BIT
+		case B_SIZE_T_TYPE:
+		case B_SSIZE_T_TYPE:
+		case B_POINTER_TYPE:
+#endif
 		{
 			uint64 *data = (uint64 *)_data;
 			uint64 *end = (uint64 *)((addr_t)_data + length);
@@ -92,11 +98,10 @@ swap_data(type_code type, void *_data, size_t length, swap_action action)
 			while (messenger < end) {
 				BMessenger::Private messengerPrivate(messenger);
 				// ToDo: if the additional fields change, this function has to be updated!
-				//messengerPrivate.SetTo(
-				//	__swap_int32(messengerPrivate.Team()),
-				//	__swap_int32(messengerPrivate.Port()),
-				//	__swap_int32(messengerPrivate.Token()));
-				// TODO
+				messengerPrivate.SetTo(
+					__swap_int32(messengerPrivate.Team()),
+					__swap_int32(messengerPrivate.Port()),
+					__swap_int32(messengerPrivate.Token()));
 				messenger++;
 			}
 			break;
@@ -152,17 +157,4 @@ is_type_swapped(type_code type)
 	}
 
 	return false;
-}
-
-//TODO
-export double __swap_double(double arg)
-{
-	// FIXME: unimplemented
-	return arg;
-}
-
-export float  __swap_float(float arg)
-{
-	// FIXME: unimplemented
-	return arg;
 }

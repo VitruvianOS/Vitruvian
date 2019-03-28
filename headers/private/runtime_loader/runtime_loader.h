@@ -11,10 +11,11 @@
 #ifndef _RUNTIME_LOADER_H
 #define _RUNTIME_LOADER_H
 
+
 #include <image.h>
 #include <OS.h>
 
-#include <elf32.h>
+#include <elf_private.h>
 
 
 // #pragma mark - runtime loader libroot interface
@@ -37,11 +38,15 @@ struct rld_export {
 		char *symbolName, int32 *nameLength, int32 *symbolType,
 		void **_location);
 	status_t (*get_nearest_symbol_at_address)(void* address,
-		image_id* _imageID,	char** _imagePath, char** _symbolName,
-		int32* _type, void** _location);
+		image_id* _imageID,	char** _imagePath, char** _imageName,
+		char** _symbolName, int32* _type, void** _location, bool* _exactMatch);
 	status_t (*test_executable)(const char *path, char *interpreter);
+	status_t (*get_executable_architecture)(const char *path,
+		const char** _architecture);
 	status_t (*get_next_image_dependency)(image_id id, uint32 *cookie,
 		const char **_name);
+	void* (*get_tls_address)(unsigned dso, addr_t offset);
+	void (*destroy_thread_tls)();
 
 	status_t (*reinit_after_fork)();
 
@@ -50,6 +55,8 @@ struct rld_export {
 	void (*call_termination_hooks)();
 
 	const struct user_space_program_args *program_args;
+	const void* commpage_address;
+	int abi_version;
 };
 
 extern struct rld_export *__gRuntimeLoader;
@@ -81,7 +88,7 @@ typedef struct elf_version_info {
 typedef struct image_t {
 	// image identification
 	char				path[B_PATH_NAME_LENGTH];
-	char				name[B_OS_NAME_LENGTH];
+	char				name[B_FILE_NAME_LENGTH];
 	image_id			id;
 	image_type			type;
 
@@ -100,34 +107,42 @@ typedef struct image_t {
 
 	// pointer to symbol participation data structures
 	uint32				*symhash;
-	struct Elf32_Sym	*syms;
+	elf_sym				*syms;
 	char				*strtab;
-	struct Elf32_Rel	*rel;
+	elf_rel				*rel;
 	int					rel_len;
-	struct Elf32_Rela	*rela;
+	elf_rela			*rela;
 	int					rela_len;
-	struct Elf32_Rel	*pltrel;
+	elf_rel				*pltrel;
 	int					pltrel_len;
+	addr_t				*init_array;
+	int					init_array_len;
+	addr_t				*preinit_array;
+	int					preinit_array_len;
+	addr_t				*term_array;
+	int					term_array_len;
+
+	unsigned			dso_tls_id;
 
 	uint32				num_needed;
 	struct image_t		**needed;
 
 	// versioning related structures
 	uint32				num_version_definitions;
-	struct Elf32_Verdef	*version_definitions;
+	elf_verdef			*version_definitions;
 	uint32				num_needed_versions;
-	struct Elf32_Verneed *needed_versions;
-	Elf32_Versym		*symbol_versions;
+	elf_verneed			*needed_versions;
+	elf_versym			*symbol_versions;
 	elf_version_info	*versions;
 	uint32				num_versions;
 
 #ifdef __cplusplus
-	struct Elf32_Sym*	(*find_undefined_symbol)(struct image_t* rootImage,
+	elf_sym*			(*find_undefined_symbol)(struct image_t* rootImage,
 							struct image_t* image,
 							const SymbolLookupInfo& lookupInfo,
 							struct image_t** foundInImage);
 #else
-	struct Elf32_Sym*	(*find_undefined_symbol)(struct image_t* rootImage,
+	elf_sym*			(*find_undefined_symbol)(struct image_t* rootImage,
 							struct image_t* image,
 							const struct SymbolLookupInfo* lookupInfo,
 							struct image_t** foundInImage);
@@ -152,12 +167,12 @@ typedef struct image_queue_t {
 #define	IMAGE_FLAG_RTLD_MASK			0x03
 			// RTLD_{LAZY,NOW} | RTLD_{LOCAL,GLOBAL}
 
-#define STRING(image, offset) ((char *)(&(image)->strtab[(offset)]))
+#define STRING(image, offset) ((char*)(&(image)->strtab[(offset)]))
 #define SYMNAME(image, sym) STRING(image, (sym)->st_name)
-#define SYMBOL(image, num) ((struct Elf32_Sym *)&(image)->syms[num])
+#define SYMBOL(image, num) (&(image)->syms[num])
 #define HASHTABSIZE(image) ((image)->symhash[0])
-#define HASHBUCKETS(image) ((unsigned int *)&(image)->symhash[2])
-#define HASHCHAINS(image) ((unsigned int *)&(image)->symhash[2+HASHTABSIZE(image)])
+#define HASHBUCKETS(image) ((unsigned int*)&(image)->symhash[2])
+#define HASHCHAINS(image) ((unsigned int*)&(image)->symhash[2+HASHTABSIZE(image)])
 
 
 // The name of the area the runtime loader creates for debugging purposes.

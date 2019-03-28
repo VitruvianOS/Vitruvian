@@ -1,12 +1,13 @@
 /*
- * Copyright 2006-2007, Haiku, Inc. All rights reserved.
+ * Copyright 2002-2010 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _SHAPE_H
 #define _SHAPE_H
 
-#include <SupportDefs.h>
+
 #include <Archivable.h>
+
 
 class BPoint;
 class BRect;
@@ -25,9 +26,9 @@ public:
 
 	virtual	status_t			IterateMoveTo(BPoint* point);
 	virtual	status_t			IterateLineTo(int32 lineCount,
-									BPoint* linePts);
+									BPoint* linePoints);
 	virtual	status_t			IterateBezierTo(int32 bezierCount,
-									BPoint* bezierPts);
+									BPoint* bezierPoints);
 	virtual	status_t			IterateClose();
 
 	virtual	status_t			IterateArcTo(float& rx, float& ry,
@@ -81,7 +82,7 @@ public:
 
 private:
 	// FBC padding
-	virtual status_t			Perform(perform_code code, void* data);
+	virtual	status_t			Perform(perform_code code, void* data);
 
 	virtual	void				_ReservedShape1();
 	virtual	void				_ReservedShape2();
@@ -111,5 +112,6 @@ private:
 
 			uint32				reserved[4];
 };
+
 
 #endif // _SHAPE_H

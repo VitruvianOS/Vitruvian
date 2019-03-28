@@ -4,7 +4,7 @@
  *
  * Authors:
  *		Marc Flerackers (mflerackers@androme.be)
- *		Stefano Ceccherini (burton666@libero.it)
+ *		Stefano Ceccherini (stefano.ceccherini@gmail.com)
  */
 
 
@@ -72,7 +72,7 @@ TextGapBuffer::InsertText(const char* inText, int32 inNumItems, int32 inAtIndex)
 }
 
 
-void
+bool
 TextGapBuffer::InsertText(BFile* file, int32 fileOffset, int32 inNumItems,
 	int32 inAtIndex)
 {
@@ -80,7 +80,7 @@ TextGapBuffer::InsertText(BFile* file, int32 fileOffset, int32 inNumItems,
 
 	if (file->GetSize(&fileSize) != B_OK
 		|| !file->IsReadable())
-		return;
+		return false;
 
 	// Clamp the text length to the file size
 	fileSize -= fileOffset;
@@ -89,7 +89,7 @@ TextGapBuffer::InsertText(BFile* file, int32 fileOffset, int32 inNumItems,
 		inNumItems = fileSize;
 
 	if (inNumItems < 1)
-		return;
+		return false;
 
 	inAtIndex = (inAtIndex > fItemCount) ? fItemCount : inAtIndex;
 	inAtIndex = (inAtIndex < 0) ? 0 : inAtIndex;
@@ -106,14 +106,16 @@ TextGapBuffer::InsertText(BFile* file, int32 fileOffset, int32 inNumItems,
 		fGapIndex += inNumItems;
 		fItemCount += inNumItems;
 	}
+
+	return true;
 }
 
 
 void
 TextGapBuffer::RemoveRange(int32 start, int32 end)
 {
-	long inAtIndex = start;
-	long inNumItems = end - start;
+	int32 inAtIndex = start;
+	int32 inNumItems = end - start;
 
 	if (inNumItems < 1)
 		return;
@@ -142,8 +144,8 @@ TextGapBuffer::GetString(int32 fromOffset, int32* _numBytes)
 	if (numBytes < 1)
 		return result;
 
-	bool isStartBeforeGap = (fromOffset < fGapIndex);
-	bool isEndBeforeGap = ((fromOffset + numBytes - 1) < fGapIndex);
+	bool isStartBeforeGap = fromOffset < fGapIndex;
+	bool isEndBeforeGap = (fromOffset + numBytes - 1) < fGapIndex;
 
 	if (isStartBeforeGap == isEndBeforeGap) {
 		result = fBuffer + fromOffset;
@@ -155,7 +157,7 @@ TextGapBuffer::GetString(int32 fromOffset, int32* _numBytes)
 			fScratchSize = numBytes;
 		}
 
-		for (long i = 0; i < numBytes; i++)
+		for (int32 i = 0; i < numBytes; i++)
 			fScratchBuffer[i] = RealCharAt(fromOffset + i);
 
 		result = fScratchBuffer;
@@ -188,10 +190,10 @@ TextGapBuffer::GetString(int32 fromOffset, int32* _numBytes)
 
 
 bool
-TextGapBuffer::FindChar(char inChar, long fromIndex, long* ioDelta)
+TextGapBuffer::FindChar(char inChar, int32 fromIndex, int32* ioDelta)
 {
-	long numChars = *ioDelta;
-	for (long i = 0; i < numChars; i++) {
+	int32 numChars = *ioDelta;
+	for (int32 i = 0; i < numChars; i++) {
 		char realChar = RealCharAt(fromIndex + i);
 		if ((realChar & 0xc0) == 0x80)
 			continue;
@@ -225,7 +227,7 @@ TextGapBuffer::Text()
 			memcpy(scratchPtr, B_UTF8_BULLET, bulletCharLen);
 			scratchPtr += bulletCharLen;
 		}
-		scratchPtr = '\0';
+		*scratchPtr = '\0';
 
 		return fScratchBuffer;
 	}
@@ -280,7 +282,7 @@ TextGapBuffer::GetString(int32 offset, int32 length, char* buffer)
 		int32 afterLen = length - beforeLen;
 
 		memcpy(buffer, fBuffer + offset, beforeLen);
-		memcpy(buffer + beforeLen, fBuffer + fGapIndex, afterLen);
+		memcpy(buffer + beforeLen, fBuffer + fGapIndex + fGapCount, afterLen);
 
 	}
 
@@ -333,7 +335,7 @@ TextGapBuffer::_MoveGapTo(int32 toIndex)
 
 
 void
-TextGapBuffer::_EnlargeGapTo(long inCount)
+TextGapBuffer::_EnlargeGapTo(int32 inCount)
 {
 	if (inCount == fGapCount)
 		return;
@@ -348,7 +350,7 @@ TextGapBuffer::_EnlargeGapTo(long inCount)
 
 
 void
-TextGapBuffer::_ShrinkGapTo(long inCount)
+TextGapBuffer::_ShrinkGapTo(int32 inCount)
 {
 	if (inCount == fGapCount)
 		return;

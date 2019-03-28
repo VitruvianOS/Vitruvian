@@ -223,7 +223,7 @@ DWindow::DWindow(BRect frame, DWindowHWInterface* interface,
 		DWindowBuffer* buffer)
 	:
 	BWindow(frame, "Haiku App Server", B_TITLED_WINDOW_LOOK,
-		B_FLOATING_ALL_WINDOW_FEEL,
+		B_NORMAL_WINDOW_FEEL,
 		B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_NOT_MOVABLE),
 	fHWInterface(interface),
 	fBuffer(buffer)
@@ -465,8 +465,9 @@ DWindowHWInterface::_OpenAccelerant(int device)
 
 	struct stat accelerant_stat;
 	const static directory_which dirs[] = {
+		B_USER_NONPACKAGED_ADDONS_DIRECTORY,
 		B_USER_ADDONS_DIRECTORY,
-		B_COMMON_ADDONS_DIRECTORY,
+		B_SYSTEM_NONPACKAGED_ADDONS_DIRECTORY,
 		B_SYSTEM_ADDONS_DIRECTORY
 	};
 
@@ -526,6 +527,7 @@ sprintf((char*)cloneInfoData, "graphics/%s", fCardNameInDevFS.String());
 				STRACE(("unable to get B_CLONE_ACCELERANT\n"));
 				unload_add_on(fAccelerantImage);
 				fAccelerantImage = -1;
+				free(cloneInfoData);
 				return B_ERROR;
 			}
 			status_t ret = cloneAccelerant(cloneInfoData);
@@ -692,7 +694,8 @@ DWindowHWInterface::SetMode(const display_mode& mode)
 		// has not been created either, but we need one to display
 		// a real BWindow in the test environment.
 		// be_app->Run() needs to be called in another thread
-		BApplication* app = new BApplication("application/x-vnd.haiku-app-server");
+		BApplication* app = new BApplication(
+			"application/x-vnd.Haiku-test-app_server");
 		app->Unlock();
 
 		thread_id appThread = spawn_thread(run_app_thread, "app thread",
@@ -906,6 +909,24 @@ DWindowHWInterface::DPMSCapabilities()
 	AutoReadLocker _(this);
 
 	return BScreen().DPMSCapabilites();
+}
+
+
+status_t
+DWindowHWInterface::SetBrightness(float brightness)
+{
+	AutoReadLocker _(this);
+
+	return BScreen().SetBrightness(brightness);
+}
+
+
+status_t
+DWindowHWInterface::GetBrightness(float* brightness)
+{
+	AutoReadLocker _(this);
+
+	return BScreen().GetBrightness(brightness);
 }
 
 

@@ -4,16 +4,20 @@
  */
 #ifndef _MENU_ITEM_H
 #define _MENU_ITEM_H
- 
+
 
 #include <Archivable.h>
 #include <InterfaceDefs.h>
 #include <Invoker.h>
 #include <Menu.h>
 
+
 class BMessage;
 class BWindow;
 
+namespace BPrivate {
+	class MenuItemPrivate;
+}
 
 class BMenuItem : public BArchivable, public BInvoker {
 public:
@@ -29,8 +33,8 @@ public:
 									bool deep = true) const;
 
 	virtual	void				SetLabel(const char* name);
-	virtual	void				SetEnabled(bool enabled);
-	virtual	void				SetMarked(bool marked);
+	virtual	void				SetEnabled(bool enable);
+	virtual	void				SetMarked(bool mark);
 	virtual	void				SetTrigger(char trigger);
 	virtual	void				SetShortcut(char shortcut, uint32 modifiers);
 
@@ -49,7 +53,7 @@ protected:
 	virtual	void				TruncateLabel(float maxWidth, char* newLabel);
 	virtual	void				DrawContent();
 	virtual	void				Draw();
-	virtual	void				Highlight(bool enabled);
+	virtual	void				Highlight(bool highlight);
 			bool				IsSelected() const;
 			BPoint				ContentLocation() const;
 
@@ -57,6 +61,7 @@ private:
 	friend class BMenu;
 	friend class BPopUpMenu;
 	friend class BMenuBar;
+	friend class BPrivate::MenuItemPrivate;
 
 	virtual	void				_ReservedMenuItem1();
 	virtual	void				_ReservedMenuItem2();
@@ -77,8 +82,13 @@ private:
 								BMenuItem(const BMenuItem& other);
 			BMenuItem&			operator=(const BMenuItem& other);
 
+private:
 			void				_InitData();
 			void				_InitMenuData(BMenu* menu);
+
+			bool				_IsActivated();
+			rgb_color			_LowColor();
+			rgb_color			_HighColor();
 
 			void				_DrawMarkSymbol();
 			void				_DrawShortcutSymbol();

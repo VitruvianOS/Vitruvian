@@ -31,13 +31,12 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef _DIALOG_PANE_
-#define _DIALOG_PANE_
+#ifndef _DIALOG_PANE_H
+#define _DIALOG_PANE_H
 
 
 #include <Control.h>
-
-#include "ObjectList.h"
+#include <ObjectList.h>
 
 
 namespace BPrivate {
@@ -45,8 +44,10 @@ namespace BPrivate {
 class ViewList : public BObjectList<BView> {
 public:
 								ViewList()
-									:	BObjectList<BView>(5, true)
-								{}
+									:
+									BObjectList<BView>(5, true)
+								{
+								}
 
 			void				RemoveAll(BView* fromParent);
 			void				AddAll(BView* toParent);
@@ -68,15 +69,15 @@ public:
 									uint32 flags = B_WILL_DRAW);
 
 	virtual						~DialogPane();
-	
+
 			BRect				FrameForMode(int32);
 			BRect				BoundsForMode(int32);
-	
+
 			int32				Mode() const;
 	virtual	void				SetMode(int32, bool initialSetup = false);
-	
+
 			void				AddItem(BView*, int32 toMode);
-	
+
 			void				SetSwitch(BControl*);
 
 	virtual	void				AttachedToWindow();
@@ -87,18 +88,18 @@ protected:
 		// called only by the constructor
 
 	virtual	void				MessageReceived(BMessage* message);
-	
+
 private:
 			int32				fMode;
 
 			BRect				fMode1Frame;
 			BRect				fMode2Frame;
 			BRect				fMode3Frame;
-	
+
 			ViewList			fMode2Items;
 			ViewList			fMode3Items;
 			BControl*			fLatch;
-	
+
 	typedef BView _inherited;
 };
 
@@ -163,4 +164,5 @@ private:
 
 using namespace BPrivate;
 
-#endif
+
+#endif	// _DIALOG_PANE_H

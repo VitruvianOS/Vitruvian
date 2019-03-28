@@ -10,7 +10,6 @@ target_sources(be PRIVATE
 	Handler.cpp
 	InitTerminateLibBe.cpp
 	Invoker.cpp
-	Jamfile
 	link_message.h
 	LinkReceiver.cpp
 	LinkSender.cpp

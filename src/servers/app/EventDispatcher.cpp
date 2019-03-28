@@ -22,6 +22,7 @@
 #include <TokenSpace.h>
 
 #include <Autolock.h>
+#include <ToolTipManager.h>
 #include <View.h>
 
 #include <new>
@@ -131,8 +132,10 @@ EventTarget::_RemoveTemporaryListener(event_listener* listener, int32 index)
 	}
 
 	if (listener->temporary_event_mask != 0) {
-		ETRACE(("events: clear temp. listener: token %ld, eventMask = %ld, options = %ld\n",
-			listener->token, listener->temporary_event_mask, listener->temporary_options));
+		ETRACE(("events: clear temp. listener: token %ld, eventMask = %ld, "
+				"options = %ld\n",
+			listener->token, listener->temporary_event_mask,
+			listener->temporary_options));
 
 		listener->temporary_event_mask = 0;
 		listener->temporary_options = 0;
@@ -229,7 +232,8 @@ EventFilter::RemoveTarget(EventTarget* target)
 
 
 EventDispatcher::EventDispatcher()
-	: BLocker("event dispatcher"),
+	:
+	BLocker("event dispatcher"),
 	fStream(NULL),
 	fThread(-1),
 	fCursorThread(-1),
@@ -389,7 +393,8 @@ EventDispatcher::_AddListener(EventTarget& target, int32 token,
 	if (eventMask == 0)
 		return false;
 
-	ETRACE(("events: add listener: token %ld, eventMask = %ld, options = %ld, %s\n",
+	ETRACE(("events: add listener: token %ld, eventMask = %ld, options = %ld,"
+			"%s\n",
 		token, eventMask, options, temporary ? "temporary" : "permanent"));
 
 	// we need a new target
@@ -607,7 +612,8 @@ EventDispatcher::SetDragMessage(BMessage& message,
 
 	if (fLastButtons == 0) {
 		// mouse buttons has already been released or was never pressed
-		bitmap->ReleaseReference();
+		if (bitmap != NULL)
+			bitmap->ReleaseReference();
 		return;
 	}
 
@@ -817,6 +823,7 @@ EventDispatcher::_EventLoop()
 			}
 			case B_MOUSE_DOWN:
 			case B_MOUSE_UP:
+			case B_MOUSE_IDLE:
 			{
 #ifdef TRACE_EVENTS
 				if (event->what != B_MOUSE_MOVED)
@@ -903,8 +910,10 @@ EventDispatcher::_EventLoop()
 				ETRACE(("key event, focus = %p\n", fFocus));
 
 				if (fKeyboardFilter != NULL
-					&& fKeyboardFilter->Filter(event, &fFocus) == B_SKIP_MESSAGE)
+					&& fKeyboardFilter->Filter(event, &fFocus)
+						== B_SKIP_MESSAGE) {
 					break;
+				}
 
 				keyboardEvent = true;
 
@@ -1002,11 +1011,27 @@ void
 EventDispatcher::_CursorLoop()
 {
 	BPoint where;
-	while (fStream->GetNextCursorPosition(where)) {
-		BAutolock _(fCursorLock);
+	const bigtime_t toolTipDelay = BToolTipManager::Manager()->ShowDelay();	
+	bool mouseIdleSent = true;
+	status_t status = B_OK;
 
-		if (fHWInterface != NULL)
-			fHWInterface->MoveCursorTo(where.x, where.y);
+	while (status != B_ERROR) {
+		const bigtime_t timeout = mouseIdleSent ?
+			B_INFINITE_TIMEOUT : toolTipDelay;
+		status = fStream->GetNextCursorPosition(where, timeout);
+
+		if (status == B_OK) {
+			mouseIdleSent = false;
+			BAutolock _(fCursorLock);
+
+			if (fHWInterface != NULL)
+				fHWInterface->MoveCursorTo(where.x, where.y);
+		} else if (status == B_TIMED_OUT) {
+			mouseIdleSent = true;
+			BMessage* mouseIdle = new BMessage(B_MOUSE_IDLE);
+			mouseIdle->AddPoint("screen_where", fLastCursorPosition);
+			fStream->InsertEvent(mouseIdle);
+		}
 	}
 
 	fCursorThread = -1;

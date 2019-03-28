@@ -16,6 +16,7 @@
 
 #include <pthread.h>
 
+#include <AutoDeleter.h>
 #include <AutoLock.h>
 #include <Beep.h>
 #include <Dragger.h>
@@ -114,7 +115,7 @@ static property_info sShelfPropertyList[] = {
 		"... of Replicant {index | name | id} of ...", 0,
 	},
 
-	{ 0, { 0 }, { 0 }, 0, 0 }
+	{ 0 }
 };
 
 static property_info sReplicantPropertyList[] = {
@@ -153,7 +154,7 @@ static property_info sReplicantPropertyList[] = {
 		NULL, 0,
 	},
 
-	{ 0, { 0 }, { 0 }, 0, 0 }
+	{ 0 }
 };
 
 
@@ -293,11 +294,11 @@ replicant_data::Archive(BMessage* msg)
 {
 	status_t result = B_OK;
 	BMessage archive;
-	if (view) 
+	if (view)
 		result = view->Archive(&archive);
 	else if (zombie_view)
 		result = zombie_view->Archive(&archive);
-		
+
 	if (result != B_OK)
 		return result;
 
@@ -306,7 +307,7 @@ replicant_data::Archive(BMessage* msg)
 	msg->AddMessage("message", &archive);
 	if (view)
 		pos = view->Frame().LeftTop();
-	else if (zombie_view) 
+	else if (zombie_view)
 		pos = zombie_view->Frame().LeftTop();
 	msg->AddPoint("position", pos);
 
@@ -550,16 +551,18 @@ BShelf::~BShelf()
 	Save();
 
 	// we own fStream only when fEntry is set
-	if (fEntry) {
+	if (fEntry != NULL) {
 		delete fEntry;
 		delete fStream;
 	}
 
 	while (fReplicants.CountItems() > 0) {
 		replicant_data *data = (replicant_data *)fReplicants.ItemAt(0);
-		fReplicants.RemoveItem(0L);
+		fReplicants.RemoveItem((int32)0);
 		delete data;
 	}
+
+	fContainerView->_SetShelf(NULL);
 }
 
 
@@ -701,10 +704,11 @@ BShelf::Save()
 	if (fEntry != NULL) {
 		BFile *file = new BFile(fEntry, B_READ_WRITE | B_ERASE_FILE);
 		status = file->InitCheck();
-		if (status < B_OK) {
+		if (status != B_OK) {
 			delete file;
 			return status;
 		}
+		delete fStream;
 		fStream = file;
 	}
 
@@ -901,7 +905,7 @@ BShelf::SetSaveLocation(BDataIO *data_io)
 {
 	fDirty = true;
 
-	if (fEntry) {
+	if (fEntry != NULL) {
 		delete fEntry;
 		fEntry = NULL;
 	}
@@ -1003,7 +1007,7 @@ BShelf::ReplicantAt(int32 index, BView **_view, uint32 *_uniqueID,
 		if (_view)
 			*_view = NULL;
 		if (_uniqueID)
-			*_uniqueID = ~0UL;
+			*_uniqueID = ~(uint32)0;
 		if (_error)
 			*_error = B_BAD_INDEX;
 
@@ -1145,7 +1149,7 @@ BShelf::_InitData(BEntry *entry, BDataIO *stream, BView *view,
 	fAllowZombies = true;
 	fTypeEnforced = false;
 
-	if (entry)
+	if (fEntry != NULL)
 		fStream = new BFile(entry, B_READ_ONLY);
 	else
 		fStream = stream;
@@ -1155,7 +1159,7 @@ BShelf::_InitData(BEntry *entry, BDataIO *stream, BView *view,
 	fContainerView->AddFilter(fFilter);
 	fContainerView->_SetShelf(this);
 
-	if (fStream) {
+	if (fStream != NULL) {
 		BMessage archive;
 
 		if (archive.Unflatten(fStream) == B_OK) {
@@ -1175,13 +1179,19 @@ BShelf::_InitData(BEntry *entry, BDataIO *stream, BView *view,
 				genCount = 1;
 
 			BMessage replicant;
-			BMessage *replmsg = NULL;
-			for (int32 i = 0; archive.FindMessage("replicant", i, &replicant) == B_OK; i++) {
+			for (int32 i = 0; archive.FindMessage("replicant", i, &replicant)
+				== B_OK; i++) {
 				BPoint point;
-				replmsg = new BMessage();
+				BMessage *replMsg = new BMessage();
+				ObjectDeleter<BMessage> deleter(replMsg);
 				replicant.FindPoint("position", &point);
-				replicant.FindMessage("message", replmsg);
-				AddReplicant(replmsg, point);
+				if (replicant.FindMessage("message", replMsg) == B_OK)
+					if (AddReplicant(replMsg, point) == B_OK) {
+						// Detach the deleter since AddReplicant is taking
+						// ownership on success. In R2 API this should be
+						// changed to take always ownership on the message.
+						deleter.Detach();
+					}
 			}
 		}
 	}
@@ -1195,10 +1205,10 @@ BShelf::_DeleteReplicant(replicant_data* item)
 	if (view == NULL)
 		view = item->zombie_view;
 
-	if (view)
+	if (view != NULL)
 		view->RemoveSelf();
 
-	if (item->dragger)
+	if (item->dragger != NULL)
 		item->dragger->RemoveSelf();
 
 	int32 index = replicant_data::IndexOf(&fReplicants, item->message);
@@ -1288,30 +1298,28 @@ BShelf::_AddReplicant(BMessage *data, BPoint *location, uint32 uniqueID)
 	// Instantiate the object, if this fails we have a zombie
 	image_id image = -1;
 	BArchivable *archivable = _InstantiateObject(data, &image);
-	
+
 	BView *view = NULL;
-	
-	if (archivable) {
+
+	if (archivable != NULL) {
 		view = dynamic_cast<BView*>(archivable);
-		
-		if (!view) {
+
+		if (view == NULL)
 			return send_reply(data, B_ERROR, uniqueID);
-		}
 	}
-	
+
 	BDragger* dragger = NULL;
 	BView* replicant = NULL;
 	BDragger::relation relation = BDragger::TARGET_UNKNOWN;
 	_BZombieReplicantView_* zombie = NULL;
-	if (view) {
+	if (view != NULL) {
 		const BPoint point = location ? *location : view->Frame().LeftTop();
 		replicant = _GetReplicant(data, view, point, dragger, relation);
 		if (replicant == NULL)
 			return send_reply(data, B_ERROR, uniqueID);
-	} else if (fDisplayZombies && fAllowZombies)
+	} else if (fDisplayZombies && fAllowZombies) {
 		zombie = _CreateZombie(data, dragger);
-
-	else if (!fAllowZombies) {
+	} else if (!fAllowZombies) {
 		// There was no view, and we're not allowed to have any zombies
 		// in the house
 		return send_reply(data, B_ERROR, uniqueID);
@@ -1334,7 +1342,7 @@ BShelf::_AddReplicant(BMessage *data, BPoint *location, uint32 uniqueID)
 		}
 	}
 
-	if (!zombie) {
+	if (zombie == NULL) {
 		data->RemoveName("_drop_point_");
 		data->RemoveName("_drop_offset_");
 	}
@@ -1353,7 +1361,7 @@ BShelf::_AddReplicant(BMessage *data, BPoint *location, uint32 uniqueID)
 
 BView *
 BShelf::_GetReplicant(BMessage *data, BView *view, const BPoint &point,
-		BDragger *&dragger, BDragger::relation &relation)
+	BDragger *&dragger, BDragger::relation &relation)
 {
 	// TODO: test me -- there seems to be lots of bugs parked here!
 	BView *replicant = NULL;
@@ -1401,7 +1409,7 @@ BShelf::_GetReplicant(BMessage *data, BView *view, const BPoint &point,
 /* static */
 void
 BShelf::_GetReplicantData(BMessage *data, BView *view, BView *&replicant,
-			BDragger *&dragger, BDragger::relation &relation)
+	BDragger *&dragger, BDragger::relation &relation)
 {
 	// Check if we have a dragger archived as "__widget" inside the message
 	BMessage widget;
@@ -1440,7 +1448,7 @@ BShelf::_CreateZombie(BMessage *data, BDragger *&dragger)
 	if (data->WasDropped()) {
 		BPoint offset;
 		BPoint dropPoint = data->DropPoint(&offset);
-		
+
 		frame.OffsetTo(fContainerView->ConvertFromScreen(dropPoint) - offset);
 
 		zombie = new _BZombieReplicantView_(frame, B_ERROR);
@@ -1490,14 +1498,13 @@ BShelf::_GetProperty(BMessage *msg, BMessage *reply)
 			for (int32 i = 0; i < CountReplicants(); i++) {
 				BView *view = NULL;
 				ReplicantAt(i, &view, &ID, &err);
-				if (err == B_OK) {
-					if (view->Name() != NULL &&
-						strlen(view->Name()) == strlen(name) && !strcmp(view->Name(), name)) {
-						replicant = view;
-						break;
-					}
-					err = B_NAME_NOT_FOUND;
+				if (err != B_OK || view == NULL)
+					continue;
+				if (view->Name() != NULL && strcmp(view->Name(), name) == 0) {
+					replicant = view;
+					break;
 				}
+				err = B_NAME_NOT_FOUND;
 			}
 			break;
 		}
@@ -1508,13 +1515,13 @@ BShelf::_GetProperty(BMessage *msg, BMessage *reply)
 			for (int32 i = 0; i < CountReplicants(); i++) {
 				BView *view = NULL;
 				ReplicantAt(i, &view, &ID, &err);
-				if (err == B_OK) {
-					if (ID == id) {
-						replicant = view;
-						break;
-					}
-					err = B_NAME_NOT_FOUND;
+				if (err != B_OK || view == NULL)
+					continue;
+				if (ID == id) {
+					replicant = view;
+					break;
 				}
+				err = B_NAME_NOT_FOUND;
 			}
 			break;
 		}

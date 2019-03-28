@@ -40,12 +40,12 @@ All rights reserved.
 #include <Debug.h>
 #include <DataIO.h>
 #include <File.h>
+#include <IconUtils.h>
 #include <String.h>
 #include <SupportDefs.h>
 
-#ifdef __HAIKU__
-#	include <IconUtils.h>
-#endif
+
+//	#pragma mark - BImageResources
 
 
 BImageResources::BImageResources(void* memAddr)
@@ -99,6 +99,7 @@ BImageResources::FinishResources(BResources* res) const
 		return B_BAD_VALUE;
 
 	fLock.Unlock();
+
 	return B_OK;
 }
 
@@ -146,14 +147,12 @@ BImageResources::GetIconResource(int32 id, icon_size size,
 	size_t length = 0;
 	const void* data;
 
-#ifdef __HAIKU__
 	// try to load vector icon
 	data = LoadResource(B_VECTOR_ICON_TYPE, id, &length);
 	if (data != NULL
 		&& BIconUtils::GetVectorIcon((uint8*)data, length, dest) == B_OK) {
 		return B_OK;
 	}
-#endif
 
 	// fall back to R5 icon
 	if (size != B_LARGE_ICON && size != B_MINI_ICON)
@@ -168,12 +167,10 @@ BImageResources::GetIconResource(int32 id, icon_size size,
 		return B_ERROR;
 	}
 
-#ifdef __HAIKU__
 	if (dest->ColorSpace() != B_CMAP8) {
 		return BIconUtils::ConvertFromCMAP8((uint8*)data, size, size,
 			size, dest);
 	}
-#endif
 
 	dest->SetBits(data, (int32)length, 0, B_CMAP8);
 	return B_OK;
@@ -184,7 +181,6 @@ status_t
 BImageResources::GetIconResource(int32 id, const uint8** iconData,
 	size_t* iconSize) const
 {
-#ifdef __HAIKU__
 	// try to load vector icon data from resources
 	size_t length = 0;
 	const void* data = LoadResource(B_VECTOR_ICON_TYPE, id, &length);
@@ -195,9 +191,6 @@ BImageResources::GetIconResource(int32 id, const uint8** iconData,
 	*iconSize = length;
 
 	return B_OK;
-#else
-	return B_ERROR;
-#endif
 }
 
 
@@ -206,7 +199,7 @@ BImageResources::find_image(void* memAddr) const
 {
 	image_info info;
 	int32 cookie = 0;
-	while (get_next_image_info(0, &cookie, &info) == B_OK)
+	while (get_next_image_info(0, &cookie, &info) == B_OK) {
 		if ((info.text <= memAddr
 			&& (((uint8*)info.text)+info.text_size) > memAddr)
 				|| (info.data <= memAddr
@@ -214,6 +207,7 @@ BImageResources::find_image(void* memAddr) const
 			// Found the image.
 			return info.id;
 		}
+	}
 
 	return -1;
 }
@@ -238,21 +232,21 @@ BImageResources::GetBitmapResource(type_code type, int32 id,
 	// Try to read as an archived bitmap.
 	stream.Seek(0, SEEK_SET);
 	BMessage archive;
-	status_t err = archive.Unflatten(&stream);
-	if (err != B_OK)
-		return err;
+	status_t result = archive.Unflatten(&stream);
+	if (result != B_OK)
+		return result;
 
 	*out = new BBitmap(&archive);
-	if (!*out)
+	if (*out == NULL)
 		return B_ERROR;
 
-	err = (*out)->InitCheck();
-	if (err != B_OK) {
+	result = (*out)->InitCheck();
+	if (result != B_OK) {
 		delete *out;
 		*out = NULL;
 	}
 
-	return err;
+	return result;
 }
 
 
@@ -263,7 +257,10 @@ static BImageResources* resources = NULL;
 // global object when the image is getting unloaded.
 class _TTrackerCleanupResources {
 public:
-	_TTrackerCleanupResources() { }
+	_TTrackerCleanupResources()
+	{
+	}
+
 	~_TTrackerCleanupResources()
 	{
 		delete resources;
@@ -276,14 +273,14 @@ namespace BPrivate {
 
 static _TTrackerCleanupResources CleanupResources;
 
-
 BImageResources* GetTrackerResources()
 {
 	if (!resources) {
 		BAutolock lock(&resLock);
 		resources = new BImageResources(&resources);
 	}
+
 	return resources;
 }
 
-}
+} // namespace BPrivate

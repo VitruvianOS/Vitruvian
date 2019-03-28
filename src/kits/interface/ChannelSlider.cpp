@@ -1,9 +1,9 @@
 /*
- * Copyright 2005-2009, Haiku Inc. All Rights Reserved.
+ * Copyright 2005-2015, Haiku Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Stefano Ceccherini (burton666@libero.it)
+ *		Stefano Ceccherini (stefano.ceccherini@gmail.com)
  *		Stephan Aßmus <superstippi@gmx.de>
  */
 
@@ -83,7 +83,7 @@ BChannelSlider::BChannelSlider(BRect area, const char* name, const char* label,
 
 
 BChannelSlider::BChannelSlider(BRect area, const char* name, const char* label,
-	BMessage* model, enum orientation orientation, int32 channels,
+	BMessage* model, orientation orientation, int32 channels,
 		uint32 resizeMode, uint32 flags)
 	: BChannelControl(area, name, label, model, channels, resizeMode, flags)
 
@@ -94,7 +94,7 @@ BChannelSlider::BChannelSlider(BRect area, const char* name, const char* label,
 
 
 BChannelSlider::BChannelSlider(const char* name, const char* label,
-	BMessage* model, enum orientation orientation, int32 channels,
+	BMessage* model, orientation orientation, int32 channels,
 		uint32 flags)
 	: BChannelControl(name, label, model, channels, flags)
 
@@ -149,10 +149,7 @@ BChannelSlider::Archive(BMessage* into, bool deep) const
 void
 BChannelSlider::AttachedToWindow()
 {
-	BView* parent = Parent();
-	if (parent != NULL)
-		SetViewColor(parent->ViewColor());
-
+	AdoptParentColors();
 	BChannelControl::AttachedToWindow();
 }
 
@@ -181,6 +178,21 @@ BChannelSlider::AllDetached()
 void
 BChannelSlider::MessageReceived(BMessage* message)
 {
+	if (message->what == B_COLORS_UPDATED
+		&& fBacking != NULL && fBackingView != NULL) {
+		rgb_color color;
+		if (message->FindColor(ui_color_name(B_PANEL_BACKGROUND_COLOR), &color)
+				== B_OK
+			&& fBacking->Lock()) {
+
+			if (fBackingView->LockLooper()) {
+				fBackingView->SetLowColor(color);
+				fBackingView->UnlockLooper();
+			}
+			fBacking->Unlock();
+		}
+	}
+
 	switch (message->what) {
 		case B_SET_PROPERTY: {
 		case B_GET_PROPERTY:
@@ -230,6 +242,7 @@ BChannelSlider::Draw(BRect updateRect)
 	_UpdateFontDimens();
 	_DrawThumbs();
 
+	SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
 	BRect bounds(Bounds());
 	if (Label()) {
 		float labelWidth = StringWidth(Label());
@@ -502,7 +515,7 @@ BChannelSlider::Orientation() const
 
 
 void
-BChannelSlider::SetOrientation(enum orientation orientation)
+BChannelSlider::SetOrientation(orientation orientation)
 {
 	bool isVertical = orientation == B_VERTICAL;
 	if (isVertical != fIsVertical) {
@@ -563,24 +576,16 @@ BChannelSlider::DrawGroove(BView* into, int32 channel, BPoint leftTop,
 	ASSERT(into != NULL);
 	BRect rect(leftTop, bottomRight);
 
-	if (be_control_look != NULL) {
-		rect.InsetBy(-2.5, -2.5);
-		rect.left = floorf(rect.left);
-		rect.top = floorf(rect.top);
-		rect.right = floorf(rect.right);
-		rect.bottom = floorf(rect.bottom);
-		rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
-		rgb_color barColor = be_control_look->SliderBarColor(base);
-		uint32 flags = 0;
-		be_control_look->DrawSliderBar(into, rect, rect, base,
-			barColor, flags, Orientation());
-		return;
-	}
-
-	_DrawGrooveFrame(fBackingView, rect.InsetByCopy(-2.5, -2.5));
-
-	rect.InsetBy(-0.5, -0.5);
-	into->FillRect(rect, B_SOLID_HIGH);
+	rect.InsetBy(-2.5, -2.5);
+	rect.left = floorf(rect.left);
+	rect.top = floorf(rect.top);
+	rect.right = floorf(rect.right);
+	rect.bottom = floorf(rect.bottom);
+	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color barColor = be_control_look->SliderBarColor(base);
+	uint32 flags = 0;
+	be_control_look->DrawSliderBar(into, rect, rect, base,
+		barColor, flags, Orientation());
 }
 
 
@@ -598,60 +603,38 @@ BChannelSlider::DrawThumb(BView* into, int32 channel, BPoint where,
 	where.x -= bitmapBounds.right / 2.0;
 	where.y -= bitmapBounds.bottom / 2.0;
 
-
-	if (be_control_look != NULL) {
-		BRect rect(bitmapBounds.OffsetToCopy(where));
-		rect.InsetBy(1, 1);
-		rect.left = floorf(rect.left);
-		rect.top = floorf(rect.top);
-		rect.right = ceilf(rect.right + 0.5);
-		rect.bottom = ceilf(rect.bottom + 0.5);
-		rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
-		uint32 flags = 0;
-		be_control_look->DrawSliderThumb(into, rect, rect, base,
-			flags, Orientation());
-		return;
-	}
-
-
-	into->PushState();
-
-	into->SetDrawingMode(B_OP_OVER);
-	into->DrawBitmapAsync(thumb, where);
-
-	if (pressed) {
-		into->SetDrawingMode(B_OP_ALPHA);
-
-		rgb_color color = tint_color(into->ViewColor(), B_DARKEN_4_TINT);
-		color.alpha = 128;
-		into->SetHighColor(color);
-
-		BRect destRect(where, where);
-		destRect.right += bitmapBounds.right;
-		destRect.bottom += bitmapBounds.bottom;
-
-		into->FillRect(destRect);
-	}
-
-	into->PopState();
+	BRect rect(bitmapBounds.OffsetToCopy(where));
+	rect.InsetBy(1, 1);
+	rect.left = floorf(rect.left);
+	rect.top = floorf(rect.top);
+	rect.right = ceilf(rect.right + 0.5);
+	rect.bottom = ceilf(rect.bottom + 0.5);
+	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+	uint32 flags = 0;
+	be_control_look->DrawSliderThumb(into, rect, rect, base,
+		flags, Orientation());
 }
 
 
 const BBitmap*
 BChannelSlider::ThumbFor(int32 channel, bool pressed)
 {
-	// TODO: Finish me (check allocations... etc)
-	if (fLeftKnob == NULL) {
-		if (fIsVertical) {
-			fLeftKnob = new (std::nothrow) BBitmap(BRect(0, 0, 11, 14),
-				B_CMAP8);
-			fLeftKnob->SetBits(kVerticalKnobData, sizeof(kVerticalKnobData), 0,
-				B_CMAP8);
-		} else {
-			fLeftKnob = new (std::nothrow) BBitmap(BRect(0, 0, 14, 11),
-				B_CMAP8);
+	if (fLeftKnob != NULL)
+		return fLeftKnob;
+
+	if (fIsVertical) {
+		fLeftKnob = new (std::nothrow) BBitmap(BRect(0, 0, 11, 14),
+			B_CMAP8);
+		if (fLeftKnob != NULL) {
+			fLeftKnob->SetBits(kVerticalKnobData,
+					sizeof(kVerticalKnobData), 0, B_CMAP8);
+		}
+	} else {
+		fLeftKnob = new (std::nothrow) BBitmap(BRect(0, 0, 14, 11),
+			B_CMAP8);
+		if (fLeftKnob != NULL) {
 			fLeftKnob->SetBits(kHorizontalKnobData,
-				sizeof(kHorizontalKnobData), 0, B_CMAP8);
+					sizeof(kHorizontalKnobData), 0, B_CMAP8);
 		}
 	}
 
@@ -739,8 +722,6 @@ BChannelSlider::_InitData()
 	fInitialValues = NULL;
 	fMinPoint = 0;
 	fFocusChannel = -1;
-
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 }
 
 
@@ -753,13 +734,15 @@ BChannelSlider::_FinishChange(bool update)
 		if (!fAllChannels) {
 			inMask = new (std::nothrow) bool[CountChannels()];
 			if (inMask) {
-				for (int i=0; i<numChannels; i++)
+				for (int i = 0; i < numChannels; i++)
 					inMask[i] = false;
 				inMask[fCurrentChannel] = true;
 			}
 		}
 		InvokeChannel(update ? ModificationMessage() : NULL, 0, numChannels,
 			inMask);
+
+		delete[] inMask;
 	}
 
 	if (!update) {
@@ -839,38 +822,12 @@ BChannelSlider::_DrawThumbs()
 			// draw some kind of current value tool tip
 			if (fCurrentChannel != -1 && fMinPoint != 0) {
 				char valueString[32];
-				snprintf(valueString, 32, "%ld", ValueFor(fCurrentChannel));
-				float stringWidth = fBackingView->StringWidth(valueString);
-				float width = max_c(10.0, stringWidth);
-				BRect valueRect(0.0, 0.0, width, 10.0);
-
-				BRect thumbFrame(ThumbFrameFor(fCurrentChannel));
-				float thumbDelta(ThumbDeltaFor(fCurrentChannel));
-
-				if (fIsVertical) {
-					valueRect.OffsetTo((thumbFrame.Width() - width) / 2.0
-						+ fCurrentChannel * thumbFrame.Width(),
-						thumbDelta + thumbFrame.Height() + 2.0);
-					if (valueRect.bottom > fBackingView->Frame().bottom)
-						valueRect.OffsetBy(0.0, -(thumbFrame.Height() + 12.0));
-				} else {
-					valueRect.OffsetTo((thumbDelta - (width + 2.0)),
-						thumbFrame.top);
-					if (valueRect.left < fBackingView->Frame().left) {
-						valueRect.OffsetBy(thumbFrame.Width() + width + 2.0,
-							0.0);
-					}
-				}
-
-				rgb_color oldColor = fBackingView->HighColor();
-				fBackingView->SetHighColor(255, 255, 172);
-				fBackingView->FillRect(valueRect);
-				fBackingView->SetHighColor(0, 0, 0);
-				fBackingView->DrawString(valueString, BPoint(valueRect.left
-					+ (valueRect.Width() - stringWidth) / 2.0, valueRect.bottom
-					- 1.0));
-				fBackingView->StrokeRect(valueRect.InsetByCopy(-0.5, -0.5));
-				fBackingView->SetHighColor(oldColor);
+				snprintf(valueString, 32, "%" B_PRId32,
+					ValueFor(fCurrentChannel));
+				SetToolTip(valueString);
+				ShowToolTip(ToolTip());
+			} else {
+				HideToolTip();
 			}
 
 			fBackingView->Sync();

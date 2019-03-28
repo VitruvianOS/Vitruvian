@@ -35,8 +35,10 @@ All rights reserved.
 #ifndef _TEXT_WIDGET_H
 #define _TEXT_WIDGET_H
 
+
 #include "Model.h"
 #include "WidgetAttributeText.h"
+
 
 namespace BPrivate {
 
@@ -66,7 +68,7 @@ public:
 		// and current drawing view are different
 
 	void MouseUp(BRect bounds, BPoseView*, BPose*, BPoint mouseLoc);
-	
+
 	BRect CalcRect(BPoint poseLoc, const BColumn*, const BPoseView*);
 		// returns the rect derived from the formatted string width
 		// may force WidgetAttributeText recalculation
@@ -79,7 +81,7 @@ public:
 	BRect CalcOldRect(BPoint poseLoc, const BColumn*, const BPoseView*);
 		// after an update call this to determine the old rect so that
 		// we can invalidate properly
-		
+
 	void StartEdit(BRect bounds, BPoseView*, BPose*);
 	void StopEdit(bool saveChanges, BPoint loc, BPoseView*, BPose*,
 		int32 index);
@@ -104,7 +106,7 @@ public:
 
 	void CheckExpiration();
 	void CancelWait();
-	
+
 private:
 	BRect CalcRectCommon(BPoint poseLoc, const BColumn*, const BPoseView*,
 		float width);
@@ -118,7 +120,7 @@ private:
 	bool fVisible : 1;
 	bool fActive : 1;
 	bool fSymLink : 1;
-	
+
 	bigtime_t fLastClickedTime;
 	struct MouseUpParams fParams;
 };
@@ -184,5 +186,6 @@ BTextWidget::Draw(BRect widgetRect, BRect widgetTextRect, float width,
 } // namespace BPrivate
 
 using namespace BPrivate;
+
 
 #endif	// _TEXT_WIDGET_H

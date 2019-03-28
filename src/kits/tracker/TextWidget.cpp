@@ -33,6 +33,8 @@ All rights reserved.
 */
 
 
+#include "TextWidget.h"
+
 #include <string.h>
 #include <stdlib.h>
 
@@ -51,15 +53,17 @@ All rights reserved.
 #include "Commands.h"
 #include "FSUtils.h"
 #include "PoseView.h"
-#include "TextWidget.h"
 #include "Utilities.h"
-#include "WidgetAttributeText.h"
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "TextWidget"
 
+
 const float kWidthMargin = 20;
+
+
+//	#pragma mark - BTextWidget
 
 
 BTextWidget::BTextWidget(Model* model, BColumn* column, BPoseView* view)
@@ -130,7 +134,8 @@ BTextWidget::ColumnRect(BPoint poseLoc, const BColumn* column,
 	BRect result;
 	result.left = column->Offset() + poseLoc.x;
 	result.right = result.left + column->Width();
-	result.bottom = poseLoc.y + view->ListElemHeight() - 1;
+	result.bottom = poseLoc.y
+		+ roundf((view->ListElemHeight() + view->FontHeight()) / 2);
 	result.top = result.bottom - view->FontHeight();
 	return result;
 }
@@ -155,6 +160,7 @@ BTextWidget::CalcRectCommon(BPoint poseLoc, const BColumn* column,
 					- (textWidth / 2);
 				if (result.left < 0)
 					result.left = 0;
+
 				result.right = result.left + textWidth + 1;
 				break;
 
@@ -164,11 +170,14 @@ BTextWidget::CalcRectCommon(BPoint poseLoc, const BColumn* column,
 				if (result.left < 0)
 					result.left = 0;
 				break;
+
 			default:
 				TRESPASS();
+				break;
 		}
 
-		result.bottom = poseLoc.y + (view->ListElemHeight() - 1);
+		result.bottom = poseLoc.y
+			+ roundf((view->ListElemHeight() + view->FontHeight()) / 2);
 	} else {
 		if (view->ViewMode() == kIconMode) {
 			// large/scaled icon mode
@@ -180,7 +189,6 @@ BTextWidget::CalcRectCommon(BPoint poseLoc, const BColumn* column,
 
 		result.right = result.left + textWidth;
 		result.bottom = poseLoc.y + view->IconPoseHeight();
-
 	}
 	result.top = result.bottom - view->FontHeight();
 
@@ -212,11 +220,12 @@ BTextWidget::CalcClickRect(BPoint poseLoc, const BColumn* column,
 	if (result.Width() < kWidthMargin) {
 		// if resulting rect too narrow, make it a bit wider
 		// for comfortable clicking
-		if (column && column->Width() < kWidthMargin)
+		if (column != NULL && column->Width() < kWidthMargin)
 			result.right = result.left + column->Width();
 		else
 			result.right = result.left + kWidthMargin;
 	}
+
 	return result;
 }
 
@@ -229,12 +238,11 @@ BTextWidget::CheckExpiration()
 		get_click_speed(&doubleClickSpeed);
 
 		bigtime_t delta = system_time() - fLastClickedTime;
-	
+
 		if (delta > doubleClickSpeed) {
 			// at least 'doubleClickSpeed' microseconds ellapsed and no click
 			// was registered since.
 			fLastClickedTime = 0;
-			fParams.poseView->SetTextWidgetToCheck(NULL);
 			StartEdit(fParams.bounds, fParams.poseView, fParams.pose);
 		}
 	} else {
@@ -279,7 +287,7 @@ BTextWidget::MouseUp(BRect bounds, BPoseView* view, BPose* pose, BPoint)
 
 		fParams.pose = pose;
 		fParams.bounds = bounds;
-		fParams.poseView = view;		
+		fParams.poseView = view;
 	} else
 		fLastClickedTime = 0;
 }
@@ -292,8 +300,14 @@ TextViewFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 	if (message->FindInt8("byte", (int8*)&key) != B_OK)
 		return B_DISPATCH_MESSAGE;
 
-	BPoseView* poseView = dynamic_cast<BContainerWindow*>(
-		filter->Looper())->PoseView();
+	ThrowOnAssert(filter != NULL);
+
+	BContainerWindow* window = dynamic_cast<BContainerWindow*>(
+		filter->Looper());
+	ThrowOnAssert(window != NULL);
+
+	BPoseView* poseView = window->PoseView();
+	ThrowOnAssert(poseView != NULL);
 
 	if (key == B_RETURN || key == B_ESCAPE) {
 		poseView->CommitActivePose(key == B_RETURN);
@@ -320,11 +334,18 @@ TextViewFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 		BTextView* textView = dynamic_cast<BTextView*>(
 			scrollView->FindView("WidgetTextView"));
 		if (textView != NULL) {
+			BRect textRect = textView->TextRect();
 			BRect rect = scrollView->Frame();
 
-			if (rect.right + 3 > poseView->Bounds().right
-				|| rect.left - 3 < 0)
+			if (rect.right + 5 > poseView->Bounds().right
+				|| rect.left - 5 < 0)
 				textView->MakeResizable(true, NULL);
+
+			if (textRect.Width() + 10 < rect.Width()) {
+				textView->MakeResizable(true, scrollView);
+				// make sure no empty white space stays on the right
+				textView->ScrollToOffset(0);
+			}
 		}
 	}
 
@@ -335,21 +356,15 @@ TextViewFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 void
 BTextWidget::StartEdit(BRect bounds, BPoseView* view, BPose* pose)
 {
-	if (!IsEditable())
+	view->SetTextWidgetToCheck(NULL, this);
+	if (!IsEditable() || IsActive())
 		return;
 
 	BEntry entry(pose->TargetModel()->EntryRef());
 	if (entry.InitCheck() == B_OK
-		&& !ConfirmChangeIfWellKnownDirectory(&entry,
-			B_TRANSLATE_COMMENT("rename",
-				"As in 'if you rename this folder...' (en) "
-				"'Wird dieser Ordner umbenannt...' (de)"),
-			B_TRANSLATE_COMMENT("rename",
-				"As in 'to rename this folder...' (en) "
-				"'Um diesen Ordner umzubenennen...' (de)"),
-			B_TRANSLATE_COMMENT("Rename",
-				"Button label, 'Rename' (en), 'Umbenennen' (de)")))
+		&& !ConfirmChangeIfWellKnownDirectory(&entry, kRename)) {
 		return;
+	}
 
 	// get bounds with full text length
 	BRect rect(bounds);
@@ -413,8 +428,10 @@ BTextWidget::StartEdit(BRect bounds, BPoseView* view, BPose* pose)
 	}
 	textView->MakeResizable(true, hitBorder ? NULL : scrollView);
 
-	view->SetActivePose(pose);		// tell view about pose
-	SetActive(true);				// for widget
+	view->SetActivePose(pose);
+		// tell view about pose
+	SetActive(true);
+		// for widget
 
 	textView->SelectAll();
 	textView->MakeFocus();
@@ -422,7 +439,8 @@ BTextWidget::StartEdit(BRect bounds, BPoseView* view, BPose* pose)
 	// make this text widget invisible while we edit it
 	SetVisible(false);
 
-	ASSERT(view->Window());	// how can I not have a Window here???
+	ASSERT(view->Window() != NULL);
+		// how can I not have a Window here???
 
 	if (view->Window()) {
 		// force immediate redraw so TextView appears instantly
@@ -437,19 +455,19 @@ BTextWidget::StopEdit(bool saveChanges, BPoint poseLoc, BPoseView* view,
 {
 	// find the text editing view
 	BView* scrollView = view->FindView("BorderView");
-	ASSERT(scrollView);
-	if (!scrollView)
+	ASSERT(scrollView != NULL);
+	if (scrollView == NULL)
 		return;
 
 	BTextView* textView = dynamic_cast<BTextView*>(
 		scrollView->FindView("WidgetTextView"));
-	ASSERT(textView);
-	if (!textView)
+	ASSERT(textView != NULL);
+	if (textView == NULL)
 		return;
 
 	BColumn* column = view->ColumnFor(fAttrHash);
-	ASSERT(column);
-	if (!column)
+	ASSERT(column != NULL);
+	if (column == NULL)
 		return;
 
 	if (saveChanges && fText->CommitEditedText(textView)) {
@@ -465,7 +483,7 @@ BTextWidget::StopEdit(bool saveChanges, BPoint poseLoc, BPoseView* view,
 	scrollView->RemoveSelf();
 	delete scrollView;
 
-	ASSERT(view->Window());
+	ASSERT(view->Window() != NULL);
 	view->Window()->UpdateIfNeeded();
 	view->MakeFocus();
 
@@ -496,7 +514,7 @@ BTextWidget::SelectAll(BPoseView* view)
 {
 	BTextView* text = dynamic_cast<BTextView*>(
 		view->FindView("WidgetTextView"));
-	if (text)
+	if (text != NULL)
 		text->SelectAll();
 }
 
@@ -509,17 +527,10 @@ BTextWidget::Draw(BRect eraseRect, BRect textRect, float, BPoseView* view,
 	textRect.OffsetBy(offset);
 
 	if (direct) {
-#ifdef __HAIKU__
 		// draw selection box if selected
 		if (selected) {
-#else
-		// erase area we're going to draw in
-		// NOTE: WidgetTextOutline() is reused for
-		// erasing background on R5 here
-		if (view->WidgetTextOutline() || selected) {
-#endif
 			drawView->SetDrawingMode(B_OP_COPY);
-			eraseRect.OffsetBy(offset);
+//			eraseRect.OffsetBy(offset);
 //			drawView->FillRect(eraseRect, B_SOLID_LOW);
 			drawView->FillRect(textRect, B_SOLID_LOW);
 		} else
@@ -529,11 +540,11 @@ BTextWidget::Draw(BRect eraseRect, BRect textRect, float, BPoseView* view,
 		rgb_color highColor;
 		if (view->IsDesktopWindow()) {
 			if (selected)
-				highColor = kWhite;
+				highColor = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
 			else
 				highColor = view->DeskTextColor();
 		} else if (selected && view->Window()->IsActive()) {
-			highColor = kWhite;
+			highColor = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
 		} else
 			highColor = kBlack;
 
@@ -551,7 +562,6 @@ BTextWidget::Draw(BRect eraseRect, BRect textRect, float, BPoseView* view,
 
 	const char* fittingText = fText->FittingText(view);
 
-#ifdef __HAIKU__
 	// TODO: Comparing view and drawView here to avoid rendering
 	// the text outline when producing a drag bitmap. The check is
 	// not fully correct, since an offscreen view is also used in some
@@ -567,10 +577,13 @@ BTextWidget::Draw(BRect eraseRect, BRect textRect, float, BPoseView* view,
 		BFont font;
 		drawView->GetFont(&font);
 
-		rgb_color textColor = drawView->HighColor();
-		if (textColor.red + textColor.green + textColor.blue < 128 * 3) {
+		rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
+		if (view->IsDesktopWindow())
+			textColor = view->DeskTextColor();
+
+		if (textColor.Brightness() < 100) {
 			// dark text on light outline
-			rgb_color glowColor = kWhite;
+			rgb_color glowColor = ui_color(B_SHINE_COLOR);
 
 			font.SetFalseBoldWidth(2.0);
 			drawView->SetFont(&font, B_FONT_FALSE_BOLD_WIDTH);
@@ -611,12 +624,11 @@ BTextWidget::Draw(BRect eraseRect, BRect textRect, float, BPoseView* view,
 		drawView->SetDrawingMode(B_OP_OVER);
 		drawView->SetHighColor(textColor);
 	}
-#endif // __HAIKU__
 
 	drawView->DrawString(fittingText, loc);
 
 	if (fSymLink && (fAttrHash == view->FirstColumn()->AttrHash())) {
-		// ToDo:
+		// TODO:
 		// this should be exported to the WidgetAttribute class, probably
 		// by having a per widget kind style
 		if (direct) {

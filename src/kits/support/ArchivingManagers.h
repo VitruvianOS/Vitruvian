@@ -1,5 +1,5 @@
 /*
- * Copyright 2010, Haiku, Inc. All Rights Reserved.
+ * Copyright 2010 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _ARCHIVING_MANAGERS_H
@@ -47,18 +47,16 @@ public:
 			return NULL;
 
 		BMessage* archive = const_cast<BMessage*>(constArchive);
-		return NULL;
-		// TODO
-		//return static_cast<BManagerBase*>(
-		//	BMessage::Private(archive).ArchivingPointer());
+
+		return static_cast<BManagerBase*>(
+			BMessage::Private(archive).ArchivingPointer());
 	}
 
 
 	static void
 	SetManagerPointer(BMessage* archive, BManagerBase* manager)
 	{
-		//TODO
-		//BMessage::Private(archive).SetArchivingPointer(manager);
+		BMessage::Private(archive).SetArchivingPointer(manager);
 	}
 
 
@@ -167,4 +165,5 @@ private:
 } // namespace Archiving
 } // namespace BPrivate
 
-#endif
+
+#endif	// _ARCHIVING_MANAGERS_H

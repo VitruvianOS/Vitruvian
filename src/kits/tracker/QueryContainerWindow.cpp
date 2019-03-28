@@ -48,22 +48,25 @@ All rights reserved.
 #include "QueryPoseView.h"
 
 
+//	#pragma mark - BQueryContainerWindow
+
+
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "QueryContainerWindow"
 
+
 BQueryContainerWindow::BQueryContainerWindow(LockingList<BWindow>* windowList,
-	uint32 containerWindowFlags, window_look look,
-	window_feel feel, uint32 flags, uint32 workspace)
-	:	BContainerWindow(windowList, containerWindowFlags, look, feel,
-			flags, workspace)
+	uint32 containerWindowFlags)
+	:
+	BContainerWindow(windowList, containerWindowFlags)
 {
 }
 
 
 BPoseView*
-BQueryContainerWindow::NewPoseView(Model* model, BRect rect, uint32)
+BQueryContainerWindow::NewPoseView(Model* model, uint32)
 {
-	return new BQueryPoseView(model, rect);
+	return new BQueryPoseView(model);
 }
 
 
@@ -77,12 +80,11 @@ BQueryContainerWindow::PoseView() const
 void
 BQueryContainerWindow::CreatePoseView(Model* model)
 {
-	BRect rect(Bounds());
-	rect.right -= B_V_SCROLL_BAR_WIDTH;
-	rect.bottom -= B_H_SCROLL_BAR_HEIGHT;
-	fPoseView = NewPoseView(model, rect, kListMode);
+	fPoseView = NewPoseView(model, kListMode);
 
-	AddChild(fPoseView);
+	fBorderedView->GroupLayout()->AddView(fPoseView);
+	fBorderedView->EnableBorderHighlight(false);
+	fBorderedView->GroupLayout()->SetInsets(0, 0, 1, 1);
 }
 
 
@@ -96,7 +98,7 @@ BQueryContainerWindow::AddWindowMenu(BMenu* menu)
 	item->SetTarget(this);
 	menu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Select"B_UTF8_ELLIPSIS),
+	item = new BMenuItem(B_TRANSLATE("Select" B_UTF8_ELLIPSIS),
 		new BMessage(kShowSelectionWindow), 'A', B_SHIFT_KEY);
 	item->SetTarget(PoseView());
 	menu->AddItem(item);
@@ -124,13 +126,14 @@ BQueryContainerWindow::AddWindowContextMenus(BMenu* menu)
 	BMenuItem* resizeItem = new BMenuItem(B_TRANSLATE("Resize to fit"),
 		new BMessage(kResizeToFit), 'Y');
 	menu->AddItem(resizeItem);
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Select"B_UTF8_ELLIPSIS),
+	menu->AddItem(new BMenuItem(B_TRANSLATE("Select" B_UTF8_ELLIPSIS),
 		new BMessage(kShowSelectionWindow), 'A', B_SHIFT_KEY));
 	menu->AddItem(new BMenuItem(B_TRANSLATE("Select all"),
 		new BMessage(B_SELECT_ALL), 'A'));
 	BMenuItem* closeItem = new BMenuItem(B_TRANSLATE("Close"),
 		new BMessage(B_QUIT_REQUESTED), 'W');
 	menu->AddItem(closeItem);
+
 	// target items as needed
 	menu->SetTargetForItems(PoseView());
 	closeItem->SetTarget(this);
@@ -145,7 +148,7 @@ BQueryContainerWindow::SetUpDefaultState()
 
 	WindowStateNodeOpener opener(this, true);
 		// this is our destination node, whatever it is for this window
-	if (!opener.StreamNode())
+	if (opener.StreamNode() == NULL)
 		return;
 
 	BString defaultStatePath(kQueryTemplates);

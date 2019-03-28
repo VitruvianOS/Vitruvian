@@ -1,5 +1,5 @@
 /*
- * Copyright 2009, Haiku, Inc. All rights reserved.
+ * Copyright 2009-2015, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _CHANNEL_SLIDER_H
@@ -14,19 +14,17 @@ public:
 								BChannelSlider(BRect area, const char* name,
 									const char* label, BMessage* message,
 									int32 channels = 1,
-									uint32 resizeMode
-										= B_FOLLOW_LEFT | B_FOLLOW_TOP,
+									uint32 resizeMode = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_WILL_DRAW);
 								BChannelSlider(BRect area, const char* name,
 									const char* label, BMessage* message,
-									enum orientation orientation,
+									orientation orientation,
 									int32 channels = 1,
-									uint32 resizeMode
-										= B_FOLLOW_LEFT | B_FOLLOW_TOP,
+									uint32 resizeMode = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_WILL_DRAW);
 								BChannelSlider(const char* name,
 									const char* label, BMessage* message,
-									enum orientation orientation,
+									orientation orientation,
 									int32 channels = 1,
 									uint32 flags = B_WILL_DRAW);
 								BChannelSlider(BMessage* archive);
@@ -67,7 +65,7 @@ public:
 	virtual	void				SetEnabled(bool on);
 
 	virtual	orientation			Orientation() const;
-			void				SetOrientation(enum orientation orientation);
+			void				SetOrientation(orientation orientation);
 
 	virtual	int32				MaxChannelCount() const;
 	virtual	bool				SupportsIndividualLimits() const;

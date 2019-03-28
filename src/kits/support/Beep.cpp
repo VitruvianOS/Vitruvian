@@ -9,14 +9,14 @@
 
 #include <stdio.h>
 
-//#include <DataExchange.h>
-//#include <MediaSounds.h>
+#include <DataExchange.h>
+#include <MediaSounds.h>
 
 
 status_t
 system_beep(const char* eventName)
 {
-	/*BMessenger messenger("application/x-vnd.Be.addon-host");
+	BMessenger messenger("application/x-vnd.Be.addon-host");
 	if (!messenger.IsValid())
 		return B_ERROR;
 
@@ -28,8 +28,7 @@ system_beep(const char* eventName)
 	if (status != B_OK || reply.FindInt32("error", &status) != B_OK)
 		status = B_BAD_REPLY;
 
-	return status;*/
-	return B_ERROR;
+	return status;
 }
 
 
@@ -43,7 +42,7 @@ beep()
 status_t
 add_system_beep_event(const char* name, uint32 flags)
 {
-	/*BMessenger messenger("application/x-vnd.Be.media-server");
+	BMessenger messenger("application/x-vnd.Be.media-server");
 	if (!messenger.IsValid())
 		return B_ERROR;
 
@@ -56,7 +55,5 @@ add_system_beep_event(const char* name, uint32 flags)
 	if (status != B_OK || reply.FindInt32("error", &status) != B_OK)
 		status = B_BAD_REPLY;
 
-	return status;*/
-	return B_ERROR;
+	return status;
 }
-

@@ -1,7 +1,8 @@
 /*
- * Copyright 2010, Haiku, Inc.
+ * Copyright 2010 Haiku, Inc. All rights reserved.
  * Copyright 2006, Ingo Weinhold <bonefish@cs.tu-berlin.de>.
- * All rights reserved. Distributed under the terms of the MIT License.
+ *
+ * Distributed under the terms of the MIT License.
  */
 
 
@@ -12,7 +13,7 @@ BGridView::BGridView(float horizontalSpacing, float verticalSpacing)
 	:
 	BView(NULL, 0, new BGridLayout(horizontalSpacing, verticalSpacing))
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+	AdoptSystemColors();
 }
 
 
@@ -21,7 +22,7 @@ BGridView::BGridView(const char* name, float horizontalSpacing,
 	:
 	BView(name, 0, new BGridLayout(horizontalSpacing, verticalSpacing))
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+	AdoptSystemColors();
 }
 
 
@@ -81,4 +82,3 @@ void BGridView::_ReservedGridView7() {}
 void BGridView::_ReservedGridView8() {}
 void BGridView::_ReservedGridView9() {}
 void BGridView::_ReservedGridView10() {}
-

@@ -20,9 +20,9 @@ typedef ulong cpu_status;
 
 #if B_DEBUG_SPINLOCK_CONTENTION
 	typedef struct {
-		vint32	lock;
-		vint32	count_low;
-		vint32	count_high;
+		int32	lock;
+		int32	count_low;
+		int32	count_high;
 	} spinlock;
 
 #	define B_SPINLOCK_INITIALIZER { 0, 0, 0 }
@@ -31,14 +31,38 @@ typedef ulong cpu_status;
 			(spinlock)->count_low = 0;				\
 			(spinlock)->count_high = 0;				\
 		} while (false)
-#	define B_SPINLOCK_IS_LOCKED(spinlock)	((spinlock)->lock > 0)
 #else
-	typedef vint32 spinlock;
+	typedef struct {
+		int32	lock;
+	} spinlock;
 
-#	define B_SPINLOCK_INITIALIZER 0
-#	define B_INITIALIZE_SPINLOCK(lock)	do { *(lock) = 0; } while (false)
-#	define B_SPINLOCK_IS_LOCKED(lock)	(*(lock) > 0)
+#	define B_SPINLOCK_INITIALIZER { 0 }
+#	define B_INITIALIZE_SPINLOCK(spinlock)	do {	\
+			(spinlock)->lock = 0;					\
+		} while (false)
 #endif
+
+#define B_SPINLOCK_IS_LOCKED(spinlock)	(atomic_get(&(spinlock)->lock) > 0)
+
+typedef struct {
+	int32		lock;
+} rw_spinlock;
+
+#define B_RW_SPINLOCK_INITIALIZER	{ 0 }
+#define B_INITIALIZE_RW_SPINLOCK(rw_spinlock)	do {	\
+		(rw_spinlock)->lock = 0;						\
+	} while (false)
+
+typedef struct {
+	spinlock	lock;
+	uint32		count;
+} seqlock;
+
+#define B_SEQLOCK_INITIALIZER	{ B_SPINLOCK_INITIALIZER, 0 }
+#define B_INITIALIZE_SEQLOCK(seqlock)	do {		\
+		B_INITIALIZE_SPINLOCK(&(seqlock)->lock);	\
+		(seqlock)->count = 0;						\
+	} while (false)
 
 /* interrupt handling support for device drivers */
 
@@ -126,6 +150,19 @@ extern void			restore_interrupts(cpu_status status);
 extern void			acquire_spinlock(spinlock *lock);
 extern void			release_spinlock(spinlock *lock);
 
+extern bool			try_acquire_write_spinlock(rw_spinlock* lock);
+extern void			acquire_write_spinlock(rw_spinlock* lock);
+extern void			release_write_spinlock(rw_spinlock* lock);
+extern bool			try_acquire_read_spinlock(rw_spinlock* lock);
+extern void			acquire_read_spinlock(rw_spinlock* lock);
+extern void			release_read_spinlock(rw_spinlock* lock);
+
+extern bool			try_acquire_write_seqlock(seqlock* lock);
+extern void			acquire_write_seqlock(seqlock* lock);
+extern void			release_write_seqlock(seqlock* lock);
+extern uint32		acquire_read_seqlock(seqlock* lock);
+extern bool			release_read_seqlock(seqlock* lock, uint32 count);
+
 extern status_t		install_io_interrupt_handler(long interrupt_number,
 						interrupt_handler handler, void *data, ulong flags);
 extern status_t		remove_io_interrupt_handler(long interrupt_number,
@@ -159,7 +196,8 @@ extern area_id		map_physical_memory(const char *areaName,
 						uint32 protection, void **_mappedAddress);
 
 /* kernel debugging facilities */
-//extern void			dprintf(const char *format, ...) _PRINTFLIKE(1, 2);
+extern void			dprintf(const char *format, ...) _PRINTFLIKE(1, 2);
+extern void			dvprintf(const char *format, va_list args);
 extern void			kprintf(const char *fmt, ...) _PRINTFLIKE(1, 2);
 
 extern void 		dump_block(const char *buffer, int size, const char *prefix);

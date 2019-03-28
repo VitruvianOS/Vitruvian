@@ -6,6 +6,7 @@
  *		Graham MacDonald (macdonag@btopenworld.com)
  */
 
+
 #include <PictureButton.h>
 
 #include <new>
@@ -14,10 +15,10 @@
 
 
 BPictureButton::BPictureButton(BRect frame, const char* name,
-		BPicture* off, BPicture* on, BMessage* message,
-		uint32 behavior, uint32 resizeMask, uint32 flags)
+	BPicture* off, BPicture* on, BMessage* message,
+	uint32 behavior, uint32 resizingMode, uint32 flags)
 	:
-	BControl(frame, name, "", message, resizeMask, flags),
+	BControl(frame, name, "", message, resizingMode, flags),
 	fEnabledOff(new(std::nothrow) BPicture(*off)),
 	fEnabledOn(new(std::nothrow) BPicture(*on)),
 	fDisabledOff(NULL),
@@ -38,7 +39,7 @@ BPictureButton::BPictureButton(BMessage* data)
 	BMessage pictureArchive;
 
 	// Default to 1 state button if not here - is this valid?
-	if (data->FindInt32 ("_behave", (int32* )&fBehavior) != B_OK)
+	if (data->FindInt32("_behave", (int32*)&fBehavior) != B_OK)
 		fBehavior = B_ONE_STATE_BUTTON;
 
 	// Now expand the pictures:
@@ -65,13 +66,10 @@ BPictureButton::~BPictureButton()
 }
 
 
-// #pragma mark -
-
-
 BArchivable*
 BPictureButton::Instantiate(BMessage* data)
 {
-	if ( validate_instantiation(data, "BPictureButton"))
+	if (validate_instantiation(data, "BPictureButton"))
 		return new (std::nothrow) BPictureButton(data);
 
 	return NULL;
@@ -120,9 +118,6 @@ BPictureButton::Archive(BMessage* data, bool deep) const
 }
 
 
-// #pragma mark -
-
-
 void
 BPictureButton::AttachedToWindow()
 {
@@ -149,9 +144,6 @@ BPictureButton::AllDetached()
 {
 	BControl::AllDetached();
 }
-
-
-// #pragma mark -
 
 
 void
@@ -182,20 +174,17 @@ BPictureButton::FrameResized(float newWidth, float newHeight)
 }
 
 
-// #pragma mark -
-
-
 void
-BPictureButton::WindowActivated(bool state)
+BPictureButton::WindowActivated(bool active)
 {
-	BControl::WindowActivated(state);
+	BControl::WindowActivated(active);
 }
 
 
 void
-BPictureButton::MakeFocus(bool state)
+BPictureButton::MakeFocus(bool focus)
 {
-	BControl::MakeFocus(state);
+	BControl::MakeFocus(focus);
 }
 
 
@@ -227,9 +216,9 @@ BPictureButton::Draw(BRect updateRect)
 
 
 void
-BPictureButton::MessageReceived(BMessage* msg)
+BPictureButton::MessageReceived(BMessage* message)
 {
-	BControl::MessageReceived(msg);
+	BControl::MessageReceived(message);
 }
 
 
@@ -260,10 +249,10 @@ BPictureButton::KeyDown(const char* bytes, int32 numBytes)
 
 
 void
-BPictureButton::MouseDown(BPoint point)
+BPictureButton::MouseDown(BPoint where)
 {
 	if (!IsEnabled()) {
-		BControl::MouseDown(point);
+		BControl::MouseDown(where);
 		return;
 	}
 
@@ -283,10 +272,10 @@ BPictureButton::MouseDown(BPoint point)
 
 
 void
-BPictureButton::MouseUp(BPoint point)
+BPictureButton::MouseUp(BPoint where)
 {
 	if (IsEnabled() && IsTracking()) {
-		if (Bounds().Contains(point)) {
+		if (Bounds().Contains(where)) {
 			if (fBehavior == B_ONE_STATE_BUTTON) {
 				if (Value() == B_CONTROL_ON) {
 					snooze(75000);
@@ -302,15 +291,16 @@ BPictureButton::MouseUp(BPoint point)
 
 
 void
-BPictureButton::MouseMoved(BPoint point, uint32 transit, const BMessage* msg)
+BPictureButton::MouseMoved(BPoint where, uint32 code,
+	const BMessage* dragMessage)
 {
 	if (IsEnabled() && IsTracking()) {
-		if (transit == B_EXITED_VIEW)
+		if (code == B_EXITED_VIEW)
 			SetValue(B_CONTROL_OFF);
-		else if (transit == B_ENTERED_VIEW)
+		else if (code == B_ENTERED_VIEW)
 			SetValue(B_CONTROL_ON);
 	} else
-		BControl::MouseMoved(point, transit, msg);
+		BControl::MouseMoved(where, code, dragMessage);
 }
 
 
@@ -318,34 +308,34 @@ BPictureButton::MouseMoved(BPoint point, uint32 transit, const BMessage* msg)
 
 
 void
-BPictureButton::SetEnabledOn(BPicture* on)
+BPictureButton::SetEnabledOn(BPicture* picture)
 {
 	delete fEnabledOn;
-	fEnabledOn = new (std::nothrow) BPicture(*on);
+	fEnabledOn = new (std::nothrow) BPicture(*picture);
 }
 
 
 void
-BPictureButton::SetEnabledOff(BPicture* off)
+BPictureButton::SetEnabledOff(BPicture* picture)
 {
 	delete fEnabledOff;
-	fEnabledOff = new (std::nothrow) BPicture(*off);
+	fEnabledOff = new (std::nothrow) BPicture(*picture);
 }
 
 
 void
-BPictureButton::SetDisabledOn(BPicture* on)
+BPictureButton::SetDisabledOn(BPicture* picture)
 {
 	delete fDisabledOn;
-	fDisabledOn = new (std::nothrow) BPicture(*on);
+	fDisabledOn = new (std::nothrow) BPicture(*picture);
 }
 
 
 void
-BPictureButton::SetDisabledOff(BPicture* off)
+BPictureButton::SetDisabledOff(BPicture* picture)
 {
 	delete fDisabledOff;
-	fDisabledOff = new (std::nothrow) BPicture(*off);
+	fDisabledOff = new (std::nothrow) BPicture(*picture);
 }
 
 
@@ -399,17 +389,18 @@ BPictureButton::SetValue(int32 value)
 
 
 status_t
-BPictureButton::Invoke(BMessage* msg)
+BPictureButton::Invoke(BMessage* message)
 {
-	return BControl::Invoke(msg);
+	return BControl::Invoke(message);
 }
 
 
 BHandler*
-BPictureButton::ResolveSpecifier(BMessage* msg, int32 index,
-	BMessage* specifier, int32 form, const char* property)
+BPictureButton::ResolveSpecifier(BMessage* message, int32 index,
+	BMessage* specifier, int32 what, const char* property)
 {
-	return BControl::ResolveSpecifier(msg, index, specifier, form, property);
+	return BControl::ResolveSpecifier(message, index, specifier,
+		what, property);
 }
 
 
@@ -470,13 +461,25 @@ BPictureButton::Perform(perform_code code, void* _data)
 			BPictureButton::DoLayout();
 			return B_OK;
 		}
+		case PERFORM_CODE_SET_ICON:
+		{
+			perform_data_set_icon* data = (perform_data_set_icon*)_data;
+			return BPictureButton::SetIcon(data->icon, data->flags);
+		}
 	}
 
 	return BControl::Perform(code, _data);
 }
 
 
-// #pragma mark -
+status_t
+BPictureButton::SetIcon(const BBitmap* icon, uint32 flags)
+{
+	return BControl::SetIcon(icon, flags);
+}
+
+
+// #pragma mark - BPictureButton private methods
 
 
 void BPictureButton::_ReservedPictureButton1() {}

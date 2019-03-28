@@ -32,12 +32,15 @@ names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
 
+
 #include "FSClipboard.h"
+
 #include <Clipboard.h>
 #include <Alert.h>
 #include <Catalog.h>
 #include <Locale.h>
 #include <NodeMonitor.h>
+
 #include "Commands.h"
 #include "FSUtils.h"
 #include "Tracker.h"
@@ -51,13 +54,13 @@ static inline void MakeModeNameFromRefName(char* modeName, char* refName);
 static inline bool CompareModeAndRefName(const char* modeName,
 	const char* refName);
 
-/*
+#if 0
 static bool
 FSClipboardCheckIntegrity()
 {
 	return true;
 }
-*/
+#endif
 
 static void
 MakeNodeFromName(node_ref* node, char* name)
@@ -73,14 +76,14 @@ MakeNodeFromName(node_ref* node, char* name)
 static inline void
 MakeRefName(char* refName, const node_ref* node)
 {
-	sprintf(refName, "r%ld_%Ld", node->device, node->node);
+	sprintf(refName, "r%" B_PRIdDEV "_%" B_PRIdINO, node->device, node->node);
 }
 
 
 static inline void
 MakeModeName(char* modeName, const node_ref* node)
 {
-	sprintf(modeName, "m%ld_%Ld", node->device, node->node);
+	sprintf(modeName, "m%" B_PRIdDEV "_%" B_PRIdINO, node->device, node->node);
 }
 
 
@@ -106,11 +109,12 @@ CompareModeAndRefName(const char* modeName, const char* refName)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - FSClipBoard
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "FSClipBoard"
+
 
 bool
 FSClipboardHasRefs()
@@ -145,8 +149,9 @@ FSClipboardHasRefs()
 void
 FSClipboardStartWatch(BMessenger target)
 {
-	if (dynamic_cast<TTracker*>(be_app) != NULL)
-		((TTracker*)be_app)->ClipboardRefsWatcher()->AddToNotifyList(target);
+	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
+	if (tracker != NULL && tracker->ClipboardRefsWatcher() != NULL)
+		tracker->ClipboardRefsWatcher()->AddToNotifyList(target);
 	else {
 		// this code is used by external apps using objects using FSClipboard
 		// functions, i.e. applications using FilePanel
@@ -163,8 +168,9 @@ FSClipboardStartWatch(BMessenger target)
 void
 FSClipboardStopWatch(BMessenger target)
 {
-	if (dynamic_cast<TTracker*>(be_app) != NULL)
-		((TTracker*)be_app)->ClipboardRefsWatcher()->AddToNotifyList(target);
+	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
+	if (tracker != NULL && tracker->ClipboardRefsWatcher() != NULL)
+		tracker->ClipboardRefsWatcher()->AddToNotifyList(target);
 	else {
 		// this code is used by external apps using objects using FSClipboard
 		// functions, i.e. applications using FilePanel
@@ -196,7 +202,6 @@ FSClipboardClear()
  *	It will check if the entries are already present, so that there can only
  *	be one reference to them in the clipboard.
  */
-
 uint32
 FSClipboardAddPoses(const node_ref* directory, PoseList* list,
 	uint32 moveMode, bool clearClipboard)
@@ -266,7 +271,7 @@ FSClipboardAddPoses(const node_ref* directory, PoseList* list,
 						refsAdded++;
 					} else {
 						clip->RemoveName(modeName);
-						
+
 						clipNode.node = *node;
 						clipNode.moveMode = kDelete;	// note removing node
 						updateMessage.AddData("tcnode", T_CLIPBOARD_NODE,
@@ -280,7 +285,7 @@ FSClipboardAddPoses(const node_ref* directory, PoseList* list,
 					if (clip->AddRef(refName, model->EntryRef()) == B_OK
 						&& clip->AddInt32(modeName, (int32)moveMode) == B_OK) {
 						pose->SetClipboardMode(moveMode);
-						
+
 						clipNode.node = *node;
 						updateMessage.AddData("tcnode", T_CLIPBOARD_NODE,
 							&clipNode, sizeof(TClipboardNodeRef), true,
@@ -422,7 +427,7 @@ FSClipboardPaste(Model* model, uint32 linksMode)
 				uint32 newMoveMode = 0;
 				bool sameDirectory = destNodeRef->device == ref.device
 					&& destNodeRef->node == ref.directory;
-				
+
 				if (!entry.Exists()) {
 					// The entry doesn't exist anymore, so we'll remove
 					// that entry from the clipboard as well
@@ -567,7 +572,7 @@ FSClipboardFindNodeMode(Model* model, bool autoLock, bool updateRefIfNeeded)
 	}
 	if (change)
 		be_clipboard->Commit();
-	
+
 	if (autoLock)
 		be_clipboard->Unlock();
 
@@ -702,7 +707,7 @@ BClipboardRefsWatcher::RemoveNodesByDevice(dev_t device)
 	BMessage* clip = be_clipboard->Data();
 	if (clip != NULL) {
 		char deviceName[6];
-		sprintf(deviceName, "r%ld_", device);
+		sprintf(deviceName, "r%" B_PRIdDEV "_", device);
 
 		int32 index = 0;
 		char* refName;
@@ -744,7 +749,7 @@ BClipboardRefsWatcher::UpdateNode(node_ref* node, entry_ref* ref)
 			clip->RemoveName(name);
 			MakeModeName(name);
 			clip->RemoveName(name);
-			
+
 			RemoveNode(node);
 		}
 		be_clipboard->Commit();

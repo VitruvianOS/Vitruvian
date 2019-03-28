@@ -31,15 +31,15 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
+
+//	PoseList is a commonly used instance of BObjectList<BPose>
+//	Defines convenience find and iteration calls
 #ifndef _POSE_LIST_H
 #define _POSE_LIST_H
 
 
-//	PoseList is a commonly used instance of BObjectList<BPose>
-//	Defines convenience find and iteration calls
+#include <ObjectList.h>
 
-
-#include "ObjectList.h"
 #include "Pose.h"
 
 
@@ -50,15 +50,20 @@ namespace BPrivate {
 
 class Model;
 
+
 class PoseList : public BObjectList<BPose> {
 public:
 	PoseList(int32 itemsPerBlock = 20, bool owning = false)
-		:	BObjectList<BPose>(itemsPerBlock, owning)
-		{}
+		:
+		BObjectList<BPose>(itemsPerBlock, owning)
+	{
+	}
 
 	PoseList(const PoseList &list)
-		:	BObjectList<BPose>(list)
-		{}
+		:
+		BObjectList<BPose>(list)
+	{
+	}
 
 	BPose* FindPose(const node_ref* node, int32* index = NULL) const;
 	BPose* FindPose(const entry_ref* entry, int32* index = NULL) const;
@@ -67,7 +72,10 @@ public:
 		// same as FindPose, node can be a target of the actual
 		// pose if the pose is a symlink
 	PoseList* FindAllPoses(const node_ref* node) const;
+
+	BPose* FindPoseByFileName(const char* name, int32* _index = NULL) const;
 };
+
 
 // iteration glue, add permutations as needed
 
@@ -81,7 +89,7 @@ EachPoseAndModel(PoseList* list,
 	for (int32 index = list->CountItems() - 1; index >= 0; index--) {
 		BPose* pose = list->ItemAt(index);
 		Model* model = pose->TargetModel();
-		if (model)
+		if (model != NULL)
 			(eachFunction)(pose, model, eachParam1);
 	}
 }
@@ -96,7 +104,7 @@ EachPoseAndModel(PoseList* list,
 	for (int32 index = list->CountItems() - 1; index >= 0; index--) {
 		BPose* pose = list->ItemAt(index);
 		Model* model = pose->TargetModel();
-		if (model)
+		if (model != NULL)
 			(eachFunction)(pose, model, index, eachParam1);
 	}
 }
@@ -111,10 +119,11 @@ EachPoseAndModel(PoseList* list,
 	for (int32 index = list->CountItems() - 1; index >= 0; index--) {
 		BPose* pose = list->ItemAt(index);
 		Model* model = pose->TargetModel();
-		if (model)
+		if (model != NULL)
 			(eachFunction)(pose, model, eachParam1, eachParam2);
 	}
 }
+
 
 template<class EachParam1, class EachParam2>
 void
@@ -125,10 +134,11 @@ EachPoseAndModel(PoseList* list,
 	for (int32 index = list->CountItems() - 1; index >= 0; index--) {
 		BPose* pose = list->ItemAt(index);
 		Model* model = pose->TargetModel();
-		if (model)
+		if (model != NULL)
 			(eachFunction)(pose, model, index, eachParam1, eachParam2);
 	}
 }
+
 
 template<class EachParam1>
 void
@@ -138,10 +148,11 @@ EachPoseAndResolvedModel(PoseList* list,
 	for (int32 index = list->CountItems() - 1; index >= 0; index--) {
 		BPose* pose = list->ItemAt(index);
 		Model* model = pose->TargetModel()->ResolveIfLink();
-		if (model)
+		if (model != NULL)
 			(eachFunction)(pose, model, eachParam1);
 	}
 }
+
 
 template<class EachParam1>
 void
@@ -152,10 +163,11 @@ EachPoseAndResolvedModel(PoseList* list,
 	for (int32 index = list->CountItems() - 1; index >= 0; index--) {
 		BPose* pose = list->ItemAt(index);
 		Model* model = pose->TargetModel()->ResolveIfLink();
-		if (model)
+		if (model != NULL)
 			(eachFunction)(pose, model, index, eachParam1);
 	}
 }
+
 
 template<class EachParam1, class EachParam2>
 void
@@ -166,10 +178,11 @@ EachPoseAndResolvedModel(PoseList* list,
 	for (int32 index = list->CountItems() - 1; index >= 0; index--) {
 		BPose* pose = list->ItemAt(index);
 		Model* model = pose->TargetModel()->ResolveIfLink();
-		if (model)
+		if (model != NULL)
 			(eachFunction)(pose, model, eachParam1, eachParam2);
 	}
 }
+
 
 template<class EachParam1, class EachParam2>
 void
@@ -180,7 +193,7 @@ EachPoseAndResolvedModel(PoseList* list,
 	for (int32 index = list->CountItems() - 1; index >= 0; index--) {
 		BPose* pose = list->ItemAt(index);
 		Model* model = pose->TargetModel()->ResolveIfLink();
-		if (model)
+		if (model != NULL)
 			(eachFunction)(pose, model, index, eachParam1, eachParam2);
 	}
 }
@@ -188,5 +201,6 @@ EachPoseAndResolvedModel(PoseList* list,
 } // namespace BPrivate
 
 using namespace BPrivate;
+
 
 #endif	// _POSE_LIST_H

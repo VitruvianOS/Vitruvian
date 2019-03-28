@@ -1,7 +1,8 @@
 /*
  * Copyright 2009, Christian Packmann.
  * Copyright 2008, Andrej Spielmann <andrej.spielmann@seh.ox.ac.uk>.
- * Copyright 2005-2009, Stephan Aßmus <superstippi@gmx.de>.
+ * Copyright 2005-2014, Stephan Aßmus <superstippi@gmx.de>.
+ * Copyright 2015, Julian Harnath <julian.harnath@rwth-aachen.de>
  * All rights reserved. Distributed under the terms of the MIT License.
  */
 
@@ -17,6 +18,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <syslog.h>
 
 #include <Bitmap.h>
 #include <GraphicsDefs.h>
@@ -51,6 +53,8 @@
 #include <AutoDeleter.h>
 #include <View.h>
 
+#include "AlphaMask.h"
+#include "BitmapPainter.h"
 #include "DrawingMode.h"
 #include "GlobalSubpixelSettings.h"
 #include "PatternHandler.h"
@@ -83,19 +87,29 @@ using std::nothrow;
 #define CHECK_CLIPPING	if (!fValidClipping) return BRect(0, 0, -1, -1);
 #define CHECK_CLIPPING_NO_RETURN	if (!fValidClipping) return;
 
-// Defines for SIMD support.
-#define APPSERVER_SIMD_MMX	(1 << 0)
-#define APPSERVER_SIMD_SSE	(1 << 1)
 
-// Prototypes for assembler routines
-extern "C" {
-	void bilinear_scale_xloop_mmxsse(const uint8* src, void* dst,
-		void* xWeights, uint32 xmin, uint32 xmax, uint32 wTop, uint32 srcBPR);
-}
+// Shortcuts for accessing internal data
+#define fBuffer					fInternal.fBuffer
+#define fPixelFormat			fInternal.fPixelFormat
+#define fBaseRenderer			fInternal.fBaseRenderer
+#define fUnpackedScanline		fInternal.fUnpackedScanline
+#define fPackedScanline			fInternal.fPackedScanline
+#define fRasterizer				fInternal.fRasterizer
+#define fRenderer				fInternal.fRenderer
+#define fRendererBin			fInternal.fRendererBin
+#define fSubpixPackedScanline	fInternal.fSubpixPackedScanline
+#define fSubpixUnpackedScanline	fInternal.fSubpixUnpackedScanline
+#define fSubpixRasterizer		fInternal.fSubpixRasterizer
+#define fSubpixRenderer			fInternal.fSubpixRenderer
+#define fMaskedUnpackedScanline	fInternal.fMaskedUnpackedScanline
+#define fClippedAlphaMask		fInternal.fClippedAlphaMask
+#define fPath					fInternal.fPath
+#define fCurve					fInternal.fCurve
+
 
 static uint32 detect_simd();
 
-static uint32 sSIMDFlags = detect_simd();
+uint32 gSIMDFlags = detect_simd();
 
 
 /*!	Detect SIMD flags for use in AppServer. Checks all CPUs in the system
@@ -125,7 +139,7 @@ detect_simd()
 	// supported across all CPUs found.
 	uint32 systemSIMD = 0xffffffff;
 
-	for (int32 cpu = 0; cpu < systemInfo.cpu_count; cpu++) {
+	for (uint32 cpu = 0; cpu < systemInfo.cpu_count; cpu++) {
 		cpuid_info cpuInfo;
 		get_cpuid(&cpuInfo, 0, cpu);
 
@@ -167,22 +181,7 @@ detect_simd()
 
 Painter::Painter()
 	:
-	fBuffer(),
-	fPixelFormat(fBuffer, &fPatternHandler),
-	fBaseRenderer(fPixelFormat),
-	fUnpackedScanline(),
-	fPackedScanline(),
-	fSubpixPackedScanline(),
-	fSubpixUnpackedScanline(),
-	fSubpixRasterizer(),
-	fRasterizer(),
-	fSubpixRenderer(fBaseRenderer),
-	fRenderer(fBaseRenderer),
-	fRendererBin(fBaseRenderer),
-
-	fPath(),
-	fCurve(fPath),
-
+	fInternal(fPatternHandler),
 	fSubpixelPrecise(false),
 	fValidClipping(false),
 	fDrawingText(false),
@@ -199,7 +198,8 @@ Painter::Painter()
 
 	fPatternHandler(),
 	fTextRenderer(fSubpixRenderer, fRenderer, fRendererBin, fUnpackedScanline,
-		fSubpixUnpackedScanline, fSubpixRasterizer)
+		fSubpixUnpackedScanline, fSubpixRasterizer, fMaskedUnpackedScanline,
+		fTransform)
 {
 	fPixelFormat.SetDrawingMode(fDrawingMode, fAlphaSrcMode, fAlphaFncMode,
 		false);
@@ -270,9 +270,9 @@ Painter::Bounds() const
 
 // SetDrawState
 void
-Painter::SetDrawState(const DrawState* data, int32 xOffset, int32 yOffset)
+Painter::SetDrawState(const DrawState* state, int32 xOffset, int32 yOffset)
 {
-	// NOTE: The custom clipping in "data" is ignored, because it has already
+	// NOTE: The custom clipping in "state" is ignored, because it has already
 	// been taken into account elsewhere
 
 	// NOTE: Usually this function is only used when the "current view"
@@ -281,36 +281,48 @@ Painter::SetDrawState(const DrawState* data, int32 xOffset, int32 yOffset)
 	// Painter methods are used directly, so this function is much less
 	// speed critical than it used to be.
 
-	SetPenSize(data->PenSize());
+	SetTransform(state->CombinedTransform(), xOffset, yOffset);
 
-	SetFont(data);
+	SetPenSize(state->PenSize());
 
-	fSubpixelPrecise = data->SubPixelPrecise();
+	SetFont(state);
+
+	fSubpixelPrecise = state->SubPixelPrecise();
+
+	if (state->GetAlphaMask() != NULL) {
+		fMaskedUnpackedScanline = state->GetAlphaMask()->Scanline();
+		fClippedAlphaMask = state->GetAlphaMask()->Mask();
+	} else {
+		fMaskedUnpackedScanline = NULL;
+		fClippedAlphaMask = NULL;
+	}
 
 	// any of these conditions means we need to use a different drawing
 	// mode instance
 	bool updateDrawingMode
-		= !(data->GetPattern() == fPatternHandler.GetPattern())
-			|| data->GetDrawingMode() != fDrawingMode
-			|| (data->GetDrawingMode() == B_OP_ALPHA
-				&& (data->AlphaSrcMode() != fAlphaSrcMode
-					|| data->AlphaFncMode() != fAlphaFncMode));
+		= !(state->GetPattern() == fPatternHandler.GetPattern())
+			|| state->GetDrawingMode() != fDrawingMode
+			|| (state->GetDrawingMode() == B_OP_ALPHA
+				&& (state->AlphaSrcMode() != fAlphaSrcMode
+					|| state->AlphaFncMode() != fAlphaFncMode));
 
-	fDrawingMode = data->GetDrawingMode();
-	fAlphaSrcMode = data->AlphaSrcMode();
-	fAlphaFncMode = data->AlphaFncMode();
-	fPatternHandler.SetPattern(data->GetPattern());
+	fDrawingMode = state->GetDrawingMode();
+	fAlphaSrcMode = state->AlphaSrcMode();
+	fAlphaFncMode = state->AlphaFncMode();
+	fPatternHandler.SetPattern(state->GetPattern());
 	fPatternHandler.SetOffsets(xOffset, yOffset);
-	fLineCapMode = data->LineCapMode();
-	fLineJoinMode = data->LineJoinMode();
-	fMiterLimit = data->MiterLimit();
+	fLineCapMode = state->LineCapMode();
+	fLineJoinMode = state->LineJoinMode();
+	fMiterLimit = state->MiterLimit();
+
+	SetFillRule(state->FillRule());
 
 	// adopt the color *after* the pattern is set
 	// to set the renderers to the correct color
-	SetHighColor(data->HighColor());
-	SetLowColor(data->LowColor());
+	SetHighColor(state->HighColor());
+	SetLowColor(state->LowColor());
 
-	if (updateDrawingMode || fPixelFormat.UsesOpCopyForText())
+	if (updateDrawingMode)
 		_UpdateDrawingMode();
 }
 
@@ -330,6 +342,21 @@ Painter::ConstrainClipping(const BRegion* region)
 		clipping_rect cb = fClippingRegion->FrameInt();
 		fRasterizer.clip_box(cb.left, cb.top, cb.right + 1, cb.bottom + 1);
 		fSubpixRasterizer.clip_box(cb.left, cb.top, cb.right + 1, cb.bottom + 1);
+	}
+}
+
+
+void
+Painter::SetTransform(BAffineTransform transform, int32 xOffset, int32 yOffset)
+{
+	fIdentityTransform = transform.IsIdentity();
+	if (!fIdentityTransform) {
+		fTransform = agg::trans_affine_translation(-xOffset, -yOffset);
+		fTransform *= agg::trans_affine(transform.sx, transform.shy,
+			transform.shx, transform.sy, transform.tx, transform.ty);
+		fTransform *= agg::trans_affine_translation(xOffset, yOffset);
+	} else {
+		fTransform.reset();
 	}
 }
 
@@ -398,6 +425,17 @@ Painter::SetStrokeMode(cap_mode lineCap, join_mode joinMode, float miterLimit)
 }
 
 
+void
+Painter::SetFillRule(int32 fillRule)
+{
+	agg::filling_rule_e aggFillRule = fillRule == B_EVEN_ODD
+		? agg::fill_even_odd : agg::fill_non_zero;
+
+	fRasterizer.filling_rule(aggFillRule);
+	fSubpixRasterizer.filling_rule(aggFillRule);
+}
+
+
 // SetPattern
 void
 Painter::SetPattern(const pattern& p, bool drawingText)
@@ -449,12 +487,13 @@ Painter::StrokeLine(BPoint a, BPoint b)
 
 	// "false" means not to do the pixel center offset,
 	// because it would mess up our optimized versions
-	_Transform(&a, false);
-	_Transform(&b, false);
+	_Align(&a, false);
+	_Align(&b, false);
 
 	// first, try an optimized version
-	if (fPenSize == 1.0
-		&& (fDrawingMode == B_OP_COPY || fDrawingMode == B_OP_OVER)) {
+	if (fPenSize == 1.0 && fIdentityTransform
+		&& (fDrawingMode == B_OP_COPY || fDrawingMode == B_OP_OVER)
+		&& fMaskedUnpackedScanline == NULL) {
 		pattern pat = *fPatternHandler.GetR5Pattern();
 		if (pat == B_SOLID_HIGH
 			&& StraightLine(a, b, fPatternHandler.HighColor())) {
@@ -469,9 +508,12 @@ Painter::StrokeLine(BPoint a, BPoint b)
 
 	if (a == b) {
 		// special case dots
-		if (fPenSize == 1.0 && !fSubpixelPrecise) {
+		if (fPenSize == 1.0 && !fSubpixelPrecise && fIdentityTransform) {
 			if (fClippingRegion->Contains(a)) {
-				fPixelFormat.blend_pixel((int)a.x, (int)a.y, fRenderer.color(),
+				int dotX = (int)a.x;
+				int dotY = (int)a.y;
+				fBaseRenderer.translate_to_base_ren(dotX, dotY);
+				fPixelFormat.blend_pixel(dotX, dotY, fRenderer.color(),
 					255);
 			}
 		} else {
@@ -483,51 +525,22 @@ Painter::StrokeLine(BPoint a, BPoint b)
 			_FillPath(fPath);
 		}
 	} else {
-		// do the pixel center offset here
-		// tweak ends to "include" the pixel at the index,
-		// we need to do this in order to produce results like R5,
-		// where coordinates were inclusive
-		if (!fSubpixelPrecise) {
-			bool centerOnLine = fmodf(fPenSize, 2.0) != 0.0;
-			if (a.x == b.x) {
-				// shift to pixel center vertically
-				if (centerOnLine) {
-					a.x += 0.5;
-					b.x += 0.5;
-				}
-				// extend on bottom end
-				if (a.y < b.y)
-					b.y++;
-				else
-					a.y++;
-			} else if (a.y == b.y) {
-				if (centerOnLine) {
-					// shift to pixel center horizontally
-					a.y += 0.5;
-					b.y += 0.5;
-				}
-				// extend on right end
-				if (a.x < b.x)
-					b.x++;
-				else
-					a.x++;
-			} else {
-				// do this regardless of pensize
-				if (a.x < b.x)
-					b.x++;
-				else
-					a.x++;
-				if (a.y < b.y)
-					b.y++;
-				else
-					a.y++;
-			}
+		// Do the pixel center offset here
+		if (!fSubpixelPrecise && fmodf(fPenSize, 2.0) != 0.0) {
+			_Align(&a, true);
+			_Align(&b, true);
 		}
 
 		fPath.move_to(a.x, a.y);
 		fPath.line_to(b.x, b.y);
 
-		_StrokePath(fPath);
+		if (!fSubpixelPrecise && fPenSize == 1.0f) {
+			// Tweak ends to "include" the pixel at the index,
+			// we need to do this in order to produce results like R5,
+			// where coordinates were inclusive
+			_StrokePath(fPath, B_SQUARE_CAP);
+		} else
+			_StrokePath(fPath);
 	}
 }
 
@@ -630,9 +643,9 @@ Painter::FillTriangle(BPoint pt1, BPoint pt2, BPoint pt3,
 {
 	CHECK_CLIPPING
 
-	_Transform(&pt1);
-	_Transform(&pt2);
-	_Transform(&pt3);
+	_Align(&pt1);
+	_Align(&pt2);
+	_Align(&pt3);
 
 	fPath.remove_all();
 
@@ -652,27 +665,30 @@ Painter::DrawPolygon(BPoint* p, int32 numPts, bool filled, bool closed) const
 {
 	CHECK_CLIPPING
 
-	if (numPts > 0) {
-		fPath.remove_all();
+	if (numPts == 0)
+		return BRect(0.0, 0.0, -1.0, -1.0);
 
-		_Transform(p);
-		fPath.move_to(p->x, p->y);
+	bool centerOffset = !filled && fIdentityTransform
+		&& fmodf(fPenSize, 2.0) != 0.0;
 
-		for (int32 i = 1; i < numPts; i++) {
-			p++;
-			_Transform(p);
-			fPath.line_to(p->x, p->y);
-		}
+	fPath.remove_all();
 
-		if (closed)
-			fPath.close_polygon();
+	_Align(p, centerOffset);
+	fPath.move_to(p->x, p->y);
 
-		if (filled)
-			return _FillPath(fPath);
-
-		return _StrokePath(fPath);
+	for (int32 i = 1; i < numPts; i++) {
+		p++;
+		_Align(p, centerOffset);
+		fPath.line_to(p->x, p->y);
 	}
-	return BRect(0.0, 0.0, -1.0, -1.0);
+
+	if (closed)
+		fPath.close_polygon();
+
+	if (filled)
+		return _FillPath(fPath);
+
+	return _StrokePath(fPath);
 }
 
 
@@ -686,12 +702,12 @@ Painter::FillPolygon(BPoint* p, int32 numPts, const BGradient& gradient,
 	if (numPts > 0) {
 		fPath.remove_all();
 
-		_Transform(p);
+		_Align(p);
 		fPath.move_to(p->x, p->y);
 
 		for (int32 i = 1; i < numPts; i++) {
 			p++;
-			_Transform(p);
+			_Align(p);
 			fPath.line_to(p->x, p->y);
 		}
 
@@ -712,10 +728,10 @@ Painter::DrawBezier(BPoint* p, bool filled) const
 
 	fPath.remove_all();
 
-	_Transform(&(p[0]));
-	_Transform(&(p[1]));
-	_Transform(&(p[2]));
-	_Transform(&(p[3]));
+	_Align(&(p[0]));
+	_Align(&(p[1]));
+	_Align(&(p[2]));
+	_Align(&(p[3]));
 
 	fPath.move_to(p[0].x, p[0].y);
 	fPath.curve4(p[1].x, p[1].y, p[2].x, p[2].y, p[3].x, p[3].y);
@@ -737,83 +753,16 @@ Painter::FillBezier(BPoint* p, const BGradient& gradient) const
 
 	fPath.remove_all();
 
-	_Transform(&(p[0]));
-	_Transform(&(p[1]));
-	_Transform(&(p[2]));
-	_Transform(&(p[3]));
+	_Align(&(p[0]));
+	_Align(&(p[1]));
+	_Align(&(p[2]));
+	_Align(&(p[3]));
 
 	fPath.move_to(p[0].x, p[0].y);
 	fPath.curve4(p[1].x, p[1].y, p[2].x, p[2].y, p[3].x, p[3].y);
 
 	fPath.close_polygon();
 	return _FillPath(fCurve, gradient);
-}
-
-
-static void
-iterate_shape_data(agg::path_storage& path,
-	const int32& opCount, const uint32* opList,
-	const int32& ptCount, const BPoint* points,
-	const BPoint& viewToScreenOffset, float viewScale)
-{
-	// TODO: if shapes are ever used more heavily in Haiku,
-	// it would be nice to use BShape data directly (write
-	// an AGG "VertexSource" adaptor)
-	path.remove_all();
-	for (int32 i = 0; i < opCount; i++) {
-		uint32 op = opList[i] & 0xFF000000;
-		if (op & OP_MOVETO) {
-			path.move_to(
-				points->x * viewScale + viewToScreenOffset.x,
-				points->y * viewScale + viewToScreenOffset.y);
-			points++;
-		}
-
-		if (op & OP_LINETO) {
-			int32 count = opList[i] & 0x00FFFFFF;
-			while (count--) {
-				path.line_to(
-					points->x * viewScale + viewToScreenOffset.x,
-					points->y * viewScale + viewToScreenOffset.y);
-				points++;
-			}
-		}
-
-		if (op & OP_BEZIERTO) {
-			int32 count = opList[i] & 0x00FFFFFF;
-			while (count) {
-				path.curve4(
-					points[0].x * viewScale + viewToScreenOffset.x,
-					points[0].y * viewScale + viewToScreenOffset.y,
-					points[1].x * viewScale + viewToScreenOffset.x,
-					points[1].y * viewScale + viewToScreenOffset.y,
-					points[2].x * viewScale + viewToScreenOffset.x,
-					points[2].y * viewScale + viewToScreenOffset.y);
-				points += 3;
-				count -= 3;
-			}
-		}
-
-		if ((op & OP_LARGE_ARC_TO_CW) || (op & OP_LARGE_ARC_TO_CCW)
-			|| (op & OP_SMALL_ARC_TO_CW) || (op & OP_SMALL_ARC_TO_CCW)) {
-			int32 count = opList[i] & 0x00FFFFFF;
-			while (count) {
-				path.arc_to(
-					points[0].x * viewScale,
-					points[0].y * viewScale,
-					points[1].x,
-					op & (OP_LARGE_ARC_TO_CW | OP_LARGE_ARC_TO_CCW),
-					op & (OP_SMALL_ARC_TO_CW | OP_LARGE_ARC_TO_CW),
-					points[2].x * viewScale + viewToScreenOffset.x,
-					points[2].y * viewScale + viewToScreenOffset.y);
-				points += 3;
-				count -= 3;
-			}
-		}
-
-		if (op & OP_CLOSE)
-			path.close_polygon();
-	}
 }
 
 
@@ -825,8 +774,8 @@ Painter::DrawShape(const int32& opCount, const uint32* opList,
 {
 	CHECK_CLIPPING
 
-	iterate_shape_data(fPath, opCount, opList, ptCount, points,
-		viewToScreenOffset, viewScale);
+	_IterateShapeData(opCount, opList, ptCount, points, viewToScreenOffset,
+		viewScale);
 
 	if (filled)
 		return _FillPath(fCurve);
@@ -843,8 +792,8 @@ Painter::FillShape(const int32& opCount, const uint32* opList,
 {
 	CHECK_CLIPPING
 
-	iterate_shape_data(fPath, opCount, opList, ptCount, points,
-		viewToScreenOffset, viewScale);
+	_IterateShapeData(opCount, opList, ptCount, points, viewToScreenOffset,
+		viewScale);
 
 	return _FillPath(fCurve, gradient);
 }
@@ -858,12 +807,13 @@ Painter::StrokeRect(const BRect& r) const
 
 	BPoint a(r.left, r.top);
 	BPoint b(r.right, r.bottom);
-	_Transform(&a, false);
-	_Transform(&b, false);
+	_Align(&a, false);
+	_Align(&b, false);
 
 	// first, try an optimized version
-	if (fPenSize == 1.0 &&
-		(fDrawingMode == B_OP_COPY || fDrawingMode == B_OP_OVER)) {
+	if (fPenSize == 1.0 && fIdentityTransform
+			&& (fDrawingMode == B_OP_COPY || fDrawingMode == B_OP_OVER)
+			&& fMaskedUnpackedScanline == NULL) {
 		pattern p = *fPatternHandler.GetR5Pattern();
 		if (p == B_SOLID_HIGH) {
 			BRect rect(a, b);
@@ -876,7 +826,7 @@ Painter::StrokeRect(const BRect& r) const
 		}
 	}
 
-	if (fmodf(fPenSize, 2.0) != 0.0) {
+	if (fIdentityTransform && fmodf(fPenSize, 2.0) != 0.0) {
 		// shift coords to center of pixels
 		a.x += 0.5;
 		a.y += 0.5;
@@ -920,11 +870,12 @@ Painter::FillRect(const BRect& r) const
 	// support invalid rects
 	BPoint a(min_c(r.left, r.right), min_c(r.top, r.bottom));
 	BPoint b(max_c(r.left, r.right), max_c(r.top, r.bottom));
-	_Transform(&a, false);
-	_Transform(&b, false);
+	_Align(&a, true, false);
+	_Align(&b, true, false);
 
 	// first, try an optimized version
-	if (fDrawingMode == B_OP_COPY || fDrawingMode == B_OP_OVER) {
+	if ((fDrawingMode == B_OP_COPY || fDrawingMode == B_OP_OVER)
+		&& fMaskedUnpackedScanline == NULL && fIdentityTransform) {
 		pattern p = *fPatternHandler.GetR5Pattern();
 		if (p == B_SOLID_HIGH) {
 			BRect rect(a, b);
@@ -936,7 +887,8 @@ Painter::FillRect(const BRect& r) const
 			return _Clipped(rect);
 		}
 	}
-	if (fDrawingMode == B_OP_ALPHA && fAlphaFncMode == B_ALPHA_OVERLAY) {
+	if (fDrawingMode == B_OP_ALPHA && fAlphaFncMode == B_ALPHA_OVERLAY
+		&& fMaskedUnpackedScanline == NULL && fIdentityTransform) {
 		pattern p = *fPatternHandler.GetR5Pattern();
 		if (p == B_SOLID_HIGH) {
 			BRect rect(a, b);
@@ -978,12 +930,13 @@ Painter::FillRect(const BRect& r, const BGradient& gradient) const
 	// support invalid rects
 	BPoint a(min_c(r.left, r.right), min_c(r.top, r.bottom));
 	BPoint b(max_c(r.left, r.right), max_c(r.top, r.bottom));
-	_Transform(&a, false);
-	_Transform(&b, false);
+	_Align(&a, true, false);
+	_Align(&b, true, false);
 
 	// first, try an optimized version
 	if (gradient.GetType() == BGradient::TYPE_LINEAR
-		&& (fDrawingMode == B_OP_COPY || fDrawingMode == B_OP_OVER)) {
+		&& (fDrawingMode == B_OP_COPY || fDrawingMode == B_OP_OVER)
+		&& fMaskedUnpackedScanline == NULL && fIdentityTransform) {
 		const BGradientLinear* linearGradient
 			= dynamic_cast<const BGradientLinear*>(&gradient);
 		if (linearGradient->Start().x == linearGradient->End().x
@@ -1056,7 +1009,8 @@ Painter::FillRect(const BRect& r, const rgb_color& c) const
 
 // FillRectVerticalGradient
 void
-Painter::FillRectVerticalGradient(BRect r, const BGradientLinear& gradient) const
+Painter::FillRectVerticalGradient(BRect r,
+	const BGradientLinear& gradient) const
 {
 	if (!fValidClipping)
 		return;
@@ -1142,94 +1096,15 @@ Painter::StrokeRoundRect(const BRect& r, float xRadius, float yRadius) const
 
 	BPoint lt(r.left, r.top);
 	BPoint rb(r.right, r.bottom);
-	bool centerOffset = fPenSize == 1.0;
-	// TODO: use this when using _StrokePath()
-	// bool centerOffset = fmodf(fPenSize, 2.0) != 0.0;
-	_Transform(&lt, centerOffset);
-	_Transform(&rb, centerOffset);
+	bool centerOffset = fmodf(fPenSize, 2.0) != 0.0;
+	_Align(&lt, centerOffset);
+	_Align(&rb, centerOffset);
 
-	if (fPenSize == 1.0) {
-		agg::rounded_rect rect;
-		rect.rect(lt.x, lt.y, rb.x, rb.y);
-		rect.radius(xRadius, yRadius);
+	agg::rounded_rect rect;
+	rect.rect(lt.x, lt.y, rb.x, rb.y);
+	rect.radius(xRadius, yRadius);
 
-		return _StrokePath(rect);
-	}
-
-	// NOTE: This implementation might seem a little strange, but it makes
-	// stroked round rects look like on R5. A more correct way would be to
-	// use _StrokePath() as above (independent from fPenSize).
-	// The fact that the bounding box of the round rect is not enlarged
-	// by fPenSize/2 is actually on purpose, though one could argue it is
-	// unexpected.
-
-	// enclose the right and bottom edge
-	rb.x++;
-	rb.y++;
-
-	agg::rounded_rect outer;
-	outer.rect(lt.x, lt.y, rb.x, rb.y);
-	outer.radius(xRadius, yRadius);
-
-	if (gSubpixelAntialiasing) {
-		fSubpixRasterizer.reset();
-		fSubpixRasterizer.add_path(outer);
-
-		// don't add an inner hole if the "size is negative", this avoids
-		// some defects that can be observed on R5 and could be regarded
-		// as a bug.
-		if (2 * fPenSize < rb.x - lt.x && 2 * fPenSize < rb.y - lt.y) {
-			agg::rounded_rect inner;
-			inner.rect(lt.x + fPenSize, lt.y + fPenSize, rb.x - fPenSize,
-				rb.y - fPenSize);
-			inner.radius(max_c(0.0, xRadius - fPenSize),
-				max_c(0.0, yRadius - fPenSize));
-
-			fSubpixRasterizer.add_path(inner);
-		}
-
-		// make the inner rect work as a hole
-		fSubpixRasterizer.filling_rule(agg::fill_even_odd);
-
-		if (fPenSize > 2) {
-			agg::render_scanlines(fSubpixRasterizer, fSubpixPackedScanline,
-				fSubpixRenderer);
-		} else {
-			agg::render_scanlines(fSubpixRasterizer, fSubpixUnpackedScanline,
-				fSubpixRenderer);
-		}
-
-		fSubpixRasterizer.filling_rule(agg::fill_non_zero);
-	} else {
-		fRasterizer.reset();
-		fRasterizer.add_path(outer);
-
-		// don't add an inner hole if the "size is negative", this avoids
-		// some defects that can be observed on R5 and could be regarded as
-		// a bug.
-		if (2 * fPenSize < rb.x - lt.x && 2 * fPenSize < rb.y - lt.y) {
-			agg::rounded_rect inner;
-			inner.rect(lt.x + fPenSize, lt.y + fPenSize, rb.x - fPenSize,
-				rb.y - fPenSize);
-			inner.radius(max_c(0.0, xRadius - fPenSize),
-				max_c(0.0, yRadius - fPenSize));
-
-			fRasterizer.add_path(inner);
-		}
-
-		// make the inner rect work as a hole
-		fRasterizer.filling_rule(agg::fill_even_odd);
-
-		if (fPenSize > 2)
-			agg::render_scanlines(fRasterizer, fPackedScanline, fRenderer);
-		else
-			agg::render_scanlines(fRasterizer, fUnpackedScanline, fRenderer);
-
-		// reset to default
-		fRasterizer.filling_rule(agg::fill_non_zero);
-	}
-
-	return _Clipped(_BoundingBox(outer));
+	return _StrokePath(rect);
 }
 
 
@@ -1241,8 +1116,8 @@ Painter::FillRoundRect(const BRect& r, float xRadius, float yRadius) const
 
 	BPoint lt(r.left, r.top);
 	BPoint rb(r.right, r.bottom);
-	_Transform(&lt, false);
-	_Transform(&rb, false);
+	_Align(&lt, false);
+	_Align(&rb, false);
 
 	// account for stricter interpretation of coordinates in AGG
 	// the rectangle ranges from the top-left (.0, .0)
@@ -1267,8 +1142,8 @@ Painter::FillRoundRect(const BRect& r, float xRadius, float yRadius,
 
 	BPoint lt(r.left, r.top);
 	BPoint rb(r.right, r.bottom);
-	_Transform(&lt, false);
-	_Transform(&rb, false);
+	_Align(&lt, false);
+	_Align(&rb, false);
 
 	// account for stricter interpretation of coordinates in AGG
 	// the rectangle ranges from the top-left (.0, .0)
@@ -1320,58 +1195,12 @@ Painter::DrawEllipse(BRect r, bool fill) const
 	if (divisions > 4096)
 		divisions = 4096;
 
-	if (fill) {
-		agg::ellipse path(center.x, center.y, xRadius, yRadius, divisions);
+	agg::ellipse path(center.x, center.y, xRadius, yRadius, divisions);
 
+	if (fill)
 		return _FillPath(path);
-	}
-
-	// NOTE: This implementation might seem a little strange, but it makes
-	// stroked ellipses look like on R5. A more correct way would be to use
-	// _StrokePath(), but it currently has its own set of problems with
-	// narrow ellipses (for small xRadii or yRadii).
-	float inset = fPenSize / 2.0;
-	agg::ellipse inner(center.x, center.y, max_c(0.0, xRadius - inset),
-		max_c(0.0, yRadius - inset), divisions);
-	agg::ellipse outer(center.x, center.y, xRadius + inset, yRadius + inset,
-		divisions);
-
-	if (gSubpixelAntialiasing) {
-		fSubpixRasterizer.reset();
-		fSubpixRasterizer.add_path(outer);
-		fSubpixRasterizer.add_path(inner);
-
-		// make the inner ellipse work as a hole
-		fSubpixRasterizer.filling_rule(agg::fill_even_odd);
-
-		if (fPenSize > 4) {
-			agg::render_scanlines(fSubpixRasterizer, fSubpixPackedScanline,
-				fSubpixRenderer);
-		} else {
-			agg::render_scanlines(fSubpixRasterizer, fSubpixUnpackedScanline,
-				fSubpixRenderer);
-		}
-
-		// reset to default
-		fSubpixRasterizer.filling_rule(agg::fill_non_zero);
-	} else {
-		fRasterizer.reset();
-		fRasterizer.add_path(outer);
-		fRasterizer.add_path(inner);
-
-		// make the inner ellipse work as a hole
-		fRasterizer.filling_rule(agg::fill_even_odd);
-
-		if (fPenSize > 4)
-			agg::render_scanlines(fRasterizer, fPackedScanline, fRenderer);
-		else
-			agg::render_scanlines(fRasterizer, fUnpackedScanline, fRenderer);
-
-		// reset to default
-		fRasterizer.filling_rule(agg::fill_non_zero);
-	}
-
-	return _Clipped(_BoundingBox(outer));
+	else
+		return _StrokePath(path);
 }
 
 
@@ -1406,7 +1235,7 @@ Painter::StrokeArc(BPoint center, float xRadius, float yRadius, float angle,
 {
 	CHECK_CLIPPING
 
-	_Transform(&center);
+	_Align(&center);
 
 	double angleRad = (angle * M_PI) / 180.0;
 	double spanRad = (span * M_PI) / 180.0;
@@ -1427,7 +1256,7 @@ Painter::FillArc(BPoint center, float xRadius, float yRadius, float angle,
 {
 	CHECK_CLIPPING
 
-	_Transform(&center);
+	_Align(&center);
 
 	double angleRad = (angle * M_PI) / 180.0;
 	double spanRad = (span * M_PI) / 180.0;
@@ -1464,7 +1293,7 @@ Painter::FillArc(BPoint center, float xRadius, float yRadius, float angle,
 {
 	CHECK_CLIPPING
 
-	_Transform(&center);
+	_Align(&center);
 
 	double angleRad = (angle * M_PI) / 180.0;
 	double spanRad = (span * M_PI) / 180.0;
@@ -1602,29 +1431,13 @@ Painter::DrawBitmap(const ServerBitmap* bitmap, BRect bitmapRect,
 {
 	CHECK_CLIPPING
 
-	BRect touched = _Clipped(viewRect);
+	BRect touched = TransformAlignAndClipRect(viewRect);
 
-	if (bitmap && bitmap->IsValid() && touched.IsValid()) {
-		// the native bitmap coordinate system
-		BRect actualBitmapRect(bitmap->Bounds());
-
-		TRACE("Painter::DrawBitmap()\n");
-		TRACE("   actualBitmapRect = (%.1f, %.1f) - (%.1f, %.1f)\n",
-			actualBitmapRect.left, actualBitmapRect.top,
-			actualBitmapRect.right, actualBitmapRect.bottom);
-		TRACE("   bitmapRect = (%.1f, %.1f) - (%.1f, %.1f)\n",
-			bitmapRect.left, bitmapRect.top, bitmapRect.right,
-			bitmapRect.bottom);
-		TRACE("   viewRect = (%.1f, %.1f) - (%.1f, %.1f)\n",
-			viewRect.left, viewRect.top, viewRect.right, viewRect.bottom);
-
-		agg::rendering_buffer srcBuffer;
-		srcBuffer.attach(bitmap->Bits(), bitmap->Width(), bitmap->Height(),
-			bitmap->BytesPerRow());
-
-		_DrawBitmap(srcBuffer, bitmap->ColorSpace(), actualBitmapRect,
-			bitmapRect, viewRect, options);
+	if (touched.IsValid()) {
+		BitmapPainter bitmapPainter(this, bitmap, options);
+		bitmapPainter.Draw(bitmapRect, viewRect);
 	}
+
 	return touched;
 }
 
@@ -1682,35 +1495,53 @@ Painter::InvertRect(const BRect& r) const
 }
 
 
-// #pragma mark - private
-
-
-// _Transform
-inline void
-Painter::_Transform(BPoint* point, bool centerOffset) const
+void
+Painter::SetRendererOffset(int32 offsetX, int32 offsetY)
 {
-	// rounding
-	if (!fSubpixelPrecise) {
-		// TODO: validate usage of floor() for values < 0
-		point->x = (int32)point->x;
-		point->y = (int32)point->y;
-	}
-	// this code is supposed to move coordinates to the center of pixels,
-	// as AGG considers (0,0) to be the "upper left corner" of a pixel,
-	// but BViews are less strict on those details
-	if (centerOffset) {
-		point->x += 0.5;
-		point->y += 0.5;
-	}
+	fBaseRenderer.set_offset(offsetX, offsetY);
 }
 
 
-// _Transform
-inline BPoint
-Painter::_Transform(const BPoint& point, bool centerOffset) const
+// #pragma mark - private
+
+
+inline float
+Painter::_Align(float coord, bool round, bool centerOffset) const
 {
-	BPoint ret = point;
-	_Transform(&ret, centerOffset);
+	// rounding
+	if (round)
+		coord = (int32)coord;
+
+	// This code is supposed to move coordinates to the center of pixels,
+	// as AGG considers (0,0) to be the "upper left corner" of a pixel,
+	// but BViews are less strict on those details
+	if (centerOffset)
+		coord += 0.5;
+
+	return coord;
+}
+
+
+inline void
+Painter::_Align(BPoint* point, bool centerOffset) const
+{
+	_Align(point, !fSubpixelPrecise, centerOffset);
+}
+
+
+inline void
+Painter::_Align(BPoint* point, bool round, bool centerOffset) const
+{
+	point->x = _Align(point->x, round, centerOffset);
+	point->y = _Align(point->y, round, centerOffset);
+}
+
+
+inline BPoint
+Painter::_Align(const BPoint& point, bool centerOffset) const
+{
+	BPoint ret(point);
+	_Align(&ret, centerOffset);
 	return ret;
 }
 
@@ -1778,9 +1609,9 @@ Painter::_DrawTriangle(BPoint pt1, BPoint pt2, BPoint pt3, bool fill) const
 {
 	CHECK_CLIPPING
 
-	_Transform(&pt1);
-	_Transform(&pt2);
-	_Transform(&pt3);
+	_Align(&pt1);
+	_Align(&pt2);
+	_Align(&pt3);
 
 	fPath.remove_all();
 
@@ -1797,970 +1628,69 @@ Painter::_DrawTriangle(BPoint pt1, BPoint pt2, BPoint pt3, bool fill) const
 }
 
 
-// copy_bitmap_row_cmap8_copy
-static inline void
-copy_bitmap_row_cmap8_copy(uint8* dst, const uint8* src, int32 numPixels,
-	const rgb_color* colorMap)
-{
-	uint32* d = (uint32*)dst;
-	const uint8* s = src;
-	while (numPixels--) {
-		const rgb_color c = colorMap[*s++];
-		*d++ = (c.alpha << 24) | (c.red << 16) | (c.green << 8) | (c.blue);
-	}
-}
-
-
-// copy_bitmap_row_cmap8_over
-static inline void
-copy_bitmap_row_cmap8_over(uint8* dst, const uint8* src, int32 numPixels,
-	const rgb_color* colorMap)
-{
-	uint32* d = (uint32*)dst;
-	const uint8* s = src;
-	while (numPixels--) {
-		const rgb_color c = colorMap[*s++];
-		if (c.alpha)
-			*d = (c.alpha << 24) | (c.red << 16) | (c.green << 8) | (c.blue);
-		d++;
-	}
-}
-
-
-// copy_bitmap_row_bgr32_copy
-static inline void
-copy_bitmap_row_bgr32_copy(uint8* dst, const uint8* src, int32 numPixels,
-	const rgb_color* colorMap)
-{
-	memcpy(dst, src, numPixels * 4);
-}
-
-
-// copy_bitmap_row_bgr32_over
-static inline void
-copy_bitmap_row_bgr32_over(uint8* dst, const uint8* src, int32 numPixels,
-	const rgb_color* colorMap)
-{
-	uint32* d = (uint32*)dst;
-	uint32* s = (uint32*)src;
-	while (numPixels--) {
-		if (*s != B_TRANSPARENT_MAGIC_RGBA32)
-			*(uint32*)d = *(uint32*)s;
-		d++;
-		s++;
-	}
-}
-
-
-// copy_bitmap_row_bgr32_alpha
-static inline void
-copy_bitmap_row_bgr32_alpha(uint8* dst, const uint8* src, int32 numPixels,
-	const rgb_color* colorMap)
-{
-	uint32* d = (uint32*)dst;
-	int32 bytes = numPixels * 4;
-	uint8 buffer[bytes];
-	uint8* b = buffer;
-	while (numPixels--) {
-		if (src[3] == 255) {
-			*(uint32*)b = *(uint32*)src;
-		} else {
-			*(uint32*)b = *d;
-			b[0] = ((src[0] - b[0]) * src[3] + (b[0] << 8)) >> 8;
-			b[1] = ((src[1] - b[1]) * src[3] + (b[1] << 8)) >> 8;
-			b[2] = ((src[2] - b[2]) * src[3] + (b[2] << 8)) >> 8;
-		}
-		d++;
-		b += 4;
-		src += 4;
-	}
-	memcpy(dst, buffer, bytes);
-}
-
-
-// _TransparentMagicToAlpha
-template<typename sourcePixel>
 void
-Painter::_TransparentMagicToAlpha(sourcePixel* buffer, uint32 width,
-	uint32 height, uint32 sourceBytesPerRow, sourcePixel transparentMagic,
-	BBitmap* output) const
+Painter::_IterateShapeData(const int32& opCount, const uint32* opList,
+	const int32& ptCount, const BPoint* points,
+	const BPoint& viewToScreenOffset, float viewScale) const
 {
-	uint8* sourceRow = (uint8*)buffer;
-	uint8* destRow = (uint8*)output->Bits();
-	uint32 destBytesPerRow = output->BytesPerRow();
-
-	for (uint32 y = 0; y < height; y++) {
-		sourcePixel* pixel = (sourcePixel*)sourceRow;
-		uint32* destPixel = (uint32*)destRow;
-		for (uint32 x = 0; x < width; x++, pixel++, destPixel++) {
-			if (*pixel == transparentMagic)
-				*destPixel &= 0x00ffffff;
-		}
-
-		sourceRow += sourceBytesPerRow;
-		destRow += destBytesPerRow;
-	}
-}
-
-
-// _DrawBitmap
-void
-Painter::_DrawBitmap(agg::rendering_buffer& srcBuffer, color_space format,
-	BRect actualBitmapRect, BRect bitmapRect, BRect viewRect,
-	uint32 options) const
-{
-	if (!fValidClipping
-		|| !bitmapRect.IsValid() || !bitmapRect.Intersects(actualBitmapRect)
-		|| !viewRect.IsValid()) {
-		return;
-	}
-
-	if (!fSubpixelPrecise) {
-		align_rect_to_pixels(&bitmapRect);
-		align_rect_to_pixels(&viewRect);
-	}
-
-	TRACE("Painter::_DrawBitmap()\n");
-	TRACE("   bitmapRect = (%.1f, %.1f) - (%.1f, %.1f)\n",
-		bitmapRect.left, bitmapRect.top, bitmapRect.right, bitmapRect.bottom);
-	TRACE("   viewRect = (%.1f, %.1f) - (%.1f, %.1f)\n",
-		viewRect.left, viewRect.top, viewRect.right, viewRect.bottom);
-
-	double xScale = (viewRect.Width() + 1) / (bitmapRect.Width() + 1);
-	double yScale = (viewRect.Height() + 1) / (bitmapRect.Height() + 1);
-
-	if (xScale == 0.0 || yScale == 0.0)
-		return;
-
-	// compensate for the lefttop offset the actualBitmapRect might have
-	// actualBitmapRect has the right size, but put it at B_ORIGIN
-	// bitmapRect is already in good coordinates
-	actualBitmapRect.OffsetBy(-actualBitmapRect.left, -actualBitmapRect.top);
-
-	// constrain rect to passed bitmap bounds
-	// and transfer the changes to the viewRect with the right scale
-	if (bitmapRect.left < actualBitmapRect.left) {
-		float diff = actualBitmapRect.left - bitmapRect.left;
-		viewRect.left += diff * xScale;
-		bitmapRect.left = actualBitmapRect.left;
-	}
-	if (bitmapRect.top < actualBitmapRect.top) {
-		float diff = actualBitmapRect.top - bitmapRect.top;
-		viewRect.top += diff * yScale;
-		bitmapRect.top = actualBitmapRect.top;
-	}
-	if (bitmapRect.right > actualBitmapRect.right) {
-		float diff = bitmapRect.right - actualBitmapRect.right;
-		viewRect.right -= diff * xScale;
-		bitmapRect.right = actualBitmapRect.right;
-	}
-	if (bitmapRect.bottom > actualBitmapRect.bottom) {
-		float diff = bitmapRect.bottom - actualBitmapRect.bottom;
-		viewRect.bottom -= diff * yScale;
-		bitmapRect.bottom = actualBitmapRect.bottom;
-	}
-
-	double xOffset = viewRect.left - bitmapRect.left;
-	double yOffset = viewRect.top - bitmapRect.top;
-
-	// optimized code path for B_CMAP8 and no scale
-	if (xScale == 1.0 && yScale == 1.0) {
-		if (format == B_CMAP8) {
-			if (fDrawingMode == B_OP_COPY) {
-				_DrawBitmapNoScale32(copy_bitmap_row_cmap8_copy, 1,
-					srcBuffer, (int32)xOffset, (int32)yOffset, viewRect);
-				return;
-			}
-			if (fDrawingMode == B_OP_OVER) {
-				_DrawBitmapNoScale32(copy_bitmap_row_cmap8_over, 1,
-					srcBuffer, (int32)xOffset, (int32)yOffset, viewRect);
-				return;
-			}
-		} else if (format == B_RGB32) {
-			if (fDrawingMode == B_OP_OVER) {
-				_DrawBitmapNoScale32(copy_bitmap_row_bgr32_over, 4,
-					srcBuffer, (int32)xOffset, (int32)yOffset, viewRect);
-				return;
-			}
-		}
-	}
-
-	BBitmap* temp = NULL;
-	ObjectDeleter<BBitmap> tempDeleter;
-
-	if ((format != B_RGBA32 && format != B_RGB32)
-		|| (format == B_RGB32 && fDrawingMode != B_OP_COPY
-#if 1
-// Enabling this would make the behavior compatible to BeOS, which
-// treats B_RGB32 bitmaps as B_RGB*A*32 bitmaps in B_OP_ALPHA - unlike in
-// all other drawing modes, where B_TRANSPARENT_MAGIC_RGBA32 is handled.
-// B_RGB32 bitmaps therefore don't draw correctly on BeOS if they actually
-// use this color, unless the alpha channel contains 255 for all other
-// pixels, which is inconsistent.
-			&& fDrawingMode != B_OP_ALPHA
-#endif
-		)) {
-		temp = new (nothrow) BBitmap(actualBitmapRect, B_BITMAP_NO_SERVER_LINK,
-			B_RGBA32);
-		if (temp == NULL) {
-			fprintf(stderr, "Painter::_DrawBitmap() - "
-				"out of memory for creating temporary conversion bitmap\n");
-			return;
-		}
-
-		tempDeleter.SetTo(temp);
-
-		status_t err = temp->ImportBits(srcBuffer.buf(),
-			srcBuffer.height() * srcBuffer.stride(),
-			srcBuffer.stride(), 0, format);
-		if (err < B_OK) {
-			fprintf(stderr, "Painter::_DrawBitmap() - "
-				"colorspace conversion failed: %s\n", strerror(err));
-			return;
-		}
-
-		// the original bitmap might have had some of the
-		// transaparent magic colors set that we now need to
-		// make transparent in our RGBA32 bitmap again.
-		switch (format) {
-			case B_RGB32:
-				_TransparentMagicToAlpha((uint32 *)srcBuffer.buf(),
-					srcBuffer.width(), srcBuffer.height(),
-					srcBuffer.stride(), B_TRANSPARENT_MAGIC_RGBA32,
-					temp);
-				break;
-
-			// TODO: not sure if this applies to B_RGBA15 too. It
-			// should not because B_RGBA15 actually has an alpha
-			// channel itself and it should have been preserved
-			// when importing the bitmap. Maybe it applies to
-			// B_RGB16 though?
-			case B_RGB15:
-				_TransparentMagicToAlpha((uint16 *)srcBuffer.buf(),
-					srcBuffer.width(), srcBuffer.height(),
-					srcBuffer.stride(), B_TRANSPARENT_MAGIC_RGBA15,
-					temp);
-				break;
-
-			default:
-				break;
-		}
-
-		srcBuffer.attach((uint8*)temp->Bits(),
-			(uint32)actualBitmapRect.IntegerWidth() + 1,
-			(uint32)actualBitmapRect.IntegerHeight() + 1,
-			temp->BytesPerRow());
-	}
-
-	// maybe we can use an optimized version if there is no scale
-	if (xScale == 1.0 && yScale == 1.0) {
-		if (fDrawingMode == B_OP_COPY) {
-			_DrawBitmapNoScale32(copy_bitmap_row_bgr32_copy, 4, srcBuffer,
-				(int32)xOffset, (int32)yOffset, viewRect);
-			return;
-		}
-		if (fDrawingMode == B_OP_OVER || (fDrawingMode == B_OP_ALPHA
-				 && fAlphaSrcMode == B_PIXEL_ALPHA
-				 && fAlphaFncMode == B_ALPHA_OVERLAY)) {
-			_DrawBitmapNoScale32(copy_bitmap_row_bgr32_alpha, 4, srcBuffer,
-				(int32)xOffset, (int32)yOffset, viewRect);
-			return;
-		}
-	}
-
-	if (fDrawingMode == B_OP_COPY) {
-		if ((options & B_FILTER_BITMAP_BILINEAR) != 0) {
-			_DrawBitmapBilinearCopy32(srcBuffer, xOffset, yOffset, xScale,
-				yScale, viewRect);
-		} else {
-			_DrawBitmapNearestNeighborCopy32(srcBuffer, xOffset, yOffset,
-				xScale, yScale, viewRect);
-		}
-		return;
-	}
-
-	// for all other cases (non-optimized drawing mode or scaled drawing)
-	_DrawBitmapGeneric32(srcBuffer, xOffset, yOffset, xScale, yScale, viewRect,
-		options);
-}
-
-
-#define DEBUG_DRAW_BITMAP 0
-
-
-// _DrawBitmapNoScale32
-template <class F>
-void
-Painter::_DrawBitmapNoScale32(F copyRowFunction, uint32 bytesPerSourcePixel,
-	agg::rendering_buffer& srcBuffer, int32 xOffset, int32 yOffset,
-	BRect viewRect) const
-{
-	// NOTE: this would crash if viewRect was large enough to read outside the
-	// bitmap, so make sure this is not the case before calling this function!
-	uint8* dst = fBuffer.row_ptr(0);
-	uint32 dstBPR = fBuffer.stride();
-
-	const uint8* src = srcBuffer.row_ptr(0);
-	uint32 srcBPR = srcBuffer.stride();
-
-	int32 left = (int32)viewRect.left;
-	int32 top = (int32)viewRect.top;
-	int32 right = (int32)viewRect.right;
-	int32 bottom = (int32)viewRect.bottom;
-
-#if DEBUG_DRAW_BITMAP
-if (left - xOffset < 0 || left - xOffset >= (int32)srcBuffer.width() ||
-	right - xOffset >= (int32)srcBuffer.width() ||
-	top - yOffset < 0 || top - yOffset >= (int32)srcBuffer.height() ||
-	bottom - yOffset >= (int32)srcBuffer.height()) {
-
-	char message[256];
-	sprintf(message, "reading outside of bitmap (%ld, %ld, %ld, %ld) "
-			"(%d, %d) (%ld, %ld)",
-		left - xOffset, top - yOffset, right - xOffset, bottom - yOffset,
-		srcBuffer.width(), srcBuffer.height(), xOffset, yOffset);
-	debugger(message);
-}
-#endif
-
-	const rgb_color* colorMap = SystemPalette();
-
-	// copy rects, iterate over clipping boxes
-	fBaseRenderer.first_clip_box();
-	do {
-		int32 x1 = max_c(fBaseRenderer.xmin(), left);
-		int32 x2 = min_c(fBaseRenderer.xmax(), right);
-		if (x1 <= x2) {
-			int32 y1 = max_c(fBaseRenderer.ymin(), top);
-			int32 y2 = min_c(fBaseRenderer.ymax(), bottom);
-			if (y1 <= y2) {
-				uint8* dstHandle = dst + y1 * dstBPR + x1 * 4;
-				const uint8* srcHandle = src + (y1 - yOffset) * srcBPR
-					+ (x1 - xOffset) * bytesPerSourcePixel;
-
-				for (; y1 <= y2; y1++) {
-					copyRowFunction(dstHandle, srcHandle, x2 - x1 + 1, colorMap);
-
-					dstHandle += dstBPR;
-					srcHandle += srcBPR;
-				}
-			}
-		}
-	} while (fBaseRenderer.next_clip_box());
-}
-
-
-// _DrawBitmapNearestNeighborCopy32
-void
-Painter::_DrawBitmapNearestNeighborCopy32(agg::rendering_buffer& srcBuffer,
-	double xOffset, double yOffset, double xScale, double yScale,
-	BRect viewRect) const
-{
-	//bigtime_t now = system_time();
-	uint32 dstWidth = viewRect.IntegerWidth() + 1;
-	uint32 dstHeight = viewRect.IntegerHeight() + 1;
-	uint32 srcWidth = srcBuffer.width();
-	uint32 srcHeight = srcBuffer.height();
-
-	// Do not calculate more filter weights than necessary and also
-	// keep the stack based allocations reasonably sized
-	if (fClippingRegion->Frame().IntegerWidth() + 1 < (int32)dstWidth)
-		dstWidth = fClippingRegion->Frame().IntegerWidth() + 1;
-	if (fClippingRegion->Frame().IntegerHeight() + 1 < (int32)dstHeight)
-		dstHeight = fClippingRegion->Frame().IntegerHeight() + 1;
-
-	// When calculating less filter weights than specified by viewRect,
-	// we need to compensate the offset.
-	uint32 filterWeightXIndexOffset = 0;
-	uint32 filterWeightYIndexOffset = 0;
-	if (fClippingRegion->Frame().left > viewRect.left) {
-		filterWeightXIndexOffset = (int32)(fClippingRegion->Frame().left
-			- viewRect.left);
-	}
-	if (fClippingRegion->Frame().top > viewRect.top) {
-		filterWeightYIndexOffset = (int32)(fClippingRegion->Frame().top
-			- viewRect.top);
-	}
-
-	// should not pose a problem with stack overflows
-	// (needs around 6Kb for 1920x1200)
-	uint16 xIndices[dstWidth];
-	uint16 yIndices[dstHeight];
-
-	// Extract the cropping information for the source bitmap,
-	// If only a part of the source bitmap is to be drawn with scale,
-	// the offset will be different from the viewRect left top corner.
-	int32 xBitmapShift = (int32)(viewRect.left - xOffset);
-	int32 yBitmapShift = (int32)(viewRect.top - yOffset);
-
-	for (uint32 i = 0; i < dstWidth; i++) {
-		// index into source
-		uint16 index = (uint16)((i + filterWeightXIndexOffset) * srcWidth
-			/ (srcWidth * xScale));
-		// round down to get the left pixel
-		xIndices[i] = index;
-		// handle cropped source bitmap
-		xIndices[i] += xBitmapShift;
-		// precompute index for 32 bit pixels
-		xIndices[i] *= 4;
-	}
-
-	for (uint32 i = 0; i < dstHeight; i++) {
-		// index into source
-		uint16 index = (uint16)((i + filterWeightYIndexOffset) * srcHeight
-			/ (srcHeight * yScale));
-		// round down to get the top pixel
-		yIndices[i] = index;
-		// handle cropped source bitmap
-		yIndices[i] += yBitmapShift;
-	}
-//printf("X: %d ... %d, %d (%ld or %f)\n",
-//	xIndices[0], xIndices[dstWidth - 2], xIndices[dstWidth - 1], dstWidth,
-//	srcWidth * xScale);
-//printf("Y: %d ... %d, %d (%ld or %f)\n",
-//	yIndices[0], yIndices[dstHeight - 2], yIndices[dstHeight - 1], dstHeight,
-//	srcHeight * yScale);
-
-	const int32 left = (int32)viewRect.left;
-	const int32 top = (int32)viewRect.top;
-	const int32 right = (int32)viewRect.right;
-	const int32 bottom = (int32)viewRect.bottom;
-
-	const uint32 dstBPR = fBuffer.stride();
-
-	// iterate over clipping boxes
-	fBaseRenderer.first_clip_box();
-	do {
-		const int32 x1 = max_c(fBaseRenderer.xmin(), left);
-		const int32 x2 = min_c(fBaseRenderer.xmax(), right);
-		if (x1 > x2)
-			continue;
-
-		int32 y1 = max_c(fBaseRenderer.ymin(), top);
-		int32 y2 = min_c(fBaseRenderer.ymax(), bottom);
-		if (y1 > y2)
-			continue;
-
-		// buffer offset into destination
-		uint8* dst = fBuffer.row_ptr(y1) + x1 * 4;
-
-		// x and y are needed as indeces into the wheight arrays, so the
-		// offset into the target buffer needs to be compensated
-		const int32 xIndexL = x1 - left - filterWeightXIndexOffset;
-		const int32 xIndexR = x2 - left - filterWeightXIndexOffset;
-		y1 -= top + filterWeightYIndexOffset;
-		y2 -= top + filterWeightYIndexOffset;
-
-//printf("x: %ld - %ld\n", xIndexL, xIndexR);
-//printf("y: %ld - %ld\n", y1, y2);
-
-		for (; y1 <= y2; y1++) {
-			// buffer offset into source (top row)
-			register const uint8* src = srcBuffer.row_ptr(yIndices[y1]);
-			// buffer handle for destination to be incremented per pixel
-			register uint32* d = (uint32*)dst;
-
-			for (int32 x = xIndexL; x <= xIndexR; x++) {
-				*d = *(uint32*)(src + xIndices[x]);
-				d++;
-			}
-			dst += dstBPR;
-		}
-	} while (fBaseRenderer.next_clip_box());
-
-//printf("draw bitmap %.5fx%.5f: %lld\n", xScale, yScale, system_time() - now);
-}
-
-
-// _DrawBitmapBilinearCopy32
-void
-Painter::_DrawBitmapBilinearCopy32(agg::rendering_buffer& srcBuffer,
-	double xOffset, double yOffset, double xScale, double yScale,
-	BRect viewRect) const
-{
-	//bigtime_t now = system_time();
-	uint32 dstWidth = viewRect.IntegerWidth() + 1;
-	uint32 dstHeight = viewRect.IntegerHeight() + 1;
-	uint32 srcWidth = srcBuffer.width();
-	uint32 srcHeight = srcBuffer.height();
-
-	// Do not calculate more filter weights than necessary and also
-	// keep the stack based allocations reasonably sized
-	if (fClippingRegion->Frame().IntegerWidth() + 1 < (int32)dstWidth)
-		dstWidth = fClippingRegion->Frame().IntegerWidth() + 1;
-	if (fClippingRegion->Frame().IntegerHeight() + 1 < (int32)dstHeight)
-		dstHeight = fClippingRegion->Frame().IntegerHeight() + 1;
-
-	// When calculating less filter weights than specified by viewRect,
-	// we need to compensate the offset.
-	uint32 filterWeightXIndexOffset = 0;
-	uint32 filterWeightYIndexOffset = 0;
-	if (fClippingRegion->Frame().left > viewRect.left) {
-		filterWeightXIndexOffset = (int32)(fClippingRegion->Frame().left
-			- viewRect.left);
-	}
-	if (fClippingRegion->Frame().top > viewRect.top) {
-		filterWeightYIndexOffset = (int32)(fClippingRegion->Frame().top
-			- viewRect.top);
-	}
-
-	struct FilterInfo {
-		uint16 index;	// index into source bitmap row/column
-		uint16 weight;	// weight of the pixel at index [0..255]
-	};
-
-//#define FILTER_INFOS_ON_HEAP
-#ifdef FILTER_INFOS_ON_HEAP
-	FilterInfo* xWeights = new (nothrow) FilterInfo[dstWidth];
-	FilterInfo* yWeights = new (nothrow) FilterInfo[dstHeight];
-	if (xWeights == NULL || yWeights == NULL) {
-		delete[] xWeights;
-		delete[] yWeights;
-		return;
-	}
-#else
-	// stack based saves about 200µs on 1.85 GHz Core 2 Duo
-	// should not pose a problem with stack overflows
-	// (needs around 12Kb for 1920x1200)
-	FilterInfo xWeights[dstWidth];
-	FilterInfo yWeights[dstHeight];
-#endif
-
-	// Extract the cropping information for the source bitmap,
-	// If only a part of the source bitmap is to be drawn with scale,
-	// the offset will be different from the viewRect left top corner.
-	int32 xBitmapShift = (int32)(viewRect.left - xOffset);
-	int32 yBitmapShift = (int32)(viewRect.top - yOffset);
-
-	for (uint32 i = 0; i < dstWidth; i++) {
-		// fractional index into source
-		// NOTE: It is very important to calculate the fractional index
-		// into the source pixel grid like this to prevent out of bounds
-		// access! It will result in the rightmost pixel of the destination
-		// to access the rightmost pixel of the source with a weighting
-		// of 255. This in turn will trigger an optimization in the loop
-		// that also prevents out of bounds access.
-		float index = (i + filterWeightXIndexOffset) * (srcWidth - 1)
-			/ (srcWidth * xScale - 1);
-		// round down to get the left pixel
-		xWeights[i].index = (uint16)index;
-		xWeights[i].weight = 255 - (uint16)((index - xWeights[i].index) * 255);
-		// handle cropped source bitmap
-		xWeights[i].index += xBitmapShift;
-		// precompute index for 32 bit pixels
-		xWeights[i].index *= 4;
-	}
-
-	for (uint32 i = 0; i < dstHeight; i++) {
-		// fractional index into source
-		// NOTE: It is very important to calculate the fractional index
-		// into the source pixel grid like this to prevent out of bounds
-		// access! It will result in the bottommost pixel of the destination
-		// to access the bottommost pixel of the source with a weighting
-		// of 255. This in turn will trigger an optimization in the loop
-		// that also prevents out of bounds access.
-		float index = (i + filterWeightYIndexOffset) * (srcHeight - 1)
-			/ (srcHeight * yScale - 1);
-		// round down to get the top pixel
-		yWeights[i].index = (uint16)index;
-		yWeights[i].weight = 255 - (uint16)((index - yWeights[i].index) * 255);
-		// handle cropped source bitmap
-		yWeights[i].index += yBitmapShift;
-	}
-//printf("X: %d/%d ... %d/%d, %d/%d (%ld)\n",
-//	xWeights[0].index, xWeights[0].weight,
-//	xWeights[dstWidth - 2].index, xWeights[dstWidth - 2].weight,
-//	xWeights[dstWidth - 1].index, xWeights[dstWidth - 1].weight,
-//	dstWidth);
-//printf("Y: %d/%d ... %d/%d, %d/%d (%ld)\n",
-//	yWeights[0].index, yWeights[0].weight,
-//	yWeights[dstHeight - 2].index, yWeights[dstHeight - 2].weight,
-//	yWeights[dstHeight - 1].index, yWeights[dstHeight - 1].weight,
-//	dstHeight);
-
-	const int32 left = (int32)viewRect.left;
-	const int32 top = (int32)viewRect.top;
-	const int32 right = (int32)viewRect.right;
-	const int32 bottom = (int32)viewRect.bottom;
-
-	const uint32 dstBPR = fBuffer.stride();
-	const uint32 srcBPR = srcBuffer.stride();
-
-	// Figure out which version of the code we want to use...
-	enum {
-		kOptimizeForLowFilterRatio = 0,
-		kUseDefaultVersion,
-		kUseSIMDVersion
-	};
-
-	int codeSelect = kUseDefaultVersion;
-
-	uint32 neededSIMDFlags = APPSERVER_SIMD_MMX | APPSERVER_SIMD_SSE;
-	if ((sSIMDFlags & neededSIMDFlags) == neededSIMDFlags)
-		codeSelect = kUseSIMDVersion;
-	else {
-		if (xScale == yScale && (xScale == 1.5 || xScale == 2.0
-			|| xScale == 2.5 || xScale == 3.0)) {
-			codeSelect = kOptimizeForLowFilterRatio;
-		}
-	}
-
-	// iterate over clipping boxes
-	fBaseRenderer.first_clip_box();
-	do {
-		const int32 x1 = max_c(fBaseRenderer.xmin(), left);
-		const int32 x2 = min_c(fBaseRenderer.xmax(), right);
-		if (x1 > x2)
-			continue;
-
-		int32 y1 = max_c(fBaseRenderer.ymin(), top);
-		int32 y2 = min_c(fBaseRenderer.ymax(), bottom);
-		if (y1 > y2)
-			continue;
-
-		// buffer offset into destination
-		uint8* dst = fBuffer.row_ptr(y1) + x1 * 4;
-
-		// x and y are needed as indeces into the wheight arrays, so the
-		// offset into the target buffer needs to be compensated
-		const int32 xIndexL = x1 - left - filterWeightXIndexOffset;
-		const int32 xIndexR = x2 - left - filterWeightXIndexOffset;
-		y1 -= top + filterWeightYIndexOffset;
-		y2 -= top + filterWeightYIndexOffset;
-
-//printf("x: %ld - %ld\n", xIndexL, xIndexR);
-//printf("y: %ld - %ld\n", y1, y2);
-
-		switch (codeSelect) {
-			case kOptimizeForLowFilterRatio:
-			{
-				// In this mode, we anticipate to hit many destination pixels
-				// that map directly to a source pixel, we have more branches
-				// in the inner loop but save time because of the special
-				// cases. If there are too few direct hit pixels, the branches
-				// only waste time.
-				for (; y1 <= y2; y1++) {
-					// cache the weight of the top and bottom row
-					const uint16 wTop = yWeights[y1].weight;
-					const uint16 wBottom = 255 - yWeights[y1].weight;
-
-					// buffer offset into source (top row)
-					register const uint8* src
-						= srcBuffer.row_ptr(yWeights[y1].index);
-					// buffer handle for destination to be incremented per
-					// pixel
-					register uint8* d = dst;
-
-					if (wTop == 255) {
-						for (int32 x = xIndexL; x <= xIndexR; x++) {
-							const uint8* s = src + xWeights[x].index;
-							// This case is important to prevent out
-							// of bounds access at bottom edge of the source
-							// bitmap. If the scale is low and integer, it will
-							// also help the speed.
-							if (xWeights[x].weight == 255) {
-								// As above, but to prevent out of bounds
-								// on the right edge.
-								*(uint32*)d = *(uint32*)s;
-							} else {
-								// Only the left and right pixels are
-								// interpolated, since the top row has 100%
-								// weight.
-								const uint16 wLeft = xWeights[x].weight;
-								const uint16 wRight = 255 - wLeft;
-								d[0] = (s[0] * wLeft + s[4] * wRight) >> 8;
-								d[1] = (s[1] * wLeft + s[5] * wRight) >> 8;
-								d[2] = (s[2] * wLeft + s[6] * wRight) >> 8;
-							}
-							d += 4;
-						}
-					} else {
-						for (int32 x = xIndexL; x <= xIndexR; x++) {
-							const uint8* s = src + xWeights[x].index;
-							if (xWeights[x].weight == 255) {
-								// Prevent out of bounds access on the right
-								// edge or simply speed up.
-								const uint8* sBottom = s + srcBPR;
-								d[0] = (s[0] * wTop + sBottom[0] * wBottom)
-									>> 8;
-								d[1] = (s[1] * wTop + sBottom[1] * wBottom)
-									>> 8;
-								d[2] = (s[2] * wTop + sBottom[2] * wBottom)
-									>> 8;
-							} else {
-								// calculate the weighted sum of all four
-								// interpolated pixels
-								const uint16 wLeft = xWeights[x].weight;
-								const uint16 wRight = 255 - wLeft;
-								// left and right of top row
-								uint32 t0 = (s[0] * wLeft + s[4] * wRight)
-									* wTop;
-								uint32 t1 = (s[1] * wLeft + s[5] * wRight)
-									* wTop;
-								uint32 t2 = (s[2] * wLeft + s[6] * wRight)
-									* wTop;
-
-								// left and right of bottom row
-								s += srcBPR;
-								t0 += (s[0] * wLeft + s[4] * wRight) * wBottom;
-								t1 += (s[1] * wLeft + s[5] * wRight) * wBottom;
-								t2 += (s[2] * wLeft + s[6] * wRight) * wBottom;
-
-								d[0] = t0 >> 16;
-								d[1] = t1 >> 16;
-								d[2] = t2 >> 16;
-							}
-							d += 4;
-						}
-					}
-					dst += dstBPR;
-				}
-				break;
-			}
-
-			case kUseDefaultVersion:
-			{
-				// In this mode we anticipate many pixels wich need filtering,
-				// there are no special cases for direct hit pixels except for
-				// the last column/row and the right/bottom corner pixel.
-
-				// The last column/row handling does not need to be performed
-				// for all clipping rects!
-				int32 yMax = y2;
-				if (yWeights[yMax].weight == 255)
-					yMax--;
-				int32 xIndexMax = xIndexR;
-				if (xWeights[xIndexMax].weight == 255)
-					xIndexMax--;
-
-				for (; y1 <= yMax; y1++) {
-					// cache the weight of the top and bottom row
-					const uint16 wTop = yWeights[y1].weight;
-					const uint16 wBottom = 255 - yWeights[y1].weight;
-
-					// buffer offset into source (top row)
-					register const uint8* src
-						= srcBuffer.row_ptr(yWeights[y1].index);
-					// buffer handle for destination to be incremented per
-					// pixel
-					register uint8* d = dst;
-
-					for (int32 x = xIndexL; x <= xIndexMax; x++) {
-						const uint8* s = src + xWeights[x].index;
-						// calculate the weighted sum of all four
-						// interpolated pixels
-						const uint16 wLeft = xWeights[x].weight;
-						const uint16 wRight = 255 - wLeft;
-						// left and right of top row
-						uint32 t0 = (s[0] * wLeft + s[4] * wRight) * wTop;
-						uint32 t1 = (s[1] * wLeft + s[5] * wRight) * wTop;
-						uint32 t2 = (s[2] * wLeft + s[6] * wRight) * wTop;
-
-						// left and right of bottom row
-						s += srcBPR;
-						t0 += (s[0] * wLeft + s[4] * wRight) * wBottom;
-						t1 += (s[1] * wLeft + s[5] * wRight) * wBottom;
-						t2 += (s[2] * wLeft + s[6] * wRight) * wBottom;
-						d[0] = t0 >> 16;
-						d[1] = t1 >> 16;
-						d[2] = t2 >> 16;
-						d += 4;
-					}
-					// last column of pixels if necessary
-					if (xIndexMax < xIndexR) {
-						const uint8* s = src + xWeights[xIndexR].index;
-						const uint8* sBottom = s + srcBPR;
-						d[0] = (s[0] * wTop + sBottom[0] * wBottom) >> 8;
-						d[1] = (s[1] * wTop + sBottom[1] * wBottom) >> 8;
-						d[2] = (s[2] * wTop + sBottom[2] * wBottom) >> 8;
-					}
-
-					dst += dstBPR;
-				}
-
-				// last row of pixels if necessary
-				// buffer offset into source (bottom row)
-				register const uint8* src
-					= srcBuffer.row_ptr(yWeights[y2].index);
-				// buffer handle for destination to be incremented per pixel
-				register uint8* d = dst;
-
-				if (yMax < y2) {
-					for (int32 x = xIndexL; x <= xIndexMax; x++) {
-						const uint8* s = src + xWeights[x].index;
-						const uint16 wLeft = xWeights[x].weight;
-						const uint16 wRight = 255 - wLeft;
-						d[0] = (s[0] * wLeft + s[4] * wRight) >> 8;
-						d[1] = (s[1] * wLeft + s[5] * wRight) >> 8;
-						d[2] = (s[2] * wLeft + s[6] * wRight) >> 8;
-						d += 4;
-					}
-				}
-
-				// pixel in bottom right corner if necessary
-				if (yMax < y2 && xIndexMax < xIndexR) {
-					const uint8* s = src + xWeights[xIndexR].index;
-					*(uint32*)d = *(uint32*)s;
-				}
-				break;
-			}
-
-#ifdef __INTEL__
-			case kUseSIMDVersion:
-			{
-				// Basically the same as the "standard" mode, but we use SIMD
-				// routines for the processing of the single display lines.
-
-				// The last column/row handling does not need to be performed
-				// for all clipping rects!
-				int32 yMax = y2;
-				if (yWeights[yMax].weight == 255)
-					yMax--;
-				int32 xIndexMax = xIndexR;
-				if (xWeights[xIndexMax].weight == 255)
-					xIndexMax--;
-
-				for (; y1 <= yMax; y1++) {
-					// cache the weight of the top and bottom row
-					const uint16 wTop = yWeights[y1].weight;
-					const uint16 wBottom = 255 - yWeights[y1].weight;
-
-					// buffer offset into source (top row)
-					const uint8* src = srcBuffer.row_ptr(yWeights[y1].index);
-					// buffer handle for destination to be incremented per
-					// pixel
-					uint8* d = dst;
-					bilinear_scale_xloop_mmxsse(src, dst, xWeights,	xIndexL,
-						xIndexMax, wTop, srcBPR);
-					// increase pointer by processed pixels
-					d += (xIndexMax - xIndexL + 1) * 4;
-
-					// last column of pixels if necessary
-					if (xIndexMax < xIndexR) {
-						const uint8* s = src + xWeights[xIndexR].index;
-						const uint8* sBottom = s + srcBPR;
-						d[0] = (s[0] * wTop + sBottom[0] * wBottom) >> 8;
-						d[1] = (s[1] * wTop + sBottom[1] * wBottom) >> 8;
-						d[2] = (s[2] * wTop + sBottom[2] * wBottom) >> 8;
-					}
-
-					dst += dstBPR;
-				}
-
-				// last row of pixels if necessary
-				// buffer offset into source (bottom row)
-				register const uint8* src
-					= srcBuffer.row_ptr(yWeights[y2].index);
-				// buffer handle for destination to be incremented per pixel
-				register uint8* d = dst;
-
-				if (yMax < y2) {
-					for (int32 x = xIndexL; x <= xIndexMax; x++) {
-						const uint8* s = src + xWeights[x].index;
-						const uint16 wLeft = xWeights[x].weight;
-						const uint16 wRight = 255 - wLeft;
-						d[0] = (s[0] * wLeft + s[4] * wRight) >> 8;
-						d[1] = (s[1] * wLeft + s[5] * wRight) >> 8;
-						d[2] = (s[2] * wLeft + s[6] * wRight) >> 8;
-						d += 4;
-					}
-				}
-
-				// pixel in bottom right corner if necessary
-				if (yMax < y2 && xIndexMax < xIndexR) {
-					const uint8* s = src + xWeights[xIndexR].index;
-					*(uint32*)d = *(uint32*)s;
-				}
-				break;
-			}
-#endif	// __INTEL__
-		}
-	} while (fBaseRenderer.next_clip_box());
-
-#ifdef FILTER_INFOS_ON_HEAP
-	delete[] xWeights;
-	delete[] yWeights;
-#endif
-//printf("draw bitmap %.5fx%.5f: %lld\n", xScale, yScale, system_time() - now);
-}
-
-
-// _DrawBitmapGeneric32
-void
-Painter::_DrawBitmapGeneric32(agg::rendering_buffer& srcBuffer,
-	double xOffset, double yOffset, double xScale, double yScale,
-	BRect viewRect, uint32 options) const
-{
-	TRACE("Painter::_DrawBitmapGeneric32()\n");
-	TRACE("   offset: %.1f, %.1f\n", xOffset, yOffset);
-	TRACE("   scale: %.3f, %.3f\n", xScale, yScale);
-	TRACE("   viewRect: (%.1f, %.1f) - (%.1f, %.1f)\n",
-		viewRect.left, viewRect.top, viewRect.right, viewRect.bottom);
-	// AGG pipeline
-
-	// pixel format attached to bitmap
-	typedef agg::pixfmt_bgra32 pixfmt_image;
-	pixfmt_image pixf_img(srcBuffer);
-
-	agg::trans_affine srcMatrix;
-	// NOTE: R5 seems to ignore this offset when drawing bitmaps
-	//	srcMatrix *= agg::trans_affine_translation(-actualBitmapRect.left,
-	//		-actualBitmapRect.top);
-
-	agg::trans_affine imgMatrix;
-	imgMatrix *= agg::trans_affine_translation(xOffset - viewRect.left,
-		yOffset - viewRect.top);
-	imgMatrix *= agg::trans_affine_scaling(xScale, yScale);
-	imgMatrix *= agg::trans_affine_translation(viewRect.left, viewRect.top);
-	imgMatrix.invert();
-
-	// image interpolator
-	typedef agg::span_interpolator_linear<> interpolator_type;
-	interpolator_type interpolator(imgMatrix);
-
-	// scanline allocator
-	agg::span_allocator<pixfmt_image::color_type> spanAllocator;
-
-	// image accessor attached to pixel format of bitmap
-	typedef agg::image_accessor_clip<pixfmt_image> source_type;
-	source_type source(pixf_img, agg::rgba8(0, 0, 0, 0));
-
-	// clip to the current clipping region's frame
-	viewRect = viewRect & fClippingRegion->Frame();
-	// convert to pixel coords (versus pixel indices)
-	viewRect.right++;
-	viewRect.bottom++;
-
-	// path enclosing the bitmap
+	// TODO: if shapes are ever used more heavily in Haiku,
+	// it would be nice to use BShape data directly (write
+	// an AGG "VertexSource" adaptor)
 	fPath.remove_all();
-	fPath.move_to(viewRect.left, viewRect.top);
-	fPath.line_to(viewRect.right, viewRect.top);
-	fPath.line_to(viewRect.right, viewRect.bottom);
-	fPath.line_to(viewRect.left, viewRect.bottom);
-	fPath.close_polygon();
+	for (int32 i = 0; i < opCount; i++) {
+		uint32 op = opList[i] & 0xFF000000;
+		if ((op & OP_MOVETO) != 0) {
+			fPath.move_to(
+				points->x * viewScale + viewToScreenOffset.x,
+				points->y * viewScale + viewToScreenOffset.y);
+			points++;
+		}
 
-	agg::conv_transform<agg::path_storage> transformedPath(fPath, srcMatrix);
-	fRasterizer.reset();
-	fRasterizer.add_path(transformedPath);
+		if ((op & OP_LINETO) != 0) {
+			int32 count = opList[i] & 0x00FFFFFF;
+			while (count--) {
+				fPath.line_to(
+					points->x * viewScale + viewToScreenOffset.x,
+					points->y * viewScale + viewToScreenOffset.y);
+				points++;
+			}
+		}
 
-	if ((options & B_FILTER_BITMAP_BILINEAR) != 0) {
-		// image filter (bilinear)
-		typedef agg::span_image_filter_rgba_bilinear<
-			source_type, interpolator_type> span_gen_type;
-		span_gen_type spanGenerator(source, interpolator);
+		if ((op & OP_BEZIERTO) != 0) {
+			int32 count = opList[i] & 0x00FFFFFF;
+			while (count) {
+				fPath.curve4(
+					points[0].x * viewScale + viewToScreenOffset.x,
+					points[0].y * viewScale + viewToScreenOffset.y,
+					points[1].x * viewScale + viewToScreenOffset.x,
+					points[1].y * viewScale + viewToScreenOffset.y,
+					points[2].x * viewScale + viewToScreenOffset.x,
+					points[2].y * viewScale + viewToScreenOffset.y);
+				points += 3;
+				count -= 3;
+			}
+		}
 
-		// render the path with the bitmap as scanline fill
-		agg::render_scanlines_aa(fRasterizer, fUnpackedScanline, fBaseRenderer,
-			spanAllocator, spanGenerator);
-	} else {
-		// image filter (nearest neighbor)
-		typedef agg::span_image_filter_rgba_nn<
-			source_type, interpolator_type> span_gen_type;
-		span_gen_type spanGenerator(source, interpolator);
+		if ((op & OP_LARGE_ARC_TO_CW) != 0 || (op & OP_LARGE_ARC_TO_CCW) != 0
+			|| (op & OP_SMALL_ARC_TO_CW) != 0
+			|| (op & OP_SMALL_ARC_TO_CCW) != 0) {
+			int32 count = opList[i] & 0x00FFFFFF;
+			while (count > 0) {
+				fPath.arc_to(
+					points[0].x * viewScale,
+					points[0].y * viewScale,
+					points[1].x,
+					op & (OP_LARGE_ARC_TO_CW | OP_LARGE_ARC_TO_CCW),
+					op & (OP_SMALL_ARC_TO_CW | OP_LARGE_ARC_TO_CW),
+					points[2].x * viewScale + viewToScreenOffset.x,
+					points[2].y * viewScale + viewToScreenOffset.y);
+				points += 3;
+				count -= 3;
+			}
+		}
 
-		// render the path with the bitmap as scanline fill
-		agg::render_scanlines_aa(fRasterizer, fUnpackedScanline, fBaseRenderer,
-			spanAllocator, spanGenerator);
+		if ((op & OP_CLOSE) != 0)
+			fPath.close_polygon();
 	}
 }
 
@@ -2869,36 +1799,34 @@ agg_line_join_mode_for(join_mode mode)
 	return agg::miter_join;
 }
 
-// _StrokePath
+
 template<class VertexSource>
 BRect
 Painter::_StrokePath(VertexSource& path) const
 {
+	return _StrokePath(path, fLineCapMode);
+}
+
+
+template<class VertexSource>
+BRect
+Painter::_StrokePath(VertexSource& path, cap_mode capMode) const
+{
 	agg::conv_stroke<VertexSource> stroke(path);
 	stroke.width(fPenSize);
 
-	stroke.line_cap(agg_line_cap_mode_for(fLineCapMode));
+	stroke.line_cap(agg_line_cap_mode_for(capMode));
 	stroke.line_join(agg_line_join_mode_for(fLineJoinMode));
 	stroke.miter_limit(fMiterLimit);
 
-	if (gSubpixelAntialiasing) {
-		fSubpixRasterizer.reset();
-		fSubpixRasterizer.add_path(stroke);
+	if (fIdentityTransform)
+		return _RasterizePath(stroke);
 
-		agg::render_scanlines(fSubpixRasterizer,
-			fSubpixPackedScanline, fSubpixRenderer);
-	} else {
-		fRasterizer.reset();
-		fRasterizer.add_path(stroke);
+	stroke.approximation_scale(fTransform.scale());
 
-		agg::render_scanlines(fRasterizer, fPackedScanline, fRenderer);
-	}
-
-	BRect touched = _BoundingBox(path);
-	float penSize = ceilf(fPenSize / 2.0);
-	touched.InsetBy(-penSize, -penSize);
-
-	return _Clipped(touched);
+	agg::conv_transform<agg::conv_stroke<VertexSource> > transformedStroke(
+		stroke, fTransform);
+	return _RasterizePath(transformedStroke);
 }
 
 
@@ -2907,7 +1835,26 @@ template<class VertexSource>
 BRect
 Painter::_FillPath(VertexSource& path) const
 {
-	if (gSubpixelAntialiasing) {
+	if (fIdentityTransform)
+		return _RasterizePath(path);
+
+	agg::conv_transform<VertexSource> transformedPath(path, fTransform);
+	return _RasterizePath(transformedPath);
+}
+
+
+// _RasterizePath
+template<class VertexSource>
+BRect
+Painter::_RasterizePath(VertexSource& path) const
+{
+	if (fMaskedUnpackedScanline != NULL) {
+		// TODO: we can't do both alpha-masking and subpixel AA.
+		fRasterizer.reset();
+		fRasterizer.add_path(path);
+		agg::render_scanlines(fRasterizer, *fMaskedUnpackedScanline,
+			fRenderer);
+	} else if (gSubpixelAntialiasing) {
 		fSubpixRasterizer.reset();
 		fSubpixRasterizer.add_path(path);
 		agg::render_scanlines(fSubpixRasterizer,
@@ -2927,49 +1874,119 @@ template<class VertexSource>
 BRect
 Painter::_FillPath(VertexSource& path, const BGradient& gradient) const
 {
-	GTRACE("Painter::_FillPath\n");
+	if (fIdentityTransform)
+		return _RasterizePath(path, gradient);
 
-	switch(gradient.GetType()) {
-		case BGradient::TYPE_LINEAR: {
+	agg::conv_transform<VertexSource> transformedPath(path, fTransform);
+	return _RasterizePath(transformedPath, gradient);
+}
+
+
+// _FillPath
+template<class VertexSource>
+BRect
+Painter::_RasterizePath(VertexSource& path, const BGradient& gradient) const
+{
+	GTRACE("Painter::_RasterizePath\n");
+
+	agg::trans_affine gradientTransform;
+
+	switch (gradient.GetType()) {
+		case BGradient::TYPE_LINEAR:
+		{
 			GTRACE(("Painter::_FillPath> type == TYPE_LINEAR\n"));
-			_FillPathGradientLinear(path, *((const BGradientLinear*) &gradient));
+			const BGradientLinear& linearGradient
+				= (const BGradientLinear&) gradient;
+			agg::gradient_x gradientFunction;
+			_CalcLinearGradientTransform(linearGradient.Start(),
+				linearGradient.End(), gradientTransform);
+			_RasterizePath(path, gradient, gradientFunction, gradientTransform);
 			break;
 		}
-		case BGradient::TYPE_RADIAL: {
+		case BGradient::TYPE_RADIAL:
+		{
 			GTRACE(("Painter::_FillPathGradient> type == TYPE_RADIAL\n"));
-			_FillPathGradientRadial(path,
-				*((const BGradientRadial*) &gradient));
+			const BGradientRadial& radialGradient
+				= (const BGradientRadial&) gradient;
+			agg::gradient_radial gradientFunction;
+			_CalcRadialGradientTransform(radialGradient.Center(),
+				gradientTransform);
+			_RasterizePath(path, gradient, gradientFunction, gradientTransform,
+				radialGradient.Radius());
 			break;
 		}
-		case BGradient::TYPE_RADIAL_FOCUS: {
+		case BGradient::TYPE_RADIAL_FOCUS:
+		{
 			GTRACE(("Painter::_FillPathGradient> type == TYPE_RADIAL_FOCUS\n"));
-			_FillPathGradientRadialFocus(path,
-				*((const BGradientRadialFocus*) &gradient));
+			const BGradientRadialFocus& radialGradient
+				= (const BGradientRadialFocus&) gradient;
+			agg::gradient_radial_focus gradientFunction;
+			_CalcRadialGradientTransform(radialGradient.Center(),
+				gradientTransform);
+			_RasterizePath(path, gradient, gradientFunction, gradientTransform,
+				radialGradient.Radius());
 			break;
 		}
-		case BGradient::TYPE_DIAMOND: {
+		case BGradient::TYPE_DIAMOND:
+		{
 			GTRACE(("Painter::_FillPathGradient> type == TYPE_DIAMOND\n"));
-			_FillPathGradientDiamond(path,
-				*((const BGradientDiamond*) &gradient));
+			const BGradientDiamond& diamontGradient
+				= (const BGradientDiamond&) gradient;
+			agg::gradient_diamond gradientFunction;
+			_CalcRadialGradientTransform(diamontGradient.Center(),
+				gradientTransform);
+			_RasterizePath(path, gradient, gradientFunction, gradientTransform);
 			break;
 		}
-		case BGradient::TYPE_CONIC: {
+		case BGradient::TYPE_CONIC:
+		{
 			GTRACE(("Painter::_FillPathGradient> type == TYPE_CONIC\n"));
-			_FillPathGradientConic(path,
-				*((const BGradientConic*) &gradient));
+			const BGradientConic& conicGradient
+				= (const BGradientConic&) gradient;
+			agg::gradient_conic gradientFunction;
+			_CalcRadialGradientTransform(conicGradient.Center(),
+				gradientTransform);
+			_RasterizePath(path, gradient, gradientFunction, gradientTransform);
 			break;
 		}
-		case BGradient::TYPE_NONE: {
-			GTRACE(("Painter::_FillPathGradient> type == TYPE_NONE\n"));
+
+		default:
+		case BGradient::TYPE_NONE:
+			GTRACE(("Painter::_FillPathGradient> type == TYPE_NONE/unkown\n"));
 			break;
-		}
 	}
 
 	return _Clipped(_BoundingBox(path));
 }
 
 
-// _MakeGradient
+void
+Painter::_CalcLinearGradientTransform(BPoint startPoint, BPoint endPoint,
+	agg::trans_affine& matrix, float gradient_d2) const
+{
+	float dx = endPoint.x - startPoint.x;
+	float dy = endPoint.y - startPoint.y;
+
+	matrix.reset();
+	matrix *= agg::trans_affine_scaling(sqrt(dx * dx + dy * dy) / gradient_d2);
+	matrix *= agg::trans_affine_rotation(atan2(dy, dx));
+	matrix *= agg::trans_affine_translation(startPoint.x, startPoint.y);
+	matrix *= fTransform;
+	matrix.invert();
+}
+
+
+void
+Painter::_CalcRadialGradientTransform(BPoint center,
+	agg::trans_affine& matrix, float gradient_d2) const
+{
+	matrix.reset();
+	matrix *= agg::trans_affine_translation(center.x, center.y);
+	matrix *= fTransform;
+	matrix.invert();
+}
+
+
 void
 Painter::_MakeGradient(const BGradient& gradient, int32 colorCount,
 	uint32* colors, int32 arrayOffset, int32 arraySize) const
@@ -3049,7 +2066,6 @@ Painter::_MakeGradient(const BGradient& gradient, int32 colorCount,
 }
 
 
-// _MakeGradient
 template<class Array>
 void
 Painter::_MakeGradient(Array& array, const BGradient& gradient) const
@@ -3061,10 +2077,11 @@ Painter::_MakeGradient(Array& array, const BGradient& gradient) const
 							 from->color.blue, from->color.alpha);
 		agg::rgba8 toColor(to->color.red, to->color.green,
 						   to->color.blue, to->color.alpha);
-		GTRACE("Painter::_MakeGradient> fromColor(%d, %d, %d) offset = %f\n",
-			   fromColor.r, fromColor.g, fromColor.b, from->offset);
-		GTRACE("Painter::_MakeGradient> toColor(%d, %d, %d) offset = %f\n",
-			   toColor.r, toColor.g, toColor.b, to->offset);
+		GTRACE("Painter::_MakeGradient> fromColor(%d, %d, %d, %d) offset = %f\n",
+			   fromColor.r, fromColor.g, fromColor.b, fromColor.a,
+			   from->offset);
+		GTRACE("Painter::_MakeGradient> toColor(%d, %d, %d %d) offset = %f\n",
+			   toColor.r, toColor.g, toColor.b, toColor.a, to->offset);
 		float dist = to->offset - from->offset;
 		GTRACE("Painter::_MakeGradient> dist = %f\n", dist);
 		// TODO: Review this... offset should better be on [0..1]
@@ -3072,253 +2089,48 @@ Painter::_MakeGradient(Array& array, const BGradient& gradient) const
 			for (int j = (int)from->offset; j <= (int)to->offset; j++) {
 				float f = (float)(to->offset - j) / (float)(dist + 1);
 				array[j] = toColor.gradient(fromColor, f);
-				GTRACE("Painter::_MakeGradient> array[%d](%d, %d, %d)\n",
-					   array[j].r, array[j].g, array[j].b);
+				GTRACE("Painter::_MakeGradient> array[%d](%d, %d, %d, %d)\n",
+					   j, array[j].r, array[j].g, array[j].b, array[j].a);
 			}
 		}
 	}
 }
 
 
-// _CalcLinearGradientTransform
-void Painter::_CalcLinearGradientTransform(BPoint startPoint, BPoint endPoint,
-	agg::trans_affine& matrix, float gradient_d2) const
-{
-	float dx = endPoint.x - startPoint.x;
-	float dy = endPoint.y - startPoint.y;
-
-	matrix.reset();
-	matrix *= agg::trans_affine_scaling(sqrt(dx * dx + dy * dy) / gradient_d2);
-	matrix *= agg::trans_affine_rotation(atan2(dy, dx));
-	matrix *= agg::trans_affine_translation(startPoint.x, startPoint.y);
-	matrix.invert();
-}
-
-
-// _FillPathGradientLinear
-template<class VertexSource>
+template<class VertexSource, typename GradientFunction>
 void
-Painter::_FillPathGradientLinear(VertexSource& path,
-	const BGradientLinear& linear) const
+Painter::_RasterizePath(VertexSource& path, const BGradient& gradient,
+	GradientFunction function, agg::trans_affine& gradientTransform,
+	int gradientStop) const
 {
-	GTRACE("Painter::_FillPathGradientLinear\n");
-
-	BPoint start = linear.Start();
-	BPoint end = linear.End();
+	GTRACE("Painter::_RasterizePath\n");
 
 	typedef agg::span_interpolator_linear<> interpolator_type;
 	typedef agg::pod_auto_array<agg::rgba8, 256> color_array_type;
 	typedef agg::span_allocator<agg::rgba8> span_allocator_type;
-	typedef agg::gradient_x	gradient_func_type;
 	typedef agg::span_gradient<agg::rgba8, interpolator_type,
-				gradient_func_type, color_array_type> span_gradient_type;
+				GradientFunction, color_array_type> span_gradient_type;
 	typedef agg::renderer_scanline_aa<renderer_base, span_allocator_type,
 				span_gradient_type> renderer_gradient_type;
 
-	gradient_func_type gradientFunc;
-	agg::trans_affine gradientMatrix;
-	interpolator_type spanInterpolator(gradientMatrix);
+	interpolator_type spanInterpolator(gradientTransform);
 	span_allocator_type spanAllocator;
 	color_array_type colorArray;
 
-	_MakeGradient(colorArray, linear);
+	_MakeGradient(colorArray, gradient);
 
-	span_gradient_type spanGradient(spanInterpolator, gradientFunc, colorArray,
-		0, 100);
+	span_gradient_type spanGradient(spanInterpolator, function, colorArray,
+		0, gradientStop);
 
 	renderer_gradient_type gradientRenderer(fBaseRenderer, spanAllocator,
 		spanGradient);
 
-	_CalcLinearGradientTransform(start, end, gradientMatrix);
-
 	fRasterizer.reset();
 	fRasterizer.add_path(path);
-	agg::render_scanlines(fRasterizer, fPackedScanline, gradientRenderer);
-}
-
-
-// _FillPathGradientRadial
-template<class VertexSource>
-void
-Painter::_FillPathGradientRadial(VertexSource& path,
-	const BGradientRadial& radial) const
-{
-	GTRACE("Painter::_FillPathGradientRadial\n");
-
-	BPoint center = radial.Center();
-// TODO: finish this
-//	float radius = radial.Radius();
-
-	typedef agg::span_interpolator_linear<> interpolator_type;
-	typedef agg::pod_auto_array<agg::rgba8, 256> color_array_type;
-	typedef agg::span_allocator<agg::rgba8> span_allocator_type;
-	typedef agg::gradient_radial gradient_func_type;
-	typedef agg::span_gradient<agg::rgba8, interpolator_type,
-	gradient_func_type, color_array_type> span_gradient_type;
-	typedef agg::renderer_scanline_aa<renderer_base, span_allocator_type,
-	span_gradient_type> renderer_gradient_type;
-
-	gradient_func_type gradientFunc;
-	agg::trans_affine gradientMatrix;
-	interpolator_type spanInterpolator(gradientMatrix);
-	span_allocator_type spanAllocator;
-	color_array_type colorArray;
-
-	_MakeGradient(colorArray, radial);
-
-	span_gradient_type spanGradient(spanInterpolator, gradientFunc, colorArray,
-		0, 100);
-
-	renderer_gradient_type gradientRenderer(fBaseRenderer, spanAllocator,
-		spanGradient);
-
-	gradientMatrix.reset();
-	gradientMatrix *= agg::trans_affine_translation(center.x, center.y);
-	gradientMatrix.invert();
-
-//	_CalcLinearGradientTransform(start, end, gradientMtx);
-
-	fRasterizer.reset();
-	fRasterizer.add_path(path);
-	agg::render_scanlines(fRasterizer, fPackedScanline, gradientRenderer);
-}
-
-
-// _FillPathGradientRadialFocus
-template<class VertexSource>
-void
-Painter::_FillPathGradientRadialFocus(VertexSource& path,
-	const BGradientRadialFocus& focus) const
-{
-	GTRACE("Painter::_FillPathGradientRadialFocus\n");
-
-	BPoint center = focus.Center();
-// TODO: finish this.
-//	BPoint focal = focus.Focal();
-//	float radius = focus.Radius();
-
-	typedef agg::span_interpolator_linear<> interpolator_type;
-	typedef agg::pod_auto_array<agg::rgba8, 256> color_array_type;
-	typedef agg::span_allocator<agg::rgba8> span_allocator_type;
-	typedef agg::gradient_radial_focus gradient_func_type;
-	typedef agg::span_gradient<agg::rgba8, interpolator_type,
-	gradient_func_type, color_array_type> span_gradient_type;
-	typedef agg::renderer_scanline_aa<renderer_base, span_allocator_type,
-	span_gradient_type> renderer_gradient_type;
-
-	gradient_func_type gradientFunc;
-	agg::trans_affine gradientMatrix;
-	interpolator_type spanInterpolator(gradientMatrix);
-	span_allocator_type spanAllocator;
-	color_array_type colorArray;
-
-	_MakeGradient(colorArray, focus);
-
-	span_gradient_type spanGradient(spanInterpolator, gradientFunc, colorArray,
-		0, 100);
-
-	renderer_gradient_type gradientRenderer(fBaseRenderer, spanAllocator,
-		spanGradient);
-
-	gradientMatrix.reset();
-	gradientMatrix *= agg::trans_affine_translation(center.x, center.y);
-	gradientMatrix.invert();
-
-	//	_CalcLinearGradientTransform(start, end, gradientMatrix);
-
-	fRasterizer.reset();
-	fRasterizer.add_path(path);
-	agg::render_scanlines(fRasterizer, fPackedScanline, gradientRenderer);
-}
-
-
-// _FillPathGradientDiamond
-template<class VertexSource>
-void
-Painter::_FillPathGradientDiamond(VertexSource& path,
-	const BGradientDiamond& diamond) const
-{
-	GTRACE("Painter::_FillPathGradientDiamond\n");
-
-	BPoint center = diamond.Center();
-//	float radius = diamond.Radius();
-
-	typedef agg::span_interpolator_linear<> interpolator_type;
-	typedef agg::pod_auto_array<agg::rgba8, 256> color_array_type;
-	typedef agg::span_allocator<agg::rgba8> span_allocator_type;
-	typedef agg::gradient_diamond gradient_func_type;
-	typedef agg::span_gradient<agg::rgba8, interpolator_type,
-	gradient_func_type, color_array_type> span_gradient_type;
-	typedef agg::renderer_scanline_aa<renderer_base, span_allocator_type,
-	span_gradient_type> renderer_gradient_type;
-
-	gradient_func_type gradientFunc;
-	agg::trans_affine gradientMatrix;
-	interpolator_type spanInterpolator(gradientMatrix);
-	span_allocator_type spanAllocator;
-	color_array_type colorArray;
-
-	_MakeGradient(colorArray, diamond);
-
-	span_gradient_type spanGradient(spanInterpolator, gradientFunc, colorArray,
-		0, 100);
-
-	renderer_gradient_type gradientRenderer(fBaseRenderer, spanAllocator,
-		spanGradient);
-
-	gradientMatrix.reset();
-	gradientMatrix *= agg::trans_affine_translation(center.x, center.y);
-	gradientMatrix.invert();
-
-	//	_CalcLinearGradientTransform(start, end, gradientMatrix);
-
-	fRasterizer.reset();
-	fRasterizer.add_path(path);
-	agg::render_scanlines(fRasterizer, fPackedScanline, gradientRenderer);
-}
-
-
-// _FillPathGradientConic
-template<class VertexSource>
-void
-Painter::_FillPathGradientConic(VertexSource& path,
-	const BGradientConic& conic) const
-{
-	GTRACE("Painter::_FillPathGradientConic\n");
-
-	BPoint center = conic.Center();
-//	float radius = conic.Radius();
-
-	typedef agg::span_interpolator_linear<> interpolator_type;
-	typedef agg::pod_auto_array<agg::rgba8, 256> color_array_type;
-	typedef agg::span_allocator<agg::rgba8> span_allocator_type;
-	typedef agg::gradient_conic gradient_func_type;
-	typedef agg::span_gradient<agg::rgba8, interpolator_type,
-	gradient_func_type, color_array_type> span_gradient_type;
-	typedef agg::renderer_scanline_aa<renderer_base, span_allocator_type,
-	span_gradient_type> renderer_gradient_type;
-
-	gradient_func_type gradientFunc;
-	agg::trans_affine gradientMatrix;
-	interpolator_type spanInterpolator(gradientMatrix);
-	span_allocator_type spanAllocator;
-	color_array_type colorArray;
-
-	_MakeGradient(colorArray, conic);
-
-	span_gradient_type spanGradient(spanInterpolator, gradientFunc, colorArray,
-		0, 100);
-
-	renderer_gradient_type gradientRenderer(fBaseRenderer, spanAllocator,
-		spanGradient);
-
-	gradientMatrix.reset();
-	gradientMatrix *= agg::trans_affine_translation(center.x, center.y);
-	gradientMatrix.invert();
-
-	//	_CalcLinearGradientTransform(start, end, gradientMatrix);
-
-	fRasterizer.reset();
-	fRasterizer.add_path(path);
-	agg::render_scanlines(fRasterizer, fPackedScanline, gradientRenderer);
+	if (fMaskedUnpackedScanline == NULL)
+		agg::render_scanlines(fRasterizer, fUnpackedScanline, gradientRenderer);
+	else {
+		agg::render_scanlines(fRasterizer, *fMaskedUnpackedScanline,
+			gradientRenderer);
+	}
 }

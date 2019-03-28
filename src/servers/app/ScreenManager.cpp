@@ -14,8 +14,7 @@
 #include "Screen.h"
 #include "ServerConfig.h"
 
-#include "remote/RemoteHWInterface.h"
-#include "html5/HTML5HWInterface.h"
+#include "RemoteHWInterface.h"
 
 #include <Autolock.h>
 #include <Entry.h>
@@ -35,6 +34,35 @@ using std::nothrow;
 
 
 ScreenManager* gScreenManager;
+
+
+class ScreenChangeListener : public HWInterfaceListener {
+public:
+								ScreenChangeListener(ScreenManager& manager,
+									Screen* screen);
+
+private:
+virtual	void					ScreenChanged(HWInterface* interface);
+
+			ScreenManager&		fManager;
+			Screen*				fScreen;
+};
+
+
+ScreenChangeListener::ScreenChangeListener(ScreenManager& manager,
+	Screen* screen)
+	:
+	fManager(manager),
+	fScreen(screen)
+{
+}
+
+
+void
+ScreenChangeListener::ScreenChanged(HWInterface* interface)
+{
+	fManager.ScreenChanged(fScreen);
+}
 
 
 ScreenManager::ScreenManager()
@@ -58,6 +86,7 @@ ScreenManager::~ScreenManager()
 		screen_item* item = fScreenList.ItemAt(i);
 
 		delete item->screen;
+		delete item->listener;
 		delete item;
 	}
 }
@@ -111,14 +140,10 @@ ScreenManager::AcquireScreens(ScreenOwner* owner, int32* wishList,
 		// TODO: right now we only support remote screens, but we could
 		// also target specific accelerants to support other graphics cards
 		HWInterface* interface;
-		/*
-		if (strncmp(target, "vnc:", 4) == 0)
+		/*if (strncmp(target, "vnc:", 4) == 0)
 			interface = new(nothrow) VNCHWInterface(target);
 		else*/
-		//if (strncmp(target, "html5:", 6) == 0)
-		//	interface = new(nothrow) HTML5HWInterface(target);
-		//else
-		//	interface = new(nothrow) RemoteHWInterface(target);
+			interface = new(nothrow) RemoteHWInterface(target);
 		if (interface != NULL) {
 			screen_item* item = _AddHWInterface(interface);
 			if (item != NULL && list.AddItem(item->screen)) {
@@ -152,6 +177,19 @@ ScreenManager::ReleaseScreens(ScreenList& list)
 
 
 void
+ScreenManager::ScreenChanged(Screen* screen)
+{
+	BAutolock locker(this);
+
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item->screen == screen)
+			item->owner->ScreenChanged(screen);
+	}
+}
+
+
+void
 ScreenManager::_ScanDrivers()
 {
 	HWInterface* interface = NULL;
@@ -166,16 +204,12 @@ ScreenManager::_ScanDrivers()
 	bool initDrivers = true;
 	while (initDrivers) {
 
-//#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
-//		  interface = new AccelerantHWInterface();
-//#elif defined(USE_DIRECT_WINDOW_TEST_MODE)
-//		  interface = new DWindowHWInterface();
-//#else
-//		  interface = new ViewHWInterface();
-//#endif
-
-#if 0
-		  interface = new XServerHWInterface();
+#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+		  interface = new AccelerantHWInterface();
+#elif defined(USE_DIRECT_WINDOW_TEST_MODE)
+		  interface = new DWindowHWInterface();
+#else
+		  interface = new ViewHWInterface();
 #endif
 
 		_AddHWInterface(interface);
@@ -197,12 +231,20 @@ ScreenManager::_AddHWInterface(HWInterface* interface)
 
 	if (screen->Initialize() >= B_OK) {
 		screen_item* item = new(nothrow) screen_item;
+
 		if (item != NULL) {
 			item->screen = screen;
 			item->owner = NULL;
-			if (fScreenList.AddItem(item))
-				return item;
+			item->listener = new(nothrow) ScreenChangeListener(*this, screen);
+			if (item->listener != NULL
+				&& interface->AddListener(item->listener)) {
+				if (fScreenList.AddItem(item))
+					return item;
 
+				interface->RemoveListener(item->listener);
+			}
+
+			delete item->listener;
 			delete item;
 		}
 	}

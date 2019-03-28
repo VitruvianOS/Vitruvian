@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku.
+ * Copyright 2001-2016, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -7,15 +7,13 @@
  *		Axel Dörfler, axeld@pinc-software.de
  */
 
+
 /*!	Manages font families and styles */
 
-#include <SupportDefs.h>
-#include <config/types.h>
 
-#include "FontFamily.h"
 #include "FontManager.h"
-#include "ServerConfig.h"
-#include "ServerFont.h"
+
+#include <new>
 
 #include <Autolock.h>
 #include <Directory.h>
@@ -27,7 +25,10 @@
 #include <Path.h>
 #include <String.h>
 
-#include <new>
+#include "FontFamily.h"
+#include "ServerConfig.h"
+#include "ServerFont.h"
+
 
 //#define TRACE_FONT_MANAGER
 #ifdef TRACE_FONT_MANAGER
@@ -164,8 +165,8 @@ FontManager::MessageReceived(BMessage* message)
 				{
 					const char* name;
 					node_ref nodeRef;
-					if (message->FindUInt32("device", &nodeRef.device) != B_OK
-						|| message->FindUInt32("directory", &nodeRef.node) != B_OK
+					if (message->FindInt32("device", &nodeRef.device) != B_OK
+						|| message->FindInt64("directory", &nodeRef.node) != B_OK
 						|| message->FindString("name", &name) != B_OK)
 						break;
 
@@ -201,10 +202,10 @@ FontManager::MessageReceived(BMessage* message)
 					node_ref nodeRef;
 					uint64 fromNode;
 					uint64 node;
-					if (message->FindUInt32("device", &nodeRef.device) != B_OK
-						|| message->FindUInt32("to directory", &nodeRef.node) != B_OK
-						|| message->FindUInt64("from directory", (uint64 *)&fromNode) != B_OK
-						|| message->FindUInt64("node", (uint64 *)&node) != B_OK
+					if (message->FindInt32("device", &nodeRef.device) != B_OK
+						|| message->FindInt64("to directory", &nodeRef.node) != B_OK
+						|| message->FindInt64("from directory", (int64 *)&fromNode) != B_OK
+						|| message->FindInt64("node", (int64 *)&node) != B_OK
 						|| message->FindString("name", &name) != B_OK)
 						break;
 
@@ -225,7 +226,7 @@ FontManager::MessageReceived(BMessage* message)
 							if (fromDirectory == NULL) {
 								// there is a new directory to watch for us
 								_AddPath(entry);
-								FTRACE("new directory moved in");
+								FTRACE(("new directory moved in"));
 							} else {
 								// A directory from our watched directories has
 								// been renamed or moved within the watched
@@ -239,7 +240,7 @@ FontManager::MessageReceived(BMessage* message)
 										style->UpdatePath(directory->directory);
 									}
 								}
-								FTRACE("directory renamed");
+								FTRACE(("directory renamed"));
 							}
 						} else {
 							if (fromDirectory != NULL) {
@@ -275,9 +276,9 @@ FontManager::MessageReceived(BMessage* message)
 				{
 					node_ref nodeRef;
 					uint64 directoryNode;
-					if (message->FindUInt32("device", &nodeRef.device) != B_OK
-						|| message->FindUInt64("directory", (uint64 *)&directoryNode) != B_OK
-						|| message->FindUInt64("node", &nodeRef.node) != B_OK)
+					if (message->FindInt32("device", &nodeRef.device) != B_OK
+						|| message->FindInt64("directory", (int64 *)&directoryNode) != B_OK
+						|| message->FindInt64("node", &nodeRef.node) != B_OK)
 						break;
 
 					font_directory* directory = _FindDirectory(nodeRef);
@@ -333,16 +334,16 @@ FontManager::_LoadRecentFontMappings()
 		ttfontsPath.Append("ttfonts");
 
 		BPath veraFontPath = ttfontsPath;
-		veraFontPath.Append("DejaVuSans.ttf");
-		_AddDefaultMapping("DejaVu Sans", "Book", veraFontPath.Path());
+		veraFontPath.Append("NotoSansDisplay-Regular.ttf");
+		_AddDefaultMapping("Noto Sans Display", "Book", veraFontPath.Path());
 
 		veraFontPath.SetTo(ttfontsPath.Path());
-		veraFontPath.Append("DejaVuSans-Bold.ttf");
-		_AddDefaultMapping("DejaVu Sans", "Bold", veraFontPath.Path());
+		veraFontPath.Append("NotoSansDisplay-Bold.ttf");
+		_AddDefaultMapping("Noto Sans Display", "Bold", veraFontPath.Path());
 
 		veraFontPath.SetTo(ttfontsPath.Path());
-		veraFontPath.Append("DejaVuSansMono.ttf");
-		_AddDefaultMapping("DejaVu Sans Mono", "Book", veraFontPath.Path());
+		veraFontPath.Append("NotoMono-Regular.ttf");
+		_AddDefaultMapping("Noto Mono", "Regular", veraFontPath.Path());
 
 		return true;
 	}
@@ -530,12 +531,12 @@ void
 FontManager::_AddSystemPaths()
 {
 	BPath path;
-	if (find_directory(B_BEOS_FONTS_DIRECTORY, &path, true) == B_OK)
+	if (find_directory(B_SYSTEM_FONTS_DIRECTORY, &path, true) == B_OK)
 		_AddPath(path.Path());
 
 	// We don't scan these in test mode to help shave off some startup time
 #if !TEST_MODE
-	if (find_directory(B_COMMON_FONTS_DIRECTORY, &path, true) == B_OK)
+	if (find_directory(B_SYSTEM_NONPACKAGED_FONTS_DIRECTORY, &path, true) == B_OK)
 		_AddPath(path.Path());
 #endif
 }
@@ -610,8 +611,8 @@ FontManager::_AddFont(font_directory& directory, BEntry& entry)
 	FTRACE(("\tadd style: %s, %s\n", face->family_name, face->style_name));
 
 	// the FontStyle takes over ownership of the FT_Face object
-	FontStyle *style = new FontStyle(nodeRef, path.Path(), face);
-	if (!family->AddStyle(style)) {
+	FontStyle *style = new (std::nothrow) FontStyle(nodeRef, path.Path(), face);
+	if (style == NULL || !family->AddStyle(style)) {
 		delete style;
 		delete family;
 		return B_NO_MEMORY;
@@ -644,7 +645,8 @@ FontManager::_FindDirectory(node_ref& nodeRef)
 void
 FontManager::_RemoveDirectory(font_directory* directory)
 {
-	FTRACE(("FontManager: Remove directory (%Ld)!\n", directory->directory.node));
+	FTRACE(("FontManager: Remove directory (%" B_PRIdINO ")!\n",
+		directory->directory.node));
 
 	fDirectories.RemoveItem(directory, false);
 
@@ -706,8 +708,8 @@ FontManager::_AddPath(BEntry& entry, font_directory** _newDirectory)
 	if (status != B_OK) {
 		// we cannot watch this directory - while this is unfortunate,
 		// it's not a critical error
-		printf("could not watch directory %ld:%Ld\n", nodeRef.device,
-			nodeRef.node);
+		printf("could not watch directory %" B_PRIdDEV ":%" B_PRIdINO "\n",
+			nodeRef.device, nodeRef.node);
 			// TODO: should go into syslog()
 	} else {
 		BPath path(&entry);
@@ -1146,10 +1148,12 @@ FontManager::AttachUser(uid_t userID)
 	// TODO: actually, find_directory() cannot know which user ID we want here
 	// TODO: avoids user fonts in safe mode
 	BPath path;
-	if (find_directory(B_USER_FONTS_DIRECTORY, &path, true) != B_OK)
-		return;
-
-	_AddPath(path.Path());
+	if (find_directory(B_USER_FONTS_DIRECTORY, &path, true) == B_OK)
+		_AddPath(path.Path());
+	if (find_directory(B_USER_NONPACKAGED_FONTS_DIRECTORY, &path, true)
+			== B_OK) {
+		_AddPath(path.Path());
+	}
 #endif
 }
 

@@ -30,6 +30,10 @@ struct BAbstractLayout::Proxy {
 	{
 	}
 
+	virtual ~Proxy()
+	{
+	}
+
 	virtual	BSize		MinSize() const = 0;
 	virtual void		SetMinSize(const BSize&) = 0;
 
@@ -47,7 +51,7 @@ struct BAbstractLayout::Proxy {
 
 	virtual bool		IsVisible(bool ancestorHidden) const = 0;
 	virtual	void		SetVisible(bool visible) = 0;
-	
+
 	virtual	status_t	AddDataToArchive(BMessage* archive,
 							bool ancestorHidden) = 0;
 	virtual	status_t	RestoreDataFromArchive(const BMessage* archive) = 0;
@@ -237,7 +241,7 @@ struct BAbstractLayout::ViewProxy : Proxy {
 	bool IsVisible(bool ancestorsVisible) const
 	{
 		int16 showLevel = BView::Private(view).ShowLevel();
-		return (showLevel - (ancestorsVisible) ? 0 : 1) <= 0;
+		return (showLevel - (ancestorsVisible ? 0 : 1)) <= 0;
 	}
 
 	void SetVisible(bool visible)

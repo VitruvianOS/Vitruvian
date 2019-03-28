@@ -1,7 +1,8 @@
 /*
- * Copyright 2010, Haiku, Inc.
+ * Copyright 2010 Haiku, Inc. All rights reserved.
  * Copyright 2006, Ingo Weinhold <bonefish@cs.tu-berlin.de>.
- * All rights reserved. Distributed under the terms of the MIT License.
+ *
+ * Distributed under the terms of the MIT License.
  */
 
 
@@ -33,7 +34,7 @@ struct BGroupLayout::ItemLayoutData {
 };
 
 
-BGroupLayout::BGroupLayout(enum orientation orientation, float spacing)
+BGroupLayout::BGroupLayout(orientation orientation, float spacing)
 	:
 	BTwoDimensionalLayout(),
 	fOrientation(orientation)
@@ -85,7 +86,7 @@ BGroupLayout::Orientation() const
 
 
 void
-BGroupLayout::SetOrientation(enum orientation orientation)
+BGroupLayout::SetOrientation(orientation orientation)
 {
 	if (orientation != fOrientation) {
 		fOrientation = orientation;
@@ -189,12 +190,12 @@ status_t
 BGroupLayout::Archive(BMessage* into, bool deep) const
 {
 	BArchiver archiver(into);
-	status_t err = BTwoDimensionalLayout::Archive(into, deep);
+	status_t result = BTwoDimensionalLayout::Archive(into, deep);
 
-	if (err == B_OK)
-		err = into->AddBool(kVerticalField, fOrientation == B_VERTICAL);
+	if (result == B_OK)
+		result = into->AddBool(kVerticalField, fOrientation == B_VERTICAL);
 
-	return archiver.Finish(err);
+	return archiver.Finish(result);
 }
 
 
@@ -234,12 +235,12 @@ BGroupLayout::ItemUnarchived(const BMessage* from,
 	BLayoutItem* item, int32 index)
 {
 	float weight;
-	status_t err = from->FindFloat(kItemWeightField, index, &weight);
+	status_t result = from->FindFloat(kItemWeightField, index, &weight);
 
-	if (err == B_OK)
+	if (result == B_OK)
 		_LayoutDataForItem(item)->weight = weight;
 
-	return err;
+	return result;
 }
 
 
@@ -262,7 +263,7 @@ BGroupLayout::ItemRemoved(BLayoutItem* item, int32 fromIndex)
 
 
 void
-BGroupLayout::PrepareItems(enum orientation orientation)
+BGroupLayout::PrepareItems(orientation orientation)
 {
 	// filter the visible items
 	fVisibleItems.MakeEmpty();
@@ -290,7 +291,7 @@ BGroupLayout::InternalCountRows()
 
 
 void
-BGroupLayout::GetColumnRowConstraints(enum orientation orientation, int32 index,
+BGroupLayout::GetColumnRowConstraints(orientation orientation, int32 index,
 	ColumnRowConstraints* constraints)
 {
 	if (index >= 0 && index < fVisibleItems.CountItems()) {
@@ -329,9 +330,7 @@ BGroupLayout::GetItemDimensions(BLayoutItem* item, Dimensions* dimensions)
 BGroupLayout::ItemLayoutData*
 BGroupLayout::_LayoutDataForItem(BLayoutItem* item) const
 {
-	if (!item)
-		return NULL;
-	return (ItemLayoutData*)item->LayoutData();
+	return item == NULL ? NULL : (ItemLayoutData*)item->LayoutData();
 }
 
 
@@ -352,4 +351,3 @@ void BGroupLayout::_ReservedGroupLayout7() {}
 void BGroupLayout::_ReservedGroupLayout8() {}
 void BGroupLayout::_ReservedGroupLayout9() {}
 void BGroupLayout::_ReservedGroupLayout10() {}
-

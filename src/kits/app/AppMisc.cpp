@@ -1,8 +1,9 @@
 /*
- * Copyright 2001-2011, Haiku, Inc.
+ * Copyright 2001-2015, Haiku, Inc.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
+ *		Axel Dörfler, axeld@pinc-software.de
  *		Ingo Weinhold, bonefish@@users.sf.net
  */
 
@@ -16,6 +17,7 @@
 
 #include <Entry.h>
 #include <image.h>
+#include <Messenger.h>
 #include <OS.h>
 
 #include <ServerLink.h>
@@ -23,6 +25,9 @@
 
 
 namespace BPrivate {
+
+
+static team_id sCurrentTeam = -1;
 
 
 /*!	\brief Returns the path to an application's executable.
@@ -123,13 +128,19 @@ get_app_ref(entry_ref *ref, bool traverse)
 team_id
 current_team()
 {
-	static team_id team = -1;
-	if (team < 0) {
+	if (sCurrentTeam < 0) {
 		thread_info info;
 		if (get_thread_info(find_thread(NULL), &info) == B_OK)
-			team = info.team;
+			sCurrentTeam = info.team;
 	}
-	return team;
+	return sCurrentTeam;
+}
+
+
+void
+init_team_after_fork()
+{
+	sCurrentTeam = -1;
 }
 
 
@@ -147,7 +158,7 @@ main_thread_for(team_id team)
 	// a team info to verify the existence of the team.
 	team_info info;
 	status_t error = get_team_info(team, &info);
-	return (error == B_OK ? team : error);
+	return error == B_OK ? team : error;
 }
 
 
@@ -165,14 +176,45 @@ is_app_showing_modal_window(team_id team)
 }
 
 
-static port_id sServerPort = -1;
+#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 
 
-void
-invalidate_server_port()
+/*!	Creates a connection with the desktop.
+*/
+status_t
+create_desktop_connection(ServerLink* link, const char* name, int32 capacity)
 {
-	sServerPort = -1;
+	// Create the port so that the app_server knows where to send messages
+	port_id clientPort = create_port(capacity, name);
+	if (clientPort < 0)
+		return clientPort;
+
+	link->SetReceiverPort(clientPort);
+
+	BMessage request(AS_GET_DESKTOP);
+	request.AddInt32("user", getuid());
+	request.AddInt32("version", AS_PROTOCOL_VERSION);
+	request.AddString("target", getenv("TARGET_SCREEN"));
+
+	BMessenger server("application/x-vnd.Haiku-app_server");
+	BMessage reply;
+	status_t status = server.SendMessage(&request, &reply);
+	if (status != B_OK)
+		return status;
+
+	port_id desktopPort = reply.GetInt32("port", B_ERROR);
+	if (desktopPort < 0)
+		return desktopPort;
+
+	link->SetSenderPort(desktopPort);
+	return B_OK;
 }
+
+
+#else // HAIKU_TARGET_PLATFORM_LIBBE_TEST
+
+
+static port_id sServerPort = -1;
 
 
 port_id
@@ -188,7 +230,7 @@ get_app_server_port()
 }
 
 
-/*!	Creates a connection with the desktop.
+/*! Creates a connection with the desktop.
 */
 status_t
 create_desktop_connection(ServerLink* link, const char* name, int32 capacity)
@@ -221,6 +263,9 @@ create_desktop_connection(ServerLink* link, const char* name, int32 capacity)
 
 	return B_OK;
 }
+
+
+#endif // HAIKU_TARGET_PLATFORM_LIBBE_TEST
 
 
 } // namespace BPrivate

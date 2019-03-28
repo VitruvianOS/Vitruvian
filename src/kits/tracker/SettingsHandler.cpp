@@ -49,19 +49,24 @@ All rights reserved.
 
 #include "SettingsHandler.h"
 
+
+//	#pragma mark - ArgvParser
+
+
 ArgvParser::ArgvParser(const char* name)
-	:	fFile(0),
-		fBuffer(NULL),
-		fPos(-1),
-		fArgc(0),
-		fCurrentArgv(0),
-		fCurrentArgsPos(-1),
-		fSawBackslash(false),
-		fEatComment(false),
-		fInDoubleQuote(false),
-		fInSingleQuote(false),
-		fLineNo(0),
-		fFileName(name)
+	:
+	fFile(0),
+	fBuffer(NULL),
+	fPos(-1),
+	fArgc(0),
+	fCurrentArgv(0),
+	fCurrentArgsPos(-1),
+	fSawBackslash(false),
+	fEatComment(false),
+	fInDoubleQuote(false),
+	fInSingleQuote(false),
+	fLineNo(0),
+	fFileName(name)
 {
 	fFile = fopen(fFileName, "r");
 	if (!fFile) {
@@ -75,10 +80,10 @@ ArgvParser::ArgvParser(const char* name)
 
 ArgvParser::~ArgvParser()
 {
-	delete [] fBuffer;
+	delete[] fBuffer;
 
 	MakeArgvEmpty();
-	delete [] fCurrentArgv;
+	delete[] fCurrentArgv;
 
 	if (fFile)
 		fclose(fFile);
@@ -91,7 +96,7 @@ ArgvParser::MakeArgvEmpty()
 	// done with current argv, free it up
 	for (int32 index = 0; index < fArgc; index++)
 		delete[] fCurrentArgv[index];
-	
+
 	fArgc = 0;
 }
 
@@ -103,10 +108,12 @@ ArgvParser::SendArgv(ArgvHandler argvHandlerFunc, void* passThru)
 		NextArgv();
 		fCurrentArgv[fArgc] = 0;
 		const char* result = (argvHandlerFunc)(fArgc, fCurrentArgv, passThru);
-		if (result)
-			printf("File %s; Line %ld # %s", fFileName, fLineNo, result);
+		if (result != NULL) {
+			printf("File %s; Line %" B_PRId32 " # %s", fFileName, fLineNo,
+				result);
+		}
 		MakeArgvEmpty();
-		if (result)
+		if (result != NULL)
 			return B_ERROR;
 	}
 
@@ -123,7 +130,7 @@ ArgvParser::NextArgv()
 	}
 	fCurrentArgs[++fCurrentArgsPos] = '\0';
 	// terminate current arg pos
-	
+
 	// copy it as a string to the current argv slot
 	fCurrentArgv[fArgc] = new char [strlen(fCurrentArgs) + 1];
 	strcpy(fCurrentArgv[fArgc], fCurrentArgs);
@@ -152,6 +159,7 @@ ArgvParser::GetCh()
 			return EOF;
 		fPos = 0;
 	}
+
 	return fBuffer[fPos++];
 }
 
@@ -161,6 +169,7 @@ ArgvParser::EachArgv(const char* name, ArgvHandler argvHandlerFunc,
 	void* passThru)
 {
 	ArgvParser parser(name);
+
 	return parser.EachArgvPrivate(name, argvHandlerFunc, passThru);
 }
 
@@ -188,8 +197,8 @@ ArgvParser::EachArgvPrivate(const char* name, ArgvHandler argvHandlerFunc,
 			// handle new line
 			fEatComment = false;
 			if (!fSawBackslash && (fInDoubleQuote || fInSingleQuote)) {
-				printf("File %s ; Line %ld # unterminated quote\n", name,
-					fLineNo);
+				printf("File %s ; Line %" B_PRId32 " # unterminated quote\n",
+					name, fLineNo);
 				result = B_ERROR;
 				break;
 			}
@@ -254,8 +263,12 @@ ArgvParser::EachArgvPrivate(const char* name, ArgvHandler argvHandlerFunc,
 }
 
 
+//	#pragma mark - SettingsArgvDispatcher
+
+
 SettingsArgvDispatcher::SettingsArgvDispatcher(const char* name)
-	:	name(name)
+	:
+	name(name)
 {
 }
 
@@ -317,12 +330,13 @@ SettingsArgvDispatcher::WriteRectValue(Settings* setting, BRect rect)
 
 
 Settings::Settings(const char* filename, const char* settingsDirName)
-	:	fFileName(filename),
-		fSettingsDir(settingsDirName),
-		fList(0),
-		fCount(0),
-		fListSize(30),
-		fCurrentSettings(0)
+	:
+	fFileName(filename),
+	fSettingsDir(settingsDirName),
+	fList(0),
+	fCount(0),
+	fListSize(30),
+	fCurrentSettings(0)
 {
 	fList = (SettingsArgvDispatcher**)calloc((size_t)fListSize,
 		sizeof(SettingsArgvDispatcher*));
@@ -407,7 +421,7 @@ Settings::MakeSettingsDirectory(BDirectory* resultingSettingsDir)
 	BPath path;
 	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path, true) != B_OK)
 		return;
-	
+
 	// make sure there is a directory
 	// mkdir() will only make one leaf at a time, unfortunately
 	path.Append(fSettingsDir);

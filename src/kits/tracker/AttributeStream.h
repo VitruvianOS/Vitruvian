@@ -46,18 +46,17 @@ All rights reserved.
 //
 //	In addition to the whacky (but usefull) << syntax, calls like Read, Write
 //	are also available
-#ifndef __ATTRIBUTE_STREAM__
-#define __ATTRIBUTE_STREAM__
+#ifndef _ATTRIBUTE_STREAM_H
+#define _ATTRIBUTE_STREAM_H
 
 
+#include <ObjectList.h>
 #include <Node.h>
 #include <Rect.h>
 #include <String.h>
 #include <TypeConstants.h>
 
 #include <fs_attr.h>
-
-#include "ObjectList.h"
 
 
 namespace BPrivate {
@@ -74,15 +73,14 @@ struct AttributeTemplate {
 class AttributeInfo {
 	// utility class for internal attribute description
 public:
-	AttributeInfo()
-		{}
-	AttributeInfo(const AttributeInfo &);
-	AttributeInfo(const char*, attr_info);
-	AttributeInfo(const char*, uint32, off_t);
-	
-	void SetTo(const AttributeInfo &);
-	void SetTo(const char*, attr_info);
-	void SetTo(const char*, uint32, off_t);
+	AttributeInfo();
+	AttributeInfo(const AttributeInfo& other);
+	AttributeInfo(const char* name, attr_info info);
+	AttributeInfo(const char* name, uint32 type, off_t size);
+
+	void SetTo(const AttributeInfo& other);
+	void SetTo(const char* name, attr_info info);
+	void SetTo(const char* name, uint32 type, off_t size);
 	const char* Name() const;
 	uint32 Type() const;
 	off_t Size() const;
@@ -170,8 +168,7 @@ public:
 
 	void SetTo(BNode*);
 
-	BNode* Node()
-		{ return fNode; }
+	BNode* Node() { return fNode; }
 
 protected:
 	virtual bool CanFeed() const { return true; }
@@ -186,7 +183,7 @@ protected:
 private:
 	AttributeInfo fCurrentAttr;
 	BNode* fNode;
-	
+
 	typedef AttributeStreamNode _inherited;
 };
 
@@ -215,16 +212,17 @@ protected:
 	class AttrNode {
 	public:
 		AttrNode(const char* name, uint32 type, off_t size, char* data)
-			:	fAttr(name, type, size),
-				fData(data)
-			{
-			}
+		:
+		fAttr(name, type, size),
+		fData(data)
+		{
+		}
 
 		~AttrNode()
-			{
-				delete [] fData;
-			}
-			
+		{
+			delete[] fData;
+		}
+
 		AttributeInfo fAttr;
 		char* fData;
 	};
@@ -369,9 +367,10 @@ private:
 template<class Type>
 AttributeStreamConstValue<Type>::AttributeStreamConstValue(const char* name,
 	uint32 attributeType, Type value)
-	:	fAttr(name, attributeType, sizeof(Type)),
-		fValue(value),
-		fRewound(true)
+	:
+	fAttr(name, attributeType, sizeof(Type)),
+	fValue(value),
+	fRewound(true)
 {
 }
 
@@ -419,44 +418,55 @@ AttributeStreamConstValue<Type>::Find(const char* name, uint32 type) const
 class AttributeStreamBoolValue : public AttributeStreamConstValue<bool> {
 public:
 	AttributeStreamBoolValue(const char* name, bool value)
-		:	AttributeStreamConstValue<bool>(name, B_BOOL_TYPE, value)
-		{}
+		:
+		AttributeStreamConstValue<bool>(name, B_BOOL_TYPE, value)
+	{
+	}
 };
 
 
 class AttributeStreamInt32Value : public AttributeStreamConstValue<int32> {
 public:
 	AttributeStreamInt32Value(const char* name, int32 value)
-		:	AttributeStreamConstValue<int32>(name, B_INT32_TYPE, value)
-		{}
+		:
+		AttributeStreamConstValue<int32>(name, B_INT32_TYPE, value)
+	{
+	}
 };
 
 
 class AttributeStreamInt64Value : public AttributeStreamConstValue<int64> {
 public:
 	AttributeStreamInt64Value(const char* name, int64 value)
-		:	AttributeStreamConstValue<int64>(name, B_INT64_TYPE, value)
-		{}
+		:
+		AttributeStreamConstValue<int64>(name, B_INT64_TYPE, value)
+	{
+	}
 };
 
 
 class AttributeStreamRectValue : public AttributeStreamConstValue<BRect> {
 public:
 	AttributeStreamRectValue(const char* name, BRect value)
-		:	AttributeStreamConstValue<BRect>(name, B_RECT_TYPE, value)
-		{}
+		:
+		AttributeStreamConstValue<BRect>(name, B_RECT_TYPE, value)
+	{
+	}
 };
 
 
 class AttributeStreamFloatValue : public AttributeStreamConstValue<float> {
 public:
 	AttributeStreamFloatValue(const char* name, float value)
-		:	AttributeStreamConstValue<float>(name, B_FLOAT_TYPE, value)
-		{}
+		:
+		AttributeStreamConstValue<float>(name, B_FLOAT_TYPE, value)
+	{
+	}
 };
 
 } // namespace BPrivate
 
 using namespace BPrivate;
 
-#endif
+
+#endif	// _ATTRIBUTE_STREAM_H

@@ -37,6 +37,7 @@ All rights reserved.
 
 #include "FilePanelPriv.h"
 #include "RecentItems.h"
+#include "FSUtils.h"
 
 
 // FBC fluff, stick it here to not pollute real .cpp files
@@ -93,15 +94,24 @@ void BFilePanel::_ReservedFilePanel8() {}
 
 // deprecated cruft
 
-#if __GNUC__ && __GNUC__ < 3 || __MWERKS__
+#if __GNUC__ && __GNUC__ < 3
 extern "C" {
 
+_EXPORT void
+run_open_panel__Fv()
+{
+	(new TFilePanel())->Show();
+}
+
+
+_EXPORT void
+run_save_panel__Fv()
+{
+	(new TFilePanel(B_SAVE_PANEL))->Show();
+}
+
 _EXPORT BFilePanel*
-#if __GNUC__
 __10BFilePanel15file_panel_modeP10BMessengerP9entry_refUlbP8BMessageP10BRefFilterT5T5
-#elif __MWERKS__
-__ct__10BFilePanelF15file_panel_modeP10BMessengerP9entry_refUlbP8BMessageP10BRefFilterbb
-#endif
 (void* self,
 	file_panel_mode mode, BMessenger* target,
 	entry_ref* ref, uint32 nodeFlavors, bool multipleSelection,
@@ -114,37 +124,48 @@ __ct__10BFilePanelF15file_panel_modeP10BMessengerP9entry_refUlbP8BMessageP10BRef
 }
 
 _EXPORT void
-#if __GNUC__
-SetPanelDirectory__10BFilePanelP10BDirectory
-#elif __MWERKS__
-SetPanelDirectory__10BFilePanelFP10BDirectory
-#endif
-(BFilePanel* self, BDirectory* d)
+SetPanelDirectory__10BFilePanelP10BDirectory(BFilePanel* self, BDirectory* d)
 {
 	self->SetPanelDirectory(d);
 }
 
 _EXPORT void
-#if __GNUC__
-SetPanelDirectory__10BFilePanelP6BEntry
-#elif __MWERKS__
-SetPanelDirectory__10BFilePanelFP6BEntry
-#endif
-(BFilePanel* self, BEntry* e)
+SetPanelDirectory__10BFilePanelP6BEntry(BFilePanel* self, BEntry* e)
 {
 	self->SetPanelDirectory(e);
 }
 
 _EXPORT void
-#if __GNUC__
-SetPanelDirectory__10BFilePanelP9entry_ref
-#elif __MWERKS__
-SetPanelDirectory__10BFilePanelFP9entry_ref
-#endif
-(BFilePanel* self, entry_ref* r)
+SetPanelDirectory__10BFilePanelP9entry_ref(BFilePanel* self, entry_ref* r)
 {
 	self->SetPanelDirectory(r);
 }
-	
+
+_EXPORT status_t
+FSGetDeskDir__8BPrivateP10BDirectoryl(BDirectory* deskDir, dev_t)
+{
+	// since we no longer keep a desktop directory on any volume other
+	// than /boot, redirect to FSGetDeskDir ignoring the volume argument
+	return FSGetDeskDir(deskDir);
+}
+
+_EXPORT status_t
+FSGetDeskDir__FP10BDirectoryl(BDirectory* deskDir, dev_t)
+{
+	return FSGetDeskDir(deskDir);
+}
+
+_EXPORT status_t
+FSCopyAttributesAndStats__8BPrivateP5BNodeT1(BNode* srcNode, BNode* destNode)
+{
+	return FSCopyAttributesAndStats(srcNode, destNode);
+}
+
+_EXPORT status_t
+FSGetTrashDir__FP10BDirectoryl(BDirectory* trashDir, dev_t volume)
+{
+	return FSGetTrashDir(trashDir, volume);
+}
+
 }
 #endif

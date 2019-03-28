@@ -25,8 +25,8 @@ status_t send_message(const void *message, int32 messageSize,
 	const messaging_target *targets, int32 targetCount);
 
 // syscalls
-area_id _kern_register_messaging_service(sem_id lockingSem, sem_id counterSem);
-status_t _kern_unregister_messaging_service();
+area_id _user_register_messaging_service(sem_id lockingSem, sem_id counterSem);
+status_t _user_unregister_messaging_service();
 
 #ifdef __cplusplus
 }

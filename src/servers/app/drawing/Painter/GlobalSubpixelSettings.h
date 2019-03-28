@@ -17,7 +17,7 @@ enum {
 	HINTING_MODE_MONOSPACED_ONLY
 };
 
-#define AVERAGE_BASED_SUBPIXEL_FILTERING
+//#define AVERAGE_BASED_SUBPIXEL_FILTERING
 
 extern bool gSubpixelAntialiasing;
 extern uint8 gDefaultHintingMode;

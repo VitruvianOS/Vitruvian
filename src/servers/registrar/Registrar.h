@@ -36,6 +36,7 @@ class EventQueue;
 class MessageEvent;
 class MessageRunnerManager;
 class MIMEManager;
+class PackageWatchingManager;
 class ShutdownProcess;
 
 class TRoster;
@@ -63,9 +64,9 @@ private:
 	MIMEManager				*fMIMEManager;
 	EventQueue				*fEventQueue;
 	MessageRunnerManager	*fMessageRunnerManager;
-	MessageEvent			*fSanityEvent;
 	ShutdownProcess			*fShutdownProcess;
 	AuthenticationManager	*fAuthenticationManager;
+	PackageWatchingManager	*fPackageWatchingManager;
 };
 
 #endif	// REGISTRAR_H

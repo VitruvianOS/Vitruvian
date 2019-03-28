@@ -32,48 +32,49 @@ names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
 
-#include <Alert.h>
 
-#include "Commands.h"
-#include "DeskWindow.h"
-#include "Model.h"
 #include "SettingsViews.h"
-#include "Tracker.h"
-#include "WidgetAttributeText.h"
 
 #include <Box.h>
 #include <Button.h>
 #include <Catalog.h>
+#include <CheckBox.h>
+#include <ColorControl.h>
 #include <ControlLook.h>
-#include <GroupLayoutBuilder.h>
+#include <LayoutBuilder.h>
 #include <Locale.h>
 #include <MenuField.h>
-#include <ColorControl.h>
 #include <NodeMonitor.h>
+#include <Point.h>
+#include <RadioButton.h>
 #include <StringView.h>
+
+#include "Commands.h"
+#include "DeskWindow.h"
+#include "Model.h"
+#include "Tracker.h"
+#include "WidgetAttributeText.h"
 
 
 static const uint32 kSpaceBarSwitchColor = 'SBsc';
-static const float kItemExtraSpacing = 2.0f;
-static const float kIndentSpacing = 12.0f;
 
 //TODO: defaults should be set in one place only (TrackerSettings.cpp) while
 //		being accessible from here.
 //		What about adding DefaultValue(), IsDefault() etc... methods to
 //		xxxValueSetting ?
 static const uint8 kSpaceBarAlpha = 192;
-static const rgb_color kDefaultUsedSpaceColor = {0, 203, 0, kSpaceBarAlpha};
+static const rgb_color kDefaultUsedSpaceColor = { 0, 203, 0, kSpaceBarAlpha };
 static const rgb_color kDefaultFreeSpaceColor
-	= {255, 255, 255, kSpaceBarAlpha};
+	= { 255, 255, 255, kSpaceBarAlpha };
 static const rgb_color kDefaultWarningSpaceColor
-	= {203, 0, 0, kSpaceBarAlpha};
+	= { 203, 0, 0, kSpaceBarAlpha };
 
 
 static void
 send_bool_notices(uint32 what, const char* name, bool value)
 {
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
+	if (tracker == NULL)
 		return;
 
 	BMessage message;
@@ -82,11 +83,12 @@ send_bool_notices(uint32 what, const char* name, bool value)
 }
 
 
-//	#pragma mark -
-
-
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "SettingsView"
+
+
+//	#pragma mark - SettingsView
+
 
 SettingsView::SettingsView(const char* name)
 	:
@@ -168,12 +170,20 @@ SettingsView::IsRevertable() const
 }
 
 
-// #pragma mark -
+// #pragma mark - DesktopSettingsView
 
 
 DesktopSettingsView::DesktopSettingsView()
 	:
-	SettingsView("DesktopSettingsView")
+	SettingsView("DesktopSettingsView"),
+	fShowDisksIconRadioButton(NULL),
+	fMountVolumesOntoDesktopRadioButton(NULL),
+	fMountSharedVolumesOntoDesktopCheckBox(NULL),
+	fShowDisksIcon(false),
+	fMountVolumesOntoDesktop(false),
+	fMountSharedVolumesOntoDesktop(false),
+	fIntegrateNonBootBeOSDesktops(false),
+	fEjectWhenUnmounting(false)
 {
 	fShowDisksIconRadioButton = new BRadioButton("",
 		B_TRANSLATE("Show Disks icon"),
@@ -187,29 +197,17 @@ DesktopSettingsView::DesktopSettingsView()
 		B_TRANSLATE("Show shared volumes on Desktop"),
 		new BMessage(kVolumesOnDesktopChanged));
 
-	fMountButton = new BButton("",
-		B_TRANSLATE("Mount settings" B_UTF8_ELLIPSIS),
-		new BMessage(kRunAutomounterSettings));
-
 	const float spacing = be_control_look->DefaultItemSpacing();
 
-	BGroupLayoutBuilder(this)
+	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
+		.Add(fShowDisksIconRadioButton)
+		.Add(fMountVolumesOntoDesktopRadioButton)
 		.AddGroup(B_VERTICAL, 0)
-			.Add(fShowDisksIconRadioButton)
-			.Add(fMountVolumesOntoDesktopRadioButton)
-			.AddGroup(B_VERTICAL, 0)
-				.Add(fMountSharedVolumesOntoDesktopCheckBox)
-				.SetInsets(20, 0, 0, 0)
+			.Add(fMountSharedVolumesOntoDesktopCheckBox)
+			.SetInsets(spacing * 2, 0, 0, 0)
 			.End()
-			.AddGlue()
-			.AddGroup(B_HORIZONTAL)
-				.Add(fMountButton)
-				.AddGlue()
-			.End()
-		.End()
-		.SetInsets(spacing, spacing, spacing, spacing);
-
-	fMountButton->SetTarget(be_app);
+		.AddGlue()
+		.SetInsets(spacing);
 }
 
 
@@ -226,7 +224,7 @@ void
 DesktopSettingsView::MessageReceived(BMessage* message)
 {
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
+	if (tracker == NULL)
 		return;
 
 	TrackerSettings settings;
@@ -236,7 +234,7 @@ DesktopSettingsView::MessageReceived(BMessage* message)
 		{
 			// Turn on and off related settings:
 			fMountVolumesOntoDesktopRadioButton->SetValue(
-				!fShowDisksIconRadioButton->Value() == 1);
+				!(fShowDisksIconRadioButton->Value() == 1));
 			fMountSharedVolumesOntoDesktopCheckBox->SetEnabled(
 				fMountVolumesOntoDesktopRadioButton->Value() == 1);
 
@@ -257,7 +255,8 @@ DesktopSettingsView::MessageReceived(BMessage* message)
 				fMountSharedVolumesOntoDesktopCheckBox->Value() == 1);
 
 			// Send the notification message:
-			tracker->SendNotices(kVolumesOnDesktopChanged, &notificationMessage);
+			tracker->SendNotices(kVolumesOnDesktopChanged,
+				&notificationMessage);
 
 			// Tell the settings window the contents have changed:
 			Window()->PostMessage(kSettingsContentsModified);
@@ -268,7 +267,7 @@ DesktopSettingsView::MessageReceived(BMessage* message)
 		{
 			// Turn on and off related settings:
 			fShowDisksIconRadioButton->SetValue(
-				!fMountVolumesOntoDesktopRadioButton->Value() == 1);
+				!(fMountVolumesOntoDesktopRadioButton->Value() == 1));
 			fMountSharedVolumesOntoDesktopCheckBox->SetEnabled(
 				fMountVolumesOntoDesktopRadioButton->Value() == 1);
 
@@ -289,7 +288,8 @@ DesktopSettingsView::MessageReceived(BMessage* message)
 				fMountSharedVolumesOntoDesktopCheckBox->Value() == 1);
 
 			// Send the notification message:
-			tracker->SendNotices(kVolumesOnDesktopChanged, &notificationMessage);
+			tracker->SendNotices(kVolumesOnDesktopChanged,\
+				&notificationMessage);
 
 			// Tell the settings window the contents have changed:
 			Window()->PostMessage(kSettingsContentsModified);
@@ -298,6 +298,7 @@ DesktopSettingsView::MessageReceived(BMessage* message)
 
 		default:
 			_inherited::MessageReceived(message);
+			break;
 	}
 }
 
@@ -349,7 +350,7 @@ void
 DesktopSettingsView::_SendNotices()
 {
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
+	if (tracker == NULL)
 		return;
 
 	// Construct the notification message:
@@ -406,12 +407,26 @@ DesktopSettingsView::IsRevertable() const
 }
 
 
-// #pragma mark -
+// #pragma mark - WindowsSettingsView
 
 
 WindowsSettingsView::WindowsSettingsView()
 	:
-	SettingsView("WindowsSettingsView")
+	SettingsView("WindowsSettingsView"),
+	fShowFullPathInTitleBarCheckBox(NULL),
+	fSingleWindowBrowseCheckBox(NULL),
+	fShowNavigatorCheckBox(NULL),
+	fOutlineSelectionCheckBox(NULL),
+	fSortFolderNamesFirstCheckBox(NULL),
+	fHideDotFilesCheckBox(NULL),
+	fTypeAheadFilteringCheckBox(NULL),
+	fShowFullPathInTitleBar(false),
+	fSingleWindowBrowse(false),
+	fShowNavigator(false),
+	fTransparentSelection(false),
+	fSortFolderNamesFirst(false),
+	fHideDotFiles(false),
+	fTypeAheadFiltering(false)
 {
 	fShowFullPathInTitleBarCheckBox = new BCheckBox("",
 		B_TRANSLATE("Show folder location in title tab"),
@@ -433,30 +448,33 @@ WindowsSettingsView::WindowsSettingsView()
 		B_TRANSLATE("List folders first"),
 		new BMessage(kSortFolderNamesFirstChanged));
 
+	fHideDotFilesCheckBox = new BCheckBox("",
+		B_TRANSLATE("Hide dotfiles"),
+		new BMessage(kHideDotFilesChanged));
+
 	fTypeAheadFilteringCheckBox = new BCheckBox("",
 		B_TRANSLATE("Enable type-ahead filtering"),
 		new BMessage(kTypeAheadFilteringChanged));
 
 	const float spacing = be_control_look->DefaultItemSpacing();
 
-	BGroupLayoutBuilder(this)
+	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.AddGroup(B_VERTICAL, 0)
-			.AddGroup(B_VERTICAL, 0)
-				.Add(fShowFullPathInTitleBarCheckBox)
-				.Add(fSingleWindowBrowseCheckBox)
+			.Add(fShowFullPathInTitleBarCheckBox)
+			.Add(fSingleWindowBrowseCheckBox)
 			.End()
-			.AddGroup(B_VERTICAL)
-				.Add(fShowNavigatorCheckBox)
-				.SetInsets(20, 0, 0, 0)
+		.AddGroup(B_VERTICAL)
+			.Add(fShowNavigatorCheckBox)
+			.SetInsets(spacing * 2, 0, 0, 0)
 			.End()
-			.AddGroup(B_VERTICAL, 0)
-				.Add(fOutlineSelectionCheckBox)
-				.Add(fSortFolderNamesFirstCheckBox)
-				.Add(fTypeAheadFilteringCheckBox)
+		.AddGroup(B_VERTICAL, 0)
+			.Add(fOutlineSelectionCheckBox)
+			.Add(fSortFolderNamesFirstCheckBox)
+			.Add(fHideDotFilesCheckBox)
+			.Add(fTypeAheadFilteringCheckBox)
 			.End()
 		.AddGlue()
-		.End()
-		.SetInsets(spacing, spacing, spacing, spacing);
+		.SetInsets(spacing);
 }
 
 
@@ -468,6 +486,7 @@ WindowsSettingsView::AttachedToWindow()
 	fShowFullPathInTitleBarCheckBox->SetTarget(this);
 	fOutlineSelectionCheckBox->SetTarget(this);
 	fSortFolderNamesFirstCheckBox->SetTarget(this);
+	fHideDotFilesCheckBox->SetTarget(this);
 	fTypeAheadFilteringCheckBox->SetTarget(this);
 }
 
@@ -476,8 +495,9 @@ void
 WindowsSettingsView::MessageReceived(BMessage* message)
 {
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
+	if (tracker == NULL)
 		return;
+
 	TrackerSettings settings;
 
 	switch (message->what) {
@@ -537,6 +557,20 @@ WindowsSettingsView::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kHideDotFilesChanged:
+		{
+			settings.SetHideDotFiles(
+				fHideDotFilesCheckBox->Value() == 1);
+
+			// Make the notification message and send it to the tracker:
+			send_bool_notices(kHideDotFilesChanged,
+				"HideDotFiles",
+				fHideDotFilesCheckBox->Value() == 1);
+
+			Window()->PostMessage(kSettingsContentsModified);
+			break;
+		}
+
 		case kTypeAheadFilteringChanged:
 		{
 			settings.SetTypeAheadFiltering(
@@ -559,7 +593,7 @@ void
 WindowsSettingsView::SetDefaults()
 {
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
+	if (tracker == NULL)
 		return;
 
 	TrackerSettings settings;
@@ -591,6 +625,12 @@ WindowsSettingsView::SetDefaults()
 			"SortFolderNamesFirst", true);
 	}
 
+	if (!settings.HideDotFiles()) {
+		settings.SetHideDotFiles(true);
+		send_bool_notices(kHideDotFilesChanged,
+			"HideDotFiles", true);
+	}
+
 	if (settings.TypeAheadFiltering()) {
 		settings.SetTypeAheadFiltering(false);
 		send_bool_notices(kTypeAheadFilteringChanged,
@@ -619,7 +659,7 @@ void
 WindowsSettingsView::Revert()
 {
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
+	if (tracker == NULL)
 		return;
 
 	TrackerSettings settings;
@@ -651,6 +691,12 @@ WindowsSettingsView::Revert()
 			"SortFolderNamesFirst", fSortFolderNamesFirst);
 	}
 
+	if (settings.HideDotFiles() != fHideDotFiles) {
+		settings.SetSortFolderNamesFirst(fHideDotFiles);
+		send_bool_notices(kHideDotFilesChanged,
+			"HideDotFiles", fHideDotFiles);
+	}
+
 	if (settings.TypeAheadFiltering() != fTypeAheadFiltering) {
 		settings.SetTypeAheadFiltering(fTypeAheadFiltering);
 		send_bool_notices(kTypeAheadFilteringChanged,
@@ -674,6 +720,7 @@ WindowsSettingsView::ShowCurrentSettings()
 	fOutlineSelectionCheckBox->SetValue(settings.TransparentSelection()
 		? B_CONTROL_OFF : B_CONTROL_ON);
 	fSortFolderNamesFirstCheckBox->SetValue(settings.SortFolderNamesFirst());
+	fHideDotFilesCheckBox->SetValue(settings.HideDotFiles());
 	fTypeAheadFilteringCheckBox->SetValue(settings.TypeAheadFiltering());
 }
 
@@ -688,6 +735,7 @@ WindowsSettingsView::RecordRevertSettings()
 	fShowNavigator = settings.ShowNavigator();
 	fTransparentSelection = settings.TransparentSelection();
 	fSortFolderNamesFirst = settings.SortFolderNamesFirst();
+	fHideDotFiles = settings.HideDotFiles();
 	fTypeAheadFiltering = settings.TypeAheadFiltering();
 }
 
@@ -702,11 +750,12 @@ WindowsSettingsView::IsRevertable() const
 		|| fShowNavigator != settings.ShowNavigator()
 		|| fTransparentSelection != settings.TransparentSelection()
 		|| fSortFolderNamesFirst != settings.SortFolderNamesFirst()
+		|| fHideDotFiles != settings.HideDotFiles()
 		|| fTypeAheadFiltering != settings.TypeAheadFiltering();
 }
 
 
-// #pragma mark -
+// #pragma mark - SpaceBarSettingsView
 
 
 SpaceBarSettingsView::SpaceBarSettingsView()
@@ -733,27 +782,25 @@ SpaceBarSettingsView::SpaceBarSettingsView()
 		B_TRANSLATE("Warning space color"),
 		new BMessage(kSpaceBarSwitchColor)));
 
-	BBox* box = new BBox("box");
-	box->SetLabel(fColorPicker = new BMenuField("menu", NULL, menu));
+	fColorPicker = new BMenuField("menu", NULL, menu);
 
-	fColorControl = new BColorControl(BPoint(8,
-			fColorPicker->Bounds().Height() + 8 + kItemExtraSpacing),
+	fColorControl = new BColorControl(BPoint(0, 0),
 		B_CELLS_16x16, 1, "SpaceColorControl",
 		new BMessage(kSpaceBarColorChanged));
 	fColorControl->SetValue(TrackerSettings().UsedSpaceColor());
-	box->AddChild(fColorControl);
 
-	const float spacing = be_control_look->DefaultItemSpacing();
+	BBox* box = new BBox("box");
+	box->SetLabel(fColorPicker);
+	box->AddChild(BLayoutBuilder::Group<>(B_HORIZONTAL)
+		.Add(fColorControl)
+		.SetInsets(B_USE_DEFAULT_SPACING)
+		.View());
 
-	BGroupLayout* layout = GroupLayout();
-	layout->SetOrientation(B_VERTICAL);
-	layout->SetSpacing(0);
-	BGroupLayoutBuilder(layout)
+	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.Add(fSpaceBarShowCheckBox)
 		.Add(box)
 		.AddGlue()
-		.SetInsets(spacing, spacing, spacing, spacing);
-
+		.SetInsets(B_USE_DEFAULT_SPACING);
 }
 
 
@@ -775,8 +822,9 @@ void
 SpaceBarSettingsView::MessageReceived(BMessage* message)
 {
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
+	if (tracker == NULL)
 		return;
+
 	TrackerSettings settings;
 
 	switch (message->what) {
@@ -796,9 +844,11 @@ SpaceBarSettingsView::MessageReceived(BMessage* message)
 				case 0:
 					fColorControl->SetValue(settings.UsedSpaceColor());
 					break;
+
 				case 1:
 					fColorControl->SetValue(settings.FreeSpaceColor());
 					break;
+
 				case 2:
 					fColorControl->SetValue(settings.WarningSpaceColor());
 					break;
@@ -817,15 +867,20 @@ SpaceBarSettingsView::MessageReceived(BMessage* message)
 				case 0:
 					settings.SetUsedSpaceColor(color);
 					break;
+
 				case 1:
 					settings.SetFreeSpaceColor(color);
 					break;
+
 				case 2:
 					settings.SetWarningSpaceColor(color);
 					break;
 			}
 
-			Window()->PostMessage(kSettingsContentsModified);
+			BWindow* window = Window();
+			if (window != NULL)
+				window->PostMessage(kSettingsContentsModified);
+
 			tracker->PostMessage(kSpaceBarColorChanged);
 			break;
 		}
@@ -841,7 +896,7 @@ void
 SpaceBarSettingsView::SetDefaults()
 {
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
+	if (tracker == NULL)
 		return;
 
 	TrackerSettings settings;
@@ -880,7 +935,7 @@ void
 SpaceBarSettingsView::Revert()
 {
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
+	if (tracker == NULL)
 		return;
 
 	TrackerSettings settings;
@@ -947,151 +1002,3 @@ SpaceBarSettingsView::IsRevertable() const
 		|| fFreeSpaceColor != settings.FreeSpaceColor()
 		|| fWarningSpaceColor != settings.WarningSpaceColor();
 }
-
-
-// #pragma mark -
-
-
-TrashSettingsView::TrashSettingsView()
-	:
-	SettingsView("TrashSettingsView")
-{
-	fDontMoveFilesToTrashCheckBox = new BCheckBox("",
-		B_TRANSLATE("Don't move files to Trash"),
-			new BMessage(kDontMoveFilesToTrashChanged));
-
-	fAskBeforeDeleteFileCheckBox = new BCheckBox("",
-		B_TRANSLATE("Ask before delete"),
-			new BMessage(kAskBeforeDeleteFileChanged));
-
-	const float spacing = be_control_look->DefaultItemSpacing();
-
-	BGroupLayout* layout = GroupLayout();
-	layout->SetOrientation(B_VERTICAL);
-	layout->SetSpacing(0);
-	BGroupLayoutBuilder(layout)
-		.Add(fDontMoveFilesToTrashCheckBox)
-		.Add(fAskBeforeDeleteFileCheckBox)
-		.AddGlue()
-		.SetInsets(spacing, spacing, spacing, spacing);
-
-}
-
-
-void
-TrashSettingsView::AttachedToWindow()
-{
-	fDontMoveFilesToTrashCheckBox->SetTarget(this);
-	fAskBeforeDeleteFileCheckBox->SetTarget(this);
-}
-
-
-void
-TrashSettingsView::MessageReceived(BMessage* message)
-{
-	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
-		return;
-	TrackerSettings settings;
-
-	switch (message->what) {
-		case kDontMoveFilesToTrashChanged:
-			settings.SetDontMoveFilesToTrash(
-				fDontMoveFilesToTrashCheckBox->Value() == 1);
-
-			tracker->SendNotices(kDontMoveFilesToTrashChanged);
-			Window()->PostMessage(kSettingsContentsModified);
-			break;
-
-		case kAskBeforeDeleteFileChanged:
-			settings.SetAskBeforeDeleteFile(
-				fAskBeforeDeleteFileCheckBox->Value() == 1);
-
-			tracker->SendNotices(kAskBeforeDeleteFileChanged);
-			Window()->PostMessage(kSettingsContentsModified);
-			break;
-
-		default:
-			_inherited::MessageReceived(message);
-			break;
-	}
-}
-
-
-void
-TrashSettingsView::SetDefaults()
-{
-	TrackerSettings settings;
-
-	settings.SetDontMoveFilesToTrash(false);
-	settings.SetAskBeforeDeleteFile(true);
-
-	ShowCurrentSettings();
-	_SendNotices();
-}
-
-
-bool
-TrashSettingsView::IsDefaultable() const
-{
-	TrackerSettings settings;
-
-	return settings.DontMoveFilesToTrash() != false
-		|| settings.AskBeforeDeleteFile() != true;
-}
-
-
-void
-TrashSettingsView::Revert()
-{
-	TrackerSettings settings;
-
-	settings.SetDontMoveFilesToTrash(fDontMoveFilesToTrash);
-	settings.SetAskBeforeDeleteFile(fAskBeforeDeleteFile);
-
-	ShowCurrentSettings();
-	_SendNotices();
-}
-
-
-void
-TrashSettingsView::_SendNotices()
-{
-	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker)
-		return;
-
-	tracker->SendNotices(kDontMoveFilesToTrashChanged);
-	tracker->SendNotices(kAskBeforeDeleteFileChanged);
-}
-
-
-void
-TrashSettingsView::ShowCurrentSettings()
-{
-	TrackerSettings settings;
-
-	fDontMoveFilesToTrashCheckBox->SetValue(settings.DontMoveFilesToTrash());
-	fAskBeforeDeleteFileCheckBox->SetValue(settings.AskBeforeDeleteFile());
-}
-
-
-void
-TrashSettingsView::RecordRevertSettings()
-{
-	TrackerSettings settings;
-
-	fDontMoveFilesToTrash = settings.DontMoveFilesToTrash();
-	fAskBeforeDeleteFile = settings.AskBeforeDeleteFile();
-}
-
-
-bool
-TrashSettingsView::IsRevertable() const
-{
-	return fDontMoveFilesToTrash
-			!= (fDontMoveFilesToTrashCheckBox->Value() > 0)
-		|| fAskBeforeDeleteFile
-			!= (fAskBeforeDeleteFileCheckBox->Value() > 0);
-}
-

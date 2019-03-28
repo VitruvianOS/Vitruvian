@@ -1,9 +1,9 @@
 /*
- * Copyright 2007-2010, Haiku, Inc. All Rights Reserved.
+ * Copyright 2007-2010 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
-#ifndef _DATE_TIME_H_
-#define _DATE_TIME_H_
+#ifndef _DATE_TIME_H
+#define _DATE_TIME_H
 
 
 #include <String.h>
@@ -13,7 +13,6 @@ class BMessage;
 
 
 namespace BPrivate {
-
 
 enum time_type {
 	B_GMT_TIME,
@@ -92,6 +91,8 @@ public:
 								BDate();
 								BDate(const BDate& other);
 								BDate(int32 year, int32 month, int32 day);
+								BDate(time_t time,
+									time_type type = B_LOCAL_TIME);
 								BDate(const BMessage* archive);
 								~BDate();
 
@@ -119,6 +120,10 @@ public:
 			int32				Year() const;
 			int32				Month() const;
 			int32				Difference(const BDate& date) const;
+
+			void				SetDay(int32 day);
+			void				SetMonth(int32 month);
+			void				SetYear(int32 year);
 
 			int32				DayOfWeek() const;
 			int32				DayOfYear() const;
@@ -189,8 +194,8 @@ public:
 			const BTime&		Time() const;
 			void				SetTime(const BTime &time);
 
-			int32				Time_t() const;
-			void				SetTime_t(uint32 seconds);
+			time_t				Time_t() const;
+			void				SetTime_t(time_t seconds);
 
 			bool				operator!=(const BDateTime& dateTime) const;
 			bool				operator==(const BDateTime& dateTime) const;
@@ -206,9 +211,7 @@ private:
 			BTime				fTime;
 };
 
-
 }	// namespace BPrivate
-
 
 using BPrivate::time_type;
 using BPrivate::B_GMT_TIME;
@@ -224,4 +227,4 @@ using BPrivate::BDate;
 using BPrivate::BDateTime;
 
 
-#endif	// _DATE_TIME_H_
+#endif	// _DATE_TIME_H

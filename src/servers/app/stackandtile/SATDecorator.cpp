@@ -1,5 +1,5 @@
 /*
- * Copyright 2010, Haiku, Inc.
+ * Copyright 2010-2015, Haiku, Inc.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -27,7 +27,12 @@
 #endif
 
 
-static const float kResizeKnobSize = 18.0;
+static const rgb_color kFrameColors[4] = {
+	{ 152, 152, 152, 255 },
+	{ 240, 240, 240, 255 },
+	{ 152, 152, 152, 255 },
+	{ 108, 108, 108, 255 }
+};
 
 static const rgb_color kHighlightFrameColors[6] = {
 	{ 52, 52, 52, 255 },
@@ -38,22 +43,26 @@ static const rgb_color kHighlightFrameColors[6] = {
 	{ 8, 8, 8, 255 }
 };
 
-static const rgb_color kTabColor = {255, 203, 0, 255};
-static const rgb_color kHighlightTabColor = tint_color(kTabColor,
-	B_DARKEN_2_TINT);
-static const rgb_color kHighlightTabColorLight = tint_color(kHighlightTabColor,
-	(B_LIGHTEN_MAX_TINT + B_LIGHTEN_2_TINT) / 2);
-static const rgb_color kHighlightTabColorBevel = tint_color(kHighlightTabColor,
-	B_LIGHTEN_2_TINT);
-static const rgb_color kHighlightTabColorShadow = tint_color(kHighlightTabColor,
-	(B_DARKEN_1_TINT + B_NO_TINT) / 2);
-
-
-SATDecorator::SATDecorator(DesktopSettings& settings, BRect frame)
+SATDecorator::SATDecorator(DesktopSettings& settings, BRect frame,
+							Desktop* desktop)
 	:
-	DefaultDecorator(settings, frame)
+	DefaultDecorator(settings, frame, desktop)
 {
+}
 
+
+void
+SATDecorator::UpdateColors(DesktopSettings& settings)
+{
+	DefaultDecorator::UpdateColors(settings);
+
+	// Called during construction, and during any changes
+	fHighlightTabColor		= tint_color(fFocusTabColor, B_DARKEN_2_TINT);
+	fHighlightTabColorLight	= tint_color(fHighlightTabColor,
+								(B_LIGHTEN_MAX_TINT + B_LIGHTEN_2_TINT) / 2);
+	fHighlightTabColorBevel	= tint_color(fHighlightTabColor, B_LIGHTEN_2_TINT);
+	fHighlightTabColorShadow= tint_color(fHighlightTabColor,
+								(B_DARKEN_1_TINT + B_NO_TINT) / 2);
 }
 
 
@@ -62,18 +71,17 @@ SATDecorator::GetComponentColors(Component component, uint8 highlight,
 	ComponentColors _colors, Decorator::Tab* _tab)
 {
 	DefaultDecorator::Tab* tab = static_cast<DefaultDecorator::Tab*>(_tab);
-	// we handle only our own highlights
-	if (highlight != HIGHLIGHT_STACK_AND_TILE) {
-		DefaultDecorator::GetComponentColors(component, highlight,
-			_colors, tab);
+
+	// Get the standard colors from the DefaultDecorator
+	DefaultDecorator::GetComponentColors(component, highlight, _colors, tab);
+
+	// Now we need to make some changes if the Stack and tile highlight is used
+	if (highlight != HIGHLIGHT_STACK_AND_TILE)
 		return;
-	}
 
 	if (tab && tab->isHighlighted == false
 		&& (component == COMPONENT_TAB || component == COMPONENT_CLOSE_BUTTON
 			|| component == COMPONENT_ZOOM_BUTTON)) {
-		DefaultDecorator::GetComponentColors(component, highlight,
-			_colors, tab);
 		return;
 	}
 
@@ -81,17 +89,17 @@ SATDecorator::GetComponentColors(Component component, uint8 highlight,
 		case COMPONENT_TAB:
 			_colors[COLOR_TAB_FRAME_LIGHT] = kFrameColors[0];
 			_colors[COLOR_TAB_FRAME_DARK] = kFrameColors[3];
-			_colors[COLOR_TAB] = kHighlightTabColor;
-			_colors[COLOR_TAB_LIGHT] = kHighlightTabColorLight;
-			_colors[COLOR_TAB_BEVEL] = kHighlightTabColorBevel;
-			_colors[COLOR_TAB_SHADOW] = kHighlightTabColorShadow;
-			_colors[COLOR_TAB_TEXT] = kFocusTextColor;
+			_colors[COLOR_TAB] = fHighlightTabColor;
+			_colors[COLOR_TAB_LIGHT] = fHighlightTabColorLight;
+			_colors[COLOR_TAB_BEVEL] = fHighlightTabColorBevel;
+			_colors[COLOR_TAB_SHADOW] = fHighlightTabColorShadow;
+			_colors[COLOR_TAB_TEXT] = fFocusTextColor;
 			break;
 
 		case COMPONENT_CLOSE_BUTTON:
 		case COMPONENT_ZOOM_BUTTON:
-			_colors[COLOR_BUTTON] = kHighlightTabColor;
-			_colors[COLOR_BUTTON_LIGHT] = kHighlightTabColorLight;
+			_colors[COLOR_BUTTON] = fHighlightTabColor;
+			_colors[COLOR_BUTTON_LIGHT] = fHighlightTabColorLight;
 			break;
 
 		case COMPONENT_LEFT_BORDER:

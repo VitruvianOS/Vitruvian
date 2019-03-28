@@ -37,9 +37,6 @@ target_sources(be PRIVATE
 	Volume.cpp
 	VolumeRoster.cpp
 
-	mime/database_support.cpp
-	mime/database_access.cpp
-
 	sniffer/CharStream.cpp
 	sniffer/DisjList.cpp
 	sniffer/Err.cpp

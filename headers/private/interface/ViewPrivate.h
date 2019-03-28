@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2008, Haiku.
+ * Copyright 2003-2015, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -17,6 +17,7 @@
 #include <Region.h>
 #include <ServerProtocolStructs.h>
 #include <View.h>
+
 
 const static uint32 kDeleteReplicant = 'JAHA';
 
@@ -39,8 +40,13 @@ enum {
 	B_VIEW_LOW_COLOR_BIT		= 0x00008000,
 	B_VIEW_VIEW_COLOR_BIT		= 0x00010000,
 	B_VIEW_PATTERN_BIT			= 0x00020000,
+	B_VIEW_TRANSFORM_BIT		= 0x00040000,
+	B_VIEW_FILL_RULE_BIT		= 0x00080000,
+	B_VIEW_WHICH_VIEW_COLOR_BIT	= 0x00100000,
+	B_VIEW_WHICH_LOW_COLOR_BIT	= 0x00200000,
+	B_VIEW_WHICH_HIGH_COLOR_BIT	= 0x00400000,
 
-	B_VIEW_ALL_BITS				= 0x0003ffff,
+	B_VIEW_ALL_BITS				= 0x00ffffff,
 
 	// these used for archiving only
 	B_VIEW_RESIZE_BIT			= 0x00001000,
@@ -51,38 +57,37 @@ enum {
 
 class BView::Private {
 public:
-	Private(BView* view)
-		:
-		fView(view)
-	{
-	}
+								Private(BView* view)
+									:
+									fView(view)
+								{
+								}
 
-	int16 ShowLevel()
-	{
-		return fView->fShowLevel;
-	}
+			int16				ShowLevel()
+									{ return fView->fShowLevel; }
 
-	// defined in View.cpp
-	bool	WillLayout();
-	bool	MinMaxValid();
+			// defined in View.cpp
+			bool				WillLayout();
+			bool				MinMaxValid();
 
-	BLayoutItem* LayoutItemAt(int32 index);
-	int32	CountLayoutItems();
-	void	RegisterLayoutItem(BLayoutItem* item);
-	void	DeregisterLayoutItem(BLayoutItem* item);
+			BLayoutItem*		LayoutItemAt(int32 index);
+			int32				CountLayoutItems();
+			void				RegisterLayoutItem(BLayoutItem* item);
+			void				DeregisterLayoutItem(BLayoutItem* item);
 
-	bool RemoveSelf()
-	{
-		return fView->_RemoveSelf();
-	}
+			bool				RemoveSelf()
+									{ return fView->_RemoveSelf(); }
 
-	BView* fView;
+private:
+			BView* fView;
 };
 
 
 namespace BPrivate {
 
+
 class PortLink;
+
 
 class ViewState {
 	public:
@@ -105,24 +110,38 @@ class ViewState {
 
 		// This one is not affected by pop state/push state
 		rgb_color			view_color;
+		color_which			which_view_color;
+		float				which_view_color_tint;
+
+		// these are cached values
+		color_which			which_low_color;
+		float				which_low_color_tint;
+
+		color_which			which_high_color;
+		float				which_high_color_tint;
 
 		::pattern			pattern;
 
 		::drawing_mode		drawing_mode;
 		BRegion				clipping_region;
 		bool				clipping_region_used;
+
+		// transformation
 		BPoint				origin;
+		float				scale;
+		BAffineTransform	transform;
 
 		// line modes
 		join_mode			line_join;
 		cap_mode			line_cap;
 		float				miter_limit;
 
+		// fill rule
+		int32				fill_rule;
+
 		// alpha blending
 		source_alpha		alpha_source_mode;
 		alpha_function		alpha_function_mode;
-
-		float				scale;
 
 		// fonts
 		BFont				font;
@@ -139,11 +158,13 @@ class ViewState {
 		BRect				print_rect;
 };
 
+
 inline bool
 ViewState::IsValid(uint32 bit) const
 {
 	return valid_flags & bit;
 }
+
 
 inline bool
 ViewState::IsAllValid() const
@@ -152,7 +173,9 @@ ViewState::IsAllValid() const
 		== (B_VIEW_ALL_BITS & ~B_VIEW_CLIP_REGION_BIT);
 }
 
+
 }	// namespace BPrivate
+
 
 struct _array_data_{
 		// the max number of points in the array
@@ -162,5 +185,6 @@ struct _array_data_{
 		// the array of points
 	ViewLineArrayInfo*	array;
 };
+
 
 #endif	/* VIEW_PRIVATE_H */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2009, Haiku, Inc. All rights reserved.
+ * Copyright 2005-2016, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _FONT_H_
@@ -8,6 +8,7 @@
 
 #include <SupportDefs.h>
 #include <InterfaceDefs.h>
+
 
 class BPoint;
 
@@ -42,6 +43,7 @@ enum {
 
 // truncation modes
 enum {
+	B_NO_TRUNCATION			= ~0U,
 	B_TRUNCATE_END			= 0,
 	B_TRUNCATE_BEGINNING	= 1,
 	B_TRUNCATE_MIDDLE		= 2,
@@ -118,6 +120,15 @@ private:
 };
 
 
+struct unicode_block_range {
+	uint32					start;
+	uint32					end;
+	const unicode_block&	block;
+
+	uint32 Count() const { return end + 1 - start; }
+};
+
+
 struct edge_info {
 	float	left;
 	float	right;
@@ -138,8 +149,8 @@ struct escapement_delta {
 
 
 struct font_cache_info {
-    int32    sheared_font_penalty;
-    int32    rotated_font_penalty;
+	int32    sheared_font_penalty;
+	int32    rotated_font_penalty;
 	float    oversize_threshold;
 	int32    oversize_penalty;
 	int32    cache_size;
@@ -149,7 +160,7 @@ struct font_cache_info {
 
 struct tuned_font_info {
 	float    size;
-	float    shear; 
+	float    shear;
 	float    rotation;
 	uint32   flags;
 	uint16   face;
@@ -199,6 +210,7 @@ public:
 			bool				IsFullAndHalfFixed() const;
 			BRect				BoundingBox() const;
 			unicode_block		Blocks() const;
+			bool				IncludesBlock(uint32 start, uint32 end) const;
 			font_file_format	FileFormat() const;
 
 			int32				CountTuned() const;
@@ -274,7 +286,7 @@ private:
 		friend void _init_global_fonts_();
 
 			void				_GetExtraFlags() const;
-			void				_GetBoundingBoxes(const char charArray[], 
+			void				_GetBoundingBoxes(const char charArray[],
 									int32 numChars, font_metric_mode mode,
 									bool string_escapement,
 									escapement_delta* delta,
@@ -312,7 +324,7 @@ status_t get_font_family(int32 index, font_family* name,
 int32 count_font_styles(font_family name);
 status_t get_font_style(font_family family, int32 index, font_style* name,
 	uint32* flags = NULL);
-status_t get_font_style(font_family family, int32 index, font_style* name, 
+status_t get_font_style(font_family family, int32 index, font_style* name,
 	uint16* face, uint32* flags = NULL);
 bool update_font_families(bool checkOnly);
 
@@ -352,7 +364,7 @@ unicode_block::operator&(const unicode_block& block) const
 	return result;
 }
 
-		
+
 unicode_block
 unicode_block::operator|(const unicode_block& block) const
 {
@@ -363,12 +375,13 @@ unicode_block::operator|(const unicode_block& block) const
 	return result;
 }
 
-		
+
 unicode_block&
 unicode_block::operator=(const unicode_block& block)
 {
 	fData[0] = block.fData[0];
 	fData[1] = block.fData[1];
+
 	return *this;
 }
 
@@ -385,5 +398,6 @@ unicode_block::operator!=(const unicode_block& block) const
 {
 	return fData[0] != block.fData[0] || fData[1] != block.fData[1];
 }
+
 
 #endif // _FONT_H_

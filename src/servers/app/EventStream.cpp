@@ -13,6 +13,8 @@
 #include <ServerProtocol.h>
 #include <shared_cursor_area.h>
 
+#include <AppMisc.h>
+
 #include <new>
 #include <stdio.h>
 #include <string.h>
@@ -35,10 +37,10 @@ EventStream::SupportsCursorThread() const
 }
 
 
-bool
-EventStream::GetNextCursorPosition(BPoint& where)
+status_t
+EventStream::GetNextCursorPosition(BPoint& where, bigtime_t timeout)
 {
-	return false;
+	return B_ERROR;
 }
 
 
@@ -53,6 +55,8 @@ InputServerStream::InputServerStream(BMessenger& messenger)
 	fLatestMouseMoved(NULL)
 {
 	BMessage message(IS_ACQUIRE_INPUT);
+	message.AddInt32("remote team", BPrivate::current_team());
+
 	fCursorArea = create_area("shared cursor", (void **)&fCursorBuffer, B_ANY_ADDRESS,
 		B_PAGE_SIZE, B_LAZY_LOCK, B_READ_AREA | B_WRITE_AREA);
 	if (fCursorArea >= B_OK)
@@ -155,18 +159,23 @@ InputServerStream::GetNextEvent(BMessage** _event)
 }
 
 
-bool
-InputServerStream::GetNextCursorPosition(BPoint &where)
+status_t
+InputServerStream::GetNextCursorPosition(BPoint &where, bigtime_t timeout)
 {
 	status_t status;
+
 	do {
-		status = acquire_sem(fCursorSemaphore);
+		status = acquire_sem_etc(fCursorSemaphore, 1, B_RELATIVE_TIMEOUT,
+			timeout);
 	} while (status == B_INTERRUPTED);
+
+	if (status == B_TIMED_OUT)
+		return status;
 
 	if (status == B_BAD_SEM_ID) {
 		// the semaphore is no longer valid - the input_server must have died
 		fCursorSemaphore = -1;
-		return false;
+		return B_ERROR;
 	}
 
 #ifdef HAIKU_TARGET_PLATFORM_HAIKU
@@ -184,10 +193,10 @@ InputServerStream::GetNextCursorPosition(BPoint &where)
 
 	if (fQuitting) {
 		fQuitting = false;
-		return false;
+		return B_ERROR;
 	}
 
-	return true;
+	return B_OK;
 }
 
 
@@ -266,9 +275,9 @@ InputServerStream::_MessageFromPort(BMessage** _message, bigtime_t timeout)
 	delete[] buffer;
 
 	if (status != B_OK) {
-		printf("Unflatten event failed: %s, port message code was: %ld - %c%c%c%c\n",
-			strerror(status), code, (int8)(code >> 24), (int8)(code >> 16),
-			(int8)(code >> 8), (int8)code);
+		printf("Unflatten event failed: %s, port message code was: %" B_PRId32
+			" - %c%c%c%c\n", strerror(status), code, (int8)(code >> 24),
+			(int8)(code >> 16), (int8)(code >> 8), (int8)code);
 		delete message;
 		return status;
 	}

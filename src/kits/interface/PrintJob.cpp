@@ -32,6 +32,7 @@
 #include <SystemCatalog.h>
 #include <View.h>
 
+#include <AutoDeleter.h>
 #include <pr_server.h>
 #include <ViewPrivate.h>
 
@@ -96,7 +97,7 @@ struct _page_header_ {
 	int32 number_of_pictures;
 	off_t next_page;
 	int32 reserved[10];
-};
+} _PACKED;
 
 
 static void
@@ -239,9 +240,9 @@ BPrintJob::BeginJob()
 	char *printer = _GetCurrentPrinterName();
 	if (printer == NULL)
 		return;
+	MemoryDeleter _(printer);
 
 	path.Append(printer);
-	free(printer);
 
 	char mangledName[B_FILE_NAME_LENGTH];
 	_GetMangledName(mangledName, B_FILE_NAME_LENGTH);
@@ -293,7 +294,7 @@ BPrintJob::CommitJob()
 		return;
 
 	if (fSpoolFileHeader.page_count == 0) {
-		ShowError(B_TRANSLATE("No Pages to print!"));
+		ShowError(B_TRANSLATE("No pages to print!"));
 		CancelJob();
 		return;
 	}
@@ -576,7 +577,7 @@ BPrintJob::_RecurseView(BView* view, BPoint origin, BPicture* picture,
 void
 BPrintJob::_GetMangledName(char* buffer, size_t bufferSize) const
 {
-	snprintf(buffer, bufferSize, "%s@%lld", fPrintJobName,
+	snprintf(buffer, bufferSize, "%s@%" B_PRId64, fPrintJobName,
 		system_time() / 1000);
 }
 

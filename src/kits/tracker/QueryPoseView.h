@@ -46,9 +46,10 @@ namespace BPrivate {
 class BQueryContainerWindow;
 class QueryEntryListCollection;
 
+
 class BQueryPoseView : public BPoseView {
 public:
-	BQueryPoseView(Model*, BRect, uint32 resizeMask = B_FOLLOW_ALL);
+	BQueryPoseView(Model*);
 	virtual ~BQueryPoseView();
 
 	virtual void MessageReceived(BMessage* message);
@@ -74,7 +75,6 @@ protected:
 	virtual void EditQueries();
 	virtual EntryListBase* InitDirentIterator(const entry_ref*);
 	virtual uint32 WatchNewNodeMask();
-	virtual bool ShouldShowPose(const Model*, const PoseInfo*);
 	virtual void AddPosesCompleted();
 
 private:
@@ -82,15 +82,26 @@ private:
 		// typically there will be one query per volume specified
 		// QueryEntryListCollection provides the abstraction layer
 		// defining the iterators for _add_poses_
-	bool fShowResultsFromTrash;
 	mutable BString fSearchForMimeType;
 
+	BRefFilter* fRefFilter;
 	BObjectList<BQuery>* fQueryList;
 	QueryEntryListCollection* fQueryListContainer;
 
 	bool fCreateOldPoseList;
 
 	typedef BPoseView _inherited;
+};
+
+
+class QueryRefFilter : public BRefFilter {
+public:
+	QueryRefFilter(bool showResultsFromTrash);
+	bool Filter(const entry_ref* ref, BNode* node, stat_beos* st,
+		const char* filetype);
+
+private:
+	bool fShowResultsFromTrash;
 };
 
 
@@ -103,24 +114,30 @@ class QueryEntryListCollection : public EntryListBase {
 	class QueryListRep {
 	public:
 		QueryListRep(BObjectList<BQuery>* queryList)
-			:	fQueryList(queryList),
-				fRefCount(0),
-				fShowResultsFromTrash(0),
-				fOldPoseList(NULL)
-			{}
+			:
+			fQueryList(queryList),
+			fRefCount(0),
+			fShowResultsFromTrash(false),
+			fQueryListIndex(-1),
+			fDynamicDateQuery(false),
+			fRefreshEveryHour(false),
+			fRefreshEveryMinute(false),
+			fOldPoseList(NULL)
+		{
+		}
 
 		~QueryListRep()
-			{
-				ASSERT(fRefCount <= 0);
-				delete fQueryList;
-				delete fOldPoseList;
-			}
+		{
+			ASSERT(fRefCount <= 0);
+			delete fQueryList;
+			delete fOldPoseList;
+		}
 
 		BObjectList<BQuery>* OpenQueryList()
-			{
-				fRefCount++;
-				return fQueryList;
-			}
+		{
+			fRefCount++;
+			return fQueryList;
+		}
 
 		bool CloseQueryList()
 		{
@@ -149,10 +166,14 @@ public:
 	QueryEntryListCollection* Clone();
 
 	BObjectList<BQuery>* QueryList() const
-		{ return fQueryListRep->fQueryList; }
+	{
+		return fQueryListRep->fQueryList;
+	}
 
 	PoseList* OldPoseList() const
-		{ return fQueryListRep->fOldPoseList; }
+	{
+		return fQueryListRep->fOldPoseList;
+	}
 	void ClearOldPoseList();
 
 	virtual status_t GetNextEntry(BEntry* entry, bool traverse = false);
@@ -180,5 +201,6 @@ private:
 } // namespace BPrivate
 
 using namespace BPrivate;
+
 
 #endif	// _QUERY_POSE_VIEW_H

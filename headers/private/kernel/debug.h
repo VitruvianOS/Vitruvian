@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2010, Axel Dörfler, axeld@pinc-software.de
+ * Copyright 2002-2015, Axel Dörfler, axeld@pinc-software.de
  * Distributed under the terms of the Haiku License.
  *
  * Copyright 2001-2002, Travis Geiselbrecht. All rights reserved.
@@ -69,12 +69,18 @@
 #	define ASSERT_PRINT(x, format, args...)	do { } while(0)
 #endif
 
-#define STATIC_ASSERT(x)								\
-	do {												\
-		struct __staticAssertStruct__ {					\
-			char __static_assert_failed__[2*(x) - 1];	\
-		};												\
-	} while (false)
+#if __GNUC__ >= 5 && !defined(__cplusplus)
+#	define STATIC_ASSERT(x) _Static_assert(x, "static assert failed!")
+#elif defined(__cplusplus) && __cplusplus >= 201103L
+#	define STATIC_ASSERT(x) static_assert(x, "static assert failed!")
+#else
+#	define STATIC_ASSERT(x)								\
+		do {												\
+			struct __staticAssertStruct__ {					\
+				char __static_assert_failed__[2*(x) - 1];	\
+			};												\
+		} while (false)
+#endif
 
 #if KDEBUG
 #	define KDEBUG_ONLY(x)				x
@@ -221,8 +227,9 @@ extern bool debug_is_debugged_team(team_id teamID);
 
 extern struct arch_debug_registers* debug_get_debug_registers(int32 cpu);
 
-extern status_t	_user_kernel_debugger(const char *message);
-extern void		_user_debug_output(const char *userString);
+extern status_t _user_kernel_debugger(const char *message);
+extern void _user_register_syslog_daemon(port_id port);
+extern void	_user_debug_output(const char *userString);
 
 #ifdef __cplusplus
 }

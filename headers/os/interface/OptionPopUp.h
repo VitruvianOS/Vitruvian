@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku, Inc. All rights reserved.
+ * Copyright 2001-2015, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _OPTION_POP_UP_H
@@ -16,18 +16,17 @@ class BOptionPopUp : public BOptionControl {
 public:
 								BOptionPopUp(BRect frame, const char* name,
 									const char* label, BMessage* message,
-									uint32 resizeMask = B_FOLLOW_LEFT
-										| B_FOLLOW_TOP,
+									uint32 resizeMask = B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_WILL_DRAW);
 								BOptionPopUp(BRect frame, const char* name,
 									const char* label,  BMessage* message,
 									bool fixed, uint32 resizeMask
-										= B_FOLLOW_LEFT | B_FOLLOW_TOP,
+										= B_FOLLOW_LEFT_TOP,
 									uint32 flags = B_WILL_DRAW);
 								BOptionPopUp(const char* name,
 									const char* label, BMessage* message,
 									uint32 flags = B_WILL_DRAW);
-								
+
 	virtual						~BOptionPopUp();
 
 			BMenuField*			MenuField();
@@ -40,6 +39,7 @@ public:
 									int32 index);
 
 	virtual	void				AllAttached();
+	virtual	void				AttachedToWindow();
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				SetLabel(const char* text);
 	virtual	void				SetValue(int32 value);
@@ -47,7 +47,7 @@ public:
 	virtual	void				GetPreferredSize(float* _width,
 									float* _height);
 	virtual	void				ResizeToPreferred();
-		
+
 	virtual	int32				SelectedOption(const char** _name = 0,
 									int32* _value = 0) const;
 private:

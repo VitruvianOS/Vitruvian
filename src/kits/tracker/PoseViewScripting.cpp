@@ -50,14 +50,6 @@ All rights reserved.
 
 #define kPropertyPath "Path"
 
-#ifndef _SCRIPTING_ONLY
-	#if _SUPPORTS_FEATURE_SCRIPTING
-		#define _SCRIPTING_ONLY(x) x
-	#else
-		#define _SCRIPTING_ONLY(x)
-	#endif
-#endif
-
 // notes on PoseView scripting interface:
 // Indices and entry_refs are used to specify poses; In the case of indices
 // and previous/next specifiers the current PoseView sort order is used.
@@ -94,8 +86,6 @@ doo Tracker delete Selection 'test/EL34' of Poses of Window test
 //				- pose location
 //				- pose text widgets
 
-
-#if _SUPPORTS_FEATURE_SCRIPTING
 
 const property_info kPosesPropertyList[] = {
 	{	kPropertyPath,
@@ -193,46 +183,34 @@ const property_info kPosesPropertyList[] = {
 		{},
 		{}
 	},
-	{	NULL,
-		{},
-		{},
-		NULL, 0,
-		{},
-		{},
-		{}
-	}
-};
 
-#endif
+	{ 0 }
+};
 
 
 status_t
-BPoseView::GetSupportedSuites(BMessage* _SCRIPTING_ONLY(data))
+BPoseView::GetSupportedSuites(BMessage* data)
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
 	data->AddString("suites", kPosesSuites);
 	BPropertyInfo propertyInfo(
 		const_cast<property_info*>(kPosesPropertyList));
 	data->AddFlat("messages", &propertyInfo);
-	
+
 	return _inherited::GetSupportedSuites(data);
-#else
-	return B_UNSUPPORTED;
-#endif
 }
 
 
 bool
-BPoseView::HandleScriptingMessage(BMessage* _SCRIPTING_ONLY(message))
+BPoseView::HandleScriptingMessage(BMessage* message)
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
 	if (message->what != B_GET_PROPERTY
 		&& message->what != B_SET_PROPERTY
 		&& message->what != B_CREATE_PROPERTY
 		&& message->what != B_COUNT_PROPERTIES
 		&& message->what != B_DELETE_PROPERTY
-		&& message->what != B_EXECUTE_PROPERTY)
+		&& message->what != B_EXECUTE_PROPERTY) {
 		return false;
+	}
 
 	// dispatch scripting messages
 	BMessage reply(B_REPLY);
@@ -247,9 +225,9 @@ BPoseView::HandleScriptingMessage(BMessage* _SCRIPTING_ONLY(message))
 
 	if (result != B_OK || index == -1)
 		return false;
-	
-	ASSERT(property);
-	
+
+	ASSERT(property != NULL);
+
 	switch (message->what) {
 		case B_CREATE_PROPERTY:
 			handled = CreateProperty(message, &specifier, form, property,
@@ -259,12 +237,12 @@ BPoseView::HandleScriptingMessage(BMessage* _SCRIPTING_ONLY(message))
 		case B_GET_PROPERTY:
 			handled = GetProperty(&specifier, form, property, &reply);
 			break;
-		
+
 		case B_SET_PROPERTY:
 			handled = SetProperty(message, &specifier, form, property,
 				&reply);
 			break;
-			
+
 		case B_COUNT_PROPERTIES:
 			handled = CountProperty(&specifier, form, property, &reply);
 			break;
@@ -272,7 +250,7 @@ BPoseView::HandleScriptingMessage(BMessage* _SCRIPTING_ONLY(message))
 		case B_DELETE_PROPERTY:
 			handled = DeleteProperty(&specifier, form, property, &reply);
 			break;
-		
+
 		case B_EXECUTE_PROPERTY:
 			handled = ExecuteProperty(&specifier, form, property, &reply);
 			break;
@@ -284,23 +262,18 @@ BPoseView::HandleScriptingMessage(BMessage* _SCRIPTING_ONLY(message))
 	}
 
 	return handled;
-#else
-	return false;
-#endif
 }
 
 
 bool
-BPoseView::ExecuteProperty(BMessage* _SCRIPTING_ONLY(specifier),
-	int32 _SCRIPTING_ONLY(form), const char* _SCRIPTING_ONLY(property),
-	BMessage* _SCRIPTING_ONLY(reply))
+BPoseView::ExecuteProperty(BMessage* specifier, int32 form,
+	const char* property, BMessage* reply)
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
-	status_t error = B_OK;
+	status_t result = B_OK;
 	bool handled = false;
 	if (strcmp(property, kPropertyEntry) == 0) {
 		BMessage launchMessage(B_REFS_RECEIVED);
-		
+
 		if (form == (int32)B_ENTRY_SPECIFIER) {
 			// move all poses specified by entry_ref to Trash
 			entry_ref ref;
@@ -314,8 +287,8 @@ BPoseView::ExecuteProperty(BMessage* _SCRIPTING_ONLY(specifier),
 				&specifyingIndex) == B_OK; index++) {
 				BPose* pose = PoseAtIndex(specifyingIndex);
 
-				if (!pose) {
-					error = B_ENTRY_NOT_FOUND;
+				if (pose == NULL) {
+					result = B_ENTRY_NOT_FOUND;
 					break;
 				}
 
@@ -324,7 +297,7 @@ BPoseView::ExecuteProperty(BMessage* _SCRIPTING_ONLY(specifier),
 		} else
 			return false;
 
-		if (error == B_OK) {
+		if (result == B_OK) {
 			// add a messenger to the launch message that will be used to
 			// dispatch scripting calls from apps to the PoseView
 			launchMessage.AddMessenger("TrackerViewToken",
@@ -335,23 +308,18 @@ BPoseView::ExecuteProperty(BMessage* _SCRIPTING_ONLY(specifier),
 		handled = true;
 	}
 
-	if (error != B_OK)
-		reply->AddInt32("error", error);
+	if (result != B_OK)
+		reply->AddInt32("error", result);
 
 	return handled;
-#else
-	return false;
-#endif
 }
 
 
 bool
-BPoseView::CreateProperty(BMessage* _SCRIPTING_ONLY(specifier), BMessage*,
-	int32 _SCRIPTING_ONLY(form), const char* _SCRIPTING_ONLY(property),
-	BMessage* _SCRIPTING_ONLY(reply))
+BPoseView::CreateProperty(BMessage* specifier, BMessage*, int32 form,
+	const char* property, BMessage* reply)
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
-	status_t error = B_OK;
+	status_t result = B_OK;
 	bool handled = false;
 	if (strcmp(property, kPropertySelection) == 0) {
 		// creating on a selection expands the current selection
@@ -365,13 +333,12 @@ BPoseView::CreateProperty(BMessage* _SCRIPTING_ONLY(specifier), BMessage*,
 			entry_ref ref;
 			// select poses specified by entries
 			for (int32 index = 0; specifier->FindRef("data", index, &ref)
-				== B_OK; index++) {
-
+					== B_OK; index++) {
 				int32 poseIndex;
 				BPose* pose = FindPose(&ref, form, &poseIndex);
 
-				if (!pose) {
-					error = B_ENTRY_NOT_FOUND;
+				if (pose == NULL) {
+					result = B_ENTRY_NOT_FOUND;
 					handled = true;
 					break;
 				}
@@ -383,11 +350,10 @@ BPoseView::CreateProperty(BMessage* _SCRIPTING_ONLY(specifier), BMessage*,
 			// select poses specified by indices
 			int32 specifyingIndex;
 			for (int32 index = 0; specifier->FindInt32("data", index,
-				&specifyingIndex) == B_OK; index++) {
-
+					&specifyingIndex) == B_OK; index++) {
 				BPose* pose = PoseAtIndex(specifyingIndex);
-				if (!pose) {
-					error = B_BAD_INDEX;
+				if (pose == NULL) {
+					result = B_BAD_INDEX;
 					handled = true;
 					break;
 				}
@@ -398,23 +364,18 @@ BPoseView::CreateProperty(BMessage* _SCRIPTING_ONLY(specifier), BMessage*,
 		}
 	}
 
-	if (error != B_OK)
-		reply->AddInt32("error", error);
+	if (result != B_OK)
+		reply->AddInt32("error", result);
 
 	return handled;
-#else
-	return false;
-#endif
 }
 
 
 bool
-BPoseView::DeleteProperty(BMessage* _SCRIPTING_ONLY(specifier),
-	int32 _SCRIPTING_ONLY(form), const char* _SCRIPTING_ONLY(property),
-	BMessage* _SCRIPTING_ONLY(reply))
+BPoseView::DeleteProperty(BMessage* specifier, int32 form,
+	const char* property, BMessage* reply)
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
-	status_t error = B_OK;
+	status_t result = B_OK;
 	bool handled = false;
 
 	if (strcmp(property, kPropertySelection) == 0) {
@@ -425,13 +386,12 @@ BPoseView::DeleteProperty(BMessage* _SCRIPTING_ONLY(specifier),
 			entry_ref ref;
 			// select poses specified by entries
 			for (int32 index = 0; specifier->FindRef("refs", index, &ref)
-				== B_OK; index++) {
-
+					== B_OK; index++) {
 				int32 poseIndex;
 				BPose* pose = FindPose(&ref, form, &poseIndex);
 
-				if (!pose) {
-					error = B_ENTRY_NOT_FOUND;
+				if (pose == NULL) {
+					result = B_ENTRY_NOT_FOUND;
 					break;
 				}
 
@@ -443,11 +403,11 @@ BPoseView::DeleteProperty(BMessage* _SCRIPTING_ONLY(specifier),
 			// move all poses specified by index to Trash
 			int32 specifyingIndex;
 			for (int32 index = 0; specifier->FindInt32("index", index,
-				&specifyingIndex) == B_OK; index++) {
+					&specifyingIndex) == B_OK; index++) {
 				BPose* pose = PoseAtIndex(specifyingIndex);
 
-				if (!pose) {
-					error = B_BAD_INDEX;
+				if (pose == NULL) {
+					result = B_BAD_INDEX;
 					break;
 				}
 
@@ -468,9 +428,9 @@ BPoseView::DeleteProperty(BMessage* _SCRIPTING_ONLY(specifier),
 			// move all poses specified by entry_ref to Trash
 			entry_ref ref;
 			for (int32 index = 0; specifier->FindRef("refs", index, &ref)
-				== B_OK; index++)
+					== B_OK; index++) {
 				entryList->AddItem(new entry_ref(ref));
-
+			}
 		} else if (form == (int32)B_INDEX_SPECIFIER) {
 			// move all poses specified by index to Trash
 			int32 specifyingIndex;
@@ -478,18 +438,20 @@ BPoseView::DeleteProperty(BMessage* _SCRIPTING_ONLY(specifier),
 					&specifyingIndex) == B_OK; index++) {
 				BPose* pose = PoseAtIndex(specifyingIndex);
 
-				if (!pose) {
-					error = B_BAD_INDEX;
+				if (pose == NULL) {
+					result = B_BAD_INDEX;
 					break;
 				}
 
 				entryList->AddItem(
 					new entry_ref(*pose->TargetModel()->EntryRef()));
 			}
-		} else
+		} else {
+			delete entryList;
 			return false;
+		}
 
-		if (error == B_OK) {
+		if (result == B_OK) {
 			TrackerSettings settings;
 			if (!settings.DontMoveFilesToTrash()) {
 				// move the list we build into trash, don't make the
@@ -497,27 +459,26 @@ BPoseView::DeleteProperty(BMessage* _SCRIPTING_ONLY(specifier),
 				MoveListToTrash(entryList, false, false);
 			} else
 				Delete(entryList, false, settings.AskBeforeDeleteFile());
+		} else {
+			for (int i = entryList->CountItems() - 1; i >= 0; i--)
+				delete entryList->ItemAt(i);
+			delete entryList;
 		}
 
 		handled = true;
 	}
 
-	if (error != B_OK)
-		reply->AddInt32("error", error);
+	if (result != B_OK)
+		reply->AddInt32("error", result);
 
 	return handled;
-#else
-	return false;
-#endif
 }
 
 
 bool
-BPoseView::CountProperty(BMessage*, int32,
-	const char* _SCRIPTING_ONLY(property),
-	BMessage* _SCRIPTING_ONLY(reply))
+BPoseView::CountProperty(BMessage*, int32, const char* property,
+	BMessage* reply)
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
 	bool handled = false;
 	//PRINT(("BPoseView::CountProperty, %s\n", property));
 
@@ -529,28 +490,24 @@ BPoseView::CountProperty(BMessage*, int32,
 		reply->AddInt32("result", fPoseList->CountItems());
 		handled = true;
 	}
+
 	return handled;
-#else
-	return false;
-#endif
 }
 
 
 bool
-BPoseView::GetProperty(BMessage* _SCRIPTING_ONLY(specifier),
-	int32 _SCRIPTING_ONLY(form), const char* _SCRIPTING_ONLY(property),
-	BMessage* _SCRIPTING_ONLY(reply))
+BPoseView::GetProperty(BMessage* specifier, int32 form,
+	const char* property, BMessage* reply)
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
 //	PRINT(("GetProperty %s\n", property));
 	bool handled = false;
-	status_t error = B_OK;
+	status_t result = B_OK;
 
 	if (strcmp(property, kPropertyPath) == 0) {
 		if (form == B_DIRECT_SPECIFIER) {
 			handled = true;
-			if (!TargetModel())
-				error = B_NOT_A_DIRECTORY;
+			if (TargetModel() == NULL)
+				result = B_NOT_A_DIRECTORY;
 			else
 				reply->AddRef("result", TargetModel()->EntryRef());
 		}
@@ -559,9 +516,10 @@ BPoseView::GetProperty(BMessage* _SCRIPTING_ONLY(specifier),
 		switch (form) {
 			case B_DIRECT_SPECIFIER:
 				// return entries of all poses in selection
-				for (int32 index = 0; index < count; index++)
+				for (int32 index = 0; index < count; index++) {
 					reply->AddRef("result", fSelectionList->ItemAt(index)->
 						TargetModel()->EntryRef());
+				}
 
 				handled = true;
 				break;
@@ -574,21 +532,21 @@ BPoseView::GetProperty(BMessage* _SCRIPTING_ONLY(specifier),
 					entry_ref ref;
 					if (specifier->FindRef("data", &ref) != B_OK)
 						break;
-					
+
 					int32 poseIndex;
 					BPose* pose = FindPose(&ref, &poseIndex);
-					
+
 					for (;;) {
 						if (form == (int32)kPreviousSpecifier)
 							pose = PoseAtIndex(--poseIndex);
 						else if (form == (int32)kNextSpecifier)
 							pose = PoseAtIndex(++poseIndex);
-						
-						if (!pose) {
-							error = B_ENTRY_NOT_FOUND;
+
+						if (pose == NULL) {
+							result = B_ENTRY_NOT_FOUND;
 							break;
 						}
-						
+
 						if (pose->IsSelected()) {
 							reply->AddRef("result",
 								pose->TargetModel()->EntryRef());
@@ -596,7 +554,7 @@ BPoseView::GetProperty(BMessage* _SCRIPTING_ONLY(specifier),
 							break;
 						}
 					}
-			
+
 					handled = true;
 					break;
 				}
@@ -622,9 +580,9 @@ BPoseView::GetProperty(BMessage* _SCRIPTING_ONLY(specifier),
 				int32 index;
 				if (specifier->FindInt32("index", &index) != B_OK)
 					break;
-				
+
 				if (!PoseAtIndex(index)) {
-					error = B_BAD_INDEX;
+					result = B_BAD_INDEX;
 					handled = true;
 					break;
 				}
@@ -643,16 +601,16 @@ BPoseView::GetProperty(BMessage* _SCRIPTING_ONLY(specifier),
 				entry_ref ref;
 				if (specifier->FindRef("data", &ref) != B_OK)
 					break;
-				
+
 				int32 tmp;
 				BPose* pose = FindPose(&ref, form, &tmp);
 
-				if (!pose) {
-					error = B_ENTRY_NOT_FOUND;
+				if (pose == NULL) {
+					result = B_ENTRY_NOT_FOUND;
 					handled = true;
 					break;
 				}
-				
+
 				reply->AddRef("result", pose->TargetModel()->EntryRef());
 				reply->AddInt32("index", IndexOfPose(pose));
 
@@ -661,24 +619,19 @@ BPoseView::GetProperty(BMessage* _SCRIPTING_ONLY(specifier),
 			}
 		}
 	}
-	
-	if (error != B_OK)
-		reply->AddInt32("error", error);
+
+	if (result != B_OK)
+		reply->AddInt32("error", result);
 
 	return handled;
-#else
-	return false;
-#endif
 }
 
 
 bool
-BPoseView::SetProperty(BMessage* _SCRIPTING_ONLY(message), BMessage*,
-	int32 _SCRIPTING_ONLY(form), const char* _SCRIPTING_ONLY(property),
-	BMessage* _SCRIPTING_ONLY(reply))
+BPoseView::SetProperty(BMessage* message, BMessage*, int32 form,
+	const char* property, BMessage* reply)
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
-	status_t error = B_OK;
+	status_t result = B_OK;
 	bool handled = false;
 
 	if (strcmp(property, kPropertySelection) == 0) {
@@ -691,10 +644,9 @@ BPoseView::SetProperty(BMessage* _SCRIPTING_ONLY(message), BMessage*,
 				int32 selEnd;
 				if (message->FindInt32("data", 0, &selStart) == B_OK
 					&& message->FindInt32("data", 1, &selEnd) == B_OK) {
-
 					if (selStart < 0 || selStart >= fPoseList->CountItems()
 						|| selEnd < 0 || selEnd >= fPoseList->CountItems()) {
-						error = B_BAD_INDEX;
+						result = B_BAD_INDEX;
 						handled = true;
 						break;
 					}
@@ -711,13 +663,12 @@ BPoseView::SetProperty(BMessage* _SCRIPTING_ONLY(message), BMessage*,
 				// select/unselect poses specified by entries
 				bool clearSelection = true;
 				for (int32 index = 0; message->FindRef("data", index, &ref)
-					== B_OK; index++) {
-
+						== B_OK; index++) {
 					int32 poseIndex;
 					BPose* pose = FindPose(&ref, form, &poseIndex);
 
-					if (!pose) {
-						error = B_ENTRY_NOT_FOUND;
+					if (pose == NULL) {
+						result = B_ENTRY_NOT_FOUND;
 						handled = true;
 						break;
 					}
@@ -737,22 +688,17 @@ BPoseView::SetProperty(BMessage* _SCRIPTING_ONLY(message), BMessage*,
 		}
 	}
 
-	if (error != B_OK)
-		reply->AddInt32("error", error);
+	if (result != B_OK)
+		reply->AddInt32("error", result);
 
 	return handled;
-#else
-	return false;
-#endif
 }
 
 
 BHandler*
-BPoseView::ResolveSpecifier(BMessage* _SCRIPTING_ONLY(message),
-	int32 _SCRIPTING_ONLY(index), BMessage* _SCRIPTING_ONLY(specifier),
-	int32 _SCRIPTING_ONLY(form), const char* _SCRIPTING_ONLY(property))
+BPoseView::ResolveSpecifier(BMessage* message, int32 index,
+	BMessage* specifier, int32 form, const char* property)
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
 	BPropertyInfo propertyInfo(
 		const_cast<property_info*>(kPosesPropertyList));
 
@@ -765,17 +711,13 @@ BPoseView::ResolveSpecifier(BMessage* _SCRIPTING_ONLY(message),
 	}
 
 	return this;
-#else
-	return NULL;
-#endif
 }
 
 
 BPose*
-BPoseView::FindPose(const entry_ref* _SCRIPTING_ONLY(ref),
-	int32 _SCRIPTING_ONLY(specifierForm), int32* _SCRIPTING_ONLY(index)) const
+BPoseView::FindPose(const entry_ref* ref, int32 specifierForm,
+	int32* index) const
 {
-#if _SUPPORTS_FEATURE_SCRIPTING
 	// flavor of FindPose, used by previous/next specifiers
 
 	BPose* pose = FindPose(ref, index);
@@ -786,7 +728,4 @@ BPoseView::FindPose(const entry_ref* _SCRIPTING_ONLY(ref),
 		return PoseAtIndex(++*index);
 	else
 		return pose;
-#else
-	return NULL;
-#endif
 }

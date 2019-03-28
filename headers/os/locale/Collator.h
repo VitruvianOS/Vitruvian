@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2011, Haiku, Inc.
+ * Copyright 2003-2017, Haiku, Inc.
  * Distributed under the terms of the MIT Licence.
  */
 #ifndef _COLLATOR_H_
@@ -9,16 +9,15 @@
 #include <Archivable.h>
 #include <SupportDefs.h>
 
-#include <unicode/coll.h>
 
-namespace icu_57 {
+#ifndef U_ICU_NAMESPACE
+  #define U_ICU_NAMESPACE icu
+#endif
+namespace U_ICU_NAMESPACE {
 	class Collator;
-	class RuleBasedCollator;
 };
 
-
 class BString;
-class BCollatorAddOn;
 
 
 enum collator_strengths {
@@ -34,9 +33,6 @@ enum collator_strengths {
 };
 
 
-// N.B.: This class is not multithread-safe, as Compare() and GetKey() change
-//       the ICUCollator (the strength). So if you want to use a BCollator from
-//       more than one thread, you need to protect it with a lock
 class BCollator : public BArchivable {
 public:
 								BCollator();
@@ -51,55 +47,54 @@ public:
 
 			BCollator&			operator=(const BCollator& source);
 
-			void				SetDefaultStrength(int8 strength);
-			int8				DefaultStrength() const;
+			status_t			SetStrength(int8 strength) const;
 
 			void				SetIgnorePunctuation(bool ignore);
 			bool				IgnorePunctuation() const;
 
-			status_t			GetSortKey(const char* string, BString* key,
-									int8 strength = B_COLLATE_DEFAULT) const;
+			status_t			SetNumericSorting(bool enable);
 
-			int					Compare(const char* s1, const char* s2,
-									int8 strength = B_COLLATE_DEFAULT) const;
-			bool				Equal(const char* s1, const char* s2,
-									int8 strength = B_COLLATE_DEFAULT) const;
-			bool				Greater(const char* s1, const char* s2,
-									int8 strength = B_COLLATE_DEFAULT) const;
-			bool				GreaterOrEqual(const char* s1, const char* s2,
-									int8 strength = B_COLLATE_DEFAULT) const;
+			status_t			GetSortKey(const char* string, BString* key)
+									const;
+
+			int					Compare(const char* s1, const char* s2)
+									const;
+			bool				Equal(const char* s1, const char* s2)
+									const;
+			bool				Greater(const char* s1, const char* s2)
+									const;
+			bool				GreaterOrEqual(const char* s1, const char* s2)
+									const;
 
 								// (un-)archiving API
 			status_t			Archive(BMessage* archive, bool deep) const;
 	static	BArchivable*		Instantiate(BMessage* archive);
 
 private:
-			status_t			_SetStrength(int8 strength) const;
 
-			mutable icu::Collator*	fICUCollator;
-			int8				fDefaultStrength;
+			mutable U_ICU_NAMESPACE::Collator*	fICUCollator;
 			bool				fIgnorePunctuation;
 };
 
 
 inline bool
-BCollator::Equal(const char *s1, const char *s2, int8 strength) const
+BCollator::Equal(const char *s1, const char *s2) const
 {
-	return Compare(s1, s2, strength) == 0;
+	return Compare(s1, s2) == 0;
 }
 
 
 inline bool
-BCollator::Greater(const char *s1, const char *s2, int8 strength) const
+BCollator::Greater(const char *s1, const char *s2) const
 {
-	return Compare(s1, s2, strength) > 0;
+	return Compare(s1, s2) > 0;
 }
 
 
 inline bool
-BCollator::GreaterOrEqual(const char *s1, const char *s2, int8 strength) const
+BCollator::GreaterOrEqual(const char *s1, const char *s2) const
 {
-	return Compare(s1, s2, strength) >= 0;
+	return Compare(s1, s2) >= 0;
 }
 
 

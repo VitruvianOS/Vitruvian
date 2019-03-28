@@ -1,11 +1,12 @@
 /*
- * Copyright 2005-2009, Haiku.
+ * Copyright 2005-2015, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Stephan Aßmus <superstippi@gmx.de>
  *		Axel Dörfler, axeld@pinc-software.de
  *		Andrej Spielmann, <andrej.spielmann@seh.ox.ac.uk>
+ *		Joseph Groover <looncraz@looncraz.net>
  */
 
 
@@ -18,6 +19,7 @@
 #include <Path.h>
 
 #include <DefaultColors.h>
+#include <InterfaceDefs.h>
 #include <ServerReadOnlyMemory.h>
 
 #include "Desktop.h"
@@ -58,8 +60,9 @@ DesktopSettingsPrivate::_SetDefaults()
 	// init scrollbar info
 	fScrollBarInfo.proportional = true;
 	fScrollBarInfo.double_arrows = false;
-	fScrollBarInfo.knob = 1;
+	fScrollBarInfo.knob = 0;
 		// look of the knob (R5: (0, 1, 2), 1 = default)
+		// change default = 0 (no knob) in Haiku
 	fScrollBarInfo.min_knob_size = 15;
 
 	// init menu info
@@ -77,9 +80,9 @@ DesktopSettingsPrivate::_SetDefaults()
 	fWorkspacesRows = 2;
 
 	memcpy(fShared.colors, BPrivate::kDefaultColors,
-		sizeof(rgb_color) * kNumColors);
+		sizeof(rgb_color) * kColorWhichCount);
 
-	gSubpixelAntialiasing = false;
+	gSubpixelAntialiasing = true;
 	gDefaultHintingMode = HINTING_MODE_ON;
 	gSubpixelAverageWeight = 120;
 	gSubpixelOrderingRGB = true;
@@ -291,12 +294,15 @@ DesktopSettingsPrivate::_Load()
 			}
 
 			// colors
-			for (int32 i = 0; i < kNumColors; i++) {
+			for (int32 i = 0; i < kColorWhichCount; i++) {
 				char colorName[12];
-				snprintf(colorName, sizeof(colorName), "color%ld",
+				snprintf(colorName, sizeof(colorName), "color%" B_PRId32,
 					(int32)index_to_color_which(i));
 
-				settings.FindInt32(colorName, (int32*)&fShared.colors[i]);
+				if (settings.FindInt32(colorName, (int32*)&fShared.colors[i]) != B_OK) {
+					// Set obviously bad value so the Appearance app can detect it
+					fShared.colors[i] = B_TRANSPARENT_COLOR;
+				}
 			}
 		}
 	}
@@ -436,9 +442,9 @@ DesktopSettingsPrivate::Save(uint32 mask)
 			settings.AddInt8("subpixel average weight", gSubpixelAverageWeight);
 			settings.AddBool("subpixel ordering", gSubpixelOrderingRGB);
 
-			for (int32 i = 0; i < kNumColors; i++) {
+			for (int32 i = 0; i < kColorWhichCount; i++) {
 				char colorName[12];
-				snprintf(colorName, sizeof(colorName), "color%ld",
+				snprintf(colorName, sizeof(colorName), "color%" B_PRId32,
 					(int32)index_to_color_which(i));
 				settings.AddInt32(colorName, (const int32&)fShared.colors[i]);
 			}
@@ -578,13 +584,6 @@ DesktopSettingsPrivate::AcceptFirstClick() const
 }
 
 
-bool
-DesktopSettingsPrivate::FocusFollowsMouse() const
-{
-	return MouseMode() == B_FOCUS_FOLLOWS_MOUSE;
-}
-
-
 void
 DesktopSettingsPrivate::SetShowAllDraggers(bool show)
 {
@@ -653,17 +652,63 @@ DesktopSettingsPrivate::WorkspacesMessage(int32 index) const
 
 
 void
-DesktopSettingsPrivate::SetUIColor(color_which which, const rgb_color color)
+DesktopSettingsPrivate::SetUIColor(color_which which, const rgb_color color,
+									bool* changed)
 {
-	//
 	int32 index = color_which_to_index(which);
-	if (index < 0 || index >= kNumColors)
+	if (index < 0 || index >= kColorWhichCount)
 		return;
+
+	if (changed != NULL)
+		*changed = fShared.colors[index] != color;
+
 	fShared.colors[index] = color;
 	// TODO: deprecate the background_color member of the menu_info struct,
 	// otherwise we have to keep this duplication...
 	if (which == B_MENU_BACKGROUND_COLOR)
 		fMenuInfo.background_color = color;
+
+	Save(kAppearanceSettings);
+}
+
+
+void
+DesktopSettingsPrivate::SetUIColors(const BMessage& colors, bool* changed)
+{
+	int32 count = colors.CountNames(B_RGB_32_BIT_TYPE);
+	if (count <= 0)
+		return;
+
+	int32 index = 0;
+	int32 colorIndex = 0;
+	char* name = NULL;
+	type_code type;
+	rgb_color color;
+	color_which which = B_NO_COLOR;
+
+	while (colors.GetInfo(B_RGB_32_BIT_TYPE, index, &name, &type) == B_OK) {
+		which = which_ui_color(name);
+		colorIndex = color_which_to_index(which);
+		if (colorIndex < 0 || colorIndex >= kColorWhichCount
+			|| colors.FindColor(name, &color) != B_OK) {
+			if (changed != NULL)
+				changed[index] = false;
+
+			++index;
+			continue;
+		}
+
+		if (changed != NULL)
+			changed[index] = fShared.colors[colorIndex] != color;
+
+		fShared.colors[colorIndex] = color;
+
+		if (which == (int32)B_MENU_BACKGROUND_COLOR)
+			fMenuInfo.background_color = color;
+
+		++index;
+	}
+
 	Save(kAppearanceSettings);
 }
 
@@ -673,8 +718,9 @@ DesktopSettingsPrivate::UIColor(color_which which) const
 {
 	static const rgb_color invalidColor = {0, 0, 0, 0};
 	int32 index = color_which_to_index(which);
-	if (index < 0 || index >= kNumColors)
+	if (index < 0 || index >= kColorWhichCount)
 		return invalidColor;
+
 	return fShared.colors[index];
 }
 
@@ -813,13 +859,6 @@ mode_focus_follows_mouse
 DesktopSettings::FocusFollowsMouseMode() const
 {
 	return fSettings->FocusFollowsMouseMode();
-}
-
-
-bool
-DesktopSettings::FocusFollowsMouse() const
-{
-	return fSettings->FocusFollowsMouse();
 }
 
 
@@ -988,9 +1027,9 @@ LockedDesktopSettings::SetShowAllDraggers(bool show)
 
 
 void
-LockedDesktopSettings::SetUIColor(color_which which, const rgb_color color)
+LockedDesktopSettings::SetUIColors(const BMessage& colors, bool* changed)
 {
-	fSettings->SetUIColor(which, color);
+	fSettings->SetUIColors(colors, &changed[0]);
 }
 
 

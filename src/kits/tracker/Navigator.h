@@ -31,14 +31,14 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef _NAVIGATOR_H_
-#define _NAVIGATOR_H_
+#ifndef _NAVIGATOR_H
+#define _NAVIGATOR_H
 
 
+#include <ToolBar.h>
+
+#include "ContainerWindow.h"
 #include "Model.h"
-
-#include <PictureButton.h>
-#include <View.h>
 
 
 class BTextControl;
@@ -58,48 +58,28 @@ enum NavigationAction
 	kNavigatorCommandBackward = 'NVBW',
 	kNavigatorCommandForward = 'NVFW',
 	kNavigatorCommandUp = 'NVUP',
-	kNavigatorCommandLocation = 'NVLC'
+	kNavigatorCommandLocation = 'NVLC',
+	kNavigatorCommandSetFocus = 'NVSF'
 };
 
 
-// Custom BPictureButton which takes
-// bitmap resource IDs as arguments
-class BNavigatorButton : public BPictureButton {
+class BNavigator : public BToolBar {
 public:
-	BNavigatorButton(BRect rect, const char* name, BMessage* message, int32 resIDon,
-		int32 resIDoff, int32 resIDdisabled);
-					 
-	~BNavigatorButton();
-	
-	virtual	void AttachedToWindow();
-
-	void SetPicture(BBitmap*, bool enabled, bool on);
-
-private:
-	int32 fResIDOn;
-	int32 fResIDOff;
-	int32 fResIDDisabled;
-};
-
-
-class BNavigator : public BView {
-public:
-	BNavigator(const Model* model, BRect rect,
-		uint32 resizeMask = B_FOLLOW_LEFT_RIGHT);
+	BNavigator(const Model* model);
 	~BNavigator();
 
 	void UpdateLocation(const Model* newmodel, int32 action);
 
-	static float CalcNavigatorHeight(void);
-
 	BContainerWindow* Window() const;
 
 protected:
-	virtual void Draw(BRect rect);
 	virtual void MessageReceived(BMessage* msg);
 	virtual void AttachedToWindow();
+	virtual void AllAttached();
+	virtual void Draw(BRect updateRect);
 
-	void GoForward(bool option); // is option key held down?
+	void GoForward(bool option);
+		// is option key held down?
 	void GoBackward(bool option);
 	void GoUp(bool option);
 	void SendNavigationMessage(NavigationAction, BEntry*, bool option);
@@ -107,11 +87,8 @@ protected:
 	void GoTo();
 
 private:
-	BPath				fPath;
-	BNavigatorButton*	fBack;
-	BNavigatorButton*	fForw;
-	BNavigatorButton*	fUp;
-	BTextControl*		fLocation;
+	BPath fPath;
+	BTextControl* fLocation;
 
 	BObjectList<BPath> fBackHistory;
 	BObjectList<BPath> fForwHistory;
@@ -132,4 +109,5 @@ BNavigator::Window() const
 
 using namespace BPrivate;
 
-#endif	// _NAVIGATOR_H_
+
+#endif	// _NAVIGATOR_H

@@ -1,5 +1,5 @@
 /*
- * Copyright 2010, Haiku, Inc. All Rights Reserved.
+ * Copyright 2010-2017, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _NOTIFICATION_H
@@ -33,6 +33,9 @@ public:
 
 	static	BArchivable*		Instantiate(BMessage* archive);
 	virtual	status_t			Archive(BMessage* archive, bool deep = true) const;
+
+			const char*			SourceSignature() const;
+			const char*			SourceName() const;
 
 			notification_type	Type() const;
 
@@ -71,8 +74,19 @@ public:
 			status_t			Send(bigtime_t timeout = -1);
 
 private:
+	virtual	void _ReservedNotification1();
+	virtual	void _ReservedNotification2();
+	virtual	void _ReservedNotification3();
+	virtual	void _ReservedNotification4();
+	virtual	void _ReservedNotification5();
+	virtual	void _ReservedNotification6();
+	virtual	void _ReservedNotification7();
+	virtual	void _ReservedNotification8();
+
 			status_t			fInitStatus;
 
+			BString				fSourceSignature;
+			BString				fSourceName;
 			notification_type	fType;
 			BString				fGroup;
 			BString				fTitle;
@@ -85,6 +99,8 @@ private:
 			BList				fRefs;
 			BList				fArgv;
 			BBitmap*			fBitmap;
+
+			uint32				_reserved[8];
 };
 
 

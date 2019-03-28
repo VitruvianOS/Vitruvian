@@ -1,10 +1,10 @@
 /*
- * Copyright 2007-2010, Haiku, Inc. All Rights Reserved.
+ * Copyright 2007-2010 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Julun <host.haiku@gmx.de>
- *		Stephan Aßmus <superstippi@gmx.de>
+ *		Stephan Aßmus, superstippi@gmx.de
+ *		Julun, host.haiku@gmx.de
  */
 
 #include "DateTime.h"
@@ -13,11 +13,13 @@
 #include <time.h>
 #include <sys/time.h>
 
+#include <DateFormat.h>
+#include <Locale.h>
+#include <LocaleRoster.h>
 #include <Message.h>
 
 
 namespace BPrivate {
-
 
 const int32			kSecondsPerMinute			= 60;
 
@@ -201,7 +203,6 @@ BTime::SetTime(int32 hour, int32 minute, int32 second, int32 microsecond)
 {
 	return _SetTime(hour, minute, second, microsecond);
 }
-
 
 
 /*!
@@ -488,6 +489,23 @@ BDate::BDate(int32 year, int32 month, int32 day)
 }
 
 
+BDate::BDate(time_t time, time_type type)
+{
+	struct tm result;
+	struct tm* timeinfo;
+
+	if (type == B_GMT_TIME)
+		timeinfo = gmtime_r(&time, &result);
+	else
+		timeinfo = localtime_r(&time, &result);
+
+	if (timeinfo != NULL) {
+		_SetDate(timeinfo->tm_year + 1900, timeinfo->tm_mon + 1,
+			timeinfo->tm_mday);
+	}
+}
+
+
 /*!
 	Constructs a new BDate object from the provided archive.
 */
@@ -588,21 +606,7 @@ BDate::IsValid(int32 year, int32 month, int32 day)
 BDate
 BDate::CurrentDate(time_type type)
 {
-	time_t timer;
-	struct tm result;
-	struct tm* timeinfo;
-
-	time(&timer);
-
-	if (type == B_GMT_TIME)
-		timeinfo = gmtime_r(&timer, &result);
-	else
-		timeinfo = localtime_r(&timer, &result);
-
-	if (timeinfo == NULL)
-		return BDate();
-
-	return BDate(timeinfo->tm_year + 1900, timeinfo->tm_mon +1, timeinfo->tm_mday);
+	return BDate(time(NULL), type);
 }
 
 
@@ -660,7 +664,7 @@ BDate::GetDate(int32* year, int32* month, int32* day) const
 
 
 /*!
-	Adds \c days to the current date. If the passed value is negativ it will
+	Adds \c days to the current date. If the passed value is negative it will
 	become earlier. If the current date is invalid, the \c days are not added.
 */
 void
@@ -768,6 +772,27 @@ int32
 BDate::Difference(const BDate& date) const
 {
 	return date.DateToJulianDay() - DateToJulianDay();
+}
+
+
+void
+BDate::SetDay(int32 day)
+{
+	fDay = day;
+}
+
+
+void
+BDate::SetMonth(int32 month)
+{
+	fMonth = month;
+}
+
+
+void
+BDate::SetYear(int32 year)
+{
+	fYear = year;
 }
 
 
@@ -996,14 +1021,13 @@ BDate::LongDayName(int32 day)
 	if (day < 1 || day > 7)
 		return BString();
 
-	tm tm_struct;
-	memset(&tm_struct, 0, sizeof(tm));
-	tm_struct.tm_wday = day == 7 ? 0 : day;
+	const BLocale* locale = BLocaleRoster::Default()->GetDefaultLocale();
+	BDateFormat format(locale);
+	BString out;
+	if (format.GetDayName(day, out, B_LONG_DATE_FORMAT) != B_OK)
+		return BString();
 
-	char buffer[256];
-	strftime(buffer, sizeof(buffer), "%A", &tm_struct);
-
-	return BString(buffer);
+	return out;
 }
 
 
@@ -1027,14 +1051,13 @@ BDate::LongMonthName(int32 month)
 	if (month < 1 || month > 12)
 		return BString();
 
-	tm tm_struct;
-	memset(&tm_struct, 0, sizeof(tm));
-	tm_struct.tm_mon = month - 1;
+	const BLocale* locale = BLocaleRoster::Default()->GetDefaultLocale();
+	BDateFormat format(locale);
+	BString out;
+	if (format.GetMonthName(month, out, B_LONG_DATE_FORMAT) != B_OK)
+		return BString();
 
-	char buffer[256];
-	strftime(buffer, sizeof(buffer), "%B", &tm_struct);
-
-	return BString(buffer);
+	return out;
 }
 
 
@@ -1371,7 +1394,7 @@ BDateTime::SetTime(const BTime& time)
 	1.1.1970 - 00:00:00. If the current date is before 1.1.1970 the function
 	returns -1;
 */
-int32
+time_t
 BDateTime::Time_t() const
 {
 	BDate date(1970, 1, 1);
@@ -1392,7 +1415,7 @@ BDateTime::Time_t() const
 	tm_struct.tm_isdst = -1;
 
 	// return secs_since_jan1_1970 or -1 on error
-	return int32(mktime(&tm_struct));
+	return mktime(&tm_struct);
 }
 
 
@@ -1401,10 +1424,16 @@ BDateTime::Time_t() const
 	1.1.1970 - 00:00:00.
 */
 void
-BDateTime::SetTime_t(uint32 seconds)
+BDateTime::SetTime_t(time_t seconds)
 {
+	time_t timePart = seconds % kSecondsPerDay;
+	if (timePart < 0) {
+		timePart += kSecondsPerDay;
+		seconds -= kSecondsPerDay;
+	}
+
 	BTime time;
-	time.AddSeconds(seconds % kSecondsPerDay);
+	time.AddSeconds(timePart);
 	fTime.SetTime(time);
 
 	BDate date(1970, 1, 1);
@@ -1490,5 +1519,4 @@ BDateTime::operator>=(const BDateTime& dateTime) const
 	return false;
 }
 
-
-}	//namespace BPrivate
+}	/* namespace BPrivate */

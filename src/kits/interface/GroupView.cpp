@@ -1,27 +1,28 @@
 /*
- * Copyright 2010, Haiku, Inc.
+ * Copyright 2010-2015 Haiku, Inc. All rights reserved.
  * Copyright 2006, Ingo Weinhold <bonefish@cs.tu-berlin.de>.
- * All rights reserved. Distributed under the terms of the MIT License.
+ *
+ * Distributed under the terms of the MIT License.
  */
 
 
 #include <GroupView.h>
 
 
-BGroupView::BGroupView(enum orientation orientation, float spacing)
+BGroupView::BGroupView(orientation orientation, float spacing)
 	:
 	BView(NULL, 0, new BGroupLayout(orientation, spacing))
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+	AdoptSystemColors();
 }
 
 
-BGroupView::BGroupView(const char* name, enum orientation orientation,
+BGroupView::BGroupView(const char* name, orientation orientation,
 	float spacing)
 	:
 	BView(name, 0, new BGroupLayout(orientation, spacing))
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+	AdoptSystemColors();
 }
 
 
@@ -29,6 +30,7 @@ BGroupView::BGroupView(BMessage* from)
 	:
 	BView(from)
 {
+	AdoptSystemColors();
 }
 
 
@@ -53,6 +55,7 @@ BGroupView::Instantiate(BMessage* from)
 {
 	if (validate_instantiation(from, "BGroupView"))
 		return new BGroupView(from);
+
 	return NULL;
 }
 
@@ -81,4 +84,3 @@ void BGroupView::_ReservedGroupView7() {}
 void BGroupView::_ReservedGroupView8() {}
 void BGroupView::_ReservedGroupView9() {}
 void BGroupView::_ReservedGroupView10() {}
-

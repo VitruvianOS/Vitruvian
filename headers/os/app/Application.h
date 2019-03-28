@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku Inc.
+ * Copyright 2001-2015 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _APPLICATION_H
@@ -21,7 +21,9 @@ class BMessageRunner;
 class BResources;
 class BServer;
 class BWindow;
+
 struct app_info;
+
 
 namespace BPrivate {
 	class PortLink;
@@ -75,12 +77,18 @@ public:
 			int32				CountLoopers() const;
 			BLooper*			LooperAt(int32 index) const;
 			bool				IsLaunching() const;
+			const char*			Signature() const;
 			status_t			GetAppInfo(app_info* info) const;
 	static	BResources*			AppResources();
 
 	virtual	void				DispatchMessage(BMessage* message,
 									BHandler* handler);
 			void				SetPulseRate(bigtime_t rate);
+
+	// Register a BLooper to be quit before the BApplication
+	// object is destroyed.
+			status_t			RegisterLooper(BLooper* looper);
+			status_t			UnregisterLooper(BLooper* looper);
 
 	// More scripting
 	virtual status_t			GetSupportedSuites(BMessage* data);
@@ -97,8 +105,9 @@ private:
 	friend class Private;
 	friend class BServer;
 
-								BApplication(const char* signature, bool initGUI,
-									status_t* error);
+								BApplication(const char* signature,
+									const char* looperName, port_id port,
+									bool initGUI, status_t* error);
 								BApplication(uint32 signature);
 								BApplication(const BApplication&);
 			BApplication&		operator=(const BApplication&);
@@ -117,6 +126,7 @@ private:
 									const char* property);
 			void				_InitData(const char* signature, bool initGUI,
 									status_t* error);
+			port_id				_GetPort(const char* signature);
 			void				BeginRectTracking(BRect r, bool trackWhole);
 			void				EndRectTracking();
 			status_t			_SetupServerAllocator();
@@ -124,12 +134,14 @@ private:
 			status_t			_ConnectToServer();
 			void				_ReconnectToServer();
 			bool				_QuitAllWindows(bool force);
-			bool				_WindowQuitLoop(bool quitFilePanels, bool force);
+			bool				_WindowQuitLoop(bool quitFilePanels,
+									bool force);
 			void				_ArgvReceived(BMessage* message);
 
 			uint32				InitialWorkspace();
 			int32				_CountWindows(bool includeMenus) const;
-			BWindow*			_WindowAt(uint32 index, bool includeMenus) const;
+			BWindow*			_WindowAt(uint32 index,
+									bool includeMenus) const;
 
 	static	void				_InitAppResources();
 
@@ -137,8 +149,8 @@ private:
 	static	BResources*			sAppResources;
 
 			const char*			fAppName;
-			BPrivate::PortLink*	fServerLink;
-			BPrivate::ServerMemoryAllocator* fServerAllocator;
+			::BPrivate::PortLink*	fServerLink;
+			::BPrivate::ServerMemoryAllocator* fServerAllocator;
 
 			void*				fCursorData;
 			bigtime_t			fPulseRate;
@@ -151,9 +163,11 @@ private:
 			bool				fReadyToRunCalled;
 };
 
+
 // Global Objects
 
 extern BApplication* be_app;
 extern BMessenger be_app_messenger;
+
 
 #endif	// _APPLICATION_H

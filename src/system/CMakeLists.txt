@@ -19,7 +19,7 @@ target_sources(root PRIVATE
 
 set_target_properties(root PROPERTIES LINKER_LANGUAGE CXX)
 
-target_link_libraries(root PUBLIC dl pthread)
+target_link_libraries(root PUBLIC dl pthread ${ZLIB_LIBRARIES})
 
 add_subdirectory(kernel_linux)
 add_subdirectory(libroot)

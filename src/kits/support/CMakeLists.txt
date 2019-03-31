@@ -1,16 +1,20 @@
 target_sources(be PRIVATE
+	Architecture.cpp
 	Archivable.cpp
 	ArchivingManagers.cpp
-	ArchivingManagers.h
+	Base64.cpp
 	Beep.cpp
 	BlockCache.cpp
 	BufferedDataIO.cpp
 	BufferIO.cpp
 	ByteOrder.cpp
-	CMakeLists.txt
+	CompressionAlgorithm.cpp
 	DataIO.cpp
+	DataPositionIOWrapper.cpp
 	DateTime.cpp
 	Flattenable.cpp
+	Job.cpp
+	JobQueue.cpp
 	List.cpp
 	Locker.cpp
 	PointerList.cpp
@@ -18,4 +22,8 @@ target_sources(be PRIVATE
 	StopWatch.cpp
 	String.cpp
 	StringList.cpp
+	Url.cpp
+	Uuid.cpp
+	ZlibCompressionAlgorithm.cpp
+	ZstdCompressionAlgorithm.cpp
 )

@@ -4,9 +4,16 @@ target_include_directories(be PRIVATE
 	"textview_support"
 )
 
+#TODO: how to specify a full path?
+target_include_directories(be PRIVATE
+	"../../../headers/private/interface"
+)
+
 target_sources(be PRIVATE
+	AboutWindow.cpp
 	AbstractLayout.cpp
 	AbstractLayoutItem.cpp
+	AbstractSpinner.cpp
 	AffineTransform.cpp
 	Alert.cpp
 	Alignment.cpp
@@ -15,16 +22,18 @@ target_sources(be PRIVATE
 	Box.cpp
 	Button.cpp
 	CardLayout.cpp
+	CardView.cpp
 	ChannelControl.cpp
 	ChannelSlider.cpp
 	CheckBox.cpp
-	CMakeLists.txt
 	ColorControl.cpp
 	ColorConversion.cpp
+	ColorMenuItem.cpp
 	ColumnListView.cpp
 	ColumnTypes.cpp
 	Control.cpp
 	ControlLook.cpp
+	DecimalSpinner.cpp
 	DecorInfo.cpp
 	Deskbar.cpp
 	Dragger.cpp
@@ -42,11 +51,12 @@ target_sources(be PRIVATE
 	GroupLayoutBuilder.cpp
 	GroupLayout.cpp
 	GroupView.cpp
+	HaikuControlLook.cpp
+	Icon.cpp
 	Input.cpp
 	InterfaceDefs.cpp
 	LayoutContext.cpp
 	Layout.cpp
-	layouter
 	LayoutItem.cpp
 	LayoutUtils.cpp
 	ListItem.cpp
@@ -55,6 +65,7 @@ target_sources(be PRIVATE
 	Menu.cpp
 	MenuField.cpp
 	MenuItem.cpp
+	MenuItemPrivate.cpp
 	MenuPrivate.cpp
 	MenuWindow.cpp
 	OptionControl.cpp
@@ -83,9 +94,9 @@ target_sources(be PRIVATE
 	Size.cpp
 	Slider.cpp
 	SpaceLayoutItem.cpp
+	Spinner.cpp
 	SplitLayoutBuilder.cpp
 	SplitLayout.cpp
-	SplitLayout.h
 	SplitView.cpp
 	StatusBar.cpp
 	StringItem.cpp
@@ -93,15 +104,13 @@ target_sources(be PRIVATE
 	TabView.cpp
 	TextControl.cpp
 	TextInput.cpp
-	TextInput.h
 	TextView.cpp
-	textview_support
 	ToolTip.cpp
 	ToolTipManager.cpp
 	TwoDimensionalLayout.cpp
 	View.cpp
 	ViewLayoutItem.cpp
-	ViewLayoutItem.h
+	ViewPort.cpp
 	Window.cpp
 	WindowStack.cpp
 	ZombieReplicantView.cpp

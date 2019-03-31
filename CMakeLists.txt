@@ -5,7 +5,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
 
 # Defaults
-set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
+#set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
 set(CMAKE_COLOR_MAKEFILE ON)
 
 # Ensure env
@@ -54,7 +54,7 @@ math(EXPR PLATFORM_BITS "8*${CMAKE_SIZEOF_VOID_P}")
 set(GLOBAL_CFLAGS
 )
 
-set(SOURCE_HEADERS_DIR "headers")
+#set(SOURCE_HEADERS_DIR "headers")
 
 set(
 	PUBLIC_HEADERS
@@ -67,10 +67,6 @@ set(
 	"headers/os/storage"
 
 	"headers/os/config"
-	"headers/os/libs/agg/dbg_new"
-	"headers/os/libs/agg/util"
-	"headers/os/libs/icon"
-	"headers/os/libs/linprog"
 	"headers/os/add-ons/file_system"
 	"headers/os/add-ons/graphics"
 	"headers/os/add-ons/registrar"
@@ -90,6 +86,11 @@ set(
 	"headers/os/posix/compat/sys"
 
 	"headers/posix"
+
+	#"headers/os/libs/agg/dbg_new"
+	#"headers/os/libs/agg/util"
+	#"headers/os/libs/icon"
+	#"headers/os/libs/linprog"
 )
 
 set(
@@ -102,7 +103,10 @@ set(
 	"headers/private/graphics/common"
 	"headers/private/graphics/vesa"
 	"headers/private/input"
-	"headers/private/interface"
+	# TODO: We can't keep all here
+	# each module need to specify
+	# the private and public headers
+	#"headers/private/interface"
 	"headers/private/libroot"
 	"headers/private/kernel"
 	"headers/private/libroot"
@@ -121,11 +125,14 @@ set(
 	"headers/private/system/arch/x86"
 	"headers/private/tracker"
 
-	"headers/libs/icon/"
+	"headers/private/kernel/arch/x86/"
+
+	#"headers/libs/icon/"
 	"headers/libs/agg/"
 	"headers/libs/linprog/"
 
 	"src/kits/tracker/"
+	"src/system/libroot/os/"
 )
 
 set(
@@ -137,10 +144,11 @@ set(
 
 # Default include directories.
 include_directories(
+	AFTER
 	"headers"
 	${BUILD_HEADERS}
-	${PUBLIC_HEADERS}
 	${PRIVATE_HEADERS}
+	${PUBLIC_HEADERS}
 )
 
 # Log some information.
@@ -161,10 +169,12 @@ message(STATUS "=============================================")
 message(STATUS "")
 
 # Sub directories
-add_subdirectory(headers)
+#add_subdirectory(headers)
 add_subdirectory(src)
 
 # Deps
 set(BUILD_ICU ON)
 set(ICU_BUILD_VERSION 57.0)
 add_subdirectory(external/icu-cmake)
+
+find_package(ZLIB REQUIRED)

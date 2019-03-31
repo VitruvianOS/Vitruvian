@@ -15,7 +15,7 @@ target_sources(root PRIVATE
 	port.c
 	scheduler.c
 	sem.c
-	system_info.c
+	system_info.cpp
 	system_revision.c
 	team.c
 	thread.c

@@ -10,7 +10,9 @@ target_sources(be PRIVATE
 	Handler.cpp
 	InitTerminateLibBe.cpp
 	Invoker.cpp
-	link_message.h
+	Key.cpp
+	KeyStore.cpp
+	LaunchRoster.cpp
 	LinkReceiver.cpp
 	LinkSender.cpp
 	Looper.cpp

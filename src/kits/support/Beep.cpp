@@ -9,13 +9,16 @@
 
 #include <stdio.h>
 
+#ifdef __HAIKU__
 #include <DataExchange.h>
 #include <MediaSounds.h>
+#endif
 
 
 status_t
 system_beep(const char* eventName)
 {
+#ifdef __HAIKU__
 	BMessenger messenger("application/x-vnd.Be.addon-host");
 	if (!messenger.IsValid())
 		return B_ERROR;
@@ -29,6 +32,8 @@ system_beep(const char* eventName)
 		status = B_BAD_REPLY;
 
 	return status;
+#endif
+	return B_ERROR;
 }
 
 
@@ -42,6 +47,7 @@ beep()
 status_t
 add_system_beep_event(const char* name, uint32 flags)
 {
+#ifdef __HAIKU__
 	BMessenger messenger("application/x-vnd.Be.media-server");
 	if (!messenger.IsValid())
 		return B_ERROR;
@@ -56,4 +62,6 @@ add_system_beep_event(const char* name, uint32 flags)
 		status = B_BAD_REPLY;
 
 	return status;
+#endif
+	return B_ERROR;
 }

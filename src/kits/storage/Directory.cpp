@@ -362,8 +362,10 @@ BDirectory::GetNextRef(entry_ref* ref)
 			|| !strcmp(entry.d_name, ".."));
 	}
 
+#ifdef __HAIKU__
 	ref->device = entry.d_pdev;
 	ref->directory = entry.d_pino;
+#endif
 	return ref->set_name(entry.d_name);
 }
 
@@ -607,6 +609,7 @@ create_directory(const char* path, mode_t mode)
 // #pragma mark - symbol versions
 
 
+#ifdef __HAIKU__
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	if __GNUC__ == 2	// gcc 2
 
@@ -642,3 +645,4 @@ create_directory(const char* path, mode_t mode)
 
 #	endif	// gcc 4
 #endif	// !HAIKU_TARGET_PLATFORM_LIBBE_TEST
+#endif

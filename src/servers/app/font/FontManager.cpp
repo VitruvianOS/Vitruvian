@@ -163,6 +163,7 @@ FontManager::MessageReceived(BMessage* message)
 			switch (opcode) {
 				case B_ENTRY_CREATED:
 				{
+					#ifdef __HAIKU__
 					const char* name;
 					node_ref nodeRef;
 					if (message->FindInt32("device", &nodeRef.device) != B_OK
@@ -191,11 +192,13 @@ FontManager::MessageReceived(BMessage* message)
 
 						_AddFont(*directory, entry);
 					}
+					#endif
 					break;
 				}
 
 				case B_ENTRY_MOVED:
 				{
+					#ifdef __HAIKU__
 					// has the entry been moved into a monitored directory or has
 					// it been removed from one?
 					const char* name;
@@ -269,11 +272,13 @@ FontManager::MessageReceived(BMessage* message)
 							_RemoveStyle(nodeRef.device, fromNode, node);
 						}
 					}
+					#endif
 					break;
 				}
 
 				case B_ENTRY_REMOVED:
 				{
+					#ifdef __HAIKU__
 					node_ref nodeRef;
 					uint64 directoryNode;
 					if (message->FindInt32("device", &nodeRef.device) != B_OK
@@ -290,6 +295,7 @@ FontManager::MessageReceived(BMessage* message)
 						_RemoveStyle(nodeRef.device, directoryNode, nodeRef.node);
 					}
 					break;
+					#endif
 				}
 			}
 			break;

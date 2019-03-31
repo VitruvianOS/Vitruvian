@@ -6,7 +6,7 @@
 
 #include <locks.h>
 
-
+#if 0
 enum {
 	STATE_UNINITIALIZED	= -1,	// keep in sync with INIT_ONCE_UNINITIALIZED
 	STATE_INITIALIZING	= -2,
@@ -84,3 +84,4 @@ __init_once(vint32* control, status_t (*initRoutine)(void*), void* data)
 
 	return 0;
 }
+#endif

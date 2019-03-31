@@ -30,7 +30,7 @@ static void inline
 undefer_signals()
 {
 	struct user_thread* thread = get_user_thread();
-	if (--thread->defer_signals == 0 && thread->pending_signals != 0) {
+	if (--thread->defer_signals == 0 /*&& thread->pending_signals != 0*/) {
 		// signals shall no longer be deferred -- call a dummy syscall to handle
 		// the pending ones
 		is_computer_on();

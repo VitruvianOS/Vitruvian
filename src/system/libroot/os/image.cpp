@@ -16,7 +16,7 @@
 #include <syscalls.h>
 #include <user_runtime.h>
 
-
+#if 0
 thread_id
 load_image(int32 argCount, const char **args, const char **environ)
 {
@@ -48,6 +48,7 @@ load_image(int32 argCount, const char **args, const char **environ)
 
 	char** flatArgs = NULL;
 	size_t flatArgsSize;
+
 	status_t status = __flatten_process_args(args, argCount, environ, envCount,
 		&flatArgs, &flatArgsSize);
 
@@ -298,4 +299,4 @@ _call_init_routines_(void)
 	// This is called by the original BeOS startup code.
 	// We don't need it, because our loader already does the job, right?
 }
-
+#endif

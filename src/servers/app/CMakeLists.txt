@@ -111,13 +111,16 @@ target_sources(app_server PRIVATE
 	drawing/Painter/bitmap_painter/BitmapPainter.cpp
 	drawing/Painter/AGGTextRenderer.cpp
 
-	drawing/interface/remote/NetReceiver.cpp
-	drawing/interface/remote/NetSender.cpp
-	drawing/interface/remote/RemoteDrawingEngine.cpp
-	drawing/interface/remote/RemoteEventStream.cpp
-	drawing/interface/remote/RemoteHWInterface.cpp
-	drawing/interface/remote/RemoteMessage.cpp
-	drawing/interface/remote/StreamingRingBuffer.cpp
+	#drawing/interface/remote/NetReceiver.cpp
+	#drawing/interface/remote/NetSender.cpp
+	#drawing/interface/remote/RemoteDrawingEngine.cpp
+	#drawing/interface/remote/RemoteEventStream.cpp
+	#drawing/interface/remote/RemoteHWInterface.cpp
+	#drawing/interface/remote/RemoteMessage.cpp
+	#drawing/interface/remote/StreamingRingBuffer.cpp
+
+	drawing/interface/local/AccelerantBuffer.cpp
+	drawing/interface/local/AccelerantHWInterface.cpp
 
 	stackandtile/SATDecorator.cpp
 	stackandtile/SATGroup.cpp

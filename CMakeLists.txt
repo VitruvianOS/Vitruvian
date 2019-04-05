@@ -52,10 +52,19 @@ math(EXPR PLATFORM_BITS "8*${CMAKE_SIZEOF_VOID_P}")
 
 # V\OS defines
 set(GLOBAL_CFLAGS
+	#-DOPENSSL_ENABLED
 )
 
-#set(SOURCE_HEADERS_DIR "headers")
+# Deps
+set(BUILD_ICU ON)
+set(ICU_BUILD_VERSION 57.0)
+add_subdirectory(external/icu-cmake)
 
+find_package(ZLIB REQUIRED)
+#find_package(OpenSSL REQUIRED)
+#find_package(Fontconfig REQUIRED)
+
+# Headers
 set(
 	PUBLIC_HEADERS
 
@@ -86,11 +95,6 @@ set(
 	"headers/os/posix/compat/sys"
 
 	"headers/posix"
-
-	#"headers/os/libs/agg/dbg_new"
-	#"headers/os/libs/agg/util"
-	#"headers/os/libs/icon"
-	#"headers/os/libs/linprog"
 )
 
 set(
@@ -124,10 +128,10 @@ set(
 	"headers/private/system"
 	"headers/private/system/arch/x86"
 	"headers/private/tracker"
+	"headers/private/net"
 
 	"headers/private/kernel/arch/x86/"
 
-	#"headers/libs/icon/"
 	"headers/libs/agg/"
 	"headers/libs/linprog/"
 
@@ -171,10 +175,3 @@ message(STATUS "")
 # Sub directories
 #add_subdirectory(headers)
 add_subdirectory(src)
-
-# Deps
-set(BUILD_ICU ON)
-set(ICU_BUILD_VERSION 57.0)
-add_subdirectory(external/icu-cmake)
-
-find_package(ZLIB REQUIRED)

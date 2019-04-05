@@ -1,10 +1,5 @@
 add_library(be SHARED "")
 
-target_link_libraries(be PRIVATE
-    "-Wl,--whole-archive"
-    "-Wl,--no-whole-archive"
-)
-
 file(GLOB_RECURSE privateHeaderFiles "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 
 target_sources(be PRIVATE
@@ -14,7 +9,7 @@ target_sources(be PRIVATE
 
 set_target_properties(be PROPERTIES LINKER_LANGUAGE CXX)
 
-target_link_libraries(be PRIVATE root linprog icon agg icu)
+target_link_libraries(be PUBLIC root linprog icon agg icu)
 
 add_subdirectory(app)
 add_subdirectory(interface)

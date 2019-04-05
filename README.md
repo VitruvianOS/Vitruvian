@@ -16,6 +16,7 @@ Planned to be supported:
 From the sources directory:
 
 ```
+git submodule update --init
 mkdir build/
 cd build/
 cmake -GNinja ..

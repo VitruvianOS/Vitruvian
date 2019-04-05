@@ -29,7 +29,7 @@
 #include <dlfcn.h>
 
 
-thread_id _kern_load_image(int32 argc, const char **argv, const char **envp)
+thread_id load_image(int32 argc, const char **argv, const char **envp)
 {
 	// FIXME: this should launch the app in parameter 1 of argv with the
 	// arguments in argv and the environment variables in envp.  It
@@ -42,7 +42,7 @@ thread_id _kern_load_image(int32 argc, const char **argv, const char **envp)
 }
 
 
-image_id _kern_load_add_on(const char* path)
+image_id load_add_on(const char* path)
 {
 	void* hdll = dlopen(path, RTLD_LAZY);
 	if( !hdll )
@@ -54,14 +54,14 @@ image_id _kern_load_add_on(const char* path)
 }
 
 
-status_t _kern_unload_add_on(image_id imageID)
+status_t unload_add_on(image_id imageID)
 {
 	void* hdll = (void*)imageID;
 	return dlclose(hdll) ? B_ERROR : B_OK;
 }
 
 
-status_t _kern_get_image_symbol(image_id imid, const char* name, int32 sclass, void** pptr)
+status_t get_image_symbol(image_id imid, const char* name, int32 sclass, void** pptr)
 {
 	void* hdll = (void*)imid;
 	const char* err = NULL;
@@ -79,7 +79,7 @@ status_t _kern_get_image_symbol(image_id imid, const char* name, int32 sclass, v
 
 
 status_t
-_kern_get_image_info(image_id id, image_info *info, size_t infoSize)
+_get_image_info(image_id id, image_info *info, size_t infoSize)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
@@ -87,7 +87,7 @@ _kern_get_image_info(image_id id, image_info *info, size_t infoSize)
 
 
 status_t
-_kern_get_next_image_info(team_id teamID, int32 *cookie, image_info *info, size_t size)
+_get_next_image_info(team_id team, int32 *cookie, image_info *info, size_t infoSize)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
@@ -95,7 +95,7 @@ _kern_get_next_image_info(team_id teamID, int32 *cookie, image_info *info, size_
 
 
 void
-_kern_clear_caches(void* address, size_t length, uint32 flags)
+clear_caches(void* address, size_t length, uint32 flags)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;

@@ -18,6 +18,7 @@ struct real_time_data;
 extern "C" {
 #endif
 
+#ifdef __HAIKU__
 extern int __gABIVersion;
 
 extern char _single_threaded;
@@ -53,7 +54,7 @@ int32 __arch_get_stack_trace(addr_t* returnAddresses, int32 maxCount,
 	int32 skipFrames, addr_t stackBase, addr_t stackEnd);
 
 void __set_stack_protection(void);
-
+#endif
 
 #ifdef __cplusplus
 }

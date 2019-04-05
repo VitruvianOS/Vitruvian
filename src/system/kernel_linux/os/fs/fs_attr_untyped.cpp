@@ -768,3 +768,11 @@ _kern_remove_attr(int fd, const char *name)
 }
 
 #endif	// ! BUILDING_FS_SHELL
+
+
+int
+fs_open_attr(const char *path, const char *attribute, uint32 type, int openMode)
+{
+	UNIMPLEMENTED();
+	return 0;
+}

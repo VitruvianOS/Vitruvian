@@ -490,6 +490,15 @@ BDirectory::operator=(const BDirectory& dir)
 }
 
 
+#ifdef __VOS__
+status_t
+BDirectory::GetStatFor(const char* path, struct stat* st) const
+{
+	return _GetStatFor(path, st);
+}
+#endif
+
+
 status_t
 BDirectory::_GetStatFor(const char* path, struct stat* st) const
 {

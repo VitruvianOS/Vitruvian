@@ -652,6 +652,15 @@ BNode::InitAttrDir()
 }
 
 
+#ifdef __VOS__
+status_t
+BNode::GetStat(struct stat* stat) const
+{
+	return _GetStat(stat);
+}
+#endif
+
+
 status_t
 BNode::_GetStat(struct stat* stat) const
 {

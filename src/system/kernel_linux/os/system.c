@@ -31,6 +31,7 @@
 extern mode_t __gUmask = 022;
 
 
+#if 0
 /* helper for get_system_info */
 static void get_cpu_info( system_info* psInfo )
 {
@@ -97,6 +98,8 @@ static void get_cpu_info( system_info* psInfo )
 	}
 #endif
 }
+#endif
+
 
 /* helper for get_system_info */
 static void get_mem_info( system_info* psInfo )
@@ -129,9 +132,11 @@ status_t _kern_get_system_info(system_info* psInfo, size_t size )
 		strcpy( psInfo->kernel_build_time, "unknown" );
 	}
 	psInfo->kernel_version = 2LL;
+#if 0
 	get_cpu_info( psInfo ); /* set boot time and cpu info */
 	get_mem_info( psInfo ); /* set various mem info */
 	get_fs_info( psInfo );  /* set various fs info */
+#endif
 
 	return 0;
 }
@@ -210,6 +215,22 @@ _kern_start_watching_system(int32 object, uint32 flags,
 status_t
 _kern_stop_watching_system(int32 object, uint32 flags,
 	port_id port, int32 token)
+{
+	UNIMPLEMENTED();
+	return B_ERROR;
+}
+
+
+status_t
+_kern_get_cpu_info(uint32 firstCPU, uint32 cpuCount, cpu_info* info)
+{
+	UNIMPLEMENTED();
+	return B_ERROR;
+}
+
+status_t
+_kern_get_cpu_topology_info(cpu_topology_node_info* topologyInfos,
+	uint32* topologyInfoCount)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;

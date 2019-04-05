@@ -772,6 +772,15 @@ BEntry::_Dump(const char* name)
 }
 
 
+#ifdef __VOS__
+status_t
+BEntry::GetStat(struct stat* st) const
+{
+	return _GetStat(st);
+}
+#endif
+
+
 status_t
 BEntry::_GetStat(struct stat* st) const
 {

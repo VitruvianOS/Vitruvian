@@ -814,9 +814,11 @@ HWInterface::_CopyToFront(uint8* src, uint32 srcBPR, int32 x, int32 y,
 					args.top = y;
 					args.right = right;
 					args.bottom = bottom;
+					#ifdef __HAIKU__
 					if (ioctl(fVGADevice, VGA_PLANAR_BLIT, &args, sizeof(args))
 							== 0)
 						break;
+					#endif
 				}
 
 				// Since we cannot set the plane, we do monochrome output

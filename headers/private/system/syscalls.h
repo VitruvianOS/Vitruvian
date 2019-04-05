@@ -24,7 +24,6 @@ extern "C" {
 struct attr_info;
 struct dirent;
 struct fd_info;
-struct fd_set;
 struct fs_info;
 struct iovec;
 struct msqid_ds;
@@ -152,7 +151,7 @@ extern pid_t		_kern_setsid(void);
 extern status_t		_kern_change_root(const char *path);
 
 extern thread_id	_kern_spawn_thread(
-						struct thread_creation_attributes* attributes);
+	thread_func func, const char *name, int32 priority, void *data);
 extern thread_id	_kern_find_thread(const char *name);
 extern status_t		_kern_suspend_thread(thread_id thread);
 extern status_t		_kern_resume_thread(thread_id thread);
@@ -282,8 +281,8 @@ extern status_t		_kern_create_fifo(int fd, const char *path, mode_t perms);
 extern status_t		_kern_create_pipe(int *fds);
 extern status_t		_kern_access(int fd, const char *path, int mode,
 						bool effectiveUserGroup);
-extern ssize_t		_kern_select(int numfds, struct fd_set *readSet,
-						struct fd_set *writeSet, struct fd_set *errorSet,
+extern ssize_t		_kern_select(int numfds, fd_set *readSet,
+						fd_set *writeSet, fd_set *errorSet,
 						bigtime_t timeout, const sigset_t *sigMask);
 extern ssize_t		_kern_poll(struct pollfd *fds, int numFDs,
 						bigtime_t timeout);

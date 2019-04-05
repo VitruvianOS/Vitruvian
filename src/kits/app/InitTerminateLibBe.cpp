@@ -4,6 +4,7 @@
  *
  * Authors:
  *		Ingo Weinhold (bonefish@users.sf.net)
+ * 		Dario Casalinuovo
  */
 
 //!	Global library initialization/termination routines.
@@ -23,8 +24,8 @@ extern void __initialize_locale_kit();
 
 
 // debugging
-//#define DBG(x) x
-#define DBG(x)
+#define DBG(x) x
+//#define DBG(x)
 #define OUT	printf
 
 
@@ -42,7 +43,7 @@ initialize_forked_child()
 }
 
 
-extern "C" void
+extern "C" void __attribute__ ((constructor))
 initialize_before(image_id)
 {
 	DBG(OUT("initialize_before()\n"));
@@ -50,13 +51,17 @@ initialize_before(image_id)
 	BMessage::Private::StaticInit();
 	BRoster::Private::InitBeRoster();
 
+#ifdef __VOS__
+	pthread_atfork(initialize_forked_child, NULL, NULL);
+#else
 	atfork(initialize_forked_child);
+#endif
 
 	DBG(OUT("initialize_before() done\n"));
 }
 
 
-extern "C" void
+extern "C" void __attribute__ ((constructor(101)))
 initialize_after(image_id)
 {
 	DBG(OUT("initialize_after()\n"));
@@ -67,7 +72,7 @@ initialize_after(image_id)
 }
 
 
-extern "C" void
+extern "C" void __attribute__ ((destructor(101)))
 terminate_after(image_id)
 {
 	DBG(OUT("terminate_after()\n"));
@@ -78,4 +83,3 @@ terminate_after(image_id)
 
 	DBG(OUT("terminate_after() done\n"));
 }
-

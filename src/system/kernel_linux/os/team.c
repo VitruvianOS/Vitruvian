@@ -5,6 +5,9 @@
  */
 
 #include <OS.h>
+
+#include <errno.h>
+
 #include "syscalls.h"
 
 
@@ -43,11 +46,4 @@ _kern_get_next_team_info(int32 *cookie, team_info *info)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
-}
-
-
-int
-atfork(void (*func)(void))
-{
-	return pthread_atfork(func, NULL, NULL);
 }

@@ -286,13 +286,20 @@ extern status_t		_get_team_usage_info(team_id team, int32 who,
 
 /* Threads */
 
+typedef status_t (*thread_func)(void *);
+#define thread_entry thread_func
+	/* thread_entry is for backward compatibility only! Use thread_func */
+
 typedef enum {
 	B_THREAD_RUNNING	= 1,
 	B_THREAD_READY,
 	B_THREAD_RECEIVING,
 	B_THREAD_ASLEEP,
 	B_THREAD_SUSPENDED,
-	B_THREAD_WAITING
+	B_THREAD_WAITING,
+
+	// TODO: needed?
+	B_THREAD_SPAWNED
 } thread_state;
 
 typedef struct {
@@ -306,6 +313,14 @@ typedef struct {
 	bigtime_t		kernel_time;
 	void			*stack_base;
 	void			*stack_end;
+
+	/* Cosmoe additions */
+	thread_func		func;
+	void			*data;
+	pthread_t		pth;
+	int32			code;
+	thread_id		sender;
+	void			*buffer;
 } thread_info;
 
 #define B_IDLE_PRIORITY					0
@@ -323,10 +338,6 @@ typedef struct {
 	   in <time.h> */
 
 #define B_FIRST_REAL_TIME_PRIORITY		B_REAL_TIME_DISPLAY_PRIORITY
-
-typedef status_t (*thread_func)(void *);
-#define thread_entry thread_func
-	/* thread_entry is for backward compatibility only! Use thread_func */
 
 extern thread_id	spawn_thread(thread_func, const char *name, int32 priority,
 						void *data);

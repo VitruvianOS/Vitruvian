@@ -4,6 +4,7 @@ target_sources(root PRIVATE
 	area.c
 	atomic.c
 	debug.c
+	getenv.c
 	image.c
 	memory.cpp
 	missing_imp.c
@@ -22,6 +23,7 @@ target_sources(root PRIVATE
 	system.c
 	system_ioctl.c
 
+	fs/vfs.cpp
 	fs/build.cpp
 	fs/dir.c
 	#fs/fs_attr.cpp
@@ -36,6 +38,8 @@ target_sources(root PRIVATE
 	fs/fs_volume.c
 	#fs/kernel_interface.POSIX.cpp
 	fs/volume/LinuxVolume.cpp
+
+	locks/lock.cpp
 
 	tls.cpp
 )

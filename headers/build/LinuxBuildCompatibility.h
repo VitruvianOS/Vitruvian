@@ -1,14 +1,24 @@
-#ifndef BEOS_BUILD_COMPATIBILITY_H
-#define BEOS_BUILD_COMPATIBILITY_H
+#ifndef LINUX_BUILD_COMPATIBILITY_H
+#define LINUX_BUILD_COMPATIBILITY_H
 
+#include <config/HaikuConfig.h>
+#include <config/types.h>
+
+#include <SupportDefs.h>
+
+#include <string.h>
+
+
+#define SYMLOOP_MAX _POSIX_SYMLOOP_MAX
+#define O_RWMASK O_ACCMODE
+
+#define __VOS__ 1
+
+#define __HAIKU_PRIMARY_PACKAGING_ARCH "x86_64"
 
 #define _IMPEXP_BE
 
-#define __HAIKU_BEOS_COMPATIBLE_TYPES 1
-#define ATOMIC_FUNCS_ARE_SYSCALLS 1
-#define __x86_64__ 1
-
-#define UNIMPLEMENTED()		printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
+#define UNIMPLEMENTED() printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
 
 #define ULONGLONG_MAX   (0xffffffffffffffffULL)
 #define LONGLONG_MAX	(9223372036854775807LL)
@@ -21,25 +31,8 @@
 #	define _ALIGN(p) (((unsigned)(p) + _ALIGNBYTES) & ~_ALIGNBYTES)
 #endif
 
-#include <config/HaikuConfig.h>
-#include <config/types.h>
-#include <SupportDefs.h>
-
 #define DEBUG_SERVER
 #define SERVER_TRUE 0
-
-#if defined(HAIKU_HOST_PLATFORM_CYGWIN)
-#	ifndef __addr_t_defined
-#		define __addr_t_defined
-#	endif
-#endif
-
-// DEFFILEMODE is not available on Cygwin, SunOS and when building with musl c
-#if defined(HAIKU_HOST_PLATFORM_CYGWIN) || defined(HAIKU_HOST_PLATFORM_SUNOS) \
-	|| !defined(DEFFILEMODE)
-#ifndef DEFFILEMODE
-#define DEFFILEMODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)
-#endif
 
 // There's no ALLPERMS when building with musl c
 #ifndef ALLPERMS
@@ -51,14 +44,6 @@
 #endif
 
 #include <ctype.h>
-#endif
-
-#ifdef HAIKU_HOST_PLATFORM_SUNOS
-#	include <limits.h>
-#	ifndef NAME_MAX
-#		define NAME_MAX	MAXNAMELEN
-#	endif
-#endif
 
 typedef unsigned long	haiku_build_addr_t;
 #define addr_t			haiku_build_addr_t
@@ -112,7 +97,6 @@ extern ssize_t	writev_pos(int fd, off_t pos, const struct iovec* vec,
 #	define S_IUMSK ALLPERMS
 #endif
 
-#include <string.h>
 extern char* _haiku_build_strerror(int errnum);
 
 // remap file descriptor functions
@@ -152,28 +136,9 @@ int		_haiku_build_fcntl(int fd, int op, int argument);
 int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 			const char* to);
 
-#ifndef _HAIKU_BUILD_DONT_REMAP_FD_FUNCTIONS
-
-#	if defined(HAIKU_HOST_USE_XATTR) && defined(HAIKU_HOST_PLATFORM_HAIKU)
-#		define fs_read_attr			_haiku_build_fs_read_attr
-#		define fs_write_attr		_haiku_build_fs_write_attr
-#		define fs_remove_attr		_haiku_build_fs_remove_attr
-#		define fs_stat_attr			_haiku_build_fs_stat_attr
-#		define fs_open_attr			_haiku_build_fs_open_attr
-#		define fs_fopen_attr		_haiku_build_fs_fopen_attr
-#		define fs_close_attr		_haiku_build_fs_close_attr
-#		define fs_open_attr_dir		_haiku_build_fs_open_attr_dir
-#		define fs_fopen_attr_dir	_haiku_build_fs_fopen_attr_dir
-#		define fs_close_attr_dir	_haiku_build_fs_close_attr_dir
-#		define fs_read_attr_dir		_haiku_build_fs_read_attr_dir
-#		define fs_rewind_attr_dir	_haiku_build_fs_rewind_attr_dir
-#	endif
-
-#endif	// _HAIKU_BUILD_DONT_REMAP_FD_FUNCTIONS
-
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
-#endif	// BEOS_BUILD_COMPATIBILITY_H
+#endif	// LINUX_BUILD_COMPATIBILITY_H
 

@@ -28,7 +28,7 @@
 #include <sys/time.h>
 
 void
-set_real_time_clock(uint32 currentTime)
+set_real_time_clock(uint64 currentTime)
 {
 	struct timeval tv;
 	struct timezone tz;
@@ -42,7 +42,7 @@ set_real_time_clock(uint32 currentTime)
 }
 
 
-uint32
+uint64
 real_time_clock(void)
 {
 	struct timeval tv;

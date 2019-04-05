@@ -134,6 +134,7 @@ ScreenManager::AcquireScreens(ScreenOwner* owner, int32* wishList,
 		}
 	}
 
+#ifdef __HAIKU__
 #if TEST_MODE == 0
 	if (added == 0 && target != NULL) {
 		// there's a specific target screen we want to initialize
@@ -153,6 +154,7 @@ ScreenManager::AcquireScreens(ScreenOwner* owner, int32* wishList,
 		}
 	}
 #endif // TEST_MODE == 0
+#endif
 
 	return added > 0 ? B_OK : B_ENTRY_NOT_FOUND;
 }

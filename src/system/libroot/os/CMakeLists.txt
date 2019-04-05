@@ -1,14 +1,18 @@
 target_sources(root PRIVATE
+	Architecture.cpp
 	area.c
 	atomic.c
 	debug.c
+	driver_settings.cpp
 	find_directory.cpp
+	find_paths.cpp
 	#fs_attr.cpp
 	fs_index.c
 	fs_info.c
 	fs_query.cpp
 	fs_volume.c
 	image.cpp
+	launch.cpp
 	locks
 	memory.cpp
 	parsedate.cpp

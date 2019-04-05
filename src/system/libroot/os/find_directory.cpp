@@ -518,11 +518,22 @@ __find_directory_alpha4(directory_which which, dev_t device, bool createIt,
 }
 
 
-//DEFINE_LIBROOT_KERNEL_SYMBOL_VERSION("__find_directory_alpha4",
-//	"find_directory@", "BASE");
+#ifdef __HAIKU__
+DEFINE_LIBROOT_KERNEL_SYMBOL_VERSION("__find_directory_alpha4",
+	"find_directory@", "BASE");
 
-//DEFINE_LIBROOT_KERNEL_SYMBOL_VERSION("__find_directory", "find_directory@@",
-//	"1_ALPHA5");
+DEFINE_LIBROOT_KERNEL_SYMBOL_VERSION("__find_directory", "find_directory@@",
+	"1_ALPHA5");
+#else
+extern "C" status_t
+find_directory(directory_which which, dev_t device, bool createIt,
+	char *returnedPath, int32 pathLength)
+{
+	return __find_directory(which, device, createIt, returnedPath, pathLength);
+}
+#endif
+
+
 #else // _LOADER_MODE
 status_t
 __find_directory(directory_which which, dev_t device, bool createIt,

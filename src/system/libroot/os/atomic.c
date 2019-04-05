@@ -8,7 +8,7 @@
 
 #include <syscalls.h>
 
-#if 0
+
 #ifdef ATOMIC_FUNCS_ARE_SYSCALLS
 
 void
@@ -121,5 +121,4 @@ extern int32_t __sync_fetch_and_add_4(int32_t *value, int32_t addValue)
 	return atomic_add((int32 *)value, addValue);
 }
 
-#endif
 #endif

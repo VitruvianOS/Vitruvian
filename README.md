@@ -11,20 +11,23 @@ Planned to be supported:
 * Fbdev and drm framebuffer
 * Possible Wayland backend
 
+#### Getting the source code
+
+git clone https://github.com/Barrett17/V-OS.git
+
 #### Building V\OS
 
-From the sources directory:
+After cloning the repo, open a Terminal and enter in the sources directory.
 
 ```
-git submodule update --init
-mkdir build/
-cd build/
-cmake -GNinja ..
+mkdir generated/
+cd generated/
+../configure
 ninja -j2
 ```
 
 #### Contributing
 
-Contributing to the operating system is open to anyone, feel free to send a pull request.
+Contributing to the project is open to anyone, feel free to send a pull request.
 
 [Master Development Ticket](https://github.com/Barrett17/V-OS/issues/1)

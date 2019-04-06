@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# Init submodules
+echo "Add external submodules"
+git submodule update --init --recursive ../
+# Generate the buildsystem
+cmake .. -GNinja
+
+echo "Configured correctly!"

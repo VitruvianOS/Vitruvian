@@ -1,4 +1,7 @@
 /*
+ * Copyright 2019, Dario Casalinuovo
+ * Distributed under the terms of the LGPL License.
+ *
  * Copyright 2005-2011, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Distributed under the terms of the MIT License.
  */
@@ -272,6 +275,15 @@ get_path(const NodeRef *ref, const char *name, string &path)
 		path += name;
 	}
 
+	return B_OK;
+}
+
+status_t
+_kern_normalize_path(const char* userPath, bool traverseLink, char* buffer)
+{
+	string normPath;
+	normalize_entry_path(userPath, normPath);
+	strcpy(buffer, normPath.c_str());
 	return B_OK;
 }
 

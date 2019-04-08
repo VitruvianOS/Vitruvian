@@ -14,8 +14,15 @@
 void
 _kern_debugger(const char *message)
 {
-	printf("debugger() called: %s\n", message);
 	exit(1);
+}
+
+
+status_t
+_kern_kernel_debugger(const char *message)
+{
+	_kern_debugger(message);
+	return B_OK;
 }
 
 

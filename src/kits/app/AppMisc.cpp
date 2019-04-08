@@ -49,6 +49,12 @@ get_app_path(team_id team, char *buffer)
 	if (!buffer)
 		return B_BAD_VALUE;
 
+#ifdef __VOS__
+	char buf[B_PATH_NAME_LENGTH-1];
+	readlink("/proc/self/exe", buf, B_PATH_NAME_LENGTH-1);
+	strlcpy(buffer, buf, B_PATH_NAME_LENGTH-1);
+	return B_OK;
+#else
 	image_info info;
 	int32 cookie = 0;
 
@@ -60,6 +66,7 @@ get_app_path(team_id team, char *buffer)
 	}
 
 	return B_ENTRY_NOT_FOUND;
+#endif
 }
 
 

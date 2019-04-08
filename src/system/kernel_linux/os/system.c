@@ -191,7 +191,7 @@ _kern_snooze(bigtime_t amount)
 status_t
 _kern_snooze_until(bigtime_t time, int timeBase)
 {
-	return snooze(time - system_time());
+	return _kern_snooze(time - system_time());
 }
 
 
@@ -199,7 +199,7 @@ status_t
 _kern_snooze_etc(bigtime_t amount, int timeBase, uint32 flags)
 {
 	// TODO: determine what timeBase and flags do
-	return snooze(amount);
+	return _kern_snooze(amount);
 }
 
 

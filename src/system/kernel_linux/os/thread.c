@@ -1,4 +1,7 @@
 /*
+** Copyright 2019, Dario Casalinuovo. All rights reserved.
+** Distributed under the terms of the LGPL License.
+**
 ** Copyright 2004, Bill Hayden. All rights reserved.
 ** Copyright 2002-2004, The OpenBeOS Team. All rights reserved.
 ** Distributed under the terms of the OpenBeOS License.
@@ -415,6 +418,11 @@ _kern_wait_for_thread(thread_id id, status_t *_returnCode)
 	{
 		if (thread_table[i].thread == id)
 		{
+			// It seems the thread was spawned
+			// but never resumed.
+			if (thread_table[i].pth == -1)
+				return B_OK;
+
 			if (pthread_join(thread_table[i].pth, (void**)_returnCode) == 0)
 				return B_OK;
 			break;

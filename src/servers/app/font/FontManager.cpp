@@ -666,6 +666,7 @@ FontManager::_RemoveDirectory(font_directory* directory)
 status_t
 FontManager::_AddPath(const char* path)
 {
+	printf("adding path %s\n", path);
 	BEntry entry;
 	status_t status = entry.SetTo(path);
 	if (status != B_OK)

@@ -26,7 +26,11 @@ using std::nothrow;
 
 
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+#ifndef __VOS__
 #	include "AccelerantHWInterface.h"
+#else
+#	include "FBDevHWInterface.h"
+#endif
 #else
 #	include "ViewHWInterface.h"
 #	include "DWindowHWInterface.h"
@@ -207,7 +211,11 @@ ScreenManager::_ScanDrivers()
 	while (initDrivers) {
 
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+#ifndef __VOS__
 		  interface = new AccelerantHWInterface();
+#else
+		interface = new FBDevHWInterface();
+#endif
 #elif defined(USE_DIRECT_WINDOW_TEST_MODE)
 		  interface = new DWindowHWInterface();
 #else

@@ -48,6 +48,8 @@ static int thread_shm = -1;
 static void init_thread(void);
 static void teardown_threads(void);
 
+static __thread thread_id sCurThreadID;
+
 /* TODO: table access is not protected by a semaphore */
 
 static void
@@ -124,6 +126,8 @@ _kern_spawn_thread(thread_func func, const char *name, int32 priority, void *dat
 			thread_table[i].code = 0;
 			thread_table[i].sender = 0;
 			thread_table[i].buffer = NULL;
+
+			sCurThreadID = i;
 
 			return i;
 		}
@@ -305,11 +309,11 @@ void teardown_threads()
 
 
 status_t
-_kern_get_thread_info(thread_id id, thread_info *info, size_t size)
+_kern_get_thread_info(thread_id id, thread_info *info)
 {
 	init_thread();
 
-	if (info == NULL || size != sizeof(thread_info) || id < B_OK)
+	if (info == NULL || id < B_OK)
 		return B_BAD_VALUE;
 
 	int i;
@@ -361,8 +365,9 @@ find_thread(const char *name)
 
 	pthread_t pth = 0;
 
+	// TODO: We need to make more use of thread local storage!
 	if (name == NULL)
-		pth = pthread_self();
+		return sCurThreadID;
 
 	int i;
 	for (i = 0; i < MAX_THREADS; i++)
@@ -372,11 +377,6 @@ find_thread(const char *name)
 			if (!pth)
 			{
 				if (strcmp(thread_table[i].name, name) == 0)
-					return i;
-			}
-			else
-			{
-				if (thread_table[i].pth == pth)
 					return i;
 			}
 		}
@@ -505,19 +505,6 @@ _kern_block_thread(uint32 flags, bigtime_t timeout)
 
 status_t
 _kern_unblock_thread(thread_id thread, status_t status)
-{
-	UNIMPLEMENTED();
-}
-
-
-// TODO WTF
-void __allocate_pthread(int32 foo, void* data)
-{
-	UNIMPLEMENTED();
-}
-
-
-void __pthread_destroy_thread()
 {
 	UNIMPLEMENTED();
 }

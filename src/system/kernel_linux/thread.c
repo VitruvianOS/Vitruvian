@@ -301,18 +301,18 @@ _kern_get_thread_info(thread_id id, thread_info *info)
 
 
 status_t
-_kern_get_next_thread_info(team_id team, int32 *_cookie, thread_info *info, size_t size)
+_kern_get_next_thread_info(team_id team, int32 *_cookie, thread_info *info)
 {
 	init_thread();
 
-	if (info == NULL || size != sizeof(thread_info) || *_cookie < 0)
+	if (info == NULL || *_cookie < 0)
 		return B_BAD_VALUE;
 
 	for (uint32 i = *_cookie; i < MAX_THREADS; i++) {
 		if (thread_table[i].team == team) {
 			*_cookie = i + 1;
 
-			return _get_thread_info(thread_table[i].thread, info, size);
+			return _kern_get_thread_info(thread_table[i].thread, info);
 		}
 	}
 

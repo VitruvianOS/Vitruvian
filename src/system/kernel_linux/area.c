@@ -245,7 +245,7 @@ status_t _kern_resize_area(area_id id, size_t new_size)
 }
 
 
-status_t _kern_get_area_info(area_id hArea, area_info* psInfo, size_t size)
+status_t _kern_get_area_info(area_id hArea, area_info* psInfo)
 {
 	if (hArea < 0 || hArea >= AREA_ID_MAX || g_pAreaMap == NULL ||
 			g_pAreaMap[hArea].area == AREA_ID_FREE) {
@@ -258,7 +258,8 @@ status_t _kern_get_area_info(area_id hArea, area_info* psInfo, size_t size)
 
 
 status_t
-_kern_get_next_area_info(team_id team, int32 *cookie, area_info *areaInfo, size_t size)
+_kern_get_next_area_info(team_id team, ssize_t* cookie,
+	area_info* areaInfo)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;

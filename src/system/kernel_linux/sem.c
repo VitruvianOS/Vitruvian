@@ -225,7 +225,7 @@ _kern_acquire_sem(sem_id id)
 
 
 status_t
-_kern_acquire_sem_etc(sem_id id, int32 count, uint32 flags,
+_kern_acquire_sem_etc(sem_id id, uint32 count, uint32 flags,
 	bigtime_t timeout)
 {
 	int group = get_group(id / SEMMSL);
@@ -287,7 +287,7 @@ _kern_release_sem(sem_id id)
 
 
 status_t
-_kern_release_sem_etc(sem_id id, int32 count, uint32 flags)
+_kern_release_sem_etc(sem_id id, uint32 count, uint32 flags)
 {
 	int group = get_group(id / SEMMSL);
 	int member = id % SEMMSL;
@@ -422,7 +422,7 @@ _kern_set_sem_owner(sem_id id, team_id team)
 
 
 status_t
-_kern_switch_sem(sem_id releaseSem, sem_id id, int32 count)
+_kern_switch_sem(sem_id releaseSem, sem_id id)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
@@ -430,7 +430,7 @@ _kern_switch_sem(sem_id releaseSem, sem_id id, int32 count)
 
 
 status_t
-_kern_switch_sem_etc(sem_id releaseSem, sem_id id, int32 count, uint32 flags, bigtime_t timeout)
+_kern_switch_sem_etc(sem_id releaseSem, sem_id id, uint32 count, uint32 flags, bigtime_t timeout)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;

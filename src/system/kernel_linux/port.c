@@ -545,7 +545,7 @@ _kern_find_port(const char *name)
  */
 
 static void
-fill_port_info(struct port_entry *port, port_info *info, size_t size)
+fill_port_info(struct port_entry *port, port_info *info)
 {
 	int32 count;
 
@@ -565,11 +565,11 @@ fill_port_info(struct port_entry *port, port_info *info, size_t size)
 
 
 status_t
-_kern_get_port_info(port_id id, port_info *info, size_t size)
+_kern_get_port_info(port_id id, port_info *info)
 {
 	int slot;
 
-	if (info == NULL || size != sizeof(port_info))
+	if (info == NULL)
 		return B_BAD_VALUE;
 	if (!sPortsActive)
 		port_init();
@@ -587,7 +587,7 @@ _kern_get_port_info(port_id id, port_info *info, size_t size)
 	}
 
 	// fill a port_info struct with info
-	fill_port_info(&sPorts[slot], info, size);
+	fill_port_info(&sPorts[slot], info);
 
 	RELEASE_PORT_LOCK(sPorts[slot]);
 
@@ -605,11 +605,11 @@ _kern_get_port_message_info_etc(port_id port, port_message_info *info,
 
 
 status_t
-_kern_get_next_port_info(team_id team, int32 *_cookie, struct port_info *info, size_t size)
+_kern_get_next_port_info(team_id team, int32 *_cookie, struct port_info *info)
 {
 	int slot;
 
-	if (info == NULL || size != sizeof(port_info) || _cookie == NULL || team < B_OK)
+	if (info == NULL || _cookie == NULL || team < B_OK)
 		return B_BAD_VALUE;
 	if (!sPortsActive)
 		port_init();
@@ -631,7 +631,7 @@ _kern_get_next_port_info(team_id team, int32 *_cookie, struct port_info *info, s
 		GRAB_PORT_LOCK(sPorts[slot]);
 		if (sPorts[slot].id != -1 && sPorts[slot].capacity != 0 && sPorts[slot].owner == team) {
 			// found one!
-			fill_port_info(&sPorts[slot], info, size);
+			fill_port_info(&sPorts[slot], info);
 
 			RELEASE_PORT_LOCK(sPorts[slot]);
 			slot++;
@@ -738,7 +738,7 @@ _kern_port_buffer_size_etc(port_id id, uint32 flags, bigtime_t timeout)
 }
 
 
-ssize_t
+int32
 _kern_port_count(port_id id)
 {
 	int32 count;

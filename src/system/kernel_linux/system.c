@@ -115,7 +115,7 @@ static void get_fs_info( system_info* psInfo )
 }
 
 
-status_t _kern_get_system_info(system_info* psInfo, size_t size )
+status_t _kern_get_system_info(system_info* psInfo)
 {
 	struct utsname unamebuffer;
 
@@ -196,9 +196,12 @@ _kern_snooze_until(bigtime_t time, int timeBase)
 
 
 status_t
-_kern_snooze_etc(bigtime_t amount, int timeBase, uint32 flags)
+_kern_snooze_etc(bigtime_t amount, int timeBase, int32 flags,
+	bigtime_t* _remainingTime)
 {
 	// TODO: determine what timeBase and flags do
+	// TODO: fill remainingTime
+	*_remainingTime = 0;
 	return _kern_snooze(amount);
 }
 

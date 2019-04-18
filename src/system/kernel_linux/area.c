@@ -24,6 +24,10 @@
 //----------------------------------------------------------------------------*/
 
 
+#include <SupportDefs.h>
+#include <StorageDefs.h> // Just because BeOS apps expect this here
+#include <OS.h>
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/mman.h>
@@ -34,9 +38,6 @@
 
 #include <string.h>
 
-#include <SupportDefs.h>
-#include <StorageDefs.h>	/* Just because BeOS apps expect this here */
-#include <OS.h>
 
 #define TRACE_AREA 0
 #if TRACE_AREA
@@ -49,13 +50,12 @@
 
 #define dprintf printf
 
-  // Area IDs
+// Area IDs
 #define AREA_ID_MAX  256
 #define AREA_ID_FREE 0xFFFFFFFF
 
 
 area_info* g_pAreaMap = NULL;
-
 
 
 void init_area_map(void)
@@ -69,65 +69,62 @@ void init_area_map(void)
 	TRACE(("Master area table key is 0x%x.\n", table_key));
 
 	/* create and initialize a new area table in shared memory */
-	shmid = shmget(table_key, sizeof(area_info)*AREA_ID_MAX, IPC_CREAT | IPC_EXCL | 0700 );
-	if (shmid == -1 && errno == EEXIST)
-	{
+	shmid = shmget(table_key, sizeof(area_info)*AREA_ID_MAX,
+		IPC_CREAT | IPC_EXCL | 0700);
+
+	if (shmid == -1 && errno == EEXIST) {
 		/* grab the existing shared memory semaphore table */
-		shmid = shmget(table_key, sizeof(area_info)*AREA_ID_MAX, IPC_CREAT | 0700);
+		shmid = shmget(table_key,
+			sizeof(area_info)*AREA_ID_MAX, IPC_CREAT | 0700);
+
 		TRACE(("Using existing system area table.\n"));
+
 		created = 0;
 	}
 
 	g_pAreaMap = shmat(shmid, NULL, 0);
-	if (g_pAreaMap == (void*)(-1))
-	{
-		printf( "init_area_map(): failed in shmat: %s\n", strerror(errno) );
+	if (g_pAreaMap == (void*)(-1)) {
+		printf("init_area_map(): failed in shmat: %s\n",
+			strerror(errno));
 		g_pAreaMap = NULL;
 		return;
 	}
 
-	if (created)
-	{
-		int n;
-		for(n = 0; n < AREA_ID_MAX; n++)
-		{
+	if (created == 1) {
+		for (uint32 n = 0; n < AREA_ID_MAX; n++) {
 			g_pAreaMap[n].area = AREA_ID_FREE;
 		}
 	}
 }
 
 
-/* FIXME: need to sync access to area map with mutex */
-area_id _kern_create_area(const char* name, void** start_addr, uint32 addr_spec, size_t size, uint32 lock, uint32 protection)
+/* TODO: need to sync access to area map with mutex */
+area_id _kern_create_area(const char* name, void** start_addr,
+	uint32 addr_spec, size_t size, uint32 lock, uint32 protection)
 {
-	uint n;
-
 	if (g_pAreaMap == NULL)
 		init_area_map();
 
-	for(n = 0; n < AREA_ID_MAX; n++)
-	{
-		if(g_pAreaMap[n].area == AREA_ID_FREE)
-		{
+	for (uint32 n = 0; n < AREA_ID_MAX; n++) {
+		if (g_pAreaMap[n].area == AREA_ID_FREE) {
 			int iShmID = shmget(n, size, IPC_CREAT | 0700);
-			if(iShmID == -1)
-			{
-				printf("create_area(): shmget(%u,%u) failed (%s)\n", n, size, strerror(errno));
+			if (iShmID == -1) {
+				printf("create_area(): shmget(%u,%u) failed (%s)\n",
+					n, size, strerror(errno));
 				return B_NO_MEMORY;
 			}
 			
-			g_pAreaMap[n].address = shmat( iShmID, NULL, 0 );
-			if(g_pAreaMap[n].address == (void*)(-1))
-			{
-				printf("create_area(): shmat(%d) failed (%s)\n", iShmID, strerror(errno));
+			g_pAreaMap[n].address = shmat(iShmID, NULL, 0);
+			if (g_pAreaMap[n].address == (void*)(-1)) {
+				printf("create_area(): shmat(%d) failed (%s)\n",
+					iShmID, strerror(errno));
 				return B_NO_MEMORY;
 			}
 			
-			if( start_addr != NULL )
-			{
+			if (start_addr != NULL) {
 				*start_addr = g_pAreaMap[n].address;
 			}
-			strncpy( g_pAreaMap[n].name, name, B_OS_NAME_LENGTH );
+			strncpy(g_pAreaMap[n].name, name, B_OS_NAME_LENGTH);
 			g_pAreaMap[n].name[B_OS_NAME_LENGTH -1] = '\0';
 			g_pAreaMap[n].area = iShmID;
 			g_pAreaMap[n].size = size;
@@ -142,17 +139,15 @@ area_id _kern_create_area(const char* name, void** start_addr, uint32 addr_spec,
 }
 
 
-area_id _kern_clone_area(const char* name, void** dest_addr, uint32 addr_spec, uint32 protection, area_id source)
+area_id _kern_clone_area(const char* name, void** dest_addr,
+	uint32 addr_spec, uint32 protection, area_id source)
 {
-	uint n;
-
 	if (g_pAreaMap == NULL)
 		init_area_map();
 
 	if (source < 0 || source >= AREA_ID_MAX || g_pAreaMap == NULL ||
-		g_pAreaMap[source].area == AREA_ID_FREE)
-	{
-		printf( "clone_area(): AREA IS FREE\n" );
+		g_pAreaMap[source].area == AREA_ID_FREE) {
+		printf("clone_area(): AREA IS FREE\n");
 		return -EPERM;
 	}
 
@@ -160,27 +155,22 @@ area_id _kern_clone_area(const char* name, void** dest_addr, uint32 addr_spec, u
 	uint32 nProtection = g_pAreaMap[source].protection;
 	uint32 lock = g_pAreaMap[source].lock;
 
-	for(n = 0; n < AREA_ID_MAX; n++)
-	{
-		if( g_pAreaMap[n].area == AREA_ID_FREE )
-		{
-			int iShmID = shmget( source, nSize, IPC_CREAT | 0700 );
-			if( iShmID == -1 )
-			{
-				printf( "clone_area(): shmget(%u,%u) failed (%s)\n", n, nSize, strerror(errno) );
+	for (uint32 n = 0; n < AREA_ID_MAX; n++) {
+		if (g_pAreaMap[n].area == AREA_ID_FREE) {
+			int iShmID = shmget(source, nSize, IPC_CREAT | 0700);
+			if (iShmID == -1) {
+				printf("clone_area(): shmget(%u,%u) failed (%s)\n", n, nSize, strerror(errno));
 				return B_NO_MEMORY;
 			}
 
 			g_pAreaMap[n].address = shmat(iShmID, NULL, 0);
 
-			if( g_pAreaMap[n].address == (void*)(-1) )
-			{
-				printf( "clone_area(): shmat(%d) failed (%s)\n", iShmID, strerror(errno) );
+			if (g_pAreaMap[n].address == (void*)(-1)) {
+				printf("clone_area(): shmat(%d) failed (%s)\n", iShmID, strerror(errno));
 				return B_NO_MEMORY;
 			}
 
-			if(dest_addr != NULL)
-			{
+			if (dest_addr != NULL) {
 				*dest_addr = g_pAreaMap[n].address;
 			}
 			strncpy(g_pAreaMap[n].name, name, B_OS_NAME_LENGTH);
@@ -202,19 +192,13 @@ area_id _kern_clone_area(const char* name, void** dest_addr, uint32 addr_spec, u
 area_id
 _kern_find_area(const char *name)
 {
-	uint n;
-
 	if (g_pAreaMap == NULL)
 		init_area_map();
 
-	for(n = 0; n < AREA_ID_MAX; n++)
-	{
-		if(g_pAreaMap[n].area != AREA_ID_FREE)
-		{
-			if(strcmp(name, g_pAreaMap[n].name) == 0)
-			{
-				return n;
-			}
+	for (uint32 n = 0; n < AREA_ID_MAX; n++) {
+		if (g_pAreaMap[n].area != AREA_ID_FREE
+				&& strcmp(name, g_pAreaMap[n].name) == 0) {
+			return n;
 		}
 	}
 
@@ -223,20 +207,15 @@ _kern_find_area(const char *name)
 
 
 area_id
-_kern_area_for(void *address)
+_kern_area_for (void *address)
 {
-	uint n;
-
 	if (g_pAreaMap == NULL)
 		init_area_map();
 
-	for( n = 0; n < AREA_ID_MAX; n++ )
-	{
-		if(g_pAreaMap[n].area != AREA_ID_FREE)
-		{
-			if((address >= g_pAreaMap[n].address) &&
-				(address < g_pAreaMap[n].address + g_pAreaMap[n].size))
-			{
+	for (uint32 n = 0; n < AREA_ID_MAX; n++) {
+		if (g_pAreaMap[n].area != AREA_ID_FREE) {
+			if ((address >= g_pAreaMap[n].address)
+				&& (address < g_pAreaMap[n].address + g_pAreaMap[n].size)) {
 				return n;
 			}
 		}
@@ -246,11 +225,10 @@ _kern_area_for(void *address)
 }
 
 
-status_t _kern_delete_area( area_id hArea )
+status_t _kern_delete_area(area_id hArea)
 {
-	if( hArea < 0 || hArea >= AREA_ID_MAX || g_pAreaMap == NULL ||
-		g_pAreaMap[hArea].area == AREA_ID_FREE )
-	{
+	if (hArea < 0 || hArea >= AREA_ID_MAX || g_pAreaMap == NULL ||
+			g_pAreaMap[hArea].area == AREA_ID_FREE) {
 		return B_ERROR;
 	}
 	/* FIXME: refcount the shmseg and shmdt() when zero */
@@ -267,11 +245,10 @@ status_t _kern_resize_area(area_id id, size_t new_size)
 }
 
 
-status_t _kern_get_area_info( area_id hArea, area_info* psInfo, size_t size )
+status_t _kern_get_area_info(area_id hArea, area_info* psInfo, size_t size)
 {
-	if( hArea < 0 || hArea >= AREA_ID_MAX || g_pAreaMap == NULL ||
-		g_pAreaMap[hArea].area == AREA_ID_FREE )
-	{
+	if (hArea < 0 || hArea >= AREA_ID_MAX || g_pAreaMap == NULL ||
+			g_pAreaMap[hArea].area == AREA_ID_FREE) {
 		return B_BAD_VALUE;
 	}
 	

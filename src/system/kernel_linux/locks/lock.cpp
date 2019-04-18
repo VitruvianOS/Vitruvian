@@ -18,6 +18,7 @@ status_t
 recursive_lock_lock(recursive_lock *lock)
 {
 	UNIMPLEMENTED();
+	return B_OK;
 }
 
 

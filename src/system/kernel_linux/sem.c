@@ -385,7 +385,7 @@ status_t _kern_get_sem_info(sem_id id,
 		(SEMVMX == semctl(group, member, GETVAL, 0)) // sem not inited yet
 	)
 		return B_BAD_SEM_ID;
-	
+
 	if (info == NULL || size != sizeof(sem_info))
 		return B_BAD_VALUE;
 

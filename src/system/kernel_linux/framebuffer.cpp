@@ -1,3 +1,7 @@
+/*
+ * Copyright 2018-2019, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the LGPL License.
+ */
 
 #include <SupportDefs.h>
 

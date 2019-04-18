@@ -1,5 +1,6 @@
 //------------------------------------------------------------------------------
 //	Copyright (c) 2004, Bill Hayden
+//	Copyright (c) 2018-2019, Dario Casalinuovo
 //
 //	Permission is hereby granted, free of charge, to any person obtaining a
 //	copy of this software and associated documentation files (the "Software"),
@@ -45,9 +46,9 @@ thread_id load_image(int32 argc, const char **argv, const char **envp)
 image_id load_add_on(const char* path)
 {
 	void* hdll = dlopen(path, RTLD_LAZY);
-	if( !hdll )
-	{
-		printf("load_add_on(): dlopen('%s', RTLD_LAZY) failed: %s\n", path, dlerror());
+	if (hdll == NULL) {
+		printf("load_add_on(): dlopen('%s', RTLD_LAZY) failed: %s\n",
+			path, dlerror());
 		return B_ERROR;
 	}
 	return (int)hdll;
@@ -61,16 +62,17 @@ status_t unload_add_on(image_id imageID)
 }
 
 
-status_t get_image_symbol(image_id imid, const char* name, int32 sclass, void** pptr)
+status_t get_image_symbol(image_id imid, const char* name,
+	int32 sclass, void** pptr)
 {
 	void* hdll = (void*)imid;
 	const char* err = NULL;
 
 	*pptr = dlsym(hdll, name);
 	err = dlerror();
-	if (err)
-	{
-		printf("_kern_get_image_symbol(): dlsym('%s') failed: %s\n", name, err);
+	if (err) {
+		printf("_kern_get_image_symbol(): dlsym('%s') failed: %s\n",
+			name, err);
 		return B_BAD_IMAGE_ID;
 	}
 

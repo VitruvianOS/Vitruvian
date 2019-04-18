@@ -1,6 +1,6 @@
 /*
  * Copyright 2018, Dario Casalinuovo.
- * Distributed under the terms of the MIT License.
+ * Distributed under the terms of the LGPL License.
  */
 
 #include <scheduler.h>
@@ -14,4 +14,3 @@ _kern_estimate_max_scheduling_latency(thread_id thread)
 	UNIMPLEMENTED();
 	return 0;
 }
-

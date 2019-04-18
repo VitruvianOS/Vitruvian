@@ -14,6 +14,7 @@
 #include <util/KMessage.h>
 #include <messaging.h>
 #include <MessagingServiceDefs.h>
+#include <syscalls.h>
 
 #include "MessagingService.h"
 
@@ -522,7 +523,7 @@ send_message(const KMessage *message, const messaging_target *targets,
 }
 
 
-status_t
+status_t __attribute__ ((constructor(101)))
 init_messaging_service()
 {
 	static char buffer[sizeof(MessagingService)];

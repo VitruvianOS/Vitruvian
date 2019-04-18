@@ -1,6 +1,7 @@
 /* ports for IPC */
 
 /*
+** Copyright 2018-2019, Dario Casalinuovo. All rights reserved.
 ** Copyright 2004, Bill Hayden. All rights reserved.
 ** Copyright 2002-2004, The OpenBeOS Team. All rights reserved.
 ** Distributed under the terms of the OpenBeOS License.
@@ -107,8 +108,7 @@ port_init(void)
 
 	// create and initialize ports table in shared memory
 	sPortArea = shmget(table_key, size, IPC_CREAT | IPC_EXCL | 0700);
-	if (sPortArea == -1 && errno == EEXIST)
-	{
+	if (sPortArea == -1 && errno == EEXIST) {
 		/* get existing semaphore table in shared memory */
 		sPortArea = shmget(table_key, size, IPC_CREAT | 0700);
 		TRACE(("Using pre-existing master ports table\n"));
@@ -123,8 +123,7 @@ port_init(void)
 
 	/* point our local table at the master table */
 	sPortMemory = shmat(sPortArea, NULL, 0);
-	if (sPortMemory == (void *) -1)
-	{
+	if (sPortMemory == (void *) -1) {
 		TRACE(("FATAL: Couldn't attach port table: %s\n", strerror (errno)));
 		return B_ERROR;
 	}
@@ -132,20 +131,16 @@ port_init(void)
 	sNextPort = (port_id *)sPortMemory + sizeof(sem_id);
 	sPorts = (void*)sNextPort + sizeof(port_id);
 
-	if (created)
-	{
-		int i;
+	if (created) {
 		memset(sNextPort, 0, size);
-		for (i = 0; i < gMaxPorts; i++)
-		{
+		for (uint32 i = 0; i < gMaxPorts; i++) {
 			sPorts[i].id = -1;
 			sPorts[i].lock = -1;
 		}
 
 		sPortSem = create_sem(1, "master port lock");
 		*((sem_id *)sPortMemory) = sPortSem;
-	}
-	else
+	} else
 		sPortSem = *((sem_id *)sPortMemory);
 
 	atexit(teardown_ports);
@@ -162,11 +157,11 @@ port_init(void)
 static int
 dump_port_list(void)
 {
-	int i;
-
-	for (i = 0; i < gMaxPorts; i++) {
-		if (sPorts[i].id >= 0)
-			dprintf("%p\tid: %ld\t\tname: '%s'\n", &sPorts[i], sPorts[i].id, sPorts[i].name);
+	for (uint32 i = 0; i < gMaxPorts; i++) {
+		if (sPorts[i].id >= 0) {
+			dprintf("%p\tid: %ld\t\tname: '%s'\n", &sPorts[i],
+				sPorts[i].id, sPorts[i].name);
+		}
 	}
 	return 0;
 }
@@ -190,13 +185,11 @@ _dump_port_info(struct port_entry *port)
 int
 dump_port_info(int argc, char **argv)
 {
-	int i;
 	int is_number;
 	
 	port_init();
 	 
-	if (!sPortsActive)
-	{
+	if (!sPortsActive) {
 		dprintf("No Cosmoe ports in use.\n");
 		return 0;
 	}
@@ -209,15 +202,14 @@ dump_port_info(int argc, char **argv)
 	is_number = isdigit(argv[1][0]);
 
 	// walk through the ports list, trying to match number or name
-	for (i = 0; i < gMaxPorts; i++) {
+	for (uint32 i = 0; i < gMaxPorts; i++) {
 		if (is_number) {
 			if (sPorts[i].id == atoi(argv[1])) {
 				_dump_port_info(&sPorts[i]);
 				return 0;
 			}
-		}
-		else if (sPorts[i].name != NULL
-			&& strcmp(argv[1], sPorts[i].name) == 0) {
+		} else if (sPorts[i].name != NULL
+				&& strcmp(argv[1], sPorts[i].name) == 0) {
 			_dump_port_info(&sPorts[i]);
 			return 0;
 		}
@@ -234,7 +226,6 @@ delete_owned_ports(team_id owner)
 {
 	// ToDo: investigate maintaining a list of ports in the team
 	//	to make this simpler and more efficient.
-	int i;
 	int count = 0;
 
 	if (!sPortsActive)
@@ -242,7 +233,7 @@ delete_owned_ports(team_id owner)
 
 	GRAB_PORT_LIST_LOCK();
 
-	for (i = 0; i < gMaxPorts; i++) {
+	for (uint32 i = 0; i < gMaxPorts; i++) {
 		if (sPorts[i].id != -1 && sPorts[i].owner == owner) {
 			port_id id = sPorts[i].id;
 
@@ -276,7 +267,6 @@ _kern_create_port(int32 queueLength, const char *name)
 	sem_id readSem, writeSem, portSem;
 	port_id returnValue;
 	team_id	owner;
-	int i;
 
 	if (!sPortsActive)
 		port_init();
@@ -285,8 +275,9 @@ _kern_create_port(int32 queueLength, const char *name)
 
 	// check queue length
 	if (queueLength < 1
-		|| queueLength > MAX_QUEUE_LENGTH)
+			|| queueLength > MAX_QUEUE_LENGTH) {
 		return B_BAD_VALUE;
+	}
 
 	// check & dup name
 	if (name == NULL)
@@ -325,11 +316,10 @@ _kern_create_port(int32 queueLength, const char *name)
 	GRAB_PORT_LIST_LOCK();
 
 	// find the first empty spot
-	for (i = 0; i < gMaxPorts; i++) {
+	for (uint32 i = 0; i < gMaxPorts; i++) {
 		if (sPorts[i].id == -1) {
 			key_t  port_shm_key;
 			const size_t size = sizeof(port_msg) * queueLength;
-			int    j;
 			void* msg_queue;
 
 			// make the port_id be a multiple of the slot it's in
@@ -368,16 +358,14 @@ _kern_create_port(int32 queueLength, const char *name)
 			TRACE(("create_port: generated port queue key %d from %s + %d.\n", port_shm_key, path, static_port_count));
 			/* create and initialize a new semaphore table in shared memory */
 			sPorts[i].queue_shm = shmget(port_shm_key, size, IPC_CREAT | IPC_EXCL | 0700);
-			if (sPorts[i].queue_shm == -1 && errno == EEXIST)
-			{
+			if (sPorts[i].queue_shm == -1 && errno == EEXIST) {
 				/* TODO: this should be FATAL */
 				/* TODO: we don't know if it is large enough */
 				sPorts[i].queue_shm = shmget(port_shm_key, size, IPC_CREAT | 0700);
 				TRACE(("WARNING: Using pre-existing port queue.\n"));
 			}
 
-			if (sPorts[i].queue_shm < 0)
-			{
+			if (sPorts[i].queue_shm < 0) {
 				TRACE(("FATAL: Couldn't setup port queue with key %d: %s\n",
 						port_shm_key,
 						strerror(errno)));
@@ -390,8 +378,7 @@ _kern_create_port(int32 queueLength, const char *name)
 
 			/* point our local table at the master table */
 			msg_queue = shmat(sPorts[i].queue_shm, NULL, 0);
-			if (msg_queue == (void *) -1)
-			{
+			if (msg_queue == (void *) -1) {
 				printf("Couldn't attach port queue: %s\n", strerror(errno));
 				returnValue = B_NO_MEMORY;
 				sPorts[i].id = -1;
@@ -401,8 +388,7 @@ _kern_create_port(int32 queueLength, const char *name)
 			TRACE(("Port %d is now attached successfully\n", i));
 
 			port_msg* p = msg_queue;
-			for (j = 0; j < queueLength; j++)
-			{
+			for (uint32 j = 0; j < queueLength; j++) {
 				p[j].buffer_chain[0] = '\0';
 				p[j].code = 0;
 				p[j].size = 0;
@@ -542,16 +528,13 @@ _kern_find_port(const char *name)
 
 		RELEASE_PORT_LOCK(sPorts[i]);
 	}
-	
-	if (portFound >= 0)
-	{
+
+	if (portFound >= 0) {
 		TRACE(("find_port(): Port %ld matches search\n", portFound));
-	}
-	else
-	{
+	} else {
 		TRACE(("find_port(): Couldn't find port named \"%s\"\n", name));
 	}
-	
+
 	return portFound;
 }
 
@@ -1054,13 +1037,12 @@ _kern_set_port_owner(port_id id, team_id team)
 
 void teardown_ports(void)
 {
-	if (!sPorts)
-	{
+	if (!sPorts) {
 		printf("teardown_ports(): no ports to delete\n");
 		return;
 	}
 
-	/* remove all sems owned by our team */
+	// remove all sems owned by our team
 	int num_deleted = delete_owned_ports(getpid());
 
 	printf("teardown_ports(): %d ports deleted\n", num_deleted);

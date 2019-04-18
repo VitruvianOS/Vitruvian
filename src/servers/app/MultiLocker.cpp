@@ -20,7 +20,11 @@
 #endif
 
 
+#ifdef __HAIKU__
 const int32 LARGE_NUMBER = 100000;
+#else
+const int32 LARGE_NUMBER = 10000;
+#endif
 
 
 MultiLocker::MultiLocker(const char* baseName)

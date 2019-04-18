@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 
+
 ssize_t
 __getenv_reentrant(const char* name, char* buffer, size_t bufferSize)
 {
@@ -14,5 +15,6 @@ __getenv_reentrant(const char* name, char* buffer, size_t bufferSize)
 	else
 		strncpy(buffer, ret, bufferSize);
 
+	free(ret);
 	return bufferSize;
 }

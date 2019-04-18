@@ -32,10 +32,10 @@
 #	define TRACE(x) ;
 #endif
 
-/* FIXME: Threads that die normally do not remove their own entries from */
+/* TODO: Threads that die normally do not remove their own entries from */
 /*        the thread table.  They remain forever...                      */
 
-/* Todo: Compute based on the amount of available memory. */
+/* TODO: Compute based on the amount of available memory. */
 #define MAX_THREADS 4096
 
 #define FREE_SLOT 0xFFFFFFFF
@@ -67,34 +67,29 @@ init_thread(void)
 
 	/* create and initialize a new semaphore table in shared memory */
 	thread_shm = shmget(table_key, size, IPC_CREAT | IPC_EXCL | 0700);
-	if (thread_shm == -1 && errno == EEXIST)
-	{
+	if (thread_shm == -1 && errno == EEXIST) {
 		/* grab the existing shared memory thread table */
 		thread_shm = shmget(table_key, size, IPC_CREAT | 0700);
 		created = false;
 	}
 
-	if (thread_shm < 0)
-	{
+	if (thread_shm < 0) {
 		printf("FATAL: Couldn't setup thread table: %s\n", strerror(errno));
 		return;
 	}
 
 	/* point our local table at the master table */
 	thread_table = shmat(thread_shm, NULL, 0);
-	if (thread_table == (void *) -1)
-	{
+	if (thread_table == (void *) -1) {
 		printf("FATAL: Couldn't load thread table: %s\n", strerror(errno));
 		return;
 	}
 
-	if (created)
-	{
-		int i;
+	if (created) {
 		/* POTENTIAL RACE: table exists but is uninitialized until here */
-		for (i = 0; i < MAX_THREADS; i++)
+		for (uint32 i = 0; i < MAX_THREADS; i++) {
 			thread_table[i].thread = FREE_SLOT;
-
+		}
 	}
 
 	atexit(teardown_threads);
@@ -106,11 +101,8 @@ _kern_spawn_thread(thread_func func, const char *name, int32 priority, void *dat
 {
 	init_thread();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread == FREE_SLOT)
-		{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == FREE_SLOT) {
 			if (!name)
 				name = "no-name thread";
 
@@ -142,13 +134,9 @@ _kern_kill_thread(thread_id thread)
 {
 	init_thread();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread == thread)
-		{
-			if (pthread_kill(thread_table[i].pth, SIGKILL) == 0)
-			{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == thread) {
+			if (pthread_kill(thread_table[i].pth, SIGKILL) == 0) {
 				thread_table[i].thread = FREE_SLOT;
 				thread_table[i].team = 0;
 				if (thread_table[i].buffer)
@@ -169,11 +157,8 @@ _kern_rename_thread(thread_id thread, const char *newName)
 {
 	init_thread ();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread == thread)
-		{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == thread) {
 			strncpy(thread_table[i].name, newName, B_OS_NAME_LENGTH);
 			thread_table[i].name[B_OS_NAME_LENGTH - 1] = '\0';
 
@@ -189,14 +174,11 @@ void
 _kern_exit_thread(status_t status)
 {
 	pthread_t this_thread = pthread_self();
-	int i;
-	
+
 	init_thread();
-	
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].pth == this_thread)
-		{
+
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].pth == this_thread) {
 			thread_table[i].thread = FREE_SLOT;
 			thread_table[i].team = 0;
 			if (thread_table[i].buffer)
@@ -221,14 +203,10 @@ _kern_send_data(thread_id thread, int32 code, const void *buffer, size_t buffer_
 {
 	init_thread();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread == thread)
-		{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == thread) {
 			thread_table[i].code = code;
-			if (buffer)
-			{
+			if (buffer) {
 				if (!thread_table[i].buffer)
 					thread_table[i].buffer = malloc(buffer_size);
 				memcpy(thread_table[i].buffer, buffer, buffer_size);
@@ -247,19 +225,15 @@ _kern_receive_data(thread_id *sender, void *buffer, size_t bufferSize)
 {
 	init_thread();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread != FREE_SLOT)
-		{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread != FREE_SLOT) {
 			if (*sender)
 				thread_table[i].sender = *sender;
 
 			while (!thread_table[i].buffer)
 				continue;
 
-			if (thread_table[i].buffer)
-			{
+			if (thread_table[i].buffer) {
 				memcpy(buffer, thread_table[i].buffer, bufferSize);
 				free(thread_table[i].buffer);
 			}
@@ -277,9 +251,7 @@ _kern_has_data(thread_id thread)
 {
 	init_thread();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == thread)
 			return (thread_table[i].buffer != NULL);
 	}
@@ -290,14 +262,10 @@ _kern_has_data(thread_id thread)
 
 void teardown_threads()
 {
-	int count = 0;
-	int i;
-	
+	int32 count = 0;
 	/* Free thread table entries created by our process */
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].team == getpid())
-		{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].team == getpid()) {
 			thread_table[i].thread = FREE_SLOT;
 			thread_table[i].team = 0;
 			count++;
@@ -316,11 +284,8 @@ _kern_get_thread_info(thread_id id, thread_info *info)
 	if (info == NULL || id < B_OK)
 		return B_BAD_VALUE;
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread == id)
-		{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == id) {
 			info->thread = id;
 			strncpy (info->name, thread_table[i].name, B_OS_NAME_LENGTH);
 			info->name[B_OS_NAME_LENGTH - 1] = '\0';
@@ -342,12 +307,9 @@ _kern_get_next_thread_info(team_id team, int32 *_cookie, thread_info *info, size
 
 	if (info == NULL || size != sizeof(thread_info) || *_cookie < 0)
 		return B_BAD_VALUE;
-	
-	int i;
-	for (i = *_cookie; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].team == team)
-		{
+
+	for (uint32 i = *_cookie; i < MAX_THREADS; i++) {
+		if (thread_table[i].team == team) {
 			*_cookie = i + 1;
 
 			return _get_thread_info(thread_table[i].thread, info, size);
@@ -369,13 +331,9 @@ find_thread(const char *name)
 	if (name == NULL)
 		return sCurThreadID;
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread != FREE_SLOT)
-		{
-			if (!pth)
-			{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread != FREE_SLOT) {
+			if (!pth) {
 				if (strcmp(thread_table[i].name, name) == 0)
 					return i;
 			}
@@ -391,11 +349,8 @@ _kern_set_thread_priority(thread_id id, int32 priority)
 {
 	init_thread();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread == id)
-		{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == id) {
 			thread_table[i].priority = priority;
 			return B_OK;
 		}
@@ -413,11 +368,8 @@ _kern_wait_for_thread(thread_id id, status_t *_returnCode)
 
 	init_thread();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread == id)
-		{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == id) {
 			// It seems the thread was spawned
 			// but never resumed.
 			if (thread_table[i].pth == -1)
@@ -438,11 +390,8 @@ _kern_suspend_thread(thread_id id)
 {
 	init_thread();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread == id)
-		{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == id) {
 			pthread_kill(thread_table[i].pth, SIGSTOP);
 			thread_table[i].state = B_THREAD_SUSPENDED;
 
@@ -459,13 +408,9 @@ _kern_resume_thread(thread_id id)
 {
 	init_thread();
 
-	int i;
-	for (i = 0; i < MAX_THREADS; i++)
-	{
-		if (thread_table[i].thread == id)
-		{
-			switch (thread_table[i].state)
-			{
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == id) {
+			switch (thread_table[i].state) {
 				case B_THREAD_SPAWNED:
 				{
 					pthread_t tid;

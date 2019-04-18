@@ -23,7 +23,6 @@ target_sources(root PRIVATE
 	system.c
 	system_ioctl.c
 
-	fs/vfs.cpp
 	fs/build.cpp
 	fs/dir.c
 	#fs/fs_attr.cpp

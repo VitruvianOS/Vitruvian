@@ -1,6 +1,9 @@
 add_subdirectory(messaging)
 
 target_sources(root PRIVATE
+
+	main.cpp
+
 	byteorder.cpp
 	framebuffer.cpp
 	area.c

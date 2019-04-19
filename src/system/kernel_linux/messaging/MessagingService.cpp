@@ -523,7 +523,7 @@ send_message(const KMessage *message, const messaging_target *targets,
 }
 
 
-status_t __attribute__ ((constructor(101)))
+status_t
 init_messaging_service()
 {
 	static char buffer[sizeof(MessagingService)];

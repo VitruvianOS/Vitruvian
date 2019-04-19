@@ -201,7 +201,9 @@ _kern_snooze_etc(bigtime_t amount, int timeBase, int32 flags,
 {
 	// TODO: determine what timeBase and flags do
 	// TODO: fill remainingTime
-	*_remainingTime = 0;
+	if (_remainingTime != NULL)
+		*_remainingTime = 0;
+
 	return _kern_snooze(amount);
 }
 

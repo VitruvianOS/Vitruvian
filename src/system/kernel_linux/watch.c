@@ -27,7 +27,7 @@ _kern_stop_watching(dev_t device, ino_t node, port_id port,
 	uint32 token)
 {
 	UNIMPLEMENTED();
-	return B_ERROR;
+	return B_OK;
 }
 
 

@@ -13,7 +13,7 @@
 #include "volume/LinuxVolume.h"
 
 
-BObjectList<LinuxVolume> sVolumesList = NULL;
+BObjectList<LinuxVolume> sVolumesList;
 
 
 void
@@ -43,7 +43,7 @@ _kern_next_device(int32 *cookie)
 	if(*cookie >= sVolumesList.CountItems())
 		return -1;
 
-	printf("dev_t: %d\n", *cookie);
+	//printf("dev_t: %d\n", *cookie);
 
 	LinuxVolume* volume = sVolumesList.ItemAt(*cookie);
 

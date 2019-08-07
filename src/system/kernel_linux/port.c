@@ -599,7 +599,7 @@ status_t
 _kern_get_port_message_info_etc(port_id port, port_message_info *info,
 	size_t infoSize, uint32 flags, bigtime_t timeout)
 {
-	TRACE("UNIMPLEMENTED\n");
+	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
@@ -651,13 +651,6 @@ _kern_get_next_port_info(team_id team, int32 *_cookie, struct port_info *info)
 
 
 ssize_t
-_kern_port_buffer_size(port_id id)
-{
-	return port_buffer_size_etc(id, 0, 0);
-}
-
-
-ssize_t
 _kern_port_buffer_size_etc(port_id id, uint32 flags, bigtime_t timeout)
 {
 	sem_id cachedSem;
@@ -668,7 +661,7 @@ _kern_port_buffer_size_etc(port_id id, uint32 flags, bigtime_t timeout)
 	int tail;
 	void* msg_queue;
 
-	TRACE(("port_buffer_size(%ld): enter\n", (long)id));
+	TRACE(("port_buffer_size(%" B_PRId64 "): enter\n", (long)id));
 
 	if (!sPortsActive)
 		port_init();
@@ -738,6 +731,13 @@ _kern_port_buffer_size_etc(port_id id, uint32 flags, bigtime_t timeout)
 }
 
 
+ssize_t
+_kern_port_buffer_size(port_id id)
+{
+	return _kern_port_buffer_size_etc(id, 0, 0);
+}
+
+
 int32
 _kern_port_count(port_id id)
 {
@@ -768,12 +768,6 @@ _kern_port_count(port_id id)
 
 	// return count of messages (sem_count)
 	return count;
-}
-
-ssize_t
-_kern_read_port(port_id port, int32 *msgCode, void *msgBuffer, size_t bufferSize)
-{
-	return read_port_etc(port, msgCode, msgBuffer, bufferSize, 0, 0);
 }
 
 
@@ -886,10 +880,10 @@ _kern_read_port_etc(port_id id, int32 *_msgCode, void *msgBuffer, size_t bufferS
 }
 
 
-status_t
-_kern_write_port(port_id id, int32 msgCode, const void *msgBuffer, size_t bufferSize)
+ssize_t
+_kern_read_port(port_id port, int32 *msgCode, void *msgBuffer, size_t bufferSize)
 {
-	return write_port_etc(id, msgCode, msgBuffer, bufferSize, 0, 0);
+	return _kern_read_port_etc(port, msgCode, msgBuffer, bufferSize, 0, 0);
 }
 
 
@@ -997,6 +991,13 @@ _kern_write_port_etc(port_id id, int32 msgCode, const void *msgBuffer,
 
 	TRACE(("write_port_etc(): wrote %ld bytes to port %d queue position %d.\n", (long)bufferSize, slot, head));
 	return B_NO_ERROR;
+}
+
+
+status_t
+_kern_write_port(port_id id, int32 msgCode, const void *msgBuffer, size_t bufferSize)
+{
+	return _kern_write_port_etc(id, msgCode, msgBuffer, bufferSize, 0, 0);
 }
 
 

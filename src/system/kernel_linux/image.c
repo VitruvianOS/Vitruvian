@@ -100,5 +100,5 @@ void
 clear_caches(void* address, size_t length, uint32 flags)
 {
 	UNIMPLEMENTED();
-	return B_ERROR;
+	return;
 }

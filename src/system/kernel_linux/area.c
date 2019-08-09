@@ -288,5 +288,5 @@ _kern_reserve_address_range(addr_t* _address,
 	uint32 addressSpec, addr_t size)
 {
 	UNIMPLEMENTED();
-	return B_ERROR;
+	return B_OK;
 }

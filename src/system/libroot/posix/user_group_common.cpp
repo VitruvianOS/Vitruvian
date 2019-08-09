@@ -16,7 +16,6 @@
 #include <new>
 
 #include <errno_private.h>
-#include <launch.h>
 #include <libroot_private.h>
 #include <locks.h>
 #include <RegistrarDefs.h>
@@ -55,14 +54,9 @@ BPrivate::user_group_unlock()
 port_id
 BPrivate::get_registrar_authentication_port()
 {
-	if (sRegistrarPort < 0) {
-		BPrivate::KMessage data;
-		if (BPrivate::get_launch_data(B_REGISTRAR_SIGNATURE, data)
-				== B_OK) {
-			sRegistrarPort = data.GetInt32(
-				B_REGISTRAR_AUTHENTICATION_PORT_NAME "_port", -1);
-		}
-	}
+	if (sRegistrarPort < 0)
+		sRegistrarPort = find_port(B_REGISTRAR_AUTHENTICATION_PORT_NAME);
+
 	return sRegistrarPort;
 }
 

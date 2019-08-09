@@ -22,7 +22,6 @@
 #include <Roster.h>
 
 #include <AppMisc.h>
-#include <LaunchRoster.h>
 #include <LooperList.h>
 #include <MessagePrivate.h>
 #include <MessageUtils.h>
@@ -326,20 +325,12 @@ BMessenger::_InitData(const char* signature, team_id team, status_t* _result)
 		// no team ID given
 		if (signature != NULL) {
 			// Try existing launch communication data first
-			BMessage data;
-			if (BLaunchRoster().GetData(signature, data) == B_OK) {
-				info.port = data.GetInt32("port", -1);
-				team = data.GetInt32("team", -5);
-			}
-			if (info.port < 0) {
-				result = be_roster->GetAppInfo(signature, &info);
-				team = info.team;
-				// B_ERROR means that no application with the given signature
-				// is running. But we are supposed to return B_BAD_VALUE.
-				if (result == B_ERROR)
-					result = B_BAD_VALUE;
-			} else
-				info.flags = 0;
+			result = be_roster->GetAppInfo(signature, &info);
+			team = info.team;
+			// B_ERROR means that no application with the given signature
+			// is running. But we are supposed to return B_BAD_VALUE.
+			if (result == B_ERROR)
+				result = B_BAD_VALUE;
 		} else
 			result = B_BAD_TYPE;
 	} else {

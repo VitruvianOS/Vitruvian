@@ -12,7 +12,6 @@ target_sources(be PRIVATE
 	Invoker.cpp
 	Key.cpp
 	KeyStore.cpp
-	LaunchRoster.cpp
 	LinkReceiver.cpp
 	LinkSender.cpp
 	Looper.cpp

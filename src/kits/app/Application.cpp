@@ -40,8 +40,6 @@
 #include <AutoLocker.h>
 #include <BitmapPrivate.h>
 #include <DraggerPrivate.h>
-#include <LaunchDaemonDefs.h>
-#include <LaunchRoster.h>
 #include <LooperList.h>
 #include <MenuWindow.h>
 #include <PicturePrivate.h>
@@ -265,7 +263,7 @@ BApplication::BApplication(const char* signature, status_t* _error)
 BApplication::BApplication(const char* signature, const char* looperName,
 	port_id port, bool initGUI, status_t* _error)
 	:
-	BLooper(B_NORMAL_PRIORITY + 1, port < 0 ? _GetPort(signature) : port,
+	BLooper(B_NORMAL_PRIORITY + 1, port /*< 0 ? _GetPort(signature) : port*/,
 		looperName != NULL ? looperName : kDefaultLooperName)
 {
 	_InitData(signature, initGUI, _error);
@@ -373,7 +371,7 @@ BApplication::_InitData(const char* signature, bool initGUI, status_t* _error)
 #ifndef RUN_WITHOUT_REGISTRAR
 	bool registerApp = signature == NULL
 		|| (strcasecmp(signature, B_REGISTRAR_SIGNATURE) != 0
-			&& strcasecmp(signature, kLaunchDaemonSignature) != 0);
+			/*&& strcasecmp(signature, kLaunchDaemonSignature) != 0*/);
 	// get team and thread
 	team_id team = Team();
 	thread_id thread = BPrivate::main_thread_for(team);
@@ -543,7 +541,8 @@ DBG(OUT("BApplication::InitData() done\n"));
 port_id
 BApplication::_GetPort(const char* signature)
 {
-	return BLaunchRoster().GetPort(signature, NULL);
+	UNIMPLEMENTED();
+	//return BLaunchRoster().GetPort(signature, NULL);
 }
 
 

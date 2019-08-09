@@ -14,7 +14,6 @@
 
 #include <syslog.h>
 
-#include <LaunchRoster.h>
 #include <PortLink.h>
 
 #include "BitmapManager.h"
@@ -73,7 +72,7 @@ AppServer::AppServer(status_t* status)
 	BMessage data;
 	data.AddString("name", "app_server");
 	data.AddInt32("session", 0);
-	BLaunchRoster().Target("login", data);
+	//BLaunchRoster().Target("login", data);
 }
 
 

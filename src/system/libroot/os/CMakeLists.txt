@@ -12,7 +12,6 @@ target_sources(root PRIVATE
 	fs_query.cpp
 	fs_volume.c
 	image.cpp
-	launch.cpp
 	locks
 	memory.cpp
 	parsedate.cpp

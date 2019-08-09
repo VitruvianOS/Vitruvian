@@ -43,7 +43,5 @@ target_sources(root PRIVATE
 	#fs/kernel_interface.POSIX.cpp
 	fs/volume/LinuxVolume.cpp
 
-	locks/lock.cpp
-
 	tls.cpp
 )

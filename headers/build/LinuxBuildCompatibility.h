@@ -136,6 +136,14 @@ int		_haiku_build_fcntl(int fd, int op, int argument);
 int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 			const char* to);
 
+#define recursive_lock_init(lock, name)    __recursive_lock_init(lock, name)
+#define recursive_lock_init_etc(lock, name, flags) \
+      __recursive_lock_init_etc(lock, name, flags)
+#define recursive_lock_destroy(lock)       __recursive_lock_destroy(lock)
+#define recursive_lock_lock(lock)          __recursive_lock_lock(lock)
+#define recursive_lock_unlock(lock)        __recursive_lock_unlock(lock)
+#define recursive_lock_get_recursion(lock) __recursive_lock_get_recursion(lock)
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

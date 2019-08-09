@@ -135,12 +135,16 @@ get_app_ref(entry_ref *ref, bool traverse)
 team_id
 current_team()
 {
+#if 0
 	if (sCurrentTeam < 0) {
 		thread_info info;
 		if (get_thread_info(find_thread(NULL), &info) == B_OK)
 			sCurrentTeam = info.team;
 	}
 	return sCurrentTeam;
+#else
+	return getpid();
+#endif
 }
 
 
@@ -201,7 +205,7 @@ create_desktop_connection(ServerLink* link, const char* name, int32 capacity)
 	BMessage request(AS_GET_DESKTOP);
 	request.AddInt32("user", getuid());
 	request.AddInt32("version", AS_PROTOCOL_VERSION);
-	request.AddString("target", getenv("TARGET_SCREEN"));
+	request.AddString("target", "baron");
 
 	BMessenger server("application/x-vnd.Haiku-app_server");
 	BMessage reply;
@@ -256,7 +260,7 @@ create_desktop_connection(ServerLink* link, const char* name, int32 capacity)
 	link->StartMessage(AS_GET_DESKTOP);
 	link->Attach<port_id>(clientPort);
 	link->Attach<int32>(getuid());
-	link->AttachString(getenv("TARGET_SCREEN"));
+	link->AttachString("baron");
 	link->Attach<int32>(AS_PROTOCOL_VERSION);
 
 	int32 code;

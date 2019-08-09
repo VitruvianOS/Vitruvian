@@ -195,9 +195,9 @@ TRoster::HandleAddApplication(BMessage* request)
 	uint32 token = 0;
 
 	uint32 launchFlags = flags & B_LAUNCH_MASK;
-	BEntry entry(&ref);
-	if (!entry.Exists())
-		SET_ERROR(error, B_ENTRY_NOT_FOUND);
+	//BEntry entry(&ref);
+	//if (!entry.Exists())
+	//	SET_ERROR(error, B_ENTRY_NOT_FOUND);
 
 	if (error == B_OK)
 		_ValidateRunning(ref, signature);
@@ -393,8 +393,8 @@ TRoster::HandleIsAppRegistered(BMessage* request)
 
 	// check the parameters
 	// entry_ref
-	if (error == B_OK && !BEntry(&ref).Exists())
-		SET_ERROR(error, B_ENTRY_NOT_FOUND);
+	//if (error == B_OK && !BEntry(&ref).Exists())
+	//	SET_ERROR(error, B_ENTRY_NOT_FOUND);
 	// team/token
 	if (error == B_OK && team < 0 && token == 0)
 		SET_ERROR(error, B_BAD_VALUE);

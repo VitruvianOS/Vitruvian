@@ -711,17 +711,17 @@ FontManager::_AddPath(BEntry& entry, font_directory** _newDirectory)
 	directory->group = stat.st_gid;
 	directory->revision = 0;
 
-	status = watch_node(&nodeRef, B_WATCH_DIRECTORY, this);
-	if (status != B_OK) {
+	//status = watch_node(&nodeRef, B_WATCH_DIRECTORY, this);
+	//if (status != B_OK) {
 		// we cannot watch this directory - while this is unfortunate,
 		// it's not a critical error
-		printf("could not watch directory %" B_PRIdDEV ":%" B_PRIdINO "\n",
-			nodeRef.device, nodeRef.node);
+		//printf("could not watch directory %" B_PRIdDEV ":%" B_PRIdINO "\n",
+			//nodeRef.device, nodeRef.node);
 			// TODO: should go into syslog()
-	} else {
+	//} else {
 		BPath path(&entry);
 		FTRACE(("FontManager: now watching: %s\n", path.Path()));
-	}
+	//}
 
 	fDirectories.AddItem(directory);
 

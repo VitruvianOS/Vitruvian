@@ -48,7 +48,7 @@ static int thread_shm = -1;
 static void init_thread(void);
 static void teardown_threads(void);
 
-static __thread thread_id sCurThreadID;
+static __thread thread_id sCurThreadID = B_NAME_NOT_FOUND;
 
 /* TODO: table access is not protected by a semaphore */
 

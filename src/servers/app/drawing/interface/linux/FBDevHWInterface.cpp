@@ -30,7 +30,9 @@ FBDevHWInterface::FBDevHWInterface()
 	ioctl(fFrameBuffer, FBIOPUT_VSCREENINFO, &fVInfo);
 	ioctl(fFrameBuffer, FBIOGET_VSCREENINFO, &fVInfo);
 
-	//printf("%ld\n", fScreenSize);
+	fDisplayMode.virtual_width = fVInfo.xres_virtual;
+	fDisplayMode.virtual_height = fVInfo.yres_virtual;
+	fDisplayMode.space = B_RGB32;
 
 	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
 	//fBackBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
@@ -39,7 +41,7 @@ FBDevHWInterface::FBDevHWInterface()
 
 FBDevHWInterface::~FBDevHWInterface()
 {
-	UNIMPLEMENTED();
+	CALLED();
 }
 
 
@@ -49,8 +51,6 @@ FBDevHWInterface::Initialize()
 	status_t ret = HWInterface::Initialize();
 	if (ret < B_OK)
 		return ret;
-
-	printf("hw init ok\n");
 
 	ret = fFrontBuffer->InitCheck();
 	if (ret < B_OK)
@@ -63,134 +63,144 @@ FBDevHWInterface::Initialize()
 status_t
 FBDevHWInterface::Shutdown()
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return B_OK;
 }
 
 
 status_t
-FBDevHWInterface::SetMode(const display_mode &mode)
+FBDevHWInterface::SetMode(const display_mode& mode)
 {
-	UNIMPLEMENTED();
-	return B_UNSUPPORTED;
+	CALLED();
+	return B_OK;
 }
 
 
 void
-FBDevHWInterface::GetMode(display_mode *mode)
+FBDevHWInterface::GetMode(display_mode* mode)
 {
-	UNIMPLEMENTED();
-	if (mode != NULL)
-		memset(mode, 0, sizeof(display_mode));
+	CALLED();
+	*mode = fDisplayMode;
 }
 
 
 status_t
-FBDevHWInterface::GetDeviceInfo(accelerant_device_info *info)
+FBDevHWInterface::GetDeviceInfo(accelerant_device_info* info)
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return B_UNSUPPORTED;
 }
 
 
 status_t
-FBDevHWInterface::GetFrameBufferConfig(frame_buffer_config &config)
+FBDevHWInterface::GetFrameBufferConfig(frame_buffer_config& config)
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return B_UNSUPPORTED;
 }
 
 
 status_t
-FBDevHWInterface::GetModeList(display_mode **_modeList, uint32 *_count)
+FBDevHWInterface::GetModeList(display_mode** _modeList, uint32* _count)
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return B_UNSUPPORTED;
 }
 
 
 status_t
-FBDevHWInterface::GetPixelClockLimits(display_mode *mode, uint32 *_low, uint32 *_high)
+FBDevHWInterface::GetPixelClockLimits(display_mode* mode, uint32* _low, uint32* _high)
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return B_UNSUPPORTED;
 }
 
 
 status_t
-FBDevHWInterface::GetTimingConstraints(display_timing_constraints *constraints)
+FBDevHWInterface::GetTimingConstraints(display_timing_constraints* constraints)
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return B_UNSUPPORTED;
 }
 
 
 status_t
-FBDevHWInterface::ProposeMode(display_mode *candidate, const display_mode *low, const display_mode *high)
+FBDevHWInterface::ProposeMode(display_mode* candidate,
+	const display_mode* low, const display_mode* high)
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return B_UNSUPPORTED;
 }
 
 
 sem_id
 FBDevHWInterface::RetraceSemaphore()
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return B_UNSUPPORTED;
 }
 
 
 status_t
 FBDevHWInterface::WaitForRetrace(bigtime_t timeout)
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return B_UNSUPPORTED;
 }
 
 
 status_t
 FBDevHWInterface::SetDPMSMode(uint32 state)
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return B_UNSUPPORTED;
 }
 
 
 uint32
 FBDevHWInterface::DPMSMode()
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return B_UNSUPPORTED;
 }
 
 
 uint32
 FBDevHWInterface::DPMSCapabilities()
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return 0;
 }
 
 
 status_t
 FBDevHWInterface::SetBrightness(float)
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return B_UNSUPPORTED;
 }
 
 
 status_t
-FBDevHWInterface::GetBrightness(float *)
+FBDevHWInterface::GetBrightness(float*)
 {
-	UNIMPLEMENTED();
+	CALLED();
+	return B_UNSUPPORTED;
 }
 
 
-RenderingBuffer *
+RenderingBuffer*
 FBDevHWInterface::FrontBuffer() const
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return fFrontBuffer;
 }
 
 
-RenderingBuffer *
+RenderingBuffer*
 FBDevHWInterface::BackBuffer() const
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return fBackBuffer;
 }
 
@@ -204,16 +214,8 @@ FBDevHWInterface::IsDoubleBuffered() const
 
 
 status_t
-FBDevHWInterface::Invalidate(const BRect &frame)
+FBDevHWInterface::CopyBackToFront(const BRect& frame)
 {
-	UNIMPLEMENTED();
-	return B_OK;
-}
-
-
-status_t
-FBDevHWInterface::CopyBackToFront(const BRect &frame)
-{
-	UNIMPLEMENTED();
-	return B_OK;
+	CALLED();
+	return B_ERROR;
 }

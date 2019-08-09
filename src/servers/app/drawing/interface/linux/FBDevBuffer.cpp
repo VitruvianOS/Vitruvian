@@ -21,32 +21,35 @@ FBDevBuffer::FBDevBuffer(int fd, struct fb_var_screeninfo vInfo,
 	fInfo = finfo;
 	fBuffer = mmap(0, fInfo.line_length * fVInfo.yres_virtual,
 		PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)0);
-	
-	/*int x,y;
 
-	for (x=0;x<fVInfo.xres;x++)
-		for (y=0;y<fVInfo.yres;y++)
-		{
-			long location = (x+fVInfo.xoffset) * (fVInfo.bits_per_pixel/8) + (y+fVInfo.yoffset) * fInfo.line_length;
-			*((uint32_t*)(fBuffer + location)) = pixel_color(0xFF,0x00,0xFF, &fVInfo);
-		}*/
+#if 0
+	int x,y;
+	for (x = 0;x < fVInfo.xres; x++) {
+		for (y = 0; y < fVInfo.yres; y++) {
+			long location = (x+fVInfo.xoffset)
+				* (fVInfo.bits_per_pixel/8)
+					+ (y+fVInfo.yoffset) * fInfo.line_length;
+			*((uint32_t*)(fBuffer + location))
+				= pixel_color(0xFF,0x00,0xFF, &fVInfo);
+		}
+	}
+#endif
 }
 
 
 FBDevBuffer::~FBDevBuffer()
 {
-	UNIMPLEMENTED();
+	CALLED();
 }
 
 
 status_t
 FBDevBuffer::InitCheck() const
 {
-	UNIMPLEMENTED();
+	CALLED();
 	if (fBuffer != MAP_FAILED)
 		return B_OK;
 
-	printf("fbbuf err\n");
 	return B_ERROR;
 }
 
@@ -54,7 +57,7 @@ FBDevBuffer::InitCheck() const
 color_space
 FBDevBuffer::ColorSpace() const
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return B_RGB32;
 }
 
@@ -62,7 +65,7 @@ FBDevBuffer::ColorSpace() const
 void*
 FBDevBuffer::Bits() const
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return (void*)fBuffer;
 }
 
@@ -70,7 +73,7 @@ FBDevBuffer::Bits() const
 uint32
 FBDevBuffer::BytesPerRow() const
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return fInfo.line_length;
 }
 
@@ -78,7 +81,7 @@ FBDevBuffer::BytesPerRow() const
 uint32
 FBDevBuffer::Width() const
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return fVInfo.xres;
 }
 
@@ -86,6 +89,6 @@ FBDevBuffer::Width() const
 uint32
 FBDevBuffer::Height() const
 {
-	UNIMPLEMENTED();
+	CALLED();
 	return fVInfo.yres;
 }

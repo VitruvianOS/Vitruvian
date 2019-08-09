@@ -12,6 +12,13 @@
 #include "RenderingBuffer.h"
 
 
+#if DEBUG
+	#define CALLED() 			printf("CALLED %s\n",__PRETTY_FUNCTION__)
+#else
+  	#define CALLED() 			((void)0)
+#endif
+
+
 class FBDevBuffer : public RenderingBuffer {
 public:
 								FBDevBuffer(int fd,

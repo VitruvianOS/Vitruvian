@@ -54,7 +54,6 @@ public:
 	virtual	RenderingBuffer*	BackBuffer() const;
 	virtual	bool				IsDoubleBuffered() const;
 
-	virtual	status_t			Invalidate(const BRect& frame);
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 
 private:
@@ -67,7 +66,6 @@ private:
 
 			struct fb_fix_screeninfo	fInfo;
 			struct fb_var_screeninfo	fVInfo;
-			//long				fScreenSize;
 
 };
 

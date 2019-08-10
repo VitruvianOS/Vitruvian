@@ -31,7 +31,7 @@ int32 get_rounded_cpu_speed(void);
 #endif
 
 
-#if defined(__INTEL__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__)
 /*!	Tries to parse an Intel CPU ID string to match our usual naming scheme.
 	Note, this function is not thread safe, and must only be called once
 	at a time.
@@ -182,7 +182,7 @@ get_cpu_vendor_string(enum cpu_vendor cpuVendor)
 }
 
 
-#if defined(__INTEL__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__)
 /*! Parameter 'name' needs to point to an allocated array of 49 characters. */
 void
 get_cpuid_model_string(char *name)
@@ -237,21 +237,21 @@ get_cpuid_model_string(char *name)
 		}
 	}
 }
-#endif	/* __INTEL__ || __x86_64__ */
+#endif	/* __i386__ || __x86_64__ */
 
 
 static const char*
 get_cpu_model_string(enum cpu_platform platform, enum cpu_vendor cpuVendor,
 	uint32 cpuModel)
 {
-#if defined(__INTEL__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__)
 	char cpuidName[49];
 #endif
 
 	(void)cpuVendor;
 	(void)cpuModel;
 
-#if defined(__INTEL__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__)
 	if (platform != B_CPU_x86 && platform != B_CPU_x86_64)
 		return NULL;
 
@@ -324,8 +324,7 @@ get_cpu_model_string(enum cpu_platform platform, enum cpu_vendor cpuVendor,
 				return "FX-Series";
 			if (model == 0x10 || model == 0x13)
 				return "A-Series";
-		} else if (family == 0x8f)
-			return "Ryzen 7";
+		}
 
 		// Fallback to manual parsing of the model string
 		get_cpuid_model_string(cpuidName);
@@ -483,7 +482,7 @@ get_cpu_type(char *vendorBuffer, size_t vendorSize, char *modelBuffer,
 	cpu_topology_node_info* topology = NULL;
 	get_cpu_topology_info(NULL, &topologyNodeCount);
 	if (topologyNodeCount != 0)
-		topology = new cpu_topology_node_info[topologyNodeCount];
+		topology = (cpu_topology_node_info*)calloc(topologyNodeCount, sizeof(cpu_topology_node_info));
 	get_cpu_topology_info(topology, &topologyNodeCount);
 
 	enum cpu_platform platform = B_CPU_UNKNOWN;
@@ -507,7 +506,7 @@ get_cpu_type(char *vendorBuffer, size_t vendorSize, char *modelBuffer,
 				break;
 		}
 	}
-	delete[] topology;
+	free(topology);
 
 	vendor = get_cpu_vendor_string(cpuVendor);
 	if (vendor == NULL)
@@ -529,7 +528,7 @@ get_rounded_cpu_speed(void)
 	cpu_topology_node_info* topology = NULL;
 	get_cpu_topology_info(NULL, &topologyNodeCount);
 	if (topologyNodeCount != 0)
-		topology = new cpu_topology_node_info[topologyNodeCount];
+		topology = (cpu_topology_node_info*)calloc(topologyNodeCount, sizeof(cpu_topology_node_info));
 	get_cpu_topology_info(topology, &topologyNodeCount);
 
 	uint64 cpuFrequency = 0;
@@ -539,7 +538,7 @@ get_rounded_cpu_speed(void)
 				break;
 		}
 	}
-	delete[] topology;
+	free(topology);
 
 	int target, frac, delta;
 	int freqs[] = { 100, 50, 25, 75, 33, 67, 20, 40, 60, 80, 10, 30, 70, 90 };

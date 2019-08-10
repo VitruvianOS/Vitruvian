@@ -1,6 +1,39 @@
 target_sources(be PRIVATE
-	#CalendarView.cpp
+	AboutMenuItem.cpp
+	ArgumentVector.cpp
+	AttributeUtilities.cpp
+	BitmapButton.cpp
+	CalendarView.cpp
+	ColorQuantizer.cpp
+	CommandPipe.cpp
 	DragTrackingFilter.cpp
+	DriverSettingsMessageAdapter.cpp
+	#Geolocation.cpp
 	HashString.cpp
+	#IconButton.cpp
+	#IconView.cpp
+	JsonWriter.cpp
+	JsonEventListener.cpp
+	JsonMessageWriter.cpp
+	JsonTextWriter.cpp
+	JsonEvent.cpp
+	Json.cpp
+	Keymap.cpp
+	LongAndDragTrackingFilter.cpp
+	MessageBuilder.cpp
 	NaturalCompare.cpp
+	PromptWindow.cpp
+	#QueryFile.cpp
+	RegExp.cpp
+	RWLocker.cpp
+	RWLockManager.cpp
+	SettingsHandler.cpp
+	ShakeTrackingFilter.cpp
+	StringForRate.cpp
+	StringForSize.cpp
+	StripeView.cpp
+	TextTable.cpp
+	Thread.cpp
+	ToolBar.cpp
+	Variant.cpp
 )

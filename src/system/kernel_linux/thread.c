@@ -453,3 +453,11 @@ _kern_unblock_thread(thread_id thread, status_t status)
 {
 	UNIMPLEMENTED();
 }
+
+
+status_t
+_kern_unblock_threads(thread_id* threads, uint32 count,
+	status_t status)
+{
+	UNIMPLEMENTED();
+}

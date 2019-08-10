@@ -74,6 +74,7 @@ set(
 	"headers/os/kernel"
 	"headers/os/support"
 	"headers/os/storage"
+	"headers/os/translation"
 
 	"headers/os/config"
 	"headers/os/add-ons/file_system"

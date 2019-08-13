@@ -4,11 +4,12 @@ target_sources(root PRIVATE
 
 	main.cpp
 
-	byteorder.cpp
-	framebuffer.cpp
 	area.c
 	atomic.c
+	byteorder.cpp
 	debug.c
+	extended_team_info.cpp
+	framebuffer.cpp
 	getenv.c
 	image.c
 	memory.cpp
@@ -25,6 +26,7 @@ target_sources(root PRIVATE
 	libc.c
 	real_time_clock.c
 	shutdown.cpp
+	signal.cpp
 	system.c
 	system_ioctl.c
 
@@ -42,6 +44,8 @@ target_sources(root PRIVATE
 	fs/fs_volume.c
 	#fs/kernel_interface.POSIX.cpp
 	fs/volume/LinuxVolume.cpp
+
+	disk_device/disk_device.cpp
 
 	tls.cpp
 )

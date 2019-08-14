@@ -38,6 +38,8 @@
 
 #include <string.h>
 
+#include "main.h"
+
 
 #define TRACE_AREA 0
 #if TRACE_AREA
@@ -58,7 +60,7 @@
 area_info* g_pAreaMap = NULL;
 
 
-void init_area_map(void)
+void init_area_map()
 {
 	int shmid;
 	int created = 1;
@@ -102,8 +104,10 @@ void init_area_map(void)
 area_id _kern_create_area(const char* name, void** start_addr,
 	uint32 addr_spec, size_t size, uint32 lock, uint32 protection)
 {
+#ifdef DEBUG
 	if (g_pAreaMap == NULL)
-		init_area_map();
+		debugger("area map is null");
+#endif
 
 	for (uint32 n = 0; n < AREA_ID_MAX; n++) {
 		if (g_pAreaMap[n].area == AREA_ID_FREE) {
@@ -142,9 +146,6 @@ area_id _kern_create_area(const char* name, void** start_addr,
 area_id _kern_clone_area(const char* name, void** dest_addr,
 	uint32 addr_spec, uint32 protection, area_id source)
 {
-	if (g_pAreaMap == NULL)
-		init_area_map();
-
 	if (source < 0 || source >= AREA_ID_MAX || g_pAreaMap == NULL ||
 		g_pAreaMap[source].area == AREA_ID_FREE) {
 		printf("clone_area(): AREA IS FREE\n");
@@ -192,9 +193,6 @@ area_id _kern_clone_area(const char* name, void** dest_addr,
 area_id
 _kern_find_area(const char *name)
 {
-	if (g_pAreaMap == NULL)
-		init_area_map();
-
 	for (uint32 n = 0; n < AREA_ID_MAX; n++) {
 		if (g_pAreaMap[n].area != AREA_ID_FREE
 				&& strcmp(name, g_pAreaMap[n].name) == 0) {
@@ -209,9 +207,6 @@ _kern_find_area(const char *name)
 area_id
 _kern_area_for (void *address)
 {
-	if (g_pAreaMap == NULL)
-		init_area_map();
-
 	for (uint32 n = 0; n < AREA_ID_MAX; n++) {
 		if (g_pAreaMap[n].area != AREA_ID_FREE) {
 			if ((address >= g_pAreaMap[n].address)

@@ -49,3 +49,7 @@ target_sources(root PRIVATE
 
 	tls.cpp
 )
+
+target_include_directories(root PRIVATE
+	"./"
+)

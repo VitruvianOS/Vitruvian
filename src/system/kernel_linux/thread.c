@@ -25,6 +25,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "main.h"
+
+
 #define TRACE_THREAD 1
 #ifdef TRACE_THREAD
 #	define TRACE(x) dprintf x
@@ -45,14 +48,13 @@ typedef void* (*pthread_entry) (void*);
 thread_info *thread_table = NULL;
 static int thread_shm = -1;
 
-static void init_thread(void);
 static void teardown_threads(void);
 
 static __thread thread_id sCurThreadID = B_NAME_NOT_FOUND;
 
 /* TODO: table access is not protected by a semaphore */
 
-static void
+void
 init_thread(void)
 {
 	key_t table_key;
@@ -99,8 +101,6 @@ init_thread(void)
 thread_id
 _kern_spawn_thread(thread_func func, const char *name, int32 priority, void *data)
 {
-	init_thread();
-
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == FREE_SLOT) {
 			if (!name)
@@ -132,8 +132,6 @@ _kern_spawn_thread(thread_func func, const char *name, int32 priority, void *dat
 status_t
 _kern_kill_thread(thread_id thread)
 {
-	init_thread();
-
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == thread) {
 			if (pthread_kill(thread_table[i].pth, SIGKILL) == 0) {
@@ -155,8 +153,6 @@ _kern_kill_thread(thread_id thread)
 status_t
 _kern_rename_thread(thread_id thread, const char *newName)
 {
-	init_thread ();
-
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == thread) {
 			strncpy(thread_table[i].name, newName, B_OS_NAME_LENGTH);
@@ -174,8 +170,6 @@ void
 _kern_exit_thread(status_t status)
 {
 	pthread_t this_thread = pthread_self();
-
-	init_thread();
 
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].pth == this_thread) {
@@ -201,8 +195,6 @@ _kern_on_exit_thread(void (*callback)(void *), void *data)
 status_t
 _kern_send_data(thread_id thread, int32 code, const void *buffer, size_t buffer_size)
 {
-	init_thread();
-
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == thread) {
 			thread_table[i].code = code;
@@ -223,8 +215,6 @@ _kern_send_data(thread_id thread, int32 code, const void *buffer, size_t buffer_
 status_t
 _kern_receive_data(thread_id *sender, void *buffer, size_t bufferSize)
 {
-	init_thread();
-
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread != FREE_SLOT) {
 			if (*sender)
@@ -249,8 +239,6 @@ _kern_receive_data(thread_id *sender, void *buffer, size_t bufferSize)
 bool
 _kern_has_data(thread_id thread)
 {
-	init_thread();
-
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == thread)
 			return (thread_table[i].buffer != NULL);
@@ -279,8 +267,6 @@ void teardown_threads()
 status_t
 _kern_get_thread_info(thread_id id, thread_info *info)
 {
-	init_thread();
-
 	if (info == NULL || id < B_OK)
 		return B_BAD_VALUE;
 
@@ -303,8 +289,6 @@ _kern_get_thread_info(thread_id id, thread_info *info)
 status_t
 _kern_get_next_thread_info(team_id team, int32 *_cookie, thread_info *info)
 {
-	init_thread();
-
 	if (info == NULL || *_cookie < 0)
 		return B_BAD_VALUE;
 
@@ -323,8 +307,6 @@ _kern_get_next_thread_info(team_id team, int32 *_cookie, thread_info *info)
 thread_id
 find_thread(const char *name)
 {
-	init_thread();
-
 	pthread_t pth = 0;
 
 	// TODO: We need to make more use of thread local storage!
@@ -347,7 +329,6 @@ find_thread(const char *name)
 status_t
 _kern_set_thread_priority(thread_id id, int32 priority)
 {
-	init_thread();
 
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == id) {
@@ -365,8 +346,6 @@ _kern_wait_for_thread(thread_id id, status_t *_returnCode)
 {
 	if (_returnCode == NULL)
 		return B_BAD_VALUE;
-
-	init_thread();
 
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == id) {
@@ -388,8 +367,6 @@ _kern_wait_for_thread(thread_id id, status_t *_returnCode)
 status_t
 _kern_suspend_thread(thread_id id)
 {
-	init_thread();
-
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == id) {
 			pthread_kill(thread_table[i].pth, SIGSTOP);
@@ -406,8 +383,6 @@ _kern_suspend_thread(thread_id id)
 status_t
 _kern_resume_thread(thread_id id)
 {
-	init_thread();
-
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].thread == id) {
 			switch (thread_table[i].state) {
@@ -445,6 +420,7 @@ status_t
 _kern_block_thread(uint32 flags, bigtime_t timeout)
 {
 	UNIMPLEMENTED();
+	return B_ERROR;
 }
 
 
@@ -452,6 +428,7 @@ status_t
 _kern_unblock_thread(thread_id thread, status_t status)
 {
 	UNIMPLEMENTED();
+	return B_ERROR;
 }
 
 
@@ -460,4 +437,5 @@ _kern_unblock_threads(thread_id* threads, uint32 count,
 	status_t status)
 {
 	UNIMPLEMENTED();
+	return B_ERROR;
 }

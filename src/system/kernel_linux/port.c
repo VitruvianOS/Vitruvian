@@ -22,6 +22,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "main.h"
+
 #define dprintf printf
 #define panic printf
 #define team_get_current_team_id getpid
@@ -86,13 +88,12 @@ static bool sPortsActive = false;
 #define GRAB_PORT_LOCK(s) if ((s).lock != -1) do {} while(acquire_sem((s).lock) == B_INTERRUPTED)
 #define RELEASE_PORT_LOCK(s) if ((s).lock != -1) release_sem((s).lock)
 
-static status_t port_init(void);
 static void teardown_ports(void);
 static int delete_owned_ports(team_id owner);
 
 
 status_t
-port_init(void)
+port_init()
 {
 	int size = sizeof(sem_id) + sizeof(port_id) + (sizeof(struct port_entry) * gMaxPorts);
 	key_t table_key;
@@ -186,8 +187,6 @@ int
 dump_port_info(int argc, char **argv)
 {
 	int is_number;
-	
-	port_init();
 	 
 	if (!sPortsActive) {
 		dprintf("No Cosmoe ports in use.\n");
@@ -268,8 +267,6 @@ _kern_create_port(int32 queueLength, const char *name)
 	port_id returnValue;
 	team_id	owner;
 
-	if (!sPortsActive)
-		port_init();
 	if (!sPortsActive)
 		return B_BAD_PORT_ID;
 
@@ -425,8 +422,6 @@ _kern_close_port(port_id id)
 {
 	int slot;
 
-	if (!sPortsActive)
-		port_init();
 	if (!sPortsActive || id < 0)
 		return B_BAD_PORT_ID;
 
@@ -456,8 +451,6 @@ _kern_delete_port(port_id id)
 	sem_id readSem, writeSem, portSem;
 	int slot;
 
-	if (!sPortsActive)
-		port_init();
 	if (!sPortsActive || id < 0)
 		return B_BAD_PORT_ID;
 
@@ -506,8 +499,6 @@ _kern_find_port(const char *name)
 	port_id portFound = B_NAME_NOT_FOUND;
 	int i;
 
-	if (!sPortsActive)
-		port_init();
 	if (!sPortsActive)
 		return B_NAME_NOT_FOUND;
 	if (name == NULL)
@@ -571,8 +562,7 @@ _kern_get_port_info(port_id id, port_info *info)
 
 	if (info == NULL)
 		return B_BAD_VALUE;
-	if (!sPortsActive)
-		port_init();
+
 	if (!sPortsActive || id < 0)
 		return B_BAD_PORT_ID;
 
@@ -611,8 +601,7 @@ _kern_get_next_port_info(team_id team, int32 *_cookie, struct port_info *info)
 
 	if (info == NULL || _cookie == NULL || team < B_OK)
 		return B_BAD_VALUE;
-	if (!sPortsActive)
-		port_init();
+
 	if (!sPortsActive)
 		return B_BAD_PORT_ID;
 
@@ -662,9 +651,6 @@ _kern_port_buffer_size_etc(port_id id, uint32 flags, bigtime_t timeout)
 	void* msg_queue;
 
 	TRACE(("port_buffer_size(%" B_PRId64 "): enter\n", (long)id));
-
-	if (!sPortsActive)
-		port_init();
 
 	if (!sPortsActive || id < 0)
 		return B_BAD_PORT_ID;
@@ -744,8 +730,6 @@ _kern_port_count(port_id id)
 	int32 count;
 	int slot;
 
-	if (!sPortsActive == false)
-		port_init();
 	if (!sPortsActive || id < 0)
 		return B_BAD_PORT_ID;
 
@@ -782,9 +766,6 @@ _kern_read_port_etc(port_id id, int32 *_msgCode, void *msgBuffer, size_t bufferS
 	int slot;
 	int tail;
 	void* msg_queue;
-
-	if (!sPortsActive)
-		port_init();
 
 	if (!sPortsActive || id < 0)
 		return B_BAD_PORT_ID;
@@ -898,9 +879,6 @@ _kern_write_port_etc(port_id id, int32 msgCode, const void *msgBuffer,
 	int slot;
 	void* msg_queue;
 
-	if (!sPortsActive)
-		port_init();
-
 	if (!sPortsActive || id < 0)
 		return B_BAD_PORT_ID;
 
@@ -1005,9 +983,6 @@ status_t
 _kern_set_port_owner(port_id id, team_id team)
 {
 	int slot;
-
-	if (!sPortsActive)
-		port_init();
 
 	if (!sPortsActive || id < 0)
 		return B_BAD_PORT_ID;

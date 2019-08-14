@@ -182,8 +182,8 @@ on_exit_thread(void (*callback)(void *), void *data)
 	node->next = *head;
 	*head = node;
 	return B_OK;
-	#elseif
-	return kern_on_exit_thread(callback, data);
+	#else
+	return _kern_on_exit_thread(callback, data);
 	#endif
 }
 

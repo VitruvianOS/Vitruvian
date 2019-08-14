@@ -102,7 +102,7 @@ init_thread(void)
 
 			char arg[1024];
 			uint32 ret = readlink("/proc/self/exe", arg, sizeof(arg)-1);
-			if (ret ==-1)
+			if (ret == -1)
 				return;
 			arg[ret] = '\0';
 
@@ -212,7 +212,8 @@ _kern_exit_thread(status_t status)
 status_t
 _kern_on_exit_thread(void (*callback)(void *), void *data)
 {
-    return B_NO_MEMORY;
+	UNIMPLEMENTED();
+    return B_OK;
 }
 
 

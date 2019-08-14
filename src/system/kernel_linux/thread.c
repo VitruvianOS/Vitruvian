@@ -247,7 +247,7 @@ _kern_has_data(thread_id thread)
 void teardown_threads()
 {
 	int32 count = 0;
-	/* Free thread table entries created by our process */
+	// Free thread table entries created by our process
 	for (uint32 i = 0; i < MAX_THREADS; i++) {
 		if (thread_table[i].team == getpid()) {
 			thread_table[i].thread = FREE_SLOT;

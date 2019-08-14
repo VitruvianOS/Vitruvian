@@ -494,7 +494,7 @@ port_id
 _kern_find_port(const char *name)
 {
 	port_id portFound = B_NAME_NOT_FOUND;
-	int i;
+	uint32 i;
 
 	if (!sPortsActive)
 		return B_NAME_NOT_FOUND;
@@ -517,11 +517,10 @@ _kern_find_port(const char *name)
 		RELEASE_PORT_LOCK(sPorts[i]);
 	}
 
-	if (portFound >= 0) {
+	if (portFound >= 0)
 		TRACE(("find_port(): Port %ld matches search\n", portFound));
-	} else {
+	else
 		TRACE(("find_port(): Couldn't find port named \"%s\"\n", name));
-	}
 
 	return portFound;
 }
@@ -592,7 +591,8 @@ _kern_get_port_message_info_etc(port_id port, port_message_info *info,
 
 
 status_t
-_kern_get_next_port_info(team_id team, int32 *_cookie, struct port_info *info)
+_kern_get_next_port_info(team_id team, int32 *_cookie,
+	struct port_info *info)
 {
 	int slot;
 
@@ -753,8 +753,8 @@ _kern_port_count(port_id id)
 
 
 ssize_t
-_kern_read_port_etc(port_id id, int32 *_msgCode, void *msgBuffer, size_t bufferSize,
-	uint32 flags, bigtime_t timeout)
+_kern_read_port_etc(port_id id, int32 *_msgCode, void *msgBuffer,
+	size_t bufferSize, uint32 flags, bigtime_t timeout)
 {
 	sem_id cachedSem;
 	status_t status;
@@ -859,7 +859,8 @@ _kern_read_port_etc(port_id id, int32 *_msgCode, void *msgBuffer, size_t bufferS
 
 
 ssize_t
-_kern_read_port(port_id port, int32 *msgCode, void *msgBuffer, size_t bufferSize)
+_kern_read_port(port_id port, int32 *msgCode,
+	void *msgBuffer, size_t bufferSize)
 {
 	return _kern_read_port_etc(port, msgCode, msgBuffer, bufferSize, 0, 0);
 }
@@ -970,7 +971,8 @@ _kern_write_port_etc(port_id id, int32 msgCode, const void *msgBuffer,
 
 
 status_t
-_kern_write_port(port_id id, int32 msgCode, const void *msgBuffer, size_t bufferSize)
+_kern_write_port(port_id id, int32 msgCode,
+	const void *msgBuffer, size_t bufferSize)
 {
 	return _kern_write_port_etc(id, msgCode, msgBuffer, bufferSize, 0, 0);
 }

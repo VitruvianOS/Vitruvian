@@ -25,7 +25,6 @@
 
 
 #include <SupportDefs.h>
-#include <StorageDefs.h> // Just because BeOS apps expect this here
 #include <OS.h>
 
 #include <unistd.h>
@@ -160,14 +159,16 @@ area_id _kern_clone_area(const char* name, void** dest_addr,
 		if (g_pAreaMap[n].area == AREA_ID_FREE) {
 			int iShmID = shmget(source, nSize, IPC_CREAT | 0700);
 			if (iShmID == -1) {
-				printf("clone_area(): shmget(%u,%u) failed (%s)\n", n, nSize, strerror(errno));
+				printf("clone_area(): shmget(%u,%u) failed (%s)\n",
+					n, nSize, strerror(errno));
 				return B_NO_MEMORY;
 			}
 
 			g_pAreaMap[n].address = shmat(iShmID, NULL, 0);
 
 			if (g_pAreaMap[n].address == (void*)(-1)) {
-				printf("clone_area(): shmat(%d) failed (%s)\n", iShmID, strerror(errno));
+				printf("clone_area(): shmat(%d) failed (%s)\n",
+					iShmID, strerror(errno));
 				return B_NO_MEMORY;
 			}
 

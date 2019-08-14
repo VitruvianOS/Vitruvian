@@ -48,8 +48,6 @@ typedef void* (*pthread_entry) (void*);
 thread_info *thread_table = NULL;
 static int thread_shm = -1;
 
-static void teardown_threads(void);
-
 static __thread thread_id sCurThreadID = B_NAME_NOT_FOUND;
 
 /* TODO: table access is not protected by a semaphore */
@@ -93,8 +91,6 @@ init_thread(void)
 			thread_table[i].thread = FREE_SLOT;
 		}
 	}
-
-	atexit(teardown_threads);
 }
 
 

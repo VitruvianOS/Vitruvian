@@ -26,4 +26,6 @@ void __attribute__ ((destructor))
 deinit__kernel_layer()
 {
 	printf("deinit_kernel_layer()\n");
+	teardown_threads();
+	teardown_ports();
 }

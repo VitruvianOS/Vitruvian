@@ -88,7 +88,6 @@ static bool sPortsActive = false;
 #define GRAB_PORT_LOCK(s) if ((s).lock != -1) do {} while(acquire_sem((s).lock) == B_INTERRUPTED)
 #define RELEASE_PORT_LOCK(s) if ((s).lock != -1) release_sem((s).lock)
 
-static void teardown_ports(void);
 static int delete_owned_ports(team_id owner);
 
 
@@ -143,8 +142,6 @@ port_init()
 		*((sem_id *)sPortMemory) = sPortSem;
 	} else
 		sPortSem = *((sem_id *)sPortMemory);
-
-	atexit(teardown_ports);
 
 	TRACE(("port_init: exit\n"));
 

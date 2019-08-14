@@ -2,6 +2,8 @@ target_sources(be PRIVATE
 	AboutMenuItem.cpp
 	ArgumentVector.cpp
 	AttributeUtilities.cpp
+	# TODO: this should be a separate lib
+	#ExpressionParser.cpp
 	BitmapButton.cpp
 	CalendarView.cpp
 	ColorQuantizer.cpp

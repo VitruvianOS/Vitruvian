@@ -1426,9 +1426,9 @@ BPoseView::AddPosesTask(void* castToParams)
 					continue;
 				}
 
-				dirNode.device = eptr->d_pdev;
-				dirNode.node = eptr->d_pino;
-				itemNode.device = eptr->d_dev;
+				//dirNode.device = eptr->d_pdev;
+				//dirNode.node = eptr->d_pino;
+				//itemNode.device = eptr->d_dev;
 				itemNode.node = eptr->d_ino;
 
 				BPoseView::WatchNewNode(&itemNode, watchMask, lock.Target());
@@ -1567,9 +1567,9 @@ BPoseView::AddRootPoses(bool watchIndividually, bool mountShared)
 
 			monitorMsg.AddInt32("opcode", B_ENTRY_CREATED);
 
-			monitorMsg.AddInt32("device", model.NodeRef()->device);
-			monitorMsg.AddInt64("node", model.NodeRef()->node);
-			monitorMsg.AddInt64("directory", model.EntryRef()->directory);
+			monitorMsg.AddUInt64("device", model.NodeRef()->device);
+			monitorMsg.AddUInt64("node", model.NodeRef()->node);
+			monitorMsg.AddUInt64("directory", model.EntryRef()->directory);
 			monitorMsg.AddString("name", model.EntryRef()->name);
 			if (Window())
 				Window()->PostMessage(&monitorMsg, this);
@@ -2345,8 +2345,8 @@ BPoseView::MessageReceived(BMessage* message)
 		case kFSClipboardChanges:
 		{
 			node_ref node;
-			message->FindInt32("device", &node.device);
-			message->FindInt64("directory", &node.node);
+			message->FindUInt64("device", &node.device);
+			message->FindUInt64("directory", &node.node);
 
 			Model* targetModel = TargetModel();
 			if (targetModel != NULL && *targetModel->NodeRef() == node)
@@ -2972,9 +2972,9 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 			if (ViewMode() == kListMode)
 				break;
 
-			const StatStruct* stat = model->StatBuf();
-			if (stat->st_crtime < now - 5 || stat->st_crtime > now)
-				break;
+			//const StatStruct* stat = model->StatBuf();
+			//if (stat->st_crtime < now - 5 || stat->st_crtime > now)
+			//	break;
 
 			//PRINT(("retrying to read pose info for %s, %d\n",
 			//	model->Name(), count));
@@ -3271,8 +3271,8 @@ BPoseView::UpdatePosesClipboardModeFromClipboard(BMessage* clipboardReport)
 	bool fullInvalidateNeeded = false;
 
 	node_ref node;
-	clipboardReport->FindInt32("device", &node.device);
-	clipboardReport->FindInt64("directory", &node.node);
+	clipboardReport->FindUInt64("device", &node.device);
+	clipboardReport->FindUInt64("directory", &node.node);
 
 	bool clearClipboard = false;
 	clipboardReport->FindBool("clearClipboard", &clearClipboard);
@@ -5357,11 +5357,11 @@ BPoseView::FSNotification(const BMessage* message)
 		{
 			ASSERT(targetModel != NULL);
 
-			message->FindInt32("device", &itemNode.device);
+			message->FindUInt64("device", &itemNode.device);
 			node_ref dirNode;
 			dirNode.device = itemNode.device;
-			message->FindInt64("directory", (int64*)&dirNode.node);
-			message->FindInt64("node", (int64*)&itemNode.node);
+			message->FindUInt64("directory", (int64*)&dirNode.node);
+			message->FindUInt64("node", (int64*)&itemNode.node);
 
 			int32 count = fBrokenLinks->CountItems();
 			bool createPose = true;
@@ -5429,8 +5429,8 @@ BPoseView::FSNotification(const BMessage* message)
 			break;
 
 		case B_ENTRY_REMOVED:
-			message->FindInt32("device", &itemNode.device);
-			message->FindInt64("node", (int64*)&itemNode.node);
+			message->FindUInt64("device", &itemNode.device);
+			message->FindUInt64("node", (int64*)&itemNode.node);
 
 			// our window itself may be deleted
 			// we must check to see if this comes as a query
@@ -5512,7 +5512,7 @@ BPoseView::FSNotification(const BMessage* message)
 		}
 
 		case B_DEVICE_UNMOUNTED:
-			if (message->FindInt32("device", &device) == B_OK) {
+			if (message->FindUInt64("device", &device) == B_OK) {
 				if (targetModel != NULL
 					&& targetModel->NodeRef()->device == device) {
 					// close the window from a volume that is gone
@@ -5614,11 +5614,11 @@ BPoseView::EntryMoved(const BMessage* message)
 	node_ref dirNode;
 	node_ref itemNode;
 
-	message->FindInt32("device", &dirNode.device);
+	message->FindUInt64("device", &dirNode.device);
 	itemNode.device = dirNode.device;
-	message->FindInt64("to directory", (int64*)&dirNode.node);
-	message->FindInt64("node", (int64*)&itemNode.node);
-	message->FindInt64("from directory", (int64*)&oldDir);
+	message->FindUInt64("to directory", (int64*)&dirNode.node);
+	message->FindUInt64("node", (int64*)&itemNode.node);
+	message->FindUInt64("from directory", (int64*)&oldDir);
 
 	const char* name;
 	if (message->FindString("name", &name) != B_OK)
@@ -5807,8 +5807,8 @@ bool
 BPoseView::AttributeChanged(const BMessage* message)
 {
 	node_ref itemNode;
-	message->FindInt32("device", &itemNode.device);
-	message->FindInt64("node", (int64*)&itemNode.node);
+	message->FindUInt64("device", &itemNode.device);
+	message->FindUInt64("node", (int64*)&itemNode.node);
 
 	const char* attrName;
 	if (message->FindString("attr", &attrName) != B_OK)

@@ -3,8 +3,8 @@
 //  by the MIT License.
 //---------------------------------------------------------------------
 
-#include <algobase.h>
-#include <new.h>
+#include <parallel/algobase.h>
+#include <new>
 #include <stdio.h>
 #include <string.h>
 
@@ -14,6 +14,9 @@
 #include <View.h>
 
 #include "PartitioningDialog.h"
+
+using namespace std;
+
 
 enum {
 	MSG_OK		= 'okay',

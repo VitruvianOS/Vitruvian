@@ -376,12 +376,12 @@ TFilePanel::FSFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 		case B_ENTRY_MOVED:
 		{
 			node_ref itemNode;
-			message->FindInt64("node", (int64*)&itemNode.node);
+			message->FindUInt64("node", (int64*)&itemNode.node);
 
 			node_ref dirNode;
-			message->FindInt32("device", &dirNode.device);
+			message->FindUInt64("device", &dirNode.device);
 			itemNode.device = dirNode.device;
-			message->FindInt64("to directory", (int64*)&dirNode.node);
+			message->FindUInt64("to directory", (int64*)&dirNode.node);
 
 			const char* name;
 			if (message->FindString("name", &name) != B_OK)
@@ -400,8 +400,8 @@ TFilePanel::FSFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 		case B_ENTRY_REMOVED:
 		{
 			node_ref itemNode;
-			message->FindInt32("device", &itemNode.device);
-			message->FindInt64("node", (int64*)&itemNode.node);
+			message->FindUInt64("device", &itemNode.device);
+			message->FindUInt64("node", (int64*)&itemNode.node);
 
 			// if folder we're watching is deleted, switch to root
 			// or Desktop
@@ -1781,7 +1781,7 @@ BFilePanelPoseView::FSNotification(const BMessage* message)
 		case B_DEVICE_UNMOUNTED:
 		{
 			dev_t device;
-			if (message->FindInt32("device", &device) == B_OK) {
+			if (message->FindUInt64("device", &device) == B_OK) {
 				if (TargetModel() != NULL
 					&& TargetModel()->NodeRef()->device == device) {
 					// Volume currently shown in this file panel
@@ -1890,9 +1890,9 @@ BFilePanelPoseView::AdaptToVolumeChange(BMessage* message)
 		else
 			monitorMsg.AddInt32("opcode", B_ENTRY_REMOVED);
 
-		monitorMsg.AddInt32("device", model.NodeRef()->device);
-		monitorMsg.AddInt64("node", model.NodeRef()->node);
-		monitorMsg.AddInt64("directory", model.EntryRef()->directory);
+		monitorMsg.AddUInt64("device", model.NodeRef()->device);
+		monitorMsg.AddUInt64("node", model.NodeRef()->node);
+		monitorMsg.AddUInt64("directory", model.EntryRef()->directory);
 		monitorMsg.AddString("name", model.EntryRef()->name);
 		TrackerSettings().SetShowDisksIcon(showDisksIcon);
 		if (Window())

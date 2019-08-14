@@ -1295,7 +1295,7 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 		newLink.SetOwner(srcStat->st_uid);
 		newLink.SetGroup(srcStat->st_gid);
 		newLink.SetModificationTime(srcStat->st_mtime);
-		newLink.SetCreationTime(srcStat->st_crtime);
+		//newLink.SetCreationTime(srcStat->st_crtime);
 
 		return;
 	}
@@ -1397,7 +1397,7 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 	destFile.SetOwner(srcStat->st_uid);
 	destFile.SetGroup(srcStat->st_gid);
 	destFile.SetModificationTime(srcStat->st_mtime);
-	destFile.SetCreationTime(srcStat->st_crtime);
+	//destFile.SetCreationTime(srcStat->st_crtime);
 
 	delete[] buffer;
 
@@ -1884,7 +1884,7 @@ FSCopyAttributesAndStats(BNode* srcNode, BNode* destNode, bool copyTimes)
 	destNode->SetGroup(srcStat.st_gid);
 	if (copyTimes) {
 		destNode->SetModificationTime(srcStat.st_mtime);
-		destNode->SetCreationTime(srcStat.st_crtime);
+		//destNode->SetCreationTime(srcStat.st_crtime);
 	}
 
 	return B_OK;
@@ -3432,19 +3432,19 @@ LoaderErrorDetails(const entry_ref* app, BString &details)
 	while (environ[envCount] != NULL)
 		envCount++;
 
-	char** flatArgs = NULL;
-	size_t flatArgsSize;
-	result = __flatten_process_args((const char**)argv, 1,
-		environ, &envCount, argv[0], &flatArgs, &flatArgsSize);
-	if (result != B_OK)
-		return result;
+	//char** flatArgs = NULL;
+	//size_t flatArgsSize;
+	//result = __flatten_process_args((const char**)argv, 1,
+	//	environ, &envCount, argv[0], &flatArgs, &flatArgsSize);
+	//if (result != B_OK)
+	//	return result;
 
-	result = _kern_load_image(flatArgs, flatArgsSize, 1, envCount,
-		B_NORMAL_PRIORITY, B_WAIT_TILL_LOADED, errorPort, 0);
-	if (result == B_OK) {
+	//result = _kern_load_image(flatArgs, flatArgsSize, 1, envCount,
+	//	B_NORMAL_PRIORITY, B_WAIT_TILL_LOADED, errorPort, 0);
+	//if (result == B_OK) {
 		// we weren't supposed to be able to start the application...
 		return B_ERROR;
-	}
+	//}
 
 	// read error message from port and construct details string
 

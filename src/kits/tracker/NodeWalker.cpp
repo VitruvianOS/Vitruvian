@@ -403,8 +403,8 @@ build_dirent(const BEntry* source, struct dirent* ent,
 	// info about this node
 	ent->d_reclen = static_cast<ushort>(recordLength);
 	strcpy(ent->d_name, ref.name);
-	ent->d_dev = ref.device;
-	ent->d_ino = ref.directory;
+	//ent->d_dev = ref.device;
+	//ent->d_ino = ref.directory;
 
 	// info about the parent
 	BEntry parent;
@@ -412,11 +412,11 @@ build_dirent(const BEntry* source, struct dirent* ent,
 	if (parent.InitCheck() == B_OK) {
 		entry_ref parentRef;
 		parent.GetRef(&parentRef);
-		ent->d_pdev = parentRef.device;
-		ent->d_pino = parentRef.directory;
+		//ent->d_pdev = parentRef.device;
+		//ent->d_pino = parentRef.directory;
 	} else {
-		ent->d_pdev = 0;
-		ent->d_pino = 0;
+		//ent->d_pdev = 0;
+		//ent->d_pino = 0;
 	}
 
 	return 1;
@@ -462,13 +462,13 @@ TNodeWalker::GetNextDirents(struct dirent* ent, size_t size, int32 count)
 	}
 
 	// push any directories in the returned entries onto the stack
-	for (int32 i = 0; i < nextDirent; i++) {
-		if (fTopDir->Contains(ent->d_name, B_DIRECTORY_NODE)) {
-			entry_ref ref(ent->d_dev, ent->d_ino, ent->d_name);
-			PushDirCommon(&ref);
-		}
-		ent = (dirent*)((char*)ent + ent->d_reclen);
-	}
+	//for (int32 i = 0; i < nextDirent; i++) {
+	//	if (fTopDir->Contains(ent->d_name, B_DIRECTORY_NODE)) {
+	//		entry_ref ref(ent->d_dev, ent->d_ino, ent->d_name);
+	//		PushDirCommon(&ref);
+	//	}
+	//	ent = (dirent*)((char*)ent + ent->d_reclen);
+	//}
 
 	return nextDirent;
 }

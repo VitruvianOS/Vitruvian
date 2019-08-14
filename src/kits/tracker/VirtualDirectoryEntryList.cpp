@@ -89,8 +89,8 @@ VirtualDirectoryEntryList::GetNextRef(entry_ref* ref)
 	if (result == 0)
 		return B_ENTRY_NOT_FOUND;
 
-	ref->device = entry.d_pdev;
-	ref->directory = entry.d_pino;
+	//ref->device = entry.d_pdev;
+	//ref->directory = entry.d_pino;
 	return ref->set_name(entry.d_name);
 }
 
@@ -108,8 +108,8 @@ VirtualDirectoryEntryList::GetNextDirents(struct dirent* buffer, size_t length,
 
 	// deal with directories
 	entry_ref ref;
-	ref.device = buffer->d_pdev;
-	ref.directory = buffer->d_pino;
+	//ref.device = buffer->d_pdev;
+	//ref.directory = buffer->d_pino;
 	if (ref.set_name(buffer->d_name) == B_OK && BEntry(&ref).IsDirectory()) {
 		if (VirtualDirectoryManager* manager
 				= VirtualDirectoryManager::Instance()) {

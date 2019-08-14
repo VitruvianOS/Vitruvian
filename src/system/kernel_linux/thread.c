@@ -91,6 +91,34 @@ init_thread(void)
 			thread_table[i].thread = FREE_SLOT;
 		}
 	}
+
+	for (uint32 i = 0; i < MAX_THREADS; i++) {
+		if (thread_table[i].thread == FREE_SLOT) {
+			thread_table[i].pth = pthread_self();
+			thread_table[i].thread = i;
+			thread_table[i].team = getpid();
+			thread_table[i].priority = B_NORMAL_PRIORITY;
+			thread_table[i].state = B_THREAD_RUNNING;
+
+			char arg[1024];
+			uint32 ret = readlink("/proc/self/exe", arg, sizeof(arg)-1);
+			if (ret ==-1)
+				return;
+			arg[ret] = '\0';
+
+			strncpy(thread_table[i].name, arg, B_OS_NAME_LENGTH);
+			thread_table[i].name[B_OS_NAME_LENGTH - 1] = '\0';
+			// TODO: The main thread function is NULL
+			thread_table[i].func = NULL;
+			thread_table[i].data = NULL;
+			thread_table[i].code = 0;
+			thread_table[i].sender = 0;
+			thread_table[i].buffer = NULL;
+
+			sCurThreadID = i;
+			return;
+		}
+	}
 }
 
 

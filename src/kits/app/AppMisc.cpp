@@ -135,16 +135,12 @@ get_app_ref(entry_ref *ref, bool traverse)
 team_id
 current_team()
 {
-#if 0
 	if (sCurrentTeam < 0) {
 		thread_info info;
 		if (get_thread_info(find_thread(NULL), &info) == B_OK)
 			sCurrentTeam = info.team;
 	}
 	return sCurrentTeam;
-#else
-	return getpid();
-#endif
 }
 
 

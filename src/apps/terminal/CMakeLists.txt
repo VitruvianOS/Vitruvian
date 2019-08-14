@@ -38,4 +38,4 @@ target_include_directories(Terminal PRIVATE
 )
 
 #localestub shared tracker translation textencoding
-target_link_libraries(Terminal PRIVATE be root)
+target_link_libraries(Terminal PRIVATE be root tracker)

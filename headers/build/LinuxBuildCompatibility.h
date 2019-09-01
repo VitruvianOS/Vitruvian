@@ -31,9 +31,6 @@
 #	define _ALIGN(p) (((unsigned)(p) + _ALIGNBYTES) & ~_ALIGNBYTES)
 #endif
 
-#define DEBUG_SERVER
-#define SERVER_TRUE 0
-
 // There's no ALLPERMS when building with musl c
 #ifndef ALLPERMS
 #	define ALLPERMS (S_ISUID|S_ISGID|S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO)

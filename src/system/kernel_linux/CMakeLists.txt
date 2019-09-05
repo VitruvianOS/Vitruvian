@@ -12,8 +12,8 @@ target_sources(root PRIVATE
 	framebuffer.cpp
 	getenv.c
 	image.c
+	tls.cpp
 	memory.cpp
-	missing_imp.c
 	mutex.cpp
 	port.c
 	scheduler.cpp
@@ -22,7 +22,6 @@ target_sources(root PRIVATE
 	thread.c
 	time.cpp
 	wait_for_objects.cpp
-	watch.c
 	libc.c
 	real_time_clock.c
 	shutdown.cpp
@@ -42,12 +41,12 @@ target_sources(root PRIVATE
 	fs/fs_info.cpp
 	fs/fs_query.c
 	fs/fs_volume.c
+	fs/missing_imp.c
+	fs/watch.c
 	#fs/kernel_interface.POSIX.cpp
 	fs/volume/LinuxVolume.cpp
 
-	disk_device/disk_device.cpp
-
-	tls.cpp
+	fs/disk_device/disk_device.cpp
 )
 
 target_include_directories(root PRIVATE

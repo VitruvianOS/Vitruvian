@@ -1,0 +1,290 @@
+BMessenger()
+case 1:	IsValid() should return false.
+		IsTargetLocal() should return false.
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+
+BMessenger(const BHandler *handler, const BLooper *looper, status_t *result)
+case 1:	handler is NULL, looper is NULL, result is NULL =>
+		IsValid() and IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+case 2:	handler is NULL, looper is NULL, result is not NULL =>
+		IsValid() and IsTargetLocal() should return false.
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+		result is set to B_BAD_VALUE.
+case 3:	handler is NULL, looper is not NULL, result is not NULL =>
+		IsValid() and IsTargetLocal() should return true.
+		Target() should return NULL and the correct value for looper.
+		Team() should return this team.
+		result is set to B_OK.
+case 4:	handler is not NULL, looper is NULL, result is not NULL,
+		handler doesn't belong to a looper =>
+		IsValid() and IsTargetLocal() should return false.
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+		result is set to B_MISMATCHED_VALUES.
+case 5:	handler is not NULL, looper is NULL, result is not NULL
+		handler does belong to a looper =>
+		IsValid() and IsTargetLocal() should return true.
+		Target() should return the correct handler and handler->Looper()
+		for looper.
+		Team() should return this team.
+		result is set to B_OK.
+case 6:	handler is not NULL, looper is not NULL, result is not NULL
+		handler does belong to the looper =>
+		IsValid() and IsTargetLocal() should return true.
+		Target() should return the correct handler and the correct value
+		for looper.
+		Team() should return this team.
+		result is set to B_OK.
+case 7:	handler is not NULL, looper is not NULL, result is not NULL
+		handler does belong to a different looper =>
+		IsValid() and IsTargetLocal() should return false.
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+		result is set to B_MISMATCHED_VALUES.
+
+BMessenger(const BMessenger &from)
+case 1:	from is uninitialized =>
+		IsValid() and IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+case 2:	from is properly initialized to a local target =>
+		IsValid() and IsTargetLocal() should return true
+		Target() should return the same values as for from.
+		Team() should return this team.
+
+BMessenger(const char *signature, team_id team, status_t *result)
+case 1:	signature is NULL, team is -1, result is (not) NULL =>
+		IsValid() and IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+		(result should be set to B_BAD_TYPE.)
+case 2:	signature is not NULL, but identifies no running application,
+		team is -1, result is (not) NULL =>
+		IsValid() and IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+		(result should be set to B_BAD_VALUE.)
+case 3:	signature is NULL, team is > 0, but identifies no running application,
+		result is (not) NULL =>
+		IsValid() and IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+		(result should be set to B_BAD_TEAM_ID.)
+case 4:	signature is not NULL and identifies a running B_ARGV_ONLY application,
+		team is -1, result is (not) NULL =>
+		IsValid() and IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return the remote app's team ID.
+		(result should be set to B_BAD_TYPE.)
+case 5:	signature is NULL,
+		team is > 0 and identifies a running B_ARGV_ONLY application,
+		result is (not) NULL =>
+		IsValid() and IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return the remote app's team ID.
+		(result should be set to B_BAD_TYPE.)
+case 6:	signature is not NULL and identifies a "normal" running application,
+		team is -1, result is (not) NULL =>
+		IsValid() should return true
+		IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return the team ID of the remote application.
+		(result should be set to B_OK.)
+case 7:	signature is NULL,
+		team is > 0 and identifies a "normal" running application,
+		result is (not) NULL =>
+		IsValid() should return true, false after the app terminated
+		IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return the team ID of the remote application (team).
+		(result should be set to B_OK.)
+case 8:	signature is not NULL and team is > 0, but both identify different
+		applications, result is (not) NULL =>
+		IsValid() and IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+		(result should be set to B_MISMATCHED_VALUES.)
+case 9:	signature is not NULL,
+		team is > 0 and both identify the same application (more than one
+		app with the given signature are running), result is (not) NULL =>
+		IsValid() should return true
+		IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return the team ID of the remote application (team).
+		(result should be set to B_OK.)
+
+bool IsTargetLocal() const
+case 1:	this is uninitialized =>
+		should return false.
+case 2:	this is initialized to local target with preferred handler =>
+		should return true.
+case 3:	this is initialized to local target with specific handler =>
+		should return true.
+case 4:	this is initialized to local target with preferred handler =>
+		should return false.
+case 5:	this is initialized to remote target with specific handler =>
+		should return false.
+
+BHandler *Target(BLooper **looper) const
+case 1:	this is uninitialized, looper is NULL =>
+		should return NULL.
+case 2:	this is initialized to local target with preferred handler,
+		looper is NULL =>
+		should return NULL.
+case 3:	this is initialized to local target with specific handler,
+		looper is NULL =>
+		should return correct handler.
+case 4:	this is initialized to remote target with preferred handler,
+		looper is NULL =>
+		should return NULL.
+case 5:	this is initialized to remote target with specific handler,
+		looper is NULL =>
+		should return NULL.
+other cases included in BMessenger(...) cases
+
+bool LockTarget() const
+case 1:	this is uninitialized =>
+		should return false.
+case 2:	this is initialized to local target with preferred handler,
+		looper is not locked =>
+		should lock the looper and return true.
+case 3:	this is initialized to local target with specific handler,
+		looper is not locked =>
+		should lock the looper and return true.
+case 4:	this is initialized to local target with preferred handler,
+		looper is locked by another thread =>
+		should block until the looper is unlocked, lock it and return true.
+case 5:	this is initialized to local target with specific handler,
+		looper is locked by another thread =>
+		should block until the looper is unlocked, lock it and return true.
+case 6:	this is initialized to remote target with preferred handler,
+		looper is not locked =>
+		should not lock the looper and return false.
+case 7:	this is initialized to remote target with specific handler,
+		looper is not locked =>
+		should not lock the looper and return false.
+
+status_t LockTargetWithTimeout(bigtime_t timeout) const
+case 1:	this is uninitialized =>
+		should return B_BAD_VALUE.
+case 2:	this is initialized to local target with preferred handler,
+		looper is not locked =>
+		should lock the looper and return B_OK.
+case 3:	this is initialized to local target with specific handler,
+		looper is not locked =>
+		should lock the looper and return B_OK.
+case 4:	this is initialized to local target with preferred handler,
+		looper is locked by another thread, timeout is 100ms =>
+		should block until the looper is unlocked (after 50ms), lock it
+		and return B_OK.
+case 5:	this is initialized to local target with preferred handler,
+		looper is locked by another thread, timeout is 25ms =>
+		should block for 25ms, not until the looper is unlocked (after 50ms),
+		should return B_TIMED_OUT.
+case 6:	this is initialized to local target with specific handler,
+		looper is locked by another thread, timeout is 100ms =>
+		should block until the looper is unlocked (after 50ms), lock it
+		and return B_OK.
+case 7:	this is initialized to local target with specific handler,
+		looper is locked by another thread, timeout is 25ms =>
+		should block for 25ms, not until the looper is unlocked (after 50ms),
+		should return B_TIMED_OUT.
+case 8:	this is initialized to remote target with preferred handler,
+		looper is not locked =>
+		should not lock the looper and return B_BAD_VALUE.
+case 9:	this is initialized to remote target with specific handler,
+		looper is not locked =>
+		should not lock the looper and return B_BAD_VALUE.
+
+bool IsValid() const
+included in BMessenger(...) cases
+
+team_id Team() const
+included in BMessenger(...) cases
+
+BMessenger &operator=(const BMessenger &from)
+case 1:	from is uninitialized =>
+		IsValid() and IsTargetLocal() should return false
+		Target() should return NULL and NULL for looper.
+		Team() should return -1.
+case 2:	from is properly initialized to a local target (preferred handler) =>
+		IsValid() and IsTargetLocal() should return true
+		Target() should return the same values as for from.
+		Team() should return this team.
+case 3:	from is properly initialized to a local target (specific handler) =>
+		IsValid() and IsTargetLocal() should return true
+		Target() should return the same values as for from.
+		Team() should return this team.
+
+bool operator==(const BMessenger &other) const
+case 1:	this and other are uninitialized =>
+		should return true.
+case 2:	this is initialized, other is uninitialized, and vice versa =>
+		should return false.
+case 3:	this and other are initialized, different cases:
+		- same object => true
+		- different objects same target => true
+		- looper preferred handler vs. same looper but the looper itself as
+		  handler => false
+		- looper preferred handler vs. other looper preferred handler => false
+		- looper preferred handler vs. other looper specific handler => false
+		- local looper vs. remote looper => false
+
+bool operator!=(const BMessenger &a, const BMessenger &b)
+included in == cases
+
+bool operator<(const BMessenger &a, const BMessenger &b)
+case 1:	set fields of a and b manually =>
+		should return whatever the reference implementation returns.
+
+status_t SendMessage(uint32 command, BHandler *replyTo) const
+case 1:	this is uninitialized, replyTo is NULL =>
+		should return B_BAD_PORT_ID.
+case 2:	this is uninitialized, replyTo points to a valid handler  =>
+		should return B_BAD_PORT_ID.
+case 3:	this is initialized to a local/remote target with preferred/specific
+		handler, replyTo is NULL =>
+		should deliver the message and return B_OK.
+case 4:	this is initialized to a local/remote target with preferred/specific
+		handler, replyTo points to a valid handler =>
+		should deliver the message and return B_OK, a reply should be posted
+		to the reply handler.
+
+status_t SendMessage(BMessage *message, BHandler *replyTo,
+					 bigtime_t timeout) const
+case 1:	message is NULL, replyTo is NULL, timeout is B_INFINITE_TIMEOUT =>
+		should return B_BAD_VALUE.
+other cases similar to those of SendMessage(uint32, BHandler *). Each one with
+a timeout of B_INFINITE_TIMEOUT, 0 and some ms. For the last two
+timeouts in failure cases B_WOULD_BLOCK/B_TIMED_OUT should be returned.
+
+status_t SendMessage(BMessage *message, BMessenger replyTo,
+					 bigtime_t timeout) const
+cases similar to those of SendMessage(BMessage *, BHandler *, bigtime_t).
+An invalid replyTo messenger causes the same behavior as a NULL handler.
+
+status_t SendMessage(uint32 command, BMessage *reply) const
+case 1:	this is uninitialized, reply is NULL =>
+		should return B_BAD_PORT_ID or B_BAD_VALUE.
+case 2:	this is uninitialized, replyTo points to a valid message  =>
+		should return B_BAD_PORT_ID.
+case 3:	this is initialized to a local/remote target with preferred/specific
+		handler, reply is NULL =>
+		should return B_BAD_VALUE.
+case 4:	this is initialized to a local/remote target with preferred/specific
+		handler, reply points to a valid message =>
+		should deliver the message, wait for a reply and return B_OK,
+		reply should contain the reply.
+
+status_t SendMessage(BMessage *message, BMessage *reply,
+					 bigtime_t deliveryTimeout,
+					 bigtime_t replyTimeout) const
+cases similar to those of SendMessage(uint32, BMessage *). deliveryTimeout and
+replyTimeout are B_INFINITE_TIMEOUT, 0 or some ms. In timeout cases
+B_WOULD_BLOCK/B_TIMED_OUT should be returned.
+
+

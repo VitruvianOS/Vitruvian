@@ -58,7 +58,7 @@ in the administrative group (ADMIN_AREA_SEM).
 #endif /* __USE_GNU */
 #include <sys/sem.h>
 
-#define TRACE_SEM 0
+//#define TRACE_SEM 0
 #if TRACE_SEM
 #	define TRACE(x) printf x
 #else

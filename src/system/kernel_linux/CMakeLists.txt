@@ -20,7 +20,7 @@ target_sources(root PRIVATE
 	sem.c
 	team.c
 	thread.c
-	time.cpp
+	timer.cpp
 	wait_for_objects.cpp
 	libc.c
 	real_time_clock.c

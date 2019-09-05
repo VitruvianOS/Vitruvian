@@ -195,9 +195,12 @@ TRoster::HandleAddApplication(BMessage* request)
 	uint32 token = 0;
 
 	uint32 launchFlags = flags & B_LAUNCH_MASK;
+	#ifndef __VOS__
 	BEntry entry(&ref);
 	if (!entry.Exists())
 		SET_ERROR(error, B_ENTRY_NOT_FOUND);
+	#endif
+	UNIMPLEMENTED();
 
 	if (error == B_OK)
 		_ValidateRunning(ref, signature);
@@ -391,10 +394,13 @@ TRoster::HandleIsAppRegistered(BMessage* request)
 	PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device, ref.directory,
 		ref.name);
 
+	#ifndef __VOS__
 	// check the parameters
 	// entry_ref
 	if (error == B_OK && !BEntry(&ref).Exists())
 		SET_ERROR(error, B_ENTRY_NOT_FOUND);
+	#endif
+	UNIMPLEMENTED();
 	// team/token
 	if (error == B_OK && team < 0 && token == 0)
 		SET_ERROR(error, B_BAD_VALUE);

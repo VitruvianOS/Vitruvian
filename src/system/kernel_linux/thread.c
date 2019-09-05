@@ -245,14 +245,16 @@ _kern_receive_data(thread_id *sender, void *buffer, size_t bufferSize)
 			if (*sender)
 				thread_table[i].sender = *sender;
 
-			while (!thread_table[i].buffer)
+			while (!thread_table[i].buffer) {
+				// TODO: we want to use a pthread condition here
+				snooze(1000);
 				continue;
+			}
 
 			if (thread_table[i].buffer) {
 				memcpy(buffer, thread_table[i].buffer, bufferSize);
 				free(thread_table[i].buffer);
 			}
-
 			return B_OK;
 		}
 	}

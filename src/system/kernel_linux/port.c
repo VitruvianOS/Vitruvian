@@ -28,7 +28,7 @@
 #define panic printf
 #define team_get_current_team_id getpid
 
-#define TRACE_PORTS
+//#define TRACE_PORTS
 #ifdef TRACE_PORTS
 #	define TRACE(x) dprintf x
 #else
@@ -36,7 +36,7 @@
 #endif
 
 #ifndef DEBUG
-#define DEBUG 1
+#define DEBUG 0
 #endif
 
 #define PORT_MAX_MESSAGE_SIZE 4096

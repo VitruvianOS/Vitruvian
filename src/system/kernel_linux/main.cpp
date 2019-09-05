@@ -7,6 +7,8 @@
 
 #include <kernel/messaging.h>
 
+#include <stdlib.h>
+
 #include "messaging/MessagingService.h"
 
 
@@ -15,6 +17,9 @@ void __attribute__ ((constructor))
 init_kernel_layer()
 {
 	printf("init_kernel_layer()\n");
+
+	setenv("TARGET_SCREEN", "root", 1);
+
 	init_area_map();
 	port_init();
 	init_thread();

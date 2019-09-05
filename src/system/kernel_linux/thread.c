@@ -420,6 +420,11 @@ _kern_resume_thread(thread_id id)
 					if (pthread_create(&tid, NULL, (pthread_entry)thread_table[i].func,
 										thread_table[i].data) == 0)
 					{
+						char tName[16];
+						memset(tName, 0, sizeof(tName));
+						strncpy(tName, thread_table[i].name, 14);
+						pthread_setname_np(tid, tName);
+
 						thread_table[i].pth = tid;
 						thread_table[i].state = B_THREAD_RUNNING;
 						return B_OK;

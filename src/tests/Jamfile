@@ -1,19 +1,18 @@
 SubDir HAIKU_TOP src tests ;
 
-SetSubDirSupportedPlatformsBeOSCompatible ;
 AddSubDirSupportedPlatforms libbe_test ;
 
 UnitTestLib libexampletest.so
 	: ExampleTestAddon.cpp
 		ExampleTest.cpp
-	: be $(TARGET_LIBSTDC++)
+	: be [ TargetLibstdc++ ]
 	:
 ;
 
 UnitTest UnitTester
 	: UnitTester.cpp
-	: be $(TARGET_LIBSTDC++)
-	: UnitTester.rsrc
+	: be [ TargetLibstdc++ ]
+	: UnitTester.rdef
 ;
 
 # Install libbe and other libraries for target platform libbe_test.

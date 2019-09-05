@@ -577,11 +577,11 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 			ino_t node;
 			const char* name;
 			if (message->FindString("name", &name) == B_OK
-				&& message->FindInt32("from directory", &(ref.directory))
+				&& message->FindUInt64("from directory", &(ref.directory))
 					== B_OK
-				&& message->FindInt32("to directory", &todirectory) == B_OK
-				&& message->FindInt32("device", &(ref.device)) == B_OK
-				&& message->FindInt32("node", &node) == B_OK ) {
+				&& message->FindUInt64("to directory", &todirectory) == B_OK
+				&& message->FindUInt64("device", &(ref.device)) == B_OK
+				&& message->FindUInt64("node", &node) == B_OK ) {
 
 				if (name == NULL)
 					break;
@@ -598,8 +598,8 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 		{
 			// entry was rm'd from the device
 			node_ref nodeRef;
-			if (message->FindInt32("device", &(nodeRef.device)) == B_OK
-				&& message->FindInt32("node", &(nodeRef.node)) == B_OK) {
+			if (message->FindUInt64("device", &(nodeRef.device)) == B_OK
+				&& message->FindUInt64("node", &(nodeRef.node)) == B_OK) {
 				DeskbarItemInfo* item = DeskbarItemFor(nodeRef);
 				if (item == NULL)
 					break;

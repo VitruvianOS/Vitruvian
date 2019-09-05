@@ -312,7 +312,7 @@ TTracker::TTracker()
 					message.what = B_NODE_MONITOR;
 					message.AddInt32("opcode", B_ENTRY_CREATED);
 					message.AddUInt64("device", model.NodeRef()->device);
-					message.AddUInt64("node", model.NodeRef()->node);
+					message.AddInt64("node", model.NodeRef()->node);
 					message.AddUInt64("directory",
 						model.EntryRef()->directory);
 					message.AddString("name", model.EntryRef()->name);
@@ -1698,10 +1698,13 @@ TTracker::NeedMoreNodeMonitors()
 	struct rlimit rl;
 	rl.rlim_cur = fNodeMonitorCount;
 	rl.rlim_max = RLIM_SAVED_MAX;
-	//if (setrlimit(RLIMIT_NOVMON, &rl) < 0) {
-	//	fNodeMonitorCount -= kNodeMonitorBumpValue;
-	//	return errno;
-	//}
+	#ifndef __VOS__
+	if (setrlimit(RLIMIT_NOVMON, &rl) < 0) {
+		fNodeMonitorCount -= kNodeMonitorBumpValue;
+		return errno;
+	}
+	#endif
+	UNIMPLEMENTED();
 
 	return B_OK;
 }

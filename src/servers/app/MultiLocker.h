@@ -21,6 +21,7 @@
 
 
 #include <OS.h>
+#include <locks.h>
 
 
 #define MULTI_LOCKER_TIMING	0
@@ -56,9 +57,8 @@ public:
 			bool				ReadUnlock();
 			bool				WriteUnlock();
 
-			// does the current thread hold a write lock ?
-			bool				IsWriteLocked(addr_t *stackBase = NULL,
-									thread_id *thread = NULL) const;
+			// does the current thread hold a write lock?
+			bool				IsWriteLocked() const;
 
 #if MULTI_LOCKER_DEBUG
 			// in DEBUG mode returns whether the lock is held
@@ -72,7 +72,9 @@ private:
 			MultiLocker&		operator=(const MultiLocker& other);
 									// not implemented
 
-#if MULTI_LOCKER_DEBUG
+#if !MULTI_LOCKER_DEBUG
+			rw_lock				fLock;
+#else
 			// functions for managing the DEBUG reader array
 			void				_RegisterThread();
 			void				_UnregisterThread();
@@ -80,24 +82,11 @@ private:
 			sem_id				fLock;
 			int32*				fDebugArray;
 			int32				fMaxThreads;
-#else
-			// readers adjust count and block on fReadSem when a writer
-			// hold the lock
-			int32				fReadCount;
-			sem_id				fReadSem;
-			// writers adjust the count and block on fWriteSem
-			// when readers hold the lock
-			int32				fWriteCount;
-			sem_id 				fWriteSem;
-			// writers must acquire fWriterLock when acquiring a write lock
-			int32				fLockCount;
-			sem_id				fWriterLock;
+			int32				fWriterNest;
+			thread_id			fWriterThread;
 #endif	// MULTI_LOCKER_DEBUG
 
 			status_t			fInit;
-			int32				fWriterNest;
-			thread_id			fWriterThread;
-			addr_t				fWriterStackBase;
 
 #if MULTI_LOCKER_TIMING
 			uint32 				rl_count;

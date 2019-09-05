@@ -12,11 +12,12 @@
 #include <List.h>
 
 #include "IconBuild.h"
-#include "Shape.h"
 
 
 _BEGIN_ICON_NAMESPACE
 
+
+class Shape;
 
 #ifdef ICON_O_MATIC
 class ShapeContainerListener {

@@ -111,9 +111,8 @@ typedef struct {
 #define	B_ANY_KERNEL_BLOCK_ADDRESS	(B_ANY_KERNEL_ADDRESS + 1)
 
 /* area protection flags for the kernel */
-#define B_KERNEL_READ_AREA			16
-#define B_KERNEL_WRITE_AREA			32
-#define B_USER_CLONEABLE_AREA		256
+#define B_KERNEL_READ_AREA			(1 << 4)
+#define B_KERNEL_WRITE_AREA			(1 << 5)
 
 /* MTR attributes for mapping physical memory (Intel Architecture only) */
 // TODO: rename those to something more meaningful
@@ -196,7 +195,9 @@ extern area_id		map_physical_memory(const char *areaName,
 						uint32 protection, void **_mappedAddress);
 
 /* kernel debugging facilities */
-//extern void			dprintf(const char *format, ...) _PRINTFLIKE(1, 2);
+#ifdef __HAIKU__
+extern void			dprintf(const char *format, ...) _PRINTFLIKE(1, 2);
+#endif
 extern void			dvprintf(const char *format, va_list args);
 extern void			kprintf(const char *fmt, ...) _PRINTFLIKE(1, 2);
 

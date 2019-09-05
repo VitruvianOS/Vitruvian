@@ -21,6 +21,7 @@
 
 #include <new>
 #include <string.h>
+#include <pthread.h>
 
 
 using std::nothrow;
@@ -464,15 +465,12 @@ static PaletteConverter	sPaletteConverter;
 /*static*/ status_t
 PaletteConverter::InitializeDefault(bool useServer)
 {
-	//if (sPaletteConverter.InitCheck() != B_OK) {
-		//pthread_once(&sPaletteConverterInitOnce,
-			//useServer
-				//? &_InitializeDefaultAppServer
-				if (useServer)
-					return _InitializeDefaultAppServer;
-				else
-					return _InitializeDefaultNoAppServer;
-	//}
+	if (sPaletteConverter.InitCheck() != B_OK) {
+		pthread_once(&sPaletteConverterInitOnce,
+			useServer
+				? &_InitializeDefaultAppServer
+				: &_InitializeDefaultNoAppServer);
+	}
 
 	return sPaletteConverter.InitCheck();
 }

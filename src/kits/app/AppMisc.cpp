@@ -1,10 +1,11 @@
 /*
- * Copyright 2001-2015, Haiku, Inc.
+ * Copyright 2001-2019, Haiku, Inc.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Axel Dörfler, axeld@pinc-software.de
  *		Ingo Weinhold, bonefish@@users.sf.net
+ *		Jacob Secunda
  */
 
 
@@ -19,9 +20,12 @@
 #include <image.h>
 #include <Messenger.h>
 #include <OS.h>
+#include <Window.h>
 
+#include <AutoDeleter.h>
 #include <ServerLink.h>
 #include <ServerProtocol.h>
+#include <WindowInfo.h>
 
 
 namespace BPrivate {
@@ -42,6 +46,7 @@ static team_id sCurrentTeam = -1;
 status_t
 get_app_path(team_id team, char *buffer)
 {
+#ifndef __VOS__
 	// The only way to get the path to the application's executable seems to
 	// be to get an image_info of its image, which also contains a path.
 	// Several images may belong to the team (libraries, add-ons), but only
@@ -49,12 +54,6 @@ get_app_path(team_id team, char *buffer)
 	if (!buffer)
 		return B_BAD_VALUE;
 
-#ifdef __VOS__
-	char buf[B_PATH_NAME_LENGTH-1];
-	readlink("/proc/self/exe", buf, B_PATH_NAME_LENGTH-1);
-	strlcpy(buffer, buf, B_PATH_NAME_LENGTH-1);
-	return B_OK;
-#else
 	image_info info;
 	int32 cookie = 0;
 
@@ -66,6 +65,11 @@ get_app_path(team_id team, char *buffer)
 	}
 
 	return B_ENTRY_NOT_FOUND;
+#else
+	char buf[B_PATH_NAME_LENGTH-1];
+	readlink("/proc/self/exe", buf, B_PATH_NAME_LENGTH-1);
+	strlcpy(buffer, buf, B_PATH_NAME_LENGTH-1);
+	return B_OK;
 #endif
 }
 
@@ -178,8 +182,30 @@ main_thread_for(team_id team)
 bool
 is_app_showing_modal_window(team_id team)
 {
-	// TODO: Implement!
-	return true;
+	int32 tokenCount;
+	int32* tokens = get_token_list(team, &tokenCount);
+
+	if (tokens != NULL) {
+		MemoryDeleter tokenDeleter(tokens);
+
+		for (int32 index = 0; index < tokenCount; index++) {
+			client_window_info* matchWindowInfo = get_window_info(tokens[index]);
+			if (matchWindowInfo == NULL) {
+				// That window probably closed. Just go to the next one.
+				continue;
+			}
+
+			window_feel theFeel = (window_feel)matchWindowInfo->feel;
+			free(matchWindowInfo);
+
+			if (theFeel == B_MODAL_SUBSET_WINDOW_FEEL
+				|| theFeel == B_MODAL_APP_WINDOW_FEEL
+				|| theFeel == B_MODAL_ALL_WINDOW_FEEL)
+				return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -201,7 +227,7 @@ create_desktop_connection(ServerLink* link, const char* name, int32 capacity)
 	BMessage request(AS_GET_DESKTOP);
 	request.AddInt32("user", getuid());
 	request.AddInt32("version", AS_PROTOCOL_VERSION);
-	request.AddString("target", "baron");
+	request.AddString("target", getenv("TARGET_SCREEN"));
 
 	BMessenger server("application/x-vnd.Haiku-app_server");
 	BMessage reply;
@@ -256,7 +282,7 @@ create_desktop_connection(ServerLink* link, const char* name, int32 capacity)
 	link->StartMessage(AS_GET_DESKTOP);
 	link->Attach<port_id>(clientPort);
 	link->Attach<int32>(getuid());
-	link->AttachString("baron");
+	link->AttachString(getenv("TARGET_SCREEN"));
 	link->Attach<int32>(AS_PROTOCOL_VERSION);
 
 	int32 code;

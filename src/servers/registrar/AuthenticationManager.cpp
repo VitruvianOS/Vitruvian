@@ -20,6 +20,7 @@
 #include <StringList.h>
 
 #include <AutoDeleter.h>
+#include <LaunchRoster.h>
 #include <RegistrarDefs.h>
 
 #include <libroot_private.h>
@@ -750,7 +751,13 @@ AuthenticationManager::Init()
 		return B_NO_MEMORY;
 	}
 
-	fRequestPort = create_port(100, B_REGISTRAR_AUTHENTICATION_PORT_NAME);
+	#ifndef __VOS__
+		fRequestPort = BLaunchRoster().GetPort(
+			B_REGISTRAR_AUTHENTICATION_PORT_NAME);
+	#else
+		fRequestPort = create_port(100, B_REGISTRAR_AUTHENTICATION_PORT_NAME);
+	#endif
+
 	if (fRequestPort < 0)
 		return fRequestPort;
 

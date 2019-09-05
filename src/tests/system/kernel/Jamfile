@@ -11,6 +11,8 @@ SimpleTest fibo_load_image : fibo_load_image.cpp ;
 SimpleTest fibo_fork : fibo_fork.cpp ;
 SimpleTest fibo_exec : fibo_exec.cpp ;
 
+SimpleTest fifo_poll_test : fifo_poll_test.cpp ;
+
 SimpleTest live_query :
 	live_query.cpp
 	: be
@@ -49,6 +51,8 @@ SimpleTest port_wakeup_test_9 : port_wakeup_test_9.cpp ;
 
 SimpleTest mmap_resize_test : mmap_resize_test.cpp ;
 
+SimpleTest null_poll_test : null_poll_test.cpp ;
+
 SimpleTest reserved_areas_test : reserved_areas_test.cpp ;
 
 SimpleTest select_check : select_check.cpp ;
@@ -59,10 +63,8 @@ SimpleTest sem_acquire_test1 : sem_acquire_test1.cpp : be ;
 SimpleTest spinlock_contention : spinlock_contention.cpp ;
 
 SimpleTest syscall_restart_test : syscall_restart_test.cpp
-	: network $(TARGET_LIBSUPC++) ;
+	: network [ TargetLibsupc++ ] ;
 
-SetSupportedPlatformsForTarget syscall_time
-	: $(HAIKU_BEOS_COMPATIBLE_PLATFORMS) ;
 SimpleTest syscall_time : syscall_time.cpp ;
 
 SimpleTest transfer_area_test : transfer_area_test.cpp ;
@@ -76,17 +78,14 @@ SimpleTest wait_for_objects_test : wait_for_objects_test.cpp ;
 
 SimpleTest yield_test : yield_test.cpp ;
 
-SetSupportedPlatformsForTarget sigint_bug113_test
-	: $(HAIKU_BEOS_COMPATIBLE_PLATFORMS) ;
 SimpleTest sigint_bug113_test : sigint_bug113_test.cpp ;
 
-SetSupportedPlatformsForTarget set_area_protection_test1
-	: $(HAIKU_BEOS_COMPATIBLE_PLATFORMS) ;
 SimpleTest set_area_protection_test1 : set_area_protection_test1.cpp ;
 
 SimpleTest sigsuspend_test : sigsuspend_test.cpp ;
 
 SubInclude HAIKU_TOP src tests system kernel cache ;
+SubInclude HAIKU_TOP src tests system kernel fs ;
 #SubInclude HAIKU_TOP src tests system kernel disk_device_manager ;
 SubInclude HAIKU_TOP src tests system kernel device_manager ;
 SubInclude HAIKU_TOP src tests system kernel file_corruption ;
@@ -95,3 +94,4 @@ SubInclude HAIKU_TOP src tests system kernel slab ;
 SubInclude HAIKU_TOP src tests system kernel swap ;
 SubInclude HAIKU_TOP src tests system kernel unit ;
 SubInclude HAIKU_TOP src tests system kernel util ;
+SubInclude HAIKU_TOP src tests system kernel vm ;

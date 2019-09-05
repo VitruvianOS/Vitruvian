@@ -1891,7 +1891,7 @@ BFilePanelPoseView::AdaptToVolumeChange(BMessage* message)
 			monitorMsg.AddInt32("opcode", B_ENTRY_REMOVED);
 
 		monitorMsg.AddUInt64("device", model.NodeRef()->device);
-		monitorMsg.AddUInt64("node", model.NodeRef()->node);
+		monitorMsg.AddInt64("node", model.NodeRef()->node);
 		monitorMsg.AddUInt64("directory", model.EntryRef()->directory);
 		monitorMsg.AddString("name", model.EntryRef()->name);
 		TrackerSettings().SetShowDisksIcon(showDisksIcon);

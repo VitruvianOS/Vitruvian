@@ -22,6 +22,7 @@
 #include <Roster.h>
 
 #include <AppMisc.h>
+#include <LaunchRoster.h>
 #include <LooperList.h>
 #include <MessagePrivate.h>
 #include <MessageUtils.h>
@@ -324,13 +325,25 @@ BMessenger::_InitData(const char* signature, team_id team, status_t* _result)
 	if (team < 0) {
 		// no team ID given
 		if (signature != NULL) {
+		#ifndef __VOS__
 			// Try existing launch communication data first
-			result = be_roster->GetAppInfo(signature, &info);
-			team = info.team;
-			// B_ERROR means that no application with the given signature
-			// is running. But we are supposed to return B_BAD_VALUE.
-			if (result == B_ERROR)
-				result = B_BAD_VALUE;
+			BMessage data;
+			if (BLaunchRoster().GetData(signature, data) == B_OK) {
+				info.port = data.GetInt32("port", -1);
+				team = data.GetInt32("team", -5);
+			}
+			if (info.port < 0) {
+		#endif
+				result = be_roster->GetAppInfo(signature, &info);
+				team = info.team;
+				// B_ERROR means that no application with the given signature
+				// is running. But we are supposed to return B_BAD_VALUE.
+				if (result == B_ERROR)
+					result = B_BAD_VALUE;
+		#ifndef __VOS__
+			} else
+				info.flags = 0;
+		#endif
 		} else
 			result = B_BAD_TYPE;
 	} else {
@@ -379,7 +392,7 @@ void
 BMessenger::_InitData(const BHandler* handler, const BLooper* looper,
 	status_t* _result)
 {
-	status_t result = handler || looper != NULL ? B_OK : B_BAD_VALUE;
+	status_t result = (handler != NULL || looper != NULL) ? B_OK : B_BAD_VALUE;
 	if (result == B_OK) {
 		if (handler != NULL) {
 			// BHandler is given, check/retrieve the looper.

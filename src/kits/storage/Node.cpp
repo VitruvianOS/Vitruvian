@@ -652,15 +652,6 @@ BNode::InitAttrDir()
 }
 
 
-#ifdef __VOS__
-status_t
-BNode::GetStat(struct stat* stat) const
-{
-	return _GetStat(stat);
-}
-#endif
-
-
 status_t
 BNode::_GetStat(struct stat* stat) const
 {
@@ -684,10 +675,19 @@ BNode::_GetStat(struct stat_beos* stat) const
 }
 
 
+#ifdef __VOS__
+status_t
+BNode::GetStat(struct stat* stat) const
+{
+	return _GetStat(stat);
+}
+#endif
+
+
 //	#pragma mark - symbol versions
 
 
-#ifdef __HAIKU__
+#ifndef __VOS__
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	if __GNUC__ == 2	// gcc 2
 

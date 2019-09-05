@@ -40,6 +40,8 @@
 #include <AutoLocker.h>
 #include <BitmapPrivate.h>
 #include <DraggerPrivate.h>
+#include <LaunchDaemonDefs.h>
+#include <LaunchRoster.h>
 #include <LooperList.h>
 #include <MenuWindow.h>
 #include <PicturePrivate.h>
@@ -289,6 +291,7 @@ BApplication::BApplication(BMessage* data)
 }
 
 
+#ifdef _BEOS_R5_COMPATIBLE_
 BApplication::BApplication(uint32 signature)
 {
 }
@@ -297,6 +300,14 @@ BApplication::BApplication(uint32 signature)
 BApplication::BApplication(const BApplication &rhs)
 {
 }
+
+
+BApplication&
+BApplication::operator=(const BApplication &rhs)
+{
+	return *this;
+}
+#endif
 
 
 BApplication::~BApplication()
@@ -338,13 +349,6 @@ BApplication::~BApplication()
 }
 
 
-BApplication&
-BApplication::operator=(const BApplication &rhs)
-{
-	return *this;
-}
-
-
 void
 BApplication::_InitData(const char* signature, bool initGUI, status_t* _error)
 {
@@ -371,7 +375,10 @@ BApplication::_InitData(const char* signature, bool initGUI, status_t* _error)
 #ifndef RUN_WITHOUT_REGISTRAR
 	bool registerApp = signature == NULL
 		|| (strcasecmp(signature, B_REGISTRAR_SIGNATURE) != 0
-			/*&& strcasecmp(signature, kLaunchDaemonSignature) != 0*/);
+			#ifndef __VOS__
+			&& strcasecmp(signature, kLaunchDaemonSignature) != 0
+			#endif
+			);
 	// get team and thread
 	team_id team = Team();
 	thread_id thread = BPrivate::main_thread_for(team);
@@ -541,8 +548,11 @@ DBG(OUT("BApplication::InitData() done\n"));
 port_id
 BApplication::_GetPort(const char* signature)
 {
+	#ifndef __VOS__
+	return BLaunchRoster().GetPort(signature, NULL);
+	#endif
 	UNIMPLEMENTED();
-	//return BLaunchRoster().GetPort(signature, NULL);
+	return -1;
 }
 
 

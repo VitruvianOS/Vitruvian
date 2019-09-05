@@ -4,7 +4,7 @@
  * Based on consoled and MuTerminal.
  *
  * Copyright 2005 Michael Lotz. All rights reserved.
- * Distributed under the Haiku License.
+ * Distributed under the MIT License.
  *
  * Copyright 2004-2005, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
@@ -26,8 +26,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
-
-#include <sys/ioctl.h>
 
 #include "Arguments.h"
 #include "Console.h"
@@ -178,7 +176,7 @@ MiniView::OpenTTY()
 					tio.c_cc[VMIN]   = 4;
 					tio.c_cc[VTIME]  = 0;
 					tio.c_cc[VEOL2]  = 0;			/* '^@' */
-					//tio.c_cc[VSWTCH] = 0;			/* '^@' */
+					tio.c_cc[VSWTCH] = 0;			/* '^@' */
 					tio.c_cc[VSTART] = 'S' & 0x1f;	/* '^S' */
 					tio.c_cc[VSTOP]  = 'Q' & 0x1f;	/* '^Q' */
 					tio.c_cc[VSUSP]  = '@' & 0x1f;	/* '^@' */
@@ -187,7 +185,7 @@ MiniView::OpenTTY()
 					tcsetattr(fSlaveFD, TCSANOW, &tio);
 					
 					// set window size
-					struct winsize ws;
+					winsize ws;
 					int32 rows, cols;
 					GetSize(&cols, &rows);
 					ws.ws_row = rows;
@@ -221,7 +219,7 @@ MiniView::FrameResized(float width, float height)
 {
 	ViewBuffer::FrameResized(width, height);
 	
-	struct winsize ws;
+	winsize ws;
 	int32 rows, cols;
 	GetSize(&cols, &rows);
 	ws.ws_row = rows;

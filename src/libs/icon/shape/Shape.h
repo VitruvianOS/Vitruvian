@@ -16,7 +16,6 @@
 #include "IconBuild.h"
 #include "PathContainer.h"
 #include "PathSource.h"
-#include "Style.h"
 #include "Transformable.h"
 #include "VectorPath.h"
 
@@ -26,6 +25,8 @@
 
 _BEGIN_ICON_NAMESPACE
 
+
+class Style;
 
 #ifdef ICON_O_MATIC
 // TODO: merge Observer and ShapeListener interface
@@ -51,7 +52,7 @@ class Shape : public IconObject,
 			  public PathContainerListener,
 			  public PathListener {
 #else
-class Shape : public Transformable {
+class Shape : public _ICON_NAMESPACE Transformable {
 #endif
 
  public:
@@ -96,15 +97,15 @@ class Shape : public Transformable {
 	inline	PathContainer*		Paths() const
 									{ return fPaths; }
 
-			void				SetStyle(BPrivate::Icon::Style* style);
-	inline	BPrivate::Icon::Style*	Style() const
+			void				SetStyle(::Style* style);
+	inline	::Style*			Style() const
 									{ return fStyle; }
 
 	inline	BRect				LastBounds() const
 									{ return fLastBounds; }
 			BRect				Bounds(bool updateLast = false) const;
 
-			BPrivate::Icon::VertexSource&	VertexSource();
+			::VertexSource&		VertexSource();
 			void				SetGlobalScale(double scale);
 
 			bool				AddTransformer(Transformer* transformer);
@@ -147,7 +148,7 @@ class Shape : public Transformable {
 
  private:
 			PathContainer*		fPaths;
-			BPrivate::Icon::Style*	fStyle;
+			::Style*			fStyle;
 
 			PathSource			fPathSource;
 			BList				fTransformers;

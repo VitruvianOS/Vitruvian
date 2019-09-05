@@ -19,14 +19,12 @@
 
 #include "GradientTransformable.h"
 #include "Icon.h"
-#include "Shape.h"
+#include "shape/Shape.h"
 #include "ShapeContainer.h"
 #include "Style.h"
 #include "VectorPath.h"
 
 using std::nothrow;
-
-_BEGIN_ICON_NAMESPACE
 
 class IconRenderer::StyleHandler {
 	struct StyleItem {
@@ -318,7 +316,7 @@ IconRenderer::Demultiply()
 
 // #pragma mark -
 
-typedef agg::conv_transform<BPrivate::Icon::VertexSource, Transformation> ScaledPath;
+typedef agg::conv_transform<VertexSource, Transformation> ScaledPath;
 typedef agg::conv_transform<ScaledPath, HintingTransformer> HintedPath;
 
 // _Render
@@ -426,4 +424,6 @@ IconRenderer::_CommitRenderPass(StyleHandler& styleHandler, bool reset)
 		fRasterizer.reset();
 }
 
-_END_ICON_NAMESPACE
+
+
+

@@ -28,7 +28,7 @@ target_sources(registrar PRIVATE
 	MessageRunnerManager.cpp
 	MessagingService.cpp
 	MIMEManager.cpp
-	PackageWatchingManager.cpp
+	#PackageWatchingManager.cpp
 	PriorityMessageQueue.cpp
 	RecentApps.cpp
 	RecentEntries.cpp

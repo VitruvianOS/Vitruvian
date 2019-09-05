@@ -7,6 +7,8 @@
 #include <SupportDefs.h>
 
 #include <string.h>
+#include <time.h>
+#include <sys/ioctl.h>
 
 
 #define SYMLOOP_MAX _POSIX_SYMLOOP_MAX

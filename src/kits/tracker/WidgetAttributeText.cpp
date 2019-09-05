@@ -439,8 +439,10 @@ WidgetAttributeText::AttrAsString(const Model* model, BString* outString,
 		case B_TIME_TYPE:
 			if (strcmp(attrName, kAttrStatModified) == 0)
 				value = model->StatBuf()->st_mtime;
-			//else if (strcmp(attrName, kAttrStatCreated) == 0)
-			//	value = model->StatBuf()->st_crtime;
+			#ifndef __VOS__
+			else if (strcmp(attrName, kAttrStatCreated) == 0)
+				value = model->StatBuf()->st_crtime;
+			#endif
 			else {
 				TRESPASS();
 				// not yet supported
@@ -1236,7 +1238,10 @@ CreationTimeAttributeText::ReadValue()
 {
 	fValueDirty = false;
 	fValueIsDefined = true;
-	//return fModel->StatBuf()->st_crtime;
+	#ifndef __VOS__
+	return fModel->StatBuf()->st_crtime;
+	#endif
+	UNIMPLEMENTED();
 	return 0;
 }
 
@@ -1732,7 +1737,7 @@ GenericAttributeText::CommitEditedTextFlavor(BTextView* textView)
 	switch (type) {
 		case B_STRING_TYPE:
 			size = fModel->WriteAttr(columnName, type, 0, textView->Text(),
-				(size_t)(textView->TextLength() + 1));
+				(size_t)textView->TextLength() + 1);
 			break;
 
 		case B_BOOL_TYPE:

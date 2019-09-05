@@ -362,9 +362,11 @@ BDirectory::GetNextRef(entry_ref* ref)
 			|| !strcmp(entry.d_name, ".."));
 	}
 
-#ifdef __HAIKU__
+#ifndef __VOS__
 	ref->device = entry.d_pdev;
 	ref->directory = entry.d_pino;
+#else
+	UNIMPLEMENTED();
 #endif
 	return ref->set_name(entry.d_name);
 }
@@ -490,15 +492,6 @@ BDirectory::operator=(const BDirectory& dir)
 }
 
 
-#ifdef __VOS__
-status_t
-BDirectory::GetStatFor(const char* path, struct stat* st) const
-{
-	return _GetStatFor(path, st);
-}
-#endif
-
-
 status_t
 BDirectory::_GetStatFor(const char* path, struct stat* st) const
 {
@@ -615,10 +608,19 @@ create_directory(const char* path, mode_t mode)
 }
 
 
+#ifdef __VOS__
+status_t
+BDirectory::GetStatFor(const char* path, struct stat* st) const
+{
+	return _GetStatFor(path, st);
+}
+#endif
+
+
 // #pragma mark - symbol versions
 
 
-#ifdef __HAIKU__
+#ifndef __VOS__
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	if __GNUC__ == 2	// gcc 2
 

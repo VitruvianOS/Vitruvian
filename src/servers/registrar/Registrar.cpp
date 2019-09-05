@@ -63,8 +63,8 @@ Registrar::Registrar(status_t* _error)
 	fEventQueue(NULL),
 	fMessageRunnerManager(NULL),
 	fShutdownProcess(NULL),
-	fAuthenticationManager(NULL),
-	fPackageWatchingManager(NULL)
+	fAuthenticationManager(NULL)//,
+	//fPackageWatchingManager(NULL)
 {
 	FUNCTION_START();
 
@@ -83,7 +83,7 @@ Registrar::~Registrar()
 	Lock();
 	fEventQueue->Die();
 	delete fAuthenticationManager;
-	delete fPackageWatchingManager;
+	//delete fPackageWatchingManager;
 	delete fMessageRunnerManager;
 	delete fEventQueue;
 	fMIMEManager->Lock();
@@ -167,7 +167,7 @@ Registrar::ReadyToRun()
 	}
 
 	// create the package watching manager
-	fPackageWatchingManager = new PackageWatchingManager;
+	//fPackageWatchingManager = new PackageWatchingManager;
 
 	// Sanity check roster after team deletion
 	BMessenger target(this);
@@ -344,13 +344,13 @@ Registrar::_MessageReceived(BMessage *message)
 			break;
 
 		// package watching requests
-		case B_REG_PACKAGE_START_WATCHING:
-		case B_REG_PACKAGE_STOP_WATCHING:
-			fPackageWatchingManager->HandleStartStopWatching(message);
-			break;
-		case B_PACKAGE_UPDATE:
-			fPackageWatchingManager->NotifyWatchers(message);
-			break;
+		//case B_REG_PACKAGE_START_WATCHING:
+		//case B_REG_PACKAGE_STOP_WATCHING:
+		//	fPackageWatchingManager->HandleStartStopWatching(message);
+		//	break;
+		//case B_PACKAGE_UPDATE:
+		//	fPackageWatchingManager->NotifyWatchers(message);
+		//	break;
 
 		// internal messages
 		case B_SYSTEM_OBJECT_UPDATE:

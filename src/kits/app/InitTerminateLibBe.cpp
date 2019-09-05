@@ -4,7 +4,6 @@
  *
  * Authors:
  *		Ingo Weinhold (bonefish@users.sf.net)
- * 		Dario Casalinuovo
  */
 
 //!	Global library initialization/termination routines.
@@ -24,8 +23,8 @@ extern void __initialize_locale_kit();
 
 
 // debugging
-#define DBG(x) x
-//#define DBG(x)
+//#define DBG(x) x
+#define DBG(x)
 #define OUT	printf
 
 
@@ -43,7 +42,7 @@ initialize_forked_child()
 }
 
 
-extern "C" void __attribute__ ((constructor))
+extern "C" void __attribute__ ((constructor(100)))
 initialize_before(image_id)
 {
 	DBG(OUT("initialize_before()\n"));
@@ -55,7 +54,7 @@ initialize_before(image_id)
 	pthread_atfork(initialize_forked_child, NULL, NULL);
 #else
 	atfork(initialize_forked_child);
-#endif
+#endif	
 
 	DBG(OUT("initialize_before() done\n"));
 }
@@ -83,3 +82,4 @@ terminate_after(image_id)
 
 	DBG(OUT("terminate_after() done\n"));
 }
+

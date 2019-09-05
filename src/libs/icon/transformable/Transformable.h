@@ -75,5 +75,9 @@ class Transformable : public agg::trans_affine {
 
 _END_ICON_NAMESPACE
 
+
+_USING_ICON_NAMESPACE
+
+
 #endif // TRANSFORMABLE_H
 

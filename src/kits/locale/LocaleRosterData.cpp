@@ -366,9 +366,11 @@ LocaleRosterData::_InitializeCatalogAddOns()
 						&& strcmp(dent->d_name, "x86") != 0
 						&& strcmp(dent->d_name, "x86_gcc2") != 0) {
 					// we have found (what should be) a catalog-add-on:
-					#ifdef __HAIKU__
+					#ifndef __VOS__
 					eref.device = dent->d_pdev;
 					eref.directory = dent->d_pino;
+					#else
+						UNIMPLEMENTED();
 					#endif
 					eref.set_name(dent->d_name);
 					entry.SetTo(&eref, true);

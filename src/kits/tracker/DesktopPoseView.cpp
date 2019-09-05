@@ -255,7 +255,7 @@ DesktopPoseView::AdaptToVolumeChange(BMessage* message)
 			}
 		}
 		entryMessage.AddUInt64("device", model.NodeRef()->device);
-		entryMessage.AddUInt64("node", model.NodeRef()->node);
+		entryMessage.AddInt64("node", model.NodeRef()->node);
 		entryMessage.AddUInt64("directory", model.EntryRef()->directory);
 		entryMessage.AddString("name", model.EntryRef()->name);
 		BContainerWindow* deskWindow

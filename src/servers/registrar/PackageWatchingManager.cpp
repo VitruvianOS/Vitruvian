@@ -8,9 +8,7 @@
 
 #include <new>
 
-#ifdef __HAIKU__
 #include <package/PackageRoster.h>
-#endif
 
 #include <RegistrarDefs.h>
 
@@ -18,13 +16,8 @@
 #include "EventMaskWatcher.h"
 
 
-#ifdef __HAIKU__
 using namespace BPackageKit;
-#endif
 using namespace BPrivate;
-
-
-#warning "Package Kit Code is disabled!!!! Re-enable this in future"
 
 
 PackageWatchingManager::PackageWatchingManager()
@@ -65,11 +58,9 @@ PackageWatchingManager::NotifyWatchers(BMessage* message)
 
 	uint32 eventMask;
 	switch (event) {
-#ifdef __HAIKU__
 		case B_INSTALLATION_LOCATION_PACKAGES_CHANGED:
 			eventMask = B_WATCH_PACKAGE_INSTALLATION_LOCATIONS;
 			break;
-#endif
 		default:
 			WARNING("Invalid event: %" B_PRId32 "\n", event);
 			return;

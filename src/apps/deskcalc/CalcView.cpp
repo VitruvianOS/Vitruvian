@@ -33,7 +33,7 @@
 #include <MenuItem.h>
 #include <Message.h>
 #include <MessageRunner.h>
-//#include <PlaySound.h>
+#include <PlaySound.h>
 #include <Point.h>
 #include <PopUpMenu.h>
 #include <Region.h>

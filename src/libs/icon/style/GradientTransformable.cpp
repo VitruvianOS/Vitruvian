@@ -17,8 +17,6 @@
 #  include "support.h"
 #endif
 
-_BEGIN_ICON_NAMESPACE
-
 // constructor
 Gradient::Gradient(bool empty)
 #ifdef ICON_O_MATIC
@@ -61,7 +59,7 @@ Gradient::Gradient(BMessage* archive)
 		return;
 
 	// read transformation
-	int32 size = 6;
+	int32 size = Transformable::matrix_size;
 	const void* matrix;
 	ssize_t dataSize = size * sizeof(double);
 	if (archive->FindData("transformation", B_DOUBLE_TYPE,
@@ -168,7 +166,7 @@ Gradient::operator=(const Gradient& other)
 	AutoNotificationSuspender _(this);
 #endif
 
-	//SetTransform(other);
+	SetTransform(other);
 	SetColors(other);
 	SetType(other.fType);
 	SetInterpolation(other.fInterpolation);
@@ -614,5 +612,3 @@ Gradient::_MakeEmpty()
 		delete ColorAtFast(i);
 	fColors.MakeEmpty();
 }
-
-_END_ICON_NAMESPACE

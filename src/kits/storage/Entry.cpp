@@ -772,15 +772,6 @@ BEntry::_Dump(const char* name)
 }
 
 
-#ifdef __VOS__
-status_t
-BEntry::GetStat(struct stat* st) const
-{
-	return _GetStat(st);
-}
-#endif
-
-
 status_t
 BEntry::_GetStat(struct stat* st) const
 {
@@ -834,9 +825,19 @@ operator<(const entry_ref& a, const entry_ref& b)
 }
 
 
+#ifdef __VOS__
+status_t
+BEntry::GetStat(struct stat* st) const
+{
+	return _GetStat(st);
+}
+#endif
+
+
 // #pragma mark - symbol versions
 
-#ifdef __HAIKU__
+
+#ifndef __VOS__
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	if __GNUC__ == 2	// gcc 2
 

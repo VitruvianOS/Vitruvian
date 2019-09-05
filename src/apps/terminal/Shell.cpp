@@ -43,8 +43,6 @@
 #include <extended_system_info.h>
 #include <extended_system_info_defs.h>
 
-#include <sys/ioctl.h>
-
 #include "ActiveProcessInfo.h"
 #include "ShellParameters.h"
 #include "TermConst.h"
@@ -381,7 +379,9 @@ initialize_termios(struct termios &tio)
 	tio.c_cc[VMIN]   = 4;
 	tio.c_cc[VTIME]  = 0;
 	tio.c_cc[VEOL2]  = CEOL;		/* '^@' */
-	//tio.c_cc[VSWTCH] = CSWTCH;		/* '^@' */
+	#ifndef __VOS__
+	tio.c_cc[VSWTCH] = CSWTCH;		/* '^@' */
+	#endif
 	tio.c_cc[VSTART] = CSTART;		/* '^S' */
 	tio.c_cc[VSTOP]  = CSTOP;		/* '^Q' */
 	tio.c_cc[VSUSP]  = CSUSP;		/* '^Z' */

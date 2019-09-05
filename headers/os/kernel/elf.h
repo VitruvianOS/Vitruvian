@@ -1,13 +1,14 @@
 /*
- * Copyright 2002-2016 Haiku, Inc. All rights reserved.
+ * Copyright 2002-2019 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _ELF_H
 #define _ELF_H
 
 
-#include <SupportDefs.h>
+#include <BeBuild.h>
 #include <ByteOrder.h>
+#include <SupportDefs.h>
 
 
 typedef uint32 Elf32_Addr;
@@ -27,6 +28,16 @@ typedef uint64 Elf64_Xword;
 typedef int64 Elf64_Sxword;
 
 typedef Elf64_Half Elf64_Versym;
+
+#if B_HAIKU_32_BIT
+	#define Elf_Addr Elf32_Addr
+	#define Elf_Phdr Elf32_Phdr
+	#define Elf_Half Elf32_Half
+#elif B_HAIKU_64_BIT
+	#define Elf_Addr Elf64_Addr
+	#define Elf_Phdr Elf64_Phdr
+	#define Elf_Half Elf64_Half
+#endif
 
 
 /*** ELF header ***/
@@ -92,6 +103,12 @@ typedef struct {
 #define ELFMAG3		'F'
 #define ELFMAG		"\x7f""ELF"
 #define SELFMAG		4
+
+/* e_ident */
+#define IS_ELF(ehdr)    ((ehdr).e_ident[EI_MAG0] == ELFMAG0 && \
+	(ehdr).e_ident[EI_MAG1] == ELFMAG1 && \
+	(ehdr).e_ident[EI_MAG2] == ELFMAG2 && \
+	(ehdr).e_ident[EI_MAG3] == ELFMAG3)
 
 /* e_type (Object file type) */
 #define ET_NONE			0 /* No file type */
@@ -196,6 +213,9 @@ typedef struct {
 #define EM_AMDGPU		224 /* AMD GPU */
 #define EM_RISCV		243 /* RISC-V */
 #define EM_BPF			247 /* Linux kernel bpf virtual machine */
+
+#define EM_ALPHA        0x9026 /* Digital Alpha (nonstandard, but the value
+								  everyone uses) */
 
 /* architecture class (EI_CLASS) */
 #define ELFCLASSNONE	0

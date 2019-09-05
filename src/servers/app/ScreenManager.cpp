@@ -27,13 +27,13 @@ using std::nothrow;
 
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #ifndef __VOS__
-#	include "AccelerantHWInterface.h"
-#else
+ #	include "AccelerantHWInterface.h"
+ #else
 #	include "FBDevHWInterface.h"
 #endif
 #else
-#	include "ViewHWInterface.h"
-#	include "DWindowHWInterface.h"
+ #	include "ViewHWInterface.h"
+ #	include "DWindowHWInterface.h"
 #endif
 
 
@@ -138,7 +138,7 @@ ScreenManager::AcquireScreens(ScreenOwner* owner, int32* wishList,
 		}
 	}
 
-#ifdef __HAIKU__
+#ifndef __VOS__
 #if TEST_MODE == 0
 	if (added == 0 && target != NULL) {
 		// there's a specific target screen we want to initialize
@@ -212,7 +212,7 @@ ScreenManager::_ScanDrivers()
 
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #ifndef __VOS__
-		  interface = new AccelerantHWInterface();
+ 		  interface = new AccelerantHWInterface();
 #else
 		interface = new FBDevHWInterface();
 #endif

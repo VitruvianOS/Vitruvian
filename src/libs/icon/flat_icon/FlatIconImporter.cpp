@@ -25,16 +25,13 @@
 #include "PathCommandQueue.h"
 #include "PathContainer.h"
 #include "PerspectiveTransformer.h"
-#include "Shape.h"
+#include "shape/Shape.h"
 #include "StrokeTransformer.h"
 #include "Style.h"
 #include "StyleContainer.h"
 #include "VectorPath.h"
 
 using std::nothrow;
-using BPrivate::Icon::Shape;
-
-_BEGIN_ICON_NAMESPACE
 
 // constructor
 FlatIconImporter::FlatIconImporter()
@@ -146,7 +143,7 @@ FlatIconImporter::_ParseSections(LittleEndianBuffer& buffer, Icon* icon)
 static bool
 _ReadTransformable(LittleEndianBuffer& buffer, Transformable* transformable)
 {
-	int32 matrixSize = 6;
+	int32 matrixSize = Transformable::matrix_size;
 	double matrix[matrixSize];
 	for (int32 i = 0; i < matrixSize; i++) {
 		float value;
@@ -546,7 +543,7 @@ FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
 	}
 
 	// create the shape
-	BPrivate::Icon::Shape* shape = new (nothrow) BPrivate::Icon::Shape(style);
+	Shape* shape = new (nothrow) Shape(style);
 	ObjectDeleter<Shape> shapeDeleter(shape);
 
 	if (!shape || shape->InitCheck() < B_OK)
@@ -657,5 +654,5 @@ FlatIconImporter::_ParseShapes(LittleEndianBuffer& buffer,
 }
 
 
-_END_ICON_NAMESPACE
+
 

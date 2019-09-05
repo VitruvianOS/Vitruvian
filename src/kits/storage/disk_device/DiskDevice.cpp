@@ -133,8 +133,8 @@ BDiskDevice::Eject(bool update)
 		return errno;
 
 	status_t status = B_OK;
-	//if (ioctl(fd, B_EJECT_DEVICE) != 0)
-	//	status = errno;
+	if (ioctl(fd, B_EJECT_DEVICE) != 0)
+		status = errno;
 
 	close(fd);
 

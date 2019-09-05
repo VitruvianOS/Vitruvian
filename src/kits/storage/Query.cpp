@@ -359,10 +359,12 @@ BQuery::GetNextRef(entry_ref* ref)
 			}
 		}
 		if (error == B_OK) {
-#ifdef __HAIKU__
+			#ifndef __VOS__
 			ref->device = entry.d_pdev;
 			ref->directory = entry.d_pino;
-#endif
+			#else
+			UNIMPLEMENTED();
+			#endif
 			error = ref->set_name(entry.d_name);
 		}
 	}

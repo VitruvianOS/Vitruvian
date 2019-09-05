@@ -118,9 +118,11 @@ BMergedDirectory::GetNextRef(entry_ref* ref)
 	if (result == 0)
 		return B_ENTRY_NOT_FOUND;
 
-#ifdef __HAIKU__
+#ifndef __VOS__
 	ref->device = entry.d_pdev;
 	ref->directory = entry.d_pino;
+#else
+	UNIMPLEMENTED();
 #endif
 	return ref->set_name(entry.d_name);
 }
@@ -216,7 +218,7 @@ BMergedDirectory::ShallPreferFirstEntry(const entry_ref& entry1, int32 index1,
 void
 BMergedDirectory::_FindBestEntry(dirent* direntBuffer)
 {
-#ifdef __HAIKU__
+#ifndef __VOS__
 	entry_ref bestEntry(direntBuffer->d_pdev, direntBuffer->d_pino,
 		direntBuffer->d_name);
 	if (bestEntry.name == NULL)
@@ -239,6 +241,7 @@ BMergedDirectory::_FindBestEntry(dirent* direntBuffer)
 			bestIndex = i;
 		}
 	}
-#endif
+#else
 	UNIMPLEMENTED();
+#endif
 }

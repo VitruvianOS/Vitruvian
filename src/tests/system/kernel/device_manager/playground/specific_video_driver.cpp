@@ -6,6 +6,8 @@
 
 #include "bus.h"
 
+#include <string.h>
+
 #include <KernelExport.h>
 #include <PCI.h>
 

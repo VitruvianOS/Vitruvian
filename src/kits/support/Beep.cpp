@@ -1,7 +1,7 @@
 /*
  * Copyright 2004-2009, Axel Dörfler, axeld@pinc-software.de.
  * Copyright 2007, Jérôme Duval. All rights reserved.
- * Distributed under the terms of the Haiku License.
+ * Distributed under the terms of the MIT License.
  */
 
 
@@ -9,7 +9,7 @@
 
 #include <stdio.h>
 
-#ifdef __HAIKU__
+#ifndef __VOS__
 #include <DataExchange.h>
 #include <MediaSounds.h>
 #endif
@@ -18,7 +18,7 @@
 status_t
 system_beep(const char* eventName)
 {
-#ifdef __HAIKU__
+#ifndef __VOS__
 	BMessenger messenger("application/x-vnd.Be.addon-host");
 	if (!messenger.IsValid())
 		return B_ERROR;
@@ -32,8 +32,10 @@ system_beep(const char* eventName)
 		status = B_BAD_REPLY;
 
 	return status;
-#endif
+#else
+	UNIMPLEMENTED();
 	return B_ERROR;
+#endif
 }
 
 
@@ -47,7 +49,7 @@ beep()
 status_t
 add_system_beep_event(const char* name, uint32 flags)
 {
-#ifdef __HAIKU__
+#ifndef __VOS__
 	BMessenger messenger("application/x-vnd.Be.media-server");
 	if (!messenger.IsValid())
 		return B_ERROR;
@@ -62,6 +64,8 @@ add_system_beep_event(const char* name, uint32 flags)
 		status = B_BAD_REPLY;
 
 	return status;
-#endif
+#else
+	UNIMPLEMENTED();
 	return B_ERROR;
+#endif
 }

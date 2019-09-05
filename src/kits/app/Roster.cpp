@@ -42,6 +42,7 @@
 
 #include <AppMisc.h>
 #include <DesktopLink.h>
+#include <LaunchRoster.h>
 #include <MessengerPrivate.h>
 #include <PortLink.h>
 #include <RosterPrivate.h>
@@ -1871,6 +1872,7 @@ BRoster::_LaunchApp(const char* mimeType, const entry_ref* ref,
 	thread_id appThread = -1;
 	port_id appPort = -1;
 	uint32 appToken = 0;
+	entry_ref hintRef;
 
 	while (true) {
 		// find the app
@@ -1880,6 +1882,7 @@ BRoster::_LaunchApp(const char* mimeType, const entry_ref* ref,
 			&appFlags, &wasDocument);
 		DBG(OUT("  find app: %s (%" B_PRIx32 ") %s \n", strerror(error), error,
 			signature));
+
 		if (error != B_OK)
 			return error;
 
@@ -1955,15 +1958,18 @@ BRoster::_LaunchApp(const char* mimeType, const entry_ref* ref,
 						_RemovePreRegApp(appToken);
 
 					if (!wasDocument) {
+						// Did we already try this?
+						if (appRef == hintRef)
+							break;
+
 						// Remove app hint if it's this one
 						BMimeType appType(signature);
-						entry_ref hintRef;
 
 						if (appType.InitCheck() == B_OK
 							&& appType.GetAppHint(&hintRef) == B_OK
 							&& appRef == hintRef) {
 							appType.SetAppHint(NULL);
-							// try again
+							// try again with the app hint removed
 							continue;
 						}
 					}
@@ -2188,6 +2194,8 @@ BRoster::_TranslateRef(entry_ref* ref, BMimeType* appMeta,
 	if (ref == NULL || appMeta == NULL || appRef == NULL || appFile == NULL)
 		return B_BAD_VALUE;
 
+	entry_ref originalRef = *ref;
+
 	// resolve ref, if necessary
 	BEntry entry;
 	status_t error = entry.SetTo(ref, false);
@@ -2248,7 +2256,9 @@ BRoster::_TranslateRef(entry_ref* ref, BMimeType* appMeta,
 		// we're done.
 		char preferredApp[B_MIME_TYPE_LENGTH];
 		if (!isDocument || appFileInfo.GetPreferredApp(preferredApp) != B_OK) {
-			*appRef = *ref;
+			// If we were given a symlink, point appRef to it in case its name
+			// or attributes are relevant.
+			*appRef = originalRef;
 			if (_wasDocument != NULL)
 				*_wasDocument = isDocument;
 
@@ -2636,6 +2646,23 @@ BRoster::_InitMessenger()
 
 	// find the registrar port
 
+
+#ifndef __VOS__
+	BMessage data;
+	if (BLaunchRoster().GetData(B_REGISTRAR_SIGNATURE, data) == B_OK) {
+		port_id port = data.GetInt32("port", -1);
+		team_id team = data.GetInt32("team", -1);
+
+		if (port >= 0 && team != current_team()) {
+			// Make sure we aren't the registrar ourselves.
+
+			DBG(OUT("  found roster port\n"));
+
+			BMessenger::Private(fMessenger).SetTo(team, port,
+				B_PREFERRED_TOKEN);
+		}
+	}
+#else
 	port_id rosterPort = find_port(B_REGISTRAR_PORT_NAME);
 	port_info info;
 	if (rosterPort >= 0 && get_port_info(rosterPort, &info) == B_OK) {
@@ -2644,6 +2671,7 @@ BRoster::_InitMessenger()
 		BMessenger::Private(fMessenger).SetTo(info.team, rosterPort,
 			B_PREFERRED_TOKEN);
 	}
+#endif
 
 	DBG(OUT("BRoster::InitMessengers() done\n"));
 }

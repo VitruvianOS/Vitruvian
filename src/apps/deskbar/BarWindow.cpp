@@ -74,8 +74,8 @@ class TStartableMenuBar : public BMenuBar {
 public:
 	TStartableMenuBar();
 	void StartMenuBar(int32 menuIndex, bool sticky = true, bool showMenu = false,
-		BRect* special_rect = NULL) { //BMenuBar::StartMenuBar(menuIndex, sticky, showMenu,
-			/*special_rect);*/ }
+		BRect* special_rect = NULL) { BMenuBar::StartMenuBar(menuIndex, sticky, showMenu,
+			special_rect); }
 };
 
 

@@ -1673,12 +1673,8 @@ ShutdownProcess::_QuitNonApps()
 		if (fVitalSystemApps.find(teamInfo.team) == fVitalSystemApps.end()) {
 			PRINT("  sending team %" B_PRId32 " TERM signal\n", teamInfo.team);
 
-#ifdef __VOS__
-			_kern_kill_thread(teamInfo.team);
-#else
 			// Note: team ID == team main thread ID under Haiku
 			send_signal(teamInfo.team, SIGTERM);
-#endif
 		}
 	}
 

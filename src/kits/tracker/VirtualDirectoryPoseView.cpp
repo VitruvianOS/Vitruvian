@@ -207,18 +207,20 @@ VirtualDirectoryPoseView::_EntryCreated(const BMessage* message)
 		BDirectory directory;
 		if (directory.SetTo(&nodeRef) != B_OK)
 			return true;
-
+		#ifndef __VOS__
 		BPrivate::Storage::LongDirEntry entry;
 		while (directory.GetNextDirents(&entry, sizeof(entry), 1) == 1) {
 			if (strcmp(entry.d_name, ".") != 0
 				&& strcmp(entry.d_name, "..") != 0) {
-				//_DispatchEntryCreatedOrRemovedMessage(B_ENTRY_CREATED,
-				//	node_ref(entry.d_dev, entry.d_ino),
-				//	NotOwningEntryRef(entry.d_pdev, entry.d_pino,
-				//		entry.d_name),
-				//	NULL, false);
+				_DispatchEntryCreatedOrRemovedMessage(B_ENTRY_CREATED,
+					node_ref(entry.d_dev, entry.d_ino),
+					NotOwningEntryRef(entry.d_pdev, entry.d_pino,
+						entry.d_name),
+					NULL, false);
 			}
 		}
+		#endif
+		UNIMPLEMENTED();
 		return true;
 	}
 
@@ -386,7 +388,7 @@ VirtualDirectoryPoseView::_EntryMoved(const BMessage* message)
 	NotOwningEntryRef toEntryRef;
 	node_ref nodeRef;
 
-	if (message->FindInt32("node device", &nodeRef.device) != B_OK
+	if (message->FindUInt64("node device", &nodeRef.device) != B_OK
 		|| message->FindUInt64("node", &nodeRef.node) != B_OK
 		|| message->FindUInt64("device", &fromEntryRef.device) != B_OK
 		|| message->FindUInt64("from directory", &fromEntryRef.directory) != B_OK
@@ -464,7 +466,7 @@ VirtualDirectoryPoseView::_DispatchEntryCreatedOrRemovedMessage(int32 opcode,
 	BMessage message(B_NODE_MONITOR);
 	message.AddInt32("opcode", opcode);
 	message.AddUInt64("device", nodeRef.device);
-	message.AddUInt64("node", nodeRef.node);
+	message.AddInt64("node", nodeRef.node);
 	message.AddUInt64("directory", entryRef.directory);
 	message.AddString("name", entryRef.name);
 	if (path != NULL && path[0] != '\0')

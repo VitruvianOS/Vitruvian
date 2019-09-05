@@ -8,6 +8,8 @@
 
 #include "HWInterface.h"
 
+#include "LibInputEventStream.h"
+
 #include <linux/fb.h>
 
 
@@ -20,6 +22,8 @@ public:
 
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown();
+
+	virtual	EventStream*		CreateEventStream();
 
 	virtual	status_t			SetMode(const display_mode& mode);
 	virtual	void				GetMode(display_mode* mode);
@@ -63,6 +67,8 @@ private:
 			display_mode		fDisplayMode;
 
 			int					fFrameBuffer;
+
+			LibInputEventStream* fEventStream;
 
 			struct fb_fix_screeninfo	fInfo;
 			struct fb_var_screeninfo	fVInfo;

@@ -125,6 +125,7 @@ target_sources(app_server PRIVATE
 
 	drawing/interface/linux/FBDevHWInterface.cpp
 	drawing/interface/linux/FBDevBuffer.cpp
+	drawing/interface/linux/LibInputEventStream.cpp
 
 	stackandtile/SATDecorator.cpp
 	stackandtile/SATGroup.cpp
@@ -134,4 +135,4 @@ target_sources(app_server PRIVATE
 	stackandtile/Tiling.cpp
 )
 
-target_link_libraries(app_server PRIVATE be root freetype agg icon linprog)
+target_link_libraries(app_server PRIVATE be root freetype agg icon linprog input udev)

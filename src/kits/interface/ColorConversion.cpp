@@ -465,6 +465,7 @@ static PaletteConverter	sPaletteConverter;
 /*static*/ status_t
 PaletteConverter::InitializeDefault(bool useServer)
 {
+#ifndef __VOS__
 	if (sPaletteConverter.InitCheck() != B_OK) {
 		pthread_once(&sPaletteConverterInitOnce,
 			useServer
@@ -473,6 +474,10 @@ PaletteConverter::InitializeDefault(bool useServer)
 	}
 
 	return sPaletteConverter.InitCheck();
+#else
+	UNIMPLEMENTED();
+	return B_OK;
+#endif
 }
 
 

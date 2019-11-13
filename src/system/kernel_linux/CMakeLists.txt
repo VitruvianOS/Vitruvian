@@ -25,7 +25,7 @@ target_sources(root PRIVATE
 	real_time_clock.c
 	shutdown.cpp
 	signal.cpp
-	system.c
+	system_info.c
 	system_ioctl.c
 
 	fs/build.cpp

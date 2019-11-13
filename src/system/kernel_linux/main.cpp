@@ -12,6 +12,9 @@
 #include "messaging/MessagingService.h"
 
 
+mode_t __gUmask = 022;
+
+
 // This function should be called before anything else
 void __attribute__ ((constructor))
 init_kernel_layer()

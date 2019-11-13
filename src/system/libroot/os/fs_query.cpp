@@ -90,7 +90,7 @@ get_path_for_dirent(struct dirent *dent, char *buffer, size_t length)
 	return _kern_entry_ref_to_path(dent->d_pdev, dent->d_pino, dent->d_name,
 		buffer, length);
 	#elseif
-	printf("get_path_for_dirent UNIMPLEMENTED\n");
+	UNIMPLEMENTED();
 	#endif
 }
 

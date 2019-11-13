@@ -5,7 +5,6 @@ target_sources(root PRIVATE
 	main.cpp
 
 	area.c
-	atomic.c
 	byteorder.cpp
 	debug.c
 	extended_team_info.cpp

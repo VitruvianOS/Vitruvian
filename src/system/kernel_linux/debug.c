@@ -1,6 +1,6 @@
 /*
  * Copyright 2018, Dario Casalinuovo. All rights reserved.
- * Distributed under the terms of the MIT License.
+ * Distributed under the terms of the LGPL License.
  */
 
 

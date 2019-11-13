@@ -14,7 +14,7 @@
 void
 _kern_debugger(const char *message)
 {
-	exit(1);
+	abort();
 }
 
 

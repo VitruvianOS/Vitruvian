@@ -12,7 +12,6 @@ target_sources(root PRIVATE
 	fs_info.c
 	fs_query.cpp
 	fs_volume.c
-	image.cpp
 	memory.cpp
 	parsedate.cpp
 	port.c

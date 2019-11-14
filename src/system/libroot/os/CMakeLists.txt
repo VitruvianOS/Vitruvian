@@ -27,5 +27,4 @@ target_sources(root PRIVATE
 	locks/init_once.cpp
 	locks/mutex.cpp
 	locks/recursive_lock.cpp
-	locks/rw_lock.cpp
 )

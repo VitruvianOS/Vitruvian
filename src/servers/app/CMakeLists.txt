@@ -49,7 +49,6 @@ target_sources(app_server PRIVATE
 	IntRect.cpp
 	Layer.cpp
 	MessageLooper.cpp
-	MultiLocker.cpp
 	OffscreenServerWindow.cpp
 	OffscreenWindow.cpp
 	PictureBoundingBoxPlayer.cpp

@@ -77,7 +77,7 @@ HWInterface::~HWInterface()
 status_t
 HWInterface::Initialize()
 {
-	return MultiLocker::InitCheck();
+	return B_OK;
 }
 
 

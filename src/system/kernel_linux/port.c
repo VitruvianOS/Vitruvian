@@ -39,7 +39,9 @@
 #define DEBUG 0
 #endif
 
-#define PORT_MAX_MESSAGE_SIZE 4096
+#define MAX_QUEUE_LENGTH 4096
+#define PORT_MAX_MESSAGE_SIZE (256 * 1024)
+
 
 typedef struct port_msg {
 	int32		code;
@@ -66,9 +68,7 @@ static int dump_port_list(void);
 static void _dump_port_info(struct port_entry *port);
 
 // gMaxPorts must be power of 2
-int32 gMaxPorts = 256;
-
-#define MAX_QUEUE_LENGTH 256
+int32 gMaxPorts = 4096;
 
 /* This implementation is a major memory hog, so let's not
 ** make things worse than they already are! A 64k message? */
@@ -820,6 +820,11 @@ _kern_read_port_etc(port_id id, int32 *_msgCode, void *msgBuffer,
 		panic("port %ld: tail < 0", sPorts[slot].id);
 	if (tail > sPorts[slot].capacity)
 		panic("port %ld: tail > cap %ld", sPorts[slot].id, sPorts[slot].capacity);
+
+	// TODO: this should mean the port is closed, so we return
+	// check if this behavior is consistent.
+	if (sPorts[slot].capacity == 0)
+		return 0;
 
 	sPorts[slot].tail = (sPorts[slot].tail + 1) % sPorts[slot].capacity;
 

@@ -9,6 +9,9 @@
 #include <sys/utsname.h>
 
 
+extern int32 __gCPUCount;
+
+
 int32
 _kern_is_computer_on()
 {
@@ -46,6 +49,7 @@ _kern_get_system_info(system_info* psInfo)
 	// TODO: proc
 	psInfo->max_threads = 93966;
 	psInfo->kernel_version = 3LL;
+	psInfo->cpu_count = __gCPUCount;
 
 	struct utsname buf;
 	uname(&buf);

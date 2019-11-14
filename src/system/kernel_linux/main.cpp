@@ -30,6 +30,8 @@ init_kernel_layer()
 }
 
 
+#if 0
+// TODO: This cannot possibly work in the way it's meant.
 void __attribute__ ((destructor))
 deinit__kernel_layer()
 {
@@ -37,3 +39,4 @@ deinit__kernel_layer()
 	teardown_threads();
 	teardown_ports();
 }
+#endif

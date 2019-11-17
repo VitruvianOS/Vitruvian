@@ -108,9 +108,12 @@ _get_next_image_info(team_id team, int32* cookie,
 		return B_BAD_VALUE;
 	}
 
-	if (*cookie == 0 && team == 0) {
+	if (team == 0)
+		team = getpid();
+
+	if (*cookie == 0) {
 		char path[B_PATH_NAME_LENGTH];
-		sprintf(path, "/proc/%d/exe", getpid());
+		sprintf(path, "/proc/%d/exe", team);
 
 		ssize_t len = readlink(path, info->name, B_PATH_NAME_LENGTH - 1);
 		if (len < 0)

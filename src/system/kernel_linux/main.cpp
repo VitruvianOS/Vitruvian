@@ -19,7 +19,7 @@ int __libc_argc;
 char** __libc_argv;
 
 
-// This function should be called before anything else
+// This function is executed before everything else
 void __attribute__ ((constructor))
 init_kernel_layer(int argc, char** argv)
 {
@@ -27,7 +27,6 @@ init_kernel_layer(int argc, char** argv)
 
 	// Init global stuff
 	__gCPUCount = sysconf(_SC_NPROCESSORS_ONLN);
-	// Note this is not portable on non UNIX systems
 	__libc_argc = argc;
 	__libc_argv = argv;
 
@@ -37,7 +36,6 @@ init_kernel_layer(int argc, char** argv)
 	// Init the kernel layer
 	init_area_map();
 	port_init();
-	init_thread();
 	init_messaging_service();
 }
 
@@ -48,7 +46,6 @@ void __attribute__ ((destructor))
 deinit__kernel_layer()
 {
 	printf("deinit_kernel_layer()\n");
-	teardown_threads();
 	teardown_ports();
 }
 #endif

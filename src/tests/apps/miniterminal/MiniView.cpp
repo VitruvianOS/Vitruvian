@@ -176,7 +176,7 @@ MiniView::OpenTTY()
 					tio.c_cc[VMIN]   = 4;
 					tio.c_cc[VTIME]  = 0;
 					tio.c_cc[VEOL2]  = 0;			/* '^@' */
-					tio.c_cc[VSWTCH] = 0;			/* '^@' */
+					//tio.c_cc[VSWTCH] = 0;			/* '^@' */
 					tio.c_cc[VSTART] = 'S' & 0x1f;	/* '^S' */
 					tio.c_cc[VSTOP]  = 'Q' & 0x1f;	/* '^Q' */
 					tio.c_cc[VSUSP]  = '@' & 0x1f;	/* '^@' */

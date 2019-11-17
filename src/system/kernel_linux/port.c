@@ -944,6 +944,10 @@ _kern_write_port_etc(port_id id, int32 msgCode, const void *msgBuffer,
 	msg->code = msgCode;
 	msg->size = bufferSize;
 	memcpy(msg->buffer_chain, msgBuffer, bufferSize);
+
+	if (sPorts[slot].capacity == 0)
+		return B_BAD_PORT_ID;
+
 	sPorts[slot].head = (sPorts[slot].head + 1) % sPorts[slot].capacity;
 
 	shmdt(msg_queue);

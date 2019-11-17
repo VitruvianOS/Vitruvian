@@ -46,7 +46,6 @@ static team_id sCurrentTeam = -1;
 status_t
 get_app_path(team_id team, char *buffer)
 {
-#ifndef __VOS__
 	// The only way to get the path to the application's executable seems to
 	// be to get an image_info of its image, which also contains a path.
 	// Several images may belong to the team (libraries, add-ons), but only
@@ -65,12 +64,6 @@ get_app_path(team_id team, char *buffer)
 	}
 
 	return B_ENTRY_NOT_FOUND;
-#else
-	char buf[B_PATH_NAME_LENGTH-1];
-	readlink("/proc/self/exe", buf, B_PATH_NAME_LENGTH-1);
-	strlcpy(buffer, buf, B_PATH_NAME_LENGTH-1);
-	return B_OK;
-#endif
 }
 
 

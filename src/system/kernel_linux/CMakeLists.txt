@@ -1,7 +1,6 @@
 add_subdirectory(messaging)
 
 target_sources(root PRIVATE
-
 	main.cpp
 
 	area.c
@@ -10,7 +9,7 @@ target_sources(root PRIVATE
 	extended_team_info.cpp
 	framebuffer.cpp
 	getenv.c
-	image.c
+	image.cpp
 	tls.cpp
 	memory.cpp
 	mutex.cpp
@@ -18,7 +17,7 @@ target_sources(root PRIVATE
 	scheduler.cpp
 	sem.c
 	team.c
-	thread.c
+	thread.cpp
 	timer.cpp
 	wait_for_objects.cpp
 	libc.c

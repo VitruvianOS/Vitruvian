@@ -1,5 +1,14 @@
 #!/bin/sh
 
+if [ ! -d generated ]
+then 
+	mkdir generated
+else
+	rm -rf generated
+	mkdir generated
+fi
+ls 
+cd generated
 # Init submodules
 echo "Add external submodules"
 git submodule update --init --recursive ../

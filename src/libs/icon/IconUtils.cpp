@@ -154,11 +154,11 @@ scale_down(const uint8* srcBits, uint8* dstBits, int32 srcWidth, int32 srcHeight
 			p4 = *((rgb_color*)srcBits + ((l + 1)* srcWidth) + c);
 
 			// color components
-			out.blue = (uint8)(p1.blue * d1 + p2.blue * d2 + p3.blue * d3
+			out.blue = (uint8)(p1.blue * d1 + p2.blue * d2 + p3.blue * d3 
 				+ p4.blue * d4);
-			out.green = (uint8)(p1.green * d1 + p2.green * d2 + p3.green * d3
+			out.green = (uint8)(p1.green * d1 + p2.green * d2 + p3.green * d3 
 				+ p4.green * d4);
-			out.red = (uint8)(p1.red * d1 + p2.red * d2 + p3.red * d3
+			out.red = (uint8)(p1.red * d1 + p2.red * d2 + p3.red * d3 
 				+ p4.red * d4);
 			out.alpha = (uint8)(p1.alpha * d1 + p2.alpha * d2 + p3.alpha * d3
 				+ p4.alpha * d4);

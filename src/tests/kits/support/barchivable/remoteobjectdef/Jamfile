@@ -1,10 +1,9 @@
 SubDir HAIKU_TOP src tests kits support barchivable remoteobjectdef ;
 
-SetSubDirSupportedPlatformsBeOSCompatible ;
 AddSubDirSupportedPlatforms libbe_test ;
 
 UnitTestLib libsupporttest_RemoteTestObject.so
 	: RemoteTestObject.cpp
-	: be $(TARGET_LIBSTDC++)
+	: be [ TargetLibstdc++ ]
 	: RemoteTestObject.rdef
 ;

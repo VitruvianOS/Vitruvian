@@ -1060,9 +1060,9 @@ PathHandler::_EntryCreated(BMessage* message)
 	NotOwningEntryRef entryRef;
 	node_ref nodeRef;
 
-	if (message->FindInt32("device", &nodeRef.device) != B_OK
-		|| message->FindInt64("node", &nodeRef.node) != B_OK
-		|| message->FindInt64("directory", &entryRef.directory) != B_OK
+	if (message->FindUInt64("device", &nodeRef.device) != B_OK
+		|| message->FindUInt64("node", &nodeRef.node) != B_OK
+		|| message->FindUInt64("directory", &entryRef.directory) != B_OK
 		|| message->FindString("name", (const char**)&entryRef.name) != B_OK) {
 		return;
 	}
@@ -1092,9 +1092,9 @@ PathHandler::_EntryRemoved(BMessage* message)
 	NotOwningEntryRef entryRef;
 	node_ref nodeRef;
 
-	if (message->FindInt32("device", &nodeRef.device) != B_OK
-		|| message->FindInt64("node", &nodeRef.node) != B_OK
-		|| message->FindInt64("directory", &entryRef.directory) != B_OK
+	if (message->FindUInt64("device", &nodeRef.device) != B_OK
+		|| message->FindUInt64("node", &nodeRef.node) != B_OK
+		|| message->FindUInt64("directory", &entryRef.directory) != B_OK
 		|| message->FindString("name", (const char**)&entryRef.name) != B_OK) {
 		return;
 	}
@@ -1118,11 +1118,11 @@ PathHandler::_EntryMoved(BMessage* message)
 	NotOwningEntryRef toEntryRef;
 	node_ref nodeRef;
 
-	if (message->FindInt32("node device", &nodeRef.device) != B_OK
-		|| message->FindInt64("node", &nodeRef.node) != B_OK
-		|| message->FindInt32("device", &fromEntryRef.device) != B_OK
-		|| message->FindInt64("from directory", &fromEntryRef.directory) != B_OK
-		|| message->FindInt64("to directory", &toEntryRef.directory) != B_OK
+	if (message->FindUInt64("node device", &nodeRef.device) != B_OK
+		|| message->FindUInt64("node", &nodeRef.node) != B_OK
+		|| message->FindUInt64("device", &fromEntryRef.device) != B_OK
+		|| message->FindUInt64("from directory", &fromEntryRef.directory) != B_OK
+		|| message->FindUInt64("to directory", &toEntryRef.directory) != B_OK
 		|| message->FindString("from name", (const char**)&fromEntryRef.name)
 			!= B_OK
 		|| message->FindString("name", (const char**)&toEntryRef.name)
@@ -1339,8 +1339,8 @@ PathHandler::_NodeChanged(BMessage* message)
 {
 	node_ref nodeRef;
 
-	if (message->FindInt32("device", &nodeRef.device) != B_OK
-		|| message->FindInt64("node", &nodeRef.node) != B_OK) {
+	if (message->FindUInt64("device", &nodeRef.device) != B_OK
+		|| message->FindUInt64("node", &nodeRef.node) != B_OK) {
 		return;
 	}
 
@@ -1462,7 +1462,7 @@ PathHandler::_EntryCreated(const NotOwningEntryRef& entryRef,
 	if (directory == NULL) {
 		// We're out of sync with reality.
 		if (!dryRun) {
-			if (Entry* nodeEntry = directory->FirstNodeEntry()) {
+			if (Entry* nodeEntry = directoryNode->FirstNodeEntry()) {
 				// remove the entry that is in the way and re-add the proper
 				// entry
 				NotOwningEntryRef directoryEntryRef = nodeEntry->EntryRef();
@@ -1851,9 +1851,9 @@ PathHandler::_NotifyEntryCreatedOrRemoved(const entry_ref& entryRef,
 
 	BMessage message(B_PATH_MONITOR);
 	message.AddInt32("opcode", opcode);
-	message.AddInt32("device", entryRef.device);
-	message.AddInt64("directory", entryRef.directory);
-	message.AddInt32("node device", nodeRef.device);
+	message.AddUInt64("device", entryRef.device);
+	message.AddUInt64("directory", entryRef.directory);
+	message.AddUInt64("node device", nodeRef.device);
 		// This field is not in a usual node monitoring message, since the node
 		// the created/removed entry refers to always belongs to the same FS as
 		// the directory, as another FS cannot yet/no longer be mounted there.
@@ -1885,10 +1885,10 @@ PathHandler::_NotifyEntryMoved(const entry_ref& fromEntryRef,
 
 	BMessage message(B_PATH_MONITOR);
 	message.AddInt32("opcode", B_ENTRY_MOVED);
-	message.AddInt32("device", fromEntryRef.device);
-	message.AddInt64("from directory", fromEntryRef.directory);
-	message.AddInt64("to directory", toEntryRef.directory);
-	message.AddInt32("node device", nodeRef.device);
+	message.AddUInt64("device", fromEntryRef.device);
+	message.AddUInt64("from directory", fromEntryRef.directory);
+	message.AddUInt64("to directory", toEntryRef.directory);
+	message.AddUInt64("node device", nodeRef.device);
 	message.AddInt64("node", nodeRef.node);
 	message.AddString("from name", fromEntryRef.name);
 	message.AddString("name", toEntryRef.name);

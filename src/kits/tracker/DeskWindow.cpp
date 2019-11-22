@@ -522,7 +522,7 @@ BDeskWindow::AddWindowContextMenus(BMenu* menu)
 
 #ifdef CUT_COPY_PASTE_IN_CONTEXT_MENU
 	BMenuItem* pasteItem = new BMenuItem(B_TRANSLATE("Paste"),
-		new BMessage(B_PASTE), 'V'));
+		new BMessage(B_PASTE), 'V');
 	menu->AddItem(pasteItem);
 	menu->AddSeparatorItem();
 #endif
@@ -656,8 +656,8 @@ BDeskWindow::MessageReceived(BMessage* message)
 				dev_t device;
 				ino_t node;
 				if (fNodeRef == NULL
-					|| message->FindInt32("device", &device) != B_OK
-					|| message->FindInt64("node", &node) != B_OK
+					|| message->FindUInt64("device", &device) != B_OK
+					|| message->FindUInt64("node", &node) != B_OK
 					|| device != fNodeRef->device
 					|| node != fNodeRef->node)
 					break;

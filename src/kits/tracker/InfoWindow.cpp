@@ -599,8 +599,8 @@ BInfoWindow::MessageReceived(BMessage* message)
 				case B_ENTRY_REMOVED:
 				{
 					node_ref itemNode;
-					message->FindInt32("device", &itemNode.device);
-					message->FindInt64("node", &itemNode.node);
+					message->FindUInt64("device", &itemNode.device);
+					message->FindUInt64("node", &itemNode.node);
 					// our window itself may be deleted
 					if (*TargetModel()->NodeRef() == itemNode)
 						Close();
@@ -626,7 +626,7 @@ BInfoWindow::MessageReceived(BMessage* message)
 					// mounted, we might as well quit
 					node_ref itemNode;
 					// Only the device information is available
-					message->FindInt32("device", &itemNode.device);
+					message->FindUInt64("device", &itemNode.device);
 					if (TargetModel()->NodeRef()->device == itemNode.device)
 						Close();
 					break;
@@ -1099,9 +1099,10 @@ AttributeView::ModelChanged(Model* model, BMessage* message)
 		{
 			node_ref dirNode;
 			node_ref itemNode;
-			dirNode.device = itemNode.device = message->FindInt32("device");
-			message->FindInt64("to directory", &dirNode.node);
-			message->FindInt64("node", &itemNode.node);
+			message->FindUInt64("device", &itemNode.device);
+			dirNode.device = itemNode.device;
+			message->FindUInt64("to directory", &dirNode.node);
+			message->FindUInt64("node", &itemNode.node);
 
 			const char* name;
 			if (message->FindString("name", &name) != B_OK)

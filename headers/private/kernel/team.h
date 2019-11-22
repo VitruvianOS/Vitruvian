@@ -50,6 +50,7 @@ void team_set_job_control_state(Team* team, job_control_state newState,
 void team_set_controlling_tty(int32 index);
 int32 team_get_controlling_tty();
 status_t team_set_foreground_process_group(int32 ttyIndex, pid_t processGroup);
+uid_t team_geteuid(team_id id);
 
 status_t start_watching_team(team_id team, void (*hook)(team_id, void *),
 			void *data);

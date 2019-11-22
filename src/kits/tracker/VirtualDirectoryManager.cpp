@@ -428,6 +428,7 @@ status_t
 VirtualDirectoryManager::TranslateDirectoryEntry(
 	const node_ref& definitionFileRef, dirent* buffer)
 {
+	#ifndef __VOS__
 	NotOwningEntryRef entryRef(buffer->d_pdev, buffer->d_pino, buffer->d_name);
 	node_ref nodeRef(buffer->d_dev, buffer->d_ino);
 
@@ -442,6 +443,9 @@ VirtualDirectoryManager::TranslateDirectoryEntry(
 	buffer->d_ino = nodeRef.node;
 
 	return B_OK;
+	#endif
+	UNIMPLEMENTED();
+	return B_ERROR;
 }
 
 

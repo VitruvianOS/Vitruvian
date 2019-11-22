@@ -1,0 +1,54 @@
+/*
+ * Copyright 2019, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the LGPL License.
+ */
+
+#include "main.h"
+
+#include <kernel/messaging.h>
+
+#include <stdlib.h>
+#include <linux/limits.h>
+
+#include "messaging/MessagingService.h"
+
+
+mode_t __gUmask = 022;
+int32 __gCPUCount;
+int __libc_argc;
+char** __libc_argv;
+
+
+// This function should be called before anything else
+void __attribute__ ((constructor))
+init_kernel_layer(int argc, char** argv)
+{
+	printf("init_kernel_layer()\n");
+
+	// Init global stuff
+	__gCPUCount = sysconf(_SC_NPROCESSORS_ONLN);
+	// Note this is not portable on non UNIX systems
+	__libc_argc = argc;
+	__libc_argv = argv;
+
+	// Set screen
+	setenv("TARGET_SCREEN", "root", 1);
+
+	// Init the kernel layer
+	init_area_map();
+	port_init();
+	init_thread();
+	init_messaging_service();
+}
+
+
+#if 0
+// TODO: This cannot possibly work in the way it's meant.
+void __attribute__ ((destructor))
+deinit__kernel_layer()
+{
+	printf("deinit_kernel_layer()\n");
+	teardown_threads();
+	teardown_ports();
+}
+#endif

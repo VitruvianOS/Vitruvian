@@ -10,6 +10,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/server
 
 target_include_directories(app_server PUBLIC
 	"./drawing"
+	"./drawing/interface/linux"
 	"./drawing/interface/local"
 	"./drawing/interface/remote"
 	"./font"
@@ -48,7 +49,6 @@ target_sources(app_server PRIVATE
 	IntRect.cpp
 	Layer.cpp
 	MessageLooper.cpp
-	MultiLocker.cpp
 	OffscreenServerWindow.cpp
 	OffscreenWindow.cpp
 	PictureBoundingBoxPlayer.cpp
@@ -119,8 +119,12 @@ target_sources(app_server PRIVATE
 	#drawing/interface/remote/RemoteMessage.cpp
 	#drawing/interface/remote/StreamingRingBuffer.cpp
 
-	drawing/interface/local/AccelerantBuffer.cpp
-	drawing/interface/local/AccelerantHWInterface.cpp
+	#drawing/interface/local/AccelerantBuffer.cpp
+	#drawing/interface/local/AccelerantHWInterface.cpp
+
+	drawing/interface/linux/FBDevHWInterface.cpp
+	drawing/interface/linux/FBDevBuffer.cpp
+	drawing/interface/linux/LibInputEventStream.cpp
 
 	stackandtile/SATDecorator.cpp
 	stackandtile/SATGroup.cpp
@@ -130,4 +134,4 @@ target_sources(app_server PRIVATE
 	stackandtile/Tiling.cpp
 )
 
-target_link_libraries(app_server PRIVATE be root freetype agg icon linprog)
+target_link_libraries(app_server PRIVATE be root freetype agg icon linprog input udev)

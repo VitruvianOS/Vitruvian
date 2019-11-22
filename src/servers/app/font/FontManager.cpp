@@ -166,8 +166,8 @@ FontManager::MessageReceived(BMessage* message)
 					#ifdef __HAIKU__
 					const char* name;
 					node_ref nodeRef;
-					if (message->FindInt32("device", &nodeRef.device) != B_OK
-						|| message->FindInt64("directory", &nodeRef.node) != B_OK
+					if (message->FindUInt64("device", &nodeRef.device) != B_OK
+						|| message->FindUInt64("directory", &nodeRef.node) != B_OK
 						|| message->FindString("name", &name) != B_OK)
 						break;
 
@@ -205,10 +205,10 @@ FontManager::MessageReceived(BMessage* message)
 					node_ref nodeRef;
 					uint64 fromNode;
 					uint64 node;
-					if (message->FindInt32("device", &nodeRef.device) != B_OK
-						|| message->FindInt64("to directory", &nodeRef.node) != B_OK
-						|| message->FindInt64("from directory", (int64 *)&fromNode) != B_OK
-						|| message->FindInt64("node", (int64 *)&node) != B_OK
+					if (message->FindUInt64("device", &nodeRef.device) != B_OK
+						|| message->FindUInt64("to directory", &nodeRef.node) != B_OK
+						|| message->FindUInt64("from directory", (int64 *)&fromNode) != B_OK
+						|| message->FindUInt64("node", (int64 *)&node) != B_OK
 						|| message->FindString("name", &name) != B_OK)
 						break;
 
@@ -281,9 +281,9 @@ FontManager::MessageReceived(BMessage* message)
 					#ifdef __HAIKU__
 					node_ref nodeRef;
 					uint64 directoryNode;
-					if (message->FindInt32("device", &nodeRef.device) != B_OK
-						|| message->FindInt64("directory", (int64 *)&directoryNode) != B_OK
-						|| message->FindInt64("node", &nodeRef.node) != B_OK)
+					if (message->FindUInt64("device", &nodeRef.device) != B_OK
+						|| message->FindUInt64("directory", (int64 *)&directoryNode) != B_OK
+						|| message->FindUInt64("node", &nodeRef.node) != B_OK)
 						break;
 
 					font_directory* directory = _FindDirectory(nodeRef);
@@ -666,6 +666,7 @@ FontManager::_RemoveDirectory(font_directory* directory)
 status_t
 FontManager::_AddPath(const char* path)
 {
+	printf("adding path %s\n", path);
 	BEntry entry;
 	status_t status = entry.SetTo(path);
 	if (status != B_OK)
@@ -710,17 +711,17 @@ FontManager::_AddPath(BEntry& entry, font_directory** _newDirectory)
 	directory->group = stat.st_gid;
 	directory->revision = 0;
 
-	status = watch_node(&nodeRef, B_WATCH_DIRECTORY, this);
-	if (status != B_OK) {
+	//status = watch_node(&nodeRef, B_WATCH_DIRECTORY, this);
+	//if (status != B_OK) {
 		// we cannot watch this directory - while this is unfortunate,
 		// it's not a critical error
-		printf("could not watch directory %" B_PRIdDEV ":%" B_PRIdINO "\n",
-			nodeRef.device, nodeRef.node);
+		//printf("could not watch directory %" B_PRIdDEV ":%" B_PRIdINO "\n",
+			//nodeRef.device, nodeRef.node);
 			// TODO: should go into syslog()
-	} else {
+	//} else {
 		BPath path(&entry);
 		FTRACE(("FontManager: now watching: %s\n", path.Path()));
-	}
+	//}
 
 	fDirectories.AddItem(directory);
 

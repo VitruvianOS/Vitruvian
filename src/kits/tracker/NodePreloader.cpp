@@ -121,8 +121,8 @@ NodePreloader::MessageReceived(BMessage* message)
 				case B_ENTRY_REMOVED:
 				{
 					AutoLock<Benaphore> locker(fLock);
-					message->FindInt32("device", &itemNode.device);
-					message->FindInt64("node", &itemNode.node);
+					message->FindUInt64("device", &itemNode.device);
+					message->FindUInt64("node", &itemNode.node);
 					Model* model = FindModel(itemNode);
 					if (model == NULL)
 						break;
@@ -137,8 +137,8 @@ NodePreloader::MessageReceived(BMessage* message)
 				case B_STAT_CHANGED:
 				{
 					AutoLock<Benaphore> locker(fLock);
-					message->FindInt32("device", &itemNode.device);
-					message->FindInt64("node", &itemNode.node);
+					message->FindUInt64("device", &itemNode.device);
+					message->FindUInt64("node", &itemNode.node);
 
 					const char* attrName;
 					message->FindString("attr", &attrName);

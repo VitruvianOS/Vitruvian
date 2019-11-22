@@ -465,7 +465,7 @@ FindWindow::SaveQueryAsAttributes(BNode* file, BEntry* entry,
 			if (!item->IsMarked())
 				continue;
 
-			if (item->Message()->FindInt32("device", &dev) != B_OK)
+			if (item->Message()->FindUInt64("device", &dev) != B_OK)
 				continue;
 
 			count++;
@@ -1120,7 +1120,7 @@ FindPanel::MessageReceived(BMessage* message)
 			if (message->FindPointer("source", (void**)&invokedItem) != B_OK)
 				return;
 
-			if (message->FindInt32("device", &dev) != B_OK)
+			if (message->FindUInt64("device", &dev) != B_OK)
 				break;
 
 			BMenu* menu = invokedItem->Menu();
@@ -1408,8 +1408,8 @@ FindPanel::BuildAttrQuery(BQuery* query, bool &dynamicDate) const
 							"true") == 0) {
 						value = 1;
 					} else if (strcasecmp(textControl->Text(),
-							"true") == 0) {
-						value = 1;
+							"false") == 0) {
+						value = 0;
 					} else
 						value = (uint32)atoi(textControl->Text());
 
@@ -1921,7 +1921,7 @@ FindPanel::AddVolumes(BMenu* menu)
 	// ToDo: add calls to this to rebuild the menu when a volume gets mounted
 
 	BMessage* message = new BMessage(kVolumeItem);
-	message->AddInt32("device", -1);
+	message->AddUInt64("device", -1);
 	menu->AddItem(new BMenuItem(B_TRANSLATE("All disks"), message));
 	menu->AddSeparatorItem();
 	PopUpMenuSetTitle(menu, B_TRANSLATE("All disks"));
@@ -1943,7 +1943,7 @@ FindPanel::AddVolumes(BMenu* menu)
 				continue;
 
 			message = new BMessage(kVolumeItem);
-			message->AddInt32("device", volume.Device());
+			message->AddUInt64("device", volume.Device());
 			menu->AddItem(new ModelMenuItem(&model, model.Name(), message));
 		}
 	}

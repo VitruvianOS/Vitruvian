@@ -1295,8 +1295,11 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 		newLink.SetOwner(srcStat->st_uid);
 		newLink.SetGroup(srcStat->st_gid);
 		newLink.SetModificationTime(srcStat->st_mtime);
+		#ifndef __VOS__
 		newLink.SetCreationTime(srcStat->st_crtime);
-
+		#else
+		UNIMPLEMENTED();
+		#endif
 		return;
 	}
 
@@ -1397,7 +1400,11 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 	destFile.SetOwner(srcStat->st_uid);
 	destFile.SetGroup(srcStat->st_gid);
 	destFile.SetModificationTime(srcStat->st_mtime);
+	#ifndef __VOS__
 	destFile.SetCreationTime(srcStat->st_crtime);
+	#else
+	UNIMPLEMENTED();
+	#endif
 
 	delete[] buffer;
 
@@ -1880,11 +1887,17 @@ FSCopyAttributesAndStats(BNode* srcNode, BNode* destNode, bool copyTimes)
 	struct stat srcStat;
 	srcNode->GetStat(&srcStat);
 	destNode->SetPermissions(srcStat.st_mode);
+	#ifndef __VOS__
 	destNode->SetOwner(srcStat.st_uid);
+	#else
+	UNIMPLEMENTED();
+	#endif
 	destNode->SetGroup(srcStat.st_gid);
 	if (copyTimes) {
 		destNode->SetModificationTime(srcStat.st_mtime);
+		#ifndef __VOS__
 		destNode->SetCreationTime(srcStat.st_crtime);
+		#endif
 	}
 
 	return B_OK;
@@ -2424,7 +2437,7 @@ FSMakeOriginalName(char* name, BDirectory* destDir, const char* suffix)
 	fnum = 1;
 	strcpy(temp_name, name);
 	while (destDir->Contains(temp_name)) {
-		sprintf(temp_name, "%s %" B_PRId32, copybase, ++fnum);
+		snprintf(temp_name, sizeof(temp_name), "%s %" B_PRId32, copybase, ++fnum);
 
 		if (strlen(temp_name) > (B_FILE_NAME_LENGTH - 1)) {
 			// The name has grown too long. Maybe we just went from
@@ -2433,7 +2446,7 @@ FSMakeOriginalName(char* name, BDirectory* destDir, const char* suffix)
 			// truncate the 'root' name and continue.
 			// ??? should we reset fnum or not ???
 			root[strlen(root) - 1] = '\0';
-			sprintf(temp_name, "%s%s %" B_PRId32, root, suffix, fnum);
+			snprintf(temp_name, sizeof(temp_name), "%s%s %" B_PRId32, root, suffix, fnum);
 		}
 	}
 
@@ -3432,6 +3445,7 @@ LoaderErrorDetails(const entry_ref* app, BString &details)
 	while (environ[envCount] != NULL)
 		envCount++;
 
+#ifndef __VOS__
 	char** flatArgs = NULL;
 	size_t flatArgsSize;
 	result = __flatten_process_args((const char**)argv, 1,
@@ -3445,7 +3459,8 @@ LoaderErrorDetails(const entry_ref* app, BString &details)
 		// we weren't supposed to be able to start the application...
 		return B_ERROR;
 	}
-
+#endif
+	UNIMPLEMENTED();
 	// read error message from port and construct details string
 
 	ssize_t bufferSize;

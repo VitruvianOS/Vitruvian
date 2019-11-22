@@ -240,11 +240,12 @@ BStatable::GetCreationTime(time_t* ctime) const
 	if (result == B_OK)
 		result = GetStat(&stat);
 
+#ifndef __VOS__
 	if (result == B_OK)
-#ifdef __HAIKU__
 		*ctime = stat.st_crtime;
-#elseif
-		*ctime = stat.st_ctime;
+#else
+	if (result == B_OK)
+		*ctime = stat.st_mtime;
 #endif
 	return result;
 }
@@ -255,11 +256,10 @@ status_t
 BStatable::SetCreationTime(time_t ctime)
 {
 	struct stat stat;
-
-#ifdef __HAIKU__
+#ifndef __VOS__
 	stat.st_crtime = ctime;
-#elseif
-	stat.st_ctime = ctime;
+#else
+	UNIMPLEMENTED();
 #endif
 
 	return set_stat(stat, B_STAT_CREATION_TIME);

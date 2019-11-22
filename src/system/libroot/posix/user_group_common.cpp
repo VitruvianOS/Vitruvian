@@ -55,9 +55,16 @@ port_id
 BPrivate::get_registrar_authentication_port()
 {
 	if (sRegistrarPort < 0)
-		sRegistrarPort = find_port(REGISTRAR_AUTHENTICATION_PORT_NAME);
+		sRegistrarPort = find_port(B_REGISTRAR_AUTHENTICATION_PORT_NAME);
 
 	return sRegistrarPort;
+}
+
+
+void
+BPrivate::set_registrar_authentication_port(port_id port)
+{
+	sRegistrarPort = port;
 }
 
 

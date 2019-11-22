@@ -532,10 +532,7 @@ BSecureSocket::InitCheck()
 bool
 BSecureSocket::CertificateVerificationFailed(BCertificate&, const char*)
 {
-	// Until apps actually make use of the certificate API, let's keep the old
-	// behavior and accept all connections, even if the certificate validation
-	// didn't work.
-	return true;
+	return false;
 }
 
 
@@ -589,12 +586,10 @@ BSecureSocket::_SetupCommon(const char* host)
 	BIO_set_fd(fPrivate->fBIO, fSocket, BIO_NOCLOSE);
 	SSL_set_bio(fPrivate->fSSL, fPrivate->fBIO, fPrivate->fBIO);
 	SSL_set_ex_data(fPrivate->fSSL, Private::sDataIndex, this);
-	if (host != NULL) {
-		BString hostString = host;
-		if (hostString != "")
-			SSL_set_tlsext_host_name(fPrivate->fSSL, host);
+	if (host != NULL && host[0] != '\0') {
+		SSL_set_tlsext_host_name(fPrivate->fSSL, host);
+		X509_VERIFY_PARAM_set1_host(SSL_get0_param(fPrivate->fSSL), host, 0);
 	}
-
 
 	return B_OK;
 }

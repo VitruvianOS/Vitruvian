@@ -153,7 +153,7 @@ int32 control_graphics_card(uint32, void*);
 extern "C" {
 #endif
 
-#ifdef __HAIKU__
+#ifndef __VOS__
 void dprintf(const char *format, ...);
 #endif
 bool set_dprintf_enabled(bool);

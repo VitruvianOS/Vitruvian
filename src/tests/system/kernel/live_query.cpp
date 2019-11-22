@@ -185,9 +185,9 @@ LiveQuery::MessageReceived(BMessage* message)
 			int64 directory;
 			int64 node;
 			const char* name;
-			message->FindInt32("device", &device);
-			message->FindInt64("directory", &directory);
-			message->FindInt64("node", &node);
+			message->FindUInt64("device", &device);
+			message->FindUInt64("directory", &directory);
+			message->FindUInt64("node", &node);
 			message->FindString("name", &name);
 
 			switch (what) {

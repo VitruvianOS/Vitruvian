@@ -1,2 +1,8 @@
+add_subdirectory(clock)
+add_subdirectory(deskbar)
+#add_subdirectory(deskcalc)
+add_subdirectory(pairs)
 add_subdirectory(osutils)
+add_subdirectory(sudoku)
+add_subdirectory(terminal)
 add_subdirectory(testharness)

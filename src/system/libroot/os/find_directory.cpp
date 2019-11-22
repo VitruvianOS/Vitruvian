@@ -291,11 +291,19 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 
 	memset(buffer, 0, pathLength);
 
+#ifdef __VOS__
+	char buf[1024];
+	get_user_home_path(buf, 1024);
+	char* path = strcat(buf, "/os");
+#else
+	char* path = "/boot";
+#endif
+
 	/* fiddle with non-boot volume for items that need it */
 	switch (which) {
 		case B_DESKTOP_DIRECTORY:
 		case B_TRASH_DIRECTORY:
-			bootDevice = dev_for_path("/boot");
+			bootDevice = dev_for_path(path);
 			if (device <= 0)
 				device = bootDevice;
 			if (fs_stat_dev(device, &fsInfo) != B_OK)
@@ -313,14 +321,14 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 			} else {
 				/* use the user id to find the home folder */
 				/* done later */
-				strlcat(buffer, "/boot", pathLength);
+				strlcat(buffer, path, pathLength);
 			}
 			break;
 		case B_PACKAGE_LINKS_DIRECTORY:
 			// this is a directory living in rootfs
 			break;
 		default:
-			strlcat(buffer, "/boot", pathLength);
+			strlcat(buffer, path, pathLength);
 			break;
 	}
 

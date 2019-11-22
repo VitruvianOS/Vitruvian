@@ -195,9 +195,12 @@ TRoster::HandleAddApplication(BMessage* request)
 	uint32 token = 0;
 
 	uint32 launchFlags = flags & B_LAUNCH_MASK;
+	#ifndef __VOS__
 	BEntry entry(&ref);
 	if (!entry.Exists())
 		SET_ERROR(error, B_ENTRY_NOT_FOUND);
+	#endif
+	UNIMPLEMENTED();
 
 	if (error == B_OK)
 		_ValidateRunning(ref, signature);
@@ -391,10 +394,13 @@ TRoster::HandleIsAppRegistered(BMessage* request)
 	PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device, ref.directory,
 		ref.name);
 
+	#ifndef __VOS__
 	// check the parameters
 	// entry_ref
 	if (error == B_OK && !BEntry(&ref).Exists())
 		SET_ERROR(error, B_ENTRY_NOT_FOUND);
+	#endif
+	UNIMPLEMENTED();
 	// team/token
 	if (error == B_OK && team < 0 && token == 0)
 		SET_ERROR(error, B_BAD_VALUE);
@@ -486,9 +492,7 @@ TRoster::HandleRemoveApp(BMessage* request)
 	status_t error = B_OK;
 	// get the parameters
 	team_id team;
-	if (request->FindInt32("team", &team) != B_OK)
-		team = -1;
-
+	error = request->FindInt32("team", &team);
 	PRINT("team: %" B_PRId32 "\n", team);
 
 	// remove the app
@@ -658,7 +662,6 @@ TRoster::HandleGetAppInfo(BMessage* request)
 
 	BAutolock _(fLock);
 
-	status_t error = B_OK;
 	// get the parameters
 	team_id team;
 	entry_ref ref;
@@ -673,38 +676,39 @@ TRoster::HandleGetAppInfo(BMessage* request)
 	if (request->FindString("signature", &signature) != B_OK)
 		hasSignature = false;
 
-if (hasTeam)
-PRINT("team: %" B_PRId32 "\n", team);
-if (hasRef)
-PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device, ref.directory,
-	ref.name);
-if (hasSignature)
-PRINT("signature: %s\n", signature);
+	if (hasTeam)
+		PRINT("team: %" B_PRId32 "\n", team);
+	if (hasRef) {
+		PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device,
+			ref.directory, ref.name);
+	}
+	if (hasSignature)
+		PRINT("signature: %s\n", signature);
 
 	// get the info
 	RosterAppInfo* info = NULL;
-	if (error == B_OK) {
-		if (hasTeam) {
-			info = fRegisteredApps.InfoFor(team);
-			if (info == NULL)
-				SET_ERROR(error, B_BAD_TEAM_ID);
-		} else if (hasRef) {
-			info = fRegisteredApps.InfoFor(&ref);
-			if (info == NULL)
-				SET_ERROR(error, B_ERROR);
-		} else if (hasSignature) {
-			info = fRegisteredApps.InfoFor(signature);
-			if (info == NULL)
-				SET_ERROR(error, B_ERROR);
-		} else {
-			// If neither of those has been supplied, the active application
-			// info is requested.
-			if (fActiveApp)
-				info = fActiveApp;
-			else
-				SET_ERROR(error, B_ERROR);
-		}
+	status_t error = B_OK;
+	if (hasTeam) {
+		info = fRegisteredApps.InfoFor(team);
+		if (info == NULL)
+			SET_ERROR(error, B_BAD_TEAM_ID);
+	} else if (hasRef) {
+		info = fRegisteredApps.InfoFor(&ref);
+		if (info == NULL)
+			SET_ERROR(error, B_ERROR);
+	} else if (hasSignature) {
+		info = fRegisteredApps.InfoFor(signature);
+		if (info == NULL)
+			SET_ERROR(error, B_ERROR);
+	} else {
+		// If neither of those has been supplied, the active application
+		// info is requested.
+		if (fActiveApp)
+			info = fActiveApp;
+		else
+			SET_ERROR(error, B_ERROR);
 	}
+
 	// reply to the request
 	if (error == B_OK) {
 		BMessage reply(B_REG_SUCCESS);
@@ -730,29 +734,23 @@ TRoster::HandleGetAppList(BMessage* request)
 
 	BAutolock _(fLock);
 
-	status_t error = B_OK;
 	// get the parameters
 	const char* signature;
 	if (request->FindString("signature", &signature) != B_OK)
 		signature = NULL;
+
 	// reply to the request
-	if (error == B_OK) {
-		BMessage reply(B_REG_SUCCESS);
-		// get the list
-		for (AppInfoList::Iterator it(fRegisteredApps.It());
-			 RosterAppInfo* info = *it;
-			 ++it) {
-			if (info->state != APP_STATE_REGISTERED)
-				continue;
-			if (!signature || !strcasecmp(signature, info->signature))
-				reply.AddInt32("teams", info->team);
-		}
-		request->SendReply(&reply);
-	} else {
-		BMessage reply(B_REG_ERROR);
-		reply.AddInt32("error", error);
-		request->SendReply(&reply);
+	BMessage reply(B_REG_SUCCESS);
+	// get the list
+	for (AppInfoList::Iterator it(fRegisteredApps.It());
+		 RosterAppInfo* info = *it;
+		 ++it) {
+		if (info->state != APP_STATE_REGISTERED)
+			continue;
+		if (signature == NULL || strcasecmp(signature, info->signature) == 0)
+			reply.AddInt32("teams", info->team);
 	}
+	request->SendReply(&reply);
 
 	FUNCTION_END();
 }
@@ -1234,8 +1232,8 @@ status_t
 TRoster::Init()
 {
 	// check lock initialization
-	if (fLock.Sem() < 0)
-		return fLock.Sem();
+	if (fLock.InitCheck() < 0)
+		return fLock.InitCheck();
 
 	// create the info
 	RosterAppInfo* info = new(nothrow) RosterAppInfo;

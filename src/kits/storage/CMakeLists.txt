@@ -1,6 +1,8 @@
 target_include_directories(be PRIVATE
 	"./"
 	"mime"
+	"disk_device"
+	"disk_device/jobs"
 )
 
 target_sources(be PRIVATE
@@ -29,8 +31,7 @@ target_sources(be PRIVATE
 	OffsetFile.cpp
 	Path.cpp
 	PathFinder.cpp
-	# TODO fix
-	#PathMonitor.cpp
+	PathMonitor.cpp
 	Query.cpp
 	QueryPredicate.cpp
 	RemoveEngine.cpp
@@ -72,4 +73,35 @@ target_sources(be PRIVATE
 	sniffer/RPattern.cpp
 	sniffer/RPatternList.cpp
 	sniffer/Rule.cpp
+
+	disk_device/DiskDevice.cpp
+	disk_device/DiskDeviceJob.cpp
+	disk_device/DiskDeviceJobGenerator.cpp
+	disk_device/DiskDeviceJobQueue.cpp
+	disk_device/DiskDeviceList.cpp
+	disk_device/DiskDevicePrivate.cpp
+	disk_device/DiskDeviceRoster.cpp
+	disk_device/DiskDeviceTypes.cpp
+	disk_device/DiskDeviceVisitor.cpp
+	disk_device/DiskScannerAddOn.cpp
+	disk_device/DiskSystemAddOn.cpp
+	disk_device/DiskSystemAddOnManager.cpp
+	disk_device/DiskSystem.cpp
+	disk_device/MutablePartition.cpp
+	disk_device/Partition.cpp
+	disk_device/PartitionDelegate.cpp
+	disk_device/PartitioningDialog.cpp
+	disk_device/PartitioningInfo.cpp
+	disk_device/PartitionParameterEditor.cpp
+	disk_device/PartitionReference.cpp
+
+	disk_device/jobs/CreateChildJob.cpp
+	disk_device/jobs/RepairJob.cpp
+	disk_device/jobs/DefragmentJob.cpp
+	disk_device/jobs/ResizeJob.cpp
+	disk_device/jobs/DeleteChildJob.cpp
+	disk_device/jobs/SetStringJob.cpp
+	disk_device/jobs/InitializeJob.cpp
+	disk_device/jobs/UninitializeJob.cpp
+	disk_device/jobs/MoveJob.cpp
 )

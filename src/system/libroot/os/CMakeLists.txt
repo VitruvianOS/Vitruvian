@@ -4,6 +4,7 @@ target_sources(root PRIVATE
 	atomic.c
 	debug.c
 	driver_settings.cpp
+	extended_system_info.cpp
 	find_directory.cpp
 	find_paths.cpp
 	#fs_attr.cpp
@@ -11,9 +12,6 @@ target_sources(root PRIVATE
 	fs_info.c
 	fs_query.cpp
 	fs_volume.c
-	image.cpp
-	launch.cpp
-	locks
 	memory.cpp
 	parsedate.cpp
 	port.c
@@ -29,5 +27,4 @@ target_sources(root PRIVATE
 	locks/init_once.cpp
 	locks/mutex.cpp
 	locks/recursive_lock.cpp
-	locks/rw_lock.cpp
 )

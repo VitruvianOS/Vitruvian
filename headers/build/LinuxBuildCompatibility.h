@@ -7,6 +7,8 @@
 #include <SupportDefs.h>
 
 #include <string.h>
+#include <time.h>
+#include <sys/ioctl.h>
 
 
 #define SYMLOOP_MAX _POSIX_SYMLOOP_MAX
@@ -30,9 +32,6 @@
 #ifndef _ALIGN
 #	define _ALIGN(p) (((unsigned)(p) + _ALIGNBYTES) & ~_ALIGNBYTES)
 #endif
-
-#define DEBUG_SERVER
-#define SERVER_TRUE 0
 
 // There's no ALLPERMS when building with musl c
 #ifndef ALLPERMS
@@ -135,6 +134,14 @@ int		_haiku_build_openat(int fd, const char* path, int openMode,
 int		_haiku_build_fcntl(int fd, int op, int argument);
 int		_haiku_build_renameat(int fromFD, const char* from, int toFD,
 			const char* to);
+
+#define recursive_lock_init(lock, name)    __recursive_lock_init(lock, name)
+#define recursive_lock_init_etc(lock, name, flags) \
+      __recursive_lock_init_etc(lock, name, flags)
+#define recursive_lock_destroy(lock)       __recursive_lock_destroy(lock)
+#define recursive_lock_lock(lock)          __recursive_lock_lock(lock)
+#define recursive_lock_unlock(lock)        __recursive_lock_unlock(lock)
+#define recursive_lock_get_recursion(lock) __recursive_lock_get_recursion(lock)
 
 #ifdef __cplusplus
 } // extern "C"

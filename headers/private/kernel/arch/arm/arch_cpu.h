@@ -1,6 +1,6 @@
 /*
 ** Copyright 2003-2004, Axel Dörfler, axeld@pinc-software.de. All rights reserved.
-** Distributed under the terms of the Haiku License.
+** Distributed under the terms of the MIT License.
 */
 #ifndef _KERNEL_ARCH_ARM_CPU_H
 #define _KERNEL_ARCH_ARM_CPU_H
@@ -10,6 +10,24 @@
 #define CACHE_LINE_SIZE 64
 	// TODO: Could be 32-bits sometimes?
 
+
+#if __ARM_ARCH__ <= 5
+#define isb() __asm__ __volatile__("" : : : "memory")
+#define dsb() __asm__ __volatile__("mcr p15, 0, %0, c7, c10, 4" \
+    : : "r" (0) : "memory")
+#define dmb() __asm__ __volatile__("" : : : "memory")
+#elif __ARM_ARCH__ == 6
+#define isb() __asm__ __volatile__("mcr p15, 0, %0, c7, c5, 4" \
+    : : "r" (0) : "memory")
+#define dsb() __asm__ __volatile__("mcr p15, 0, %0, c7, c10, 4" \
+    : : "r" (0) : "memory")
+#define dmb() __asm__ __volatile__("mcr p15, 0, %0, c7, c10, 5" \
+    : : "r" (0) : "memory")
+#else /* ARMv7+ */
+#define isb() __asm__ __volatile__("isb" : : : "memory")
+#define dsb() __asm__ __volatile__("dsb" : : : "memory")
+#define dmb() __asm__ __volatile__("dmb" : : : "memory")
+#endif
 
 #define set_ac()
 #define clear_ac()

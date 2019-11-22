@@ -788,7 +788,7 @@ BPoseView::SavePoseLocations(BRect* frameIfDesktop)
 					extendedPoseInfo = (ExtendedPoseInfo*)
 						new char [size];
 
-					memset(extendedPoseInfo, 0, size);
+					memset((void*)extendedPoseInfo, 0, size);
 					extendedPoseInfo->fWorkspaces = 0xffffffff;
 					extendedPoseInfo->fInvisible = false;
 					extendedPoseInfo->fShowFromBootOnly = false;
@@ -1426,11 +1426,12 @@ BPoseView::AddPosesTask(void* castToParams)
 					continue;
 				}
 
+#ifndef __VOS__
 				dirNode.device = eptr->d_pdev;
 				dirNode.node = eptr->d_pino;
 				itemNode.device = eptr->d_dev;
 				itemNode.node = eptr->d_ino;
-
+#endif
 				BPoseView::WatchNewNode(&itemNode, watchMask, lock.Target());
 					// have to node monitor ahead of time because Model will
 					// cache up the file type and preferred app
@@ -1567,9 +1568,9 @@ BPoseView::AddRootPoses(bool watchIndividually, bool mountShared)
 
 			monitorMsg.AddInt32("opcode", B_ENTRY_CREATED);
 
-			monitorMsg.AddInt32("device", model.NodeRef()->device);
+			monitorMsg.AddUInt64("device", model.NodeRef()->device);
 			monitorMsg.AddInt64("node", model.NodeRef()->node);
-			monitorMsg.AddInt64("directory", model.EntryRef()->directory);
+			monitorMsg.AddUInt64("directory", model.EntryRef()->directory);
 			monitorMsg.AddString("name", model.EntryRef()->name);
 			if (Window())
 				Window()->PostMessage(&monitorMsg, this);
@@ -1783,8 +1784,8 @@ BPoseView::AddPoseToList(PoseList* list, bool visibleList, bool insertionSort,
 	bool addedItem = false;
 	bool needToDraw = true;
 
-	if (insertionSort && list->CountItems() > 0) {
-		int32 orientation = BSearchList(list, pose, &poseIndex, 0);
+	if (insertionSort && poseIndex > 0) {
+		int32 orientation = BSearchList(list, pose, &poseIndex, poseIndex);
 
 		if (orientation == kInsertAfter)
 			poseIndex++;
@@ -1794,50 +1795,72 @@ BPoseView::AddPoseToList(PoseList* list, bool visibleList, bool insertionSort,
 			poseBounds = CalcPoseRectList(pose, poseIndex);
 			havePoseBounds = true;
 
-			BRect srcRect(Extent());
-			srcRect.top = poseBounds.top;
-			srcRect = srcRect & viewBounds;
-			BRect destRect(srcRect);
-			destRect.OffsetBy(0, fListElemHeight);
+			// Simple optimization: if the new pose bounds is completely below
+			// the current view bounds, we do not need to draw.
+			if (poseBounds.top > viewBounds.bottom) {
+				needToDraw = false;
+			} else {
+				// The new pose may need to be placed where another pose already
+				// is. This code creates some rects where we either need to
+				// slide some already drawn poses down, or at least update the
+				// rect where the new pose is.
+				BRect srcRect(Extent());
+				srcRect.top = poseBounds.top;
+				srcRect = srcRect & viewBounds;
+				BRect destRect(srcRect);
+				destRect.OffsetBy(0, fListElemHeight);
 
-			// special case the addition of a pose that scrolls
-			// the extent into the view for the first time:
-			if (destRect.bottom > viewBounds.top
-				&& destRect.top > destRect.bottom) {
-				// make destRect valid
-				destRect.top = viewBounds.top;
-			}
+				// special case the addition of a pose that scrolls
+				// the extent into the view for the first time:
+				if (destRect.bottom > viewBounds.top
+					&& destRect.top > destRect.bottom) {
+					// make destRect valid
+					destRect.top = viewBounds.top;
+				}
 
-			if (srcRect.Intersects(viewBounds)
-				|| destRect.Intersects(viewBounds)) {
-				// The visual area is affected by the insertion.
-				// If items have been added above the visual area,
-				// delay the scrolling. srcRect.bottom holds the
-				// current Extent(). So if the bottom is still above
-				// the viewBounds top, it means the view is scrolled
-				// to show the area below the items that have already
-				// been added.
-				if (srcRect.top == viewBounds.top
-					&& srcRect.bottom >= viewBounds.top
-					&& poseIndex != 0) {
-					// if new pose above current view bounds, cache up
-					// the draw and do it later
-					listViewScrollBy += fListElemHeight;
-					needToDraw = false;
-				} else {
-					FinishPendingScroll(listViewScrollBy, viewBounds);
-					list->AddItem(pose, poseIndex);
-
-					fMimeTypeListIsDirty = true;
-					addedItem = true;
-					if (srcRect.IsValid()) {
-						CopyBits(srcRect, destRect);
-						srcRect.bottom = destRect.top;
-						SynchronousUpdate(srcRect);
+				// TODO: As long as either srcRect or destRect are valid, this
+				// will always be true because srcRect is built from viewBounds.
+				// Many times they are not valid, but most of the time they are,
+				// and in a folder with a lot of contents this causes a lot of
+				// unnecessary drawing. Hence the optimization above. This all
+				// just needs to be rethought completely. Similar code is in
+				// BPoseView::InsertPoseAfter.
+				if (srcRect.Intersects(viewBounds)
+					|| destRect.Intersects(viewBounds)) {
+					// The visual area is affected by the insertion.
+					// If items have been added above the visual area,
+					// delay the scrolling. srcRect.bottom holds the
+					// current Extent(). So if the bottom is still above
+					// the viewBounds top, it means the view is scrolled
+					// to show the area below the items that have already
+					// been added.
+					if (srcRect.top == viewBounds.top
+						&& srcRect.bottom >= viewBounds.top
+						&& poseIndex != 0) {
+						// if new pose above current view bounds, cache up
+						// the draw and do it later
+						listViewScrollBy += fListElemHeight;
+						needToDraw = false;
 					} else {
-						SynchronousUpdate(destRect);
+						FinishPendingScroll(listViewScrollBy, viewBounds);
+						list->AddItem(pose, poseIndex);
+
+						fMimeTypeListIsDirty = true;
+						addedItem = true;
+						if (srcRect.IsValid()) {
+							// Slide the already drawn bits down.
+							CopyBits(srcRect, destRect);
+							// Shrink the srcRect down to the just the part that
+							// needs to be redrawn.
+							srcRect.bottom = destRect.top;
+							SynchronousUpdate(srcRect);
+						} else {
+							// This is probably the bottom of the view or just
+							// got scrolled into view.
+							SynchronousUpdate(destRect);
+						}
+						needToDraw = false;
 					}
-					needToDraw = false;
 				}
 			}
 		}
@@ -2345,8 +2368,8 @@ BPoseView::MessageReceived(BMessage* message)
 		case kFSClipboardChanges:
 		{
 			node_ref node;
-			message->FindInt32("device", &node.device);
-			message->FindInt64("directory", &node.node);
+			message->FindUInt64("device", &node.device);
+			message->FindUInt64("directory", &node.node);
 
 			Model* targetModel = TargetModel();
 			if (targetModel != NULL && *targetModel->NodeRef() == node)
@@ -2972,9 +2995,12 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 			if (ViewMode() == kListMode)
 				break;
 
+			#ifndef __VOS__
 			const StatStruct* stat = model->StatBuf();
 			if (stat->st_crtime < now - 5 || stat->st_crtime > now)
 				break;
+			#endif
+			UNIMPLEMENTED();
 
 			//PRINT(("retrying to read pose info for %s, %d\n",
 			//	model->Name(), count));
@@ -3271,8 +3297,8 @@ BPoseView::UpdatePosesClipboardModeFromClipboard(BMessage* clipboardReport)
 	bool fullInvalidateNeeded = false;
 
 	node_ref node;
-	clipboardReport->FindInt32("device", &node.device);
-	clipboardReport->FindInt64("directory", &node.node);
+	clipboardReport->FindUInt64("device", &node.device);
+	clipboardReport->FindUInt64("directory", &node.node);
 
 	bool clearClipboard = false;
 	clipboardReport->FindBool("clearClipboard", &clearClipboard);
@@ -5357,11 +5383,11 @@ BPoseView::FSNotification(const BMessage* message)
 		{
 			ASSERT(targetModel != NULL);
 
-			message->FindInt32("device", &itemNode.device);
+			message->FindUInt64("device", &itemNode.device);
 			node_ref dirNode;
 			dirNode.device = itemNode.device;
-			message->FindInt64("directory", (int64*)&dirNode.node);
-			message->FindInt64("node", (int64*)&itemNode.node);
+			message->FindUInt64("directory", (int64*)&dirNode.node);
+			message->FindUInt64("node", (int64*)&itemNode.node);
 
 			int32 count = fBrokenLinks->CountItems();
 			bool createPose = true;
@@ -5429,8 +5455,8 @@ BPoseView::FSNotification(const BMessage* message)
 			break;
 
 		case B_ENTRY_REMOVED:
-			message->FindInt32("device", &itemNode.device);
-			message->FindInt64("node", (int64*)&itemNode.node);
+			message->FindUInt64("device", &itemNode.device);
+			message->FindUInt64("node", (int64*)&itemNode.node);
 
 			// our window itself may be deleted
 			// we must check to see if this comes as a query
@@ -5512,7 +5538,7 @@ BPoseView::FSNotification(const BMessage* message)
 		}
 
 		case B_DEVICE_UNMOUNTED:
-			if (message->FindInt32("device", &device) == B_OK) {
+			if (message->FindUInt64("device", &device) == B_OK) {
 				if (targetModel != NULL
 					&& targetModel->NodeRef()->device == device) {
 					// close the window from a volume that is gone
@@ -5614,11 +5640,11 @@ BPoseView::EntryMoved(const BMessage* message)
 	node_ref dirNode;
 	node_ref itemNode;
 
-	message->FindInt32("device", &dirNode.device);
+	message->FindUInt64("device", &dirNode.device);
 	itemNode.device = dirNode.device;
-	message->FindInt64("to directory", (int64*)&dirNode.node);
-	message->FindInt64("node", (int64*)&itemNode.node);
-	message->FindInt64("from directory", (int64*)&oldDir);
+	message->FindUInt64("to directory", (int64*)&dirNode.node);
+	message->FindUInt64("node", (int64*)&itemNode.node);
+	message->FindUInt64("from directory", (int64*)&oldDir);
 
 	const char* name;
 	if (message->FindString("name", &name) != B_OK)
@@ -5807,8 +5833,8 @@ bool
 BPoseView::AttributeChanged(const BMessage* message)
 {
 	node_ref itemNode;
-	message->FindInt32("device", &itemNode.device);
-	message->FindInt64("node", (int64*)&itemNode.node);
+	message->FindUInt64("device", &itemNode.device);
+	message->FindUInt64("node", (int64*)&itemNode.node);
 
 	const char* attrName;
 	if (message->FindString("attr", &attrName) != B_OK)
@@ -9289,6 +9315,7 @@ PoseCompareAddWidget(const BPose* p1, const BPose* p2, BPoseView* view)
 	}
 
 	int32 result = 0;
+	// We perform a loop in case there is a secondary sort
 	for (int32 count = 0; ; count++) {
 		BTextWidget* widget1 = primary->WidgetFor(sort);
 		if (widget1 == NULL)
@@ -9303,19 +9330,19 @@ PoseCompareAddWidget(const BPose* p1, const BPose* p2, BPoseView* view)
 
 		result = widget1->Compare(*widget2, view);
 
-		if (count != 0)
+		// We either have a non-equal result, or are on the second iteration
+		// for secondary sort. Either way, return.
+		if (result != 0 || count != 0)
 			return result;
 
-		// do we need to sort by secondary attribute?
-		if (result == 0) {
-			sort = view->SecondarySort();
-			if (!sort)
-				return result;
+		// Non-equal result, sort by secondary attribute
+		sort = view->SecondarySort();
+		if (!sort)
+			return result;
 
-			column = view->ColumnFor(sort);
-			if (column == NULL)
-				return result;
-		}
+		column = view->ColumnFor(sort);
+		if (column == NULL)
+			return result;
 	}
 
 	return result;
@@ -10334,7 +10361,8 @@ BPoseView::FilterPose(BPose* pose)
 	if (fRefFilter != NULL) {
 		PoseInfo poseInfo;
 		ReadPoseInfo(pose->TargetModel(), &poseInfo);
-		pose->TargetModel()->OpenNode();
+		if (pose->TargetModel()->OpenNode() != B_OK)
+			return false;
 		if (!ShouldShowPose(pose->TargetModel(), &poseInfo))
 			return false;
 	}

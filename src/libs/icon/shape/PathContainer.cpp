@@ -15,10 +15,6 @@
 
 #include "VectorPath.h"
 
-
-_BEGIN_ICON_NAMESPACE
-
-
 #ifdef ICON_O_MATIC
 PathContainerListener::PathContainerListener() {}
 PathContainerListener::~PathContainerListener() {}
@@ -222,5 +218,3 @@ PathContainer::_NotifyPathRemoved(VectorPath* path) const
 }
 #endif // ICON_O_MATIC
 
-
-_END_ICON_NAMESPACE

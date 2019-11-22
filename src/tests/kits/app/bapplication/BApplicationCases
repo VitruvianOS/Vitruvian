@@ -1,0 +1,138 @@
+BApplication(const char *signature)
+case 1:	signature is NULL =>
+		Should print error message and quit.
+case 2:	signature is no valid MIME string =>
+		Should print error message and quit.
+case 3:	signature is a valid MIME string, but doesn't have the "application"
+		supertype =>
+		Should print error message and quit.
+case 4:	signature is a valid MIME string with "application" supertype,
+		but a different one than in the app attributes/resources =>
+		Should print warning message and continue.
+		InitCheck() should return B_OK.
+case 5:	signature is a valid MIME string with "application" supertype,
+		and the same as in the app attributes/resources =>
+		Shouldn't print anything at all and continue.
+		InitCheck() should return B_OK.
+
+
+BApplication(const char *signature, status_t *error)
+cases similar to those of BApplication(const char *), if error is NULL,
+otherwise the app does not quit and error is set to the same value as
+returned by InitCheck(), which is B_BAD_VALUE on error.
+
+thread_id Run()
+case 1:	launch the app two times: B_MULTIPLE_LAUNCH | B_ARGV_ONLY,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	ReadyToRun(), QuitRequested()
+case 2:	launch the app two times: B_MULTIPLE_LAUNCH | B_ARGV_ONLY,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+		second app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+case 3:	launch the app two times: B_MULTIPLE_LAUNCH,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	ReadyToRun(), QuitRequested()
+case 4:	launch the app two times: B_MULTIPLE_LAUNCH,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+		second app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+case 5:	launch the app two times: B_SINGLE_LAUNCH | B_ARGV_ONLY,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	quits
+case 6:	launch the app two times: B_SINGLE_LAUNCH | B_ARGV_ONLY,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), ArgvReceived(),
+					QuitRequested()
+		second app:	quits
+case 7:	launch the app two times: B_SINGLE_LAUNCH,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	quits
+case 8:	launch the app two times: B_SINGLE_LAUNCH,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), ArgvReceived(),
+					QuitRequested()
+		second app:	quits
+case 9:	launch two apps with the same signature: B_SINGLE_LAUNCH | B_ARGV_ONLY,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	ReadyToRun(), QuitRequested()
+case 10:launch two apps with the same signature: B_SINGLE_LAUNCH | B_ARGV_ONLY,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+		second app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+case 11:launch two apps with the same signature: B_SINGLE_LAUNCH,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	ReadyToRun(), QuitRequested()
+case 12:launch two apps with the same signature: B_SINGLE_LAUNCH,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+		second app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+case 13:launch the app two times: B_EXCLUSIVE_LAUNCH | B_ARGV_ONLY,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	quits
+case 14:launch the app two times: B_EXCLUSIVE_LAUNCH | B_ARGV_ONLY,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+		second app:	quits
+case 15:launch the app two times: B_EXCLUSIVE_LAUNCH,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	quits
+case 16:launch the app two times: B_EXCLUSIVE_LAUNCH,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), ArgvReceived(),
+					QuitRequested()
+		second app:	quits
+case 17:launch two apps with the same signature:
+		B_EXCLUSIVE_LAUNCH | B_ARGV_ONLY,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	quits
+case 18:launch two apps with the same signature:
+		B_EXCLUSIVE_LAUNCH | B_ARGV_ONLY,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+		second app:	quits
+case 19:launch two apps with the same signature: B_EXCLUSIVE_LAUNCH,
+		no command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ReadyToRun(), QuitRequested()
+		second app:	quits
+case 20:launch two apps with the same signature: B_EXCLUSIVE_LAUNCH,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), ArgvReceived(),
+					QuitRequested()
+		second app:	quits
+case 21:launch the app two times: first: B_EXCLUSIVE_LAUNCH,
+		second: B_EXCLUSIVE_LAUNCH | B_ARGV_ONLY,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), ArgvReceived(),
+					QuitRequested()
+		second app:	quits
+
+case 22:launch the app two times: first: B_EXCLUSIVE_LAUNCH | B_ARGV_ONLY,
+		second: B_EXCLUSIVE_LAUNCH,
+		command line args, send B_QUIT_REQUESTED to both of them =>
+		first app:	ArgvReceived(), ReadyToRun(), QuitRequested()
+		second app:	quits
+
+void Quit()
+case 1:	not running application =>
+		Should delete the application object.
+case 2:	running application, call from looper thread =>
+		Run() should return. Should not delete the application object.
+case 3:	running application, call from other thread =>
+		Run() should return. Should not delete the application object.
+case 4:	running application, call from other thread, but don't lock before =>
+		Should print error message, but proceed anyway. Run() should return.
+		Should not delete the application object.
+
+bool QuitRequested()
+case 1:	return false the first time, true the second time it is invoked =>
+		Should not quit after the first time, but after the second one.
+

@@ -73,7 +73,9 @@ AppServer::AppServer(status_t* status)
 	BMessage data;
 	data.AddString("name", "app_server");
 	data.AddInt32("session", 0);
+	#ifndef __VOS__
 	BLaunchRoster().Target("login", data);
+	#endif
 }
 
 

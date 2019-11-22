@@ -1,2 +1,3 @@
 add_subdirectory(app)
-#add_subdirectory(registrar)
+add_subdirectory(input)
+add_subdirectory(registrar)

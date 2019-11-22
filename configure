@@ -1,14 +1,19 @@
 #!/bin/sh
-
-if [ ! -d generated ]
-then 
-	mkdir generated
-else
-	rm -rf generated
-	mkdir generated
+FOLDER="generated"
+if [ $# -eq 1 ] 
+then
+    FOLDER=$1
+    if [ ! -d $FOLDER ]
+        then 
+            echo "Creating folder $FOLDER"
+        	mkdir $FOLDER
+        else
+            echo "Cleaning folder $FOLDER"
+        	rm -rf $FOLDER
+            mkdir $FOLDER
+    fi
 fi
-ls 
-cd generated
+cd $FOLDER
 # Init submodules
 echo "Add external submodules"
 git submodule update --init --recursive ../

@@ -7,31 +7,43 @@
 #include <image.h>
 #include <dlfcn.h>
 
-extern sem_id gLoadImageLockSem = -1;
+#include "KernelDebug.h"
+
+extern int gLoadImageFD = -1;
 
 thread_id
 load_image(int32 argc, const char** argv, const char** envp)
 {
-	printf("load_image: %s\n", argv[0]);
-	status_t ret = B_OK;
-	gLoadImageLockSem = create_sem(0, "load_image block sem");
+	TRACE("load_image: %s\n", argv[0]);
+	for (int i = 0; i < argc; i++)
+		printf("%s\n", argv[i]);
+	int lockfd[2];
+	if (pipe(lockfd) == -1)
+		return -1;
+
 	pid_t pid = fork();
 	if (pid == 0) {
-		acquire_sem_etc(gLoadImageLockSem, 1, B_TIMEOUT, B_INFINITE_TIMEOUT);
-		int32 ret = execvpe(argc, argv, envp);
+		close(lockfd[1]);
+
+		// Wait for the father to unlock us
+		uint32 value;
+		read(lockfd[0], &value, sizeof(value));
+
+		// TODO: const_cast for argv?
+		int32 ret = execvpe(argv[0], argv, envp);
 		if (ret == -1) {
-			printf("%s\n", strerror(errno));
+			TRACE("execv err %s\n", strerror(errno));
 			_exit(1);
-			return B_ERROR;
+			return -1;
 		}
-	} else if (pid < 0) {
-		ret = B_ERROR;
-		printf("load_image error\n");
+	} else {
+		close(lockfd[0]);
+		gLoadImageFD = lockfd[1];
+
+		TRACE("load image ok\n");
+		return pid;
 	}
-	printf("pid %d\n", pid);
-	delete_sem(gLoadImageLockSem);
-	gLoadImageLockSem = -1;
-	return ret;
+	return -1;
 }
 
 
@@ -45,7 +57,7 @@ load_add_on(const char* path)
 	if (image == NULL)
 		return B_ERROR;
 
-	return image;
+	return (image_id)image;
 }
 
 

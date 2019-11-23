@@ -34,6 +34,7 @@ struct data_wrap {
 	pid_t tid;
 };
 
+extern int gLoadImageFD;
 
 static BLocker fLock;
 
@@ -80,13 +81,13 @@ _thread_run(void* data)
 	_kern_unblock_thread(threadData->father, B_OK);
 
 	_kern_block_thread(B_TIMEOUT, B_INFINITE_TIMEOUT);
-	int ret = threadData->func(threadData->data);
+	threadData->func(threadData->data);
 
 	fLock.Lock();
 	ThreadPool::DeinitThread(threadData->tid);
 	fLock.Unlock();
 
-	delete data;
+	delete threadData;
 	return NULL;
 }
 
@@ -104,6 +105,7 @@ _kern_spawn_thread(thread_func func, const char* name, int32 priority, void* dat
 	fLock.Unlock();
 	pthread_t tid;
 	int32 ret = pthread_create(&tid, NULL, _thread_run, dataWrap);
+	// TODO: errorcheck
 	_kern_block_thread(B_TIMEOUT, B_INFINITE_TIMEOUT);
 
 	return dataWrap->tid;
@@ -243,26 +245,32 @@ _kern_wait_for_thread(thread_id id, status_t* _returnCode)
 		return B_OK;
 	}
 
-	#if 0
-	int status;
-	do {
-		printf("waitpid\n");
-		int w = waitpid(id, &status, WUNTRACED | WCONTINUED);
-		if (w == -1) {
-			return B_BAD_THREAD_ID;
-		}
+	if (gLoadImageFD != -1) {
+		uint32 value = 1;
+		write(gLoadImageFD, (const void*)&value, sizeof(uint32));
+		close(gLoadImageFD);
+		gLoadImageFD = -1;
 
-	   if (WIFEXITED(status)) {
-			printf("exited, status=%d\n", WEXITSTATUS(status));
-		} else if (WIFSIGNALED(status)) {
-			printf("killed by signal %d\n", WTERMSIG(status));
-		} else if (WIFSTOPPED(status)) {
-			printf("stopped by signal %d\n", WSTOPSIG(status));
-		} else if (WIFCONTINUED(status)) {
-			printf("continued\n");
+		int status;
+		do {
+			TRACE("waitpid %d\n", id);
+			if (waitpid(id, &status, WUNTRACED | WCONTINUED) == -1)
+				return B_BAD_THREAD_ID;
+
+			if (WIFEXITED(status)) {
+				TRACE("exited, status=%d\n", WEXITSTATUS(status));
+			} else if (WIFSIGNALED(status)) {
+				TRACE("killed by signal %d\n", WTERMSIG(status));
+			} else if (WIFSTOPPED(status)) {
+				TRACE("stopped by signal %d\n", WSTOPSIG(status));
+			} else if (WIFCONTINUED(status)) {
+				TRACE("continued\n");
 			}
 		} while (!WIFEXITED(status) && !WIFSIGNALED(status));
-	#endif
+
+		// TODO: returncode
+		return B_OK;
+	}
 
 	return B_BAD_THREAD_ID;
 }

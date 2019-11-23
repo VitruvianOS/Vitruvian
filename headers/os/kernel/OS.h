@@ -316,15 +316,6 @@ typedef struct {
 	bigtime_t		kernel_time;
 	void			*stack_base;
 	void			*stack_end;
-
-	// TODO: Needed?
-	/* Cosmoe additions */
-	thread_func		func;
-	void			*data;
-	pthread_t		pth;
-	int32			code;
-	thread_id		sender;
-	void			*buffer;
 } thread_info;
 
 #define B_IDLE_PRIORITY					0

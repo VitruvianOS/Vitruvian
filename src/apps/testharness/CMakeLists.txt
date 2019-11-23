@@ -28,8 +28,8 @@ add_executable(testsempingpong
 
 target_link_libraries(testsempingpong PRIVATE be root)
 
-add_executable(teststopwatch
-	teststopwatch.cpp
+add_executable(testthread
+	testthread.cpp
 )
 
-target_link_libraries(teststopwatch PRIVATE be root)
+target_link_libraries(testthread PRIVATE be root)

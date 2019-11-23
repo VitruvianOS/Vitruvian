@@ -25,6 +25,7 @@
 static std::map<thread_id, pthread_t> gThreadsMap;
 static std::map<thread_id, sem_id> gSemsMap;
 static __thread sem_id sThreadBlockSem = -1;
+static std::map<thread_id, void*> gBuffersMap;
 
 struct data_wrap {
 	thread_func func;
@@ -38,6 +39,7 @@ extern int gLoadImageFD;
 
 static BLocker fLock;
 
+
 // Static initialization for the main thread
 class ThreadPool {
 public:
@@ -50,6 +52,7 @@ public:
 		gThreadsMap.insert(std::make_pair(find_thread(NULL), pthread_self()));
 		sThreadBlockSem = create_sem(0, "block_thread_sem");
 		gSemsMap.insert(std::make_pair(find_thread(NULL), sThreadBlockSem));
+		gBuffersMap.insert(std::make_pair(find_thread(NULL), malloc(4096)));
 	}
 
 	static void DeinitThread(thread_id tid) {
@@ -153,9 +156,12 @@ _kern_send_data(thread_id thread, int32 code,
 	// Blocks if there's already a message
 	// Otherwise copy the msg and return
 
-	// 1) Wait the queue to be created or to become empty
-	// 2) Write the msg
-
+	auto elem = gBuffersMap.find(thread);
+	if (elem != end(gBuffersMap)) {
+		memcpy(elem->second, buffer, buffer_size);
+		_kern_unblock_thread(thread, B_OK);
+		return B_OK;
+	}
 	return B_BAD_THREAD_ID;
 }
 
@@ -166,10 +172,10 @@ _kern_receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 	UNIMPLEMENTED();
 	// Blocks if there is no message to read
 
-	// 1) Check and create the queue eventually
-	// 2) Wait for message
-
-	return B_BAD_THREAD_ID;
+	_kern_block_thread(B_TIMEOUT, B_INFINITE_TIMEOUT);
+	void* buf = gBuffersMap.find(find_thread(NULL))->second;
+	memcpy(buffer, buf, bufferSize);
+	return B_OK;
 }
 
 

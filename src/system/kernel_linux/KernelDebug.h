@@ -7,7 +7,7 @@
 #define _KERNEL_DEBUG_H
 
 #ifndef DEBUG
-  #define DEBUG 0
+  #define DEBUG 3
 #endif
 
 #include <Debug.h>

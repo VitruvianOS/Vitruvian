@@ -12,6 +12,5 @@ extern status_t
 _kern_send_signal(int32 id, uint32 signal,
 	const union sigval* userValue, uint32 flags)
 {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	return kill(id, signal);
 }

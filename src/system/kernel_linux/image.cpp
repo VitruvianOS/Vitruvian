@@ -11,12 +11,17 @@
 
 extern int gLoadImageFD = -1;
 
+
 thread_id
 load_image(int32 argc, const char** argv, const char** envp)
 {
 	TRACE("load_image: %s\n", argv[0]);
+
+#ifdef DEBUG
 	for (int i = 0; i < argc; i++)
-		printf("%s\n", argv[i]);
+		TRACE("%s\n", argv[i]);
+#endif
+
 	int lockfd[2];
 	if (pipe(lockfd) == -1)
 		return -1;
@@ -29,21 +34,22 @@ load_image(int32 argc, const char** argv, const char** envp)
 		uint32 value;
 		read(lockfd[0], &value, sizeof(value));
 
-		// TODO: const_cast for argv?
-		int32 ret = execvpe(argv[0], argv, envp);
+		int32 ret = execvpe(argv[0], const_cast<char* const*>(argv),
+			const_cast<char* const*>(envp));
 		if (ret == -1) {
 			TRACE("execv err %s\n", strerror(errno));
 			_exit(1);
 			return -1;
 		}
-	} else {
-		close(lockfd[0]);
-		gLoadImageFD = lockfd[1];
-
-		TRACE("load image ok\n");
-		return pid;
 	}
-	return -1;
+	close(lockfd[0]);
+
+	if (pid == -1) {
+		close(lockfd[1]);
+		TRACE("fork error\n");
+	}
+	gLoadImageFD = lockfd[1];
+	return pid;
 }
 
 

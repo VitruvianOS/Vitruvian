@@ -90,8 +90,10 @@ struct define_t {
 extern BResources rsrc;
 extern const char* rsrc_file;
 
-extern "C" int yylex();
+extern "C" {
+int yylex();
 int yyparse();
+}
 
 void init_lexer();
 void clean_up_lexer();

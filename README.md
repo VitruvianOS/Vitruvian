@@ -9,6 +9,17 @@ while still retaining the power of the linux kernel.
 
 * Support for linux framebuffer.
 
+#### Pre-requisite software
+
+* gcc >= 8
+* ninja
+* cmake >= 3.13
+* libinput >= 10
+
+```
+sudo apt install cmake ninja libinput-dev git nasm autoconf automake texinfo flex bison gawk build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib
+```
+
 #### Getting the source code
 
 git clone https://github.com/Barrett17/V-OS.git

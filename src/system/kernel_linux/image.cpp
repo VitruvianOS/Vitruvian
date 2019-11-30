@@ -18,7 +18,7 @@ load_image(int32 argc, const char** argv, const char** envp)
 	TRACE("load_image: %s\n", argv[0]);
 
 #ifdef DEBUG
-	for (int i = 0; i < argc; i++)
+	for (uint32 i = 0; i < argc; i++)
 		TRACE("%s\n", argv[i]);
 #endif
 
@@ -39,7 +39,6 @@ load_image(int32 argc, const char** argv, const char** envp)
 		if (ret == -1) {
 			TRACE("execv err %s\n", strerror(errno));
 			_exit(1);
-			return -1;
 		}
 	}
 	close(lockfd[0]);
@@ -47,8 +46,9 @@ load_image(int32 argc, const char** argv, const char** envp)
 	if (pid == -1) {
 		close(lockfd[1]);
 		TRACE("fork error\n");
-	}
-	gLoadImageFD = lockfd[1];
+	} else
+		gLoadImageFD = lockfd[1];
+
 	return pid;
 }
 
@@ -112,7 +112,6 @@ _get_image_info(image_id id, image_info* info, size_t infoSize)
 			&cookie, info, sizeof(*info));
 	}
 
-	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
@@ -149,6 +148,5 @@ _get_next_image_info(team_id team, int32* cookie,
 		return B_OK;
 	}
 
-	UNIMPLEMENTED();
 	return B_ERROR;
 }

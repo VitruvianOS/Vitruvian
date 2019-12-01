@@ -8,6 +8,7 @@ AddOn(
 	icon
 	agg
 	icu
+	${ZLIB_LIBRARIES}
 )
 
 add_subdirectory(app)

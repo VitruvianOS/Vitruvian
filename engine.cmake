@@ -28,8 +28,8 @@ macro( Application name )
 		message( FATAL_ERROR "APPLICATION: 'SOURCES' argument required." )
 	endif()
 
-	list (INSERT _APPLICATION_LIBS 0 root)
 	list (INSERT _APPLICATION_LIBS 0 be)
+	list (INSERT _APPLICATION_LIBS 0 root)
 	target_link_libraries(${name} PRIVATE ${_APPLICATION_LIBS})
 
 	# Add current dir headers

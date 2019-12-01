@@ -16,4 +16,4 @@ jobs:
     - name: configure
       run: cd generated.x86 && ../configure
     - name: ninja
-      run: ninja
+      run: cd generated.x86 && ninja

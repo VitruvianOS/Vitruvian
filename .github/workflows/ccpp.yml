@@ -1,0 +1,21 @@
+name: C/C++ CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: configure
+      run: ./configure
+    - name: mkdir
+      run: mkdir generated.x86
+    - name: cd
+      run: cd generated.x86
+    - name: configure
+      run: configure ..
+    - name: ninja
+      run: ninja

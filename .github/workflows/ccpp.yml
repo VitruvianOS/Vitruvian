@@ -9,8 +9,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
-    - name: configure
-      run: ./configure
+    - name: deps
+      run: apt install ninja cmake bison flex libinput-dev
     - name: mkdir
       run: mkdir generated.x86
     - name: configure

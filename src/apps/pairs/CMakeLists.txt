@@ -1,8 +1,9 @@
-add_executable(Pairs
+Application(
+	Pairs
+
+	SOURCES
 	Pairs.cpp
 	PairsButton.cpp
 	PairsView.cpp
 	PairsWindow.cpp
 )
-
-target_link_libraries(Pairs PRIVATE be root)

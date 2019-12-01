@@ -1,4 +1,7 @@
-add_executable(Terminal
+Application(
+	Terminal
+
+	SOURCES
 	ActiveProcessInfo.cpp
 	AppearPrefView.cpp
 	Arguments.cpp
@@ -31,11 +34,11 @@ add_executable(Terminal
 	TitlePlaceholderMapper.cpp
 	VTKeyTbl.c
 	VTPrsTbl.c
-)
 
-target_include_directories(Terminal PRIVATE
+	LIBS
+	tracker
+	pthread
+
+	INCLUDES
 	"../../../headers/private/textencoding/"
 )
-
-#localestub shared tracker translation textencoding
-target_link_libraries(Terminal PRIVATE be root tracker)

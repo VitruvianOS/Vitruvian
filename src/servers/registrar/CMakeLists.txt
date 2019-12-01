@@ -1,19 +1,10 @@
 find_package(Freetype REQUIRED)
 include_directories(${FREETYPE_INCLUDE_DIRS})
 
-add_executable(registrar)
+Server(
+	registrar
 
-target_include_directories(registrar PUBLIC
-	"./"
-	"mime"
-)
-
-#TODO: how to specify a full path?
-#target_include_directories(app_server PRIVATE
-#	"../../../headers/private/interface"
-#)
-
-target_sources(registrar PRIVATE
+	SOURCES
 	AppInfoList.cpp
 	AppInfoListMessagingTargetSet.cpp
 	AuthenticationManager.cpp
@@ -46,6 +37,7 @@ target_sources(registrar PRIVATE
 	mime/RegistrarThread.cpp
 	mime/RegistrarThreadManager.cpp
 	mime/UpdateMimeInfoThread.cpp
-)
 
-target_link_libraries(registrar PRIVATE be root)
+	INCLUDES
+	"mime"
+)

@@ -1,15 +1,14 @@
-add_library(be SHARED "")
+AddOn(
+	be
+	SHARED
 
-file(GLOB_RECURSE privateHeaderFiles "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-
-target_sources(be PRIVATE
-    ${headerFiles}
-    ${privateHeaderFiles}
+	LIBS
+	root
+	linprog
+	icon
+	agg
+	icu
 )
-
-set_target_properties(be PROPERTIES LINKER_LANGUAGE CXX)
-
-target_link_libraries(be PUBLIC root linprog icon agg icu)
 
 add_subdirectory(app)
 add_subdirectory(game)

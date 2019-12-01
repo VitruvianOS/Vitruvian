@@ -1,12 +1,8 @@
-add_library(tracker SHARED "")
+AddOn(
+	tracker
+	SHARED
 
-target_include_directories(tracker PRIVATE
-	"../../../headers/private/interface"
-	"../../../headers/os/add-ons/input_server/"
-	"../../add-ons/input_server/filters/shortcut_catcher/"
-)
-
-target_sources(tracker PRIVATE
+	SOURCES
 	AttributeStream.cpp
 	AutoMounterSettings.cpp
 	BackgroundImage.cpp
@@ -77,6 +73,7 @@ target_sources(tracker PRIVATE
 	VirtualDirectoryWindow.cpp
 	WidgetAttributeText.cpp
 
+	# TODO maybe this should be a static library
 	../../servers/input/InputServerFilter.cpp
 	../../add-ons/input_server/filters/shortcut_catcher/BitFieldTesters.cpp
 	../../add-ons/input_server/filters/shortcut_catcher/CommandActuators.cpp
@@ -85,6 +82,13 @@ target_sources(tracker PRIVATE
 	../../add-ons/input_server/filters/shortcut_catcher/KeyInfos.cpp
 	../../add-ons/input_server/filters/shortcut_catcher/ParseCommandLine.cpp
 	../../add-ons/input_server/filters/shortcut_catcher/ShortcutsServerFilter.cpp
-)
 
-target_link_libraries(tracker PUBLIC be root)
+	INCLUDES
+	"../../../headers/private/interface"
+	"../../../headers/os/add-ons/input_server/"
+	"../../add-ons/input_server/filters/shortcut_catcher/"
+
+	LIBS
+	be
+	root
+)

@@ -1,4 +1,7 @@
-add_executable(StyledEdit
+Application(
+	StyledEdit
+
+	SOURCES
 	ColorMenuItem.cpp
 	FindWindow.cpp
 	ReplaceWindow.cpp
@@ -6,10 +9,10 @@ add_executable(StyledEdit
 	StyledEditApp.cpp
 	StyledEditView.cpp
 	StyledEditWindow.cpp
-)
 
-target_link_libraries(StyledEdit PRIVATE be root tracker)
+	LIBS
+	tracker
 
-target_include_directories(StyledEdit PRIVATE
+	INCLUDES
 	"../../../headers/private/textencoding/"
 )

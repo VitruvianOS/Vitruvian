@@ -1,9 +1,11 @@
 find_package(Freetype REQUIRED)
 include_directories(${FREETYPE_INCLUDE_DIRS})
 
-add_library(agg STATIC "")
+AddOn(
+	agg
+	STATIC
 
-target_sources(agg PRIVATE
+	SOURCES
 	src/agg_arc.cpp
 	src/agg_arrowhead.cpp
 	src/agg_bezier_arc.cpp

@@ -1,7 +1,8 @@
-add_executable(Clock
+Application(
+	Clock
+
+	SOURCES
 	cl_view.cpp 
 	cl_wind.cpp 
-	clock.cpp 
+	clock.cpp
 )
-
-target_link_libraries(Clock PRIVATE be root)

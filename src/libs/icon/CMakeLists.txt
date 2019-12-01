@@ -1,18 +1,8 @@
-add_library(icon STATIC "")
-
-target_include_directories(
+AddOn(
 	icon
-	PRIVATE
-	"./"
-	"shape/"
-	"flat_icon/"
-	"message/"
-	"style/"
-	"transformable/"
-	"transformer/"
-)
+	STATIC
 
-target_sources(icon PRIVATE
+	SOURCES
 	Icon.cpp
 	IconRenderer.cpp
 	IconUtils.cpp
@@ -20,6 +10,7 @@ target_sources(icon PRIVATE
 	flat_icon/FlatIconImporter.cpp
 	flat_icon/LittleEndianBuffer.cpp
 	flat_icon/PathCommandQueue.cpp
+
 	message/Defines.cpp
 	message/MessageImporter.cpp
 	shape/PathContainer.cpp
@@ -30,6 +21,7 @@ target_sources(icon PRIVATE
 	style/StyleContainer.cpp
 	style/Style.cpp
 	transformable/Transformable.cpp 
+
 	transformer/AffineTransformer.cpp
 	transformer/ContourTransformer.cpp
 	transformer/PathSource.cpp
@@ -37,6 +29,15 @@ target_sources(icon PRIVATE
 	transformer/StrokeTransformer.cpp
 	transformer/Transformer.cpp
 	transformer/TransformerFactory.cpp
-)
 
-target_link_libraries(icon PRIVATE agg)
+	LIBS
+	agg
+
+	INCLUDES
+	"shape/"
+	"flat_icon/"
+	"message/"
+	"style/"
+	"transformable/"
+	"transformer/"	
+)

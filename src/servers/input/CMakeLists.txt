@@ -1,15 +1,7 @@
-add_executable(input_server)
+Server(
+	input_server
 
-target_include_directories(input_server PUBLIC
-	"./"
-)
-
-target_include_directories(input_server PRIVATE
-	"../../../headers/private/interface"
-	"../../../headers/os/add-ons/input_server/"
-)
-
-target_sources(input_server PRIVATE
+	SOURCES
 	InputServer.cpp
 	InputServerDevice.cpp
 	InputServerFilter.cpp
@@ -30,6 +22,8 @@ target_sources(input_server PRIVATE
 	#AddOnMonitor.cpp
 	#AddOnMonitorHandler.cpp
 	#NodeMonitorHandler.cpp
-)
 
-target_link_libraries(input_server PRIVATE be)
+	INCLUDES
+	"../../../headers/private/interface"
+	"../../../headers/os/add-ons/input_server/"
+)

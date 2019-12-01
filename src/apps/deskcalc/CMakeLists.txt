@@ -1,4 +1,7 @@
-add_executable(DeskCalc
+Application(
+	DeskCalc
+
+	SOURCES
 	CalcApplication.cpp
 	CalcOptions.cpp
 	CalcView.cpp
@@ -6,10 +9,7 @@ add_executable(DeskCalc
 	DeskCalc.cpp
 	ExpressionTextView.cpp
 	InputTextView.cpp
-)
 
-target_link_libraries(DeskCalc PRIVATE be root)
-
-target_include_directories(DeskCalc PRIVATE
+	INCLUDES
 	"../../../headers/private/interface/"
 )

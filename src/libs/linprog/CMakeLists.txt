@@ -1,6 +1,8 @@
-add_library(linprog STATIC "")
+AddOn(
+	linprog
+	STATIC
 
-target_sources(linprog PRIVATE
+	SOURCES
 	ActiveSetSolver.cpp
 	Constraint.cpp
 	LayoutOptimizer.cpp

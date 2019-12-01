@@ -5,7 +5,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
 
 # Defaults
-#set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
 set(CMAKE_COLOR_MAKEFILE ON)
 
 # Ensure env
@@ -61,8 +60,6 @@ set(ICU_BUILD_VERSION 57.2)
 add_subdirectory(external/icu-cmake)
 
 find_package(ZLIB REQUIRED)
-#find_package(OpenSSL REQUIRED)
-#find_package(Fontconfig REQUIRED)
 
 # Headers
 set(
@@ -172,6 +169,9 @@ message(STATUS "CMAKE_AR:                        ${CMAKE_AR}")
 message(STATUS "CMAKE_RANLIB:                    ${CMAKE_RANLIB}")
 message(STATUS "=============================================")
 message(STATUS "")
+
+#include support functions
+include(engine.cmake)
 
 # Sub directories
 #add_subdirectory(headers)

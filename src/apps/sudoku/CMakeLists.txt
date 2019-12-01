@@ -1,4 +1,7 @@
-add_executable(Sudoku
+Application(
+	Sudoku
+
+    SOURCES
 	ProgressWindow.cpp
 	Sudoku.cpp
 	SudokuField.cpp
@@ -6,10 +9,7 @@ add_executable(Sudoku
 	SudokuSolver.cpp
 	SudokuView.cpp
 	SudokuWindow.cpp
-)
 
-target_link_libraries(Sudoku PRIVATE be root tracker)
-
-target_include_directories(Sudoku PRIVATE
-	"../../kits/tracker/"
+    LIBS
+	tracker
 )

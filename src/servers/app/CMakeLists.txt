@@ -1,31 +1,10 @@
 find_package(Freetype REQUIRED)
 include_directories(${FREETYPE_INCLUDE_DIRS})
 
-add_executable(app_server)
+Server(
+	app_server
 
-#TODO: we want a custom target_include_directories that does that:
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/servers/app/")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/servers/app/ \
-	-iquote ${PROJECT_SOURCE_DIR}/src/servers/app/drawing/Painter/bitmap_painter/")
-
-target_include_directories(app_server PUBLIC
-	"./drawing"
-	"./drawing/interface/linux"
-	"./drawing/interface/local"
-	"./drawing/interface/remote"
-	"./font"
-	"./stackandtile"
-	"./decorator"
-	"./drawing/Painter"
-	"./drawing/Painter/drawing_modes"
-)
-
-#TODO: how to specify a full path?
-target_include_directories(app_server PRIVATE
-	"../../../headers/private/interface"
-)
-
-target_sources(app_server PRIVATE
+	SOURCES
 	Angle.cpp
 	AppServer.cpp
 	#BitfieldRegion.cpp
@@ -87,6 +66,7 @@ target_sources(app_server PRIVATE
 	font/FontManager.cpp
 	font/FontStyle.cpp
 
+	# TODO this should be
 	#libasdrawing.a
 	drawing/AlphaMask.cpp
 	drawing/AlphaMaskCache.cpp
@@ -132,6 +112,24 @@ target_sources(app_server PRIVATE
 	stackandtile/StackAndTile.cpp
 	stackandtile/Stacking.cpp
 	stackandtile/Tiling.cpp
+
+	LIBS be root freetype agg icon linprog input udev
+
+	INCLUDES
+	"./drawing"
+	"./drawing/interface/linux"
+	"./drawing/interface/local"
+	"./drawing/interface/remote"
+	"./font"
+	"./stackandtile"
+	"./decorator"
+	"./drawing/Painter"
+	"./drawing/Painter/drawing_modes"
+
+	"../../../headers/private/interface"
 )
 
-target_link_libraries(app_server PRIVATE be root freetype agg icon linprog input udev)
+#TODO: we want a custom target_include_directories that does that:
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/servers/app/")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/servers/app/ \
+	-iquote ${PROJECT_SOURCE_DIR}/src/servers/app/drawing/Painter/bitmap_painter/")

@@ -17,7 +17,7 @@ while still retaining the power of the linux kernel.
 * libinput >= 10
 
 ```
-sudo apt install cmake ninja libinput-dev git nasm autoconf automake texinfo flex bison gawk build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib
+sudo apt install cmake ninja libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib
 ```
 
 #### Getting the source code

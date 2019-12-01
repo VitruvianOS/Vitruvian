@@ -14,7 +14,7 @@ while still retaining the power of the linux kernel.
 * gcc >= 8
 * ninja
 * cmake >= 3.13
-* libinput >= 10
+* libinput >= 1.10
 
 ```
 sudo apt install cmake ninja libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib

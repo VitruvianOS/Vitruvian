@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: deps
-      run: sudo apt install ninja-build cmake bison flex libinput-dev
+      run: sudo apt install ninja-build cmake bison flex libinput-dev --fix-missing
     - name: mkdir
       run: mkdir generated.x86
     - name: configure

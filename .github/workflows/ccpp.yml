@@ -9,6 +9,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
+    - name: update
+      run: sudo apt update
     - name: deps
       run: sudo apt install ninja-build cmake bison flex libinput-dev --fix-missing
     - name: mkdir

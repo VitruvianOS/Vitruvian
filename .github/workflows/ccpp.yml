@@ -13,9 +13,7 @@ jobs:
       run: ./configure
     - name: mkdir
       run: mkdir generated.x86
-    - name: cd
-      run: cd generated.x86
     - name: configure
-      run: ../configure
+      run: cd generated.x86 && ../configure
     - name: ninja
       run: ninja

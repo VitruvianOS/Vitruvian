@@ -1,9 +1,9 @@
 AddOn(
 	be
 	SHARED
-
-	LIBS pthread root linprog icon agg icu ${ZLIB_LIBRARIES}
 )
+
+target_link_libraries(be PUBLIC pthread root linprog icon agg icu ${ZLIB_LIBRARIES})
 
 AddOn(
 	be_bootstrap

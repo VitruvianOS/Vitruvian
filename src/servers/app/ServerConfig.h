@@ -23,7 +23,7 @@
 #define SERVER_SIGNATURE "application/x-vnd.haiku-app-server"
 
 // Folder for additional window decorators
-#define DECORATORS_DIR "/boot/home/config/add-ons/decorators/"
+#define DECORATORS_DIR "/os/home/config/add-ons/decorators/"
 
 // These definitions provide the server something to use for default
 // system fonts.

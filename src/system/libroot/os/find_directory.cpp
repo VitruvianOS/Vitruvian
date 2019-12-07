@@ -87,7 +87,7 @@ static const char *kSystemDirectories[] = {
 	SYSTEM,										// B_SYSTEM_DIRECTORY
 	SYSTEM,										// B_BEOS_SYSTEM_DIRECTORY
 	SYSTEM "/add-ons$a",
-	SYSTEM "/boot",
+	SYSTEM "/os",
 	SYSTEM "/data/fonts",
 	SYSTEM "/lib$a",
 	SYSTEM "/servers",
@@ -111,7 +111,7 @@ static const char *kCommonDirectories[] = {
 	COMMON,									// B_COMMON_DIRECTORY
 	COMMON,									// B_COMMON_SYSTEM_DIRECTORY
 	COMMON "/add-ons$a",
-	COMMON "/boot",
+	COMMON "/os",
 	COMMON "/data/fonts",
 	COMMON "/lib$a",
 	COMMON "/servers",
@@ -291,13 +291,7 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 
 	memset(buffer, 0, pathLength);
 
-#ifdef __VOS__
-	char buf[1024];
-	get_user_home_path(buf, 1024);
-	char* path = strcat(buf, "/os");
-#else
-	char* path = "/boot";
-#endif
+	char* path = "/os";
 
 	/* fiddle with non-boot volume for items that need it */
 	switch (which) {
@@ -561,7 +555,7 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 
 	memset(buffer, 0, pathLength);
 
-	strlcat(buffer, "/boot", pathLength);
+	strlcat(buffer, "/os", pathLength);
 
 	switch ((int)which) {
 		/* Haiku system directories */

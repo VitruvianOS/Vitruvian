@@ -186,7 +186,7 @@ get_relative_directory_path(size_t installationLocationIndex,
 		case B_FIND_PATH_BIN_DIRECTORY:
 			return "/bin%";
 		case B_FIND_PATH_BOOT_DIRECTORY:
-			return "/boot";
+			return "/os";
 		case B_FIND_PATH_CACHE_DIRECTORY:
 			return "/cache";
 		case B_FIND_PATH_DATA_DIRECTORY:

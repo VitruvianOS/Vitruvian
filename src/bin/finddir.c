@@ -213,7 +213,7 @@ main(int argc, char *argv[])
 	dirType = B_BEOS_DIRECTORY; /* so that it compiles */
 	
 	/* By default use boot volume*/
-	volume = dev_for_path("/boot");
+	volume = dev_for_path("/os");
 	
 	if (argc <= 1) {
 		status = ARGUMENT_MISSING;

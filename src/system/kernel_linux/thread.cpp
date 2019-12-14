@@ -192,7 +192,8 @@ _kern_has_data(thread_id thread)
 status_t
 _kern_get_thread_info(thread_id id, thread_info* info)
 {
-	//UNIMPLEMENTED();
+	CALLED();
+
 	info->thread = id;
 	strncpy (info->name, "Unknown", B_OS_NAME_LENGTH);
 	info->name[B_OS_NAME_LENGTH - 1] = '\0';

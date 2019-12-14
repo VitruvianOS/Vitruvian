@@ -22,10 +22,10 @@
 #include "KernelDebug.h"
 
 
+static std::map<thread_id, port_id> gPortsMap;
 static std::map<thread_id, pthread_t> gThreadsMap;
 static std::map<thread_id, sem_id> gSemsMap;
 static __thread sem_id sThreadBlockSem = -1;
-static std::map<thread_id, void*> gBuffersMap;
 
 struct data_wrap {
 	thread_func func;
@@ -48,11 +48,11 @@ public:
 	}
 
 	static void InitThread(thread_id tid) {
+		gPortsMap.insert(std::make_pair(find_thread(NULL), create_port(1, std::to_string(tid).c_str())));
 		// TODO: Add thread_id to the name?
 		gThreadsMap.insert(std::make_pair(find_thread(NULL), pthread_self()));
 		sThreadBlockSem = create_sem(0, "block_thread_sem");
 		gSemsMap.insert(std::make_pair(find_thread(NULL), sThreadBlockSem));
-		gBuffersMap.insert(std::make_pair(find_thread(NULL), malloc(4096)));
 	}
 
 	static void DeinitThread(thread_id tid) {
@@ -152,29 +152,32 @@ status_t
 _kern_send_data(thread_id thread, int32 code,
 	const void* buffer, size_t buffer_size)
 {
-	UNIMPLEMENTED();
+	CALLED();
 	// Blocks if there's already a message
 	// Otherwise copy the msg and return
+	port_id id = find_port(std::to_string(thread).c_str());
+	if (id < 0)
+		return B_BAD_THREAD_ID;
 
-	auto elem = gBuffersMap.find(thread);
-	if (elem != end(gBuffersMap)) {
-		memcpy(elem->second, buffer, buffer_size);
-		_kern_unblock_thread(thread, B_OK);
-		return B_OK;
-	}
-	return B_BAD_THREAD_ID;
+	size_t s = write_port(id, code, buffer, buffer_size);
+	if (s != buffer_size)
+		return B_ERROR;
+
+	return B_OK;
 }
 
 
 status_t
 _kern_receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 {
-	UNIMPLEMENTED();
+	CALLED();
 	// Blocks if there is no message to read
+	int32 code;
+	size_t size = read_port(gPortsMap.find(find_thread(NULL))->second,
+		&code, buffer, bufferSize);
+	if (size != bufferSize)
+		return B_ERROR;
 
-	_kern_block_thread(B_TIMEOUT, B_INFINITE_TIMEOUT);
-	void* buf = gBuffersMap.find(find_thread(NULL))->second;
-	memcpy(buffer, buf, bufferSize);
 	return B_OK;
 }
 

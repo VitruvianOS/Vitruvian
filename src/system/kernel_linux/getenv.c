@@ -6,6 +6,8 @@
 #include <pthread.h>
 #include <stdlib.h>
 
+
+extern char** environ;
 static pthread_mutex_t gMutex;
 static bool gInitialized = false;
 
@@ -20,14 +22,24 @@ __getenv_reentrant(const char* name, char* buffer, size_t bufferSize)
 		pthread_mutex_init(&gMutex, &attr);
 		gInitialized = true;
 	}
-	pthread_mutex_lock(&gMutex);
-	char* ret = getenv(name);
-	if (ret == NULL)
-		return 0;
-	else
-		strncpy(buffer, ret, bufferSize);
 
-	free(ret);
+	int len = strlen(name);
+	pthread_mutex_lock(&gMutex);
+	for (int i = 0; environ[i] != NULL; i++) {
+		if (strncmp(name, environ[i], len) == 0
+				&& environ[i][len] == '=') {
+
+			size_t envLen = strlen(&environ[i][len+1]);
+			if (envLen >= bufferSize) {
+				pthread_mutex_unlock(&gMutex);
+				return ENOSPC;
+			}
+
+			strcpy(buffer, &environ[i][len+1]);
+			pthread_mutex_unlock(&gMutex);
+			return 0;
+		}
+	}
 	pthread_mutex_unlock(&gMutex);
-	return bufferSize;
+	return ENOENT;
 }

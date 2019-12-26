@@ -12,7 +12,7 @@ thread_test(void *data)
    if (code != B_OK)
 	printf("err\n");
 
-   printf("Received: %s %d\n", buf, find_thread(NULL));
+   printf("Received: \"%s\" from thread %d\n", buf, find_thread(NULL));
 
    return 0;
 }

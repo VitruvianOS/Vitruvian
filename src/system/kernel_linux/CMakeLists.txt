@@ -17,7 +17,7 @@ target_sources(root PRIVATE
 	scheduler.cpp
 	sem.c
 	Team.cpp
-	thread.cpp
+	Thread.cpp
 	timer.cpp
 	wait_for_objects.cpp
 	libc.c

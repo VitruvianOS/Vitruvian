@@ -23,7 +23,6 @@
   #define UNIMPLEMENTED()		printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
 
   #if DEBUG >= 2
-	#define BROKEN()			printf("BROKEN %s\n",__PRETTY_FUNCTION__)
 	#define TRACE 				printf
   #else
   	#define BROKEN()			((void)0)
@@ -38,11 +37,7 @@
 
 #else
 
-	#define PRINT_FORMAT(_text, _fmt)	((void)0)
-	#define PRINT_INPUT(_text, _in)		((void)0)
-	#define PRINT_OUTPUT(_text, _out)	((void)0)
 	#define UNIMPLEMENTED() 			printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
-	#define BROKEN()					((void)0)
 	#define CALLED()					((void)0)
 	#define PRINT(l, a...)				((void)0)
 	#define ERROR(a...)					fprintf(stderr, a)

@@ -51,7 +51,7 @@ initialize_before(image_id)
 	BRoster::Private::InitBeRoster();
 
 #ifdef __VOS__
-	pthread_atfork(initialize_forked_child, NULL, NULL);
+	pthread_atfork(NULL, NULL, initialize_forked_child);
 #else
 	atfork(initialize_forked_child);
 #endif	

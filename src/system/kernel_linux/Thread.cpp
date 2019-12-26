@@ -63,28 +63,39 @@ struct data_wrap {
 };
 
 
+static std::map<thread_id, Thread*> gThreadsMap;
+static __thread Thread* gCurrentThread;
+
+extern int gLoadImageFD;
+static BLocker fLock;
+
+
 // Static initialization for the main thread
 class ThreadPool {
 public:
+
+	static void ReinitAtFork()
+	{
+		TRACE("Process %d reinit thread after fork", getpid());
+		gThreadsMap.clear();
+		gCurrentThread = new Thread();
+		gLoadImageFD = -1;
+	}
+
 	ThreadPool()
 	{
 		fMainThread = new Thread();
+		pthread_atfork(NULL, NULL, &ReinitAtFork);
 	}
 
 private:
 	Thread* fMainThread;
 };
 
-
-static std::map<thread_id, Thread*> gThreadsMap;
-static __thread Thread* gCurrentThread;
 static ThreadPool init;
 
-extern int gLoadImageFD;
-static BLocker fLock;
 
-
-void*
+static void*
 _thread_run(void* data)
 {
 	CALLED();
@@ -222,7 +233,6 @@ Thread::Unblock(thread_id thread, status_t status)
 	}
 
 	TRACE("error unblocking thread\n");
-
 	return B_ERROR;
 }
 

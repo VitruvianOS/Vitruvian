@@ -5,9 +5,8 @@ BISON_TARGET(parser parser.y ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp)
 FLEX_TARGET(lexer lexer.l  ${CMAKE_CURRENT_BINARY_DIR}/lexer.cpp)
 
 Application(rc
-	rc.cpp
-
 	SOURCES
+	rc.cpp
 	${BISON_parser_OUTPUTS}
 	${FLEX_lexer_OUTPUTS}
 	compile.cpp

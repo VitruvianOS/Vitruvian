@@ -28,8 +28,8 @@ macro( Application name )
 		message( FATAL_ERROR "APPLICATION: 'SOURCES' argument required." )
 	endif()
 
-	list (INSERT _APPLICATION_LIBS 0 be)
 	list (INSERT _APPLICATION_LIBS 0 root)
+	list (INSERT _APPLICATION_LIBS 0 be)
 	target_link_libraries(${name} PRIVATE ${_APPLICATION_LIBS})
 
 	# Add current dir headers
@@ -75,4 +75,30 @@ macro( AddOn name type )
 
 endmacro()
 
-# TODO: Add macros for Test, Catalog
+macro( Test name )
+
+	set( _OPTIONS_ARGS )
+	set( _ONE_VALUE_ARGS )
+	set( _MULTI_VALUE_ARGS SOURCES LIBS INCLUDES )
+
+	cmake_parse_arguments( _TEST "${_OPTIONS_ARGS}" "${_ONE_VALUE_ARGS}" "${_MULTI_VALUE_ARGS}" ${ARGN} )
+
+	# TODO support for resources (rdef)
+
+	if( _TEST_SOURCES )
+		add_executable(${name} ${_TEST_SOURCES})
+	else()
+		message( FATAL_ERROR "TEST: 'SOURCES' argument required." )
+	endif()
+
+	list (INSERT _TEST_LIBS 0 root)
+	list (INSERT _TEST_LIBS 0 be)
+	target_link_libraries(${name} PRIVATE ${_TEST_LIBS})
+
+	# Add current dir headers
+	list (APPEND _TEST_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
+	target_include_directories(${name} PRIVATE ${_TEST_INCLUDES})
+
+endmacro()
+
+# TODO: Add macros for Catalog

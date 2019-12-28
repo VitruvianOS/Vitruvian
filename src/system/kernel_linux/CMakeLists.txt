@@ -16,6 +16,7 @@ target_sources(root PRIVATE
 	port.c
 	scheduler.cpp
 	sem.c
+	SystemWatcher.cpp
 	Team.cpp
 	Thread.cpp
 	timer.cpp

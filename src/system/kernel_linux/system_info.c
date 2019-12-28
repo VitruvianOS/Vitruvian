@@ -63,29 +63,12 @@ _kern_get_system_info(system_info* psInfo)
 
 
 status_t
-_kern_start_watching_system(int32 object, uint32 flags,
-	port_id port, int32 token)
-{
-	UNIMPLEMENTED();
-	return B_ERROR;
-}
-
-
-status_t
-_kern_stop_watching_system(int32 object, uint32 flags,
-	port_id port, int32 token)
-{
-	UNIMPLEMENTED();
-	return B_ERROR;
-}
-
-
-status_t
 _kern_get_cpu_info(uint32 firstCPU, uint32 cpuCount, cpu_info* info)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
 }
+
 
 status_t
 _kern_get_cpu_topology_info(cpu_topology_node_info* topologyInfos,

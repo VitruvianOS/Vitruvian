@@ -22,6 +22,10 @@
 #include "KernelDebug.h"
 
 
+// TODO: Add fine-grained locking, some parts are not correctly locked
+// at the moment.
+
+
 class Thread {
 public:
 						Thread();
@@ -154,8 +158,8 @@ Thread::Spawn(thread_func func, const char* name, int32 priority,
 	dataWrap->father = find_thread(NULL);
 	fLock.Unlock();
 
-	pthread_t tid;
-	int32 ret = pthread_create(&tid, NULL, _thread_run, dataWrap);
+	pthread_t pThread;
+	int32 ret = pthread_create(&pThread, NULL, _thread_run, dataWrap);
 
 	// TODO: errorcheck
 	gCurrentThread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
@@ -167,7 +171,10 @@ Thread::Spawn(thread_func func, const char* name, int32 priority,
 status_t
 Thread::WaitForThread(thread_id id, status_t* _returnCode)
 {
+	fLock.Lock();
 	auto elem = gThreadsMap.find(id);
+	fLock.Unlock();
+
 	if (elem != end(gThreadsMap)
 			&& pthread_join(elem->second->fNativeThread,
 				(void**)_returnCode) == 0) {
@@ -226,7 +233,10 @@ Thread::Block(uint32 flags, bigtime_t timeout)
 status_t
 Thread::Unblock(thread_id thread, status_t status)
 {
+	fLock.Lock();
 	auto pair = gThreadsMap.find(thread);
+	fLock.Unlock();
+
 	if (pair != end(gThreadsMap)) {
 		release_sem(pair->second->fThreadBlockSem);
 		return B_OK;

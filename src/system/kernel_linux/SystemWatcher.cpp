@@ -5,7 +5,6 @@
 
 #include "SystemWatcher.h"
 
-#include <Autolock.h>
 #include <syscalls.h>
 
 #include <linux/cn_proc.h>
@@ -15,6 +14,8 @@
 
 #include "system_info.h"
 #include "KernelDebug.h"
+
+#include <kernel/util/AutoLock.h>
 
 
 SystemWatcher* SystemWatcher::fInstance = NULL;
@@ -125,7 +126,7 @@ SystemWatcher::WatchTask()
 void
 SystemWatcher::HandleProcEvent(struct cn_msg* header)
 {
-	BAutolock _(&fLock);
+	AutoLocker<BLocker> _(&fLock);
 
 	if (header->id.val != CN_VAL_PROC || header->id.idx != CN_IDX_PROC)
 		return;
@@ -211,7 +212,7 @@ SystemWatcher::AddListener(int32 object, uint32 flags,
 	if (fInstance == NULL)
 		fInstance = new SystemWatcher();
 
-	BAutolock _(&fInstance->fLock);
+	AutoLocker<BLocker> _(&fInstance->fLock);
 
 	if (!fInstance->IsRunning()) {
 		ret = fInstance->Run();
@@ -231,7 +232,7 @@ SystemWatcher::RemoveListener(int32 object, uint32 flags,
 	if (fInstance == NULL || !fInstance->IsRunning())
 		return B_NO_INIT;
 
-	BAutolock _(&fInstance->fLock);
+	AutoLocker<BLocker> _(&fInstance->fLock);
 
 	for (int i = 0; i < fInstance->fListeners.CountItems(); i++) {
 		WatchListener* elem = fInstance->fListeners.ItemAt(i);

@@ -47,11 +47,11 @@ In order to start you need to run the following commands from the generated.x64 
 
 #### FAQ 
 
-1. ** app_server quit with the following message: could not inizialize font manager **
+1.  **app_server quit with the following message: could not inizialize font manager**
 
 This means that  the app_server can't find the fonts. If you have them make sure to copy the fonts folder in /os/system/data
 
-2. ** I tried to start it but when i launch it i just get the background and it quit immediately after **
+2. **I tried to start it but when i launch it i just get the background and it quit immediately after**
 
 That is normal, and even if it looks like that it has quitted, it is not true, and is running correctly.
 

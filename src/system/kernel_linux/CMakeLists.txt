@@ -28,10 +28,7 @@ target_sources(root PRIVATE
 	system_info.c
 	system_ioctl.c
 
-	fs/build.cpp
 	fs/dir.c
-	#fs/fs_attr.cpp
-	#fs/fs_attr_generic.cpp
 	fs/fs_attr_untyped.cpp
 	fs/fs.cpp
 	fs/fs_descriptors.cpp

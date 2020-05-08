@@ -59,4 +59,4 @@ That is normal, and even if it looks like that it has quitted, it is not true, a
 
 Contributing to the project is open to anyone, feel free to send a pull request.
 
-[Master Development Ticket](https://github.com/Barrett17/V-OS/issues/1)
+[Issues](https://github.com/Barrett17/V-OS/issues)

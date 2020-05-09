@@ -30,7 +30,7 @@ target_sources(root PRIVATE
 
 	fs/dir.c
 	fs/fs_attr_untyped.cpp
-	fs/fs.cpp
+	fs/fs2.cpp
 	fs/fs_descriptors.cpp
 	fs/fs_impl.h
 	fs/fs_index.c

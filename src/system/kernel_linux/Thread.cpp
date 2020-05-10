@@ -273,14 +273,8 @@ Thread::ReceiveData(thread_id* sender, void* buffer, size_t bufferSize)
 	int32 code;
 	size_t size = read_port(gCurrentThread->fThreadPort,
 		&code, buffer, bufferSize);
-
-	// TODO: there must be something not right here,
-	// enabling the following check looks like make some
-	// hypotetically legit calls to fail.
-
-	//if (size <= 0)
-	//	printf("read port error\n");
-	//	return B_ERROR;
+	if (size <= 0)
+		return size;
 
 	return B_OK;
 }

@@ -48,11 +48,3 @@ _kstop_watching_vnode_(dev_t device, ino_t node,
 	UNIMPLEMENTED();
 	return B_ERROR;
 }
-
-
-status_t
-_kstop_notifying_(port_id port, int32 handlerToken)
-{
-	UNIMPLEMENTED();
-	return B_ERROR;
-}

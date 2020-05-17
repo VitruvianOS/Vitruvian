@@ -14,12 +14,10 @@
 #include <stdio.h>
 
 #undef TRACE
-#undef PRINT
 #undef UNIMPLEMENTED
 
 
 #if DEBUG > 0
-
   #define UNIMPLEMENTED()		printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
 
   #if DEBUG >= 2
@@ -34,15 +32,10 @@
   #else
   	#define CALLED() 			((void)0)
   #endif
-
 #else
-
 	#define UNIMPLEMENTED() 			printf("UNIMPLEMENTED %s\n",__PRETTY_FUNCTION__)
 	#define CALLED()					((void)0)
-	#define PRINT(l, a...)				((void)0)
 	#define ERROR(a...)					fprintf(stderr, a)
 	#define TRACE(a...)					((void)0)
-
 #endif
-
 #endif

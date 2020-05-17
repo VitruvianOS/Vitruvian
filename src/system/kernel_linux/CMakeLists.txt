@@ -6,15 +6,12 @@ target_sources(root PRIVATE
 	area.c
 	byteorder.cpp
 	debug.c
-	extended_team_info.cpp
 	framebuffer.cpp
 	getenv.c
 	image.cpp
 	tls.cpp
-	memory.cpp
 	mutex.cpp
 	port.c
-	scheduler.cpp
 	sem.c
 	SystemWatcher.cpp
 	Team.cpp

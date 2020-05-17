@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2018-2020, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
 
@@ -463,4 +463,12 @@ _kern_unblock_threads(thread_id* threads, uint32 count,
 	}
 
 	return success ? B_OK : B_ERROR;
+}
+
+
+bigtime_t
+_kern_estimate_max_scheduling_latency(thread_id thread)
+{
+	UNIMPLEMENTED();
+	return 0;
 }

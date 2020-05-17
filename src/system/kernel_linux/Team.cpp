@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2018-2020, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
 
@@ -37,6 +37,24 @@ _kern_get_team_info(team_id id, team_info *info)
 
 status_t
 _kern_get_next_team_info(int32 *cookie, team_info *info)
+{
+	UNIMPLEMENTED();
+	return B_ERROR;
+}
+
+
+status_t
+_kern_get_memory_properties(team_id teamID, const void* address, uint32* _protected,
+	 uint32* _lock)
+{
+	UNIMPLEMENTED();
+	return B_ERROR;
+}
+
+
+status_t
+_kern_get_extended_team_info(team_id teamID, uint32 flags,
+	void* buffer, size_t size, size_t* _sizeNeeded)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;

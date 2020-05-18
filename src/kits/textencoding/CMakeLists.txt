@@ -5,6 +5,4 @@ target_sources(be PRIVATE
 	utf8_conversions.cpp
 )
 
-target_include_directories(be PRIVATE
-	"../../../headers/private/textencoding/"
-)
+UsePrivateHeaders( be textencoding )

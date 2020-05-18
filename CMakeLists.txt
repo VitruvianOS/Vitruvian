@@ -105,10 +105,6 @@ set(
 	"headers/private/graphics/common"
 	"headers/private/graphics/vesa"
 	"headers/private/input"
-	# TODO: We can't keep all here
-	# each module need to specify
-	# the private and public headers
-	#"headers/private/interface"
 	"headers/private/libroot"
 	"headers/private/kernel"
 	"headers/private/libroot"
@@ -124,10 +120,10 @@ set(
 	"headers/private/support"
 	"headers/private/syslog_daemon"
 	"headers/private/system"
-	"headers/private/system/arch/x86"
 	"headers/private/tracker"
 	"headers/private/net"
 
+	"headers/private/system/arch/x86/"
 	"headers/private/kernel/arch/x86/"
 
 	"headers/libs/agg/"

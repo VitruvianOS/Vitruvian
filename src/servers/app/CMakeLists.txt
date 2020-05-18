@@ -125,9 +125,9 @@ Server(
 	"./decorator"
 	"./drawing/Painter"
 	"./drawing/Painter/drawing_modes"
-
-	"../../../headers/private/interface"
 )
+
+UsePrivateHeaders( app_server interface )
 
 #TODO: we want a custom target_include_directories that does that:
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/servers/app/")

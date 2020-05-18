@@ -12,7 +12,6 @@ Application(
 
 	LIBS
 	tracker
-
-	INCLUDES
-	"../../../headers/private/textencoding/"
 )
+
+UsePrivateHeaders( StyledEdit textencoding )

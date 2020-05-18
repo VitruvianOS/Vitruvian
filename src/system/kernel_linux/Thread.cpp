@@ -22,10 +22,6 @@
 #include "KernelDebug.h"
 
 
-// TODO: Add fine-grained locking, some parts are not correctly locked
-// at the moment.
-
-
 class Thread {
 public:
 						Thread();
@@ -40,19 +36,20 @@ public:
 	status_t			Block(uint32 flags, bigtime_t timeout);
 	static status_t		Unblock(thread_id thread, status_t status);
 
+	void				Lock();
+	void				Unlock();
+
 	static status_t		SendData(thread_id thread, int32 code,
 							const void* buffer, size_t buffer_size);
-	status_t			ReceiveData(thread_id* sender, void* buffer, size_t bufferSize);
+	status_t			ReceiveData(thread_id* sender,
+							void* buffer, size_t bufferSize);
 	static bool 		HasData(thread_id thread);
 
-	// Access to various stuff
-
 private:
-
-	// TODO: atfork reset
 	thread_id			fThread;
 	sem_id				fThreadBlockSem = -1;
 	port_id				fThreadPort;
+	pthread_mutex_t		fMutexLock;
 
 	pthread_t			fNativeThread;
 };
@@ -99,26 +96,24 @@ private:
 static ThreadPool init;
 
 
-static void*
+void*
 _thread_run(void* data)
 {
 	CALLED();
 
-	fLock.Lock();
+	Thread* thread = new Thread();
+
 	data_wrap* threadData = (data_wrap*)data;
 	threadData->tid = find_thread(NULL);
-	Thread* thread = new Thread();
-	fLock.Unlock();
 
 	Thread::Unblock(threadData->father, B_OK);
 	thread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
 	threadData->func(threadData->data);
-
-	fLock.Lock();
 	delete thread;
-	fLock.Unlock();
-
 	delete threadData;
+
+	status_t exitStatus = B_OK;
+	pthread_exit(&exit);
 	return NULL;
 }
 
@@ -131,19 +126,24 @@ Thread::Thread()
 	// TODO: Add thread_id to the name?
 	fThreadBlockSem = create_sem(0, "block_thread_sem");
 	fNativeThread = pthread_self();
-
+	pthread_mutex_init(&fMutexLock, NULL);
 	gCurrentThread = this;
+
+	fLock.Lock();
 	gThreadsMap.insert(std::make_pair(fThread, this));
+	fLock.Unlock();
 }
 
 
 Thread::~Thread()
 {
-	// Maybe we want to trace this
 	delete_sem(fThreadBlockSem);
 	delete_port(fThreadPort);
+	pthread_mutex_destroy(&fMutexLock);
 
+	fLock.Lock();
 	gThreadsMap.erase(fThread);
+	fLock.Unlock();
 }
 
 
@@ -151,12 +151,10 @@ thread_id
 Thread::Spawn(thread_func func, const char* name, int32 priority,
 	void* data)
 {
-	fLock.Lock();
 	data_wrap* dataWrap = new data_wrap();
 	dataWrap->data = data;
 	dataWrap->func = func;
 	dataWrap->father = find_thread(NULL);
-	fLock.Unlock();
 
 	pthread_t pThread;
 	int32 ret = pthread_create(&pThread, NULL, _thread_run, dataWrap);
@@ -173,11 +171,12 @@ Thread::WaitForThread(thread_id id, status_t* _returnCode)
 {
 	fLock.Lock();
 	auto elem = gThreadsMap.find(id);
+	bool isValid = elem != end(gThreadsMap);
 	fLock.Unlock();
 
-	if (elem != end(gThreadsMap)
-			&& pthread_join(elem->second->fNativeThread,
-				(void**)_returnCode) == 0) {
+	printf("join %d\n", id);
+	if (isValid && pthread_join(elem->second->fNativeThread,
+				(void**)&_returnCode) == 0) {
 		return B_OK;
 	}
 
@@ -219,6 +218,20 @@ Thread::Resume(thread_id id)
 }
 
 
+void
+Thread::Lock()
+{
+	pthread_mutex_lock(&fMutexLock);
+}
+
+
+void
+Thread::Unlock()
+{
+	pthread_mutex_unlock(&fMutexLock);
+}
+
+
 status_t
 Thread::Block(uint32 flags, bigtime_t timeout)
 {
@@ -235,9 +248,10 @@ Thread::Unblock(thread_id thread, status_t status)
 {
 	fLock.Lock();
 	auto pair = gThreadsMap.find(thread);
+	bool isValid = pair != end(gThreadsMap);
 	fLock.Unlock();
 
-	if (pair != end(gThreadsMap)) {
+	if (isValid) {
 		release_sem(pair->second->fThreadBlockSem);
 		return B_OK;
 	}

@@ -39,5 +39,7 @@ AddOn(
 	"message/"
 	"style/"
 	"transformable/"
-	"transformer/"	
+	"transformer/"
 )
+
+UsePrivateHeaders( icon shared )

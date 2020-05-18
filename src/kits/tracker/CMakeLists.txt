@@ -84,7 +84,6 @@ AddOn(
 	../../add-ons/input_server/filters/shortcut_catcher/ShortcutsServerFilter.cpp
 
 	INCLUDES
-	"../../../headers/private/interface"
 	"../../../headers/os/add-ons/input_server/"
 	"../../add-ons/input_server/filters/shortcut_catcher/"
 
@@ -92,3 +91,5 @@ AddOn(
 	be
 	root
 )
+
+UsePrivateHeaders( tracker interface shared tracker mount storage )

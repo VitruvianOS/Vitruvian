@@ -1,7 +1,9 @@
- #  Copyright 2019, Dario Casalinuovo. All rights reserved.
+ #  Copyright 2019-2020, Dario Casalinuovo. All rights reserved.
  #  Distributed under the terms of the LGPL License.
 
 include(CMakeParseArguments)
+
+# TODO: Add macros for Catalog
 
 # Usage:
 # Application(
@@ -101,4 +103,49 @@ macro( Test name )
 
 endmacro()
 
-# TODO: Add macros for Catalog
+function( UsePrivateHeaders target )
+	set(_private_headers
+		app
+		add-ons/input_server/
+		binary_compatibility
+		graphics
+		graphics/common
+		graphics/vesa
+		input
+		interface
+		libroot
+		kernel
+		libroot
+		locale
+		mount
+		notification
+		print
+		runtime_loader
+		shared
+		storage
+		storage/mime
+		storage/sniffer
+		support
+		syslog_daemon
+		system
+		textencoding
+		tracker
+		net
+	)
+
+	foreach(arg IN LISTS ARGN)
+		if ("${arg}" IN_LIST _private_headers)
+			target_include_directories(
+				${target}
+				PRIVATE
+				"${PROJECT_SOURCE_DIR}/headers/private/${arg}/"
+			)
+			#message(STATUS "\n ${target} ${arg} \n")
+		endif()
+	endforeach()
+	target_include_directories(
+		${target}
+		PRIVATE
+		"${PROJECT_SOURCE_DIR}/headers/private/"
+	)
+endfunction()

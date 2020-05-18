@@ -38,7 +38,6 @@ Application(
 	LIBS
 	tracker
 	pthread
-
-	INCLUDES
-	"../../../headers/private/textencoding/"
 )
+
+UsePrivateHeaders( Terminal textencoding )

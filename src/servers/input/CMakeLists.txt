@@ -24,6 +24,7 @@ Server(
 	#NodeMonitorHandler.cpp
 
 	INCLUDES
-	"../../../headers/private/interface"
 	"../../../headers/os/add-ons/input_server/"
 )
+
+UsePrivateHeaders(input_server interface)

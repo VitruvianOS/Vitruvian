@@ -9,7 +9,6 @@ Application(
 	DeskCalc.cpp
 	ExpressionTextView.cpp
 	InputTextView.cpp
-
-	INCLUDES
-	"../../../headers/private/interface/"
 )
+
+UsePrivateHeaders( DeskCalc interface )

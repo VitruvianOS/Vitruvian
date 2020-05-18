@@ -4,11 +4,6 @@ target_include_directories(be PRIVATE
 	"textview_support"
 )
 
-#TODO: how to specify a full path?
-target_include_directories(be PRIVATE
-	"../../../headers/private/interface"
-)
-
 target_sources(be PRIVATE
 	AboutWindow.cpp
 	AbstractLayout.cpp
@@ -129,3 +124,5 @@ target_sources(be PRIVATE
 	textview_support/UndoBuffer.cpp
 	textview_support/WidthBuffer.cpp
 )
+
+UsePrivateHeaders( be interface )

@@ -10,3 +10,5 @@ AddOn(
 	Summand.cpp
 	Variable.cpp
 )
+
+UsePrivateHeaders(linprog shared)

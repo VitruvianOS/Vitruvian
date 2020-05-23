@@ -1,58 +1,118 @@
 /*
- * Copyright 2018, Dario Casalinuovo.
- * Distributed under the terms of the MIT License.
+ *  Copyright 2018-2020, Dario Casalinuovo. All rights reserved.
+ *  Distributed under the terms of the LGPL License.
  */
 
 #include <fs_info.h>
-#include <ObjectList.h>
-#include <errno.h>
 
+#include <errno.h>
 #include <mntent.h>
+#include <stdlib.h>
+#include <sys/statvfs.h>
+
+#include "KernelDebug.h"
 
 #include "syscalls.h"
-#include "volume/LinuxVolume.h"
 
 
-BObjectList<LinuxVolume> sVolumesList;
+namespace BPrivate {
 
 
-void
-_init_devices_list()
-{
-	sVolumesList = BObjectList<LinuxVolume>(true);
-	
-	struct mntent* mtEntry = NULL;
-	FILE* fstab = setmntent(_PATH_MOUNTED, "r");
+static FILE* fEntries = NULL;
 
-	int32 i = 0;
-	while ((mtEntry = getmntent(fstab)) != NULL)
-		sVolumesList.AddItem(new LinuxVolume(mtEntry, i++));
 
-	// TODO: Check errno on fail?
-	if (endmntent(fstab) == 0)
-		sVolumesList.MakeEmpty();
+class LinuxVolume {
+public:
+
+	static status_t FillInfo(struct mntent* mountEntry, fs_info* info)
+	{
+		// TODO: fsh_name, io_size, improve flags
+
+		if (strlcpy(info->volume_name, mountEntry->mnt_dir,
+				B_FILE_NAME_LENGTH-1) >= B_FILE_NAME_LENGTH) {
+			return B_BUFFER_OVERFLOW;
+		}
+
+		if (strlcpy(info->device_name, mountEntry->mnt_fsname,
+				128) >= 128) {
+			return B_BUFFER_OVERFLOW;
+		}
+
+		// NOTE: this fields needs to be B_OS_NAME_LENGTH
+		strcpy(info->fsh_name, "unknown");
+
+		struct statvfs volume;
+		if (statvfs(mountEntry->mnt_dir, &volume) != B_OK)
+			return errno;
+
+		info->dev = dev_for_path(mountEntry->mnt_dir);
+		info->root = 1;
+		info->flags = 0;
+		info->block_size = volume.f_bsize;
+		info->total_blocks = volume.f_blocks;
+		info->free_blocks = volume.f_bavail;
+		info->total_nodes = volume.f_files;
+		info->free_nodes = volume.f_favail;
+		info->io_size = -1;
+
+		if (volume.f_flag & ST_RDONLY)
+			info->flags &= B_FS_IS_READONLY;
+
+		return B_OK;
+	}
+
+	static struct mntent* FindVolume(dev_t volume)
+	{
+		struct mntent* mountEntry = NULL;
+		FILE* fstab = setmntent("/etc/fstab", "r");
+		if (fstab == NULL)
+			return NULL;
+
+		while ((mountEntry = getmntent(fstab)) != NULL) {
+			dev_t device = dev_for_path(mountEntry->mnt_dir);
+			if (volume == device) {
+				struct mntent* ret = new struct mntent;
+				memcpy(ret, mountEntry, sizeof(struct mntent));
+				endmntent(fstab);
+				return ret;
+			}
+		}
+		endmntent(fstab);
+		return NULL;
+	}
+
+	static dev_t GetNext(int32* cookie)
+	{
+		if (fEntries == NULL) {
+			fEntries = setmntent("/etc/fstab", "r");
+		}
+
+		struct mntent* mountEntry = getmntent(fEntries);
+		if (mountEntry == NULL) {
+			endmntent(fEntries);
+			fEntries = NULL;
+			*cookie = -1;
+			return B_BAD_VALUE;
+		}
+
+		(*cookie)++;
+		return dev_for_path(mountEntry->mnt_dir);
+	}
+};
+
+
 }
 
 
 dev_t
-_kern_next_device(int32 *cookie)
+_kern_next_device(int32* cookie)
 {
-	if (sVolumesList.CountItems() == 0)
-		_init_devices_list();
+	CALLED();
 
-	if(*cookie >= sVolumesList.CountItems())
-		return -1;
+	if (cookie == NULL || *cookie < 0)
+		return B_BAD_VALUE;
 
-	//printf("dev_t: %d\n", *cookie);
-
-	LinuxVolume* volume = sVolumesList.ItemAt(*cookie);
-
-	if (volume == NULL)
-		return -1;
-
-	(*cookie)++;
-
-	return volume->Device();
+	return BPrivate::LinuxVolume::GetNext(cookie);
 }
 
 
@@ -65,28 +125,16 @@ _kern_write_fs_info(dev_t device, const struct fs_info* info, int mask)
 
 
 status_t
-_kern_read_fs_info(dev_t device, fs_info *info)
+_kern_read_fs_info(dev_t device, fs_info* info)
 {
-	// The mntent structure is defined in <mntent.h> as follows:
-	//
-	//    struct mntent {
-	//       char *mnt_fsname;   /* name of mounted filesystem */
-	//        char *mnt_dir;      /* filesystem path prefix */
-	//        char *mnt_type;     /* mount type (see mntent.h) */
-	//       char *mnt_opts;     /* mount options (see mntent.h) */
-	//        int   mnt_freq;     /* dump frequency in days */
-	//        int   mnt_passno;   /* pass number on parallel fsck */
-	//    };
+	CALLED();
 
-	// TODO fill fs_info with data from the fs
-
-	LinuxVolume* volume = sVolumesList.ItemAt((int32)device);
-	if (volume == NULL)
+	if (device < 0 || info == NULL)
 		return B_ERROR;
 
-	info->dev = device;
-	strcpy(info->volume_name, volume->Name());
-	strcpy(info->device_name, volume->DeviceName());
+	struct mntent* entry = BPrivate::LinuxVolume::FindVolume(device);
+	if (entry == NULL)
+		return B_BAD_VALUE;
 
-	return B_OK;
+	return BPrivate::LinuxVolume::FillInfo(entry, info);
 }

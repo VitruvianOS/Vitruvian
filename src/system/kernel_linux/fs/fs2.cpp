@@ -79,13 +79,6 @@ getPath(ino_t node, const char* name, std::string& path)
 }
 
 
-status_t
-get_path(int fd, const char* name, std::string& path)
-{
-	return getPath(fd, name, path);
-}
-
-
 static void
 insertPath(ino_t inode, std::string path) {
 	fLock.Lock();

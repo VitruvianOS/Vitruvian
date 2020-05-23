@@ -46,7 +46,7 @@ _kern_get_system_info(system_info* psInfo)
 {
 	UNIMPLEMENTED();
 
-	// TODO: proc
+	// TODO: getrusage + proc
 	psInfo->max_threads = 93966;
 	psInfo->kernel_version = 3LL;
 	psInfo->cpu_count = __gCPUCount;

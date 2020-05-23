@@ -29,12 +29,11 @@ target_sources(root PRIVATE
 
 	fs/fs2.cpp
 	fs/fs_attr.cpp
-	fs/fs_index.c
+	fs/fs_index.cpp
 	fs/fs_info.cpp
-	fs/fs_query.c
-	fs/fs_volume.c
-	fs/watch.c
-	fs/volume/LinuxVolume.cpp
+	fs/fs_query.cpp
+	fs/fs_volume.cpp
+	fs/watch.cpp
 
 	fs/disk_device/disk_device.cpp
 )

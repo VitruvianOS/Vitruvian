@@ -11,10 +11,9 @@ int main(void)
 	char*		aVolumeName;
 	
 	aVolume = new BVolume;
-	aVolumeName = new char[256];
+	aVolumeName = new char[B_FILE_NAME_LENGTH];
 	
-	while (aRoster.GetNextVolume(aVolume) != -1)
-	{
+	while (aRoster.GetNextVolume(aVolume) == B_OK) {
 		aVolume->GetName(aVolumeName);
 		printf("Found Volume \"%s\"\n", aVolumeName);
 		count++;

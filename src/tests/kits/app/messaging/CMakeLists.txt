@@ -1,6 +1,3 @@
 
-add_executable(PortLinkTest
-	PortLinkTest.cpp
-)
-
-target_link_libraries(PortLinkTest PRIVATE be root)
+Test(HandlerLooperMessageTest SOURCES HandlerLooperMessageTest.cpp)
+Test(PortLinkTest SOURCES PortLinkTest.cpp)

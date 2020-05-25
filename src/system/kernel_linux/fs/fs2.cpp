@@ -96,7 +96,7 @@ insertPath(ino_t inode, std::string path) {
 
 inline ssize_t
 checkPosition(off_t pos, int fd, int seekType) {
-	if (pos != -1) {
+	if (pos > 0) {
 		off_t ret = lseek(fd, pos, seekType);
 		if (ret < 0)
 			return errno;
@@ -478,4 +478,18 @@ _kern_unlock_node(int fd)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
+}
+
+
+ssize_t
+read_pos(int fd, off_t pos, void* buffer, size_t count)
+{
+	return _kern_read(fd, pos, buffer, count);
+}
+
+
+ssize_t
+write_pos(int fd, off_t pos, const void* buffer,size_t count)
+{
+	return _kern_write(fd, pos, buffer, count);
 }

@@ -17,7 +17,7 @@ while still retaining the power of the linux kernel.
 * libinput >= 1.10
 
 ```
-sudo apt install cmake ninja-build libfreetype6-dev libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib
+sudo apt install cmake ninja-build libfreetype6-dev libinput-dev libncurses-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib
 ```
 
 #### Getting the source code

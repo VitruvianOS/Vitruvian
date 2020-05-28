@@ -7,7 +7,7 @@ target_sources(root PRIVATE
 	extended_system_info.cpp
 	find_directory.cpp
 	find_paths.cpp
-	#fs_attr.cpp
+	fs_attr.cpp
 	fs_index.c
 	fs_info.c
 	fs_query.cpp

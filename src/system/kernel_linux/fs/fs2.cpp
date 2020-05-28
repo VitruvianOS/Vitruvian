@@ -386,6 +386,13 @@ _kern_rewind_dir(int fd)
 }
 
 
+status_t
+_kern_remove_dir(int fd, const char* path)
+{
+	UNIMPLEMENTED();
+	return B_ERROR;
+}
+
 
 status_t
 _kern_rename(int oldDir, const char* oldPath, int newDir, const char* newPath)

@@ -4,6 +4,7 @@
 include(CMakeParseArguments)
 
 # TODO: Add macros for Catalog
+# TODO: Implement EnableWError( target )
 
 # Usage:
 # Application(

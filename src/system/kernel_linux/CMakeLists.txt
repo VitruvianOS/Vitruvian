@@ -29,17 +29,14 @@ target_sources(root PRIVATE
 	system_ioctl.c
 
 	fs/dir.c
-	fs/fs_attr_untyped.cpp
+
 	fs/fs2.cpp
-	fs/fs_descriptors.cpp
-	fs/fs_impl.h
+	fs/fs_attr.cpp
 	fs/fs_index.c
 	fs/fs_info.cpp
 	fs/fs_query.c
 	fs/fs_volume.c
-	fs/missing_imp.c
 	fs/watch.c
-	#fs/kernel_interface.POSIX.cpp
 	fs/volume/LinuxVolume.cpp
 
 	fs/disk_device/disk_device.cpp

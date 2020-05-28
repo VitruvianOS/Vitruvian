@@ -1,9 +1,6 @@
-## V\OS README
+## V/OS README
 
-Vitruvian is a modern operating system written in C++.
-
-V\OS aims to provide a user experience that is free from unneeded complexities
-while still retaining the power of the linux kernel.
+Vitruvian is the Operating System with the human at the center.
 
 #### Video backends
 

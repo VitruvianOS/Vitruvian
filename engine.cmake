@@ -5,6 +5,7 @@ include(CMakeParseArguments)
 
 # TODO: Add macros for Catalog
 # TODO: Implement EnableWError( target )
+# TODO: Add possibility to set compiler defs for a target
 
 # Usage:
 # Application(
@@ -89,7 +90,9 @@ macro( Test name )
 	# TODO support for resources (rdef)
 
 	if( _TEST_SOURCES )
-		add_executable(${name} ${_TEST_SOURCES})
+		if (NOT "${name}" STREQUAL "GLOBAL")
+			add_executable(${name} ${_TEST_SOURCES})
+		endif()
 	else()
 		message( FATAL_ERROR "TEST: 'SOURCES' argument required." )
 	endif()
@@ -136,17 +139,23 @@ function( UsePrivateHeaders target )
 
 	foreach(arg IN LISTS ARGN)
 		if ("${arg}" IN_LIST _private_headers)
-			target_include_directories(
-				${target}
-				PRIVATE
-				"${PROJECT_SOURCE_DIR}/headers/private/${arg}/"
-			)
+			if("${target}" STREQUAL "GLOBAL")
+				include_directories("${PROJECT_SOURCE_DIR}/headers/private/${arg}/")
+			else()
+				target_include_directories(
+					${target}
+					PRIVATE
+					"${PROJECT_SOURCE_DIR}/headers/private/${arg}/"
+				)
+			endif()
 			#message(STATUS "\n ${target} ${arg} \n")
 		endif()
 	endforeach()
-	target_include_directories(
-		${target}
-		PRIVATE
-		"${PROJECT_SOURCE_DIR}/headers/private/"
-	)
+	if(NOT "${target}" STREQUAL "GLOBAL")
+		target_include_directories(
+			${target}
+			PRIVATE
+			"${PROJECT_SOURCE_DIR}/headers/private/"
+		)
+	endif()
 endfunction()

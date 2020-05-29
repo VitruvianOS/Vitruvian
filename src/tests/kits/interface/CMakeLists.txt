@@ -1,4 +1,4 @@
-include_directories("../../../../headers/private/interface")
+UsePrivateHeaders(GLOBAL interface)
 
 Test (SimpleAlertTest SOURCES SimpleAlertTest.cpp)
 

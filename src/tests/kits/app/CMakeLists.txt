@@ -1,3 +1,3 @@
-include_directories("../../../../headers/private/app")
+UsePrivateHeaders(GLOBAL app)
 
-#Test (DanoMessageTest SOURCES DanoMessageTest.cpp)
+#Test(DanoMessageTest SOURCES DanoMessageTest.cpp)

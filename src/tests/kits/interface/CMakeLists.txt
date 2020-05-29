@@ -1,54 +1,46 @@
 UsePrivateHeaders(GLOBAL interface)
 
-Test (SimpleAlertTest SOURCES SimpleAlertTest.cpp)
 
-Test (ChannelSliderTest SOURCES ChannelSliderTest.cpp)
+Test(ChannelSliderTest SOURCES ChannelSliderTest.cpp)
 
-#Test (CheckBoxTest SOURCES CheckBoxTest.cpp)
+#Test(CheckBoxTest SOURCES CheckBoxTest.cpp)
 
-Test (ControlLookTest SOURCES ControlLookTest.cpp)
+Test(ControlLookTest SOURCES ControlLookTest.cpp)
 
-Test (DrawBitmapTest SOURCES bbitmap/DrawBitmapTest.cpp)
+Test(ClippingPlusRedraw SOURCES ClippingPlusRedraw.cpp)
 
-Test (ListViewTest SOURCES ListViewTest.cpp)
+Test(DrawBitmapTest SOURCES bbitmap/DrawBitmapTest.cpp)
 
-Test (ScreenTest SOURCES ScreenTest.cpp)
+#Test(GetMouseTest SOURCES GetMouseTest.cpp)
 
-Test (ScrollViewTest SOURCES ScrollViewTest.cpp)
+Test(LookTest SOURCES look/Look.cpp LIBS tracker)
 
-Test (StatusBarTest SOURCES StatusBarTest.cpp)
+Test(ListViewTest SOURCES ListViewTest.cpp)
 
-Test (ToolTipTest SOURCES ToolTipTest.cpp)
+Test(MenuBeginningTest SOURCES MenuBeginningTest.cpp)
 
-#Test (GetMouseTest SOURCES GetMouseTest.cpp)
+Test(PulseTest SOURCES PulseTest.cpp)
 
-Test (PulseTest SOURCES PulseTest.cpp)
+Test(ScreenTest SOURCES ScreenTest.cpp)
 
-Test (SliderTest SOURCES SliderTest.cpp)
+#Test(ScrollViewSetBorderTest SOURCES ScrollViewSetBorderTest.cpp)
 
-Test (TruncateString SOURCES TruncateString.cpp)
+Test(ScrollViewTest SOURCES ScrollViewTest.cpp)
 
-Test (MenuBeginningTest SOURCES MenuBeginningTest.cpp)
+Test(SetDiskModeTest SOURCES SetDiskModeTest.cpp)
 
-#Test (WidthBufferTest SOURCES WidthBufferTest.cpp)
+Test(SimpleAlertTest SOURCES SimpleAlertTest.cpp)
 
-Test (ClippingPlusRedraw SOURCES ClippingPlusRedraw.cpp)
+Test(SliderTest SOURCES SliderTest.cpp)
 
-Test (SetDiskModeTest SOURCES SetDiskModeTest.cpp)
+Test(StatusBarTest SOURCES StatusBarTest.cpp)
 
-#Test (ScrollViewSetBorderTest SOURCES ScrollViewSetBorderTest.cpp)
+Test(TextViewTestManual SOURCES TextViewTestManual.cpp)
 
-Test (TextViewTestManual SOURCES TextViewTestManual.cpp)
+Test(ToolTipTest SOURCES ToolTipTest.cpp)
 
-Test (WindowStackTest SOURCES bwindowstack/WindowStackTest.cpp)
+Test(TruncateString SOURCES TruncateString.cpp)
 
-Application(
-	LookTest
+#Test(WidthBufferTest SOURCES WidthBufferTest.cpp)
 
-	SOURCES
-	look/Look.cpp
-	INCLUDES
-	"../../../../headers/private/interface"
-)
-
-target_link_libraries(LookTest PRIVATE tracker)
+Test(WindowStackTest SOURCES bwindowstack/WindowStackTest.cpp)

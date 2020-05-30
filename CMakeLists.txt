@@ -154,7 +154,7 @@ message(STATUS "=============================================")
 message(STATUS "")
 
 #include support functions
-include(engine.cmake)
+include(build/engine.cmake)
 
 # Sub directories
 #add_subdirectory(headers)

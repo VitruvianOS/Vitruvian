@@ -26,6 +26,7 @@ Application(
 	Switcher.cpp
 
 	LIBS tracker
+	RDEF Deskbar.rdef
 )
 
 UsePrivateHeaders( Deskbar interface )

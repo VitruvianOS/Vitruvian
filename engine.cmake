@@ -20,11 +20,9 @@ macro( Application name )
 
 	set( _OPTIONS_ARGS )
 	set( _ONE_VALUE_ARGS )
-	set( _MULTI_VALUE_ARGS SOURCES LIBS INCLUDES )
+	set( _MULTI_VALUE_ARGS SOURCES LIBS INCLUDES RDEF )
 
 	cmake_parse_arguments( _APPLICATION "${_OPTIONS_ARGS}" "${_ONE_VALUE_ARGS}" "${_MULTI_VALUE_ARGS}" ${ARGN} )
-
-	# TODO support for resources (rdef)
 
 	if( _APPLICATION_SOURCES )
 		add_executable(${name} ${_APPLICATION_SOURCES})
@@ -40,6 +38,22 @@ macro( Application name )
 	list (APPEND _APPLICATION_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
 	target_include_directories(${name} PRIVATE ${_APPLICATION_INCLUDES})
 
+	# Experimental, disabled
+	# TODO: support multiple rdefs
+	#if( _APPLICATION_RDEF )
+	if( 0 )
+		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF}")
+			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF} not found\n")
+			return()
+		endif()
+		message("${_APPLICATION_RDEF}")
+		add_custom_command(TARGET ${name} POST_BUILD
+			COMMAND "${CMAKE_BINARY_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF}" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}"
+			COMMAND "${CMAKE_BINARY_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${name}.rsrc"
+			COMMENT "Building resources for Deskbar"
+		)
+		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${name}.rsrc")
+	endif()
 endmacro()
 
 macro( Server name )

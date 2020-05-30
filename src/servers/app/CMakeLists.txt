@@ -127,7 +127,7 @@ Server(
 	"./drawing/Painter/drawing_modes"
 )
 
-UsePrivateHeaders( app_server interface )
+UsePrivateHeaders(app_server app interface graphics graphics/common kernel support)
 
 #TODO: we want a custom target_include_directories that does that:
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/servers/app/")

@@ -41,3 +41,5 @@ Server(
 	INCLUDES
 	"mime"
 )
+
+UsePrivateHeaders(registrar app kernel)

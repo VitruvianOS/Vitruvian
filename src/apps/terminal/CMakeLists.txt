@@ -40,4 +40,4 @@ Application(
 	pthread
 )
 
-UsePrivateHeaders( Terminal textencoding )
+UsePrivateHeaders(Terminal textencoding kernel)

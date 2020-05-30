@@ -36,7 +36,8 @@ set(COMMON_FLAGS "-include LinuxBuildCompatibility.h -Wall \
 	-Wpointer-arith -Wcast-align -Wsign-compare -Wstrict-aliasing \
 	-Wno-multichar -fPIC ${DIAG_FLAGS}")
 
-# TODO: We want ideally to remove -Wno-deprecated at some point
+# TODO: We want ideally to remove -Wno-deprecated at some point.
+
 # Set flags.
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} \
@@ -100,29 +101,14 @@ set(
 	PRIVATE_HEADERS
 
 	"headers/private/"
-	"headers/private/app"
-	"headers/private/binary_compatibility"
-	"headers/private/graphics"
-	"headers/private/graphics/common"
-	"headers/private/graphics/vesa"
+
 	"headers/private/input"
 	"headers/private/libroot"
-	"headers/private/kernel"
-	"headers/private/libroot"
-	"headers/private/locale"
-	"headers/private/mount"
-	"headers/private/notification"
 	"headers/private/print"
-	"headers/private/runtime_loader"
 	"headers/private/shared"
-	"headers/private/storage/"
-	"headers/private/storage/mime"
-	"headers/private/storage/sniffer"
-	"headers/private/support"
-	"headers/private/syslog_daemon"
+	"headers/private/storage"
 	"headers/private/system"
 	"headers/private/tracker"
-	"headers/private/net"
 
 	"headers/private/system/arch/x86/"
 	"headers/private/kernel/arch/x86/"

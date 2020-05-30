@@ -27,4 +27,4 @@ Server(
 	"../../../headers/os/add-ons/input_server/"
 )
 
-UsePrivateHeaders(input_server interface)
+UsePrivateHeaders(input_server app interface support)

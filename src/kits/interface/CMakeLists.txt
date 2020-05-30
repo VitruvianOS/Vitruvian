@@ -125,4 +125,4 @@ target_sources(be PRIVATE
 	textview_support/WidthBuffer.cpp
 )
 
-UsePrivateHeaders( be interface )
+UsePrivateHeaders(be interface)

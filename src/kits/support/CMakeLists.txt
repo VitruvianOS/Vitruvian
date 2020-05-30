@@ -28,6 +28,8 @@ target_sources(be PRIVATE
 	ZstdCompressionAlgorithm.cpp
 )
 
+UsePrivateHeaders(be support)
+
 target_sources(be_bootstrap PRIVATE
 	Architecture.cpp
 	Archivable.cpp
@@ -56,3 +58,5 @@ target_sources(be_bootstrap PRIVATE
 	ZlibCompressionAlgorithm.cpp
 	ZstdCompressionAlgorithm.cpp
 )
+
+UsePrivateHeaders(be support)

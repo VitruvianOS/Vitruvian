@@ -29,7 +29,7 @@ Application(
 	RDEF Deskbar.rdef
 )
 
-UsePrivateHeaders( Deskbar interface )
+UsePrivateHeaders(Deskbar app interface)
 
 add_definitions(-DDB_ADDONS -D_INCLUDES_CLASS_DEVICE_MAP=1)
 

@@ -46,11 +46,16 @@ getPath(int fd, const char* name, std::string& path)
 			return B_ERROR;
 
 		path = std::string(buf, bytes);
-	}
 
-	if (name != NULL) {
-		path += '/';
-		path += name;
+		if (name != NULL) {
+			path += '/';
+			path += name;
+		}
+
+	} else if (name != NULL) {
+		char buf[B_PATH_NAME_LENGTH];
+		_kern_normalize_path(name, true, buf);
+		path = std::string(buf);
 	}
 
 	TRACE("getPath %s fd %d\n", path.c_str(), fd);
@@ -61,6 +66,11 @@ getPath(int fd, const char* name, std::string& path)
 status_t
 getPath(ino_t node, const char* name, std::string& path)
 {
+	if (node < 0 && name == NULL)
+		return B_BAD_VALUE;
+
+	TRACE("getPath %ld %s\n", node, name);
+
 	fLock.Lock();
 	auto elem = gMap.find(node);
 	if (elem != end(gMap)) {
@@ -75,6 +85,7 @@ getPath(ino_t node, const char* name, std::string& path)
 		return B_OK;
 	}
 	fLock.Unlock();
+
 	return B_ERROR;
 }
 
@@ -84,17 +95,6 @@ insertPath(ino_t inode, std::string path) {
 	fLock.Lock();
 	gMap.insert(std::make_pair(inode, path));
 	fLock.Unlock();
-}
-
-
-inline ssize_t
-checkPosition(off_t pos, int fd, int seekType) {
-	if (pos > 0) {
-		off_t ret = lseek(fd, pos, seekType);
-		if (ret < 0)
-			return errno;
-	}
-	return B_OK;
 }
 
 
@@ -110,7 +110,7 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	std::string destPath;
 	status_t ret = BPrivate::getPath(fd, path, destPath);
 	if (ret != B_OK)
-		return ret;
+		return B_ENTRY_NOT_FOUND;
 
 	int result;
 	if (traverseLink)
@@ -118,10 +118,10 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	else
 		result = lstat(destPath.c_str(), st);
 
-	BPrivate::insertPath(st->st_ino, destPath);
-
 	if (result < 0)
-		return result;
+		return B_ENTRY_NOT_FOUND;
+	else
+		BPrivate::insertPath(st->st_ino, destPath);
 
 	return B_OK;
 }
@@ -132,18 +132,13 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 {
 	CALLED();
 
-	std::string src;
-	status_t err = BPrivate::getPath(fd, path, src);
-	if (err != B_OK)
-		return err;
-
 	struct stat st;
-	if (lstat(src.c_str(), &st) < 0 && !(openMode & O_CREAT))
+	if (fstatat(fd, path, &st, AT_SYMLINK_NOFOLLOW) < 0
+			&& !(openMode & O_CREAT)) {
 		return errno;
+	}
 
-	BPrivate::insertPath(st.st_ino, src.c_str());
-
-	return open(src.c_str(), openMode, perms);
+	return openat(fd, path, openMode, perms);
 }
 
 
@@ -161,19 +156,9 @@ _kern_open_dir(int fd, const char* path)
 {
 	CALLED();
 
-	std::string temp;
-	status_t ret = BPrivate::getPath(fd, path, temp);
-	if (ret != B_OK)
-		return ret;
+	// todo AT_FDCWD
 
-	DIR* dir = opendir(temp.c_str());
-	if (dir != NULL) {
-		int result = dirfd(dir);
-		free(dir);
-		return result;
-	}
-
-	return errno;
+	return openat(fd, path, 0);
 }
 
 
@@ -263,20 +248,31 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 	std::string destPath;
 	status_t ret = BPrivate::getPath(node, leaf, destPath);
 	if (ret == B_OK) {
-		if (strlcpy(userPath, destPath.c_str(), pathLength) >= pathLength)
+		if (strlcpy(userPath, destPath.c_str(),
+				pathLength) >= pathLength) {
 			return B_BUFFER_OVERFLOW;
+		}
  	}
 	return ret;
 }
 
 
 status_t
-_kern_normalize_path(const char* userPath, bool traverseLink, char* buffer)
+_kern_normalize_path(const char* userPath, bool _ignored, char* buffer)
 {
 	CALLED();
-	// TODO: this is actually incomplete
-	realpath(userPath, buffer);
-	return B_OK;
+
+	status_t ret = B_OK;
+	char* path = realpath(userPath, NULL);
+	if (path == NULL)
+		return B_ENTRY_NOT_FOUND;
+
+	if (strlcpy(buffer, path, B_PATH_NAME_LENGTH)
+			>= B_PATH_NAME_LENGTH) {
+		ret = B_BUFFER_OVERFLOW;
+	}
+	free(path);
+	return ret;
 }
 
 
@@ -285,12 +281,10 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 {
 	CALLED();
 
-	std::string destPath;
-	status_t ret = BPrivate::getPath(fd, path, destPath);
-	if (ret != B_OK)
-		return ret;
+	if (fd < 0)
+		return B_BAD_VALUE;
 
-	ssize_t size = readlink(destPath.c_str(), buffer, *_bufferSize);
+	ssize_t size = readlinkat(fd, path, buffer, *_bufferSize);
 	if (size < 0)
 		return errno;
 
@@ -336,7 +330,11 @@ _kern_seek(int fd, off_t pos, int seekType)
 {
 	CALLED();
 
-	return BPrivate::checkPosition(fd, pos, seekType);
+	off_t ret = lseek(fd, pos, seekType);
+	if (ret < 0)
+		return errno;
+
+	return ret;
 }
 
 
@@ -345,11 +343,7 @@ _kern_read(int fd, off_t pos, void* buffer, size_t bufferSize)
 {
 	CALLED();
 
-	ssize_t ret = BPrivate::checkPosition(fd, pos, SEEK_SET);
-	if (ret != B_OK)
-		return ret;
-
-	ssize_t size = read(fd, buffer, bufferSize);
+	ssize_t size = pread(fd, buffer, bufferSize, pos);
 	return (size < 0) ? errno : size;
 }
 
@@ -359,11 +353,7 @@ _kern_write(int fd, off_t pos, const void* buffer, size_t bufferSize)
 {
 	CALLED();
 
-	ssize_t ret = BPrivate::checkPosition(fd, pos, SEEK_SET);
-	if (ret != B_OK)
-		return ret;
-
-	ssize_t size = write(fd, buffer, bufferSize);
+	ssize_t size = pwrite(fd, buffer, bufferSize, pos);
 	return (size < 0) ? errno : size;
 }
 
@@ -389,8 +379,13 @@ _kern_rewind_dir(int fd)
 status_t
 _kern_remove_dir(int fd, const char* path)
 {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	CALLED();
+
+	if (fd < 0)
+		return B_FILE_ERROR;
+
+	int ret = unlinkat(fd, path, AT_REMOVEDIR);
+	return (ret < 0) ? B_ERROR : B_OK;
 }
 
 
@@ -399,18 +394,7 @@ _kern_rename(int oldDir, const char* oldPath, int newDir, const char* newPath)
 {
 	CALLED();
 
-	std::string dirPath;
-	std::string newDirPath;
-
-	status_t ret = BPrivate::getPath(oldDir, oldPath, dirPath);
-	if (ret != B_OK)
-		return ret;
-
-	ret = BPrivate::getPath(newDir, newPath, newDirPath);
-	if (ret != B_OK)
-		return ret;
-
-	return (rename(dirPath.c_str(), newDirPath.c_str()) < 0) ? B_OK : errno;
+	return (renameat(oldDir, oldPath, newDir, newPath) < 0) ? B_OK : errno;
 }
 
 
@@ -428,12 +412,10 @@ _kern_create_dir(int fd, const char* path, int perms)
 {
 	CALLED();
 
-	std::string dirPath;
-	status_t ret = BPrivate::getPath(fd, path, dirPath);
-	if (ret == B_OK && mkdir(dirPath.c_str(), perms) < 0)
+	if (mkdirat(fd, path, perms) < 0)
 		return errno;
 
-	return ret;
+	return B_OK;
 }
 
 
@@ -447,7 +429,7 @@ _kern_create_symlink(int fd, const char* path, const char* toPath, int mode)
 	if (ret != B_OK)
 		return ret;
 
-	return (symlink(toPath, temp.c_str()) < 0) ? errno : B_OK;
+	return (symlink(temp.c_str(), toPath) < 0) ? errno : B_OK;
 }
 
 
@@ -456,12 +438,7 @@ _kern_unlink(int fd, const char* path)
 {
 	CALLED();
 
-	std::string destPath;
-	status_t ret = BPrivate::getPath(fd, path, destPath);
-	if (ret != B_OK)
-		return ret;
-
-	return (unlink(destPath.c_str()) < 0) ? errno : B_OK;
+	return (unlinkat(fd, path, 0) < 0) ? errno : B_OK;
 }
 
 
@@ -484,6 +461,8 @@ _kern_unlock_node(int fd)
 ssize_t
 read_pos(int fd, off_t pos, void* buffer, size_t count)
 {
+	CALLED();
+
 	return _kern_read(fd, pos, buffer, count);
 }
 
@@ -491,5 +470,7 @@ read_pos(int fd, off_t pos, void* buffer, size_t count)
 ssize_t
 write_pos(int fd, off_t pos, const void* buffer,size_t count)
 {
+	CALLED();
+
 	return _kern_write(fd, pos, buffer, count);
 }

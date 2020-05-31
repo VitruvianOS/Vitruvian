@@ -5,6 +5,10 @@
 
 #include <syscalls.h>
 
+#include <sys/xattr.h>
+
+#include "KernelDebug.h"
+
 
 int
 _kern_open_attr_dir(int fd, const char* path,
@@ -17,22 +21,25 @@ _kern_open_attr_dir(int fd, const char* path,
 ssize_t
 _kern_read_attr(int fd, const char* attribute, off_t pos,
 		void* buffer, size_t readBytes) {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	CALLED();
+
+	return fgetxattr(fd, attribute, buffer, readBytes);
 }
 
 
 ssize_t
 _kern_write_attr(int fd, const char* attribute, uint32 type,
 		off_t pos, const void* buffer, size_t readBytes) {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	CALLED();
+
+	return fsetxattr(fd, attribute, buffer, readBytes, 0);
 }
 
 
 status_t
 _kern_stat_attr(int fd, const char* attribute,
-		struct attr_info *attrInfo) {
+		struct attr_info* attrInfo) {
+	printf("%s\n", attribute);
 	UNIMPLEMENTED();
 	return B_ERROR;
 }
@@ -48,8 +55,9 @@ _kern_open_attr(int fd, const char* path, const char* name,
 
 status_t
 _kern_remove_attr(int fd, const char* name) {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	CALLED();
+
+	return fremovexattr(fd, name);
 }
 
 

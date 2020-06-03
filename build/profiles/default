@@ -1,0 +1,10 @@
+set(DESKBAR_APPLICATIONS
+	StyledEdit
+	Terminal
+)
+
+set(SYSTEM_SERVERS
+	app_server
+	input_server
+	registrar
+)

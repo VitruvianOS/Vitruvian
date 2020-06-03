@@ -15,5 +15,5 @@ endfunction()
 include(build/profiles/default)
 
 SET(CPACK_GENERATOR "DEB")
-SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "KK")
+SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")
 INCLUDE(CPack)

@@ -12,7 +12,7 @@ Vitruvian is the Operating System with the human at the center.
 * ninja
 * cmake >= 3.13
 * libinput >= 1.10
-* libncursed-dev 
+* libncurses-dev 
 
 ```
 sudo apt install cmake ninja-build libfreetype6-dev libinput-dev libncurses-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib

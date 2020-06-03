@@ -159,3 +159,5 @@ include(build/engine.cmake)
 # Sub directories
 #add_subdirectory(headers)
 add_subdirectory(src)
+
+include(build/packages.cmake)

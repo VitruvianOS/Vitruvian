@@ -12,7 +12,17 @@ function( ImageInclude path )
 	endforeach()
 endfunction()
 
+function( ImageIncludeFile source dest )
+	install(FILES ${source} DESTINATION ${dest})
+endfunction()
+
+function( ImageIncludeDir source dest )
+	install(DIRECTORY ${source} DESTINATION ${dest})
+endfunction()
+
+
 include(build/profiles/default)
+
 
 SET(CPACK_GENERATOR "DEB")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")

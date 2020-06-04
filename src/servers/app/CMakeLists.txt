@@ -102,8 +102,9 @@ Server(
 	#drawing/interface/local/AccelerantBuffer.cpp
 	#drawing/interface/local/AccelerantHWInterface.cpp
 
-	drawing/interface/linux/FBDevHWInterface.cpp
-	drawing/interface/linux/FBDevBuffer.cpp
+	drawing/interface/linux/fbdev/FBDevHWInterface.cpp
+	drawing/interface/linux/fbdev/FBDevBuffer.cpp
+
 	drawing/interface/linux/LibInputEventStream.cpp
 
 	stackandtile/SATDecorator.cpp
@@ -118,6 +119,7 @@ Server(
 	INCLUDES
 	"./drawing"
 	"./drawing/interface/linux"
+	"./drawing/interface/linux/fbdev"
 	"./drawing/interface/local"
 	"./drawing/interface/remote"
 	"./font"

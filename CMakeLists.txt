@@ -44,13 +44,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} \
 	-Woverloaded-virtual -Wno-ctor-dtor-privacy \
 	-fexceptions -fpermissive -Wno-deprecated")
 
-# Goal is to work without libctdc++ installed
-set(CMAKE_CXX_IMPLICIT_LINK_LIBRARIES "libc")
-set(CMAKE_CXX_IMPLICIT_LINK_DIRECTORIES "")
-
-# Compute platform bits.
-math(EXPR PLATFORM_BITS "8*${CMAKE_SIZEOF_VOID_P}")
-
 # V\OS defines
 set(GLOBAL_CFLAGS
 	#-DOPENSSL_ENABLED

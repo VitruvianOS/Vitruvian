@@ -21,19 +21,6 @@ FBDevBuffer::FBDevBuffer(int fd, struct fb_var_screeninfo vInfo,
 	fInfo = finfo;
 	fBuffer = mmap(0, fInfo.line_length * fVInfo.yres_virtual,
 		PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)0);
-
-#if 0
-	int x,y;
-	for (x = 0;x < fVInfo.xres; x++) {
-		for (y = 0; y < fVInfo.yres; y++) {
-			long location = (x+fVInfo.xoffset)
-				* (fVInfo.bits_per_pixel/8)
-					+ (y+fVInfo.yoffset) * fInfo.line_length;
-			*((uint32_t*)(fBuffer + location))
-				= pixel_color(0xFF,0x00,0xFF, &fVInfo);
-		}
-	}
-#endif
 }
 
 

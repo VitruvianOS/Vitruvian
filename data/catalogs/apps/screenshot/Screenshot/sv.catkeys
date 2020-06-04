@@ -1,0 +1,31 @@
+1	swedish	x-vnd.haiku-screenshot	3958461128
+Include window border	ScreenshotWindow		Inkludera fönsterkant
+Overwrite	ScreenshotWindow		Skriv över
+Save in:	ScreenshotWindow		Spara i:
+Error saving \"%s\":\n\t%s	ScreenshotWindow		Misslyckades med att spara \"%s\":\n\t%s
+This file already exists.\n Are you sure you would like to overwrite it?	ScreenshotWindow		Denna fil finns redan.\n Är du säker på att du vill skriva över den?
+OK	ScreenshotWindow		OK
+The destination path exists but is not a folder.	ScreenshotWindow		Målsökvägen existerar men är inte en katalog.
+Select	ScreenshotWindow		Markera
+Save as:	ScreenshotWindow		Spara som:
+seconds	ScreenshotWindow		sekunder
+New screenshot	ScreenshotWindow		Ny skärmdump
+Screenshot	System name		Skärmdump
+Desktop	ScreenshotWindow		Skrivbord
+Artwork folder	ScreenshotWindow		Illustrationsmapp
+Translator Settings	ScreenshotWindow		Översättningsinställningar
+Include mouse pointer	ScreenshotWindow		Inkludera muspekare
+overwrite	ScreenshotWindow		skriv över
+Settings…	ScreenshotWindow		Inställningar...
+Choose folder	ScreenshotWindow		Välj mapp
+Name:	ScreenshotWindow		Namn:
+Choose folder…	ScreenshotWindow		Välj mapp...
+Please select	ScreenshotWindow		Vänligen välj
+Failed to save screenshot	ScreenshotWindow		Misslyckades med att spara skärmdump
+Cancel	ScreenshotWindow		Avbryt
+Delay:	ScreenshotWindow		Fördröjning:
+Copy to clipboard	ScreenshotWindow		Kopiera till urklipp
+screenshot	Screenshot	Base filename of screenshot files	skärmdump
+Home folder	ScreenshotWindow		Hemmapp
+Save	ScreenshotWindow		Spara
+Capture active window	ScreenshotWindow		Fånga aktivt fönster

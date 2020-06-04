@@ -1,0 +1,7 @@
+1	indonesian	x-vnd.Haiku-BFSAddOn	3514982252
+Enable query support	BFS_Initialize_Parameter		Aktifkan dukungan kueri
+Name:	BFS_Initialize_Parameter		Nama:
+8192 (Mostly large files)	BFS_Initialize_Parameter		8192 (Kebanyakan berkas besar)
+2048 (Recommended)	BFS_Initialize_Parameter		2048 (Direkomendasikan)
+1024 (Mostly small files)	BFS_Initialize_Parameter		1024 (Kebanyakan berkas kecil)
+Blocksize:	BFS_Initialize_Parameter		Ukuranblok:

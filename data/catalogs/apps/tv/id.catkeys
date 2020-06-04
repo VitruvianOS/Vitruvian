@@ -1,0 +1,27 @@
+1	indonesian	x-vnd.Haiku.TV	1995288111
+No menu	MainWin		Tidak ada menu
+No border	MainWin		Tanpa tepian
+force 704 x 576, display aspect 4:3	MainWin		Paksa 704 x 576, aspek tampilan 4:3
+Error, connecting to interface failed:\n\n	MainWin		Galat, koneksi ke antarmuka gagal:\n\n
+force 544 x 576, display aspect 4:3	MainWin		Paksa 544 x 576, aspek tampilan 4:3
+Full screen	MainWin		Layar penuh
+Scale to native size	MainWin		Skalakan ke ukuran asli
+unknown	MainWin		tidak diketahui
+Next channel	MainWin		Saluran selanjutnya
+Keep aspect ratio	MainWin		Jaga aspek rasio
+DVB - Digital Video Broadcasting TV	MainWin		DVB - Digital Video Broadcasting TV
+Always on top	MainWin		Selalu di atas
+Debug	MainWin		Debug
+Interface	MainWin		Antarmuka
+force 720 x 576, display aspect 4:3	MainWin		paksa 720 x 576, aspek tampilan 4:3
+Quit	MainWin		Keluar
+Channel	MainWin		Saluran
+Previous channel	MainWin		Saluran sebelumnya
+OK	MainWin		OKE
+TV	MainWin		TV
+Settings	MainWin		Pengaturan
+TV	System name		TV
+Settings…	MainWin		Pengaturan…
+None	MainWin		tidak ada
+Error, interface is busy:\n\n	MainWin		Galat, antarmuka sibuk:\n\n
+pixel aspect ratio	MainWin		aspek rasio piksel

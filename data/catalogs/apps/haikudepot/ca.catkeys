@@ -1,0 +1,31 @@
+1	catalan; valencian	x-vnd.Haiku-HaikuDepot	4101014534
+Uninstall	PackageManager		Desinstal·la
+(%Votes%)	FeaturedPackagesView		(%Votes%)
+Uninstalled	PackageListView		Desinstal·lat
+<no info>	PackageInfoView		<cap informació>
+No user ratings available.	PackageInfoView		No hi ha valoracions dels usuaris disponibles.
+Rating	PackageListView		Valoració
+Active	PackageListView		Actiu
+Ratings	PackageInfoView		Valoracions
+Name	PackageListView		Nom
+Fatal error	PackageManager		Error greu
+No changelog available.	PackageInfoView		No hi ha cap registre de canvis disponible.
+Available	PackageListView		Disponible
+Click a package to view information	PackageInfoView		Cliqueu sobre un paquet per veure'n la informació
+Close	PackageManager		Tanca
+Changelog	PackageInfoView		Registre de canvis
+About	PackageInfoView		Quant a
+Inactive	PackageListView		Inactiu
+Downloading:	PackageInfoView		S'està baixant:
+(%Votes%)	PackageInfoView		(%Votes%)
+Close	UserLoginWindow		Tanca
+Close	RatePackageWindow		Tanca
+n/a	PackageInfoView		n/d
+Tools	MainWindow		Eines
+Status	PackageListView		Estat
+Unknown	PackageListView		Desconegut
+HaikuDepot	System name		Repertori Haiku
+Search terms:	FilterView		Paraules que voleu cercar:
+Description	PackageListView		Descripció
+Install	PackageManager		Instal·la
+%Version%	PackageInfoView		%Version%

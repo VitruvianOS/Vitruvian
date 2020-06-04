@@ -1,0 +1,16 @@
+1	finnish	x-vnd.Haiku-TGATranslator	3075011211
+Save with RLE compression	TGAView		Tallenna RLE-tiivistyksellä
+Targa image (%d bits truecolor)	TGATranslator		Targa-kuva (%d-bittinen truecolor-kuva)
+Ignore TGA alpha channel	TGAView		Ohita TGA-alfakanava
+Targa image (%d bits colormap)	TGATranslator		Targa-kuva (%d-bittinen värikartta)
+TGA image translator	TGAView		TGA-kuvamuunnin
+Targa image (%d bits RLE colormap)	TGATranslator		Targa-kuva (%d-bittinen RLE-värikartta)
+Targa image (%d bits gray)	TGATranslator		Targa-kuva (%d-bittinen harmaa)
+Written by the Haiku Translation Kit Team	TGAView		Tekijä: Haiku Translation Kit Team
+Targa image (%d bits RLE truecolor)	TGATranslator		Targa-kuva (%d-bittinen RLE truecolor-kuva)
+TGA images	TGATranslator		TGA-kuvat
+Version %d.%d.%d, %s	TGAView		Versio %d.%d.%d, %s
+TGATranslator Settings	TGATranslator		TGA-muunninasetukset
+TGA image translator	TGATranslator		TGA-kuvamuunnin
+Targa image (%d bits RLE gray)	TGATranslator		Targa-kuva (%d-bittinen RLE harmaa)
+TGA Settings	TGAMain		TGA-asetukset

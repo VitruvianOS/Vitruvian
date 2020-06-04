@@ -1,0 +1,17 @@
+1	romanian	x-vnd.Haiku-Magnify	94607167
+Decrease pixel size	Magnify-Main		Micșorează dimensiune pixel
+Increase pixel size	Magnify-Main		Mărește dimensiune pixel
+Stick coordinates	Magnify-Main		Lipește coordonate
+%width x %height  @ {0, plural, one{# pixel/pixel} other{# pixels/pixel}}	Magnify-Main		%width x %height  @ {0, plural, one{# pixel/pixel} other{# pixeli/pixel}}
+Copy image	Magnify-Main		Copiază imagine
+Decrease window size	Magnify-Main		Micșorează dimensiune fereastră
+Remove a crosshair	Magnify-Main		Elimină un reticul
+Add a crosshair	Magnify-Main		Adaugă un reticul
+Freeze image	Magnify-Main		Îngheață imaginea
+Increase window size	Magnify-Main		Mărește dimensiune fereastră
+Save image	Magnify-Main		Salvează imagine
+Show grid	Magnify-Main		Afișează grilă
+Magnify	System name		Lupă
+Info	Magnify-Main		Info
+Show info	Magnify-Main		Afișează informații
+Make square	Magnify-Main		Alcătuiește pătrat

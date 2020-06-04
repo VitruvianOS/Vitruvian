@@ -1,0 +1,92 @@
+1	finnish	x-vnd.Haiku-Devices	3345509916
+ACPI bus	DevicesView		ACPI-väylä
+Encryption controller	Device		Salausohjain
+Bus Information	Device		Väylätiedot
+Devices	System name		Laitteet
+Graphics Peripheral	DeviceSCSI		Grafiikkaoheislaite
+Processor	Device		Suoritin
+Generate system information	DevicesView		Tuota järjestelmätiedot
+Class info	DevicePCI		Luokkatiedot
+ACPI Information	DeviceACPI		ACPI-tiedot
+Detailed	DevicesView		Yksityiskohdat
+Computer	DevicesView		Tietokone
+Communications	DeviceSCSI		Viestinnät
+Class Info:\t\t\t\t: %classInfo%	DeviceSCSI		Luokkatiedot:\t\t\t\t: %classInfo%
+Mass storage controller	Device		Massamuistilaiteohjain
+Connection	DevicesView		Yhteys
+Printer	DeviceSCSI		Tulostin
+ACPI Processor Namespace '%2'	DeviceACPI		ACPI-prosessorinimiavaruus ’%2’
+SCSI Information	DeviceSCSI		SCSI-tiedot
+Manufacturer	Device		Valmistaja
+Device name:	Device		Laitenimi:
+Scanner	DeviceSCSI		Skanneri
+Memory controller	Device		Muistiohjain
+Unknown device	DevicesView		Tuntematon laite
+Unknown	DevicePCI		Tuntematon
+ACPI node '%1'	DeviceACPI		ACPI-solmu ’%1’
+Optical Drive	DeviceSCSI		Optinen laite
+Name	PropertyList		Nimi
+Manufacturer	DeviceSCSI		Valmistaja
+Device Name\t\t\t\t: %Name%\nManufacturer\t\t\t: %Manufacturer%\nDriver used\t\t\t\t: %DriverUsed%\nDevice paths\t: %DevicePaths%	Device		Laitenimi\t\t\t\t: %Name%\nValmistaja\t\t\t: %Manufacturer%\nKäytetty ajuri\t\t\t\t: %DriverUsed%\nLaitepolut\t: %DevicePaths%
+Device name	Device		Laitenimi
+Satellite communications controller	Device		Satelliittiviestintäohjain
+Device class	DeviceSCSI		Laiteluokka
+Device	Device		Laite
+Input device controller	Device		Syötelaiteohjain
+PCI bus	DevicesView		PCI-väylä
+ACPI System Indicator	DeviceACPI		ACPI-järjestelmäindikaattori
+ACPI System Bus	DeviceACPI		ACPI-järjestelmäväylä
+PCI Information	DevicePCI		PCI-tiedot
+Tape Drive	DeviceSCSI		Nauha-asema
+Changer	DeviceSCSI		Vaihtaja
+Serial bus controller	Device		Sarjaväyläohjain
+Refresh devices	DevicesView		Verestä laitteita
+Category	DevicesView		Luokka
+RBC	DeviceSCSI		RBC
+None	Device		Ei mitään
+Device paths	Device		Laitepolut
+Unknown device	Device		Tuntematon laite
+Wireless controller	Device		Langaton ohjain
+Generic system peripheral	Device		Yleinen järjestelmän oheislaite
+Value	PropertyList		Arvo
+Devices	DevicesView		Laitteet
+Device name	DeviceACPI		Laitenimi
+Card Reader	DeviceSCSI		Korttilukija
+Display controller	Device		Näyttöohjain
+Basic information	DevicesView		Perustiedot
+ACPI Button '%1'	DeviceACPI		ACPI-painike '%1'
+Bus	DevicesView		Väylä
+ACPI <unknown>	DeviceACPI		ACPI <unknown>
+Device name	DevicePCI		Laitenimi
+Disk Drive	DeviceSCSI		Levyasema
+Other	DeviceSCSI		Muu
+Report compatibility	DevicesView		Ilmoita yhteensopivuudesta
+Computer	Device		Tietokone
+PCI bus	Device		PCI-väylä
+Enclosure	DeviceSCSI		Kotelo
+Order by:	DevicesView		Järjestys:
+ACPI Thermal Zone	DeviceACPI		ACPI-lämpöalue
+Intelligent controller	Device		Älyohjain
+Multimedia controller	Device		Multimediaohjain
+Quit	DevicesView		Poistu
+ISA bus	Device		ISA-väylä
+ISA bus	DevicesView		ISA-väylä
+Processor	DeviceSCSI		Suoritin
+Manufacturer:	Device		Valmistaja:
+Class Info:\t\t\t\t: %classInfo%	DeviceACPI		Luokkatiedot:\t\t\t\t: %classInfo%
+Bridge	Device		Silta
+Worm	DeviceSCSI		Kertakirjoitteinen
+CD-ROM	DeviceSCSI		CD-ROM
+Manufacturer	DevicePCI		Valmistaja
+Bridge	DeviceSCSI		Silta
+Signal processing controller	Device		Signaalikäsittelyohjain
+Device name	DeviceSCSI		Laitenimi
+Docking station	Device		Telakka-asema
+Array	DeviceSCSI		Matriisi
+Unclassified device	Device		Luokittelematon laite
+ACPI controller	Device		ACPI-ohjain
+Network controller	Device		Verkko-ohjain
+Driver used	Device		Käytetty laite
+Communication controller	Device		Viestintäohjain
+ACPI bus	Device		ACPI-väylä
+unknown	Device		tuntematon

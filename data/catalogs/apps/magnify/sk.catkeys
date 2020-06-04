@@ -1,0 +1,17 @@
+1	slovak	x-vnd.Haiku-Magnify	94607167
+Decrease pixel size	Magnify-Main		Zmenšiť veľkosť pixla
+Increase pixel size	Magnify-Main		Zväčšiť veľkosť pixla
+Stick coordinates	Magnify-Main		Prilepiť súradnice
+%width x %height  @ {0, plural, one{# pixel/pixel} other{# pixels/pixel}}	Magnify-Main		%width x %height  @ {0, plural, one{# pixel/pixel} few{# pixely/pixel} other{# pixelov/pixel}}
+Copy image	Magnify-Main		Kopírovať obrázok
+Decrease window size	Magnify-Main		Zmenšiť veľkosť okna
+Remove a crosshair	Magnify-Main		Odstrániť mušku
+Add a crosshair	Magnify-Main		Pridať mušku
+Freeze image	Magnify-Main		Zmraziť obraz
+Increase window size	Magnify-Main		Zväčšiť veľkosť okna
+Save image	Magnify-Main		Uložiť obrázok
+Show grid	Magnify-Main		Zobraziť mriežku
+Magnify	System name		Lupa
+Info	Magnify-Main		Info
+Show info	Magnify-Main		Zobraziť informácie
+Make square	Magnify-Main		Urobiť štvorec

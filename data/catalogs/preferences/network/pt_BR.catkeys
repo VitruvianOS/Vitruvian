@@ -1,0 +1,14 @@
+1	portuguese (brazil)	x-vnd.Haiku-Network	4026755568
+New…	NetworkWindow		Novo…
+Other	NetworkWindow		Outro
+Gateway:	IntefaceAddressView		Rota padrão:
+EAP	EAP protected network		EAP
+Services	NetworkWindow		Serviços
+Revert	NetworkWindow		Reverter
+Apply	IntefaceAddressView		Aplicar
+Static	IntefaceAddressView		Estático
+launch error	NetworkWindow		Erro de carregamento
+Automatic	IntefaceAddressView		Automático
+Your gateway to the internet	IntefaceAddressView		Sua rota padrão para a internet
+Enable	ServiceView		Habilitar
+Disabled	IntefaceAddressView		Desabilitado

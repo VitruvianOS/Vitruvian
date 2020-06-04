@@ -1,0 +1,49 @@
+1	slovak	x-vnd.Haiku-ProcessController	4131818684
+Error saving file	ProcessController		Chyba pri ukladaní súboru
+Display priority	ProcessController		Priorita zobrazenie
+That's no Fun!	ProcessController		To nie je sranda!
+What do you want to do with the team \"%s\"?	ProcessController		Čo chcete robiť s tímom „%s“?
+Your setting file could not be saved!\n(%s)	ProcessController		Váš súbor s nastavením nebolo možné uložiť!\n(%s)
+Processor %d	ProcessController		Procesor %d
+Live in the Deskbar	ProcessController		Zobrazovať v Paneli
+Kill this team!	ProcessController		Ukončiť tento tím!
+OK	ProcessController		OK
+You can run ProcessController in a window or install it in the Deskbar.	ProcessController		Správcu procesov môžete spúšťať v okne alebo ho nainštalovať do Panelu.
+Real-time priority	ProcessController		Priorita v reálnom čase
+Custom priority	ProcessController		Vlastná priorita
+Debug this thread!	ProcessController		Ladiť toto vlákno!
+Low priority	ProcessController		Nízka priorita
+Urgent display priority	ProcessController		Priorita naliehavé zobrazenie
+Memory usage	ProcessController		Využitie pamäte
+Ok!	ProcessController		OK
+Normal priority	ProcessController		Normálna priorita
+Restart Deskbar	ProcessController		Reštartovať Panel
+About ProcessController…	ProcessController		O Správcovi procesov…
+Usage: %s [-deskbar]\n	ProcessController		Použitie: %s [-deskbar]\n
+Please confirm	ProcessController		Prosím, potvrďte
+Urgent priority	ProcessController		Naliehavá priorita
+What do you want to do with the thread \"%s\"?	ProcessController		Čo chcete robiť s vláknom „%s“?
+(c) 1996-2001 Georges-Edouard Berenger, berenger@francenet.fr\n	ProcessController		(c) 1996-2001 Georges-Edouard Berenger, berenger@francenet.fr\n
+Idle priority	ProcessController		Priorita nečinný
+Real-time display priority	ProcessController		Priorita zobrazenie v reálnom čase
+Threads and CPU usage	ProcessController		Vlákna a využitie CPU
+Quit application	ProcessController		Ukončiť aplikáciu
+Info	ProcessController		Info
+Kill this thread!	ProcessController		Ukončiť toto vlákno!
+This team is already gone…	ProcessController		Tento tím už je preč…
+Gone teams…	ProcessController		Ukončené tímy…
+Quit an application	ProcessController		Ukončiť aplikáciu
+Cancel	ProcessController		Zrušiť
+Install in Deskbar	ProcessController		Nainštalovať do Panelu
+Debug this team!	ProcessController		Ladiť tento tím!
+Low latency	ProcessController		Nízka latencia
+ProcessController	System name		Správca procesov
+Lowest active priority	ProcessController		Najnižšia aktívna priorita
+Restart Tracker	ProcessController		Reštartovať Tracker
+System resources & caches…	ProcessController		Zdroje a vyrovnávacia pamäť systému…
+Damned!	ProcessController		Sakra!
+New Terminal	ProcessController		Nový terminál
+Power saving	ProcessController		Šetrenie energie
+ProcessController is already installed in Deskbar.	ProcessController		Správca procesov je už v Paneli nainštalovaný.
+This thread is already gone…	ProcessController		Toto vlákno už je preč…
+Run in window	ProcessController		Spustiť v okne

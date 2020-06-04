@@ -1,0 +1,50 @@
+1	lithuanian	x-vnd.Haiku-Mail	688530788
+Account settings	AutoConfigWindow		Paskyros nuostatos
+\t\t· Outgoing	Config Window		\t\t· Siuntimas
+E-mail address:	E-Mail		El. pašto adresas:
+Create new account	AutoConfigWindow		Naujos paskyros kūrimas
+While sending and receiving	Config Window		siunčiant ir gaunant
+Apply	Config Window		Taikyti
+Incoming mail filters	Config Views		Gaunamų laiškų filtrai
+Outgoing mail filters	Config Views		Siunčiamų laiškų filtrai
+Server name:	E-Mail		Serverio vardas:
+Add	Config Window		Pridėti
+Back	AutoConfigWindow		Atgal
+Real name:	E-Mail		Asmenvardis:
+Real name:	Config Views		Asmenvardis:
+\t\t· E-mail filters	Config Window		\t\t· El. pašto filtrai
+Outgoing	E-Mail		Pašto siuntimas
+Accounts	Config Window		Paskyros
+Outgoing	Config Window		Pašto siuntimas
+Remove	Config Views		Pašalinti
+Settings	Config Window		Nuostatos
+Never	Config Window	show status window	niekada
+Account name:	Config Views		Paskyros pavadinimas:
+\t\t· Incoming	Config Window		\t\t· Gavimas
+Enter a valid e-mail address.	AutoConfigWindow		Įveskite galiojantį elektroninio pašto adresą.
+\nThe general settings couldn't be reverted.\n\nError retrieving general settings:\n%s\n	Config Window		\nAtšaukti bendrųjų nuostatų pakeitimų nepavyko.\n\nKlaida gaunant bendrąsias nuostatas:\n%s\n
+Incoming	E-Mail		Pašto gavimas
+Choose Protocol	E-Mail		Išsirinkite protokolą
+Return address:	Config Views		Atgalinis adresas:
+Password:	E-Mail		Slaptažodis:
+Error retrieving general settings: %s\n	Config Window		Klaida gaunant bendrąsias nuostatas: %s\n
+The filter could not be moved. Deleting filter.	Config Views		Filtro perkelti nepavyko. Filtras šalinamas.
+OK	Config Views		Gerai
+Revert	Config Window		Atšaukti pakeitimus
+Incoming	Config Window		Pašto gavimas
+Finish	AutoConfigWindow		Atlikta
+Add filter	Config Views		Pridėti filtrą
+Account settings	Config Views		Paskyros nuostatos
+minutes	Config Window		min.
+E-mail	System name		El. paštas
+Check every	Config Window		Tikrinti kas
+Account name:	E-Mail		Paskyros pavadinimas:
+Edit mailbox menu…	Config Window		Keisti pašto dėžutės meniu…
+Server Name:	E-Mail		Serverio vardas:
+Remove	Config Window		Pašalinti
+Login name:	E-Mail		Abonento vardas:
+While sending	Config Window		siunčiant
+OK	Config Window		Gerai
+OK	AutoConfigWindow		Gerai
+Next	AutoConfigWindow		Toliau
+Error	Config Window		Klaida

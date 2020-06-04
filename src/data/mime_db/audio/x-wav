@@ -1,0 +1,13 @@
+
+resource(0, "BEOS:TYPE") #'MIMS' "application/x-vnd.Be-meta-mime";
+
+resource(1, "META:TYPE") "audio/x-wav";
+
+resource(2, "META:S:DESC") #'MSDC' "WAVE audio file";
+
+resource(3, "META:EXTENS") message(234) {
+	"extensions" = "wav",
+	"type" = "audio/x-wav"
+};
+
+resource(5, "META:SNIFF_RULE") "0.50 [8] (\"WAV\")";

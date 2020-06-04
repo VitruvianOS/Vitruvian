@@ -1,0 +1,7 @@
+1	korean	x-vnd.Haiku-BFSAddOn	3514982252
+Enable query support	BFS_Initialize_Parameter		질의 가능 지원
+Name:	BFS_Initialize_Parameter		이름:
+8192 (Mostly large files)	BFS_Initialize_Parameter		8192 (대부분의 대용량 파일)
+2048 (Recommended)	BFS_Initialize_Parameter		2048 (추천)
+1024 (Mostly small files)	BFS_Initialize_Parameter		1024 (대부분의 저용량 파일)
+Blocksize:	BFS_Initialize_Parameter		블록크기:

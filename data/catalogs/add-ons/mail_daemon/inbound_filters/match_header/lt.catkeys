@@ -1,0 +1,12 @@
+1	lithuanian	x-vnd.Haiku-MatchHeader	1349121828
+Delete message	ConfigView		pašalinti laišką
+Set flags to	ConfigView		nustatyti požymius į
+<Choose account>	ConfigView		<parinkite paskyrą>
+Then	ConfigView		tuomet
+If	ConfigView		Kai
+Set as read	ConfigView		pažymėti kaip skaitytą
+Reply with	ConfigView		atsakyti naudojant
+<Choose action>	ConfigView		<parinkite veiksmą>
+Move to	ConfigView		perkelti į
+this field is based on the action	ConfigView		šio lauko galimos reikšmės priklauso nuo veiksmo
+has	ConfigView		turi

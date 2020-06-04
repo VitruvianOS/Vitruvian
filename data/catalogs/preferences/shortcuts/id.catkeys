@@ -1,0 +1,39 @@
+1	indonesian	x-vnd.Haiku-Shortcuts	863758906
+*MouseUp	ShortcutsWindow		*MouseUp
+Application	ShortcutsWindow		Aplikasi
+Option	ShortcutsSpec	Name for modifier on keyboard	Opsi
+Save changes before closing?	ShortcutsWindow		Simpan perubahan sebelum menutup?
+Revert to saved	ShortcutsWindow		Kembali ke tersimpan
+Don't save	ShortcutsWindow		Jangan simpan
+*MouseDown	ShortcutsWindow		*MouseDown
+*Beep	ShortcutsWindow		*Beep
+Shortcuts wasn't able to save your keyset.	ShortcutsWindow		Pemintas tidak bisa menyimpan keyset Anda.
+Save	ShortcutsWindow		Simpan
+Oh no	ShortcutsWindow		Oh tidak
+Key	ShortcutsWindow		Kunci
+Select	ShortcutsWindow		Pilih
+Shortcuts	System name		Pintasan
+Quit	ShortcutsWindow		Keluar
+(Choose application with file requester)	ShortcutsWindow		(Pilih aplikasi dengan berkas pemohon)
+Cancel	ShortcutsWindow		Batal
+*MoveMouse +20 +0	ShortcutsWindow		*TombolMouse +20 +0
+Control	ShortcutsSpec	Name for modifier on keyboard	Kontrol
+Shortcuts was unable to parse your KeySet file!	ShortcutsWindow		Pintasan tidak dapat mengurai file KeySet Anda!
+Shortcuts was unable to save your KeySet file!	ShortcutsWindow		Pintasan tidak dapat menyimpan file KeySet Anda!
+*InsertString \"Your Text Here\"	ShortcutsWindow		*InsertString \"Teks Anda Disini\"
+Remove selected shortcut	ShortcutsWindow		Hapus pintasan yang dipilih
+Error, NULL state description?	ShortcutsSpec		Ada Kesalahan, deskripsi kondisi NULL?
+Shortcuts was couldn't open your KeySet file!	ShortcutsWindow		Pintasan tidak dapat membuka file KeySet Anda!
+Save & apply	ShortcutsWindow		Simpan & terapkan
+Open	ShortcutsWindow		Buka
+Append	ShortcutsWindow		Tambahkan
+Save KeySet as…	ShortcutsWindow		Simpan keyset sebagai...
+Append KeySet…	ShortcutsWindow		Tambah Keyset...
+*MouseButton 1	ShortcutsWindow		*TombolMouse 1
+OK	ShortcutsWindow		OKE
+Add new shortcut	ShortcutsWindow		Tambahkan pintasan baru
+Shift	ShortcutsSpec	Name for modifier on keyboard	Shift
+Open KeySet…	ShortcutsWindow		Buka Keyset...
+File	ShortcutsWindow		Berkas
+*LaunchHandler text/html	ShortcutsWindow		*LaunchHandler text/html
+*MoveMouseTo 50% 50%	ShortcutsWindow		*MoveMouseTo 50% 50%

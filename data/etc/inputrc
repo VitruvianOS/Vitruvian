@@ -1,0 +1,15 @@
+# readline input configuration
+
+"\e[5~": history-search-backward
+"\e[6~": history-search-forward
+"\e[3~": delete-char
+"\eO5D": backward-word
+"\eO5C": forward-word
+
+# UTF-8 support
+set meta-flag on
+set output-meta on
+set convert-meta off
+
+set mark-symlinked-directories on
+set mark-directories on

@@ -1,0 +1,17 @@
+1	polish	x-vnd.Haiku-FontDemo	3449067186
+Stop cycling	ControlView		Zatrzymaj zmianę
+Haiku, Inc.	FontDemoView		Haiku, Inc.
+Rotation: %d	ControlView		Obrót: %d
+Shear: %d	ControlView		Pochylenie: %d
+Spacing: %d	ControlView		Odstęp: %d
+Cycle fonts	ControlView		Zmieniaj fonty
+Font:	ControlView		Font:
+Drawing mode:	ControlView		Tryb rysowania:
+Haiku, Inc.	ControlView		Haiku, Inc.
+Controls	FontDemo		Sterowanie
+FontDemo	System name		FontDemo
+Outline: %d	ControlView		Kontur: %d
+Text:	ControlView		Tekst:
+Antialiased text	ControlView		Wygładzony tekst
+Bounding boxes	ControlView		Obwiednia
+Size: %d	ControlView		Rozmiar: %d

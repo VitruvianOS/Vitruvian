@@ -1,0 +1,11 @@
+1	lithuanian	x-vnd.Haiku-SGITranslator	4153400005
+SGI images	SGITranslator		SGI paveikslai
+Use compression:	SGIView		Naudoti glaudinimą:
+SGI image translator	SGIView		SGI paveikslų keitiklis
+SGI image	SGITranslator		SGI paveikslas
+SGITranslator Settings	SGITranslator		SGI keitiklio nuostatos
+SGI Settings	SGIMain		SGI nuostatos
+SGI image translator	SGITranslator		SGI paveikslų keitiklis
+None	SGIView		jokio
+RLE	SGIView		RLE
+written by:\n	SGIView		Autorius:\n

@@ -1,0 +1,47 @@
+1	romanian	x-vnd.Haiku-ActivityMonitor	1155619009
+P-faults	DataSource		Defecțiuni-P
+Media nodes	DataSource		Noduri media
+Threads	DataSource		Fire de execuție
+Always on top	ActivityWindow		Mereu deasupra
+Add graph	ActivityWindow		Adaugă grafic
+Teams	DataSource		Echipe
+MiB	DataSource		MiO
+Network send	DataSource		Trimite în rețea
+CPU usage (combined)	DataSource		Utilizare CPU (combinat)
+CPU	DataSource		CPU
+Used memory	DataSource		Memorie utilizată
+Cached memory	DataSource		Memorie în cache
+Apps	DataSource		Aplicații
+Show legend	ActivityView		Arată legenda
+Text clipboard	DataSource		Clipboard text
+Settings	ActivityWindow		Configurări
+Receiving	DataSource		Primire
+Settings…	ActivityWindow		Configurări…
+Ports	DataSource		Porturi
+Page faults	DataSource		Defecțiuni de pagină
+Sending	DataSource		Trimitere
+Cache	DataSource		Cache
+%.1f faults/s	DataSource		%.1f defecțiuni/s
+Update time interval:	SettingsWindow		Actualizează intervalul de timp:
+TX	DataSource	Shorter version for Sending	TX
+Quit	ActivityWindow		Închidere
+Block cache memory	DataSource		Blochează memoria tampon
+Remove graph	ActivityView		Elimină grafic
+%lld sec.	SettingsWindow		%lld sec.
+%lld ms	SettingsWindow		%lld ms
+CPU usage	DataSource		Utilizare CPU
+Raw clipboard	DataSource		Clipboard brut
+Sems	DataSource		Sems
+%.1f MiB	DataSource		%.1f MO
+ActivityMonitor	System name		ActivityMonitor
+Running applications	DataSource		Aplicații care rulează
+Semaphores	DataSource		Semafoare
+Block cache	DataSource		Blochează cache
+Swap space	DataSource		Spaţiu swap
+Swap	DataSource		Swap
+File	ActivityWindow		Fișier
+usage	DataSource		utilizare
+Additional items	ActivityView		Elemente adiționale
+Network receive	DataSource		Recepție rețea
+Memory	DataSource		Memorie
+RX	DataSource	Shorter version for Receiving.	RX

@@ -1,0 +1,7 @@
+1	romanian	x-vnd.Haiku-BFSAddOn	3514982252
+Enable query support	BFS_Initialize_Parameter		Activează suportul de interogare
+Name:	BFS_Initialize_Parameter		Nume:
+8192 (Mostly large files)	BFS_Initialize_Parameter		8192 (În general fișiere mari)
+2048 (Recommended)	BFS_Initialize_Parameter		2048 (Recomandat)
+1024 (Mostly small files)	BFS_Initialize_Parameter		1024 (în general fișiere mici)
+Blocksize:	BFS_Initialize_Parameter		Dimensiune bloc:

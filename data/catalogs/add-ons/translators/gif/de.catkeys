@@ -1,0 +1,19 @@
+1	german	x-vnd.Haiku-GIFTranslator	2201651797
+Websafe	GIFView		Web-Farben
+Write interlaced images	GIFView		Bilder interlaced ausgeben
+Optimal	GIFView		Optimal
+Greyscale	GIFView		Graustufen
+Colors:	GIFView		Farben:
+GIF image translator	GIFTranslator		GIF-Bild-Translator
+Be Bitmap Format (GIFTranslator)	GIFTranslator		Be-Bitmap-Format (GIFTranslator)
+GIF image translator	GIFView		GIF-Bild-Translator
+Palette:	GIFView		Palette:
+GIF image	GIFTranslator		GIF-Bild
+Write transparent images	GIFView		Bilder mit Transparenz ausgeben
+GIF images	GIFTranslator		GIF-Bilder
+Version %d.%d.%d, %s	GIFView		Version %d.%d.%d, %s
+Use RGB color	GIFView		RGB-Farbe:
+Use dithering	GIFView		Dithering benutzen
+GIF Settings	GIFTranslator		GIF-Einstellungen
+BeOS system	GIFView		BeOS System
+Automatic (from alpha channel)	GIFView		Automatisch (per Alphakanal)

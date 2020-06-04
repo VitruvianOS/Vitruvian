@@ -1,0 +1,61 @@
+1	belarusian	x-vnd.Haiku-ShowImage	575555985
+Use as background…	Menus		Ужыць як фон…
+File	Menus		Файл
+Slide delay	Menus		Затрымка слайду
+Selection mode	Menus		Рэжым Выдзялення
+Zoom in	Menus		Павялічыць
+The document '%s' has been changed. Do you want to close the document?	ClosePrompt		Дакумент '%s' зменены. Вы жадаеце яго закрыць?
+Page setup…	Menus		Наладкі старонкі…
+Print…	Menus		Друкаваць…
+OK	SaveToFile		ОК
+Previous page	Menus		Папярэдняя старонка
+View	Menus		Від
+Full screen	Menus		Поўны экран
+Go to page	Menus		Перайсці да старонкі
+Zoom out	Menus		Паменшыць
+Quit	Menus		Выйсці
+Rotate counterclockwise	Menus		Павярнуць супраць гадзіннікавай стрэлкі
+High-quality zooming	Menus		Высокаякаснае павелічэнне
+Browse	Menus		Праглядзець
+Edit	Menus		Правіць
+Could not load image! Either the file or an image translator for it does not exist.	LoadAlerts		Немагчыма загрузіць выяву. Не існуе або сам файл, або канвертар для яго.
+First page	Menus		Першая старонка
+The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		Дакумент '%s' (старонка %d) зменены. Вы жадаеце яго закрыць?
+Leave full screen	Menus		Пакінуць рэжым поўнага экрана
+Close	Menus		Закрыць
+Close	ClosePrompt		Закрыць
+Resize to (in 1/72 inches):	PrintOptionsWindow		Змяніць памер (у 1/72 дзюйма):
+Rating	Menus		Рэйтынг
+Flip left to right	Menus		Адлюстраваць злева направа
+Show caption in full screen mode	Menus		Паказваць меткі ў паўнаэкранным меню
+DPI:	PrintOptionsWindow		DPI:
+Open…	Menus		Адкрыць…
+Next file	Menus		Наступны файл
+Clear selection	Menus		Ачысціць выдзяленне
+Close document	ClosePrompt		Закрыць дакумент
+Height: 	PrintOptionsWindow		Вышыня: 
+The file '%s' could not be written.	SaveToFile		Немагчыма запісаць файл '%s'.
+Cancel	ClosePrompt		Адмена
+Show tool bar	Menus		Паказаць панэль інструментаў
+Fit to window	Menus		Умясціць у вакно
+Print options	PrintOptionsWindow		Опцыі друку
+Copy	Menus		Капіяваць
+Progress monitor	ProgressWindow		Манітор прагрэсу
+Last page	Menus		Апошняя старонка
+Stretch to window	Menus		Расцягнуць да вакна
+Previous file	Menus		Папярэдні файл
+ShowImage	System name		Выявы
+Slide show	Menus		Слайд шоу
+Fit image to page	PrintOptionsWindow		Умясціць выяву на старонцы
+Flip top to bottom	Menus		Адлюстраваць зверху наніз
+Select all	Menus		Выбраць усё
+Zoom factor in %:	PrintOptionsWindow		Мера павелічэння, %:
+Width:	PrintOptionsWindow		Шырыня:
+Image	Menus		Выява
+Move to Trash	Menus		Перамясціць у сметніцу
+OK	Alerts		ОК
+Rotate clockwise	Menus		Павярнуць па гадзіннікавай стрэлцы
+Job setup	PrintOptionsWindow		Наладка заданняў
+Original size	Menus		Пачатковы памер
+Next page	Menus		Наступная старонка
+Save as…	Menus		Захаваць як…

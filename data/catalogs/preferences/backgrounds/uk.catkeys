@@ -1,0 +1,28 @@
+1	ukrainian	x-vnd.Haiku-Backgrounds	681978856
+Backgrounds	System name		Тло
+X:	Main View		X:
+Setting the background image failed:	Main View		Налаштування картинки для тла призупинено:
+Resolution: 	Image Filepanel		Роздільча здатність: 
+pick one	Main View		вибрати
+Default	Main View		Типово
+Center	Main View		Центрувати
+Folder: %path	Main View		Тека: %path
+Manual	Main View		Вручну
+Set background image error	Main View		Помилка при встановленні картинки для тла
+Default folder	Main View		Типова тека
+Revert	Main View		Повернути
+None	Main View		Жодного
+All workspaces	Main View		На всі робочі простори
+Icon label outline	Main View		Обкреслювати текст значків
+Other…	Main View		Інше…
+Current workspace	Main View		Поточний робочий простір
+Apply	Main View		Використати
+Other folder…	Main View		Інша тека…
+Y:	Main View		Y:
+Tile	Main View		Заповнити
+Select	Main View		Вибрати
+Scale to fit	Main View		Припасувати
+OK	Main View		Гаразд
+Placement:	Main View		Розміщення:
+Preview	Main View		Попередній перегляд
+Image:	Main View		Зображення:

@@ -1,0 +1,7 @@
+1	polish	x-vnd.Haiku-BFSAddOn	3514982252
+Enable query support	BFS_Initialize_Parameter		Włącz obsługę zapytań
+Name:	BFS_Initialize_Parameter		Nazwa:
+8192 (Mostly large files)	BFS_Initialize_Parameter		8192 (głównie duże pliki)
+2048 (Recommended)	BFS_Initialize_Parameter		2048 (zalecane)
+1024 (Mostly small files)	BFS_Initialize_Parameter		1024 (głównie małe pliki)
+Blocksize:	BFS_Initialize_Parameter		Rozmiar bloku:

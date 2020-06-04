@@ -1,0 +1,21 @@
+1	hungarian	x-vnd.Haiku-NetworkStatus	3823341665
+Netmask	NetworkStatusView		Hálózati maszk
+Quit	NetworkStatusView		Kilépés
+Unknown	NetworkStatusView		Ismeretlen
+Launching the network preflet failed.\n\nError: 	NetworkStatusView		Nem sikerült elindítani a hálózati prefletet.\n\nHiba:
+Install in Deskbar	NetworkStatus		Telepítés az Asztalsávra
+Open network preferences…	NetworkStatusView		Hálózati beállítások megnyitása…
+NetworkStatus	System name		Hálózat állapot
+OK	NetworkStatusView		Rendben
+No link	NetworkStatusView		Nincs kapcsolat
+Could not join wireless network:\n	NetworkStatusView		Nem lehet csatlakozni a vezeték nélküli hálózatra:\n
+Ready	NetworkStatusView		Kész
+Network Status	NetworkStatusView		Hálózat állapota
+Address	NetworkStatusView		Cím
+No stateful configuration	NetworkStatusView		Nincs konfiguráció
+You can run NetworkStatus in a window or install it in the Deskbar.	NetworkStatus		A Hálózat állapota futtatható ablakban, vagy telepíthető az Asztalsávra.
+Broadcast	NetworkStatusView		Broadcast
+%ifaceName information:\n	NetworkStatusView		%ifaceName információi:\n
+Run in window	NetworkStatus		Futtatás ablakban
+<no wireless networks found>	NetworkStatusView		<nem található vezeték nélküli hálózat>
+Configuring	NetworkStatusView		Konfigurálás

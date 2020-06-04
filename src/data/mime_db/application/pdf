@@ -1,0 +1,108 @@
+
+resource(0, "BEOS:TYPE") #'MIMS' "application/x-vnd.Be-meta-mime";
+
+resource(1, "META:TYPE") "application/pdf";
+
+resource(2, "META:SNIFF_RULE") "0.50 (\"%PDF\")";
+
+resource(3, "META:PREF_APP") #'MSIG' "application/x-vnd.mp-xpdf";
+
+resource(4, "META:S:DESC") #'MSDC' "PDF document";
+
+resource(5, "META:L:DESC") #'MLDC' "Portable Document Format (PDF)";
+
+resource(6, "META:EXTENS") message(234) {
+	"extensions" = "pdf",
+	"type" = "application/pdf"
+};
+
+resource(7, "META:ICON") #'VICN' array {
+	$"6E636966080200160338D2F73CD163BF82B23B84A94B88504870C900E7BDFFFF"
+	$"EB0501020106023E49240000000000003CAAAA4940004A3000FFF4F4F47CFFC0"
+	$"C0040192020016023A55A6BAC2293F0DA33E958646C2EB47A1D60001FF9E05FF"
+	$"020006023B61A038E755B9F2003C4C154AC9623D6A0500FF6D6DFFDA1C1C0200"
+	$"060239658D3E8928BDB2D1387A224A2B6346C66BFF1467FF6B06F8B7100606AE"
+	$"0BB40BBF4D33C3AFB75DC173BDEFC607C13EC804CA28BD82C118B920C51BBB40"
+	$"BF07B8083AB6BC0605AE02B57D3EB9B9C3EFB7BB44BBB751BD75C936CA8EC1B1"
+	$"402F0A093B593D5BBFCDC93E455BC516C5F160465B435D4544510A045A425E3F"
+	$"5A3D5740080238333D2E08023D36413208024139463408023A484A3708023E4B"
+	$"4E390802424E4F3F0606F60F3E3022492444244D245A2255225A225A305A3055"
+	$"3049324D3244320404B6412E2745294526452C422B0604F649272E4E2C4E2F4E"
+	$"2C4E294EB71B4E260803522E522756270802522B552B0A04283E3E4C50383A2E"
+	$"0D0A03020203000A0101011001178400040A020101000A010100100117840004"
+	$"0A000100000A0404060407091815FF01178100040A0404060407091800150117"
+	$"8200040A040208051815FF01178100040A07010F023DCCCC0000000000003E00"
+	$"00460CCC47C0000A01010F123DCCCC0000000000003E0000460CCC47C0000117"
+	$"8100040A01010A1001178402040A06010A000A05040D0B0C0E1815FF01178222"
+	$"04"
+};
+
+resource(8, "META:ATTR_INFO") message(233) {
+	"attr:name" = "META:subject",
+	"attr:name" = "META:title",
+	"attr:name" = "META:creator",
+	"attr:name" = "META:author",
+	"attr:name" = "META:keyw",
+	"attr:name" = "PDF:producer",
+	"attr:name" = "PDF:created",
+	"attr:name" = "PDF:modified",
+	"attr:name" = "META:pages",
+	"attr:name" = "PDF:version",
+	"attr:name" = "PDF:linearized",
+	"attr:public_name" = "Subject",
+	"attr:public_name" = "Title",
+	"attr:public_name" = "Creator",
+	"attr:public_name" = "Author",
+	"attr:public_name" = "Keywords",
+	"attr:public_name" = "Producer",
+	"attr:public_name" = "Created",
+	"attr:public_name" = "Modified",
+	"attr:public_name" = "Pages",
+	"attr:public_name" = "Version",
+	"attr:public_name" = "Linearized",
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'LONG',
+	"attr:type" = 'LONG',
+	"attr:type" = 'LONG',
+	"attr:type" = 'DBLE',
+	"attr:type" = 'BOOL',
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:width" = 200,
+	"attr:width" = 200,
+	"attr:width" = 150,
+	"attr:width" = 150,
+	"attr:width" = 150,
+	"attr:width" = 150,
+	"attr:width" = 60,
+	"attr:width" = 60,
+	"attr:width" = 50,
+	"attr:width" = 70,
+	"attr:width" = 90,
+	"type" = "application/pdf"
+};

@@ -1,0 +1,113 @@
+
+resource(0, "BEOS:TYPE") #'MIMS' "application/x-vnd.Be-meta-mime";
+
+resource(1, "META:TYPE") "audio";
+
+resource(2, "META:L:DESC") #'MLDC' "Generic audio file";
+
+resource(3, "META:S:DESC") #'MSDC' "Audio file";
+
+resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-MediaPlayer";
+
+resource(5, "META:EXTENS") message(234) {
+	"type" = "audio"
+};
+
+resource(6, "META:ATTR_INFO") message(233) {
+	"attr:name" = "Audio:Artist",
+	"attr:name" = "Media:Title",
+	"attr:name" = "Audio:Album",
+	"attr:name" = "Audio:Track",
+	"attr:name" = "Media:Year",
+	"attr:name" = "Media:Comment",
+	"attr:name" = "Media:Genre",
+	"attr:name" = "Media:Rating",
+	"attr:name" = "Media:Length",
+	"attr:name" = "Audio:Bitrate",
+	"attr:public_name" = "Artist",
+	"attr:public_name" = "Title",
+	"attr:public_name" = "Album",
+	"attr:public_name" = "Track",
+	"attr:public_name" = "Year",
+	"attr:public_name" = "Comment",
+	"attr:public_name" = "Genre",
+	"attr:public_name" = "Rating",
+	"attr:public_name" = "Playing time",
+	"attr:public_name" = "Bitrate",
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'LONG',
+	"attr:type" = 'LONG',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'LONG',
+	"attr:type" = 'LLNG',
+	"attr:type" = 'CSTR',
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:width" = 30,
+	"attr:width" = 30,
+	"attr:width" = 30,
+	"attr:width" = 30,
+	"attr:width" = 30,
+	"attr:width" = 40,
+	"attr:width" = 30,
+	"attr:width" = 60,
+	"attr:width" = 60,
+	"attr:width" = 50,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 1,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 1,
+	"attr:alignment" = 1,
+	"attr:display_as" = "",
+	"attr:display_as" = "",
+	"attr:display_as" = "",
+	"attr:display_as" = "",
+	"attr:display_as" = "",
+	"attr:display_as" = "",
+	"attr:display_as" = "",
+	"attr:display_as" = "rating",
+	"attr:display_as" = "duration",
+	"attr:display_as" = "",
+	"type" = "audio"
+};
+
+resource(7, "META:ICON") #'VICN' array {
+	$"6E6369660605010200060338D2F73CD163BF82B23B84A94B88504870C900A5C5"
+	$"FFBDEAF2FFFFD5E3FF020106023E49240000000000003CAAAA4940004A3000FF"
+	$"D8E4FA7C7794C9040192020016023A66BABB23523D88443CB3F9489F5D48C17C"
+	$"0001FF27020106023A7E6FBB109D3DA2AF3CF54A497C2B496FDC00485C85FFBB"
+	$"CFF70A0606AE0BB40BBF4D33C3AFB75DC173BDEFC607C13EC804CA28BD82C118"
+	$"B920C51BBB40BF07B8083AB6BC0605AE02B57D3EB9B9C3EFB7BB44BBB751BD75"
+	$"C936CA8EC1B1402F0A093B593D5BBFCDC93E455BC516C5F160465B435D454451"
+	$"0A045A425E3F5A3D5740060AAFBF0E3B4A3848BF6AC4D6414145443D3E363CBF"
+	$"4DBB374B3C4B3C483D49454643C4FEC2D84F3C533F4B393B302E3A3D413D413A"
+	$"4208024151553B08023C4D4F38080236494A3508023145443208022B413F2D07"
+	$"0A03020203000A0001011001178400040A020101000A0001001001178400040A"
+	$"010100000A050505060708091815FF01178100040A04010400"
+};

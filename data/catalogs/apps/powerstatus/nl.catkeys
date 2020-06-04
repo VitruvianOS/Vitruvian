@@ -1,0 +1,42 @@
+1	dutch; flemish	x-vnd.Haiku-PowerStatus	2428503748
+Design capacity low warning: 	PowerStatus		Waarschuwing lage ontwerpcapaciteit:
+Show percent	PowerStatus		Toon percentage
+Design capacity: 	PowerStatus		Ontwerpcapaciteit
+ mW	PowerStatus		mW
+Type: 	PowerStatus		Type:
+non-rechargeable	PowerStatus		Niet-oplaadbaar
+Empty battery slot	PowerStatus		Accuvak is leeg
+ mV	PowerStatus		mV
+Run in window	PowerStatus		Actief in venster
+PowerStatus	System name		PowerStatus
+ mWh	PowerStatus		mWh
+Battery info…	PowerStatus		Accu-info...
+Damaged battery	PowerStatus		Beschadigde batterij
+Show time	PowerStatus		Toon de tijd
+Last full charge: 	PowerStatus		Laatst compleet opgeladen:
+Battery unused	PowerStatus		Accu ongebruikt
+Extended battery info	PowerStatus		Uitgebreide accu-informatie
+ mA	PowerStatus		mA
+Current rate: 	PowerStatus		Huidige stroom:
+discharging	PowerStatus		Bezig met ontladen
+Show text label	PowerStatus		Toon tekstlabel
+About…	PowerStatus		Over...
+Model number: 	PowerStatus		Modelnummer
+Install in Deskbar	PowerStatus		Installeer in Deskbar
+ mAh	PowerStatus		mAh
+Capacity: 	PowerStatus		Capaciteit
+Battery discharging	PowerStatus		Accu bezig met ontladen
+Serial number: 	PowerStatus		Serienummer:
+Capacity granularity 1: 	PowerStatus		Capaciteit van granulariteit 1:
+OEM info: 	PowerStatus		OEM-info:
+Design voltage: 	PowerStatus		Ontwerpvoltage:
+Battery charging	PowerStatus		Accu laadt
+Design capacity warning: 	PowerStatus		Waarschuwing ontwerpcapaciteit:
+Quit	PowerStatus		Afsluiten
+rechargeable	PowerStatus		oplaadbaar
+charging	PowerStatus		bezig met laden
+You can run PowerStatus in a window or install it in the Deskbar.	PowerStatus		U kunt PowerStatus in een venster in actie hebben of in Deskbar installeren.
+Show status icon	PowerStatus		Toon status-icoon
+Capacity granularity 2: 	PowerStatus		Capaciteit van granulariteit 2:
+Technology: 	PowerStatus		Techniek:
+no battery	PowerStatus		geen accu

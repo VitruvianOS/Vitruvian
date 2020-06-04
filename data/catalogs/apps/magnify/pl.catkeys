@@ -1,0 +1,17 @@
+1	polish	x-vnd.Haiku-Magnify	94607167
+Decrease pixel size	Magnify-Main		Zmniejsz rozmiar piksela
+Increase pixel size	Magnify-Main		Zwiększ rozmiar piksela
+Stick coordinates	Magnify-Main		Zablokuj współrzędne
+%width x %height  @ {0, plural, one{# pixel/pixel} other{# pixels/pixel}}	Magnify-Main		%width x %height @ {0, plural, one{# piksel/piksel} few{# piksele/piksel} many{# pikseli/piksel} other{# piksela/piksel}}
+Copy image	Magnify-Main		Kopiuj obraz
+Decrease window size	Magnify-Main		Zmniejsz rozmiar okna
+Remove a crosshair	Magnify-Main		Usuń znacznik
+Add a crosshair	Magnify-Main		Dodaj znacznik
+Freeze image	Magnify-Main		Zablokuj obraz
+Increase window size	Magnify-Main		Zwiększ rozmiar okna
+Save image	Magnify-Main		Zapisz obraz
+Show grid	Magnify-Main		Pokaż siatkę
+Magnify	System name		Magnify
+Info	Magnify-Main		Informacje
+Show info	Magnify-Main		Pokaż informacje
+Make square	Magnify-Main		Zrób kwadrat

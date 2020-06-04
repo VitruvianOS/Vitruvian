@@ -1,0 +1,20 @@
+1	russian	x-vnd.Haiku-MidiPlayer	1046133011
+This tiny program\nKnows how to play thousands of\nCheesy sounding songs	Main Application	This is a haiku. First line has five syllables, second has seven and last has five again. Create your own.	Эта крошечная программа\nУмеет играть тысячи\nПростых мелодий
+Dungeon	Main Window		Подземелье
+Could not load song	Main Window		Не удалось загрузить мелодию
+Igor's lab	Main Window		Лаборатория
+Off	Main Window		Выключить
+Loading instruments…	Scope View		Загрузка инструментов…
+Volume:	Main Window		Громкость:
+Closet	Main Window		Ванная
+Scope	Main Window		Осцилограф
+Drop MIDI file here	Scope View		Перенесите сюда MIDI файл
+None	Main Window		Нет
+Reverb:	Main Window		Реверберация:
+MidiPlayer	System name		MIDI плеер
+OK	Main Window		ОК
+Stop	Main Window		Остановить
+Live input:	Main Window		Прямой ввод:
+Garage	Main Window		Гараж
+Play	Main Window		Проиграть
+Cavern	Main Window		Пещера

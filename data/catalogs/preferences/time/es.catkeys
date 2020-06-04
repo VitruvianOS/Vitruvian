@@ -1,0 +1,47 @@
+1	spanish; castilian	x-vnd.Haiku-Time	752043118
+OK	Time		Aceptar
+Message receiving failed	Time		Fallo en la recepción del mensaje
+Time & Date, written by:\n\n\tAndrew Edward McCall\n\tMike Berg\n\tJulun\n\tPhilippe Saint-Pierre\n\nCopyright 2004-2012, Haiku.	Time		Fecha y hora, escrito por:\n\n\t Andrew Edward McCall\n\t Mike Berg\n\t Julun\n\t Philippe Saint-Pierre\n\n Copyright 2004-2012, Haiku.
+Australia	Time		Australia
+America	Time		América
+Reset to default server list	Time		Reestablecer a la lista de servidores por defecto
+Could not resolve server address	Time		No se pudo ubicar la dirección del servidor
+Set time zone	Time		Definir zona horaria
+Waiting for answer failed	Time		Fallo en la espera de respuesta
+<Other>	Time		<Otro>
+Received invalid time	Time		Se recibió un tiempo inválido
+Remove	Time		Quitar
+Synchronize again	Time		Sincronizar de nuevo
+Asia	Time		Asia
+Try all servers	Time		Probar todos los servidores
+Time	Time		Hora
+Current time:	Time		Hora actual:
+Europe	Time		Europa
+Show day of week	Time		Mostrar día de la semana
+Local time (Windows compatible)	Time		Hora local (compatible con Windows)
+Hardware clock set to:	Time		Establecer el reloj físico a:
+Arctic	Time		Ártico
+Antarctica	Time		Antártico
+GMT (UNIX compatible)	Time		UTC (Tiempo Universal Coordinado, compatible UNIX)
+Africa	Time		África
+Stop	Time		Parar
+Time zone	Time		Zona horaria
+Clock	Time		Reloj
+Network time	Time		Hora de red
+Sending request failed	Time		Falló el envío de solicitud
+Preview time:	Time		Vista previa de hora:
+\nNow: 	Time		\nAhora:
+Could not create socket	Time		No se pudo crear el socket
+Pacific	Time		Pacífico
+Atlantic	Time		Atlántico
+Show clock in Deskbar	Time		Mostrar reloj en la barra de escritorio
+Display time with seconds	Time		Mostrar hora con segundos
+Time	System name		Hora
+about	Time		sobre
+Show time zone	Time		Mostrar huso horario:
+Synchronize at boot	Time		Sincronizar al inicio
+Indian	Time		Hindú
+Revert	Time		Revertir
+Date and time	Time		Fecha y hora
+Synchronize	Time		Sincronizar
+Add	Time		Añadir

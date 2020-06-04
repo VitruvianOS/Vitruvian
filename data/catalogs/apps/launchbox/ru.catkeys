@@ -1,0 +1,36 @@
+1	russian	x-vnd.Haiku-LaunchBox	1530497419
+Set description…	LaunchBox		Изменить описание…
+Really close this pad?\n(The pad will not be remembered.)	LaunchBox		Вы действительно хотите закрыть эту панель?\n(Эта панель не сохранится)
+OK	LaunchBox		ОК
+Ignore double-click	LaunchBox		Игнорировать двойной щелчок
+Show on all workspaces	LaunchBox		Отображать на всех рабочих столах
+Name Panel	LaunchBox		Название панели
+Autostart	LaunchBox		Автозапуск
+Clone	LaunchBox		Дублировать
+Description for '%3'	LaunchBox		Описание для '%3'
+Show window border	LaunchBox		Отображать рамку окна
+\n\nFailed to launch application with signature '%2'.\n\nError:	LaunchBox		\n\nНе удалось запустить приложение с сигнатурой '%2'.\n\nОшибка:
+Failed to launch 'something', error in Pad data.	LaunchBox		Не удалось запустить 'something', ошибка в данных панели.
+LaunchBox	System name		Панель запуска
+Auto-raise	LaunchBox		Всплывать при наведении
+Icon size	LaunchBox		Размер значков
+Open containing folder	LaunchBox		Открыть содержащую папку
+Add button here	LaunchBox		Добавить кнопку
+Cancel	LaunchBox		Отмена
+launch popup	LaunchBox		launch popup
+Clear button	LaunchBox		Очистить кнопку
+Bummer	LaunchBox		Облом
+last chance	LaunchBox		последний шанс
+You can drag an icon here.	LaunchBox		Вы можете перетащить значок сюда.
+Pad 1	LaunchBox		Панель 1
+Failed to launch '%1'.\n\nError:	LaunchBox		Не удалось запустить '%1'.\n\nОшибка:
+Settings	LaunchBox		Настройки
+Vertical layout	LaunchBox		Расположить вертикально
+Pad	LaunchBox		Панель
+Close	LaunchBox		Закрыть
+Remove button	LaunchBox		Удалить кнопку
+Quit	LaunchBox		Выход
+Horizontal layout	LaunchBox		Расположить горизонтально
+New	LaunchBox		Создать
+Failed to send 'open folder' command to Tracker.\n\nError: 	LaunchBox		Не удалось послать команду "открыть папку" в Tracker.\n\nОшибка: 
+Pad %1	LaunchBox		Панель %1

@@ -1,0 +1,16 @@
+1	dutch; flemish	x-vnd.Haiku-MatchHeader	3544711400
+Delete message	ConfigView		Bericht verwijderen
+Match \"%attribute\" against \"%regex\"	RuleFilter		Match \"%attribute\" tegen \"%regex\"
+Match header	RuleFilter		Header matchen
+Set flags to	ConfigView		Markeer als
+<Choose account>	ConfigView		<Kies account>
+Wildcard value like \"*spam*\".\nPrefix with \"REGEX:\" in order to use regular expressions.	ConfigView		Wildcard-waarde zoals \"*spam*\".\nGebruik voorvoegsel \"REGEX:\" om reguliere expressies te gebruiken.
+Then	ConfigView		Dan
+If	ConfigView		Als
+Set as read	ConfigView		Als gelezen markeren
+Reply with	ConfigView		Antwoord met
+<Choose action>	ConfigView		<Kies actie>
+Move to	ConfigView		Verplaats naar
+this field is based on the action	ConfigView		dit veld is gebaseerd op de actie
+Account	ConfigView		Account
+has	ConfigView		Heeft

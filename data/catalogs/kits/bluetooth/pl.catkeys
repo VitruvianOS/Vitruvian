@@ -1,0 +1,88 @@
+1	polish	x-vnd.Haiku-Bluetooth	3550394259
+Positioning	DeviceClass		Urządzenie pozycjonujące
+Controller	DeviceClass		Kontroler
+Common ISDN access	DeviceClass		Urządzenie dostępowe ISDN
+Unknown (reserved) minor device class	DeviceClass		Nieznana (ukryta) klasa urządzenia
+Uncategorized	DeviceClass		Urządzenie nieskategoryzowane
+Keyboard	DeviceClass		Klawiatura
+Smart phone	DeviceClass		Telefon typu smartphone
+VCR	DeviceClass		Magnetowid
+Cellular	DeviceClass		Komórka
+Audio	DeviceClass		Urządzenie audio
+Audio/Video	DeviceClass		Urządzenie audio/wideo
+Car audio	DeviceClass		Samochodowy system audio
+Major class: 	DeviceClass		Klasa główna: 
+HiFi audio device	DeviceClass		Urządzenie audio HiFi
+Microphone	DeviceClass		Mikrofon
+Capturing	DeviceClass		Urządzenie przechwytujące
+Jacket	DeviceClass		Osłona
+50-67% utilized	DeviceClass		50-67% wykorzystane
+Headphones	DeviceClass		Słuchawki
+Imaging	DeviceClass		Urządzenie przetwarzające obraz
+Device conforms to the headset profile	DeviceClass		Urządzenie dopasowuje się do profilu słuchawek headset
+Remote control	DeviceClass		Pilot
+Fully available	DeviceClass		W pełni dostępne
+#CommandFailed#Not Valid name	RemoteDevice		#CommandFailed#Not Valid name
+Server	DeviceClass		Serwer
+No service available	DeviceClass		Brak dostępnej usługi
+Printer	DeviceClass		Drukarka
+Card reader	DeviceClass		Czytnik kart
+Wired modem or voice gateway	DeviceClass		Modem kablowy lub bramka głosowa
+#ServerNotReady#Not Valid name	RemoteDevice		#ServerNotReady#Not Valid name
+#NoOwnerError#Not Valid name	RemoteDevice		#NoOwnerError#Not Valid name
+Camcorder	DeviceClass		Kamera wideo
+#NotCompletedRequest#Not Valid name	RemoteDevice		#NotCompletedRequest#Not Valid name
+17-33% utilized	DeviceClass		17-33% wykorzystane
+Desktop workstation	DeviceClass		Komputerowa stacja robocza
+Unspecified	DeviceClass		Niesprecyzowany rodzaj urządzenia
+Miscellaneous	DeviceClass		Rozmaite
+Robot	DeviceClass		Robot
+Vehicle	DeviceClass		Pojazd
+LAN access	DeviceClass		Urządzenie dostępowe LAN
+Glasses	DeviceClass		Okulary cyfrowe
+Phone	DeviceClass		Telefon
+Laptop	DeviceClass		Laptop
+67-83% utilized	DeviceClass		67-83% wykorzystane
+Cordless	DeviceClass		Urządzenie bezprzewodowe
+Invalid device class!\n	DeviceClass		Niepoprawna klasa urządzenia!\n
+Minor class: 	DeviceClass		Klasa drugorzędna: 
+Doll/Action figure	DeviceClass		Lalka
+Not implemented	RemoteDevice		Niezaimplementowane
+33-50% utilized	DeviceClass		33-50% wykorzystane
+Gaming/Toy	DeviceClass		Zabawka
+Video camera	DeviceClass		Kamera
+Handheld	DeviceClass		Handheld
+Service classes: 	DeviceClass		Klasy usługi: 
+Loudspeaker	DeviceClass		Głośniki
+83-99% utilized	DeviceClass		83-99% wykorzystane
+SIM card reader	DeviceClass		Czytnik kart SIM
+Computer	DeviceClass		Komputer
+Scanner	DeviceClass		Skaner
+Wearable	DeviceClass	A wearable computer	Komputer przenośny
+Display	DeviceClass		Wyświetlacz
+Gamepad	DeviceClass		Gamepad
+Video monitor	DeviceClass		Monitor
+Palm	DeviceClass	A palm-held device	Urządzenie typu Palm
+Joystick	DeviceClass		Joystick
+Networking	DeviceClass		Urządzenie sieciowe
+Telephony	DeviceClass		Urządzenie telefoniczne
+Game	DeviceClass		Gra
+Video display and loudspeaker	DeviceClass		Wyświetlacz z głośnikami
+Wrist watch	DeviceClass		Zegarek na rękę
+Sensing device	DeviceClass		Czujniki
+Pointing device	DeviceClass		Urządzenie wskazujące
+(reserved)	DeviceClass		(ukryty)
+Rendering	DeviceClass		Urządzenie renderujące
+Information	DeviceClass		Informacja
+Helmet	DeviceClass		Kask
+Pager	DeviceClass	A small radio device to receive short text messages	Pager
+Hands-free	DeviceClass		Urządzenie głośnomówiące
+Digitizer tablet	DeviceClass		Tablet
+Portable audio	DeviceClass		Przenośne urządzenie audio
+Camera	DeviceClass		Aparat
+1-17% utilized	DeviceClass		1-17% wykorzystane
+Combo keyboard/pointing device	DeviceClass		Klawiatura z urządzeniem wskazującym
+Video conferencing	DeviceClass		Urządzenie do prowadzenia wideokonferencji
+Peripheral	DeviceClass		Urządzenie peryferyjne
+Object transfer	DeviceClass		Urządzenie transferujące
+Set-top box	DeviceClass		Dekoder STB

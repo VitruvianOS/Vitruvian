@@ -1,0 +1,14 @@
+1	portuguese (brazil)	x-vnd.Haiku-MatchHeader	4262558281
+Delete message	ConfigView		Apagar mensagem
+Match \"%attribute\" against \"%regex\"	RuleFilter		Combinar \"%atributo\" com \"%regex\"
+Match header	RuleFilter		Combinar cabeçalho
+Set flags to	ConfigView		Definir bandeiras para
+<Choose account>	ConfigView		<Escolher conta>
+Then	ConfigView		Então
+If	ConfigView		Se
+Set as read	ConfigView		Marcar como lida
+Reply with	ConfigView		Responder com
+<Choose action>	ConfigView		<Escolher ação>
+Move to	ConfigView		Mover para
+this field is based on the action	ConfigView		este campo é baseado na ação
+has	ConfigView		tem

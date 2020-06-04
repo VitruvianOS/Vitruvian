@@ -1,0 +1,31 @@
+1	slovak	x-vnd.haiku-screenshot	3958461128
+Include window border	ScreenshotWindow		Vrátane okraja okna
+Overwrite	ScreenshotWindow		Prepísať
+Save in:	ScreenshotWindow		Uložiť do:
+Error saving \"%s\":\n\t%s	ScreenshotWindow		Chyba pri ukladaní „%s“:\n\t%s
+This file already exists.\n Are you sure you would like to overwrite it?	ScreenshotWindow		Tento súbor už existuje.\n Ste si istý, že ho chcete prepísať?
+OK	ScreenshotWindow		OK
+The destination path exists but is not a folder.	ScreenshotWindow		Cieľová cesta existuje, ale nie je to priečinok.
+Select	ScreenshotWindow		Vybrať
+Save as:	ScreenshotWindow		Uložiť ako:
+seconds	ScreenshotWindow		sekúnd
+New screenshot	ScreenshotWindow		Nová snímka obrazovky
+Screenshot	System name		Snímka obrazovky
+Desktop	ScreenshotWindow		Plocha
+Artwork folder	ScreenshotWindow		Priečinok s výtvarnými dielami
+Translator Settings	ScreenshotWindow		Nastavenia prekladača
+Include mouse pointer	ScreenshotWindow		Vrátane kurzora myši
+overwrite	ScreenshotWindow		prepísať
+Settings…	ScreenshotWindow		Nastavenia…
+Choose folder	ScreenshotWindow		Vyberte priečinok
+Name:	ScreenshotWindow		Názov:
+Choose folder…	ScreenshotWindow		Vyberte priečinok…
+Please select	ScreenshotWindow		Prosím, vyberte
+Failed to save screenshot	ScreenshotWindow		Nepodarilo sa uložiť snímku obrazovky
+Cancel	ScreenshotWindow		Zrušiť
+Delay:	ScreenshotWindow		Oneskorenie:
+Copy to clipboard	ScreenshotWindow		Skopírovať do schránky
+screenshot	Screenshot	Base filename of screenshot files	snímka obrazovky
+Home folder	ScreenshotWindow		Domovský priečinok
+Save	ScreenshotWindow		Uložiť
+Capture active window	ScreenshotWindow		Zachytiť aktívne okno

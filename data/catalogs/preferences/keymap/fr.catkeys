@@ -1,0 +1,132 @@
+1	french	x-vnd.Haiku-Keymap	221508000
+Key	Modifier keys window	As in a computer keyboard key	Touche
+Japanese	KeymapNames		Japonais
+US	KeymapNames		US
+Brazilian	KeymapNames		Brésilien
+Right control	Keyboard Layout View		Contrôle droit
+Dvorak	KeymapNames		Dvorak
+Option:	Modifier keys window	Option key role name	Option :
+Cancel	Modifier keys window		Annuler
+Sample and clipboard:	Keymap window		Exemple et presse-papier :
+Polish	KeymapNames		Polonais
+Latin-American	KeymapNames		Latin-Americain
+Ukrainian	KeymapNames		Ukrainien
+DEL	Keyboard Layout View		Suppr
+United-Kingdom	KeymapNames		Royaume-Uni
+Turkish (Type-F)	KeymapNames		Turc (Type-F)
+Serbian (Cyrillic)	KeymapNames		Serbe (cyrillique)
+Belgian (point)	KeymapNames		Belge (point)
+Finnish	KeymapNames		Finnois
+Num lock	Keyboard Layout View		Verr. Num.
+Switch shortcut keys to Windows/Linux mode	Keymap window		Basculer les touches de raccourcis en mode Linux/Windows
+Spanish (Dvorak)	KeymapNames		Espagnol (Dvorak)
+Option	Keyboard Layout View	Option key	Option
+Scroll lock	Keyboard Layout View		Arrêt défilement
+US-International	KeymapNames		US-International
+Right option	Keyboard Layout View		Option droite
+Turkish (Type-Q)	KeymapNames		Turc (Type-Q)
+Revert	Modifier keys window		Défaire
+Slovak	KeymapNames		Slovaque
+CAPS LOCK	Keyboard Layout View		Verr. Maj.
+Colemak	KeymapNames		Colemak
+Dvorak (programmer's)	KeymapNames		Dvorak (programmation)
+German (Mac)	KeymapNames		Allemand (Mac)
+Arabic (102)	KeymapNames		Arabe (102)
+Belarusian (Mac)	KeymapNames		Biélorusse (Mac)
+Croatian	KeymapNames		Croate
+Set modifier keys	Modifier keys window		Régler les touches modificatrices
+Win/Cmd key	Modifier keys window	Label of the \"Windows\" key (PC)/Command key (Mac)	Touche Win/Cmd
+Spanish	KeymapNames		Espagnol
+Ukrainian (Mac)	KeymapNames		Ukrainien (Mac)
+Command:	Modifier keys window	Command key role name	Commande :
+French (Bépo)	KeymapNames		Français (Bépo)
+Russian (Typewriter)	KeymapNames		Russe (Machine à écrire)
+Acute trigger	Keymap window		Accent aigu
+Italian	KeymapNames		Italien
+Modifier keys	Modifier keys window		Touches modificatrices
+Kazakh	KeymapNames		Kazakh
+Save as…	Keymap window		Enregistrer sous…
+Lithuanian (Standard)	KeymapNames		Lituanien (Standard)
+Error: duplicate keys	Modifier keys window		Erreur : touches dupliquées
+Bulgarian (Phonetic)	KeymapNames		Bulgare (phonétique)
+Canadian-French	KeymapNames		Canadien-Français
+Hungarian	KeymapNames		Hongrois
+Control	Keyboard Layout View	Control key	Contrôle
+Irish	KeymapNames		Irlandais
+Remove	Keyboard Layout View		Supprimer
+Tilde trigger	Keymap window		Tilde
+Shift	Keyboard Layout View	Shift key	Majuscule
+Czech (Mac)	KeymapNames		Tchèque (Mac)
+Macedonian	KeymapNames		Macédonien
+Left command	Keyboard Layout View		Commande gauche
+Albanian	KeymapNames		Albanais
+(Current)	Keymap window		(Actif)
+Left option	Keyboard Layout View		Option gauche
+Esperanto	KeymapNames		Espéranto
+Belarusian	KeymapNames		Biélorusse
+Warning: left and right key roles do not match	Modifier keys window		Attention : les rôles des touches gauche et droite ne correspondent pas
+Circumflex trigger	Keymap window		Accent circonflexe
+Caps lock	Keyboard Layout View		Verr. Maj.
+Left shift	Keyboard Layout View		Majuscule gauche
+Russian (Yawert)	KeymapNames		Russe (Yawert)
+Bulgarian (Cyrillic)	KeymapNames		Bulgare (cyrillique)
+Swedish	KeymapNames		Suédois
+Left control	Keyboard Layout View		Contrôle gauche
+CAPS	Keyboard Layout View	Very short for 'caps lock'	Maj.
+Role	Modifier keys window	As in the role of a modifier key	Rôle
+Svorak	KeymapNames		Svorak
+German	KeymapNames		Allemand
+Swiss-German	KeymapNames		Suisse-Allemand
+Ctrl key	Modifier keys window	Label of key farthest from the spacebar, usually Ctrle.g. Strg for German keyboard	Touche contrôle
+Czech	KeymapNames		Tchèque
+Russian (Udmurt, Komi, Mari)	KeymapNames		Russe (Udmurt, Komi, Mari)
+Control:	Modifier keys window	Control key role name	Contrôle :
+Disabled	Modifier keys window	Do nothing	Désactivé
+Select dead keys	Keymap window		Sélection des touches mortes
+Russian (Mac)	KeymapNames		Russe (Mac)
+Right shift	Keyboard Layout View		Majuscule droite
+Belarusian (Latin)	KeymapNames		Biélorusse (Latin)
+Hebrew	KeymapNames		Hébreu
+Layout	Keymap window		Disposition
+Greek	KeymapNames		Grec
+Revert	Keymap window		Défaire
+Grave trigger	Keymap window		Accent grave
+Menu	Keyboard Layout View	Menu key	Menu
+Faeroese	KeymapNames		Féroïen
+Quit	Keymap window		Quitter
+Polish (Typewriter)	KeymapNames		Polonais (Machine à écrire)
+French (Mac)	KeymapNames		Français (Mac)
+User:	Keymap window		Utilisateur :
+Alt/Opt key	Modifier keys window	Label of Alt key (PC)/Option key (Mac)	Touche Alt/Option
+SHIFT	Keyboard Layout View		Maj
+Estonian	KeymapNames		Estonien
+Serbian (Latin)	KeymapNames		Serbe (Latin)
+French	KeymapNames		Français
+Portuguese	KeymapNames		Portugais
+Swiss-French	KeymapNames		Suisse-Français
+Shift:	Modifier keys window	Shift key role name	Majuscule :
+Keymap	System name		Disposition du clavier
+Slovene	KeymapNames		Slovène
+Lithuanian	KeymapNames		Lituanien
+Set modifier keys…	Keymap window		Régler les touches modificatrices…
+Switch shortcut keys to Haiku mode	Keymap window		Basculer les touches de raccourcis en mode Haiku
+Defaults	Keymap window		Valeurs par défaut
+ISO-9995	KeymapNames		ISO-9995
+System:	Keymap window		Système :
+Switch shortcut keys	Keymap window		Basculer les touches de raccourcis
+Right command	Keyboard Layout View		Commande droite
+NUM LOCK	Keyboard Layout View		Verr. Num.
+Belgian (comma)	KeymapNames		Belge (virgule)
+Norwegian	KeymapNames		Norvégien
+Font	Keymap window		Police
+Danish	KeymapNames		Danois
+Shift key	Modifier keys window	Label of key above Ctrl, usually Shift	Touche majuscule
+Russian	KeymapNames		Russe
+Romanian	KeymapNames		Roumain
+Command	Keyboard Layout View	Command key	Commande
+File	Keymap window		Fichier
+Brazilian (ABNT2)	KeymapNames		Brésilien (ABNT2)
+Dutch	KeymapNames		Néerlandais
+Diaeresis trigger	Keymap window		Tréma
+Icelandic	KeymapNames		Islandais
+Open…	Keymap window		Ouvrir…

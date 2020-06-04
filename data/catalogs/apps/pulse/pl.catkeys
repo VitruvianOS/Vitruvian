@@ -1,0 +1,47 @@
+1	polish	x-vnd.Haiku-Pulse	3788463253
+Normal mode	DeskbarPulseView		Tryb normalny
+Info	CPUButton		Informacje
+Quit	DeskbarPulseView		Zakończ
+Info	DeskbarPulseView		Informacja
+Normal mode	MiniPulseView		Tryb normalny
+Frame color	ConfigView		Kolor ramki
+Error	PulseApp		Błąd
+Bar colors	ConfigView		Kolor poprzeczki
+%.2f GHz	NormalPulseView		%.2f GHz
+Defaults	PrefsWindow		Przywróć domyślne
+%ld MHz	NormalPulseView		%ld MHz
+Mini mode	PrefsWindow		Tryb mini
+CPU progress bar	NormalPulseView		Pasek postępu procesora
+Fade colors	ConfigView		Cieniowanie kolorów
+About Pulse…	PulseView		O Pulse…
+Pulse	NormalPulseView		Pulse
+Deskbar mode	NormalPulseView		Tryb Deskbar
+Remove replicant	CPUButton		Usuń replikant
+You can't disable the last active CPU.	PulseView		Nie możesz wyłączyć ostatniego aktywnego procesora.
+Width of icon:	ConfigView		Szerokość ikony:
+Deskbar mode	MiniPulseView		Tryb Deskbar
+OK	PulseView		OK
+%s\n\nBy David Ramsey and Arve Hjønnevåg\nRevised by Daniel Switkin\n	PulseApp		%s\n\nautorstwa Davida Ramseya i Arve Hjønnevåga\npoprawiony przez Daniela Switkina\n
+OK	PrefsWindow		OK
+Pulse	PulseApp		Pulse
+Removing from Deskbar failed.\n%s	DeskbarPulseView		Usunięcie z Deskbara nieudane.\n%s
+OK	PulseApp		OK
+About Pulse…	CPUButton		O Pulsie…
+Deskbar mode	PrefsWindow		Tryb Deskbar
+Mini mode	DeskbarPulseView		Tryb mini
+You can't disable the last active CPU.	CPUButton		Nie możesz wyłączyć ostatniego aktywnego procesora.
+OK	CPUButton		OK
+Deskbar	CPUButton		Deskbar
+Settings…	PulseView		Ustawienia…
+Deskbar menu	CPUButton		Menu Deskbara
+Mini mode	NormalPulseView		Tryb mini
+Quit	MiniPulseView		Wyjdź
+Info	PulseView		Informacje
+OK	DeskbarPulseView		OK
+Info	PulseApp		Informacje
+Pulse	System name		Pulse
+Active color	ConfigView		Aktywny kolor
+Installing in Deskbar failed\n%s	PulseApp		Instalacja w Deskbarze nieudana\n%s
+Idle color	ConfigView		Kolor bezczynny
+Normal mode	PrefsWindow		Tryb normalny
+Pulse settings	PulseWindow		Ustawienia Pulse

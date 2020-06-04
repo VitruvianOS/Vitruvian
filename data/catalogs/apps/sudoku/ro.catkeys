@@ -1,0 +1,35 @@
+1	romanian	x-vnd.Haiku-Sudoku	3382377306
+Restore snapshot	SudokuWindow		Restaurează instantaneu
+File	SudokuWindow		Fișier
+Mark invalid values	SudokuWindow		Marchează valorile nevalide
+Solve single field	SudokuWindow		Rezolvă câmp unic
+Hard	SudokuWindow		Dificil
+Start again	SudokuWindow		Pornește din nou
+New	SudokuWindow		Nou
+Easy	SudokuWindow		Simplu
+Undo	SudokuWindow		Anulează
+Export as…	SudokuWindow		Exportă ca…
+Quit	SudokuWindow		Închidere
+Redo	SudokuWindow		Repetă
+Could not open \"%s\":\n%s\n	SudokuWindow		Nu s-a putut deschide \"%s\":\n%s\n
+Blank	SudokuWindow		Spațiu
+Sudoku solved - congratulations!\n	SudokuWindow		Sudoku rezolvat - felicitări!\n
+Text	SudokuWindow		Text
+Copy	SudokuWindow		Copiere
+Solve	SudokuWindow		Rezolvare
+HTML	SudokuWindow		HTML
+Advanced	SudokuWindow		Avansat
+Set all hints	SudokuWindow		Stabilește toate indiciile
+Searching for removable values	SudokuGenerator		Se caută valorile care se pot elimina
+Abort	ProgressWindow		Anulează
+Could not set Sudoku:\n%s\n	SudokuWindow		Nu s-a putut stabili Sudoku:\n%s\n
+Help	SudokuWindow		Ajutor
+OK	SudokuWindow		OK
+Sudoku	System name		Sudoku
+Progress monitor	ProgressWindow		Monitor progres
+Creating solvable field	SudokuGenerator		Creare câmp rezolvabil
+View	SudokuWindow		Vizualizare
+Snapshot current	SudokuWindow		Instantaneu curent
+Mark valid hints	SudokuWindow		Marchează indicii valide
+Sudoku request	SudokuWindow		Cerere Sudoku
+Open file…	SudokuWindow		Deschidere fișier…

@@ -1,0 +1,20 @@
+1	swedish	x-vnd.Haiku-MidiPlayer	1046133011
+This tiny program\nKnows how to play thousands of\nCheesy sounding songs	Main Application	This is a haiku. First line has five syllables, second has seven and last has five again. Create your own.	Detta lilla program\nKan spela tusentals av\nHäftigt ljudliga låtar
+Dungeon	Main Window		Stor grotta
+Could not load song	Main Window		Kunde inte öppna filen
+Igor's lab	Main Window		Igor's labb
+Off	Main Window		Av
+Loading instruments…	Scope View		Läs in instrument...
+Volume:	Main Window		Volym:
+Closet	Main Window		Garderob
+Scope	Main Window		Visualisering
+Drop MIDI file here	Scope View		Släpp en MIDI-fil här
+None	Main Window		Inget
+Reverb:	Main Window		Eko:
+MidiPlayer	System name		MidiSpelare
+OK	Main Window		OK
+Stop	Main Window		Stopp
+Live input:	Main Window		Livekälla:
+Garage	Main Window		Garage
+Play	Main Window		Spela
+Cavern	Main Window		Grotta

@@ -1,0 +1,31 @@
+1	german	x-vnd.Haiku-Locale	1488345554
+Available languages	Locale Preflet Window		Verfügbare Sprachen
+Negative:	TimeFormatSettings		Negativ:
+already chosen	LanguageListView		bereits ausgewählt
+Unable to find the available languages! You can't use this preflet!	Locale Preflet Window		Es wurden keine verfügbaren Sprachen gefunden. Dieses Preflet kann daher nicht verwendet werden!
+Deskbar and Tracker need to be restarted for this change to take effect. Would you like to restart them now?	Locale Preflet Window		Damit diese Änderungen sichtbar werden, müssen Deskbar und Tracker neu gestartet werden. Sollen sie jetzt neu gestartet werden?
+Long format:	TimeFormatSettings		Langes Format:
+Currency	TimeFormatSettings		Währung
+Locale	System name		Sprache
+Short format:	TimeFormatSettings		Kurzes Format:
+Language	Locale Preflet Window		Sprache
+Preferred languages	Locale Preflet Window		Bevorzugte Sprache
+Use month/day-names from preferred language	TimeFormatSettings		Monats-/Tagesnamen aus bevorzugter Sprache verwenden
+Formatting	Locale Preflet Window		Formatierung
+Locale	Locale Preflet Window		Land & Sprache
+Numbers	TimeFormatSettings		Zahlen
+24 hour	TimeFormatSettings		24 Stunden
+OK	Locale Preflet Window		OK
+Restart	Locale Preflet Window		Neustart
+Full format:	TimeFormatSettings		Volles Format:
+Defaults	Locale Preflet Window		Standardwerte
+Cancel	Locale Preflet Window		Abbrechen
+Translate application and folder names in Deskbar and Tracker.	Locale Preflet Window		Übersetzte Programmnamen in Deskbar und Tracker
+Revert	Locale Preflet Window		Anfangswerte
+Medium format:	TimeFormatSettings		Mittleres Format:
+12 hour	TimeFormatSettings		12 Stunden
+Time	TimeFormatSettings		Zeit
+Date	TimeFormatSettings		Datum
+Positive:	TimeFormatSettings		Positiv:
+Locale	Locale Preflet		Land & Sprache
+Options	Locale Preflet Window		Optionen

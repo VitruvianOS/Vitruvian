@@ -1,0 +1,35 @@
+1	swedish	x-vnd.Haiku-Sudoku	3382377306
+Restore snapshot	SudokuWindow		Hämta ögonblicksbild
+File	SudokuWindow		Arkiv
+Mark invalid values	SudokuWindow		Markera felaktiga värden
+Solve single field	SudokuWindow		Lös ett fält
+Hard	SudokuWindow		Svår
+Start again	SudokuWindow		Starta igen
+New	SudokuWindow		Ny
+Easy	SudokuWindow		Lätt
+Undo	SudokuWindow		Ångra
+Export as…	SudokuWindow		Exportera som...
+Quit	SudokuWindow		Avsluta
+Redo	SudokuWindow		Gör om
+Could not open \"%s\":\n%s\n	SudokuWindow		Kunde inte öppna \"%s\":\n%s\n
+Blank	SudokuWindow		Tom
+Sudoku solved - congratulations!\n	SudokuWindow		Sudoku löst - grattis!\n
+Text	SudokuWindow		Text
+Copy	SudokuWindow		Kopiera
+Solve	SudokuWindow		Lös
+HTML	SudokuWindow		HTML
+Advanced	SudokuWindow		Avancerat
+Set all hints	SudokuWindow		Sätt alla ledrådar
+Searching for removable values	SudokuGenerator		Letar efter värden som kan tas bort
+Abort	ProgressWindow		Avbryt
+Could not set Sudoku:\n%s\n	SudokuWindow		Kunde inte ställa in Sudoku:\n%s\n
+Help	SudokuWindow		Hjälp
+OK	SudokuWindow		OK
+Sudoku	System name		Sudoku
+Progress monitor	ProgressWindow		Förloppsindikator
+Creating solvable field	SudokuGenerator		Skapar lösbart fält
+View	SudokuWindow		Visa
+Snapshot current	SudokuWindow		Ta ögonblicksbild
+Mark valid hints	SudokuWindow		Markera korrekta minnesmarkeringar
+Sudoku request	SudokuWindow		Sudoku undrar
+Open file…	SudokuWindow		Öppna fil...

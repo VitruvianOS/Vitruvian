@@ -1,0 +1,50 @@
+1	finnish	x-vnd.Be-PEPL	2332202134
+Launching the FileTypes preflet to configure Person attributes has failed.\n\nError: 	People		Tiedostotyypit-asetusohjelman käynnistäminen Henkilö-attribuuttien asettamiseksi epäonnistui.\n\nVirhe: 
+Unnamed person	People		Nimetön henkilö
+New person…	People		Uusi henkilö...
+Address	People		Osoite
+Zip	People		Postinumero
+Select all	People		Valitse kaikki
+Could not create %s.	People		Kohteen %s luominen epäonnistui.
+Quit	People		Lopeta
+Company	People		Yritys
+Name	People		Nimi
+The file '%name%' could not be written.	People		Kirjoittaminen tiedostoon ’%name%’ epäonnistui.
+Contact name	People		Yhteysnimi
+Cancel	People		Peru
+Edit	People		Muokkaa
+Save changes before closing?	People		Tallennetaanko muutokset ennen sulkemista?
+People	System name		Ihmiset
+Error	People		Virhe
+Revert	People		Palauta
+Country	People		Maa
+Person	Short mimetype description		Henkilö
+New person	People		Uusi henkilö
+Save	People		Tallenna
+Fax	People		Faksi
+URL	People		Verkko-osoite
+%name% picture	People		%name% -kuva
+Home phone	People		Kotipuhelin
+none	Groups list		ei mitään
+Save as…	People		Tallenna nimellä...
+Cut	People		Leikkaa
+Contact information for a person.	Long mimetype description		Henkilön yhteystiedot.
+Remove image	People		Poista kuva
+City	People		Kaupunki
+Undo	People		Peru
+Don't save	People		Älä tallenna
+Configure attributes	People		Asetusattribuutit
+Work phone	People		Työpuhelin
+State	People		Valtio
+Nickname	People		Lempinimi
+OK	People		Valmis
+File	People		Tiedosto
+Redo	People		Tee uudelleen
+Close	People		Sulje
+Copy	People		Kopioi
+Paste	People		Liitä
+E-mail	People		Sähköposti
+Group	People		Ryhmä
+Drop an image here,\nor use the contextual menu.	People		Pudota kuva tänne, tai käytä\nasiayhteysvalikkoa.
+Load image…	People		Lataa kuva…
+Sorry	People		Valitan

@@ -1,0 +1,27 @@
+1	french	x-vnd.Haiku.TV	1995288111
+No menu	MainWin		Pas de menu
+No border	MainWin		Pas de bordure
+force 704 x 576, display aspect 4:3	MainWin		forcer en 704x576, proportions 4:3
+Error, connecting to interface failed:\n\n	MainWin		Erreur, impossible de se connecter à l’interface :\n\n
+force 544 x 576, display aspect 4:3	MainWin		forcer en 544x576, proportions 4:3
+Full screen	MainWin		Plein écran
+Scale to native size	MainWin		Redimensionner à la taille native
+unknown	MainWin		inconnu
+Next channel	MainWin		Chaîne suivante
+Keep aspect ratio	MainWin		Conserver les proportions
+DVB - Digital Video Broadcasting TV	MainWin		DVB - Télévision Numérique Terrestre
+Always on top	MainWin		Toujours au dessus
+Debug	MainWin		Déboguer
+Interface	MainWin		Interface
+force 720 x 576, display aspect 4:3	MainWin		forcer en 720 x 576, proportions 4:3
+Quit	MainWin		Quitter
+Channel	MainWin		Chaîne
+Previous channel	MainWin		Chaîne précédente
+OK	MainWin		OK
+TV	MainWin		TV
+Settings	MainWin		Réglages
+TV	System name		TV
+Settings…	MainWin		Réglages…
+None	MainWin		Aucun
+Error, interface is busy:\n\n	MainWin		Erreur, l’interface est occupée :\n\n
+pixel aspect ratio	MainWin		proportions de l’image

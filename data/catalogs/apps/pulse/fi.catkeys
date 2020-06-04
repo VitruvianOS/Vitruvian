@@ -1,0 +1,48 @@
+1	finnish	x-vnd.Haiku-Pulse	139895817
+Normal mode	DeskbarPulseView		Normaalitila
+Info	CPUButton		Tiedot
+Quit	DeskbarPulseView		Lopeta
+Info	DeskbarPulseView		Tiedot
+Normal mode	MiniPulseView		Normaalitila
+Frame color	ConfigView		Kehysväri
+Error	PulseApp		Virhe
+Bar colors	ConfigView		Palkkivärit
+%.2f GHz	NormalPulseView		%.2f GHz
+Defaults	PrefsWindow		Oletukset
+%ld MHz	NormalPulseView		%ld MHz
+Mini mode	PrefsWindow		Minitila
+CPU progress bar	NormalPulseView		Prosessorin edistymispalkki
+Fade colors	ConfigView		Haalista värit
+About Pulse…	PulseView		Ohjelmasta Pulssi...
+Pulse	NormalPulseView		Pulssi
+Deskbar mode	NormalPulseView		Työpöytäpalkkitila
+Remove replicant	CPUButton		Poista kopio
+You can't disable the last active CPU.	PulseView		Et voi ottaa pois käytöstä viimeistä käytössä olevaa prosessoria.
+Width of icon:	ConfigView		Kuvakkeen leveys:
+Deskbar mode	MiniPulseView		Työpöytäpalkkitila
+OK	PulseView		Valmis
+%s\n\nBy David Ramsey and Arve Hjønnevåg\nRevised by Daniel Switkin\n	PulseApp		%s\n\ntekijät: David Ramsey ja Arve Hjønnevåg\nPäivittäjä: Daniel Switkin\n
+OK	PrefsWindow		Valmis
+Pulse	PulseApp		Pulssi
+Removing from Deskbar failed.\n%s	DeskbarPulseView		Poistaminen Työpöytäpalkista epäonnistui.\n%s
+OK	PulseApp		Valmis
+About Pulse…	CPUButton		Ohjelmasta Pulssi...
+Deskbar mode	PrefsWindow		Työpöytäpalkkitila
+Mini mode	DeskbarPulseView		Minitila
+You can't disable the last active CPU.	CPUButton		Et voi ottaa pois käytöstä viimeistä käytössä olevaa prosessoria.
+OK	CPUButton		Valmis
+Deskbar	CPUButton		Työpöytäpalkki
+Settings…	PulseView		Asetukset...
+Deskbar menu	CPUButton		Työpöytäpalkkivalikko
+Mini mode	NormalPulseView		Minitila
+Quit	MiniPulseView		Lopeta
+Info	PulseView		Tiedot
+Usage: Pulse [--mini] [-w width] [--width=width]\n\t[--deskbar] [--normal] [--framecolor 0xrrggbb]\n\t[--activecolor 0xrrggbb] [--idlecolor 0xrrggbb]	PulseApp		Käyttö: Pulse [--mini] [-w leveys] [--width=leveys]\n\t[--deskbar] [--normal] [--framecolor 0xrrggbb]\n\t[--activecolor 0xrrggbb] [--idlecolor 0xrrggbb]
+OK	DeskbarPulseView		Valmis
+Info	PulseApp		Tiedot
+Pulse	System name		Pulssi
+Active color	ConfigView		Käytössä oleva väri
+Installing in Deskbar failed\n%s	PulseApp		Asentaminen Työpöytäpalkkiin epäonnistui\n%s
+Idle color	ConfigView		Joutokäyntiväri
+Normal mode	PrefsWindow		Normaalitila
+Pulse settings	PulseWindow		Pulssi-asetukset

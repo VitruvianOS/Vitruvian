@@ -1,0 +1,13 @@
+1	finnish	x-vnd.Haiku-NewMailNotification	2111731137
+Log window	NotifierConfigView		Loki-ikkuna
+none	NotifierConfigView		ei mitään
+New mails notification	NotifierFilter		Uusien sähköpostiviestien ilmoitus
+Alert	NotifierConfigView		Hälytys
+OK	NotifierFilter		Valmis
+Central alert	NotifierConfigView		Keskeinen hälytys
+Beep	NotifierConfigView		Piip
+Central beep	NotifierConfigView		Keskeinen piip
+{0, plural, one{One new message} other{# new messages}}	NotifierFilter		{0, plural, one{Yksi uusi viesti} other{# uutta viestiä}}
+New messages	NotifierFilter		Uudet viestit
+Method:	NotifierConfigView		Metodi:
+Keyboard LEDs	NotifierConfigView		Näppäimistön ledit

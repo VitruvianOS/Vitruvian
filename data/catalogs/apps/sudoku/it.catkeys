@@ -1,0 +1,35 @@
+1	italian	x-vnd.Haiku-Sudoku	3382377306
+Restore snapshot	SudokuWindow		Ripristina snapshot
+File	SudokuWindow		File
+Mark invalid values	SudokuWindow		Segna numeri inseriti non validi
+Solve single field	SudokuWindow		Risolvi singolo campo
+Hard	SudokuWindow		Difficile
+Start again	SudokuWindow		Riavvia
+New	SudokuWindow		Nuovo
+Easy	SudokuWindow		Facile
+Undo	SudokuWindow		Annulla
+Export as…	SudokuWindow		Esporta come...
+Quit	SudokuWindow		Esci
+Redo	SudokuWindow		Ripeti
+Could not open \"%s\":\n%s\n	SudokuWindow		Impossibile aprire \"%s\":\n%s\n
+Blank	SudokuWindow		Vuoto
+Sudoku solved - congratulations!\n	SudokuWindow		Sudoku risolto - congratulazioni!\n
+Text	SudokuWindow		Testo
+Copy	SudokuWindow		Copia
+Solve	SudokuWindow		Risolvi
+HTML	SudokuWindow		HTML
+Advanced	SudokuWindow		Avanzato
+Set all hints	SudokuWindow		Imposta tutti i suggerimenti
+Searching for removable values	SudokuGenerator		Cerca volori rimuovibili
+Abort	ProgressWindow		Arresta
+Could not set Sudoku:\n%s\n	SudokuWindow		Impossibile impostare Sudoku:\n%s\n
+Help	SudokuWindow		Aiuto
+OK	SudokuWindow		OK
+Sudoku	System name		Sudoku
+Progress monitor	ProgressWindow		Monitor progresso
+Creating solvable field	SudokuGenerator		Crea campi risolvibili
+View	SudokuWindow		Visualizza
+Snapshot current	SudokuWindow		Snapshot attuale
+Mark valid hints	SudokuWindow		Suggerisci numeri da inserire validi
+Sudoku request	SudokuWindow		Sudoku richiesta
+Open file…	SudokuWindow		Apri file...

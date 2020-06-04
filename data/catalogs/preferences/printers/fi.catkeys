@@ -1,0 +1,41 @@
+1	finnish	x-vnd.Be-PRNT	1465107170
+Test page	TestPageView		Testaussivu
+Remove	PrintersWindow		Poista
+Red	TestPageView		Punainen
+Default Printer	PrinterListView		Oletustulostin
+<pick one>	AddPrinterDialog		<poimi yksi>
+Connected to:	AddPrinterDialog		Yhdistetty kohteeseen:
+Make default	PrintersWindow		Aseta oletusarvoksi
+Cyan	TestPageView		Sinivihreä
+Completed	JobListView		Valmis
+Test page	PrintersWindow		Testaussivu
+Transport: %transport% %transport_address%	PrinterListView		Siirto: %transport% %transport_address%
+Failed	JobListView		Epäonnistui
+Blue	TestPageView		Sininen
+Waiting	JobListView		Odotetaan
+Processing	JobListView		Käsitellään
+Cancel	AddPrinterDialog		Peru
+Unknown status	JobListView		Tuntematon tila
+Print jobs for %printer_name%	PrintersWindow		Tulosta työt tulostimella %printer_name%
+{0, plural, =-1{??? pages}=1{# page}other{# pages}}	JobListView		{0, plural, =-1{??? sivua}=1{# sivu}other{# sivua}}
+Add printer	AddPrinterDialog		Lisää tulostin
+Printers	PrintersWindow		Tulostimet
+No printer found!	TransportMenu		Tulostinta ei löytynyt!
+Add…	PrintersWindow		Lisää...
+Magenta	TestPageView		Sinipunainen
+Transport: %transport% %transport_address%	TestPageView		Siirto: %transport% %transport_address%
+Add	AddPrinterDialog		Lisää
+Print jobs: No printer selected	PrintersWindow		Tulostustyöt: Tulostinta ei ole valittu
+Printer name:	AddPrinterDialog		Tulostinnimi:
+Yellow	TestPageView		Keltainen
+Black	TestPageView		Musta
+Printer type:	AddPrinterDialog		Tulostintyyppi:
+Printers	System name		Tulostinasetukset
+{0, plural,=0{No pending jobs}=1{1 pending job}other{# pending jobs}}	PrinterListView		{0, plural,=0{Ei odottavaa työtä}=1{1 odottava työ}other{# odottavaa työtä}}
+Printer: %printer_name%\nDriver:  %driver%\n	TestPageView		Tulostin: %printer_name%\nAjuri:   %driver%\n
+Green	TestPageView		Vihreä
+Print test page	PrintersWindow		Tulosta testisivu
+Restart job	PrintersWindow		Käynnistä työ uudelleen
+Driver: %driver%	PrinterListView		Ajuri: %driver%
+Cancel job	PrintersWindow		Peru työ
+%.2f KB	JobListView		%.2f kilotavua

@@ -1,0 +1,18 @@
+1	indonesian	x-vnd.Haiku-Pairs	818003250
+Pairs	System name		Pasangan
+Quit	PairsWindow		Keluar
+Medium	PairsWindow		Medium
+Game	PairsWindow		Permainan
+Expert (8x8)	PairsWindow		Ahli (8x8)
+New	PairsWindow		Baru
+OK	Pairs		OKE
+Pairs did not find enough vector icons to start; it needs at least %zu, found %zu.\n	Pairs	Don't translate \"%zu\", but make sure to keep them.	Pairs tidak menemukan ikon vektor yang cukup untuk memulai; setidaknya perlu %zu, ditemukan %zu.\n
+You completed the game in {0, plural, one{# click} other{# clicks}}.\n	PairsWindow		Anda menyelesaikan game dalam {0, plural, one{# click} other{# clicks}}.\n
+Small	PairsWindow		Kecil
+Size	PairsWindow		Ukuran
+%app%\n\twritten by Ralf Schülke\n\tCopyright 2008-2010, Haiku Inc.\n\n	PairsWindow		%app%\n\tDitulis oleh Ralf Schülke\n\tHak Cipta 2008-2010, Haiku Inc.\n\n
+Quit game	PairsWindow		Keluar permainan
+Large	PairsWindow		Besar
+Beginner (4x4)	PairsWindow		Pemula (4x4)
+Intermediate (6x6)	PairsWindow		Menengah (6x6)
+New game	PairsWindow		Permainan baru

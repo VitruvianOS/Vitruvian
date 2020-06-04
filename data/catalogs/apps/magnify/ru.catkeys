@@ -1,0 +1,17 @@
+1	russian	x-vnd.Haiku-Magnify	94607167
+Decrease pixel size	Magnify-Main		Уменьшить размер пикселя
+Increase pixel size	Magnify-Main		Увеличить размер пикселя
+Stick coordinates	Magnify-Main		Зафиксировать координаты
+%width x %height  @ {0, plural, one{# pixel/pixel} other{# pixels/pixel}}	Magnify-Main		%width x %height  @ {0, plural, one{# пиксель на пиксель} few{# пикселя на пиксель} other{# пикселей на пиксель}}
+Copy image	Magnify-Main		Копировать изображение
+Decrease window size	Magnify-Main		Уменьшить размер окна
+Remove a crosshair	Magnify-Main		Удалить перекрестье
+Add a crosshair	Magnify-Main		Добавить перекрестье
+Freeze image	Magnify-Main		Стоп-кадр
+Increase window size	Magnify-Main		Увеличить размер окна
+Save image	Magnify-Main		Сохранить изображение
+Show grid	Magnify-Main		Показать сетку
+Magnify	System name		Увеличитель
+Info	Magnify-Main		Информация
+Show info	Magnify-Main		Показать информацию
+Make square	Magnify-Main		Сделать квадрат

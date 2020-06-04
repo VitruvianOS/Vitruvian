@@ -1,0 +1,36 @@
+1	japanese	x-vnd.Haiku-LaunchBox	1530497419
+Set description…	LaunchBox		説明を作成…
+Really close this pad?\n(The pad will not be remembered.)	LaunchBox		このパッドを閉じてよろしいですか?\n(パッドは記憶されません。)
+OK	LaunchBox		OK
+Ignore double-click	LaunchBox		ダブルクリックを無視する
+Show on all workspaces	LaunchBox		すべてのワークスペースに表示
+Name Panel	LaunchBox		名前パネル
+Autostart	LaunchBox		自動起動
+Clone	LaunchBox		複製
+Description for '%3'	LaunchBox		'%3' の説明
+Show window border	LaunchBox		ウィンドウ枠を表示
+\n\nFailed to launch application with signature '%2'.\n\nError:	LaunchBox		\n\nアプリケーション (シグネチャ '%2') の起動に失敗しました。\n\nエラー:
+Failed to launch 'something', error in Pad data.	LaunchBox		'something' の起動に失敗しました。パッドデータ中にエラーがあります。
+LaunchBox	System name		ランチャー
+Auto-raise	LaunchBox		自動的に前面へ
+Icon size	LaunchBox		アイコンサイズ
+Open containing folder	LaunchBox		フォルダーを開く
+Add button here	LaunchBox		ここにボタンを追加
+Cancel	LaunchBox		中止
+launch popup	LaunchBox		ポップアップを起動
+Clear button	LaunchBox		ボタンを消去
+Bummer	LaunchBox		失敗
+last chance	LaunchBox		最後のチャンス
+You can drag an icon here.	LaunchBox		ここにアイコンをドラッグしてください
+Pad 1	LaunchBox		パッド 1
+Failed to launch '%1'.\n\nError:	LaunchBox		'%1' の起動に失敗しました。\n\nエラー:
+Settings	LaunchBox		設定
+Vertical layout	LaunchBox		垂直配置
+Pad	LaunchBox		パッド
+Close	LaunchBox		閉じる
+Remove button	LaunchBox		ボタンを削除
+Quit	LaunchBox		終了
+Horizontal layout	LaunchBox		水平配置
+New	LaunchBox		新規作成
+Failed to send 'open folder' command to Tracker.\n\nError: 	LaunchBox		Tracker への 'open folder' コマンドの送信に失敗しました。\n\nエラー:
+Pad %1	LaunchBox		パッド %1

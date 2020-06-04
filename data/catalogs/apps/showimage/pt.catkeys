@@ -1,0 +1,39 @@
+1	portuguese	x-vnd.Haiku-ShowImage	2984414415
+Browse	Menus		Navegar
+Cancel	ClosePrompt		Cancelar
+Close	ClosePrompt		Fechar
+Close document	ClosePrompt		Fechar documento
+Could not load image! Either the file or an image translator for it does not exist.	LoadAlerts		Não foi possível abrir a imagem! Ou um arquivo ou um tradutor de imagem necessário não existe.
+DPI:	PrintOptionsWindow		DPI:
+First page	Menus		Primeira página
+Fit image to page	PrintOptionsWindow		Ajustar imagem à página
+Flip left to right	Menus		Inverter horizontalmente
+Flip top to bottom	Menus		Inverter verticalmente
+Full screen	Menus		Ecrã inteiro
+Go to page	Menus		Ir para a página
+Height: 	PrintOptionsWindow		Altura: 
+High-quality zooming	Menus		Zoom de alta qualidade
+Image	Menus		Imagem
+Job setup	PrintOptionsWindow		Configurar trabalho de impressão
+Last page	Menus		Última página
+Next file	Menus		Próximo ficheiro
+Next page	Menus		Próxima página
+Original size	Menus		Tamanho original
+Previous file	Menus		Ficheiro anterior
+Previous page	Menus		Página anterior
+Print options	PrintOptionsWindow		Opções de impressão
+Resize to (in 1/72 inches):	PrintOptionsWindow		Redimensionar para (em 1/72 polegadas):
+Rotate clockwise	Menus		Rodar para a direita
+Rotate counterclockwise	Menus		Rodar para a esquerda
+Show caption in full screen mode	Menus		Mostrar legenda no modo de ecrã inteiro
+Slide delay	Menus		Tempo de transição
+Slide show	Menus		Apresentação de Diapositivos
+The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		O documento '%s' (página %d) foi modificado. Você deseja fechar o documento?
+The document '%s' has been changed. Do you want to close the document?	ClosePrompt		O documento '%s' foi modificado. Você deseja fechar o documento?
+Undo	Menus		Anular
+Use as background…	Menus		Usar como papel de parede...
+View	Menus		Ver
+Width:	PrintOptionsWindow		Largura:
+Zoom factor in %:	PrintOptionsWindow		Zoom em %:
+Zoom in	Menus		Aumentar zoom
+Zoom out	Menus		Diminuir zoom

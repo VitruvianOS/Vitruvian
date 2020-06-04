@@ -1,0 +1,26 @@
+1	belarusian	x-vnd.haiku-screenshot	363809141
+Include window border	ScreenshotWindow		Уключыць мяжу вакна
+Overwrite	ScreenshotWindow		Перазапiсаць
+Save in:	ScreenshotWindow		Захаваць у:
+This file already exists.\n Are you sure you would like to overwrite it?	ScreenshotWindow		Гэты файл ужо існуе.\n Вы ўпэўнены што жадаеце яго перапісаць?
+Select	ScreenshotWindow		Выбраць
+Save as:	ScreenshotWindow		Захаваць як:
+seconds	ScreenshotWindow		секунд
+New screenshot	ScreenshotWindow		Новы здымак экрану
+Screenshot	System name		Здымак экрана
+Desktop	ScreenshotWindow		Рабочы стол
+Artwork folder	ScreenshotWindow		Каталог малюнкаў
+Translator Settings	ScreenshotWindow		Наладкі канвертара
+Include mouse pointer	ScreenshotWindow		Уключыць курсор мышы
+overwrite	ScreenshotWindow		перазапіс
+Settings…	ScreenshotWindow		Наладкі…
+Choose folder	ScreenshotWindow		Выберыце каталог
+Name:	ScreenshotWindow		Імя:
+Please select	ScreenshotWindow		Калі ласка, выберыце
+Cancel	ScreenshotWindow		Адмена
+Delay:	ScreenshotWindow		Затрымка:
+Copy to clipboard	ScreenshotWindow		Капіяваць у буфер
+screenshot	Screenshot	Base filename of screenshot files	здымак
+Home folder	ScreenshotWindow		Хатні каталог
+Save	ScreenshotWindow		Захаваць
+Capture active window	ScreenshotWindow		Захваціць актыўнае вакно

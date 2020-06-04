@@ -1,0 +1,41 @@
+1	belarusian	x-vnd.Haiku-Shortcuts	1611284793
+*MouseUp	ShortcutsWindow		*МышУверх
+Application	ShortcutsWindow		Праграма
+Option	ShortcutsSpec	Name for modifier on keyboard	Параметр
+Save changes before closing?	ShortcutsWindow		Захаваць змены перад зачыненнем?
+Revert to saved	ShortcutsWindow		Вярнуцца да захаванага
+Don't save	ShortcutsWindow		Не захоўваць
+*MouseDown	ShortcutsWindow		*МышУніз
+*Beep	ShortcutsWindow		*Гудок
+Shortcuts wasn't able to save your keyset.	ShortcutsWindow		Рэдактар Гарачых Клавішаў не змог захаваць вашу канфігурацыю (KeySet).
+Save	ShortcutsWindow		Захаваць
+Oh no	ShortcutsWindow		О не
+Key	ShortcutsWindow		Клавіша
+*SendMessage application/x-vnd.Be-TRAK 'Tfnd'	ShortcutsWindow		*АдаслацьПаведамленне application/x-vnd.Be-TRAK 'Tfnd'
+Select	ShortcutsWindow		Выбраць
+Shortcuts	System name		Гарачыя клавішы
+Quit	ShortcutsWindow		Выйсці
+(Choose application with file requester)	ShortcutsWindow		(Выберыце праграму, якая патрабуе выбара файлу)
+Cancel	ShortcutsWindow		Адмена
+*MoveMouse +20 +0	ShortcutsWindow		*РухацьМыш +20 +0
+Control	ShortcutsSpec	Name for modifier on keyboard	Control
+Shortcuts was unable to parse your KeySet file!	ShortcutsWindow		Рэдактар Гарачых Клавішаў не змог разабраць ваш файл KeySet!
+Shortcuts was unable to save your KeySet file!	ShortcutsWindow		Рэдактар Гарачых Клавішаў не змог захаваць ваш файл KeySet!
+*InsertString \"Your Text Here\"	ShortcutsWindow		*УставіцьСтраку \"Ваш Тэкст\"
+Remove selected shortcut	ShortcutsWindow		Выдаліць выбраную гарачую клавішу
+Error, NULL state description?	ShortcutsSpec		Памылка, апісанне стану NULL?
+Shortcuts was couldn't open your KeySet file!	ShortcutsWindow		Рэдактар Гарачых Клавішаў не змог адкрыць ваш файл KeySet!
+Save & apply	ShortcutsWindow		Захаваць і ўжыць
+Open	ShortcutsWindow		Адкрыць
+Append	ShortcutsWindow		Прычапіць
+Save KeySet as…	ShortcutsWindow		Захаваць KeySet як…
+Append KeySet…	ShortcutsWindow		Дадаць KeySet…
+*MouseButton 1	ShortcutsWindow		*КнопкаМышы 1
+*Multi \"*MoveMouseTo 100% 0\" \"*MouseButton 1\"	ShortcutsWindow		*Множнае \"*РухацьМышДа 100% 0\" \"*КнопкаМышы 1\"
+OK	ShortcutsWindow		ОК
+Add new shortcut	ShortcutsWindow		Дадаць новую гарачую клавішу
+Shift	ShortcutsSpec	Name for modifier on keyboard	Shift
+Open KeySet…	ShortcutsWindow		Адкрыць KeySet…
+File	ShortcutsWindow		Файл
+*LaunchHandler text/html	ShortcutsWindow		*АпрацоўшчыкЗапуску text/html
+*MoveMouseTo 50% 50%	ShortcutsWindow		*РухацьМышДа 50% 50%

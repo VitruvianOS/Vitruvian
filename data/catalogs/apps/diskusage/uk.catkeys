@@ -1,0 +1,23 @@
+1	ukrainian	x-vnd.Haiku-DiskUsage	2951688400
+%size% in {0, plural, one{# file} other{# files}}	Info Window		%size% in {0, plural, one{# file} other{# files}}
+Scanning %refName%	Scanner		Сканування %refName%
+%d files	Status View	For UI layouting only, use the longest plural form for your language	%d файлів
+Size	Info Window		Розмір
+Rescan	Pie View		Пересканувати
+Kind	Info Window		Тип
+file unavailable	Pie View		файл недоступний
+no supporting apps	Pie View		відсутні підтримувані програми
+Path	Info Window		Шлях
+Scan	Status View		Сканувати
+Rescan	Status View		Пересканувати
+file unavailable	Status View		файл недоступний
+Get info	Pie View		Інформація
+DiskUsage	System name		Використання диску
+Created	Info Window		Створено
+Modified	Info Window		Змінено
+Abort	Status View		Перервати
+Open with	Pie View		Відкрити в
+Open	Pie View		Відкрити
+{0, plural, one{# file} other{# files}}	Status View		{0, plural, one{# file} other{# files}}
+%a, %d %b %Y, %r	Info Window		%a, %d %b %Y, %r
+Free on %refName%	Scanner		Вільно на %refName%

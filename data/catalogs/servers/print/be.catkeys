@@ -1,0 +1,54 @@
+1	belarusian	x-vnd.Be-PSRV	2930356711
+Undefined	ConfigWindow		Нявызначаны
+Return the number of available transports	PrintServerApp Scripting		Вярнуць колькасць даступных транспортаў
+Return the number of available printers	PrintServerApp Scripting		Вярнуць колькасць даступных прынтэраў
+Get currently available ports/devices	Transport Scripting		Вызначыць даступныя зараз порты/прылады
+Retrieve or select the active printer	PrintServerApp Scripting		Вызначыць або выбраць актыўны прынтэр
+Cancel	PrintServerApp		Адмена
+Retrieve a specific printer	PrintServerApp Scripting		Вызначыць асабісты прынтэр
+Page %1 to %2	ConfigWindow		Старонкі з %1 па %2
+Get name of the printer add-on used for this printer	Printer Scripting		Вызначыць імя дапаўнення, ужытага для гэтага прынтэра
+B5 (JIS)	ConfigWindow	JIS P0138 B5, a Japanese paper size	B5 (JIS)
+OK	ConfigWindow		Так
+Cancel	ConfigWindow		Адмена
+Printer server	ConfigWindow		Сервер друку
+Page %1 to %2, %3 copies	ConfigWindow		Старонкі з %1 па %2, %3 копій
+A printer with that name already exists, but its driver could not be found! Replace?	PrintServerApp		Прынтэр з гэтым імем ужо існуе, але яго драйвер не знойдзены! Замяніць?
+Yes	PrintServerApp		Так
+Ledger	ConfigWindow	ANSI B (ledger), a North American paper size	Ledger
+Would you like to set one up now?	PrintServerApp		Жадаеце наладзіць яго зараз?
+A6	ConfigWindow	ISO 216 paper size	A6
+Portrait	ConfigWindow		Партрэт
+All pages	ConfigWindow		Усе старонкі
+There is no default printer set up.	PrintServerApp		Прынтэр па змоўчанню не прызначаны.
+B5	ConfigWindow	ISO 216 paper size	B5
+A0	ConfigWindow	ISO 216 paper size	A0
+Letter	ConfigWindow	ANSI A (letter), a North American paper size	Letter
+Printer:	ConfigWindow		Прынтэр:
+A2	ConfigWindow	ISO 216 paper size	A2
+Select a printer	ConfigWindow		Абраць прынтэр
+Show configuration window	PrintServerApp Scripting		Паказаць вакно канфігурацыі
+A4	ConfigWindow	ISO 216 paper size	A4
+Get comments about this printer	Printer Scripting		Атрымаць каментарыі да гэтага прынтэра
+A printer with that name already exists, but it's not usable at all! Replace?	PrintServerApp		Прынтэр з гэтым імем ужо існуе, але наогул не функцыянуе! Замяніць?
+No	PrintServerApp		Не
+Get the transport configuration for this printer	Printer Scripting		Атрымаць канфігурацыю транспорта для гэтага прынтэра
+Landscape	ConfigWindow		Пейзаж
+Legal	ConfigWindow	A North American paper size (216 x 356 mm, or 8.5 x 14 in)	Legal
+There are no printers set up.	PrintServerApp		Няма прынтэраў для ўсталёўкі.
+Get name of the transport add-on used for this printer	Printer Scripting		Атрымаць імя транспорта, ужытага для гэтага прынтэра
+All pages, %1 copies	ConfigWindow		Усе старонкі, %1 копій
+Delete a specific printer	PrintServerApp Scripting		Выдаліць асабісты прынтэр
+Create a new printer	PrintServerApp Scripting		Стварыць новы прынтэр
+OK	PrintServerApp		Так
+Print setup	ConfigWindow		Наладкі друку
+A1	ConfigWindow	ISO 216 paper size	A1
+Retrieve a specific transport	PrintServerApp Scripting		Вызначыць асабісты транспорт
+Get name of printer	Printer Scripting		Атрымаць імя прынтэра
+A3	ConfigWindow	ISO 216 paper size	A3
+Get name of transport	Transport Scripting		Атрымаць імя транспорта
+A5	ConfigWindow	ISO 216 paper size	A5
+Would you like to make @ the default printer?	PrintServerApp		Жадаеце зрабіць @ прадвызначаным прынтэрам?
+Tabloid	ConfigWindow	ANSI B (tabloid), a North American paper size	Tabloid
+Page setup	ConfigWindow		Наладкі старонкі
+Paper setup:	ConfigWindow		Наладкі паперы:

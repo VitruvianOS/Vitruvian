@@ -1,0 +1,35 @@
+1	polish	x-vnd.Haiku-Sudoku	3382377306
+Restore snapshot	SudokuWindow		Przywróć migawkę
+File	SudokuWindow		Plik
+Mark invalid values	SudokuWindow		Oznacz nieprawidłowe wartości
+Solve single field	SudokuWindow		Rozwiąż pojedyncze pole
+Hard	SudokuWindow		Trudny
+Start again	SudokuWindow		Rozpocznij jeszcze raz
+New	SudokuWindow		Nowy
+Easy	SudokuWindow		Łatwy
+Undo	SudokuWindow		Cofnij
+Export as…	SudokuWindow		Eksportuj jako…
+Quit	SudokuWindow		Zakończ
+Redo	SudokuWindow		Ponów
+Could not open \"%s\":\n%s\n	SudokuWindow		Nie można otworzyć „%s”:\n%s\n
+Blank	SudokuWindow		Puste
+Sudoku solved - congratulations!\n	SudokuWindow		Sudoku rozwiązane - gratulacje!\n
+Text	SudokuWindow		Tekst
+Copy	SudokuWindow		Kopiuj
+Solve	SudokuWindow		Rozwiąż
+HTML	SudokuWindow		HTML
+Advanced	SudokuWindow		Zaawansowany
+Set all hints	SudokuWindow		Ustaw wszystkie podpowiedzi
+Searching for removable values	SudokuGenerator		Szukanie wartości wymiennych
+Abort	ProgressWindow		Przerwij
+Could not set Sudoku:\n%s\n	SudokuWindow		Nie można ustawić Sudoku:\n%s\n
+Help	SudokuWindow		Pomoc
+OK	SudokuWindow		OK
+Sudoku	System name		Sudoku
+Progress monitor	ProgressWindow		Monitor postępu
+Creating solvable field	SudokuGenerator		Tworzenie rozwiązywalnego pola
+View	SudokuWindow		Widok
+Snapshot current	SudokuWindow		Utwórz migawkę
+Mark valid hints	SudokuWindow		Oznacz prawidłowe podpowiedzi
+Sudoku request	SudokuWindow		Żądanie Sudoku
+Open file…	SudokuWindow		Otwórz plik…

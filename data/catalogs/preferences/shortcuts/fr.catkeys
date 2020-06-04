@@ -1,0 +1,47 @@
+1	french	x-vnd.Haiku-Shortcuts	3834857117
+*MouseUp	ShortcutsWindow		*SourisEnHaut
+Application	ShortcutsWindow		Application
+Option	ShortcutsSpec	Name for modifier on keyboard	Option
+Save changes before closing?	ShortcutsWindow		Voulez-vous enregistrer les modifications avant de fermer ?
+Revert to saved	ShortcutsWindow		Revenir à la version enregistrée
+Don't save	ShortcutsWindow		Ne pas enregistrer
+*MouseDown	ShortcutsWindow		*SourisEnBas
+*Beep	ShortcutsWindow		*Bip
+Shortcuts wasn't able to save your keyset.	ShortcutsWindow		Raccourcis n’a pas pu enregistrer votre jeu de touches.
+Save	ShortcutsWindow		Enregistrer
+Either	ShortcutsSpec		Soit
+Oh no	ShortcutsWindow		Oh non !
+Key	ShortcutsWindow		Touche
+*SendMessage application/x-vnd.Be-TRAK 'Tfnd'	ShortcutsWindow		*EnvoyerMessage application/x-vnd.Be-TRAK 'Tfnd'
+Select	ShortcutsWindow		Sélectionner
+Shortcuts	System name		Raccourcis
+Quit	ShortcutsWindow		Quitter
+(Choose application with file requester)	ShortcutsWindow		(Choisissez une application avec une requête de fichier)
+Cancel	ShortcutsWindow		Annuler
+*MoveMouse +20 +0	ShortcutsWindow		*BougeSouris +20 +0
+Control	ShortcutsSpec	Name for modifier on keyboard	Contrôle
+Left	ShortcutsSpec		Gauche
+Shortcuts was unable to parse your KeySet file!	ShortcutsWindow		Raccourcis n’a pas pu analyser votre fichier de jeu de touches !
+Shortcuts was unable to save your KeySet file!	ShortcutsWindow		Raccourcis n’a pas pu enregistrer votre fichier de jeu de touches !
+*InsertString \"Your Text Here\"	ShortcutsWindow		*InsérerTexte « votre texte ici »
+Remove selected shortcut	ShortcutsWindow		Supprimer le raccourci sélectionné
+Error, NULL state description?	ShortcutsSpec		Erreur : description d’état NULL ?
+Alt	ShortcutsSpec	Name for modifier on keyboard	Alt
+Shortcuts was couldn't open your KeySet file!	ShortcutsWindow		Raccourcis n’a pas pu ouvrir le fichier de jeu de touches !
+Save & apply	ShortcutsWindow		Sauver et appliquer
+Open	ShortcutsWindow		Ouvrir
+Append	ShortcutsWindow		Ajouter
+Both	ShortcutsSpec		Les deux
+Save KeySet as…	ShortcutsWindow		Enregistrer le jeu de touches sous…
+Append KeySet…	ShortcutsWindow		Ajouter un jeu de touches…
+*MouseButton 1	ShortcutsWindow		*BoutonSouris 1
+*Multi \"*MoveMouseTo 100% 0\" \"*MouseButton 1\"	ShortcutsWindow		*Multi « *BougerSourisEn 100% 0 » « *BoutonSouris 1 »
+Right	ShortcutsSpec		Droit
+OK	ShortcutsWindow		OK
+Add new shortcut	ShortcutsWindow		Ajouter un nouveau raccourci
+(None)	ShortcutsSpec		(Aucun)
+Shift	ShortcutsSpec	Name for modifier on keyboard	Majuscule
+Open KeySet…	ShortcutsWindow		Ouvrir un jeu de touches…
+File	ShortcutsWindow		Fichier
+*LaunchHandler text/html	ShortcutsWindow		*GestionnaireDeLancement text/html
+*MoveMouseTo 50% 50%	ShortcutsWindow		*BougerLaSourisEn 50% 50%

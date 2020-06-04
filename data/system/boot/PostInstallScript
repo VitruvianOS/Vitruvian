@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# Check for fresh install and run post install scripts.
+
+title=$1
+freshInstallIndicator=$2
+postInstallDir=$3
+
+if [ -e $freshInstallIndicator ]; then
+	# execute scripts
+	for f in $postInstallDir/*.sh
+	do
+		if [ -f $f ]; then
+			echo "Running $title script $f ..." > /dev/dprintf
+			$f
+		fi
+	done
+
+	sync
+	rm $freshInstallIndicator
+fi

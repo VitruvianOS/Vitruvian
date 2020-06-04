@@ -1,0 +1,42 @@
+1	ukrainian	x-vnd.Haiku-libbe	3337473349
+{0, plural, one{# byte} other{# bytes}}	StringForSize		{0, plural, one{# byte}, other{# bytes}}
+All Rights Reserved.	AboutWindow		Усі права застережено.
+gold master	AboutWindow		золотий майстер
+Undo	TextView		Відмінити
+gamma	AboutWindow		гамма
+development	AboutWindow		розробка
+OK	Dragger		Гаразд
+OK	PrintJob		Гаразд
+Print Server is not responding.	PrintJob		Принт сервер недоступний.
+About %app%	AboutMenuItem		Про %app%
+Warning	Dragger		Увага
+Green:	ColorControl		Зелений:
+Redo	TextView		Відмінити відміну
+No pages to print!	PrintJob		Жодної сторінки для друку!
+beta	AboutWindow		бета
+OK	ZombieReplicantView		Гаразд
+Cut	TextView		Вирізати
+%3.2f GiB	StringForSize		%3.2f GiB
+Can't delete this replicant from its original application. Life goes on.	Dragger		Неможливо видалити реплікант з рідної прграми. Життя продовжується.
+Error	ZombieReplicantView		Помилка
+Paste	TextView		Вставити
+OK	AboutWindow		Гаразд
+Special Thanks:	AboutWindow		Особлива подяка:
+%.2f TiB	StringForSize		%.2f TiB
+Remove replicant	Dragger		Видалити реплікант
+Version	AboutWindow		Версія
+Red:	ColorControl		Червоний:
+<empty>	Menu		<пусто>
+Copy	TextView		Копіювати
+Select all	TextView		Вибрати все
+alpha	AboutWindow		альфа
+%3.2f MiB	StringForSize		%3.2f MiB
+Error	PrintJob		Помилка
+About %app%	AboutWindow		Про %app%
+About %app…	Dragger		Про %app…
+Version history:	AboutWindow		Історія версії:
+Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Неможливо визначити програму для репліканта. Не знайдено підпису програми.\n%error
+%3.2f KiB	StringForSize		%3.2f KiB
+Blue:	ColorControl		Синій:
+Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		Неможливо створити реплікант для \"%description\".\n%error
+Written by:	AboutWindow		Автор:

@@ -1,0 +1,47 @@
+1	italian	x-vnd.Haiku-Pulse	3788463253
+Normal mode	DeskbarPulseView		Modalità normale
+Info	CPUButton		Informazioni
+Quit	DeskbarPulseView		Esci
+Info	DeskbarPulseView		Informazioni
+Normal mode	MiniPulseView		Modalità normale
+Frame color	ConfigView		Colore cornice
+Error	PulseApp		Errore
+Bar colors	ConfigView		Colori della barra
+%.2f GHz	NormalPulseView		%.2f GHz
+Defaults	PrefsWindow		Predefiniti
+%ld MHz	NormalPulseView		%ld MHz
+Mini mode	PrefsWindow		Modalità mini
+CPU progress bar	NormalPulseView		Barra di avanzamento CPU
+Fade colors	ConfigView		Colori sfumati
+About Pulse…	PulseView		Informazioni su Pulse…
+Pulse	NormalPulseView		Pulse
+Deskbar mode	NormalPulseView		Modalità Deskbar
+Remove replicant	CPUButton		Rimuovi replicante
+You can't disable the last active CPU.	PulseView		Non puoi disattivare l'unica CPU attiva.
+Width of icon:	ConfigView		Larghezza dell'icona:
+Deskbar mode	MiniPulseView		Modalità Deskbar
+OK	PulseView		OK
+%s\n\nBy David Ramsey and Arve Hjønnevåg\nRevised by Daniel Switkin\n	PulseApp		%s\n\nDi David Ramsey e Arve Hjønnevåg\nModificato da Daniel Switkin\n
+OK	PrefsWindow		OK
+Pulse	PulseApp		Pulse
+Removing from Deskbar failed.\n%s	DeskbarPulseView		Rimozione dalla Deskbar fallita.\n%s
+OK	PulseApp		OK
+About Pulse…	CPUButton		Informazioni su Pulse…
+Deskbar mode	PrefsWindow		Modalità Deskbar
+Mini mode	DeskbarPulseView		Modalità mini
+You can't disable the last active CPU.	CPUButton		Non puoi disattivare l'ultima CPU attiva.
+OK	CPUButton		OK
+Deskbar	CPUButton		Deskbar
+Settings…	PulseView		Impostazioni…
+Deskbar menu	CPUButton		Menu Deskbar
+Mini mode	NormalPulseView		Modalità mini
+Quit	MiniPulseView		Esci
+Info	PulseView		Informazioni
+OK	DeskbarPulseView		OK
+Info	PulseApp		Informazioni
+Pulse	System name		Pulse
+Active color	ConfigView		Colore attivo
+Installing in Deskbar failed\n%s	PulseApp		Installazione nella Deskbar fallita.\n%s
+Idle color	ConfigView		Colore di inattività
+Normal mode	PrefsWindow		Modalità normale
+Pulse settings	PulseWindow		Impostazioni di Pulse

@@ -1,0 +1,46 @@
+1	portuguese (brazil)	x-vnd.Haiku-PowerStatus	3173765686
+Design capacity low warning: 	PowerStatus		Aviso de design de baixa capacidade 
+Show percent	PowerStatus		Mostrar porcentagem
+Design capacity: 	PowerStatus		Capacidade de design:
+ mW	PowerStatus		 mW
+The battery level is getting low, please plug in the device.	PowerStatus		O nível da bateria estáficando baixo, por favor ligue o dispositivo.
+Battery low	PowerStatus		Bateria fraca
+Type: 	PowerStatus		Tipo:
+non-rechargeable	PowerStatus		não-recarregável
+Empty battery slot	PowerStatus		Slot de bateria vazio
+ mV	PowerStatus		 mV
+Run in window	PowerStatus		Em modo janela
+PowerStatus	System name		Estado de Força
+ mWh	PowerStatus		 mWh
+Battery info…	PowerStatus		Informação da bateria...
+Damaged battery	PowerStatus		Bateria danificada
+Show time	PowerStatus		Mostrar tempo
+Last full charge: 	PowerStatus		Última carga completa:
+Battery unused	PowerStatus		Bateria sem uso
+Extended battery info	PowerStatus		Informação da reserva de bateria
+ mA	PowerStatus		 mA
+Current rate: 	PowerStatus		Índice
+discharging	PowerStatus		descarregando
+Show text label	PowerStatus		Mostrar rótulos de texto
+About…	PowerStatus		Sobre...
+Model number: 	PowerStatus		Número do modelo
+Install in Deskbar	PowerStatus		Instalar na Deskbar
+ mAh	PowerStatus		 mAh
+Capacity: 	PowerStatus		Capacidade
+Battery discharging	PowerStatus		Descarregando bateria
+Serial number: 	PowerStatus		Número de série:
+Battery critical	PowerStatus		Bateria crítica
+Capacity granularity 1: 	PowerStatus		Capacidade granularidade 1
+OEM info: 	PowerStatus		Informação do fabricante
+Design voltage: 	PowerStatus		Design de voltagem:
+Battery charging	PowerStatus		Carregando bateria
+The battery level is critical, please plug in the device immediately.	PowerStatus		O nível de bateria é crítico, por favor conecte no dispositivo imediatamente.
+Design capacity warning: 	PowerStatus		Design de advertência de capacidade:
+Quit	PowerStatus		Sair
+rechargeable	PowerStatus		recarregável
+charging	PowerStatus		carregando
+You can run PowerStatus in a window or install it in the Deskbar.	PowerStatus		Você pode rodar o Estado de Força numa janela ou instalá-lo na Deskbar
+Show status icon	PowerStatus		Mostrar ícone de status
+Capacity granularity 2: 	PowerStatus		Capacidade granularidade 2
+Technology: 	PowerStatus		Tecnologia:
+no battery	PowerStatus		sem bateria

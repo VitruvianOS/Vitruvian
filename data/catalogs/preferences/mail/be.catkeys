@@ -1,0 +1,50 @@
+1	belarusian	x-vnd.Haiku-Mail	688530788
+Account settings	AutoConfigWindow		Наладкі рахунка
+\t\t· Outgoing	Config Window		\t\t· Выходны
+E-mail address:	E-Mail		Адрас E-mail:
+Create new account	AutoConfigWindow		Стварыць новы рахунак
+While sending and receiving	Config Window		Пры адпраўцы і атрыманні
+Apply	Config Window		Прымяніць
+Incoming mail filters	Config Views		Уваходныя фільтры пошты
+Outgoing mail filters	Config Views		Фільтры выходнай пошты
+Server name:	E-Mail		Імя серверу:
+Add	Config Window		Дадаць
+Back	AutoConfigWindow		Назад
+Real name:	E-Mail		Рэальнае імя:
+Real name:	Config Views		Рэальнае імя:
+\t\t· E-mail filters	Config Window		\t\t· Фільтры е-пошты
+Outgoing	E-Mail		Выходны
+Accounts	Config Window		Акаунты
+Outgoing	Config Window		Выходны
+Remove	Config Views		Выдаліць
+Settings	Config Window		Наладкі
+Never	Config Window	show status window	Ніколі
+Account name:	Config Views		Імя акаунту:
+\t\t· Incoming	Config Window		\t\t· Уваходны
+Enter a valid e-mail address.	AutoConfigWindow		Увядзіце адрас е-пошты.
+\nThe general settings couldn't be reverted.\n\nError retrieving general settings:\n%s\n	Config Window		\nАгульныя опцыі немагчыма адмяніць.\n\nПамылка пры атрыманні агульных опцый:\n%s\n
+Incoming	E-Mail		Уваходны
+Choose Protocol	E-Mail		Выбраць пратакол
+Return address:	Config Views		Адрас звароту:
+Password:	E-Mail		Пароль:
+Error retrieving general settings: %s\n	Config Window		Памылка пры атрыманні агульных наладак: %s\n
+The filter could not be moved. Deleting filter.	Config Views		Немагчыма перамесціць фільтар. Фільтар выдаляецца.
+OK	Config Views		ОК
+Revert	Config Window		Адмяніць
+Incoming	Config Window		Уваходны
+Finish	AutoConfigWindow		Скончыць
+Add filter	Config Views		Дадаць фільтр
+Account settings	Config Views		Наладкі акаунту
+minutes	Config Window		хвілін
+E-mail	System name		Е-Пошта
+Check every	Config Window		Правяраць кожныя
+Account name:	E-Mail		Імя акаунта:
+Edit mailbox menu…	Config Window		Правіць меню паштовай скрыні…
+Server Name:	E-Mail		Імя сервера:
+Remove	Config Window		Выдаліць
+Login name:	E-Mail		Імя карыстача:
+While sending	Config Window		Пры адапраўленні
+OK	Config Window		ОК
+OK	AutoConfigWindow		ОК
+Next	AutoConfigWindow		Далей
+Error	Config Window		Памылка

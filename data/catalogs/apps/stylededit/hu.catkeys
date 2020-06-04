@@ -1,0 +1,88 @@
+1	hungarian	x-vnd.Haiku-StyledEdit	727465241
+Document statistics	Statistics		Dokumentum statisztika
+Cannot revert, file not found: \"%s\".	RevertToSavedAlert		Nem vonható vissza, a fájl \"%s\" nem található.
+Cut	Menus		Kivágás
+Center	Menus		Középre
+Wrap-around search	FindandReplaceWindow		Folyamatos keresés
+Page setup…	Menus		Oldalbeállítás…
+Untitled 	StyledEditWindow		Névtelen
+OK	Statistics		Rendben
+Find	FindandReplaceWindow		Keresés
+New	Menus		Új
+Document	Menus		Dokumentum
+Search backwards	FindandReplaceWindow		Keresés visszafelé
+Find again	Menus		Keresés újra
+Read-only	StatusView		Csak olvasható
+Save	Menus		Mentés
+Cancel	QuitAlert		Mégse
+Copy	Menus		Másolás
+Reload	NodeMonitorAlerts		Újratöltés
+line %d, column %d	StatusView		%d. sor, %d. oszlop
+Words:	Statistics		Szó:
+???	LoadAlert		???
+Recover	NodeMonitorAlerts		Helyreállítás
+Error saving \"%s\":\n%s	SaveAlert		Hiba történt \"%s\" mentése közben:\n%s
+OK	RevertToSavedAlert		Rendben
+Unlock file	StatusView		Fájl feloldása
+Italic	Menus		Dőlt
+Can't undo	Menus		Nem vonható vissza
+Replace…	Menus		Csere…
+File	Menus		Fájl
+Bold	Menus		Félkövér
+Paste	Menus		Beillesztés
+File \"%file%\" was modified by another application, reload it?	NodeMonitorAlerts		A fájlt \"%file"\" egy másik program módosította. Újratöltsem?
+File \"%file%\" was removed by another application, recover it?	NodeMonitorAlerts		A fájlt \"%file%\" egy másik program törölte. Helyre szeretné állítani?
+Lines:	Statistics		Sor:
+Replace in all windows	FindandReplaceWindow		Cserélje minden ablakban
+\"%s\" has unsaved changes.\nRevert it to the last saved version? 	RevertToSavedAlert		A fájlban \"%s\" történt módosítások még nincsenek mentve.\nVissza szeretné állítani a legutóbbi mentett verziót?
+Save	SaveAlert		Mentés
+Default	Open_and_SaveAsPanel		Alapértelmett
+Cancel	RevertToSavedAlert		Mégse
+Cancel	FindandReplaceWindow		Mégse
+Statistics…	Menus		Statisztika…
+Encoding	Open_and_SaveAsPanel		Kódolás
+Replace all	FindandReplaceWindow		Mindet cseréli
+Close	Menus		Bezárás
+Error loading \"%s\":\n\tUnsupported format	LoadAlert		Hiba történt \"%s\" betöltése közben:\n\tA formátum nem támogatott
+Left	Menus		Balra
+Default	Menus		Alapértelmett
+OK	SaveAlert		Rendben
+Color	Menus		Szín
+Save changes to the document \"%s\"? 	QuitAlert		Menti a dokumentum \"%s\" változtatásait?
+StyledEdit	System name		StyledEdit
+Find:	FindandReplaceWindow		Keresés:
+Undo typing	QuitAlert		Gépelés visszavonása
+Error loading \"%s\":\n\t%s	LoadAlert		Hiba történt \"%s\" betöltésekor:\n\t%s
+Don't save	SaveAlert		Ne mentsen
+Reload…	Menus		Újratöltés…
+Print…	Menus		Nyomtatás…
+Quit	Menus		Kilépés
+Redo typing	QuitAlert		Újragépelés
+Ignore	NodeMonitorAlerts		Mellőzés
+Wrap lines	Menus		Sortörés
+Text encoding	Menus		Szöveg kódolása
+Unable to unlock file\n\t%s	QuitAlert		Nem tudom feloldani a fájlt:\n\t %s
+Modified	StatusView		Módosítva
+OK	LoadAlert		Rendben
+Save	QuitAlert		Mentés
+Case-sensitive	FindandReplaceWindow		Betűérzékeny
+Find selection	Menus		Keresés a kijelölésben
+Cancel	SaveAlert		Mégse
+Find…	Menus		Keresés…
+Revert	RevertToSavedAlert		Visszaállítás
+Size	Menus		Méret
+Autodetect	Menus		Automatikus felismerés
+Replace next	Menus		Következő cseréje
+OK	QuitAlert		Rendben
+Replace with:	FindandReplaceWindow		Csere erre:
+Edit	Menus		Szerkesztés
+Open…	Menus		Megnyitás…
+Save as…	Menus		Mentés másként…
+Replace	FindandReplaceWindow		Cserél
+Characters:	Statistics		Karakter:
+Don't save	QuitAlert		Ne mentse
+This file is marked read-only. Save changes to the document \"%s\"? 	SaveAlert		Ez a fájl írásvédett. Menti a \"%s\" dokumentum változtatásait?
+Align	Menus		Igazítás
+Font	Menus		Betűtípus
+Select all	Menus		Összes kijelölése
+Right	Menus		Jobbra

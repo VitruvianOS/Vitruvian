@@ -1,0 +1,50 @@
+1	german	x-vnd.Be-PEPL	2332202134
+Launching the FileTypes preflet to configure Person attributes has failed.\n\nError: 	People		Der Start der Dateityp-Einstellungen zum Konfigurieren der Person-Attribute ist fehlgeschlagen.\n\nFehler:
+Unnamed person	People		Unbenannte Person
+New person…	People		Neue Person…
+Address	People		Adresse
+Zip	People		Postleitzahl
+Select all	People		Alles auswählen
+Could not create %s.	People		\"%s\" konnte nicht erstellt werden.
+Quit	People		Beenden
+Company	People		Firma
+Name	People		Name
+The file '%name%' could not be written.	People		Die Datei '%name%' konnte nicht gespeichert werden.
+Contact name	People		Kontaktname
+Cancel	People		Abbrechen
+Edit	People		Bearbeiten
+Save changes before closing?	People		Änderungen vor dem Schließen speichern?
+People	System name		Kontakte
+Error	People		Fehler
+Revert	People		Anfangswerte
+Country	People		Land
+Person	Short mimetype description		Person
+New person	People		Neue Person
+Save	People		Speichern
+Fax	People		Fax
+URL	People		URL
+%name% picture	People		%name% Bild
+Home phone	People		Telefon (Privat)
+none	Groups list		keine
+Save as…	People		Speichern als…
+Cut	People		Ausschneiden
+Contact information for a person.	Long mimetype description		Kontaktinformationen einer Person.
+Remove image	People		Bild löschen
+City	People		Stadt
+Undo	People		Rückgängig
+Don't save	People		Nicht speichern
+Configure attributes	People		Attribute konfigurieren
+Work phone	People		Telefon (Arbeit)
+State	People		Bundesland
+Nickname	People		Spitzname
+OK	People		OK
+File	People		Datei
+Redo	People		Wiederholen
+Close	People		Schließen
+Copy	People		Kopieren
+Paste	People		Einfügen
+E-mail	People		E-mail
+Group	People		Gruppe
+Drop an image here,\nor use the contextual menu.	People		Bild hier fallen lassen,\noder Kontextmenü nutzen.
+Load image…	People		Bild laden…
+Sorry	People		Entschuldigung

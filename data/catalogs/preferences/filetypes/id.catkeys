@@ -1,0 +1,156 @@
+1	indonesian	x-vnd.Haiku-FileTypes	3116280330
+Left	Attribute Window	Attribute column alignment in Tracker	Kiri
+Final	Application Types Window		Final
+FileTypes request	FileTypes Window		Permintaan FileTypes
+This file type already exists	New File Type Window		Jenis file ini sudah ada
+Preferred application	FileTypes Window		Aplikasi yang disukai
+Launch	Application Types Window		Meluncurkan
+Removing uninstalled application types	Application Types Window		Menghapus tipe aplikasi yang telah dilepas
+Width:	Attribute Window	Default column width in Tracker for this attribute.	Lebar:
+Same as…	FileType Window	The same TYPE as ...	Sama seperti…
+(from super type)	FileTypes Window		(dari tipe super)
+Select same preferred application as	FileTypes Window		Pilih aplikasi yang disukai sama dengan
+Could not change attributes	Attribute Window		Tidak bisa mengubah atribut
+Icon	FileTypes Window		Ikon
+Add…	Application Type Window		Tambah…
+Attribute name:	Attribute Window		Nama atribut:
+Long description:	Application Type Window		Deskripsi panjang:
+Cancel	Preferred App Menu		Batal
+Remove	FileTypes Window		Hapus
+The application \"%s\" does not support this file type.\nAre you sure you want to set it anyway?	Preferred App Menu		Aplikasi ini \"%s\" Tidak mendukung tipe file ini.\nAnda yakin untuk tetap mengaturnya?
+Remove	Application Type Window		Hapus
+Gamma	Application Type Window		Gama
+Cancel	Application Type Window		Batal
+Attribute	Attribute Window		Atribut
+Multiple launch	Application Type Window		Beberapa peluncuran
+Edit…	Application Types Window		Sunting…
+Could not set preferred application	FileTypes Window		Tidak bisa mengatur aplikasi yang disukai
+Description	FileTypes Window		Keterangan
+Signature:	Application Types Window		Tanda tangan:
+None	FileTypes Window		Tak satupun
+Exclusive launch	Application Type Window		Peluncuran eksklusif
+Removing a file type cannot be reverted.\nAre you sure you want to remove it?	FileTypes Window		Menghapus jenis berkas tidak dapat dipulihkan.\nApakah Anda yakin ingin menghapusnya?
+Cancel	New File Type Window		Batal
+Select same preferred application as	FileType Window		Pilih aplikasi yang sama disukai sebagai
+Cancel	Type List Window		Batal
+Don't save	Application Type Window		Jangan disimpan
+Center	Attribute Window	Attribute column alignment in Tracker	Tengah
+Done	Extension Window		Selesai
+Development	Application Types Window		Pengembangan
+Abort	Application Types Window		Batal
+Save	Application Type Window		Simpan
+Same as…	FileType Window	The same APPLICATION as ...	Sama seperti…
+%1 application type	Application Type Window		%1 tipe aplikasi
+Icon	Application Type Window		Ikon
+Version:	Application Type Window		Versi:
+Default application	FileType Window		Aplikasi standar
+Internal name:	New File Type Window		Nama internal:
+Extension:	Extension Window		Tambahan:
+Extensions:	FileTypes Window		Ekstensi:
+Select preferred application	FileType Window		Pilih aplikasi yang disukai
+Description:	FileTypes Window		Keterangan:
+Multiple files from \"%s\" file type	FileType Window		Beberapa file dari \"%s\" tipe file
+Add new group	New File Type Window		Tambah grup baru
+Remove uninstalled	Application Types Window		Hapus yang telah dilepas
+File	Application Type Window		Berkas
+Progress	Application Types Window		Proses
+Select…	FileType Window		Pilih…
+Information	Application Types Window		Informasi
+Settings	FileTypes Window		Pengaturan
+Done	Attribute Window		Selesai
+FileTypes request	FileTypes		Permintaan FileTypes
+Select same type as	FileType Window		Pilih jenis yang sama seperti
+Version:	Application Types Window		Versi:
+Application types	Application Types Window		Jenis aplikasi
+(from application)	FileTypes Window		(dari aplikasi)
+Description:	Application Types Window		Keterangan:
+Name:	Application Types Window		Nama:
+File could not be opened	Preferred App Menu		Berkas tidak dapat dibuka
+Args only	Application Type Window		Hanya args
+Could not open \"%s\":\n%s	FileTypes		tidak bisa membuka \"%s\":\n%s
+Right	Attribute Window	Attribute column alignment in Tracker	Kanan
+Save changes before closing?	Application Type Window		Simpan perubahan sebelum ditutup?
+Background app	Application Type Window		Aplikasi latar
+Recognition rule is not valid:\n\n	FileTypes Window		Aturan pengenalan tidak valid:\n\n
+Show icons in list	FileTypes Window		Tampilkan ikon dalam daftar
+Editable	Attribute Window	If Tracker allows to edit this attribute.	Dapat disunting
+New resource file…	FileTypes Window		Berkas sumber daya baru…
+[Multiple files] file types	FileType Window		[Banyak file] jenis file
+Application type	Application Type Window		Jenis aplikasi
+Show in Tracker…	Application Types Window		Tunjukkan di Tracker…
+Type name:	FileTypes Window		Nama tipe:
+Visible	Attribute Window		Terlihat
+Select preferred application	FileTypes Window		Pilih aplikasi yang disukai
+Path:	Application Types Window		Lokasi:
+Could not install file type	New File Type Window		Tidak bisa menginstal jenis file
+Same as…	FileTypes Window		Sama seperti…
+Golden master	Application Type Window		Master emas
+FileTypes request	Preferred App Menu		Permintaan FileType
+Single launch	Application Type Window		Peluncuran tunggal
+no icon	FileTypes Window		tidak ada ikon
+%s file type	FileType Window		%s tipe berkas
+Removing a super type cannot be reverted.\nAll file types that belong to this super type will be lost!\n\nAre you sure you want to do this? To remove the whole group, hold down the Shift key and press \"Remove\".	FileTypes Window		Menghapus tipe super tidak dapat dipulihkan.\nSemua jenis file yang termasuk dalam tipe super akan hilang!\n\nApakah Anda yakin ingin melakukan ini? Untuk menghapus seluruh kelompok, tahan tombol Shift dan tekan \"Remove\".
+Add type	New File Type Window		Tambah tipe
+Remove icon	Icon View		Hapus ikon
+Cancel	Extension Window		Batal
+Alignment:	Attribute Window		Penjajaran:
+Icon	FileType Window		Ikon
+Signature:	Application Type Window		Tanda tangan:
+Development	Application Type Window		Pengembangan
+Golden master	Application Types Window		Master emas
+Add	Extension Window		Tambah
+Open…	FileTypes Window		Buka…
+Could not change file extensions	Extension Window		Tidak dapat mengubah ektensi berkas
+Could not open file	FileType Window		Tidak dapat membuka berkas
+Choose type	Type List Window		Pilih tipe
+Select…	FileTypes Window		Pilih…
+File recognition	FileTypes Window		Pengenalan berkas
+Application types…	FileTypes Window		Tipe aplikasi...
+Add icon…	Icon View		Tambah ikon…
+Cancel	FileTypes Window		Batal
+Save into resource file…	Application Type Window		Simpan ke dalam file sumber daya…
+Special:	Attribute Window		Khusus:
+Type:	Attribute Window		Tipe:
+Could not retrieve application signature	Preferred App Menu		Tidak dapat mengambil signature aplikasi
+Beta	Application Types Window		Beta
+Add group	New File Type Window		Tambah grup
+Cancel	Attribute Window		Batal
+Gamma	Application Types Window		Gama
+Supported types	Application Type Window		Tipe yang didukung
+Beta	Application Type Window		Beta
+Could not retrieve preferred application of this file	Preferred App Menu		Tidak dapat menjalani aplikasi kesukaan dari tipe berkas ini
+Application flags	Application Type Window		Tanda aplikasi
+OK	FileTypes		OKE
+Group name:	New File Type Window		Nama grup:
+Move up	FileTypes Window		Naik
+Add	Attribute Window		Tambah
+File	FileTypes Window		Berkas
+Open file	FileTypes		Buka file
+Version info	Application Type Window		Info versi
+Final	Application Type Window		Final
+Preferred application	FileType Window		Aplikasi yang disukai
+FileTypes	FileTypes		TypeBerkas
+Set preferred application	Preferred App Menu		Atur aplikasi yang disukai
+New file type	New File Type Window		Tipe berkas baru
+Short description:	Application Type Window		Deskripsi singkat:
+Save request	Application Type Window		Simpan permintaan
+Could not remove file type: %s\n	FileTypes Window		Tidak bisa menghapus tipe file: %s\n
+Display as:	Attribute Window	Tracker offers different display modes for attributes.	Tampilkan sebagai:
+Done	Type List Window		Selesai
+Extra attributes	FileTypes Window		Atribut tambahan
+Group:	New File Type Window		Grup:
+Alpha	Application Types Window		Alfa
+Close	Application Type Window		Tutup
+Extension	Extension Window		Tambahan
+Rule:	FileTypes Window		Aturan:
+FileTypes	System name		TipeBerkas
+Version	Application Types Window		Versi
+Quit	FileTypes Window		Keluar
+File type	FileType Window		Tipe berkas
+Internal name:	FileTypes Window		Nama internal:
+Add…	FileTypes Window		Tambah…
+Edit icon…	Icon View		Edit ikon…
+Internal name:	Attribute Window		Nama internal:
+Show recognition rule	FileTypes Window		Tampilkan aturan pengenalan
+Move down	FileTypes Window		Seret ke bawah
+Alpha	Application Type Window		Alfa

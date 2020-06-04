@@ -1,0 +1,30 @@
+1	catalan; valencian	x-vnd.Haiku-StyledEdit	3345279005
+Cut	Menus		Retalla
+OK	Statistics		D'acord
+Find	FindandReplaceWindow		Cerca
+Find again	Menus		Repeteix la cerca
+Save	Menus		Desa
+Cancel	QuitAlert		Anul·la
+OK	RevertToSavedAlert		D'acord
+Paste	Menus		Enganxa
+Save	SaveAlert		Desa
+Cancel	RevertToSavedAlert		Anul·la
+Cancel	FindandReplaceWindow		Anul·la
+Close	Menus		Tanca
+OK	SaveAlert		D'acord
+Save changes to the document \"%s\"? 	QuitAlert		Voleu desar els canvis al document \"%s\"? 
+StyledEdit	System name		Editor dels Estils
+Find:	FindandReplaceWindow		Cerca:
+Don't save	SaveAlert		No ho desis
+OK	LoadAlert		D'acord
+Save	QuitAlert		Desa
+Find selection	Menus		Cerca la selecció
+Cancel	SaveAlert		Anul·la
+Find…	Menus		Cerca…
+Replace next	Menus		Substitueix el següent
+OK	QuitAlert		D'acord
+Edit	Menus		Edita
+Open…	Menus		Obre...
+Save as…	Menus		Anomena i desa…
+Don't save	QuitAlert		No ho desis
+This file is marked read-only. Save changes to the document \"%s\"? 	SaveAlert		Aquest fitxer és només de lectura. Voleu desar els canvis al document \"%s\"? 

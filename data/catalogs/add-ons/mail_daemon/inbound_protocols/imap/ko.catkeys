@@ -1,0 +1,6 @@
+1	korean	x-vnd.Haiku-IMAP	3213145085
+Failed to fetch available storage.	IMAPFolderConfig		사용 가능한 저장소를 가져오는 데 실패했습니다.
+Apply	IMAPFolderConfig		더하기
+status	IMAPFolderConfig		상태
+IMAP Folders	IMAPFolderConfig		IMAP 폴더들
+Destination:	imap_config		대상:

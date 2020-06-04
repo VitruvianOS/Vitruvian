@@ -1,0 +1,20 @@
+1	dutch; flemish	x-vnd.Haiku-PSDTranslator	1706619436
+Lab	PSDLoader		Lab
+Uncompressed	PSDConfig		Ongecomprimeerd
+Indexed	PSDLoader		Geïndexeerd
+Grayscale	PSDLoader		Grijswaarden
+Photoshop image translator	PSDConfig		Photoshop-afbeelding translator
+Photoshop image translator	PSDTranslator		Photoshop-afbeelding translator
+Version %d.%d.%d, %s	PSDConfig		Versie %d.%d.%d, %s
+Photoshop image	PSDTranslator		Photoshop-afbeelding
+RLE	PSDConfig		RLE
+RGBA	PSDLoader		RGBA
+Photoshop image (%s)	PSDTranslator		Photoshop-afbeelding (%s)
+PSDTranslator Settings	PSDConfig		PSDTranslator-instellingen
+RGB	PSDLoader		RGB
+Bitmap	PSDLoader		Rasterafbeelding
+CMYK	PSDLoader		CMYK
+Compression: 	PSDConfig		Compressie: 
+Format: 	PSDConfig		Formaat: 
+Multichannel	PSDLoader		Multikanaal
+Duotone	PSDLoader		Duotone

@@ -1,0 +1,27 @@
+1	portuguese (brazil)	x-vnd.haiku-screenshot	3896204963
+Include window border	ScreenshotWindow		Incluir borda da janela
+Overwrite	ScreenshotWindow		Sobrescrever
+Save in:	ScreenshotWindow		Salvar em:
+This file already exists.\n Are you sure you would like to overwrite it?	ScreenshotWindow		Este arquivo já existe.\n Deseja realmente sobrescrevê-lo?
+Select	ScreenshotWindow		Escolher
+Save as:	ScreenshotWindow		Salvar como:
+seconds	ScreenshotWindow		segundos
+New screenshot	ScreenshotWindow		Nova captura
+Screenshot	System name		Captura de Tela
+Desktop	ScreenshotWindow		Desktop
+Artwork folder	ScreenshotWindow		Pasta de Artes
+Translator Settings	ScreenshotWindow		Configurações do tradutor
+Include mouse pointer	ScreenshotWindow		Incluir ponteiro do mouse
+overwrite	ScreenshotWindow		sobrescrever
+Settings…	ScreenshotWindow		Configurações...
+Choose folder	ScreenshotWindow		Escolher pasta
+Name:	ScreenshotWindow		Nome:
+Choose folder…	ScreenshotWindow		Escolha a pasta...
+Please select	ScreenshotWindow		Por favor escolha
+Cancel	ScreenshotWindow		Cancelar
+Delay:	ScreenshotWindow		Atraso:
+Copy to clipboard	ScreenshotWindow		Copiar para área de transferência
+screenshot	Screenshot	Base filename of screenshot files	captura
+Home folder	ScreenshotWindow		Pasta Home
+Save	ScreenshotWindow		Salvar
+Capture active window	ScreenshotWindow		Capturar janela ativa

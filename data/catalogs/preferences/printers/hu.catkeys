@@ -1,0 +1,41 @@
+1	hungarian	x-vnd.Be-PRNT	1465107170
+Test page	TestPageView		Tesztoldal
+Remove	PrintersWindow		Eltávolítás
+Red	TestPageView		Vörös
+Default Printer	PrinterListView		Alapértelmezett nyomtató
+<pick one>	AddPrinterDialog		<válasszon egyet>
+Connected to:	AddPrinterDialog		Csatlakozás:
+Make default	PrintersWindow		Legyen alapértelmezett
+Cyan	TestPageView		Cián
+Completed	JobListView		Kész
+Test page	PrintersWindow		Tesztoldal
+Transport: %transport% %transport_address%	PrinterListView		Csatlakozás: %transport% %transport_address%
+Failed	JobListView		Sikertelen
+Blue	TestPageView		Kék
+Waiting	JobListView		Várakozás
+Processing	JobListView		Feldolgozás
+Cancel	AddPrinterDialog		Mégse
+Unknown status	JobListView		Ismeretlen állapot
+Print jobs for %printer_name%	PrintersWindow		%printer_name% nyomtatási feladatai
+{0, plural, =-1{??? pages}=1{# page}other{# pages}}	JobListView		{0, plural, =-1{??? oldal}=1{# oldal}other{# oldal}}
+Add printer	AddPrinterDialog		Nyomtató hozzáadása
+Printers	PrintersWindow		Nyomtatók
+No printer found!	TransportMenu		Nem található nyomtató!
+Add…	PrintersWindow		Hozzáadás…
+Magenta	TestPageView		Magenta
+Transport: %transport% %transport_address%	TestPageView		Csatlakozás: %transport% %transport_address%
+Add	AddPrinterDialog		Hozzáadás
+Print jobs: No printer selected	PrintersWindow		Feladatok: nincs nyomtató kiválasztva
+Printer name:	AddPrinterDialog		Nyomtató neve:
+Yellow	TestPageView		Sárga
+Black	TestPageView		Fekete
+Printer type:	AddPrinterDialog		Nyomtató típusa:
+Printers	System name		Nyomtatók
+{0, plural,=0{No pending jobs}=1{1 pending job}other{# pending jobs}}	PrinterListView		{0, plural,=0{Nincsen nyomtatni való}=1{1 várakozó feladat}other{# várakozó feladat}}
+Printer: %printer_name%\nDriver:  %driver%\n	TestPageView		Nyomtató: %printer_name%\nVezérlő: %driver%\n
+Green	TestPageView		Zöld
+Print test page	PrintersWindow		Tesztoldal nyomtatása
+Restart job	PrintersWindow		Feladat újraindítása
+Driver: %driver%	PrinterListView		Vezérlő: %driver%
+Cancel job	PrintersWindow		Feladat visszavonása
+%.2f KB	JobListView		%.2f KiB

@@ -1,0 +1,17 @@
+1	japanese	x-vnd.Haiku-FontDemo	3449067186
+Stop cycling	ControlView		循環を中止
+Haiku, Inc.	FontDemoView		Haiku, Inc.
+Rotation: %d	ControlView		回転: %d
+Shear: %d	ControlView		傾斜: %d
+Spacing: %d	ControlView		文字間隔: %d
+Cycle fonts	ControlView		フォントを循環
+Font:	ControlView		フォント:
+Drawing mode:	ControlView		描画モード:
+Haiku, Inc.	ControlView		Haiku, Inc.
+Controls	FontDemo		コントロール
+FontDemo	System name		フォントデモ
+Outline: %d	ControlView		アウトライン: %d
+Text:	ControlView		テキスト:
+Antialiased text	ControlView		アンチエイリアス
+Bounding boxes	ControlView		バウンディングボックス
+Size: %d	ControlView		サイズ: %d

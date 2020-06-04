@@ -1,0 +1,27 @@
+1	belarusian	x-vnd.Haiku.TV	1995288111
+No menu	MainWin		Няма меню
+No border	MainWin		Няма мяжы
+force 704 x 576, display aspect 4:3	MainWin		прымусовыя 704 x 576 (4:3)
+Error, connecting to interface failed:\n\n	MainWin		Памылка, далучыцца да інтэрфейсу не ўдалося:\n\n
+force 544 x 576, display aspect 4:3	MainWin		прымусовыя 544 x 576 (4:3)
+Full screen	MainWin		Поўны экран
+Scale to native size	MainWin		Расцягнуць да роднага памеру
+unknown	MainWin		невядома
+Next channel	MainWin		Наступны канал
+Keep aspect ratio	MainWin		Захоўваць суадносіны бакоў
+DVB - Digital Video Broadcasting TV	MainWin		DVB - Лічбавае тэлебачанне
+Always on top	MainWin		Заўседы ў фокусе
+Debug	MainWin		Адладка
+Interface	MainWin		Інтэрфейс
+force 720 x 576, display aspect 4:3	MainWin		прымусовыя 720 x 576, экран 4:3
+Quit	MainWin		Выйсці
+Channel	MainWin		Канал
+Previous channel	MainWin		Папярэдні канал
+OK	MainWin		ОК
+TV	MainWin		Тэлевізар
+Settings	MainWin		Наладкі
+TV	System name		Тэлевізар
+Settings…	MainWin		Наладкі…
+None	MainWin		Няма
+Error, interface is busy:\n\n	MainWin		Памылка, інтэрфейс заняты:\n\n
+pixel aspect ratio	MainWin		суадносіны бакоў для пікселяў

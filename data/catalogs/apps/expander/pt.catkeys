@@ -1,0 +1,13 @@
+1	portuguese	x-vnd.Haiku-Expander	3298829330
+Cancel	ExpanderWindow		Cancelar
+Close	ExpanderMenu		Fechar
+Continue	ExpanderWindow		Continuar
+Destination	ExpanderWindow		Destino
+Expand	ExpanderMenu		Expandir
+Expander: Open	ExpanderWindow		Expander: Abrir
+Settings	ExpanderMenu		Definições
+Source	ExpanderWindow		Fonte
+Stop	ExpanderMenu		Parar
+Stop	ExpanderWindow		Parar
+The destination is not a folder.	ExpanderWindow		O destino não é uma pasta.
+is not supported	ExpanderWindow		não é suportado

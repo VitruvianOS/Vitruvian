@@ -1,0 +1,17 @@
+1	spanish; castilian	x-vnd.Haiku-FontDemo	3449067186
+Stop cycling	ControlView		Detener ciclo
+Haiku, Inc.	FontDemoView		Haiku, Inc.
+Rotation: %d	ControlView		Rotación: %d
+Shear: %d	ControlView		Corte: %d
+Spacing: %d	ControlView		Espacio: %d
+Cycle fonts	ControlView		Ciclar tipos de letra
+Font:	ControlView		Tipo de letra:
+Drawing mode:	ControlView		Modo de dibujo:
+Haiku, Inc.	ControlView		Haiku, Inc.
+Controls	FontDemo		Controles
+FontDemo	System name		FontDemo
+Outline: %d	ControlView		Esquema: %d
+Text:	ControlView		Text:
+Antialiased text	ControlView		Texto suavizado
+Bounding boxes	ControlView		Cajas con bordes
+Size: %d	ControlView		Tamaño: %d

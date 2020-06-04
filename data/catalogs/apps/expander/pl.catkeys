@@ -1,0 +1,49 @@
+1	polish	x-vnd.Haiku-Expander	1129502603
+Expand	ExpanderMenu		Rozpakuj
+Expanding '%s'…	ExpanderWindow		Rozpakowywanie „%s”…
+Close window when done expanding	ExpanderPreferences		Zamknij okno po zakończeniu rozpakowywania
+Set destination…	ExpanderMenu		Wybierz miejsce docelowe…
+Use:	ExpanderPreferences		Użyj:
+File expanded	ExpanderWindow		Plik rozpakowany
+The destination is read only.	ExpanderWindow		Miejsce docelowe jest tylko do odczytu.
+Expander: Open	ExpanderWindow		Expander: Otwórz
+ is not supported	ExpanderWindow		 nie jest obsługiwany
+Expander settings	ExpanderPreferences		Ustawienia Expandera
+Select current	DirectoryFilePanel		Wybierz obecny
+Source	ExpanderWindow		Źródło
+Error when expanding archive	ExpanderWindow		Wystąpił błąd podczas rozpakowywania archiwum
+Hide contents	ExpanderWindow		Ukryj zawartość
+Cancel	ExpanderWindow		Anuluj
+Automatically expand files	ExpanderPreferences		Automatycznie rozpakuj pliki
+Continue	ExpanderWindow		Kontynuuj
+Destination folder	ExpanderPreferences		Katalog docelowy
+Other	ExpanderPreferences		Inne
+Cancel	ExpanderPreferences		Anuluj
+Expansion	ExpanderPreferences		Rozpakowywanie
+Select	DirectoryFilePanel		Wybierz
+Destination folder doesn't exist. Would you like to create it?	ExpanderWindow		Katalog docelowy nie istnieje. Czy chcesz go utworzyć?
+Same directory as source (archive) file	ExpanderPreferences		Ten sam co archiwum źródłowe
+Settings	ExpanderMenu		Ustawienia
+Settings…	ExpanderMenu		Ustawienia…
+Expander: Choose destination	DirectoryFilePanel		Expander: Wybierz katalog docelowy
+Select	ExpanderPreferences		Wybierz
+Show contents	ExpanderWindow		Pokaż zawartość
+Automatically show contents listing	ExpanderPreferences		Automatycznie pokaż listę zawartości
+OK	ExpanderPreferences		OK
+Leave destination folder path empty	ExpanderPreferences		Pozostaw katalog docelowy pusty
+Failed to create the destination folder.	ExpanderWindow		Nie udało się utworzyć katalogu docelowego.
+Select '%s'…	DirectoryFilePanel		Wybierz „%s”…
+Create	ExpanderWindow		Utwórz
+The file doesn't exist	ExpanderWindow		Plik nie istnieje
+Stop	ExpanderMenu		Zatrzymaj
+File	ExpanderMenu		Plik
+Expander	System name		Expander
+Expand	ExpanderWindow		Rozpakuj
+Close	ExpanderMenu		Zamknij
+The destination is not a folder.	ExpanderWindow		Cel nie jest katalogiem.
+Open destination folder after extraction	ExpanderPreferences		Otwórz katalog docelowy po rozpakowaniu
+Creating listing for '%s'…	ExpanderWindow		Tworzenie listy dla „%s”…
+Set source…	ExpanderMenu		Wybierz źródło…
+Show contents	ExpanderMenu		Pokaż zawartość
+Stop	ExpanderWindow		Zatrzymaj
+Destination	ExpanderWindow		Cel

@@ -1,0 +1,41 @@
+1	french	x-vnd.Be-PRNT	1465107170
+Test page	TestPageView		Page de test
+Remove	PrintersWindow		Retirer
+Red	TestPageView		Rouge
+Default Printer	PrinterListView		Imprimante par défaut
+<pick one>	AddPrinterDialog		<choisir>
+Connected to:	AddPrinterDialog		Connecté à :
+Make default	PrintersWindow		Utiliser par défaut
+Cyan	TestPageView		Cyan
+Completed	JobListView		Achevé
+Test page	PrintersWindow		Page de test
+Transport: %transport% %transport_address%	PrinterListView		Liaison : %transport% %transport_address%
+Failed	JobListView		Échoué
+Blue	TestPageView		Bleu
+Waiting	JobListView		Attente
+Processing	JobListView		Traitement
+Cancel	AddPrinterDialog		Annuler
+Unknown status	JobListView		État inconnu
+Print jobs for %printer_name%	PrintersWindow		Impressions en cours pour %printer_name%
+{0, plural, =-1{??? pages}=1{# page}other{# pages}}	JobListView		{0, plural, =-1{??? pages}=1{# page}other{# pages}}
+Add printer	AddPrinterDialog		Ajouter une imprimante
+Printers	PrintersWindow		Imprimantes
+No printer found!	TransportMenu		Aucune imprimante trouvée !
+Add…	PrintersWindow		Ajouter…
+Magenta	TestPageView		Magenta
+Transport: %transport% %transport_address%	TestPageView		Liaison : %transport% %transport_address%
+Add	AddPrinterDialog		Ajouter
+Print jobs: No printer selected	PrintersWindow		Travaux d’impression : Aucune imprimante sélectionnée
+Printer name:	AddPrinterDialog		Nom de l’imprimante :
+Yellow	TestPageView		Jaune
+Black	TestPageView		Noir
+Printer type:	AddPrinterDialog		Type d’imprimante :
+Printers	System name		Imprimantes
+{0, plural,=0{No pending jobs}=1{1 pending job}other{# pending jobs}}	PrinterListView		{0, plural,=0{Aucun travail en attente}=1{1 travail en attente}other{# travaux en attente}}
+Printer: %printer_name%\nDriver:  %driver%\n	TestPageView		Imprimante : %printer_name%\n    Pilote : %driver%\n
+Green	TestPageView		Vert
+Print test page	PrintersWindow		Imprimer une page de test
+Restart job	PrintersWindow		Reprendre la travail
+Driver: %driver%	PrinterListView		Pilote : %driver%
+Cancel job	PrintersWindow		Annuler le travail
+%.2f KB	JobListView		%.2f Ko

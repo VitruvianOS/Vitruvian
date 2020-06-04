@@ -1,0 +1,72 @@
+1	dutch; flemish	x-vnd.Haiku-StyledEdit	537696910
+Document statistics	Statistics		Documentstatistieken
+Cannot revert, file not found: \"%s\".	RevertToSavedAlert		Kan niet herstellen, het bestand \"%s\" werd niet gevonden.
+Cut	Menus		Knippen
+Center	Menus		Centreren
+Wrap-around search	FindandReplaceWindow		Rondgaand zoeken
+Page setup…	Menus		Pagina-configuratie...
+Untitled 	StyledEditWindow		Naamloos
+OK	Statistics		Oké
+Find	FindandReplaceWindow		Zoeken
+New	Menus		Nieuw
+Document	Menus		Document
+Search backwards	FindandReplaceWindow		Achteruit zoeken
+Find again	Menus		Opnieuw zoeken
+Save	Menus		Opslaan
+Cancel	QuitAlert		Annuleren
+Copy	Menus		Kopiëren
+Words:	Statistics		Woorden:
+???	LoadAlert		???
+Error saving \"%s\":\n%s	SaveAlert		Fout bij opslaan van \"%s\":\n%s
+OK	RevertToSavedAlert		Oké
+Italic	Menus		Cursief
+Can't undo	Menus		Kan niet ongedaan maken
+Replace…	Menus		Vervangen...
+File	Menus		Bestand
+Bold	Menus		Vet
+Paste	Menus		Plakken
+Lines:	Statistics		Regels:
+Replace in all windows	FindandReplaceWindow		Vervang in alle vensters
+Save	SaveAlert		Opslaan
+Default	Open_and_SaveAsPanel		Standaard
+Cancel	RevertToSavedAlert		Annuleren
+Cancel	FindandReplaceWindow		Annuleren
+Statistics…	Menus		Statistieken...
+Encoding	Open_and_SaveAsPanel		Codering
+Replace all	FindandReplaceWindow		Alles vervangen
+Close	Menus		Sluiten
+Error loading \"%s\":\n\tUnsupported format	LoadAlert		Fout bij 't laden van \"%s\":\n\tNiet-ondersteund formaat
+Left	Menus		Links
+Default	Menus		Standaard
+OK	SaveAlert		Oké
+Color	Menus		Kleur
+Save changes to the document \"%s\"? 	QuitAlert		Veranderingen aan het document \"%s\" opslaan? 
+StyledEdit	System name		StyledEdit
+Find:	FindandReplaceWindow		Vind:
+Undo typing	QuitAlert		Typen ongedaan maken
+Error loading \"%s\":\n\t%s	LoadAlert		Fout bij het laden van \"%s\":\n\t%s
+Don't save	SaveAlert		Niet opslaan
+Print…	Menus		Afdrukken...
+Quit	Menus		Sluiten
+Redo typing	QuitAlert		Opnieuw typen
+Wrap lines	Menus		Regels afbreken
+OK	LoadAlert		Oké
+Save	QuitAlert		Opslaan
+Case-sensitive	FindandReplaceWindow		Hoofdlettergevoelig
+Find selection	Menus		Selectie vinden
+Cancel	SaveAlert		Annuleren
+Find…	Menus		Zoeken...
+Size	Menus		Grootte
+Replace next	Menus		Volgende vervangen
+OK	QuitAlert		Oké
+Replace with:	FindandReplaceWindow		Vervangen door:
+Edit	Menus		Bewerken
+Open…	Menus		Openen…
+Save as…	Menus		Opslaan als...
+Replace	FindandReplaceWindow		Vervangen
+Characters:	Statistics		Karakters:
+Don't save	QuitAlert		Niet opslaan
+Align	Menus		Uitlijnen
+Font	Menus		Lettertype
+Select all	Menus		Alles selecteren
+Right	Menus		Rechts

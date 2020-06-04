@@ -1,0 +1,46 @@
+1	lithuanian	x-vnd.Haiku-ActivityMonitor	581504566
+P-faults	DataSource		Psl. klaidos
+Threads	DataSource		Gijos
+Always on top	ActivityWindow		Visada viršuje
+Add graph	ActivityWindow		Pridėti grafiką
+Teams	DataSource		Procesų grupės
+MiB	DataSource		MiB
+Network send	DataSource		Išsiunčiami duomenys
+CPU usage (combined)	DataSource		Centrinio procesoriaus apkrova (kompleksinė)
+CPU	DataSource		Centrinis procesorius Nr.
+Used memory	DataSource		Naudojama atmintis
+Cached memory	DataSource		Atmintis podėlyje
+Apps	DataSource		Programos
+Show legend	ActivityView		Rodyti legendą
+Text clipboard	DataSource		Tekstas iškarpinėje
+Settings	ActivityWindow		Nuostatos
+Receiving	DataSource		Atsiuntimas
+Settings…	ActivityWindow		Nuostatos…
+Ports	DataSource		Prievadai
+Page faults	DataSource		Puslapiavimo klaidos
+Sending	DataSource		Išsiuntimas
+Cache	DataSource		Podėlis
+%.1f faults/s	DataSource		%.1f klaidų/s
+Update time interval:	SettingsWindow		Atnaujinimo periodas:
+TX	DataSource	Shorter version for Sending	Išs.
+Quit	ActivityWindow		Baigti darbą
+Block cache memory	DataSource		Blokinio podėlio atmintis
+Remove graph	ActivityView		Pašalinti grafiką
+%lld sec.	SettingsWindow		%lld sek.
+%lld ms	SettingsWindow		%lld ms
+CPU usage	DataSource		Centrinio procesoriaus apkrova
+Raw clipboard	DataSource		Iškarpinės apimtis
+Sems	DataSource		Sem.
+%.1f MiB	DataSource		%.1f MiB
+ActivityMonitor	System name		Aktyvumo monitorius
+Running applications	DataSource		Veikiančios programos
+Semaphores	DataSource		Semaforai
+Block cache	DataSource		Blokinis podėlis
+Swap space	DataSource		Sukeitimų failo dydis
+Swap	DataSource		Sukeitimų failas
+File	ActivityWindow		Failas
+usage	DataSource		apkrova
+Additional items	ActivityView		Papildomi elementai
+Network receive	DataSource		Atsiunčiami duomenys
+Memory	DataSource		Atmintis
+RX	DataSource	Shorter version for Receiving.	Ats.

@@ -1,0 +1,50 @@
+1	slovak	x-vnd.Be-PEPL	2332202134
+Launching the FileTypes preflet to configure Person attributes has failed.\n\nError: 	People		Spustenie nastavenia typov súborov, aby sa nastavili atribúty Osoby, zlyhalo.\n\nChyba: 
+Unnamed person	People		Nepomenovaná osoba
+New person…	People		Nová osoba…
+Address	People		Adresa
+Zip	People		PSČ
+Select all	People		Vybrať všetky
+Could not create %s.	People		Nebolo možné vytvoriť %s.
+Quit	People		Ukončiť
+Company	People		Spoločnosť
+Name	People		Meno
+The file '%name%' could not be written.	People		Súbor „%name%“ nebolo možné zapísať.
+Contact name	People		Meno kontaktu
+Cancel	People		Zrušiť
+Edit	People		Upraviť
+Save changes before closing?	People		Uložiť zmeny pred ukončením?
+People	System name		Ľudia
+Error	People		Chyba
+Revert	People		Vrátiť
+Country	People		Krajina
+Person	Short mimetype description		Osoba
+New person	People		Nová osoba
+Save	People		Uložiť
+Fax	People		Fax
+URL	People		URL
+%name% picture	People		Obrázok %name%
+Home phone	People		Telefón domov
+none	Groups list		žiadna
+Save as…	People		Uložiť ako…
+Cut	People		Vystrihnúť
+Contact information for a person.	Long mimetype description		Kontaktné informácie osoby.
+Remove image	People		Odstrániť obrázok
+City	People		Mesto
+Undo	People		Späť
+Don't save	People		Neukladať
+Configure attributes	People		Nastaviť atribúty
+Work phone	People		Telefón do práce
+State	People		Štát
+Nickname	People		Prezývka
+OK	People		OK
+File	People		Súbor
+Redo	People		Opakovať
+Close	People		Zatvoriť
+Copy	People		Kopírovať
+Paste	People		Vložiť
+E-mail	People		E-mail
+Group	People		Skupina
+Drop an image here,\nor use the contextual menu.	People		Sem pretiahnite obrázok\nalebo použite kontextové menu.
+Load image…	People		Načítať obrázok…
+Sorry	People		Prepáčte

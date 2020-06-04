@@ -1,0 +1,38 @@
+1	romanian	x-vnd.Be-PRNT	2042381362
+Test page	TestPageView		Pagină de test
+Remove	PrintersWindow		Elimină
+Red	TestPageView		Roșu
+Default Printer	PrinterListView		Imprimantă implicită
+<pick one>	AddPrinterDialog		<pick one>
+Connected to:	AddPrinterDialog		Conectat la:
+Make default	PrintersWindow		Stabilește ca implicit
+Cyan	TestPageView		Cyan
+Completed	JobListView		Completat
+Test page	PrintersWindow		Pagină de test
+Transport: %transport% %transport_address%	PrinterListView		Transport: %transport% %transport_address%
+Failed	JobListView		Eșuat
+Blue	TestPageView		Albastru
+Waiting	JobListView		Se așteaptă
+Processing	JobListView		Se procesează
+Cancel	AddPrinterDialog		Anulează
+Unknown status	JobListView		Stare necunoscută
+Add printer	AddPrinterDialog		Adaugă imprimantă
+Printers	PrintersWindow		Imprimante
+No printer found!	TransportMenu		Nicio imprimantă găsită!
+Add…	PrintersWindow		Adaugă…
+Magenta	TestPageView		Purpuriu
+Transport: %transport% %transport_address%	TestPageView		Transport: %transport% %transport_address%
+Add	AddPrinterDialog		Adaugă
+Print jobs: No printer selected	PrintersWindow		Sarcini de tipărire: Nicio imprimantă selectată
+Printer name:	AddPrinterDialog		Nume imprimantă:
+Yellow	TestPageView		Galben
+Black	TestPageView		Negru
+Printer type:	AddPrinterDialog		Tip de imprimantă:
+Printers	System name		Imprimante
+Printer: %printer_name%\nDriver:  %driver%\n	TestPageView		Imprimantă: %printer_name%\nDriver:  %driver%\n
+Green	TestPageView		Verde
+Print test page	PrintersWindow		Tipărește o pagină de test
+Restart job	PrintersWindow		Repornește sarcină
+Driver: %driver%	PrinterListView		Driver: %driver%
+Cancel job	PrintersWindow		Anulează sarcină
+%.2f KB	JobListView		%.2f KB

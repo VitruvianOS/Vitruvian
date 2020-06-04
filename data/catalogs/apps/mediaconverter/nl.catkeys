@@ -1,0 +1,55 @@
+1	dutch; flemish	x-vnd.Haiku-MediaConverter	3017975112
+Video quality: %3d%%	MediaConverter		Videokwaliteit: %3d%%
+Source files	MediaConverter		Bronbestanden
+Error converting '%filename'	MediaConverter		Fout bij het omzetten van '%filename'
+Conversion completed	MediaConverter		Conversie voltooid
+Audio:	MediaConverter-FileInfo		Audio:
+MediaConverter+:SaveDirectory	MediaConverter		MediaConverter+:OpslagMap
+Cancelling	MediaConverter		Annuleren
+None available	Audio codecs		Geen beschikbaar
+No file selected	MediaConverter-FileInfo		Geen bestand geselecteerd
+High	MediaConverter		Hoog
+File Error	MediaConverter-FileInfo		Bestandsfout
+None available	Video codecs		Geen beschikbaar
+Output format	MediaConverter		Uitvoerformaat
+OK	MediaConverter		OK
+Error creating '%filename'	MediaConverter		Fout bij het aanmaken van '%filename'
+Error loading a file	MediaConverter		Fout bij het laden van een bestand
+Encoder parameters	MediaConverter-EncoderWindow		Parameters van de encoder
+Open…	Menu		Openen ...
+Audio encoding:	MediaConverter		Audiocodering:
+Audio quality: %3d%%	MediaConverter		Audiokwaliteit: %3d%%
+Cancelling…	MediaConverter		Wordt geannuleerd...
+Output file '%filename' created	MediaConverter		Uitvoerbestand '%filename' gemaakt
+Output folder	MediaConverter		Uitvoermap
+ seconds	MediaFileInfo		seconden
+Video using parameters form settings	MediaConverter		Video gebruik makend van de gespecifieerde instellingen
+Video:	MediaConverter-FileInfo		Video:
+Select	MediaConverter		Selecteren
+Conversion cancelled	MediaConverter		Omzetting geannuleerd
+Low	MediaConverter		Laag
+Error loading files	MediaConverter		Fout bij het laden van bestanden
+End   [ms]: 	MediaConverter		Einde [ms]:
+Cancel	MediaConverter		Annuleren
+OK	MediaConverter-FileInfo		OK
+Video encoding:	MediaConverter		Videocodering:
+An error has occurred reading the file info.\n\nError : 	MediaConverter-FileInfo		Er is een fout opgetreden bij het lezen van de bestandsinformatie.\n\nFout:
+Error	MediaConverter		Fout
+File details	MediaConverter		Bestandsdetails
+No audio	Audio codecs list		Geen audio
+Drop media files onto this window	MediaConverter		Sleep mediabestanden naar dit venster
+Quit	Menu		Afsluiten
+Duration:	MediaConverter-FileInfo		Duur:
+MediaConverter	System name		MediaConverter
+Error launching: %strError%	MediaConverter		Fout bij het starten: %strError%
+File format:	MediaConverter		Bestandsformaat:
+File	Menu		Bestand
+Video quality not supported	MediaConverter		Videokwaliteit niet ondersteund
+Select this folder	MediaConverter		Deze map selecteren
+%d bit 	MediaFileInfo		%d bit
+No video	Video codecs list		Geen video
+Continue	MediaConverter		Voortzetten
+Convert	MediaConverter		Converteren
+Audio quality not supported	MediaConverter		Geluidskwaliteit wordt niet ondersteund
+Preview	MediaConverter		Voorbeeld
+Start [ms]: 	MediaConverter		Start [ms]:

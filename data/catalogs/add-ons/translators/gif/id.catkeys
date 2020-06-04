@@ -1,0 +1,19 @@
+1	indonesian	x-vnd.Haiku-GIFTranslator	2201651797
+Websafe	GIFView		Web aman
+Write interlaced images	GIFView		Tulis gambar interlace
+Optimal	GIFView		Optimal
+Greyscale	GIFView		Skala abu-abu
+Colors:	GIFView		Warna:
+GIF image translator	GIFTranslator		Penterjemah citra GIF
+Be Bitmap Format (GIFTranslator)	GIFTranslator		Format Bitmap Be (GIFTranslator)
+GIF image translator	GIFView		Penterjemah citra GIF
+Palette:	GIFView		Palet:
+GIF image	GIFTranslator		Citra GIF
+Write transparent images	GIFView		Tulis citra transparan
+GIF images	GIFTranslator		Citra GIF
+Version %d.%d.%d, %s	GIFView		Versi %d.%d.%d, %s
+Use RGB color	GIFView		Gunakan warna RGB
+Use dithering	GIFView		Gunakan penggetaran
+GIF Settings	GIFTranslator		Pengaturan GIF
+BeOS system	GIFView		Sistem BeOS
+Automatic (from alpha channel)	GIFView		Otomatis (dari kanal alpha)

@@ -1,0 +1,62 @@
+1	finnish	x-vnd.Haiku-ShowImage	3998703664
+Use as background…	Menus		Käytä taustana…
+File	Menus		Tiedosto
+Slide delay	Menus		Diaviive
+Selection mode	Menus		Valintatila
+Zoom in	Menus		Lähennä
+The document '%s' has been changed. Do you want to close the document?	ClosePrompt		Asiakirja ’%s’ on muuttunut. Haluatko sulkea asiakirjan?
+Page setup…	Menus		Sivuasetus...
+Print…	Menus		Tulosta...
+Get info…	Menus		Haetaan tiedot...
+OK	SaveToFile		Valmis
+Previous page	Menus		Edellinen sivu
+View	Menus		Näkymä
+Full screen	Menus		Kokoruutu
+Go to page	Menus		Siirry sivulle
+Zoom out	Menus		Loitonna
+Quit	Menus		Lopeta
+Rotate counterclockwise	Menus		Pyöritä vastapäivään
+High-quality zooming	Menus		Korkealaatuinen rajaus
+Browse	Menus		Selaa
+Edit	Menus		Muokkaa
+Could not load image! Either the file or an image translator for it does not exist.	LoadAlerts		Kuvan lataus epäonnistui! Puuttuu joko tiedosto tai kuvamuunnin sitä varten.
+First page	Menus		Ensimmäinen sivu
+The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		Asiakirja ’%s’ (sivu %d) on muuttunut. Haluatko sulkea asiakirjan?
+Leave full screen	Menus		Jätä kokoruututila
+Close	Menus		Sulje
+Close	ClosePrompt		Sulje
+Resize to (in 1/72 inches):	PrintOptionsWindow		Skaalaa kokoon (1/72 tuumissa):
+Rating	Menus		Arvosana
+Flip left to right	Menus		Käännä ympäri vasemmalta oikealle
+Show caption in full screen mode	Menus		Näytä kuvateksti kokoruututilassa
+DPI:	PrintOptionsWindow		DPI:
+Open…	Menus		Avaa...
+Next file	Menus		Seuraava tiedosto
+Clear selection	Menus		Tyhjennä valinta
+Close document	ClosePrompt		Sulje asiakirja
+Height: 	PrintOptionsWindow		Korkeus: 
+The file '%s' could not be written.	SaveToFile		Tiedoston ’%s’ kirjoittaminen epäonnistui.
+Cancel	ClosePrompt		Peru
+Show tool bar	Menus		Näytä työkalupalkki
+Fit to window	Menus		Sovita ikkunaan
+Print options	PrintOptionsWindow		Tulostusvalitsimet
+Copy	Menus		Kopioi
+Progress monitor	ProgressWindow		Edistymisvalvonta
+Last page	Menus		Viimeinen sivu
+Stretch to window	Menus		Venytä ikkunaan
+Previous file	Menus		Edellinen tiedosto
+ShowImage	System name		Kuvakatselin
+Slide show	Menus		Diaesitys
+Fit image to page	PrintOptionsWindow		Sovita kuva sivulle
+Flip top to bottom	Menus		Käännä ympäri ylhäältä alas
+Select all	Menus		Valitse kaikki
+Zoom factor in %:	PrintOptionsWindow		Rajaustekijä kohteessa %:
+Width:	PrintOptionsWindow		Leveys:
+Image	Menus		Kuva
+Move to Trash	Menus		Siirrä roskakoriin
+OK	Alerts		Valmis
+Rotate clockwise	Menus		Pyöritä myötäpäivään
+Job setup	PrintOptionsWindow		Työasetukset
+Original size	Menus		Alkuperäiskoko
+Next page	Menus		Seuraava sivu
+Save as…	Menus		Tallenna nimellä...

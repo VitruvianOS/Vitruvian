@@ -1,0 +1,32 @@
+1	portuguese	x-vnd.Haiku-Installer	1519304611
+%1ld of %2ld	InstallerWindow	number of files copied	%1ld de %2ld
+?? of ??	InstallerWindow	Unknown progress	?? de ??
+???	InstallerWindow	Unknown partition name	???
+Additional disk space required: %s	InstallerWindow		Espaço em disco adicional necessário: %s
+Additional disk space required: 0.0 KiB	InstallerWindow		Espaço em disco adicional necessário: 0.0 KiB
+Begin	InstallerWindow		Iniciar
+Cancel	InstallProgress		Cancelar
+Cancel	InstallerWindow		Cancelar
+Collecting copy information.	InstallProgress		A obter informações da cópia.
+Continue	InstallerApp		Continuar
+Continue	InstallerWindow	In alert after pressing Stop	Continuar
+Hide optional packages	InstallerWindow		Ocultar pacotes opcionais
+Install anyway	InstallProgress		Instalar na mesma
+Install from:	InstallerWindow		Instalar a partir de:
+Install progress:  	InstallerWindow		Progresso da instalação:
+Installation canceled.	InstallProgress		Instalação cancelada.
+No optional packages available.	PackagesView		Não existem pacotes opcionais disponíveis.
+OK	InstallProgress		OK
+OK	InstallerApp		OK
+OK	InstallerWindow		OK
+Onto:	InstallerWindow		Em:
+Quit	InstallerWindow		Terminar
+Restart system	InstallerWindow		Reiniciar sistema
+Show optional packages	InstallerWindow		Mostrar pacotes opcionais
+Starting Installation.	InstallProgress		A iniciar a instalação.
+Stop	InstallerWindow	In alert after pressing Stop	Parar
+The mount point could not be retrieved.	InstallProgress		Não foi possível obter o ponto de montagem.
+Try installing anyway	InstallProgress		Tentar instalar na mesma
+Unknown Type	InstallProgress	Partition content type	Tipo desconhecido
+Write boot sector to '%s'	InstallerWindow		Escrever sector de arranque em '%s'
+scanning…	InstallerWindow		A analisar...

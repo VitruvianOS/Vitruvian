@@ -1,0 +1,41 @@
+1	swedish	x-vnd.Be-PRNT	1465107170
+Test page	TestPageView		Testsida
+Remove	PrintersWindow		Ta bort
+Red	TestPageView		Röd
+Default Printer	PrinterListView		Standardskrivare
+<pick one>	AddPrinterDialog		<välj en>
+Connected to:	AddPrinterDialog		Ansluten till:
+Make default	PrintersWindow		Gör till förvald
+Cyan	TestPageView		Cyan
+Completed	JobListView		Färdigt
+Test page	PrintersWindow		Testsida
+Transport: %transport% %transport_address%	PrinterListView		Transport: %transport% %transport_address%
+Failed	JobListView		Misslyckades
+Blue	TestPageView		Blå
+Waiting	JobListView		Väntar
+Processing	JobListView		Bearbetar
+Cancel	AddPrinterDialog		Avbryt
+Unknown status	JobListView		Okänd status
+Print jobs for %printer_name%	PrintersWindow		Utskriftsjobb för %printer_name%
+{0, plural, =-1{??? pages}=1{# page}other{# pages}}	JobListView		{0, plural, =-1{??? sidor}=1{# sida}other{# sidor}}
+Add printer	AddPrinterDialog		Lägg till skrivare
+Printers	PrintersWindow		Skrivare
+No printer found!	TransportMenu		Ingen skrivare funnen!
+Add…	PrintersWindow		Lägg till...
+Magenta	TestPageView		Magneta
+Transport: %transport% %transport_address%	TestPageView		Transport: %transport% %transport_address%
+Add	AddPrinterDialog		Lägg till
+Print jobs: No printer selected	PrintersWindow		Utskrifter: Ingen skrivare vald
+Printer name:	AddPrinterDialog		Skrivarnamn:
+Yellow	TestPageView		Gul
+Black	TestPageView		Svart
+Printer type:	AddPrinterDialog		Skrivartyp:
+Printers	System name		Skrivare
+{0, plural,=0{No pending jobs}=1{1 pending job}other{# pending jobs}}	PrinterListView		{0, plural,=0{Inga väntande jobb}=1{1 väntande jobb}other{# väntande jobb}}
+Printer: %printer_name%\nDriver:  %driver%\n	TestPageView		Skrivare: %printer_name%\nDrivrutin: %driver%\n
+Green	TestPageView		Grön
+Print test page	PrintersWindow		Skriv ut testsida
+Restart job	PrintersWindow		Starta om utskrift
+Driver: %driver%	PrinterListView		Drivrutin: %driver%
+Cancel job	PrintersWindow		Avbryt utskrift
+%.2f KB	JobListView		%.2f KB

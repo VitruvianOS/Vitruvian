@@ -1,0 +1,155 @@
+1	hungarian	x-vnd.Haiku-MediaPlayer	1313616492
+Remove Entry into Trash	MediaPlayer-RemovePLItemsCmd		Bejegyzés Szemetesbe helyezése
+Close	MediaPlayer-PlaylistWindow		Bezárás
+Volume of background clips	MediaPlayer-SettingsWindow		Háttérbeli klippek hangereje
+Use hardware video overlays if available	MediaPlayer-SettingsWindow		Hardveres gyorsítás használata ha elérhető
+Audio	MediaPlayer-InfoWin		Audió
+Subtitle placement:	MediaPlayer-SettingsWindow		Felirat helye:
+MediaPlayer	System name		Médialejátszó
+Audio track	MediaPlayer-Main		Audiósáv
+Muted	MediaPlayer-SettingsWindow		Némítva
+OK	MediaPlayer-RemovePLItemsCmd		Rendben
+Open Playlist	MediaPlayer-PlaylistWindow		Lejátszási lista megnyitása
+Subtitles	MediaPlayer-Main		Feliratok
+%app% encountered an internal error. The file could not be opened.	MediaPlayer-Main		A(z) %app% egy belső hibáa ütközött. A fájlt nem sikerült megnyitni.
+DrawBitmap	MediaPlayer-InfoWin		BittérképKirajzolás
+File info	MediaPlayer-InfoWin		Információk
+raw audio	MediaPlayer-InfoWin		nyers audio
+Select all	MediaPlayer-PlaylistWindow		Mind kijelölése
+New player…	MediaPlayer-Main		Új lejátszó…
+Move Entries	MediaPlayer-MovePLItemsCmd		Bejegyzések áthelyezése
+OK	MediaPlayer-Main		Rendben
+Remove	MediaPlayer-PlaylistWindow		Eltávolítás
+<unknown>	MediaPlayer-InfoWin		<ismeretlen>
+Resume:	MediaPlayer-SettingsWindow		Folytatás:
+Duration	MediaPlayer-InfoWin		Időtartam
+Import Entries	MediaPlayer-ImportPLItemsCmd		Bejegyzések importálása
+Open network stream	MediaPlayer-Main		Hálózati műsor megnyitása
+Move file to Trash	MediaPlayer-PlaylistWindow		Fájl Szemetesbe helyezése
+Open file…	MediaPlayer-Main		Fájl megnyitása…
+Scale controls in full screen mode	MediaPlayer-SettingsWindow		Nagyított vezérlők teljes képernyős módban
+View options	MediaPlayer-SettingsWindow		Megjelenítési beállítások
+%d kHz	MediaPlayer-InfoWin		%d kHz
+Full volume	MediaPlayer-SettingsWindow		Teljes hangerő
+<untitled>	PlaylistItem-title		<névtelen>
+Start media server	MediaPlayer-Main		Médiakiszolgáló indítása
+It appears the media server is not running.\nWould you like to start it ?	MediaPlayer-Main		Úgy tűnik a médiakiszolgáló nem fut.\nEl kívánja indítani?
+Location	MediaPlayer-InfoWin		Útvonal
+Medium	MediaPlayer-SettingsWindow		Közepes
+Play mode	MediaPlayer-SettingsWindow		Lejátszás módja
+Playlist	MediaPlayer-PlaylistWindow		Lejátszási lista
+%d Bit	MediaPlayer-InfoWin		%d bit
+Track	Audio Track Menu		Sáv
+Close	MediaPlayer-Main		Bezárás
+Save error	MediaPlayer-PlaylistWindow		Mentési hiba
+Attributes	MediaPlayer-Main		Jellemzők
+Bottom of screen	MediaPlayer-SettingsWindow		A képernyő alján
+MediaPlayer settings	MediaPlayer-SettingsWindow		Médialejátszó beállításai
+Copyright	MediaPlayer-InfoWin		Másolásvédett
+Invalid URL inserted!	MediaPlayer-NetworkStream		A megadott cím érvénytelen.
+Aspect ratio	MediaPlayer-Main		Képarány
+Saving the playlist failed.\n\nError: 	MediaPlayer-PlaylistWindow		Lejátszási lista mentése sikertelen.\n\nHiba:
+<no media>	MediaPlayer-InfoWin		<nincs fájl>
+Hide interface	MediaPlayer-Main		Vezérlők elrejtése
+Error: 	MediaPlayer-Main		Hiba:
+Video track	MediaPlayer-Main		Videósáv
+Playlist…	MediaPlayer-Main		Lejátszási lista…
+<unnamed media>	MediaPlayer-InfoWin		<névtelen>
+Save	MediaPlayer-PlaylistWindow		Mentés
+Randomize Entries	MediaPlayer-RandomizePLItemsCmd		Bejegyzések véletlenszerűsítése
+Cancel	MediaPlayer-NetworkStream		Mégse
+Nothing to Play	MediaPlayer-Main		Nincs mit lejátszani
+OK	MediaPlayer-SettingsWindow		Rendben
+Remove Entries	MediaPlayer-RemovePLItemsCmd		Bejegyzések eltávolítása
+never	MediaPlayer-SettingsWindow		soha
+Loop audio	MediaPlayer-SettingsWindow		Hangfájl ismétlése
+Internal error (malformed message). Saving the playlist failed.	MediaPlayer-PlaylistWindow		Belső hiba (rossz üzenet). A lejátszási lista mentése sikertelen.
+Open…	MediaPlayer-PlaylistWindow		Megnyitás…
+Revert	MediaPlayer-SettingsWindow		Visszaállít
+Low volume	MediaPlayer-SettingsWindow		Alacsony hangerő
+Audio	MediaPlayer-Main		Audió
+{0, plural, =1{Mono} =2{Stereo} other{# Channels}}	MediaPlayer-InfoWin		{0, plural, =1{Mono} =2{Stereo} other{# csatorna}}
+Quit	MediaPlayer-Main		Kilépés
+Redo	MediaPlayer-PlaylistWindow		Újra
+Move Entry	MediaPlayer-MovePLItemsCmd		Bejegyzés áthelyezése
+<unknown>	PlaylistItem-author		<névtelen>
+Cancel	MediaPlayer-SettingsWindow		Mégse
+Large	MediaPlayer-SettingsWindow		Nagy
+Import Entry	MediaPlayer-ImportPLItemsCmd		Bejegyzés importálása
+unknown format	MediaPlayer-InfoWin		ismeretlen formátum
+Track %d	MediaPlayer-Main		Szám %d
+All files could not be moved into Trash.	MediaPlayer-RemovePLItemsCmd		Nem sikerült minden fájlt a Szemetesbe helyezni
+Total duration: %s	MediaPlayer-PlaylistWindow		Teljes időtartam: %s
+%.3f kHz	MediaPlayer-InfoWin		%.3f kHz
+Move into trash error	MediaPlayer-RemovePLItemsCmd		Szemetesbe helyezési hiba
+50% scale	MediaPlayer-Main		50%-os méret
+Drop files to play	MediaPlayer-Main		Húzzon ide fájlokat a lejátszáshoz
+Copy Entry	MediaPlayer-CopyPLItemsCmd		Bejegyzés másolása
+Close window after playing audio	MediaPlayer-SettingsWindow		Hangfájl lejátszása után zárja be az ablakot
+Edit	MediaPlayer-PlaylistWindow		Szerkesztés
+Copy Entries	MediaPlayer-CopyPLItemsCmd		Bejegyzések másolása
+Always on top	MediaPlayer-Main		Mindig felül legyen
+Open	MediaPlayer-PlaylistWindow		Megnyitás
+always	MediaPlayer-SettingsWindow		mindig
+Loop video	MediaPlayer-SettingsWindow		Videófájl ismétlése
+Stream URL:	MediaPlayer-NetworkStream		Műsor címe:
+<unknown>	PlaylistItem-album		<ismeretlen>
+Stream settings	MediaPlayer-Main		Film beállításai
+none	Subtitles menu		nincs 
+Save Playlist	MediaPlayer-PlaylistWindow		Lejátszási lista mentése
+Overlay	MediaPlayer-InfoWin		Overlay
+2.35 : 1 (Cinemascope)	MediaPlayer-Main		2.35 : 1 (Cinemascope)
+Rating	MediaPlayer-Main		Értékelés
+Internal error (out of memory). Saving the playlist failed.	MediaPlayer-PlaylistWindow		Belső hiba (nincs elég memória). A lejátszási lista mentése sikertelen.
+Video	MediaPlayer-Main		Videó
+There is no decoder installed to handle the file format, or the decoder has trouble with the specific version of the format.	MediaPlayer-Main		Nincs olyan dekódoló telepítve ami ezt a formátumot kezelni tudná, vagy ha van, a formátum ezen verzióját hibásan kezeli.
+Lock Peaks	MediaPlayer-PeakView		Csúcsok zárolása
+none	Audio track menu		nincs
+Open network stream	MediaPlayer-NetworkStream		Hálózati műsor megnyitása
+Automatically start playing	MediaPlayer-SettingsWindow		Lejátszás indítása automatikusan
+Undo	MediaPlayer-PlaylistWindow		Visszavonás
+Display mode	MediaPlayer-InfoWin		Megjelenítési mód
+Bottom of video	MediaPlayer-SettingsWindow		A videó alján
+Small	MediaPlayer-SettingsWindow		Kicsi
+Settings…	MediaPlayer-Main		Beállítások…
+min	MediaPlayer-InfoWin	Minutes	perc
+Saving the playlist failed:\n\nError: 	MediaPlayer-PlaylistWindow		A lejátszási lista mentése sikertelen:\n\nHiba:
+Video	MediaPlayer-InfoWin		Videó
+File info…	MediaPlayer-Main		Információk…
+1.85 : 1 (American)	MediaPlayer-Main		1.85 : 1 (amerikai)
+<unnamed>	PlaylistItem-name		<névtelen>
+Track	Video Track Menu		Sáv
+Full screen	MediaPlayer-Main		Teljes képernyő
+OK	MediaPlayer-NetworkStream		Rendben
+Internal error (locking failed). Saving the playlist failed.	MediaPlayer-PlaylistWindow		Belső hiba (nem sikerült zárolni). A lejátszási lista mentése sikertelen.
+100% scale	MediaPlayer-Main		100%-os méret
+<nothing to redo>	MediaPlayer-PlaylistWindow		<nincs mit újra csinálni>
+Bad URL	MediaPlayer-NetworkStream		Hibás cím
+Save	MediaPlayer-Main		Mentés
+Close window after playing video	MediaPlayer-SettingsWindow		Videófájl lejátszása után zárja be az ablakot
+Scale movies smoothly (non-overlay mode)	MediaPlayer-SettingsWindow		Filmek simított átméretezése
+200% scale	MediaPlayer-Main		200%-os méret
+The file '%filename' could not be opened.\n\n	MediaPlayer-Main		A fájlt (%filename) nem sikerült megnyitni.\n\n
+None of the files you wanted to play appear to be media files.	MediaPlayer-Main		Egyik fájl se tűnik médiafájlnak.
+Remove Entry	MediaPlayer-RemovePLItemsCmd		Bejegyzés eltávolítása
+Remove Entries into Trash	MediaPlayer-RemovePLItemsCmd		Bejegyzések Szemetesbe helyezése
+Subtitle size:	MediaPlayer-SettingsWindow		Felirat mérete:
+No aspect correction	MediaPlayer-Main		Nincs képarányjavítás
+raw video	MediaPlayer-InfoWin		nyers videó
+Container	MediaPlayer-InfoWin		Tároló
+none	MediaPlayer-Main		nincs 
+Open clips	MediaPlayer-Main		Klippek megnyitása
+Some files could not be moved into Trash.	MediaPlayer-RemovePLItemsCmd		Néhány elemet nem lehetett a Szemetesbe helyezni.
+<nothing to undo>	MediaPlayer-PlaylistWindow		<nincs mit visszavonni>
+Save as…	MediaPlayer-PlaylistWindow		Mentés másként…
+Error: 	MediaPlayer-RemovePLItemsCmd		Hiba:
+300% scale	MediaPlayer-Main		300%-os méret
+Open	MediaPlayer-Main		Megnyitás
+ask every time	MediaPlayer-SettingsWindow		mindig kérdezze
+(not supported)	MediaPlayer-InfoWin		(nem támogatott)
+Randomize	MediaPlayer-PlaylistWindow		Véletlenszerű
+%.3f fps	MediaPlayer-InfoWin		%.3f fps
+Off	Subtitles menu		Ki
+400% scale	MediaPlayer-Main		400%-os méret
+h	MediaPlayer-InfoWin	Hours	ó
+OK	MediaPlayer-PlaylistWindow		Rendben

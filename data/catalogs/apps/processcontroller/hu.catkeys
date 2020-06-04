@@ -1,0 +1,50 @@
+1	hungarian	x-vnd.Haiku-ProcessController	168752057
+Error saving file	ProcessController		Hiba történt a fájl mentése során
+Display priority	ProcessController		Kijelzési prioritás
+That's no Fun!	ProcessController		Ez nem vicces!
+What do you want to do with the team \"%s\"?	ProcessController		Mit kíván tenni a szállal: \"%s\"?
+Your setting file could not be saved!\n(%s)	ProcessController		A beállításfájlt nem sikerült elmenteni!\n(%s)
+Processor %d	ProcessController		%d processzor
+Live in the Deskbar	ProcessController		Átrakás az Asztalsávra
+Kill this team!	ProcessController		Szál leállítása!
+OK	ProcessController		Rendben
+You can run ProcessController in a window or install it in the Deskbar.	ProcessController		Futtathatja a Folyamatkezelőt egy ablakban, vagy feltelepítheti azt az Asztalsávra.
+Real-time priority	ProcessController		Valós idejű prioritás
+Custom priority	ProcessController		Egyéni prioritás
+Debug this thread!	ProcessController		Szál hibakeresése!
+Low priority	ProcessController		Alacsony prioritás
+Urgent display priority	ProcessController		Magas kijelzési prioritás
+Memory usage	ProcessController		Memóriahasználat
+Ok!	ProcessController		Rendben!
+Normal priority	ProcessController		Normál prioritás
+Restart Deskbar	ProcessController		Asztalsáv újraindítása
+About ProcessController…	ProcessController		Folyamatkezelő névjegye…
+Usage: %s [-deskbar]\n	ProcessController		Használat: %s [-deskbar]\n
+Please confirm	ProcessController		Jóváhagyás
+Urgent priority	ProcessController		Magas prioritás
+What do you want to do with the thread \"%s\"?	ProcessController		Mit kíván tenni a szállal: \"%s\"?
+(c) 1996-2001 Georges-Edouard Berenger, berenger@francenet.fr\n	ProcessController		(c) 1996-2001 Georges-Edouard Berenger, berenger@francenet.fr\n
+Idle priority	ProcessController		Üresjárat prioritás
+Real-time display priority	ProcessController		Valós idejű kijelzési prioritás
+Threads and CPU usage	ProcessController		Szálak és processzorhasználat
+Quit application	ProcessController		Program leállítása
+Info	ProcessController		Infó
+Kill this thread!	ProcessController		Szál leállítása!
+This team is already gone…	ProcessController		Ez a csapat már eltűnt…
+Gone teams…	ProcessController		Eltűnt csapatok…
+Quit an application	ProcessController		Program leállítása
+Cancel	ProcessController		Mégse
+Install in Deskbar	ProcessController		Telepítés az Asztalsávra
+Debug this team!	ProcessController		Szál hibakeresése!
+Low latency	ProcessController		Kis késleltetés
+ProcessController	System name		Folyamatkezelő
+Lowest active priority	ProcessController		Legalacsonyabb aktív prioritás
+Restart Tracker	ProcessController		Nyomkövető újraindítása
+System resources & caches…	ProcessController		Rendszer erőforrásai és gyorsítótárai…
+Damned!	ProcessController		Fenébe!
+New Terminal	ProcessController		Új terminál
+Power saving	ProcessController		Energiatakarékosság
+ProcessController is already installed in Deskbar.	ProcessController		A Folyamatkezelő már telepítve van az Asztalsávra.
+This is the last active processor…\nYou can't turn it off!	ProcessController		Ez az utolsó aktív processzor…\nNem kapcsolható ki.
+This thread is already gone…	ProcessController		Ez a szál már eltűnt…
+Run in window	ProcessController		Futtatás ablakban

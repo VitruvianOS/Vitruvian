@@ -1,0 +1,88 @@
+1	hungarian	x-vnd.Haiku-Bluetooth	3550394259
+Positioning	DeviceClass		Pozicionálás
+Controller	DeviceClass		Vezérlő
+Common ISDN access	DeviceClass		Közös ISDN hozzáférés
+Unknown (reserved) minor device class	DeviceClass		Ismeretlen (foglalt) aleszközosztály
+Uncategorized	DeviceClass		Nem kategorizált
+Keyboard	DeviceClass		Billentyűzet
+Smart phone	DeviceClass		Okostelefon
+VCR	DeviceClass		VCR
+Cellular	DeviceClass		Mobil
+Audio	DeviceClass		Audio
+Audio/Video	DeviceClass		Audio/Videó
+Car audio	DeviceClass		Autós audiószett
+Major class: 	DeviceClass		Főcsoport:
+HiFi audio device	DeviceClass		HiFi audióeszköz
+Microphone	DeviceClass		Mikrofon
+Capturing	DeviceClass		Elfogás
+Jacket	DeviceClass		Jacket
+50-67% utilized	DeviceClass		50-67% kihasznált
+Headphones	DeviceClass		Fejhallgatók
+Imaging	DeviceClass		Képkezelő
+Device conforms to the headset profile	DeviceClass		Az eszköz megfelel a fejhallgató profilnak
+Remote control	DeviceClass		Távirányító
+Fully available	DeviceClass		Teljesen elérhető
+#CommandFailed#Not Valid name	RemoteDevice		#SikertelenParancs# Érvénytelen név
+Server	DeviceClass		Kiszolgáló
+No service available	DeviceClass		Nincs elérhető szolgáltatás
+Printer	DeviceClass		Nyomtató
+Card reader	DeviceClass		Kártyaolvasó
+Wired modem or voice gateway	DeviceClass		Kábelmodem vagy VOIP átjáró
+#ServerNotReady#Not Valid name	RemoteDevice		#AKiszolgálóNincsKész# Érvénytelen név
+#NoOwnerError#Not Valid name	RemoteDevice		#TulajdonosHiba# Érvénytelen név
+Camcorder	DeviceClass		Kamera
+#NotCompletedRequest#Not Valid name	RemoteDevice		#NemTeljesítettKérés# Érvénytelen név
+17-33% utilized	DeviceClass		17-33% kihasznált
+Desktop workstation	DeviceClass		Asztali munkaállomás
+Unspecified	DeviceClass		Nem meghatározható
+Miscellaneous	DeviceClass		Egyéb
+Robot	DeviceClass		Robot
+Vehicle	DeviceClass		Jármű
+LAN access	DeviceClass		LAN hozzáférés
+Glasses	DeviceClass		Szemüveg
+Phone	DeviceClass		Telefon
+Laptop	DeviceClass		Laptop
+67-83% utilized	DeviceClass		67-83% kihasznált
+Cordless	DeviceClass		Vezeték nélküli
+Invalid device class!\n	DeviceClass		Érvénytelen eszközosztály!\n
+Minor class: 	DeviceClass		Alcsoport:
+Doll/Action figure	DeviceClass		Baba/Akciófigura
+Not implemented	RemoteDevice		Nincs implementálva
+33-50% utilized	DeviceClass		33-50% kihasznált
+Gaming/Toy	DeviceClass		Játék/játékszer
+Video camera	DeviceClass		Videókamera
+Handheld	DeviceClass		Kézigép
+Service classes: 	DeviceClass		Szolgáltatáscsoportok:
+Loudspeaker	DeviceClass		Hangszóró
+83-99% utilized	DeviceClass		83-99% kihasznált
+SIM card reader	DeviceClass		SIM kátyaolvasó
+Computer	DeviceClass		Számítógép
+Scanner	DeviceClass		Szkenner
+Wearable	DeviceClass	A wearable computer	Hordozható
+Display	DeviceClass		Kijelző
+Gamepad	DeviceClass		Konzol
+Video monitor	DeviceClass		Videómonitor
+Palm	DeviceClass	A palm-held device	Palm
+Joystick	DeviceClass		Botkormány
+Networking	DeviceClass		Hálózat
+Telephony	DeviceClass		Telefónia
+Game	DeviceClass		Játék
+Video display and loudspeaker	DeviceClass		Kijelző hangszórókkal
+Wrist watch	DeviceClass		Karóra
+Sensing device	DeviceClass		Eszköz érzékelése
+Pointing device	DeviceClass		Mutatóeszköz
+(reserved)	DeviceClass		(foglalt)
+Rendering	DeviceClass		Renderelés
+Information	DeviceClass		Információ
+Helmet	DeviceClass		Sisak
+Pager	DeviceClass	A small radio device to receive short text messages	Személyhívó 
+Hands-free	DeviceClass		Szabadkézi
+Digitizer tablet	DeviceClass		Digitalizáló tábla
+Portable audio	DeviceClass		Hordozható audio
+Camera	DeviceClass		Kamera
+1-17% utilized	DeviceClass		1-17% kihasznált
+Combo keyboard/pointing device	DeviceClass		Billentyűzet/mutató eszköz
+Video conferencing	DeviceClass		Videókonferencia
+Peripheral	DeviceClass		Periféria
+Object transfer	DeviceClass		Fájlátvitel
+Set-top box	DeviceClass		Set-top box

@@ -1,0 +1,17 @@
+
+resource(0, "BEOS:TYPE") #'MIMS' "application/x-vnd.Be-meta-mime";
+
+resource(1, "META:TYPE") "video/ogg";
+
+resource(2, "META:S:DESC") #'MSDC' "Ogg video file";
+
+resource(3, "META:L:DESC") #'MLDC' "Ogg video profile (a/v in Ogg container)";
+
+resource(4, "META:EXTENS") message(234) {
+	"extensions" = "ogv",
+	"extensions" = "ogm",
+	"type" = "video/ogg"
+};
+
+resource(5, "META:SNIFF_RULE") "0.50 (\"OggS\")";
+

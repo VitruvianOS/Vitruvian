@@ -1,0 +1,17 @@
+1	hungarian	x-vnd.Haiku-FontDemo	3449067186
+Stop cycling	ControlView		Váltakozás megállítása
+Haiku, Inc.	FontDemoView		Haiku, Inc.
+Rotation: %d	ControlView		Forgatás: %d
+Shear: %d	ControlView		Dőlésszög: %d
+Spacing: %d	ControlView		Térköz: %d
+Cycle fonts	ControlView		Betűtípusok váltása
+Font:	ControlView		Betűtípus:
+Drawing mode:	ControlView		Kirajzolás módja:
+Haiku, Inc.	ControlView		Haiku, Inc.
+Controls	FontDemo		Vezérlők
+FontDemo	System name		Betűk
+Outline: %d	ControlView		Körvonal: %d
+Text:	ControlView		Szöveg:
+Antialiased text	ControlView		Szöveg élsimítása
+Bounding boxes	ControlView		Bekerítő dobozok
+Size: %d	ControlView		Méret: %d

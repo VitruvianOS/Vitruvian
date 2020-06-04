@@ -1,0 +1,17 @@
+1	belarusian	x-vnd.Haiku-FontDemo	3449067186
+Stop cycling	ControlView		Спынiць цыкл
+Haiku, Inc.	FontDemoView		Haiku, Inc.
+Rotation: %d	ControlView		Паварот: %d
+Shear: %d	ControlView		Зрух: %d
+Spacing: %d	ControlView		Адбіўка: %d
+Cycle fonts	ControlView		Паўтор шрыфтоў
+Font:	ControlView		Шрыфт:
+Drawing mode:	ControlView		Рэжым малявання:
+Haiku, Inc.	ControlView		Haiku, Inc.
+Controls	FontDemo		Кiраванне
+FontDemo	System name		FontDemo
+Outline: %d	ControlView		Абрыс: %d
+Text:	ControlView		Тэкст:
+Antialiased text	ControlView		Згладжаны тэкст
+Bounding boxes	ControlView		Абмежавальныя рамкі
+Size: %d	ControlView		Памер: %d

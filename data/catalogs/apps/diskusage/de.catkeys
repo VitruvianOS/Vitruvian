@@ -1,0 +1,23 @@
+1	german	x-vnd.Haiku-DiskUsage	2951688400
+%size% in {0, plural, one{# file} other{# files}}	Info Window		%size% in {0, plural, one{einer Datei} other{# Dateien}}
+Scanning %refName%	Scanner		Analysiere %refName%
+%d files	Status View	For UI layouting only, use the longest plural form for your language	%d Dateien
+Size	Info Window		Größe
+Rescan	Pie View		Erneut analysieren
+Kind	Info Window		Art
+file unavailable	Pie View		Datei nicht verfügbar
+no supporting apps	Pie View		keine geeigneten Anwendungen
+Path	Info Window		Pfad
+Scan	Status View		Analyse
+Rescan	Status View		Erneut analysieren
+file unavailable	Status View		Datei nicht verfügbar
+Get info	Pie View		Datei-Info
+DiskUsage	System name		Datenträgerbelegung
+Created	Info Window		Erstellt
+Modified	Info Window		Geändert
+Abort	Status View		Abbrechen
+Open with	Pie View		Öffnen mit
+Open	Pie View		Öffnen
+{0, plural, one{# file} other{# files}}	Status View		{0, plural, one{# Datei}, other{# Dateien}}
+%a, %d %b %Y, %r	Info Window		%a, %d %b %Y, %r
+Free on %refName%	Scanner		Frei auf %refName%

@@ -1,0 +1,42 @@
+1	spanish; castilian	x-vnd.Haiku-libbe	3337473349
+{0, plural, one{# byte} other{# bytes}}	StringForSize		{0, plural, one{# byte} other{# bytes}}
+All Rights Reserved.	AboutWindow		Todos los derechos reservados.
+gold master	AboutWindow		maestro dorado
+Undo	TextView		Deshacer
+gamma	AboutWindow		gama
+development	AboutWindow		desarrollo
+OK	Dragger		Aceptar
+OK	PrintJob		Aceptar
+Print Server is not responding.	PrintJob		El servidor de impresión no responde.
+About %app%	AboutMenuItem		Acerca de %app%
+Warning	Dragger		Advertencia
+Green:	ColorControl		Verde:
+Redo	TextView		Rehacer
+No pages to print!	PrintJob		¡Sin páginas para imprimir!
+beta	AboutWindow		beta
+OK	ZombieReplicantView		Aceptar
+Cut	TextView		Cortar
+%3.2f GiB	StringForSize		%3.2f GiB
+Can't delete this replicant from its original application. Life goes on.	Dragger		No se puede borrar este replicante de su aplicación original. La vida sigue.
+Error	ZombieReplicantView		Error
+Paste	TextView		Pegar
+OK	AboutWindow		Aceptar
+Special Thanks:	AboutWindow		Agradecimientos especiales:
+%.2f TiB	StringForSize		%.2f TiB
+Remove replicant	Dragger		Remover replicante
+Version	AboutWindow		Versión
+Red:	ColorControl		Rojo:
+<empty>	Menu		<vacío>
+Copy	TextView		Copiar
+Select all	TextView		Seleccionar todo
+alpha	AboutWindow		alfa
+%3.2f MiB	StringForSize		%3.2f MiB
+Error	PrintJob		Error
+About %app%	AboutWindow		Acerca de %app%
+About %app…	Dragger		Acerca de %app…
+Version history:	AboutWindow		Historal de versión:
+Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		No se puede localizar la aplicación para el replicante. Ninguna firma de aplicación se proporcionó:\n%error
+%3.2f KiB	StringForSize		%3.2f KiB
+Blue:	ColorControl		Azul:
+Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		No se puede crear el replicante para \"%description\".\n%error
+Written by:	AboutWindow		Escrito por:

@@ -1,0 +1,35 @@
+1	finnish	x-vnd.Haiku-Sudoku	3382377306
+Restore snapshot	SudokuWindow		Palauta kuvakaappaus
+File	SudokuWindow		Tiedosto
+Mark invalid values	SudokuWindow		Merkitse väärät arvot
+Solve single field	SudokuWindow		Ratkaise yksi kenttä
+Hard	SudokuWindow		Vaikea
+Start again	SudokuWindow		Aloita uudelleen
+New	SudokuWindow		Uusi
+Easy	SudokuWindow		Helppo
+Undo	SudokuWindow		Peru
+Export as…	SudokuWindow		Vie nimellä...
+Quit	SudokuWindow		Lopeta
+Redo	SudokuWindow		Tee uudelleen
+Could not open \"%s\":\n%s\n	SudokuWindow		Kohteen ”%s” avaus epäonnistui:\n%s\n
+Blank	SudokuWindow		Tyhjä
+Sudoku solved - congratulations!\n	SudokuWindow		Sudoku ratkaistu - onneksi olkoon!\n
+Text	SudokuWindow		Teksti
+Copy	SudokuWindow		Kopioi
+Solve	SudokuWindow		Ratkaise
+HTML	SudokuWindow		HTML
+Advanced	SudokuWindow		Guru
+Set all hints	SudokuWindow		Aseta kaikki vihjeet
+Searching for removable values	SudokuGenerator		Etsitään poistettavia arvoja
+Abort	ProgressWindow		Keskeytä
+Could not set Sudoku:\n%s\n	SudokuWindow		Sudokun asettaminen epäonnistui:\n%s\n
+Help	SudokuWindow		Opaste
+OK	SudokuWindow		Valmis
+Sudoku	System name		Sudoku
+Progress monitor	ProgressWindow		Edistymisvalvonta
+Creating solvable field	SudokuGenerator		Luodaan ratkaistava kenttä
+View	SudokuWindow		Näkymä
+Snapshot current	SudokuWindow		Otan kuvakaappaus nykyisestä
+Mark valid hints	SudokuWindow		Merkitse kelvolliset vihjeet
+Sudoku request	SudokuWindow		Sudoku-pyyntö
+Open file…	SudokuWindow		Avaa tiedosto...

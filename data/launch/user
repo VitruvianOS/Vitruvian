@@ -1,0 +1,82 @@
+target desktop {
+	env /system/boot/SetupEnvironment
+
+	service x-vnd.Be-TRAK {
+		launch /system/Tracker
+		legacy
+		on initial_volumes_mounted
+	}
+
+	service x-vnd.Be-TSKB {
+		launch /system/Deskbar
+		on initial_volumes_mounted
+	}
+
+	job x-vnd.Haiku-LaunchBox {
+		launch /system/apps/LaunchBox
+		if setting ~/config/settings/LaunchBox/main_settings autostart
+		on initial_volumes_mounted
+		legacy
+		no_safemode
+	}
+
+	service x-vnd.Be-POST {
+		launch /system/servers/mail_daemon
+		if setting ~/config/settings/Mail/new_mail_daemon DaemonAutoStarts
+		on initial_volumes_mounted
+		no_safemode
+	}
+
+	job user-bootscript {
+		launch /bin/sh ~/config/settings/boot/UserBootscript
+	}
+
+	job check-daylight-saving-time {
+		launch /system/bin/dstcheck
+	}
+
+	job update-time {
+		launch /system/preferences/Time "" --update
+		if setting ~/config/settings/networktime\ settings "synchronize at boot"
+		on network_available
+	}
+
+	job first-login {
+		launch /bin/sh /system/boot/PostInstallScript "first login" ~/config/settings/first_login /boot/system/boot/first-login
+		if file_exists ~/config/settings/first_login
+		requires x-vnd.Be-TSKB
+	}
+
+	job create-installer-link {
+		# When run from a read-only medium a.k.a. live desktop
+		if {
+			read_only
+			file_exists /boot/system/apps/Installer
+		}
+		launch /bin/ln -sf /boot/system/apps/Installer ~/Desktop/Installer
+	}
+}
+
+target first_boot {
+	job x-vnd.Haiku-FirstBootPrompt
+}
+
+target installer {
+	job x-vnd.Haiku-Installer
+}
+
+run {
+	if {
+		file_exists /system/bin/FirstBootPrompt
+		or {
+			not file_exists /boot/home/config/settings/Locale\ settings
+			read_only
+		}
+	}
+	then {
+		first_boot
+	}
+	else {
+		desktop
+	}
+}

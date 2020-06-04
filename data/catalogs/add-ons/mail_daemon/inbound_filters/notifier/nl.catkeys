@@ -1,0 +1,13 @@
+1	dutch; flemish	x-vnd.Haiku-NewMailNotification	2111731137
+Log window	NotifierConfigView		Logvenster
+none	NotifierConfigView		geen
+New mails notification	NotifierFilter		Nieuwe e-mails notificatie
+Alert	NotifierConfigView		Signaal
+OK	NotifierFilter		OK
+Central alert	NotifierConfigView		Centraal signaal
+Beep	NotifierConfigView		Geluidssignaal
+Central beep	NotifierConfigView		Centraal geluidssignaal
+{0, plural, one{One new message} other{# new messages}}	NotifierFilter		{0, plural, one{Eén nieuw bericht} other {# nieuwe berichten}}
+New messages	NotifierFilter		Nieuwe bericht
+Method:	NotifierConfigView		Methode:
+Keyboard LEDs	NotifierConfigView		Toetsenbords LED's

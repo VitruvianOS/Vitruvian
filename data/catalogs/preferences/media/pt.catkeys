@@ -1,0 +1,24 @@
+1	portuguese	x-vnd.Haiku-Media	2390037910
+Audio input:	Media views		Entrada de áudio:
+Audio output:	Media views		Saída de áudio:
+Audio settings	Media Window		Defenições de áudio
+Channel:	Media views		Canal:
+Cleaning up.	Media Window		A limpar.
+Could not connect to the media server.\nWould you like to start it ?	Media Window		Não foi possível estabelecer uma ligação ao servidor multimédia.\nDeseja iniciá-lo?
+Defaults	Media views		Predefenições
+Done shutting down.	Media Window		Encerramento concluído.
+OK	Media Window		OK
+Quit	Media Window		Sair
+Ready for use…	Media Window		Pronto a funcionar...
+Restart media services	Media views		Reiniciar serviços multimédia
+Restarting media services\nShutting down media server\n	Media Window		A reiniciar os serviços multimédia\nA encerrar o servidor multimédia...\n
+Restarting media services\nStarting media server…\n	Media Window		A reiniciar os serviços multimédia\nA iniciar o servidor multimédia...\n
+Show volume control on Deskbar	Media views		Mostrar controlo de volume na Deskbar
+Start media server	Media Window		Iniciar o servidor multimédia
+Starting media server…	Media Window		A iniciar o servidor multimédia...
+Stopping media server…	Media Window		A encerrar o servidor multimédia...
+Telling media_addon_server to quit.	Media Window		A indicar ao servidor adicional multimédia para encerrar.
+This hardware has no controls.	Media Window		Este hardware não tem controlos.
+Video input:	Media views		Entrada de vídeo:
+Video output:	Media views		Saída de vídeo:
+Waiting for media_server to quit.	Media Window		À espera que o media_server termine.

@@ -1,0 +1,17 @@
+1	hungarian	x-vnd.Haiku-MatchHeader	1946584206
+Delete message	ConfigView		az üzenet törlése
+Match \"%attribute\" against \"%regex\"	RuleFilter		Egyező \"%attribute\" \"%regex\" helyett
+Match header	RuleFilter		Fejléc egyezése
+Set flags to	ConfigView		megjelölés:
+Header field (e.g. Subject, From, …)	ConfigView		Fejléc mező (pl. Subject, From, …)
+<Choose account>	ConfigView		<Válassza ki a fiókot>
+Wildcard value like \"*spam*\".\nPrefix with \"REGEX:\" in order to use regular expressions.	ConfigView		Általános kifejezés, mint például \"*spam*\".\nA \"REGEX:\" előtag megadása szükséges az általános kifejezések használatához.
+Then	ConfigView		Akkor
+If	ConfigView		Ha:
+Set as read	ConfigView		olvasottnak jelölés
+Reply with	ConfigView		válaszolás:
+<Choose action>	ConfigView		<Válassza ki a műveletet>
+Move to	ConfigView		mozgatás ide:
+this field is based on the action	ConfigView		ez a mező a műveleten alapszik
+Account	ConfigView		Fiók
+has	ConfigView		tartalmaz

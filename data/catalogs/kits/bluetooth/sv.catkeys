@@ -1,0 +1,88 @@
+1	swedish	x-vnd.Haiku-Bluetooth	3550394259
+Positioning	DeviceClass		Position
+Controller	DeviceClass		Kontroller
+Common ISDN access	DeviceClass		Allmän ISDN åtkomst
+Unknown (reserved) minor device class	DeviceClass		Okänd (reserverad) mindre enhetsklass
+Uncategorized	DeviceClass		Okategoriserad
+Keyboard	DeviceClass		Tangentbord
+Smart phone	DeviceClass		Smart phone
+VCR	DeviceClass		Videoapparat
+Cellular	DeviceClass		Mobil
+Audio	DeviceClass		Ljud
+Audio/Video	DeviceClass		Ljud/Bild
+Car audio	DeviceClass		Billjud
+Major class: 	DeviceClass		Större klass:
+HiFi audio device	DeviceClass		HiFi-ljudenhet
+Microphone	DeviceClass		Mikrofon
+Capturing	DeviceClass		Fångar
+Jacket	DeviceClass		Uttag
+50-67% utilized	DeviceClass		50-67% utnyttjat
+Headphones	DeviceClass		Hörlurar
+Imaging	DeviceClass		Avbildning
+Device conforms to the headset profile	DeviceClass		Enheten passar till headsetprofilen
+Remote control	DeviceClass		Fjärrkontroll
+Fully available	DeviceClass		Fullt tillgänglig
+#CommandFailed#Not Valid name	RemoteDevice		#CommandFailed#Ogiltigt namn
+Server	DeviceClass		Server
+No service available	DeviceClass		Tjänst ej tillgänglig
+Printer	DeviceClass		Skrivare
+Card reader	DeviceClass		Kortläsare
+Wired modem or voice gateway	DeviceClass		Trådmodem eller telefonigateway
+#ServerNotReady#Not Valid name	RemoteDevice		#ServerNotReady#Ogiltigt namn
+#NoOwnerError#Not Valid name	RemoteDevice		#NoOwnerError#Ogiltigt namn
+Camcorder	DeviceClass		Videokamera
+#NotCompletedRequest#Not Valid name	RemoteDevice		#NotCompletedRequest#Ogiltigt namn
+17-33% utilized	DeviceClass		17-33% utnyttjat
+Desktop workstation	DeviceClass		Stationär dator
+Unspecified	DeviceClass		Ospecifierad
+Miscellaneous	DeviceClass		Diverse
+Robot	DeviceClass		Robot
+Vehicle	DeviceClass		Fordon
+LAN access	DeviceClass		LAN-åtkomst
+Glasses	DeviceClass		Glasögon
+Phone	DeviceClass		Telefon
+Laptop	DeviceClass		Bärbar dator
+67-83% utilized	DeviceClass		67-83% utnyttjat
+Cordless	DeviceClass		Trådlös
+Invalid device class!\n	DeviceClass		Ogiltig enhetsklass!\n
+Minor class: 	DeviceClass		Mindre klass:
+Doll/Action figure	DeviceClass		Docka/Leksaksgubbe
+Not implemented	RemoteDevice		Ej implementerat
+33-50% utilized	DeviceClass		33-50% utnyttjat
+Gaming/Toy	DeviceClass		Spel/Leksak
+Video camera	DeviceClass		Videokamera
+Handheld	DeviceClass		Handhållen
+Service classes: 	DeviceClass		Serviceklasser:
+Loudspeaker	DeviceClass		Högtalare
+83-99% utilized	DeviceClass		83-99% utnyttjat
+SIM card reader	DeviceClass		SIM-kortsläsare
+Computer	DeviceClass		Dator
+Scanner	DeviceClass		Skanner
+Wearable	DeviceClass	A wearable computer	Bärbar
+Display	DeviceClass		Skärm
+Gamepad	DeviceClass		Handkontroll
+Video monitor	DeviceClass		Videomonitor
+Palm	DeviceClass	A palm-held device	Handflata
+Joystick	DeviceClass		Spelspak
+Networking	DeviceClass		Nätverk
+Telephony	DeviceClass		Telefoni
+Game	DeviceClass		Spel
+Video display and loudspeaker	DeviceClass		Videoskärm och högtalare
+Wrist watch	DeviceClass		Handledsklocka
+Sensing device	DeviceClass		Avläsningsenhet
+Pointing device	DeviceClass		Pekenhet
+(reserved)	DeviceClass		(reserverad)
+Rendering	DeviceClass		Rendering
+Information	DeviceClass		Information
+Helmet	DeviceClass		Hjälm
+Pager	DeviceClass	A small radio device to receive short text messages	Personsökare
+Hands-free	DeviceClass		Hands-free
+Digitizer tablet	DeviceClass		Digitaliseringsbord
+Portable audio	DeviceClass		Portabelt ljud
+Camera	DeviceClass		Kamera
+1-17% utilized	DeviceClass		1-17% utnyttjat
+Combo keyboard/pointing device	DeviceClass		Kombinerad tangentbord/pekenhet
+Video conferencing	DeviceClass		Videokonferens
+Peripheral	DeviceClass		Tillbehör
+Object transfer	DeviceClass		Objektöverföring
+Set-top box	DeviceClass		Digitalbox

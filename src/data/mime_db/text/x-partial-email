@@ -1,0 +1,101 @@
+
+resource(0, "BEOS:TYPE") #'MIMS' "application/x-vnd.Be-meta-mime";
+
+resource(1, "META:TYPE") "text/x-partial-email";
+
+resource(2, "META:S:DESC") #'MSDC' "Partially downloaded E-mail";
+
+resource(3, "META:EXTENS") message(234) {
+	"type" = "text/x-partial-email"
+};
+
+resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.Be-MAIL";
+
+resource(5, "META:ICON") #'VICN' array {
+	$"6E636966040500040178020006023A94CD3C078ABE370B3CD1394B9EF949A6E5"
+	$"00FFFCACFFE6E27C03A07D32050604BA47584A595E455E485E4254430A042246"
+	$"46585A4436350A063742234639443E46455741480A0436355A44465822460804"
+	$"3635384340475A44050A010100000A0001011001178402040A020103000A0301"
+	$"02000A030104100117820004"
+};
+
+resource(6, "META:ATTR_INFO") message(233) {
+	"attr:name" = "MAIL:name",
+	"attr:name" = "MAIL:subject",
+	"attr:name" = "MAIL:to",
+	"attr:name" = "MAIL:cc",
+	"attr:name" = "MAIL:from",
+	"attr:name" = "MAIL:reply",
+	"attr:name" = "MAIL:status",
+	"attr:name" = "MAIL:priority",
+	"attr:name" = "MAIL:when",
+	"attr:name" = "MAIL:account",
+	"attr:name" = "MAIL:thread",
+	"attr:public_name" = "Name",
+	"attr:public_name" = "Subject",
+	"attr:public_name" = "To",
+	"attr:public_name" = "Cc",
+	"attr:public_name" = "From",
+	"attr:public_name" = "Reply To",
+	"attr:public_name" = "Status",
+	"attr:public_name" = "Priority",
+	"attr:public_name" = "When",
+	"attr:public_name" = "Account",
+	"attr:public_name" = "Thread",
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'TIME',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'CSTR',
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:editable" = false,
+	"attr:width" = 200,
+	"attr:width" = 200,
+	"attr:width" = 200,
+	"attr:width" = 200,
+	"attr:width" = 200,
+	"attr:width" = 200,
+	"attr:width" = 50,
+	"attr:width" = 40,
+	"attr:width" = 150,
+	"attr:width" = 100,
+	"attr:width" = 200,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 1,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"type" = "text/x-partial-email"
+};

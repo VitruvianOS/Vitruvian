@@ -1,0 +1,12 @@
+1	belarusian	x-vnd.Haiku-MatchHeader	1349121828
+Delete message	ConfigView		Выдаліць паведамленне
+Set flags to	ConfigView		Меткі паведамлення ў
+<Choose account>	ConfigView		<Абярыце рахунак>
+Then	ConfigView		Тады
+If	ConfigView		Калі
+Set as read	ConfigView		Пазначыць як прагледжанае
+Reply with	ConfigView		Адказаць з
+<Choose action>	ConfigView		<Абярыце аперацыю>
+Move to	ConfigView		Перасунуць у
+this field is based on the action	ConfigView		гэты параметр грунтуецца на аперацыі
+has	ConfigView		меў

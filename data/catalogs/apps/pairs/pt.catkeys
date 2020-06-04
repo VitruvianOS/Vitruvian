@@ -1,0 +1,12 @@
+1	portuguese	x-vnd.Haiku-Pairs	1126884905
+Beginner (4x4)	PairsWindow		Principiante (4x4)
+Expert (8x8)	PairsWindow		Especialista (8x8)
+Game	PairsWindow		Jogo
+Intermediate (6x6)	PairsWindow		Médio (6x6)
+New	PairsWindow		Novo
+New game	PairsWindow		Novo jogo
+OK	PairsView		OK
+Pairs did not find enough vector icons in the system; it needs at least %d.	PairsView		A aplicação Pairs não encontrou ícones vectoriais suficientes no sistema; são necessários pelo menos %d.
+Quit	PairsWindow		Sair
+Quit game	PairsWindow		Terminar jogo
+Size	PairsWindow		Tamanho

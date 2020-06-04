@@ -1,0 +1,88 @@
+1	finnish	x-vnd.Haiku-Bluetooth	3550394259
+Positioning	DeviceClass		Sijoittelu
+Controller	DeviceClass		Ohjain
+Common ISDN access	DeviceClass		Yleinen ISDN-liitäntä
+Unknown (reserved) minor device class	DeviceClass		Tuntematon (varattu) minor-laiteluokka
+Uncategorized	DeviceClass		Luokittelematon
+Keyboard	DeviceClass		Näppäimistö
+Smart phone	DeviceClass		Älypuhelin
+VCR	DeviceClass		Kuvanauhuri
+Cellular	DeviceClass		Matkapuhelin
+Audio	DeviceClass		Ääni
+Audio/Video	DeviceClass		Ääni/video
+Car audio	DeviceClass		Autoradio
+Major class: 	DeviceClass		Major-luokka: 
+HiFi audio device	DeviceClass		HiFi-äänilaite
+Microphone	DeviceClass		Mikrofoni
+Capturing	DeviceClass		Kaapataan
+Jacket	DeviceClass		Takki
+50-67% utilized	DeviceClass		50-67% käytetty hyödyksi
+Headphones	DeviceClass		Korvakuulokkeet
+Imaging	DeviceClass		Kuvankäsittely
+Device conforms to the headset profile	DeviceClass		Laite on yhteensopiva kuulokeprofiilin kanssa
+Remote control	DeviceClass		Kauko-ohjain
+Fully available	DeviceClass		Täysin käytettävissä oleva
+#CommandFailed#Not Valid name	RemoteDevice		#CommandFailed#Ei ole kelvollinen nimi
+Server	DeviceClass		Palvelin
+No service available	DeviceClass		Palvelu ei ole käytettävissä
+Printer	DeviceClass		Tulostin
+Card reader	DeviceClass		Kortinlukija
+Wired modem or voice gateway	DeviceClass		Lankamodeemi tai ääniyhdyskäytävä
+#ServerNotReady#Not Valid name	RemoteDevice		#ServerNotReady#Ei ole kelvollinen nimi
+#NoOwnerError#Not Valid name	RemoteDevice		#NoOwnerError#Ei ole kelvollinen nimi
+Camcorder	DeviceClass		Videokamera
+#NotCompletedRequest#Not Valid name	RemoteDevice		#NotCompletedRequest#Ei ole kelvollinen nimi
+17-33% utilized	DeviceClass		17-33% käytetty hyödyksi
+Desktop workstation	DeviceClass		Työpöytätyöasema
+Unspecified	DeviceClass		Määrittelemätön
+Miscellaneous	DeviceClass		Sekalainen
+Robot	DeviceClass		Robotti
+Vehicle	DeviceClass		Ajoneuvo
+LAN access	DeviceClass		LAN-liittymä
+Glasses	DeviceClass		Silmälasit
+Phone	DeviceClass		Puhelin
+Laptop	DeviceClass		Sylimikro
+67-83% utilized	DeviceClass		67-83% käytetty hyödyksi
+Cordless	DeviceClass		Langaton
+Invalid device class!\n	DeviceClass		Virheellinen laiteluokka!\n
+Minor class: 	DeviceClass		Minor-luokka: 
+Doll/Action figure	DeviceClass		Nukke/Taistelunukke
+Not implemented	RemoteDevice		Ei ole toteutettu
+33-50% utilized	DeviceClass		33-50% käytetty hyödyksi
+Gaming/Toy	DeviceClass		Peli/Lelu
+Video camera	DeviceClass		Videokamera
+Handheld	DeviceClass		Kämmenlaite
+Service classes: 	DeviceClass		Palveluluokat: 
+Loudspeaker	DeviceClass		Kaiutin
+83-99% utilized	DeviceClass		83-99% käytetty hyödyksi
+SIM card reader	DeviceClass		SIM-korttilukija
+Computer	DeviceClass		Tietokone
+Scanner	DeviceClass		Skanneri
+Wearable	DeviceClass	A wearable computer	Päälle puettava
+Display	DeviceClass		Näyttö
+Gamepad	DeviceClass		Peliohjain
+Video monitor	DeviceClass		Videonäyttö
+Palm	DeviceClass	A palm-held device	Kämmentietokone
+Joystick	DeviceClass		Sauvaohjain
+Networking	DeviceClass		Verkkotyöskentely
+Telephony	DeviceClass		Puhelinpalvelut
+Game	DeviceClass		Peli
+Video display and loudspeaker	DeviceClass		Videonäyttö ja kaiutin
+Wrist watch	DeviceClass		Rannekello
+Sensing device	DeviceClass		Tuntolaite
+Pointing device	DeviceClass		Osoitinlaite
+(reserved)	DeviceClass		(varattu)
+Rendering	DeviceClass		Renderöidään
+Information	DeviceClass		Tiedot
+Helmet	DeviceClass		Kypärä
+Pager	DeviceClass	A small radio device to receive short text messages	Hakulaite
+Hands-free	DeviceClass		Kädet vapauttava
+Digitizer tablet	DeviceClass		Digitointipiirtopöytä
+Portable audio	DeviceClass		Matkaradio
+Camera	DeviceClass		Kamera
+1-17% utilized	DeviceClass		1-17% käytetty hyödyksi
+Combo keyboard/pointing device	DeviceClass		Yhdistelmänäppäimistö/osoituslaite
+Video conferencing	DeviceClass		Videoneuvottelu
+Peripheral	DeviceClass		Oheislaite
+Object transfer	DeviceClass		Objektisiirto
+Set-top box	DeviceClass		Digisovitin

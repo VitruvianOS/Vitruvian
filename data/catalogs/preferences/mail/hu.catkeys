@@ -1,0 +1,54 @@
+1	hungarian	x-vnd.Haiku-Mail	2750130554
+Account settings	AutoConfigWindow		Fiókbeállítások
+\t\t· Outgoing	Config Window		\t\t· Kimenő
+An error occurred while creating the config view: %error.	Config Views		Hiba történt a konfigurációs nézet létrehozása közben: %error.
+E-mail address:	E-Mail		E-mail cím:
+Create new account	AutoConfigWindow		Új fiók létrehozása
+While sending and receiving	Config Window		Küldéskor / fogadáskor
+Error!	Config Views		Hiba!
+Apply	Config Window		Alkalmaz
+Incoming mail filters	Config Views		Bejövő levelek szűrői
+Outgoing mail filters	Config Views		Kimenő levelek szűrői
+Server name:	E-Mail		Kiszolgáló neve:
+Add	Config Window		Hozzáadás
+Back	AutoConfigWindow		Vissza
+Real name:	E-Mail		Valódi név:
+Real name:	Config Views		Valódi név:
+\t\t· E-mail filters	Config Window		\t\t· E-mail szűrők
+Outgoing	E-Mail		Kimenő
+Accounts	Config Window		Fiókok
+Outgoing	Config Window		Kimenő
+Remove	Config Views		Eltávolítás
+Show notifications:	Config Window		Értesítések megjelenítése:
+Settings	Config Window		Beállítások
+Never	Config Window	show status window	Soha
+Account name:	Config Views		Fiók neve:
+\t\t· Incoming	Config Window		\t\t· Bejövő
+Enter a valid e-mail address.	AutoConfigWindow		Írjon be egy valós e-mail címet.
+\nThe general settings couldn't be reverted.\n\nError retrieving general settings:\n%s\n	Config Window		\nAz általános beállítások visszaállítása sikertelen.\n\nHiba történt az általános beállítások beolvasása közben:\n%s\n
+Incoming	E-Mail		Bejövő
+Choose Protocol	E-Mail		Protokoll választása
+Return address:	Config Views		Válasz cím:
+Password:	E-Mail		Jelszó:
+Error retrieving general settings: %s\n	Config Window		Hiba történt az általános beállítások beolvasása közben:%s\n
+The filter could not be moved. Deleting filter.	Config Views		Nem lehetett áthelyezni a szűrőt. A szűrő törlése.
+OK	Config Views		Rendben
+Revert	Config Window		Visszaállít
+Incoming	Config Window		Bejövő
+Finish	AutoConfigWindow		Befejezés
+Add filter	Config Views		Szűrő hozzáadása
+Account settings	Config Views		Fiókbeállítások
+minutes	Config Window		percenként
+E-mail	System name		E-mail
+Check every	Config Window		Ellenőrzés gyakorisága:
+Create a new account with the Add button.\n\nRemove an account with the Remove button on the selected item.\n\nSelect an item in the list to change its settings.	Config Window		Új fiók létrehozása a Hozzáadás gombbal.\n\nA kijelölt fiók eltávolítása az Eltávolítás gombbal.\n\nVálassz egy fiókot a listából annak beállításainak módosításához.
+Account name:	E-Mail		Fiók neve:
+Edit mailbox menu…	Config Window		Postafiókmenü szerkesztése…
+Server Name:	E-Mail		Kiszolgáló neve:
+Remove	Config Window		Eltávolítás
+Login name:	E-Mail		Felhasználó:
+While sending	Config Window		Küldés közben
+OK	Config Window		Rendben
+OK	AutoConfigWindow		Rendben
+Next	AutoConfigWindow		Következő
+Error	Config Window		Hiba

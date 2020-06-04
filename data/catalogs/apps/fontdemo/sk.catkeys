@@ -1,0 +1,17 @@
+1	slovak	x-vnd.Haiku-FontDemo	3449067186
+Stop cycling	ControlView		Zastaviť opakovanie
+Haiku, Inc.	FontDemoView		Haiku, Inc.
+Rotation: %d	ControlView		Otočenie: %d
+Shear: %d	ControlView		Skosenie: %d
+Spacing: %d	ControlView		Rozostupy: %d
+Cycle fonts	ControlView		Písma dokola
+Font:	ControlView		Písmo:
+Drawing mode:	ControlView		Režim kreslenia:
+Haiku, Inc.	ControlView		Haiku, Inc.
+Controls	FontDemo		Ovládacie prvky
+FontDemo	System name		Demo Písiem
+Outline: %d	ControlView		Obrys: %d
+Text:	ControlView		Text:
+Antialiased text	ControlView		Antialiasovaný text
+Bounding boxes	ControlView		Okraje ohraničenia
+Size: %d	ControlView		Veľkosť: %d

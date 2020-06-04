@@ -1,0 +1,20 @@
+1	portuguese (brazil)	x-vnd.Haiku-MidiPlayer	1046133011
+This tiny program\nKnows how to play thousands of\nCheesy sounding songs	Main Application	This is a haiku. First line has five syllables, second has seven and last has five again. Create your own.	Um programinha\nQue toca milhares de\nCanções melosas
+Dungeon	Main Window		Calabouço
+Could not load song	Main Window		Não foi possível carregar a música
+Igor's lab	Main Window		Laboratório do Igor
+Off	Main Window		Desligado
+Loading instruments…	Scope View		Carregando instrumentos…
+Volume:	Main Window		Volume:
+Closet	Main Window		Closet
+Scope	Main Window		Espectro
+Drop MIDI file here	Scope View		Jogue aqui o arquivo MIDI
+None	Main Window		Nenhum
+Reverb:	Main Window		Reverberação:
+MidiPlayer	System name		MidiPlayer
+OK	Main Window		OK
+Stop	Main Window		Parar
+Live input:	Main Window		Entrada ao vivo:
+Garage	Main Window		Garagem
+Play	Main Window		Tocar
+Cavern	Main Window		Caverna

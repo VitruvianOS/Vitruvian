@@ -1,0 +1,17 @@
+1	hungarian	x-vnd.Haiku-Magnify	94607167
+Decrease pixel size	Magnify-Main		Képpontméret csökkentése
+Increase pixel size	Magnify-Main		Képpont méretének növelése
+Stick coordinates	Magnify-Main		Koordináták rögzítése
+%width x %height  @ {0, plural, one{# pixel/pixel} other{# pixels/pixel}}	Magnify-Main		%width x %height @ {0, plural, one{# képpont/képpont} other{# képpont/képpont}}
+Copy image	Magnify-Main		Kép másolása
+Decrease window size	Magnify-Main		Ablak méretének csökkentése
+Remove a crosshair	Magnify-Main		Célkereszt eltávolítása
+Add a crosshair	Magnify-Main		Egy célkereszt hozzáadása
+Freeze image	Magnify-Main		Kép megfagyasztása
+Increase window size	Magnify-Main		Ablak méretének növelése
+Save image	Magnify-Main		Kép mentése
+Show grid	Magnify-Main		Rács megjelenítése
+Magnify	System name		Nagyító
+Info	Magnify-Main		Infó
+Show info	Magnify-Main		Információk megjelenításe
+Make square	Magnify-Main		Négyzetté alakítás

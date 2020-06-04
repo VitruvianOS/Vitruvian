@@ -1,0 +1,88 @@
+1	indonesian	x-vnd.Haiku-Bluetooth	3550394259
+Positioning	DeviceClass		Memposisikan
+Controller	DeviceClass		Kontroler
+Common ISDN access	DeviceClass		Akses ISDN umum
+Unknown (reserved) minor device class	DeviceClass		Tak diketahui (cadangan) kelas alat minor
+Uncategorized	DeviceClass		Tak terkategori
+Keyboard	DeviceClass		Papan ketik
+Smart phone	DeviceClass		Smart phone
+VCR	DeviceClass		VCR
+Cellular	DeviceClass		Seluler
+Audio	DeviceClass		Audio
+Audio/Video	DeviceClass		Audio/Video
+Car audio	DeviceClass		Audio mobil
+Major class: 	DeviceClass		Kelas besar: 
+HiFi audio device	DeviceClass		Perangkat audio HiFi
+Microphone	DeviceClass		Mikrofon
+Capturing	DeviceClass		Menangkap
+Jacket	DeviceClass		Jaket
+50-67% utilized	DeviceClass		terpakai 50-67%
+Headphones	DeviceClass		Headphone
+Imaging	DeviceClass		Pencitraan
+Device conforms to the headset profile	DeviceClass		Perangkat sesuai dengan profil headset
+Remote control	DeviceClass		Remot kontrol
+Fully available	DeviceClass		Sepenuhnya tersedia
+#CommandFailed#Not Valid name	RemoteDevice		#CommandFailed#Nama tidak valid
+Server	DeviceClass		Server
+No service available	DeviceClass		Servis tidak tersedia
+Printer	DeviceClass		Pencetak
+Card reader	DeviceClass		Pembaca kartu
+Wired modem or voice gateway	DeviceClass		Modem kabel atau gateway suara
+#ServerNotReady#Not Valid name	RemoteDevice		#ServerNotReady#Bukan nama yang benar
+#NoOwnerError#Not Valid name	RemoteDevice		#NoOwnerError#Nama tidak valid
+Camcorder	DeviceClass		Camcorder
+#NotCompletedRequest#Not Valid name	RemoteDevice		#NotCompletedRequest#Nama tidak valid
+17-33% utilized	DeviceClass		terpakai 17-33%
+Desktop workstation	DeviceClass		Desktop workstation
+Unspecified	DeviceClass		Tak-ditentukan
+Miscellaneous	DeviceClass		Serba neka
+Robot	DeviceClass		Robot
+Vehicle	DeviceClass		Kendaraan
+LAN access	DeviceClass		Akses LAN
+Glasses	DeviceClass		Kacamata
+Phone	DeviceClass		Telepon
+Laptop	DeviceClass		Leptop
+67-83% utilized	DeviceClass		terpakai 67-83%
+Cordless	DeviceClass		Nirkabel
+Invalid device class!\n	DeviceClass		Kelas perangkat tidak valid!\n
+Minor class: 	DeviceClass		Kelas kecil: 
+Doll/Action figure	DeviceClass		Boneka/Gambar bergerak
+Not implemented	RemoteDevice		Tidak diimplementasikan
+33-50% utilized	DeviceClass		terpakai 33-50%
+Gaming/Toy	DeviceClass		Permainan/Mainan
+Video camera	DeviceClass		Video kamera
+Handheld	DeviceClass		Handheld
+Service classes: 	DeviceClass		Kelas layanan: 
+Loudspeaker	DeviceClass		Loudspeaker
+83-99% utilized	DeviceClass		dimanfaatkan 83-99%
+SIM card reader	DeviceClass		Pembaca kartu SIM
+Computer	DeviceClass		Komputer
+Scanner	DeviceClass		Pemindai
+Wearable	DeviceClass	A wearable computer	Dapat dipakai
+Display	DeviceClass		Tampilan
+Gamepad	DeviceClass		Gamepad
+Video monitor	DeviceClass		Video monitor
+Palm	DeviceClass	A palm-held device	Palm
+Joystick	DeviceClass		Joystick
+Networking	DeviceClass		Jaringan
+Telephony	DeviceClass		Telepon
+Game	DeviceClass		Permainan
+Video display and loudspeaker	DeviceClass		Penampil video dan loudspeaker
+Wrist watch	DeviceClass		Jam tangan
+Sensing device	DeviceClass		Perangkat penginderaan
+Pointing device	DeviceClass		Alat penunjuk
+(reserved)	DeviceClass		(cadangan)
+Rendering	DeviceClass		Pencitraan
+Information	DeviceClass		Informasi
+Helmet	DeviceClass		Helm
+Pager	DeviceClass	A small radio device to receive short text messages	Pager
+Hands-free	DeviceClass		Bebas-genggam
+Digitizer tablet	DeviceClass		Tablet digitizer
+Portable audio	DeviceClass		Audio portabel
+Camera	DeviceClass		Kamera
+1-17% utilized	DeviceClass		terpakai 1-17%
+Combo keyboard/pointing device	DeviceClass		Combo keyboard/alat penunjuk
+Video conferencing	DeviceClass		Konferensi video
+Peripheral	DeviceClass		Peripheral
+Object transfer	DeviceClass		Transfer objek
+Set-top box	DeviceClass		Kotak set-top

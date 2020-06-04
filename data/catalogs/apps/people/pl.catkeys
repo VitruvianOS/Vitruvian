@@ -1,0 +1,50 @@
+1	polish	x-vnd.Be-PEPL	2332202134
+Launching the FileTypes preflet to configure Person attributes has failed.\n\nError: 	People		Uruchomienie panelu FileTypes, aby skonfigurować atrybuty osoby nie powiodło się.\n\nBłąd: 
+Unnamed person	People		Nienazwana osoba
+New person…	People		Nowa osoba…
+Address	People		Adres
+Zip	People		Kod pocztowy
+Select all	People		Zaznacz wszystkie
+Could not create %s.	People		Nie można utworzyć %s.
+Quit	People		Zakończ
+Company	People		Firma
+Name	People		Imię i nazwisko
+The file '%name%' could not be written.	People		Plik „%name%” nie mógł zostać zapisany.
+Contact name	People		Imię i nazwisko
+Cancel	People		Anuluj
+Edit	People		Edycja
+Save changes before closing?	People		Czy zapisać zmiany przed zamknięciem?
+People	System name		Ludzie
+Error	People		Błąd
+Revert	People		Cofnij
+Country	People		Kraj
+Person	Short mimetype description		Osoba
+New person	People		Nowa osoba
+Save	People		Zapisz
+Fax	People		Faks
+URL	People		Adres URL
+%name% picture	People		%name% zdjęcie
+Home phone	People		Telefon domowy
+none	Groups list		brak
+Save as…	People		Zapisz jako…
+Cut	People		Wytnij
+Contact information for a person.	Long mimetype description		Informacje kontaktowe osoby.
+Remove image	People		Usuń obraz
+City	People		Miasto
+Undo	People		Cofnij
+Don't save	People		Nie zapisuj
+Configure attributes	People		Konfiguracja atrybutów
+Work phone	People		Telefon do pracy
+State	People		Województwo
+Nickname	People		Pseudonim
+OK	People		OK
+File	People		Plik
+Redo	People		Powtórz
+Close	People		Zamknij
+Copy	People		Kopiuj
+Paste	People		Wklej
+E-mail	People		E-mail
+Group	People		Grupa
+Drop an image here,\nor use the contextual menu.	People		Upuść obraz tutaj\nlub użyj menu kontekstowego.
+Load image…	People		Wczytaj obraz…
+Sorry	People		Przykro nam

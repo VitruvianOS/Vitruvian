@@ -1,0 +1,62 @@
+1	italian	x-vnd.Haiku-ShowImage	3998703664
+Use as background…	Menus		Utilizza come sfondo…
+File	Menus		File
+Slide delay	Menus		Tempo d'attesa
+Selection mode	Menus		Modalità selezione
+Zoom in	Menus		Zoom avanti
+The document '%s' has been changed. Do you want to close the document?	ClosePrompt		Il documento '%s' è stato modificato. Vuoi chiudere il documento?
+Page setup…	Menus		Imposta pagina…
+Print…	Menus		Stampa…
+Get info…	Menus		Ottieni informazioni…
+OK	SaveToFile		OK
+Previous page	Menus		Pagina precedente
+View	Menus		Visualizza
+Full screen	Menus		Schermo intero
+Go to page	Menus		Vai alla pagina
+Zoom out	Menus		Zoom indietro
+Quit	Menus		Esci
+Rotate counterclockwise	Menus		Ruota in senso antiorario
+High-quality zooming	Menus		Zoom di alta qualità
+Browse	Menus		Sfoglia
+Edit	Menus		Modifica
+Could not load image! Either the file or an image translator for it does not exist.	LoadAlerts		Impossibile caricare l'immagine! Il file immagine, il translator relativo o entrambi non esistono.
+First page	Menus		Prima pagina
+The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		Il documento '%s' (pagina %d) è stato modificato. Vuoi chiudere il documento?
+Leave full screen	Menus		Esci dallo schermo intero
+Close	Menus		Chiudi
+Close	ClosePrompt		Chiudi
+Resize to (in 1/72 inches):	PrintOptionsWindow		Ridimensiona (in 1/72 pollici):
+Rating	Menus		Voto
+Flip left to right	Menus		Ribalta orizzontalmente
+Show caption in full screen mode	Menus		Mostra didascalia in modalità schermo intero
+DPI:	PrintOptionsWindow		Punti per pollice:
+Open…	Menus		Apri...
+Next file	Menus		File seguente
+Clear selection	Menus		Pulisci selezione
+Close document	ClosePrompt		Chiudi documento
+Height: 	PrintOptionsWindow		Altezza: 
+The file '%s' could not be written.	SaveToFile		Impossibile scrivere il file '%s'.
+Cancel	ClosePrompt		Annulla
+Show tool bar	Menus		Mostra strumenti
+Fit to window	Menus		Adatta alla finestra
+Print options	PrintOptionsWindow		Opzioni di stampa
+Copy	Menus		Copia
+Progress monitor	ProgressWindow		Controllo avanzamento
+Last page	Menus		Ultima pagina
+Stretch to window	Menus		Estendi alla finestra
+Previous file	Menus		File precedente
+ShowImage	System name		ShowImage
+Slide show	Menus		Mostra sequenza
+Fit image to page	PrintOptionsWindow		Adatta alla pagina
+Flip top to bottom	Menus		Ribalta verticalmente
+Select all	Menus		Seleziona tutto
+Zoom factor in %:	PrintOptionsWindow		Fattore di zoom in %:
+Width:	PrintOptionsWindow		Larghezza:
+Image	Menus		Immagine
+Move to Trash	Menus		Sposta nel Cestino
+OK	Alerts		OK
+Rotate clockwise	Menus		Ruota in senso orario
+Job setup	PrintOptionsWindow		Imposta attività
+Original size	Menus		Dimensione originale
+Next page	Menus		Pagina seguente
+Save as…	Menus		Salva come…

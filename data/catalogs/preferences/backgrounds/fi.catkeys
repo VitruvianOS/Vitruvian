@@ -1,0 +1,28 @@
+1	finnish	x-vnd.Haiku-Backgrounds	681978856
+Backgrounds	System name		Tausta-asetukset
+X:	Main View		X:
+Setting the background image failed:	Main View		Taustakuvan asetus epäonnistui:
+Resolution: 	Image Filepanel		Erottelutarkkuus: 
+pick one	Main View		poimi yksi
+Default	Main View		Oletus
+Center	Main View		Keskitä
+Folder: %path	Main View		Kansio: %path
+Manual	Main View		Manuaalinen
+Set background image error	Main View		Taustakuvan asetuksen virhe
+Default folder	Main View		Oletuskansio
+Revert	Main View		Palauta
+None	Main View		Ei mikään
+All workspaces	Main View		Kaikki työtilat
+Icon label outline	Main View		Kuvakenimiön ääriviiva
+Other…	Main View		Muut…
+Current workspace	Main View		Nykyinen työtila
+Apply	Main View		Käytä
+Other folder…	Main View		Muu kansio…
+Y:	Main View		Y:
+Tile	Main View		Vierekkäin
+Select	Main View		Valitse
+Scale to fit	Main View		Sovita
+OK	Main View		Valmis
+Placement:	Main View		Sijoittaminen:
+Preview	Main View		Esikatselu
+Image:	Main View		Kuva:

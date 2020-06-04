@@ -1,0 +1,54 @@
+1	japanese	x-vnd.Haiku-Network	3694799483
+Ethernet device	InterfaceListItem		イーサネットデバイス
+Link speed:	IntefaceView		リンクスピード:
+disconnected	IntefaceView		切断済み
+IP Address:	IntefaceAddressView		IP アドレス:
+WPA	WPA protected network		WPA
+Network:	IntefaceView		ネットワーク:
+Received:	IntefaceView		受信:
+New…	NetworkWindow		新規…
+no link	InterfaceListItem		リンク切れ
+Other	NetworkWindow		その他
+Sent:	IntefaceView		送信:
+Gateway:	IntefaceAddressView		ゲートウェイ:
+The netmask defines your local network	IntefaceAddressView		ネットマスクはローカルネットワークを定義します
+Your IP address	IntefaceAddressView		このコンピューターの IP アドレス
+DHCP	IntefaceAddressView		DHCP
+Netmask:	IntefaceAddressView		ネットマスク:
+EAP	EAP protected network		EAP
+Services	NetworkWindow		サービス
+Installing NetworkStatus in Deskbar failed: %s	NetworkWindow		ネットワーク状況の Deskbar へのインストールに失敗しました: %s
+Revert	NetworkWindow		元に戻す
+off	ServiceListItem		オフ
+WEP	WEP protected network		WEP
+<no wireless networks found>	IntefaceView		<無線ネットワークが見つかりません>
+Enable	IntefaceView		有効
+connected	IntefaceView		接続済み
+Apply	IntefaceAddressView		適用
+Disable	ServiceView		無効
+WPA2	WPA2 protected network		ネットマスクはローカルネットワークを定義します
+Show network status in Deskbar	NetworkWindow		Deskbar にネットワークの状況を表示する
+Mode:	IntefaceAddressView		モード:
+connected	InterfaceListItem		接続済み
+OK	NetworkWindow		OK
+Static	IntefaceAddressView		固定 IP
+launch error	NetworkWindow		その他
+Renegotiate	IntefaceView		再ネゴシエート
+MAC address:	IntefaceView		MAC アドレス:
+%name% (%authenticationMode%)	WirelessNetworkMenuItem		%name% (%authenticationMode%)
+disabled	InterfaceListItem		無効
+Dial-up connection	InterfaceListItem		ダイアルアップ接続
+on	ServiceListItem		オン
+The method for obtaining an IP address	IntefaceAddressView		IP アドレスの取得方法
+Automatic	IntefaceAddressView		自動
+Choose automatically	IntefaceView		自動選択
+Status:	IntefaceView		状態:
+Disable	IntefaceView		無効
+Manage…	NetworkWindow		管理…
+open	Open network		開く
+Network	NetworkWindow		ネットワーク
+Your gateway to the internet	IntefaceAddressView		インターネットへのゲートウェイ
+Enable	ServiceView		有効
+Wireless device	InterfaceListItem		無線デバイス
+Disabled	IntefaceAddressView		無効
+VPN connection	InterfaceListItem		VPN 接続

@@ -1,0 +1,71 @@
+
+resource(0, "BEOS:TYPE") #'MIMS' "application/x-vnd.Be-meta-mime";
+
+resource(1, "META:TYPE") "image";
+
+resource(2, "META:L:DESC") #'MLDC' "Generic image file";
+
+resource(3, "META:S:DESC") #'MSDC' "Image file";
+
+resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-ShowImage";
+
+resource(6, "META:ATTR_INFO") message(233) {
+	"attr:name" = "Media:Width",
+	"attr:name" = "Media:Height",
+	"attr:name" = "Media:Year",
+	"attr:name" = "Media:Comment",
+	"attr:name" = "Media:Rating",
+	"attr:public_name" = "Width",
+	"attr:public_name" = "Height",
+	"attr:public_name" = "Year",
+	"attr:public_name" = "Comment",
+	"attr:public_name" = "Rating",
+	"attr:type" = 'LONG',
+	"attr:type" = 'LONG',
+	"attr:type" = 'LONG',
+	"attr:type" = 'CSTR',
+	"attr:type" = 'LONG',
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:viewable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:editable" = true,
+	"attr:width" = 60,
+	"attr:width" = 60,
+	"attr:width" = 60,
+	"attr:width" = 120,
+	"attr:width" = 60,
+	"attr:alignment" = 1,
+	"attr:alignment" = 1,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:alignment" = 0,
+	"attr:display_as" = "",
+	"attr:display_as" = "",
+	"attr:display_as" = "",
+	"attr:display_as" = "",
+	"attr:display_as" = "rating",
+	"type" = "image"
+};
+
+resource(5, "META:ICON") #'VICN' array {
+	$"6E6369660502000603399E0F3D9C0ABF82B23B84A94B88504870C900A5B1FFBC"
+	$"EAF1FFFFB3B8FF0501020106023E49240000000000003CAAAA4940004A3000FF"
+	$"C0D5FF7C896EFF0401920200060235A2F6BB95C63FF7DD3A033B432AA54A4CB2"
+	$"00C70585F5EE068F070606AE0BB40BBF4D33C3AFB75DC173BDEFC607C13EC804"
+	$"CA28BD82C118B920C51BBB40BF07B8083AB6BC0605AE02B57D3EB9B9C3EFB7BB"
+	$"44BBB751BD75C936CA8EC1B1402F0A093B593D5BBFCDC93E455BC516C5F16046"
+	$"5B435D4544510A045A425E3F5A3D5740020ABB1EBB84BB1EBB84BB1EBB84B887"
+	$"BD35B983BC31B77CBE48B807C04CB6C5C023B939C072BDB542BAB8C131C015C0"
+	$"0845BF73C0E0BFC7C2C9BF0DC455BEB4C4E1BF99C41FBE5CC52DBDDBC3C8BE1B"
+	$"C692BD9B4ABBDDC674BC29C0FEBB91BD823BBF6639BB9D3DB9D2BE4EBA63BE70"
+	$"2EBE0102024841C3C8C019C217C032C323C13145C0FE4CC1640202C65FBE74C6"
+	$"D2BE67C5EDBE81C653BF0DC5C6BEDAC6DFBF40060A03020203000A0101011001"
+	$"178400040A020101000A0101001001178400040A000100000A040304050600"
+};
+

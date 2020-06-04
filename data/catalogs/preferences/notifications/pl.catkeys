@@ -1,0 +1,14 @@
+1	polish	x-vnd.Haiku-Notifications	672560863
+Window width:	GeneralView		Szerokość okna:
+OK	PrefletWin		OK
+Notifications	PrefletWin		Powiadomienia
+Revert	PrefletWin		Cofnij
+Applications	PrefletView		Aplikacje
+An error occurred saving the preferences.\nIt's possible you are running out of disk space.	PrefletWin		Wystąpił błąd podczas zapisywania ustawień.\nMożliwe, że kończy się miejsce na dysku.
+Applications	NotificationView		Aplikacje
+General	PrefletView		Ogólne
+OK	NotificationView		OK
+Notifications	System name		Powiadomienia
+Allowed	NotificationView		Zezwolone
+Application	NotificationView		Aplikacja
+Enable notifications	GeneralView		Włącz powiadomienia

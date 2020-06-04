@@ -1,0 +1,47 @@
+1	lithuanian	x-vnd.Haiku-Pulse	3788463253
+Normal mode	DeskbarPulseView		Įprastinė veiksena
+Info	CPUButton		Informacija
+Quit	DeskbarPulseView		Baigti darbą
+Info	DeskbarPulseView		Informacija
+Normal mode	MiniPulseView		Įprastinė veiksena
+Frame color	ConfigView		Rėmelio spalva
+Error	PulseApp		Klaida
+Bar colors	ConfigView		Juostų spalvos
+%.2f GHz	NormalPulseView		%.2f GHz
+Defaults	PrefsWindow		Numatytai
+%ld MHz	NormalPulseView		%ld MHz
+Mini mode	PrefsWindow		Minimalioji veiksena
+CPU progress bar	NormalPulseView		Procesoriaus užimtumo juosta
+Fade colors	ConfigView		Išblukinti spalvas
+About Pulse…	PulseView		Apie Pulsą…
+Pulse	NormalPulseView		Pulsas
+Deskbar mode	NormalPulseView		Pranešimų srities veiksena
+Remove replicant	CPUButton		Pašalinti replikantą
+You can't disable the last active CPU.	PulseView		Paskutinio aktyvaus procesoriaus negalima išjungti.
+Width of icon:	ConfigView		Piktogramos plotis:
+Deskbar mode	MiniPulseView		Pranešimų srities veiksena
+OK	PulseView		Gerai
+%s\n\nBy David Ramsey and Arve Hjønnevåg\nRevised by Daniel Switkin\n	PulseApp		%s\n\nSukūrė David Ramsey ir Arve Hjønnevåg\nPeržiūrėjo Daniel Switkin\n
+OK	PrefsWindow		Gerai
+Pulse	PulseApp		Pulsas
+Removing from Deskbar failed.\n%s	DeskbarPulseView		Nepavyko pašalinti iš pranešimų srities.\n%s
+OK	PulseApp		Gerai
+About Pulse…	CPUButton		Apie Pulsą…
+Deskbar mode	PrefsWindow		Pranešimų srities veiksena
+Mini mode	DeskbarPulseView		Minimalioji veiksena
+You can't disable the last active CPU.	CPUButton		Paskutinio aktyvaus procesoriaus negalima išjungti.
+OK	CPUButton		Gerai
+Deskbar	CPUButton		Pranešimų sritis
+Settings…	PulseView		Nuostatos…
+Deskbar menu	CPUButton		Užduočių juostos meniu
+Mini mode	NormalPulseView		Minimalioji veiksena
+Quit	MiniPulseView		Baigti darbą
+Info	PulseView		Informacija
+OK	DeskbarPulseView		Gerai
+Info	PulseApp		Informacija
+Pulse	System name		Pulsas
+Active color	ConfigView		Aktyvi spalva
+Installing in Deskbar failed\n%s	PulseApp		Nepavyko patalpinti pranešimų srityje\n%s
+Idle color	ConfigView		Ramybės būsenos spalva
+Normal mode	PrefsWindow		Įprastinė veiksena
+Pulse settings	PulseWindow		Pulso nuostatos

@@ -1,0 +1,53 @@
+1	russian	x-vnd.Haiku-Network	804107944
+Ethernet device	InterfaceListItem		Ethernet устройство
+Link speed:	IntefaceView		Скорость соединения:
+disconnected	IntefaceView		отключено
+IP Address:	IntefaceAddressView		IP-адрес:
+WPA	WPA protected network		WPA
+Network:	IntefaceView		Сеть
+Received:	IntefaceView		Получено:
+New…	NetworkWindow		Создать…
+no link	InterfaceListItem		нет соединения
+Other	NetworkWindow		Другая
+Sent:	IntefaceView		Отправлено:
+Gateway:	IntefaceAddressView		Шлюз:
+The netmask defines your local network	IntefaceAddressView		Маска подсети определяет вашу локальную сеть
+Your IP address	IntefaceAddressView		Ваш IP-адрес
+DHCP	IntefaceAddressView		DHCP
+Netmask:	IntefaceAddressView		Маска подсети:
+EAP	EAP protected network		EAP
+Services	NetworkWindow		Службы
+Installing NetworkStatus in Deskbar failed: %s	NetworkWindow		Не удалось установить NetworkStatus в Deskbar: %s
+Revert	NetworkWindow		Вернуть
+off	ServiceListItem		выключен
+WEP	WEP protected network		WEP
+<no wireless networks found>	IntefaceView		<беспроводные сети не найдены>
+Enable	IntefaceView		Включить
+connected	IntefaceView		подключено
+Apply	IntefaceAddressView		Применить
+Disable	ServiceView		Отключить
+WPA2	WPA2 protected network		WPA2
+Show network status in Deskbar	NetworkWindow		Отображать статус интерфейсов в Deskbar
+Mode:	IntefaceAddressView		Режим:
+connected	InterfaceListItem		подключено
+Static	IntefaceAddressView		Статический
+launch error	NetworkWindow		Ошибка запуска
+Renegotiate	IntefaceView		Переполучить
+MAC address:	IntefaceView		MAC-адрес:
+%name% (%authenticationMode%)	WirelessNetworkMenuItem		%name% (%authenticationMode%)
+disabled	InterfaceListItem		отключен
+Dial-up connection	InterfaceListItem		Коммутируемый доступ
+on	ServiceListItem		включен
+The method for obtaining an IP address	IntefaceAddressView		Метод получения IP-адреса
+Automatic	IntefaceAddressView		Автоматический
+Choose automatically	IntefaceView		Выбрать автоматически
+Status:	IntefaceView		Статус:
+Disable	IntefaceView		Отключить
+Manage…	NetworkWindow		Настроить…
+open	Open network		открытая
+Network	NetworkWindow		Сеть
+Your gateway to the internet	IntefaceAddressView		Ваш шлюз в интернет
+Enable	ServiceView		Включить
+Wireless device	InterfaceListItem		Беспроводное устройство
+Disabled	IntefaceAddressView		Отключен
+VPN connection	InterfaceListItem		VPN соединение

@@ -17,6 +17,7 @@ ImageInclude("/system/servers" ${SYSTEM_SERVERS})
 
 
 set(SYSTEM_LIBS
+	root
 	be
 	tracker
 )

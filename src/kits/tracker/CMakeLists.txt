@@ -89,6 +89,7 @@ AddOn(
 
 	LIBS
 	be
+	localestub
 	root
 )
 

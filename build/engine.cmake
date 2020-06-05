@@ -30,9 +30,9 @@ macro( Application name )
 		message( FATAL_ERROR "APPLICATION: 'SOURCES' argument required." )
 	endif()
 
-	list (INSERT _APPLICATION_LIBS 0 root)
 	list (INSERT _APPLICATION_LIBS 0 be)
-	target_link_libraries(${name} PRIVATE ${_APPLICATION_LIBS})
+	list (INSERT _APPLICATION_LIBS 0 root)
+	target_link_libraries(${name} PUBLIC ${_APPLICATION_LIBS})
 
 	# Add current dir headers
 	list (APPEND _APPLICATION_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
@@ -68,7 +68,7 @@ macro( Server name )
 
 	list (INSERT _SERVER_LIBS 0 root)
 	list (INSERT _SERVER_LIBS 0 be)
-	target_link_libraries(${name} PRIVATE ${_SERVER_LIBS})
+	target_link_libraries(${name} PUBLIC ${_SERVER_LIBS})
 
 	list (APPEND _SERVER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
 	target_include_directories(${name} PRIVATE ${_SERVER_INCLUDES})
@@ -85,7 +85,7 @@ macro( AddOn name type )
 
 	add_library(${name} ${type} ${_ADDON_SOURCES})
 
-	target_link_libraries(${name} PRIVATE ${_ADDON_LIBS})
+	target_link_libraries(${name} PUBLIC ${_ADDON_LIBS})
 
 	# Add current dir headers
 	list ( APPEND _ADDON_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} )
@@ -111,9 +111,9 @@ macro( Test name )
 		message( FATAL_ERROR "TEST: 'SOURCES' argument required." )
 	endif()
 
-	list (INSERT _TEST_LIBS 0 root)
 	list (INSERT _TEST_LIBS 0 be)
-	target_link_libraries(${name} PRIVATE ${_TEST_LIBS})
+	list (INSERT _TEST_LIBS 0 root)
+	target_link_libraries(${name} PUBLIC ${_TEST_LIBS})
 
 	# Add current dir headers
 	list (APPEND _TEST_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})

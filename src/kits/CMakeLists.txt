@@ -2,12 +2,10 @@ AddOn(
 	be
 	SHARED
 
-	LIBS pthread root linprog icon agg ${ZLIB_LIBRARIES}
+	LIBS root icon agg ${ZLIB_LIBRARIES} pthread icu localestub
 )
 
-target_link_libraries(be PUBLIC icu)
-
-UsePrivateHeaders( be app interface kernel locale print shared )
+UsePrivateHeaders(be app interface kernel locale print shared locale)
 
 AddOn(
 	be_bootstrap
@@ -16,7 +14,7 @@ AddOn(
 	LIBS pthread ${ZLIB_LIBRARIES}
 )
 
-UsePrivateHeaders( be_bootstrap interface app support )
+UsePrivateHeaders(be_bootstrap interface app support)
 
 add_subdirectory(app)
 add_subdirectory(game)

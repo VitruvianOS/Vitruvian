@@ -1,3 +1,4 @@
+
 #!/bin/sh
 
 bold=$(tput bold)
@@ -18,15 +19,20 @@ echo ${bold}Vitruvian Building inside the Chroot Environment...
 echo ${normal}
 
 sudo chroot $HOME/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
-apt update && apt install -y --no-install-recommends linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools wpagui curl openssh-client vim libfl-dev cmake ninja-build libfreetype6-dev libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib &&\
+apt update && apt install -y --no-install-recommends linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools wpagui curl openssh-client vim libfl-dev cmake ninja-build libfreetype6-dev libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib libncurses-dev mingetty plymouth plymouth-themes &&\
 apt install -y --reinstall ca-certificates &&\
+git clone https://github.com/wesbluemarine/Plymouth-Themes.git &&\
+mv Plymouth-Themes/isometric /usr/share/plymouth/themes &&\
+rm -rf Plymouth-Themes &&\
+plymouth-set-default-theme -R isometric &&\
 apt clean &&\
 git clone https://github.com/Barrett17/V-OS.git &&\
 cd /V-OS &&\
 mkdir /V-OS/generated.x86 &&\
 cd /V-OS/generated.x86 &&\
 ../configure && ninja -j$((`nproc`+1)) &&\
-cat <<EOT >> /root/.bash_profile
+cat <<EOT >> /root/.start.sh
+#!/bin/sh
 /V-OS/./src/apps/testharness/clean_shm.sh
 /V-OS/./generated.x86/src/servers/registrar/registrar > registrar.out &
 sleep 1
@@ -34,8 +40,24 @@ sleep 1
 sleep 2
 /V-OS/./generated.x86/src/servers/input/input_server > input_server.out &
 sleep 1
-/V-OS/./generated.x86/src/apps/deskbar/Deskbar > deskbar.out &
+/V-OS/./generated.x86/src/apps/deskbar/Deskbar > deskbar.out
 EOT
+chmod +x /root/.start.sh &&\
+cat <<EOT >> /root/.bash_profile
+/root/.start.sh
+EOT
+cat <<EOT >> /etc/systemd/system/autologin.service
+[Unit]
+After=systemd-user-sessions.service
+
+[Service]
+ExecStart=/sbin/mingetty --autologin root --noclear tty8 38400
+
+[Install]
+WantedBy=multi-user.target
+EOT
+systemctl disable getty@tty1 &&\
+systemctl enable autologin.service &&\
 mkdir -p /os/system/data/fonts/
 passwd; exit"
 
@@ -69,16 +91,12 @@ echo ${bold}Create Grub Menu...
 echo ${normal}
 
 cat <<'EOF' >$HOME/LIVE_BOOT/scratch/grub.cfg
-
 insmod all_video
-
 search --set=root --file /VITRUVIAN_CUSTOM
-
 set default="0"
 set timeout=30
-
 menuentry "Vitruvian Live" {
-    linux /vmlinuz boot=live quiet
+    linux /vmlinuz boot=live quiet splash
     initrd /initrd
 }
 EOF
@@ -147,4 +165,4 @@ xorriso \
         /boot/grub/bios.img=$HOME/LIVE_BOOT/scratch/bios.img \
         /EFI/efiboot.img=$HOME/LIVE_BOOT/scratch/efiboot.img
 
-echo ${bold}Finihed!
+echo ${bold}Finished!

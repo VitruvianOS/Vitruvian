@@ -24,6 +24,10 @@ endfunction()
 include(build/profiles/default)
 
 
+set(CORE_DEPS "libc (>=6.0), libinput (>= 1.10)")
+
+
+set(CPACK_DEBIAN_PACKAGE_DEPENDS ${CORE_DEPS})
 SET(CPACK_GENERATOR "DEB")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")
 INCLUDE(CPack)

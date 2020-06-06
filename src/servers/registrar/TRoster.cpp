@@ -1155,7 +1155,7 @@ TRoster::HandleRestartAppServer(BMessage* request)
 
 	const char* pathString;
 	if (request->FindString("path", &pathString) != B_OK)
-		pathString = "/os/system/servers";
+		pathString = "/system/servers";
 	BPath path(pathString);
 	path.Append("app_server");
 	// NOTE: its required at some point that the binary name is "app_server"

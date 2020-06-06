@@ -186,7 +186,7 @@ get_relative_directory_path(size_t installationLocationIndex,
 		case B_FIND_PATH_BIN_DIRECTORY:
 			return "/bin%";
 		case B_FIND_PATH_BOOT_DIRECTORY:
-			return "/os";
+			return "/";
 		case B_FIND_PATH_CACHE_DIRECTORY:
 			return "/cache";
 		case B_FIND_PATH_DATA_DIRECTORY:
@@ -403,7 +403,8 @@ get_file_attribute(const char* path, const char* attribute, char* nameBuffer,
 		return errno;
 
 	status_t error = B_OK;
-	ssize_t bytesRead = read(fd, nameBuffer, bufferSize - 1);
+	ssize_t bytesRead = fs_read_attr(fd, attribute, B_STRING_TYPE,
+		0, nameBuffer, bufferSize - 1);
 	if (bytesRead < 0)
 		error = bytesRead;
 	else if (bytesRead == 0)

@@ -337,7 +337,7 @@ FontManager::_LoadRecentFontMappings()
 
 	BPath ttfontsPath;
 	if (find_directory(B_BEOS_FONTS_DIRECTORY, &ttfontsPath) == B_OK) {
-		ttfontsPath.Append("ttfonts");
+		ttfontsPath.Append("truetype/noto");
 
 		BPath veraFontPath = ttfontsPath;
 		veraFontPath.Append("NotoSansDisplay-Regular.ttf");

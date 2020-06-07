@@ -18,6 +18,8 @@
 
 #include <syscalls.h>
 
+#define DEBUG 3
+
 #include "main.h"
 #include "KernelDebug.h"
 
@@ -36,9 +38,6 @@ public:
 	status_t			Block(uint32 flags, bigtime_t timeout);
 	static status_t		Unblock(thread_id thread, status_t status);
 
-	void				Lock();
-	void				Unlock();
-
 	static status_t		SendData(thread_id thread, int32 code,
 							const void* buffer, size_t buffer_size);
 	status_t			ReceiveData(thread_id* sender,
@@ -46,12 +45,15 @@ public:
 	static bool 		HasData(thread_id thread);
 
 private:
+	friend class ThreadPool;
+
+	static void*		thread_run(void* data);
+
 	thread_id			fThread;
 	sem_id				fThreadBlockSem = -1;
 	port_id				fThreadPort;
-	pthread_mutex_t		fMutexLock;
 
-	pthread_t			fNativeThread;
+	sem_id				fThreadExitSem;
 };
 
 
@@ -64,32 +66,63 @@ struct data_wrap {
 };
 
 
-static std::map<thread_id, Thread*> gThreadsMap;
-static __thread Thread* gCurrentThread;
-
 extern int gLoadImageFD;
-static BLocker fLock;
 
+static __thread Thread* gCurrentThread;
+static __thread sem_id gThreadExitSem;
+
+static BLocker fLock;
+static std::map<thread_id, Thread*> gThreadsMap;
 
 // Static initialization for the main thread
 class ThreadPool {
 public:
 
+	ThreadPool()
+	{
+		fMainThread = new Thread();
+		gThreadsMap.insert(std::make_pair(find_thread(NULL), fMainThread));
+		pthread_atfork(NULL, NULL, &ReinitAtFork);
+	}
+
+	static thread_id
+	CreateThread()
+	{
+		thread_id id = find_thread(NULL);
+		Thread* thread = new Thread();
+
+		gThreadsMap.insert(std::make_pair(id, thread));
+		return id;
+	}
+
+	static Thread* Find(thread_id id)
+	{
+		auto elem = gThreadsMap.find(id);
+		if (elem == end(gThreadsMap))
+			return NULL;
+
+		return elem->second;
+	}
+
+	static void Lock()
+	{
+		fLock.Lock();
+	}
+
+	static void Unlock()
+	{
+		fLock.Unlock();
+	}
+
+private:
 	static void ReinitAtFork()
 	{
 		TRACE("Process %d reinit thread after fork", getpid());
 		gThreadsMap.clear();
-		gCurrentThread = new Thread();
+		ThreadPool::CreateThread();
 		gLoadImageFD = -1;
 	}
 
-	ThreadPool()
-	{
-		fMainThread = new Thread();
-		pthread_atfork(NULL, NULL, &ReinitAtFork);
-	}
-
-private:
 	Thread* fMainThread;
 };
 
@@ -97,23 +130,29 @@ static ThreadPool init;
 
 
 void*
-_thread_run(void* data)
+Thread::thread_run(void* data)
 {
 	CALLED();
-
-	Thread* thread = new Thread();
-
+	ThreadPool::Lock();
 	data_wrap* threadData = (data_wrap*)data;
-	threadData->tid = find_thread(NULL);
+	threadData->tid = ThreadPool::CreateThread();
+	ThreadPool::Unlock();
 
 	Thread::Unblock(threadData->father, B_OK);
-	thread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
+	gCurrentThread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
+
 	threadData->func(threadData->data);
-	delete thread;
+
+	ThreadPool::Lock();
+	gThreadsMap.erase(gCurrentThread);
+	delete gCurrentThread;
+	gCurrentThread = NULL;
 	delete threadData;
+	ThreadPool::Unlock();
 
 	status_t exitStatus = B_OK;
-	pthread_exit(&exit);
+	delete_sem(gThreadExitSem);
+	pthread_exit(&exitStatus);
 	return NULL;
 }
 
@@ -125,13 +164,11 @@ Thread::Thread()
 	fThreadPort = create_port(1, std::to_string(fThread).c_str());
 	// TODO: Add thread_id to the name?
 	fThreadBlockSem = create_sem(0, "block_thread_sem");
-	fNativeThread = pthread_self();
-	pthread_mutex_init(&fMutexLock, NULL);
-	gCurrentThread = this;
 
-	fLock.Lock();
-	gThreadsMap.insert(std::make_pair(fThread, this));
-	fLock.Unlock();
+	fThreadExitSem = create_sem(0, "exit_thread_sem");
+	gThreadExitSem = fThreadExitSem;
+
+	gCurrentThread = this;
 }
 
 
@@ -139,11 +176,6 @@ Thread::~Thread()
 {
 	delete_sem(fThreadBlockSem);
 	delete_port(fThreadPort);
-	pthread_mutex_destroy(&fMutexLock);
-
-	fLock.Lock();
-	gThreadsMap.erase(fThread);
-	fLock.Unlock();
 }
 
 
@@ -157,11 +189,11 @@ Thread::Spawn(thread_func func, const char* name, int32 priority,
 	dataWrap->father = find_thread(NULL);
 
 	pthread_t pThread;
-	int32 ret = pthread_create(&pThread, NULL, _thread_run, dataWrap);
+	int32 ret = pthread_create(&pThread, NULL, Thread::thread_run, dataWrap);
+	if (ret < 0)
+		return B_ERROR;
 
-	// TODO: errorcheck
 	gCurrentThread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
-
 	return dataWrap->tid;
 }
 
@@ -169,18 +201,19 @@ Thread::Spawn(thread_func func, const char* name, int32 priority,
 status_t
 Thread::WaitForThread(thread_id id, status_t* _returnCode)
 {
-	fLock.Lock();
-	auto elem = gThreadsMap.find(id);
-	bool isValid = elem != end(gThreadsMap);
-	fLock.Unlock();
+	ThreadPool::Lock();
+		auto elem = gThreadsMap.find(id);
+		if (elem == end(gThreadsMap))
+			return B_BAD_THREAD_ID;
+		sem_id sem = elem->second->fThreadExitSem;
+	ThreadPool::Unlock();
 
-	printf("join %d\n", id);
-	if (isValid && pthread_join(elem->second->fNativeThread,
-				(void**)&_returnCode) == 0) {
-		return B_OK;
-	}
+	status_t ret = acquire_sem(sem);
 
-	if (gLoadImageFD != -1) {
+	if (_returnCode != NULL)
+		*_returnCode = 0;
+
+	if (ret != B_OK && gLoadImageFD != -1) {
 		uint32 value = 1;
 		write(gLoadImageFD, (const void*)&value, sizeof(uint32));
 		close(gLoadImageFD);
@@ -207,7 +240,7 @@ Thread::WaitForThread(thread_id id, status_t* _returnCode)
 		return B_OK;
 	}
 
-	return B_BAD_THREAD_ID;
+	return ret;
 }
 
 
@@ -215,20 +248,6 @@ status_t
 Thread::Resume(thread_id id)
 {
 	return Unblock(id, B_OK);
-}
-
-
-void
-Thread::Lock()
-{
-	pthread_mutex_lock(&fMutexLock);
-}
-
-
-void
-Thread::Unlock()
-{
-	pthread_mutex_unlock(&fMutexLock);
 }
 
 
@@ -246,17 +265,23 @@ Thread::Block(uint32 flags, bigtime_t timeout)
 status_t
 Thread::Unblock(thread_id thread, status_t status)
 {
-	fLock.Lock();
-	auto pair = gThreadsMap.find(thread);
-	bool isValid = pair != end(gThreadsMap);
-	fLock.Unlock();
+	ThreadPool::Lock();
+	auto elem = gThreadsMap.find(thread);
+	if (elem == end(gThreadsMap)) {
+		ThreadPool::Unlock();
+		return B_BAD_THREAD_ID;
+	}
+	Thread* ret = elem->second;
+	sem_id blockSem = -1;
+	if (ret != NULL)
+		blockSem = ret->fThreadBlockSem;
+	ThreadPool::Unlock();
 
-	if (isValid) {
-		release_sem(pair->second->fThreadBlockSem);
+	if (blockSem != -1) {
+		release_sem(blockSem);
 		return B_OK;
 	}
 
-	TRACE("error unblocking thread\n");
 	return B_ERROR;
 }
 
@@ -284,8 +309,9 @@ status_t
 Thread::ReceiveData(thread_id* sender, void* buffer, size_t bufferSize)
 {
 	// Blocks if there is no message to read
+	port_id port = gCurrentThread->fThreadPort;
 	int32 code;
-	size_t size = read_port(gCurrentThread->fThreadPort,
+	size_t size = read_port(port,
 		&code, buffer, bufferSize);
 	if (size <= 0)
 		return size;
@@ -358,7 +384,11 @@ status_t
 _kern_receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 {
 	CALLED();
-	return gCurrentThread->ReceiveData(sender, buffer, bufferSize);
+	if (gCurrentThread == NULL)
+		return B_BAD_THREAD_ID;
+
+	status_t ret = gCurrentThread->ReceiveData(sender, buffer, bufferSize);
+	return ret;
 }
 
 

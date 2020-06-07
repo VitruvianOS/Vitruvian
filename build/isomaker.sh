@@ -25,39 +25,94 @@ git clone https://github.com/wesbluemarine/Plymouth-Themes.git &&\
 mv Plymouth-Themes/isometric /usr/share/plymouth/themes &&\
 rm -rf Plymouth-Themes &&\
 plymouth-set-default-theme -R isometric &&\
-apt clean &&\
 git clone https://github.com/Barrett17/V-OS.git &&\
 cd /V-OS &&\
 mkdir /V-OS/generated.x86 &&\
 cd /V-OS/generated.x86 &&\
 ../configure && ninja -j$((`nproc`+1)) &&\
-cat <<EOT >> /root/.start.sh
-#!/bin/sh
-/V-OS/./src/apps/testharness/clean_shm.sh
-/V-OS/./generated.x86/src/servers/registrar/registrar > registrar.out &
-sleep 1
-/V-OS/./generated.x86/src/servers/app/app_server > app_server.out &
-sleep 2
-/V-OS/./generated.x86/src/servers/input/input_server > input_server.out &
-sleep 1
-/V-OS/./generated.x86/src/apps/deskbar/Deskbar > deskbar.out
-EOT
-chmod +x /root/.start.sh &&\
-cat <<EOT >> /root/.bash_profile
-/root/.start.sh
-EOT
-cat <<EOT >> /etc/systemd/system/autologin.service
+cd /V-OS/generated.x86/ &&\
+cpack &&\
+apt -y remove --purge autoconf automake bison build-essential cmake flex gcc-multilib git less libfreetype6-dev libinput-dev libncurses-dev libtool mtools ninja-build texinfo unzip zip zlib1g-dev &&\
+apt -y autoremove &&\
+apt clean &&\
+apt install -y -f /V-OS/generated.x86/*.deb &&\
+rm -rf /V-OS/ &&\
+
+cat <<EOT >> /etc/systemd/system/registrar.service
 [Unit]
-After=systemd-user-sessions.service
+Description=registrar server daemon
+Conflicts=getty@tty1.service
 
 [Service]
-ExecStart=/sbin/mingetty --autologin root --noclear tty8 38400
+ExecStart=/system/servers/registrar
+StandardInput=tty-force
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+RestartSec=500ms
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
 EOT
-systemctl disable getty@tty1 &&\
-systemctl enable autologin.service &&\
+
+cat <<EOT >> /etc/systemd/system/app_server.service
+[Unit]
+Description=app server daemon
+Conflicts=getty@tty1.service
+After=registrar.service
+
+[Service]
+ExecStartPre=/bin/sleep 0.5
+ExecStart=/system/servers/app_server
+StandardInput=tty-force
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+RestartSec=500ms
+
+[Install]
+WantedBy=graphical.target
+EOT
+
+cat <<EOT >> /etc/systemd/system/input_server.service
+[Unit]
+Description=app server daemon
+Conflicts=getty@tty1.service
+After=app_server.service
+
+[Service]
+ExecStartPre=/bin/sleep 0.5
+ExecStart=/system/servers/input_server
+StandardInput=tty-force
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+RestartSec=500ms
+
+[Install]
+WantedBy=graphical.target
+EOT
+
+cat <<EOT >> /etc/systemd/system/deskbar.service
+[Unit]
+Description=deskbar daemon
+Conflicts=getty@tty1.service
+After=input_server.service
+
+[Service]
+ExecStartPre=/bin/sleep 0.5
+ExecStart=/system/servers/Deskbar
+StandardInput=tty-force
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+RestartSec=500ms
+
+[Install]
+WantedBy=graphical.target
+EOT
+
+systemctl enable app_server.service deskbar.service input_server.service registrar.service &&\
 mkdir -p /os/system/data/fonts/
 passwd; exit"
 
@@ -94,7 +149,8 @@ cat <<'EOF' >$HOME/LIVE_BOOT/scratch/grub.cfg
 insmod all_video
 search --set=root --file /VITRUVIAN_CUSTOM
 set default="0"
-set timeout=30
+set timeout=0
+set hidden_timeout=0
 menuentry "Vitruvian Live" {
     linux /vmlinuz boot=live quiet splash
     initrd /initrd

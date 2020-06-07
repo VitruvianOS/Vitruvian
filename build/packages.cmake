@@ -24,9 +24,8 @@ endfunction()
 include(build/profiles/default)
 
 
-set(CORE_DEPS "libc6 (>= 2.29), libfl2 (>= 2.5.33), libfreetype6 (>= 2.2.1), libgcc-s1 (>= 3.0), libinput10 (>= 0.15.0), libncurses6 (>= 6), libstdc++6 (>= 5.2), libtinfo6 (>= 6), libudev1 (>= 183), zlib1g (>= 1:1.1.4)")
+set(CORE_DEPS "libc6 (>= 2.28), libfl2 (>= 2.5.33), libfreetype6 (>= 2.2.1), libinput10 (>= 0.15.0), libncurses6 (>= 6), libstdc++6 (>= 5.2), libtinfo6 (>= 6), libudev1 (>= 183), zlib1g (>= 1:1.1.4)")
 
-#set (CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${CORE_DEPS})
 SET(CPACK_GENERATOR "DEB")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")

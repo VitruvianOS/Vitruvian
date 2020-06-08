@@ -1,6 +1,8 @@
 add_subdirectory(system)
 
 add_subdirectory(bin)
+add_subdirectory(tools)
+
 add_subdirectory(libs)
 
 add_subdirectory(kits)

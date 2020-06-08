@@ -87,6 +87,8 @@ set(
 	"headers/os/support"
 	"headers/os/posix/compat/sys"
 
+	"headers/tools/cppunit"
+
 	"headers/posix"
 )
 

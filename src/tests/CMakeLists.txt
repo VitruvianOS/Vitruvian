@@ -8,6 +8,6 @@ add_definitions(-DNO_ELF_SYMBOL_PATCHING)
 include_directories("${PROJECT_SOURCE_DIR}/headers/tools/cppunit")
 
 
-AddOn(libexampletest SHARED SOURCES ExampleTestAddon.cpp ExampleTest.cpp)
+#AddOn(libexampletest SHARED SOURCES ExampleTestAddon.cpp ExampleTest.cpp)
 #UnitTester(UnitTester SOURCES UnitTester.cpp RDEF UnitTester.rdef)
-Application(UnitTester SOURCES UnitTester.cpp LIBS libcppunit)
+#Application(UnitTester SOURCES UnitTester.cpp LIBS libcppunit)

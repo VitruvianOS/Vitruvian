@@ -19,13 +19,13 @@ echo ${bold}Vitruvian Building inside the Chroot Environment...
 echo ${normal}
 
 sudo chroot $HOME/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
-apt update && apt install -y --no-install-recommends linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools wpagui curl openssh-client vim libfl-dev cmake ninja-build libfreetype6-dev libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib libncurses-dev mingetty plymouth plymouth-themes &&\
+apt update && apt install -y --no-install-recommends linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools wpagui curl openssh-client vim libfl-dev cmake ninja-build libfreetype6-dev libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib libncurses-dev plymouth plymouth-themes fonts-noto-core fonts-noto-extra fonts-noto-mono &&\
 apt install -y --reinstall ca-certificates &&\
 git clone https://github.com/wesbluemarine/Plymouth-Themes.git &&\
 mv Plymouth-Themes/isometric /usr/share/plymouth/themes &&\
 rm -rf Plymouth-Themes &&\
 plymouth-set-default-theme -R isometric &&\
-git clone https://github.com/Barrett17/V-OS.git &&\
+git clone https://github.com/Barrett17/V-OS.git --branch development &&\
 cd /V-OS &&\
 mkdir /V-OS/generated.x86 &&\
 cd /V-OS/generated.x86 &&\
@@ -113,14 +113,7 @@ WantedBy=graphical.target
 EOT
 
 systemctl enable app_server.service deskbar.service input_server.service registrar.service &&\
-mkdir -p /os/system/data/fonts/
 passwd; exit"
-
-
-echo ${bold}Copy ttfonts inside Chroot Environment...
-echo ${normal}
-
-sudo cp -r ~/ttfonts $HOME/LIVE_BOOT/chroot/os/system/data/fonts/ttfonts/
 
 echo ${bold}Create Directories for Live Environment Files...
 echo ${normal}

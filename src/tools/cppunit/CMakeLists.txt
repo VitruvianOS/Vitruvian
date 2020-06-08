@@ -37,3 +37,5 @@ AddOn(
 	cppunit/TypeInfoHelper.cpp
 	cppunit/XmlOutputter.cpp
 )
+
+target_include_directories(libcppunit PRIVATE "${PROJECT_SOURCE_DIR}/headers/tools/cppunit")

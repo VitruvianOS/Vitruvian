@@ -1,4 +1,7 @@
-target_sources(be PRIVATE
+AddOn(
+	libshared
+	STATIC
+	SOURCES
 	AboutMenuItem.cpp
 	ArgumentVector.cpp
 	AttributeUtilities.cpp
@@ -39,3 +42,5 @@ target_sources(be PRIVATE
 	ToolBar.cpp
 	Variant.cpp
 )
+
+UsePrivateHeaders(libshared shared locale interface kernel)

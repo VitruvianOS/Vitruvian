@@ -2,10 +2,13 @@ AddOn(
 	be
 	SHARED
 
-	LIBS root icon agg ${ZLIB_LIBRARIES} pthread icu localestub libshared
+	LIBS root icon agg ${ZLIB_LIBRARIES} pthread localestub libshared
 )
 
 UsePrivateHeaders(be app interface kernel print shared locale)
+
+target_link_libraries(be PUBLIC icu)
+
 
 AddOn(
 	be_bootstrap

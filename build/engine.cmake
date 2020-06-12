@@ -66,8 +66,8 @@ macro( Server name )
 
 	add_executable(${name} ${_SERVER_SOURCES})
 
-	list (INSERT _SERVER_LIBS 0 root)
 	list (INSERT _SERVER_LIBS 0 be)
+	list (INSERT _SERVER_LIBS 0 root)
 	target_link_libraries(${name} PUBLIC ${_SERVER_LIBS})
 
 	list (APPEND _SERVER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
@@ -85,7 +85,7 @@ macro( AddOn name type )
 
 	add_library(${name} ${type} ${_ADDON_SOURCES})
 
-	target_link_libraries(${name} PUBLIC ${_ADDON_LIBS})
+	target_link_libraries(${name} PRIVATE ${_ADDON_LIBS})
 
 	# Add current dir headers
 	list ( APPEND _ADDON_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} )

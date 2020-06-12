@@ -36,6 +36,9 @@ AddOn(
 	cppunit/TextTestResult.cpp
 	cppunit/TypeInfoHelper.cpp
 	cppunit/XmlOutputter.cpp
+	LIBS
+	be
+	root
 )
 
 target_include_directories(libcppunit PRIVATE "${PROJECT_SOURCE_DIR}/headers/tools/cppunit")

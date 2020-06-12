@@ -32,10 +32,7 @@ UsePrivateHeaders(be support)
 
 target_sources(be_bootstrap PRIVATE
 	Architecture.cpp
-	Archivable.cpp
-	ArchivingManagers.cpp
 	Base64.cpp
-	Beep.cpp
 	BlockCache.cpp
 	BufferedDataIO.cpp
 	BufferIO.cpp
@@ -43,7 +40,6 @@ target_sources(be_bootstrap PRIVATE
 	CompressionAlgorithm.cpp
 	DataIO.cpp
 	DataPositionIOWrapper.cpp
-	DateTime.cpp
 	Flattenable.cpp
 	Job.cpp
 	JobQueue.cpp

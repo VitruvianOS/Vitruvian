@@ -32,7 +32,7 @@ Application(
 	ResourceSet.cpp
 	Switcher.cpp
 
-	LIBS tracker
+	LIBS tracker libshared
 	RDEF Deskbar.rdef
 )
 

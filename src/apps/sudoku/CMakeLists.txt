@@ -1,7 +1,7 @@
 Application(
 	Sudoku
 
-    SOURCES
+	SOURCES
 	ProgressWindow.cpp
 	Sudoku.cpp
 	SudokuField.cpp
@@ -10,6 +10,5 @@ Application(
 	SudokuView.cpp
 	SudokuWindow.cpp
 
-    LIBS
-	tracker
+	LIBS tracker libshared
 )

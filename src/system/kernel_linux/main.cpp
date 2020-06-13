@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <linux/limits.h>
 
+#include "KernelDebug.h"
 #include "messaging/MessagingService.h"
 
 
@@ -23,7 +24,7 @@ char** __libc_argv;
 void __attribute__ ((constructor))
 init_kernel_layer(int argc, char** argv)
 {
-	printf("init_kernel_layer()\n");
+	TRACE("init_kernel_layer()\n");
 
 	// Init global stuff
 	__gCPUCount = sysconf(_SC_NPROCESSORS_ONLN);
@@ -40,12 +41,9 @@ init_kernel_layer(int argc, char** argv)
 }
 
 
-#if 0
-// TODO: This cannot possibly work in the way it's meant.
 void __attribute__ ((destructor))
 deinit__kernel_layer()
 {
-	printf("deinit_kernel_layer()\n");
+	TRACE("deinit_kernel_layer()\n");
 	teardown_ports();
 }
-#endif

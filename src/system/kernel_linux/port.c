@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "KernelDebug.h"
 #include "main.h"
 
 #define dprintf printf
@@ -1022,13 +1023,13 @@ _kern_set_port_owner(port_id id, team_id team)
 void teardown_ports(void)
 {
 	if (!sPorts) {
-		printf("teardown_ports(): no ports to delete\n");
+		TRACE("teardown_ports(): no ports to delete\n");
 		return;
 	}
 
 	// remove all sems owned by our team
 	int num_deleted = delete_owned_ports(getpid());
 
-	printf("teardown_ports(): %d ports deleted\n", num_deleted);
+	TRACE(("teardown_ports(): %d ports deleted\n", num_deleted));
 }
 

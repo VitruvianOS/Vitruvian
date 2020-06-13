@@ -25,7 +25,7 @@
 extern int gLoadImageFD;
 
 
-namespace BPrivate {
+namespace BKernelPrivate {
 
 
 class Thread {
@@ -311,7 +311,7 @@ status_t
 Thread::ReceiveData(thread_id* sender, void* buffer, size_t bufferSize)
 {
 	// Blocks if there is no message to read
-	port_id port = BPrivate::gCurrentThread->fThreadPort;
+	port_id port = BKernelPrivate::gCurrentThread->fThreadPort;
 	int32 code;
 	size_t size = read_port(port,
 		&code, buffer, bufferSize);
@@ -339,7 +339,7 @@ thread_id
 _kern_spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 {
 	CALLED();
-	return BPrivate::Thread::Spawn(func, name, priority, data);
+	return BKernelPrivate::Thread::Spawn(func, name, priority, data);
 }
 
 
@@ -381,7 +381,7 @@ _kern_send_data(thread_id thread, int32 code,
 	const void* buffer, size_t buffer_size)
 {
 	CALLED();
-	return BPrivate::Thread::SendData(thread, code, buffer, buffer_size);
+	return BKernelPrivate::Thread::SendData(thread, code, buffer, buffer_size);
 }
 
 
@@ -389,10 +389,10 @@ status_t
 _kern_receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 {
 	CALLED();
-	if (BPrivate::gCurrentThread == NULL)
+	if (BKernelPrivate::gCurrentThread == NULL)
 		return B_BAD_THREAD_ID;
 
-	status_t ret = BPrivate::gCurrentThread->ReceiveData(sender,
+	status_t ret = BKernelPrivate::gCurrentThread->ReceiveData(sender,
 		buffer, bufferSize);
 	return ret;
 }
@@ -401,7 +401,7 @@ _kern_receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 bool
 _kern_has_data(thread_id thread)
 {
-	return BPrivate::Thread::HasData(thread);
+	return BKernelPrivate::Thread::HasData(thread);
 }
 
 
@@ -461,7 +461,7 @@ status_t
 _kern_wait_for_thread(thread_id id, status_t* _returnCode)
 {
 	CALLED();
-	return BPrivate::Thread::WaitForThread(id, _returnCode);
+	return BKernelPrivate::Thread::WaitForThread(id, _returnCode);
 }
 
 
@@ -477,7 +477,7 @@ status_t
 _kern_resume_thread(thread_id id)
 {
 	CALLED();
-	return BPrivate::Thread::Resume(id);
+	return BKernelPrivate::Thread::Resume(id);
 }
 
 
@@ -485,7 +485,7 @@ status_t
 _kern_block_thread(uint32 flags, bigtime_t timeout)
 {
 	CALLED();
-	return BPrivate::gCurrentThread->Block(flags, timeout);
+	return BKernelPrivate::gCurrentThread->Block(flags, timeout);
 }
 
 
@@ -493,7 +493,7 @@ status_t
 _kern_unblock_thread(thread_id thread, status_t status)
 {
 	CALLED();
-	return BPrivate::Thread::Unblock(thread, status);
+	return BKernelPrivate::Thread::Unblock(thread, status);
 }
 
 

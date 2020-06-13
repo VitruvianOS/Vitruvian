@@ -7,6 +7,7 @@ add_subdirectory(libs)
 
 add_subdirectory(kits)
 add_subdirectory(servers)
+add_subdirectory(add-ons)
 
 add_subdirectory(apps)
 

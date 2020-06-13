@@ -4,6 +4,7 @@
 echo "Add external submodules"
 git submodule update --init --recursive ../
 # Generate the buildsystem
-cmake -DCMAKE_BUILD_TYPE=Debug .. -GNinja
+# TODO document flags
+cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=0 .. -GNinja
 
 echo "Configured correctly!"

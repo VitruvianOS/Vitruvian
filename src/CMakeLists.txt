@@ -11,4 +11,6 @@ add_subdirectory(add-ons)
 
 add_subdirectory(apps)
 
-add_subdirectory(tests)
+if(BUILD_TESTS STREQUAL "1")
+	add_subdirectory(tests)
+endif()

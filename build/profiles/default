@@ -17,6 +17,13 @@ set(SYSTEM_SERVERS
 ImageInclude("/system/servers" ${SYSTEM_SERVERS})
 
 
+set(INPUT_SERVER_ADDONS
+	keyboard
+	mouse
+)
+ImageInclude("/system/add-ons/input_server/devices" ${INPUT_SERVER_ADDONS})
+
+
 set(SYSTEM_LIBS
 	root
 	be

@@ -5,7 +5,7 @@
 
 // Standard Includes -----------------------------------------------------------
 #include <iostream>
-#include <posix/string.h>
+#include <string.h>
 
 // System Includes -------------------------------------------------------------
 #include <Looper.h>

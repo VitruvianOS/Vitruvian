@@ -60,6 +60,7 @@ find_package(ZLIB REQUIRED)
 set(
 	PUBLIC_HEADERS
 
+	"headers/"
 	"headers/os"
 	"headers/os/app"
 	"headers/os/drivers"

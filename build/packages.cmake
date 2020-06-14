@@ -20,6 +20,10 @@ function( ImageIncludeDir source dest )
 	install(DIRECTORY ${source} DESTINATION ${dest})
 endfunction()
 
+function( ImageCreateDir dest )
+	install(DIRECTORY DESTINATION ${dest})
+endfunction()
+
 
 include(build/profiles/default)
 

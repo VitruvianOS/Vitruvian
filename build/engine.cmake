@@ -3,6 +3,10 @@
 
 include(CMakeParseArguments)
 
+include(build/defs.cmake)
+include(build/deps.cmake)
+include(build/headers.cmake)
+
 # TODO: Add macros for Catalog
 # TODO: Implement EnableWError( target )
 # TODO: Add possibility to set compiler defs for a target

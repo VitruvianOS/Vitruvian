@@ -24,7 +24,6 @@ function( ImageCreateDir dest )
 	install(DIRECTORY DESTINATION ${dest})
 endfunction()
 
-
 include(build/profiles/default)
 
 

@@ -28,13 +28,20 @@ set(SYSTEM_LIBS
 	root
 	be
 	tracker
+	translation
 )
 ImageInclude("/lib" ${SYSTEM_LIBS})
 
 
+set(SYSTEM_TRANSLATORS
+	HVIFTranslator
+)
+ImageInclude("/system/add-ons/Translators" ${SYSTEM_TRANSLATORS})
+
+
 set(SYSTEM_PREFERENCES
 )
-ImageInclude("/system/servers" ${SYSTEM_PREFERENCES})
+ImageInclude("/system/preferences" ${SYSTEM_PREFERENCES})
 
 
 set(BIN_DIRECTORY

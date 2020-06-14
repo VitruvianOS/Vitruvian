@@ -65,6 +65,7 @@ set(BIN_DIRECTORY
 	setmime
 	shutdown
 	system_time
+	translate
 	watch
 	xres
 )

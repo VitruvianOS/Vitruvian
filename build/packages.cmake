@@ -24,6 +24,7 @@ function( ImageCreateDir dest )
 	install(DIRECTORY DESTINATION ${dest})
 endfunction()
 
+include(build/baseimage.cmake)
 include(build/profiles/default)
 
 

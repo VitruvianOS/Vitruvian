@@ -1,4 +1,7 @@
-target_sources(be PRIVATE
+AddOn(game
+	SHARED
+
+	SOURCES
 	DirectWindow.cpp
 	#GameSound.cpp
 	#SimpleGameSound.cpp
@@ -11,3 +14,5 @@ target_sources(be PRIVATE
 	#GameSoundBuffer.cpp
 	#PushGameSound.cpp
 )
+
+UsePrivateHeaders(game app interface)

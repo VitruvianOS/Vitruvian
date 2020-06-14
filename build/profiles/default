@@ -35,6 +35,7 @@ ImageInclude("/lib" ${SYSTEM_LIBS})
 
 set(SYSTEM_TRANSLATORS
 	HVIFTranslator
+	RAWTranslator
 )
 ImageInclude("/system/add-ons/Translators" ${SYSTEM_TRANSLATORS})
 

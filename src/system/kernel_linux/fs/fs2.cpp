@@ -318,10 +318,35 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize,
 {
 	CALLED();
 
-	if (maxCount <= 0 || buffer == NULL || bufferSize <= 0)
+	if (fd < 0 || buffer == NULL || bufferSize <= 0 || maxCount <= 0)
 		return B_BAD_VALUE;
- 
-	return syscall(SYS_getdents, fd, buffer, bufferSize);
+
+	struct linux_dirent {
+		long           d_ino;
+		off_t          d_off;
+		unsigned short d_reclen;
+		char           d_name[];
+	};
+
+	struct linux_dirent buf[maxCount+1];
+	size_t bufSize = sizeof(struct linux_dirent)*(maxCount+1);
+
+	ssize_t ret = syscall(SYS_getdents, fd, &buf, bufSize);
+	if (ret == 0)
+		return B_OK;
+
+	if (ret < 0)
+		return B_ERROR;
+
+	ssize_t retCount = ret/sizeof(struct linux_dirent);
+	for (uint32 i = 0; i < maxCount && i < retCount; i++) {
+		buffer[i].d_ino = buf[i].d_ino;
+		buffer[i].d_off = buf[i].d_off;
+		buffer[i].d_reclen = buf[i].d_reclen;
+		strcpy(buffer[i].d_name, buf[i].d_name);
+	}
+
+	return retCount;
 }
 
 

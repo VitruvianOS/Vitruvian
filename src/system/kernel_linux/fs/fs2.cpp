@@ -16,8 +16,6 @@
 
 #include "KernelDebug.h"
 
-//TODO: add more args checking
-
 
 namespace BPrivate {
 
@@ -107,6 +105,12 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 {
 	CALLED();
 
+	if (fd < 0 && path == NULL)
+		return B_FILE_NOT_FOUND;
+
+	if (fd == -1)
+		fd = AT_FDCWD;
+
 	std::string destPath;
 	status_t ret = BPrivate::getPath(fd, path, destPath);
 	if (ret != B_OK)
@@ -132,6 +136,12 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 {
 	CALLED();
 
+	if (fd < 0 && path == NULL)
+		return B_ERROR;
+
+	if (fd == -1)
+		fd = AT_FDCWD;
+
 	struct stat st;
 	if (fstatat(fd, path, &st, AT_SYMLINK_NOFOLLOW) < 0
 			&& !(openMode & O_CREAT)) {
@@ -156,7 +166,11 @@ _kern_open_dir(int fd, const char* path)
 {
 	CALLED();
 
-	// todo AT_FDCWD
+	if (fd < 0 && path == NULL)
+		return B_ERROR;
+
+	if (fd == -1)
+		fd = AT_FDCWD;
 
 	return openat(fd, path, 0);
 }
@@ -167,8 +181,12 @@ _kern_open_parent_dir(int fd, char* name, size_t nameLength)
 {
 	CALLED();
 
+	if (fd < 0 && name == NULL)
+		return B_ERROR;
+
 	std::string path;
 	if (BPrivate::getPath(fd, NULL, path) == B_OK) {
+		TRACE("got path %s\n", path.c_str());
 		char* dirPath = dirname(strdup(path.c_str()));
 		if (dirPath == NULL)
 			return B_ERROR;
@@ -281,8 +299,11 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 {
 	CALLED();
 
-	if (fd < 0)
-		return B_BAD_VALUE;
+	if (fd < 0 && path == NULL)
+		return B_FILE_NOT_FOUND;
+
+	if (fd == -1)
+		fd = AT_FDCWD;
 
 	ssize_t size = readlinkat(fd, path, buffer, *_bufferSize);
 	if (size < 0)
@@ -307,6 +328,12 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 	const struct stat* st, size_t statSize, int statMask)
 {
 	UNIMPLEMENTED();
+
+	if (fd < 0 && path == NULL)
+		return B_FILE_NOT_FOUND;
+
+	if (fd == -1)
+		fd = AT_FDCWD;
 
 	return B_OK;
 }
@@ -388,7 +415,7 @@ _kern_rewind_dir(int fd)
 {
 	CALLED();
 
-	if (fd < 0)
+	if (fd == -1)
 		return B_BAD_VALUE;
 
 	DIR* dir = fdopendir(dup(fd));
@@ -406,8 +433,11 @@ _kern_remove_dir(int fd, const char* path)
 {
 	CALLED();
 
-	if (fd < 0)
-		return B_FILE_ERROR;
+	if (fd < 0 && path == NULL)
+		return B_FILE_NOT_FOUND;
+
+	if (fd == -1)
+		fd = AT_FDCWD;
 
 	int ret = unlinkat(fd, path, AT_REMOVEDIR);
 	return (ret < 0) ? B_ERROR : B_OK;
@@ -437,6 +467,14 @@ _kern_create_dir(int fd, const char* path, int perms)
 {
 	CALLED();
 
+	if (fd < 0 && path == NULL)
+		return B_FILE_NOT_FOUND;
+
+	if (fd == -1)
+		fd = AT_FDCWD;
+
+	TRACE("create dir %d %s\n", fd, path);
+
 	if (mkdirat(fd, path, perms) < 0)
 		return errno;
 
@@ -448,6 +486,12 @@ status_t
 _kern_create_symlink(int fd, const char* path, const char* toPath, int mode)
 {
 	CALLED();
+
+	if (fd < 0 && path == NULL)
+		return B_FILE_NOT_FOUND;
+
+	if (fd == -1)
+		fd = AT_FDCWD;
 
 	std::string temp;
 	status_t ret = BPrivate::getPath(fd, path, temp);
@@ -462,6 +506,12 @@ status_t
 _kern_unlink(int fd, const char* path)
 {
 	CALLED();
+
+	if (fd < 0 && path == NULL)
+		return B_FILE_NOT_FOUND;
+
+	if (fd == -1)
+		fd = AT_FDCWD;
 
 	return (unlinkat(fd, path, 0) < 0) ? errno : B_OK;
 }

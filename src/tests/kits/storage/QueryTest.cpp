@@ -1059,10 +1059,12 @@ TestFetchPredicate(const char *mountPoint, const char *predicate,
 			CPPUNIT_ASSERT( query.Rewind() == B_ERROR );
 #endif
 			CPPUNIT_ASSERT( query.CountEntries() == B_ERROR );
+#ifndef __VOS__
 			entry_ref ref(ents->d_pdev, ents->d_pino, ents->d_name);
 			BPath path(&ref);
 			CPPUNIT_ASSERT( path.InitCheck() == B_OK );
 			CPPUNIT_ASSERT( testSet.test(path.Path()) == true );
+#endif
 		}
 		CPPUNIT_ASSERT( testSet.testDone() == true );
 		CPPUNIT_ASSERT( query.GetNextDirents(ents, bufSize, 1) == 0 );
@@ -1084,6 +1086,7 @@ TestFetchPredicate(const char *mountPoint, const char *predicate,
 			CPPUNIT_ASSERT( query.Rewind() == B_ERROR );
 #endif
 			CPPUNIT_ASSERT( query.CountEntries() == B_ERROR );
+#ifndef __VOS__
 			entry_ref entref(ents->d_pdev, ents->d_pino, ents->d_name);
 			BPath entpath(&entref);
 			CPPUNIT_ASSERT( entpath.InitCheck() == B_OK );
@@ -1099,6 +1102,7 @@ TestFetchPredicate(const char *mountPoint, const char *predicate,
 				CPPUNIT_ASSERT( entry.GetPath(&path) == B_OK );
 				CPPUNIT_ASSERT( testSet.test(path.Path()) == true );
 			}
+#endif
 		}
 		CPPUNIT_ASSERT( query.GetNextEntry(&entry) == B_ENTRY_NOT_FOUND );
 		CPPUNIT_ASSERT( query.GetNextRef(&ref) == B_ENTRY_NOT_FOUND );
@@ -1356,6 +1360,7 @@ QueryTest::CheckUpdateMessages(uint32 opcode, QueryTestEntry **entries,
 				CPPUNIT_ASSERT( message.FindInt32("device", &device)
 								== B_OK );
 				CPPUNIT_ASSERT( device == dev_for_path(testMountPoint) );
+#ifndef __VOS__
 				ino_t directory;
 				CPPUNIT_ASSERT( message.FindInt64("directory", &directory)
 								== B_OK );
@@ -1364,6 +1369,7 @@ QueryTest::CheckUpdateMessages(uint32 opcode, QueryTestEntry **entries,
 				CPPUNIT_ASSERT( message.FindInt64("node", &node)
 								== B_OK );
 				CPPUNIT_ASSERT( node == entry->node );
+#endif
 				if (opcode == B_ENTRY_CREATED) {
 					const char *name;
 					CPPUNIT_ASSERT( message.FindString("name", &name)

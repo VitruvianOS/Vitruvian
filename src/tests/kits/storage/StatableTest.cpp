@@ -128,11 +128,13 @@ StatableTest::GetXYZTest()
 		CPPUNIT_ASSERT( owner == st.st_uid );
 		CPPUNIT_ASSERT( group == st.st_gid );
 // R5: returns not only the permission bits, so we need to filter for the test
-//		CPPUNIT_ASSERT( perms == (st.st_mode & S_IUMSK) );
 		CPPUNIT_ASSERT( (perms & S_IUMSK) == (st.st_mode & S_IUMSK) );
 		CPPUNIT_ASSERT( size == st.st_size );
 		CPPUNIT_ASSERT( mtime == st.st_mtime );
+#ifndef __VOS__
+		CPPUNIT_ASSERT( perms == (st.st_mode & S_IUMSK) );
 		CPPUNIT_ASSERT( ctime == st.st_crtime );
+#endif
 #if !TEST_R5 && !TEST_OBOS /* !!!POSIX ONLY!!! */
 		CPPUNIT_ASSERT( atime == st.st_atime );
 #endif
@@ -217,7 +219,9 @@ StatableTest::SetXYZTest()
 		CPPUNIT_ASSERT( group == st.st_gid );
 		CPPUNIT_ASSERT( perms == (st.st_mode & S_IUMSK) );
 		CPPUNIT_ASSERT( mtime == st.st_mtime );
+#ifndef __VOS__
 		CPPUNIT_ASSERT( ctime == st.st_crtime );
+#endif
 #if !TEST_R5 && !TEST_OBOS /* !!!POSIX ONLY!!! */
 		CPPUNIT_ASSERT( atime == st.st_atime );
 #endif

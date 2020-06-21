@@ -1,5 +1,5 @@
 add_subdirectory(app)
 add_subdirectory(interface)
 #add_subdirectory(net)
-#add_subdirectory(storage)
+add_subdirectory(storage)
 add_subdirectory(support)

@@ -542,7 +542,9 @@ CheckWatchingMessage(bool mounted, dev_t expectedDevice, BTestHandler &handler,
 		CHK(message.FindInt32("opcode", &opcode) == B_OK);
 		CHK(message.FindInt32("new device", &device) == B_OK);
 		CHK(message.FindInt32("device", &parentDevice) == B_OK);
+#ifndef __VOS__
 		CHK(message.FindInt64("directory", &directory) == B_OK);
+#endif
 		CHK(opcode == B_DEVICE_MOUNTED);
 		CHK(device == expectedDevice);
 		CHK(parentDevice == nodeRef.device);

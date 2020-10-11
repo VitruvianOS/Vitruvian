@@ -13,10 +13,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <string>
 
 #include "syscalls.h"
 
-static std::list<int> gTeams;
 
 #define UID_LINE 8
 #define GID_LINE 9
@@ -24,8 +24,15 @@ static std::list<int> gTeams;
 #define MAX_LINE_LENGTH 1024
 
 
+namespace BKernelPrivate {
+
+static std::list<int> gTeams;
+
+}
+
+
 status_t
-_kern_get_team_usage_info(team_id team, int32 who, team_usage_info *info, size_t size)
+_kern_get_team_usage_info(team_id team, int32 who, team_usage_info* info, size_t size)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
@@ -44,39 +51,45 @@ _kern_kill_team(team_id team)
 
 
 status_t
-_kern_get_team_info(team_id id, team_info *info)
+_kern_get_team_info(team_id id, team_info* info)
 {
+	if (id < 0 || info == NULL)
+		return B_BAD_VALUE;
+
   	char procPath[B_PATH_NAME_LENGTH];
 	char buffer[MAX_LINE_LENGTH];
 	char commandProcPath[B_PATH_NAME_LENGTH];
-    if ( id == 0 ) {
-        id = getpid();        
-	}
+
+	if (id == 0)
+		id = getpid();
 
 	sprintf(procPath, "/proc/%d/status", id);
 	sprintf(commandProcPath, "/proc/%d/cmdline", id);
-	FILE *fileid = fopen(procPath, "r");
-    if( fileid == NULL ){
-        return B_ERROR;
-    }
-	int fileCommandId = open(commandProcPath, O_RDONLY);
-	int i=0;
-	while( !feof(fileid) ){
+	FILE* fileid = fopen(procPath, "r");
+
+	if (fileid == NULL)
+		return B_BAD_VALUE;
+
+	int i = 0;
+	while (!feof(fileid)) {
 		fgets(buffer, MAX_LINE_LENGTH, fileid);
-		if(i == UID_LINE) {
-			sscanf(buffer, "Uid:\t%u\t", &info->uid);
-		} else if(i == GID_LINE) {
-			sscanf(buffer, "Gid:\t%u\t", &info->gid);
-		} else {
-			if (strncmp(buffer, "Threads:", sizeof("Threads:")) == 0) {
-				sscanf(buffer, "Threads:\t%d", &info->thread_count);
-				break;
-			}
+
+		std::string temp(buffer);
+		if (temp.find("Uid:\t")) {
+			sscanf(buffer, "Uid:\t%u\t\n", &info->uid);
+		} else if(temp.find("Gid:\t")) {
+			sscanf(buffer, "Gid:\t%u\t\n", &info->gid);
+		} else if (temp.find("Threads:\t") != std::string::npos) {
+			sscanf(buffer, "Threads:\t%d\n", &info->thread_count);
+			break;
 		}
 		i++;
 	}
+
+	int fileCommandId = open(commandProcPath, O_RDONLY);
 	int bytesRead = read(fileCommandId, buffer, MAX_LINE_LENGTH);
 	int argCount = 0;
+
 	int j = 0;
 	while (j < bytesRead) {
 		if (buffer[j] == '\0') {
@@ -85,38 +98,44 @@ _kern_get_team_info(team_id id, team_info *info)
 		}
 		j++;
 	}
+
 	buffer[j] = '\0';
 	info->argc = argCount;
 	info->team = id;
 	strncpy(info->args, buffer, MAX_BYTES);
+
 	fclose(fileid);
 	close(fileCommandId);
+
 	return B_OK;
 }
 
 
 status_t
-_kern_get_next_team_info(int32 *cookie, team_info *info)
+_kern_get_next_team_info(int32* cookie, team_info* info)
 {
+	if (cookie == NULL || *cookie == -1 || info == NULL)
+		return B_BAD_VALUE;
+
 	if (*cookie == 0) {
-		DIR *procDir = opendir("/proc");
-		struct dirent *dir;
+		DIR* procDir = opendir("/proc");
+		struct dirent* dir = NULL;
 
 		if (procDir != NULL) {
 			while ((dir = readdir(procDir)) != NULL) {
-				if (atoi(dir->d_name) > 0) {
-					gTeams.push_front(atoi(dir->d_name));
-				}
+				if (atoi(dir->d_name) > 0)
+					BKernelPrivate::gTeams.push_front(atoi(dir->d_name));
 			}
-		} else {
+		} else
 			return B_ERROR;
-		}
+
 		closedir(procDir);
 	}
-	if (*cookie > gTeams.size()) {
-		return B_ERROR;
-	}
-	std::list <int> :: iterator gTeamsIt = gTeams.begin();
+
+	if (*cookie >= (int32)BKernelPrivate::gTeams.size())
+		return B_BAD_VALUE;
+
+	std::list<int>::iterator gTeamsIt = BKernelPrivate::gTeams.begin();
 	std::advance(gTeamsIt, *cookie);
 	unsigned int cur_pid = *gTeamsIt;
 	(*cookie)++;

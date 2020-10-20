@@ -7,8 +7,15 @@
 #include <ObjectList.h>
 #include <OS.h>
 
+#include <linux/cn_proc.h>
 #include <linux/netlink.h>
 #include <sys/socket.h>
+
+
+struct cn_msg;
+
+
+namespace BKernelPrivate {
 
 
 struct WatchListener {
@@ -53,3 +60,6 @@ private:
 	BLocker						fLock;
 	static SystemWatcher* 		fInstance;
 };
+
+
+}

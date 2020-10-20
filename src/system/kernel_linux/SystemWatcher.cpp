@@ -7,15 +7,16 @@
 
 #include <syscalls.h>
 
-#include <linux/cn_proc.h>
 #include <linux/connector.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "system_info.h"
 #include "KernelDebug.h"
+#include "util/AutoLock.h"
 
-#include <kernel/util/AutoLock.h>
+
+namespace BKernelPrivate {
 
 
 SystemWatcher* SystemWatcher::fInstance = NULL;
@@ -56,7 +57,7 @@ SystemWatcher::Run()
 	}
 
 	struct nlmsghdr message = {
-		NLMSG_LENGTH(sizeof(struct cn_msg)+sizeof(enum proc_cn_mcast_op)),
+		NLMSG_LENGTH(sizeof(struct ::cn_msg)+sizeof(enum proc_cn_mcast_op)),
 		NLMSG_DONE
 	};
 
@@ -246,12 +247,16 @@ SystemWatcher::RemoveListener(int32 object, uint32 flags,
 }
 
 
+}
+
+
 status_t
 _kern_start_watching_system(int32 object, uint32 flags,
 	port_id port, int32 token)
 {
 	CALLED();
-	return SystemWatcher::AddListener(object, flags, port, token);
+	return BKernelPrivate::SystemWatcher::AddListener(object, flags,
+		port, token);
 }
 
 
@@ -260,5 +265,6 @@ _kern_stop_watching_system(int32 object, uint32 flags,
 	port_id port, int32 token)
 {
 	CALLED();
-	return SystemWatcher::RemoveListener(object, flags, port, token);
+	return BKernelPrivate::SystemWatcher::RemoveListener(object, flags,
+		port, token);
 }

@@ -1,11 +1,12 @@
-
 Application(
-	HVIFTranslator
+	RTFTranslator
 
 	SOURCES
-	HVIFMain.cpp	
-	HVIFTranslator.cpp
-	HVIFView.cpp
+	ConfigView.cpp
+	convert.cpp
+	main.cpp
+	RTF.cpp
+	RTFTranslator.cpp
 
 	LIBS be translation translatorutils
 

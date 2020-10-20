@@ -1,11 +1,10 @@
 
 Application(
-	HVIFTranslator
+	JPEGTranslator
 
 	SOURCES
-	HVIFMain.cpp	
-	HVIFTranslator.cpp
-	HVIFView.cpp
+	ConfigView.cpp
+	PCXTranslator.cpp
 
 	LIBS be translation translatorutils
 

@@ -1,11 +1,11 @@
 
 Application(
-	HVIFTranslator
+	PPMTranslator
 
 	SOURCES
-	HVIFMain.cpp	
-	HVIFTranslator.cpp
-	HVIFView.cpp
+	colorspace.cpp	
+	PPMMain.cpp
+	PPMTranslator.cpp
 
 	LIBS be translation translatorutils
 

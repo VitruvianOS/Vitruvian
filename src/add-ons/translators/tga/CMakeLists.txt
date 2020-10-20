@@ -1,11 +1,10 @@
-
 Application(
-	HVIFTranslator
+	TGATranslator
 
 	SOURCES
-	HVIFMain.cpp	
-	HVIFTranslator.cpp
-	HVIFView.cpp
+	TGAMain.cpp
+	TGATranslator.cpp
+	TGAView.cpp
 
 	LIBS be translation translatorutils
 

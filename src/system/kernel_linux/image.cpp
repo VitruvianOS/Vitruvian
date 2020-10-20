@@ -3,13 +3,103 @@
  * Distributed under the terms of the LGPL License.
  */
 
+#include <Locker.h>
+
 #include <errno.h>
 #include <image.h>
 #include <dlfcn.h>
 
+#include <map>
+
 #include "KernelDebug.h"
+#include "util/AutoLock.h"
+
 
 extern int gLoadImageFD = -1;
+
+
+namespace BKernelPrivate {
+
+
+class ImagePool {
+public:
+	static image_id	Load(const char* path) {
+		if (path == NULL)
+			return B_BAD_VALUE;
+
+		AutoLocker<BLocker> _(&fLock);
+
+		void* image = dlopen(path, RTLD_LAZY);
+
+		if (image == NULL)
+			return B_ERROR;
+
+		fLoadedAddOns.insert(std::make_pair(++fId, image));
+
+		return fId;
+	}
+
+	static status_t Unload(image_id id) {
+		if (id <= 0)
+			return B_BAD_VALUE;
+
+		AutoLocker<BLocker> _(&fLock);
+
+		void* image = _Find(id);
+		if (image == NULL)
+			return B_ERROR;
+
+		if (dlclose(image) != 0)
+			return B_ERROR;
+
+		return B_OK;
+	}
+
+	static status_t FindSymbol(image_id id, const char* name,
+		int32 sclass, void** pptr) {
+
+		if (id <= 0 || name == NULL || sclass <= 0 || pptr == NULL)
+			return B_BAD_VALUE;
+
+		AutoLocker<BLocker> _(&fLock);
+
+		void* image = _Find(id);
+		if (image == NULL)
+			return B_ERROR;
+
+		void* symbol = dlsym(image, name);
+		if (symbol == NULL)
+			return B_ERROR;
+
+		*pptr = symbol;
+
+		return B_OK;
+	}
+
+private:
+	static void* _Find(image_id id) {
+		auto addon = fLoadedAddOns.find(id);
+
+		if (addon == end(fLoadedAddOns)) {
+			fLock.Unlock();
+			return NULL;
+		}
+
+		return addon->second;
+	}
+
+	static std::map<image_id, void*> fLoadedAddOns;
+	static image_id fId;
+	static BLocker fLock;
+};
+
+
+std::map<image_id, void*> ImagePool::fLoadedAddOns;
+image_id ImagePool::fId;
+BLocker ImagePool::fLock;
+
+
+}
 
 
 thread_id
@@ -18,7 +108,7 @@ load_image(int32 argc, const char** argv, const char** envp)
 	TRACE("load_image: %s\n", argv[0]);
 
 #ifdef DEBUG
-	for (uint32 i = 0; i < argc; i++)
+	for (int32 i = 0; i < argc; i++)
 		TRACE("%s\n", argv[i]);
 #endif
 
@@ -56,29 +146,14 @@ load_image(int32 argc, const char** argv, const char** envp)
 image_id
 load_add_on(const char* path)
 {
-	if (path == NULL)
-		return B_BAD_VALUE;
-
-	void* image = dlopen(path, RTLD_LAZY);
-	if (image == NULL)
-		return B_ERROR;
-
-	return (image_id)image;
+	return BKernelPrivate::ImagePool::Load(path);
 }
 
 
 status_t
 unload_add_on(image_id id)
 {
-	void* image = (void*)id;
-
-	if (image == NULL)
-		return B_BAD_VALUE;
-
-	if (dlclose(image) != 0)
-		return B_ERROR;
-
-	return B_OK;
+	return BKernelPrivate::ImagePool::Unload(id);
 }
 
 
@@ -86,17 +161,7 @@ status_t
 get_image_symbol(image_id id, const char* name,
 	int32 sclass, void** pptr)
 {
-	void* image = (void*)id;
-
-	if (image == NULL || name == NULL || pptr == NULL)
-		return B_BAD_VALUE;
-
-	void* sym = dlsym(image, name);
-	if (sym == NULL)
-		return B_ERROR;
-
-	*pptr = sym;
-	return B_OK;
+	return BKernelPrivate::ImagePool::FindSymbol(id, name, sclass, pptr);
 }
 
 
@@ -138,6 +203,7 @@ _get_next_image_info(team_id team, int32* cookie,
 
 		info->name[len] = '\0';
 		// We use the team id to identify it's image
+		// TODO: we probably want to use something else
 		info->id = team;
 		info->type = B_APP_IMAGE;
 		info->sequence = 0;

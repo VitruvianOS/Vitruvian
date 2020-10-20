@@ -1,11 +1,11 @@
 
 Application(
-	HVIFTranslator
+	BMPTranslator
 
 	SOURCES
-	HVIFMain.cpp	
-	HVIFTranslator.cpp
-	HVIFView.cpp
+	BMPMain.cpp
+	BMPTranslator.cpp
+	BMPView.cpp
 
 	LIBS be translation translatorutils
 

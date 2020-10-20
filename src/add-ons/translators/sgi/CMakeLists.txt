@@ -1,11 +1,11 @@
-
 Application(
-	HVIFTranslator
+	SGITranslator
 
 	SOURCES
-	HVIFMain.cpp	
-	HVIFTranslator.cpp
-	HVIFView.cpp
+	SGIImage.cpp
+	SGIMain.cpp
+	SGITranslator.cpp
+	SGIView.cpp
 
 	LIBS be translation translatorutils
 

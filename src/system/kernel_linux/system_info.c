@@ -32,7 +32,7 @@ status_t
 _kern_snooze_etc(bigtime_t amount, int timeBase, int32 flags,
 	bigtime_t* _remainingTime)
 {
-	// TODO: complete me
+	// timebase is ignored
 
 	if (_remainingTime != NULL)
 		*_remainingTime = 0;
@@ -42,21 +42,27 @@ _kern_snooze_etc(bigtime_t amount, int timeBase, int32 flags,
 
 
 status_t
-_kern_get_system_info(system_info* psInfo)
+_kern_get_system_info(system_info* info)
 {
 	UNIMPLEMENTED();
 
 	// TODO: getrusage + proc
-	psInfo->max_threads = 93966;
-	psInfo->kernel_version = 3LL;
-	psInfo->cpu_count = __gCPUCount;
+	info->max_threads = 93966;
+
+	info->cpu_count = __gCPUCount;
 
 	struct utsname buf;
 	uname(&buf);
 
-	strcpy(psInfo->kernel_name, buf.sysname );
-	strcpy(psInfo->kernel_build_date, buf.release );
-	strcpy(psInfo->kernel_build_time, "unknown" );
+	// TODO: Use major version number from buf.release
+	info->kernel_version = 5LL;
+	strcpy(info->kernel_name, buf.sysname);
+	// TODO: Use date from buf.version
+	strcpy(info->kernel_build_date, buf.version);
+	strcpy(info->kernel_build_time, "unknown");
+
+	// TODO: define proper ABI flags
+	info->abi = 0x00200000;
 
 	return B_OK;
 }

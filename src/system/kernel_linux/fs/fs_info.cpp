@@ -85,9 +85,8 @@ public:
 
 	static dev_t GetNext(int32* cookie)
 	{
-		if (fEntries == NULL) {
+		if (fEntries == NULL)
 			fEntries = setmntent("/etc/fstab", "r");
-		}
 
 		struct mntent* mountEntry = getmntent(fEntries);
 		if (mountEntry == NULL) {
@@ -131,7 +130,7 @@ _kern_read_fs_info(dev_t device, fs_info* info)
 {
 	CALLED();
 
-	if (device < 0 || info == NULL)
+	if (device <= 0 || info == NULL)
 		return B_ERROR;
 
 	struct mntent* entry = BPrivate::LinuxVolume::FindVolume(device);

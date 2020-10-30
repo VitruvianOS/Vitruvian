@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2019-2020, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
 

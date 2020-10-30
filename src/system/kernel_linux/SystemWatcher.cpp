@@ -1,5 +1,5 @@
 /*
- *  Copyright 2019, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2019-2020, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
 
@@ -14,6 +14,7 @@
 #include "system_info.h"
 #include "KernelDebug.h"
 #include "util/AutoLock.h"
+#include "util/KMessage.h"
 
 
 namespace BKernelPrivate {
@@ -41,9 +42,11 @@ SystemWatcher::IsRunning() const
 status_t
 SystemWatcher::Run()
 {
+	CALLED();
+
 	fSocket = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_CONNECTOR);
 	if (fSocket == -1) {
-		TRACE("SystemWatcher socket error");
+		TRACE("SystemWatcher: Socket error");
 		return B_ERROR;
 	}
 
@@ -51,30 +54,57 @@ SystemWatcher::Run()
 	fAddr.nl_pid = getpid();
 	fAddr.nl_groups = CN_IDX_PROC;
 
-	if (bind(fSocket, (struct sockaddr* ) &fAddr, sizeof(fAddr))) {
-		TRACE("SystemWatcher bind error");
+	if (bind(fSocket, (struct sockaddr*)&fAddr, sizeof(fAddr))) {
+		TRACE("SystemWatcher: Bind error");
+		close(fSocket);
 		return B_ERROR;
 	}
 
-	struct nlmsghdr message = {
-		NLMSG_LENGTH(sizeof(struct ::cn_msg)+sizeof(enum proc_cn_mcast_op)),
-		NLMSG_DONE
-	};
+	struct
+	{
+		union {
+			struct nlmsghdr header;
+			char padding[NLMSG_HDRLEN];
+		};
 
-	if (send(fSocket, &message, message.nlmsg_len, 0) != message.nlmsg_len) {
-		TRACE("SystemWatcher send error\n");
+		struct cn_msg msg;
+		enum proc_cn_mcast_op op;
+	} __attribute__((packed, aligned(NLMSG_ALIGNTO))) request;
+
+    memset(&request, 0, sizeof(request));
+
+    request.op = PROC_CN_MCAST_LISTEN;
+
+    request.msg.id.idx = CN_IDX_PROC;
+    request.msg.id.val = CN_VAL_PROC;
+    request.msg.len = sizeof(request.op);
+
+    request.header.nlmsg_pid = getpid();
+    request.header.nlmsg_type = NLMSG_DONE;
+    request.header.nlmsg_len = sizeof(request);
+
+	if (send(fSocket, &request, sizeof(request), 0) == -1) {
+		close(fSocket);
+		TRACE("SystemWatcher: Error sending request\n");
 		return B_ERROR;
 	}
 
 	fBuf = (struct nlmsghdr*)malloc(CONNECTOR_MAX_MSG_SIZE);
 	if (fBuf <= 0) {
-		TRACE("SystemWatcher memory error\n");
+		close(fSocket);
+		TRACE("SystemWatcher: Memory error\n");
 		return B_NO_MEMORY;
 	}
 
 	fThread = spawn_thread(_WatchTask, "SystemWatcher", 5, NULL);
-	if (fThread <= 0)
-		return B_ERROR;
+	if (fThread <= 0) {
+		free(fBuf);
+		close(fSocket);
+		TRACE("SystemWatcher: Can't spawn receiver thread\n");
+		return B_NO_MEMORY;
+	}
+
+	fRunning = true;
 
 	return resume_thread(fThread);
 }
@@ -94,6 +124,8 @@ SystemWatcher::_WatchTask(void* cookie)
 void
 SystemWatcher::WatchTask()
 {
+	CALLED();
+
 	while (1) {
 		socklen_t len = sizeof(fAddr);
 
@@ -194,12 +226,27 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 
 
 void
-SystemWatcher::Notify(uint32 flags, uint32 what, uint32 team)
+SystemWatcher::Notify(uint32 flags, uint32 what, uint32 thread)
 {
 	for (int32 i = 0; i < fListeners.CountItems(); i++) {
 		if (fListeners.ItemAt(i)->flags & flags) {
-			write_port(fListeners.ItemAt(i)->port, what,
-				&team, sizeof(team));
+			char buffer[128];
+
+			KMessage message;
+			message.SetTo(buffer, sizeof(buffer), B_SYSTEM_OBJECT_UPDATE);
+			message.AddInt32("opcode", what);
+
+			if (what < B_THREAD_CREATED)
+				message.AddInt32("team", thread);
+			else
+				message.AddInt32("thread", thread);
+
+			message.SetDeliveryInfo(fListeners.ItemAt(i)->token,
+				fListeners.ItemAt(i)->port, -1, gettid());
+
+			int32 kPortMessageCode = 'pjpp';
+			write_port(fListeners.ItemAt(i)->port,
+				kPortMessageCode, message.Buffer(), message.ContentSize());
 		}
 	}
 }
@@ -209,20 +256,21 @@ status_t
 SystemWatcher::AddListener(int32 object, uint32 flags,
 	port_id port, int32 token)
 {
-	status_t ret = B_OK;
 	if (fInstance == NULL)
 		fInstance = new SystemWatcher();
 
 	AutoLocker<BLocker> _(&fInstance->fLock);
 
 	if (!fInstance->IsRunning()) {
-		ret = fInstance->Run();
-		if (ret != B_OK)
-			return ret;
+		status_t err = fInstance->Run();
+		if (err != B_OK)
+			return err;
 	}
 
-	return fInstance->fListeners.AddItem(
+	bool ret = fInstance->fListeners.AddItem(
 		new WatchListener{object, flags, port, token});
+
+	return ret ? B_OK : B_ERROR;
 }
 
 

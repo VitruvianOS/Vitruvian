@@ -18,10 +18,9 @@ Server(
 
 	PathList.cpp
 
-	# storage
-	#AddOnMonitor.cpp
-	#AddOnMonitorHandler.cpp
-	#NodeMonitorHandler.cpp
+	../../kits/storage/AddOnMonitor.cpp
+	../../kits/storage/AddOnMonitorHandler.cpp
+	../../kits/storage/NodeMonitorHandler.cpp
 
 	INCLUDES
 	"../../../headers/os/add-ons/input_server/"

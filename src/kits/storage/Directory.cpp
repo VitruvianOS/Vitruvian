@@ -340,7 +340,12 @@ BDirectory::GetNextEntry(BEntry* entry, bool traverse)
 		entry->Unset();
 		return status;
 	}
+
+#ifdef __VOS__
+	return entry->SetTo(this, ref.name, traverse);
+#else
 	return entry->SetTo(&ref, traverse);
+#endif
 }
 
 

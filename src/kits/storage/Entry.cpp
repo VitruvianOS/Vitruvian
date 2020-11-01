@@ -36,8 +36,15 @@ using namespace std;
 
 entry_ref::entry_ref()
 	:
-	device((dev_t)-1),
-	directory((ino_t)-1),
+#ifdef __VOS__
+	// TODO: We probably want to check also how it's handled in other
+	// places
+	device(0),
+	directory(0),
+#else
+	device(-1),
+	directory(-1),
+#endif
 	name(NULL)
 {
 }

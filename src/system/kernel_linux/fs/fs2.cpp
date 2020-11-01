@@ -17,7 +17,7 @@
 #include "KernelDebug.h"
 
 
-namespace BPrivate {
+namespace BKernelPrivate {
 
 
 static BLocker fLock;
@@ -33,6 +33,8 @@ getPath(int fd, const char* name, std::string& path)
 		path = std::string(name);
 		return B_OK;
 	} 
+
+	// TODO: fd = AT_FDCWD;
 
 	if (fd >= 0) {
 		char buf[PATH_MAX];
@@ -66,6 +68,9 @@ getPath(ino_t node, const char* name, std::string& path)
 {
 	if (node < 0 && name == NULL)
 		return B_BAD_VALUE;
+
+	if (node > 0 && name != NULL && name[0] == '/' && strlen(name) == 1)
+		name = NULL;
 
 	TRACE("getPath %ld %s\n", node, name);
 
@@ -108,11 +113,11 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	if (fd < 0 && path == NULL)
 		return B_FILE_NOT_FOUND;
 
-	if (fd == -1)
+	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
 
 	std::string destPath;
-	status_t ret = BPrivate::getPath(fd, path, destPath);
+	status_t ret = BKernelPrivate::getPath(fd, path, destPath);
 	if (ret != B_OK)
 		return B_ENTRY_NOT_FOUND;
 
@@ -125,7 +130,7 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	if (result < 0)
 		return B_ENTRY_NOT_FOUND;
 	else
-		BPrivate::insertPath(st->st_ino, destPath);
+		BKernelPrivate::insertPath(st->st_ino, destPath);
 
 	return B_OK;
 }
@@ -139,13 +144,21 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 	if (fd < 0 && path == NULL)
 		return B_ERROR;
 
-	if (fd == -1)
+	// TODO see BNode::_SetTo
+
+	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
 
+	std::string destPath;
+	status_t ret = BKernelPrivate::getPath(fd, path, destPath);
+
+	if (strlen(path) >= B_FILE_NAME_LENGTH)
+		return B_NAME_TOO_LONG;
+
 	struct stat st;
-	if (fstatat(fd, path, &st, AT_SYMLINK_NOFOLLOW) < 0
-			&& !(openMode & O_CREAT)) {
-		return errno;
+	if (lstat(destPath.c_str(), &st) < 0) {
+		if (!(openMode & O_CREAT))
+			return B_ENTRY_NOT_FOUND;
 	}
 
 	return openat(fd, path, openMode, perms);
@@ -167,17 +180,27 @@ _kern_open_dir(int fd, const char* path)
 	CALLED();
 
 	if (fd < 0 && path == NULL)
-		return B_ERROR;
+		return B_BAD_VALUE;
 
-	if (fd == -1)
-		fd = AT_FDCWD;
+	int ret = 0;
+	if (fd == -1 && path[0] != NULL) {
+		DIR* dir = opendir(path);
+		if (dir == NULL)
+			return B_ENTRY_NOT_FOUND;
 
-	return openat(fd, path, 0);
+		ret = dirfd(dir);
+	} else
+		ret = openat(fd, path, O_RDWR);
+
+	if (ret < 0)
+		return B_ENTRY_NOT_FOUND;
+
+	return ret;
 }
 
 
 int
-_kern_open_parent_dir(int fd, char* name, size_t nameLength)
+_kern_open_parent_dir(int fd, char* name, size_t length)
 {
 	CALLED();
 
@@ -185,31 +208,39 @@ _kern_open_parent_dir(int fd, char* name, size_t nameLength)
 		return B_ERROR;
 
 	std::string path;
-	if (BPrivate::getPath(fd, NULL, path) == B_OK) {
-		TRACE("got path %s\n", path.c_str());
-		char* dirPath = dirname(strdup(path.c_str()));
-		if (dirPath == NULL)
-			return B_ERROR;
+	if (BKernelPrivate::getPath(fd, NULL, path) == B_OK) {
+		char* destPath = NULL;
+		if (path == "/") {
+			// TODO
+			//strcpy(name, ".");
+			return _kern_open_dir(-1, "/");
+		} else {
+			char* dirPath = dirname(strdup(path.c_str()));
+			if (dirPath == NULL)
+				return B_ERROR;
 
-		DIR* dir = opendir(dirPath);
-		if (dir == NULL)
-			return errno;
+			TRACE("the path %s\n", dirPath);
 
-		char* destPath = basename(dirPath);
-		if (destPath == NULL) {
-			closedir(dir);
-			return B_ERROR;
+			DIR* dir = opendir(dirPath);
+			if (dir == NULL)
+				return B_ERROR;
+
+			char* destPath = basename(dirPath);
+
+			if (destPath == NULL) {
+				closedir(dir);
+				return B_ERROR;
+			}
+
+			if (strlcpy(name, destPath, strlen(destPath))
+					>= length) {
+				closedir(dir);
+				return B_BUFFER_OVERFLOW;
+			}
+			int ret = dirfd(dir);
+			free(dir);
+			return ret;
 		}
-
-		if (strlcpy(name, destPath, strlen(destPath))
-				>= strlen(destPath)) {
-			closedir(dir);
-			return B_BUFFER_OVERFLOW;
-		}
-
-		int ret = dirfd(dir);
-		free(dir);
-		return ret;
 	}
 
 	return B_ERROR;
@@ -222,7 +253,7 @@ _kern_open_dir_entry_ref(dev_t device, ino_t node, const char* name)
 	CALLED();
 
 	std::string path;
-	if (BPrivate::getPath(node, name, path) == B_OK) {
+	if (BKernelPrivate::getPath(node, name, path) == B_OK) {
 		DIR* dir = opendir(path.c_str());
 		if (dir != NULL) {
 			int result = dirfd(dir);
@@ -242,10 +273,10 @@ _kern_open_entry_ref(dev_t device, ino_t node, const char* name,
 	CALLED();
 
 	std::string path;
-	if (BPrivate::getPath(node, name, path) == B_OK) {
+	if (BKernelPrivate::getPath(node, name, path) == B_OK) {
 		int ret = open(path.c_str(), openMode, perms);
 		if (ret < 0)
-			return errno;
+			return B_ENTRY_NOT_FOUND;
 
 		return ret;
 	}
@@ -262,9 +293,10 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 
 	if (pathLength <= 0)
 		return B_ERROR;
+		//return B_ENTRY_NOT_FOUND;
 
 	std::string destPath;
-	status_t ret = BPrivate::getPath(node, leaf, destPath);
+	status_t ret = BKernelPrivate::getPath(node, leaf, destPath);
 	if (ret == B_OK) {
 		if (strlcpy(userPath, destPath.c_str(),
 				pathLength) >= pathLength) {
@@ -302,12 +334,12 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 	if (fd < 0 && path == NULL)
 		return B_FILE_NOT_FOUND;
 
-	if (fd == -1)
+	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
 
 	ssize_t size = readlinkat(fd, path, buffer, *_bufferSize);
 	if (size < 0)
-		return errno;
+		return B_ERROR;
 
 	*_bufferSize = size;
 	return B_OK;
@@ -332,7 +364,7 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 	if (fd < 0 && path == NULL)
 		return B_FILE_NOT_FOUND;
 
-	if (fd == -1)
+	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
 
 	return B_OK;
@@ -434,13 +466,18 @@ _kern_remove_dir(int fd, const char* path)
 	CALLED();
 
 	if (fd < 0 && path == NULL)
-		return B_FILE_NOT_FOUND;
+		return B_ENTRY_NOT_FOUND;
 
-	if (fd == -1)
+	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
 
 	int ret = unlinkat(fd, path, AT_REMOVEDIR);
-	return (ret < 0) ? B_ERROR : B_OK;
+
+	// TODO: remap errors
+	if (ret < 0 && errno == ENOTEMPTY)
+		return B_DIRECTORY_NOT_EMPTY;
+
+	return (ret < 0) ? B_ENTRY_NOT_FOUND : B_OK;
 }
 
 
@@ -449,7 +486,7 @@ _kern_rename(int oldDir, const char* oldPath, int newDir, const char* newPath)
 {
 	CALLED();
 
-	return (renameat(oldDir, oldPath, newDir, newPath) < 0) ? B_OK : errno;
+	return (renameat(oldDir, oldPath, newDir, newPath) < 0) ? B_OK : B_BAD_VALUE;
 }
 
 
@@ -458,7 +495,7 @@ _kern_dup(int fd)
 {
 	CALLED();
 
-	return (fd < 0) ? B_FILE_ERROR : dup(fd);
+	return (fd < 0) ? -1 : dup(fd);
 }
 
 
@@ -470,7 +507,7 @@ _kern_create_dir(int fd, const char* path, int perms)
 	if (fd < 0 && path == NULL)
 		return B_FILE_NOT_FOUND;
 
-	if (fd == -1)
+	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
 
 	TRACE("create dir %d %s\n", fd, path);
@@ -490,11 +527,11 @@ _kern_create_symlink(int fd, const char* path, const char* toPath, int mode)
 	if (fd < 0 && path == NULL)
 		return B_FILE_NOT_FOUND;
 
-	if (fd == -1)
+	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
 
 	std::string temp;
-	status_t ret = BPrivate::getPath(fd, path, temp);
+	status_t ret = BKernelPrivate::getPath(fd, path, temp);
 	if (ret != B_OK)
 		return ret;
 
@@ -508,12 +545,12 @@ _kern_unlink(int fd, const char* path)
 	CALLED();
 
 	if (fd < 0 && path == NULL)
-		return B_FILE_NOT_FOUND;
+		return B_ENTRY_NOT_FOUND;
 
-	if (fd == -1)
+	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
 
-	return (unlinkat(fd, path, 0) < 0) ? errno : B_OK;
+	return (unlinkat(fd, path, 0) < 0) ? B_ENTRY_NOT_FOUND : B_OK;
 }
 
 

@@ -37,7 +37,9 @@ init_kernel_layer(int argc, char** argv)
 	// Init the kernel layer
 	init_area_map();
 	port_init();
-	init_messaging_service();
+
+	if (argv[0] != NULL && strcmp(argv[0], "registrar") <= 0)
+		init_messaging_service();
 }
 
 

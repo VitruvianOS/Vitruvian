@@ -1,23 +1,22 @@
 set(BUILD_ICU ON)
 set(ICU_BUILD_VERSION 57.2)
-set(LIBS_PATH_BASE "/usr/lib/x86_64-linux-gnu/")
 set(HEADERS_PATH_BASE "/usr/include")
 
-set(EXR_LIBRARIES "${LIBS_PATH_BASE}/libIlmImf.so;${LIBS_PATH_BASE}/libHalf.so")
+set(EXR_LIBRARIES "IlmImf;Half")
 set(EXR_INCLUDES "${HEADERS_PATH_BASE}/OpenEXR/")
 
-set(GIF_LIBRARIES "${LIBS_PATH_BASE}/libgif.so")
+set(GIF_LIBRARIES "gif")
 
-set(ICNS_LIBRARIES "${LIBS_PATH_BASE}/libicns.so")
+set(ICNS_LIBRARIES "icns")
 
-set(JPEG_LIBRARIES "${LIBS_PATH_BASE}/libjpeg.so")
+set(JPEG_LIBRARIES "jpeg")
 
-set(PNG_LIBRARIES "${LIBS_PATH_BASE}/libpng.so")
+set(PNG_LIBRARIES "png")
 set(PNG_INCLUDES "${HEADERS_PATH_BASE}/libpng/")
 
-set(TIFF_LIBRARIES "${LIBS_PATH_BASE}/libtiff.so")
+set(TIFF_LIBRARIES "tiff")
 
-set(WEBP_LIBRARIES "${LIBS_PATH_BASE}/libwebp.so")
+set(WEBP_LIBRARIES "webp")
 
 
 add_subdirectory(external/icu-cmake)

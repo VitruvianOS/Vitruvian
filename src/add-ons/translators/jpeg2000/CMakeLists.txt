@@ -5,7 +5,7 @@ Application(
 	SOURCES
 	JPEG2000Translator.cpp
 
-	LIBS be translation translatorutils jpeg
+	LIBS be translation translatorutils ${JPEG_LIBRARIES}
 
 	INCLUDES
 	"../shared"

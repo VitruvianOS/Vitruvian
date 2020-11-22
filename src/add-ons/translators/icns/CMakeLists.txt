@@ -8,7 +8,7 @@ Application(
 	ICNSTranslator.cpp
 	main.cpp
 
-	LIBS be translation translatorutils icns
+	LIBS be translation translatorutils ${ICNS_LIBRARIES}
 
 	INCLUDES
 	"../shared"

@@ -14,7 +14,7 @@ jobs:
     - name: cmake
       run: wget https://github.com/Kitware/CMake/releases/download/v3.13.4/cmake-3.13.4-Linux-x86_64.tar.gz && tar -xvf cmake-3.13.4-Linux-x86_64.tar.gz
     - name: deps
-      run: sudo apt install ninja-build cmake bison flex libfl-dev libinput-dev libncurses-dev --fix-missing
+      run: sudo apt install ninja-build cmake bison flex libfl-dev libgif-dev libicns-dev libinput-dev libjpeg-dev libncurses-dev libpng-dev libtiff-dev libwebp-dev --fix-missing
     - name: mkdir
       run: mkdir generated.x86
     - name: configure

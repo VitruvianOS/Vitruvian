@@ -9,9 +9,10 @@ Application(
 	IStreamWrapper.cpp
 	main.cpp
 
-	LIBS be translation translatorutils IlmImf Half
+	LIBS be translation translatorutils ${EXR_LIBRARIES}
+
 
 	INCLUDES
 	"../shared"
-	"/usr/include/OpenEXR/"
+${EXR_INCLUDES}
 )

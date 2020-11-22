@@ -11,9 +11,8 @@ Application(
 	SavePalette.cpp
 	SFHash.cpp
 
-	LIBS be translation translatorutils gif
+	LIBS be translation translatorutils ${GIF_LIBRARIES}
 
 	INCLUDES
 	"../shared"
-	"/usr/include/libgif"
 )

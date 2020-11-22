@@ -7,9 +7,9 @@ Application(
 	PNGTranslator.cpp
 	PNGView.cpp
 
-	LIBS be translation translatorutils png
+	LIBS be translation translatorutils ${PNG_LIBRARIES}
 
 	INCLUDES
 	"../shared"
-	"/usr/include/libpng"
+	${PNG_INCLUDES}
 )

@@ -1,7 +1,6 @@
 set(BUILD_ICU ON)
 set(ICU_BUILD_VERSION 57.2)
 set(HEADERS_PATH_BASE "/usr/include")
-
 set(APPSERVER_LIBRARIES "freetype;input;udev")
 
 set(EXR_LIBRARIES "IlmImf;Half")

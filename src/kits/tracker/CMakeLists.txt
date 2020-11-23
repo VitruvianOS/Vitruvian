@@ -87,7 +87,7 @@ AddOn(
 	"../../../headers/os/add-ons/input_server/"
 	"../../add-ons/input_server/filters/shortcut_catcher/"
 
-	LIBS be localestub root libshared game
+	LIBS be localestub root libshared game translation
 )
 
 UsePrivateHeaders(tracker interface shared tracker mount storage support)

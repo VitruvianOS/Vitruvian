@@ -7,7 +7,7 @@ AddOn(
 
 UsePrivateHeaders(be app interface kernel print shared locale)
 
-target_link_libraries(be PUBLIC icu translation)
+target_link_libraries(be PUBLIC icu)
 
 
 AddOn(

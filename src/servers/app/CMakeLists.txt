@@ -114,7 +114,7 @@ Server(
 	stackandtile/Stacking.cpp
 	stackandtile/Tiling.cpp
 
-	LIBS be root localestub agg icon linprog libshared ${APPSERVER_LIBRARIES}
+	LIBS be root localestub agg icon linprog libshared ${FREETYPE_LIBRARIES} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES}
 
 	INCLUDES
 	"./drawing"

@@ -10,5 +10,5 @@ Application(
 	SudokuView.cpp
 	SudokuWindow.cpp
 
-	LIBS tracker libshared
+	LIBS tracker shared
 )

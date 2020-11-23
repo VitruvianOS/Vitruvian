@@ -35,7 +35,7 @@ Application(
 	VTKeyTbl.c
 	VTPrsTbl.c
 
-	LIBS be localestub libshared tracker translation pthread
+	LIBS be localestub shared tracker translation pthread
 )
 
 UsePrivateHeaders(Terminal textencoding kernel)

@@ -24,7 +24,7 @@ Server(
 
 	INCLUDES
 	"../../../headers/os/add-ons/input_server/"
-	LIBS libshared
+	LIBS shared
 )
 
 UsePrivateHeaders(input_server app interface support)

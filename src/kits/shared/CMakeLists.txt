@@ -1,5 +1,5 @@
 AddOn(
-	libshared
+	shared
 	STATIC
 	SOURCES
 	AboutMenuItem.cpp
@@ -43,4 +43,4 @@ AddOn(
 	Variant.cpp
 )
 
-UsePrivateHeaders(libshared shared locale interface kernel)
+UsePrivateHeaders(shared shared locale interface kernel)

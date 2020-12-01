@@ -1,6 +1,5 @@
 target_sources(root PRIVATE
 	Architecture.cpp
-	area.c
 	atomic.c
 	debug.c
 	driver_settings.cpp

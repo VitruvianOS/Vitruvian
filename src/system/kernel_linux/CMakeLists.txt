@@ -3,7 +3,7 @@ add_subdirectory(messaging)
 target_sources(root PRIVATE
 	main.cpp
 
-	area.c
+	Area.cpp
 	byteorder.cpp
 	debug.c
 	framebuffer.cpp

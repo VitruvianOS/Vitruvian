@@ -3,8 +3,8 @@
  * Distributed under the terms of the LGPL License.
  */
 
-#ifndef _KERNEL_DEBUG_H
-#define _KERNEL_DEBUG_H
+#ifndef _KERNEL_PRIVATE_DEBUG_H
+#define _KERNEL_PRIVATE_DEBUG_H
 
 #ifndef DEBUG
   #define DEBUG 0

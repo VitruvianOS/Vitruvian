@@ -35,7 +35,6 @@ init_kernel_layer(int argc, char** argv)
 	setenv("TARGET_SCREEN", "root", 1);
 
 	// Init the kernel layer
-	init_area_map();
 	port_init();
 
 	if (argv[0] != NULL && strcmp(argv[0], "registrar") <= 0)

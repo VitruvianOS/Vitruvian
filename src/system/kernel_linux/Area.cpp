@@ -26,16 +26,16 @@ namespace BKernelPrivate {
 
 class Area {
 public:
-					Area() {};
+					Area()
+					:
+					fPath(NULL),
+					fName(NULL)
+					{};
 
 					~Area()
 					{
-						unlink(fPath);
-						// TODO: unlink lock
 						free(fPath);
 						free(fName);
-						flock(fLock, LOCK_UN);
-						close(fLock);
 					};
 
 	area_id			Create(const char* name, void** startAddr, uint32 addrSpec,
@@ -365,6 +365,14 @@ void
 Area::Unmap()
 {
 	munmap(fAddress, fSize);
+
+	if (fPath != NULL)
+		unlink(fPath);
+
+	// TODO: unlink lock
+
+	flock(fLock, LOCK_UN);
+	close(fLock);
 }
 
 
@@ -439,6 +447,7 @@ Area::_PublishArea(const char* name, int oflag)
 	path.append(name);
 	path.append(".XXXXXX");
 	fPath = strdup(path.c_str());
+	fName = strdup(name);
 
 	int ret = mkstemp(fPath);
 	if (ret < 0)

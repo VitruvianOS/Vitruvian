@@ -1,6 +1,5 @@
 target_sources(root PRIVATE
 	Architecture.cpp
-	atomic.c
 	debug.c
 	driver_settings.cpp
 	extended_system_info.cpp

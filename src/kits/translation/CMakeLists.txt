@@ -8,6 +8,7 @@ AddOn(
 	TranslationUtils.cpp
 	Translator.cpp
 	TranslatorRoster.cpp
+	LIBS textencoding
 )
 
 UsePrivateHeaders(translation textencoding)

@@ -7,7 +7,7 @@ Application(
 	PPMMain.cpp
 	PPMTranslator.cpp
 
-	LIBS be translation translatorutils
+	LIBS be translation translatorutils localestub
 
 	INCLUDES
 	"../shared"

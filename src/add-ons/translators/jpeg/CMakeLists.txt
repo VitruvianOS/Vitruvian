@@ -9,7 +9,7 @@ Application(
 	exif_parser.cpp
 	JPEGTranslator.cpp
 
-	LIBS be translation translatorutils ${JPEG_LIBRARIES}
+	LIBS be translation translatorutils localestub ${JPEG_LIBRARIES}
 
 	INCLUDES
 	"../shared"

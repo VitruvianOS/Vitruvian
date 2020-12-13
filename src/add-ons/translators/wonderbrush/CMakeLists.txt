@@ -1,5 +1,5 @@
 Application(
-	WONDERBRUSHTranslator
+	WonderbrushTranslator
 
 	SOURCES
 	support/bitmap_compression.cpp
@@ -12,7 +12,7 @@ Application(
 	WonderBrushTranslator.cpp
 	WonderBrushView.cpp
 
-	LIBS be translation translatorutils ${ZLIB_LIBRARIES}
+	LIBS be translation translatorutils localestub ${ZLIB_LIBRARIES}
 
 	INCLUDES
 	"../shared"

@@ -1,8 +1,12 @@
-target_sources(be PRIVATE
+AddOn(
+	textencoding
+	SHARED
+	SOURCES
 	CharacterSet.cpp
 	CharacterSetRoster.cpp
 	character_sets.cpp
 	utf8_conversions.cpp
+	LIBS localestub
 )
 
-UsePrivateHeaders( be textencoding )
+UsePrivateHeaders( textencoding textencoding )

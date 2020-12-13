@@ -7,6 +7,8 @@
 
 #include <find_directory_private.h>
 
+#include <TypeConstants.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>

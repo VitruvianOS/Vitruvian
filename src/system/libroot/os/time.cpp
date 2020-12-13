@@ -12,10 +12,10 @@
 #include <FindDirectory.h>
 #include <OS.h>
 
-#include <commpage_defs.h>
+//#include <commpage_defs.h>
 #include <errno_private.h>
-#include <libroot_private.h>
-#include <real_time_data.h>
+//#include <libroot_private.h>
+//#include <real_time_data.h>
 #include <user_timer_defs.h>
 #include <syscalls.h>
 

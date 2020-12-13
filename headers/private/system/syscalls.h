@@ -8,7 +8,7 @@
 
 #include <arch_config.h>
 #include <DiskDeviceDefs.h>
-#include <elf_private.h>
+//#include <elf_private.h>
 #include <image.h>
 #include <image_defs.h>
 #include <OS.h>
@@ -232,10 +232,10 @@ extern status_t		_kern_get_image_info(image_id id, image_info *info,
 						size_t size);
 extern status_t		_kern_get_next_image_info(team_id team, int32 *cookie,
 						image_info *info, size_t size);
-extern status_t		_kern_read_kernel_image_symbols(image_id id,
-						elf_sym* symbolTable, int32* _symbolCount,
-						char* stringTable, size_t* _stringTableSize,
-						addr_t* _imageDelta);
+//extern status_t		_kern_read_kernel_image_symbols(image_id id,
+//						elf_sym* symbolTable, int32* _symbolCount,
+//						char* stringTable, size_t* _stringTableSize,
+//						addr_t* _imageDelta);
 
 // VFS functions
 extern dev_t		_kern_mount(const char *path, const char *device,

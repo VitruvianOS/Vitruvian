@@ -10,9 +10,9 @@
 #include <stdio.h>
 
 #include <libroot_private.h>
-#include <pthread_private.h>
-#include <thread_defs.h>
-#include <tls.h>
+//#include <pthread_private.h>
+//#include <thread_defs.h>
+//#include <tls.h>
 #include <syscalls.h>
 
 

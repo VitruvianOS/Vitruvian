@@ -135,9 +135,9 @@ function( UsePrivateHeaders target )
 		graphics/vesa
 		input
 		interface
-		libroot
 		kernel
 		libroot
+		libroot2
 		locale
 		mount
 		notification

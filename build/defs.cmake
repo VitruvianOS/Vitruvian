@@ -12,6 +12,9 @@ if (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     message(FATAL_ERROR "Only Linux is supported as host operating system.")
 endif()
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 11)
+
 # Add Color diagnostics
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     SET(DIAG_FLAGS "-fcolor-diagnostics")
@@ -30,14 +33,14 @@ set(COMMON_FLAGS "-include LinuxBuildCompatibility.h -Wall \
 	-Wpointer-arith -Wcast-align -Wsign-compare -Wstrict-aliasing \
 	-Wno-multichar -fPIC ${DIAG_FLAGS}")
 
-# TODO: We want ideally to remove -Wno-deprecated at some point.
-
 # Set flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS}")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} \
 	-Woverloaded-virtual -Wno-ctor-dtor-privacy \
 	-fexceptions -fpermissive -Wno-deprecated")
+
+# TODO: We want ideally to remove -Wno-deprecated at some point.
 
 # V\OS Global defines
 set(GLOBAL_CFLAGS

@@ -7,6 +7,7 @@
 
 #include <Locker.h>
 
+#include <string>
 #include <map>
 
 #include <pthread.h>

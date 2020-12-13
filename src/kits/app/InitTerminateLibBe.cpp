@@ -11,6 +11,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef __VOS__
+#include <pthread.h>
+#endif
 
 #include <AppMisc.h>
 #include <LooperList.h>

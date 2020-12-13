@@ -31,6 +31,7 @@ set(SYSTEM_LIBS
 	textencoding
 	tracker
 	translation
+	textencoding
 )
 ImageInclude("/lib" ${SYSTEM_LIBS})
 

@@ -29,19 +29,6 @@ system_time()
 
 
 status_t
-_kern_snooze_etc(bigtime_t amount, int timeBase, int32 flags,
-	bigtime_t* _remainingTime)
-{
-	// timebase is ignored
-
-	if (_remainingTime != NULL)
-		*_remainingTime = 0;
-
-	return usleep(amount);
-}
-
-
-status_t
 _kern_get_system_info(system_info* info)
 {
 	UNIMPLEMENTED();

@@ -336,8 +336,11 @@ Thread::HasData(thread_id thread)
 }
 
 
+extern "C" {
+
+
 thread_id
-_kern_spawn_thread(thread_func func, const char* name, int32 priority, void* data)
+spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 {
 	CALLED();
 	return BKernelPrivate::Thread::Spawn(func, name, priority, data);
@@ -345,7 +348,7 @@ _kern_spawn_thread(thread_func func, const char* name, int32 priority, void* dat
 
 
 status_t
-_kern_kill_thread(thread_id thread)
+kill_thread(thread_id thread)
 {
 	UNIMPLEMENTED();
 	// pthread_cancel?
@@ -354,7 +357,7 @@ _kern_kill_thread(thread_id thread)
 
 
 status_t
-_kern_rename_thread(thread_id thread, const char* newName)
+rename_thread(thread_id thread, const char* newName)
 {
 	UNIMPLEMENTED();
 	return B_OK;
@@ -362,15 +365,14 @@ _kern_rename_thread(thread_id thread, const char* newName)
 
 
 void
-_kern_exit_thread(status_t status)
+exit_thread(status_t status)
 {
 	pthread_exit((void*)&status);
 }
 
 
-extern "C"
 status_t
-_kern_on_exit_thread(void (*callback)(void *), void *data)
+on_exit_thread(void (*callback)(void *), void *data)
 {
 	UNIMPLEMENTED();
 	return B_OK;
@@ -378,7 +380,7 @@ _kern_on_exit_thread(void (*callback)(void *), void *data)
 
 
 status_t
-_kern_send_data(thread_id thread, int32 code,
+send_data(thread_id thread, int32 code,
 	const void* buffer, size_t buffer_size)
 {
 	CALLED();
@@ -387,7 +389,7 @@ _kern_send_data(thread_id thread, int32 code,
 
 
 status_t
-_kern_receive_data(thread_id* sender, void* buffer, size_t bufferSize)
+receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 {
 	CALLED();
 	if (BKernelPrivate::gCurrentThread == NULL)
@@ -400,16 +402,19 @@ _kern_receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 
 
 bool
-_kern_has_data(thread_id thread)
+has_data(thread_id thread)
 {
 	return BKernelPrivate::Thread::HasData(thread);
 }
 
 
 status_t
-_kern_get_thread_info(thread_id id, thread_info* info)
+_get_thread_info(thread_id id, thread_info* info, size_t size)
 {
 	CALLED();
+
+	if (id < 0 || info == NULL || size != sizeof(thread_info))
+		return B_BAD_VALUE;
 
 	info->thread = id;
 	strncpy (info->name, "Unknown", B_OS_NAME_LENGTH);
@@ -422,9 +427,12 @@ _kern_get_thread_info(thread_id id, thread_info* info)
 
 
 status_t
-_kern_get_next_thread_info(team_id team, int32* _cookie,
-	thread_info* info)
+_get_next_thread_info(team_id team, int32* cookie,
+	thread_info* info, size_t size)
 {
+	if (info == NULL || cookie == NULL || size != sizeof(thread_info))
+		return B_BAD_VALUE;
+
 	// Use proc
 	UNIMPLEMENTED();
 	return B_BAD_VALUE;
@@ -445,7 +453,7 @@ find_thread(const char* name)
 
 
 status_t
-_kern_set_thread_priority(thread_id id, int32 priority)
+set_thread_priority(thread_id id, int32 priority)
 {
 	UNIMPLEMENTED();
 	// Mapping:
@@ -459,7 +467,7 @@ _kern_set_thread_priority(thread_id id, int32 priority)
 
 
 status_t
-_kern_wait_for_thread(thread_id id, status_t* _returnCode)
+wait_for_thread(thread_id id, status_t* _returnCode)
 {
 	CALLED();
 	return BKernelPrivate::Thread::WaitForThread(id, _returnCode);
@@ -467,7 +475,7 @@ _kern_wait_for_thread(thread_id id, status_t* _returnCode)
 
 
 status_t
-_kern_suspend_thread(thread_id id)
+suspend_thread(thread_id id)
 {
 	debugger("V\\OS doesn't support thread suspend"); 
 	return B_BAD_THREAD_ID;
@@ -475,10 +483,28 @@ _kern_suspend_thread(thread_id id)
 
 
 status_t
-_kern_resume_thread(thread_id id)
+resume_thread(thread_id id)
 {
 	CALLED();
 	return BKernelPrivate::Thread::Resume(id);
+}
+
+
+status_t
+snooze(bigtime_t time)
+{
+	CALLED();
+
+	return usleep(time);
+}
+
+
+status_t
+snooze_until(bigtime_t time, int timeBase)
+{
+	UNIMPLEMENTED();
+
+	return B_ERROR;
 }
 
 
@@ -522,4 +548,7 @@ _kern_estimate_max_scheduling_latency(thread_id thread)
 {
 	UNIMPLEMENTED();
 	return 0;
+}
+
+
 }

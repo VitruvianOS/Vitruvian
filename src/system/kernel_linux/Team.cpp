@@ -151,7 +151,7 @@ _get_next_team_info(int32* cookie, team_info* info, size_t size)
 
 
 status_t
-_kern_get_memory_properties(team_id teamID, const void* address, uint32* _protected,
+get_memory_properties(team_id teamID, const void* address, uint32* _protected,
 	 uint32* _lock)
 {
 	UNIMPLEMENTED();

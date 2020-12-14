@@ -16,7 +16,7 @@ target_sources(root PRIVATE
 	SystemWatcher.cpp
 	Team.cpp
 	Thread.cpp
-	timer.cpp
+	time.cpp
 	wait_for_objects.cpp
 	libc.c
 	real_time_clock.c

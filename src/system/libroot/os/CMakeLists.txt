@@ -10,14 +10,12 @@ target_sources(root PRIVATE
 	fs_info.c
 	fs_query.cpp
 	fs_volume.c
-	memory.cpp
 	parsedate.cpp
 	port.c
 	scheduler.c
 	sem.c
 	system_info.cpp
 	system_revision.c
-	time.cpp
 	wait_for_objects.cpp
 
 	locks/init_once.cpp

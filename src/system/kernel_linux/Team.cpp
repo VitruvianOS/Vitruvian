@@ -31,8 +31,11 @@ static std::list<int> gTeams;
 }
 
 
+extern "C" {
+
+
 status_t
-_kern_get_team_usage_info(team_id team, int32 who, team_usage_info* info, size_t size)
+_get_team_usage_info(team_id team, int32 who, team_usage_info* info, size_t size)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
@@ -40,7 +43,7 @@ _kern_get_team_usage_info(team_id team, int32 who, team_usage_info* info, size_t
 
 
 status_t
-_kern_kill_team(team_id team)
+kill_team(team_id team)
 {
 	int err = kill((pid_t) team, SIGKILL);
 	if (err < 0)
@@ -51,9 +54,9 @@ _kern_kill_team(team_id team)
 
 
 status_t
-_kern_get_team_info(team_id id, team_info* info)
+_get_team_info(team_id id, team_info* info, size_t size)
 {
-	if (id < 0 || info == NULL)
+	if (id < 0 || info == NULL || size != sizeof(team_info))
 		return B_BAD_VALUE;
 
   	char procPath[B_PATH_NAME_LENGTH];
@@ -112,10 +115,12 @@ _kern_get_team_info(team_id id, team_info* info)
 
 
 status_t
-_kern_get_next_team_info(int32* cookie, team_info* info)
+_get_next_team_info(int32* cookie, team_info* info, size_t size)
 {
-	if (cookie == NULL || *cookie == -1 || info == NULL)
+	if (cookie == NULL || *cookie < 0 || info == NULL
+			|| size != sizeof(team_info)) {
 		return B_BAD_VALUE;
+	}
 
 	if (*cookie == 0) {
 		DIR* procDir = opendir("/proc");
@@ -140,7 +145,7 @@ _kern_get_next_team_info(int32* cookie, team_info* info)
 	unsigned int cur_pid = *gTeamsIt;
 	(*cookie)++;
 
-	return _kern_get_team_info(cur_pid, info);
+	return get_team_info(cur_pid, info);
 
 }
 
@@ -160,4 +165,7 @@ _kern_get_extended_team_info(team_id teamID, uint32 flags,
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
+}
+
+
 }

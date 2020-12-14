@@ -17,7 +17,6 @@ target_sources(root PRIVATE
 	sem.c
 	system_info.cpp
 	system_revision.c
-	team.c
 	thread.c
 	time.cpp
 	wait_for_objects.cpp

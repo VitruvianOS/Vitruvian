@@ -5,11 +5,17 @@
 
 #include <OS.h>
 
-#include <syscalls.h>
+
+ssize_t
+wait_for_objects(object_wait_info* infos, int numInfos)
+{
+	UNIMPLEMENTED();
+	return 0;
+}
 
 
 ssize_t
-_kern_wait_for_objects(object_wait_info* infos, int numInfos, uint32 flags,
+wait_for_objects_etc(object_wait_info* infos, int numInfos, uint32 flags,
 	bigtime_t timeout)
 {
 	UNIMPLEMENTED();

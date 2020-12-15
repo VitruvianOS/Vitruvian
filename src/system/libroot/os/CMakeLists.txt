@@ -16,7 +16,6 @@ target_sources(root PRIVATE
 	sem.c
 	system_info.cpp
 	system_revision.c
-	wait_for_objects.cpp
 
 	locks/init_once.cpp
 	locks/mutex.cpp

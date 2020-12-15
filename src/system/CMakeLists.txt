@@ -8,5 +8,5 @@ AddOn(
 # TODO: get rid of runtime loader
 UsePrivateHeaders(root app shared libroot2 system kernel runtime_loader)
 
-add_subdirectory(kernel_linux)
 add_subdirectory(libroot)
+add_subdirectory(libroot2)

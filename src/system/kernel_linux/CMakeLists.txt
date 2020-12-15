@@ -18,12 +18,15 @@ target_sources(root PRIVATE
 	Thread.cpp
 	time.cpp
 	wait_for_objects.cpp
-	libc.c
+
 	real_time_clock.c
 	shutdown.cpp
-	signal.cpp
 	system_info.c
-	system_ioctl.c
+
+
+	compat/libc.c
+	compat/system_ioctl.c
+	compat/signal.cpp
 
 	fs/dir.c
 

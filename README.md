@@ -2,12 +2,7 @@
 
 Vitruvian is the Operating System with the human at the center.
 
-#### Video backends
+#### Goals
 
-* Support for linux framebuffer.
-
-#### Contributing
-
-Contributing to the project is open to anyone, feel free to send a pull request.
-
-[Issues](https://github.com/Barrett17/V-OS/issues)
+* Fast, reactive and easy to use interface
+* Highly integrated Desktop Environment

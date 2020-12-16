@@ -3,8 +3,6 @@ target_sources(root PRIVATE
 	debug.c
 	driver_settings.cpp
 	extended_system_info.cpp
-	find_directory.cpp
-	find_paths.cpp
 	fs_attr.cpp
 	fs_index.c
 	fs_info.c

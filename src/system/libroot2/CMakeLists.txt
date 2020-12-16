@@ -30,6 +30,8 @@ target_sources(root PRIVATE
 
 	fs/dir.c
 
+	fs/find_directory.cpp
+	fs/find_paths.cpp
 	fs/fs2.cpp
 	fs/fs_attr.cpp
 	fs/fs_index.cpp

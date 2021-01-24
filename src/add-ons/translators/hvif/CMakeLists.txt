@@ -7,7 +7,7 @@ Application(
 	HVIFTranslator.cpp
 	HVIFView.cpp
 
-	LIBS be translation translatorutils
+	LIBS be translation localestub translatorutils
 
 	INCLUDES
 	"../shared"

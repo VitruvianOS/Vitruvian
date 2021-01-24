@@ -6,4 +6,5 @@ Application(
 	PairsButton.cpp
 	PairsView.cpp
 	PairsWindow.cpp
+	LIBS localestub
 )

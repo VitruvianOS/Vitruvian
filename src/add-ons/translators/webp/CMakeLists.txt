@@ -6,7 +6,7 @@ Application(
 	main.cpp
 	WebPTranslator.cpp
 
-	LIBS be translation translatorutils ${WEBP_LIBRARIES}
+	LIBS be translation translatorutils localestub ${WEBP_LIBRARIES}
 
 	INCLUDES
 	"../shared"

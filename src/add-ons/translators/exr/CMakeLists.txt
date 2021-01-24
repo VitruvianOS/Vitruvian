@@ -9,7 +9,7 @@ Application(
 	IStreamWrapper.cpp
 	main.cpp
 
-	LIBS be translation translatorutils ${EXR_LIBRARIES}
+	LIBS be translation translatorutils localestub ${EXR_LIBRARIES}
 
 
 	INCLUDES

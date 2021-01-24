@@ -8,7 +8,7 @@ Application(
 	RTF.cpp
 	RTFTranslator.cpp
 
-	LIBS be translation translatorutils
+	LIBS be translation translatorutils localestub
 
 	INCLUDES
 	"../shared"

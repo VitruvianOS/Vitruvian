@@ -7,7 +7,7 @@ Application(
 	PNGTranslator.cpp
 	PNGView.cpp
 
-	LIBS be translation translatorutils ${PNG_LIBRARIES}
+	LIBS be translation translatorutils localestub ${PNG_LIBRARIES}
 
 	INCLUDES
 	"../shared"

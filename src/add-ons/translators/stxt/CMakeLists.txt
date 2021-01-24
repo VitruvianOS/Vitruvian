@@ -6,7 +6,7 @@ Application(
 	STXTTranslator.cpp
 	STXTView.cpp
 
-	LIBS be translation translatorutils
+	LIBS be translation translatorutils textencoding localestub
 
 	INCLUDES
 	"../shared"

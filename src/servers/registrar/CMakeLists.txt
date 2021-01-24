@@ -40,6 +40,7 @@ Server(
 
 	INCLUDES
 	"mime"
+	LIBS localestub
 )
 
 UsePrivateHeaders(registrar app kernel)

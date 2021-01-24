@@ -51,7 +51,7 @@ set(SYSTEM_TRANSLATORS
 	TGATranslator
 	TIFFTranslator
 	WEBPTranslator
-	WONDERBRUSHTranslator
+	WonderbrushTranslator
 )
 ImageInclude("/system/add-ons/Translators" ${SYSTEM_TRANSLATORS})
 

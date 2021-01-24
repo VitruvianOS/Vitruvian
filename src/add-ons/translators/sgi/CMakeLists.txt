@@ -7,7 +7,7 @@ Application(
 	SGITranslator.cpp
 	SGIView.cpp
 
-	LIBS be translation translatorutils
+	LIBS be translation translatorutils localestub
 
 	INCLUDES
 	"../shared"

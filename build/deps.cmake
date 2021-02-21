@@ -25,6 +25,7 @@ set(ICU_BUILD_VERSION 57.2)
 set(HEADERS_PATH_BASE "/usr/include")
 
 add_subdirectory(external/icu-cmake)
+add_subdirectory(external/backward-cpp)
 
 DeclareDependency(
 	GNUC

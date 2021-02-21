@@ -5,7 +5,7 @@ target_sources(root PRIVATE
 
 	Area.cpp
 	byteorder.cpp
-	debug.c
+	debug.cpp
 	framebuffer.cpp
 	getenv.c
 	image.cpp

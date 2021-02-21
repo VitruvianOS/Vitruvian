@@ -42,6 +42,10 @@ macro( Application name )
 	list (APPEND _APPLICATION_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
 	target_include_directories(${name} PRIVATE ${_APPLICATION_INCLUDES})
 
+	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
+
+	add_backward(${name})
+
 	# Experimental, disabled
 	# TODO: support multiple rdefs
 	#if( _APPLICATION_RDEF )
@@ -77,6 +81,8 @@ macro( Server name )
 	list (APPEND _SERVER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
 	target_include_directories(${name} PRIVATE ${_SERVER_INCLUDES})
 
+	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
+	add_backward(${name})
 endmacro()
 
 macro( AddOn name type )
@@ -95,6 +101,8 @@ macro( AddOn name type )
 	list ( APPEND _ADDON_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} )
 	target_include_directories(${name} PRIVATE ${_ADDON_INCLUDES})
 
+	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
+	add_backward(${name})
 endmacro()
 
 macro( Test name )
@@ -123,6 +131,8 @@ macro( Test name )
 	list (APPEND _TEST_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
 	target_include_directories(${name} PRIVATE ${_TEST_INCLUDES})
 
+	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
+	add_backward(${name})
 endmacro()
 
 function( UsePrivateHeaders target )

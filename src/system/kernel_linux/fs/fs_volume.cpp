@@ -3,6 +3,7 @@
  * Distributed under the terms of the LGPL License.
  */
 
+#include <fs_info.h>
 #include <syscalls.h>
 #include <sys/mount.h>
 
@@ -16,8 +17,9 @@ _kern_mount(const char* path, const char* device,
     if (mount_status == 0)        
     {
         dev_t mounted_path = dev_for_path(path);
+        return mounted_path;
     }
-    return B_ERROR
+    return B_ERROR;
 }
 
 

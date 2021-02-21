@@ -14,8 +14,7 @@ _kern_mount(const char* path, const char* device,
 	size_t argsLength)
 {
     int mountStatus = mount(path, device, fs_name, flags, args);
-    if (mountStatus == 0)        
-    {
+    if (mountStatus == 0) {
         dev_t mountedPath = dev_for_path(path);
         return mountedPath;
     }

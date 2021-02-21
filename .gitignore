@@ -1,3 +1,6 @@
 Jamfile
 Makefile
 Makefile.in
+.*.sw*
+*.out
+generated.x*

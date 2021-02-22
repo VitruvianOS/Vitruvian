@@ -84,6 +84,14 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	DRM
+	LIBRARIES	"drm"
+	PACKAGES	"libdrm-dev"
+	INCLUDES	"${HEADERS_PATH_BASE}/libdrm/"
+)
+
+
+DeclareDependency(
 	JPEG
 	LIBRARIES	"jpeg"
 	PACKAGES	"libjpeg-dev"

@@ -48,7 +48,7 @@ debug_vprintf(const char* format, va_list args)
 	char buffer[2048];
 	vsnprintf(buffer, sizeof(buffer), format, args);
 
-	debug_printf(buffer);
+	printf(buffer);
 }
 
 

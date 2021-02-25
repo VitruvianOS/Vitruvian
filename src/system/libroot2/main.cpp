@@ -20,11 +20,20 @@ int __libc_argc;
 char** __libc_argv;
 
 
+void
+segv_handler(int sig)
+{
+	debugger("Guru Meditation");
+}
+
+
 // This function is executed before everything else
 void __attribute__ ((constructor))
 init_kernel_layer(int argc, char** argv)
 {
 	TRACE("init_kernel_layer()\n");
+
+	signal(SIGSEGV, segv_handler);
 
 	// Init global stuff
 	__gCPUCount = sysconf(_SC_NPROCESSORS_ONLN);

@@ -37,7 +37,7 @@ FBDevHWInterface::FBDevHWInterface()
 	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
 	//fBackBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
 
-	fEventStream = new LibInputEventStream();
+	fEventStream = new LibInputEventStream(fVInfo.xres, fVInfo.yres);
 }
 
 

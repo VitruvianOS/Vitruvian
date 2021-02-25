@@ -35,7 +35,7 @@ const static struct libinput_interface interface = {
 };
 
 
-LibInputEventStream::LibInputEventStream()
+LibInputEventStream::LibInputEventStream(uint32 width, uint32 height)
 	:
 	fEventList(10, true),
 	fEventListLocker("remote event list"),
@@ -45,7 +45,9 @@ LibInputEventStream::LibInputEventStream()
 	fMousePosition(0, 0),
 	fMouseButtons(0),
 	fModifiers(0),
-	fRunning(true)
+	fRunning(true),
+	fWidth(width),
+	fHeight(height)
 {
 	fEventNotification = create_sem(0, "remote event notification");
 
@@ -211,10 +213,10 @@ LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 			fMousePosition.x += static_cast<int>(dx);
 			fMousePosition.y += static_cast<int>(dy);
 
-			fMousePosition.x = std::min(1366.0f, fMousePosition.x);
+			fMousePosition.x = std::min((float)fWidth, fMousePosition.x);
 			fMousePosition.x = std::max(0.0f, fMousePosition.x);
 
-			fMousePosition.y = std::min(768.0f, fMousePosition.y);
+			fMousePosition.y = std::min((float)fHeight, fMousePosition.y);
 			fMousePosition.y = std::max(0.0f, fMousePosition.y);
 
 			event->AddPoint("where", fMousePosition);

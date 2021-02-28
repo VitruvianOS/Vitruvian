@@ -1,0 +1,16 @@
+[Unit]
+Description=app server daemon
+Conflicts=getty@tty1.service
+After=app_server.service
+
+[Service]
+ExecStartPre=/bin/sleep 0.5
+ExecStart=/system/servers/input_server
+StandardInput=tty-force
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+RestartSec=500ms
+
+[Install]
+WantedBy=graphical.target

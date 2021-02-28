@@ -1,0 +1,16 @@
+[Unit]
+Description=deskbar daemon
+Conflicts=getty@tty1.service
+After=input_server.service
+
+[Service]
+ExecStartPre=/bin/sleep 0.5
+ExecStart=/system/servers/Deskbar
+StandardInput=tty-force
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+RestartSec=500ms
+
+[Install]
+WantedBy=graphical.target

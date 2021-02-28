@@ -28,10 +28,11 @@ include(build/baseimage.cmake)
 include(build/profiles/default)
 
 string(REPLACE ";" "," RESULT "${RUN_LIST}")
-message(STATUS "RESULT: ${RESULT}")
+
 set(CORE_DEPS "${RESULT}")
 
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${CORE_DEPS})
 SET(CPACK_GENERATOR "DEB")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/data/systemd/postinst" "${CMAKE_CURRENT_SOURCE_DIR}/data/systemd/prerm")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")
 INCLUDE(CPack)

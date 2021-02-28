@@ -1,0 +1,3 @@
+#!/bin/sh
+
+systemctl disable app_server.service input_server.service deskbar.service registrar.service

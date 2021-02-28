@@ -27,6 +27,8 @@ ImageInclude("/system/add-ons/input_server/devices" ${INPUT_SERVER_ADDONS})
 set(SYSTEM_LIBS
 	root
 	be
+	game
+	textencoding
 	tracker
 	translation
 )

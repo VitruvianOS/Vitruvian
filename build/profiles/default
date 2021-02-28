@@ -87,3 +87,15 @@ set(BIN_DIRECTORY
 	xres
 )
 ImageInclude("/bin" ${BIN_DIRECTORY})
+
+
+list (APPEND SERVICES_LIST "${_SYSTEMD_SERVICES}")
+
+set(SYSTEMD_SERVICES
+  data/systemd/app_server.service
+  data/systemd/deskbar.service
+  data/systemd/input_server.service
+  data/systemd/registrar.service
+)
+
+install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)

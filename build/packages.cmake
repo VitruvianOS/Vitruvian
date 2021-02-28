@@ -28,6 +28,7 @@ include(build/baseimage.cmake)
 include(build/profiles/default)
 
 string(REPLACE ";" "," RESULT "${RUN_LIST}")
+
 set(CORE_DEPS "${RESULT}")
 
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${CORE_DEPS})

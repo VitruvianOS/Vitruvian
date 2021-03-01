@@ -130,4 +130,4 @@ DeclareDependency(
 	RUNTIMES  "zlib1g (>= 1:1.1.4)"
 )
 
-file(WRITE build/deb_deps.sh "#!/bin/bash \nsudo apt install ${DEP_LIST} debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools -y")
+file(WRITE build/build_deps.txt "${DEP_LIST}")

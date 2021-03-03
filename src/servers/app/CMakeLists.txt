@@ -102,8 +102,8 @@ Server(
 	#drawing/interface/local/AccelerantBuffer.cpp
 	#drawing/interface/local/AccelerantHWInterface.cpp
 
-	drawing/interface/linux/fbdev/FBDevHWInterface.cpp
-	drawing/interface/linux/fbdev/FBDevBuffer.cpp
+	drawing/interface/linux/drm/DrmHWInterface.cpp
+	drawing/interface/linux/drm/DrmBuffer.cpp
 
 	drawing/interface/linux/LibInputEventStream.cpp
 
@@ -114,11 +114,14 @@ Server(
 	stackandtile/Stacking.cpp
 	stackandtile/Tiling.cpp
 
-	LIBS be root localestub agg icon linprog shared ${FREETYPE_LIBRARIES} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES}
+	LIBS be root localestub shared agg icon linprog ${FREETYPE_LIBRARIES} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES}
 
 	INCLUDES
+	${DRM_INCLUDES}
+
 	"./drawing"
 	"./drawing/interface/linux"
+	"./drawing/interface/linux/drm"
 	"./drawing/interface/linux/fbdev"
 	"./drawing/interface/local"
 	"./drawing/interface/remote"

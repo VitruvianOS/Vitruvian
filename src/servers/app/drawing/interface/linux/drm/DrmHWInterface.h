@@ -1,24 +1,32 @@
 /*
- * Copyright 2019, Dario Casalinuovo.
+ * Copyright 2021, Dario Casalinuovo.
  * Distributed under the terms of the GPL License.
  */
-#ifndef FBDEV_GRAPHICS_CARD_H
-#define FBDEV_GRAPHICS_CARD_H
+#ifndef DRM_INTERFACE_H
+#define DRM_INTERFACE_H
 
 
+#include <xf86drm.h>
+#include <xf86drmMode.h>
+
+#include "DrmBuffer.h"
 #include "HWInterface.h"
-
 #include "LibInputEventStream.h"
 
-#include <linux/fb.h>
+
+#if DEBUG
+	#define CALLED() 			printf("CALLED %s\n",__PRETTY_FUNCTION__)
+#else
+  	#define CALLED() 			((void)0)
+#endif
 
 
-class FBDevBuffer;
+class DrmBuffer;
 
-class FBDevHWInterface : public HWInterface {
+class DrmHWInterface : public HWInterface {
 public:
-								FBDevHWInterface();
-	virtual						~FBDevHWInterface();
+								DrmHWInterface();
+	virtual						~DrmHWInterface();
 
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown();
@@ -50,10 +58,9 @@ public:
 	virtual uint32				DPMSMode();
 	virtual uint32				DPMSCapabilities();
 
-	virtual status_t			SetBrightness(float);
-	virtual status_t			GetBrightness(float*);
+	virtual status_t			SetBrightness(float brightness);
+	virtual status_t			GetBrightness(float* brightness);
 
-	// frame buffer access
 	virtual	RenderingBuffer*	FrontBuffer() const;
 	virtual	RenderingBuffer*	BackBuffer() const;
 	virtual	bool				IsDoubleBuffered() const;
@@ -61,18 +68,17 @@ public:
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 
 private:
-			FBDevBuffer*		fBackBuffer;
-			FBDevBuffer*		fFrontBuffer;
+			DrmDevice*			_FindDev(int fd) const;
+
+			int					fFd;
+			DrmDevice*			fDevList;
+
+			DrmBuffer*			fFrontBuffer;
+			DrmBuffer*			fBackBuffer;
 
 			display_mode		fDisplayMode;
 
-			int					fFrameBuffer;
-
 			LibInputEventStream* fEventStream;
-
-			struct fb_fix_screeninfo	fInfo;
-			struct fb_var_screeninfo	fVInfo;
-
 };
 
-#endif // VIEW_GRAPHICS_CARD_H
+#endif

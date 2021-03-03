@@ -29,7 +29,7 @@ using std::nothrow;
 #ifndef __VOS__
  #	include "AccelerantHWInterface.h"
  #else
-#	include "FBDevHWInterface.h"
+#	include "DrmHWInterface.h"
 #endif
 #else
  #	include "ViewHWInterface.h"
@@ -214,7 +214,7 @@ ScreenManager::_ScanDrivers()
 #ifndef __VOS__
  		  interface = new AccelerantHWInterface();
 #else
-		interface = new FBDevHWInterface();
+		interface = new DrmHWInterface();
 #endif
 #elif defined(USE_DIRECT_WINDOW_TEST_MODE)
 		  interface = new DWindowHWInterface();

@@ -14,11 +14,11 @@ extern "C" {
 void
 debugger(const char* message)
 {
-	// TODO set handlers for default abort signals
 	using namespace backward;
 	StackTrace st; st.load_here(32);
 	Printer p; p.print(st);
 
+	printf(message);
 	abort();
 }
 
@@ -55,6 +55,7 @@ debug_vprintf(const char* format, va_list args)
 status_t
 debug_thread(thread_id thread)
 {
+	UNIMPLEMENTED();
 	// TODO
 	// FindThread::Debug()
 }

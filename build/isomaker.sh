@@ -19,100 +19,24 @@ echo ${bold}Vitruvian Building inside the Chroot Environment...
 echo ${normal}
 
 sudo chroot $HOME/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
-apt update && apt install -y --no-install-recommends linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools wpagui curl openssh-client vim libfl-dev cmake ninja-build libfreetype6-dev libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less zlib1g-dev libtool mtools gcc-multilib libncurses-dev plymouth plymouth-themes fonts-noto-core fonts-noto-extra fonts-noto-mono &&\
+apt update && apt install -y --no-install-recommends linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny libfl-dev cmake ninja-build libfreetype6-dev libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less libtool mtools gcc-multilib libncurses-dev libgif-dev libjpeg-dev libicns-dev libopenexr-dev libpng-dev libtiff-dev libwebp-dev zlib1g-dev &&\
 apt install -y --reinstall ca-certificates &&\
-git clone https://github.com/wesbluemarine/Plymouth-Themes.git &&\
-mv Plymouth-Themes/isometric /usr/share/plymouth/themes &&\
-rm -rf Plymouth-Themes &&\
-plymouth-set-default-theme -R isometric &&\
 git clone https://github.com/Barrett17/V-OS.git --branch development &&\
 cd /V-OS &&\
+sed -i -e 's/Debug //g' configure &&\
 mkdir /V-OS/generated.x86 &&\
 cd /V-OS/generated.x86 &&\
 ../configure && ninja -j$((`nproc`+1)) &&\
 cd /V-OS/generated.x86/ &&\
 cpack &&\
-apt -y remove --purge autoconf automake bison build-essential cmake flex gcc-multilib git less libfreetype6-dev libinput-dev libncurses-dev libtool mtools ninja-build texinfo unzip zip zlib1g-dev &&\
+apt -y remove --purge autoconf automake bison build-essential cmake flex gcc-multilib git less libtool mtools ninja-build texinfo unzip zip &&\
+apt -y remove --purge *-dev &&\
+xargs -a /V-OS/build/build_deps.txt apt -y remove --purge &&\
 apt -y autoremove &&\
 apt clean &&\
 apt install -y -f /V-OS/generated.x86/*.deb &&\
 rm -rf /V-OS/ &&\
 
-cat <<EOT >> /etc/systemd/system/registrar.service
-[Unit]
-Description=registrar server daemon
-Conflicts=getty@tty1.service
-
-[Service]
-ExecStart=/system/servers/registrar
-StandardInput=tty-force
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
-RestartSec=500ms
-
-[Install]
-WantedBy=graphical.target
-EOT
-
-cat <<EOT >> /etc/systemd/system/app_server.service
-[Unit]
-Description=app server daemon
-Conflicts=getty@tty1.service
-After=registrar.service
-
-[Service]
-ExecStartPre=/bin/sleep 0.5
-ExecStart=/system/servers/app_server
-StandardInput=tty-force
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
-RestartSec=500ms
-
-[Install]
-WantedBy=graphical.target
-EOT
-
-cat <<EOT >> /etc/systemd/system/input_server.service
-[Unit]
-Description=app server daemon
-Conflicts=getty@tty1.service
-After=app_server.service
-
-[Service]
-ExecStartPre=/bin/sleep 0.5
-ExecStart=/system/servers/input_server
-StandardInput=tty-force
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
-RestartSec=500ms
-
-[Install]
-WantedBy=graphical.target
-EOT
-
-cat <<EOT >> /etc/systemd/system/deskbar.service
-[Unit]
-Description=deskbar daemon
-Conflicts=getty@tty1.service
-After=input_server.service
-
-[Service]
-ExecStartPre=/bin/sleep 0.5
-ExecStart=/system/servers/Deskbar
-StandardInput=tty-force
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
-RestartSec=500ms
-
-[Install]
-WantedBy=graphical.target
-EOT
-
-systemctl enable app_server.service deskbar.service input_server.service registrar.service &&\
 passwd; exit"
 
 echo ${bold}Create Directories for Live Environment Files...
@@ -127,7 +51,7 @@ echo ${normal}
 sudo mksquashfs \
     $HOME/LIVE_BOOT/chroot \
     $HOME/LIVE_BOOT/image/live/filesystem.squashfs \
-    -e boot
+    -b 1048576 -comp xz -Xdict-size 100% -e boot
 
 echo ${bold}Copy Kernel and Initramfs from Chroot to Live Directory...
 echo ${normal}

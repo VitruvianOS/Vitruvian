@@ -39,6 +39,8 @@ DeclareDependency(
 
 DeclareDependency(
 	FLEX
+	LIBRARIES	"fl"
+	PACKAGES	"libfl-dev"
 	RUNTIMES	"libfl2 (>= 2.5.33)"
 )
 
@@ -55,6 +57,7 @@ DeclareDependency(
 	LIBRARIES	"freetype"
 	PACKAGES	"libfreetype6-dev"
 	RUNTIMES	"libfreetype6 (>= 2.2.1)"
+	INCLUDES	"${HEADERS_PATH_BASE}/freetype2/"
 )
 
 DeclareDependency(

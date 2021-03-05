@@ -1,5 +1,4 @@
-find_package(Freetype REQUIRED)
-include_directories(${FREETYPE_INCLUDE_DIRS})
+include_directories(${FREETYPE_INCLUDES})
 
 Server(
 	app_server

@@ -11,4 +11,4 @@ AddOn(
 	LIBS textencoding
 )
 
-UsePrivateHeaders(translation textencoding)
+UsePrivateHeaders(translation textencoding system)

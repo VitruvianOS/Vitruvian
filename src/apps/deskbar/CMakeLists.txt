@@ -36,4 +36,4 @@ Application(
 	RDEF Deskbar.rdef
 )
 
-UsePrivateHeaders(Deskbar app interface)
+UsePrivateHeaders(Deskbar app interface tracker)

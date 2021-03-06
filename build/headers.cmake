@@ -40,12 +40,12 @@ set(
 	"headers/private/"
 
 	"headers/private/input"
-	"headers/private/libroot"
-	"headers/private/print"
+#	"headers/private/libroot"
+#	"headers/private/print"
 	"headers/private/shared"
 	"headers/private/storage"
-	"headers/private/system"
-	"headers/private/tracker"
+#	"headers/private/system"
+#	"headers/private/tracker"
 
 	"headers/private/system/arch/x86/"
 	"headers/private/kernel/arch/x86/"

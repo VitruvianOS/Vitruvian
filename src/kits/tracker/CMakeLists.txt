@@ -90,4 +90,4 @@ AddOn(
 	LIBS be localestub root shared game translation
 )
 
-UsePrivateHeaders(tracker interface shared tracker mount storage support)
+UsePrivateHeaders(tracker interface shared tracker mount storage system support)

@@ -2,7 +2,7 @@ add_subdirectory(addattr)
 #add_subdirectory(desklink)
 add_subdirectory(rc)
 
-UsePrivateHeaders(GLOBAL app)
+UsePrivateHeaders(GLOBAL app system)
 
 Application(catarea SOURCES catarea.c)
 Application(catattr SOURCES catattr.cpp)

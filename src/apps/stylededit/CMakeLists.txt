@@ -13,4 +13,4 @@ Application(
 	LIBS tracker shared translation translatorutils textencoding
 )
 
-UsePrivateHeaders( StyledEdit textencoding )
+UsePrivateHeaders(StyledEdit textencoding tracker)

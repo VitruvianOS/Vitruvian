@@ -42,4 +42,4 @@ Server(
 	LIBS localestub
 )
 
-UsePrivateHeaders(registrar app kernel)
+UsePrivateHeaders(registrar app kernel libroot system tracker)

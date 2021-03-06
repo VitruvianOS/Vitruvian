@@ -5,7 +5,7 @@ AddOn(
 	LIBS root icon agg ${ZLIB_LIBRARIES} pthread localestub shared
 )
 
-UsePrivateHeaders(be app interface kernel print shared locale)
+UsePrivateHeaders(be app interface kernel print shared locale libroot shared system)
 
 target_link_libraries(be PUBLIC icu)
 

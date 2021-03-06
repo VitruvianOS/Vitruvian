@@ -38,4 +38,4 @@ Application(
 	LIBS be localestub shared tracker translation textencoding pthread
 )
 
-UsePrivateHeaders(Terminal textencoding kernel)
+UsePrivateHeaders(Terminal textencoding kernel libroot system)

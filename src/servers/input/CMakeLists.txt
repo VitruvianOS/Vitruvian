@@ -27,4 +27,4 @@ Server(
 	LIBS shared
 )
 
-UsePrivateHeaders(input_server app interface support)
+UsePrivateHeaders(input_server app interface system support)

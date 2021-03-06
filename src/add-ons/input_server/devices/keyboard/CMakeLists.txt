@@ -12,4 +12,4 @@ AddOn(
 	"./"
 )
 
-UsePrivateHeaders(keyboard input interface)
+UsePrivateHeaders(keyboard input interface system tracker)

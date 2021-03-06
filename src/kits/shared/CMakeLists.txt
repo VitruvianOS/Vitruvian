@@ -43,4 +43,4 @@ AddOn(
 	Variant.cpp
 )
 
-UsePrivateHeaders(shared shared locale interface kernel)
+UsePrivateHeaders(shared shared locale interface kernel libroot system)

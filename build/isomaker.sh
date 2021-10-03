@@ -13,7 +13,7 @@ echo  ${bold}Prepare Debian Bootstrap...
 echo ${normal}
 
 mkdir -p $HOME/LIVE_BOOT
-sudo debootstrap --arch=amd64 --variant=minbase buster $HOME/LIVE_BOOT/chroot http://ftp.us.debian.org/debian/
+sudo debootstrap --arch=amd64 --variant=minbase bullseye $HOME/LIVE_BOOT/chroot http://ftp.us.debian.org/debian/
 
 echo ${bold}Vitruvian Building inside the Chroot Environment...
 echo ${normal}

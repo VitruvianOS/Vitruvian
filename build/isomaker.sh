@@ -21,21 +21,21 @@ echo ${normal}
 sudo chroot $HOME/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
 apt update && apt install -y --no-install-recommends linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny libfl-dev cmake ninja-build libfreetype6-dev libinput-dev git autoconf automake texinfo flex bison build-essential unzip zip less libtool mtools gcc-multilib libncurses-dev libgif-dev libjpeg-dev libicns-dev libopenexr-dev libpng-dev libtiff-dev libwebp-dev zlib1g-dev &&\
 apt install -y --reinstall ca-certificates &&\
-git clone https://github.com/Barrett17/V-OS.git --branch development &&\
-cd /V-OS &&\
+git clone https://github.com/VitruvianOS/Core.git --branch development &&\
+cd /Core &&\
 sed -i -e 's/Debug //g' configure &&\
-mkdir /V-OS/generated.x86 &&\
-cd /V-OS/generated.x86 &&\
+mkdir /Core/generated.x86 &&\
+cd /Core/generated.x86 &&\
 ../configure && ninja -j$((`nproc`+1)) &&\
-cd /V-OS/generated.x86/ &&\
+cd /Core/generated.x86/ &&\
 cpack &&\
 apt -y remove --purge autoconf automake bison build-essential cmake flex gcc-multilib git less libtool mtools ninja-build texinfo unzip zip &&\
 apt -y remove --purge *-dev &&\
-xargs -a /V-OS/build/build_deps.txt apt -y remove --purge &&\
+xargs -a /Core/build/build_deps.txt apt -y remove --purge &&\
 apt -y autoremove &&\
 apt clean &&\
-apt install -y -f /V-OS/generated.x86/*.deb &&\
-rm -rf /V-OS/ &&\
+apt install -y -f /Core/generated.x86/*.deb &&\
+rm -rf /Core/ &&\
 
 passwd; exit"
 

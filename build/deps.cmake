@@ -133,4 +133,4 @@ DeclareDependency(
 	RUNTIMES  "zlib1g (>= 1:1.1.4)"
 )
 
-file(WRITE build/build_deps.txt "${DEP_LIST}")
+file(WRITE generated.x86/build_deps.txt "${DEP_LIST}")

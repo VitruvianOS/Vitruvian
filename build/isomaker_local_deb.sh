@@ -1,5 +1,6 @@
-
 #!/bin/sh
+
+set -e
 
 bold=$(tput bold)
 normal=$(tput sgr0)
@@ -18,13 +19,21 @@ sudo debootstrap --arch=amd64 --variant=minbase bullseye $HOME/LIVE_BOOT/chroot 
 echo ${bold}Vitruvian Building inside the Chroot Environment...
 echo ${normal}
 
-sudo cp ~/Core/generated.x86/*.deb $HOME/LIVE_BOOT/chroot/var/
+# Check if any local deb file exist
+count=`ls -1 $HOME/Core/generated.x86/*.deb 2>/dev/null | wc -l`
+if [ $count != 0 ]; then
+sudo mount -o bind $HOME/Core/generated.x86/  $HOME/LIVE_BOOT/chroot/tmp/
+else
+echo ${bold}No deb file generated! Please run cpack inside Core/generated.x86/
+echo ${normal}
+exit
+fi
 
 sudo chroot $HOME/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
-apt update && apt install -y --no-install-recommends linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny &&\
-apt install -y -f /var/*.deb &&\
-rm /var/*.deb &&\
+apt update && apt install -y --no-install-recommends apt-utils dialog linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny &&\
+apt install -y -f /tmp/*.deb &&\
 passwd; exit"
+sudo umount $HOME/LIVE_BOOT/chroot/tmp/ &\
 
 echo ${bold}Create Directories for Live Environment Files...
 echo ${normal}

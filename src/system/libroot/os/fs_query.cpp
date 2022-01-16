@@ -80,6 +80,8 @@ fs_read_query(DIR *dir)
 }
 
 
+#ifdef LEGACY_ENTRY_REF
+
 status_t
 get_path_for_dirent(struct dirent *dent, char *buffer, size_t length)
 {
@@ -94,3 +96,4 @@ get_path_for_dirent(struct dirent *dent, char *buffer, size_t length)
 	#endif
 }
 
+#endif

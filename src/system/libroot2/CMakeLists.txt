@@ -4,14 +4,13 @@ target_sources(root PRIVATE
 	main.cpp
 
 	Area.cpp
-	byteorder.cpp
 	debug.cpp
 	framebuffer.cpp
 	getenv.c
 	image.cpp
 	tls.cpp
 	mutex.cpp
-	port.c
+	Port.cpp
 	sem.c
 	SystemWatcher.cpp
 	Team.cpp
@@ -24,9 +23,10 @@ target_sources(root PRIVATE
 	system_info.c
 
 
+	compat/byteorder.cpp
 	compat/libc.c
-	compat/system_ioctl.c
 	compat/signal.cpp
+	compat/system_ioctl.c
 
 	fs/dir.c
 
@@ -41,8 +41,11 @@ target_sources(root PRIVATE
 	fs/watch.cpp
 
 	fs/disk_device/disk_device.cpp
+	${BACKWARD_ENABLE}
 )
 
 target_include_directories(root PRIVATE
 	"./"
 )
+
+add_backward(root)

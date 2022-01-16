@@ -168,4 +168,9 @@ _kern_get_extended_team_info(team_id teamID, uint32 flags,
 }
 
 
+void
+reinit_after_fork() {
+
+}
+
 }

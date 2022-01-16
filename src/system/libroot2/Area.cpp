@@ -5,8 +5,7 @@
 
 
 #include <KernelExport.h>
-#include <Locker.h>
-#include <util/AutoLock.h>
+
 
 #include <map>
 #include <string>
@@ -16,7 +15,7 @@
 #include <sys/mman.h>
 
 #include "KernelDebug.h"
-
+#include "MutexLock.h"
 
 namespace BKernelPrivate {
 
@@ -27,15 +26,11 @@ namespace BKernelPrivate {
 class Area {
 public:
 					Area()
-					:
-					fPath(NULL),
-					fName(NULL)
-					{};
+					{
+					};
 
 					~Area()
 					{
-						free(fPath);
-						free(fName);
 					};
 
 	area_id			Create(const char* name, void** startAddr, uint32 addrSpec,
@@ -57,8 +52,8 @@ private:
 		bool		_CheckLock(const char* path);
 
 		area_id		fId;
-		const char* fName;
-		const char* fPath;
+		std::string fName;
+		std::string fPath;
 		const char* fLockPath;
 		int			fLock;
 
@@ -72,7 +67,7 @@ public:
 	static area_id Create(const char* name, void** startAddr, uint32 addrSpec,
 		size_t size, uint32 lock, uint32 protection)
 	{
-		AutoLocker<BLocker> _(&fLock);
+		BKernelPrivate::MutexLocker locker(&fLock);
 	
 		Area* area = new Area();
 		area_id id = area->Create(name, startAddr, addrSpec,
@@ -88,7 +83,7 @@ public:
 	static area_id Clone(const char* name, void** destAddr, uint32 addrSpec,
 		uint32 protection, area_id source)
 	{
-		AutoLocker<BLocker> _(&fLock);
+		BKernelPrivate::MutexLocker locker(&fLock);
 
 		Area* area = new Area();
 		area_id id = area->Clone(name, destAddr, addrSpec,
@@ -104,7 +99,7 @@ public:
 
 	static status_t Delete(area_id id)
 	{
-		AutoLocker<BLocker> _(&fLock);
+		BKernelPrivate::MutexLocker locker(&fLock);
 
 		Area* area = FindLocalArea(id);
 		if (area == NULL)
@@ -118,7 +113,7 @@ public:
 
 	static status_t Resize(area_id id, size_t newSize)
 	{
-		AutoLocker<BLocker> _(&fLock);
+		BKernelPrivate::MutexLocker locker(&fLock);
 
 		Area* area = FindLocalArea(id);
 		if (area == NULL)
@@ -134,7 +129,7 @@ public:
 	
 	static status_t	SetProtection(area_id id, uint32 protection)
 	{
-		AutoLocker<BLocker> _(&fLock);
+		BKernelPrivate::MutexLocker locker(&fLock);
 	
 		Area* area = FindLocalArea(id);
 		if (area == NULL)
@@ -189,6 +184,7 @@ public:
 		return B_ERROR;
 	}
 
+#if 0
 	static area_id FindName(const char* name)
 	{
 		if (name == NULL)
@@ -212,6 +208,7 @@ public:
 		closedir(dir);
 		return B_ERROR;
 	}
+#endif
 
 	//static status_t	GetNextAreaInfo();
 	//static status_t	GetAreaInfo();
@@ -224,11 +221,11 @@ public:
 
 private:
 	static std::map<area_id, Area*>	fAreas;
-	static BLocker					fLock;
+	static pthread_mutex_t			fLock;
 };
 
 std::map<area_id, Area*> AreaPool::fAreas;
-BLocker	AreaPool::fLock;
+pthread_mutex_t AreaPool::fLock = PTHREAD_MUTEX_INITIALIZER;
 
 
 area_id
@@ -249,7 +246,7 @@ Area::Create(const char* name, void** startAddr, uint32 addrSpec,
 
 	if (ftruncate(handle, size) != 0) {
 		close(handle);
-		unlink(fPath);
+		unlink(fPath.c_str());
 		return B_NO_MEMORY;
 	}
 
@@ -264,15 +261,15 @@ Area::Create(const char* name, void** startAddr, uint32 addrSpec,
 	if ((fAddress = mmap(address, size, prot, MAP_SHARED, handle, 0))
 			== MAP_FAILED) {
 		close(handle);
-		unlink(fPath);
+		unlink(fPath.c_str());
 		return (errno == ENOMEM ? B_NO_MEMORY : B_ERROR);
 	}
 	close(handle);
 
-	TRACE("mmapped area %s at %p size %d\n", fName, fAddress, size);
+	TRACE("mmapped area %s at %p size %d\n", fName.c_str(), fAddress, size);
 
 	struct stat st;
-	if (stat(fPath, &st) == -1 || st.st_size <= 0)
+	if (stat(fPath.c_str(), &st) == -1 || st.st_size <= 0)
 		return B_NO_MEMORY;
 
 	fId = st.st_ino;
@@ -337,16 +334,16 @@ Area::Clone(const char* name, void** startAddr, uint32 addrSpec,
 		return B_NO_MEMORY;
 
 	// TODO: we shouldn't unlink here
-	if (unlink(fPath) == -1)
+	if (unlink(fPath.c_str()) == -1)
 		return B_ERROR;
 
-	if (linkat(handler, "", AT_FDCWD, fPath, AT_EMPTY_PATH) == -1) {
+	if (linkat(handler, "", AT_FDCWD, fPath.c_str(), AT_EMPTY_PATH) == -1) {
 		printf("err %s\n", strerror(errno));
 		return B_ERROR;
 	}
 	close(handler);
 
-	if (stat(fPath, &st) == -1 || st.st_size <= 0)
+	if (stat(fPath.c_str(), &st) == -1 || st.st_size <= 0)
 		return B_NO_MEMORY;
 
 	fId = st.st_ino;
@@ -366,8 +363,8 @@ Area::Unmap()
 {
 	munmap(fAddress, fSize);
 
-	if (fPath != NULL)
-		unlink(fPath);
+
+		unlink(fPath.c_str());
 
 	// TODO: unlink lock
 
@@ -382,7 +379,7 @@ Area::Resize(area_id id, size_t newSize)
 	if (id < 0 || newSize < 0)
 		return B_BAD_VALUE;
 
-	int handle = open(fPath, O_RDWR, 0);
+	int handle = open(fPath.c_str(), O_RDWR, 0);
 	if (handle == -1)
 		return B_ERROR;
 
@@ -443,21 +440,25 @@ Area::ReserveAddressRange(addr_t* address, uint32 addressSpec,
 int
 Area::_PublishArea(const char* name, int oflag)
 {
+	fName = name;
+
 	std::string path = AREA_PATH;
 	path.append(name);
 	path.append(".XXXXXX");
-	fPath = strdup(path.c_str());
-	fName = strdup(name);
 
-	int ret = mkstemp(fPath);
+	char tmp[B_FILE_NAME_LENGTH];
+	strncpy(tmp, path.c_str(), B_FILE_NAME_LENGTH);
+
+	int ret = mkstemp(tmp);
 	if (ret < 0)
 		return -1;
 
-	path = fPath;
+	fPath = std::string(tmp);
+	path = std::string(fPath);
 	path.append("_lock");
 	fLock = creat(path.c_str(), oflag);
 	if (fLock < 0) {
-		TRACE("path %s %s %s\n", path.c_str(), strerror(errno), fPath);
+		TRACE("path %s %s %s\n", path.c_str(), strerror(errno), fPath.c_str());
 		return -1;
 	}
 
@@ -527,6 +528,7 @@ delete_area(area_id id)
 }
 
 
+#if 0
 area_id
 find_area(const char* name)
 {
@@ -534,7 +536,7 @@ find_area(const char* name)
 
 	return BKernelPrivate::AreaPool::FindName(name);
 }
-
+#endif
 
 status_t
 resize_area(area_id id, size_t newSize)
@@ -573,7 +575,6 @@ set_area_protection(area_id id, uint32 protection)
 }
 
 
-#ifndef LIBB2
 area_id
 _kern_transfer_area(area_id id, void **_address, uint32 addressSpec,
 	team_id target)
@@ -581,7 +582,6 @@ _kern_transfer_area(area_id id, void **_address, uint32 addressSpec,
 	UNIMPLEMENTED();
 	return id;
 }
-#endif
 
 
 status_t

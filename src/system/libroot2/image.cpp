@@ -12,7 +12,7 @@
 #include <map>
 
 #include "KernelDebug.h"
-#include "util/AutoLock.h"
+#include "MutexLock.h"
 
 
 extern int gLoadImageFD = -1;
@@ -27,7 +27,7 @@ public:
 		if (path == NULL)
 			return B_BAD_VALUE;
 
-		AutoLocker<BLocker> _(&fLock);
+		BKernelPrivate::MutexLocker _(&fLock);
 
 		void* image = dlopen(path, RTLD_LAZY);
 
@@ -43,7 +43,7 @@ public:
 		if (id <= 0)
 			return B_BAD_VALUE;
 
-		AutoLocker<BLocker> _(&fLock);
+		BKernelPrivate::MutexLocker _(&fLock);
 
 		void* image = _Find(id);
 		if (image == NULL)
@@ -61,7 +61,7 @@ public:
 		if (id <= 0 || name == NULL || sclass <= 0 || pptr == NULL)
 			return B_BAD_VALUE;
 
-		AutoLocker<BLocker> _(&fLock);
+		BKernelPrivate::MutexLocker _(&fLock);
 
 		void* image = _Find(id);
 		if (image == NULL)
@@ -81,7 +81,6 @@ private:
 		auto addon = fLoadedAddOns.find(id);
 
 		if (addon == end(fLoadedAddOns)) {
-			fLock.Unlock();
 			return NULL;
 		}
 
@@ -90,13 +89,13 @@ private:
 
 	static std::map<image_id, void*> fLoadedAddOns;
 	static image_id fId;
-	static BLocker fLock;
+	static pthread_mutex_t fLock;
 };
 
 
 std::map<image_id, void*> ImagePool::fLoadedAddOns;
 image_id ImagePool::fId;
-BLocker ImagePool::fLock;
+pthread_mutex_t ImagePool::fLock = PTHREAD_MUTEX_INITIALIZER;
 
 
 }

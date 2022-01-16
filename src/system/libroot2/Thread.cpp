@@ -20,7 +20,10 @@
 #include <syscalls.h>
 
 #include "main.h"
+
 #include "KernelDebug.h"
+
+#include "../kernel/nexus/nexus.h"
 
 
 extern int gLoadImageFD;
@@ -56,7 +59,6 @@ private:
 
 	thread_id			fThread;
 	sem_id				fThreadBlockSem = -1;
-	port_id				fThreadPort;
 
 	sem_id				fThreadExitSem;
 };
@@ -74,8 +76,9 @@ struct data_wrap {
 static __thread Thread* gCurrentThread;
 static __thread sem_id gThreadExitSem;
 
-static BLocker fLock;
+static pthread_mutex_t fLock;
 static std::map<thread_id, Thread*> gThreadsMap;
+static int fNexus = -1;
 
 // Static initialization for the main thread
 class ThreadPool {
@@ -83,9 +86,8 @@ public:
 
 	ThreadPool()
 	{
-		fMainThread = new Thread();
-		gThreadsMap.insert(std::make_pair(find_thread(NULL), fMainThread));
-		pthread_atfork(NULL, NULL, &ReinitAtFork);
+		_Init();
+		pthread_atfork(NULL, NULL, &_ReinitAtFork);
 	}
 
 	static thread_id
@@ -109,24 +111,31 @@ public:
 
 	static void Lock()
 	{
-		fLock.Lock();
+		pthread_mutex_lock(&fLock);
 	}
 
 	static void Unlock()
 	{
-		fLock.Unlock();
+		pthread_mutex_unlock(&fLock);
 	}
 
 private:
-	static void ReinitAtFork()
+	static void _ReinitAtFork()
 	{
 		TRACE("Process %d reinit thread after fork", getpid());
 		gThreadsMap.clear();
-		ThreadPool::CreateThread();
-		gLoadImageFD = -1;
+		_Init();
 	}
 
-	Thread* fMainThread;
+	static void _Init()
+	{
+		fNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
+		pthread_mutex_init(&fLock, NULL);
+		gLoadImageFD = -1;
+		ThreadPool::CreateThread();
+	}
+
+	Thread*			fMainThread;
 };
 
 static ThreadPool init;
@@ -138,6 +147,14 @@ Thread::thread_run(void* data)
 	CALLED();
 	ThreadPool::Lock();
 	data_wrap* threadData = (data_wrap*)data;
+
+	if (ioctl(fNexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
+		status_t exitStatus = B_ERROR;
+		delete_sem(gThreadExitSem);
+		pthread_exit(&exitStatus);
+		return NULL;
+	}
+
 	threadData->tid = ThreadPool::CreateThread();
 	ThreadPool::Unlock();
 
@@ -154,6 +171,9 @@ Thread::thread_run(void* data)
 	ThreadPool::Unlock();
 
 	status_t exitStatus = B_OK;
+	if (ioctl(fNexus, NEXUS_THREAD_EXIT, NULL) < 0)
+		exitStatus = B_ERROR;
+
 	delete_sem(gThreadExitSem);
 	pthread_exit(&exitStatus);
 	return NULL;
@@ -163,22 +183,18 @@ Thread::thread_run(void* data)
 Thread::Thread()
 {
 	fThread = find_thread(NULL);
-
-	fThreadPort = create_port(1, std::to_string(fThread).c_str());
-	// TODO: Add thread_id to the name?
 	fThreadBlockSem = create_sem(0, "block_thread_sem");
-
 	fThreadExitSem = create_sem(0, "exit_thread_sem");
 	gThreadExitSem = fThreadExitSem;
-
 	gCurrentThread = this;
 }
 
 
 Thread::~Thread()
 {
+	//assert(gettid() == this->fThreadID);
 	delete_sem(fThreadBlockSem);
-	delete_port(fThreadPort);
+	// TODO: pthread_detach
 }
 
 
@@ -216,6 +232,7 @@ Thread::WaitForThread(thread_id id, status_t* _returnCode)
 	if (_returnCode != NULL)
 		*_returnCode = 0;
 
+	// TODO: move to Team
 	if (ret != B_OK && gLoadImageFD != -1) {
 		uint32 value = 1;
 		write(gLoadImageFD, (const void*)&value, sizeof(uint32));
@@ -291,17 +308,16 @@ Thread::Unblock(thread_id thread, status_t status)
 
 status_t
 Thread::SendData(thread_id thread, int32 code, const void* buffer,
-	size_t buffer_size)
+	size_t bufferSize)
 {
 	// Blocks if there's already a message
 	// Otherwise copy the msg and return
-	port_id id = find_port(std::to_string(thread).c_str());
-	if (id < 0) {
-		TRACE("port not found\n");
-		return B_BAD_THREAD_ID;
-	}
-	size_t s = write_port(id, code, buffer, buffer_size);
-	if (s != buffer_size)
+	struct nexus_exchange exchange;
+	exchange.op = NEXUS_THREAD_WRITE;
+	exchange.buffer = buffer;
+	exchange.size = bufferSize;
+	exchange.code = thread;
+	if (ioctl(fNexus, NEXUS_THREAD_OP, &exchange) < 0)
 		return B_ERROR;
 
 	return B_OK;
@@ -312,12 +328,12 @@ status_t
 Thread::ReceiveData(thread_id* sender, void* buffer, size_t bufferSize)
 {
 	// Blocks if there is no message to read
-	port_id port = BKernelPrivate::gCurrentThread->fThreadPort;
-	int32 code;
-	size_t size = read_port(port,
-		&code, buffer, bufferSize);
-	if (size <= 0)
-		return size;
+	struct nexus_exchange exchange;
+	exchange.op = NEXUS_THREAD_READ;
+	exchange.buffer = buffer;
+	exchange.size = bufferSize;
+	if (ioctl(fNexus, NEXUS_THREAD_OP, &exchange) < 0)
+		return B_ERROR;
 
 	return B_OK;
 }
@@ -445,7 +461,9 @@ find_thread(const char* name)
 	if (name == NULL)
 		return syscall(SYS_gettid);
 
-	// Find on shm the name
+	debugger("You are calling find_thread with something different than null");
+
+	// TODO: deprecate
 
 	UNIMPLEMENTED();
 	return B_NAME_NOT_FOUND;
@@ -493,7 +511,7 @@ resume_thread(thread_id id)
 status_t
 snooze(bigtime_t time)
 {
-	CALLED();
+	//CALLED();
 
 	return usleep(time);
 }

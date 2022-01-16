@@ -105,6 +105,9 @@ Server(
 	drawing/interface/linux/drm/DrmHWInterface.cpp
 	drawing/interface/linux/drm/DrmBuffer.cpp
 
+	drawing/interface/linux/fbdev/FBDevHWInterface.cpp
+	drawing/interface/linux/fbdev/FBDevBuffer.cpp
+
 	drawing/interface/linux/LibInputEventStream.cpp
 
 	stackandtile/SATDecorator.cpp

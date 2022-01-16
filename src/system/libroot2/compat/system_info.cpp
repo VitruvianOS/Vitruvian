@@ -168,34 +168,6 @@ __get_cpu_topology_info(cpu_topology_node_info* topologyInfos,
 }
 
 
-status_t
-__start_watching_system(int32 object, uint32 flags, port_id port, int32 token)
-{
-	return _kern_start_watching_system(object, flags, port, token);
-}
-
-
-status_t
-__stop_watching_system(int32 object, uint32 flags, port_id port, int32 token)
-{
-	return _kern_stop_watching_system(object, flags, port, token);
-}
-
-
-int32
-is_computer_on(void)
-{
-	return _kern_is_computer_on();
-}
-
-
-double
-is_computer_on_fire(void)
-{
-	return 0.63739;
-}
-
-
 B_DEFINE_WEAK_ALIAS(__get_system_info, get_system_info);
 B_DEFINE_WEAK_ALIAS(__get_cpu_info, get_cpu_info);
 B_DEFINE_WEAK_ALIAS(__get_cpu_topology_info, get_cpu_topology_info);

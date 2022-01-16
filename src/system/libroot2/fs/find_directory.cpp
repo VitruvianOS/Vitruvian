@@ -28,11 +28,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <architecture_private.h>
 #include <errno_private.h>
 #include <find_directory_private.h>
 #include <stdlib_private.h>
-#include <symbol_versioning.h>
 #include <user_group.h>
 
 #include <AutoDeleter.h>
@@ -484,12 +482,15 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 	if (char* dollar = strchr(templatePath, '$')) {
 		if (dollar[1] == 'a') {
 			pathBuffer.Append(templatePath, dollar - templatePath);
+#ifndef __VOS__
+// TODO: clean me
 #ifndef _KERNEL_MODE
 			const char* architecture = __get_architecture();
 			if (strcmp(architecture, __get_primary_architecture()) != 0) {
 				pathBuffer.Append('/');
 				pathBuffer.Append(architecture);
 			}
+#endif
 #endif
 			templatePath = dollar + 2;
 		}

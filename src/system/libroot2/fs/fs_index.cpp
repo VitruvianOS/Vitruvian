@@ -3,36 +3,53 @@
  *  Distributed under the terms of the LGPL License.
  */
 
-#include <syscalls.h>
+
+#include <fs_attr.h>
 
 
-status_t
-_kern_create_index(dev_t device, const char* name, uint32 type, uint32 flags)
+extern "C" status_t
+fs_create_index(dev_t device, const char* name, uint32 type, uint32 flags)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
 
-status_t
-_kern_remove_index(dev_t device, const char* name)
+extern "C" status_t
+fs_remove_index(dev_t device, const char* name)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
 
-int
-_kern_stat_index(dev_t device, const char* name, struct index_info* indexInfo)
+extern "C" int
+fs_stat_index(dev_t device, const char* name, struct index_info* indexInfo)
 {
 	UNIMPLEMENTED();
 	return B_ERROR;
 }
 
 
-int
-_kern_open_index_dir(dev_t device)
+extern "C" DIR*
+fs_open_index_dir(dev_t device)
 {
 	UNIMPLEMENTED();
 	return 0;
+}
+
+
+extern "C" int
+fs_close_index_dir(DIR* dir)
+{
+	UNIMPLEMENTED();
+	return B_ERROR;
+}
+
+
+extern "C" struct dirent*
+fs_read_index_dir(DIR* dir)
+{
+	UNIMPLEMENTED();
+	return NULL;
 }

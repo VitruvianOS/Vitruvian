@@ -19,8 +19,6 @@
 
 #include <syscalls.h>
 
-#include "main.h"
-
 #include "KernelDebug.h"
 
 #include "../kernel/nexus/nexus.h"
@@ -559,14 +557,5 @@ _kern_unblock_threads(thread_id* threads, uint32 count,
 
 	return success ? B_OK : B_ERROR;
 }
-
-
-bigtime_t
-_kern_estimate_max_scheduling_latency(thread_id thread)
-{
-	UNIMPLEMENTED();
-	return 0;
-}
-
 
 }

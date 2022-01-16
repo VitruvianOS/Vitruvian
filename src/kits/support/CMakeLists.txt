@@ -1,5 +1,5 @@
 target_sources(be PRIVATE
-	Architecture.cpp
+	#Architecture.cpp
 	Archivable.cpp
 	ArchivingManagers.cpp
 	Base64.cpp
@@ -31,7 +31,7 @@ target_sources(be PRIVATE
 UsePrivateHeaders(be support)
 
 target_sources(be_bootstrap PRIVATE
-	Architecture.cpp
+	#Architecture.cpp
 	Base64.cpp
 	BlockCache.cpp
 	BufferedDataIO.cpp

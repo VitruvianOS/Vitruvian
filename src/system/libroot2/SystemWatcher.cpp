@@ -299,7 +299,7 @@ SystemWatcher::RemoveListener(int32 object, uint32 flags,
 
 
 status_t
-_kern_start_watching_system(int32 object, uint32 flags,
+__start_watching_system(int32 object, uint32 flags,
 	port_id port, int32 token)
 {
 	CALLED();
@@ -309,7 +309,7 @@ _kern_start_watching_system(int32 object, uint32 flags,
 
 
 status_t
-_kern_stop_watching_system(int32 object, uint32 flags,
+__stop_watching_system(int32 object, uint32 flags,
 	port_id port, int32 token)
 {
 	CALLED();

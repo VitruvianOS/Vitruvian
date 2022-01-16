@@ -18,7 +18,6 @@
 
 #include <fs_attr.h>
 
-#include <architecture_private.h>
 #include <AutoDeleter.h>
 #include <directories.h>
 #include <syscalls.h>
@@ -502,8 +501,7 @@ internal_path_for_path(char* referencePath, size_t referencePathSize,
 	path_base_directory baseDirectory, const char* subPath, uint32 flags,
 	char* pathBuffer, size_t bufferSize)
 {
-	if (strcmp(architecture, __get_primary_architecture()) == 0)
-		architecture = NULL;
+	architecture = NULL;
 
 	// resolve dependency
 	char packageName[B_FILE_NAME_LENGTH];
@@ -609,8 +607,11 @@ __find_path_etc(const void* codePointer, const char* dependency,
 	if (error != B_OK)
 		return error;
 
+#ifndef __VOS__
+	// TODO: clean me
 	if (architecture == NULL)
 		architecture = __get_architecture();
+#endif
 
 	return internal_path_for_path(imageInfo.name, sizeof(imageInfo.name),
 		dependency, architecture, baseDirectory, subPath, flags, pathBuffer,
@@ -641,8 +642,10 @@ __find_path_for_path_etc(const char* path, const char* dependency,
 		return B_NAME_TOO_LONG;
 	}
 
+#ifndef __VOS__
 	if (architecture == NULL)
 		architecture = __guess_architecture_for_path(path);
+#endif
 
 	return internal_path_for_path(referencePath, sizeof(referencePath),
 		dependency, architecture, baseDirectory, subPath, flags, pathBuffer,
@@ -670,10 +673,12 @@ __find_paths_etc(const char* architecture, path_base_directory baseDirectory,
 	// effective architecture is the primary one, set architecture to NULL to
 	// indicate that we don't need to insert an architecture subdirectory
 	// component.
+#ifndef __VOS__
 	if (architecture == NULL)
 		architecture = __get_architecture();
-	if (strcmp(architecture, __get_primary_architecture()) == 0)
-		architecture = NULL;
+#endif
+
+	architecture = NULL;
 	size_t architectureSize = architecture != NULL
 		? strlen(architecture) + 1 : 0;
 

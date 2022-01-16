@@ -1,22 +1,23 @@
 add_subdirectory(messaging)
 
 target_sources(root PRIVATE
-	main.cpp
+	init.cpp
 
 	Area.cpp
 	debug.cpp
+	driver_settings.cpp
+	extended_system_info.cpp
 	framebuffer.cpp
-	getenv.c
 	image.cpp
-	tls.cpp
 	mutex.cpp
+	parsedate.cpp
 	Port.cpp
 	sem.c
 	SystemWatcher.cpp
 	Team.cpp
 	Thread.cpp
 	time.cpp
-	wait_for_objects.cpp
+
 
 	real_time_clock.c
 	shutdown.cpp
@@ -25,10 +26,13 @@ target_sources(root PRIVATE
 
 	compat/byteorder.cpp
 	compat/libc.c
+	compat/scheduler.c
 	compat/signal.cpp
+	compat/system_info.cpp
+	compat/system_revision.c
 	compat/system_ioctl.c
-
-	fs/dir.c
+	compat/tls.cpp
+	compat/wait_for_objects.cpp
 
 	fs/find_directory.cpp
 	fs/find_paths.cpp
@@ -37,10 +41,16 @@ target_sources(root PRIVATE
 	fs/fs_index.cpp
 	fs/fs_info.cpp
 	fs/fs_query.cpp
-	fs/fs_volume.cpp
+	fs/fs_volume.c
 	fs/watch.cpp
+	fs/getenv.c
 
 	fs/disk_device/disk_device.cpp
+
+	locks/init_once.cpp
+	locks/mutex.cpp
+	locks/recursive_lock.cpp
+
 	${BACKWARD_ENABLE}
 )
 

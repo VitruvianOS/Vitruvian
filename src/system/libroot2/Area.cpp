@@ -3,10 +3,7 @@
  * Distributed under the terms of the LGPL License.
  */
 
-
 #include <KernelExport.h>
-
-
 #include <map>
 #include <string>
 
@@ -16,6 +13,7 @@
 
 #include "KernelDebug.h"
 #include "MutexLock.h"
+
 
 namespace BKernelPrivate {
 
@@ -301,8 +299,7 @@ Area::Clone(const char* name, void** startAddr, uint32 addrSpec,
 
 	int oflag = O_RDONLY;
 	int prot = PROT_READ;
-	if (protection & B_WRITE_AREA
-			|| protection & B_KERNEL_WRITE_AREA) {
+	if (protection & B_WRITE_AREA || protection & B_KERNEL_WRITE_AREA) {
 		prot |= PROT_WRITE;
 		oflag = O_RDWR;
 	}

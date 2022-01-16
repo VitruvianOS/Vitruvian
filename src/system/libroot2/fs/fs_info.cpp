@@ -6,6 +6,7 @@
 #include <fs_info.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <mntent.h>
 #include <stdlib.h>
 #include <sys/statvfs.h>
@@ -13,6 +14,9 @@
 #include "KernelDebug.h"
 
 #include "syscalls.h"
+
+
+//TODO: set errno for public functions
 
 
 namespace BPrivate {
@@ -27,7 +31,7 @@ public:
 	static status_t FillInfo(struct mntent* mountEntry, fs_info* info)
 	{
 		// TODO: io_size, improve flags
-
+#include <stdlib.h>
 		if (strlcpy(info->volume_name, mountEntry->mnt_dir,
 				B_FILE_NAME_LENGTH-1) >= B_FILE_NAME_LENGTH) {
 			return B_BUFFER_OVERFLOW;
@@ -106,7 +110,7 @@ public:
 
 
 dev_t
-_kern_next_device(int32* cookie)
+next_dev(int32* cookie)
 {
 	CALLED();
 
@@ -126,7 +130,7 @@ _kern_write_fs_info(dev_t device, const struct fs_info* info, int mask)
 
 
 status_t
-_kern_read_fs_info(dev_t device, fs_info* info)
+fs_stat_dev(dev_t device, fs_info* info)
 {
 	CALLED();
 
@@ -138,4 +142,15 @@ _kern_read_fs_info(dev_t device, fs_info* info)
 		return B_BAD_VALUE;
 
 	return BPrivate::LinuxVolume::FillInfo(entry, info);
+}
+
+
+dev_t
+dev_for_path(const char* path)
+{
+	struct stat st;
+	if (stat(path, &st) < 0)
+		return -1;
+
+	return st.st_dev;
 }

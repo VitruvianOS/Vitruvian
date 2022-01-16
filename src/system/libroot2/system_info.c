@@ -13,9 +13,16 @@ extern int32 __gCPUCount;
 
 
 int32
-_kern_is_computer_on()
+is_computer_on()
 {
 	return 1L;
+}
+
+
+double
+is_computer_on_fire(void)
+{
+	return 0.63739;
 }
 
 

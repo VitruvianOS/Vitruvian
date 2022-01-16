@@ -3,7 +3,7 @@
  * Distributed under the terms of the LGPL License.
  */
 
-#include "main.h"
+#include "init.h"
 
 #include <kernel/messaging.h>
 
@@ -19,6 +19,7 @@ int32 __gCPUCount;
 int __libc_argc;
 char** __libc_argv;
 
+extern "C" void _kern_init_ports();
 
 void
 segv_handler(int sig)
@@ -44,7 +45,8 @@ init_kernel_layer(int argc, char** argv)
 	setenv("TARGET_SCREEN", "root", 1);
 
 	// Init the kernel layer
-	port_init();
+	//port_init();
+	_kern_init_ports();
 
 	if (argv[0] != NULL && strcmp(argv[0], "registrar") <= 0)
 		init_messaging_service();
@@ -55,5 +57,5 @@ void __attribute__ ((destructor))
 deinit__kernel_layer()
 {
 	TRACE("deinit_kernel_layer()\n");
-	teardown_ports();
+	//teardown_ports();
 }

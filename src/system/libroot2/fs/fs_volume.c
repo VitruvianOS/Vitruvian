@@ -9,9 +9,8 @@
 
 
 dev_t
-_kern_mount(const char* path, const char* device,
-	const char* fs_name, uint32 flags, const char* args,
-	size_t argsLength)
+fs_mount_volume(const char* path, const char* device,
+	const char* fs_name, uint32 flags, const char* args)
 {
     int mountStatus = mount(path, device, fs_name, flags, args);
     if (mountStatus == 0) {
@@ -23,7 +22,7 @@ _kern_mount(const char* path, const char* device,
 
 
 status_t
-_kern_unmount(const char* path, uint32 flags)
+fs_unmount_volume(const char* path, uint32 flags)
 {
 	return umount2(path, flags);
 }

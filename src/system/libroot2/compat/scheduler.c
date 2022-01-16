@@ -57,6 +57,6 @@ suggest_thread_priority(uint32 what, int32 period, bigtime_t jitter,
 bigtime_t
 estimate_max_scheduling_latency(thread_id thread)
 {
-	return _kern_estimate_max_scheduling_latency(thread);
+	UNIMPLEMENTED();
+	return 0;
 }
-

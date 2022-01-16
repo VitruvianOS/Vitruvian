@@ -90,7 +90,7 @@ SystemWatcher::Run()
 	}
 
 	fBuf = (struct nlmsghdr*)malloc(CONNECTOR_MAX_MSG_SIZE);
-	if (fBuf <= 0) {
+	if (fBuf == NULL) {
 		close(fSocket);
 		TRACE("SystemWatcher: Memory error\n");
 		return B_NO_MEMORY;

@@ -3,16 +3,18 @@
  *  Distributed under the terms of the LGPL License.
  */
 
+#include "Team.h"
+
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <list>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <list>
 #include <string>
 
 #include "syscalls.h"
@@ -27,6 +29,20 @@
 namespace BKernelPrivate {
 
 static std::list<int> gTeams;
+static Team gTeam;
+
+
+Team::Team()
+{
+	fNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
+}
+
+int
+Team::GetNexusDescriptor()
+{
+	return gTeam.fNexus;
+}
+
 
 }
 

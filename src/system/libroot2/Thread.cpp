@@ -20,6 +20,7 @@
 #include <syscalls.h>
 
 #include "KernelDebug.h"
+#include "Team.h"
 
 #include "../kernel/nexus/nexus.h"
 
@@ -76,7 +77,7 @@ static __thread sem_id gThreadExitSem;
 
 static pthread_mutex_t fLock;
 static std::map<thread_id, Thread*> gThreadsMap;
-static int fNexus = -1;
+static int gNexus = BKernelPrivate::Team::GetNexusDescriptor();
 
 // Static initialization for the main thread
 class ThreadPool {
@@ -127,7 +128,6 @@ private:
 
 	static void _Init()
 	{
-		fNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
 		pthread_mutex_init(&fLock, NULL);
 		gLoadImageFD = -1;
 		ThreadPool::CreateThread();
@@ -146,7 +146,7 @@ Thread::thread_run(void* data)
 	ThreadPool::Lock();
 	data_wrap* threadData = (data_wrap*)data;
 
-	if (ioctl(fNexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
+	if (ioctl(gNexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
 		status_t exitStatus = B_ERROR;
 		delete_sem(gThreadExitSem);
 		pthread_exit(&exitStatus);
@@ -169,7 +169,7 @@ Thread::thread_run(void* data)
 	ThreadPool::Unlock();
 
 	status_t exitStatus = B_OK;
-	if (ioctl(fNexus, NEXUS_THREAD_EXIT, NULL) < 0)
+	if (ioctl(gNexus, NEXUS_THREAD_EXIT, NULL) < 0)
 		exitStatus = B_ERROR;
 
 	delete_sem(gThreadExitSem);
@@ -308,14 +308,19 @@ status_t
 Thread::SendData(thread_id thread, int32 code, const void* buffer,
 	size_t bufferSize)
 {
+	if (buffer == NULL)
+		return B_ERROR;
+
 	// Blocks if there's already a message
 	// Otherwise copy the msg and return
-	struct nexus_exchange exchange;
+	struct nexus_thread_exchange exchange;
 	exchange.op = NEXUS_THREAD_WRITE;
 	exchange.buffer = buffer;
 	exchange.size = bufferSize;
-	exchange.code = thread;
-	if (ioctl(fNexus, NEXUS_THREAD_OP, &exchange) < 0)
+	exchange.return_code = code;
+	exchange.receiver = thread;
+
+	if (ioctl(gNexus, NEXUS_THREAD_OP, &exchange) < 0)
 		return B_ERROR;
 
 	return B_OK;
@@ -325,15 +330,22 @@ Thread::SendData(thread_id thread, int32 code, const void* buffer,
 status_t
 Thread::ReceiveData(thread_id* sender, void* buffer, size_t bufferSize)
 {
+	CALLED();
+
+	if (sender == NULL)
+		return B_ERROR;
+
 	// Blocks if there is no message to read
-	struct nexus_exchange exchange;
+	struct nexus_thread_exchange exchange;
 	exchange.op = NEXUS_THREAD_READ;
 	exchange.buffer = buffer;
 	exchange.size = bufferSize;
-	if (ioctl(fNexus, NEXUS_THREAD_OP, &exchange) < 0)
+	if (ioctl(gNexus, NEXUS_THREAD_OP, &exchange) < 0)
 		return B_ERROR;
 
-	return B_OK;
+	*sender = exchange.sender;
+
+	return exchange.return_code;
 }
 
 
@@ -343,6 +355,7 @@ Thread::HasData(thread_id thread)
 	// Return true if there's a queue and there's a message
 	// False otherwise
 	UNIMPLEMENTED();
+	// TODO: add nexus op
 	return false;
 }
 
@@ -409,9 +422,8 @@ receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 	if (BKernelPrivate::gCurrentThread == NULL)
 		return B_BAD_THREAD_ID;
 
-	status_t ret = BKernelPrivate::gCurrentThread->ReceiveData(sender,
+	return BKernelPrivate::gCurrentThread->ReceiveData(sender,
 		buffer, bufferSize);
-	return ret;
 }
 
 
@@ -459,7 +471,7 @@ find_thread(const char* name)
 	if (name == NULL)
 		return syscall(SYS_gettid);
 
-	debugger("You are calling find_thread with something different than null");
+	debugger("You are calling find_thread with something different than NULL");
 
 	// TODO: deprecate
 

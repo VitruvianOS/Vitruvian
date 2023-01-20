@@ -172,6 +172,7 @@ Thread::thread_run(void* data)
 	if (ioctl(gNexus, NEXUS_THREAD_EXIT, NULL) < 0)
 		exitStatus = B_ERROR;
 
+	// TODO exit callback pthread_key
 	delete_sem(gThreadExitSem);
 	pthread_exit(&exitStatus);
 	return NULL;

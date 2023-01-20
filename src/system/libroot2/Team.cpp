@@ -17,6 +17,9 @@
 #include <list>
 #include <string>
 
+#define DEBUG 3
+#include "KernelDebug.h"
+#include "messaging/MessagingService.h"
 #include "syscalls.h"
 
 
@@ -25,22 +28,80 @@
 #define MAX_BYTES 64
 #define MAX_LINE_LENGTH 1024
 
+mode_t __gUmask = 022;
+int32 __gCPUCount;
+int __libc_argc;
+char** __libc_argv;
+
 
 namespace BKernelPrivate {
 
+
 static std::list<int> gTeams;
-static Team gTeam;
+static int gNexus = -1;
 
 
-Team::Team()
+void
+segv_handler(int sig)
 {
-	fNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
+	debugger("Guru Meditation");
 }
+
+
+// This function is executed before everything else
+void __attribute__ ((constructor))
+init_team(int argc, char** argv)
+{
+	TRACE("init_team()\n");
+
+	signal(SIGSEGV, segv_handler);
+
+	// Init global stuff
+	__gCPUCount = sysconf(_SC_NPROCESSORS_ONLN);
+	__libc_argc = argc;
+	__libc_argv = argv;
+
+	// Set screen
+	setenv("TARGET_SCREEN", "root", 1);
+
+	Team::InitTeam();
+
+	init_ports();
+
+	if (argv[0] != NULL && strcmp(argv[0], "registrar") <= 0)
+		init_messaging_service();
+}
+
+
+void __attribute__ ((destructor))
+deinit_team()
+{
+	TRACE("deinit_team()\n");
+}
+
+
+void
+Team::InitTeam()
+{
+	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
+	if (gNexus < 0) {
+		printf("Can't open Nexus IPC\n");
+		exit(-1);
+	}
+}
+
+
+void
+Team::DeInitTeam()
+{
+	close(gNexus);
+}
+
 
 int
 Team::GetNexusDescriptor()
 {
-	return gTeam.fNexus;
+	return gNexus;
 }
 
 

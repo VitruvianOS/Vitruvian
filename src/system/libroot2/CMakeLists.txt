@@ -1,8 +1,6 @@
 add_subdirectory(messaging)
 
 target_sources(root PRIVATE
-	init.cpp
-
 	Area.cpp
 	debug.cpp
 	driver_settings.cpp
@@ -18,11 +16,9 @@ target_sources(root PRIVATE
 	Thread.cpp
 	time.cpp
 
-
 	real_time_clock.c
 	shutdown.cpp
 	system_info.c
-
 
 	compat/byteorder.cpp
 	compat/libc.c

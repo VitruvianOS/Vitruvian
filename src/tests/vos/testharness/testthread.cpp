@@ -9,8 +9,8 @@ thread_test(void *data)
    char buf[512];
 
    code = receive_data(&sender, (void *)buf, sizeof(buf));
-   if (code != B_OK)
-	printf("err\n");
+   if (code != 63)
+	printf("ERROR: WRONG CODE!!!\n");
 
    printf("Received: \"%s\" from thread %d\n", buf, find_thread(NULL));
 

@@ -16,7 +16,7 @@
 
 class LibInputEventStream : public EventStream {
 public:
-									LibInputEventStream();
+									LibInputEventStream(uint32 width, uint32 height);
 	virtual							~LibInputEventStream();
 
 	virtual	bool					IsValid() { return true; }
@@ -46,6 +46,8 @@ private:
 			volatile bool			fRunning;
 			struct udev*			fUDevHandle;
 			struct libinput*		fInputHandle;
+			uint32					fWidth;
+			uint32					fHeight;
 };
 
 #endif // LIBINPUT_EVENT_STREAM_H

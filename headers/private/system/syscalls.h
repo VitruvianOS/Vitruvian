@@ -8,7 +8,7 @@
 
 #include <arch_config.h>
 #include <DiskDeviceDefs.h>
-#include <elf_private.h>
+//#include <elf_private.h>
 #include <image.h>
 #include <image_defs.h>
 #include <OS.h>
@@ -232,16 +232,13 @@ extern status_t		_kern_get_image_info(image_id id, image_info *info,
 						size_t size);
 extern status_t		_kern_get_next_image_info(team_id team, int32 *cookie,
 						image_info *info, size_t size);
-extern status_t		_kern_read_kernel_image_symbols(image_id id,
-						elf_sym* symbolTable, int32* _symbolCount,
-						char* stringTable, size_t* _stringTableSize,
-						addr_t* _imageDelta);
+//extern status_t		_kern_read_kernel_image_symbols(image_id id,
+//						elf_sym* symbolTable, int32* _symbolCount,
+//						char* stringTable, size_t* _stringTableSize,
+//						addr_t* _imageDelta);
 
 // VFS functions
-extern dev_t		_kern_mount(const char *path, const char *device,
-						const char *fs_name, uint32 flags, const char *args,
-						size_t argsLength);
-extern status_t		_kern_unmount(const char *path, uint32 flags);
+
 extern status_t		_kern_read_fs_info(dev_t device, struct fs_info *info);
 extern status_t		_kern_write_fs_info(dev_t device, const struct fs_info *info,
 						int mask);
@@ -289,25 +286,9 @@ extern ssize_t		_kern_poll(struct pollfd *fds, int numFDs,
 
 extern int			_kern_open_attr_dir(int fd, const char *path,
 						bool traverseLeafLink);
-extern ssize_t		_kern_read_attr(int fd, const char *attribute, off_t pos,
-						void *buffer, size_t readBytes);
-extern ssize_t		_kern_write_attr(int fd, const char *attribute, uint32 type,
-						off_t pos, const void *buffer, size_t readBytes);
-extern status_t		_kern_stat_attr(int fd, const char *attribute,
-						struct attr_info *attrInfo);
-extern int			_kern_open_attr(int fd, const char* path, const char *name,
-						uint32 type, int openMode);
 extern status_t		_kern_remove_attr(int fd, const char *name);
 extern status_t		_kern_rename_attr(int fromFile, const char *fromName,
 						int toFile, const char *toName);
-extern int			_kern_open_index_dir(dev_t device);
-extern status_t		_kern_create_index(dev_t device, const char *name,
-						uint32 type, uint32 flags);
-extern status_t		_kern_read_index_stat(dev_t device, const char *name,
-						struct stat *stat);
-extern status_t		_kern_remove_index(dev_t device, const char *name);
-extern status_t		_kern_getcwd(char *buffer, size_t size);
-extern status_t		_kern_setcwd(int fd, const char *path);
 extern int			_kern_open_query(dev_t device, const char *query,
 						size_t queryLength, uint32 flags, port_id port,
 						int32 token);

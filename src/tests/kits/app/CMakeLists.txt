@@ -1,3 +1,5 @@
+add_subdirectory(messaging)
+
 UsePrivateHeaders(GLOBAL app)
 
 add_definitions(-DNO_ELF_SYMBOL_PATCHING -DTEST_OBOS)

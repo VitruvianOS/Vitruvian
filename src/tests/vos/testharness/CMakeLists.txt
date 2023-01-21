@@ -6,3 +6,5 @@ Application(tessempingpong SOURCES testsempingpong.cpp)
 Application(testthread SOURCES testthread.cpp)
 Application(testteam SOURCES testteam.cpp)
 Application(testfsinfo SOURCES main.cpp)
+
+add_subdirectory(port)

@@ -1,20 +1,7 @@
 /*
- * Copyright 2019-2021, Dario Casalinuovo. All rights reserved.
+ * Copyright 2019-2023, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the LGPL License.
  */
-
-#include <Port.h>
-
-#include <map>
-#include <string>
-
-#include <dirent.h>
-#include <errno.h>
-#include <linux/limits.h>
-#include <sys/inotify.h>
-#include <sys/resource.h>
-#include <sys/stat.h>
-#include <sys/time.h>
 
 #include "Team.h"
 #include "KernelDebug.h"
@@ -84,7 +71,7 @@ delete_port(port_id id)
 	exchange.id = id;
 
 	if (ioctl(gNexus, NEXUS_PORT_OP, &exchange) < 0)
-		return exchange.return_code;;
+		return exchange.return_code;
 
 	return B_OK;
 }
@@ -93,12 +80,8 @@ delete_port(port_id id)
 port_id
 find_port(const char* name)
 {
-	//CALLED();
-
 	if (name == NULL)
 		return B_BAD_VALUE;
-
-	TRACE("find %s\n", name);
 
 	struct nexus_port_exchange exchange;
 	exchange.buffer = name;
@@ -122,9 +105,32 @@ _kern_get_next_port_info(team_id team, int32* _cookie,
 
 
 status_t
-_get_port_info(port_id id, port_info* info, size_t size)
+_get_port_info(port_id id, port_info* out_info, size_t size)
 {
-	UNIMPLEMENTED();
+	CALLED();
+
+	if (id < 0)
+		return B_BAD_PORT_ID;
+
+	if (out_info == NULL || size != sizeof(*out_info))
+		return B_BAD_VALUE;
+
+	struct nexus_port_exchange exchange;
+	nexus_port_info info;
+
+	exchange.op = NEXUS_PORT_INFO;
+	exchange.id = id;
+	exchange.buffer = (void*)&info;
+
+	if (ioctl(gNexus, NEXUS_PORT_OP, &exchange) < 0)
+		return exchange.return_code;
+
+	out_info->port = info.port;
+	out_info->team = info.team;
+	out_info->capacity = info.capacity;
+	out_info->queue_count = info.queue_count;
+	out_info->total_count = info.total_count;
+
 	return B_OK;
 }
 
@@ -137,14 +143,10 @@ port_count(port_id id)
 	if (id < 0)
 		return B_BAD_PORT_ID;
 
-	struct nexus_port_exchange exchange;
-	exchange.op = NEXUS_PORT_COUNT;
-	exchange.id = id;
+	port_info info;
+	status_t ret = get_port_info(id, &info);
 
-	if (ioctl(gNexus, NEXUS_PORT_OP, &exchange) < 0)
-		return exchange.return_code;
-
-	return exchange.cookie;
+	return ret != B_OK ? ret : info.queue_count;
 }
 
 
@@ -163,17 +165,16 @@ port_buffer_size_etc(port_id id, uint32 flags, bigtime_t timeout)
 {
 	CALLED();
 
-	TRACE("buffer size %d %u %lu\n", id, flags, timeout);
+	if (id < 0)
+		return B_BAD_PORT_ID;
 
 	port_message_info info;
 	memset(&info, 0, sizeof(info));
+
 	status_t ret = _get_port_message_info_etc(id, &info, sizeof(info),
 		flags, timeout);
 
-	if (ret == B_OK)
-		return info.size;
-
-	return ret;
+	return (ret == B_OK) ? info.size : ret;
 }
 
 
@@ -186,14 +187,11 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 	if (id < 0)
 		return B_BAD_PORT_ID;
 
-	if (info == NULL || infoSize != sizeof(*info))
+	if (info == NULL /*|| infoSize != sizeof(*info)*/)
 		return B_BAD_VALUE;
 
-	TRACE("read args %s %d %d %u %lu\n", _find_port_name(id),
-		find_thread(NULL), id, flags, timeout);
-
 	struct nexus_port_exchange exchange;
-	exchange.op = NEXUS_PORT_INFO;
+	exchange.op = NEXUS_PORT_MESSAGE_INFO;
 	exchange.id = id;
 	exchange.flags = flags;
 	exchange.timeout = timeout;
@@ -223,13 +221,10 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 	if (id < 0)
 		return B_BAD_PORT_ID;
 
-	if (msgCode == NULL || (msgBuffer == NULL && bufferSize > 0)
+	if ((msgBuffer == NULL && bufferSize > 0)
 			|| bufferSize > PORT_MAX_MESSAGE_SIZE) {
 		return B_BAD_VALUE;
 	}
-
-	TRACE("read args %s %d %d %u %lu\n", _find_port_name(id),
-		find_thread(NULL), id, flags, timeout);
 
 	struct nexus_port_exchange exchange;
 	exchange.op = NEXUS_PORT_READ;
@@ -269,9 +264,6 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 		return B_BAD_VALUE;
 	}
 
-	TRACE("write args %s %d %d %u %lu\n", _find_port_name(id),
-		find_thread(NULL), id, flags, timeout);
-
 	struct nexus_port_exchange exchange;
 	exchange.op = NEXUS_PORT_WRITE;
 	exchange.id = id;
@@ -283,6 +275,9 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 
 	if (ioctl(gNexus, NEXUS_PORT_OP, &exchange) < 0)
 		return exchange.return_code;
+
+	//printf("Write op 2 size %.4s\n", msgCode);
+
 
 	return B_OK;
 }
@@ -302,6 +297,8 @@ set_port_owner(port_id id, team_id team)
 {
 	UNIMPLEMENTED();
 
+	return B_OK;
+
 	// TODO: we want to deprecate this function
 	// and introduce a mechanism which requires
 	// the target process approval.
@@ -309,16 +306,15 @@ set_port_owner(port_id id, team_id team)
 	if (id < 0)
 		return B_BAD_PORT_ID;
 
-	//struct nexus_port_exchange exchange;
-	//exchange.op = NEXUS_PORT_TRANSFER;
-	//exchange.id = id;
+	struct nexus_port_exchange exchange;
+	exchange.op = NEXUS_SET_PORT_OWNER;
+	exchange.id = id;
+	exchange.cookie = team;
 
-	// TODO: fill
+	if (ioctl(gNexus, NEXUS_PORT_OP, &exchange) < 0)
+		return B_BAD_PORT_ID;
 
-	//if (ioctl(gNexus, NEXUS_PORT_OP, &exchange) < 0)
-	//	return B_BAD_PORT_ID;
-
-	return B_OK;
+	return exchange.return_code;
 }
 
 
@@ -326,4 +322,5 @@ extern "C"
 int
 dump_port_info(int argc, char **argv)
 {
+	// TODO this might be a good candidate for removal.
 }

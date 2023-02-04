@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, Dario Casalinuovo.
+ * Copyright 2018-2023, Dario Casalinuovo.
  * Distributed under the terms of the LGPL License.
  */
 
@@ -9,6 +9,9 @@
 ssize_t
 wait_for_objects(object_wait_info* infos, int numInfos)
 {
+	// This function should be doable, however it doesn't seem to
+	// have any use. If some day it becomes useful, feel free
+	// to implement and move it back.
 	UNIMPLEMENTED();
 	return 0;
 }

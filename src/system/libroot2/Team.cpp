@@ -47,7 +47,6 @@ segv_handler(int sig)
 	debugger("Guru Meditation");
 }
 
-
 // This function is executed before everything else
 void __attribute__ ((constructor))
 init_team(int argc, char** argv)

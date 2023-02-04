@@ -353,11 +353,20 @@ Thread::ReceiveData(thread_id* sender, void* buffer, size_t bufferSize)
 bool
 Thread::HasData(thread_id thread)
 {
-	// Return true if there's a queue and there's a message
-	// False otherwise
-	UNIMPLEMENTED();
-	// TODO: add nexus op
-	return false;
+	// Return true if there's a message
+	// Blocks if there is no message to read --- boh
+
+	if (thread < 0)
+		return false;
+
+	struct nexus_thread_exchange exchange;
+	exchange.op = NEXUS_THREAD_HAS_DATA;
+	exchange.receiver = thread;
+
+	if (ioctl(gNexus, NEXUS_THREAD_OP, &exchange) < 0)
+		return false;
+
+	return exchange.return_code == B_OK;
 }
 
 

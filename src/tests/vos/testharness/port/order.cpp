@@ -3,13 +3,10 @@
 
 #include <OS.h>
 
-
-#include <sys/inotify.h>
-#include <limits.h>
-
 port_id test_p1;
 port_id test_p2;
 char testdata[5];
+char testdata2[5];
 
 
 int main()
@@ -35,15 +32,23 @@ int main()
 	if (status != B_OK)
 		printf("port err (failure)\n");
 
-	ret = read_port(test_p1, &dummy, testdata, sizeof(testdata));
+	ret = read_port(test_p1, &dummy, testdata2, sizeof(testdata));
 	if (ret < 0)
 		printf("port err (failure)\n");
-	printf("Read size: %d Data: %s\n", ret, testdata);
 
-	ret = read_port(test_p1, &dummy, testdata, sizeof(testdata));
+	printf("Read size: %d Data: %s\n", ret, testdata2);
+
+	if (strcmp("abcd", testdata2) != 0)
+		printf("FAILURE data not equal\n");
+
+	ret = read_port(test_p1, &dummy, testdata2, sizeof(testdata));
 	if (ret < 0)
 		printf("port err (failure)\n");
-	printf("Read size: %d Data: %s\n", ret, testdata);
+
+	printf("Read size: %d Data: %s\n", ret, testdata2);
+
+	if (strcmp("bacd", testdata2) != 0)
+		printf("FAILURE data not equal\n");
 
 	printf("Should wait for a read now\n");
 

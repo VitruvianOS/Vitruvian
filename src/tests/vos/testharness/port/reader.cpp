@@ -29,11 +29,11 @@ int main()
 		printf("port err\n");
 	printf("Read size: %d Data: %s\n", ret, testdata);
 
-	memset(testdata, 0, sizeof(testdata));
-	ret = read_port(test_p2, &dummy, testdata, sizeof(testdata));
-	printf("exited successfully\n");
+	//memset(testdata, 0, sizeof(testdata));
+	//ret = read_port(test_p2, &dummy, testdata, sizeof(testdata));
+	//printf("exited successfully\n");
 
-	//close_port(test_p1);
-	//delete_port(test_p1);
+	close_port(test_p1);
+	delete_port(test_p1);
 	return 0;
 }

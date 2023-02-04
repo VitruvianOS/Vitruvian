@@ -8,7 +8,14 @@ thread_test(void *data)
    int32 code;
    char buf[512];
 
+   printf("testthread (%s):thread %d should have data\n",
+    	(has_data(find_thread(NULL)) == true) ? "pass" : "FAIL", find_thread(NULL));  
+
    code = receive_data(&sender, (void *)buf, sizeof(buf));
+
+   printf("testthread (%s):thread %d should not have data\n",
+    	(has_data(sender) != true) ? "pass" : "FAIL", sender);  
+
    if (code != 63)
 	printf("ERROR: WRONG CODE!!!\n");
 
@@ -26,8 +33,14 @@ main()
    const char *buf = "Hello";
 
    other_thread = spawn_thread(thread_test, "test", 5, NULL);
-   send_data(other_thread, code, (void *)buf, strlen(buf));
-   resume_thread(other_thread);
 
-	sleep(3);
+   printf("testthread (%s):thread %d should not have data\n",
+		(has_data(other_thread) == false) ? "pass" : "FAIL", other_thread);  
+
+   send_data(other_thread, code, (void *)buf, strlen(buf));
+
+   printf("testthread (%s):thread %d should have data\n",
+		(has_data(other_thread) == true) ? "pass" : "FAIL", other_thread);  
+
+   resume_thread(other_thread);
 }

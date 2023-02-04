@@ -1,6 +1,7 @@
 Application(testlist SOURCES testlist.cpp)
 Application(testoskit SOURCES testoskit.cpp)
 Application(testports SOURCES testports.cpp)
+Application(testports2 SOURCES testports2.cpp)
 Application(testsem SOURCES testsem.cpp)
 Application(tessempingpong SOURCES testsempingpong.cpp)
 Application(testthread SOURCES testthread.cpp)

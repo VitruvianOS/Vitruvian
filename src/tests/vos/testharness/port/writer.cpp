@@ -25,7 +25,7 @@ int main()
 
 	sleep(6);
 
-	//close_port(test_p2);
-	//delete_port(test_p2);
+	close_port(test_p2);
+	delete_port(test_p2);
 	return 0;
 }

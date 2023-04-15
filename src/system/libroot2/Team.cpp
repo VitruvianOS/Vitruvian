@@ -5,8 +5,6 @@
 
 #include "Team.h"
 
-#include <OS.h>
-
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -44,6 +42,8 @@ namespace BKernelPrivate {
 static std::list<int> gTeams;
 static int gNexus = -1;
 
+sem_id Team::fForkSem = -1;
+
 
 void
 segv_handler(int sig)
@@ -73,7 +73,8 @@ init_team(int argc, char** argv)
 
 	init_ports();
 
-	pthread_atfork(NULL, NULL, &Team::ReinitAtFork);
+	pthread_atfork(&Team::PrepareFatherAtFork,
+		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
 
 	// TODO: this has to go
 	if (argv[0] != NULL && strcmp(argv[0], "registrar") <= 0)
@@ -84,6 +85,7 @@ init_team(int argc, char** argv)
 void __attribute__ ((destructor))
 deinit_team()
 {
+	//Team::DeInitTeam();
 	TRACE("deinit_team()\n");
 }
 
@@ -114,11 +116,31 @@ Team::GetNexusDescriptor()
 
 
 void
-Team::ReinitAtFork()
+Team::PrepareFatherAtFork()
+{
+	fForkSem = create_sem(0, "team_fork_sem");
+}
+
+
+void
+Team::SyncFatherAtFork()
+{
+	acquire_sem(fForkSem);
+	delete_sem(fForkSem);
+	fForkSem = -1;
+}
+
+
+void
+Team::ReinitChildAtFork()
 {
 	printf("reinit_at_fork()\n");
 	InitTeam();
-	Thread::ReinitAtFork();
+
+	Thread::ReinitChildAtFork();
+
+	release_sem(fForkSem);
+	fForkSem = -1;
 }
 
 

@@ -82,7 +82,7 @@ Thread::~Thread()
 
 
 void
-Thread::ReinitAtFork()
+Thread::ReinitChildAtFork()
 {
 	TRACE("Process %d reinit thread after fork\n", getpid());
 	gThreadsMap.clear();

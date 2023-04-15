@@ -22,7 +22,7 @@ public:
 
 	static void*		thread_run(void* data);
 
-	static void			ReinitAtFork();
+	static void			ReinitChildAtFork();
 
 	static thread_id	CreateThread();
 

@@ -8,5 +8,6 @@ Application(testthread SOURCES testthread.cpp)
 Application(testteam SOURCES testteam.cpp)
 Application(testfsinfo SOURCES main.cpp)
 Application(test_team_send_data SOURCES test_team_send_data.cpp)
+Application(set_port_owner SOURCES set_port_owner.cpp)
 
 add_subdirectory(port)

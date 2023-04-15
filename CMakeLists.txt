@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
 project(VOS VERSION 0.2.0 LANGUAGES CXX C)
 
-# Log some information.
 message(STATUS "")
 message(STATUS "============= Build environment =============")
 message(STATUS "CMAKE_SYSTEM:                    ${CMAKE_SYSTEM}")
@@ -17,11 +16,23 @@ message(STATUS "CMAKE_CXX_COMPILER:              ${CMAKE_CXX_COMPILER}")
 message(STATUS "CMAKE_AR:                        ${CMAKE_AR}")
 message(STATUS "CMAKE_RANLIB:                    ${CMAKE_RANLIB}")
 message(STATUS "=============================================")
+message(STATUS "BUILDTOOLS_MODE:                 ${BUILDTOOLS_MODE}")
+message(STATUS "BUILDTOOLS_DIR:                  ${BUILDTOOLS_DIR}")
+message(STATUS "BUILD_TESTS:                     ${BUILD_TESTS}")
+message(STATUS "=============================================")
 message(STATUS "")
 
+# TODO shouldn't we resolve an absolute path here? it kind of works
+# only if buildtools is in the project source dir, which...we don't
+# really want to constrain.
+if(NOT BUILDTOOLS_DIR AND NOT BUILDTOOLS_MODE STREQUAL "1") 
+	message( FATAL_ERROR "Buildtools path not defined!" )
+endif()
 
 include(build/engine.cmake)
 
 add_subdirectory(src)
 
-include(build/packages.cmake)
+if(NOT BUILDTOOLS_MODE STREQUAL "1")
+	include(build/packages.cmake)
+endif()

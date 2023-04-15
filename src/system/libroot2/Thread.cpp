@@ -139,46 +139,6 @@ private:
 static ThreadPool init;
 
 
-void*
-Thread::thread_run(void* data)
-{
-	CALLED();
-	ThreadPool::Lock();
-	data_wrap* threadData = (data_wrap*)data;
-
-	if (ioctl(gNexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
-		status_t exitStatus = B_ERROR;
-		delete_sem(gThreadExitSem);
-		pthread_exit(&exitStatus);
-		return NULL;
-	}
-
-	threadData->tid = ThreadPool::CreateThread();
-	ThreadPool::Unlock();
-
-	Thread::Unblock(threadData->father, B_OK);
-	gCurrentThread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
-
-	threadData->func(threadData->data);
-
-	ThreadPool::Lock();
-	gThreadsMap.erase(gCurrentThread);
-	delete gCurrentThread;
-	gCurrentThread = NULL;
-	delete threadData;
-	ThreadPool::Unlock();
-
-	status_t exitStatus = B_OK;
-	if (ioctl(gNexus, NEXUS_THREAD_EXIT, NULL) < 0)
-		exitStatus = B_ERROR;
-
-	// TODO exit callback pthread_key
-	delete_sem(gThreadExitSem);
-	pthread_exit(&exitStatus);
-	return NULL;
-}
-
-
 Thread::Thread()
 {
 	fThread = find_thread(NULL);
@@ -194,6 +154,45 @@ Thread::~Thread()
 	//assert(gettid() == this->fThreadID);
 	delete_sem(fThreadBlockSem);
 	// TODO: pthread_detach
+}
+
+
+void*
+Thread::thread_run(void* data)
+{
+	CALLED();
+	ThreadPool::Lock();
+	if (ioctl(gNexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
+		status_t exitStatus = B_ERROR;
+		delete_sem(gThreadExitSem);
+		pthread_exit(&exitStatus);
+		return NULL;
+	}
+	data_wrap* threadData = (data_wrap*)data;
+	threadData->tid = ThreadPool::CreateThread();
+	ThreadPool::Unlock();
+
+	Thread::Unblock(threadData->father, B_OK);
+	gCurrentThread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
+
+	threadData->func(threadData->data);
+
+	ThreadPool::Lock();
+	gThreadsMap.erase(gCurrentThread);
+	printf("%d is exiting\n", gettid());
+	delete gCurrentThread;
+	gCurrentThread = NULL;
+	delete threadData;
+	ThreadPool::Unlock();
+
+	status_t exitStatus = B_OK;
+	if (ioctl(gNexus, NEXUS_THREAD_EXIT, NULL) < 0)
+		exitStatus = B_ERROR;
+
+	// TODO exit callback pthread_key
+	delete_sem(gThreadExitSem);
+	pthread_exit(&exitStatus);
+	return NULL;
 }
 
 
@@ -221,8 +220,10 @@ Thread::WaitForThread(thread_id id, status_t* _returnCode)
 {
 	ThreadPool::Lock();
 		auto elem = gThreadsMap.find(id);
-		if (elem == end(gThreadsMap))
+		if (elem == end(gThreadsMap)) {
+			ThreadPool::Unlock();
 			return B_BAD_THREAD_ID;
+		}
 		sem_id sem = elem->second->fThreadExitSem;
 	ThreadPool::Unlock();
 
@@ -312,8 +313,6 @@ Thread::SendData(thread_id thread, int32 code, const void* buffer,
 	if (buffer == NULL)
 		return B_ERROR;
 
-	// Blocks if there's already a message
-	// Otherwise copy the msg and return
 	struct nexus_thread_exchange exchange;
 	exchange.op = NEXUS_THREAD_WRITE;
 	exchange.buffer = buffer;
@@ -336,7 +335,6 @@ Thread::ReceiveData(thread_id* sender, void* buffer, size_t bufferSize)
 	if (sender == NULL)
 		return B_ERROR;
 
-	// Blocks if there is no message to read
 	struct nexus_thread_exchange exchange;
 	exchange.op = NEXUS_THREAD_READ;
 	exchange.buffer = buffer;
@@ -353,9 +351,6 @@ Thread::ReceiveData(thread_id* sender, void* buffer, size_t bufferSize)
 bool
 Thread::HasData(thread_id thread)
 {
-	// Return true if there's a message
-	// Blocks if there is no message to read --- boh
-
 	if (thread < 0)
 		return false;
 
@@ -384,11 +379,11 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 }
 
 
+// Unsafe, Deprecated
 status_t
 kill_thread(thread_id thread)
 {
 	UNIMPLEMENTED();
-	// pthread_cancel?
 	return B_BAD_THREAD_ID;
 }
 

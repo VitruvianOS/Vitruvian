@@ -1,3 +1,5 @@
+if(NOT BUILDTOOLS_MODE STREQUAL "1")
+
 add_subdirectory(addattr)
 #add_subdirectory(desklink)
 add_subdirectory(rc)
@@ -26,3 +28,11 @@ Application(system_time SOURCES system_time.cpp)
 Application(translate SOURCES translate.cpp LIBS translation)
 Application(watch SOURCES watch.c LIBS ncurses)
 Application(xres SOURCES xres.cpp)
+
+else()
+
+add_subdirectory(rc)
+
+BuildModeApplication(xres SOURCES xres.cpp)
+
+endif()

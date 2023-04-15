@@ -359,9 +359,7 @@ void
 Area::Unmap()
 {
 	munmap(fAddress, fSize);
-
-
-		unlink(fPath.c_str());
+	unlink(fPath.c_str());
 
 	// TODO: unlink lock
 

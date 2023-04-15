@@ -40,13 +40,8 @@ set(
 	"headers/private/"
 
 	"headers/private/input"
-#	"headers/private/libroot"
-#	"headers/private/print"
 	"headers/private/shared"
 	"headers/private/storage"
-#	"headers/private/system"
-#	"headers/private/tracker"
-
 	"headers/private/system/arch/x86/"
 	"headers/private/kernel/arch/x86/"
 
@@ -64,7 +59,28 @@ set(
 	"headers/config"
 )
 
+set(
+	BUILDTOOLS_MODE_HEADERS
+	"headers/build"
+	"headers/build/config_headers"
+	"headers/config"
 
+	"headers/build/os"
+	"headers/build/os/app"
+	"headers/build/os/drivers"
+	"headers/build/os/interface"
+	"headers/build/os/kernel"
+	"headers/build/os/support"
+	"headers/build/os/storage"
+	"headers/build/os/storage/mime"
+	"headers/build/os/storage/sniffer"
+	"headers/build/os/add-ons/registrar/"
+	"headers/private/system/arch/x86_64/"
+	"headers/private/kernel/arch/"
+	"headers/private/kernel/arch/x86/"
+)
+
+if(NOT BUILDTOOLS_MODE STREQUAL "1")
 # Standard include directories
 include_directories(
 	AFTER
@@ -73,3 +89,10 @@ include_directories(
 	${PRIVATE_HEADERS}
 	${PUBLIC_HEADERS}
 )
+else()
+include_directories(
+	AFTER
+	"headers"
+	${BUILDTOOLS_MODE_HEADERS}
+)
+endif()

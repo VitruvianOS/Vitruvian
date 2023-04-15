@@ -20,7 +20,7 @@
 namespace BKernelPrivate {
 
 
-static BLocker fLock;
+static pthread_mutex_t sLock;
 static std::map<ino_t, std::string> gMap;
 
 
@@ -74,7 +74,7 @@ getPath(ino_t node, const char* name, std::string& path)
 
 	TRACE("getPath %ld %s\n", node, name);
 
-	fLock.Lock();
+	pthread_mutex_lock(&sLock);
 	auto elem = gMap.find(node);
 	if (elem != end(gMap)) {
 		TRACE("getPath %d %s %s\n", node, elem->second.c_str(), name);
@@ -84,10 +84,10 @@ getPath(ino_t node, const char* name, std::string& path)
 			ret += name;
 		}
 		path = ret;
-		fLock.Unlock();
+		pthread_mutex_unlock(&sLock);
 		return B_OK;
 	}
-	fLock.Unlock();
+	pthread_mutex_unlock(&sLock);
 
 	return B_ERROR;
 }
@@ -95,9 +95,9 @@ getPath(ino_t node, const char* name, std::string& path)
 
 static void
 insertPath(ino_t inode, std::string path) {
-	fLock.Lock();
+	pthread_mutex_lock(&sLock);
 	gMap.insert(std::make_pair(inode, path));
-	fLock.Unlock();
+	pthread_mutex_unlock(&sLock);
 }
 
 
@@ -111,7 +111,7 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	CALLED();
 
 	if (fd < 0 && path == NULL)
-		return B_FILE_NOT_FOUND;
+		return B_ENTRY_NOT_FOUND;
 
 	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
@@ -332,7 +332,7 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 	CALLED();
 
 	if (fd < 0 && path == NULL)
-		return B_FILE_NOT_FOUND;
+		return B_ENTRY_NOT_FOUND;
 
 	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
@@ -362,7 +362,7 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 	UNIMPLEMENTED();
 
 	if (fd < 0 && path == NULL)
-		return B_FILE_NOT_FOUND;
+		return B_ENTRY_NOT_FOUND;
 
 	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
@@ -505,7 +505,7 @@ _kern_create_dir(int fd, const char* path, int perms)
 	CALLED();
 
 	if (fd < 0 && path == NULL)
-		return B_FILE_NOT_FOUND;
+		return B_ENTRY_NOT_FOUND;
 
 	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;
@@ -525,7 +525,7 @@ _kern_create_symlink(int fd, const char* path, const char* toPath, int mode)
 	CALLED();
 
 	if (fd < 0 && path == NULL)
-		return B_FILE_NOT_FOUND;
+		return B_ENTRY_NOT_FOUND;
 
 	if (fd == -1 && path[0] != '/')
 		fd = AT_FDCWD;

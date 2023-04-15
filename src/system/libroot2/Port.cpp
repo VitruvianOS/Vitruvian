@@ -295,9 +295,7 @@ write_port(port_id id, int32 msgCode,
 status_t
 set_port_owner(port_id id, team_id team)
 {
-	UNIMPLEMENTED();
-
-	return B_OK;
+	CALLED();
 
 	// TODO: we want to deprecate this function
 	// and introduce a mechanism which requires

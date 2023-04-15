@@ -82,8 +82,9 @@ VirtualDirectoryEntryList::GetNextEntry(BEntry* entry, bool traverse)
 status_t
 VirtualDirectoryEntryList::GetNextRef(entry_ref* ref)
 {
-	BPrivate::Storage::LongDirEntry entry;
-	int32 result = GetNextDirents(&entry, sizeof(entry), 1);
+	BPrivate::Storage::LongDirEntry longEntry;
+	struct dirent* entry = longEntry.dirent();
+	int32 result = GetNextDirents(entry, sizeof(longEntry), 1);
 	if (result < 0)
 		return result;
 	if (result == 0)
@@ -93,7 +94,8 @@ VirtualDirectoryEntryList::GetNextRef(entry_ref* ref)
 	ref->device = entry.d_pdev;
 	ref->directory = entry.d_pino;
 #endif
-	return ref->set_name(entry.d_name);
+	UNIMPLEMENTED();
+	return ref->set_name(entry->d_name);
 }
 
 
@@ -110,10 +112,11 @@ VirtualDirectoryEntryList::GetNextDirents(struct dirent* buffer, size_t length,
 
 	// deal with directories
 	entry_ref ref;
-	#ifdef _VOS_
+#ifndef __VOS__
 	ref.device = buffer->d_pdev;
 	ref.directory = buffer->d_pino;
-	#endif
+#endif
+	UNIMPLEMENTED();
 	if (ref.set_name(buffer->d_name) == B_OK && BEntry(&ref).IsDirectory()) {
 		if (VirtualDirectoryManager* manager
 				= VirtualDirectoryManager::Instance()) {

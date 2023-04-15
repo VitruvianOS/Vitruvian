@@ -50,6 +50,8 @@ target_sources(root PRIVATE
 	${BACKWARD_ENABLE}
 )
 
+add_dependencies(root nexus)
+
 target_include_directories(root PRIVATE
 	"./"
 )

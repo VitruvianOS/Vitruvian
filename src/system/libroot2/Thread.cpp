@@ -25,6 +25,7 @@
 #include "../kernel/nexus/nexus.h"
 
 
+// TODO remove
 extern int gLoadImageFD;
 
 
@@ -36,25 +37,16 @@ public:
 						Thread();
 						~Thread();
 
-	static thread_id	Spawn(thread_func func, const char* name,
-							int32 priority, void* data);
-
 	static status_t		WaitForThread(thread_id id, status_t* _returnCode);
 	static status_t		Resume(thread_id id);
 
 	status_t			Block(uint32 flags, bigtime_t timeout);
 	static status_t		Unblock(thread_id thread, status_t status);
 
-	static status_t		SendData(thread_id thread, int32 code,
-							const void* buffer, size_t buffer_size);
-	status_t			ReceiveData(thread_id* sender,
-							void* buffer, size_t bufferSize);
-	static bool 		HasData(thread_id thread);
+	static void*		thread_run(void* data);
 
 private:
 	friend class ThreadPool;
-
-	static void*		thread_run(void* data);
 
 	thread_id			fThread;
 	sem_id				fThreadBlockSem = -1;
@@ -86,7 +78,7 @@ public:
 	ThreadPool()
 	{
 		_Init();
-		pthread_atfork(NULL, NULL, &_ReinitAtFork);
+		pthread_atfork(NULL, NULL, &ReinitAtFork);
 	}
 
 	static thread_id
@@ -118,13 +110,14 @@ public:
 		pthread_mutex_unlock(&fLock);
 	}
 
-private:
-	static void _ReinitAtFork()
+	static void ReinitAtFork()
 	{
-		TRACE("Process %d reinit thread after fork", getpid());
+		TRACE("Process %d reinit thread after fork\n", getpid());
 		gThreadsMap.clear();
 		_Init();
 	}
+
+private:
 
 	static void _Init()
 	{
@@ -193,25 +186,6 @@ Thread::thread_run(void* data)
 	delete_sem(gThreadExitSem);
 	pthread_exit(&exitStatus);
 	return NULL;
-}
-
-
-thread_id
-Thread::Spawn(thread_func func, const char* name, int32 priority,
-	void* data)
-{
-	data_wrap* dataWrap = new data_wrap();
-	dataWrap->data = data;
-	dataWrap->func = func;
-	dataWrap->father = find_thread(NULL);
-
-	pthread_t pThread;
-	int32 ret = pthread_create(&pThread, NULL, Thread::thread_run, dataWrap);
-	if (ret < 0)
-		return B_ERROR;
-
-	gCurrentThread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
-	return dataWrap->tid;
 }
 
 
@@ -306,65 +280,6 @@ Thread::Unblock(thread_id thread, status_t status)
 }
 
 
-status_t
-Thread::SendData(thread_id thread, int32 code, const void* buffer,
-	size_t bufferSize)
-{
-	if (buffer == NULL)
-		return B_ERROR;
-
-	struct nexus_thread_exchange exchange;
-	exchange.op = NEXUS_THREAD_WRITE;
-	exchange.buffer = buffer;
-	exchange.size = bufferSize;
-	exchange.return_code = code;
-	exchange.receiver = thread;
-
-	if (ioctl(gNexus, NEXUS_THREAD_OP, &exchange) < 0)
-		return B_ERROR;
-
-	return B_OK;
-}
-
-
-status_t
-Thread::ReceiveData(thread_id* sender, void* buffer, size_t bufferSize)
-{
-	CALLED();
-
-	if (sender == NULL)
-		return B_ERROR;
-
-	struct nexus_thread_exchange exchange;
-	exchange.op = NEXUS_THREAD_READ;
-	exchange.buffer = buffer;
-	exchange.size = bufferSize;
-	if (ioctl(gNexus, NEXUS_THREAD_OP, &exchange) < 0)
-		return B_ERROR;
-
-	*sender = exchange.sender;
-
-	return exchange.return_code;
-}
-
-
-bool
-Thread::HasData(thread_id thread)
-{
-	if (thread < 0)
-		return false;
-
-	struct nexus_thread_exchange exchange;
-	exchange.op = NEXUS_THREAD_HAS_DATA;
-	exchange.receiver = thread;
-
-	if (ioctl(gNexus, NEXUS_THREAD_OP, &exchange) < 0)
-		return false;
-
-	return exchange.return_code == B_OK;
-}
-
-
 }
 
 
@@ -375,7 +290,23 @@ thread_id
 spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 {
 	CALLED();
-	return BKernelPrivate::Thread::Spawn(func, name, priority, data);
+
+	BKernelPrivate::data_wrap* dataWrap
+		= new BKernelPrivate::data_wrap();
+	dataWrap->data = data;
+	dataWrap->func = func;
+	dataWrap->father = find_thread(NULL);
+
+	pthread_t pThread;
+	int32 ret = pthread_create(&pThread, NULL,
+		BKernelPrivate::Thread::thread_run, dataWrap);
+	if (ret < 0)
+		return B_ERROR;
+
+	BKernelPrivate::gCurrentThread->Block(B_TIMEOUT,
+		B_INFINITE_TIMEOUT);
+
+	return dataWrap->tid;
 }
 
 
@@ -399,6 +330,7 @@ rename_thread(thread_id thread, const char* newName)
 void
 exit_thread(status_t status)
 {
+	// TODO what about the status?
 	pthread_exit((void*)&status);
 }
 
@@ -413,10 +345,24 @@ on_exit_thread(void (*callback)(void *), void *data)
 
 status_t
 send_data(thread_id thread, int32 code,
-	const void* buffer, size_t buffer_size)
+	const void* buffer, size_t bufferSize)
 {
 	CALLED();
-	return BKernelPrivate::Thread::SendData(thread, code, buffer, buffer_size);
+
+	if (buffer == NULL)
+		return B_ERROR;
+
+	struct nexus_thread_exchange exchange;
+	exchange.op = NEXUS_THREAD_WRITE;
+	exchange.buffer = buffer;
+	exchange.size = bufferSize;
+	exchange.return_code = code;
+	exchange.receiver = thread;
+
+	if (ioctl(BKernelPrivate::gNexus, NEXUS_THREAD_OP, &exchange) < 0)
+		return B_ERROR;
+
+	return B_OK;
 }
 
 
@@ -424,18 +370,37 @@ status_t
 receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 {
 	CALLED();
-	if (BKernelPrivate::gCurrentThread == NULL)
-		return B_BAD_THREAD_ID;
 
-	return BKernelPrivate::gCurrentThread->ReceiveData(sender,
-		buffer, bufferSize);
+	if (sender == NULL)
+		return B_ERROR;
+
+	struct nexus_thread_exchange exchange;
+	exchange.op = NEXUS_THREAD_READ;
+	exchange.buffer = buffer;
+	exchange.size = bufferSize;
+	if (ioctl(BKernelPrivate::gNexus, NEXUS_THREAD_OP, &exchange) < 0)
+		return B_ERROR;
+
+	*sender = exchange.sender;
+
+	return exchange.return_code;
 }
 
 
 bool
 has_data(thread_id thread)
 {
-	return BKernelPrivate::Thread::HasData(thread);
+	if (thread < 0)
+		return false;
+
+	struct nexus_thread_exchange exchange;
+	exchange.op = NEXUS_THREAD_HAS_DATA;
+	exchange.receiver = thread;
+
+	if (ioctl(BKernelPrivate::gNexus, NEXUS_THREAD_OP, &exchange) < 0)
+		return false;
+
+	return exchange.return_code == B_OK;
 }
 
 
@@ -448,7 +413,7 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 		return B_BAD_VALUE;
 
 	info->thread = id;
-	strncpy (info->name, "Unknown", B_OS_NAME_LENGTH);
+	strncpy(info->name, "Unknown", B_OS_NAME_LENGTH);
 	info->name[B_OS_NAME_LENGTH - 1] = '\0';
 	info->state = B_THREAD_RUNNING;
 	info->priority = 5;
@@ -464,7 +429,7 @@ _get_next_thread_info(team_id team, int32* cookie,
 	if (info == NULL || cookie == NULL || size != sizeof(thread_info))
 		return B_BAD_VALUE;
 
-	// Use proc
+	// TODO: Use proc?
 	UNIMPLEMENTED();
 	return B_BAD_VALUE;
 }

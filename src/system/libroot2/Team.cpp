@@ -67,6 +67,7 @@ init_team(int argc, char** argv)
 
 	init_ports();
 
+	// TODO: this has to go
 	if (argv[0] != NULL && strcmp(argv[0], "registrar") <= 0)
 		init_messaging_service();
 }

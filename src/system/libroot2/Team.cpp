@@ -5,6 +5,8 @@
 
 #include "Team.h"
 
+#include <OS.h>
+
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -16,6 +18,8 @@
 
 #include <list>
 #include <string>
+
+#include "Thread.h"
 
 #define DEBUG 3
 #include "KernelDebug.h"
@@ -47,7 +51,9 @@ segv_handler(int sig)
 	debugger("Guru Meditation");
 }
 
+
 // This function is executed before everything else
+// TODO: what about using gcc .init and .fini?
 void __attribute__ ((constructor))
 init_team(int argc, char** argv)
 {
@@ -66,6 +72,8 @@ init_team(int argc, char** argv)
 	Team::InitTeam();
 
 	init_ports();
+
+	pthread_atfork(NULL, NULL, &Team::ReinitAtFork);
 
 	// TODO: this has to go
 	if (argv[0] != NULL && strcmp(argv[0], "registrar") <= 0)
@@ -102,6 +110,13 @@ int
 Team::GetNexusDescriptor()
 {
 	return gNexus;
+}
+
+
+void
+Team::ReinitAtFork()
+{
+	Thread::ReinitAtFork();
 }
 
 
@@ -244,10 +259,5 @@ _kern_get_extended_team_info(team_id teamID, uint32 flags,
 	return B_ERROR;
 }
 
-
-void
-reinit_after_fork() {
-
-}
 
 }

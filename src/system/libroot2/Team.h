@@ -17,6 +17,8 @@ class Team
 public:
 	static void	InitTeam();
 	static void	DeInitTeam();
+	static void ReinitAtFork();
+
 	static int	GetNexusDescriptor();
 };
 

@@ -44,9 +44,10 @@ struct data_wrap {
 static __thread Thread* gCurrentThread;
 static __thread sem_id gThreadExitSem;
 
-static pthread_mutex_t fLock;
+static pthread_mutex_t gLock;
 static std::map<thread_id, Thread*> gThreadsMap;
 static int gNexus = BKernelPrivate::Team::GetNexusDescriptor();
+
 
 // Static initialization for the main thread
 class ThreadPool {
@@ -54,56 +55,9 @@ public:
 
 	ThreadPool()
 	{
-		_Init();
-		pthread_atfork(NULL, NULL, &ReinitAtFork);
+		Thread::_Init();
 	}
 
-	static thread_id
-	CreateThread()
-	{
-		thread_id id = find_thread(NULL);
-		Thread* thread = new Thread();
-
-		gThreadsMap.insert(std::make_pair(id, thread));
-		return id;
-	}
-
-	static Thread* Find(thread_id id)
-	{
-		auto elem = gThreadsMap.find(id);
-		if (elem == end(gThreadsMap))
-			return NULL;
-
-		return elem->second;
-	}
-
-	static void Lock()
-	{
-		pthread_mutex_lock(&fLock);
-	}
-
-	static void Unlock()
-	{
-		pthread_mutex_unlock(&fLock);
-	}
-
-	static void ReinitAtFork()
-	{
-		TRACE("Process %d reinit thread after fork\n", getpid());
-		gThreadsMap.clear();
-		_Init();
-	}
-
-private:
-
-	static void _Init()
-	{
-		pthread_mutex_init(&fLock, NULL);
-		gLoadImageFD = -1;
-		ThreadPool::CreateThread();
-	}
-
-	Thread*			fMainThread;
 };
 
 static ThreadPool init;
@@ -127,11 +81,44 @@ Thread::~Thread()
 }
 
 
+void
+Thread::ReinitAtFork()
+{
+	TRACE("Process %d reinit thread after fork\n", getpid());
+	gThreadsMap.clear();
+	_Init();
+}
+
+
+thread_id
+Thread::CreateThread()
+{
+	thread_id id = find_thread(NULL);
+	Thread* thread = new Thread();
+
+	gThreadsMap.insert(std::make_pair(id, thread));
+	return id;
+}
+
+
+void
+Thread::Lock()
+{
+	pthread_mutex_lock(&gLock);
+}
+
+void
+Thread::Unlock()
+{
+	pthread_mutex_unlock(&gLock);
+}
+
+
 void*
 Thread::thread_run(void* data)
 {
 	CALLED();
-	ThreadPool::Lock();
+	Thread::Lock();
 	if (ioctl(gNexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
 		status_t exitStatus = B_ERROR;
 		delete_sem(gThreadExitSem);
@@ -139,21 +126,21 @@ Thread::thread_run(void* data)
 		return NULL;
 	}
 	data_wrap* threadData = (data_wrap*)data;
-	threadData->tid = ThreadPool::CreateThread();
-	ThreadPool::Unlock();
+	threadData->tid = CreateThread();
+	Thread::Unlock();
 
 	Thread::Unblock(threadData->father, B_OK);
 	gCurrentThread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
 
 	threadData->func(threadData->data);
 
-	ThreadPool::Lock();
+	Thread::Lock();
 	gThreadsMap.erase(gCurrentThread);
 	printf("%d is exiting\n", gettid());
 	delete gCurrentThread;
 	gCurrentThread = NULL;
 	delete threadData;
-	ThreadPool::Unlock();
+	Thread::Unlock();
 
 	status_t exitStatus = B_OK;
 	if (ioctl(gNexus, NEXUS_THREAD_EXIT, NULL) < 0)
@@ -169,14 +156,14 @@ Thread::thread_run(void* data)
 status_t
 Thread::WaitForThread(thread_id id, status_t* _returnCode)
 {
-	ThreadPool::Lock();
+	Thread::Lock();
 		auto elem = gThreadsMap.find(id);
 		if (elem == end(gThreadsMap)) {
-			ThreadPool::Unlock();
+			Thread::Unlock();
 			return B_BAD_THREAD_ID;
 		}
 		sem_id sem = elem->second->fThreadExitSem;
-	ThreadPool::Unlock();
+	Thread::Unlock();
 
 	status_t ret = acquire_sem(sem);
 
@@ -236,17 +223,17 @@ Thread::Block(uint32 flags, bigtime_t timeout)
 status_t
 Thread::Unblock(thread_id thread, status_t status)
 {
-	ThreadPool::Lock();
+	Thread::Lock();
 	auto elem = gThreadsMap.find(thread);
 	if (elem == end(gThreadsMap)) {
-		ThreadPool::Unlock();
+		Thread::Unlock();
 		return B_BAD_THREAD_ID;
 	}
 	Thread* ret = elem->second;
 	sem_id blockSem = -1;
 	if (ret != NULL)
 		blockSem = ret->fThreadBlockSem;
-	ThreadPool::Unlock();
+	Thread::Unlock();
 
 	if (blockSem != -1) {
 		release_sem(blockSem);
@@ -254,6 +241,15 @@ Thread::Unblock(thread_id thread, status_t status)
 	}
 
 	return B_ERROR;
+}
+
+
+void
+Thread::_Init()
+{
+	pthread_mutex_init(&gLock, NULL);
+	gLoadImageFD = -1;
+	CreateThread();
 }
 
 

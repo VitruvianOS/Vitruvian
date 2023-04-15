@@ -22,8 +22,17 @@ public:
 
 	static void*		thread_run(void* data);
 
+	static void			ReinitAtFork();
+
+	static thread_id	CreateThread();
+
+	static void			Lock();
+	static void			Unlock();
+
 private:
 	friend class ThreadPool;
+
+	static void			_Init();
 
 	thread_id			fThread;
 	sem_id				fThreadBlockSem = -1;

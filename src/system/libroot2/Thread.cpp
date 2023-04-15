@@ -21,6 +21,7 @@
 
 #include "KernelDebug.h"
 #include "Team.h"
+#include "Thread.h"
 
 #include "../kernel/nexus/nexus.h"
 
@@ -32,29 +33,6 @@ extern int gLoadImageFD;
 namespace BKernelPrivate {
 
 
-class Thread {
-public:
-						Thread();
-						~Thread();
-
-	static status_t		WaitForThread(thread_id id, status_t* _returnCode);
-	static status_t		Resume(thread_id id);
-
-	status_t			Block(uint32 flags, bigtime_t timeout);
-	static status_t		Unblock(thread_id thread, status_t status);
-
-	static void*		thread_run(void* data);
-
-private:
-	friend class ThreadPool;
-
-	thread_id			fThread;
-	sem_id				fThreadBlockSem = -1;
-
-	sem_id				fThreadExitSem;
-};
-
-
 struct data_wrap {
 	thread_func func;
 	void* data;
@@ -62,7 +40,6 @@ struct data_wrap {
 
 	pid_t tid;
 };
-
 
 static __thread Thread* gCurrentThread;
 static __thread sem_id gThreadExitSem;

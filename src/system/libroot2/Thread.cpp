@@ -86,6 +86,7 @@ Thread::ReinitAtFork()
 {
 	TRACE("Process %d reinit thread after fork\n", getpid());
 	gThreadsMap.clear();
+	gNexus = BKernelPrivate::Team::GetNexusDescriptor();
 	_Init();
 }
 

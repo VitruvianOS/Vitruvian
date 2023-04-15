@@ -116,6 +116,8 @@ Team::GetNexusDescriptor()
 void
 Team::ReinitAtFork()
 {
+	printf("reinit_at_fork()\n");
+	InitTeam();
 	Thread::ReinitAtFork();
 }
 

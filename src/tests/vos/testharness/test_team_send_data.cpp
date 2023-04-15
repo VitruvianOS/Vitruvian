@@ -14,15 +14,21 @@ int main(void)
 		return;
 
 	if (team == 0) {
-		send_data(father, code, (void *)buf, strlen(buf));
+		status_t ret = send_data(father, code, (void *)buf, strlen(buf));
+		if (ret != B_OK)
+			printf("FAIL\n");
 		return;
 	}
 
 	char recBuf[512];
 	thread_id sender;
 
-	code = receive_data(&sender, (void *)recBuf, sizeof(recBuf));
+	int32 retCode = receive_data(&sender, (void *)recBuf, sizeof(recBuf));
 
-	printf("exit");
+	if (retCode != 63)
+		printf("FAIL\n");
+	else
+		printf("SUCCESS\n");
+
 	return 0;
 }

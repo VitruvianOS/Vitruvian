@@ -8,6 +8,9 @@ thread_test(void *data)
    int32 code;
    char buf[512];
 
+   if (rename_thread(find_thread(NULL), "yawning") != B_OK)
+        printf("renaming thread FAIL");
+
    printf("testthread (%s):thread %d should have data\n",
     	(has_data(find_thread(NULL)) == true) ? "pass" : "FAIL", find_thread(NULL));  
 

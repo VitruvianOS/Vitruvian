@@ -296,7 +296,19 @@ kill_thread(thread_id thread)
 status_t
 rename_thread(thread_id thread, const char* newName)
 {
-	UNIMPLEMENTED();
+	CALLED();
+
+	if (newName == NULL)
+		return B_ERROR;
+
+	struct nexus_thread_exchange exchange;
+	exchange.op = NEXUS_THREAD_SET_NAME;
+	exchange.buffer = newName;
+	exchange.receiver = thread;
+
+	if (ioctl(BKernelPrivate::gNexus, NEXUS_THREAD_OP, &exchange) < 0)
+		return B_ERROR;
+
 	return B_OK;
 }
 

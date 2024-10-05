@@ -67,8 +67,8 @@ SystemWatcher::Run()
 			char padding[NLMSG_HDRLEN];
 		};
 
-		struct cn_msg msg;
 		enum proc_cn_mcast_op op;
+		struct cn_msg msg;
 	} __attribute__((packed, aligned(NLMSG_ALIGNTO))) request;
 
     memset(&request, 0, sizeof(request));

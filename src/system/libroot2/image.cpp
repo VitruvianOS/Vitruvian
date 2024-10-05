@@ -31,8 +31,10 @@ public:
 
 		void* image = dlopen(path, RTLD_LAZY);
 
-		if (image == NULL)
+		if (image == NULL) {
+			printf("%s\n", dlerror());
 			return B_ERROR;
+		}
 
 		fLoadedAddOns.insert(std::make_pair(++fId, image));
 
@@ -58,7 +60,7 @@ public:
 	static status_t FindSymbol(image_id id, const char* name,
 		int32 sclass, void** pptr) {
 
-		if (id <= 0 || name == NULL || sclass <= 0 || pptr == NULL)
+		if (id < 0 || name == NULL || pptr == NULL)
 			return B_BAD_VALUE;
 
 		BKernelPrivate::MutexLocker _(&fLock);
@@ -80,9 +82,8 @@ private:
 	static void* _Find(image_id id) {
 		auto addon = fLoadedAddOns.find(id);
 
-		if (addon == end(fLoadedAddOns)) {
+		if (addon == end(fLoadedAddOns))
 			return NULL;
-		}
 
 		return addon->second;
 	}
@@ -94,7 +95,7 @@ private:
 
 
 std::map<image_id, void*> ImagePool::fLoadedAddOns;
-image_id ImagePool::fId;
+image_id ImagePool::fId = -1;
 pthread_mutex_t ImagePool::fLock = PTHREAD_MUTEX_INITIALIZER;
 
 

@@ -20,15 +20,15 @@ macro( DeclareDependency name )
 
 endmacro()
 
-if(NOT BUILDTOOLS_MODE STREQUAL "1")
+#if(NOT BUILDTOOLS_MODE STREQUAL "1")
 
-set(BUILD_ICU ON)
-set(ICU_BUILD_VERSION 57.2)
-set(HEADERS_PATH_BASE "/usr/include")
+#set(BUILD_ICU ON)
+#set(ICU_BUILD_VERSION 57.2)
+#set(HEADERS_PATH_BASE "/usr/include")
 
-add_subdirectory(external/icu-cmake)
+#add_subdirectory(external/icu-cmake)
 
-endif()
+#endif()
 
 add_subdirectory(external/backward-cpp)
 

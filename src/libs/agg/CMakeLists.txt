@@ -1,4 +1,4 @@
-include_directories(${FREETYPE_INCLUDES})
+find_package(Freetype REQUIRED)
 
 AddOn(
 	agg
@@ -33,3 +33,7 @@ AddOn(
 
 	font_freetype/agg_font_freetype.cpp
 )
+
+target_include_directories(agg PRIVATE ${FREETYPE_INCLUDE_DIRS})
+target_link_libraries(agg ${FREETYPE_LIBRARY})
+

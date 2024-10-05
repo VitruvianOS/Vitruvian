@@ -10,5 +10,5 @@ Application(
 	SudokuView.cpp
 	SudokuWindow.cpp
 
-	LIBS tracker shared
+	LIBS tracker shared localestub
 )

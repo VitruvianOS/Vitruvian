@@ -1,13 +1,13 @@
+find_package(ICU REQUIRED COMPONENTS i18n uc dt in io)
+
 AddOn(
 	be
 	SHARED
 
-	LIBS root icon agg ${ZLIB_LIBRARIES} pthread localestub shared
+	LIBS root icon ${ICU_LIBRARIES} agg ${ZLIB_LIBRARIES} pthread localestub shared
 )
 
 UsePrivateHeaders(be app interface kernel print shared locale libroot shared system)
-
-target_link_libraries(be PUBLIC icu)
 
 
 AddOn(

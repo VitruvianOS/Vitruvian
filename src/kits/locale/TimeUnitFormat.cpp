@@ -23,6 +23,10 @@
 #include <Locale.h>
 #include <LocaleRoster.h>
 
+
+U_NAMESPACE_USE
+
+
 // maps our unit element to the corresponding ICU unit
 static const TimeUnit::UTimeUnitFields skUnitMap[] = {
 	TimeUnit::UTIMEUNIT_YEAR,
@@ -121,8 +125,10 @@ BTimeUnitFormat::Format(BString& buffer, const int32 value,
 		= new TimeUnitAmount((double)value, skUnitMap[unit], icuStatus);
 	if (timeUnitAmount == NULL)
 		return B_NO_MEMORY;
-	if (!U_SUCCESS(icuStatus))
+	if (!U_SUCCESS(icuStatus)) {
+		delete timeUnitAmount;
 		return B_ERROR;
+	}
 
 	Formattable formattable;
 	formattable.adoptObject(timeUnitAmount);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2011, Haiku, Inc.
+ * Copyright 2003-2019, Haiku, Inc.
  * Distributed under the terms of the MIT Licence.
  */
 #ifndef _COUNTRY_H_
@@ -32,10 +32,14 @@ public:
 								BCountry& operator=(const BCountry& other);
 								~BCountry();
 
+			status_t			SetTo(const char* countryCode);
+			status_t			InitCheck() const;
+
 			status_t			GetNativeName(BString& name) const;
 			status_t			GetName(BString& name,
 									const BLanguage* displayLanguage = NULL
 									) const;
+			status_t			GetPreferredLanguage(BLanguage&) const;
 
 			const char*			Code() const;
 									// ISO-3166

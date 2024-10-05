@@ -36,6 +36,9 @@
 #include <unicode/timezone.h>
 
 
+U_NAMESPACE_USE
+
+
 namespace BPrivate {
 
 
@@ -129,7 +132,7 @@ LocaleRosterData::LocaleRosterData(const BLanguage& language,
 	:
 	fLock("LocaleRosterData"),
 	fDefaultLocale(&language, &conventions),
-	fIsFilesystemTranslationPreferred(false),
+	fIsFilesystemTranslationPreferred(true),
 	fAreResourcesLoaded(false)
 {
 	fInitStatus = _Initialize();
@@ -332,6 +335,7 @@ LocaleRosterData::_InitializeCatalogAddOns()
 	if (!defaultCatalogAddOnInfo)
 		return B_NO_MEMORY;
 
+	defaultCatalogAddOnInfo->MakeSureItsLoaded();
 	defaultCatalogAddOnInfo->fInstantiateFunc = DefaultCatalog::Instantiate;
 	defaultCatalogAddOnInfo->fCreateFunc = DefaultCatalog::Create;
 	fCatalogAddOnInfos.AddItem((void*)defaultCatalogAddOnInfo);
@@ -365,13 +369,15 @@ LocaleRosterData::_InitializeCatalogAddOns()
 						&& strcmp(dent->d_name, "..") != 0
 						&& strcmp(dent->d_name, "x86") != 0
 						&& strcmp(dent->d_name, "x86_gcc2") != 0) {
+
 					// we have found (what should be) a catalog-add-on:
 					#ifndef __VOS__
-					eref.device = dent->d_pdev;
-					eref.directory = dent->d_pino;
+ 					eref.device = dent->d_pdev;
+ 					eref.directory = dent->d_pino;
 					#else
 						UNIMPLEMENTED();
 					#endif
+
 					eref.set_name(dent->d_name);
 					entry.SetTo(&eref, true);
 						// traverse through any links to get to the real thang!
@@ -403,8 +409,12 @@ LocaleRosterData::_InitializeCatalogAddOns()
 						CatalogAddOnInfo* addOnInfo
 							= new(std::nothrow) CatalogAddOnInfo(dent->d_name,
 								addOnFolderName, priority);
-						if (addOnInfo)
-							fCatalogAddOnInfos.AddItem((void*)addOnInfo);
+						if (addOnInfo != NULL) {
+							if (addOnInfo->MakeSureItsLoaded())
+								fCatalogAddOnInfos.AddItem((void*)addOnInfo);
+							else
+								delete addOnInfo;
+						}
 					}
 				}
 				// Bump the dirent-pointer by length of the dirent just handled:

@@ -1,6 +1,6 @@
 /*
  * Copyright 2003-2011, Axel Dörfler, axeld@pinc-software.de.
- * Copyright 2009-2010, Adrien Destugues, pulkomandy@gmail.com.
+ * Copyright 2009-2019, Adrien Destugues, pulkomandy@gmail.com.
  * Distributed under the terms of the MIT License.
  */
 
@@ -28,10 +28,14 @@
 #include <stdlib.h>
 
 
+U_NAMESPACE_USE
+
+
 BCountry::BCountry(const char* countryCode)
 	:
-	fICULocale(new icu::Locale("", countryCode))
+	fICULocale(NULL)
 {
+	SetTo(countryCode);
 }
 
 
@@ -48,7 +52,10 @@ BCountry::operator=(const BCountry& other)
 	if (this == &other)
 		return *this;
 
-	*fICULocale = *other.fICULocale;
+	if (!fICULocale)
+		fICULocale = new icu::Locale(*other.fICULocale);
+	else
+		*fICULocale = *other.fICULocale;
 
 	return *this;
 }
@@ -61,10 +68,37 @@ BCountry::~BCountry()
 
 
 status_t
+BCountry::SetTo(const char* countryCode)
+{
+	delete fICULocale;
+	fICULocale = new icu::Locale("", countryCode);
+
+	return InitCheck();
+}
+
+
+status_t
+BCountry::InitCheck() const
+{
+	if (fICULocale == NULL)
+		return B_NO_MEMORY;
+
+	if (fICULocale->isBogus())
+		return B_BAD_DATA;
+
+	return B_OK;
+}
+
+
+status_t
 BCountry::GetNativeName(BString& name) const
 {
+	status_t valid = InitCheck();
+	if (valid != B_OK)
+		return valid;
+
 	UnicodeString string;
-	fICULocale->getDisplayName(*fICULocale, string);
+	fICULocale->getDisplayCountry(*fICULocale, string);
 	string.toTitle(NULL, *fICULocale);
 
 	name.Truncate(0);
@@ -78,7 +112,10 @@ BCountry::GetNativeName(BString& name) const
 status_t
 BCountry::GetName(BString& name, const BLanguage* displayLanguage) const
 {
-	status_t status = B_OK;
+	status_t status = InitCheck();
+	if (status != B_OK)
+		return status;
+
 	BString appLanguage;
 	if (displayLanguage == NULL) {
 		BMessage preferredLanguages;
@@ -92,7 +129,7 @@ BCountry::GetName(BString& name, const BLanguage* displayLanguage) const
 
 	if (status == B_OK) {
 		UnicodeString uString;
-		fICULocale->getDisplayName(Locale(appLanguage), uString);
+		fICULocale->getDisplayCountry(Locale(appLanguage), uString);
 		name.Truncate(0);
 		BStringByteSink stringConverter(&name);
 		uString.toUTF8(stringConverter);
@@ -102,9 +139,42 @@ BCountry::GetName(BString& name, const BLanguage* displayLanguage) const
 }
 
 
+status_t
+BCountry::GetPreferredLanguage(BLanguage& language) const
+{
+#if U_ICU_VERSION_MAJOR_NUM < 63
+	return ENOSYS;
+#else
+	status_t status = InitCheck();
+	if (status != B_OK)
+		return status;
+
+	icu::Locale* languageLocale = fICULocale->clone();
+	if (languageLocale == NULL)
+		return B_NO_MEMORY;
+
+	UErrorCode icuError = U_ZERO_ERROR;
+	languageLocale->addLikelySubtags(icuError);
+
+	if (U_FAILURE(icuError))
+		return B_ERROR;
+
+	status = language.SetTo(languageLocale->getLanguage());
+
+	delete languageLocale;
+
+	return status;
+#endif
+}
+
+
 const char*
 BCountry::Code() const
 {
+	status_t status = InitCheck();
+	if (status != B_OK)
+		return NULL;
+
 	return fICULocale->getCountry();
 }
 
@@ -112,6 +182,10 @@ BCountry::Code() const
 status_t
 BCountry::GetIcon(BBitmap* result) const
 {
+	status_t status = InitCheck();
+	if (status != B_OK)
+		return status;
+
 	return BLocaleRoster::Default()->GetFlagIconForCountry(result, Code());
 }
 
@@ -119,6 +193,10 @@ BCountry::GetIcon(BBitmap* result) const
 status_t
 BCountry::GetAvailableTimeZones(BMessage* timeZones) const
 {
+	status_t status = InitCheck();
+	if (status != B_OK)
+		return status;
+
 	return BLocaleRoster::Default()->GetAvailableTimeZonesForCountry(timeZones,
 		Code());
 }

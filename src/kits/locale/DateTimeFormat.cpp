@@ -22,6 +22,9 @@
 #include <unicode/smpdtfmt.h>
 
 
+U_NAMESPACE_USE
+
+
 BDateTimeFormat::BDateTimeFormat(const BLocale* locale)
 	: BFormat(locale)
 {
@@ -101,7 +104,7 @@ BDateTimeFormat::Format(char* target, size_t maxSize, time_t time,
 	BString format;
 	fConventions.GetDateTimeFormat(dateStyle, timeStyle, format);
 	ObjectDeleter<DateFormat> dateFormatter(_CreateDateTimeFormatter(format));
-	if (dateFormatter.Get() == NULL)
+	if (!dateFormatter.IsSet())
 		return B_NO_MEMORY;
 
 	UnicodeString icuString;
@@ -125,13 +128,13 @@ BDateTimeFormat::Format(BString& target, const time_t time,
 	BString format;
 	fConventions.GetDateTimeFormat(dateStyle, timeStyle, format);
 	ObjectDeleter<DateFormat> dateFormatter(_CreateDateTimeFormatter(format));
-	if (dateFormatter.Get() == NULL)
+	if (!dateFormatter.IsSet())
 		return B_NO_MEMORY;
 
 	if (timeZone != NULL) {
 		ObjectDeleter<TimeZone> icuTimeZone(
 			TimeZone::createTimeZone(timeZone->ID().String()));
-		if (icuTimeZone.Get() == NULL)
+		if (!icuTimeZone.IsSet())
 			return B_NO_MEMORY;
 		dateFormatter->setTimeZone(*icuTimeZone.Get());
 	}

@@ -16,6 +16,7 @@
 #include <Autolock.h>
 #include <Catalog.h>
 #include <CatalogData.h>
+#include <DefaultCatalog.h>
 #include <Debug.h>
 #include <Entry.h>
 #include <FormattingConventions.h>
@@ -149,14 +150,12 @@ MutableLocaleRoster::CreateCatalog(const char* type, const char* signature,
 	for (int32 i = 0; i < count; ++i) {
 		CatalogAddOnInfo* info = (CatalogAddOnInfo*)
 			fData->fCatalogAddOnInfos.ItemAt(i);
-		if (info->fName.ICompare(type)!=0 || !info->MakeSureItsLoaded()
-			|| !info->fCreateFunc)
+		if (info->fName.ICompare(type) != 0 || !info->fCreateFunc)
 			continue;
 
 		BCatalogData* catalog = info->fCreateFunc(signature, language);
-		if (catalog) {
+		if (catalog != NULL) {
 			info->fLoadedCatalogs.AddItem(catalog);
-			info->UnloadIfPossible();
 			return catalog;
 		}
 	}
@@ -188,21 +187,23 @@ MutableLocaleRoster::LoadCatalog(const entry_ref& catalogOwner,
 		CatalogAddOnInfo* info = (CatalogAddOnInfo*)
 			fData->fCatalogAddOnInfos.ItemAt(i);
 
-		if (!info->MakeSureItsLoaded() || !info->fInstantiateFunc)
+		if (!info->fInstantiateFunc)
 			continue;
 		BMessage languages;
-		if (language)
+		if (language != NULL) {
 			// try to load catalogs for the given language:
 			languages.AddString("language", language);
-		else
+		} else {
 			// try to load catalogs for one of the preferred languages:
 			GetPreferredLanguages(&languages);
+		}
 
 		BCatalogData* catalog = NULL;
 		const char* lang;
-		for (int32 l=0; languages.FindString("language", l, &lang)==B_OK; ++l) {
+		for (int32 l = 0; languages.FindString("language", l, &lang) == B_OK;
+			++l) {
 			catalog = info->fInstantiateFunc(catalogOwner, lang, fingerprint);
-			if (catalog)
+			if (catalog != NULL)
 				info->fLoadedCatalogs.AddItem(catalog);
 			// Chain-load catalogs for languages that depend on
 			// other languages.
@@ -212,7 +213,7 @@ MutableLocaleRoster::LoadCatalog(const entry_ref& catalogOwner,
 			// to "english"):
 			int32 pos;
 			BString langName(lang);
-			BCatalogData* currCatalog = catalog;
+			BCatalogData* currentCatalog = catalog;
 			BCatalogData* nextCatalog = NULL;
 			while ((pos = langName.FindLast('_')) >= 0) {
 				// language is based on parent, so we load that, too:
@@ -220,19 +221,121 @@ MutableLocaleRoster::LoadCatalog(const entry_ref& catalogOwner,
 				langName.Truncate(pos);
 				nextCatalog = info->fInstantiateFunc(catalogOwner,
 					langName.String(), fingerprint);
-				if (nextCatalog) {
+				if (nextCatalog != NULL) {
 					info->fLoadedCatalogs.AddItem(nextCatalog);
-					if(currCatalog)
-						currCatalog->SetNext(nextCatalog);
+					if (currentCatalog != NULL)
+						currentCatalog->SetNext(nextCatalog);
 					else
 						catalog = nextCatalog;
-					currCatalog = nextCatalog;
+					currentCatalog = nextCatalog;
 				}
 			}
 			if (catalog != NULL)
 				return catalog;
 		}
-		info->UnloadIfPossible();
+	}
+
+	return NULL;
+}
+
+
+/*
+ * Loads a catalog for the given signature and language.
+ *
+ * Only the default catalog type is searched, and only the standard system
+ * directories.
+ *
+ * If a catalog depends on another language (as 'english-british' depends
+ * on 'english') the dependant catalogs are automatically loaded, too.
+ * So it is perfectly possible that this method returns a catalog-chain
+ * instead of a single catalog.
+ * NULL is returned if no matching catalog could be found.
+ */
+BCatalogData*
+MutableLocaleRoster::LoadCatalog(const char* signature,
+	const char* language) const
+{
+	BAutolock lock(fData->fLock);
+	if (!lock.IsLocked())
+		return NULL;
+
+	BMessage languages;
+	if (language != NULL) {
+		// try to load catalogs for the given language:
+		languages.AddString("language", language);
+	} else {
+		// try to load catalogs for one of the preferred languages:
+		GetPreferredLanguages(&languages);
+	}
+
+
+	int32 count = fData->fCatalogAddOnInfos.CountItems();
+	CatalogAddOnInfo* defaultCatalogInfo = NULL;
+	for (int32 i = 0; i < count; ++i) {
+		CatalogAddOnInfo* info = (CatalogAddOnInfo*)
+			fData->fCatalogAddOnInfos.ItemAt(i);
+		if (info->fInstantiateFunc
+				== BPrivate::DefaultCatalog::Instantiate) {
+			defaultCatalogInfo = info;
+			break;
+		}
+	}
+
+	if (defaultCatalogInfo == NULL)
+		return NULL;
+
+	BPrivate::DefaultCatalog* catalog = NULL;
+	const char* lang;
+	for (int32 l = 0; languages.FindString("language", l, &lang) == B_OK; ++l) {
+		catalog = new (std::nothrow) BPrivate::DefaultCatalog(NULL, signature,
+			lang);
+
+		if (catalog != NULL) {
+			if (catalog->InitCheck() != B_OK
+				|| catalog->ReadFromStandardLocations() != B_OK) {
+				delete catalog;
+				catalog = NULL;
+			} else {
+				defaultCatalogInfo->fLoadedCatalogs.AddItem(catalog);
+			}
+		}
+
+		// Chain-load catalogs for languages that depend on
+		// other languages.
+		// The current implementation uses the filename in order to
+		// detect dependencies (parenthood) between languages (it
+		// traverses from "english_british_oxford" to "english_british"
+		// to "english"):
+		int32 pos;
+		BString langName(lang);
+		BCatalogData* currentCatalog = catalog;
+		BPrivate::DefaultCatalog* nextCatalog = NULL;
+		while ((pos = langName.FindLast('_')) >= 0) {
+			// language is based on parent, so we load that, too:
+			// (even if the parent catalog was not found)
+			langName.Truncate(pos);
+			nextCatalog = new (std::nothrow) BPrivate::DefaultCatalog(NULL,
+				signature, langName.String());
+
+			if (nextCatalog == NULL)
+				continue;
+
+			if (nextCatalog->InitCheck() != B_OK
+				|| nextCatalog->ReadFromStandardLocations() != B_OK) {
+				delete nextCatalog;
+				continue;
+			}
+
+			defaultCatalogInfo->fLoadedCatalogs.AddItem(nextCatalog);
+
+			if (currentCatalog != NULL)
+				currentCatalog->SetNext(nextCatalog);
+			else
+				catalog = nextCatalog;
+			currentCatalog = nextCatalog;
+		}
+		if (catalog != NULL)
+			return catalog;
 	}
 
 	return NULL;
@@ -242,7 +345,6 @@ MutableLocaleRoster::LoadCatalog(const entry_ref& catalogOwner,
 /*
  * unloads the given catalog (or rather: catalog-chain).
  * Every single catalog of the chain will be deleted automatically.
- * Add-ons that have no more current catalogs are unloaded, too.
  */
 status_t
 MutableLocaleRoster::UnloadCatalog(BCatalogData* catalog)
@@ -266,7 +368,6 @@ MutableLocaleRoster::UnloadCatalog(BCatalogData* catalog)
 			if (info->fLoadedCatalogs.HasItem(catalog)) {
 				info->fLoadedCatalogs.RemoveItem(catalog);
 				delete catalog;
-				info->UnloadIfPossible();
 				res = B_OK;
 				break;
 			}

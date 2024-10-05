@@ -26,6 +26,9 @@
 #include <unicode/locid.h>
 
 
+U_NAMESPACE_USE
+
+
 BLanguage::BLanguage()
 	:
 	fDirection(B_LEFT_TO_RIGHT),
@@ -65,6 +68,9 @@ BLanguage::SetTo(const char* language)
 	fICULocale = new icu::Locale(language);
 	if (fICULocale == NULL)
 		return B_NO_MEMORY;
+
+	if (fICULocale->isBogus())
+		return B_BAD_VALUE;
 
 	return B_OK;
 }

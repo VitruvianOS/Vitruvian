@@ -10,7 +10,7 @@ Application(
 	StyledEditView.cpp
 	StyledEditWindow.cpp
 
-	LIBS tracker shared translation translatorutils textencoding
+	LIBS tracker shared translation translatorutils textencoding localestub
 )
 
 UsePrivateHeaders(StyledEdit textencoding tracker)

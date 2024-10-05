@@ -24,11 +24,15 @@ public:
 								BCatalog(const entry_ref& catalogOwner,
 									const char* language = NULL,
 									uint32 fingerprint = 0);
+								BCatalog(const char* signature,
+									const char* language = NULL);
+
 	virtual						~BCatalog();
 
 			const char*			GetString(const char* string,
 									const char* context = NULL,
-									const char* comment = NULL);
+									const char* comment = NULL)
+									__attribute__((format_arg(2)));
 			const char*			GetString(uint32 id);
 
 			status_t			GetData(const char* name, BMessage* msg);
@@ -41,6 +45,8 @@ public:
 			status_t			SetTo(const entry_ref& catalogOwner,
 									const char* language = NULL,
 									uint32 fingerprint = 0);
+			status_t			SetTo(const char* signature,
+									const char* language = NULL);
 
 			status_t			InitCheck() const;
 			int32				CountItems() const;
@@ -93,29 +99,32 @@ private:
 
 #else
 
+#ifndef B_CATALOG
+#define B_CATALOG BLocaleRoster::Default()->GetCatalog()
+#endif
+
 // Translation macros which may be used to shorten translation requests:
 #undef B_TRANSLATE
 #define B_TRANSLATE(string) \
-	BLocaleRoster::Default()->GetCatalog()->GetString((string), \
-		B_TRANSLATION_CONTEXT)
+	B_CATALOG->GetString((string), B_TRANSLATION_CONTEXT)
 
 #undef B_TRANSLATE_CONTEXT
 #define B_TRANSLATE_CONTEXT(string, context) \
-	BLocaleRoster::Default()->GetCatalog()->GetString((string), (context))
+	B_CATALOG->GetString((string), (context))
 
 #undef B_TRANSLATE_COMMENT
 #define B_TRANSLATE_COMMENT(string, comment) \
-	BLocaleRoster::Default()->GetCatalog()->GetString((string), \
+	B_CATALOG->GetString((string), \
 		B_TRANSLATION_CONTEXT, (comment))
 
 #undef B_TRANSLATE_ALL
 #define B_TRANSLATE_ALL(string, context, comment) \
-	BLocaleRoster::Default()->GetCatalog()->GetString((string), (context), \
+	B_CATALOG->GetString((string), (context), \
 		(comment))
 
 #undef B_TRANSLATE_ID
 #define B_TRANSLATE_ID(id) \
-	BLocaleRoster::Default()->GetCatalog()->GetString((id))
+	B_CATALOG->GetString((id))
 
 #undef B_TRANSLATE_SYSTEM_NAME
 #define B_TRANSLATE_SYSTEM_NAME(string) \

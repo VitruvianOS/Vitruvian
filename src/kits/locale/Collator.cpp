@@ -22,6 +22,9 @@
 #include <unicode/tblcoll.h>
 
 
+U_NAMESPACE_USE
+
+
 BCollator::BCollator()
 	:
 	fIgnorePunctuation(true)
@@ -118,6 +121,9 @@ BCollator::IgnorePunctuation() const
 status_t
 BCollator::SetNumericSorting(bool enable)
 {
+	if (fICUCollator == NULL)
+		return B_NO_INIT;
+
 	UErrorCode error = U_ZERO_ERROR;
 	fICUCollator->setAttribute(UCOL_NUMERIC_COLLATION,
 		enable ? UCOL_ON : UCOL_OFF, error);
@@ -169,8 +175,10 @@ BCollator::GetSortKey(const char* string, BString* key) const
 int
 BCollator::Compare(const char* s1, const char* s2) const
 {
-	// TODO : handle fIgnorePunctuation
+	if (fICUCollator == NULL)
+		return strcmp(s1, s2);
 
+	// TODO : handle fIgnorePunctuation
 	UErrorCode error = U_ZERO_ERROR;
 	return fICUCollator->compare(s1, s2, error);
 }
@@ -219,6 +227,9 @@ BCollator::Instantiate(BMessage* archive)
 status_t
 BCollator::SetStrength(int8 strength) const
 {
+	if (fICUCollator == NULL)
+		return B_NO_INIT;
+
 	if (strength == B_COLLATE_DEFAULT)
 		strength = B_COLLATE_TERTIARY;
 

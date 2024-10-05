@@ -33,6 +33,9 @@
 #include <stdlib.h>
 
 
+U_NAMESPACE_USE
+
+
 // #pragma mark - helpers
 
 
@@ -431,7 +434,7 @@ BFormattingConventions::GetDateFormat(BDateFormatStyle style,
 
 	ObjectDeleter<DateFormat> dateFormatter(
 		DateFormat::createDateInstance((DateFormat::EStyle)style, *fICULocale));
-	if (dateFormatter.Get() == NULL)
+	if (!dateFormatter.IsSet())
 		return B_NO_MEMORY;
 
 	SimpleDateFormat* dateFormatterImpl
@@ -464,7 +467,7 @@ BFormattingConventions::GetTimeFormat(BTimeFormatStyle style,
 
 	ObjectDeleter<DateFormat> timeFormatter(
 		DateFormat::createTimeInstance((DateFormat::EStyle)style, *fICULocale));
-	if (timeFormatter.Get() == NULL)
+	if (!timeFormatter.IsSet())
 		return B_NO_MEMORY;
 
 	SimpleDateFormat* timeFormatterImpl
@@ -508,7 +511,7 @@ BFormattingConventions::GetDateTimeFormat(BDateFormatStyle dateStyle,
 	ObjectDeleter<DateFormat> dateFormatter(
 		DateFormat::createDateTimeInstance((DateFormat::EStyle)dateStyle,
 			(DateFormat::EStyle)timeStyle, *fICULocale));
-	if (dateFormatter.Get() == NULL)
+	if (!dateFormatter.IsSet())
 		return B_NO_MEMORY;
 
 	SimpleDateFormat* dateFormatterImpl

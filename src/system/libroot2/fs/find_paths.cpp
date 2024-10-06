@@ -7,8 +7,6 @@
 
 #include <find_directory_private.h>
 
-#include <TypeConstants.h>
-
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,9 +16,11 @@
 
 #include <fs_attr.h>
 
+#include <architecture_private.h>
 #include <AutoDeleter.h>
 #include <directories.h>
 #include <syscalls.h>
+#include <TypeConstants.h>
 
 #include "PathBuffer.h"
 
@@ -186,8 +186,13 @@ get_relative_directory_path(size_t installationLocationIndex,
 			return "/apps";
 		case B_FIND_PATH_BIN_DIRECTORY:
 			return "/bin%";
+		#ifdef __VOS__
+		case B_FIND_PATH_BOOT_DIRECTORY:
+			return "/boot";
+		#else
 		case B_FIND_PATH_BOOT_DIRECTORY:
 			return "/";
+		#endif
 		case B_FIND_PATH_CACHE_DIRECTORY:
 			return "/cache";
 		case B_FIND_PATH_DATA_DIRECTORY:
@@ -217,8 +222,7 @@ get_relative_directory_path(size_t installationLocationIndex,
 		case B_FIND_PATH_SERVERS_DIRECTORY:
 			return "/servers";
 		case B_FIND_PATH_SETTINGS_DIRECTORY:
-			return installationLocationIndex == kHomeInstallationLocationIndex
-				? "/settings/global" : "/settings";
+			return "/settings";
 		case B_FIND_PATH_SOUNDS_DIRECTORY:
 			return "/data/sounds";
 		case B_FIND_PATH_SPOOL_DIRECTORY:
@@ -404,8 +408,12 @@ get_file_attribute(const char* path, const char* attribute, char* nameBuffer,
 		return errno;
 
 	status_t error = B_OK;
+	#ifdef __VOS__
+	ssize_t bytesRead = read(fd, nameBuffer, bufferSize - 1);
+	#else
 	ssize_t bytesRead = fs_read_attr(fd, attribute, B_STRING_TYPE,
 		0, nameBuffer, bufferSize - 1);
+	#endif
 	if (bytesRead < 0)
 		error = bytesRead;
 	else if (bytesRead == 0)
@@ -501,7 +509,8 @@ internal_path_for_path(char* referencePath, size_t referencePathSize,
 	path_base_directory baseDirectory, const char* subPath, uint32 flags,
 	char* pathBuffer, size_t bufferSize)
 {
-	architecture = NULL;
+	if (strcmp(architecture, __get_primary_architecture()) == 0)
+		architecture = NULL;
 
 	// resolve dependency
 	char packageName[B_FILE_NAME_LENGTH];
@@ -558,8 +567,8 @@ internal_path_for_path(char* referencePath, size_t referencePathSize,
 
 	// get the installation location
 	InstallationLocations* installationLocations = InstallationLocations::Get();
-	MethodDeleter<InstallationLocations> installationLocationsDeleter(
-		installationLocations, &InstallationLocations::Put);
+	MethodDeleter<InstallationLocations, void, &InstallationLocations::Put>
+		installationLocationsDeleter(installationLocations);
 
 	size_t installationLocationIndex;
 	const char* installationLocation = installationLocations->LocationFor(
@@ -607,11 +616,8 @@ __find_path_etc(const void* codePointer, const char* dependency,
 	if (error != B_OK)
 		return error;
 
-#ifndef __VOS__
-	// TODO: clean me
 	if (architecture == NULL)
 		architecture = __get_architecture();
-#endif
 
 	return internal_path_for_path(imageInfo.name, sizeof(imageInfo.name),
 		dependency, architecture, baseDirectory, subPath, flags, pathBuffer,
@@ -642,10 +648,8 @@ __find_path_for_path_etc(const char* path, const char* dependency,
 		return B_NAME_TOO_LONG;
 	}
 
-#ifndef __VOS__
 	if (architecture == NULL)
 		architecture = __guess_architecture_for_path(path);
-#endif
 
 	return internal_path_for_path(referencePath, sizeof(referencePath),
 		dependency, architecture, baseDirectory, subPath, flags, pathBuffer,
@@ -673,12 +677,10 @@ __find_paths_etc(const char* architecture, path_base_directory baseDirectory,
 	// effective architecture is the primary one, set architecture to NULL to
 	// indicate that we don't need to insert an architecture subdirectory
 	// component.
-#ifndef __VOS__
 	if (architecture == NULL)
 		architecture = __get_architecture();
-#endif
-
-	architecture = NULL;
+	if (strcmp(architecture, __get_primary_architecture()) == 0)
+		architecture = NULL;
 	size_t architectureSize = architecture != NULL
 		? strlen(architecture) + 1 : 0;
 
@@ -686,8 +688,8 @@ __find_paths_etc(const char* architecture, path_base_directory baseDirectory,
 
 	// get the installation locations
 	InstallationLocations* installationLocations = InstallationLocations::Get();
-	MethodDeleter<InstallationLocations> installationLocationsDeleter(
-		installationLocations, &InstallationLocations::Put);
+	MethodDeleter<InstallationLocations, void, &InstallationLocations::Put>
+		installationLocationsDeleter(installationLocations);
 
 	// Get the relative paths and compute the total size to allocate.
 	const char* relativePaths[InstallationLocations::kCount];
@@ -764,8 +766,8 @@ __guess_secondary_architecture_from_path(const char* path,
 
 	// get an installation location relative path
 	InstallationLocations* installationLocations = InstallationLocations::Get();
-	MethodDeleter<InstallationLocations> installationLocationsDeleter(
-		installationLocations, &InstallationLocations::Put);
+	MethodDeleter<InstallationLocations, void, &InstallationLocations::Put>
+		installationLocationsDeleter(installationLocations);
 
 	size_t installationLocationIndex;
 	const char* installationLocation = installationLocations->LocationFor(

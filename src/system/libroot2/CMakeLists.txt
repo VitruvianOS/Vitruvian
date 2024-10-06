@@ -2,6 +2,7 @@ add_subdirectory(messaging)
 
 target_sources(root PRIVATE
 	Area.cpp
+	Architecture.cpp
 	debug.cpp
 	driver_settings.cpp
 	extended_system_info.cpp

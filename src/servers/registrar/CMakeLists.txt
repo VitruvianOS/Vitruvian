@@ -6,7 +6,7 @@ Server(
 	SOURCES
 	AppInfoList.cpp
 	AppInfoListMessagingTargetSet.cpp
-	AuthenticationManager.cpp
+	#AuthenticationManager.cpp
 	Clipboard.cpp
 	ClipboardHandler.cpp
 	Event.cpp

@@ -1,4 +1,4 @@
-include_directories(${FREETYPE_INCLUDES})
+find_package(Freetype REQUIRED)
 
 Server(
 	app_server
@@ -101,8 +101,8 @@ Server(
 	#drawing/interface/local/AccelerantBuffer.cpp
 	#drawing/interface/local/AccelerantHWInterface.cpp
 
-	drawing/interface/linux/drm/DrmHWInterface.cpp
-	drawing/interface/linux/drm/DrmBuffer.cpp
+	#drawing/interface/linux/drm/DrmHWInterface.cpp
+	#drawing/interface/linux/drm/DrmBuffer.cpp
 
 	drawing/interface/linux/fbdev/FBDevHWInterface.cpp
 	drawing/interface/linux/fbdev/FBDevBuffer.cpp
@@ -116,10 +116,11 @@ Server(
 	stackandtile/Stacking.cpp
 	stackandtile/Tiling.cpp
 
-	LIBS be root localestub shared agg icon linprog ${FREETYPE_LIBRARIES} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES}
+	LIBS be root localestub shared agg icon linprog ${FREETYPE_LIBRARY} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES}
 
 	INCLUDES
 	${DRM_INCLUDES}
+	${FREETYPE_INCLUDE_DIRS}
 
 	"./drawing"
 	"./drawing/interface/linux"

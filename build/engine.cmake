@@ -50,20 +50,20 @@ macro( Application name )
 
 	# Experimental, disabled
 	# TODO: support multiple rdefs
-	if( _APPLICATION_RDEF )
-		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF}")
-			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF} not found\n")
-			return()
-		endif()
-		message("${_APPLICATION_RDEF}")
-		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Compiling resource file for ${name}..."
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF}" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}"
-			COMMAND echo "Adding resources to ${name} binary..."
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${name}.rsrc"
-		)
-		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${name}.rsrc")
-	endif()
+	#if( _APPLICATION_RDEF )
+	#	if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF}")
+	#		message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF} not found\n")
+	#		return()
+	#	endif()
+	#	message("${_APPLICATION_RDEF}")
+	#	add_custom_command(TARGET ${name} POST_BUILD
+	#		COMMAND echo "Compiling resource file for ${name}..."
+	#		COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF}" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}"
+	#		COMMAND echo "Adding resources to ${name} binary..."
+	#		COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${name}.rsrc"
+	#	)
+	#	set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${name}.rsrc")
+	#endif()
 endmacro()
 
 macro( Server name )

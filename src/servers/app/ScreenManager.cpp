@@ -29,7 +29,7 @@ using std::nothrow;
 #ifndef __VOS__
  #	include "AccelerantHWInterface.h"
  #else
-#	include "DrmHWInterface.h"
+//#	include "DrmHWInterface.h"
 #	include "FBDevHWInterface.h"
 #endif
 #else

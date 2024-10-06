@@ -9,6 +9,7 @@
 
 #include <dirent.h>
 #include <libgen.h>
+#include <pthread.h>
 #include <sys/syscall.h>
 
 #include <map>

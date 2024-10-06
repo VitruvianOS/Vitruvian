@@ -37,24 +37,24 @@ ImageInclude("/lib" ${SYSTEM_LIBS})
 
 
 set(SYSTEM_TRANSLATORS
-	BMPTranslator
-	EXRTranslator
-	GIFTranslator
-	HVIFTranslator
-	ICNSTranslator
-	ICOTranslator
-	JPEGTranslator
-	PNGTranslator
-	PPMTranslator
-	PSDTranslator
+#	BMPTranslator
+#	EXRTranslator
+#	GIFTranslator
+#	HVIFTranslator
+#	ICNSTranslator
+#	ICOTranslator
+#	JPEGTranslator
+#	PNGTranslator
+#	PPMTranslator
+#	PSDTranslator
 	RAWTranslator
-	RTFTranslator
-	SGITranslator
-	STXTTranslator
-	TGATranslator
-	TIFFTranslator
-	WEBPTranslator
-	WonderbrushTranslator
+#	RTFTranslator
+#	SGITranslator
+#	STXTTranslator
+#	TGATranslator
+#	TIFFTranslator
+#	WEBPTranslator
+#	WonderbrushTranslator
 )
 ImageInclude("/system/add-ons/Translators" ${SYSTEM_TRANSLATORS})
 

@@ -99,18 +99,31 @@ BMergedDirectory::AddDirectory(const char* path)
 status_t
 BMergedDirectory::GetNextEntry(BEntry* entry, bool traverse)
 {
+#ifndef __VOS__
 	entry_ref ref;
 	status_t error = GetNextRef(&ref);
 	if (error != B_OK)
 		return error;
 
 	return entry->SetTo(&ref, traverse);
+#else
+	BPrivate::Storage::LongDirEntry longEntry;
+	struct dirent* localEntry = longEntry.dirent();
+	int32 result = GetNextDirents(localEntry, sizeof(longEntry), 1);
+	if (result < 0)
+		return result;
+	if (result == 0)
+		return B_ENTRY_NOT_FOUND;
+
+	return entry->SetTo(this, localEntry.d_name, traverse);
+#endif
 }
 
 
 status_t
 BMergedDirectory::GetNextRef(entry_ref* ref)
 {
+#ifndef __VOS__
 	BPrivate::Storage::LongDirEntry longEntry;
 	struct dirent* entry = longEntry.dirent();
 	int32 result = GetNextDirents(entry, sizeof(longEntry), 1);
@@ -126,6 +139,14 @@ BMergedDirectory::GetNextRef(entry_ref* ref)
 	UNIMPLEMENTED();
 #endif
 	return ref->set_name(entry->d_name);
+#else
+	BEntry entry;
+	status_t error = GetNextEntry(&entry);
+	if (error != B_OK)
+		return error;
+
+	return entry->GetRef(ref);
+#endif
 }
 
 

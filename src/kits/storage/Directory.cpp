@@ -96,6 +96,7 @@ BDirectory::~BDirectory()
 status_t
 BDirectory::SetTo(const entry_ref* ref)
 {
+#if 1
 	// open node
 	status_t error = _SetTo(ref, true);
 	if (error != B_OK)
@@ -103,6 +104,24 @@ BDirectory::SetTo(const entry_ref* ref)
 
 	// open dir
 	fDirFd = _kern_open_dir_entry_ref(ref->device, ref->directory, ref->name);
+	//fDirFd = dup(ref->fd);
+	if (fDirFd < 0) {
+		status_t error = fDirFd;
+		Unset();
+		return (fCStatus = error);
+	}
+
+	fCStatus = B_OK;
+	// set close on exec flag on dir FD
+	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
+#else
+	// open node
+	status_t error = _SetTo(ref->fd, ref->name, true);
+	if (error != B_OK)
+		return error;
+
+	// open dir
+	fDirFd = _kern_open_dir(ref->fd, ref->name);
 	if (fDirFd < 0) {
 		status_t error = fDirFd;
 		Unset();
@@ -111,7 +130,7 @@ BDirectory::SetTo(const entry_ref* ref)
 
 	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
-
+#endif
 	return B_OK;
 }
 
@@ -331,6 +350,7 @@ BDirectory::Contains(const BEntry* entry, int32 nodeFlags) const
 status_t
 BDirectory::GetNextEntry(BEntry* entry, bool traverse)
 {
+#ifndef __VOS__
 	if (entry == NULL)
 		return B_BAD_VALUE;
 
@@ -346,12 +366,33 @@ BDirectory::GetNextEntry(BEntry* entry, bool traverse)
 #else
  	return entry->SetTo(&ref, traverse);
 #endif
+#else
+	if (entry == NULL)
+		return B_BAD_VALUE;
+	if (InitCheck() != B_OK)
+		return B_FILE_ERROR;
+
+	BPrivate::Storage::LongDirEntry longEntry;
+	struct dirent* localEntry = longEntry.dirent();
+	bool next = true;
+	while (next) {
+		if (GetNextDirents(localEntry, sizeof(longEntry), 1) != 1) {
+			return B_ENTRY_NOT_FOUND;
+		}
+
+		next = (!strcmp(localEntry->d_name, ".")
+			|| !strcmp(localEntry->d_name, ".."));
+	}
+
+	return entry->SetTo(this, localEntry->d_name, traverse);
+#endif
 }
 
 
 status_t
 BDirectory::GetNextRef(entry_ref* ref)
 {
+#ifndef __VOS__
 	if (ref == NULL)
 		return B_BAD_VALUE;
 	if (InitCheck() != B_OK)
@@ -375,6 +416,18 @@ BDirectory::GetNextRef(entry_ref* ref)
 	UNIMPLEMENTED();
 #endif
 	return ref->set_name(entry->d_name);
+
+#else
+	if (ref == NULL)
+		return B_BAD_VALUE;
+
+	BEntry entry;
+	status_t status = GetNextEntry(&entry);
+	if (status != B_OK)
+		return status;
+
+	return entry.GetRef(ref);
+#endif
 }
 
 

@@ -247,6 +247,7 @@ BEntry::SetTo(const entry_ref* ref, bool traverse)
 
 	// open the directory and let set() do the rest
 	int dirFD = _kern_open_dir_entry_ref(ref->device, ref->directory, NULL);
+	//int dirFD = dup(ref->fd);
 	if (dirFD < 0)
 		return (fCStatus = dirFD);
 	return (fCStatus = _SetTo(dirFD, ref->name, traverse));
@@ -295,7 +296,10 @@ BEntry::GetRef(entry_ref* ref) const
 	if (error == B_OK) {
 		ref->device = st.st_dev;
 		ref->directory = st.st_ino;
+		ref->fd = _kern_dup(fDirFd);
 		error = ref->set_name(fName);
+		printf("entry get ref %d\n", ref->fd);
+
 	}
 	return error;
 }

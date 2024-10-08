@@ -97,6 +97,8 @@ BFile::~BFile()
 status_t
 BFile::SetTo(const entry_ref* ref, uint32 openMode)
 {
+	printf("file set to %d\n", ref->fd);
+
 	Unset();
 
 	if (!ref)
@@ -108,8 +110,12 @@ BFile::SetTo(const entry_ref* ref, uint32 openMode)
 
 	openMode |= O_CLOEXEC;
 
-	int fd = _kern_open_entry_ref(ref->device, ref->directory, ref->name,
+	int fd = _kern_open_entry_ref(ref->device, ref->directory, ref->name, 
 		openMode, DEFFILEMODE & ~__gUmask);
+	if (ref->fd < 0)
+		return B_ERROR;
+
+	//int fd = _kern_open(ref->fd, NULL, openMode, DEFFILEMODE & ~__gUmask);
 	if (fd >= 0) {
 		set_fd(fd);
 		fMode = openMode;

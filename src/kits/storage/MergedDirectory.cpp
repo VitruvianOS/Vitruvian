@@ -99,7 +99,7 @@ BMergedDirectory::AddDirectory(const char* path)
 status_t
 BMergedDirectory::GetNextEntry(BEntry* entry, bool traverse)
 {
-#ifndef __VOS__
+#ifdef __VOS__
 	entry_ref ref;
 	status_t error = GetNextRef(&ref);
 	if (error != B_OK)
@@ -115,7 +115,9 @@ BMergedDirectory::GetNextEntry(BEntry* entry, bool traverse)
 	if (result == 0)
 		return B_ENTRY_NOT_FOUND;
 
-	return entry->SetTo(this, localEntry.d_name, traverse);
+	// TODO: This won't compile, we need to get the path from GetNextDirents
+	// and use it to build the entry_ref
+	return entry->SetTo(this, localEntry->d_name, traverse);
 #endif
 }
 
@@ -123,7 +125,7 @@ BMergedDirectory::GetNextEntry(BEntry* entry, bool traverse)
 status_t
 BMergedDirectory::GetNextRef(entry_ref* ref)
 {
-#ifndef __VOS__
+#ifdef __VOS__
 	BPrivate::Storage::LongDirEntry longEntry;
 	struct dirent* entry = longEntry.dirent();
 	int32 result = GetNextDirents(entry, sizeof(longEntry), 1);

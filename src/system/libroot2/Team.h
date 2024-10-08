@@ -11,9 +11,6 @@
 namespace BKernelPrivate {
 
 
-extern "C" void init_ports();
-
-
 class Team
 {
 public:

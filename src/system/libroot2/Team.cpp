@@ -58,7 +58,7 @@ segv_handler(int sig)
 void __attribute__ ((constructor))
 init_team(int argc, char** argv)
 {
-	TRACE("init_team()\n");
+	TRACE("init_team() %d\n", argc);
 
 	signal(SIGSEGV, segv_handler);
 
@@ -71,8 +71,6 @@ init_team(int argc, char** argv)
 	setenv("TARGET_SCREEN", "root", 1);
 
 	Team::InitTeam();
-
-	init_ports();
 
 	pthread_atfork(&Team::PrepareFatherAtFork,
 		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);

@@ -46,7 +46,6 @@ static __thread sem_id gThreadExitSem;
 
 static pthread_mutex_t gLock;
 static std::map<thread_id, Thread*> gThreadsMap;
-static int gNexus = BKernelPrivate::Team::GetNexusDescriptor();
 
 
 // Static initialization for the main thread
@@ -86,7 +85,7 @@ Thread::ReinitChildAtFork()
 {
 	TRACE("Process %d reinit thread after fork\n", getpid());
 	gThreadsMap.clear();
-	gNexus = BKernelPrivate::Team::GetNexusDescriptor();
+
 	_Init();
 }
 
@@ -120,7 +119,8 @@ Thread::thread_run(void* data)
 {
 	CALLED();
 	Thread::Lock();
-	if (ioctl(gNexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (ioctl(nexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
 		status_t exitStatus = B_ERROR;
 		delete_sem(gThreadExitSem);
 		pthread_exit(&exitStatus);
@@ -144,7 +144,8 @@ Thread::thread_run(void* data)
 	Thread::Unlock();
 
 	status_t exitStatus = B_OK;
-	if (ioctl(gNexus, NEXUS_THREAD_EXIT, NULL) < 0)
+
+	if (ioctl(nexus, NEXUS_THREAD_EXIT, NULL) < 0)
 		exitStatus = B_ERROR;
 
 	// TODO exit callback pthread_key
@@ -267,6 +268,7 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 
 	BKernelPrivate::data_wrap* dataWrap
 		= new BKernelPrivate::data_wrap();
+	//dataWrap->name
 	dataWrap->data = data;
 	dataWrap->func = func;
 	dataWrap->father = find_thread(NULL);
@@ -306,7 +308,8 @@ rename_thread(thread_id thread, const char* newName)
 	exchange.buffer = newName;
 	exchange.receiver = thread;
 
-	if (ioctl(BKernelPrivate::gNexus, NEXUS_THREAD_OP, &exchange) < 0)
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (ioctl(nexus, NEXUS_THREAD_OP, &exchange) < 0)
 		return B_ERROR;
 
 	return B_OK;
@@ -345,7 +348,8 @@ send_data(thread_id thread, int32 code,
 	exchange.return_code = code;
 	exchange.receiver = thread;
 
-	if (ioctl(BKernelPrivate::gNexus, NEXUS_THREAD_OP, &exchange) < 0)
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (ioctl(nexus, NEXUS_THREAD_OP, &exchange) < 0)
 		return B_ERROR;
 
 	return B_OK;
@@ -364,7 +368,9 @@ receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 	exchange.op = NEXUS_THREAD_READ;
 	exchange.buffer = buffer;
 	exchange.size = bufferSize;
-	if (ioctl(BKernelPrivate::gNexus, NEXUS_THREAD_OP, &exchange) < 0)
+
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (ioctl(nexus, NEXUS_THREAD_OP, &exchange) < 0)
 		return B_ERROR;
 
 	*sender = exchange.sender;
@@ -383,7 +389,8 @@ has_data(thread_id thread)
 	exchange.op = NEXUS_THREAD_HAS_DATA;
 	exchange.receiver = thread;
 
-	if (ioctl(BKernelPrivate::gNexus, NEXUS_THREAD_OP, &exchange) < 0)
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (ioctl(nexus, NEXUS_THREAD_OP, &exchange) < 0)
 		return false;
 
 	return exchange.return_code == B_OK;
@@ -399,8 +406,9 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 		return B_BAD_VALUE;
 
 	info->thread = id;
+	memset(&info->name, 0, B_OS_NAME_LENGTH);
 	strncpy(info->name, "Unknown", B_OS_NAME_LENGTH);
-	info->name[B_OS_NAME_LENGTH - 1] = '\0';
+	//info->name[B_OS_NAME_LENGTH - 1] = '\0';
 	info->state = B_THREAD_RUNNING;
 	info->priority = 5;
 	info->team = getpid();

@@ -17,7 +17,7 @@ public:
 		printf("Mouse DOWN !!! %lld\n", system_time());
 		
 		BPoint mouseWhere;
-		ulong buttons;	
+		uint32 buttons;	
 		do {
 			GetMouse(&mouseWhere, &buttons);
 			snooze(10000);

@@ -11,7 +11,7 @@ Test(ClippingPlusRedraw SOURCES ClippingPlusRedraw.cpp)
 
 Test(DrawBitmapTest SOURCES bbitmap/DrawBitmapTest.cpp)
 
-#Test(GetMouseTest SOURCES GetMouseTest.cpp)
+Test(GetMouseTest SOURCES GetMouseTest.cpp)
 
 Test(LookTest SOURCES look/Look.cpp LIBS tracker)
 

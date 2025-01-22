@@ -115,19 +115,28 @@ BDirectory::SetTo(const entry_ref* ref)
 	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 #else
-	// open node
-	status_t error = _SetTo(ref->fd, ref->name, true);
-	if (error != B_OK)
-		return error;
 
-	// open dir
-	fDirFd = _kern_open_dir(ref->fd, ref->name);
+	int dirFD = _kern_open(ref->fd, NULL, O_RDWR | O_CLOEXEC, 0);
+
 	if (fDirFd < 0) {
 		status_t error = fDirFd;
 		Unset();
 		return (fCStatus = error);
 	}
 
+	// open node
+	status_t error = _SetTo(dirFD, ref->name, true);
+	if (error != B_OK)
+		return error;
+
+	// open dir
+	/*fDirFd = _kern_open_dir(ref->fd, ref->name);
+	if (fDirFd < 0) {
+		status_t error = fDirFd;
+		Unset();
+		return (fCStatus = error);
+	}
+*/
 	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 #endif

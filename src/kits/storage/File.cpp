@@ -110,10 +110,14 @@ BFile::SetTo(const entry_ref* ref, uint32 openMode)
 
 	openMode |= O_CLOEXEC;
 
+#if 1
 	int fd = _kern_open_entry_ref(ref->device, ref->directory, ref->name, 
 		openMode, DEFFILEMODE & ~__gUmask);
-	if (ref->fd < 0)
-		return B_ERROR;
+#else
+	int fd = _kern_open(ref->fd, ref->name, openMode, DEFFILEMODE & ~__gUmask);
+#endif
+	//if (ref->fd < 0)
+	//	return B_ERROR;
 
 	//int fd = _kern_open(ref->fd, NULL, openMode, DEFFILEMODE & ~__gUmask);
 	if (fd >= 0) {

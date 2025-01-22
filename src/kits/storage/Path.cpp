@@ -135,6 +135,8 @@ BPath::SetTo(const entry_ref* ref)
 			return B_FILE_ERROR;
 
 		std::string path = std::string(buf, bytes);
+		path.append("/");
+		path.append(ref->name);
 		printf("path %s\n", path.c_str());
 #endif
 	if (fCStatus != B_OK)

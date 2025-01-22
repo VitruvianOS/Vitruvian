@@ -246,8 +246,13 @@ BEntry::SetTo(const entry_ref* ref, bool traverse)
 		return SetTo(ref->name, traverse);
 
 	// open the directory and let set() do the rest
+#if 1
 	int dirFD = _kern_open_dir_entry_ref(ref->device, ref->directory, NULL);
-	//int dirFD = dup(ref->fd);
+#else
+	int traverseFlag = (traverse ? 0 : O_NOTRAVERSE);
+	int dirFD = _kern_open(ref->fd, NULL, O_RDWR | O_CLOEXEC
+		| traverseFlag, 0);
+#endif
 	if (dirFD < 0)
 		return (fCStatus = dirFD);
 	return (fCStatus = _SetTo(dirFD, ref->name, traverse));

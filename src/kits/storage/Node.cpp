@@ -612,7 +612,10 @@ BNode::_SetTo(const entry_ref* ref, bool traverse)
 			fFd = _kern_open_entry_ref_fd(ref->device, ref->directory, ref->name,
 				ref->fd, O_RDONLY | O_CLOEXEC | traverseFlag, 0);*/
 
-		fFd = _kern_open(ref->fd, NULL, O_RDWR | O_CLOEXEC | traverseFlag, 0);
+		fFd = _kern_open(ref->fd, ref->name, O_RDWR | O_CLOEXEC | traverseFlag, 0);
+		if (fFd < B_OK && fFd != B_ENTRY_NOT_FOUND) {
+			fFd = _kern_open(ref->fd, ref->name, O_RDONLY | O_CLOEXEC | traverseFlag, 0);
+		}
 #endif
 		if (fFd < 0)
 			result = fFd;

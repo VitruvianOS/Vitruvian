@@ -408,7 +408,7 @@ get_file_attribute(const char* path, const char* attribute, char* nameBuffer,
 		return errno;
 
 	status_t error = B_OK;
-	#ifdef __VOS__
+	#ifndef __VOS__
 	ssize_t bytesRead = read(fd, nameBuffer, bufferSize - 1);
 	#else
 	ssize_t bytesRead = fs_read_attr(fd, attribute, B_STRING_TYPE,

@@ -33,17 +33,17 @@ public:
 		// TODO: io_size, improve flags
 #include <stdlib.h>
 		if (strlcpy(info->volume_name, mountEntry->mnt_dir,
-				B_FILE_NAME_LENGTH-1) >= B_FILE_NAME_LENGTH) {
+				B_FILE_NAME_LENGTH-1) >= B_FILE_NAME_LENGTH-1) {
 			return B_BUFFER_OVERFLOW;
 		}
 
 		if (strlcpy(info->device_name, mountEntry->mnt_fsname,
-				127) >= 128) {
+				127) >= 127) {
 			return B_BUFFER_OVERFLOW;
 		}
 
 		if (strlcpy(info->fsh_name, mountEntry->mnt_type,
-				B_OS_NAME_LENGTH-1) >= B_OS_NAME_LENGTH) {
+				B_OS_NAME_LENGTH-1) >= B_OS_NAME_LENGTH-1) {
 			return B_BUFFER_OVERFLOW;
 		}
 

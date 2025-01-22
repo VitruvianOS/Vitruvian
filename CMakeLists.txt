@@ -22,6 +22,8 @@ message(STATUS "BUILD_TESTS:                     ${BUILD_TESTS}")
 message(STATUS "=============================================")
 message(STATUS "")
 
+set(CMAKE_BUILD_TYPE Debug)
+
 # TODO shouldn't we resolve an absolute path here? it kind of works
 # only if buildtools is in the project source dir, which...we don't
 # really want to constrain.

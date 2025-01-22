@@ -1,8 +1,10 @@
 /*
  * Copyright 2013, Haiku, Inc. All Rights Reserved.
+ * Copyright 2024, The Vitruvian Projects. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
+ * 		Dario Casalinuovo
  *		Ingo Weinhold <ingo_weinhold@gmx.de>
  */
 
@@ -99,7 +101,7 @@ BMergedDirectory::AddDirectory(const char* path)
 status_t
 BMergedDirectory::GetNextEntry(BEntry* entry, bool traverse)
 {
-#ifdef __VOS__
+#ifndef __VOS__
 	entry_ref ref;
 	status_t error = GetNextRef(&ref);
 	if (error != B_OK)
@@ -109,15 +111,14 @@ BMergedDirectory::GetNextEntry(BEntry* entry, bool traverse)
 #else
 	BPrivate::Storage::LongDirEntry longEntry;
 	struct dirent* localEntry = longEntry.dirent();
-	int32 result = GetNextDirents(localEntry, sizeof(longEntry), 1);
+	BDirectory dir;
+	int32 result = _GetNextDirents(dir, localEntry, sizeof(longEntry), 1);
 	if (result < 0)
 		return result;
 	if (result == 0)
 		return B_ENTRY_NOT_FOUND;
 
-	// TODO: This won't compile, we need to get the path from GetNextDirents
-	// and use it to build the entry_ref
-	return entry->SetTo(this, localEntry->d_name, traverse);
+	return entry->SetTo(&dir, localEntry->d_name, traverse);
 #endif
 }
 
@@ -125,7 +126,7 @@ BMergedDirectory::GetNextEntry(BEntry* entry, bool traverse)
 status_t
 BMergedDirectory::GetNextRef(entry_ref* ref)
 {
-#ifdef __VOS__
+#ifndef __VOS__
 	BPrivate::Storage::LongDirEntry longEntry;
 	struct dirent* entry = longEntry.dirent();
 	int32 result = GetNextDirents(entry, sizeof(longEntry), 1);
@@ -134,12 +135,6 @@ BMergedDirectory::GetNextRef(entry_ref* ref)
 	if (result == 0)
 		return B_ENTRY_NOT_FOUND;
 
-#ifndef __VOS__
-	ref->device = entry->d_pdev;
-	ref->directory = entry->d_pino;
-#else
-	UNIMPLEMENTED();
-#endif
 	return ref->set_name(entry->d_name);
 #else
 	BEntry entry;
@@ -147,7 +142,7 @@ BMergedDirectory::GetNextRef(entry_ref* ref)
 	if (error != B_OK)
 		return error;
 
-	return entry->GetRef(ref);
+	return entry.GetRef(ref);
 #endif
 }
 
@@ -156,10 +151,20 @@ int32
 BMergedDirectory::GetNextDirents(struct dirent* direntBuffer, size_t bufferSize,
 	int32 maxEntries)
 {
+	BDirectory dir;
+	return _GetNextDirents(dir, direntBuffer, bufferSize, maxEntries);
+}
+
+
+int32
+BMergedDirectory::_GetNextDirents(BDirectory& dir, struct dirent* direntBuffer, size_t bufferSize,
+	int32 maxEntries)
+{
 	if (maxEntries <= 0)
 		return B_BAD_VALUE;
 
 	while (fDirectoryIndex < fDirectories.CountItems()) {
+		dir.SetTo(fDirectories.ItemAt(fDirectoryIndex), ".");
 		int32 count = fDirectories.ItemAt(fDirectoryIndex)->GetNextDirents(
 			direntBuffer, bufferSize, 1);
 		if (count < 0)
@@ -195,7 +200,7 @@ BMergedDirectory::GetNextDirents(struct dirent* direntBuffer, size_t bufferSize,
 				}
 
 				if (fPolicy == B_COMPARE)
-					_FindBestEntry(direntBuffer);
+					_FindBestEntry(dir, direntBuffer);
 				return 1;
 		}
 	}
@@ -240,11 +245,14 @@ BMergedDirectory::ShallPreferFirstEntry(const entry_ref& entry1, int32 index1,
 
 
 void
-BMergedDirectory::_FindBestEntry(dirent* direntBuffer)
+BMergedDirectory::_FindBestEntry(BDirectory& dir, dirent* direntBuffer)
 {
-#ifndef __VOS__
-	entry_ref bestEntry(direntBuffer->d_pdev, direntBuffer->d_pino,
+	struct stat st;
+	dir.GetStatFor(direntBuffer->d_name, &st);
+
+	entry_ref bestEntry(st.st_dev, direntBuffer->d_ino,
 		direntBuffer->d_name);
+
 	if (bestEntry.name == NULL)
 		return;
 	int32 bestIndex = fDirectoryIndex;
@@ -256,16 +264,11 @@ BMergedDirectory::_FindBestEntry(dirent* direntBuffer)
 		entry_ref ref;
 		if (entry.GetStat(&st) == B_OK && entry.GetRef(&ref) == B_OK
 			&& !ShallPreferFirstEntry(bestEntry, bestIndex, ref, i)) {
-			direntBuffer->d_pdev = ref.device;
-			direntBuffer->d_pino = ref.directory;
-			direntBuffer->d_dev = st.st_dev;
+			dir.SetTo(fDirectories.ItemAt(i), ".");
 			direntBuffer->d_ino = st.st_ino;
 			bestEntry.device = ref.device;
 			bestEntry.directory = ref.directory;
 			bestIndex = i;
 		}
 	}
-#else
-	UNIMPLEMENTED();
-#endif
 }

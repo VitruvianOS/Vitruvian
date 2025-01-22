@@ -59,7 +59,14 @@ private:
 			struct EntryNameSet;
 
 private:
-			void				_FindBestEntry(dirent* direntBuffer);
+			int32				_GetNextDirents(
+									BDirectory& dir,
+									struct dirent* direntBuffer,
+									size_t bufferSize,
+									int32 maxEntries = INT_MAX);
+
+			void				_FindBestEntry(BDirectory& dir,
+									dirent* direntBuffer);
 
 private:
 			DirectoryList		fDirectories;

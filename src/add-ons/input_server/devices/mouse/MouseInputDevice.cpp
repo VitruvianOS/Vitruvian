@@ -30,13 +30,37 @@
 #include <String.h>
 #include <View.h>
 
+#include <libinput.h>
+#include <linux/input.h>
+#include <sys/epoll.h>
+
 #include <kb_mouse_settings.h>
 #include <keyboard_mouse_driver.h>
 #include <touchpad_settings.h>
 
 
+static int
+open_restricted(const char *path, int flags, void *user_data)
+{
+	int fd = open(path, flags);
+	return fd < 0 ? -errno : fd;
+}
+
+
+static void
+close_restricted(int fd, void *user_data)
+{
+	close(fd);
+}
+
+
+const static struct libinput_interface interface = {
+	.open_restricted = open_restricted,
+	.close_restricted = close_restricted,
+};
+
 #undef TRACE
-//#define TRACE_MOUSE_DEVICE
+#define TRACE_MOUSE_DEVICE
 #ifdef TRACE_MOUSE_DEVICE
 
 	class FunctionTracer {
@@ -80,7 +104,7 @@
 							_to.Append(' ', (sFunctionDepth + 1) * 2); \
 							debug_printf("%p -> %s", this, _to.String()); \
 							debug_printf(x); } while (0)
-#	define LOG_EVENT(text...) do {} while (0)
+#	define LOG_EVENT(text...)TRACE(text)
 #	define LOG_ERR(text...) TRACE(text)
 #else
 #	define TRACE(x...) do {} while (0)
@@ -150,6 +174,9 @@ private:
 			touchpad_settings	fTouchpadSettings;
 			BMessage*			fTouchpadSettingsMessage;
 			BLocker				fTouchpadSettingsLock;
+
+			struct udev*			fUDevHandle;
+			struct libinput*		fInputHandle;
 };
 
 
@@ -182,6 +209,11 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fDeviceRef.type = B_POINTING_DEVICE;
 	fDeviceRef.cookie = this;
 
+	fUDevHandle = udev_new();
+	fInputHandle = libinput_udev_create_context(&interface, NULL,
+		fUDevHandle);
+	libinput_udev_assign_seat(fInputHandle, "seat0");
+
 #ifdef HAIKU_TARGET_PLATFORM_HAIKU
 	fSettings.map.button[0] = B_PRIMARY_MOUSE_BUTTON;
 	fSettings.map.button[1] = B_SECONDARY_MOUSE_BUTTON;
@@ -200,6 +232,9 @@ MouseDevice::~MouseDevice()
 
 	free(fDeviceRef.name);
 	delete fTouchpadSettingsMessage;
+
+	libinput_unref(fInputHandle);
+	udev_unref(fUDevHandle);
 }
 
 
@@ -246,8 +281,8 @@ MouseDevice::Stop()
 	fActive = false;
 		// this will stop the thread as soon as it reads the next packet
 
-	close(fDevice);
-	fDevice = -1;
+	//close(fDevice);
+	//fDevice = -1;
 
 	if (fThread >= 0) {
 		// unblock the thread, which might wait on a semaphore.
@@ -349,6 +384,8 @@ MouseDevice::_ControlThread()
 {
 	MD_CALLED();
 
+	printf("control thread\n");
+#if 0
 	if (fDevice < 0) {
 		_ControlThreadCleanup();
 		// TOAST!
@@ -375,16 +412,31 @@ MouseDevice::_ControlThread()
 	}
 
 	_UpdateSettings();
-
+#endif
 	uint32 lastButtons = 0;
 	float historyDeltaX = 0.0;
 	float historyDeltaY = 0.0;
 
 	static const bigtime_t kTransferDelay = 1000000 / 125;
 		// 125 transfers per second should be more than enough
-#define USE_REGULAR_INTERVAL 1
+#define USE_REGULAR_INTERVAL 0
 #if USE_REGULAR_INTERVAL
 	bigtime_t nextTransferTime = system_time() + kTransferDelay;
+#endif
+
+#ifdef __VOS__
+	int poll = epoll_create1(0);
+	if (poll < 0)
+		return;
+
+	epoll_event event;
+	event.events = EPOLLIN;
+	event.data.fd = libinput_get_fd(fInputHandle);
+
+	if (epoll_ctl(poll, EPOLL_CTL_ADD, event.data.fd, &event) < 0) {
+		close(poll);
+		return;
+	}
 #endif
 
 	while (fActive) {
@@ -395,13 +447,94 @@ MouseDevice::_ControlThread()
 		nextTransferTime += kTransferDelay;
 #endif
 
+#if 0
 		if (ioctl(fDevice, MS_READ, &movements, sizeof(movements)) != B_OK) {
 			LOG_ERR("Mouse device exiting, %s\n", strerror(errno));
 			_ControlThreadCleanup();
 			// TOAST!
 			return;
 		}
+#endif
+		memset(&movements, 0, sizeof(movements));
+		fIsTouchpad = true;
 
+	//while (fRunning) {
+		epoll_wait(poll, &event, 1, 200);
+
+		if (libinput_dispatch(fInputHandle) < 0) {
+			close(poll);
+			return;
+		}
+
+		libinput_event* ev;
+		while ((ev
+			= libinput_get_event(fInputHandle)) != NULL) {
+			//_ScheduleEvent(inputEvent);
+			//libinput_event_destroy(inputEvent);
+
+	//}
+
+	libinput_event_type type = libinput_event_get_type(ev);
+	libinput_device* dev = libinput_event_get_device(ev);
+	uint32 what = 0;
+
+	switch (type)
+	{
+		case LIBINPUT_EVENT_DEVICE_ADDED:
+		case LIBINPUT_EVENT_DEVICE_REMOVED:
+			break;
+
+		case LIBINPUT_EVENT_POINTER_MOTION:
+		{
+			libinput_event_pointer* e
+				= libinput_event_get_pointer_event(ev);
+
+			movements.xdelta = libinput_event_pointer_get_dx_unaccelerated(e);
+			movements.ydelta = libinput_event_pointer_get_dy_unaccelerated(e)*-1;
+
+			printf("motion %d %d\n", movements.xdelta, movements.ydelta);
+			break;
+		}
+	
+		case LIBINPUT_EVENT_POINTER_BUTTON:
+		{
+			printf("button go\n");
+			libinput_event_pointer* e
+				= libinput_event_get_pointer_event(ev);
+
+
+
+			const bool pressed
+				= (libinput_event_pointer_get_button_state(e)
+					== LIBINPUT_BUTTON_STATE_PRESSED);
+
+				//what = B_MOUSE_DOWN;
+			if (pressed)
+				movements.clicks++;
+	//		} else
+				//what = B_MOUSE_UP;
+		//		movements.clicks = 0;
+
+
+			//event->AddInt32("modifiers", fModifiers);
+
+			//if (what == B_MOUSE_DOWN)
+			//	event->AddInt32("clicks", 0);
+
+    switch (libinput_event_pointer_get_button(e)) {
+    case 0x110: movements.buttons = 0x1; break;
+    case 0x111: movements.buttons = 0x2; break;
+    case 0x112: movements.buttons = 0x3; break;
+    }
+			break;
+		}
+		default:
+			continue;
+	}
+
+	movements.timestamp = system_time();
+
+#if 0
 		// take care of updating the settings first, if necessary
 		if (fUpdateSettings) {
 			fUpdateSettings = false;
@@ -417,10 +550,12 @@ MouseDevice::_ControlThread()
 			} else
 				_UpdateSettings();
 		}
-
+#endif
 		uint32 buttons = lastButtons ^ movements.buttons;
 
 		uint32 remappedButtons = _RemapButtons(movements.buttons);
+		printf("buttons %d\n", movements.buttons);
+		printf("remapped buttons %d\n", remappedButtons);
 		int32 deltaX, deltaY;
 		_ComputeAcceleration(movements, deltaX, deltaY, historyDeltaX,
 			historyDeltaY);
@@ -477,7 +612,9 @@ MouseDevice::_ControlThread()
 #if !USE_REGULAR_INTERVAL
 		snooze(kTransferDelay);
 #endif
+			}
 	}
+	close(poll);
 }
 
 
@@ -506,7 +643,7 @@ MouseDevice::_UpdateSettings()
 	MD_CALLED();
 
 	// retrieve current values
-
+	return;
 	if (get_mouse_map(&fSettings.map) != B_OK)
 		LOG_ERR("error when get_mouse_map\n");
 	else {
@@ -618,10 +755,8 @@ MouseDevice::_ComputeAcceleration(const mouse_movement& movements,
 
 	// acceleration
 	double acceleration = 1;
-	if (fSettings.accel.accel_factor) {
 		acceleration = 1 + sqrt(deltaX * deltaX + deltaY * deltaY)
 			* fSettings.accel.accel_factor / 524288.0;
-	}
 
 	deltaX *= acceleration;
 	deltaY *= acceleration;
@@ -680,8 +815,9 @@ MouseInputDevice::MouseInputDevice()
 
 	StartMonitoringDevice(kMouseDevicesDirectory);
 	StartMonitoringDevice(kTouchpadDevicesDirectory);
-	_RecursiveScan(kMouseDevicesDirectory);
-	_RecursiveScan(kTouchpadDevicesDirectory);
+	//_RecursiveScan(kMouseDevicesDirectory);
+	//_RecursiveScan(kTouchpadDevicesDirectory);
+	_AddDevice("/dev/input/mouse");
 }
 
 
@@ -778,6 +914,7 @@ MouseInputDevice::_RecursiveScan(const char* directory)
 {
 	MID_CALLED();
 
+#if 0
 	BEntry entry;
 	BDirectory dir(directory);
 	while (dir.GetNextEntry(&entry) == B_OK) {
@@ -794,6 +931,7 @@ MouseInputDevice::_RecursiveScan(const char* directory)
 		else
 			_AddDevice(path.Path());
 	}
+#endif
 }
 
 

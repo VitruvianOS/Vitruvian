@@ -45,7 +45,7 @@ using std::nothrow;
 
 // Global InputServer member variables.
 
-InputServer* gInputServer;
+export InputServer* gInputServer;
 
 BList InputServer::gInputFilterList;
 BLocker InputServer::gInputFilterListLocker("is_filter_queue_sem");

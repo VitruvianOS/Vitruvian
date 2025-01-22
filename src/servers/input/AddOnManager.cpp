@@ -113,7 +113,7 @@ instantiate_add_on(image_id image, const char* path, const char* type)
 		delete addOn;
 		return NULL;
 	}
-
+	printf("addon instantiated\n");
 	return addOn;
 }
 
@@ -314,6 +314,8 @@ status_t
 AddOnManager::_RegisterAddOn(BEntry& entry)
 {
 	BPath path(&entry);
+
+	printf("register addon %s\n", path.Path());
 
 	entry_ref ref;
 	status_t status = entry.GetRef(&ref);

@@ -27,4 +27,10 @@ Server(
 	LIBS shared
 )
 
+target_compile_definitions(input_server PRIVATE
+	-DDEBUG=1 -DTRACE_ADD_ON_MONITOR=1
+)
+
 UsePrivateHeaders(input_server app interface system support)
+
+set_target_properties(input_server PROPERTIES ENABLE_EXPORTS 1)

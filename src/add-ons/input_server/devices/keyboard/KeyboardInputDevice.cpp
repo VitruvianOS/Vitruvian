@@ -29,7 +29,7 @@
 
 #undef TRACE
 
-//#define TRACE_KEYBOARD_DEVICE
+#define TRACE_KEYBOARD_DEVICE
 #ifdef TRACE_KEYBOARD_DEVICE
 
 static	int32		sFunctionDepth = -1;
@@ -86,12 +86,13 @@ private:
 
 
 const static uint32 kKeyboardThreadPriority = B_FIRST_REAL_TIME_PRIORITY + 4;
-const static char* kKeyboardDevicesDirectory = "/dev/input/keyboard";
+const static char* kKeyboardDevicesDirectory = "/dev/input/keyboard/";
 
 
 extern "C" BInputServerDevice*
 instantiate_input_device()
 {
+	printf("device instantiated\n");
 	return new(std::nothrow) KeyboardInputDevice();
 }
 
@@ -789,9 +790,13 @@ KeyboardInputDevice::_RecursiveScan(const char* directory)
 
 	BEntry entry;
 	BDirectory dir(directory);
+	if (dir.InitCheck() != B_OK)
+		printf("dir err\n");
+
 	while (dir.GetNextEntry(&entry) == B_OK) {
 		BPath path;
 		entry.GetPath(&path);
+		TRACE("keyboardinputdevice entry\n", path.Path());
 		if (entry.IsDirectory())
 			_RecursiveScan(path.Path());
 		else

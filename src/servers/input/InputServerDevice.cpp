@@ -158,6 +158,8 @@ BInputServerDevice::StopMonitoringDevice(const char* device)
 status_t
 BInputServerDevice::AddDevices(const char* path)
 {
+	printf("adddevices %s\n", path);
+
 	BDirectory directory;
 	status_t status = directory.SetTo(path);
 	if (status != B_OK)

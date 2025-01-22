@@ -33,6 +33,40 @@ struct entry_ref {
 			dev_t				device;
 			ino_t				directory;
 			char*				name;
+
+#if 0
+protected:
+								//entry_ref(dev_t dev, ino_t dir,
+								//	const char* name, int fd);
+
+			//bool				is_valid();
+
+			status_t			publish(int fd = -1,
+									const char* path = NULL,
+									const uint32 policy = B_REF_COUNT,
+									uint32 team = -1);
+
+								// B_LOCAL_REF
+								// B_GLOBAL_REF
+								// B_REF_COUNT
+								// B_TEAM_ALIVE
+								// B_TEAM_TRANSFER
+
+			//void				accept(const uint32 policy);
+
+			//void				acquire();
+			//void				release();
+#endif
+			friend class 		BPath;
+			friend class		BEntry;
+			friend class		BDirectory;
+			friend class		BFile;
+			friend class		BNode;
+
+private:
+			int					fd;
+			//entry_ref_id		id;
+
 };
 
 

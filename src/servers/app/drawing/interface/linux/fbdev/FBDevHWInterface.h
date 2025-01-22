@@ -11,6 +11,9 @@
 #include "LibInputEventStream.h"
 
 #include <linux/fb.h>
+#include <linux/vt.h>
+#include <linux/kd.h>
+#include <termios.h>
 
 
 class FBDevBuffer;
@@ -53,7 +56,6 @@ public:
 	virtual status_t			SetBrightness(float);
 	virtual status_t			GetBrightness(float*);
 
-	// frame buffer access
 	virtual	RenderingBuffer*	FrontBuffer() const;
 	virtual	RenderingBuffer*	BackBuffer() const;
 	virtual	bool				IsDoubleBuffered() const;
@@ -61,6 +63,13 @@ public:
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 
 private:
+			status_t			_InitTTy(int ttyNumber);
+			int					_OpenTTy(int ttyNumber);
+			void				_DeinitTTy();
+			static void			_SwitchVt(int sig);
+
+			LibInputEventStream* fEventStream;
+
 			FBDevBuffer*		fBackBuffer;
 			FBDevBuffer*		fFrontBuffer;
 
@@ -68,11 +77,14 @@ private:
 
 			int					fFrameBuffer;
 
-			LibInputEventStream* fEventStream;
-
 			struct fb_fix_screeninfo	fInfo;
 			struct fb_var_screeninfo	fVInfo;
 
+			struct sigaction	fSigUsr1;
+			struct sigaction	fSigUsr2;
+
+			struct vt_mode		fVtMode;
+			struct termios		fTermios;              
 };
 
 #endif // VIEW_GRAPHICS_CARD_H

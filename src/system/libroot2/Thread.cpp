@@ -494,9 +494,10 @@ snooze(bigtime_t time)
 status_t
 snooze_until(bigtime_t time, int timeBase)
 {
-	UNIMPLEMENTED();
+	if (timeBase != B_SYSTEM_TIMEBASE)
+		return B_ERROR;
 
-	return B_ERROR;
+	return snooze(time - system_time());
 }
 
 

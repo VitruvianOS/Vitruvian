@@ -4,6 +4,7 @@
 int32
 thread_test(void *data)
 {
+   printf("thread test thread\n");
    thread_id sender;
    int32 code;
    char buf[512];

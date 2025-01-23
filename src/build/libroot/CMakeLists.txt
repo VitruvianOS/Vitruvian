@@ -11,15 +11,17 @@ AddOn(
 	port.cpp
 	main.cpp
 	errors.cpp
+	debug.cpp
 
 	#Area.cpp
-	${LIBROOT_SOURCES}/debug.cpp
+	#${LIBROOT_SOURCES}/debug.cpp
 	${LIBROOT_SOURCES}/driver_settings.cpp
 	#${LIBROOT_SOURCES}/extended_system_info.cpp
 	${LIBROOT_SOURCES}/framebuffer.cpp
 	${LIBROOT_SOURCES}/image.cpp
 	${LIBROOT_SOURCES}/mutex.cpp
 	${LIBROOT_SOURCES}/locks/mutex.cpp
+	${LIBROOT_SOURCES}/Architecture.cpp
 	#${LIBROOT_SOURCES}/parsedate.cpp
 	#Port.cpp
 	#sem.c
@@ -37,12 +39,12 @@ AddOn(
 	${LIBROOT_SOURCES}/compat/byteorder.cpp
 	${LIBROOT_SOURCES}/compat/libc.c
 	#${LIBROOT_SOURCES}/compat/scheduler.c
-	${LIBROOT_SOURCES}/compat/signal.cpp
+	#${LIBROOT_SOURCES}/compat/signal.cpp
 	#${LIBROOT_SOURCES}/compat/system_info.cpp
-	${LIBROOT_SOURCES}/compat/system_revision.c
-	${LIBROOT_SOURCES}/compat/system_ioctl.c
+	#${LIBROOT_SOURCES}/compat/system_revision.c
+	#${LIBROOT_SOURCES}/compat/system_ioctl.c
 	#${LIBROOT_SOURCES}/compat/tls.cpp
-	${LIBROOT_SOURCES}/compat/wait_for_objects.cpp
+	#${LIBROOT_SOURCES}/compat/wait_for_objects.cpp
 
 	${LIBROOT_SOURCES}/fs/find_directory.cpp
 	${LIBROOT_SOURCES}/fs/find_paths.cpp

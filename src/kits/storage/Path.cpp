@@ -109,7 +109,6 @@ BPath::InitCheck() const
 status_t
 BPath::SetTo(const entry_ref* ref)
 {
-	printf("path set to %d\n", ref->fd);
 	Unset();
 	if (!ref)
 		return fCStatus = B_BAD_VALUE;

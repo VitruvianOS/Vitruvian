@@ -78,6 +78,7 @@ set(
 	"headers/private/system/arch/x86_64/"
 	"headers/private/kernel/arch/"
 	"headers/private/kernel/arch/x86/"
+	"headers/private/libroot/"
 )
 
 if(NOT BUILDTOOLS_MODE STREQUAL "1")

@@ -40,7 +40,7 @@ set(SYSTEM_TRANSLATORS
 #	BMPTranslator
 #	EXRTranslator
 #	GIFTranslator
-#	HVIFTranslator
+	HVIFTranslator
 #	ICNSTranslator
 #	ICOTranslator
 #	JPEGTranslator

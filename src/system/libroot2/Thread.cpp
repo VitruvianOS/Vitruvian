@@ -517,6 +517,8 @@ _kern_unblock_thread(thread_id thread, status_t status)
 }
 
 
+// TODO this appears to be used only by RWLockManager
+// we can remove both.
 status_t
 _kern_unblock_threads(thread_id* threads, uint32 count,
 	status_t status)

@@ -40,14 +40,6 @@ DeclareDependency(
 )
 
 DeclareDependency(
-	EXR
-	LIBRARIES	"IlmImf;Half"
-	PACKAGES	"libopenexr-dev"
-	RUNTIMES	"libopenexr25 (>= 2.5.4-2)"
-	INCLUDES	"${HEADERS_PATH_BASE}/OpenEXR/"
-)
-
-DeclareDependency(
 	FREETYPE
 	LIBRARIES	"freetype"
 	PACKAGES	"libfreetype6-dev"
@@ -56,17 +48,10 @@ DeclareDependency(
 )
 
 DeclareDependency(
-	GIF
-	LIBRARIES	"gif"
-	PACKAGES	"libgif-dev"
-	RUNTIMES	"libgif7 (>= 5.1.9-2)"
-)
-
-DeclareDependency(
-	ICNS
-	LIBRARIES	"icns"
-	PACKAGES	"libicns-dev"
-	RUNTIMES	"libicns1 (>= 0.8.1-3.1)"
+	ICU
+	LIBRARIES	"icu"
+	PACKAGES	"libicu-dev"
+	RUNTIMES	"libicu72 (>= 72.1.3)"
 )
 
 DeclareDependency(
@@ -88,27 +73,11 @@ DeclareDependency(
 	INCLUDES	"${HEADERS_PATH_BASE}/libdrm/"
 )
 
-
 DeclareDependency(
-	JPEG
-	LIBRARIES	"jpeg"
-	PACKAGES	"libjpeg-dev"
-	RUNTIMES	"libjpeg62-turbo (>= 2.0.6-4)"
-)
-
-DeclareDependency(
-	PNG
-	LIBRARIES	"png"
-	PACKAGES	"libpng-dev"
-	RUNTIMES	"libpng16-16 (>= 1.6.37-3)"
-	INCLUDES	"${HEADERS_PATH_BASE}/libpng/"
-)
-
-DeclareDependency(
-	TIFF
-	LIBRARIES	"tiff"
-	PACKAGES	"libtiff-dev"
-	RUNTIMES	"libtiff5 (>= 4.2.0-1)"
+	GIF
+	LIBRARIES	"gif"
+	PACKAGES	"libgif-dev"
+	RUNTIMES	"libgif7 (>= 5.1.9-2)"
 )
 
 DeclareDependency(
@@ -124,17 +93,54 @@ DeclareDependency(
 )
 
 DeclareDependency(
-	WEBP
-	LIBRARIES	"webp"
-	PACKAGES	"libwebp-dev"
-	RUNTIMES	"libwebp6 (>= 0.6.1-2.1)"
-)
-
-DeclareDependency(
 	ZLIB
 	LIBRARIES  "z"
 	PACKAGES  "zlib1g-dev"
 	RUNTIMES  "zlib1g (>= 1:1.2.11)"
 )
+
+#DeclareDependency(
+#	ICNS
+#	LIBRARIES	"icns"
+#	PACKAGES	"libicns-dev"
+#	RUNTIMES	"libicns1 (>= 0.8.1-3.1)"
+#)
+
+#DeclareDependency(
+#	EXR
+#	LIBRARIES	"IlmImf;Half"
+#	PACKAGES	"libopenexr-dev"
+#	RUNTIMES	"libopenexr25 (>= 2.5.4-2)"
+#	INCLUDES	"${HEADERS_PATH_BASE}/OpenEXR/"
+#)
+
+#DeclareDependency(
+#	JPEG
+#	LIBRARIES	"jpeg"
+#	PACKAGES	"libjpeg-dev"
+#	RUNTIMES	"libjpeg62-turbo (>= 2.0.6-4)"
+#)
+
+#DeclareDependency(
+#	PNG
+#	LIBRARIES	"png"
+#	PACKAGES	"libpng-dev"
+#	RUNTIMES	"libpng16-16 (>= 1.6.37-3)"
+#	INCLUDES	"${HEADERS_PATH_BASE}/libpng/"
+#)
+
+#DeclareDependency(
+#	TIFF
+#	LIBRARIES	"tiff"
+#	PACKAGES	"libtiff-dev"
+#	RUNTIMES	"libtiff6 (>= 4.5.0-1)"
+#)
+
+#DeclareDependency(
+#	WEBP
+#	LIBRARIES	"webp"
+#	PACKAGES	"libwebp-dev"
+#	RUNTIMES	"libwebp6 (>= 0.6.1-2.1)"
+#)
 
 file(WRITE generated.x86/build_deps.txt "${DEP_LIST}")

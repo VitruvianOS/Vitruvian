@@ -1,6 +1,4 @@
 
-find_package(ICU REQUIRED COMPONENTS i18n uc dt in io)
-
 target_sources(be PRIVATE
 	cat.cpp
 	Catalog.cpp

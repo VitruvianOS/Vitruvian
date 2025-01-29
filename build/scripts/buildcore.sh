@@ -2,7 +2,7 @@
 
 set -e
 
-basedir=`realpath ./generated.x86`
+basedir=`realpath ./`
 
 bold=$(tput bold)
 normal=$(tput sgr0)

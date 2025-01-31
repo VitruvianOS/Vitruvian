@@ -1,11 +1,9 @@
 #!/bin/sh
-
 set -e
 
 basedir=`realpath ./`
 
 bold=$(tput bold)
-normal=$(tput sgr0)
 
 echo ${bold}Building core packages...
 

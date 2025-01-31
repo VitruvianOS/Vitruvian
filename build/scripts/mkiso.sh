@@ -1,5 +1,4 @@
 #!/bin/sh
-
 set -e
 
 basedir=`realpath ./`
@@ -10,17 +9,21 @@ normal=$(tput sgr0)
 # Check if any local deb file exist
 count=`ls -1 $basedir/*.deb 2>/dev/null | wc -l`
 if [ $count != 0 ]; then
-sudo mount -o bind $basedir/  $basedir/LIVE_BOOT/chroot/tmp/
+sudo mount -o bind $basedir/ $basedir/LIVE_BOOT/chroot/tmp/
 else
 echo ${bold}No deb file generated! Please run cpack inside /$basedir/
 echo ${normal}
 exit
 fi
 
+cleanup() {
+  echo "Unmounting $basedir/LIVE_BOOT/chroot/tmp/"
+  sudo umount $basedir/LIVE_BOOT/chroot/tmp/
+}
+trap cleanup EXIT
+
 sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
-apt install -y -f /tmp/*.deb &&\
-passwd; exit"
-sudo umount $basedir/LIVE_BOOT/chroot/tmp/ &\
+apt install -y -f --reinstall /tmp/*.deb && depmod --basedir=./ 6.1.0-29-amd64 && exit"
 
 echo ${bold}Create Directories for Live Environment Files...
 echo ${normal}

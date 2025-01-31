@@ -1,6 +1,9 @@
 #!/bin/sh
+
+kernelversion=`cat ./kernelversion.conf`
+
 # Generate the buildsystem
 # TODO document flags
-cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=1 -DBUILDTOOLS_DIR=../buildtools .. -GNinja
+cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=1 -DBUILDTOOLS_DIR=../buildtools -DKERNEL_RELEASE=$kernelversion .. -GNinja
 
 echo "Configured correctly!"

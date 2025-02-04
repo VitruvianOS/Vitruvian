@@ -27,4 +27,4 @@ jobs:
     - name: configure generated.x86
       run: cd generated.x86 && ../configure
     - name: ninja generated.x86
-      run: cd generated.x86 && export TERM=xterm-256color && bash ../build/scripts/setupenv.sh && ../configure && ninja
+      run: cd generated.x86 && export TERM=xterm-256color && bash ../build/scripts/setupenv.sh && ../configure && ninja && cpack && ../build/scripts/mkiso.sh

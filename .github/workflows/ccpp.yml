@@ -6,20 +6,25 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    container: debian:bookworm
     
     steps:
     - uses: actions/checkout@v1
     - name: update
-      run: sudo apt update
-    - name: cmake
-      run: wget https://github.com/Kitware/CMake/releases/download/v3.13.4/cmake-3.13.4-Linux-x86_64.tar.gz && tar -xvf cmake-3.13.4-Linux-x86_64.tar.gz
+      run: apt update
     - name: deps
-      run: sudo apt install ninja-build cmake bison flex libfl-dev libfreetype6-dev libgif-dev libicns-dev libinput-dev libjpeg-dev libncurses-dev libopenexr-dev libpng-dev libtiff-dev libudev-dev libwebp-dev zlib1g-dev --fix-missing
+      run: apt install -y build-essential elfutils generate-ninja git libicu-dev ninja-build cmake bison flex libdrm-dev libelf-dev libfl-dev libfreetype6-dev libgif-dev libicns-dev libinput-dev libjpeg-dev libncurses-dev libopenexr-dev libpng-dev libtiff-dev libudev-dev libwebp-dev linux-headers-6.1.0-29-amd64 sudo zlib1g-dev --fix-missing
     - name: mkdir
-      run: mkdir generated.x86
-    - name: configure
-      run: cd generated.x86 && git submodule update --init --recursive ../
-    - name: configure
-      run: cd generated.x86 && ../cmake-3.13.4-Linux-x86_64/bin/cmake .. -GNinja
-    - name: ninja
-      run: cd generated.x86 && ninja
+      run: mkdir buildtools && mkdir generated.x86
+    - name: directory exception
+      run: cd buildtools && git config --global --add safe.directory /__w/Vitruvian/Vitruvian
+    - name: sumodule update
+      run: cd buildtools && git submodule update --init --recursive ../
+    - name: configure buildtools
+      run: cd buildtools && cmake -DBUILDTOOLS_MODE=1 .. -GNinja
+    - name: ninja buildtools
+      run: cd buildtools && ninja
+    - name: configure generated.x86
+      run: cd generated.x86 && ../configure
+    - name: ninja generated.x86
+      run: cd generated.x86 && export TERM=xterm-256color && bash ../build/scripts/setupenv.sh && ../configure && ninja

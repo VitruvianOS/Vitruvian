@@ -29,7 +29,7 @@ using std::nothrow;
 #ifndef __VOS__
  #	include "AccelerantHWInterface.h"
  #else
-//#	include "DrmHWInterface.h"
+#	include "DrmHWInterface.h"
 #	include "FBDevHWInterface.h"
 #endif
 #else
@@ -77,11 +77,13 @@ ScreenManager::ScreenManager()
 {
 	_ScanDrivers();
 
+#ifndef __VOS__
 	// turn on node monitoring the graphics driver directory
 	BEntry entry("/dev/graphics");
 	node_ref nodeRef;
 	if (entry.InitCheck() == B_OK && entry.GetNodeRef(&nodeRef) == B_OK)
 		watch_node(&nodeRef, B_WATCH_DIRECTORY, this);
+#endif
 }
 
 
@@ -215,8 +217,8 @@ ScreenManager::_ScanDrivers()
 #ifndef __VOS__
  		  interface = new AccelerantHWInterface();
 #else
-//		interface = new DrmHWInterface();
-		interface = new FBDevHWInterface();
+		interface = new DrmHWInterface();
+//		interface = new FBDevHWInterface();
 #endif
 #elif defined(USE_DIRECT_WINDOW_TEST_MODE)
 		  interface = new DWindowHWInterface();

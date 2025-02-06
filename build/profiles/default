@@ -102,3 +102,5 @@ set(SYSTEMD_SERVICES
 )
 
 install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)
+
+ImageIncludeFile(data/etc/modules-load.d/nexus.conf /etc/modules-load.d/)

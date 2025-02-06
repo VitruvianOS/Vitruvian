@@ -1,3 +1,5 @@
 #!/bin/sh
 
 systemctl enable app_server.service input_server.service deskbar.service registrar.service
+
+echo 'nexus' | tee -a /etc/modules

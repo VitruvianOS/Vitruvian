@@ -99,6 +99,21 @@ DeclareDependency(
 	RUNTIMES  "zlib1g (>= 1:1.2.11)"
 )
 
+# This should be needed just for backward-cpp
+DeclareDependency(
+	BINUTILS
+	LIBRARIES  "bfd"
+	PACKAGES  "binutils-dev"
+	RUNTIMES  "libbinutils (>= 2.40-2)"
+)
+
+DeclareDependency(
+	LIBDRM
+	LIBRARIES  "drm"
+	PACKAGES  "libdrm-dev"
+	RUNTIMES  "libdrm2 (>= 2.4.114-1)"
+)
+
 #DeclareDependency(
 #	ICNS
 #	LIBRARIES	"icns"

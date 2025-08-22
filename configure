@@ -1,6 +1,6 @@
 #!/bin/sh
 
-kernelversion=`cat ./kernelversion.conf`
+kernelversion=`cat ./localkernelversion.conf`
 
 # Generate the buildsystem
 # TODO document flags

@@ -6,7 +6,7 @@
 #include "Team.h"
 #include "KernelDebug.h"
 
-#include "../kernel/nexus/nexus.h"
+#include "../kernel/nexus/nexus/nexus.h"
 
 
 port_id	

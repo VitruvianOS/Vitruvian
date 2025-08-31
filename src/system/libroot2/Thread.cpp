@@ -23,7 +23,7 @@
 #include "Team.h"
 #include "Thread.h"
 
-#include "../kernel/nexus/nexus.h"
+#include "../kernel/nexus/nexus/nexus.h"
 
 
 // TODO remove

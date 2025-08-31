@@ -247,9 +247,9 @@ FBDevHWInterface::_InitTTy(int ttyNumber)
 
 	gTTy = _OpenTTy(ttyNumber);
 
-	if ( ioctl(gTTy, KDSETMODE, KD_GRAPHICS) == -1 ) {
-		printf( "Failed to switch tty mode to KD_GRAPHICS");
-	}
+	//if ( ioctl(gTTy, KDSETMODE, KD_GRAPHICS) == -1 ) {
+	//	printf( "Failed to switch tty mode to KD_GRAPHICS");
+	//}
 
 	// Setup keyboard
 	tcgetattr(0, &fTermios);

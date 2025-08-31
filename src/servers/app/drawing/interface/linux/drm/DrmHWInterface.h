@@ -68,10 +68,7 @@ public:
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 
 private:
-			DrmDevice*			_FindDev(int fd) const;
-
 			int					fFd;
-			DrmDevice*			fDevList;
 
 			DrmBuffer*			fFrontBuffer;
 			DrmBuffer*			fBackBuffer;

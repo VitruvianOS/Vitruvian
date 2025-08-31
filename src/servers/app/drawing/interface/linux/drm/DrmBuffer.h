@@ -8,6 +8,7 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
+#include "modeset.h"
 #include "RenderingBuffer.h"
 
 
@@ -18,29 +19,9 @@
 #endif
 
 
-class DrmDevice {
-public:
-	uint32*			buffer;
-	uint32			conn_id;
-	uint32			enc_id;
-	uint32			crtc_id;
-	uint32			fb_id;
-	uint32			width;
-	uint32			height;
-	uint32			pitch;
-	uint32			size;
-	uint32			handle;
-
-	drmModeModeInfo mode;
-	drmModeCrtc*	crtc;
-
-	DrmDevice*		next;
-};
-
-
 class DrmBuffer : public RenderingBuffer {
 public:
-								DrmBuffer(int fd, DrmDevice* dev);
+								DrmBuffer(int fd, modeset_dev* dev);
 	virtual						~DrmBuffer();
 
 	virtual	status_t			InitCheck() const;
@@ -52,7 +33,7 @@ public:
 	virtual	uint32				Height() const;
 
 private:
-			DrmDevice*			fDev;
+			modeset_dev*		fDev;
 			status_t			fErr;
 			color_space			fColorSpace;
 

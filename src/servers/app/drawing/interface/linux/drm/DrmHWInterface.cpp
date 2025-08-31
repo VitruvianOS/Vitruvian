@@ -13,95 +13,56 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "modeset.h"
 
 static const char* sDriPath = "/dev/dri/card0";
-
-
-DrmDevice*
-DrmHWInterface::_FindDev(int fd) const
-{
-	drmModeRes* res = drmModeGetResources(fd);
-	if (res == NULL)
-		return NULL;
-
-	DrmDevice* devHead = NULL;
-	for (int i = 0; i < res->count_connectors; i++) {
-		drmModeConnector* conn = drmModeGetConnector(fd, res->connectors[i]);
-
-		if (conn != NULL && conn->connection == DRM_MODE_CONNECTED
-				&& conn->count_modes > 0) {
-			DrmDevice* dev = new DrmDevice();
-			memset(dev, 0, sizeof(DrmDevice));
-
-			dev->conn_id = conn->connector_id;
-			dev->enc_id = conn->encoder_id;
-			dev->next = NULL;
-
-			memcpy(&dev->mode, &conn->modes[0], sizeof(drmModeModeInfo));
-			dev->width = conn->modes[0].hdisplay;
-			dev->height = conn->modes[0].vdisplay;
-
-			drmModeEncoder* enc = drmModeGetEncoder(fd, dev->enc_id);
-			if (enc  == NULL)
-				return NULL;
-
-			dev->crtc_id = enc->crtc_id;
-			drmModeFreeEncoder(enc);
-
-			dev->crtc = NULL;
-
-			dev->next = devHead;
-			devHead = dev;
-		}
-		drmModeFreeConnector(conn);
-	}
-	drmModeFreeResources(res);
-
-	return devHead;
-}
 
 
 DrmHWInterface::DrmHWInterface()
 	:
 	HWInterface(false, false),
 	fFd(-1),
-	fDevList(NULL),
 	fFrontBuffer(NULL),
 	fBackBuffer(NULL),
 	fEventStream(NULL)
 {
-	if ((fFd = open(sDriPath, O_RDWR)) < 0) {
-		fprintf(stderr, "Error Opening \"%s\"\n", sDriPath);
+
+	int ret;
+	struct modeset_dev *iter;
+
+	fprintf(stderr, "using card '%s'\n", sDriPath);
+
+	/* open the DRM device */
+	ret = modeset_open(&fFd, sDriPath);
+	if (ret)
 		return;
+
+	/* prepare all connectors and CRTCs */
+	ret = modeset_prepare(fFd);
+	if (ret)
+		return;
+
+	drmSetMaster(fFd);
+	/* perform actual modesetting on each found connector+CRTC */
+	for (iter = get_dev(); iter; iter = iter->next) {
+		iter->saved_crtc = drmModeGetCrtc(fFd, iter->crtc);
+		ret = drmModeSetCrtc(fFd, iter->crtc, iter->fb, 0, 0,
+				     &iter->conn, 1, &iter->mode);
+		if (ret)
+			fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
+				iter->conn, errno);
 	}
 
-	int flags = fcntl(fFd, F_GETFD);
-	if (flags < 0 || fcntl(fFd, F_SETFD, flags | FD_CLOEXEC) < 0)
-		return;
+	fFrontBuffer = new DrmBuffer(fFd, get_dev());
+	fEventStream = new LibInputEventStream(get_dev()->width, get_dev()->height);
 
-	uint64_t hasDumbBuffer;
-	if (drmGetCap(fFd, DRM_CAP_DUMB_BUFFER, &hasDumbBuffer) < 0
-			|| hasDumbBuffer == 0) {
-		return;
-	}
+	fDisplayMode.virtual_width = get_dev()->width;
+	fDisplayMode.virtual_height = get_dev()->height;
+	fDisplayMode.space = B_RGB32;
 
-	fDevList = _FindDev(fFd);
+	//modeset_draw();
 
-	if (fDevList == NULL) {
-		fprintf(stderr, "Error: Can't find any DRM device\n");
-		return;
-	}
-
-	printf("Connectors list:\n\n");
-	for (DrmDevice* dev = fDevList; dev != NULL; dev = dev->next) {
-		printf("connector id:%d\n", dev->conn_id);
-		printf("\tencoder id:%d crtc id:%d fb id:%d\n",
-			dev->enc_id, dev->crtc_id, dev->fb_id);
-		printf("\twidth:%d height:%d\n", dev->width, dev->height);
-	}
-
-	fFrontBuffer = new DrmBuffer(fFd, fDevList);
-	fEventStream = new LibInputEventStream(fDevList->width, fDevList->height);
+	//exit(0);
 }
 
 
@@ -109,33 +70,9 @@ DrmHWInterface::~DrmHWInterface()
 {
 	CALLED();
 
-	struct drm_mode_destroy_dumb destroyReq;
+	drmDropMaster(fFd);
 
-	for (DrmDevice* device = fDevList; device != NULL;) {
-		if (device->crtc) {
-			drmModeSetCrtc(fFd, device->crtc->crtc_id,
-				device->crtc->buffer_id,
-				device->crtc->x,
-				device->crtc->y,
-				&device->conn_id, 1,
-				&device->crtc->mode);
-		}
-
-		drmModeFreeCrtc(device->crtc);
-		munmap(device->buffer, device->size);
-
-		drmModeRmFB(fFd, device->fb_id);
-
-		memset(&destroyReq, 0, sizeof(destroyReq));
-		destroyReq.handle = device->handle;
-		drmIoctl(fFd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroyReq);
-
-		DrmDevice* tmp = device;
-		device = device->next;
-		delete tmp;
-	}
-
-	close(fFd);
+	modeset_cleanup(fFd);
 
 	delete fFrontBuffer;
 	delete fEventStream;

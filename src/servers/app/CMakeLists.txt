@@ -1,5 +1,8 @@
 find_package(Freetype REQUIRED)
 
+find_library(DRM_LIBRARY NAMES drm)
+find_path(DRM_INCLUDE_DIR NAMES libdrm/drm.h)
+
 Server(
 	app_server
 
@@ -101,8 +104,9 @@ Server(
 	#drawing/interface/local/AccelerantBuffer.cpp
 	#drawing/interface/local/AccelerantHWInterface.cpp
 
-	#drawing/interface/linux/drm/DrmHWInterface.cpp
-	#drawing/interface/linux/drm/DrmBuffer.cpp
+	drawing/interface/linux/drm/DrmHWInterface.cpp
+	drawing/interface/linux/drm/DrmBuffer.cpp
+	drawing/interface/linux/drm/modeset.c
 
 	drawing/interface/linux/fbdev/FBDevHWInterface.cpp
 	drawing/interface/linux/fbdev/FBDevBuffer.cpp
@@ -119,7 +123,7 @@ Server(
 	LIBS be root localestub shared agg icon linprog ${FREETYPE_LIBRARY} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES}
 
 	INCLUDES
-	${DRM_INCLUDES}
+	${DRM_INCLUDE_DIR}/libdrm/
 	${FREETYPE_INCLUDE_DIRS}
 
 	"./drawing"

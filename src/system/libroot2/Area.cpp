@@ -19,7 +19,7 @@ namespace BKernelPrivate {
 
 
 #define AREA_PATH "/dev/shm/vproc/area/"
-
+#define VPROC_PATH "/dev/shm/vproc/"
 
 class Area {
 public:
@@ -436,6 +436,13 @@ int
 Area::_PublishArea(const char* name, int oflag)
 {
 	fName = name;
+
+    struct stat st;
+
+	if (stat(AREA_PATH, &st) != 0) {
+		mkdir(VPROC_PATH, 0700);
+		mkdir(AREA_PATH, 0700);
+	}
 
 	std::string path = AREA_PATH;
 	path.append(name);

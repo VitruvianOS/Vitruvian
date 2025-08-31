@@ -2,6 +2,7 @@
 set -e
 
 basedir=`realpath ./`
+imagekernelversion=`cat ./imagekernelversion.conf`
 
 bold=$(tput bold)
 normal=$(tput sgr0)
@@ -10,6 +11,7 @@ normal=$(tput sgr0)
 count=`ls -1 $basedir/*.deb 2>/dev/null | wc -l`
 if [ $count != 0 ]; then
 sudo mount -o bind $basedir/ $basedir/LIVE_BOOT/chroot/tmp/
+sudo mount -t proc /proc ./LIVE_BOOT/chroot/proc/
 else
 echo ${bold}No deb file generated! Please run cpack inside /$basedir/
 echo ${normal}
@@ -19,11 +21,20 @@ fi
 cleanup() {
   echo "Unmounting $basedir/LIVE_BOOT/chroot/tmp/"
   sudo umount $basedir/LIVE_BOOT/chroot/tmp/
+  sudo umount ./LIVE_BOOT/chroot/proc/
 }
 trap cleanup EXIT
 
+if [ -f $basedir/LIVE_BOOT/image/live/filesystem.squashfs ]; then
+    echo "Removing previous squashfs image..."
+    rm -f $basedir/LIVE_BOOT/image/live/filesystem.squashfs
+fi 
+
 sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
-apt install -y -f --reinstall /tmp/*.deb && depmod --basedir=./ 6.1.0-29-amd64 && exit"
+apt install -y -f --reinstall /tmp/*.deb && depmod -v $imagekernelversion && exit"
+
+sudo umount ./LIVE_BOOT/chroot/proc/
+sudo umount ./LIVE_BOOT/chroot/tmp/
 
 echo ${bold}Create Directories for Live Environment Files...
 echo ${normal}

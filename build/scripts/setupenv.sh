@@ -22,7 +22,7 @@ apt update && apt install -y --no-install-recommends apt-utils dialog linux-imag
 echo "root:vitruvio"|chpasswd; exit"
 
 ls ./LIVE_BOOT/chroot/lib/modules | head -n1 > imagekernelversion.conf
-uname -r > localkernelversion.conf
+uname -r > hostkernelversion.conf
 
 echo ${bold}Success!
 echo ${normal}

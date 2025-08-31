@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 
-project(VOS VERSION 0.2.0 LANGUAGES CXX C)
+project(VOS VERSION 0.2.5 LANGUAGES CXX C)
 
 message(STATUS "")
 message(STATUS "============= Build environment =============")

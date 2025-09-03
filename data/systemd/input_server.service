@@ -7,9 +7,9 @@ After=app_server.service
 ExecStartPre=/bin/sleep 0.5
 ExecStart=/system/servers/input_server
 StandardInput=tty-force
-StandardOutput=journal+console
-StandardError=inherit
-Restart=always
+StandardOutput=append:/var/log/inputserver.log
+StandardError=append:/var/log/inputserver.log
+Restart=no
 RestartSec=500ms
 
 [Install]

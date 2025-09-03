@@ -5,9 +5,9 @@ Conflicts=getty@tty1.service
 [Service]
 ExecStart=/system/servers/registrar
 StandardInput=tty-force
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
+StandardOutput=append:/var/log/registrar.log
+StandardError=append:/var/log/registrar.log
+Restart=no
 RestartSec=500ms
 
 [Install]

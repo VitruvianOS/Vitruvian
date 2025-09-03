@@ -6,10 +6,11 @@ After=registrar.service
 [Service]
 ExecStartPre=/bin/sleep 0.5
 ExecStart=/system/servers/app_server
+Environment=DISPLAY=:0
 StandardInput=tty-force
-StandardOutput=inherit
-StandardError=inherit
-Restart=always
+StandardOutput=append:/var/log/appserver.log
+StandardError=append:/var/log/appserver.log
+Restart=no
 RestartSec=500ms
 
 [Install]

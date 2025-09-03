@@ -7,9 +7,9 @@ After=input_server.service
 ExecStartPre=/bin/sleep 0.5
 ExecStart=/system/servers/Deskbar
 StandardInput=tty-force
-StandardOutput=journal+console
-StandardError=inherit
-Restart=always
+StandardOutput=append:/var/log/deskbar.log
+StandardError=append:/var/log/deskbar.log
+Restart=no
 RestartSec=500ms
 
 [Install]

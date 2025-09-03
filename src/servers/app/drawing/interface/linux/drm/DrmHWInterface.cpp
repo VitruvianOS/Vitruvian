@@ -16,17 +16,15 @@
 #include "modeset.h"
 
 static const char* sDriPath = "/dev/dri/card0";
-
+int DrmHWInterface::fFd = -1;
 
 DrmHWInterface::DrmHWInterface()
 	:
 	HWInterface(false, false),
-	fFd(-1),
 	fFrontBuffer(NULL),
 	fBackBuffer(NULL),
 	fEventStream(NULL)
 {
-
 	int ret;
 	struct modeset_dev *iter;
 
@@ -42,7 +40,10 @@ DrmHWInterface::DrmHWInterface()
 	if (ret)
 		return;
 
+	TTy::InitTTy(1, &SwitchVt);
+
 	drmSetMaster(fFd);
+
 	/* perform actual modesetting on each found connector+CRTC */
 	for (iter = get_dev(); iter; iter = iter->next) {
 		iter->saved_crtc = drmModeGetCrtc(fFd, iter->crtc);
@@ -55,14 +56,11 @@ DrmHWInterface::DrmHWInterface()
 
 	fFrontBuffer = new DrmBuffer(fFd, get_dev());
 	fEventStream = new LibInputEventStream(get_dev()->width, get_dev()->height);
-
 	fDisplayMode.virtual_width = get_dev()->width;
 	fDisplayMode.virtual_height = get_dev()->height;
 	fDisplayMode.space = B_RGB32;
 
-	//modeset_draw();
-
-	//exit(0);
+	//ioctl(TTy::gTTy, KDSETMODE, KD_GRAPHICS);
 }
 
 
@@ -71,8 +69,9 @@ DrmHWInterface::~DrmHWInterface()
 	CALLED();
 
 	drmDropMaster(fFd);
-
 	modeset_cleanup(fFd);
+
+	TTy::DeinitTTy();
 
 	delete fFrontBuffer;
 	delete fEventStream;
@@ -263,4 +262,22 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 {
 	CALLED();
 	return B_ERROR;
+}
+
+
+void
+DrmHWInterface::SwitchVt(int sig)
+{
+	switch (sig)
+	{
+		case SIGUSR1:
+			drmDropMaster(fFd);
+			ioctl(TTy::gTTy, VT_RELDISP, 1);
+			break;
+		case SIGUSR2:
+			ioctl(TTy::gTTy, VT_RELDISP, VT_ACTIVATE);
+			ioctl(TTy::gTTy, VT_RELDISP, VT_ACKACQ);
+			drmSetMaster(fFd);
+			break;
+	}
 }

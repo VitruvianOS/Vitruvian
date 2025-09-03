@@ -12,6 +12,7 @@
 #include "DrmBuffer.h"
 #include "HWInterface.h"
 #include "LibInputEventStream.h"
+#include "TTy.h"
 
 
 #if DEBUG
@@ -68,7 +69,9 @@ public:
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 
 private:
-			int					fFd;
+			static void		 	SwitchVt(int sig);
+
+			static int			fFd;
 
 			DrmBuffer*			fFrontBuffer;
 			DrmBuffer*			fBackBuffer;

@@ -112,6 +112,7 @@ Server(
 	drawing/interface/linux/fbdev/FBDevBuffer.cpp
 
 	drawing/interface/linux/LibInputEventStream.cpp
+	drawing/interface/linux/TTy.cpp
 
 	stackandtile/SATDecorator.cpp
 	stackandtile/SATGroup.cpp

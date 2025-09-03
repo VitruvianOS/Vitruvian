@@ -9,11 +9,9 @@
 #include "HWInterface.h"
 
 #include "LibInputEventStream.h"
+#include "TTy.h"
 
 #include <linux/fb.h>
-#include <linux/vt.h>
-#include <linux/kd.h>
-#include <termios.h>
 
 
 class FBDevBuffer;
@@ -63,11 +61,6 @@ public:
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 
 private:
-			status_t			_InitTTy(int ttyNumber);
-			int					_OpenTTy(int ttyNumber);
-			void				_DeinitTTy();
-			static void			_SwitchVt(int sig);
-
 			LibInputEventStream* fEventStream;
 
 			FBDevBuffer*		fBackBuffer;
@@ -79,12 +72,6 @@ private:
 
 			struct fb_fix_screeninfo	fInfo;
 			struct fb_var_screeninfo	fVInfo;
-
-			struct sigaction	fSigUsr1;
-			struct sigaction	fSigUsr2;
-
-			struct vt_mode		fVtMode;
-			struct termios		fTermios;              
 };
 
 #endif // VIEW_GRAPHICS_CARD_H

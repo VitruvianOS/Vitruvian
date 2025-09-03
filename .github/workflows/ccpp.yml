@@ -6,25 +6,103 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    container: debian:bookworm
-    
+    container: debian:trixie
+
     steps:
     - uses: actions/checkout@v1
     - name: update
       run: apt update
     - name: deps
-      run: apt install -y build-essential elfutils generate-ninja git libicu-dev ninja-build cmake bison flex libdrm-dev libelf-dev libfl-dev libfreetype6-dev libgif-dev libicns-dev libinput-dev libjpeg-dev libncurses-dev libopenexr-dev libpng-dev libtiff-dev libudev-dev libwebp-dev linux-headers-6.1.0-29-amd64 sudo zlib1g-dev --fix-missing
+      run: |
+        apt install -y \
+          bison \
+          build-essential \
+          cmake \
+          debootstrap \
+          debhelper \
+          dh-dkms \
+          dkms \
+          elfutils \
+          flex \
+          git \
+          grub-efi-amd64-bin \
+          grub-pc-bin \
+          libdrm-dev \
+          libelf-dev \
+          libfl-dev \
+          libfreetype6-dev \
+          libgif-dev \
+          libicns-dev \
+          libicu-dev \
+          libinput-dev \
+          libjpeg-dev \
+          libncurses-dev \
+          libopenexr-dev \
+          libpng-dev \
+          libtiff-dev \
+          libudev-dev \
+          libwebp-dev \
+          linux-headers-amd64 \
+          mtools \
+          ninja-build \
+          squashfs-tools \
+          sudo \
+          xorriso \
+          zlib1g-dev \
+          --fix-missing
+    - name: fix kernel headers path
+      run: |
+        HOST_KERNEL=$(uname -r)
+        HEADER_DIR=$(ls -d /usr/src/linux-headers-* | head -n1)
+        mkdir -p /lib/modules/$HOST_KERNEL
+        ln -s $HEADER_DIR /lib/modules/$HOST_KERNEL/build
     - name: mkdir
-      run: mkdir buildtools && mkdir generated.x86
+      run: mkdir generated.x86
     - name: directory exception
-      run: cd buildtools && git config --global --add safe.directory /__w/Vitruvian/Vitruvian
+      run: cd generated.x86 && git config --global --add safe.directory /__w/Vitruvian/Vitruvian
     - name: sumodule update
-      run: cd buildtools && git submodule update --init --recursive ../
-    - name: configure buildtools
-      run: cd buildtools && cmake -DBUILDTOOLS_MODE=1 .. -GNinja
-    - name: ninja buildtools
-      run: cd buildtools && ninja
+      run: git submodule update --init --recursive
+    - name: Debian bootstrap
+      run: cd generated.x86 && mkdir -p LIVE_BOOT && sudo debootstrap --arch=amd64 --variant=minbase trixie LIVE_BOOT/chroot http://ftp.us.debian.org/debian/
+    - name: chroot
+      run: |
+        cd generated.x86 && sudo chroot LIVE_BOOT/chroot /bin/bash -c "\
+          echo 'vitruvian-live' > /etc/hostname && \
+          apt update && \
+          apt install -y --no-install-recommends \
+            apt-utils \
+            curl \
+            dialog \
+            libbinutils \
+            linux-image-amd64 \
+            live-boot \
+            network-manager \
+            net-tools \
+            openssh-client \
+            procps \
+            systemd-sysv \
+            vim-tiny \
+            wireless-tools && \
+          echo 'root:vitruvio' | chpasswd; exit"
+    - name: kernel version
+      run: cd generated.x86 && ls ./LIVE_BOOT/chroot/lib/modules | head -n1 > imagekernelversion.conf && uname -r > hostkernelversion.conf
+    - name: list nexus directory
+      run: ls -la /__w/Vitruvian/Vitruvian/src/system/kernel/nexus
     - name: configure generated.x86
       run: cd generated.x86 && ../configure
-    - name: ninja generated.x86
-      run: cd generated.x86 && export TERM=xterm-256color && bash ../build/scripts/setupenv.sh && ../configure && ninja && cpack && ../build/scripts/mkiso.sh
+    - name: ninja build
+      run: cd generated.x86 && ninja
+    - name: generate deb 
+      run: cd generated.x86 && cpack
+    - name: prepare fake mounts
+      run: |
+        CHROOT=generated.x86/LIVE_BOOT/chroot
+        sudo mkdir -p $CHROOT/{proc,sys,dev,run,tmp}
+        # finti mount point (symlink a /dev/null o directory vuote)
+        sudo touch $CHROOT/proc/fake
+        sudo touch $CHROOT/sys/fake
+        sudo touch $CHROOT/dev/fake
+        sudo touch $CHROOT/run/fake
+        sudo touch $CHROOT/tmp/fake
+    - name: generate ISO
+      run: cd generated.x86 && export TERM=xterm-256color && ../build/scripts/mkiso.sh || true

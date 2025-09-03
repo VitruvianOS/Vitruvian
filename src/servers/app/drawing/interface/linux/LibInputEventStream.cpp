@@ -191,6 +191,26 @@ LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 		case LIBINPUT_EVENT_DEVICE_REMOVED:
 			break;
 
+		case LIBINPUT_EVENT_POINTER_MOTION_ABSOLUTE:
+		{
+			libinput_event_pointer* e
+				= libinput_event_get_pointer_event(ev);
+
+			what = B_MOUSE_MOVED;
+			
+			fMouseButtons = libinput_event_pointer_get_button(e);
+
+			double dx = libinput_event_pointer_get_absolute_x_transformed(e, fWidth);
+			double dy = libinput_event_pointer_get_absolute_y_transformed(e, fHeight);
+			fMousePosition.x = static_cast<int>(dx);
+			fMousePosition.y = static_cast<int>(dy);
+			event->AddPoint("where", fMousePosition);
+			event->AddInt32("buttons", fMouseButtons);
+
+			fLatestMouseMovedEvent = event;
+			break;
+		}
+
 		case LIBINPUT_EVENT_POINTER_MOTION:
 		case LIBINPUT_EVENT_POINTER_BUTTON:
 		{

@@ -168,7 +168,7 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 	switch (event->what)
 	{
 
-	#if __GNUC__ <= 14
+	#if __GNUC__ <= 13
 		case proc_event::what::PROC_EVENT_FORK:
 	#else
 		case PROC_EVENT_FORK:
@@ -193,7 +193,7 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 			break;
 		}
 
-	#if __GNUC__ <= 14
+	#if __GNUC__ <= 13
 		case proc_event::what::PROC_EVENT_EXEC:
 	#else
 		case PROC_EVENT_EXEC:
@@ -205,7 +205,7 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 			break;
 		}
 
-	#if __GNUC__ <= 14
+	#if __GNUC__ <= 13
 		case proc_event::what::PROC_EVENT_EXIT:
 	#else
 		case PROC_EVENT_EXIT:

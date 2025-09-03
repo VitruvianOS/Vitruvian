@@ -167,7 +167,12 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 	struct proc_event* event = (struct proc_event*)header->data;
 	switch (event->what)
 	{
+
+	#if __GNUC__ <= 14
 		case proc_event::what::PROC_EVENT_FORK:
+	#else
+		case PROC_EVENT_FORK:
+	#endif
 		{
 			if (event->event_data.fork.child_pid
 					== event->event_data.fork.child_tgid) {
@@ -188,7 +193,11 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 			break;
 		}
 
+	#if __GNUC__ <= 14
 		case proc_event::what::PROC_EVENT_EXEC:
+	#else
+		case PROC_EVENT_EXEC:
+	#endif
 		{
 			Notify(B_WATCH_SYSTEM_TEAM_CREATION
 					| B_WATCH_SYSTEM_TEAM_DELETION,
@@ -196,7 +205,11 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 			break;
 		}
 
+	#if __GNUC__ <= 14
 		case proc_event::what::PROC_EVENT_EXIT:
+	#else
+		case PROC_EVENT_EXIT:
+	#endif
 		{
 			if (event->event_data.exit.process_pid
 					== event->event_data.exit.process_tgid) {

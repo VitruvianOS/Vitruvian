@@ -47,8 +47,6 @@ target_sources(root PRIVATE
 	locks/init_once.cpp
 	locks/mutex.cpp
 	locks/recursive_lock.cpp
-
-	${BACKWARD_ENABLE}
 )
 
 add_dependencies(root nexus)
@@ -56,5 +54,3 @@ add_dependencies(root nexus)
 target_include_directories(root PRIVATE
 	"./"
 )
-
-add_backward(root)

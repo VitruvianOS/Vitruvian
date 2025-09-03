@@ -20,8 +20,6 @@
 
 #include "KernelDebug.h"
 
-#include <backward.hpp>
-
 #define OPEN_BY_INODE_WORKAROUND 1
 
 // TODO convert the convertible errno errors in return
@@ -66,10 +64,6 @@ getPath(int fd, const char* name, std::string& path)
 		_kern_normalize_path(name, true, buf);
 		path = std::string(buf);
 	}
-
-	using namespace backward;
-	StackTrace st; st.load_here(32);
-	Printer p; p.print(st);
 
 	printf("getPath found %s fd %d\n", path.c_str(), fd);
 	return B_OK;
@@ -308,10 +302,6 @@ _kern_open_entry_ref(dev_t device, ino_t node, const char* name,
 {
 	UNIMPLEMENTED();
 
-	using namespace backward;
-	StackTrace st; st.load_here(32);
-	Printer p; p.print(st);
-
 	if (name == NULL || device < 0 || node < 0)
 		return B_BAD_VALUE;
 
@@ -348,10 +338,6 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 	char* userPath, size_t pathLength)
 {
 	UNIMPLEMENTED();
-
-	using namespace backward;
-	StackTrace st; st.load_here(32);
-	Printer p; p.print(st);
 
 	if (pathLength <= 0)
 		return B_BAD_VALUE;

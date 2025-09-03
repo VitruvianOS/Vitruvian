@@ -20,8 +20,6 @@ macro( DeclareDependency name )
 
 endmacro()
 
-add_subdirectory(external/backward-cpp)
-
 DeclareDependency(
 	GNUC
 	RUNTIMES	"libc6 (>= 2.31-13)"

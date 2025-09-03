@@ -14,8 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <backward.hpp>
-
 typedef struct debug_string_entry {
 	const char	*string;
 	uint32		code;
@@ -65,13 +63,7 @@ void
 debugger(const char *message)
 {
 	debug_printf("%" B_PRId32 ": DEBUGGER: %s\n", find_thread(NULL), message);
-
-	// TODO: one day this would open the debugger.
-	using namespace backward;
-	StackTrace st; st.load_here(32);
-	Printer p; p.print(st);
-
-	abort();
+	exit(-1);	
 }
 
 

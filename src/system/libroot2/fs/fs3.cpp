@@ -144,10 +144,8 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 
 	printf("open %d path %s\n", fd, path);
 
-#if 0
 	if (fd < 0 && path == NULL)
 		return B_BAD_VALUE;
-#endif
 
 	// TODO see BNode::_SetTo
 
@@ -186,10 +184,8 @@ _kern_open_dir(int fd, const char* path)
 {
 	CALLED();
 
-#if 0
 	if (fd < 0 && path == NULL)
 		return B_BAD_VALUE;
-#endif
 
 	if (fd < 0)
 		fd = AT_FDCWD;
@@ -270,16 +266,12 @@ _kern_open_dir_entry_ref(dev_t device, ino_t node, const char* name)
 {
 	UNIMPLEMENTED();
 
-	using namespace backward;
-	StackTrace st; st.load_here(32);
-	Printer p; p.print(st);
-
 	std::string path;
 	if (BKernelPrivate::getPath(node, name, path) == B_OK) {
 		DIR* dir = opendir(path.c_str());
 		if (dir != NULL) {
-			int result = dirfd(dir);
-			free(dir);
+			int result = dup(dirfd(dir));
+			closedir(dir);
 			return result;
 		}
 	}
@@ -382,10 +374,8 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 {
 	CALLED();
 
-#if 0
 	if (fd < 0 && path == NULL)
 		return B_BAD_VALUE;
-#endif
 
 	if (fd < 0)
 		fd = AT_FDCWD;
@@ -438,67 +428,40 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize,
 
 	if (fd < 0)
 		fd = AT_FDCWD;
-#if 1
+
 	struct linux_dirent {
 		long           d_ino;
 		off_t          d_off;
 		unsigned short d_reclen;
-		char           d_name[];
+		char           d_name[256];
 	};
 
-	struct linux_dirent* buf = malloc(sizeof(struct linux_dirent)*(maxCount+1));
-	size_t bufSize = sizeof(struct linux_dirent)*(maxCount+1);
-
+	size_t bufSize = sizeof(struct linux_dirent)*(maxCount);
+	struct linux_dirent* buf = (linux_dirent*)malloc(bufSize);
 	ssize_t ret = syscall(SYS_getdents, fd, buf, bufSize);
-	if (ret == 0) {
-		printf("end of directory\n");
-		return 0;
-	}
-	if (ret < 0) {
-		perror("directory err");
+	if (ret <= 0) {
+		free(buf);
 		return B_ENTRY_NOT_FOUND;
 	}
 	ssize_t retCount = ret/sizeof(struct linux_dirent);
 
-	printf("read dir fd %d ok count %d\n", fd, retCount);
-
 	for (uint32 i = 0; i < retCount; i++) {
-		printf("entry name %s\n", buf[i].d_name);
+		printf("readdir: entry name %s\n", buf[i].d_name);
 	}
 
 	for (uint32 i = 0; i < maxCount && i < retCount; i++) {
 		buffer[i].d_ino = buf[i].d_ino;
 		buffer[i].d_off = buf[i].d_off;
 		buffer[i].d_reclen = buf[i].d_reclen;
-		strcpy(buffer[i].d_name, buf[i].d_name);
+		strncpy(buffer[i].d_name, buf[i].d_name, 256 - 1);
+		buffer[i].d_name[256 - 1] = '\0';
 	}
 
 	if (retCount > maxCount)
-		_kern_seek(fd, -1*(retCount-maxCount), SEEK_CUR);
-	
-	return std::min((int)retCount, (int)maxCount);
-#else
-	DIR* dir = fdopendir(dup(fd));
-	
-	struct dirent* entry = NULL;
-	int i;
-	for (i = 0; i < maxCount; i++) {
-		entry = readdir(dir);
-		if (entry == NULL) {
-			closedir(dir);
-			return i;
-		}
+		lseek(fd, -1*(retCount-maxCount), SEEK_CUR);
 
-		printf("entry %s\n", entry->d_name);
-
-		buffer[i].d_ino = entry->d_ino;
-		buffer[i].d_off = entry->d_off;
-		buffer[i].d_reclen = entry->d_reclen;
-		strcpy(buffer[i].d_name, entry->d_name);
-	}
-	closedir(dir);
-	return i;
-#endif
+	free(buf);
+	return (retCount > maxCount) ? maxCount : retCount;
 }
 
 
@@ -538,10 +501,8 @@ _kern_rewind_dir(int fd)
 	UNIMPLEMENTED();
 
 	// TODO: why not AT_FDCWD
-	if (fd < 0) {
-		printf("seek error\n");
+	if (fd < 0)
 		return B_BAD_VALUE;
-	}
 
 	return _kern_seek(fd, 0, SEEK_SET);
 }

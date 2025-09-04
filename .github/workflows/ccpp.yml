@@ -4,7 +4,6 @@ on: [push]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     container: debian:trixie
 
@@ -60,7 +59,7 @@ jobs:
       run: mkdir generated.x86
     - name: directory exception
       run: cd generated.x86 && git config --global --add safe.directory /__w/Vitruvian/Vitruvian
-    - name: sumodule update
+    - name: submodule update
       run: git submodule update --init --recursive
     - name: setup environment
       run: cd generated.x86 && export TERM=xterm-256color && ../build/scripts/setupenv.sh
@@ -72,15 +71,44 @@ jobs:
       run: cd generated.x86 && ninja
     - name: generate deb 
       run: cd generated.x86 && cpack
-    - name: prepare fake mounts
+    - name: pack build output
+      run: tar --exclude='generated.x86/LIVE_BOOT/chroot/dev/*' -czf generated.x86.tar.gz generated.x86
+    - name: upload build output
+      uses: actions/upload-artifact@v4
+      with:
+        name: generated
+        path: generated.x86.tar.gz
+
+  iso:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: download build output
+      uses: actions/download-artifact@v4
+      with:
+        name: generated
+        path: .
+    - name: unpack build output
+      run: tar -xzf generated.x86.tar.gz
+    - name: recreate fake dev nodes
       run: |
-        CHROOT=generated.x86/LIVE_BOOT/chroot
-        sudo mkdir -p $CHROOT/{proc,sys,dev,run,tmp}
-        # finti mount point (symlink a /dev/null o directory vuote)
-        sudo touch $CHROOT/proc/fake
-        sudo touch $CHROOT/sys/fake
-        sudo touch $CHROOT/dev/fake
-        sudo touch $CHROOT/run/fake
-        sudo touch $CHROOT/tmp/fake
+        mkdir -p generated.x86/LIVE_BOOT/chroot/dev
+        touch generated.x86/LIVE_BOOT/chroot/dev/{null,zero,tty,console,urandom,random,full,ptmx}
+    - name: deps for ISO
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          xorriso \
+          squashfs-tools \
+          mtools \
+          grub-pc-bin \
+          grub-efi-amd64-bin
     - name: generate ISO
-      run: cd generated.x86 && export TERM=xterm-256color && ../build/scripts/mkiso.sh || true
+      run: cd generated.x86 && export TERM=xterm-256color && ../build/scripts/mkiso.sh
+    - name: upload ISO
+      uses: actions/upload-artifact@v4
+      with:
+        name: vitruvian-iso
+        path: generated.x86/*.iso

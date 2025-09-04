@@ -62,30 +62,8 @@ jobs:
       run: cd generated.x86 && git config --global --add safe.directory /__w/Vitruvian/Vitruvian
     - name: sumodule update
       run: git submodule update --init --recursive
-    - name: Debian bootstrap
-      run: cd generated.x86 && mkdir -p LIVE_BOOT && sudo debootstrap --arch=amd64 --variant=minbase trixie LIVE_BOOT/chroot http://ftp.us.debian.org/debian/
-    - name: chroot
-      run: |
-        cd generated.x86 && sudo chroot LIVE_BOOT/chroot /bin/bash -c "\
-          echo 'vitruvian-live' > /etc/hostname && \
-          apt update && \
-          apt install -y --no-install-recommends \
-            apt-utils \
-            curl \
-            dialog \
-            libbinutils \
-            linux-image-amd64 \
-            live-boot \
-            network-manager \
-            net-tools \
-            openssh-client \
-            procps \
-            systemd-sysv \
-            vim-tiny \
-            wireless-tools && \
-          echo 'root:vitruvio' | chpasswd; exit"
-    - name: kernel version
-      run: cd generated.x86 && ls ./LIVE_BOOT/chroot/lib/modules | head -n1 > imagekernelversion.conf && uname -r > hostkernelversion.conf
+    - name: setup environment
+      run: cd generated.x86 && export TERM=xterm-256color && ../build/scripts/setupenv.sh
     - name: list nexus directory
       run: ls -la /__w/Vitruvian/Vitruvian/src/system/kernel/nexus
     - name: configure generated.x86

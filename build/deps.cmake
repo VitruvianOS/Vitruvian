@@ -49,7 +49,7 @@ DeclareDependency(
 	ICU
 	LIBRARIES	"icu"
 	PACKAGES	"libicu-dev"
-	RUNTIMES	"libicu72 (>= 72.1-3)"
+	RUNTIMES	"libicu76 (>= 76.1-4)"
 )
 
 DeclareDependency(

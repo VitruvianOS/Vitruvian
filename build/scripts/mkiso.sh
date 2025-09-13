@@ -1,4 +1,5 @@
 #!/bin/sh
+export TERM=xterm-256color
 set -e
 
 basedir=`realpath ./`
@@ -20,8 +21,12 @@ fi
 
 cleanup() {
   echo "Unmounting $basedir/LIVE_BOOT/chroot/tmp/"
-  sudo umount $basedir/LIVE_BOOT/chroot/tmp/
-  sudo umount ./LIVE_BOOT/chroot/proc/
+  if mountpoint -q "$basedir/LIVE_BOOT/chroot/tmp/"; then
+    sudo umount "$basedir/LIVE_BOOT/chroot/tmp/"
+  fi
+  if mountpoint -q "$basedir/LIVE_BOOT/chroot/proc/"; then
+    sudo umount "$basedir/LIVE_BOOT/chroot/proc/"
+  fi
 }
 trap cleanup EXIT
 
@@ -31,10 +36,17 @@ if [ -f $basedir/LIVE_BOOT/image/live/filesystem.squashfs ]; then
 fi 
 
 sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
-apt install -y -f --reinstall /tmp/*.deb && depmod -v $imagekernelversion && exit"
+apt update && \
+apt install -y -f --reinstall /tmp/*.deb && \
+apt install -y dkms build-essential linux-headers-$imagekernelversion && \
+depmod -v $imagekernelversion && exit"
 
-sudo umount ./LIVE_BOOT/chroot/proc/
-sudo umount ./LIVE_BOOT/chroot/tmp/
+if mountpoint -q "$basedir/LIVE_BOOT/chroot/proc/"; then
+  sudo umount "$basedir/LIVE_BOOT/chroot/proc/"
+fi
+if mountpoint -q "$basedir/LIVE_BOOT/chroot/tmp/"; then
+  sudo umount "$basedir/LIVE_BOOT/chroot/tmp/"
+fi
 
 echo ${bold}Create Directories for Live Environment Files...
 echo ${normal}
@@ -135,4 +147,4 @@ xorriso \
         /boot/grub/bios.img=$basedir/LIVE_BOOT/scratch/bios.img \
         /EFI/efiboot.img=$basedir/LIVE_BOOT/scratch/efiboot.img
 
-echo ${bold}Finished!
+echo ${bold}Finished! 

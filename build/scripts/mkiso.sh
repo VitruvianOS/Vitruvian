@@ -20,7 +20,6 @@ if [ $count != 0 ]; then
       sudo mount --bind "$basedir/LIVE_BOOT/chroot/$libdir" "$basedir/LIVE_BOOT/chroot/$libdir"
     fi
   done
-
 else
   echo ${bold}No deb file generated! Please run cpack inside /$basedir/
   echo ${normal}
@@ -30,14 +29,14 @@ fi
 # Cleanup automatico dei mount
 cleanup() {
   if mountpoint -q "$basedir/LIVE_BOOT/chroot/proc/"; then
-    sudo umount "$basedir/LIVE_BOOT/chroot/proc/"
+    sudo umount -l "$basedir/LIVE_BOOT/chroot/proc/"
   fi
   if mountpoint -q "$basedir/LIVE_BOOT/chroot/tmp/"; then
-    sudo umount "$basedir/LIVE_BOOT/chroot/tmp/"
+    sudo umount -l "$basedir/LIVE_BOOT/chroot/tmp/"
   fi
   for libdir in lib lib64 usr/lib; do
     if mountpoint -q "$basedir/LIVE_BOOT/chroot/$libdir"; then
-      sudo umount "$basedir/LIVE_BOOT/chroot/$libdir"
+      sudo umount -l "$basedir/LIVE_BOOT/chroot/$libdir"
     fi
   done
 }
@@ -47,8 +46,14 @@ trap cleanup EXIT
 sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo 'vitruvian-live' > /etc/hostname &\
 apt update && \
 apt install -y -f --reinstall /tmp/*.deb && \
-apt install -y dkms build-essential linux-headers-$imagekernelversion && \
+apt install -y dkms build-essential linux-headers-$imagekernelversion cmake ninja-build && \
 depmod -v $imagekernelversion && exit"
+
+# Ensure project is available in chroot
+if [ ! -d "$basedir/LIVE_BOOT/chroot/tmp/project" ]; then
+  mkdir -p $basedir/LIVE_BOOT/chroot/tmp/project
+  cp -r $basedir/* $basedir/LIVE_BOOT/chroot/tmp/project/
+fi
 
 # Build Ninja project inside chroot
 sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "

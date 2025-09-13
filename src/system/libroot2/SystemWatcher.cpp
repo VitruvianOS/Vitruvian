@@ -71,17 +71,17 @@ SystemWatcher::Run()
 		struct cn_msg msg;
 	} __attribute__((packed, aligned(NLMSG_ALIGNTO))) request;
 
-    memset(&request, 0, sizeof(request));
+	memset(&request, 0, sizeof(request));
 
-    request.op = PROC_CN_MCAST_LISTEN;
+	request.op = PROC_CN_MCAST_LISTEN;
 
-    request.msg.id.idx = CN_IDX_PROC;
-    request.msg.id.val = CN_VAL_PROC;
-    request.msg.len = sizeof(request.op);
+	request.msg.id.idx = CN_IDX_PROC;
+	request.msg.id.val = CN_VAL_PROC;
+	request.msg.len = sizeof(request.op);
 
-    request.header.nlmsg_pid = getpid();
-    request.header.nlmsg_type = NLMSG_DONE;
-    request.header.nlmsg_len = sizeof(request);
+	request.header.nlmsg_pid = getpid();
+	request.header.nlmsg_type = NLMSG_DONE;
+	request.header.nlmsg_len = sizeof(request);
 
 	if (send(fSocket, &request, sizeof(request), 0) == -1) {
 		close(fSocket);
@@ -167,12 +167,7 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 	struct proc_event* event = (struct proc_event*)header->data;
 	switch (event->what)
 	{
-
-	#if __GNUC__ <= 13
-		case proc_event::what::PROC_EVENT_FORK:
-	#else
 		case PROC_EVENT_FORK:
-	#endif
 		{
 			if (event->event_data.fork.child_pid
 					== event->event_data.fork.child_tgid) {
@@ -193,11 +188,7 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 			break;
 		}
 
-	#if __GNUC__ <= 13
-		case proc_event::what::PROC_EVENT_EXEC:
-	#else
 		case PROC_EVENT_EXEC:
-	#endif
 		{
 			Notify(B_WATCH_SYSTEM_TEAM_CREATION
 					| B_WATCH_SYSTEM_TEAM_DELETION,
@@ -205,11 +196,7 @@ SystemWatcher::HandleProcEvent(struct cn_msg* header)
 			break;
 		}
 
-	#if __GNUC__ <= 13
-		case proc_event::what::PROC_EVENT_EXIT:
-	#else
 		case PROC_EVENT_EXIT:
-	#endif
 		{
 			if (event->event_data.exit.process_pid
 					== event->event_data.exit.process_tgid) {

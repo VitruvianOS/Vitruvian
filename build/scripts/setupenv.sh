@@ -19,8 +19,18 @@ for libdir in lib lib64 usr/lib; do
   fi
 done
 
+# Cleanup automatico dei bind mount
+cleanup() {
+  for libdir in lib lib64 usr/lib; do
+    if mountpoint -q "$basedir/LIVE_BOOT/chroot/$libdir"; then
+      sudo umount "$basedir/LIVE_BOOT/chroot/$libdir"
+    fi
+  done
+}
+trap cleanup EXIT
+
 sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
-apt update && apt install -y --no-install-recommends apt-utils dialog linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny libbinutils &&\
+apt update && apt install -y --no-install-recommends apt-utils dialog linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny libbinutils ninja-build &&\
 echo "root:vitruvio"|chpasswd; exit"
 
 ls ./LIVE_BOOT/chroot/lib/modules | head -n1 > imagekernelversion.conf

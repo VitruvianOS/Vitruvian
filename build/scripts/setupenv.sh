@@ -9,8 +9,24 @@ normal=$(tput sgr0)
 echo  ${bold}Prepare Debian bootstrap and install packages...
 echo ${normal}
 
+if [ -d "$basedir/LIVE_BOOT/chroot" ]; then
+  ts=$(date +%Y%m%d-%H%M%S)
+  backup="$basedir/LIVE_BOOT/chroot.old-$ts"
+  echo "Found existing chroot, moving to $backup"
+  sudo umount -l $basedir/LIVE_BOOT/chroot/proc 2>/dev/null || true
+  sudo umount -l $basedir/LIVE_BOOT/chroot/sys 2>/dev/null || true
+  sudo umount -l $basedir/LIVE_BOOT/chroot/dev/pts 2>/dev/null || true
+  sudo umount -l $basedir/LIVE_BOOT/chroot/dev 2>/dev/null || true
+  for libdir in lib lib64 usr/lib; do
+    if mountpoint -q "$basedir/LIVE_BOOT/chroot/$libdir"; then
+      sudo umount -l "$basedir/LIVE_BOOT/chroot/$libdir"
+    fi
+  done
+  sudo mv "$basedir/LIVE_BOOT/chroot" "$backup"
+fi
+
 mkdir -p $basedir/LIVE_BOOT
-sudo debootstrap --arch=amd64 --variant=minbase trixie $basedir/LIVE_BOOT/chroot http://ftp.us.debian.org/debian/
+sudo debootstrap --arch=amd64 --variant=minbase trixie $basedir/LIVE_BOOT/chroot http://deb.debian.org/debian/
 
 sudo mount -t proc / $basedir/LIVE_BOOT/chroot/proc
 sudo mount --rbind /sys $basedir/LIVE_BOOT/chroot/sys

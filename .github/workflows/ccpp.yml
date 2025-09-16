@@ -1,4 +1,3 @@
-
 name: Build Vitruvian ISO
 
 on: [push]
@@ -53,8 +52,36 @@ jobs:
       - name: Run mkiso script
         run: cd generated.x86 && ../build/scripts/mkiso.sh
 
+      # Generate checksums for ISO
+      - name: Generate ISO checksum
+        run: |
+          cd generated.x86/LIVE_BOOT
+          for iso in *.iso; do
+            sha256sum "$iso" > "$iso.sha256"
+          done
+
+      # Upload ISO and checksum
       - name: Upload Vitruvian ISO
         uses: actions/upload-artifact@v4
         with:
           name: Vitruvian-ISO
-          path: generated.x86/LIVE_BOOT/*.iso
+          path: |
+            generated.x86/LIVE_BOOT/*.iso
+            generated.x86/LIVE_BOOT/*.sha256
+
+      # Generate checksums for DEB packages
+      - name: Generate DEB checksums
+        run: |
+          cd generated.x86
+          for deb in *.deb; do
+            sha256sum "$deb" > "$deb.sha256"
+          done
+
+      # Upload DEB packages and checksums
+      - name: Upload Vitruvian DEB packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vitruvian-DEB
+          path: |
+            generated.x86/*.deb
+            generated.x86/*.sha256

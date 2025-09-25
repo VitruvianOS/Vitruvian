@@ -20,12 +20,12 @@ exit
 fi
 
 cleanup() {
-  echo "Unmounting $basedir/LIVE_BOOT/chroot/tmp/"
-  if mountpoint -q "$basedir/LIVE_BOOT/chroot/tmp/"; then
-    sudo umount "$basedir/LIVE_BOOT/chroot/tmp/"
-  fi
+  echo "Unmounting..."
   if mountpoint -q "$basedir/LIVE_BOOT/chroot/proc/"; then
     sudo umount "$basedir/LIVE_BOOT/chroot/proc/"
+  fi
+  if mountpoint -q "$basedir/LIVE_BOOT/chroot/tmp/"; then
+    sudo umount "$basedir/LIVE_BOOT/chroot/tmp/"
   fi
 }
 trap cleanup EXIT
@@ -37,7 +37,7 @@ fi
 
 sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
 apt update && \
-apt install -y dkms build-essential linux-headers-$imagekernelversion && \
+apt install -y dkms build-essential linux-headers-$imagekernelversion libseat1 && \
 apt install -y -f --reinstall /tmp/*.deb && \
 depmod -v $imagekernelversion && exit"
 

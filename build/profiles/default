@@ -8,9 +8,15 @@ set(DESKBAR_APPLICATIONS
 ImageInclude("/system/apps" ${DESKBAR_APPLICATIONS})
 
 
+set(CORE_APPLICATIONS
+	Deskbar
+	Tracker
+)
+ImageInclude("/system/" ${CORE_APPLICATIONS})
+
+
 set(SYSTEM_SERVERS
 	app_server
-	Deskbar
 	input_server
 	registrar
 )
@@ -95,10 +101,11 @@ ImageInclude("/bin" ${BIN_DIRECTORY})
 list (APPEND SERVICES_LIST "${_SYSTEMD_SERVICES}")
 
 set(SYSTEMD_SERVICES
-  data/systemd/app_server.service
-  data/systemd/deskbar.service
-  data/systemd/input_server.service
   data/systemd/registrar.service
+  data/systemd/app_server.service
+  data/systemd/input_server.service
+  data/systemd/deskbar.service
+  data/systemd/tracker.service
 )
 
 install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)

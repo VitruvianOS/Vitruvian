@@ -9,6 +9,7 @@ StandardOutput=append:/var/log/registrar.log
 StandardError=append:/var/log/registrar.log
 Restart=no
 RestartSec=500ms
+StartLimitBurst=5
 
 [Install]
 WantedBy=graphical.target

@@ -1,3 +1,38 @@
 #!/bin/sh
 
-systemctl enable app_server.service input_server.service deskbar.service registrar.service
+mkdir -p /system/add-ons/
+mkdir -p /system/apps/
+mkdir -p /system/data/
+mkdir -p /system/demos/
+mkdir -p /system/develop/
+mkdir -p /system/documentation/
+mkdir -p /system/preferences/
+mkdir -p /system/servers/
+mkdir -p /system/settings/
+
+ln -sf /bin /system/bin
+ln -sf /lib /system/lib
+ln -sf /tmp /system/cache
+ln -sf /var /system/var
+
+mkdir -p /home/Desktop
+
+# Deskbar menu
+
+mkdir -p /home/config/settings/deskbar/menu/
+
+#mkdir -p /home/config/settings/deskbar/menu/Applications/
+#mkdir -p /home/config/settings/deskbar/menu/Preferences/
+#mkdir -p /home/config/settings/deskbar/menu/Demos/
+#ln -sf /system/apps/Pairs /home/config/settings/deskbar/menu/Applications/Pairs
+
+mkdir -p /system/data/deskbar/menu/
+ln -sf /system/data/deskbar/menu /system/data/deskbar/menu_entries
+
+mkdir -p /system/data/deskbar/menu/Applications/
+mkdir -p /system/data/deskbar/menu/Preferences/
+mkdir -p /system/data/deskbar/menu/Demos/
+
+ln -sf /system/apps/StyledEdit /system/data/deskbar/menu/Applications/StyledEdit
+
+systemctl enable registrar.service app_server.service input_server.service deskbar.service tracker.service

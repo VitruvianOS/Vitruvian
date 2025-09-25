@@ -1,0 +1,16 @@
+[Unit]
+Description=Tracker
+Conflicts=getty@tty1.service
+After=deskbar.service
+
+[Service]
+ExecStartPre=/bin/sleep 0.5
+ExecStart=/system/Tracker
+StandardInput=tty-force
+StandardOutput=append:/var/log/tracker.log
+StandardError=append:/var/log/tracker.log
+Restart=no
+RestartSec=500ms
+
+[Install]
+WantedBy=graphical.target

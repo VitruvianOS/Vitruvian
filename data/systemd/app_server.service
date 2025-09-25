@@ -6,7 +6,7 @@ After=registrar.service
 [Service]
 ExecStartPre=/bin/sleep 0.5
 ExecStart=/system/servers/app_server
-Environment=DISPLAY=:0
+Environment=DISPLAY=:4
 StandardInput=tty-force
 StandardOutput=append:/var/log/appserver.log
 StandardError=append:/var/log/appserver.log

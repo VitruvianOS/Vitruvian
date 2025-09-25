@@ -77,16 +77,9 @@ extern ssize_t	readv_pos(int fd, off_t pos, const struct iovec* vec,
 extern ssize_t	writev_pos(int fd, off_t pos, const struct iovec* vec,
 					size_t count);
 
-
-// There's no O_NOTRAVERSE under Linux and FreeBSD -- we replace it with a flag
-// that won't be used by our tools, preferrably a non-portable one; a fixed
-// constant could always lead to trouble on the host.
-// We can abuse this flag for our purposes as we filter it in libroot.
 #ifndef O_NOTRAVERSE
-#	ifdef O_NOCTTY
-#		define O_NOTRAVERSE	O_NOCTTY
-#	elif defined(O_RANDOM)
-#		define O_NOTRAVERSE O_RANDOM
+#	ifdef __VOS__
+#		define O_NOTRAVERSE AT_SYMLINK_NOFOLLOW
 #	else
 #		error "Search for a proper replacement value for O_NOTRAVERSE"
 #	endif

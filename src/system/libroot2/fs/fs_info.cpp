@@ -31,7 +31,6 @@ public:
 	static status_t FillInfo(struct mntent* mountEntry, fs_info* info)
 	{
 		// TODO: io_size, improve flags
-#include <stdlib.h>
 		if (strlcpy(info->volume_name, mountEntry->mnt_dir,
 				B_FILE_NAME_LENGTH-1) >= B_FILE_NAME_LENGTH-1) {
 			return B_BUFFER_OVERFLOW;

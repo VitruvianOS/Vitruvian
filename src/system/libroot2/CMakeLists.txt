@@ -15,7 +15,6 @@ target_sources(root PRIVATE
 	SystemWatcher.cpp
 	Team.cpp
 	Thread.cpp
-	time.cpp
 
 	real_time_clock.c
 	shutdown.cpp
@@ -28,6 +27,7 @@ target_sources(root PRIVATE
 	compat/system_info.cpp
 	compat/system_revision.c
 	compat/system_ioctl.c
+	compat/time.cpp
 	compat/tls.cpp
 	compat/wait_for_objects.cpp
 

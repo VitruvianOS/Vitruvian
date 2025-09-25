@@ -48,7 +48,7 @@ AddOn(
 
 	${LIBROOT_SOURCES}/fs/find_directory.cpp
 	${LIBROOT_SOURCES}/fs/find_paths.cpp
-	${LIBROOT_SOURCES}/fs/fs2.cpp
+	${LIBROOT_SOURCES}/fs/fs3.cpp
 	${LIBROOT_SOURCES}/fs/fs_attr.cpp
 	${LIBROOT_SOURCES}/fs/fs_index.cpp
 	${LIBROOT_SOURCES}/fs/fs_info.cpp

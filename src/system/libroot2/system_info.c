@@ -5,8 +5,8 @@
 
 #include <syscalls.h>
 
-#include <sys/time.h>
 #include <sys/utsname.h>
+#include <time.h>
 
 
 extern int32 __gCPUCount;
@@ -26,12 +26,10 @@ is_computer_on_fire(void)
 }
 
 
-bigtime_t
-system_time()
-{
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	return (1000000LL * tv.tv_sec) + tv.tv_usec;	
+bigtime_t system_time() {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (1000000LL * ts.tv_sec) + (ts.tv_nsec / 1000);
 }
 
 

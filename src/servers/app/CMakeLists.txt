@@ -3,10 +3,6 @@ find_package(Freetype REQUIRED)
 find_library(DRM_LIBRARY NAMES drm)
 find_path(DRM_INCLUDE_DIR NAMES libdrm/drm.h)
 
-
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(SEAT REQUIRED libseat)
-
 Server(
 	app_server
 

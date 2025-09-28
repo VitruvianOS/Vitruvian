@@ -121,7 +121,7 @@ Server(
 	stackandtile/Stacking.cpp
 	stackandtile/Tiling.cpp
 
-	LIBS be root localestub shared agg icon linprog seat ${FREETYPE_LIBRARY} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES}
+	LIBS be root localestub shared agg icon linprog ${FREETYPE_LIBRARY} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES}
 	RDEF app_server.rdef
 
 	INCLUDES

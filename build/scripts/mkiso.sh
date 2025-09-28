@@ -37,7 +37,7 @@ fi
 
 sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
 apt update && \
-apt install -y dkms build-essential linux-headers-$imagekernelversion libseat1 && \
+apt install -y dkms build-essential linux-headers-$imagekernelversion && \
 apt install -y -f --reinstall /tmp/*.deb && \
 depmod -v $imagekernelversion && exit"
 

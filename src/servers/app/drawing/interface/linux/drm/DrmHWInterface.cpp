@@ -12,7 +12,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <libseat.h>
 
 #include "modeset.h"
 

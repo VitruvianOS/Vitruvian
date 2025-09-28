@@ -28,8 +28,15 @@ jobs:
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
 
+      - name: Build buildtools
+        run: |
+          mkdir buildtools
+          cd buildtools
+          cmake -DBUILDTOOLS_MODE=1 .. -GNinja
+          ninja
+
       - name: Create build directory
-        run: mkdir generated.x86
+        run: mkdir -p generated.x86
 
       - name: Init submodules
         run: git submodule update --init --recursive

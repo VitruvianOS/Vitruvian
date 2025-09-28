@@ -28,7 +28,7 @@ AddOn(
 	#SystemWatcher.cpp
 	#${LIBROOT_SOURCES}/Team.cpp
 	#Thread.cpp
-	${LIBROOT_SOURCES}/time.cpp
+	${LIBROOT_SOURCES}/compat/time.cpp
 
 	${LIBROOT_SOURCES}/messaging/KMessage.cpp
 

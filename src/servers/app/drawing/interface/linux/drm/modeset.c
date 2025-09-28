@@ -85,6 +85,7 @@ struct modeset_dev* get_dev() {
  * nvidia, intel, etc. specific code, we depend on DUMB_BUFFERs here.
  */
 
+
 int modeset_open(int *out, const char *node)
 {
 	int fd, ret;
@@ -172,6 +173,7 @@ int modeset_open(int *out, const char *node)
  * Our helper modeset_setup_dev() returns -ENOENT if the connector is currently
  * unused and no monitor is plugged in. So we can ignore this connector.
  */
+
 
 int modeset_prepare(int fd)
 {

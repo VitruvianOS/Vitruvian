@@ -12,11 +12,13 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <libseat.h>
 
 #include "modeset.h"
 
 static const char* sDriPath = "/dev/dri/card0";
 int DrmHWInterface::fFd = -1;
+
 
 DrmHWInterface::DrmHWInterface()
 	:
@@ -40,7 +42,7 @@ DrmHWInterface::DrmHWInterface()
 	if (ret)
 		return;
 
-	TTy::InitTTy(1, &SwitchVt);
+	//TTy::InitTTy(4, SwitchVt);
 
 	drmSetMaster(fFd);
 
@@ -71,7 +73,7 @@ DrmHWInterface::~DrmHWInterface()
 	drmDropMaster(fFd);
 	modeset_cleanup(fFd);
 
-	TTy::DeinitTTy();
+	//TTy::DeinitTTy();
 
 	delete fFrontBuffer;
 	delete fEventStream;
@@ -271,8 +273,8 @@ DrmHWInterface::SwitchVt(int sig)
 	switch (sig)
 	{
 		case SIGUSR1:
-			drmDropMaster(fFd);
 			ioctl(TTy::gTTy, VT_RELDISP, 1);
+			drmDropMaster(fFd);
 			break;
 		case SIGUSR2:
 			ioctl(TTy::gTTy, VT_RELDISP, VT_ACTIVATE);

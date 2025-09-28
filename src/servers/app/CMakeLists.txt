@@ -3,6 +3,10 @@ find_package(Freetype REQUIRED)
 find_library(DRM_LIBRARY NAMES drm)
 find_path(DRM_INCLUDE_DIR NAMES libdrm/drm.h)
 
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SEAT REQUIRED libseat)
+
 Server(
 	app_server
 
@@ -121,7 +125,8 @@ Server(
 	stackandtile/Stacking.cpp
 	stackandtile/Tiling.cpp
 
-	LIBS be root localestub shared agg icon linprog ${FREETYPE_LIBRARY} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES}
+	LIBS be root localestub shared agg icon linprog seat ${FREETYPE_LIBRARY} ${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES}
+	RDEF app_server.rdef
 
 	INCLUDES
 	${DRM_INCLUDE_DIR}/libdrm/

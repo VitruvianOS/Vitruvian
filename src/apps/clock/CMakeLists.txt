@@ -6,4 +6,5 @@ Application(
 	cl_wind.cpp 
 	clock.cpp
 	LIBS textencoding localestub
+	RDEF Clock.rdef
 )

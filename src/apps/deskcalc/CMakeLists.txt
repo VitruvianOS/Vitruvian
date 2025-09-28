@@ -9,6 +9,8 @@ Application(
 	DeskCalc.cpp
 	ExpressionTextView.cpp
 	InputTextView.cpp
+	RDEF
+	DeskCalc.rdef
 )
 
 UsePrivateHeaders( DeskCalc interface )

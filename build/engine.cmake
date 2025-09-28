@@ -46,20 +46,20 @@ macro( Application name )
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
 
-	# TODO: support multiple rdefs
 	if( _APPLICATION_RDEF )
-		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF}")
-			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF} not found\n")
+		foreach( RDEF_FILE ${_APPLICATION_RDEF} )
+		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}")
+			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE} not found\n")
 			return()
 		endif()
-		message("${_APPLICATION_RDEF}")
 		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Compiling resource file for ${name}..."
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${_APPLICATION_RDEF}" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}"
-			COMMAND echo "Adding resources to ${name} binary..."
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${name}.rsrc"
+			COMMAND echo "Compiling resource file ${RDEF_FILE} for ${name}..."
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
+			COMMAND echo "Adding resources ${RDEF_FILE} to ${name} binary..."
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
 		)
-		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${name}.rsrc")
+		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
+		endforeach()
 	endif()
 endmacro()
 
@@ -67,7 +67,7 @@ macro( Server name )
 
 	set( _OPTIONS_ARGS )
 	set( _ONE_VALUE_ARGS )
-	set( _MULTI_VALUE_ARGS SOURCES LIBS INCLUDES )
+	set( _MULTI_VALUE_ARGS SOURCES LIBS INCLUDES RDEF )
 
 	cmake_parse_arguments( _SERVER "${_OPTIONS_ARGS}" "${_ONE_VALUE_ARGS}" "${_MULTI_VALUE_ARGS}" ${ARGN} )
 
@@ -81,13 +81,29 @@ macro( Server name )
 	target_include_directories(${name} PRIVATE ${_SERVER_INCLUDES})
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
+
+	if( _SERVER_RDEF )
+		foreach( RDEF_FILE ${_SERVER_RDEF} )
+		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}")
+			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE} not found\n")
+			return()
+		endif()
+		add_custom_command(TARGET ${name} POST_BUILD
+			COMMAND echo "Compiling resource file ${RDEF_FILE} for ${name}..."
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
+			COMMAND echo "Adding resources ${RDEF_FILE} to ${name} binary..."
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+		)
+		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
+		endforeach()
+	endif()
 endmacro()
 
 macro( AddOn name type )
 
 	set( _OPTIONS_ARGS )
 	set( _ONE_VALUE_ARGS )
-	set( _MULTI_VALUE_ARGS SOURCES LIBS INCLUDES )
+	set( _MULTI_VALUE_ARGS SOURCES LIBS INCLUDES RDEF )
 
 	cmake_parse_arguments( _ADDON "${_OPTIONS_ARGS}" "${_ONE_VALUE_ARGS}" "${_MULTI_VALUE_ARGS}" ${ARGN} )
 
@@ -100,13 +116,29 @@ macro( AddOn name type )
 	target_include_directories(${name} PRIVATE ${_ADDON_INCLUDES})
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
+
+	if( _ADDON_RDEF )
+		foreach( RDEF_FILE ${_ADDON_RDEF} )
+		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}")
+			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE} not found\n")
+			return()
+		endif()
+		add_custom_command(TARGET ${name} POST_BUILD
+			COMMAND echo "Compiling resource file ${RDEF_FILE} for ${name}..."
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
+			COMMAND echo "Adding resources ${RDEF_FILE} to ${name} binary..."
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+		)
+		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
+		endforeach()
+	endif()
 endmacro()
 
 macro( Test name )
 
 	set( _OPTIONS_ARGS )
 	set( _ONE_VALUE_ARGS )
-	set( _MULTI_VALUE_ARGS SOURCES LIBS INCLUDES )
+	set( _MULTI_VALUE_ARGS SOURCES LIBS INCLUDES RDEF )
 
 	cmake_parse_arguments( _TEST "${_OPTIONS_ARGS}" "${_ONE_VALUE_ARGS}" "${_MULTI_VALUE_ARGS}" ${ARGN} )
 
@@ -129,6 +161,22 @@ macro( Test name )
 	target_include_directories(${name} PRIVATE ${_TEST_INCLUDES})
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
+
+	if( _ADDON_RDEF )
+		foreach( RDEF_FILE ${_ADDON_RDEF} )
+		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}")
+			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE} not found\n")
+			return()
+		endif()
+		add_custom_command(TARGET ${name} POST_BUILD
+			COMMAND echo "Compiling resource file ${RDEF_FILE} for ${name}..."
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
+			COMMAND echo "Adding resources ${RDEF_FILE} to ${name} binary..."
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+		)
+		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
+		endforeach()
+	endif()
 endmacro()
 
 function( UsePrivateHeaders target )
@@ -262,4 +310,5 @@ macro( BuildModeApplication name )
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
 
+	# I suppose RDEFs are not needed here, but in case feel free to add it.
 endmacro()

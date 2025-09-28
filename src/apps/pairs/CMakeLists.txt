@@ -7,4 +7,5 @@ Application(
 	PairsView.cpp
 	PairsWindow.cpp
 	LIBS localestub
+	RDEF Pairs.rdef
 )

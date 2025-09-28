@@ -26,7 +26,7 @@ Application(
 	Switcher.cpp
 
 	LIBS tracker shared localestub
-	RDEF Deskbar.rdef
+	RDEF Deskbar.rdef icons.rdef
 )
 
 target_compile_definitions(Deskbar PRIVATE

@@ -9,6 +9,7 @@ Application(
 	SudokuSolver.cpp
 	SudokuView.cpp
 	SudokuWindow.cpp
+	RDEF Sudoku.rdef
 
 	LIBS tracker shared localestub
 )

@@ -25,6 +25,7 @@ Server(
 	INCLUDES
 	"../../../headers/os/add-ons/input_server/"
 	LIBS shared
+	RDEF input_server.rdef
 )
 
 target_compile_definitions(input_server PRIVATE

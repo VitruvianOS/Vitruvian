@@ -36,6 +36,7 @@ Application(
 	VTPrsTbl.c
 
 	LIBS be localestub shared tracker translation textencoding pthread
+	RDEF Terminal.rdef
 )
 
 UsePrivateHeaders(Terminal textencoding kernel libroot system)

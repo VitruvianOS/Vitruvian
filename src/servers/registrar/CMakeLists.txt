@@ -40,6 +40,7 @@ Server(
 	INCLUDES
 	"mime"
 	LIBS localestub
+	RDEF registrar.rdef
 )
 
 UsePrivateHeaders(registrar app kernel libroot system tracker)

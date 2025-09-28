@@ -11,6 +11,7 @@ Application(
 	StyledEditWindow.cpp
 
 	LIBS tracker shared translation translatorutils textencoding localestub
+	RDEF StyledEdit.rdef
 )
 
 UsePrivateHeaders(StyledEdit textencoding tracker)

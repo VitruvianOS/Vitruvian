@@ -1,6 +1,6 @@
 ## V\OS README
 
-**Vitruvian** also known as V\OS is the Operating System with the human at the center.
+**Vitruvian** a.ka. V\OS is the Operating System with the human at the center.
 
 #### Goals
 
@@ -15,15 +15,16 @@ V\OS is a reimplementation of the BeOS (and to some extent Haiku) userland on Li
 
 ### Join the Community!
 
-#### Telegram channel for updates on the development:
-
-https://t.me/vitruvian_official
-
-#### Discussions channel:
+#### Telegram Channels
+##### Discussions channel:
 
 https://t.me/vitruvian_official_chat
 
-Mailing lists will be activated soon. Stay tuned.
+##### Community updates:
+
+https://t.me/vitruvian_official
+
+#### Mailing lists will be activated soon. Stay tuned.
 
 ### Installation
 
@@ -39,8 +40,8 @@ We welcome contributions from the community! If you're interested in helping out
 
 ### Donate
 
-https://www.paypal.me/vitruvianos
+[2025/2026 Funding](https://www.paypal.com/pool/9iLXEgZj41)
 
 ### License
 
-V\OS is released under a hybrid [GPL License](#)/[MIT License](#) scheme.
+V\OS is released under a hybrid [GPL](#)/[MIT](#) License scheme.

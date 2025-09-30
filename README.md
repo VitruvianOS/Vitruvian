@@ -1,8 +1,8 @@
 ## V\OS README
 
-**Vitruvian** a.ka. V\OS is the Operating System with the human at the center.
+**Vitruvian** is the Operating System with the human at the center.
 
-#### Goals
+#### V\OS Goals
 
 * **Fast, reactive, and easy-to-use interface**: V\OS aims to provide a seamless user experience with minimal latency and intuitive navigation.
 * **Highly integrated Desktop Environment**: The desktop environment is designed to work harmoniously with all applications, ensuring a cohesive and efficient workflow.

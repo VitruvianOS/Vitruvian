@@ -53,9 +53,8 @@ macro( Application name )
 			return()
 		endif()
 		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Compiling resource file ${RDEF_FILE} for ${name}..."
+			COMMAND echo "Building resource file ${RDEF_FILE}..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
-			COMMAND echo "Adding resources ${RDEF_FILE} to ${name} binary..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
 		)
 		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
@@ -89,9 +88,8 @@ macro( Server name )
 			return()
 		endif()
 		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Compiling resource file ${RDEF_FILE} for ${name}..."
+			COMMAND echo "Building resource file ${RDEF_FILE}..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
-			COMMAND echo "Adding resources ${RDEF_FILE} to ${name} binary..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
 		)
 		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
@@ -124,9 +122,8 @@ macro( AddOn name type )
 			return()
 		endif()
 		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Compiling resource file ${RDEF_FILE} for ${name}..."
+			COMMAND echo "Building resource file ${RDEF_FILE}..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
-			COMMAND echo "Adding resources ${RDEF_FILE} to ${name} binary..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
 		)
 		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
@@ -169,9 +166,8 @@ macro( Test name )
 			return()
 		endif()
 		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Compiling resource file ${RDEF_FILE} for ${name}..."
+			COMMAND echo "Building resource file ${RDEF_FILE}..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
-			COMMAND echo "Adding resources ${RDEF_FILE} to ${name} binary..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
 		)
 		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")

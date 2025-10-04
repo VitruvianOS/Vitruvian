@@ -170,22 +170,21 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	if (fd < 0 && path == NULL)
 		return B_ERROR;
 
+	int flags = traverseLink == false ? AT_SYMLINK_NOFOLLOW : 0;
 	if (path == NULL) {
-		// TODO in theory fstatat should be enough for that
-		if (!traverseLink && fstat(fd, st) < 0)
-			return B_ENTRY_NOT_FOUND;
-		else if (traverseLink && lstat(fd, st) < 0)
-			return B_ENTRY_NOT_FOUND;
+		if (!traverseLink) {
+			if (fstat(fd, st) < 0)
+				return B_ENTRY_NOT_FOUND;
 
-		return B_OK;
+			return B_OK;
+		}
+		flags |= AT_EMPTY_PATH;
 	}
 
 	if (fd < 0)
 		fd = AT_FDCWD;
 
-	return fstatat(fd, path, st,
-		traverseLink == false ? AT_SYMLINK_NOFOLLOW : 0) < 0 ?
-			B_ENTRY_NOT_FOUND : B_OK;
+	return fstatat(fd, path, st, flags) < 0 ? B_ENTRY_NOT_FOUND : B_OK;
 }
 
 
@@ -290,6 +289,7 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 			return ret;
 		}
 
+		// No need to free basename
 		char* baseName = basename(buf);
 		if (baseName == NULL) {
 			close(dirfd);
@@ -310,7 +310,7 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 
 #ifdef OPEN_BY_INODE_WORKAROUND
 	struct stat st;
-	if (_kern_read_stat(dirfd, name, false, &st, 0) == B_OK)
+	if (_kern_read_stat(dirfd, NULL, false, &st, 0) == B_OK)
 		BKernelPrivate::insertPath(st.st_ino, dirfd);
 #endif
 

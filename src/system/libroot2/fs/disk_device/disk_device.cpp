@@ -1,16 +1,59 @@
 /*
- *  Copyright 2019-2020, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2019-2025, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
 
 #include <syscalls.h>
 
+#include <dirent.h>
+#include <sys/stat.h>
 
-int
-_kern_get_next_disk_device_id(int32* cookie, size_t* neededSize)
-{
-	UNIMPLEMENTED();
-	return -1;
+
+static DIR* diskDir = NULL;
+static int32 currentCookie = 0;
+
+
+int _kern_get_next_disk_device_id(int32* cookie, size_t* neededSize) {
+	if (*cookie == -1 || cookie != currentCookie+1) {
+		*cookie = -1;
+		return B_BAD_VALUE;
+	}
+
+	if (*cookie == 0) {
+		if (diskDir != NULL)
+			close(diskDir);
+
+		diskDir = opendir("/dev/disk/by-id/");
+		if (diskDir == NULL)
+			return B_ENTRY_NOT_FOUND;
+	}
+
+	struct stat st;
+	char path[B_OS_NAME_LENGTH];
+
+	currentCookie = *cookie;
+
+	static struct dirent* dirEntry = NULL;
+	while ((dirEntry = readdir(diskDir)) != NULL) {
+			int ret = snprintf(path, sizeof(path),
+				"/dev/disk/by-id/%s", dirEntry->d_name);
+
+			if (ret < 0)
+				return B_ENTRY_NOT_FOUND;
+
+			if (stat(path, &st) == 0) {
+				*cookie = currentCookie++;
+				// TODO
+				//*neededSize = ?
+				return st.st_dev;
+			}
+		currentCookie++;
+	}
+
+	closedir(diskDir);
+	diskDir = NULL;
+	currentCookie = 0;
+	return B_ENTRY_NOT_FOUND;
 }
 
 

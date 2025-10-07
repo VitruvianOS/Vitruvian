@@ -41,6 +41,7 @@ main()
    printf("testthread (%s):thread %d should not have data\n",
 		(has_data(other_thread) == false) ? "pass" : "FAIL", other_thread);  
 
+   printf("%d\n", other_thread);
    send_data(other_thread, code, (void *)buf, strlen(buf));
 
    printf("testthread (%s):thread %d should have data\n",

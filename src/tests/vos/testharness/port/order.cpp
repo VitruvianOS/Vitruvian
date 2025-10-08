@@ -36,7 +36,7 @@ int main()
 	if (ret < 0)
 		printf("port err (failure)\n");
 
-	printf("Read size: %d Data: %s\n", ret, testdata2);
+	printf("Read size: %ld Data: %s\n", ret, testdata2);
 
 	if (strcmp("abcd", testdata2) != 0)
 		printf("FAILURE data not equal\n");
@@ -45,7 +45,7 @@ int main()
 	if (ret < 0)
 		printf("port err (failure)\n");
 
-	printf("Read size: %d Data: %s\n", ret, testdata2);
+	printf("Read size: %ld Data: %s\n", ret, testdata2);
 
 	if (strcmp("bacd", testdata2) != 0)
 		printf("FAILURE data not equal\n");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2023, Dario Casalinuovo. All rights reserved.
+ * Copyright 2019-2025, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the LGPL License.
  */
 
@@ -298,7 +298,6 @@ set_port_owner(port_id id, team_id team)
 	if (id < 0)
 		return B_BAD_PORT_ID;
 
-
 	struct nexus_port_exchange exchange;
 	exchange.op = NEXUS_SET_PORT_OWNER;
 	exchange.id = id;
@@ -309,12 +308,4 @@ set_port_owner(port_id id, team_id team)
 		return B_BAD_PORT_ID;
 
 	return exchange.return_code;
-}
-
-
-extern "C"
-int
-dump_port_info(int argc, char **argv)
-{
-	// TODO this might be a good candidate for removal.
 }

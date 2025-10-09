@@ -286,12 +286,11 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 }
 
 
-// Unsafe, Deprecated
 status_t
 kill_thread(thread_id thread)
 {
-	UNIMPLEMENTED();
-	return B_BAD_THREAD_ID;
+	status_t ret = kill_team(thread);
+	return ret == B_BAD_TEAM_ID ? B_BAD_THREAD_ID : ret;
 }
 
 

@@ -41,8 +41,8 @@ struct data_wrap {
 	pid_t tid;
 };
 
-static __thread Thread* gCurrentThread;
-static __thread sem_id gThreadExitSem;
+static __thread Thread* gCurrentThread = NULL;
+static __thread pthread_key_t sOnExitKey;
 
 static pthread_mutex_t gLock;
 static std::map<thread_id, Thread*> gThreadsMap;
@@ -259,15 +259,27 @@ rename_thread(thread_id thread, const char* newName)
 void
 exit_thread(status_t status)
 {
-	// TODO what about the status?
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	// TODO pass exit status here
+	if (ioctl(nexus, NEXUS_THREAD_EXIT, NULL) < 0)
+		status = B_ERROR;
+
+	// TODO what about the status here?
 	pthread_exit((void*)&status);
 }
 
 
 status_t
-on_exit_thread(void (*callback)(void *), void *data)
+on_exit_thread(void (*callback)(void *), void* data)
 {
-	UNIMPLEMENTED();
+    int ret = pthread_key_create(&BKernelPrivate::sOnExitKey, callback);
+    if (ret != 0)
+		return B_ERROR;
+
+    ret = pthread_setspecific(BKernelPrivate::sOnExitKey, data);
+    if (ret != 0)
+		return B_ERROR;
+
 	return B_OK;
 }
 

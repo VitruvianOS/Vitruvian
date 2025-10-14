@@ -1,5 +1,5 @@
 /*
- *  Copyright 2018-2020, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2018-2025, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
 
@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <list>
@@ -35,6 +36,7 @@ mode_t __gUmask = 022;
 int32 __gCPUCount;
 int __libc_argc;
 char** __libc_argv;
+extern int gLoadImageFD;
 
 
 namespace BKernelPrivate {
@@ -60,6 +62,8 @@ init_team(int argc, char** argv)
 {
 	TRACE("init_team() %d\n", argc);
 
+	// TODO I think there's more stuff that normally
+	// is handled by the debugger in BeOS.
 	signal(SIGSEGV, segv_handler);
 
 	// Init global stuff
@@ -72,6 +76,8 @@ init_team(int argc, char** argv)
 
 	Team::InitTeam();
 
+	// This should be good for us. We register the first set of callbacks
+	// that will be executed before any other set the user may register.
 	pthread_atfork(&Team::PrepareFatherAtFork,
 		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
 
@@ -138,8 +144,84 @@ Team::ReinitChildAtFork()
 
 	Thread::ReinitChildAtFork();
 
+	// _kern_unblock_thread(father)
 	release_sem(fForkSem);
 	fForkSem = -1;
+}
+
+
+thread_id
+Team::LoadImage(int32 argc, const char** argv, const char** envp)
+{
+	TRACE("load_image: %s\n", argv[0]);
+
+	int lockfd[2];
+	if (pipe(lockfd) == -1)
+		return -1;
+
+	pid_t pid = fork();
+	if (pid == 0) {
+		close(lockfd[1]);
+
+		// Wait for the father to unlock us
+		uint32 value;
+		read(lockfd[0], &value, sizeof(value));
+
+		int32 ret = execvpe(argv[0], const_cast<char* const*>(argv),
+			const_cast<char* const*>(envp));
+		if (ret == -1) {
+			TRACE("execv err %s\n", strerror(errno));
+			_exit(1);
+		}
+	}
+	close(lockfd[0]);
+
+	if (pid == -1) {
+		close(lockfd[1]);
+		TRACE("fork error\n");
+		return B_ERROR;
+	} else
+		gLoadImageFD = lockfd[1];
+
+	return pid;
+}
+
+
+status_t
+Team::WaitForTeam(team_id id, status_t* returnCode)
+{
+	if (id == getpid())
+		debugger("Team::WaitForTeam: This shouldn't happen.");
+
+	if (kill(id, 0) < 0)
+		return B_BAD_THREAD_ID;
+
+	if (gLoadImageFD != -1) {
+		uint32 value = 1;
+		write(gLoadImageFD, (const void*)&value, sizeof(uint32));
+		close(gLoadImageFD);
+		gLoadImageFD = -1;
+	}
+
+	int status;
+	do {
+		TRACE("waitpid %d\n", id);
+
+		if (waitpid(id, &status, WUNTRACED | WCONTINUED) == -1)
+			return B_BAD_THREAD_ID;
+
+		if (WIFEXITED(status)) {
+			TRACE("waitpid: exited, status=%d\n", WEXITSTATUS(status));
+			if (returnCode)
+				*returnCode = -WEXITSTATUS(status) == 0 ? B_OK : B_ERROR;
+			return B_OK;
+		} else if (WIFSIGNALED(status)) {
+			TRACE("waitpid: killed by signal %d\n", WTERMSIG(status));
+			return B_INTERRUPTED;
+		}
+	} while (!WIFEXITED(status) && !WIFSIGNALED(status));
+	//}
+	return B_BAD_THREAD_ID;
 }
 
 
@@ -186,7 +268,7 @@ _get_team_info(team_id id, team_info* info, size_t size)
 	FILE* fileid = fopen(procPath, "r");
 
 	if (fileid == NULL)
-		return B_BAD_VALUE;
+		return B_BAD_TEAM_ID;
 
 	int i = 0;
 	while (!feof(fileid)) {

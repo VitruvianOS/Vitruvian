@@ -14,17 +14,21 @@ namespace BKernelPrivate {
 class Team
 {
 public:
-	static void		InitTeam();
-	static void		DeInitTeam();
+	static void			InitTeam();
+	static void			DeInitTeam();
 
-	static void 	PrepareFatherAtFork();
-	static void 	SyncFatherAtFork();
-	static void 	ReinitChildAtFork();
+	static status_t		WaitForTeam(team_id id, status_t* _returnCode);
+	static thread_id	LoadImage(int32 argc, const char** argv,
+							const char** envp);
+
+	static void 		PrepareFatherAtFork();
+	static void 		SyncFatherAtFork();
+	static void 		ReinitChildAtFork();
 
 	static int		GetNexusDescriptor();
 
 private:
-	static sem_id	fForkSem;
+	static sem_id		fForkSem;
 };
 
 

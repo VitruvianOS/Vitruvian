@@ -11,6 +11,7 @@
 
 #include <map>
 
+#include "Team.h"
 #include "KernelDebug.h"
 #include "MutexLock.h"
 
@@ -31,10 +32,8 @@ public:
 
 		void* image = dlopen(path, RTLD_LAZY);
 
-		if (image == NULL) {
-			printf("%s\n", dlerror());
+		if (image == NULL)
 			return B_ERROR;
-		}
 
 		fLoadedAddOns.insert(std::make_pair(++fId, image));
 
@@ -105,41 +104,7 @@ pthread_mutex_t ImagePool::fLock = PTHREAD_MUTEX_INITIALIZER;
 thread_id
 load_image(int32 argc, const char** argv, const char** envp)
 {
-	TRACE("load_image: %s\n", argv[0]);
-
-#ifdef DEBUG
-	for (int32 i = 0; i < argc; i++)
-		TRACE("%s\n", argv[i]);
-#endif
-
-	int lockfd[2];
-	if (pipe(lockfd) == -1)
-		return -1;
-
-	pid_t pid = fork();
-	if (pid == 0) {
-		close(lockfd[1]);
-
-		// Wait for the father to unlock us
-		uint32 value;
-		read(lockfd[0], &value, sizeof(value));
-
-		int32 ret = execvpe(argv[0], const_cast<char* const*>(argv),
-			const_cast<char* const*>(envp));
-		if (ret == -1) {
-			TRACE("execv err %s\n", strerror(errno));
-			_exit(1);
-		}
-	}
-	close(lockfd[0]);
-
-	if (pid == -1) {
-		close(lockfd[1]);
-		TRACE("fork error\n");
-	} else
-		gLoadImageFD = lockfd[1];
-
-	return pid;
+	return BKernelPrivate::Team::LoadImage(argc, argv, envp);
 }
 
 
@@ -193,7 +158,7 @@ _get_next_image_info(team_id team, int32* cookie,
 	if (team == 0)
 		team = getpid();
 
-	if (*cookie == 0) {
+	if (*cookie == 0 && team == getpid()) {
 		char path[B_PATH_NAME_LENGTH];
 		sprintf(path, "/proc/%d/exe", team);
 

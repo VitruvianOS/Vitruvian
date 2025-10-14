@@ -136,71 +136,15 @@ Thread::thread_run(void* data)
 	threadData->func(threadData->data);
 
 	Thread::Lock();
-	gThreadsMap.erase(gCurrentThread);
+	gThreadsMap.erase(threadData->tid);
 	printf("%d is exiting\n", gettid());
 	delete gCurrentThread;
 	gCurrentThread = NULL;
 	delete threadData;
 	Thread::Unlock();
 
-	status_t exitStatus = B_OK;
-
-	if (ioctl(nexus, NEXUS_THREAD_EXIT, NULL) < 0)
-		exitStatus = B_ERROR;
-
-	// TODO exit callback pthread_key
-	delete_sem(gThreadExitSem);
-	pthread_exit(&exitStatus);
+	exit_thread(B_OK);
 	return NULL;
-}
-
-
-status_t
-Thread::WaitForThread(thread_id id, status_t* _returnCode)
-{
-	Thread::Lock();
-		auto elem = gThreadsMap.find(id);
-		if (elem == end(gThreadsMap)) {
-			Thread::Unlock();
-			return B_BAD_THREAD_ID;
-		}
-		sem_id sem = elem->second->fThreadExitSem;
-	Thread::Unlock();
-
-	status_t ret = acquire_sem(sem);
-
-	if (_returnCode != NULL)
-		*_returnCode = 0;
-
-	// TODO: move to Team
-	if (ret != B_OK && gLoadImageFD != -1) {
-		uint32 value = 1;
-		write(gLoadImageFD, (const void*)&value, sizeof(uint32));
-		close(gLoadImageFD);
-		gLoadImageFD = -1;
-
-		int status;
-		do {
-			TRACE("waitpid %d\n", id);
-			if (waitpid(id, &status, WUNTRACED | WCONTINUED) == -1)
-				return B_BAD_THREAD_ID;
-
-			if (WIFEXITED(status)) {
-				TRACE("exited, status=%d\n", WEXITSTATUS(status));
-			} else if (WIFSIGNALED(status)) {
-				TRACE("killed by signal %d\n", WTERMSIG(status));
-			} else if (WIFSTOPPED(status)) {
-				TRACE("stopped by signal %d\n", WSTOPSIG(status));
-			} else if (WIFCONTINUED(status)) {
-				TRACE("continued\n");
-			}
-		} while (!WIFEXITED(status) && !WIFSIGNALED(status));
-
-		// TODO: returncode
-		return B_OK;
-	}
-
-	return ret;
 }
 
 

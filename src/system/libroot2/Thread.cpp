@@ -66,8 +66,6 @@ Thread::Thread()
 {
 	fThread = find_thread(NULL);
 	fThreadBlockSem = create_sem(0, "block_thread_sem");
-	fThreadExitSem = create_sem(0, "exit_thread_sem");
-	gThreadExitSem = fThreadExitSem;
 	gCurrentThread = this;
 }
 
@@ -122,7 +120,6 @@ Thread::thread_run(void* data)
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	if (ioctl(nexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
 		status_t exitStatus = B_ERROR;
-		delete_sem(gThreadExitSem);
 		pthread_exit(&exitStatus);
 		return NULL;
 	}
@@ -221,7 +218,7 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 	int32 ret = pthread_create(&pThread, NULL,
 		BKernelPrivate::Thread::thread_run, dataWrap);
 	if (ret < 0)
-		return B_ERROR;
+		return -errno;
 
 	BKernelPrivate::gCurrentThread->Block(B_TIMEOUT,
 		B_INFINITE_TIMEOUT);
@@ -253,7 +250,7 @@ rename_thread(thread_id thread, const char* newName)
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	if (ioctl(nexus, NEXUS_THREAD_OP, &exchange) < 0)
-		return B_ERROR;
+		return B_BAD_THREAD_ID;
 
 	return B_OK;
 }
@@ -281,8 +278,8 @@ send_data(thread_id thread, int32 code,
 {
 	CALLED();
 
-	if (buffer == NULL)
-		return B_ERROR;
+	if (buffer == NULL || buffer == NULL || bufferSize < 0)
+		return B_BAD_VALUE;
 
 	struct nexus_thread_exchange exchange;
 	exchange.op = NEXUS_THREAD_WRITE;
@@ -304,14 +301,15 @@ receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 {
 	CALLED();
 
-	if (sender == NULL)
-		return B_ERROR;
+	if (sender == NULL || buffer == NULL || bufferSize < 0)
+		return B_BAD_VALUE;
 
 	struct nexus_thread_exchange exchange;
 	exchange.op = NEXUS_THREAD_READ;
 	exchange.buffer = buffer;
 	exchange.size = bufferSize;
 
+	// TODO B_INTERRUPTED
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	if (ioctl(nexus, NEXUS_THREAD_OP, &exchange) < 0)
 		return B_ERROR;
@@ -348,6 +346,8 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 	if (id < 0 || info == NULL || size != sizeof(thread_info))
 		return B_BAD_VALUE;
 
+	// TODO: Proc
+
 	info->thread = id;
 	memset(&info->name, 0, B_OS_NAME_LENGTH);
 	strncpy(info->name, "Unknown", B_OS_NAME_LENGTH);
@@ -366,7 +366,7 @@ _get_next_thread_info(team_id team, int32* cookie,
 	if (info == NULL || cookie == NULL || size != sizeof(thread_info))
 		return B_BAD_VALUE;
 
-	// TODO: Use proc?
+	// TODO: Proc
 	UNIMPLEMENTED();
 	return B_BAD_VALUE;
 }
@@ -402,10 +402,24 @@ set_thread_priority(thread_id id, int32 priority)
 
 
 status_t
-wait_for_thread(thread_id id, status_t* _returnCode)
+wait_for_thread(thread_id id, status_t* returnCode)
 {
 	CALLED();
-	return BKernelPrivate::Thread::WaitForThread(id, _returnCode);
+
+	// TODO resume thread if was spawned just now
+	struct nexus_thread_exchange exchange;
+	exchange.op = NEXUS_THREAD_WAITFOR;
+	exchange.receiver = id;
+
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (ioctl(nexus, NEXUS_THREAD_OP, &exchange) < 0)
+		return BKernelPrivate::Team::WaitForTeam(id, returnCode);
+
+	// TODO fix this
+	if (returnCode != NULL)
+		*returnCode = 0;
+
+	return B_OK;
 }
 
 
@@ -428,8 +442,6 @@ resume_thread(thread_id id)
 status_t
 snooze(bigtime_t time)
 {
-	//CALLED();
-
 	return usleep(time);
 }
 

@@ -14,7 +14,6 @@ public:
 						Thread();
 						~Thread();
 
-	static status_t		WaitForThread(thread_id id, status_t* _returnCode);
 	static status_t		Resume(thread_id id);
 
 	status_t			Block(uint32 flags, bigtime_t timeout);
@@ -36,8 +35,6 @@ private:
 
 	thread_id			fThread;
 	sem_id				fThreadBlockSem = -1;
-
-	sem_id				fThreadExitSem;
 };
 
 

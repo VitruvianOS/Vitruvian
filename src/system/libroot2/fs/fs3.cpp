@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <string.h>
 #include <sys/syscall.h>
 
 #include <map>
@@ -629,7 +630,7 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 {
 	CALLED();
 
-	if (buffer == NULL || bufferSize == 0 || maxCount == 0)
+	if (buffer == NULL || bufferSize <= 0 || maxCount == 0)
 		return B_BAD_VALUE;
 
 	if (fd < 0)
@@ -639,7 +640,7 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 		long           d_ino;
 		off_t          d_off;
 		unsigned short d_reclen;
-		char           d_name[256];
+		char           d_name[255];
 	};
 
 	size_t bufSize = sizeof(struct linux_dirent) * maxCount;
@@ -647,33 +648,42 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 	if (direntBuffer == NULL)
 		return B_NO_MEMORY;
 
+	off_t seekOffset = _kern_seek(fd, 0, SEEK_CUR);
+
 	ssize_t ret = syscall(SYS_getdents, fd, direntBuffer, bufSize);
 	if (ret < 0) {
 		free(direntBuffer);
 		return BKernelPrivate::posixError(errno);
 	}
 
-	ssize_t retCount = ret / sizeof(struct linux_dirent);
-	size_t countToCopy = (retCount < maxCount) ? retCount : maxCount;
+	int i = 0;
+	int pos = 0;
+	while (pos < ret && i < maxCount) {
+		struct linux_dirent* dir = (struct linux_dirent *) (direntBuffer + pos);
+		buffer[i].d_ino = dir->d_ino;
+		buffer[i].d_off = dir->d_off;
+		buffer[i].d_reclen = dir->d_reclen;
 
-	for (size_t i = 0; i < countToCopy; i++) {
-		buffer[i].d_ino = direntBuffer[i].d_ino;
-		buffer[i].d_off = direntBuffer[i].d_off;
-		buffer[i].d_reclen = direntBuffer[i].d_reclen;
-		memcpy(buffer[i].d_name, direntBuffer[i].d_name,
-			sizeof(buffer[i].d_name));
-		buffer[i].d_name[sizeof(buffer[i].d_name) - 1] = '\0';
-	}
-
-	if (retCount > maxCount) {
-		if (_kern_seek(fd, -1 * (retCount - maxCount), SEEK_CUR) < 0) {
+		if (strlcpy(buffer[i].d_name, dir->d_name, sizeof(buffer[i].d_name))
+				> sizeof(buffer[i].d_name)) {
 			free(direntBuffer);
-			return BKernelPrivate::posixError(errno);
+			close(dirfd);
+			return B_BUFFER_OVERFLOW;
 		}
-	}
 
+        pos += dir->d_reclen;
+        seekOffset = dir->d_off;
+        i++;
+	}
 	free(direntBuffer);
-	return countToCopy;
+
+	if (pos < ret)
+		_kern_seek(fd, seekOffset, SEEK_SET);
+
+	if (i <= 0)
+		return B_ENTRY_NOT_FOUND;
+
+	return i;
 }
 
 

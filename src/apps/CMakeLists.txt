@@ -1,7 +1,6 @@
 add_subdirectory(clock)
 add_subdirectory(deskbar)
 #add_subdirectory(deskcalc)
-add_subdirectory(osutils)
 add_subdirectory(pairs)
 add_subdirectory(stylededit)
 add_subdirectory(sudoku)

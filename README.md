@@ -11,7 +11,9 @@
 
 ### Overview
 
-V\OS is a reimplementation of the BeOS (and to some extent Haiku) userland on Linux, bringing the elegance and simplicity of a classic operating system to modern days. By leveraging the strengths of Linux while maintaining the user-friendly aspects of BeOS, V\OS offers a unique blend of performance and usability. V\OS leverages the power of linux by integrating ad-hoc built kernel modules for a reactive and enjoyable user experience.
+V\OS is an operating system based on linux heavily inspired by the BeOS, bringing the elegance and simplicity of a classic operating system to modern days. By leveraging the strengths of Linux while maintaining the user-friendly aspects of BeOS, V\OS offers a unique blend of performance and usability. V\OS leverages the power of linux by integrating ad-hoc built kernel modules and real time patches for a reactive and enjoyable user experience. V\OS supports the BeOS/Haiku runtime on Linux with minimal to no API changes.
+
+The boot file systems supported are XFS and SquashFS including support for extended attributes. File system indexing and live queries are planned to be released later on. By default the system ships a linux kernel including real time patches while at the same time providing support for non-rt linux kernels.
 
 ### Join the Community!
 

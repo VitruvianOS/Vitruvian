@@ -12,13 +12,14 @@ AddOn(
 	main.cpp
 	errors.cpp
 	debug.cpp
+	image.cpp
 
 	#Area.cpp
 	#${LIBROOT_SOURCES}/debug.cpp
 	${LIBROOT_SOURCES}/driver_settings.cpp
 	#${LIBROOT_SOURCES}/extended_system_info.cpp
 	${LIBROOT_SOURCES}/framebuffer.cpp
-	${LIBROOT_SOURCES}/image.cpp
+	#${LIBROOT_SOURCES}/image.cpp
 	${LIBROOT_SOURCES}/mutex.cpp
 	${LIBROOT_SOURCES}/locks/mutex.cpp
 	${LIBROOT_SOURCES}/Architecture.cpp

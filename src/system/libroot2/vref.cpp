@@ -13,7 +13,7 @@
 namespace BKernelPrivate {
 
 static dev_t sNexusVrefDev = -1;
-static int sNexusFd = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVrefDev);
+static int sNexus = Team::GetVRefDescriptor(&sNexusVrefDev);
 
 };
 
@@ -21,8 +21,7 @@ static int sNexusFd = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVrefDev);
 vref_id
 create_vref(int fd)
 {
-	int nexus = BKernelPrivate::Team::GetVRefDescriptor();
-	vref_id id = ioctl(nexus, NEXUS_VREF_CREATE, &fd);
+	vref_id id = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_CREATE, &fd);
 	printf("create vref %d fd %d\n", id, fd);
 	return id;
 }
@@ -31,18 +30,24 @@ create_vref(int fd)
 status_t
 acquire_vref(vref_id id, int* fd)
 {
-	int nexus = BKernelPrivate::Team::GetVRefDescriptor();
-	int f = ioctl(nexus, NEXUS_VREF_ACQUIRE, &id);
-	printf("acquire vref %d fd %d\n", id, fd);
-	return f;
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_ACQUIRE, &id);
+
+	printf("acquire vref %d fd %d\n", id, ret);
+
+	if (ret < 0)
+		return ret;
+
+	if (*fd != NULL)
+		*fd = ret;
+
+	return B_OK;
 }
 
 
 int
 acquire_vref(vref_id id)
 {
-	int nexus = BKernelPrivate::Team::GetVRefDescriptor();
-	int fd = ioctl(nexus, NEXUS_VREF_ACQUIRE, &id);
+	int fd = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_ACQUIRE, &id);
 	printf("acquire vref %d fd %d\n", id, fd);
 	return fd;
 }
@@ -51,7 +56,14 @@ acquire_vref(vref_id id)
 vref_id
 clone_vref(vref_id id, int* fd)
 {
-	
+	//int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_CLONE, &id);
+	//if (ret < 0)
+	//	return ret;
+
+	//if (fd != NULL)
+	//	*fd = ret;
+
+	return id;
 }
 
 
@@ -59,8 +71,7 @@ status_t
 release_vref(vref_id id)
 {
 	printf("release vref %d\n", id);
-	int nexus = BKernelPrivate::Team::GetVRefDescriptor();
-	return ioctl(nexus, NEXUS_VREF_RELEASE, &id);
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_RELEASE, &id);
 }
 
 

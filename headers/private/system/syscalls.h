@@ -613,13 +613,8 @@ extern status_t		_kern_start_watching_disks(uint32 eventMask, port_id port,
 						int32 token);
 extern status_t		_kern_stop_watching_disks(port_id port, int32 token);
 
-
 // V\OS
 
-extern int 			_kern_open_dir_entry_ref_by_fd(int fd, team_id team,
-						const char* name);
-extern int			_kern_open_entry_ref_by_fd(int fd, team_id team,
-						const char* name, int openMode, int perms);
 extern status_t		_kern_entry_ref_to_path_by_fd(int fd, team_id team,
 						char* name, char* buffer, size_t bufferSize);
 extern status_t		_kern_fd_to_path(int fd, team_id team, char* buffer,

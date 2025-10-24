@@ -45,6 +45,7 @@ typedef int32 port_id;
 typedef int32 sem_id;
 typedef int32 team_id;
 typedef int32 thread_id;
+typedef int32 vref_id;
 
 
 /* Areas */
@@ -645,6 +646,15 @@ typedef struct object_wait_info {
 extern ssize_t		wait_for_objects(object_wait_info* infos, int numInfos);
 extern ssize_t		wait_for_objects_etc(object_wait_info* infos, int numInfos,
 						uint32 flags, bigtime_t timeout);
+
+// V\OS API
+
+extern vref_id		create_vref(int fd);
+//vref_id			clone_virtual_ref(vref_id id, int* fd);
+//extern int		acquire_vref(vref_id id, int* fd);
+extern int			acquire_vref(vref_id id);
+extern status_t		release_vref(vref_id id);
+extern dev_t		get_vref_dev();
 
 
 #ifdef __cplusplus

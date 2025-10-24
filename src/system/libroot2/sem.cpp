@@ -5,9 +5,7 @@
 
 #include <OS.h>
 
-#include <execinfo.h>
 #include "Team.h"
-#define DEBUG 0
 #include "KernelDebug.h"
 
 #include "../kernel/nexus/nexus/nexus.h"
@@ -26,8 +24,7 @@ create_sem_etc(int32 count, const char* name, team_id _owner)
 	exchange.name = name;
 
 	int sNexus = BKernelPrivate::Team::GetSemDescriptor();
-	//int ret = nexus_io(sNexus, NEXUS_SEM_CREATE, &exchange);
-	int ret = ioctl(sNexus, NEXUS_SEM_CREATE, &exchange);
+	int ret = nexus_io(sNexus, NEXUS_SEM_CREATE, &exchange);
 	if (ret < 0)
 		return ret;
 
@@ -49,14 +46,9 @@ delete_sem(sem_id id)
 
 	struct nexus_sem_exchange exchange;
 	exchange.id = id;
-	int sNexus = BKernelPrivate::Team::GetSemDescriptor();
-	int ret = ioctl(sNexus, NEXUS_SEM_DELETE, &exchange);
-	if (ret == -1)
-		return -errno;
-	if (ret < 0)
-		return ret;
 
-	return B_OK;
+	int sNexus = BKernelPrivate::Team::GetSemDescriptor();
+	return nexus_io(sNexus, NEXUS_SEM_DELETE, &exchange);
 }
 
 
@@ -79,12 +71,7 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 	exchange.timeout = timeout;
 
 	int sNexus = BKernelPrivate::Team::GetSemDescriptor();
-	int ret = ioctl(sNexus, NEXUS_SEM_ACQUIRE, &exchange);
-
-	if (ret == -1)
-		ret = -errno;
-
-	return ret;
+	return nexus_io(sNexus, NEXUS_SEM_ACQUIRE, &exchange);
 }
 
 
@@ -105,12 +92,9 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 	exchange.id = id;
 	exchange.count = count;
 	exchange.flags = flags;
-	int sNexus = BKernelPrivate::Team::GetSemDescriptor();
-	if (ioctl(sNexus, NEXUS_SEM_RELEASE, &exchange) < 0) {
-		return B_ERROR;
-	}
 
-	return B_OK;
+	int sNexus = BKernelPrivate::Team::GetSemDescriptor();
+	return nexus_io(sNexus, NEXUS_SEM_RELEASE, &exchange);
 }
 
 
@@ -121,8 +105,9 @@ get_sem_count(sem_id id, int32* thread_count)
 
 	struct nexus_sem_exchange exchange;
 	exchange.id = id;
+
 	int sNexus = BKernelPrivate::Team::GetSemDescriptor();
-	int ret = ioctl(sNexus, NEXUS_SEM_COUNT, &exchange);
+	int ret = nexus_io(sNexus, NEXUS_SEM_COUNT, &exchange);
 	if (ret < 0)
 		return ret;
 

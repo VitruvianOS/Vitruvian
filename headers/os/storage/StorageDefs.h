@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025, The Vitruvian Project. All Rights Reserved.
  * Copyright 2002-2006, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -15,7 +16,7 @@
 #define B_DEV_NAME_LENGTH		NAME_MAX
 #define B_FILE_NAME_LENGTH		NAME_MAX
 #define B_PATH_NAME_LENGTH		MAXPATHLEN
-#define B_ATTR_NAME_LENGTH		(B_FILE_NAME_LENGTH - 1)
+#define B_ATTR_NAME_LENGTH		XATTR_NAME_MAX
 #define B_MIME_TYPE_LENGTH		(B_ATTR_NAME_LENGTH - 15)
 #define B_MAX_SYMLINKS			SYMLOOP_MAX
 

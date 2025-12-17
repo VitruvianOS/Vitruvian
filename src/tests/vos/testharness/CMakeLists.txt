@@ -12,5 +12,7 @@ Application(set_port_owner SOURCES set_port_owner.cpp)
 Application(test_load_image2 SOURCES test_load_image2.cpp)
 Application(test_load_image SOURCES test_load_image.cpp)
 Application(test_area SOURCES test_area.cpp)
+Application(testvref SOURCES testvref.cpp)
+
 
 add_subdirectory(port)

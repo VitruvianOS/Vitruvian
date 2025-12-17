@@ -15,6 +15,7 @@ target_sources(root PRIVATE
 	SystemWatcher.cpp
 	Team.cpp
 	Thread.cpp
+	vref.cpp
 
 	real_time_clock.c
 	shutdown.cpp
@@ -39,8 +40,9 @@ target_sources(root PRIVATE
 	fs/fs_info.cpp
 	fs/fs_query.cpp
 	fs/fs_volume.c
-	fs/watch.cpp
 	fs/getenv.c
+	fs/normalize_path.cpp
+	fs/watch.cpp
 
 	fs/disk_device/disk_device.cpp
 

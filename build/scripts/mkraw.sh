@@ -46,7 +46,7 @@ sudo mkdir -p "$MNT/boot/efi"
 sudo mount "$EFI_PART" "$MNT/boot/efi"
 
 # 7. Bootstrap Debian
-sudo debootstrap --arch=amd64 bookworm "$MNT" http://deb.debian.org/debian
+sudo debootstrap --arch=amd64 trixie "$MNT" http://deb.debian.org/debian
 
 # 8. Copy local deb packages into target if present
 if ls "$PWD"/*.deb >/dev/null 2>&1; then
@@ -69,8 +69,8 @@ echo "$USER:$PASS" | chpasswd
 adduser $USER sudo
 
 cat > /etc/apt/sources.list <<EOL
-deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
-deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
 EOL
 
 apt update

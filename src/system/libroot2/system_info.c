@@ -5,6 +5,10 @@
 
 #include <syscalls.h>
 
+#include <stdlib.h>
+#include <dirent.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
 #include <sys/utsname.h>
 #include <time.h>
 
@@ -37,25 +41,135 @@ bigtime_t system_time() {
 status_t
 _kern_get_system_info(system_info* info)
 {
-	UNIMPLEMENTED();
+	if (info == NULL)
+		return B_BAD_VALUE;
 
-	// TODO: getrusage + proc
-	info->max_threads = 93966;
+	memset(info, 0, sizeof(*info));
+
+	struct rlimit rl;
+	if (getrlimit(RLIMIT_NPROC, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY)
+		info->max_threads = (int32_t)rl.rlim_cur;
+	else
+		info->max_threads = 65536;
 
 	info->cpu_count = __gCPUCount;
 
 	struct utsname buf;
-	uname(&buf);
+	if (uname(&buf) == 0) {
+		strncpy(info->kernel_name, buf.sysname, sizeof(info->kernel_name) - 1);
+		info->kernel_name[sizeof(info->kernel_name) - 1] = '\0';
 
-	// TODO: Use major version number from buf.release
-	info->kernel_version = 5LL;
-	strcpy(info->kernel_name, buf.sysname);
-	// TODO: Use date from buf.version
-	strcpy(info->kernel_build_date, buf.version);
-	strcpy(info->kernel_build_time, "unknown");
+		// kernel_version: parse major version from release
+		const char *p = buf.release;
+		// skip non-digits
+		while (*p && (*p < '0' || *p > '9')) ++p;
+		if (*p) {
+			char tmp[64];
+			size_t n = strcspn(p, ".-_ ");
+			if (n >= sizeof(tmp))
+				n = sizeof(tmp) - 1;
+			memcpy(tmp, p, n);
+			tmp[n] = '\0';
+			info->kernel_version = atoll(tmp);
+		} else {
+			info->kernel_version = 0;
+		}
 
-	// TODO: define proper ABI flags
-	info->abi = 0x00200000;
+		time_t mtime = 0;
+		int hasMtime = 0;
+
+		// Try common candidate paths that include the release string
+		const char *candidates_fmt[] = {
+			"/boot/vmlinuz-%s",
+			"/vmlinuz-%s",
+			"/boot/kernel-%s",
+			NULL
+		};
+		char path[PATH_MAX];
+		for (const char **pf = candidates_fmt; !hasMtime && *pf; ++pf) {
+			if (snprintf(path, sizeof(path), *pf, buf.release) >= (int)sizeof(path))
+				continue;
+			struct stat st;
+			if (stat(path, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
+				mtime = st.st_mtime;
+				hasMtime = 1;
+				break;
+			}
+		}
+
+		// Try common non-formatted locations
+		if (!hasMtime) {
+			const char *candidates[] = {
+				"/boot/vmlinuz",
+				"/vmlinuz",
+				"/boot/kernel",
+				NULL
+			};
+			for (const char **p = candidates; !hasMtime && *p; ++p) {
+				struct stat st;
+				if (stat(*p, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
+					mtime = st.st_mtime;
+					hasMtime = 1;
+				}
+			}
+		}
+
+		// If still not found, scan /boot for files containing the release substring
+		if (!hasMtime) {
+			DIR *d = opendir("/boot");
+			if (d) {
+				struct dirent *ent;
+				while ((ent = readdir(d)) != NULL) {
+					if (ent->d_type != DT_REG && ent->d_type != DT_LNK && ent->d_type != DT_UNKNOWN)
+						continue;
+					if (strstr(ent->d_name, buf.release) == NULL)
+						continue;
+					if (snprintf(path, sizeof(path), "/boot/%s", ent->d_name) >= (int)sizeof(path))
+						continue;
+					struct stat st;
+					if (stat(path, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
+						mtime = st.st_mtime;
+						hasMtime = 1;
+						break;
+					}
+				}
+				closedir(d);
+			}
+		}
+
+		// Format build date/time from mtime if found
+		if (hasMtime) {
+			struct tm tm;
+			if (gmtime_r(&mtime, &tm) != NULL) {
+				strftime(info->kernel_build_date, sizeof(info->kernel_build_date),
+					"%Y-%m-%d", &tm);
+				strftime(info->kernel_build_time, sizeof(info->kernel_build_time),
+			         "%H:%M:%S UTC", &tm);
+			} else {
+				strncpy(info->kernel_build_date, "unknown", sizeof(info->kernel_build_date) - 1);
+				info->kernel_build_date[sizeof(info->kernel_build_date) - 1] = '\0';
+				strncpy(info->kernel_build_time, "unknown", sizeof(info->kernel_build_time) - 1);
+				info->kernel_build_time[sizeof(info->kernel_build_time) - 1] = '\0';
+			}
+		} else {
+			// Fallback: copy uname().version to build_date (heuristic)
+			strncpy(info->kernel_build_date, buf.version, sizeof(info->kernel_build_date) - 1);
+			info->kernel_build_date[sizeof(info->kernel_build_date) - 1] = '\0';
+			strncpy(info->kernel_build_time, "unknown", sizeof(info->kernel_build_time) - 1);
+			info->kernel_build_time[sizeof(info->kernel_build_time) - 1] = '\0';
+		}
+	} else {
+		// uname failed, fill defaults
+		strncpy(info->kernel_name, "unknown", sizeof(info->kernel_name) - 1);
+		info->kernel_name[sizeof(info->kernel_name) - 1] = '\0';
+		info->kernel_version = 0;
+		strncpy(info->kernel_build_date, "unknown", sizeof(info->kernel_build_date) - 1);
+		info->kernel_build_date[sizeof(info->kernel_build_date) - 1] = '\0';
+		strncpy(info->kernel_build_time, "unknown", sizeof(info->kernel_build_time) - 1);
+		info->kernel_build_time[sizeof(info->kernel_build_time) - 1] = '\0';
+	}
+
+	info->abi = 0x002000000;
 
 	return B_OK;
 }

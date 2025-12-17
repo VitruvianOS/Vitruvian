@@ -214,9 +214,9 @@ extern status_t		release_sem(sem_id id);
 extern status_t		release_sem_etc(sem_id id, int32 count, uint32 flags);
 /* TODO: the following two calls are not part of the BeOS API, and might be
    changed or even removed for the final release of Haiku R1 */
-extern status_t		switch_sem(sem_id semToBeReleased, sem_id id);
-extern status_t		switch_sem_etc(sem_id semToBeReleased, sem_id id,
-						int32 count, uint32 flags, bigtime_t timeout);
+//extern status_t		switch_sem(sem_id semToBeReleased, sem_id id);
+//extern status_t		switch_sem_etc(sem_id semToBeReleased, sem_id id,
+//						int32 count, uint32 flags, bigtime_t timeout);
 extern status_t		get_sem_count(sem_id id, int32 *threadCount);
 extern status_t		set_sem_owner(sem_id id, team_id team);
 
@@ -301,8 +301,6 @@ typedef enum {
 	B_THREAD_ASLEEP,
 	B_THREAD_SUSPENDED,
 	B_THREAD_WAITING,
-
-	// TODO: needed?
 	B_THREAD_SPAWNED
 } thread_state;
 
@@ -650,9 +648,9 @@ extern ssize_t		wait_for_objects_etc(object_wait_info* infos, int numInfos,
 // V\OS API
 
 extern vref_id		create_vref(int fd);
-//vref_id			clone_virtual_ref(vref_id id, int* fd);
-//extern int		acquire_vref(vref_id id, int* fd);
-extern int			acquire_vref(vref_id id);
+extern status_t		acquire_vref_etc(vref_id id, int* fd);
+extern status_t		acquire_vref(vref_id id);
+extern int			open_vref(vref_id id);
 extern status_t		release_vref(vref_id id);
 extern dev_t		get_vref_dev();
 

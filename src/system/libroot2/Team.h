@@ -8,6 +8,7 @@
 
 #include <OS.h>
 
+
 namespace BKernelPrivate {
 
 
@@ -25,7 +26,10 @@ public:
 	static void 		SyncFatherAtFork();
 	static void 		ReinitChildAtFork();
 
-	static int		GetNexusDescriptor();
+	static int			GetNexusDescriptor();
+	static int			GetSemDescriptor();
+	static int			GetAreaDescriptor();
+	static int			GetVRefDescriptor(dev_t* dev = NULL);
 
 private:
 	static sem_id		fForkSem;

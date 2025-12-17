@@ -44,6 +44,8 @@ namespace BKernelPrivate {
 
 static std::list<int> gTeams;
 static int gNexus = -1;
+static int gNexusSem = -1;
+static int gNexusVRef = -1;
 
 sem_id Team::fForkSem = -1;
 
@@ -67,7 +69,8 @@ init_team(int argc, char** argv)
 	signal(SIGSEGV, segv_handler);
 
 	// Init global stuff
-	__gCPUCount = sysconf(_SC_NPROCESSORS_ONLN);
+	int32 cpus = (int32) sysconf(_SC_NPROCESSORS_ONLN);
+	__gCPUCount = (cpus > 0) ? (int32_t)cpus : 1;
 	__libc_argc = argc;
 	__libc_argv = argv;
 
@@ -90,7 +93,6 @@ init_team(int argc, char** argv)
 void __attribute__ ((destructor))
 deinit_team()
 {
-	//Team::DeInitTeam();
 	TRACE("deinit_team()\n");
 }
 
@@ -103,13 +105,18 @@ Team::InitTeam()
 		printf("Can't open Nexus IPC\n");
 		exit(-1);
 	}
-}
 
+	gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
+	if (gNexusSem < 0) {
+		printf("Can't open Nexus Sem\n");
+		exit(-1);
+	}
 
-void
-Team::DeInitTeam()
-{
-	close(gNexus);
+	gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
+	if (gNexusVRef < 0) {
+		printf("Can't open Nexus VRef\n");
+		exit(-1);
+	}
 }
 
 
@@ -117,6 +124,25 @@ int
 Team::GetNexusDescriptor()
 {
 	return gNexus;
+}
+
+
+int
+Team::GetSemDescriptor()
+{
+	return gNexusSem;
+}
+
+
+int
+Team::GetVRefDescriptor(dev_t* dev)
+{
+	if (dev != NULL) {
+		struct stat st;
+		fstat(gNexusVRef, &st);
+		*dev = st.st_dev;
+	}
+	return gNexusVRef;
 }
 
 

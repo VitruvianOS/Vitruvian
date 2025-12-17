@@ -5,6 +5,8 @@
 
 #include <OS.h>
 
+#include "KernelDebug.h"
+#include "syscalls.h"
 #include "Team.h"
 
 #include "../kernel/nexus/nexus/nexus.h"
@@ -21,56 +23,44 @@ static int sNexus = Team::GetVRefDescriptor(&sNexusVrefDev);
 vref_id
 create_vref(int fd)
 {
-	vref_id id = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_CREATE, &fd);
-	printf("create vref %d fd %d\n", id, fd);
-	return id;
+	CALLED();
+
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_CREATE, &fd);
 }
 
 
-status_t
-acquire_vref(vref_id id, int* fd)
+int
+open_vref(vref_id id)
 {
-	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_ACQUIRE, &id);
+	CALLED();
 
-	printf("acquire vref %d fd %d\n", id, ret);
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_OPEN, &id);
+}
+
+status_t
+acquire_vref_etc(vref_id id, int* fd)
+{
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_ACQUIRE_FD, &id);
 
 	if (ret < 0)
 		return ret;
 
-	if (*fd != NULL)
+	if (fd != NULL)
 		*fd = ret;
 
 	return B_OK;
 }
 
-
-int
+status_t
 acquire_vref(vref_id id)
 {
-	int fd = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_ACQUIRE, &id);
-	printf("acquire vref %d fd %d\n", id, fd);
-	return fd;
-}
-
-
-vref_id
-clone_vref(vref_id id, int* fd)
-{
-	//int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_CLONE, &id);
-	//if (ret < 0)
-	//	return ret;
-
-	//if (fd != NULL)
-	//	*fd = ret;
-
-	return id;
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_ACQUIRE, &id);
 }
 
 
 status_t
 release_vref(vref_id id)
 {
-	printf("release vref %d\n", id);
 	return nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_RELEASE, &id);
 }
 

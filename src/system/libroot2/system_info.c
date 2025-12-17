@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019, Dario Casalinuovo. All rights reserved.
+ * Copyright 2018-2025, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the LGPL License.
  */
 
@@ -20,7 +20,7 @@ is_computer_on()
 
 
 double
-is_computer_on_fire(void)
+is_computer_on_fire()
 {
 	return 0.63739;
 }
@@ -28,8 +28,9 @@ is_computer_on_fire(void)
 
 bigtime_t system_time() {
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return (1000000LL * ts.tv_sec) + (ts.tv_nsec / 1000);
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+        return B_ERROR;
+    return (int64_t)ts.tv_sec * (int64_t)1000000 + (int64_t)(ts.tv_nsec / 1000);
 }
 
 

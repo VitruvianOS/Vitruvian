@@ -27,7 +27,7 @@ create_sem_etc(int32 count, const char* name, team_id _owner)
 	exchange.count = count;
 	exchange.name = name;
 
-	int ret = nexus_io(sNexus, NEXUS_SEM_CREATE, &exchange);
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_CREATE, &exchange);
 	if (ret < 0)
 		return ret;
 
@@ -50,7 +50,7 @@ delete_sem(sem_id id)
 	struct nexus_sem_exchange exchange;
 	exchange.id = id;
 
-	return nexus_io(sNexus, NEXUS_SEM_DELETE, &exchange);
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_DELETE, &exchange);
 }
 
 
@@ -72,7 +72,7 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 	exchange.flags = flags;
 	exchange.timeout = timeout;
 
-	return nexus_io(sNexus, NEXUS_SEM_ACQUIRE, &exchange);
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_ACQUIRE, &exchange);
 }
 
 
@@ -94,7 +94,7 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 	exchange.count = count;
 	exchange.flags = flags;
 
-	return nexus_io(sNexus, NEXUS_SEM_RELEASE, &exchange);
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_RELEASE, &exchange);
 }
 
 
@@ -106,7 +106,7 @@ get_sem_count(sem_id id, int32* thread_count)
 	struct nexus_sem_exchange exchange;
 	exchange.id = id;
 
-	int ret = nexus_io(sNexus, NEXUS_SEM_COUNT, &exchange);
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_COUNT, &exchange);
 	if (ret < 0)
 		return ret;
 
@@ -126,7 +126,7 @@ _get_sem_info(sem_id id, struct sem_info *info, size_t size)
 	struct nexus_sem_info semInfo;
 	semInfo.sem = id;
 
-	int ret = nexus_io(sNexus, NEXUS_SEM_INFO, &semInfo);
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_INFO, &semInfo);
 	if (ret < 0)
 		return ret;
 

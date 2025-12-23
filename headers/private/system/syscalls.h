@@ -248,8 +248,6 @@ extern status_t		_kern_entry_ref_to_path(dev_t device, ino_t inode,
 						const char *leaf, char *userPath, size_t pathLength);
 extern status_t		_kern_normalize_path(const char* userPath,
 						bool traverseLink, char* buffer);
-extern int			_kern_open_entry_ref(dev_t device, ino_t inode,
-						const char *name, int openMode, int perms);
 extern int			_kern_open(int fd, const char *path, int openMode,
 						int perms);
 extern int			_kern_open_dir_entry_ref(dev_t device, ino_t inode,
@@ -619,6 +617,11 @@ extern status_t		_kern_entry_ref_to_path_by_fd(int fd, team_id team,
 						char* name, char* buffer, size_t bufferSize);
 extern status_t		_kern_fd_to_path(int fd, team_id team, char* buffer,
 						size_t bufferSize);
+extern int			_kern_open_entry_ref(dev_t device, ino_t inode,
+						const char *name, int openMode, int perms);
+extern int			_kern_open_virtual_ref(vref_id id, const char* name,
+						int openMode, int perms);
+extern int			_kern_open_dir_virtual_ref(vref_id id, const char* name);
 
 // The end mark for gensyscallinfos.
 #ifdef GEN_SYSCALL_INFOS_PROCESSING

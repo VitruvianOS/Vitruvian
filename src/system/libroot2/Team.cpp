@@ -21,7 +21,6 @@
 
 #include "Thread.h"
 
-#define DEBUG 3
 #include "KernelDebug.h"
 #include "messaging/MessagingService.h"
 #include "syscalls.h"
@@ -100,29 +99,22 @@ deinit_team()
 void
 Team::InitTeam()
 {
-	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
-	if (gNexus < 0) {
-		printf("Can't open Nexus IPC\n");
-		exit(-1);
-	}
-
-	gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
-	if (gNexusSem < 0) {
-		printf("Can't open Nexus Sem\n");
-		exit(-1);
-	}
-
-	gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
-	if (gNexusVRef < 0) {
-		printf("Can't open Nexus VRef\n");
-		exit(-1);
-	}
+	GetNexusDescriptor();
+	GetSemDescriptor();
+	GetVRefDescriptor();
 }
 
 
 int
 Team::GetNexusDescriptor()
 {
+	if (gNexus == -1) {
+		gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
+		if (gNexus < 0) {
+			printf("Can't open Nexus IPC\n");
+			exit(-1);
+		}
+	}
 	return gNexus;
 }
 
@@ -130,6 +122,13 @@ Team::GetNexusDescriptor()
 int
 Team::GetSemDescriptor()
 {
+	if (gNexusSem == -1) {
+		gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
+		if (gNexusSem < 0) {
+			printf("Can't open Nexus Sem\n");
+			exit(-1);
+		}
+	}
 	return gNexusSem;
 }
 
@@ -137,6 +136,14 @@ Team::GetSemDescriptor()
 int
 Team::GetVRefDescriptor(dev_t* dev)
 {
+	if (gNexusVRef == -1) {
+		gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
+		if (gNexusVRef < 0) {
+			printf("Can't open Nexus VRef\n");
+			exit(-1);
+		}
+	}
+
 	if (dev != NULL) {
 		struct stat st;
 		fstat(gNexusVRef, &st);

@@ -16,7 +16,6 @@ class Team
 {
 public:
 	static void			InitTeam();
-	static void			DeInitTeam();
 
 	static status_t		WaitForTeam(team_id id, status_t* _returnCode);
 	static thread_id	LoadImage(int32 argc, const char** argv,

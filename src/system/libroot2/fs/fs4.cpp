@@ -5,112 +5,13 @@
 
 #include <syscalls.h>
 
-#include <dirent.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <string.h>
-#include <sys/syscall.h>
-
-#include <execinfo.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <cxxabi.h>
-
-#include <map>
-#include <string>
-
 #include <NodeMonitor.h>
 
+#include <dirent.h>
+#include <fcntl.h>
+#include <sys/syscall.h>
+
 #include "KernelDebug.h"
-
-
-namespace BKernelPrivate {
-
-
-status_t posixError(int posixError) {
-	switch (posixError) {
-		case EACCES:
-			return B_PERMISSION_DENIED;
-		case EEXIST:
-			return B_FILE_EXISTS;
-		case EINVAL:
-			return B_BAD_VALUE;
-		case ENOENT:
-			return B_ENTRY_NOT_FOUND;
-		case ENOTDIR:
-			return B_NOT_A_DIRECTORY;
-		case EISDIR:
-			return B_IS_A_DIRECTORY;
-		case ENOTEMPTY:
-			return B_DIRECTORY_NOT_EMPTY;
-		case EBADF:
-			return B_FILE_ERROR;
-		case EIO:
-			return B_IO_ERROR;
-		case EBUSY:
-			return B_BUSY;
-		case ETIMEDOUT:
-			return B_TIMED_OUT;
-		case ENOMEM:
-			return B_NO_MEMORY;
-		case ENOSPC:
-			return B_DEVICE_FULL;
-		case ENXIO:
-			return B_DEVICE_NOT_FOUND;
-		case E2BIG:
-			return B_TOO_MANY_ARGS;
-		case ESRCH:
-			return B_BAD_THREAD_ID;
-		case EINTR:
-			return B_INTERRUPTED;
-		case EREMOTE:
-			return B_IO_ERROR;
-		case EDQUOT:
-			return B_NO_MORE_FDS;
-//		case EWOULDBLOCK:
-		case EAGAIN:
-			return B_WOULD_BLOCK;
-		case EFAULT:
-			return B_BAD_ADDRESS;
-		case EFBIG:
-			return B_FILE_TOO_LARGE;
-		case EPIPE:
-			return B_BUSTED_PIPE;
-		case ETXTBSY:
-			return B_BUSY;
-		//case EDEADLK:
-		//	return B_DEAD_LOCK;
-		case ENAMETOOLONG:
-			return B_NAME_TOO_LONG;
-		case EPERM:
-			return B_NOT_ALLOWED;
-		case EROFS:
-			return B_READ_ONLY_DEVICE;
-		case EMFILE:
-			return B_NO_MORE_FDS;
-		case EXDEV:
-			return B_CROSS_DEVICE_LINK;
-		case ENOEXEC:
-			return B_NOT_AN_EXECUTABLE;
-		case EOVERFLOW:
-			return B_BUFFER_OVERFLOW;
-		case ERANGE:
-			return B_RESULT_NOT_REPRESENTABLE;
-		case ENODEV:
-			return B_DEVICE_NOT_FOUND;
-		case EOPNOTSUPP:
-			return B_NOT_SUPPORTED;
-		case ELOOP:
-			return B_LINK_LIMIT;
-
-		default:
-			return B_ERROR;
-	}
-}
-
-
-}
 
 
 status_t
@@ -119,19 +20,14 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 {
 	CALLED();
 
-	printf("readstat %d %s\n", fd, path);
-
-
 	if (fd < 0 && path == NULL)
 		return B_ERROR;
 
 	int flags = traverseLink == false ? AT_SYMLINK_NOFOLLOW : 0;
 	if (path == NULL) {
 		if (!traverseLink) {
-			if (fstat(fd, st) < 0) {
-				printf("stat entry not found\n");
+			if (fstat(fd, st) < 0)
 				return B_ENTRY_NOT_FOUND;
-			}
 
 			return B_OK;
 		}
@@ -141,11 +37,7 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	if (fd < 0)
 		fd = AT_FDCWD;
 
-	status_t ret = fstatat(fd, path, st, flags) < 0 ? B_ENTRY_NOT_FOUND : B_OK;
-	if (ret != B_OK)
-		printf("fstatat err\n");
-
-	return ret;
+	return fstatat(fd, path, st, flags) < 0 ? B_ENTRY_NOT_FOUND : B_OK;
 }
 
 
@@ -154,7 +46,6 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 {
 	CALLED();
 
-	printf("%d %s\n", fd, path);
 	if (fd < 0 && path == NULL)
 		return B_BAD_VALUE;
 
@@ -167,7 +58,7 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 	// TODO see BNode::_SetTo
 	int ret = openat(fd, path, openMode, perms);
 	if (ret < 0)
-		return BKernelPrivate::posixError(errno);
+		return -errno;
 
 	// TODO do we really need this?
 	struct stat st;
@@ -187,7 +78,7 @@ _kern_close(int fd)
 {
 	CALLED();
 
-	return (close(fd) < 0) ? BKernelPrivate::posixError(errno) : B_OK;
+	return (close(fd) < 0) ? -errno : B_OK;
 }
 
 
@@ -210,7 +101,7 @@ _kern_open_dir(int fd, const char* path)
 
 	int ret = openat(fd, path, flags);
 	if (ret < 0)
-		return BKernelPrivate::posixError(errno);
+		return -errno;
 
 	return ret;
 }
@@ -435,17 +326,12 @@ _kern_fd_to_path(int fd, team_id team, char* buffer, size_t bufferSize)
 
 	ssize_t size = readlink(procPath, buffer, bufferSize);
 	if (size < 0)
-		return BKernelPrivate::posixError(errno);
+		return -errno;
 
 	buffer[size] = '\0';
 
-	printf("fd_to_path %s\n", buffer);
-
 	return B_OK;
 }
-
-
-
 
 
 status_t
@@ -468,7 +354,7 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 
 	ssize_t size = readlinkat(fd, path, buffer, *_bufferSize);
 	if (size < 0)
-		return BKernelPrivate::posixError(errno);
+		return -errno;
 
 	*_bufferSize = size;
 	return B_OK;
@@ -484,7 +370,7 @@ _kern_fsync(int fd)
 		return B_FILE_ERROR;
 
 	return (fsync(fd) < 0)
-		? BKernelPrivate::posixError(errno) : B_OK ;
+		? -errno : B_OK ;
 }
 
 
@@ -508,22 +394,22 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 
 	if (statMask & B_STAT_MODE) {
 		if (fchmodat(fd, path, st->st_mode, flags) < 0)
-			return BKernelPrivate::posixError(errno);
+			return -errno;
 	}
 
 	if (statMask & B_STAT_UID) {
 		if (fchownat(fd, path, st->st_uid, -1, flags) < 0)
-			return BKernelPrivate::posixError(errno);
+			return -errno;
 	}
 
 	if (statMask & B_STAT_GID) {
 		if (fchownat(fd, path, -1, st->st_gid, flags) < 0)
-			return BKernelPrivate::posixError(errno);
+			return -errno;
 	}
 
 	if (statMask & B_STAT_SIZE && S_ISREG(st->st_mode)) {
 		if (ftruncate64(fd, st->st_size) < 0)
-			return BKernelPrivate::posixError(errno);
+			return -errno;
 	}
 
 	if (statMask & (B_STAT_MODIFICATION_TIME | B_STAT_ACCESS_TIME)) {
@@ -537,7 +423,7 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 			times[1].tv_sec = st->st_mtime;
 
 		if (utimensat(fd, path, times, 0) < 0)
-			return BKernelPrivate::posixError(errno);
+			return -errno;
 	}
 
 	return B_OK;
@@ -572,7 +458,7 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 	ssize_t ret = syscall(SYS_getdents, fd, direntBuffer, bufSize);
 	if (ret < 0) {
 		free(direntBuffer);
-		return BKernelPrivate::posixError(errno);
+		return -errno;
 	}
 
 	int i = 0;
@@ -615,7 +501,7 @@ _kern_seek(int fd, off_t pos, int seekType)
 		return B_FILE_ERROR;
 
 	off_t size = lseek(fd, pos, seekType);
-	return (size < 0) ? BKernelPrivate::posixError(errno) : size;
+	return (size < 0) ? -errno : size;
 }
 
 
@@ -628,7 +514,7 @@ _kern_read(int fd, off_t pos, void* buffer, size_t bufferSize)
 		return B_FILE_ERROR;
 
 	ssize_t size = pread(fd, buffer, bufferSize, pos);
-	return (size < 0) ? BKernelPrivate::posixError(errno) : size;
+	return (size < 0) ? -errno : size;
 }
 
 
@@ -641,7 +527,7 @@ _kern_write(int fd, off_t pos, const void* buffer, size_t bufferSize)
 		return B_FILE_ERROR;
 
 	ssize_t size = pwrite(fd, buffer, bufferSize, pos);
-	return (size < 0) ? BKernelPrivate::posixError(errno) : size;
+	return (size < 0) ? -errno : size;
 }
 
 
@@ -674,7 +560,7 @@ _kern_remove_dir(int fd, const char* path)
 		flags |= AT_EMPTY_PATH;
 
 	if (unlinkat(fd, path, flags) < 0)
-		return BKernelPrivate::posixError(errno);
+		return -errno;
 
 	return B_OK;
 }
@@ -698,7 +584,7 @@ _kern_rename(int oldDir, const char* oldPath,
 		newDir = AT_FDCWD;
 
 	return (renameat(oldDir, oldPath, newDir, newPath) < 0)
-		? BKernelPrivate::posixError(errno) : B_OK;
+		? -errno : B_OK;
 }
 
 
@@ -710,7 +596,7 @@ _kern_dup(int fd)
 		return B_FILE_ERROR;
 
 	int ret = dup(fd);
-	return (ret < 0) ? BKernelPrivate::posixError(errno) : ret;
+	return (ret < 0) ? -errno : ret;
 }
 
 
@@ -723,7 +609,7 @@ _kern_create_dir(int fd, const char* path, int perms)
 		return B_BAD_VALUE;
 
 	return (mkdirat((fd < 0 ? AT_FDCWD : fd), path, perms) < 0) ?
-		BKernelPrivate::posixError(errno) : B_OK;
+		-errno : B_OK;
 }
 
 
@@ -740,7 +626,7 @@ _kern_create_symlink(int fd, const char* path,
 	// TODO mode?
 
 	return (symlinkat(path, (fd < 0 ? AT_FDCWD : fd), toPath) < 0)
-		? BKernelPrivate::posixError(errno) : B_OK;
+		? -errno : B_OK;
 }
 
 
@@ -757,7 +643,7 @@ _kern_unlink(int fd, const char* path)
 
 	int flags = (path == NULL ? AT_EMPTY_PATH : 0);
 	return (unlinkat(fd, path, flags | AT_SYMLINK_NOFOLLOW) < 0)
-		? BKernelPrivate::posixError(errno) : B_OK;
+		? -errno : B_OK;
 }
 
 
@@ -774,7 +660,7 @@ _kern_lock_node(int fd)
 	lock.l_len = 0;
 
 	if (fcntl(fd, F_SETLK, &lock) == -1)
-		return BKernelPrivate::posixError(errno);
+		return -errno;
 
 	return B_OK;
 }
@@ -793,7 +679,7 @@ _kern_unlock_node(int fd)
 	lock.l_len = 0;
 
 	if (fcntl(fd, F_SETLK, &lock) == -1)
-		return BKernelPrivate::posixError(errno);
+		return -errno;
 
 	return B_OK;
 }

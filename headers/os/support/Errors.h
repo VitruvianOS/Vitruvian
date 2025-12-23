@@ -44,6 +44,7 @@
 #define B_NO_INIT							(B_GENERAL_ERROR_BASE + 14)
 #define B_NOT_INITIALIZED					-EINIT
 #define B_BUSY								-EBUSY
+// B_NOT_ALLOWED should be eperm but since it is -1 would clash with B_ERROR
 #define B_NOT_ALLOWED						(B_GENERAL_ERROR_BASE + 16)
 #define B_BAD_DATA							(B_GENERAL_ERROR_BASE + 17)
 #define B_DONT_DO_THAT						(B_GENERAL_ERROR_BASE + 18)

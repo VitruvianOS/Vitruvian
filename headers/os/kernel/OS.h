@@ -48,13 +48,12 @@ typedef pid_t thread_id;
 typedef int32 vref_id;
 
 #if defined(__cplusplus)
-  #define STATIC_ASSERT(expr, msg) static_assert((expr), msg)
+  #define TYPE_ASSERT(expr, msg) static_assert((expr), msg)
 #else
-  #define STATIC_ASSERT(expr, msg) _Static_assert((expr), msg)
+  #define TYPE_ASSERT(expr, msg) _Static_assert((expr), msg)
 #endif
 
-STATIC_ASSERT(sizeof(pid_t) == sizeof(int32_t),
-	"WARNING: pid_t is not 32-bit on this platform!");
+TYPE_ASSERT(sizeof(pid_t) == sizeof(int32_t), "WARNING: pid_t is not 32-bit on this platform!");
 
 /* Areas */
 

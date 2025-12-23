@@ -369,8 +369,7 @@ _kern_fsync(int fd)
 	if (fd < 0)
 		return B_FILE_ERROR;
 
-	return (fsync(fd) < 0)
-		? -errno : B_OK ;
+	return (fsync(fd) < 0) ? -errno : B_OK ;
 }
 
 
@@ -583,8 +582,7 @@ _kern_rename(int oldDir, const char* oldPath,
 	if (newDir < 0)
 		newDir = AT_FDCWD;
 
-	return (renameat(oldDir, oldPath, newDir, newPath) < 0)
-		? -errno : B_OK;
+	return (renameat(oldDir, oldPath, newDir, newPath) < 0) ? -errno : B_OK;
 }
 
 
@@ -608,8 +606,7 @@ _kern_create_dir(int fd, const char* path, int perms)
 	if (path == NULL)
 		return B_BAD_VALUE;
 
-	return (mkdirat((fd < 0 ? AT_FDCWD : fd), path, perms) < 0) ?
-		-errno : B_OK;
+	return (mkdirat((fd < 0 ? AT_FDCWD : fd), path, perms) < 0) ? -errno : B_OK;
 }
 
 
@@ -625,8 +622,7 @@ _kern_create_symlink(int fd, const char* path,
 
 	// TODO mode?
 
-	return (symlinkat(path, (fd < 0 ? AT_FDCWD : fd), toPath) < 0)
-		? -errno : B_OK;
+	return (symlinkat(path, (fd < 0 ? AT_FDCWD : fd), toPath) < 0) ? -errno : B_OK;
 }
 
 
@@ -642,8 +638,7 @@ _kern_unlink(int fd, const char* path)
 		fd = AT_FDCWD;
 
 	int flags = (path == NULL ? AT_EMPTY_PATH : 0);
-	return (unlinkat(fd, path, flags | AT_SYMLINK_NOFOLLOW) < 0)
-		? -errno : B_OK;
+	return (unlinkat(fd, path, flags | AT_SYMLINK_NOFOLLOW) < 0) ? -errno : B_OK;
 }
 
 

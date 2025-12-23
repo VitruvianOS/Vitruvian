@@ -4,7 +4,7 @@
 #define COMMON_H
 
 // Standard Includes -----------------------------------------------------------
-#include <posix/string.h>
+#include <string.h>
 #include <errno.h>
 
 // System Includes -------------------------------------------------------------

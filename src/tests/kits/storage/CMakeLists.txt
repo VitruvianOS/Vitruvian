@@ -11,6 +11,7 @@ AddOn(
 
 	SOURCES
 	StorageKitTestAddon.cpp
+
 	AppFileInfoTest.cpp
 	BasicTest.cpp
 	DirectoryTest.cpp

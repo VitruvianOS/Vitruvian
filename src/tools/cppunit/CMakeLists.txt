@@ -1,8 +1,8 @@
 #TODO: It may be interesting to see this work on Linux
-add_definitions(-DNO_ELF_SYMBOL_PATCHING)
+add_definitions(-DNO_ELF_SYMBOL_PATCHING -DTEST_OBOS)
 
 AddOn(
-	libcppunit
+	cppunit
 	SHARED
 	SOURCES
 	BTestCase.cpp
@@ -41,4 +41,4 @@ AddOn(
 	root
 )
 
-target_include_directories(libcppunit PRIVATE "${PROJECT_SOURCE_DIR}/headers/tools/cppunit")
+target_include_directories(cppunit PRIVATE "${PROJECT_SOURCE_DIR}/headers/tools/cppunit")

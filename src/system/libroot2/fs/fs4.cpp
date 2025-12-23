@@ -11,6 +11,12 @@
 #include <string.h>
 #include <sys/syscall.h>
 
+#include <execinfo.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <cxxabi.h>
+
 #include <map>
 #include <string>
 
@@ -20,61 +26,6 @@
 
 
 namespace BKernelPrivate {
-
-
-#define OPEN_BY_INODE_WORKAROUND 1
-#ifdef OPEN_BY_INODE_WORKAROUND
-
-static pthread_mutex_t sLock;
-static std::map<ino_t, std::string> gMap;
-
-
-status_t
-getPath(ino_t node, const char* name, std::string& path)
-{
-	if (node < 0 && name == NULL)
-		return B_BAD_VALUE;
-
-	pthread_mutex_lock(&sLock);
-	auto elem = gMap.find(node);
-	if (elem != end(gMap)) {
-		printf("getPath for node %d %s %s\n", node, elem->second.c_str(), name);
-		std::string ret(elem->second.c_str());
-		if (name != NULL) {
-			ret += '/';
-			ret += name;
-		}
-		path = ret;
-		pthread_mutex_unlock(&sLock);
-		return B_OK;
-	}
-	pthread_mutex_unlock(&sLock);
-
-	return B_ERROR;
-}
-
-
-// TODO: missing dev_t
-static void
-insertPath(ino_t inode, int fd) {
-	if (inode < 0 || fd < 0) {
-		printf("insertPath: Trying to insert wrong path\n");
-		return;
-	}
-
-	char destPath[B_PATH_NAME_LENGTH];
-	status_t ret
-		= _kern_fd_to_path(fd, -1, destPath, sizeof(destPath));
-	if (ret != B_OK)
-		return;
-
-	pthread_mutex_lock(&sLock);
-	// TODO remove std::string
-	gMap.insert(std::make_pair(inode, std::string(destPath)));
-	pthread_mutex_unlock(&sLock);
-}
-
-#endif
 
 
 status_t posixError(int posixError) {
@@ -168,14 +119,19 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 {
 	CALLED();
 
+	printf("readstat %d %s\n", fd, path);
+
+
 	if (fd < 0 && path == NULL)
 		return B_ERROR;
 
 	int flags = traverseLink == false ? AT_SYMLINK_NOFOLLOW : 0;
 	if (path == NULL) {
 		if (!traverseLink) {
-			if (fstat(fd, st) < 0)
+			if (fstat(fd, st) < 0) {
+				printf("stat entry not found\n");
 				return B_ENTRY_NOT_FOUND;
+			}
 
 			return B_OK;
 		}
@@ -185,7 +141,11 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	if (fd < 0)
 		fd = AT_FDCWD;
 
-	return fstatat(fd, path, st, flags) < 0 ? B_ENTRY_NOT_FOUND : B_OK;
+	status_t ret = fstatat(fd, path, st, flags) < 0 ? B_ENTRY_NOT_FOUND : B_OK;
+	if (ret != B_OK)
+		printf("fstatat err\n");
+
+	return ret;
 }
 
 
@@ -194,6 +154,7 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 {
 	CALLED();
 
+	printf("%d %s\n", fd, path);
 	if (fd < 0 && path == NULL)
 		return B_BAD_VALUE;
 
@@ -216,10 +177,6 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 			return B_ENTRY_NOT_FOUND;
 		}
 	}
-
-#ifdef OPEN_BY_INODE_WORKAROUND
-	BKernelPrivate::insertPath(st.st_ino, ret);
-#endif
 
 	return ret;
 }
@@ -248,18 +205,12 @@ _kern_open_dir(int fd, const char* path)
 	// TODO O_EXCL only with O_CREAT?
 	int flags = O_EXCL | O_DIRECTORY;
 
-	if (path == NULL)
+	if (!path)
 		flags |= AT_EMPTY_PATH;
 
 	int ret = openat(fd, path, flags);
 	if (ret < 0)
 		return BKernelPrivate::posixError(errno);
-
-#ifdef OPEN_BY_INODE_WORKAROUND
-	struct stat st;
-	if (_kern_read_stat(fd, path, false, &st, 0) == B_OK)
-		BKernelPrivate::insertPath(st.st_ino, ret);
-#endif
 
 	return ret;
 }
@@ -309,13 +260,23 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 		}
 	}
 
-#ifdef OPEN_BY_INODE_WORKAROUND
-	struct stat st;
-	if (_kern_read_stat(dirfd, NULL, false, &st, 0) == B_OK)
-		BKernelPrivate::insertPath(st.st_ino, dirfd);
-#endif
-
 	return dirfd;
+}
+
+
+int
+_kern_open_dir_virtual_ref(vref_id id, const char* name)
+{
+	int fd = open_vref(id);
+	if (fd < 0)
+		return fd;
+
+	if (name == NULL || strlen(name) == 0 || (strcmp(name, ".") == 0))
+		return fd;
+
+	int ret = openat(fd, name, O_EXCL | O_DIRECTORY);
+	close(fd);
+	return ret;
 }
 
 
@@ -324,13 +285,32 @@ _kern_open_dir_entry_ref(dev_t device, ino_t node, const char* name)
 {
 	CALLED();
 
-	char path[B_PATH_NAME_LENGTH];
-	status_t err = _kern_entry_ref_to_path(device, node,
-		name, path, sizeof(path));
-	if (err != B_OK)
-		return err;
+	if (device <= 0 || node <= 0)
+		return B_BAD_VALUE;
 
-	return _kern_open_dir(AT_FDCWD, path);
+	if (device == get_vref_dev())
+		return _kern_open_dir_virtual_ref(node, name);
+
+	UNIMPLEMENTED();
+
+	return B_ERROR;
+}
+
+
+int
+_kern_open_virtual_ref(vref_id id, const char* name,
+	int openMode, int perms)
+{
+	int fd = open_vref(id);
+	if (fd < 0)
+		return fd;
+
+	if (name == NULL || strlen(name) == 0 || (strcmp(name, ".") == 0))
+		return fd;
+
+	int ret = openat(fd, name, openMode, perms);
+	close(fd);
+	return ret;
 }
 
 
@@ -340,20 +320,17 @@ _kern_open_entry_ref(dev_t device, ino_t node, const char* name,
 {
 	CALLED();
 
-	char path[B_PATH_NAME_LENGTH];
-	status_t err = _kern_entry_ref_to_path(device, node,
-		name, path, sizeof(path));
-	if (err != B_OK)
-		return err;
+	printf("open entry ref %lu %lu vref dev is %lu\n", device, node, get_vref_dev());
 
-	if (_kern_open(AT_FDCWD, path, openMode, perms) < 0) {
-		if (errno == EISDIR && (openMode & O_RDWR))
-			return _kern_open_dir(AT_FDCWD, path);
+	if (device <= 0 || node <= 0)
+		return B_BAD_VALUE;
 
-		return BKernelPrivate::posixError(errno);
-	}
+	if (device == get_vref_dev())
+		return _kern_open_virtual_ref(node, name, openMode, perms);
 
-	return B_OK;
+	UNIMPLEMENTED();
+
+	return B_ERROR;
 }
 
 
@@ -362,6 +339,8 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 	char* userPath, size_t pathLength)
 {
 	CALLED();
+
+	printf("entry ref to path %d %d %s\n", device, node, leaf);
 
 	if (leaf == NULL && (device < 0 || node < 0))
 		return B_BAD_VALUE;
@@ -377,26 +356,25 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 		return B_OK;
 	}
 
-#ifdef OPEN_BY_INODE_WORKAROUND
+	if (device == get_vref_dev()) {
+		vref_id id = (vref_id) node;
+		int fd = open_vref(id);
+		if (fd < 0)
+			return B_ERROR;
+
+		status_t ret = _kern_entry_ref_to_path_by_fd(fd, -1, leaf,
+			userPath, pathLength);
+		close(fd);
+		return ret;
+	}
+
 	UNIMPLEMENTED();
 
-	std::string destPath;
-	status_t ret = BKernelPrivate::getPath(node, leaf, destPath);
-	if (ret != B_OK)
-		return ret;
-
-	if (strlcpy(userPath, destPath.c_str(),
-			pathLength) >= pathLength) {
-		return B_BUFFER_OVERFLOW;
-	}
- 
-	return B_OK;
-#else
 	return B_ERROR;
-#endif
 }
 
 
+// TODO remove?
 int
 _kern_open_dir_entry_ref_fd(dev_t device, ino_t node, const char* name)
 {
@@ -409,51 +387,6 @@ _kern_open_entry_ref_fd(dev_t device, ino_t node, const char* name,
 	int openMode, int perms)
 {
 	return _kern_open_entry_ref(device, node, name, openMode, perms);
-}
-
-
-int
-_kern_open_dir_entry_ref_by_fd(int fd, team_id team, const char* name)
-{
-	if (name != NULL && name[0] == '/')
-		return _kern_open_dir(AT_FDCWD, name);
-
-	if (fd < 0)
-		return B_FILE_ERROR;
-
-	if (team == getpid() || team == -1)
-		return _kern_open_dir(fd, name);
-
-	char path[B_PATH_NAME_LENGTH];
-	status_t ret = _kern_entry_ref_to_path_by_fd(fd, team, name,
-		path, B_PATH_NAME_LENGTH);
-	if (ret != B_OK)
-		return ret;
-
-	return _kern_open_dir(AT_FDCWD, path);	
-}
-
-
-int
-_kern_open_entry_ref_by_fd(int fd, team_id team, const char* name,
-	int openMode, int perms)
-{
-	if (name != NULL && name[0] == '/')
-		return _kern_open(AT_FDCWD, name, openMode, perms);
-
-	if (fd < 0)
-		return B_FILE_ERROR;
-
-	if (team == getpid() || team == -1)
-		return _kern_open(fd, name, openMode, perms);
-
-	char path[B_PATH_NAME_LENGTH];
-	status_t ret = _kern_entry_ref_to_path_by_fd(fd, team, name,
-		path, B_PATH_NAME_LENGTH);
-	if (ret != B_OK)
-		return ret;
-
-	return _kern_open(AT_FDCWD, path, openMode, perms);
 }
 
 
@@ -486,6 +419,8 @@ _kern_entry_ref_to_path_by_fd(int fd, team_id team, char* name,
 status_t
 _kern_fd_to_path(int fd, team_id team, char* buffer, size_t bufferSize)
 {
+	CALLED();
+
 	if (fd < 0)
 		return B_FILE_ERROR;
 
@@ -503,30 +438,14 @@ _kern_fd_to_path(int fd, team_id team, char* buffer, size_t bufferSize)
 		return BKernelPrivate::posixError(errno);
 
 	buffer[size] = '\0';
+
+	printf("fd_to_path %s\n", buffer);
+
 	return B_OK;
 }
 
 
-status_t
-_kern_normalize_path(const char* userPath, bool _ignored, char* buffer)
-{
-	CALLED();
 
-	if (userPath == NULL || buffer == NULL)
-		return B_BAD_VALUE;
-
-	status_t ret = B_OK;
-	char* path = realpath(userPath, NULL);
-	if (path == NULL)
-		return B_ENTRY_NOT_FOUND;
-
-	if (strlcpy(buffer, path, B_PATH_NAME_LENGTH)
-			>= B_PATH_NAME_LENGTH) {
-		ret = B_BUFFER_OVERFLOW;
-	}
-	free(path);
-	return ret;
-}
 
 
 status_t

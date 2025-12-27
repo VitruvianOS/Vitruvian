@@ -448,8 +448,106 @@ status_t
 get_memory_properties(team_id teamID, const void* address, uint32* _protected,
 	 uint32* _lock)
 {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	if (_protected == NULL || _lock == NULL)
+		return B_BAD_VALUE;
+
+	*_protected = 0;
+	*_lock = 0;
+
+	if (teamID < 0 || address == NULL)
+		return B_BAD_VALUE;
+
+	if (teamID == 0)
+		teamID = getpid();
+
+	int pidfd = (int)syscall(SYS_pidfd_open, (pid_t)teamID, 0);
+
+	if (pidfd < 0) {
+		char procdir[64];
+		snprintf(procdir, sizeof(procdir), "/proc/%d", teamID);
+		if (access(procdir, F_OK) != 0)
+			return B_BAD_TEAM_ID;
+	}
+
+	char maps_path[64];
+	snprintf(maps_path, sizeof(maps_path), "/proc/%d/maps", teamID);
+	FILE* maps = fopen(maps_path, "r");
+	if (maps == NULL) {
+		close(pidfd);
+		return B_BAD_TEAM_ID;
+	}
+
+	unsigned long long addr = (unsigned long long)(uintptr_t)address;
+	char line[512];
+	int found = 0;
+	char perms[8] = {0};
+	unsigned long long start = 0, end = 0;
+	char pathname[PATH_MAX] = {0};
+
+	while (fgets(line, sizeof(line), maps)) {
+		// line format: start-end perms offset dev inode pathname
+		// e.g. 00400000-0040b000 r-xp 00000000 08:01 131073 /bin/cat
+		int fields = sscanf(line, "%llx-%llx %7s %*s %*s %*s %1023[^\n]",
+							&start, &end, perms, pathname);
+		if (fields >= 3) {
+			if (addr >= start && addr < end) {
+				found = 1;
+				break;
+			}
+		}
+	}
+
+	fclose(maps);
+
+	if (!found) {
+		close(pidfd);
+		return B_BAD_VALUE;
+	}
+
+	uint32 prot = 0;
+	if (perms[0] == 'r') prot |= B_READ_AREA;
+	if (perms[1] == 'w') prot |= B_WRITE_AREA;
+	if (perms[2] == 'x') prot |= B_EXECUTE_AREA;
+	*_protected = prot;
+
+	char smaps_path[64];
+	snprintf(smaps_path, sizeof(smaps_path), "/proc/%d/smaps", teamID);
+	FILE* smaps = fopen(smaps_path, "r");
+	if (smaps != NULL) {
+		while (fgets(line, sizeof(line), smaps)) {
+			unsigned long long s = 0, e = 0;
+			char p[8] = {0};
+			int hdr = sscanf(line, "%llx-%llx %7s", &s, &e, p);
+			if (hdr >= 2) {
+				if (s == start && e == end) {
+					while (fgets(line, sizeof(line), smaps)) {
+						if (strncmp(line, "Locked:", 7) == 0) {
+							long locked_kb = 0;
+							if (sscanf(line + 7, "%ld", &locked_kb) == 1) {
+								if (locked_kb > 0)
+									*_lock = 1;
+								else
+									*_lock = 0;
+							}
+							fclose(smaps);
+							close(pidfd);
+							return B_OK;
+						}
+						if (strchr(line, '-') && strstr(line, "kB") == NULL)
+							break;
+					}
+					break;
+				} else {
+					continue;
+				}
+			}
+		}
+		fclose(smaps);
+	}
+
+	close(pidfd);
+	*_lock = 0;
+	return B_OK;
 }
 
 

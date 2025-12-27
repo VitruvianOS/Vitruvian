@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <syscall.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -267,8 +268,71 @@ extern "C" {
 status_t
 _get_team_usage_info(team_id team, int32 who, team_usage_info* info, size_t size)
 {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	if (info == NULL || size != sizeof(team_usage_info) || team < 0)
+		return B_BAD_VALUE;
+
+	if (team == 0)
+		team = getpid();
+
+	info->user_time = 0;
+	info->kernel_time = 0;
+
+	int pidfd = (int)syscall(SYS_pidfd_open, (pid_t)team, 0);
+
+	if (pidfd < 0) {
+		char procdir[64];
+		snprintf(procdir, sizeof(procdir), "/proc/%d", team);
+		if (access(procdir, F_OK) != 0)
+			return B_BAD_TEAM_ID;
+	}
+
+	char path[64];
+	char buf[4096];
+
+	snprintf(path, sizeof(path), "/proc/%d/stat", team);
+	int fd = open(path, O_RDONLY | O_CLOEXEC);
+	if (fd < 0) {
+		close(pidfd);
+		return B_BAD_TEAM_ID;
+	}
+
+	ssize_t dataRead = read(fd, buf, sizeof(buf) - 1);
+	close(fd);
+	close(pidfd);
+	if (dataRead <= 0)
+		return B_ERROR;
+
+	buf[dataRead] = '\0';
+
+	char* paren = strrchr(buf, ')');
+	if (!paren)
+		return B_ERROR;
+
+	char* p = paren + 2;
+	unsigned long utime_ticks = 0, stime_ticks = 0;
+	int field = 3;
+	char* save = NULL;
+	char* token = strtok_r(p, " ", &save);
+
+	while (token) {
+		if (field == 14) {
+			utime_ticks = strtoul(token, NULL, 10);
+		} else if (field == 15) {
+			stime_ticks = strtoul(token, NULL, 10);
+			break;
+		}
+		field++;
+		token = strtok_r(NULL, " ", &save);
+	}
+
+	long hz = sysconf(_SC_CLK_TCK);
+	if (hz <= 0)
+		hz = 100;
+
+	info->user_time = (bigtime_t)((utime_ticks * 1000000ULL) / (unsigned long)hz);
+	info->kernel_time = (bigtime_t)((stime_ticks * 1000000ULL) / (unsigned long)hz);
+
+	return B_OK;
 }
 
 

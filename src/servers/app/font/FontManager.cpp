@@ -78,14 +78,7 @@ FontManager::font_directory::FindStyle(const node_ref& nodeRef) const
 static status_t
 set_entry(node_ref& nodeRef, const char* name, BEntry& entry)
 {
-	entry_ref ref;
-	ref.device = nodeRef.device;
-	ref.directory = nodeRef.node;
-
-	status_t status = ref.set_name(name);
-	if (status != B_OK)
-		return status;
-
+	entry_ref ref(ref.device, ref.directory, name);
 	return entry.SetTo(&ref);
 }
 
@@ -377,9 +370,7 @@ FontManager::_AddMappedFont(const char* familyName, const char* styleName)
 
 			// find parent directory
 
-			node_ref nodeRef;
-			nodeRef.device = mapping->ref.device;
-			nodeRef.node = mapping->ref.directory;
+			node_ref nodeRef(mapping->ref.device, mapping->ref.directory);
 			font_directory* directory = _FindDirectory(nodeRef);
 			if (directory == NULL) {
 				// unknown directory, maybe this is a user font - try
@@ -422,14 +413,11 @@ void
 FontManager::_RemoveStyle(dev_t device, uint64 directoryNode, uint64 node)
 {
 	// remove font style from directory
-	node_ref nodeRef;
-	nodeRef.device = device;
-	nodeRef.node = directoryNode;
-
+	node_ref nodeRef(device, directoryNode);
 	font_directory* directory = _FindDirectory(nodeRef);
 	if (directory != NULL) {
 		// find style in directory and remove it
-		nodeRef.node = node;
+		nodeRef = node_ref(device, node);
 		FontStyle* style = directory->FindStyle(nodeRef);
 		if (style != NULL)
 			_RemoveStyle(*directory, style);

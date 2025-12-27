@@ -80,6 +80,7 @@ BStatable::IsSymLink() const
 }
 
 
+#ifndef __VOS__
 // Fills out ref with the node_ref of the node.
 status_t
 BStatable::GetNodeRef(node_ref* ref) const
@@ -97,6 +98,7 @@ BStatable::GetNodeRef(node_ref* ref) const
 
 	return result;
 }
+#endif
 
 
 // Fills out the node's UID into owner.
@@ -311,7 +313,7 @@ BStatable::GetVolume(BVolume* volume) const
 
 
 // _OhSoStatable1() -> GetStat()
-extern "C" status_t
+/*extern "C" status_t
 #if __GNUC__ == 2
 _OhSoStatable1__9BStatable(const BStatable* self, struct stat* stat)
 #else
@@ -329,6 +331,6 @@ _ZN9BStatable14_OhSoStatable1Ev(const BStatable* self, struct stat* stat)
 	return B_OK;
 }
 
-
+*/
 void BStatable::_OhSoStatable2() {}
 void BStatable::_OhSoStatable3() {}

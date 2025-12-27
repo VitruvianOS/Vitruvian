@@ -83,6 +83,7 @@ class BDirectory : public BNode, public BEntryList {
 	private:
 		uint32 _reservedData[7];
 		int fDirFd;
+		node_ref fDirRef;
 };
 
 status_t create_directory(const char *path, mode_t mode);

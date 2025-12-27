@@ -8,7 +8,9 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <Node.h>
 #include <SupportDefs.h>
+#include <OS.h>
 
 #include <Statable.h>
 
@@ -19,10 +21,18 @@ class BPath;
 
 struct entry_ref {
 								entry_ref();
-								entry_ref(dev_t dev, ino_t dir,
-									const char* name);
+								entry_ref(dev_t dev, ino_t dir, const char* name);
+								entry_ref(int entryFd, const char* name);
+								entry_ref(const node_ref& node, const char* name);
 								entry_ref(const entry_ref& ref);
+
 								~entry_ref();
+
+			//status_t			init_check() const;
+			//bool				is_virtual() const;
+			//vref_id			id() const;
+			bool 				is_virtual;
+			//const node_ref 	dereference() const;
 
 			status_t			set_name(const char* name);
 
@@ -34,29 +44,6 @@ struct entry_ref {
 			ino_t				directory;
 			char*				name;
 
-#if 0
-protected:
-								//entry_ref(dev_t dev, ino_t dir,
-								//	const char* name, int fd);
-
-			//bool				is_valid();
-
-			status_t			publish(int fd = -1,
-									const char* path = NULL,
-									const uint32 policy = B_REF_COUNT,
-									uint32 team = -1);
-
-								// B_LOCAL_REF
-								// B_GLOBAL_REF
-								// B_REF_COUNT
-								// B_TEAM_ALIVE
-								// B_TEAM_TRANSFER
-
-			//void				accept(const uint32 policy);
-
-			//void				acquire();
-			//void				release();
-#endif
 			friend class 		BPath;
 			friend class		BEntry;
 			friend class		BDirectory;
@@ -64,9 +51,8 @@ protected:
 			friend class		BNode;
 
 private:
-			int					fd;
-			//entry_ref_id		id;
-
+			team_id				team;
+			//const node_ref	node;
 };
 
 
@@ -100,6 +86,7 @@ public:
 			status_t			GetParent(BEntry* entry) const;
 			status_t			GetParent(BDirectory* dir) const;
 			status_t			GetName(char* buffer) const;
+			status_t			GetNodeRef(node_ref* ref) const;
 
 			status_t			Rename(const char* path, bool clobber = false);
 			status_t			MoveTo(BDirectory* dir, const char* path = NULL,
@@ -139,6 +126,7 @@ private:
 
 private:
 			int					fDirFd;
+			node_ref			fDirRef;
 			char*				fName;
 			status_t			fCStatus;
 

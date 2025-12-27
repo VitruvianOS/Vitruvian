@@ -113,31 +113,11 @@ BPath::SetTo(const entry_ref* ref)
 	if (!ref)
 		return fCStatus = B_BAD_VALUE;
 
-
-#if 1
 	char path[B_PATH_NAME_LENGTH];
 
 	fCStatus = _kern_entry_ref_to_path(ref->device, ref->directory,
 		ref->name, path, sizeof(path));
-#else
-	//fCStatus = _kern_entry_ref_to_path_fd(ref->device, ref->directory,
-	//	ref->name, ref->fd, path, sizeof(path));
-		fCStatus = B_OK;
 
-		char buf[B_PATH_NAME_LENGTH];
-		size_t size = B_PATH_NAME_LENGTH;
-		std::string proc = "/proc/self/fd/";
-		proc.append(std::to_string(ref->fd));
-
-		ssize_t bytes = readlink(proc.c_str(), buf, size);
-		if (bytes < 0)
-			return B_FILE_ERROR;
-
-		std::string path = std::string(buf, bytes);
-		path.append("/");
-		path.append(ref->name);
-		printf("path %s\n", path.c_str());
-#endif
 	if (fCStatus != B_OK)
 		return fCStatus;
 

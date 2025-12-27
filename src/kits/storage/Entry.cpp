@@ -41,6 +41,8 @@ entry_ref::entry_ref()
 	// places
 	device(0),
 	directory(0),
+	is_virtual(false),
+	team(-1),
 #else
 	device(-1),
 	directory(-1),
@@ -54,9 +56,50 @@ entry_ref::entry_ref(dev_t dev, ino_t dir, const char* name)
 	:
 	device(dev),
 	directory(dir),
-	name(NULL)
+	name(NULL),
+	is_virtual(false),
+	team(-1)
 {
 	set_name(name);
+	team = getpid();
+	if (dev == get_vref_dev()) {
+		is_virtual = true;
+		acquire_vref((vref_id) dir);
+	}
+}
+
+
+entry_ref::entry_ref(int entryFd, const char* name)
+	:
+	device(0),
+	directory(0),
+	name(NULL),
+	is_virtual(true),
+	team(-1)
+{
+	set_name(name);
+	team = getpid();
+	device = get_vref_dev();
+	directory = create_vref(entryFd);
+}
+
+
+entry_ref::entry_ref(const node_ref& ref, const char* name)
+	:
+	device(0),
+	directory(0),
+	name(NULL),
+	is_virtual(false),
+	team(-1)
+{
+	set_name(name);
+	team = getpid();
+	if (ref.device == get_vref_dev()) {
+		acquire_vref(ref.node);
+		is_virtual = true;
+	}
+	device = ref.device;
+	directory = ref.node;
 }
 
 
@@ -64,15 +107,22 @@ entry_ref::entry_ref(const entry_ref& ref)
 	:
 	device(ref.device),
 	directory(ref.directory),
-	name(NULL)
+	name(NULL),
+	is_virtual(ref.is_virtual),
+	team(ref.team)
 {
 	set_name(ref.name);
+	if (is_virtual)
+		acquire_vref(ref.directory);
 }
 
 
 entry_ref::~entry_ref()
 {
 	free(name);
+
+	if (is_virtual && directory > 0)
+		release_vref((vref_id) directory);
 }
 
 
@@ -120,6 +170,11 @@ entry_ref::operator=(const entry_ref& ref)
 	device = ref.device;
 	directory = ref.directory;
 	set_name(ref.name);
+	if (ref.is_virtual) {
+		is_virtual = true;
+		acquire_vref((vref_id) directory);
+	}
+	team = ref.team;
 	return *this;
 }
 
@@ -246,13 +301,8 @@ BEntry::SetTo(const entry_ref* ref, bool traverse)
 		return SetTo(ref->name, traverse);
 
 	// open the directory and let set() do the rest
-#if 1
 	int dirFD = _kern_open_dir_entry_ref(ref->device, ref->directory, NULL);
-#else
-	int traverseFlag = (traverse ? 0 : O_NOTRAVERSE);
-	int dirFD = _kern_open(ref->fd, NULL, O_RDWR | O_CLOEXEC
-		| traverseFlag, 0);
-#endif
+
 	if (dirFD < 0)
 		return (fCStatus = dirFD);
 	return (fCStatus = _SetTo(dirFD, ref->name, traverse));
@@ -281,6 +331,8 @@ BEntry::Unset()
 	free(fName);
 
 	fDirFd = -1;
+	//release_vref(fDirRef);
+	fDirRef = node_ref();
 	fName = NULL;
 	fCStatus = B_NO_INIT;
 }
@@ -298,14 +350,9 @@ BEntry::GetRef(entry_ref* ref) const
 	struct stat st;
 	status_t error = _kern_read_stat(fDirFd, NULL, false, &st,
 		sizeof(struct stat));
-	if (error == B_OK) {
-		ref->device = st.st_dev;
-		ref->directory = st.st_ino;
-		ref->fd = _kern_dup(fDirFd);
-		error = ref->set_name(fName);
-		printf("entry get ref %d\n", ref->fd);
+	if (error == B_OK)
+		*ref = entry_ref(fDirRef, fName);
 
-	}
 	return error;
 }
 
@@ -348,6 +395,7 @@ status_t BEntry::GetParent(BEntry* entry) const
 	// init the entry
 	entry->Unset();
 	entry->fDirFd = parentFD;
+	// TODO vref
 	entry->fCStatus = entry->_SetName(leafName);
 	if (entry->fCStatus != B_OK)
 		entry->Unset();
@@ -367,12 +415,14 @@ BEntry::GetParent(BDirectory* dir) const
 	// It is sufficient to check whether our leaf name is ".".
 	if (strcmp(fName, ".") == 0)
 		return B_ENTRY_NOT_FOUND;
+#ifndef __VOS__
 	// get a node ref for the directory and init it
 	struct stat st;
 	status_t error = _kern_read_stat(fDirFd, NULL, false, &st,
 		sizeof(struct stat));
 	if (error != B_OK)
 		return error;
+#ifndef __VOS__
 	node_ref ref;
 	ref.device = st.st_dev;
 	ref.node = st.st_ino;
@@ -380,6 +430,19 @@ BEntry::GetParent(BDirectory* dir) const
 	// TODO: This can be optimized: We already have a FD for the directory,
 	// so we could dup() it and set it on the directory. We just need a private
 	// API for being able to do that.
+#else
+	int parentFd = _kern_open_parent_dir(fDirFd, fName, 0);
+	node_ref ref(parentFd);
+	return dir->SetTo(&ref);
+#endif
+#else
+	BEntry entry;
+	status_t ret = GetParent(&entry);
+	if (ret != B_OK)
+		return ret;
+
+	return dir->SetTo(&entry);
+#endif
 }
 
 
@@ -393,6 +456,31 @@ BEntry::GetName(char* buffer) const
 
 	strcpy(buffer, fName);
 	return B_OK;
+}
+
+
+status_t
+BEntry::GetNodeRef(node_ref* ref) const
+{
+	if (fCStatus != B_OK)
+		return B_NO_INIT;
+
+	if (ref == NULL)
+		return B_BAD_VALUE;
+
+	struct stat st;
+	status_t error = _kern_read_stat(fDirFd, fName, false, &st,
+		sizeof(struct stat));
+	if (error == B_OK) {
+		int tempFd = openat(fDirFd, fName, O_RDONLY);
+		if (tempFd < 0)
+			return tempFd;
+
+		*ref = node_ref(tempFd);
+		close(tempFd);
+	}
+
+	return error;
 }
 
 
@@ -689,6 +777,7 @@ BEntry::_SetTo(int dirFD, const char* path, bool traverse)
 		return error;
 	fdCloser.Detach();
 	fDirFd = dirFD;
+	fDirRef = node_ref(fDirFd);
 	return B_OK;
 }
 

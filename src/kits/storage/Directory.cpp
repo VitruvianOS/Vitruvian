@@ -96,7 +96,6 @@ BDirectory::~BDirectory()
 status_t
 BDirectory::SetTo(const entry_ref* ref)
 {
-#if 1
 	// open node
 	status_t error = _SetTo(ref, true);
 	if (error != B_OK)
@@ -104,42 +103,18 @@ BDirectory::SetTo(const entry_ref* ref)
 
 	// open dir
 	fDirFd = _kern_open_dir_entry_ref(ref->device, ref->directory, ref->name);
-	//fDirFd = dup(ref->fd);
+
 	if (fDirFd < 0) {
 		status_t error = fDirFd;
 		Unset();
 		return (fCStatus = error);
 	}
 
+	fDirRef = node_ref(fDirFd);
 	fCStatus = B_OK;
 	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
-#else
 
-	int dirFD = _kern_open(ref->fd, NULL, O_RDWR | O_CLOEXEC, 0);
-
-	if (fDirFd < 0) {
-		status_t error = fDirFd;
-		Unset();
-		return (fCStatus = error);
-	}
-
-	// open node
-	status_t error = _SetTo(dirFD, ref->name, true);
-	if (error != B_OK)
-		return error;
-
-	// open dir
-	/*fDirFd = _kern_open_dir(ref->fd, ref->name);
-	if (fDirFd < 0) {
-		status_t error = fDirFd;
-		Unset();
-		return (fCStatus = error);
-	}
-*/
-	// set close on exec flag on dir FD
-	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
-#endif
 	return B_OK;
 }
 
@@ -179,6 +154,7 @@ BDirectory::SetTo(const BEntry* entry)
 		return (fCStatus = error);
 	}
 
+	fDirRef = node_ref(fDirFd);
 	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 
@@ -202,6 +178,7 @@ BDirectory::SetTo(const char* path)
 		return (fCStatus = error);
 	}
 
+	fDirRef = node_ref(fDirFd);
 	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 
@@ -241,6 +218,7 @@ BDirectory::SetTo(const BDirectory* dir, const char* path)
 		_kern_close(dirFD);
 	}
 
+	fDirRef = node_ref(fDirFd);
 	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 
@@ -255,6 +233,8 @@ BDirectory::GetEntry(BEntry* entry) const
 		return B_BAD_VALUE;
 	if (InitCheck() != B_OK)
 		return B_NO_INIT;
+
+	// TODO use fDirRef? this enough?
 	return entry->SetTo(this, ".", false);
 }
 
@@ -262,10 +242,12 @@ BDirectory::GetEntry(BEntry* entry) const
 bool
 BDirectory::IsRootDirectory() const
 {
+	// TODO
 	// compare the directory's node ID with the ID of the root node of the FS
 	bool result = false;
 	node_ref ref;
 	fs_info info;
+	// TODO dereference
 	if (GetNodeRef(&ref) == B_OK && fs_stat_dev(ref.device, &info) == 0)
 		result = (ref.node == info.root);
 	return result;
@@ -359,7 +341,7 @@ BDirectory::Contains(const BEntry* entry, int32 nodeFlags) const
 status_t
 BDirectory::GetNextEntry(BEntry* entry, bool traverse)
 {
-#ifndef __VOS__
+#if 0
 	if (entry == NULL)
 		return B_BAD_VALUE;
 
@@ -385,9 +367,8 @@ BDirectory::GetNextEntry(BEntry* entry, bool traverse)
 	struct dirent* localEntry = longEntry.dirent();
 	bool next = true;
 	while (next) {
-		if (GetNextDirents(localEntry, sizeof(longEntry), 1) != 1) {
+		if (GetNextDirents(localEntry, sizeof(longEntry), 1) != 1)
 			return B_ENTRY_NOT_FOUND;
-		}
 
 		next = (!strcmp(localEntry->d_name, ".")
 			|| !strcmp(localEntry->d_name, ".."));
@@ -401,7 +382,7 @@ BDirectory::GetNextEntry(BEntry* entry, bool traverse)
 status_t
 BDirectory::GetNextRef(entry_ref* ref)
 {
-#ifndef __VOS__
+#if 0
 	if (ref == NULL)
 		return B_BAD_VALUE;
 	if (InitCheck() != B_OK)
@@ -429,6 +410,8 @@ BDirectory::GetNextRef(entry_ref* ref)
 #else
 	if (ref == NULL)
 		return B_BAD_VALUE;
+	if (InitCheck() != B_OK)
+		return B_FILE_ERROR;
 
 	BEntry entry;
 	status_t status = GetNextEntry(&entry);
@@ -607,6 +590,7 @@ BDirectory::close_fd()
 	if (fDirFd >= 0) {
 		_kern_close(fDirFd);
 		fDirFd = -1;
+		fDirRef = node_ref();
 	}
 	BNode::close_fd();
 }

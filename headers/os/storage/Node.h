@@ -5,7 +5,7 @@
 #ifndef _NODE_H
 #define _NODE_H
 
-
+#include <OS.h>
 #include <Statable.h>
 
 
@@ -18,7 +18,15 @@ struct entry_ref;
 struct node_ref {
 	node_ref();
 	node_ref(dev_t device, ino_t node);
+	node_ref(int fd);
 	node_ref(const node_ref& other);
+	~node_ref();
+
+	//status_t init_check() const;
+	//bool is_virtual() const;
+	//vref_id id() const;
+	bool is_virtual;
+	//const node_ref dereference() const;
 
 	bool operator==(const node_ref& other) const;
 	bool operator!=(const node_ref& other) const;
@@ -27,6 +35,10 @@ struct node_ref {
 
 	dev_t device;
 	ino_t node;
+private:
+	dev_t real_device;
+	dev_t real_node;
+	team_id team;
 };
 
 
@@ -73,10 +85,13 @@ public:
 			status_t			ReadAttrString(const char* name,
 									BString* result) const;
 
+			status_t			GetNodeRef(node_ref* ref) const;
+
 			BNode&				operator=(const BNode& node);
 			bool				operator==(const BNode& node) const;
 			bool				operator!=(const BNode& node) const;
 
+			// TODO
 			int					Dup();
 				// This should be "const" but R5's is not... Ugggh.
 
@@ -110,6 +125,7 @@ private:
 			uint32				rudeData[4];
 			int					fFd;
 				// Ffile descriptor for the given node
+			node_ref			fNodeRef;
 			int					fAttrFd;
 				// file descriptor for the attribute directory of the node,
 				// initialized lazily

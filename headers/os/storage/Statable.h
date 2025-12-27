@@ -34,7 +34,9 @@ public:
 	bool IsDirectory() const;
 	bool IsSymLink() const;
 
-	status_t GetNodeRef(node_ref* ref) const;
+	// This is a V\OS API change.
+	virtual status_t GetNodeRef(node_ref* ref) const = 0;
+	//status_t GetNodeRef(node_ref* ref) const;
 
 	status_t GetOwner(uid_t* owner) const;
 	status_t SetOwner(uid_t owner);

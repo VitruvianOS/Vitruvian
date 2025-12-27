@@ -34,8 +34,10 @@
 
 node_ref::node_ref()
 	:
-	device((dev_t)-1),
-	node((ino_t)-1)
+	device((dev_t)0),
+	node((ino_t)0),
+	is_virtual(false),
+	team(-1)
 {
 }
 
@@ -45,15 +47,39 @@ node_ref::node_ref(dev_t device, ino_t node)
 	device(device),
 	node(node)
 {
+	if (device == get_vref_dev() && node > 0) {
+		acquire_vref((vref_id)node);
+		is_virtual = true;
+	}
+}
+
+
+node_ref::node_ref(int fd)
+	:
+	device(0),
+	node(0),
+	is_virtual(true)
+{
+	device = get_vref_dev();
+	node = create_vref(fd);
 }
 
 
 node_ref::node_ref(const node_ref& other)
 	:
-	device((dev_t)-1),
-	node((ino_t)-1)
+	device((dev_t)0),
+	node((ino_t)0)
 {
 	*this = other;
+	if (is_virtual && node > 0)
+		acquire_vref((vref_id) other.node);
+}
+
+
+node_ref::~node_ref()
+{
+	if (is_virtual && node > 0)
+		release_vref((vref_id)node);
 }
 
 
@@ -86,6 +112,11 @@ node_ref::operator=(const node_ref& other)
 {
 	device = other.device;
 	node = other.node;
+	is_virtual = other.is_virtual;
+	if (is_virtual && node > 0)
+		acquire_vref(node);
+
+	team = other.team;
 	return *this;
 }
 
@@ -212,6 +243,8 @@ void
 BNode::Unset()
 {
 	close_fd();
+	//release_vref(fNodeRef);
+	fNodeRef = node_ref();
 	fCStatus = B_NO_INIT;
 }
 
@@ -397,6 +430,25 @@ BNode::ReadAttrString(const char* name, BString* result) const
 }
 
 
+status_t
+BNode::GetNodeRef(node_ref* ref) const
+{
+	if (fCStatus != B_OK)
+		return B_NO_INIT;
+
+	if (ref == NULL)
+		return B_BAD_VALUE;
+
+	struct stat st;
+	status_t error = _kern_read_stat(fFd, NULL, false, &st,
+		sizeof(struct stat));
+	if (error == B_OK)
+		*ref = fNodeRef;
+
+	return error;
+}
+
+
 BNode&
 BNode::operator=(const BNode& node)
 {
@@ -563,7 +615,10 @@ BNode::_SetTo(int fd, const char* path, bool traverse)
 			// opening read-write failed, re-try read-only
 			fFd = _kern_open(fd, path, O_RDONLY | O_CLOEXEC | traverseFlag, 0);
 		}
-		if (fFd < 0)
+
+		if (fFd)
+			fNodeRef = node_ref(fFd);
+		else
 			error = fFd;
 	}
 
@@ -590,35 +645,31 @@ status_t
 BNode::_SetTo(const entry_ref* ref, bool traverse)
 {
 	Unset();
-	printf("node set to\n");
 
 	status_t result = (ref ? B_OK : B_BAD_VALUE);
 	if (result == B_OK) {
-		printf("result B_OK\n");
 		int traverseFlag = (traverse ? 0 : O_NOTRAVERSE);
-#if 1
-		fFd = _kern_open_entry_ref(ref->device, ref->directory, ref->name,
-			O_RDWR | O_CLOEXEC | traverseFlag, 0);
-		if (fFd < B_OK && fFd != B_ENTRY_NOT_FOUND) {
-			// opening read-write failed, re-try read-only
-			fFd = _kern_open_entry_ref(ref->device, ref->directory, ref->name,
-				O_RDONLY | O_CLOEXEC | traverseFlag, 0);
-		}
-#else
-		/*fFd = _kern_open_entry_ref_fd(ref->device, ref->directory, ref->name,
-			ref->fd, O_RDWR | O_CLOEXEC | traverseFlag, 0);
-		if (fFd < B_OK && fFd != B_ENTRY_NOT_FOUND) {
-			// opening read-write failed, re-try read-only
-			fFd = _kern_open_entry_ref_fd(ref->device, ref->directory, ref->name,
-				ref->fd, O_RDONLY | O_CLOEXEC | traverseFlag, 0);*/
 
-		fFd = _kern_open(ref->fd, ref->name, O_RDWR | O_CLOEXEC | traverseFlag, 0);
-		if (fFd < B_OK && fFd != B_ENTRY_NOT_FOUND) {
-			fFd = _kern_open(ref->fd, ref->name, O_RDONLY | O_CLOEXEC | traverseFlag, 0);
+		if (ref->is_virtual) {
+			fFd = _kern_open_virtual_ref(ref->directory, ref->name,
+					O_CLOEXEC | traverseFlag, O_RDWR);
+			if (fFd != B_OK && fFd != B_ENTRY_NOT_FOUND) {
+				fFd = _kern_open_virtual_ref(ref->directory, ref->name,
+					O_CLOEXEC | traverseFlag, O_RDONLY);
+			}
+		} else {
+			fFd = _kern_open_entry_ref(ref->device, ref->directory, ref->name,
+				O_RDWR | O_CLOEXEC | traverseFlag, 0);
+			if (fFd < B_OK && fFd != B_ENTRY_NOT_FOUND) {
+				// opening read-write failed, re-try read-only
+				fFd = _kern_open_entry_ref(ref->device, ref->directory, ref->name,
+					O_RDONLY | O_CLOEXEC | traverseFlag, 0);
+			}
 		}
-#endif
-		if (fFd < 0)
+		if (result != B_OK || fFd < 0)
 			result = fFd;
+		else
+			fNodeRef = node_ref(fFd);
 	}
 
 	return fCStatus = result;

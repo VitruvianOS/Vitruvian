@@ -55,14 +55,19 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 	if (path == NULL)
 		openMode |= AT_EMPTY_PATH;
 
-	// TODO see BNode::_SetTo
 	int ret = openat(fd, path, openMode, perms);
 	if (ret < 0)
 		return -errno;
 
-	// TODO do we really need this?
 	struct stat st;
-	if (_kern_read_stat(ret, path, false, &st, 0) != B_OK) {
+	int err = 0;
+
+	if (path == NULL || (openMode & AT_EMPTY_PATH))
+		err = fstat(ret, &st);
+	else
+		err = fstatat(fd, path, &st, 0);
+
+	if (err != 0) {
 		if (!(openMode & O_CREAT)) {
 			close(ret);
 			return B_ENTRY_NOT_FOUND;
@@ -93,7 +98,6 @@ _kern_open_dir(int fd, const char* path)
 	if (fd < 0)
 		fd = AT_FDCWD;
 
-	// TODO O_EXCL only with O_CREAT?
 	int flags = O_EXCL | O_DIRECTORY;
 
 	if (!path)
@@ -132,7 +136,6 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 			return ret;
 		}
 
-		// No need to free basename
 		char* baseName = basename(buf);
 		if (baseName == NULL) {
 			close(dirfd);
@@ -167,7 +170,7 @@ _kern_open_dir_virtual_ref(vref_id id, const char* name)
 
 	int ret = openat(fd, name, O_EXCL | O_DIRECTORY);
 	close(fd);
-	return ret;
+	return (ret < 0) ? -errno : ret;
 }
 
 
@@ -201,7 +204,7 @@ _kern_open_virtual_ref(vref_id id, const char* name,
 
 	int ret = openat(fd, name, openMode, perms);
 	close(fd);
-	return ret;
+	return (ret < 0) ? -errno : ret;
 }
 
 
@@ -211,7 +214,9 @@ _kern_open_entry_ref(dev_t device, ino_t node, const char* name,
 {
 	CALLED();
 
-	printf("open entry ref %lu %lu vref dev is %lu\n", device, node, get_vref_dev());
+	printf("open entry ref %llu %llu vref dev is %llu\n",
+		(unsigned long long)device, (unsigned long long)node,
+		(unsigned long long)get_vref_dev());
 
 	if (device <= 0 || node <= 0)
 		return B_BAD_VALUE;
@@ -231,17 +236,18 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 {
 	CALLED();
 
-	printf("entry ref to path %d %d %s\n", device, node, leaf);
+	printf("entry ref to path %llu %llu %s\n",
+		(unsigned long long)device, (unsigned long long)node,
+		(leaf ? leaf : "(null)"));
 
 	if (leaf == NULL && (device < 0 || node < 0))
 		return B_BAD_VALUE;
 
-	if ((leaf != NULL && leaf[0] == '\0') || pathLength <= 0)
+	if ((leaf != NULL && leaf[0] == '\0') || pathLength == 0)
 		return B_BAD_VALUE;
 
 	if (leaf != NULL && leaf[0] == '/') {
-		if (strlcpy(userPath, leaf,
-				strlen(leaf)) >= pathLength) {
+		if (strlcpy(userPath, leaf, pathLength) >= pathLength) {
 			return B_BUFFER_OVERFLOW;
 		}
 		return B_OK;
@@ -289,9 +295,9 @@ _kern_entry_ref_to_path_by_fd(int fd, team_id team, char* name,
 		return _kern_fd_to_path(fd, team, buffer, bufferSize);
 
 	if (name != NULL && name[0] == '/') {
-		if (strlcpy(buffer, name, strlen(name)) >= bufferSize)
+		if (strlcpy(buffer, name, bufferSize) >= bufferSize)
 			return B_BUFFER_OVERFLOW;
-	
+
 		return B_OK;
 	}
 
@@ -302,10 +308,12 @@ _kern_entry_ref_to_path_by_fd(int fd, team_id team, char* name,
 	if (ret != B_OK)
 		return ret;
 
-	// TODO stat?
-	snprintf(buffer, bufferSize, "%s/%s", resolvedPath, name);
+	if (snprintf(buffer, bufferSize, "%s/%s", resolvedPath, name) >= (int)bufferSize)
+		return B_BUFFER_OVERFLOW;
+
 	return B_OK;
 }
+
 
 status_t
 _kern_fd_to_path(int fd, team_id team, char* buffer, size_t bufferSize)
@@ -324,7 +332,7 @@ _kern_fd_to_path(int fd, team_id team, char* buffer, size_t bufferSize)
 	else
 		snprintf(procPath, sizeof(procPath), "/proc/%d/fd/%d", team, fd);
 
-	ssize_t size = readlink(procPath, buffer, bufferSize);
+	ssize_t size = readlink(procPath, buffer, bufferSize - 1);
 	if (size < 0)
 		return -errno;
 
@@ -348,17 +356,19 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 	if (fd < 0)
 		fd = AT_FDCWD;
 
-	// Since Linux 2.6.39, path can be an empty string
+	// Since Linux 2.6.39, path can be an empty string; allow path==NULL => ""
 	if (path == NULL)
 		path = "";
 
-	ssize_t size = readlinkat(fd, path, buffer, *_bufferSize);
+	ssize_t size = readlinkat(fd, path, buffer, *_bufferSize - 1);
 	if (size < 0)
 		return -errno;
 
-	*_bufferSize = size;
+	buffer[size] = '\0';
+	*_bufferSize = (size_t)size;
 	return B_OK;
 }
+
 
 
 status_t
@@ -413,15 +423,24 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 
 	if (statMask & (B_STAT_MODIFICATION_TIME | B_STAT_ACCESS_TIME)) {
 		struct timespec times[2];
-		memset(times, 0, sizeof(times));
+		times[0].tv_nsec = UTIME_OMIT;
+		times[1].tv_nsec = UTIME_OMIT;
 
-		if (statMask & B_STAT_ACCESS_TIME)
+		if (statMask & B_STAT_ACCESS_TIME) {
 			times[0].tv_sec = st->st_atime;
+			times[0].tv_nsec = 0;
+		} else {
+			times[0].tv_sec = 0;
+		}
 
-		if (statMask & B_STAT_MODIFICATION_TIME)
+		if (statMask & B_STAT_MODIFICATION_TIME) {
 			times[1].tv_sec = st->st_mtime;
+			times[1].tv_nsec = 0;
+		} else {
+			times[1].tv_sec = 0;
+		}
 
-		if (utimensat(fd, path, times, 0) < 0)
+		if (utimensat(fd, path, times, flags) < 0)
 			return -errno;
 	}
 
@@ -434,54 +453,70 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 {
 	CALLED();
 
-	if (buffer == NULL || bufferSize <= 0 || maxCount == 0)
+	if (buffer == NULL || bufferSize == 0 || maxCount == 0)
 		return B_BAD_VALUE;
 
 	if (fd < 0)
 		return B_FILE_ERROR;
 
-	struct linux_dirent {
-		long           d_ino;
-		off_t          d_off;
-		unsigned short d_reclen;
-		char           d_name[255];
-	};
+	// linux_dirent64 header (LP64): d_ino(8) + d_off(8) + d_reclen(2) + d_type(1) = 19 bytes
+	const size_t LINUX_DIRENT64_HEADER = 8 + 8 + 2 + 1;
 
-	size_t bufSize = sizeof(struct linux_dirent) * maxCount;
-	struct linux_dirent* direntBuffer = malloc(bufSize);
+	if (NAME_MAX == 0)
+		return B_BAD_VALUE;
+	if (maxCount > SIZE_MAX / (LINUX_DIRENT64_HEADER + NAME_MAX))
+		return B_BAD_VALUE;
+	size_t bufSize = maxCount * (LINUX_DIRENT64_HEADER + NAME_MAX);
+
+	void* direntBuffer = malloc(bufSize);
 	if (direntBuffer == NULL)
 		return B_NO_MEMORY;
 
 	off_t seekOffset = _kern_seek(fd, 0, SEEK_CUR);
 
-	ssize_t ret = syscall(SYS_getdents, fd, direntBuffer, bufSize);
+	ssize_t ret = syscall(SYS_getdents64, fd, direntBuffer, bufSize);
 	if (ret < 0) {
+		int saved_errno = errno;
 		free(direntBuffer);
-		return -errno;
+		return -saved_errno;
 	}
 
 	int i = 0;
-	int pos = 0;
-	while (pos < ret && i < maxCount) {
-		struct linux_dirent* dir = (struct linux_dirent *) (direntBuffer + pos);
-		buffer[i].d_ino = dir->d_ino;
-		buffer[i].d_off = dir->d_off;
-		buffer[i].d_reclen = dir->d_reclen;
+	size_t pos = 0;
+	while (pos < (size_t)ret && i < (int)maxCount) {
+		if ((size_t)ret - pos < LINUX_DIRENT64_HEADER)
+			break;
 
-		if (strlcpy(buffer[i].d_name, dir->d_name, sizeof(buffer[i].d_name))
-				> sizeof(buffer[i].d_name)) {
-			free(direntBuffer);
-			close(dirfd);
+		char* base = (char*)direntBuffer + pos;
+		uint64_t d_ino = *(uint64_t*)(base + 0);
+		int64_t  d_off = *(int64_t*)(base + 8);
+		uint16_t reclen = *(uint16_t*)(base + 16);
+
+		if (reclen < LINUX_DIRENT64_HEADER)
+			break;
+		if (pos + reclen > (size_t)ret)
+			break;
+
+		buffer[i].d_ino = (ino_t)d_ino;
+		buffer[i].d_off = (off_t)d_off;
+		buffer[i].d_reclen = reclen;
+
+		size_t name_len = reclen - LINUX_DIRENT64_HEADER;
+		size_t dst_size = sizeof(buffer[i].d_name);
+		size_t to_copy = name_len;
+		if (to_copy >= dst_size)
 			return B_BUFFER_OVERFLOW;
-		}
+		memcpy(buffer[i].d_name, base + LINUX_DIRENT64_HEADER, to_copy);
+		buffer[i].d_name[to_copy] = '\0';
 
-        pos += dir->d_reclen;
-        seekOffset = dir->d_off;
-        i++;
+		pos += reclen;
+		seekOffset = d_off;
+		i++;
 	}
+
 	free(direntBuffer);
 
-	if (pos < ret)
+	if (pos < (size_t)ret)
 		_kern_seek(fd, seekOffset, SEEK_SET);
 
 	if (i <= 0)
@@ -616,13 +651,10 @@ _kern_create_symlink(int fd, const char* path,
 {
 	CALLED();
 
-	// symlinkat does not seem to support AT_EMPTY_PATH
 	if (path == NULL || toPath == NULL)
-		return B_BAD_VALUE; 
+		return B_BAD_VALUE;
 
-	// TODO mode?
-
-	return (symlinkat(path, (fd < 0 ? AT_FDCWD : fd), toPath) < 0) ? -errno : B_OK;
+	return (symlinkat(toPath, (fd < 0 ? AT_FDCWD : fd), path) < 0) ? -errno : B_OK;
 }
 
 

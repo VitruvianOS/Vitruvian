@@ -5,6 +5,8 @@
 
 #include "Team.h"
 
+#include <OS.h>
+
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -20,11 +22,10 @@
 #include <list>
 #include <string>
 
-#include "Thread.h"
-
 #include "KernelDebug.h"
 #include "messaging/MessagingService.h"
 #include "syscalls.h"
+#include "Thread.h"
 
 
 #define UID_LINE 8
@@ -353,57 +354,163 @@ _get_team_info(team_id id, team_info* info, size_t size)
 	if (id < 0 || info == NULL || size != sizeof(team_info))
 		return B_BAD_VALUE;
 
-  	char procPath[B_PATH_NAME_LENGTH];
+	int pidfd = (int)syscall(SYS_pidfd_open, (pid_t)id, 0);
+
+	if (pidfd < 0) {
+		char procdir[64];
+		snprintf(procdir, sizeof(procdir), "/proc/%d", pidfd);
+		if (access(procdir, F_OK) != 0)
+			return B_BAD_TEAM_ID;
+	}
+
+	memset(info, 0, sizeof(team_info));
+
+	char procPath[B_PATH_NAME_LENGTH];
 	char buffer[MAX_LINE_LENGTH];
 	char commandProcPath[B_PATH_NAME_LENGTH];
 
 	if (id == 0)
 		id = getpid();
 
-	sprintf(procPath, "/proc/%d/status", id);
-	sprintf(commandProcPath, "/proc/%d/cmdline", id);
-	FILE* fileid = fopen(procPath, "r");
-
-	if (fileid == NULL)
+	snprintf(procPath, sizeof(procPath), "/proc/%d/status", id);
+	snprintf(commandProcPath, sizeof(commandProcPath), "/proc/%d/cmdline", id);
+	FILE* statusFile = fopen(procPath, "r");
+	if (statusFile == NULL) {
+		close(pidfd);
 		return B_BAD_TEAM_ID;
-
-	int i = 0;
-	while (!feof(fileid)) {
-		fgets(buffer, MAX_LINE_LENGTH, fileid);
-
-		std::string temp(buffer);
-		if (temp.find("Uid:\t")) {
-			sscanf(buffer, "Uid:\t%u\t\n", &info->uid);
-		} else if(temp.find("Gid:\t")) {
-			sscanf(buffer, "Gid:\t%u\t\n", &info->gid);
-		} else if (temp.find("Threads:\t") != std::string::npos) {
-			sscanf(buffer, "Threads:\t%d\n", &info->thread_count);
-			break;
-		}
-		i++;
 	}
 
-	int fileCommandId = open(commandProcPath, O_RDONLY);
-	int bytesRead = read(fileCommandId, buffer, MAX_LINE_LENGTH);
-	int argCount = 0;
-
-	int j = 0;
-	while (j < bytesRead) {
-		if (buffer[j] == '\0') {
-			argCount++;
-			buffer[j] = ' ';
-		}
-		j++;
-	}
-
-	buffer[j] = '\0';
-	info->argc = argCount;
 	info->team = id;
-	strncpy(info->args, buffer, MAX_BYTES);
+	while (fgets(buffer, sizeof(buffer), statusFile) != NULL) {
+		if (strncmp(buffer, "Uid:", 4) == 0) {
+			uid_t ruid = 0, euid = 0, suid = 0, fuid = 0;
+			sscanf(buffer + 4, "%u %u %u %u", &ruid, &euid, &suid, &fuid);
+			info->real_uid = ruid;
+			info->uid = euid;
+		} else if (strncmp(buffer, "Gid:", 4) == 0) {
+			gid_t rgid = 0, egid = 0, sgid = 0, fgid = 0;
+			sscanf(buffer + 4, "%u %u %u %u", &rgid, &egid, &sgid, &fgid);
+			info->real_gid = rgid;
+			info->gid = egid;
+		} else if (strncmp(buffer, "Threads:", 8) == 0) {
+			sscanf(buffer + 8, "%d", &info->thread_count);
+		} else if (strncmp(buffer, "PPid:", 5) == 0) {
+			pid_t ppid = (pid_t)atoi(buffer + 5);
+			info->parent = (team_id)ppid;
+		}
+	}
 
-	fclose(fileid);
-	close(fileCommandId);
+	fclose(statusFile);
 
+	int cmdFd = open(commandProcPath, O_RDONLY);
+	if (cmdFd >= 0) {
+		ssize_t n = read(cmdFd, buffer, sizeof(buffer) - 1);
+		if (n > 0) {
+			int argc = 0;
+			for (ssize_t i = 0; i < n; i++) {
+				if (buffer[i] == '\0') {
+					argc++;
+					buffer[i] = ' ';
+				}
+			}
+			if (n > 0 && argc == 0)
+				argc = 1;
+			buffer[n] = '\0';
+
+			info->argc = argc;
+			strncpy(info->args, buffer, sizeof(info->args) - 1);
+			info->args[sizeof(info->args) - 1] = '\0';
+		}
+		close(cmdFd);
+	} else {
+		info->argc = 0;
+		info->args[0] = '\0';
+	}
+
+	{
+		char mapsPath[B_PATH_NAME_LENGTH];
+		snprintf(mapsPath, sizeof(mapsPath), "/proc/%d/maps", id);
+		FILE* maps = fopen(mapsPath, "r");
+		if (maps) {
+			int images = 0;
+			int areas = 0;
+			char lastPath[PATH_MAX] = {0};
+			while (fgets(buffer, sizeof(buffer), maps)) {
+				areas++;
+				char* p = strchr(buffer, '/');
+				if (p) {
+					char* nl = strchr(p, '\n');
+					if (nl) *nl = '\0';
+					if (lastPath[0] == '\0' || strcmp(p, lastPath) != 0) {
+						images++;
+						strncpy(lastPath, p, sizeof(lastPath) - 1);
+						lastPath[sizeof(lastPath) - 1] = '\0';
+					}
+				}
+			}
+			fclose(maps);
+			info->image_count = images;
+			info->area_count = areas;
+		} else {
+			info->image_count = 0;
+			info->area_count = 0;
+		}
+	}
+
+	info->debugger_nub_thread = -1;
+	info->debugger_nub_port = 0;
+
+	{
+		char statPath[B_PATH_NAME_LENGTH];
+		snprintf(statPath, sizeof(statPath), "/proc/%d/stat", id);
+		FILE* stat = fopen(statPath, "r");
+		if (stat) {
+			char statbuf[4096];
+			size_t r = fread(statbuf, 1, sizeof(statbuf) - 1, stat);
+			statbuf[r] = '\0';
+			char* rp = strrchr(statbuf, ')');
+			if (rp) {
+				char* rest = rp + 2;
+				char* saveptr = NULL;
+				(void)strtok_r(rest, " ", &saveptr);
+				(void)strtok_r(NULL, " ", &saveptr);
+				char* tok = strtok_r(NULL, " ", &saveptr);
+				if (tok) info->group_id = (pid_t)strtol(tok, NULL, 10);
+				tok = strtok_r(NULL, " ", &saveptr);
+				if (tok) info->session_id = (pid_t)strtol(tok, NULL, 10);
+
+				int field = 5;
+				while (field < 22 && (tok = strtok_r(NULL, " ", &saveptr)))
+					field++;
+				if (tok) {
+					unsigned long long starttime = strtoull(tok, NULL, 10);
+					if (starttime != 0) {
+						long ticks = sysconf(_SC_CLK_TCK);
+						if (ticks <= 0) ticks = 100;
+
+						FILE* uptime = fopen("/proc/uptime", "r");
+						double up = 0.0;
+						if (uptime) {
+							if (fscanf(uptime, "%lf", &up) != 1)
+								up = 0.0;
+							fclose(uptime);
+						}
+
+						struct timespec now;
+						if (clock_gettime(CLOCK_REALTIME, &now) == 0 && up > 0.0) {
+							double boot_time = now.tv_sec - up;
+							double proc_start_secs = ((double)starttime) / (double)ticks;
+							double proc_start_time = boot_time + proc_start_secs;
+							info->start_time = (bigtime_t)(proc_start_time * 1e6);
+						}
+					}
+				}
+			}
+			fclose(stat);
+		}
+	}
+
+	close(pidfd);
 	return B_OK;
 }
 
@@ -556,7 +663,7 @@ _kern_get_extended_team_info(team_id teamID, uint32 flags,
 	void* buffer, size_t size, size_t* _sizeNeeded)
 {
 	UNIMPLEMENTED();
-	return B_ERROR;
+	return B_UNSUPPORTED;
 }
 
 

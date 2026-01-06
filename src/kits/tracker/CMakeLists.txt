@@ -88,6 +88,13 @@ AddOn(
 	"../../add-ons/input_server/filters/shortcut_catcher/"
 
 	LIBS be localestub root shared game translation
+
+	RDEF TrackerIcons.rdef libtracker.rdef
 )
 
 UsePrivateHeaders(tracker interface shared tracker mount storage system support)
+
+target_compile_definitions(tracker PRIVATE
+	_BUILDING_tracker=1
+	_SUPPORTS_RESOURCES=1
+)

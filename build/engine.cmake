@@ -124,7 +124,7 @@ macro( AddOn name type )
 		add_custom_command(TARGET ${name} POST_BUILD
 			COMMAND echo "Building resource file ${RDEF_FILE}..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "$<TARGET_FILE:${name}>" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
 		)
 		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
 		endforeach()

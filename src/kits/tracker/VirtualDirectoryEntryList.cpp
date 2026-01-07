@@ -84,7 +84,8 @@ VirtualDirectoryEntryList::GetNextRef(entry_ref* ref)
 {
 	BPrivate::Storage::LongDirEntry longEntry;
 	struct dirent* entry = longEntry.dirent();
-	int32 result = GetNextDirents(entry, sizeof(longEntry), 1);
+	BDirectory dir;
+	int32 result = GetNextDirents(dir, entry, sizeof(longEntry), 1);
 	if (result < 0)
 		return result;
 	if (result == 0)
@@ -93,9 +94,41 @@ VirtualDirectoryEntryList::GetNextRef(entry_ref* ref)
 #ifndef __VOS__
 	ref->device = entry.d_pdev;
 	ref->directory = entry.d_pino;
+#else
+	BEntry dirEntry;
+	dir.GetEntry(&dirEntry);
+	dirEntry.GetRef(ref);
 #endif
-	UNIMPLEMENTED();
 	return ref->set_name(entry->d_name);
+}
+
+
+int32
+VirtualDirectoryEntryList::GetNextDirents(BDirectory& dir, struct dirent* buffer, size_t length,
+	int32 count)
+{
+	if (count > 1)
+		count = 1;
+
+	int32 countRead = fMergedDirectory._GetNextDirents(dir, buffer, length, count);
+	if (countRead != 1)
+		return countRead;
+
+	// deal with directories
+	entry_ref ref;
+	BEntry entry;
+	dir.GetEntry(&entry);
+	entry.GetRef(&ref);
+	if (ref.set_name(buffer->d_name) == B_OK && BEntry(&ref).IsDirectory()) {
+		if (VirtualDirectoryManager* manager
+				= VirtualDirectoryManager::Instance()) {
+			AutoLocker<VirtualDirectoryManager> managerLocker(manager);
+			node_ref node(ref.device, ref.directory);
+			manager->TranslateDirectoryEntry(fDefinitionFileRef, ref, node);
+		}
+	}
+
+	return countRead;
 }
 
 
@@ -106,26 +139,8 @@ VirtualDirectoryEntryList::GetNextDirents(struct dirent* buffer, size_t length,
 	if (count > 1)
 		count = 1;
 
-	int32 countRead = fMergedDirectory.GetNextDirents(buffer, length, count);
-	if (countRead != 1)
-		return countRead;
-
-	// deal with directories
-	entry_ref ref;
-#ifndef __VOS__
-	ref.device = buffer->d_pdev;
-	ref.directory = buffer->d_pino;
-#endif
-	UNIMPLEMENTED();
-	if (ref.set_name(buffer->d_name) == B_OK && BEntry(&ref).IsDirectory()) {
-		if (VirtualDirectoryManager* manager
-				= VirtualDirectoryManager::Instance()) {
-			AutoLocker<VirtualDirectoryManager> managerLocker(manager);
-			manager->TranslateDirectoryEntry(fDefinitionFileRef, buffer);
-		}
-	}
-
-	return countRead;
+	BDirectory dir;
+	return GetNextDirents(dir, buffer, length, count);
 }
 
 

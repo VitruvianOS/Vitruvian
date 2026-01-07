@@ -207,20 +207,23 @@ VirtualDirectoryPoseView::_EntryCreated(const BMessage* message)
 		BDirectory directory;
 		if (directory.SetTo(&nodeRef) != B_OK)
 			return true;
-		#ifndef __VOS__
-		BPrivate::Storage::LongDirEntry entry;
+
+		struct dirent entry;
 		while (directory.GetNextDirents(&entry, sizeof(entry), 1) == 1) {
 			if (strcmp(entry.d_name, ".") != 0
 				&& strcmp(entry.d_name, "..") != 0) {
+				BEntry dirEntry;
+				directory.GetEntry(&dirEntry);
+				entry_ref ref;
+				dirEntry.GetRef(&ref);
 				_DispatchEntryCreatedOrRemovedMessage(B_ENTRY_CREATED,
-					node_ref(entry.d_dev, entry.d_ino),
-					NotOwningEntryRef(entry.d_pdev, entry.d_pino,
+					node_ref(ref.device, ref.directory),
+					NotOwningEntryRef(ref.device, ref.directory,
 						entry.d_name),
 					NULL, false);
 			}
 		}
-		#endif
-		UNIMPLEMENTED();
+
 		return true;
 	}
 

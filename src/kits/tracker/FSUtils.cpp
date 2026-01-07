@@ -1885,11 +1885,7 @@ FSCopyAttributesAndStats(BNode* srcNode, BNode* destNode, bool copyTimes)
 	struct stat srcStat;
 	srcNode->GetStat(&srcStat);
 	destNode->SetPermissions(srcStat.st_mode);
-	#ifndef __VOS__
 	destNode->SetOwner(srcStat.st_uid);
-	#else
-	UNIMPLEMENTED();
-	#endif
 	destNode->SetGroup(srcStat.st_gid);
 	if (copyTimes) {
 		destNode->SetModificationTime(srcStat.st_mtime);

@@ -33,6 +33,8 @@ public:
 	virtual	status_t			GetNextEntry(BEntry* entry,
 									bool traverse = false);
 	virtual	status_t			GetNextRef(entry_ref* ref);
+	virtual	int32				GetNextDirents(BDirectory& dir, struct dirent* buffer,
+									size_t length, int32 count = INT_MAX);
 	virtual	int32				GetNextDirents(struct dirent* buffer,
 									size_t length, int32 count = INT_MAX);
 

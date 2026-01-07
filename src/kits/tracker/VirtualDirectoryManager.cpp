@@ -423,7 +423,7 @@ VirtualDirectoryManager::GetParentDirectoryDefinitionFile(
 	return _entryRef.name != NULL;
 }
 
-
+#ifndef __VOS__
 status_t
 VirtualDirectoryManager::TranslateDirectoryEntry(
 	const node_ref& definitionFileRef, dirent* buffer)
@@ -447,6 +447,7 @@ VirtualDirectoryManager::TranslateDirectoryEntry(
 	UNIMPLEMENTED();
 	return B_ERROR;
 }
+#endif
 
 
 status_t

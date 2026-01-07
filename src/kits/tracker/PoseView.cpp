@@ -1413,30 +1413,26 @@ BPoseView::AddPosesTask(void* castToParams)
 			node_ref dirNode;
 			node_ref itemNode;
 
-			int32 count = container->GetNextDirents(eptr, 1024, 1);
-			if (count <= 0 && modelChunkIndex == -1)
-				break;
-
+			BEntry reff;
+			int32 count = container->GetNextEntry(&reff) == B_OK ? 1 : 0;
 			if (count > 0) {
 				ASSERT(count == 1);
 
-				if ((!hideDotFiles && (!strcmp(eptr->d_name, ".")
-					|| !strcmp(eptr->d_name, "..")))
-					|| (hideDotFiles && eptr->d_name[0] == '.')) {
+				if ((!hideDotFiles && (!strcmp(reff.Name(), ".")
+					|| !strcmp(reff.Name(), "..")))
+					|| (hideDotFiles && reff.Name()[0] == '.')) {
 					continue;
 				}
 
-#ifndef __VOS__
-				dirNode.device = eptr->d_pdev;
-				dirNode.node = eptr->d_pino;
-				itemNode.device = eptr->d_dev;
-				itemNode.node = eptr->d_ino;
-#endif
+				BEntry parent;
+				reff.GetParent(&parent);
+				reff.GetNodeRef(&itemNode);
+				parent.GetNodeRef(&dirNode);
 				BPoseView::WatchNewNode(&itemNode, watchMask, lock.Target());
 					// have to node monitor ahead of time because Model will
 					// cache up the file type and preferred app
 					// OK to call when poseView is not locked
-				model = new Model(&dirNode, &itemNode, eptr->d_name, false);
+				model = new Model(&dirNode, &itemNode, reff.Name(), false);
 				result = model->InitCheck();
 				modelChunkIndex++;
 				posesResult->fModels[modelChunkIndex] = model;

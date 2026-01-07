@@ -1,7 +1,9 @@
 /*
- *  Copyright 2018-2025, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2018-2026, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
+
+#define _GNU_SOURCE
 
 #include "Team.h"
 
@@ -11,8 +13,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <syscall.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -22,6 +26,7 @@
 #include <list>
 #include <string>
 
+#define DEBUG 2
 #include "KernelDebug.h"
 #include "messaging/MessagingService.h"
 #include "syscalls.h"
@@ -48,7 +53,7 @@ static int gNexus = -1;
 static int gNexusSem = -1;
 static int gNexusVRef = -1;
 
-sem_id Team::fForkSem = -1;
+static int fForkPipe[2] = {-1, -1};
 
 
 void
@@ -58,8 +63,6 @@ segv_handler(int sig)
 }
 
 
-// This function is executed before everything else
-// TODO: what about using gcc .init and .fini?
 void __attribute__ ((constructor))
 init_team(int argc, char** argv)
 {
@@ -69,13 +72,11 @@ init_team(int argc, char** argv)
 	// is handled by the debugger in BeOS.
 	signal(SIGSEGV, segv_handler);
 
-	// Init global stuff
 	int32 cpus = (int32) sysconf(_SC_NPROCESSORS_ONLN);
 	__gCPUCount = (cpus > 0) ? (int32_t)cpus : 1;
 	__libc_argc = argc;
 	__libc_argv = argv;
 
-	// Set screen
 	setenv("TARGET_SCREEN", "root", 1);
 
 	Team::InitTeam();
@@ -158,107 +159,181 @@ Team::GetVRefDescriptor(dev_t* dev)
 void
 Team::PrepareFatherAtFork()
 {
-	fForkSem = create_sem(0, "team_fork_sem");
+	TRACE("PrepareFatherAtFork()\n");
+
+	if (pipe2(fForkPipe, O_CLOEXEC) == -1) {
+		debugger("CRITICAL: pipe2 is broken");
+
+		fForkPipe[0] = -1;
+		fForkPipe[1] = -1;
+		TRACE("PrepareFatherAtFork: pipe creation failed: %s\n", strerror(errno));
+	}
 }
 
 
 void
 Team::SyncFatherAtFork()
 {
-	acquire_sem(fForkSem);
-	delete_sem(fForkSem);
-	fForkSem = -1;
+	TRACE("SyncFatherAtFork()\n");
+
+	if (fForkPipe[0] != -1) {
+		close(fForkPipe[1]);
+		fForkPipe[1] = -1;
+
+		char buf;
+		ssize_t ret;
+		do {
+			ret = read(fForkPipe[0], &buf, 1);
+		} while (ret == -1 && errno == EINTR);
+
+		close(fForkPipe[0]);
+		fForkPipe[0] = -1;
+	}
 }
 
 
 void
 Team::ReinitChildAtFork()
 {
-	printf("reinit_at_fork()\n");
+	TRACE("ReinitChildAtFork()\n");
+
 	InitTeam();
+
+	if (fForkPipe[0] != -1) {
+		close(fForkPipe[0]);
+		fForkPipe[0] = -1;
+	}
 
 	Thread::ReinitChildAtFork();
 
-	// _kern_unblock_thread(father)
-	release_sem(fForkSem);
-	fForkSem = -1;
+	if (fForkPipe[1] != -1) {
+		char buf = 1;
+		ssize_t ret;
+		do {
+			ret = write(fForkPipe[1], &buf, 1);
+		} while (ret == -1 && errno == EINTR);
+
+		close(fForkPipe[1]);
+		fForkPipe[1] = -1;
+	}
 }
 
 
 thread_id
 Team::LoadImage(int32 argc, const char** argv, const char** envp)
 {
-	TRACE("load_image: %s\n", argv[0]);
+	if (argc < 1 || argv == NULL || argv[0] == NULL) {
+		TRACE("load_image: invalid arguments\n");
+		return B_BAD_VALUE;
+	}
 
-	int lockfd[2];
-	if (pipe(lockfd) == -1)
-		return -1;
+	TRACE("load_image: %s (argc=%d)\n", argv[0], argc);
+
+	int syncPipe[2];
+	if (pipe2(syncPipe, O_CLOEXEC) == -1) {
+		TRACE("load_image: pipe failed: %s\n", strerror(errno));
+		return -errno;
+	}
+
+	sigset_t blockMask, oldMask;
+	sigemptyset(&blockMask);
+	sigaddset(&blockMask, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &blockMask, &oldMask);
 
 	pid_t pid = fork();
-	if (pid == 0) {
-		close(lockfd[1]);
-
-		// Wait for the father to unlock us
-		uint32 value;
-		read(lockfd[0], &value, sizeof(value));
-
-		int32 ret = execvpe(argv[0], const_cast<char* const*>(argv),
-			const_cast<char* const*>(envp));
-		if (ret == -1) {
-			TRACE("execv err %s\n", strerror(errno));
-			_exit(1);
-		}
-	}
-	close(lockfd[0]);
-
 	if (pid == -1) {
-		close(lockfd[1]);
-		TRACE("fork error\n");
-		return B_ERROR;
-	} else
-		gLoadImageFD = lockfd[1];
-
-	return pid;
-}
-
-
-status_t
-Team::WaitForTeam(team_id id, status_t* returnCode)
-{
-	if (id == getpid())
-		debugger("Team::WaitForTeam: This shouldn't happen.");
-
-	if (kill(id, 0) < 0)
-		return B_BAD_THREAD_ID;
-
-	if (gLoadImageFD != -1) {
-		uint32 value = 1;
-		write(gLoadImageFD, (const void*)&value, sizeof(uint32));
-		close(gLoadImageFD);
-		gLoadImageFD = -1;
+		int savedErrno = errno;
+		close(syncPipe[0]);
+		close(syncPipe[1]);
+		sigprocmask(SIG_SETMASK, &oldMask, NULL);
+		TRACE("load_image: fork failed: %s\n", strerror(savedErrno));
+		return -savedErrno;
 	}
+
+	if (pid == 0) {
+		close(syncPipe[0]);
+
+		sigprocmask(SIG_SETMASK, &oldMask, NULL);
+
+		raise(SIGSTOP);
+
+		execvpe(argv[0], const_cast<char* const*>(argv),
+			envp ? const_cast<char* const*>(envp) : environ);
+
+		int execErrno = errno;
+		ssize_t written = write(syncPipe[1], &execErrno, sizeof(execErrno));
+		(void)written;
+
+		TRACE("load_image child: exec failed for '%s': %s\n",
+			argv[0], strerror(execErrno));
+		 // command not found
+		_exit(127);
+	}
+
+	close(syncPipe[1]);
+
+	sigprocmask(SIG_SETMASK, &oldMask, NULL);
 
 	int status;
+	pid_t result;
 	do {
-		TRACE("waitpid %d\n", id);
+		result = waitpid(pid, &status, WUNTRACED);
+	} while (result == -1 && errno == EINTR);
 
-		if (waitpid(id, &status, WUNTRACED | WCONTINUED) == -1)
-			return B_BAD_THREAD_ID;
+	if (result == -1) {
+		int savedErrno = errno;
+		close(syncPipe[0]);
+		kill(pid, SIGKILL);
+		waitpid(pid, NULL, 0);
+		TRACE("load_image: waitpid failed: %s\n", strerror(savedErrno));
+		return -savedErrno;
+	}
 
-		if (WIFEXITED(status)) {
-			TRACE("waitpid: exited, status=%d\n", WEXITSTATUS(status));
-			if (returnCode)
-				*returnCode = -WEXITSTATUS(status) == 0 ? B_OK : B_ERROR;
-			return B_OK;
-		} else if (WIFSIGNALED(status)) {
-			TRACE("waitpid: killed by signal %d\n", WTERMSIG(status));
-			return B_INTERRUPTED;
+	if (WIFSTOPPED(status) && WSTOPSIG(status) == SIGSTOP) {
+		close(syncPipe[0]);
+		TRACE("load_image: successfully loaded '%s' as team %d (suspended)\n",
+			argv[0], pid);
+		return (thread_id)pid;
+	}
+
+	if (WIFEXITED(status) || WIFSIGNALED(status)) {
+		int execErrno = 0;
+		ssize_t bytesRead = read(syncPipe[0], &execErrno, sizeof(execErrno));
+		close(syncPipe[0]);
+
+		if (bytesRead == sizeof(execErrno) && execErrno != 0) {
+			TRACE("load_image: exec failed with errno %d: %s\n",
+				execErrno, strerror(execErrno));
+
+			switch (execErrno) {
+				case ENOENT:
+					return B_ENTRY_NOT_FOUND;
+				case EACCES:
+				case EPERM:
+					return B_PERMISSION_DENIED;
+				case ENOEXEC:
+				case ELIBBAD:
+					return B_NOT_AN_EXECUTABLE;
+				case ENOMEM:
+					return B_NO_MEMORY;
+				case E2BIG:
+					return B_BAD_VALUE;
+				default:
+					return -execErrno;
+			}
 		}
-	} while (!WIFEXITED(status) && !WIFSIGNALED(status));
-	//}
-	return B_BAD_THREAD_ID;
-}
 
+		TRACE("load_image: child exited unexpectedly\n");
+		return B_ERROR;
+	}
+
+	// Unexpected state
+	close(syncPipe[0]);
+	kill(pid, SIGKILL);
+	waitpid(pid, NULL, 0);
+	TRACE("load_image: unexpected child state\n");
+	return B_ERROR;
+}
 
 }
 

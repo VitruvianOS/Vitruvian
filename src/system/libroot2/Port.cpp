@@ -30,9 +30,9 @@ port_id create_port(int32 queueLength, const char* name)
 	exchange.size = (uint32_t)(strlen(name) + 1);
 	exchange.cookie = queueLength;
 
-	int rc = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_CREATE, &exchange);
-	if (rc < 0)
-		return exchange.return_code ? exchange.return_code : rc;
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_CREATE, &exchange);
+	if (ret < 0)
+		return ret;
 
 	return exchange.id;
 }
@@ -50,10 +50,7 @@ close_port(port_id id)
 	exchange.op = NEXUS_PORT_CLOSE;
 	exchange.id = id;
 
-	if (nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange) < 0)
-		return exchange.return_code;
-
-	return B_OK;
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
 }
 
 
@@ -69,10 +66,7 @@ delete_port(port_id id)
 	exchange.op = NEXUS_PORT_DELETE;
 	exchange.id = id;
 
-	if (nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange) < 0)
-		return exchange.return_code;
-
-	return B_OK;
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
 }
 
 
@@ -86,8 +80,9 @@ find_port(const char* name)
 	exchange.buffer = name;
 	exchange.size = strlen(name)+1;
 
-	if (nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_FIND, &exchange) < 0)
-		return exchange.return_code;
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_FIND, &exchange);
+	if (ret < 0)
+		return ret;
 
 	return exchange.id;
 }
@@ -121,8 +116,9 @@ _get_port_info(port_id id, port_info* out_info, size_t size)
 	exchange.id = id;
 	exchange.buffer = (void*)&info;
 
-	if (nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange) < 0)
-		return exchange.return_code;
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
+	if (ret < 0)
+		return ret;
 
 	out_info->port = info.port;
 	out_info->team = info.team;
@@ -199,8 +195,9 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 	exchange.buffer = &privateInfo;
 	exchange.size = sizeof(privateInfo);
 
-	if (nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange) < 0)
-		return exchange.return_code;
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
+	if (ret < 0)
+		return ret;
 
 	info->size = privateInfo.size;
 	info->sender = privateInfo.sender;
@@ -233,8 +230,9 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 	exchange.flags = flags;
 	exchange.timeout = timeout;
 
-	if (nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange) < 0)
-		return exchange.return_code;
+	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
+	if (ret < 0)
+		return ret;
 
 	return exchange.size;
 }
@@ -271,10 +269,7 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 	exchange.flags = flags;
 	exchange.timeout = timeout;
 
-	if (nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange) < 0)
-		return exchange.return_code;
-
-	return B_OK;
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
 }
 
 
@@ -304,8 +299,5 @@ set_port_owner(port_id id, team_id team)
 	exchange.id = id;
 	exchange.cookie = team;
 
-	if (nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange) < 0)
-		return B_BAD_PORT_ID;
-
-	return exchange.return_code;
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
 }

@@ -374,11 +374,14 @@ LocaleRosterData::_InitializeCatalogAddOns()
 					#ifndef __VOS__
  					eref.device = dent->d_pdev;
  					eref.directory = dent->d_pino;
+ 					eref.set_name(dent->d_name);
 					#else
-						UNIMPLEMENTED();
+					BEntry dirEntry;
+					addOnFolder.GetEntry(&dirEntry);
+					dirEntry.GetRef(&eref);
+					eref.set_name(dent->d_name);
 					#endif
 
-					eref.set_name(dent->d_name);
 					entry.SetTo(&eref, true);
 						// traverse through any links to get to the real thang!
 					node.SetTo(&entry);

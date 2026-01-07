@@ -360,13 +360,12 @@ BQuery::GetNextRef(entry_ref* ref)
 			}
 		}
 		if (error == B_OK) {
+			*ref = entry_ref(fQueryFd, entry->d_name);
 			#ifndef __VOS__
 			ref->device = entry.d_pdev;
 			ref->directory = entry.d_pino;
-			#else
-			UNIMPLEMENTED();
-			#endif
 			error = ref->set_name(entry->d_name);
+			#endif
 		}
 	}
 	return error;

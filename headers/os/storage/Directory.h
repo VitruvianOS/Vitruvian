@@ -35,6 +35,8 @@ class BDirectory : public BNode, public BEntryList {
 		status_t SetTo(const BDirectory *dir, const char *path);
 
 		status_t GetEntry(BEntry *entry) const;
+		// TODO: that would simplify some code
+		//status_t GetRef(entry_ref& ref) const;
 
 		bool IsRootDirectory() const;
 

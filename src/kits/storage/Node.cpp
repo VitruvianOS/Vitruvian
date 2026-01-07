@@ -243,7 +243,8 @@ void
 BNode::Unset()
 {
 	close_fd();
-	//release_vref(fNodeRef);
+	// unset?
+	release_vref(fNodeRef.node);
 	fNodeRef = node_ref();
 	fCStatus = B_NO_INIT;
 }

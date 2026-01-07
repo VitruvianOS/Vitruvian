@@ -331,7 +331,7 @@ BEntry::Unset()
 	free(fName);
 
 	fDirFd = -1;
-	//release_vref(fDirRef);
+	release_vref(fDirRef.node);
 	fDirRef = node_ref();
 	fName = NULL;
 	fCStatus = B_NO_INIT;
@@ -415,34 +415,16 @@ BEntry::GetParent(BDirectory* dir) const
 	// It is sufficient to check whether our leaf name is ".".
 	if (strcmp(fName, ".") == 0)
 		return B_ENTRY_NOT_FOUND;
-#ifndef __VOS__
+
 	// get a node ref for the directory and init it
 	struct stat st;
 	status_t error = _kern_read_stat(fDirFd, NULL, false, &st,
 		sizeof(struct stat));
 	if (error != B_OK)
 		return error;
-#ifndef __VOS__
-	node_ref ref;
-	ref.device = st.st_dev;
-	ref.node = st.st_ino;
-	return dir->SetTo(&ref);
-	// TODO: This can be optimized: We already have a FD for the directory,
-	// so we could dup() it and set it on the directory. We just need a private
-	// API for being able to do that.
-#else
-	int parentFd = _kern_open_parent_dir(fDirFd, fName, 0);
-	node_ref ref(parentFd);
-	return dir->SetTo(&ref);
-#endif
-#else
-	BEntry entry;
-	status_t ret = GetParent(&entry);
-	if (ret != B_OK)
-		return ret;
 
-	return dir->SetTo(&entry);
-#endif
+	node_ref ref(fDirRef);
+	return dir->SetTo(&ref);
 }
 
 

@@ -234,8 +234,8 @@ BDirectory::GetEntry(BEntry* entry) const
 	if (InitCheck() != B_OK)
 		return B_NO_INIT;
 
-	// TODO use fDirRef? this enough?
-	return entry->SetTo(this, ".", false);
+	entry_ref ref(fDirRef, NULL);
+	return entry->SetTo(&ref);
 }
 
 
@@ -341,7 +341,6 @@ BDirectory::Contains(const BEntry* entry, int32 nodeFlags) const
 status_t
 BDirectory::GetNextEntry(BEntry* entry, bool traverse)
 {
-#if 0
 	if (entry == NULL)
 		return B_BAD_VALUE;
 
@@ -352,37 +351,13 @@ BDirectory::GetNextEntry(BEntry* entry, bool traverse)
 		return status;
 	}
 
-#ifdef __VOS__
-	return entry->SetTo(this, ref.name, traverse);
-#else
  	return entry->SetTo(&ref, traverse);
-#endif
-#else
-	if (entry == NULL)
-		return B_BAD_VALUE;
-	if (InitCheck() != B_OK)
-		return B_FILE_ERROR;
-
-	BPrivate::Storage::LongDirEntry longEntry;
-	struct dirent* localEntry = longEntry.dirent();
-	bool next = true;
-	while (next) {
-		if (GetNextDirents(localEntry, sizeof(longEntry), 1) != 1)
-			return B_ENTRY_NOT_FOUND;
-
-		next = (!strcmp(localEntry->d_name, ".")
-			|| !strcmp(localEntry->d_name, ".."));
-	}
-
-	return entry->SetTo(this, localEntry->d_name, traverse);
-#endif
 }
 
 
 status_t
 BDirectory::GetNextRef(entry_ref* ref)
 {
-#if 0
 	if (ref == NULL)
 		return B_BAD_VALUE;
 	if (InitCheck() != B_OK)
@@ -399,27 +374,8 @@ BDirectory::GetNextRef(entry_ref* ref)
 			|| !strcmp(entry->d_name, ".."));
 	}
 
-#ifndef __VOS__
-	ref->device = entry->d_pdev;
-	ref->directory = entry->d_pino;
-#else
-	UNIMPLEMENTED();
-#endif
-	return ref->set_name(entry->d_name);
-
-#else
-	if (ref == NULL)
-		return B_BAD_VALUE;
-	if (InitCheck() != B_OK)
-		return B_FILE_ERROR;
-
-	BEntry entry;
-	status_t status = GetNextEntry(&entry);
-	if (status != B_OK)
-		return status;
-
-	return entry.GetRef(ref);
-#endif
+	*ref = entry_ref(fDirRef, entry->d_name);
+	return B_OK;
 }
 
 

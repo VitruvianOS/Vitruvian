@@ -18,6 +18,7 @@ struct entry_ref;
 struct node_ref {
 	node_ref();
 	node_ref(dev_t device, ino_t node);
+	//node_ref(dev_t device, ino_t node, uint32 flags);
 	node_ref(int fd);
 	node_ref(const node_ref& other);
 	~node_ref();
@@ -27,14 +28,21 @@ struct node_ref {
 	//vref_id id() const;
 	bool is_virtual;
 	//const node_ref dereference() const;
+	//void	unset() const;
 
 	bool operator==(const node_ref& other) const;
 	bool operator!=(const node_ref& other) const;
 	bool operator<(const node_ref& other) const;
 	node_ref& operator=(const node_ref& other);
 
+#ifdef IMMUTABLE_FS_REFS
+	const dev_t device;
+	const ino_t node;
+#else
 	dev_t device;
 	ino_t node;
+#endif
+
 private:
 	dev_t real_device;
 	dev_t real_node;

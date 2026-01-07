@@ -48,6 +48,12 @@ public:
 	virtual status_t			Rewind();
 	virtual int32				CountEntries();
 
+			int32				_GetNextDirents(
+									BDirectory& dir,
+									struct dirent* direntBuffer,
+									size_t bufferSize,
+									int32 maxEntries = INT_MAX);
+
 protected:
 	virtual	bool				ShallPreferFirstEntry(const entry_ref& entry1,
 									int32 index1, const entry_ref& entry2,
@@ -59,12 +65,6 @@ private:
 			struct EntryNameSet;
 
 private:
-			int32				_GetNextDirents(
-									BDirectory& dir,
-									struct dirent* direntBuffer,
-									size_t bufferSize,
-									int32 maxEntries = INT_MAX);
-
 			void				_FindBestEntry(BDirectory& dir,
 									dirent* direntBuffer);
 

@@ -22,6 +22,7 @@ class BPath;
 struct entry_ref {
 								entry_ref();
 								entry_ref(dev_t dev, ino_t dir, const char* name);
+								//entry_ref(dev_t dev, ino_t dir, const char* name, uint32 flags);
 								entry_ref(int entryFd, const char* name);
 								entry_ref(const node_ref& node, const char* name);
 								entry_ref(const entry_ref& ref);
@@ -32,7 +33,8 @@ struct entry_ref {
 			//bool				is_virtual() const;
 			//vref_id			id() const;
 			bool 				is_virtual;
-			//const node_ref 	dereference() const;
+			//const entry_ref 	dereference() const;
+			//void				unset() const;
 
 			status_t			set_name(const char* name);
 
@@ -40,10 +42,15 @@ struct entry_ref {
 			bool				operator!=(const entry_ref& ref) const;
 			entry_ref&			operator=(const entry_ref& ref);
 
+#ifdef IMMUTABLE_FS_REFS
+			const dev_t			device;
+			const ino_t			directory;
+			const char*			name;
+#else
 			dev_t				device;
 			ino_t				directory;
 			char*				name;
-
+#endif
 			friend class 		BPath;
 			friend class		BEntry;
 			friend class		BDirectory;

@@ -1,13 +1,13 @@
 /*
- *  Copyright 2025, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
+
+#include <sys/ioctl.h>
 
 #include <OS.h>
 
 #include "Team.h"
-#include "KernelDebug.h"
-
 #include "../kernel/nexus/nexus/nexus.h"
 
 
@@ -19,38 +19,28 @@ static int sNexus = Team::GetSemDescriptor();
 
 
 sem_id
-create_sem_etc(int32 count, const char* name, team_id _owner)
-{
-	CALLED();
-
-	struct nexus_sem_exchange exchange;
-	exchange.count = count;
-	exchange.name = name;
-
-	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_CREATE, &exchange);
-	if (ret < 0)
-		return ret;
-
-	return exchange.id;
-}
-
-
-sem_id
 create_sem(int32 count, const char* name)
 {
-	return create_sem_etc(count, name, getpid());
+	struct nexus_sem_exchange ex;
+	ex.count = count;
+	ex.name = name;
+	ex.flags = 0;
+	ex.timeout = 0;
+	
+	if (nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_CREATE, &ex) < 0)
+		return B_ERROR;
+
+	return ex.id;
 }
 
 
 status_t
 delete_sem(sem_id id)
 {
-	CALLED();
+	struct nexus_sem_exchange ex;
+	ex.id = id;
 
-	struct nexus_sem_exchange exchange;
-	exchange.id = id;
-
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_DELETE, &exchange);
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_DELETE, &ex);
 }
 
 
@@ -64,22 +54,20 @@ acquire_sem(sem_id id)
 status_t
 acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 {
-	CALLED();
+	struct nexus_sem_exchange ex;
 
-	struct nexus_sem_exchange exchange;
-	exchange.id = id;
-	exchange.count = count;
-	exchange.flags = flags;
-	exchange.timeout = timeout;
+	ex.id = id;
+	ex.count = count;
+	ex.flags = flags;
+	ex.timeout = timeout;
 
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_ACQUIRE, &exchange);
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_ACQUIRE, &ex);
 }
 
 
 status_t
 release_sem(sem_id id)
 {
-	CALLED();
 	return release_sem_etc(id, 1, 0);
 }
 
@@ -87,65 +75,57 @@ release_sem(sem_id id)
 status_t
 release_sem_etc(sem_id id, int32 count, uint32 flags)
 {
-	CALLED();
+	struct nexus_sem_exchange ex;
 
-	struct nexus_sem_exchange exchange;
-	exchange.id = id;
-	exchange.count = count;
-	exchange.flags = flags;
+	ex.id = id;
+	ex.count = count;
+	ex.flags = flags;
+	ex.timeout = 0;
 
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_RELEASE, &exchange);
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_RELEASE, &ex);
 }
 
 
 status_t
-get_sem_count(sem_id id, int32* thread_count)
+get_sem_count(sem_id id, int32* threadCount)
 {
-	CALLED();
+	struct nexus_sem_exchange ex;
+	status_t ret;
 
-	struct nexus_sem_exchange exchange;
-	exchange.id = id;
+	ex.id = id;
 
-	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_COUNT, &exchange);
-	if (ret < 0)
-		return ret;
+	ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_COUNT, &ex);
+	if (ret == 0 && threadCount)
+		*threadCount = ex.count;
 
-	*thread_count = exchange.count;
-
-	return B_OK;
+	return ret;
 }
 
 
 status_t
-_get_sem_info(sem_id id, struct sem_info *info, size_t size)
+_get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 {
-	CALLED();
-	if (id < 0 || info == NULL)
-		return B_BAD_VALUE;
+	struct nexus_sem_info newInfo;
+	status_t ret;
 
-	struct nexus_sem_info semInfo;
-	semInfo.sem = id;
+	newInfo.sem = id;
 
-	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_INFO, &semInfo);
-	if (ret < 0)
-		return ret;
+	ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_INFO, &newInfo);
+	if (ret == 0 && info != NULL) {
+		info->sem = newInfo.sem;
+		info->team = newInfo.team;
+		strncpy(info->name, newInfo.name, B_OS_NAME_LENGTH);
+		info->name[B_OS_NAME_LENGTH - 1] = '\0';
+		info->count = newInfo.count;
+		info->latest_holder = newInfo.latest_holder;
+	}
 
-	if (semInfo.sem != id)
-		debugger("_get_sem_info: id mismatch!");
-
-	info->sem = semInfo.sem;
-	info->team = semInfo.team;
-	strcpy(info->name, semInfo.name);
-	info->count = semInfo.count;
-	info->latest_holder	= semInfo.latest_holder;
-	
-	return B_OK;
+	return ret;
 }
 
 
 status_t
-_get_next_sem_info(team_id id, int32* cookie,
-	struct sem_info* info, size_t size)
+_get_next_sem_info(team_id id, int32* cookie, struct sem_info* info, size_t size)
 {
 	UNIMPLEMENTED();
 	// TODO proc
@@ -157,7 +137,6 @@ status_t
 set_sem_owner(sem_id id, team_id team)
 {
 	UNIMPLEMENTED();
-	// This is not really used beyond device drivers
-	// TODO: Deprecate someday
-	return B_OK;
+	// This is not really used beyond device drivers, deprecated.
+	return B_UNSUPPORTED;
 }

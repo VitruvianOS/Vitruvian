@@ -12,6 +12,128 @@
 #include <sys/epoll.h>
 
 #include <algorithm>
+#include <InterfaceDefs.h>
+#include <View.h>
+
+
+static const struct {
+	uint32 linuxKey;
+	uint32 Bkey;
+} kKeyMap[] = {
+	{ KEY_ESC, B_ESCAPE },
+	{ KEY_1, '1' },
+	{ KEY_2, '2' },
+	{ KEY_3, '3' },
+	{ KEY_4, '4' },
+	{ KEY_5, '5' },
+	{ KEY_6, '6' },
+	{ KEY_7, '7' },
+	{ KEY_8, '8' },
+	{ KEY_9, '9' },
+	{ KEY_0, '0' },
+	{ KEY_MINUS, '-' },
+	{ KEY_EQUAL, '=' },
+	{ KEY_BACKSPACE, B_BACKSPACE },
+	{ KEY_TAB, B_TAB },
+	{ KEY_Q, 'q' },
+	{ KEY_W, 'w' },
+	{ KEY_E, 'e' },
+	{ KEY_R, 'r' },
+	{ KEY_T, 't' },
+	{ KEY_Y, 'y' },
+	{ KEY_U, 'u' },
+	{ KEY_I, 'i' },
+	{ KEY_O, 'o' },
+	{ KEY_P, 'p' },
+	{ KEY_LEFTBRACE, '[' },
+	{ KEY_RIGHTBRACE, ']' },
+	{ KEY_ENTER, B_ENTER },
+	//{ KEY_LEFTCTRL, B_LEFT_CONTROL_KEY },
+	//{ KEY_RIGHTCTRL, B_RIGHT_CONTROL_KEY },
+	{ KEY_A, 'a' },
+	{ KEY_S, 's' },
+	{ KEY_D, 'd' },
+	{ KEY_F, 'f' },
+	{ KEY_G, 'g' },
+	{ KEY_H, 'h' },
+	{ KEY_J, 'j' },
+	{ KEY_K, 'k' },
+	{ KEY_L, 'l' },
+	{ KEY_SEMICOLON, ';' },
+	{ KEY_APOSTROPHE, '\'' },
+	{ KEY_GRAVE, '`' },
+	//{ KEY_LEFTSHIFT, B_LEFT_SHIFT_KEY },
+	{ KEY_BACKSLASH, '\\' },
+	{ KEY_Z, 'z' },
+	{ KEY_X, 'x' },
+	{ KEY_C, 'c' },
+	{ KEY_V, 'v' },
+	{ KEY_B, 'b' },
+	{ KEY_N, 'n' },
+	{ KEY_M, 'm' },
+	{ KEY_COMMA, ',' },
+	{ KEY_DOT, '.' },
+	{ KEY_SLASH, '/' },
+	//{ KEY_RIGHTSHIFT, B_RIGHT_SHIFT_KEY },
+	{ KEY_KPASTERISK, '*' },
+	//{ KEY_LEFTALT, B_LEFT_OPTION_KEY },
+	{ KEY_SPACE, B_SPACE },
+	//{ KEY_CAPSLOCK, B_CAPS_LOCK },
+	{ KEY_F1, B_F1_KEY },
+	{ KEY_F2, B_F2_KEY },
+	{ KEY_F3, B_F3_KEY },
+	{ KEY_F4, B_F4_KEY },
+	{ KEY_F5, B_F5_KEY },
+	{ KEY_F6, B_F6_KEY },
+	{ KEY_F7, B_F7_KEY },
+	{ KEY_F8, B_F8_KEY },
+	{ KEY_F9, B_F9_KEY },
+	{ KEY_F10, B_F10_KEY },
+	{ KEY_F11, B_F11_KEY },
+	{ KEY_F12, B_F12_KEY },
+	//{ KEY_NUMLOCK, B_NUM_LOCK },
+	//{ KEY_SCROLLLOCK, B_SCROLL_LOCK },
+	/*{ KEY_KP7, B_KP_7_KEY },
+	{ KEY_KP8, B_KP_8_KEY },
+	{ KEY_KP9, B_KP_9_KEY },
+	{ KEY_KP4, B_KP_4_KEY },
+	{ KEY_KP5, B_KP_5_KEY },
+	{ KEY_KP6, B_KP_6_KEY },
+	{ KEY_KP1, B_KP_1_KEY },
+	{ KEY_KP2, B_KP_2_KEY },
+	{ KEY_KP3, B_KP_3_KEY },
+	{ KEY_KP0, B_KP_0_KEY },*/
+	{ KEY_KPMINUS, '-' },
+	{ KEY_KPPLUS, '+' },
+	{ KEY_KPDOT, '.' },
+	{ KEY_102ND, '\\' },
+	//{ KEY_RIGHTALT, B_RIGHT_OPTION_KEY },
+	{ KEY_HOME, B_HOME },
+	{ KEY_UP, B_UP_ARROW },
+	{ KEY_PAGEUP, B_PAGE_UP },
+	{ KEY_LEFT, B_LEFT_ARROW },
+	{ KEY_RIGHT, B_RIGHT_ARROW },
+	{ KEY_END, B_END },
+	{ KEY_DOWN, B_DOWN_ARROW },
+	{ KEY_PAGEDOWN, B_PAGE_DOWN },
+	{ KEY_INSERT, B_INSERT },
+	{ KEY_DELETE, B_DELETE },
+	//{ KEY_LEFTMETA, B_LEFT_COMMAND_KEY },
+	//{ KEY_RIGHTMETA, B_RIGHT_COMMAND_KEY },
+	//{ KEY_COMPOSE, B_MENU_KEY },
+};
+
+// Mouse button mapping
+static uint32 MapMouseButton(uint32 linuxButton) {
+	switch (linuxButton) {
+		case BTN_LEFT: return B_PRIMARY_MOUSE_BUTTON;
+		case BTN_RIGHT: return B_SECONDARY_MOUSE_BUTTON;
+		case BTN_MIDDLE: return B_TERTIARY_MOUSE_BUTTON;
+		case BTN_SIDE: return 0x08; // Back button
+		case BTN_EXTRA: return 0x10; // Forward button
+		default: return 0;
+	}
+}
 
 
 static int
@@ -38,18 +160,19 @@ const static struct libinput_interface interface = {
 LibInputEventStream::LibInputEventStream(uint32 width, uint32 height)
 	:
 	fEventList(10, true),
-	fEventListLocker("remote event list"),
+	fEventListLocker("libinput event list"),
 	fEventNotification(-1),
 	fWaitingOnEvent(false),
 	fLatestMouseMovedEvent(NULL),
 	fMousePosition(0, 0),
 	fMouseButtons(0),
 	fModifiers(0),
+	fOldModifiers(0),
 	fRunning(true),
 	fWidth(width),
 	fHeight(height)
 {
-	fEventNotification = create_sem(0, "remote event notification");
+	fEventNotification = create_sem(0, "libinput event notification");
 
 	fUDevHandle = udev_new();
 	fInputHandle = libinput_udev_create_context(&interface, NULL,
@@ -81,6 +204,8 @@ LibInputEventStream::~LibInputEventStream()
 void
 LibInputEventStream::UpdateScreenBounds(BRect bounds)
 {
+	fWidth = bounds.IntegerWidth() + 1;
+	fHeight = bounds.IntegerHeight() + 1;
 }
 
 
@@ -178,7 +303,7 @@ void
 LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 {
 	libinput_event_type type = libinput_event_get_type(ev);
-	libinput_device* dev = libinput_event_get_device(ev);
+	//libinput_device* dev = libinput_event_get_device(ev);
 	uint32 what = 0;
 
 	BMessage* event = new BMessage();
@@ -236,9 +361,11 @@ LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 			fMousePosition.y = std::min((float)fHeight, fMousePosition.y);
 			fMousePosition.y = std::max(0.0f, fMousePosition.y);
 
+			uint32 fBButton = MapMouseButton(fMouseButtons);
+
 			event->AddPoint("where", fMousePosition);
 			if (what == B_MOUSE_MOVED || what == B_MOUSE_DOWN)
-				event->AddInt32("buttons", fMouseButtons);
+				event->AddInt32("buttons", fBButton);
 
 			//event->AddInt32("modifiers", fModifiers);
 
@@ -277,18 +404,36 @@ LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 
 		case LIBINPUT_EVENT_KEYBOARD_KEY:
 		{
-			/*libinput_event_keyboard* e
-				= libinput_event_get_keyboard_event(ev);
-			const uint32_t keycode
-				= libinput_event_keyboard_get_key(e) + 8;
+			libinput_event_keyboard* e = libinput_event_get_keyboard_event(ev);
+			uint32 keyCode = libinput_event_keyboard_get_key(e);
+			libinput_key_state state = libinput_event_keyboard_get_key_state(e);
 
-			if (libinput_event_keyboard_get_key_state(e)
-					== LIBINPUT_KEY_STATE_PRESSED) {
+			int32 Bkey = _MapKeyCode(keyCode);
+			if (Bkey == 0)
+				break;
+
+			_UpdateModifiers(keyCode, state == LIBINPUT_KEY_STATE_PRESSED);
+
+			uint32 currentModifiers = _GetCurrentModifiers();
+
+			if (state == LIBINPUT_KEY_STATE_PRESSED) {
+				int32 repeatCount = fKeyStates[keyCode] ? 2 : 1;
+				fKeyStates[keyCode] = true;
 				what = B_KEY_DOWN;
-			} else
+				_AddKeyEvent(event, B_KEY_DOWN, Bkey, currentModifiers, repeatCount);
+			} else {
+				fKeyStates[keyCode] = false;
 				what = B_KEY_UP;
+				_AddKeyEvent(event, B_KEY_UP, Bkey, currentModifiers, 1);
+			}
+			if (currentModifiers != fOldModifiers) {
+				//_AddModifiersEvent(event, currentModifiers, fOldModifiers);
+				event->AddInt32("be:old_modifiers", fOldModifiers);
+				event->AddInt32("modifiers", currentModifiers);
+				what = B_MODIFIERS_CHANGED;
+				fOldModifiers = currentModifiers;
+			}
 
-			event->AddInt32("key", keycode);*/
 			break;
 		}
 
@@ -316,3 +461,98 @@ LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 		release_sem(fEventNotification);
 	}
 }
+
+int32 LibInputEventStream::_MapKeyCode(uint32 linuxKeyCode)
+{
+	for (size_t i = 0; i < sizeof(kKeyMap) / sizeof(kKeyMap[0]); i++) {
+		if (kKeyMap[i].linuxKey == linuxKeyCode)
+			return kKeyMap[i].Bkey;
+	}
+
+	// If not found in mapping, return the key code as-is (for ASCII characters)
+	//if (linuxKeyCode >= KEY_A && linuxKeyCode <= KEY_Z)
+	//	return 'a' + (linuxKeyCode - KEY_A);
+	//if (linuxKeyCode >= KEY_1 && linuxKeyCode <= KEY_0)
+	//	return '1' + (linuxKeyCode - KEY_1);
+
+	return linuxKeyCode;
+}
+
+void LibInputEventStream::_UpdateModifiers(uint32 keyCode, bool pressed)
+{
+	switch (keyCode) {
+		case KEY_LEFTSHIFT:
+			if (pressed) fModifiers |= B_SHIFT_KEY;
+			else fModifiers &= ~B_SHIFT_KEY;
+			break;
+		case KEY_RIGHTSHIFT:
+			if (pressed) fModifiers |= B_RIGHT_SHIFT_KEY;
+			else fModifiers &= ~B_RIGHT_SHIFT_KEY;
+			break;
+
+		case KEY_LEFTCTRL:
+		case KEY_RIGHTCTRL:
+			if (pressed) fModifiers |= B_CONTROL_KEY;
+			else fModifiers &= ~B_CONTROL_KEY;
+			break;
+
+		case KEY_LEFTALT:
+		case KEY_RIGHTALT:
+			if (pressed) fModifiers |= B_OPTION_KEY;
+			else fModifiers &= ~B_OPTION_KEY;
+			break;
+
+		case KEY_LEFTMETA:
+		case KEY_RIGHTMETA:
+			if (pressed) fModifiers |= B_COMMAND_KEY;
+			else fModifiers &= ~B_COMMAND_KEY;
+			break;
+
+		case KEY_CAPSLOCK:
+			if (pressed) {
+				fCapsLock = !fCapsLock;
+				if (fCapsLock) fModifiers |= B_CAPS_LOCK;
+				else fModifiers &= ~B_CAPS_LOCK;
+			}
+			break;
+
+		case KEY_NUMLOCK:
+			if (pressed) {
+				fNumLock = !fNumLock;
+				if (fNumLock) fModifiers |= B_NUM_LOCK;
+				else fModifiers &= ~B_NUM_LOCK;
+			}
+			break;
+
+		case KEY_SCROLLLOCK:
+			if (pressed) {
+				fScrollLock = !fScrollLock;
+				if (fScrollLock) fModifiers |= B_SCROLL_LOCK;
+				else fModifiers &= ~B_SCROLL_LOCK;
+			}
+			break;
+	}
+}
+
+uint32 LibInputEventStream::_GetCurrentModifiers() const
+{
+	return fModifiers;
+}
+
+void LibInputEventStream::_AddKeyEvent(BMessage* message, uint32 what, int32 key,
+	uint32 modifiers, int32 repeatCount)
+{
+	message->AddInt32("key", key);
+	message->AddInt32("raw_char", key);
+	message->AddInt32("modifiers", modifiers);
+
+	// Add character representation
+	char byte = (char)key;
+	char bytes[2] = {byte, 0};
+	message->AddInt8("byte", (int8)byte);
+	message->AddString("bytes", bytes);
+
+	if (what == B_KEY_DOWN && repeatCount > 1)
+		message->AddInt32("be:key_repeat", repeatCount);
+}
+

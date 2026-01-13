@@ -3,9 +3,9 @@
  *  Distributed under the terms of the LGPL License.
  */
 
-#include <sys/ioctl.h>
-
 #include <OS.h>
+
+#include <sys/ioctl.h>
 
 #include "Team.h"
 #include "../kernel/nexus/nexus/nexus.h"
@@ -21,25 +21,21 @@ static int sNexus = Team::GetSemDescriptor();
 sem_id
 create_sem(int32 count, const char* name)
 {
-	struct nexus_sem_exchange ex;
-	ex.count = count;
-	ex.name = name;
-	ex.flags = 0;
-	ex.timeout = 0;
-	
-	if (nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_CREATE, &ex) < 0)
-		return B_ERROR;
+	struct nexus_sem_exchange ex = {
+		.count = count,
+		.flags = 0,
+		.timeout = 0,
+		.name = name
+	};
 
-	return ex.id;
+	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_CREATE, &ex);
 }
 
 
 status_t
 delete_sem(sem_id id)
 {
-	struct nexus_sem_exchange ex;
-	ex.id = id;
-
+	struct nexus_sem_exchange ex = { .id = id };
 	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_DELETE, &ex);
 }
 
@@ -54,12 +50,12 @@ acquire_sem(sem_id id)
 status_t
 acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 {
-	struct nexus_sem_exchange ex;
-
-	ex.id = id;
-	ex.count = count;
-	ex.flags = flags;
-	ex.timeout = timeout;
+	struct nexus_sem_exchange ex = {
+		.id = id,
+		.count = count,
+		.flags = flags,
+		.timeout = timeout
+	};
 
 	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_ACQUIRE, &ex);
 }
@@ -75,12 +71,12 @@ release_sem(sem_id id)
 status_t
 release_sem_etc(sem_id id, int32 count, uint32 flags)
 {
-	struct nexus_sem_exchange ex;
-
-	ex.id = id;
-	ex.count = count;
-	ex.flags = flags;
-	ex.timeout = 0;
+	struct nexus_sem_exchange ex = {
+		.id = id,
+		.count = count,
+		.flags = flags,
+		.timeout = 0
+	};
 
 	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_RELEASE, &ex);
 }
@@ -89,13 +85,9 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 status_t
 get_sem_count(sem_id id, int32* threadCount)
 {
-	struct nexus_sem_exchange ex;
-	status_t ret;
-
-	ex.id = id;
-
-	ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_COUNT, &ex);
-	if (ret == 0 && threadCount)
+	struct nexus_sem_exchange ex = { .id = id };
+	status_t ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_COUNT, &ex);
+	if (ret == B_OK && threadCount)
 		*threadCount = ex.count;
 
 	return ret;
@@ -105,13 +97,9 @@ get_sem_count(sem_id id, int32* threadCount)
 status_t
 _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 {
-	struct nexus_sem_info newInfo;
-	status_t ret;
-
-	newInfo.sem = id;
-
-	ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_INFO, &newInfo);
-	if (ret == 0 && info != NULL) {
+	struct nexus_sem_info newInfo { .sem = id };
+	status_t ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_INFO, &newInfo);
+	if (ret == B_OK && info != NULL) {
 		info->sem = newInfo.sem;
 		info->team = newInfo.team;
 		strncpy(info->name, newInfo.name, B_OS_NAME_LENGTH);

@@ -417,7 +417,7 @@ receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 	// TODO B_INTERRUPTED
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	status_t ret = nexus_io(nexus, NEXUS_THREAD_OP, &exchange);
-	if (ret < 0)
+	if (ret != B_OK)
 		return ret;
 
 	if (sender)

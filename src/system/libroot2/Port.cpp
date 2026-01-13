@@ -31,7 +31,7 @@ port_id create_port(int32 queueLength, const char* name)
 	exchange.cookie = queueLength;
 
 	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_CREATE, &exchange);
-	if (ret < 0)
+	if (ret != B_OK)
 		return ret;
 
 	return exchange.id;
@@ -81,7 +81,7 @@ find_port(const char* name)
 	exchange.size = strlen(name)+1;
 
 	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_FIND, &exchange);
-	if (ret < 0)
+	if (ret != B_OK)
 		return ret;
 
 	return exchange.id;
@@ -117,7 +117,7 @@ _get_port_info(port_id id, port_info* out_info, size_t size)
 	exchange.buffer = (void*)&info;
 
 	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
-	if (ret < 0)
+	if (ret != B_OK)
 		return ret;
 
 	out_info->port = info.port;
@@ -196,7 +196,7 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 	exchange.size = sizeof(privateInfo);
 
 	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
-	if (ret < 0)
+	if (ret != B_OK)
 		return ret;
 
 	info->size = privateInfo.size;
@@ -231,7 +231,7 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 	exchange.timeout = timeout;
 
 	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_PORT_OP, &exchange);
-	if (ret < 0)
+	if (ret != B_OK)
 		return ret;
 
 	return exchange.size;

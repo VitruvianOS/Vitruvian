@@ -42,7 +42,7 @@ acquire_vref_etc(vref_id id, int* fd)
 {
 	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_ACQUIRE_FD, &id);
 
-	if (ret < 0)
+	if (ret != B_OK)
 		return ret;
 
 	if (fd != NULL)

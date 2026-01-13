@@ -28,7 +28,7 @@ public:
 		if (path == NULL)
 			return B_BAD_VALUE;
 
-		BKernelPrivate::MutexLocker _(&fLock);
+		MutexLocker _(&fLock);
 
 		void* image = dlopen(path, RTLD_LAZY);
 
@@ -44,7 +44,7 @@ public:
 		if (id <= 0)
 			return B_BAD_VALUE;
 
-		BKernelPrivate::MutexLocker _(&fLock);
+		MutexLocker _(&fLock);
 
 		void* image = _Find(id);
 		if (image == NULL)
@@ -62,7 +62,7 @@ public:
 		if (id < 0 || name == NULL || pptr == NULL)
 			return B_BAD_VALUE;
 
-		BKernelPrivate::MutexLocker _(&fLock);
+		MutexLocker _(&fLock);
 
 		void* image = _Find(id);
 		if (image == NULL)

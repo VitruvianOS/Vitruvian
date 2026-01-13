@@ -20,6 +20,10 @@ extern "C" {
 
 /* System constants */
 
+#if NAME_MAX != 255
+#error "NAME_MAX mismatch: expected 255"
+#endif
+
 #define B_OS_NAME_LENGTH	32
 #define B_PAGE_SIZE			4096
 #define B_INFINITE_TIMEOUT	(9223372036854775807LL)

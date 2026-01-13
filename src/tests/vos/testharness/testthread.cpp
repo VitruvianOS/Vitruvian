@@ -21,7 +21,7 @@ thread_test(void *data)
     	(has_data(sender) != true) ? "pass" : "FAIL", sender);  
 
    if (code != 63)
-	printf("FAIL WRONG CODE!!!\n");
+	printf("FAIL WRONG CODE!!! %d\n", code);
 
    printf("Received: \"%s\" from thread %d\n", buf, find_thread(NULL));
 

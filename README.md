@@ -42,7 +42,7 @@ We welcome contributions from the community! If you're interested in helping out
 
 ### Donate
 
-[2025/2026 Funding](https://www.paypal.com/pool/9iLXEgZj41)
+[Donate](https://github.com/VitruvianOS/Vitruvian/wiki/Donate)
 
 ### License
 

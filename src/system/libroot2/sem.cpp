@@ -13,9 +13,11 @@
 
 namespace BKernelPrivate {
 
-static int sNexus = Team::GetSemDescriptor();
+static int sNexus = -1;
 
 };
+
+using BKernelPrivate::sNexus;
 
 
 sem_id
@@ -28,7 +30,13 @@ create_sem(int32 count, const char* name)
 		.name = name
 	};
 
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_CREATE, &ex);
+	if (sNexus == -1) {
+		sNexus = BKernelPrivate::Team::GetSemDescriptor();
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	return nexus_io(sNexus, NEXUS_SEM_CREATE, &ex);
 }
 
 
@@ -36,7 +44,14 @@ status_t
 delete_sem(sem_id id)
 {
 	struct nexus_sem_exchange ex = { .id = id };
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_DELETE, &ex);
+
+	if (sNexus == -1) {
+		sNexus = BKernelPrivate::Team::GetSemDescriptor();
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	return nexus_io(sNexus, NEXUS_SEM_DELETE, &ex);
 }
 
 
@@ -57,7 +72,13 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 		.timeout = timeout
 	};
 
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_ACQUIRE, &ex);
+	if (sNexus == -1) {
+		sNexus = BKernelPrivate::Team::GetSemDescriptor();
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	return nexus_io(sNexus, NEXUS_SEM_ACQUIRE, &ex);
 }
 
 
@@ -78,7 +99,13 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 		.timeout = 0
 	};
 
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_RELEASE, &ex);
+	if (sNexus == -1) {
+		sNexus = BKernelPrivate::Team::GetSemDescriptor();
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	return nexus_io(sNexus, NEXUS_SEM_RELEASE, &ex);
 }
 
 
@@ -86,7 +113,14 @@ status_t
 get_sem_count(sem_id id, int32* threadCount)
 {
 	struct nexus_sem_exchange ex = { .id = id };
-	status_t ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_COUNT, &ex);
+
+	if (sNexus == -1) {
+		sNexus = BKernelPrivate::Team::GetSemDescriptor();
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	status_t ret = nexus_io(sNexus, NEXUS_SEM_COUNT, &ex);
 	if (ret == B_OK && threadCount)
 		*threadCount = ex.count;
 
@@ -98,7 +132,14 @@ status_t
 _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 {
 	struct nexus_sem_info newInfo { .sem = id };
-	status_t ret = nexus_io(BKernelPrivate::sNexus, NEXUS_SEM_INFO, &newInfo);
+
+	if (sNexus == -1) {
+		sNexus = BKernelPrivate::Team::GetSemDescriptor();
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	status_t ret = nexus_io(sNexus, NEXUS_SEM_INFO, &newInfo);
 	if (ret == B_OK && info != NULL) {
 		info->sem = newInfo.sem;
 		info->team = newInfo.team;

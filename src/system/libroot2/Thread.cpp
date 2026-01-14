@@ -591,7 +591,7 @@ set_thread_priority(thread_id id, int32 priority)
 
 
 status_t
-wait_for_thread_posix(thread_id id, status_t* returnCode)
+wait_for_remote_thread(thread_id id, status_t* returnCode)
 {
 	CALLED();
 
@@ -668,7 +668,7 @@ wait_for_thread(thread_id id, status_t* returnCode)
 			return -errno;
 
 		kill(id, SIGCONT);
-		return wait_for_thread_posix(id, returnCode);
+		return wait_for_remote_thread(id, returnCode);
 	}
 
 	if (ret == B_INTERRUPTED)

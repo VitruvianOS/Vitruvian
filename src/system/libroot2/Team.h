@@ -15,7 +15,15 @@ namespace BKernelPrivate {
 class Team
 {
 public:
-	static void			InitTeam();
+	static void			PreInitTeam();
+
+	static int			GetNexusDescriptor();
+	static int			GetSemDescriptor();
+	static int			GetAreaDescriptor();
+	static int			GetVRefDescriptor(dev_t* dev = NULL);
+
+	static mode_t		GetUmask();
+	static int32		GetCPUCount();
 
 	static thread_id	LoadImage(int32 argc, const char** argv,
 							const char** envp);
@@ -23,11 +31,6 @@ public:
 	static void 		PrepareFatherAtFork();
 	static void 		SyncFatherAtFork();
 	static void 		ReinitChildAtFork();
-
-	static int			GetNexusDescriptor();
-	static int			GetSemDescriptor();
-	static int			GetAreaDescriptor();
-	static int			GetVRefDescriptor(dev_t* dev = NULL);
 };
 
 

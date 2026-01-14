@@ -33,27 +33,24 @@
 #include "Thread.h"
 
 
-#define UID_LINE 8
-#define GID_LINE 9
-#define MAX_BYTES 64
-#define MAX_LINE_LENGTH 1024
-
-mode_t __gUmask = 022;
-int32 __gCPUCount;
+int32 __gCPUCount = BKernelPrivate::Team::GetCPUCount();
+mode_t __gUmask = BKernelPrivate::Team::GetUmask();
 int __libc_argc;
 char** __libc_argv;
-extern int gLoadImageFD;
 
 
 namespace BKernelPrivate {
 
 
-static std::list<int> gTeams;
+static pthread_once_t gTeamOnce = PTHREAD_ONCE_INIT;
+
 static int gNexus = -1;
 static int gNexusSem = -1;
 static int gNexusVRef = -1;
 
-static int fForkPipe[2] = {-1, -1};
+static int gForkPipe[2] = {-1, -1};
+
+static std::list<int> gTeams;
 
 
 void
@@ -68,21 +65,14 @@ init_team(int argc, char** argv)
 {
 	TRACE("init_team() %d\n", argc);
 
-	// TODO I think there's more stuff that normally
-	// is handled by the debugger in BeOS.
-	signal(SIGSEGV, segv_handler);
-
-	int32 cpus = (int32) sysconf(_SC_NPROCESSORS_ONLN);
-	__gCPUCount = (cpus > 0) ? (int32_t)cpus : 1;
 	__libc_argc = argc;
 	__libc_argv = argv;
 
-	setenv("TARGET_SCREEN", "root", 1);
-
-	Team::InitTeam();
+	pthread_once(&gTeamOnce, &Team::PreInitTeam);
 
 	// This should be good for us. We register the first set of callbacks
 	// that will be executed before any other set the user may register.
+	// Calling it again shouldn't overwrite the previous callbacks.
 	pthread_atfork(&Team::PrepareFatherAtFork,
 		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
 
@@ -100,24 +90,57 @@ deinit_team()
 
 
 void
-Team::InitTeam()
+Team::PreInitTeam()
 {
-	GetNexusDescriptor();
-	GetSemDescriptor();
-	GetVRefDescriptor();
+	TRACE("Team::PreInitTeam\n");
+
+	// TODO I think there's more stuff that normally
+	// is handled by the debugger in BeOS.
+	signal(SIGSEGV, segv_handler);
+	setenv("TARGET_SCREEN", "root", 1);
+
+	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
+	if (gNexus < 0) {
+		printf("Can't open Nexus IPC\n");
+		exit(-1);
+	}
+
+	gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
+	if (gNexusSem < 0) {
+		printf("Can't open Nexus Sem\n");
+		exit(-1);
+	}
+
+#if 0
+	gNexusArea = open("/dev/nexus_area", O_RDWR | O_CLOEXEC);
+	if (gNexusArea < 0) {
+		printf("Can't open Nexus Areay\n");
+		exit(-1);
+	}
+#endif
+
+	gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
+	if (gNexusVRef < 0) {
+		printf("Can't open Nexus VRef\n");
+		exit(-1);
+	}
+
+#if 0
+	gNexusNodeMonitor = open("/dev/nexus_node_monitor", O_RDWR | O_CLOEXEC);
+	if (gNexusNodeMonitor < 0) {
+		printf("Can't open Nexus Node Monitor module\n");
+		exit(-1);
+	}
+#endif
 }
 
 
 int
 Team::GetNexusDescriptor()
 {
-	if (gNexus == -1) {
-		gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
-		if (gNexus < 0) {
-			printf("Can't open Nexus IPC\n");
-			exit(-1);
-		}
-	}
+	if (gNexus == -1)
+		pthread_once(&gTeamOnce, &Team::PreInitTeam);
+
 	return gNexus;
 }
 
@@ -125,27 +148,30 @@ Team::GetNexusDescriptor()
 int
 Team::GetSemDescriptor()
 {
-	if (gNexusSem == -1) {
-		gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
-		if (gNexusSem < 0) {
-			printf("Can't open Nexus Sem\n");
-			exit(-1);
-		}
-	}
+	if (gNexusSem == -1)
+		pthread_once(&gTeamOnce, &Team::PreInitTeam);
+
 	return gNexusSem;
 }
+
+
+#if 0
+int
+Team::GetAreaDescriptor()
+{
+	if (gNexusArea == -1)
+		pthread_once(&gTeamOnce, &Team::PreInitTeam);
+
+	return gNexusArea;
+}
+#endif
 
 
 int
 Team::GetVRefDescriptor(dev_t* dev)
 {
-	if (gNexusVRef == -1) {
-		gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
-		if (gNexusVRef < 0) {
-			printf("Can't open Nexus VRef\n");
-			exit(-1);
-		}
-	}
+	if (gNexusVRef == -1)
+		pthread_once(&gTeamOnce, &Team::PreInitTeam);
 
 	if (dev != NULL) {
 		struct stat st;
@@ -156,16 +182,45 @@ Team::GetVRefDescriptor(dev_t* dev)
 }
 
 
+#if 0
+int
+Team::GetNodeMonitorDescriptor()
+{
+	if (gNexusNodeMonitor == -1)
+		pthread_once(&gTeamOnce, &Team::PreInitTeam);
+
+	return gNexusNodeMonitor;
+}
+#endif
+
+
+mode_t
+Team::GetUmask()
+{
+	mode_t m = umask(0);
+	umask(m);
+	return m;
+}
+
+
+int32
+Team::GetCPUCount()
+{
+	int32 cpuCount = (int32)sysconf(_SC_NPROCESSORS_ONLN);
+	return (cpuCount > 0) ? cpuCount : 1;	
+}
+
+
 void
 Team::PrepareFatherAtFork()
 {
 	TRACE("PrepareFatherAtFork()\n");
 
-	if (pipe2(fForkPipe, O_CLOEXEC) == -1) {
+	if (pipe2(gForkPipe, O_CLOEXEC) == -1) {
 		debugger("CRITICAL: pipe2 is broken");
 
-		fForkPipe[0] = -1;
-		fForkPipe[1] = -1;
+		gForkPipe[0] = -1;
+		gForkPipe[1] = -1;
 		TRACE("PrepareFatherAtFork: pipe creation failed: %s\n", strerror(errno));
 	}
 }
@@ -176,18 +231,18 @@ Team::SyncFatherAtFork()
 {
 	TRACE("SyncFatherAtFork()\n");
 
-	if (fForkPipe[0] != -1) {
-		close(fForkPipe[1]);
-		fForkPipe[1] = -1;
+	if (gForkPipe[0] != -1) {
+		close(gForkPipe[1]);
+		gForkPipe[1] = -1;
 
 		char buf;
 		ssize_t ret;
 		do {
-			ret = read(fForkPipe[0], &buf, 1);
+			ret = read(gForkPipe[0], &buf, 1);
 		} while (ret == -1 && errno == EINTR);
 
-		close(fForkPipe[0]);
-		fForkPipe[0] = -1;
+		close(gForkPipe[0]);
+		gForkPipe[0] = -1;
 	}
 }
 
@@ -197,24 +252,31 @@ Team::ReinitChildAtFork()
 {
 	TRACE("ReinitChildAtFork()\n");
 
-	InitTeam();
+	__gCPUCount = BKernelPrivate::Team::GetCPUCount();
+	__gUmask = BKernelPrivate::Team::GetUmask();
 
-	if (fForkPipe[0] != -1) {
-		close(fForkPipe[0]);
-		fForkPipe[0] = -1;
+	// We don't know what might have happened before fork,
+	// we might inherit an invalid pthread_once so let's
+	// reinit.
+	gTeamOnce = PTHREAD_ONCE_INIT;
+	pthread_once(&gTeamOnce, &Team::PreInitTeam);
+
+	if (gForkPipe[0] != -1) {
+		close(gForkPipe[0]);
+		gForkPipe[0] = -1;
 	}
 
 	Thread::ReinitChildAtFork();
 
-	if (fForkPipe[1] != -1) {
+	if (gForkPipe[1] != -1) {
 		char buf = 1;
 		ssize_t ret;
 		do {
-			ret = write(fForkPipe[1], &buf, 1);
+			ret = write(gForkPipe[1], &buf, 1);
 		} while (ret == -1 && errno == EINTR);
 
-		close(fForkPipe[1]);
-		fForkPipe[1] = -1;
+		close(gForkPipe[1]);
+		gForkPipe[1] = -1;
 	}
 }
 
@@ -426,6 +488,11 @@ kill_team(team_id team)
 status_t
 _get_team_info(team_id id, team_info* info, size_t size)
 {
+	#define UID_LINE 8
+	#define GID_LINE 9
+	#define MAX_BYTES 64
+	#define MAX_LINE_LENGTH 1024
+
 	if (id < 0 || info == NULL || size != sizeof(team_info))
 		return B_BAD_VALUE;
 

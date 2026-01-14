@@ -66,10 +66,6 @@ init_team(int argc, char** argv)
 {
 	TRACE("init_team() %d\n", argc);
 
-	// TODO I think there's more stuff that normally
-	// is handled by the debugger in BeOS.
-	signal(SIGSEGV, segv_handler);
-
 	pthread_once(&gTeamOnce, &Team::InitTeam);
 
 	__libc_argc = argc;
@@ -93,13 +89,19 @@ deinit_team()
 void
 Team::InitTeam()
 {
+	TRACE("Team::InitTeam\n");
+
+	// TODO I think there's more stuff that normally
+	// is handled by the debugger in BeOS.
+	signal(SIGSEGV, segv_handler);
+
+	Team::PreInitTeam();
+
 	// This should be good for us. We register the first set of callbacks
 	// that will be executed before any other set the user may register.
 	// Calling it again shouldn't overwrite the previous callbacks.
 	pthread_atfork(&Team::PrepareFatherAtFork,
 		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
-
-	Team::PreInitTeam();
 }
 
 

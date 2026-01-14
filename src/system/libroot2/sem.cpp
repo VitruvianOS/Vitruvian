@@ -13,7 +13,7 @@
 
 namespace BKernelPrivate {
 
-static int sNexus = -1;
+static int sNexus = BKernelPrivate::Team::GetSemDescriptor();
 
 };
 
@@ -30,7 +30,7 @@ create_sem(int32 count, const char* name)
 		.name = name
 	};
 
-	if (sNexus == -1) {
+	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetSemDescriptor();
 		if (sNexus < 0)
 			return B_ERROR;
@@ -45,7 +45,7 @@ delete_sem(sem_id id)
 {
 	struct nexus_sem_exchange ex = { .id = id };
 
-	if (sNexus == -1) {
+	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetSemDescriptor();
 		if (sNexus < 0)
 			return B_ERROR;
@@ -72,7 +72,7 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 		.timeout = timeout
 	};
 
-	if (sNexus == -1) {
+	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetSemDescriptor();
 		if (sNexus < 0)
 			return B_ERROR;
@@ -99,7 +99,7 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 		.timeout = 0
 	};
 
-	if (sNexus == -1) {
+	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetSemDescriptor();
 		if (sNexus < 0)
 			return B_ERROR;
@@ -114,7 +114,7 @@ get_sem_count(sem_id id, int32* threadCount)
 {
 	struct nexus_sem_exchange ex = { .id = id };
 
-	if (sNexus == -1) {
+	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetSemDescriptor();
 		if (sNexus < 0)
 			return B_ERROR;
@@ -133,7 +133,7 @@ _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 {
 	struct nexus_sem_info newInfo { .sem = id };
 
-	if (sNexus == -1) {
+	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetSemDescriptor();
 		if (sNexus < 0)
 			return B_ERROR;

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2025, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
 
@@ -14,10 +14,13 @@
 
 namespace BKernelPrivate {
 
-static dev_t sNexusVrefDev = -1;
-static int sNexus = Team::GetVRefDescriptor(&sNexusVrefDev);
+static dev_t sNexusVRefDev = -1;
+static int sNexus = Team::GetVRefDescriptor(&sNexusVRefDev);
 
 };
+
+using BKernelPrivate::sNexus;
+using BKernelPrivate::sNexusVRefDev;
 
 
 vref_id
@@ -25,7 +28,13 @@ create_vref(int fd)
 {
 	CALLED();
 
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_CREATE, &fd);
+	if (sNexus < 0) {
+		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	return nexus_io(sNexus, NEXUS_VREF_CREATE, &fd);
 }
 
 
@@ -34,13 +43,25 @@ open_vref(vref_id id)
 {
 	CALLED();
 
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_OPEN, &id);
+	if (sNexus < 0) {
+		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	return nexus_io(sNexus, NEXUS_VREF_OPEN, &id);
 }
 
 status_t
 acquire_vref_etc(vref_id id, int* fd)
 {
-	int ret = nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_ACQUIRE_FD, &id);
+	if (sNexus < 0) {
+		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	int ret = nexus_io(sNexus, NEXUS_VREF_ACQUIRE_FD, &id);
 
 	if (ret != B_OK)
 		return ret;
@@ -54,19 +75,31 @@ acquire_vref_etc(vref_id id, int* fd)
 status_t
 acquire_vref(vref_id id)
 {
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_ACQUIRE, &id);
+	if (sNexus < 0) {
+		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	return nexus_io(sNexus, NEXUS_VREF_ACQUIRE, &id);
 }
 
 
 status_t
 release_vref(vref_id id)
 {
-	return nexus_io(BKernelPrivate::sNexus, NEXUS_VREF_RELEASE, &id);
+	if (sNexus < 0) {
+		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
+	return nexus_io(sNexus, NEXUS_VREF_RELEASE, &id);
 }
 
 
 dev_t
 get_vref_dev()
 {
-	return BKernelPrivate::sNexusVrefDev;
+	return sNexusVRefDev;
 }

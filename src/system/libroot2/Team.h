@@ -16,6 +16,7 @@ class Team
 {
 public:
 	static void			PreInitTeam();
+	static void			InitTeam();
 
 	static int			GetNexusDescriptor();
 	static int			GetSemDescriptor();

@@ -46,6 +46,7 @@ static pthread_once_t gTeamOnce = PTHREAD_ONCE_INIT;
 
 static int gNexus = -1;
 static int gNexusSem = -1;
+static int gNexusArea = -1;
 static int gNexusVRef = -1;
 
 static int gForkPipe[2] = {-1, -1};
@@ -65,16 +66,16 @@ init_team(int argc, char** argv)
 {
 	TRACE("init_team() %d\n", argc);
 
+	// TODO I think there's more stuff that normally
+	// is handled by the debugger in BeOS.
+	signal(SIGSEGV, segv_handler);
+
+	pthread_once(&gTeamOnce, &Team::InitTeam);
+
 	__libc_argc = argc;
 	__libc_argv = argv;
 
-	pthread_once(&gTeamOnce, &Team::PreInitTeam);
-
-	// This should be good for us. We register the first set of callbacks
-	// that will be executed before any other set the user may register.
-	// Calling it again shouldn't overwrite the previous callbacks.
-	pthread_atfork(&Team::PrepareFatherAtFork,
-		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
+	setenv("TARGET_SCREEN", "root", 1);
 
 	// TODO: this has to go
 	if (argv[0] != NULL && strcmp(argv[0], "registrar") <= 0)
@@ -90,14 +91,22 @@ deinit_team()
 
 
 void
+Team::InitTeam()
+{
+	// This should be good for us. We register the first set of callbacks
+	// that will be executed before any other set the user may register.
+	// Calling it again shouldn't overwrite the previous callbacks.
+	pthread_atfork(&Team::PrepareFatherAtFork,
+		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
+
+	Team::PreInitTeam();
+}
+
+
+void
 Team::PreInitTeam()
 {
 	TRACE("Team::PreInitTeam\n");
-
-	// TODO I think there's more stuff that normally
-	// is handled by the debugger in BeOS.
-	signal(SIGSEGV, segv_handler);
-	setenv("TARGET_SCREEN", "root", 1);
 
 	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
 	if (gNexus < 0) {
@@ -111,13 +120,11 @@ Team::PreInitTeam()
 		exit(-1);
 	}
 
-#if 0
 	gNexusArea = open("/dev/nexus_area", O_RDWR | O_CLOEXEC);
 	if (gNexusArea < 0) {
-		printf("Can't open Nexus Areay\n");
+		printf("Can't open Nexus Area\n");
 		exit(-1);
 	}
-#endif
 
 	gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
 	if (gNexusVRef < 0) {
@@ -139,7 +146,7 @@ int
 Team::GetNexusDescriptor()
 {
 	if (gNexus == -1)
-		pthread_once(&gTeamOnce, &Team::PreInitTeam);
+		pthread_once(&gTeamOnce, &Team::InitTeam);
 
 	return gNexus;
 }
@@ -149,29 +156,28 @@ int
 Team::GetSemDescriptor()
 {
 	if (gNexusSem == -1)
-		pthread_once(&gTeamOnce, &Team::PreInitTeam);
+		pthread_once(&gTeamOnce, &Team::InitTeam);
 
 	return gNexusSem;
 }
 
 
-#if 0
+
 int
 Team::GetAreaDescriptor()
 {
 	if (gNexusArea == -1)
-		pthread_once(&gTeamOnce, &Team::PreInitTeam);
+		pthread_once(&gTeamOnce, &Team::InitTeam);
 
 	return gNexusArea;
 }
-#endif
 
 
 int
 Team::GetVRefDescriptor(dev_t* dev)
 {
 	if (gNexusVRef == -1)
-		pthread_once(&gTeamOnce, &Team::PreInitTeam);
+		pthread_once(&gTeamOnce, &Team::InitTeam);
 
 	if (dev != NULL) {
 		struct stat st;
@@ -187,7 +193,7 @@ int
 Team::GetNodeMonitorDescriptor()
 {
 	if (gNexusNodeMonitor == -1)
-		pthread_once(&gTeamOnce, &Team::PreInitTeam);
+		pthread_once(&gTeamOnce, &Team::InitTeam);
 
 	return gNexusNodeMonitor;
 }
@@ -256,8 +262,7 @@ Team::ReinitChildAtFork()
 	__gUmask = BKernelPrivate::Team::GetUmask();
 
 	// We don't know what might have happened before fork,
-	// we might inherit an invalid pthread_once so let's
-	// reinit.
+	// we might inherit an invalid pthread_once so let's reinit.
 	gTeamOnce = PTHREAD_ONCE_INIT;
 	pthread_once(&gTeamOnce, &Team::PreInitTeam);
 

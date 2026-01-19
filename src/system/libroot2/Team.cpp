@@ -28,7 +28,6 @@
 
 #define DEBUG 2
 #include "KernelDebug.h"
-#include "messaging/MessagingService.h"
 #include "syscalls.h"
 #include "Thread.h"
 
@@ -72,10 +71,6 @@ init_team(int argc, char** argv)
 	__libc_argv = argv;
 
 	setenv("TARGET_SCREEN", "root", 1);
-
-	// TODO: this has to go
-	if (argv[0] != NULL && strcmp(argv[0], "registrar") <= 0)
-		init_messaging_service();
 }
 
 

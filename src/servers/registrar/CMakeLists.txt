@@ -16,7 +16,6 @@ Server(
 	MessageEvent.cpp
 	MessageHandler.cpp
 	MessageRunnerManager.cpp
-	MessagingService.cpp
 	MIMEManager.cpp
 	#PackageWatchingManager.cpp
 	PriorityMessageQueue.cpp

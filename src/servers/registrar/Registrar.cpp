@@ -29,7 +29,6 @@
 #include "MessageDeliverer.h"
 #include "MessageEvent.h"
 #include "MessageRunnerManager.h"
-#include "MessagingService.h"
 #include "MIMEManager.h"
 #include "PackageWatchingManager.h"
 #include "ShutdownProcess.h"
@@ -158,13 +157,6 @@ Registrar::ReadyToRun()
 
 	// init the global be_roster
 	BRoster::Private().SetTo(be_app_messenger, BMessenger(NULL, fMIMEManager));
-
-	// create the messaging service
-	error = MessagingService::CreateDefault();
-	if (error != B_OK) {
-		ERROR("Registrar::ReadyToRun(): Failed to init messaging service "
-			"(that's by design when running under R5): %s\n", strerror(error));
-	}
 
 	// create the package watching manager
 	//fPackageWatchingManager = new PackageWatchingManager;

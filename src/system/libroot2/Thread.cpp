@@ -665,9 +665,11 @@ wait_for_thread(thread_id id, status_t* returnCode)
 
 	if (ret == B_BAD_THREAD_ID) {
 		if (kill(id, 0) < 0)
-			return -errno;
+			return B_BAD_THREAD_ID;
 
-		kill(id, SIGCONT);
+        if (kill(id, SIGCONT) < 0)
+            return -errno;
+
 		return wait_for_remote_thread(id, returnCode);
 	}
 
@@ -696,7 +698,20 @@ status_t
 resume_thread(thread_id id)
 {
 	CALLED();
-	return BKernelPrivate::Thread::Resume(id);
+
+    status_t ret = BKernelPrivate::Thread::Resume(id);
+
+    if (ret == B_BAD_THREAD_ID) {
+        if (kill(id, 0) < 0)
+            return B_BAD_THREAD_ID;
+
+        if (kill(id, SIGCONT) < 0)
+            return -errno;
+
+        return B_OK;
+    }
+
+    return ret;
 }
 
 

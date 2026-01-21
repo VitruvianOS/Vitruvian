@@ -101,5 +101,11 @@ release_vref(vref_id id)
 dev_t
 get_vref_dev()
 {
+	if (sNexus < 0) {
+		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
+		if (sNexus < 0)
+			return B_ERROR;
+	}
+
 	return sNexusVRefDev;
 }

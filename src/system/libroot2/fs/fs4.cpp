@@ -1,5 +1,5 @@
 /*
- *  Copyright 2020-2025, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2020-2026, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
 
@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <sys/syscall.h>
 
+#include "LinuxVolume.h"
 #include "KernelDebug.h"
 
 
@@ -185,9 +186,18 @@ _kern_open_dir_entry_ref(dev_t device, ino_t node, const char* name)
 	if (device == get_vref_dev())
 		return _kern_open_dir_virtual_ref(node, name);
 
-	UNIMPLEMENTED();
+	char path[B_PATH_NAME_LENGTH];
+	status_t ret = _kern_entry_ref_to_path(device, node, name, path,
+		B_PATH_NAME_LENGTH);
 
-	return B_ERROR;
+	if (ret != B_OK) {
+		// TODO stack trace here
+		UNIMPLEMENTED();
+		return ret;
+	}
+
+	int fd = opendir(path);
+	return (fd < 0) ? -errno : fd;
 }
 
 
@@ -202,9 +212,9 @@ _kern_open_virtual_ref(vref_id id, const char* name,
 	if (name == NULL || strlen(name) == 0 || (strcmp(name, ".") == 0))
 		return fd;
 
-	int ret = openat(fd, name, openMode, perms);
+	int retFd = openat(fd, name, openMode, perms);
 	close(fd);
-	return (ret < 0) ? -errno : ret;
+	return (retFd < 0) ? -errno : retFd;
 }
 
 
@@ -218,15 +228,21 @@ _kern_open_entry_ref(dev_t device, ino_t node, const char* name,
 		(unsigned long long)device, (unsigned long long)node,
 		(unsigned long long)get_vref_dev());
 
-	if (device <= 0 || node <= 0)
+	if (device == B_INVALID_DEV || node == B_INVALID_INO)
 		return B_BAD_VALUE;
 
 	if (device == get_vref_dev())
 		return _kern_open_virtual_ref(node, name, openMode, perms);
 
-	UNIMPLEMENTED();
+	char path[B_PATH_NAME_LENGTH];
+	status_t ret = _kern_entry_ref_to_path(device, node, name, path,
+		B_PATH_NAME_LENGTH);
 
-	return B_ERROR;
+	if (ret != B_OK)
+		return ret;
+
+	int fd = open(path, openMode, perms);
+	return (fd < 0) ? -errno : fd;
 }
 
 
@@ -255,19 +271,43 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 
 	if (device == get_vref_dev()) {
 		vref_id id = (vref_id) node;
+		if (id < 0)
+			return B_ENTRY_NOT_FOUND;
+
 		int fd = open_vref(id);
 		if (fd < 0)
-			return B_ERROR;
+			return fd;
 
 		status_t ret = _kern_entry_ref_to_path_by_fd(fd, -1, leaf,
 			userPath, pathLength);
+
 		close(fd);
 		return ret;
 	}
 
+	// This is an exception to support opening volumes. If the dev_t, ino_t
+	// and leaf match, then we open the entry ref.
+	struct mntent* mountEntry = BKernelPrivate::LinuxVolume::FindVolume(device);
+	if (mountEntry) {
+		struct stat st;
+		if (stat(mountEntry->mnt_dir, &st) < 0)
+			return -errno;
+
+		if (node == st.st_ino) {
+			printf("fs: opening dev_t %lld %s\n", st.st_dev, mountEntry->mnt_dir);
+			if (snprintf(userPath, pathLength, "%s/%s",
+					mountEntry->mnt_dir, leaf) >= pathLength) {
+				return B_BUFFER_OVERFLOW;
+			}
+			return B_OK;
+		}
+	}
+
+	// TODO backtrace here
+
 	UNIMPLEMENTED();
 
-	return B_ERROR;
+	return B_ENTRY_NOT_FOUND;
 }
 
 
@@ -368,7 +408,6 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 	*_bufferSize = (size_t)size;
 	return B_OK;
 }
-
 
 
 status_t

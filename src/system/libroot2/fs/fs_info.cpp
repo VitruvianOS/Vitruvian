@@ -1,13 +1,12 @@
 /*
- *  Copyright 2018-2020, Dario Casalinuovo. All rights reserved.
+ *  Copyright 2018-2026, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  */
 
-#include <fs_info.h>
+#include "LinuxVolume.h"
 
 #include <errno.h>
 #include <fcntl.h>
-#include <mntent.h>
 #include <stdlib.h>
 #include <sys/statvfs.h>
 
@@ -19,17 +18,15 @@
 //TODO: set errno for public functions
 
 
-namespace BPrivate {
+namespace BKernelPrivate {
 
 
 static FILE* fEntries = NULL;
 
 
-class LinuxVolume {
-public:
-
-	static status_t FillInfo(struct mntent* mountEntry, fs_info* info)
-	{
+status_t
+LinuxVolume::FillInfo(struct mntent* mountEntry, fs_info* info)
+{
 		// TODO: io_size, improve flags
 		if (strlcpy(info->volume_name, mountEntry->mnt_dir,
 				B_FILE_NAME_LENGTH-1) >= B_FILE_NAME_LENGTH-1) {
@@ -48,10 +45,14 @@ public:
 
 		struct statvfs volume;
 		if (statvfs(mountEntry->mnt_dir, &volume) != B_OK)
-			return errno;
+			return -errno;
 
-		info->dev = dev_for_path(mountEntry->mnt_dir);
-		info->root = 1;
+		struct stat st;
+		if (stat(mountEntry->mnt_dir, &st) < 0)
+			return B_ENTRY_NOT_FOUND;
+
+		info->dev = st.st_dev;
+		info->root = st.st_ino;
 		info->flags = 0;
 		info->block_size = volume.f_bsize;
 		info->total_blocks = volume.f_blocks;
@@ -64,10 +65,12 @@ public:
 			info->flags &= B_FS_IS_READONLY;
 
 		return B_OK;
-	}
+}
 
-	static struct mntent* FindVolume(dev_t volume)
-	{
+
+struct mntent*
+LinuxVolume::FindVolume(dev_t volume)
+{
 		struct mntent* mountEntry = NULL;
 		FILE* fstab = setmntent("/etc/fstab", "r");
 		if (fstab == NULL)
@@ -84,10 +87,12 @@ public:
 		}
 		endmntent(fstab);
 		return NULL;
-	}
+}
 
-	static dev_t GetNext(int32* cookie)
-	{
+
+dev_t
+LinuxVolume::GetNext(int32* cookie)
+{
 		if (fEntries == NULL)
 			fEntries = setmntent("/etc/fstab", "r");
 
@@ -101,8 +106,7 @@ public:
 
 		(*cookie)++;
 		return dev_for_path(mountEntry->mnt_dir);
-	}
-};
+}
 
 
 }
@@ -116,7 +120,7 @@ next_dev(int32* cookie)
 	if (cookie == NULL || *cookie < 0)
 		return B_BAD_VALUE;
 
-	return BPrivate::LinuxVolume::GetNext(cookie);
+	return BKernelPrivate::LinuxVolume::GetNext(cookie);
 }
 
 
@@ -133,14 +137,14 @@ fs_stat_dev(dev_t device, fs_info* info)
 {
 	CALLED();
 
-	if (device <= 0 || info == NULL)
+	if (device == B_INVALID_DEV || info == NULL)
 		return B_ERROR;
 
-	struct mntent* entry = BPrivate::LinuxVolume::FindVolume(device);
+	struct mntent* entry = BKernelPrivate::LinuxVolume::FindVolume(device);
 	if (entry == NULL)
 		return B_BAD_VALUE;
 
-	return BPrivate::LinuxVolume::FillInfo(entry, info);
+	return BKernelPrivate::LinuxVolume::FillInfo(entry, info);
 }
 
 
@@ -149,7 +153,7 @@ dev_for_path(const char* path)
 {
 	struct stat st;
 	if (stat(path, &st) < 0)
-		return -1;
+		return B_INVALID_DEV;
 
 	return st.st_dev;
 }

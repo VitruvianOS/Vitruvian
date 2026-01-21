@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, Dario Casalinuovo. All rights reserved.
+ * Copyright 2019-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the LGPL License.
  */
 
@@ -32,14 +32,14 @@ __getenv_reentrant(const char* name, char* buffer, size_t bufferSize)
 			size_t envLen = strlen(&environ[i][len+1]);
 			if (envLen >= bufferSize) {
 				pthread_mutex_unlock(&gMutex);
-				return ENOSPC;
+				return B_BUFFER_OVERFLOW;
 			}
 
 			strcpy(buffer, &environ[i][len+1]);
 			pthread_mutex_unlock(&gMutex);
-			return 0;
+			return B_OK;
 		}
 	}
 	pthread_mutex_unlock(&gMutex);
-	return ENOENT;
+	return B_ENTRY_NOT_FOUND;
 }

@@ -21,7 +21,6 @@ target_sources(root PRIVATE
 	shutdown.cpp
 	system_info.c
 
-	compat/byteorder.cpp
 	compat/libc.c
 	compat/scheduler.c
 	compat/signal.cpp
@@ -31,6 +30,7 @@ target_sources(root PRIVATE
 	compat/time.cpp
 	compat/tls.cpp
 	compat/wait_for_objects.cpp
+	compat/getenv.c
 
 	fs/find_directory.cpp
 	fs/find_paths.cpp

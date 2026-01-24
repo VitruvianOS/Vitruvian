@@ -26,7 +26,9 @@ https://t.me/vitruvian_official_chat
 
 https://t.me/vitruvian_official
 
-#### Mailing lists will be activated soon. Stay tuned.
+##### Mailing list
+
+https://www.freelists.org/list/vitruvian
 
 ### Installation
 

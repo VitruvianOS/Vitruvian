@@ -17,7 +17,6 @@ macro( DeclareDependency name )
 	list (APPEND PACKAGES_LIST "${_DECLAREDEPENDENCY_PACKAGES}")
 	set (DEP_LIST "${DEP_LIST} ${_DECLAREDEPENDENCY_PACKAGES}")
 	set (RUN_LIST ${RUN_LIST} ${_DECLAREDEPENDENCY_RUNTIMES})
-
 endmacro()
 
 DeclareDependency(
@@ -60,6 +59,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	EVDEV
+	LIBRARIES	"evdev"
+	PACKAGES	"libevdev-dev"
+	RUNTIMES	"libevdev-dev (>= 1.13.4)"
+)
+
+DeclareDependency(
 	NOTO
 	RUNTIMES	"fonts-noto-core;fonts-noto-extra;fonts-noto-mono"
 )
@@ -69,6 +75,14 @@ DeclareDependency(
 	LIBRARIES	"drm"
 	PACKAGES	"libdrm-dev"
 	INCLUDES	"${HEADERS_PATH_BASE}/libdrm/"
+	RUNTIMES	"libdrm2 (>= 2.4.124-2)"
+)
+
+DeclareDependency(
+	SEAT
+	LIBRARIES	"seat"
+	PACKAGES	"libseat-dev"
+	RUNTIMES	"libseat1 (>= 0.9.1-1)"
 )
 
 DeclareDependency(
@@ -95,14 +109,6 @@ DeclareDependency(
 	LIBRARIES  "z"
 	PACKAGES  "zlib1g-dev"
 	RUNTIMES  "zlib1g (>= 1:1.2.11)"
-)
-
-# This should be needed just for backward-cpp
-DeclareDependency(
-	BINUTILS
-	LIBRARIES  "bfd"
-	PACKAGES  "binutils-dev"
-	RUNTIMES  "libbinutils (>= 2.40-2)"
 )
 
 DeclareDependency(
@@ -156,4 +162,18 @@ DeclareDependency(
 #	RUNTIMES	"libwebp6 (>= 0.6.1-2.1)"
 #)
 
+# Dependencies for Debug builds
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+
+DeclareDependency(
+	BACKTRACE
+	LIBRARIES  "backtrace"
+	PACKAGES  "libbacktrace-dev"
+	RUNTIMES  "libbacktrace-dev (>= 0.1-4)"
+)
+
+endif()
+
+# TODO
 file(WRITE generated.x86/build_deps.txt "${DEP_LIST}")

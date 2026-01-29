@@ -9,7 +9,7 @@ add_subdirectory(servers)
 add_subdirectory(add-ons)
 add_subdirectory(apps)
 
-if(BUILD_TESTS STREQUAL "1")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 	add_subdirectory(tests)
 endif()
 

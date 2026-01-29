@@ -94,7 +94,7 @@ delete_port(port_id id)
 port_id
 find_port(const char* name)
 {
-	if (name == NULL)
+	if (name == NULL || name[0] == '\0')
 		return B_BAD_VALUE;
 
 	if (sNexus < 0) {
@@ -345,6 +345,9 @@ set_port_owner(port_id id, team_id team)
 
 	if (id < 0)
 		return B_BAD_PORT_ID;
+
+	if (team < 0)
+		return B_BAD_TEAM_ID;
 
 	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetNexusDescriptor();

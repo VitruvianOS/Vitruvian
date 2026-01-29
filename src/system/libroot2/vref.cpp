@@ -43,6 +43,9 @@ open_vref(vref_id id)
 {
 	CALLED();
 
+	if (id < 0)
+		return B_BAD_VALUE;
+
 	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
 		if (sNexus < 0)
@@ -55,6 +58,9 @@ open_vref(vref_id id)
 status_t
 acquire_vref_etc(vref_id id, int* fd)
 {
+	if (id < 0)
+		return B_BAD_VALUE;
+
 	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
 		if (sNexus < 0)
@@ -63,7 +69,7 @@ acquire_vref_etc(vref_id id, int* fd)
 
 	int ret = nexus_io(sNexus, NEXUS_VREF_ACQUIRE_FD, &id);
 
-	if (ret != B_OK)
+	if (ret < 0)
 		return ret;
 
 	if (fd != NULL)
@@ -75,6 +81,9 @@ acquire_vref_etc(vref_id id, int* fd)
 status_t
 acquire_vref(vref_id id)
 {
+	if (id < 0)
+		return B_BAD_VALUE;
+
 	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
 		if (sNexus < 0)
@@ -88,6 +97,9 @@ acquire_vref(vref_id id)
 status_t
 release_vref(vref_id id)
 {
+	if (id < 0)
+		return B_BAD_VALUE;
+
 	if (sNexus < 0) {
 		sNexus = BKernelPrivate::Team::GetVRefDescriptor(&sNexusVRefDev);
 		if (sNexus < 0)

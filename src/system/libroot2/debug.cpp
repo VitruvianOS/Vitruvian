@@ -1,231 +1,217 @@
 /*
- * Copyright 2002-2008, Axel Dörfler, axeld@pinc-software.de. All rights reserved.
- * Copyright 2019-2023, Axel Dörfler, axeld@pinc-software.de. All rights reserved.
- * Distributed under the terms of the MIT License.
+ * Copyright 2026, Dario Casalinuovo
+ * Distributed under the terms of the LGPL License.
  */
-
 
 #include <debugger.h>
 #include <OS.h>
-#include <Debug.h>
-#include "syscalls.h"
 
-#include <stdio.h>
+#include <cxxabi.h>
+#include <execinfo.h>
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct debug_string_entry {
-	const char	*string;
-	uint32		code;
-} debug_string_entry;
-
-static const debug_string_entry sDebugMessageStrings[] = {
-	{ "Thread not running",	B_DEBUGGER_MESSAGE_THREAD_DEBUGGED },
-	{ "Debugger call",		B_DEBUGGER_MESSAGE_DEBUGGER_CALL },
-	{ "Breakpoint hit",		B_DEBUGGER_MESSAGE_BREAKPOINT_HIT },
-	{ "Watchpoint hit",		B_DEBUGGER_MESSAGE_WATCHPOINT_HIT },
-	{ "Single step",		B_DEBUGGER_MESSAGE_SINGLE_STEP },
-	{ "Before syscall",		B_DEBUGGER_MESSAGE_PRE_SYSCALL },
-	{ "After syscall",		B_DEBUGGER_MESSAGE_POST_SYSCALL },
-	{ "Signal received",	B_DEBUGGER_MESSAGE_SIGNAL_RECEIVED },
-	{ "Exception occurred",	B_DEBUGGER_MESSAGE_EXCEPTION_OCCURRED },
-	{ "Team created",		B_DEBUGGER_MESSAGE_TEAM_CREATED },
-	{ "Team deleted",		B_DEBUGGER_MESSAGE_TEAM_DELETED },
-	{ "Thread created",		B_DEBUGGER_MESSAGE_THREAD_CREATED },
-	{ "Thread created",		B_DEBUGGER_MESSAGE_THREAD_DELETED },
-	{ "Image created",		B_DEBUGGER_MESSAGE_IMAGE_CREATED },
-	{ "Image deleted",		B_DEBUGGER_MESSAGE_IMAGE_DELETED },
-	{ NULL, 0 }
-};
-
-static const debug_string_entry sDebugExceptionTypeStrings[] = {
-	{ "Non-maskable interrupt",		B_NON_MASKABLE_INTERRUPT },
-	{ "Machine check exception",	B_MACHINE_CHECK_EXCEPTION },
-	{ "Segment violation",			B_SEGMENT_VIOLATION },
-	{ "Alignment exception",		B_ALIGNMENT_EXCEPTION },
-	{ "Divide error",				B_DIVIDE_ERROR },
-	{ "Overflow exception",			B_OVERFLOW_EXCEPTION },
-	{ "Bounds check exception",		B_BOUNDS_CHECK_EXCEPTION },
-	{ "Invalid opcode exception",	B_INVALID_OPCODE_EXCEPTION },
-	{ "Segment not present",		B_SEGMENT_NOT_PRESENT },
-	{ "Stack fault",				B_STACK_FAULT },
-	{ "General protection fault",	B_GENERAL_PROTECTION_FAULT },
-	{ "Floating point exception",	B_FLOATING_POINT_EXCEPTION },
-	{ NULL, 0 }
-};
 
 bool _rtDebugFlag = true;
 
 
-extern "C" {
+namespace BKernelPrivate {
+
+
+#ifdef HAVE_LIBBACKTRACE
+#include <backtrace.h>
+static struct backtrace_state* sBacktraceState = NULL;
+#endif
+
+
+static void
+PrintStackTrace()
+{
+#ifdef HAVE_LIBBACKTRACE
+	if (sBacktraceState == NULL) {
+		sBacktraceState = backtrace_create_state(NULL, 1, NULL, NULL);
+	}
+
+	if (sBacktraceState) {
+		fprintf(stderr, "Stack trace:\n");
+		int frame = 0;
+		backtrace_full(sBacktraceState, 1,
+			[](void* data, uintptr_t pc, const char* filename,
+			   int lineno, const char* function) -> int {
+				int* f = (int*)data;
+				if (function) {
+					int status;
+					char* demangled = abi::__cxa_demangle(function, NULL, NULL, &status);
+					fprintf(stderr, "  #%d  %s", (*f)++,
+						demangled ? demangled : function);
+					free(demangled);
+					if (filename)
+						fprintf(stderr, " at %s:%d", filename, lineno);
+					fprintf(stderr, "\n");
+				} else {
+					fprintf(stderr, "  #%d  0x%lx\n", (*f)++, (unsigned long)pc);
+				}
+				return 0;
+			},
+			NULL, &frame);
+		return;
+	}
+#endif
+
+	fprintf(stderr, "WARNING: Fallback to glibc backtrace!");
+
+	void* buffer[64];
+	int nframes = backtrace(buffer, 64);
+	char** symbols = backtrace_symbols(buffer, nframes);
+
+	fprintf(stderr, "Stack trace:\n");
+	for (int i = 1; i < nframes; i++) {
+		if (symbols) {
+			char* sym = symbols[i];
+			char* begin = strchr(sym, '(');
+			char* end = begin ? strchr(begin, '+') : NULL;
+
+			if (begin && end) {
+				*end = '\0';
+				int status;
+				char* demangled = abi::__cxa_demangle(begin + 1, NULL, NULL, &status);
+				if (demangled) {
+					*end = '+';
+					fprintf(stderr, "  #%d  %s\n", i - 1, demangled);
+					free(demangled);
+					continue;
+				}
+				*end = '+';
+			}
+			fprintf(stderr, "  #%d  %s\n", i - 1, sym);
+		} else {
+			fprintf(stderr, "  #%d  %p\n", i - 1, buffer[i]);
+		}
+	}
+
+	free(symbols);
+}
+
+
+} // namespace BKernelPrivate
+
 
 void
-debugger(const char *message)
+debugger(const char* message)
 {
-	debug_printf("%" B_PRId32 ": DEBUGGER: %s\n", find_thread(NULL), message);
-	exit(-1);	
+	thread_id thread = find_thread(NULL);
+
+	fprintf(stderr, "\n");
+	fprintf(stderr, "=========================================\n");
+	fprintf(stderr, "======== *** Guru Meditation *** ========\n");
+	fprintf(stderr, "DEBUGGER: %s\n", message ? message : "(no message)");
+	// TODO: get thread name
+	fprintf(stderr, "Thread: %" B_PRId32 " (%s)\n", thread, "main");
+	fprintf(stderr, "PID: %d\n", getpid());
+	fprintf(stderr, "=========================================\n");
+	BKernelPrivate::PrintStackTrace();
+	fprintf(stderr, "=========================================\n");
+
+	const char* action = getenv("VOS_DEBUGGER_ACTION");
+
+	if (action && strcmp(action, "gdb") == 0) {
+		fprintf(stderr, "Launching GDB...\n");
+
+		char pid_str[16];
+		snprintf(pid_str, sizeof(pid_str), "%d", getpid());
+
+		pid_t child = fork();
+		if (child == 0) {
+			execlp("gdb", "gdb", "-p", pid_str, NULL);
+			_exit(1);
+		} else if (child > 0) {
+			pause();
+		}
+	} else if (action && strcmp(action, "wait") == 0) {
+		fprintf(stderr, "Waiting for debugger. Attach with:\n");
+		fprintf(stderr, "  gdb -p %d\n", getpid());
+		pause();
+	} else if (action && strcmp(action, "core") == 0) {
+		fprintf(stderr, "Generating core dump...\n");
+		abort();
+	} else {
+		fprintf(stderr, "Exiting. Set VOS_DEBUGGER_ACTION=gdb|wait|core for debugging.\n");
+		exit(-1);
+	}
 }
 
 
-status_t
-_kern_kernel_debugger(const char* message)
-{
-	debugger(message);
-}
+extern "C" {
 
-
-#if 0
 
 int
-disable_debugger(int state)
+_debuggerAssert(const char* file, int line, const char* message)
 {
-	return _kern_disable_debugger(state);
+	char buffer[1024];
+	const char *msg = (message && *message) ? message : "(no message)";
+	const char *fname = file ? file : "(unknown)";
+
+	int needed = snprintf(buffer, sizeof(buffer),
+		"ASSERT FAILED: %s\n  File: %s\n  Line: %d",
+		msg, fname, line);
+
+	if (needed < 0) {
+		debugger("ASSERT FAILED: <format error>");
+	} else
+		debugger(buffer);
+
+	return 0;
 }
-
-
-status_t
-install_default_debugger(port_id debuggerPort)
-{
-	return _kern_install_default_debugger(debuggerPort);
-}
-
-
-port_id
-install_team_debugger(team_id team, port_id debuggerPort)
-{
-	return _kern_install_team_debugger(team, debuggerPort);
-}
-
-
-status_t
-remove_team_debugger(team_id team)
-{
-	return _kern_remove_team_debugger(team);
-}
-
-#endif
 
 
 status_t
 debug_thread(thread_id thread)
 {
-	UNIMPLEMENTED();
+	fprintf(stderr, "debug_thread(%" B_PRId32 "): Not implemented\n", thread);
+	return B_UNSUPPORTED;
 }
 
-
-#if 0
-
-
-/**	\brief Suspends the thread until a debugger has been installed for this
- *		   team.
- *
- *	As soon as this happens (immediately, if a debugger is already installed)
- *	the thread stops for debugging. This is desirable for debuggers that spawn
- *	their debugged teams via fork() and want the child to wait till they have
- *	installed themselves as team debugger before continuing with exec*().
- */
 
 void
-wait_for_debugger(void)
+debug_printf(const char *format, ...)
 {
-	_kern_wait_for_debugger();
+	va_list ap;
+	va_start(ap, format);
+	debug_vprintf(format, ap);
+	va_end(ap);
 }
 
-
-status_t
-set_debugger_breakpoint(void *address)
+void
+debug_vprintf(const char *format, va_list args)
 {
-	return _kern_set_debugger_breakpoint(address, 0, 0, false);
-}
+	char buffer[1024];
+	va_list ap;
 
+	va_copy(ap, args);
+	int needed = vsnprintf(buffer, sizeof(buffer), format, ap);
+	va_end(ap);
 
-status_t
-clear_debugger_breakpoint(void *address)
-{
-	return _kern_clear_debugger_breakpoint(address, false);
-}
-
-
-status_t
-set_debugger_watchpoint(void *address, uint32 type, int32 length)
-{
-	return _kern_set_debugger_breakpoint(address, type, length, true);
-}
-
-
-status_t
-clear_debugger_watchpoint(void *address)
-{
-	return _kern_clear_debugger_breakpoint(address, true);
-}
-#endif
-
-
-static void
-get_debug_string(const debug_string_entry *stringEntries,
-	const char *defaultString, uint32 code, char *buffer, int32 bufferSize)
-{
-	int i;
-
-	if (!buffer || bufferSize <= 0)
+	if (needed < 0) {
+		fputs("<debug_vprintf format error>\n", stdout);
 		return;
-
-	for (i = 0; stringEntries[i].string; i++) {
-		if (stringEntries[i].code == code) {
-			strlcpy(buffer, stringEntries[i].string, bufferSize);
-			return;
-		}
 	}
 
-	snprintf(buffer, bufferSize, defaultString, code);
-}
-
-
-void
-get_debug_message_string(debug_debugger_message message, char *buffer,
-	int32 bufferSize)
-{
-	get_debug_string(sDebugMessageStrings, "Unknown message %lu",
-		(uint32)message, buffer, bufferSize);
-}
-
-
-void
-get_debug_exception_string(debug_exception_type exception, char *buffer,
-	int32 bufferSize)
-{
-	get_debug_string(sDebugExceptionTypeStrings, "Unknown exception %lu",
-		(uint32)exception, buffer, bufferSize);
-}
-
-
-//	#pragma mark - Debug.h functions
-
-
-bool
-_debugFlag(void)
-{
-	return _rtDebugFlag;
-}
-
-
-bool
-_setDebugFlag(bool flag)
-{
-	bool previous = _rtDebugFlag;
-	_rtDebugFlag = flag;
-	return previous;
+	size_t to_write = (size_t)(needed < (int)sizeof(buffer)
+		? needed : (int)sizeof(buffer) - 1);
+   
+	if (to_write > 0)
+		fwrite(buffer, 1, to_write, stdout);
 }
 
 
 int
 _debugPrintf(const char *fmt, ...)
 {
-	va_list ap;
-	int ret;
-
 	if (!_rtDebugFlag)
 		return 0;
+
+	va_list ap;
+	int ret;
 
 	va_start(ap, fmt);
 	ret = vfprintf(stdout, fmt, ap);
@@ -238,97 +224,40 @@ _debugPrintf(const char *fmt, ...)
 int
 _sPrintf(const char *fmt, ...)
 {
+	if (!_rtDebugFlag)
+		return 0;
+
 	char buffer[512];
 	va_list ap;
 	int ret;
-
-	if (!_rtDebugFlag)
-		return 0;
 
 	va_start(ap, fmt);
 	ret = vsnprintf(buffer, sizeof(buffer), fmt, ap);
 	va_end(ap);
 
-	if (ret >= 0)
-		printf("%s\n", buffer);
+	if (ret < 0)
+		return ret;
+
+	size_t len = (size_t)(ret < (int)sizeof(buffer)
+		? ret : sizeof(buffer) - 1);
+
+	if (len == 0 || buffer[len - 1] != '\n') {
+		if (len > 0)
+			fwrite(buffer, 1, len, stdout);
+		putchar('\n');
+	} else
+		fwrite(buffer, 1, len, stdout);
 
 	return ret;
 }
 
 
-int
-_xdebugPrintf(const char *fmt, ...)
+status_t
+_kern_kernel_debugger(const char* message)
 {
-	va_list ap;
-	int ret;
-
-	va_start(ap, fmt);
-	ret = vfprintf(stdout, fmt, ap);
-	va_end(ap);
-
-	return ret;
+	debugger(message);
+	return B_OK;
 }
 
 
-int
-_debuggerAssert(const char *file, int line, const char *message)
-{
-	char buffer[1024];
-	snprintf(buffer, sizeof(buffer),
-		"Assert failed: File: %s, Line: %d, %s",
-		file, line, message);
-
-	debug_printf("%" B_PRId32 ": ASSERT: %s:%d %s\n", find_thread(NULL), file,
-		line, buffer);
-#if 0
-	_kern_debugger(buffer);
-#endif
-	return 0;
-}
-
-// TODO: Remove. Temporary debug helper.
-// (accidently these are more or less the same as _sPrintf())
-
-void
-debug_printf(const char *format, ...)
-{
-	va_list list;
-	va_start(list, format);
-
-	debug_vprintf(format, list);
-
-	va_end(list);
-}
-
-void
-debug_vprintf(const char *format, va_list args)
-{
-	char buffer[1024];
-	vsnprintf(buffer, sizeof(buffer), format, args);
-
-	printf("%s", buffer);
-}
-
-
-void
-ktrace_printf(const char *format, ...)
-{
-	va_list list;
-	va_start(list, format);
-
-	vprintf(format, list);
-
-	va_end(list);
-}
-
-
-void
-ktrace_vprintf(const char *format, va_list args)
-{
-	char buffer[1024];
-	vsnprintf(buffer, sizeof(buffer), format, args);
-
-	printf("%s", buffer);
-}
-
-}
+} // extern "C"

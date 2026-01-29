@@ -162,6 +162,9 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 int
 _kern_open_dir_virtual_ref(vref_id id, const char* name)
 {
+	if (id < 0)
+		return B_BAD_VALUE;
+
 	int fd = open_vref(id);
 	if (fd < 0)
 		return fd;
@@ -180,7 +183,7 @@ _kern_open_dir_entry_ref(dev_t device, ino_t node, const char* name)
 {
 	CALLED();
 
-	if (device <= 0 || node <= 0)
+	if (device == B_INVALID_DEV || node == B_INVALID_INO)
 		return B_BAD_VALUE;
 
 	if (device == get_vref_dev())
@@ -205,6 +208,9 @@ int
 _kern_open_virtual_ref(vref_id id, const char* name,
 	int openMode, int perms)
 {
+	if (id < 0)
+		return B_BAD_VALUE;
+
 	int fd = open_vref(id);
 	if (fd < 0)
 		return fd;
@@ -256,7 +262,7 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 		(unsigned long long)device, (unsigned long long)node,
 		(leaf ? leaf : "(null)"));
 
-	if (leaf == NULL && (device < 0 || node < 0))
+	if (leaf == NULL && (device == B_INVALID_DEV || node == B_INVALID_INO))
 		return B_BAD_VALUE;
 
 	if ((leaf != NULL && leaf[0] == '\0') || pathLength == 0)
@@ -288,20 +294,26 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 	// This is an exception to support opening volumes. If the dev_t, ino_t
 	// and leaf match, then we open the entry ref.
 	struct mntent* mountEntry = BKernelPrivate::LinuxVolume::FindVolume(device);
-	if (mountEntry) {
-		struct stat st;
-		if (stat(mountEntry->mnt_dir, &st) < 0)
-			return -errno;
-
-		if (node == st.st_ino) {
-			printf("fs: opening dev_t %lld %s\n", st.st_dev, mountEntry->mnt_dir);
-			if (snprintf(userPath, pathLength, "%s/%s",
-					mountEntry->mnt_dir, leaf) >= pathLength) {
-				return B_BUFFER_OVERFLOW;
-			}
-			return B_OK;
-		}
+	if (!mountEntry) {
+		return B_ENTRY_NOT_FOUND;
 	}
+
+	struct stat st;
+	if (stat(mountEntry->mnt_dir, &st) < 0) {
+		BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
+		return -errno;
+	}
+
+	if (node == st.st_ino) {
+		printf("fs: opening dev_t %lld %s\n", st.st_dev, mountEntry->mnt_dir);
+		if (snprintf(userPath, pathLength, "%s/%s",
+				mountEntry->mnt_dir, leaf) >= pathLength) {
+			return B_BUFFER_OVERFLOW;
+		}
+		return B_OK;
+	}
+
+	BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
 
 	// TODO backtrace here
 

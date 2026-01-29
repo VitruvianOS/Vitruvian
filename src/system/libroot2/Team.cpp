@@ -135,12 +135,13 @@ Team::PreInitTeam()
 {
 	TRACE("Team::PreInitTeam\n");
 
-	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
 	if (gNexus < 0) {
-		printf("Can't open Nexus IPC\n");
-		exit(-1);
+		gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
+		if (gNexus < 0) {
+			printf("Can't open Nexus IPC\n");
+			exit(-1);
+		}
 	}
-
 	gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
 	if (gNexusSem < 0) {
 		printf("Can't open Nexus Sem\n");
@@ -288,10 +289,30 @@ Team::ReinitChildAtFork()
 	__gCPUCount = BKernelPrivate::Team::GetCPUCount();
 	__gUmask = BKernelPrivate::Team::GetUmask();
 
-	// We don't know what might have happened before fork,
-	// we might inherit an invalid pthread_once so let's reinit.
+	if (gNexus >= 0) {
+		close(gNexus);
+		gNexus = -1;
+	}
+	if (gNexusSem >= 0) {
+		close(gNexusSem);
+		gNexusSem = -1;
+	}
+	if (gNexusArea >= 0) {
+		close(gNexusArea);
+		gNexusArea = -1;
+	}
+	if (gNexusVRef >= 0) {
+		close(gNexusVRef);
+		gNexusVRef = -1;
+	}
+
 	gTeamOnce = PTHREAD_ONCE_INIT;
-	pthread_once(&gTeamOnce, &Team::PreInitTeam);
+
+	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
+	if (gNexus < 0) {
+		printf("Can't open Nexus IPC\n");
+		exit(-1);
+	}
 
 	if (gForkPipe[0] != -1) {
 		close(gForkPipe[0]);
@@ -698,6 +719,7 @@ _get_next_team_info(int32* cookie, team_info* info, size_t size)
 	}
 
 	if (*cookie == 0) {
+		// TODO rewrite keeping a static DIR*
 		DIR* procDir = opendir("/proc");
 		struct dirent* dir = NULL;
 

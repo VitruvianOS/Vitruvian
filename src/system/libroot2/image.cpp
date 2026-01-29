@@ -16,9 +16,6 @@
 #include "MutexLock.h"
 
 
-extern int gLoadImageFD = -1;
-
-
 namespace BKernelPrivate {
 
 

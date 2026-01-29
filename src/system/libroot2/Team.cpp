@@ -53,10 +53,33 @@ static int gForkPipe[2] = {-1, -1};
 static std::list<int> gTeams;
 
 
-void
-segv_handler(int sig)
+static const char*
+signal_to_msg(int sig)
 {
-	debugger("Guru Meditation");
+	switch (sig) {
+		case SIGSEGV:
+			return "Segmentation Violation";
+		case SIGBUS:
+			return "Bus Error";
+		case SIGFPE:
+			return "Floating Point Exception";
+		case SIGILL:
+			return "Illegal Instruction";
+		case SIGABRT:
+			return "Abort";
+		case SIGTRAP:
+			return "Breakpoint/Trap";
+
+		default:
+			return "Unknown Signal";
+	}
+}
+
+
+void
+fault_handler(int sig)
+{
+	debugger(signal_to_msg(sig));
 }
 
 
@@ -86,9 +109,16 @@ Team::InitTeam()
 {
 	TRACE("Team::InitTeam\n");
 
-	// TODO I think there's more stuff that normally
-	// is handled by the debugger in BeOS.
-	signal(SIGSEGV, segv_handler);
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_sigaction = fault_handler;
+	sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+
+	sigaction(SIGSEGV, &sa, NULL);
+	sigaction(SIGBUS, &sa, NULL);
+	sigaction(SIGFPE, &sa, NULL);
+	sigaction(SIGILL, &sa, NULL);
+	sigaction(SIGABRT, &sa, NULL);
 
 	Team::PreInitTeam();
 

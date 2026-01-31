@@ -41,7 +41,6 @@ target_sources(root PRIVATE
 	fs/fs_info.cpp
 	fs/fs_query.cpp
 	fs/fs_volume.c
-	fs/getenv.c
 	fs/normalize_path.cpp
 	fs/watch.cpp
 

@@ -22,12 +22,10 @@ message(STATUS "BUILD_TESTS:                     ${BUILD_TESTS}")
 message(STATUS "=============================================")
 message(STATUS "")
 
-set(CMAKE_BUILD_TYPE Debug)
-
 # TODO shouldn't we resolve an absolute path here? it kind of works
 # only if buildtools is in the project source dir, which...we don't
 # really want to constrain.
-if(NOT BUILDTOOLS_DIR AND NOT BUILDTOOLS_MODE STREQUAL "1") 
+if(NOT BUILDTOOLS_DIR AND NOT BUILDTOOLS_MODE STREQUAL "1")
 	message( FATAL_ERROR "Buildtools path not defined!" )
 endif()
 

@@ -8,7 +8,7 @@ AddOn(
 find_library(BACKTRACE_LIBRARY backtrace)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT BACKTRACE_LIBRARY)
-  message(FATAL_ERROR "Building in Debug mode requires libbacktrace-dev. Feel free to disable Debug build.")
+	message(FATAL_ERROR "Building in Debug mode requires libbacktrace-dev. Feel free to disable Debug build.")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

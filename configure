@@ -2,8 +2,20 @@
 
 kernelversion=`cat ./hostkernelversion.conf`
 
-# Generate the buildsystem
-# TODO document flags
-cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=1 -DBUILDTOOLS_DIR=../buildtools -DKERNEL_RELEASE=$kernelversion .. -GNinja
+# Right now we have three build types:
+#
+# Release - Produce images close to an actual release
+# Debug - Enable advanced debugging features
+# Workflow - Suitable for workflow builds
+
+# Override: BUILD_TYPE=Release ./configure
+BUILD_TYPE="${BUILD_TYPE:-Debug}"
+
+# TODO pass flags directly from configure
+cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILDTOOLS_DIR=../buildtools -DKERNEL_RELEASE=$kernelversion .. -GNinja
+
+if [ "$BUILD_TYPE" = "Debug" ]; then
+    echo "NOTE: Debug build will include a SSH server (root:vitruvio)"
+fi
 
 echo "Configured correctly!"

@@ -45,7 +45,7 @@ jobs:
         run: cd generated.x86 && export TERM=xterm-256color && ../build/scripts/setupenv.sh
 
       - name: Configure
-        run: cd generated.x86 && ../configure
+        run: cd generated.x86 && BUILD_TYPE=Workflow ../configure
 
       - name: Ninja build
         run: cd generated.x86 && ninja

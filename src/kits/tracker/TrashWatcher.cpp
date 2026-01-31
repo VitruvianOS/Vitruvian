@@ -80,8 +80,10 @@ BTrashWatcher::IsTrashNode(const node_ref* testNode) const
 	int32 count = fTrashNodeList.CountItems();
 	for (int32 index = 0; index < count; index++) {
 		node_ref* nref = fTrashNodeList.ItemAt(index);
-		if (nref->node == testNode->node && nref->device == testNode->device)
+		if (nref->dereference().ino() == testNode->dereference().ino()
+				&& nref->dereference().dev() == testNode->dereference().dev()) {
 			return true;
+		}
 	}
 
 	return false;

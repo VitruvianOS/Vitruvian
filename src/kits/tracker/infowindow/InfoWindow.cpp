@@ -407,7 +407,7 @@ BInfoWindow::MessageReceived(BMessage* message)
 			if (fModel->IsVolume()) {
 				BVolume boot;
 				BVolumeRoster().GetBootVolume(&boot);
-				BVolume volume(fModel->NodeRef()->device);
+				BVolume volume(fModel->NodeRef()->dereference().dev());
 				if (volume != boot) {
 					TTracker* tracker = dynamic_cast<TTracker*>(be_app);
 					if (tracker != NULL)

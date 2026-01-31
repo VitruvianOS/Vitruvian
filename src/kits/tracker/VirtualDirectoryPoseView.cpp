@@ -115,7 +115,7 @@ VirtualDirectoryPoseView::SetViewMode(uint32 newMode)
 EntryListBase*
 VirtualDirectoryPoseView::InitDirentIterator(const entry_ref* ref)
 {
-	if (fRootDefinitionFileRef.node < 0 || *ref != *TargetModel()->EntryRef())
+	if (fRootDefinitionFileRef.ino() == B_INVALID_INO || *ref != *TargetModel()->EntryRef())
 		return NULL;
 
 	Model sourceModel(ref, false, true);
@@ -190,6 +190,7 @@ VirtualDirectoryPoseView::_EntryCreated(const BMessage* message)
 	NotOwningEntryRef entryRef;
 	node_ref nodeRef;
 
+	#ifdef __VOS_OLD_NODE_REF__
 	if (message->FindUInt64("device", &nodeRef.device) != B_OK
 		|| message->FindUInt64("node", &nodeRef.node) != B_OK
 		|| message->FindUInt64("directory", &entryRef.directory) != B_OK
@@ -197,6 +198,7 @@ VirtualDirectoryPoseView::_EntryCreated(const BMessage* message)
 		return true;
 	}
 	entryRef.device = nodeRef.device;
+	#endif
 
 	// It might be one of our directories.
 	BString path;
@@ -217,8 +219,8 @@ VirtualDirectoryPoseView::_EntryCreated(const BMessage* message)
 				entry_ref ref;
 				dirEntry.GetRef(&ref);
 				_DispatchEntryCreatedOrRemovedMessage(B_ENTRY_CREATED,
-					node_ref(ref.device, ref.directory),
-					NotOwningEntryRef(ref.device, ref.directory,
+					node_ref(ref.dev(), ref.dir()),
+					NotOwningEntryRef(ref.dev(), ref.dir(),
 						entry.d_name),
 					NULL, false);
 			}
@@ -286,6 +288,7 @@ VirtualDirectoryPoseView::_EntryRemoved(const BMessage* message)
 	NotOwningEntryRef entryRef;
 	node_ref nodeRef;
 
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	if (message->FindUInt64("device", &nodeRef.device) != B_OK
 		|| message->FindUInt64("node", &nodeRef.node) != B_OK
 		|| message->FindUInt64("directory", &entryRef.directory)
@@ -294,6 +297,7 @@ VirtualDirectoryPoseView::_EntryRemoved(const BMessage* message)
 		return true;
 	}
 	entryRef.device = nodeRef.device;
+	#endif
 
 	// It might be our definition file.
 	if (nodeRef == *TargetModel()->NodeRef())
@@ -391,6 +395,7 @@ VirtualDirectoryPoseView::_EntryMoved(const BMessage* message)
 	NotOwningEntryRef toEntryRef;
 	node_ref nodeRef;
 
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	if (message->FindUInt64("node device", &nodeRef.device) != B_OK
 		|| message->FindUInt64("node", &nodeRef.node) != B_OK
 		|| message->FindUInt64("device", &fromEntryRef.device) != B_OK
@@ -403,6 +408,7 @@ VirtualDirectoryPoseView::_EntryMoved(const BMessage* message)
 		return true;
 	}
 	toEntryRef.device = fromEntryRef.device;
+	#endif
 
 	// TODO: That's the lazy approach. Ideally we'd analyze the situation and
 	// forward a B_ENTRY_MOVED, if possible. There are quite a few cases to
@@ -420,6 +426,7 @@ bool
 VirtualDirectoryPoseView::_NodeStatChanged(const BMessage* message)
 {
 	node_ref nodeRef;
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	if (message->FindUInt64("device", &nodeRef.device) != B_OK
 		|| message->FindUInt64("node", &nodeRef.node) != B_OK) {
 		return true;
@@ -456,7 +463,7 @@ VirtualDirectoryPoseView::_NodeStatChanged(const BMessage* message)
 		if (!fIsRoot)
 			return true;
 	}
-
+	#endif
 	return _inherited::FSNotification(message);
 }
 
@@ -466,6 +473,7 @@ VirtualDirectoryPoseView::_DispatchEntryCreatedOrRemovedMessage(int32 opcode,
 	const node_ref& nodeRef, const entry_ref& entryRef, const char* path,
 	bool dispatchToSuperClass)
 {
+#ifdef __VOS_OLD_NODE_MONITOR__
 	BMessage message(B_NODE_MONITOR);
 	message.AddInt32("opcode", opcode);
 	message.AddUInt64("device", nodeRef.device);
@@ -474,11 +482,13 @@ VirtualDirectoryPoseView::_DispatchEntryCreatedOrRemovedMessage(int32 opcode,
 	message.AddString("name", entryRef.name);
 	if (path != NULL && path[0] != '\0')
 		message.AddString("path", path);
+
 	bool result = dispatchToSuperClass
 		? _inherited::FSNotification(&message)
 		: FSNotification(&message);
 	if (!result)
 		pendingNodeMonitorCache.Add(&message);
+#endif
 }
 
 

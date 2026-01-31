@@ -131,8 +131,8 @@ Model::Model(const Model& other)
 	fHasLocalizedName(other.fHasLocalizedName),
 	fLocalizedNameIsCached(other.fLocalizedNameIsCached)
 {
-	fStatBuf.st_dev = other.NodeRef()->device;
-	fStatBuf.st_ino = other.NodeRef()->node;
+	fStatBuf.st_dev = other.NodeRef()->dev();
+	fStatBuf.st_ino = other.NodeRef()->ino();
 
 	if (other.IsSymLink() && other.LinkTo())
 		fLinkTo = new Model(*other.LinkTo());
@@ -141,8 +141,8 @@ Model::Model(const Model& other)
 	if (fStatus == B_OK) {
 		ASSERT(fNode);
 		fNode->GetStat(&fStatBuf);
-		ASSERT(fStatBuf.st_dev == other.NodeRef()->device);
-		ASSERT(fStatBuf.st_ino == other.NodeRef()->node);
+		ASSERT(fStatBuf.st_dev == other.NodeRef()->dev());
+		ASSERT(fStatBuf.st_ino == other.NodeRef()->ino());
 	}
 	if (!other.IsNodeOpen())
 		CloseNode();
@@ -302,11 +302,9 @@ Model::SetTo(const node_ref* dirNode, const node_ref* nodeRef,
 	fBaseType = kUnknownNode;
 	fMimeType = "";
 
-	fStatBuf.st_dev = nodeRef->device;
-	fStatBuf.st_ino = nodeRef->node;
-	fEntryRef.device = dirNode->device;
-	fEntryRef.directory = dirNode->node;
-	fEntryRef.name = strdup(name);
+	fStatBuf.st_dev = nodeRef->dereference().dev();
+	fStatBuf.st_ino = nodeRef->dereference().ino();
+	fEntryRef = entry_ref(dirNode->dev(), dirNode->ino(), name);
 
 	BEntry tmpNode(&fEntryRef);
 	fStatus = tmpNode.InitCheck();
@@ -676,8 +674,8 @@ Model::FinishSettingUpType()
 
 		case kVolumeNode:
 		{
-			if (NodeRef()->node == fEntryRef.directory
-				&& NodeRef()->device == fEntryRef.device) {
+			if (NodeRef()->ino() == fEntryRef.dir()
+				&& NodeRef()->dev() == fEntryRef.dev()) {
 				// promote from volume to file system root
 				fBaseType = kRootNode;
 				fMimeType = B_ROOT_MIMETYPE;
@@ -694,7 +692,7 @@ Model::FinishSettingUpType()
 			}
 
 			char name[B_FILE_NAME_LENGTH];
-			BVolume volume(NodeRef()->device);
+			BVolume volume(NodeRef()->dereference().dev());
 			if (volume.InitCheck() == B_OK && volume.GetName(name) == B_OK) {
 				if (fVolumeName != NULL)
 					DeletePreferredAppVolumeNameLinkTo();
@@ -838,8 +836,7 @@ Model::UpdateEntryRef(const node_ref* dirNode, const char* name)
 		fVolumeName = strdup(name);
 	}
 
-	fEntryRef.device = dirNode->device;
-	fEntryRef.directory = dirNode->node;
+	fEntryRef = entry_ref(dirNode->dev(), dirNode->ino(), fEntryRef.name);
 
 	if (fEntryRef.name != NULL && strcmp(fEntryRef.name, name) == 0)
 		return;
@@ -1440,7 +1437,7 @@ Model::TrackIconSource(icon_size size)
 	}
 
 	if (fBaseType == kVolumeNode) {
-		BVolume volume(NodeRef()->device);
+		BVolume volume(NodeRef()->dereference().device);
 		status_t result = volume.GetIcon(&bitmap, size);
 		PRINT(("getting icon from volume %s\n", strerror(result)));
 	} else {

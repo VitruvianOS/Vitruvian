@@ -92,12 +92,14 @@ PendingNodeMonitorCache::Add(const BMessage* message)
 	PRINT(("adding pending node monitor\n"));
 	message->PrintToStream();
 #endif
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	node_ref node;
 	if (message->FindUInt64("device", &node.device) != B_OK
 		|| message->FindUInt64("node", (int64*)&node.node) != B_OK)
 		return;
 
 	fList.AddItem(new PendingNodeMonitorEntry(&node, message));
+	#endif
 }
 
 

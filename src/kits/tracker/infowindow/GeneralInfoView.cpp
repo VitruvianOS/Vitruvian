@@ -397,6 +397,7 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 	switch (message->FindInt32("opcode")) {
 		case B_ENTRY_MOVED:
 		{
+			#ifdef __VOS_OLD_NODE_MONITOR__
 			node_ref dirNode;
 			node_ref itemNode;
 			dirNode.device = itemNode.device = message->FindUInt64("device");
@@ -425,6 +426,7 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 					B_STRING_TYPE, 0, this);
 				Invalidate();
 			}
+			#endif
 			break;
 		}
 
@@ -688,7 +690,7 @@ GeneralInfoView::CheckAndSetSize()
 		off_t capacity = 0;
 
 		if (fModel->IsVolume()) {
-			BVolume volume(fModel->NodeRef()->device);
+			BVolume volume(fModel->NodeRef()->dereference().device);
 			freeBytes = volume.FreeBytes();
 			capacity = volume.Capacity();
 		} else {

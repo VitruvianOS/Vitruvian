@@ -123,7 +123,7 @@ VirtualDirectoryEntryList::GetNextDirents(BDirectory& dir, struct dirent* buffer
 		if (VirtualDirectoryManager* manager
 				= VirtualDirectoryManager::Instance()) {
 			AutoLocker<VirtualDirectoryManager> managerLocker(manager);
-			node_ref node(ref.device, ref.directory);
+			node_ref node(ref.dev(), ref.dir());
 			manager->TranslateDirectoryEntry(fDefinitionFileRef, ref, node);
 		}
 	}

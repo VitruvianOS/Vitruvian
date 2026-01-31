@@ -577,7 +577,7 @@ BInfoWindow::MessageReceived(BMessage* message)
 			if (fModel->IsVolume()) {
 				BVolume boot;
 				BVolumeRoster().GetBootVolume(&boot);
-				BVolume volume(fModel->NodeRef()->device);
+				BVolume volume(fModel->NodeRef()->dereference().dev());
 				if (volume != boot) {
 					TTracker* tracker = dynamic_cast<TTracker*>(be_app);
 					if (tracker != NULL)
@@ -598,12 +598,14 @@ BInfoWindow::MessageReceived(BMessage* message)
 			switch (message->FindInt32("opcode")) {
 				case B_ENTRY_REMOVED:
 				{
+					#ifdef __VOS_OLD_NODE_MONITOR__
 					node_ref itemNode;
 					message->FindUInt64("device", &itemNode.device);
 					message->FindUInt64("node", &itemNode.node);
 					// our window itself may be deleted
 					if (*TargetModel()->NodeRef() == itemNode)
 						Close();
+					#endif
 					break;
 				}
 
@@ -622,6 +624,7 @@ BInfoWindow::MessageReceived(BMessage* message)
 
 				case B_DEVICE_UNMOUNTED:
 				{
+					#ifdef __VOS_OLD_NODE_MONITOR__
 					// We were watching a volume that is no longer
 					// mounted, we might as well quit
 					node_ref itemNode;
@@ -629,6 +632,7 @@ BInfoWindow::MessageReceived(BMessage* message)
 					message->FindUInt64("device", &itemNode.device);
 					if (TargetModel()->NodeRef()->device == itemNode.device)
 						Close();
+					#endif
 					break;
 				}
 
@@ -703,7 +707,7 @@ BInfoWindow::CalcSize(void* castToWindow)
 	BInfoWindow* window = static_cast<BInfoWindow*>(castToWindow);
 	BDirectory dir(window->TargetModel()->EntryRef());
 	BDirectory trashDir;
-	FSGetTrashDir(&trashDir, window->TargetModel()->EntryRef()->device);
+	FSGetTrashDir(&trashDir, window->TargetModel()->EntryRef()->dereference().dev());
 	if (dir.InitCheck() != B_OK) {
 		if (window->StopCalc())
 			return B_ERROR;
@@ -1099,10 +1103,13 @@ AttributeView::ModelChanged(Model* model, BMessage* message)
 		{
 			node_ref dirNode;
 			node_ref itemNode;
+
+			#ifdef __VOS_OLD_NODE_MONITOR__
 			message->FindUInt64("device", &itemNode.device);
 			dirNode.device = itemNode.device;
 			message->FindUInt64("to directory", &dirNode.node);
 			message->FindUInt64("node", &itemNode.node);
+			#endif
 
 			const char* name;
 			if (message->FindString("name", &name) != B_OK)
@@ -1116,8 +1123,8 @@ AttributeView::ModelChanged(Model* model, BMessage* message)
 				// volume directly - this hack works for volumes that are
 				// mounted in the root directory
 				|| (model->IsVolume()
-					&& itemNode.device == 1
-					&& itemNode.node == model->NodeRef()->node)) {
+					&& itemNode.dev() == 1
+					&& itemNode.ino() == model->NodeRef()->ino())) {
 				model->UpdateEntryRef(&dirNode, name);
 				BString title;
 				title << name << B_TRANSLATE(" info");
@@ -1597,7 +1604,7 @@ AttributeView::CheckAndSetSize()
 		off_t capacity = 0;
 
 		if (fModel->IsVolume()) {
-			BVolume volume(fModel->NodeRef()->device);
+			BVolume volume(fModel->NodeRef()->dereference().dev());
 			freeBytes = volume.FreeBytes();
 			capacity = volume.Capacity();
 		} else {
@@ -1994,7 +2001,7 @@ AttributeView::FinishEditingTitle(bool commit)
 				reopen = true;
 			} else {
 				if (fModel->IsVolume()) {
-					BVolume	volume(fModel->NodeRef()->device);
+					BVolume	volume(fModel->NodeRef()->dereference().dev());
 					if (volume.InitCheck() == B_OK)
 						volume.SetName(text);
 				} else
@@ -2138,7 +2145,7 @@ AttributeView::BuildContextMenu(BMenu* parent)
 			BVolume boot;
 			BVolumeRoster().GetBootVolume(&boot);
 			BVolume volume;
-			volume.SetTo(fModel->NodeRef()->device);
+			volume.SetTo(fModel->NodeRef()->dereference().dev());
 			if (volume == boot)
 				item->SetEnabled(false);
 		}

@@ -376,16 +376,20 @@ TFilePanel::FSFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 		case B_ENTRY_MOVED:
 		{
 			node_ref itemNode;
+			node_ref dirNode;
+			const char* name;
+
+			#ifdef __VOS_OLD_NODE_MONITOR__
 			message->FindUInt64("node", (int64*)&itemNode.node);
 
-			node_ref dirNode;
 			message->FindUInt64("device", &dirNode.device);
 			itemNode.device = dirNode.device;
 			message->FindUInt64("to directory", (int64*)&dirNode.node);
 
-			const char* name;
+
 			if (message->FindString("name", &name) != B_OK)
 				break;
+			#endif
 
 			// if current directory moved, update entry ref and menu
 			// but not wind title
@@ -400,8 +404,10 @@ TFilePanel::FSFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 		case B_ENTRY_REMOVED:
 		{
 			node_ref itemNode;
+			#ifdef __VOS_OLD_NODE_MONITOR__
 			message->FindUInt64("device", &itemNode.device);
 			message->FindUInt64("node", (int64*)&itemNode.node);
+			#endif
 
 			// if folder we're watching is deleted, switch to root
 			// or Desktop
@@ -1755,6 +1761,7 @@ BFilePanelPoseView::FSNotification(const BMessage* message)
 		case B_DEVICE_MOUNTED:
 		{
 			if (IsDesktopView()) {
+				// _VOS_OLD_NODE_MONITOR
 				// Pretty much copied straight from DesktopPoseView.
 				// Would be better if the code could be shared somehow.
 				dev_t device;
@@ -1764,6 +1771,7 @@ BFilePanelPoseView::FSNotification(const BMessage* message)
 				ASSERT(TargetModel() != NULL);
 				TrackerSettings settings;
 
+				// TODO
 				BVolume volume(device);
 				if (volume.InitCheck() != B_OK)
 					break;
@@ -1783,7 +1791,7 @@ BFilePanelPoseView::FSNotification(const BMessage* message)
 			dev_t device;
 			if (message->FindUInt64("device", &device) == B_OK) {
 				if (TargetModel() != NULL
-					&& TargetModel()->NodeRef()->device == device) {
+					&& TargetModel()->NodeRef()->dev() == device) {
 					// Volume currently shown in this file panel
 					// disappeared, reset location to home directory
 					BMessage message(kSwitchToHome);
@@ -1890,6 +1898,7 @@ BFilePanelPoseView::AdaptToVolumeChange(BMessage* message)
 		else
 			monitorMsg.AddInt32("opcode", B_ENTRY_REMOVED);
 
+		#ifdef __VOS_OLD_NODE_MONITOR__
 		monitorMsg.AddUInt64("device", model.NodeRef()->device);
 		monitorMsg.AddInt64("node", model.NodeRef()->node);
 		monitorMsg.AddUInt64("directory", model.EntryRef()->directory);
@@ -1897,6 +1906,7 @@ BFilePanelPoseView::AdaptToVolumeChange(BMessage* message)
 		TrackerSettings().SetShowDisksIcon(showDisksIcon);
 		if (Window())
 			Window()->PostMessage(&monitorMsg, this);
+		#endif
 	}
 
 	ShowVolumes(mountVolumesOnDesktop, mountSharedVolumesOntoDesktop);

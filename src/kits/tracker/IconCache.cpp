@@ -586,7 +586,7 @@ IconCache::GetVolumeIcon(AutoLock<SimpleIconCache>*nodeCacheLocker,
 	// try getting using the BVolume::GetIcon call; if miss,
 	// go for the default mime based icon
 	if (entry == NULL || !entry->HaveIconBitmap(NORMAL_ICON_ONLY, size)) {
-		BVolume volume(model->NodeRef()->device);
+		BVolume volume(model->NodeRef()->dereference().dev());
 
 		if (volume.IsShared()) {
 			// check if it's a network share and give it a special icon
@@ -1722,8 +1722,9 @@ NodeCacheEntry::Hash() const
 uint32
 NodeCacheEntry::Hash(const node_ref* node)
 {
-	return node->device ^ ((uint32*)&node->node)[0]
-		^ ((uint32*)&node->node)[1];
+	ino_t ino = node->ino();
+	return node->dev() ^ ((uint32*)&ino)[0]
+		^ ((uint32*)&ino)[1];
 }
 
 

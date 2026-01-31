@@ -846,7 +846,7 @@ NameAttributeText::CommitEditedTextFlavor(BTextView* textView)
 	// renamings
 	status_t result;
 	if (fModel->IsVolume()) {
-		BVolume	volume(fModel->NodeRef()->device);
+		BVolume	volume(fModel->NodeRef()->dereference().dev());
 		result = volume.InitCheck();
 		if (result == B_OK) {
 			RenameVolumeUndo undo(volume, text);
@@ -983,7 +983,7 @@ RealNameAttributeText::CommitEditedTextFlavor(BTextView* textView)
 	// renamings
 	status_t result;
 	if (fModel->IsVolume()) {
-		BVolume volume(fModel->NodeRef()->device);
+		BVolume volume(fModel->NodeRef()->dereference().dev());
 		result = volume.InitCheck();
 		if (result == B_OK) {
 			RenameVolumeUndo undo(volume, text);
@@ -1137,7 +1137,7 @@ SizeAttributeText::ReadValue()
 	// get the size
 
 	if (fModel->IsVolume()) {
-		BVolume volume(fModel->NodeRef()->device);
+		BVolume volume(fModel->NodeRef()->dereference().dev());
 
 		return volume.Capacity();
 	}

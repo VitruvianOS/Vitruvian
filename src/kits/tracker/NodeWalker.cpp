@@ -402,33 +402,27 @@ build_dirent(const BEntry* source, struct dirent* ent,
 		// can't fit in buffer, bail
 		return 0;
 	}
-	// TODO dereference
+
 	// info about this node
 	ent->d_reclen = static_cast<ushort>(recordLength);
 	strcpy(ent->d_name, ref.name);
-	#ifndef __VOS__
-	ent->d_dev = ref.device;
-	#else
-	UNIMPLEMENTED();
-	#endif
-	ent->d_ino = ref.directory;
+	ent->d_ino = ref.dereference().dir();
 
+	#ifndef __VOS__
 	// info about the parent
 	BEntry parent;
 	source->GetParent(&parent);
 	if (parent.InitCheck() == B_OK) {
 		entry_ref parentRef;
 		parent.GetRef(&parentRef);
-		#ifndef __VOS__
+
 		ent->d_pdev = parentRef.device;
 		ent->d_pino = parentRef.directory;
-		#endif
 	} else {
-		#ifndef __VOS__
 		ent->d_pdev = 0;
 		ent->d_pino = 0;
-		#endif
 	}
+	#endif
 
 	return 1;
 }

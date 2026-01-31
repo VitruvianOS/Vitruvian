@@ -2285,7 +2285,7 @@ BContainerWindow::MenusBeginning()
 				= PoseView()->SelectionList()->ItemAt(index)->TargetModel();
 			if (model->IsVolume()) {
 				BVolume volume;
-				volume.SetTo(model->NodeRef()->device);
+				volume.SetTo(model->NodeRef()->dereference().dev());
 				if (volume != boot) {
 					ejectableVolumeSelected = true;
 					break;
@@ -2499,7 +2499,7 @@ BContainerWindow::PopulateMoveCopyNavMenu(BNavMenu* navMenu, uint32 what,
 	BEntry entry;
 	BPath path;
 	Model model;
-	dev_t device = ref->device;
+	dev_t device = ref->dereference().dev();
 
 	int32 volumeCount = 0;
 
@@ -2835,7 +2835,7 @@ BContainerWindow::ShowContextMenu(BPoint loc, const entry_ref* ref, BView*)
 						BVolume boot;
 						BVolumeRoster().GetBootVolume(&boot);
 						BVolume volume;
-						volume.SetTo(model.NodeRef()->device);
+						volume.SetTo(model.NodeRef()->dereference().dev());
 						if (volume != boot)
 							ejectableVolumeSelected = true;
 

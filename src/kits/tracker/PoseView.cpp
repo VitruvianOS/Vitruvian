@@ -744,7 +744,7 @@ BPoseView::SavePoseLocations(BRect* frameIfDesktop)
 	Model* targetModel = TargetModel();
 	ThrowOnAssert(targetModel != NULL);
 
-	BVolume volume(TargetModel()->NodeRef()->device);
+	BVolume volume(TargetModel()->NodeRef()->dereference().dev());
 	if (volume.InitCheck() != B_OK)
 		return;
 
@@ -765,10 +765,11 @@ BPoseView::SavePoseLocations(BRect* frameIfDesktop)
 			Model* model = pose->TargetModel();
 			poseInfo.fInvisible = false;
 
+			// TODO __VOS__ check
 			if (model->IsRoot())
-				poseInfo.fInitedDirectory = targetModel->NodeRef()->node;
+				poseInfo.fInitedDirectory = targetModel->NodeRef()->ino();
 			else
-				poseInfo.fInitedDirectory = model->EntryRef()->directory;
+				poseInfo.fInitedDirectory = model->EntryRef()->dir();
 
 			poseInfo.fLocation = pose->Location(this);
 
@@ -1563,11 +1564,12 @@ BPoseView::AddRootPoses(bool watchIndividually, bool mountShared)
 			monitorMsg.what = B_NODE_MONITOR;
 
 			monitorMsg.AddInt32("opcode", B_ENTRY_CREATED);
-
+			#ifdef __VOS_OLD_NODE_MONITOR__
 			monitorMsg.AddUInt64("device", model.NodeRef()->device);
 			monitorMsg.AddInt64("node", model.NodeRef()->node);
 			monitorMsg.AddUInt64("directory", model.EntryRef()->directory);
 			monitorMsg.AddString("name", model.EntryRef()->name);
+			#endif
 			if (Window())
 				Window()->PostMessage(&monitorMsg, this);
 		}
@@ -1686,7 +1688,7 @@ BPoseView::CreateVolumePose(BVolume* volume, bool watchIndividually)
 
 	// If the volume is mounted at a directory of a persistent volume, we don't
 	// want it on the desktop or in the disks window.
-	BVolume parentVolume(ref.device);
+	BVolume parentVolume(ref.dereference().dev());
 	if (parentVolume.InitCheck() == B_OK && parentVolume.IsPersistent())
 		return;
 
@@ -1694,8 +1696,7 @@ BPoseView::CreateVolumePose(BVolume* volume, bool watchIndividually)
 	root.GetNodeRef(&itemNode);
 
 	node_ref dirNode;
-	dirNode.device = ref.device;
-	dirNode.node = ref.directory;
+	dirNode = node_ref(ref.dev(), ref.dir());
 
 	BPose* pose = EntryCreated(&dirNode, &itemNode, ref.name, 0);
 	if (pose != NULL && watchIndividually) {
@@ -2363,6 +2364,7 @@ BPoseView::MessageReceived(BMessage* message)
 
 		case kFSClipboardChanges:
 		{
+			#ifdef __VOS_OLD_NODE_MONITOR__
 			node_ref node;
 			message->FindUInt64("device", &node.device);
 			message->FindUInt64("directory", &node.node);
@@ -2376,6 +2378,7 @@ BPoseView::MessageReceived(BMessage* message)
 				SetHasPosesInClipboard(false);
 				SetPosesClipboardMode(0);
 			}
+			#endif
 			break;
 		}
 
@@ -3009,9 +3012,9 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 		poseInfo->fInitedDirectory = -1LL;
 		poseInfo->fInvisible = false;
 	} else if (TargetModel() == NULL
-		|| (poseInfo->fInitedDirectory != model->EntryRef()->directory
+		|| (poseInfo->fInitedDirectory != model->EntryRef()->dir()
 			&& (poseInfo->fInitedDirectory
-				!= TargetModel()->NodeRef()->node))) {
+				!= TargetModel()->NodeRef()->ino()))) {
 		// info was read properly but it's not for this directory
 		poseInfo->fInitedDirectory = -1LL;
 	} else if (poseInfo->fLocation.x < -kSanePoseLocation
@@ -3292,9 +3295,12 @@ BPoseView::UpdatePosesClipboardModeFromClipboard(BMessage* clipboardReport)
 	fRealPivotPose = NULL;
 	bool fullInvalidateNeeded = false;
 
+
 	node_ref node;
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	clipboardReport->FindUInt64("device", &node.device);
 	clipboardReport->FindUInt64("directory", &node.node);
+	#endif
 
 	bool clearClipboard = false;
 	clipboardReport->FindBool("clearClipboard", &clearClipboard);
@@ -3392,7 +3398,7 @@ BPoseView::PlaceFolder(const entry_ref* ref, const BMessage* message)
 	if (setPosition) {
 		Model* targetModel = TargetModel();
 		if (targetModel != NULL && targetModel->NodeRef() != NULL) {
-			FSSetPoseLocation(targetModel->NodeRef()->node, &node,
+			FSSetPoseLocation(targetModel->NodeRef()->ino(), &node,
 				location);
 		}
 	}
@@ -4344,7 +4350,7 @@ BPoseView::TrySettingPoseLocation(BNode* node, BPoint point)
 	ASSERT(targetModel != NULL);
 
 	if (targetModel != NULL && targetModel->NodeRef() != NULL
-		&& FSSetPoseLocation(targetModel->NodeRef()->node, node, point)
+		&& FSSetPoseLocation(targetModel->NodeRef()->ino(), node, point)
 			== B_OK) {
 		// get rid of opposite endianness attribute
 		node->RemoveAttr(kAttrPoseInfoForeign);
@@ -5234,10 +5240,10 @@ void
 BPoseView::PoseHandleDeviceUnmounted(BPose* pose, Model* model, int32 index,
 	BPoseView* poseView, dev_t device)
 {
-	if (model->NodeRef()->device == device)
+	if (model->NodeRef()->dev() == device)
 		poseView->DeletePose(model->NodeRef());
 	else if (model->IsSymLink() && model->LinkTo() != NULL
-		&& model->LinkTo()->NodeRef()->device == device) {
+		&& model->LinkTo()->NodeRef()->dev() == device) {
 		poseView->DeleteSymLinkPoseTarget(model->LinkTo()->NodeRef(),
 			pose, index);
 	}
@@ -5378,13 +5384,14 @@ BPoseView::FSNotification(const BMessage* message)
 		case B_ENTRY_CREATED:
 		{
 			ASSERT(targetModel != NULL);
-
-			message->FindUInt64("device", &itemNode.device);
 			node_ref dirNode;
+
+			#ifdef __VOS_OLD_NODE_MONITOR__
+			message->FindUInt64("device", &itemNode.device);
 			dirNode.device = itemNode.device;
 			message->FindUInt64("directory", (int64*)&dirNode.node);
 			message->FindUInt64("node", (int64*)&itemNode.node);
-
+			#endif
 			int32 count = fBrokenLinks->CountItems();
 			bool createPose = true;
 			// Query windows can get notices on different dirNodes
@@ -5451,6 +5458,7 @@ BPoseView::FSNotification(const BMessage* message)
 			break;
 
 		case B_ENTRY_REMOVED:
+			#ifdef __VOS_OLD_NODE_MONITOR_
 			message->FindUInt64("device", &itemNode.device);
 			message->FindUInt64("node", (int64*)&itemNode.node);
 
@@ -5497,6 +5505,7 @@ BPoseView::FSNotification(const BMessage* message)
 			 	DeletePose(&itemNode);
 				TryUpdatingBrokenLinks();
 			}
+			#endif
 			break;
 
 		case B_DEVICE_MOUNTED:
@@ -5536,7 +5545,7 @@ BPoseView::FSNotification(const BMessage* message)
 		case B_DEVICE_UNMOUNTED:
 			if (message->FindUInt64("device", &device) == B_OK) {
 				if (targetModel != NULL
-					&& targetModel->NodeRef()->device == device) {
+					&& targetModel->NodeRef()->dev() == device) {
 					// close the window from a volume that is gone
 					DisableSaveLocation();
 					Window()->Close();
@@ -5569,7 +5578,7 @@ BPoseView::CreateSymlinkPoseTarget(Model* symlink)
 			entry_ref eref;
 			entry.GetNodeRef(&nref);
 			entry.GetRef(&eref);
-			if (eref.directory != TargetModel()->NodeRef()->node)
+			if (eref.dir() != TargetModel()->NodeRef()->ino())
 				WatchNewNode(&nref, B_WATCH_STAT | B_WATCH_ATTR | B_WATCH_NAME
 					| B_WATCH_INTERIM_STAT, this);
 			newResolvedModel = new Model(&entry, true);
@@ -5636,11 +5645,13 @@ BPoseView::EntryMoved(const BMessage* message)
 	node_ref dirNode;
 	node_ref itemNode;
 
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	message->FindUInt64("device", &dirNode.device);
 	itemNode.device = dirNode.device;
 	message->FindUInt64("to directory", (int64*)&dirNode.node);
 	message->FindUInt64("node", (int64*)&itemNode.node);
 	message->FindUInt64("from directory", (int64*)&oldDir);
+	#endif
 
 	const char* name;
 	if (message->FindString("name", &name) != B_OK)
@@ -5651,6 +5662,8 @@ BPoseView::EntryMoved(const BMessage* message)
 	// is different than that of the root directory; we have to do a
 	// lookup using the new volume name and get the volume device from there
 	StatStruct st;
+	#ifdef __VOS_OLD_NODE_MONITOR__
+	// TODO dereference
 	// get the inode of the root and check if we got a notification on it
 	if (stat("/", &st) >= 0
 		&& st.st_dev == dirNode.device
@@ -5663,6 +5676,7 @@ BPoseView::EntryMoved(const BMessage* message)
 			itemNode.device = st.st_dev;
 		}
 	}
+	#endif
 
 	Model* targetModel = TargetModel();
 	ThrowOnAssert(targetModel != NULL);
@@ -5670,7 +5684,7 @@ BPoseView::EntryMoved(const BMessage* message)
 	node_ref thisDirNode;
 	if (ContainerWindow()->IsTrash()) {
 		BDirectory trashDir;
-		if (FSGetTrashDir(&trashDir, itemNode.device) != B_OK)
+		if (FSGetTrashDir(&trashDir, itemNode.dev()) != B_OK)
 			return true;
 
 		trashDir.GetNodeRef(&thisDirNode);
@@ -5683,7 +5697,7 @@ BPoseView::EntryMoved(const BMessage* message)
 		assert_cast<BContainerWindow*>(Window())->UpdateTitle();
 	}
 
-	if (oldDir == dirNode.node || targetModel->IsQuery()
+	if (oldDir == dirNode.ino() || targetModel->IsQuery()
 		|| targetModel->IsVirtualDirectory()) {
 		// rename or move of entry in this directory (or query)
 
@@ -5739,9 +5753,9 @@ BPoseView::EntryMoved(const BMessage* message)
 		}
 		if (pose != NULL)
 			pendingNodeMonitorCache.PoseCreatedOrMoved(this, pose);
-	} else if (oldDir == thisDirNode.node)
+	} else if (oldDir == thisDirNode.ino())
 		DeletePose(&itemNode);
-	else if (dirNode.node == thisDirNode.node)
+	else if (dirNode.ino() == thisDirNode.ino())
 		EntryCreated(&dirNode, &itemNode, name);
 
 	TryUpdatingBrokenLinks();
@@ -5828,6 +5842,7 @@ BPoseView::StopWatchingParentsOf(const entry_ref* ref)
 bool
 BPoseView::AttributeChanged(const BMessage* message)
 {
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	node_ref itemNode;
 	message->FindUInt64("device", &itemNode.device);
 	message->FindUInt64("node", (int64*)&itemNode.node);
@@ -5962,7 +5977,7 @@ BPoseView::AttributeChanged(const BMessage* message)
 			return false;
 		}
 	}
-
+	#endif
 	return true;
 }
 
@@ -6153,7 +6168,7 @@ CopyOneTrashedRefAsEntry(const entry_ref* ref, BObjectList<entry_ref>* trashList
 		// volumes will get unmounted
 
 	// see if pose's device has a trash
-	int32 device = ref->device;
+	int32 device = ref->dev();
 	BDirectory trashDir;
 
 	// cache up the result in a map so that we don't have to keep calling
@@ -6182,7 +6197,7 @@ CopyPoseOneAsEntry(BPose* pose, BObjectList<entry_ref>* trashList,
 static bool
 CheckVolumeReadOnly(const entry_ref* ref)
 {
-	BVolume volume (ref->device);
+	BVolume volume (ref->dereference().dev());
 	if (volume.IsReadOnly()) {
 		BAlert* alert = new BAlert ("",
 			B_TRANSLATE("Files cannot be moved or deleted from a read-only "
@@ -8352,7 +8367,7 @@ BPoseView::UnmountSelectedVolumes()
 
 		Model* model = pose->TargetModel();
 		if (model->IsVolume()) {
-			BVolume volume(model->NodeRef()->device);
+			BVolume volume(model->NodeRef()->dereference().dev());
 			if (volume != boot) {
 				TTracker* tracker = dynamic_cast<TTracker*>(be_app);
 				if (tracker != NULL)

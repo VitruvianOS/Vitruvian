@@ -649,6 +649,7 @@ BDeskWindow::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case B_PATH_MONITOR:
 		{
+			#ifdef __VOS_OLD_NODE_MONITOR__
 			const char* path = "";
 			if (!(message->FindString("path", &path) == B_OK
 					&& strcmp(path, fShortcutsSettings) == 0)) {
@@ -663,6 +664,7 @@ BDeskWindow::MessageReceived(BMessage* message)
 					break;
 			}
 			ApplyShortcutPreferences(true);
+			#endif
 			break;
 		}
 		case B_NODE_MONITOR:

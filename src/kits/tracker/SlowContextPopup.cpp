@@ -231,7 +231,7 @@ BSlowContextMenu::StartBuildingItemList()
 	// return false when done building
 	BEntry entry;
 
-	if (fNavDir.device < 0 || entry.SetTo(&fNavDir) != B_OK
+	if (fNavDir.dev() == B_INVALID_DEV || entry.SetTo(&fNavDir) != B_OK
 		|| !entry.Exists()) {
 		return false;
 	}

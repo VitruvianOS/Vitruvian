@@ -209,7 +209,7 @@ GetVolumeFlags(Model* model)
 		}
 		return B_FS_HAS_ATTR;
 	}
-	if (!fs_stat_dev(model->NodeRef()->device,&info))
+	if (!fs_stat_dev(model->NodeRef()->dev(),&info))
 		return info.flags;
 
 	return B_FS_HAS_ATTR;
@@ -290,6 +290,7 @@ TTracker::TTracker()
 	// open desktop window
 	BContainerWindow* deskWindow = NULL;
 	BDirectory deskDir;
+
 	if (FSGetDeskDir(&deskDir) == B_OK) {
 		// create desktop
 		BEntry entry;
@@ -308,6 +309,7 @@ TTracker::TTracker()
 				Model model(&entry);
 				if (model.InitCheck() == B_OK) {
 					// add the root icon to desktop window
+					#ifdef __VOS_OLD_NODE_MONITOR__
 					BMessage message;
 					message.what = B_NODE_MONITOR;
 					message.AddInt32("opcode", B_ENTRY_CREATED);
@@ -317,6 +319,7 @@ TTracker::TTracker()
 						model.EntryRef()->directory);
 					message.AddString("name", model.EntryRef()->name);
 					deskWindow->PostMessage(&message, deskWindow->PoseView());
+					#endif
 				}
 			}
 		} else

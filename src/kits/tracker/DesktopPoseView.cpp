@@ -120,6 +120,7 @@ DesktopPoseView::FSNotification(const BMessage* message)
 	switch (message->FindInt32("opcode")) {
 		case B_DEVICE_MOUNTED:
 		{
+			// TODO _VOS_OLD_NODE_MONITOR
 			dev_t device;
 			if (message->FindInt32("new device", &device) != B_OK)
 				break;
@@ -254,6 +255,7 @@ DesktopPoseView::AdaptToVolumeChange(BMessage* message)
 				}
 			}
 		}
+	#ifdef __VOS_OLD_NODE_MONITOR__
 		entryMessage.AddUInt64("device", model.NodeRef()->device);
 		entryMessage.AddInt64("node", model.NodeRef()->node);
 		entryMessage.AddUInt64("directory", model.EntryRef()->directory);
@@ -262,6 +264,8 @@ DesktopPoseView::AdaptToVolumeChange(BMessage* message)
 			= dynamic_cast<BContainerWindow*>(Window());
 		if (deskWindow != NULL)
 			deskWindow->PostMessage(&entryMessage, deskWindow->PoseView());
+	
+	#endif
 	}
 
 	ShowVolumes(mountVolumesOnDesktop, mountSharedVolumesOntoDesktop);

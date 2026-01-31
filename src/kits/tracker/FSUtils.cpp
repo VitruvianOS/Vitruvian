@@ -449,8 +449,7 @@ CheckDevicesEqual(const entry_ref* srcRef, const Model* targetModel)
 	BDirectory destDir (targetModel->EntryRef());
 	struct stat deststat;
 	destDir.GetStat(&deststat);
-
-	return srcRef->device == deststat.st_dev;
+	return srcRef->dereference().dev() == deststat.st_dev;
 }
 
 
@@ -490,7 +489,7 @@ FSSetPoseLocation(BEntry* entry, BPoint point)
 	if (result != B_OK)
 		return result;
 
-	return FSSetPoseLocation(destNodeRef.node, &node, point);
+	return FSSetPoseLocation(destNodeRef.ino(), &node, point);
 }
 
 
@@ -904,7 +903,7 @@ MoveTask(BObjectList<entry_ref>* srcList, BEntry* destEntry, BList* pointList,
 	// extract information from src, dest models
 	// ## note that we're assuming all items come from the same volume
 	// ## by looking only at FirstItem here which is not a good idea
-	dev_t srcVolumeDevice = srcList->FirstItem()->device;
+	dev_t srcVolumeDevice = srcList->FirstItem()->dereference().dev();
 	dev_t destVolumeDevice = srcVolumeDevice;
 
 	StatStruct deststat;
@@ -1004,7 +1003,7 @@ MoveTask(BObjectList<entry_ref>* srcList, BEntry* destEntry, BList* pointList,
 				BEntry entry(srcRef);
 				entry.GetParent(&destDir);
 				destDir.GetStat(&deststat);
-				volume.SetTo(srcRef->device);
+				volume.SetTo(srcRef->dereference().dev());
 			}
 
 			// handle case where item is dropped into folder it already lives
@@ -1013,8 +1012,8 @@ MoveTask(BObjectList<entry_ref>* srcList, BEntry* destEntry, BList* pointList,
 				&& moveMode != kCreateRelativeLink
 				&& moveMode != kDuplicateSelection
 				&& !destIsTrash
-				&& (srcRef->device == destRef.device
-				&& srcRef->directory == deststat.st_ino)) {
+				&& (srcRef->dereference().dev() == destRef.dereference().dev()
+				&& srcRef->dereference().dir() == deststat.st_ino)) {
 				continue;
 			}
 
@@ -1158,7 +1157,7 @@ CopyFile(BEntry* srcFile, StatStruct* srcStat, BDirectory* destDir,
 
 	node_ref node;
 	destDir->GetNodeRef(&node);
-	BVolume volume(node.device);
+	BVolume volume(node.dereference().dev());
 
 	// check for free space first
 	if ((srcStat->st_size + kKBSize) >= volume.FreeBytes()) {
@@ -1283,7 +1282,7 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 		node_ref destNodeRef;
 		destDir->GetNodeRef(&destNodeRef);
 		// copy or write new pose location as a first thing
-		SetUpPoseLocation(ref.directory, destNodeRef.node, &srcLink,
+		SetUpPoseLocation(ref.dir(), destNodeRef.ino(), &srcLink,
 			&newLink, loc);
 
 		BNodeInfo nodeInfo(&newLink);
@@ -1341,7 +1340,7 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 	node_ref destNodeRef;
 	destDir->GetNodeRef(&destNodeRef);
 	// copy or write new pose location as a first thing
-	SetUpPoseLocation(ref.directory, destNodeRef.node, &srcFile,
+	SetUpPoseLocation(ref.dir(), destNodeRef.ino(), &srcFile,
 		&destFile, loc);
 
 	char* buffer = new char[bufsize];
@@ -1572,7 +1571,7 @@ CopyFolder(BEntry* srcEntry, BDirectory* destDir,
 	// copy or write new pose location
 	node_ref destNodeRef;
 	destDir->GetNodeRef(&destNodeRef);
-	SetUpPoseLocation(ref.directory, destNodeRef.node, &srcDir,
+	SetUpPoseLocation(ref.dir(), destNodeRef.ino(), &srcDir,
 		&newDir, loc);
 
 	while (srcDir.GetNextEntry(&entry) == B_OK) {
@@ -1674,14 +1673,14 @@ MoveItem(BEntry* entry, BDirectory* destDir, BPoint* loc, uint32 moveMode,
 			entry->GetPath(&path);
 			if (loc && loc != (BPoint*)-1) {
 				poseInfo.fInvisible = false;
-				poseInfo.fInitedDirectory = destNode.node;
+				poseInfo.fInitedDirectory = destNode.ino();
 				poseInfo.fLocation = *loc;
 			}
 
 			status_t err = B_ERROR;
 
 			if (moveMode == kCreateRelativeLink) {
-				if (statbuf.st_dev == destNode.device) {
+				if (statbuf.st_dev == destNode.dereference().dev()) {
 					// relative link only works on the same device
 					char oldwd[B_PATH_NAME_LENGTH];
 					getcwd(oldwd, B_PATH_NAME_LENGTH);
@@ -1768,7 +1767,7 @@ MoveItem(BEntry* entry, BDirectory* destDir, BPoint* loc, uint32 moveMode,
 		}
 
 		// if move is on same volume don't copy
-		if (statbuf.st_dev == destNode.device && moveMode != kCopySelectionTo
+		if (statbuf.st_dev == destNode.dereference().dev() && moveMode != kCopySelectionTo
 			&& moveMode != kDuplicateSelection) {
 
 			// for "Move" the size for status is always 1 - since file
@@ -1940,7 +1939,7 @@ MoveEntryToTrash(BEntry* entry, BPoint* loc, Undo &undo)
 
 		// if it's a volume, try to unmount
 		if (dir.IsRootDirectory()) {
-			BVolume	volume(nodeRef.device);
+			BVolume	volume(nodeRef.dereference().dev());
 			BVolume	boot;
 
 			BVolumeRoster().GetBootVolume(&boot);
@@ -1964,7 +1963,7 @@ MoveEntryToTrash(BEntry* entry, BPoint* loc, Undo &undo)
 		}
 
 		// get trash directory on same volume as item being moved
-		result = FSGetTrashDir(&trash_dir, nodeRef.device);
+		result = FSGetTrashDir(&trash_dir, nodeRef.dereference().dev());
 		if (result != B_OK)
 			return result;
 
@@ -1988,13 +1987,15 @@ MoveEntryToTrash(BEntry* entry, BPoint* loc, Undo &undo)
 		BMessage message(kCloseWindowAndChildren);
 
 		node_ref parentNode;
+		#ifdef __VOS_OLD_NODE_MONITOR__
 		parentNode.device = statbuf.st_dev;
 		parentNode.node = statbuf.st_ino;
 		message.AddData("node_ref", B_RAW_TYPE, &parentNode, sizeof(node_ref));
+		#endif
 		be_app->PostMessage(&message);
 	} else {
 		// get trash directory on same volume as item being moved
-		result = FSGetTrashDir(&trash_dir, nodeRef.device);
+		result = FSGetTrashDir(&trash_dir, nodeRef.dereference().dev());
 		if (result != B_OK)
 			return result;
 	}
@@ -2504,7 +2505,7 @@ CalcItemsAndSize(CopyLoopControl* loopControl,
 		if (entry_ref* ref = refList->ItemAt(0)) {
 			// TODO: This assumes all entries in the list share the same
 			// volume...
-			BVolume volume(ref->device);
+			BVolume volume(ref->dereference().dev());
 			if (volume.InitCheck() == B_OK)
 				blockSize = volume.BlockSize();
 		}
@@ -2828,7 +2829,7 @@ FSInTrashDir(const entry_ref* ref)
 		return false;
 
 	BDirectory trashDir;
-	if (FSGetTrashDir(&trashDir, ref->device) != B_OK)
+	if (FSGetTrashDir(&trashDir, ref->dereference().dev()) != B_OK)
 		return false;
 
 	return trashDir.Contains(&entry);
@@ -3101,9 +3102,7 @@ FSCreateTrashDirs()
 status_t
 FSCreateNewFolder(const entry_ref* ref)
 {
-	node_ref node;
-	node.device = ref->device;
-	node.node = ref->directory;
+	node_ref node = node_ref(ref->dev(), ref->dir());
 
 	BDirectory dir(&node);
 	status_t result = dir.InitCheck();

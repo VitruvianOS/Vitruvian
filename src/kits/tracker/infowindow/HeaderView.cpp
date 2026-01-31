@@ -246,7 +246,7 @@ HeaderView::FinishEditingTitle(bool commit)
 				reopen = true;
 			} else {
 				if (fModel->IsVolume()) {
-					BVolume	volume(fModel->NodeRef()->device);
+					BVolume	volume(fModel->NodeRef()->dereference().dev());
 					if (volume.InitCheck() == B_OK)
 						volume.SetName(text);
 				} else
@@ -639,7 +639,7 @@ HeaderView::BuildContextMenu(BMenu* parent)
 			BVolume boot;
 			BVolumeRoster().GetBootVolume(&boot);
 			BVolume volume;
-			volume.SetTo(fModel->NodeRef()->device);
+			volume.SetTo(fModel->NodeRef()->dereference().dev());
 			if (volume == boot)
 				item->SetEnabled(false);
 		}

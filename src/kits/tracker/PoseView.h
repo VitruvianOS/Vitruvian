@@ -76,7 +76,7 @@ struct std::hash<node_ref>
 	size_t
 	operator()(node_ref ref) const
 	{
-		return ref.node;
+		return ref.ino();
 	}
 };
 #if __GNUC__ > 2

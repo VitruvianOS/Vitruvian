@@ -528,7 +528,7 @@ VirtualDirectoryManager::TranslateDirectoryEntry(
 			"  name \"%s\"\n"
 			"}\n"
 			"subdir \"%s\"\n",
-			rootEntryRef.device, rootEntryRef.directory, rootEntryRef.name,
+			rootEntryRef.dev(), rootEntryRef.dir(), rootEntryRef.name,
 			info->Path().String());
 		// failure is not nice, but not mission critical for this application
 		if (!definitionFileContent.IsEmpty()) {
@@ -539,9 +539,7 @@ VirtualDirectoryManager::TranslateDirectoryEntry(
 
 	const entry_ref& entryRef = info->DefinitionFileEntryRef();
 	_nodeRef = info->DefinitionFileNodeRef();
-	_entryRef.device = entryRef.device;
-	_entryRef.directory = entryRef.directory;
-
+	_entryRef = entry_ref(entryRef.dev(), entryRef.dir(), _entryRef.name);
 	return B_OK;
 }
 

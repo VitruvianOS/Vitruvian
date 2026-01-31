@@ -12,12 +12,16 @@
 
 namespace BKernelPrivate {
 
+
 class LinuxVolume {
 public:
-	static status_t	FillInfo(struct mntent* mountEntry, fs_info* info);
-	static struct	mntent* FindVolume(dev_t volume);
-	static dev_t	GetNext(int32* cookie);
+	static status_t 		FillVolumeInfo(struct mntent* mountEntry,
+								fs_info* info);
+	static struct mntent*	FindVolume(dev_t device);
+	static void				FreeVolumeEntry(struct mntent* entry);
+	static dev_t			GetNextVolume(int32* cookie);
 };
+
 
 }
 

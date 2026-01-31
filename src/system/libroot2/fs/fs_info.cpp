@@ -25,7 +25,7 @@ static FILE* fEntries = NULL;
 
 
 status_t
-LinuxVolume::FillInfo(struct mntent* mountEntry, fs_info* info)
+LinuxVolume::FillVolumeInfo(struct mntent* mountEntry, fs_info* info)
 {
 		// TODO: io_size, improve flags
 		if (strlcpy(info->volume_name, mountEntry->mnt_dir,
@@ -79,7 +79,7 @@ LinuxVolume::FindVolume(dev_t volume)
 		while ((mountEntry = getmntent(fstab)) != NULL) {
 			dev_t device = dev_for_path(mountEntry->mnt_dir);
 			if (volume == device) {
-				struct mntent* ret = new struct mntent;
+				struct mntent* ret = malloc(sizeof(struct mntent));
 				memcpy(ret, mountEntry, sizeof(struct mntent));
 				endmntent(fstab);
 				return ret;
@@ -90,8 +90,21 @@ LinuxVolume::FindVolume(dev_t volume)
 }
 
 
+void
+LinuxVolume::FreeVolumeEntry(struct mntent* entry)
+{
+	if (entry) {
+		free(entry->mnt_fsname);
+		free(entry->mnt_dir);
+		free(entry->mnt_type);
+		free(entry->mnt_opts);
+		free(entry);
+	}
+}
+
+
 dev_t
-LinuxVolume::GetNext(int32* cookie)
+LinuxVolume::GetNextVolume(int32* cookie)
 {
 		if (fEntries == NULL)
 			fEntries = setmntent("/etc/fstab", "r");
@@ -120,7 +133,7 @@ next_dev(int32* cookie)
 	if (cookie == NULL || *cookie < 0)
 		return B_BAD_VALUE;
 
-	return BKernelPrivate::LinuxVolume::GetNext(cookie);
+	return BKernelPrivate::LinuxVolume::GetNextVolume(cookie);
 }
 
 
@@ -144,7 +157,7 @@ fs_stat_dev(dev_t device, fs_info* info)
 	if (entry == NULL)
 		return B_BAD_VALUE;
 
-	return BKernelPrivate::LinuxVolume::FillInfo(entry, info);
+	return BKernelPrivate::LinuxVolume::FillVolumeInfo(entry, info);
 }
 
 

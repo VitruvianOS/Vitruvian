@@ -78,7 +78,7 @@ FontManager::font_directory::FindStyle(const node_ref& nodeRef) const
 static status_t
 set_entry(node_ref& nodeRef, const char* name, BEntry& entry)
 {
-	entry_ref ref(ref.device, ref.directory, name);
+	entry_ref ref(nodeRef.dev(), nodeRef.ino(), name);
 	return entry.SetTo(&ref);
 }
 
@@ -370,7 +370,7 @@ FontManager::_AddMappedFont(const char* familyName, const char* styleName)
 
 			// find parent directory
 
-			node_ref nodeRef(mapping->ref.device, mapping->ref.directory);
+			node_ref nodeRef(mapping->ref.dev(), mapping->ref.dir());
 			font_directory* directory = _FindDirectory(nodeRef);
 			if (directory == NULL) {
 				// unknown directory, maybe this is a user font - try

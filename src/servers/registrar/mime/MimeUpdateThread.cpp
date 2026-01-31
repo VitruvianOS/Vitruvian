@@ -202,8 +202,8 @@ MimeUpdateThread::UpdateEntry(const entry_ref *ref)
 //printf("Updating '%s' (%s)... \n", path.Path(),
 //	(DeviceSupportsAttributes(ref->device) ? "yes" : "no"));
 
-	if (!err && (device_is_root_device(ref->device)
-				|| DeviceSupportsAttributes(ref->device))) {
+	if (!err && (device_is_root_device(ref->dereference().dev())
+				|| DeviceSupportsAttributes(ref->dereference().dev()))) {
 		// Update this entry
 		if (!err) {
 			// R5 appears to ignore whether or not the update succeeds.

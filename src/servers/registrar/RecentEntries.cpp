@@ -249,7 +249,7 @@ RecentEntries::Print()
 	for (item = fEntryList.begin(); item != fEntryList.end(); item++) {
 		printf("%d: device == '%" B_PRIdDEV "', dir == '%" B_PRIdINO "', "
 			"name == '%s', app == '%s', index == %" B_PRId32 "\n", counter++,
-			(*item)->ref.device, (*item)->ref.directory, (*item)->ref.name,
+			(*item)->ref.dev(), (*item)->ref.dir(), (*item)->ref.name,
 			(*item)->sig.c_str(), (*item)->index);
 	}
 	return B_OK;

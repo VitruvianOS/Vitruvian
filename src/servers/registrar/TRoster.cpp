@@ -1622,8 +1622,8 @@ TRoster::_AddMessageAppInfo(BMessage* message, const app_info* info)
 	flatInfo.team = info->team;
 	flatInfo.port = info->port;
 	flatInfo.flags = info->flags;
-	flatInfo.ref_device = info->ref.device;
-	flatInfo.ref_directory = info->ref.directory;
+	flatInfo.ref_device = info->ref.dev();
+	flatInfo.ref_directory = info->ref.dir();
 	memcpy(flatInfo.signature, info->signature, B_MIME_TYPE_LENGTH);
 
 	// set the ref name to NULL and copy it into the flat structure

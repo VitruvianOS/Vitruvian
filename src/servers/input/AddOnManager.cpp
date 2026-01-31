@@ -58,7 +58,7 @@ public:
 	{
 		CALLED();
 		entry_ref ref;
-		make_entry_ref(entryInfo->dir_nref.device, entryInfo->dir_nref.node,
+		make_entry_ref(entryInfo->dir_nref.dev(), entryInfo->dir_nref.ino(),
 			entryInfo->name, &ref);
 		BEntry entry(&ref, false);
 
@@ -69,7 +69,7 @@ public:
 	{
 		CALLED();
 		entry_ref ref;
-		make_entry_ref(entryInfo->dir_nref.device, entryInfo->dir_nref.node,
+		make_entry_ref(entryInfo->dir_nref.dev(), entryInfo->dir_nref.ino(),
 			entryInfo->name, &ref);
 		BEntry entry(&ref, false);
 

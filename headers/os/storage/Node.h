@@ -1,5 +1,6 @@
 /*
  * Copyright 2002-2011 Haiku, Inc. All rights reserved.
+ * Copyright 2025-2026, The Vitruvian Project, All rights Reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _NODE_H
@@ -18,34 +19,37 @@ struct entry_ref;
 struct node_ref {
 	node_ref();
 	node_ref(dev_t device, ino_t node);
-	//node_ref(dev_t device, ino_t node, uint32 flags);
+	//node_ref(vref_id id, uint32 flags);
 	node_ref(int fd);
 	node_ref(const node_ref& other);
 	~node_ref();
 
-	//status_t init_check() const;
-	//bool is_virtual() const;
-	//vref_id id() const;
-	bool is_virtual;
-	//const node_ref dereference() const;
-	//void	unset() const;
+	// This is experimental V\OS API. It will change.
+	dev_t dev() const { return device; }
+	ino_t ino() const { return node; }
+
+	status_t init_check() const;
+
+	vref_id id() const;
+	bool is_virtual() const;
+	const node_ref dereference() const;
+	void unset();
 
 	bool operator==(const node_ref& other) const;
 	bool operator!=(const node_ref& other) const;
 	bool operator<(const node_ref& other) const;
 	node_ref& operator=(const node_ref& other);
 
-#ifdef IMMUTABLE_FS_REFS
-	const dev_t device;
-	const ino_t node;
+#ifdef __VOS_NEW_ENTRY_REF__
+protected:
 #else
-	dev_t device;
-	ino_t node;
+public:
 #endif
 
+	dev_t device;
+	ino_t node;
+
 private:
-	dev_t real_device;
-	dev_t real_node;
 	team_id team;
 };
 
@@ -99,9 +103,7 @@ public:
 			bool				operator==(const BNode& node) const;
 			bool				operator!=(const BNode& node) const;
 
-			// TODO
-			int					Dup();
-				// This should be "const" but R5's is not... Ugggh.
+			int					Dup() const;
 
 private:
 	friend class BFile;
@@ -132,7 +134,7 @@ private:
 private:
 			uint32				rudeData[4];
 			int					fFd;
-				// Ffile descriptor for the given node
+				// file descriptor for the given node
 			node_ref			fNodeRef;
 			int					fAttrFd;
 				// file descriptor for the attribute directory of the node,

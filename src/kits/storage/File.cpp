@@ -108,7 +108,7 @@ BFile::SetTo(const entry_ref* ref, uint32 openMode)
 
 	openMode |= O_CLOEXEC;
 	int fd = -1;
-	if (ref->is_virtual) {
+	if (ref->is_virtual()) {
 		fd = _kern_open_virtual_ref(ref->directory, ref->name, 
 			openMode, DEFFILEMODE & ~__gUmask);
 	} else {

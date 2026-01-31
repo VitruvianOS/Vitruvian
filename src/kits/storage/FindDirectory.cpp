@@ -31,7 +31,7 @@ find_directory(directory_which which, BPath* path, bool createIt,
 	if (path == NULL)
 		return B_BAD_VALUE;
 
-	dev_t device = (dev_t)-1;
+	dev_t device = (dev_t)B_INVALID_DEV;
 	if (volume && volume->InitCheck() == B_OK)
 		device = volume->Device();
 

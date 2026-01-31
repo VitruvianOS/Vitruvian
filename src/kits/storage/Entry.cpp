@@ -5,6 +5,7 @@
  * Authors:
  *		Tyler Dauwalder
  *		Ingo Weinhold, bonefish@users.sf.net
+ *		Dario Casalinuovo
  */
 
 
@@ -36,18 +37,10 @@ using namespace std;
 
 entry_ref::entry_ref()
 	:
-#ifdef __VOS__
-	// TODO: We probably want to check also how it's handled in other
-	// places
-	device(0),
-	directory(0),
-	is_virtual(false),
-	team(-1),
-#else
-	device(-1),
-	directory(-1),
-#endif
-	name(NULL)
+	device(B_INVALID_DEV),
+	directory(B_INVALID_INO),
+	name(NULL),
+	team(-1)
 {
 }
 
@@ -57,63 +50,65 @@ entry_ref::entry_ref(dev_t dev, ino_t dir, const char* name)
 	device(dev),
 	directory(dir),
 	name(NULL),
-	is_virtual(false),
 	team(-1)
 {
 	set_name(name);
 	team = getpid();
-	if (dev == get_vref_dev()) {
-		is_virtual = true;
-		acquire_vref((vref_id) dir);
-	}
+
+	if (is_virtual() && dir != B_INVALID_INO)
+		acquire_vref((vref_id)dir);
 }
+
+
+//entry_ref::entry_ref(vref_id id, const char* name, uint32 flags)
+//	:
+//	device(get_vref_dev()),
+//	directory((ino_t)id)
+//{
+	// TODO allow to override the acquire_ref.
+//}
 
 
 entry_ref::entry_ref(int entryFd, const char* name)
 	:
-	device(0),
-	directory(0),
+	device(B_INVALID_DEV),
+	directory(B_INVALID_INO),
 	name(NULL),
-	is_virtual(true),
 	team(-1)
 {
-	set_name(name);
-	team = getpid();
 	device = get_vref_dev();
 	directory = create_vref(entryFd);
+	set_name(name);
+	team = getpid();
 }
 
 
 entry_ref::entry_ref(const node_ref& ref, const char* name)
 	:
-	device(0),
-	directory(0),
+	device(ref.dev()),
+	directory(ref.ino()),
 	name(NULL),
-	is_virtual(false),
 	team(-1)
 {
 	set_name(name);
 	team = getpid();
-	if (ref.device == get_vref_dev()) {
-		acquire_vref(ref.node);
-		is_virtual = true;
-	}
-	device = ref.device;
-	directory = ref.node;
+
+	if (is_virtual())
+		acquire_vref(directory);
 }
 
 
 entry_ref::entry_ref(const entry_ref& ref)
 	:
-	device(ref.device),
-	directory(ref.directory),
+	device(ref.dev()),
+	directory(ref.dir()),
 	name(NULL),
-	is_virtual(ref.is_virtual),
 	team(ref.team)
 {
 	set_name(ref.name);
-	if (is_virtual)
-		acquire_vref(ref.directory);
+
+	if (is_virtual())
+		acquire_vref(directory);
 }
 
 
@@ -121,7 +116,7 @@ entry_ref::~entry_ref()
 {
 	free(name);
 
-	if (is_virtual && directory > 0)
+	if (is_virtual() && directory != B_INVALID_INO)
 		release_vref((vref_id) directory);
 }
 
@@ -140,6 +135,66 @@ entry_ref::set_name(const char* name)
 	}
 
 	return B_OK;
+}
+
+
+status_t entry_ref::init_check() const
+{
+	if (is_virtual()) {
+		// TODO
+	}
+	return B_OK;
+}
+
+bool entry_ref::is_virtual() const
+{
+	dev_t dev = get_vref_dev();
+	if (dev == B_INVALID_DEV)
+		return false;
+
+	if (device == dev)
+		return true;
+
+	return false;
+}
+
+
+vref_id
+entry_ref::id() const
+{
+	if (is_virtual())
+		return (vref_id)directory;
+
+	return B_BAD_VALUE;
+}
+
+
+const entry_ref
+entry_ref::dereference() const
+{
+	if (!is_virtual())
+		return *this;
+
+	int fd = open_vref(id());
+	if (fd < 0)
+		return entry_ref(B_INVALID_DEV, B_INVALID_INO, NULL);
+
+	struct stat st;
+	if (fstat(fd, &st) == -1) {
+		close(fd);
+		return entry_ref(B_INVALID_DEV, B_INVALID_INO, NULL);
+	}
+	close(fd);
+	return entry_ref(st.st_dev, st.st_ino, name);
+}
+
+
+void entry_ref::unset()
+{
+	if (is_virtual())
+		release_vref(id());
+
+	*this = entry_ref();
 }
 
 
@@ -167,14 +222,18 @@ entry_ref::operator=(const entry_ref& ref)
 	if (this == &ref)
 		return *this;
 
+	// TODO that seems to break the refs, investigate why
+	//if (is_virtual() && directory != B_INVALID_INO)
+	//    release_vref((vref_id) directory);
+
 	device = ref.device;
 	directory = ref.directory;
 	set_name(ref.name);
-	if (ref.is_virtual) {
-		is_virtual = true;
-		acquire_vref((vref_id) directory);
-	}
 	team = ref.team;
+
+	if (is_virtual() && directory != B_INVALID_INO)
+		acquire_vref((vref_id) directory);
+
 	return *this;
 }
 
@@ -331,8 +390,7 @@ BEntry::Unset()
 	free(fName);
 
 	fDirFd = -1;
-	release_vref(fDirRef.node);
-	fDirRef = node_ref();
+	fDirRef.unset();
 	fName = NULL;
 	fCStatus = B_NO_INIT;
 }
@@ -395,7 +453,8 @@ status_t BEntry::GetParent(BEntry* entry) const
 	// init the entry
 	entry->Unset();
 	entry->fDirFd = parentFD;
-	// TODO vref
+	entry->fDirRef = node_ref(parentFD);
+
 	entry->fCStatus = entry->_SetName(leafName);
 	if (entry->fCStatus != B_OK)
 		entry->Unset();
@@ -423,8 +482,7 @@ BEntry::GetParent(BDirectory* dir) const
 	if (error != B_OK)
 		return error;
 
-	node_ref ref(fDirRef);
-	return dir->SetTo(&ref);
+	return dir->SetTo(&node_ref(fDirRef));
 }
 
 
@@ -454,7 +512,7 @@ BEntry::GetNodeRef(node_ref* ref) const
 	status_t error = _kern_read_stat(fDirFd, fName, false, &st,
 		sizeof(struct stat));
 	if (error == B_OK) {
-		int tempFd = openat(fDirFd, fName, O_RDONLY);
+		int tempFd = _kern_open(fDirFd, fName, O_RDONLY, 0);
 		if (tempFd < 0)
 			return tempFd;
 
@@ -567,9 +625,10 @@ BEntry::operator=(const BEntry& item)
 	Unset();
 	if (item.fCStatus == B_OK) {
 		fDirFd = _kern_dup(item.fDirFd);
-		if (fDirFd >= 0)
+		if (fDirFd >= 0) {
+			fDirRef = node_ref(fDirRef);
 			fCStatus = _SetName(item.fName);
-		else
+		} else
 			fCStatus = fDirFd;
 
 		if (fCStatus != B_OK)
@@ -818,9 +877,12 @@ BEntry::_Rename(BEntry& target, bool clobber)
 		Unset();
 		fCStatus = target.fCStatus;
 		fDirFd = target.fDirFd;
+		// TODO __VOS__ check acquire here
+		fDirRef = target.fDirRef;
 		fName = target.fName;
 		target.fCStatus = B_NO_INIT;
 		target.fDirFd = -1;
+		target.fDirRef.unset();
 		target.fName = NULL;
 	}
 	return error;
@@ -902,10 +964,10 @@ get_ref_for_path(const char* path, entry_ref* ref)
 bool
 operator<(const entry_ref& a, const entry_ref& b)
 {
-	return (a.device < b.device
-		|| (a.device == b.device
-			&& (a.directory < b.directory
-			|| (a.directory == b.directory
+	return (a.dev() < b.dev()
+		|| (a.dev() == b.dev()
+			&& (a.dir() < b.dir()
+			|| (a.dir() == b.dir()
 				&& ((a.name == NULL && b.name != NULL)
 				|| (a.name != NULL && b.name != NULL
 					&& strcmp(a.name, b.name) < 0))))));

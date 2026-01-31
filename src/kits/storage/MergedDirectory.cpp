@@ -233,11 +233,12 @@ BMergedDirectory::ShallPreferFirstEntry(const entry_ref& entry1, int32 index1,
 void
 BMergedDirectory::_FindBestEntry(BDirectory& dir, dirent* direntBuffer)
 {
-	struct stat st;
-	dir.GetStatFor(direntBuffer->d_name, &st);
+	node_ref node;
+	BEntry entry;
+	dir.GetEntry(&entry);
+	entry.GetNodeRef(&node);
 
-	entry_ref bestEntry(st.st_dev, direntBuffer->d_ino,
-		direntBuffer->d_name);
+	entry_ref bestEntry = entry_ref(node.dev(), node.ino(), direntBuffer->d_name);
 
 	if (bestEntry.name == NULL)
 		return;
@@ -250,10 +251,9 @@ BMergedDirectory::_FindBestEntry(BDirectory& dir, dirent* direntBuffer)
 		entry_ref ref;
 		if (entry.GetStat(&st) == B_OK && entry.GetRef(&ref) == B_OK
 			&& !ShallPreferFirstEntry(bestEntry, bestIndex, ref, i)) {
-			dir.SetTo(fDirectories.ItemAt(i), ".");
+			// TODO __VOS__ are we actually populating all dirent* buffers correctly?
 			direntBuffer->d_ino = st.st_ino;
-			bestEntry.device = ref.device;
-			bestEntry.directory = ref.directory;
+			bestEntry = entry_ref(ref.dev(), ref.dir(), bestEntry.name);
 			bestIndex = i;
 		}
 	}

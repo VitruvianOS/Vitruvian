@@ -136,7 +136,7 @@ public:
 
 	bool Exists() const
 	{
-		return fNodeRef.device >= 0;
+		return fNodeRef.dev() != B_INVALID_DEV;
 	}
 
 	const NotOwningEntryRef& EntryRef() const
@@ -167,8 +167,7 @@ public:
 		if (error != B_OK)
 			return error;
 
-		fEntryRef.device = entryRef.device;
-		fEntryRef.directory = entryRef.directory;
+		fEntryRef = entry_ref(entryRef.dev(), entryRef.dir(), fEntryRef.name);
 
 		// init node ref
 		struct stat st;
@@ -176,7 +175,7 @@ public:
 		if (error != B_OK)
 			return error == B_ENTRY_NOT_FOUND ? B_OK : error;
 
-		fNodeRef = node_ref(st.st_dev, st.st_ino);
+		fNodeRef = node_ref(entryRef.dev(), entryRef.dir());
 		fIsDirectory = S_ISDIR(st.st_mode);
 
 		// start watching
@@ -237,7 +236,7 @@ struct AncestorHashDefinition {
 
 	size_t HashKey(const node_ref& key) const
 	{
-		return size_t(key.device ^ key.node);
+		return size_t(key.dev() ^ key.ino());
 	}
 
 	size_t Hash(Ancestor* value) const
@@ -420,7 +419,7 @@ struct NodeHashDefinition {
 
 	size_t HashKey(const node_ref& key) const
 	{
-		return size_t(key.device ^ key.node);
+		return size_t(key.dev() ^ key.ino());
 	}
 
 	size_t Hash(Node* value) const
@@ -1059,7 +1058,7 @@ PathHandler::_EntryCreated(BMessage* message)
 
 	NotOwningEntryRef entryRef;
 	node_ref nodeRef;
-
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	if (message->FindUInt64("device", &nodeRef.device) != B_OK
 		|| message->FindUInt64("node", &nodeRef.node) != B_OK
 		|| message->FindUInt64("directory", &entryRef.directory) != B_OK
@@ -1067,13 +1066,14 @@ PathHandler::_EntryCreated(BMessage* message)
 		return;
 	}
 	entryRef.device = nodeRef.device;
+	#endif
 
 	if (_CheckDuplicateEntryNotification(B_ENTRY_CREATED, entryRef, nodeRef))
 		return;
 
 	TRACE("%p->PathHandler::_EntryCreated(): entry: %" B_PRIdDEV ":%" B_PRIdINO
-		":\"%s\", node: %" B_PRIdDEV ":%" B_PRIdINO "\n", this, entryRef.device,
-		entryRef.directory, entryRef.name, nodeRef.device, nodeRef.node);
+		":\"%s\", node: %" B_PRIdDEV ":%" B_PRIdINO "\n", this, entryRef.dev(),
+		entryRef.dir(), entryRef.name, nodeRef.dev(), nodeRef.ino());
 
 	BEntry entry;
 	struct stat st;
@@ -1092,6 +1092,7 @@ PathHandler::_EntryRemoved(BMessage* message)
 	NotOwningEntryRef entryRef;
 	node_ref nodeRef;
 
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	if (message->FindUInt64("device", &nodeRef.device) != B_OK
 		|| message->FindUInt64("node", &nodeRef.node) != B_OK
 		|| message->FindUInt64("directory", &entryRef.directory) != B_OK
@@ -1099,6 +1100,7 @@ PathHandler::_EntryRemoved(BMessage* message)
 		return;
 	}
 	entryRef.device = nodeRef.device;
+	#endif
 
 	if (_CheckDuplicateEntryNotification(B_ENTRY_REMOVED, entryRef, nodeRef))
 		return;
@@ -1118,6 +1120,7 @@ PathHandler::_EntryMoved(BMessage* message)
 	NotOwningEntryRef toEntryRef;
 	node_ref nodeRef;
 
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	if (message->FindUInt64("node device", &nodeRef.device) != B_OK
 		|| message->FindUInt64("node", &nodeRef.node) != B_OK
 		|| message->FindUInt64("device", &fromEntryRef.device) != B_OK
@@ -1138,12 +1141,15 @@ PathHandler::_EntryMoved(BMessage* message)
 
 	TRACE("%p->PathHandler::_EntryMoved(): entry: %" B_PRIdDEV ":%" B_PRIdINO
 		":\"%s\" -> %" B_PRIdDEV ":%" B_PRIdINO ":\"%s\", node: %" B_PRIdDEV
-		":%" B_PRIdINO "\n", this, fromEntryRef.device, fromEntryRef.directory,
-		fromEntryRef.name, toEntryRef.device, toEntryRef.directory,
-		toEntryRef.name, nodeRef.device, nodeRef.node);
+		":%" B_PRIdINO "\n", this, fromEntryRef.dev(), fromEntryRef.dir(),
+		fromEntryRef.name, toEntryRef.dev(), toEntryRef.dir(),
+		toEntryRef.name, nodeRef.dev(), nodeRef.ino());
+	#endif
 
 	BEntry entry;
 	struct stat st;
+	// TODO __VOS__ GetRef() here and compare with that we can also compare
+	// with dereferenced entry to be sure?
 	if (entry.SetTo(&toEntryRef) != B_OK || entry.GetStat(&st) != B_OK
 		|| nodeRef != node_ref(st.st_dev, st.st_ino)) {
 		_EntryRemoved(fromEntryRef, nodeRef, false, true, NULL);
@@ -1338,7 +1344,7 @@ void
 PathHandler::_NodeChanged(BMessage* message)
 {
 	node_ref nodeRef;
-
+	#ifdef __VOS__OLD_NODE_MONITOR__
 	if (message->FindUInt64("device", &nodeRef.device) != B_OK
 		|| message->FindUInt64("node", &nodeRef.node) != B_OK) {
 		return;
@@ -1350,7 +1356,7 @@ PathHandler::_NodeChanged(BMessage* message)
 				? "attribute: " : "stat",
 			message->GetInt32("opcode", B_STAT_CHANGED) == B_ATTR_CHANGED
 				? message->GetString("attr", "") : "");
-
+	
 	bool isDirectory = false;
 	BString path;
 	if (Ancestor* ancestor = _GetAncestor(nodeRef)) {
@@ -1368,6 +1374,7 @@ PathHandler::_NodeChanged(BMessage* message)
 		return;
 
 	_NotifyTarget(*message, path);
+	#endif
 }
 
 
@@ -1846,9 +1853,10 @@ PathHandler::_NotifyEntryCreatedOrRemoved(const entry_ref& entryRef,
 	TRACE("%p->PathHandler::_NotifyEntryCreatedOrRemoved(): entry %s: %"
 		B_PRIdDEV ":%" B_PRIdINO ":\"%s\", node: %" B_PRIdDEV ":%" B_PRIdINO
 		"\n", this, opcode == B_ENTRY_CREATED ? "created" : "removed",
-		entryRef.device, entryRef.directory, entryRef.name, nodeRef.device,
-		nodeRef.node);
+		entryRef.dev(), entryRef.dir(), entryRef.name, nodeRef.dev(),
+		nodeRef.ino());
 
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	BMessage message(B_PATH_MONITOR);
 	message.AddInt32("opcode", opcode);
 	message.AddUInt64("device", entryRef.device);
@@ -1864,6 +1872,7 @@ PathHandler::_NotifyEntryCreatedOrRemoved(const entry_ref& entryRef,
 	message.AddString("name", entryRef.name);
 
 	_NotifyTarget(message, path);
+	#endif
 }
 
 
@@ -1877,6 +1886,7 @@ PathHandler::_NotifyEntryMoved(const entry_ref& fromEntryRef,
 		return;
 	}
 
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	TRACE("%p->PathHandler::_NotifyEntryMoved(): entry: %" B_PRIdDEV ":%"
 		B_PRIdINO ":\"%s\" -> %" B_PRIdDEV ":%" B_PRIdINO ":\"%s\", node: %"
 		B_PRIdDEV ":%" B_PRIdINO "\n", this, fromEntryRef.device,
@@ -1902,6 +1912,7 @@ PathHandler::_NotifyEntryMoved(const entry_ref& fromEntryRef,
 		message.AddString("from path", fromPath);
 
 	_NotifyTarget(message, path);
+	#endif
 }
 
 

@@ -5,6 +5,7 @@
  * Authors:
  *		Tyler Dauwalder
  *		Ingo Weinhold, bonefish@users.sf.net
+ *		Dario Casalinuovo
  */
 
 
@@ -34,9 +35,8 @@
 
 node_ref::node_ref()
 	:
-	device((dev_t)0),
-	node((ino_t)0),
-	is_virtual(false),
+	device(B_INVALID_DEV),
+	node(B_INVALID_INO),
 	team(-1)
 {
 }
@@ -47,39 +47,103 @@ node_ref::node_ref(dev_t device, ino_t node)
 	device(device),
 	node(node)
 {
-	if (device == get_vref_dev() && node > 0) {
-		acquire_vref((vref_id)node);
-		is_virtual = true;
-	}
+	if (is_virtual() && node != B_INVALID_INO)
+		acquire_vref((vref_id) node);
 }
+
+
+//node_ref::node_ref(vref_id id, uint32 flags)
+//	:
+//	device(get_vref_dev()),
+//	node((ino_t)id)
+//{
+	// TODO: supports overriding the acquire_vref.
+//}
 
 
 node_ref::node_ref(int fd)
 	:
-	device(0),
-	node(0),
-	is_virtual(true)
+	device(get_vref_dev()),
+	node(create_vref(fd))
 {
-	device = get_vref_dev();
-	node = create_vref(fd);
+	// TODO init_check
 }
 
 
 node_ref::node_ref(const node_ref& other)
 	:
-	device((dev_t)0),
-	node((ino_t)0)
+	device(other.device),
+	node(other.node)
 {
-	*this = other;
-	if (is_virtual && node > 0)
+	if (is_virtual() && node != B_INVALID_INO)
 		acquire_vref((vref_id) other.node);
 }
 
 
 node_ref::~node_ref()
 {
-	if (is_virtual && node > 0)
-		release_vref((vref_id)node);
+	if (is_virtual() && node != B_INVALID_INO)
+		release_vref((vref_id) node);
+}
+
+
+status_t
+node_ref::init_check() const
+{
+	if (is_virtual()) {
+		// TODO
+	}
+	return B_OK;
+}
+
+bool
+node_ref::is_virtual() const
+{
+	dev_t dev = get_vref_dev();
+	if (dev == B_INVALID_DEV)
+		return false;
+
+	if (device == dev)
+		return true;
+
+	return false;
+}
+
+vref_id
+node_ref::id() const
+{
+	if (!is_virtual())
+		return B_BAD_VALUE;
+
+	return (vref_id) node;
+}
+
+const node_ref
+node_ref::dereference() const
+{
+	if (!is_virtual())
+		return *this;
+
+	int fd = open_vref(id());
+	if (fd < 0)
+		return node_ref(B_INVALID_DEV, B_INVALID_INO);
+
+	struct stat st;
+	if (fstat(fd, &st) == -1) {
+		close(fd);
+		return node_ref(B_INVALID_DEV, B_INVALID_INO);
+	}
+	close(fd);
+	return node_ref(st.st_dev, st.st_ino);
+}
+
+void
+node_ref::unset()
+{
+	if (is_virtual())
+		release_vref(id());
+
+	*this = node_ref(B_INVALID_DEV, B_INVALID_INO);
 }
 
 
@@ -110,13 +174,20 @@ node_ref::operator<(const node_ref& other) const
 node_ref&
 node_ref::operator=(const node_ref& other)
 {
+	if (this == &other)
+		return *this;
+
+	// TODO that seems to break the refs, investigate why
+	//if (is_virtual() && node != B_INVALID_INO)
+	//    release_vref((vref_id) node);
+
 	device = other.device;
 	node = other.node;
-	is_virtual = other.is_virtual;
-	if (is_virtual && node > 0)
-		acquire_vref(node);
-
 	team = other.team;
+
+	if (is_virtual() && node != B_INVALID_INO)
+		acquire_vref((vref_id) node);
+
 	return *this;
 }
 
@@ -243,9 +314,10 @@ void
 BNode::Unset()
 {
 	close_fd();
-	// unset?
-	release_vref(fNodeRef.node);
-	fNodeRef = node_ref();
+
+	if (fNodeRef.is_virtual())
+		fNodeRef.unset();
+
 	fCStatus = B_NO_INIT;
 }
 
@@ -462,6 +534,7 @@ BNode::operator=(const BNode& node)
 	// We have to manually dup the node, because R5::BNode::Dup()
 	// is not declared to be const (which IMO is retarded).
 	fFd = _kern_dup(node.fFd);
+	fNodeRef = node.fNodeRef;
 	fCStatus = (fFd < 0) ? B_NO_INIT : B_OK ;
 
 	return *this;
@@ -498,7 +571,7 @@ BNode::operator!=(const BNode& node) const
 
 
 int
-BNode::Dup()
+BNode::Dup() const
 {
 	int fd = _kern_dup(fFd);
 
@@ -535,10 +608,13 @@ void BNode::_RudeNode6() { }
 status_t
 BNode::set_fd(int fd)
 {
-	if (fFd != -1)
+	if (fFd != -1) {
 		close_fd();
+		fNodeRef.unset();
+	}
 
 	fFd = fd;
+	fNodeRef = node_ref(fd);
 
 	return B_OK;
 }
@@ -560,6 +636,7 @@ BNode::close_fd()
 	if (fFd >= 0) {
 		_kern_close(fFd);
 		fFd = -1;
+		fNodeRef.unset();
 	}
 }
 
@@ -594,12 +671,12 @@ BNode::set_status(status_t newStatus)
 	The \a fCStatus member will be set to the return value of this method.
 
 	\param fd Either a directory FD or a value < 0. In the latter case \a path
-	       must be specified.
+		   must be specified.
 	\param path Either \a NULL in which case \a fd must be given, absolute, or
-	       relative to the directory specified by \a fd (if given) or to the
-	       current working directory.
+		   relative to the directory specified by \a fd (if given) or to the
+		   current working directory.
 	\param traverse If the node identified by \a fd and \a path is a symlink
-	       and \a traverse is \c true, the symlink will be resolved recursively.
+		   and \a traverse is \c true, the symlink will be resolved recursively.
 
 	\returns \c B_OK if everything went fine, or an error code otherwise.
 */
@@ -638,7 +715,7 @@ BNode::_SetTo(int fd, const char* path, bool traverse)
 
 	\param ref An entry_ref identifying the node to be opened.
 	\param traverse If the node identified by \a ref is a symlink and
-	       \a traverse is \c true, the symlink will be resolved recursively.
+		   \a traverse is \c true, the symlink will be resolved recursively.
 
 	\returns \c B_OK if everything went fine, or an error code otherwise.
 */
@@ -651,7 +728,7 @@ BNode::_SetTo(const entry_ref* ref, bool traverse)
 	if (result == B_OK) {
 		int traverseFlag = (traverse ? 0 : O_NOTRAVERSE);
 
-		if (ref->is_virtual) {
+		if (ref->is_virtual()) {
 			fFd = _kern_open_virtual_ref(ref->directory, ref->name,
 					O_CLOEXEC | traverseFlag, O_RDWR);
 			if (fFd != B_OK && fFd != B_ENTRY_NOT_FOUND) {

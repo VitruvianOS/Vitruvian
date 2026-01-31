@@ -117,9 +117,7 @@ BVolume::GetRootDirectory(BDirectory *directory) const
 		error = errno;
 	// init the directory
 	if (error == B_OK) {
-		node_ref ref;
-		ref.device = info.dev;
-		ref.node = info.root;
+		node_ref ref(info.dev, info.root);
 		error = directory->SetTo(&ref);
 	}
 	return error;
@@ -233,8 +231,8 @@ BVolume::SetName(const char *name)
 		&& entry.Exists()
 		&& traversedEntry.SetTo(entryPath.Path(), true) == B_OK
 		&& traversedEntry.GetNodeRef(&entryNodeRef) == B_OK
-		&& entryNodeRef.device == fDevice
-		&& entryNodeRef.node == oldInfo.root) {
+		&& entryNodeRef.dereference().dev() == fDevice
+		&& entryNodeRef.dereference().ino() == oldInfo.root) {
 		entry.Rename(name, false);
 	}
 	return error;

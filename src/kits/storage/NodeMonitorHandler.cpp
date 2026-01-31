@@ -10,17 +10,15 @@ NodeMonitorHandler::make_entry_ref(dev_t device, ino_t directory,
                                    const char * name, 
                                    entry_ref * ref)
 {
-	ref->device = device;
-	ref->directory = directory;
-	return ref->set_name(name);
+	*ref = entry_ref(device, directory, name);
+	return ref->init_check();
 }
 
 
 /* static */ void
 NodeMonitorHandler::make_node_ref(dev_t device, ino_t node, node_ref * ref)
 {
-	ref->device = device;
-	ref->node = node;
+	*ref = node_ref(device, node);
 }
 
 

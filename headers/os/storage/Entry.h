@@ -1,5 +1,6 @@
 /*
  * Copyright 2002-2012, Haiku, Inc. All Rights Reserved.
+ * Copyright 2025-2026, The Vitruvian Project, All rights Reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _ENTRY_H
@@ -22,35 +23,41 @@ class BPath;
 struct entry_ref {
 								entry_ref();
 								entry_ref(dev_t dev, ino_t dir, const char* name);
-								//entry_ref(dev_t dev, ino_t dir, const char* name, uint32 flags);
+								//entry_ref(vref_id id, const char* name, uint32 flags);
 								entry_ref(int entryFd, const char* name);
 								entry_ref(const node_ref& node, const char* name);
 								entry_ref(const entry_ref& ref);
 
 								~entry_ref();
 
-			//status_t			init_check() const;
-			//bool				is_virtual() const;
-			//vref_id			id() const;
-			bool 				is_virtual;
-			//const entry_ref 	dereference() const;
-			//void				unset() const;
+			status_t			init_check() const;
+
+			// This is an experimental V\OS API. It will change.
+			dev_t				dev() const { return device; }
+			ino_t				dir() const { return directory; }
 
 			status_t			set_name(const char* name);
+
+			vref_id				id() const;
+			bool				is_virtual() const;
+			const entry_ref 	dereference() const;
+			void				unset();
 
 			bool				operator==(const entry_ref& ref) const;
 			bool				operator!=(const entry_ref& ref) const;
 			entry_ref&			operator=(const entry_ref& ref);
 
-#ifdef IMMUTABLE_FS_REFS
-			const dev_t			device;
-			const ino_t			directory;
-			const char*			name;
+#ifdef __VOS_NEW_ENTRY_REF__
+protected:
 #else
+public:
+#endif
 			dev_t				device;
 			ino_t				directory;
+
+public:
 			char*				name;
-#endif
+
 			friend class 		BPath;
 			friend class		BEntry;
 			friend class		BDirectory;
@@ -59,7 +66,6 @@ struct entry_ref {
 
 private:
 			team_id				team;
-			//const node_ref	node;
 };
 
 

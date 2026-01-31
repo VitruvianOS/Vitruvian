@@ -1,6 +1,6 @@
 /*
- * Copyright 2025, The Vitruvian Project. All Rights Reserved.
  * Copyright 2002-2006, Haiku, Inc. All Rights Reserved.
+ * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _DEF_STORAGE_H
@@ -37,6 +37,16 @@ enum node_flavor {
 	B_DIRECTORY_NODE	= 0x04,
 	B_ANY_NODE			= 0x07
 };
+
+/* V\OS Extensions **Experimental** */
+
+// The reason for adding the following glags is that since dev_t
+// on linux is unsigned, comparisons like "device > -1" are always true.
+// However, (dev_t)-1 equals to the maximum possible unsigned value and
+// it works very well as a sentinel, while at the same time it
+// keeps working for systems where dev_t is signed.
+#define B_INVALID_DEV ((dev_t)-1)
+#define B_INVALID_INO ((ino_t)-1)
 
 
 #endif /* _DEF_STORAGE_H */

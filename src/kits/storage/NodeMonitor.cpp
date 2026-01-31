@@ -62,7 +62,7 @@ watch_node(const node_ref* node, uint32 flags, BMessenger target)
 		if (node == NULL)
 			return B_BAD_VALUE;
 
-		return _kern_stop_watching(node->device, node->node, port, token);
+		return _kern_stop_watching(node->dev(), node->ino(), port, token);
 	}
 
 	// subscribe to...
@@ -81,7 +81,7 @@ watch_node(const node_ref* node, uint32 flags, BMessenger target)
 		if (node == NULL)
 			return B_BAD_VALUE;
 
-		return _kern_start_watching(node->device, node->node, flags, port,
+		return _kern_start_watching(node->dev(), node->ino(), flags, port,
 			token);
 	}
 

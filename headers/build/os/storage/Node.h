@@ -30,6 +30,9 @@ struct node_ref {
 
 	bool operator<(const node_ref &ref) const;
 
+	dev_t dev() { return device; }
+	dev_t ino() { return node; }
+
 	dev_t device;
 	ino_t node;
 };

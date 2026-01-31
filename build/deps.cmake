@@ -176,4 +176,4 @@ DeclareDependency(
 endif()
 
 # TODO
-file(WRITE generated.x86/build_deps.txt "${DEP_LIST}")
+file(WRITE ${CMAKE_BINARY_DIR}/build_deps.txt "${DEP_LIST}")

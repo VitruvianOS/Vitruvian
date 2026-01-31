@@ -180,8 +180,11 @@ template<>
 inline void
 byte_swap(entry_ref &data)
 {
-	byte_swap(data.device);
-	byte_swap(data.directory);
+	dev_t dev = data.dev();
+	ino_t dir = data.dir();
+	byte_swap(dev);
+	byte_swap(dir);
+	data = entry_ref(dev, dir, data.name);
 }
 
 #endif	// _MESSAGE_UTILS_H_

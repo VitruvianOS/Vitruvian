@@ -100,8 +100,7 @@ find_message_app_info(BMessage* message, app_info* info)
 			info->team = flatInfo->team;
 			info->port = flatInfo->port;
 			info->flags = flatInfo->flags;
-			info->ref.device = flatInfo->ref_device;
-			info->ref.directory = flatInfo->ref_directory;
+			info->ref = entry_ref(flatInfo->ref_device, flatInfo->ref_directory, NULL);
 			info->ref.name = NULL;
 			memcpy(info->signature, flatInfo->signature, B_MIME_TYPE_LENGTH);
 			if (strlen(flatInfo->ref_name) > 0)
@@ -148,7 +147,7 @@ can_app_be_used(const entry_ref* ref)
 	BDirectory directory;
 	BVolume volume;
 	if (error == B_OK
-		&& volume.SetTo(ref->device) == B_OK
+		&& volume.SetTo(ref->dereference().dev()) == B_OK
 		&& find_directory(B_TRASH_DIRECTORY, &trashPath, false, &volume)
 			== B_OK
 		&& directory.SetTo(trashPath.Path()) == B_OK

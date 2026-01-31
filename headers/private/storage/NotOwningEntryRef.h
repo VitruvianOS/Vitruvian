@@ -46,7 +46,7 @@ public:
 
 	~NotOwningEntryRef()
 	{
-		name = NULL;
+		unset();
 	}
 
 	NotOwningEntryRef& SetTo(dev_t device, ino_t directory, const char* name)
@@ -54,12 +54,15 @@ public:
 		this->device = device;
 		this->directory = directory;
 		this->name = const_cast<char*>(name);
+		if (is_virtual())
+			acquire_vref((vref_id) directory);
+
 		return *this;
 	}
 
 	NotOwningEntryRef& SetTo(const node_ref& directoryRef, const char* name)
 	{
-		return SetTo(directoryRef.device, directoryRef.node, name);
+		return SetTo(directoryRef.dev(), directoryRef.ino(), name);
 	}
 
 	node_ref DirectoryNodeRef() const
@@ -69,14 +72,12 @@ public:
 
 	NotOwningEntryRef& SetDirectoryNodeRef(const node_ref& directoryRef)
 	{
-		device = directoryRef.device;
-		directory = directoryRef.node;
-		return *this;
+		return SetTo(directoryRef.dev(), directoryRef.ino());
 	}
 
 	NotOwningEntryRef& operator=(const entry_ref& other)
 	{
-		return SetTo(other.device, other.directory, other.name);
+		return SetTo(other.dev(), other.dir(), other.name);
 	}
 };
 

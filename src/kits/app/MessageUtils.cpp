@@ -36,56 +36,55 @@ CalculateChecksum(const uint8 *buffer, int32 size)
 }
 
 
-/* entry_ref support functions */
-status_t
-entry_ref_flatten(char *buffer, size_t *size, const entry_ref *ref)
+status_t entry_ref_flatten(char *buffer, size_t *size, const entry_ref *ref)
 {
-	if (*size < sizeof(ref->device) + sizeof(ref->directory))
+	if (*size < sizeof(dev_t) + sizeof(ino_t))
 		return B_BUFFER_OVERFLOW;
 
-	memcpy((void *)buffer, (const void *)&ref->device, sizeof(ref->device));
-	buffer += sizeof(ref->device);
-	memcpy((void *)buffer, (const void *)&ref->directory, sizeof(ref->directory));
-	buffer += sizeof (ref->directory);
-	*size -= sizeof(ref->device) + sizeof(ref->directory);
+	dev_t dev = ref->dev();
+	ino_t dir = ref->dir();
+	memcpy((void *)buffer, (const void *)&dev, sizeof(dev));
+	buffer += sizeof(dev);
+	memcpy((void *)buffer, (const void *)&dir, sizeof(dir));
+	buffer += sizeof(dir);
+	*size -= sizeof(dev) + sizeof(dir);
 
 	size_t nameLength = 0;
 	if (ref->name) {
 		nameLength = strlen(ref->name) + 1;
 		if (*size < nameLength)
 			return B_BUFFER_OVERFLOW;
-
 		memcpy((void *)buffer, (const void *)ref->name, nameLength);
 	}
-
-	*size = sizeof(ref->device) + sizeof(ref->directory) + nameLength;
+	*size = sizeof(dev) + sizeof(dir) + nameLength;
 	return B_OK;
 }
 
 
-status_t
-entry_ref_unflatten(entry_ref *ref, const char *buffer, size_t size)
+status_t entry_ref_unflatten(entry_ref *ref, const char *buffer, size_t size)
 {
-	if (size < sizeof(ref->device) + sizeof(ref->directory)) {
+	if (size < sizeof(dev_t) + sizeof(ino_t)) {
 		*ref = entry_ref();
 		return B_BAD_VALUE;
 	}
 
-	memcpy((void  *)&ref->device, (const void *)buffer, sizeof(ref->device));
-	buffer += sizeof (ref->device);
-	memcpy((void *)&ref->directory, (const void *)buffer, sizeof(ref->directory));
-	buffer += sizeof(ref->directory);
+	dev_t dev;
+	ino_t dir;
+	memcpy(&dev, buffer, sizeof(dev));
+	buffer += sizeof(dev);
+	memcpy(&dir, buffer, sizeof(dir));
+	buffer += sizeof(dir);
 
-	if (ref->device != ~(dev_t)0 && size > sizeof(ref->device)
-			+ sizeof(ref->directory)) {
-		ref->set_name(buffer);
-		if (ref->name == NULL) {
-			*ref = entry_ref();
-			return B_NO_MEMORY;
-		}
-	} else
-		ref->set_name(NULL);
-
+	if (dev != B_INVALID_DEV && size > sizeof(dev) + sizeof(dir))
+		*ref = entry_ref(dev, dir, buffer);
+	else
+		*ref = entry_ref(dev, dir, NULL);
+	
+	if (ref->name == NULL && size > sizeof(dev) + sizeof(dir)) {
+		*ref = entry_ref();
+		return B_NO_MEMORY;
+	}
+	
 	return B_OK;
 }
 

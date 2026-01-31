@@ -75,9 +75,7 @@ DefaultCatalog::DefaultCatalog(const entry_ref &catalogOwner,
 	status_t status;
 
 	// search for catalog living in sub-folder of app's folder:
-	node_ref nref;
-	nref.device = catalogOwner.device;
-	nref.node = catalogOwner.directory;
+	node_ref nref(catalogOwner.dev(), catalogOwner.dir());
 	BDirectory appDir(&nref);
 	BString catalogName("locale/");
 	catalogName << kCatFolder
@@ -509,9 +507,7 @@ default_catalog_get_available_languages(BMessage* availableLanguages,
 
 	app_info appInfo;
 	be_app->GetAppInfo(&appInfo);
-	node_ref nref;
-	nref.device = appInfo.ref.device;
-	nref.node = appInfo.ref.directory;
+	node_ref nref(appInfo.ref.dev(), appInfo.ref.dir());
 	BDirectory appDir(&nref);
 	BString catalogName("locale/");
 	catalogName << kCatFolder

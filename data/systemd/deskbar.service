@@ -1,10 +1,10 @@
 [Unit]
-Description=deskbar daemon
+Description=Deskbar
 Conflicts=getty@tty1.service
-After=input_server.service
+Wants=graphical.target
+After=graphical.target
 
 [Service]
-ExecStartPre=/bin/sleep 0.5
 ExecStart=/system/Deskbar
 StandardInput=tty-force
 StandardOutput=append:/var/log/deskbar.log

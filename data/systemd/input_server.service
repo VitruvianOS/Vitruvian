@@ -4,7 +4,7 @@ Conflicts=getty@tty1.service
 After=app_server.service
 
 [Service]
-ExecStartPre=/bin/sleep 0.5
+ExecStartPre=/bin/sleep 0.1
 ExecStart=/system/servers/input_server
 StandardInput=tty-force
 StandardOutput=append:/var/log/inputserver.log

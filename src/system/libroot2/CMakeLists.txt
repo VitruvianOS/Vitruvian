@@ -1,7 +1,8 @@
 add_subdirectory(messaging)
 
 target_sources(root PRIVATE
-	Area.cpp
+	area.cpp
+	byteorder.cpp
 	Architecture.cpp
 	debug.cpp
 	driver_settings.cpp
@@ -11,7 +12,7 @@ target_sources(root PRIVATE
 	mutex.cpp
 	parsedate.cpp
 	Port.cpp
-	sem.c
+	sem.cpp
 	SystemWatcher.cpp
 	Team.cpp
 	Thread.cpp

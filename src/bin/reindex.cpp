@@ -231,8 +231,8 @@ handleFile(BEntry *entry, BNode *node)
 			entry_ref ref;
 			if (entry->GetRef(&ref) == B_OK) {
 				index_info indexInfo;
-				if (fs_stat_index(ref.device, attrName, &indexInfo) != B_OK)
-					fs_create_index(ref.device, attrName, attr->Type(), 0);
+				if (fs_stat_index(ref.dereference().dev(), attrName, &indexInfo) != B_OK)
+					fs_create_index(ref.dereference().dev(), attrName, attr->Type(), 0);
 			}
 		}
 	}
@@ -272,7 +272,7 @@ copyIndicesFromVolume(const char *path, BEntry &to)
 		return;
 	}
 
-	dev_t targetDevice = ref.device;
+	dev_t targetDevice = ref.dereference().dev();
 	dev_t sourceDevice = dev_for_path(path);
 	if (sourceDevice < B_OK) {
 		fprintf(stderr, "%s: Could not open source volume: %s\n", kProgramName,

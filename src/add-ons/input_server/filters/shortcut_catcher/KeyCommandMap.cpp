@@ -228,6 +228,7 @@ KeyCommandMap::MessageReceived(BMessage* message)
 
 		case B_PATH_MONITOR:
 		{
+			#ifdef __VOS_OLD_NODE_MONITOR_
 			const char* path = "";
 			// only fall through for appropriate file
 			if (!(message->FindString("path", &path) == B_OK
@@ -241,6 +242,7 @@ KeyCommandMap::MessageReceived(BMessage* message)
 					break;
 				}
 			}
+			#endif
 		}
 		// fall-through
 		case FILE_UPDATED:
@@ -301,8 +303,7 @@ KeyCommandMap::MessageReceived(BMessage* message)
 					}
 				}
 			} else {
-				fNodeRef.device = -1;
-				fNodeRef.node = -1;
+				fNodeRef.unset();
 			}
 
 			if (fSyncSpecs.Lock()) {

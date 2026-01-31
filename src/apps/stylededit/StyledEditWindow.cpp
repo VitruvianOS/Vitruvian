@@ -556,7 +556,7 @@ StyledEditWindow::MessageReceived(BMessage* message)
 			bool readOnly = !fTextView->IsEditable();
 			message->AddBool("readOnly", readOnly);
 			if (readOnly) {
-				BVolume volume(fNodeRef.device);
+				BVolume volume(fNodeRef.dereference().dev());
 				message->AddBool("canUnlock", !volume.IsReadOnly());
 			}
 			fStatusView->SetStatus(message);
@@ -1491,7 +1491,7 @@ StyledEditWindow::_LoadFile(entry_ref* ref, const char* forceEncoding)
 		bool editable = (getuid() == st.st_uid && S_IWUSR & st.st_mode)
 					|| (getgid() == st.st_gid && S_IWGRP & st.st_mode)
 					|| (S_IWOTH & st.st_mode);
-		BVolume volume(ref->device);
+		BVolume volume(ref->dereference().dev());
 		editable = editable && !volume.IsReadOnly();
 		_SetReadOnly(!editable);
 	}
@@ -2043,7 +2043,7 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 		return;
 
 	if (opcode != B_ENTRY_CREATED
-		&& message->FindInt64("node") != fNodeRef.node)
+		&& message->FindInt64("node") != fNodeRef.ino())
 		// bypass foreign nodes' event
 		return;
 

@@ -96,9 +96,9 @@ DumpItem(DeskbarItemInfo* item)
 {
 	printf("is addon: %i, id: %" B_PRId32 "\n", item->isAddOn, item->id);
 	printf("entry_ref:  %" B_PRIdDEV ", %" B_PRIdINO ", %s\n",
-		item->entryRef.device, item->entryRef.directory, item->entryRef.name);
-	printf("node_ref:  %" B_PRIdDEV ", %" B_PRIdINO "\n", item->nodeRef.device,
-		item->nodeRef.node);
+		item->entryRef.dev(), item->entryRef.dir(), item->entryRef.name);
+	printf("node_ref:  %" B_PRIdDEV ", %" B_PRIdINO "\n", item->nodeRef.dev(),
+		item->nodeRef.ino());
 }
 
 
@@ -576,6 +576,7 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 			ino_t todirectory;
 			ino_t node;
 			const char* name;
+			#ifdef __VOS_OLD_NODE_MONITOR__
 			if (message->FindString("name", &name) == B_OK
 				&& message->FindUInt64("from directory", &(ref.directory))
 					== B_OK
@@ -591,13 +592,16 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 				// the new directory
 				MoveItem(&ref, todirectory);
 			}
+			#endif
 			break;
 		}
 
 		case B_ENTRY_REMOVED:
 		{
+			#ifdef __VOS_OLD_NODE_MONITOR__
 			// entry was rm'd from the device
 			node_ref nodeRef;
+
 			if (message->FindUInt64("device", &(nodeRef.device)) == B_OK
 				&& message->FindUInt64("node", &(nodeRef.node)) == B_OK) {
 				DeskbarItemInfo* item = DeskbarItemFor(nodeRef);
@@ -611,6 +615,7 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 
 				UnloadAddOn(&nodeRef, NULL, true, false);
 			}
+			#endif
 			break;
 		}
 	}
@@ -701,9 +706,7 @@ TReplicantTray::AddItem(int32 id, node_ref nodeRef, BEntry& entry, bool isAddOn)
 	item->isAddOn = isAddOn;
 
 	if (entry.GetRef(&item->entryRef) != B_OK) {
-		item->entryRef.device = -1;
-		item->entryRef.directory = -1;
-		item->entryRef.name = NULL;
+		item->entryRef.unset();
 	}
 	item->nodeRef = nodeRef;
 
@@ -729,8 +732,10 @@ TReplicantTray::UnloadAddOn(node_ref* nodeRef, dev_t* device, bool which,
 		if (item == NULL)
 			continue;
 
+		// __VOS_OLD_NODE_MONITOR__
+		// __VOS__ TODO is that a place to dereference?
 		if ((which && nodeRef != NULL && item->nodeRef == *nodeRef)
-			|| (device != NULL && item->nodeRef.device == *device)) {
+			|| (device != NULL && item->nodeRef.dev() == *device)) {
 
 			if (device != NULL && be_roster->IsRunning(&item->entryRef))
 				continue;
@@ -794,9 +799,9 @@ TReplicantTray::MoveItem(entry_ref* ref, ino_t toDirectory)
 			continue;
 
 		if (strcmp(item->entryRef.name, ref->name) == 0
-			&& item->entryRef.device == ref->device
-			&& item->entryRef.directory == ref->directory) {
-			item->entryRef.directory = toDirectory;
+			&& item->entryRef.dereference().dev() == ref->dereference().dev()
+			&& item->entryRef.dereference().dir() == ref->dereference().dir()) {
+			item->entryRef = entry_ref(ref->dev(), toDirectory, ref->name);
 			break;
 		}
 	}

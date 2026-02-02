@@ -14,4 +14,6 @@ Application(
 	INCLUDES
 	"../shared"
 	"../raw"
+
+	RDEF JPEGTranslator.rdef
 )

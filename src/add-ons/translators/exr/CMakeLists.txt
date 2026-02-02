@@ -11,8 +11,9 @@ Application(
 
 	LIBS be translation translatorutils localestub ${EXR_LIBRARIES}
 
-
 	INCLUDES
 	"../shared"
-${EXR_INCLUDES}
+	${EXR_INCLUDES}
+
+	RDEF EXRTranslator.rdef
 )

@@ -12,4 +12,6 @@ Application(
 	INCLUDES
 	"../shared"
 	${PNG_INCLUDES}
+
+	RDEF PNGTranslator.rdef
 )

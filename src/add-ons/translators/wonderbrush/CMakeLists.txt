@@ -17,5 +17,7 @@ Application(
 	INCLUDES
 	"../shared"
 	"support"
+
+	RDEF WonderBrushTranslator.rdef
 )
 

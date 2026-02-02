@@ -1,6 +1,6 @@
 
 Application(
-	JPEGTranslator
+	PCXTranslator
 
 	SOURCES
 	ConfigView.cpp
@@ -10,4 +10,6 @@ Application(
 
 	INCLUDES
 	"../shared"
+
+	RDEF PCXTranslator.rdef
 )

@@ -14,4 +14,6 @@ Application(
 
 	INCLUDES
 	"../shared"
+
+	RDEF PSDTranslator.rdef
 )

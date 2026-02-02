@@ -15,4 +15,6 @@ Application(
 
 	INCLUDES
 	"../shared"
+
+	RDEF GIFTranslator.rdef
 )

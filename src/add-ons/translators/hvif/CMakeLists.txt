@@ -1,9 +1,8 @@
-
 Application(
 	HVIFTranslator
 
 	SOURCES
-	HVIFMain.cpp	
+	HVIFMain.cpp
 	HVIFTranslator.cpp
 	HVIFView.cpp
 
@@ -11,4 +10,6 @@ Application(
 
 	INCLUDES
 	"../shared"
+
+	RDEF HVIFTranslator.rdef
 )

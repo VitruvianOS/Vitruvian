@@ -9,4 +9,6 @@ Application(
 
 	INCLUDES
 	"../shared"
+
+	RDEF JPEG2000Translator.rdef
 )

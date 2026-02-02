@@ -12,4 +12,6 @@ Application(
 
 	INCLUDES
 	"../shared"
+
+	RDEF RTFTranslator.rdef
 )

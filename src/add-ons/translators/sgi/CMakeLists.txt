@@ -11,4 +11,6 @@ Application(
 
 	INCLUDES
 	"../shared"
+
+	RDEF SGITranslator.rdef
 )

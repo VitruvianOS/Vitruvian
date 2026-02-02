@@ -10,4 +10,6 @@ Application(
 
 	INCLUDES
 	"../shared"
+
+	RDEF TGATranslator.rdef
 )

@@ -10,6 +10,8 @@ Application(
 
 	INCLUDES
 	"../shared"
+
+	RDEF STXTTranslator.rdef
 )
 
 UsePrivateHeaders(STXTTranslator textencoding)

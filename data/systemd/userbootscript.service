@@ -1,0 +1,14 @@
+[Unit]
+Description=User boot script
+#TODO add other services
+After=graphical.target registrar.service app_server.service NetworkManager.service
+Wants=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/config/settings/boot/UserBootscript
+StandardOutput=append:/var/log/userbootscript.log
+StandardError=append:/var/log/userbootscript.log
+
+[Install]
+WantedBy=graphical.target

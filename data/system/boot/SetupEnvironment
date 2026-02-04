@@ -1,25 +1,38 @@
-#
-# First we set up a bunch of environment variables that we want everyone
-# to inherit
-#
+# Copyright 2019-2026, The Vitruvian Project. All rights reserved.
+# Distributed under the terms of the MIT License.
 
-export HOME=/boot/home
+export HOME=/home
 export LC_CTYPE="en_US.UTF-8"
 
-BUILDHOME=/boot/system/develop
+BUILDHOME=/system/develop
 
-case `uname -m` in
-BePC|Intel|unknown)
+case "$(uname -m)" in
+x86_64|amd64)
+	BE_HOST_CPU=x86_64
+	;;
+i?86)
 	BE_HOST_CPU=x86
 	;;
-BeMac|BeBox)
-	BE_HOST_CPU=ppc
+aarch64|arm64)
+	BE_HOST_CPU=arm64
+	;;
+armv7l|armv7*)
+	BE_HOST_CPU=armv7l
+	;;
+ppc64le)
+	BE_HOST_CPU=ppc64le
+	;;
+s390x)
+	BE_HOST_CPU=s390x
+	;;
+riscv64)
+	BE_HOST_CPU=riscv64
 	;;
 *)
-	BE_HOST_CPU=`uname -m`
+	BE_HOST_CPU="$(uname -m)"
+	;;
 esac
 
-# not used by Haiku, but by (legacy) applications (e.g. Pe)
 BH=$BUILDHOME/headers
 BEINCLUDES="$BH;$BH/be;$BH/posix;$BH/glibc;$BH/cpp;$BH/be/app;$BH/be/device;$BH/be/interface;$BH/be/locale;$BH/be/media;$BH/be/midi;$BH/be/midi2;$BH/be/net;$BH/be/kernel;$BH/be/storage;$BH/be/support;$BH/be/game;$BH/be/opengl;$BH/be/drivers;$BH/gnu;$BH/be/mail;$BH/be/translation;$BH/be/devel;$BH/be/add-ons/graphics;$BH/be/be_apps/NetPositive;$BH/be/be_apps/Tracker"
 
@@ -28,25 +41,25 @@ export BEINCLUDES
 export BE_HOST_CPU
 
 if [ "$SAFEMODE" != "yes" ]; then
-	export PATH=.:$HOME/config/non-packaged/bin:$HOME/config/bin:/boot/system/non-packaged/bin:/bin:/boot/system/apps:/boot/system/preferences
-	export LIBRARY_PATH="%A/lib:$HOME/config/non-packaged/lib:$HOME/config/lib:/boot/system/non-packaged/lib:/boot/system/lib"
-	export ADDON_PATH="%A/add-ons:$HOME/config/non-packaged/add-ons:$HOME/config/add-ons:/boot/system/non-packaged/add-ons:/boot/system/add-ons"
+	export PATH=.:$HOME/config/bin:/bin:/system/apps:/system/preferences
+	export LIBRARY_PATH="%A/lib:$HOME/config/lib:/system/lib:/lib"
+	export ADDON_PATH="%A/add-ons:$HOME/config/add-ons:/system/add-ons"
 else
-	export PATH=.:/bin:/boot/system/apps:/boot/system/preferences
-	export LIBRARY_PATH="%A/lib:/boot/system/lib"
-	export ADDON_PATH="%A/add-ons:/boot/system/add-ons"
+	export PATH=.:/bin:/system/apps:/system/preferences
+	export LIBRARY_PATH="%A/lib:/system/lib:/lib"
+	export ADDON_PATH="%A/add-ons:/system/add-ons"
 fi
 
 # Locale
-export LC_MESSAGES=`locale --message`
-export LC_NUMERIC=`locale --format`
-export LC_TIME=`locale --time`
+export LC_MESSAGES="${LC_MESSAGES:-en_US.UTF-8}"
+export LC_NUMERIC="${LC_NUMERIC:-en_US.UTF-8}"
+export LC_TIME="${LC_TIME:-en_US.UTF-8}"
 export LC_COLLATE=$LC_MESSAGES
 export LC_CTYPE=$LC_MESSAGES
 export LC_MONETARY=$LC_NUMERIC
 
 if [ "$SAFEMODE" != "yes" ]; then
 	if [ -f $HOME/config/settings/boot/UserSetupEnvironment ]; then
-     	. $HOME/config/settings/boot/UserSetupEnvironment
+		. $HOME/config/settings/boot/UserSetupEnvironment
 	fi
 fi

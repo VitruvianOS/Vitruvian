@@ -3,15 +3,8 @@
 # Place user customizations in ~/config/settings/profile
 #
 
-_ARCH=`getarch 2>/dev/null`
-if [ "$_ARCH" = "`getarch -p 2>/dev/null`" ] ; then
-	echo -e "\nWelcome to the Haiku shell.\n"
-	PS1="\w"
-else
-	echo -e "\nSwitching to architecture `getarch`\n"
-	PS1="[$_ARCH] \w"
-fi
-unset _ARCH
+echo -e "\nWelcome to Vitruvian.\n"
+PS1="\w"
 
 export PS1="\["'`if [ $? = 0 ]; then echo "\e[32m";
 	else echo "\e[31m"; fi`'"\]$PS1\[\e[0m\]> "
@@ -20,7 +13,7 @@ export USER=`id -un`
 export GROUP=`id -gn`
 
 if [ -z $BE_HOST_CPU ]; then
-	. /boot/system/boot/SetupEnvironment
+	. /system/boot/SetupEnvironment
 fi
 
 export HISTFILESIZE=500

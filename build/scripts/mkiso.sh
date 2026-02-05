@@ -8,7 +8,12 @@ imagekernelversion=`cat ./imagekernelversion.conf`
 bold=$(tput bold)
 normal=$(tput sgr0)
 
-# Check if any local deb file exist
+BUILD_TYPE="Release"
+if [ -f "$basedir/buildconfig.conf" ]; then
+    . "$basedir/buildconfig.conf"
+    BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
+fi
+
 count=`ls -1 $basedir/*.deb 2>/dev/null | wc -l`
 if [ $count != 0 ]; then
 sudo mount -o bind $basedir/ $basedir/LIVE_BOOT/chroot/tmp/
@@ -39,7 +44,43 @@ sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc
 apt update && \
 apt install -y dkms build-essential linux-headers-$imagekernelversion && \
 apt install -y -f --reinstall /tmp/*.deb && \
-depmod -v $imagekernelversion && exit"
+depmod -v $imagekernelversion && echo 'root:live' | chpasswd; exit"
+
+if [ "$BUILD_TYPE" = "Debug" ]; then
+    echo "${bold}Configuring SSH server for debug access..."
+    echo "${normal}"
+
+    CHROOT_DIR="$basedir/LIVE_BOOT/chroot"
+    DROPIN_DIR="/etc/ssh/sshd_config.d"
+    DROPIN_FILE="$DROPIN_DIR/debug.conf"
+
+    sudo chroot "$CHROOT_DIR" /bin/bash -eux <<'CHROOT'
+
+mkdir -p /etc/ssh/sshd_config.d
+
+cat > /etc/ssh/sshd_config.d/debug.conf <<'EOF'
+PermitRootLogin yes
+PasswordAuthentication yes
+PermitEmptyPasswords no
+# keep other defaults from main sshd_config
+EOF
+
+chmod 0644 /etc/ssh/sshd_config.d/debug.conf
+chown root:root /etc/ssh/sshd_config.d/debug.conf
+
+mkdir -p /root/.ssh
+chmod 0700 /root/.ssh
+chown root:root /root/.ssh
+
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable ssh.service 2>/dev/null || true
+fi
+
+CHROOT
+
+    echo "${bold}SSH server configured."
+    echo "${normal}"
+fi
 
 if mountpoint -q "$basedir/LIVE_BOOT/chroot/proc/"; then
   sudo umount "$basedir/LIVE_BOOT/chroot/proc/"
@@ -147,4 +188,15 @@ xorriso \
         /boot/grub/bios.img=$basedir/LIVE_BOOT/scratch/bios.img \
         /EFI/efiboot.img=$basedir/LIVE_BOOT/scratch/efiboot.img
 
-echo ${bold}Finished! 
+echo ${bold}Finished!
+echo ${normal}
+echo "ISO created: $basedir/LIVE_BOOT/vitruvian-custom.iso"
+echo "Build type: $BUILD_TYPE"
+if [ "$BUILD_TYPE" = "Debug" ]; then
+    echo ""
+    echo "${bold}Debug build - SSH access enabled:${normal}"
+    echo "  User: root"
+    echo "  Password: live"
+    echo "  Connect: ssh root@<guest-ip>"
+fi
+echo "" 

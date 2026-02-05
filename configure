@@ -1,6 +1,8 @@
 #!/bin/sh
 
-kernelversion=`cat ./hostkernelversion.conf`
+uname -r > hostkernelversion.conf
+hostkernel=`cat ./hostkernelversion.conf`
+guestkernel=`cat ./imagekernelversion.conf`
 
 # Right now we have three build types:
 #
@@ -11,11 +13,6 @@ kernelversion=`cat ./hostkernelversion.conf`
 # Override: BUILD_TYPE=Release ./configure
 BUILD_TYPE="${BUILD_TYPE:-Debug}"
 
-# TODO pass flags directly from configure
-cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILDTOOLS_DIR=../buildtools -DKERNEL_RELEASE=$kernelversion .. -GNinja
-
-if [ "$BUILD_TYPE" = "Debug" ]; then
-    echo "NOTE: Debug build will include a SSH server (root:vitruvio)"
-fi
+cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILDTOOLS_DIR=../buildtools -DHOST_KERNEL=$hostkernel -DGUEST_KERNEL=$guestkernel .. -GNinja
 
 echo "Configured correctly!"

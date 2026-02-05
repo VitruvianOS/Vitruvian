@@ -53,12 +53,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+BASE_PACKAGES="apt-utils dialog linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny libbinutils openssh-server"
+
 sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo 'vitruvian-live' > /etc/hostname && \
-apt update && apt install -y --no-install-recommends apt-utils dialog linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny libbinutils && \
-echo 'root:vitruvio' | chpasswd; exit"
+apt update && apt install -y --no-install-recommends $BASE_PACKAGES $DEBUG_PACKAGES && \
+exit"
 
 ls ./LIVE_BOOT/chroot/lib/modules | head -n1 > imagekernelversion.conf
-uname -r > hostkernelversion.conf
 
-echo ${bold}Success!
 echo ${normal}

@@ -244,6 +244,8 @@ SystemWatcher::Notify(uint32 flags, uint32 what, uint32 thread)
 			message.SetDeliveryInfo(fListeners.ItemAt(i)->token,
 				fListeners.ItemAt(i)->port, -1, find_thread(NULL));
 
+			// TODO we should have some private header for private
+			// message whats
 			int32 kPortMessageCode = 'pjpp';
 			write_port(fListeners.ItemAt(i)->port,
 				kPortMessageCode, message.Buffer(), message.ContentSize());

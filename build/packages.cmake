@@ -1,4 +1,4 @@
- #  Copyright 2019-2020, Dario Casalinuovo. All rights reserved.
+ #  Copyright 2019-2026, Dario Casalinuovo. All rights reserved.
  #  Distributed under the terms of the LGPL License.
 
 function( ImageInclude path )
@@ -33,6 +33,6 @@ set(CORE_DEPS "${RESULT}")
 
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${CORE_DEPS})
 SET(CPACK_GENERATOR "DEB")
-set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/data/systemd/postinst" "${CMAKE_CURRENT_SOURCE_DIR}/data/systemd/prerm")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postinst" "${CMAKE_CURRENT_SOURCE_DIR}/data/debian/prerm")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")
 INCLUDE(CPack)

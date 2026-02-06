@@ -65,6 +65,10 @@ set(SYSTEM_TRANSLATORS
 ImageInclude("/system/add-ons/Translators" ${SYSTEM_TRANSLATORS})
 
 
+# MIME database for application signature launching
+ImageIncludeDir("src/data/mime_db" "/system/data/")
+
+
 set(SYSTEM_PREFERENCES
 )
 ImageInclude("/system/preferences" ${SYSTEM_PREFERENCES})

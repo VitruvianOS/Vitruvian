@@ -1,7 +1,8 @@
 target_sources(root PRIVATE
 	Team.cpp
+
 	thread.cpp
-	Port.cpp
+	port.cpp
 	sem.cpp
 	area.cpp
 
@@ -11,16 +12,16 @@ target_sources(root PRIVATE
 	extended_system_info.cpp
 	framebuffer.cpp
 	image.cpp
-	mutex.cpp
 	parsedate.cpp
 	real_time_clock.c
-	SystemWatcher.cpp
 	shutdown.cpp
 	system_info.c
+
+	SystemWatcher.cpp
 	KMessage.cpp
 
-	fs/vref.cpp
 	fs/fs.cpp
+	fs/vref.cpp
 	fs/node_monitor.cpp
 	fs/disk_device/disk_device.cpp
 	fs/fs_info.cpp
@@ -44,10 +45,10 @@ target_sources(root PRIVATE
 	compat/wait_for_objects.cpp
 	compat/getenv.c
 
-	# TODO: remove init_once
-	locks/init_once.cpp
-	locks/mutex.cpp
-	locks/recursive_lock.cpp
+	compat/mutex.cpp
+	compat/locks/init_once.cpp
+	compat/locks/mutex.cpp
+	compat/locks/recursive_lock.cpp
 )
 
 add_dependencies(root nexus)

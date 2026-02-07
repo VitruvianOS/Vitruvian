@@ -19,11 +19,7 @@
 static const char* const kArchitecture = "x86_64";
 static const char* const kPrimaryArchitecture = "x86_64";
 
-#ifdef __HAIKU_ARCH_X86
-	static const char* const kSiblingArchitectures[] = {"x86_gcc2", "x86"};
-#else
-	static const char* const kSiblingArchitectures[] = {};
-#endif
+static const char* const kSiblingArchitectures[] = {};
 
 static const size_t kSiblingArchitectureCount
 	= sizeof(kSiblingArchitectures) / sizeof(const char*);

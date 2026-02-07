@@ -29,6 +29,7 @@ public:
 	static thread_id	LoadImage(int32 argc, const char** argv,
 							const char** envp);
 
+private:
 	static void 		PrepareFatherAtFork();
 	static void 		SyncFatherAtFork();
 	static void 		ReinitChildAtFork();

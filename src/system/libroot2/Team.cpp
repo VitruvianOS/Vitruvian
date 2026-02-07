@@ -7,29 +7,17 @@
 
 #include "Team.h"
 
-#include <OS.h>
-
 #include <dirent.h>
-#include <errno.h>
-#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <syscall.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
 
 #include <list>
 #include <string>
 
-#define DEBUG 2
 #include "KernelDebug.h"
 #include "syscalls.h"
-#include "Thread.h"
 
 
 int32 __gCPUCount = BKernelPrivate::Team::GetCPUCount();
@@ -93,6 +81,10 @@ init_team(int argc, char** argv)
 	__libc_argc = argc;
 	__libc_argv = argv;
 
+	// If we don't set this we get no debug output from servers
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
+
 	setenv("TARGET_SCREEN", "root", 1);
 }
 
@@ -136,13 +128,21 @@ Team::PreInitTeam()
 	TRACE("Team::PreInitTeam\n");
 
 	if (gNexus < 0) {
-		gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
-		if (gNexus < 0) {
-			printf("Can't open Nexus IPC\n");
-			exit(-1);
+		const char* nexusFdEnv = getenv("__VITRUVIAN_NEXUS_FD");
+		if (nexusFdEnv != NULL) {
+			gNexus = atoi(nexusFdEnv);
+			unsetenv("__VITRUVIAN_NEXUS_FD");
+			TRACE("Team::PreInitTeam: using inherited nexus fd %d\n", gNexus);
+		} else {
+			gNexus = open("/dev/nexus", O_RDWR);
+			if (gNexus < 0) {
+				printf("Can't open Nexus IPC\n");
+				exit(-1);
+			}
 		}
 	}
-	gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
+
+	gNexusSem = open("/dev/nexus_sem", O_RDWR);
 	if (gNexusSem < 0) {
 		printf("Can't open Nexus Sem\n");
 		exit(-1);
@@ -170,6 +170,7 @@ Team::PreInitTeam()
 }
 
 
+// TODO inline in header those and use unlikely
 int
 Team::GetNexusDescriptor()
 {
@@ -308,18 +309,10 @@ Team::ReinitChildAtFork()
 
 	gTeamOnce = PTHREAD_ONCE_INIT;
 
-	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
-	if (gNexus < 0) {
-		printf("Can't open Nexus IPC\n");
-		exit(-1);
-	}
-
 	if (gForkPipe[0] != -1) {
 		close(gForkPipe[0]);
 		gForkPipe[0] = -1;
 	}
-
-	Thread::ReinitChildAtFork();
 
 	if (gForkPipe[1] != -1) {
 		char buf = 1;
@@ -355,21 +348,46 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 	sigaddset(&blockMask, SIGCHLD);
 	sigprocmask(SIG_BLOCK, &blockMask, &oldMask);
 
-	pid_t pid = fork();
+	TRACE("LoadImage: about to clone(), gNexus=%d gNexusSem=%d gNexusArea=%d gNexusVRef=%d\n",
+		gNexus, gNexusSem, gNexusArea, gNexusVRef);
+
+	pid_t pid = syscall(SYS_clone, SIGCHLD, 0, NULL, NULL, 0);
 	if (pid == -1) {
 		int savedErrno = errno;
 		close(syncPipe[0]);
 		close(syncPipe[1]);
 		sigprocmask(SIG_SETMASK, &oldMask, NULL);
-		TRACE("load_image: fork failed: %s\n", strerror(savedErrno));
+		TRACE("load_image: clone failed: %s\n", strerror(savedErrno));
 		return -savedErrno;
 	}
 
 	if (pid == 0) {
+		TRACE("LoadImage CHILD: closing nexus fds gNexus=%d gNexusSem=%d gNexusArea=%d gNexusVRef=%d\n",
+			gNexus, gNexusSem, gNexusArea, gNexusVRef);
+
+		if (gNexus >= 0) {
+			close(gNexus); gNexus = -1;
+		}
+		if (gNexusSem >= 0) {
+			close(gNexusSem); gNexusSem = -1;
+		}
+		if (gNexusArea >= 0) {
+			close(gNexusArea); gNexusArea = -1;
+		}
+		if (gNexusVRef >= 0) {
+			close(gNexusVRef); gNexusVRef = -1;
+		}
+
 		close(syncPipe[0]);
 
-		sigprocmask(SIG_SETMASK, &oldMask, NULL);
+		int nexusFd = open("/dev/nexus", O_RDWR);
+		if (nexusFd >= 0) {
+			char fdStr[16];
+			snprintf(fdStr, sizeof(fdStr), "%d", nexusFd);
+			setenv("__VITRUVIAN_NEXUS_FD", fdStr, 1);
+		}
 
+		sigprocmask(SIG_SETMASK, &oldMask, NULL);
 		raise(SIGSTOP);
 
 		execvpe(argv[0], const_cast<char* const*>(argv),
@@ -851,15 +869,6 @@ get_memory_properties(team_id teamID, const void* address, uint32* _protected,
 	close(pidfd);
 	*_lock = 0;
 	return B_OK;
-}
-
-
-status_t
-_kern_get_extended_team_info(team_id teamID, uint32 flags,
-	void* buffer, size_t size, size_t* _sizeNeeded)
-{
-	UNIMPLEMENTED();
-	return B_UNSUPPORTED;
 }
 
 

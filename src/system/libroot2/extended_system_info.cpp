@@ -50,3 +50,12 @@ get_extended_team_info(team_id teamID, uint32 flags, KMessage& info)
 
 
 }	// namespace BPrivate
+
+
+status_t
+_kern_get_extended_team_info(team_id teamID, uint32 flags,
+	void* buffer, size_t size, size_t* _sizeNeeded)
+{
+	UNIMPLEMENTED();
+	return B_UNSUPPORTED;
+}

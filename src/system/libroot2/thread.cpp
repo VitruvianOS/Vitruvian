@@ -5,26 +5,16 @@
 
 #include <OS.h>
 
-#include <Locker.h>
-
-#include <string>
-#include <map>
-
 #include <dirent.h>
 #include <poll.h>
 #include <pthread.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/syscall.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
 
 #include <syscalls.h>
 
 #include "KernelDebug.h"
 #include "Team.h"
-#include "Thread.h"
 
 #include "../kernel/nexus/nexus/nexus.h"
 
@@ -32,248 +22,40 @@
 namespace BKernelPrivate {
 
 
-struct data_wrap {
-	thread_func func;
-	void* data;
-	thread_id father;
-
-	pid_t tid;
-};
-
-static __thread Thread* gCurrentThread = NULL;
 static __thread pthread_key_t sOnExitKey;
 
-static pthread_mutex_t gLock;
-static std::map<thread_id, Thread*> gThreadsMap;
 
+struct thread_data {
+	const char* name;
+	thread_id father;
 
-// Static initialization for the main thread
-class ThreadPool {
-public:
-
-	ThreadPool()
-	{
-		Thread::_Init();
-	}
-
+	thread_func func;
+	void* data;
 };
 
-static ThreadPool init;
 
-
-Thread::Thread()
-{
-	fThread = find_thread(NULL);
-	fThreadBlockSem = create_sem(0, "block_thread_sem");
-	if (fThreadBlockSem < 0) {
-		TRACE("Thread: Failed to create block semaphore: %ld\n", fThreadBlockSem);
-	}
-	gCurrentThread = this;
-}
-
-
-Thread::~Thread()
-{
-	if (fThreadBlockSem >= 0) {
-		delete_sem(fThreadBlockSem);
-		fThreadBlockSem = -1;
-	}
-	// TODO: pthread_detach
-}
-
-
-void
-Thread::ReinitChildAtFork()
-{
-	TRACE("Process %d reinit thread after fork\n", getpid());
-
-	gThreadsMap.clear();
-	gCurrentThread = NULL;
-
-	_Init();
-}
-
-
-thread_id
-Thread::CreateThread()
-{
-	thread_id id = find_thread(NULL);
-	Thread* thread = new Thread();
-
-	if (thread->fThreadBlockSem < 0) {
-		TRACE("CreateThread: block sem creation failed\n");
-		delete thread;
-		return B_NO_MEMORY;
-	}
-
-	gThreadsMap.insert(std::make_pair(id, thread));
-	return id;
-}
-
-
-void
-Thread::Lock()
-{
-	pthread_mutex_lock(&gLock);
-}
-
-void
-Thread::Unlock()
-{
-	pthread_mutex_unlock(&gLock);
-}
-
-
-void*
-Thread::thread_run(void* data)
+void* thread_run(void* data)
 {
 	CALLED();
 
-	data_wrap* threadData = (data_wrap*)data;
+	thread_data* threadData = (thread_data*)data;
+	nexus_thread_spawn spawnInfo = { threadData->name, threadData->father };
 
-	Thread::Lock();
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus_io(nexus, NEXUS_THREAD_SPAWN, "thread name") < 0) {
+	status_t ret = nexus_io(nexus, NEXUS_THREAD_SPAWN, &spawnInfo);
+	if (ret < 0) {
 		TRACE("thread_run: NEXUS_THREAD_SPAWN failed\n");
-		threadData->tid = -1;
-		Thread::Unlock();
-		Thread::Unblock(threadData->father, B_ERROR);
+		delete threadData;
 		return NULL;
 	}
 
-	thread_id tid = CreateThread();
-	if (tid < 0) {
-		TRACE("thread_run: CreateThread failed\n");
-		threadData->tid = -1;
-		Thread::Unlock();
-		Thread::Unblock(threadData->father, B_ERROR);
-		return NULL;
-	}
+	pthread_detach(pthread_self());
 
-	threadData->tid = tid;
-	Thread::Unlock();
+	status_t error = threadData->func(threadData->data);
 
-	Thread::Unblock(threadData->father, B_OK);
-
-	status_t blockResult = gCurrentThread->Block(B_TIMEOUT, B_INFINITE_TIMEOUT);
-	if (blockResult != B_OK) {
-		TRACE("thread_run: Block failed with %ld\n", blockResult);
-	}
-
-	status_t threadResult = threadData->func(threadData->data);
-
-	Thread::Lock();
-	gThreadsMap.erase(threadData->tid);
-	TRACE("%d is exiting\n", gettid());
-	delete gCurrentThread;
-	gCurrentThread = NULL;
 	delete threadData;
-	Thread::Unlock();
-
-	exit_thread(threadResult);
+	exit_thread(error);
 	return NULL;
-}
-
-
-status_t
-Thread::Resume(thread_id id)
-{
-	return Unblock(id, B_OK);
-}
-
-
-#if 0
-
-status_t
-Thread::Block(uint32 flags, bigtime_t timeout)
-{
-	CALLED();
-
-	struct nexus_thread_exchange exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.op = NEXUS_THREAD_BLOCK;
-	exchange.flags = flags;
-	exchange.timeout = timeout;
-
-	int sNexus = BKernelPrivate::Team::GetNexusDescriptor();
-	status_t ret = nexus_io(sNexus, NEXUS_THREAD_OP, &exchange);
-	return ret;
-}
-
-
-status_t
-Thread::Unblock(thread_id thread, status_t status)
-{
-	CALLED();
-
-	if (thread < 0)
-		return B_BAD_THREAD_ID;
-
-	struct nexus_thread_exchange exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.op = NEXUS_THREAD_UNBLOCK;
-	exchange.receiver = thread;
-	exchange.status = status;
-
-	int sNexus = BKernelPrivate::Team::GetNexusDescriptor();
-	return nexus_io(sNexus, NEXUS_THREAD_OP, &exchange);
-}
-
-
-#else
-
-status_t
-Thread::Block(uint32 flags, bigtime_t timeout)
-{
-	if (fThreadBlockSem < 0) {
-		TRACE("Block: ThreadBlockSem uninitialized or invalid\n");
-		debugger("ThreadBlockSem uninitialized");
-		return B_ERROR;
-	}
-
-	return acquire_sem_etc(fThreadBlockSem, 1, flags, timeout);
-}
-
-
-status_t
-Thread::Unblock(thread_id thread, status_t status)
-{
-	Thread::Lock();
-	auto elem = gThreadsMap.find(thread);
-	if (elem == end(gThreadsMap)) {
-		Thread::Unlock();
-		return B_BAD_THREAD_ID;
-	}
-
-	Thread* ret = elem->second;
-	sem_id blockSem = -1;
-	if (ret != NULL)
-		blockSem = ret->fThreadBlockSem;
-	Thread::Unlock();
-
-	if (blockSem >= 0) {
-		status_t result = release_sem(blockSem);
-		if (result != B_OK) {
-			TRACE("Unblock: release_sem failed with %ld\n", result);
-		}
-		return result;
-	}
-
-	return B_ERROR;
-}
-
-#endif
-
-
-void
-Thread::_Init()
-{
-	pthread_mutex_init(&gLock, NULL);
-
-	thread_id id = CreateThread();
-	if (id < 0) {
-		TRACE("Thread::_Init: CreateThread failed\n");
-	}
 }
 
 
@@ -292,40 +74,41 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 		return B_BAD_VALUE;
 	}
 
-	BKernelPrivate::data_wrap* dataWrap
-		= new BKernelPrivate::data_wrap();
-	if (dataWrap == NULL)
+	BKernelPrivate::thread_data* threadData
+		= new BKernelPrivate::thread_data();
+	if (threadData == NULL)
 		return B_NO_MEMORY;
 
-	dataWrap->data = data;
-	dataWrap->func = func;
-	dataWrap->father = find_thread(NULL);
-	dataWrap->tid = -1;
+	threadData->name = name;
+	threadData->father = find_thread(NULL); 
+	threadData->func = func;	
+	threadData->data = data;
 
 	pthread_t pThread;
 	int32 ret = pthread_create(&pThread, NULL,
-		BKernelPrivate::Thread::thread_run, dataWrap);
+		BKernelPrivate::thread_run, threadData);
 	if (ret != 0) {
-		delete dataWrap;
+		delete threadData;
 		return -errno;
 	}
 
-	status_t blockResult = BKernelPrivate::gCurrentThread->Block(B_TIMEOUT,
-		B_INFINITE_TIMEOUT);
-
-	if (blockResult != B_OK)
-		TRACE("spawn_thread: Block failed with %ld\n", blockResult);
-
-	if (dataWrap->tid < 0)
-		return B_ERROR;
-
-	return dataWrap->tid;
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	thread_id id = nexus_io(nexus, NEXUS_THREAD_WAIT_NEWBORN, NULL);
+	if (id < 0)
+		return B_BAD_THREAD_ID;
+	return id;
 }
 
 
 status_t
 kill_thread(thread_id thread)
 {
+	if (thread < 0)
+		return B_BAD_THREAD_ID;
+
+	if (thread == find_thread(NULL))
+		return B_NOT_ALLOWED;
+
 	status_t ret = kill_team(thread);
 	return ret == B_BAD_TEAM_ID ? B_BAD_THREAD_ID : ret;
 }
@@ -628,9 +411,8 @@ wait_for_remote_thread(thread_id id, status_t* returnCode)
 		status = (status_t)si.si_status;
 	} else if (si.si_code == CLD_KILLED || si.si_code == CLD_DUMPED) {
 		status = (status_t)(-si.si_status);
-	} else {
+	} else
 		status = B_ERROR;
-	}
 
 	waitid(P_PIDFD, pfd, &si, WEXITED);
 	close(pfd);
@@ -651,8 +433,13 @@ wait_for_thread(thread_id id, status_t* returnCode)
 		return B_BAD_THREAD_ID;
 
 	if (id == getpid()) {
-		debugger("Team::WaitForTeam: cannot wait for own team");
+		debugger("wait_for_thread: you can't wait for your own team!");
 		return B_BAD_TEAM_ID;
+	}
+
+	if (id == find_thread(NULL)) {
+		debugger("wait_for_thread: do you really want to wait for yourself?");
+		return B_BAD_THREAD_ID;
 	}
 
 	struct nexus_thread_exchange exchange;
@@ -662,13 +449,12 @@ wait_for_thread(thread_id id, status_t* returnCode)
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	status_t ret = nexus_io(nexus, NEXUS_THREAD_OP, &exchange);
-
 	if (ret == B_BAD_THREAD_ID) {
 		if (kill(id, 0) < 0)
 			return B_BAD_THREAD_ID;
 
-        if (kill(id, SIGCONT) < 0)
-            return -errno;
+		if (kill(id, SIGCONT) < 0)
+			return -errno;
 
 		return wait_for_remote_thread(id, returnCode);
 	}
@@ -699,19 +485,23 @@ resume_thread(thread_id id)
 {
 	CALLED();
 
-    status_t ret = BKernelPrivate::Thread::Resume(id);
+	// TODO remove me
+	if (kill(id, 0) == 0)
+		kill(id, SIGCONT);
 
-    if (ret == B_BAD_THREAD_ID) {
-        if (kill(id, 0) < 0)
-            return B_BAD_THREAD_ID;
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	status_t ret = nexus_io(nexus, NEXUS_THREAD_RESUME, id);
+	if (ret == B_BAD_THREAD_ID) {
+		if (kill(id, 0) < 0)
+			return B_BAD_THREAD_ID;
 
-        if (kill(id, SIGCONT) < 0)
-            return -errno;
+		if (kill(id, SIGCONT) < 0)
+			return -errno;
 
-        return B_OK;
-    }
+		return B_OK;
+	}
 
-    return ret;
+	return ret;
 }
 
 
@@ -735,47 +525,5 @@ snooze_until(bigtime_t time, int timeBase)
 	return snooze(time - now);
 }
 
-
-status_t
-_kern_block_thread(uint32 flags, bigtime_t timeout)
-{
-	CALLED();
-
-	if (BKernelPrivate::gCurrentThread == NULL) {
-		TRACE("_kern_block_thread: no current thread!\n");
-		return B_ERROR;
-	}
-
-	return BKernelPrivate::gCurrentThread->Block(flags, timeout);
-}
-
-
-status_t
-_kern_unblock_thread(thread_id thread, status_t status)
-{
-	CALLED();
-	return BKernelPrivate::Thread::Unblock(thread, status);
-}
-
-
-// TODO this appears to be used only by RWLockManager
-// we can remove both.
-status_t
-_kern_unblock_threads(thread_id* threads, uint32 count,
-	status_t status)
-{
-	CALLED();
-
-	if (threads == NULL || count == 0)
-		return B_BAD_VALUE;
-
-	bool success = true;
-	for (uint32 i = 0; i < count; i++) {
-		if (_kern_unblock_thread(threads[i], status) != B_OK)
-			success = false;
-	}
-
-	return success ? B_OK : B_ERROR;
-}
 
 }

@@ -1,9 +1,11 @@
-add_subdirectory(messaging)
-
 target_sources(root PRIVATE
+	Team.cpp
+	thread.cpp
+	Port.cpp
+	sem.cpp
 	area.cpp
+
 	byteorder.cpp
-	Architecture.cpp
 	debug.cpp
 	driver_settings.cpp
 	extended_system_info.cpp
@@ -11,17 +13,26 @@ target_sources(root PRIVATE
 	image.cpp
 	mutex.cpp
 	parsedate.cpp
-	Port.cpp
-	sem.cpp
-	SystemWatcher.cpp
-	Team.cpp
-	Thread.cpp
-	vref.cpp
-
 	real_time_clock.c
+	SystemWatcher.cpp
 	shutdown.cpp
 	system_info.c
+	KMessage.cpp
 
+	fs/vref.cpp
+	fs/fs.cpp
+	fs/node_monitor.cpp
+	fs/disk_device/disk_device.cpp
+	fs/fs_info.cpp
+	fs/mount.cpp
+	fs/attr.cpp
+	fs/index.cpp
+	fs/query.cpp
+	fs/find_directory.cpp
+	fs/find_paths.cpp
+	fs/normalize_path.cpp
+
+	compat/Architecture.cpp
 	compat/libc.c
 	compat/scheduler.c
 	compat/signal.cpp
@@ -33,19 +44,7 @@ target_sources(root PRIVATE
 	compat/wait_for_objects.cpp
 	compat/getenv.c
 
-	fs/find_directory.cpp
-	fs/find_paths.cpp
-	fs/fs4.cpp
-	fs/fs_attr.cpp
-	fs/fs_index.cpp
-	fs/fs_info.cpp
-	fs/fs_query.cpp
-	fs/fs_volume.c
-	fs/normalize_path.cpp
-	fs/watch.cpp
-
-	fs/disk_device/disk_device.cpp
-
+	# TODO: remove init_once
 	locks/init_once.cpp
 	locks/mutex.cpp
 	locks/recursive_lock.cpp

@@ -105,6 +105,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	BLKID
+	LIBRARIES	"blkid"
+	PACKAGES	"libblkid-dev"
+	RUNTIMES	"libblkid1 (>= 2.41-5)"
+)
+
+DeclareDependency(
 	ZLIB
 	LIBRARIES  "z"
 	PACKAGES  "zlib1g-dev"

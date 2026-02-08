@@ -2,7 +2,7 @@ AddOn(
 	root
 	SHARED
 
-	LIBS be_bootstrap rt dl pthread ${ZLIB_LIBRARIES}
+	LIBS be_bootstrap rt dl pthread ${ZLIB_LIBRARIES} ${UDEV_LIBRARIES} ${BLKID_LIBRARIES}
 )
 
 find_library(BACKTRACE_LIBRARY backtrace)

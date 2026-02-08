@@ -22,6 +22,7 @@ public:
 	static int			GetSemDescriptor();
 	static int			GetAreaDescriptor();
 	static int			GetVRefDescriptor(dev_t* dev = NULL);
+	static int			GetUDevDescriptor();
 
 	static mode_t		GetUmask();
 	static int32		GetCPUCount();

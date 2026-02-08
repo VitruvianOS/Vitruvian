@@ -8,6 +8,7 @@
 #include "Team.h"
 
 #include <dirent.h>
+#include <libudev.h>
 #include <pthread.h>
 #include <signal.h>
 #include <syscall.h>
@@ -35,6 +36,7 @@ static int gNexus = -1;
 static int gNexusSem = -1;
 static int gNexusArea = -1;
 static int gNexusVRef = -1;
+static int gUdev = -1;
 
 static int gForkPipe[2] = {-1, -1};
 
@@ -229,6 +231,16 @@ Team::GetNodeMonitorDescriptor()
 #endif
 
 
+int
+Team::GetUDevDescriptor()
+{
+	if (gUdev == -1)
+		gUdev = udev_new();
+
+	return gUdev;
+}
+
+
 mode_t
 Team::GetUmask()
 {
@@ -306,6 +318,10 @@ Team::ReinitChildAtFork()
 		close(gNexusVRef);
 		gNexusVRef = -1;
 	}
+	if (gUdev >= 0) {
+		udev_unref(gUdev);
+		gUdev = -1;
+	}
 
 	gTeamOnce = PTHREAD_ONCE_INIT;
 
@@ -366,16 +382,24 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 			gNexus, gNexusSem, gNexusArea, gNexusVRef);
 
 		if (gNexus >= 0) {
-			close(gNexus); gNexus = -1;
+			close(gNexus);
+			gNexus = -1;
 		}
 		if (gNexusSem >= 0) {
-			close(gNexusSem); gNexusSem = -1;
+			close(gNexusSem);
+			gNexusSem = -1;
 		}
 		if (gNexusArea >= 0) {
-			close(gNexusArea); gNexusArea = -1;
+			close(gNexusArea);
+			gNexusArea = -1;
 		}
 		if (gNexusVRef >= 0) {
-			close(gNexusVRef); gNexusVRef = -1;
+			close(gNexusVRef);
+			gNexusVRef = -1;
+		}
+		if (gUdev >= 0) {
+			close(gUdev);
+			gUdev = -1;
 		}
 
 		close(syncPipe[0]);

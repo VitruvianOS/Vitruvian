@@ -123,7 +123,7 @@ dev_t
 LinuxVolume::GetNextVolume(int32* cookie)
 {
 	if (cookie == NULL)
-		return B_BAD_VALUE;
+		return B_INVALID_DEV;
 
 	if (*cookie == 0 || sVolumeIterator == NULL) {
 		if (sVolumeIterator != NULL)
@@ -131,7 +131,7 @@ LinuxVolume::GetNextVolume(int32* cookie)
 
 		sVolumeIterator = setmntent(PROC_MOUNTS, "r");
 		if (sVolumeIterator == NULL)
-			return B_ERROR;
+			return B_INVALID_DEV;
 	}
 
 	struct mntent* mountEntry;
@@ -169,7 +169,7 @@ LinuxVolume::GetNextVolume(int32* cookie)
 	endmntent(sVolumeIterator);
 	sVolumeIterator = NULL;
 	*cookie = -1;
-	return B_BAD_VALUE;
+	return B_INVALID_DEV;
 }
 
 
@@ -185,7 +185,7 @@ next_dev(int32* cookie)
 	CALLED();
 
 	if (cookie == NULL || *cookie < 0)
-		return B_BAD_VALUE;
+		return B_INVALID_DEV;
 
 	return LinuxVolume::GetNextVolume(cookie);
 }
@@ -214,11 +214,11 @@ dev_t
 dev_for_path(const char* path)
 {
 	if (path == NULL)
-		return B_BAD_VALUE;
+		return B_INVALID_DEV;
 
 	struct stat st;
 	if (stat(path, &st) < 0)
-		return B_ENTRY_NOT_FOUND;
+		return B_INVALID_DEV;
 
 	return st.st_dev;
 }

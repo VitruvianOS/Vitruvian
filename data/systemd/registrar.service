@@ -12,4 +12,4 @@ RestartSec=500ms
 StartLimitBurst=5
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target

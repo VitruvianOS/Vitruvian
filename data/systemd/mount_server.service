@@ -4,6 +4,7 @@ Conflicts=getty@tty1.service
 After=registrar.service
 
 [Service]
+ExecStartPre=/bin/sleep 0.5
 ExecStart=/system/servers/mount_server
 StandardInput=tty-force
 StandardOutput=append:/var/log/mount_server.log

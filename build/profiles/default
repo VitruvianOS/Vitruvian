@@ -19,6 +19,7 @@ set(SYSTEM_SERVERS
 	app_server
 	input_server
 	registrar
+	mount_server
 )
 ImageInclude("/system/servers" ${SYSTEM_SERVERS})
 

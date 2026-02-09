@@ -1,5 +1,5 @@
 [Unit]
-Description=deskbar daemon
+Description=Deskbar
 Conflicts=getty@tty1.service
 After=input_server.service
 

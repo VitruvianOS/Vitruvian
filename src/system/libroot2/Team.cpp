@@ -73,7 +73,7 @@ fault_handler(int sig)
 }
 
 
-void __attribute__ ((constructor))
+void __attribute__ ((constructor(1)))
 init_team(int argc, char** argv)
 {
 	TRACE("init_team() %d\n", argc);
@@ -169,6 +169,7 @@ Team::PreInitTeam()
 		exit(-1);
 	}
 #endif
+
 }
 
 

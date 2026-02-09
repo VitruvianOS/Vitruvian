@@ -34,5 +34,7 @@ mkdir -p /system/data/deskbar/menu/Preferences/
 mkdir -p /system/data/deskbar/menu/Demos/
 
 ln -sf /system/apps/StyledEdit /system/data/deskbar/menu/Applications/StyledEdit
+ln -sf /system/apps/Terminal /system/data/deskbar/menu/Applications/Terminal
 
-systemctl enable registrar.service app_server.service input_server.service deskbar.service tracker.service
+
+systemctl enable registrar.service mount_server app_server.service deskbar.service tracker.service

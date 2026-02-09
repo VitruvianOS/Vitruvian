@@ -1,13 +1,19 @@
 /*
- * Copyright 2021, Dario Casalinuovo.
+ * Copyright 2021-2026, Dario Casalinuovo.
  * Distributed under the terms of the GPL License.
  */
 #ifndef DRM_INTERFACE_H
 #define DRM_INTERFACE_H
 
-
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+extern "C" {
+#include <libseat.h>
+}
+
+#include <mutex>
+#include <condition_variable>
+#include <thread>
 
 #include "DrmBuffer.h"
 #include "HWInterface.h"
@@ -68,17 +74,34 @@ public:
 
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 
+			void				EventThreadMain();
+
+			void				_OnSessionEnable();
+			void				_OnSessionDisable();
+
 private:
-			static void		 	SwitchVt(int sig);
+			void					_RestoreDisplay();
 
-			static int			fFd;
+			static int				fFd;
 
-			DrmBuffer*			fFrontBuffer;
-			DrmBuffer*			fBackBuffer;
+			DrmBuffer*				fFrontBuffer;
+			DrmBuffer*				fBackBuffer;
 
-			display_mode		fDisplayMode;
+			display_mode			fDisplayMode;
 
-			LibInputEventStream* fEventStream;
+			LibInputEventStream* 	fEventStream;
+
+			struct libseat*			fSeat;
+			int						fDeviceId;
+			volatile bool			fSessionActive;
+			bool					fInitialized;
+			volatile bool			fRunning;
+			uint32_t				fSessionGeneration;
+
+			std::thread				fEventThread;
+			std::mutex				fSessionMutex;
+			std::condition_variable	fSessionCondition;
+			std::mutex				fSeatMutex;
 };
 
 #endif

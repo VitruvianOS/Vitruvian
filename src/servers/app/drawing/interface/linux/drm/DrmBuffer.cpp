@@ -1,5 +1,5 @@
 /*
- * Copyright 2021, Dario Casalinuovo.
+ * Copyright 2021-2026, Dario Casalinuovo.
  * Distributed under the terms of the GPL License.
  */
 

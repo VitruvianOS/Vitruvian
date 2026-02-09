@@ -1,5 +1,5 @@
 /*
- * Copyright 2021, Dario Casalinuovo
+ * Copyright 2021-2026, Dario Casalinuovo
  * All rights reserved. Distributed under the terms of the GPL license.
  */
 #ifndef DRM_BUFFER_H

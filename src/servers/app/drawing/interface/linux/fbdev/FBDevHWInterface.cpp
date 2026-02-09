@@ -41,7 +41,7 @@ FBDevHWInterface::FBDevHWInterface()
 	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
 	//fBackBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
 
-	fEventStream = new LibInputEventStream(fVInfo.xres_virtual, fVInfo.yres_virtual);
+	fEventStream = new LibInputEventStream(fVInfo.xres_virtual, fVInfo.yres_virtual, NULL);
 
 	//ioctl(TTy::gTTy, KDSETMODE, KD_GRAPHICS);
 }

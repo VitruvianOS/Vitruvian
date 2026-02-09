@@ -99,7 +99,7 @@ _kern_open_dir(int fd, const char* path)
 	if (fd < 0)
 		fd = AT_FDCWD;
 
-	int flags = O_EXCL | O_DIRECTORY;
+	int flags = O_DIRECTORY;
 
 	if (!path)
 		flags |= AT_EMPTY_PATH;
@@ -144,7 +144,7 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 		}
 
 		size_t len = strlen(baseName);
-		if (len > B_PATH_NAME_LENGTH || len > length) {
+		if (len+1 > length) {
 			close(dirfd);
 			return B_BUFFER_OVERFLOW;
 		}
@@ -172,7 +172,7 @@ _kern_open_dir_virtual_ref(vref_id id, const char* name)
 	if (name == NULL || strlen(name) == 0 || (strcmp(name, ".") == 0))
 		return fd;
 
-	int ret = openat(fd, name, O_EXCL | O_DIRECTORY);
+	int ret = openat(fd, name, O_DIRECTORY | O_CLOEXEC);
 	close(fd);
 	return (ret < 0) ? -errno : ret;
 }
@@ -199,7 +199,7 @@ _kern_open_dir_entry_ref(dev_t device, ino_t node, const char* name)
 		return ret;
 	}
 
-	int fd = opendir(path);
+	int fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
 	return (fd < 0) ? -errno : fd;
 }
 
@@ -308,8 +308,10 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 		printf("fs: opening dev_t %lld %s\n", st.st_dev, mountEntry->mnt_dir);
 		if (snprintf(userPath, pathLength, "%s/%s",
 				mountEntry->mnt_dir, leaf) >= pathLength) {
+			BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
 			return B_BUFFER_OVERFLOW;
 		}
+		BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
 		return B_OK;
 	}
 
@@ -411,6 +413,9 @@ _kern_read_link(int fd, const char* path, char* buffer, size_t* _bufferSize)
 	// Since Linux 2.6.39, path can be an empty string; allow path==NULL => ""
 	if (path == NULL)
 		path = "";
+
+	if (*_bufferSize == 0)
+		return B_BAD_VALUE;
 
 	ssize_t size = readlinkat(fd, path, buffer, *_bufferSize - 1);
 	if (size < 0)
@@ -524,6 +529,8 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 		return B_NO_MEMORY;
 
 	off_t seekOffset = _kern_seek(fd, 0, SEEK_CUR);
+	if (seekOffset < 0)
+		return seekOffset;
 
 	ssize_t ret = syscall(SYS_getdents64, fd, direntBuffer, bufSize);
 	if (ret < 0) {
@@ -567,8 +574,11 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 
 	free(direntBuffer);
 
-	if (pos < (size_t)ret)
-		_kern_seek(fd, seekOffset, SEEK_SET);
+	if (pos < (size_t)ret) {
+		off_t offset = _kern_seek(fd, seekOffset, SEEK_SET);
+		if (offset < 0)
+			return offset;
+	}
 
 	if (i <= 0)
 		return B_ENTRY_NOT_FOUND;

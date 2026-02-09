@@ -63,6 +63,7 @@ DeclareDependency(
 	LIBRARIES	"evdev"
 	PACKAGES	"libevdev-dev"
 	RUNTIMES	"libevdev-dev (>= 1.13.4)"
+	INCLUDES	"/usr/include/libevdev-1.0/"
 )
 
 DeclareDependency(

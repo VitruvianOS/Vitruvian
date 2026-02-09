@@ -140,7 +140,7 @@ node_ref::dereference() const
 void
 node_ref::unset()
 {
-	if (is_virtual())
+	if (is_virtual() && node != B_INVALID_DEV)
 		release_vref(id());
 
 	*this = node_ref(B_INVALID_DEV, B_INVALID_INO);
@@ -177,9 +177,8 @@ node_ref::operator=(const node_ref& other)
 	if (this == &other)
 		return *this;
 
-	// TODO that seems to break the refs, investigate why
-	//if (is_virtual() && node != B_INVALID_INO)
-	//    release_vref((vref_id) node);
+	dev_t oldDevice = device;
+	ino_t oldNode = node;
 
 	device = other.device;
 	node = other.node;
@@ -187,6 +186,11 @@ node_ref::operator=(const node_ref& other)
 
 	if (is_virtual() && node != B_INVALID_INO)
 		acquire_vref((vref_id) node);
+
+	#if 0
+	if (oldDevice == get_vref_dev() && oldNode != B_INVALID_INO)
+		release_vref((vref_id) oldNode);
+	#endif
 
 	return *this;
 }

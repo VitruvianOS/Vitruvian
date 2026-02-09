@@ -191,7 +191,7 @@ entry_ref::dereference() const
 
 void entry_ref::unset()
 {
-	if (is_virtual())
+	if (is_virtual() && directory != B_INVALID_DEV)
 		release_vref(id());
 
 	*this = entry_ref();
@@ -222,9 +222,8 @@ entry_ref::operator=(const entry_ref& ref)
 	if (this == &ref)
 		return *this;
 
-	// TODO that seems to break the refs, investigate why
-	//if (is_virtual() && directory != B_INVALID_INO)
-	//    release_vref((vref_id) directory);
+	dev_t oldDevice = device;
+	ino_t oldDirectory = directory;
 
 	device = ref.device;
 	directory = ref.directory;
@@ -233,6 +232,11 @@ entry_ref::operator=(const entry_ref& ref)
 
 	if (is_virtual() && directory != B_INVALID_INO)
 		acquire_vref((vref_id) directory);
+
+	#if 0
+	if (oldDevice == get_vref_dev() && oldDirectory != B_INVALID_INO)
+		release_vref((vref_id) oldDirectory);
+	#endif
 
 	return *this;
 }
@@ -475,14 +479,17 @@ BEntry::GetParent(BDirectory* dir) const
 	if (strcmp(fName, ".") == 0)
 		return B_ENTRY_NOT_FOUND;
 
-	// get a node ref for the directory and init it
-	struct stat st;
-	status_t error = _kern_read_stat(fDirFd, NULL, false, &st,
-		sizeof(struct stat));
-	if (error != B_OK)
-		return error;
+	BEntry parent;
+	entry_ref ref;
+	status_t ret = GetParent(&parent);
+	if (ret != B_OK)
+		return ret;
 
-	return dir->SetTo(&node_ref(fDirRef));
+	ret = parent.GetRef(&ref);
+	if (ret != B_OK)
+		return ret;
+
+	return dir->SetTo(&ref);
 }
 
 
@@ -626,7 +633,7 @@ BEntry::operator=(const BEntry& item)
 	if (item.fCStatus == B_OK) {
 		fDirFd = _kern_dup(item.fDirFd);
 		if (fDirFd >= 0) {
-			fDirRef = node_ref(fDirRef);
+			fDirRef = item.fDirRef;
 			fCStatus = _SetName(item.fName);
 		} else
 			fCStatus = fDirFd;

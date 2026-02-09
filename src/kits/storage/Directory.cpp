@@ -242,14 +242,12 @@ BDirectory::GetEntry(BEntry* entry) const
 bool
 BDirectory::IsRootDirectory() const
 {
-	// TODO
-	// compare the directory's node ID with the ID of the root node of the FS
 	bool result = false;
 	node_ref ref;
 	fs_info info;
-	// TODO dereference
+
 	if (GetNodeRef(&ref) == B_OK && fs_stat_dev(ref.dereference().dev(), &info) == 0)
-		result = (ref.ino() == info.root);
+		result = (ref.dereference().ino() == info.root);
 	return result;
 }
 

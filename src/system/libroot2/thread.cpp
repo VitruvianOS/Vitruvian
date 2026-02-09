@@ -46,6 +46,7 @@ void* thread_run(void* data)
 	if (ret < 0) {
 		TRACE("thread_run: NEXUS_THREAD_SPAWN failed\n");
 		delete threadData;
+		exit_thread(B_ERROR);
 		return NULL;
 	}
 
@@ -54,7 +55,16 @@ void* thread_run(void* data)
 	status_t error = threadData->func(threadData->data);
 
 	delete threadData;
-	exit_thread(error);
+
+	struct nexus_thread_exchange exchange;
+	memset(&exchange, 0, sizeof(exchange));
+	exchange.return_code = B_OK;
+	int err = nexus_io(nexus, NEXUS_THREAD_EXIT, &exchange);
+	if (err < 0) {
+		pthread_exit((void*)(intptr_t) EINVAL);
+		return;
+	}
+
 	return NULL;
 }
 
@@ -141,8 +151,13 @@ exit_thread(status_t status)
 	exchange.return_code = status;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	nexus_io(nexus, NEXUS_THREAD_EXIT, &exchange);
-	pthread_exit((void*)(intptr_t)status);
+	status_t err = nexus_io(nexus, NEXUS_THREAD_EXIT, &exchange);
+	if (status < 0 || err != B_OK) {
+		pthread_exit((void*)(intptr_t) EINVAL);
+		return;
+	}
+
+	return pthread_exit(NULL);
 }
 
 

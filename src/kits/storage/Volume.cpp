@@ -72,7 +72,7 @@ BVolume::SetTo(dev_t device)
 	// uninitialize
 	Unset();
 	// check the parameter
-	status_t error = (device >= 0 ? B_OK : B_BAD_VALUE);
+	status_t error = (device != B_INVALID_DEV ? B_OK : B_BAD_VALUE);
 	if (error == B_OK) {
 		fs_info info;
 		if (fs_stat_dev(device, &info) != 0)
@@ -117,7 +117,13 @@ BVolume::GetRootDirectory(BDirectory *directory) const
 		error = errno;
 	// init the directory
 	if (error == B_OK) {
-		node_ref ref(info.dev, info.root);
+		int dirFd = _kern_open_entry_ref(info.dev, info.root, NULL,
+			O_RDWR, 0);
+
+		if (dirFd < 0)
+			return dirFd;
+
+		node_ref ref(dirFd);
 		error = directory->SetTo(&ref);
 	}
 	return error;

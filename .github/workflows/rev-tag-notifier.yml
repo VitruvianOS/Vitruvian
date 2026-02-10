@@ -10,11 +10,15 @@ permissions:
 jobs:
   increment-and-notify:
     runs-on: ubuntu-latest
+    env:
+      RETRY_MAX: 3
+      COMMIT_LIMIT: 50   # max commits to include in Telegram message
     steps:
       - name: Checkout pushed ref (full)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0     # needed to list tags and read history
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure git user
         run: |
@@ -27,12 +31,12 @@ jobs:
           # Pattern: rev-<number>
           latest=$(git tag --list 'rev-*' --sort=-v:refname | head -n1 || true)
           if [ -z "$latest" ]; then
-            echo "::set-output name=latest::"
-            echo "::set-output name=num::"
+            echo "latest=" >> "$GITHUB_OUTPUT"
+            echo "num=" >> "$GITHUB_OUTPUT"
           else
             num=${latest#rev-}
-            echo "::set-output name=latest::$latest"
-            echo "::set-output name=num::$num"
+            echo "latest=$latest" >> "$GITHUB_OUTPUT"
+            echo "num=$num" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Determine next rev number
@@ -50,46 +54,150 @@ jobs:
             fi
           fi
           tag="rev-${next}"
-          echo "::set-output name=tag::$tag"
-          echo "::set-output name=number::$next"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "number=$next" >> "$GITHUB_OUTPUT"
 
-      - name: Create and push rev tag
+      - name: Create and push rev tag (with retry to avoid race)
+        id: push_tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${{ steps.next_rev.outputs.tag }}"
-          echo "Creating tag $tag at $GITHUB_SHA"
-          git tag "$tag" "$GITHUB_SHA"
-          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" "refs/tags/${tag}"
+          set -euo pipefail
+          attempt=0
+          # Determine target SHA to tag (prefer GITHUB_SHA if valid, else HEAD)
+          target_sha="${GITHUB_SHA:-}"
+          if ! git rev-parse --verify "$target_sha" >/dev/null 2>&1; then
+            target_sha=$(git rev-parse --verify HEAD)
+          fi
+
+          while [ $attempt -lt "$RETRY_MAX" ]; do
+            attempt=$((attempt + 1))
+            # Recompute latest to reduce window-of-time races
+            latest=$(git tag --list 'rev-*' --sort=-v:refname | head -n1 || true)
+            if [ -z "$latest" ]; then
+              num=0
+            else
+              num=${latest#rev-}
+              if ! echo "$num" | grep -Eq '^[0-9]+$'; then
+                num=0
+              fi
+            fi
+            next=$((num + 1))
+            tag="rev-${next}"
+            echo "Attempt $attempt: creating tag $tag at $target_sha"
+
+            # Create annotated tag (safer metadata) and push
+            git tag -a "$tag" -m "Auto increment rev tag ${tag}" "$target_sha"
+            if git push origin "refs/tags/${tag}"; then
+              echo "pushed_tag=$tag" >> "$GITHUB_OUTPUT"
+              echo "pushed=1" >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              echo "Push failed (possible collision). Deleting local tag and retrying."
+              git tag -d "$tag" || true
+              sleep 1
+            fi
+          done
+
+          echo "pushed=" >> "$GITHUB_OUTPUT"
+          echo "pushed_tag=" >> "$GITHUB_OUTPUT"
+          echo "Failed to create tag after $RETRY_MAX attempts."
+          exit 1
 
       - name: Find latest rev tag (by creation date for notification)
         id: latest_for_notify
         run: |
-          # find latest rev-* tag by creation date; leave empty if none
+          # Ensure tags are available
+          git fetch --tags --prune
+          # find latest rev-* tag by creation date; prefer annotated tag taggerdate, fall back to commit date
           entry=$(git for-each-ref --sort=-creatordate --format='%(refname:short) %(creatordate:unix)' refs/tags | grep '^rev-[0-9]\+' | head -n1 || true)
           if [ -z "$entry" ]; then
-            echo "::set-output name=tag::"
-            echo "::set-output name=ts::"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "ts=" >> "$GITHUB_OUTPUT"
           else
             tag=$(echo "$entry" | awk '{print $1}')
             ts=$(echo "$entry" | awk '{print $2}')
-            echo "::set-output name=tag::$tag"
-            echo "::set-output name=ts::$ts"
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "ts=$ts" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build Telegram message
         id: message
         run: |
+          set -euo pipefail
           repo="${GITHUB_REPOSITORY}"
-          branch="${GITHUB_REF#refs/heads/}"
-          sha_full="${GITHUB_SHA}"
-          sha="${sha_full::7}"
-          author="$(git --no-pager show -s --format='%an' $GITHUB_SHA || echo '')"
-          msg="$(git --no-pager show -s --format='%s' $GITHUB_SHA || echo '')"
+          repo_url="https://github.com/${repo}"
+          ref="${GITHUB_REF:-}"
+          branch=""
+          pushed_tag=""
+          if echo "$ref" | grep -q '^refs/heads/'; then
+            branch="${ref#refs/heads/}"
+          elif echo "$ref" | grep -q '^refs/tags/'; then
+            pushed_tag="${ref#refs/tags/}"
+            branch=""
+          else
+            branch="$ref"
+          fi
+
+          sha_full="${GITHUB_SHA:-$(git rev-parse --verify HEAD)}"
+          sha_short="${sha_full::7}"
+
           latest_tag="${{ steps.latest_for_notify.outputs.tag }}"
-          tag_part="Rev: ${latest_tag:-(none)}"
-          body="Repo: ${repo}%0ABranch: ${branch}%0ACommit: ${sha}%0AAuthor: ${author}%0AMessage: ${msg}%0A${tag_part}"
-          echo "::set-output name=body::$body"
+
+          before="${GITHUB_EVENT_BEFORE:-}"
+          after="${GITHUB_EVENT_AFTER:-$GITHUB_SHA}"
+
+          # Build commits list safely using a unit separator
+          if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
+            range="${before}..${after}"
+            git_cmd=(git --no-pager log --pretty=format:'%h%x1F%an%x1F%s' "${range}" --max-count=${COMMIT_LIMIT})
+          else
+            git_cmd=(git --no-pager log -n 1 --pretty=format:'%h%x1F%an%x1F%s' "${after}")
+          fi
+
+          commits_raw=$("${git_cmd[@]}" || true)
+
+          commits_text=""
+          if [ -z "$commits_raw" ]; then
+            commits_text="(no commits found)"
+          else
+            # iterate lines separated by newline
+            while IFS= read -r line; do
+              # split on unit separator
+              IFS=$'\x1F' read -r shorthash author message <<< "$line"
+              # resolve full hash where possible
+              fullhash=$(git rev-parse "${shorthash}" 2>/dev/null || echo "${shorthash}")
+              commit_url="${repo_url}/commit/${fullhash}"
+              # escape HTML entities for Telegram parse_mode=HTML
+              esc_msg=$(printf '%s' "$message" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+              esc_author=$(printf '%s' "$author" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+              commits_text="${commits_text}${shorthash} - ${esc_msg} (${esc_author})%0A${commit_url}%0A"
+            done <<< "$commits_raw"
+          fi
+
+          repo_link="<a href=\"${repo_url}\">${repo}</a>"
+          commit_link="<a href=\"${repo_url}/commit/${sha_full}\">${sha_short}</a>"
+
+          tag_link="(none)"
+          if [ -n "${latest_tag}" ]; then
+            tag_link="<a href=\"${repo_url}/releases/tag/${latest_tag}\">${latest_tag}</a>"
+          fi
+
+          branch_info=""
+          if [ -n "$branch" ]; then
+            branch_info="Branch: ${branch}%0A"
+          elif [ -n "$pushed_tag" ]; then
+            branch_info="Tag push: ${pushed_tag}%0A"
+          fi
+
+          body="Repo: ${repo_link}%0A${branch_info}Commit: ${commit_link}%0ATag: ${tag_link}%0A%0ACommits:%0A${commits_text}"
+          # Truncate body if excessively long (Telegram has limits ~4096 chars)
+          maxlen=3800
+          if [ "${#body}" -gt "$maxlen" ]; then
+            body="${body:0:$maxlen}%0A...(truncated)"
+          fi
+
+          echo "body=$body" >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram notification
         env:
@@ -108,4 +216,4 @@ jobs:
 
       - name: Output created tag
         run: |
-          echo "Created tag: ${{ steps.next_rev.outputs.tag }}"
+          echo "Created tag: ${{ steps.push_tag.outputs.pushed_tag }}"

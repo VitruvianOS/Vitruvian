@@ -1704,7 +1704,7 @@ TTracker::NeedMoreNodeMonitors()
 	#ifndef __VOS__
 	if (setrlimit(RLIMIT_NOVMON, &rl) < 0) {
 		fNodeMonitorCount -= kNodeMonitorBumpValue;
-		return errno;
+		return -errno;
 	}
 	#endif
 	UNIMPLEMENTED();

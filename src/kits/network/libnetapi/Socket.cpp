@@ -84,7 +84,7 @@ BSocket::Read(void* buffer, size_t size)
 	ssize_t bytesReceived = recv(Socket(), buffer, size, 0);
 	if (bytesReceived < 0) {
 		TRACE("%p: BSocket::Read() error: %s\n", this, strerror(errno));
-		return errno;
+		return -errno;
 	}
 
 	return bytesReceived;
@@ -97,7 +97,7 @@ BSocket::Write(const void* buffer, size_t size)
 	ssize_t bytesSent = send(Socket(), buffer, size, 0);
 	if (bytesSent < 0) {
 		TRACE("%p: BSocket::Write() error: %s\n", this, strerror(errno));
-		return errno;
+		return -errno;
 	}
 
 	return bytesSent;

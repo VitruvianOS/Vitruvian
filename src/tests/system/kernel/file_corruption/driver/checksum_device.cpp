@@ -201,7 +201,7 @@ private:
 		ssize_t written = pwrite(fFD, block->checkSums, B_PAGE_SIZE,
 			block->blockIndex * B_PAGE_SIZE);
 		if (written < 0)
-			return errno;
+			return -errno;
 		if (written != B_PAGE_SIZE)
 			return B_ERROR;
 
@@ -217,7 +217,7 @@ private:
 		ssize_t bytesRead = pread(fFD, block->checkSums, B_PAGE_SIZE,
 			blockIndex * B_PAGE_SIZE);
 		if (bytesRead < 0)
-			return errno;
+			return -errno;
 		if (bytesRead != B_PAGE_SIZE)
 			return B_ERROR;
 
@@ -334,12 +334,12 @@ struct RawDevice : Device, DoublyLinkedListLinkImpl<RawDevice> {
 			// result when pages from both the underlying file system and the
 			// one using the checksum device are collected in one run.
 		if (fFD < 0)
-			return errno;
+			return -errno;
 
 		// get the size
 		struct stat st;
 		if (fstat(fFD, &st) < 0)
-			return errno;
+			return -errno;
 
 		switch (st.st_mode & S_IFMT) {
 			case S_IFREG:
@@ -350,7 +350,7 @@ struct RawDevice : Device, DoublyLinkedListLinkImpl<RawDevice> {
 			{
 				device_geometry geometry;
 				if (ioctl(fFD, B_GET_GEOMETRY, &geometry, sizeof(geometry)) < 0)
-					return errno;
+					return -errno;
 
 				fFileSize = (off_t)geometry.bytes_per_sector
 					* geometry.sectors_per_track
@@ -530,7 +530,7 @@ private:
 			: pread(fFD, fTransferBuffer, B_PAGE_SIZE, offset);
 
 		if (transferred < 0)
-			return errno;
+			return -errno;
 		if (transferred != B_PAGE_SIZE)
 			return B_ERROR;
 

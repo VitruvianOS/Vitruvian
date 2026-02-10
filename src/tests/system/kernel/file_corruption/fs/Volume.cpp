@@ -83,12 +83,12 @@ Volume::Init(const char* device)
 		fFD = open(device, O_RDONLY);
 
 	if (fFD < 0)
-		return errno;
+		return -errno;
 
 	// get the size
 	struct stat st;
 	if (fstat(fFD, &st) < 0)
-		return errno;
+		return -errno;
 
 	off_t size;
 	switch (st.st_mode & S_IFMT) {
@@ -100,7 +100,7 @@ Volume::Init(const char* device)
 		{
 			device_geometry geometry;
 			if (ioctl(fFD, B_GET_GEOMETRY, &geometry, sizeof(geometry)) < 0)
-				return errno;
+				return -errno;
 
 			size = (off_t)geometry.bytes_per_sector * geometry.sectors_per_track
 				* geometry.cylinder_count * geometry.head_count;

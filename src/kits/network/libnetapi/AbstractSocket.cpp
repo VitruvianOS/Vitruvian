@@ -124,7 +124,7 @@ BAbstractSocket::SetTimeout(bigtime_t timeout)
 	if (setsockopt(fSocket, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(timeval)) != 0
 		|| setsockopt(fSocket, SOL_SOCKET, SO_RCVTIMEO, &tv,
 			sizeof(timeval)) != 0) {
-		return errno;
+		return -errno;
 	}
 
 	return B_OK;
@@ -275,7 +275,7 @@ BAbstractSocket::_OpenIfNeeded(int family, int type)
 
 	fSocket = socket(family, type, 0);
 	if (fSocket < 0)
-		return errno;
+		return -errno;
 
 	TRACE("%p: socket opened FD %d\n", this, fSocket);
 	return B_OK;
@@ -287,7 +287,7 @@ BAbstractSocket::_UpdateLocalAddress()
 {
 	socklen_t localLength = sizeof(sockaddr_storage);
 	if (getsockname(fSocket, fLocal, &localLength) != 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }
@@ -311,7 +311,7 @@ BAbstractSocket::_WaitFor(int flags, bigtime_t timeout) const
 
 	int result = poll(&entry, 1, millis);
 	if (result < 0)
-		return errno;
+		return -errno;
 	if (result == 0)
 		return millis > 0 ? B_TIMED_OUT : B_WOULD_BLOCK;
 

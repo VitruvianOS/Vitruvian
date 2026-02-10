@@ -419,7 +419,7 @@ BZlibCompressionAlgorithm::_TranslateZlibError(int error)
 			// it
 			return B_ERROR;
 		case Z_ERRNO:
-			return errno;
+			return -errno;
 		case Z_STREAM_ERROR:
 			return B_BAD_VALUE;
 		case Z_DATA_ERROR:

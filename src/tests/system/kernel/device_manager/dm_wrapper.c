@@ -16,7 +16,7 @@ status_t init_dm_wrapper(void)
 
 	fd = open(device, 0);
 	if (fd < 0)
-		return errno;
+		return -errno;
 	return B_OK;
 }
 

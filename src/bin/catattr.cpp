@@ -139,12 +139,12 @@ catAttr(const char *attribute, const char *fileName, bool keepRaw,
 {
 	int fd = open(fileName, O_RDONLY | (resolveLinks ? 0 : O_NOTRAVERSE));
 	if (fd < 0)
-		return errno;
+		return -errno;
 
 	attr_info info;
 	if (fs_stat_attr(fd, attribute, &info) < 0) {
 		close(fd);
-		return errno;
+		return -errno;
 	}
 
 	// limit size of the attribute, only the first 64k will make it on screen
@@ -166,7 +166,7 @@ catAttr(const char *attribute, const char *fileName, bool keepRaw,
 	if (bytesRead < 0) {
 		free(buffer);
 		close(fd);
-		return errno;
+		return -errno;
 	}
 
 	if (bytesRead != size) {

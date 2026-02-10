@@ -39,7 +39,7 @@ do_ifaliasreq(const char* name, int32 option, BNetworkInterfaceAddress& address,
 
 	int socket = ::socket(family, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
@@ -56,7 +56,7 @@ do_ifaliasreq(const char* name, int32 option, BNetworkInterfaceAddress& address,
 		address.Broadcast().Length());
 
 	if (ioctl(socket, option, &request, sizeof(struct ifaliasreq)) < 0)
-		return errno;
+		return -errno;
 
 	if (readBack) {
 		address.SetFlags(request.ifra_flags);
@@ -83,14 +83,14 @@ do_request(int family, T& request, const char* name, int option)
 {
 	int socket = ::socket(family, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
 	strlcpy(((struct ifreq&)request).ifr_name, name, IF_NAMESIZE);
 
 	if (ioctl(socket, option, &request, sizeof(T)) < 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }
@@ -481,7 +481,7 @@ BNetworkInterface::GetHardwareAddress(BNetworkAddress& address)
 {
 	int socket = ::socket(AF_LINK, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
@@ -489,7 +489,7 @@ BNetworkInterface::GetHardwareAddress(BNetworkAddress& address)
 	strlcpy(request.ifr_name, Name(), IF_NAMESIZE);
 
 	if (ioctl(socket, SIOCGIFADDR, &request, sizeof(struct ifreq)) < 0)
-		return errno;
+		return -errno;
 
 	address.SetTo(request.ifr_addr);
 	return B_OK;

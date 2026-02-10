@@ -87,7 +87,7 @@ BFileDescriptorIO::GetSize(off_t* size) const
 {
 	struct stat st;
 	if (fstat(fFD, &st) < 0)
-		return errno;
+		return -errno;
 
 	*size = st.st_size;
 	return B_OK;

@@ -65,14 +65,14 @@ BNetworkRoster::GetNextInterface(uint32* cookie,
 
 	int socket = ::socket(AF_INET, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
 	ifconf config;
 	config.ifc_len = sizeof(config.ifc_value);
 	if (ioctl(socket, SIOCGIFCOUNT, &config, sizeof(struct ifconf)) < 0)
-		return errno;
+		return -errno;
 
 	size_t count = (size_t)config.ifc_value;
 	if (count == 0)
@@ -87,7 +87,7 @@ BNetworkRoster::GetNextInterface(uint32* cookie,
 	config.ifc_len = count * sizeof(struct ifreq);
 	config.ifc_buf = buffer;
 	if (ioctl(socket, SIOCGIFCONF, &config, sizeof(struct ifconf)) < 0)
-		return errno;
+		return -errno;
 
 	ifreq* interfaces = (ifreq*)buffer;
 	ifreq* end = (ifreq*)(buffer + config.ifc_len);
@@ -112,7 +112,7 @@ BNetworkRoster::AddInterface(const char* name)
 {
 	int socket = ::socket(AF_INET, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
@@ -121,7 +121,7 @@ BNetworkRoster::AddInterface(const char* name)
 	strlcpy(request.ifra_name, name, IF_NAMESIZE);
 
 	if (ioctl(socket, SIOCAIFADDR, &request, sizeof(request)) != 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }
@@ -139,7 +139,7 @@ BNetworkRoster::RemoveInterface(const char* name)
 {
 	int socket = ::socket(AF_INET, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
@@ -149,7 +149,7 @@ BNetworkRoster::RemoveInterface(const char* name)
 	request.ifr_addr.sa_family = AF_UNSPEC;
 
 	if (ioctl(socket, SIOCDIFADDR, &request, sizeof(request)) != 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }

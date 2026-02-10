@@ -30,7 +30,7 @@ writeAttrValue(int fd, const char* name, type_code type, Type value)
 {
 	ssize_t bytes = fs_write_attr(fd, name, type, 0, &value, sizeof(Type));
 	if (bytes < 0)
-		return errno;
+		return -errno;
 
 	return bytes;
 }
@@ -135,7 +135,7 @@ writeAttr(int fd, type_code type, const char* name, const char* value, size_t le
 			ssize_t bytes = fs_write_attr(fd, name, type, 0, value,
 				length ? length : strlen(value) + 1);
 			if (bytes < 0)
-				return errno;
+				return -errno;
 
 			return bytes;
 	}
@@ -153,7 +153,7 @@ addAttr(const char* file, type_code type, const char* name,
 {
 	int fd = open(file, O_RDONLY | (resolveLinks ? 0 : O_NOTRAVERSE));
 	if (fd < 0)
-		return errno;
+		return -errno;
 
 	fs_remove_attr(fd, name);
 	ssize_t bytes = writeAttr(fd, type, name, value, length);

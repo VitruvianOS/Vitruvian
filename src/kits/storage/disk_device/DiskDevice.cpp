@@ -130,7 +130,7 @@ BDiskDevice::Eject(bool update)
 	// open, eject and close the device
 	int fd = open(fDeviceData->path, O_RDONLY);
 	if (fd < 0)
-		return errno;
+		return -errno;
 
 	status_t status = B_OK;
 	if (ioctl(fd, B_EJECT_DEVICE) != 0)

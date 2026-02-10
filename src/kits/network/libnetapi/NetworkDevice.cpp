@@ -52,7 +52,7 @@ get_80211(const char* name, int32 type, void* data, int32& length)
 {
 	int socket = ::socket(AF_INET, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
@@ -64,7 +64,7 @@ get_80211(const char* name, int32 type, void* data, int32& length)
 	ireq.i_data = data;
 
 	if (ioctl(socket, SIOCG80211, &ireq, sizeof(struct ieee80211req)) < 0)
-		return errno;
+		return -errno;
 
 	length = ireq.i_len;
 	return B_OK;
@@ -77,7 +77,7 @@ set_80211(const char* name, int32 type, void* data,
 {
 	int socket = ::socket(AF_INET, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
@@ -89,7 +89,7 @@ set_80211(const char* name, int32 type, void* data,
 	ireq.i_data = data;
 
 	if (ioctl(socket, SIOCS80211, &ireq, sizeof(struct ieee80211req)) < 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }
@@ -100,14 +100,14 @@ do_request(T& request, const char* name, int option)
 {
 	int socket = ::socket(AF_LINK, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
 	strlcpy(((struct ifreq&)request).ifr_name, name, IF_NAMESIZE);
 
 	if (ioctl(socket, option, &request, sizeof(T)) < 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }
@@ -118,14 +118,14 @@ do_request<ieee80211req>(ieee80211req& request, const char* name, int option)
 {
 	int socket = ::socket(AF_INET, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser closer(socket);
 
 	strlcpy(((struct ieee80211req&)request).i_name, name, IFNAMSIZ);
 
 	if (ioctl(socket, option, &request, sizeof(request)) < 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }

@@ -44,7 +44,7 @@ moveAttribute(const char* fromFile, const char* fromAttr, const char* toFile,
 {
 	int fromFileFD = open(fromFile, O_RDONLY);
 	if (fromFileFD < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser fromFileFDCloser(fromFileFD);
 	FileDescriptorCloser toFileFDCloser;
@@ -53,7 +53,7 @@ moveAttribute(const char* fromFile, const char* fromAttr, const char* toFile,
 	if (strcmp(fromFile, toFile) != 0) {
 		toFileFD = open(toFile, O_RDONLY);
 		if (toFileFD < 0)
-			return errno;
+			return -errno;
 
 		toFileFDCloser.SetTo(toFileFD);
 	}
@@ -75,14 +75,14 @@ moveAttribute(const char* fromFile, const char* fromAttr, const char* toFile,
 	int fromAttrFD = fs_fopen_attr(fromFileFD, fromAttr, fromInfo.type,
 		O_RDONLY | O_EXCL);
 	if (fromAttrFD < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser fromAttrFDCloser(fromAttrFD);
 
 	int toAttrFD = fs_fopen_attr(toFileFD, toAttr, fromInfo.type,
 		O_CREAT | O_WRONLY | O_TRUNC);
 	if (fromAttrFD < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser toAttrFDCloser(toAttrFD);
 
@@ -93,7 +93,7 @@ moveAttribute(const char* fromFile, const char* fromAttr, const char* toFile,
 		ssize_t bytesRead = read_pos(fromAttrFD, offset, kBuffer, size);
 		if (bytesRead < 0) {
 			fs_remove_attr(toFileFD, toAttr);
-			return errno;
+			return -errno;
 		}
 
 		ssize_t bytesWritten = write_pos(toAttrFD, offset, kBuffer, bytesRead);
@@ -101,7 +101,7 @@ moveAttribute(const char* fromFile, const char* fromAttr, const char* toFile,
 			fs_remove_attr(toFileFD, toAttr);
 			if (bytesWritten >= 0)
 				return B_IO_ERROR;
-			return errno;
+			return -errno;
 		}
 
 		bytesLeft -= bytesRead;
@@ -109,7 +109,7 @@ moveAttribute(const char* fromFile, const char* fromAttr, const char* toFile,
 	}
 
 	if (fs_remove_attr(fromFileFD, fromAttr) < 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }

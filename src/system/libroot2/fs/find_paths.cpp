@@ -264,7 +264,7 @@ create_directory(char* path)
 		*slash = '/';
 
 		if (!created)
-			return errno;
+			return -errno;
 
 		slash = strchr(slash + 1, '/');
 	}
@@ -325,7 +325,7 @@ normalize_path(const char* path, char* buffer, size_t bufferSize)
 	// make sure the path exists
 	struct stat st;
 	if (lstat(buffer, &st) != 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }
@@ -405,7 +405,7 @@ get_file_attribute(const char* path, const char* attribute, char* nameBuffer,
 	int fd = fs_open_attr(path, attribute, B_STRING_TYPE,
 		O_RDONLY | O_NOTRAVERSE);
 	if (fd < 0)
-		return errno;
+		return -errno;
 
 	status_t error = B_OK;
 	#ifndef __VOS__

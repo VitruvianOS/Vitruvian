@@ -417,7 +417,7 @@ Transaction::_UpdateBlockCheckSums()
 		// set it
 		if (ioctl(fVolume->FD(), CHECKSUM_DEVICE_IOCTL_SET_CHECK_SUM, fCheckSum,
 				sizeof(*fCheckSum)) < 0) {
-			return errno;
+			return -errno;
 		}
 	}
 
@@ -436,7 +436,7 @@ Transaction::_RevertBlockCheckSums()
 		// set the old check sum
 		if (ioctl(fVolume->FD(), CHECKSUM_DEVICE_IOCTL_SET_CHECK_SUM,
 				&info->indexAndCheckSum, sizeof(info->indexAndCheckSum)) < 0) {
-			return errno;
+			return -errno;
 		}
 	}
 

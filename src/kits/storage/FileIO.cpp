@@ -83,7 +83,7 @@ off_t
 BFileIO::Seek(off_t position, uint32 seekMode)
 {
 	if (fseeko(fFile, position, seekMode) < 0)
-		return errno;
+		return -errno;
 
 	return BFileIO::Position();
 }
@@ -128,11 +128,11 @@ BFileIO::_Seek(off_t position, uint32 seekMode) const
 	// save the current position
 	off_t oldPosition = ftello(fFile);
 	if (oldPosition < 0)
-		return errno;
+		return -errno;
 
 	// seek to the requested position
 	if (fseeko(fFile, position, seekMode) < 0)
-		return errno;
+		return -errno;
 
 	return oldPosition;
 }

@@ -20,7 +20,8 @@ jobs:
             libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
             libgif-dev libicns-dev libicu-dev libinput-dev \
             libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
-            libtiff-dev libudev-dev libwebp-dev \
+            libtiff-dev libudev-dev libwebp-dev libseat-dev \
+            libblkid-dev libudev-dev libdrm-dev \
             linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             fakeroot devscripts lintian wget

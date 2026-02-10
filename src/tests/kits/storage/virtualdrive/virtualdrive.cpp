@@ -184,7 +184,7 @@ init_device_info(int32 index, virtual_drive_info *initInfo)
 	// open the file
 	int fd = open(initInfo->file_name, (readOnly ? O_RDONLY : O_RDWR));
 	if (fd < 0)
-		return errno;
+		return -errno;
 
 	status_t error = B_OK;
 
@@ -257,7 +257,7 @@ init_device_info(int32 index, virtual_drive_info *initInfo)
 		// the Be headers.
 		if (ioctl(fd, 10000) != 0) {
 			dprintf("virtualdrive: disable caching ioctl failed\n");
-			return errno;
+			return -errno;
 		}
 	}
 

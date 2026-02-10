@@ -548,11 +548,11 @@ BPartition::Mount(const char* mountPoint, uint32 mountFlags,
 
 		// create the directory
 		if (mkdir(mountPoint, S_IRWXU | S_IRWXG | S_IRWXO) < 0)
-			return errno;
+			return -errno;
 
 		if (mkdir(markerPath.Path(), S_IRWXU | S_IRWXG | S_IRWXO) < 0) {
 			rmdir(mountPoint);
-			return errno;
+			return -errno;
 		}
 
 		deleteMountPoint = true;

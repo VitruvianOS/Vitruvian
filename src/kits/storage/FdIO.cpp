@@ -115,7 +115,7 @@ BFdIO::GetSize(off_t* _size) const
 {
 	struct stat st;
 	if (fstat(fFd, &st) != 0)
-		return errno;
+		return -errno;
 
 	*_size = st.st_size;
 	return B_OK;

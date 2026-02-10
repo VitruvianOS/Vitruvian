@@ -67,7 +67,7 @@ BDatagramSocket::SetBroadcast(bool broadcast)
 	int value = broadcast ? 1 : 0;
 	if (setsockopt(fSocket, SOL_SOCKET, SO_BROADCAST, &value, sizeof(value))
 			!= 0)
-		return errno;
+		return -errno;
 
 	return B_OK;
 }
@@ -95,7 +95,7 @@ BDatagramSocket::SendTo(const BNetworkAddress& address, const void* buffer,
 	ssize_t bytesSent = sendto(fSocket, buffer, size, 0, address,
 		address.Length());
 	if (bytesSent < 0)
-		return errno;
+		return -errno;
 
 	return bytesSent;
 }
@@ -109,7 +109,7 @@ BDatagramSocket::ReceiveFrom(void* buffer, size_t bufferSize,
 	ssize_t bytesReceived = recvfrom(fSocket, buffer, bufferSize, 0,
 		from, &fromLength);
 	if (bytesReceived < 0)
-		return errno;
+		return -errno;
 
 	return bytesReceived;
 }
@@ -124,7 +124,7 @@ BDatagramSocket::Read(void* buffer, size_t size)
 	ssize_t bytesReceived = recv(Socket(), buffer, size, 0);
 	if (bytesReceived < 0) {
 		TRACE("%p: BSocket::Read() error: %s\n", this, strerror(errno));
-		return errno;
+		return -errno;
 	}
 
 	return bytesReceived;
@@ -144,7 +144,7 @@ BDatagramSocket::Write(const void* buffer, size_t size)
 	if (bytesSent < 0) {
 		TRACE("%p: BDatagramSocket::Write() error: %s\n", this,
 			strerror(errno));
-		return errno;
+		return -errno;
 	}
 
 	return bytesSent;

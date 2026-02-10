@@ -112,7 +112,7 @@ get_device_icon(const char* device, void* icon, int32 size)
 
 	int fd = open(device, O_RDONLY);
 	if (fd < 0)
-		return errno;
+		return -errno;
 
 	// ToDo: The mounted directories for volumes can also have META:X:STD_ICON
 	// attributes. Should those attributes override the icon returned by
@@ -151,7 +151,7 @@ get_device_icon(const char* device, void* icon, int32 size)
 
 			return status;
 		}
-		return errno;
+		return -errno;
 	}
 
 	close(fd);
@@ -225,7 +225,7 @@ get_device_icon(const char* device, uint8** _data, size_t* _size,
 
 	int fd = open(device, O_RDONLY);
 	if (fd < 0)
-		return errno;
+		return -errno;
 
 	// Try to get the icon by name first
 

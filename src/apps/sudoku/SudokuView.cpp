@@ -143,7 +143,7 @@ SudokuView::SetTo(entry_ref& ref)
 
 	FILE* file = fopen(path.Path(), "r");
 	if (file == NULL)
-		return errno;
+		return -errno;
 
 	uint32 maxOut = fField->Size() * fField->Size();
 	char buffer[1024];

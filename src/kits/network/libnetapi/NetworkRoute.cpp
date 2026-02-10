@@ -258,14 +258,14 @@ BNetworkRoute::GetRoutes(int family, const char* interfaceName,
 {
 	int socket = ::socket(family, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	FileDescriptorCloser fdCloser(socket);
 
 	ifconf config;
 	config.ifc_len = sizeof(config.ifc_value);
 	if (ioctl(socket, SIOCGRTSIZE, &config, sizeof(struct ifconf)) < 0)
-		return errno;
+		return -errno;
 
 	uint32 size = (uint32)config.ifc_value;
 	if (size == 0)
@@ -280,7 +280,7 @@ BNetworkRoute::GetRoutes(int family, const char* interfaceName,
 	config.ifc_buf = buffer;
 
 	if (ioctl(socket, SIOCGRTTABLE, &config, sizeof(struct ifconf)) < 0)
-		return errno;
+		return -errno;
 
 	ifreq* interface = (ifreq*)buffer;
 	ifreq* end = (ifreq*)((uint8*)buffer + size);

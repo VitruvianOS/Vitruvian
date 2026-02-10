@@ -952,11 +952,11 @@ BNetworkAddress::ResolveForDestination(const BNetworkAddress& destination)
 
 	int socket = ::socket(fAddress.ss_family, SOCK_DGRAM, 0);
 	if (socket < 0)
-		return errno;
+		return -errno;
 
 	if (ioctl(socket, SIOCGETRT, route, sizeof(buffer)) != 0) {
 		close(socket);
-		return errno;
+		return -errno;
 	}
 
 	uint16 port = Port();

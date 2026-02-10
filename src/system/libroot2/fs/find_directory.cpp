@@ -219,7 +219,7 @@ create_path(const char *path, mode_t mode)
 		if (stat(buffer, &st) < 0) {
 			__set_errno(0);
 			if (mkdir(buffer, mode) < 0)
-				return errno;
+				return -errno;
 		}
 	}
 

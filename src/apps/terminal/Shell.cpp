@@ -216,7 +216,7 @@ Shell::UpdateWindowSize(int rows, int columns)
 	winSize.ws_row = rows;
 	winSize.ws_col = columns;
 	if (ioctl(fFd, TIOCSWINSZ, &winSize) != 0)
-		return errno;
+		return -errno;
 	return B_OK;
 }
 
@@ -225,7 +225,7 @@ status_t
 Shell::GetAttr(struct termios &attr) const
 {
 	if (tcgetattr(fFd, &attr) < 0)
-		return errno;
+		return -errno;
 	return B_OK;
 }
 
@@ -234,7 +234,7 @@ status_t
 Shell::SetAttr(const struct termios &attr)
 {
 	if (tcsetattr(fFd, TCSANOW, &attr) < 0)
-		return errno;
+		return -errno;
 	return B_OK;
 }
 
@@ -425,14 +425,14 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 
 	if (master < 0) {
 		fprintf(stderr, "Didn't find any available pseudo ttys.");
-		return errno;
+		return -errno;
 	}
 
 	if (grantpt(master) != 0 || unlockpt(master) != 0
 		|| (ttyName = ptsname(master)) == NULL) {
 		close(master);
 		fprintf(stderr, "Failed to init pseudo tty.");
-		return errno;
+		return -errno;
 	}
 
 	/*

@@ -100,7 +100,7 @@ install_file(const char *file, off_t size)
 	if (fd < 0) {
 		fprintf(stderr, "Failed to open control device: %s\n",
 				strerror(errno));
-		return errno;
+		return -errno;
 	}
 
 	// set up the info
@@ -157,7 +157,7 @@ uninstall_file(const char *device, bool immediately)
 	if (fd < 0) {
 		fprintf(stderr, "Failed to open device `%s': %s\n",
 				device, strerror(errno));
-		return errno;
+		return -errno;
 	}
 
 	// issue the ioctl
@@ -180,7 +180,7 @@ info_for_device(const char *device)
 	if (fd < 0) {
 		fprintf(stderr, "Failed to open device `%s': %s\n",
 				device, strerror(errno));
-		return errno;
+		return -errno;
 	}
 
 	// set up the info

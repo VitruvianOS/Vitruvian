@@ -225,7 +225,7 @@ BSecureSocket::Private::ErrorCode(int returnValue)
 			if (returnValue == -1)
 			{
 				fprintf(stderr, "SSL %s\n", ERR_error_string(error, NULL));
-				return errno;
+				return -errno;
 			}
 
 			fprintf(stderr, "SSL %s\n", ERR_error_string(error, NULL));

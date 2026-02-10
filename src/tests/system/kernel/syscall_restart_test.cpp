@@ -239,7 +239,7 @@ public:
 		fFDs[1] = -1;
 
 		if (pipe(fFDs) != 0)
-			return errno;
+			return -errno;
 
 		return B_OK;
 	}
@@ -293,7 +293,7 @@ public:
 		fFDs[1] = -1;
 
 		if (pipe(fFDs) != 0)
-			return errno;
+			return -errno;
 
 		// fill pipe
 		fcntl(fFDs[1], F_SETFL, O_NONBLOCK);
@@ -458,7 +458,7 @@ public:
 		if (fServerSocket < 0) {
 			fprintf(stderr, "Could not open server socket: %s\n",
 				strerror(errno));
-			return errno;
+			return -errno;
 		}
 
 		int reuse = 1;
@@ -466,7 +466,7 @@ public:
 				sizeof(int)) == -1) {
 			fprintf(stderr, "Could not make server socket reusable: %s\n",
 				strerror(errno));
-			return errno;
+			return -errno;
 		}
 
 		memset(&fServerAddress, 0, sizeof(sockaddr_in));
@@ -477,7 +477,7 @@ public:
 				sizeof(struct sockaddr)) == -1) {
 			fprintf(stderr, "Could not bind server socket: %s\n",
 				strerror(errno));
-			return errno;
+			return -errno;
 		}
 
 		socklen_t length = sizeof(sockaddr_in);
@@ -487,7 +487,7 @@ public:
 		if (listen(fServerSocket, 10) == -1) {
 			fprintf(stderr, "Could not listen on server socket: %s\n",
 				strerror(errno));
-			return errno;
+			return -errno;
 		}
 
 		return B_OK;
@@ -501,7 +501,7 @@ public:
 		fAcceptedSocket = accept(fServerSocket,
 			(struct sockaddr *)&clientAddress, &length);
 		if (fAcceptedSocket == -1)
-			return errno;
+			return -errno;
 
 		return B_OK;
 	}
@@ -565,7 +565,7 @@ public:
 		if (fServerSocket < 0) {
 			fprintf(stderr, "Could not open server socket: %s\n",
 				strerror(errno));
-			return errno;
+			return -errno;
 		}
 
 		int reuse = 1;
@@ -573,7 +573,7 @@ public:
 				sizeof(int)) == -1) {
 			fprintf(stderr, "Could not make server socket reusable: %s\n",
 				strerror(errno));
-			return errno;
+			return -errno;
 		}
 
 		memset(&fServerAddress, 0, sizeof(sockaddr_in));
@@ -584,7 +584,7 @@ public:
 				sizeof(struct sockaddr)) == -1) {
 			fprintf(stderr, "Could not bind server socket: %s\n",
 				strerror(errno));
-			return errno;
+			return -errno;
 		}
 
 		socklen_t length = sizeof(sockaddr_in);
@@ -594,14 +594,14 @@ public:
 		if (listen(fServerSocket, 10) == -1) {
 			fprintf(stderr, "Could not listen on server socket: %s\n",
 				strerror(errno));
-			return errno;
+			return -errno;
 		}
 
 		fClientSocket = socket(AF_INET, SOCK_STREAM, 0);
 		if (fClientSocket == -1) {
 			fprintf(stderr, "Could not open client socket: %s\n",
 				strerror(errno));
-			return errno;
+			return -errno;
 		}
 
 		fcntl(fClientSocket, F_SETFL, O_NONBLOCK);
@@ -611,7 +611,7 @@ public:
 			if (errno != EINPROGRESS) {
 				fprintf(stderr, "Could not connect to server socket: %s\n",
 					strerror(errno));
-				return errno;
+				return -errno;
 			}
 		}
 
@@ -621,7 +621,7 @@ public:
 		fAcceptedSocket = accept(fServerSocket,
 			(struct sockaddr *)&clientAddress, &length);
 		if (fAcceptedSocket == -1)
-			return errno;
+			return -errno;
 
 		fcntl(fClientSocket, F_SETFL, 0);
 

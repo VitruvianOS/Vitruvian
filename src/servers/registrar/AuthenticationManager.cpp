@@ -1248,7 +1248,7 @@ AuthenticationManager::_InitPasswdDB()
 	if (file == NULL) {
 		debug_printf("REG: Failed to open passwd DB file \"%s\": %s\n",
 			kPasswdFile, strerror(errno));
-		return errno;
+		return -errno;
 	}
 	CObjectDeleter<FILE, int> _(file, fclose);
 
@@ -1297,7 +1297,7 @@ AuthenticationManager::_InitGroupDB()
 	if (file == NULL) {
 		debug_printf("REG: Failed to open group DB file \"%s\": %s\n",
 			kGroupFile, strerror(errno));
-		return errno;
+		return -errno;
 	}
 	CObjectDeleter<FILE, int> _(file, fclose);
 
@@ -1345,7 +1345,7 @@ AuthenticationManager::_InitShadowPwdDB()
 	if (file == NULL) {
 		debug_printf("REG: Failed to open shadow passwd DB file \"%s\": %s\n",
 			kShadowPwdFile, strerror(errno));
-		return errno;
+		return -errno;
 	}
 	CObjectDeleter<FILE, int> _(file, fclose);
 

@@ -480,7 +480,7 @@ VirtualDirectoryManager::TranslateDirectoryEntry(
 
 			struct stat st;
 			if (lstat(path.Path(), &st) != 0)
-				return errno;
+				return -errno;
 
 			parentInfo->SetId(id);
 			parentInfo->SetChildDefinitionsDirectoryRef(

@@ -202,7 +202,7 @@ main(int argc, char **argv)
 		if (index == NULL) {
 			if (errno != B_ENTRY_NOT_FOUND && errno != B_OK) {
 				printf("%s: fs_read_index_dir: (%d) %s\n", argv[0], errno, strerror(errno));
-				return errno;
+				return -errno;
 			}
 			break;
 		}
@@ -212,7 +212,7 @@ main(int argc, char **argv)
 
 			if (fs_stat_index(device, index->d_name, &info) != B_OK) {
 				printf("%s: fs_stat_index(): (%d) %s\n", argv[0], errno, strerror(errno));
-				return errno;
+				return -errno;
 			}
 
 			if (verbose)

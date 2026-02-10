@@ -169,7 +169,7 @@ BVolume::BlockSize() const
 	// get FS stat
 	fs_info info;
 	if (fs_stat_dev(fDevice, &info) != 0)
-		return errno;
+		return -errno;
 
 	return info.block_size;
 }
@@ -204,7 +204,7 @@ BVolume::SetName(const char *name)
 	// get the FS stat (including the old name) first
 	fs_info oldInfo;
 	if (fs_stat_dev(fDevice, &oldInfo) != 0)
-		return errno;
+		return -errno;
 	if (strcmp(name, oldInfo.volume_name) == 0)
 		return B_OK;
 	// set the volume name
@@ -256,7 +256,7 @@ BVolume::GetIcon(BBitmap *icon, icon_size which) const
 	// get FS stat for the device name
 	fs_info info;
 	if (fs_stat_dev(fDevice, &info) != 0)
-		return errno;
+		return -errno;
 
 	// get the icon
 	return get_device_icon(info.device_name, icon, which);
@@ -273,7 +273,7 @@ BVolume::GetIcon(uint8** _data, size_t* _size, type_code* _type) const
 	// get FS stat for the device name
 	fs_info info;
 	if (fs_stat_dev(fDevice, &info) != 0)
-		return errno;
+		return -errno;
 
 	// get the icon
 	return get_device_icon(info.device_name, _data, _size, _type);

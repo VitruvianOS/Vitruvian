@@ -399,11 +399,9 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 			gNexusVRef = -1;
 		}
 		if (gUdev >= 0) {
-			close(gUdev);
+			udev_unref(gUdev);
 			gUdev = -1;
 		}
-
-		close(syncPipe[0]);
 
 		int nexusFd = open("/dev/nexus", O_RDWR);
 		if (nexusFd >= 0) {
@@ -412,6 +410,7 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 			setenv("__VITRUVIAN_NEXUS_FD", fdStr, 1);
 		}
 
+		close(syncPipe[0]);
 		sigprocmask(SIG_SETMASK, &oldMask, NULL);
 		raise(SIGSTOP);
 

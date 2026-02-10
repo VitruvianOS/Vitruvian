@@ -120,7 +120,7 @@ Server(
 		#drawing/interface/linux/fbdev/TTy.cpp
 
 		drawing/interface/linux/LibInputEventStream.cpp
-		drawing/interface/linux/LibEvdevEventStream.cpp
+		#drawing/interface/linux/LibEvdevEventStream.cpp
 
 		stackandtile/SATDecorator.cpp
 		stackandtile/SATGroup.cpp

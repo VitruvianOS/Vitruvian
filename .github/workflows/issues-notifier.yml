@@ -1,0 +1,69 @@
+name: Notify Chat on new issue
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: read
+
+jobs:
+  notify-telegram:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Telegram message
+        id: build
+        run: |
+          set -euo pipefail
+          # Inputs from event JSON
+          issue_number="${{ github.event.issue.number }}"
+          issue_title="${{ github.event.issue.title }}"
+          issue_body="${{ github.event.issue.body || '' }}"
+          issue_user="${{ github.event.issue.user.login }}"
+          issue_url="${{ github.event.issue.html_url }}"
+          labels_array="${{ toJson(github.event.issue.labels) }}"
+
+          # Extract label names (jq not available by default). Use GitHub-provided string if simple:
+          # Build comma-separated labels
+          labels=""
+          if [ "${labels_array}" != "[]" ]; then
+            # labels_array is JSON like [{"id":..., "name":"bug",...},...]
+            # Use simple parsing to extract "name" fields
+            labels=$(printf '%s' "${labels_array}" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p' | paste -sd ", " -)
+          fi
+          if [ -z "$labels" ]; then
+            labels="(none)"
+          fi
+
+          # Truncate body
+          maxlen=800
+          if [ "${#issue_body}" -gt "$maxlen" ]; then
+            issue_body="${issue_body:0:$maxlen}...(truncated)"
+          fi
+
+          # Escape HTML for Telegram parse_mode=HTML
+          esc() {
+            printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+          }
+
+          repo="${GITHUB_REPOSITORY}"
+          repo_url="https://github.com/${repo}"
+          repo_link="<a href=\"${repo_url}\">${repo}</a>"
+          issue_link="<a href=\"${issue_url}\">#${issue_number} ${esc "${issue_title}"}</a>"
+
+          body="Repo: ${repo_link}%0AIssue: ${issue_link}%0AAuthor: ${esc "${issue_user}"}%0ALabels: ${esc "${labels}"}%0A%0A${esc "${issue_body}"}"
+          echo "body=$body" >> "$GITHUB_OUTPUT"
+
+      - name: Send Telegram notification
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
+            echo "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID; skipping."
+            exit 0
+          fi
+          body="${{ steps.build.outputs.body }}"
+          curl -sS --fail -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "text=${body}" \
+            -d "parse_mode=HTML"

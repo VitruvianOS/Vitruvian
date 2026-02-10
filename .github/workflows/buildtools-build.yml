@@ -49,12 +49,6 @@ jobs:
       - name: Create build directory
         run: mkdir -p generated.x86
 
-      - name: Setup environment
-        run: |
-          cd generated.x86
-          export TERM=xterm-256color
-          ../build/scripts/setupenv.sh
-
       - name: Configure project
         run: |
           cd generated.x86

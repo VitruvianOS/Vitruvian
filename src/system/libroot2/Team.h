@@ -7,6 +7,7 @@
 #define _LIBROOT2_TEAM
 
 #include <OS.h>
+#include <libudev.h>
 
 
 namespace BKernelPrivate {
@@ -15,14 +16,14 @@ namespace BKernelPrivate {
 class Team
 {
 public:
-	static void			PreInitTeam();
 	static void			InitTeam();
 
 	static int			GetNexusDescriptor();
 	static int			GetSemDescriptor();
 	static int			GetAreaDescriptor();
 	static int			GetVRefDescriptor(dev_t* dev = NULL);
-	static int			GetUDevDescriptor();
+	static int			GetNodeMonitorDescriptor();
+	static struct udev*	GetUDev();
 
 	static mode_t		GetUmask();
 	static int32		GetCPUCount();

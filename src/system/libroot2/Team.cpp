@@ -8,7 +8,6 @@
 #include "Team.h"
 
 #include <dirent.h>
-#include <libudev.h>
 #include <pthread.h>
 #include <signal.h>
 #include <syscall.h>
@@ -36,7 +35,8 @@ static int gNexus = -1;
 static int gNexusSem = -1;
 static int gNexusArea = -1;
 static int gNexusVRef = -1;
-static int gUdev = -1;
+static int gNexusNodeMonitor = -1;
+static struct udev* gUdev = NULL;
 
 static int gForkPipe[2] = {-1, -1};
 
@@ -220,7 +220,7 @@ Team::GetVRefDescriptor(dev_t* dev)
 }
 
 
-#if 0
+
 int
 Team::GetNodeMonitorDescriptor()
 {
@@ -229,13 +229,12 @@ Team::GetNodeMonitorDescriptor()
 
 	return gNexusNodeMonitor;
 }
-#endif
 
 
-int
-Team::GetUDevDescriptor()
+struct udev*
+Team::GetUDev()
 {
-	if (gUdev == -1)
+	if (gUdev == NULL)
 		gUdev = udev_new();
 
 	return gUdev;
@@ -319,9 +318,13 @@ Team::ReinitChildAtFork()
 		close(gNexusVRef);
 		gNexusVRef = -1;
 	}
-	if (gUdev >= 0) {
+	if (gNexusNodeMonitor >= 0) {
+		close(gNexusNodeMonitor);
+		gNexusVRef = -1;
+	}
+	if (gUdev != NULL) {
 		udev_unref(gUdev);
-		gUdev = -1;
+		gUdev = NULL;
 	}
 
 	gTeamOnce = PTHREAD_ONCE_INIT;
@@ -398,9 +401,13 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 			close(gNexusVRef);
 			gNexusVRef = -1;
 		}
-		if (gUdev >= 0) {
+		if (gNexusNodeMonitor >= 0) {
+			close(gNexusNodeMonitor);
+			gNexusVRef = -1;
+		}
+		if (gUdev != NULL) {
 			udev_unref(gUdev);
-			gUdev = -1;
+			gUdev = NULL;
 		}
 
 		int nexusFd = open("/dev/nexus", O_RDWR);

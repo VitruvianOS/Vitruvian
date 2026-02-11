@@ -1,7 +1,7 @@
-name: Notify Chat on new issue
+name: Notify Chat on issue open/close
 on:
   issues:
-    types: [opened]
+    types: [opened, closed]
 
 permissions:
   issues: read
@@ -10,37 +10,42 @@ jobs:
   notify-telegram:
     runs-on: ubuntu-latest
     steps:
+      - name: Read event JSON
+        id: event
+        run: |
+          echo "event_path=${GITHUB_EVENT_PATH}" >> "$GITHUB_OUTPUT"
+
       - name: Build Telegram message
         id: build
+        env:
+          EVENT_PATH: ${{ steps.event.outputs.event_path }}
         run: |
           set -euo pipefail
-          # Inputs from event JSON
-          issue_number="${{ github.event.issue.number }}"
-          issue_title="${{ github.event.issue.title }}"
-          issue_body="${{ github.event.issue.body || '' }}"
-          issue_user="${{ github.event.issue.user.login }}"
-          issue_url="${{ github.event.issue.html_url }}"
-          labels_array="${{ toJson(github.event.issue.labels) }}"
-
-          # Extract label names (jq not available by default). Use GitHub-provided string if simple:
-          # Build comma-separated labels
-          labels=""
-          if [ "${labels_array}" != "[]" ]; then
-            # labels_array is JSON like [{"id":..., "name":"bug",...},...]
-            # Use simple parsing to extract "name" fields
-            labels=$(printf '%s' "${labels_array}" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p' | paste -sd ", " -)
-          fi
-          if [ -z "$labels" ]; then
+          if command -v jq >/dev/null 2>&1; then
+            number=$(jq -r .issue.number "$EVENT_PATH")
+            title=$(jq -r .issue.title "$EVENT_PATH")
+            body_text=$(jq -r '.issue.body // ""' "$EVENT_PATH")
+            user=$(jq -r .issue.user.login "$EVENT_PATH")
+            url=$(jq -r .issue.html_url "$EVENT_PATH")
+            labels=$(jq -r '[.issue.labels[]?.name] | join(", ")' "$EVENT_PATH")
+            action=$(jq -r .action "$EVENT_PATH")
+            actor=$(jq -r '.sender.login // ""' "$EVENT_PATH")
+          else
+            number="${{ github.event.issue.number }}"
+            title="${{ github.event.issue.title }}"
+            body_text="${{ github.event.issue.body || '' }}"
+            user="${{ github.event.issue.user.login }}"
+            url="${{ github.event.issue.html_url }}"
             labels="(none)"
+            action="${{ github.event.action }}"
+            actor="${{ github.actor }}"
           fi
 
-          # Truncate body
           maxlen=800
-          if [ "${#issue_body}" -gt "$maxlen" ]; then
-            issue_body="${issue_body:0:$maxlen}...(truncated)"
+          if [ "${#body_text}" -gt "$maxlen" ]; then
+            body_text="${body_text:0:$maxlen}...(truncated)"
           fi
 
-          # Escape HTML for Telegram parse_mode=HTML
           esc() {
             printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
           }
@@ -48,10 +53,18 @@ jobs:
           repo="${GITHUB_REPOSITORY}"
           repo_url="https://github.com/${repo}"
           repo_link="<a href=\"${repo_url}\">${repo}</a>"
-          issue_link="<a href=\"${issue_url}\">#${issue_number} ${esc "${issue_title}"}</a>"
+          issue_link="<a href=\"${url}\">#${number} ${esc "$title"}</a>"
 
-          body="Repo: ${repo_link}%0AIssue: ${issue_link}%0AAuthor: ${esc "${issue_user}"}%0ALabels: ${esc "${labels}"}%0A%0A${esc "${issue_body}"}"
-          echo "body=$body" >> "$GITHUB_OUTPUT"
+          if [ "$action" = "opened" ]; then
+            msg_title="New issue opened"
+            body="Repo: ${repo_link}\nIssue: ${issue_link}\nAuthor: ${esc "$user"}\nLabels: ${esc "${labels:-(none)}"}\n\n${esc "$body_text"}"
+          else
+            msg_title="Issue closed"
+            body="Repo: ${repo_link}\nIssue: ${issue_link}\nClosed by: ${esc "$actor"}\nLabels: ${esc "${labels:-(none)}"}\n\n${esc "$body_text"}"
+          fi
+
+          final="<b>$(esc "$msg_title")</b>\n${body}"
+          echo "body=${final}" >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram notification
         env:
@@ -65,5 +78,5 @@ jobs:
           body="${{ steps.build.outputs.body }}"
           curl -sS --fail -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
-            -d "text=${body}" \
+            --data-urlencode "text=${body}" \
             -d "parse_mode=HTML"

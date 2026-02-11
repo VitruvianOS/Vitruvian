@@ -1,7 +1,8 @@
 /*
- * Copyright 2019-2026, Dario Casalinuovo. All rights reserved.
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the LGPL License.
  */
+
 #ifndef _VOS_FS_UTILS_H
 #define _VOS_FS_UTILS_H
 
@@ -14,6 +15,8 @@
 #include <stdlib.h>
 #include <sys/mount.h>
 #include <sys/statvfs.h>
+
+#include "Team.h"
 
 
 namespace BKernelPrivate {

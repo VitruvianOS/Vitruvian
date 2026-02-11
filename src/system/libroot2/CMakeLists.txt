@@ -23,7 +23,8 @@ target_sources(root PRIVATE
 	fs/fs.cpp
 	fs/vref.cpp
 	fs/node_monitor.cpp
-	fs/disk_device/disk_device.cpp
+	fs/disk_monitor.cpp
+	fs/disk_device.cpp
 	fs/fs_info.cpp
 	fs/mount.cpp
 	fs/attr.cpp

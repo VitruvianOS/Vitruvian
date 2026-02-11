@@ -46,8 +46,7 @@ void* thread_run(void* data)
 	if (ret < 0) {
 		TRACE("thread_run: NEXUS_THREAD_SPAWN failed\n");
 		delete threadData;
-		exit_thread(B_ERROR);
-		return NULL;
+		return EINVAL;
 	}
 
 	pthread_detach(pthread_self());
@@ -61,10 +60,9 @@ void* thread_run(void* data)
 	exchange.return_code = B_OK;
 	int err = nexus_io(nexus, NEXUS_THREAD_EXIT, &exchange);
 	if (err < 0) {
-		pthread_exit((void*)(intptr_t) EINVAL);
-		return;
+		TRACE("thread_run: NEXUS_THREAD_EXIT failed\n");
+		return EINVAL;
 	}
-
 	return NULL;
 }
 

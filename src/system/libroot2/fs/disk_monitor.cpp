@@ -5,6 +5,7 @@
 
 #include "disk_monitor.h"
 
+#include <DiskDeviceRoster.h>
 #include <NodeMonitor.h>
 
 #include <sys/poll.h>
@@ -17,6 +18,7 @@
 
 #include <util/KMessage.h>
 
+#include "disk_device.h"
 #include "Team.h"
 #include "KernelDebug.h"
 
@@ -82,18 +84,50 @@ init_udev()
 
 
 static void
-send_device_notification(port_id port, uint32 token, uint32 opcode, dev_t newDevice)
+send_device_notification(port_id port, uint32 token, uint32 opcode, dev_t device,
+	dev_t parentDevice = -1, ino_t parentDirectory = -1)
 {
+	// TODO this code doesn't really understand mount points, we should
+	// send notifications for volumes that are actually mounted/unmounted.
 	KMessage message;
-	char buffer[128];
+	char buffer[256];
 	const int32 kPortMessageCode = 'pjpp';
 	message.SetTo(buffer, sizeof(buffer), B_NODE_MONITOR);
 	message.AddInt32("opcode", opcode);
 	if (opcode == B_DEVICE_MOUNTED) {
-		message.AddInt32("new device", (int32)newDevice);
+		message.AddInt32("new device", (int32)device);
+		if (parentDevice != (dev_t)-1)
+			message.AddInt32("device", (int32)parentDevice);
+		if (parentDirectory != (ino_t)-1)
+			message.AddInt64("directory", parentDirectory);
 	} else {
-		message.AddInt32("device", (int32)newDevice);
+		message.AddInt32("device", (int32)device);
 	}
+	message.SetDeliveryInfo(token, port, -1, find_thread(NULL));
+
+	write_port(port, kPortMessageCode, message.Buffer(), message.ContentSize());
+}
+
+
+static void
+send_disk_device_notification(port_id port, uint32 token, uint32 event,
+	const char* devNode)
+{
+	partition_id deviceId = -1;
+	if (devNode && devNode[0])
+		deviceId = make_partition_id(devNode);
+
+	if (deviceId < 0)
+		return;
+
+	KMessage message;
+	char buffer[256];
+	const int32 kPortMessageCode = 'pjpp';
+
+	message.SetTo(buffer, sizeof(buffer), B_DEVICE_UPDATE);
+	message.AddInt32("event", event);
+	message.AddInt32("device_id", deviceId);
+	message.AddInt32("partition_id", deviceId);
 	message.SetDeliveryInfo(token, port, -1, find_thread(NULL));
 
 	write_port(port, kPortMessageCode, message.Buffer(), message.ContentSize());
@@ -109,6 +143,21 @@ udev_action_to_opcode(const char* action)
 		return B_DEVICE_MOUNTED;
 	if (strcmp(action, "remove") == 0)
 		return B_DEVICE_UNMOUNTED;
+	return 0;
+}
+
+
+static uint32
+udev_action_to_disk_event(const char* action)
+{
+	if (!action)
+		return 0;
+	if (strcmp(action, "add") == 0)
+		return B_DEVICE_ADDED;
+	if (strcmp(action, "remove") == 0)
+		return B_DEVICE_REMOVED;
+	if (strcmp(action, "change") == 0)
+		return B_DEVICE_MEDIA_CHANGED;
 	return 0;
 }
 
@@ -165,10 +214,10 @@ udev_thread_func()
 		struct udev_device* dev;
 		while ((dev = udev_monitor_receive_device(udevMonitor)) != nullptr) {
 			const char* action = udev_device_get_action(dev);
-			const char* devnode = udev_device_get_devnode(dev);
-			(void)devnode;
+			const char* devNode = udev_device_get_devnode(dev);
 
 			uint32 opcode = udev_action_to_opcode(action);
+			uint32 diskEvent = udev_action_to_disk_event(action);
 			if (opcode != 0) {
 				dev_t devnum = udev_device_get_devnum(dev);
 
@@ -206,12 +255,22 @@ udev_thread_func()
 					const VolumeWatcherKey& key = p.first;
 					uint32 mask = p.second;
 					bool send = false;
-					if (opcode == B_DEVICE_MOUNTED && (mask & WATCH_DISK_ADD))
+					uint32 eventToSend = 0;
+
+					if (diskEvent == B_DEVICE_ADDED && (mask & WATCH_DISK_ADD)) {
 						send = true;
-					else if (opcode == B_DEVICE_UNMOUNTED && (mask & WATCH_DISK_REMOVE))
+						eventToSend = B_DEVICE_ADDED;
+					} else if (diskEvent == B_DEVICE_REMOVED && (mask & WATCH_DISK_REMOVE)) {
 						send = true;
-					if (send) {
-						send_device_notification(key.port, key.token, opcode, devnum);
+						eventToSend = B_DEVICE_REMOVED;
+					} else if (diskEvent == B_DEVICE_MEDIA_CHANGED && (mask & WATCH_DISK_ADD)) {
+						send = true;
+						eventToSend = B_DEVICE_MEDIA_CHANGED;
+					}
+
+					if (send && eventToSend != 0) {
+						send_disk_device_notification(key.port, key.token,
+							eventToSend, devNode);
 					}
 				}
 			}
@@ -231,38 +290,39 @@ udev_thread_func()
 static void
 start_thread()
 {
-	bool start = false;
 	{
 		std::lock_guard<std::mutex> guard(gWatchLock);
-		if (!gWatchThreadRunning &&
-			(!gMountWatchers.empty() || !gVolumeWatchers.empty() || !gDiskWatchers.empty())) {
-			gWatchThreadRunning = true;
+		if (gWatchThreadRunning)
+			return;
+		if (!gMountWatchers.empty() || !gVolumeWatchers.empty() || !gDiskWatchers.empty()) {
 			gWatcherExitRequested = false;
-			start = true;
+			gWatchThread = std::thread(udev_thread_func);
+			gWatchThreadRunning = true;
 		}
 	}
-	if (start)
-		gWatchThread = std::thread(udev_thread_func);
 }
+
 
 static void
 stop_thread()
 {
-	bool stop = false;
+	std::thread threadToJoin;
 	{
 		std::lock_guard<std::mutex> guard(gWatchLock);
-		if (gWatchThreadRunning &&
-			gMountWatchers.empty() && gVolumeWatchers.empty() && gDiskWatchers.empty()) {
-			stop = true;
+		if (!gWatchThreadRunning)
+			return;
+
+		if (gMountWatchers.empty() && gVolumeWatchers.empty() && gDiskWatchers.empty()) {
+			gWatcherExitRequested = true;
+			if (gWatchThread.joinable())
+				threadToJoin = std::move(gWatchThread);
+
+			gWatchThreadRunning = false;
 		}
 	}
-	if (stop) {
-		gWatcherExitRequested = true;
-		if (gWatchThread.joinable())
-			gWatchThread.join();
 
-		gWatchThreadRunning = false;
-	}
+	if (threadToJoin.joinable())
+		threadToJoin.join();
 }
 
 
@@ -271,10 +331,11 @@ start_mount_watching(port_id port, uint32 token)
 {
 	printf("start mount_watching\n");
 
-	std::lock_guard<std::mutex> guard(gWatchLock);
-
-	VolumeWatcherKey key = { port, token };
-	gMountWatchers[key] = 1;
+	{
+		std::lock_guard<std::mutex> guard(gWatchLock);
+		VolumeWatcherKey key = { port, token };
+		gMountWatchers[key] = 1;
+	}
 
 	start_thread();
 	return B_OK;
@@ -302,8 +363,11 @@ start_volume_watching(dev_t device, port_id port, uint32 token)
 {
 	std::lock_guard<std::mutex> guard(gWatchLock);
 
-	VolumeWatcher watcher = { port, token, device };
-	gVolumeWatchers.push_back(watcher);
+	{
+		std::lock_guard<std::mutex> guard(gWatchLock);
+		VolumeWatcher watcher = { port, token, device };
+		gVolumeWatchers.push_back(watcher);
+	}
 
 	start_thread();
 	return B_OK;
@@ -369,7 +433,6 @@ extern "C" {
 status_t
 _kern_start_watching_volume(dev_t device, uint32 flags, port_id port, uint32 token)
 {
-	std::lock_guard<std::mutex> guard(gWatchLock);
 	return start_volume_watching(device, port, token);
 }
 
@@ -377,7 +440,6 @@ _kern_start_watching_volume(dev_t device, uint32 flags, port_id port, uint32 tok
 status_t
 _kern_stop_watching_volume(dev_t device, port_id port, uint32 token)
 {
-	std::lock_guard<std::mutex> guard(gWatchLock);
 	return stop_volume_watching(device, port, token);
 }
 

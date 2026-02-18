@@ -328,30 +328,26 @@ Team::ReinitChildAtFork()
 	}
 	if (gNexusNodeMonitor >= 0) {
 		close(gNexusNodeMonitor);
-		gNexusVRef = -1;
+		gNexusNodeMonitor = -1;
 	}
 	if (gUdev != NULL) {
 		udev_unref(gUdev);
 		gUdev = NULL;
 	}
 
+	gNexus = open("/dev/nexus", O_RDWR);
+	if (gNexus < 0) {
+		printf("ReinitChildAtFork: Can't open Nexus IPC\n");
+		return;
+	}
+
+	thread_id id = nexus_io(gNexus, NEXUS_THREAD_CLONE_EXECUTED, 1);
+	if (id < 0)
+		printf("clone failed (child)\n");
+
 	gTeamOnce = PTHREAD_ONCE_INIT;
-
-	if (gForkPipe[0] != -1) {
-		close(gForkPipe[0]);
-		gForkPipe[0] = -1;
-	}
-
-	if (gForkPipe[1] != -1) {
-		char buf = 1;
-		ssize_t ret;
-		do {
-			ret = write(gForkPipe[1], &buf, 1);
-		} while (ret == -1 && errno == EINTR);
-
-		close(gForkPipe[1]);
-		gForkPipe[1] = -1;
-	}
+	gPreinitDone = false;
+	pthread_once(&gTeamOnce, &Team::InitTeam);
 }
 
 

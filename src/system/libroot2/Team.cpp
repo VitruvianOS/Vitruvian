@@ -19,17 +19,19 @@
 #include "KernelDebug.h"
 #include "syscalls.h"
 
+#include "../kernel/nexus/nexus/nexus.h"
 
 int32 __gCPUCount = BKernelPrivate::Team::GetCPUCount();
 mode_t __gUmask = BKernelPrivate::Team::GetUmask();
-int __libc_argc;
-char** __libc_argv;
+int __libc_argc = 0;
+char** __libc_argv = NULL;
 
 
 namespace BKernelPrivate {
 
 
 static pthread_once_t gTeamOnce = PTHREAD_ONCE_INIT;
+static bool gPreinitDone = false;
 
 static int gNexus = -1;
 static int gNexusSem = -1;
@@ -38,9 +40,35 @@ static int gNexusVRef = -1;
 static int gNexusNodeMonitor = -1;
 static struct udev* gUdev = NULL;
 
-static int gForkPipe[2] = {-1, -1};
-
+// TODO replace with DIR*
 static std::list<int> gTeams;
+
+
+static void
+OpenNexusDevices()
+{
+	if (gPreinitDone)
+		return;
+
+	if (gNexus < 0) {
+		const char* nexusFdEnv = getenv("__VITRUVIAN_NEXUS_FD");
+		if (nexusFdEnv != NULL) {
+			gNexus = atoi(nexusFdEnv);
+			unsetenv("__VITRUVIAN_NEXUS_FD");
+		} else {
+			gNexus = open("/dev/nexus", O_RDWR);
+		}
+	}
+
+	if (gNexusSem < 0)
+		gNexusSem = open("/dev/nexus_sem", O_RDWR);
+	if (gNexusArea < 0)
+		gNexusArea = open("/dev/nexus_area", O_RDWR | O_CLOEXEC);
+	if (gNexusVRef < 0)
+		gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
+
+	gPreinitDone = true;
+}
 
 
 static const char*
@@ -78,16 +106,15 @@ init_team(int argc, char** argv)
 {
 	TRACE("init_team() %d\n", argc);
 
-	pthread_once(&gTeamOnce, &Team::InitTeam);
-
 	__libc_argc = argc;
 	__libc_argv = argv;
 
-	// If we don't set this we get no debug output from servers
-	setvbuf(stdout, NULL, _IONBF, 0);
-	setvbuf(stderr, NULL, _IONBF, 0);
+	__gCPUCount = BKernelPrivate::Team::GetCPUCount();
+	__gUmask = BKernelPrivate::Team::GetUmask();
 
-	setenv("TARGET_SCREEN", "root", 1);
+	pthread_once(&gTeamOnce, &Team::InitTeam);
+
+	TRACE("init_team exit\n");
 }
 
 
@@ -97,11 +124,22 @@ deinit_team()
 	TRACE("deinit_team()\n");
 }
 
-
 void
 Team::InitTeam()
 {
 	TRACE("Team::InitTeam\n");
+
+	// If we don't set this we get no debug output from servers
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
+
+	setenv("TARGET_SCREEN", "root", 1);
+
+	// Register atfork handlers. This should be good for us - we register the
+	// first set of callbacks that will be executed before any other set the
+	// user may register. Calling pthread_atfork again adds to the list.
+	pthread_atfork(&Team::PrepareFatherAtFork,
+		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
 
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
@@ -114,27 +152,12 @@ Team::InitTeam()
 	sigaction(SIGILL, &sa, NULL);
 	sigaction(SIGABRT, &sa, NULL);
 
-	Team::PreInitTeam();
-
-	// This should be good for us. We register the first set of callbacks
-	// that will be executed before any other set the user may register.
-	// Calling it again shouldn't overwrite the previous callbacks.
-	pthread_atfork(&Team::PrepareFatherAtFork,
-		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
-}
-
-
-void
-Team::PreInitTeam()
-{
-	TRACE("Team::PreInitTeam\n");
-
 	if (gNexus < 0) {
 		const char* nexusFdEnv = getenv("__VITRUVIAN_NEXUS_FD");
 		if (nexusFdEnv != NULL) {
 			gNexus = atoi(nexusFdEnv);
 			unsetenv("__VITRUVIAN_NEXUS_FD");
-			TRACE("Team::PreInitTeam: using inherited nexus fd %d\n", gNexus);
+			TRACE("Team::InitTeam: using inherited nexus fd %d\n", gNexus);
 		} else {
 			gNexus = open("/dev/nexus", O_RDWR);
 			if (gNexus < 0) {
@@ -144,41 +167,45 @@ Team::PreInitTeam()
 		}
 	}
 
-	gNexusSem = open("/dev/nexus_sem", O_RDWR);
 	if (gNexusSem < 0) {
-		printf("Can't open Nexus Sem\n");
-		exit(-1);
+		gNexusSem = open("/dev/nexus_sem", O_RDWR);
+		if (gNexusSem < 0) {
+			printf("Can't open Nexus Sem\n");
+			exit(-1);
+		}
 	}
 
-	gNexusArea = open("/dev/nexus_area", O_RDWR | O_CLOEXEC);
 	if (gNexusArea < 0) {
-		printf("Can't open Nexus Area\n");
-		exit(-1);
+		gNexusArea = open("/dev/nexus_area", O_RDWR | O_CLOEXEC);
+		if (gNexusArea < 0) {
+			printf("Can't open Nexus Area\n");
+			exit(-1);
+		}
 	}
 
-	gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
 	if (gNexusVRef < 0) {
-		printf("Can't open Nexus VRef\n");
-		exit(-1);
+		gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
+		if (gNexusVRef < 0) {
+			printf("Can't open Nexus VRef\n");
+			exit(-1);
+		}
 	}
 
-#if 0
+#ifdef __ENABLE_NODE_MONITOR__
 	gNexusNodeMonitor = open("/dev/nexus_node_monitor", O_RDWR | O_CLOEXEC);
 	if (gNexusNodeMonitor < 0) {
 		printf("Can't open Nexus Node Monitor module\n");
 		exit(-1);
 	}
 #endif
-
 }
 
 
-// TODO inline in header those and use unlikely
 int
 Team::GetNexusDescriptor()
 {
 	if (gNexus == -1)
-		pthread_once(&gTeamOnce, &Team::InitTeam);
+		OpenNexusDevices();
 
 	return gNexus;
 }
@@ -188,18 +215,17 @@ int
 Team::GetSemDescriptor()
 {
 	if (gNexusSem == -1)
-		pthread_once(&gTeamOnce, &Team::InitTeam);
+		OpenNexusDevices();
 
 	return gNexusSem;
 }
-
 
 
 int
 Team::GetAreaDescriptor()
 {
 	if (gNexusArea == -1)
-		pthread_once(&gTeamOnce, &Team::InitTeam);
+		OpenNexusDevices();
 
 	return gNexusArea;
 }
@@ -209,7 +235,7 @@ int
 Team::GetVRefDescriptor(dev_t* dev)
 {
 	if (gNexusVRef == -1)
-		pthread_once(&gTeamOnce, &Team::InitTeam);
+		OpenNexusDevices();
 
 	if (dev != NULL) {
 		struct stat st;
@@ -220,12 +246,11 @@ Team::GetVRefDescriptor(dev_t* dev)
 }
 
 
-
 int
 Team::GetNodeMonitorDescriptor()
 {
 	if (gNexusNodeMonitor == -1)
-		pthread_once(&gTeamOnce, &Team::InitTeam);
+		OpenNexusDevices();
 
 	return gNexusNodeMonitor;
 }
@@ -262,14 +287,6 @@ void
 Team::PrepareFatherAtFork()
 {
 	TRACE("PrepareFatherAtFork()\n");
-
-	if (pipe2(gForkPipe, O_CLOEXEC) == -1) {
-		debugger("CRITICAL: pipe2 is broken");
-
-		gForkPipe[0] = -1;
-		gForkPipe[1] = -1;
-		TRACE("PrepareFatherAtFork: pipe creation failed: %s\n", strerror(errno));
-	}
 }
 
 
@@ -278,19 +295,10 @@ Team::SyncFatherAtFork()
 {
 	TRACE("SyncFatherAtFork()\n");
 
-	if (gForkPipe[0] != -1) {
-		close(gForkPipe[1]);
-		gForkPipe[1] = -1;
-
-		char buf;
-		ssize_t ret;
-		do {
-			ret = read(gForkPipe[0], &buf, 1);
-		} while (ret == -1 && errno == EINTR);
-
-		close(gForkPipe[0]);
-		gForkPipe[0] = -1;
-	}
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	thread_id id = nexus_io(nexus, NEXUS_THREAD_WAIT_NEWBORN, NULL);
+	if (id < 0)
+		printf("Fork failed\n");
 }
 
 
@@ -357,28 +365,13 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 
 	TRACE("load_image: %s (argc=%d)\n", argv[0], argc);
 
-	int syncPipe[2];
-	if (pipe2(syncPipe, O_CLOEXEC) == -1) {
-		TRACE("load_image: pipe failed: %s\n", strerror(errno));
-		return -errno;
-	}
-
-	sigset_t blockMask, oldMask;
-	sigemptyset(&blockMask);
-	sigaddset(&blockMask, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &blockMask, &oldMask);
-
 	TRACE("LoadImage: about to clone(), gNexus=%d gNexusSem=%d gNexusArea=%d gNexusVRef=%d\n",
 		gNexus, gNexusSem, gNexusArea, gNexusVRef);
 
 	pid_t pid = syscall(SYS_clone, SIGCHLD, 0, NULL, NULL, 0);
 	if (pid == -1) {
-		int savedErrno = errno;
-		close(syncPipe[0]);
-		close(syncPipe[1]);
-		sigprocmask(SIG_SETMASK, &oldMask, NULL);
-		TRACE("load_image: clone failed: %s\n", strerror(savedErrno));
-		return -savedErrno;
+		TRACE("load_image: clone failed: %s\n", strerror(errno));
+		return -errno;
 	}
 
 	if (pid == 0) {
@@ -403,100 +396,44 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 		}
 		if (gNexusNodeMonitor >= 0) {
 			close(gNexusNodeMonitor);
-			gNexusVRef = -1;
+			gNexusNodeMonitor = -1;
 		}
 		if (gUdev != NULL) {
 			udev_unref(gUdev);
 			gUdev = NULL;
 		}
 
-		int nexusFd = open("/dev/nexus", O_RDWR);
-		if (nexusFd >= 0) {
+		gNexus = open("/dev/nexus", O_RDWR);
+		if (gNexus >= 0) {
 			char fdStr[16];
-			snprintf(fdStr, sizeof(fdStr), "%d", nexusFd);
+			snprintf(fdStr, sizeof(fdStr), "%d", gNexus);
 			setenv("__VITRUVIAN_NEXUS_FD", fdStr, 1);
 		}
 
-		close(syncPipe[0]);
-		sigprocmask(SIG_SETMASK, &oldMask, NULL);
-		raise(SIGSTOP);
+		int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+		thread_id id = nexus_io(nexus, NEXUS_THREAD_CLONE_EXECUTED, NULL);
+		if (id < 0)
+			printf("Fork failed\n");
 
 		execvpe(argv[0], const_cast<char* const*>(argv),
 			envp ? const_cast<char* const*>(envp) : environ);
 
-		int execErrno = errno;
-		ssize_t written = write(syncPipe[1], &execErrno, sizeof(execErrno));
-		(void)written;
-
 		TRACE("load_image child: exec failed for '%s': %s\n",
-			argv[0], strerror(execErrno));
+			argv[0], strerror(errno));
+
 		 // command not found
 		_exit(127);
 	}
 
-	close(syncPipe[1]);
-
-	sigprocmask(SIG_SETMASK, &oldMask, NULL);
-
-	int status;
-	pid_t result;
-	do {
-		result = waitpid(pid, &status, WUNTRACED);
-	} while (result == -1 && errno == EINTR);
-
-	if (result == -1) {
-		int savedErrno = errno;
-		close(syncPipe[0]);
-		kill(pid, SIGKILL);
-		waitpid(pid, NULL, 0);
-		TRACE("load_image: waitpid failed: %s\n", strerror(savedErrno));
-		return -savedErrno;
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	thread_id id = nexus_io(nexus, NEXUS_THREAD_WAIT_NEWBORN, NULL);
+	if (id < 0) {
+		printf("Fork failed\n");
+		return B_BAD_THREAD_ID;
 	}
 
-	if (WIFSTOPPED(status) && WSTOPSIG(status) == SIGSTOP) {
-		close(syncPipe[0]);
-		TRACE("load_image: successfully loaded '%s' as team %d (suspended)\n",
-			argv[0], pid);
-		return (thread_id)pid;
-	}
-
-	if (WIFEXITED(status) || WIFSIGNALED(status)) {
-		int execErrno = 0;
-		ssize_t bytesRead = read(syncPipe[0], &execErrno, sizeof(execErrno));
-		close(syncPipe[0]);
-
-		if (bytesRead == sizeof(execErrno) && execErrno != 0) {
-			TRACE("load_image: exec failed with errno %d: %s\n",
-				execErrno, strerror(execErrno));
-
-			switch (execErrno) {
-				case ENOENT:
-					return B_ENTRY_NOT_FOUND;
-				case EACCES:
-				case EPERM:
-					return B_PERMISSION_DENIED;
-				case ENOEXEC:
-				case ELIBBAD:
-					return B_NOT_AN_EXECUTABLE;
-				case ENOMEM:
-					return B_NO_MEMORY;
-				case E2BIG:
-					return B_BAD_VALUE;
-				default:
-					return -execErrno;
-			}
-		}
-
-		TRACE("load_image: child exited unexpectedly\n");
-		return B_ERROR;
-	}
-
-	// Unexpected state
-	close(syncPipe[0]);
-	kill(pid, SIGKILL);
-	waitpid(pid, NULL, 0);
-	TRACE("load_image: unexpected child state\n");
-	return B_ERROR;
+	TRACE("load_image: success\n");
+	return id;
 }
 
 }

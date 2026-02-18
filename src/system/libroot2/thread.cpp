@@ -39,6 +39,7 @@ void* thread_run(void* data)
 	CALLED();
 
 	thread_data* threadData = (thread_data*)data;
+	// TODO do we need to pass father?
 	nexus_thread_spawn spawnInfo = { threadData->name, threadData->father };
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
@@ -55,6 +56,8 @@ void* thread_run(void* data)
 
 	delete threadData;
 
+	// TODO at the moment that's the best we can do
+	// but this will be replaced by nexus automatic thread cleanup
 	struct nexus_thread_exchange exchange;
 	memset(&exchange, 0, sizeof(exchange));
 	exchange.return_code = B_OK;
@@ -488,8 +491,8 @@ wait_for_thread(thread_id id, status_t* returnCode)
 status_t
 suspend_thread(thread_id id)
 {
-	debugger("V\\OS doesn't support thread suspend"); 
-	return B_BAD_THREAD_ID;
+	UNIMPLEMENTED();
+	return B_NOT_SUPPORTED;
 }
 
 
@@ -497,10 +500,6 @@ status_t
 resume_thread(thread_id id)
 {
 	CALLED();
-
-	// TODO remove me
-	if (kill(id, 0) == 0)
-		kill(id, SIGCONT);
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	status_t ret = nexus_io(nexus, NEXUS_THREAD_RESUME, id);

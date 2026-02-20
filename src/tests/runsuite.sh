@@ -2,9 +2,6 @@
 
 cd /system/apps/unittester/
 
-
-export LD_PRELOAD=./libcppunit.so
-
 ./UnitTester -l./libs BLocker > locker.log
 ./UnitTester -l./libs BNode > node.log
 ./UnitTester -l./libs BEntry > entry.log

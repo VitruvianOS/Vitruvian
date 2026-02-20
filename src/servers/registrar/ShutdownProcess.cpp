@@ -693,8 +693,8 @@ ShutdownProcess::Init(BMessage* request)
 	if (fInternalEventSemaphore < 0)
 		RETURN_ERROR(fInternalEventSemaphore);
 
-	// init the app server connection
-	fHasGUI = Registrar::App()->InitGUIContext() == B_OK;
+	// NOTE: Originally we called InitGUIContext() here, but it's better
+	// to do so in the worked thread, so we moved it there.
 
 	// start watching application quits
 	status_t error = fRoster->AddWatcher(this);
@@ -1259,6 +1259,8 @@ ShutdownProcess::_WorkerDoShutdown()
 	bool synchronous;
 	if (fRequest->FindBool("synchronous", &synchronous) == B_OK && !synchronous)
 		_SendReply(B_OK);
+
+	fHasGUI = Registrar::App()->InitGUIContext() == B_OK;
 
 	// ask the user to confirm the shutdown, if desired
 	bool askUser;

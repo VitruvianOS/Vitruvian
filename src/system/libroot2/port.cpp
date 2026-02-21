@@ -9,7 +9,8 @@
 #include "../kernel/nexus/nexus/nexus.h"
 
 
-port_id create_port(int32 queueLength, const char* name)
+port_id
+create_port(int32 queueLength, const char* name)
 {
 	CALLED();
 
@@ -136,6 +137,7 @@ _get_port_info(port_id id, port_info* out_info, size_t size)
 
 	out_info->port = info.port;
 	out_info->team = info.team;
+	strlcpy(out_info->name, info.name, sizeof(out_info->name));
 	out_info->capacity = info.capacity;
 	out_info->queue_count = info.queue_count;
 	out_info->total_count = info.total_count;
@@ -315,7 +317,7 @@ set_port_owner(port_id id, team_id team)
 	CALLED();
 
 	// TODO: we want to deprecate this function
-	// and introduce a mechanism which requires
+	// and introduce a mechanism that requires
 	// the target process approval.
 
 	if (id < 0)

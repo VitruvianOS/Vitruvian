@@ -159,8 +159,8 @@ macro( Test name )
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
 
-	if( _ADDON_RDEF )
-		foreach( RDEF_FILE ${_ADDON_RDEF} )
+	if( _TEST_RDEF )
+		foreach( RDEF_FILE ${_TEST_RDEF} )
 		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}")
 			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE} not found\n")
 			return()

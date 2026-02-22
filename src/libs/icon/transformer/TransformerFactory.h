@@ -20,24 +20,28 @@ class BMessage;
 _BEGIN_ICON_NAMESPACE
 
 
+class Shape;
 class Transformer;
 class VertexSource;
+
+enum {
+	AFFINE_TRANSFORMER,
+	PERSPECTIVE_TRANSFORMER,
+	CONTOUR_TRANSFORMER,
+	STROKE_TRANSFORMER,
+};
+
 
 class TransformerFactory {
  public:
 
 	static	Transformer*		TransformerFor(uint32 type,
-											   VertexSource& source);
+											   VertexSource& source,
+											   Shape* shape);
 
 	static	Transformer*		TransformerFor(BMessage* archive,
-											   VertexSource& source);
-
-#ifdef ICON_O_MATIC
-	static	bool				NextType(int32* cookie,
-										 uint32* type,
-										 BString* name);
-
-#endif // ICON_O_MATIC
+											   VertexSource& source,
+											   Shape* shape);
 };
 
 

@@ -13,21 +13,21 @@ AddOn(
 
 	message/Defines.cpp
 	message/MessageImporter.cpp
-	shape/PathContainer.cpp
-	shape/ShapeContainer.cpp
+	shape/PathSourceShape.cpp
+	shape/ReferenceImage.cpp
 	shape/Shape.cpp
 	shape/VectorPath.cpp
 	style/GradientTransformable.cpp
-	style/StyleContainer.cpp
 	style/Style.cpp
 	transformable/Transformable.cpp 
 
 	transformer/AffineTransformer.cpp
+	transformer/CompoundStyleTransformer.cpp
 	transformer/ContourTransformer.cpp
 	transformer/PathSource.cpp
 	transformer/PerspectiveTransformer.cpp
 	transformer/StrokeTransformer.cpp
-	transformer/Transformer.cpp
+	transformer/StyleTransformer.cpp
 	transformer/TransformerFactory.cpp
 
 	LIBS
@@ -36,6 +36,7 @@ AddOn(
 	INCLUDES
 	"shape/"
 	"flat_icon/"
+	"generic"
 	"message/"
 	"style/"
 	"transformable/"

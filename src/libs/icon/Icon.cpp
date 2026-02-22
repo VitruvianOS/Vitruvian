@@ -1,9 +1,10 @@
 /*
- * Copyright 2006, Haiku.
+ * Copyright 2006, 2023, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Stephan Aßmus <superstippi@gmx.de>
+ *		Zardshard
  */
 
 #include "Icon.h"
@@ -11,10 +12,11 @@
 #include <new>
 #include <stdio.h>
 
-#include "PathContainer.h"
-#include "shape/Shape.h"
+#include "PathSourceShape.h"
+#include "ReferenceImage.h"
+#include "Shape.h"
 #include "Style.h"
-#include "StyleContainer.h"
+#include "VectorPath.h"
 
 using std::nothrow;
 
@@ -25,128 +27,126 @@ IconListener::~IconListener() {}
 
 // #pragma mark -
 
-// constructor
+
 Icon::Icon()
-	: fStyles(new (nothrow) StyleContainer()),
-	  fPaths(new (nothrow) PathContainer(true)),
-	  fShapes(new (nothrow) ShapeContainer())
+	: fStyles(true),
+	  fPaths(true),
+	  fShapes(true)
 #ifdef ICON_O_MATIC
 	, fListeners(2)
 #endif
 {
 #ifdef ICON_O_MATIC
-	if (fShapes)
-		fShapes->AddListener(this);
+	fShapes.AddListener(this);
 #endif
 }
 
-// constructor
+
 Icon::Icon(const Icon& other)
-	: fStyles(new (nothrow) StyleContainer()),
-	  fPaths(new (nothrow) PathContainer(true)),
-	  fShapes(new (nothrow) ShapeContainer())
+	: fStyles(true),
+	  fPaths(true),
+	  fShapes(true)
 #ifdef ICON_O_MATIC
 	, fListeners(2)
 #endif
 {
-	if (!fStyles || !fPaths || !fShapes)
-		return;
-
 #ifdef ICON_O_MATIC
-	fShapes->AddListener(this);
+	fShapes.AddListener(this);
 #endif
 
-	int32 styleCount = other.fStyles->CountStyles();
+	int32 styleCount = other.fStyles.CountItems();
 	for (int32 i = 0; i < styleCount; i++) {
-		Style* style = other.fStyles->StyleAtFast(i);
+		Style* style = other.fStyles.ItemAtFast(i);
 		Style* clone = new (nothrow) Style(*style);
-		if (!clone || !fStyles->AddStyle(clone)) {
+		if (!clone || !fStyles.AddItem(clone)) {
 			delete clone;
 			return;
 		}
 	}
 
-	int32 pathCount = other.fPaths->CountPaths();
+	int32 pathCount = other.fPaths.CountItems();
 	for (int32 i = 0; i < pathCount; i++) {
-		VectorPath* path = other.fPaths->PathAtFast(i);
+		VectorPath* path = other.fPaths.ItemAtFast(i);
 		VectorPath* clone = new (nothrow) VectorPath(*path);
-		if (!clone || !fPaths->AddPath(clone)) {
+		if (!clone || !fPaths.AddItem(clone)) {
 			delete clone;
 			return;
 		}
 	}
 
-	int32 shapeCount = other.fShapes->CountShapes();
+	int32 shapeCount = other.fShapes.CountItems();
 	for (int32 i = 0; i < shapeCount; i++) {
-		Shape* shape = other.fShapes->ShapeAtFast(i);
-		Shape* clone = new (nothrow) Shape(*shape);
-		if (!clone || !fShapes->AddShape(clone)) {
+		Shape* shape = other.fShapes.ItemAtFast(i);
+		Shape* clone = shape->Clone();
+		if (!clone || !fShapes.AddItem(clone)) {
 			delete clone;
 			return;
 		}
-		// the cloned shape references styles and paths in
-		// the "other" icon, replace them with "local" styles
-		// and paths
-		int32 styleIndex = other.fStyles->IndexOf(shape->Style());
-		clone->SetStyle(fStyles->StyleAt(styleIndex));
 
-		clone->Paths()->MakeEmpty();
-		pathCount = shape->Paths()->CountPaths();
-		for (int32 j = 0; j < pathCount; j++) {
-			VectorPath* remote = shape->Paths()->PathAtFast(j);
-			int32 index = other.fPaths->IndexOf(remote);
-			VectorPath* local = fPaths->PathAt(index);
-			if (!local) {
-				printf("failed to match remote and "
-					   "local paths while cloning icon\n");
-				continue;
-			}
-			if (!clone->Paths()->AddPath(local)) {
-				return;
+		// PathSourceShapes require further handling
+		PathSourceShape* pathSourceShape = dynamic_cast<PathSourceShape*>(shape);
+		PathSourceShape* pathSourceShapeClone = dynamic_cast<PathSourceShape*>(clone);
+		if (pathSourceShape != NULL && pathSourceShapeClone != NULL) {
+			// the cloned shape references styles and paths in
+			// the "other" icon, replace them with "local" styles
+			// and paths
+
+			int32 styleIndex = other.fStyles.IndexOf(pathSourceShape->Style());
+			pathSourceShapeClone->SetStyle(fStyles.ItemAt(styleIndex));
+
+			pathSourceShapeClone->Paths()->MakeEmpty();
+			pathCount = pathSourceShape->Paths()->CountItems();
+			for (int32 j = 0; j < pathCount; j++) {
+				VectorPath* remote = pathSourceShape->Paths()->ItemAtFast(j);
+				int32 index = other.fPaths.IndexOf(remote);
+				VectorPath* local = fPaths.ItemAt(index);
+				if (!local) {
+					printf("failed to match remote and "
+						   "local paths while cloning icon\n");
+					continue;
+				}
+				if (!pathSourceShapeClone->Paths()->AddItem(local)) {
+					return;
+				}
 			}
 		}
 	}
 }
 
-// destructor
+
 Icon::~Icon()
 {
-	if (fShapes) {
-		fShapes->MakeEmpty();
+	fShapes.MakeEmpty();
 #ifdef ICON_O_MATIC
-		fShapes->RemoveListener(this);
+	fShapes.RemoveListener(this);
 #endif
-		delete fShapes;
-	}
-	delete fPaths;
-	delete fStyles;
 }
 
-// InitCheck
+
 status_t
 Icon::InitCheck() const
 {
-	return fStyles && fPaths && fShapes ? B_OK : B_NO_MEMORY;
+	return B_OK;
 }
 
 #ifdef ICON_O_MATIC
-// ShapeAdded
+
 void
-Icon::ShapeAdded(Shape* shape, int32 index)
+Icon::ItemAdded(Shape* shape, int32 index)
 {
 	shape->AddObserver(this);
 	_NotifyAreaInvalidated(shape->Bounds(true));
 }
 
-// ShapeRemoved
+
 void
-Icon::ShapeRemoved(Shape* shape)
+Icon::ItemRemoved(Shape* shape)
 {
 	shape->RemoveObserver(this);
 	_NotifyAreaInvalidated(shape->Bounds(true));
 }
 
-// ObjectChanged
+
 void
 Icon::ObjectChanged(const Observable* object)
 {
@@ -159,7 +159,7 @@ Icon::ObjectChanged(const Observable* object)
 	}
 }
 
-// AddListener
+
 bool
 Icon::AddListener(IconListener* listener)
 {
@@ -172,7 +172,7 @@ Icon::AddListener(IconListener* listener)
 	return false;
 }
 
-// RemoveListener
+
 bool
 Icon::RemoveListener(IconListener* listener)
 {
@@ -181,26 +181,25 @@ Icon::RemoveListener(IconListener* listener)
 #endif // ICON_O_MATIC
 
 
-// Clone
 Icon*
 Icon::Clone() const
 {
 	return new (nothrow) Icon(*this);
 }
 
-// MakeEmpty
+
 void
 Icon::MakeEmpty()
 {
-	fShapes->MakeEmpty();
-	fPaths->MakeEmpty();
-	fStyles->MakeEmpty();
+	fShapes.MakeEmpty();
+	fPaths.MakeEmpty();
+	fStyles.MakeEmpty();
 }
 
 // #pragma mark -
 
+
 #ifdef ICON_O_MATIC
-// _NotifyAreaInvalidated
 void
 Icon::_NotifyAreaInvalidated(const BRect& area) const
 {
@@ -213,5 +212,3 @@ Icon::_NotifyAreaInvalidated(const BRect& area) const
 	}
 }
 #endif // ICON_O_MATIC
-
-

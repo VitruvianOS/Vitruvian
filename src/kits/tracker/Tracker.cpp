@@ -59,6 +59,8 @@ All rights reserved.
 #include <Volume.h>
 #include <VolumeRoster.h>
 
+#include <tracker_private.h>
+
 #include "Attributes.h"
 #include "AutoLock.h"
 #include "BackgroundImage.h"
@@ -287,44 +289,16 @@ TTracker::TTracker()
 	gLaunchLooper = new LaunchLooper();
 	gLaunchLooper->Run();
 
-	// open desktop window
-	BContainerWindow* deskWindow = NULL;
-	BDirectory deskDir;
+	// create Desktop window and lock it
+	AutoLock<WindowList> lock(&fWindowList);
+	BContainerWindow* deskWindow = new BDeskWindow(&fWindowList);
+	AutoLock<BWindow> windowLock(deskWindow);
 
-	if (FSGetDeskDir(&deskDir) == B_OK) {
-		// create desktop
-		BEntry entry;
-		deskDir.GetEntry(&entry);
-		Model* model = new Model(&entry, true);
-		if (model->InitCheck() == B_OK) {
-			AutoLock<WindowList> lock(&fWindowList);
-			deskWindow = new BDeskWindow(&fWindowList);
-			AutoLock<BWindow> windowLock(deskWindow);
-			deskWindow->CreatePoseView(model);
-			deskWindow->Init();
+	// init Desktop now that pose view is created and window is locked
+	deskWindow->Init();
 
-			if (TrackerSettings().ShowDisksIcon()) {
-				// create model for root of everything
-				BEntry entry("/");
-				Model model(&entry);
-				if (model.InitCheck() == B_OK) {
-					// add the root icon to desktop window
-					#ifdef __VOS_OLD_NODE_MONITOR__
-					BMessage message;
-					message.what = B_NODE_MONITOR;
-					message.AddInt32("opcode", B_ENTRY_CREATED);
-					message.AddUInt64("device", model.NodeRef()->device);
-					message.AddInt64("node", model.NodeRef()->node);
-					message.AddUInt64("directory",
-						model.EntryRef()->directory);
-					message.AddString("name", model.EntryRef()->name);
-					deskWindow->PostMessage(&message, deskWindow->PoseView());
-					#endif
-				}
-			}
-		} else
-			delete model;
-	}
+	// create this before ReadyToRun() so that the Trash icon gets set
+	fTrashWatcher = new BTrashWatcher();
 }
 
 
@@ -335,6 +309,8 @@ TTracker::~TTracker()
 
 	BPathMonitor::SetWatchingInterface(NULL);
 	delete fWatchingInterface;
+
+	delete fMimeTypeList;
 }
 
 
@@ -374,11 +350,10 @@ TTracker::QuitRequested()
 			= dynamic_cast<BContainerWindow*>(fWindowList.ItemAt(i));
 
 		if (window != NULL && window->Lock()) {
-			if (window->TargetModel() != NULL
-				&& !window->PoseView()->IsDesktopWindow()) {
-				if (window->TargetModel()->IsRoot())
+			if (window->TargetModel() != NULL && !window->TargetModel()->IsDesktop()) {
+				if (window->TargetModel()->IsRoot()) {
 					message.AddBool("open_disks_window", true);
-				else {
+				} else {
 					BEntry entry;
 					BPath path;
 					const entry_ref* ref = window->TargetModel()->EntryRef();
@@ -487,7 +462,7 @@ TTracker::MessageReceived(BMessage* message)
 			OpenInfoWindows(message);
 			break;
 
-		case kMoveToTrash:
+		case kMoveSelectionToTrash:
 			MoveRefsToTrash(message);
 			break;
 
@@ -560,12 +535,12 @@ TTracker::MessageReceived(BMessage* message)
 			MountServer().SendMessage(message);
 			break;
 
-
 		case kRestoreBackgroundImage:
 		{
 			BDeskWindow* desktop = GetDeskWindow();
 			AutoLock<BWindow> lock(desktop);
 			desktop->UpdateDesktopBackgroundImages();
+			desktop->PostMessage(message, desktop->PoseView());
 			break;
 		}
 
@@ -617,6 +592,40 @@ TTracker::MessageReceived(BMessage* message)
 			bool localize;
 			if (message->FindBool("filesys", &localize) == B_OK)
 				gLocalizedNamePreferred = localize;
+			break;
+		}
+
+		case kUpdateThumbnail:
+		{
+			// message passed from generator thread
+			// update icon on passed-in node_ref
+			node_ref noderef;
+			if (message->FindNodeRef("noderef", &noderef) == B_OK) {
+				// cycle through open windows to find the node's pose
+				// TODO find a faster way
+				AutoLock<WindowList> lock(&fWindowList);
+				int32 count = fWindowList.CountItems();
+				for (int32 index = 0; index < count; index++) {
+					BContainerWindow* window = dynamic_cast<BContainerWindow*>(
+						fWindowList.ItemAt(index));
+					if (window == NULL)
+						continue;
+
+					AutoLock<BWindow> windowLock(window);
+					if (!windowLock.IsLocked())
+						continue;
+
+					BPoseView* poseView = window->PoseView();
+					if (poseView == NULL)
+						continue;
+
+					BPose* pose = poseView->FindPose(&noderef);
+					if (pose != NULL) {
+						poseView->UpdateIcon(pose);
+						break; // updated pose icon, exit loop
+					}
+				}
+			}
 			break;
 		}
 
@@ -684,7 +693,7 @@ TTracker::MoveRefsToTrash(const BMessage* message)
 	if (count <= 0)
 		return;
 
-	BObjectList<entry_ref>* srcList = new BObjectList<entry_ref>(count, true);
+	BObjectList<entry_ref, true>* srcList = new BObjectList<entry_ref, true>(count);
 
 	for (int32 index = 0; index < count; index++) {
 		entry_ref ref;
@@ -823,11 +832,17 @@ TTracker::OpenRef(const entry_ref* ref, const node_ref* nodeToClose,
 	if (result != B_OK) {
 		BAlert* alert = new BAlert("",
 			B_TRANSLATE("There was an error resolving the link."),
-			B_TRANSLATE("Cancel"), 0, 0, B_WIDTH_AS_USUAL,
-				B_WARNING_ALERT);
+			B_TRANSLATE_COMMENT("Get info", "Tracker's 'Get info' panel [ALT+I]"),
+			B_TRANSLATE("Cancel"), 0, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
 		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-		alert->Go();
+		int32 choice = alert->Go();
 
+		if (choice == 0) {
+			BMessenger tracker(kTrackerSignature);
+			BMessage message(kGetInfo);
+			message.AddRef("refs", ref);
+			tracker.SendMessage(&message);
+		}
 		return result;
 	} else
 		model = new Model(&entry);
@@ -1047,8 +1062,7 @@ TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
 	int32 windowCount = 0;
 	while (window != NULL) {
 		if ((window->Workspaces() & workspace) != 0
-			&& (dynamic_cast<BDeskWindow*>(window) == NULL
-				|| !TrackerSettings().SingleWindowBrowse())) {
+			&& (!model->IsDesktop() || !TrackerSettings().SingleWindowBrowse())) {
 			// We found at least one window that is open and is not Desktop
 			// or we're in spatial mode, activate it and make sure we don't
 			// jerk the workspaces around.
@@ -1092,7 +1106,7 @@ TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
 		window = new BContainerWindow(&fWindowList, openFlags);
 	}
 
-	if (model != NULL && window->LockLooper()) {
+	if (model != NULL && window != NULL && window->LockLooper()) {
 		window->CreatePoseView(model);
 		if (window->PoseView() == NULL) {
 			// Failed initialization.
@@ -1157,6 +1171,7 @@ TTracker::OpenInfoWindows(BMessage* message)
 				wind->Activate();
 				delete model;
 			} else {
+				model->SniffMimeIfNeeded();
 				wind = new BInfoWindow(model, index, &fWindowList);
 				wind->PostMessage(kRestoreState);
 			}
@@ -1178,6 +1193,22 @@ TTracker::GetDeskWindow() const
 	TRESPASS();
 
 	return NULL;
+}
+
+
+void
+TTracker::PostMessageToAllContainerWindows(BMessage& message) const
+{
+	ASSERT(fWindowList.IsLocked());
+
+	int32 count = fWindowList.CountItems();
+	for (int32 index = 0; index < count; index++) {
+		BContainerWindow* window = dynamic_cast<BContainerWindow*>(
+			fWindowList.ItemAt(index));
+
+		if (window != NULL)
+			window->PostMessage(&message);
+	}
 }
 
 
@@ -1523,7 +1554,6 @@ TTracker::ReadyToRun()
 	InstallIndices();
 	InstallTemporaryBackgroundImages();
 
-	fTrashWatcher = new BTrashWatcher();
 	fTrashWatcher->Run();
 
 	fClipboardRefsWatcher = new BClipboardRefsWatcher();

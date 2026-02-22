@@ -67,10 +67,11 @@ namespace BPrivate {
 class Benaphore;
 class BPose;
 class BPoseView;
+class Model;
 
 // global variables
-static const rgb_color kBlack = {0, 0, 0, 255};
-static const rgb_color kWhite = {255, 255, 255 ,255};
+static const rgb_color kBlack = make_color(0, 0, 0, 255);
+static const rgb_color kWhite = make_color(255, 255, 255 ,255);
 
 const int64 kHalfKBSize = 512;
 const int64 kKBSize = 1024;
@@ -113,7 +114,7 @@ private:
 	};
 
 	Benaphore* fLock;
-	BObjectList<periodic_pose> fPoseList;
+	BObjectList<periodic_pose, true> fPoseList;
 };
 
 extern PeriodicUpdatePoses gPeriodicUpdatePoses;
@@ -178,12 +179,16 @@ public:
 void DisallowMetaKeys(BTextView*);
 void DisallowFilenameKeys(BTextView*);
 
-
 bool ValidateStream(BMallocIO*, uint32, int32 version);
 
+float ReadOnlyTint(rgb_color base);
+float ReadOnlyTint(color_which base);
+rgb_color InvertColor(rgb_color color);
+rgb_color InvertColorSmart(rgb_color color);
 
 bool SecondaryMouseButtonDown(int32 modifiers, int32 buttons);
-uint32 HashString(const char* string, uint32 seed);
+
+uint32 SeededHashString(const char* string, uint32 seed);
 uint32 AttrHashString(const char* string, uint32 type);
 
 
@@ -347,36 +352,6 @@ private:
 };
 
 
-class LooperAutoLocker {
-public:
-	LooperAutoLocker(BHandler* handler)
-	:	fHandler(handler),
-		fHasLock(handler->LockLooper())
-	{
-	}
-
-	~LooperAutoLocker()
-	{
-		if (fHasLock)
-			fHandler->UnlockLooper();
-	}
-
-	bool operator!() const
-	{
-		return !fHasLock;
-	}
-
-	bool IsLocked() const
-	{
-		return fHasLock;
-	}
-
-private:
-	BHandler* fHandler;
-	bool fHasLock;
-};
-
-
 class ShortcutFilter : public BMessageFilter {
 public:
 	ShortcutFilter(uint32 shortcutKey, uint32 shortcutModifier,
@@ -429,6 +404,7 @@ void StringFromStream(BString*, BMallocIO*, bool endianSwap = false);
 void StringToStream(const BString*, BMallocIO*);
 int32 ArchiveSize(const BString*);
 
+extern int CompareLabels(const BMenuItem*, const BMenuItem*);
 extern void EnableNamedMenuItem(BMenu* menu, const char* itemName, bool on);
 extern void MarkNamedMenuItem(BMenu* menu, const char* itemName, bool on);
 extern void EnableNamedMenuItem(BMenu* menu, uint32 commandName, bool on);
@@ -437,18 +413,6 @@ extern void DeleteSubmenu(BMenuItem* submenuItem);
 
 extern bool BootedInSafeMode();
 
-
-inline rgb_color
-Color(int32 r, int32 g, int32 b, int32 alpha = 255)
-{
-	rgb_color result;
-	result.red = (uchar)r;
-	result.green = (uchar)g;
-	result.blue = (uchar)b;
-	result.alpha = (uchar)alpha;
-
-	return result;
-}
 
 void PrintToStream(rgb_color color);
 
@@ -559,7 +523,7 @@ inline void PrintDirToStream(const BDirectory*, const char* = 0) {}
 	if (logFile != 0) {														\
 		thread_info info;													\
 		get_thread_info(find_thread(NULL), &info);							\
-		PrintToLogFile("[t %Ld] \"%s\" (%s:%i) ", system_time(),			\
+		PrintToLogFile("[t %lld] \"%s\" (%s:%i) ", system_time(),			\
 			info.name, __FILE__, __LINE__);									\
 		PrintToLogFile _ARGS_;												\
 		PrintToLogFile("\n");												\
@@ -594,6 +558,15 @@ inline uint64 SwapUInt64(uint64 value) { return B_SWAP_INT64(value); }
 extern const float kExactMatchScore;
 float ComputeTypeAheadScore(const char* text, const char* match,
 	bool wordMode = false);
+
+
+inline float
+ActualFontHeight(const BView* view)
+{
+	font_height height;
+	view->GetFontHeight(&height);
+	return height.ascent + height.descent + 1;
+}
 
 } // namespace BPrivate
 

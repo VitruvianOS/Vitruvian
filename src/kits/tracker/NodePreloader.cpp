@@ -73,7 +73,7 @@ NodePreloader::InstallNodePreloader(const char* name, BLooper* host)
 NodePreloader::NodePreloader(const char* name)
 	:
 	BHandler(name),
-	fModelList(20, true),
+	fModelList(20),
 	fQuitRequested(false)
 {
 }
@@ -195,8 +195,8 @@ NodePreloader::PreloadOne(const char* dirPath)
 		if (model->InitCheck() == B_OK && model->IconFrom() == kUnknownSource) {
 			TTracker::WatchNode(model->NodeRef(),
 				B_WATCH_STAT | B_WATCH_ATTR, this);
-			IconCache::sIconCache->Preload(model, kNormalIcon, B_MINI_ICON,
-				true);
+			IconCache::sIconCache->Preload(model, kNormalIcon,
+				IconCache::sMiniIconSize, true);
 			fModelList.AddItem(model);
 			model->CloseNode();
 		} else

@@ -67,8 +67,10 @@ MakeNodeFromName(node_ref* node, char* name)
 {
 	char* nodeString = strchr(name, '_');
 	if (nodeString != NULL) {
+		//node->node = strtoll(nodeString + 1, (char**)NULL, 10);
+		//node->device = atoi(name + 1);
 		*node = node_ref(atoi(name + 1),
-			strtoll(nodeString + 1, (char**)NULL, 10));
+						 strtoll(nodeString + 1, (char**)NULL, 10));
 	}
 }
 
@@ -375,9 +377,9 @@ FSClipboardPaste(Model* model, uint32 linksMode)
 	node_ref* destNodeRef = (node_ref*)model->NodeRef();
 
 	// these will be passed to the asynchronous copy/move process
-	BObjectList<entry_ref>* moveList = new BObjectList<entry_ref>(0, true);
-	BObjectList<entry_ref>* copyList = new BObjectList<entry_ref>(0, true);
-	BObjectList<entry_ref>* duplicateList = new BObjectList<entry_ref>(0, true);
+	BObjectList<entry_ref, true>* moveList = new BObjectList<entry_ref, true>(0);
+	BObjectList<entry_ref, true>* copyList = new BObjectList<entry_ref, true>(0);
+	BObjectList<entry_ref, true>* duplicateList = new BObjectList<entry_ref, true>(0);
 
 	if ((be_clipboard->Lock())) {
 		BMessage* clip = be_clipboard->Data();
@@ -385,8 +387,9 @@ FSClipboardPaste(Model* model, uint32 linksMode)
 			char modeName[64];
 			uint32 moveMode = 0;
 
-			BMessage* updateMessage = NULL;
-			node_ref updateNodeRef(B_INVALID_DEV, B_INVALID_INO);
+			BMessage updateMessage(kFSClipboardChanges);
+			node_ref updateNodeRef;
+			//updateNodeRef.device = -1; haiku
 
 			char* refName;
 			type_code type;
@@ -402,27 +405,22 @@ FSClipboardPaste(Model* model, uint32 linksMode)
 
 				// If the entry_ref's directory has changed, send previous notification
 				// (if any), and start new one for the new directory
-				if (updateNodeRef.dev() != ref.dev()
-					|| updateNodeRef.ino() != ref.dir()) {
-					if (updateMessage != NULL) {
-						tracker.SendMessage(updateMessage);
-						delete updateMessage;
+				if (updateNodeRef.dev() != ref.dev() || updateNodeRef.ino() != ref.dir()) {
+					if (!updateMessage.IsEmpty()) {
+						tracker.SendMessage(&updateMessage);
+						updateMessage.MakeEmpty();
 					}
 
-					updateNodeRef = node_ref(ref.dev(), ref.dir());
-
-					// __VOS_OLD_NODE_MONITOR__
-					updateMessage = new BMessage(kFSClipboardChanges);
-					updateMessage->AddUInt64("device", updateNodeRef.dev());
-					updateMessage->AddUInt64("directory", updateNodeRef.ino());
+					updateNodeRef.device = ref.device;
+					updateNodeRef.node = ref.directory;
+					updateMessage.AddUInt64("device", updateNodeRef.dev());
+					updateMessage.AddUInt64("directory", updateNodeRef.ino());
 				}
 
 				// we need this data later on
 				MakeModeNameFromRefName(modeName, refName);
-				if (!linksMode && clip->FindInt32(modeName, (int32*)&moveMode)
-					!= B_OK) {
+				if (!linksMode && clip->FindInt32(modeName, (int32*)&moveMode) != B_OK)
 					continue;
-				}
 
 				BEntry entry(&ref);
 
@@ -438,46 +436,41 @@ FSClipboardPaste(Model* model, uint32 linksMode)
 
 					newMoveMode = kDelete;
 				} else {
-					// the entry does exist, so lets see what we will
-					// do with it
+					// the entry does exist, so lets see what we will do with it
 					if (!sameDirectory) {
 						if (linksMode || moveMode == kMoveSelectionTo) {
 							// the linksMode uses the moveList as well
 							moveList->AddItem(new entry_ref(ref));
 						} else if (moveMode == kCopySelectionTo)
 							copyList->AddItem(new entry_ref(ref));
-					} else {
-						// if the entry should have been removed from its
-						// directory, we want to copy that entry next time, no
-						// matter if the items don't have to be moved at all
-						// (source == target)
-						if (moveMode == kMoveSelectionTo)
-							newMoveMode = kCopySelectionTo;
-						else {
-							// we are copying a file into its same directory, do
-							// a duplicate
-							duplicateList->AddItem(new entry_ref(ref));
-						}
+					} else if (moveMode != kMoveSelectionTo) {
+						// we are copying a file into its same directory, do a duplicate
+						duplicateList->AddItem(new entry_ref(ref));
 					}
+
+					// Whether the entry changed directories or not we want to copy that entry
+					// next time, even if the items don't have to be moved (source == target).
+					if (moveMode == kMoveSelectionTo)
+						newMoveMode = kCopySelectionTo;
 				}
 
 				// add the change to the update message (if necessary)
-				if (newMoveMode) {
+				if (newMoveMode != 0) {
 					clip->ReplaceInt32(modeName, kCopySelectionTo);
 
 					TClipboardNodeRef clipNode;
 					MakeNodeFromName(&clipNode.node, modeName);
 					clipNode.moveMode = kDelete;
-					updateMessage->AddData("tcnode", T_CLIPBOARD_NODE,
-						&clipNode, sizeof(TClipboardNodeRef), true);
+					updateMessage.AddData("tcnode", T_CLIPBOARD_NODE, &clipNode,
+						sizeof(TClipboardNodeRef), true);
 				}
 			}
 			be_clipboard->Commit();
 
 			// send notification for the last directory
-			if (updateMessage != NULL) {
-				tracker.SendMessage(updateMessage);
-				delete updateMessage;
+			if (!updateMessage.IsEmpty()) {
+				tracker.SendMessage(&updateMessage);
+				updateMessage.MakeEmpty();
 			}
 		}
 		be_clipboard->Unlock();
@@ -514,14 +507,14 @@ FSClipboardPaste(Model* model, uint32 linksMode)
 		// there was some problem with our target, so we bail out here
 		delete moveList;
 		delete copyList;
+		delete duplicateList;
 		return false;
 	}
 
 	// asynchronous calls take over ownership of the objects passed to it
-	if (moveList->CountItems() > 0) {
-		FSMoveToFolder(moveList, new BEntry(entry),
-			linksMode ? linksMode : kMoveSelectionTo);
-	} else
+	if (moveList->CountItems() > 0)
+		FSMoveToFolder(moveList, new BEntry(entry), linksMode ? linksMode : kMoveSelectionTo);
+	else
 		delete moveList;
 
 	if (copyList->CountItems() > 0)
@@ -622,7 +615,7 @@ FSClipboardRemove(Model* model)
 
 BClipboardRefsWatcher::BClipboardRefsWatcher()
 	:	BLooper("ClipboardRefsWatcher", B_LOW_PRIORITY, 4096),
-	fNotifyList(10, false)
+	fNotifyList(10)
 {
 	watch_node(NULL, B_WATCH_MOUNT, this);
 	fRefsInClipboard = FSClipboardHasRefs();
@@ -794,8 +787,8 @@ BClipboardRefsWatcher::Clear()
 //	const node_ref* node)
 //{
 //	BMessage message(kFSClipboardChanges);
-//	message.AddUInt64("device", node->device);
-//	message.AddUInt64("directory", node->node);
+//	message.AddInt32("device", node->device);
+//	message.AddInt64("directory", node->node);
 //	message.AddBool("clearClipboard", clearClipboard);
 //
 //	if (Lock()) {
@@ -860,7 +853,7 @@ BClipboardRefsWatcher::MessageReceived(BMessage* message)
 		return;
 	}
 
-	switch (message->FindInt32("opcode")) {
+	switch (message->GetInt32("opcode", 0)) {
 		case B_ENTRY_MOVED:
 		{
 			#ifdef __VOS_OLD_NODE_MONITOR__
@@ -882,7 +875,7 @@ BClipboardRefsWatcher::MessageReceived(BMessage* message)
 		case B_DEVICE_UNMOUNTED:
 		{
 			dev_t device;
-			message->FindUInt64("device", &device);
+			message->FindInt32("device", &device);
 			RemoveNodesByDevice(device);
 			break;
 		}

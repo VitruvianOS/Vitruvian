@@ -13,12 +13,13 @@ AddOn(
 	DeskWindow.cpp
 	DialogPane.cpp
 	DirMenu.cpp
+	DraggableContainerIcon.cpp
 	EntryIterator.cpp
 	FavoritesMenu.cpp
 	FBCPadding.cpp
 	FilePanel.cpp
 	FilePanelPriv.cpp
-	FilePermissionsView.cpp
+	#FilePermissionsView.cpp
 	FindPanel.cpp
 	FSClipboard.cpp
 	FSUndoRedo.cpp
@@ -26,7 +27,8 @@ AddOn(
 	GroupedMenu.cpp
 	IconCache.cpp
 	IconMenuItem.cpp
-	InfoWindow.cpp
+	#InfoWindow.cpp
+	LiveMenu.cpp
 	MimeTypeList.cpp
 	MiniMenuField.cpp
 	Model.cpp
@@ -48,15 +50,17 @@ AddOn(
 	RegExp.cpp
 	SelectionWindow.cpp
 	Settings.cpp
-	SettingsHandler.cpp
+	#SettingsHandler.cpp
 	SettingsViews.cpp
-	SlowContextPopup.cpp
+	Shortcuts.cpp
+	#SlowContextPopup.cpp
 	SlowMenu.cpp
 	StatusWindow.cpp
 	TaskLoop.cpp
 	TemplatesMenu.cpp
 	Tests.cpp
 	TextWidget.cpp
+	Thumbnails.cpp
 	TitleView.cpp
 	Tracker.cpp
 	TrackerInitialState.cpp
@@ -73,6 +77,12 @@ AddOn(
 	VirtualDirectoryWindow.cpp
 	WidgetAttributeText.cpp
 
+	infowindow/AttributesView.cpp
+	infowindow/FilePermissionsView.cpp
+	infowindow/GeneralInfoView.cpp
+	infowindow/HeaderView.cpp
+	infowindow/InfoWindow.cpp
+
 	# TODO maybe this should be a static library
 	../../servers/input/InputServerFilter.cpp
 	../../add-ons/input_server/filters/shortcut_catcher/BitFieldTesters.cpp
@@ -84,6 +94,7 @@ AddOn(
 	../../add-ons/input_server/filters/shortcut_catcher/ShortcutsServerFilter.cpp
 
 	INCLUDES
+	"infowindow"
 	"../../../headers/os/add-ons/input_server/"
 	"../../add-ons/input_server/filters/shortcut_catcher/"
 

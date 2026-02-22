@@ -46,6 +46,7 @@ All rights reserved.
 #include <MenuField.h>
 #include <NodeMonitor.h>
 #include <Point.h>
+#include <PopUpMenu.h>
 #include <RadioButton.h>
 #include <StringView.h>
 
@@ -53,21 +54,11 @@ All rights reserved.
 #include "DeskWindow.h"
 #include "Model.h"
 #include "Tracker.h"
+#include "TrackerDefaults.h"
 #include "WidgetAttributeText.h"
 
 
 static const uint32 kSpaceBarSwitchColor = 'SBsc';
-
-//TODO: defaults should be set in one place only (TrackerSettings.cpp) while
-//		being accessible from here.
-//		What about adding DefaultValue(), IsDefault() etc... methods to
-//		xxxValueSetting ?
-static const uint8 kSpaceBarAlpha = 192;
-static const rgb_color kDefaultUsedSpaceColor = { 0, 203, 0, kSpaceBarAlpha };
-static const rgb_color kDefaultFreeSpaceColor
-	= { 255, 255, 255, kSpaceBarAlpha };
-static const rgb_color kDefaultWarningSpaceColor
-	= { 203, 0, 0, kSpaceBarAlpha };
 
 
 static void
@@ -179,11 +170,11 @@ DesktopSettingsView::DesktopSettingsView()
 	fShowDisksIconRadioButton(NULL),
 	fMountVolumesOntoDesktopRadioButton(NULL),
 	fMountSharedVolumesOntoDesktopCheckBox(NULL),
-	fShowDisksIcon(false),
-	fMountVolumesOntoDesktop(false),
-	fMountSharedVolumesOntoDesktop(false),
+	fShowDisksIcon(kDefaultShowDisksIcon),
+	fMountVolumesOntoDesktop(kDefaultMountVolumesOntoDesktop),
+	fMountSharedVolumesOntoDesktop(kDefaultMountSharedVolumesOntoDesktop),
 	fIntegrateNonBootBeOSDesktops(false),
-	fEjectWhenUnmounting(false)
+	fEjectWhenUnmounting(kDefaultEjectWhenUnmounting)
 {
 	fShowDisksIconRadioButton = new BRadioButton("",
 		B_TRANSLATE("Show Disks icon"),
@@ -288,8 +279,7 @@ DesktopSettingsView::MessageReceived(BMessage* message)
 				fMountSharedVolumesOntoDesktopCheckBox->Value() == 1);
 
 			// Send the notification message:
-			tracker->SendNotices(kVolumesOnDesktopChanged,\
-				&notificationMessage);
+			tracker->SendNotices(kVolumesOnDesktopChanged, &notificationMessage);
 
 			// Tell the settings window the contents have changed:
 			Window()->PostMessage(kSettingsContentsModified);
@@ -309,10 +299,10 @@ DesktopSettingsView::SetDefaults()
 	// ToDo: Avoid the duplication of the default values.
 	TrackerSettings settings;
 
-	settings.SetShowDisksIcon(false);
-	settings.SetMountVolumesOntoDesktop(true);
-	settings.SetMountSharedVolumesOntoDesktop(true);
-	settings.SetEjectWhenUnmounting(true);
+	settings.SetShowDisksIcon(kDefaultShowDisksIcon);
+	settings.SetMountVolumesOntoDesktop(kDefaultMountVolumesOntoDesktop);
+	settings.SetMountSharedVolumesOntoDesktop(kDefaultMountSharedVolumesOntoDesktop);
+	settings.SetEjectWhenUnmounting(kDefaultEjectWhenUnmounting);
 
 	ShowCurrentSettings();
 	_SendNotices();
@@ -324,10 +314,10 @@ DesktopSettingsView::IsDefaultable() const
 {
 	TrackerSettings settings;
 
-	return settings.ShowDisksIcon() != false
-		|| settings.MountVolumesOntoDesktop() != true
-		|| settings.MountSharedVolumesOntoDesktop() != true
-		|| settings.EjectWhenUnmounting() != true;
+	return settings.ShowDisksIcon() != kDefaultShowDisksIcon
+		|| settings.MountVolumesOntoDesktop() != kDefaultMountVolumesOntoDesktop
+		|| settings.MountSharedVolumesOntoDesktop() != kDefaultMountSharedVolumesOntoDesktop
+		|| settings.EjectWhenUnmounting() != kDefaultEjectWhenUnmounting;
 }
 
 
@@ -420,13 +410,15 @@ WindowsSettingsView::WindowsSettingsView()
 	fSortFolderNamesFirstCheckBox(NULL),
 	fHideDotFilesCheckBox(NULL),
 	fTypeAheadFilteringCheckBox(NULL),
-	fShowFullPathInTitleBar(false),
-	fSingleWindowBrowse(false),
-	fShowNavigator(false),
-	fTransparentSelection(false),
-	fSortFolderNamesFirst(false),
-	fHideDotFiles(false),
-	fTypeAheadFiltering(false)
+	fGenerateImageThumbnailsCheckBox(NULL),
+	fShowFullPathInTitleBar(kDefaultShowFullPathInTitleBar),
+	fSingleWindowBrowse(kDefaultSingleWindowBrowse),
+	fShowNavigator(kDefaultShowNavigator),
+	fTransparentSelection(kDefaultTransparentSelection),
+	fSortFolderNamesFirst(kDefaultSortFolderNamesFirst),
+	fHideDotFiles(kDefaultHideDotFiles),
+	fTypeAheadFiltering(kDefaultTypeAheadFiltering),
+	fGenerateImageThumbnails(kDefaultGenerateImageThumbnails)
 {
 	fShowFullPathInTitleBarCheckBox = new BCheckBox("",
 		B_TRANSLATE("Show folder location in title tab"),
@@ -456,6 +448,10 @@ WindowsSettingsView::WindowsSettingsView()
 		B_TRANSLATE("Enable type-ahead filtering"),
 		new BMessage(kTypeAheadFilteringChanged));
 
+	fGenerateImageThumbnailsCheckBox = new BCheckBox("",
+		B_TRANSLATE("Generate image thumbnails"),
+		new BMessage(kGenerateImageThumbnailsChanged));
+
 	const float spacing = be_control_look->DefaultItemSpacing();
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
@@ -472,6 +468,7 @@ WindowsSettingsView::WindowsSettingsView()
 			.Add(fSortFolderNamesFirstCheckBox)
 			.Add(fHideDotFilesCheckBox)
 			.Add(fTypeAheadFilteringCheckBox)
+			.Add(fGenerateImageThumbnailsCheckBox)
 			.End()
 		.AddGlue()
 		.SetInsets(spacing);
@@ -488,6 +485,7 @@ WindowsSettingsView::AttachedToWindow()
 	fSortFolderNamesFirstCheckBox->SetTarget(this);
 	fHideDotFilesCheckBox->SetTarget(this);
 	fTypeAheadFilteringCheckBox->SetTarget(this);
+	fGenerateImageThumbnailsCheckBox->SetTarget(this);
 }
 
 
@@ -561,12 +559,9 @@ WindowsSettingsView::MessageReceived(BMessage* message)
 		{
 			settings.SetHideDotFiles(
 				fHideDotFilesCheckBox->Value() == 1);
-
-			// Make the notification message and send it to the tracker:
 			send_bool_notices(kHideDotFilesChanged,
 				"HideDotFiles",
 				fHideDotFilesCheckBox->Value() == 1);
-
 			Window()->PostMessage(kSettingsContentsModified);
 			break;
 		}
@@ -578,6 +573,17 @@ WindowsSettingsView::MessageReceived(BMessage* message)
 			send_bool_notices(kTypeAheadFilteringChanged,
 				"TypeAheadFiltering",
 				fTypeAheadFilteringCheckBox->Value() == 1);
+			Window()->PostMessage(kSettingsContentsModified);
+			break;
+		}
+
+		case kGenerateImageThumbnailsChanged:
+		{
+			settings.SetGenerateImageThumbnails(
+				fGenerateImageThumbnailsCheckBox->Value() == 1);
+			send_bool_notices(kGenerateImageThumbnailsChanged,
+				"GenerateImageThumbnails",
+				fGenerateImageThumbnailsCheckBox->Value() == 1);
 			Window()->PostMessage(kSettingsContentsModified);
 			break;
 		}
@@ -598,43 +604,49 @@ WindowsSettingsView::SetDefaults()
 
 	TrackerSettings settings;
 
-	if (settings.ShowFullPathInTitleBar()) {
-		settings.SetShowFullPathInTitleBar(false);
+	if (settings.ShowFullPathInTitleBar() != kDefaultShowFullPathInTitleBar) {
+		settings.SetShowFullPathInTitleBar(kDefaultShowFullPathInTitleBar);
 		tracker->SendNotices(kWindowsShowFullPathChanged);
 	}
 
-	if (settings.SingleWindowBrowse()) {
-		settings.SetSingleWindowBrowse(false);
+	if (settings.SingleWindowBrowse() != kDefaultSingleWindowBrowse) {
+		settings.SetSingleWindowBrowse(kDefaultSingleWindowBrowse);
 		tracker->SendNotices(kSingleWindowBrowseChanged);
 	}
 
-	if (settings.ShowNavigator()) {
-		settings.SetShowNavigator(false);
+	if (settings.ShowNavigator() != kDefaultShowNavigator) {
+		settings.SetShowNavigator(kDefaultShowNavigator);
 		tracker->SendNotices(kShowNavigatorChanged);
 	}
 
-	if (!settings.TransparentSelection()) {
-		settings.SetTransparentSelection(true);
+	if (settings.TransparentSelection() != kDefaultTransparentSelection) {
+		settings.SetTransparentSelection(kDefaultTransparentSelection);
 		send_bool_notices(kTransparentSelectionChanged,
-			"TransparentSelection", true);
+			"TransparentSelection", kDefaultTransparentSelection);
 	}
 
-	if (!settings.SortFolderNamesFirst()) {
-		settings.SetSortFolderNamesFirst(true);
+	if (settings.SortFolderNamesFirst() != kDefaultSortFolderNamesFirst) {
+		settings.SetSortFolderNamesFirst(kDefaultSortFolderNamesFirst);
 		send_bool_notices(kSortFolderNamesFirstChanged,
-			"SortFolderNamesFirst", true);
+			"SortFolderNamesFirst", kDefaultSortFolderNamesFirst);
 	}
 
-	if (!settings.HideDotFiles()) {
-		settings.SetHideDotFiles(true);
+	if (settings.HideDotFiles() != kDefaultHideDotFiles) {
+		settings.SetHideDotFiles(kDefaultHideDotFiles);
 		send_bool_notices(kHideDotFilesChanged,
-			"HideDotFiles", true);
+			"HideDotFiles", kDefaultHideDotFiles);
 	}
 
-	if (settings.TypeAheadFiltering()) {
-		settings.SetTypeAheadFiltering(false);
+	if (settings.TypeAheadFiltering() != kDefaultTypeAheadFiltering) {
+		settings.SetTypeAheadFiltering(kDefaultTypeAheadFiltering);
 		send_bool_notices(kTypeAheadFilteringChanged,
-			"TypeAheadFiltering", true);
+			"TypeAheadFiltering", kDefaultTypeAheadFiltering);
+	}
+
+	if (settings.GenerateImageThumbnails() != kDefaultGenerateImageThumbnails) {
+		settings.SetGenerateImageThumbnails(kDefaultGenerateImageThumbnails);
+		send_bool_notices(kGenerateImageThumbnailsChanged,
+			"GenerateImageThumbnails", kDefaultGenerateImageThumbnails);
 	}
 
 	ShowCurrentSettings();
@@ -646,12 +658,14 @@ WindowsSettingsView::IsDefaultable() const
 {
 	TrackerSettings settings;
 
-	return settings.ShowFullPathInTitleBar() != false
-		|| settings.SingleWindowBrowse() != false
-		|| settings.ShowNavigator() != false
-		|| settings.TransparentSelection() != true
-		|| settings.SortFolderNamesFirst() != true
-		|| settings.TypeAheadFiltering() != false;
+	return settings.ShowFullPathInTitleBar() != kDefaultShowFullPathInTitleBar
+		|| settings.SingleWindowBrowse() != kDefaultSingleWindowBrowse
+		|| settings.ShowNavigator() != kDefaultShowNavigator
+		|| settings.TransparentSelection() != kDefaultTransparentSelection
+		|| settings.SortFolderNamesFirst() != kDefaultSortFolderNamesFirst
+		|| settings.HideDotFiles() != kDefaultHideDotFiles
+		|| settings.TypeAheadFiltering() != kDefaultTypeAheadFiltering
+		|| settings.GenerateImageThumbnails() != kDefaultGenerateImageThumbnails;
 }
 
 
@@ -703,6 +717,12 @@ WindowsSettingsView::Revert()
 			"TypeAheadFiltering", fTypeAheadFiltering);
 	}
 
+	if (settings.GenerateImageThumbnails() != fGenerateImageThumbnails) {
+		settings.SetGenerateImageThumbnails(fGenerateImageThumbnails);
+		send_bool_notices(kGenerateImageThumbnailsChanged,
+			"GenerateImageThumbnails", fGenerateImageThumbnails);
+	}
+
 	ShowCurrentSettings();
 }
 
@@ -722,6 +742,8 @@ WindowsSettingsView::ShowCurrentSettings()
 	fSortFolderNamesFirstCheckBox->SetValue(settings.SortFolderNamesFirst());
 	fHideDotFilesCheckBox->SetValue(settings.HideDotFiles());
 	fTypeAheadFilteringCheckBox->SetValue(settings.TypeAheadFiltering());
+	fGenerateImageThumbnailsCheckBox->SetValue(
+		settings.GenerateImageThumbnails());
 }
 
 
@@ -737,6 +759,7 @@ WindowsSettingsView::RecordRevertSettings()
 	fSortFolderNamesFirst = settings.SortFolderNamesFirst();
 	fHideDotFiles = settings.HideDotFiles();
 	fTypeAheadFiltering = settings.TypeAheadFiltering();
+	fGenerateImageThumbnails = settings.GenerateImageThumbnails();
 }
 
 
@@ -751,7 +774,8 @@ WindowsSettingsView::IsRevertable() const
 		|| fTransparentSelection != settings.TransparentSelection()
 		|| fSortFolderNamesFirst != settings.SortFolderNamesFirst()
 		|| fHideDotFiles != settings.HideDotFiles()
-		|| fTypeAheadFiltering != settings.TypeAheadFiltering();
+		|| fTypeAheadFiltering != settings.TypeAheadFiltering()
+		|| fGenerateImageThumbnails != settings.GenerateImageThumbnails();
 }
 
 
@@ -859,7 +883,7 @@ SpaceBarSettingsView::MessageReceived(BMessage* message)
 		case kSpaceBarColorChanged:
 		{
 			rgb_color color = fColorControl->ValueAsColor();
-			color.alpha = kSpaceBarAlpha;
+			color.alpha = kDefaultSpaceBarAlpha;
 				// alpha is ignored by BColorControl but is checked
 				// in equalities
 
@@ -903,7 +927,7 @@ SpaceBarSettingsView::SetDefaults()
 
 	if (!settings.ShowVolumeSpaceBar()) {
 		settings.SetShowVolumeSpaceBar(true);
-		send_bool_notices(kShowVolumeSpaceBar, "ShowVolumeSpaceBar", true);
+		send_bool_notices(kShowVolumeSpaceBar, "ShowVolumeSpaceBar", kDefaultShowVolumeSpaceBar);
 	}
 
 	if (settings.UsedSpaceColor() != kDefaultUsedSpaceColor
@@ -924,7 +948,7 @@ SpaceBarSettingsView::IsDefaultable() const
 {
 	TrackerSettings settings;
 
-	return settings.ShowVolumeSpaceBar() != true
+	return settings.ShowVolumeSpaceBar() != kDefaultShowVolumeSpaceBar
 		|| settings.UsedSpaceColor() != kDefaultUsedSpaceColor
 		|| settings.FreeSpaceColor() != kDefaultFreeSpaceColor
 		|| settings.WarningSpaceColor() != kDefaultWarningSpaceColor;

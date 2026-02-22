@@ -174,10 +174,10 @@ IconSpewer::DrawSomeNew()
 	ASSERT(view);
 
 	BRect bounds(target->Bounds());
-	view->SetHighColor(Color(255, 255, 255));
+	view->SetHighColor(255, 255, 255);
 	view->FillRect(bounds);
 
-	view->SetHighColor(Color(0, 0, 0));
+	view->SetHighColor(0, 0, 0);
 	char buffer[256];
 	if (cycleTime) {
 		sprintf(buffer, "last cycle time %" B_PRId64 " ms", cycleTime/1000);
@@ -208,7 +208,7 @@ IconSpewer::DrawSomeNew()
 
 			IconCache::sIconCache->Draw(&model, view,
 				BPoint(column * (kIconSize + 2), row * (kIconSize + 2)),
-				kNormalIcon, kIconSize, true);
+				kNormalIcon, BSize(kIconSize - 1, kIconSize - 1), true);
 			target->Unlock();
 			numDrawn++;
 		}
@@ -232,17 +232,17 @@ IconSpewer::DrawSomeOld()
 	ASSERT(view);
 
 	BRect bounds(target->Bounds());
-	view->SetHighColor(Color(255, 255, 255));
+	view->SetHighColor(255, 255, 255);
 	view->FillRect(bounds);
 
-	view->SetHighColor(Color(0, 0, 0));
+	view->SetHighColor(0, 0, 0);
 	char buffer[256];
 	if (cycleTime) {
-		sprintf(buffer, "last cycle time %Ld ms", cycleTime/1000);
+		sprintf(buffer, "last cycle time %lld ms", cycleTime/1000);
 		view->DrawString(buffer, BPoint(20, bounds.bottom - 20));
 	}
 	if (numDrawn) {
-		sprintf(buffer, "average draw time %Ld us per icon",
+		sprintf(buffer, "average draw time %lld us per icon",
 			watch.ElapsedTime() / numDrawn);
 		view->DrawString(buffer, BPoint(20, bounds.bottom - 30));
 	}

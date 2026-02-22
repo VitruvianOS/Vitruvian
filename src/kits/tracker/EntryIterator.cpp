@@ -40,6 +40,7 @@ All rights reserved.
 
 #include <new>
 #include <string.h>
+#include <stddef.h>
 
 #include "EntryIterator.h"
 
@@ -254,7 +255,7 @@ CachedEntryIterator::GetNextDirents(struct dirent* ent, size_t size,
 	if (fDirentBuffer == NULL) {
 		fDirentBuffer = (dirent*)malloc(kDirentBufferSize);
 		ASSERT(fIndex == 0 && fNumEntries == 0);
-		ASSERT(size > sizeof(dirent) + B_FILE_NAME_LENGTH);
+		ASSERT(size > offsetof(struct dirent, d_name) + B_FILE_NAME_LENGTH);
 	}
 
 	if (count == 0)
@@ -278,7 +279,7 @@ CachedEntryIterator::GetNextDirents(struct dirent* ent, size_t size,
 			ASSERT(bufferRemain >= 0);
 
 			if ((size_t)bufferRemain
-					< (sizeof(dirent) + B_FILE_NAME_LENGTH)) {
+					< (offsetof(struct dirent, d_name) + B_FILE_NAME_LENGTH)) {
 				// cant fit a big entryRef in the buffer, just bail
 				// and start from scratch
 				break;
@@ -432,7 +433,7 @@ DirectoryEntryList::CountEntries()
 
 EntryIteratorList::EntryIteratorList()
 	:
-	fList(5, true),
+	fList(5),
 	fCurrentIndex(0)
 {
 }

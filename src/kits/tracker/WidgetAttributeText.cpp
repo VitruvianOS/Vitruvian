@@ -50,16 +50,16 @@ All rights reserved.
 #include <Debug.h>
 #include <Locale.h>
 #include <NodeInfo.h>
+#include <NumberFormat.h>
 #include <Path.h>
 #include <StringFormat.h>
+#include <StringForSize.h>
 #include <SupportDefs.h>
 #include <TextView.h>
 #include <Volume.h>
 #include <VolumeRoster.h>
 
 #include "Attributes.h"
-#include "FindPanel.h"
-#include "FSUndoRedo.h"
 #include "FSUtils.h"
 #include "Model.h"
 #include "OpenWithWindow.h"
@@ -76,14 +76,6 @@ All rights reserved.
 
 const int32 kGenericReadBufferSize = 1024;
 
-const char* kSizeFormats[] = {
-	"%.2f %s",
-	"%.1f %s",
-	"%.f %s",
-	"%.f%s",
-	0
-};
-
 
 bool NameAttributeText::sSortFolderNamesFirst = false;
 bool RealNameAttributeText::sSortFolderNamesFirst = false;
@@ -94,65 +86,34 @@ float
 TruncFileSizeBase(BString* outString, int64 value, const View* view,
 	float width)
 {
-	// ToDo: If slow, replace float divisions with shifts
-	//       if fast enough, try fitting more decimal places.
-
-	// ToDo: Update string_for_size() in libshared to be able to
-	//       handle this case.
-
-	BString buffer;
-
 	// format file size value
 	if (value == kUnknownSize) {
 		*outString = "-";
 		return view->StringWidth("-");
-	} else if (value < kKBSize) {
-		static BStringFormat format(B_TRANSLATE(
-			"{0, plural, one{# byte} other{# bytes}}"));
-		format.Format(buffer, value);
-		if (view->StringWidth(buffer.String()) > width)
-			buffer.SetToFormat(B_TRANSLATE("%Ld B"), value);
-	} else {
-		const char* suffix;
-		float doubleValue;
-		if (value >= kTBSize) {
-			suffix = B_TRANSLATE("TiB");
-			doubleValue = (double)value / kTBSize;
-		} else if (value >= kGBSize) {
-			suffix = B_TRANSLATE("GiB");
-			doubleValue = (double)value / kGBSize;
-		} else if (value >= kMBSize) {
-			suffix = B_TRANSLATE("MiB");
-			doubleValue = (double)value / kMBSize;
-		} else {
-			ASSERT(value >= kKBSize);
-			suffix = B_TRANSLATE("KiB");
-			doubleValue = (double)value / kKBSize;
+	}
+
+	char sizeBuffer[128];
+	BString buffer = string_for_size(value, sizeBuffer, sizeof(sizeBuffer));
+
+	if (value < kKBSize) {
+		if (view->StringWidth(buffer.String()) > width) {
+			buffer.SetToFormat(B_TRANSLATE_COMMENT("%lld B", "The filesize symbol for byte"),
+				(long long int)value);
 		}
-
-		for (int32 index = 0; ; index++) {
-			if (kSizeFormats[index] == 0)
-				break;
-
-			buffer.SetToFormat(kSizeFormats[index], doubleValue, suffix);
-			// strip off an insignificant zero so we don't get readings
-			// such as 1.00
-			char* period = 0;
-			for (char* tmp = const_cast<char*>(buffer.String()); *tmp != '\0';
-					tmp++) {
-				if (*tmp == '.')
-					period = tmp;
-			}
-			if (period && period[1] && period[2] == '0')
-				// move the rest of the string over the insignificant zero
-				for (char* tmp = &period[2]; *tmp; tmp++)
-					*tmp = tmp[1];
-
-			float resultWidth = view->StringWidth(buffer);
-			if (resultWidth <= width) {
-				*outString = buffer.String();
-				return resultWidth;
-			}
+	} else {
+		// strip off an insignificant zero so we don't get readings
+		// such as 1.00
+		BNumberFormat numberFormat;
+		BString separator(numberFormat.GetSeparator(B_DECIMAL_SEPARATOR));
+		if (!separator.IsEmpty()) {
+			int32 position = buffer.FindFirst(separator);
+			if (position != B_ERROR && buffer.ByteAt(position + 2) == '0')
+				buffer.Remove(position + 2, 1);
+		}
+		float resultWidth = view->StringWidth(buffer);
+		if (resultWidth <= width) {
+			*outString = buffer.String();
+			return resultWidth;
 		}
 	}
 
@@ -339,10 +300,9 @@ WidgetAttributeText::~WidgetAttributeText()
 const char*
 WidgetAttributeText::FittingText(const BPoseView* view)
 {
-	if (fDirty || fColumn->Width() != fOldWidth || CheckSettingsChanged()
-		|| !fValueIsDefined) {
+	bool widthChanged = view->ViewMode() == kListMode ? fColumn->Width() != fOldWidth : false;
+	if (fDirty || widthChanged || CheckSettingsChanged())
 		CheckViewChanged(view);
-	}
 
 	ASSERT(!fDirty);
 	return fText.String();
@@ -409,7 +369,7 @@ WidgetAttributeText::Width(const BPoseView* pose)
 
 
 void
-WidgetAttributeText::SetUpEditing(BTextView*)
+WidgetAttributeText::SetupEditing(BTextView*)
 {
 	ASSERT(fColumn->Editable());
 }
@@ -498,8 +458,7 @@ WidgetAttributeText::AttrAsString(const Model* model, BString* outString,
 bool
 WidgetAttributeText::IsEditable() const
 {
-	return fColumn->Editable()
-		&& !BVolume(fModel->StatBuf()->st_dev).IsReadOnly();
+	return fColumn->Editable();
 }
 
 
@@ -691,8 +650,11 @@ PathAttributeText::ReadValue(BString* outString)
 	if (entry.InitCheck() == B_OK && entry.GetPath(&path) == B_OK) {
 		*outString = path.Path();
 		TruncateLeaf(outString);
-	} else
+		fValueIsDefined = true;
+	} else {
 		*outString = "-";
+		fValueIsDefined = false;
+	}
 
 	fValueDirty = false;
 }
@@ -716,10 +678,13 @@ OriginalPathAttributeText::ReadValue(BString* outString)
 	BPath path;
 
 	// get the original path
-	if (entry.InitCheck() == B_OK && FSGetOriginalPath(&entry, &path) == B_OK)
+	if (entry.InitCheck() == B_OK && FSGetOriginalPath(&entry, &path) == B_OK) {
 		*outString = path.Path();
-	else
+		fValueIsDefined = true;
+	} else {
 		*outString = "-";
+		fValueIsDefined = false;
+	}
 
 	fValueDirty = false;
 }
@@ -751,6 +716,7 @@ KindAttributeText::ReadValue(BString* outString)
 		*outString = fModel->MimeType();
 
 	fValueDirty = false;
+	fValueIsDefined = true;
 }
 
 
@@ -788,6 +754,7 @@ NameAttributeText::ReadValue(BString* outString)
 	*outString = fModel->Name();
 
 	fValueDirty = false;
+	fValueIsDefined = true;
 }
 
 
@@ -796,15 +763,20 @@ NameAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
-	fOldWidth = fColumn->Width();
+
+	if (view->ViewMode() != kListMode)
+		fOldWidth = view->StringWidth("M") * 30;
+	else
+		fOldWidth = fColumn->Width();
+
 	fTruncatedWidth = TruncString(outString, fFullValueText.String(),
-		fFullValueText.Length(), view, fOldWidth, B_TRUNCATE_END);
+		fFullValueText.Length(), view, fOldWidth, B_TRUNCATE_MIDDLE);
 	fDirty = false;
 }
 
 
 void
-NameAttributeText::SetUpEditing(BTextView* textView)
+NameAttributeText::SetupEditing(BTextView* textView)
 {
 	DisallowFilenameKeys(textView);
 
@@ -816,58 +788,16 @@ NameAttributeText::SetUpEditing(BTextView* textView)
 bool
 NameAttributeText::CommitEditedTextFlavor(BTextView* textView)
 {
-	const char* text = textView->Text();
+	if (textView == NULL)
+		return false;
+
+	const char* name = textView->Text();
+	size_t length = (size_t)textView->TextLength();
 
 	BEntry entry(fModel->EntryRef());
-	if (entry.InitCheck() != B_OK)
-		return false;
-
-	BDirectory	parent;
-	if (entry.GetParent(&parent) != B_OK)
-		return false;
-
-	bool removeExisting = false;
-	if (parent.Contains(text)) {
-		BAlert* alert = new BAlert("",
-			B_TRANSLATE("That name is already taken. "
-			"Please type another one."),
-			B_TRANSLATE("Replace other file"),
-			B_TRANSLATE("OK"),
-			NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-		alert->SetShortcut(0, 'r');
-		if (alert->Go())
-			return false;
-
-		removeExisting = true;
-	}
-
-	// TODO:
-	// use model-flavor specific virtuals for all of these special
-	// renamings
-	status_t result;
-	if (fModel->IsVolume()) {
-		BVolume	volume(fModel->NodeRef()->dereference().dev());
-		result = volume.InitCheck();
-		if (result == B_OK) {
-			RenameVolumeUndo undo(volume, text);
-
-			result = volume.SetName(text);
-			if (result != B_OK)
-				undo.Remove();
-		}
-	} else {
-		if (fModel->IsQuery()) {
-			BModelWriteOpener opener(fModel);
-			ASSERT(fModel->Node());
-			MoreOptionsStruct::SetQueryTemporary(fModel->Node(), false);
-		}
-
-		RenameUndo undo(entry, text);
-
-		result = entry.Rename(text, removeExisting);
-		if (result != B_OK)
-			undo.Remove();
-	}
+	status_t result = entry.InitCheck();
+	if (result == B_OK)
+		result = EditModelName(fModel, name, length);
 
 	return result == B_OK;
 }
@@ -883,8 +813,7 @@ NameAttributeText::SetSortFolderNamesFirst(bool enabled)
 bool
 NameAttributeText::IsEditable() const
 {
-	return StringAttributeText::IsEditable()
-		&& !fModel->HasLocalizedName();
+	return StringAttributeText::IsEditable();
 }
 
 
@@ -894,7 +823,7 @@ NameAttributeText::IsEditable() const
 RealNameAttributeText::RealNameAttributeText(const Model* model,
 	const BColumn* column)
 	:
-	StringAttributeText(model, column)
+	NameAttributeText(model, column)
 {
 }
 
@@ -923,6 +852,7 @@ RealNameAttributeText::ReadValue(BString* outString)
 	*outString = fModel->EntryRef()->name;
 
 	fValueDirty = false;
+	fValueIsDefined = true;
 }
 
 
@@ -931,82 +861,21 @@ RealNameAttributeText::FitValue(BString* outString, const BPoseView* view)
 {
 	if (fValueDirty)
 		ReadValue(&fFullValueText);
+
 	fOldWidth = fColumn->Width();
 	fTruncatedWidth = TruncString(outString, fFullValueText.String(),
-		fFullValueText.Length(), view, fOldWidth, B_TRUNCATE_END);
+		fFullValueText.Length(), view, fOldWidth, B_TRUNCATE_MIDDLE);
 	fDirty = false;
 }
 
 
 void
-RealNameAttributeText::SetUpEditing(BTextView* textView)
+RealNameAttributeText::SetupEditing(BTextView* textView)
 {
 	DisallowFilenameKeys(textView);
 
 	textView->SetMaxBytes(B_FILE_NAME_LENGTH);
 	textView->SetText(fFullValueText.String(), fFullValueText.Length());
-}
-
-
-bool
-RealNameAttributeText::CommitEditedTextFlavor(BTextView* textView)
-{
-	const char* text = textView->Text();
-
-	BEntry entry(fModel->EntryRef());
-	if (entry.InitCheck() != B_OK)
-		return false;
-
-	BDirectory	parent;
-	if (entry.GetParent(&parent) != B_OK)
-		return false;
-
-	bool removeExisting = false;
-	if (parent.Contains(text)) {
-		BAlert* alert = new BAlert("",
-			B_TRANSLATE("That name is already taken. "
-			"Please type another one."),
-			B_TRANSLATE("Replace other file"),
-			B_TRANSLATE("OK"),
-			NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-
-		alert->SetShortcut(0, 'r');
-
-		if (alert->Go())
-			return false;
-
-		removeExisting = true;
-	}
-
-	// TODO:
-	// use model-flavor specific virtuals for all of these special
-	// renamings
-	status_t result;
-	if (fModel->IsVolume()) {
-		BVolume volume(fModel->NodeRef()->dereference().dev());
-		result = volume.InitCheck();
-		if (result == B_OK) {
-			RenameVolumeUndo undo(volume, text);
-
-			result = volume.SetName(text);
-			if (result != B_OK)
-				undo.Remove();
-		}
-	} else {
-		if (fModel->IsQuery()) {
-			BModelWriteOpener opener(fModel);
-			ASSERT(fModel->Node());
-			MoreOptionsStruct::SetQueryTemporary(fModel->Node(), false);
-		}
-
-		RenameUndo undo(entry, text);
-
-		result = entry.Rename(text, removeExisting);
-		if (result != B_OK)
-			undo.Remove();
-	}
-
-	return result == B_OK;
 }
 
 
@@ -1042,9 +911,11 @@ OwnerAttributeText::ReadValue(BString* outString)
 			user << "root";
 	} else
 		user << nodeOwner;
+
 	*outString = user.String();
 
 	fValueDirty = false;
+	fValueIsDefined = true;
 }
 
 
@@ -1069,9 +940,11 @@ GroupAttributeText::ReadValue(BString* outString)
 			group << "0";
 	} else
 		group << nodeGroup;
+
 	*outString = group.String();
 
 	fValueDirty = false;
+	fValueIsDefined = true;
 }
 #endif  // OWNER_GROUP_ATTRIBUTES
 
@@ -1116,6 +989,7 @@ ModeAttributeText::ReadValue(BString* outString)
 	*outString = buffer;
 
 	fValueDirty = false;
+	fValueIsDefined = true;
 }
 
 
@@ -1138,13 +1012,14 @@ SizeAttributeText::ReadValue()
 
 	if (fModel->IsVolume()) {
 		BVolume volume(fModel->NodeRef()->dereference().dev());
-
+		fValueIsDefined = volume.Capacity() != 0;
 		return volume.Capacity();
 	}
 
 	if (fModel->IsDirectory() || fModel->IsQuery()
 		|| fModel->IsQueryTemplate() || fModel->IsSymLink()
 		|| fModel->IsVirtualDirectory()) {
+		fValueIsDefined = false;
 		return kUnknownSize;
 	}
 
@@ -1155,27 +1030,31 @@ SizeAttributeText::ReadValue()
 
 
 void
-SizeAttributeText::FitValue(BString* outString, const BPoseView* view)
+SizeAttributeText::FitValue(BString* outString, const BPoseView* poseView)
 {
 	if (fValueDirty)
 		fValue = ReadValue();
 
 	fOldWidth = fColumn->Width();
-	fTruncatedWidth = TruncFileSize(outString, fValue, view, fOldWidth);
+	if (!fValueIsDefined) {
+		*outString = "-";
+		fTruncatedWidth = poseView->StringWidth("-");
+	} else
+		fTruncatedWidth = TruncFileSize(outString, fValue, poseView, fOldWidth);
 	fDirty = false;
 }
 
 
 float
-SizeAttributeText::PreferredWidth(const BPoseView* pose) const
+SizeAttributeText::PreferredWidth(const BPoseView* poseView) const
 {
-	if (fValueIsDefined) {
-		BString widthString;
-		TruncFileSize(&widthString, fValue, pose, 100000);
-		return pose->StringWidth(widthString.String());
-	}
+	if (!fValueIsDefined)
+		return poseView->StringWidth("-");
 
-	return pose->StringWidth("-");
+	BString widthString;
+	TruncFileSize(&widthString, fValue, poseView, 100000);
+
+	return poseView->StringWidth(widthString.String());
 }
 
 
@@ -1286,8 +1165,7 @@ GenericAttributeText::CheckAttributeChanged()
 
 	// fDirty could already be true, in that case we mustn't set it to
 	// false, even if the attribute text hasn't changed
-	bool changed = fValue.int64t != tmpValue.int64t
-		|| tmpString != fFullValueText;
+	bool changed = fValue.int64t != tmpValue.int64t || tmpString != fFullValueText;
 	if (changed)
 		fDirty = true;
 
@@ -1690,7 +1568,7 @@ GenericAttributeText::CommitEditedText(BTextView* textView)
 
 
 void
-GenericAttributeText::SetUpEditing(BTextView* textView)
+GenericAttributeText::SetupEditing(BTextView* textView)
 {
 	textView->SetMaxBytes(kGenericReadBufferSize - 1);
 	textView->SetText(fFullValueText.String(), fFullValueText.Length());
@@ -1989,12 +1867,12 @@ CheckboxAttributeText::CheckboxAttributeText(const Model* model,
 
 
 void
-CheckboxAttributeText::SetUpEditing(BTextView* view)
+CheckboxAttributeText::SetupEditing(BTextView* view)
 {
 	// TODO: support editing for real!
 	BString outString;
 	GenericAttributeText::FitValue(&outString, NULL);
-	GenericAttributeText::SetUpEditing(view);
+	GenericAttributeText::SetupEditing(view);
 }
 
 
@@ -2059,12 +1937,12 @@ RatingAttributeText::RatingAttributeText(const Model* model,
 
 
 void
-RatingAttributeText::SetUpEditing(BTextView* view)
+RatingAttributeText::SetupEditing(BTextView* view)
 {
 	// TODO: support editing for real!
 	BString outString;
 	GenericAttributeText::FitValue(&outString, NULL);
-	GenericAttributeText::SetUpEditing(view);
+	GenericAttributeText::SetupEditing(view);
 }
 
 
@@ -2110,8 +1988,10 @@ RatingAttributeText::FitValue(BString* ratingString, const BPoseView* view)
 
 	for (int32 i = 0; i < fCount; i++) {
 		int64 n = i * steps;
-		if (rating > n)
+		if (rating > n + steps / 2)
 			fFullValueText += "★";
+		else if (rating > n)
+			fFullValueText += "⯪";
 		else
 			fFullValueText += "☆";
 	}
@@ -2205,9 +2085,11 @@ VersionAttributeText::ReadValue(BString* outString)
 			&& info.GetVersionInfo(&version, fAppVersion
 				? B_APP_VERSION_KIND : B_SYSTEM_VERSION_KIND) == B_OK) {
 			*outString = version.short_info;
+			fValueIsDefined = true;
 			return;
 		}
 	}
 
 	*outString = "-";
+	fValueIsDefined = false;
 }

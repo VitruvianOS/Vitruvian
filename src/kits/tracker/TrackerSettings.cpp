@@ -38,7 +38,11 @@ All rights reserved.
 #include <Debug.h>
 
 #include "Tracker.h"
+#include "TrackerDefaults.h"
 #include "WidgetAttributeText.h"
+
+
+#define RGBTOHEX(c) ((c.alpha << 24) | (c.red << 16) | (c.green << 8) | (c.blue))
 
 
 class TTrackerState : public Settings {
@@ -72,6 +76,7 @@ private:
 	BooleanValueSetting* fSortFolderNamesFirst;
 	BooleanValueSetting* fHideDotFiles;
 	BooleanValueSetting* fTypeAheadFiltering;
+	BooleanValueSetting* fGenerateImageThumbnails;
 
 	ScalarValueSetting* fRecentApplicationsCount;
 	ScalarValueSetting* fRecentDocumentsCount;
@@ -81,9 +86,6 @@ private:
 	HexScalarValueSetting* fUsedSpaceColor;
 	HexScalarValueSetting* fFreeSpaceColor;
 	HexScalarValueSetting* fWarningSpaceColor;
-
-	BooleanValueSetting* fDontMoveFilesToTrash;
-	BooleanValueSetting* fAskBeforeDeleteFile;
 
 	Benaphore fInitLock;
 	bool fInited;
@@ -136,6 +138,7 @@ TTrackerState::TTrackerState()
 	fSortFolderNamesFirst(NULL),
 	fHideDotFiles(NULL),
 	fTypeAheadFiltering(NULL),
+	fGenerateImageThumbnails(NULL),
 	fRecentApplicationsCount(NULL),
 	fRecentDocumentsCount(NULL),
 	fRecentFoldersCount(NULL),
@@ -143,8 +146,6 @@ TTrackerState::TTrackerState()
 	fUsedSpaceColor(NULL),
 	fFreeSpaceColor(NULL),
 	fWarningSpaceColor(NULL),
-	fDontMoveFilesToTrash(NULL),
-	fAskBeforeDeleteFile(NULL),
 	fInited(false),
 	fSettingsLoaded(false)
 {
@@ -167,6 +168,7 @@ TTrackerState::TTrackerState(const TTrackerState&)
 	fSortFolderNamesFirst(NULL),
 	fHideDotFiles(NULL),
 	fTypeAheadFiltering(NULL),
+	fGenerateImageThumbnails(NULL),
 	fRecentApplicationsCount(NULL),
 	fRecentDocumentsCount(NULL),
 	fRecentFoldersCount(NULL),
@@ -174,8 +176,6 @@ TTrackerState::TTrackerState(const TTrackerState&)
 	fUsedSpaceColor(NULL),
 	fFreeSpaceColor(NULL),
 	fWarningSpaceColor(NULL),
-	fDontMoveFilesToTrash(NULL),
-	fAskBeforeDeleteFile(NULL),
 	fInited(false),
 	fSettingsLoaded(false)
 {
@@ -207,52 +207,50 @@ TTrackerState::LoadSettingsIfNeeded()
 
 	// Set default settings before reading from disk
 
-	Add(fShowDisksIcon = new BooleanValueSetting("ShowDisksIcon", false));
+	Add(fShowDisksIcon = new BooleanValueSetting("ShowDisksIcon", kDefaultShowDisksIcon));
 	Add(fMountVolumesOntoDesktop
-		= new BooleanValueSetting("MountVolumesOntoDesktop", true));
-	Add(fMountSharedVolumesOntoDesktop =
-		new BooleanValueSetting("MountSharedVolumesOntoDesktop", true));
+		= new BooleanValueSetting("MountVolumesOntoDesktop", kDefaultMountVolumesOntoDesktop));
+	Add(fMountSharedVolumesOntoDesktop = new BooleanValueSetting(
+		"MountSharedVolumesOntoDesktop", kDefaultMountSharedVolumesOntoDesktop));
 	Add(fEjectWhenUnmounting
-		= new BooleanValueSetting("EjectWhenUnmounting", true));
+		= new BooleanValueSetting("EjectWhenUnmounting", kDefaultEjectWhenUnmounting));
 
-	Add(fDesktopFilePanelRoot
-		= new BooleanValueSetting("DesktopFilePanelRoot", true));
+	Add(fDesktopFilePanelRoot // deprecated
+		= new BooleanValueSetting("DesktopFilePanelRoot", kDefaultDesktopFilePanelRoot));
+	Add(fShowSelectionWhenInactive // deprecated
+		= new BooleanValueSetting("ShowSelectionWhenInactive", kDefaultShowSelectionWhenInactive));
+
 	Add(fShowFullPathInTitleBar
-		= new BooleanValueSetting("ShowFullPathInTitleBar", false));
-	Add(fShowSelectionWhenInactive
-		= new BooleanValueSetting("ShowSelectionWhenInactive", true));
-	Add(fTransparentSelection
-		= new BooleanValueSetting("TransparentSelection", true));
-	Add(fSortFolderNamesFirst
-		= new BooleanValueSetting("SortFolderNamesFirst", true));
-	Add(fHideDotFiles = new BooleanValueSetting("HideDotFiles", false));
-	Add(fTypeAheadFiltering
-		= new BooleanValueSetting("TypeAheadFiltering", false));
+		= new BooleanValueSetting("ShowFullPathInTitleBar", kDefaultShowFullPathInTitleBar));
 	Add(fSingleWindowBrowse
-		= new BooleanValueSetting("SingleWindowBrowse", false));
-	Add(fShowNavigator = new BooleanValueSetting("ShowNavigator", false));
+		= new BooleanValueSetting("SingleWindowBrowse", kDefaultSingleWindowBrowse));
+	Add(fShowNavigator = new BooleanValueSetting("ShowNavigator", kDefaultShowNavigator));
+	Add(fTransparentSelection
+		= new BooleanValueSetting("TransparentSelection", kDefaultTransparentSelection));
+	Add(fSortFolderNamesFirst
+		= new BooleanValueSetting("SortFolderNamesFirst", kDefaultSortFolderNamesFirst));
+	Add(fHideDotFiles = new BooleanValueSetting("HideDotFiles", kDefaultHideDotFiles));
+	Add(fTypeAheadFiltering
+		= new BooleanValueSetting("TypeAheadFiltering", kDefaultTypeAheadFiltering));
+	Add(fGenerateImageThumbnails
+		= new BooleanValueSetting("GenerateImageThumbnails", kDefaultGenerateImageThumbnails));
 
 	Add(fRecentApplicationsCount
-		= new ScalarValueSetting("RecentApplications", 10, "", ""));
+		= new ScalarValueSetting("RecentApplications", kDefaultRecentApplications, "", ""));
 	Add(fRecentDocumentsCount
-		= new ScalarValueSetting("RecentDocuments", 10, "", ""));
+		= new ScalarValueSetting("RecentDocuments", kDefaultRecentDocuments, "", ""));
 	Add(fRecentFoldersCount
-		= new ScalarValueSetting("RecentFolders", 10, "", ""));
+		= new ScalarValueSetting("RecentFolders", kDefaultRecentFolders, "", ""));
 
 	Add(fShowVolumeSpaceBar
-		= new BooleanValueSetting("ShowVolumeSpaceBar", true));
-
+		= new BooleanValueSetting("ShowVolumeSpaceBar", kDefaultShowVolumeSpaceBar));
 	Add(fUsedSpaceColor
-		= new HexScalarValueSetting("UsedSpaceColor", 0xc000cb00, "", ""));
+		= new HexScalarValueSetting("UsedSpaceColor", RGBTOHEX(kDefaultUsedSpaceColor), "", ""));
 	Add(fFreeSpaceColor
-		= new HexScalarValueSetting("FreeSpaceColor", 0xc0ffffff, "", ""));
+		= new HexScalarValueSetting("FreeSpaceColor", RGBTOHEX(kDefaultFreeSpaceColor), "", ""));
 	Add(fWarningSpaceColor
-		= new HexScalarValueSetting("WarningSpaceColor", 0xc0cb0000, "", ""));
-
-	Add(fDontMoveFilesToTrash
-		= new BooleanValueSetting("DontMoveFilesToTrash", false));
-	Add(fAskBeforeDeleteFile
-		= new BooleanValueSetting("AskBeforeDeleteFile", true));
+		= new HexScalarValueSetting("WarningSpaceColor", RGBTOHEX(kDefaultWarningSpaceColor),
+			"", ""));
 
 	TryReadingSettings();
 
@@ -292,6 +290,7 @@ void
 TrackerSettings::SetShowDisksIcon(bool enabled)
 {
 	gTrackerState.fShowDisksIcon->SetValue(enabled);
+	gTrackerState.fMountVolumesOntoDesktop->SetValue(!enabled);
 }
 
 
@@ -319,6 +318,7 @@ TrackerSettings::MountVolumesOntoDesktop()
 void
 TrackerSettings::SetMountVolumesOntoDesktop(bool enabled)
 {
+	gTrackerState.fShowDisksIcon->SetValue(!enabled);
 	gTrackerState.fMountVolumesOntoDesktop->SetValue(enabled);
 }
 
@@ -466,6 +466,20 @@ TrackerSettings::SetTypeAheadFiltering(bool enabled)
 
 
 bool
+TrackerSettings::GenerateImageThumbnails()
+{
+	return gTrackerState.fGenerateImageThumbnails->Value();
+}
+
+
+void
+TrackerSettings::SetGenerateImageThumbnails(bool enabled)
+{
+	gTrackerState.fGenerateImageThumbnails->SetValue(enabled);
+}
+
+
+bool
 TrackerSettings::ShowSelectionWhenInactive()
 {
 	return gTrackerState.fShowSelectionWhenInactive->Value();
@@ -554,32 +568,4 @@ void
 TrackerSettings::SetRecentFoldersCount(int32 count)
 {
 	gTrackerState.fRecentFoldersCount->ValueChanged(count);
-}
-
-
-bool
-TrackerSettings::DontMoveFilesToTrash()
-{
-	return gTrackerState.fDontMoveFilesToTrash->Value();
-}
-
-
-void
-TrackerSettings::SetDontMoveFilesToTrash(bool enabled)
-{
-	gTrackerState.fDontMoveFilesToTrash->SetValue(enabled);
-}
-
-
-bool
-TrackerSettings::AskBeforeDeleteFile()
-{
-	return gTrackerState.fAskBeforeDeleteFile->Value();
-}
-
-
-void
-TrackerSettings::SetAskBeforeDeleteFile(bool enabled)
-{
-	gTrackerState.fAskBeforeDeleteFile->SetValue(enabled);
 }

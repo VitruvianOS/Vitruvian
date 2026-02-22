@@ -48,7 +48,7 @@ namespace BPrivate {
 
 class BDeskWindow : public BContainerWindow {
 public:
-	BDeskWindow(LockingList<BWindow>* windowList);
+	BDeskWindow(LockingList<BWindow>* windowList, uint32 openFlags = 0);
 	virtual ~BDeskWindow();
 
 	virtual void Init(const BMessage* message = NULL);
@@ -70,15 +70,16 @@ public:
 
 	void SaveDesktopPoseLocations();
 
+	virtual bool ShouldHaveDraggableFolderIcon() { return false; };
+
 protected:
-	virtual void AddWindowContextMenus(BMenu*);
 	virtual BPoseView* NewPoseView(Model*, uint32);
 
 	virtual void WorkspaceActivated(int32, bool);
 	virtual void MessageReceived(BMessage*);
 
 private:
-	void InitAddonsList(bool);
+	void InitAddOnsList(bool);
 	void ApplyShortcutPreferences(bool);
 
 	BShelf* fDeskShelf;

@@ -73,8 +73,8 @@ BFilePanel::BFilePanel(file_panel_mode mode, BMessenger* target,
 	BEntry startDir(ref);
 	fWindow = new TFilePanel(mode, target, &startDir, nodeFlavors,
 		multipleSelection, message, filter, 0, B_DOCUMENT_WINDOW_LOOK,
-		modal ? B_MODAL_APP_WINDOW_FEEL : B_NORMAL_WINDOW_FEEL,
-		hideWhenDone);
+		(modal ? B_MODAL_APP_WINDOW_FEEL : B_NORMAL_WINDOW_FEEL),
+		B_CURRENT_WORKSPACE, 0, hideWhenDone);
 
 	static_cast<TFilePanel*>(fWindow)->SetClientObject(this);
 
@@ -105,17 +105,31 @@ BFilePanel::Show()
 		fWindow->SetWorkspaces(workspace);
 	}
 
-	// Position the file panel like an alert
+	// Position like an alert, unless the parent is NULL and a position was
+	// already restored from saved settings.
 	BWindow* parent = dynamic_cast<BWindow*>(
 		BLooper::LooperForThread(find_thread(NULL)));
-	const BRect frame = parent != NULL ? parent->Frame()
-		: BScreen(fWindow).Frame();
+	if (parent != NULL)
+		fWindow->MoveTo(fWindow->AlertPosition(parent->Frame()));
+	else {
+		if (!static_cast<TFilePanel*>(fWindow)->DefaultStateRestored())
+			fWindow->MoveTo(fWindow->AlertPosition(BScreen(fWindow).Frame()));
+	}
 
-	fWindow->MoveTo(fWindow->AlertPosition(frame));
 	if (!IsShowing())
 		fWindow->Show();
 
 	fWindow->Activate();
+
+#if 1
+	// The Be Book gives the names for some of the child views so that apps
+	// could move them around if they needed to, but we have most in layouts,
+	// so once the window has been opened, we have to forcibly resize "PoseView"
+	// (fBackView) to fully invalidate its layout in case any of the controls
+	// in it have been moved.
+	fWindow->FindView("PoseView")->ResizeBy(1, 1);
+	fWindow->FindView("PoseView")->ResizeBy(-1, -1);
+#endif
 }
 
 
@@ -282,7 +296,7 @@ BFilePanel::SetPanelDirectory(const entry_ref* ref)
 	if (!lock)
 		return;
 
-	static_cast<TFilePanel*>(fWindow)->SetTo(ref);
+	static_cast<TFilePanel*>(fWindow)->SwitchDirectory(ref);
 }
 
 
@@ -298,7 +312,7 @@ BFilePanel::SetPanelDirectory(const char* path)
 	if (!lock)
 		return;
 
-	static_cast<TFilePanel*>(fWindow)->SetTo(&ref);
+	static_cast<TFilePanel*>(fWindow)->SwitchDirectory(&ref);
 }
 
 
@@ -315,7 +329,7 @@ BFilePanel::SetPanelDirectory(const BEntry* entry)
 void
 BFilePanel::SetPanelDirectory(const BDirectory* dir)
 {
-	BEntry	entry;
+	BEntry entry;
 
 	if (dir && (dir->GetEntry(&entry) == B_OK))
 		SetPanelDirectory(&entry);

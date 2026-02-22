@@ -82,8 +82,7 @@ enum nav_flags {
 
 
 bool
-SpringLoadedFolderCompareMessages(const BMessage* incoming,
-	const BMessage* dragMessage)
+SpringLoadedFolderCompareMessages(const BMessage* incoming, const BMessage* dragMessage)
 {
 	if (incoming == NULL || dragMessage == NULL)
 		return false;
@@ -134,7 +133,7 @@ SpringLoadedFolderCompareMessages(const BMessage* incoming,
 
 void
 SpringLoadedFolderSetMenuStates(const BMenu* menu,
-	const BObjectList<BString>* typeslist)
+	const BStringList* typeslist)
 {
 	if (menu == NULL || typeslist == NULL || typeslist->IsEmpty())
 		return;
@@ -183,7 +182,7 @@ SpringLoadedFolderSetMenuStates(const BMenu* menu,
 
 void
 SpringLoadedFolderAddUniqueTypeToList(entry_ref* ref,
-	BObjectList<BString>* typeslist)
+	BStringList* typeslist)
 {
 	if (ref == NULL || typeslist == NULL)
 		return;
@@ -212,23 +211,23 @@ SpringLoadedFolderAddUniqueTypeToList(entry_ref* ref,
 		}
 		// scan the current list, don't add dups
 		bool isUnique = true;
-		int32 count = typeslist->CountItems();
+		int32 count = typeslist->CountStrings();
 		for (int32 index = 0 ; index < count ; index++) {
-			if (typeslist->ItemAt(index)->Compare(mimestr) == 0) {
+			if (typeslist->StringAt(index).Compare(mimestr) == 0) {
 				isUnique = false;
 				break;
 			}
 		}
 
 		if (isUnique)
-			typeslist->AddItem(new BString(mimestr));
+			typeslist->Add(mimestr);
 	}
 }
 
 
 void
 SpringLoadedFolderCacheDragData(const BMessage* incoming, BMessage** message,
-	BObjectList<BString>** typeslist)
+	BStringList** typeslist)
 {
 	if (incoming == NULL)
 		return;
@@ -237,7 +236,7 @@ SpringLoadedFolderCacheDragData(const BMessage* incoming, BMessage** message,
 	delete* typeslist;
 
 	BMessage* localMessage = new BMessage(*incoming);
-	BObjectList<BString>* localTypesList = new BObjectList<BString>(10, true);
+	BStringList* localTypesList = new BStringList(10);
 
 	for (int32 index = 0; incoming->HasRef("refs", index); index++) {
 		entry_ref ref;
@@ -251,7 +250,7 @@ SpringLoadedFolderCacheDragData(const BMessage* incoming, BMessage** message,
 	*typeslist = localTypesList;
 }
 
-}
+} // namespace BPrivate
 
 
 //	#pragma mark - BNavMenu
@@ -262,7 +261,7 @@ SpringLoadedFolderCacheDragData(const BMessage* incoming, BMessage** message,
 
 
 BNavMenu::BNavMenu(const char* title, uint32 message, const BHandler* target,
-	BWindow* parentWindow, const BObjectList<BString>* list)
+	BWindow* parentWindow, const BStringList* list)
 	:
 	BSlowMenu(title),
 	fMessage(message),
@@ -272,22 +271,19 @@ BNavMenu::BNavMenu(const char* title, uint32 message, const BHandler* target,
 	fItemList(NULL),
 	fContainer(NULL),
 	fIteratingDesktop(false),
-	fTypesList(new BObjectList<BString>(10, true))
+	fTypesList(new BStringList(10))
 {
 	if (list != NULL)
 		*fTypesList = *list;
 
 	InitIconPreloader();
 
-	SetFont(be_plain_font);
-
 	// add the parent window to the invocation message so that it
 	// can be closed if option modifier held down during invocation
-	BContainerWindow* originatingWindow =
-		dynamic_cast<BContainerWindow*>(fParentWindow);
-	if (originatingWindow != NULL) {
+	BContainerWindow* source = dynamic_cast<BContainerWindow*>(fParentWindow);
+	if (source != NULL) {
 		fMessage.AddData("nodeRefsToClose", B_RAW_TYPE,
-			originatingWindow->TargetModel()->NodeRef(), sizeof(node_ref));
+			source->TargetModel()->NodeRef(), sizeof(node_ref));
 	}
 
 	// too long to have triggers
@@ -297,7 +293,7 @@ BNavMenu::BNavMenu(const char* title, uint32 message, const BHandler* target,
 
 BNavMenu::BNavMenu(const char* title, uint32 message,
 	const BMessenger& messenger, BWindow* parentWindow,
-	const BObjectList<BString>* list)
+	const BStringList* list)
 	:
 	BSlowMenu(title),
 	fMessage(message),
@@ -307,22 +303,19 @@ BNavMenu::BNavMenu(const char* title, uint32 message,
 	fItemList(NULL),
 	fContainer(NULL),
 	fIteratingDesktop(false),
-	fTypesList(new BObjectList<BString>(10, true))
+	fTypesList(new BStringList(10))
 {
 	if (list != NULL)
 		*fTypesList = *list;
 
 	InitIconPreloader();
 
-	SetFont(be_plain_font);
-
 	// add the parent window to the invocation message so that it
 	// can be closed if option modifier held down during invocation
-	BContainerWindow* originatingWindow =
-		dynamic_cast<BContainerWindow*>(fParentWindow);
-	if (originatingWindow != NULL) {
+	BContainerWindow* source = dynamic_cast<BContainerWindow*>(fParentWindow);
+	if (source != NULL) {
 		fMessage.AddData("nodeRefsToClose", B_RAW_TYPE,
-			originatingWindow->TargetModel()->NodeRef(), sizeof (node_ref));
+			source->TargetModel()->NodeRef(), sizeof(node_ref));
 	}
 
 	// too long to have triggers
@@ -396,9 +389,7 @@ BNavMenu::ClearMenuBuildingState()
 	// item list is non-owning, need to delete the items because
 	// they didn't get added to the menu
 	if (fItemList != NULL) {
-		int32 count = fItemList->CountItems();
-		for (int32 index = count - 1; index >= 0; index--)
-			delete RemoveItem(index);
+		RemoveItems(0, fItemList->CountItems(), true);
 
 		delete fItemList;
 		fItemList = NULL;
@@ -424,24 +415,26 @@ BNavMenu::StartBuildingItemList()
 	status_t status = entry.GetParent(&parent);
 
 	// if ref is the root item then build list of volume root dirs
-	fFlags = uint8((fFlags & ~kVolumesOnly)
-		| (status == B_ENTRY_NOT_FOUND ? kVolumesOnly : 0));
-	if (fFlags & kVolumesOnly)
+	fFlags = uint8((fFlags & ~kVolumesOnly) | (status == B_ENTRY_NOT_FOUND ? kVolumesOnly : 0));
+	if ((fFlags & kVolumesOnly) != 0)
 		return true;
 
 	Model startModel(&entry, true);
 	if (startModel.InitCheck() != B_OK || !startModel.IsContainer())
 		return false;
 
-	if (startModel.IsQuery())
+	if (startModel.IsQuery()) {
 		fContainer = new QueryEntryListCollection(&startModel);
-	else if (startModel.IsVirtualDirectory())
+	} else if (startModel.IsVirtualDirectory()) {
 		fContainer = new VirtualDirectoryEntryList(&startModel);
-	else if (startModel.IsDesktop()) {
+	} else if (startModel.IsDesktop()) {
 		fIteratingDesktop = true;
-		fContainer = DesktopPoseView::InitDesktopDirentIterator(
-			0, 	startModel.EntryRef());
-		AddRootItemsIfNeeded();
+		fContainer = DesktopPoseView::InitDesktopDirentIterator(0, startModel.EntryRef());
+		if (TrackerSettings().MountVolumesOntoDesktop())
+			AddVolumeItems();
+		else if (TrackerSettings().ShowDisksIcon())
+			AddRootItem();
+
 		AddTrashItem();
 	} else if (startModel.IsTrash()) {
 		// the trash window needs to display a union of all the
@@ -452,26 +445,20 @@ BNavMenu::StartBuildingItemList()
 		fContainer = new EntryIteratorList();
 
 		while (volRoster.GetNextVolume(&volume) == B_OK) {
-			if (volume.IsReadOnly() || !volume.IsPersistent())
+			if (volume.IsReadOnly() || !volume.IsPersistent() || volume.Capacity() == 0)
 				continue;
 
 			BDirectory trashDir;
-
 			if (FSGetTrashDir(&trashDir, volume.Device()) == B_OK) {
-				EntryIteratorList* iteratorList
-					= dynamic_cast<EntryIteratorList*>(fContainer);
-
+				EntryIteratorList* iteratorList = dynamic_cast<EntryIteratorList*>(fContainer);
 				ASSERT(iteratorList != NULL);
-
 				if (iteratorList != NULL)
 					iteratorList->AddItem(new DirectoryEntryList(trashDir));
 			}
 		}
 	} else {
 		BDirectory* directory = dynamic_cast<BDirectory*>(startModel.Node());
-
 		ASSERT(directory != NULL);
-
 		if (directory != NULL)
 			fContainer = new DirectoryEntryList(*directory);
 	}
@@ -486,21 +473,35 @@ BNavMenu::StartBuildingItemList()
 
 
 void
-BNavMenu::AddRootItemsIfNeeded()
+BNavMenu::AddRootItem()
+{
+	BEntry entry("/");
+	Model model(&entry);
+	if (model.InitCheck() != B_OK)
+		return;
+
+	AddOneItem(&model);
+}
+
+
+void
+BNavMenu::AddVolumeItems()
 {
 	BVolumeRoster roster;
 	roster.Rewind();
+
 	BVolume volume;
+	BDirectory root;
+	BEntry entry;
+	Model model;
+
 	while (roster.GetNextVolume(&volume) == B_OK) {
-		BDirectory root;
-		BEntry entry;
-		if (!volume.IsPersistent()
-			|| volume.GetRootDirectory(&root) != B_OK
-			|| root.GetEntry(&entry) != B_OK) {
+		if (volume.InitCheck() != B_OK || !volume.IsPersistent() || volume.Capacity() == 0
+			|| volume.GetRootDirectory(&root) != B_OK || root.GetEntry(&entry) != B_OK) {
 			continue;
 		}
 
-		Model model(&entry);
+		model.SetTo(&entry);
 		AddOneItem(&model);
 	}
 }
@@ -544,8 +545,11 @@ BNavMenu::AddNextItem()
 		return true;
 	}
 
-	QueryEntryListCollection* queryContainer
-		= dynamic_cast<QueryEntryListCollection*>(fContainer);
+	// skip Trash
+	if (model.IsTrash())
+		return true;
+
+	QueryEntryListCollection* queryContainer = dynamic_cast<QueryEntryListCollection*>(fContainer);
 	if (queryContainer != NULL && !queryContainer->ShowResultsFromTrash()
 		&& FSInTrashDir(model.EntryRef())) {
 		// query entry is in trash and shall not be shown
@@ -554,18 +558,14 @@ BNavMenu::AddNextItem()
 
 	ssize_t size = -1;
 	PoseInfo poseInfo;
-	if (model.Node() != NULL) {
-		size = model.Node()->ReadAttr(kAttrPoseInfo, B_RAW_TYPE, 0,
-			&poseInfo, sizeof(poseInfo));
-	}
+	if (model.Node() != NULL)
+		size = model.Node()->ReadAttr(kAttrPoseInfo, B_RAW_TYPE, 0, &poseInfo, sizeof(poseInfo));
 
 	model.CloseNode();
 
 	// item might be in invisible
-	if (size == sizeof(poseInfo)
-			&& !BPoseView::PoseVisible(&model, &poseInfo)) {
+	if (size == sizeof(poseInfo) && !BPoseView::PoseVisible(&model, &poseInfo))
 		return true;
-	}
 
 	AddOneItem(&model);
 
@@ -588,7 +588,7 @@ BNavMenu::AddOneItem(Model* model)
 ModelMenuItem*
 BNavMenu::NewModelItem(Model* model, const BMessage* invokeMessage,
 	const BMessenger& target, bool suppressFolderHierarchy,
-	BContainerWindow* parentWindow, const BObjectList<BString>* typeslist,
+	BContainerWindow* parentWindow, const BStringList* typeslist,
 	TrackingHookData* hook)
 {
 	if (model->InitCheck() != B_OK)
@@ -645,10 +645,15 @@ BNavMenu::NewModelItem(Model* model, const BMessage* invokeMessage,
 	BMessage* message = new BMessage(*invokeMessage);
 	message->AddRef("refs", model->EntryRef());
 
+	menu_info info;
+	get_menu_info(&info);
+	BFont menuFont;
+	menuFont.SetFamilyAndStyle(info.f_family, info.f_style);
+	menuFont.SetSize(info.font_size);
+
 	// truncate name if necessary
 	BString truncatedString(model->Name());
-	be_plain_font->TruncateString(&truncatedString, B_TRUNCATE_END,
-		GetMaxMenuWidth());
+	menuFont.TruncateString(&truncatedString, B_TRUNCATE_END, GetMaxMenuWidth());
 
 	ModelMenuItem* item = NULL;
 	if (!isContainer || suppressFolderHierarchy) {
@@ -678,16 +683,17 @@ void
 BNavMenu::BuildVolumeMenu()
 {
 	BVolumeRoster roster;
-	BVolume volume;
-
 	roster.Rewind();
+
+	BVolume volume;
+	BDirectory startDir;
+	BEntry entry;
+
 	while (roster.GetNextVolume(&volume) == B_OK) {
-		if (!volume.IsPersistent())
+		if (volume.InitCheck() != B_OK || !volume.IsPersistent() || volume.Capacity() == 0)
 			continue;
 
-		BDirectory startDir;
 		if (volume.GetRootDirectory(&startDir) == B_OK) {
-			BEntry entry;
 			startDir.GetEntry(&entry);
 
 			Model* model = new Model(&entry);
@@ -724,12 +730,10 @@ BNavMenu::CompareFolderNamesFirstOne(const BMenuItem* i1, const BMenuItem* i2)
 	const ModelMenuItem* item1 = dynamic_cast<const ModelMenuItem*>(i1);
 	const ModelMenuItem* item2 = dynamic_cast<const ModelMenuItem*>(i2);
 
-	if (item1 != NULL && item2 != NULL) {
-		return item1->TargetModel()->CompareFolderNamesFirst(
-			item2->TargetModel());
-	}
+	if (item1 != NULL && item2 != NULL)
+		return item1->TargetModel()->CompareFolderNamesFirst(item2->TargetModel());
 
-	return strcasecmp(i1->Label(), i2->Label());
+	return CompareOne(i1, i2);
 }
 
 
@@ -738,7 +742,7 @@ BNavMenu::CompareOne(const BMenuItem* i1, const BMenuItem* i2)
 {
 	ThrowOnAssert(i1 != NULL && i2 != NULL);
 
-	return strcasecmp(i1->Label(), i2->Label());
+	return NaturalCompare(i1->Label(), i2->Label());
 }
 
 
@@ -757,12 +761,10 @@ BNavMenu::DoneBuildingItemList()
 	if ((fFlags & kShowParent) != 0) {
 		BDirectory directory(&fNavDir);
 		BEntry entry(&fNavDir);
-		if (!directory.IsRootDirectory()
-			&& entry.GetParent(&entry) == B_OK) {
+		if (!directory.IsRootDirectory() && entry.GetParent(&entry) == B_OK) {
 			Model model(&entry, true);
 			BLooper* looper;
-			AddNavParentDir(&model, fMessage.what,
-				fMessenger.Target(&looper));
+			AddNavParentDir(&model, fMessage.what, fMessenger.Target(&looper));
 		}
 	}
 
@@ -845,7 +847,7 @@ BNavMenu::SetShowParent(bool show)
 
 
 void
-BNavMenu::SetTypesList(const BObjectList<BString>* list)
+BNavMenu::SetTypesList(const BStringList* list)
 {
 	if (list != NULL)
 		*fTypesList = *list;
@@ -854,7 +856,7 @@ BNavMenu::SetTypesList(const BObjectList<BString>* list)
 }
 
 
-const BObjectList<BString>*
+const BStringList*
 BNavMenu::TypesList() const
 {
 	return fTypesList;
@@ -905,4 +907,83 @@ BNavMenu::SetTrackingHookDeep(BMenu* menu, bool (*func)(BMenu*, void*),
 		if (submenu != NULL)
 			SetTrackingHookDeep(submenu, func, state);
 	}
+}
+
+
+//	#pragma mark - BPopUpNavMenu
+
+
+BPopUpNavMenu::BPopUpNavMenu(const char* title)
+	:
+	BNavMenu(title, B_REFS_RECEIVED, BMessenger(), NULL, NULL),
+	fTrackThread(-1)
+{
+}
+
+
+BPopUpNavMenu::~BPopUpNavMenu()
+{
+	_WaitForTrackThread();
+}
+
+
+void
+BPopUpNavMenu::_WaitForTrackThread()
+{
+	if (fTrackThread >= 0) {
+		status_t status;
+		while (wait_for_thread(fTrackThread, &status) == B_INTERRUPTED)
+			;
+	}
+}
+
+
+void
+BPopUpNavMenu::ClearMenu()
+{
+	RemoveItems(0, CountItems(), true);
+
+	fMenuBuilt = false;
+}
+
+
+void
+BPopUpNavMenu::Go(BPoint where)
+{
+	_WaitForTrackThread();
+
+	fWhere = where;
+
+	fTrackThread = spawn_thread(_TrackThread, "popup", B_DISPLAY_PRIORITY, this);
+}
+
+
+bool
+BPopUpNavMenu::IsShowing() const
+{
+	return Window() != NULL && !Window()->IsHidden();
+}
+
+
+BPoint
+BPopUpNavMenu::ScreenLocation()
+{
+	return fWhere;
+}
+
+
+int32
+BPopUpNavMenu::_TrackThread(void* _menu)
+{
+	BPopUpNavMenu* menu = static_cast<BPopUpNavMenu*>(_menu);
+
+	menu->Show();
+
+	BMenuItem* result = menu->Track();
+	if (result != NULL)
+		static_cast<BInvoker*>(result)->Invoke();
+
+	menu->Hide();
+
+	return 0;
 }

@@ -35,9 +35,12 @@ All rights reserved.
 
 #include "HeaderView.h"
 
+#include <algorithm>
+
 #include <Alert.h>
 #include <Application.h>
 #include <Catalog.h>
+#include <ControlLook.h>
 #include <Locale.h>
 #include <PopUpMenu.h>
 #include <ScrollView.h>
@@ -52,17 +55,13 @@ All rights reserved.
 #include "Model.h"
 #include "NavMenu.h"
 #include "PoseView.h"
+#include "Shortcuts.h"
 #include "Tracker.h"
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "InfoWindow"
 
-
-// Offsets taken from TAlertView::Draw in BAlert.cpp
-const float kIconHorizOffset = 18.0f;
-const float kIconVertOffset = 6.0f;
-const float kBorderWidth = 32.0f;
 
 // Amount you have to move the mouse before a drag starts
 const float kDragSlop = 3.0f;
@@ -75,16 +74,14 @@ HeaderView::HeaderView(Model* model)
 	fIconModel(model),
 	fTitleEditView(NULL),
 	fTrackingState(no_track),
-	fMouseDown(false),
 	fIsDropTarget(false),
 	fDoubleClick(false),
 	fDragging(false)
 {
-	// Create the rect for displaying the icon
-	fIconRect.Set(0, 0, B_LARGE_ICON - 1, B_LARGE_ICON - 1);
-	// Offset taken from BAlert
-	fIconRect.OffsetBy(kIconHorizOffset, kIconVertOffset);
-	SetExplicitMinSize(BSize(B_SIZE_UNSET, B_LARGE_ICON + 2 * kIconVertOffset));
+	const float labelSpacing = be_control_look->DefaultLabelSpacing();
+	fIconRect = BRect(BPoint(labelSpacing * 3.0f, labelSpacing),
+		be_control_look->ComposeIconSize(B_LARGE_ICON));
+	SetExplicitSize(BSize(B_SIZE_UNSET, fIconRect.Width() + 2 * fIconRect.top));
 
 	// The title rect
 	// The magic numbers are used to properly calculate the rect so that
@@ -95,12 +92,12 @@ HeaderView::HeaderView(Model* model)
 	GetFont(&currentFont);
 	currentFont.GetHeight(&fontMetrics);
 
-	fTitleRect.left = fIconRect.right + 5;
+	fTitleRect.left = fIconRect.right + labelSpacing;
 	fTitleRect.top = 0;
 	fTitleRect.bottom = fontMetrics.ascent + 1;
-	fTitleRect.right = min_c(
+	fTitleRect.right = std::min(
 		fTitleRect.left + currentFont.StringWidth(fModel->Name()),
-		Bounds().Width() - 5);
+		Bounds().Width() - labelSpacing);
 	// Offset so that it centers with the icon
 	fTitleRect.OffsetBy(0,
 		fIconRect.top + ((fIconRect.Height() - fTitleRect.Height()) / 2));
@@ -118,7 +115,6 @@ HeaderView::HeaderView(Model* model)
 		else
 			delete resolvedModel;
 	}
-
 }
 
 
@@ -222,59 +218,31 @@ HeaderView::BeginEditingTitle()
 void
 HeaderView::FinishEditingTitle(bool commit)
 {
-	if (fTitleEditView == NULL)
+	if (fTitleEditView == NULL || !commit)
 		return;
 
-	bool reopen = false;
+	const char* name = fTitleEditView->Text();
+	size_t length = (size_t)fTitleEditView->TextLength();
 
-	const char* text = fTitleEditView->Text();
-	uint32 length = strlen(text);
-	if (commit && strcmp(text, fModel->Name()) != 0
-		&& length < B_FILE_NAME_LENGTH) {
-		BEntry entry(fModel->EntryRef());
-		BDirectory parent;
-		if (entry.InitCheck() == B_OK
-			&& entry.GetParent(&parent) == B_OK) {
-			if (parent.Contains(text)) {
-				BAlert* alert = new BAlert("",
-					B_TRANSLATE("That name is already taken. "
-					"Please type another one."),
-					B_TRANSLATE("OK"),
-					0, 0, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-				alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-				alert->Go();
-				reopen = true;
-			} else {
-				if (fModel->IsVolume()) {
-					BVolume	volume(fModel->NodeRef()->dereference().dev());
-					if (volume.InitCheck() == B_OK)
-						volume.SetName(text);
-				} else
-					entry.Rename(text);
+	status_t result = EditModelName(fModel, name, length);
+	bool reopen = (result == B_NAME_TOO_LONG || result == B_NAME_IN_USE);
 
-				// Adjust the size of the text rect
-				BFont currentFont(be_plain_font);
-				currentFont.SetSize(currentFont.Size() + 2);
-				fTitleRect.right = min_c(fTitleRect.left
-						+ currentFont.StringWidth(fTitleEditView->Text()),
-					Bounds().Width() - 5);
-			}
-		}
-	} else if (length >= B_FILE_NAME_LENGTH) {
-		BAlert* alert = new BAlert("",
-			B_TRANSLATE("That name is too long. Please type another one."),
-			B_TRANSLATE("OK"),
-			0, 0, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-		alert->Go();
-		reopen = true;
+	if (result == B_OK) {
+		// Adjust the size of the text rect
+		BFont currentFont(be_plain_font);
+		currentFont.SetSize(currentFont.Size() + 2);
+		float stringWidth = currentFont.StringWidth(fTitleEditView->Text());
+		fTitleRect.right = std::min(fTitleRect.left + stringWidth,
+			Bounds().Width() - 5);
 	}
 
 	// Remove view
 	BView* scrollView = fTitleEditView->Parent();
-	RemoveChild(scrollView);
-	delete scrollView;
-	fTitleEditView = NULL;
+	if (scrollView != NULL) {
+		RemoveChild(scrollView);
+		delete scrollView;
+		fTitleEditView = NULL;
+	}
 
 	if (reopen)
 		BeginEditingTitle();
@@ -296,13 +264,12 @@ HeaderView::Draw(BRect)
 	// Draw the icon, straddling the border
 	SetDrawingMode(B_OP_OVER);
 	IconCache::sIconCache->Draw(fIconModel, this, fIconRect.LeftTop(),
-		kNormalIcon, B_LARGE_ICON, true);
+		kNormalIcon, fIconRect.Size(), true);
 	SetDrawingMode(B_OP_COPY);
 
 	// Font information
 	font_height fontMetrics;
 	BFont currentFont;
-	float lineHeight = 0;
 	float lineBase = 0;
 
 	// Draw the main title if the user is not currently editing it
@@ -311,14 +278,13 @@ HeaderView::Draw(BRect)
 		SetFontSize(be_bold_font->Size());
 		GetFont(&currentFont);
 		currentFont.GetHeight(&fontMetrics);
-		lineHeight = CurrentFontHeight() + 5;
 		lineBase = fTitleRect.bottom - fontMetrics.descent;
 		SetHighColor(labelColor);
 		MovePenTo(BPoint(fIconRect.right + 6, lineBase));
 
 		// Recalculate the rect width
-		fTitleRect.right = min_c(
-				fTitleRect.left + currentFont.StringWidth(fModel->Name()),
+		fTitleRect.right = std::min(fTitleRect.left
+				+ currentFont.StringWidth(fModel->Name()),
 			Bounds().Width() - 5);
 		// Check for possible need of truncation
 		if (StringWidth(fModel->Name()) > fTitleRect.Width()) {
@@ -358,24 +324,17 @@ HeaderView::MouseDown(BPoint where)
 	// Assume this isn't part of a double click
 	fDoubleClick = false;
 
-	BEntry entry;
-	fModel->GetEntry(&entry);
-
-	if (fTitleRect.Contains(where)) {
-		if (!fModel->HasLocalizedName()
-			&& ConfirmChangeIfWellKnownDirectory(&entry, kRename, true)) {
-			BeginEditingTitle();
-		}
-	} else if (fTitleEditView) {
+	if (fTitleRect.Contains(where) && fTitleEditView == NULL)
+		BeginEditingTitle();
+	else if (fTitleEditView != NULL)
 		FinishEditingTitle(true);
-	} else if (fIconRect.Contains(where)) {
+	else if (fIconRect.Contains(where)) {
 		uint32 buttons;
 		Window()->CurrentMessage()->FindInt32("buttons", (int32*)&buttons);
 		if (SecondaryMouseButtonDown(modifiers(), buttons)) {
 			// Show contextual menu
-			BPopUpMenu* contextMenu
-				= new BPopUpMenu("FileContext", false, false);
-			if (contextMenu) {
+			BPopUpMenu* contextMenu = new BPopUpMenu("PoseContext", false, false);
+			if (contextMenu != NULL) {
 				BuildContextMenu(contextMenu);
 				contextMenu->SetAsyncAutoDestruct(true);
 				contextMenu->Go(ConvertToScreen(where), true, true,
@@ -388,8 +347,8 @@ HeaderView::MouseDown(BPoint where)
 			BPoint offsetPoint;
 			offsetPoint.x = where.x - fIconRect.left;
 			offsetPoint.y = where.y - fIconRect.top;
-			if (IconCache::sIconCache->IconHitTest(offsetPoint, fIconModel,
-					kNormalIcon, B_LARGE_ICON)) {
+			if (IconCache::sIconCache->IconHitTest(offsetPoint, fIconModel, kNormalIcon,
+					fIconRect.Size())) {
 				// Can't drag the trash anywhere..
 				fTrackingState = fModel->IsTrash()
 					? open_only_track : icon_track;
@@ -407,7 +366,7 @@ HeaderView::MouseDown(BPoint where)
 						offsetPoint.y = fClickPoint.y - fIconRect.top;
 						fDoubleClick
 							= IconCache::sIconCache->IconHitTest(offsetPoint,
-							fIconModel, kNormalIcon, B_LARGE_ICON);
+							fIconModel, kNormalIcon, fIconRect.Size());
 					}
 				}
 			}
@@ -415,7 +374,6 @@ HeaderView::MouseDown(BPoint where)
 	}
 
 	fClickPoint = where;
-	fMouseDown = true;
 	SetMouseEventMask(B_POINTER_EVENTS, B_NO_POINTER_HISTORY);
 }
 
@@ -432,88 +390,97 @@ HeaderView::MouseMoved(BPoint where, uint32, const BMessage* dragMessage)
 		SetDrawingMode(B_OP_OVER);
 		if (overTarget != fIsDropTarget) {
 			IconCache::sIconCache->Draw(fIconModel, this, fIconRect.LeftTop(),
-				overTarget ? kSelectedIcon : kNormalIcon, B_LARGE_ICON, true);
+				overTarget ? kSelectedIcon : kNormalIcon, fIconRect.Size(), true);
 			fIsDropTarget = overTarget;
 		}
 	}
 
 	switch (fTrackingState) {
 		case icon_track:
-			if (fMouseDown && !fDragging
-				&& (abs((int32)(where.x - fClickPoint.x)) > kDragSlop
-					|| abs((int32)(where.y - fClickPoint.y)) > kDragSlop)) {
-				// Find the required height
-				BFont font;
-				GetFont(&font);
+		{
+			if (fDragging)
+				break;
 
-				float height = CurrentFontHeight()
-					+ fIconRect.Height() + 8;
-				BRect rect(0, 0, min_c(fIconRect.Width()
-						+ font.StringWidth(fModel->Name()) + 4,
-					fIconRect.Width() * 3), height);
-				BBitmap* dragBitmap = new BBitmap(rect, B_RGBA32, true);
-				dragBitmap->Lock();
-				BView* view = new BView(dragBitmap->Bounds(), "",
-					B_FOLLOW_NONE, 0);
-				dragBitmap->AddChild(view);
-				view->SetOrigin(0, 0);
-				BRect clipRect(view->Bounds());
-				BRegion newClip;
-				newClip.Set(clipRect);
-				view->ConstrainClippingRegion(&newClip);
+			uint32 buttons = Window()->CurrentMessage()->GetInt32("buttons", 0);
+			if (buttons == 0)
+				break;
 
-				// Transparent draw magic
-				view->SetHighColor(0, 0, 0, 0);
-				view->FillRect(view->Bounds());
-				view->SetDrawingMode(B_OP_ALPHA);
-				rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
-				textColor.alpha = 128;
-					// set transparency by value
-				view->SetHighColor(textColor);
-				view->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_COMPOSITE);
-
-				// Draw the icon
-				float hIconOffset = (rect.Width() - fIconRect.Width()) / 2;
-				IconCache::sIconCache->Draw(fIconModel, view,
-					BPoint(hIconOffset, 0), kNormalIcon, B_LARGE_ICON, true);
-
-				// See if we need to truncate the string
-				BString nameString(fModel->Name());
-				if (view->StringWidth(fModel->Name()) > rect.Width()) {
-					view->TruncateString(&nameString, B_TRUNCATE_END,
-						rect.Width() - 5);
-				}
-
-				// Draw the label
-				font_height fontHeight;
-				font.GetHeight(&fontHeight);
-				float leftText = (view->StringWidth(nameString.String())
-					- fIconRect.Width()) / 2;
-				view->MovePenTo(BPoint(hIconOffset - leftText + 2,
-					fIconRect.Height() + (fontHeight.ascent + 2)));
-				view->DrawString(nameString.String());
-
-				view->Sync();
-				dragBitmap->Unlock();
-
-				BMessage dragMessage(B_REFS_RECEIVED);
-				dragMessage.AddPoint("click_pt", fClickPoint);
-				BPoint tmpLoc;
-				uint32 button;
-				GetMouse(&tmpLoc, &button);
-				if (button)
-					dragMessage.AddInt32("buttons", (int32)button);
-
-				dragMessage.AddInt32("be:actions",
-					(modifiers() & B_OPTION_KEY) != 0
-						? B_COPY_TARGET : B_MOVE_TARGET);
-				dragMessage.AddRef("refs", fModel->EntryRef());
-				DragMessage(&dragMessage, dragBitmap, B_OP_ALPHA,
-					BPoint((fClickPoint.x - fIconRect.left)
-					+ hIconOffset, fClickPoint.y - fIconRect.top), this);
-				fDragging = true;
+			if (abs((int32)(where.x - fClickPoint.x)) <= kDragSlop
+				&& abs((int32)(where.y - fClickPoint.y)) <= kDragSlop) {
+				break;
 			}
+
+			// Find the required height
+			BFont font;
+			GetFont(&font);
+			float width = std::min(fIconRect.Width() + font.StringWidth(fModel->Name()) + 4,
+				fIconRect.Width() * 3);
+			float height = CurrentFontHeight() + fIconRect.Height() + 8;
+
+			BRect rect(0, 0, width, height);
+			BBitmap* dragBitmap = new BBitmap(rect, B_RGBA32, true);
+			dragBitmap->Lock();
+
+			BView* view = new BView(dragBitmap->Bounds(), "", B_FOLLOW_NONE, 0);
+			dragBitmap->AddChild(view);
+			view->SetOrigin(0, 0);
+
+			BRect clipRect(view->Bounds());
+			BRegion newClip;
+			newClip.Set(clipRect);
+			view->ConstrainClippingRegion(&newClip);
+
+			// Transparent draw magic
+			view->SetHighColor(0, 0, 0, 0);
+			view->FillRect(view->Bounds());
+			view->SetDrawingMode(B_OP_ALPHA);
+
+			rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
+			textColor.alpha = 128;
+				// set transparency by value
+			view->SetHighColor(textColor);
+			view->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_COMPOSITE);
+
+			// Draw the icon
+			float hIconOffset = (rect.Width() - fIconRect.Width()) / 2;
+			IconCache::sIconCache->Draw(fIconModel, view, BPoint(hIconOffset, 0), kNormalIcon,
+				fIconRect.Size(), true);
+
+			// See if we need to truncate the string
+			BString nameString(fModel->Name());
+			if (view->StringWidth(fModel->Name()) > rect.Width())
+				view->TruncateString(&nameString, B_TRUNCATE_END, rect.Width() - 5);
+
+			// Draw the label
+			font_height fontHeight;
+			font.GetHeight(&fontHeight);
+			float leftText
+				= roundf((view->StringWidth(nameString.String()) - fIconRect.Width()) / 2);
+			float x = hIconOffset - leftText + 2;
+			float y = fIconRect.Height() + fontHeight.ascent + 2;
+			view->MovePenTo(BPoint(x, y));
+			view->DrawString(nameString.String());
+
+			view->Sync();
+			dragBitmap->Unlock();
+
+			BMessage dragMessage(B_REFS_RECEIVED);
+			dragMessage.AddPoint("click_pt", fClickPoint);
+			BPoint tmpLoc;
+			uint32 button;
+			GetMouse(&tmpLoc, &button);
+			if (button)
+				dragMessage.AddInt32("buttons", (int32)button);
+
+			dragMessage.AddInt32("be:actions",
+				(modifiers() & B_OPTION_KEY) != 0 ? B_COPY_TARGET : B_MOVE_TARGET);
+			dragMessage.AddRef("refs", fModel->EntryRef());
+			x = fClickPoint.x - fIconRect.left + hIconOffset;
+			y = fClickPoint.y - fIconRect.top;
+			DragMessage(&dragMessage, dragBitmap, B_OP_ALPHA, BPoint(x, y), this);
+			fDragging = true;
 			break;
+		}
 
 		case open_only_track :
 			// Special type of entry that can't be renamed or drag and dropped
@@ -530,8 +497,7 @@ HeaderView::MouseMoved(BPoint where, uint32, const BMessage* dragMessage)
 void
 HeaderView::MouseUp(BPoint where)
 {
-	if ((fTrackingState == icon_track
-			|| fTrackingState == open_only_track)
+	if ((fTrackingState == icon_track || fTrackingState == open_only_track)
 		&& fIconRect.Contains(where)) {
 		// If it was a double click, then tell Tracker to open the item
 		// The CurrentMessage() here does* not* have a "clicks" field,
@@ -550,7 +516,6 @@ HeaderView::MouseUp(BPoint where)
 	}
 
 	// End mouse tracking
-	fMouseDown = false;
 	fDragging = false;
 	fTrackingState = no_track;
 }
@@ -622,18 +587,14 @@ HeaderView::BuildContextMenu(BMenu* parent)
 		navigationItem->SetTarget(be_app);
 	}
 
-	parent->AddItem(new BMenuItem(B_TRANSLATE("Open"),
-		new BMessage(kOpenSelection), 'O'));
+	parent->AddItem(TShortcuts().OpenItem());
 
-	if (!model.IsDesktop() && !model.IsRoot() && !model.IsTrash()
-		&& !fModel->HasLocalizedName()) {
-		parent->AddItem(new BMenuItem(B_TRANSLATE("Edit name"),
-			new BMessage(kEditItem), 'E'));
+	if (!model.IsDesktop() && !model.IsRoot() && !model.IsTrash()) {
+		parent->AddItem(TShortcuts().EditNameItem());
 		parent->AddSeparatorItem();
 
 		if (fModel->IsVolume()) {
-			BMenuItem* item = new BMenuItem(B_TRANSLATE("Unmount"),
-				new BMessage(kUnmountVolume), 'U');
+			BMenuItem* item = TShortcuts().UnmountItem();
 			parent->AddItem(item);
 			// volume model, enable/disable the Unmount item
 			BVolume boot;
@@ -646,12 +607,10 @@ HeaderView::BuildContextMenu(BMenu* parent)
 	}
 
 	if (!model.IsRoot() && !model.IsVolume() && !model.IsTrash())
-		parent->AddItem(new BMenuItem(B_TRANSLATE("Identify"),
-			new BMessage(kIdentifyEntry)));
+		parent->AddItem(TShortcuts().IdentifyItem());
 
 	if (model.IsTrash())
-		parent->AddItem(new BMenuItem(B_TRANSLATE("Empty Trash"),
-			new BMessage(kEmptyTrash)));
+		parent->AddItem(TShortcuts().EmptyTrashItem());
 
 	BMenuItem* sizeItem = NULL;
 	if (model.IsDirectory() && !model.IsVolume() && !model.IsRoot())  {
@@ -720,5 +679,3 @@ HeaderView::CurrentFontHeight()
 
 	return fontHeight.ascent + fontHeight.descent + fontHeight.leading + 2;
 }
-
-

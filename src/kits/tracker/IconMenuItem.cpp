@@ -41,6 +41,7 @@ All rights reserved.
 #include <Debug.h>
 #include <Menu.h>
 #include <MenuField.h>
+#include <MenuPrivate.h>
 #include <NodeInfo.h>
 
 #include "IconCache.h"
@@ -126,10 +127,10 @@ ModelMenuItem::DrawContent()
 {
 	if (fDrawText) {
 		BPoint drawPoint(ContentLocation());
-		drawPoint.x += ListIconSize() + ListIconSize() / 4
-			+ (fExtraPad ? 6 : 0);
+		drawPoint.x += ListIconSize() + ListIconSize() / 4 + _ExtraLeftPadding();
 		if (fHeightDelta > 0)
-			drawPoint.y += ceil(fHeightDelta / 2);
+			drawPoint.y += ceilf(fHeightDelta / 2);
+
 		Menu()->MovePenTo(drawPoint);
 		_inherited::DrawContent();
 	}
@@ -154,10 +155,9 @@ ModelMenuItem::DrawIcon()
 	// center icon with text.
 
 	float deltaHeight = fHeightDelta < 0 ? -fHeightDelta : 0;
-	where.y += ceil(deltaHeight / 2);
+	where.y += ceilf(deltaHeight / 2);
 
-	if (fExtraPad)
-		where.x += 6;
+	where.x += _ExtraLeftPadding();
 
 	Menu()->SetDrawingMode(B_OP_OVER);
 	Menu()->SetLowColor(B_TRANSPARENT_32_BIT);
@@ -165,15 +165,65 @@ ModelMenuItem::DrawIcon()
 	// draw small icon, synchronously
 	if (IsEnabled()) {
 		IconCache::sIconCache->Draw(fModel.ResolveIfLink(), Menu(), where,
-			kNormalIcon, (icon_size)ListIconSize());
+			kNormalIcon, BSize(ListIconSize() - 1, ListIconSize() - 1));
 	} else {
 		// dimmed, for now use a special blitter; icon cache should
 		// know how to blit one eventually
 		IconCache::sIconCache->SyncDraw(fModel.ResolveIfLink(), Menu(), where,
-			kNormalIcon, (icon_size)ListIconSize(), DimmedIconBlitter);
+			kNormalIcon, BSize(ListIconSize() - 1, ListIconSize() - 1), DimmedIconBlitter);
 	}
 
 	Menu()->PopState();
+}
+
+
+float
+ModelMenuItem::_ExtraLeftPadding()
+{
+	if (!fExtraPad)
+		return 0;
+
+	// BMenu and BMenuBar have different margins,
+	// we want to make them the same. See fExtraPad.
+	float leftDelta;
+	_GetHorizontalItemMarginDelta(&leftDelta, NULL);
+
+	return leftDelta;
+}
+
+
+float
+ModelMenuItem::_ExtraPadding()
+{
+	if (!fExtraPad)
+		return 0;
+
+	// BMenu and BMenuBar have different margins,
+	// we want to make them the same. See fExtraPad.
+	float leftDelta, rightDelta;
+	_GetHorizontalItemMarginDelta(&leftDelta, &rightDelta);
+
+	return leftDelta + rightDelta;
+}
+
+
+void
+ModelMenuItem::_GetHorizontalItemMarginDelta(float* _leftDelta, float* _rightDelta)
+{
+	float menuLeft, menuRight, menuBarLeft, menuBarRight;
+
+	BMenu tempMenu("temp");
+	BPrivate::MenuPrivate menuPrivate(&tempMenu);
+	menuPrivate.GetItemMargins(&menuLeft, NULL, &menuRight, NULL);
+
+	BPrivate::MenuPrivate menuBarPrivate(Menu());
+	menuBarPrivate.GetItemMargins(&menuBarLeft, NULL, &menuBarRight, NULL);
+
+	if (_leftDelta != NULL)
+		*_leftDelta = menuLeft - menuBarLeft;
+
+	if (_rightDelta != NULL)
+		*_rightDelta = menuRight - menuBarRight;
 }
 
 
@@ -181,11 +231,13 @@ void
 ModelMenuItem::GetContentSize(float* width, float* height)
 {
 	_inherited::GetContentSize(width, height);
-	float iconSize = ListIconSize();
+
+	const float iconSize = ListIconSize();
 	fHeightDelta = iconSize - *height;
 	if (*height < iconSize)
 		*height = iconSize;
-	*width = *width + iconSize / 4 + iconSize + (fExtraPad ? 18 : 0);
+
+	*width += iconSize + iconSize / 4 + _ExtraPadding();
 }
 
 
@@ -280,10 +332,9 @@ IconMenuItem::IconMenuItem(const char* label, BMessage* message,
 	fWhich(which)
 {
 	if (nodeInfo != NULL) {
-		fDeviceIcon = new BBitmap(BRect(0, 0, which - 1, which - 1),
-			kDefaultIconDepth);
-
-		if (nodeInfo->GetTrackerIcon(fDeviceIcon, B_MINI_ICON) != B_OK) {
+		fDeviceIcon = new BBitmap(BRect(BPoint(0, 0),
+			be_control_look->ComposeIconSize(which)), kDefaultIconDepth);
+		if (nodeInfo->GetTrackerIcon(fDeviceIcon, (icon_size)-1) != B_OK) {
 			delete fDeviceIcon;
 			fDeviceIcon = NULL;
 		}
@@ -304,7 +355,7 @@ IconMenuItem::IconMenuItem(const char* label, BMessage* message,
 	fWhich(which)
 {
 	BMimeType mime(iconType);
-	fDeviceIcon = new BBitmap(BRect(0, 0, which - 1, which - 1),
+	fDeviceIcon = new BBitmap(BRect(BPoint(0, 0), be_control_look->ComposeIconSize(which)),
 		kDefaultIconDepth);
 
 	if (mime.GetIcon(fDeviceIcon, which) != B_OK) {
@@ -331,7 +382,7 @@ IconMenuItem::IconMenuItem(BMenu* submenu, BMessage* message,
 	fWhich(which)
 {
 	BMimeType mime(iconType);
-	fDeviceIcon = new BBitmap(BRect(0, 0, which - 1, which - 1),
+	fDeviceIcon = new BBitmap(BRect(BPoint(0, 0), be_control_look->ComposeIconSize(which)),
 		kDefaultIconDepth);
 
 	if (mime.GetIcon(fDeviceIcon, which) != B_OK) {
@@ -359,7 +410,7 @@ IconMenuItem::IconMenuItem(BMessage* data)
 	if (data != NULL) {
 		fWhich = (icon_size)data->GetInt32("_which", B_MINI_ICON);
 
-		fDeviceIcon = new BBitmap(BRect(0, 0, fWhich - 1, fWhich - 1),
+		fDeviceIcon = new BBitmap(BRect(BPoint(0, 0), be_control_look->ComposeIconSize(fWhich)),
 			kDefaultIconDepth);
 
 		if (data->HasData("_deviceIconBits", B_RAW_TYPE)) {
@@ -417,11 +468,16 @@ IconMenuItem::GetContentSize(float* width, float* height)
 {
 	_inherited::GetContentSize(width, height);
 
-	fHeightDelta = 16 - *height;
-	if (*height < 16)
-		*height = 16;
+	int32 iconHeight = fWhich;
+	if (fDeviceIcon != NULL)
+		iconHeight = fDeviceIcon->Bounds().IntegerHeight() + 1;
 
-	*width += 20;
+	fHeightDelta = iconHeight - *height;
+	if (*height < iconHeight)
+		*height = iconHeight;
+
+	if (fDeviceIcon != NULL)
+		*width += fDeviceIcon->Bounds().Width() + be_control_look->DefaultLabelSpacing();
 }
 
 
@@ -430,7 +486,7 @@ IconMenuItem::DrawContent()
 {
 	BPoint drawPoint(ContentLocation());
 	if (fDeviceIcon != NULL)
-		drawPoint.x += (float)fWhich + 4.0f;
+		drawPoint.x += fDeviceIcon->Bounds().Width() + be_control_look->DefaultLabelSpacing();
 
 	if (fHeightDelta > 0)
 		drawPoint.y += ceilf(fHeightDelta / 2);
@@ -498,15 +554,14 @@ IconMenuItem::SetMarked(bool mark)
 
 	// our topmost menu has a menu item
 
-	IconMenuItem* topLevelIconMenuItem
-		= dynamic_cast<IconMenuItem*>(topLevelItem);
-	if (topLevelIconMenuItem == NULL)
+	IconMenuItem* topLevelMenuItem = dynamic_cast<IconMenuItem*>(topLevelItem);
+	if (topLevelMenuItem == NULL)
 		return;
 
 	// our topmost menu's item is an IconMenuItem
 
 	// update the icon
-	topLevelIconMenuItem->SetIcon(fDeviceIcon);
+	topLevelMenuItem->SetIcon(fDeviceIcon);
 	menu->Invalidate();
 }
 
@@ -518,10 +573,9 @@ IconMenuItem::SetIcon(BBitmap* icon)
 		if (fDeviceIcon != NULL)
 			delete fDeviceIcon;
 
-		fDeviceIcon = new BBitmap(BRect(0, 0, fWhich - 1, fWhich - 1),
-			icon->ColorSpace());
-		fDeviceIcon->SetBits(icon->Bits(), icon->BitsLength(), 0,
-			icon->ColorSpace());
+		fDeviceIcon = new BBitmap(BRect(BPoint(0, 0),
+			be_control_look->ComposeIconSize(fWhich)), icon->ColorSpace());
+		fDeviceIcon->ImportBits(icon);
 	} else {
 		delete fDeviceIcon;
 		fDeviceIcon = NULL;

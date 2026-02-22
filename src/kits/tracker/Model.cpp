@@ -59,6 +59,7 @@ All rights reserved.
 #include <NodeMonitor.h>
 #include <Path.h>
 #include <SymLink.h>
+#include <StringList.h>
 #include <Query.h>
 #include <Volume.h>
 #include <VolumeRoster.h>
@@ -68,6 +69,7 @@ All rights reserved.
 #include "FindPanel.h"
 #include "FSUtils.h"
 #include "MimeTypes.h"
+#include "Thumbnails.h"
 #include "Tracker.h"
 #include "Utilities.h"
 
@@ -80,25 +82,6 @@ All rights reserved.
 BObjectList<Model>* writableOpenModelList = NULL;
 BObjectList<Model>* readOnlyOpenModelList = NULL;
 #endif
-
-
-static bool
-CheckNodeIconHint(BNode* node)
-{
-	if (node == NULL)
-		return false;
-
-	attr_info info;
-	if (node->GetAttrInfo(kAttrIcon, &info) == B_OK
-		// has a vector icon, or
-		|| (node->GetAttrInfo(kAttrMiniIcon, &info) == B_OK
-			&& node->GetAttrInfo(kAttrLargeIcon, &info) == B_OK)) {
-		// has a mini _and_ large icon
-		return true;
-	}
-
-	return false;
-}
 
 
 //	#pragma mark - Model()
@@ -332,27 +315,57 @@ Model::InitCheck() const
 
 
 int
-Model::CompareFolderNamesFirst(const Model* compareModel) const
+Model::CompareFolderNamesFirst(const Model* compare) const
 {
-	if (compareModel == NULL)
+	if (compare == NULL)
 		return -1;
 
-	const Model* resolvedCompareModel = compareModel->ResolveIfLink();
-	const Model* resolvedMe = ResolveIfLink();
+	const Model* resolved = ResolveIfLink();
+	const Model* resolvedCompare = compare->ResolveIfLink();
 
-	bool meIsDirOrVolume = resolvedMe->IsDirectory() || resolvedMe->IsVolume()
-		|| resolvedMe->IsVirtualDirectory();
-	bool otherIsDirOrVolume = resolvedCompareModel->IsDirectory()
-		|| resolvedCompareModel->IsVolume()
-		|| resolvedCompareModel->IsVirtualDirectory();
+	bool meIsRoot = resolved->IsRoot();
+	bool otherIsRoot = resolvedCompare->IsRoot();
 
-	if (meIsDirOrVolume) {
-		if (!otherIsDirOrVolume)
-			return -1;
-	} else if (otherIsDirOrVolume)
+	// sort root directory first
+
+	if (meIsRoot && !otherIsRoot)
+		return -1;
+	else if (!meIsRoot && otherIsRoot)
 		return 1;
 
-	return NaturalCompare(Name(), compareModel->Name());
+	bool meIsVolume = resolved->IsVolume();
+	bool otherIsVolume = resolvedCompare->IsVolume();
+
+	// sort volume as a directory if capacity is 0
+
+	if (meIsVolume) {
+		BVolume volume(resolved->NodeRef()->dereference().dev());
+		if (volume.InitCheck() == B_OK && volume.Capacity() == 0)
+			meIsVolume = false;
+	}
+
+	if (otherIsVolume) {
+		BVolume volume(resolvedCompare->NodeRef()->dereference().dev());
+		if (volume.InitCheck() == B_OK && volume.Capacity() == 0)
+			otherIsVolume = false;
+	}
+
+	// sort by volume then by directory then by file name
+
+	if (meIsVolume && !otherIsVolume)
+		return -1;
+	else if (!meIsVolume && otherIsVolume)
+		return 1;
+
+	bool meIsDir = resolved->IsDirectory() || resolved->IsVirtualDirectory();
+	bool otherIsDir = resolvedCompare->IsDirectory() || resolvedCompare->IsVirtualDirectory();
+
+	if (meIsDir && !otherIsDir)
+		return -1;
+	else if (!meIsDir && otherIsDir)
+		return 1;
+
+	return NaturalCompare(Name(), compare->Name());
 }
 
 
@@ -442,8 +455,8 @@ Model::OpenNodeCommon(bool writable)
 		SetupBaseType();
 
 	switch (fBaseType) {
-		case kPlainNode:
 		case kExecutableNode:
+		case kPlainNode:
 		case kQueryNode:
 		case kQueryTemplateNode:
 		case kVirtualDirectoryNode:
@@ -453,11 +466,11 @@ Model::OpenNodeCommon(bool writable)
 				(uint32)(writable ? O_RDWR : O_RDONLY));
 			break;
 
+		case kDesktopNode:
 		case kDirectoryNode:
-		case kVolumeNode:
 		case kRootNode:
 		case kTrashNode:
-		case kDesktopNode:
+		case kVolumeNode:
 			if (!IsNodeOpen())
 				fNode = new BDirectory(&fEntryRef);
 
@@ -609,14 +622,14 @@ Model::CacheLocalizedName()
 void
 Model::FinishSettingUpType()
 {
-	char mimeString[B_MIME_TYPE_LENGTH];
+	char type[B_MIME_TYPE_LENGTH];
 	BEntry entry;
 
 	// While we are reading the node, do a little snooping to see if it even
 	// makes sense to look for a node-based icon. This serves as a hint to the
 	// icon cache, allowing it to not hit the disk again for models that do not
 	// have an icon defined by the node.
-	if (IsNodeOpen() && fBaseType != kLinkNode && !CheckNodeIconHint(fNode))
+	if (fBaseType != kLinkNode && !CheckAppIconHint())
 		fIconFrom = kUnknownNotFromNode;
 
 	if (fBaseType != kDirectoryNode
@@ -626,22 +639,28 @@ Model::FinishSettingUpType()
 		BNodeInfo info(fNode);
 
 		// check if a specific mime type is set
-		if (info.GetType(mimeString) == B_OK) {
+		if (info.GetType(type) == B_OK) {
 			// node has a specific mime type
-			fMimeType = mimeString;
-			if (strcmp(mimeString, B_QUERY_MIMETYPE) == 0)
+			fMimeType = type;
+			if (strcmp(type, B_QUERY_MIMETYPE) == 0)
 				fBaseType = kQueryNode;
-			else if (strcmp(mimeString, B_QUERY_TEMPLATE_MIMETYPE) == 0)
+			else if (strcmp(type, B_QUERY_TEMPLATE_MIMETYPE) == 0)
 				fBaseType = kQueryTemplateNode;
-			else if (strcmp(mimeString, kVirtualDirectoryMimeType) == 0)
+			else if (strcmp(type, kVirtualDirectoryMimeType) == 0)
 				fBaseType = kVirtualDirectoryNode;
 
-			if (info.GetPreferredApp(mimeString) == B_OK) {
+			attr_info thumb;
+			if (fNode->GetAttrInfo(kAttrThumbnail, &thumb) == B_OK
+				|| ShouldGenerateThumbnail(type)) {
+				fIconFrom = kNode;
+			}
+
+			if (info.GetPreferredApp(type) == B_OK) {
 				if (fPreferredAppName)
 					DeletePreferredAppVolumeNameLinkTo();
 
-				if (mimeString[0])
-					fPreferredAppName = strdup(mimeString);
+				if (*type != '\0')
+					fPreferredAppName = strdup(type);
 			}
 		}
 	}
@@ -660,8 +679,8 @@ Model::FinishSettingUpType()
 				// should use a shared string here
 			if (IsNodeOpen()) {
 				BNodeInfo info(fNode);
-				if (info.GetType(mimeString) == B_OK)
-					fMimeType = mimeString;
+				if (info.GetType(type) == B_OK)
+					fMimeType = type;
 
 				if (fIconFrom == kUnknownNotFromNode
 					&& WellKnowEntryList::Match(NodeRef())
@@ -736,6 +755,31 @@ Model::FinishSettingUpType()
 }
 
 
+bool
+Model::CheckAppIconHint() const
+{
+	attr_info info;
+	if (fNode == NULL) {
+		// Node is not open.
+		return false;
+	}
+
+	if (fNode->GetAttrInfo(kAttrIcon, &info) == B_OK) {
+		// Node has a vector icon
+		return true;
+	}
+
+	if (fNode->GetAttrInfo(kAttrMiniIcon, &info) == B_OK
+		&& fNode->GetAttrInfo(kAttrLargeIcon, &info) == B_OK) {
+		// Node has a mini _and_ large icon
+		return true;
+	}
+
+	// If there isn't either of these, we can't use the icon attribute from the node.
+	return false;
+}
+
+
 void
 Model::ResetIconFrom()
 {
@@ -744,10 +788,14 @@ Model::ResetIconFrom()
 	if (InitCheck() != B_OK)
 		return;
 
-	// mirror the logic from FinishSettingUpType
-	if ((fBaseType == kDirectoryNode || fBaseType == kVolumeNode
-			|| fBaseType == kTrashNode || fBaseType == kDesktopNode)
-		&& !CheckNodeIconHint(fNode)) {
+	bool hasAttrIcon = CheckAppIconHint();
+
+	if (hasAttrIcon && (fBaseType == kDesktopNode || fBaseType == kTrashNode)) {
+		// Desktop or Trash with an icon attribute
+		fIconFrom = kNode;
+		return;
+	} else if (!hasAttrIcon && (fBaseType == kDirectoryNode || fBaseType == kVolumeNode)) {
+		// No icon attribute override, check if well-known or root directory
 		BDirectory* directory = dynamic_cast<BDirectory*>(fNode);
 		if (WellKnowEntryList::Match(NodeRef()) > (directory_which)-1) {
 			fIconFrom = kTrackerSupplied;
@@ -757,6 +805,7 @@ Model::ResetIconFrom()
 			return;
 		}
 	}
+
 	fIconFrom = kUnknownSource;
 }
 
@@ -783,6 +832,28 @@ Model::SetPreferredAppSignature(const char* signature)
 		fPreferredAppName = strdup(signature);
 	else
 		fPreferredAppName = NULL;
+}
+
+
+bool
+Model::IsPrintersDir() const
+{
+	BEntry entry(EntryRef());
+	return FSIsPrintersDir(&entry);
+}
+
+
+bool
+Model::InRoot() const
+{
+	return FSInRootDir(EntryRef());
+}
+
+
+bool
+Model::InTrash() const
+{
+	return FSInTrashDir(EntryRef());
 }
 
 
@@ -878,23 +949,24 @@ Model::AttrChanged(const char* attrName)
 	if (attrName != NULL
 		&& (strcmp(attrName, kAttrIcon) == 0
 			|| strcmp(attrName, kAttrMiniIcon) == 0
-			|| strcmp(attrName, kAttrLargeIcon) == 0)) {
+			|| strcmp(attrName, kAttrLargeIcon) == 0
+			|| strcmp(attrName, kAttrThumbnail) == 0)) {
 		return true;
 	}
 
 	if (attrName == NULL
 		|| strcmp(attrName, kAttrMIMEType) == 0
 		|| strcmp(attrName, kAttrPreferredApp) == 0) {
-		char mimeString[B_MIME_TYPE_LENGTH];
+		char type[B_MIME_TYPE_LENGTH];
 		BNodeInfo info(fNode);
-		if (info.GetType(mimeString) != B_OK)
+		if (info.GetType(type) != B_OK)
 			fMimeType = "";
 		else {
 			// node has a specific mime type
-			fMimeType = mimeString;
+			fMimeType = type;
 			if (!IsVolume() && !IsSymLink()
-				&& info.GetPreferredApp(mimeString) == B_OK) {
-				SetPreferredAppSignature(mimeString);
+				&& info.GetPreferredApp(type) == B_OK) {
+				SetPreferredAppSignature(type);
 			}
 		}
 
@@ -919,6 +991,9 @@ Model::AttrChanged(const char* attrName)
 bool
 Model::StatChanged()
 {
+	if (fNode == NULL)
+		return false;
+
 	ASSERT(IsNodeOpen());
 	mode_t oldMode = fStatBuf.st_mode;
 	fStatus = fNode->GetStat(&fStatBuf);
@@ -985,7 +1060,7 @@ Model::IsDropTarget(const Model* forDocument, bool traverse) const
 Model::CanHandleResult
 Model::CanHandleDrops() const
 {
-	if (IsDirectory()) {
+	if (IsDirectory() || IsVirtualDirectory()) {
 		// directories take anything
 		// resolve permissions here
 		return kCanHandle;
@@ -1031,7 +1106,7 @@ enum {
 
 
 static int32
-MatchMimeTypeString(/*const */BString* documentType, const char* handlerType)
+MatchMimeTypeString(const BString& documentType, const char* handlerType)
 {
 	// perform a mime type wildcard match
 	// handler types of the form "text"
@@ -1048,16 +1123,16 @@ MatchMimeTypeString(/*const */BString* documentType, const char* handlerType)
 
 	if (supertypeOnlyLength) {
 		// compare just the supertype
-		tmp = strstr(documentType->String(), "/");
-		if (tmp && (tmp - documentType->String() == supertypeOnlyLength)) {
-			if (documentType->ICompare(handlerType, supertypeOnlyLength) == 0)
+		tmp = strstr(documentType.String(), "/");
+		if (tmp && (tmp - documentType.String() == supertypeOnlyLength)) {
+			if (documentType.ICompare(handlerType, supertypeOnlyLength) == 0)
 				return kMatchSupertype;
 			else
 				return kDontMatch;
 		}
 	}
 
-	if (documentType->ICompare(handlerType) == 0)
+	if (documentType.ICompare(handlerType) == 0)
 		return kMatch;
 
 	return kDontMatch;
@@ -1065,7 +1140,7 @@ MatchMimeTypeString(/*const */BString* documentType, const char* handlerType)
 
 
 int32
-Model::SupportsMimeType(const char* type, const BObjectList<BString>* list,
+Model::SupportsMimeType(const char* type, const BStringList* list,
 	bool exactReason) const
 {
 	ASSERT((type == 0) != (list == 0));
@@ -1099,21 +1174,24 @@ Model::SupportsMimeType(const char* type, const BObjectList<BString>* list,
 				result = kSuperhandlerModel;
 		}
 
-		int32 match;
+		int32 match = kDontMatch;
 
 		if (type != NULL || (list != NULL && list->IsEmpty())) {
 			BString typeString(type);
-			match = MatchMimeTypeString(&typeString, mimeSignature);
+			match = MatchMimeTypeString(typeString, mimeSignature);
 		} else {
-			match = WhileEachListItem(const_cast<BObjectList<BString>*>(list),
-				MatchMimeTypeString, mimeSignature);
-			// const_cast shouldnt be here, have to have it until
-			// MW cleans up
+			const int32 count = list->CountStrings();
+			for (int32 i = 0; i < count; i++) {
+				match = MatchMimeTypeString(list->StringAt(i), mimeSignature);
+				if (match != kDontMatch)
+					break;
+			}
 		}
-		if (match == kMatch)
+
+		if (match == kMatch) {
 			// supports the actual type, it can't get any better
 			return kModelSupportsType;
-		else if (match == kMatchSupertype) {
+		} else if (match == kMatchSupertype) {
 			if (!exactReason)
 				return kModelSupportsSupertype;
 
@@ -1128,7 +1206,7 @@ Model::SupportsMimeType(const char* type, const BObjectList<BString>* list,
 
 
 bool
-Model::IsDropTargetForList(const BObjectList<BString>* list) const
+Model::IsDropTargetForList(const BStringList* list) const
 {
 	switch (CanHandleDrops()) {
 		case kCanHandle:
@@ -1200,7 +1278,24 @@ Model::Mimeset(bool force)
 	opener.OpenNode();
 	AttrChanged(NULL);
 
-	return !oldType.ICompare(MimeType());
+	return oldType.ICompare(MimeType()) != 0;
+}
+
+
+void
+Model::SniffMimeIfNeeded()
+{
+	if (fMimeType != B_FILE_MIMETYPE)
+		return;
+
+	BVolume volume(fStatBuf.st_dev);
+	if (volume.InitCheck() == B_OK && !volume.KnowsMime()) {
+		BMimeType mimeType;
+		if (BMimeType::GuessMimeType(&fEntryRef, &mimeType) == B_OK)
+			fMimeType = mimeType.Type();
+	}
+
+	return;
 }
 
 
@@ -1254,6 +1349,7 @@ Model::GetLongVersionString(BString &result, version_kind kind)
 	result = version.long_info;
 	return B_OK;
 }
+
 
 status_t
 Model::GetVersionString(BString &result, version_kind kind)
@@ -1437,7 +1533,7 @@ Model::TrackIconSource(icon_size size)
 	}
 
 	if (fBaseType == kVolumeNode) {
-		BVolume volume(NodeRef()->dereference().device);
+		BVolume volume(NodeRef()->dereference().dev()); //? dereference().device
 		status_t result = volume.GetIcon(&bitmap, size);
 		PRINT(("getting icon from volume %s\n", strerror(result)));
 	} else {

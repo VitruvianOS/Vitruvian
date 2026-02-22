@@ -92,7 +92,7 @@ protected:
 };
 
 
-const int32 kDirentBufferSize = 10 * 1024;
+const int32 kDirentBufferSize = B_PAGE_SIZE * 2;
 
 
 class CachedEntryIterator : public EntryListBase {
@@ -189,7 +189,7 @@ public:
 	virtual int32 CountEntries();
 
 protected:
-	BObjectList<BEntryList> fList;
+	BObjectList<BEntryList, true> fList;
 	int32 fCurrentIndex;
 };
 

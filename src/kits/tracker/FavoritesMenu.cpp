@@ -269,7 +269,12 @@ FavoritesMenu::AddNextItem()
 
 			// don't add folders that are already in the GoTo section
 			if (find_if(fUniqueRefCheck.begin(), fUniqueRefCheck.end(),
-				bind2nd(std::equal_to<entry_ref>(), ref))
+#if __GNUC__ <= 2
+				bind2nd(std::equal_to<entry_ref>(), ref)
+#else
+				[ref](entry_ref compared) { return ref == compared; }
+#endif
+			)
 					!= fUniqueRefCheck.end()) {
 				continue;
 			}
@@ -380,7 +385,7 @@ RecentsMenu::StartBuildingItemList()
 	int32 count = CountItems()-1;
 	for (int32 index = count; index >= 0; index--) {
 		BMenuItem* item = ItemAt(index);
-		ASSERT(item);
+		ASSERT(item != NULL);
 
 		RemoveItem(index);
 		delete item;

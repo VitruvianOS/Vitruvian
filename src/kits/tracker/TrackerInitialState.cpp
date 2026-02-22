@@ -82,6 +82,7 @@ static const char* kAttrState = "META:state";
 static const char* kAttrZip = "META:zip";
 static const char* kAttrCountry = "META:country";
 static const char* kAttrHomePhone = "META:hphone";
+static const char* kAttrMobilePhone = "META:mphone";
 static const char* kAttrWorkPhone = "META:wphone";
 static const char* kAttrFax = "META:fax";
 static const char* kAttrEmail = "META:email";
@@ -225,8 +226,9 @@ mkColumnsBits(BMallocIO& stream, const ColumnData* src, int32 nelm,
 	for (int32 i = 0; i < nelm; i++) {
 		BColumn c(
 			B_TRANSLATE_CONTEXT(src[i].title, context),
-			src[i].offset, src[i].width, src[i].align, src[i].attributeName,
+			src[i].width, src[i].align, src[i].attributeName,
 			src[i].attrType, src[i].statField, src[i].editable);
+		c.SetOffset(src[i].offset);
 		c.ArchiveToStream(&stream);
 	}
 
@@ -371,6 +373,8 @@ TTracker::InitMimeTypes()
 			true, true, 120, B_ALIGN_LEFT, false);
 		installer.AddExtraAttribute("Home phone", kAttrHomePhone,
 			B_STRING_TYPE, true, true, 90, B_ALIGN_LEFT, false);
+		installer.AddExtraAttribute("Mobile phone", kAttrMobilePhone,
+			B_STRING_TYPE, true, true, 90, B_ALIGN_LEFT, false);
 		installer.AddExtraAttribute("Work phone", kAttrWorkPhone,
 			B_STRING_TYPE, true, true, 90, B_ALIGN_LEFT, false);
 		installer.AddExtraAttribute("Fax", kAttrFax, B_STRING_TYPE,
@@ -468,6 +472,8 @@ TTracker::InstallDefaultTemplates()
 	// the following templates are in big endian and we rely on the Tracker
 	// translation support to swap them on little endian machines
 	//
+	// the column attribute is generated and written in the byte order of the machine
+	//
 	// in case there is an attribute (B_RECT_TYPE) that gets swapped by the media
 	// (unzip, file system endianness swapping, etc., the correct endianness for
 	// the correct machine has to be used here
@@ -493,8 +499,8 @@ TTracker::InstallDefaultTemplates()
 				"\000\000\000\000\000\000\000"
 		},
 		{
-			// attr: _trk/columns
-			kAttrColumns_be,
+			// attr: _trk/columns_le / _trk/columns
+			kAttrColumns,
 			B_RAW_TYPE,
 			0,
 			NULL
@@ -506,14 +512,14 @@ TTracker::InstallDefaultTemplates()
 
 	static const ColumnData defaultQueryColumns[] =
 	{
-		{ B_TRANSLATE_MARK("Name"), 40, 145, B_ALIGN_LEFT, "_stat/name",
-			B_STRING_TYPE, true, true },
-		{ B_TRANSLATE_MARK("Path"), 200, 225, B_ALIGN_LEFT, "_trk/path",
-			B_STRING_TYPE, false, false },
-		{ B_TRANSLATE_MARK("Size"), 440, 41, B_ALIGN_LEFT, "_stat/size",
-			B_OFF_T_TYPE, true, false },
-		{ B_TRANSLATE_MARK("Modified"), 496, 138, B_ALIGN_LEFT, "_stat/modified",
-			B_TIME_TYPE, true, false }
+		{ B_TRANSLATE_MARK("Name"), 40, 145, B_ALIGN_LEFT,
+			kAttrStatName, B_STRING_TYPE, true, true },
+		{ B_TRANSLATE_MARK("Location"), 200, 225, B_ALIGN_LEFT,
+			kAttrPath, B_STRING_TYPE, false, false },
+		{ B_TRANSLATE_MARK("Size"), 440, 41, B_ALIGN_RIGHT,
+			kAttrStatSize, B_OFF_T_TYPE, true, false },
+		{ B_TRANSLATE_MARK("Modified"), 496, 138, B_ALIGN_LEFT,
+			kAttrStatModified, B_TIME_TYPE, true, false }
 	};
 
 
@@ -538,8 +544,8 @@ TTracker::InstallDefaultTemplates()
 				"\000\000\000\000\000\000"
 		},
 		{
-			// attr: _trk/columns
-			kAttrColumns_be,
+			// attr: _trk/columns_le / _trk/columns
+			kAttrColumns,
 			B_RAW_TYPE,
 			0,
 			NULL
@@ -583,8 +589,8 @@ TTracker::InstallDefaultTemplates()
 				"\000\000\000\000\000\000\000"
 		},
 		{
-			// attr: _trk/columns
-			kAttrColumns_be,
+			// attr: _trk/columns_le / _trk/columns
+			kAttrColumns,
 			B_RAW_TYPE,
 			0,
 			NULL
@@ -630,8 +636,8 @@ TTracker::InstallDefaultTemplates()
 				"\000\000\000\000\000\000"
 		},
 		{
-			// attr: _trk/columns
-			kAttrColumns_be,
+			// attr: _trk/columns_le / _trk/columns
+			kAttrColumns,
 			B_RAW_TYPE,
 			0,
 			NULL
@@ -650,7 +656,7 @@ TTracker::InstallDefaultTemplates()
 		{ B_TRANSLATE_MARK("From"), 165, 153, B_ALIGN_LEFT, "MAIL:from",
 			B_STRING_TYPE, false, false },
 		{ B_TRANSLATE_MARK("When"), 333, 120, B_ALIGN_LEFT, "MAIL:when",
-			B_STRING_TYPE, false, false },
+			B_TIME_TYPE, false, false },
 		{ B_TRANSLATE_MARK("Status"), 468, 50, B_ALIGN_RIGHT, "MAIL:status",
 			B_STRING_TYPE, false, true }
 	};

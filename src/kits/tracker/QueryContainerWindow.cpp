@@ -46,6 +46,7 @@ All rights reserved.
 #include "Commands.h"
 #include "QueryContainerWindow.h"
 #include "QueryPoseView.h"
+#include "Shortcuts.h"
 
 
 //	#pragma mark - BQueryContainerWindow
@@ -56,9 +57,9 @@ All rights reserved.
 
 
 BQueryContainerWindow::BQueryContainerWindow(LockingList<BWindow>* windowList,
-	uint32 containerWindowFlags)
+	uint32 openFlags)
 	:
-	BContainerWindow(windowList, containerWindowFlags)
+	BContainerWindow(windowList, openFlags)
 {
 }
 
@@ -93,28 +94,27 @@ BQueryContainerWindow::AddWindowMenu(BMenu* menu)
 {
 	BMenuItem* item;
 
-	item = new BMenuItem(B_TRANSLATE("Resize to fit"),
-		new BMessage(kResizeToFit), 'Y');
+	item = Shortcuts()->ResizeToFitItem();
 	item->SetTarget(this);
 	menu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Select" B_UTF8_ELLIPSIS),
-		new BMessage(kShowSelectionWindow), 'A', B_SHIFT_KEY);
+	item = Shortcuts()->SelectItem();
 	item->SetTarget(PoseView());
 	menu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Select all"),
-		new BMessage(B_SELECT_ALL), 'A');
+	item = Shortcuts()->SelectAllItem();
 	item->SetTarget(PoseView());
 	menu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Invert selection"),
-		new BMessage(kInvertSelection), 'S');
+	item = Shortcuts()->InvertSelectionItem();
 	item->SetTarget(PoseView());
 	menu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Close"),
-		new BMessage(B_QUIT_REQUESTED), 'W');
+	item = Shortcuts()->CloseItem();
+	item->SetTarget(this);
+	menu->AddItem(item);
+
+	item = Shortcuts()->CloseAllInWorkspaceItem();
 	item->SetTarget(this);
 	menu->AddItem(item);
 }
@@ -123,15 +123,11 @@ BQueryContainerWindow::AddWindowMenu(BMenu* menu)
 void
 BQueryContainerWindow::AddWindowContextMenus(BMenu* menu)
 {
-	BMenuItem* resizeItem = new BMenuItem(B_TRANSLATE("Resize to fit"),
-		new BMessage(kResizeToFit), 'Y');
+	BMenuItem* resizeItem = Shortcuts()->ResizeToFitItem();
 	menu->AddItem(resizeItem);
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Select" B_UTF8_ELLIPSIS),
-		new BMessage(kShowSelectionWindow), 'A', B_SHIFT_KEY));
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Select all"),
-		new BMessage(B_SELECT_ALL), 'A'));
-	BMenuItem* closeItem = new BMenuItem(B_TRANSLATE("Close"),
-		new BMessage(B_QUIT_REQUESTED), 'W');
+	menu->AddItem(Shortcuts()->SelectItem());
+	menu->AddItem(Shortcuts()->SelectAllItem());
+	BMenuItem* closeItem = Shortcuts()->CloseItem();
 	menu->AddItem(closeItem);
 
 	// target items as needed
@@ -142,7 +138,7 @@ BQueryContainerWindow::AddWindowContextMenus(BMenu* menu)
 
 
 void
-BQueryContainerWindow::SetUpDefaultState()
+BQueryContainerWindow::SetupDefaultState()
 {
 	BNode defaultingNode;
 
@@ -190,6 +186,13 @@ BQueryContainerWindow::SetUpDefaultState()
 	NamesToAcceptAttrFilter filter(allowAttrs);
 	AttributeStreamFileNode fileNode(&defaultingNode);
 	*opener.StreamNode() << memoryNode << filter << fileNode;
+}
+
+
+bool
+BQueryContainerWindow::ShouldHaveEditQueryItem(const entry_ref*)
+{
+	return true;
 }
 
 

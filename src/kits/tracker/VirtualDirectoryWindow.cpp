@@ -49,6 +49,7 @@ All rights reserved.
 #include <AutoLocker.h>
 
 #include "Commands.h"
+#include "Shortcuts.h"
 #include "VirtualDirectoryManager.h"
 #include "VirtualDirectoryPoseView.h"
 
@@ -63,11 +64,10 @@ namespace BPrivate {
 
 
 VirtualDirectoryWindow::VirtualDirectoryWindow(LockingList<BWindow>* windowList,
-	uint32 containerWindowFlags, window_look look, window_feel feel,
-	uint32 flags, uint32 workspace)
+	uint32 openFlags, window_look look, window_feel feel, uint32 windowFlags,
+	uint32 workspace)
 	:
-	BContainerWindow(windowList, containerWindowFlags, look, feel, flags,
-		workspace)
+	BContainerWindow(windowList, openFlags, look, feel, windowFlags, workspace)
 {
 }
 
@@ -135,33 +135,27 @@ VirtualDirectoryWindow::AddWindowMenu(BMenu* menu)
 {
 	BMenuItem* item;
 
-	item = new BMenuItem(B_TRANSLATE("Resize to fit"),
-		new BMessage(kResizeToFit), 'Y');
+	item = Shortcuts()->ResizeToFitItem();
 	item->SetTarget(this);
 	menu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Select" B_UTF8_ELLIPSIS),
-		new BMessage(kShowSelectionWindow), 'A', B_SHIFT_KEY);
+	item = Shortcuts()->SelectItem();
 	item->SetTarget(PoseView());
 	menu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Select all"),
-		new BMessage(B_SELECT_ALL), 'A');
+	item = Shortcuts()->SelectAllItem();
+	item->SetTarget(this);
+	menu->AddItem(item);
+
+	item = Shortcuts()->InvertSelectionItem();
 	item->SetTarget(PoseView());
 	menu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Invert selection"),
-		new BMessage(kInvertSelection), 'S');
+	item = Shortcuts()->OpenParentItem();
 	item->SetTarget(PoseView());
 	menu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Open parent"),
-		new BMessage(kOpenParentDir), B_UP_ARROW);
-	item->SetTarget(PoseView());
-	menu->AddItem(item);
-
-	item = new BMenuItem(B_TRANSLATE("Close"),
-		new BMessage(B_QUIT_REQUESTED), 'W');
+	item = Shortcuts()->CloseItem();
 	item->SetTarget(this);
 	menu->AddItem(item);
 }
@@ -170,15 +164,11 @@ VirtualDirectoryWindow::AddWindowMenu(BMenu* menu)
 void
 VirtualDirectoryWindow::AddWindowContextMenus(BMenu* menu)
 {
-	BMenuItem* resizeItem = new BMenuItem(B_TRANSLATE("Resize to fit"),
-		new BMessage(kResizeToFit), 'Y');
+	BMenuItem* resizeItem = Shortcuts()->ResizeToFitItem();
 	menu->AddItem(resizeItem);
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Select" B_UTF8_ELLIPSIS),
-		new BMessage(kShowSelectionWindow), 'A', B_SHIFT_KEY));
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Select all"),
-		new BMessage(B_SELECT_ALL), 'A'));
-	BMenuItem* closeItem = new BMenuItem(B_TRANSLATE("Close"),
-		new BMessage(B_QUIT_REQUESTED), 'W');
+	menu->AddItem(Shortcuts()->SelectItem());
+	menu->AddItem(Shortcuts()->SelectAllItem());
+	BMenuItem* closeItem = Shortcuts()->CloseItem();
 	menu->AddItem(closeItem);
 	// target items as needed
 	menu->SetTargetForItems(PoseView());

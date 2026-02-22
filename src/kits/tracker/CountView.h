@@ -43,8 +43,6 @@ namespace BPrivate {
 
 class BPoseView;
 
-const int32 kCountViewWidth = 76;
-
 
 class BCountView : public BView {
 	// displays the item count and a barber pole while the view is updating
@@ -80,6 +78,7 @@ private:
 	void TrySpinningBarberPole();
 
 	int32 fLastCount;
+	int32 fLastCountSelected;
 	BPoseView* fPoseView;
 	bool fShowingBarberPole : 1;
 	BBitmap* fBarberPoleMap;

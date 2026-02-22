@@ -102,8 +102,8 @@ public:
 			const node_ref* parent);
 		// closes parent, waits for child to open first
 
-	void SelectChildInParentSoon(const entry_ref* child,
-			const node_ref* parent);
+	void SelectChildInParentSoon(const entry_ref* parent,
+			const node_ref* child);
 		// waits till child shows up in parent and selects it
 
 	void SelectPoseAtLocationSoon(node_ref parent, BPoint location);
@@ -139,6 +139,7 @@ public:
 
 	void ShowSettingsWindow();
 
+	void PostMessageToAllContainerWindows(BMessage& message) const;
 	BContainerWindow* FindContainerWindow(const node_ref*,
 		int32 number = 0) const;
 	BContainerWindow* FindContainerWindow(const entry_ref*,
@@ -174,8 +175,8 @@ private:
 			const node_ref* parent);
 	bool LaunchAndCloseParentIfOK(const entry_ref* launchThis,
 			const node_ref* closeThis, const BMessage* messageToBundle);
-	bool SelectChildInParent(const entry_ref* child,
-			const node_ref* parent);
+	bool SelectChildInParent(const entry_ref* parent,
+			const node_ref* child);
 	void SelectPoseAtLocationInParent(node_ref parent, BPoint location);
 	bool CloseParentWindowCommon(BContainerWindow*);
 

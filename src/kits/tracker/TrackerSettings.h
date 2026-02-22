@@ -94,6 +94,8 @@ public:
 	void SetHideDotFiles(bool hide);
 	bool TypeAheadFiltering();
 	void SetTypeAheadFiltering(bool enabled);
+	bool GenerateImageThumbnails();
+	void SetGenerateImageThumbnails(bool enabled);
 
 	bool ShowSelectionWhenInactive();
 	void SetShowSelectionWhenInactive(bool);
@@ -117,11 +119,6 @@ public:
 	void SetDateOrderFormat(DateOrder);
 	bool ClockIs24Hr();
 	void SetClockTo24Hr(bool);
-
-	bool DontMoveFilesToTrash();
-	void SetDontMoveFilesToTrash(bool);
-	bool AskBeforeDeleteFile();
-	void SetAskBeforeDeleteFile(bool);
 
 private:
 	//TTrackerState* fSettings;

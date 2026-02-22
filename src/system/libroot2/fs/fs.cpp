@@ -56,24 +56,14 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 	if (path == NULL)
 		openMode |= AT_EMPTY_PATH;
 
-	int ret = openat(fd, path, openMode, perms);
+	int ret;
+	if (openMode & O_CREAT)
+		ret = openat(fd, path, openMode, perms);
+	else
+		ret = openat(fd, path, openMode);
+
 	if (ret < 0)
 		return -errno;
-
-	struct stat st;
-	int err = 0;
-
-	if (path == NULL || (openMode & AT_EMPTY_PATH))
-		err = fstat(ret, &st);
-	else
-		err = fstatat(fd, path, &st, 0);
-
-	if (err != 0) {
-		if (!(openMode & O_CREAT)) {
-			close(ret);
-			return B_ENTRY_NOT_FOUND;
-		}
-	}
 
 	return ret;
 }

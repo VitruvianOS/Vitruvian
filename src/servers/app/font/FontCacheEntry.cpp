@@ -143,14 +143,13 @@ FontCacheEntry::FontCacheEntry()
 FontCacheEntry::~FontCacheEntry()
 {
 //printf("~FontCacheEntry()\n");
-	delete fGlyphCache;
 }
 
 
 bool
 FontCacheEntry::Init(const ServerFont& font, bool forceVector)
 {
-	if (fGlyphCache == NULL)
+	if (!fGlyphCache.IsSet())
 		return false;
 
 	glyph_rendering renderingType = _RenderTypeFor(font, forceVector);
@@ -159,12 +158,20 @@ FontCacheEntry::Init(const ServerFont& font, bool forceVector)
 	FT_Encoding charMap = FT_ENCODING_NONE;
 	bool hinting = font.Hinting();
 
-	if (!fEngine.Init(font.Path(), 0, font.Size(), charMap,
-			renderingType, hinting)) {
+	bool success;
+	if (font.FontData() != NULL)
+		success = fEngine.Init(NULL, font.FaceIndex(), font.Size(), charMap,
+			renderingType, hinting, (const void*)font.FontData(), font.FontDataSize());
+	else
+		success = fEngine.Init(font.Path(), font.FaceIndex(), font.Size(), charMap,
+			renderingType, hinting);
+
+	if (!success) {
 		fprintf(stderr, "FontCacheEntry::Init() - some error loading font "
 			"file %s\n", font.Path());
 		return false;
 	}
+
 	if (fGlyphCache->Init() != B_OK) {
 		fprintf(stderr, "FontCacheEntry::Init() - failed to allocate "
 			"GlyphCache table for font file %s\n", font.Path());
@@ -203,8 +210,6 @@ render_as_space(uint32 glyphCode)
 			// no-break space
 		|| (glyphCode == 0x1680)
 			// ogham space mark
-		|| (glyphCode == 0x180e)
-			// mongolian vowel separator
 		|| (glyphCode >= 0x2000 && glyphCode <= 0x200a)
 			// en quand, hair space
 		|| (glyphCode >= 0x2028 && glyphCode <= 0x2029)
@@ -223,17 +228,20 @@ inline bool
 render_as_zero_width(uint32 glyphCode)
 {
 	// ignorable chars: render as invisible
-	// as per Unicode DerivedCoreProperties.txt: Default_Ignorable_Code_Point
+	// as per Unicode DerivedCoreProperties.txt: Default_Ignorable_Code_Point.
+	// We also don't want tofu for noncharacters if we ever get one.
 	return (glyphCode == 0x00ad)
 			// soft hyphen
 		|| (glyphCode == 0x034f)
 			// combining grapheme joiner
+		|| (glyphCode == 0x061c)
+			// arabic letter mark
 		|| (glyphCode >= 0x115f && glyphCode <= 0x1160)
 			// hangul fillers
 		|| (glyphCode >= 0x17b4 && glyphCode <= 0x17b5)
 			// ignorable khmer vowels
-		|| (glyphCode >= 0x180b && glyphCode <= 0x180d)
-			// variation selectors
+		|| (glyphCode >= 0x180b && glyphCode <= 0x180f)
+			// mongolian variation selectors and vowel separator
 		|| (glyphCode >= 0x200b && glyphCode <= 0x200f)
 			// zero width space, cursive joiners, ltr marks
 		|| (glyphCode >= 0x202a && glyphCode <= 0x202e)
@@ -250,10 +258,19 @@ render_as_zero_width(uint32 glyphCode)
 			// halfwidth hangul filler
 		|| (glyphCode >= 0xfff0 && glyphCode <= 0xfff8)
 			// reserved
+		|| (glyphCode >= 0x1bca0 && glyphCode <= 0x1bca3)
+			// shorthand format controls
 		|| (glyphCode >= 0x1d173 && glyphCode <= 0x1d17a)
 			// musical symbols
 		|| (glyphCode >= 0xe0000 && glyphCode <= 0xe01ef)
 			// variation selectors, tag space, reserved
+		|| (glyphCode >= 0xe01f0 && glyphCode <= 0xe0fff)
+			// reserved
+		|| ((glyphCode & 0xffff) >= 0xfffe)
+			// noncharacters
+		|| ((glyphCode >= 0xfdd0 && glyphCode <= 0xfdef)
+			&& glyphCode != 0xfdd1)
+			// noncharacters; 0xfdd1 is used internally to force .notdef glyph
 		;
 }
 
@@ -263,6 +280,16 @@ FontCacheEntry::CachedGlyph(uint32 glyphCode)
 {
 	// Only requires a read lock.
 	return fGlyphCache->FindGlyph(glyphCode);
+}
+
+
+bool
+FontCacheEntry::CanCreateGlyph(uint32 glyphCode)
+{
+	// Note that this bypass any fallback or caching because it is used in
+	// the fallback code itself.
+	uint32 glyphIndex = fEngine.GlyphIndexForGlyphCode(glyphCode);
+	return glyphIndex != 0;
 }
 
 
@@ -303,9 +330,6 @@ FontCacheEntry::CreateGlyph(uint32 glyphCode, FontCacheEntry* fallbackEntry)
 		if (render_as_space(glyphCode)) {
 			// get the normal space glyph
 			glyphIndex = engine->GlyphIndexForGlyphCode(0x20 /* space */);
-		} else {
-			// The glyph was not found anywhere.
-			return NULL;
 		}
 	}
 
@@ -375,8 +399,8 @@ FontCacheEntry::GenerateSignature(char* signature, size_t signatureSize,
 	bool hinting = font.Hinting();
 	uint8 averageWeight = gSubpixelAverageWeight;
 
-	snprintf(signature, signatureSize, "%" B_PRId32 ",%u,%d,%d,%.1f,%d,%d",
-		font.GetFamilyAndStyle(), charMap,
+	snprintf(signature, signatureSize, "%" B_PRId32 ",%p,%u,%d,%d,%.1f,%d,%d",
+		font.GetFamilyAndStyle(), font.Manager(), charMap,
 		font.Face(), int(renderingType), font.Size(), hinting, averageWeight);
 }
 

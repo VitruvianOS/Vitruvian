@@ -1,16 +1,18 @@
 /*
- * Copyright 2001-2016, Haiku.
+ * Copyright 2001-2020, Haiku.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Adrian Oanca <adioanca@cotty.iren.ro>
- *		Stephan Aßmus <superstippi@gmx.de>
- *		Axel Dörfler <axeld@pinc-software.de>
- *		Andrej Spielmann <andrej.spielmann@seh.ox.ac.uk>
- *		Brecht Machiels <brecht@mos6581.org>
- *		Clemens Zeidler <haiku@clemens-zeidler.de>
- *		Ingo Weinhold <ingo_weinhold@gmx.de>
- *		Joseph Groover <looncraz@looncraz.net>
+ *		Adrian Oanca, adioanca@cotty.iren.ro
+ *		Stephan Aßmus, superstippi@gmx.de
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		Andrej Spielmann, andrej.spielmann@seh.ox.ac.uk
+ *		Brecht Machiels, brecht@mos6581.org
+ *		Clemens Zeidler, haiku@clemens-zeidler.de
+ *		Ingo Weinhold, ingo_weinhold@gmx.de
+ *		Joseph Groover, looncraz@looncraz.net
+ *		Tri-Edge AI
+ *		Jacob Secunda, secundja@gmail.com
  */
 
 
@@ -36,6 +38,7 @@
 
 #include <PrivateScreen.h>
 #include <ServerProtocol.h>
+#include <ServerReadOnlyMemory.h>
 #include <ViewPrivate.h>
 #include <WindowInfo.h>
 
@@ -44,10 +47,11 @@
 #include "DecorManager.h"
 #include "DesktopSettingsPrivate.h"
 #include "DrawingEngine.h"
-#include "FontManager.h"
+#include "GlobalFontManager.h"
 #include "HWInterface.h"
 #include "InputManager.h"
 #include "Screen.h"
+#include "ScreenManager.h"
 #include "ServerApp.h"
 #include "ServerConfig.h"
 #include "ServerCursor.h"
@@ -211,7 +215,7 @@ KeyboardFilter::Filter(BMessage* message, EventTarget** _target,
 				fDesktop->SetWorkspaceAsync(key - B_F1_KEY, takeWindow);
 				return B_SKIP_MESSAGE;
 			}
-		} if (key == 0x11
+		} else if (key == 0x11
 			&& (modifiers & (B_COMMAND_KEY | B_CONTROL_KEY | B_OPTION_KEY))
 					== B_COMMAND_KEY) {
 			// switch to previous workspace (command + `)
@@ -465,11 +469,8 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 
 Desktop::~Desktop()
 {
-	delete fSettings;
-
 	delete_area(fSharedReadOnlyArea);
 	delete_port(fMessagePort);
-	gFontManager->DetachUser(fUserID);
 
 	free(fTargetScreen);
 }
@@ -494,7 +495,7 @@ Desktop::Init()
 	// desktop settings, since it is used there already
 	InitializeColorMap();
 
-	const size_t areaSize = B_PAGE_SIZE;
+	const size_t areaSize = sizeof(server_read_only_memory);
 	char name[B_OS_NAME_LENGTH];
 	snprintf(name, sizeof(name), "d:%d:shared read only", fUserID);
 	fSharedReadOnlyArea = create_area(name, (void **)&fServerReadOnlyMemory,
@@ -502,22 +503,68 @@ Desktop::Init()
 	if (fSharedReadOnlyArea < B_OK)
 		return fSharedReadOnlyArea;
 
-	gFontManager->AttachUser(fUserID);
-
-	fSettings = new DesktopSettingsPrivate(fServerReadOnlyMemory);
+	fSettings.SetTo(new DesktopSettingsPrivate(fServerReadOnlyMemory));
 
 	for (int32 i = 0; i < kMaxWorkspaces; i++) {
 		_Windows(i).SetIndex(i);
 		fWorkspaces[i].RestoreConfiguration(*fSettings->WorkspacesMessage(i));
 	}
 
-	fVirtualScreen.SetConfiguration(*this,
+	status_t status = fVirtualScreen.SetConfiguration(*this,
 		fWorkspaces[0].CurrentScreenConfiguration());
+	if (status != B_OK) {
+		debug_printf("app_server: Failed to initialize virtual screen configuration: %s\n",
+			strerror(status));
+		return status;
+	}
 
 	if (fVirtualScreen.HWInterface() == NULL) {
 		debug_printf("Could not initialize graphics output. Exiting.\n");
 		return B_ERROR;
 	}
+
+	// now that the mode is set, see if we should increase the default font size
+	if (fSettings->DefaultPlainFont() == *gFontManager->DefaultPlainFont()
+			&& !fSettings->DidLoadFontSettings()) {
+		float fontSize = fSettings->DefaultPlainFont().Size();
+		gScreenManager->Lock();
+		Screen* screen = gScreenManager->ScreenAt(0);
+		if (screen != NULL) {
+			display_mode mode;
+			screen->GetMode(mode);
+
+			if (mode.virtual_width > 3840 && mode.virtual_height > 2160)
+				fontSize *= 2.0f;
+			else if (mode.virtual_width > 1920 && mode.virtual_height > 1080)
+				fontSize *= 1.5f;
+		}
+		gScreenManager->Unlock();
+
+		// modify settings without saving them
+		const_cast<ServerFont&>(fSettings->DefaultPlainFont()).SetSize(fontSize);
+		const_cast<ServerFont&>(fSettings->DefaultBoldFont()).SetSize(fontSize);
+		const_cast<ServerFont&>(fSettings->DefaultFixedFont()).SetSize(fontSize);
+		const_cast<menu_info&>(fSettings->MenuInfo()).font_size = fontSize;
+	}
+
+#if 1
+	// Migrate old default UI control color to the new one.
+	// TODO: Drop this after R1/beta6 is released!
+	if (fSettings->UIColor(B_CONTROL_BACKGROUND_COLOR) == make_color(245, 245, 245)
+			&& fSettings->ControlLook().IsEmpty()) {
+		rgb_color newControlBackground = make_color(222, 222, 222);
+		fSettings->SetUIColor(B_CONTROL_BACKGROUND_COLOR, newControlBackground);
+		fSettings->SetUIColor(B_SCROLL_BAR_THUMB_COLOR, newControlBackground);
+	}
+#endif
+
+	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
+
+	HWInterface()->SetDPMSMode(B_DPMS_ON);
+
+	float brightness = fWorkspaces[0].StoredScreenConfiguration().Brightness(0);
+	if (brightness > 0)
+		HWInterface()->SetBrightness(brightness);
 
 	fVirtualScreen.HWInterface()->MoveCursorTo(
 		fVirtualScreen.Frame().Width() / 2,
@@ -646,15 +693,17 @@ Desktop::KeyEvent(uint32 what, int32 key, int32 modifiers)
 void
 Desktop::SetCursor(ServerCursor* newCursor)
 {
+	AutoWriteLocker _(fWindowLock);
+
 	if (newCursor == NULL)
 		newCursor = fCursorManager.GetCursor(B_CURSOR_ID_SYSTEM_DEFAULT);
 
 	if (newCursor == fCursor)
 		return;
 
-	fCursor = newCursor;
+	fCursor.SetTo(newCursor, false);
 
-	if (fManagementCursor.Get() == NULL)
+	if (!fManagementCursor.IsSet())
 		HWInterface()->SetCursor(newCursor);
 }
 
@@ -669,10 +718,12 @@ Desktop::Cursor() const
 void
 Desktop::SetManagementCursor(ServerCursor* newCursor)
 {
+	AutoWriteLocker _(fWindowLock);
+
 	if (newCursor == fManagementCursor)
 		return;
 
-	fManagementCursor = newCursor;
+	fManagementCursor.SetTo(newCursor, false);
 
 	HWInterface()->SetCursor(newCursor != NULL ? newCursor : fCursor.Get());
 }
@@ -884,6 +935,29 @@ Desktop::RevertScreenModes(uint32 workspaces)
 				SetScreenMode(workspace, screen->ID(), stored->mode, false);
 		}
 	}
+}
+
+
+status_t
+Desktop::SetBrightness(int32 id, float brightness)
+{
+	status_t result = HWInterface()->SetBrightness(brightness);
+
+	if (result == B_OK) {
+		if (fWorkspaces[0].StoredScreenConfiguration().CurrentByID(id) == NULL) {
+			// store the current configuration if empty
+			screen_configuration* current
+				= fWorkspaces[0].CurrentScreenConfiguration().CurrentByID(id);
+			fWorkspaces[0].StoredScreenConfiguration().Set(id,
+				current->has_info ? &current->info : NULL, current->frame, current->mode);
+		}
+		fWorkspaces[0].StoredScreenConfiguration().SetBrightness(id,
+			brightness);
+		// Save brightness for next boot
+		StoreWorkspaceConfiguration(0);
+	}
+
+	return result;
 }
 
 
@@ -1416,7 +1490,7 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 					}
 
 					stackWindow->Anchor(workspace).position += BPoint(x, y);
-					stackWindow->SetCurrentWorkspace(workspace);
+					stackWindow->SetPriorWorkspace(workspace);
 					_WindowChanged(stackWindow);
 				}
 			}
@@ -1499,12 +1573,14 @@ Desktop::ResizeWindowBy(Window* window, float x, float y)
 		return;
 	}
 
-	// the dirty region for the inside of the window is
-	// constructed by the window itself in ResizeBy()
+	// The dirty region for the inside of the window is constructed by the window itself in
+	// ResizeBy()
 	BRegion newDirtyRegion;
-	// track the dirty region outside the window in case
-	// it is shrunk in "previouslyOccupiedRegion"
+	// Track the dirty region outside the window in case it is shrunk in "previouslyOccupiedRegion"
 	BRegion previouslyOccupiedRegion(window->VisibleRegion());
+	// Track the region that was drawn in previous update sessions, so we can compute the newly
+	// exposed areas by excluding this from the update region.
+	BRegion previousVisibleContentRegion(window->VisibleContentRegion());
 
 	// stop direct frame buffer access
 	bool direct = false;
@@ -1524,10 +1600,18 @@ Desktop::ResizeWindowBy(Window* window, float x, float y)
 	// make sure the window cannot mark stuff dirty outside
 	// its visible region...
 	newDirtyRegion.IntersectWith(&window->VisibleRegion());
-	// ...because we do this outself
+	// ...because we do this ourselves
 	newDirtyRegion.Include(&previouslyOccupiedRegion);
 
-	MarkDirty(newDirtyRegion);
+	// calculate old expose region as window visible region difference
+	BRegion exposeRegion(previouslyOccupiedRegion);
+	exposeRegion.Exclude(&window->VisibleRegion());
+	// ...and new expose region as window content visible region difference
+	BRegion tmp(window->VisibleContentRegion());
+	tmp.Exclude(&previousVisibleContentRegion);
+	exposeRegion.Include(&tmp);
+
+	MarkDirty(newDirtyRegion, exposeRegion);
 	_SetBackground(background);
 	_WindowChanged(window);
 
@@ -1538,6 +1622,25 @@ Desktop::ResizeWindowBy(Window* window, float x, float y)
 	}
 
 	NotifyWindowResized(window);
+}
+
+
+void
+Desktop::SetWindowOutlinesDelta(Window* window, BPoint delta)
+{
+	AutoWriteLocker _(fWindowLock);
+
+	if (!window->IsVisible())
+		return;
+
+	BRegion newDirtyRegion;
+	window->SetOutlinesDelta(delta, &newDirtyRegion);
+
+	BRegion background;
+	_RebuildClippingForAllWindows(background);
+
+	MarkDirty(newDirtyRegion);
+	_SetBackground(background);
 }
 
 
@@ -1677,6 +1780,8 @@ Desktop::FontsChanged(Window* window)
 	window->FontsChanged(&dirty);
 
 	RebuildAndRedrawAfterWindowChange(window, dirty);
+
+	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
 }
 
 
@@ -2088,14 +2193,14 @@ Desktop::FindTarget(BMessenger& messenger)
 
 
 void
-Desktop::MarkDirty(BRegion& region)
+Desktop::MarkDirty(BRegion& dirtyRegion, BRegion& exposeRegion)
 {
-	if (region.CountRects() == 0)
+	if (dirtyRegion.CountRects() == 0)
 		return;
 
 	if (LockAllWindows()) {
 		// send redraw messages to all windows intersecting the dirty region
-		_TriggerWindowRedrawing(region);
+		_TriggerWindowRedrawing(dirtyRegion, exposeRegion);
 
 		UnlockAllWindows();
 	}
@@ -2332,7 +2437,7 @@ Desktop::WriteWindowInfo(int32 serverToken, BPrivate::LinkSender& sender)
 	int32 length = window->Title() ? strlen(window->Title()) : 0;
 
 	sender.StartMessage(B_OK);
-	sender.Attach<int32>(sizeof(client_window_info) + length);
+	sender.Attach<int32>(sizeof(client_window_info) + length + 1);
 	sender.Attach(&info, sizeof(window_info));
 	sender.Attach<float>(tabSize);
 	sender.Attach<float>(borderSize);
@@ -2542,10 +2647,10 @@ Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (link.ReadString(&appSignature) != B_OK)
 				break;
 
-			ServerApp* app = new (std::nothrow) ServerApp(this, clientReplyPort,
-				clientLooperPort, clientTeamID, htoken, appSignature);
+			ObjectDeleter<ServerApp> app(new (std::nothrow) ServerApp(this, clientReplyPort,
+				clientLooperPort, clientTeamID, htoken, appSignature));
 			status_t status = B_OK;
-			if (app == NULL)
+			if (!app.IsSet())
 				status = B_NO_MEMORY;
 			if (status == B_OK)
 				status = app->InitCheck();
@@ -2554,11 +2659,9 @@ Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (status == B_OK) {
 				// add the new ServerApp to the known list of ServerApps
 				fApplicationsLock.Lock();
-				fApplications.AddItem(app);
+				fApplications.AddItem(app.Detach());
 				fApplicationsLock.Unlock();
 			} else {
-				delete app;
-
 				// if everything went well, ServerApp::Run() will notify
 				// the client - but since it didn't, we do it here
 				BPrivate::LinkSender reply(clientReplyPort);
@@ -2676,14 +2779,13 @@ Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			fQuitting = true;
 			BroadcastToAllApps(AS_QUIT_APP);
 
-			// We now need to process the remaining AS_DELETE_APP messages and
-			// wait for the kMsgShutdownServer message.
-			// If an application does not quit as asked, the picasso thread
-			// will send us this message in 2-3 seconds.
+			// We now need to process the remaining AS_DELETE_APP messages.
+			// We quit the looper when the last app is deleted.
 
 			// if there are no apps to quit, shutdown directly
 			if (fShutdownCount == 0)
 				PostMessage(kMsgQuitLooper);
+
 			break;
 
 		case AS_ACTIVATE_WORKSPACE:
@@ -3380,14 +3482,14 @@ Desktop::_RebuildClippingForAllWindows(BRegion& stillAvailableOnScreen)
 
 
 void
-Desktop::_TriggerWindowRedrawing(BRegion& newDirtyRegion)
+Desktop::_TriggerWindowRedrawing(BRegion& dirtyRegion, BRegion& exposeRegion)
 {
 	// send redraw messages to all windows intersecting the dirty region
 	for (Window* window = CurrentWindows().LastWindow(); window != NULL;
 			window = window->PreviousWindow(fCurrentWorkspace)) {
 		if (!window->IsHidden()
-			&& newDirtyRegion.Intersects(window->VisibleRegion().Frame()))
-			window->ProcessDirtyRegion(newDirtyRegion);
+			&& dirtyRegion.Intersects(window->VisibleRegion().Frame()))
+			window->ProcessDirtyRegion(dirtyRegion, exposeRegion);
 	}
 }
 
@@ -3456,7 +3558,7 @@ Desktop::RebuildAndRedrawAfterWindowChange(Window* changedWindow,
 	_SetBackground(stillAvailableOnScreen);
 	_WindowChanged(changedWindow);
 
-	_TriggerWindowRedrawing(dirty);
+	_TriggerWindowRedrawing(dirty, dirty);
 }
 
 
@@ -3528,7 +3630,7 @@ Desktop::_ScreenChanged(Screen* screen)
 
 	// figure out dirty region
 	dirty.Exclude(&background);
-	_TriggerWindowRedrawing(dirty);
+	_TriggerWindowRedrawing(dirty, dirty);
 
 	// send B_SCREEN_CHANGED to windows on that screen
 	BMessage update(B_SCREEN_CHANGED);
@@ -3754,13 +3856,11 @@ Desktop::_SetWorkspace(int32 index, bool moveFocusWindow)
 		} else {
 			// We need to remember the previous visible region of the
 			// window if they changed their order
-			BRegion* region = new (std::nothrow)
-				BRegion(window->VisibleRegion());
-			if (region != NULL) {
-				if (previousRegions.AddItem(region))
+			ObjectDeleter<BRegion> region(new (std::nothrow)
+				BRegion(window->VisibleRegion()));
+			if (region.IsSet()) {
+				if (previousRegions.AddItem(region.Detach()))
 					windows.AddWindow(window);
-				else
-					delete region;
 			}
 		}
 	}

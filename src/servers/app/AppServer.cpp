@@ -14,12 +14,14 @@
 
 #include <syslog.h>
 
+#include <AutoDeleter.h>
 #include <LaunchRoster.h>
 #include <PortLink.h>
+#include <RosterPrivate.h>
 
 #include "BitmapManager.h"
 #include "Desktop.h"
-#include "FontManager.h"
+#include "GlobalFontManager.h"
 #include "InputManager.h"
 #include "ScreenManager.h"
 #include "ServerProtocol.h"
@@ -57,7 +59,7 @@ AppServer::AppServer(status_t* status)
 	gInputManager = new InputManager();
 
 	// Create the font server and scan the proper directories.
-	gFontManager = new FontManager;
+	gFontManager = new GlobalFontManager;
 	if (gFontManager->InitCheck() != B_OK)
 		debugger("font manager could not be initialized!");
 
@@ -69,13 +71,20 @@ AppServer::AppServer(status_t* status)
 	// Create the bitmap allocator. Object declared in BitmapManager.cpp
 	gBitmapManager = new BitmapManager();
 
+#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+#if 0
+	// This is not presently needed, as app_server is launched from the login session.
 	// TODO: check the attached displays, and launch login session for them
 	BMessage data;
 	data.AddString("name", "app_server");
 	data.AddInt32("session", 0);
-	#ifndef __VOS__
 	BLaunchRoster().Target("login", data);
-	#endif
+#endif
+
+	// Inform the registrar we've (re)started.
+	BMessage request(kMsgAppServerStarted);
+	BRoster::Private().SendTo(&request, NULL, false);
+#endif
 }
 
 
@@ -174,20 +183,19 @@ Desktop*
 AppServer::_CreateDesktop(uid_t userID, const char* targetScreen)
 {
 	BAutolock locker(fDesktopLock);
-	Desktop* desktop = NULL;
+	ObjectDeleter<Desktop> desktop;
 	try {
-		desktop = new Desktop(userID, targetScreen);
+		desktop.SetTo(new Desktop(userID, targetScreen));
 
 		status_t status = desktop->Init();
 		if (status == B_OK)
 			status = desktop->Run();
-		if (status == B_OK && !fDesktops.AddItem(desktop))
+		if (status == B_OK && !fDesktops.AddItem(desktop.Get()))
 			status = B_NO_MEMORY;
 
 		if (status != B_OK) {
 			syslog(LOG_ERR, "Cannot initialize Desktop object: %s\n",
 				strerror(status));
-			delete desktop;
 			return NULL;
 		}
 	} catch (...) {
@@ -195,7 +203,7 @@ AppServer::_CreateDesktop(uid_t userID, const char* targetScreen)
 		return NULL;
 	}
 
-	return desktop;
+	return desktop.Detach();
 }
 
 

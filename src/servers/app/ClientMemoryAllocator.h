@@ -40,8 +40,7 @@ public:
 								ClientMemoryAllocator(ServerApp* application);
 								~ClientMemoryAllocator();
 
-			void*				Allocate(size_t size, block** _address,
-									bool& newArea);
+			void*				Allocate(size_t size, block** _address);
 			void				Free(block* cookie);
 
 			void				Detach();
@@ -49,7 +48,7 @@ public:
 			void				Dump();
 
 private:
-			struct block*		_AllocateChunk(size_t size, bool& newArea);
+			struct block*		_AllocateChunk(size_t size);
 
 private:
 			ServerApp*			fApplication;
@@ -76,20 +75,21 @@ public:
 	virtual						~ClientMemory();
 
 			void*				Allocate(ClientMemoryAllocator* allocator,
-									size_t size, bool& newArea);
+									size_t size);
 
 	virtual area_id				Area();
 	virtual uint8*				Address();
 	virtual uint32				AreaOffset();
 
 private:
-			ClientMemoryAllocator*	fAllocator;
+			BReference<ClientMemoryAllocator>
+								fAllocator;
 			block*				fBlock;
 };
 
 
 /*! Just clones an existing area. */
-class ClonedAreaMemory  : public AreaMemory{
+class ClonedAreaMemory : public AreaMemory {
 public:
 								ClonedAreaMemory();
 	virtual						~ClonedAreaMemory();
@@ -101,6 +101,7 @@ public:
 	virtual uint32				AreaOffset();
 
 private:
+			area_id		fArea;
 			area_id		fClonedArea;
 			uint32		fOffset;
 			uint8*		fBase;

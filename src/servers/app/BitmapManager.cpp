@@ -121,13 +121,12 @@ BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 			overlayToken);
 
 		overlay_client_data* clientData = NULL;
-		bool newArea = false;
 
 		if (overlay != NULL && overlay->InitCheck() == B_OK) {
 			// allocate client memory to communicate the overlay semaphore
 			// and buffer location to the BBitmap
 			clientData = (overlay_client_data*)bitmap->fClientMemory.Allocate(
-				allocator, sizeof(overlay_client_data), newArea);
+				allocator, sizeof(overlay_client_data));
 		}
 
 		if (clientData != NULL) {
@@ -139,19 +138,18 @@ BitmapManager::CreateBitmap(ClientMemoryAllocator* allocator,
 
 			buffer = (uint8*)overlay->OverlayBuffer()->buffer;
 			if (_allocationFlags)
-				*_allocationFlags = kFramebuffer | (newArea ? kNewAllocatorArea : 0);
+				*_allocationFlags = kFramebuffer;
 		} else
 			delete overlay;
 	} else if (allocator != NULL) {
 		// standard bitmaps
-		bool newArea;
 		buffer = (uint8*)bitmap->fClientMemory.Allocate(allocator,
-			bitmap->BitsLength(), newArea);
+			bitmap->BitsLength());
 		if (buffer != NULL) {
 			bitmap->fMemory = &bitmap->fClientMemory;
 
 			if (_allocationFlags)
-				*_allocationFlags = kAllocator | (newArea ? kNewAllocatorArea : 0);
+				*_allocationFlags = kAllocator;
 		}
 	} else {
 		// server side only bitmaps
@@ -197,19 +195,17 @@ BitmapManager::CloneFromClient(area_id clientArea, int32 areaOffset,
 	BAutolock locker(fLock);
 	if (!locker.IsLocked())
 		return NULL;
-	ServerBitmap* bitmap = new(std::nothrow) ServerBitmap(bounds, space, flags,
-		bytesPerRow);
+	BReference<ServerBitmap> bitmap(new(std::nothrow) ServerBitmap(bounds, space, flags,
+		bytesPerRow), true);
 	if (bitmap == NULL)
 		return NULL;
 
 	ClonedAreaMemory* memory = new(std::nothrow) ClonedAreaMemory;
 	if (memory == NULL) {
-		delete bitmap;
 		return NULL;
 	}
 	int8* buffer = (int8*)memory->Clone(clientArea, areaOffset);
 	if (buffer == NULL) {
-		delete bitmap;
 		delete memory;
 		return NULL;
 	}
@@ -217,7 +213,7 @@ BitmapManager::CloneFromClient(area_id clientArea, int32 areaOffset,
 	bitmap->fMemory = memory;
 	bitmap->fBuffer = memory->Address();
 	bitmap->fToken = gTokenSpace.NewToken(kBitmapToken, bitmap);
-	return bitmap;
+	return bitmap.Detach();
 }
 
 
@@ -229,6 +225,8 @@ BitmapManager::BitmapRemoved(ServerBitmap* bitmap)
 	BAutolock locker(fLock);
 	if (!locker.IsLocked())
 		return;
+
+	gTokenSpace.RemoveToken(bitmap->Token());
 
 	if (bitmap->Overlay() != NULL)
 		fOverlays.RemoveItem(bitmap);

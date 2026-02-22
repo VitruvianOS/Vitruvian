@@ -33,14 +33,20 @@ public:
 								CursorManager();
 								~CursorManager();
 
+			void				InitializeCursors(float scale);
+			void				ReleaseCursors();
+
 			ServerCursor*		CreateCursor(team_id clientTeam,
 									 const uint8* cursorData);
+			ServerCursor*		CreateCursor(team_id clientTeam,
+									BRect r, color_space format, int32 flags,
+									BPoint hotspot, int32 bytesPerRow = -1);
 
 			int32				AddCursor(ServerCursor* cursor,
 									int32 token = -1);
 			void				DeleteCursors(team_id team);
 
-			bool				RemoveCursor(ServerCursor* cursor);
+			void				RemoveCursor(ServerCursor* cursor);
 
 			void				SetCursorSet(const char* path);
 			ServerCursor*		GetCursor(BCursorID which);
@@ -48,9 +54,11 @@ public:
 			ServerCursor*		FindCursor(int32 token);
 
 private:
-			void				_InitCursor(ServerCursor*& cursorMember,
-									const uint8* cursorBits, BCursorID id,
-									const BPoint& hotSpot = B_ORIGIN);
+			BBitmap				_RenderVectorCursor(uint32 size, const uint8* vector,
+									uint32 vectorSize, float shadowStrength);
+			void				_InitCursor(ServerCursor*& cursorMember, BCursorID id,
+									const uint8* vector, uint32 vectorSize,
+									const BPoint& hotSpot, float scale);
 			void				_LoadCursor(ServerCursor*& cursorMember,
 									const CursorSet& set, BCursorID id);
 			ServerCursor*		_FindCursor(team_id cientTeam,

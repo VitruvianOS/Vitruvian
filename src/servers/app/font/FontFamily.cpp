@@ -12,8 +12,6 @@
 
 #include "FontFamily.h"
 
-#include "FontManager.h"
-
 #include <FontPrivate.h>
 
 
@@ -65,25 +63,6 @@ FontFamily::FontFamily(const char *name, uint16 id)
 
 
 /*!
-	\brief Destructor
-
-	Deletes all attached styles. Note that a FontFamily must only be deleted
-	by the font manager.
-*/
-FontFamily::~FontFamily()
-{
-	for (int32 i = fStyles.CountItems(); i-- > 0;) {
-		FontStyle* style = fStyles.RemoveItemAt(i);
-
-		// we remove us before deleting the style, so that the font manager
-		// is not contacted to remove the style from us
-		style->_SetFontFamily(NULL, -1);
-		delete style;
-	}
-}
-
-
-/*!
 	\brief Returns the name of the family
 	\return The family's name
 */
@@ -99,7 +78,7 @@ FontFamily::Name() const
 	\param style pointer to FontStyle object to be added
 */
 bool
-FontFamily::AddStyle(FontStyle *style)
+FontFamily::AddStyle(FontStyle* style)
 {
 	if (!style)
 		return false;
@@ -132,15 +111,11 @@ FontFamily::AddStyle(FontStyle *style)
 bool
 FontFamily::RemoveStyle(FontStyle* style)
 {
-	if (!gFontManager->IsLocked()) {
-		debugger("FontFamily::RemoveStyle() called without having the font manager locked!");
+	if (style == NULL)
 		return false;
-	}
 
 	if (!fStyles.RemoveItem(style))
 		return false;
-
-	style->_SetFontFamily(NULL, -1);
 
 	// force a refresh if a request for font flags is needed
 	fFlags = kInvalidFamilyFlags;
@@ -245,25 +220,14 @@ FontFamily::GetStyle(const char *name) const
 
 
 FontStyle*
-FontFamily::GetStyleByID(uint16 id) const
-{
-	int32 count = fStyles.CountItems();
-	for (int32 i = 0; i < count; i++) {
-		FontStyle* style = fStyles.ItemAt(i);
-		if (style->ID() == id)
-			return style;
-	}
-
-	return NULL;
-}
-
-
-FontStyle*
 FontFamily::GetStyleMatchingFace(uint16 face) const
 {
-	// TODO: support other faces (strike through, underlined, outlines...)
+	// Other face flags do not impact the font selection (they are applied
+	// during drawing)
 	face &= B_BOLD_FACE | B_ITALIC_FACE | B_REGULAR_FACE | B_CONDENSED_FACE
 		| B_LIGHT_FACE | B_HEAVY_FACE;
+	if (face == 0)
+		face = B_REGULAR_FACE;
 
 	int32 count = fStyles.CountItems();
 	for (int32 i = 0; i < count; i++) {

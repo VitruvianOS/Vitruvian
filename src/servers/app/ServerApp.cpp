@@ -30,6 +30,7 @@
 
 #include <AppDefs.h>
 #include <Autolock.h>
+#include <AutoLocker.h>
 #include <Debug.h>
 #include <List.h>
 #include <ScrollBar.h>
@@ -44,6 +45,7 @@
 #include <ServerProtocol.h>
 #include <WindowPrivate.h>
 
+#include "AppFontManager.h"
 #include "AppServer.h"
 #include "BitmapManager.h"
 #include "CursorManager.h"
@@ -52,7 +54,7 @@
 #include "DecorManager.h"
 #include "DrawingEngine.h"
 #include "EventStream.h"
-#include "FontManager.h"
+#include "GlobalFontManager.h"
 #include "HWInterface.h"
 #include "InputManager.h"
 #include "OffscreenServerWindow.h"
@@ -63,7 +65,6 @@
 #include "ServerPicture.h"
 #include "ServerTokenSpace.h"
 #include "ServerWindow.h"
-#include "SystemPalette.h"
 #include "Window.h"
 
 
@@ -99,19 +100,22 @@ ServerApp::ServerApp(Desktop* desktop, port_id clientReplyPort,
 	fSignature(signature),
 	fClientTeam(clientTeam),
 	fWindowListLock("window list"),
+	fInitialWorkspace(desktop->CurrentWorkspace()),
+		// TODO: this should probably be retrieved when the app is loaded!
 	fTemporaryDisplayModeChange(0),
 	fMapLocker("server app maps"),
 	fAppCursor(NULL),
 	fViewCursor(NULL),
 	fCursorHideLevel(0),
 	fIsActive(false),
-	fMemoryAllocator(new (std::nothrow) ClientMemoryAllocator(this))
+	fMemoryAllocator(new (std::nothrow) ClientMemoryAllocator(this), true),
+	fAppFontManager(NULL)
 {
-	if (fSignature == "")
+	if (fSignature.IsEmpty())
 		fSignature = "application/no-signature";
 
 	char name[B_OS_NAME_LENGTH];
-	snprintf(name, sizeof(name), "a<%" B_PRId32 ":%s", clientTeam,
+	snprintf(name, sizeof(name), "a<%" B_PRId32 ":%s", fClientTeam,
 		SignatureLeaf());
 
 	fMessagePort = create_port(DEFAULT_MONITOR_PORT_SIZE, name);
@@ -120,10 +124,10 @@ ServerApp::ServerApp(Desktop* desktop, port_id clientReplyPort,
 
 	fLink.SetSenderPort(fClientReplyPort);
 	fLink.SetReceiverPort(fMessagePort);
-	fLink.SetTargetTeam(clientTeam);
+	fLink.SetTargetTeam(fClientTeam);
 
 	// we let the application own the port, so that we get aware when it's gone
-	if (set_port_owner(fMessagePort, clientTeam) < B_OK) {
+	if (set_port_owner(fMessagePort, fClientTeam) < B_OK) {
 		delete_port(fMessagePort);
 		fMessagePort = -1;
 		return;
@@ -132,9 +136,6 @@ ServerApp::ServerApp(Desktop* desktop, port_id clientReplyPort,
 	BMessenger::Private(fHandlerMessenger).SetTo(fClientTeam,
 		clientLooperPort, clientToken);
 
-	fInitialWorkspace = desktop->CurrentWorkspace();
-		// TODO: this should probably be retrieved when the app is loaded!
-
 	// record the current system wide fonts..
 	desktop->LockSingleWindow();
 	DesktopSettings settings(desktop);
@@ -142,6 +143,8 @@ ServerApp::ServerApp(Desktop* desktop, port_id clientReplyPort,
 	settings.GetDefaultBoldFont(fBoldFont);
 	settings.GetDefaultFixedFont(fFixedFont);
 	desktop->UnlockSingleWindow();
+
+	fAppFontManager = new AppFontManager();
 
 	STRACE(("ServerApp %s:\n", Signature()));
 	STRACE(("\tBApp port: %" B_PRId32 "\n", fClientReplyPort));
@@ -205,8 +208,8 @@ ServerApp::~ServerApp()
 		fPictureMap.begin()->second->SetOwner(NULL);
 
 	fDesktop->GetCursorManager().DeleteCursors(fClientTeam);
-	if (fMemoryAllocator != NULL)
-		fMemoryAllocator->ReleaseReference();
+
+	delete fAppFontManager;
 
 	STRACE(("ServerApp %s::~ServerApp(): Exiting\n", Signature()));
 }
@@ -294,15 +297,7 @@ ServerApp::Activate(bool value)
 void
 ServerApp::SetCurrentCursor(ServerCursor* cursor)
 {
-	if (fViewCursor != cursor) {
-		if (fViewCursor)
-			fViewCursor->ReleaseReference();
-
-		fViewCursor = cursor;
-
-		if (fViewCursor)
-			fViewCursor->AcquireReference();
-	}
+	fViewCursor.SetTo(cursor, false);
 
 	fDesktop->SetCursor(CurrentCursor());
 }
@@ -417,16 +412,16 @@ ServerApp::GetBitmap(int32 token) const
 ServerPicture*
 ServerApp::CreatePicture(const ServerPicture* original)
 {
-	ServerPicture* picture;
+	BReference<ServerPicture> picture;
 	if (original != NULL)
-		picture = new(std::nothrow) ServerPicture(*original);
+		picture.SetTo(new(std::nothrow) ServerPicture(*original), true);
 	else
-		picture = new(std::nothrow) ServerPicture();
+		picture.SetTo(new(std::nothrow) ServerPicture(), true);
 
 	if (picture != NULL && !picture->SetOwner(this))
-		picture->ReleaseReference();
+		return NULL;
 
-	return picture;
+	return picture.Detach();
 }
 
 
@@ -457,7 +452,7 @@ ServerApp::AddPicture(ServerPicture* picture)
 	ASSERT(picture->Owner() == NULL);
 
 	try {
-		fPictureMap.insert(std::make_pair(picture->Token(), picture));
+		fPictureMap.insert(std::make_pair(picture->Token(), BReference<ServerPicture>(picture, false)));
 	} catch (std::bad_alloc& exception) {
 		return false;
 	}
@@ -475,22 +470,6 @@ ServerApp::RemovePicture(ServerPicture* picture)
 	ASSERT(picture->Owner() == this);
 
 	fPictureMap.erase(picture->Token());
-	picture->ReleaseReference();
-}
-
-
-/*!	Called from the ClientMemoryAllocator whenever a server area could be
-	deleted.
-	A message is then sent to the client telling it that it can delete its
-	client area, too.
-*/
-void
-ServerApp::NotifyDeleteClientArea(area_id serverArea)
-{
-	BMessage notify(kMsgDeleteServerMemoryArea);
-	notify.AddInt32("server area", serverArea);
-
-	SendMessageToClient(&notify);
 }
 
 
@@ -681,7 +660,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			status_t error = gDecorManager.SetDecorator(path, fDesktop);
 
-			fLink.Attach<status_t>(error);
+			fLink.StartMessage(error);
 			fLink.Flush();
 
 			if (error == B_OK)
@@ -750,7 +729,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			//	3) int32 area pointer offset used to calculate fBasePtr
 
 			// First, let's attempt to allocate the bitmap
-			ServerBitmap* bitmap = NULL;
+			BReference<ServerBitmap> bitmap;
 			uint8 allocationFlags = kAllocator;
 
 			BRect frame;
@@ -766,9 +745,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (link.Read<int32>(&screenID) == B_OK) {
 				// TODO: choose the right HWInterface with regards to the
 				// screenID
-				bitmap = gBitmapManager->CreateBitmap(fMemoryAllocator,
+				bitmap.SetTo(gBitmapManager->CreateBitmap(fMemoryAllocator,
 					*fDesktop->HWInterface(), frame, colorSpace, flags,
-					bytesPerRow, screenID, &allocationFlags);
+					bytesPerRow, screenID, &allocationFlags), true);
 			}
 
 			STRACE(("ServerApp %s: Create Bitmap (%.1fx%.1f)\n",
@@ -785,9 +764,6 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				if ((allocationFlags & kFramebuffer) != 0)
 					fLink.Attach<int32>(bitmap->BytesPerRow());
 			} else {
-				if (bitmap != NULL)
-					bitmap->ReleaseReference();
-
 				fLink.StartMessage(B_NO_MEMORY);
 			}
 
@@ -828,15 +804,13 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (link.Read<int32>(&token) != B_OK)
 				break;
 
-			ServerBitmap* bitmap = GetBitmap(token);
+			BReference<ServerBitmap> bitmap(GetBitmap(token), true);
 			if (bitmap != NULL) {
 				STRACE(("ServerApp %s: Get overlay restrictions for bitmap "
 					"%" B_PRId32 "\n", Signature(), token));
 
 				status = fDesktop->HWInterface()->GetOverlayRestrictions(
 					bitmap->Overlay(), &restrictions);
-
-				bitmap->ReleaseReference();
 			}
 
 			fLink.StartMessage(status);
@@ -866,7 +840,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		case AS_RECONNECT_BITMAP:
 		{
 			// First, let's attempt to allocate the bitmap
-			ServerBitmap* bitmap = NULL;
+			BReference<ServerBitmap> bitmap;
 
 			BRect frame;
 			color_space colorSpace;
@@ -885,8 +859,8 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (link.Read<int32>(&areaOffset) == B_OK) {
 				// TODO: choose the right HWInterface with regards to the
 				// screenID
-				bitmap = gBitmapManager->CloneFromClient(clientArea, areaOffset,
-					frame, colorSpace, flags, bytesPerRow);
+				bitmap.SetTo(gBitmapManager->CloneFromClient(clientArea, areaOffset,
+					frame, colorSpace, flags, bytesPerRow), true);
 			}
 
 			if (bitmap != NULL && _AddBitmap(bitmap)) {
@@ -896,9 +870,6 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				fLink.Attach<area_id>(bitmap->Area());
 
 			} else {
-				if (bitmap != NULL)
-					bitmap->ReleaseReference();
-
 				fLink.StartMessage(B_NO_MEMORY);
 			}
 
@@ -914,7 +885,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: Create Picture\n", Signature()));
 			status_t status = B_NO_MEMORY;
 
-			ServerPicture* picture = CreatePicture();
+			BReference<ServerPicture> picture(CreatePicture());
 			if (picture != NULL) {
 				int32 subPicturesCount = 0;
 				link.Read<int32>(&subPicturesCount);
@@ -922,6 +893,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 					int32 token = -1;
 					link.Read<int32>(&token);
 
+					BAutolock _(fMapLocker);
 					if (ServerPicture* subPicture = _FindPicture(token))
 						picture->NestPicture(subPicture);
 				}
@@ -955,19 +927,17 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		{
 			STRACE(("ServerApp %s: Clone Picture\n", Signature()));
 			int32 token;
-			ServerPicture* original = NULL;
+			BReference<ServerPicture> original;
 			if (link.Read<int32>(&token) == B_OK)
-				original = GetPicture(token);
+				original.SetTo(GetPicture(token), true);
 
 			if (original != NULL) {
-				ServerPicture* cloned = CreatePicture(original);
+				BReference<ServerPicture> cloned(CreatePicture(original), true);
 				if (cloned != NULL) {
 					fLink.StartMessage(B_OK);
 					fLink.Attach<int32>(cloned->Token());
 				} else
 					fLink.StartMessage(B_NO_MEMORY);
-
-				original->ReleaseReference();
 			} else
 				fLink.StartMessage(B_BAD_VALUE);
 
@@ -980,11 +950,10 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			STRACE(("ServerApp %s: Download Picture\n", Signature()));
 			int32 token;
 			link.Read<int32>(&token);
-			ServerPicture* picture = GetPicture(token);
+			BReference<ServerPicture> picture(GetPicture(token), true);
 			if (picture != NULL) {
 				picture->ExportData(fLink);
 					// ExportData() calls StartMessage() already
-				picture->ReleaseReference();
 			} else
 				fLink.StartMessage(B_ERROR);
 
@@ -1109,18 +1078,12 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (!fDesktop->GetCursorManager().Lock())
 				break;
 
-			ServerCursor* oldCursor = fAppCursor;
-			fAppCursor = fDesktop->GetCursorManager().FindCursor(token);
-			if (fAppCursor != NULL)
-				fAppCursor->AcquireReference();
+			fAppCursor.SetTo(fDesktop->GetCursorManager().FindCursor(token), false);
+
+			fDesktop->GetCursorManager().Unlock();
 
 			if (_HasWindowUnderMouse())
 				fDesktop->SetCursor(CurrentCursor());
-
-			if (oldCursor != NULL)
-				oldCursor->ReleaseReference();
-
-			fDesktop->GetCursorManager().Unlock();
 
 			if (sync) {
 				// The application is expecting a reply
@@ -1139,13 +1102,8 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				break;
 
 			if (fDesktop->GetCursorManager().Lock()) {
-				ServerCursor* cursor = fDesktop->GetCursorManager().FindCursor(
-					info.cursorToken);
-				// If we found a cursor, make sure it doesn't go away. If we
-				// get a NULL cursor, it probably means we are supposed to use
-				// the system default cursor.
-				if (cursor != NULL)
-					cursor->AcquireReference();
+				BReference<ServerCursor> cursor(fDesktop->GetCursorManager().FindCursor(
+					info.cursorToken), false);
 
 				fDesktop->GetCursorManager().Unlock();
 
@@ -1173,10 +1131,6 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				}
 
 				fDesktop->UnlockAllWindows();
-
-				// Release the temporary reference.
-				if (cursor != NULL)
-					cursor->ReleaseReference();
 			}
 
 			if (info.sync) {
@@ -1234,27 +1188,90 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
-		case AS_REFERENCE_CURSOR:
+		case AS_CREATE_CURSOR_BITMAP:
+		{
+			STRACE(("ServerApp %s: Create Cursor bitmap\n", Signature()));
+
+			status_t status = B_ERROR;
+
+			int32 size = 0, bytesPerRow = 0;
+			BRect cursorRect;
+			color_space colorspace = B_RGBA32;
+			BPoint hotspot;
+			ServerCursor* cursor = NULL;
+
+			if (link.Read<BRect>(&cursorRect) == B_OK
+				&& link.Read<BPoint>(&hotspot) == B_OK
+				&& link.Read<color_space>(&colorspace) == B_OK
+				&& link.Read<int32>(&bytesPerRow) == B_OK
+				&& link.Read<int32>(&size) == B_OK
+				&& size > 0) {
+
+				BStackOrHeapArray<uint8, 256> byteArray(size);
+				if (!byteArray.IsValid()) {
+					status = B_NO_MEMORY;
+				} else if (link.Read(byteArray, size) == B_OK) {
+					cursor = fDesktop->GetCursorManager().CreateCursor(
+						fClientTeam, cursorRect, colorspace, 0, hotspot);
+					if (cursor == NULL)
+						status = B_NO_MEMORY;
+					else
+						cursor->ImportBits(byteArray, size, bytesPerRow, colorspace);
+				}
+			}
+
+			if (cursor != NULL) {
+				// Synchronous message - BApplication is waiting on the
+				// cursor's ID
+				fLink.StartMessage(B_OK);
+				fLink.Attach<int32>(cursor->Token());
+			} else
+				fLink.StartMessage(status);
+
+			fLink.Flush();
+			break;
+		}
+
+		case AS_CLONE_CURSOR:
 		{
 			STRACE(("ServerApp %s: Reference BCursor\n", Signature()));
 
 			// Attached data:
-			// 1) int32 token ID of the cursor to reference
+			// 1) int32 token ID of the cursor to clone
 
 			int32 token;
 			if (link.Read<int32>(&token) != B_OK)
 				break;
 
-			if (!fDesktop->GetCursorManager().Lock())
-				break;
+			status_t status = B_ERROR;
+			ServerCursor* cursor = NULL;
 
-			ServerCursor* cursor
-				= fDesktop->GetCursorManager().FindCursor(token);
-			if (cursor != NULL)
-				cursor->AcquireReference();
+			if (fDesktop->GetCursorManager().Lock()) {
+				ServerCursor* existingCursor
+					= fDesktop->GetCursorManager().FindCursor(token);
+				if (existingCursor != NULL)
+					cursor = new(std::nothrow) ServerCursor(existingCursor);
+				if (cursor != NULL) {
+					cursor->SetOwningTeam(fClientTeam);
+					token = fDesktop->GetCursorManager().AddCursor(cursor);
+					if (token < 0) {
+						delete cursor;
+						cursor = NULL;
+					}
+				}
 
-			fDesktop->GetCursorManager().Unlock();
+				fDesktop->GetCursorManager().Unlock();
+			}
 
+			if (cursor != NULL) {
+				// Synchronous message - BApplication is waiting on the
+				// cursor's ID
+				fLink.StartMessage(B_OK);
+				fLink.Attach<int32>(cursor->Token());
+			} else
+				fLink.StartMessage(status);
+
+			fLink.Flush();
 			break;
 		}
 
@@ -1274,8 +1291,8 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			ServerCursor* cursor
 				= fDesktop->GetCursorManager().FindCursor(token);
-			if (cursor != NULL)
-				cursor->ReleaseReference();
+			if (cursor != NULL && cursor->OwningTeam() == fClientTeam)
+				fDesktop->GetCursorManager().RemoveCursor(cursor);
 
 			fDesktop->GetCursorManager().Unlock();
 
@@ -1319,6 +1336,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				fLink.Attach<uint32>(size);
 				fLink.Attach<uint32>(cursor->Width());
 				fLink.Attach<uint32>(cursor->Height());
+				fLink.Attach<color_space>(cursor->ColorSpace());
 				fLink.Attach<BPoint>(cursor->GetHotSpot());
 				fLink.Attach(cursor->Bits(), size);
 			} else
@@ -1557,6 +1575,198 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 		/* font messages */
 
+		case AS_ADD_FONT_FILE:
+		{
+			FTRACE(("ServerApp %s: Received BFont creation request\n",
+				Signature()));
+
+			// Add a font for an application from a file
+
+			// Attached Data:
+			// 1) char* - path to font on disk
+			// 2) uint16 - index in font file
+			// 3) uint16 - instance
+
+			// Returns:
+			// 1) uint16 - family ID of added font
+			// 2) uint16 - style ID of added font
+			// 3) uint16 - face of added font
+
+			AutoLocker< ::FontManager> fontLock(fAppFontManager);
+
+			if (fAppFontManager->CountFamilies() > MAX_USER_FONTS) {
+				fLink.StartMessage(B_NOT_ALLOWED);
+				fLink.Flush();
+				break;
+			}
+
+			uint16 familyID, styleID;
+			char* fontPath;
+			uint16 index, instance;
+			link.ReadString(&fontPath);
+			link.Read<uint16>(&index);
+			link.Read<uint16>(&instance);
+
+			status_t status = fAppFontManager->AddUserFontFromFile(fontPath, index, instance,
+				familyID, styleID);
+
+			if (status != B_OK) {
+				fLink.StartMessage(status);
+			} else {
+				ServerFont font;
+				status = font.SetFamilyAndStyle(familyID, styleID,
+					fAppFontManager);
+
+				fLink.StartMessage(status);
+				if (status == B_OK) {
+					fLink.Attach<uint16>(font.FamilyID());
+					fLink.Attach<uint16>(font.StyleID());
+					fLink.Attach<uint16>(font.Face());
+				}
+			}
+
+			fLink.Flush();
+			break;
+		}
+
+		case AS_ADD_FONT_MEMORY:
+		{
+			FTRACE(("ServerApp %s: Received BFont memory creation request\n",
+				Signature()));
+
+			// Add a font for an application from a memory area
+
+			// Attached Data:
+			// 1) area_id - id of memory area where font resides
+			// 2) size_t - size of memory area for font
+			// 3) size_t - offset to start of font memory
+			// 4) uint16 - index in font buffer
+			// 5) uint16 - instance
+
+			// Returns:
+			// 1) uint16 - family ID of added font
+			// 2) uint16 - style ID of added font
+			// 3) uint16 - face of added font
+
+			AutoLocker< ::FontManager> fontLock(fAppFontManager);
+
+			if (fAppFontManager->CountFamilies() > MAX_USER_FONTS) {
+				fLink.StartMessage(B_NOT_ALLOWED);
+				fLink.Flush();
+				break;
+			}
+
+			area_id fontAreaID, fontAreaCloneID;
+			area_info fontAreaInfo;
+			char* area_addr;
+			size_t size, offset;
+			uint16 index, instance;
+
+			link.Read<int32>(&fontAreaID);
+			link.Read<size_t>(&size);
+			link.Read<size_t>(&offset);
+			link.Read<uint16>(&index);
+			link.Read<uint16>(&instance);
+			fontAreaCloneID = clone_area("user font",
+				(void **)&area_addr,
+				B_ANY_ADDRESS,
+				B_READ_AREA,
+				fontAreaID);
+
+			if (fontAreaCloneID < B_OK) {
+				fLink.StartMessage(fontAreaCloneID);
+				fLink.Flush();
+				break;
+			}
+
+			status_t status = get_area_info(fontAreaCloneID, &fontAreaInfo);
+			if (status != B_OK) {
+				fLink.StartMessage(status);
+				fLink.Flush();
+				delete_area(fontAreaCloneID);
+				break;
+			}
+
+			size_t fontMemorySize = fontAreaInfo.size - offset;
+
+			if (size == 0)
+				size = fontMemorySize;
+
+			// Check size of font area and reject if it's too large
+			if (size > MAX_FONT_DATA_SIZE_BYTES
+				|| size > fontMemorySize) {
+				fLink.StartMessage(B_BAD_DATA);
+				fLink.Flush();
+				delete_area(fontAreaCloneID);
+				break;
+			}
+
+			FT_Byte* fontData = (FT_Byte*)(malloc (sizeof(FT_Byte) * size));
+			if (fontData == NULL) {
+				delete_area(fontAreaCloneID);
+				fLink.StartMessage(B_BAD_DATA);
+				fLink.Flush();
+				break;
+			}
+
+			memcpy(fontData, (FT_Byte*)fontAreaInfo.address + offset, size);
+
+			delete_area(fontAreaCloneID);
+
+			uint16 familyID, styleID;
+
+			status = fAppFontManager->AddUserFontFromMemory(fontData, size, index, instance,
+				familyID, styleID);
+
+			if (status != B_OK) {
+				fLink.StartMessage(status);
+				free(fontData);
+			} else {
+				ServerFont font;
+				status = font.SetFamilyAndStyle(familyID, styleID,
+					fAppFontManager);
+
+				if (status == B_OK) {
+					font.SetFontData(fontData, size);
+					fLink.StartMessage(B_OK);
+					fLink.Attach<uint16>(font.FamilyID());
+					fLink.Attach<uint16>(font.StyleID());
+					fLink.Attach<uint16>(font.Face());
+				} else {
+					fLink.StartMessage(status);
+					free(fontData);
+				}
+			}
+
+			fLink.Flush();
+			break;
+		}
+
+		case AS_REMOVE_FONT:
+		{
+			STRACE(("ServerApp %s: Received BFont removal request\n",
+				Signature()));
+
+			// Remove an application-added font
+
+			// Attached Data:
+			// 1) uint16 - familyID of font to remove
+			// 2) uint16 - styleID of font to remove
+
+			uint16 familyID, styleID;
+			link.Read<uint16>(&familyID);
+			link.Read<uint16>(&styleID);
+
+			status_t status = B_OK;
+
+			AutoLocker< ::FontManager> fontLock(fAppFontManager);
+			status = fAppFontManager->RemoveUserFont(familyID, styleID);
+
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+
 		case AS_SET_SYSTEM_FONT:
 		{
 			FTRACE(("ServerApp %s: AS_SET_SYSTEM_FONT\n", Signature()));
@@ -1589,11 +1799,11 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 					LockedDesktopSettings settings(fDesktop);
 
 					// TODO: Should we also update our internal copies now?
-					if (!strcmp(type, "plain"))
+					if (strcmp(type, "plain") == 0)
 						settings.SetDefaultPlainFont(font);
-					else if (!strcmp(type, "bold"))
+					else if (strcmp(type, "bold") == 0)
 						settings.SetDefaultBoldFont(font);
-					else if (!strcmp(type, "fixed"))
+					else if (strcmp(type, "fixed") == 0)
 						settings.SetDefaultFixedFont(font);
 				} else
 					gFontManager->Unlock();
@@ -1611,13 +1821,13 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			char type[B_OS_NAME_LENGTH];
 			status_t status = link.ReadString(type, sizeof(type));
 			if (status == B_OK) {
-				if (!strcmp(type, "plain")) {
+				if (strcmp(type, "plain") == 0)
 					font = *gFontManager->DefaultPlainFont();
-				} else if (!strcmp(type, "bold")) {
+				else if (strcmp(type, "bold") == 0)
 					font = *gFontManager->DefaultBoldFont();
-				} else if (!strcmp(type, "fixed")) {
+				else if (strcmp(type, "fixed") == 0)
 					font = *gFontManager->DefaultFixedFont();
-				} else
+				else
 					status = B_BAD_VALUE;
 			}
 
@@ -1655,8 +1865,8 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			}
 
 			// The client is requesting the system fonts, this
-			// could happend either at application start up, or
-			// because the client is resyncing with the global
+			// could have happened either at application start up,
+			// or because the client is resyncing with the global
 			// fonts. So we record the current system wide fonts
 			// into our own copies at this point.
 			DesktopSettings settings(fDesktop);
@@ -1700,11 +1910,13 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 		case AS_GET_FONT_LIST_REVISION:
 		{
-			STRACE(("ServerApp %s: AS_GET_FONT_LIST_REVISION\n", Signature()));
+			FTRACE(("ServerApp %s: AS_GET_FONT_LIST_REVISION\n", Signature()));
 
 			fLink.StartMessage(B_OK);
-			fLink.Attach<int32>(
-				gFontManager->CheckRevision(fDesktop->UserID()));
+			gFontManager->Lock();
+			fLink.Attach<uint32>(gFontManager->Revision());
+				// TODO: get value per fDesktop->UserID()
+			gFontManager->Unlock();
 			fLink.Flush();
 			break;
 		}
@@ -1728,15 +1940,22 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			int32 index;
 			link.Read<int32>(&index);
 
-			gFontManager->Lock();
+			AutoLocker< ::FontManager> fontLock(gFontManager);
 
 			FontFamily* family = gFontManager->FamilyAt(index);
+			if (family == NULL) {
+				fontLock.SetTo(fAppFontManager, false);
+
+				family = fAppFontManager->FamilyAt(index);
+			}
+
 			if (family) {
 				fLink.StartMessage(B_OK);
 				fLink.AttachString(family->Name());
 				fLink.Attach<uint32>(family->Flags());
 
 				int32 count = family->CountStyles();
+
 				fLink.Attach<int32>(count);
 
 				for (int32 i = 0; i < count; i++) {
@@ -1749,7 +1968,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			} else
 				fLink.StartMessage(B_BAD_VALUE);
 
-			gFontManager->Unlock();
+
 			fLink.Flush();
 			break;
 		}
@@ -1770,9 +1989,15 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<uint16>(&familyID);
 			link.Read<uint16>(&styleID);
 
-			gFontManager->Lock();
+			AutoLocker< ::FontManager> fontLock(gFontManager);
 
-			FontStyle *fontStyle = gFontManager->GetStyle(familyID, styleID);
+			FontStyle* fontStyle = gFontManager->GetStyle(familyID, styleID);
+			if (fontStyle == NULL) {
+				fontLock.SetTo(fAppFontManager, false);
+
+				fontStyle = fAppFontManager->GetStyle(familyID, styleID);
+			}
+
 			if (fontStyle != NULL) {
 				fLink.StartMessage(B_OK);
 				fLink.AttachString(fontStyle->Family()->Name());
@@ -1781,7 +2006,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				fLink.StartMessage(B_BAD_VALUE);
 
 			fLink.Flush();
-			gFontManager->Unlock();
+
 			break;
 		}
 
@@ -1794,7 +2019,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// 1) font_family - name of font family to use
 			// 2) font_style - name of style in family
 			// 3) family ID - only used if 1) is empty
-			// 4) style ID - only used if 2) is empty
+			// 4) style ID - only used if 1) and 2) are empty
 			// 5) face - the font's current face
 
 			// Returns:
@@ -1812,10 +2037,16 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				&& link.Read<uint16>(&styleID) == B_OK
 				&& link.Read<uint16>(&face) == B_OK) {
 				// get the font and return IDs and face
-				gFontManager->Lock();
+				AutoLocker< ::FontManager> fontLock(gFontManager);
 
-				FontStyle *fontStyle = gFontManager->GetStyle(family, style,
+				FontStyle* fontStyle = gFontManager->GetStyle(family, style,
 					familyID, styleID, face);
+				if (fontStyle == NULL) {
+					fontLock.SetTo(fAppFontManager, false);
+
+					fontStyle = fAppFontManager->GetStyle(family, style,
+						familyID, styleID, face);
+				}
 
 				if (fontStyle != NULL) {
 					fLink.StartMessage(B_OK);
@@ -1828,8 +2059,6 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 					fLink.Attach<uint16>(face);
 				} else
 					fLink.StartMessage(B_NAME_NOT_FOUND);
-
-				gFontManager->Unlock();
 			} else
 				fLink.StartMessage(B_BAD_VALUE);
 
@@ -1852,16 +2081,21 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<int32>(&familyID);
 			link.Read<int32>(&styleID);
 
-			gFontManager->Lock();
+			AutoLocker< ::FontManager> fontLock(gFontManager);
 
-			FontStyle *fontStyle = gFontManager->GetStyle(familyID, styleID);
-			if (fontStyle) {
+			FontStyle* fontStyle = gFontManager->GetStyle(familyID, styleID);
+			if (fontStyle == NULL) {
+				fontLock.SetTo(fAppFontManager, false);
+
+				fontStyle = fAppFontManager->GetStyle(familyID, styleID);
+			}
+
+			if (fontStyle != NULL) {
 				fLink.StartMessage(B_OK);
 				fLink.Attach<uint16>((uint16)fontStyle->FileFormat());
 			} else
 				fLink.StartMessage(B_BAD_VALUE);
 
-			gFontManager->Unlock();
 			fLink.Flush();
 			break;
 		}
@@ -1882,12 +2116,12 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// Returns:
 			// 1) float - width of the string in pixels (numStrings times)
 
-			uint16 family, style;
+			uint16 familyID, styleID;
 			float size;
 			uint8 spacing;
 
-			link.Read<uint16>(&family);
-			link.Read<uint16>(&style);
+			link.Read<uint16>(&familyID);
+			link.Read<uint16>(&styleID);
 			link.Read<float>(&size);
 			link.Read<uint8>(&spacing);
 			int32 numStrings;
@@ -1915,7 +2149,10 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			ServerFont font;
 
-			if (font.SetFamilyAndStyle(family, style) == B_OK && size > 0) {
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
+			if (status == B_OK && size > 0) {
 				font.SetSize(size);
 				font.SetSpacing(spacing);
 
@@ -1942,18 +2179,37 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 		case AS_GET_FONT_BOUNDING_BOX:
 		{
-			FTRACE(("ServerApp %s: AS_GET_BOUNDING_BOX unimplemented\n",
+			FTRACE(("ServerApp %s: AS_GET_BOUNDING_BOX\n",
 				Signature()));
 
 			// Attached Data:
 			// 1) uint16 - family ID
 			// 2) uint16 - style ID
+			// 3) float - font size
 
 			// Returns:
 			// 1) BRect - box holding entire font
 
-			// ToDo: implement me!
-			fLink.StartMessage(B_ERROR);
+			uint16 familyID, styleID;
+			float size;
+
+			link.Read<uint16>(&familyID);
+			link.Read<uint16>(&styleID);
+			link.Read<float>(&size);
+
+			ServerFont font;
+
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
+			if (status == B_OK && size > 0) {
+				font.SetSize(size);
+
+				fLink.StartMessage(B_OK);
+				fLink.Attach<BRect>(font.BoundingBox());
+			} else
+				fLink.StartMessage(B_BAD_VALUE);
+
 			fLink.Flush();
 			break;
 		}
@@ -1973,16 +2229,21 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<uint16>(&familyID);
 			link.Read<uint16>(&styleID);
 
-			gFontManager->Lock();
+			AutoLocker< ::FontManager> fontLock(gFontManager);
 
-			FontStyle *fontStyle = gFontManager->GetStyle(familyID, styleID);
+			FontStyle* fontStyle = gFontManager->GetStyle(familyID, styleID);
+			if (fontStyle == NULL) {
+				fontLock.SetTo(fAppFontManager, false);
+
+				fontStyle = fAppFontManager->GetStyle(familyID, styleID);
+			}
+
 			if (fontStyle != NULL) {
 				fLink.StartMessage(B_OK);
 				fLink.Attach<int32>(fontStyle->TunedCount());
 			} else
 				fLink.StartMessage(B_BAD_VALUE);
 
-			gFontManager->Unlock();
 			fLink.Flush();
 			break;
 		}
@@ -2022,16 +2283,21 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<uint16>(&familyID);
 			link.Read<uint16>(&styleID);
 
-			gFontManager->Lock();
+			AutoLocker< ::FontManager> fontLock(gFontManager);
 
-			FontStyle *fontStyle = gFontManager->GetStyle(familyID, styleID);
+			FontStyle* fontStyle = gFontManager->GetStyle(familyID, styleID);
+			if (fontStyle == NULL) {
+				fontLock.SetTo(fAppFontManager, false);
+
+				fontStyle = fAppFontManager->GetStyle(familyID, styleID);
+			}
+
 			if (fontStyle != NULL) {
 				fLink.StartMessage(B_OK);
 				fLink.Attach<uint32>(fontStyle->Flags());
 			} else
 				fLink.StartMessage(B_BAD_VALUE);
 
-			gFontManager->Unlock();
 			fLink.Flush();
 			break;
 		}
@@ -2051,9 +2317,15 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<uint16>(&styleID);
 			link.Read<float>(&size);
 
-			gFontManager->Lock();
+			AutoLocker< ::FontManager> fontLock(gFontManager);
 
-			FontStyle *fontStyle = gFontManager->GetStyle(familyID, styleID);
+			FontStyle* fontStyle = gFontManager->GetStyle(familyID, styleID);
+			if (fontStyle == NULL) {
+				fontLock.SetTo(fAppFontManager, false);
+
+				fontStyle = fAppFontManager->GetStyle(familyID, styleID);
+			}
+
 			if (fontStyle != NULL) {
 				font_height height;
 				fontStyle->GetHeight(size, height);
@@ -2063,7 +2335,6 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			} else
 				fLink.StartMessage(B_BAD_VALUE);
 
-			gFontManager->Unlock();
 			fLink.Flush();
 			break;
 		}
@@ -2084,7 +2355,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<uint16>(&styleID);
 
 			ServerFont font;
-			status_t status = font.SetFamilyAndStyle(familyID, styleID);
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
 			if (status == B_OK) {
 				unicode_block blocksForFont;
 				font.GetUnicodeBlocks(blocksForFont);
@@ -2119,7 +2392,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<uint32>(&end);
 
 			ServerFont font;
-			status_t status = font.SetFamilyAndStyle(familyID, styleID);
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
 			if (status == B_OK) {
 				bool hasBlock;
 
@@ -2180,7 +2455,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read(charArray, numBytes);
 
 			ServerFont font;
-			status_t status = font.SetFamilyAndStyle(familyID, styleID);
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
 			if (status == B_OK) {
 				font.SetSize(size);
 				font.SetShear(shear);
@@ -2215,6 +2492,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// 3) int32 - numChars
 			// 4) int32 - numBytes
 			// 5) char - the char buffer with size numBytes
+			// 6) bool - whether to try fallback fonts
 
 			uint16 familyID, styleID;
 			link.Read<uint16>(&familyID);
@@ -2234,11 +2512,15 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			link.Read(charArray, numBytes);
 
+			bool useFallbacks;
+			link.Read<bool>(&useFallbacks);
+
 			ServerFont font;
-			status_t status = font.SetFamilyAndStyle(familyID, styleID);
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
 			if (status == B_OK) {
-				status = font.GetHasGlyphs(charArray, numBytes, numChars,
-					hasArray);
+				status = font.GetHasGlyphs(charArray, numBytes, numChars, hasArray, useFallbacks);
 				if (status == B_OK) {
 					fLink.StartMessage(B_OK);
 					fLink.Attach(hasArray, numChars * sizeof(bool));
@@ -2284,7 +2566,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read(charArray, numBytes);
 
 			ServerFont font;
-			status_t status = font.SetFamilyAndStyle(familyID, styleID);
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
 			if (status == B_OK) {
 				status = font.GetEdges(charArray, numBytes, numChars,
 					edgeArray);
@@ -2362,7 +2646,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read(charArray, numBytes);
 
 			ServerFont font;
-			status_t status = font.SetFamilyAndStyle(familyID, styleID);
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
 			if (status == B_OK) {
 				font.SetSize(size);
 				font.SetSpacing(spacing);
@@ -2447,7 +2733,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// figure out escapements
 
 			ServerFont font;
-			status_t status = font.SetFamilyAndStyle(familyID, styleID);
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
 			if (status == B_OK) {
 				font.SetSize(size);
 				font.SetSpacing(spacing);
@@ -2534,7 +2822,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// figure out escapements
 
 			ServerFont font;
-			status_t status = font.SetFamilyAndStyle(familyID, styleID);
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
 			if (status == B_OK) {
 				font.SetSize(size);
 				font.SetRotation(rotation);
@@ -2577,9 +2867,8 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// 8) uint32 - flags
 			// 9) font_metric_mode - mode
 			// 10) int32 numStrings
-			// 11) escapement_delta - additional delta (numStrings times)
-			// 12) int32 string length to measure (numStrings times)
-			// 13) string - string (numStrings times)
+			// 11) string - string (numStrings times)
+			// 12) escapement_delta - additional delta (numStrings times)
 
 			// Returns:
 			// 1) BRect - rects with numStrings entries
@@ -2618,11 +2907,14 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				// This version of ReadString allocates the strings, we free
 				// them below
 				link.ReadString(&stringArray[i], &lengthArray[i]);
-				link.Read<escapement_delta>(&deltaArray[i]);
 			}
+			for (int32 i = 0; i < numStrings; i++)
+				link.Read<escapement_delta>(&deltaArray[i]);
 
 			ServerFont font;
-			status_t status = font.SetFamilyAndStyle(familyID, styleID);
+			status_t status = font.SetFamilyAndStyle(familyID, styleID,
+				fAppFontManager);
+
 			if (status == B_OK) {
 				font.SetSize(ptsize);
 				font.SetRotation(rotation);
@@ -2867,24 +3159,6 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
-		case AS_SCREEN_GET_COLORMAP:
-		{
-			STRACE(("ServerApp %s: AS_SCREEN_GET_COLORMAP\n", Signature()));
-
-			int32 id;
-			link.Read<int32>(&id);
-
-			const color_map* colorMap = SystemColorMap();
-			if (colorMap != NULL) {
-				fLink.StartMessage(B_OK);
-				fLink.Attach<color_map>(*colorMap);
-			} else
-				fLink.StartMessage(B_ERROR);
-
-			fLink.Flush();
-			break;
-		}
-
 		case AS_GET_DESKTOP_COLOR:
 		{
 			STRACE(("ServerApp %s: get desktop color\n", Signature()));
@@ -3109,7 +3383,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			float brightness;
 			link.Read<float>(&brightness);
 
-			status_t status = fDesktop->HWInterface()->SetBrightness(brightness);
+			status_t status = fDesktop->SetBrightness(id, brightness);
 			fLink.StartMessage(status);
 
 			fLink.Flush();
@@ -3134,7 +3408,9 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		case AS_READ_BITMAP:
 		{
 			STRACE(("ServerApp %s: AS_READ_BITMAP\n", Signature()));
+			int32 id;
 			int32 token;
+			link.Read<int32>(&id);
 			link.Read<int32>(&token);
 
 			bool drawCursor = true;
@@ -3145,14 +3421,13 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			bool success = false;
 
-			ServerBitmap* bitmap = GetBitmap(token);
+			BReference<ServerBitmap> bitmap(GetBitmap(token), true);
 			if (bitmap != NULL) {
 				if (fDesktop->GetDrawingEngine()->LockExclusiveAccess()) {
 					success = fDesktop->GetDrawingEngine()->ReadBitmap(bitmap,
 						drawCursor, bounds) == B_OK;
 					fDesktop->GetDrawingEngine()->UnlockExclusiveAccess();
 				}
-				bitmap->ReleaseReference();
 			}
 
 			if (success)
@@ -3507,7 +3782,7 @@ ServerApp::_AddBitmap(ServerBitmap* bitmap)
 	BAutolock _(fMapLocker);
 
 	try {
-		fBitmapMap.insert(std::make_pair(bitmap->Token(), bitmap));
+		fBitmapMap.insert(std::make_pair(bitmap->Token(), BReference<ServerBitmap>(bitmap, false)));
 	} catch (std::bad_alloc& exception) {
 		return false;
 	}
@@ -3524,8 +3799,6 @@ ServerApp::_DeleteBitmap(ServerBitmap* bitmap)
 
 	gBitmapManager->BitmapRemoved(bitmap);
 	fBitmapMap.erase(bitmap->Token());
-
-	bitmap->ReleaseReference();
 }
 
 

@@ -1,5 +1,5 @@
 //----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
+//  This software is part of the Haiku distribution and is covered
 //  by the MIT License.
 //---------------------------------------------------------------------
 
@@ -33,7 +33,7 @@ private:
 
 private:
 	mutable BLocker				fLock;
-	BObjectList<MessageInfo>	fMessages;
+	BObjectList<MessageInfo, true> fMessages;
 };
 
 #endif	// PRIORITY_MESSAGE_QUEUE_H

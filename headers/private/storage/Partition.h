@@ -19,7 +19,7 @@ class BPartitionParameterEditor;
 class BDiskDeviceVisitor;
 class BDiskSystem;
 class BMutablePartition;
-template <class T> class BObjectList;
+template <class T, bool O> class BObjectList;
 class BPartitioningInfo;
 class BPath;
 class BVolume;
@@ -38,6 +38,7 @@ public:
 			off_t				Size() const;
 			off_t				ContentSize() const;	// 0 if uninitialized
 			uint32				BlockSize() const;
+			uint32				PhysicalBlockSize() const;
 			int32				Index() const;		// 0 for devices
 			uint32				Status() const;
 
@@ -52,7 +53,8 @@ public:
 			uint32				Flags() const;
 
 			const char*			Name() const;
-			const char*			ContentName() const;
+			BString				ContentName() const;
+			const char*			RawContentName() const;
 			const char*			Type() const;			// See DiskDeviceTypes.h
 			const char*			ContentType() const;	// See DiskDeviceTypes.h
 			partition_id		ID() const;
@@ -104,9 +106,9 @@ public:
 			status_t			ValidateResize(off_t* size) const;
 			status_t			Resize(off_t size);
 
-			bool				CanMove(BObjectList<BPartition>*
+			bool				CanMove(BObjectList<BPartition, false>*
 										unmovableDescendants = NULL,
-									BObjectList<BPartition>*
+									BObjectList<BPartition, false>*
 										movableOnlyIfUnmounted = NULL) const;
 			status_t			ValidateMove(off_t* newOffset) const;
 			status_t			Move(off_t newOffset);

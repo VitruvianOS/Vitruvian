@@ -141,6 +141,16 @@ BPartition::BlockSize() const
 }
 
 
+/*!	\brief Returns the physical block size of the device.
+	\return The physical block size of the device in bytes.
+*/
+uint32
+BPartition::PhysicalBlockSize() const
+{
+	return _PartitionData()->physical_block_size;
+}
+
+
 /*!	\brief Returns the index of the partition in its session's list of
 		   partitions.
 	\return The index of the partition in its session's list of partitions.
@@ -248,8 +258,35 @@ BPartition::Name() const
 }
 
 
-const char*
+BString
 BPartition::ContentName() const
+{
+	if ((_PartitionData()->content_name == NULL || strlen(_PartitionData()->content_name) == 0)
+		&& ContainsFileSystem()) {
+		// Give a default name to unnamed volumes
+		off_t divisor = 1ULL << 40;
+		off_t diskSize = _PartitionData()->content_size;
+		char unit = 'T';
+		if (diskSize < divisor) {
+			divisor = 1UL << 30;
+			unit = 'G';
+			if (diskSize < divisor) {
+				divisor = 1UL << 20;
+				unit = 'M';
+			}
+		}
+		double size = double((10 * diskSize + divisor - 1) / divisor);
+		BString name;
+		name.SetToFormat("%g %ciB %s volume", size / 10, unit, _PartitionData()->content_type);
+		return name;
+	}
+
+	return _PartitionData()->content_name;
+}
+
+
+const char*
+BPartition::RawContentName() const
 {
 	return _PartitionData()->content_name;
 }
@@ -518,13 +555,18 @@ BPartition::GetMountPoint(BPath* mountPoint) const
 	\param mountFlags Currently only \c B_MOUNT_READ_ONLY is defined, which
 		   forces the volume to be mounted read-only.
 	\param parameters File system specific mount parameters.
-	\return \c B_OK, if everything went fine, another error code otherwise.
+	\return \c B_OK if everything went fine, another error code otherwise.
+	\return \c B_BUSY if already mounted.
+	\return \c B_BAD_VALUE if volume does not contain a file system.
+	\return \c B_NOT_ALLOWED if a permission error occurs.
 */
 status_t
-BPartition::Mount(const char* mountPoint, uint32 mountFlags,
-	const char* parameters)
+BPartition::Mount(const char* mountPoint, uint32 mountFlags, const char* parameters)
 {
-	if (IsMounted() || !ContainsFileSystem())
+	if (IsMounted())
+		return B_BUSY;
+
+	if (!ContainsFileSystem())
 		return B_BAD_VALUE;
 
 	// get the partition path
@@ -1001,7 +1043,7 @@ status_t
 BPartition::ValidateSetType(const char* type) const
 {
 	BPartition* parent = Parent();
-	if (parent == NULL || fDelegate == NULL)
+	if (parent == NULL || parent->fDelegate == NULL || fDelegate == NULL)
 		return B_NO_INIT;
 
 	return parent->fDelegate->ValidateSetType(fDelegate, type);
@@ -1012,7 +1054,7 @@ status_t
 BPartition::SetType(const char* type)
 {
 	BPartition* parent = Parent();
-	if (parent == NULL || fDelegate == NULL)
+	if (parent == NULL || parent->fDelegate == NULL || fDelegate == NULL)
 		return B_NO_INIT;
 
 	return parent->fDelegate->SetType(fDelegate, type);
@@ -1035,10 +1077,22 @@ status_t
 BPartition::GetParameterEditor(B_PARAMETER_EDITOR_TYPE type,
 	BPartitionParameterEditor** editor)
 {
-	if (fDelegate == NULL)
-		return B_NO_INIT;
+	// When creating a new partition, this will be called for parent inside
+	// which we are creating a partition.
+	// When modifying an existing partition, this will be called for the
+	// partition itself, but the parameters are in fact managed by the parent
+	// (see SetParameters)
+	if (type == B_CREATE_PARAMETER_EDITOR) {
+		if (fDelegate == NULL)
+			return B_NO_INIT;
+		return fDelegate->GetParameterEditor(type, editor);
+	} else {
+		BPartition* parent = Parent();
+		if (parent == NULL || parent->fDelegate == NULL)
+			return B_NO_INIT;
 
-	return fDelegate->GetParameterEditor(type, editor);
+		return parent->fDelegate->GetParameterEditor(type, editor);
+	}
 }
 
 
@@ -1046,7 +1100,7 @@ status_t
 BPartition::SetParameters(const char* parameters)
 {
 	BPartition* parent = Parent();
-	if (parent == NULL || fDelegate == NULL)
+	if (parent == NULL || parent->fDelegate == NULL || fDelegate == NULL)
 		return B_NO_INIT;
 
 	return parent->fDelegate->SetParameters(fDelegate, parameters);
@@ -1322,6 +1376,7 @@ BPartition::_Update(user_partition_data* data, bool* updated)
 	if (data->offset != oldData->offset
 		|| data->size != oldData->size
 		|| data->block_size != oldData->block_size
+		|| data->physical_block_size != oldData->physical_block_size
 		|| data->status != oldData->status
 		|| data->flags != oldData->flags
 		|| data->volume != oldData->volume

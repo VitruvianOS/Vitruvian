@@ -1,5 +1,5 @@
 //----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered
+//  This software is part of the Haiku distribution and is covered
 //  by the MIT License.
 //---------------------------------------------------------------------
 /*!
@@ -375,9 +375,8 @@ AssociatedTypes::BuildAssociatedTypesTable()
 								if (subEntry.GetName(subtype) == B_OK) {
 									BPrivate::Storage::to_lower(subtype);
 
-									char fulltype[B_PATH_NAME_LENGTH];
-									snprintf(fulltype, B_PATH_NAME_LENGTH, "%s/%s",
-										supertype, subtype);
+									BString fulltype;
+									fulltype.SetToFormat("%s/%s", supertype, subtype);
 
 									// Process the subtype
 									ProcessType(fulltype);

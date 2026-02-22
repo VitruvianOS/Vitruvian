@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <cstddef>
 
 #include <Directory.h>
 #include <Entry.h>
@@ -291,7 +292,7 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 
 	// recurse
 	if ((fFlags & COPY_RECURSIVELY) != 0 && S_ISDIR(sourceStat.st_mode)) {
-		char buffer[sizeof(dirent) + B_FILE_NAME_LENGTH];
+		char buffer[offsetof(struct dirent, d_name) + B_FILE_NAME_LENGTH];
 		dirent *entry = (dirent*)buffer;
 		while (sourceDir.GetNextDirents(entry, sizeof(buffer), 1) == 1) {
 			if (strcmp(entry->d_name, ".") == 0

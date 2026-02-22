@@ -1,5 +1,7 @@
 /*
  * Copyright 2005, Ingo Weinhold, bonefish@users.sf.net.
+ * Copyright 2021, Jacob Secunda.
+ *
  * Distributed under the terms of the MIT License.
  *
  * Manages the shutdown process.
@@ -7,19 +9,14 @@
 #ifndef SHUTDOWN_PROCESS_H
 #define SHUTDOWN_PROCESS_H
 
-#include <hash_set>
-
+#include <HashMap.h>
+#include <HashSet.h>
 #include <Locker.h>
 #include <Looper.h>
 
 #include "AppInfoList.h"
 #include "EventMaskWatcher.h"
 #include "RosterAppInfo.h"
-
-#if __GNUC__ >= 4
-using __gnu_cxx::hash_set;
-#endif
-
 
 class EventQueue;
 class TRoster;
@@ -69,6 +66,8 @@ private:
 									bool enabled);
 			void				_SetShutdownWindowKillButtonEnabled(
 									bool enabled);
+			void				_SetShutdownWindowWaitAnimationEnabled(
+									bool enabled);
 			void				_SetShutdownWindowWaitForShutdown();
 			void				_SetShutdownWindowWaitForAbortedOK();
 
@@ -95,6 +94,8 @@ private:
 	class QuitRequestReplyHandler;
 	class ShutdownWindow;
 
+	typedef HashSet<HashKey32<team_id> > TeamHash;
+
 	friend class QuitRequestReplyHandler;
 
 			BLocker				fWorkerLock;
@@ -103,11 +104,11 @@ private:
 			BMessage*			fRequest;
 			TRoster*			fRoster;
 			EventQueue*			fEventQueue;
-			hash_set<team_id>	fVitalSystemApps;
+			TeamHash			fVitalSystemApps;
 			AppInfoList			fSystemApps;
 			AppInfoList			fUserApps;
 			AppInfoList			fBackgroundApps;
-			hash_set<team_id>	fDebuggedTeams;
+			TeamHash			fDebuggedTeams;
 			TimeoutEvent*		fTimeoutEvent;
 			InternalEventList*	fInternalEvents;
 			sem_id				fInternalEventSemaphore;

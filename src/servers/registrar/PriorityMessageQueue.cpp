@@ -1,5 +1,5 @@
 //----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
+//  This software is part of the Haiku distribution and is covered
 //  by the MIT License.
 //---------------------------------------------------------------------
 
@@ -28,7 +28,7 @@ private:
 // constructor
 PriorityMessageQueue::PriorityMessageQueue()
 	: fLock(),
-	  fMessages(20, true)
+	  fMessages(20)
 {
 }
 

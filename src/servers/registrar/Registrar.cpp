@@ -240,6 +240,13 @@ Registrar::_MessageReceived(BMessage *message)
 			_HandleShutDown(message);
 			break;
 		}
+		case B_REG_IS_SHUT_DOWN_IN_PROGRESS:
+		{
+			PRINT("B_REG_IS_SHUT_DOWN_IN_PROGRESS\n");
+
+			_HandleIsShutDownInProgress(message);
+			break;
+		}
 		case B_REG_TEAM_DEBUGGER_ALERT:
 		{
 			if (fShutdownProcess != NULL)
@@ -360,9 +367,10 @@ Registrar::_MessageReceived(BMessage *message)
 			}
 			break;
 
-		case kMsgRestartAppServer:
+		case kMsgAppServerStarted:
 		{
-			fRoster->HandleRestartAppServer(message);
+			fRoster->HandleAppServerStarted(message);
+			// Don't pass this message on to our BApplication, as that may deadlock.
 			break;
 		}
 
@@ -407,6 +415,18 @@ Registrar::_HandleShutDown(BMessage *request)
 		ShutdownProcess::SendReply(request, error);
 }
 
+/*!	\brief Handle a is shut down in progress request message.
+	\param request The request to be handled.
+*/
+void
+Registrar::_HandleIsShutDownInProgress(BMessage *request)
+{
+	BMessage reply(B_REG_SUCCESS);
+	reply.AddBool("in-progress", fShutdownProcess != NULL);
+	request->SendReply(&reply);
+}
+
+
 
 //	#pragma mark -
 
@@ -450,7 +470,7 @@ main()
 			"registrar main() caught exception: %s", exception.what());
 		debugger(buffer);
 	} catch (...) {
-		debugger("registrar main() caught unknown exception");
+		debugger("registrar main() caught unknown exception");
 	}
 
 	PRINT("delete app...\n");

@@ -391,8 +391,11 @@ TRoster::HandleIsAppRegistered(BMessage* request)
 	PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device, ref.directory,
 		ref.name);
 
+	// check the parameters
+	// entry_ref
 	if (error == B_OK && !BEntry(&ref).Exists())
 		SET_ERROR(error, B_ENTRY_NOT_FOUND);
+	// team/token
 	if (error == B_OK && team < 0 && token == 0)
 		SET_ERROR(error, B_BAD_VALUE);
 
@@ -1138,39 +1141,14 @@ TRoster::HandleSaveRecentLists(BMessage* request)
 
 
 void
-TRoster::HandleRestartAppServer(BMessage* request)
+TRoster::HandleAppServerStarted(BMessage* request)
 {
 	BAutolock _(fLock);
 
-	// TODO: if an app_server is still running, stop it first
-
-	const char* pathString;
-	if (request->FindString("path", &pathString) != B_OK)
-		pathString = "/system/servers";
-	BPath path(pathString);
-	path.Append("app_server");
-	// NOTE: its required at some point that the binary name is "app_server"
-
-	const char **argv = new const char * [2];
-	argv[0] = strdup(path.Path());
-	argv[1] = NULL;
-
-	thread_id threadId = load_image(1, argv, (const char**)environ);
-	int i;
-	for (i = 0; i < 1; i++)
-		delete argv[i];
-	delete [] argv;
-
-	resume_thread(threadId);
-	// give the server some time to create the server port
-	snooze(100000);
-
-	// notify all apps
-	// TODO: whats about ourself?
 	AppInfoListMessagingTargetSet targetSet(fRegisteredApps);
 	if (targetSet.HasNext()) {
 		// send the messages
-		BMessage message(kMsgAppServerRestarted);
+		BMessage message(kMsgAppServerStarted);
 		MessageDeliverer::Default()->DeliverMessage(&message, targetSet);
 	}
 }
@@ -1401,7 +1379,7 @@ TRoster::SetShuttingDown(bool shuttingDown)
 */
 status_t
 TRoster::GetShutdownApps(AppInfoList& userApps, AppInfoList& systemApps,
-	AppInfoList& backgroundApps, hash_set<team_id>& vitalSystemApps)
+	AppInfoList& backgroundApps, HashSet<HashKey32<team_id> >& vitalSystemApps)
 {
 	BAutolock _(fLock);
 
@@ -1414,28 +1392,28 @@ TRoster::GetShutdownApps(AppInfoList& userApps, AppInfoList& systemApps,
 	// * debug server
 
 	// ourself
-	vitalSystemApps.insert(be_app->Team());
+	vitalSystemApps.Add(be_app->Team());
 
 	// kernel team
 	team_info teamInfo;
 	if (get_team_info(B_SYSTEM_TEAM, &teamInfo) == B_OK)
-		vitalSystemApps.insert(teamInfo.team);
+		vitalSystemApps.Add(teamInfo.team);
 
 	// app server
 	RosterAppInfo* info
 		= fRegisteredApps.InfoFor("application/x-vnd.haiku-app_server");
 	if (info != NULL)
-		vitalSystemApps.insert(info->team);
+		vitalSystemApps.Add(info->team);
 
 	// debug server
 	info = fRegisteredApps.InfoFor("application/x-vnd.haiku-debug_server");
 	if (info != NULL)
-		vitalSystemApps.insert(info->team);
+		vitalSystemApps.Add(info->team);
 
 	// populate the other groups
 	for (AppInfoList::Iterator it(fRegisteredApps.It());
 			RosterAppInfo* info = *it; ++it) {
-		if (vitalSystemApps.find(info->team) == vitalSystemApps.end()) {
+		if (!vitalSystemApps.Contains(info->team)) {
 			RosterAppInfo* clonedInfo = info->Clone();
 			if (clonedInfo) {
 				if (_IsSystemApp(info)) {
@@ -1463,7 +1441,7 @@ TRoster::GetShutdownApps(AppInfoList& userApps, AppInfoList& systemApps,
 	// not excluded in the lists above
 	info = fRegisteredApps.InfoFor("application/x-vnd.Be-input_server");
 	if (info != NULL)
-		vitalSystemApps.insert(info->team);
+		vitalSystemApps.Add(info->team);
 
 	// clean up on error
 	if (error != B_OK) {

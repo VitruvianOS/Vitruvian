@@ -112,7 +112,7 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 
 	int dirfd = _kern_open_dir(fd, "..");
 	if (dirfd < 0)
-		return dirfd;
+		return -errno;
 
 	if (name != NULL) {
 		if (length <= 0) {
@@ -121,7 +121,7 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 		}
 
 		char buf[B_PATH_NAME_LENGTH];
-		status_t ret = _kern_fd_to_path(dirfd, -1, buf, sizeof(buf));
+		status_t ret = _kern_fd_to_path(fd, -1, buf, sizeof(buf));
 		if (ret != B_OK) {
 			close(dirfd);
 			return ret;
@@ -133,13 +133,16 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 			return B_ENTRY_NOT_FOUND;
 		}
 
+		if (strcmp(baseName, "/") == 0)
+			baseName = (char*)".";
+
 		size_t len = strlen(baseName);
 		if (len+1 > length) {
 			close(dirfd);
 			return B_BUFFER_OVERFLOW;
 		}
 
-		if (strlcpy(name, baseName, len) >= len) {
+		if (strlcpy(name, baseName, length) >= length) {
 			close(dirfd);
 			return B_BUFFER_OVERFLOW;
 		}

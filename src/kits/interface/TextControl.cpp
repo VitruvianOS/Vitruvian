@@ -1,11 +1,12 @@
 /*
- * Copyright 2001-2015, Haiku Inc.
+ * Copyright 2001-2020 Haiku Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Frans van Nispen (xlr8@tref.nl)
  *		Stephan Aßmus <superstippi@gmx.de>
  *		Ingo Weinhold <bonefish@cs.tu-berlin.de>
+ *		John Scipione <jscipione@gmail.com>
  */
 
 
@@ -18,6 +19,7 @@
 
 #include <AbstractLayoutItem.h>
 #include <ControlLook.h>
+#include <HSL.h>
 #include <LayoutUtils.h>
 #include <Message.h>
 #include <PropertyInfo.h>
@@ -35,8 +37,7 @@
 #	include <stdio.h>
 #	include <FunctionTracer.h>
 	static int32 sFunctionDepth = -1;
-#	define CALLED(x...)	FunctionTracer _ft("BTextControl", __FUNCTION__, \
-							sFunctionDepth)
+#	define CALLED(x...)	FunctionTracer _ft(printf, this, __PRETTY_FUNCTION__, sFunctionDepth)
 #	define TRACE(x...)	{ BString _to; \
 							_to.Append(' ', (sFunctionDepth + 1) * 2); \
 							printf("%s", _to.String()); printf(x); }
@@ -359,6 +360,8 @@ BTextControl::Draw(BRect updateRect)
 	rect.InsetBy(-2, -2);
 
 	rgb_color base = ViewColor();
+	rgb_color text = HighColor();
+
 	uint32 flags = fLook;
 	if (!enabled)
 		flags |= BControlLook::B_DISABLED;
@@ -366,8 +369,7 @@ BTextControl::Draw(BRect updateRect)
 	if (active)
 		flags |= BControlLook::B_FOCUSED;
 
-	be_control_look->DrawTextControlBorder(this, rect, updateRect, base,
-		flags);
+	be_control_look->DrawTextControlBorder(this, rect, updateRect, base, flags);
 
 	if (Label() != NULL) {
 		if (fLayoutData->label_layout_item != NULL) {
@@ -377,12 +379,8 @@ BTextControl::Draw(BRect updateRect)
 			rect.right = fDivider - kLabelInputSpacing;
 		}
 
-		// erase the is control flag before drawing the label so that the label
-		// will get drawn using B_PANEL_TEXT_COLOR
-		flags &= ~BControlLook::B_IS_CONTROL;
-
 		be_control_look->DrawLabel(this, Label(), rect, updateRect,
-			base, flags, BAlignment(fLabelAlign, B_ALIGN_MIDDLE));
+			base, flags, BAlignment(fLabelAlign, B_ALIGN_MIDDLE), &text);
 	}
 }
 
@@ -474,7 +472,8 @@ BTextControl::MessageReceived(BMessage* message)
 		if (message->HasColor(ui_color_name(B_PANEL_BACKGROUND_COLOR))
 			|| message->HasColor(ui_color_name(B_PANEL_TEXT_COLOR))
 			|| message->HasColor(ui_color_name(B_DOCUMENT_BACKGROUND_COLOR))
-			|| message->HasColor(ui_color_name(B_DOCUMENT_TEXT_COLOR))) {
+			|| message->HasColor(ui_color_name(B_DOCUMENT_TEXT_COLOR))
+			|| message->HasColor(ui_color_name(B_FAILURE_COLOR))) {
 			_UpdateTextViewColors(IsEnabled());
 		}
 	}
@@ -599,8 +598,10 @@ BTextControl::MarkAsInvalid(bool invalid)
 	else
 		fLook &= ~BControlLook::B_INVALID;
 
-	if (look != fLook)
+	if (look != fLook) {
+		_UpdateTextViewColors(IsEnabled());
 		Invalidate();
+	}
 }
 
 
@@ -637,7 +638,6 @@ void
 BTextControl::SetAlignment(alignment labelAlignment, alignment textAlignment)
 {
 	fText->SetAlignment(textAlignment);
-	fText->AlignTextRect();
 
 	if (fLabelAlign != labelAlignment) {
 		fLabelAlign = labelAlignment;
@@ -911,6 +911,7 @@ BTextControl::DoLayout()
 	// place the text view and set the divider
 	textFrame.InsetBy(kFrameMargin, kFrameMargin);
 	BLayoutUtils::AlignInFrame(fText, textFrame);
+	fText->SetTextRect(textFrame.OffsetToCopy(B_ORIGIN));
 
 	fDivider = divider;
 
@@ -1049,6 +1050,18 @@ BTextControl::_UpdateTextViewColors(bool enable)
 	if (!enable) {
 		textColor = disable_color(textColor, ViewColor());
 		viewColor = disable_color(ViewColor(), viewColor);
+	} else if ((fLook & BControlLook::B_INVALID) != 0) {
+		hsl_color normalViewColor = hsl_color::from_rgb(viewColor);
+		rgb_color failureColor = ui_color(B_FAILURE_COLOR);
+		hsl_color newViewColor = hsl_color::from_rgb(failureColor);
+		if (normalViewColor.lightness < 0.15)
+			newViewColor.lightness = 0.15;
+		else if (normalViewColor.lightness > 0.95)
+			newViewColor.lightness = 0.95;
+		else
+			newViewColor.lightness = normalViewColor.lightness;
+
+		viewColor = newViewColor.to_rgb();
 	}
 
 	fText->SetFontAndColor(&font, B_FONT_ALL, &textColor);
@@ -1115,7 +1128,6 @@ BTextControl::_InitText(const char* initialText, const BMessage* archive)
 
 		SetText(initialText);
 		fText->SetAlignment(B_ALIGN_LEFT);
-		fText->AlignTextRect();
 	}
 
 	// Although this is not strictly initializing the text view,
@@ -1171,7 +1183,6 @@ BTextControl::_LayoutTextView()
 	frame.InsetBy(kFrameMargin, kFrameMargin);
 	fText->MoveTo(frame.left, frame.top);
 	fText->ResizeTo(frame.Width(), frame.Height());
-	fText->AlignTextRect();
 
 	TRACE("width: %.2f, height: %.2f\n", Frame().Width(), Frame().Height());
 	TRACE("fDivider: %.2f\n", fDivider);

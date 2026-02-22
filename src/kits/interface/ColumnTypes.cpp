@@ -6,32 +6,29 @@
 /					data types for use in BColumnListView.
 /
 /	Copyright 2000+, Be Incorporated, All Rights Reserved
+/	Copyright 2024, Haiku, Inc. All Rights Reserved
 /
 *******************************************************************************/
 
+
 #include "ColumnTypes.h"
 
+#include <StringFormat.h>
+#include <SystemCatalog.h>
 #include <View.h>
 
-#include <parsedate.h>
 #include <stdio.h>
 
 
+using BPrivate::gSystemCatalog;
+
+#undef B_TRANSLATE_COMMENT
+#define B_TRANSLATE_COMMENT(str, comment) \
+	gSystemCatalog.GetString(B_TRANSLATE_MARK_COMMENT(str, comment), \
+		B_TRANSLATION_CONTEXT, (comment))
+
+
 #define kTEXT_MARGIN	8
-
-
-const int64 kKB_SIZE = 1024;
-const int64 kMB_SIZE = 1048576;
-const int64 kGB_SIZE = 1073741824;
-const int64 kTB_SIZE = kGB_SIZE * kKB_SIZE;
-
-const char* kSIZE_FORMATS[] = {
-	"%.2f %s",
-	"%.1f %s",
-	"%.f %s",
-	"%.f%s",
-	0
-};
 
 
 BTitledColumn::BTitledColumn(const char* title, float width, float minWidth,
@@ -320,17 +317,6 @@ BDateColumn::BDateColumn(const char* title, float width, float minWidth,
 }
 
 
-const char *kTIME_FORMATS[] = {
-	"%A, %B %d %Y, %I:%M:%S %p",	// Monday, July 09 1997, 05:08:15 PM
-	"%a, %b %d %Y, %I:%M:%S %p",	// Mon, Jul 09 1997, 05:08:15 PM
-	"%a, %b %d %Y, %I:%M %p",		// Mon, Jul 09 1997, 05:08 PM
-	"%b %d %Y, %I:%M %p",			// Jul 09 1997, 05:08 PM
-	"%m/%d/%y, %I:%M %p",			// 07/09/97, 05:08 PM
-	"%m/%d/%y",						// 07/09/97
-	NULL
-};
-
-
 void
 BDateColumn::DrawField(BField* _field, BRect rect, BView* parent)
 {
@@ -346,14 +332,27 @@ BDateColumn::DrawField(BField* _field, BRect rect, BView* parent)
 		parent->GetFont(&font);
 		localtime_r(&currentTime, &time_data);
 
-		for (int32 index = 0; ; index++) {
-			if (!kTIME_FORMATS[index])
-				break;
+		// dateStyles[] and timeStyles[] must be the same length
+		const BDateFormatStyle dateStyles[] = {
+			B_FULL_DATE_FORMAT, B_FULL_DATE_FORMAT, B_LONG_DATE_FORMAT, B_LONG_DATE_FORMAT,
+			B_MEDIUM_DATE_FORMAT, B_SHORT_DATE_FORMAT,
+		};
 
-			strftime(dateString, 256, kTIME_FORMATS[index], &time_data);
-			if (font.StringWidth(dateString) <= width)
+		const BTimeFormatStyle timeStyles[] = {
+			B_MEDIUM_TIME_FORMAT, B_SHORT_TIME_FORMAT, B_MEDIUM_TIME_FORMAT, B_SHORT_TIME_FORMAT,
+			B_SHORT_TIME_FORMAT, B_SHORT_TIME_FORMAT,
+		};
+
+		size_t index;
+		for (index = 0; index < B_COUNT_OF(dateStyles); index++) {
+			ssize_t output = fDateTimeFormat.Format(dateString, sizeof(dateString), currentTime,
+				dateStyles[index], timeStyles[index]);
+			if (output >= 0 && font.StringWidth(dateString) <= width)
 				break;
 		}
+
+		if (index == B_COUNT_OF(dateStyles))
+			fDateFormat.Format(dateString, sizeof(dateString), currentTime, B_SHORT_DATE_FORMAT);
 
 		if (font.StringWidth(dateString) > width) {
 			BString out_string(dateString);
@@ -411,64 +410,71 @@ BSizeColumn::BSizeColumn(const char* title, float width, float minWidth,
 }
 
 
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "StringForSize"
+
+
 void
 BSizeColumn::DrawField(BField* _field, BRect rect, BView* parent)
 {
-	char str[256];
-	float width = rect.Width() - (2 * kTEXT_MARGIN);
 	BFont font;
+	BString printedSize;
 	BString string;
-	off_t size = ((BSizeField*)_field)->Size();
 
+	float width = rect.Width() - (2 * kTEXT_MARGIN);
+
+	double value = ((BSizeField*)_field)->Size();
 	parent->GetFont(&font);
-	if (size < kKB_SIZE) {
-		sprintf(str, "%" B_PRId64 " bytes", size);
-		if (font.StringWidth(str) > width)
-			sprintf(str, "%" B_PRId64 " B", size);
-	} else {
-		const char*	suffix;
-		float float_value;
-		if (size >= kTB_SIZE) {
-			suffix = "TB";
-			float_value = (float)size / kTB_SIZE;
-		} else if (size >= kGB_SIZE) {
-			suffix = "GB";
-			float_value = (float)size / kGB_SIZE;
-		} else if (size >= kMB_SIZE) {
-			suffix = "MB";
-			float_value = (float)size / kMB_SIZE;
-		} else {
-			suffix = "KB";
-			float_value = (float)size / kKB_SIZE;
+
+	// we cannot use string_for_size due to the precision/cell width logic
+	const char* kFormats[] = {
+		B_TRANSLATE_MARK_COMMENT("{0, plural, one{%s byte} other{%s bytes}}", "size unit"),
+		B_TRANSLATE_MARK_COMMENT("%s KiB", "size unit"),
+		B_TRANSLATE_MARK_COMMENT("%s MiB", "size unit"),
+		B_TRANSLATE_MARK_COMMENT("%s GiB", "size unit"),
+		B_TRANSLATE_MARK_COMMENT("%s TiB", "size unit")
+	};
+
+	size_t index = 0;
+	while (index < B_COUNT_OF(kFormats) - 1 && value >= 1024.0) {
+		value /= 1024.0;
+		index++;
+	}
+
+	BString format;
+	BStringFormat formatter(
+		gSystemCatalog.GetString(kFormats[index], B_TRANSLATION_CONTEXT, "size unit"));
+	formatter.Format(format, value);
+
+	if (index == 0) {
+		fNumberFormat.SetPrecision(0);
+		fNumberFormat.Format(printedSize, value);
+		string.SetToFormat(format.String(), printedSize.String());
+
+		if (font.StringWidth(string) > width) {
+			BStringFormat formatter(B_TRANSLATE_COMMENT("%s B", "size unit, narrow space"));
+			format.Truncate(0);
+			formatter.Format(format, value);
+			string.SetToFormat(format.String(), printedSize.String());
 		}
-
-		for (int32 index = 0; ; index++) {
-			if (!kSIZE_FORMATS[index])
+	} else {
+		int precision = 2;
+		while (precision >= 0) {
+			fNumberFormat.SetPrecision(precision);
+			fNumberFormat.Format(printedSize, value);
+			string.SetToFormat(format.String(), printedSize.String());
+			if (font.StringWidth(string) <= width)
 				break;
 
-			sprintf(str, kSIZE_FORMATS[index], float_value, suffix);
-			// strip off an insignificant zero so we don't get readings
-			// such as 1.00
-			char *period = 0;
-			char *tmp (NULL);
-			for (tmp = str; *tmp; tmp++) {
-				if (*tmp == '.')
-					period = tmp;
-			}
-			if (period && period[1] && period[2] == '0') {
-				// move the rest of the string over the insignificant zero
-				for (tmp = &period[2]; *tmp; tmp++)
-					*tmp = tmp[1];
-			}
-			if (font.StringWidth(str) <= width)
-				break;
+			precision--;
 		}
 	}
 
-	string = str;
 	parent->TruncateString(&string, B_TRUNCATE_MIDDLE, width + 2);
 	DrawString(string.String(), parent, rect);
 }
+
+#undef B_TRANSLATION_CONTEXT
 
 
 int
@@ -521,13 +527,10 @@ BIntegerColumn::BIntegerColumn(const char* title, float width, float minWidth,
 void
 BIntegerColumn::DrawField(BField *field, BRect rect, BView* parent)
 {
-	char formatted[256];
-	float width = rect.Width() - (2 * kTEXT_MARGIN);
 	BString string;
 
-	sprintf(formatted, "%d", (int)((BIntegerField*)field)->Value());
-
-	string = formatted;
+	fNumberFormat.Format(string, (int32)((BIntegerField*)field)->Value());
+	float width = rect.Width() - (2 * kTEXT_MARGIN);
 	parent->TruncateString(&string, B_TRUNCATE_MIDDLE, width + 2);
 	DrawString(string.String(), parent, rect);
 }
@@ -554,32 +557,35 @@ GraphColumn::GraphColumn(const char* name, float width, float minWidth,
 void
 GraphColumn::DrawField(BField* field, BRect rect, BView* parent)
 {
-	int number = ((BIntegerField*)field)->Value();
+	double fieldValue = ((BIntegerField*)field)->Value();
+	double percentValue = fieldValue / 100.0;
 
-	if (number > 100)
-		number = 100;
-	else if (number < 0)
-		number = 0;
+	if (percentValue > 1.0)
+		percentValue = 1.0;
+	else if (percentValue < 0.0)
+		percentValue = 0.0;
 
 	BRect graphRect(rect);
 	graphRect.InsetBy(5, 3);
-	parent->StrokeRect(graphRect);
-	if (number > 0) {
+	parent->StrokeRoundRect(graphRect, 2.5, 2.5);
+
+	if (percentValue > 0.0) {
 		graphRect.InsetBy(1, 1);
-		float value = graphRect.Width() * (float)number / 100;
+		double value = graphRect.Width() * percentValue;
 		graphRect.right = graphRect.left + value;
-		parent->SetHighColor(0, 0, 190);
+		parent->SetHighUIColor(B_NAVIGATION_BASE_COLOR);
 		parent->FillRect(graphRect);
 	}
 
 	parent->SetDrawingMode(B_OP_INVERT);
 	parent->SetHighColor(128, 128, 128);
-	char numberString[256];
-	sprintf(numberString, "%d%%", number);
 
-	float width = be_plain_font->StringWidth(numberString);
+	BString percentString;
+	fNumberFormat.FormatPercent(percentString, percentValue);
+	float width = be_plain_font->StringWidth(percentString);
+
 	parent->MovePenTo(rect.left + rect.Width() / 2 - width / 2, rect.bottom - FontHeight());
-	parent->DrawString(numberString);
+	parent->DrawString(percentString.String());
 }
 
 

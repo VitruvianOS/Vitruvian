@@ -1,10 +1,11 @@
 /*
- * Copyright 2001-2015, Haiku Inc. All rights reserved.
+ * Copyright 2001-2020 Haiku Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Frans van Nispen (xlr8@tref.nl)
  *		Marc Flerackers (mflerackers@androme.be)
+ *		John Scipione (jscipione@gmail.com)
  */
 
 
@@ -14,7 +15,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <ControlLook.h>
 #include <InterfaceDefs.h>
 #include <LayoutUtils.h>
 #include <Message.h>
@@ -31,7 +31,8 @@ _BTextInput_::_BTextInput_(BRect frame, BRect textRect, uint32 resizeMask,
 	uint32 flags)
 	:
 	BTextView(frame, "_input_", textRect, resizeMask, flags),
-	fPreviousText(NULL)
+	fPreviousText(NULL),
+	fInMouseDown(false)
 {
 	MakeResizable(true);
 }
@@ -40,7 +41,8 @@ _BTextInput_::_BTextInput_(BRect frame, BRect textRect, uint32 resizeMask,
 _BTextInput_::_BTextInput_(BMessage* archive)
 	:
 	BTextView(archive),
-	fPreviousText(NULL)
+	fPreviousText(NULL),
+	fInMouseDown(false)
 {
 	MakeResizable(true);
 }
@@ -72,13 +74,9 @@ _BTextInput_::Archive(BMessage* data, bool deep) const
 void
 _BTextInput_::MouseDown(BPoint where)
 {
-	if (!IsFocus()) {
-		MakeFocus(true);
-		return;
-	}
-
-	// only pass through to base class if we already have focus
+	fInMouseDown = true;
 	BTextView::MouseDown(where);
+	fInMouseDown = false;
 }
 
 
@@ -86,8 +84,6 @@ void
 _BTextInput_::FrameResized(float width, float height)
 {
 	BTextView::FrameResized(width, height);
-
-	AlignTextRect();
 }
 
 
@@ -131,7 +127,8 @@ _BTextInput_::MakeFocus(bool state)
 
 	if (state) {
 		SetInitialText();
-		SelectAll();
+		if (!fInMouseDown)
+			SelectAll();
 	} else {
 		if (strcmp(Text(), fPreviousText) != 0)
 			TextControl()->Invoke();
@@ -160,42 +157,6 @@ _BTextInput_::MinSize()
 	// the text rect.
 	min.width = min.height * 3;
 	return BLayoutUtils::ComposeSize(ExplicitMinSize(), min);
-}
-
-
-void
-_BTextInput_::AlignTextRect()
-{
-	// the label font could require the control to be higher than
-	// necessary for the text view, we compensate this by layouting
-	// the text rect to be in the middle, normally this means there
-	// is one pixel spacing on each side
-	BRect textRect(Bounds());
-	float vInset = max_c(1,
-			floorf((textRect.Height() - LineHeight(0)) / 2.0));
-	float hInset = 2;
-	float textFontWidth = TextRect().right;
-
-	switch (Alignment()) {
-		case B_ALIGN_LEFT:
-			hInset = be_control_look->DefaultLabelSpacing();
-			break;
-
-		case B_ALIGN_RIGHT:
-			hInset  = textRect.right - textFontWidth;
-			hInset -= be_control_look->DefaultLabelSpacing();
-			break;
-
-		case B_ALIGN_CENTER:
-			hInset = (textRect.right - textFontWidth) / 2.0;
-			break;
-
-		default:
-			break;
-	}
-
-	textRect.InsetBy(hInset, vInset);
-	SetTextRect(textRect);
 }
 
 

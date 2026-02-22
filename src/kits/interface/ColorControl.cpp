@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2013 Haiku, Inc. All Rights Reserved.
+ * Copyright 2001-2025 Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -18,8 +18,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
-#include <iostream>
 
 #include <ControlLook.h>
 #include <Bitmap.h>
@@ -178,6 +176,15 @@ BColorControl::_InitData(color_control_layout layout, float size,
 		AddChild(fGreenText);
 		AddChild(fBlueText);
 	}
+
+	fRedText->SetHighUIColor(B_PANEL_TEXT_COLOR);
+	fBlueText->SetHighUIColor(B_PANEL_TEXT_COLOR);
+	fGreenText->SetHighUIColor(B_PANEL_TEXT_COLOR);
+
+	// right align rgb values so that they line up
+	fRedText->SetAlignment(B_ALIGN_LEFT, B_ALIGN_RIGHT);
+	fGreenText->SetAlignment(B_ALIGN_LEFT, B_ALIGN_RIGHT);
+	fBlueText->SetAlignment(B_ALIGN_LEFT, B_ALIGN_RIGHT);
 
 	ResizeToPreferred();
 
@@ -360,6 +367,18 @@ BColorControl::AttachedToWindow()
 void
 BColorControl::MessageReceived(BMessage* message)
 {
+	if (message->WasDropped() && IsEnabled()) {
+		char* name;
+		type_code type;
+		rgb_color* color;
+		ssize_t size;
+		if (message->GetInfo(B_RGB_COLOR_TYPE, 0, &name, &type) == B_OK
+			&& message->FindData(name, type, (const void**)&color, &size) == B_OK) {
+			SetValue(*color);
+			Invoke(message);
+		}
+	}
+
 	switch (message->what) {
 		case kMsgColorEntered:
 		{
@@ -405,6 +424,7 @@ BColorControl::MessageReceived(BMessage* message)
 
 		default:
 			BControl::MessageReceived(message);
+			break;
 	}
 }
 
@@ -427,7 +447,7 @@ BColorControl::_DrawColorArea(BView* target, BRect updateRect)
 	BRect rect = _PaletteFrame();
 	bool enabled = IsEnabled();
 
-	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color base = ViewColor();
 	rgb_color darken1 = tint_color(base, B_DARKEN_1_TINT);
 
 	uint32 flags = be_control_look->Flags(this);
@@ -495,7 +515,7 @@ BColorControl::_DrawColorArea(BView* target, BRect updateRect)
 void
 BColorControl::_DrawSelectors(BView* target)
 {
-	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color base = ViewColor();
 	rgb_color lightenmax = tint_color(base, B_LIGHTEN_MAX_TINT);
 
 	if (fPaletteMode) {

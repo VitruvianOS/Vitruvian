@@ -1,10 +1,12 @@
 /*
- * Copyright 2007-2009, Haiku, Inc. All rights reserved.
+ * Copyright 2007-2020 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _TEXTVIEW_H
 #define _TEXTVIEW_H
 
+
+#include <stdint.h>
 
 #include <Locker.h>
 #include <View.h>
@@ -128,6 +130,9 @@ public:
 	virtual	void				Select(int32 startOffset, int32 endOffset);
 			void				SelectAll();
 			void				GetSelection(int32* _start, int32* _end) const;
+
+			void				AdoptSystemColors();
+			bool				HasSystemColors() const;
 
 			void				SetFontAndColor(const BFont* font,
 									uint32 mode = B_FONT_ALL,
@@ -297,9 +302,10 @@ private:
 									int32 numBytes);
 
 			void				_Refresh(int32 fromOffset, int32 toOffset,
-									bool scroll);
+									int32 scrollTo = INT32_MIN);
 			void				_RecalculateLineBreaks(int32* startLine,
 									int32* endLine);
+			void				_ValidateTextRect();
 			int32				_FindLineBreak(int32 fromOffset,
 									float* _ascent, float* _descent,
 									float* inOutWidth);
@@ -388,12 +394,14 @@ private:
 			int32				_PreviousWordStart(int32 offset);
 			int32				_NextWordEnd(int32 offset);
 
-			bool				_GetProperty(BMessage* specifier, int32 form,
+			bool				_GetProperty(BMessage* message,
+									BMessage* specifier,
 									const char* property, BMessage* reply);
-			bool				_SetProperty(BMessage* specifier, int32 form,
+			bool				_SetProperty(BMessage* message,
+									BMessage* specifier,
 									const char* property, BMessage* reply);
-			bool				_CountProperties(BMessage* specifier,
-									int32 form, const char* property,
+			bool				_CountProperties(BMessage* message,
+									BMessage* specifier, const char* property,
 									BMessage* reply);
 
 			void				_HandleInputMethodChanged(BMessage* message);
@@ -410,6 +418,18 @@ private:
 
 			void				_FilterDisallowedChars(char* text,
 									ssize_t& length, text_run_array* runArray);
+
+			void				_UpdateInsets(const BRect& rect);
+
+			float				_ViewWidth();
+			float				_ViewHeight();
+			BRect				_ViewRect();
+
+			float				_TextWidth();
+			float				_TextHeight();
+			BRect				_TextRect();
+
+			float				_UneditableTint() const;
 
 private:
 			BPrivate::TextGapBuffer*	fText;

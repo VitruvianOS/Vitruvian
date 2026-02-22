@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include <DataIO.h>
+#include <Gradient.h>
 #include <Point.h>
 #include <Rect.h>
 #include <Region.h>
@@ -156,6 +157,37 @@ PictureDataWriter::WriteSetLineMode(const cap_mode& cap, const join_mode& join,
 
 
 status_t
+PictureDataWriter::WriteSetFillRule(int32 fillRule)
+{
+	try {
+		BeginOp(B_PIC_SET_FILL_RULE);
+		Write<int32>(fillRule);
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+PictureDataWriter::WriteSetBlendingMode(source_alpha srcAlpha, alpha_function alphaFunc)
+{
+	try {
+		BeginOp(B_PIC_SET_BLENDING_MODE);
+		Write<int16>(srcAlpha);
+		Write<int16>(alphaFunc);
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
 PictureDataWriter::WriteSetScale(const float& scale)
 {
 	try {
@@ -269,18 +301,14 @@ PictureDataWriter::WriteClipToPicture(int32 pictureToken,
 status_t
 PictureDataWriter::WriteSetClipping(const BRegion& region)
 {
-	// TODO: I don't know if it's compatible with R5's BPicture version
 	try {
+		BeginOp(B_PIC_SET_CLIPPING_RECTS);
+		Write<clipping_rect>(region.FrameInt());
 		const int32 numRects = region.CountRects();
-		if (numRects > 0 && region.Frame().IsValid()) {
-			BeginOp(B_PIC_SET_CLIPPING_RECTS);
-			Write<uint32>(numRects);
-			for (int32 i = 0; i < numRects; i++)
-				Write<BRect>(region.RectAt(i));
+		for (int32 i = 0; i < numRects; i++)
+			Write<clipping_rect>(region.RectAtInt(i));
 
-			EndOp();
-		} else
-			WriteClearClipping();
+		EndOp();
 	} catch (status_t& status) {
 		return status;
 	}
@@ -464,12 +492,10 @@ PictureDataWriter::WriteDrawString(const BPoint& where, const char* string,
 		EndOp();
 
 		BeginOp(B_PIC_DRAW_STRING);
+		Write<int32>(length);
+		WriteData(string, length);
 		Write<float>(escapement.space);
 		Write<float>(escapement.nonspace);
-		//WriteData(string, length + 1);
-			// TODO: is string 0 terminated? why is length given?
-		WriteData(string, length);
-		Write<uint8>(0);
 		EndOp();
 	} catch (status_t& status) {
 		return status;
@@ -489,8 +515,8 @@ PictureDataWriter::WriteDrawString(const char* string,
 		for (int32 i = 0; i < locationCount; i++) {
 			Write<BPoint>(locations[i]);
 		}
+		Write<int32>(length);
 		WriteData(string, length);
-		Write<uint8>(0);
 		EndOp();
 	} catch (status_t& status) {
 		return status;
@@ -510,6 +536,155 @@ PictureDataWriter::WriteDrawShape(const int32& opCount, const void* opList,
 		Write<int32>(ptCount);
 		WriteData(opList, opCount * sizeof(uint32));
 		WriteData(ptList, ptCount * sizeof(BPoint));
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+PictureDataWriter::WriteDrawRectGradient(const BRect& rect, const BGradient& gradient, const bool& fill)
+{
+	try {
+		BeginOp(fill ? B_PIC_FILL_RECT_GRADIENT : B_PIC_STROKE_RECT_GRADIENT);
+		Write<BRect>(rect);
+		gradient.Flatten(fData);
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+PictureDataWriter::WriteDrawRoundRectGradient(const BRect& rect, const BPoint& radius, const BGradient& gradient,
+	const bool& fill)
+{
+	try {
+		BeginOp(fill ? B_PIC_FILL_ROUND_RECT_GRADIENT : B_PIC_STROKE_ROUND_RECT_GRADIENT);
+		Write<BRect>(rect);
+		Write<BPoint>(radius);
+		gradient.Flatten(fData);
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+PictureDataWriter::WriteDrawBezierGradient(const BPoint points[4], const BGradient& gradient, const bool& fill)
+{
+	try {
+		BeginOp(fill ? B_PIC_FILL_BEZIER_GRADIENT : B_PIC_STROKE_BEZIER_GRADIENT);
+		for (int32 i = 0; i < 4; i++)
+			Write<BPoint>(points[i]);
+
+		gradient.Flatten(fData);
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+PictureDataWriter::WriteDrawArcGradient(const BPoint& center, const BPoint& radius,
+	const float& startTheta, const float& arcTheta, const BGradient& gradient, const bool& fill)
+{
+	try {
+		BeginOp(fill ? B_PIC_FILL_ARC_GRADIENT : B_PIC_STROKE_ARC_GRADIENT);
+		Write<BPoint>(center);
+		Write<BPoint>(radius);
+		Write<float>(startTheta);
+		Write<float>(arcTheta);
+		gradient.Flatten(fData);
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+PictureDataWriter::WriteDrawEllipseGradient(const BRect& rect, const BGradient& gradient, const bool& fill)
+{
+	try {
+		BeginOp(fill ? B_PIC_FILL_ELLIPSE_GRADIENT : B_PIC_STROKE_ELLIPSE_GRADIENT);
+		Write<BRect>(rect);
+		gradient.Flatten(fData);
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+PictureDataWriter::WriteDrawPolygonGradient(const int32& numPoints, BPoint* points,
+	const bool& isClosed, const BGradient& gradient, const bool& fill)
+{
+	try {
+		BeginOp(fill ? B_PIC_FILL_POLYGON_GRADIENT : B_PIC_STROKE_POLYGON_GRADIENT);
+		Write<int32>(numPoints);
+		for (int32 i = 0; i < numPoints; i++)
+			Write<BPoint>(points[i]);
+
+		if (!fill)
+			Write<uint8>((uint8)isClosed);
+
+		gradient.Flatten(fData);
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+PictureDataWriter::WriteDrawShapeGradient(const int32& opCount, const void* opList,
+	const int32& ptCount, const void* ptList, const BGradient& gradient, const bool& fill)
+{
+	try {
+		BeginOp(fill ? B_PIC_FILL_SHAPE_GRADIENT : B_PIC_STROKE_SHAPE_GRADIENT);
+		Write<int32>(opCount);
+		Write<int32>(ptCount);
+		WriteData(opList, opCount * sizeof(uint32));
+		WriteData(ptList, ptCount * sizeof(BPoint));
+		gradient.Flatten(fData);
+		EndOp();
+	} catch (status_t& status) {
+		return status;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+PictureDataWriter::WriteStrokeLineGradient(const BPoint& start, const BPoint& end,
+	const BGradient& gradient)
+{
+	try {
+		BeginOp(B_PIC_STROKE_LINE_GRADIENT);
+		Write<BPoint>(start);
+		Write<BPoint>(end);
+		gradient.Flatten(fData);
 		EndOp();
 	} catch (status_t& status) {
 		return status;
@@ -571,8 +746,10 @@ PictureDataWriter::WriteSetFontFamily(const font_family family)
 {
 	try {
 		BeginOp(B_PIC_SET_FONT_FAMILY);
-		WriteData(family, strlen(family));
-		Write<uint8>(0);
+		// BeOS writes string size including terminating null character for some reason.
+		uint32 length = strlen(family) + 1;
+		Write<uint32>(length);
+		WriteData(family, length);
 		EndOp();
 	} catch (status_t& status) {
 		return status;
@@ -587,8 +764,10 @@ PictureDataWriter::WriteSetFontStyle(const font_style style)
 {
 	try {
 		BeginOp(B_PIC_SET_FONT_STYLE);
-		WriteData(style, strlen(style));
-		Write<uint8>(0);
+		// BeOS writes string size including terminating null character for some reason.
+		uint32 length = strlen(style) + 1;
+		Write<uint32>(length);
+		WriteData(style, length);
 		EndOp();
 	} catch (status_t& status) {
 		return status;

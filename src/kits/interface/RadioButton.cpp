@@ -85,11 +85,11 @@ BRadioButton::Archive(BMessage* data, bool deep) const
 void
 BRadioButton::Draw(BRect updateRect)
 {
+	rgb_color base = ViewColor();
+
 	// its size depends on the text height
 	font_height fontHeight;
 	GetFontHeight(&fontHeight);
-
-	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
 
 	uint32 flags = be_control_look->Flags(this);
 	if (fOutlined)
@@ -99,19 +99,14 @@ BRadioButton::Draw(BRect updateRect)
 	BRect rect(knobRect);
 	be_control_look->DrawRadioButton(this, rect, updateRect, base, flags);
 
-	// erase the is control flag before drawing the label so that the label
-	// will get drawn using B_PANEL_TEXT_COLOR.
-	flags &= ~BControlLook::B_IS_CONTROL;
-
 	BRect labelRect(Bounds());
-	labelRect.left = knobRect.right + 1
-		+ be_control_look->DefaultLabelSpacing();
+	labelRect.left = knobRect.right + 1 + be_control_look->DefaultLabelSpacing();
 
 	const BBitmap* icon = IconBitmap(
 		B_INACTIVE_ICON_BITMAP | (IsEnabled() ? 0 : B_DISABLED_ICON_BITMAP));
+	const BAlignment alignment = BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER);
 
-	be_control_look->DrawLabel(this, Label(), icon, labelRect, updateRect,
-		base, flags);
+	be_control_look->DrawLabel(this, Label(), icon, labelRect, updateRect, base, flags, alignment);
 }
 
 

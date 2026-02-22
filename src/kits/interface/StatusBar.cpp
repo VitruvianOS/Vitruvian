@@ -323,7 +323,7 @@ BStatusBar::Draw(BRect updateRect)
 		rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
 
 		if (backgroundColor != ui_color(B_PANEL_BACKGROUND_COLOR)) {
-			if (backgroundColor.Brightness() > 100)
+			if (backgroundColor.IsLight())
 				textColor = make_color(0, 0, 0, 255);
 			else
 				textColor = make_color(255, 255, 255, 255);
@@ -382,10 +382,11 @@ BStatusBar::MessageReceived(BMessage *message)
 
 		case B_COLORS_UPDATED:
 		{
-			// Change the bar color IF we don't have an application-set color.
-			if ((fInternalFlags & kCustomBarColor) == 0) {
-				message->FindColor(ui_color_name(B_STATUS_BAR_COLOR),
-					&fBarColor);
+			rgb_color color;
+			if (message->FindColor(ui_color_name(B_STATUS_BAR_COLOR), &color) == B_OK) {
+				// Change the bar color IF we don't have an application-set color.
+				if ((fInternalFlags & kCustomBarColor) == 0)
+					fBarColor = color;
 			}
 
 			break;

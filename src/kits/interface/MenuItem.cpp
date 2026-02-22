@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2015 Haiku, Inc. All rights reserved.
+ * Copyright 2001-2025 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -40,10 +40,9 @@ const char* kUTF8ControlMap[] = {
 	NULL, /* B_END */
 	NULL, /* B_INSERT */
 	NULL, NULL,
-	NULL, /* B_BACKSPACE */
+	"\xe2\x8c\xab", /* B_BACKSPACE U+232B */
 	"\xe2\x86\xb9", /* B_TAB U+21B9 */
-	"\xe2\x86\xb5", /* B_ENTER, U+21B5 */
-	//"\xe2\x8f\x8e", /* B_ENTER, U+23CE it's the official one */
+	"\xe2\x8f\x8e", /* B_ENTER, U+23CE */
 	NULL, /* B_PAGE_UP */
 	NULL, /* B_PAGE_DOWN */
 	NULL, NULL, NULL,
@@ -53,13 +52,16 @@ const char* kUTF8ControlMap[] = {
 	"\xe2\x86\x92", /* B_RIGHT_ARROW */
 	"\xe2\x86\x91", /* B_UP_ARROW */
 	"\xe2\x86\x93", /* B_DOWN_ARROW */
+	"\xe2\x90\xa3"  /* B_SPACE */
 };
+
+static const char* kDeleteShortcutUTF8 = "\xe2\x8c\xa6"; /* B_DELETE U+2326 */
 
 
 using BPrivate::MenuPrivate;
 
-BMenuItem::BMenuItem(const char* label, BMessage* message, char shortcut,
-	uint32 modifiers)
+
+BMenuItem::BMenuItem(const char* label, BMessage* message, char shortcut, uint32 modifiers)
 {
 	_InitData();
 	if (label != NULL)
@@ -68,11 +70,7 @@ BMenuItem::BMenuItem(const char* label, BMessage* message, char shortcut,
 	SetMessage(message);
 
 	fShortcutChar = shortcut;
-
-	if (shortcut != 0)
-		fModifiers = modifiers | B_COMMAND_KEY;
-	else
-		fModifiers = 0;
+	fModifiers = (fShortcutChar != 0 ? modifiers : 0);
 }
 
 
@@ -161,7 +159,7 @@ BMenuItem::Archive(BMessage* data, bool deep) const
 	if (status == B_OK && fUserTrigger)
 		status = data->AddInt32("_user_trig", fUserTrigger);
 
-	if (status == B_OK && fShortcutChar) {
+	if (status == B_OK && fShortcutChar != 0) {
 		status = data->AddInt32("_shortcut", fShortcutChar);
 		if (status == B_OK)
 			status = data->AddInt32("_mods", fModifiers);
@@ -274,20 +272,16 @@ BMenuItem::SetTrigger(char trigger)
 void
 BMenuItem::SetShortcut(char shortcut, uint32 modifiers)
 {
-	if (fShortcutChar != 0 && (fModifiers & B_COMMAND_KEY) != 0
-		&& fWindow != NULL) {
+	if (fShortcutChar != 0 && fWindow != NULL)
 		fWindow->RemoveShortcut(fShortcutChar, fModifiers);
-	}
 
-	fShortcutChar = shortcut;
+	uint32 key = (uint32)shortcut;
 
-	if (shortcut != 0)
-		fModifiers = modifiers | B_COMMAND_KEY;
-	else
-		fModifiers = 0;
+	if (key != 0 && fWindow != NULL)
+		fWindow->_AddShortcut(&key, &modifiers, this);
 
-	if (fShortcutChar != 0 && (fModifiers & B_COMMAND_KEY) && fWindow)
-		fWindow->AddShortcut(fShortcutChar, fModifiers, this);
+	fShortcutChar = (char)key;
+	fModifiers = (fShortcutChar != 0 ? modifiers : 0);
 
 	if (fSuper != NULL) {
 		fSuper->InvalidateLayout();
@@ -469,13 +463,16 @@ BMenuItem::Draw()
 	DrawContent();
 
 	// draw extra symbols
-	const menu_layout layout = MenuPrivate(fSuper).Layout();
-	if (layout == B_ITEMS_IN_COLUMN) {
+	MenuPrivate privateAccessor(fSuper);
+	const menu_layout layout = privateAccessor.Layout();
+	if (layout != B_ITEMS_IN_ROW) {
 		if (IsMarked())
 			_DrawMarkSymbol();
+	}
 
-		if (fShortcutChar)
-			_DrawShortcutSymbol();
+	if (layout == B_ITEMS_IN_COLUMN) {
+		if (fShortcutChar != 0)
+			_DrawShortcutSymbol(privateAccessor.HasSubmenus());
 
 		if (Submenu() != NULL)
 			_DrawSubmenuSymbol();
@@ -571,11 +568,17 @@ BMenuItem::Install(BWindow* window)
 
 	fWindow = window;
 
-	if (fShortcutChar != 0 && (fModifiers & B_COMMAND_KEY) && fWindow)
-		window->AddShortcut(fShortcutChar, fModifiers, this);
+	uint32 key = (uint32)fShortcutChar;
+	uint32 modifiers = fModifiers;
+
+	if (fShortcutChar != 0 && fWindow != NULL)
+		fWindow->_AddShortcut(&key, &modifiers, this);
+
+	fShortcutChar = (char)key;
+	fModifiers = (fShortcutChar != 0 ? modifiers : 0);
 
 	if (!Messenger().IsValid())
-		SetTarget(window);
+		SetTarget(fWindow);
 }
 
 
@@ -627,10 +630,8 @@ BMenuItem::Uninstall()
 	if (Target() == fWindow)
 		SetTarget(BMessenger());
 
-	if (fShortcutChar != 0 && (fModifiers & B_COMMAND_KEY) != 0
-		&& fWindow != NULL) {
+	if (fShortcutChar != 0 && fWindow != NULL)
 		fWindow->RemoveShortcut(fShortcutChar, fModifiers);
-	}
 
 	fWindow = NULL;
 }
@@ -745,21 +746,24 @@ BMenuItem::_DrawMarkSymbol()
 
 
 void
-BMenuItem::_DrawShortcutSymbol()
+BMenuItem::_DrawShortcutSymbol(bool submenus)
 {
 	BMenu* menu = fSuper;
 	BFont font;
 	menu->GetFont(&font);
 	BPoint where = ContentLocation();
+	// Start from the right and walk our way back
 	where.x = fBounds.right - font.Size();
 
-	if (fSubmenu != NULL)
+	// Leave space for the submenu arrow if any item in the menu has a submenu
+	if (submenus)
 		where.x -= fBounds.Height() / 2;
 
 	const float ascent = MenuPrivate(fSuper).Ascent();
-	if (fShortcutChar < B_SPACE && kUTF8ControlMap[(int)fShortcutChar])
+	if ((fShortcutChar <= B_SPACE && kUTF8ControlMap[(int)fShortcutChar])
+		|| fShortcutChar == B_DELETE) {
 		_DrawControlChar(fShortcutChar, where + BPoint(0, ascent));
-	else
+	} else
 		fSuper->DrawChar(fShortcutChar, where + BPoint(0, ascent));
 
 	where.y += (fBounds.Height() - 11) / 2 - 1;
@@ -825,7 +829,9 @@ BMenuItem::_DrawControlChar(char shortcut, BPoint where)
 	// TODO: If needed, take another font for the control characters
 	//	(or have font overlays in the app_server!)
 	const char* symbol = " ";
-	if (kUTF8ControlMap[(int)fShortcutChar])
+	if (shortcut == B_DELETE)
+		symbol = kDeleteShortcutUTF8;
+	else if (kUTF8ControlMap[(int)fShortcutChar])
 		symbol = kUTF8ControlMap[(int)fShortcutChar];
 
 	fSuper->DrawString(symbol, where);

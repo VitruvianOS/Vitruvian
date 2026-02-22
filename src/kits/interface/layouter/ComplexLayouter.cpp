@@ -53,7 +53,7 @@ public:
 	void InitFromSizes(int32* sizes)
 	{
 		fLocations[0] = 0;
-		for (int32 i = 0; i < fCount; i++) 
+		for (int32 i = 0; i < fCount; i++)
 			fLocations[i + 1] = fLocations[i] + sizes[i] + fSpacing;
 	}
 
@@ -168,7 +168,7 @@ ComplexLayouter::ComplexLayouter(int32 elementCount, float spacing)
 	  fSums(new(nothrow) SumItem[elementCount + 1]),
 	  fSumBackups(new(nothrow) SumItemBackup[elementCount + 1]),
 	  fOptimizer(new(nothrow) LayoutOptimizer(elementCount)),
-	  fUnlimited(B_SIZE_UNLIMITED / (elementCount == 0 ? 1 : elementCount)),
+	  fUnlimited((int32)B_SIZE_UNLIMITED / (elementCount == 0 ? 1 : elementCount)),
 	  fMinMaxValid(false),
 	  fOptimizerConstraintsAdded(false)
 {
@@ -605,6 +605,12 @@ ComplexLayouter::_ValidateLayout()
 		Constraint* constraint = fConstraints[i];
 		while (constraint != NULL) {
 			int32 minSum = fSums[constraint->start].min + constraint->min;
+			//Do not allow the cumulative minimum at fSums[i+1].min to be less than the
+			//cumulative minimum already established at fSums[i].min (fSums[i] may have been
+			//ignored if fSums[constraint->start] evaluates to, say, fSums[i-1]).
+			if (minSum < fSums[i].min) {
+				minSum = fSums[i].min;
+			}
 			if (minSum > sum.min) {
 				sum.min = minSum;
 			} else {

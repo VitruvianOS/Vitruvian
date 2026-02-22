@@ -21,6 +21,7 @@
 #include <Bitmap.h>
 #include <Button.h>
 #include <ControlLook.h>
+#include <Debug.h>
 #include <FindDirectory.h>
 #include <IconUtils.h>
 #include <LayoutBuilder.h>
@@ -57,8 +58,7 @@ public:
 	virtual	BSize				MaxSize();
 	virtual	void				Draw(BRect updateRect);
 
-			void				SetBitmap(BBitmap* Icon)
-									{ fIconBitmap = Icon; }
+			void				SetBitmap(BBitmap* icon);
 			BBitmap*			Bitmap()
 									{ return fIconBitmap; }
 
@@ -84,17 +84,10 @@ static const int kSemTimeOut = 50000;
 
 static const int kButtonOffsetSpacing = 62;
 static const int kButtonUsualWidth = 55;
-static const int kIconStripeWidth = 30;
+static const int kIconStripeWidthFactor = 5;
 
 static const int kWindowMinWidth = 310;
 static const int kWindowOffsetMinWidth = 335;
-
-
-static inline int32
-icon_layout_scale()
-{
-	return max_c(1, ((int32)be_plain_font->Size() + 15) / 16);
-}
 
 
 // #pragma mark -
@@ -486,8 +479,8 @@ void BAlert::_ReservedAlert3() {}
 
 
 void
-BAlert::_Init(const char* text, const char* button0, const char* button1,
-	const char* button2, button_width buttonWidth, button_spacing spacing,
+BAlert::_Init(const char* text, const char* button1, const char* button2,
+	const char* button3, button_width buttonWidth, button_spacing spacing,
 	alert_type type)
 {
 	fInvoker = NULL;
@@ -521,9 +514,9 @@ BAlert::_Init(const char* text, const char* button0, const char* button1,
 				.AddGlue()
 				.Add(fButtonLayout);
 
-	AddButton(button0);
 	AddButton(button1);
 	AddButton(button2);
+	AddButton(button3);
 
 	AddCommonFilter(new(std::nothrow) _BAlertFilter_(this));
 }
@@ -537,45 +530,21 @@ BAlert::_CreateTypeIcon()
 
 	// The icons are in the app_server resources
 	BBitmap* icon = NULL;
-	BPath path;
-	status_t status = find_directory(B_BEOS_SERVERS_DIRECTORY, &path);
-	if (status != B_OK) {
-		FTRACE((stderr, "BAlert::_CreateTypeIcon() - find_directory "
-			"failed: %s\n", strerror(status)));
-		return NULL;
-	}
-
-	path.Append("app_server");
-	BFile file;
-	status = file.SetTo(path.Path(), B_READ_ONLY);
-	if (status != B_OK) {
-		FTRACE((stderr, "BAlert::_CreateTypeIcon() - BFile init failed: %s\n",
-			strerror(status)));
-		return NULL;
-	}
-
-	BResources resources;
-	status = resources.SetTo(&file);
-	if (status != B_OK) {
-		FTRACE((stderr, "BAlert::_CreateTypeIcon() - BResources init "
-			"failed: %s\n", strerror(status)));
-		return NULL;
-	}
 
 	// Which icon are we trying to load?
 	const char* iconName;
 	switch (fType) {
 		case B_INFO_ALERT:
-			iconName = "info";
+			iconName = "dialog-information";
 			break;
 		case B_IDEA_ALERT:
-			iconName = "idea";
+			iconName = "dialog-idea";
 			break;
 		case B_WARNING_ALERT:
-			iconName = "warn";
+			iconName = "dialog-warning";
 			break;
 		case B_STOP_ALERT:
-			iconName = "stop";
+			iconName = "dialog-error";
 			break;
 
 		default:
@@ -584,9 +553,8 @@ BAlert::_CreateTypeIcon()
 			return NULL;
 	}
 
-	int32 iconSize = 32 * icon_layout_scale();
 	// Allocate the icon bitmap
-	icon = new(std::nothrow) BBitmap(BRect(0, 0, iconSize - 1, iconSize - 1),
+	icon = new(std::nothrow) BBitmap(BRect(BPoint(0, 0), be_control_look->ComposeIconSize(32)),
 		0, B_RGBA32);
 	if (icon == NULL || icon->InitCheck() < B_OK) {
 		FTRACE((stderr, "BAlert::_CreateTypeIcon() - No memory for bitmap\n"));
@@ -595,31 +563,7 @@ BAlert::_CreateTypeIcon()
 	}
 
 	// Load the raw icon data
-	size_t size = 0;
-	const uint8* rawIcon;
-
-	// Try to load vector icon
-	rawIcon = (const uint8*)resources.LoadResource(B_VECTOR_ICON_TYPE,
-		iconName, &size);
-	if (rawIcon != NULL
-		&& BIconUtils::GetVectorIcon(rawIcon, size, icon) == B_OK) {
-		return icon;
-	}
-
-	// Fall back to bitmap icon
-	rawIcon = (const uint8*)resources.LoadResource(B_LARGE_ICON_TYPE,
-		iconName, &size);
-	if (rawIcon == NULL) {
-		FTRACE((stderr, "BAlert::_CreateTypeIcon() - Icon resource not found\n"));
-		delete icon;
-		return NULL;
-	}
-
-	// Handle color space conversion
-	if (icon->ColorSpace() != B_CMAP8) {
-		BIconUtils::ConvertFromCMAP8(rawIcon, iconSize, iconSize,
-			iconSize, icon);
-	}
+	BIconUtils::GetSystemIcon(iconName, icon);
 
 	return icon;
 }
@@ -754,21 +698,41 @@ TAlertView::Archive(BMessage* archive, bool deep) const
 
 
 void
+TAlertView::SetBitmap(BBitmap* icon)
+{
+	if (icon == NULL && fIconBitmap == NULL)
+		return;
+
+	ASSERT(icon != fIconBitmap);
+
+	BBitmap* oldBitmap = fIconBitmap;
+	fIconBitmap = icon;
+	Invalidate();
+
+	if (oldBitmap == NULL || icon == NULL || oldBitmap->Bounds() != icon->Bounds())
+		InvalidateLayout();
+
+	delete oldBitmap;
+}
+
+
+void
 TAlertView::GetPreferredSize(float* _width, float* _height)
 {
-	int32 scale = icon_layout_scale();
-
 	if (_width != NULL) {
+		*_width = be_control_look->DefaultLabelSpacing() * 3;
 		if (fIconBitmap != NULL)
-			*_width = 18 * scale + fIconBitmap->Bounds().Width();
+			*_width += fIconBitmap->Bounds().Width();
 		else
-			*_width = 0;
+			*_width += be_control_look->ComposeIconSize(B_LARGE_ICON).Width();
 	}
+
 	if (_height != NULL) {
+		*_height = be_control_look->DefaultLabelSpacing();
 		if (fIconBitmap != NULL)
-			*_height = 6 * scale + fIconBitmap->Bounds().Height();
+			*_height += fIconBitmap->Bounds().Height();
 		else
-			*_height = 0;
+			*_height += be_control_look->ComposeIconSize(B_LARGE_ICON).Height();
 	}
 }
 
@@ -783,20 +747,19 @@ TAlertView::MaxSize()
 void
 TAlertView::Draw(BRect updateRect)
 {
-	if (fIconBitmap == NULL)
-		return;
-
 	// Here's the fun stuff
 	BRect stripeRect = Bounds();
-	int32 iconLayoutScale = icon_layout_scale();
-	stripeRect.right = kIconStripeWidth * iconLayoutScale;
+	stripeRect.right = kIconStripeWidthFactor * be_control_look->DefaultLabelSpacing();
 	SetHighColor(tint_color(ViewColor(), B_DARKEN_1_TINT));
 	FillRect(stripeRect);
 
+	if (fIconBitmap == NULL)
+		return;
+
 	SetDrawingMode(B_OP_ALPHA);
 	SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
-	DrawBitmapAsync(fIconBitmap, BPoint(18 * iconLayoutScale,
-		6 * iconLayoutScale));
+	DrawBitmapAsync(fIconBitmap, BPoint(be_control_look->DefaultLabelSpacing() * 3,
+		be_control_look->DefaultLabelSpacing()));
 }
 
 

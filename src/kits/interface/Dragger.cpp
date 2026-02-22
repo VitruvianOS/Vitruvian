@@ -227,6 +227,7 @@ BDragger::AttachedToWindow()
 		SetLowColor(kZombieColor);
 		SetViewColor(kZombieColor);
 	} else {
+		SetFlags(Flags() | B_TRANSPARENT_BACKGROUND);
 		SetLowColor(B_TRANSPARENT_COLOR);
 		SetViewColor(B_TRANSPARENT_COLOR);
 	}
@@ -251,16 +252,6 @@ BDragger::Draw(BRect update)
 	BRect bounds(Bounds());
 
 	if (AreDraggersDrawn() && (fShelf == NULL || fShelf->AllowsDragging())) {
-		if (Parent() != NULL && (Parent()->Flags() & B_DRAW_ON_CHILDREN) == 0) {
-			uint32 flags = Parent()->Flags();
-			Parent()->SetFlags(flags | B_DRAW_ON_CHILDREN);
-			SetHighColor(Parent()->ViewColor());
-			FillRect(Bounds());
-			Parent()->Draw(Frame() & ConvertToParent(update));
-			Parent()->Flush();
-			Parent()->SetFlags(flags);
-		}
-
 		BPoint where = bounds.RightBottom() - BPoint(fBitmap->Bounds().Width(),
 			fBitmap->Bounds().Height());
 		SetDrawingMode(B_OP_OVER);
@@ -269,18 +260,6 @@ BDragger::Draw(BRect update)
 
 		if (fIsZombie) {
 			// TODO: should draw it differently ?
-		}
-	} else if (IsVisibilityChanging()) {
-		if (Parent() != NULL) {
-			if ((Parent()->Flags() & B_DRAW_ON_CHILDREN) == 0) {
-				uint32 flags = Parent()->Flags();
-				Parent()->SetFlags(flags | B_DRAW_ON_CHILDREN);
-				Parent()->Invalidate(Frame() & ConvertToParent(update));
-				Parent()->SetFlags(flags);
-			}
-		} else {
-			SetHighColor(255, 255, 255);
-			FillRect(bounds);
 		}
 	}
 }
@@ -336,10 +315,7 @@ BDragger::MessageReceived(BMessage* msg)
 			// This code is used whenever the "are draggers drawn" option is
 			// changed.
 			if (fRelation == TARGET_IS_CHILD) {
-				fTransition = true;
-				Draw(Bounds());
-				Flush();
-				fTransition = false;
+				Invalidate(Bounds());
 			} else {
 				if ((fShelf != NULL && fShelf->AllowsDragging()
 						&& AreDraggersDrawn())
@@ -668,7 +644,7 @@ BDragger::_AddToList()
 		// The dragger is not shown - but we can't hide us in case we're the
 		// parent of the actual target view (because then you couldn't see
 		// it anymore).
-		if (fRelation != TARGET_IS_CHILD && !IsHidden())
+		if (fRelation != TARGET_IS_CHILD && !IsHidden(this))
 			Hide();
 	}
 }

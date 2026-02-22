@@ -15,6 +15,7 @@
 #include <AppServerLink.h>
 #include <ServerProtocol.h>
 
+#include <math.h>
 
 // patterns
 const pattern B_SOLID_HIGH = {{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
@@ -36,11 +37,15 @@ const uint32 B_TRANSPARENT_MAGIC_RGBA32_BIG = 0x77747700;
 const struct screen_id B_MAIN_SCREEN_ID = {0};
 
 
-// rgb_color
 int32
 rgb_color::Brightness() const
 {
-	return ((int32)red * 41 + (int32)green * 187 + (int32)blue * 28) >> 8;
+	// From http://alienryderflex.com/hsp.html
+	// Useful in particular to decide if the color is "light" or "dark"
+	// by checking if the perceptual brightness is > 127.
+
+	return (uint8)roundf(sqrtf(
+		0.299f * red * red + 0.587f * green * green + 0.114 * blue * blue));
 }
 
 
@@ -97,6 +102,14 @@ get_pixel_size_for(color_space space, size_t *pixelChunk, size_t *rowAlignment,
 	int32 pixPerChunk = 0;
 	switch (space) {
 		// supported
+		case B_RGBA64: case B_RGBA64_BIG:
+			bytesPerPixel = 8;
+			pixPerChunk = 2;
+			break;
+		case B_RGB48: case B_RGB48_BIG:
+			bytesPerPixel = 6;
+			pixPerChunk = 2;
+			break;
 		case B_RGB32: case B_RGBA32:
 		case B_RGB32_BIG: case B_RGBA32_BIG:
 		case B_UVL32: case B_UVLA32:
@@ -217,6 +230,8 @@ bitmaps_support_space(color_space space, uint32 *supportFlags)
 			break;
 
 		// supported, but cannot draw
+		case B_RGBA64: case B_RGBA64_BIG:
+		case B_RGB48: case B_RGB48_BIG:
 		case B_YCbCr422: case B_YCbCr411: case B_YCbCr444: case B_YCbCr420:
 		case B_YUV422: case B_YUV411: case B_YUV444: case B_YUV420:
 		case B_UVL24: case B_UVL32: case B_UVLA32:

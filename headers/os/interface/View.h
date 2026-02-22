@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2015 Haiku, Inc. All rights reserved.
+ * Copyright 2001-2020 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef	_VIEW_H
@@ -16,10 +16,13 @@
 
 
 // mouse button
+#define B_MOUSE_BUTTON(n) (1 << ((n) - 1))
+
+// Legacy BeOS R5 mouse button definitions
 enum {
-	B_PRIMARY_MOUSE_BUTTON				= 0x01,
-	B_SECONDARY_MOUSE_BUTTON			= 0x02,
-	B_TERTIARY_MOUSE_BUTTON				= 0x04
+	B_PRIMARY_MOUSE_BUTTON				= B_MOUSE_BUTTON(1),
+	B_SECONDARY_MOUSE_BUTTON			= B_MOUSE_BUTTON(2),
+	B_TERTIARY_MOUSE_BUTTON				= B_MOUSE_BUTTON(3)
 };
 
 // mouse transit
@@ -41,19 +44,20 @@ enum {
 	B_LOCK_WINDOW_FOCUS					= 0x00000001,
 	B_SUSPEND_VIEW_FOCUS				= 0x00000002,
 	B_NO_POINTER_HISTORY				= 0x00000004,
-	// NOTE: New in Haiku (unless this flag is
-	// specified, both BWindow and BView::GetMouse()
-	// will filter out older mouse moved messages)
+		// NOTE: This is the default behavior in Haiku, unlike in BeOS
 	B_FULL_POINTER_HISTORY				= 0x00000008
+		// NOTE: New in Haiku (unless this flag is
+		// specified, both BWindow and BView::GetMouse()
+		// will filter out older mouse moved messages)
 };
 
-enum {
+enum rect_tracking_style {
 	B_TRACK_WHOLE_RECT,
 	B_TRACK_RECT_CORNER
 };
 
 // set font mask
-enum {
+enum set_font_mask {
 	B_FONT_FAMILY_AND_STYLE				= 0x00000001,
 	B_FONT_SIZE							= 0x00000002,
 	B_FONT_SHEAR						= 0x00000004,
@@ -66,6 +70,16 @@ enum {
 	B_FONT_ALL							= 0x000001FF
 };
 
+typedef enum {
+	B_CURRENT_STATE_COORDINATES,
+	B_PREVIOUS_STATE_COORDINATES,
+	B_VIEW_COORDINATES,
+	B_PARENT_VIEW_DRAW_COORDINATES,
+	B_PARENT_VIEW_COORDINATES,
+	B_WINDOW_COORDINATES,
+	B_SCREEN_COORDINATES
+} coordinate_space;
+
 // view flags
 const uint32 B_FULL_UPDATE_ON_RESIZE	= 0x80000000UL;	/* 31 */
 const uint32 _B_RESERVED1_				= 0x40000000UL;	/* 30 */
@@ -76,10 +90,11 @@ const uint32 B_FRAME_EVENTS				= 0x04000000UL;	/* 26 */
 const uint32 B_NAVIGABLE				= 0x02000000UL;	/* 25 */
 const uint32 B_SUBPIXEL_PRECISE			= 0x01000000UL;	/* 24 */
 const uint32 B_DRAW_ON_CHILDREN			= 0x00800000UL;	/* 23 */
-const uint32 B_INPUT_METHOD_AWARE		= 0x00400000UL;	/* 23 */
-const uint32 B_SCROLL_VIEW_AWARE		= 0x00200000UL;	/* 22 */
-const uint32 B_SUPPORTS_LAYOUT			= 0x00100000UL;	/* 21 */
-const uint32 B_INVALIDATE_AFTER_LAYOUT	= 0x00080000UL;	/* 20 */
+const uint32 B_INPUT_METHOD_AWARE		= 0x00400000UL;	/* 22 */
+const uint32 B_SCROLL_VIEW_AWARE		= 0x00200000UL;	/* 21 */
+const uint32 B_SUPPORTS_LAYOUT			= 0x00100000UL;	/* 20 */
+const uint32 B_INVALIDATE_AFTER_LAYOUT	= 0x00080000UL;	/* 19 */
+const uint32 B_TRANSPARENT_BACKGROUND	= 0x00040000UL;	/* 18 */
 
 #define _RESIZE_MASK_ (0xffff)
 
@@ -89,25 +104,24 @@ const uint32 _VIEW_BOTTOM_				= 3UL;
 const uint32 _VIEW_RIGHT_				= 4UL;
 const uint32 _VIEW_CENTER_				= 5UL;
 
-inline uint32 _rule_(uint32 r1, uint32 r2, uint32 r3, uint32 r4)
-	{ return ((r1 << 12) | (r2 << 8) | (r3 << 4) | r4); }
+#define _rule_(r1, r2, r3, r4) (((r1) << 12) | ((r2) << 8) | ((r3) << 4) | (r4))
 
-#define B_FOLLOW_NONE 0
-#define B_FOLLOW_ALL_SIDES	_rule_(_VIEW_TOP_, _VIEW_LEFT_, _VIEW_BOTTOM_, \
-								_VIEW_RIGHT_)
-#define B_FOLLOW_ALL		B_FOLLOW_ALL_SIDES
+const uint32 B_FOLLOW_NONE 			= 0;
+const uint32 B_FOLLOW_ALL_SIDES		= _rule_(_VIEW_TOP_, _VIEW_LEFT_,
+										_VIEW_BOTTOM_, _VIEW_RIGHT_);
+const uint32 B_FOLLOW_ALL			= B_FOLLOW_ALL_SIDES;
 
-#define B_FOLLOW_LEFT		_rule_(0, _VIEW_LEFT_, 0, _VIEW_LEFT_)
-#define B_FOLLOW_RIGHT		_rule_(0, _VIEW_RIGHT_, 0, _VIEW_RIGHT_)
-#define B_FOLLOW_LEFT_RIGHT	_rule_(0, _VIEW_LEFT_, 0, _VIEW_RIGHT_)
-#define B_FOLLOW_H_CENTER	_rule_(0, _VIEW_CENTER_, 0, _VIEW_CENTER_)
+const uint32 B_FOLLOW_LEFT			= _rule_(0, _VIEW_LEFT_, 0, _VIEW_LEFT_);
+const uint32 B_FOLLOW_RIGHT			= _rule_(0, _VIEW_RIGHT_, 0, _VIEW_RIGHT_);
+const uint32 B_FOLLOW_LEFT_RIGHT	= _rule_(0, _VIEW_LEFT_, 0, _VIEW_RIGHT_);
+const uint32 B_FOLLOW_H_CENTER		= _rule_(0, _VIEW_CENTER_, 0, _VIEW_CENTER_);
 
-#define B_FOLLOW_TOP		_rule_(_VIEW_TOP_, 0, _VIEW_TOP_, 0)
-#define B_FOLLOW_BOTTOM		_rule_(_VIEW_BOTTOM_, 0, _VIEW_BOTTOM_, 0)
-#define B_FOLLOW_TOP_BOTTOM	_rule_(_VIEW_TOP_, 0, _VIEW_BOTTOM_, 0)
-#define B_FOLLOW_V_CENTER	_rule_(_VIEW_CENTER_, 0, _VIEW_CENTER_, 0)
+const uint32 B_FOLLOW_TOP			= _rule_(_VIEW_TOP_, 0, _VIEW_TOP_, 0);
+const uint32 B_FOLLOW_BOTTOM		= _rule_(_VIEW_BOTTOM_, 0, _VIEW_BOTTOM_, 0);
+const uint32 B_FOLLOW_TOP_BOTTOM	= _rule_(_VIEW_TOP_, 0, _VIEW_BOTTOM_, 0);
+const uint32 B_FOLLOW_V_CENTER		= _rule_(_VIEW_CENTER_, 0, _VIEW_CENTER_, 0);
 
-#define B_FOLLOW_LEFT_TOP	B_FOLLOW_TOP | B_FOLLOW_LEFT
+const uint32 B_FOLLOW_LEFT_TOP		= B_FOLLOW_TOP | B_FOLLOW_LEFT;
 
 class BBitmap;
 class BCursor;
@@ -319,6 +333,8 @@ public:
 			void				ScaleBy(double x, double y);
 			void				RotateBy(double angleRadians);
 
+			BAffineTransform	TransformTo(coordinate_space basis) const;
+
 			void				PushState();
 			void				PopState();
 
@@ -330,6 +346,10 @@ public:
 									::pattern pattern = B_SOLID_HIGH);
 			void				StrokeLine(BPoint start, BPoint end,
 									::pattern pattern = B_SOLID_HIGH);
+			void				StrokeLine(BPoint toPoint,
+									const BGradient& gradient);
+			void				StrokeLine(BPoint start, BPoint end,
+									const BGradient& gradient);
 			void				BeginLineArray(int32 count);
 			void				AddLine(BPoint start, BPoint end,
 									rgb_color color);
@@ -345,6 +365,16 @@ public:
 									int32 numPoints, BRect bounds,
 									bool closed = true,
 									::pattern pattern = B_SOLID_HIGH);
+			void				StrokePolygon(const BPolygon* polygon,
+									bool closed,
+									const BGradient& gradient);
+			void				StrokePolygon(const BPoint* pointArray,
+									int32 numPoints, bool closed,
+									const BGradient& gradient);
+			void				StrokePolygon(const BPoint* pointArray,
+									int32 numPoints, BRect bounds,
+									bool closed,
+									const BGradient& gradient);
 			void				FillPolygon(const BPolygon* polygon,
 									::pattern pattern = B_SOLID_HIGH);
 			void				FillPolygon(const BPoint* pointArray,
@@ -367,6 +397,11 @@ public:
 			void				StrokeTriangle(BPoint point1, BPoint point2,
 									BPoint point3,
 									::pattern pattern = B_SOLID_HIGH);
+			void				StrokeTriangle(BPoint point1, BPoint point2,
+									BPoint point3, BRect bounds,
+									const BGradient& gradient);
+			void				StrokeTriangle(BPoint point1, BPoint point2,
+									BPoint point3, const BGradient& gradient);
 			void				FillTriangle(BPoint point1, BPoint point2,
 									BPoint point3,
 									::pattern pattern = B_SOLID_HIGH);
@@ -381,6 +416,8 @@ public:
 
 			void				StrokeRect(BRect rect,
 									::pattern pattern = B_SOLID_HIGH);
+			void				StrokeRect(BRect rect,
+									const BGradient& gradient);
 			void				FillRect(BRect rect,
 									::pattern pattern = B_SOLID_HIGH);
 			void				FillRect(BRect rect, const BGradient& gradient);
@@ -393,6 +430,9 @@ public:
 			void				StrokeRoundRect(BRect rect, float xRadius,
 									float yRadius,
 									::pattern pattern = B_SOLID_HIGH);
+			void				StrokeRoundRect(BRect rect, float xRadius,
+									float yRadius,
+									const BGradient& gradient);
 			void				FillRoundRect(BRect rect, float xRadius,
 									float yRadius,
 									::pattern pattern = B_SOLID_HIGH);
@@ -404,6 +444,11 @@ public:
 									::pattern pattern = B_SOLID_HIGH);
 			void				StrokeEllipse(BRect rect,
 									::pattern pattern = B_SOLID_HIGH);
+			void				StrokeEllipse(BPoint center, float xRadius,
+									float yRadius,
+									const BGradient& gradient);
+			void				StrokeEllipse(BRect rect,
+									const BGradient& gradient);
 			void				FillEllipse(BPoint center, float xRadius,
 									float yRadius,
 									::pattern pattern = B_SOLID_HIGH);
@@ -421,6 +466,13 @@ public:
 			void				StrokeArc(BRect rect, float startAngle,
 									float arcAngle,
 									::pattern pattern = B_SOLID_HIGH);
+			void				StrokeArc(BPoint center, float xRadius,
+									float yRadius, float startAngle,
+									float arcAngle,
+									const BGradient& gradient);
+			void				StrokeArc(BRect rect, float startAngle,
+									float arcAngle,
+									const BGradient& gradient);
 			void				FillArc(BPoint center, float xRadius,
 									float yRadius, float startAngle,
 									float arcAngle,
@@ -436,6 +488,8 @@ public:
 
 			void				StrokeBezier(BPoint* controlPoints,
 									::pattern pattern = B_SOLID_HIGH);
+			void				StrokeBezier(BPoint* controlPoints,
+									const BGradient& gradient);
 			void				FillBezier(BPoint* controlPoints,
 									::pattern pattern = B_SOLID_HIGH);
 			void				FillBezier(BPoint* controlPoints,
@@ -443,6 +497,8 @@ public:
 
 			void				StrokeShape(BShape* shape,
 									::pattern pattern = B_SOLID_HIGH);
+			void				StrokeShape(BShape* shape,
+									const BGradient& gradient);
 			void				FillShape(BShape* shape,
 									::pattern pattern = B_SOLID_HIGH);
 			void				FillShape(BShape* shape,
@@ -471,6 +527,12 @@ public:
 			void				DrawBitmap(const BBitmap* aBitmap,
 									BPoint where);
 			void				DrawBitmap(const BBitmap* aBitmap);
+
+			void				DrawTiledBitmapAsync(const BBitmap* aBitmap,
+									BRect viewRect, BPoint phase = B_ORIGIN);
+
+			void				DrawTiledBitmap(const BBitmap* aBitmap,
+									BRect viewRect, BPoint phase = B_ORIGIN);
 
 			void				DrawChar(char aChar);
 			void				DrawChar(char aChar, BPoint location);

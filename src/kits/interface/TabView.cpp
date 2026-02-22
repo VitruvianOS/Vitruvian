@@ -29,8 +29,10 @@
 #include <Rect.h>
 #include <Region.h>
 #include <String.h>
+#include <Window.h>
 
 #include <binary_compatibility/Support.h>
+#include <private/libroot/libroot_private.h>
 
 
 static property_info sPropertyList[] = {
@@ -46,14 +48,26 @@ static property_info sPropertyList[] = {
 };
 
 
+static bool
+IsLayouted(BView* childView)
+{
+	BView* container = childView->Parent();
+	if (container != NULL)
+		return dynamic_cast<BCardLayout*>(container->GetLayout()) != NULL;
+	return false;
+}
+
+
 BTab::BTab(BView* contentsView)
 	:
 	fEnabled(true),
 	fSelected(false),
 	fFocus(false),
-	fView(contentsView),
-	fTabView(NULL)
+	fView(contentsView)
 {
+	fTabView = NULL;
+	if (fView != NULL)
+		fLabel = fView->Name();
 }
 
 
@@ -62,9 +76,10 @@ BTab::BTab(BMessage* archive)
 	BArchivable(archive),
 	fSelected(false),
 	fFocus(false),
-	fView(NULL),
-	fTabView(NULL)
+	fView(NULL)
 {
+	fTabView = NULL;
+
 	bool disable;
 
 	if (archive->FindBool("_disable", &disable) != B_OK)
@@ -120,10 +135,17 @@ BTab::Perform(uint32 d, void* arg)
 const char*
 BTab::Label() const
 {
+#ifdef __HAIKU_BEOS_COMPATIBLE
+	if (__gABIVersion >= B_HAIKU_ABI_GCC_2_HAIKU)
+		return fLabel;
+
 	if (fView != NULL)
 		return fView->Name();
-	else
-		return NULL;
+
+	return NULL;
+#else
+	return fLabel;
+#endif
 }
 
 
@@ -133,7 +155,11 @@ BTab::SetLabel(const char* label)
 	if (label == NULL || fView == NULL)
 		return;
 
-	fView->SetName(label);
+#ifdef __HAIKU_BEOS_COMPATIBLE
+	if (__gABIVersion < B_HAIKU_ABI_GCC_2_HAIKU)
+		fView->SetName(label);
+#endif
+	fLabel = label;
 
 	if (fTabView != NULL)
 		fTabView->Invalidate();
@@ -168,12 +194,7 @@ BTab::Deselect()
 	if (fView != NULL) {
 		// NOTE: Views are not added/removed, if there is layout,
 		// they are made visible/invisible in that case.
-		bool removeView = false;
-		BView* container = fView->Parent();
-		if (container != NULL)
-			removeView =
-				dynamic_cast<BCardLayout*>(container->GetLayout()) == NULL;
-		if (removeView)
+		if (!IsLayouted(fView))
 			fView->RemoveSelf();
 	}
 
@@ -220,6 +241,7 @@ BTab::SetView(BView* view)
 		delete fView;
 	}
 	fView = view;
+	fLabel = fView->Name();
 
 	if (fTabView != NULL && fSelected) {
 		Select(fTabView->ContainerView());
@@ -306,19 +328,53 @@ BTab::DrawLabel(BView* owner, BRect frame)
 	BAffineTransform transform;
 	transform.RotateBy(center, rotation * M_PI / 180.0f);
 	owner->SetTransform(transform);
+
+	rgb_color highColor = ui_color(B_PANEL_TEXT_COLOR);
 	be_control_look->DrawLabel(owner, Label(), frame, frame,
 		ui_color(B_PANEL_BACKGROUND_COLOR),
 		IsEnabled() ? 0 : BControlLook::B_DISABLED,
-		BAlignment(B_ALIGN_HORIZONTAL_CENTER, B_ALIGN_VERTICAL_CENTER));
+		BAlignment(B_ALIGN_HORIZONTAL_CENTER, B_ALIGN_VERTICAL_CENTER), &highColor);
 	owner->SetTransform(BAffineTransform());
 }
 
 
 void
-BTab::DrawTab(BView* owner, BRect frame, tab_position position, bool full)
+BTab::DrawTab(BView* owner, BRect frame, tab_position, bool)
 {
-	rgb_color no_tint = ui_color(B_PANEL_BACKGROUND_COLOR);
+	if (fTabView == NULL)
+		return;
+
+	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+	uint32 flags = 0;
+	uint32 borders = _Borders(owner, frame);
+
+	int32 index = fTabView->IndexOf(this);
+	int32 selected = fTabView->Selection();
+	int32 first = 0;
+	int32 last = fTabView->CountTabs() - 1;
+
+	if (index == selected) {
+		be_control_look->DrawActiveTab(owner, frame, frame, base, flags,
+			borders, fTabView->TabSide(), index, selected, first, last);
+	} else {
+		be_control_look->DrawInactiveTab(owner, frame, frame, base, flags,
+			borders, fTabView->TabSide(), index, selected, first, last);
+	}
+
+	DrawLabel(owner, frame);
+}
+
+
+//	#pragma mark - BTab private methods
+
+
+uint32
+BTab::_Borders(BView* owner, BRect frame)
+{
 	uint32 borders = 0;
+	if (owner == NULL || fTabView == NULL)
+		return borders;
+
 	if (fTabView->TabSide() == BTabView::kTopSide
 		|| fTabView->TabSide() == BTabView::kBottomSide) {
 		borders = BControlLook::B_TOP_BORDER | BControlLook::B_BOTTOM_BORDER;
@@ -339,15 +395,7 @@ BTab::DrawTab(BView* owner, BRect frame, tab_position position, bool full)
 			borders |= BControlLook::B_BOTTOM_BORDER;
 	}
 
-	if (position == B_TAB_FRONT) {
-		be_control_look->DrawActiveTab(owner, frame, frame, no_tint, 0,
-			borders, fTabView->TabSide());
-	} else {
-		be_control_look->DrawInactiveTab(owner, frame, frame, no_tint, 0,
-			borders, fTabView->TabSide());
-	}
-
-	DrawLabel(owner, frame);
+	return borders;
 }
 
 
@@ -640,6 +688,8 @@ BTabView::MessageReceived(BMessage* message)
 		}
 
 #if 0
+		// TODO this would be annoying as-is, but maybe it makes sense with
+		// a modifier or using only deltaX (not the main mouse wheel)
 		case B_MOUSE_WHEEL_CHANGED:
 		{
 			float deltaX = 0.0f;
@@ -712,11 +762,31 @@ BTabView::KeyDown(const char* bytes, int32 numBytes)
 void
 BTabView::MouseDown(BPoint where)
 {
-	for (int32 i = 0; i < CountTabs(); i++) {
-		if (TabFrame(i).Contains(where)
-			&& i != Selection()) {
-			Select(i);
-			return;
+	// Which button is pressed?
+	uint32 buttons = 0;
+	BMessage* currentMessage = Window()->CurrentMessage();
+	if (currentMessage != NULL) {
+		currentMessage->FindInt32("buttons", (int32*)&buttons);
+	}
+
+	int32 selection = Selection();
+	int32 numTabs = CountTabs();
+	if (buttons & B_MOUSE_BUTTON(4)) {
+		// The "back" mouse button moves to previous tab
+		if (selection > 0 && numTabs > 1)
+			Select(Selection() - 1);
+	} else if (buttons & B_MOUSE_BUTTON(5)) {
+		// The "forward" mouse button moves to next tab
+		if (selection < numTabs - 1)
+			Select(Selection() + 1);
+	} else {
+		// Other buttons are used to select a tab by clicking directly on it
+		for (int32 i = 0; i < CountTabs(); i++) {
+			if (TabFrame(i).Contains(where)
+					&& i != Selection()) {
+				Select(i);
+				return;
+			}
 		}
 	}
 
@@ -868,94 +938,36 @@ BRect
 BTabView::DrawTabs()
 {
 	BRect bounds(Bounds());
-	BRect tabsBounds;
+	BRect tabFrame(bounds);
 	uint32 borders = 0;
 	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+
+	// set tabFrame to area around tabs
 	if (fTabSide == kTopSide || fTabSide == kBottomSide) {
 		if (fTabSide == kTopSide)
-			bounds.bottom = fTabHeight;
+			tabFrame.bottom = fTabHeight;
 		else
-			bounds.top = bounds.bottom - fTabHeight;
-		tabsBounds = bounds;
-			// make a copy for later
-
-		// draw an inactive tab frame behind all tabs
-		borders = BControlLook::B_TOP_BORDER | BControlLook::B_BOTTOM_BORDER;
-		if (fBorderStyle == B_NO_BORDER) {
-			// removes left border that is an artifact of DrawInactiveTab()
-			bounds.left -= 1;
-		} else {
-			borders |= BControlLook::B_LEFT_BORDER
-				| BControlLook::B_RIGHT_BORDER;
-		}
-
-		// DrawInactiveTab draws 2px border
-		// draw a little wider tab frame to align B_PLAIN_BORDER with it
-		if (fBorderStyle == B_PLAIN_BORDER) {
-			bounds.left -= 1;
-			bounds.right += 1;
-		}
+			tabFrame.top = tabFrame.bottom - fTabHeight;
 	} else if (fTabSide == kLeftSide || fTabSide == kRightSide) {
 		if (fTabSide == kLeftSide)
-			bounds.right = fTabHeight;
+			tabFrame.right = fTabHeight;
 		else
-			bounds.left = bounds.right - fTabHeight;
-		tabsBounds = bounds;
-			// make a copy for later
-
-		// draw an inactive tab frame behind all tabs
-		borders = BControlLook::B_LEFT_BORDER | BControlLook::B_RIGHT_BORDER;
-		if (fBorderStyle == B_NO_BORDER) {
-			// removes top border that is an artifact of DrawInactiveTab()
-			bounds.top -= 1;
-		} else {
-			borders |= BControlLook::B_TOP_BORDER
-				| BControlLook::B_BOTTOM_BORDER;
-		}
-
-		// DrawInactiveTab draws 2px border
-		// draw a little wider tab frame to align B_PLAIN_BORDER with it
-		if (fBorderStyle == B_PLAIN_BORDER) {
-			bounds.top -= 1;
-			bounds.bottom += 1;
-		}
+			tabFrame.left = tabFrame.right - fTabHeight;
 	}
 
-	be_control_look->DrawInactiveTab(this, bounds, bounds, base, 0,
-		borders, fTabSide);
+	// draw frame behind tabs
+	be_control_look->DrawTabFrame(this, tabFrame, bounds, base, 0,
+		borders, fBorderStyle, fTabSide);
 
-	// draw the tabs on top of the inactive tab bounds
-	BRect activeTabFrame;
+	// draw the tabs on top of the tab frame
 	int32 tabCount = CountTabs();
 	for (int32 i = 0; i < tabCount; i++) {
 		BRect tabFrame = TabFrame(i);
-		if (i == fSelection)
-			activeTabFrame = tabFrame;
 
 		TabAt(i)->DrawTab(this, tabFrame,
-			i == fSelection ? B_TAB_FRONT :
-				(i == 0) ? B_TAB_FIRST : B_TAB_ANY,
-			i + 1 != fSelection);
-	}
-
-	float last = 0.0f;
-	float lastTab = 0.0f;
-	if (fTabSide == kTopSide || fTabSide == kBottomSide) {
-		lastTab = TabFrame(tabCount - 1).right;
-		last = bounds.right;
-		tabsBounds.left = tabsBounds.right = lastTab;
-		borders = BControlLook::B_TOP_BORDER | BControlLook::B_BOTTOM_BORDER;
-	} else if (fTabSide == kLeftSide || fTabSide == kRightSide) {
-		lastTab = TabFrame(tabCount - 1).bottom;
-		last = bounds.bottom;
-		tabsBounds.top = tabsBounds.bottom = lastTab;
-		borders = BControlLook::B_LEFT_BORDER | BControlLook::B_RIGHT_BORDER;
-	}
-
-	if (lastTab < last) {
-		// draw a 1px right border on the last tab
-		be_control_look->DrawInactiveTab(this, tabsBounds, tabsBounds, base, 0,
-			borders, fTabSide);
+			i == fSelection ? B_TAB_FRONT
+				: (i == 0) ? B_TAB_FIRST : B_TAB_ANY,
+			i != fSelection - 1);
 	}
 
 	return fSelection < CountTabs() ? TabFrame(fSelection) : BRect();
@@ -1003,35 +1015,36 @@ BTabView::TabFrame(int32 index) const
 	if (index >= CountTabs() || index < 0)
 		return BRect();
 
-	float width = 100.0f;
-	float height = fTabHeight;
-	float offset = BControlLook::ComposeSpacing(B_USE_WINDOW_SPACING);
-	BRect bounds(Bounds());
+	const float padding = ceilf(be_control_look->DefaultLabelSpacing() * 3.3f);
+	const float height = fTabHeight;
+	const float offset = BControlLook::ComposeSpacing(B_USE_WINDOW_SPACING);
+	const BRect bounds(Bounds());
 
+	float width = padding * 5.0f;
 	switch (fTabWidthSetting) {
 		case B_WIDTH_FROM_LABEL:
 		{
 			float x = 0.0f;
 			for (int32 i = 0; i < index; i++){
-				x += StringWidth(TabAt(i)->Label()) + 20.0f;
+				x += StringWidth(TabAt(i)->Label()) + padding;
 			}
 
 			switch (fTabSide) {
 				case kTopSide:
 					return BRect(offset + x, 0.0f,
-						offset + x + StringWidth(TabAt(index)->Label()) + 20.0f,
+						offset + x + StringWidth(TabAt(index)->Label()) + padding,
 						height);
 				case kBottomSide:
 					return BRect(offset + x, bounds.bottom - height,
-						offset + x + StringWidth(TabAt(index)->Label()) + 20.0f,
+						offset + x + StringWidth(TabAt(index)->Label()) + padding,
 						bounds.bottom);
 				case kLeftSide:
 					return BRect(0.0f, offset + x, height, offset + x
-						+ StringWidth(TabAt(index)->Label()) + 20.0f);
+						+ StringWidth(TabAt(index)->Label()) + padding);
 				case kRightSide:
 					return BRect(bounds.right - height, offset + x,
 						bounds.right, offset + x
-							+ StringWidth(TabAt(index)->Label()) + 20.0f);
+							+ StringWidth(TabAt(index)->Label()) + padding);
 				default:
 					return BRect();
 			}
@@ -1040,7 +1053,7 @@ BTabView::TabFrame(int32 index) const
 		case B_WIDTH_FROM_WIDEST:
 			width = 0.0;
 			for (int32 i = 0; i < CountTabs(); i++) {
-				float tabWidth = StringWidth(TabAt(i)->Label()) + 20.0f;
+				float tabWidth = StringWidth(TabAt(i)->Label()) + padding;
 				if (tabWidth > width)
 					width = tabWidth;
 			}
@@ -1359,6 +1372,21 @@ BTabView::ViewForTab(int32 tabIndex) const
 }
 
 
+int32
+BTabView::IndexOf(BTab* tab) const
+{
+	if (tab != NULL) {
+		int32 tabCount = CountTabs();
+		for (int32 index = 0; index < tabCount; index++) {
+			if (TabAt(index) == tab)
+				return index;
+		}
+	}
+
+	return -1;
+}
+
+
 void
 BTabView::_InitObject(bool layouted, button_width width)
 {
@@ -1376,7 +1404,8 @@ BTabView::_InitObject(bool layouted, button_width width)
 
 	font_height fh;
 	GetFontHeight(&fh);
-	fTabHeight = ceilf(fh.ascent + fh.descent + fh.leading + 8.0f);
+	fTabHeight = ceilf(fh.ascent + fh.descent + fh.leading +
+		(be_control_look->DefaultLabelSpacing() * 1.3f));
 
 	fContainerView = NULL;
 	_InitContainerView(layouted);

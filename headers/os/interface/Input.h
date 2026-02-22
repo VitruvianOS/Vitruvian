@@ -25,6 +25,14 @@ enum input_device_type {
 };
 
 
+enum input_pointing_device_subtype {
+	B_UNKNOWN_POINTING_DEVICE	= 0,
+	B_MOUSE_POINTING_DEVICE		= 1,
+	B_TOUCHPAD_POINTING_DEVICE	= 2,
+	B_TABLET_POINTING_DEVICE	= 3
+};
+
+
 enum input_device_notification {
 	B_INPUT_DEVICE_ADDED	= 0x0001,
 	B_INPUT_DEVICE_STARTED	= 0x0002,

@@ -99,7 +99,8 @@ _BMCMenuBar_::_BMCMenuBar_(BRect frame, bool fixedSize, BMenuField* menuField)
 		!fixedSize),
 	fMenuField(menuField),
 	fFixedSize(fixedSize),
-	fShowPopUpMarker(true)
+	fShowPopUpMarker(true),
+	fIsInside(false)
 {
 	_Init();
 }
@@ -110,7 +111,8 @@ _BMCMenuBar_::_BMCMenuBar_(BMenuField* menuField)
 	BMenuBar("_mc_mb_", B_ITEMS_IN_ROW),
 	fMenuField(menuField),
 	fFixedSize(true),
-	fShowPopUpMarker(true)
+	fShowPopUpMarker(true),
+	fIsInside(false)
 {
 	_Init();
 }
@@ -121,7 +123,8 @@ _BMCMenuBar_::_BMCMenuBar_(BMessage* data)
 	BMenuBar(data),
 	fMenuField(NULL),
 	fFixedSize(true),
-	fShowPopUpMarker(true)
+	fShowPopUpMarker(true),
+	fIsInside(false)
 {
 	SetFlags(Flags() | B_FRAME_EVENTS);
 
@@ -162,15 +165,7 @@ _BMCMenuBar_::AttachedToWindow()
 	if (fFixedSize && (Flags() & B_SUPPORTS_LAYOUT) == 0)
 		SetResizingMode(B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP);
 
-	if (Parent() != NULL) {
-		color_which which = Parent()->LowUIColor();
-		if (which == B_NO_COLOR)
-			SetLowColor(Parent()->LowColor());
-		else
-			SetLowUIColor(which);
-
-	} else
-		SetLowUIColor(B_MENU_BACKGROUND_COLOR);
+	SetLowUIColor(B_CONTROL_BACKGROUND_COLOR);
 
 	fPreviousWidth = Bounds().Width();
 }
@@ -179,34 +174,48 @@ _BMCMenuBar_::AttachedToWindow()
 void
 _BMCMenuBar_::Draw(BRect updateRect)
 {
-	if (fFixedSize) {
-		// Set the width of the menu bar because the menu bar bounds may have
-		// been expanded by the selected menu item.
-		ResizeTo(fMenuField->_MenuBarWidth(), Bounds().Height());
-	} else {
-		// For compatability with BeOS R5:
-		//  - Set to the minimum of the menu bar width set by the menu frame
-		//    and the selected menu item width.
-		//  - Set the height to the preferred height ignoring the height of the
-		//    menu field.
-		float height;
-		BMenuBar::GetPreferredSize(NULL, &height);
-		ResizeTo(std::min(Bounds().Width(), fMenuField->_MenuBarWidth()),
-			height);
+	if ((Flags() & B_SUPPORTS_LAYOUT) == 0) {
+		if (fFixedSize) {
+			// Set the width of the menu bar because the menu bar bounds may have
+			// been expanded by the selected menu item.
+			ResizeTo(fMenuField->_MenuBarWidth(), Bounds().Height());
+		} else {
+			// For compatability with BeOS R5:
+			//  - Set to the minimum of the menu bar width set by the menu frame
+			//    and the selected menu item width.
+			//  - Set the height to the preferred height ignoring the height of the
+			//    menu field.
+			float height;
+			BMenuBar::GetPreferredSize(NULL, &height);
+			ResizeTo(std::min(Bounds().Width(), fMenuField->_MenuBarWidth()),
+				height);
+		}
 	}
 
 	BRect rect(Bounds());
-	rgb_color base = ui_color(B_MENU_BACKGROUND_COLOR);
 	uint32 flags = 0;
 	if (!IsEnabled())
 		flags |= BControlLook::B_DISABLED;
 	if (IsFocus())
 		flags |= BControlLook::B_FOCUSED;
+	if (fIsInside)
+		flags |= BControlLook::B_HOVER;
 
 	be_control_look->DrawMenuFieldBackground(this, rect,
-		updateRect, base, fShowPopUpMarker, flags);
+		updateRect, LowColor(), fShowPopUpMarker, flags);
 
 	DrawItems(updateRect);
+}
+
+
+void
+_BMCMenuBar_::MouseMoved(BPoint where, uint32 code, const BMessage* dragMessage)
+{
+	bool inside = (code != B_EXITED_VIEW) && Bounds().Contains(where);
+	if (inside != fIsInside) {
+		fIsInside = inside;
+		Invalidate();
+	}
 }
 
 

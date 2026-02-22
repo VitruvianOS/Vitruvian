@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2017, Haiku, Inc. All rights reserved.
+ * Copyright 2009-2020 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _HAIKU_CONTROL_LOOK_H
@@ -27,8 +27,6 @@ public:
 	virtual float				DefaultLabelSpacing() const;
 
 	virtual	float				DefaultItemSpacing() const;
-
-	static	float				ComposeSpacing(float spacing);
 
 	virtual uint32				Flags(BControl* control) const;
 
@@ -157,6 +155,15 @@ public:
 									const rgb_color& base,
 									uint32 flags = 0);
 
+	virtual	void				DrawScrollBarBorder(BView* view,
+									BRect rect, const BRect& updateRect,
+									const rgb_color& base, uint32 flags,
+									orientation orientation);
+	virtual	void				DrawScrollBarButton(BView* view,
+									BRect rect, const BRect& updateRect,
+									const rgb_color& base, const rgb_color& text,
+									uint32 flags, int32 direction, orientation orientation,
+									bool down = false);
 	virtual	void				DrawScrollBarBackground(BView* view,
 									BRect& rect1, BRect& rect2,
 									const BRect& updateRect,
@@ -166,6 +173,11 @@ public:
 									BRect& rect, const BRect& updateRect,
 									const rgb_color& base, uint32 flags,
 									orientation orientation);
+	virtual	void				DrawScrollBarThumb(BView* view,
+									BRect& rect, const BRect& updateRect,
+									const rgb_color& base, uint32 flags,
+									orientation orientation,
+									uint32 knobStyle = B_KNOB_NONE);
 
 	virtual	void				DrawScrollViewFrame(BView* view,
 									BRect& rect, const BRect& updateRect,
@@ -217,17 +229,26 @@ public:
 									hash_mark_location location,
 									uint32 flags, orientation orientation);
 
+	virtual	void				DrawTabFrame(BView* view, BRect& rect,
+									const BRect& updateRect,
+									const rgb_color& base, uint32 flags = 0,
+									uint32 borders = B_ALL_BORDERS,
+									border_style borderStyle = B_FANCY_BORDER,
+									uint32 side = B_TOP_BORDER);
 	virtual	void				DrawActiveTab(BView* view, BRect& rect,
 									const BRect& updateRect,
 									const rgb_color& base, uint32 flags = 0,
 									uint32 borders = B_ALL_BORDERS,
-									uint32 side = B_TOP_BORDER);
-
+									uint32 side = B_TOP_BORDER,
+									int32 index = 0, int32 selected = -1,
+									int32 first = 0, int32 last = 0);
 	virtual	void				DrawInactiveTab(BView* view, BRect& rect,
 									const BRect& updateRect,
 									const rgb_color& base, uint32 flags = 0,
 									uint32 borders = B_ALL_BORDERS,
-									uint32 side = B_TOP_BORDER);
+									uint32 side = B_TOP_BORDER,
+									int32 index = 0, int32 selected = -1,
+									int32 first = 0, int32 last = 0);
 
 	virtual	void				DrawSplitter(BView* view, BRect& rect,
 									const BRect& updateRect,
@@ -326,14 +347,11 @@ protected:
 									float rightBottomRadius,
 									const rgb_color& base,
 									const rgb_color& background,
-									float contrast, float brightness = 1.0,
 									uint32 flags = 0,
 									uint32 borders = B_ALL_BORDERS);
 
 			void				_DrawOuterResessedFrame(BView* view,
 									BRect& rect, const rgb_color& base,
-									float contrast = 1.0f,
-									float brightness = 1.0f,
 									uint32 flags = 0,
 									uint32 borders = B_ALL_BORDERS);
 
@@ -508,13 +526,8 @@ protected:
 									orientation orientation);
 
 	// Border color methods
-			rgb_color			_EdgeLightColor(const rgb_color& base,
-									float contrast, float brightness,
-									uint32 flags);
-
-			rgb_color			_EdgeShadowColor(const rgb_color& base,
-									float contrast, float brightness,
-									uint32 flags);
+			rgb_color			_EdgeColor(const rgb_color& base,
+									bool shadow, uint32 flags);
 
 			rgb_color			_FrameLightColor(const rgb_color& base,
 									uint32 flags);

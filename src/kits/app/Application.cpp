@@ -291,7 +291,7 @@ BApplication::BApplication(BMessage* data)
 }
 
 
-#ifdef _BEOS_R5_COMPATIBLE_
+#ifdef __HAIKU_BEOS_COMPATIBLE
 BApplication::BApplication(uint32 signature)
 {
 }
@@ -337,7 +337,7 @@ BApplication::~BApplication()
 		link.StartMessage(B_QUIT_REQUESTED);
 		link.Flush();
 	}
-	delete_port(fServerLink->SenderPort());
+	// the sender port belongs to the app_server
 	delete_port(fServerLink->ReceiverPort());
 	delete fServerLink;
 #endif	// RUN_WITHOUT_APP_SERVER
@@ -375,10 +375,10 @@ BApplication::_InitData(const char* signature, bool initGUI, status_t* _error)
 #ifndef RUN_WITHOUT_REGISTRAR
 	bool registerApp = signature == NULL
 		|| (strcasecmp(signature, B_REGISTRAR_SIGNATURE) != 0
-			#ifndef __VOS__
+		#ifndef __VOS__
 			&& strcasecmp(signature, kLaunchDaemonSignature) != 0
-			#endif
-			);
+		#endif
+		);
 	// get team and thread
 	team_id team = Team();
 	thread_id thread = BPrivate::main_thread_for(team);
@@ -698,20 +698,9 @@ BApplication::MessageReceived(BMessage* message)
 			be_roster->ActivateApp(Team());
 			break;
 
-		case kMsgAppServerRestarted:
+		case kMsgAppServerStarted:
 			_ReconnectToServer();
 			break;
-
-		case kMsgDeleteServerMemoryArea:
-		{
-			int32 serverArea;
-			if (message->FindInt32("server area", &serverArea) == B_OK) {
-				// The link is not used, but we currently borrow its lock
-				BPrivate::AppServerLink link;
-				fServerAllocator->RemoveArea(serverArea);
-			}
-			break;
-		}
 
 		default:
 			BLooper::MessageReceived(message);
@@ -1472,7 +1461,13 @@ BApplication::_ConnectToServer()
 void
 BApplication::_ReconnectToServer()
 {
-	delete_port(fServerLink->SenderPort());
+	team_info dummy;
+	if (get_team_info(fServerLink->TargetTeam(), &dummy) == B_OK) {
+		// We're already connected to the correct server.
+		return;
+	}
+
+	// the sender port belongs to the app_server
 	delete_port(fServerLink->ReceiverPort());
 
 	if (_ConnectToServer() != B_OK)
@@ -1488,7 +1483,7 @@ BApplication::_ReconnectToServer()
 		if (window == NULL)
 			continue;
 		BMessenger windowMessenger(window);
-		windowMessenger.SendMessage(kMsgAppServerRestarted);
+		windowMessenger.SendMessage(kMsgAppServerStarted);
 	}
 
 	reconnect_bitmaps_to_app_server();

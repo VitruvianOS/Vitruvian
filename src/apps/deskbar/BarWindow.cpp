@@ -41,6 +41,7 @@ All rights reserved.
 #include <Application.h>
 #include <AutoDeleter.h>
 #include <Catalog.h>
+#include <ControlLook.h>
 #include <Directory.h>
 #include <FindDirectory.h>
 #include <Path.h>
@@ -85,14 +86,17 @@ TDeskbarMenu* TBarWindow::sDeskbarMenu = NULL;
 TBarWindow::TBarWindow()
 	:
 	BWindow(BRect(-1000.0f, -1000.0f, -1000.0f, -1000.0f),
-		B_TRANSLATE_SYSTEM_NAME("Deskbar"), B_BORDERED_WINDOW,
+		"Deskbar", /* no B_TRANSLATE_SYSTEM_NAME, for binary compatibility */
+		B_BORDERED_WINDOW,
 		B_WILL_ACCEPT_FIRST_CLICK | B_NOT_ZOOMABLE | B_NOT_CLOSABLE
 			| B_NOT_MINIMIZABLE | B_NOT_MOVABLE | B_NOT_V_RESIZABLE
 			| B_AVOID_FRONT | B_ASYNCHRONOUS_CONTROLS,
 		B_ALL_WORKSPACES),
-	fShowingMenu(false)
+	fBarApp(static_cast<TBarApp*>(be_app)),
+	fBarView(NULL),
+	fMenusShown(0)
 {
-	desk_settings* settings = ((TBarApp*)be_app)->Settings();
+	desk_settings* settings = fBarApp->Settings();
 	if (settings->alwaysOnTop)
 		SetFeel(B_FLOATING_ALL_WINDOW_FEEL);
 
@@ -102,6 +106,8 @@ TBarWindow::TBarWindow()
 
 	RemoveShortcut('H', B_COMMAND_KEY | B_CONTROL_KEY);
 	AddShortcut('F', B_COMMAND_KEY, new BMessage(kFindButton));
+
+	SetSizeLimits();
 }
 
 
@@ -130,9 +136,16 @@ TBarWindow::MenusBeginning()
 		return;
 	}
 
+	// raise Deskbar on menu open in auto-raise mode unless always-on-top
+	desk_settings* settings = fBarApp->Settings();
+	bool alwaysOnTop = settings->alwaysOnTop;
+	bool autoRaise = settings->autoRaise;
+	if (!alwaysOnTop && autoRaise)
+		fBarView->RaiseDeskbar(true);
+
 	sDeskbarMenu->ResetTargets();
 
-	fShowingMenu = true;
+	fMenusShown++;
 	BWindow::MenusBeginning();
 }
 
@@ -140,8 +153,16 @@ TBarWindow::MenusBeginning()
 void
 TBarWindow::MenusEnded()
 {
-	fShowingMenu = false;
+	fMenusShown--;
 	BWindow::MenusEnded();
+
+	// lower Deskbar back down again on menu close in auto-raise mode
+	// unless another menu is open or always-on-top.
+	desk_settings* settings = fBarApp->Settings();
+	bool alwaysOnTop = settings->alwaysOnTop;
+	bool autoRaise = settings->autoRaise;
+	if (!alwaysOnTop && autoRaise && fMenusShown <= 0)
+		fBarView->RaiseDeskbar(false);
 
 	if (sDeskbarMenu->LockLooper()) {
 		sDeskbarMenu->ForceRebuild();
@@ -228,7 +249,7 @@ TBarWindow::FrameResized(float width, float height)
 	if (!fBarView->Vertical())
 		return BWindow::FrameResized(width, height);
 
-	bool setToHiddenSize = static_cast<TBarApp*>(be_app)->Settings()->autoHide
+	bool setToHiddenSize = fBarApp->Settings()->autoHide
 		&& fBarView->IsHidden() && !fBarView->DragRegion()->IsDragging();
 	if (!setToHiddenSize) {
 		// constrain within limits
@@ -240,14 +261,14 @@ TBarWindow::FrameResized(float width, float height)
 		else
 			newWidth = width;
 
-		float oldWidth = static_cast<TBarApp*>(be_app)->Settings()->width;
+		float oldWidth = fBarApp->Settings()->width;
 
 		// update width setting
-		static_cast<TBarApp*>(be_app)->Settings()->width = newWidth;
+		fBarApp->Settings()->width = newWidth;
 
 		if (oldWidth != newWidth) {
 			fBarView->ResizeTo(width, fBarView->Bounds().Height());
-			if (fBarView->Vertical() && fBarView->ExpandoState())
+			if (fBarView->Vertical() && fBarView->ExpandoMenuBar() != NULL)
 				fBarView->ExpandoMenuBar()->SetMaxContentWidth(width);
 
 			fBarView->UpdatePlacement();
@@ -293,7 +314,12 @@ TBarWindow::ScreenChanged(BRect size, color_space depth)
 {
 	BWindow::ScreenChanged(size, depth);
 
-	fBarView->UpdatePlacement();
+	SetSizeLimits();
+
+	if (fBarView != NULL) {
+		fBarView->DragRegion()->CalculateRegions();
+		fBarView->UpdatePlacement();
+	}
 }
 
 
@@ -643,7 +669,59 @@ TBarWindow::GetIconFrame(BMessage* message)
 bool
 TBarWindow::IsShowingMenu() const
 {
-	return fShowingMenu;
+	return fMenusShown > 0;
+}
+
+
+void
+TBarWindow::SetSizeLimits()
+{
+	BRect screenFrame = (BScreen(this)).Frame();
+	bool setToHiddenSize = fBarApp->Settings()->autoHide
+		&& fBarView->IsHidden() && !fBarView->DragRegion()->IsDragging();
+
+	if (setToHiddenSize) {
+		if (fBarView->Vertical())
+			BWindow::SetSizeLimits(0, kHiddenDimension, 0, kHiddenDimension);
+		else {
+			BWindow::SetSizeLimits(screenFrame.Width(), screenFrame.Width(),
+				0, kHiddenDimension);
+		}
+	} else {
+		float minHeight;
+		float maxHeight;
+		float minWidth;
+		float maxWidth;
+
+		if (fBarView->Vertical()) {
+			minHeight = fBarView->TabHeight() - 1;
+			maxHeight = B_SIZE_UNLIMITED;
+			minWidth = gMinimumWindowWidth;
+			maxWidth = gMaximumWindowWidth;
+		} else {
+			// horizontal
+			if (fBarView->MiniState()) {
+				// horizontal mini-mode
+				minWidth = gMinimumWindowWidth;
+				maxWidth = B_SIZE_UNLIMITED;
+				minHeight = fBarView->TabHeight() - 1;
+				maxHeight = std::max(fBarView->TabHeight() - 1,
+					kGutter + fBarView->ReplicantTray()->MaxReplicantHeight() + kGutter);
+			} else {
+				// horizontal expando-mode
+				const int32 max
+					= be_control_look->ComposeIconSize(kMaximumIconSize).IntegerWidth() + 1;
+				const float iconPadding
+					= be_control_look->ComposeSpacing(kIconPadding);
+
+				minWidth = maxWidth = screenFrame.Width();
+				minHeight = kMenuBarHeight - 1;
+				maxHeight = max + iconPadding / 2;
+			}
+		}
+
+		BWindow::SetSizeLimits(minWidth, maxWidth, minHeight, maxHeight);
+	}
 }
 
 

@@ -37,6 +37,7 @@ All rights reserved.
 #include "WindowMenuItem.h"
 
 #include <Bitmap.h>
+#include <ControlLook.h>
 #include <Debug.h>
 #include <NaturalCompare.h>
 
@@ -51,27 +52,24 @@ All rights reserved.
 #include "icons.h"
 
 
-const float kHPad = 10.0f;
-const float kVPad = 2.0f;
-const float kLabelOffset = 8.0f;
-
-const BRect kIconRect(1.0f, 1.0f, 13.0f, 14.0f);
+static float sHPad, sVPad, sLabelOffset = 0.0f;
 
 
 //	#pragma mark - TWindowMenuItem
 
 
-TWindowMenuItem::TWindowMenuItem(const char* name, int32 id, bool mini,
-	bool currentWorkspace, bool dragging)
+TWindowMenuItem::TWindowMenuItem(const char* name, int32 id, bool minimized,
+	bool local, bool dragging)
 	:
 	TTruncatableMenuItem(name, NULL),
+	fBitmap(NULL),
 	fID(id),
-	fMini(mini),
-	fCurrentWorkSpace(currentWorkspace),
+	fIsModified(false),
+	fIsMinimized(minimized),
+	fIsLocal(local),
 	fDragging(dragging),
 	fExpanded(false),
-	fRequireUpdate(false),
-	fModified(false)
+	fRequireUpdate(false)
 {
 	_Init(name);
 }
@@ -82,11 +80,11 @@ TWindowMenuItem::GetContentSize(float* width, float* height)
 {
 	if (width != NULL) {
 		if (!fExpanded) {
-			*width = kHPad + fLabelWidth + kHPad;
+			*width = sHPad + fLabelWidth + sHPad;
 			if (fID >= 0)
-				*width += fBitmap->Bounds().Width() + kLabelOffset;
+				*width += fBitmap->Bounds().Width() + sLabelOffset;
 		} else
-			*width = Frame().Width()/* - kHPad*/;
+			*width = Frame().Width()/* - sHPad*/;
 	}
 
 	// Note: when the item is in "expanded mode", ie embedded into
@@ -98,7 +96,7 @@ TWindowMenuItem::GetContentSize(float* width, float* height)
 		*height = (fID >= 0) ? fBitmap->Bounds().Height() : 0.0f;
 		float labelHeight = fLabelAscent + fLabelDescent;
 		*height = (labelHeight > *height) ? labelHeight : *height;
-		*height += kVPad * 2;
+		*height += sVPad * 2;
 	}
 }
 
@@ -126,7 +124,7 @@ TWindowMenuItem::Draw()
 
 		rgb_color shadow = tint_color(menuColor, 1.09);
 		menu->SetHighColor(shadow);
-		frame.right = frame.left + kHPad / 2;
+		frame.right = frame.left + sHPad / 2;
 		menu->FillRect(frame);
 
 		menu->SetHighColor(menuColor);
@@ -157,28 +155,30 @@ void
 TWindowMenuItem::DrawContent()
 {
 	BMenu* menu = Menu();
-	BPoint contentLocation = ContentLocation() + BPoint(kHPad, 0);
+	BPoint contentLocation = ContentLocation() + BPoint(sHPad, 0);
 
 	if (fID >= 0) {
 		menu->SetDrawingMode(B_OP_OVER);
 
-		float width = fBitmap->Bounds().Width();
-		if (width > 16)
-			contentLocation.x -= 8;
+		const float bitmapWidth = fBitmap->Bounds().Width(),
+			bitmapHeight = fBitmap->Bounds().Height();
+		float shiftedBy = 0.0f;
+		if (bitmapWidth > bitmapHeight) {
+			shiftedBy = (bitmapHeight + 1) / 2.0f;
+			contentLocation.x -= shiftedBy;
+		}
 
 		float height;
 		GetContentSize(NULL, &height);
-		contentLocation.y += (height - fBitmap->Bounds().Height()) / 2;
+		contentLocation.y += (height - bitmapHeight) / 2;
 
 		menu->MovePenTo(contentLocation);
 		menu->DrawBitmapAsync(fBitmap);
 
-		if (width > 16)
-			contentLocation.x += 8;
-
-		contentLocation.x += kIconRect.Width() + kLabelOffset;
+		contentLocation.x += shiftedBy;
+		contentLocation.x += (bitmapWidth - shiftedBy) + sLabelOffset;
 	}
-	contentLocation.y = ContentLocation().y + kVPad + fLabelAscent;
+	contentLocation.y = ContentLocation().y + sVPad + fLabelAscent;
 
 	menu->SetDrawingMode(B_OP_COPY);
 	menu->MovePenTo(contentLocation);
@@ -214,8 +214,8 @@ TWindowMenuItem::Invoke(BMessage* /*message*/)
 
 			if (item->Menu()->Window() != NULL) {
 				zoomRect = item->Menu()->ConvertToScreen(item->Frame());
-				doZoom = (fMini && action == B_BRING_TO_FRONT)
-					|| (!fMini && action == B_MINIMIZE_WINDOW);
+				doZoom = (fIsMinimized && action == B_BRING_TO_FRONT)
+					|| (!fIsMinimized && action == B_MINIMIZE_WINDOW);
 			}
 
 			do_window_action(fID, action, zoomRect, doZoom);
@@ -226,14 +226,14 @@ TWindowMenuItem::Invoke(BMessage* /*message*/)
 
 
 void
-TWindowMenuItem::SetTo(const char* name, int32 id, bool mini,
-	bool currentWorkspace, bool dragging)
+TWindowMenuItem::SetTo(const char* name, int32 id, bool minimized,
+	bool local, bool dragging)
 {
-	fModified = fCurrentWorkSpace != currentWorkspace || fMini != mini;
+	fIsModified = fIsLocal != local || fIsMinimized != minimized;
 
 	fID = id;
-	fMini = mini;
-	fCurrentWorkSpace = currentWorkspace;
+	fIsMinimized = minimized;
+	fIsLocal = local;
 	fDragging = dragging;
 	fRequireUpdate = false;
 
@@ -256,23 +256,28 @@ TWindowMenuItem::InsertIndexFor(BMenu* menu, int32 startIndex,
 }
 
 
-//	#pragma mark - private methods
+//	#pragma mark - TWindowMenuItem private methods
 
 
 void
 TWindowMenuItem::_Init(const char* name)
 {
-	if (fMini) {
-		fBitmap = fCurrentWorkSpace
-			? AppResSet()->FindBitmap(B_MESSAGE_TYPE, R_WindowHiddenIcon)
-			: AppResSet()->FindBitmap(B_MESSAGE_TYPE, R_WindowHiddenSwitchIcon);
-	} else {
-		fBitmap = fCurrentWorkSpace
-			? AppResSet()->FindBitmap(B_MESSAGE_TYPE, R_WindowShownIcon)
-			: AppResSet()->FindBitmap(B_MESSAGE_TYPE, R_WindowShownSwitchIcon);
+	if (sHPad == 0.0f) {
+		// Initialize the padding values.
+		sHPad = be_control_look->ComposeSpacing(B_USE_ITEM_SPACING) - 1.0f;
+		sVPad = ceilf(be_control_look->ComposeSpacing(B_USE_SMALL_SPACING) / 4.0f);
+		sLabelOffset = ceilf((be_control_look->DefaultLabelSpacing() / 3.0f) * 4.0f);
 	}
 
-	BFont font(be_plain_font);
+	TBarApp* app = static_cast<TBarApp*>(be_app);
+	fBitmap = app->FetchWindowIcon(fIsLocal, fIsMinimized);
+
+	// use menu font (parent font not available yet)
+	menu_info info;
+	get_menu_info(&info);
+	BFont font;
+	font.SetFamilyAndStyle(info.f_family, info.f_style);
+	font.SetSize(info.font_size);
 	fLabelWidth = ceilf(font.StringWidth(name));
 	font_height fontHeight;
 	font.GetHeight(&fontHeight);

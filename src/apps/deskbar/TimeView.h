@@ -66,9 +66,10 @@ const uint32 kShowTimeZone = 'SwTz';
 const uint32 kGetClockSettings = 'GCkS';
 
 
-
 class BCountry;
 class BMessageRunner;
+class CalendarMenuWindow;
+class TBarView;
 
 #ifdef AS_REPLICANT
 class _EXPORT	TTimeView;
@@ -76,7 +77,8 @@ class _EXPORT	TTimeView;
 
 class TTimeView : public BView {
 public:
-								TTimeView(float maxWidth, float height);
+								TTimeView(float maxWidth, float height,
+									TBarView* barView = NULL);
 								TTimeView(BMessage* data);
 								~TTimeView();
 
@@ -95,9 +97,6 @@ public:
 				void			Pulse();
 				void			ResizeToPreferred();
 
-				bool			Orientation() const;
-				void			SetOrientation(bool o);
-
 				bool			ShowSeconds() const;
 				void			SetShowSeconds(bool show);
 
@@ -108,6 +107,7 @@ public:
 				void			SetShowTimeZone(bool show);
 
 				void			ShowCalendar(BPoint where);
+				bool			IsShowingCalendar();
 
 private:
 		friend class TReplicantTray;
@@ -119,6 +119,9 @@ private:
 				void			ShowTimeOptions(BPoint);
 				void			Update();
 
+				bool			Vertical();
+
+				TBarView*		fBarView;
 				BView*			fParent;
 				bool			fNeedToUpdate;
 
@@ -136,8 +139,7 @@ private:
 
 				float			fMaxWidth;
 				float			fHeight;
-				bool			fOrientation;
-									// vertical = true
+
 				int16			fShowLevel;
 
 				bool			fShowSeconds;
@@ -147,19 +149,13 @@ private:
 				BPoint			fTimeLocation;
 				BPoint			fDateLocation;
 
-				BMessenger		fCalendarWindow;
+				BMessenger		fCalendarWindowMessenger;
+		CalendarMenuWindow* 	fCalendarWindow;
 
 				// For date and time localization purposes
 				BDateTimeFormat* fTimeFormat;
 				BDateFormat*	fDateFormat;
 };
-
-
-inline bool
-TTimeView::Orientation() const
-{
-	return fOrientation;
-}
 
 
 #endif	/* TIME_VIEW_H */

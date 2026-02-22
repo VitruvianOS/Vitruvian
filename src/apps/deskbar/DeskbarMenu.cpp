@@ -285,14 +285,20 @@ B_TRANSLATE_MARK_VOID("About this system")
 	AddItem(mountMenu);
 #endif
 
-	item = new BMenuItem(B_TRANSLATE("Deskbar preferences" B_UTF8_ELLIPSIS),
-		new BMessage(kConfigShow));
+	BString menuLabel(B_TRANSLATE("%appname% preferences" B_UTF8_ELLIPSIS));
+	menuLabel.ReplaceFirst("%appname%", B_TRANSLATE_SYSTEM_NAME("Deskbar"));
+	item = new BMenuItem(menuLabel, new BMessage(kConfigShow));
 	item->SetTarget(be_app);
 	AddItem(item);
 
 	AddSeparatorItem();
 
 	BMenu* shutdownMenu = new BMenu(B_TRANSLATE("Shutdown" B_UTF8_ELLIPSIS));
+
+	item = new BMenuItem(B_TRANSLATE("Power off"),
+		new BMessage(kShutdownSystem));
+	item->SetEnabled(!dragging);
+	shutdownMenu->AddItem(item);
 
 	item = new BMenuItem(B_TRANSLATE("Restart system"),
 		new BMessage(kRebootSystem));
@@ -310,13 +316,8 @@ B_TRANSLATE_MARK_VOID("About this system")
 	}
 #endif
 
-	item = new BMenuItem(B_TRANSLATE("Power off"),
-		new BMessage(kShutdownSystem));
-	item->SetEnabled(!dragging);
-	shutdownMenu->AddItem(item);
-	shutdownMenu->SetFont(be_plain_font);
-
 	shutdownMenu->SetTargetForItems(be_app);
+
 	BMessage* message = new BMessage(kShutdownSystem);
 	message->AddBool("confirm", true);
 	AddItem(new BMenuItem(shutdownMenu, message));
@@ -397,16 +398,17 @@ BPoint
 TDeskbarMenu::ScreenLocation()
 {
 	bool vertical = fBarView->Vertical();
-	int32 expando = (fBarView->State() == kExpandoState);
+	int32 expando = fBarView->ExpandoState();
+	bool left = fBarView->Left();
 	BPoint point;
 
 	BRect rect = Supermenu()->Bounds();
 	Supermenu()->ConvertToScreen(&rect);
 
-	if (expando && vertical && fBarView->Left()) {
+	if (vertical && expando && left) {
 		PRINT(("Left\n"));
 		point = rect.RightTop() + BPoint(0, 3);
-	} else if (expando && vertical && !fBarView->Left()) {
+	} else if (vertical && expando && !left) {
 		PRINT(("Right\n"));
 		point = rect.LeftTop() - BPoint(Bounds().Width(), 0) + BPoint(0, 3);
 	} else
@@ -653,7 +655,6 @@ TRecentsMenu::ResetTargets()
 DeskbarMountMenu::DeskbarMountMenu(const char* name)
 	: BPrivate::MountMenu(name)
 {
-	SetFont(be_plain_font);
 }
 
 

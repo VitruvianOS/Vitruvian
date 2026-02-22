@@ -84,7 +84,7 @@ private:
 	int virtual Compare(const void *key, const void* item) = 0;
 };
 
-struct comparator : public binary_function<const void*, const void*, bool>
+struct comparator
 {
 	comparator(AbstractPointerListHelper* helper) : helper(helper) {}
 	
@@ -243,7 +243,7 @@ private:
 _PointerList_::_PointerList_(int32 itemsPerBlock, bool own)
 	:
 	BList(itemsPerBlock),
-	owning(own)
+	fLegacyOwning(own)
 {
 	
 }
@@ -252,7 +252,7 @@ _PointerList_::_PointerList_(int32 itemsPerBlock, bool own)
 _PointerList_::_PointerList_(const _PointerList_ &list)
 	:
 	BList(list),
-	owning(list.owning)
+	fLegacyOwning(list.fLegacyOwning)
 {
 }
 
@@ -393,5 +393,3 @@ _PointerList_::MoveItem(int32 from, int32 to)
 	items[to] = fromItem;
 	return true;
 }
-
-

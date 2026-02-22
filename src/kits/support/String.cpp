@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2014 Haiku, Inc. All rights reserved.
+ * Copyright 2001-2021 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -193,10 +193,18 @@ BString::BString(const char* string, int32 maxLength)
 }
 
 
+//#if __cplusplus >= 201103L
+BString::BString(BString&& string) noexcept
+{
+	fPrivateData = string.fPrivateData;
+	string.fPrivateData = NULL;
+}
+//#endif
+
+
 BString::~BString()
 {
-	if (!_IsShareable() || atomic_add(&_ReferenceCount(), -1) == 1)
-		_FreePrivateData();
+	_ReleasePrivateData();
 }
 
 
@@ -219,19 +227,17 @@ BString::CountBytes(int32 fromCharOffset, int32 charCount) const
 
 
 /*static*/ uint32
-BString::HashValue(const char* string)
+BString::HashValue(const char* _string)
 {
-	// from the Dragon Book: a slightly modified hashpjw()
-    uint32 h = 0;
-    if (string != NULL) {
-        for (; *string; string++) {
-            uint32 g = h & 0xf0000000;
-            if (g)
-                h ^= g >> 24;
-            h = (h << 4) + *string;
-        }
-    }
-    return h;
+	const uint8* string = (const uint8*)_string;
+	if (string == NULL)
+		return 0;
+
+	uint32 h = 5381;
+	char c;
+	while ((c = *string++) != 0)
+		h = (h * 33) + c;
+	return h;
 }
 
 
@@ -263,6 +269,20 @@ BString::operator=(char c)
 }
 
 
+//#if __cplusplus >= 201103L
+BString&
+BString::operator=(BString&& string) noexcept
+{
+	if (this != &string) {
+		_ReleasePrivateData();
+		fPrivateData = string.fPrivateData;
+		string.fPrivateData = NULL;
+	}
+	return *this;
+}
+//#endif
+
+
 BString&
 BString::SetTo(const char* string, int32 maxLength)
 {
@@ -285,15 +305,7 @@ BString::SetTo(const BString& string)
 	if (fPrivateData == string.fPrivateData)
 		return *this;
 
-	bool freeData = true;
-
-	if (_IsShareable() && atomic_add(&_ReferenceCount(), -1) > 1) {
-		// there is still someone who shares our data
-		freeData = false;
-	}
-
-	if (freeData)
-		_FreePrivateData();
+	_ReleasePrivateData();
 
 	// if source is sharable share, otherwise clone
 	if (string._IsShareable()) {
@@ -2266,13 +2278,13 @@ BString::BString(char* privateData, PrivateDataTag tag)
 status_t
 BString::_MakeWritable()
 {
+	if (fPrivateData == NULL)
+		return B_NO_INIT;
+
 	if (atomic_get(&_ReferenceCount()) > 1) {
 		// It might be shared, and this requires special treatment
 		char* newData = _Clone(fPrivateData, Length());
-		if (atomic_add(&_ReferenceCount(), -1) == 1) {
-			// someone else left, we were the last owner
-			_FreePrivateData();
-		}
+		_ReleasePrivateData();
 		if (newData == NULL)
 			return B_NO_MEMORY;
 
@@ -2294,7 +2306,7 @@ BString::_MakeWritable(int32 length, bool copy)
 {
 	char* newData = NULL;
 
-	if (atomic_get(&_ReferenceCount()) > 1) {
+	if (fPrivateData != NULL && atomic_get(&_ReferenceCount()) > 1) {
 		// we might share our data with someone else
 		if (copy)
 			newData = _Clone(fPrivateData, length);
@@ -2304,10 +2316,7 @@ BString::_MakeWritable(int32 length, bool copy)
 		if (newData == NULL)
 			return B_NO_MEMORY;
 
-		if (atomic_add(&_ReferenceCount(), -1) == 1) {
-			// someone else left, we were the last owner
-			_FreePrivateData();
-		}
+		_ReleasePrivateData();
 	} else {
 		// we don't share our data with someone else
 		newData = _Resize(length);
@@ -2360,14 +2369,9 @@ BString::_Resize(int32 length)
 	if (length < 0)
 		length = 0;
 
-	char* newData = (char*)realloc(data, length + kPrivateDataOffset + 1);
-	if (newData == NULL) {
-		free(data);
-		data = NULL;
+	data = (char*)realloc(data, length + kPrivateDataOffset + 1);
+	if (data == NULL)
 		return NULL;
-	} else {
-		data = newData;
-	}
 
 	data += kPrivateDataOffset;
 
@@ -2447,6 +2451,15 @@ BString::_FreePrivateData()
 		free(fPrivateData - kPrivateDataOffset);
 		fPrivateData = NULL;
 	}
+}
+
+
+void
+BString::_ReleasePrivateData()
+{
+	if (!_IsShareable() || atomic_add(&_ReferenceCount(), -1) == 1)
+		_FreePrivateData();
+	fPrivateData = NULL;
 }
 
 

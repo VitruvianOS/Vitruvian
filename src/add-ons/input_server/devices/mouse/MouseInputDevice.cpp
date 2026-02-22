@@ -808,7 +808,7 @@ MouseDevice::_RemapButtons(uint32 buttons) const
 
 MouseInputDevice::MouseInputDevice()
 	:
-	fDevices(2, true),
+	fDevices(2),
 	fDeviceListLock("MouseInputDevice list")
 {
 	MID_CALLED();

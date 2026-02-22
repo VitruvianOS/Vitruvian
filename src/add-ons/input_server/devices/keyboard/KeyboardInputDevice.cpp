@@ -609,7 +609,7 @@ KeyboardDevice::_EnqueueInlineInputMethod(int32 opcode,
 
 KeyboardInputDevice::KeyboardInputDevice()
 	:
-	fDevices(2, true),
+	fDevices(2),
 	fDeviceListLock("KeyboardInputDevice list"),
 	fTeamMonitorWindow(NULL)
 {

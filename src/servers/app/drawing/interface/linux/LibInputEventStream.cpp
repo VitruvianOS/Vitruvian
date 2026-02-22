@@ -445,19 +445,30 @@ LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 			break;
 		}
 
-		case LIBINPUT_EVENT_POINTER_MOTION:
 		case LIBINPUT_EVENT_POINTER_BUTTON:
 		{
 			libinput_event_pointer* e = libinput_event_get_pointer_event(ev);
+			uint32 linuxButton = libinput_event_pointer_get_button(e);
+			uint32 bButton = MapMouseButton(linuxButton);
 
-			if (type == LIBINPUT_EVENT_POINTER_MOTION)
-				what = B_MOUSE_MOVED;
-			else if (libinput_event_pointer_get_button_state(e) == LIBINPUT_BUTTON_STATE_PRESSED)
+			if (libinput_event_pointer_get_button_state(e)
+					== LIBINPUT_BUTTON_STATE_PRESSED) {
 				what = B_MOUSE_DOWN;
-			else
+				fMouseButtons |= bButton;
+			} else {
 				what = B_MOUSE_UP;
+				fMouseButtons &= ~bButton;
+			}
 
-			fMouseButtons = libinput_event_pointer_get_button(e);
+			event->AddPoint("where", fMousePosition);
+			event->AddInt32("buttons", fMouseButtons);
+			break;
+		}
+
+		case LIBINPUT_EVENT_POINTER_MOTION:
+		{
+			libinput_event_pointer* e = libinput_event_get_pointer_event(ev);
+			what = B_MOUSE_MOVED;
 
 			double dx = libinput_event_pointer_get_dx(e);
 			double dy = libinput_event_pointer_get_dy(e);
@@ -471,11 +482,8 @@ LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 			fMousePosition.y = std::min((float)fHeight, fMousePosition.y);
 			fMousePosition.y = std::max(0.0f, fMousePosition.y);
 
-			uint32 bButton = MapMouseButton(fMouseButtons);
-
 			event->AddPoint("where", fMousePosition);
-			if (what == B_MOUSE_MOVED || what == B_MOUSE_DOWN)
-				event->AddInt32("buttons", bButton);
+			event->AddInt32("buttons", fMouseButtons);
 
 			fLatestMouseMovedEvent = event;
 			break;

@@ -25,18 +25,30 @@ typedef struct {
 	uint8 revision;
 } edid1_version;
 
+// analog input parameters
+typedef struct {
+	uint8 input_voltage;	// 0=0.7V/0.3V, 1=0.714V/0.286,
+				// 2=1V/0.4V, 3=0.7V/0V
+	bool setup;		// true if voltage configurable
+	bool sep_sync;
+	bool comp_sync;
+	bool sync_on_green;
+	bool sync_serr;
+} edid1_analog_params;
+
+
+// digital input parameters
+typedef struct {
+	uint8 bit_depth;
+	uint8 interface;
+} edid1_digital_params;
+
 // display info
 typedef struct {
-	BBITFIELD8_7 ( 
-		input_type : 1,		// 1 : digital
-		input_voltage : 2,	// 0=0.7V/0.3V, 1=0.714V/0.286, 
-							// 2=1V/0.4V, 3=0.7V/0V
-		setup : 1,			// true if voltage configurable
-		sep_sync : 1,
-		comp_sync : 1,
-		sync_on_green : 1,
-		sync_serr : 1
-	);
+	uint8 input_type;
+	edid1_analog_params analog_params;
+	edid1_digital_params digital_params;
+
 	uint8 h_size;
 	uint8 v_size;
 	uint8 gamma;	// (x+100)/100
@@ -115,11 +127,33 @@ typedef struct {
 	} data;
 } edid1_detailed_monitor;
 
+// CTA data block
+typedef struct cta_info {
+	uint8 tag;
+	uint8 revision;
+	uint8 num_native_detailed;
+	bool ycbcr422_supported;
+	bool ycbcr444_supported;
+	bool audio_supported;
+	bool underscan;
+	edid1_detailed_timing detailed_timing[6];
+	uint8 num_data_blocks;
+	cta_data_block data_blocks[8];
+} cta_info;
+
+
+// DisplayID data block
+typedef struct displayid_info {
+	uint8 tag;
+	uint8 version;
+	uint8 extension_count;
+} displayid_info;
+
 // EDID data block
-typedef struct edid1_info {  
+typedef struct edid1_info {
 	edid1_vendor vendor;
 	edid1_version version;
-	edid1_display display;	
+	edid1_display display;
 	edid1_established_timing established_timing;
 	edid1_std_timing std_timing[EDID1_NUM_STD_TIMING];
 
@@ -127,7 +161,12 @@ typedef struct edid1_info {
 	edid1_detailed_monitor detailed_monitor[EDID1_NUM_DETAILED_MONITOR_DESC];
 
 	uint8 num_sections;
+
+	// optional
+	cta_info cta_block;
+	displayid_info displayid_block;
 } edid1_info;
+
 
 #define EDID_VERSION_1 1
 

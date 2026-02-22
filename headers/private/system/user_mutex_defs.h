@@ -6,7 +6,10 @@
 #define _SYSTEM_USER_MUTEX_DEFS_H
 
 
-// user mutex specific flags passed to _kern_user_mutex_unlock()
+// flags passed to _kern_mutex_{un}block
+// (same uint32 also used for B_TIMEOUT, etc.)
+#define B_USER_MUTEX_SHARED			0x40000000
+	// Mutex is in shared memory.
 #define B_USER_MUTEX_UNBLOCK_ALL	0x80000000
 	// All threads currently waiting on the mutex will be unblocked. The mutex
 	// state will be locked.

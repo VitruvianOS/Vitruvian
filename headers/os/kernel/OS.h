@@ -504,7 +504,9 @@ enum cpu_platform {
 	B_CPU_ARM_64,
 	B_CPU_ALPHA,
 	B_CPU_MIPS,
-	B_CPU_SH
+	B_CPU_SH,
+	B_CPU_SPARC,
+	B_CPU_RISC_V
 };
 
 enum cpu_vendor {
@@ -519,7 +521,10 @@ enum cpu_vendor {
 	B_CPU_VENDOR_VIA,
 	B_CPU_VENDOR_IBM,
 	B_CPU_VENDOR_MOTOROLA,
-	B_CPU_VENDOR_NEC
+	B_CPU_VENDOR_NEC,
+	B_CPU_VENDOR_HYGON,
+	B_CPU_VENDOR_SUN,
+	B_CPU_VENDOR_FUJITSU
 };
 
 typedef struct {
@@ -637,7 +642,7 @@ enum {
 
 	B_EVENT_ACQUIRE_SEMAPHORE	= 0x0001,	/* semaphore can be acquired */
 
-	B_EVENT_INVALID				= 0x1000	/* FD/port/sem/thread ID not or
+	B_EVENT_INVALID				= 0x1000,	/* FD/port/sem/thread ID not or
 											   no longer valid (e.g. has been
 											   close/deleted) */
 };

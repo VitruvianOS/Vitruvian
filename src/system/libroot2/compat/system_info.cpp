@@ -159,6 +159,22 @@ __get_cpu_info(uint32 firstCPU, uint32 cpuCount, cpu_info* info)
 	return _kern_get_cpu_info(firstCPU, cpuCount, info);
 }
 
+status_t
+_get_cpu_info_etc(uint32 firstCPU, uint32 cpuCount, cpu_info* info,
+	size_t size)
+{
+	if (info == NULL || size != sizeof(cpu_info))
+		return B_BAD_VALUE;
+	return __get_cpu_info(firstCPU, cpuCount, info);
+}
+
+status_t
+get_cpuid(cpuid_info *info, uint32 eaxRegister, uint32 cpuNum)
+{
+	//return _kern_get_cpuid(info, eaxRegister, cpuNum);
+	return B_OK;
+}
+
 
 status_t
 __get_cpu_topology_info(cpu_topology_node_info* topologyInfos,

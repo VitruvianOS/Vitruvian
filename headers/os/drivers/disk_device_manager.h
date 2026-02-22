@@ -25,12 +25,12 @@ typedef struct partition_data {
 	off_t			size;
 	off_t			content_size;
 	uint32			block_size;
+	uint32			physical_block_size;
 	int32			child_count;
 	int32			index;			// [sys]
 	uint32			status;
 	uint32			flags;
 	dev_t			volume;			// [sys]
-	void			*mount_cookie;	// [sys]
 	char			*name;			// max: B_OS_NAME_LENGTH
 	char			*content_name;	//
 	char			*type;			//

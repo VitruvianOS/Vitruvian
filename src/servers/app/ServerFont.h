@@ -15,7 +15,9 @@
 #include <Font.h>
 #include <Rect.h>
 
+#include "AppFontManager.h"
 #include "FontFamily.h"
+#include "FontManager.h"
 #include "GlobalSubpixelSettings.h"
 #include "Transformable.h"
 
@@ -66,11 +68,15 @@ class ServerFont {
 			const char*			Family() const;
 			const char*			Path() const
 									{ return fStyle->Path(); }
+			long				FaceIndex() const
+									{ return fStyle->FreeTypeFace()->face_index; }
 
 			void				SetStyle(FontStyle* style);
 			status_t			SetFamilyAndStyle(uint16 familyID,
-									uint16 styleID);
-			status_t			SetFamilyAndStyle(uint32 fontID);
+									uint16 styleID,
+									AppFontManager* fontManager = NULL);
+			status_t			SetFamilyAndStyle(uint32 fontID,
+									AppFontManager* fontManager = NULL);
 
 			uint16				StyleID() const
 									{ return fStyle->ID(); }
@@ -88,8 +94,8 @@ class ServerFont {
 									{ fSpacing = value; }
 			void				SetShear(float value)
 									{ fShear = value; }
-			void				SetSize(float value)
-									{ fSize = value; }
+			void				SetSize(float value);
+
 			void				SetRotation(float value)
 									{ fRotation = value; }
 			void				SetFalseBoldWidth(float value)
@@ -117,7 +123,7 @@ class ServerFont {
 
 			status_t			GetHasGlyphs(const char charArray[],
 									int32 numBytes, int32 numChars,
-									bool hasArray[]) const;
+									bool hasArray[], bool useFallbacks) const;
 
 			status_t			GetEdges(const char charArray[], int32 numBytes,
 									int32 numChars, edge_info edgeArray[])
@@ -167,13 +173,24 @@ class ServerFont {
 			status_t			IncludesUnicodeBlock(uint32 start, uint32 end,
 									bool &hasBlock);
 
+			FontManager*		Manager() const
+									{ return fStyle->Manager(); }
+
+			void  				SetFontData(FT_Byte* location, uint32 size);
+			uint32				FontDataSize() const
+									{ return fStyle->FontDataSize(); }
+			FT_Byte* 			FontData() const
+									{ return fStyle->FontData(); }
+
 protected:
 	friend class FontStyle;
+
 			FT_Face				GetTransformedFace(bool rotate,
 									bool shear) const;
 			void				PutTransformedFace(FT_Face face) const;
 
-			FontStyle*			fStyle;
+			BReference<FontStyle>
+								fStyle;
 			float				fSize;
 			float				fRotation;
 			float				fShear;

@@ -49,8 +49,6 @@ RemoteDrawingEngine::~RemoteDrawingEngine()
 	message.Add(fToken);
 	message.Flush();
 
-	delete fBitmapDrawingEngine;
-
 	if (fCallbackAdded)
 		fHWInterface->RemoveCallback(fToken);
 	if (fResultNotify >= 0)
@@ -114,7 +112,7 @@ RemoteDrawingEngine::SetDrawState(const DrawState* state, int32 xOffset,
 	SetHighColor(state->HighColor());
 	SetLowColor(state->LowColor());
 	SetFont(state->Font());
-	SetTransform(state->CombinedTransform());
+	SetTransform(state->CombinedTransform(), xOffset, yOffset);
 
 	RemoteMessage message(NULL, fHWInterface->SendBuffer());
 	message.Start(RP_SET_OFFSETS);
@@ -270,8 +268,11 @@ RemoteDrawingEngine::SetFont(const DrawState* state)
 
 
 void
-RemoteDrawingEngine::SetTransform(const BAffineTransform& transform)
+RemoteDrawingEngine::SetTransform(const BAffineTransform& transform,
+	int32 xOffset, int32 yOffset)
 {
+	// TODO: take offset into account
+
 	if (fState.Transform() == transform)
 		return;
 
@@ -410,14 +411,14 @@ RemoteDrawingEngine::DrawArc(BRect rect, const float& angle, const float& span,
 }
 
 void
-RemoteDrawingEngine::FillArc(BRect rect, const float& angle, const float& span,
-	const BGradient& gradient)
+RemoteDrawingEngine::DrawArc(BRect rect, const float& angle, const float& span,
+	bool filled, const BGradient& gradient)
 {
 	if (!fClippingRegion.Intersects(rect))
 		return;
 
 	RemoteMessage message(NULL, fHWInterface->SendBuffer());
-	message.Start(RP_FILL_ARC_GRADIENT);
+	message.Start(filled ? RP_FILL_ARC_GRADIENT : RP_STROKE_ARC_GRADIENT);
 	message.Add(fToken);
 	message.Add(rect);
 	message.Add(angle);
@@ -444,14 +445,14 @@ RemoteDrawingEngine::DrawBezier(BPoint* points, bool filled)
 
 
 void
-RemoteDrawingEngine::FillBezier(BPoint* points, const BGradient& gradient)
+RemoteDrawingEngine::DrawBezier(BPoint* points, bool filled, const BGradient& gradient)
 {
 	BRect bounds = _BuildBounds(points, 4);
 	if (!fClippingRegion.Intersects(bounds))
 		return;
 
 	RemoteMessage message(NULL, fHWInterface->SendBuffer());
-	message.Start(RP_FILL_BEZIER_GRADIENT);
+	message.Start(filled ? RP_FILL_BEZIER_GRADIENT : RP_STROKE_BEZIER_GRADIENT);
 	message.Add(fToken);
 	message.AddList(points, 4);
 	message.AddGradient(gradient);
@@ -476,13 +477,13 @@ RemoteDrawingEngine::DrawEllipse(BRect rect, bool filled)
 
 
 void
-RemoteDrawingEngine::FillEllipse(BRect rect, const BGradient& gradient)
+RemoteDrawingEngine::DrawEllipse(BRect rect, bool filled, const BGradient& gradient)
 {
 	if (!fClippingRegion.Intersects(rect))
 		return;
 
 	RemoteMessage message(NULL, fHWInterface->SendBuffer());
-	message.Start(RP_FILL_ELLIPSE_GRADIENT);
+	message.Start(filled ? RP_FILL_ELLIPSE_GRADIENT : RP_STROKE_ELLIPSE_GRADIENT);
 	message.Add(fToken);
 	message.Add(rect);
 	message.AddGradient(gradient);
@@ -512,14 +513,14 @@ RemoteDrawingEngine::DrawPolygon(BPoint* pointList, int32 numPoints,
 
 
 void
-RemoteDrawingEngine::FillPolygon(BPoint* pointList, int32 numPoints,
-	BRect bounds, const BGradient& gradient, bool closed)
+RemoteDrawingEngine::DrawPolygon(BPoint* pointList, int32 numPoints,
+	BRect bounds, bool filled, bool closed, const BGradient& gradient)
 {
 	if (!fClippingRegion.Intersects(bounds))
 		return;
 
 	RemoteMessage message(NULL, fHWInterface->SendBuffer());
-	message.Start(RP_FILL_POLYGON_GRADIENT);
+	message.Start(filled ? RP_FILL_POLYGON_GRADIENT : RP_STROKE_POLYGON_GRADIENT);
 	message.Add(fToken);
 	message.Add(bounds);
 	message.Add(closed);
@@ -629,6 +630,23 @@ RemoteDrawingEngine::StrokeRect(BRect rect)
 
 
 void
+RemoteDrawingEngine::StrokeRect(BRect rect, const BGradient& gradient)
+{
+	BRect bounds = rect;
+	bounds.InsetBy(fExtendWidth, fExtendWidth);
+
+	if (!fClippingRegion.Intersects(bounds))
+		return;
+
+	RemoteMessage message(NULL, fHWInterface->SendBuffer());
+	message.Start(RP_STROKE_RECT_GRADIENT);
+	message.Add(fToken);
+	message.Add(rect);
+	message.AddGradient(gradient);
+}
+
+
+void
 RemoteDrawingEngine::FillRect(BRect rect)
 {
 	if (!fClippingRegion.Intersects(rect))
@@ -709,14 +727,14 @@ RemoteDrawingEngine::DrawRoundRect(BRect rect, float xRadius, float yRadius,
 
 
 void
-RemoteDrawingEngine::FillRoundRect(BRect rect, float xRadius, float yRadius,
-	const BGradient& gradient)
+RemoteDrawingEngine::DrawRoundRect(BRect rect, float xRadius, float yRadius,
+	bool filled, const BGradient& gradient)
 {
 	if (!fClippingRegion.Intersects(rect))
 		return;
 
 	RemoteMessage message(NULL, fHWInterface->SendBuffer());
-	message.Start(RP_FILL_ROUND_RECT_GRADIENT);
+	message.Start(filled ? RP_FILL_ROUND_RECT_GRADIENT : RP_STROKE_ROUND_RECT_GRADIENT);
 	message.Add(fToken);
 	message.Add(rect);
 	message.Add(xRadius);
@@ -751,16 +769,16 @@ RemoteDrawingEngine::DrawShape(const BRect& bounds, int32 opCount,
 
 
 void
-RemoteDrawingEngine::FillShape(const BRect& bounds, int32 opCount,
+RemoteDrawingEngine::DrawShape(const BRect& bounds, int32 opCount,
 	const uint32* opList, int32 pointCount, const BPoint* pointList,
-	const BGradient& gradient, const BPoint& viewToScreenOffset,
+	bool filled, const BGradient& gradient, const BPoint& viewToScreenOffset,
 	float viewScale)
 {
 	if (!fClippingRegion.Intersects(bounds))
 		return;
 
 	RemoteMessage message(NULL, fHWInterface->SendBuffer());
-	message.Start(RP_FILL_SHAPE_GRADIENT);
+	message.Start(filled ? RP_FILL_SHAPE_GRADIENT : RP_STROKE_SHAPE_GRADIENT);
 	message.Add(fToken);
 	message.Add(bounds);
 	message.Add(opCount);
@@ -793,14 +811,14 @@ RemoteDrawingEngine::DrawTriangle(BPoint* points, const BRect& bounds,
 
 
 void
-RemoteDrawingEngine::FillTriangle(BPoint* points, const BRect& bounds,
-	const BGradient& gradient)
+RemoteDrawingEngine::DrawTriangle(BPoint* points, const BRect& bounds,
+	bool filled, const BGradient& gradient)
 {
 	if (!fClippingRegion.Intersects(bounds))
 		return;
 
 	RemoteMessage message(NULL, fHWInterface->SendBuffer());
-	message.Start(RP_FILL_TRIANGLE_GRADIENT);
+	message.Start(filled ? RP_FILL_TRIANGLE_GRADIENT : RP_STROKE_TRIANGLE_GRADIENT);
 	message.Add(fToken);
 	message.AddList(points, 3);
 	message.Add(bounds);
@@ -821,6 +839,23 @@ RemoteDrawingEngine::StrokeLine(const BPoint &start, const BPoint &end)
 	message.Start(RP_STROKE_LINE);
 	message.Add(fToken);
 	message.AddList(points, 2);
+}
+
+
+void
+RemoteDrawingEngine::StrokeLine(const BPoint &start, const BPoint &end, const BGradient& gradient)
+{
+	BPoint points[2] = { start, end };
+	BRect bounds = _BuildBounds(points, 2);
+
+	if (!fClippingRegion.Intersects(bounds))
+		return;
+
+	RemoteMessage message(NULL, fHWInterface->SendBuffer());
+	message.Start(RP_STROKE_LINE_GRADIENT);
+	message.Add(fToken);
+	message.AddList(points, 2);
+	message.AddGradient(gradient);
 }
 
 
@@ -1106,10 +1141,10 @@ RemoteDrawingEngine::_ExtractBitmapRegions(ServerBitmap& bitmap, uint32 options,
 				* (int32)(sourceRect.Height() + 1.5))) {
 			// the target bitmap is smaller than the source, scale it locally
 			// and send over the smaller version to avoid sending any extra data
-			if (fBitmapDrawingEngine == NULL) {
-				fBitmapDrawingEngine
-					= new(std::nothrow) BitmapDrawingEngine(B_RGBA32);
-				if (fBitmapDrawingEngine == NULL)
+			if (!fBitmapDrawingEngine.IsSet()) {
+				fBitmapDrawingEngine.SetTo(
+					new(std::nothrow) BitmapDrawingEngine(B_RGBA32));
+				if (!fBitmapDrawingEngine.IsSet())
 					result = B_NO_MEMORY;
 			}
 

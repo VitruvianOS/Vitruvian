@@ -25,9 +25,10 @@
 #include "Desktop.h"
 #include "FontCache.h"
 #include "FontCacheEntry.h"
-#include "FontManager.h"
+#include "GlobalFontManager.h"
 #include "GlobalSubpixelSettings.h"
 #include "ServerConfig.h"
+#include "SystemPalette.h"
 
 
 DesktopSettingsPrivate::DesktopSettingsPrivate(server_read_only_memory* shared)
@@ -54,7 +55,7 @@ DesktopSettingsPrivate::_SetDefaults()
 
 	fMouseMode = B_NORMAL_MOUSE;
 	fFocusFollowsMouseMode = B_NORMAL_FOCUS_FOLLOWS_MOUSE;
-	fAcceptFirstClick = false;
+	fAcceptFirstClick = true;
 	fShowAllDraggers = true;
 
 	// init scrollbar info
@@ -79,7 +80,9 @@ DesktopSettingsPrivate::_SetDefaults()
 	fWorkspacesColumns = 2;
 	fWorkspacesRows = 2;
 
-	memcpy(fShared.colors, BPrivate::kDefaultColors,
+	memcpy((void*)&fShared.colormap, SystemColorMap(),
+		sizeof(color_map));
+	memcpy((void*)fShared.colors, BPrivate::kDefaultColors,
 		sizeof(rgb_color) * kColorWhichCount);
 
 	gSubpixelAntialiasing = true;
@@ -151,7 +154,9 @@ DesktopSettingsPrivate::_Load()
 	if (status == B_OK) {
 		BMessage settings;
 		status = settings.Unflatten(&file);
-		if (status == B_OK && gFontManager->Lock()) {
+		if (status != B_OK) {
+			fFontSettingsLoadStatus = status;
+		} else if (gFontManager->Lock()) {
 			const char* family;
 			const char* style;
 			float size;
@@ -176,7 +181,8 @@ DesktopSettingsPrivate::_Load()
 				&& settings.FindString("fixed style", &style) == B_OK
 				&& settings.FindFloat("fixed size", &size) == B_OK) {
 				FontStyle* fontStyle = gFontManager->GetStyle(family, style);
-				if (fontStyle != NULL && fontStyle->IsFixedWidth())
+				if (fontStyle != NULL && (fontStyle->IsFixedWidth()
+						|| fontStyle->IsFullAndHalfFixed()))
 					fFixedFont.SetStyle(fontStyle);
 				fFixedFont.SetSize(size);
 			}
@@ -186,8 +192,10 @@ DesktopSettingsPrivate::_Load()
 				gDefaultHintingMode = hinting;
 
 			gFontManager->Unlock();
-		}
-	}
+		} else
+			fFontSettingsLoadStatus = EWOULDBLOCK;
+	} else
+		fFontSettingsLoadStatus = status;
 
 	// read mouse settings
 
@@ -829,7 +837,7 @@ DesktopSettingsPrivate::_ValidateWorkspacesLayout(int32& columns,
 
 DesktopSettings::DesktopSettings(Desktop* desktop)
 	:
-	fSettings(desktop->fSettings)
+	fSettings(desktop->fSettings.Get())
 {
 
 }

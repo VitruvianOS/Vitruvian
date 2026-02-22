@@ -47,6 +47,7 @@
 #include <PortLink.h>
 #include <ShapePrivate.h>
 #include <ServerProtocolStructs.h>
+#include <StackOrHeapArray.h>
 #include <ViewPrivate.h>
 #include <WindowInfo.h>
 #include <WindowPrivate.h>
@@ -162,7 +163,6 @@ ServerWindow::ServerWindow(const char* title, ServerApp* app,
 	fTitle(NULL),
 	fDesktop(app->GetDesktop()),
 	fServerApp(app),
-	fWindow(NULL),
 	fWindowAddedToDesktop(false),
 
 	fClientTeam(app->ClientTeam()),
@@ -177,7 +177,6 @@ ServerWindow::ServerWindow(const char* title, ServerApp* app,
 	fCurrentDrawingRegion(),
 	fCurrentDrawingRegionValid(false),
 
-	fDirectWindowInfo(NULL),
 	fIsDirectlyAccessing(false)
 {
 	STRACE(("ServerWindow(%s)::ServerWindow()\n", title));
@@ -203,9 +202,12 @@ ServerWindow::~ServerWindow()
 {
 	STRACE(("ServerWindow(%s@%p):~ServerWindow()\n", fTitle, this));
 
+	BPrivate::gDefaultTokens.RemoveToken(fServerToken);
+
 	if (!fWindow->IsOffscreenWindow()) {
 		fWindowAddedToDesktop = false;
-		fDesktop->RemoveWindow(fWindow);
+		fDesktop->RemoveWindow(fWindow.Get());
+		fDesktop = NULL;
 	}
 
 	if (App() != NULL) {
@@ -213,14 +215,12 @@ ServerWindow::~ServerWindow()
 		fServerApp = NULL;
 	}
 
-	delete fWindow;
+	fWindow.Unset(); // TODO: is it really needed?
 
 	free(fTitle);
 	delete_port(fMessagePort);
 
-	BPrivate::gDefaultTokens.RemoveToken(fServerToken);
-
-	delete fDirectWindowInfo;
+	fDirectWindowInfo.Unset(); // TODO: is it really needed?
 	STRACE(("ServerWindow(%p) will exit NOW\n", this));
 
 	delete_sem(fDeathSemaphore);
@@ -236,13 +236,11 @@ ServerWindow::~ServerWindow()
 
 	profiles.SortItems(compare_message_profiles);
 
-	BString codeName;
 	int32 count = profiles.CountItems();
 	for (int32 i = 0; i < count; i++) {
 		profile* p = (profile*)profiles.ItemAtFast(i);
-		string_for_message_code(p->code, codeName);
 		printf("[%s] called %" B_PRId32 " times, %g secs (%" B_PRId64 " usecs "
-			"per call)\n", codeName.String(), p->count, p->time / 1000000.0,
+			"per call)\n", string_for_message_code(p->code), p->count, p->time / 1000000.0,
 			p->time / p->count);
 	}
 	if (sRedrawProcessingTime.count > 0) {
@@ -282,15 +280,14 @@ ServerWindow::Init(BRect frame, window_look look, window_feel feel,
 
 	// We cannot call MakeWindow in the constructor, since it
 	// is a virtual function!
-	fWindow = MakeWindow(frame, fTitle, look, feel, flags, workspace);
-	if (!fWindow || fWindow->InitCheck() != B_OK) {
-		delete fWindow;
-		fWindow = NULL;
+	fWindow.SetTo(MakeWindow(frame, fTitle, look, feel, flags, workspace));
+	if (!fWindow.IsSet() || fWindow->InitCheck() != B_OK) {
+		fWindow.Unset();
 		return B_NO_MEMORY;
 	}
 
 	if (!fWindow->IsOffscreenWindow()) {
-		fDesktop->AddWindow(fWindow);
+		fDesktop->AddWindow(fWindow.Get());
 		fWindowAddedToDesktop = true;
 	}
 
@@ -309,7 +306,7 @@ ServerWindow::Window() const
 	if (!fWindowAddedToDesktop)
 		return NULL;
 
-	return fWindow;
+	return fWindow.Get();
 }
 
 
@@ -352,8 +349,8 @@ ServerWindow::_Show()
 	// TODO: Maybe we need to dispatch a message to the desktop to show/hide us
 	// instead of doing it from this thread.
 	fDesktop->UnlockSingleWindow();
-	fDesktop->ShowWindow(fWindow);
-	if (fDirectWindowInfo && fDirectWindowInfo->IsFullScreen())
+	fDesktop->ShowWindow(fWindow.Get());
+	if (fDirectWindowInfo.IsSet() && fDirectWindowInfo->IsFullScreen())
 		_ResizeToFullScreen();
 
 	fDesktop->LockSingleWindow();
@@ -372,7 +369,7 @@ ServerWindow::_Hide()
 		return;
 
 	fDesktop->UnlockSingleWindow();
-	fDesktop->HideWindow(fWindow);
+	fDesktop->HideWindow(fWindow.Get());
 	fDesktop->LockSingleWindow();
 }
 
@@ -412,8 +409,8 @@ ServerWindow::SetTitle(const char* newTitle)
 		rename_thread(Thread(), name);
 	}
 
-	if (fWindow != NULL)
-		fDesktop->SetWindowTitle(fWindow, newTitle);
+	if (fWindow.IsSet())
+		fDesktop->SetWindowTitle(fWindow.Get(), newTitle);
 }
 
 
@@ -628,7 +625,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 					"minimize: %d\n", Title(), minimize));
 
 				fDesktop->UnlockSingleWindow();
-				fDesktop->MinimizeWindow(fWindow, minimize);
+				fDesktop->MinimizeWindow(fWindow.Get(), minimize);
 				fDesktop->LockSingleWindow();
 			}
 			break;
@@ -646,9 +643,9 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			fDesktop->UnlockSingleWindow();
 
 			if (activate)
-				fDesktop->SelectWindow(fWindow);
+				fDesktop->SelectWindow(fWindow.Get());
 			else
-				fDesktop->SendWindowBehind(fWindow, NULL);
+				fDesktop->SendWindowBehind(fWindow.Get(), NULL);
 
 			fDesktop->LockSingleWindow();
 			break;
@@ -669,7 +666,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 					Title(), behindOf != NULL ? behindOf->Title() : "NULL"));
 
 				if (behindOf != NULL || token == -1) {
-					fDesktop->SendWindowBehind(fWindow, behindOf);
+					fDesktop->SendWindowBehind(fWindow.Get(), behindOf);
 					status = B_OK;
 				} else
 					status = B_NAME_NOT_FOUND;
@@ -731,7 +728,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				if (window == NULL || window->Feel() != B_NORMAL_WINDOW_FEEL) {
 					status = B_BAD_VALUE;
 				} else {
-					status = fDesktop->AddWindowToSubset(fWindow, window)
+					status = fDesktop->AddWindowToSubset(fWindow.Get(), window)
 						? B_OK : B_NO_MEMORY;
 				}
 			}
@@ -751,7 +748,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				::Window* window = fDesktop->FindWindowByClientToken(token,
 					App()->ClientTeam());
 				if (window != NULL) {
-					fDesktop->RemoveWindowFromSubset(fWindow, window);
+					fDesktop->RemoveWindowFromSubset(fWindow.Get(), window);
 					status = B_OK;
 				} else
 					status = B_BAD_VALUE;
@@ -776,7 +773,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			}
 
 			if (status == B_OK && !fWindow->IsOffscreenWindow())
-				fDesktop->SetWindowLook(fWindow, (window_look)look);
+				fDesktop->SetWindowLook(fWindow.Get(), (window_look)look);
 
 			fLink.StartMessage(status);
 			fLink.Flush();
@@ -796,7 +793,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			}
 
 			if (status == B_OK && !fWindow->IsOffscreenWindow())
-				fDesktop->SetWindowFeel(fWindow, (window_feel)feel);
+				fDesktop->SetWindowFeel(fWindow.Get(), (window_feel)feel);
 
 			fLink.StartMessage(status);
 			fLink.Flush();
@@ -816,7 +813,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			}
 
 			if (status == B_OK && !fWindow->IsOffscreenWindow())
-				fDesktop->SetWindowFlags(fWindow, flags);
+				fDesktop->SetWindowFlags(fWindow.Get(), flags);
 
 			fLink.StartMessage(status);
 			fLink.Flush();
@@ -840,7 +837,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 #endif
 		case AS_IS_FRONT_WINDOW:
 		{
-			bool isFront = fDesktop->FrontWindow() == fWindow;
+			bool isFront = fDesktop->FrontWindow() == fWindow.Get();
 			DTRACE(("ServerWindow %s: Message AS_IS_FRONT_WINDOW: %d\n",
 				Title(), isFront));
 			fLink.StartMessage(isFront ? B_OK : B_ERROR);
@@ -867,7 +864,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			DTRACE(("ServerWindow %s: Message AS_SET_WORKSPACES %" B_PRIx32 "\n",
 				Title(), newWorkspaces));
 
-			fDesktop->SetWindowWorkspaces(fWindow, newWorkspaces);
+			fDesktop->SetWindowWorkspaces(fWindow.Get(), newWorkspaces);
 			break;
 		}
 		case AS_WINDOW_RESIZE:
@@ -889,7 +886,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				// pragmatically set window bounds
 //				fLink.StartMessage(B_BUSY);
 //			} else {
-				fDesktop->ResizeWindowBy(fWindow,
+				fDesktop->ResizeWindowBy(fWindow.Get(),
 					xResizeTo - fWindow->Frame().Width(),
 					yResizeTo - fWindow->Frame().Height());
 				fLink.StartMessage(B_OK);
@@ -914,7 +911,8 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				// pragmatically set window positions
 				fLink.StartMessage(B_BUSY);
 			} else {
-				fDesktop->MoveWindowBy(fWindow, xMoveTo - fWindow->Frame().left,
+				fDesktop->MoveWindowBy(fWindow.Get(),
+					xMoveTo - fWindow->Frame().left,
 					yMoveTo - fWindow->Frame().top);
 				fLink.StartMessage(B_OK);
 			}
@@ -963,7 +961,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			fLink.Flush();
 
-			fDesktop->NotifySizeLimitsChanged(fWindow, minWidth, maxWidth,
+			fDesktop->NotifySizeLimitsChanged(fWindow.Get(), minWidth, maxWidth,
 				minHeight, maxHeight);
 			break;
 		}
@@ -975,12 +973,13 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 				Title()));
 
 			int32 size;
-			if (fWindow && link.Read<int32>(&size) == B_OK) {
+			if (fWindow.IsSet() && link.Read<int32>(&size) == B_OK) {
 				char buffer[size];
 				if (link.Read(buffer, size) == B_OK) {
 					BMessage settings;
 					if (settings.Unflatten(buffer) == B_OK)
-						fDesktop->SetWindowDecoratorSettings(fWindow, settings);
+						fDesktop->SetWindowDecoratorSettings(
+							fWindow.Get(), settings);
 				}
 			}
 			break;
@@ -1015,7 +1014,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		case AS_SYSTEM_FONT_CHANGED:
 		{
 			// Has the all-window look
-			fDesktop->FontsChanged(fWindow);
+			fDesktop->FontsChanged(fWindow.Get());
 			break;
 		}
 
@@ -1098,7 +1097,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<bool>(&enable);
 
 			status_t status = B_OK;
-			if (fDirectWindowInfo != NULL)
+			if (fDirectWindowInfo.IsSet())
 				_DirectWindowSetFullScreen(enable);
 			else
 				status = B_BAD_TYPE;
@@ -1171,7 +1170,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 		case AS_TALK_TO_DESKTOP_LISTENER:
 		{
-			if (fDesktop->MessageForListener(fWindow, fLink.Receiver(),
+			if (fDesktop->MessageForListener(fWindow.Get(), fLink.Receiver(),
 				fLink.Sender()))
 				break;
 			// unhandled message at least send an error if needed
@@ -1184,11 +1183,9 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 		default:
 			if (fCurrentView == NULL) {
-				BString codeName;
-				string_for_message_code(code, codeName);
 				debug_printf("ServerWindow %s received unexpected code - "
 					"message '%s' before top_view attached.\n",
-					Title(), codeName.String());
+					Title(), string_for_message_code(code));
 				if (link.NeedsReply()) {
 					fLink.StartMessage(B_ERROR);
 					fLink.Flush();
@@ -1303,7 +1300,8 @@ fDesktop->LockSingleWindow();
 			DTRACE(("ServerWindow %s: Message AS_VIEW_SET_FONT_STATE: "
 				"View name: %s\n", fTitle, fCurrentView->Name()));
 
-			fCurrentView->CurrentState()->ReadFontFromLink(link);
+			fCurrentView->CurrentState()->ReadFontFromLink(link,
+				fServerApp->FontManager());
 			fWindow->GetDrawingEngine()->SetFont(
 				fCurrentView->CurrentState());
 			break;
@@ -1355,7 +1353,7 @@ fDesktop->UnlockSingleWindow();
 				// TODO: possible deadlock
 				if (eventMask != 0 || options != 0) {
 					if (options & B_LOCK_WINDOW_FOCUS)
-						fDesktop->SetFocusLocked(fWindow);
+						fDesktop->SetFocusLocked(fWindow.Get());
 					fDesktop->EventDispatcher().AddTemporaryListener(EventTarget(),
 						fCurrentView->Token(), eventMask, options);
 				} else {
@@ -1381,7 +1379,7 @@ fDesktop->LockSingleWindow();
 			float offsetX = x - fCurrentView->Frame().left;
 			float offsetY = y - fCurrentView->Frame().top;
 
-			BRegion dirty;
+			BRegion dirty, expose;
 			fCurrentView->MoveBy(offsetX, offsetY, &dirty);
 
 			// TODO: think about how to avoid this hack:
@@ -1392,7 +1390,7 @@ fDesktop->LockSingleWindow();
 			if (View* parent = fCurrentView->Parent())
 				parent->RebuildClipping(false);
 
-			fWindow->MarkContentDirty(dirty);
+			fWindow->MarkContentDirty(dirty, expose);
 			break;
 		}
 		case AS_VIEW_RESIZE_TO:
@@ -1409,14 +1407,14 @@ fDesktop->LockSingleWindow();
 			float deltaWidth = newWidth - fCurrentView->Frame().Width();
 			float deltaHeight = newHeight - fCurrentView->Frame().Height();
 
-			BRegion dirty;
+			BRegion dirty, expose;
 			fCurrentView->ResizeBy(deltaWidth, deltaHeight, &dirty);
 
 			// TODO: see above
 			if (View* parent = fCurrentView->Parent())
 				parent->RebuildClipping(false);
 
-			fWindow->MarkContentDirty(dirty);
+			fWindow->MarkContentDirty(dirty, expose);
 			break;
 		}
 		case AS_VIEW_GET_COORD:
@@ -1617,7 +1615,7 @@ fDesktop->LockSingleWindow();
 		case AS_VIEW_SET_TRANSFORM:
 		{
 			BAffineTransform transform;
-			if (link.Read<BAffineTransform>(&transform) != B_OK)
+			if (link.ReadAffineTransform(&transform) != B_OK)
 				break;
 
 			DTRACE(("ServerWindow %s: Message AS_VIEW_SET_TRANSFORM: "
@@ -1640,7 +1638,24 @@ fDesktop->LockSingleWindow();
 				transform.shx, transform.sy, transform.tx, transform.ty));
 
 			fLink.StartMessage(B_OK);
-			fLink.Attach<BAffineTransform>(transform);
+			fLink.AttachAffineTransform(transform);
+			fLink.Flush();
+			break;
+		}
+		case AS_VIEW_GET_PARENT_COMPOSITE:
+		{
+			DrawState* state = fCurrentView->CurrentState()->PreviousState();
+
+			fLink.StartMessage(B_OK);
+			if (state != NULL) {
+				fLink.AttachAffineTransform(state->CombinedTransform());
+				fLink.Attach<float>(state->CombinedScale());
+				fLink.Attach<BPoint>(state->CombinedOrigin());
+			} else {
+				fLink.AttachAffineTransform(BAffineTransform());
+				fLink.Attach<float>(1.0f);
+				fLink.Attach<BPoint>(B_ORIGIN);
+			}
 			fLink.Flush();
 			break;
 		}
@@ -2024,7 +2039,7 @@ fDesktop->LockSingleWindow();
 			rgb_color colorKey = {0};
 
 			if (status == B_OK) {
-				ServerBitmap* bitmap = fServerApp->GetBitmap(bitmapToken);
+				BReference<ServerBitmap> bitmap(fServerApp->GetBitmap(bitmapToken), true);
 				if (bitmapToken == -1 || bitmap != NULL) {
 					bool wasOverlay = fCurrentView->ViewBitmap() != NULL
 						&& fCurrentView->ViewBitmap()->Overlay() != NULL;
@@ -2048,9 +2063,6 @@ fDesktop->LockSingleWindow();
 						bitmap->Overlay()->SetFlags(options);
 						colorKey = bitmap->Overlay()->Color();
 					}
-
-					if (bitmap != NULL)
-						bitmap->ReleaseReference();
 				} else
 					status = B_BAD_VALUE;
 			}
@@ -2096,20 +2108,16 @@ fDesktop->LockSingleWindow();
 			if (link.Read<bool>(&inverse) != B_OK)
 				break;
 
-			ServerPicture* picture = fServerApp->GetPicture(pictureToken);
+			BReference<ServerPicture> picture(fServerApp->GetPicture(pictureToken), true);
 			if (picture == NULL)
 				break;
 
-			AlphaMask* const mask = new(std::nothrow) PictureAlphaMask(
+			BReference<AlphaMask> const mask(new(std::nothrow) PictureAlphaMask(
 				fCurrentView->GetAlphaMask(), picture,
-				*fCurrentView->CurrentState(), where, inverse);
+				*fCurrentView->CurrentState(), where, inverse), true);
 			fCurrentView->SetAlphaMask(mask);
-			if (mask != NULL)
-				mask->ReleaseReference();
 
 			_UpdateDrawState(fCurrentView);
-
-			picture->ReleaseReference();
 			break;
 		}
 
@@ -2135,20 +2143,16 @@ fDesktop->LockSingleWindow();
 		}
 		case AS_VIEW_SET_CLIP_REGION:
 		{
-			int32 rectCount;
-			status_t status = link.Read<int32>(&rectCount);
-				// a negative count means no
-				// region for the current draw state,
-				// but an *empty* region is actually valid!
-				// even if it means no drawing is allowed
+			bool hasClipRegion;
+			status_t status = link.Read<bool>(&hasClipRegion);
 
 			if (status < B_OK)
 				break;
 
-			if (rectCount >= 0) {
+			if (hasClipRegion) {
 				// we are supposed to set the clipping region
 				BRegion region;
-				if (rectCount > 0 && link.ReadRegion(&region) < B_OK)
+				if (link.ReadRegion(&region) < B_OK)
 					break;
 
 				DTRACE(("ServerWindow %s: Message AS_VIEW_SET_CLIP_REGION: "
@@ -2309,15 +2313,13 @@ fDesktop->LockSingleWindow();
 				BMessage dragMessage;
 				if (link.Read(buffer, bufferSize) == B_OK
 					&& dragMessage.Unflatten(buffer) == B_OK) {
-						ServerBitmap* bitmap
-							= fServerApp->GetBitmap(bitmapToken);
+						BReference<ServerBitmap> bitmap(
+							fServerApp->GetBitmap(bitmapToken), true);
 						// TODO: possible deadlock
 fDesktop->UnlockSingleWindow();
 						fDesktop->EventDispatcher().SetDragMessage(dragMessage,
 							bitmap, offset);
 fDesktop->LockSingleWindow();
-						if (bitmap != NULL)
-							bitmap->ReleaseReference();
 				}
 				delete[] buffer;
 			}
@@ -2383,7 +2385,7 @@ fDesktop->LockSingleWindow();
 		{
 			DTRACE(("ServerWindow %s: Message AS_VIEW_BEGIN_PICTURE\n",
 				Title()));
-			ServerPicture* picture = App()->CreatePicture();
+			BReference<ServerPicture> picture(App()->CreatePicture(), true);
 			if (picture != NULL) {
 				picture->SyncState(fCurrentView);
 				fCurrentView->SetPicture(picture);
@@ -2399,14 +2401,12 @@ fDesktop->LockSingleWindow();
 			int32 token;
 			link.Read<int32>(&token);
 
-			ServerPicture* picture = App()->GetPicture(token);
+			BReference<ServerPicture> picture(App()->GetPicture(token), true);
 			if (picture != NULL)
 				picture->SyncState(fCurrentView);
 
 			fCurrentView->SetPicture(picture);
 
-			if (picture != NULL)
-				picture->ReleaseReference();
 			break;
 		}
 
@@ -2451,7 +2451,21 @@ fDesktop->LockSingleWindow();
 		}
 
 		default:
-			_DispatchViewDrawingMessage(code, link);
+			// The drawing code handles allocation failures using exceptions;
+			// so we need to account for that here.
+			try {
+				_DispatchViewDrawingMessage(code, link);
+			} catch (std::bad_alloc&) {
+				// Cancel any message we were in the middle of sending.
+				fLink.CancelMessage();
+
+				if (link.NeedsReply()) {
+					// As done in _DispatchViewDrawingMessage, send just a
+					// single status_t as the reply.
+					fLink.StartMessage(B_NO_MEMORY);
+					fLink.Flush();
+				}
+			}
 			break;
 	}
 }
@@ -2542,6 +2556,41 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			fCurrentView->CurrentState()->SetPenLocation(penPos);
 			break;
 		}
+		case AS_STROKE_LINE_GRADIENT:
+		{
+			ViewStrokeLineInfo info;
+			if (link.Read<ViewStrokeLineInfo>(&info) != B_OK)
+				break;
+
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			DTRACE(("ServerWindow %s: Message AS_STROKE_LINE: View: %s -> "
+				"BPoint(%.1f, %.1f) - BPoint(%.1f, %.1f)\n", Title(),
+					fCurrentView->Name(),
+					info.startPoint.x, info.startPoint.y,
+					info.endPoint.x, info.endPoint.y));
+
+			BPoint penPos = info.endPoint;
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&info.startPoint);
+			transform.Apply(&info.endPoint);
+			drawingEngine->StrokeLine(info.startPoint, info.endPoint, *gradient);
+
+			// We update the pen here because many DrawingEngine calls which
+			// do not update the pen position actually call StrokeLine
+
+			// TODO: Decide where to put this, for example, it cannot be done
+			// for DrawString(), also there needs to be a decision, if the pen
+			// location is in View coordinates (I think it should be) or in
+			// screen coordinates.
+			fCurrentView->CurrentState()->SetPenLocation(penPos);
+			break;
+		}
 		case AS_VIEW_INVERT_RECT:
 		{
 			BRect rect;
@@ -2587,6 +2636,27 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			drawingEngine->FillRect(rect);
 			break;
 		}
+		case AS_STROKE_RECT_GRADIENT:
+		{
+			BRect rect;
+			link.Read<BRect>(&rect);
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+
+			GTRACE(("ServerWindow %s: Message AS_STROKE_RECT_GRADIENT: View: %s "
+				"-> BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
+				fCurrentView->Name(), rect.left, rect.top, rect.right,
+				rect.bottom));
+
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&rect);
+			transform.Apply(gradient);
+			drawingEngine->StrokeRect(rect, *gradient);
+			delete gradient;
+			break;
+		}
 		case AS_FILL_RECT_GRADIENT:
 		{
 			BRect rect;
@@ -2619,7 +2689,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				info.options |= B_FILTER_BITMAP_BILINEAR;
 #endif
 
-			ServerBitmap* bitmap = fServerApp->GetBitmap(info.bitmapToken);
+			BReference<ServerBitmap> bitmap(fServerApp->GetBitmap(info.bitmapToken), true);
 			if (bitmap != NULL) {
 				DTRACE(("ServerWindow %s: Message AS_VIEW_DRAW_BITMAP: "
 					"View: %s, bitmap: %" B_PRId32 " (size %" B_PRId32 " x "
@@ -2640,8 +2710,6 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 
 				drawingEngine->DrawBitmap(bitmap, info.bitmapRect,
 					info.viewRect, info.options);
-
-				bitmap->ReleaseReference();
 			}
 			break;
 		}
@@ -2662,9 +2730,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			drawingEngine->DrawArc(r, angle, span, code == AS_FILL_ARC);
 			break;
 		}
+		case AS_STROKE_ARC_GRADIENT:
 		case AS_FILL_ARC_GRADIENT:
 		{
-			GTRACE(("ServerWindow %s: Message AS_FILL_ARC_GRADIENT\n",
+			GTRACE(("ServerWindow %s: Message AS_STROKE/FILL_ARC_GRADIENT\n",
 				Title()));
 
 			float angle, span;
@@ -2679,7 +2748,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				fCurrentView->PenToScreenTransform();
 			transform.Apply(&r);
 			transform.Apply(gradient);
-			drawingEngine->FillArc(r, angle, span, *gradient);
+			drawingEngine->DrawArc(r, angle, span, code == AS_FILL_ARC_GRADIENT, *gradient);
 			delete gradient;
 			break;
 		}
@@ -2703,9 +2772,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			drawingEngine->DrawBezier(pts, code == AS_FILL_BEZIER);
 			break;
 		}
+		case AS_STROKE_BEZIER_GRADIENT:
 		case AS_FILL_BEZIER_GRADIENT:
 		{
-			GTRACE(("ServerWindow %s: Message AS_FILL_BEZIER_GRADIENT\n",
+			GTRACE(("ServerWindow %s: Message AS_STROKE/FILL_BEZIER_GRADIENT\n",
 				Title()));
 
 			const SimpleTransform transform =
@@ -2719,7 +2789,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			if (link.ReadGradient(&gradient) != B_OK)
 				break;
 			transform.Apply(gradient);
-			drawingEngine->FillBezier(pts, *gradient);
+			drawingEngine->DrawBezier(pts, code == AS_FILL_BEZIER_GRADIENT, *gradient);
 			delete gradient;
 			break;
 		}
@@ -2737,9 +2807,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			drawingEngine->DrawEllipse(rect, code == AS_FILL_ELLIPSE);
 			break;
 		}
+		case AS_STROKE_ELLIPSE_GRADIENT:
 		case AS_FILL_ELLIPSE_GRADIENT:
 		{
-			GTRACE(("ServerWindow %s: Message AS_FILL_ELLIPSE_GRADIENT\n",
+			GTRACE(("ServerWindow %s: Message AS_STROKE/FILL_ELLIPSE_GRADIENT\n",
 				Title()));
 
 			BRect rect;
@@ -2751,7 +2822,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				fCurrentView->PenToScreenTransform();
 			transform.Apply(&rect);
 			transform.Apply(gradient);
-			drawingEngine->FillEllipse(rect, *gradient);
+			drawingEngine->DrawEllipse(rect, code == AS_FILL_ELLIPSE_GRADIENT, *gradient);
 			delete gradient;
 			break;
 		}
@@ -2775,9 +2846,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				code == AS_FILL_ROUNDRECT);
 			break;
 		}
+		case AS_STROKE_ROUNDRECT_GRADIENT:
 		case AS_FILL_ROUNDRECT_GRADIENT:
 		{
-			GTRACE(("ServerWindow %s: Message AS_FILL_ROUNDRECT_GRADIENT\n",
+			GTRACE(("ServerWindow %s: Message AS_FILL_STROKE/FILL_GRADIENT\n",
 				Title()));
 
 			BRect rect;
@@ -2792,7 +2864,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				fCurrentView->PenToScreenTransform();
 			transform.Apply(&rect);
 			transform.Apply(gradient);
-			drawingEngine->FillRoundRect(rect, xrad, yrad, *gradient);
+			drawingEngine->DrawRoundRect(rect, xrad, yrad, code == AS_FILL_ROUNDRECT_GRADIENT,
+				*gradient);
 			delete gradient;
 			break;
 		}
@@ -2819,9 +2892,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			drawingEngine->DrawTriangle(pts, rect, code == AS_FILL_TRIANGLE);
 			break;
 		}
+		case AS_STROKE_TRIANGLE_GRADIENT:
 		case AS_FILL_TRIANGLE_GRADIENT:
 		{
-			DTRACE(("ServerWindow %s: Message AS_FILL_TRIANGLE_GRADIENT\n",
+			DTRACE(("ServerWindow %s: Message AS_STROKE/FILL_TRIANGLE_GRADIENT\n",
 				Title()));
 
 			const SimpleTransform transform =
@@ -2838,7 +2912,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				break;
 			transform.Apply(&rect);
 			transform.Apply(gradient);
-			drawingEngine->FillTriangle(pts, rect, *gradient);
+			drawingEngine->DrawTriangle(pts, rect, code == AS_FILL_TRIANGLE_GRADIENT, *gradient);
 			delete gradient;
 			break;
 		}
@@ -2871,15 +2945,18 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			delete[] pointList;
 			break;
 		}
+		case AS_STROKE_POLYGON_GRADIENT:
 		case AS_FILL_POLYGON_GRADIENT:
 		{
-			DTRACE(("ServerWindow %s: Message AS_FILL_POLYGON_GRADIENT\n",
+			DTRACE(("ServerWindow %s: Message AS_STROKE/FILL_POLYGON_GRADIENT\n",
 				Title()));
 
 			BRect polyFrame;
 			bool isClosed = true;
 			int32 pointCount;
 			link.Read<BRect>(&polyFrame);
+			if (code == AS_STROKE_POLYGON_GRADIENT)
+				link.Read<bool>(&isClosed);
 			link.Read<int32>(&pointCount);
 
 			const SimpleTransform transform =
@@ -2893,8 +2970,9 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				transform.Apply(&polyFrame);
 				transform.Apply(gradient);
 
-				drawingEngine->FillPolygon(pointList, pointCount,
-					polyFrame, *gradient, isClosed && pointCount > 2);
+				drawingEngine->DrawPolygon(pointList, pointCount,
+					polyFrame, code == AS_FILL_POLYGON_GRADIENT, isClosed && pointCount > 2,
+					*gradient);
 				delete gradient;
 			}
 			delete[] pointList;
@@ -2939,9 +3017,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			delete[] ptList;
 			break;
 		}
+		case AS_STROKE_SHAPE_GRADIENT:
 		case AS_FILL_SHAPE_GRADIENT:
 		{
-			DTRACE(("ServerWindow %s: Message AS_FILL_SHAPE_GRADIENT\n",
+			DTRACE(("ServerWindow %s: Message AS_STROKE/FILL_SHAPE_GRADIENT\n",
 				Title()));
 
 			BRect shapeFrame;
@@ -2970,8 +3049,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				transform.Apply(&screenOffset);
 				transform.Apply(&shapeFrame);
 				transform.Apply(gradient);
-				drawingEngine->FillShape(shapeFrame, opCount, opList,
-					ptCount, ptList, *gradient, screenOffset,
+				drawingEngine->DrawShape(shapeFrame, opCount, opList,
+					ptCount, ptList, code == AS_FILL_SHAPE_GRADIENT, *gradient, screenOffset,
 					fCurrentView->Scale());
 				delete gradient;
 			}
@@ -3068,15 +3147,11 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				break;
 			}
 
-			const ssize_t kMaxStackStringSize = 4096;
-			char stackString[kMaxStackStringSize];
-			char* string = stackString;
-			if (info.stringLength >= kMaxStackStringSize) {
-				// NOTE: Careful, the + 1 is for termination!
-				string = (char*)malloc((info.stringLength + 1 + 63) / 64 * 64);
-				if (string == NULL)
-					break;
-			}
+			// NOTE: Careful, the + 1 is for termination!
+			BStackOrHeapArray<char, 4096> string(
+				(info.stringLength + 1 + 63) / 64 * 64);
+			if (!string.IsValid())
+				break;
 
 			escapement_delta* delta = NULL;
 			if (code == AS_DRAW_STRING_WITH_DELTA) {
@@ -3084,11 +3159,9 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				delta = &info.delta;
 			}
 
-			if (link.Read(string, info.stringLength) != B_OK) {
-				if (string != stackString)
-					free(string);
+			if (link.Read(string, info.stringLength) != B_OK)
 				break;
-			}
+
 			// Terminate the string, if nothing else, it's important
 			// for the DTRACE call below...
 			string[info.stringLength] = '\0';
@@ -3103,8 +3176,6 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
 			fCurrentView->CurrentState()->SetPenLocation(penLocation);
 
-			if (string != stackString)
-				free(string);
 			break;
 		}
 		case AS_DRAW_STRING_WITH_OFFSETS:
@@ -3117,27 +3188,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			if (link.Read<int32>(&glyphCount) != B_OK || glyphCount <= 0)
 				break;
 
-			const ssize_t kMaxStackStringSize = 512;
-			char stackString[kMaxStackStringSize];
-			char* string = stackString;
-			BPoint stackLocations[kMaxStackStringSize];
-			BPoint* locations = stackLocations;
-			MemoryDeleter stringDeleter;
-			MemoryDeleter locationsDeleter;
-			if (stringLength >= kMaxStackStringSize) {
-				// NOTE: Careful, the + 1 is for termination!
-				string = (char*)malloc((stringLength + 1 + 63) / 64 * 64);
-				if (string == NULL)
-					break;
-				stringDeleter.SetTo(string);
-			}
-			if (glyphCount > kMaxStackStringSize) {
-				locations = (BPoint*)malloc(
-					((glyphCount * sizeof(BPoint)) + 63) / 64 * 64);
-				if (locations == NULL)
-					break;
-				locationsDeleter.SetTo(locations);
-			}
+			// NOTE: Careful, the + 1 is for termination!
+			BStackOrHeapArray<char, 512> string(
+				(stringLength + 1 + 63) / 64 * 64);
+			BStackOrHeapArray<BPoint, 512> locations(glyphCount);
+			if (!string.IsValid() || !locations.IsValid())
+				break;
 
 			if (link.Read(string, stringLength) != B_OK)
 				break;
@@ -3174,7 +3230,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 
 			BPoint where;
 			if (link.Read<BPoint>(&where) == B_OK) {
-				ServerPicture* picture = App()->GetPicture(token);
+				BReference<ServerPicture> picture(App()->GetPicture(token), true);
 				if (picture != NULL) {
 					// Setting the drawing origin outside of the
 					// state makes sure that everything the picture
@@ -3187,8 +3243,6 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 					fCurrentView->PopState();
 
 					fCurrentView->PopState();
-
-					picture->ReleaseReference();
 				}
 			}
 			break;
@@ -3206,10 +3260,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		}
 
 		default:
-			BString codeString;
-			string_for_message_code(code, codeString);
 			debug_printf("ServerWindow %s received unexpected code: %s\n",
-				Title(), codeString.String());
+				Title(), string_for_message_code(code));
 
 			if (link.NeedsReply()) {
 				// the client is now blocking and waiting for a reply!
@@ -3237,6 +3289,7 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<float>(&x);
 			link.Read<float>(&y);
 
+			fCurrentView->SetDrawingOrigin(BPoint(x, y));
 			picture->WriteSetOrigin(BPoint(x, y));
 			break;
 		}
@@ -3251,12 +3304,14 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 
 		case AS_VIEW_PUSH_STATE:
 		{
+			fCurrentView->PushState();
 			picture->WritePushState();
 			break;
 		}
 
 		case AS_VIEW_POP_STATE:
 		{
+			fCurrentView->PopState();
 			picture->WritePopState();
 			break;
 		}
@@ -3314,6 +3369,19 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 				info.lineJoin, info.miterLimit);
 			break;
 		}
+		case AS_VIEW_SET_FILL_RULE:
+		{
+			int32 fillRule;
+			if (link.Read<int32>(&fillRule) != B_OK)
+				break;
+
+			picture->WriteSetFillRule(fillRule);
+
+			fCurrentView->CurrentState()->SetFillRule(fillRule);
+			fWindow->GetDrawingEngine()->SetFillRule(fillRule);
+
+			break;
+		}
 		case AS_VIEW_SET_SCALE:
 		{
 			float scale;
@@ -3329,7 +3397,7 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 		case AS_VIEW_SET_TRANSFORM:
 		{
 			BAffineTransform transform;
-			if (link.Read<BAffineTransform>(&transform) != B_OK)
+			if (link.ReadAffineTransform(&transform) != B_OK)
 				break;
 
 			picture->WriteSetTransform(transform);
@@ -3518,12 +3586,219 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
+		case AS_STROKE_RECT_GRADIENT:
+		case AS_FILL_RECT_GRADIENT:
+		{
+			BRect rect;
+			link.Read<BRect>(&rect);
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			picture->WriteDrawRectGradient(rect, *gradient, code == AS_FILL_RECT_GRADIENT);
+			break;
+		}
+
+		case AS_STROKE_ARC_GRADIENT:
+		case AS_FILL_ARC_GRADIENT:
+		{
+			BRect rect;
+			link.Read<BRect>(&rect);
+			float startTheta, arcTheta;
+			link.Read<float>(&startTheta);
+			link.Read<float>(&arcTheta);
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			BPoint radii((rect.Width() + 1) / 2, (rect.Height() + 1) / 2);
+			BPoint center = rect.LeftTop() + radii;
+
+			picture->WriteDrawArcGradient(center, radii, startTheta, arcTheta, *gradient,
+				code == AS_FILL_ARC_GRADIENT);
+			break;
+		}
+
+		case AS_STROKE_BEZIER_GRADIENT:
+		case AS_FILL_BEZIER_GRADIENT:
+		{
+			BPoint points[4];
+			for (int32 i = 0; i < 4; i++) {
+				link.Read<BPoint>(&(points[i]));
+			}
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			picture->WriteDrawBezierGradient(points, *gradient, code == AS_FILL_BEZIER_GRADIENT);
+			break;
+		}
+
+		case AS_STROKE_ELLIPSE_GRADIENT:
+		case AS_FILL_ELLIPSE_GRADIENT:
+		{
+			BRect rect;
+			link.Read<BRect>(&rect);
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			picture->WriteDrawEllipseGradient(rect, *gradient, code == AS_FILL_ELLIPSE_GRADIENT);
+			break;
+		}
+
+		case AS_STROKE_ROUNDRECT_GRADIENT:
+		case AS_FILL_ROUNDRECT_GRADIENT:
+		{
+			BRect rect;
+			link.Read<BRect>(&rect);
+
+			BPoint radii;
+			link.Read<float>(&radii.x);
+			link.Read<float>(&radii.y);
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			picture->WriteDrawRoundRectGradient(rect, radii, *gradient, code == AS_FILL_ROUNDRECT_GRADIENT);
+			break;
+		}
+
+		case AS_STROKE_TRIANGLE_GRADIENT:
+		case AS_FILL_TRIANGLE_GRADIENT:
+		{
+			// There is no B_PIC_FILL/STROKE_TRIANGLE op,
+			// we implement it using B_PIC_FILL/STROKE_POLYGON
+			BPoint points[3];
+
+			for (int32 i = 0; i < 3; i++) {
+				link.Read<BPoint>(&(points[i]));
+			}
+
+			BRect rect;
+			link.Read<BRect>(&rect);
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			picture->WriteDrawPolygonGradient(3, points,
+					true, *gradient, code == AS_FILL_TRIANGLE_GRADIENT);
+			break;
+		}
+
+		case AS_STROKE_POLYGON_GRADIENT:
+		case AS_FILL_POLYGON_GRADIENT:
+		{
+			BRect polyFrame;
+			bool isClosed = true;
+			int32 pointCount;
+			const bool fill = (code == AS_FILL_POLYGON_GRADIENT);
+
+			link.Read<BRect>(&polyFrame);
+			if (code == AS_STROKE_POLYGON_GRADIENT)
+				link.Read<bool>(&isClosed);
+			link.Read<int32>(&pointCount);
+
+			ArrayDeleter<BPoint> pointList(new(nothrow) BPoint[pointCount]);
+			if (link.Read(pointList.Get(), pointCount * sizeof(BPoint)) != B_OK)
+				break;
+
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			picture->WriteDrawPolygonGradient(pointCount, pointList.Get(),
+				isClosed && pointCount > 2, *gradient, fill);
+			break;
+		}
+
+		case AS_STROKE_SHAPE_GRADIENT:
+		case AS_FILL_SHAPE_GRADIENT:
+		{
+			BRect shapeFrame;
+			int32 opCount;
+			int32 ptCount;
+
+			link.Read<BRect>(&shapeFrame);
+			link.Read<int32>(&opCount);
+			link.Read<int32>(&ptCount);
+
+			ArrayDeleter<uint32> opList(new(std::nothrow) uint32[opCount]);
+			ArrayDeleter<BPoint> ptList(new(std::nothrow) BPoint[ptCount]);
+			if (!opList.IsSet() || !ptList.IsSet()
+				|| link.Read(opList.Get(), opCount * sizeof(uint32)) != B_OK
+				|| link.Read(ptList.Get(), ptCount * sizeof(BPoint)) != B_OK)
+				break;
+
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			// This might seem a bit weird, but under BeOS, the shapes
+			// are always offset by the current pen location
+			BPoint penLocation
+				= fCurrentView->CurrentState()->PenLocation();
+			for (int32 i = 0; i < ptCount; i++) {
+				ptList.Get()[i] += penLocation;
+			}
+			const bool fill = (code == AS_FILL_SHAPE_GRADIENT);
+			picture->WriteDrawShapeGradient(opCount, opList.Get(), ptCount, ptList.Get(), *gradient, fill);
+
+			break;
+		}
+
+		case AS_FILL_REGION_GRADIENT:
+		{
+			// There is no B_PIC_FILL_REGION op, we have to
+			// implement it using B_PIC_FILL_RECT
+			BRegion region;
+			if (link.ReadRegion(&region) < B_OK)
+				break;
+
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			for (int32 i = 0; i < region.CountRects(); i++)
+				picture->WriteDrawRectGradient(region.RectAt(i), *gradient, true);
+			break;
+		}
+
 		case AS_STROKE_LINE:
 		{
 			ViewStrokeLineInfo info;
 			link.Read<ViewStrokeLineInfo>(&info);
 
 			picture->WriteStrokeLine(info.startPoint, info.endPoint);
+
+			BPoint penPos = info.endPoint;
+			const SimpleTransform transform =
+				fCurrentView->PenToScreenTransform();
+			transform.Apply(&info.endPoint);
+			fCurrentView->CurrentState()->SetPenLocation(penPos);
+			break;
+		}
+
+		case AS_STROKE_LINE_GRADIENT:
+		{
+			ViewStrokeLineInfo info;
+			link.Read<ViewStrokeLineInfo>(&info);
+
+			BGradient* gradient;
+			if (link.ReadGradient(&gradient) != B_OK)
+				break;
+			ObjectDeleter<BGradient> gradientDeleter(gradient);
+
+			picture->WriteStrokeLineGradient(info.startPoint, info.endPoint, *gradient);
 
 			BPoint penPos = info.endPoint;
 			const SimpleTransform transform =
@@ -3619,11 +3894,16 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			// We need to update the pen location
 			fCurrentView->PenToScreenTransform().Apply(&info.location);
-			BPoint penLocation = fWindow->GetDrawingEngine()->DrawStringDry(
-				string, info.stringLength, info.location, &info.delta);
+			DrawingEngine* drawingEngine = fWindow->GetDrawingEngine();
+			if (drawingEngine->LockParallelAccess()) {
+				BPoint penLocation = drawingEngine->DrawStringDry(
+					string, info.stringLength, info.location, &info.delta);
 
-			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
-			fCurrentView->CurrentState()->SetPenLocation(penLocation);
+				fCurrentView->ScreenToPenTransform().Apply(&penLocation);
+				fCurrentView->CurrentState()->SetPenLocation(penLocation);
+
+				drawingEngine->UnlockParallelAccess();
+			}
 
 			free(string);
 			break;
@@ -3639,27 +3919,12 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (link.Read<int32>(&glyphCount) != B_OK || glyphCount <= 0)
 				break;
 
-			const ssize_t kMaxStackStringSize = 512;
-			char stackString[kMaxStackStringSize];
-			char* string = stackString;
-			BPoint stackLocations[kMaxStackStringSize];
-			BPoint* locations = stackLocations;
-			MemoryDeleter stringDeleter;
-			MemoryDeleter locationsDeleter;
-			if (stringLength >= kMaxStackStringSize) {
-				// NOTE: Careful, the + 1 is for termination!
-				string = (char*)malloc((stringLength + 1 + 63) / 64 * 64);
-				if (string == NULL)
-					break;
-				stringDeleter.SetTo(string);
-			}
-			if (glyphCount > kMaxStackStringSize) {
-				locations = (BPoint*)malloc(
-					((glyphCount * sizeof(BPoint)) + 63) / 64 * 64);
-				if (locations == NULL)
-					break;
-				locationsDeleter.SetTo(locations);
-			}
+			// NOTE: Careful, the + 1 is for termination!
+			BStackOrHeapArray<char, 512> string(
+				(stringLength + 1 + 63) / 64 * 64);
+			BStackOrHeapArray<BPoint, 512> locations(glyphCount);
+			if (!string.IsValid() || !locations.IsValid())
+				break;
 
 			if (link.Read(string, stringLength) != B_OK)
 				break;
@@ -3679,12 +3944,17 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			picture->WriteDrawString(string, stringLength, locations,
 				glyphCount);
 
-			// Update pen location
-			BPoint penLocation = fWindow->GetDrawingEngine()->DrawStringDry(
-				string, stringLength, locations);
+			DrawingEngine* drawingEngine = fWindow->GetDrawingEngine();
+			if (drawingEngine->LockParallelAccess()) {
+				// Update pen location
+				BPoint penLocation = drawingEngine->DrawStringDry(
+					string, stringLength, locations);
 
-			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
-			fCurrentView->CurrentState()->SetPenLocation(penLocation);
+				fCurrentView->ScreenToPenTransform().Apply(&penLocation);
+				fCurrentView->CurrentState()->SetPenLocation(penLocation);
+
+				drawingEngine->UnlockParallelAccess();
+			}
 
 			break;
 		}
@@ -3700,24 +3970,16 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			link.Read<int32>(&opCount);
 			link.Read<int32>(&ptCount);
 
-			uint32* opList = new(std::nothrow) uint32[opCount];
-			BPoint* ptList = new(std::nothrow) BPoint[ptCount];
-			if (opList != NULL && ptList != NULL
-				&& link.Read(opList, opCount * sizeof(uint32)) >= B_OK
-				&& link.Read(ptList, ptCount * sizeof(BPoint)) >= B_OK) {
-				// This might seem a bit weird, but under BeOS, the shapes
-				// are always offset by the current pen location
-				BPoint penLocation
-					= fCurrentView->CurrentState()->PenLocation();
-				for (int32 i = 0; i < ptCount; i++) {
-					ptList[i] += penLocation;
-				}
-				const bool fill = (code == AS_FILL_SHAPE);
-				picture->WriteDrawShape(opCount, opList, ptCount, ptList, fill);
+			BStackOrHeapArray<uint32, 512> opList(opCount);
+			BStackOrHeapArray<BPoint, 512> ptList(ptCount);
+			if (!opList.IsValid() || !ptList.IsValid()
+				|| link.Read(opList, opCount * sizeof(uint32)) < B_OK
+				|| link.Read(ptList, ptCount * sizeof(BPoint)) < B_OK) {
+				break;
 			}
+			picture->WriteDrawShape(opCount, opList, ptCount,
+				ptList, code == AS_FILL_SHAPE);
 
-			delete[] opList;
-			delete[] ptList;
 			break;
 		}
 
@@ -3726,7 +3988,7 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			ViewDrawBitmapInfo info;
 			link.Read<ViewDrawBitmapInfo>(&info);
 
-			ServerBitmap* bitmap = App()->GetBitmap(info.bitmapToken);
+			BReference<ServerBitmap> bitmap(App()->GetBitmap(info.bitmapToken), true);
 			if (bitmap == NULL)
 				break;
 
@@ -3735,7 +3997,6 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 				bitmap->ColorSpace(), info.options, bitmap->Bits(),
 				bitmap->BitsLength());
 
-			bitmap->ReleaseReference();
 			break;
 		}
 
@@ -3746,15 +4007,13 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			BPoint where;
 			if (link.Read<BPoint>(&where) == B_OK) {
-				ServerPicture* pictureToDraw = App()->GetPicture(token);
+				BReference<ServerPicture> pictureToDraw(App()->GetPicture(token), true);
 				if (pictureToDraw != NULL) {
 					// We need to make a copy of the picture, since it can
 					// change after it has been drawn
-					ServerPicture* copy = App()->CreatePicture(pictureToDraw);
+					BReference<ServerPicture> copy(App()->CreatePicture(pictureToDraw), true);
 					picture->NestPicture(copy);
 					picture->WriteDrawPicture(where, copy->Token());
-
-					pictureToDraw->ReleaseReference();
 				}
 			}
 			break;
@@ -3799,15 +4058,13 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (link.Read<bool>(&inverse) != B_OK)
 				break;
 
-			ServerPicture* pictureToClip = fServerApp->GetPicture(pictureToken);
+			BReference<ServerPicture> pictureToClip(fServerApp->GetPicture(pictureToken), true);
 			if (pictureToClip != NULL) {
 				// We need to make a copy of the picture, since it can
 				// change after it has been drawn
-				ServerPicture* copy = App()->CreatePicture(pictureToClip);
+				BReference<ServerPicture> copy(App()->CreatePicture(pictureToClip), true);
 				picture->NestPicture(copy);
 				picture->WriteClipToPicture(copy->Token(), where, inverse);
-
-				pictureToClip->ReleaseReference();
 			}
 			break;
 		}
@@ -3848,7 +4105,7 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 
 		case AS_VIEW_BEGIN_PICTURE:
 		{
-			ServerPicture* newPicture = App()->CreatePicture();
+			BReference <ServerPicture> newPicture(App()->CreatePicture(), true);
 			if (newPicture != NULL) {
 				newPicture->PushPicture(picture);
 				newPicture->SyncState(fCurrentView);
@@ -3862,7 +4119,7 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			int32 token;
 			link.Read<int32>(&token);
 
-			ServerPicture* appendPicture = App()->GetPicture(token);
+			BReference<ServerPicture> appendPicture(App()->GetPicture(token), true);
 			if (appendPicture != NULL) {
 				//picture->SyncState(fCurrentView);
 				appendPicture->AppendPicture(picture);
@@ -3870,17 +4127,13 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			fCurrentView->SetPicture(appendPicture);
 
-			if (appendPicture != NULL)
-				appendPicture->ReleaseReference();
 			break;
 		}
 
 		case AS_VIEW_END_PICTURE:
 		{
-			ServerPicture* poppedPicture = picture->PopPicture();
+			BReference<ServerPicture> poppedPicture(picture->PopPicture(), true);
 			fCurrentView->SetPicture(poppedPicture);
-			if (poppedPicture != NULL)
-				poppedPicture->ReleaseReference();
 
 			fLink.StartMessage(B_OK);
 			fLink.Attach<int32>(picture->Token());
@@ -3919,7 +4172,7 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (layer == NULL)
 				break;
 
-			Layer* previousLayer = layer->PopLayer();
+			BReference<Layer> previousLayer(layer->PopLayer(), true);
 			if (previousLayer == NULL) {
 				// End last layer
 				return false;
@@ -3930,23 +4183,22 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
-/*
+// TODO: disabled without explanation in hrev19264. investigate problem and enable
+#if 0
 		case AS_VIEW_SET_BLENDING_MODE:
 		{
 			ViewBlendingModeInfo info;
 			link.Read<ViewBlendingModeInfo>(&info);
 
-			picture->BeginOp(B_PIC_SET_BLENDING_MODE);
-			picture->AddInt16((int16)info.sourceAlpha);
-			picture->AddInt16((int16)info.alphaFunction);
-			picture->EndOp();
+			picture->WriteSetBlendingMode(info.sourceAlpha, info.alphaFunction);
 
 			fCurrentView->CurrentState()->SetBlendingMode(info.sourceAlpha,
 				info.alphaFunction);
 			fWindow->GetDrawingEngine()->SetBlendingMode(info.sourceAlpha,
 				info.alphaFunction);
 			break;
-		}*/
+		}
+#endif
 		default:
 			return false;
 	}
@@ -4138,7 +4390,7 @@ ServerWindow::ScreenChanged(const BMessage* message)
 {
 	SendMessageToClient(message);
 
-	if (fDirectWindowInfo != NULL && fDirectWindowInfo->IsFullScreen())
+	if (fDirectWindowInfo.IsSet() && fDirectWindowInfo->IsFullScreen())
 		_ResizeToFullScreen();
 }
 
@@ -4172,7 +4424,7 @@ ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 {
 	ASSERT_MULTI_LOCKED(fDesktop->WindowLocker());
 
-	if (fDirectWindowInfo == NULL)
+	if (!fDirectWindowInfo.IsSet())
 		return;
 
 	STRACE(("HandleDirectConnection(bufferState = %" B_PRId32 ", driverState = "
@@ -4193,8 +4445,7 @@ ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 		// The client application didn't release the semaphore
 		// within the given timeout. Or something else went wrong.
 		// Deleting this member should make it crash.
-		delete fDirectWindowInfo;
-		fDirectWindowInfo = NULL;
+		fDirectWindowInfo.Unset();
 	} else if ((bufferState & B_DIRECT_MODE_MASK) == B_DIRECT_START)
 		fIsDirectlyAccessing = true;
 	else if ((bufferState & B_DIRECT_MODE_MASK) == B_DIRECT_STOP)
@@ -4313,10 +4564,10 @@ ServerWindow::_ResizeToFullScreen()
 		screenFrame = fWindow->Screen()->Frame();
 	}
 
-	fDesktop->MoveWindowBy(fWindow,
+	fDesktop->MoveWindowBy(fWindow.Get(),
 		screenFrame.left - fWindow->Frame().left,
 		screenFrame.top - fWindow->Frame().top);
-	fDesktop->ResizeWindowBy(fWindow,
+	fDesktop->ResizeWindowBy(fWindow.Get(),
 		screenFrame.Width() - fWindow->Frame().Width(),
 		screenFrame.Height() - fWindow->Frame().Height());
 }
@@ -4325,7 +4576,7 @@ ServerWindow::_ResizeToFullScreen()
 status_t
 ServerWindow::_EnableDirectWindowMode()
 {
-	if (fDirectWindowInfo != NULL) {
+	if (fDirectWindowInfo.IsSet()) {
 		// already in direct window mode
 		return B_ERROR;
 	}
@@ -4335,14 +4586,13 @@ ServerWindow::_EnableDirectWindowMode()
 		return B_UNSUPPORTED;
 	}
 
-	fDirectWindowInfo = new(std::nothrow) DirectWindowInfo;
-	if (fDirectWindowInfo == NULL)
+	fDirectWindowInfo.SetTo(new(std::nothrow) DirectWindowInfo);
+	if (!fDirectWindowInfo.IsSet())
 		return B_NO_MEMORY;
 
 	status_t status = fDirectWindowInfo->InitCheck();
 	if (status != B_OK) {
-		delete fDirectWindowInfo;
-		fDirectWindowInfo = NULL;
+		fDirectWindowInfo.Unset();
 
 		return status;
 	}
@@ -4367,15 +4617,15 @@ ServerWindow::_DirectWindowSetFullScreen(bool enable)
 		fDirectWindowInfo->DisableFullScreen();
 
 		// Resize window back to its original size
-		fDesktop->MoveWindowBy(fWindow,
+		fDesktop->MoveWindowBy(fWindow.Get(),
 			originalFrame.left - fWindow->Frame().left,
 			originalFrame.top - fWindow->Frame().top);
-		fDesktop->ResizeWindowBy(fWindow,
+		fDesktop->ResizeWindowBy(fWindow.Get(),
 			originalFrame.Width() - fWindow->Frame().Width(),
 			originalFrame.Height() - fWindow->Frame().Height());
 
 		fDesktop->HWInterface()->SetCursorVisible(true);
 	}
 
-	fDesktop->SetWindowFeel(fWindow, feel);
+	fDesktop->SetWindowFeel(fWindow.Get(), feel);
 }

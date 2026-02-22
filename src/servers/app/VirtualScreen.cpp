@@ -17,7 +17,7 @@
 
 VirtualScreen::VirtualScreen()
 	:
-	fScreenList(4, true),
+	fScreenList(4),
 	fDrawingEngine(NULL),
 	fHWInterface(NULL)
 {
@@ -124,8 +124,17 @@ VirtualScreen::AddScreen(Screen* screen, ScreenConfigurations& configurations)
 		// we found settings for this screen, and try to apply them now
 		status = screen->SetMode(mode);
 	}
+
 	if (status != B_OK) {
-		status_t status = screen->SetPreferredMode();
+		// We found no configuration or it wasn't valid, try to fallback to
+		// sane values
+		status = screen->SetPreferredMode();
+		if (status == B_OK) {
+			monitor_info info;
+			bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
+			screen->GetMode(mode);
+			configurations.Set(screen->ID(), hasInfo ? &info : NULL, screen->Frame(), mode);
+		}
 		if (status != B_OK)
 			status = screen->SetBestMode(1024, 768, B_RGB32, 60.f);
 		if (status != B_OK)
@@ -133,6 +142,9 @@ VirtualScreen::AddScreen(Screen* screen, ScreenConfigurations& configurations)
 		if (status != B_OK) {
 			debug_printf("app_server: Failed to set mode: %s\n",
 				strerror(status));
+
+			delete item;
+			return status;
 		}
 	}
 

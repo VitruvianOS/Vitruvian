@@ -7,6 +7,7 @@
 #define ALPHA_MASK_H
 
 #include <Referenceable.h>
+#include <locks.h>
 
 #include "agg_clipped_alpha_mask.h"
 #include "ServerPicture.h"
@@ -14,8 +15,6 @@
 #include "DrawState.h"
 #include "drawing/Painter/defines.h"
 #include "IntRect.h"
-
-#include <Locker.h>
 
 
 class BShape;
@@ -48,12 +47,22 @@ public:
 
 			size_t				BitmapSize() const;
 
+			bool				IsInverted() const
+								{ return fInverse; }
+
+			bool				IsClipped() const
+								{ return fClippedToCanvas; }
+
+			uint8				OutsideOpacity() const
+								{ return fOutsideOpacity; }
+
 protected:
 			ServerBitmap*		_CreateTemporaryBitmap(BRect bounds) const;
 			void				_Generate();
 			void				_SetNoClipping();
 			const IntRect&		_PreviousMaskBounds() const;
 	virtual	void				_AddToCache() = 0;
+			void				_SetOutsideOpacity();
 
 private:
 	virtual	ServerBitmap*		_RenderSource(const IntRect& canvasBounds) = 0;
@@ -65,7 +74,7 @@ protected:
 			BReference<AlphaMask> fPreviousMask;
 			IntRect				fBounds;
 			bool				fClippedToCanvas;
-			BLocker				fLock;
+			recursive_lock		fLock;
 
 private:
 	friend class AlphaMaskCache;
@@ -74,6 +83,7 @@ private:
 			IntRect				fCanvasBounds;
 			const bool			fInverse;
 			uint8				fBackgroundOpacity;
+			uint8				fOutsideOpacity;
 
 			int32				fNextMaskCount;
 			bool				fInCache;
@@ -83,7 +93,7 @@ private:
 									// one in the cache, without being
 									// in the cache itself
 
-			UtilityBitmap*		fBits;
+			BReference<UtilityBitmap> fBits;
 			agg::rendering_buffer fBuffer;
 			agg::clipped_alpha_mask fMask;
 			scanline_unpacked_masked_type fScanline;
@@ -141,7 +151,7 @@ private:
 
 private:
 			BReference<ServerPicture> fPicture;
-			DrawState*			fDrawState;
+			ObjectDeleter<DrawState> fDrawState;
 };
 
 
@@ -173,7 +183,7 @@ private:
 private:
 	friend class AlphaMaskCache;
 
-			shape_data*			fShape;
+			BReference<shape_data> fShape;
 			BRect				fShapeBounds;
 	static	DrawState*			fDrawState;
 };

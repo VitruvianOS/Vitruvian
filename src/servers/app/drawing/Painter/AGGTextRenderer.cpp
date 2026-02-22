@@ -9,7 +9,10 @@
 #include <agg_basics.h>
 #include <agg_bounding_rect.h>
 #include <agg_conv_segmentator.h>
+#include <agg_conv_stroke.h>
 #include <agg_conv_transform.h>
+#include <agg_path_storage.h>
+#include <agg_scanline_boolean_algebra.h>
 #include <agg_trans_affine.h>
 
 #include <math.h>
@@ -18,11 +21,6 @@
 #include <string.h>
 
 #define SHOW_GLYPH_BOUNDS 0
-
-#if SHOW_GLYPH_BOUNDS
-#	include <agg_conv_stroke.h>
-#	include <agg_path_storage.h>
-#endif
 
 #include "GlobalSubpixelSettings.h"
 #include "GlyphLayoutEngine.h"
@@ -42,7 +40,6 @@ AGGTextRenderer::AGGTextRenderer(renderer_subpix_type& subpixRenderer,
 	fGray8Scanline(),
 	fMonoAdaptor(),
 	fMonoScanline(),
-	fSubpixAdaptor(),
 
 	fCurves(fPathAdaptor),
 	fContour(fCurves),
@@ -121,7 +118,6 @@ typedef agg::conv_transform<FontCacheEntry::ContourConverter, Transformable>
 class AGGTextRenderer::StringRenderer {
 public:
 	StringRenderer(const IntRect& clippingFrame, bool dryRun,
-			bool subpixelAntiAliased,
 			FontCacheEntry::TransformedOutline& transformedGlyph,
 			FontCacheEntry::TransformedContourOutline& transformedContour,
 			const Transformable& transform,
@@ -133,7 +129,6 @@ public:
 		fTransformOffset(transformOffset),
 		fClippingFrame(clippingFrame),
 		fDryRun(dryRun),
-		fSubpixelAntiAliased(subpixelAntiAliased),
 		fVector(false),
 		fBounds(INT32_MAX, INT32_MAX, INT32_MIN, INT32_MIN),
 		fNextCharPos(nextCharPos),
@@ -143,11 +138,13 @@ public:
 
 		fRenderer(renderer)
 	{
+		fSubpixelAntiAliased = gSubpixelAntialiasing && fRenderer.Antialiasing();
 	}
 
 	bool NeedsVector()
 	{
-		return !fTransform.IsTranslationOnly();
+		return !fTransform.IsTranslationOnly()
+			|| (fSubpixelAntiAliased && fRenderer.fMaskedScanline != NULL);
 	}
 
 	void Start()
@@ -171,6 +168,17 @@ public:
 			}
 		}
 
+		if (!fDryRun) {
+			if ((fRenderer.fFont.Face() & B_UNDERSCORE_FACE) != 0)
+				_DrawHorizontalLine(y + 2);
+
+			if ((fRenderer.fFont.Face() & B_STRIKEOUT_FACE) != 0) {
+				font_height fontHeight;
+				fRenderer.fFont.GetHeight(fontHeight);
+				_DrawHorizontalLine(y - (fontHeight.ascent + fontHeight.descent) / 4);
+			}
+		}
+
 		if (fNextCharPos) {
 			fNextCharPos->x = x;
 			fNextCharPos->y = y;
@@ -191,14 +199,15 @@ public:
 		// it is therefor yet "untransformed" in case there is an
 		// embedded transformation.
 		const agg::rect_i& r = glyph->bounds;
+		if (!r.is_valid())
+			return true;
 		IntRect glyphBounds(int32(r.x1 + x), int32(r.y1 + y - 1),
 			int32(r.x2 + x + 1), int32(r.y2 + y + 1));
 			// NOTE: "-1"/"+1" converts the glyph bounding box from pixel
 			// indices to pixel area coordinates
 
 		// track bounding box
-		if (glyphBounds.IsValid())
-			fBounds = fBounds | glyphBounds;
+		fBounds = fBounds | glyphBounds;
 
 		// render the glyph if this is not a dry run
 		if (!fDryRun) {
@@ -260,6 +269,7 @@ public:
 
 					case glyph_data_subpix:
 						// TODO: Handle alpha mask (fRenderer.fMaskedScanline)
+						//       and remove the grayscale workaround for that.
 						agg::render_scanlines(fRenderer.fGray8Adaptor,
 							fRenderer.fGray8Scanline,
 							fRenderer.fSubpixRenderer);
@@ -267,7 +277,7 @@ public:
 
 					case glyph_data_outline: {
 						fVector = true;
-						if (fSubpixelAntiAliased) {
+						if (fSubpixelAntiAliased && fRenderer.fMaskedScanline == NULL) {
 							if (fRenderer.fContour.width() == 0.0) {
 								fRenderer.fSubpixRasterizer.add_path(
 									fTransformedGlyph);
@@ -293,11 +303,10 @@ public:
 	p.close_polygon();
 	agg::conv_stroke<agg::path_storage> ps(p);
 	ps.width(1.0);
-	if (fSubpixelAntiAliased) {
+	if (fSubpixelAntiAliased && fRenderer.fMaskedScanline != NULL)
 		fRenderer.fSubpixRasterizer.add_path(ps);
-	} else {
+	else
 		fRenderer.fRasterizer.add_path(ps);
-	}
 #endif
 
 						break;
@@ -313,6 +322,34 @@ public:
 	IntRect Bounds() const
 	{
 		return fBounds;
+	}
+
+private:
+	void _DrawHorizontalLine(float y)
+	{
+		agg::path_storage path;
+		IntRect bounds = fBounds;
+		BPoint left(bounds.left, y);
+		BPoint right(bounds.right, y);
+		fTransform.Transform(&left);
+		fTransform.Transform(&right);
+		path.move_to(left.x + 0.5, left.y + 0.5);
+		path.line_to(right.x + 0.5, right.y + 0.5);
+		agg::conv_stroke<agg::path_storage> pathStorage(path);
+		pathStorage.width(fRenderer.fFont.Size() / 12.0f);
+		if (fRenderer.fMaskedScanline != NULL) {
+			fRenderer.fRasterizer.add_path(pathStorage);
+			agg::render_scanlines(fRenderer.fRasterizer,
+				*fRenderer.fMaskedScanline, fRenderer.fSolidRenderer);
+		} else if (fSubpixelAntiAliased) {
+			fRenderer.fSubpixRasterizer.add_path(pathStorage);
+			agg::render_scanlines(fRenderer.fSubpixRasterizer,
+				fRenderer.fSubpixScanline, fRenderer.fSubpixRenderer);
+		} else {
+			fRenderer.fRasterizer.add_path(pathStorage);
+			agg::render_scanlines(fRenderer.fRasterizer,
+				fRenderer.fScanline, fRenderer.fSolidRenderer);
+		}
 	}
 
 private:
@@ -358,9 +395,7 @@ AGGTextRenderer::RenderString(const char* string, uint32 length,
 	transform.Transform(&transformOffset);
 	IntRect clippingIntFrame(clippingFrame);
 
-	StringRenderer renderer(clippingIntFrame, dryRun,
-		gSubpixelAntialiasing && fAntialias,
-		transformedOutline, transformedContourOutline,
+	StringRenderer renderer(clippingIntFrame, dryRun, transformedOutline, transformedContourOutline,
 		transform, transformOffset, nextCharPos, *this);
 
 	GlyphLayoutEngine::LayoutGlyphs(renderer, fFont, string, length, INT32_MAX,
@@ -395,9 +430,7 @@ AGGTextRenderer::RenderString(const char* string, uint32 length,
 	transform.Transform(&transformOffset);
 	IntRect clippingIntFrame(clippingFrame);
 
-	StringRenderer renderer(clippingIntFrame, dryRun,
-		gSubpixelAntialiasing && fAntialias,
-		transformedOutline, transformedContourOutline,
+	StringRenderer renderer(clippingIntFrame, dryRun, transformedOutline, transformedContourOutline,
 		transform, transformOffset, nextCharPos, *this);
 
 	GlyphLayoutEngine::LayoutGlyphs(renderer, fFont, string, length, INT32_MAX,

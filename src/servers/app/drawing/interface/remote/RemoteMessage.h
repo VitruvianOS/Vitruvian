@@ -125,7 +125,17 @@ enum {
 	RP_KEY_UP,
 	RP_UNMAPPED_KEY_DOWN,
 	RP_UNMAPPED_KEY_UP,
-	RP_MODIFIERS_CHANGED
+	RP_MODIFIERS_CHANGED,
+
+	RP_STROKE_ARC_GRADIENT = 260,
+	RP_STROKE_BEZIER_GRADIENT,
+	RP_STROKE_ELLIPSE_GRADIENT,
+	RP_STROKE_POLYGON_GRADIENT,
+	RP_STROKE_RECT_GRADIENT,
+	RP_STROKE_ROUND_RECT_GRADIENT,
+	RP_STROKE_SHAPE_GRADIENT,
+	RP_STROKE_TRIANGLE_GRADIENT,
+	RP_STROKE_LINE_GRADIENT,
 };
 
 
@@ -327,7 +337,9 @@ RemoteMessage::ReadRegion(BRegion& region)
 	region.MakeEmpty();
 
 	int32 rectCount;
-	Read(rectCount);
+	status_t result = Read(rectCount);
+	if (result != B_OK)
+		return B_ERROR;
 
 	for (int32 i = 0; i < rectCount; i++) {
 		BRect rect;

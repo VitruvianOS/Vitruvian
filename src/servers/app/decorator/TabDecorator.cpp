@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2015 Haiku, Inc.
+ * Copyright 2001-2020 Haiku, Inc.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -10,7 +10,8 @@
  *		John Scipione, jscipione@gmail.com
  *		Ingo Weinhold, ingo_weinhold@gmx.de
  *		Clemens Zeidler, haiku@clemens-zeidler.de
- *		Joseph Groover <looncraz@looncraz.net>
+ *		Joseph Groover, looncraz@looncraz.net
+ *		Jacob Secunda, secundaja@gmail.com
  */
 
 
@@ -104,6 +105,10 @@ TabDecorator::Draw(BRect updateRect)
 	fDrawingEngine->SetDrawState(&fDrawState);
 
 	_DrawFrame(updateRect & fBorderRect);
+
+	if (IsOutlineResizing())
+		_DrawOutlineFrame(updateRect & fOutlineBorderRect);
+
 	_DrawTabs(updateRect & fTitleBarRect);
 }
 
@@ -117,6 +122,10 @@ TabDecorator::Draw()
 	fDrawingEngine->SetDrawState(&fDrawState);
 
 	_DrawFrame(fBorderRect);
+
+	if (IsOutlineResizing())
+		_DrawOutlineFrame(fOutlineBorderRect);
+
 	_DrawTabs(fTitleBarRect);
 }
 
@@ -154,8 +163,8 @@ TabDecorator::RegionAt(BPoint where, int32& tab) const
 			|| fTopTab->look == B_FLOATING_WINDOW_LOOK
 			|| fTopTab->look == B_MODAL_WINDOW_LOOK
 			|| fTopTab->look == kLeftTitledWindowLook)) {
-		BRect resizeRect(BPoint(fBottomBorder.right - kBorderResizeLength,
-			fBottomBorder.bottom - kBorderResizeLength),
+		BRect resizeRect(BPoint(fBottomBorder.right - fBorderResizeLength,
+			fBottomBorder.bottom - fBorderResizeLength),
 			fBottomBorder.RightBottom());
 		if (resizeRect.Contains(where))
 			return REGION_RIGHT_BOTTOM_CORNER;
@@ -226,6 +235,9 @@ TabDecorator::_DoLayout()
 
 	bool hasTab = false;
 
+	// TODO: Put this computation somewhere more central!
+	const float scaleFactor = max_c(fDrawState.Font().Size() / 12.0f, 1.0f);
+
 	switch ((int)fTopTab->look) {
 		case B_MODAL_WINDOW_LOOK:
 			fBorderWidth = 5;
@@ -249,6 +261,10 @@ TabDecorator::_DoLayout()
 		default:
 			fBorderWidth = 0;
 	}
+
+	fBorderWidth = int32(fBorderWidth * scaleFactor);
+	fResizeKnobSize = kResizeKnobSize * scaleFactor;
+	fBorderResizeLength = kBorderResizeLength * scaleFactor;
 
 	// calculate left/top/right/bottom borders
 	if (fBorderWidth > 0) {
@@ -277,8 +293,8 @@ TabDecorator::_DoLayout()
 
 	// calculate resize rect
 	if (fBorderWidth > 1) {
-		fResizeRect.Set(fBottomBorder.right - kResizeKnobSize,
-			fBottomBorder.bottom - kResizeKnobSize, fBottomBorder.right,
+		fResizeRect.Set(fBottomBorder.right - fResizeKnobSize,
+			fBottomBorder.bottom - fResizeKnobSize, fBottomBorder.right,
 			fBottomBorder.bottom);
 	} else {
 		// no border or one pixel border (menus and such)
@@ -297,6 +313,34 @@ TabDecorator::_DoLayout()
 		fTabsRegion.MakeEmpty();
 		fTitleBarRect.Set(0.0, 0.0, -1.0, -1.0);
 	}
+}
+
+
+void
+TabDecorator::_DoOutlineLayout()
+{
+	fOutlineBorderWidth = 1;
+
+	// calculate left/top/right/bottom outline borders
+	// NOTE: no overlapping, the left and right border rects
+	// don't include the corners!
+	fLeftOutlineBorder.Set(fFrame.left - fOutlineBorderWidth, fFrame.top,
+		fFrame.left - 1, fFrame.bottom);
+
+	fRightOutlineBorder.Set(fFrame.right + 1, fFrame.top ,
+		fFrame.right + fOutlineBorderWidth, fFrame.bottom);
+
+	fTopOutlineBorder.Set(fFrame.left - fOutlineBorderWidth,
+		fFrame.top - fOutlineBorderWidth,
+		fFrame.right + fOutlineBorderWidth, fFrame.top - 1);
+
+	fBottomOutlineBorder.Set(fFrame.left - fOutlineBorderWidth,
+		fFrame.bottom + 1,
+		fFrame.right + fOutlineBorderWidth,
+		fFrame.bottom + fOutlineBorderWidth);
+
+	fOutlineBorderRect = BRect(fTopOutlineBorder.LeftTop(),
+		fBottomOutlineBorder.RightBottom());
 }
 
 
@@ -323,15 +367,16 @@ TabDecorator::_DoTabLayout()
 		fDrawState.Font().GetHeight(fontHeight);
 
 		if (tab->look != kLeftTitledWindowLook) {
+			const float spacing = fBorderWidth * 1.4f;
 			tabRect.Set(fFrame.left - fBorderWidth,
 				fFrame.top - fBorderWidth
-					- ceilf(fontHeight.ascent + fontHeight.descent + 7.0),
-				((fFrame.right - fFrame.left) < 35.0 ?
-					fFrame.left + 35.0 : fFrame.right) + fBorderWidth,
+					- ceilf(fontHeight.ascent + fontHeight.descent + spacing),
+				((fFrame.right - fFrame.left) < (spacing * 5) ?
+					fFrame.left + (spacing * 5) : fFrame.right) + fBorderWidth,
 				fFrame.top - fBorderWidth);
 		} else {
 			tabRect.Set(fFrame.left - fBorderWidth
-				- ceilf(fontHeight.ascent + fontHeight.descent + 5.0),
+				- ceilf(fontHeight.ascent + fontHeight.descent + fBorderWidth),
 					fFrame.top - fBorderWidth, fFrame.left - fBorderWidth,
 				fFrame.bottom + fBorderWidth);
 		}
@@ -439,6 +484,8 @@ TabDecorator::_DistributeTabSize(float delta)
 	}
 
 	float minus = ceilf(std::min(maxTabSize - secMaxTabSize, delta));
+	if (minus < 1.0)
+		return;
 	delta -= minus;
 	minus /= nTabsWithMaxSize;
 
@@ -479,6 +526,19 @@ TabDecorator::_DistributeTabSize(float delta)
 
 
 void
+TabDecorator::_DrawOutlineFrame(BRect rect)
+{
+	drawing_mode oldMode;
+
+	fDrawingEngine->SetDrawingMode(B_OP_ALPHA, oldMode);
+	fDrawingEngine->SetPattern(B_MIXED_COLORS);
+	fDrawingEngine->StrokeRect(rect);
+
+	fDrawingEngine->SetDrawingMode(oldMode);
+}
+
+
+void
 TabDecorator::_SetTitle(Decorator::Tab* tab, const char* string,
 	BRegion* updateRegion)
 {
@@ -488,6 +548,7 @@ TabDecorator::_SetTitle(Decorator::Tab* tab, const char* string,
 		// Get a rect of all the tabs
 
 	_DoLayout();
+	_DoOutlineLayout();
 
 	if (updateRegion == NULL)
 		return;
@@ -555,9 +616,9 @@ TabDecorator::_ResizeBy(BPoint offset, BRegion* dirty)
 			case B_MODAL_WINDOW_LOOK:
 			case kLeftTitledWindowLook:
 				// The bottom border resize line
-				realResizeRect.Set(fRightBorder.right - kBorderResizeLength,
+				realResizeRect.Set(fRightBorder.right - fBorderResizeLength,
 					fBottomBorder.top,
-					fRightBorder.right - kBorderResizeLength,
+					fRightBorder.right - fBorderResizeLength,
 					fBottomBorder.bottom - 1);
 				// Old location
 				dirty->Include(realResizeRect);
@@ -567,9 +628,9 @@ TabDecorator::_ResizeBy(BPoint offset, BRegion* dirty)
 
 				// The right border resize line
 				realResizeRect.Set(fRightBorder.left,
-					fBottomBorder.bottom - kBorderResizeLength,
+					fBottomBorder.bottom - fBorderResizeLength,
 					fRightBorder.right - 1,
-					fBottomBorder.bottom - kBorderResizeLength);
+					fBottomBorder.bottom - fBorderResizeLength);
 				// Old location
 				dirty->Include(realResizeRect);
 				realResizeRect.OffsetBy(offset);
@@ -784,6 +845,8 @@ TabDecorator::_AddTab(DesktopSettings& settings, int32 index,
 	_UpdateFont(settings);
 
 	_DoLayout();
+	_DoOutlineLayout();
+
 	if (updateRegion != NULL)
 		updateRegion->Include(fTitleBarRect);
 	return true;
@@ -793,10 +856,14 @@ TabDecorator::_AddTab(DesktopSettings& settings, int32 index,
 bool
 TabDecorator::_RemoveTab(int32 index, BRegion* updateRegion)
 {
-	BRect oldTitle = fTitleBarRect;
+	BRect oldRect = TabRect(index) | TabRect(CountTabs() - 1);
+		// Get a rect of all the tabs to the right - they will all be moved
+
 	_DoLayout();
+	_DoOutlineLayout();
+
 	if (updateRegion != NULL) {
-		updateRegion->Include(oldTitle);
+		updateRegion->Include(oldRect);
 		updateRegion->Include(fTitleBarRect);
 	}
 	return true;
@@ -838,10 +905,9 @@ TabDecorator::_GetFootprint(BRegion *region)
 	// This function calculates the decorator's footprint in coordinates
 	// relative to the view. This is most often used to set a Window
 	// object's visible region.
+
 	if (region == NULL)
 		return;
-
-	region->MakeEmpty();
 
 	if (fTopTab->look == B_NO_BORDER_WINDOW_LOOK)
 		return;
@@ -858,7 +924,7 @@ TabDecorator::_GetFootprint(BRegion *region)
 
 	if (fTopTab->look == B_DOCUMENT_WINDOW_LOOK) {
 		// include the rectangular resize knob on the bottom right
-		float knobSize = kResizeKnobSize - fBorderWidth;
+		float knobSize = fResizeKnobSize - fBorderWidth;
 		region->Include(BRect(fFrame.right - knobSize, fFrame.bottom - knobSize,
 			fFrame.right, fFrame.bottom));
 	}
@@ -1000,8 +1066,10 @@ TabDecorator::_LayoutTabItems(Decorator::Tab* _tab, const BRect& tabRect)
 float
 TabDecorator::_DefaultTextOffset() const
 {
-	return (fTopTab->look == B_FLOATING_WINDOW_LOOK
-		|| fTopTab->look == kLeftTitledWindowLook) ? 10 : 18;
+	if (fTopTab->look == B_FLOATING_WINDOW_LOOK
+			|| fTopTab->look == kLeftTitledWindowLook)
+		return int32(fBorderWidth * 3.4f);
+	return int32(fBorderWidth * 3.6f);
 }
 
 

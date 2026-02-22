@@ -19,10 +19,12 @@
 #include "Canvas.h"
 #include "IntRect.h"
 
+#include <AutoDeleter.h>
 #include <GraphicsDefs.h>
 #include <InterfaceDefs.h>
 #include <ObjectList.h>
 #include <Region.h>
+#include <Referenceable.h>
 #include <String.h>
 
 class BList;
@@ -168,8 +170,8 @@ public:
 
 			// for background clearing
 			virtual void	Draw(DrawingEngine* drawingEngine,
-								BRegion* effectiveClipping,
-								BRegion* windowContentClipping,
+								const BRegion* effectiveClipping,
+								const BRegion* windowContentClipping,
 								bool deep = false);
 
 			virtual void	MouseDown(BMessage* message, BPoint where);
@@ -202,15 +204,15 @@ public:
 			// clipping
 			void			RebuildClipping(bool deep);
 			BRegion&		ScreenAndUserClipping(
-								BRegion* windowContentClipping,
+								const BRegion* windowContentClipping,
 								bool force = false) const;
 			void			InvalidateScreenClipping();
 	inline	bool			IsScreenClippingValid() const
 								{
 									return fScreenClippingValid
-										&& (fUserClipping == NULL
-										|| (fUserClipping != NULL
-										&& fScreenAndUserClipping != NULL));
+										&& (!fUserClipping.IsSet()
+										|| (fUserClipping.IsSet()
+										&& fScreenAndUserClipping.IsSet()));
 								}
 
 			// debugging
@@ -226,7 +228,7 @@ protected:
 	virtual	void			_ScreenToLocalTransform(
 								SimpleTransform& transform) const;
 
-			BRegion&		_ScreenClipping(BRegion* windowContentClipping,
+			BRegion&		_ScreenClipping(const BRegion* windowContentClipping,
 								bool force = false) const;
 			void			_MoveScreenClipping(int32 x, int32 y,
 								bool deep);
@@ -243,7 +245,8 @@ protected:
 			rgb_color		fViewColor;
 			color_which		fWhichViewColor;
 			float			fWhichViewColorTint;
-			ServerBitmap*	fViewBitmap;
+			BReference<ServerBitmap>
+							fViewBitmap;
 			IntRect			fBitmapSource;
 			IntRect			fBitmapDestination;
 			int32			fBitmapResizingMode;
@@ -267,8 +270,10 @@ protected:
 			View*			fNextSibling;
 			View*			fLastChild;
 
-			ServerCursor*	fCursor;
-			ServerPicture*	fPicture;
+			BReference<ServerCursor>
+							fCursor;
+			BReference<ServerPicture>
+							fPicture;
 
 			// clipping
 			BRegion			fLocalClipping;
@@ -276,8 +281,10 @@ protected:
 	mutable	BRegion			fScreenClipping;
 	mutable	bool			fScreenClippingValid;
 
-			BRegion*		fUserClipping;
-	mutable	BRegion*		fScreenAndUserClipping;
+			ObjectDeleter<BRegion>
+							fUserClipping;
+	mutable	ObjectDeleter<BRegion>
+							fScreenAndUserClipping;
 };
 
 #endif	// VIEW_H

@@ -57,7 +57,7 @@ private:
 			void					_AddKeyEvent(BMessage* message, uint32 what, int32 key,
 										uint32 modifiers, int32 repeatCount = 1);
 
-			BObjectList<BMessage>	fEventList;
+			BObjectList<BMessage, true>	fEventList;
 			BLocker					fEventListLocker;
 			sem_id					fEventNotification;
 			bool					fWaitingOnEvent;

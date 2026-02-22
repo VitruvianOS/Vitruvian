@@ -16,7 +16,6 @@ Server(
 	SOURCES
 		Angle.cpp
 		AppServer.cpp
-		#BitfieldRegion.cpp
 		BitmapManager.cpp
 		Canvas.cpp
 		ClientMemoryAllocator.cpp
@@ -31,11 +30,11 @@ Server(
 		DrawState.cpp
 		EventDispatcher.cpp
 		EventStream.cpp
-		HashTable.cpp
 		InputManager.cpp
 		IntPoint.cpp
 		IntRect.cpp
 		Layer.cpp
+		MultiLocker.cpp
 		MessageLooper.cpp
 		OffscreenServerWindow.cpp
 		OffscreenWindow.cpp
@@ -68,12 +67,14 @@ Server(
 		decorator/TabDecorator.cpp
 		decorator/WindowBehaviour.cpp
 
+		font/AppFontManager.cpp
 		font/FontCache.cpp
 		font/FontCacheEntry.cpp
 		font/FontEngine.cpp
 		font/FontFamily.cpp
 		font/FontManager.cpp
 		font/FontStyle.cpp
+		font/GlobalFontManager.cpp
 
 		# TODO this should be
 		#libasdrawing.a
@@ -84,7 +85,6 @@ Server(
 		drawing/drawing_support.cpp
 		drawing/DrawingEngine.cpp
 		drawing/MallocBuffer.cpp
-		drawing/UpdateQueue.cpp
 		drawing/PatternHandler.cpp
 		drawing/Overlay.cpp
 		drawing/BitmapHWInterface.cpp

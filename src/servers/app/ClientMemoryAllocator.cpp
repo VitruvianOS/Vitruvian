@@ -26,6 +26,7 @@
 #include <Autolock.h>
 
 #include "ServerApp.h"
+#include "ServerMemoryAllocator.h"
 
 
 typedef block_list::Iterator block_iterator;
@@ -64,7 +65,7 @@ ClientMemoryAllocator::~ClientMemoryAllocator()
 
 
 void*
-ClientMemoryAllocator::Allocate(size_t size, block** _address, bool& newArea)
+ClientMemoryAllocator::Allocate(size_t size, block** _address)
 {
 	// A detached allocator no longer allows any further allocations
 	if (fApplication == NULL)
@@ -86,11 +87,10 @@ ClientMemoryAllocator::Allocate(size_t size, block** _address, bool& newArea)
 	if (best == NULL) {
 		// We didn't find a free block - we need to allocate
 		// another chunk, or resize an existing chunk
-		best = _AllocateChunk(size, newArea);
+		best = _AllocateChunk(size);
 		if (best == NULL)
 			return NULL;
-	} else
-		newArea = false;
+	}
 
 	// We need to split the chunk into two parts: the one to keep
 	// and the one to give away
@@ -184,9 +184,6 @@ ClientMemoryAllocator::Free(block* freeBlock)
 		fChunks.Remove(chunk);
 		delete_area(chunk->area);
 
-		if (fApplication != NULL)
-			fApplication->NotifyDeleteClientArea(chunk->area);
-
 		free(chunk);
 	}
 }
@@ -227,7 +224,7 @@ ClientMemoryAllocator::Dump()
 
 
 struct block*
-ClientMemoryAllocator::_AllocateChunk(size_t size, bool& newArea)
+ClientMemoryAllocator::_AllocateChunk(size_t size)
 {
 	// round up to multiple of page size
 	size = (size + B_PAGE_SIZE - 1) & ~(B_PAGE_SIZE - 1);
@@ -238,10 +235,8 @@ ClientMemoryAllocator::_AllocateChunk(size_t size, bool& newArea)
 	struct chunk* chunk;
 	while ((chunk = iterator.Next()) != NULL) {
 		status_t status = resize_area(chunk->area, chunk->size + size);
-		if (status == B_OK) {
-			newArea = false;
+		if (status == B_OK)
 			break;
-		}
 	}
 
 	// TODO: resize and relocate while holding the write lock
@@ -288,7 +283,6 @@ ClientMemoryAllocator::_AllocateChunk(size_t size, bool& newArea)
 		chunk->size = size;
 
 		fChunks.Add(chunk);
-		newArea = true;
 	} else {
 		// create new free block for this chunk
 		block = (struct block *)malloc(sizeof(struct block));
@@ -324,21 +318,20 @@ ClientMemory::ClientMemory()
 
 ClientMemory::~ClientMemory()
 {
-	if (fBlock != NULL)
-		fAllocator->Free(fBlock);
-	if (fAllocator != NULL)
-		fAllocator->ReleaseReference();
+	if (fAllocator != NULL) {
+		if (fBlock != NULL)
+			fAllocator->Free(fBlock);
+		fAllocator.Unset();
+	}
 }
 
 
 void*
-ClientMemory::Allocate(ClientMemoryAllocator* allocator, size_t size,
-	bool& newArea)
+ClientMemory::Allocate(ClientMemoryAllocator* allocator, size_t size)
 {
-	fAllocator = allocator;
-	fAllocator->AcquireReference();
+	fAllocator.SetTo(allocator, false);
 
-	return fAllocator->Allocate(size, &fBlock, newArea);
+	return fAllocator->Allocate(size, &fBlock);
 }
 
 
@@ -372,8 +365,13 @@ ClientMemory::AreaOffset()
 // #pragma mark -
 
 
+static BLocker sLocker("ClonedAreaMemory allocator");
+static BPrivate::ServerMemoryAllocator sClonedAreaMemoryAllocator;
+
+
 ClonedAreaMemory::ClonedAreaMemory()
 	:
+	fArea(-1),
 	fClonedArea(-1),
 	fOffset(0),
 	fBase(NULL)
@@ -383,18 +381,19 @@ ClonedAreaMemory::ClonedAreaMemory()
 
 ClonedAreaMemory::~ClonedAreaMemory()
 {
-	if (fClonedArea >= 0)
-		delete_area(fClonedArea);
+	BAutolock locker(sLocker);
+	sClonedAreaMemoryAllocator.RemoveArea(fArea);
 }
 
 
 void*
 ClonedAreaMemory::Clone(area_id area, uint32 offset)
 {
-	fClonedArea = clone_area("server_memory", (void**)&fBase, B_ANY_ADDRESS,
-		B_READ_AREA | B_WRITE_AREA, area);
-	if (fBase == NULL)
+	BAutolock locker(sLocker);
+	if (sClonedAreaMemoryAllocator.AddArea(area, fClonedArea, fBase, 0, false) != B_OK)
 		return NULL;
+
+	fArea = area;
 	fOffset = offset;
 	return Address();
 }

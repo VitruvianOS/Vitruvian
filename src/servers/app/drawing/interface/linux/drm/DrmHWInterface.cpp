@@ -15,7 +15,7 @@
 #include "modeset.h"
 
 
-static const char* sDriPath = "/dev/dri/card0";
+static const char* sDriPath = "/dev/dri/card1";
 int DrmHWInterface::fFd = -1;
 
 extern "C" void seat_enable_cb(struct libseat* seat, void* data)
@@ -41,7 +41,7 @@ static struct libseat_seat_listener seat_listener = {
 
 DrmHWInterface::DrmHWInterface()
 	:
-	HWInterface(false, false),
+	HWInterface(),
 	fFrontBuffer(NULL),
 	fBackBuffer(NULL),
 	fEventStream(NULL),

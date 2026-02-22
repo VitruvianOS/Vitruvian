@@ -126,26 +126,13 @@ View::View(IntRect frame, IntPoint scrollingOffset, const char* name,
 	fUserClipping(NULL),
 	fScreenAndUserClipping(NULL)
 {
-	if (fDrawState)
+	if (fDrawState.IsSet())
 		fDrawState->SetSubPixelPrecise(fFlags & B_SUBPIXEL_PRECISE);
 }
 
 
 View::~View()
 {
-	if (fViewBitmap != NULL)
-		fViewBitmap->ReleaseReference();
-
-	delete fScreenAndUserClipping;
-	delete fUserClipping;
-	delete fDrawState;
-
-//	if (fWindow && this == fWindow->TopView())
-//		fWindow->SetTopView(NULL);
-
-	if (fCursor)
-		fCursor->ReleaseReference();
-
 	// iterate over children and delete each one
 	View* view = fFirstChild;
 	while (view) {
@@ -277,12 +264,10 @@ View::AddChild(View* view)
 			// trigger redraw
 			IntRect clippedFrame = view->Frame();
 			ConvertToVisibleInTopView(&clippedFrame);
-			BRegion* dirty = fWindow->GetRegion();
-			if (dirty) {
-				dirty->Set((clipping_rect)clippedFrame);
-				fWindow->MarkContentDirtyAsync(*dirty);
-				fWindow->RecycleRegion(dirty);
-			}
+
+			BRegion dirty;
+			dirty.Set((clipping_rect)clippedFrame);
+			fWindow->MarkContentDirtyAsync(dirty);
 		}
 	}
 }
@@ -333,12 +318,10 @@ View::RemoveChild(View* view)
 			// trigger redraw
 			IntRect clippedFrame = view->Frame();
 			ConvertToVisibleInTopView(&clippedFrame);
-			BRegion* dirty = fWindow->GetRegion();
-			if (dirty) {
-				dirty->Set((clipping_rect)clippedFrame);
-				fWindow->MarkContentDirtyAsync(*dirty);
-				fWindow->RecycleRegion(dirty);
-			}
+
+			BRegion dirty;
+			dirty.Set((clipping_rect)clippedFrame);
+			fWindow->MarkContentDirtyAsync(dirty);
 		}
 	}
 
@@ -490,7 +473,18 @@ View::SetName(const char* string)
 void
 View::SetFlags(uint32 flags)
 {
+	uint32 oldFlags = fFlags;
 	fFlags = flags;
+
+	// Child view with B_TRANSPARENT_BACKGROUND flag change clipping of
+	// parent view.
+	if (fParent != NULL
+		&& IsVisible()
+		&& (((oldFlags & B_TRANSPARENT_BACKGROUND) != 0)
+			!= ((fFlags & B_TRANSPARENT_BACKGROUND) != 0))) {
+		fParent->RebuildClipping(false);
+	}
+
 	fDrawState->SetSubPixelPrecise(fFlags & B_SUBPIXEL_PRECISE);
 }
 
@@ -510,15 +504,9 @@ View::SetViewBitmap(ServerBitmap* bitmap, IntRect sourceRect,
 				newOverlay->TakeOverToken(overlay);
 		} else if (overlay != NULL)
 			overlay->Hide();
-
-		fViewBitmap->ReleaseReference();
 	}
 
-	// the caller is allowed to delete the bitmap after setting the background
-	if (bitmap != NULL)
-		bitmap->AcquireReference();
-
-	fViewBitmap = bitmap;
+	fViewBitmap.SetTo(bitmap, false);
 	fBitmapSource = sourceRect;
 	fBitmapDestination = destRect;
 	fBitmapResizingMode = resizingMode;
@@ -720,8 +708,10 @@ View::ResizeBy(int32 x, int32 y, BRegion* dirtyRegion)
 				// include their own dirty regions in ParentResized()
 				for (View* child = FirstChild(); child;
 						child = child->NextSibling()) {
-					if (!child->IsVisible())
+					if (!child->IsVisible()
+						|| (child->fFlags & B_TRANSPARENT_BACKGROUND) != 0) {
 						continue;
+					}
 					IntRect previousChildVisible(
 						child->Frame() & oldBounds & Bounds());
 					if (dirty->Frame().Intersects(previousChildVisible)) {
@@ -915,7 +905,7 @@ View::CopyBits(IntRect src, IntRect dst, BRegion& windowContentClipping)
 	dirty->Exclude(copyRegion);
 
 	dirty->IntersectWith(screenAndUserClipping);
-	fWindow->MarkContentDirty(*dirty);
+	fWindow->MarkContentDirty(*dirty, *dirty);
 
 	fWindow->RecycleRegion(dirty);
 	fWindow->RecycleRegion(copyRegion);
@@ -976,15 +966,17 @@ View::ViewUIColor(float* tint)
 void
 View::PushState()
 {
-	DrawState* newState = fDrawState->PushState();
-	if (newState) {
-		fDrawState = newState;
-		// In BeAPI, B_SUBPIXEL_PRECISE is a view flag, and not affected by the
-		// view state. Our implementation moves it to the draw state, but let's
-		// be compatible with the API here and make it survive accross state
-		// changes.
-		fDrawState->SetSubPixelPrecise(fFlags & B_SUBPIXEL_PRECISE);
-	}
+	DrawState* previousState = fDrawState.Detach();
+	DrawState* newState = previousState->PushState();
+	if (newState == NULL)
+		newState = previousState;
+
+	fDrawState.SetTo(newState);
+	// In BeAPI, B_SUBPIXEL_PRECISE is a view flag, and not affected by the
+	// view state. Our implementation moves it to the draw state, but let's
+	// be compatible with the API here and make it survive accross state
+	// changes.
+	fDrawState->SetSubPixelPrecise(fFlags & B_SUBPIXEL_PRECISE);
 }
 
 
@@ -999,7 +991,7 @@ View::PopState()
 
 	bool rebuildClipping = fDrawState->HasAdditionalClipping();
 
-	fDrawState = fDrawState->PopState();
+	fDrawState.SetTo(fDrawState->PopState());
 	fDrawState->SetSubPixelPrecise(fFlags & B_SUBPIXEL_PRECISE);
 
 	// rebuild clipping
@@ -1026,13 +1018,7 @@ View::SetCursor(ServerCursor* cursor)
 	if (cursor == fCursor)
 		return;
 
-	if (fCursor)
-		fCursor->ReleaseReference();
-
-	fCursor = cursor;
-
-	if (fCursor)
-		fCursor->AcquireReference();
+	fCursor.SetTo(cursor, false);
 }
 
 
@@ -1042,13 +1028,7 @@ View::SetPicture(ServerPicture* picture)
 	if (picture == fPicture)
 		return;
 
-	if (fPicture != NULL)
-		fPicture->ReleaseReference();
-
-	fPicture = picture;
-
-	if (fPicture != NULL)
-		fPicture->AcquireReference();
+	fPicture.SetTo(picture, false);
 }
 
 
@@ -1057,7 +1037,7 @@ View::BlendAllLayers()
 {
 	if (fPicture == NULL)
 		return;
-	Layer* layer = dynamic_cast<Layer*>(fPicture);
+	Layer* layer = dynamic_cast<Layer*>(fPicture.Get());
 	if (layer == NULL)
 		return;
 	BlendLayer(layer);
@@ -1065,8 +1045,8 @@ View::BlendAllLayers()
 
 
 void
-View::Draw(DrawingEngine* drawingEngine, BRegion* effectiveClipping,
-	BRegion* windowContentClipping, bool deep)
+View::Draw(DrawingEngine* drawingEngine, const BRegion* effectiveClipping,
+	const BRegion* windowContentClipping, bool deep)
 {
 	if (!fVisible) {
 		// child views cannot be visible either
@@ -1264,12 +1244,10 @@ View::SetHidden(bool hidden)
 				// trigger a redraw
 				IntRect clippedBounds = Bounds();
 				ConvertToVisibleInTopView(&clippedBounds);
-				BRegion* dirty = fWindow->GetRegion();
-				if (!dirty)
-					return;
-				dirty->Set((clipping_rect)clippedBounds);
-				fWindow->MarkContentDirty(*dirty);
-				fWindow->RecycleRegion(dirty);
+
+				BRegion dirty, expose;
+				dirty.Set((clipping_rect)clippedBounds);
+				fWindow->MarkContentDirty(dirty, expose);
 			}
 		}
 	}
@@ -1371,13 +1349,13 @@ View::PrintToStream() const
 	printf("  valid:            %d\n", fScreenClippingValid);
 
 	printf("  fUserClipping:\n");
-	if (fUserClipping != NULL)
+	if (fUserClipping.IsSet())
 		fUserClipping->PrintToStream();
 	else
 		printf("  none\n");
 
 	printf("  fScreenAndUserClipping:\n");
-	if (fScreenAndUserClipping != NULL)
+	if (fScreenAndUserClipping.IsSet())
 		fScreenAndUserClipping->PrintToStream();
 	else
 		printf("  invalid\n");
@@ -1406,8 +1384,10 @@ View::RebuildClipping(bool deep)
 				return;
 
 			for (; child; child = child->NextSibling()) {
-				if (child->IsVisible())
+				if (child->IsVisible()
+					&& (child->fFlags & B_TRANSPARENT_BACKGROUND) == 0) {
 					childrenRegion->Include((clipping_rect)child->Frame());
+				}
 			}
 
 			fLocalClipping.Exclude(childrenRegion);
@@ -1429,44 +1409,42 @@ View::RebuildClipping(bool deep)
 		// hand, views for which this feature is actually used will
 		// probably not have any children, so it is not that expensive
 		// after all
-		if (fUserClipping == NULL) {
-			fUserClipping = new (nothrow) BRegion;
-			if (fUserClipping == NULL)
+		if (!fUserClipping.IsSet()) {
+			fUserClipping.SetTo(new (nothrow) BRegion);
+			if (!fUserClipping.IsSet())
 				return;
 		}
 
-		fDrawState->GetCombinedClippingRegion(fUserClipping);
+		fDrawState->GetCombinedClippingRegion(fUserClipping.Get());
 	} else {
-		delete fUserClipping;
-		fUserClipping = NULL;
+		fUserClipping.SetTo(NULL);
 	}
 
-	delete fScreenAndUserClipping;
-	fScreenAndUserClipping = NULL;
+	fScreenAndUserClipping.SetTo(NULL);
 	fScreenClippingValid = false;
 }
 
 
 BRegion&
-View::ScreenAndUserClipping(BRegion* windowContentClipping, bool force) const
+View::ScreenAndUserClipping(const BRegion* windowContentClipping, bool force) const
 {
 	// no user clipping - return screen clipping directly
-	if (fUserClipping == NULL)
+	if (!fUserClipping.IsSet())
 		return _ScreenClipping(windowContentClipping, force);
 
 	// combined screen and user clipping already valid
-	if (fScreenAndUserClipping != NULL)
-		return *fScreenAndUserClipping;
+	if (fScreenAndUserClipping.IsSet())
+		return *fScreenAndUserClipping.Get();
 
 	// build a new combined user and screen clipping
-	fScreenAndUserClipping = new (nothrow) BRegion(*fUserClipping);
-	if (fScreenAndUserClipping == NULL)
+	fScreenAndUserClipping.SetTo(new (nothrow) BRegion(*fUserClipping.Get()));
+	if (!fScreenAndUserClipping.IsSet())
 		return fScreenClipping;
 
-	LocalToScreenTransform().Apply(fScreenAndUserClipping);
+	LocalToScreenTransform().Apply(fScreenAndUserClipping.Get());
 	fScreenAndUserClipping->IntersectWith(
 		&_ScreenClipping(windowContentClipping, force));
-	return *fScreenAndUserClipping;
+	return *fScreenAndUserClipping.Get();
 }
 
 
@@ -1489,8 +1467,7 @@ View::InvalidateScreenClipping()
 //	if (!fScreenClippingValid)
 //		return;
 
-	delete fScreenAndUserClipping;
-	fScreenAndUserClipping = NULL;
+	fScreenAndUserClipping.SetTo(NULL);
 	fScreenClippingValid = false;
 	// invalidate the childrens screen clipping as well
 	for (View* child = FirstChild(); child; child = child->NextSibling()) {
@@ -1500,7 +1477,7 @@ View::InvalidateScreenClipping()
 
 
 BRegion&
-View::_ScreenClipping(BRegion* windowContentClipping, bool force) const
+View::_ScreenClipping(const BRegion* windowContentClipping, bool force) const
 {
 	if (!fScreenClippingValid || force) {
 		fScreenClipping = fLocalClipping;
@@ -1512,12 +1489,9 @@ View::_ScreenClipping(BRegion* windowContentClipping, bool force) const
 		ConvertToVisibleInTopView(&clippedBounds);
 		if (clippedBounds.Width() < fScreenClipping.Frame().Width()
 			|| clippedBounds.Height() < fScreenClipping.Frame().Height()) {
-			BRegion* temp = fWindow->GetRegion();
-			if (temp) {
-				temp->Set((clipping_rect)clippedBounds);
-				fScreenClipping.IntersectWith(temp);
-				fWindow->RecycleRegion(temp);
-			}
+			BRegion temp;
+			temp.Set((clipping_rect)clippedBounds);
+			fScreenClipping.IntersectWith(&temp);
 		}
 
 		fScreenClipping.IntersectWith(windowContentClipping);
@@ -1533,8 +1507,7 @@ View::_MoveScreenClipping(int32 x, int32 y, bool deep)
 {
 	if (fScreenClippingValid) {
 		fScreenClipping.OffsetBy(x, y);
-		delete fScreenAndUserClipping;
-		fScreenAndUserClipping = NULL;
+		fScreenAndUserClipping.SetTo(NULL);
 	}
 
 	if (deep) {

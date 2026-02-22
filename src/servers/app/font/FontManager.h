@@ -10,129 +10,106 @@
 #define FONT_MANAGER_H
 
 
-#include "HashTable.h"
-
-#include <Looper.h>
+#include <HashMap.h>
+#include <Node.h>
 #include <ObjectList.h>
+#include <Referenceable.h>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
-class BEntry;
-class BPath;
-struct node_ref;
 
 class FontFamily;
 class FontStyle;
-class ServerFont;
 
 
 /*!
 	\class FontManager FontManager.h
-	\brief Manager for the largest part of the font subsystem
+	\brief Base class interface used by GlobalFontManager and AppFontManager
 */
-class FontManager : public BLooper {
+class FontManager {
 public:
 								FontManager();
 	virtual						~FontManager();
 
-			status_t			InitCheck() { return fInitStatus; }
-			void				SaveRecentFontMappings();
+	virtual	bool				Lock() = 0;
+	virtual	void				Unlock() = 0;
+	virtual	bool				IsLocked() const = 0;
 
-	virtual	void				MessageReceived(BMessage* message);
+	virtual	int32				CountFamilies();
 
-			int32				CheckRevision(uid_t user);
-			int32				CountFamilies();
-
-			int32				CountStyles(const char* family);
-			int32				CountStyles(uint16 familyID);
+	virtual	int32				CountStyles(const char* family);
+	virtual	int32				CountStyles(uint16 familyID);
 			FontFamily*			FamilyAt(int32 index) const;
 
-			FontFamily*			GetFamily(uint16 familyID) const;
-			FontFamily*			GetFamily(const char* name);
+	virtual	FontFamily*			GetFamily(uint16 familyID) const;
+	virtual	FontFamily*			GetFamily(const char* name);
 
 			FontStyle*			GetStyleByIndex(const char* family,
 									int32 index);
 			FontStyle*			GetStyleByIndex(uint16 familyID, int32 index);
-			FontStyle*			GetStyle(const char* family, const char* style,
-									uint16 familyID = 0xffff,
-									uint16 styleID = 0xffff, uint16 face = 0);
-			FontStyle*			GetStyle(const char *family, uint16 styleID);
-			FontStyle*			GetStyle(uint16 familyID,
+
+	virtual	FontStyle*			GetStyle(uint16 familyID,
 									uint16 styleID) const;
+	virtual	FontStyle*			GetStyle(const char* familyName,
+									const char* styleName,
+									uint16 familyID = 0xffff,
+									uint16 styleID = 0xffff,
+									uint16 face = 0);
 			FontStyle*			FindStyleMatchingFace(uint16 face) const;
 
 			void				RemoveStyle(FontStyle* style);
 				// This call must not be used by anything else than class
 				// FontStyle.
 
-			const ServerFont*	DefaultPlainFont() const;
-			const ServerFont*	DefaultBoldFont() const;
-			const ServerFont*	DefaultFixedFont() const;
+	virtual	uint32				Revision();
 
-			void				AttachUser(uid_t userID);
-			void				DetachUser(uid_t userID);
 
-private:
-			struct font_directory;
-			struct font_mapping;
-
-			void				_AddDefaultMapping(const char* family,
-									const char* style, const char* path);
-			bool				_LoadRecentFontMappings();
-			status_t			_AddMappedFont(const char* family,
-									const char* style = NULL);
-			FontStyle*			_GetDefaultStyle(const char* familyName,
-									const char* styleName,
-									const char* fallbackFamily,
-									const char* fallbackStyle,
-									uint16 fallbackFace);
-			status_t			_SetDefaultFonts();
-			void				_PrecacheFontFile(const ServerFont* font);
-			void				_AddSystemPaths();
-			font_directory*		_FindDirectory(node_ref& nodeRef);
-			void				_RemoveDirectory(font_directory* directory);
-			status_t			_CreateDirectories(const char* path);
-			status_t			_AddPath(const char* path);
-			status_t			_AddPath(BEntry& entry,
-									font_directory** _newDirectory = NULL);
-
-			void				_RemoveStyle(font_directory& directory,
-									FontStyle* style);
-			void				_RemoveStyle(dev_t device, uint64 directory,
-									uint64 node);
-			FontFamily*			_FindFamily(const char* family) const;
-
-			void				_ScanFontsIfNecessary();
-			void				_ScanFonts();
-			status_t			_ScanFontDirectory(font_directory& directory);
-			status_t			_AddFont(font_directory& directory,
-									BEntry& entry);
-
+protected:
 			FT_CharMap			_GetSupportedCharmap(const FT_Face& face);
 
+			FontFamily*			_FindFamily(const char* family) const;
+			FontFamily*			_FindFamily(uint16 familyID) const;
+
+			status_t			_AddFont(FT_Face face, node_ref nodeRef,
+									const char* path,
+									uint16& familyID, uint16& styleID);
+			FontStyle*			_RemoveFont(uint16 familyID, uint16 styleID);
+			void				_RemoveAllFonts();
+
+	virtual	uint16				_NextID();
+
 private:
-			status_t			fInitStatus;
+			struct FontKey {
+				FontKey()
+					: familyID(0xffff), styleID(0xffff) {}
 
-			typedef BObjectList<font_directory>		DirectoryList;
-			typedef BObjectList<font_mapping>		MappingList;
+				FontKey(uint16 family, uint16 style)
+					: familyID(family), styleID(style) {}
+
+				uint32 GetHashCode() const
+				{
+					return familyID | (styleID << 16UL);
+				}
+
+				bool operator==(const FontKey& other) const
+				{
+					return familyID == other.familyID
+						&& styleID == other.styleID;
+				}
+
+				uint16 familyID, styleID;
+			};
+
+private:
 			typedef BObjectList<FontFamily>			FamilyList;
-
-			DirectoryList		fDirectories;
-			MappingList			fMappings;
 			FamilyList			fFamilies;
 
-			HashTable			fStyleHashTable;
+			HashMap<FontKey, BReference<FontStyle> > fStyleHashTable;
+			HashMap<FontKey, FontStyle*> fDelistedStyleHashTable;
 
-			ServerFont*			fDefaultPlainFont;
-			ServerFont*			fDefaultBoldFont;
-			ServerFont*			fDefaultFixedFont;
-
-			bool				fScanned;
-			int32				fNextID;
+			uint32				fRevision;
+			uint16				fNextID;
 };
-
-extern FT_Library gFreeTypeLibrary;
-extern FontManager* gFontManager;
 
 #endif	/* FONT_MANAGER_H */

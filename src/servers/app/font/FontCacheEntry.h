@@ -27,6 +27,7 @@
 #define FONT_CACHE_ENTRY_H
 
 
+#include <AutoDeleter.h>
 #include <Locker.h>
 
 #include <agg_conv_curve.h>
@@ -112,6 +113,7 @@ class FontCacheEntry : public MultiLocker, public BReferenceable {
 			const GlyphCache*	CachedGlyph(uint32 glyphCode);
 			const GlyphCache*	CreateGlyph(uint32 glyphCode,
 									FontCacheEntry* fallbackEntry = NULL);
+			bool				CanCreateGlyph(uint32 glyphCode);
 
 			void				InitAdaptors(const GlyphCache* glyph,
 									double x, double y,
@@ -143,7 +145,8 @@ class FontCacheEntry : public MultiLocker, public BReferenceable {
 
 			class GlyphCachePool;
 
-			GlyphCachePool*		fGlyphCache;
+			ObjectDeleter<GlyphCachePool>
+								fGlyphCache;
 			FontEngine			fEngine;
 
 	static	BLocker				sUsageUpdateLock;

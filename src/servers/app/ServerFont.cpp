@@ -13,8 +13,9 @@
 #include "ServerFont.h"
 
 #include "Angle.h"
+#include "AppFontManager.h"
 #include "GlyphLayoutEngine.h"
-#include "FontManager.h"
+#include "GlobalFontManager.h"
 #include "truncate_string.h"
 #include "utf8_functions.h"
 
@@ -73,8 +74,8 @@ ConicToFunc(const FT_Vector *control, const FT_Vector *to, void *user)
 	BPoint controls[3];
 
 	controls[0] = VectorToPoint(control);
-	controls[1] = VectorToPoint(to);
-	controls[2] = controls[1];
+	controls[1] = controls[0];
+	controls[2] = VectorToPoint(to);
 
 	((BShape *)user)->BezierTo(controls);
 	return 0;
@@ -130,7 +131,7 @@ is_white_space(uint32 charCode)
 ServerFont::ServerFont(FontStyle& style, float size, float rotation,
 		float shear, float falseBoldWidth, uint16 flags, uint8 spacing)
 	:
-	fStyle(&style),
+	fStyle(&style, false),
 	fSize(size),
 	fRotation(rotation),
 	fShear(shear),
@@ -142,7 +143,6 @@ ServerFont::ServerFont(FontStyle& style, float size, float rotation,
 	fFace(style.Face()),
 	fEncoding(B_UNICODE_UTF8)
 {
-	fStyle->Acquire();
 }
 
 
@@ -171,7 +171,6 @@ ServerFont::ServerFont(const ServerFont &font)
 */
 ServerFont::~ServerFont()
 {
-	fStyle->Release();
 }
 
 
@@ -193,6 +192,8 @@ ServerFont::operator=(const ServerFont& font)
 	fBounds = font.fBounds;
 
 	SetStyle(font.fStyle);
+
+	fFace = font.fFace;
 
 	return *this;
 }
@@ -252,17 +253,13 @@ void
 ServerFont::SetStyle(FontStyle* style)
 {
 	if (style && style != fStyle) {
-		// detach from old style
-		if (fStyle != NULL)
-			fStyle->Release();
+		fStyle.SetTo(style, false);
 
-		// attach to new style
-		fStyle = style;
-
-		fStyle->Acquire();
-
-		fFace = fStyle->Face();
+		fFace = fStyle->PreservedFace(fFace);
 		fDirection = fStyle->Direction();
+
+		// invalidate fBounds
+		fBounds.Set(0, -1, 0, -1);
 	}
 }
 
@@ -276,23 +273,33 @@ ServerFont::SetStyle(FontStyle* style)
 	\return B_OK if successful, B_ERROR if not
 */
 status_t
-ServerFont::SetFamilyAndStyle(uint16 familyID, uint16 styleID)
+ServerFont::SetFamilyAndStyle(uint16 familyID, uint16 styleID,
+	AppFontManager* fontManager)
 {
-	FontStyle* style = NULL;
+
+	BReference<FontStyle> style;
 
 	if (gFontManager->Lock()) {
-		style = gFontManager->GetStyle(familyID, styleID);
-		if (style != NULL)
-			style->Acquire();
+		style.SetTo(gFontManager->GetStyle(familyID, styleID), false);
 
 		gFontManager->Unlock();
 	}
 
-	if (style == NULL)
-		return B_ERROR;
+	if (style == NULL) {
+		if (fontManager != NULL && fontManager->Lock()) {
+			style.SetTo(fontManager->GetStyle(familyID, styleID), false);
+
+			fontManager->Unlock();
+		}
+
+		if (style == NULL)
+			return B_ERROR;
+	}
 
 	SetStyle(style);
-	style->Release();
+
+	// invalidate fBounds
+	fBounds.Set(0, -1, 0, -1);
 
 	return B_OK;
 }
@@ -304,37 +311,49 @@ ServerFont::SetFamilyAndStyle(uint16 familyID, uint16 styleID)
 	\return B_OK if successful, B_ERROR if not
 */
 status_t
-ServerFont::SetFamilyAndStyle(uint32 fontID)
+ServerFont::SetFamilyAndStyle(uint32 fontID, AppFontManager* fontManager)
 {
 	uint16 style = fontID & 0xFFFF;
 	uint16 family = (fontID & 0xFFFF0000) >> 16;
 
-	return SetFamilyAndStyle(family, style);
+	return SetFamilyAndStyle(family, style, fontManager);
+}
+
+
+void
+ServerFont::SetSize(float value)
+{
+	fSize = value;
+
+	// invalidate fBounds
+	fBounds.Set(0, -1, 0, -1);
 }
 
 
 status_t
 ServerFont::SetFace(uint16 face)
 {
-	// TODO: This needs further investigation. The face variable is actually
-	// flags, but some of them are not enforcable at the same time. Also don't
-	// confuse the Be API "face" with the Freetype face, which is just an
-	// index in case a single font file exports multiple font faces. The
+	// Don't confuse the Be API "face" with the Freetype face, which is just
+	// an index in case a single font file exports multiple font faces. The
 	// FontStyle class takes care of mapping the font style name to the Be
 	// API face flags in FontStyle::_TranslateStyleToFace().
 
-	FontStyle* style = NULL;
+	if (fStyle->PreservedFace(face) == face) {
+		fFace = face;
+		return B_OK;
+	}
+
+	BReference <FontStyle> style;
 	uint16 familyID = FamilyID();
 	if (gFontManager->Lock()) {
 		int32 count = gFontManager->CountStyles(familyID);
 		for (int32 i = 0; i < count; i++) {
-			style = gFontManager->GetStyleByIndex(familyID, i);
+			style.SetTo(gFontManager->GetStyleByIndex(familyID, i), false);
 			if (style == NULL)
 				break;
-			if (style->Face() == face) {
-				style->Acquire();
+			if (style->PreservedFace(face) == face)
 				break;
-			} else
+			else
 				style = NULL;
 		}
 
@@ -344,8 +363,11 @@ ServerFont::SetFace(uint16 face)
 	if (!style)
 		return B_ERROR;
 
+	fFace = face;
 	SetStyle(style);
-	style->Release();
+
+	// invalidate fBounds
+	fBounds.Set(0, -1, 0, -1);
 
 	return B_OK;
 }
@@ -358,6 +380,9 @@ ServerFont::SetFace(uint16 face)
 uint32
 ServerFont::GetFamilyAndStyle() const
 {
+	if (fStyle == NULL || fStyle->Family() == NULL)
+		return 0;
+
 	return (FamilyID() << 16) | StyleID();
 }
 
@@ -666,49 +691,43 @@ ServerFont::IncludesUnicodeBlock(uint32 start, uint32 end, bool& hasBlock)
 }
 
 
-class HasGlyphsConsumer {
- public:
-	HasGlyphsConsumer(bool* hasArray)
-		:
-		fHasArray(hasArray)
-	{
-	}
-
-	bool NeedsVector() { return false; }
-	void Start() {}
-	void Finish(double x, double y) {}
-	void ConsumeEmptyGlyph(int32 index, uint32 charCode, double x, double y)
-	{
-		fHasArray[index] = false;
-	}
-
-	bool ConsumeGlyph(int32 index, uint32 charCode, const GlyphCache* glyph,
-		FontCacheEntry* entry, double x, double y, double advanceX,
-			double advanceY)
-	{
-		fHasArray[index] = glyph->glyph_index != 0;
-		return true;
-	}
-
- private:
-	bool* fHasArray;
-};
-
-
 status_t
-ServerFont::GetHasGlyphs(const char* string, int32 numBytes, int32 numChars,
-	bool* hasArray) const
+ServerFont::GetHasGlyphs(const char* string, int32 numBytes, int32 numChars, bool* hasArray,
+	bool useFallbacks) const
 {
 	if (string == NULL || numBytes <= 0 || numChars <= 0 || hasArray == NULL)
 		return B_BAD_DATA;
 
-	HasGlyphsConsumer consumer(hasArray);
-	if (GlyphLayoutEngine::LayoutGlyphs(consumer, *this, string, numBytes,
-			numChars, NULL, fSpacing)) {
-		return B_OK;
+	FontCacheEntry* entry = NULL;
+	FontCacheReference cacheReference;
+	BObjectList<FontCacheReference, true> fallbacks(21);
+
+	entry = GlyphLayoutEngine::FontCacheEntryFor(*this, false);
+	if (entry == NULL)
+		return B_ERROR;
+
+	cacheReference.SetTo(entry);
+
+	uint32 charCode;
+	int32 charIndex = 0;
+	const char* start = string;
+	while (charIndex < numChars && (charCode = UTF8ToCharCode(&string)) != 0) {
+		hasArray[charIndex] = entry->CanCreateGlyph(charCode);
+
+		if (hasArray[charIndex] == false && useFallbacks) {
+			if (fallbacks.IsEmpty())
+				GlyphLayoutEngine::PopulateFallbacks(fallbacks, *this, false);
+
+			if (GlyphLayoutEngine::GetFallbackReference(fallbacks, charCode) != NULL)
+				hasArray[charIndex] = true;
+		}
+
+		charIndex++;
+		if (string - start + 1 > numBytes)
+			break;
 	}
 
-	return B_ERROR;
+	return B_OK;
 }
 
 
@@ -1085,7 +1104,49 @@ ServerFont::StringWidth(const char *string, int32 numBytes,
 BRect
 ServerFont::BoundingBox()
 {
-	// TODO: fBounds is nowhere calculated!
+	FT_Face face = fStyle->FreeTypeFace();
+
+	if (fBounds.IsValid() &&
+		fBounds.IntegerWidth() > 0 &&
+		fBounds.IntegerHeight() > 0)
+		return fBounds;
+
+	// if font has vector outlines, get the bounding box
+	// from freetype and scale it by the font size
+	if (IsScalable()) {
+		FT_BBox bounds = face->bbox;
+		fBounds.left = (float)bounds.xMin / (float)face->units_per_EM;
+		fBounds.right = (float)bounds.xMax / (float)face->units_per_EM;
+		fBounds.top = (float)bounds.yMin / (float)face->units_per_EM;
+		fBounds.bottom = (float)bounds.yMax / (float)face->units_per_EM;
+
+		float scaledWidth = fBounds.Width() * fSize;
+		float scaledHeight = fBounds.Height() * fSize;
+
+		fBounds.InsetBy((fBounds.Width() - scaledWidth) / 2.f,
+			(fBounds.Height() - scaledHeight) / 2.f);
+	} else {
+		// otherwise find the bitmap that is closest in size
+		// to the requested size
+		float pixelSize = fSize * 64.f;
+		float minDelta = abs(face->available_sizes[0].size - pixelSize);
+		float width = face->available_sizes[0].x_ppem;
+		float height = face->available_sizes[0].y_ppem;
+
+		for (int i = 1; i < face->num_fixed_sizes; ++i) {
+			float delta = abs(face->available_sizes[i].size - pixelSize);
+			if (delta < minDelta) {
+				width = face->available_sizes[i].x_ppem;
+				height = face->available_sizes[i].y_ppem;
+			}
+		}
+
+		fBounds.top = 0;
+		fBounds.left = 0;
+		fBounds.right = width / 64.f;
+		fBounds.bottom = height / 64.f;
+	}
+
 	return fBounds;
 }
 
@@ -1141,3 +1202,10 @@ ServerFont::EmbeddedTransformation() const
 	return transform;
 }
 
+
+void
+ServerFont::SetFontData(FT_Byte* location, uint32 size)
+{
+	if (fStyle != NULL)
+		fStyle->SetFontData(location, size);
+}

@@ -588,7 +588,7 @@ InputServer::MessageReceived(BMessage* message)
 			return;
 		}
 
-		case kMsgAppServerRestarted:
+		case kMsgAppServerStarted:
 		{
 			BApplication::MessageReceived(message);
 			BPrivate::AppServerLink link;

@@ -13,8 +13,7 @@
 #include <Roster.h>
 
 
-const int32 kMsgAppServerRestarted = 'ASRe';
-const int32 kMsgRestartAppServer = 'ReAS';
+const uint32 kMsgAppServerStarted = '_ASt';
 
 
 class BRoster::Private {
@@ -39,6 +38,8 @@ class BRoster::Private {
 
 		status_t ShutDown(bool reboot, bool confirm, bool synchronous)
 			{ return fRoster->_ShutDown(reboot, confirm, synchronous); }
+		status_t IsShutDownInProgress(bool* inProgress)
+			{ return fRoster->_IsShutDownInProgress(inProgress); }
 
 		// needed by BApplication
 

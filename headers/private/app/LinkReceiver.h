@@ -11,12 +11,14 @@
 #define _LINK_RECEIVER_H
 
 
+#include <AffineTransform.h>
 #include <OS.h>
 
 
 class BGradient;
 class BString;
 class BRegion;
+class BShape;
 
 
 namespace BPrivate {
@@ -39,7 +41,10 @@ class LinkReceiver {
 		status_t ReadString(BString& string, size_t* _length = NULL);
 		status_t ReadString(char* buffer, size_t bufferSize);
 		status_t ReadRegion(BRegion* region);
+		status_t ReadShape(BShape* shape);
 		status_t ReadGradient(BGradient** gradient);
+		status_t ReadAffineTransform(BAffineTransform *transform)
+			{ return Read(&transform->sx, sizeof(double) * 6); }
 
 		template <class Type> status_t Read(Type *data)
 			{ return Read(data, sizeof(Type)); }

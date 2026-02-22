@@ -18,6 +18,7 @@
 #include <new>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <Autolock.h>
 #include <Message.h>
@@ -37,7 +38,7 @@
 // debugging
 //#define DBG(x) x
 #define DBG(x)	;
-#define PRINT(x)	DBG({ printf("[%6ld] ", find_thread(NULL)); printf x; })
+#define PRINT(x)	DBG({ printf("[%6" B_PRId32 "] ", find_thread(NULL)); printf x; })
 
 /*
 #include <Autolock.h>
@@ -284,8 +285,56 @@ BLooper::DispatchMessage(BMessage* message, BHandler* handler)
 void
 BLooper::MessageReceived(BMessage* message)
 {
-	// TODO: implement scripting support
-	BHandler::MessageReceived(message);
+	if (!message->HasSpecifiers()) {
+		BHandler::MessageReceived(message);
+		return;
+	}
+
+	BMessage replyMsg(B_REPLY);
+	status_t err = B_BAD_SCRIPT_SYNTAX;
+	int32 index;
+	BMessage specifier;
+	int32 what;
+	const char* property;
+
+	if (message->GetCurrentSpecifier(&index, &specifier, &what, &property)
+			!= B_OK) {
+		return BHandler::MessageReceived(message);
+	}
+
+	BPropertyInfo propertyInfo(sLooperPropInfo);
+	switch (propertyInfo.FindMatch(message, index, &specifier, what,
+			property)) {
+		case 1: // Handlers: GET
+			if (message->what == B_GET_PROPERTY) {
+				int32 count = CountHandlers();
+				err = B_OK;
+				for (int32 i = 0; err == B_OK && i < count; i++) {
+					BMessenger messenger(HandlerAt(i));
+					err = replyMsg.AddMessenger("result", messenger);
+				}
+			}
+			break;
+		case 2: // Handler: COUNT
+			if (message->what == B_COUNT_PROPERTIES)
+				err = replyMsg.AddInt32("result", CountHandlers());
+			break;
+
+		default:
+			return BHandler::MessageReceived(message);
+	}
+
+	if (err != B_OK) {
+		replyMsg.what = B_MESSAGE_NOT_UNDERSTOOD;
+
+		if (err == B_BAD_SCRIPT_SYNTAX)
+			replyMsg.AddString("message", "Didn't understand the specifier(s)");
+		else
+			replyMsg.AddString("message", strerror(err));
+	}
+
+	replyMsg.AddInt32("error", err);
+	message->SendReply(&replyMsg);
 }
 
 
@@ -832,7 +881,7 @@ void BLooper::_ReservedLooper5() {}
 void BLooper::_ReservedLooper6() {}
 
 
-#ifdef _BEOS_R5_COMPATIBLE_
+#ifdef __HAIKU_BEOS_COMPATIBLE
 BLooper::BLooper(const BLooper& other)
 {
 	// Copy construction not allowed
@@ -909,7 +958,7 @@ BLooper::_Lock(BLooper* looper, port_id port, bigtime_t timeout)
 		// Check for nested lock attempt
 		if (currentThread == looper->fOwner) {
 			++looper->fOwnerCount;
-			PRINT(("BLooper::_Lock() done 5: fOwnerCount: %ld\n", loop->fOwnerCount));
+			PRINT(("BLooper::_Lock() done 5: fOwnerCount: %ld\n", looper->fOwnerCount));
 			return B_OK;
 		}
 

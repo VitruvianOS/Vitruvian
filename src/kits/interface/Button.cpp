@@ -35,9 +35,6 @@ enum {
 };
 
 
-static const float kLabelMargin = 3;
-
-
 BButton::BButton(BRect frame, const char* name, const char* label,
 	BMessage* message, uint32 resizingMode, uint32 flags)
 	:
@@ -49,9 +46,11 @@ BButton::BButton(BRect frame, const char* name, const char* label,
 	fPopUpMessage(NULL)
 {
 	// Resize to minimum height if needed
+	BFont font;
+	GetFont(&font);
 	font_height fh;
-	GetFontHeight(&fh);
-	float minHeight = 12.0f + (float)ceil(fh.ascent + fh.descent);
+	font.GetHeight(&fh);
+	float minHeight = font.Size() + (float)ceil(fh.ascent + fh.descent);
 	if (Bounds().Height() < minHeight)
 		ResizeTo(Bounds().Width(), minHeight);
 }
@@ -135,7 +134,7 @@ BButton::Draw(BRect updateRect)
 	BRect rect(Bounds());
 	rgb_color background = ViewColor();
 	rgb_color base = LowColor();
-	rgb_color textColor = ui_color(B_CONTROL_TEXT_COLOR);
+	rgb_color text = HighColor();
 
 	uint32 flags = be_control_look->Flags(this);
 	if (_Flag(FLAG_DEFAULT))
@@ -145,27 +144,20 @@ BButton::Draw(BRect updateRect)
 	if (_Flag(FLAG_INSIDE))
 		flags |= BControlLook::B_HOVER;
 
-	be_control_look->DrawButtonFrame(this, rect, updateRect,
-		base, background, flags);
+	be_control_look->DrawButtonFrame(this, rect, updateRect, base, background, flags);
 
-	if (fBehavior == B_POP_UP_BEHAVIOR) {
-		be_control_look->DrawButtonWithPopUpBackground(this, rect, updateRect,
-			base, flags);
-	} else {
-		be_control_look->DrawButtonBackground(this, rect, updateRect,
-			base, flags);
-	}
-
-	// always leave some room around the label
-	rect.InsetBy(kLabelMargin, kLabelMargin);
+	if (fBehavior == B_POP_UP_BEHAVIOR)
+		be_control_look->DrawButtonWithPopUpBackground(this, rect, updateRect, base, flags);
+	else
+		be_control_look->DrawButtonBackground(this, rect, updateRect, base, flags);
 
 	const BBitmap* icon = IconBitmap(
 		(Value() == B_CONTROL_OFF
 				? B_INACTIVE_ICON_BITMAP : B_ACTIVE_ICON_BITMAP)
 			| (IsEnabled() ? 0 : B_DISABLED_ICON_BITMAP));
 
-	be_control_look->DrawLabel(this, Label(), icon, rect, updateRect, base,
-		flags, BAlignment(B_ALIGN_CENTER, B_ALIGN_MIDDLE), &textColor);
+	be_control_look->DrawLabel(this, Label(), icon, rect, updateRect, base, flags,
+		BAlignment(B_ALIGN_CENTER, B_ALIGN_MIDDLE), &text);
 }
 
 
@@ -230,9 +222,7 @@ void
 BButton::AttachedToWindow()
 {
 	BControl::AttachedToWindow();
-
-	// Tint default control background color to match default panel background.
-	SetLowUIColor(B_CONTROL_BACKGROUND_COLOR, 1.115);
+	SetLowUIColor(B_CONTROL_BACKGROUND_COLOR);
 	SetHighUIColor(B_CONTROL_TEXT_COLOR);
 
 	if (IsDefault())
@@ -651,12 +641,13 @@ BButton::_ValidatePreferredSize()
 			left, top, right, bottom);
 
 		// width
-		float width = left + right + 2 * kLabelMargin - 1;
+		const float labelSpacing = be_control_look->DefaultLabelSpacing();
+		float width = left + right + labelSpacing - 1;
 
 		const char* label = Label();
 		if (label != NULL) {
-			width = std::max(width, 20.0f);
-			width += (float)ceil(StringWidth(label));
+			width = std::max(width, ceilf(labelSpacing * 3.3f));
+			width += ceilf(StringWidth(label));
 		}
 
 		const BBitmap* icon = IconBitmap(B_INACTIVE_ICON_BITMAP);
@@ -664,10 +655,10 @@ BButton::_ValidatePreferredSize()
 			width += icon->Bounds().Width() + 1;
 
 		if (label != NULL && icon != NULL)
-			width += be_control_look->DefaultLabelSpacing();
+			width += labelSpacing;
 
 		// height
-		float minHorizontalMargins = top + bottom + 2 * kLabelMargin;
+		float minHorizontalMargins = top + bottom + labelSpacing;
 		float height = -1;
 
 		if (label != NULL) {
@@ -686,8 +677,8 @@ BButton::_ValidatePreferredSize()
 		}
 
 		// force some minimum width/height values
-		width = std::max(width, label != NULL ? 75.0f : 5.0f);
-		height = std::max(height, 5.0f);
+		width = std::max(width, label != NULL ? (labelSpacing * 12.5f) : labelSpacing);
+		height = std::max(height, labelSpacing);
 
 		fPreferredSize.Set(width, height);
 

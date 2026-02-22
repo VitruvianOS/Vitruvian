@@ -140,7 +140,6 @@ BMenuBar::Archive(BMessage* data, bool deep) const
 void
 BMenuBar::AttachedToWindow()
 {
-	_Install(Window());
 	Window()->SetKeyMenuBar(this);
 
 	BMenu::AttachedToWindow();
@@ -495,8 +494,7 @@ BMenuBar::StartMenuBar(int32 menuIndex, bool sticky, bool showMenu,
 	fMenuSem = create_sem(0, "window close sem");
 	_set_menu_sem_(window, fMenuSem);
 
-	fTrackingPID = spawn_thread(_TrackTask, "menu_tracking",
-		B_DISPLAY_PRIORITY, NULL);
+	fTrackingPID = spawn_thread(_TrackTask, "menu_tracking", B_DISPLAY_PRIORITY, NULL);
 	if (fTrackingPID >= 0) {
 		menubar_data data;
 		data.menuBar = this;
@@ -741,9 +739,12 @@ BMenuBar::_RestoreFocus()
 void
 BMenuBar::_InitData(menu_layout layout)
 {
+	const float fontSize = be_plain_font->Size();
+	float lr = fontSize * 2.0f / 3.0f, tb = fontSize / 6.0f;
+	SetItemMargins(lr, tb, lr, tb);
+
 	fBorders = BControlLook::B_ALL_BORDERS;
 	fLastBounds = new BRect(Bounds());
-	SetItemMargins(8.0f, 2.0f, 8.0f, 2.0f);
 	_SetIgnoreHidden(true);
 	SetLowUIColor(B_MENU_BACKGROUND_COLOR);
 	SetViewColor(B_TRANSPARENT_COLOR);

@@ -18,6 +18,8 @@
 #include <Screen.h>
 #include <Window.h>
 
+#include <binary_compatibility/Support.h>
+
 
 const static unsigned char
 kVerticalKnobData[] = {
@@ -609,7 +611,7 @@ BChannelSlider::DrawThumb(BView* into, int32 channel, BPoint where,
 	rect.top = floorf(rect.top);
 	rect.right = ceilf(rect.right + 0.5);
 	rect.bottom = ceilf(rect.bottom + 0.5);
-	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color base = ui_color(B_CONTROL_BACKGROUND_COLOR);
 	uint32 flags = 0;
 	be_control_look->DrawSliderThumb(into, rect, rect, base,
 		flags, Orientation());
@@ -698,6 +700,15 @@ BChannelSlider::ThumbRangeFor(int32 channel)
 		range = bounds.Width() - frame.Width() - (kPadding * 2.0);
 	}
 	return range;
+}
+
+
+void
+BChannelSlider::UpdateToolTip(int32 currentValue)
+{
+	BString valueString;
+	valueString.SetToFormat("%" B_PRId32, currentValue);
+	SetToolTip(valueString);
 }
 
 
@@ -821,10 +832,7 @@ BChannelSlider::_DrawThumbs()
 
 			// draw some kind of current value tool tip
 			if (fCurrentChannel != -1 && fMinPoint != 0) {
-				char valueString[32];
-				snprintf(valueString, 32, "%" B_PRId32,
-					ValueFor(fCurrentChannel));
-				SetToolTip(valueString);
+				UpdateToolTip(ValueFor(fCurrentChannel));
 				ShowToolTip(ToolTip());
 			} else {
 				HideToolTip();
@@ -893,7 +901,6 @@ BChannelSlider::_MouseMovedCommon(BPoint point, BPoint point2)
 // #pragma mark - FBC padding
 
 
-void BChannelSlider::_Reserved_BChannelSlider_0(void*, ...) {}
 void BChannelSlider::_Reserved_BChannelSlider_1(void*, ...) {}
 void BChannelSlider::_Reserved_BChannelSlider_2(void*, ...) {}
 void BChannelSlider::_Reserved_BChannelSlider_3(void*, ...) {}
@@ -901,3 +908,15 @@ void BChannelSlider::_Reserved_BChannelSlider_4(void*, ...) {}
 void BChannelSlider::_Reserved_BChannelSlider_5(void*, ...) {}
 void BChannelSlider::_Reserved_BChannelSlider_6(void*, ...) {}
 void BChannelSlider::_Reserved_BChannelSlider_7(void*, ...) {}
+
+
+//	#pragma mark - binary compatibility
+
+
+extern "C" void
+B_IF_GCC_2(_Reserved_BChannelSlider_0__14BChannelSliderPve,
+	_ZN14BChannelSlider26_Reserved_BChannelSlider_0EPvz)(
+	BChannelSlider* channelSlider, int32 currentValue)
+{
+	channelSlider->BChannelSlider::UpdateToolTip(currentValue);
+}

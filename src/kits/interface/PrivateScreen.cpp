@@ -30,7 +30,9 @@
 
 #include <AppMisc.h>
 #include <AppServerLink.h>
+#include <ApplicationPrivate.h>
 #include <ServerProtocol.h>
+#include <ServerReadOnlyMemory.h>
 
 
 using namespace BPrivate;
@@ -39,11 +41,11 @@ using namespace BPrivate;
 namespace {
 
 struct Screens {
-	BObjectList<BPrivateScreen>	list;
+	BObjectList<BPrivateScreen, true> list;
 
 	Screens()
 		:
-		list(2, true),
+		list(2),
 		fLock("screen list")
 	{
 	}
@@ -295,8 +297,8 @@ BPrivateScreen::IndexForColor(uint8 red, uint8 green, uint8 blue, uint8 alpha)
 		return B_TRANSPARENT_8_BIT;
 
 	uint16 index = ((red & 0xf8) << 7) | ((green & 0xf8) << 2) | (blue >> 3);
-	if (ColorMap())
-		return fColorMap->index_map[index];
+	if (const color_map* colormap = ColorMap())
+		return colormap->index_map[index];
 
 	return 0;
 }
@@ -305,8 +307,8 @@ BPrivateScreen::IndexForColor(uint8 red, uint8 green, uint8 blue, uint8 alpha)
 rgb_color
 BPrivateScreen::ColorForIndex(const uint8 index)
 {
-	if (ColorMap())
-		return fColorMap->color_list[index];
+	if (const color_map* colormap = ColorMap())
+		return colormap->color_list[index];
 
 	return rgb_color();
 }
@@ -315,8 +317,8 @@ BPrivateScreen::ColorForIndex(const uint8 index)
 uint8
 BPrivateScreen::InvertIndex(uint8 index)
 {
-	if (ColorMap())
-		return fColorMap->inversion_map[index];
+	if (const color_map* colormap = ColorMap())
+		return colormap->inversion_map[index];
 
 	return 0;
 }
@@ -325,31 +327,10 @@ BPrivateScreen::InvertIndex(uint8 index)
 const color_map*
 BPrivateScreen::ColorMap()
 {
-	if (fColorMap == NULL) {
-		Screens* screens = Screens::Default();
-		AutoLocker<Screens> locker(screens);
+	if (be_app == NULL || BApplication::Private::ServerReadOnlyMemory() == NULL)
+		return NULL;
 
-		if (fColorMap != NULL) {
-			// someone could have been faster than us
-			return fColorMap;
-		}
-
-		// TODO: BeOS R5 here gets the colormap pointer
-		// (with BApplication::ro_offset_to_ptr() ?)
-		// which is contained in a shared area created by the server.
-		BPrivate::AppServerLink link;
-		link.StartMessage(AS_SCREEN_GET_COLORMAP);
-		link.Attach<int32>(ID());
-
-		status_t status;
-		if (link.FlushWithReply(status) == B_OK && status == B_OK) {
-			fColorMap = (color_map*)malloc(sizeof(color_map));
-			fOwnsColorMap = true;
-			link.Read<color_map>(fColorMap);
-		}
-	}
-
-	return fColorMap;
+	return &BApplication::Private::ServerReadOnlyMemory()->colormap;
 }
 
 
@@ -396,6 +377,7 @@ BPrivateScreen::ReadBitmap(BBitmap* bitmap, bool drawCursor, BRect* bounds)
 
 	BPrivate::AppServerLink link;
 	link.StartMessage(AS_READ_BITMAP);
+	link.Attach<int32>(ID());
 	link.Attach<int32>(bitmap->_ServerToken());
 	link.Attach<bool>(drawCursor);
 	link.Attach<BRect>(rect);
@@ -792,10 +774,8 @@ BPrivateScreen::BPrivateScreen(int32 id)
 	:
 	fID(id),
 	fReferenceCount(0),
-	fColorMap(NULL),
 	fRetraceSem(-1),
 	fRetraceSemValid(false),
-	fOwnsColorMap(false),
 	fFrame(0, 0, 0, 0),
 	fLastUpdate(0)
 {
@@ -804,6 +784,4 @@ BPrivateScreen::BPrivateScreen(int32 id)
 
 BPrivateScreen::~BPrivateScreen()
 {
-	if (fOwnsColorMap)
-		free(fColorMap);
 }

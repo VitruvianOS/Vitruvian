@@ -87,6 +87,12 @@ get_raw_bytes_per_row(color_space colorSpace, int32 width)
 	int32 bpr = 0;
 	switch (colorSpace) {
 		// supported
+		case B_RGBA64: case B_RGBA64_BIG:
+			bpr = 8 * width;
+			break;
+		case B_RGB48: case B_RGB48_BIG:
+			bpr = 6 * width;
+			break;
 		case B_RGB32: case B_RGBA32:
 		case B_RGB32_BIG: case B_RGBA32_BIG:
 		case B_UVL32: case B_UVLA32:
@@ -299,6 +305,28 @@ BBitmap::BBitmap(const BBitmap& source)
 	fInitError(B_NO_INIT)
 {
 	*this = source;
+}
+
+
+BBitmap::BBitmap(area_id area, ptrdiff_t areaOffset, BRect bounds,
+	uint32 flags, color_space colorSpace, int32 bytesPerRow,
+	screen_id screenID)
+	:
+	fBasePointer(NULL),
+	fSize(0),
+	fColorSpace(B_NO_COLOR_SPACE),
+	fBounds(0, 0, -1, -1),
+	fBytesPerRow(0),
+	fWindow(NULL),
+	fServerToken(-1),
+	fAreaOffset(-1),
+	fArea(-1),
+	fServerArea(-1),
+	fFlags(0),
+	fInitError(B_NO_INIT)
+{
+	_InitObject(bounds, colorSpace, flags,
+		bytesPerRow, screenID, area, areaOffset);
 }
 
 
@@ -637,8 +665,8 @@ BBitmap::SetBits(const void* data, int32 length, int32 offset,
 	int32 inBPR = -1;
 	// tweaks to mimic R5 behavior
 	if (error == B_OK) {
-		if (colorSpace == B_RGB32) {
-			// B_RGB32 means actually unpadded B_RGB24_BIG
+		if (colorSpace == B_RGB32 && (length % 3) == 0) {
+			// B_RGB32 could actually mean unpadded B_RGB24_BIG
 			colorSpace = B_RGB24_BIG;
 			inBPR = width * 3;
 		} else if (colorSpace == B_CMAP8 && fColorSpace != B_CMAP8) {
@@ -718,8 +746,7 @@ BBitmap::ImportBits(const void* data, int32 length, int32 bpr, int32 offset,
 	\param colorSpace Color space of the source data.
 	\param from The offset in the source where reading should begin.
 	\param to The offset in the bitmap where the source should be written.
-	\param width The width (in pixels) to be imported.
-	\param height The height (in pixels) to be imported.
+	\param size The size (in pixels) to be imported.
 	\return
 	- \c B_OK: Everything went fine.
 	- \c B_BAD_VALUE: \c NULL \a data, invalid \a bpr, unsupported
@@ -727,14 +754,14 @@ BBitmap::ImportBits(const void* data, int32 length, int32 bpr, int32 offset,
 */
 status_t
 BBitmap::ImportBits(const void* data, int32 length, int32 bpr,
-	color_space colorSpace, BPoint from, BPoint to, int32 width, int32 height)
+	color_space colorSpace, BPoint from, BPoint to, BSize size)
 {
 	_AssertPointer();
 
 	if (InitCheck() != B_OK)
 		return B_NO_INIT;
 
-	if (!data || length < 0 || width < 0 || height < 0)
+	if (!data || length < 0 || size.IntegerWidth() < 0 || size.IntegerHeight() < 0)
 		return B_BAD_VALUE;
 
 	if (bpr <= 0) {
@@ -745,11 +772,20 @@ BBitmap::ImportBits(const void* data, int32 length, int32 bpr,
 	}
 
 	return BPrivate::ConvertBits(data, fBasePointer, length, fSize, bpr,
-		fBytesPerRow, colorSpace, fColorSpace, from, to, width, height);
+		fBytesPerRow, colorSpace, fColorSpace, from, to,
+		size.IntegerWidth() + 1, size.IntegerHeight() + 1);
 }
 
 
-/*!	\briefly Assigns another bitmap's data to this bitmap.
+status_t
+BBitmap::ImportBits(const void* data, int32 length, int32 bpr,
+	color_space colorSpace, BPoint from, BPoint to, int32 width, int32 height)
+{
+	return ImportBits(data, length, bpr, colorSpace, from, to, BSize(width - 1, height - 1));
+}
+
+
+/*!	\brief Assigns another bitmap's data to this bitmap.
 
 	The supplied bitmap must have the exactly same dimensions as this bitmap.
 	Its data is converted to the color space of this bitmap.
@@ -790,15 +826,13 @@ BBitmap::ImportBits(const BBitmap* bitmap)
 	\param bitmap The source bitmap.
 	\param from The offset in the source where reading should begin.
 	\param to The offset in the bitmap where the source should be written.
-	\param width The width (in pixels) to be imported.
-	\param height The height (in pixels) to be imported.
+	\param size The size (in pixels) to be imported.
 	- \c B_OK: Everything went fine.
 	- \c B_BAD_VALUE: \c NULL \a bitmap, the conversion from or to one of
 	  the color spaces is not supported, or invalid width/height.
 */
 status_t
-BBitmap::ImportBits(const BBitmap* bitmap, BPoint from, BPoint to, int32 width,
-	int32 height)
+BBitmap::ImportBits(const BBitmap* bitmap, BPoint from, BPoint to, BSize size)
 {
 	if (InitCheck() != B_OK)
 		return B_NO_INIT;
@@ -807,7 +841,14 @@ BBitmap::ImportBits(const BBitmap* bitmap, BPoint from, BPoint to, int32 width,
 		return B_BAD_VALUE;
 
 	return ImportBits(bitmap->Bits(), bitmap->BitsLength(),
-		bitmap->BytesPerRow(), bitmap->ColorSpace(), from, to, width, height);
+		bitmap->BytesPerRow(), bitmap->ColorSpace(), from, to, size);
+}
+
+
+status_t
+BBitmap::ImportBits(const BBitmap* bitmap, BPoint from, BPoint to, int32 width, int32 height)
+{
+	return ImportBits(bitmap, from, to, BSize(width - 1, height - 1));
 }
 
 
@@ -1002,7 +1043,7 @@ BBitmap::_ServerToken() const
 */
 void
 BBitmap::_InitObject(BRect bounds, color_space colorSpace, uint32 flags,
-	int32 bytesPerRow, screen_id screenID)
+	int32 bytesPerRow, screen_id screenID, area_id area, ptrdiff_t areaOffset)
 {
 //printf("BBitmap::InitObject(bounds: BRect(%.1f, %.1f, %.1f, %.1f), format: %ld, flags: %ld, bpr: %ld\n",
 //	   bounds.left, bounds.top, bounds.right, bounds.bottom, colorSpace, flags, bytesPerRow);
@@ -1055,62 +1096,98 @@ BBitmap::_InitObject(BRect bounds, color_space colorSpace, uint32 flags,
 			} else
 				error = B_NO_MEMORY;
 		} else {
-			// Ask the server (via our owning application) to create a bitmap.
 			BPrivate::AppServerLink link;
 
-			// Attach Data:
-			// 1) BRect bounds
-			// 2) color_space space
-			// 3) int32 bitmap_flags
-			// 4) int32 bytes_per_row
-			// 5) int32 screen_id::id
-			link.StartMessage(AS_CREATE_BITMAP);
-			link.Attach<BRect>(bounds);
-			link.Attach<color_space>(colorSpace);
-			link.Attach<uint32>(flags);
-			link.Attach<int32>(bytesPerRow);
-			link.Attach<int32>(screenID.id);
+			if (area >= B_OK) {
+				// Use area provided by client
 
-			if (link.FlushWithReply(error) == B_OK && error == B_OK) {
-				// server side success
-				// Get token
-				link.Read<int32>(&fServerToken);
+				area_info info;
+				get_area_info(area, &info);
 
-				uint8 allocationFlags;
-				link.Read<uint8>(&allocationFlags);
-				link.Read<area_id>(&fServerArea);
-				link.Read<int32>(&fAreaOffset);
+				// Area should be owned by current team. Client should clone area if needed.
+				if (info.team != getpid())
+					error = B_BAD_VALUE;
+				else {
+					link.StartMessage(AS_RECONNECT_BITMAP);
+					link.Attach<BRect>(bounds);
+					link.Attach<color_space>(colorSpace);
+					link.Attach<uint32>(flags);
+					link.Attach<int32>(bytesPerRow);
+					link.Attach<int32>(0);
+					link.Attach<int32>(area);
+					link.Attach<int32>(areaOffset);
 
-				BPrivate::ServerMemoryAllocator* allocator
-					= BApplication::Private::ServerAllocator();
+					if (link.FlushWithReply(error) == B_OK && error == B_OK) {
+						link.Read<int32>(&fServerToken);
+						link.Read<area_id>(&fServerArea);
 
-				if ((allocationFlags & kNewAllocatorArea) != 0) {
+						if (fServerArea >= B_OK) {
+							fSize = size;
+							fColorSpace = colorSpace;
+							fBounds = bounds;
+							fBytesPerRow = bytesPerRow;
+							fFlags = flags;
+							fArea = area;
+							fAreaOffset = areaOffset;
+
+							fBasePointer = (uint8*)info.address + areaOffset;
+						} else
+							error = fServerArea;
+					}
+				}
+			} else {
+				// Ask the server (via our owning application) to create a bitmap.
+
+				// Attach Data:
+				// 1) BRect bounds
+				// 2) color_space space
+				// 3) int32 bitmap_flags
+				// 4) int32 bytes_per_row
+				// 5) int32 screen_id::id
+				link.StartMessage(AS_CREATE_BITMAP);
+				link.Attach<BRect>(bounds);
+				link.Attach<color_space>(colorSpace);
+				link.Attach<uint32>(flags);
+				link.Attach<int32>(bytesPerRow);
+				link.Attach<int32>(screenID.id);
+
+				if (link.FlushWithReply(error) == B_OK && error == B_OK) {
+					// server side success
+					// Get token
+					link.Read<int32>(&fServerToken);
+
+					uint8 allocationFlags;
+					link.Read<uint8>(&allocationFlags);
+					link.Read<area_id>(&fServerArea);
+					link.Read<int32>(&fAreaOffset);
+
+					BPrivate::ServerMemoryAllocator* allocator
+						= BApplication::Private::ServerAllocator();
+
 					error = allocator->AddArea(fServerArea, fArea,
 						fBasePointer, size);
-				} else {
-					error = allocator->AreaAndBaseFor(fServerArea, fArea,
-						fBasePointer);
 					if (error == B_OK)
 						fBasePointer += fAreaOffset;
-				}
 
-				if ((allocationFlags & kFramebuffer) != 0) {
-					// The base pointer will now point to an overlay_client_data
-					// structure bytes per row might be modified to match
-					// hardware constraints
-					link.Read<int32>(&bytesPerRow);
-					size = bytesPerRow * (bounds.IntegerHeight() + 1);
-				}
+					if ((allocationFlags & kFramebuffer) != 0) {
+						// The base pointer will now point to an overlay_client_data
+						// structure bytes per row might be modified to match
+						// hardware constraints
+						link.Read<int32>(&bytesPerRow);
+						size = bytesPerRow * (bounds.IntegerHeight() + 1);
+					}
 
-				if (fServerArea >= B_OK) {
-					fSize = size;
-					fColorSpace = colorSpace;
-					fBounds = bounds;
-					fBytesPerRow = bytesPerRow;
-					fFlags = flags;
-				} else
-					error = fServerArea;
+					if (fServerArea >= B_OK) {
+						fSize = size;
+						fColorSpace = colorSpace;
+						fBounds = bounds;
+						fBytesPerRow = bytesPerRow;
+						fFlags = flags;
+					} else
+						error = fServerArea;
+				}
 			}
+
 
 			if (error < B_OK) {
 				fBasePointer = NULL;
@@ -1132,7 +1209,7 @@ BBitmap::_InitObject(BRect bounds, color_space colorSpace, uint32 flags,
 
 	if (fInitError == B_OK) {
 		// clear to white if the flags say so.
-		if (flags & (B_BITMAP_CLEAR_TO_WHITE | B_BITMAP_ACCEPTS_VIEWS)) {
+		if (flags & B_BITMAP_CLEAR_TO_WHITE) {
 			if (fColorSpace == B_CMAP8) {
 				// "255" is the "transparent magic" index for B_CMAP8 bitmaps
 				// use the correct index for "white"
@@ -1188,7 +1265,12 @@ BBitmap::_CleanUp()
 		link.Attach<int32>(fServerToken);
 		link.Flush();
 
-		// The server areas are deleted via kMsgDeleteServerMemoryArea message
+		if (fServerArea >= B_OK) {
+			BPrivate::ServerMemoryAllocator* allocator
+				= BApplication::Private::ServerAllocator();
+
+			allocator->RemoveArea(fServerArea);
+		}
 
 		fArea = -1;
 		fServerToken = -1;

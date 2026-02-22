@@ -83,7 +83,7 @@ public:
 private:
 			status_t			_UpdateIfNecessary();
 			status_t			_Update();
-			int32				_RevisionOnServer();
+			uint32				_RevisionOnServer();
 			family*				_FindFamily(font_family name);
 	static	void				_InitSingleton();
 
@@ -91,7 +91,7 @@ private:
 			BObjectList<family>	fFamilies;
 			family*				fLastFamily;
 			bigtime_t			fLastUpdate;
-			int32				fRevision;
+			uint32				fRevision;
 
 	static	pthread_once_t		sDefaultInitOnce;
 	static	FontList*			sDefaultInstance;
@@ -224,7 +224,7 @@ FontList::_Update()
 {
 	// check version
 
-	int32 revision = _RevisionOnServer();
+	uint32 revision = _RevisionOnServer();
 	fLastUpdate = system_time();
 
 	// are we up-to-date already?
@@ -293,18 +293,21 @@ FontList::_UpdateIfNecessary()
 }
 
 
-int32
+uint32
 FontList::_RevisionOnServer()
 {
 	BPrivate::AppServerLink link;
 	link.StartMessage(AS_GET_FONT_LIST_REVISION);
 
 	int32 code;
-	if (link.FlushWithReply(code) != B_OK || code != B_OK)
-		return B_ERROR;
+	if (link.FlushWithReply(code) != B_OK || code != B_OK) {
+		// Go on as if our list is up to date. If it is a one-time thing
+		// we'll try again soon. If it isn't, we have a bigger problem.
+		return fRevision;
+	}
 
-	int32 revision;
-	link.Read<int32>(&revision);
+	uint32 revision;
+	link.Read<uint32>(&revision);
 
 	return revision;
 }
@@ -559,6 +562,7 @@ BFont::SetFamilyAndStyle(const font_family family, const font_style style)
 	link.Read<uint16>(&fFamilyID);
 	link.Read<uint16>(&fStyleID);
 	link.Read<uint16>(&fFace);
+
 	fHeight.ascent = kUninitializedAscent;
 	fExtraFlags = kUninitializedExtraFlags;
 
@@ -826,6 +830,7 @@ BFont::BoundingBox() const
 	link.StartMessage(AS_GET_FONT_BOUNDING_BOX);
 	link.Attach<uint16>(fFamilyID);
 	link.Attach<uint16>(fStyleID);
+	link.Attach<float>(fSize);
 
 	int32 code;
 	if (link.FlushWithReply(code) != B_OK
@@ -942,6 +947,7 @@ BFont::GetTunedInfo(int32 index, tuned_font_info* info) const
 }
 
 
+// Truncates a string to a given _pixel_ width based on the font and size
 void
 BFont::TruncateString(BString* inOut, uint32 mode, float width) const
 {
@@ -1284,18 +1290,16 @@ BFont::GetBoundingBoxesForStrings(const char* stringArray[], int32 numStrings,
 	link.Attach<font_metric_mode>(mode);
 	link.Attach<int32>(numStrings);
 
+	for (int32 i = 0; i < numStrings; i++)
+		link.AttachString(stringArray[i]);
+
 	if (deltas) {
-		for (int32 i = 0; i < numStrings; i++) {
-			link.AttachString(stringArray[i]);
+		for (int32 i = 0; i < numStrings; i++)
 			link.Attach<escapement_delta>(deltas[i]);
-		}
 	} else {
 		escapement_delta emptyDelta = {0, 0};
-
-		for (int32 i = 0; i < numStrings; i++) {
-			link.AttachString(stringArray[i]);
+		for (int32 i = 0; i < numStrings; i++)
 			link.Attach<escapement_delta>(emptyDelta);
-		}
 	}
 
 	if (link.FlushWithReply(code) != B_OK || code != B_OK)
@@ -1343,6 +1347,14 @@ void
 BFont::GetHasGlyphs(const char charArray[], int32 numChars,
 	bool hasArray[]) const
 {
+	GetHasGlyphs(charArray, numChars, hasArray, true);
+}
+
+
+void
+BFont::GetHasGlyphs(const char charArray[], int32 numChars, bool hasArray[],
+	bool useFallbacks) const
+{
 	if (!charArray || numChars < 1 || !hasArray)
 		return;
 
@@ -1357,6 +1369,8 @@ BFont::GetHasGlyphs(const char charArray[], int32 numChars,
 	uint32 bytesInBuffer = UTF8CountBytes(charArray, numChars);
 	link.Attach<int32>(bytesInBuffer);
 	link.Attach(charArray, bytesInBuffer);
+
+	link.Attach<bool>(useFallbacks);
 
 	if (link.FlushWithReply(code) != B_OK || code != B_OK)
 		return;
@@ -1450,4 +1464,96 @@ BFont::_GetExtraFlags() const
 	}
 
 	link.Read<uint32>(&fExtraFlags);
+}
+
+
+status_t
+BFont::LoadFont(const char* path)
+{
+	return LoadFont(path, 0, 0);
+}
+
+
+status_t
+BFont::LoadFont(const char* path, uint16 index, uint16 instance)
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_ADD_FONT_FILE);
+	link.AttachString(path);
+	link.Attach<uint16>(index);
+	link.Attach<uint16>(instance);
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) != B_OK || status != B_OK) {
+		return status;
+	}
+
+	link.Read<uint16>(&fFamilyID);
+	link.Read<uint16>(&fStyleID);
+	link.Read<uint16>(&fFace);
+	fHeight.ascent = kUninitializedAscent;
+	fExtraFlags = kUninitializedExtraFlags;
+
+	return B_OK;
+}
+
+
+status_t
+BFont::LoadFont(const area_id fontAreaID, size_t size, size_t offset)
+{
+	return LoadFont(fontAreaID, size, offset, 0, 0);
+}
+
+
+status_t
+BFont::LoadFont(const area_id fontAreaID, size_t size, size_t offset, uint16 index, uint16 instance)
+{
+	BPrivate::AppServerLink link;
+
+	link.StartMessage(AS_ADD_FONT_MEMORY);
+
+	link.Attach<int32>(fontAreaID);
+	link.Attach<size_t>(size);
+	link.Attach<size_t>(offset);
+	link.Attach<uint16>(index);
+	link.Attach<uint16>(instance);
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) != B_OK || status != B_OK) {
+		return status;
+	}
+
+	link.Read<uint16>(&fFamilyID);
+	link.Read<uint16>(&fStyleID);
+	link.Read<uint16>(&fFace);
+	fHeight.ascent = kUninitializedAscent;
+	fExtraFlags = kUninitializedExtraFlags;
+
+	return B_OK;
+}
+
+
+status_t
+BFont::UnloadFont()
+{
+	BPrivate::AppServerLink link;
+
+	link.StartMessage(AS_REMOVE_FONT);
+
+	link.Attach<uint16>(fFamilyID);
+	link.Attach<uint16>(fStyleID);
+
+	status_t status = B_ERROR;
+	if (link.FlushWithReply(status) != B_OK || status != B_OK) {
+		return status;
+	}
+
+	// reset to plain font
+	fFamilyID = sPlainFont.fFamilyID;
+	fStyleID = sPlainFont.fStyleID;
+	fFace = sPlainFont.fFace;
+	fExtraFlags = sPlainFont.fExtraFlags;
+
+	fHeight.ascent = kUninitializedAscent;
+
+	return B_OK;
 }

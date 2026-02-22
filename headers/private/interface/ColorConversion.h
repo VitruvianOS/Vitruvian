@@ -4,6 +4,9 @@
 
 #include <GraphicsDefs.h>
 
+#include <math.h>
+
+
 class BPoint;
 
 
@@ -60,6 +63,7 @@ private:
 	color_map		*fOwnColorMap;
 	status_t		fCStatus;
 };
+
 
 }	// namespace BPrivate
 

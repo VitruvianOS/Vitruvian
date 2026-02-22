@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2017, Haiku, Inc. All rights reserved.
+ * Copyright 2009-2020 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _CONTROL_LOOK_H
@@ -90,12 +90,19 @@ public:
 		B_BLEND_FRAME			= 1 << 16,
 	};
 
+	enum {
+		B_KNOB_NONE = 0,
+		B_KNOB_DOTS,
+		B_KNOB_LINES
+	};
+
 	virtual BAlignment			DefaultLabelAlignment() const = 0;
 	virtual float				DefaultLabelSpacing() const = 0;
 
 	virtual	float				DefaultItemSpacing() const = 0;
 
 	static	float				ComposeSpacing(float spacing);
+	static	BSize				ComposeIconSize(int32 size);
 
 	virtual uint32				Flags(BControl* control) const = 0;
 
@@ -288,13 +295,16 @@ public:
 									const BRect& updateRect,
 									const rgb_color& base, uint32 flags = 0,
 									uint32 borders = B_ALL_BORDERS,
-									uint32 side = B_TOP_BORDER) = 0;
-
+									uint32 side = B_TOP_BORDER,
+									int32 index = 0, int32 selected = -1,
+									int32 first = 0, int32 last = 0) = 0;
 	virtual	void				DrawInactiveTab(BView* view, BRect& rect,
 									const BRect& updateRect,
 									const rgb_color& base, uint32 flags = 0,
 									uint32 borders = B_ALL_BORDERS,
-									uint32 side = B_TOP_BORDER) = 0;
+									uint32 side = B_TOP_BORDER,
+									int32 index = 0, int32 selected = -1,
+									int32 first = 0, int32 last = 0) = 0;
 
 	virtual	void				DrawSplitter(BView* view, BRect& rect,
 									const BRect& updateRect,
@@ -396,13 +406,35 @@ public:
 			void				SetBackgroundInfo(
 									const BMessage& backgroundInfo);
 
+	virtual	void				DrawTabFrame(BView* view, BRect& rect,
+									const BRect& updateRect,
+									const rgb_color& base, uint32 flags = 0,
+									uint32 borders = B_ALL_BORDERS,
+									border_style borderStyle = B_FANCY_BORDER,
+									uint32 side = B_TOP_BORDER) = 0;
+
+	virtual	void				DrawScrollBarButton(BView* view,
+									BRect rect, const BRect& updateRect,
+									const rgb_color& base, const rgb_color& text,
+									uint32 flags, int32 direction, orientation orientation,
+									bool down = false) = 0;
+	virtual	void				DrawScrollBarThumb(BView* view,
+									BRect& rect, const BRect& updateRect,
+									const rgb_color& base, uint32 flags,
+									orientation orientation,
+									uint32 knobStyle = B_KNOB_NONE) = 0;
+	virtual	void				DrawScrollBarBorder(BView* view,
+									BRect rect, const BRect& updateRect,
+									const rgb_color& base, uint32 flags,
+									orientation orientation) = 0;
+	virtual float				GetScrollBarWidth(
+									orientation orientation = B_VERTICAL);
+
+	static	bool				ShouldDraw(BView* view, const BRect& rect,
+									const BRect& updateRect);
+
 private:
 	// FBC padding
-	virtual	void				_ReservedControlLook1();
-	virtual	void				_ReservedControlLook2();
-	virtual	void				_ReservedControlLook3();
-	virtual	void				_ReservedControlLook4();
-	virtual	void				_ReservedControlLook5();
 	virtual	void				_ReservedControlLook6();
 	virtual	void				_ReservedControlLook7();
 	virtual	void				_ReservedControlLook8();

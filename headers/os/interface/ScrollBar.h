@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2008, Haiku, Inc. All rights reserved.
+ * Copyright 2001-2020 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef	_SCROLL_BAR_H
@@ -11,12 +11,6 @@
 
 #define B_V_SCROLL_BAR_WIDTH	14.0f
 #define B_H_SCROLL_BAR_HEIGHT	14.0f
-
-// TODO: shouldn't these be moved into the implementation?
-#define SCROLL_BAR_MAXIMUM_KNOB_SIZE	50
-#define SCROLL_BAR_MINIMUM_KNOB_SIZE	9
-
-#define DISABLES_ON_WINDOW_DEACTIVATION 1
 
 
 class BScrollBar : public BView {
@@ -50,9 +44,7 @@ public:
 	virtual	void				MouseMoved(BPoint where, uint32 code,
 									const BMessage* dragMessage);
 
-#if DISABLES_ON_WINDOW_DEACTIVATION
 	virtual	void				WindowActivated(bool active);
-#endif
 
 			void				SetValue(float value);
 			float				Value() const;
@@ -121,14 +113,6 @@ private:
 			BRect				_ButtonRectFor(int32 button) const;
 			void				_UpdateTargetValue(BPoint where);
 			void				_UpdateArrowButtons();
-			void				_DrawDisabledBackground(BRect area,
-									const rgb_color& light,
-									const rgb_color& dark,
-									const rgb_color& fill);
-			void				_DrawArrowButton(int32 direction,
-									bool doubleArrows, BRect frame,
-									const BRect& updateRect,
-									bool enabled, bool down);
 
 			BSize				_MinSize() const;
 

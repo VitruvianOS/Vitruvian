@@ -46,7 +46,7 @@ All rights reserved.
 #include "SlowMenu.h"
 
 
-template<class T> class BObjectList;
+template<class T, bool O> class BObjectList;
 class BMenuItem;
 
 
@@ -75,9 +75,9 @@ struct TrackingHookData {
 class BNavMenu : public BSlowMenu {
 public:
 	BNavMenu(const char* title, uint32 message, const BHandler*,
-		BWindow* parentWindow = NULL, const BObjectList<BString>* list = NULL);
+		BWindow* parentWindow = NULL, const BStringList* list = NULL);
 	BNavMenu(const char* title, uint32 message, const BMessenger&,
-		BWindow* parentWindow = NULL, const BObjectList<BString>* list = NULL);
+		BWindow* parentWindow = NULL, const BStringList* list = NULL);
 		// parentWindow, if specified, will be closed if nav menu item invoked
 		// with option held down
 
@@ -95,8 +95,8 @@ public:
 	void SetTarget(const BMessenger&);
 	BMessenger Target();
 
-	void SetTypesList(const BObjectList<BString>* list);
-	const BObjectList<BString>* TypesList() const;
+	void SetTypesList(const BStringList* list);
+	const BStringList* TypesList() const;
 
 	void AddNavDir(const Model* model, uint32 what, BHandler* target,
 		bool populateSubmenu);
@@ -113,7 +113,7 @@ public:
 
 	static ModelMenuItem* NewModelItem(Model*, const BMessage*,
 		const BMessenger&, bool suppressFolderHierarchy = false,
-		BContainerWindow* = NULL, const BObjectList<BString>* typeslist = NULL,
+		BContainerWindow* = NULL, const BStringList* typeslist = NULL,
 		TrackingHookData* hook = NULL);
 
 	TrackingHookData* InitTrackingHook(bool (*hookfunction)(BMenu*, void*),
@@ -128,7 +128,8 @@ protected:
 	void BuildVolumeMenu();
 
 	void AddOneItem(Model*);
-	void AddRootItemsIfNeeded();
+	void AddRootItem();
+	void AddVolumeItems();
 	void AddTrashItem();
 	static void SetTrackingHookDeep(BMenu*, bool (*)(BMenu*, void*), void*);
 
@@ -139,14 +140,38 @@ protected:
 
 	// menu building state
 	uint8 fFlags;
-	BObjectList<BMenuItem>* fItemList;
+	BObjectList<BMenuItem, false>* fItemList;
 	EntryListBase* fContainer;
 	bool fIteratingDesktop;
 
-	BObjectList<BString>* fTypesList;
+	BStringList* fTypesList;
 
 	TrackingHookData fTrackingHook;
 };
+
+
+class BPopUpNavMenu : public BNavMenu {
+public:
+	BPopUpNavMenu(const char* title);
+	~BPopUpNavMenu();
+
+	void ClearMenu();
+
+	void Go(BPoint where);
+	bool IsShowing() const;
+
+protected:
+	BPoint ScreenLocation();
+
+private:
+	void _WaitForTrackThread();
+	static int32 _TrackThread(void* menu);
+
+private:
+	BPoint fWhere;
+	thread_id fTrackThread;
+};
+
 
 //	Spring Loaded Folder convenience routines
 //		used in both Tracker and Deskbar
@@ -156,11 +181,11 @@ protected:
 _IMPEXP_TRACKER bool SpringLoadedFolderCompareMessages(const BMessage *incoming,
 	const BMessage *dragmessage);
 _IMPEXP_TRACKER void SpringLoadedFolderSetMenuStates(const BMenu *menu,
-	const BObjectList<BString> *typeslist);
+	const BStringList *typeslist);
 _IMPEXP_TRACKER void SpringLoadedFolderAddUniqueTypeToList(entry_ref *ref,
-	BObjectList<BString> *typeslist);
+	BStringList *typeslist);
 _IMPEXP_TRACKER void SpringLoadedFolderCacheDragData(const BMessage *incoming,
-	BMessage **, BObjectList<BString> **typeslist);
+	BMessage **, BStringList **typeslist);
 
 } // namespace BPrivate
 

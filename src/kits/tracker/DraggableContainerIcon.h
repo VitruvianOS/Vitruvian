@@ -31,53 +31,32 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef _FILE_PERMISSIONS_VIEW_H
-#define _FILE_PERMISSIONS_VIEW_H
+#ifndef _DRAGGABLE_CONTAINER_ICON_H
+#define _DRAGGABLE_CONTAINER_ICON_H
 
 
-#include <CheckBox.h>
-#include <TextControl.h>
-
-#include "Model.h"
+#include <View.h>
 
 
 namespace BPrivate {
 
-
-class FilePermissionsView : public BView {
+class DraggableContainerIcon : public BView {
 	public:
-		FilePermissionsView(BRect, Model*);
+		DraggableContainerIcon(BSize iconSize);
 
-		void ModelChanged(Model*);
-
-	protected:
-		virtual void MessageReceived(BMessage*);
-		virtual void AttachedToWindow();
+		virtual void MouseDown(BPoint where);
+		virtual void MouseUp(BPoint);
+		virtual void MouseMoved(BPoint where, uint32, const BMessage*);
+		virtual void Draw(BRect updateRect);
 
 	private:
-		Model* fModel;
-
-		BCheckBox* fReadUserCheckBox;
-		BCheckBox* fReadGroupCheckBox;
-		BCheckBox* fReadOtherCheckBox;
-
-		BCheckBox* fWriteUserCheckBox;
-		BCheckBox* fWriteGroupCheckBox;
-		BCheckBox* fWriteOtherCheckBox;
-
-		BCheckBox* fExecuteUserCheckBox;
-		BCheckBox* fExecuteGroupCheckBox;
-		BCheckBox* fExecuteOtherCheckBox;
-
-		BTextControl* fOwnerTextControl;
-		BTextControl* fGroupTextControl;
-
-		typedef BView _inherited;
+		BSize	fIconSize;
+		uint32	fDragButton;
+		BPoint	fClickPoint;
+		bool	fDragStarted;
 };
 
-} // namespace BPrivate
-
-using namespace BPrivate;
+}	// namespace BPrivate
 
 
-#endif	// _FILE_PERMISSIONS_VIEW_H
+#endif	// _DRAGGABLE_CONTAINER_ICON_H

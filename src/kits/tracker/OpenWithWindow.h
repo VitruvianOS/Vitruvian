@@ -124,7 +124,7 @@ private:
 		// Open With window
 
 	CachedEntryIteratorList* fIteratorList;
-	BObjectList<BString> fSignatures;
+	BStringList fSignatures;
 
 	entry_ref fPreferredRef;
 	int32 fPreferredAppCount;
@@ -152,24 +152,26 @@ public:
 	void SetCanSetAppAsDefault(bool);
 	void SetCanOpen(bool);
 
+	virtual bool ShouldHaveDraggableFolderIcon() { return false; };
+
 	OpenWithPoseView* PoseView() const;
 
 protected:
 	virtual BPoseView* NewPoseView(Model* model, uint32 viewMode);
 
-	virtual	bool ShouldAddMenus() const;
-	virtual	void ShowContextMenu(BPoint, const entry_ref*, BView*);
+	virtual bool ShouldAddMenus() const;
+	virtual void ShowContextMenu(BPoint, const entry_ref*);
 	virtual void AddShortcuts();
-	virtual void NewAttributeMenu(BMenu*);
+	virtual void NewAttributesMenu(BMenu*);
 
 	virtual void RestoreState();
-	virtual	void RestoreState(const BMessage&);
+	virtual void RestoreState(const BMessage&);
 	virtual void RestoreWindowState(AttributeStreamNode*);
 	virtual void RestoreWindowState(const BMessage&);
 	virtual bool NeedsDefaultStateSetup();
-	virtual	void SaveState(bool hide = true);
-	virtual	void SaveState(BMessage&) const;
-	virtual void SetUpDefaultState();
+	virtual void SaveState(bool hide = true);
+	virtual void SaveState(BMessage&) const;
+	virtual void SetupDefaultState();
 
 	virtual bool IsShowing(const node_ref*) const;
 	virtual bool IsShowing(const entry_ref*) const;
@@ -214,6 +216,9 @@ public:
 
 	OpenWithContainerWindow* ContainerWindow() const;
 
+	virtual void AdoptSystemColors();
+	virtual bool HasSystemColors() const;
+
 	virtual bool AddPosesThreadValid(const entry_ref*) const;
 
 protected:
@@ -222,11 +227,11 @@ protected:
 	virtual void InitialStartWatching() {}
 	virtual void FinalStopWatching() {}
 
-	virtual void AttachedToWindow();
 	virtual EntryListBase* InitDirentIterator(const entry_ref* ref);
 	virtual void ReturnDirentIterator(EntryListBase* iterator);
+	virtual uint32 WatchNewNodeMask();
 
-	virtual void SetUpDefaultColumnsIfNeeded();
+	virtual void SetupDefaultColumnsIfNeeded();
 		// show launch window specific columns
 
 	// empty overrides for functions that depend on having an fModel
@@ -296,7 +301,7 @@ public:
 };
 
 
-class OpenWithMenu : public BSlowMenu {
+class OpenWithMenu: public BSlowMenu {
 public:
 	OpenWithMenu(const char* label, const BMessage* entriesToOpen,
 		BWindow* parentWindow, BHandler* target);
@@ -304,6 +309,10 @@ public:
 		BWindow* parentWindow, const BMessenger &target);
 
 private:
+	friend int SortByRelation(const RelationCachingModelProxy*,
+		const RelationCachingModelProxy*, void*);
+	friend int SortByName(const RelationCachingModelProxy*,
+		const RelationCachingModelProxy*, void*);
 	friend int SortByRelationAndName(const RelationCachingModelProxy*,
 		const RelationCachingModelProxy*, void*);
 
@@ -319,7 +328,7 @@ private:
 	// menu building state
 	SearchForSignatureEntryList* fIterator;
 	entry_ref fPreferredRef;
-	BObjectList<RelationCachingModelProxy>* fSupportingAppList;
+	BObjectList<RelationCachingModelProxy, true>* fSupportingAppList;
 	bool fHaveCommonPreferredApp;
 	BWindow* fParentWindow;
 

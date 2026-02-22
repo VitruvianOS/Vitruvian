@@ -147,7 +147,7 @@ public:
 	// status window, such that the user can drop additional items onto the
 	// progress display of the ongoing copy process to copy these items to
 	// the same target directory.
-			typedef BObjectList<entry_ref> EntryList;
+			typedef BObjectList<entry_ref, true> EntryList;
 
 			void				SetSourceList(EntryList* list);
 
@@ -167,9 +167,9 @@ private:
 #endif
 _IMPEXP_TRACKER status_t FSCopyAttributesAndStats(BNode*, BNode*, bool = true);
 
-_IMPEXP_TRACKER void FSDuplicate(BObjectList<entry_ref>* srcList,
+_IMPEXP_TRACKER void FSDuplicate(BObjectList<entry_ref, true>* srcList,
 	BList* pointList);
-_IMPEXP_TRACKER void FSMoveToFolder(BObjectList<entry_ref>* srcList, BEntry*,
+_IMPEXP_TRACKER void FSMoveToFolder(BObjectList<entry_ref, true>* srcList, BEntry*,
 	uint32 moveMode, BList* pointList = NULL);
 _IMPEXP_TRACKER void FSMakeOriginalName(char* name, BDirectory* destDir,
 	const char* suffix);
@@ -178,13 +178,13 @@ _IMPEXP_TRACKER bool FSIsPrintersDir(const BEntry*);
 _IMPEXP_TRACKER bool FSIsDeskDir(const BEntry*);
 _IMPEXP_TRACKER bool FSIsHomeDir(const BEntry*);
 _IMPEXP_TRACKER bool FSIsRootDir(const BEntry*);
-_IMPEXP_TRACKER void FSMoveToTrash(BObjectList<entry_ref>* srcList,
+_IMPEXP_TRACKER void FSMoveToTrash(BObjectList<entry_ref, true>* srcList,
 	BList* pointList = NULL, bool async = true);
 	// Deprecated
 
-void FSDeleteRefList(BObjectList<entry_ref>*, bool, bool confirm = true);
+void FSDeleteRefList(BObjectList<entry_ref, true>*, bool, bool confirm = true);
 void FSDelete(entry_ref*, bool, bool confirm = true);
-void FSRestoreRefList(BObjectList<entry_ref>* list, bool async);
+void FSRestoreRefList(BObjectList<entry_ref,true >* list, bool async);
 
 _IMPEXP_TRACKER status_t FSLaunchItem(const entry_ref* application,
 	const BMessage* refsReceived, bool async, bool openWithOK);
@@ -207,6 +207,9 @@ _IMPEXP_TRACKER status_t FSRecursiveCalcSize(BInfoWindow*,
 	CopyLoopControl* loopControl, BDirectory*, off_t* runningSize,
 	int32* fileCount, int32* dirCount);
 
+bool FSInDeskDir(const entry_ref*);
+bool FSIsQueriesDir(const entry_ref*);
+bool FSInRootDir(const entry_ref*);
 bool FSInTrashDir(const entry_ref*);
 
 // doesn't need to be exported
@@ -235,7 +238,7 @@ ReadAttrResult ReadAttr(const BNode*, const char* hostAttrName,
 ReadAttrResult GetAttrInfo(const BNode*, const char* hostAttrName,
 	const char* foreignAttrName, type_code* = NULL, size_t* = NULL);
 
-status_t FSCreateNewFolder(const entry_ref*);
+status_t FSCreateNewFolder(entry_ref*);
 status_t FSRecursiveCreateFolder(const char* path);
 void FSMakeOriginalName(BString &name, const BDirectory* destDir,
 	const char* suffix = 0);
@@ -262,6 +265,11 @@ enum DestructiveAction {
 bool ConfirmChangeIfWellKnownDirectory(const BEntry* entry,
 	DestructiveAction action, bool dontAsk = false,
 	int32* confirmedAlready = NULL);
+
+status_t EditModelName(const Model* model, const char* name, size_t);
+	// return B_OK if name was edited
+status_t ShouldEditRefName(const entry_ref* ref, const char* name, size_t);
+	// return B_OK if name should be edited
 
 bool CheckDevicesEqual(const entry_ref* entry, const Model* targetModel);
 

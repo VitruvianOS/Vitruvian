@@ -40,10 +40,12 @@ All rights reserved.
 #include <Alert.h>
 #include <Application.h>
 #include <Button.h>
+#include <ControlLook.h>
 #include <Catalog.h>
 #include <Debug.h>
 #include <Directory.h>
 #include <FindDirectory.h>
+#include <GridView.h>
 #include <Locale.h>
 #include <MenuBar.h>
 #include <MenuField.h>
@@ -62,20 +64,23 @@ All rights reserved.
 #include <Volume.h>
 #include <VolumeRoster.h>
 
-#include "Attributes.h"
 #include "AttributeStream.h"
+#include "Attributes.h"
 #include "AutoLock.h"
 #include "Commands.h"
 #include "CountView.h"
 #include "DesktopPoseView.h"
 #include "DirMenu.h"
-#include "FavoritesMenu.h"
-#include "FSUtils.h"
 #include "FSClipboard.h"
+#include "FSUtils.h"
+#include "FavoritesMenu.h"
 #include "IconMenuItem.h"
+#include "LiveMenu.h"
 #include "MimeTypes.h"
 #include "NavMenu.h"
+#include "Shortcuts.h"
 #include "Tracker.h"
+#include "TrackerDefaults.h"
 #include "Utilities.h"
 
 #include "tracker_private.h"
@@ -109,49 +114,51 @@ GetLinkFlavor(const Model* model, bool resolve = true)
 static filter_result
 key_down_filter(BMessage* message, BHandler** handler, BMessageFilter* filter)
 {
-	ASSERT(filter != NULL);
 	if (filter == NULL)
 		return B_DISPATCH_MESSAGE;
 
 	TFilePanel* panel = dynamic_cast<TFilePanel*>(filter->Looper());
-	ASSERT(panel != NULL);
-
-	if (panel == NULL)
+	if (panel == NULL || panel->TrackingMenu())
 		return B_DISPATCH_MESSAGE;
 
 	BPoseView* view = panel->PoseView();
-	if (panel->TrackingMenu())
+	if (view == NULL)
 		return B_DISPATCH_MESSAGE;
 
 	uchar key;
 	if (message->FindInt8("byte", (int8*)&key) != B_OK)
 		return B_DISPATCH_MESSAGE;
 
-	int32 modifier = 0;
-	message->FindInt32("modifiers", &modifier);
+	int32 modifiers = message->GetInt32("modifiers", 0);
+	modifiers &= B_COMMAND_KEY | B_OPTION_KEY | B_SHIFT_KEY | B_CONTROL_KEY | B_MENU_KEY;
 
-	if (modifier & B_COMMAND_KEY && key == B_UP_ARROW) {
-		filter->Looper()->PostMessage(kOpenParentDir);
-		return B_SKIP_MESSAGE;
+	if ((modifiers & B_COMMAND_KEY) != 0) {
+		switch (key) {
+			case B_UP_ARROW:
+				BMessenger(panel).SendMessage(kOpenParentDir);
+				return B_SKIP_MESSAGE;
+
+			case 'w':
+				BMessenger(panel).SendMessage(kCancelButton);
+				return B_SKIP_MESSAGE;
+
+			default:
+				break;
+		}
 	}
 
-	if (modifier & B_COMMAND_KEY && key == 'w') {
-		filter->Looper()->PostMessage(kCancelButton);
-		return B_SKIP_MESSAGE;
-	}
-
-	if (!modifier && key == B_ESCAPE) {
-		if (view->ActivePose())
+	if (modifiers == 0 && key == B_ESCAPE) {
+		if (view->ActivePose() != NULL)
 			view->CommitActivePose(false);
-		else if (view->IsFiltering())
-			filter->Looper()->PostMessage(B_CANCEL, *handler);
+		else if (view->IsTypeAheadFiltering())
+			BMessenger(panel->PoseView()).SendMessage(B_CANCEL, *handler);
 		else
-			filter->Looper()->PostMessage(kCancelButton);
+			BMessenger(panel).SendMessage(kCancelButton);
 
 		return B_SKIP_MESSAGE;
 	}
 
-	if (key == B_RETURN && view->ActivePose()) {
+	if (key == B_RETURN && view->ActivePose() != NULL) {
 		view->CommitActivePose();
 
 		return B_SKIP_MESSAGE;
@@ -164,27 +171,32 @@ key_down_filter(BMessage* message, BHandler** handler, BMessageFilter* filter)
 //	#pragma mark - TFilePanel
 
 
-TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target,
-	const BEntry* startDir, uint32 nodeFlavors, bool multipleSelection,
-	BMessage* message, BRefFilter* filter, uint32 containerWindowFlags,
-	window_look look, window_feel feel, bool hideWhenDone)
+TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target, const BEntry* startDir,
+	uint32 nodeFlavors, bool multipleSelection, BMessage* message, BRefFilter* filter,
+	uint32 openFlags, window_look look, window_feel feel, uint32 windowFlags, uint32 workspace,
+	bool hideWhenDone)
 	:
-	BContainerWindow(0, containerWindowFlags, look, feel, 0,
-		B_CURRENT_WORKSPACE, false),
+	BContainerWindow(0, openFlags, look, feel, windowFlags, workspace, false),
 	fDirMenu(NULL),
 	fDirMenuField(NULL),
 	fTextControl(NULL),
 	fClientObject(NULL),
 	fSelectionIterator(0),
 	fMessage(NULL),
+	fFavoritesMenu(NULL),
 	fHideWhenDone(hideWhenDone),
-	fIsTrackingMenu(false)
+	fIsTrackingMenu(false),
+	fDefaultStateRestored(false)
 {
+	Lock();
 	InitIconPreloader();
 
 	fIsSavePanel = (mode == B_SAVE_PANEL);
 
-	BRect windRect(85, 50, 568, 296);
+	const float labelSpacing = be_control_look->DefaultLabelSpacing();
+	// approximately (84, 50, 568, 296) with default sizing
+	BRect windRect(labelSpacing * 14.0f, labelSpacing * 8.0f,
+		labelSpacing * 95.0f, labelSpacing * 49.0f);
 	MoveTo(windRect.LeftTop());
 	ResizeTo(windRect.Width(), windRect.Height());
 
@@ -202,8 +214,10 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target,
 	else
 		fMessage = new BMessage(B_REFS_RECEIVED);
 
-	gLocalizedNamePreferred
-		= BLocaleRoster::Default()->IsFilesystemTranslationPreferred();
+	// no new template menu in file panel
+	fNewTemplatesItem = NULL;
+
+	gLocalizedNamePreferred = BLocaleRoster::Default()->IsFilesystemTranslationPreferred();
 
 	// check for legal starting directory
 	Model* model = new Model();
@@ -245,6 +259,13 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target,
 	fBorderedView = new BorderedView;
 	CreatePoseView(model);
 	fBorderedView->GroupLayout()->SetInsets(1);
+
+	fPoseContainer = new BGridView(0.0, 0.0);
+	fPoseContainer->GridLayout()->AddView(fBorderedView, 0, 1);
+
+	fCountContainer = new BGroupView(B_HORIZONTAL, 0);
+	fPoseContainer->GridLayout()->AddView(fCountContainer, 0, 2);
+
 	fPoseView->SetRefFilter(filter);
 	if (!fIsSavePanel)
 		fPoseView->SetMultipleSelection(multipleSelection);
@@ -252,8 +273,7 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target,
 	fPoseView->SetFlags(fPoseView->Flags() | B_NAVIGABLE);
 	fPoseView->SetPoseEditing(false);
 	AddCommonFilter(new BMessageFilter(B_KEY_DOWN, key_down_filter));
-	AddCommonFilter(new BMessageFilter(B_SIMPLE_DATA,
-		TFilePanel::MessageDropFilter));
+	AddCommonFilter(new BMessageFilter(B_SIMPLE_DATA, TFilePanel::MessageDropFilter));
 	AddCommonFilter(new BMessageFilter(B_NODE_MONITOR, TFilePanel::FSFilter));
 
 	// inter-application observing
@@ -261,6 +281,14 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target,
 	BHandler::StartWatching(tracker, kDesktopFilePanelRootChanged);
 
 	Init();
+
+	// Avoid the need to save state later just because of changes made
+	// during setup. This prevents unnecessary saving by Quit that can
+	// overwrite user's changes previously saved from another panel object.
+	if (StateNeedsSaving())
+		SaveState(false);
+
+	Unlock();
 }
 
 
@@ -274,8 +302,7 @@ TFilePanel::~TFilePanel()
 
 
 filter_result
-TFilePanel::MessageDropFilter(BMessage* message, BHandler**,
-	BMessageFilter* filter)
+TFilePanel::MessageDropFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 {
 	if (message == NULL || !message->WasDropped())
 		return B_DISPATCH_MESSAGE;
@@ -336,21 +363,18 @@ TFilePanel::MessageDropFilter(BMessage* message, BHandler**,
 
 		entry.GetRef(&ref);
 
-		panel->fTaskLoop->RunLater(NewMemberFunctionObjectWithResult
-			(&TFilePanel::SelectChildInParent, panel,
-			const_cast<const entry_ref*>(&ref),
-			const_cast<const node_ref*>(&child)),
-			ref == *panel->TargetModel()->EntryRef() ? 0 : 100000, 200000,
-				5000000);
-				// if the target directory is already current, we won't
-				// delay the initial selection try
+		// don't delay the initial selection try if the target directory is already current
+		panel->fTaskLoop->RunLater(
+			NewMemberFunctionObjectWithResult(&TFilePanel::SelectChildInParent, panel,
+				const_cast<const entry_ref*>(&ref), const_cast<const node_ref*>(&child)),
+			ref == *panel->TargetModel()->EntryRef() ? 0 : 100000, 200000, 5000000);
 
 		// also set the save name to the dragged in entry
 		if (panel->IsSavePanel())
 			panel->SetSaveText(path.Leaf());
 	}
 
-	panel->SetTo(&ref);
+	panel->SwitchDirectory(&ref);
 
 	return B_SKIP_MESSAGE;
 }
@@ -372,32 +396,31 @@ TFilePanel::FSFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 	if (panel == NULL)
 		return B_DISPATCH_MESSAGE;
 
-	switch (message->FindInt32("opcode")) {
+	switch (message->GetInt32("opcode", 0)) {
 		case B_ENTRY_MOVED:
 		{
 			node_ref itemNode;
-			node_ref dirNode;
-			const char* name;
-
 			#ifdef __VOS_OLD_NODE_MONITOR__
 			message->FindUInt64("node", (int64*)&itemNode.node);
 
+			node_ref dirNode;
 			message->FindUInt64("device", &dirNode.device);
 			itemNode.device = dirNode.device;
 			message->FindUInt64("to directory", (int64*)&dirNode.node);
 
-
+			const char* name;
 			if (message->FindString("name", &name) != B_OK)
 				break;
-			#endif
+
 
 			// if current directory moved, update entry ref and menu
 			// but not wind title
 			if (*(panel->TargetModel()->NodeRef()) == itemNode) {
 				panel->TargetModel()->UpdateEntryRef(&dirNode, name);
-				panel->SetTo(panel->TargetModel()->EntryRef());
+				panel->SwitchDirectory(panel->TargetModel()->EntryRef());
 				return B_SKIP_MESSAGE;
 			}
+			#endif
 			break;
 		}
 
@@ -424,9 +447,7 @@ TFilePanel::FSFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 				root.GetEntry(&entry);
 				entry.GetRef(&ref);
 
-				panel->SwitchDirToDesktopIfNeeded(ref);
-
-				panel->SetTo(&ref);
+				panel->SwitchDirectory(&ref);
 				return B_SKIP_MESSAGE;
 			}
 			break;
@@ -522,36 +543,51 @@ TFilePanel::SetRefFilter(BRefFilter* filter)
 	if (favoritesItem == NULL)
 		return;
 
-	FavoritesMenu* favoritesSubMenu
-		= dynamic_cast<FavoritesMenu*>(favoritesItem->Submenu());
+	FavoritesMenu* favoritesSubMenu = dynamic_cast<FavoritesMenu*>(favoritesItem->Submenu());
 	if (favoritesSubMenu != NULL)
 		favoritesSubMenu->SetRefFilter(filter);
 }
 
 
 void
-TFilePanel::SetTo(const entry_ref* ref)
+TFilePanel::SwitchDirectory(const entry_ref* ref)
 {
 	if (ref == NULL)
 		return;
 
 	entry_ref setToRef(*ref);
-
 	bool isDesktop = SwitchDirToDesktopIfNeeded(setToRef);
-
-	BEntry entry(&setToRef);
-	if (entry.InitCheck() != B_OK || !entry.IsDirectory())
+	BEntry entry(&setToRef, true);
+	if (entry.InitCheck() != B_OK)
 		return;
 
-	SwitchDirMenuTo(&setToRef);
+	if (!entry.Exists())
+		return;
 
 	PoseView()->SetIsDesktop(isDesktop);
-	fPoseView->SwitchDir(&setToRef);
+	_inherited::SwitchDirectory(&setToRef);
 
+	if (PoseView()->IsDesktop())
+		PoseView()->AddVolumePoses();
+
+	AddShortcut('D', B_COMMAND_KEY, new BMessage(kSwitchToDesktop));
 	AddShortcut('H', B_COMMAND_KEY, new BMessage(kSwitchToHome));
 		// our shortcut got possibly removed because the home
 		// menu item got removed - we shouldn't really have to do
 		// this - this is a workaround for a kit bug.
+
+	// update the menu field
+	for (int32 index = fDirMenu->CountItems() - 1; index >= 0; index--)
+		delete fDirMenu->RemoveItem(index);
+
+	fDirMenuField->MenuBar()->RemoveItem((int32)0);
+	fDirMenu->Populate(&entry, 0, true, true, false, true);
+
+	ModelMenuItem* item = dynamic_cast<ModelMenuItem*>(fDirMenuField->MenuBar()->ItemAt(0));
+	ASSERT(item != NULL);
+
+	// set dir menu to the new directory
+	item->SetEntry(&entry);
 }
 
 
@@ -569,13 +605,6 @@ TFilePanel::SetClientObject(BFilePanel* panel)
 }
 
 
-bool
-TFilePanel::IsOpenButtonAlwaysEnabled() const
-{
-	return !fIsSavePanel && (fNodeFlavors & B_DIRECTORY_NODE) != 0;
-}
-
-
 void
 TFilePanel::AdjustButton()
 {
@@ -586,7 +615,7 @@ TFilePanel::AdjustButton()
 
 	BTextControl* textControl
 		= dynamic_cast<BTextControl*>(FindView("text view"));
-	BObjectList<BPose>* selectionList = fPoseView->SelectionList();
+	PoseList* selectionList = fPoseView->SelectionList();
 	BString buttonText = fButtonText;
 	bool enabled = false;
 
@@ -601,9 +630,8 @@ TFilePanel::AdjustButton()
 					buttonText = B_TRANSLATE("Open");
 				} else {
 					// insert the name of the selected model into
-					// the text field
+					// the text field, do not alter focus
 					textControl->SetText(model->Name());
-					textControl->MakeFocus(true);
 				}
 			}
 		} else
@@ -624,20 +652,24 @@ TFilePanel::AdjustButton()
 				// selection mode then we don't disable button ever
 				if ((modelFlavor == B_DIRECTORY_NODE
 						|| linkFlavor == B_DIRECTORY_NODE)
-					&& count == 1)
-				  break;
+					&& count == 1) {
+					break;
+				}
 
 				if ((fNodeFlavors & modelFlavor) == 0
 					&& (fNodeFlavors & linkFlavor) == 0) {
-		    		enabled = false;
+					enabled = false;
 					break;
 				}
 			}
+		} else if ((fNodeFlavors & B_DIRECTORY_NODE) != 0) {
+			// No selection, but the current directory could be opened.
+			enabled = true;
 		}
 	}
 
 	button->SetLabel(buttonText.String());
-	button->SetEnabled(IsOpenButtonAlwaysEnabled() || enabled);
+	button->SetEnabled(enabled);
 }
 
 
@@ -679,6 +711,11 @@ TFilePanel::Init(const BMessage*)
 	BRect windRect(Bounds());
 	fBackView = new BView(Bounds(), "View", B_FOLLOW_ALL, 0);
 	fBackView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+
+	// BButton adopts the parent's high color instead of its own,
+	// hence this mismatched color set here
+	fBackView->SetHighUIColor(B_CONTROL_TEXT_COLOR);
+
 	AddChild(fBackView);
 
 	// add poseview menu bar
@@ -687,28 +724,24 @@ TFilePanel::Init(const BMessage*)
 	fBackView->AddChild(fMenuBar);
 
 	// add directory menu and menufield
-	fDirMenu = new BDirMenu(0, this, kSwitchDirectory, "refs");
-
 	font_height ht;
 	be_plain_font->GetHeight(&ht);
-	float f_height = ht.ascent + ht.descent + ht.leading;
+	const float f_height = ht.ascent + ht.descent + ht.leading;
+	const float spacing = be_control_look->ComposeSpacing(B_USE_SMALL_SPACING);
 
 	BRect rect;
-	rect.top = fMenuBar->Bounds().Height() + 8;
-	rect.left = windRect.left + 8;
-	rect.right = rect.left + 300;
+	rect.top = fMenuBar->Bounds().Height() + spacing;
+	rect.left = spacing;
+	rect.right = rect.left + (spacing * 50);
 	rect.bottom = rect.top + (f_height > 22 ? f_height : 22);
 
-	fDirMenuField = new BMenuField(rect, "DirMenuField", "", fDirMenu);
+	fDirMenuField = new BMenuField(rect, "DirMenuField", "", NULL);
 	fDirMenuField->MenuBar()->SetFont(be_plain_font);
 	fDirMenuField->SetDivider(0);
 	fDirMenuField->MenuBar()->SetMaxContentWidth(rect.Width() - 26.0f);
 		// Make room for the icon
 
-	fDirMenuField->MenuBar()->RemoveItem((int32)0);
-	fDirMenu->SetMenuBar(fDirMenuField->MenuBar());
-		// the above is a weird call from BDirMenu
-		// ToDo: clean up
+	fDirMenu = new BDirMenu(fDirMenuField->MenuBar(), this, kSwitchDirectory, "refs");
 
 	BEntry entry(TargetModel()->EntryRef());
 	if (entry.InitCheck() == B_OK)
@@ -718,13 +751,34 @@ TFilePanel::Init(const BMessage*)
 
 	fBackView->AddChild(fDirMenuField);
 
+	// add buttons
+	fButtonText = fIsSavePanel ? B_TRANSLATE("Save") : B_TRANSLATE("Open");
+	BButton* default_button = new BButton(BRect(), "default button",
+		fButtonText.String(), new BMessage(kDefaultButton),
+		B_FOLLOW_RIGHT + B_FOLLOW_BOTTOM);
+	BSize preferred = default_button->PreferredSize();
+	const BRect defaultButtonRect = BRect(BPoint(
+		windRect.Width() - (preferred.Width() + spacing + be_control_look->GetScrollBarWidth()),
+		windRect.Height() - (preferred.Height() + spacing)),
+		preferred);
+	default_button->MoveTo(defaultButtonRect.LeftTop());
+	default_button->ResizeTo(preferred);
+	fBackView->AddChild(default_button);
+
+	BButton* cancel_button = new BButton(BRect(), "cancel button",
+		B_TRANSLATE("Cancel"), new BMessage(kCancelButton),
+		B_FOLLOW_RIGHT + B_FOLLOW_BOTTOM);
+	preferred = cancel_button->PreferredSize();
+	cancel_button->MoveTo(defaultButtonRect.LeftTop()
+		- BPoint(preferred.Width() + spacing, 0));
+	cancel_button->ResizeTo(preferred);
+	fBackView->AddChild(cancel_button);
+
 	// add file name text view
 	if (fIsSavePanel) {
-		BRect rect(windRect);
-		rect.top = rect.bottom - 35;
-		rect.left = 8;
-		rect.right = rect.left + 170;
-		rect.bottom = rect.top + 13;
+		BRect rect(defaultButtonRect);
+		rect.left = spacing;
+		rect.right = rect.left + spacing * 28;
 
 		fTextControl = new BTextControl(rect, "text view",
 			B_TRANSLATE("save text"), "", NULL,
@@ -734,23 +788,20 @@ TFilePanel::Init(const BMessage*)
 		fBackView->AddChild(fTextControl);
 		fTextControl->SetDivider(0.0f);
 		fTextControl->TextView()->SetMaxBytes(B_FILE_NAME_LENGTH - 1);
-
-		fButtonText.SetTo(B_TRANSLATE("Save"));
-	} else
-		fButtonText.SetTo(B_TRANSLATE("Open"));
+	}
 
 	// Add PoseView
 	PoseView()->SetName("ActualPoseView");
-	fBorderedView->SetName("PoseView");
-	fBorderedView->SetResizingMode(B_FOLLOW_ALL);
+	fPoseContainer->SetName("PoseView");
+	fPoseContainer->SetResizingMode(B_FOLLOW_ALL);
 	fBorderedView->EnableBorderHighlight(true);
 
-	rect = windRect;
-	rect.OffsetTo(10, fDirMenuField->Frame().bottom + 10);
-	rect.bottom = windRect.bottom - 60;
-	rect.right -= B_V_SCROLL_BAR_WIDTH + 20;
-	fBorderedView->MoveTo(rect.LeftTop());
-	fBorderedView->ResizeTo(rect.Width(), rect.Height());
+	rect.left = spacing;
+	rect.top = fDirMenuField->Frame().bottom + spacing;
+	rect.right = windRect.Width() - spacing;
+	rect.bottom = defaultButtonRect.top - spacing;
+	fPoseContainer->MoveTo(rect.LeftTop());
+	fPoseContainer->ResizeTo(rect.Size());
 
 	PoseView()->AddScrollBars();
 	PoseView()->SetDragEnabled(false);
@@ -759,69 +810,27 @@ TFilePanel::Init(const BMessage*)
 	PoseView()->SetSelectionChangedHook(true);
 	PoseView()->DisableSaveLocation();
 
-	// horizontal
-	rect = fBorderedView->Frame();
-	rect.top = rect.bottom;
-	rect.bottom = rect.top + (float)B_H_SCROLL_BAR_HEIGHT;
-	PoseView()->HScrollBar()->MoveTo(rect.LeftTop());
-	PoseView()->HScrollBar()->ResizeTo(rect.Size());
-	PoseView()->HScrollBar()->SetResizingMode(B_FOLLOW_LEFT_RIGHT | B_FOLLOW_BOTTOM);
-	fBackView->AddChild(PoseView()->HScrollBar());
-
-	// vertical
-	rect = fBorderedView->Frame();
-	rect.left = rect.right;
-	rect.right = rect.left + (float)B_V_SCROLL_BAR_WIDTH;
-	PoseView()->VScrollBar()->MoveTo(rect.LeftTop());
-	PoseView()->VScrollBar()->ResizeTo(rect.Size());
-	PoseView()->VScrollBar()->SetResizingMode(B_FOLLOW_TOP_BOTTOM | B_FOLLOW_RIGHT);
-	fBackView->AddChild(PoseView()->VScrollBar());
-
 	if (fIsSavePanel)
-		fBackView->AddChild(fBorderedView, fTextControl);
+		fBackView->AddChild(fPoseContainer, fTextControl);
 	else
-		fBackView->AddChild(fBorderedView);
+		fBackView->AddChild(fPoseContainer);
+
+	fShortcuts = new TShortcuts(this);
 
 	AddShortcut('W', B_COMMAND_KEY, new BMessage(kCancelButton));
+	AddShortcut('D', B_COMMAND_KEY, new BMessage(kSwitchToDesktop));
 	AddShortcut('H', B_COMMAND_KEY, new BMessage(kSwitchToHome));
-	AddShortcut('A', B_COMMAND_KEY | B_SHIFT_KEY,
-		new BMessage(kShowSelectionWindow));
-	AddShortcut('A', B_COMMAND_KEY, new BMessage(B_SELECT_ALL), PoseView());
-	AddShortcut('S', B_COMMAND_KEY, new BMessage(kInvertSelection),
+	AddShortcut(B_DELETE, B_NO_COMMAND_KEY | B_SHIFT_KEY, new BMessage(kDeleteSelection),
 		PoseView());
+	AddShortcut(B_DELETE, B_NO_COMMAND_KEY, new BMessage(kMoveSelectionToTrash), PoseView());
+	AddShortcut('A', B_COMMAND_KEY | B_SHIFT_KEY, new BMessage(kShowSelectionWindow));
+	AddShortcut('A', B_COMMAND_KEY, new BMessage(B_SELECT_ALL), this);
+	AddShortcut('S', B_COMMAND_KEY, new BMessage(kInvertSelection), PoseView());
 	AddShortcut('Y', B_COMMAND_KEY, new BMessage(kResizeToFit), PoseView());
 	AddShortcut(B_DOWN_ARROW, B_COMMAND_KEY, new BMessage(kOpenDir));
-	AddShortcut(B_DOWN_ARROW, B_COMMAND_KEY | B_OPTION_KEY,
-		new BMessage(kOpenDir));
+	AddShortcut(B_DOWN_ARROW, B_COMMAND_KEY | B_OPTION_KEY, new BMessage(kOpenDir));
 	AddShortcut(B_UP_ARROW, B_COMMAND_KEY, new BMessage(kOpenParentDir));
-	AddShortcut(B_UP_ARROW, B_COMMAND_KEY | B_OPTION_KEY,
-		new BMessage(kOpenParentDir));
-
-	// New code to make buttons font sensitive
-	rect = windRect;
-	rect.top = rect.bottom - 35;
-	rect.bottom -= 10;
-	rect.right -= 25;
-	float default_width
-		= be_plain_font->StringWidth(fButtonText.String()) + 20;
-	rect.left = default_width > 75
-		? rect.right - default_width : rect.right - 75;
-
-	BButton* default_button = new BButton(rect, "default button",
-		fButtonText.String(), new BMessage(kDefaultButton),
-		B_FOLLOW_RIGHT + B_FOLLOW_BOTTOM);
-	fBackView->AddChild(default_button);
-
-	rect.right = rect.left -= 10;
-	float cancel_width
-		= be_plain_font->StringWidth(B_TRANSLATE("Cancel")) + 20;
-	rect.left = cancel_width > 75
-		? rect.right - cancel_width : rect.right - 75;
-
-	BButton* cancel_button = new BButton(rect, "cancel button",
-		B_TRANSLATE("Cancel"), new BMessage(kCancelButton),
-		B_FOLLOW_RIGHT + B_FOLLOW_BOTTOM);
-	fBackView->AddChild(cancel_button);
+	AddShortcut(B_UP_ARROW, B_COMMAND_KEY | B_OPTION_KEY, new BMessage(kOpenParentDir));
 
 	if (!fIsSavePanel && (fNodeFlavors & B_DIRECTORY_NODE) == 0)
 		default_button->SetEnabled(false);
@@ -830,67 +839,24 @@ TFilePanel::Init(const BMessage*)
 
 	RestoreState();
 
-	AddMenus();
+	if (ShouldAddMenus())
+		AddMenus();
+
 	AddContextMenus();
-
-	FavoritesMenu* favorites = new FavoritesMenu(B_TRANSLATE("Favorites"),
-		new BMessage(kSwitchDirectory), new BMessage(B_REFS_RECEIVED),
-		BMessenger(this), IsSavePanel(), fPoseView->RefFilter());
-	favorites->AddItem(new BMenuItem(B_TRANSLATE("Add current folder"),
-		new BMessage(kAddCurrentDir)));
-	favorites->AddItem(new BMenuItem(
-		B_TRANSLATE("Edit favorites" B_UTF8_ELLIPSIS),
-		new BMessage(kEditFavorites)));
-
-	fMenuBar->AddItem(favorites);
-
-	// configure menus
-	BMenuItem* item = fMenuBar->FindItem(B_TRANSLATE("Window"));
-	if (item) {
-		fMenuBar->RemoveItem(item);
-		delete item;
-	}
-
-	item = fMenuBar->FindItem(B_TRANSLATE("File"));
-	if (item) {
-		BMenu* menu = item->Submenu();
-		if (menu) {
-			item = menu->FindItem(kOpenSelection);
-			if (item && menu->RemoveItem(item))
-				delete item;
-
-			item = menu->FindItem(kDuplicateSelection);
-			if (item && menu->RemoveItem(item))
-				delete item;
-
-			// remove add-ons menu, identifier menu, separator
-			item = menu->FindItem(B_TRANSLATE("Add-ons"));
-			if (item) {
-				int32 index = menu->IndexOf(item);
-				delete menu->RemoveItem(index);
-				delete menu->RemoveItem(--index);
-				delete menu->RemoveItem(--index);
-			}
-
-			// remove separator
-			item = menu->FindItem(B_CUT);
-			if (item) {
-				item = menu->ItemAt(menu->IndexOf(item)-1);
-				if (item && menu->RemoveItem(item))
-					delete item;
-			}
-		}
-	}
 
 	PoseView()->ScrollTo(B_ORIGIN);
 	PoseView()->UpdateScrollRange();
 	PoseView()->ScrollTo(B_ORIGIN);
 
-	if (fTextControl) {
+	// Always focus pose view initially to make sure the borders are correctly drawn, then switch
+	// focus to text control if this is a save panel, but do not alter focus afterwards because pose
+	// view focus is needed for Cut/Copy/Paste to work.
+
+	PoseView()->MakeFocus();
+	if (fIsSavePanel && fTextControl != NULL) {
 		fTextControl->MakeFocus();
 		fTextControl->TextView()->SelectAll();
-	} else
-		PoseView()->MakeFocus();
+	}
 
 	app_info info;
 	BString title;
@@ -905,7 +871,68 @@ TFilePanel::Init(const BMessage*)
 
 	SetTitle(title.String());
 
-	SetSizeLimits(370, 10000, 200, 10000);
+	SetSizeLimits(spacing * 60, 10000, spacing * 33, 10000);
+}
+
+
+void
+TFilePanel::AddMenus()
+{
+	// File
+
+	fFileMenu = new TLiveFileMenu(B_TRANSLATE("File"), this);
+	AddFileMenu(fFileMenu);
+	fMenuBar->AddItem(fFileMenu);
+
+	// Favorites
+
+	fFavoritesMenu = new FavoritesMenu(B_TRANSLATE("Favorites"), new BMessage(kSwitchDirectory),
+		new BMessage(B_REFS_RECEIVED), BMessenger(this), IsSavePanel(), Filter());
+	AddFavoritesMenu(fFavoritesMenu);
+	fMenuBar->AddItem(fFavoritesMenu);
+}
+
+
+void
+TFilePanel::AddFileMenu(BMenu* menu)
+{
+	menu->AddItem(Shortcuts()->NewFolderItem());
+	menu->AddItem(new BSeparatorItem());
+
+	menu->AddItem(Shortcuts()->GetInfoItem());
+	menu->AddItem(Shortcuts()->EditNameItem());
+	if (TargetModel()->IsTrash() || TargetModel()->InTrash()) {
+		menu->AddItem(Shortcuts()->DeleteItem());
+		menu->AddItem(Shortcuts()->RestoreItem());
+	} else {
+		menu->AddItem(Shortcuts()->DuplicateItem());
+		menu->AddItem(Shortcuts()->MoveToTrashItem());
+	}
+
+	if (!TargetModel()->IsPrintersDir() || TargetModel()->IsRoot() || TargetModel()->IsTrash()
+		|| TargetModel()->InTrash()) {
+		menu->AddSeparatorItem();
+		menu->AddItem(Shortcuts()->CutItem());
+		menu->AddItem(Shortcuts()->CopyItem());
+		menu->AddItem(Shortcuts()->PasteItem());
+	}
+}
+
+
+void
+TFilePanel::AddWindowMenu(BMenu* menu)
+{
+	// no window menu on file panel
+}
+
+
+void
+TFilePanel::AddFavoritesMenu(BMenu* menu)
+{
+	const char* name = B_TRANSLATE("Add current folder");
+	menu->AddItem(new BMenuItem(name, new BMessage(kAddCurrentDir)));
+	name = B_TRANSLATE("Edit favorites" B_UTF8_ELLIPSIS);
+	menu->AddItem(new BMenuItem(name, new BMessage(kEditFavorites)));
 }
 
 
@@ -918,35 +945,15 @@ TFilePanel::RestoreState()
 		AttributeStreamFileNode streamNodeSource(&defaultingNode);
 		RestoreWindowState(&streamNodeSource);
 		PoseView()->Init(&streamNodeSource);
+		fDefaultStateRestored = true;
 	} else {
 		RestoreWindowState(NULL);
 		PoseView()->Init(NULL);
+		fDefaultStateRestored = false;
 	}
 
 	// Finish UI creation now that the PoseView is initialized
-	fBorderedView->GroupLayout()->AddView(0, fPoseView->TitleView());
-
-	BRect rect(fBorderedView->Frame());
-	rect.right = rect.left + kCountViewWidth;
-	rect.top = rect.bottom + 1;
-	rect.bottom = rect.top + PoseView()->HScrollBar()->Bounds().Height() - 1;
-	PoseView()->CountView()->MoveTo(rect.LeftTop());
-	PoseView()->CountView()->ResizeTo(rect.Size());
-	PoseView()->CountView()->SetResizingMode(B_FOLLOW_LEFT | B_FOLLOW_BOTTOM);
-	fBackView->AddChild(PoseView()->CountView(), fBorderedView);
-
-	PoseView()->HScrollBar()->MoveBy(kCountViewWidth + 1, 0);
-	PoseView()->HScrollBar()->ResizeBy(-kCountViewWidth - 1, 0);
-
-	// The Be Book states that the BTitleView will have a name of "TitleView",
-	// and so some apps will try to grab it by that name and move it around.
-	// They don't need to, because resizing "PoseView" (really the BorderedView)
-	// will resize the BTitleView as well. So just create a dummy view here
-	// so that they don't get NULL when trying to find the view.
-	fPoseView->TitleView()->SetName("ActualTitleView");
-	BView* dummyTitleView = new BView(BRect(), "TitleView", B_FOLLOW_NONE, 0);
-	fBackView->AddChild(dummyTitleView);
-	dummyTitleView->Hide();
+	InitLayout();
 }
 
 
@@ -959,6 +966,7 @@ TFilePanel::SaveState(bool)
 		AttributeStreamFileNode streamNodeDestination(&defaultingNode);
 		SaveWindowState(&streamNodeDestination);
 		PoseView()->SaveState(&streamNodeDestination);
+		fStateNeedsSaving = false;
 	}
 }
 
@@ -979,11 +987,11 @@ TFilePanel::RestoreWindowState(AttributeStreamNode* node)
 
 	const char* rectAttributeName = kAttrWindowFrame;
 	BRect frame(Frame());
-	if (node->Read(rectAttributeName, 0, B_RECT_TYPE, sizeof(BRect), &frame)
-		== sizeof(BRect)) {
+	if (node->Read(rectAttributeName, 0, B_RECT_TYPE, sizeof(BRect), &frame) == sizeof(BRect)) {
 		MoveTo(frame.LeftTop());
 		ResizeTo(frame.Width(), frame.Height());
 	}
+	fStateNeedsSaving = false;
 }
 
 
@@ -1002,105 +1010,81 @@ TFilePanel::RestoreWindowState(const BMessage &message)
 
 
 void
-TFilePanel::AddFileContextMenus(BMenu* menu)
+TFilePanel::AddPoseContextMenu(BMenu* menu)
 {
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Get info"),
-		new BMessage(kGetInfo), 'I'));
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Edit name"),
-		new BMessage(kEditItem), 'E'));
-	menu->AddItem(new BMenuItem(TrackerSettings().DontMoveFilesToTrash()
-		? B_TRANSLATE("Delete")
-		: B_TRANSLATE("Move to Trash"),
-		new BMessage(kMoveToTrash), 'T'));
+	menu->AddItem(Shortcuts()->GetInfoItem());
+	menu->AddItem(Shortcuts()->EditNameItem());
+	if (TargetModel()->InTrash()) {
+		menu->AddItem(Shortcuts()->DeleteItem());
+		menu->AddItem(Shortcuts()->RestoreItem());
+	} else {
+		menu->AddItem(Shortcuts()->DuplicateItem());
+		menu->AddItem(Shortcuts()->MoveToTrashItem());
+	}
 	menu->AddSeparatorItem();
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Cut"),
-		new BMessage(B_CUT), 'X'));
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Copy"),
-		new BMessage(B_COPY), 'C'));
-	//menu->AddItem(pasteItem = new BMenuItem("Paste", new BMessage(B_PASTE),
-	//	'V'));
 
-	menu->SetTargetForItems(PoseView());
+	menu->AddItem(Shortcuts()->CutItem());
+	menu->AddItem(Shortcuts()->CopyItem());
+	menu->AddItem(Shortcuts()->PasteItem());
 }
 
 
 void
-TFilePanel::AddVolumeContextMenus(BMenu* menu)
+TFilePanel::AddVolumeContextMenu(BMenu* menu)
 {
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Open"),
-		new BMessage(kOpenSelection), 'O'));
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Get info"),
-		new BMessage(kGetInfo), 'I'));
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Edit name"),
-		new BMessage(kEditItem), 'E'));
-	menu->AddSeparatorItem();
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Cut"), new BMessage(B_CUT),
-		'X'));
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Copy"),
-		new BMessage(B_COPY), 'C'));
-	//menu->AddItem(pasteItem = new BMenuItem("Paste", new BMessage(B_PASTE),
-	//	'V'));
+	menu->AddItem(Shortcuts()->OpenItem());
+	menu->AddItem(Shortcuts()->GetInfoItem());
+	menu->AddItem(Shortcuts()->EditNameItem());
 
-	menu->SetTargetForItems(PoseView());
+	menu->AddSeparatorItem();
+	menu->AddItem(Shortcuts()->PasteItem());
 }
 
 
 void
-TFilePanel::AddWindowContextMenus(BMenu* menu)
+TFilePanel::AddWindowContextMenu(BMenu* menu)
 {
-	BMenuItem* item = new BMenuItem(B_TRANSLATE("New folder"),
-		new BMessage(kNewFolder), 'N');
-	item->SetTarget(PoseView());
-	menu->AddItem(item);
+	menu->AddItem(Shortcuts()->NewFolderItem());
+	menu->AddItem(new BSeparatorItem());
+
+	menu->AddItem(Shortcuts()->PasteItem());
 	menu->AddSeparatorItem();
 
-	item = new BMenuItem(B_TRANSLATE("Paste"), new BMessage(B_PASTE), 'V');
-	item->SetTarget(PoseView());
-	menu->AddItem(item);
-	menu->AddSeparatorItem();
-
-	item = new BMenuItem(B_TRANSLATE("Select" B_UTF8_ELLIPSIS),
-		new BMessage(kShowSelectionWindow), 'A', B_SHIFT_KEY);
-	item->SetTarget(PoseView());
-	menu->AddItem(item);
-
-	item = new BMenuItem(B_TRANSLATE("Select all"),
-		new BMessage(B_SELECT_ALL), 'A');
-	item->SetTarget(PoseView());
-	menu->AddItem(item);
-
-	item = new BMenuItem(B_TRANSLATE("Invert selection"),
-		new BMessage(kInvertSelection), 'S');
-	item->SetTarget(PoseView());
-	menu->AddItem(item);
-
-	item = new BMenuItem(B_TRANSLATE("Go to parent"),
-		new BMessage(kOpenParentDir), B_UP_ARROW);
-	item->SetTarget(this);
-	menu->AddItem(item);
+	menu->AddItem(Shortcuts()->SelectItem());
+	menu->AddItem(Shortcuts()->SelectAllItem());
+	menu->AddItem(Shortcuts()->InvertSelectionItem());
+	menu->AddItem(Shortcuts()->OpenParentItem());
 }
 
 
 void
-TFilePanel::AddDropContextMenus(BMenu*)
+TFilePanel::AddTrashContextMenu(BMenu* menu)
 {
+	// use default window context menu on Trash
+	AddWindowContextMenu(menu);
+}
+
+
+void
+TFilePanel::AddDropContextMenu(BMenu*)
+{
+	// do nothing here so drop context menu doesn't get added
 }
 
 
 void
 TFilePanel::MenusBeginning()
 {
-	int32 count = PoseView()->SelectionList()->CountItems();
+	if (fMenuBar == NULL)
+		return;
 
-	EnableNamedMenuItem(fMenuBar, kNewFolder, !TargetModel()->IsRoot());
-	EnableNamedMenuItem(fMenuBar, kMoveToTrash, !TargetModel()->IsRoot()
-		&& count);
-	EnableNamedMenuItem(fMenuBar, kGetInfo, count != 0);
-	EnableNamedMenuItem(fMenuBar, kEditItem, count == 1);
+	if (CurrentMessage() != NULL && CurrentMessage()->what == B_MOUSE_DOWN) {
+		// don't commit active pose if only a keyboard shortcut is
+		// invoked - this would prevent Cut/Copy/Paste from working
+		PoseView()->CommitActivePose();
+	}
 
-	SetCutItem(fMenuBar);
-	SetCopyItem(fMenuBar);
-	SetPasteItem(fMenuBar);
+	UpdateMenu(fFileMenu, kFileMenuContext);
 
 	fIsTrackingMenu = true;
 }
@@ -1114,21 +1098,74 @@ TFilePanel::MenusEnded()
 
 
 void
-TFilePanel::ShowContextMenu(BPoint point, const entry_ref* ref, BView* view)
+TFilePanel::DetachSubmenus()
 {
-	EnableNamedMenuItem(fWindowContextMenu, kNewFolder,
-		!TargetModel()->IsRoot());
-	EnableNamedMenuItem(fWindowContextMenu, kOpenParentDir,
-		!TargetModel()->IsRoot());
-	EnableNamedMenuItem(fWindowContextMenu, kMoveToTrash,
-		!TargetModel()->IsRoot());
-
-	_inherited::ShowContextMenu(point, ref, view);
+	// no submenus to detatch in file panel
 }
 
 
 void
-TFilePanel::SetupNavigationMenu(const entry_ref*, BMenu*)
+TFilePanel::UpdateFileMenu(BMenu*)
+{
+	// nothing more to do
+}
+
+
+void
+TFilePanel::UpdateFileMenuOrPoseContextMenu(BMenu*, MenuContext, const entry_ref*)
+{
+	// nothing more to do
+}
+
+
+void
+TFilePanel::UpdateWindowMenu(BMenu*)
+{
+	// no window menu on file panel
+}
+
+
+void
+TFilePanel::UpdateWindowContextMenu(BMenu*)
+{
+	// nothing more to do
+}
+
+
+void
+TFilePanel::UpdateWindowMenuOrWindowContextMenu(BMenu*, MenuContext)
+{
+	// nothing more to do
+}
+
+
+void
+TFilePanel::RepopulateMenus()
+{
+	if (fMenuBar != NULL && fFileMenu != NULL) {
+		fMenuBar->RemoveItem(fFileMenu);
+		delete fFileMenu;
+		if (ShouldAddMenus()) {
+			fFileMenu = new TLiveFileMenu(B_TRANSLATE("File"), this);
+			AddFileMenu(fFileMenu);
+			fMenuBar->AddItem(fFileMenu, 0);
+		}
+	}
+
+	delete fPoseContextMenu;
+	fPoseContextMenu = new TLivePosePopUpMenu("PoseContext", this, false, false);
+	fPoseContextMenu->SetFont(be_plain_font);
+	TFilePanel::AddPoseContextMenu(fPoseContextMenu);
+
+	delete fWindowContextMenu;
+	fWindowContextMenu = new TLiveWindowPopUpMenu("WindowContext", this, false, false);
+	fWindowContextMenu->SetFont(be_plain_font);
+	TFilePanel::AddWindowContextMenu(fWindowContextMenu);
+}
+
+
+void
+TFilePanel::SetupNavigationMenu(BMenu*, const entry_ref*)
 {
 	// do nothing here so nav menu doesn't get added
 }
@@ -1139,44 +1176,43 @@ TFilePanel::SetButtonLabel(file_panel_button selector, const char* text)
 {
 	switch (selector) {
 		case B_CANCEL_BUTTON:
-			{
-				BButton* button
-					= dynamic_cast<BButton*>(FindView("cancel button"));
-				if (button == NULL)
-					break;
+		{
+			BButton* button = dynamic_cast<BButton*>(FindView("cancel button"));
+			if (button == NULL)
+				break;
 
+			float old_width = button->StringWidth(button->Label());
+			button->SetLabel(text);
+			float delta = old_width - button->StringWidth(text);
+			if (delta) {
+				button->MoveBy(delta, 0);
+				button->ResizeBy(-delta, 0);
+			}
+			break;
+		}
+
+		case B_DEFAULT_BUTTON:
+		{
+			fButtonText = text;
+			float delta = 0;
+			BButton* button = dynamic_cast<BButton*>(FindView("default button"));
+			if (button != NULL) {
 				float old_width = button->StringWidth(button->Label());
 				button->SetLabel(text);
-				float delta = old_width - button->StringWidth(text);
+				delta = old_width - button->StringWidth(text);
 				if (delta) {
 					button->MoveBy(delta, 0);
 					button->ResizeBy(-delta, 0);
 				}
 			}
-			break;
 
-		case B_DEFAULT_BUTTON:
-			{
-				fButtonText = text;
-				float delta = 0;
-				BButton* button
-					= dynamic_cast<BButton*>(FindView("default button"));
-				if (button != NULL) {
-					float old_width = button->StringWidth(button->Label());
-					button->SetLabel(text);
-					delta = old_width - button->StringWidth(text);
-					if (delta) {
-						button->MoveBy(delta, 0);
-						button->ResizeBy(-delta, 0);
-					}
-				}
+			// now must move cancel button
+			button = dynamic_cast<BButton*>(FindView("cancel button"));
+			if (button != NULL)
+				button->MoveBy(delta, 0);
 
-				// now must move cancel button
-				button = dynamic_cast<BButton*>(FindView("cancel button"));
-				if (button != NULL)
-					button->MoveBy(delta, 0);
-			}
 			break;
+		}
 	}
 }
 
@@ -1187,8 +1223,7 @@ TFilePanel::SetSaveText(const char* text)
 	if (text == NULL)
 		return;
 
-	BTextControl* textControl
-		= dynamic_cast<BTextControl*>(FindView("text view"));
+	BTextControl* textControl = dynamic_cast<BTextControl*>(FindView("text view"));
 	if (textControl != NULL) {
 		textControl->SetText(text);
 		if (textControl->TextView() != NULL)
@@ -1204,81 +1239,98 @@ TFilePanel::MessageReceived(BMessage* message)
 
 	switch (message->what) {
 		case B_REFS_RECEIVED:
-			// item was double clicked in file panel (PoseView)
-			if (message->FindRef("refs", &ref) == B_OK) {
-				BEntry entry(&ref, true);
-				if (entry.InitCheck() == B_OK) {
-					// Double-click on dir or link-to-dir ALWAYS opens the
-					// dir. If more than one dir is selected, the first is
-					// entered.
-					if (entry.IsDirectory()) {
-						entry.GetRef(&ref);
-						bool isDesktop = SwitchDirToDesktopIfNeeded(ref);
+		{
+			// item was double clicked in file panel (PoseView) or from the favorites menu
+			if (message->FindRef("refs", &ref) != B_OK)
+				break;
 
-						PoseView()->SetIsDesktop(isDesktop);
-						entry.SetTo(&ref);
-						PoseView()->SwitchDir(&ref);
-						SwitchDirMenuTo(&ref);
-					} else {
-						// Otherwise, we have a file or a link to a file.
-						// AdjustButton has already tested the flavor;
-						// all we have to do is see if the button is enabled.
-						BButton* button = dynamic_cast<BButton*>(
-							FindView("default button"));
-						if (button == NULL)
-							break;
+			BEntry entry(&ref, true);
+			if (entry.InitCheck() != B_OK)
+				break;
 
-						if (IsSavePanel()) {
-							int32 count = 0;
-							type_code type;
-							message->GetInfo("refs", &type, &count);
-
-							// Don't allow saves of multiple files
-							if (count > 1) {
-								ShowCenteredAlert(
-									B_TRANSLATE(
-										"Sorry, saving more than one "
-										"item is not allowed."),
-									B_TRANSLATE("Cancel"));
-							} else {
-								// if we are a savepanel, set up the
-								// filepanel correctly then pass control
-								// so we follow the same path as if the user
-								// clicked the save button
-
-								// set the 'name' fld to the current ref's
-								// name notify the panel that the default
-								// button should be enabled
-								SetSaveText(ref.name);
-								SelectionChanged();
-
-								HandleSaveButton();
-							}
-							break;
-						}
-
-					  	// send handler a message and close
-						BMessage openMessage(*fMessage);
-						for (int32 index = 0; ; index++) {
-					  		if (message->FindRef("refs", index, &ref) != B_OK)
-								break;
-							openMessage.AddRef("refs", &ref);
-					  	}
-						OpenSelectionCommon(&openMessage);
-					}
+			// Double-click on dir or link-to-dir ALWAYS opens the dir.
+			// If more than one dir is selected the first one is opened.
+			if (entry.IsDirectory()) {
+				SwitchDirectory(&ref);
+			} else {
+				// Otherwise, we have a file or a link to a file.
+				// AdjustButton has already tested the flavor if it comes from the file
+				// panel; all we have to do is see if the button is enabled.
+				// In other cases, however, we can't rely on that. So first check for
+				// TrackerViewToken in the message to see if it's coming from the pose view
+				if (message->HasMessenger("TrackerViewToken")) {
+					BButton* button = dynamic_cast<BButton*>(FindView("default button"));
+					if (button == NULL || !button->IsEnabled())
+						break;
 				}
+
+				if (IsSavePanel()) {
+					int32 count = 0;
+					type_code type;
+					message->GetInfo("refs", &type, &count);
+
+					// Don't allow saves of multiple files
+					if (count > 1) {
+						const char* sorry
+							= B_TRANSLATE("Sorry, saving more than one item is not allowed.");
+						ShowCenteredAlert(sorry, B_TRANSLATE("Cancel"));
+					} else {
+						// if we are a savepanel, set up the
+						// filepanel correctly then pass control
+						// so we follow the same path as if the user
+						// clicked the save button
+
+						// set the 'name' fld to the current ref's
+						// name notify the panel that the default
+						// button should be enabled
+						SetSaveText(ref.name);
+						SelectionChanged();
+
+						HandleSaveButton();
+					}
+					break;
+				}
+
+				// send handler a message and close
+				BMessage openMessage(*fMessage);
+				for (int32 index = 0;; index++) {
+					if (message->FindRef("refs", index, &ref) != B_OK)
+						break;
+					openMessage.AddRef("refs", &ref);
+				}
+				OpenSelectionCommon(&openMessage);
 			}
 			break;
+		}
 
 		case kSwitchDirectory:
 		{
 			entry_ref ref;
-			// this comes from dir menu or nav menu, so switch directories
-			if (message->FindRef("refs", &ref) == B_OK) {
-				BEntry entry(&ref, true);
-				if (entry.GetRef(&ref) == B_OK)
-					SetTo(&ref);
+			if (message->FindRef("refs", &ref) != B_OK)
+				break;
+
+			SwitchDirectory(&ref);
+			break;
+		}
+
+		case kSwitchToDesktop:
+		{
+			if (PoseView() != NULL && PoseView()->IsFocus()
+				&& PoseView()->CanMoveToTrashOrDuplicate()) {
+				// duplicate selection instead
+				message->what = kDuplicateSelection;
+				PostMessage(message, PoseView());
+				break;
 			}
+
+			BPath path;
+			entry_ref ref;
+			if (find_directory(B_DESKTOP_DIRECTORY, &path) != B_OK
+				|| get_ref_for_path(path.Path(), &ref) != B_OK) {
+				break;
+			}
+
+			SwitchDirectory(&ref);
 			break;
 		}
 
@@ -1291,7 +1343,7 @@ TFilePanel::MessageReceived(BMessage* message)
 				break;
 			}
 
-			SetTo(&ref);
+			SwitchDirectory(&ref);
 			break;
 		}
 
@@ -1357,9 +1409,8 @@ TFilePanel::MessageReceived(BMessage* message)
 		case kDefaultButton:
 			if (fIsSavePanel) {
 				if (PoseView()->IsFocus()
-					&& PoseView()->SelectionList()->CountItems() == 1) {
-					Model* model = (PoseView()->SelectionList()->
-						FirstItem())->TargetModel();
+					&& PoseView()->CountSelected() == 1) {
+					Model* model = (PoseView()->SelectionList()->FirstItem())->TargetModel();
 					if (model->ResolveIfLink()->IsDirectory()) {
 						PoseView()->CommitActivePose();
 						PoseView()->OpenSelection();
@@ -1370,25 +1421,27 @@ TFilePanel::MessageReceived(BMessage* message)
 				HandleSaveButton();
 			} else
 				HandleOpenButton();
+
 			break;
 
 		case B_OBSERVER_NOTICE_CHANGE:
 		{
 			int32 observerWhat;
-			if (message->FindInt32("be:observe_change_what", &observerWhat)
-					== B_OK) {
+			if (message->FindInt32("be:observe_change_what", &observerWhat) == B_OK) {
 				switch (observerWhat) {
 					case kDesktopFilePanelRootChanged:
 					{
-						bool desktopIsRoot = true;
-						if (message->FindBool("DesktopFilePanelRoot",
-								&desktopIsRoot) == B_OK) {
-							TrackerSettings().
-								SetDesktopFilePanelRoot(desktopIsRoot);
+						bool desktopIsRoot;
+						if (message->FindBool("DesktopFilePanelRoot", &desktopIsRoot) == B_OK
+							&& TrackerSettings().DesktopFilePanelRoot() != desktopIsRoot) {
+							TrackerSettings().SetDesktopFilePanelRoot(desktopIsRoot);
+							SwitchDirectory(TargetModel()->EntryRef());
 						}
-						SetTo(TargetModel()->EntryRef());
 						break;
 					}
+
+					default:
+						break;
 				}
 			}
 			break;
@@ -1404,7 +1457,7 @@ TFilePanel::MessageReceived(BMessage* message)
 void
 TFilePanel::OpenDirectory()
 {
-	BObjectList<BPose>* list = PoseView()->SelectionList();
+	PoseList* list = PoseView()->SelectionList();
 	if (list->CountItems() != 1)
 		return;
 
@@ -1412,7 +1465,7 @@ TFilePanel::OpenDirectory()
 	if (model->ResolveIfLink()->IsDirectory()) {
 		BMessage message(B_REFS_RECEIVED);
 		message.AddRef("refs", model->EntryRef());
-		PostMessage(&message);
+		BMessenger(this).SendMessage(&message);
 	}
 }
 
@@ -1420,52 +1473,29 @@ TFilePanel::OpenDirectory()
 void
 TFilePanel::OpenParent()
 {
-	if (!CanOpenParent())
-		return;
+	BEntry entry(TargetModel()->EntryRef());
+	Model oldModel(*PoseView()->TargetModel());
+	const node_ref* oldNode = oldModel.NodeRef();
 
 	BEntry parentEntry;
-	BDirectory dir;
-
-	Model oldModel(*PoseView()->TargetModel());
-	BEntry entry(oldModel.EntryRef());
-
-	if (entry.InitCheck() == B_OK
-		&& entry.GetParent(&dir) == B_OK
-		&& dir.GetEntry(&parentEntry) == B_OK
-		&& entry != parentEntry) {
-
-		entry_ref ref;
-		parentEntry.GetRef(&ref);
-
-		PoseView()->SetIsDesktop(SwitchDirToDesktopIfNeeded(ref));
-		PoseView()->SwitchDir(&ref);
-		SwitchDirMenuTo(&ref);
-
-		// make sure the child get's selected in the new view once it
-		// shows up
-		fTaskLoop->RunLater(NewMemberFunctionObjectWithResult
-			(&TFilePanel::SelectChildInParent, this,
-			const_cast<const entry_ref*>(&ref),
-			oldModel.NodeRef()), 100000, 200000, 5000000);
-	}
-}
-
-
-bool
-TFilePanel::CanOpenParent() const
-{
-	if (TrackerSettings().DesktopFilePanelRoot()) {
-		// don't allow opening Desktop folder's parent
-		if (TargetModel()->IsDesktop())
-			return false;
+	if (TrackerSettings().DesktopFilePanelRoot() && FSIsRootDir(&entry)) {
+		// open parent on root, set to Desktop
+		BDirectory desktopDir;
+		if (FSGetDeskDir(&desktopDir) != B_OK || desktopDir.GetEntry(&parentEntry) != B_OK)
+			return;
+	} else if (FSGetParentVirtualDirectoryAware(entry, parentEntry) != B_OK) {
+		return;
 	}
 
-	// block on "/"
-	BEntry root("/");
-	node_ref rootRef;
-	root.GetNodeRef(&rootRef);
+	entry_ref setToRef;
+	parentEntry.GetRef(&setToRef);
+	const entry_ref* parent = &setToRef;
+	SwitchDirectory(parent);
 
-	return rootRef != *TargetModel()->NodeRef();
+	// Make sure the child gets selected in the new view once it shows up.
+	fTaskLoop->RunLater(
+		NewMemberFunctionObjectWithResult(&TFilePanel::SelectChildInParent, this, parent, oldNode),
+		100000, 200000, 5000000);
 }
 
 
@@ -1481,19 +1511,17 @@ TFilePanel::SwitchDirToDesktopIfNeeded(entry_ref &ref)
 		return false;
 
 	BEntry entry(&ref);
-	BEntry root("/");
 
 	BDirectory desktopDir;
 	FSGetDeskDir(&desktopDir);
-	if (FSIsDeskDir(&entry)
-		// navigated into non-boot desktop, switch to boot desktop
-		|| (entry == root && !settings.ShowDisksIcon())) {
-		// hit "/" level, map to desktop
+	if (FSIsDeskDir(&entry) || (!settings.ShowDisksIcon() && FSIsRootDir(&entry))) {
+		// navigated into desktop folder or hit "root" level, switch to Desktop
 
 		desktopDir.GetEntry(&entry);
 		entry.GetRef(&ref);
 		return true;
 	}
+
 	return FSIsDeskDir(&entry);
 }
 
@@ -1649,7 +1677,7 @@ void
 TFilePanel::HandleOpenButton()
 {
 	PoseView()->CommitActivePose();
-	BObjectList<BPose>* selection = PoseView()->SelectionList();
+	PoseList* selection = PoseView()->SelectionList();
 
 	// if we have only one directory and we're not opening dirs, enter.
 	if ((fNodeFlavors & B_DIRECTORY_NODE) == 0
@@ -1685,30 +1713,12 @@ TFilePanel::HandleOpenButton()
 		}
 
 		OpenSelectionCommon(&message);
-	} else if (IsOpenButtonAlwaysEnabled()) {
+	} else if ((fNodeFlavors & B_DIRECTORY_NODE) != 0) {
+		// Open the current directory.
 		BMessage message(*fMessage);
 		message.AddRef("refs", TargetModel()->EntryRef());
 		OpenSelectionCommon(&message);
 	}
-}
-
-
-void
-TFilePanel::SwitchDirMenuTo(const entry_ref* ref)
-{
-	BEntry entry(ref);
-	for (int32 index = fDirMenu->CountItems() - 1; index >= 0; index--)
-		delete fDirMenu->RemoveItem(index);
-
-	fDirMenuField->MenuBar()->RemoveItem((int32)0);
-	fDirMenu->Populate(&entry, 0, true, true, false, true);
-
-	ModelMenuItem* item = dynamic_cast<ModelMenuItem*>(
-		fDirMenuField->MenuBar()->ItemAt(0));
-	ASSERT(item != NULL);
-
-	if (item != NULL)
-		item->SetEntry(&entry);
 }
 
 
@@ -1727,7 +1737,7 @@ TFilePanel::WindowActivated(bool active)
 BFilePanelPoseView::BFilePanelPoseView(Model* model)
 	:
 	BPoseView(model, kListMode),
-	fIsDesktop(model->IsDesktop())
+	fIsDesktop(model != NULL && model->IsDesktop())
 {
 }
 
@@ -1735,73 +1745,34 @@ BFilePanelPoseView::BFilePanelPoseView(Model* model)
 void
 BFilePanelPoseView::StartWatching()
 {
-	TTracker::WatchNode(0, B_WATCH_MOUNT, this);
-
 	// inter-application observing
 	BMessenger tracker(kTrackerSignature);
 	BHandler::StartWatching(tracker, kVolumesOnDesktopChanged);
+
+	BHandler::StartWatching(tracker, kShowSelectionWhenInactiveChanged);
+	BHandler::StartWatching(tracker, kTransparentSelectionChanged);
+	BHandler::StartWatching(tracker, kSortFolderNamesFirstChanged);
+	BHandler::StartWatching(tracker, kHideDotFilesChanged);
+	BHandler::StartWatching(tracker, kTypeAheadFilteringChanged);
+
+	_inherited::StartWatching();
 }
 
 
 void
 BFilePanelPoseView::StopWatching()
 {
-	stop_watching(this);
-
 	// inter-application observing
 	BMessenger tracker(kTrackerSignature);
 	BHandler::StopWatching(tracker, kVolumesOnDesktopChanged);
-}
 
+	BHandler::StopWatching(tracker, kShowSelectionWhenInactiveChanged);
+	BHandler::StopWatching(tracker, kTransparentSelectionChanged);
+	BHandler::StopWatching(tracker, kSortFolderNamesFirstChanged);
+	BHandler::StopWatching(tracker, kHideDotFilesChanged);
+	BHandler::StopWatching(tracker, kTypeAheadFilteringChanged);
 
-bool
-BFilePanelPoseView::FSNotification(const BMessage* message)
-{
-	switch (message->FindInt32("opcode")) {
-		case B_DEVICE_MOUNTED:
-		{
-			if (IsDesktopView()) {
-				// _VOS_OLD_NODE_MONITOR
-				// Pretty much copied straight from DesktopPoseView.
-				// Would be better if the code could be shared somehow.
-				dev_t device;
-				if (message->FindInt32("new device", &device) != B_OK)
-					break;
-
-				ASSERT(TargetModel() != NULL);
-				TrackerSettings settings;
-
-				// TODO
-				BVolume volume(device);
-				if (volume.InitCheck() != B_OK)
-					break;
-
-				if (settings.MountVolumesOntoDesktop()
-					&& (!volume.IsShared()
-						|| settings.MountSharedVolumesOntoDesktop())) {
-					// place an icon for the volume onto the desktop
-					CreateVolumePose(&volume, true);
-				}
-			}
-			break;
-		}
-
-		case B_DEVICE_UNMOUNTED:
-		{
-			dev_t device;
-			if (message->FindUInt64("device", &device) == B_OK) {
-				if (TargetModel() != NULL
-					&& TargetModel()->NodeRef()->dev() == device) {
-					// Volume currently shown in this file panel
-					// disappeared, reset location to home directory
-					BMessage message(kSwitchToHome);
-					MessageReceived(&message);
-				}
-			}
-			break;
-		}
-	}
-	return _inherited::FSNotification(message);
+	_inherited::StopWatching();
 }
 
 
@@ -1829,7 +1800,7 @@ BFilePanelPoseView::SavePoseLocations(BRect*)
 EntryListBase*
 BFilePanelPoseView::InitDirentIterator(const entry_ref* ref)
 {
-	if (IsDesktopView())
+	if (IsDesktop())
 		return DesktopPoseView::InitDesktopDirentIterator(this, ref);
 
 	return _inherited::InitDirentIterator(ref);
@@ -1839,53 +1810,22 @@ BFilePanelPoseView::InitDirentIterator(const entry_ref* ref)
 void
 BFilePanelPoseView::AddPosesCompleted()
 {
+	// the menu that adds these shortcuts may not exist initially
+	Window()->AddShortcut('D', B_COMMAND_KEY, new BMessage(kSwitchToDesktop));
+	Window()->AddShortcut('H', B_COMMAND_KEY, new BMessage(kSwitchToHome));
+
 	_inherited::AddPosesCompleted();
-	if (IsDesktopView())
-		CreateTrashPose();
-}
-
-
-void
-BFilePanelPoseView::SetIsDesktop(bool on)
-{
-	fIsDesktop = on;
-}
-
-
-bool
-BFilePanelPoseView::IsDesktopView() const
-{
-	return fIsDesktop;
-}
-
-
-void
-BFilePanelPoseView::ShowVolumes(bool visible, bool showShared)
-{
-	if (IsDesktopView()) {
-		if (!visible)
-			RemoveRootPoses();
-		else
-			AddRootPoses(true, showShared);
-	}
-
-	TFilePanel* filepanel = dynamic_cast<TFilePanel*>(Window());
-	if (filepanel != NULL && TargetModel() != NULL)
-		filepanel->SetTo(TargetModel()->EntryRef());
 }
 
 
 void
 BFilePanelPoseView::AdaptToVolumeChange(BMessage* message)
 {
-	bool showDisksIcon;
-	bool mountVolumesOnDesktop;
-	bool mountSharedVolumesOntoDesktop;
+	if (Window() == NULL)
+		return;
 
+	bool showDisksIcon = kDefaultShowDisksIcon;
 	message->FindBool("ShowDisksIcon", &showDisksIcon);
-	message->FindBool("MountVolumesOntoDesktop", &mountVolumesOnDesktop);
-	message->FindBool("MountSharedVolumesOntoDesktop",
-		&mountSharedVolumesOntoDesktop);
 
 	BEntry entry("/");
 	Model model(&entry);
@@ -1900,29 +1840,22 @@ BFilePanelPoseView::AdaptToVolumeChange(BMessage* message)
 
 		#ifdef __VOS_OLD_NODE_MONITOR__
 		monitorMsg.AddUInt64("device", model.NodeRef()->device);
-		monitorMsg.AddInt64("node", model.NodeRef()->node);
+		monitorMsg.AddUInt64("node", model.NodeRef()->node);
 		monitorMsg.AddUInt64("directory", model.EntryRef()->directory);
 		monitorMsg.AddString("name", model.EntryRef()->name);
+
 		TrackerSettings().SetShowDisksIcon(showDisksIcon);
-		if (Window())
-			Window()->PostMessage(&monitorMsg, this);
+
+		Window()->PostMessage(&monitorMsg, this);
 		#endif
 	}
 
-	ShowVolumes(mountVolumesOnDesktop, mountSharedVolumesOntoDesktop);
+	ToggleDisksVolumes();
 }
 
 
 void
 BFilePanelPoseView::AdaptToDesktopIntegrationChange(BMessage* message)
 {
-	bool mountVolumesOnDesktop = true;
-	bool mountSharedVolumesOntoDesktop = true;
-
-	message->FindBool("MountVolumesOntoDesktop", &mountVolumesOnDesktop);
-	message->FindBool("MountSharedVolumesOntoDesktop",
-		&mountSharedVolumesOntoDesktop);
-
-	ShowVolumes(false, mountSharedVolumesOntoDesktop);
-	ShowVolumes(mountVolumesOnDesktop, mountSharedVolumesOntoDesktop);
+	ToggleDisksVolumes();
 }

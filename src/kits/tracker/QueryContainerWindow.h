@@ -52,7 +52,7 @@ class BQueryContainerWindow : public BContainerWindow {
 public:
 								BQueryContainerWindow(
 									LockingList<BWindow>* windowList,
-									uint32 containerWindowFlags);
+									uint32 openFlags);
 
 			BQueryPoseView*		PoseView() const;
 			bool				ActiveOnDevice(dev_t) const;
@@ -63,7 +63,9 @@ protected:
 	virtual	void				AddWindowMenu(BMenu* menu);
 	virtual	void				AddWindowContextMenus(BMenu* menu);
 
-	virtual	void				SetUpDefaultState();
+	virtual	void				SetupDefaultState();
+
+	virtual	bool				ShouldHaveEditQueryItem(const entry_ref* = NULL);
 
 private:
 	typedef BContainerWindow	_inherited;

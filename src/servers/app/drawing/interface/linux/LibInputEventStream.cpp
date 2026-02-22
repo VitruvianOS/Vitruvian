@@ -194,7 +194,7 @@ static const struct libinput_interface sLibInputInterface = {
 
 LibInputEventStream::LibInputEventStream(uint32 width, uint32 height, struct libseat* seat)
 	:
-	fEventList(10, true),
+	fEventList(10),
 	fEventListLocker("libinput event list"),
 	fEventNotification(-1),
 	fWaitingOnEvent(false),

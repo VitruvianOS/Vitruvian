@@ -20,6 +20,7 @@
 #include <StringList.h>
 
 #include <AutoDeleter.h>
+#include <AutoDeleterPosix.h>
 #include <LaunchRoster.h>
 #include <RegistrarDefs.h>
 
@@ -563,26 +564,24 @@ public:
 			// Don't check errors. We can't do anything anyway.
 
 		// open files
-		FILE* passwdFile = fopen(kPasswdFile, "w");
-		if (passwdFile == NULL) {
+		FileCloser passwdFile(fopen(kPasswdFile, "w"));
+		if (!passwdFile.IsSet()) {
 			debug_printf("REG: Failed to open passwd file \"%s\" for "
 				"writing: %s\n", kPasswdFile, strerror(errno));
 		}
-		CObjectDeleter<FILE, int> _1(passwdFile, fclose);
 
-		FILE* shadowFile = fopen(kShadowPwdFile, "w");
-		if (shadowFile == NULL) {
+		FileCloser shadowFile(fopen(kShadowPwdFile, "w"));
+		if (!shadowFile.IsSet()) {
 			debug_printf("REG: Failed to open shadow passwd file \"%s\" for "
 				"writing: %s\n", kShadowPwdFile, strerror(errno));
 		}
-		CObjectDeleter<FILE, int> _2(shadowFile, fclose);
 
 		// write users
 		for (map<uid_t, User*>::const_iterator it = fUsersByID.begin();
 			 it != fUsersByID.end(); ++it) {
 			User* user = it->second;
-			user->WritePasswdLine(passwdFile);
-			user->WriteShadowPwdLine(shadowFile);
+			user->WritePasswdLine(passwdFile.Get());
+			user->WriteShadowPwdLine(shadowFile.Get());
 		}
 	}
 
@@ -689,18 +688,17 @@ public:
 			// Don't check errors. We can't do anything anyway.
 
 		// open file
-		FILE* groupFile = fopen(kGroupFile, "w");
-		if (groupFile == NULL) {
+		FileCloser groupFile(fopen(kGroupFile, "w"));
+		if (!groupFile.IsSet()) {
 			debug_printf("REG: Failed to open group file \"%s\" for "
 				"writing: %s\n", kGroupFile, strerror(errno));
 		}
-		CObjectDeleter<FILE, int> _1(groupFile, fclose);
 
 		// write groups
 		for (map<gid_t, Group*>::const_iterator it = fGroupsByID.begin();
 			it != fGroupsByID.end(); ++it) {
 			Group* group = it->second;
-			group->WriteGroupLine(groupFile);
+			group->WriteGroupLine(groupFile.Get());
 		}
 	}
 
@@ -750,14 +748,12 @@ AuthenticationManager::Init()
 			|| fGroupDBReply == NULL || fShadowPwdDBReply == NULL) {
 		return B_NO_MEMORY;
 	}
-
 	#ifndef __VOS__
-		fRequestPort = BLaunchRoster().GetPort(
-			B_REGISTRAR_AUTHENTICATION_PORT_NAME);
+	fRequestPort = BLaunchRoster().GetPort(
+		B_REGISTRAR_AUTHENTICATION_PORT_NAME);
 	#else
 		fRequestPort = create_port(100, B_REGISTRAR_AUTHENTICATION_PORT_NAME);
 	#endif
-
 	if (fRequestPort < 0)
 		return fRequestPort;
 
@@ -1244,16 +1240,15 @@ AuthenticationManager::_RequestThread()
 status_t
 AuthenticationManager::_InitPasswdDB()
 {
-	FILE* file = fopen(kPasswdFile, "r");
-	if (file == NULL) {
+	FileCloser file(fopen(kPasswdFile, "r"));
+	if (!file.IsSet()) {
 		debug_printf("REG: Failed to open passwd DB file \"%s\": %s\n",
 			kPasswdFile, strerror(errno));
-		return -errno;
+		return errno;
 	}
-	CObjectDeleter<FILE, int> _(file, fclose);
 
 	char lineBuffer[LINE_MAX];
-	while (char* line = fgets(lineBuffer, sizeof(lineBuffer), file)) {
+	while (char* line = fgets(lineBuffer, sizeof(lineBuffer), file.Get())) {
 		if (strlen(line) == 0)
 			continue;
 
@@ -1293,16 +1288,15 @@ AuthenticationManager::_InitPasswdDB()
 status_t
 AuthenticationManager::_InitGroupDB()
 {
-	FILE* file = fopen(kGroupFile, "r");
-	if (file == NULL) {
+	FileCloser file(fopen(kGroupFile, "r"));
+	if (!file.IsSet()) {
 		debug_printf("REG: Failed to open group DB file \"%s\": %s\n",
 			kGroupFile, strerror(errno));
-		return -errno;
+		return errno;
 	}
-	CObjectDeleter<FILE, int> _(file, fclose);
 
 	char lineBuffer[LINE_MAX];
-	while (char* line = fgets(lineBuffer, sizeof(lineBuffer), file)) {
+	while (char* line = fgets(lineBuffer, sizeof(lineBuffer), file.Get())) {
 		if (strlen(line) == 0)
 			continue;
 
@@ -1341,16 +1335,15 @@ AuthenticationManager::_InitGroupDB()
 status_t
 AuthenticationManager::_InitShadowPwdDB()
 {
-	FILE* file = fopen(kShadowPwdFile, "r");
-	if (file == NULL) {
+	FileCloser file(fopen(kShadowPwdFile, "r"));
+	if (!file.IsSet()) {
 		debug_printf("REG: Failed to open shadow passwd DB file \"%s\": %s\n",
 			kShadowPwdFile, strerror(errno));
-		return -errno;
+		return errno;
 	}
-	CObjectDeleter<FILE, int> _(file, fclose);
 
 	char lineBuffer[LINE_MAX];
-	while (char* line = fgets(lineBuffer, sizeof(lineBuffer), file)) {
+	while (char* line = fgets(lineBuffer, sizeof(lineBuffer), file.Get())) {
 		if (strlen(line) == 0)
 			continue;
 

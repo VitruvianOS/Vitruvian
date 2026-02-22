@@ -421,7 +421,7 @@ BPoseView::DeleteProperty(BMessage* specifier, int32 form,
 		// deleting entries is handled by moving entries to trash
 
 		// build a list of entries, specified by the specifier
-		BObjectList<entry_ref>* entryList = new BObjectList<entry_ref>();
+		BObjectList<entry_ref, true>* entryList = new BObjectList<entry_ref, true>();
 			// list will be deleted for us by the trashing thread
 
 		if (form == (int32)B_ENTRY_SPECIFIER) {
@@ -451,15 +451,9 @@ BPoseView::DeleteProperty(BMessage* specifier, int32 form,
 			return false;
 		}
 
-		if (result == B_OK) {
-			TrackerSettings settings;
-			if (!settings.DontMoveFilesToTrash()) {
-				// move the list we build into trash, don't make the
-				// trashing task select the next item
-				MoveListToTrash(entryList, false, false);
-			} else
-				Delete(entryList, false, settings.AskBeforeDeleteFile());
-		} else {
+		if (result == B_OK)
+			MoveListToTrash(entryList, false, false);
+		else {
 			for (int i = entryList->CountItems() - 1; i >= 0; i--)
 				delete entryList->ItemAt(i);
 			delete entryList;
@@ -487,7 +481,7 @@ BPoseView::CountProperty(BMessage*, int32, const char* property,
 		reply->AddInt32("result", fSelectionList->CountItems());
 		handled = true;
 	} else if (strcmp(property, kPropertyEntry) == 0) {
-		reply->AddInt32("result", fPoseList->CountItems());
+		reply->AddInt32("result", CurrentPoseList()->CountItems());
 		handled = true;
 	}
 
@@ -560,7 +554,7 @@ BPoseView::GetProperty(BMessage* specifier, int32 form,
 				}
 		}
 	} else if (strcmp(property, kPropertyEntry) == 0) {
-		int32 count = fPoseList->CountItems();
+		int32 count = CurrentPoseList()->CountItems();
 		switch (form) {
 			case B_DIRECT_SPECIFIER:
 			{
@@ -644,8 +638,8 @@ BPoseView::SetProperty(BMessage* message, BMessage*, int32 form,
 				int32 selEnd;
 				if (message->FindInt32("data", 0, &selStart) == B_OK
 					&& message->FindInt32("data", 1, &selEnd) == B_OK) {
-					if (selStart < 0 || selStart >= fPoseList->CountItems()
-						|| selEnd < 0 || selEnd >= fPoseList->CountItems()) {
+					if (selStart < 0 || selStart >= CurrentPoseList()->CountItems()
+						|| selEnd < 0 || selEnd >= CurrentPoseList()->CountItems()) {
 						result = B_BAD_INDEX;
 						handled = true;
 						break;

@@ -16,35 +16,17 @@
 #include <ObjectList.h>
 #include <Path.h>
 #include <Rect.h>
+#include <Referenceable.h>
 #include <String.h>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
-#include "ReferenceCounting.h"
-#include "HashTable.h"
 
 
 struct node_ref;
 class FontFamily;
+class FontManager;
 class ServerFont;
-
-
-class FontKey : public Hashable {
-	public:
-		FontKey(uint16 familyID, uint16 styleID)
-			: fHash(familyID | (styleID << 16UL))
-		{
-		}
-		virtual ~FontKey() {};
-
-		virtual uint32	Hash() const
-							{ return fHash; }
-		virtual bool	CompareTo(Hashable& other) const
-							{ return fHash == other.Hash(); }
-
-	private:
-		uint32	fHash;
-};
 
 
 /*!
@@ -54,14 +36,11 @@ class FontKey : public Hashable {
 	FontStyle objects help abstract a lot of the font engine details while
 	still offering plenty of information the style in question.
 */
-class FontStyle : public ReferenceCounting, public Hashable {
+class FontStyle : public BReferenceable {
 	public:
 						FontStyle(node_ref& nodeRef, const char* path,
-							FT_Face face);
+							FT_Face face, FontManager* fontManager);
 		virtual			~FontStyle();
-
-		virtual uint32	Hash() const;
-		virtual bool	CompareTo(Hashable& other) const;
 
 		const node_ref& NodeRef() const { return fNodeRef; }
 
@@ -153,18 +132,29 @@ class FontStyle : public ReferenceCounting, public Hashable {
 
 		status_t		UpdateFace(FT_Face face);
 
+		FontManager*	Manager() const
+							{ return fFontManager; }
+
+		uint32			FontDataSize() const
+							{ return fFontDataSize; }
+
+		void 			SetFontData(FT_Byte* location, uint32 size);
+		FT_Byte*  		FontData() const
+							{ return fFontData; }
+
 	private:
 		friend class FontFamily;
+		friend class FontManager;
 		uint16			_TranslateStyleToFace(const char *name) const;
 		void			_SetFontFamily(FontFamily* family, uint16 id);
-
 	private:
 		FT_Face			fFreeTypeFace;
 		BString			fName;
 		BPath			fPath;
 		node_ref		fNodeRef;
 
-		FontFamily*		fFamily;
+		BReference<FontFamily>
+						fFamily;
 		uint16			fID;
 
 		BRect			fBounds;
@@ -172,6 +162,10 @@ class FontStyle : public ReferenceCounting, public Hashable {
 		font_height		fHeight;
 		uint16			fFace;
 		bool			fFullAndHalfFixed;
+
+		FT_Byte*		fFontData;
+		uint32			fFontDataSize;
+		FontManager*	fFontManager;
 };
 
 #endif	// FONT_STYLE_H_

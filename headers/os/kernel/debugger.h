@@ -35,7 +35,7 @@
 	typedef struct mipsel_debug_cpu_state debug_cpu_state;
 #elif defined(__arm__)
 	typedef struct arm_debug_cpu_state debug_cpu_state;
-#elif defined(__RISCV__) || defined(__riscv64__)
+#elif (defined(__riscv) && __riscv_xlen == 64)
 	typedef struct riscv64_debug_cpu_state debug_cpu_state;
 #elif defined(__sparc64__)
 	typedef struct sparc_debug_cpu_state debug_cpu_state;
@@ -165,16 +165,16 @@ typedef enum {
 	B_DEBUG_MESSAGE_GET_SIGNAL_MASKS,	//  the debugger is interested in
 	B_DEBUG_MESSAGE_SET_SIGNAL_HANDLER,	// set/get the team's signal handler for
 	B_DEBUG_MESSAGE_GET_SIGNAL_HANDLER,	//  a signal
+	B_DEBUG_MESSAGE_CLONE_AREA,			// clone a team area into the debugger team
 
-	B_DEBUG_MESSAGE_PREPARE_HANDOVER,	// prepares the debugged team for being
+	B_DEBUG_MESSAGE_PREPARE_HANDOVER = 1000, // prepares the debugged team for being
 										// handed over to another debugger;
 										// the new debugger can just invoke
 										// install_team_debugger()
+	B_DEBUG_MESSAGE_WRITE_CORE_FILE,	// write a core file
 
-	B_DEBUG_START_PROFILER,				// start/stop sampling
-	B_DEBUG_STOP_PROFILER,				//
-
-	B_DEBUG_WRITE_CORE_FILE				// write a core file
+	B_DEBUG_MESSAGE_START_PROFILER = 2000, // start/stop sampling
+	B_DEBUG_MESSAGE_STOP_PROFILER,		//
 } debug_nub_message;
 
 // messages sent to the debugger
@@ -193,6 +193,7 @@ typedef enum {
 											// one
 	B_DEBUGGER_MESSAGE_TEAM_DELETED,		// the debugged team is gone
 	B_DEBUGGER_MESSAGE_TEAM_EXEC,			// the debugged team executes exec()
+											// (implies all images have been deleted)
 	B_DEBUGGER_MESSAGE_THREAD_CREATED,		// a thread has been created
 	B_DEBUGGER_MESSAGE_THREAD_DELETED,		// a thread has been deleted
 	B_DEBUGGER_MESSAGE_IMAGE_CREATED,		// an image has been created
@@ -252,6 +253,18 @@ typedef struct {
 	status_t	error;			// B_OK, if writing went fine
 	int32		size;			// the number of bytes actually written
 } debug_nub_write_memory_reply;
+
+// B_DEBUG_MESSAGE_CLONE_AREA
+
+typedef struct {
+	port_id		reply_port;		// port to send the reply to
+	const void	*address;		// address within area to clone
+} debug_nub_clone_area;
+
+typedef struct {
+	area_id		area;			// the ID of the newly cloned area, or an error
+	const void	*address;		// corresponding address in clone
+} debug_nub_clone_area_reply;
 
 // B_DEBUG_MESSAGE_SET_TEAM_FLAGS
 
@@ -407,6 +420,7 @@ typedef struct {
 	bool				variable_stack_depth;
 										// variable number of samples per hit;
 										// cf. debug_profiler_update
+	bool				profile_kernel;	// sample kernel stack frames
 } debug_nub_start_profiler;
 
 typedef struct {
@@ -443,6 +457,7 @@ typedef struct {
 typedef union {
 	debug_nub_read_memory			read_memory;
 	debug_nub_write_memory			write_memory;
+	debug_nub_clone_area			clone_area;
 	debug_nub_set_team_flags		set_team_flags;
 	debug_nub_set_thread_flags		set_thread_flags;
 	debug_nub_continue_thread		continue_thread;
@@ -533,6 +548,7 @@ typedef struct {
 	debug_origin		origin;
 	int					signal;		// the signal
 	struct sigaction	handler;	// the signal handler
+	siginfo_t			info;		// the signal info
 	bool				deadly;		// true, if handling the signal will kill
 									// the team
 } debug_signal_received;
@@ -559,6 +575,9 @@ typedef struct {
 typedef struct {
 	debug_origin	origin;			// thread is < 0, team is the deleted team
 									// (asynchronous message)
+	status_t		status;			// the exit code of the team
+	int				signal;			// the signal causing the exit, < 0 if none
+	team_usage_info	usage;			// the usage info of the team
 } debug_team_deleted;
 
 // B_DEBUGGER_MESSAGE_TEAM_EXEC
@@ -579,6 +598,7 @@ typedef struct {
 
 typedef struct {
 	debug_origin	origin;			// the deleted thread (asynchronous message)
+	status_t		status;			// the exit code of the thread
 } debug_thread_deleted;
 
 // B_DEBUGGER_MESSAGE_IMAGE_CREATED
@@ -617,6 +637,7 @@ typedef struct {
 										//   <sample 1> ... <sample stack_depth>
 	bool				stopped;		// if true, the thread is no longer
 										// being profiled
+	bigtime_t			last_cpu_time;	// only set if "stopped" is
 } debug_profiler_update;
 
 // B_DEBUGGER_MESSAGE_HANDED_OVER

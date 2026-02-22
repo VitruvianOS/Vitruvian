@@ -34,7 +34,9 @@
 
 #include <Accelerant.h>
 #include <Cursor.h>
+#include <Directory.h>
 #include <FindDirectory.h>
+#include <Path.h>
 #include <PathFinder.h>
 #include <String.h>
 #include <StringList.h>
@@ -58,9 +60,6 @@ using std::nothrow;
 #else
 #	define ATRACE(x) ;
 #endif
-
-#define USE_ACCELERATION		0
-#define OFFSCREEN_BACK_BUFFER	0
 
 
 const int32 kDefaultParamsCount = 64;
@@ -107,9 +106,6 @@ AccelerantHWInterface::AccelerantHWInterface()
 	fSyncToken(),
 
 	// required hooks
-	fAccAcquireEngine(NULL),
-	fAccReleaseEngine(NULL),
-	fAccSyncToToken(NULL),
 	fAccGetModeCount(NULL),
 	fAccGetModeList(NULL),
 	fAccGetFrameBufferConfig(NULL),
@@ -120,9 +116,6 @@ AccelerantHWInterface::AccelerantHWInterface()
 	// optional accelerant hooks
 	fAccGetTimingConstraints(NULL),
 	fAccProposeDisplayMode(NULL),
-	fAccFillRect(NULL),
-	fAccInvertRect(NULL),
-	fAccScreenBlit(NULL),
 	fAccSetCursorShape(NULL),
 	fAccSetCursorBitmap(NULL),
 	fAccMoveCursor(NULL),
@@ -153,7 +146,6 @@ AccelerantHWInterface::AccelerantHWInterface()
 
 	fBackBuffer(NULL),
 	fFrontBuffer(new (nothrow) AccelerantBuffer()),
-	fOffscreenBackBuffer(false),
 
 	fInitialModeSwitch(true),
 
@@ -164,8 +156,8 @@ AccelerantHWInterface::AccelerantHWInterface()
 	fBlitParams(new (nothrow) blit_params[kDefaultParamsCount]),
 	fBlitParamsCount(kDefaultParamsCount)
 {
-	fDisplayMode.virtual_width = 640;
-	fDisplayMode.virtual_height = 480;
+	fDisplayMode.virtual_width = 0;
+	fDisplayMode.virtual_height = 0;
 	fDisplayMode.space = B_RGB32;
 
 	// NOTE: I have no clue what I'm doing here.
@@ -177,9 +169,6 @@ AccelerantHWInterface::AccelerantHWInterface()
 
 AccelerantHWInterface::~AccelerantHWInterface()
 {
-	delete fBackBuffer;
-	delete fFrontBuffer;
-
 	delete[] fRectParams;
 	delete[] fBlitParams;
 
@@ -200,7 +189,7 @@ AccelerantHWInterface::Initialize()
 		return B_NO_MEMORY;
 
 	if (ret >= B_OK) {
-		for (int32 i = 1; fCardFD != B_ENTRY_NOT_FOUND; i++) {
+		for (int32 i = 0; fCardFD != B_ENTRY_NOT_FOUND; i++) {
 			fCardFD = _OpenGraphicsDevice(i);
 			if (fCardFD < 0) {
 				ATRACE(("Failed to open graphics device\n"));
@@ -217,6 +206,42 @@ AccelerantHWInterface::Initialize()
 		return fCardFD >= 0 ? B_OK : fCardFD;
 	}
 	return ret;
+}
+
+
+/*!	Proceeds with a recursive scan, avoiding vesa and framebuffer devices.
+
+
+	\return Whether a device path matching the \a deviceNumber is found.
+*/
+bool
+AccelerantHWInterface::_RecursiveScan(const char* directory, int deviceNumber, int &count,
+	char *_path)
+{
+	ATRACE(("_RecursiveScan directory: %s\n", directory));
+
+	BEntry entry;
+	BDirectory dir(directory);
+	while (dir.GetNextEntry(&entry) == B_OK) {
+		BPath path;
+		entry.GetPath(&path);
+		if (!strcmp(path.Path(), "/dev/graphics/vesa")
+			|| !strcmp(path.Path(), "/dev/graphics/framebuffer")) {
+			continue;
+		}
+
+		if (entry.IsDirectory()) {
+			if (_RecursiveScan(path.Path(), deviceNumber, count, _path))
+				return true;
+		} else {
+			if (count == deviceNumber) {
+				strlcpy(_path, path.Path(), PATH_MAX);
+				return true;
+			}
+			count++;
+		}
+	}
+	return false;
 }
 
 
@@ -237,48 +262,27 @@ AccelerantHWInterface::Initialize()
 int
 AccelerantHWInterface::_OpenGraphicsDevice(int deviceNumber)
 {
-	DIR *directory = opendir("/dev/graphics");
-	if (!directory)
-		return -1;
-
 	int device = -1;
 	int count = 0;
 	if (!use_fail_safe_video_mode()) {
-		// TODO: We do not need to avoid the "vesa" driver this way once it has
-		// been ported to the new driver architecture - the special case here
-		// can then be removed.
-		struct dirent *entry;
 		char path[PATH_MAX];
-		while (count < deviceNumber && (entry = readdir(directory)) != NULL) {
-			if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")
-				|| !strcmp(entry->d_name, "vesa"))
-				continue;
-
-			if (device >= 0) {
-				close(device);
-				device = -1;
-			}
-
-			sprintf(path, "/dev/graphics/%s", entry->d_name);
+		if (_RecursiveScan("/dev/graphics/", deviceNumber, count, path))
 			device = open(path, B_READ_WRITE);
-			if (device >= 0)
-				count++;
-		}
 	}
 
-	// Open VESA driver if we were not able to get a better one
-	if (count < deviceNumber) {
-		if (deviceNumber == 1) {
-			device = open("/dev/graphics/vesa", B_READ_WRITE);
+	// Open VESA or Framebuffer driver if we were not able to get a better one.
+	if (device == -1 && count < deviceNumber) {
+		device = open("/dev/graphics/vesa", B_READ_WRITE);
+		if (device > 0) {
+			// store the device, so that we can access the planar blitter
 			fVGADevice = device;
-				// store the device, so that we can access the planar blitter
 		} else {
-			close(device);
-			device = B_ENTRY_NOT_FOUND;
+			device = open("/dev/graphics/framebuffer", B_READ_WRITE);
 		}
-	}
 
-	closedir(directory);
+		if (device < 0)
+			return B_ENTRY_NOT_FOUND;
+	}
 
 	return device;
 }
@@ -359,9 +363,6 @@ status_t
 AccelerantHWInterface::_SetupDefaultHooks()
 {
 	// required
-	fAccAcquireEngine = (acquire_engine)fAccelerantHook(B_ACQUIRE_ENGINE, NULL);
-	fAccReleaseEngine = (release_engine)fAccelerantHook(B_RELEASE_ENGINE, NULL);
-	fAccSyncToToken = (sync_to_token)fAccelerantHook(B_SYNC_TO_TOKEN, NULL);
 	fAccGetModeCount
 		= (accelerant_mode_count)fAccelerantHook(B_ACCELERANT_MODE_COUNT, NULL);
 	fAccGetModeList = (get_mode_list)fAccelerantHook(B_GET_MODE_LIST, NULL);
@@ -374,9 +375,8 @@ AccelerantHWInterface::_SetupDefaultHooks()
 	fAccGetPixelClockLimits = (get_pixel_clock_limits)fAccelerantHook(
 		B_GET_PIXEL_CLOCK_LIMITS, NULL);
 
-	if (!fAccAcquireEngine || !fAccReleaseEngine || !fAccGetFrameBufferConfig
-		|| !fAccGetModeCount || !fAccGetModeList || !fAccSetDisplayMode
-		|| !fAccGetDisplayMode || !fAccGetPixelClockLimits) {
+	if (!fAccGetFrameBufferConfig || !fAccGetModeCount || !fAccGetModeList
+			|| !fAccSetDisplayMode || !fAccGetDisplayMode || !fAccGetPixelClockLimits) {
 		return B_ERROR;
 	}
 
@@ -416,20 +416,6 @@ AccelerantHWInterface::_SetupDefaultHooks()
 void
 AccelerantHWInterface::_UpdateHooksAfterModeChange()
 {
-	// update acceleration hooks
-#if USE_ACCELERATION
-	fAccFillRect = (fill_rectangle)fAccelerantHook(B_FILL_RECTANGLE,
-		(void *)&fDisplayMode);
-	fAccInvertRect = (invert_rectangle)fAccelerantHook(B_INVERT_RECTANGLE,
-		(void *)&fDisplayMode);
-	fAccScreenBlit = (screen_to_screen_blit)fAccelerantHook(
-		B_SCREEN_TO_SCREEN_BLIT, (void *)&fDisplayMode);
-#else
-	fAccFillRect = NULL;
-	fAccInvertRect = NULL;
-	fAccScreenBlit = NULL;
-#endif
-
 	// overlay
 	fAccOverlayCount = (overlay_count)fAccelerantHook(B_OVERLAY_COUNT, NULL);
 	fAccOverlaySupportedSpaces = (overlay_supported_spaces)fAccelerantHook(
@@ -567,7 +553,7 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	// error.
 
 	// prevent from doing the unnecessary
-	if (fModeCount > 0 && fFrontBuffer && fDisplayMode == mode) {
+	if (fModeCount > 0 && fFrontBuffer.IsSet() && fDisplayMode == mode) {
 		// TODO: better comparison of display modes
 		return B_OK;
 	}
@@ -577,25 +563,13 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	if (!_IsValidMode(mode))
 		return B_BAD_VALUE;
 
-	if (fFrontBuffer == NULL)
+	if (!fFrontBuffer.IsSet())
 		return B_NO_INIT;
 
 	// just try to set the mode - we let the graphics driver
 	// approve or deny the request, as it should know best
 
 	display_mode newMode = mode;
-
-	bool tryOffscreenBackBuffer = false;
-	fOffscreenBackBuffer = false;
-#if USE_ACCELERATION && OFFSCREEN_BACK_BUFFER
-	if (fVGADevice < 0 && (color_space)newMode.space == B_RGB32) {
-		// we should have an accelerated graphics driver, try
-		// to allocate a frame buffer large enough to contain
-		// the back buffer for double buffered drawing
-		newMode.virtual_height *= 2;
-		tryOffscreenBackBuffer = true;
-	}
-#endif
 
 	status_t status = B_ERROR;
 	if (!use_fail_safe_video_mode() || !fInitialModeSwitch)
@@ -604,14 +578,6 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 		ATRACE(("setting display mode failed\n"));
 		if (!fInitialModeSwitch)
 			return status;
-
-		// undo the offscreen backbuffer trick when trying the various
-		// fall back methods for the initial mode switch
-		// TODO: Do it even then, but it is more involved.
-		if (tryOffscreenBackBuffer) {
-			newMode.virtual_height /= 2;
-			tryOffscreenBackBuffer = false;
-		}
 
 		if (fModeList == NULL) {
 			status = _UpdateModeList();
@@ -643,15 +609,6 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 		}
 	}
 
-	if (tryOffscreenBackBuffer) {
-		// The offscreen backbuffer was successfully allocated, since
-		// the mode switch succeeded! This should be handled transparently
-		// though and not be reflected in the mode structure, so that
-		// even real virtual screens should work eventually...
-		newMode.virtual_height /= 2;
-		fOffscreenBackBuffer = true;
-	}
-
 	fDisplayMode = newMode;
 	fInitialModeSwitch = false;
 
@@ -677,60 +634,28 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 
 	_UpdateHooksAfterModeChange();
 
-	// in case there is no accelerated blit function, using
-	// an offscreen located backbuffer will not be beneficial!
-	if (fAccScreenBlit == NULL)
-		fOffscreenBackBuffer = false;
-
 	// update backbuffer if neccessary
-	if (!fBackBuffer || fBackBuffer->Width() != fFrontBuffer->Width()
+	if (!fBackBuffer.IsSet()
+		|| fBackBuffer->Width() != fFrontBuffer->Width()
 		|| fBackBuffer->Height() != fFrontBuffer->Height()
-		|| fOffscreenBackBuffer
-		|| (fFrontBuffer->ColorSpace() == B_RGB32 && fBackBuffer != NULL
-			&& !HWInterface::IsDoubleBuffered())) {
+		|| (fFrontBuffer->ColorSpace() == B_RGB32 && fBackBuffer.IsSet())) {
 		// NOTE: backbuffer is always B_RGBA32, this simplifies the
 		// drawing backend implementation tremendously for the time
 		// being. The color space conversion is handled in CopyBackToFront()
 
-		delete fBackBuffer;
-		fBackBuffer = NULL;
+		fBackBuffer.Unset();
 
-		// TODO: Above not true anymore for single buffered mode!!!
-		// -> fall back to double buffer for fDisplayMode.space != B_RGB32
-		// as intermediate solution...
-		bool doubleBuffered = HWInterface::IsDoubleBuffered();
-		if ((fFrontBuffer->ColorSpace() != B_RGB32
-			&& fFrontBuffer->ColorSpace() != B_RGBA32)
-			|| fVGADevice >= 0 || fOffscreenBackBuffer)
-			doubleBuffered = true;
-#if !USE_ACCELERATION
-		doubleBuffered = true;
-#endif
+		fBackBuffer.SetTo(new(nothrow) MallocBuffer(
+			fFrontBuffer->Width(), fFrontBuffer->Height()));
 
-		if (doubleBuffered) {
-			if (fOffscreenBackBuffer) {
-				fBackBuffer = new(nothrow) AccelerantBuffer(*fFrontBuffer,
-					true);
-			} else {
-				fBackBuffer = new(nothrow) MallocBuffer(fFrontBuffer->Width(),
-					fFrontBuffer->Height());
-			}
-
-			status = fBackBuffer ? fBackBuffer->InitCheck() : B_NO_MEMORY;
-			if (status < B_OK) {
-				delete fBackBuffer;
-				fBackBuffer = NULL;
-				fOffscreenBackBuffer = false;
-				return status;
-			}
-			// clear out backbuffer, alpha is 255 this way
-			memset(fBackBuffer->Bits(), 255, fBackBuffer->BitsLength());
+		status = fBackBuffer.IsSet()
+			? fBackBuffer->InitCheck() : B_NO_MEMORY;
+		if (status < B_OK) {
+			fBackBuffer.Unset();
+			return status;
 		}
-#if 0
-// NOTE: Currently disabled, because it make the double buffered mode flicker
-// again. See HWInterface::Invalidate() for more information.
-		SetAsyncDoubleBuffered(doubleBuffered);
-#endif
+		// clear out backbuffer, alpha is 255 this way
+		memset(fBackBuffer->Bits(), 255, fBackBuffer->BitsLength());
 	}
 
 	// update color palette configuration if necessary
@@ -1176,90 +1101,6 @@ AccelerantHWInterface::GetDriverPath(BString& string)
 }
 
 
-// #pragma mark - acceleration
-
-
-uint32
-AccelerantHWInterface::AvailableHWAcceleration() const
-{
-	uint32 flags = 0;
-
-	if (!IsDoubleBuffered() || fOffscreenBackBuffer) {
-		if (fAccScreenBlit)
-			flags |= HW_ACC_COPY_REGION;
-		if (fAccFillRect)
-			flags |= HW_ACC_FILL_REGION;
-		if (fAccInvertRect)
-			flags |= HW_ACC_INVERT_REGION;
-	}
-
-	return flags;
-}
-
-
-void
-AccelerantHWInterface::CopyRegion(const clipping_rect* sortedRectList,
-	uint32 count, int32 xOffset, int32 yOffset)
-{
-	_CopyRegion(sortedRectList, count, xOffset, yOffset, fOffscreenBackBuffer);
-}
-
-
-void
-AccelerantHWInterface::FillRegion(/*const*/ BRegion& region,
-	const rgb_color& color, bool autoSync)
-{
-	if (fAccFillRect && fAccAcquireEngine) {
-		if (fAccAcquireEngine(B_2D_ACCELERATION, 0xff, &fSyncToken,
-				&fEngineToken) >= B_OK) {
-			// convert the region
-			uint32 count;
-			_RegionToRectParams(&region, &count);
-
-			// go
-			fAccFillRect(fEngineToken, _NativeColor(color), fRectParams, count);
-
-			// done
-			if (fAccReleaseEngine)
-				fAccReleaseEngine(fEngineToken, &fSyncToken);
-
-			// sync
-			if (autoSync && fAccSyncToToken)
-				fAccSyncToToken(&fSyncToken);
-		}
-	}
-}
-
-
-void
-AccelerantHWInterface::InvertRegion(/*const*/ BRegion& region)
-{
-	if (fAccInvertRect && fAccAcquireEngine) {
-		if (fAccAcquireEngine(B_2D_ACCELERATION, 0xff, &fSyncToken,
-				&fEngineToken) >= B_OK) {
-			// convert the region
-			uint32 count;
-			_RegionToRectParams(&region, &count);
-
-			fAccInvertRect(fEngineToken, fRectParams, count);
-
-			if (fAccReleaseEngine)
-				fAccReleaseEngine(fEngineToken, &fSyncToken);
-			if (fAccSyncToToken)
-				fAccSyncToToken(&fSyncToken);
-		}
-	}
-}
-
-
-void
-AccelerantHWInterface::Sync()
-{
-	if (fAccSyncToToken)
-		fAccSyncToToken(&fSyncToken);
-}
-
-
 // #pragma mark - overlays
 
 
@@ -1519,44 +1360,27 @@ AccelerantHWInterface::MoveCursorTo(float x, float y)
 RenderingBuffer*
 AccelerantHWInterface::FrontBuffer() const
 {
-	return fFrontBuffer;
+	return fFrontBuffer.Get();
 }
 
 
 RenderingBuffer*
 AccelerantHWInterface::BackBuffer() const
 {
-	return fBackBuffer;
+	return fBackBuffer.Get();
 }
 
 
 bool
 AccelerantHWInterface::IsDoubleBuffered() const
 {
-	return fBackBuffer != NULL;
+	return fBackBuffer.IsSet();
 }
 
 
 void
 AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 {
-	if (fOffscreenBackBuffer) {
-		int32 xOffset = 0;
-		int32 yOffset = -(int32)fFrontBuffer->Height();
-
-		int32 count = region.CountRects();
-		clipping_rect rects[count];
-		for (int32 i = 0; i < count; i++) {
-			rects[i] = region.RectAtInt(i);
-			rects[i].top -= yOffset;
-			rects[i].bottom -= yOffset;
-		}
-
-		_CopyRegion(rects, count, xOffset, yOffset, false);
-
-		return;
-	}
-
 	return HWInterface::_CopyBackToFront(region);
 }
 
@@ -1592,71 +1416,12 @@ AccelerantHWInterface::_RegionToRectParams(/*const*/ BRegion* region,
 		}
 	}
 
-	int32 srcOffsetY = fOffscreenBackBuffer ? fFrontBuffer->Height() : 0;
-
 	for (uint32 i = 0; i < *count; i++) {
 		clipping_rect r = region->RectAtInt(i);
 		fRectParams[i].left = (uint16)r.left;
-		fRectParams[i].top = (uint16)r.top + srcOffsetY;
+		fRectParams[i].top = (uint16)r.top;
 		fRectParams[i].right = (uint16)r.right;
-		fRectParams[i].bottom = (uint16)r.bottom + srcOffsetY;
-	}
-}
-
-
-void
-AccelerantHWInterface::_CopyRegion(const clipping_rect* sortedRectList,
-	uint32 count, int32 xOffset, int32 yOffset, bool inBackBuffer)
-{
-	if (fAccScreenBlit && fAccAcquireEngine) {
-		if (fAccAcquireEngine(B_2D_ACCELERATION, 0xff, &fSyncToken,
-				&fEngineToken) >= B_OK) {
-			// make sure the blit_params cache is large enough
-			// TODO: locking!!
-			if (fBlitParamsCount < count) {
-				fBlitParamsCount = (count / kDefaultParamsCount + 1)
-					* kDefaultParamsCount;
-				// NOTE: realloc() could be used instead...
-				blit_params* params
-					= new (nothrow) blit_params[fBlitParamsCount];
-				if (params) {
-					delete[] fBlitParams;
-					fBlitParams = params;
-				} else {
-					count = fBlitParamsCount;
-				}
-			}
-			int32 srcOffsetY = inBackBuffer ? fFrontBuffer->Height() : 0;
-			// convert the rects
-			for (uint32 i = 0; i < count; i++) {
-				fBlitParams[i].src_left = (uint16)sortedRectList[i].left;
-				fBlitParams[i].src_top = (uint16)sortedRectList[i].top
-					+ srcOffsetY;
-
-				fBlitParams[i].dest_left = (uint16)sortedRectList[i].left
-					+ xOffset;
-				fBlitParams[i].dest_top = (uint16)sortedRectList[i].top
-					+ yOffset + srcOffsetY;
-
-				// NOTE: width and height are expressed as distance, not
-				// pixel count!
-				fBlitParams[i].width = (uint16)(sortedRectList[i].right
-					- sortedRectList[i].left);
-				fBlitParams[i].height = (uint16)(sortedRectList[i].bottom
-					- sortedRectList[i].top);
-			}
-
-			// go
-			fAccScreenBlit(fEngineToken, fBlitParams, count);
-
-			// done
-			if (fAccReleaseEngine)
-				fAccReleaseEngine(fEngineToken, &fSyncToken);
-
-			// sync
-			if (fAccSyncToToken)
-				fAccSyncToToken(&fSyncToken);
-		}
+		fRectParams[i].bottom = (uint16)r.bottom;
 	}
 }
 

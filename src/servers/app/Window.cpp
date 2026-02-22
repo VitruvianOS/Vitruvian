@@ -1,14 +1,16 @@
 /*
- * Copyright 2001-2011, Haiku, Inc.
+ * Copyright 2001-2020, Haiku, Inc.
  * Distributed under the terms of the MIT license.
  *
  * Authors:
- *		DarkWyrm <bpmagic@columbus.rr.com>
- *		Adi Oanca <adioanca@gmail.com>
- *		Stephan Aßmus <superstippi@gmx.de>
- *		Axel Dörfler <axeld@pinc-software.de>
- *		Brecht Machiels <brecht@mos6581.org>
- *		Clemens Zeidler <haiku@clemens-zeidler.de>
+ *		DarkWyrm, bpmagic@columbus.rr.com
+ *		Adi Oanca, adioanca@gmail.com
+ *		Stephan Aßmus, superstippi@gmx.de
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		Brecht Machiels, brecht@mos6581.org
+ *		Clemens Zeidler, haiku@clemens-zeidler.de
+ *		Tri-Edge AI
+ *		Jacob Secunda, secundja@gmail.com
  */
 
 
@@ -79,7 +81,6 @@ Window::Window(const BRect& frame, const char *name,
 	fVisibleRegion(),
 	fVisibleContentRegion(),
 	fDirtyRegion(),
-	fDirtyCause(0),
 
 	fContentRegion(),
 	fEffectiveDrawingRegion(),
@@ -90,8 +91,6 @@ Window::Window(const BRect& frame, const char *name,
 
 	fRegionPool(),
 
-	fWindowBehaviour(NULL),
-	fTopView(NULL),
 	fWindow(window),
 	fDrawingEngine(drawingEngine),
 	fDesktop(window->Desktop()),
@@ -100,7 +99,7 @@ Window::Window(const BRect& frame, const char *name,
 	fPendingUpdateSession(&fUpdateSessions[1]),
 	fUpdateRequested(false),
 	fInUpdate(false),
-	fUpdatesEnabled(true),
+	fUpdatesEnabled(false),
 
 	// Windows start hidden
 	fHidden(true),
@@ -113,6 +112,7 @@ Window::Window(const BRect& frame, const char *name,
 	fFeel(feel),
 	fWorkspaces(workspaces),
 	fCurrentWorkspace(-1),
+	fPriorWorkspace(-1),
 
 	fMinWidth(1),
 	fMaxWidth(32768),
@@ -131,7 +131,7 @@ Window::Window(const BRect& frame, const char *name,
 
 	SetFlags(flags, NULL);
 
-	if (fLook != B_NO_BORDER_WINDOW_LOOK && fCurrentStack.Get() != NULL) {
+	if (fLook != B_NO_BORDER_WINDOW_LOOK && fCurrentStack.IsSet()) {
 		// allocates a decorator
 		::Decorator* decorator = Decorator();
 		if (decorator != NULL) {
@@ -140,7 +140,7 @@ Window::Window(const BRect& frame, const char *name,
 		}
 	}
 	if (fFeel != kOffscreenWindowFeel)
-		fWindowBehaviour = gDecorManager.AllocateWindowBehaviour(this);
+		fWindowBehaviour.SetTo(gDecorManager.AllocateWindowBehaviour(this));
 
 	// do we need to change our size to let the decorator fit?
 	// _ResizeBy() will adapt the frame for validity before resizing
@@ -169,15 +169,11 @@ Window::Window(const BRect& frame, const char *name,
 
 Window::~Window()
 {
-	if (fTopView) {
+	if (fTopView.IsSet()) {
 		fTopView->DetachedFromWindow();
-		delete fTopView;
 	}
 
 	DetachFromWindowStack(false);
-
-	delete fWindowBehaviour;
-	delete fDrawingEngine;
 
 	gDecorManager.CleanupForWindow(this);
 }
@@ -186,8 +182,8 @@ Window::~Window()
 status_t
 Window::InitCheck() const
 {
-	if (fDrawingEngine == NULL
-		|| (fFeel != kOffscreenWindowFeel && fWindowBehaviour == NULL))
+	if (GetDrawingEngine() == NULL
+		|| (fFeel != kOffscreenWindowFeel && !fWindowBehaviour.IsSet()))
 		return B_NO_MEMORY;
 	// TODO: anything else?
 	return B_OK;
@@ -293,6 +289,7 @@ Window::MoveBy(int32 x, int32 y, bool moveStack)
 	// take along the dirty region which is not
 	// processed yet
 	fDirtyRegion.OffsetBy(x, y);
+	fExposeRegion.OffsetBy(x, y);
 
 	if (fContentRegionValid)
 		fContentRegion.OffsetBy(x, y);
@@ -304,7 +301,7 @@ Window::MoveBy(int32 x, int32 y, bool moveStack)
 
 	fEffectiveDrawingRegionValid = false;
 
-	if (fTopView != NULL) {
+	if (fTopView.IsSet()) {
 		fTopView->MoveBy(x, y, NULL);
 		fTopView->UpdateOverlay();
 	}
@@ -371,7 +368,7 @@ Window::ResizeBy(int32 x, int32 y, BRegion* dirtyRegion, bool resizeStack)
 	fContentRegionValid = false;
 	fEffectiveDrawingRegionValid = false;
 
-	if (fTopView != NULL) {
+	if (fTopView.IsSet()) {
 		fTopView->ResizeBy(x, y, dirtyRegion);
 		fTopView->UpdateOverlay();
 	}
@@ -400,12 +397,48 @@ Window::ResizeBy(int32 x, int32 y, BRegion* dirtyRegion, bool resizeStack)
 
 
 void
+Window::SetOutlinesDelta(BPoint delta, BRegion* dirtyRegion)
+{
+	float wantWidth = fFrame.IntegerWidth() + delta.x;
+	float wantHeight = fFrame.IntegerHeight() + delta.y;
+
+	// enforce size limits
+	WindowStack* stack = GetWindowStack();
+	if (stack != NULL) {
+		for (int32 i = 0; i < stack->CountWindows(); i++) {
+			Window* window = stack->WindowList().ItemAt(i);
+
+			if (wantWidth < window->fMinWidth)
+				wantWidth = window->fMinWidth;
+			if (wantWidth > window->fMaxWidth)
+				wantWidth = window->fMaxWidth;
+
+			if (wantHeight < window->fMinHeight)
+				wantHeight = window->fMinHeight;
+			if (wantHeight > window->fMaxHeight)
+				wantHeight = window->fMaxHeight;
+		}
+
+		delta.x = wantWidth - fFrame.IntegerWidth();
+		delta.y = wantHeight - fFrame.IntegerHeight();
+	}
+
+	::Decorator* decorator = Decorator();
+
+	if (decorator != NULL)
+		decorator->SetOutlinesDelta(delta, dirtyRegion);
+
+	_UpdateContentRegion();
+}
+
+
+void
 Window::ScrollViewBy(View* view, int32 dx, int32 dy)
 {
 	// this is executed in ServerWindow with the Readlock
 	// held
 
-	if (!view || view == fTopView || (dx == 0 && dy == 0))
+	if (!view || view == fTopView.Get() || (dx == 0 && dy == 0))
 		return;
 
 	BRegion* dirty = fRegionPool.GetRegion();
@@ -521,9 +554,13 @@ Window::CopyContents(BRegion* region, int32 xOffset, int32 yOffset)
 void
 Window::SetTopView(View* topView)
 {
-	fTopView = topView;
+	if (fTopView.IsSet()) {
+		fTopView->DetachedFromWindow();
+	}
 
-	if (fTopView) {
+	fTopView.SetTo(topView);
+
+	if (fTopView.IsSet()) {
 		// the top view is special, it has a coordinate system
 		// as if it was attached directly to the desktop, therefor,
 		// the coordinate conversion through the view tree works
@@ -574,7 +611,7 @@ Window::PreviousWindow(int32 index) const
 ::Decorator*
 Window::Decorator() const
 {
-	if (fCurrentStack.Get() == NULL)
+	if (!fCurrentStack.IsSet())
 		return NULL;
 	return fCurrentStack->Decorator();
 }
@@ -621,8 +658,7 @@ Window::ReloadDecor()
 
 	stack->SetDecorator(decorator);
 
-	delete fWindowBehaviour;
-	fWindowBehaviour = windowBehaviour;
+	fWindowBehaviour.SetTo(windowBehaviour);
 
 	// set the correct focus and top layer tab
 	for (int32 i = 0; i < stack->CountWindows(); i++) {
@@ -702,7 +738,7 @@ Window::DrawingRegionChanged(View* view) const
 
 
 void
-Window::ProcessDirtyRegion(BRegion& region)
+Window::ProcessDirtyRegion(const BRegion& dirtyRegion, const BRegion& exposeRegion)
 {
 	// if this is executed in the desktop thread,
 	// it means that the window thread currently
@@ -725,8 +761,8 @@ Window::ProcessDirtyRegion(BRegion& region)
 		ServerWindow()->RequestRedraw();
 	}
 
-	fDirtyRegion.Include(&region);
-	fDirtyCause |= UPDATE_EXPOSE;
+	fDirtyRegion.Include(&dirtyRegion);
+	fExposeRegion.Include(&exposeRegion);
 }
 
 
@@ -735,7 +771,7 @@ Window::RedrawDirtyRegion()
 {
 	if (TopLayerStackWindow() != this) {
 		fDirtyRegion.MakeEmpty();
-		fDirtyCause = 0;
+		fExposeRegion.MakeEmpty();
 		return;
 	}
 
@@ -743,13 +779,15 @@ Window::RedrawDirtyRegion()
 	if (IsVisible()) {
 		_DrawBorder();
 
-		BRegion* dirtyContentRegion =
-			fRegionPool.GetRegion(VisibleContentRegion());
+		BRegion* dirtyContentRegion = fRegionPool.GetRegion(VisibleContentRegion());
+		BRegion* exposeContentRegion = fRegionPool.GetRegion(VisibleContentRegion());
 		dirtyContentRegion->IntersectWith(&fDirtyRegion);
+		exposeContentRegion->IntersectWith(&fExposeRegion);
 
-		_TriggerContentRedraw(*dirtyContentRegion);
+		_TriggerContentRedraw(*dirtyContentRegion, *exposeContentRegion);
 
 		fRegionPool.Recycle(dirtyContentRegion);
+		fRegionPool.Recycle(exposeContentRegion);
 	}
 
 	// reset the dirty region, since
@@ -760,7 +798,7 @@ Window::RedrawDirtyRegion()
 	// get write access, since we're holding
 	// the read lock for the whole time.
 	fDirtyRegion.MakeEmpty();
-	fDirtyCause = 0;
+	fExposeRegion.MakeEmpty();
 }
 
 
@@ -777,7 +815,7 @@ Window::MarkDirty(BRegion& regionOnScreen)
 
 
 void
-Window::MarkContentDirty(BRegion& regionOnScreen)
+Window::MarkContentDirty(BRegion& dirtyRegion, BRegion& exposeRegion)
 {
 	// for triggering AS_REDRAW
 	// since this won't affect other windows, read locking
@@ -786,27 +824,26 @@ Window::MarkContentDirty(BRegion& regionOnScreen)
 	if (fHidden || IsOffscreenWindow())
 		return;
 
-	regionOnScreen.IntersectWith(&VisibleContentRegion());
-	fDirtyCause |= UPDATE_REQUEST;
-	_TriggerContentRedraw(regionOnScreen);
+	dirtyRegion.IntersectWith(&VisibleContentRegion());
+	exposeRegion.IntersectWith(&VisibleContentRegion());
+	_TriggerContentRedraw(dirtyRegion, exposeRegion);
 }
 
 
 void
-Window::MarkContentDirtyAsync(BRegion& regionOnScreen)
+Window::MarkContentDirtyAsync(BRegion& dirtyRegion)
 {
 	// NOTE: see comments in ProcessDirtyRegion()
 	if (fHidden || IsOffscreenWindow())
 		return;
 
-	regionOnScreen.IntersectWith(&VisibleContentRegion());
+	dirtyRegion.IntersectWith(&VisibleContentRegion());
 
 	if (fDirtyRegion.CountRects() == 0) {
 		ServerWindow()->RequestRedraw();
 	}
 
-	fDirtyRegion.Include(&regionOnScreen);
-	fDirtyCause |= UPDATE_REQUEST;
+	fDirtyRegion.Include(&dirtyRegion);
 }
 
 
@@ -825,7 +862,6 @@ Window::InvalidateView(View* view, BRegion& viewRegion)
 
 //fDrawingEngine->FillRegion(viewRegion, rgb_color{ 0, 255, 0, 255 });
 //snooze(10000);
-			fDirtyCause |= UPDATE_REQUEST;
 			_TriggerContentRedraw(viewRegion);
 		}
 	}
@@ -900,26 +936,26 @@ Window::MouseDown(BMessage* message, BPoint where,
 			if (!IsFocus()) {
 				bool acceptFirstClick
 					= (Flags() & B_WILL_ACCEPT_FIRST_CLICK) != 0;
-				bool avoidFocus = (Flags() & B_AVOID_FOCUS) != 0;
 
 				// Activate or focus the window in case it doesn't accept first
 				// click, depending on the mouse mode
-				DesktopSettings desktopSettings(fDesktop);
-				if (desktopSettings.MouseMode() == B_NORMAL_MOUSE
-					&& !acceptFirstClick)
-					fDesktop->ActivateWindow(this);
-				else if (!avoidFocus)
-					fDesktop->SetFocusWindow(this);
+				if (!acceptFirstClick) {
+					bool avoidFocus = (Flags() & B_AVOID_FOCUS) != 0;
+					DesktopSettings desktopSettings(fDesktop);
+					if (desktopSettings.MouseMode() == B_NORMAL_MOUSE)
+						fDesktop->ActivateWindow(this);
+					else if (!avoidFocus)
+						fDesktop->SetFocusWindow(this);
 
-				// Eat the click if we don't accept first click
-				// (B_AVOID_FOCUS never gets the focus, so they always accept
-				// the first click)
-				// TODO: the latter is unlike BeOS - if we really wanted to
-				// imitate this behaviour, we would need to check if we're
-				// the front window instead of the focus window
-				if (!acceptFirstClick && !desktopSettings.AcceptFirstClick()
-					&& !avoidFocus)
-					return;
+					// Eat the click if we don't accept first click
+					// (B_AVOID_FOCUS never gets the focus, so they always accept
+					// the first click)
+					// TODO: the latter is unlike BeOS - if we really wanted to
+					// imitate this behaviour, we would need to check if we're
+					// the front window instead of the focus window
+					if (!desktopSettings.AcceptFirstClick() && !avoidFocus)
+						return;
+				}
 			}
 
 			// fill out view token for the view under the mouse
@@ -1121,7 +1157,7 @@ Window::IsVisible() const
 bool
 Window::IsDragging() const
 {
-	if (!fWindowBehaviour)
+	if (!fWindowBehaviour.IsSet())
 		return false;
 	return fWindowBehaviour->IsDragging();
 }
@@ -1130,7 +1166,7 @@ Window::IsDragging() const
 bool
 Window::IsResizing() const
 {
-	if (!fWindowBehaviour)
+	if (!fWindowBehaviour.IsSet())
 		return false;
 	return fWindowBehaviour->IsResizing();
 }
@@ -1264,7 +1300,7 @@ Window::SetLook(window_look look, BRegion* updateRegion)
 		// ...and therefor the drawing region is
 		// likely not valid anymore either
 
-	if (fCurrentStack.Get() == NULL)
+	if (!fCurrentStack.IsSet())
 		return;
 
 	int32 stackPosition = PositionInStack();
@@ -1732,48 +1768,21 @@ Window::_ShiftPartOfRegion(BRegion* region, BRegion* regionToShift,
 
 
 void
-Window::_TriggerContentRedraw(BRegion& dirtyContentRegion)
+Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 {
-	if (!IsVisible() || dirtyContentRegion.CountRects() == 0
-		|| (fFlags & kWindowScreenFlag) != 0)
+	if (!IsVisible() || dirty.CountRects() == 0 || (fFlags & kWindowScreenFlag) != 0)
 		return;
 
 	// put this into the pending dirty region
 	// to eventually trigger a client redraw
-	bool wasExpose = fPendingUpdateSession->IsExpose();
-	BRegion* backgroundClearingRegion = &dirtyContentRegion;
+	_TransferToUpdateSession(&dirty);
 
-	_TransferToUpdateSession(&dirtyContentRegion);
-
-	if (fPendingUpdateSession->IsExpose()) {
-		if (!fContentRegionValid)
-			_UpdateContentRegion();
-
-		if (!wasExpose) {
-			// there was suddenly added a dirty region
-			// caused by exposing content, we need to clear
-			// the entire background
-			backgroundClearingRegion = &fPendingUpdateSession->DirtyRegion();
-		}
-
+	if (expose.CountRects() > 0) {
+		// draw exposed region background right now to avoid stamping artifacts
 		if (fDrawingEngine->LockParallelAccess()) {
 			bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
 			fDrawingEngine->SetCopyToFrontEnabled(true);
-			fDrawingEngine->SuspendAutoSync();
-
-//sCurrentColor.red = rand() % 255;
-//sCurrentColor.green = rand() % 255;
-//sCurrentColor.blue = rand() % 255;
-//sPendingColor.red = rand() % 255;
-//sPendingColor.green = rand() % 255;
-//sPendingColor.blue = rand() % 255;
-//fDrawingEngine->FillRegion(*backgroundClearingRegion, sCurrentColor);
-//snooze(10000);
-
-			fTopView->Draw(fDrawingEngine, backgroundClearingRegion,
-				&fContentRegion, true);
-
-			fDrawingEngine->Sync();
+			fTopView->Draw(fDrawingEngine.Get(), &expose, &fContentRegion, true);
 			fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
 			fDrawingEngine->UnlockParallelAccess();
 		}
@@ -1842,8 +1851,6 @@ Window::_TransferToUpdateSession(BRegion* contentDirtyRegion)
 
 	// add to pending
 	fPendingUpdateSession->SetUsed(true);
-//	if (!fPendingUpdateSession->IsExpose())
-	fPendingUpdateSession->AddCause(fDirtyCause);
 	fPendingUpdateSession->Include(contentDirtyRegion);
 
 	if (!fUpdateRequested) {
@@ -1950,13 +1957,9 @@ Window::BeginUpdate(BPrivate::PortLink& link)
 	// supress back to front buffer copies in the drawing engine
 	fDrawingEngine->SetCopyToFrontEnabled(false);
 
-	if (!fCurrentUpdateSession->IsExpose()
-		&& fDrawingEngine->LockParallelAccess()) {
-		fDrawingEngine->SuspendAutoSync();
+	if (fDrawingEngine->LockParallelAccess()) {
+		fTopView->Draw(GetDrawingEngine(), dirty, &fContentRegion, true);
 
-		fTopView->Draw(fDrawingEngine, dirty, &fContentRegion, true);
-
-		fDrawingEngine->Sync();
 		fDrawingEngine->UnlockParallelAccess();
 	} // else the background was cleared already
 
@@ -2060,13 +2063,7 @@ Window::_ObeySizeLimits()
 Window::UpdateSession::UpdateSession()
 	:
 	fDirtyRegion(),
-	fInUse(false),
-	fCause(0)
-{
-}
-
-
-Window::UpdateSession::~UpdateSession()
+	fInUse(false)
 {
 }
 
@@ -2096,24 +2093,15 @@ void
 Window::UpdateSession::SetUsed(bool used)
 {
 	fInUse = used;
-	if (!fInUse) {
+	if (!fInUse)
 		fDirtyRegion.MakeEmpty();
-		fCause = 0;
-	}
-}
-
-
-void
-Window::UpdateSession::AddCause(uint8 cause)
-{
-	fCause |= cause;
 }
 
 
 int32
 Window::PositionInStack() const
 {
-	if (fCurrentStack.Get() == NULL)
+	if (!fCurrentStack.IsSet())
 		return -1;
 	return fCurrentStack->WindowList().IndexOf(this);
 }
@@ -2125,7 +2113,7 @@ Window::DetachFromWindowStack(bool ownStackNeeded)
 	// The lock must normally be held but is not held when closing the window.
 	//ASSERT_MULTI_WRITE_LOCKED(fDesktop->WindowLocker());
 
-	if (fCurrentStack.Get() == NULL)
+	if (!fCurrentStack.IsSet())
 		return false;
 	if (fCurrentStack->CountWindows() == 1)
 		return true;
@@ -2135,16 +2123,17 @@ Window::DetachFromWindowStack(bool ownStackNeeded)
 	if (fCurrentStack->RemoveWindow(this) == false)
 		return false;
 
+	BRegion invalidatedRegion;
 	::Decorator* decorator = fCurrentStack->Decorator();
 	if (decorator != NULL) {
-		decorator->RemoveTab(index);
+		decorator->RemoveTab(index, &invalidatedRegion);
 		decorator->SetTopTab(fCurrentStack->LayerOrder().CountItems() - 1);
 	}
 
 	Window* remainingTop = fCurrentStack->TopLayerWindow();
 	if (remainingTop != NULL) {
 		if (decorator != NULL)
-			decorator->SetDrawingEngine(remainingTop->fDrawingEngine);
+			decorator->SetDrawingEngine(remainingTop->GetDrawingEngine());
 		// propagate focus to the decorator
 		remainingTop->SetFocus(remainingTop->IsFocus());
 		remainingTop->SetLook(remainingTop->Look(), NULL);
@@ -2157,8 +2146,9 @@ Window::DetachFromWindowStack(bool ownStackNeeded)
 	SetFocus(IsFocus());
 
 	if (remainingTop != NULL) {
+		invalidatedRegion.Include(&remainingTop->VisibleRegion());
 		fDesktop->RebuildAndRedrawAfterWindowChange(remainingTop,
-			remainingTop->VisibleRegion());
+			invalidatedRegion);
 	}
 	return true;
 }
@@ -2234,7 +2224,7 @@ Window::StackedWindowAt(const BPoint& where)
 Window*
 Window::TopLayerStackWindow()
 {
-	if (fCurrentStack.Get() == NULL)
+	if (!fCurrentStack.IsSet())
 		return this;
 	return fCurrentStack->TopLayerWindow();
 }
@@ -2243,7 +2233,7 @@ Window::TopLayerStackWindow()
 WindowStack*
 Window::GetWindowStack()
 {
-	if (fCurrentStack.Get() == NULL)
+	if (!fCurrentStack.IsSet())
 		return _InitWindowStack();
 	return fCurrentStack;
 }
@@ -2255,7 +2245,7 @@ Window::MoveToTopStackLayer()
 	::Decorator* decorator = Decorator();
 	if (decorator == NULL)
 		return false;
-	decorator->SetDrawingEngine(fDrawingEngine);
+	decorator->SetDrawingEngine(GetDrawingEngine());
 	SetLook(Look(), NULL);
 	decorator->SetTopTab(PositionInStack());
 	return fCurrentStack->MoveToTopLayer(this);
@@ -2265,7 +2255,7 @@ Window::MoveToTopStackLayer()
 bool
 Window::MoveToStackPosition(int32 to, bool isMoving)
 {
-	if (fCurrentStack.Get() == NULL)
+	if (!fCurrentStack.IsSet())
 		return false;
 	int32 index = PositionInStack();
 	if (fCurrentStack->Move(index, to) == false)
@@ -2312,22 +2302,20 @@ WindowStack::WindowStack(::Decorator* decorator)
 
 WindowStack::~WindowStack()
 {
-	delete fDecorator;
 }
 
 
 void
 WindowStack::SetDecorator(::Decorator* decorator)
 {
-	delete fDecorator;
-	fDecorator = decorator;
+	fDecorator.SetTo(decorator);
 }
 
 
 ::Decorator*
 WindowStack::Decorator()
 {
-	return fDecorator;
+	return fDecorator.Get();
 }
 
 

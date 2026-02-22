@@ -56,6 +56,7 @@ All rights reserved.
 
 
 const bigtime_t kBarberPoleDelay = 500000;
+static const float kMinFontSize = 8.0f;
 
 
 //	#pragma mark - BCountView
@@ -65,6 +66,7 @@ BCountView::BCountView(BPoseView* view)
 	:
 	BView("CountVw", B_PULSE_NEEDED | B_WILL_DRAW),
 	fLastCount(-1),
+	fLastCountSelected(-1),
 	fPoseView(view),
 	fShowingBarberPole(false),
 	fBarberPoleMap(NULL),
@@ -73,8 +75,13 @@ BCountView::BCountView(BPoseView* view)
 	fTypeAheadString(""),
 	fFilterString("")
 {
- 	GetTrackerResources()->GetBitmapResource(B_MESSAGE_TYPE,
- 		R_BarberPoleBitmap, &fBarberPoleMap);
+	GetTrackerResources()->GetBitmapResource(B_MESSAGE_TYPE, R_BarberPoleBitmap, &fBarberPoleMap);
+
+	SetFont(be_plain_font);
+	SetFontSize(std::max(kMinFontSize, ceilf(be_plain_font->Size() * 0.75f)));
+
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	SetLowUIColor(ViewUIColor());
 }
 
 
@@ -158,8 +165,7 @@ BCountView::BarberPoleOuterRect() const
 BRect
 BCountView::TextInvalRect() const
 {
-	BRect result = Bounds();
-	result.InsetBy(4, 3);
+	BRect result = TextAndBarberPoleRect();
 
 	// if the barber pole is not present, use its space for text
 	if (fShowingBarberPole)
@@ -173,7 +179,8 @@ BRect
 BCountView::TextAndBarberPoleRect() const
 {
 	BRect result = Bounds();
-	result.InsetBy(4, 3);
+	result.InsetBy(be_control_look->ComposeSpacing(B_USE_SMALL_SPACING) / 2,
+		floorf(result.Height() * 0.25f));
 
 	return result;
 }
@@ -182,11 +189,21 @@ BCountView::TextAndBarberPoleRect() const
 void
 BCountView::CheckCount()
 {
-	// invalidate the count text area if necessary
+	bool invalidate = false;
+
 	if (fLastCount != fPoseView->CountItems()) {
 		fLastCount = fPoseView->CountItems();
-		Invalidate(TextInvalRect());
+		invalidate = true;
 	}
+
+	if (fLastCountSelected != fPoseView->CountSelected()) {
+		fLastCountSelected = fPoseView->CountSelected();
+		invalidate = true;
+	}
+
+	// invalidate the count text area if necessary
+	if (invalidate)
+		Invalidate(TextInvalRect());
 
 	// invalidate barber pole area if necessary
 	TrySpinningBarberPole();
@@ -212,15 +229,37 @@ BCountView::Draw(BRect updateRect)
 	if (IsTypingAhead())
 		itemString << TypeAhead();
 	else if (IsFiltering()) {
-		itemString << fLastCount << " " << Filter();
+		if (fLastCountSelected != 0) {
+			static BStringFormat selectedFilteredFormat(B_TRANSLATE_COMMENT(
+				"{0, plural, other{#/%total %filter}}",
+				"Number of selected items from a filtered set: \"10/30 view\""));
+
+			char lastCountStr[32];
+			snprintf(lastCountStr, sizeof(lastCountStr), "%" B_PRId32, fLastCount);
+
+			selectedFilteredFormat.Format(itemString, fLastCountSelected);
+			itemString.ReplaceFirst("%total", lastCountStr);
+			itemString.ReplaceFirst("%filter", Filter());
+		} else
+			itemString << fLastCount << " " << Filter();
 	} else {
 		if (fLastCount == 0)
 			itemString << B_TRANSLATE("no items");
-		else {
-			static BStringFormat format(B_TRANSLATE_COMMENT(
+		else if (fLastCountSelected == 0) {
+			static BStringFormat itemFormat(B_TRANSLATE_COMMENT(
 				"{0, plural, one{# item} other{# items}}",
 				"Number of selected items: \"1 item\" or \"2 items\""));
-			format.Format(itemString, fLastCount);
+			itemFormat.Format(itemString, fLastCount);
+		} else {
+			static BStringFormat selectedFormat(B_TRANSLATE_COMMENT(
+				"{0, plural, other{#/%total selected}}",
+				"Number of selected items out of a total: \"10/30 selected\""));
+
+			char lastCountStr[32];
+			snprintf(lastCountStr, sizeof(lastCountStr), "%" B_PRId32, fLastCount);
+
+			selectedFormat.Format(itemString, fLastCountSelected);
+			itemString.ReplaceFirst("%total", lastCountStr);
 		}
 	}
 
@@ -232,9 +271,9 @@ BCountView::Draw(BRect updateRect)
 
 	if (IsTypingAhead()) {
 		// use a muted gray for the typeahead
-		SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
+		SetHighUIColor(B_DOCUMENT_TEXT_COLOR);
 	} else
-		SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
+		SetHighUIColor(B_PANEL_TEXT_COLOR);
 
 	MovePenTo(textRect.LeftBottom());
 	DrawString(itemString.String());
@@ -290,34 +329,28 @@ BCountView::MouseDown(BPoint)
 	if (fPoseView->IsFilePanel() || fPoseView->TargetModel() == NULL)
 		return;
 
-	if (!window->TargetModel()->IsRoot()) {
-		BDirMenu* menu = new BDirMenu(NULL, be_app, B_REFS_RECEIVED);
-		BEntry entry;
-		if (entry.SetTo(window->TargetModel()->EntryRef()) == B_OK)
-			menu->Populate(&entry, Window(), false, false, true, false, true);
-		else
-			menu->Populate(NULL, Window(), false, false, true, false, true);
+	if (window->TargetModel()->IsRoot())
+		return;
 
-		BPoint point = Bounds().LeftBottom();
-		point.y += 3;
-		ConvertToScreen(&point);
-		BRect clickToOpenRect(Bounds());
-		ConvertToScreen(&clickToOpenRect);
-		menu->Go(point, true, true, clickToOpenRect);
-		delete menu;
-	}
+	BDirMenu menu(NULL, be_app, B_REFS_RECEIVED);
+	BEntry entry;
+	if (entry.SetTo(window->TargetModel()->EntryRef()) == B_OK)
+		menu.Populate(&entry, Window(), false, false, true, false, true);
+	else
+		menu.Populate(NULL, Window(), false, false, true, false, true);
+
+	BPoint point = Bounds().LeftBottom();
+	point.y += 3;
+	ConvertToScreen(&point);
+	BRect clickToOpenRect(Bounds());
+	ConvertToScreen(&clickToOpenRect);
+	menu.Go(point, true, true, clickToOpenRect);
 }
 
 
 void
 BCountView::AttachedToWindow()
 {
-	SetFont(be_plain_font);
-	SetFontSize(9);
-
-	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-	SetLowUIColor(ViewUIColor());
-
 	CheckCount();
 }
 

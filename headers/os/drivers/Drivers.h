@@ -33,9 +33,9 @@ typedef status_t (*device_select_hook)(void *cookie, uint8 event, uint32 ref,
 	selectsync *sync);
 typedef status_t (*device_deselect_hook)(void *cookie, uint8 event,
 	selectsync *sync);
-typedef status_t (*device_read_pages_hook)(void *cookie, off_t position,
+typedef status_t (*device_readv_hook)(void *cookie, off_t position,
 	const iovec *vec, size_t count, size_t *_numBytes);
-typedef status_t (*device_write_pages_hook)(void *cookie, off_t position,
+typedef status_t (*device_writev_hook)(void *cookie, off_t position,
 	const iovec *vec, size_t count, size_t *_numBytes);
 
 #define	B_CUR_DRIVER_API_VERSION	2
@@ -50,10 +50,10 @@ typedef struct {
 	device_write_hook		write;			/* writes to the device */
 	device_select_hook		select;			/* start select */
 	device_deselect_hook	deselect;		/* stop select */
-	device_read_pages_hook	read_pages;
-		/* scatter-gather physical read from the device */
-	device_write_pages_hook	write_pages;
-		/* scatter-gather physical write to the device */
+	device_readv_hook	readv;
+		/* scatter-gather read from the device */
+	device_writev_hook	writev;
+		/* scatter-gather write to the device */
 } device_hooks;
 
 /* Driver functions needed to be exported by legacy drivers */
@@ -117,6 +117,8 @@ enum {
 	B_JOYSTICK_DRIVER_BASE = 8200,	/* base for codes in joystick.h */
 	B_GRAPHIC_DRIVER_BASE = 8300,	/* base for codes in graphic_driver.h */
 
+	B_SOCKET_IO_BASE = 8900,		/* base for codes in sys/sockio.h */
+
 	B_DEVICE_OP_CODES_END = 9999	/* end of Be-defined control ids */
 };
 
@@ -130,6 +132,7 @@ typedef struct {
 	bool	removable;				/* non-zero if removable */
 	bool	read_only;				/* non-zero if read only */
 	bool	write_once;				/* non-zero if write-once */
+	uint32	bytes_per_physical_sector;	/* physical sector size in bytes */
 } device_geometry;
 
 enum {
@@ -151,6 +154,7 @@ typedef struct {
 	off_t	offset;					/* offset (in bytes) */
 	off_t	size;					/* size (in bytes) */
 	int32	logical_block_size;		/* logical block size of partition */
+	int32	physical_block_size;	/* physical block size of partition */
 	int32	session;				/* id of session */
 	int32	partition;				/* id of partition */
 	char	device[256];			/* path to the physical device */

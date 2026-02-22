@@ -21,15 +21,19 @@ typedef ulong cpu_status;
 #if B_DEBUG_SPINLOCK_CONTENTION
 	typedef struct {
 		int32	lock;
-		int32	count_low;
-		int32	count_high;
+		int32		failed_try_acquire;
+		bigtime_t	total_wait;
+		bigtime_t	total_held;
+		bigtime_t	last_acquired;
 	} spinlock;
 
-#	define B_SPINLOCK_INITIALIZER { 0, 0, 0 }
+#	define B_SPINLOCK_INITIALIZER { 0, 0, 0, 0, 0 }
 #	define B_INITIALIZE_SPINLOCK(spinlock)	do {	\
 			(spinlock)->lock = 0;					\
-			(spinlock)->count_low = 0;				\
-			(spinlock)->count_high = 0;				\
+			(spinlock)->failed_try_acquire = 0;		\
+			(spinlock)->total_wait = 0;				\
+			(spinlock)->total_held = 0;				\
+			(spinlock)->last_acquired = 0;			\
 		} while (false)
 #else
 	typedef struct {
@@ -110,18 +114,19 @@ typedef struct {
 /* address specifications for mapping physical memory */
 #define	B_ANY_KERNEL_BLOCK_ADDRESS	(B_ANY_KERNEL_ADDRESS + 1)
 
+/* memory types for physical memory */
+#define B_UNCACHED_MEMORY			(1 << 28)
+#define B_WRITE_COMBINING_MEMORY	(2 << 28)
+#define B_WRITE_THROUGH_MEMORY		(3 << 28)
+#define B_WRITE_PROTECTED_MEMORY	(4 << 28)
+#define B_WRITE_BACK_MEMORY			(5 << 28)
+#define B_MEMORY_TYPE_MASK			(0xf0000000)
+
 /* area protection flags for the kernel */
 #define B_KERNEL_READ_AREA			(1 << 4)
 #define B_KERNEL_WRITE_AREA			(1 << 5)
-
-/* MTR attributes for mapping physical memory (Intel Architecture only) */
-// TODO: rename those to something more meaningful
-#define	B_MTR_UC	0x10000000
-#define	B_MTR_WC	0x20000000
-#define	B_MTR_WT	0x30000000
-#define	B_MTR_WP	0x40000000
-#define	B_MTR_WB	0x50000000
-#define	B_MTR_MASK	0xf0000000
+#define B_KERNEL_EXECUTE_AREA		(1 << 6)
+#define B_KERNEL_STACK_AREA			(1 << 7)
 
 
 /* kernel daemon service */
@@ -132,8 +137,8 @@ typedef void (*daemon_hook)(void *arg, int iteration);
 /* kernel debugging facilities */
 
 /* special return codes for kernel debugger */
-#define  B_KDEBUG_CONT   2
-#define  B_KDEBUG_QUIT   3
+#define B_KDEBUG_CONT	2
+#define B_KDEBUG_QUIT	3
 
 typedef int (*debugger_command_hook)(int argc, char **argv);
 
@@ -162,9 +167,9 @@ extern void			release_write_seqlock(seqlock* lock);
 extern uint32		acquire_read_seqlock(seqlock* lock);
 extern bool			release_read_seqlock(seqlock* lock, uint32 count);
 
-extern status_t		install_io_interrupt_handler(long interrupt_number,
-						interrupt_handler handler, void *data, ulong flags);
-extern status_t		remove_io_interrupt_handler(long interrupt_number,
+extern status_t		install_io_interrupt_handler(int32 interrupt_number,
+						interrupt_handler handler, void *data, uint32 flags);
+extern status_t		remove_io_interrupt_handler(int32 interrupt_number,
 						interrupt_handler handler, void	*data);
 
 extern status_t		add_timer(timer *t, timer_hook hook, bigtime_t period,
@@ -195,13 +200,13 @@ extern area_id		map_physical_memory(const char *areaName,
 						uint32 protection, void **_mappedAddress);
 
 /* kernel debugging facilities */
-#ifdef __HAIKU__
+#if defined(_KERNEL_MODE) || defined(_BOOT_MODE)
 extern void			dprintf(const char *format, ...) _PRINTFLIKE(1, 2);
 #endif
 extern void			dvprintf(const char *format, va_list args);
 extern void			kprintf(const char *fmt, ...) _PRINTFLIKE(1, 2);
 
-extern void 		dump_block(const char *buffer, int size, const char *prefix);
+extern void			dump_block(const char *buffer, int size, const char *prefix);
 						/* TODO: temporary API: hexdumps given buffer */
 
 extern bool			set_dprintf_enabled(bool new_state);

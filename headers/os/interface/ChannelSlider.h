@@ -84,13 +84,14 @@ public:
 	virtual	float				ThumbDeltaFor(int32 channel);
 	virtual	float				ThumbRangeFor(int32 channel);
 
+	virtual void				UpdateToolTip(int32 currentValue);
+
 private:
 	// FBC padding
 								BChannelSlider(const BChannelSlider&);
 			BChannelSlider&		operator=(const BChannelSlider&);
 
 
-	virtual	void				_Reserved_BChannelSlider_0(void*, ...);
 	virtual	void				_Reserved_BChannelSlider_1(void*, ...);
 	virtual	void				_Reserved_BChannelSlider_2(void*, ...);
 	virtual	void				_Reserved_BChannelSlider_3(void*, ...);

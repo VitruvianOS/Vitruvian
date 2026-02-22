@@ -110,6 +110,7 @@ public:
 									void* arg), void* arg);
 			const BListItem**	Items() const;
 			void				InvalidateItem(int32 index);
+			void				ScrollTo(int32 index);
 			void				ScrollToSelection();
 
 			void				Select(int32 index, bool extend = false);
@@ -188,9 +189,7 @@ private:
 			bool				_MoveItem(int32 from, int32 to);
 			bool				_ReplaceItem(int32 index, BListItem* item);
 			void				_RescanSelection(int32 from, int32 to);
-
-			void				_DoneTracking(BPoint where);
-			void				_Track(BPoint where, uint32);
+			void				_DoSelection(int32 index);
 
 private:
 			BList				fList;

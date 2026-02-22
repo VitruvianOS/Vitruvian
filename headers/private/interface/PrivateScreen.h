@@ -89,7 +89,7 @@ public:
 			uint32				BytesPerRow();
 
 private:
-	friend class BObjectList<BPrivateScreen>;
+	friend class BObjectList<BPrivateScreen, true>;
 
 								BPrivateScreen(int32 id);
 								~BPrivateScreen();
@@ -107,10 +107,8 @@ private:
 private:
 			int32				fID;
 			int32				fReferenceCount;
-			color_map*			fColorMap;
 			sem_id				fRetraceSem;
 			bool				fRetraceSemValid;
-			bool				fOwnsColorMap;
 			BRect				fFrame;
 			bigtime_t			fLastUpdate;
 };

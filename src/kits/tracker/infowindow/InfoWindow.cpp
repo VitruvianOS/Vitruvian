@@ -71,7 +71,6 @@ All rights reserved.
 #include "FSUtils.h"
 #include "GeneralInfoView.h"
 #include "IconCache.h"
-#include "IconMenuItem.h"
 #include "Model.h"
 #include "NavMenu.h"
 #include "PoseView.h"
@@ -86,10 +85,6 @@ All rights reserved.
 
 const uint32 kNewTargetSelected = 'selc';
 
-const uint32 kPaneSwitchClosed = 0;
-const uint32 kPaneSwitchOpen = 2;
-
-
 //	#pragma mark - BInfoWindow
 
 
@@ -98,7 +93,7 @@ BInfoWindow::BInfoWindow(Model* model, int32 group_index,
 	:
 	BWindow(BInfoWindow::InfoWindowRect(),
 		"InfoWindow", B_TITLED_WINDOW,
-		B_NOT_RESIZABLE | B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS,
+		B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS,
 		B_CURRENT_WORKSPACE),
 	fModel(model),
 	fStopCalc(false),
@@ -118,7 +113,7 @@ BInfoWindow::BInfoWindow(Model* model, int32 group_index,
 	if (list != NULL)
 		list->AddItem(this);
 
-	AddShortcut('E', 0, new BMessage(kEditItem));
+	AddShortcut('E', 0, new BMessage(kEditName));
 	AddShortcut('O', 0, new BMessage(kOpenSelection));
 	AddShortcut('U', 0, new BMessage(kUnmountVolume));
 	AddShortcut('P', 0, new BMessage(kPermissionsSelected));
@@ -271,13 +266,10 @@ BInfoWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
-		case kEditItem:
+		case kEditName:
 		{
 			BEntry entry(fModel->EntryRef());
-			if (!fModel->HasLocalizedName()
-				&& ConfirmChangeIfWellKnownDirectory(&entry, kRename)) {
-				fHeaderView->BeginEditingTitle();
-			}
+			fHeaderView->BeginEditingTitle();
 			break;
 		}
 
@@ -425,7 +417,7 @@ BInfoWindow::MessageReceived(BMessage* message)
 			break;
 
 		case B_NODE_MONITOR:
-			switch (message->FindInt32("opcode")) {
+			switch (message->GetInt32("opcode", 0)) {
 				case B_ENTRY_REMOVED:
 				{
 					node_ref itemNode;

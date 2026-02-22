@@ -56,16 +56,19 @@ VirtualDirectoryPoseView::~VirtualDirectoryPoseView()
 void
 VirtualDirectoryPoseView::MessageReceived(BMessage* message)
 {
+	if (message->WasDropped())
+		return _inherited::MessageReceived(message);
+
 	switch (message->what) {
 		// ignore all edit operations
 		case B_CUT:
+		case B_PASTE:
 		case kCutMoreSelectionToClipboard:
+		case kDeleteSelection:
 		case kDuplicateSelection:
-		case kDelete:
-		case kMoveToTrash:
+		case kMoveSelectionToTrash:
 		case kNewEntryFromTemplate:
 		case kNewFolder:
-		case kEditItem:
 			break;
 
 		default:
@@ -79,8 +82,7 @@ void
 VirtualDirectoryPoseView::AttachedToWindow()
 {
 	_inherited::AttachedToWindow();
-	SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR, B_DARKEN_1_TINT);
-	SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR, B_DARKEN_1_TINT);
+	AddFilter(new TPoseViewFilter(this));
 }
 
 
@@ -141,7 +143,8 @@ VirtualDirectoryPoseView::StartWatching()
 	int32 count = fDirectoryPaths.CountStrings();
 	for (int32 i = 0; i < count; i++) {
 		BString path = fDirectoryPaths.StringAt(i);
-		BPathMonitor::StartWatching(path, B_WATCH_DIRECTORY, this);
+		BPathMonitor::StartWatching(path, B_WATCH_DIRECTORY | B_WATCH_CHILDREN
+			| B_WATCH_NAME | B_WATCH_STAT | B_WATCH_INTERIM_STAT | B_WATCH_ATTR, this);
 	}
 
 	// watch the definition file
@@ -210,7 +213,7 @@ VirtualDirectoryPoseView::_EntryCreated(const BMessage* message)
 		if (directory.SetTo(&nodeRef) != B_OK)
 			return true;
 
-		struct dirent entry;
+		struct dirent entry; // vos mod
 		while (directory.GetNextDirents(&entry, sizeof(entry), 1) == 1) {
 			if (strcmp(entry.d_name, ".") != 0
 				&& strcmp(entry.d_name, "..") != 0) {
@@ -222,10 +225,9 @@ VirtualDirectoryPoseView::_EntryCreated(const BMessage* message)
 					node_ref(ref.dev(), ref.dir()),
 					NotOwningEntryRef(ref.dev(), ref.dir(),
 						entry.d_name),
-					NULL, false);
+					NULL, false); // end mod
 			}
 		}
-
 		return true;
 	}
 
@@ -428,7 +430,7 @@ VirtualDirectoryPoseView::_NodeStatChanged(const BMessage* message)
 	node_ref nodeRef;
 	#ifdef __VOS_OLD_NODE_MONITOR__
 	if (message->FindUInt64("device", &nodeRef.device) != B_OK
-		|| message->FindUInt64("node", &nodeRef.node) != B_OK) {
+		|| message->FindInt64("node", &nodeRef.node) != B_OK) {
 		return true;
 	}
 
@@ -463,6 +465,7 @@ VirtualDirectoryPoseView::_NodeStatChanged(const BMessage* message)
 		if (!fIsRoot)
 			return true;
 	}
+
 	#endif
 	return _inherited::FSNotification(message);
 }
@@ -473,22 +476,21 @@ VirtualDirectoryPoseView::_DispatchEntryCreatedOrRemovedMessage(int32 opcode,
 	const node_ref& nodeRef, const entry_ref& entryRef, const char* path,
 	bool dispatchToSuperClass)
 {
-#ifdef __VOS_OLD_NODE_MONITOR__
+	#ifdef __VOS_OLD_NODE_MONITOR__
 	BMessage message(B_NODE_MONITOR);
 	message.AddInt32("opcode", opcode);
-	message.AddUInt64("device", nodeRef.device);
+	message.AddInt32("device", nodeRef.device);
 	message.AddInt64("node", nodeRef.node);
-	message.AddUInt64("directory", entryRef.directory);
+	message.AddInt64("directory", entryRef.directory);
 	message.AddString("name", entryRef.name);
 	if (path != NULL && path[0] != '\0')
 		message.AddString("path", path);
-
 	bool result = dispatchToSuperClass
 		? _inherited::FSNotification(&message)
 		: FSNotification(&message);
 	if (!result)
 		pendingNodeMonitorCache.Add(&message);
-#endif
+	#endif
 }
 
 

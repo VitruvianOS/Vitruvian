@@ -28,13 +28,12 @@
 #include <LayoutUtils.h>
 #include <Message.h>
 #include <MessageFilter.h>
+#include <MessageRunner.h>
 #include <Point.h>
 #include <PropertyInfo.h>
 #include <TextView.h>
 #include <View.h>
 #include <Window.h>
-
-#include "Thread.h"
 
 
 static const float kFrameMargin			= 2.0f;
@@ -170,20 +169,21 @@ public:
 	virtual	void				MouseUp(BPoint where);
 	virtual	void				MouseMoved(BPoint where, uint32 transit,
 									const BMessage* message);
+	virtual void				MessageReceived(BMessage* message);
+
+			void				AdoptSystemColors();
+			bool				HasSystemColors() const;
 
 			bool				IsEnabled() const { return fIsEnabled; }
 	virtual	void				SetEnabled(bool enable) { fIsEnabled = enable; };
 
 private:
-			void				_DoneTracking(BPoint where);
-			void				_Track(BPoint where, uint32);
-
 			spinner_direction	fSpinnerDirection;
 			BAbstractSpinner*	fParent;
 			bool				fIsEnabled;
 			bool				fIsMouseDown;
 			bool				fIsMouseOver;
-			bigtime_t			fRepeatDelay;
+			BMessageRunner*		fRepeater;
 };
 
 
@@ -309,13 +309,14 @@ SpinnerButton::SpinnerButton(BRect frame, const char* name,
 	fIsEnabled(true),
 	fIsMouseDown(false),
 	fIsMouseOver(false),
-	fRepeatDelay(100000)
+	fRepeater(NULL)
 {
 }
 
 
 SpinnerButton::~SpinnerButton()
 {
+	delete fRepeater;
 }
 
 
@@ -324,7 +325,7 @@ SpinnerButton::AttachedToWindow()
 {
 	fParent = static_cast<BAbstractSpinner*>(Parent());
 
-	AdoptParentColors();
+	AdoptSystemColors();
 	BView::AttachedToWindow();
 }
 
@@ -363,7 +364,7 @@ SpinnerButton::Draw(BRect updateRect)
 	else
 		bgTint = B_NO_TINT;
 
-	rgb_color bgColor = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color bgColor = ViewColor();
 	if (bgColor.red + bgColor.green + bgColor.blue <= 128 * 3) {
 		// if dark background make the tint lighter
 		frameTint = 2.0f - frameTint;
@@ -427,8 +428,6 @@ SpinnerButton::Draw(BRect updateRect)
 			if (rect.IntegerHeight() % 2 != 0)
 				rect.bottom -= 1;
 
-			SetHighColor(tint_color(bgColor, fgTint));
-
 			// draw the +/-
 			float halfHeight = floorf(rect.Height() / 2);
 			StrokeLine(BPoint(rect.left, rect.top + halfHeight),
@@ -444,14 +443,38 @@ SpinnerButton::Draw(BRect updateRect)
 
 
 void
+SpinnerButton::AdoptSystemColors()
+{
+	SetViewUIColor(B_CONTROL_BACKGROUND_COLOR);
+	SetLowUIColor(B_CONTROL_BACKGROUND_COLOR);
+	SetHighUIColor(B_CONTROL_TEXT_COLOR);
+}
+
+
+bool
+SpinnerButton::HasSystemColors() const
+{
+	float tint = B_NO_TINT;
+
+	return ViewUIColor(&tint) == B_CONTROL_BACKGROUND_COLOR && tint == B_NO_TINT
+		&& LowUIColor(&tint) == B_CONTROL_BACKGROUND_COLOR && tint == B_NO_TINT
+		&& HighUIColor(&tint) == B_CONTROL_TEXT_COLOR && tint == B_NO_TINT;
+}
+
+
+void
 SpinnerButton::MouseDown(BPoint where)
 {
 	if (fIsEnabled) {
 		fIsMouseDown = true;
+		fSpinnerDirection == SPINNER_INCREMENT
+			? fParent->Increment()
+			: fParent->Decrement();
 		Invalidate();
-		fRepeatDelay = 100000;
-		MouseDownThread<SpinnerButton>::TrackMouse(this,
-			&SpinnerButton::_DoneTracking, &SpinnerButton::_Track);
+		BMessage repeatMessage('rept');
+		SetMouseEventMask(B_POINTER_EVENTS, B_NO_POINTER_HISTORY);
+		fRepeater = new BMessageRunner(BMessenger(this), repeatMessage,
+			200000);
 	}
 
 	BView::MouseDown(where);
@@ -470,8 +493,6 @@ SpinnerButton::MouseMoved(BPoint where, uint32 transit,
 			uint32 buttons;
 			GetMouse(&where, &buttons);
 			fIsMouseOver = Bounds().Contains(where) && buttons == 0;
-			if (!fIsMouseDown)
-				Invalidate();
 
 			break;
 		}
@@ -491,38 +512,32 @@ void
 SpinnerButton::MouseUp(BPoint where)
 {
 	fIsMouseDown = false;
+	delete fRepeater;
+	fRepeater = NULL;
 	Invalidate();
 
 	BView::MouseUp(where);
 }
 
 
-//	#pragma mark  - SpinnerButton private methods
-
-
 void
-SpinnerButton::_DoneTracking(BPoint where)
+SpinnerButton::MessageReceived(BMessage* message)
 {
-	if (fIsMouseDown || !Bounds().Contains(where))
-		fIsMouseDown = false;
-}
+	switch (message->what) {
+		case 'rept':
+		{
+			if (fIsMouseDown && fRepeater != NULL) {
+				fSpinnerDirection == SPINNER_INCREMENT
+					? fParent->Increment()
+					: fParent->Decrement();
+			}
 
+			break;
+		}
 
-void
-SpinnerButton::_Track(BPoint where, uint32)
-{
-	if (fParent == NULL || !Bounds().Contains(where)) {
-		fIsMouseDown = false;
-		return;
+		default:
+			BView::MessageReceived(message);
 	}
-	fIsMouseDown = true;
-
-	fSpinnerDirection == SPINNER_INCREMENT
-		? fParent->Increment()
-		: fParent->Decrement();
-
-	snooze(fRepeatDelay);
-	fRepeatDelay = 10000;
 }
 
 
@@ -974,7 +989,7 @@ BAbstractSpinner::GetSupportedSuites(BMessage* message)
 	BPropertyInfo prop_info(sProperties);
 	message->AddFlat("messages", &prop_info);
 
-	return BView::GetSupportedSuites(message);
+	return BControl::GetSupportedSuites(message);
 }
 
 
@@ -982,7 +997,7 @@ BHandler*
 BAbstractSpinner::ResolveSpecifier(BMessage* message, int32 index, BMessage* specifier,
 	int32 form, const char* property)
 {
-	return BView::ResolveSpecifier(message, index, specifier, form,
+	return BControl::ResolveSpecifier(message, index, specifier, form,
 		property);
 }
 
@@ -999,7 +1014,7 @@ BAbstractSpinner::AttachedToWindow()
 	_UpdateTextViewColors(IsEnabled());
 	fTextView->MakeEditable(IsEnabled());
 
-	BView::AttachedToWindow();
+	BControl::AttachedToWindow();
 }
 
 
@@ -1016,7 +1031,7 @@ BAbstractSpinner::Draw(BRect updateRect)
 void
 BAbstractSpinner::FrameResized(float width, float height)
 {
-	BView::FrameResized(width, height);
+	BControl::FrameResized(width, height);
 
 	// TODO: this causes flickering still...
 
@@ -1075,8 +1090,8 @@ BAbstractSpinner::ValueChanged()
 void
 BAbstractSpinner::MessageReceived(BMessage* message)
 {
-	if (!IsEnabled() && message->what == B_COLORS_UPDATED)
-		_UpdateTextViewColors(false);
+	if (message->what == B_COLORS_UPDATED)
+		_UpdateTextViewColors(IsEnabled());
 
 	BControl::MessageReceived(message);
 }
@@ -1092,7 +1107,7 @@ BAbstractSpinner::MakeFocus(bool focus)
 void
 BAbstractSpinner::ResizeToPreferred()
 {
-	BView::ResizeToPreferred();
+	BControl::ResizeToPreferred();
 
 	const char* label = Label();
 	if (label != NULL) {
@@ -1121,7 +1136,7 @@ BAbstractSpinner::SetFlags(uint32 flags)
 	// Don't make this one navigable
 	flags &= ~B_NAVIGABLE;
 
-	BView::SetFlags(flags);
+	BControl::SetFlags(flags);
 }
 
 
@@ -1459,11 +1474,8 @@ BAbstractSpinner::_DrawLabel(BRect updateRect)
 
 	uint32 flags = be_control_look->Flags(this);
 
-	// erase the is control flag before drawing the label so that the label
-	// will get drawn using B_PANEL_TEXT_COLOR.
-	flags &= ~BControlLook::B_IS_CONTROL;
-
-	be_control_look->DrawLabel(this, label, LowColor(), flags, BPoint(x, y));
+	rgb_color highColor = HighColor();
+	be_control_look->DrawLabel(this, label, LowColor(), flags, BPoint(x, y), &highColor);
 }
 
 
@@ -1475,7 +1487,7 @@ BAbstractSpinner::_DrawTextView(BRect updateRect)
 	if (!rect.IsValid() || !rect.Intersects(updateRect))
 		return;
 
-	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color base = ViewColor();
 	uint32 flags = 0;
 	if (!IsEnabled())
 		flags |= BControlLook::B_DISABLED;

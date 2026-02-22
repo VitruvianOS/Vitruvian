@@ -52,8 +52,11 @@ All rights reserved.
 #include <Window.h>
 
 #include "BarApp.h"
+#include "BarView.h"
+#include "BarWindow.h"
 #include "StatusView.h"
 #include "CalendarMenuWindow.h"
+#include "StatusView.h"
 
 
 static const float kHMargin = 2.0;
@@ -63,19 +66,20 @@ static const float kHMargin = 2.0;
 #define B_TRANSLATION_CONTEXT "TimeView"
 
 
-TTimeView::TTimeView(float maxWidth, float height)
+TTimeView::TTimeView(float maxWidth, float height, TBarView* barView)
 	:
 	BView(BRect(-100, -100, -90, -90), "_deskbar_tv_",
 		B_FOLLOW_RIGHT | B_FOLLOW_TOP,
 		B_WILL_DRAW | B_PULSE_NEEDED | B_FRAME_EVENTS),
+	fBarView(barView),
 	fParent(NULL),
 	fMaxWidth(maxWidth),
 	fHeight(height),
-	fOrientation(true),
 	fShowLevel(0),
 	fShowSeconds(false),
 	fShowDayOfWeek(false),
 	fShowTimeZone(false),
+	fCalendarWindow(NULL),
 	fTimeFormat(NULL),
 	fDateFormat(NULL)
 {
@@ -106,6 +110,9 @@ TTimeView::TTimeView(BMessage* data)
 
 TTimeView::~TTimeView()
 {
+	if (fCalendarWindowMessenger.IsValid())
+		fCalendarWindowMessenger.SendMessage(B_QUIT_REQUESTED);
+
 	delete fTimeFormat;
 	delete fDateFormat;
 }
@@ -126,7 +133,7 @@ status_t
 TTimeView::Archive(BMessage* data, bool deep) const
 {
 	BView::Archive(data, deep);
-	data->AddBool("orientation", fOrientation);
+	data->AddBool("orientation", Vertical());
 	data->AddInt16("showLevel", fShowLevel);
 	data->AddBool("showSeconds", fShowSeconds);
 	data->AddBool("showDayOfWeek", fShowDayOfWeek);
@@ -181,16 +188,22 @@ TTimeView::FrameMoved(BPoint)
 void
 TTimeView::GetPreferredSize(float* width, float* height)
 {
-	*height = fHeight;
-
 	float timeWidth = StringWidth(fCurrentTimeStr);
 
-	if (fOrientation) {
+	// set the height based on the font size
+	font_height fontHeight;
+	GetFontHeight(&fontHeight);
+	fHeight = fontHeight.ascent + fontHeight.descent - 2;
+		// reduce height by 2px so that clock doesn't draw on top of border
+
+	if (Vertical()) {
 		float appWidth = static_cast<TBarApp*>(be_app)->Settings()->width;
 		*width = fMaxWidth
-			= std::min(appWidth - (kDragRegionWidth + kHMargin) * 2, timeWidth);
+			= std::min(appWidth - (gDragRegionWidth + kHMargin) * 2, timeWidth);
 	} else
 		*width = fMaxWidth = timeWidth;
+
+	*height = fHeight;
 }
 
 
@@ -308,16 +321,6 @@ TTimeView::ResizeToPreferred()
 //	# pragma mark - Public methods
 
 
-void
-TTimeView::SetOrientation(bool orientation)
-{
-	fOrientation = orientation;
-	ResizeToPreferred();
-	CalculateTextPlacement();
-	Invalidate();
-}
-
-
 bool
 TTimeView::ShowSeconds() const
 {
@@ -369,13 +372,13 @@ TTimeView::SetShowTimeZone(bool show)
 void
 TTimeView::ShowCalendar(BPoint where)
 {
-	if (fCalendarWindow.IsValid()) {
+	if (fCalendarWindowMessenger.IsValid()) {
 		// If the calendar is already shown, just activate it
 		BMessage activate(B_SET_PROPERTY);
 		activate.AddSpecifier("Active");
 		activate.AddBool("data", true);
 
-		if (fCalendarWindow.SendMessage(&activate) == B_OK)
+		if (fCalendarWindowMessenger.SendMessage(&activate) == B_OK)
 			return;
 	}
 
@@ -385,10 +388,16 @@ TTimeView::ShowCalendar(BPoint where)
 	if (where.y >= BScreen().Frame().bottom)
 		where.y -= (Bounds().Height() + 4.0);
 
-	CalendarMenuWindow* window = new CalendarMenuWindow(where);
-	fCalendarWindow = BMessenger(window);
+	fCalendarWindow = new CalendarMenuWindow(where);
+	fCalendarWindowMessenger = BMessenger(fCalendarWindow);
+	fCalendarWindow->Show();
+}
 
-	window->Show();
+
+bool
+TTimeView::IsShowingCalendar()
+{
+	return fCalendarWindow != NULL && !fCalendarWindow->IsHidden();
 }
 
 
@@ -408,11 +417,13 @@ TTimeView::UpdateTimeFormat()
 
 	delete fTimeFormat;
 	fTimeFormat = new BDateTimeFormat(BLocale::Default());
-	fTimeFormat->SetDateTimeFormat(B_SHORT_DATE_FORMAT, B_SHORT_TIME_FORMAT, fields);
+	fTimeFormat->SetDateTimeFormat(B_SHORT_DATE_FORMAT, B_SHORT_TIME_FORMAT,
+		fields);
 
 	delete fDateFormat;
 	fDateFormat = new BDateFormat(BLocale::Default());
 }
+
 
 void
 TTimeView::GetCurrentTime()
@@ -443,8 +454,6 @@ TTimeView::GetCurrentDate()
 void
 TTimeView::CalculateTextPlacement()
 {
-	BRect bounds(Bounds());
-
 	fDateLocation.x = 0.0;
 	fTimeLocation.x = 0.0;
 
@@ -458,10 +467,11 @@ TTimeView::CalculateTextPlacement()
 	font.GetBoundingBoxesForStrings(stringArray, 1, B_SCREEN_METRIC, &delta,
 		rectArray);
 
-	fTimeLocation.y = fDateLocation.y = ceilf((bounds.Height()
+	// center vertically
+	fTimeLocation.y = fDateLocation.y = ceilf((Bounds().Height()
 		- rectArray[0].Height() + 1.0) / 2.0 - rectArray[0].top);
 
-	if (fOrientation) {
+	if (Vertical()) {
 		float timeWidth = StringWidth(fCurrentTimeStr);
 		if (timeWidth > fMaxWidth) {
 			// time does not fit, push it over to truncate the left side
@@ -513,4 +523,14 @@ TTimeView::Update()
 
 	if (fParent != NULL)
 		fParent->Invalidate();
+}
+
+
+bool
+TTimeView::Vertical()
+{
+	if (fBarView == NULL)
+		return true;
+
+	return fBarView->Vertical();
 }

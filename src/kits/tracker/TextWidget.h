@@ -59,11 +59,10 @@ public:
 	BTextWidget(Model*, BColumn*, BPoseView*);
 	virtual ~BTextWidget();
 
-	void Draw(BRect widgetRect, BRect widgetTextRect, float width, BPoseView*,
-		bool selected, uint32 clipboardMode);
-	void Draw(BRect widgetRect, BRect widgetTextRect, float width, BPoseView*,
-		BView* drawView, bool selected, uint32 clipboardMode, BPoint offset,
-		bool direct);
+	void Draw(BRect widgetRect, BRect widgetTextRect, BPoseView*, bool selected,
+		uint32 clipboardMode);
+	void Draw(BRect widgetRect, BRect widgetTextRect, BPoseView*, BView* drawView, bool selected,
+		uint32 clipboardMode, BPoint offset);
 		// second call is used for offscreen drawing, where PoseView
 		// and current drawing view are different
 
@@ -107,6 +106,9 @@ public:
 	void CheckExpiration();
 	void CancelWait();
 
+	float MaxWidth() { return fMaxWidth; };
+	void SetMaxWidth(float maxWidth) { fMaxWidth = maxWidth; };
+
 private:
 	BRect CalcRectCommon(BPoint poseLoc, const BColumn*, const BPoseView*,
 		float width);
@@ -120,6 +122,8 @@ private:
 	bool fVisible : 1;
 	bool fActive : 1;
 	bool fSymLink : 1;
+
+	float fMaxWidth;
 
 	bigtime_t fLastClickedTime;
 	struct MouseUpParams fParams;
@@ -176,12 +180,12 @@ BTextWidget::SetActive(bool on)
 
 
 inline void
-BTextWidget::Draw(BRect widgetRect, BRect widgetTextRect, float width,
-	BPoseView* view, bool selected, uint32 clipboardMode)
+BTextWidget::Draw(BRect widgetRect, BRect widgetTextRect, BPoseView* view, bool selected,
+	uint32 clipboardMode)
 {
-	Draw(widgetRect, widgetTextRect, width, view, (BView*)view, selected,
-		clipboardMode, BPoint(0, 0), true);
+	Draw(widgetRect, widgetTextRect, view, (BView*)view, selected, clipboardMode, B_ORIGIN);
 }
+
 
 } // namespace BPrivate
 

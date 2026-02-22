@@ -275,12 +275,22 @@ public:
 			void				GetHasGlyphs(const char charArray[],
 									int32 numChars,
 									bool hasArray[]) const;
+			void				GetHasGlyphs(const char charArray[], int32 numChars,
+									bool hasArray[], bool useFallbacks) const;
 
 			BFont&				operator=(const BFont& font);
 			bool				operator==(const BFont& font) const;
 			bool				operator!=(const BFont& font) const;
 
 			void				PrintToStream() const;
+
+			status_t			LoadFont(const char* path);
+			status_t			LoadFont(const char* path, uint16 index, uint16 instance);
+			status_t			LoadFont(const area_id fontAreaID,
+									size_t size = 0, size_t offset = 0);
+			status_t			LoadFont(const area_id fontAreaID,
+									size_t size, size_t offset, uint16 index, uint16 instance);
+			status_t			UnloadFont();
 
 private:
 		friend void _init_global_fonts_();

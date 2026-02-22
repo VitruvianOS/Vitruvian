@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2017 Haiku, Inc. All rights reserved.
+ * Copyright 2001-2019 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -170,6 +170,10 @@ ViewState::ViewState()
 	font_flags = font.Flags();
 	font_aliasing = false;
 
+	parent_composite_transform.Reset();
+	parent_composite_scale = 1.0f;
+	parent_composite_origin.Set(0, 0);
+
 	// We only keep the B_VIEW_CLIP_REGION_BIT flag invalidated,
 	// because we should get the clipping region from app_server.
 	// The other flags do not need to be included because the data they
@@ -253,17 +257,9 @@ ViewState::UpdateServerState(BPrivate::PortLink &link)
 	link.Attach<double[6]>(_transform);
 
 	// we send the 'local' clipping region... if we have one...
-	// TODO: Could be optimized, but is low prio, since most views won't
-	// have a custom clipping region.
-	if (clipping_region_used) {
-		int32 count = clipping_region.CountRects();
-		link.Attach<int32>(count);
-		for (int32 i = 0; i < count; i++)
-			link.Attach<BRect>(clipping_region.RectAt(i));
-	} else {
-		// no clipping region
-		link.Attach<int32>(-1);
-	}
+	link.Attach<bool>(clipping_region_used);
+	if (clipping_region_used)
+		link.AttachRegion(clipping_region);
 
 	// Although we might have a 'local' clipping region, when we call
 	// BView::GetClippingRegion() we ask for the 'global' one and it
@@ -326,21 +322,14 @@ ViewState::UpdateFrom(BPrivate::PortLink &link)
 	// read the user clipping
 	// (that's NOT the current View visible clipping but the additional
 	// user specified clipping!)
-	int32 clippingRectCount;
-	link.Read<int32>(&clippingRectCount);
-	if (clippingRectCount >= 0) {
+	link.Read<bool>(&clipping_region_used);
+	if (clipping_region_used)
+		link.ReadRegion(&clipping_region);
+	else
 		clipping_region.MakeEmpty();
-		for (int32 i = 0; i < clippingRectCount; i++) {
-			BRect rect;
-			link.Read<BRect>(&rect);
-			clipping_region.Include(rect);
-		}
-	} else {
-		// no user clipping used
-		clipping_region_used = false;
-	}
 
-	valid_flags = ~B_VIEW_CLIP_REGION_BIT;
+	valid_flags = ~(B_VIEW_CLIP_REGION_BIT | B_VIEW_PARENT_COMPOSITE_BIT)
+		| (valid_flags & B_VIEW_PARENT_COMPOSITE_BIT);
 }
 
 }	// namespace BPrivate
@@ -368,7 +357,7 @@ struct BView::LayoutData {
 		fLayoutInvalidationDisabled(0),
 		fLayout(NULL),
 		fLayoutContext(NULL),
-		fLayoutItems(5, false),
+		fLayoutItems(5),
 		fLayoutValid(true),		// TODO: Rethink these initial values!
 		fMinMaxValid(true),		//
 		fLayoutInProgress(false),
@@ -1050,7 +1039,8 @@ BView::SetFlags(uint32 flags)
 
 		uint32 changesFlags = flags ^ fFlags;
 		if (changesFlags & (B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE
-				| B_FRAME_EVENTS | B_SUBPIXEL_PRECISE)) {
+				| B_FRAME_EVENTS | B_SUBPIXEL_PRECISE
+				| B_TRANSPARENT_BACKGROUND)) {
 			_CheckLockAndSwitchCurrent();
 
 			fOwner->fLink->StartMessage(AS_VIEW_SET_FLAGS);
@@ -1836,6 +1826,8 @@ BView::PushState()
 
 	fOwner->fLink->StartMessage(AS_VIEW_PUSH_STATE);
 
+	fState->valid_flags &= ~B_VIEW_PARENT_COMPOSITE_BIT;
+
 	// initialize origin, scale and transform, new states start "clean".
 	fState->valid_flags |= B_VIEW_SCALE_BIT | B_VIEW_ORIGIN_BIT
 		| B_VIEW_TRANSFORM_BIT;
@@ -1959,7 +1951,7 @@ BView::SetTransform(BAffineTransform transform)
 		_CheckLockAndSwitchCurrent();
 
 		fOwner->fLink->StartMessage(AS_VIEW_SET_TRANSFORM);
-		fOwner->fLink->Attach<BAffineTransform>(transform);
+		fOwner->fLink->AttachAffineTransform(transform);
 
 		fState->valid_flags |= B_VIEW_TRANSFORM_BIT;
 	}
@@ -1979,12 +1971,77 @@ BView::Transform() const
 
  		int32 code;
 		if (fOwner->fLink->FlushWithReply(code) == B_OK && code == B_OK)
-			fOwner->fLink->Read<BAffineTransform>(&fState->transform);
+			fOwner->fLink->ReadAffineTransform(&fState->transform);
 
 		fState->valid_flags |= B_VIEW_TRANSFORM_BIT;
 	}
 
 	return fState->transform;
+}
+
+
+BAffineTransform
+BView::TransformTo(coordinate_space basis) const
+{
+	if (basis == B_CURRENT_STATE_COORDINATES)
+		return B_AFFINE_IDENTITY_TRANSFORM;
+
+	if (!fState->IsValid(B_VIEW_PARENT_COMPOSITE_BIT) && fOwner != NULL) {
+		_CheckLockAndSwitchCurrent();
+
+		fOwner->fLink->StartMessage(AS_VIEW_GET_PARENT_COMPOSITE);
+
+		int32 code;
+		if (fOwner->fLink->FlushWithReply(code) == B_OK && code == B_OK) {
+			fOwner->fLink->ReadAffineTransform(&fState->parent_composite_transform);
+			fOwner->fLink->Read<float>(&fState->parent_composite_scale);
+			fOwner->fLink->Read<BPoint>(&fState->parent_composite_origin);
+		}
+
+		fState->valid_flags |= B_VIEW_PARENT_COMPOSITE_BIT;
+	}
+
+	BAffineTransform transform = fState->parent_composite_transform * Transform();
+	float scale = fState->parent_composite_scale * Scale();
+	transform.PreScaleBy(scale, scale);
+	BPoint origin = Origin();
+	origin.x *= fState->parent_composite_scale;
+	origin.y *= fState->parent_composite_scale;
+	origin += fState->parent_composite_origin;
+	transform.TranslateBy(origin);
+
+	if (basis == B_PREVIOUS_STATE_COORDINATES) {
+		transform.TranslateBy(-fState->parent_composite_origin);
+		transform.PreMultiplyInverse(fState->parent_composite_transform);
+		transform.ScaleBy(1.0f / fState->parent_composite_scale);
+		return transform;
+	}
+
+	if (basis == B_VIEW_COORDINATES)
+		return transform;
+
+	origin = B_ORIGIN;
+
+	if (basis == B_PARENT_VIEW_COORDINATES || basis == B_PARENT_VIEW_DRAW_COORDINATES) {
+		BView* parent = Parent();
+		if (parent != NULL) {
+			ConvertToParent(&origin);
+			transform.TranslateBy(origin);
+			if (basis == B_PARENT_VIEW_DRAW_COORDINATES)
+				transform = transform.PreMultiplyInverse(parent->TransformTo(B_VIEW_COORDINATES));
+			return transform;
+		}
+		basis = B_WINDOW_COORDINATES;
+	}
+
+	ConvertToScreen(&origin);
+	if (basis == B_WINDOW_COORDINATES) {
+		BWindow* window = Window();
+		if (window != NULL)
+			origin -= window->Frame().LeftTop();
+	}
+	transform.TranslateBy(origin);
+	return transform;
 }
 
 
@@ -2954,16 +3011,9 @@ BView::ConstrainClippingRegion(BRegion* region)
 	if (_CheckOwnerLockAndSwitchCurrent()) {
 		fOwner->fLink->StartMessage(AS_VIEW_SET_CLIP_REGION);
 
-		if (region) {
-			int32 count = region->CountRects();
-			fOwner->fLink->Attach<int32>(count);
-			if (count > 0)
-				fOwner->fLink->AttachRegion(*region);
-		} else {
-			fOwner->fLink->Attach<int32>(-1);
-			// '-1' means that in the app_server, there won't be any 'local'
-			// clipping region (it will be NULL)
-		}
+		fOwner->fLink->Attach<bool>(region != NULL);
+		if (region != NULL)
+			fOwner->fLink->AttachRegion(*region);
 
 		_FlushIfNotInTransaction();
 
@@ -3121,6 +3171,38 @@ BView::DrawBitmap(const BBitmap* bitmap)
 
 
 void
+BView::DrawTiledBitmapAsync(const BBitmap* bitmap, BRect viewRect,
+	BPoint phase)
+{
+	if (bitmap == NULL || fOwner == NULL || !viewRect.IsValid())
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	ViewDrawBitmapInfo info;
+	info.bitmapToken = bitmap->_ServerToken();
+	info.options = B_TILE_BITMAP;
+	info.viewRect = viewRect;
+	info.bitmapRect = bitmap->Bounds().OffsetToCopy(phase);
+
+	fOwner->fLink->StartMessage(AS_VIEW_DRAW_BITMAP);
+	fOwner->fLink->Attach<ViewDrawBitmapInfo>(info);
+
+	_FlushIfNotInTransaction();
+}
+
+
+void
+BView::DrawTiledBitmap(const BBitmap* bitmap, BRect viewRect, BPoint phase)
+{
+	if (fOwner) {
+		DrawTiledBitmapAsync(bitmap, viewRect, phase);
+		Sync();
+	}
+}
+
+
+void
 BView::DrawChar(char c)
 {
 	DrawString(&c, 1, PenLocation());
@@ -3252,6 +3334,31 @@ BView::StrokeEllipse(BRect rect, ::pattern pattern)
 
 
 void
+BView::StrokeEllipse(BPoint center, float xRadius, float yRadius,
+	const BGradient& gradient)
+{
+	StrokeEllipse(BRect(center.x - xRadius, center.y - yRadius,
+		center.x + xRadius, center.y + yRadius), gradient);
+}
+
+
+void
+BView::StrokeEllipse(BRect rect, const BGradient& gradient)
+{
+	if (fOwner == NULL)
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	fOwner->fLink->StartMessage(AS_STROKE_ELLIPSE_GRADIENT);
+	fOwner->fLink->Attach<BRect>(rect);
+	fOwner->fLink->AttachGradient(gradient);
+
+	_FlushIfNotInTransaction();
+}
+
+
+void
 BView::FillEllipse(BPoint center, float xRadius, float yRadius,
 	::pattern pattern)
 {
@@ -3330,6 +3437,34 @@ BView::StrokeArc(BRect rect, float startAngle, float arcAngle,
 
 
 void
+BView::StrokeArc(BPoint center, float xRadius, float yRadius, float startAngle,
+	float arcAngle, const BGradient& gradient)
+{
+	StrokeArc(BRect(center.x - xRadius, center.y - yRadius, center.x + xRadius,
+		center.y + yRadius), startAngle, arcAngle, gradient);
+}
+
+
+void
+BView::StrokeArc(BRect rect, float startAngle, float arcAngle,
+	const BGradient& gradient)
+{
+	if (fOwner == NULL)
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	fOwner->fLink->StartMessage(AS_STROKE_ARC_GRADIENT);
+	fOwner->fLink->Attach<BRect>(rect);
+	fOwner->fLink->Attach<float>(startAngle);
+	fOwner->fLink->Attach<float>(arcAngle);
+	fOwner->fLink->AttachGradient(gradient);
+
+	_FlushIfNotInTransaction();
+}
+
+
+void
 BView::FillArc(BPoint center,float xRadius, float yRadius, float startAngle,
 	float arcAngle, ::pattern pattern)
 {
@@ -3399,6 +3534,25 @@ BView::StrokeBezier(BPoint* controlPoints, ::pattern pattern)
 	fOwner->fLink->Attach<BPoint>(controlPoints[1]);
 	fOwner->fLink->Attach<BPoint>(controlPoints[2]);
 	fOwner->fLink->Attach<BPoint>(controlPoints[3]);
+
+	_FlushIfNotInTransaction();
+}
+
+
+void
+BView::StrokeBezier(BPoint* controlPoints, const BGradient& gradient)
+{
+	if (fOwner == NULL)
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	fOwner->fLink->StartMessage(AS_STROKE_BEZIER_GRADIENT);
+	fOwner->fLink->Attach<BPoint>(controlPoints[0]);
+	fOwner->fLink->Attach<BPoint>(controlPoints[1]);
+	fOwner->fLink->Attach<BPoint>(controlPoints[2]);
+	fOwner->fLink->Attach<BPoint>(controlPoints[3]);
+	fOwner->fLink->AttachGradient(gradient);
 
 	_FlushIfNotInTransaction();
 }
@@ -3486,6 +3640,58 @@ BView::StrokePolygon(const BPoint* pointArray, int32 numPoints, BRect bounds,
 		fOwner->fLink->Attach<bool>(closed);
 		fOwner->fLink->Attach<int32>(polygon.fCount);
 		fOwner->fLink->Attach(polygon.fPoints, polygon.fCount * sizeof(BPoint));
+
+		_FlushIfNotInTransaction();
+	} else {
+		fprintf(stderr, "ERROR: Can't send polygon to app_server!\n");
+	}
+}
+
+
+void
+BView::StrokePolygon(const BPolygon* polygon, bool closed, const BGradient& gradient)
+{
+	if (polygon == NULL)
+		return;
+
+	StrokePolygon(polygon->fPoints, polygon->fCount, polygon->Frame(), closed,
+		gradient);
+}
+
+
+void
+BView::StrokePolygon(const BPoint* pointArray, int32 numPoints, bool closed,
+	const BGradient& gradient)
+{
+	BPolygon polygon(pointArray, numPoints);
+
+	StrokePolygon(polygon.fPoints, polygon.fCount, polygon.Frame(), closed,
+		gradient);
+}
+
+
+void
+BView::StrokePolygon(const BPoint* pointArray, int32 numPoints, BRect bounds,
+	bool closed, const BGradient& gradient)
+{
+	if (pointArray == NULL
+		|| numPoints <= 1
+		|| fOwner == NULL)
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	BPolygon polygon(pointArray, numPoints);
+	polygon.MapTo(polygon.Frame(), bounds);
+
+	if (fOwner->fLink->StartMessage(AS_STROKE_POLYGON_GRADIENT,
+			polygon.fCount * sizeof(BPoint) + sizeof(BRect) + sizeof(bool)
+				+ sizeof(int32)) == B_OK) {
+		fOwner->fLink->Attach<BRect>(polygon.Frame());
+		fOwner->fLink->Attach<bool>(closed);
+		fOwner->fLink->Attach<int32>(polygon.fCount);
+		fOwner->fLink->Attach(polygon.fPoints, polygon.fCount * sizeof(BPoint));
+		fOwner->fLink->AttachGradient(gradient);
 
 		_FlushIfNotInTransaction();
 	} else {
@@ -3614,6 +3820,22 @@ BView::StrokeRect(BRect rect, ::pattern pattern)
 
 
 void
+BView::StrokeRect(BRect rect, const BGradient& gradient)
+{
+	if (fOwner == NULL)
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	fOwner->fLink->StartMessage(AS_STROKE_RECT_GRADIENT);
+	fOwner->fLink->Attach<BRect>(rect);
+	fOwner->fLink->AttachGradient(gradient);
+
+	_FlushIfNotInTransaction();
+}
+
+
+void
 BView::FillRect(BRect rect, ::pattern pattern)
 {
 	if (fOwner == NULL)
@@ -3669,6 +3891,25 @@ BView::StrokeRoundRect(BRect rect, float xRadius, float yRadius,
 	fOwner->fLink->Attach<BRect>(rect);
 	fOwner->fLink->Attach<float>(xRadius);
 	fOwner->fLink->Attach<float>(yRadius);
+
+	_FlushIfNotInTransaction();
+}
+
+
+void
+BView::StrokeRoundRect(BRect rect, float xRadius, float yRadius,
+	const BGradient& gradient)
+{
+	if (fOwner == NULL)
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	fOwner->fLink->StartMessage(AS_STROKE_ROUNDRECT_GRADIENT);
+	fOwner->fLink->Attach<BRect>(rect);
+	fOwner->fLink->Attach<float>(xRadius);
+	fOwner->fLink->Attach<float>(yRadius);
+	fOwner->fLink->AttachGradient(gradient);
 
 	_FlushIfNotInTransaction();
 }
@@ -3803,6 +4044,66 @@ BView::StrokeTriangle(BPoint point1, BPoint point2, BPoint point3,
 			bounds.bottom = point3.y;
 
 		StrokeTriangle(point1, point2, point3, bounds, pattern);
+	}
+}
+
+
+void
+BView::StrokeTriangle(BPoint point1, BPoint point2, BPoint point3, BRect bounds,
+	const BGradient& gradient)
+{
+	if (fOwner == NULL)
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	fOwner->fLink->StartMessage(AS_STROKE_TRIANGLE_GRADIENT);
+	fOwner->fLink->Attach<BPoint>(point1);
+	fOwner->fLink->Attach<BPoint>(point2);
+	fOwner->fLink->Attach<BPoint>(point3);
+	fOwner->fLink->Attach<BRect>(bounds);
+	fOwner->fLink->AttachGradient(gradient);
+
+	_FlushIfNotInTransaction();
+}
+
+
+void
+BView::StrokeTriangle(BPoint point1, BPoint point2, BPoint point3,
+	const BGradient& gradient)
+{
+	if (fOwner) {
+		// we construct the smallest rectangle that contains the 3 points
+		// for the 1st point
+		BRect bounds(point1, point1);
+
+		// for the 2nd point
+		if (point2.x < bounds.left)
+			bounds.left = point2.x;
+
+		if (point2.y < bounds.top)
+			bounds.top = point2.y;
+
+		if (point2.x > bounds.right)
+			bounds.right = point2.x;
+
+		if (point2.y > bounds.bottom)
+			bounds.bottom = point2.y;
+
+		// for the 3rd point
+		if (point3.x < bounds.left)
+			bounds.left = point3.x;
+
+		if (point3.y < bounds.top)
+			bounds.top = point3.y;
+
+		if (point3.x > bounds.right)
+			bounds.right = point3.x;
+
+		if (point3.y > bounds.bottom)
+			bounds.bottom = point3.y;
+
+		StrokeTriangle(point1, point2, point3, bounds, gradient);
 	}
 }
 
@@ -3957,12 +4258,42 @@ BView::StrokeLine(BPoint start, BPoint end, ::pattern pattern)
 
 
 void
+BView::StrokeLine(BPoint toPoint, const BGradient& gradient)
+{
+	StrokeLine(PenLocation(), toPoint, gradient);
+}
+
+
+void
+BView::StrokeLine(BPoint start, BPoint end, const BGradient& gradient)
+{
+	if (fOwner == NULL)
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	ViewStrokeLineInfo info;
+	info.startPoint = start;
+	info.endPoint = end;
+
+	fOwner->fLink->StartMessage(AS_STROKE_LINE_GRADIENT);
+	fOwner->fLink->Attach<ViewStrokeLineInfo>(info);
+	fOwner->fLink->AttachGradient(gradient);
+
+	_FlushIfNotInTransaction();
+
+	// this modifies our pen location, so we invalidate the flag.
+	fState->valid_flags &= ~B_VIEW_PEN_LOCATION_BIT;
+}
+
+
+void
 BView::StrokeShape(BShape* shape, ::pattern pattern)
 {
 	if (shape == NULL || fOwner == NULL)
 		return;
 
-	shape_data* sd = (shape_data*)shape->fPrivateData;
+	shape_data* sd = BShape::Private(*shape).PrivateData();
 	if (sd->opCount == 0 || sd->ptCount == 0)
 		return;
 
@@ -3971,10 +4302,28 @@ BView::StrokeShape(BShape* shape, ::pattern pattern)
 
 	fOwner->fLink->StartMessage(AS_STROKE_SHAPE);
 	fOwner->fLink->Attach<BRect>(shape->Bounds());
-	fOwner->fLink->Attach<int32>(sd->opCount);
-	fOwner->fLink->Attach<int32>(sd->ptCount);
-	fOwner->fLink->Attach(sd->opList, sd->opCount * sizeof(uint32));
-	fOwner->fLink->Attach(sd->ptList, sd->ptCount * sizeof(BPoint));
+	fOwner->fLink->AttachShape(*shape);
+
+	_FlushIfNotInTransaction();
+}
+
+
+void
+BView::StrokeShape(BShape* shape, const BGradient& gradient)
+{
+	if (shape == NULL || fOwner == NULL)
+		return;
+
+	shape_data* sd = BShape::Private(*shape).PrivateData();
+	if (sd->opCount == 0 || sd->ptCount == 0)
+		return;
+
+	_CheckLockAndSwitchCurrent();
+
+	fOwner->fLink->StartMessage(AS_STROKE_SHAPE_GRADIENT);
+	fOwner->fLink->Attach<BRect>(shape->Bounds());
+	fOwner->fLink->AttachShape(*shape);
+	fOwner->fLink->AttachGradient(gradient);
 
 	_FlushIfNotInTransaction();
 }
@@ -3986,7 +4335,7 @@ BView::FillShape(BShape* shape, ::pattern pattern)
 	if (shape == NULL || fOwner == NULL)
 		return;
 
-	shape_data* sd = (shape_data*)(shape->fPrivateData);
+	shape_data* sd = BShape::Private(*shape).PrivateData();
 	if (sd->opCount == 0 || sd->ptCount == 0)
 		return;
 
@@ -3995,10 +4344,7 @@ BView::FillShape(BShape* shape, ::pattern pattern)
 
 	fOwner->fLink->StartMessage(AS_FILL_SHAPE);
 	fOwner->fLink->Attach<BRect>(shape->Bounds());
-	fOwner->fLink->Attach<int32>(sd->opCount);
-	fOwner->fLink->Attach<int32>(sd->ptCount);
-	fOwner->fLink->Attach(sd->opList, sd->opCount * sizeof(int32));
-	fOwner->fLink->Attach(sd->ptList, sd->ptCount * sizeof(BPoint));
+	fOwner->fLink->AttachShape(*shape);
 
 	_FlushIfNotInTransaction();
 }
@@ -4010,7 +4356,7 @@ BView::FillShape(BShape* shape, const BGradient& gradient)
 	if (shape == NULL || fOwner == NULL)
 		return;
 
-	shape_data* sd = (shape_data*)(shape->fPrivateData);
+	shape_data* sd = BShape::Private(*shape).PrivateData();
 	if (sd->opCount == 0 || sd->ptCount == 0)
 		return;
 
@@ -4018,10 +4364,7 @@ BView::FillShape(BShape* shape, const BGradient& gradient)
 
 	fOwner->fLink->StartMessage(AS_FILL_SHAPE_GRADIENT);
 	fOwner->fLink->Attach<BRect>(shape->Bounds());
-	fOwner->fLink->Attach<int32>(sd->opCount);
-	fOwner->fLink->Attach<int32>(sd->ptCount);
-	fOwner->fLink->Attach(sd->opList, sd->opCount * sizeof(int32));
-	fOwner->fLink->Attach(sd->ptList, sd->ptCount * sizeof(BPoint));
+	fOwner->fLink->AttachShape(*shape);
 	fOwner->fLink->AttachGradient(gradient);
 
 	_FlushIfNotInTransaction();
@@ -4391,6 +4734,9 @@ BView::Invalidate(BRect invalRect)
 
 	_CheckLockAndSwitchCurrent();
 
+	if (!fBounds.Intersects(invalRect))
+		return;
+
 	fOwner->fLink->StartMessage(AS_VIEW_INVALIDATE_RECT);
 	fOwner->fLink->Attach<BRect>(invalRect);
 
@@ -4413,6 +4759,9 @@ BView::Invalidate(const BRegion* region)
 		return;
 
 	_CheckLockAndSwitchCurrent();
+
+	if (!fBounds.Intersects(region->Frame()))
+		return;
 
 	fOwner->fLink->StartMessage(AS_VIEW_INVALIDATE_REGION);
 	fOwner->fLink->AttachRegion(*region);
@@ -5089,13 +5438,19 @@ BView::MessageReceived(BMessage* message)
 				break;
 
 			case B_SCREEN_CHANGED:
+			case B_WORKSPACE_ACTIVATED:
+			case B_WORKSPACES_CHANGED:
 			{
-				// propegate message to child views
+				BWindow* window = Window();
+				if (window == NULL)
+					break;
+
+				// propagate message to child views
 				int32 childCount = CountChildren();
 				for (int32 i = 0; i < childCount; i++) {
 					BView* view = ChildAt(i);
 					if (view != NULL)
-						view->MessageReceived(message);
+						window->PostMessage(message, view);
 				}
 				break;
 			}
@@ -5605,6 +5960,10 @@ BView::ShowToolTip(BToolTip* tip)
 void
 BView::HideToolTip()
 {
+	if (fToolTip == NULL)
+		return;
+
+	// TODO: Only hide if ours is the tooltip that's showing!
 	BToolTipManager::Manager()->HideTip();
 }
 
@@ -5875,17 +6234,14 @@ BView::_ClipToShape(BShape* shape, bool inverse)
 	if (shape == NULL)
 		return;
 
-	shape_data* sd = (shape_data*)shape->fPrivateData;
+	shape_data* sd = BShape::Private(*shape).PrivateData();
 	if (sd->opCount == 0 || sd->ptCount == 0)
 		return;
 
 	if (_CheckOwnerLockAndSwitchCurrent()) {
 		fOwner->fLink->StartMessage(AS_VIEW_CLIP_TO_SHAPE);
 		fOwner->fLink->Attach<bool>(inverse);
-		fOwner->fLink->Attach<int32>(sd->opCount);
-		fOwner->fLink->Attach<int32>(sd->ptCount);
-		fOwner->fLink->Attach(sd->opList, sd->opCount * sizeof(uint32));
-		fOwner->fLink->Attach(sd->ptList, sd->ptCount * sizeof(BPoint));
+		fOwner->fLink->AttachShape(*shape);
 		_FlushIfNotInTransaction();
 	}
 }

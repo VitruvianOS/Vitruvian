@@ -645,7 +645,7 @@ BStatusView::Draw(BRect updateRect)
 	BRect bounds(Bounds());
 	be_control_look->DrawRaisedBorder(this, bounds, updateRect, ViewColor());
 
-	SetHighColor(0, 0, 0);
+	SetHighUIColor(B_PANEL_TEXT_COLOR);
 
 	BPoint tp = fStatusBar->Frame().LeftBottom();
 	font_height fh;
@@ -684,7 +684,11 @@ BStatusView::Draw(BRect updateRect)
 		DrawString(destinationString.String(), textPoint);
 	}
 
-	SetHighColor(tint_color(LowColor(), B_DARKEN_4_TINT));
+	if (LowColor().IsLight())
+		SetHighColor(tint_color(LowColor(), B_DARKEN_4_TINT));
+	else
+		SetHighColor(tint_color(LowColor(), B_LIGHTEN_2_TINT));
+
 	font.SetSize(smallFontSize);
 	SetFont(&font, B_FONT_SIZE);
 
@@ -794,26 +798,31 @@ BStatusView::_TimeStatusString(float availableSpace, float* _width)
 	double secondsRemaining = (fTotalSize - fSizeProcessed)
 		/ totalBytesPerSecond;
 	time_t now = (time_t)real_time_clock();
-	time_t finishTime = (time_t)(now + secondsRemaining);
 
-	char timeText[32];
-	if (finishTime - now > kSecondsPerDay) {
-		BDateTimeFormat().Format(timeText, sizeof(timeText), finishTime,
-			B_MEDIUM_DATE_FORMAT, B_MEDIUM_TIME_FORMAT);
+	BString string;
+	if (secondsRemaining < 0 || (sizeof(time_t) == 4
+		&& now + secondsRemaining > INT32_MAX)) {
+		string = B_TRANSLATE("Finish: after several years");
 	} else {
-		BTimeFormat().Format(timeText, sizeof(timeText), finishTime,
-			B_MEDIUM_TIME_FORMAT);
-	}
+		char timeText[32];
+		time_t finishTime = (time_t)(now + secondsRemaining);
 
-	BString string(_FullTimeRemainingString(now, finishTime, timeText));
-	float width = StringWidth(string.String());
-	if (width > availableSpace) {
-		string.SetTo(_ShortTimeRemainingString(timeText));
-		width = StringWidth(string.String());
+		if (finishTime - now > kSecondsPerDay) {
+			BDateTimeFormat().Format(timeText, sizeof(timeText), finishTime,
+					B_MEDIUM_DATE_FORMAT, B_MEDIUM_TIME_FORMAT);
+		} else {
+			BTimeFormat().Format(timeText, sizeof(timeText), finishTime,
+					B_MEDIUM_TIME_FORMAT);
+		}
+		string = _FullTimeRemainingString(now, finishTime, timeText);
+		float width = StringWidth(string.String());
+		if (width > availableSpace) {
+			string.SetTo(_ShortTimeRemainingString(timeText));
+		}
 	}
 
 	if (_width != NULL)
-		*_width = width;
+		*_width = StringWidth(string.String());
 
 	return string;
 }

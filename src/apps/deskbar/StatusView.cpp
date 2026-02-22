@@ -69,10 +69,20 @@ All rights reserved.
 #include "icons.h"
 
 #include "BarApp.h"
+#include "BarMenuBar.h"
 #include "DeskbarUtils.h"
+#include "ExpandoMenuBar.h"
 #include "ResourceSet.h"
 #include "StatusViewShelf.h"
 #include "TimeView.h"
+
+
+static const float kVerticalMiniMultiplier = 2.9f;
+
+float sIconGap = 0.0f;
+float gDragWidth, gDragRegionWidth = 0.0f;
+float gMinReplicantHeight, gMinReplicantWidth = 0.0f;
+float gMinimumTrayWidth, gMinimumWindowWidth, gMaximumWindowWidth = 0.0f;
 
 
 #ifdef DB_ADDONS
@@ -86,9 +96,6 @@ const char* const kInstantiateItemCFunctionName = "instantiate_deskbar_item";
 const char* const kInstantiateEntryCFunctionName = "instantiate_deskbar_entry";
 const char* const kReplicantSettingsFile = "replicants";
 const char* const kReplicantPathField = "replicant_path";
-
-float gMinimumWindowWidth = kGutter + kMinimumTrayWidth + kDragRegionWidth;
-float gMaximumWindowWidth = gMinimumWindowWidth * 2;
 
 
 static void
@@ -126,30 +133,37 @@ DumpList(BList* itemlist)
 
 // don't change the name of this view to anything other than "Status"!
 
-TReplicantTray::TReplicantTray(TBarView* parent, bool vertical)
+TReplicantTray::TReplicantTray(TBarView* barView)
 	:
 	BView(BRect(0, 0, 1, 1), "Status", B_FOLLOW_LEFT | B_FOLLOW_TOP,
 		B_WILL_DRAW | B_FRAME_EVENTS),
 	fTime(NULL),
-	fBarView(parent),
+	fBarView(barView),
 	fShelf(new TReplicantShelf(this)),
-	fMultiRowMode(vertical),
+	fMinimumTrayWidth(gMinimumTrayWidth),
+	fTrayPadding(3.0f),
+	fClockMargin(12.0f),
 	fAlignmentSupport(false)
 {
-	fMaxReplicantHeight = std::max(kMinReplicantHeight,
-		floorf(kMinReplicantHeight * be_plain_font->Size() / 12));
+	// scale replicants by font size
+	fMaxReplicantHeight
+		= std::max(gMinReplicantHeight, (float)static_cast<TBarApp*>(be_app)->TeamIconSize());
+	// but not bigger than TabHeight which depends on be_bold_font
+	// TODO this should only apply to mini-mode but we set it once here for all
+	fMaxReplicantHeight = std::min(fMaxReplicantHeight, fBarView->TabHeight() - 1);
 	// TODO: depends on window size... (so use something like
 	// max(129, height * 3), and restrict the minimum window width for it)
+	// Use bold font because it depends on the window tab height.
 	fMaxReplicantWidth = 129;
 
 	fMinTrayHeight = kGutter + fMaxReplicantHeight + kGutter;
-	if (vertical)
-		fMinimumTrayWidth = gMinimumWindowWidth - kGutter - kDragRegionWidth;
-	else
-		fMinimumTrayWidth = kMinimumTrayWidth;
+	if (fBarView != NULL && fBarView->Vertical()
+		&& (fBarView->ExpandoState() || fBarView->FullState())) {
+		fMinimumTrayWidth = gMinimumWindowWidth - kGutter - gDragRegionWidth;
+	}
 
 	// Create the time view
-	fTime = new TTimeView(fMinimumTrayWidth, fMaxReplicantHeight - 1.0);
+	fTime = new TTimeView(fMinimumTrayWidth, fMaxReplicantHeight + 1, fBarView);
 }
 
 
@@ -165,14 +179,13 @@ TReplicantTray::AttachedToWindow()
 {
 	BView::AttachedToWindow();
 
-	if (be_control_look != NULL) {
-		AdoptParentColors();
-	} else {
-		SetViewUIColor(B_MENU_BACKGROUND_COLOR,	B_DARKEN_1_TINT);
-	}
+	AdoptParentColors();
 	SetDrawingMode(B_OP_COPY);
 
 	Window()->SetPulseRate(1000000);
+
+	fTrayPadding = ceilf(be_control_look->ComposeSpacing(kTrayPadding) / 2);
+	fClockMargin = fTrayPadding * 4;
 
 	clock_settings* clock = ((TBarApp*)be_app)->ClockSettings();
 	fTime->SetShowSeconds(clock->showSeconds);
@@ -181,8 +194,8 @@ TReplicantTray::AttachedToWindow()
 
 	AddChild(fTime);
 
-	fTime->MoveTo(Bounds().right - fTime->Bounds().Width() - kTrayPadding, 2);
-	fTime->SetOrientation(fMultiRowMode);
+	fTime->MoveTo(Bounds().right - fTime->Bounds().Width() - fTrayPadding, 2);
+		// will be moved into place later
 
 	if (!((TBarApp*)be_app)->Settings()->showClock)
 		fTime->Hide();
@@ -220,9 +233,10 @@ TReplicantTray::GetPreferredSize(float* preferredWidth, float* preferredHeight)
 	float width = 0;
 	float height = fMinTrayHeight;
 
-	if (fMultiRowMode) {
-		width = static_cast<TBarApp*>(be_app)->Settings()->width
-			- kDragWidth - kGutter;
+	if (fBarView->Vertical()) {
+		width = static_cast<TBarApp*>(be_app)->Settings()->width - gDragWidth - kGutter;
+		width = std::max(gMinimumTrayWidth, width);
+
 		if (fRightBottomReplicant.IsValid())
 			height = fRightBottomReplicant.bottom;
 		else if (ReplicantCount() > 0) {
@@ -230,25 +244,31 @@ TReplicantTray::GetPreferredSize(float* preferredWidth, float* preferredHeight)
 			// to show all the replicants and gutters.
 			int32 rowCount = (int32)(height / fMaxReplicantHeight);
 			height = kGutter + (rowCount * fMaxReplicantHeight)
-				+ ((rowCount - 1) * kIconGap) + kGutter;
+				+ ((rowCount - 1) * sIconGap) + kGutter;
 			height = std::max(fMinTrayHeight, height);
 		} else
 			height = fMinTrayHeight;
 	} else {
 		// if last replicant overruns clock then resize to accomodate
 		if (ReplicantCount() > 0) {
-			if (!fTime->IsHidden() && Bounds().right - kTrayPadding - 2
-						- fTime->Frame().Width() - kClockMargin
-					< fRightBottomReplicant.right + kClockMargin) {
-				width = fRightBottomReplicant.right + kClockMargin
-					+ fTime->Frame().Width() + kTrayPadding + 2;
+			if (!fTime->IsHidden(fTime) && Bounds().right - fTrayPadding - 2
+						- fTime->Frame().Width() - fClockMargin
+					< fRightBottomReplicant.right + fClockMargin) {
+				width = fRightBottomReplicant.right + fClockMargin
+					+ fTime->Frame().Width() + fTrayPadding + 2;
 			} else
-				width = fRightBottomReplicant.right + kIconGap + kGutter;
+				width = fRightBottomReplicant.right + sIconGap + kGutter;
 		}
 
 		// this view has a fixed minimum width
-		width = std::max(kMinimumTrayWidth, width);
-		height = kGutter + static_cast<TBarApp*>(be_app)->IconSize() + kGutter;
+		width = std::max(gMinimumTrayWidth, width);
+
+		// if mini-mode set to tab height
+		// else if horizontal mode set to team menu item height
+		if (fBarView->MiniState())
+			height = std::max(fMinTrayHeight, fBarView->TabHeight() - 1);
+		else
+			height = fBarView->TeamMenuItemHeight();
 	}
 
 	*preferredWidth = width;
@@ -329,7 +349,7 @@ TReplicantTray::MessageReceived(BMessage* message)
 			if (fTime == NULL)
 				return;
 
-			bool showClock = !fTime->IsHidden();
+			bool showClock = !fTime->IsHidden(fTime);
 			bool showSeconds = fTime->ShowSeconds();
 			bool showDayOfWeek = fTime->ShowDayOfWeek();
 			bool showTimeZone = fTime->ShowTimeZone();
@@ -405,11 +425,10 @@ void
 TReplicantTray::ShowReplicantMenu(BPoint point)
 {
 	BPopUpMenu* menu = new BPopUpMenu("", false, false);
-	menu->SetFont(be_plain_font);
 
 	// If clock is visible show the extended menu, otherwise show "Show clock"
 
-	if (!fTime->IsHidden())
+	if (!fTime->IsHidden(fTime))
 		fTime->ShowTimeOptions(ConvertToScreen(point));
 	else {
 		BMenuItem* item = new BMenuItem(B_TRANSLATE("Show clock"),
@@ -420,13 +439,6 @@ TReplicantTray::ShowReplicantMenu(BPoint point)
 		menu->Go(where, true, true, BRect(where - BPoint(4, 4),
 			where + BPoint(4, 4)), true);
 	}
-}
-
-
-void
-TReplicantTray::SetMultiRow(bool state)
-{
-	fMultiRowMode = state;
 }
 
 
@@ -578,11 +590,11 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 			const char* name;
 			#ifdef __VOS_OLD_NODE_MONITOR__
 			if (message->FindString("name", &name) == B_OK
-				&& message->FindUInt64("from directory", &(ref.directory))
+				&& message->FindInt64("from directory", &(ref.directory))
 					== B_OK
-				&& message->FindUInt64("to directory", &todirectory) == B_OK
-				&& message->FindUInt64("device", &(ref.device)) == B_OK
-				&& message->FindUInt64("node", &node) == B_OK ) {
+				&& message->FindInt64("to directory", &todirectory) == B_OK
+				&& message->FindInt32("device", &(ref.device)) == B_OK
+				&& message->FindInt64("node", &node) == B_OK ) {
 
 				if (name == NULL)
 					break;
@@ -601,9 +613,8 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 			#ifdef __VOS_OLD_NODE_MONITOR__
 			// entry was rm'd from the device
 			node_ref nodeRef;
-
-			if (message->FindUInt64("device", &(nodeRef.device)) == B_OK
-				&& message->FindUInt64("node", &(nodeRef.node)) == B_OK) {
+			if (message->FindInt32("device", &(nodeRef.device)) == B_OK
+				&& message->FindInt64("node", &(nodeRef.node)) == B_OK) {
 				DeskbarItemInfo* item = DeskbarItemFor(nodeRef);
 				if (item == NULL)
 					break;
@@ -1139,7 +1150,7 @@ TReplicantTray::AcceptAddon(BRect replicantFrame, BMessage* message)
 
 	alignment align = B_ALIGN_LEFT;
 	if (fAlignmentSupport && message->HasBool("deskbar:dynamic_align")) {
-		if (!fBarView->Vertical())
+		if (!fBarView->Vertical() && !fBarView->MiniState())
 			align = B_ALIGN_RIGHT;
 		else
 			align = fBarView->Left() ? B_ALIGN_LEFT : B_ALIGN_RIGHT;
@@ -1167,23 +1178,40 @@ TReplicantTray::AcceptAddon(BRect replicantFrame, BMessage* message)
 BPoint
 TReplicantTray::LocationForReplicant(int32 index, float replicantWidth)
 {
-	BPoint loc(kTrayPadding, 2);
-	if (fBarView->Vertical()) {
-		if (!fBarView->Left())
-			loc.x += kDragWidth; // move past dragger
-	} else
-		loc.x += 1; // keeps everything lined up nicely
+	BPoint loc(fTrayPadding, 0);
+	if (fBarView->Vertical() || fBarView->MiniState()) {
+		if (fBarView->Vertical() && !fBarView->Left())
+			loc.x += gDragWidth; // move past dragger on left
 
-	if (fMultiRowMode) {
+		loc.y = floorf((fBarView->TabHeight() - 1 - fMaxReplicantHeight) / 2);
+	} else {
+		loc.x -= 2; // keeps everything lined up nicely
+		const int32 iconSize = static_cast<TBarApp*>(be_app)->TeamIconSize();
+		float yOffset = iconSize > B_MINI_ICON ? 3 : 2;
+			// squeeze icons in there at 16x16, reduce border by 1px
+
+		if (fBarView->Top()) {
+			// align top
+			loc.y = yOffset;
+		} else {
+			// align bottom
+			loc.y = fBarView->TeamMenuItemHeight() + 1 - fMaxReplicantHeight - yOffset;
+		}
+	}
+
+	// move clock vertically centered in first row next to replicants
+	fTime->MoveTo(Bounds().right - fTime->Bounds().Width() - fTrayPadding,
+		loc.y + floorf((fMaxReplicantHeight - fTime->fHeight) / 2));
+
+	if (fBarView->Vertical()) {
 		// try to find free space in every row
-		for (int32 row = 0; ; loc.y += fMaxReplicantHeight + kIconGap, row++) {
+		for (int32 row = 0; ; loc.y += fMaxReplicantHeight + sIconGap, row++) {
 			// determine free space in this row
 			BRect rowRect(loc.x, loc.y,
-				loc.x + static_cast<TBarApp*>(be_app)->Settings()->width
-					- (kTrayPadding + kDragWidth + kGutter) * 2,
+				loc.x + Bounds().Width() - fTrayPadding,
 				loc.y + fMaxReplicantHeight);
-			if (row == 0 && !fTime->IsHidden())
-				rowRect.right -= kClockMargin + fTime->Frame().Width();
+			if (row == 0 && !fTime->IsHidden(fTime))
+				rowRect.right -= fClockMargin + fTime->Frame().Width();
 
 			BRect replicantRect = rowRect;
 			for (int32 i = 0; i < index; i++) {
@@ -1193,10 +1221,11 @@ TReplicantTray::LocationForReplicant(int32 index, float replicantWidth)
 					continue;
 
 				// push this replicant placement past the last one
-				replicantRect.left = view->Frame().right + kIconGap + 1;
+				replicantRect.left = view->Frame().right + sIconGap + 1;
 			}
 
-			// calculated left position, add replicantWidth to get right position
+			// calculated left position, add replicantWidth to get the
+			// right position
 			replicantRect.right = replicantRect.left + replicantWidth;
 
 			// check if replicant fits in this row
@@ -1208,14 +1237,16 @@ TReplicantTray::LocationForReplicant(int32 index, float replicantWidth)
 
 			// check next row
 		}
-	} else if (index > 0) {
-		// get the last replicant added for placement reference
-		BView* view = NULL;
-		fShelf->ReplicantAt(index - 1, &view);
-		if (view != NULL) {
-			// push this replicant placement past the last one
-			loc.x = view->Frame().right + kIconGap + 1;
-			loc.y = view->Frame().top;
+	} else {
+		// horizontal
+		if (index > 0) {
+			// get the last replicant added for placement reference
+			BView* view = NULL;
+			fShelf->ReplicantAt(index - 1, &view);
+			if (view != NULL) {
+				// push this replicant placement past the last one
+				loc.x = view->Frame().right + sIconGap + 1;
+			}
 		}
 	}
 
@@ -1323,11 +1354,11 @@ TReplicantTray::SaveTimeSettings()
 /*! Draggable region that is asynchronous so that dragging does not block
 	other activities.
 */
-TDragRegion::TDragRegion(TBarView* parent, BView* replicantTray)
+TDragRegion::TDragRegion(TBarView* barView, BView* replicantTray)
 	:
 	BControl(BRect(0, 0, 0, 0), "", "", NULL, B_FOLLOW_NONE,
-		B_WILL_DRAW | B_FRAME_EVENTS),
-	fBarView(parent),
+		B_WILL_DRAW | B_DRAW_ON_CHILDREN | B_FRAME_EVENTS),
+	fBarView(barView),
 	fReplicantTray(replicantTray),
 	fDragLocation(kAutoPlaceDragRegion)
 {
@@ -1339,10 +1370,9 @@ TDragRegion::AttachedToWindow()
 {
 	BView::AttachedToWindow();
 
-	if (be_control_look != NULL)
-		SetViewUIColor(B_MENU_BACKGROUND_COLOR, 1.1);
-	else
-		SetViewUIColor(B_MENU_BACKGROUND_COLOR);
+	CalculateRegions();
+
+	SetViewUIColor(B_MENU_BACKGROUND_COLOR, 1.1);
 
 	ResizeToPreferred();
 }
@@ -1356,11 +1386,14 @@ TDragRegion::GetPreferredSize(float* width, float* height)
 	*height = fReplicantTray->Bounds().Height();
 
 	if (fDragLocation != kNoDragRegion)
-		*width += kDragWidth + kGutter;
+		*width += gDragWidth + kGutter;
 	else
 		*width += 6;
 
-	*height += 2;
+	if (fBarView->Vertical() && !fBarView->MiniState())
+		*height += 3; // add a pixel for an extra border on top
+	else
+		*height += 2; // all other modes have a 1px border on top and bottom
 }
 
 
@@ -1371,60 +1404,43 @@ TDragRegion::Draw(BRect updateRect)
 	rgb_color hilite = tint_color(menuColor, B_DARKEN_1_TINT);
 	rgb_color ldark = tint_color(menuColor, 1.02);
 	rgb_color dark = tint_color(menuColor, B_DARKEN_2_TINT);
-	rgb_color vvdark = tint_color(menuColor, B_DARKEN_4_TINT);
-	rgb_color light = tint_color(menuColor, B_LIGHTEN_2_TINT);
 
 	BRect frame(Bounds());
 	BeginLineArray(4);
 
-	if (be_control_look != NULL) {
-		if (fBarView->Vertical()) {
-			AddLine(frame.LeftTop(), frame.RightTop(), dark);
-			AddLine(BPoint(frame.left, frame.top + 1),
-				BPoint(frame.right, frame.top + 1), ldark);
-			AddLine(frame.LeftBottom(), frame.RightBottom(), hilite);
-		} else if (fBarView->AcrossTop() || fBarView->AcrossBottom()) {
-			AddLine(frame.LeftTop(),
-				BPoint(frame.left, frame.bottom), dark);
-			AddLine(BPoint(frame.left + 1, frame.top + 1),
-				BPoint(frame.right - 1, frame.top + 1), light);
-			AddLine(BPoint(frame.right, frame.top + 2),
-				BPoint(frame.right, frame.bottom), hilite);
-			AddLine(BPoint(frame.left + 1, frame.bottom),
-				BPoint(frame.right - 1, frame.bottom), hilite);
-		}
+	if (fBarView->Vertical()) {
+		// vertical expando full or mini state, draw 2 lines at the top
+		AddLine(frame.LeftTop(), frame.RightTop(), dark);
+		AddLine(BPoint(frame.left, frame.top + 1),
+			BPoint(frame.right, frame.top + 1), ldark);
+		// add hilight along bottom
+		AddLine(BPoint(frame.left + 1, frame.bottom),
+			BPoint(frame.right - 1, frame.bottom), hilite);
 	} else {
-		if (fBarView->Vertical()) {
-			AddLine(frame.LeftTop(), frame.RightTop(), light);
-			AddLine(frame.LeftTop(), frame.LeftBottom(), light);
-			AddLine(frame.RightBottom(), frame.RightTop(), hilite);
-		} else if (fBarView->AcrossTop()) {
-			AddLine(BPoint(frame.left, frame.top + 1),
-				BPoint(frame.right - 1, frame.top + 1), light);
-			AddLine(frame.RightTop(), frame.RightBottom(), vvdark);
-			AddLine(BPoint(frame.right - 1, frame.top + 2),
-				BPoint(frame.right - 1, frame.bottom - 1), hilite);
-			AddLine(frame.LeftBottom(),
-				BPoint(frame.right - 1, frame.bottom), hilite);
-		} else if (fBarView->AcrossBottom()) {
-			AddLine(BPoint(frame.left, frame.top + 1),
-				BPoint(frame.right - 1, frame.top + 1), light);
-			AddLine(frame.LeftBottom(), frame.RightBottom(), hilite);
-			AddLine(frame.RightTop(), frame.RightBottom(), vvdark);
-			AddLine(BPoint(frame.right - 1, frame.top + 1),
-				BPoint(frame.right - 1, frame.bottom - 1), hilite);
+		// mini-mode or horizontal, draw hilight along top left and bottom
+		AddLine(frame.LeftTop(), frame.RightTop(), hilite);
+		AddLine(BPoint(frame.left, frame.top + 1), frame.LeftBottom(), hilite);
+		if (!fBarView->Vertical()) {
+			// only draw bottom hilight in horizontal mode
+			AddLine(BPoint(frame.left + 1, frame.bottom - 3),
+				BPoint(frame.right - 1, frame.bottom - 3), hilite);
 		}
 	}
 
 	EndLineArray();
-
-	if (fDragLocation != kDontDrawDragRegion || fDragLocation != kNoDragRegion)
-		DrawDragRegion();
 }
 
 
 void
-TDragRegion::DrawDragRegion()
+TDragRegion::DrawAfterChildren(BRect updateRect)
+{
+	if (fDragLocation != kDontDrawDragRegion || fDragLocation != kNoDragRegion)
+		DrawDragger();
+}
+
+
+void
+TDragRegion::DrawDragger()
 {
 	BRect dragRegion(DragRegion());
 
@@ -1434,26 +1450,37 @@ TDragRegion::DrawDragRegion()
 		// draw drag region highlighted if tracking mouse
 		menuHilite = tint_color(menuColor, B_HIGHLIGHT_BACKGROUND_TINT);
 		SetHighColor(menuHilite);
-		FillRect(dragRegion);
+		FillRect(dragRegion.InsetByCopy(0, -1));
 	} else {
 		SetHighColor(menuColor);
-		FillRect(dragRegion);
+		FillRect(dragRegion.InsetByCopy(0, 1));
 	}
 
 	rgb_color vdark = tint_color(menuHilite, B_DARKEN_3_TINT);
 	rgb_color light = tint_color(menuHilite, B_LIGHTEN_2_TINT);
 
-	BeginLineArray(dragRegion.IntegerHeight());
+	rgb_color dark = tint_color(menuHilite, B_DARKEN_2_TINT);
+
+	BeginLineArray(dragRegion.IntegerHeight() + 2);
 	BPoint where;
 	where.x = floorf((dragRegion.left + dragRegion.right) / 2 + 0.5) - 1;
 	where.y = dragRegion.top + 2;
 
-	while (where.y + 1 <= dragRegion.bottom) {
+	while (where.y + 1 <= dragRegion.bottom - 2) {
 		AddLine(where, where, vdark);
 		AddLine(where + BPoint(1, 1), where + BPoint(1, 1), light);
 
 		where.y += 3;
 	}
+
+	if (fBarView != NULL && fBarView->Vertical() && fBarView->MiniState()
+		&& !fBarView->Top()) {
+		// extend bottom border in bottom mini-mode
+		AddLine(BPoint(dragRegion.left, dragRegion.bottom - 2),
+			BPoint(dragRegion.right, dragRegion.bottom - 2),
+				IsTracking() ? menuHilite : dark);
+	}
+
 	EndLineArray();
 }
 
@@ -1461,33 +1488,19 @@ TDragRegion::DrawDragRegion()
 BRect
 TDragRegion::DragRegion() const
 {
-	float kTopBottomInset = 2;
-	float kLeftRightInset = 1;
-	if (be_control_look != NULL) {
-		kTopBottomInset = 1;
-		kLeftRightInset = 0;
-	}
-
 	BRect dragRegion(Bounds());
-	dragRegion.top += kTopBottomInset;
-	dragRegion.bottom -= kTopBottomInset;
 
 	bool placeOnLeft = false;
 	if (fDragLocation == kAutoPlaceDragRegion) {
-		if (fBarView->Vertical() && fBarView->Left())
-			placeOnLeft = true;
-		else
-			placeOnLeft = false;
+		placeOnLeft = fBarView->Left()
+			&& (fBarView->Vertical() || fBarView->MiniState());
 	} else
 		placeOnLeft = fDragLocation == kDragRegionLeft;
 
-	if (placeOnLeft) {
-		dragRegion.left += kLeftRightInset;
-		dragRegion.right = dragRegion.left + kDragWidth;
-	} else {
-		dragRegion.right += kLeftRightInset;
-		dragRegion.left = dragRegion.right - kDragWidth;
-	}
+	if (placeOnLeft)
+		dragRegion.right = dragRegion.left + gDragWidth;
+	else
+		dragRegion.left = dragRegion.right - gDragWidth;
 
 	return dragRegion;
 }
@@ -1537,11 +1550,11 @@ TDragRegion::MouseUp(BPoint where)
 
 
 bool
-TDragRegion::SwitchModeForRect(BPoint where, BRect rect,
+TDragRegion::SwitchModeForRegion(BPoint where, BRegion region,
 	bool newVertical, bool newLeft, bool newTop, int32 newState)
 {
-	if (!rect.Contains(where)) {
-		// not our rect
+	if (!region.Contains(where)) {
+		// not our region
 		return false;
 	}
 
@@ -1557,82 +1570,176 @@ TDragRegion::SwitchModeForRect(BPoint where, BRect rect,
 }
 
 
+//! Deskbar regions
+//
+// ┌───────3──────────┬─────────────────────────────────┬──────────3───────┐
+// ├────────────────┬─┘                                 └─┬────────────────┤
+// │       2        │                                     │        2       │
+// ├────────────────┤                                     ├────────────────┤
+// │                │                                     │                │
+// │                │                                     │                │
+// │                │                  4                  │                │
+// │                │                                     │                │
+// │                │                                     │                │
+// │       1        │                                     │        1       │
+// │                │                                     │                │
+// │                │                                     │                │
+// │                ├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤                │
+// │                │                                     │                │
+// │                │                                     │                │
+// │                │                                     │                │
+// ├────────────────┘                                     └────────────────┤
+// │                                                                       │
+// │                                   4                                   │
+// │                                                                       │
+// │                                                                       │
+// ├────────────────┐                                     ┌────────────────┤
+// │       2        │                                     │        2       │
+// ├────────────────┴─┐                                 ┌─┴────────────────┤
+// └───────3──────────┴─────────────────────────────────┴──────────3───────┘
+//
+// 1. Vertical expando-mode, right (default) or left
+// 2. Vertical mini-mode, right-top left-top left-bottom or right-bottom
+// 3. Horizontal mini-mode, right-top left-top left-bottom or right-bottom
+// 4. Horizontal expando-mode top or bottom
+
 void
-TDragRegion::MouseMoved(BPoint where, uint32 code, const BMessage* message)
+TDragRegion::CalculateRegions()
 {
-	if (IsTracking()) {
-		BScreen screen;
-		BRect frame = screen.Frame();
+	const BRect screenFrame((BScreen(Window())).Frame());
 
-		float hDivider = frame.Width() / 6;
-		hDivider = (hDivider < gMinimumWindowWidth + 10)
-			? gMinimumWindowWidth + 10 : hDivider;
-		float miniDivider = frame.top + kMiniHeight + 10;
-		float vDivider = frame.Height() / 2;
-#ifdef FULL_MODE
-		float thirdScreen = frame.Height() / 3;
-#endif
-		BRect topLeft(frame.left, frame.top, frame.left + hDivider,
-			miniDivider);
-		BRect topMiddle(frame.left + hDivider, frame.top, frame.right
-			- hDivider, vDivider);
-		BRect topRight(frame.right - hDivider, frame.top, frame.right,
-			miniDivider);
+	float menuBarHeight = fBarView->BarMenuBar()->Frame().Height();
+	float hDivider = floorf(screenFrame.Width() / 4);
+	float halfScreen = floorf(screenFrame.Height() / 2);
 
-#ifdef FULL_MODE
-		vDivider = miniDivider + thirdScreen;
-#endif
-		BRect middleLeft(frame.left, miniDivider, frame.left + hDivider,
-			vDivider);
-		BRect middleRight(frame.right - hDivider, miniDivider, frame.right,
-			vDivider);
+	// corners
+	fTopLeftVertical.Set(BRect(screenFrame.left,
+		screenFrame.top + menuBarHeight, screenFrame.left + hDivider,
+		screenFrame.top + floorf(menuBarHeight * kVerticalMiniMultiplier)));
+	fTopRightVertical.Set(BRect(screenFrame.right - hDivider,
+		screenFrame.top + menuBarHeight, screenFrame.right,
+		screenFrame.top + floorf(menuBarHeight * kVerticalMiniMultiplier)));
+	fBottomLeftVertical.Set(BRect(screenFrame.left,
+		screenFrame.bottom - floorf(menuBarHeight * kVerticalMiniMultiplier),
+		screenFrame.left + hDivider, screenFrame.bottom - menuBarHeight));
+	fBottomRightVertical.Set(BRect(screenFrame.right - hDivider,
+		screenFrame.bottom - floorf(menuBarHeight * kVerticalMiniMultiplier),
+		screenFrame.right, screenFrame.bottom - menuBarHeight));
 
-#ifdef FULL_MODE
-		BRect leftSide(frame.left, vDivider, frame.left + hDivider,
-			frame.bottom - thirdScreen);
-		BRect rightSide(frame.right - hDivider, vDivider, frame.right,
-			frame.bottom - thirdScreen);
+	fTopLeftHorizontal.Set(BRect(screenFrame.left, screenFrame.top,
+		screenFrame.left + hDivider, screenFrame.top + menuBarHeight));
+	fTopRightHorizontal.Set(BRect(screenFrame.right - hDivider, screenFrame.top,
+		screenFrame.right, screenFrame.top + menuBarHeight));
+	fBottomLeftHorizontal.Set(BRect(screenFrame.left, screenFrame.bottom - menuBarHeight,
+		screenFrame.left + hDivider, screenFrame.bottom));
+	fBottomRightHorizontal.Set(BRect(screenFrame.right - hDivider,
+		screenFrame.bottom - menuBarHeight, screenFrame.right,
+		screenFrame.bottom));
 
-		vDivider = frame.bottom - thirdScreen;
-#endif
-		BRect bottomLeft(frame.left, vDivider, frame.left + hDivider,
-			frame.bottom);
-		BRect bottomMiddle(frame.left + hDivider, vDivider, frame.right
-			- hDivider, frame.bottom);
-		BRect bottomRight(frame.right - hDivider, vDivider, frame.right,
-			frame.bottom);
+	// left/right expando
+	fMiddleLeft.Set(BRect(screenFrame.left, screenFrame.top,
+		screenFrame.left + hDivider, screenFrame.bottom));
+	fMiddleLeft.Exclude(&fTopLeftHorizontal);
+	fMiddleLeft.Exclude(&fBottomLeftHorizontal);
+	fMiddleLeft.Exclude(&fTopLeftVertical);
+	fMiddleLeft.Exclude(&fBottomLeftVertical);
 
-		if (where != fPreviousPosition) {
-			fPreviousPosition = where;
-			ConvertToScreen(&where);
-
-			// use short circuit evaluation for convenience
-			if (SwitchModeForRect(where, topLeft, true, true, true, kMiniState)
-				|| SwitchModeForRect(where, topMiddle, false, true, true,
-					kExpandoState)
-				|| SwitchModeForRect(where, topRight, true, false, true,
-					kMiniState)
-				|| SwitchModeForRect(where, middleLeft, true, true, true,
-					kExpandoState)
-				|| SwitchModeForRect(where, middleRight, true, false, true,
-					kExpandoState)
+	fMiddleRight.Set(BRect(screenFrame.right - hDivider,
+		screenFrame.top, screenFrame.right, screenFrame.bottom));
+	fMiddleRight.Exclude(&fTopRightHorizontal);
+	fMiddleRight.Exclude(&fBottomRightHorizontal);
+	fMiddleRight.Exclude(&fTopRightVertical);
+	fMiddleRight.Exclude(&fBottomRightVertical);
 
 #ifdef FULL_MODE
-				|| SwitchModeForRect(where, leftSide, true, true, true,
-					kFullState)
-				|| SwitchModeForRect(where, rightSide, true, false, true,
-					kFullState)
+	// left/right full
+	fLeftSide.Set(BRect(screenFrame.left, screenFrame.bottom - halfScreen,
+		screenFrame.left + hDivider, screenFrame.bottom));
+	fLeftSide.Exclude(&fBottomLeftHorizontal);
+	fLeftSide.Exclude(&fBottomLeftVertical);
+	fMiddleLeft.Exclude(&fLeftSide);
+
+	fRightSide.Set(BRect(screenFrame.right - hDivider,
+		screenFrame.bottom - halfScreen, screenFrame.right,
+		screenFrame.bottom));
+	fRightSide.Exclude(&fBottomRightHorizontal);
+	fRightSide.Exclude(&fBottomRightVertical);
+	fMiddleRight.Exclude(&fRightSide);
 #endif
-				|| SwitchModeForRect(where, bottomLeft, true, true, false,
-					kMiniState)
-				|| SwitchModeForRect(where, bottomMiddle, false, true, false,
-					kExpandoState)
-				|| SwitchModeForRect(where, bottomRight, true, false, false,
-					kMiniState))
-				;
-		}
-	} else
-		BControl::MouseMoved(where, code, message);
+
+	// top/bottom
+	BRect leftSideRect(screenFrame.left, screenFrame.top,
+		screenFrame.left + hDivider, screenFrame.bottom);
+	BRect rightSideRect(screenFrame.right - hDivider, screenFrame.top,
+		screenFrame.right, screenFrame.bottom);
+
+	fTopHalf.Set(BRect(screenFrame.left, screenFrame.top, screenFrame.right,
+		screenFrame.top + halfScreen));
+	fTopHalf.Exclude(leftSideRect);
+	fTopHalf.Exclude(rightSideRect);
+
+	fBottomHalf.Set(BRect(screenFrame.left, screenFrame.bottom - halfScreen,
+		screenFrame.right, screenFrame.bottom));
+	fBottomHalf.Exclude(leftSideRect);
+	fBottomHalf.Exclude(rightSideRect);
+}
+
+
+void
+TDragRegion::MouseMoved(BPoint where, uint32 transit,
+	const BMessage* dragMessage)
+{
+	if (!IsTracking() || where == fPreviousPosition)
+		return BControl::MouseMoved(where, transit, dragMessage);
+
+	fPreviousPosition = where;
+
+	// TODO: can't trust the passed in where param, get screen_where from
+	// Window()->CurrentMessage() instead, why is this necessary?
+	BPoint whereScreen;
+	BMessage* currentMessage = Window()->CurrentMessage();
+	if (currentMessage == NULL || currentMessage->FindPoint("screen_where",
+			&whereScreen) != B_OK) {
+		whereScreen = ConvertToScreen(where);
+	}
+
+	// use short circuit evaluation for convenience
+	if (// vertical mini
+		   SwitchModeForRegion(whereScreen, fTopLeftVertical, true,
+			true, true, kMiniState)
+		|| SwitchModeForRegion(whereScreen, fTopRightVertical, true,
+			false, true, kMiniState)
+		|| SwitchModeForRegion(whereScreen, fBottomLeftVertical, true,
+			true, false, kMiniState)
+		|| SwitchModeForRegion(whereScreen, fBottomRightVertical, true,
+			false, false, kMiniState)
+		// horizontal mini
+		|| SwitchModeForRegion(whereScreen, fTopLeftHorizontal, false,
+			true, true, kMiniState)
+		|| SwitchModeForRegion(whereScreen, fTopRightHorizontal, false,
+			false, true, kMiniState)
+		|| SwitchModeForRegion(whereScreen, fBottomLeftHorizontal, false,
+			true, false, kMiniState)
+		|| SwitchModeForRegion(whereScreen, fBottomRightHorizontal, false,
+			false, false, kMiniState)
+		// expando
+		|| SwitchModeForRegion(whereScreen, fMiddleLeft, true, true, true,
+			kExpandoState)
+		|| SwitchModeForRegion(whereScreen, fMiddleRight, true, false, true,
+			kExpandoState)
+#ifdef FULL_MODE
+		// full
+		|| SwitchModeForRegion(whereScreen, fLeftSide, true, true, true,
+			kFullState)
+		|| SwitchModeForRegion(whereScreen, fRightSide, true, false, true,
+			kFullState)
+#endif
+		// horizontal
+		|| SwitchModeForRegion(whereScreen, fTopHalf, false, true, true,
+			kExpandoState)
+		|| SwitchModeForRegion(whereScreen, fBottomHalf, false, true, false,
+			kExpandoState)
+	);
 }
 
 
@@ -1661,7 +1768,7 @@ TDragRegion::SetDragRegionLocation(int32 location)
 */
 TResizeControl::TResizeControl(TBarView* barView)
 	:
-	BControl(BRect(0, kDragWidth, 0, kMenuBarHeight), "", "", NULL,
+	BControl(BRect(0, gDragWidth, 0, kMenuBarHeight), "", "", NULL,
 		B_FOLLOW_NONE, B_WILL_DRAW | B_FRAME_EVENTS),
 	fBarView(barView)
 {
@@ -1678,10 +1785,7 @@ TResizeControl::AttachedToWindow()
 {
 	BView::AttachedToWindow();
 
-	if (be_control_look != NULL)
-		SetViewUIColor(B_MENU_BACKGROUND_COLOR, 1.1);
-	else
-		SetViewUIColor(B_MENU_BACKGROUND_COLOR);
+	SetViewUIColor(B_MENU_BACKGROUND_COLOR, 1.1);
 }
 
 
@@ -1766,35 +1870,34 @@ void
 TResizeControl::MouseMoved(BPoint where, uint32 code,
 	const BMessage* dragMessage)
 {
-	if (fBarView->Vertical()) {
-		if (IsResizing()) {
-			float windowWidth = Window()->Frame().Width();
-			float delta = 0;
-			BPoint whereScreen = ConvertToScreen(where);
+	if (!fBarView->Vertical() || !IsResizing())
+		return BControl::MouseMoved(where, code, dragMessage);
 
-			if (fBarView->Left()) {
-				delta = whereScreen.x - Window()->Frame().right;
-				if (delta > 0 && windowWidth >= gMaximumWindowWidth)
-					; // do nothing
-				else if (delta < 0 && windowWidth <= gMinimumWindowWidth)
-					; // do nothing
-				else
-					Window()->ResizeBy(delta, 0);
-			} else {
-				delta = Window()->Frame().left - whereScreen.x;
-				if (delta > 0 && windowWidth >= gMaximumWindowWidth)
-					; // do nothing
-				else if (delta < 0 && windowWidth <= gMinimumWindowWidth)
-					; // do nothing
-				else {
-					Window()->MoveBy(delta, 0);
-					Window()->ResizeBy(delta, 0);
-				}
-			}
+	float windowWidth = Window()->Frame().Width();
+	float delta = 0;
+	BPoint whereScreen = ConvertToScreen(where);
 
-			windowWidth = Window()->Frame().Width();
+	if (fBarView->Left()) {
+		delta = whereScreen.x - Window()->Frame().right;
+		if (delta > 0 && windowWidth >= gMaximumWindowWidth)
+			; // do nothing
+		else if (delta < 0 && windowWidth <= gMinimumWindowWidth)
+			; // do nothing
+		else
+			Window()->ResizeBy(delta, 0);
+	} else {
+		delta = Window()->Frame().left - whereScreen.x;
+		if (delta > 0 && windowWidth >= gMaximumWindowWidth)
+			; // do nothing
+		else if (delta < 0 && windowWidth <= gMinimumWindowWidth)
+			; // do nothing
+		else {
+			Window()->MoveBy(delta, 0);
+			Window()->ResizeBy(delta, 0);
 		}
 	}
+
+	windowWidth = Window()->Frame().Width();
 
 	BControl::MouseMoved(where, code, dragMessage);
 }

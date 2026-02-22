@@ -38,6 +38,7 @@ All rights reserved.
 
 #include <Control.h>
 #include <Node.h>
+#include <Region.h>
 #include <Query.h>
 #include <Shelf.h>
 #include <View.h>
@@ -46,25 +47,16 @@ All rights reserved.
 #include "TimeView.h"
 
 
-const float kDragWidth = 4.0f;
-const float kMinReplicantHeight = 16.0f;
-const float kMinReplicantWidth = 16.0f;
+//#define FULL_MODE
+
 const int32 kMinimumReplicantCount = 6;
-const int32 kIconGap = 2;
 const int32 kGutter = 1;
-const int32 kDragRegionWidth = 6;
-const int32 kTrayPadding = 3;
-const int32 kClockMargin = 12;
+const int32 kTrayPadding = B_USE_HALF_ITEM_SPACING;
 
-// 1 pixel for left gutter
-// space for replicant tray (6 items)
-// 6 pixel drag region
-const float kMinimumTrayWidth = kIconGap + kMinReplicantWidth
-	+ (kMinimumReplicantCount * kIconGap)
-	+ (kMinimumReplicantCount * kMinReplicantWidth) + kGutter;
-
-extern float gMinimumWindowWidth;
-extern float gMaximumWindowWidth;
+extern float sIconGap;
+extern float gDragWidth, gDragRegionWidth;
+extern float gMinReplicantHeight, gMinReplicantWidth;
+extern float gMinimumTrayWidth, gMinimumWindowWidth, gMaximumWindowWidth;
 
 #ifdef DB_ADDONS
 struct DeskbarItemInfo {
@@ -79,8 +71,7 @@ class TReplicantShelf;
 
 class TReplicantTray : public BView {
 public:
-									TReplicantTray(TBarView* barView,
-										bool vertical);
+									TReplicantTray(TBarView* barView);
 		virtual						~TReplicantTray();
 
 		virtual	void				AttachedToWindow();
@@ -91,10 +82,6 @@ public:
 
 				void				AdjustPlacement();
 				void				ShowReplicantMenu(BPoint);
-
-				void				SetMultiRow(bool state);
-				bool				IsMultiRow() const
-										{ return fMultiRowMode; }
 
 				TTimeView*			Time() const { return fTime; }
 				void				ShowHideTime();
@@ -181,8 +168,9 @@ private:
 				float				fMaxReplicantHeight;
 				float				fMinTrayHeight;
 
-				bool				fMultiRowMode;
 				float				fMinimumTrayWidth;
+				float				fTrayPadding;
+				float				fClockMargin;
 
 				bool				fAlignmentSupport;
 #ifdef DB_ADDONS
@@ -209,15 +197,16 @@ public:
 	virtual void AttachedToWindow();
 	virtual void GetPreferredSize(float*, float*);
 	virtual void Draw(BRect);
+	virtual void DrawAfterChildren(BRect);
 	virtual void MouseDown(BPoint);
 	virtual void MouseUp(BPoint);
 	virtual void MouseMoved(BPoint, uint32, const BMessage*);
 
-	void DrawDragRegion();
 	BRect DragRegion() const;
 
-	bool SwitchModeForRect(BPoint mouse, BRect rect,
+	bool SwitchModeForRegion(BPoint where, BRegion region,
 		bool newVertical, bool newLeft, bool newTop, int32 newState);
+	void CalculateRegions();
 
 	int32 DragRegionLocation() const;
 	void SetDragRegionLocation(int32);
@@ -225,10 +214,32 @@ public:
 	bool IsDragging() { return IsTracking(); };
 
 private:
+	void DrawDragger();
+
+private:
 	TBarView* fBarView;
 	BView* fReplicantTray;
 	BPoint fPreviousPosition;
 	int32 fDragLocation;
+
+	BRegion fTopLeftVertical;
+	BRegion fTopRightVertical;
+	BRegion fBottomLeftVertical;
+	BRegion fBottomRightVertical;
+
+	BRegion fTopLeftHorizontal;
+	BRegion fTopRightHorizontal;
+	BRegion fBottomLeftHorizontal;
+	BRegion fBottomRightHorizontal;
+
+	BRegion fMiddleLeft;
+	BRegion fMiddleRight;
+#ifdef FULL_MODE
+	BRegion fLeftSide;
+	BRegion fRightSide;
+#endif
+	BRegion fTopHalf;
+	BRegion fBottomHalf;
 };
 
 class TResizeControl : public BControl {

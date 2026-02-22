@@ -57,7 +57,7 @@ Canvas::~Canvas()
 status_t
 Canvas::InitCheck() const
 {
-	if (fDrawState == NULL)
+	if (!fDrawState.IsSet())
 		return B_NO_MEMORY;
 
 	return B_OK;
@@ -67,9 +67,12 @@ Canvas::InitCheck() const
 void
 Canvas::PushState()
 {
-	DrawState* newState = fDrawState->PushState();
-	if (newState)
-		fDrawState = newState;
+	DrawState* previous = fDrawState.Detach();
+	DrawState* newState = previous->PushState();
+	if (newState == NULL)
+		newState = previous;
+
+	fDrawState.SetTo(newState);
 }
 
 
@@ -81,7 +84,7 @@ Canvas::PopState()
 
 	bool rebuildClipping = fDrawState->HasAdditionalClipping();
 
-	fDrawState = fDrawState->PopState();
+	fDrawState.SetTo(fDrawState->PopState());
 
 	// rebuild clipping
 	// (the clipping from the popped state is not effective anymore)
@@ -93,7 +96,7 @@ Canvas::PopState()
 void
 Canvas::SetDrawState(DrawState* newState)
 {
-	fDrawState = newState;
+	fDrawState.SetTo(newState);
 }
 
 
@@ -111,13 +114,7 @@ Canvas::SetDrawingOrigin(BPoint origin)
 BPoint
 Canvas::DrawingOrigin() const
 {
-	BPoint origin(fDrawState->Origin());
-	float scale = Scale();
-
-	origin.x *= scale;
-	origin.y *= scale;
-
-	return origin;
+	return fDrawState->Origin();
 }
 
 
@@ -237,15 +234,11 @@ Canvas::ScreenToPenTransform() const GCC_2_NRV(transform)
 
 
 void
-Canvas::BlendLayer(Layer* layer)
+Canvas::BlendLayer(Layer* layerPtr)
 {
-	if (layer->Opacity() == 255) {
-		layer->Play(this);
-		layer->ReleaseReference();
-		return;
-	}
+	BReference<Layer> layer(layerPtr, true);
 
-	UtilityBitmap* layerBitmap = layer->RenderToBitmap(this);
+	BReference <UtilityBitmap> layerBitmap(layer->RenderToBitmap(this), true);
 	if (layerBitmap == NULL)
 		return;
 
@@ -259,15 +252,13 @@ Canvas::BlendLayer(Layer* layer)
 	fDrawState->SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_COMPOSITE);
 	fDrawState->SetTransformEnabled(false);
 
-	AlphaMask* mask = new(std::nothrow) UniformAlphaMask(layer->Opacity());
-	if (mask == NULL) {
-		layerBitmap->ReleaseReference();
-		layer->ReleaseReference();
-		return;
-	}
+	if (layer->Opacity() < 255) {
+		BReference<AlphaMask> mask(new(std::nothrow) UniformAlphaMask(layer->Opacity()), true);
+		if (mask == NULL)
+			return;
 
-	SetAlphaMask(mask);
-	mask->ReleaseReference();
+		SetAlphaMask(mask);
+	}
 	ResyncDrawState();
 
 	GetDrawingEngine()->DrawBitmap(layerBitmap, layerBitmap->Bounds(),
@@ -277,9 +268,6 @@ Canvas::BlendLayer(Layer* layer)
 
 	PopState();
 	ResyncDrawState();
-
-	layerBitmap->ReleaseReference();
-	layer->ReleaseReference();
 }
 
 
@@ -299,14 +287,13 @@ OffscreenCanvas::OffscreenCanvas(DrawingEngine* engine,
 
 OffscreenCanvas::~OffscreenCanvas()
 {
-	delete fDrawState;
 }
 
 
 void
 OffscreenCanvas::ResyncDrawState()
 {
-	fDrawingEngine->SetDrawState(fDrawState);
+	fDrawingEngine->SetDrawState(fDrawState.Get());
 }
 
 

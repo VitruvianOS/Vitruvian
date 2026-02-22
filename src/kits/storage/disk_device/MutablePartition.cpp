@@ -215,7 +215,7 @@ BMutablePartition::SetName(const char* name)
 
 
 // ContentName
-const char*
+BString
 BMutablePartition::ContentName() const
 {
 	return fData->content_name;

@@ -74,13 +74,21 @@ private:
 			BTab&				operator=(const BTab&);
 
 private:
+			uint32				_Borders(BView* owner, BRect frame);
+
+private:
 			bool 				fEnabled;
 			bool				fSelected;
 			bool				fFocus;
 			BView*				fView;
 			BTabView*			fTabView;
+			BString				fLabel;
 
-			uint32				_reserved[11];
+#ifdef B_HAIKU_64_BIT
+			uint32				_reserved[9];
+#else
+			uint32				_reserved[10];
+#endif
 };
 
 
@@ -179,6 +187,8 @@ public:
 
 			int32				CountTabs() const;
 			BView*				ViewForTab(int32 tabIndex) const;
+
+			int32				IndexOf(BTab* tab) const;
 
 private:
 	// FBC padding and forbidden methods

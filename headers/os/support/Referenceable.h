@@ -23,7 +23,7 @@ public:
 			int32				ReleaseReference();
 
 			int32				CountReferences() const
-									{ return fReferenceCount; }
+									{ return atomic_get((int32*)&fReferenceCount); }
 
 protected:
 	virtual	void				FirstReferenceAcquired();
@@ -89,6 +89,11 @@ public:
 			fObject->ReleaseReference();
 			fObject = NULL;
 		}
+	}
+
+	bool IsSet() const
+	{
+		return fObject != NULL;
 	}
 
 	Type* Get() const
@@ -195,6 +200,11 @@ public:
 	void Unset()
 	{
 		fReference.Unset();
+	}
+
+	bool IsSet() const
+	{
+		return fReference.IsSet();
 	}
 
 	const Type* Get() const

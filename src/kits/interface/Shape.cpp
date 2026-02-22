@@ -143,6 +143,15 @@ BShape::BShape(const BShape& other)
 }
 
 
+#if defined(__cplusplus) && __cplusplus >= 201103L
+BShape::BShape(BShape&& other)
+{
+	InitData();
+	MoveFrom(other);
+}
+#endif
+
+
 BShape::BShape(BMessage* archive)
 	:
 	BArchivable(archive)
@@ -250,6 +259,17 @@ BShape::operator=(const BShape& other)
 }
 
 
+#if defined(__cplusplus) && __cplusplus >= 201103L
+BShape&
+BShape::operator=(BShape&& other)
+{
+	MoveFrom(other);
+
+	return *this;
+}
+#endif
+
+
 bool
 BShape::operator==(const BShape& other) const
 {
@@ -300,6 +320,20 @@ BShape::Clear()
 
 	fState = 0;
 	fBuildingOp = 0;
+}
+
+
+void
+BShape::MoveFrom(BShape& other)
+{
+	fState = other.fState;
+	fBuildingOp = other.fBuildingOp;
+
+	shape_data* data = (shape_data*)fPrivateData;
+	fPrivateData = other.fPrivateData;
+	other.fPrivateData = data;
+
+	other.Clear();
 }
 
 
@@ -537,10 +571,10 @@ void BShape::_ReservedShape4() {}
 
 
 void
-BShape::GetData(int32* opCount, int32* ptCount, uint32** opList,
+BShape::Private::GetData(int32* opCount, int32* ptCount, uint32** opList,
 	BPoint** ptList)
 {
-	shape_data* data = (shape_data*)fPrivateData;
+	shape_data* data = PrivateData();
 
 	*opCount = data->opCount;
 	*ptCount = data->ptCount;
@@ -550,22 +584,22 @@ BShape::GetData(int32* opCount, int32* ptCount, uint32** opList,
 
 
 void
-BShape::SetData(int32 opCount, int32 ptCount, const uint32* opList,
+BShape::Private::SetData(int32 opCount, int32 ptCount, const uint32* opList,
 	const BPoint* ptList)
 {
-	Clear();
+	fShape.Clear();
 
 	if (opCount == 0)
 		return;
 
-	shape_data* data = (shape_data*)fPrivateData;
+	shape_data* data = PrivateData();
 
-	if (!AllocateOps(opCount) || !AllocatePts(ptCount))
+	if (!fShape.AllocateOps(opCount) || !fShape.AllocatePts(ptCount))
 		return;
 
 	memcpy(data->opList, opList, opCount * sizeof(uint32));
 	data->opCount = opCount;
-	fBuildingOp = data->opList[data->opCount - 1];
+	fShape.fBuildingOp = data->opList[data->opCount - 1];
 
 	if (ptCount > 0) {
 		memcpy((void*)data->ptList, ptList, ptCount * sizeof(BPoint));

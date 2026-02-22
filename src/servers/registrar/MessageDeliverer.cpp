@@ -10,10 +10,10 @@
 
 #include <AutoDeleter.h>
 #include <Autolock.h>
-#include <DataIO.h>
 #include <MessagePrivate.h>
 #include <MessengerPrivate.h>
 #include <OS.h>
+#include <StackOrHeapArray.h>
 #include <TokenSpace.h>
 #include <util/DoublyLinkedList.h>
 
@@ -37,19 +37,17 @@ static const int32		kMaxMessagesPerPort	= 10000;
 static const int32		kMaxDataPerPort		= 50 * 1024 * 1024;	// 50 MB
 
 
-// MessagingTargetSet
+// #pragma mark - MessagingTargetSet
 
-// destructor
+
 MessagingTargetSet::~MessagingTargetSet()
 {
 }
 
 
-// #pragma mark -
+// #pragma mark - DefaultMessagingTargetSet
 
-// DefaultMessagingTargetSet
 
-// constructor
 DefaultMessagingTargetSet::DefaultMessagingTargetSet(
 		const messaging_target *targets, int32 targetCount)
 	: MessagingTargetSet(),
@@ -59,19 +57,19 @@ DefaultMessagingTargetSet::DefaultMessagingTargetSet(
 {
 }
 
-// destructor
+
 DefaultMessagingTargetSet::~DefaultMessagingTargetSet()
 {
 }
 
-// HasNext
+
 bool
 DefaultMessagingTargetSet::HasNext() const
 {
 	return (fNextIndex < fTargetCount);
 }
 
-// Next
+
 bool
 DefaultMessagingTargetSet::Next(port_id &port, int32 &token)
 {
@@ -85,7 +83,7 @@ DefaultMessagingTargetSet::Next(port_id &port, int32 &token)
 	return true;
 }
 
-// Rewind
+
 void
 DefaultMessagingTargetSet::Rewind()
 {
@@ -93,11 +91,9 @@ DefaultMessagingTargetSet::Rewind()
 }
 
 
-// #pragma mark -
+// #pragma mark - SingleMessagingTargetSet
 
-// SingleMessagingTargetSet
 
-// constructor
 SingleMessagingTargetSet::SingleMessagingTargetSet(BMessenger target)
 	: MessagingTargetSet(),
 	  fAtBeginning(true)
@@ -108,7 +104,7 @@ SingleMessagingTargetSet::SingleMessagingTargetSet(BMessenger target)
 		? B_PREFERRED_TOKEN : messengerPrivate.Token());
 }
 
-// constructor
+
 SingleMessagingTargetSet::SingleMessagingTargetSet(port_id port, int32 token)
 	: MessagingTargetSet(),
 	  fPort(port),
@@ -117,19 +113,19 @@ SingleMessagingTargetSet::SingleMessagingTargetSet(port_id port, int32 token)
 {
 }
 
-// destructor
+
 SingleMessagingTargetSet::~SingleMessagingTargetSet()
 {
 }
 
-// HasNext
+
 bool
 SingleMessagingTargetSet::HasNext() const
 {
 	return fAtBeginning;
 }
 
-// Next
+
 bool
 SingleMessagingTargetSet::Next(port_id &port, int32 &token)
 {
@@ -143,7 +139,7 @@ SingleMessagingTargetSet::Next(port_id &port, int32 &token)
 	return true;
 }
 
-// Rewind
+
 void
 SingleMessagingTargetSet::Rewind()
 {
@@ -151,9 +147,9 @@ SingleMessagingTargetSet::Rewind()
 }
 
 
-// #pragma mark -
+// #pragma mark - MessageDeliverer
 
-// Message
+
 /*!	\brief Encapsulates a message to be delivered.
 
 	Besides the flattened message it also stores the when the message was
@@ -224,7 +220,7 @@ private:
 	bool		fBusy;
 };
 
-// TargetMessage
+
 /*!	\brief Encapsulates a Message to be sent to a specific handler.
 
 	A TargetMessage is always associated with (i.e. queued in) a TargetPort.
@@ -267,7 +263,7 @@ private:
 	int32				fToken;
 };
 
-// TargetMessageHandle
+
 /*!	\brief A small wrapper for TargetMessage providing a complete order.
 
 	This class only exists to provide the comparison operators required to
@@ -324,7 +320,7 @@ private:
 	TargetMessage	*fMessage;
 };
 
-// TargetPort
+
 /*!	\brief Represents a full target port, queuing the not yet delivered
 		   messages.
 
@@ -455,12 +451,13 @@ PRINT("MessageDeliverer::TargetPort::_EnforceLimits(): port: %" B_PRId32
 	set<TargetMessageHandle>	fTimeoutableMessages;
 };
 
-// TargetPortMap
+
 struct MessageDeliverer::TargetPortMap : public map<port_id, TargetPort*> {
 };
 
 
 // #pragma mark -
+
 
 /*!	\class MessageDeliverer
 	\brief Service for delivering messages, which retries the delivery as long
@@ -476,7 +473,7 @@ struct MessageDeliverer::TargetPortMap : public map<port_id, TargetPort*> {
 	the yet undelivered messages to the respective target ports.
 */
 
-// constructor
+
 MessageDeliverer::MessageDeliverer()
 	: fLock("message deliverer"),
 	  fTargetPorts(NULL),
@@ -485,7 +482,7 @@ MessageDeliverer::MessageDeliverer()
 {
 }
 
-// destructor
+
 MessageDeliverer::~MessageDeliverer()
 {
 	fTerminating = true;
@@ -498,7 +495,7 @@ MessageDeliverer::~MessageDeliverer()
 	delete fTargetPorts;
 }
 
-// Init
+
 status_t
 MessageDeliverer::Init()
 {
@@ -519,7 +516,7 @@ MessageDeliverer::Init()
 	return B_OK;
 }
 
-// CreateDefault
+
 status_t
 MessageDeliverer::CreateDefault()
 {
@@ -542,7 +539,7 @@ MessageDeliverer::CreateDefault()
 	return B_OK;
 }
 
-// DeleteDefault
+
 void
 MessageDeliverer::DeleteDefault()
 {
@@ -552,14 +549,14 @@ MessageDeliverer::DeleteDefault()
 	}
 }
 
-// Default
+
 MessageDeliverer *
 MessageDeliverer::Default()
 {
 	return sDeliverer;
 }
 
-// DeliverMessage
+
 /*!	\brief Delivers a message to the supplied target.
 
 	The method tries to send the message right now (if there are not already
@@ -583,7 +580,7 @@ MessageDeliverer::DeliverMessage(BMessage *message, BMessenger target,
 	return DeliverMessage(message, set, timeout);
 }
 
-// DeliverMessage
+
 /*!	\brief Delivers a message to the supplied targets.
 
 	The method tries to send the message right now to each of the given targets
@@ -603,20 +600,22 @@ status_t
 MessageDeliverer::DeliverMessage(BMessage *message, MessagingTargetSet &targets,
 	bigtime_t timeout)
 {
-	if (!message)
+	if (message == NULL)
 		return B_BAD_VALUE;
 
-	// flatten the message
-	BMallocIO mallocIO;
-	status_t error = message->Flatten(&mallocIO, NULL);
+	ssize_t size = message->FlattenedSize();
+	BStackOrHeapArray<char, 4096> buffer(size);
+	if (!buffer.IsValid())
+		return B_NO_MEMORY;
+
+	status_t error = message->Flatten(buffer, size);
 	if (error < B_OK)
 		return error;
 
-	return DeliverMessage(mallocIO.Buffer(), mallocIO.BufferLength(), targets,
-		timeout);
+	return DeliverMessage(buffer, size, targets, timeout);
 }
 
-// DeliverMessage
+
 /*!	\brief Delivers a flattened message to the supplied targets.
 
 	The method tries to send the message right now to each of the given targets
@@ -641,19 +640,7 @@ MessageDeliverer::DeliverMessage(const void *messageData, int32 messageSize,
 	if (!messageData || messageSize <= 0)
 		return B_BAD_VALUE;
 
-	// clone the buffer
-	void *data = malloc(messageSize);
-	if (!data)
-		return B_NO_MEMORY;
-	memcpy(data, messageData, messageSize);
-
-	// create a Message
-	Message *message = new(nothrow) Message(data, messageSize, timeout);
-	if (!message) {
-		free(data);
-		return B_NO_MEMORY;
-	}
-	BReference<Message> _(message, true);
+	BReference<Message> messageRef;
 
 	// add the message to the respective target ports
 	BAutolock locker(fLock);
@@ -669,7 +656,8 @@ MessageDeliverer::DeliverMessage(const void *messageData, int32 messageSize,
 
 		// try sending the message, if there are no queued messages yet
 		if (port->IsEmpty()) {
-			status_t error = _SendMessage(message, portID, token);
+			status_t error = BMessage::Private::SendFlattenedMessage((void*)messageData,
+				messageSize, portID, token, 0);
 			// if the message was delivered OK, we're done with the target
 			if (error == B_OK) {
 				_PutTargetPort(port);
@@ -685,8 +673,24 @@ MessageDeliverer::DeliverMessage(const void *messageData, int32 messageSize,
 			}
 		}
 
+		if (!messageRef.IsSet()) {
+			// clone the buffer
+			void *data = malloc(messageSize);
+			if (!data)
+				return B_NO_MEMORY;
+			memcpy(data, messageData, messageSize);
+
+			// create a Message
+			Message *message = new(nothrow) Message(data, messageSize, timeout);
+			if (!message) {
+				free(data);
+				return B_NO_MEMORY;
+			}
+			messageRef.SetTo(message, true);
+		}
+
 		// add the message
-		status_t error = port->PushMessage(message, token);
+		status_t error = port->PushMessage(messageRef, token);
 		_PutTargetPort(port);
 		if (error != B_OK)
 			return error;
@@ -695,7 +699,7 @@ MessageDeliverer::DeliverMessage(const void *messageData, int32 messageSize,
 	return B_OK;
 }
 
-// _GetTargetPort
+
 MessageDeliverer::TargetPort *
 MessageDeliverer::_GetTargetPort(port_id portID, bool create)
 {
@@ -716,7 +720,7 @@ MessageDeliverer::_GetTargetPort(port_id portID, bool create)
 	return port;
 }
 
-// _PutTargetPort
+
 void
 MessageDeliverer::_PutTargetPort(TargetPort *port)
 {
@@ -729,7 +733,7 @@ MessageDeliverer::_PutTargetPort(TargetPort *port)
 	}
 }
 
-// _SendMessage
+
 status_t
 MessageDeliverer::_SendMessage(Message *message, port_id portID, int32 token)
 {
@@ -740,14 +744,14 @@ MessageDeliverer::_SendMessage(Message *message, port_id portID, int32 token)
 	return error;
 }
 
-// _DelivererThreadEntry
+
 int32
 MessageDeliverer::_DelivererThreadEntry(void *data)
 {
 	return ((MessageDeliverer*)data)->_DelivererThread();
 }
 
-// _DelivererThread
+
 int32
 MessageDeliverer::_DelivererThread()
 {

@@ -29,17 +29,16 @@ move_items(void** items, int32 offset, int32 count)
 }
 
 
-BList::BList(int32 count)
+BList::BList(int32 blockSize)
 	:
 	fObjectList(NULL),
 	fPhysicalSize(0),
 	fItemCount(0),
-	fBlockSize(count),
+	fBlockSize(blockSize),
 	fResizeThreshold(0)
 {
 	if (fBlockSize <= 0)
 		fBlockSize = 1;
-	_ResizeArray(fItemCount);
 }
 
 
@@ -474,7 +473,9 @@ void BList::_ReservedList2() {}
 bool
 BList::_ResizeArray(int32 count)
 {
-	bool result = true;
+	if (fPhysicalSize == count)
+		return true;
+
 	// calculate the new physical size
 	// by doubling the existing size
 	// until we can hold at least count items
@@ -490,16 +491,17 @@ BList::_ResizeArray(int32 count)
 		newSize = fResizeThreshold;
 
 	// resize if necessary
+	bool result = true;
 	if (newSize != fPhysicalSize) {
 		void** newObjectList
 			= (void**)realloc(fObjectList, newSize * sizeof(void*));
 		if (newObjectList) {
 			fObjectList = newObjectList;
 			fPhysicalSize = newSize;
-			// set our lower bound to either 1/4
-			//of the current physical size, or 0
-			fResizeThreshold = fPhysicalSize >> 2 >= fBlockSize
-				? fPhysicalSize >> 2 : 0;
+
+			fResizeThreshold = (fPhysicalSize / 4);
+			if (fResizeThreshold < fBlockSize)
+				fResizeThreshold = 0;
 		} else
 			result = false;
 	}

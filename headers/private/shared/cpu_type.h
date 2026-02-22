@@ -48,17 +48,19 @@ parse_intel(const char* name)
 			break;
 	}
 
-	// ignore vendor
-	for (; name[index] != '\0'; index++) {
-		if (name[index] == ' ') {
-			index++;
-			break;
-		}
-	}
 
 	// parse model
 	int outIndex = 0;
 	for (; name[index] != '\0'; index++) {
+		// ignore vendor
+		if (strncmp(&name[index], "Intel", 5) == 0) {
+			for (; name[index] != '\0'; index++) {
+				if (name[index] == ' ') {
+					index++;
+					break;
+				}
+			}
+		}
 		if (!strncmp(&name[index], "(R)", 3)) {
 			outIndex += strlcpy(&buffer[outIndex], "®",
 				sizeof(buffer) - outIndex);
@@ -173,7 +175,7 @@ get_cpu_vendor_string(enum cpu_vendor cpuVendor)
 	// Should match vendors in OS.h
 	static const char* vendorStrings[] = {
 		NULL, "AMD", "Cyrix", "IDT", "Intel", "National Semiconductor", "Rise",
-		"Transmeta", "VIA", "IBM", "Motorola", "NEC"
+		"Transmeta", "VIA", "IBM", "Motorola", "NEC", "Hygon"
 	};
 
 	if ((size_t)cpuVendor >= sizeof(vendorStrings) / sizeof(const char*))

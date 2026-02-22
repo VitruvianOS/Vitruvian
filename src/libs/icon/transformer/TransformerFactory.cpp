@@ -11,14 +11,12 @@
 #include "AffineTransformer.h"
 #include "ContourTransformer.h"
 #include "PerspectiveTransformer.h"
+#include "Shape.h"
 #include "StrokeTransformer.h"
 
 #ifdef ICON_O_MATIC
 #include <Catalog.h>
 #include <Message.h>
-
-#undef B_TRANSLATION_CONTEXT
-#define B_TRANSLATION_CONTEXT "Transformation"
 #endif
 
 
@@ -27,16 +25,16 @@ _USING_ICON_NAMESPACE
 
 // TransformerFor
 Transformer*
-TransformerFactory::TransformerFor(uint32 type, VertexSource& source)
+TransformerFactory::TransformerFor(uint32 type, VertexSource& source, Shape* shape)
 {
 	switch (type) {
-		case 0:
+		case AFFINE_TRANSFORMER:
 			return new AffineTransformer(source);
-		case 1:
-			return new PerspectiveTransformer(source);
-		case 2:
+		case PERSPECTIVE_TRANSFORMER:
+			return new PerspectiveTransformer(source, shape);
+		case CONTOUR_TRANSFORMER:
 			return new ContourTransformer(source);
-		case 3:
+		case STROKE_TRANSFORMER:
 			return new StrokeTransformer(source);
 	}
 
@@ -45,14 +43,13 @@ TransformerFactory::TransformerFor(uint32 type, VertexSource& source)
 
 // TransformerFor
 Transformer*
-TransformerFactory::TransformerFor(BMessage* message,
-								   VertexSource& source)
+TransformerFactory::TransformerFor(BMessage* message, VertexSource& source, Shape* shape)
 {
 	switch (message->what) {
 		case AffineTransformer::archive_code:
 			return new AffineTransformer(source, message);
 		case PerspectiveTransformer::archive_code:
-			return new PerspectiveTransformer(source, message);
+			return new PerspectiveTransformer(source, shape, message);
 		case ContourTransformer::archive_code:
 			return new ContourTransformer(source, message);
 		case StrokeTransformer::archive_code:
@@ -62,30 +59,3 @@ TransformerFactory::TransformerFor(BMessage* message,
 	return NULL;
 }
 
-#ifdef ICON_O_MATIC
-
-// NextType
-bool
-TransformerFactory::NextType(int32* cookie, uint32* type, BString* name)
-{
-	*type = *cookie;
-	*cookie = *cookie + 1;
-
-	switch (*type) {
-		case 0:
-			*name = B_TRANSLATE("Transformation");
-			return true;
-		case 1:
-			*name = B_TRANSLATE("Perspective");
-			return true;
-		case 2:
-			*name = B_TRANSLATE("Contour");
-			return true;
-		case 3:
-			*name = B_TRANSLATE("Stroke");
-			return true;
-	}
-
-	return false;
-}
-#endif // ICON_O_MATIC

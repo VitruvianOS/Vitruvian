@@ -1,9 +1,10 @@
 /*
- * Copyright 2006, Haiku. All rights reserved.
+ * Copyright 2006, 2023, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Stephan Aßmus <superstippi@gmx.de>
+ *		Zardshard
  */
 
 #include "FlatIconImporter.h"
@@ -23,15 +24,17 @@
 #include "Icon.h"
 #include "LittleEndianBuffer.h"
 #include "PathCommandQueue.h"
-#include "PathContainer.h"
+#include "PathSourceShape.h"
 #include "PerspectiveTransformer.h"
-#include "shape/Shape.h"
+#include "Shape.h"
 #include "StrokeTransformer.h"
 #include "Style.h"
-#include "StyleContainer.h"
 #include "VectorPath.h"
 
 using std::nothrow;
+
+_USING_ICON_NAMESPACE
+
 
 // constructor
 FlatIconImporter::FlatIconImporter()
@@ -111,7 +114,7 @@ FlatIconImporter::_ParseSections(LittleEndianBuffer& buffer, Icon* icon)
 		return B_BAD_TYPE;
 
 	// styles
-	StyleContainer* styles = icon->Styles();
+	Container<Style>* styles = icon->Styles();
 	status_t ret = _ParseStyles(buffer, styles);
 	if (ret < B_OK) {
 		printf("FlatIconImporter::_ParseSections() - "
@@ -120,7 +123,7 @@ FlatIconImporter::_ParseSections(LittleEndianBuffer& buffer, Icon* icon)
 	}
 
 	// paths
-	PathContainer* paths = icon->Paths();
+	Container<VectorPath>* paths = icon->Paths();
 	ret = _ParsePaths(buffer, paths);
 	if (ret < B_OK) {
 		printf("FlatIconImporter::_ParseSections() - "
@@ -276,7 +279,7 @@ _ReadGradientStyle(LittleEndianBuffer& buffer)
 // _ParseStyles
 status_t
 FlatIconImporter::_ParseStyles(LittleEndianBuffer& buffer,
-							   StyleContainer* styles)
+							   Container<Style>* styles)
 {
 	uint8 styleCount;
 	if (!buffer.Read(styleCount))
@@ -321,7 +324,7 @@ FlatIconImporter::_ParseStyles(LittleEndianBuffer& buffer,
 			continue;
 		}
 		// add style if we were able to read one
-		if (style && !styles->AddStyle(style)) {
+		if (style && !styles->AddItem(style)) {
 			delete style;
 			return B_NO_MEMORY;
 		}
@@ -387,7 +390,7 @@ read_path_with_commands(LittleEndianBuffer& buffer, VectorPath* path,
 // _ParsePaths
 status_t
 FlatIconImporter::_ParsePaths(LittleEndianBuffer& buffer,
-							  PathContainer* paths)
+							  Container<VectorPath>* paths)
 {
 	uint8 pathCount;
 	if (!buffer.Read(pathCount))
@@ -425,7 +428,7 @@ FlatIconImporter::_ParsePaths(LittleEndianBuffer& buffer,
 		if (pathFlags & PATH_FLAG_CLOSED)
 			path->SetClosed(true);
 		// add path to container
-		if (!paths->AddPath(path)) {
+		if (!paths->AddItem(path)) {
 			delete path;
 			return B_NO_MEMORY;
 		}
@@ -436,7 +439,7 @@ FlatIconImporter::_ParsePaths(LittleEndianBuffer& buffer,
 
 // _ReadTransformer
 static Transformer*
-_ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source)
+_ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source, Shape* shape)
 {
 	uint8 transformerType;
 	if (!buffer.Read(transformerType))
@@ -480,9 +483,19 @@ _ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source)
 		}
 		case TRANSFORMER_TYPE_PERSPECTIVE: {
 			PerspectiveTransformer* perspective
-				= new (nothrow) PerspectiveTransformer(source);
-			// TODO: upgrade AGG to be able to support storage of
-			// trans_perspective
+				= new (nothrow) PerspectiveTransformer(source, shape);
+			if (!perspective)
+				return NULL;
+			double matrix[9];
+			for (int32 i = 0; i < 9; i++) {
+				float value;
+				if (!read_float_24(buffer, value)) {
+					delete perspective;
+					return NULL;
+				}
+				matrix[i] = value;
+			}
+			perspective->load_from(matrix);
 			return perspective;
 		}
 		case TRANSFORMER_TYPE_STROKE: {
@@ -521,8 +534,8 @@ _ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source)
 // _ReadPathSourceShape
 Shape*
 FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
-									   StyleContainer* styles,
-									   PathContainer* paths)
+									   Container<Style>* styles,
+									   Container<VectorPath>* paths)
 {
 	// find out which style this shape uses
 	uint8 styleIndex;
@@ -531,9 +544,9 @@ FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
 		return NULL;
 
 #ifdef ICON_O_MATIC
-	Style* style = styles->StyleAt(StyleIndexFor(styleIndex));
+	Style* style = styles->ItemAt(StyleIndexFor(styleIndex));
 #else
-	Style* style = styles->StyleAt(styleIndex);
+	Style* style = styles->ItemAt(styleIndex);
 #endif
 
 	if (!style) {
@@ -543,7 +556,7 @@ FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
 	}
 
 	// create the shape
-	Shape* shape = new (nothrow) Shape(style);
+	PathSourceShape* shape = new (nothrow) PathSourceShape(style);
 	ObjectDeleter<Shape> shapeDeleter(shape);
 
 	if (!shape || shape->InitCheck() < B_OK)
@@ -556,16 +569,16 @@ FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
 			return NULL;
 
 #ifdef ICON_O_MATIC
-		VectorPath* path = paths->PathAt(PathIndexFor(pathIndex));
+		VectorPath* path = paths->ItemAt(PathIndexFor(pathIndex));
 #else
-		VectorPath* path = paths->PathAt(pathIndex);
+		VectorPath* path = paths->ItemAt(pathIndex);
 #endif
 		if (!path) {
 			printf("_ReadPathSourceShape() - "
 				   "shape references non-existing path %d\n", pathIndex);
 			continue;
 		}
-		shape->Paths()->AddPath(path);
+		shape->Paths()->AddItem(path);
 	}
 
 	// shape flags
@@ -602,8 +615,8 @@ FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
 			return NULL;
 		for (uint32 i = 0; i < transformerCount; i++) {
 			Transformer* transformer
-				= _ReadTransformer(buffer, shape->VertexSource());
-			if (transformer && !shape->AddTransformer(transformer)) {
+				= _ReadTransformer(buffer, shape->VertexSource(), shape);
+			if (transformer && !shape->Transformers()->AddItem(transformer)) {
 				delete transformer;
 				return NULL;
 			}
@@ -617,9 +630,9 @@ FlatIconImporter::_ReadPathSourceShape(LittleEndianBuffer& buffer,
 // _ParseShapes
 status_t
 FlatIconImporter::_ParseShapes(LittleEndianBuffer& buffer,
-							   StyleContainer* styles,
-							   PathContainer* paths,
-							   ShapeContainer* shapes)
+							   Container<Style>* styles,
+							   Container<VectorPath>* paths,
+							   Container<Shape>* shapes)
 {
 	uint8 shapeCount;
 	if (!buffer.Read(shapeCount))
@@ -644,7 +657,7 @@ FlatIconImporter::_ParseShapes(LittleEndianBuffer& buffer,
 			continue;
 		}
 		// add shape if we were able to read one
-		if (shape && !shapes->AddShape(shape)) {
+		if (shape && !shapes->AddItem(shape)) {
 			delete shape;
 			return B_NO_MEMORY;
 		}
@@ -652,7 +665,3 @@ FlatIconImporter::_ParseShapes(LittleEndianBuffer& buffer,
 
 	return B_OK;
 }
-
-
-
-

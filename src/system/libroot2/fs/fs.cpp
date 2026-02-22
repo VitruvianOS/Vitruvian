@@ -534,6 +534,10 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 
 	int i = 0;
 	size_t pos = 0;
+	uint32 maxEntriesInBuffer = bufferSize / sizeof(dirent);
+	if (maxCount > maxEntriesInBuffer)
+		maxCount = maxEntriesInBuffer;
+
 	while (pos < (size_t)ret && i < (int)maxCount) {
 		if ((size_t)ret - pos < LINUX_DIRENT64_HEADER)
 			break;
@@ -550,7 +554,7 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 
 		buffer[i].d_ino = (ino_t)d_ino;
 		buffer[i].d_off = (off_t)d_off;
-		buffer[i].d_reclen = reclen;
+		buffer[i].d_reclen = sizeof(dirent);
 
 		size_t name_len = reclen - LINUX_DIRENT64_HEADER;
 		size_t dst_size = sizeof(buffer[i].d_name);

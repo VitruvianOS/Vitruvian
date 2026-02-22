@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2018, Haiku Inc. All rights reserved.
+ * Copyright 2012-2024, Haiku Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -7,8 +7,11 @@
 
 #include <stdio.h>
 
+#include <Catalog.h>
+#include <NumberFormat.h>
 #include <StringFormat.h>
 #include <SystemCatalog.h>
+
 
 using BPrivate::gSystemCatalog;
 
@@ -23,44 +26,36 @@ namespace BPrivate {
 const char*
 string_for_rate(double rate, char* string, size_t stringSize)
 {
-	double kib = rate / 1024.0;
-	if (kib < 1.0) {
-		BString tmp;
-		BStringFormat format(
-			gSystemCatalog.GetString(B_TRANSLATE_MARK(
-			"{0, plural, one{# byte/s} other{# bytes/s}}"),
-			B_TRANSLATION_CONTEXT, "bytes per second"));
-		format.Format(tmp, (int)rate);
+	const char* kFormats[] = {
+		B_TRANSLATE_MARK_COMMENT("{0, plural, one{%s byte/s} other{%s bytes/s}}",
+			"units per second"),
+		B_TRANSLATE_MARK_COMMENT("%s KiB/s", "units per second"),
+		B_TRANSLATE_MARK_COMMENT("%s MiB/s", "units per second"),
+		B_TRANSLATE_MARK_COMMENT("%s GiB/s", "units per second"),
+		B_TRANSLATE_MARK_COMMENT("%s TiB/s", "units per second")
+	};
 
-		strlcpy(string, tmp.String(), stringSize);
-		return string;
+	size_t index = 0;
+	while (index < B_COUNT_OF(kFormats) - 1 && rate >= 1024.0) {
+		rate /= 1024.0;
+		index++;
 	}
-	double mib = kib / 1024.0;
-	if (mib < 1.0) {
-		const char* trKey = B_TRANSLATE_MARK("%3.2f KiB/s");
-		snprintf(string, stringSize, gSystemCatalog.GetString(trKey,
-			B_TRANSLATION_CONTEXT, "KiB per second"), kib);
-		return string;
-	}
-	double gib = mib / 1024.0;
-	if (gib < 1.0) {
-		const char* trKey = B_TRANSLATE_MARK("%3.2f MiB/s");
-		snprintf(string, stringSize, gSystemCatalog.GetString(trKey,
-			B_TRANSLATION_CONTEXT, "MiB per second"), mib);
-		return string;
-	}
-	double tib = gib / 1024.0;
-	if (tib < 1.0) {
-		const char* trKey = B_TRANSLATE_MARK("%3.2f GiB/s");
-		snprintf(string, stringSize, gSystemCatalog.GetString(trKey,
-			B_TRANSLATION_CONTEXT, "GiB per second"), gib);
-		return string;
-	}
-	const char* trKey = B_TRANSLATE_MARK("%.2f TiB/s");
-	snprintf(string, stringSize, gSystemCatalog.GetString(trKey,
-		B_TRANSLATION_CONTEXT, "TiB per second"), tib);
+
+	BString format;
+	BStringFormat formatter(
+		gSystemCatalog.GetString(kFormats[index], B_TRANSLATION_CONTEXT, "units per second"));
+	formatter.Format(format, rate);
+
+	BString printedRate;
+	BNumberFormat numberFormat;
+	numberFormat.SetPrecision(index == 0 ? 0 : 2);
+	numberFormat.Format(printedRate, rate);
+
+	snprintf(string, stringSize, format.String(), printedRate.String());
+
 	return string;
 }
+
 
 }	// namespace BPrivate
 

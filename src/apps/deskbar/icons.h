@@ -10,4 +10,3 @@ enum {
 	R_WindowShownSwitchIcon = 23,
 	R_WindowHiddenSwitchIcon = 24
 };
-

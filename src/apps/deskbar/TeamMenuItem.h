@@ -44,6 +44,12 @@ All rights reserved.
 #include "TruncatableMenuItem.h"
 
 
+const float kSwitchWidth = 12.0f;
+
+const uint32 kMinimizeTeam = 'mntm';
+const uint32 kBringTeamToFront = 'bftm';
+
+
 class BBitmap;
 class TBarView;
 class TWindowMenuItem;
@@ -57,6 +63,7 @@ public:
 									float height = -1.0f);
 	virtual						~TTeamMenuItem();
 
+			bool				HandleMouseDown(BPoint where);
 			status_t			Invoke(BMessage* message = NULL);
 
 			void				SetOverrideWidth(float width)
@@ -108,6 +115,7 @@ private:
 			float				fLabelWidth;
 			float				fLabelAscent;
 			float				fLabelDescent;
+			float				fLabelHeight;
 
 			bool				fOverriddenSelected;
 

@@ -40,8 +40,9 @@ All rights reserved.
 #include <Window.h>
 
 
-class TDeskbarMenu;
+class TBarApp;
 class TBarView;
+class TDeskbarMenu;
 
 class TBarWindow : public BWindow {
 public:
@@ -87,13 +88,16 @@ public:
 
 			bool				IsShowingMenu() const;
 
+			void				SetSizeLimits();
+
 private:
 			bool				_IsFocusMessage(BMessage* message);
 
 private:
 	static	TDeskbarMenu*		sDeskbarMenu;
+			TBarApp*			fBarApp;
 			TBarView*			fBarView;
-			bool				fShowingMenu;
+			int32				fMenusShown;
 };
 
 

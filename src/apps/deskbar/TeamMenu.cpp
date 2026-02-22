@@ -36,11 +36,14 @@ All rights reserved.
 
 #include "TeamMenu.h"
 
+#include <algorithm>
 #include <strings.h>
 
 #include <Application.h>
 #include <Collator.h>
+#include <ControlLook.h>
 #include <Debug.h>
+#include <Mime.h>
 #include <Roster.h>
 
 #include "BarApp.h"
@@ -54,12 +57,12 @@ All rights reserved.
 //	#pragma mark - TTeamMenuItem
 
 
-TTeamMenu::TTeamMenu()
+TTeamMenu::TTeamMenu(TBarView* barView)
 	:
-	BMenu("Team Menu")
+	BMenu("Team Menu"),
+	fBarView(barView)
 {
 	SetItemMargins(0.0f, 0.0f, 0.0f, 0.0f);
-	SetFont(be_plain_font);
 }
 
 
@@ -85,22 +88,62 @@ TTeamMenu::AttachedToWindow()
 	BList teamList;
 	TBarApp::Subscribe(self, &teamList);
 
-	TBarView* barview = (dynamic_cast<TBarApp*>(be_app))->BarView();
-	bool dragging = barview && barview->Dragging();
-	int32 iconSize = static_cast<TBarApp*>(be_app)->IconSize();
-	desk_settings* settings = ((TBarApp*)be_app)->Settings();
+	bool dragging = fBarView != NULL && fBarView->Dragging();
+	desk_settings* settings = static_cast<TBarApp*>(be_app)->Settings();
+	const int32 iconSize = static_cast<TBarApp*>(be_app)->TeamIconSize();
+	const float iconPadding = be_control_look->ComposeSpacing(kIconPadding);
+	float iconOnlyWidth = iconSize + iconPadding;
+	if (settings->hideLabels)
+		iconOnlyWidth += iconPadding; // add an extra icon padding
+	const int32 large = be_control_look->ComposeIconSize(B_LARGE_ICON)
+		.IntegerWidth() + 1;
+	const int32 min = be_control_look->ComposeIconSize(kMinimumIconSize)
+		.IntegerWidth() + 1;
 
-	float width = gMinimumWindowWidth - iconSize - 4;
+	// calculate the minimum item width based on font and icon size
+	float minItemWidth = 0;
+	if (settings->hideLabels) {
+		minItemWidth = std::max(floorf(gMinimumWindowWidth / 2),
+			iconOnlyWidth);
+	} else {
+		float labelWidth = gMinimumWindowWidth - iconOnlyWidth
+			+ (be_plain_font->Size() - 12) * 4;
+		if (iconSize <= large) // label wraps after 32x32
+			labelWidth += iconSize - min;
+		minItemWidth = iconOnlyWidth + labelWidth;
+	}
+
+	float maxItemWidth = minItemWidth;
+
+	int32 teamCount = teamList.CountItems();
+	if (!settings->hideLabels) {
+		// go through list and find the widest label
+		for (int32 i = 0; i < teamCount; i++) {
+			BarTeamInfo* barInfo = (BarTeamInfo*)teamList.ItemAt(i);
+			float labelWidth = StringWidth(barInfo->name);
+			// label wraps after 32x32
+			float itemWidth = iconSize > large
+				? std::max(labelWidth, iconOnlyWidth)
+				: labelWidth + iconOnlyWidth + min
+					+ (be_plain_font->Size() - 12) * 4;
+			maxItemWidth = std::max(maxItemWidth, itemWidth);
+		}
+
+		// but not too wide
+		maxItemWidth = std::min(maxItemWidth, gMaximumWindowWidth);
+	}
+
+	SetMaxContentWidth(maxItemWidth);
 
 	if (settings->sortRunningApps)
 		teamList.SortItems(TTeamMenu::CompareByName);
 
-	int32 count = teamList.CountItems();
-	for (int32 i = 0; i < count; i++) {
+	// go through list and add the items
+	for (int32 i = 0; i < teamCount; i++) {
 		// add items back
 		BarTeamInfo* barInfo = (BarTeamInfo*)teamList.ItemAt(i);
 		TTeamMenuItem* item = new TTeamMenuItem(barInfo->teams,
-			barInfo->icon, barInfo->name, barInfo->sig, width, -1);
+			barInfo->icon, barInfo->name, barInfo->sig, maxItemWidth);
 
 		if (settings->trackerAlwaysFirst
 			&& strcasecmp(barInfo->sig, kTrackerSignature) == 0) {
@@ -109,15 +152,14 @@ TTeamMenu::AttachedToWindow()
 			AddItem(item);
 
 		if (dragging && item != NULL) {
-			bool canhandle = (dynamic_cast<TBarApp*>(be_app))->BarView()->
-				AppCanHandleTypes(item->Signature());
+			bool canhandle = fBarView->AppCanHandleTypes(item->Signature());
 			if (item->IsEnabled() != canhandle)
 				item->SetEnabled(canhandle);
 
 			BMenu* menu = item->Submenu();
 			if (menu != NULL) {
-				menu->SetTrackingHook(barview->MenuTrackingHook,
-					barview->GetTrackingHookData());
+				menu->SetTrackingHook(fBarView->MenuTrackingHook,
+					fBarView->GetTrackingHookData());
 			}
 		}
 	}
@@ -128,11 +170,11 @@ TTeamMenu::AttachedToWindow()
 		AddItem(item);
 	}
 
-	if (dragging && barview->LockLooper()) {
-		SetTrackingHook(barview->MenuTrackingHook,
-			barview->GetTrackingHookData());
-		barview->DragStart();
-		barview->UnlockLooper();
+	if (dragging && fBarView->LockLooper()) {
+		SetTrackingHook(fBarView->MenuTrackingHook,
+			fBarView->GetTrackingHookData());
+		fBarView->DragStart();
+		fBarView->UnlockLooper();
 	}
 
 	BMenu::AttachedToWindow();
@@ -142,11 +184,10 @@ TTeamMenu::AttachedToWindow()
 void
 TTeamMenu::DetachedFromWindow()
 {
-	TBarView* barView = (dynamic_cast<TBarApp*>(be_app))->BarView();
-	if (barView != NULL) {
-		BLooper* looper = barView->Looper();
+	if (fBarView != NULL) {
+		BLooper* looper = fBarView->Looper();
 		if (looper != NULL && looper->Lock()) {
-			barView->DragStop();
+			fBarView->DragStop();
 			looper->Unlock();
 		}
 	}
@@ -155,4 +196,65 @@ TTeamMenu::DetachedFromWindow()
 
 	BMessenger self(this);
 	TBarApp::Unsubscribe(self);
+}
+
+
+void
+TTeamMenu::MessageReceived(BMessage* message)
+{
+	TTeamMenuItem* item = NULL;
+
+	switch (message->what) {
+		case B_SOME_APP_QUIT:
+		case kRemoveTeam:
+		{
+			int32 itemIndex = -1;
+			message->FindInt32("itemIndex", &itemIndex);
+			team_id team = -1;
+			message->FindInt32("team", &team);
+
+			item = dynamic_cast<TTeamMenuItem*>(ItemAt(itemIndex));
+			if (item != NULL && item->Teams()->HasItem((void*)(addr_t)team)) {
+				item->Teams()->RemoveItem(team);
+				RemoveItem(itemIndex);
+				delete item;
+			}
+			break;
+		}
+
+		default:
+			BMenu::MessageReceived(message);
+			break;
+	}
+}
+
+
+void
+TTeamMenu::MouseDown(BPoint where)
+{
+	if (fBarView == NULL || fBarView->Dragging())
+		return BMenu::MouseDown(where);
+
+	BMenuItem* item = ItemAtPoint(where);
+	if (item == NULL)
+		return BMenu::MouseDown(where);
+
+	TTeamMenuItem* teamItem = dynamic_cast<TTeamMenuItem*>(item);
+	if (teamItem == NULL || !teamItem->HandleMouseDown(where))
+		BMenu::MouseDown(where);
+}
+
+
+BMenuItem*
+TTeamMenu::ItemAtPoint(BPoint point)
+{
+	int32 itemCount = CountItems();
+	for (int32 index = 0; index < itemCount; index++) {
+		BMenuItem* item = ItemAt(index);
+		if (item != NULL && item->Frame().Contains(point))
+			return item;
+	}
+
+	// no item found
+	return NULL;
 }

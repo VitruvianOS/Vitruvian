@@ -1,3 +1,4 @@
+add_subdirectory(aboutsystem)
 add_subdirectory(clock)
 add_subdirectory(deskbar)
 #add_subdirectory(deskcalc)

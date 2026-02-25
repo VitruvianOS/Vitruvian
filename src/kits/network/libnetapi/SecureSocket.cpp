@@ -39,49 +39,6 @@
 #ifdef OPENSSL_ENABLED
 
 #ifdef TRACE_SESSION_KEY
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-/*
- * print session id and master key in NSS keylog format (RSA
- * Session-ID:<session id> Master-Key:<master key>)
- */
-int SSL_SESSION_print_keylog(BIO *bp, const SSL_SESSION *x)
-{
-	size_t i;
-
-	if (x == NULL)
-		goto err;
-	if (x->session_id_length == 0 || x->master_key_length == 0)
-		goto err;
-
-	// the RSA prefix is required by the format's definition although there's
-	// nothing RSA-specific in the output, therefore, we don't have to check if
-	// the cipher suite is based on RSA
-	if (BIO_puts(bp, "RSA ") <= 0)
-		goto err;
-
-	if (BIO_puts(bp, "Session-ID:") <= 0)
-		goto err;
-	for (i = 0; i < x->session_id_length; i++) {
-		if (BIO_printf(bp, "%02X", x->session_id[i]) <= 0)
-			goto err;
-	}
-	if (BIO_puts(bp, " Master-Key:") <= 0)
-		goto err;
-	for (i = 0; i < (size_t)x->master_key_length; i++) {
-		if (BIO_printf(bp, "%02X", x->master_key[i]) <= 0)
-			goto err;
-	}
-	if (BIO_puts(bp, "\n") <= 0)
-		goto err;
-
-	return (1);
-err:
-	return (0);
-}
-
-
-#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
-
 
 // print client random id and master key in NSS keylog format
 // as session ID is not enough.
@@ -199,7 +156,7 @@ BSecureSocket::Private::ErrorCode(int returnValue)
 			return B_NO_ERROR;
 		case SSL_ERROR_ZERO_RETURN:
 			// Socket is closed
-			return B_CANCELED;
+			return B_IO_ERROR;
 		case SSL_ERROR_SSL:
 			// Probably no certificate
 			return B_NOT_ALLOWED;
@@ -224,11 +181,11 @@ BSecureSocket::Private::ErrorCode(int returnValue)
 
 			if (returnValue == -1)
 			{
-				fprintf(stderr, "SSL %s\n", ERR_error_string(error, NULL));
-				return -errno;
+				fprintf(stderr, "SSL rv -1 %s\n", ERR_error_string(error, NULL));
+				return errno;
 			}
 
-			fprintf(stderr, "SSL %s\n", ERR_error_string(error, NULL));
+			fprintf(stderr, "SSL rv other %s\n", ERR_error_string(error, NULL));
 			return B_ERROR;
 		}
 
@@ -239,7 +196,7 @@ BSecureSocket::Private::ErrorCode(int returnValue)
 		case SSL_ERROR_WANT_X509_LOOKUP:
 		default:
 			// TODO: translate SSL error codes!
-			fprintf(stderr, "SSL %s\n", ERR_error_string(error, NULL));
+			fprintf(stderr, "SSL other %s\n", ERR_error_string(error, NULL));
 			return B_ERROR;
 	}
 }
@@ -338,9 +295,6 @@ static void apps_ssl_info_callback(const SSL *s, int where, int ret)
 /* static */ void
 BSecureSocket::Private::_CreateContext()
 {
-	// We want SSL to report errors in human readable format.
-	SSL_load_error_strings();
-
 	// "SSLv23" means "any SSL or TLS version". We disable SSL v2 and v3 below
 	// to keep only TLS 1.0 and above.
 	sContext = SSL_CTX_new(SSLv23_method());
@@ -364,17 +318,8 @@ BSecureSocket::Private::_CreateContext()
 	// broken stuff (https://wiki.openssl.org/index.php/SSL/TLS_Client)
 	SSL_CTX_set_cipher_list(sContext, "HIGH:!aNULL:!PSK:!SRP:!MD5:!RC4");
 
-	SSL_CTX_set_ecdh_auto(sContext, 1);
-
 	// Setup certificate verification
-	BPath certificateStore;
-	find_directory(B_SYSTEM_DATA_DIRECTORY, &certificateStore);
-	certificateStore.Append("ssl/CARootCertificates.pem");
-	// TODO we may want to add a non-packaged certificate directory?
-	// (would make it possible to store user-added certificate exceptions
-	// there)
-	SSL_CTX_load_verify_locations(sContext, certificateStore.Path(), NULL);
-	SSL_CTX_set_verify(sContext, SSL_VERIFY_PEER, VerifyCallback);
+	SSL_CTX_set_default_verify_file(sContext);
 
 	// OpenSSL 1.0.2 and later: use the alternate "trusted first" algorithm to
 	// validate certificate chains. This makes the validation stop as soon as a
@@ -545,9 +490,27 @@ BSecureSocket::Read(void* buffer, size_t size)
 	if (!IsConnected())
 		return B_ERROR;
 
-	int bytesRead = SSL_read(fPrivate->fSSL, buffer, size);
-	if (bytesRead >= 0)
-		return bytesRead;
+	int bytesRead;
+	int retry;
+	do {
+		bytesRead = SSL_read(fPrivate->fSSL, buffer, size);
+		if (bytesRead > 0)
+			return bytesRead;
+
+		if (errno != EINTR) {
+			// Don't retry in cases of "no data available" for non-blocking
+			// sockets.
+			int error = SSL_get_error(fPrivate->fSSL, bytesRead);
+			if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE)
+				return B_WOULD_BLOCK;
+		}
+
+		// See if the error was retryable. We may have been interrupted by
+		// a signal, in which case we will retry. But it is also possible that
+		// another error has occurred which is not retryable. openssl will
+		// decide for us here.
+		retry = BIO_should_retry(SSL_get_rbio(fPrivate->fSSL));
+	} while (retry != 0);
 
 	return fPrivate->ErrorCode(bytesRead);
 }
@@ -559,9 +522,27 @@ BSecureSocket::Write(const void* buffer, size_t size)
 	if (!IsConnected())
 		return B_ERROR;
 
-	int bytesWritten = SSL_write(fPrivate->fSSL, buffer, size);
-	if (bytesWritten >= 0)
-		return bytesWritten;
+	int bytesWritten;
+	int retry;
+	do {
+		bytesWritten = SSL_write(fPrivate->fSSL, buffer, size);
+		if (bytesWritten >= 0)
+			return bytesWritten;
+
+		if (errno != EINTR) {
+			// Don't retry in cases of "no buffer space available" for
+			// non-blocking sockets.
+			int error = SSL_get_error(fPrivate->fSSL, bytesWritten);
+			if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE)
+				return B_WOULD_BLOCK;
+		}
+
+		// See if the error was retryable. We may have been interrupted by
+		// a signal, in which case we will retry. But it is also possible that
+		// another error has occurred which is not retryable. openssl will
+		// decide for us here.
+		retry = BIO_should_retry(SSL_get_wbio(fPrivate->fSSL));
+	} while (retry != 0);
 
 	return fPrivate->ErrorCode(bytesWritten);
 }

@@ -1,46 +1,56 @@
 target_sources(be PRIVATE
+	libnetapi/AbstractSocket.cpp
+	libnetapi/Certificate.cpp
+	libnetapi/DatagramSocket.cpp
 	libnetapi/DynamicBuffer.cpp
-	libnetapi/NetEndpoint.cpp
 	libnetapi/NetAddress.cpp
 	libnetapi/NetBuffer.cpp
 	libnetapi/NetDebug.cpp
-	libnetapi/SecureSocket.cpp
-	libnetapi/HttpAuthentication.cpp
-	libnetapi/Certificate.cpp
-	libnetapi/Certificate.cpp
-	libnetapi/SSL.cpp
+	libnetapi/NetEndpoint.cpp
 	#libnetapi/NetworkAddress.cpp
 	#libnetapi/NetworkAddressResolver.cpp
-	#libnetapi/NetworkCookie.cpp
-	libnetapi/NetworkCookieJar.cpp
 	#libnetapi/NetworkDevice.cpp
 	#libnetapi/NetworkInterface.cpp
 	#libnetapi/NetworkRoster.cpp
 	#libnetapi/NetworkRoute.cpp
 	libnetapi/NetworkSettings.cpp
-	libnetapi/AbstractSocket.cpp
-	libnetapi/DatagramSocket.cpp
+	libnetapi/notifications.cpp
 	libnetapi/ProxySecureSocket.cpp
 	libnetapi/SecureSocket.cpp
 	libnetapi/Socket.cpp
 	libnetapi/SocketMessenger.cpp
-	libnetapi/FileRequest.cpp
-	libnetapi/GopherRequest.cpp
-	libnetapi/DataRequest.cpp
-	libnetapi/HttpAuthentication.cpp
-	libnetapi/HttpHeaders.cpp
-	libnetapi/HttpForm.cpp
-	libnetapi/HttpRequest.cpp
-	libnetapi/HttpResult.cpp
-	libnetapi/HttpTime.cpp
-	libnetapi/notifications.cpp
-	libnetapi/NetworkRequest.cpp
-	libnetapi/UrlContext.cpp
-	libnetapi/UrlProtocolAsynchronousListener.cpp
-	libnetapi/UrlProtocolDispatchingListener.cpp
-	libnetapi/UrlProtocolListener.cpp
-	libnetapi/UrlProtocolRoster.cpp
-	libnetapi/UrlRequest.cpp
-	libnetapi/UrlResult.cpp
-	libnetapi/UrlSynchronousRequest.cpp
+
+	libnetservices/DataRequest.cpp
+	libnetservices/FileRequest.cpp
+	libnetservices/Geolocation.cpp
+	libnetservices/GopherRequest.cpp
+	libnetservices/HttpAuthentication.cpp
+	libnetservices/HttpForm.cpp
+	libnetservices/HttpHeaders.cpp
+	libnetservices/HttpRequest.cpp
+	libnetservices/HttpResult.cpp
+	libnetservices/HttpTime.cpp
+	libnetservices/NetworkCookie.cpp
+	libnetservices/NetworkCookieJar.cpp
+	libnetservices/NetworkRequest.cpp
+	libnetservices/UrlContext.cpp
+	libnetservices/UrlProtocolAsynchronousListener.cpp
+	libnetservices/UrlProtocolDispatchingListener.cpp
+	libnetservices/UrlProtocolListener.cpp
+	libnetservices/UrlProtocolRoster.cpp
+	libnetservices/UrlRequest.cpp
+	libnetservices/UrlResult.cpp
+	libnetservices/UrlSynchronousRequest.cpp
+
+	libnetservices2/ErrorsExt.cpp
+	libnetservices2/HttpBuffer.cpp
+	libnetservices2/HttpFields.cpp
+	libnetservices2/HttpParser.cpp
+	libnetservices2/HttpRequest.cpp
+	libnetservices2/HttpResult.cpp
+	libnetservices2/HttpSerializer.cpp
+	libnetservices2/HttpSession.cpp
+	libnetservices2/HttpTime.cpp
+	libnetservices2/NetServicesMisc.cpp
 )
+#UsePrivateHeaders(network libnetapi libnetservices libnetservices2)

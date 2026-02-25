@@ -17,7 +17,7 @@
 #define NET_DATALINK_MODULE_NAME "network/stack/datalink/v1"
 
 
-struct Checksum;
+class Checksum;
 struct net_protocol;
 
 
@@ -48,7 +48,6 @@ typedef struct net_interface {
 	uint32				index;
 	uint32				flags;
 	uint8				type;
-	uint32				mtu;
 	uint32				metric;
 } net_interface;
 
@@ -171,7 +170,7 @@ struct net_address_module_info {
 	uint32			(*hash_address_pair)(const struct sockaddr* ourAddress,
 						const struct sockaddr* peerAddress);
 
-	status_t		(*checksum_address)(struct Checksum* checksum,
+	status_t		(*checksum_address)(Checksum* checksum,
 						const struct sockaddr* address);
 
 	void			(*get_loopback_address)(struct sockaddr* result);

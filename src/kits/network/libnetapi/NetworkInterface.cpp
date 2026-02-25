@@ -37,11 +37,9 @@ do_ifaliasreq(const char* name, int32 option, BNetworkInterfaceAddress& address,
 	if (!readBack)
 		family = family_from_interface_address(address);
 
-	int socket = ::socket(family, SOCK_DGRAM, 0);
-	if (socket < 0)
+	FileDescriptorCloser socket(::socket(family, SOCK_DGRAM, 0));
+	if (!socket.IsSet())
 		return -errno;
-
-	FileDescriptorCloser closer(socket);
 
 	ifaliasreq request;
 	strlcpy(request.ifra_name, name, IF_NAMESIZE);
@@ -55,7 +53,7 @@ do_ifaliasreq(const char* name, int32 option, BNetworkInterfaceAddress& address,
 	memcpy(&request.ifra_broadaddr, &address.Broadcast().SockAddr(),
 		address.Broadcast().Length());
 
-	if (ioctl(socket, option, &request, sizeof(struct ifaliasreq)) < 0)
+	if (ioctl(socket.Get(), option, &request, sizeof(struct ifaliasreq)) < 0)
 		return -errno;
 
 	if (readBack) {
@@ -81,15 +79,13 @@ do_ifaliasreq(const char* name, int32 option,
 template<typename T> status_t
 do_request(int family, T& request, const char* name, int option)
 {
-	int socket = ::socket(family, SOCK_DGRAM, 0);
-	if (socket < 0)
+	FileDescriptorCloser socket(::socket(family, SOCK_DGRAM, 0));
+	if (!socket.IsSet())
 		return -errno;
-
-	FileDescriptorCloser closer(socket);
 
 	strlcpy(((struct ifreq&)request).ifr_name, name, IF_NAMESIZE);
 
-	if (ioctl(socket, option, &request, sizeof(T)) < 0)
+	if (ioctl(socket.Get(), option, &request, sizeof(T)) < 0)
 		return -errno;
 
 	return B_OK;
@@ -261,14 +257,11 @@ BNetworkInterface::MTU() const
 int32
 BNetworkInterface::Media() const
 {
-	ifmediareq request;
-	request.ifm_count = 0;
-	request.ifm_ulist = NULL;
-
+	ifreq request;
 	if (do_request(AF_INET, request, Name(), SIOCGIFMEDIA) != B_OK)
 		return -1;
 
-	return request.ifm_current;
+	return request.ifr_media;
 }
 
 
@@ -371,11 +364,9 @@ BNetworkInterface::GetAddressAt(int32 index, BNetworkInterfaceAddress& address)
 int32
 BNetworkInterface::FindAddress(const BNetworkAddress& address)
 {
-	int socket = ::socket(address.Family(), SOCK_DGRAM, 0);
-	if (socket < 0)
+	FileDescriptorCloser socket(::socket(address.Family(), SOCK_DGRAM, 0));
+	if (!socket.IsSet())
 		return -1;
-
-	FileDescriptorCloser closer(socket);
 
 	ifaliasreq request;
 	memset(&request, 0, sizeof(ifaliasreq));
@@ -384,8 +375,8 @@ BNetworkInterface::FindAddress(const BNetworkAddress& address)
 	request.ifra_index = -1;
 	memcpy(&request.ifra_addr, &address.SockAddr(), address.Length());
 
-	if (ioctl(socket, B_SOCKET_GET_ALIAS, &request, sizeof(struct ifaliasreq))
-			< 0) {
+	if (ioctl(socket.Get(), B_SOCKET_GET_ALIAS, &request,
+		sizeof(struct ifaliasreq)) < 0) {
 		return -1;
 	}
 
@@ -396,11 +387,9 @@ BNetworkInterface::FindAddress(const BNetworkAddress& address)
 int32
 BNetworkInterface::FindFirstAddress(int family)
 {
-	int socket = ::socket(family, SOCK_DGRAM, 0);
-	if (socket < 0)
+	FileDescriptorCloser socket(::socket(family, SOCK_DGRAM, 0));
+	if (!socket.IsSet())
 		return -1;
-
-	FileDescriptorCloser closer(socket);
 
 	ifaliasreq request;
 	memset(&request, 0, sizeof(ifaliasreq));
@@ -409,8 +398,8 @@ BNetworkInterface::FindFirstAddress(int family)
 	request.ifra_index = -1;
 	request.ifra_addr.ss_family = AF_UNSPEC;
 
-	if (ioctl(socket, B_SOCKET_GET_ALIAS, &request, sizeof(struct ifaliasreq))
-			< 0) {
+	if (ioctl(socket.Get(), B_SOCKET_GET_ALIAS, &request,
+		sizeof(struct ifaliasreq)) < 0) {
 		return -1;
 	}
 
@@ -479,16 +468,14 @@ BNetworkInterface::RemoveAddressAt(int32 index)
 status_t
 BNetworkInterface::GetHardwareAddress(BNetworkAddress& address)
 {
-	int socket = ::socket(AF_LINK, SOCK_DGRAM, 0);
-	if (socket < 0)
+	FileDescriptorCloser socket(::socket(AF_LINK, SOCK_DGRAM, 0));
+	if (!socket.IsSet())
 		return -errno;
-
-	FileDescriptorCloser closer(socket);
 
 	ifreq request;
 	strlcpy(request.ifr_name, Name(), IF_NAMESIZE);
 
-	if (ioctl(socket, SIOCGIFADDR, &request, sizeof(struct ifreq)) < 0)
+	if (ioctl(socket.Get(), SIOCGIFADDR, &request, sizeof(struct ifreq)) < 0)
 		return -errno;
 
 	address.SetTo(request.ifr_addr);
@@ -553,7 +540,7 @@ BNetworkInterface::RemoveDefaultRoute(int family)
 
 status_t
 BNetworkInterface::GetRoutes(int family,
-	BObjectList<BNetworkRoute>& routes) const
+	BObjectList<BNetworkRoute, true>& routes) const
 {
 	return BNetworkRoute::GetRoutes(family, Name(), routes);
 }

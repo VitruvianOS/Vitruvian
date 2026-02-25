@@ -206,7 +206,7 @@ status_t
 BNetworkRoute::GetDefaultRoute(int family, const char* interfaceName,
 	BNetworkRoute& route)
 {
-	BObjectList<BNetworkRoute> routes(1, true);
+	BObjectList<BNetworkRoute, true> routes(1);
 	status_t result = GetRoutes(family, interfaceName, RTF_DEFAULT, routes);
 	if (result != B_OK)
 		return result;
@@ -238,7 +238,7 @@ BNetworkRoute::GetDefaultGateway(int family, const char* interfaceName,
 
 
 status_t
-BNetworkRoute::GetRoutes(int family, BObjectList<BNetworkRoute>& routes)
+BNetworkRoute::GetRoutes(int family, BObjectList<BNetworkRoute, true>& routes)
 {
 	return GetRoutes(family, NULL, 0, routes);
 }
@@ -246,7 +246,7 @@ BNetworkRoute::GetRoutes(int family, BObjectList<BNetworkRoute>& routes)
 
 status_t
 BNetworkRoute::GetRoutes(int family, const char* interfaceName,
-	BObjectList<BNetworkRoute>& routes)
+	BObjectList<BNetworkRoute, true>& routes)
 {
 	return GetRoutes(family, interfaceName, 0, routes);
 }
@@ -254,17 +254,15 @@ BNetworkRoute::GetRoutes(int family, const char* interfaceName,
 
 status_t
 BNetworkRoute::GetRoutes(int family, const char* interfaceName,
-	uint32 filterFlags, BObjectList<BNetworkRoute>& routes)
+	uint32 filterFlags, BObjectList<BNetworkRoute, true>& routes)
 {
-	int socket = ::socket(family, SOCK_DGRAM, 0);
-	if (socket < 0)
+	FileDescriptorCloser socket(::socket(family, SOCK_DGRAM, 0));
+	if (!socket.IsSet())
 		return -errno;
-
-	FileDescriptorCloser fdCloser(socket);
 
 	ifconf config;
 	config.ifc_len = sizeof(config.ifc_value);
-	if (ioctl(socket, SIOCGRTSIZE, &config, sizeof(struct ifconf)) < 0)
+	if (ioctl(socket.Get(), SIOCGRTSIZE, &config, sizeof(struct ifconf)) < 0)
 		return -errno;
 
 	uint32 size = (uint32)config.ifc_value;
@@ -279,7 +277,7 @@ BNetworkRoute::GetRoutes(int family, const char* interfaceName,
 	config.ifc_len = size;
 	config.ifc_buf = buffer;
 
-	if (ioctl(socket, SIOCGRTTABLE, &config, sizeof(struct ifconf)) < 0)
+	if (ioctl(socket.Get(), SIOCGRTTABLE, &config, sizeof(struct ifconf)) < 0)
 		return -errno;
 
 	ifreq* interface = (ifreq*)buffer;

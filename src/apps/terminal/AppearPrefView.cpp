@@ -37,7 +37,6 @@
 #define B_TRANSLATION_CONTEXT "Terminal AppearancePrefView"
 
 
-
 // #pragma mark -
 
 
@@ -47,16 +46,6 @@ AppearancePrefView::AppearancePrefView(const char* name,
 	BGroupView(name, B_VERTICAL, 5),
 	fTerminalMessenger(messenger)
 {
-	const char* kColorTable[] = {
-		B_TRANSLATE_MARK("Text"),
-		B_TRANSLATE_MARK("Background"),
-		B_TRANSLATE_MARK("Cursor"),
-		B_TRANSLATE_MARK("Text under cursor"),
-		B_TRANSLATE_MARK("Selected text"),
-		B_TRANSLATE_MARK("Selected background"),
-		NULL
-	};
-
 	fBlinkCursor = new BCheckBox(
 		B_TRANSLATE("Blinking cursor"),
 			new BMessage(MSG_BLINK_CURSOR_CHANGED));
@@ -64,6 +53,10 @@ AppearancePrefView::AppearancePrefView(const char* name,
 	fAllowBold = new BCheckBox(
 		B_TRANSLATE("Allow bold text"),
 			new BMessage(MSG_ALLOW_BOLD_CHANGED));
+
+	fUseOptionAsMetaKey = new BCheckBox(
+		B_TRANSLATE("Use left Option as Meta key"),
+			new BMessage(MSG_USE_OPTION_AS_META_CHANGED));
 
 	fWarnOnExit = new BCheckBox(
 		B_TRANSLATE("Confirm exit if active programs exist"),
@@ -89,23 +82,13 @@ AppearancePrefView::AppearancePrefView(const char* name,
 	}
 	fEncodingField = new BMenuField(B_TRANSLATE("Encoding:"), encodingMenu);
 
-	BPopUpMenu* schemesPopUp = _MakeColorSchemeMenu(MSG_COLOR_SCHEME_CHANGED,
-		gPredefinedColorSchemes, gPredefinedColorSchemes[0]);
-	fColorSchemeField = new BMenuField(B_TRANSLATE("Color scheme:"),
-		schemesPopUp);
-
-	BPopUpMenu* colorsPopUp = _MakeMenu(MSG_COLOR_FIELD_CHANGED, kColorTable,
-		kColorTable[0]);
-
-	fColorField = new BMenuField(B_TRANSLATE("Color:"), colorsPopUp);
-
 	fTabTitle = new BTextControl("tabTitle", B_TRANSLATE("Tab title:"), "",
 		NULL);
 	fTabTitle->SetModificationMessage(
 		new BMessage(MSG_TAB_TITLE_SETTING_CHANGED));
 	fTabTitle->SetToolTip(BString(B_TRANSLATE(
 		"The pattern specifying the tab titles. The following placeholders\n"
-		"can be used:")) << "\n" << kTooTipSetTabTitlePlaceholders
+		"can be used:")) << "\n" << kToolTipSetTabTitlePlaceholders
 		<< "\n" << kToolTipCommonTitlePlaceholders);
 
 	fWindowTitle = new BTextControl("windowTitle", B_TRANSLATE("Window title:"),
@@ -114,7 +97,7 @@ AppearancePrefView::AppearancePrefView(const char* name,
 		new BMessage(MSG_WINDOW_TITLE_SETTING_CHANGED));
 	fWindowTitle->SetToolTip(BString(B_TRANSLATE(
 		"The pattern specifying the window titles. The following placeholders\n"
-		"can be used:")) << "\n" << kTooTipSetWindowTitlePlaceholders
+		"can be used:")) << "\n" << kToolTipSetWindowTitlePlaceholders
 		<< "\n" << kToolTipCommonTitlePlaceholders);
 
 	BLayoutBuilder::Group<>(this)
@@ -130,16 +113,11 @@ AppearancePrefView::AppearancePrefView(const char* name,
 			.Add(fFontField->CreateMenuBarLayoutItem(), 1, 3)
 			.Add(fEncodingField->CreateLabelLayoutItem(), 0, 4)
 			.Add(fEncodingField->CreateMenuBarLayoutItem(), 1, 4)
-			.Add(fColorSchemeField->CreateLabelLayoutItem(), 0, 5)
-			.Add(fColorSchemeField->CreateMenuBarLayoutItem(), 1, 5)
-			.Add(fColorField->CreateLabelLayoutItem(), 0, 6)
-			.Add(fColorField->CreateMenuBarLayoutItem(), 1, 6)
 			.End()
 		.AddGlue()
-		.Add(fColorControl = new BColorControl(BPoint(10, 10),
-			B_CELLS_32x8, 8.0, "", new BMessage(MSG_COLOR_CHANGED)))
 		.Add(fBlinkCursor)
 		.Add(fAllowBold)
+		.Add(fUseOptionAsMetaKey)
 		.Add(fWarnOnExit);
 
 	fTabTitle->SetAlignment(B_ALIGN_RIGHT, B_ALIGN_LEFT);
@@ -147,18 +125,8 @@ AppearancePrefView::AppearancePrefView(const char* name,
 	fFontField->SetAlignment(B_ALIGN_RIGHT);
 	fWindowSizeField->SetAlignment(B_ALIGN_RIGHT);
 	fEncodingField->SetAlignment(B_ALIGN_RIGHT);
-	fColorField->SetAlignment(B_ALIGN_RIGHT);
-	fColorSchemeField->SetAlignment(B_ALIGN_RIGHT);
 
 	Revert();
-
-	BTextControl* redInput = (BTextControl*)fColorControl->ChildAt(0);
-	BTextControl* greenInput = (BTextControl*)fColorControl->ChildAt(1);
-	BTextControl* blueInput = (BTextControl*)fColorControl->ChildAt(2);
-
-	redInput->SetAlignment(B_ALIGN_RIGHT, B_ALIGN_LEFT);
-	greenInput->SetAlignment(B_ALIGN_RIGHT, B_ALIGN_LEFT);
-	blueInput->SetAlignment(B_ALIGN_RIGHT, B_ALIGN_LEFT);
 }
 
 
@@ -172,12 +140,11 @@ AppearancePrefView::Revert()
 
 	fBlinkCursor->SetValue(pref->getBool(PREF_BLINK_CURSOR));
 	fAllowBold->SetValue(pref->getBool(PREF_ALLOW_BOLD));
+	fUseOptionAsMetaKey->SetValue(pref->getBool(PREF_USE_OPTION_AS_META));
 	fWarnOnExit->SetValue(pref->getBool(PREF_WARN_ON_EXIT));
 
-	_SetCurrentColorScheme();
 	_SetEncoding(pref->getString(PREF_TEXT_ENCODING));
 	_SetWindowSize(pref->getInt32(PREF_ROWS), pref->getInt32(PREF_COLS));
-	fColorControl->SetValue(pref->getRGB(PREF_TEXT_FORE_COLOR));
 
 	const char* family = pref->getString(PREF_HALF_FONT_FAMILY);
 	const char* style = pref->getString(PREF_HALF_FONT_STYLE);
@@ -194,6 +161,7 @@ AppearancePrefView::AttachedToWindow()
 	fWindowTitle->SetTarget(this);
 	fBlinkCursor->SetTarget(this);
 	fAllowBold->SetTarget(this);
+	fUseOptionAsMetaKey->SetTarget(this);
 	fWarnOnExit->SetTarget(this);
 
 	fFontField->Menu()->SetTargetForItems(this);
@@ -205,13 +173,8 @@ AppearancePrefView::AttachedToWindow()
 		fontSizeMenu->SetTargetForItems(this);
 	}
 
-	fColorControl->SetTarget(this);
-	fColorField->Menu()->SetTargetForItems(this);
-	fColorSchemeField->Menu()->SetTargetForItems(this);
 	fWindowSizeField->Menu()->SetTargetForItems(this);
 	fEncodingField->Menu()->SetTargetForItems(this);
-
-	_SetCurrentColorScheme();
 }
 
 
@@ -253,55 +216,6 @@ AppearancePrefView::MessageReceived(BMessage* msg)
 			break;
 		}
 
-		case MSG_COLOR_CHANGED:
-		{
-			const BMessage* itemMessage
-				= fColorField->Menu()->FindMarked()->Message();
-			const char* label = NULL;
-			if (itemMessage->FindString("label", &label) != B_OK)
-				break;
-			rgb_color oldColor = PrefHandler::Default()->getRGB(label);
-			if (oldColor != fColorControl->ValueAsColor()) {
-				BMenuItem* item = fColorSchemeField->Menu()->FindMarked();
-				if (strcmp(item->Label(), gCustomColorScheme.name) != 0) {
-					item->SetMarked(false);
-					item = fColorSchemeField->Menu()->FindItem(
-						gCustomColorScheme.name);
-					if (item)
-						item->SetMarked(true);
-				}
-
-				PrefHandler::Default()->setRGB(label,
-					fColorControl->ValueAsColor());
-				modified = true;
-			}
-			break;
-		}
-
-		case MSG_COLOR_SCHEME_CHANGED:
-		{
-			color_scheme* newScheme = NULL;
-			if (msg->FindPointer("color_scheme",
-					(void**)&newScheme) == B_OK) {
-				_ChangeColorScheme(newScheme);
-				const char* label = NULL;
-				if (fColorField->Menu()->FindMarked()->Message()->FindString(
-						"label", &label) == B_OK)
-					fColorControl->SetValue(
-						PrefHandler::Default()->getRGB(label));
-				modified = true;
-			}
-			break;
-		}
-
-		case MSG_COLOR_FIELD_CHANGED:
-		{
-			const char* label = NULL;
-			if (msg->FindString("label", &label) == B_OK)
-				fColorControl->SetValue(PrefHandler::Default()->getRGB(label));
-			break;
-		}
-
 		case MSG_COLS_CHANGED:
 		{
 			int rows = msg->FindInt32("rows");
@@ -334,6 +248,15 @@ AppearancePrefView::MessageReceived(BMessage* msg)
 				!= fAllowBold->Value()) {
 					PrefHandler::Default()->setBool(PREF_ALLOW_BOLD,
 						fAllowBold->Value());
+					modified = true;
+			}
+			break;
+
+		case MSG_USE_OPTION_AS_META_CHANGED:
+			if (PrefHandler::Default()->getBool(PREF_USE_OPTION_AS_META)
+				!= fUseOptionAsMetaKey->Value()) {
+					PrefHandler::Default()->setBool(PREF_USE_OPTION_AS_META,
+						fUseOptionAsMetaKey->Value());
 					modified = true;
 			}
 			break;
@@ -380,56 +303,6 @@ AppearancePrefView::MessageReceived(BMessage* msg)
 
 		BMessenger messenger(this);
 		messenger.SendMessage(MSG_PREF_MODIFIED);
-	}
-}
-
-
-void
-AppearancePrefView::_ChangeColorScheme(color_scheme* scheme)
-{
-	PrefHandler* pref = PrefHandler::Default();
-
-	pref->setRGB(PREF_TEXT_FORE_COLOR, scheme->text_fore_color);
-	pref->setRGB(PREF_TEXT_BACK_COLOR, scheme->text_back_color);
-	pref->setRGB(PREF_SELECT_FORE_COLOR, scheme->select_fore_color);
-	pref->setRGB(PREF_SELECT_BACK_COLOR, scheme->select_back_color);
-	pref->setRGB(PREF_CURSOR_FORE_COLOR, scheme->cursor_fore_color);
-	pref->setRGB(PREF_CURSOR_BACK_COLOR, scheme->cursor_back_color);
-}
-
-
-void
-AppearancePrefView::_SetCurrentColorScheme()
-{
-	PrefHandler* pref = PrefHandler::Default();
-
-	gCustomColorScheme.text_fore_color = pref->getRGB(PREF_TEXT_FORE_COLOR);
-	gCustomColorScheme.text_back_color = pref->getRGB(PREF_TEXT_BACK_COLOR);
-	gCustomColorScheme.select_fore_color = pref->getRGB(PREF_SELECT_FORE_COLOR);
-	gCustomColorScheme.select_back_color = pref->getRGB(PREF_SELECT_BACK_COLOR);
-	gCustomColorScheme.cursor_fore_color = pref->getRGB(PREF_CURSOR_FORE_COLOR);
-	gCustomColorScheme.cursor_back_color = pref->getRGB(PREF_CURSOR_BACK_COLOR);
-
-	const char* currentSchemeName = NULL;
-
-	for (const color_scheme** schemes = gPredefinedColorSchemes;
-			*schemes != NULL; schemes++) {
-		if (gCustomColorScheme == **schemes) {
-			currentSchemeName = (*schemes)->name;
-			break;
-		}
-	}
-
-	// If the scheme is not one of the known ones, assume a custom one.
-	if (currentSchemeName == NULL)
-		currentSchemeName = "Custom";
-
-	for (int32 i = 0; i < fColorSchemeField->Menu()->CountItems(); i++) {
-		BMenuItem* item = fColorSchemeField->Menu()->ItemAt(i);
-		if (strcmp(item->Label(), currentSchemeName) == 0) {
-			item->SetMarked(true);
-			break;
-		}
 	}
 }
 
@@ -582,29 +455,6 @@ AppearancePrefView::_MakeMenu(uint32 msg, const char** items,
 		items++;
 	}
 
-	return menu;
-}
-
-
-/*static*/ BPopUpMenu*
-AppearancePrefView::_MakeColorSchemeMenu(uint32 msg, const color_scheme** items,
-	const color_scheme* defaultItemName)
-{
-	BPopUpMenu* menu = new BPopUpMenu("");
-
-	int32 i = 0;
-	while (*items) {
-		if (strcmp((*items)->name, "") == 0)
-			menu->AddSeparatorItem();
-		else {
-			BMessage* message = new BMessage(msg);
-			message->AddPointer("color_scheme", (const void*)*items);
-			menu->AddItem(new BMenuItem((*items)->name, message));
-		}
-
-		items++;
-		i++;
-	}
 	return menu;
 }
 

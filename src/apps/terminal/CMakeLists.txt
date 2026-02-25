@@ -27,6 +27,8 @@ Application(
 	TermConst.cpp
 	TermParse.cpp
 	TermScrollView.cpp
+	ThemeView.cpp
+	ThemeWindow.cpp
 	TermView.cpp
 	TermViewHighlight.cpp
 	TermViewStates.cpp

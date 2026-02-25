@@ -101,3 +101,9 @@
 #define CASE_CFT 98
 #define CASE_INDEX 99
 #define CASE_NEXT_LINE 100
+#define CASE_REP 101
+#define CASE_DEC_DOL 102
+#define CASE_DECRQM 103
+#define CASE_CSI_EXCL 104
+#define CASE_DECSTR 105
+

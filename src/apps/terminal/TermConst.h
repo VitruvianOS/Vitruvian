@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2015, Haiku.
+ * Copyright 2001-2023, Haiku, Inc. All rights reserved.
  * Copyright (c) 2003-4 Kian Duffy <myob@users.sourceforge.net>
  * Copyright (C) 1998,99 Kazuho Okui and Takashi Murai.
  *
@@ -7,6 +7,7 @@
  *
  * Authors:
  *		Kian Duffy, myob@users.sourceforge.net
+ *		Simon South, simon@simonsouth.net
  *		Siarzhuk Zharski, zharik@gmx.li
  */
 #ifndef TERMCONST_H_INCLUDED
@@ -15,6 +16,7 @@
 // Application signature (Must same in Terminal.rdef)
 #define TERM_SIGNATURE "application/x-vnd.Haiku-Terminal"
 #define PREFFILE_MIMETYPE "text/x-terminal-pref"
+#define THEMEFILE_MIMETYPE "text/x-terminal-theme"
 
 // Signature of R5's Terminal. Needed for proper drop-in window count support
 #define R5_TERM_SIGNATURE "application/x-vnd.Be-SHEL"
@@ -51,6 +53,7 @@ static const uint32 MENU_FIND_STRING	= 'Mfpr';
 static const uint32 MENU_FIND_NEXT		= 'Mfnx';
 static const uint32 MENU_FIND_PREVIOUS	= 'Mfbw';
 static const uint32 MENU_SHOW_COLOR		= 'Mcol';
+static const uint32 MENU_THEME_OPEN		= 'Mthm';
 
 static const uint32 M_GET_DEVICE_NUM	= 'Mgdn';
 
@@ -79,15 +82,21 @@ static const uint32 MSG_SET_TERMINAL_TITLE				= 'sett';
 static const uint32 MSG_SET_TERMINAL_COLORS				= 'setc';
 static const uint32 MSG_RESET_TERMINAL_COLORS			= 'rstc';
 static const uint32 MSG_QUIT_TERMNAL					= 'qutt';
+static const uint32 MSG_ENABLE_META_KEY					= 'emtk';
+static const uint32 MSG_ENABLE_BRACKETED_PASTE			= 'ebkp';
 static const uint32 MSG_REPORT_MOUSE_EVENT				= 'mous';
 static const uint32 MSG_SAVE_WINDOW_POSITION			= 'swps';
 static const uint32 MSG_MOVE_TAB_LEFT					= 'mvtl';
 static const uint32 MSG_MOVE_TAB_RIGHT					= 'mvtr';
+static const uint32 MSG_SWITCH_TAB_LEFT					= 'swtl';
+static const uint32 MSG_SWITCH_TAB_RIGHT				= 'swtr';
 static const uint32 MSG_ACTIVATE_TERM					= 'msat';
 static const uint32 MSG_SET_CURSOR_STYLE				= 'mscs';
+static const uint32 MSG_GET_TERMINAL_COLOR				= 'getc';
 
 
 // Preference Read/Write Keys
+static const char* const PREF_THEME_NAME = "Theme name";
 static const char* const PREF_HALF_FONT_FAMILY = "Half Font Family";
 static const char* const PREF_HALF_FONT_STYLE = "Half Font Style";
 static const char* const PREF_HALF_FONT_SIZE = "Half Font Size";
@@ -133,6 +142,8 @@ static const char* const PREF_TEXT_ENCODING = "Text encoding";
 
 static const char* const PREF_BLINK_CURSOR = "Blinking cursor";
 static const char* const PREF_ALLOW_BOLD = "Allow bold text";
+static const char* const PREF_USE_OPTION_AS_META =
+	"Use left Option as Meta key";
 static const char* const PREF_WARN_ON_EXIT = "Warn on exit";
 static const char* const PREF_CURSOR_STYLE = "Cursor style";
 static const char* const PREF_EMULATE_BOLD = "Emulate bold";
@@ -141,8 +152,8 @@ static const char* const PREF_TAB_TITLE = "Tab title";
 static const char* const PREF_WINDOW_TITLE = "Window title";
 
 // shared strings
-extern const char* const kTooTipSetTabTitlePlaceholders;
-extern const char* const kTooTipSetWindowTitlePlaceholders;
+extern const char* const kToolTipSetTabTitlePlaceholders;
+extern const char* const kToolTipSetWindowTitlePlaceholders;
 extern const char* const kToolTipCommonTitlePlaceholders;
 
 extern const char* const kShellEscapeCharacters;
@@ -155,6 +166,16 @@ enum {
 	BLOCK_CURSOR,
 	UNDERLINE_CURSOR,
 	IBEAM_CURSOR
+};
+
+
+// Underline style
+enum {
+	SINGLE_UNDERLINE = 1,
+	DOUBLE_UNDERLINE,
+	CURLY_UNDERLINE,
+	DOTTED_UNDERLINE,
+	DASHED_UNDERLINE
 };
 
 
@@ -173,9 +194,9 @@ enum {
 #define TAB_WIDTH 8
 
 #define MIN_COLS 10
-#define MAX_COLS 256
+#define MAX_COLS 999
 #define MIN_ROWS 10
-#define MAX_ROWS 256
+#define MAX_ROWS 999
 
 // Insert mode flag
 #define MODE_OVER 0
@@ -197,24 +218,25 @@ enum {
 #define FONT			0x0100
 #define RESERVE			0x0080
 #define DUMPCR			0x0040
+#define UNDERSET		0x0020
+#define OVERLINE		0x0010
+#define HIDDEN			0x0008
 #define FORECOLOR		0xFF0000
 #define BACKCOLOR		0xFF000000
-#define CHAR_ATTRIBUTES	0xFFFF7700
-
-#define IS_WIDTH(x)	(((x) & A_WIDTH)   )
-#define IS_BOLD(x)	(((x) & BOLD)      )
-#define IS_UNDER(x)	(((x) & UNDERLINE) )
-#define IS_INVERSE(x)	(((x) & INVERSE)   )
-#define IS_MOUSE(x)	(((x) & MOUSE)     )
-#define IS_FORESET(x)	(((x) & FORESET)   )
-#define IS_BACKSET(x)	(((x) & BACKSET)   )
-#define IS_FONT(x)	(((x) & FONT)      )
-#define IS_CR(x)	(((x) & DUMPCR)	   )
-#define IS_FORECOLOR(x) (((x) & FORECOLOR) >> 16)
-#define IS_BACKCOLOR(x) (((x) & BACKCOLOR) >> 24)
+#define CHAR_ATTRIBUTES	0xFFFF7738
 
 #define FORECOLORED(x) ((x) << 16)
 #define BACKCOLORED(x) ((x) << 24)
 
+#define MODE_INTERPRET_META_KEY		0x0001
+#define MODE_META_KEY_SENDS_ESCAPE	0x0002
+#define MODE_BRACKETED_PASTE		0x0004
+#define MODE_CURSOR_BLINKING		0x0008
+#define MODE_CURSOR_HIDDEN			0x0010
+#define MODE_REPORT_X10_MOUSE_EVENT	0x0020
+#define MODE_REPORT_NORMAL_MOUSE_EVENT	0x0040
+#define MODE_REPORT_BUTTON_MOUSE_EVENT	0x0080
+#define MODE_REPORT_ANY_MOUSE_EVENT		0x00c0
+#define MODE_EXTENDED_MOUSE_COORDINATES	0x0100
 
 #endif	// TERMCONST_H_INCLUDED

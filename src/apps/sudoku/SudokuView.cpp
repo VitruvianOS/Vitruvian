@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2015, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2007-2025, Axel Dörfler, axeld@pinc-software.de.
  * Distributed under the terms of the MIT License.
  */
 
@@ -32,13 +32,12 @@ static const uint32 kMsgCheckSolved = 'chks';
 
 static const uint32 kStrongLineSize = 2;
 
-static const rgb_color kBackgroundColor = {255, 255, 240};
 static const rgb_color kHintColor = {255, 115, 0};
 static const rgb_color kValueColor = {0, 91, 162};
 static const rgb_color kValueCompletedColor = {55, 140, 35};
 static const rgb_color kInvalidValueColor = {200, 0, 0};
-static const rgb_color kValueHintBackgroundColor = {255, 215, 127};
-static const rgb_color kHintValueHintBackgroundColor = {255, 235, 185};
+static const rgb_color kIdealValueHintBackgroundColor = {255, 215, 127};
+static const rgb_color kIdealHintValueHintBackgroundColor = {255, 235, 185};
 
 extern const char* kSignature;
 
@@ -143,7 +142,7 @@ SudokuView::SetTo(entry_ref& ref)
 
 	FILE* file = fopen(path.Path(), "r");
 	if (file == NULL)
-		return -errno;
+		return errno;
 
 	uint32 maxOut = fField->Size() * fField->Size();
 	char buffer[1024];
@@ -746,7 +745,7 @@ SudokuView::KeyDown(const char *bytes, int32 /*numBytes*/)
 			break;
 	}
 
-	if (!fShowKeyboardFocus && fShowHintX != ~0UL) {
+	if (!fShowKeyboardFocus && fShowHintX != UINT32_MAX) {
 		// always start at last mouse position, if any
 		fKeyboardX = fShowHintX;
 		fKeyboardY = fShowHintY;
@@ -806,11 +805,15 @@ SudokuView::Draw(BRect /*updateRect*/)
 {
 	// draw lines
 
+	const color_which kBackgroundColorWhich = B_DOCUMENT_BACKGROUND_COLOR;
+	const rgb_color kBackgroundColor = ui_color(kBackgroundColorWhich);
+	const color_which kTextColorWhich = B_DOCUMENT_TEXT_COLOR;
+	const rgb_color kTextColor = ui_color(kTextColorWhich);
+
+	SetLowUIColor(kBackgroundColorWhich);
+	SetHighUIColor(B_CONTROL_BORDER_COLOR);
+
 	uint32 size = fField->Size();
-
-	SetLowColor(fBackgroundColor);
-	SetHighColor(0, 0, 0);
-
 	float width = fWidth - 1;
 	for (uint32 x = 1; x < size; x++) {
 		if (x % fBlockSize == 0) {
@@ -840,22 +843,25 @@ SudokuView::Draw(BRect /*updateRect*/)
 	for (uint32 y = 0; y < size; y++) {
 		for (uint32 x = 0; x < size; x++) {
 			uint32 value = fField->ValueAt(x, y);
+			rgb_color fieldBackgroundColor = kBackgroundColor;
 
-			rgb_color backgroundColor = fBackgroundColor;
-			if (value == fValueHintValue)
-				backgroundColor = kValueHintBackgroundColor;
-			else if (value == 0 && fField->HasHint(x, y, fValueHintValue))
-				backgroundColor = kHintValueHintBackgroundColor;
+			if (value == fValueHintValue) {
+				fieldBackgroundColor = mix_color(kBackgroundColor,
+					kIdealValueHintBackgroundColor, 100);
+			} else if (value == 0 && fField->HasHint(x, y, fValueHintValue)) {
+				fieldBackgroundColor = mix_color(kBackgroundColor,
+					kIdealHintValueHintBackgroundColor, 100);
+			}
 
 			if (((fShowCursor && x == fShowHintX && y == fShowHintY)
 					|| (fShowKeyboardFocus && x == fKeyboardX
 						&& y == fKeyboardY))
 				&& !fField->IsInitialValue(x, y)) {
 				// TODO: make color more intense
-				SetLowColor(tint_color(backgroundColor, B_DARKEN_2_TINT));
+				SetLowColor(tint_color(fieldBackgroundColor, B_DARKEN_2_TINT));
 				FillRect(_Frame(x, y), B_SOLID_LOW);
 			} else {
-				SetLowColor(backgroundColor);
+				SetLowColor(fieldBackgroundColor);
 				FillRect(_Frame(x, y), B_SOLID_LOW);
 			}
 
@@ -869,16 +875,27 @@ SudokuView::Draw(BRect /*updateRect*/)
 
 			SetFont(&fFieldFont);
 			if (fField->IsInitialValue(x, y))
-				SetHighColor(0, 0, 0);
+				SetHighUIColor(kTextColorWhich);
 			else {
 				if ((fHintFlags & kMarkInvalid) == 0
 					|| fField->IsValid(x, y, value)) {
-					if (fField->IsValueCompleted(value))
-						SetHighColor(kValueCompletedColor);
+					if (fField->IsValueCompleted(value)) {
+						if (kTextColor.IsDark())
+							SetHighColor(kValueCompletedColor);
+						else
+							SetHighColor(tint_color(kValueCompletedColor, B_LIGHTEN_2_TINT));
+					} else {
+						if (kTextColor.IsDark())
+							SetHighColor(kValueColor);
+						else
+							SetHighColor(tint_color(kValueColor, B_LIGHTEN_2_TINT));
+					}
+				} else {
+					if (kTextColor.IsDark())
+						SetHighColor(kInvalidValueColor);
 					else
-						SetHighColor(kValueColor);
-				} else
-					SetHighColor(kInvalidValueColor);
+						SetHighColor(tint_color(kInvalidValueColor, B_LIGHTEN_2_TINT));
+				}
 			}
 
 			char text[2];
@@ -927,8 +944,7 @@ SudokuView::_InitObject(const BMessage* archive)
 
 	SetViewColor(B_TRANSPARENT_COLOR);
 		// to avoid flickering
-	fBackgroundColor = kBackgroundColor;
-	SetLowColor(fBackgroundColor);
+	SetLowUIColor(B_CONTROL_BACKGROUND_COLOR);
 	FrameResized(0, 0);
 }
 
@@ -1145,7 +1161,7 @@ SudokuView::_SetValue(uint32 x, uint32 y, uint32 value)
 		fLastField = x + y * fField->Size();
 	}
 
-	if (value != fValueHintValue && fValueHintValue != ~0UL)
+	if (value != fValueHintValue && fValueHintValue != UINT32_MAX)
 		_SetValueHintValue(value);
 
 	if (wasCompleted != fField->IsValueCompleted(value))

@@ -10,6 +10,7 @@
 
 #include <Alert.h>
 #include <Bitmap.h>
+#include <Catalog.h>
 #include <Debug.h>
 #include <Dragger.h>
 #include <Entry.h>
@@ -18,6 +19,11 @@
 
 
 #include <time.h>
+#include <math.h>
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Clock"
 
 
 TOffscreenView::TOffscreenView(BRect frame, const char *name, short mRadius,
@@ -74,27 +80,27 @@ dummy_label:
 
 	// Generate minutes points array
 	for (counter = 90; counter >= 0; counter -= 6, index++) {
-		x = mRadius * cos(((360 - counter)/180.0) * 3.1415);
+		x = mRadius * cos(((360 - counter)/180.0) * M_PI);
 		x += 41;
-		y = mRadius * sin(((360 - counter)/180.0) * 3.1415);
+		y = mRadius * sin(((360 - counter)/180.0) * M_PI);
 		y += 41;
 		fMinutePoints[index].Set(x,y);
-		x = hRadius * cos(((360 - counter)/180.0) * 3.1415);
+		x = hRadius * cos(((360 - counter)/180.0) * M_PI);
 		x += 41;
-		y = hRadius * sin(((360 - counter)/180.0) * 3.1415);
+		y = hRadius * sin(((360 - counter)/180.0) * M_PI);
 		y += 41;
 		fHourPoints[index].Set(x,y);
 	}
 
 	for (counter = 354; counter > 90; counter -= 6,index++) {
-		x = mRadius * cos(((360 - counter)/180.0) * 3.1415);
+		x = mRadius * cos(((360 - counter)/180.0) * M_PI);
 		x += 41;
-		y = mRadius * sin(((360 - counter)/180.0) * 3.1415);
+		y = mRadius * sin(((360 - counter)/180.0) * M_PI);
 		y += 41;
 		fMinutePoints[index].Set(x,y);
-		x = hRadius * cos(((360 - counter)/180.0) * 3.1415);
+		x = hRadius * cos(((360 - counter)/180.0) * M_PI);
 		x += 41;
-		y = hRadius * sin(((360 - counter)/180.0) * 3.1415);
+		y = hRadius * sin(((360 - counter)/180.0) * M_PI);
 		y += 41;
 		fHourPoints[index].Set(x,y);
 	}
@@ -182,9 +188,9 @@ TOnscreenView::InitObject(BRect rect, short mRadius, short hRadius,
 	if (fOffscreen != NULL && fOffscreen->Lock()) {
 		fOffscreen->AddChild(fOffscreenView);
 		fOffscreen->Unlock();
-
-		fOffscreenView->DrawX();
 	}
+
+	Pulse();
 }
 
 
@@ -345,10 +351,10 @@ TOnscreenView::MessageReceived(BMessage *msg)
 	switch(msg->what) {
 		case B_ABOUT_REQUESTED:
 		{
-			BAlert *alert = new BAlert("About Clock", 
-				"Clock (The Replicant version)\n\n(C)2002, 2003 OpenBeOS,\n"
-				"2004 - 2007, Haiku, Inc.\n\nOriginally coded  by the folks "
-				"at Be.\n  Copyright Be Inc., 1991 - 1998", "OK");
+			BAlert *alert = new BAlert(B_TRANSLATE("About Clock"), B_TRANSLATE(
+				"Clock (The Replicant version)\n\nCopyright 2002-2020 "
+				"Haiku, Inc.\n\nOriginally coded by the folks "
+				"at Be.\n  Copyright 1991-1998, Be Inc."), B_TRANSLATE("OK"));
 			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 			alert->Go();
 		}	break;

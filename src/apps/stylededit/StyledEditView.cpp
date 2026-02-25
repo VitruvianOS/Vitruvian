@@ -42,6 +42,12 @@ StyledEditView::StyledEditView(BRect viewFrame, BRect textBounds,
 
 	fMessenger = new BMessenger(handler);
 	fSuppressChanges = false;
+
+	// disallow most control characters
+	for (uint32 i = 0; i < B_SPACE; ++i) {
+		if (i != B_TAB && i != B_ENTER)
+			this->DisallowChar(i);
+	}
 }
 
 
@@ -51,19 +57,10 @@ StyledEditView::~StyledEditView()
 }
 
 
-
 void
 StyledEditView::FrameResized(float width, float height)
 {
 	BTextView::FrameResized(width, height);
-
-	if (DoesWordWrap()) {
-		BRect textRect;
-		textRect = Bounds();
-		textRect.OffsetTo(B_ORIGIN);
-		textRect.InsetBy(TEXT_INSET, TEXT_INSET);
-		SetTextRect(textRect);
-	}
 }
 
 

@@ -59,9 +59,10 @@ CalcWindow::CalcWindow(BRect frame, BMessage* settings)
 	fCalcView->AddChild(dragger);
 
 	BRect rect;
-	if (settings->FindRect("window frame", &rect) == B_OK)
+	if (settings->FindRect("window frame", &rect) == B_OK) {
 		SetFrame(rect);
-	else
+		MoveOnScreen(B_MOVE_IF_PARTIALLY_OFFSCREEN);
+	} else
 		SetFrame(frame, true);
 
 	// Add shortcut keys to menu options
@@ -85,10 +86,6 @@ CalcWindow::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case MSG_OPTIONS_AUTO_NUM_LOCK:
 			fCalcView->ToggleAutoNumlock();
-			break;
-
-		case MSG_OPTIONS_AUDIO_FEEDBACK:
-			fCalcView->ToggleAudioFeedback();
 			break;
 
 		case MSG_OPTIONS_ANGLE_MODE_RADIAN:

@@ -49,7 +49,6 @@ private:
 			BMenu*				fOpenPanelEncodingMenu;
 			uint32				fOpenAsEncoding;
 			int32				fWindowCount;
-			int32				fNextUntitledWindow;
 			bool				fBadArguments;
 };
 

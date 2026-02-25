@@ -1,10 +1,11 @@
 /*
- * Copyright 2013, Haiku, Inc. All rights reserved.
+ * Copyright 2013-2023, Haiku, Inc. All rights reserved.
  * Copyright 2008, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Ingo Weinhold, ingo_weinhold@gmx.de
+ *		Simon South, simon@simonsouth.net
  *		Siarzhuk Zharski, zharik@gmx.li
  */
 #ifndef TERMINAL_BUFFER_H
@@ -14,7 +15,11 @@
 #include <Locker.h>
 #include <Messenger.h>
 
+#include <HashMap.h>
+#include <HashString.h>
+
 #include "BasicTerminalBuffer.h"
+#include "HyperLink.h"
 
 
 class TerminalBuffer : public BasicTerminalBuffer, public BLocker {
@@ -36,12 +41,12 @@ public:
 									int32 count = 1, bool dynamic = false);
 			void				ResetColors(uint8* indexes,
 									int32 count = 1, bool dynamic = false);
-			void				SetCursorStyle(int32 style, bool blinking);
-			void				SetCursorBlinking(bool blinking);
-			void				SetCursorHidden(bool hidden);
+			void				GetColor(uint8 index);
+			void				SetCursorStyle(int32 style);
+			int32				CursorStyle() const { return fCursorStyle; };
 			void				SetPaletteColor(uint8 index, rgb_color color);
-			rgb_color			PaletteColor(uint8 index);
-			int					GuessPaletteColor(int red, int green, int blue);
+			inline const rgb_color*
+								Palette() const { return fColorsPalette; }
 
 			void				NotifyQuit(int32 reason);
 
@@ -52,10 +57,12 @@ public:
 			void				UseAlternateScreenBuffer(bool clear);
 			void				UseNormalScreenBuffer();
 
-			void				ReportX10MouseEvent(bool report);
-			void				ReportNormalMouseEvent(bool report);
-			void				ReportButtonMouseEvent(bool report);
-			void				ReportAnyMouseEvent(bool report);
+			bool				IsMode(uint32 mode) const;
+			void				SetMode(uint32 mode);
+			void				ResetMode(uint32 mode);
+
+			uint32				PutHyperLink(const char* id, BString& uri);
+			bool				GetHyperLink(uint32 ref, HyperLink& _link);
 
 protected:
 	virtual	void				NotifyListener();
@@ -69,12 +76,21 @@ private:
 			TerminalLine**		fAlternateScreen;
 			HistoryBuffer*		fAlternateHistory;
 			int32				fAlternateScreenOffset;
-			uint32				fAlternateAttributes;
+			Attributes			fAlternateAttributes;
 			rgb_color*			fColorsPalette;
 
 			// listener/dirty region management
 			BMessenger			fListener;
 			bool				fListenerValid;
+
+			uint32				fMode;
+			int					fCursorStyle;
+
+			typedef HashMap<HashKey32<int32>, HyperLink*> HyperLinkRefMap;
+			HyperLinkRefMap		fHyperLinkForRef;
+			typedef HashMap<HashString, HyperLink*> HyperLinkIDMap;
+			HyperLinkIDMap		fHyperLinkForID;
+			uint32				fNextOSCRef;
 };
 
 

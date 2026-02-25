@@ -74,44 +74,8 @@
 
 // TODO: should extract from /etc/passwd instead???
 const char *kDefaultShell = "/bin/sh";
+const char *kColorTerminalType = "truecolor";
 const char *kTerminalType = "xterm-256color";
-
-/*
- * Set environment variable.
- */
-#if defined(HAIKU_TARGET_PLATFORM_BEOS) || \
-	defined(HAIKU_TARGET_PLATFORM_BONE) || \
-	defined(HAIKU_TARGET_PLATFORM_LIBBE_TEST)
-
-extern char **environ;
-
-static int setenv(const char *var, const char *value, bool overwrite);
-
-static int
-setenv(const char *var, const char *value, bool overwrite)
-{
-	int envindex = 0;
-	const int len = strlen(var);
-	const int val_len = strlen (value);
-
-	while (environ[envindex] != NULL) {
-		if (!strncmp(environ[envindex], var, len)) {
-			/* found it */
-			if (overwrite) {
-				environ[envindex] = (char *)malloc((unsigned)len + val_len + 2);
-				sprintf(environ[envindex], "%s=%s", var, value);
-			}
-			return 0;
-		}
-		envindex++;
-	}
-
-	environ[envindex] = (char *)malloc((unsigned)len + val_len + 2);
-	sprintf(environ[envindex], "%s=%s", var, value);
-	environ[++envindex] = NULL;
-	return 0;
-}
-#endif
 
 
 /* handshake interface */
@@ -311,8 +275,10 @@ Shell::AttachBuffer(TerminalBuffer *buffer)
 void
 Shell::DetachBuffer()
 {
-	if (fAttached)
+	if (fAttached) {
 		fTermParse->StopThreads();
+		fAttached = false;
+	}
 }
 
 
@@ -489,6 +455,12 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 		signal(SIGINT, SIG_DFL);
 		signal(SIGTTOU, SIG_DFL);
 
+		/* unblock sigusr1 */
+		sigset_t blockedSignals;
+		sigemptyset(&blockedSignals);
+		sigaddset(&blockedSignals, SIGUSR1);
+		pthread_sigmask(SIG_UNBLOCK, &blockedSignals, NULL);
+
 		struct termios tio;
 		/* get tty termios (not necessary).
 		 * TODO: so why are we doing it ?
@@ -551,6 +523,7 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 		/*
 		 * setenv TERM and TTY.
 		 */
+		setenv("COLORTERM", kColorTerminalType, true);
 		setenv("TERM", kTerminalType, true);
 		setenv("TTY", ttyName, true);
 		setenv("TTYPE", fShellInfo.EncodingName(), true);

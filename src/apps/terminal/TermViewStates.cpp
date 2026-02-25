@@ -8,6 +8,7 @@
  *		Stefano Ceccherini, stefano.ceccherini@gmail.com
  *		Kian Duffy, myob@users.sourceforge.net
  *		Y.Hayakawa, hida@sawada.riec.tohoku.ac.jp
+ *		Simon South, simon@simonsouth.net
  *		Ingo Weinhold, ingo_weinhold@gmx.de
  *		Clemens Zeidler, haiku@Clemens-Zeidler.de
  *		Siarzhuk Zharski, zharik@gmx.li
@@ -154,12 +155,15 @@ TermView::StandardBaseState::StandardBaseState(TermView* view)
 bool
 TermView::StandardBaseState::_StandardMouseMoved(BPoint where, int32 modifiers)
 {
-	if (!fView->fReportAnyMouseEvent && !fView->fReportButtonMouseEvent)
+	bool reportButtonMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_BUTTON_MOUSE_EVENT);
+	bool reportAnyMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_ANY_MOUSE_EVENT);
+	if (!reportButtonMouseEvent && !reportAnyMouseEvent)
 		return false;
 
 	TermPos clickPos = fView->_ConvertToTerminal(where);
 
-	if (fView->fReportButtonMouseEvent) {
+	if (reportButtonMouseEvent
+		|| fView->TextBuffer()->IsMode(MODE_EXTENDED_MOUSE_COORDINATES)) {
 		if (fView->fPrevPos.x != clickPos.x
 			|| fView->fPrevPos.y != clickPos.y) {
 			fView->_SendMouseEvent(fView->fMouseButtons, modifiers,
@@ -208,6 +212,58 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 
 	fView->_ActivateCursor(true);
 
+	// Handle the Option key when used as Meta
+	bool interpretMetaKey = fView->TextBuffer()->IsMode(MODE_INTERPRET_META_KEY);
+	bool metaKeySendsEscape = fView->TextBuffer()->IsMode(MODE_META_KEY_SENDS_ESCAPE);
+	if ((mod & B_LEFT_OPTION_KEY) != 0 && fView->fUseOptionAsMetaKey
+		&& (interpretMetaKey || metaKeySendsEscape)) {
+		const char* bytes;
+		int8 numBytes;
+
+		// Determine the character produced by the same keypress without the
+		// Option key
+		mod &= B_SHIFT_KEY | B_CAPS_LOCK | B_CONTROL_KEY;
+		const int32 (*keymapTable)[128] = (mod == 0)
+			? NULL
+			: fView->fKeymapTableForModifiers.Get(mod);
+		if (keymapTable == NULL) {
+			bytes = (const char*)&rawChar;
+			numBytes = 1;
+		} else {
+			bytes = &fView->fKeymapChars[(*keymapTable)[key]];
+			numBytes = *(bytes++);
+		}
+
+		if (numBytes <= 0)
+			return;
+
+		fView->_ScrollTo(0, true);
+
+		char outputBuffer[2];
+		const char* toWrite = bytes;
+
+		if (metaKeySendsEscape) {
+			fView->fShell->Write("\e", 1);
+		} else if (numBytes == 1) {
+			char byte = *bytes | 0x80;
+
+			// The eighth bit has special meaning in UTF-8, so if that encoding
+			// is in use recode the output (as xterm does)
+			if (fView->fEncoding == M_UTF8) {
+				outputBuffer[0] = 0xc0 | ((byte >> 6) & 0x03);
+				outputBuffer[1] = 0x80 | (byte & 0x3f);
+				numBytes = 2;
+			} else {
+				outputBuffer[0] = byte;
+				numBytes = 1;
+			}
+			toWrite = outputBuffer;
+		}
+
+		fView->fShell->Write(toWrite, numBytes);
+		return;
+	}
+
 	// handle multi-byte chars
 	if (numBytes > 1) {
 		if (fView->fEncoding != M_UTF8) {
@@ -248,12 +304,9 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 
 		case B_LEFT_ARROW:
 			if (rawChar == B_LEFT_ARROW) {
-				if ((mod & B_SHIFT_KEY) != 0) {
-					if (fView->fListener != NULL)
-						fView->fListener->PreviousTermView(fView);
-					return;
-				}
-				if ((mod & B_CONTROL_KEY) || (mod & B_COMMAND_KEY))
+				if ((mod & B_SHIFT_KEY) != 0)
+					toWrite = SHIFT_LEFT_ARROW_KEY_CODE;
+				else if ((mod & B_CONTROL_KEY) != 0)
 					toWrite = CTRL_LEFT_ARROW_KEY_CODE;
 				else
 					toWrite = LEFT_ARROW_KEY_CODE;
@@ -262,12 +315,9 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 
 		case B_RIGHT_ARROW:
 			if (rawChar == B_RIGHT_ARROW) {
-				if ((mod & B_SHIFT_KEY) != 0) {
-					if (fView->fListener != NULL)
-						fView->fListener->NextTermView(fView);
-					return;
-				}
-				if ((mod & B_CONTROL_KEY) || (mod & B_COMMAND_KEY))
+				if ((mod & B_SHIFT_KEY) != 0)
+					toWrite = SHIFT_RIGHT_ARROW_KEY_CODE;
+				else if ((mod & B_CONTROL_KEY) != 0)
 					toWrite = CTRL_RIGHT_ARROW_KEY_CODE;
 				else
 					toWrite = RIGHT_ARROW_KEY_CODE;
@@ -275,13 +325,15 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 			break;
 
 		case B_UP_ARROW:
-			if (mod & B_SHIFT_KEY) {
-				fView->_ScrollTo(fView->fScrollOffset - fView->fFontHeight,
-					true);
+			if ((mod & B_CONTROL_KEY) && (mod & B_SHIFT_KEY)) {
+				fView->_ScrollTo(fView->fScrollOffset - fView->fFontHeight, true);
 				return;
 			}
+
 			if (rawChar == B_UP_ARROW) {
-				if (mod & B_CONTROL_KEY)
+				if ((mod & B_SHIFT_KEY) != 0)
+					toWrite = SHIFT_UP_ARROW_KEY_CODE;
+				else if (mod & B_CONTROL_KEY)
 					toWrite = CTRL_UP_ARROW_KEY_CODE;
 				else
 					toWrite = UP_ARROW_KEY_CODE;
@@ -289,14 +341,15 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 			break;
 
 		case B_DOWN_ARROW:
-			if (mod & B_SHIFT_KEY) {
-				fView->_ScrollTo(fView->fScrollOffset + fView->fFontHeight,
-					true);
+			if ((mod & B_CONTROL_KEY) && (mod & B_SHIFT_KEY)) {
+				fView->_ScrollTo(fView->fScrollOffset + fView->fFontHeight, true);
 				return;
 			}
 
 			if (rawChar == B_DOWN_ARROW) {
-				if (mod & B_CONTROL_KEY)
+				if ((mod & B_SHIFT_KEY) != 0)
+					toWrite = SHIFT_DOWN_ARROW_KEY_CODE;
+				else if (mod & B_CONTROL_KEY)
 					toWrite = CTRL_DOWN_ARROW_KEY_CODE;
 				else
 					toWrite = DOWN_ARROW_KEY_CODE;
@@ -309,20 +362,26 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 			break;
 
 		case B_HOME:
-			if (rawChar == B_HOME)
-				toWrite = HOME_KEY_CODE;
+			if (rawChar == B_HOME) {
+				if ((mod & B_SHIFT_KEY) != 0)
+					toWrite = SHIFT_HOME_KEY_CODE;
+				else
+					toWrite = HOME_KEY_CODE;
+			}
 			break;
 
 		case B_END:
-			if (rawChar == B_END)
-				toWrite = END_KEY_CODE;
+			if (rawChar == B_END) {
+				if ((mod & B_SHIFT_KEY) != 0)
+					toWrite = SHIFT_END_KEY_CODE;
+				else
+					toWrite = END_KEY_CODE;
+			}
 			break;
 
 		case B_PAGE_UP:
 			if (mod & B_SHIFT_KEY) {
-				fView->_ScrollTo(
-					fView->fScrollOffset - fView->fFontHeight  * fView->fRows,
-					true);
+				fView->_ScrollTo(fView->fScrollOffset - fView->fFontHeight * fView->fRows, true);
 				return;
 			}
 			if (rawChar == B_PAGE_UP)
@@ -331,9 +390,7 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 
 		case B_PAGE_DOWN:
 			if (mod & B_SHIFT_KEY) {
-				fView->_ScrollTo(
-					fView->fScrollOffset + fView->fFontHeight * fView->fRows,
-					true);
+				fView->_ScrollTo(fView->fScrollOffset + fView->fFontHeight * fView->fRows, true);
 				return;
 			}
 			if (rawChar == B_PAGE_DOWN)
@@ -368,11 +425,16 @@ TermView::DefaultState::KeyDown(const char* bytes, int32 numBytes)
 void
 TermView::DefaultState::MouseDown(BPoint where, int32 buttons, int32 modifiers)
 {
-	if (fView->fReportAnyMouseEvent || fView->fReportButtonMouseEvent
-		|| fView->fReportNormalMouseEvent || fView->fReportX10MouseEvent) {
+	bool reportButtonMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_BUTTON_MOUSE_EVENT);
+	bool reportAnyMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_ANY_MOUSE_EVENT);
+	bool reportNormalMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_NORMAL_MOUSE_EVENT);
+	bool reportX10MouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_X10_MOUSE_EVENT);
+
+	if (reportAnyMouseEvent || reportButtonMouseEvent || reportNormalMouseEvent
+		|| reportX10MouseEvent) {
 		TermPos clickPos = fView->_ConvertToTerminal(where);
 		fView->_SendMouseEvent(buttons, modifiers, clickPos.x, clickPos.y,
-			false);
+			false, false);
 		return;
 	}
 
@@ -398,6 +460,23 @@ TermView::DefaultState::MouseMoved(BPoint where, uint32 transit,
 		return;
 
 	_StandardMouseMoved(where, modifiers);
+}
+
+
+void
+TermView::DefaultState::MouseUp(BPoint where, int32 buttons)
+{
+	bool reportButtonMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_BUTTON_MOUSE_EVENT);
+	bool reportAnyMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_ANY_MOUSE_EVENT);
+	bool reportNormalMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_NORMAL_MOUSE_EVENT);
+	bool reportX10MouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_X10_MOUSE_EVENT);
+
+	if (reportAnyMouseEvent || reportButtonMouseEvent
+		|| reportNormalMouseEvent || reportX10MouseEvent) {
+		TermPos clickPos = fView->_ConvertToTerminal(where);
+		fView->_SendMouseEvent(buttons, 0, clickPos.x, clickPos.y,
+			false, true);
+	}
 }
 
 
@@ -602,8 +681,11 @@ TermView::SelectState::MouseUp(BPoint where, int32 buttons)
 	// When releasing the first mouse button, we copy the selected text to the
 	// clipboard.
 
-	if (fView->fReportAnyMouseEvent || fView->fReportButtonMouseEvent
-		|| fView->fReportNormalMouseEvent) {
+	bool reportButtonMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_BUTTON_MOUSE_EVENT);
+	bool reportAnyMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_ANY_MOUSE_EVENT);
+	bool reportNormalMouseEvent = fView->TextBuffer()->IsMode(MODE_REPORT_NORMAL_MOUSE_EVENT);
+
+	if (reportAnyMouseEvent || reportButtonMouseEvent || reportNormalMouseEvent) {
 		TermPos clickPos = fView->_ConvertToTerminal(where);
 		fView->_SendMouseEvent(0, 0, clickPos.x, clickPos.y, false);
 	} else if ((buttons & B_PRIMARY_MOUSE_BUTTON) == 0
@@ -751,9 +833,18 @@ TermView::HyperLinkState::_GetHyperLinkAt(BPoint where, bool pathPrefixOnly,
 	HyperLink& _link, TermPos& _start, TermPos& _end)
 {
 	TerminalBuffer* textBuffer = fView->fTextBuffer;
+	BasicTerminalBuffer* visibleTextBuffer = fView->fVisibleTextBuffer;
 	BAutolock textBufferLocker(textBuffer);
+	int32 firstVisible = fView->_LineAt(0);
 
 	TermPos pos = fView->_ConvertToTerminal(where);
+
+	UTF8Char character;
+	Attributes attr;
+	if (visibleTextBuffer->GetChar(pos.y - firstVisible, pos.x, character, attr) == A_CHAR
+		&& attr.Hyperlink() != 0) {
+		return textBuffer->GetHyperLink(attr.Hyperlink(), _link);
+	}
 
 	// try to get a URL first
 	BString text;
@@ -1038,6 +1129,7 @@ TermView::HyperLinkMenuState::Prepare(BPoint point, const HyperLink& link)
 	BLayoutBuilder::Menu<> menuBuilder(menu);
 	switch (link.GetType()) {
 		case HyperLink::TYPE_URL:
+		case HyperLink::TYPE_OSC_URL:
 			menuBuilder
 				.AddItem(B_TRANSLATE("Open link"), kMessageOpenLink)
 				.AddItem(B_TRANSLATE("Copy link location"), kMessageCopyLink);
@@ -1079,8 +1171,7 @@ TermView::HyperLinkMenuState::MessageReceived(BMessage* message)
 		case kMessageCopyAbsolutePath:
 		{
 			if (fLink.IsValid()) {
-				BString toCopy = message->what == kMessageCopyLink
-					? fLink.Text() : fLink.Address();
+				BString toCopy = fLink.Address();
 
 				if (!be_clipboard->Lock())
 					return true;

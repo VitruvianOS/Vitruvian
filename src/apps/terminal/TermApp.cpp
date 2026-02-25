@@ -8,6 +8,7 @@
  * Authors:
  *		Jeremiah Bailey, <jjbailey@gmail.com>
  *		Kian Duffy, <myob@users.sourceforge.net>
+ *		Simon South, simon@simonsouth.net
  *		Siarzhuk Zharski, <zharik@gmx.li>
  */
 
@@ -61,7 +62,6 @@ TermApp::TermApp()
 	BApplication(TERM_SIGNATURE),
 	fChildCleanupThread(-1),
 	fTerminating(false),
-	fStartFullscreen(false),
 	fTermWindow(NULL),
 	fArgs(NULL)
 {
@@ -124,20 +124,20 @@ TermApp::ReadyToRun()
 	status_t status = _MakeTermWindow();
 
 	// failed spawn, print stdout and open alert panel
-	// TODO: This alert does never show up.
 	if (status < B_OK) {
-		BAlert* alert = new BAlert("alert",
-			B_TRANSLATE("Terminal couldn't start the shell. Sorry."),
+		BString text(B_TRANSLATE("%appname% couldn't start the shell. Sorry."));
+		text.ReplaceFirst("%appname%", B_TRANSLATE_SYSTEM_NAME("Terminal"));
+		BAlert* alert = new BAlert("alert", text,
 			B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_FROM_LABEL,
 			B_INFO_ALERT);
 		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-		alert->Go(NULL);
+		alert->Go();
 		PostMessage(B_QUIT_REQUESTED);
 		return;
 	}
 
 	// using BScreen::Frame isn't enough
-	if (fStartFullscreen)
+	if (fArgs->FullScreen())
 		BMessenger(fTermWindow).SendMessage(FULLSCREEN);
 }
 
@@ -179,6 +179,10 @@ void
 TermApp::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
+		case B_KEY_MAP_LOADED:
+			fTermWindow->PostMessage(message);
+			break;
+
 		case MSG_ACTIVATE_TERM:
 			fTermWindow->Activate();
 			break;
@@ -201,16 +205,6 @@ TermApp::ArgvReceived(int32 argc, char **argv)
 		PostMessage(B_QUIT_REQUESTED);
 		return;
 	}
-
-	if (fArgs->Title() != NULL)
-		fWindowTitle = fArgs->Title();
-
-	if (fArgs->WorkingDir() != NULL) {
-		fWorkingDirectory = fArgs->WorkingDir();
-		chdir(fWorkingDirectory);
-	}
-
-	fStartFullscreen = fArgs->FullScreen();
 }
 
 
@@ -235,7 +229,6 @@ TermApp::RefsReceived(BMessage* message)
 
 	// if App opened by Pref file
 	if (strcmp(mimetype, PREFFILE_MIMETYPE) == 0) {
-
 		BEntry ent(&ref);
 		BPath path(&ent);
 		PrefHandler::Default()->OpenText(path.Path());
@@ -255,7 +248,7 @@ status_t
 TermApp::_MakeTermWindow()
 {
 	try {
-		fTermWindow = new TermWindow(fWindowTitle, fArgs);
+		fTermWindow = new TermWindow(*fArgs);
 	} catch (int error) {
 		return (status_t)error;
 	} catch (...) {
@@ -266,29 +259,6 @@ TermApp::_MakeTermWindow()
 
 	return B_OK;
 }
-
-
-//#ifndef B_NETPOSITIVE_APP_SIGNATURE
-//#define B_NETPOSITIVE_APP_SIGNATURE "application/x-vnd.Be-NPOS"
-//#endif
-//
-//void
-//TermApp::ShowHTML(BMessage *msg)
-//{
-//  const char *url;
-//  msg->FindString("Url", &url);
-//  BMessage message;
-//
-//  message.what = B_NETPOSITIVE_OPEN_URL;
-//  message.AddString("be:url", url);
-
-//  be_roster->Launch(B_NETPOSITIVE_APP_SIGNATURE, &message);
-//  while(!(be_roster->IsRunning(B_NETPOSITIVE_APP_SIGNATURE)))
-//    snooze(10000);
-//
-//  // Activate net+
-//  be_roster->ActivateApp(be_roster->TeamFor(B_NETPOSITIVE_APP_SIGNATURE));
-//}
 
 
 /*static*/ void
@@ -338,7 +308,7 @@ TermApp::_Usage(char *name)
 		"\n"
 		"Usage: %s [OPTION] [SHELL]\n"), name);
 
-	fprintf(stderr, B_TRANSLATE(
+	fputs(B_TRANSLATE(
 			"  -h,     --help               print this help\n"
 			//"  -p,     --preference         load preference file\n"
 			"  -t,     --title              set window title\n"
@@ -346,7 +316,7 @@ TermApp::_Usage(char *name)
 			"  -w,     --working-directory  set initial working directory\n")
 			//"  -geom,  --geometry           set window geometry\n"
 			//"                               An example of geometry is \"80x25+100+100\"\n"
-		);
+		, stderr);
 }
 
 

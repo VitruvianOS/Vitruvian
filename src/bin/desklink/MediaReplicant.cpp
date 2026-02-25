@@ -180,6 +180,7 @@ MediaReplicant::MediaReplicant(BRect frame, const char* name,
 		uint32 resizeMask, uint32 flags)
 	:
 	BView(frame, name, resizeMask, flags),
+	fMixerControl(NULL),
 	fVolumeSlider(NULL),
 	fMuted(false)
 {
@@ -190,6 +191,7 @@ MediaReplicant::MediaReplicant(BRect frame, const char* name,
 MediaReplicant::MediaReplicant(BMessage* message)
 	:
 	BView(message),
+	fMixerControl(NULL),
 	fVolumeSlider(NULL),
 	fMuted(false)
 {
@@ -262,7 +264,7 @@ MediaReplicant::MouseDown(BPoint point)
 			B_TRANSLATE("Media preferences" B_UTF8_ELLIPSIS),
 			new BMessage(kMsgOpenMediaSettings)));
 		menu->AddItem(new BMenuItem(
-			B_TRANSLATE("Sound preferences" B_UTF8_ELLIPSIS),
+			B_TRANSLATE("Sounds preferences" B_UTF8_ELLIPSIS),
 			new BMessage(kMsgOpenSoundSettings)));
 
 		menu->AddSeparatorItem();
@@ -406,6 +408,10 @@ MediaReplicant::MessageReceived(BMessage* message)
 			_ConnectMixer();
 			break;
 
+		case B_MEDIA_SERVER_QUIT:
+			_DisconnectMixer();
+			break;
+
 		case B_MEDIA_NODE_CREATED:
 		{
 			// It's not enough to wait for B_MEDIA_SERVER_STARTED message, as
@@ -414,12 +420,11 @@ MediaReplicant::MessageReceived(BMessage* message)
 			media_node_id mixerNodeID;
 			BMediaRoster* roster = BMediaRoster::CurrentRoster();
 			if (roster != NULL
-				&& message->FindInt32("media_node_id",&mixerNodeID) == B_OK
+				&& message->FindInt32("media_node_id", &mixerNodeID) == B_OK
 				&& roster->GetNodeFor(mixerNodeID, &mixerNode) == B_OK) {
-				if (mixerNode.kind == B_SYSTEM_MIXER) {
+				if (mixerNode.kind == B_SYSTEM_MIXER)
 					_ConnectMixer();
-					roster->ReleaseNode(mixerNode);
-				}
+				roster->ReleaseNode(mixerNode);
 			}
 			break;
 		}
@@ -593,7 +598,12 @@ MediaReplicant::_DisconnectMixer()
 	if (roster == NULL)
 		return;
 
-	roster->StopWatching(this, B_MEDIA_SERVER_STARTED | B_MEDIA_NODE_CREATED);
+	roster->StopWatching(this, B_MEDIA_SERVER_STARTED);
+	roster->StopWatching(this, B_MEDIA_SERVER_QUIT);
+	roster->StopWatching(this, B_MEDIA_NODE_CREATED);
+
+	if (fMixerControl == NULL)
+		return;
 
 	if (fMixerControl->MuteNode() != media_node::null) {
 		roster->StopWatching(this, fMixerControl->MuteNode(),
@@ -614,7 +624,9 @@ MediaReplicant::_ConnectMixer()
 	if (roster == NULL)
 		return B_ERROR;
 
-	roster->StartWatching(this, B_MEDIA_SERVER_STARTED | B_MEDIA_NODE_CREATED);
+	roster->StartWatching(this, B_MEDIA_SERVER_STARTED);
+	roster->StartWatching(this, B_MEDIA_SERVER_QUIT);
+	roster->StartWatching(this, B_MEDIA_NODE_CREATED);
 
 	fMixerControl = new MixerControl(fVolumeWhich);
 
@@ -624,6 +636,8 @@ MediaReplicant::_ConnectMixer()
 
 	if (errorString != NULL) {
 		SetToolTip(errorString);
+		delete fMixerControl;
+		fMixerControl = NULL;
 		return B_ERROR;
 	}
 

@@ -13,6 +13,7 @@
 #include <Alert.h>
 #include <Bitmap.h>
 #include <Catalog.h>
+#include <ControlLook.h>
 #include <Dragger.h>
 #include <MenuItem.h>
 #include <Message.h>
@@ -42,35 +43,30 @@ DeskButton::DeskButton(BRect frame, entry_ref* ref, const char* name,
 	fActionList(actions),
 	fTitleList(titles)
 {
-#ifdef __HAIKU__
-	fSegments = new BBitmap(BRect(0, 0, 15, 15), B_RGBA32);
-#else
-	fSegments = new BBitmap(BRect(0, 0, 15, 15), B_CMAP8);
-#endif
-	BNodeInfo::GetTrackerIcon(&fRef, fSegments, B_MINI_ICON);
+	fSegments = new BBitmap(frame, B_RGBA32);
+	BNodeInfo::GetTrackerIcon(&fRef, fSegments, (icon_size)-1);
 }
 
 
 DeskButton::DeskButton(BMessage *message)
-	:	BView(message)	
+	: BView(message)
 {
 	message->FindRef("ref", &fRef);
-	
+
 	BString title, action;
 	int32 index = 0;
-	while(message->FindString("title", index, &title)==B_OK 
+	while(message->FindString("title", index, &title)==B_OK
 		&& message->FindString("action", index, &action)==B_OK) {
 		fTitleList.AddItem(new BString(title));
 		fActionList.AddItem(new BString(action));
 		index++;
 	}
-	
-#ifdef __HAIKU__
-	fSegments = new BBitmap(BRect(0, 0, 15, 15), B_RGBA32);
-#else
-	fSegments = new BBitmap(BRect(0, 0, 15, 15), B_CMAP8);
-#endif
-	BNodeInfo::GetTrackerIcon(&fRef, fSegments, B_MINI_ICON);
+
+	BRect bounds;
+	message->FindRect("bounds", &bounds);
+
+	fSegments = new BBitmap(bounds, B_RGBA32);
+	BNodeInfo::GetTrackerIcon(&fRef, fSegments, (icon_size)-1);
 }
 
 
@@ -91,18 +87,20 @@ DeskButton::Instantiate(BMessage *data)
 }
 
 
-status_t 
+status_t
 DeskButton::Archive(BMessage *data, bool deep) const
 {
 	BView::Archive(data, deep);
-	
+
 	data->AddRef("ref", &fRef);
-	
+
 	for (int32 i = 0; i < fTitleList.CountItems()
 			&& i < fActionList.CountItems(); i++) {
 		data->AddString("title", *(BString*)fTitleList.ItemAt(i));
 		data->AddString("action", *(BString*)fActionList.ItemAt(i));
 	}
+
+	data->AddRect("bounds", fSegments->Bounds());
 
 	data->AddString("add_on", kAppSignature);
 	return B_NO_ERROR;
@@ -129,7 +127,7 @@ DeskButton::MessageReceived(BMessage *message)
 
 		default:
 			BView::MessageReceived(message);
-			break;		
+			break;
 	}
 }
 
@@ -145,7 +143,7 @@ DeskButton::AttachedToWindow()
 }
 
 
-void 
+void
 DeskButton::Draw(BRect rect)
 {
 	BView::Draw(rect);
@@ -187,7 +185,7 @@ DeskButton::MouseDown(BPoint point)
 		}
 
 		menu->SetTargetForItems(this);
-		menu->Go(where, true, true, BRect(where - BPoint(4, 4), 
+		menu->Go(where, true, true, BRect(where - BPoint(4, 4),
 			where + BPoint(4, 4)));
 	} else if (mouseButtons & B_PRIMARY_MOUSE_BUTTON) {
 		be_roster->Launch(&fRef);

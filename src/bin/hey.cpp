@@ -126,6 +126,9 @@ bool is_valid_char(uint8 c);
 
 const char VERSION[] = "v1.2.8";
 
+#define MAX_INPUT_SIZE 1024
+	// Maximum amount of input data that "hey" can process at a time
+
 #define DEBUG_HEY 0		// 1: prints the script message to be sent to the target application, 0: prints only the reply
 
 
@@ -338,10 +341,10 @@ HeyInterpreterThreadHook(void* arg)
 	if (environment.HasMessenger("Target"))
 		environment.FindMessenger("Target", &target);
 
-	char command[1024];
+	char command[MAX_INPUT_SIZE];
 	status_t err;
 	BMessage reply;
-	while (gets(command)) {
+	while (fgets(command, sizeof(command), stdin)) {
 		reply.MakeEmpty();
 		err = Hey(&target, command, &reply);
 		if (!err) {
@@ -591,7 +594,7 @@ Hey(BMessenger* target, char* argv[], int32* argx, int32 argc, BMessage* reply)
 			(*argx)++;
 		result = add_data(&the_message, argv, argx);
 		if (result != B_OK) {
-			if (result == B_FILE_NOT_FOUND) {
+			if (result == B_ENTRY_NOT_FOUND) {
 				if (!silent)
 					fprintf(stderr, "File not found!\n");
 			} else if (!silent)
@@ -632,7 +635,7 @@ add_with(BMessage *to_message, char *argv[], int32 *argx, int32 argc)
 			do {
 				result = add_data(to_message, argv, argx);
 				if (result != B_OK) {
-					if (result == B_FILE_NOT_FOUND) {
+					if (result == B_ENTRY_NOT_FOUND) {
 						if (!silent)
 							fprintf(stderr, "File not found!\n");
 					} else {
@@ -943,13 +946,13 @@ add_data(BMessage *to_message, char *argv[], int32 *argx)
 			valuestring[strlen(valuestring) - 1] = 0;
 
 		if (get_ref_for_path(valuestring + 5, &file_ref) != B_OK)
-			return B_FILE_NOT_FOUND;
+			return B_ENTRY_NOT_FOUND;
 
 		// check if the ref is valid
 		BEntry entry;
 		if (entry.SetTo(&file_ref) != B_OK)
-			return B_FILE_NOT_FOUND;
-		//if(!entry.Exists())  return B_FILE_NOT_FOUND;
+			return B_ENTRY_NOT_FOUND;
+		//if(!entry.Exists())  return B_ENTRY_NOT_FOUND;
 
 		// add both ways, refsreceived needs it as "refs" while scripting needs "data"
 		to_message->AddRef("refs", &file_ref);

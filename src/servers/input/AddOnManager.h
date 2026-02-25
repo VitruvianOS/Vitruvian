@@ -21,6 +21,8 @@
 #include <AddOnMonitor.h>
 #include <AddOnMonitorHandler.h>
 
+#include <set>
+
 #include "PathList.h"
 
 
@@ -62,6 +64,8 @@ private:
 			status_t			_HandleFindDevices(BMessage* message,
 									BMessage* reply);
 			status_t			_HandleWatchDevices(BMessage* message,
+									BMessage* reply);
+			status_t			_HandleNotifyDevice(BMessage* message,
 									BMessage* reply);
 			status_t			_HandleIsDeviceRunning(BMessage* message,
 									BMessage* reply);
@@ -123,6 +127,7 @@ private:
 			PathList			fDevicePaths;
 
 			MonitorHandler*		fHandler;
+			std::set<BMessenger> fWatcherMessengerList;
 
 			bool				fSafeMode;
 };

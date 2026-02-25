@@ -24,6 +24,7 @@
 #include <ObjectList.h>
 #include <OS.h>
 #include <Screen.h>
+#include <StringList.h>
 #include <SupportDefs.h>
 
 #include <shared_cursor_area.h>
@@ -188,6 +189,13 @@ class InputServer : public BApplication {
 		status_t _SaveKeymap(bool isDefault = false);
 		void _InitKeyboardMouseStates();
 
+		MouseSettings* _RunningMouseSettings();
+		void _RunningMiceSettings(BList& settings);
+		void _DeviceStarted(InputDeviceListItem& item);
+		void _DeviceStopping(InputDeviceListItem& item);
+		MouseSettings* _GetSettingsForMouse(BString mouseName);
+		status_t _PostMouseControlMessage(int32 code, const BString& mouseName);
+
 		status_t _StartEventLoop();
 		void _EventLoop();
 		static status_t _EventLooper(void *arg);
@@ -212,7 +220,10 @@ class InputServer : public BApplication {
 		BLocker 		fInputDeviceListLocker;
 
 		KeyboardSettings fKeyboardSettings;
-		MouseSettings	fMouseSettings;
+		MultipleMouseSettings	fMouseSettings;
+		MouseSettings	fDefaultMouseSettings;
+		BStringList		fRunningMouseList;
+		BLocker 		fRunningMouseListLocker;
 
 		BPoint			fMousePos;		// current mouse position
 		key_info		fKeyInfo;		// current key info

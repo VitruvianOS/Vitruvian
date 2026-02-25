@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2010, Haiku. All rights reserved.
+ * Copyright 2002-2025, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _KEYBOARD_MOUSE_DRIVER_H
@@ -10,10 +10,9 @@
 #include <Drivers.h>
 
 
-#define KEY_Scroll      0x0f
-#define KEY_Pause       0x10
-#define KEY_Num         0x22
-#define KEY_CapsLock    0x3b
+// FIXME: these should go in InterfaceDefs.h (in the same enum as B_F1_KEY), but the names would
+// clash with names in the modifiers enum also defined there, so we would need to first rename the
+// values in the modifiers enumeration.
 #define KEY_ShiftL      0x4b
 #define KEY_ShiftR      0x56
 #define KEY_ControlL    0x5c
@@ -27,11 +26,9 @@
 #define KEY_OptR        0x67
 #define KEY_WinR        0x67
 #define KEY_Menu        0x68
-#define KEY_NumEqual    0x6a
-#define KEY_Power       0x6b
 #define KEY_SysRq       0x7e
 #define KEY_Break       0x7f
-#define KEY_Spacebar	0x5e
+#define KEY_Spacebar	0x5e // Removed from haiku
 
 #define KB_DEFAULT_CONTROL_ALT_DEL_TIMEOUT 4000000
 
@@ -62,9 +59,11 @@ enum {
 	MS_GET_CLICKSPEED,
 	MS_SET_CLICKSPEED,
 	MS_NUM_SERIAL_MICE,
+
 	MS_IS_TOUCHPAD,
-	MS_SET_TOUCHPAD_SETTINGS,
-	
+	MS_READ_TOUCHPAD,
+	MS_SET_TOUCHPAD_SETTINGS, // Removed from haiku
+
 	IIC_WRITE = B_DEVICE_OP_CODES_END + 200, 
 	RESTART_SYSTEM,
 	SHUTDOWN_SYSTEM
@@ -98,14 +97,21 @@ typedef struct {
 } mouse_movement;
 
 
+#define B_TIP_SWITCH			0x01
+#define B_SECONDARY_TIP_SWITCH	0x02
+#define B_BARREL_SWITCH			0x04
+#define B_ERASER				0x08
+#define B_TABLET_PICK			0x0F
+
+
 typedef struct {
 	uint32		buttons;
+	uint32		switches;
 	float		xpos;
 	float		ypos;
 	bool		has_contact;
 	float		pressure;
 	int32		clicks;
-	bool		eraser;
 	bigtime_t	timestamp;
 	int32		wheel_ydelta;
 	int32		wheel_xdelta;
@@ -114,10 +120,37 @@ typedef struct {
 } tablet_movement;
 
 
+// TODO: The following constants are not in use by drivers yet
+// so they cannot be used by movement_maker.cpp and these
+// values do not match with Synaptics driver finger width value.
+// See more info on touchpad_movement.fingerWidth TODO comment.
 #define B_ONE_FINGER	0x01
 #define B_TWO_FINGER	0x02
 #define B_MULTI_FINGER	0x04
 #define B_PEN			0x08
+
+
+#define B_EDGE_MOTION_DISABLED					0x00
+#define B_EDGE_MOTION_ON_MOVE					0x01
+#define B_EDGE_MOTION_ON_TAP_DRAG				0x02
+#define B_EDGE_MOTION_ON_BUTTON_CLICK_MOVE		0x04
+#define B_EDGE_MOTION_ON_BUTTON_CLICK_DRAG		0x08
+
+
+typedef struct {
+	uint16		edgeMotionWidth;
+
+	uint16		width;
+	uint16		areaStartX;
+	uint16		areaEndX;
+	uint16		areaStartY;
+	uint16		areaEndY;
+
+	uint16		minPressure;
+	// the value you reach when you hammer really hard on the touchpad
+	uint16		realMaxPressure;
+	uint16		maxPressure;
+} touchpad_specs;
 
 
 typedef struct {
@@ -128,10 +161,40 @@ typedef struct {
 	uint8		fingers;
 	bool		gesture;
 	uint8		fingerWidth;
-	// 1 - 4	normal width
-	// 5 - 11	very wide finger or palm
-	// 12		maximum reportable width; extrem wide contact
+		// TODO: Finger width is currently operating with these values
+		// on drivers and movement_maker.cpp probably following
+		// Synaptics driver finger width value interpretation of "w":
+		//
+		// 0		Two finger on the pad
+		// 1		Three or more fingers
+		// 2		Pen (instead of finger)
+		// 3		?
+		// 4 - 7	normal width
+		// 8 - 14	very wide finger or palm
+		// 15		maximum reportable width; extreme wide contact
+		//
+		// While it looks like the idea is to decouple this to end up with
+		// values related to the width only and not mixed with other features:
+		// For instance:
+		//
+		// 1 - 4	normal width
+		// 5 - 11	very wide finger or palm
+		// 12		maximum reportable width; extreme wide contact
+	int32		wheel_ydelta;
+	int32		wheel_xdelta;
+	int32		wheel_zdelta;
+	int32		wheel_wdelta;
 } touchpad_movement;
+
+
+typedef struct {
+	bigtime_t timeout;
+	int32 event;
+	union {
+		touchpad_movement touchpad;
+		mouse_movement mouse;
+	} u;
+} touchpad_read;
 
 
 #endif	// _KB_MOUSE_DRIVER_H

@@ -18,15 +18,20 @@
 #ifndef MOUSE_SETTINGS_H_
 #define MOUSE_SETTINGS_H_
 
+#include <Archivable.h>
 #include <InterfaceDefs.h>
 #include <kb_mouse_settings.h>
 #include <Path.h>
+#include <String.h>
 #include <SupportDefs.h>
+
+#include <map>
 
 
 class MouseSettings {
 	public:
 		MouseSettings();
+		MouseSettings(const mouse_settings* originalSettings);
 		~MouseSettings();
 
 		void Defaults();
@@ -60,18 +65,43 @@ class MouseSettings {
 		bool AcceptFirstClick() const { return fAcceptFirstClick; }
 		void SetAcceptFirstClick(bool acceptFirstClick);
 
+		const mouse_settings* GetSettings() { return &fSettings; }
+
+	private:
+		void _EnsureValidMapping();
+
+	private:
+		mouse_settings	fSettings;
+
+		// FIXME all these extra settings are not specific to each mouse.
+		// They should be moved into MultipleMouseSettings directly
+		mode_mouse		fMode;
+		mode_focus_follows_mouse	fFocusFollowsMouseMode;
+		bool			fAcceptFirstClick;
+};
+
+
+class MultipleMouseSettings: public BArchivable {
+	public:
+		MultipleMouseSettings();
+		~MultipleMouseSettings();
+
+		status_t Archive(BMessage* into, bool deep = false) const;
+
+		void Defaults();
+		void Dump();
 		status_t SaveSettings();
+
+
+		MouseSettings* AddMouseSettings(BString mouse_name);
+		MouseSettings* GetMouseSettings(BString mouse_name);
 
 	private:
 		static status_t GetSettingsPath(BPath &path);
 		void RetrieveSettings();
 
-		mouse_settings	fSettings, fOriginalSettings;
-		mode_mouse		fMode, fOriginalMode;
-		mode_focus_follows_mouse	fFocusFollowsMouseMode;
-		mode_focus_follows_mouse	fOriginalFocusFollowsMouseMode;
-		bool			fAcceptFirstClick;
-		bool			fOriginalAcceptFirstClick;
+		typedef std::map<BString, MouseSettings*> mouse_settings_object;
+		mouse_settings_object  fMouseSettingsObject;
 };
 
-#endif
+#endif	// MOUSE_SETTINGS_H

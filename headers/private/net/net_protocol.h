@@ -31,6 +31,17 @@ enum net_error {
 	B_NET_ERROR_UNREACH_PROTOCOL,
 	B_NET_ERROR_UNREACH_PORT,
 	B_NET_ERROR_MESSAGE_SIZE,
+	B_NET_ERROR_UNREACH_SOURCE_FAIL,
+	B_NET_ERROR_UNREACH_NET_UNKNOWN,
+	B_NET_ERROR_UNREACH_HOST_UNKNOWN,
+	B_NET_ERROR_UNREACH_ISOLATED,
+	B_NET_ERROR_UNREACH_NET_PROHIBITED,
+	B_NET_ERROR_UNREACH_HOST_PROHIBITED,
+	B_NET_ERROR_UNREACH_NET_TOS,
+	B_NET_ERROR_UNREACH_HOST_TOS,
+	B_NET_ERROR_UNREACH_FILTER_PROHIBITED,
+	B_NET_ERROR_UNREACH_HOST_PRECEDENCE,
+	B_NET_ERROR_UNREACH_PRECEDENCE_CUTOFF,
 	B_NET_ERROR_TRANSIT_TIME_EXCEEDED,
 	B_NET_ERROR_REASSEMBLY_TIME_EXCEEDED,
 	B_NET_ERROR_PARAMETER_PROBLEM,
@@ -94,24 +105,26 @@ struct net_protocol_module_info {
 	status_t	(*receive_data)(net_buffer* data);
 	status_t	(*deliver_data)(net_protocol* self, net_buffer* data);
 
-	status_t	(*error_received)(net_error error, net_buffer* data);
+	status_t	(*error_received)(net_error error, net_error_data* errorData, net_buffer* data);
 	status_t	(*error_reply)(net_protocol* self, net_buffer* cause,
 					net_error error, net_error_data* errorData);
 
 	status_t	(*add_ancillary_data)(net_protocol* self,
 					ancillary_data_container* container, const cmsghdr* header);
 	ssize_t		(*process_ancillary_data)(net_protocol* self,
-					const ancillary_data_header* header, const void* data,
-					void* buffer, size_t bufferSize);
+					const ancillary_data_container* container,
+					void* buffer, size_t bufferSize, int flags);
 	ssize_t		(*process_ancillary_data_no_container)(net_protocol* self,
 					net_buffer* buffer, void* data, size_t bufferSize);
 
 	ssize_t		(*send_data_no_buffer)(net_protocol* self, const iovec* vecs,
 					size_t vecCount, ancillary_data_container* ancillaryData,
-					const struct sockaddr* address, socklen_t addressLength);
+					const struct sockaddr* address, socklen_t addressLength,
+					int flags);
 	ssize_t		(*read_data_no_buffer)(net_protocol* self, const iovec* vecs,
 					size_t vecCount, ancillary_data_container** _ancillaryData,
-					struct sockaddr* _address, socklen_t* _addressLength);
+					struct sockaddr* _address, socklen_t* _addressLength,
+					int flags);
 };
 
 

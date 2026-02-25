@@ -223,9 +223,10 @@ BAbstractSocket::Connect(const BNetworkAddress& peer, int type,
 		fInitStatus = SetTimeout(timeout);
 
 	if (fInitStatus == B_OK && !IsBound()) {
+		// Bind to ADDR_ANY, if the address family supports it
 		BNetworkAddress local;
-		local.SetToWildcard(peer.Family());
-		fInitStatus = Bind(local, true);
+		if (local.SetToWildcard(peer.Family()) == B_OK)
+			fInitStatus = Bind(local, true);
 	}
 	if (fInitStatus != B_OK)
 		return fInitStatus;
@@ -309,7 +310,10 @@ BAbstractSocket::_WaitFor(int flags, bigtime_t timeout) const
 	entry.fd = Socket();
 	entry.events = flags;
 
-	int result = poll(&entry, 1, millis);
+	int result;
+	do {
+		result = poll(&entry, 1, millis);
+	} while (result == -1 && errno == EINTR);
 	if (result < 0)
 		return -errno;
 	if (result == 0)

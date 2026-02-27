@@ -1,62 +1,64 @@
-1	japanese	x-vnd.Haiku-ShowImage	3998703664
-Use as background…	Menus		デスクトップの背景にする…
-File	Menus		ファイル
-Slide delay	Menus		スライド間隔
-Selection mode	Menus		選択モード
-Zoom in	Menus		拡大
-The document '%s' has been changed. Do you want to close the document?	ClosePrompt		画像ファイル '%s' が変更されています。保存せずに閉じますか？
-Page setup…	Menus		ページ設定…
-Print…	Menus		印刷…
-Get info…	Menus		詳細情報…
-OK	SaveToFile		Ok
-Previous page	Menus		前のページ
-View	Menus		表示
-Full screen	Menus		全画面表示
-Go to page	Menus		指定ページへ
-Zoom out	Menus		縮小
-Quit	Menus		終了
-Rotate counterclockwise	Menus		反時計まわりに 90° 回転
-High-quality zooming	Menus		高画質拡大縮小
-Browse	Menus		閲覧
-Edit	Menus		編集
-Could not load image! Either the file or an image translator for it does not exist.	LoadAlerts		画像ファイルを読み込めません！ ファイルまたは画像トランスレーターが存在しません。
-First page	Menus		最初のページ
-The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		'%s' の %d ページが変更されました。それでもファイルを閉じますか?
-Leave full screen	Menus		全画面表示から戻る
-Close	Menus		閉じる
-Close	ClosePrompt		閉じる
-Resize to (in 1/72 inches):	PrintOptionsWindow		リサイズ (1/72 インチ):
-Rating	Menus		評価
-Flip left to right	Menus		左右反転
-Show caption in full screen mode	Menus		全画面表示モードでキャプションを表示
-DPI:	PrintOptionsWindow		解像度 (DPI):
-Open…	Menus		開く…
-Next file	Menus		次のファイル
-Clear selection	Menus		選択解除
-Close document	ClosePrompt		ファイルを閉じる
-Height: 	PrintOptionsWindow		高さ:
-The file '%s' could not be written.	SaveToFile		画像ファイル '%s' を保存できませんでした。
-Cancel	ClosePrompt		中止
-Show tool bar	Menus		ツールバーを表示
-Fit to window	Menus		ウィンドウに合わせる
-Print options	PrintOptionsWindow		印刷オプション
-Copy	Menus		コピー
-Progress monitor	ProgressWindow		進捗状況モニター
-Last page	Menus		最後のページ
-Stretch to window	Menus		ウィンドウの大きさに広げる
-Previous file	Menus		前のファイル
+1	japanese	x-vnd.Haiku-ShowImage	1471302250
 ShowImage	System name		画像ビューワ
+Page setup…	Menus		ページ設定...
+The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		'%s' の %d ページが変更されました。それでもファイルを閉じますか?
+Previous file	Menus		前のファイル
+View	Menus		表示
+Leave full screen	Menus		全画面表示から戻る
+Show caption in full screen mode	Menus		全画面表示モードでキャプションを表示
+Flip left to right	Menus		左右反転
+Full screen	Menus		全画面表示
+Copy	Menus		コピー
+Height: 	PrintOptionsWindow		高さ:
+Next file	Menus		次のファイル
 Slide show	Menus		スライドショー
-Fit image to page	PrintOptionsWindow		画像を用紙サイズに合わせる
-Flip top to bottom	Menus		上下反転
-Select all	Menus		すべて選択
-Zoom factor in %:	PrintOptionsWindow		倍率 (%):
+Original size	Menus		元のサイズ
 Width:	PrintOptionsWindow		幅:
-Image	Menus		画像
-Move to Trash	Menus		ごみ箱に移動
+Resize to (in 1/72 inches):	PrintOptionsWindow		リサイズ (1/72 インチ):
+Zoom factor in %:	PrintOptionsWindow		倍率 (%):
+Zoom out	Menus		縮小
 OK	Alerts		OK
-Rotate clockwise	Menus		時計まわりに 90° 回転
+File	Menus		ファイル
+Close	ClosePrompt		閉じる
+Image	Menus		画像
+Flip top to bottom	Menus		上下反転
+Zoom in	Menus		拡大
+Last page	Menus		最後のページ
+Cancel	ClosePrompt		中止
+Attributes	Menus		属性
+High-quality zooming	Menus		高画質拡大縮小
+The document '%s' has been changed. Do you want to close the document?	ClosePrompt		ファイル '%s' が変更されています。保存せずに閉じますか?
+Close	Menus		閉じる
+Selection mode	Menus		選択モード
+Reset rating	Menus		評価をリセット
+DPI:	PrintOptionsWindow		解像度 (DPI):
+Fit image to page	PrintOptionsWindow		画像を用紙サイズに合わせる
+Show tool bar	Menus		ツールバーの表示
+First page	Menus		最初のページ
+OK	SaveToFile		OK
+Print…	Menus		印刷...
+The file '%s' could not be written.	SaveToFile		画像ファイル '%s' を保存できません。
+Quit	Menus		終了
+Get info	Menus		詳細情報
+Rating	Menus		評価
+Close document	ClosePrompt		ファイルを閉じる
+Stretch to window	Menus		ウィンドウの大きさに広げる
 Job setup	PrintOptionsWindow		ジョブ設定
-Original size	Menus		原寸に戻す
+Clear selection	Menus		選択解除
+Rotate clockwise	Menus		右 90度回転
+Open with…	Menus		次のアプリケーションで開く…
+Rotate counterclockwise	Menus		左 90度回転
+Previous page	Menus		前のページ
+Fit to window	Menus		ウィンドウに合わせる
+Go to page	Menus		指定ページへ
+Browse	Menus		閲覧
+Progress monitor	ProgressWindow		進捗状況モニター
+Edit	Menus		編集
+Move to Trash	Menus		ごみ箱に捨てる
+Use as background…	Menus		背景にする...
+Open…	Menus		開く...
+Save as…	Menus		ファイル形式を選んで保存...
 Next page	Menus		次のページ
-Save as…	Menus		ファイル形式を選んで保存…
+Print options	PrintOptionsWindow		印刷オプション
+Slide delay	Menus		表示間隔
+Select all	Menus		すべて選択

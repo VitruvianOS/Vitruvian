@@ -1,37 +1,116 @@
-1	esperanto	x-vnd.haiku-icon_o_matic	1487435626
-Color (#%02x%02x%02x)	Style name after dropping a color		Koloro (#%02x%02x%02x)
-Add	Icon-O-Matic-StylesList		Aldoni
-Closed	Icon-O-Matic-PropertyNames		Fermita
-Duplicate	Icon-O-Matic-ShapesList		Duobligi
-Move	Icon-O-Matic-TransformationBoxStates		Movi
-OK	Icon-O-Matic-ColorPicker		Bone
-Error: 	Icon-O-Matic-Main		Eraro:
-Name	Icon-O-Matic-PropertyNames		Nomo
-Cancel	Icon-O-Matic-SVGExport		Nuligi
-Undo	Icon-O-Matic-Main		Malfari
-Cancel	Icon-O-Matic-Menu-Settings		Nuligi
-Remove	Icon-O-Matic-StylesList		Forigi
-Remove	Icon-O-Matic-PathsList		Forigi
-Quit	Icon-O-Matic-Menu-File		Eliri
-No	Icon-O-Matic-StyledTextImport		Ne
-Add	Icon-O-Matic-TransformersList		Aldoni
-Color	Icon-O-Matic-StyleTypes		Koloro
-Settings…	Icon-O-Matic-SavePanel		Agordoj…
-Remove	Icon-O-Matic-PathManipulator		Forigi
-Save	Icon-O-Matic-Menu-Settings		Konservi
-Cancel	Icon-O-Matic-ColorPicker		Nuligi
-Paste	Icon-O-Matic-Properties		Alglui
-File	Icon-O-Matic-Menus		Dosiero
-Error: 	Icon-O-Matic-Exporter		Eraro:
-Add	Icon-O-Matic-PathsList		Aldoni
-Remove	Icon-O-Matic-ShapesList		Forigi
-Yes	Icon-O-Matic-StyledTextImport		Jes
-Duplicate	Icon-O-Matic-StylesList		Duobligi
+1	esperanto	x-vnd.haiku-icon_o_matic	118707012
+None	Icon-O-Matic-Properties		Nenio
+Add empty	Icon-O-Matic-ShapesList		Aldoni malplenan
+Opening the icon failed!	Icon-O-Matic-Main		Malsukcesis uzi la piktogramon!
+Add with path	Icon-O-Matic-ShapesList		Aldoni kun itinero
+Copy	Icon-O-Matic-Properties		Kopii
 Color	Icon-O-Matic-PropertyNames		Koloro
-Redo	Icon-O-Matic-Main		Refari
-OK	Icon-O-Matic-SVGImport		Bone
+Format	Icon-O-Matic-SavePanel		Formo
+Color	Icon-O-Matic-StyleTypes		Koloro
+Select	Icon-O-Matic-Properties		Elekti
+Reset transformation	Icon-O-Matic-ShapesList		Restarigi transformon
+Duplicate	Icon-O-Matic-StylesList		Duobligi
+Rotate	Icon-O-Matic-TransformationBoxStates		Turni
+Shorten	Icon-O-Matic-PropertyNames		Mallongigi
+The text you are trying to import is quite long, are you sure?	Icon-O-Matic-StyledTextImport		La teksto, enportata de vi, estas nemalmulte longa. Ĉu vi certas?
+Paste	Icon-O-Matic-Properties		Alglui
+Close	Icon-O-Matic-Menu-File		Fermi
+Add rect	Icon-O-Matic-PathsList		Aldoni ortangulon
+Rotation	Icon-O-Matic-PropertyNames		Turno
+Transform	Icon-O-Matic-PathManipulator		Transformi
+Add shape with style	Icon-O-Matic-Menu-Shape		Aldoni formon kun stilo
+Remove	Icon-O-Matic-StylesList		Forigi
+Cancel	Icon-O-Matic-Menu-Settings		Nuligi
+Transformation	Icon-O-Matic-TransformationBoxStates		Transformo
+Closed	Icon-O-Matic-PropertyNames		Fermita
+<nothing to redo>	Icon-O-Matic-Menu-Edit		<nenio por refari>
+Height	Icon-O-Matic-PropertyNames		Alteco
+warning	Icon-O-Matic-SVGExport		averto
+File	Icon-O-Matic-Menus		Dosiero
+Properties	Icon-O-Matic-Menus		Atributoj
+Path	Icon-O-Matic-PropertyNames		Itinero
+Path	Icon-O-Matic-Menus		Itinero
+Stroke	Transformation		Streko
+Flip	Icon-O-Matic-PathManipulator		Renversi
+Opacity	Icon-O-Matic-PropertyNames		Travidebleco
+OK	Icon-O-Matic-ColorPicker		Bone
+Error: 	Icon-O-Matic-Main		Eraro: 
+Saving your document failed!	Icon-O-Matic-Exporter		Malsukcesis konservi vian dokumenton!
+Snap to grid	Icon-O-Matic-Menu-Settings		Kapti per krado
+Opening the document failed!	Icon-O-Matic-Main		Malsukcesis uzi la dokumenton!
+Add with path & style	Icon-O-Matic-ShapesList		Aldoni kun itinero kaj stilo
+Shape	Icon-O-Matic-Menus		Formo
+<unavailable>	Icon-O-Matic-StyleTypes		<neakireble>
+Min LOD	Icon-O-Matic-PropertyNames		Minimuma Detalnivelo
+Add	Icon-O-Matic-TransformersList		Aldoni
+Settings	Icon-O-Matic-Menus		Agordo
+Scale X	Icon-O-Matic-PropertyNames		Skaligi X
+Add	Icon-O-Matic-PathsList		Aldoni
+Remove	Icon-O-Matic-PathManipulator		Forigi
+Duplicate	Icon-O-Matic-ShapesList		Duobligi
+Contour	Transformation		Konturo
+Rounding	Icon-O-Matic-PropertyNames		Rondireco
+Joins	Icon-O-Matic-PropertyNames		Ligoj
+Cancel	Icon-O-Matic-ColorPicker		Nuligi
 Duplicate	Icon-O-Matic-PathsList		Duobligi
-Save	Icon-O-Matic-Menu-File		Konservi
+Save	Icon-O-Matic-Menu-Settings		Konservi
+Export as…	Icon-O-Matic-Menu-File		Elporti kiel…
+Diamond	Icon-O-Matic-StyleTypes		Rombformo
+Don't save	Icon-O-Matic-Menu-Settings		Nekonservi
+Add shape with path	Icon-O-Matic-Menu-Shape		Aldoni formon laŭ itinero
+Translation X	Icon-O-Matic-PropertyNames		Konverto X
+Rotate indices backwards	Icon-O-Matic-PathsList		Turni indeksojn reen.
 Overwrite	Icon-O-Matic-SVGExport		Anstataŭigi
-Open…	Icon-O-Matic-Menu-File		Malfermi…
-Color (#%02x%02x%02x)	Icon-O-Matic-StyledTextImport		Koloro (#%02x%02x%02x)
+Cancel	Icon-O-Matic-SVGExport		Nuligi
+Open…	Icon-O-Matic-Menu-File		Uzi…
+Remove	Icon-O-Matic-ShapesList		Forigi
+Drop shapes	Icon-O-Matic-ShapesList		Forigi formojn
+Linear	Icon-O-Matic-StyleTypes		Linia
+Clean up	Icon-O-Matic-PathsList		Purigi
+Split	Icon-O-Matic-PathManipulator		Dividi
+Move	Icon-O-Matic-TransformationBoxStates		Movi
+Conic	Icon-O-Matic-StyleTypes		Koniko
+Name	Icon-O-Matic-PropertyNames		Nomo
+Reset transformation	Icon-O-Matic-StylesList		Restarigi Transformon
+Reverse	Icon-O-Matic-PathsList		Inversigi
+Remove	Icon-O-Matic-PathsList		Forigi
+Style type	Icon-O-Matic-StyleTypes		Stiltipo
+Quit	Icon-O-Matic-Menu-File		Ĉesi
+Gradient	Icon-O-Matic-StyleTypes		Kolortransiro
+Add shape with path & style	Icon-O-Matic-Menu-Shape		Aldoni formon kun vojo kaj stilo
+Radial	Icon-O-Matic-StyleTypes		Radiusa
+Text too long	Icon-O-Matic-StyledTextImport		Teksto estas tro longa
+Caps	Icon-O-Matic-PropertyNames		Majuskloj
+OK	Icon-O-Matic-SVGImport		Bone
+Append…	Icon-O-Matic-Menu-File		Aldoni…
+Scale Y	Icon-O-Matic-PropertyNames		Skalo Y
+Rotate indices forwards	Icon-O-Matic-PathsList		Turni indeksojn antaŭen
+Save	Icon-O-Matic-Menu-File		Konservi
+Add circle	Icon-O-Matic-PathsList		Aldoni rondon
+Freeze transformation	Icon-O-Matic-ShapesList		Fiksi transformon
+Untitled	Icon-O-Matic-Main		Sennoma
+Max LOD	Icon-O-Matic-PropertyNames		Maksimumo por LOD
+Save changes to current icon before closing?	Icon-O-Matic-Menu-Settings		Ĉu konservi nunan piktogramon antaŭ ĉesi?
+Failed to open the file '%s' as an SVG document.\n\n	Icon-O-Matic-SVGImport		Malsukcesis uzi la dosieron '%s' supozante formaton SVG.\n\n
+Save as…	Icon-O-Matic-Menu-File		Konservi kiel…
+Swatches	Icon-O-Matic-Menus		Modeloj
+<modify path>	Icon-O-Matic-PathCmd		<ŝanĝi itineron>
+Icon-O-Matic	System name		Piktogramilo
+<nothing to undo>	Icon-O-Matic-Menu-Edit		<nenio por malfari>
+Add	Icon-O-Matic-StylesList		Aldoni
+Translation Y	Icon-O-Matic-PropertyNames		Transformo de Y
+Scale	Icon-O-Matic-TransformationBoxStates		Skali
+All	Icon-O-Matic-Properties		Ĉio
+Transformer	Icon-O-Matic-Menus		Tramsformigilo
+Invert selection	Icon-O-Matic-Properties		Inverti elekton
+<unkown property>	Icon-O-Matic-PropertyNames		<nekonata atributo>
+Pick a color	Icon-O-Matic-ColorPicker		Elektu koloron
+Settings…	Icon-O-Matic-SavePanel		Agordo…
+Add with style	Icon-O-Matic-ShapesList		Aldoni kun stilo
+New	Icon-O-Matic-Menu-File		Nova
+Gradient type	Icon-O-Matic-StyleTypes		Speco de kolortransiro
+Export	Icon-O-Matic-Menu-File		Eksporti
+Width	Icon-O-Matic-PropertyNames		Larĝo
+Style	Icon-O-Matic-Menus		Stilo
+Off	Icon-O-Matic-Menu-Settings		Malŝalti
+Edit	Icon-O-Matic-Menus		Redakti

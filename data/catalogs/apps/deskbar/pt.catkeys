@@ -1,38 +1,47 @@
-1	portuguese	x-vnd.Be-TSKB	3232664655
-<Be folder is empty>	BeMenu		<Pasta Be vazia>
-Always on top	PreferencesWindow		Sempre visível
-Applications	PreferencesWindow		Aplicações
-Auto-raise	PreferencesWindow		Elevar automaticamente
-Change time…	TimeView		Mudar hora…
-Clock	PreferencesWindow		Relógio
-Close all	WindowMenu		Fechar todas
-Deskbar preferences	PreferencesWindow		Preferências da Deskbar
-Deskbar preferences…	BeMenu		Preferências da Deskbar…
-Edit menu…	PreferencesWindow		Editar menu…
-Expand new applications	PreferencesWindow		Expandir novas aplicações
-Find…	BeMenu		Localizar…
-Hide all	WindowMenu		Ocultar todas
-Hide time	TimeView		Ocultar hora
-Menu	PreferencesWindow		Menu
-Mount	BeMenu		Montar
-No windows	WindowMenu		Não mostrar janelas
-Power off	BeMenu		Desligar
-Quit application	WindowMenu		Sair da aplicação
-Recent applications	BeMenu		Aplicações recentes
-Recent applications:	PreferencesWindow		Aplicações recentes:
-Recent documents	BeMenu		Documentos recentes
-Recent documents:	PreferencesWindow		Documentos recentes:
-Recent folders	BeMenu		Pastas recentes
-Recent folders:	PreferencesWindow		Pastas recentes:
-Restart Tracker	BeMenu		Reiniciar o Tracker
-Restart system	BeMenu		Reiniciar sistema
-Show Time	Tray		Mostrar hora
+1	portuguese	x-vnd.Be-TSKB	3780974715
+Auto-hide	PreferencesWindow		Ocultar automaticamente
 Show all	WindowMenu		Mostrar todas
+Edit in Tracker…	PreferencesWindow		Editar no Tracker…
+Menu	PreferencesWindow		Menu
+Tracker always first	PreferencesWindow		Tracker sempre primeiro
+Hide clock	TimeView		Esconder relógio
+Large	PreferencesWindow		Grandes
+<Deskbar folder is empty>	DeskbarMenu		<A pasta da Deskbar está vazia>
+Recent documents	DeskbarMenu		Documentos recentes
+Applications	B_USER_DESKBAR_DIRECTORY/Applications		Aplicações
+Always on top	PreferencesWindow		Sempre visível
+Restart system	DeskbarMenu		Reiniciar sistema
+Recent documents:	PreferencesWindow		Documentos recentes:
+Auto-raise	PreferencesWindow		Elevar automaticamente
+Mount	DeskbarMenu		Montar
+Icon size	PreferencesWindow		Tamanho dos ícones
+About Haiku	DeskbarMenu		Acerca do Haiku
+Small	PreferencesWindow		Pequenos
+Show calendar…	TimeView		Mostrar calendário…
+Find…	DeskbarMenu		Procurar…
+Power off	DeskbarMenu		Desligar
+Defaults	PreferencesWindow		Predefinições
+Show replicants	DeskbarMenu		Mostrar replicantes
+No windows	WindowMenu		Não mostrar janelas
+Show clock	Tray		Mostrar relógio
+Close all	WindowMenu		Fechar todas
+About this system	DeskbarMenu		Sobre este sistema
+Quit application	WindowMenu		Sair da aplicação
+Hide application names	PreferencesWindow		Esconder os nomes das aplicações
+Applications	PreferencesWindow		Aplicações
 Show application expander	PreferencesWindow		Mostrar expansor de aplicação
-Show calendar…	TimeView		Mostrar calendário...
-Show replicants	BeMenu		Mostrar replicantes
-Show seconds	PreferencesWindow		Mostrar segundos
-Shutdown…	BeMenu		Encerrar…
-Sort running applications	PreferencesWindow		Ordenar aplicações em execução
-Tracker always first	PreferencesWindow		Tracker sempre visível
+Suspend	DeskbarMenu		Suspender
+Shutdown…	DeskbarMenu		Encerrar…
+Demos	B_USER_DESKBAR_DIRECTORY/Demos		Demonstrações
+Expand new applications	PreferencesWindow		Expandir novas aplicações
+Recent applications:	PreferencesWindow		Aplicações recentes:
+Recent folders:	PreferencesWindow		Pastas recentes:
+Recent folders	DeskbarMenu		Pastas recentes
+Recent applications	DeskbarMenu		Aplicações recentes
+Hide all	WindowMenu		Ocultar todas
+Sort applications by name	PreferencesWindow		Ordenar aplicações por nome
+Revert	PreferencesWindow		Reverter
 Window	PreferencesWindow		Janela
+Preferences	B_USER_DESKBAR_DIRECTORY/Preferences		Preferências
+Time preferences…	TimeView		Preferências de data e hora…
+Desktop applets	B_USER_DESKBAR_DIRECTORY/Desktop applets		Applets da Área de Trabalho

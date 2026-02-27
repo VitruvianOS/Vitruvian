@@ -1,11 +1,11 @@
-1	italian	x-vnd.Haiku-MediaPlayer	1313616492
+1	italian	x-vnd.Haiku-MediaPlayer	334504768
 Remove Entry into Trash	MediaPlayer-RemovePLItemsCmd		Sposta elemento nel Cestino
 Close	MediaPlayer-PlaylistWindow		Chiudi
 Volume of background clips	MediaPlayer-SettingsWindow		Volume delle clip di sottofondo
 Use hardware video overlays if available	MediaPlayer-SettingsWindow		Usa gli overlay video hardware, se disponibili
 Audio	MediaPlayer-InfoWin		Audio
 Subtitle placement:	MediaPlayer-SettingsWindow		Posizione dei sottotitoli:
-MediaPlayer	System name		MediaPlayer
+MediaPlayer	System name		Lettore Multimediale
 Audio track	MediaPlayer-Main		Traccia audio
 Muted	MediaPlayer-SettingsWindow		Muto
 OK	MediaPlayer-RemovePLItemsCmd		OK
@@ -16,7 +16,6 @@ DrawBitmap	MediaPlayer-InfoWin		Disegna bitmap
 File info	MediaPlayer-InfoWin		Informazioni sul file…
 raw audio	MediaPlayer-InfoWin		audio grezzo
 Select all	MediaPlayer-PlaylistWindow		Seleziona tutto
-New player…	MediaPlayer-Main		Nuova riproduzione…
 Move Entries	MediaPlayer-MovePLItemsCmd		Sposta elementi
 OK	MediaPlayer-Main		OK
 Remove	MediaPlayer-PlaylistWindow		Elimina
@@ -25,7 +24,6 @@ Resume:	MediaPlayer-SettingsWindow		Riprendi:
 Duration	MediaPlayer-InfoWin		Durata
 Import Entries	MediaPlayer-ImportPLItemsCmd		Importa elementi
 Open network stream	MediaPlayer-Main		Apri stream di rete
-Move file to Trash	MediaPlayer-PlaylistWindow		Sposta file nel Cestino
 Open file…	MediaPlayer-Main		Apri file…
 Scale controls in full screen mode	MediaPlayer-SettingsWindow		Ridimensiona controlli nella modalità a schermo intero
 View options	MediaPlayer-SettingsWindow		Opzioni di visualizzazione
@@ -35,6 +33,8 @@ Full volume	MediaPlayer-SettingsWindow		Volume massimo
 Start media server	MediaPlayer-Main		Avvia il media server
 It appears the media server is not running.\nWould you like to start it ?	MediaPlayer-Main		Sembra che il media server non sia in esecuzione.\nAvviarlo?
 Location	MediaPlayer-InfoWin		Luogo
+%lu × %lu	MediaPlayer-InfoWin	The '×' is the Unicode multiplication sign U+00D7	%lu × %lu
+Opening '%s'.	MediaPlayer-Main		Apertura di '%s' in corso.
 Medium	MediaPlayer-SettingsWindow		Medi
 Play mode	MediaPlayer-SettingsWindow		Modalità di riproduzione
 Playlist	MediaPlayer-PlaylistWindow		Elenco di riproduzione
@@ -44,10 +44,10 @@ Close	MediaPlayer-Main		Chiudi
 Save error	MediaPlayer-PlaylistWindow		Errore durante il salvataggio
 Attributes	MediaPlayer-Main		Attributi
 Bottom of screen	MediaPlayer-SettingsWindow		Parte inferiore dello schermo
-MediaPlayer settings	MediaPlayer-SettingsWindow		Impostazioni di MediaPlayer
 Copyright	MediaPlayer-InfoWin		Copyright
 Invalid URL inserted!	MediaPlayer-NetworkStream		Immesso URL invalido!
 Aspect ratio	MediaPlayer-Main		Proporzioni
+Eject device	MediaPlayer-Main		Espelli dispositivo
 Saving the playlist failed.\n\nError: 	MediaPlayer-PlaylistWindow		Salvataggio dell'elenco di riproduzione non riuscito.\n\nErrore: 
 <no media>	MediaPlayer-InfoWin		<nessun media>
 Hide interface	MediaPlayer-Main		Nascondi interfaccia
@@ -56,6 +56,7 @@ Video track	MediaPlayer-Main		Traccia video
 Playlist…	MediaPlayer-Main		Elenco di riproduzione…
 <unnamed media>	MediaPlayer-InfoWin		<media senza nome>
 Save	MediaPlayer-PlaylistWindow		Salva
+25% scale	MediaPlayer-Main		Scala 25%
 Randomize Entries	MediaPlayer-RandomizePLItemsCmd		Rendi casuali gli elementi
 Cancel	MediaPlayer-NetworkStream		Annulla
 Nothing to Play	MediaPlayer-Main		Nulla da riprodurre
@@ -72,6 +73,7 @@ Audio	MediaPlayer-Main		Audio
 Quit	MediaPlayer-Main		Esci
 Redo	MediaPlayer-PlaylistWindow		Ripeti
 Move Entry	MediaPlayer-MovePLItemsCmd		Sposta elemento
+Reset rating	MediaPlayer-Main		Reimposta valutazione
 <unknown>	PlaylistItem-author		<sconosciuto>
 Cancel	MediaPlayer-SettingsWindow		Annulla
 Large	MediaPlayer-SettingsWindow		Grandi
@@ -99,7 +101,7 @@ none	Subtitles menu		nessuno
 Save Playlist	MediaPlayer-PlaylistWindow		Salva elenco di riproduzione
 Overlay	MediaPlayer-InfoWin		Overlay
 2.35 : 1 (Cinemascope)	MediaPlayer-Main		2.35 : 1 (Cinemascope)
-Rating	MediaPlayer-Main		Giudizio
+Rating	MediaPlayer-Main		Valutazione
 Internal error (out of memory). Saving the playlist failed.	MediaPlayer-PlaylistWindow		Errore interno (memoria piena). Salvataggio dell'elenco di riproduzione non riuscito.
 Video	MediaPlayer-Main		Video
 There is no decoder installed to handle the file format, or the decoder has trouble with the specific version of the format.	MediaPlayer-Main		Non sono stati installati decoder specifici per questo formato, oppure il decoder ha un problema con questa versione del formato.
@@ -123,6 +125,7 @@ Full screen	MediaPlayer-Main		Schermo intero
 OK	MediaPlayer-NetworkStream		OK
 Internal error (locking failed). Saving the playlist failed.	MediaPlayer-PlaylistWindow		Errore interno (errore nel lock). Fallito il salvataggio della playlist.
 100% scale	MediaPlayer-Main		Scala 100%
+New player	MediaPlayer-Main		Nuovo riproduttore
 <nothing to redo>	MediaPlayer-PlaylistWindow		<niente da ripetere>
 Bad URL	MediaPlayer-NetworkStream		URL errato
 Save	MediaPlayer-Main		Salva

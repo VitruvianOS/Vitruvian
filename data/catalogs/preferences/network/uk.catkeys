@@ -1,50 +1,54 @@
-1	ukrainian	x-vnd.Haiku-Network	943149646
-Ethernet device	InterfaceListItem		Мережева карта
+1	ukrainian	x-vnd.Haiku-Network	3807978621
+Ethernet device	InterfaceListItem		Провідний пристрій (Ethernet)
 Link speed:	IntefaceView		Швидкість з'єднання:
-disconnected	IntefaceView		від'єднати
-IP Address:	IntefaceAddressView		IP адреса:
 WPA	WPA protected network		WPA
 Network:	IntefaceView		Мережа:
-Received:	IntefaceView		Отримати:
+Received:	IntefaceView		Отримано:
 New…	NetworkWindow		Новий…
 no link	InterfaceListItem		немає з'єднання
 Other	NetworkWindow		Інший
-Sent:	IntefaceView		Відправити:
+Sent:	IntefaceView		Відправлено:
 Gateway:	IntefaceAddressView		Шлюз:
-The netmask defines your local network	IntefaceAddressView		Нетмаска визначає вашу локальну мережу
-Your IP address	IntefaceAddressView		Ваша IP адреса
+The netmask defines your local network	IntefaceAddressView		Маска підмережі визначає Вашу локальну мережу
+Your IP address	IntefaceAddressView		Ваша IP-адреса
 DHCP	IntefaceAddressView		DHCP
-Netmask:	IntefaceAddressView		Нетмаска:
+IP address:	IntefaceAddressView		IP-адреса:
+Netmask:	IntefaceAddressView		Маска підмережі:
 EAP	EAP protected network		EAP
 Services	NetworkWindow		Служби
-Installing NetworkStatus in Deskbar failed: %s	NetworkWindow		Встановлення Стан'у Мережі у Deskbar призупинено: %s
-Revert	NetworkWindow		Повернути
+Installing NetworkStatus in Deskbar failed: %s	NetworkWindow		Не вдалося встановити NetworkStatus у Deskbar: %s
+Revert	NetworkWindow		Відкат змін
+off	ServiceListItem		зупинено
 WEP	WEP protected network		WEP
-<no wireless networks found>	IntefaceView		<бездротових з'єднань не виявлено>
+<no wireless networks found>	IntefaceView		<безпровідні мережі не знайдені>
+Enable	IntefaceView		Доступно
 connected	IntefaceView		під'єднано
-Apply	IntefaceAddressView		Застосовувати
-Disable	ServiceView		Заборонити
+Apply	IntefaceAddressView		Застосувати
+Disable	ServiceView		Відключити
 WPA2	WPA2 protected network		WPA2
-Show network status in Deskbar	NetworkWindow		Показати стан мережі у Deskbar'і
+Show network status in Deskbar	NetworkWindow		Відображати стан мережі у Deskbar
 Mode:	IntefaceAddressView		Режим:
-connected	InterfaceListItem		під'єднання
+connected	InterfaceListItem		під'єднано
+OK	NetworkWindow		ОК
 Static	IntefaceAddressView		Статичний
-launch error	NetworkWindow		помилка з'єднання
-Renegotiate	IntefaceView		Переукласти
-MAC address:	IntefaceView		MAC адреса:
+launch error	NetworkWindow		помилка запуску
+Renegotiate	IntefaceView		Під'єднати 
+MAC address:	IntefaceView		MAC-адреса:
 %name% (%authenticationMode%)	WirelessNetworkMenuItem		%name% (%authenticationMode%)
 disabled	InterfaceListItem		заборонити
-Dial-up connection	InterfaceListItem		Під'єднання Dial-up
-The method for obtaining an IP address	IntefaceAddressView		Спосіб отримання IP адреси
-Automatic	IntefaceAddressView		Автоматично
+Dial-up connection	InterfaceListItem		Dial-up з'єднання 
+on	ServiceListItem		працює
+The method for obtaining an IP address	IntefaceAddressView		Спосіб отримання IP-адреси
+disconnected	InterfaceListItem		роз'єднано
+Automatic	IntefaceAddressView		Автоматичний
 Choose automatically	IntefaceView		Вибрати автоматично
 Status:	IntefaceView		Стан:
-Disable	IntefaceView		Заборонити
-Manage…	NetworkWindow		Керування…
+Disable	IntefaceView		Відключити
+Manage…	NetworkWindow		Управління…
 open	Open network		відкрити
-Network	NetworkWindow		Мережа
+Network	System name		Network
 Your gateway to the internet	IntefaceAddressView		Ваш інтернет шлюз
-Enable	ServiceView		Увімкнути
-Wireless device	InterfaceListItem		Бездротова карта
-Disabled	IntefaceAddressView		Заборонити
-VPN connection	InterfaceListItem		Під'єднання VPN
+Enable	ServiceView		Старт
+Wireless device	InterfaceListItem		Безпровідний пристрій (Wireless)
+Disabled	IntefaceAddressView		Відключити
+VPN connection	InterfaceListItem		VPN з'єднання

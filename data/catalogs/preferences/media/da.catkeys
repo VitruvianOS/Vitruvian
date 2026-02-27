@@ -1,0 +1,28 @@
+1	danish	x-vnd.Haiku-Media	4055972908
+Couldn't add volume control in Deskbar: %s\n	Media views		Kunne ikke tilføje lydstyrkestyring i skrivebordslinje: %s\n
+Restart media services	Media views		Genstart medietjenester
+Quit	Media Window		Afslut
+<none>	VideoInputMenu	Used when no video input is available	<ingen>
+Couldn't remove volume control in Deskbar: %s\n	Media views		Kunne ikke fjerne lydstyrkestyring i skrivebordslinje: %s\n
+Video output:	Media views		Videooutput:
+Video input:	Media views		Videoinput:
+Audio output:	Media views		Lydoutput:
+Please select a SoundFont.	Midi View		Vælg venligst en SoundFont.
+There are no SoundFonts installed.	Midi View		Der er ikke installeret nogen SoundFonts.
+Could not connect to the media server.\nWould you like to start it ?	Media Window		Kunne ikke oprette forbindelse til medieserveren.\nVil du starte den ?
+Video settings	Media Window		Videoindstillinger
+Audio mixer	Media Window		Lydmixer
+Show volume control on Deskbar	Media views		Vis lydstyrkestyring på skrivebordslinje
+Start media server	Media Window		Start medieserver
+Audio settings	Media Window		Lydindstillinger
+Quit anyway	Media Window		Afslut alligevel
+Media	System name		Medier
+Warning!	Media Window		Advarsel!
+MIDI Settings	Media Window		MIDI-indstillinger
+SoundFonts	Midi View		SoundFonts
+Audio input:	Media views		Lydinput:
+<none>	Media views		<ingen>
+Channel:	Media views		Kanal:
+This hardware has no controls.	Media Window		Hardwaren har ingen kontroller.
+Defaults	Media views		Standarder
+<none>	VideoOutputMenu	Used when no video output is available	<ingen>

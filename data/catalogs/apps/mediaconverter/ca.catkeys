@@ -1,9 +1,77 @@
-1	catalan; valencian	x-vnd.Haiku-MediaConverter	820560844
-Cancelling	MediaConverter		S'està cancel·lant
+1	catalan; valencian	x-vnd.Haiku-MediaConverter	1249914255
+Input file not recognized as Audio or Video	MediaConverter		No es reconeix el fitxer d’entrada com a àudio ni vídeo.
+Source files	MediaConverter		Fitxers d'origen
+Error writing video frame %lld	MediaConverter		Error en escriure el fotograma de vídeo %lld
+Audio quality: %s	MediaConverter		Qualitat de l'àudio: %s
+Error converting '%filename'	MediaConverter		Error en convertir %filename
+Selected directory not found. Defaulting to /boot/home	MediaConverter		No s'ha trobat el directori seleccionat. Es restableix a /boot/home.
+Conversion completed	MediaConverter		Conversió completada
+Audio:	MediaConverter-FileInfo		Àudio:
+MediaConverter+:SaveDirectory	MediaConverter		MediaConverter+: directori on desar
+Error creating video.	MediaConverter		Error en crear el vídeo.
+Cancelling	MediaConverter		Es cancel·la
+None available	Audio codecs		Cap de disponible
+The file has multiple audio or video tracks, only the first one of each will be converted.	MediaConverter		El fitxer té diverses pistes d'àudio o vídeo. Només es convertirà la primera de cadascuna.
+No file selected	MediaConverter-FileInfo		Cap fitxer seleccionat
+High	MediaConverter		Alt
+{0, plural, one{The file was not recognized as a supported media file:} other{# files were not recognized as supported media files:}}	MediaConverter		{0, plural, one{El fitxer no s'ha reconegut com a fitxer multimèdia compatible:} other{# fitxers no s'han reconegut com a fitxers multimèdia compatibles:}}
+File Error	MediaConverter-FileInfo		Error del fitxer
+None available	Video codecs		Cap de disponible
+Output format	MediaConverter		Format de sortida
+%.1f kHz mono	MediaFileInfo		%.1f kHz mono
+%.1f kHz stereo	MediaFileInfo		%.1f kHz estèreo
 OK	MediaConverter		D'acord
+Error creating '%filename'	MediaConverter		Error en crear %filename
+Error loading a file	MediaConverter		Error en carregar un fitxer
+Encoder parameters	MediaConverter-EncoderWindow		Paràmetres del codificador
 Open…	Menu		Obre...
-Cancelling…	MediaConverter		S'està cancel·lant...
+Audio encoding:	MediaConverter		Codificació de l'àudio:
+Multi-track file detected	MediaConverter		S'ha detectat un fitxer multipista.
+Cancelling…	MediaConverter		Es cancel·la...
+Output file '%filename' created	MediaConverter		S'ha creat el fitxer de sortida %filename.
+Output folder	MediaConverter		Carpeta de sortida
+Error creating track.	MediaConverter		Error en crear la pista.
+ seconds	MediaFileInfo		 segons
+Video using parameters form settings	MediaConverter		Vídeo que usa paràmetres de la configuració
+Video:	MediaConverter-FileInfo		Vídeo:
+Select	MediaConverter		Selecciona
 Conversion cancelled	MediaConverter		S'ha cancel·lat la conversió
-Cancel	MediaConverter		Anul·la
+Low	MediaConverter		Baix
+Error loading files	MediaConverter		Error en carregar fitxers
+{0, plural, one{# bit} other{# bits}}	MediaFileInfo		{0, plural, one{# bit} other{# bits}}
+Video quality: %s	MediaConverter		Qualitat del vídeo: %s
+End   [ms]: 	MediaConverter		Fi   [ms]: 
+Cancel	MediaConverter		Cancel·la
 OK	MediaConverter-FileInfo		D'acord
+Video encoding:	MediaConverter		Codificació de vídeo:
+An error has occurred reading the file info.\n\nError : 	MediaConverter-FileInfo		Hi ha hagut un error en llegir la informació del fitxer.\n\nError: 
+Error	MediaConverter		Error
+File details	MediaConverter		Detalls del fitxer
+No audio	Audio codecs list		Sense àudio
+Drop media files onto this window	MediaConverter		Deixeu anar fitxers multimèdia en aquesta finestra.
+{0, plural, one{# frame} other{# frames}}	MediaFileInfo		{0, plural, one{# fotograma} other{# fotogrames}}
+Error read audio frame %lld	MediaConverter		Error en llegir el marc d'àudio %lld
+Quit	Menu		Surt
+{0, plural, one{# byte} other{# bytes}}	MediaFileInfo		{0, plural, one{# byte} other{# bytes}}
+Writing audio track: %s complete	MediaConverter		S'escriu la pista d'àudio: %s completat
+Duration:	MediaConverter-FileInfo		Durada:
+MediaConverter	System name		Convertidor multimèdia
+Writing video track: %s complete	MediaConverter		S'escriu la pista de vídeo: %s completat
+Error launching: %strError%	MediaConverter		Error d'obertura: %strError%
+Error writing audio frame %lld	MediaConverter		Error en escriure el marc d'àudio %lld
+File format:	MediaConverter		Format del fitxer:
+File	Menu		Fitxer
+Video quality not supported	MediaConverter		No s'admet la qualitat del vídeo.
+Select this folder	MediaConverter		Selecciona aquesta carpeta
+%.1f kHz %ld channel	MediaFileInfo		%.1f kHz, canal %ld
+Understood	MediaConverter		Entès
+%u × %u, %.2ffps	MediaFileInfo	Width × Height, fps;The '×' is the Unicode multiplication sign U+00D7	%u × %u, %.2ffps
+%d bit 	MediaFileInfo		%d bit 
+No video	Video codecs list		Sense vídeo
 Continue	MediaConverter		Continua
+Convert	MediaConverter		Conveteix
+Audio quality not supported	MediaConverter		No s'admet la qualitat d'àudio.
+Error writing to location: %strPath%. Defaulting to location: /boot/home	MediaConverter		Error en escriure a la ubicació: %strPath%. Es restableix a /boot/home.
+Error read video frame %lld	MediaConverter		Error en llegir el fotograma de vídeo %lld
+Preview	MediaConverter		Previsualització
+Start [ms]: 	MediaConverter		Inici [ms]: 

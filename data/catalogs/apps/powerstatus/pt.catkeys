@@ -1,0 +1,47 @@
+1	portuguese	x-vnd.Haiku-PowerStatus	1160427457
+Run in window	PowerStatus		Executar numa janela
+Extended battery info	PowerStatus		Informação detalhada da bateria
+Show status icon	PowerStatus		Ver ícone de estado
+Battery charging	PowerStatus		Bateria a carregar
+Design capacity low warning: 	PowerStatus		Aviso de baixa capacidade de origem: 
+The battery level is critical, please plug in the device immediately.	PowerStatus		O nível da bateria é crítico, por favor ligue imediatamente o dispositivo à corrente.
+non-rechargeable	PowerStatus		não recarregável
+Last full charge: 	PowerStatus		Última carga completa: 
+ mV	PowerStatus		 mV
+Current rate: 	PowerStatus		Consumo atual: 
+Show text label	PowerStatus		Mostrar etiqueta de texto
+Quit	PowerStatus		Sair
+Battery not charging	PowerStatus		A bateria não está a carregar
+Battery low	PowerStatus		Bateria fraca
+Model number: 	PowerStatus		Número do modelo: 
+Battery unused	PowerStatus		Bateria sem uso
+Type: 	PowerStatus		Tipo: 
+ mAh	PowerStatus		 mAh
+Battery discharging	PowerStatus		Bateria a descarregar
+Design voltage: 	PowerStatus		Voltagem de origem: 
+discharging	PowerStatus		a descarregar
+rechargeable	PowerStatus		recarregável
+Battery info…	PowerStatus		Informações da bateria…
+Show time	PowerStatus		Mostrar tempo
+ mA	PowerStatus		 mA
+About…	PowerStatus		Acerca…
+Serial number: 	PowerStatus		Número de série: 
+Battery critical	PowerStatus		Bateria em nível crítico
+Capacity: 	PowerStatus		Capacidade: 
+ mW	PowerStatus		 mW
+Show percent	PowerStatus		Ver porcentagem
+Capacity granularity 1: 	PowerStatus		Granularidade de capacidade 1: 
+The battery level is getting low, please plug in the device.	PowerStatus		O nível de bateria está a ficar baixo, por favor ligue o dispositivo à corrente.
+Design capacity warning: 	PowerStatus		Aviso de capacidade de origem: 
+Capacity granularity 2: 	PowerStatus		Granularidade de capacidade 2: 
+Too bad!	PowerStatus		Que pena!
+Technology: 	PowerStatus		Tecnologia: 
+not charging	PowerStatus		não está a carregar
+ mWh	PowerStatus		 mWh
+PowerStatus	System name		Estado de Energia
+Design capacity: 	PowerStatus		Capacidade de origem: 
+OEM info: 	PowerStatus		Informação OEM: 
+no battery	PowerStatus		sem bateria
+Empty battery slot	PowerStatus		Compartimento da bateria vazio
+Install in Deskbar	PowerStatus		Instalar na Deskbar
+charging	PowerStatus		carregando

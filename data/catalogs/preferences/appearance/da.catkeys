@@ -1,0 +1,78 @@
+1	danish	x-vnd.Haiku-Appearance	3598979163
+Control border	Colors tab		Kontrollér kant
+Control mark	Colors tab		Kontrolmærke
+Off	AntialiasingSettingsView		Slået fra
+Window border	Colors tab		Vindueskant
+Inactive window tab	Colors tab		Inaktivt vinduesfaneblad
+Defaults	APRWindow		Standardvalg
+Shadow	Colors tab		Skygge
+Document background	Colors tab		Dokumentbaggrund
+List background	Colors tab		Oplist baggrund
+No effect on running applications	DecorSettingsView		Ingen virkning på kørende programmer
+Fixed font:	Font view		Fast skrifttype:
+Appearance	System name		Udseende
+Reduce colored edges filter strength:	AntialiasingSettingsView		Formindsk filterstyrken for farvede kanter:
+Glyph hinting:	AntialiasingSettingsView		Glyf-hintning:
+Default Haiku ControlLook	DecorSettingsView		Standard Haiku ControlLook
+Menu item text	Colors tab		Menupunkttekst
+About decorator	DecorSettingsView		Om dekoratør
+Antialiasing menu	AntialiasingSettingsView		Kantudjævningsmenu
+Success	Colors tab		Succes
+About	DecorSettingsView		Om
+Shine	Colors tab		Skinnende
+Arrow style	DecorSettingsView		Pilestil
+On	AntialiasingSettingsView		Slået til
+Decorator:	DecorSettingsView		Dekoratør:
+Menu background	Colors tab		Menubaggrund
+Revert	APRWindow		Tilbagefør
+List item text	Colors tab		Tekst for listepunkt
+OK	DecorSettingsView		O.k.
+Control text	Colors tab		Kontroltekst
+Look and feel	APRWindow		Udseende og opførsel
+Selected menu item background	Colors tab		Valgt menupunkts baggrund
+Link active	Colors tab		Lænke aktiv
+Antialiasing	APRWindow		Kantudjævning
+Menu font:	Font view		Skrifttype for menu:
+Bold font:	Font view		Fed skrifttype:
+%decorName\n\nAuthors:\n\t%decorAuthors\n\nURL: %decorURL\nLicense: %decorLic\n\n%decorDesc\n	DecorSettingsView		%decorName\n\nForfattere:\n\t%decorAuthors\n\nURL: %decorURL\nLicens: %decorLic\n\n%decorDesc\n
+Choose Decorator	DecorSettingsView		Vælg dekoratør
+Failure	Colors tab		Fejl
+Strong	AntialiasingSettingsView		Forstærket
+Double:	DecorSettingsView		Dobbelt:
+Selected menu item text	Colors tab		Valgt menupunkts tekst
+Size:	Font Selection view		Størrelse:
+Panel background	Colors tab		Panelbaggrund
+Plain font:	Font view		Almindelig skrifttype:
+Window tab text	Colors tab		Vinduesfanebladstekst
+Navigation pulse	Colors tab		Navigationspuls
+LCD subpixel	AntialiasingSettingsView		LCD-subpixel
+Window tab	Colors tab		Vinduesfaneblad
+Link text	Colors tab		Linktekst
+Tooltip background	Colors tab		Værktøjstips baggrund
+ControlLook:	DecorSettingsView		ControlLook:
+Scroll bar thumb	Colors tab		Miniature for rullebjælke
+Default	DecorSettingsView		Standard
+Link visited	Colors tab		Link besøgt
+Selected menu item border	Colors tab		Valgt menupunkts kant
+Tooltip text	Colors tab		Værktøjstiptekst
+Control background	Colors tab		Kontrol-baggrund
+Selected list item text	Colors tab		Valgte tekst for listepunkt
+Selected list item background	Colors tab		Valgt baggrund for listepunkt
+Inactive window tab text	Colors tab		Inaktiv vinduesfanebladstekst
+Navigation base	Colors tab		Navigationsbase
+Fonts	APRWindow		Skrifttyper
+The quick brown fox jumps over the lazy dog.	Font Selection view	Don't translate this literally ! Use a phrase showing all chars from A to Z.	Blåbærgrød med fløde i en dyb tallerken.
+Grayscale	AntialiasingSettingsView		Gråtone
+Antialiasing type:	AntialiasingSettingsView		Kantudjævningstype:
+Panel text	Colors tab		Paneltekst
+Hinting menu	AntialiasingSettingsView		Hintningsmenu
+Scroll bar:	DecorSettingsView		Rullebjælke:
+Choose ControlLook	DecorSettingsView		Vælg ControlLook
+Monospaced fonts only	AntialiasingSettingsView		Kun skrifttyper med fast størrelse
+Document text	Colors tab		Dokumenttekst
+Inactive window border	Colors tab		Inaktiv vindueskant
+Colors	APRWindow		Farver
+About control look	DecorSettingsView		Om control look
+Control highlight	Colors tab		Kontrol-highlight
+Link hover	Colors tab		Link over
+Single:	DecorSettingsView		Enkelt:

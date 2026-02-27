@@ -1,4 +1,4 @@
-1	french	x-vnd.haiku-softwareupdater	1722463448
+1	french	x-vnd.haiku-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	Mise à jour de la version
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Cliquez ici pour installer {0, plural, one{le paquet révisé} other{les # paquets révisés}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Paquets à désinstaller
@@ -16,7 +16,7 @@ No updates available	UpdateAction		Aucune mise à jour disponible
 New packages to be installed	SoftwareUpdaterWindow	List super item label	Nouveaux paquets à installer
 Packages to be updated	SoftwareUpdaterWindow	List super item label	Paquets à mettre à jour
 to	SoftwareUpdaterWindow	List item text	vers
-Attempting to cancel the updates…	SoftwareUpdaterWindow		Tentative d’annulation des mises à jour
+Attempting to cancel the updates…	SoftwareUpdaterWindow		Tentative d’annulation des mises à jour…
 Contacting software repositories to check for package updates.	CheckManager		Contact des dépôts de logiciels à la recherche des mises à jour disponibles pour les paquets.
 Available updates found	CheckManager		Mises à jour disponibles
 from repository	SoftwareUpdaterWindow	List item text	depuis le dépôt
@@ -41,7 +41,6 @@ Exception occurred while checking for updates: %s\n	CheckAction		Une exception e
 Packages are being updated	UpdateManager		Mise à jour des paquets en cours
 Cancel	SoftwareUpdaterWindow		Annuler
 Don't quit	SoftwareUpdaterWindow		Ne pas quitter
-Click here to run SoftwareUpdater. Some updates will require a problem solution to be selected.	CheckManager		Cliquez ici pour lancer SoftwareUpdater. Certains problèmes de mises à jour peuvent nécessiter le choix d’une solution.
 Checking for updates	SoftwareUpdaterWindow		Recherche de mises à jour
 Updates completed	UpdateManager		Les mises à jour ont abouti
 Reboot	SoftwareUpdaterWindow		Redémarrer
@@ -49,6 +48,7 @@ Show more details	SoftwareUpdaterWindow		Afficher plus de détails
 Installing version	SoftwareUpdaterWindow	List item text	Installation de la version
 Checking for updates	CheckManager		Recherche de mises à jour
 No remote repositories are available	UpdateManager	Error message	Aucun dépôt distant n’est disponible
+Software {0, plural, one{update} other{updates}} available	CheckManager		{0, plural, one{Mise à jour logicielle disponible} other{Mises à jour logicielles disponibles}}
 Reboot	SoftwareUpdaterWindow	Button label	Redémarrer
 Update	SoftwareUpdaterWindow	Alert button label	Mise à jour
 Open Repositories	SoftwareUpdaterWindow	Alert button label	Ouvrir les Dépôts
@@ -58,6 +58,6 @@ Uninstalling version	SoftwareUpdaterWindow	List item text	Désinstallation de la
 %i of %i	UpdateManager	Do not translate %i	%i sur %i
 Quit	SoftwareUpdaterWindow		Quitter
 No updates available	CheckManager		Aucune mise à jour disponible
-Usage:  SoftwareUpdater <command> [ <option> ]\nUpdates installed packages.\n\nCommands:\n  update     - Search repositories for updates on all packages.\n  check      - Check for available updates but only display a notification with results.\n  full-sync  - Synchronize the installed packages with the repositories.\n\nOptions:\n  -h or --help       Print this usage help\n  -v or --verbose    Output verbose information\n	SoftwareUpdaterApp	Command line usage help	Utilisation:  SoftwareUpdater <commande> [ <option> ]\nMet à jour les paquets installés.\n\nCommandes :\n  update     - Recherche et met à jour tous les paquets depuis les dépôts.\n  check      - Recherche dans les dépôts les mises à jour disponibles, mais affiche uniquement une notification avec les résultats.\n  full-sync  - Synchronise les paquets installés avec les dépôts.\n\nOptions :\n  -h ou --help       Affiche cette aide utilisateur.\n  -v ou --verbose    Sortie d’informations verbeuse.\n
+Usage:  SoftwareUpdater <command> [ <option> ]\nUpdates installed packages.\n\nCommands:\n  update     - Search repositories for updates on all packages.\n  check      - Check for available updates but only display a notification with results.\n  full-sync  - Synchronize the installed packages with the repositories.\n\nOptions:\n  -h or --help       Print this usage help\n  -v or --verbose    Output verbose information\n	SoftwareUpdaterApp	Command line usage help	Utilisation :  SoftwareUpdater <commande> [ <option> ]\nMet à jour les paquets installés.\n\nCommandes :\n  update     - Recherche et met à jour tous les paquets depuis les dépôts.\n  check      - Recherche dans les dépôts les mises à jour disponibles, mais affiche uniquement une notification avec les résultats.\n  full-sync  - Synchronise les paquets installés avec les dépôts.\n\nOptions :\n  -h ou --help       Affiche cette aide utilisateur.\n  -v ou --verbose    Sortie d’informations verbeuse.\n
 No remote repositories are available. Please verify that some repositories are enabled using the Repositories preflet or the 'pkgman' command.	SoftwareUpdaterWindow	Error message	Aucun dépôt distant n’est disponible. Veuillez vérifier qu’un dépôt est actif dans les préférences, ou à l’aide de la commande « pkgman ».
 Downloading packages	UpdateManager		Téléchargement des paquets

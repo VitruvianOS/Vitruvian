@@ -1,0 +1,47 @@
+1	thai	x-vnd.Be-TSKB	3780974715
+Auto-hide	PreferencesWindow		ซ่อน อัตโนมัติ
+Show all	WindowMenu		แสดงทั้งหมด
+Edit in Tracker…	PreferencesWindow		แก้ไขในตัวติดตาม
+Menu	PreferencesWindow		เมนู
+Tracker always first	PreferencesWindow		ติดตามก่อนเสมอ
+Hide clock	TimeView		ซ่อนนาฬิกา
+Large	PreferencesWindow		ขนาดใหญ่
+<Deskbar folder is empty>	DeskbarMenu		<Deskbar folder is empty>
+Recent documents	DeskbarMenu		เอกสารล่าสุด
+Applications	B_USER_DESKBAR_DIRECTORY/Applications		แอปพลิเคชั่น
+Always on top	PreferencesWindow		อยู่บนเสมอ
+Restart system	DeskbarMenu		เริ่มระบบใหม่
+Recent documents:	PreferencesWindow		เอกสารล่าสุด:
+Auto-raise	PreferencesWindow		ขยายอัตโนมัติ
+Mount	DeskbarMenu		เลือก
+Icon size	PreferencesWindow		ขนาดไอคอน
+About Haiku	DeskbarMenu		เกี่ยวกับ Haiku
+Small	PreferencesWindow		ขนาดเล็ก
+Show calendar…	TimeView		แสดงปฎิทิน
+Find…	DeskbarMenu		ค้นหา
+Power off	DeskbarMenu		ปิด
+Defaults	PreferencesWindow		ค่าเริ่มต้น
+Show replicants	DeskbarMenu		แสดงตัวจำลอง
+No windows	WindowMenu		ไม่มีหน้าต่าง
+Show clock	Tray		แสดงนาฬิกา
+Close all	WindowMenu		ปิดทั้งหมด
+About this system	DeskbarMenu		เกี่ยวกับระบบ
+Quit application	WindowMenu		ออกจากแอปพลิเคชั่น
+Hide application names	PreferencesWindow		ซ่อนชื่อแอปพิเคชั่น
+Applications	PreferencesWindow		แอปพลิเคชั่น
+Show application expander	PreferencesWindow		แสดงตัวขยายแอปพลิเคชัน
+Suspend	DeskbarMenu		หยุด
+Shutdown…	DeskbarMenu		ปิด
+Demos	B_USER_DESKBAR_DIRECTORY/Demos		ตัวอย่าง
+Expand new applications	PreferencesWindow		ขยายแอฟพลิเคชั่นใหม่
+Recent applications:	PreferencesWindow		แอปพลิเคชั่นล่าสุด
+Recent folders:	PreferencesWindow		โฟลเดอร์ล่าสุด
+Recent folders	DeskbarMenu		โฟลเดอร์ล่าสุด
+Recent applications	DeskbarMenu		แอปพลิเคชั่นล่าสุด
+Hide all	WindowMenu		ซ่อนทั้งหมด
+Sort applications by name	PreferencesWindow		จัดเรียงแอปพลิเคชันตามชื่อ
+Revert	PreferencesWindow		คืนค่า
+Window	PreferencesWindow		หน้าต่าง
+Preferences	B_USER_DESKBAR_DIRECTORY/Preferences		ตั้งค่า
+Time preferences…	TimeView		ตั้งเวลา
+Desktop applets	B_USER_DESKBAR_DIRECTORY/Desktop applets		แอพเพล็ตเดสก์ท็อป

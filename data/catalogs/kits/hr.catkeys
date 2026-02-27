@@ -1,32 +1,29 @@
-1	croatian	x-vnd.Haiku-libbe	1658467380
+1	croatian	x-vnd.Haiku-libbe	3416706263
+All Rights Reserved.	AboutWindow		Sva prava pridržana.
+Undo	TextView		Poništi
+OK	PrintJob		U redu
+OK	Dragger		U redu
+development	AboutWindow		razvoj
+Print Server is not responding.	PrintJob		Poslužitelj ispisa ne odgovara.
+About %app%	AboutMenuItem		O %app%
+Warning	Dragger		Upozorenje
+Green:	ColorControl		Zeleno:
+No pages to print!	PrintJob		Nema stranica za ispis!
 beta	AboutWindow		beta
-%3.2f GiB	StringForSize		%3.2f GiB
-Written by:	AboutWindow		Napisao:
-About %app%	AboutMenuItem		O %programu%
+OK	ZombieReplicantView		U redu
 Cut	TextView		Izreži
+Error	ZombieReplicantView		Greška
+Paste	TextView		Zalijepi
+OK	AboutWindow		U redu
 Version	AboutWindow		Verzija
+Red:	ColorControl		Crveno:
+<empty>	Menu		<empty>
 Copy	TextView		Kopiraj
-%3.2f KiB	StringForSize		%3.2f KiB
+Select all	TextView		Odaberi sve
 alpha	AboutWindow		alfa
 Error	PrintJob		Greška
-All Rights Reserved.	AboutWindow		Sva prava pridržana.
-{0, plural, one{# byte} other{# bytes}}	StringForSize		{0, množina, jedan{# byte} ostali{# bytes}}
-About %app%	AboutWindow		O %programu%
-No pages to print!	PrintJob		Nema stranica za ispis!
-OK	Dragger		U redu
-OK	PrintJob		U redu
-Green:	ColorControl		Zeleno:
+About %app…	Dragger		O %app%...
+About %app%	AboutWindow		O %app%
 Version history:	AboutWindow		Povijest verzija:
-OK	AboutWindow		U redu
-OK	ZombieReplicantView		U redu
-Print Server is not responding.	PrintJob		Poslužitelj ispisa ne odgovara.
-Paste	TextView		Zalijepi
-Special Thanks:	AboutWindow		Posebna zahvala:
-%.2f TiB	StringForSize		%.2f TiB
-Warning	Dragger		Upozorenje
-Undo	TextView		Poništi
-Red:	ColorControl		Crveno:
-%3.2f MiB	StringForSize		%3.2f MiB
-About %app…	Dragger		O %programu%...
-Error	ZombieReplicantView		Greška
 Blue:	ColorControl		Plavo:
+Written by:	AboutWindow		Napisao:

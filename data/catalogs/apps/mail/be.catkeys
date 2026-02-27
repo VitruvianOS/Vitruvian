@@ -1,4 +1,4 @@
-1	belarusian	x-vnd.Be-MAIL	3209807243
+1	belarusian	x-vnd.Be-MAIL	2282345333
 Set to Saved	Mail		Пазначыць як захаванае
 Your main text contains %ld unencodable characters. Perhaps a different character set would work better? Hit Send to send it anyway (a substitute character will be used in place of the unencodable ones), or choose Cancel to go back and try fixing it up.	Mail		Ваша паведамленне месціць %ld літар якія адсутнічаюць у выбранай кадоўцы. Нягледзячы на гэта вы маеце магчымасць Даслаць яго (у такім разе адсутныя літары будуць заменены на больш стасуючыя), ці Адмяніць перасылку ды вярнуцца і правіць гэтае паведамленне далей. Магчыма іншая кадоўка дапаможа даслаць паведамленне ў зыходным выглядзе.
 Text wrapping:	Mail		Афармоўка тэксту:
@@ -33,12 +33,8 @@ Removing attachments from a forwarded mail is not yet implemented!\nIt will not 
 Previous message	Mail		Папярэдняе паведамленне
 (Address unavailable)	Mail		(Адрэс невядомы)
 Mail	System name		Пошта
-Enclosure: %name% (Type: %type%)	Mail	Don't translate the variables %name% and %type%.	Укладанне: %name% (Тып: %type%)
 Copy link location	Mail		Капіраваць спасылку
-Attachments: 	Mail		Укладаньні: 
-Remove enclosure	Mail		Выдаліць укладанне
 Next	Mail		Наступнае
-Attachments:	Mail		Укладанні:
 Show icons only	Mail		Паказваць толькі значкі
 Subject:	Mail		Тэма:
 OK	Mail		ОК
@@ -56,7 +52,6 @@ Reply to sender	Mail		Адказаць адпраўніку
 Copy	Mail		Капіяваць
 Add signature	Mail		Дадаць подпіс
 %n - Full name	Mail		%n - Поўнае імя
-Remove quote	Mail		Выдаліць цытату
 Signature	Mail		Подпіс
 Use default account	Mail		Ужываць прадвызначаны акаунт
 draft	B_USER_DIRECTORY/mail/draft		чарнавік
@@ -93,8 +88,6 @@ To:	Mail		Каму:
 Need Tracker to move items to trash	Mail		Дзеля таго каб выкінуць элементы ў сметніцу патрэбен Tracker
 The mail_daemon could not be started:\n\t	Mail		Сервер mail_daemon ня можа быць запушчаны:\n\t
 <no account found>	Mail		<рахунак ня знойдзены>
-Mail couldn't find its dictionary.	Mail		Немагчыма знайсці слоўнік.
-Mail preferences	Mail		Наладкі Пошты
 helpful message	Mail		карыснае паведамленне
  Read 	Mail		 Чытаць 
 Font:	Mail		Шрыфт:
@@ -147,7 +140,6 @@ New mail message	Mail		Новае паведамленне
 An error occurred trying to open this signature.	Mail		Памылка. Немагчыма адкрыць гэты подпіс.
 Edit signatures…	Mail		Праўка подпісаў…
 User interface	Mail		Інтэрфейс карыстача
-Quote	Mail		Цытата
 Inconsistency occurred in the undo/redo buffer.	Mail		Неадпаведнасць ў чарзе аперацый паўтора/адмены.
 Remove attachment	Mail		Выдаліць укладанне
 Set to…	Mail		Прызначыць да…
@@ -160,4 +152,3 @@ Delete	Mail		Выдаліць
 Put your favorite e-mail queries and query templates in this folder.	Mail		Скапіюйце запыты электроннай пошты і шаблоны такіх запытаў у гэтую папку.
 Couldn't open this signature. Sorry.	Mail		Немагчыма адкрыць гэта подпіс. Выбачайце.
 Revert	Mail		Вярнуць
-Add enclosure…	Mail		Дадаць укладанне…

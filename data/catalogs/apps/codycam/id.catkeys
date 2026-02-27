@@ -1,6 +1,7 @@
-1	indonesian	x-vnd.Haiku-CodyCam	1770279704
+1	indonesian	x-vnd.Haiku-CodyCam	2786669505
 destination directory expected	CodyCam		direktori tujuan diharapkan
 reply: '%s'\n	SftpClient		balas: '%s'\n
+PASS <suppressed>  (real password sent)	FtpClient		PASS <suppressed> (sandi asli terkirim)
 JPEG image	CodyCam		Gambar JPEG
 Remote host has closed the connection.\n	FtpClient		Remote host telah menutup koneksi.\n
 image file format expected	CodyCam		format berkas gambar diharapkan
@@ -27,6 +28,7 @@ Every 2 hours	CodyCam		Setiap 2 jam
 Cannot get a time source	CodyCam		Tidak mendapatkan sumber waktu
 Every 4 hours	CodyCam		Setiap 4 jam
 cmd: '%s'\n	FtpClient		cmd: '%s'\n
+Closing the window	VideoConsumer.cpp		Menutup jendela
 Never	CodyCam		Tidak pernah
 Every 8 hours	CodyCam		Setiap 8 jam
 Cannot start the video source	CodyCam		Tidak dapat memulai sumber video
@@ -38,10 +40,10 @@ still image filename expected	CodyCam		nama berkas gambar tak bergerak diharapka
 File name:	CodyCam		Nama berkas:
 Directory:	CodyCam		Direktori:
 Error setting type of output file	VideoConsumer.cpp		Galat pengaturan tipe dari file keluaran
+Locking the window	VideoConsumer.cpp		Mengunci jendela
 Cannot find an available video stream	CodyCam		Tidak dapat menemukan aliran video yang tersedia
 Upload…	VideoConsumer.cpp		Unggah…
 password expected	CodyCam		kata sandi diharapkan
-PASS <suppressed>  (real password sent)\n	FtpClient		PASS <suppressed>  (kata sandi riil terkirim)\n
 SFTP	CodyCam		SFTP
 Output	CodyCam		Keluaran
 server address expected	CodyCam		alamat peladen diharapkan
@@ -79,7 +81,6 @@ Video settings	CodyCam		Pengaturan video
 Can't find an available connection to the video window	CodyCam		Tidak dapat menemukan ketersediaan koneksi ke jendela video
 FTP	CodyCam		FTP
 Error creating output file	VideoConsumer.cpp		Galat membuat berkas keluaran
-Cannot find a video source.\nYou need a webcam to use CodyCam.	CodyCam		Tidak dapat menemukan suatu sumber video.\nAnda perlu sebuah webcam untuk menggunakan CodyCam.
 Logging in…	VideoConsumer.cpp		Masuk…
 CodyCam	System name		CodyCam
 Error writing output file	VideoConsumer.cpp		Galat menulis berkas keluaran

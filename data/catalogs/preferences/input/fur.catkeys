@@ -1,0 +1,54 @@
+1	friulian	x-vnd.Haiku-Input	993392905
+Defaults	InputMouse		Predefinîts
+Scrolling	TouchpadPrefView		Scoriment
+Long	KeyboardView		Lunc
+Cancel	TouchpadPrefView		Anule
+Slow	TouchpadPrefView		Lente
+Device List	InputWindow		Liste dispositîfs
+Double-click speed	SettingsView		Velocitât dopli-clic
+5-Button	SettingsView		5-Botons
+Typing test area	KeyboardView		Aree di prove batidure
+Fast	KeyboardView		Svelte
+Please confirm	TouchpadPrefView		Par plasê conferme
+Trackpad speed	TouchpadPrefView		Velocitât trackpad
+Mouse speed	SettingsView		Velocitât dal mouse
+Trackpad acceleration	TouchpadPrefView		Acelerazion trackpad
+Horizontal scrolling	TouchpadPrefView		Scoriment orizontâl
+Reverse scroll direction	TouchpadPrefView		Direzion scoriment invertide
+Keyboard lock delay	TouchpadPrefView		Ritart dal bloc de tastiere
+Input	System name		Input
+Quick	TouchpadPrefView		Veloç
+Short	KeyboardView		Curt
+Revert	InputMouse		Ripristine
+Slow	KeyboardView		Lente
+2-Button	SettingsView		2-Botons
+Click to focus and raise	SettingsView		Clic par meti a fûc e parâ denant
+Vertical	TouchpadPrefView		Verticâl
+Low	TouchpadPrefView		Basse
+Focus follows mouse	SettingsView		Focalizazion daûr dal mouse
+Focus mode:	SettingsView		Mût par meti a fûc:
+Double-click test area	SettingsView		Aree di prove dopli-clic
+Revert	TouchpadPrefView		Ripristine
+4-Button	SettingsView		4-Botons
+Tapping sensitivity	TouchpadPrefView		Sensibilitât dal batuçâ
+Revert	InputKeyboard		Ripristine
+Mouse type:	SettingsView		Gjenar di mouse:
+Off	TouchpadPrefView		Distudât
+Never	TouchpadPrefView		Mai
+Fast	TouchpadPrefView		Svelte
+6-Button	SettingsView		6 Botons
+Click to focus	SettingsView		Clic par meti a fûc
+Acceleration	TouchpadPrefView		Acelerazion
+Accept first click	SettingsView		Acete il prin clic
+OK	TouchpadPrefView		VA BEN
+Delay until key repeat	KeyboardView		Ritart pe ripetizion dal tast
+Two finger scrolling	TouchpadPrefView		Scoriment cun doi dêts
+Mouse acceleration	SettingsView		Acelerazion dal mouse
+The new scroll area is very large and may impede normal mouse operation. Do you really want to change it?	TouchpadPrefView		La gnove aree di scorimetn e je une vore largje e e podarès impedî il normâl funzionament dal mouse. Cambiâle pardabon?
+High	TouchpadPrefView		Alt
+Defaults	TouchpadPrefView		Predefinîts
+1-Button	SettingsView		1-Boton
+Defaults	InputKeyboard		Predefinîts
+Key repeat rate	KeyboardView		Velocitât ripetizion tast
+Horizontal	TouchpadPrefView		Orizontâl
+3-Button	SettingsView		3-Botons

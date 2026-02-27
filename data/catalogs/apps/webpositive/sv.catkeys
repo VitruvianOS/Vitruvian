@@ -1,155 +1,174 @@
-1	swedish	x-vnd.Haiku-WebPositive	2763299522
-Show home button	Settings Window		Visa hemknapp
-Username:	Authentication Panel		Användarnamn:
-Copy URL to clipboard	Download Window		Kopiera URL till urklipp
-Cancel	Settings Window		Avbryt
-Close window	WebPositive Window		Stäng fönster
-Quit	WebPositive		Avsluta
-The download could not be opened.	Download Window		Nedladdningen kunde inte öppnas.
-The downloads folder could not be opened.\n\nError: %error	Download Window	Don't translate variable %error	Nedladdningsmappen kunde inte öppnas.\n\nFel: %error
-Close	Download Window		Stäng
-Open location	WebPositive Window		Öppna plats
-Clear history	WebPositive Window		Töm historik
-WebPositive	System name		WebPositive
-Yesterday	WebPositive Window		Igår
-Default standard font size:	Settings Window		Förinställd storlek för standardtypsnitt:
-Start page:	Settings Window		Startsida:
-History	WebPositive Window		Historik
-Error opening downloads folder	Download Window		Fel vid öppning av nedladdningsmapp
-Paste	WebPositive Window		Klistra in
-Expiration	Cookie Manager		Upphör
-Double-click or middle-click to open new tab.	Tab Manager		Dubbelklicka eller mittenklicka för att öppna en ny flik.
-Proxy username:	Settings Window		Användarnamn för proxy:
-Save page as…	WebPositive Window		Spara sida som…
-Settings	Settings Window		Inställningar
-Confirmation	WebPositive Window		Bekräftelse
-Window	WebPositive Window		Fönster
-Cookie manager	Cookie Manager		Kakhanterare
-Decrease size	WebPositive Window		Minska storleken
-Serif font:	Settings Window		Serifteckensnitt:
-Loading %url	WebPositive Window		Laddar %url
-Download aborted	Download Window		Nedladdning avbruten
-Value	Cookie Manager		Värde
-Page source	WebPositive Window		Sidkälla
-Next	WebPositive Window		Nästa
-Find next	WebPositive Window		Hitta nästa
-Download folder:	Settings Window		Nedladdningskatalog:
-Edit	WebPositive Window		Ändra
-Cancel	Authentication Panel		Avbryt
-Match case	WebPositive Window		Matcha skiftläge
-Search page:	Settings Window		Söksida:
-Zoom text only	WebPositive Window		Zooma endast text
-Default fixed font size:	Settings Window		Förinställd fast typsnittsstorlek:
-Close tab	WebPositive Window		Stäng flik
-Auto-hide mouse pointer	Settings Window		Dölj muspekare automatiskt
-Quit	WebPositive Window		Avsluta
-Full screen	WebPositive Window		Fullskärm
-Open download error	Download Window		Öppna nedladdningsfel
-The cookie jar is empty!	Cookie Manager		Kakburken är tom!
-Standard font:	Settings Window		Förinställt typsnitt:
-Find previous occurrence of search terms	WebPositive Window	find bar previous button tooltip	Hitta föregående förekomst av söktermer
-Restart	Download Window		Starta om
-Proxy server	Settings Window		Proxyserver
-Open containing folder	Download Window		Öppna innehållande mapp
-New window	WebPositive Window		Nytt fönster
-WebPositive	Download Window		WebPositive
-Open	Download Window		Öppna
-Reload	WebPositive Window		Ladda om
-Downloads	Download Window		Nedladdningar
-Sans serif font:	Settings Window		Sans-serif-typsnitt:
-Delete	Cookie Manager		Ta bort
-Forward	WebPositive Window		Framåt
-of	Download Window	...as in '12kB of 256kB'	av
-Revert	Settings Window		Återgå
-Fixed font:	Settings Window		Fast typsnitt:
-Cut	WebPositive Window		Klipp ut
-Bookmark this page	WebPositive Window		Bokmärk den här sidan
-There was an error trying to show the Bookmarks folder.\n\nError: %error	WebPositive Window	Don't translate variable %error	Det inträffade ett fel vid visning av bokmärkesmappen.\n\nFel: %error
-Open downloads folder	Download Window		Öppna nedladdningsmapp 
-Proxy password:	Settings Window		Lösenord för proxy:
-Number of days to keep links in History menu:	Settings Window		Antal dagar att spara länkar i historikmenyn:
-Reset size	WebPositive Window		Återställ storlek
-Find:	WebPositive Window		Hitta:
-Increase size	WebPositive Window		Öka storlek
-There was an error retrieving the bookmark folder.\n\nError: %error	WebPositive Window	Don't translate the variable %error	Det inträffade ett fel vid hämtning av bokmärkesmappen.\n\nFel: %error
-Downloads	WebPositive Window		Nedladdningar
-Requesting %url	WebPositive Window		Begär %url
-Find next occurrence of search terms	WebPositive Window	find bar next button tooltip	Hitta nästa förekomst av söktermer
-Apply	Settings Window		Tillämpa
-Bookmark info	WebPositive Window		Bokmärkesinfo
-Size:	Font Selection view		Storlek:
-Show tabs if only one page is open	Settings Window		Visa flikar om endast en sida är öppen
-About	WebPositive Window		Om
-Fonts	Settings Window		Teckensnitt
-OK	Download Window		OK
-Page source error	WebPositive Window		Sidkällsfel
-Open blank page	Settings Window		Öppna tom sida
-New tabs:	Settings Window		Nya flikar:
-Cancel	WebPositive Window		Avbryt
-Open all	WebPositive Window		Öppna alla
-Proxy server requires authentication	Settings Window		Proxyservern kräver autentisiering
-Clear	URL Bar		Rensa
-Cut	URL Bar		Klipp ut
-Clear	WebPositive Window		Rensa
-Script console	Console Window		Skriptkonsoll
-Remove	Download Window		Ta bort
-Find	WebPositive Window		Hitta
-Find previous	WebPositive Window		Hitta tidigare
-Settings	WebPositive Window		Inställningar
-(Finish: %date)	Download Window		(Avsluta: %date)
-Script console	WebPositive Window		Skriptkonsoll
-Name	Cookie Manager		Namn
-Proxy server address:	Settings Window		Proxyserveradress:
-Proxy server port:	Settings Window		Proxyserverport:
-Bookmarks	WebPositive Window		Bokmärken
-Paste	URL Bar		Klistra in
-Cookie manager	WebPositive Window		Kakhanterare
-/s)	Download Window	...as in 'per second'	/s)
-Hide password text	Authentication Panel		Dölj lösenord
-The quick brown fox jumps over the lazy dog.	Font Selection view	Don't translate this literally ! Use a phrase showing all chars from A to Z.	Yxmördaren Julia Blomqvist på fäktning i Schweiz.
-Open start page	Settings Window		Öppna startsida
-Continue downloads	WebPositive		Återuppta nedladdningar
-Cancel	Download Window		Avbryt
-Flags	Cookie Manager		Flaggor
-Open search page	Settings Window		Öppna söksida
-Clear	Console Window		Rensa
-Password:	Authentication Panel		Lösenord:
-Path	Cookie Manager		Sökväg
-Back	WebPositive Window		Bakåt
-New browser window	Download Window		Nytt webbläsarfönster
-Today	WebPositive Window		Idag
-Remember username and password for this site	Authentication Panel		Kom ihåg användarnamn och lösenord för den här sidan
-Earlier	WebPositive Window		Tidigare
+1	swedish	x-vnd.Haiku-WebPositive	4110209091
 Authentication required	Authentication Panel		Autentisiering krävs
-Use proxy server to connect to the internet	Settings Window		Använd proxyserver för att koppla upp mot internet
-There are still downloads in progress, do you really want to quit WebPositive now?	WebPositive		Nedladdningar pågår fortfarande. Vill du verkligen stänga WebPositive nu?
-Auto-hide interface in full screen mode	Settings Window		Dölj gränssnittet automatiskt i helskärmsläge
-%url failed	WebPositive Window	Loading URL failed. Don't translate variable %url.	%url misslyckades
-New tab	WebPositive Window		Ny flik
-Downloads in progress	WebPositive		Nedladdningar pågår
-(Finish: %date - %duration left)	Download Window		(Avsluta: %date - %duration left)
-Style:	Font Selection view		Stil:
-General	Settings Window		Allmän
-View	WebPositive Window		Vy
 Previous	WebPositive Window		Tidigare
-There was an error creating the bookmark file.\n\nError: %error	WebPositive Window	Don't translate variable %error	Det uppstod ett fel vid skapandet av bokmärkesfilen.\n\nFel: %error
-(Finish: %date - Over %duration left)	Download Window		(Färdig: %date - Över %duration kvar)
-Bookmark error	WebPositive Window		Bokmärkesfel
-Do you really want to clear the browsing history?	WebPositive Window		Vill du verkligen rensa din historik?
-Copy	WebPositive Window		Kopiera
+Copy	Console Window		Kopiera
+(Finish: %date)	Download Window		(Avsluta: %date)
 Open bookmarks confirmation	WebPositive Window		Öppna bokmärkesbekräftelse
-Remove missing	Download Window		Ta bort saknade
-Clone current page	Settings Window		Klona aktuell sida
-Do you want to open %addedCount bookmarks all at once?	WebPositive Window	Don't translate variable %addedCount.	Vill du öppna %addedCount bokmärken på samma gång?
-Session cookie	Cookie Manager		Sessionskaka
-OK	Authentication Panel		OK
-Copy	URL Bar		Kopiera
-Download finished	Download Window		Nedladdning avslutad
-Show bookmark bar	WebPositive Window		Visa bokmärkesfältet
-OK	WebPositive Window		OK
-Manage bookmarks	WebPositive Window		Hantera bokmärken
-A bookmark for this page (%bookmarkName) already exists.	WebPositive Window	Don't translate variable %bookmarkName	Ett bokmärke för denna sida (%bookmarkName) finns redan.
-Cookies for %s	Cookie Manager		Kakor för %s
-New windows:	Settings Window		Nya fönster:
+Delete	BookmarkBar		Radera
+Download folder:	Settings Window		Nedladdningskatalog:
+Close window	WebPositive Window		Stäng fönster
+Rename	BookmarkBar		Döpa om
+Find:	WebPositive Window		Hitta:
+Script console	WebPositive Window		Skriptkonsoll
+There was an error setting up the bookmark.	WebPositive Window		Det uppstod ett fel när bokmärket skulle ställas in.
+Fonts	Settings Window		Teckensnitt
+Path	Cookie Manager		Sökväg
+Bookmarks	WebPositive Window		Bokmärken
+Failed to remove bookmark '%leaf%' from boookmark bar.	BookmarkBar		Det gick inte att ta bort bokmärket '%leaf%' från bokmärkesfältet.
+Use proxy server to connect to the internet	Settings Window		Använd proxyserver för att koppla upp mot internet
 %url finished	WebPositive Window	Loading URL finished. Don't translate variable %url.	%url färdig
+Auto-hide interface in full screen mode	Settings Window		Dölj gränssnittet automatiskt i helskärmsläge
+Delete	Cookie Manager		Ta bort
+There was an error retrieving the bookmark folder.\n\nError: %error	WebPositive Window	Don't translate the variable %error	Det inträffade ett fel vid hämtning av bokmärkesmappen.\n\nFel: %error
+(Finish: %date - Over %duration left)	Download Window		(Färdig: %date - Över %duration kvar)
+Open containing folder	Download Window		Öppna innehållande mapp
+Find previous	WebPositive Window		Hitta tidigare
+Full screen	WebPositive Window		Fullskärm
+Downloads in progress	WebPositive		Nedladdningar pågår
+Copy URL to clipboard	Download Window		Kopiera URL till urklipp
+Do you want to open %addedCount bookmarks all at once?	WebPositive Window	Don't translate variable %addedCount.	Vill du öppna %addedCount bokmärken på samma gång?
+Clone current page	Settings Window		Klona aktuell sida
+Start page:	Settings Window		Startsida:
+Cancel	Download Window		Avbryt
+Settings	Settings Window		Inställningar
+Downloads	WebPositive Window		Nedladdningar
+Browse…	Settings Window		Bläddra…
+Resume prior session	Settings Window		Återuppta föregående session
+Match case	WebPositive Window		Matcha skiftläge
+Proxy password:	Settings Window		Lösenord för proxy:
+Failed to delete bookmark:\n'%path%'	BookmarkBar		Det gick inte att ta bort bokmärke:\n'%path%'
+Size:	Font Selection view		Storlek:
+Page source	WebPositive Window		Sidkälla
+Proxy server port:	Settings Window		Proxyserverport:
+Error opening downloads folder	Download Window		Fel vid öppning av nedladdningsmapp
+Show bookmark bar	WebPositive Window		Visa bokmärkesfältet
+Find	WebPositive Window		Hitta
+Standard font:	Settings Window		Förinställt typsnitt:
+Open download error	Download Window		Öppna nedladdningsfel
+General	Settings Window		Allmän
+New tabs:	Settings Window		Nya flikar:
+%url failed	WebPositive Window	Loading URL failed. Don't translate variable %url.	%url misslyckades
+Open downloads folder	Download Window		Öppna nedladdningsmapp 
+Proxy server	Settings Window		Proxyserver
+Darn!	WebPositive		Attans!
+Decrease size	WebPositive Window		Minska storleken
+Default fixed font size:	Settings Window		Förinställd fast typsnittsstorlek:
+Sans serif font:	Settings Window		Sans-serif-typsnitt:
+Clear	WebPositive Window		Rensa
+The download could not be opened.	Download Window		Nedladdningen kunde inte öppnas.
+Cookies for %s	Cookie Manager		Kakor för %s
+Close	Download Window		Stäng
+WebPositive	System name		WebPositive
+%s - Search term	Settings Window		%s - Sökterm
+Old name: %s	BookmarkBar		Gammalt namn: %s
+Expiration	Cookie Manager		Upphör
+Reload	WebPositive Window		Ladda om
+Download finished	Download Window		Nedladdning avslutad
+Cookie manager	WebPositive Window		Kakhanterare
+Username:	Authentication Panel		Användarnamn:
+Hide password text	Authentication Panel		Dölj lösenord
+OK	Authentication Panel		OK
+Name	Cookie Manager		Namn
 Remove finished	Download Window		Ta bort avslutade
+Earlier	WebPositive Window		Tidigare
+Edit	WebPositive Window		Ändra
+Back	WebPositive Window		Bakåt
+Yesterday	WebPositive Window		Igår
+Quit	WebPositive		Avsluta
+Download aborted	Download Window		Nedladdning avbruten
+Number of days to keep links in History menu:	Settings Window		Antal dagar att spara länkar i historikmenyn:
+Password:	Authentication Panel		Lösenord:
+Forward	WebPositive Window		Framåt
+Clear	Console Window		Rensa
+Cut	URL Bar		Klipp ut
+View	WebPositive Window		Vy
+Paste	URL Bar		Klistra in
+Find next	WebPositive Window		Hitta nästa
+Open search page	Settings Window		Öppna söksida
+New tab	WebPositive Window		Ny flik
+Increase size	WebPositive Window		Öka storlek
+Today	WebPositive Window		Idag
+Open location	WebPositive Window		Öppna plats
+There are still downloads in progress, do you really want to quit %appname% now?	WebPositive		Nedladdningar pågår fortfarande, vill du verkligen avsluta %appname% nu?
+New browser window	Download Window		Nytt webbläsarfönster
+Open	Download Window		Öppna
+New window	WebPositive Window		Nytt fönster
+New windows:	Settings Window		Nya fönster:
+The downloads folder could not be opened.\n\nError: %error	Download Window	Don't translate variable %error	Nedladdningsmappen kunde inte öppnas.\n\nFel: %error
+Cancel	Authentication Panel		Avbryt
+Style:	Font Selection view		Stil:
+There was an error creating the bookmark file.\n\nError: %error	WebPositive Window	Don't translate variable %error	Det uppstod ett fel vid skapandet av bokmärkesfilen.\n\nFel: %error
+OK	Download Window		OK
+Proxy username:	Settings Window		Användarnamn för proxy:
+Rename bookmark	BookmarkBar		Byt namn på bokmärke
+Manage bookmarks	WebPositive Window		Hantera bokmärken
+/s)	Download Window	...as in 'per second'	/s)
+Restart	Download Window		Starta om
+Serif font:	Settings Window		Serifteckensnitt:
+Apply	Settings Window		Tillämpa
+There was an error trying to show the Bookmarks folder.\n\nError: %error	WebPositive Window	Don't translate variable %error	Det inträffade ett fel vid visning av bokmärkesmappen.\n\nFel: %error
+Revert	Settings Window		Återgå
+Copy	WebPositive Window		Kopiera
+Your CPU is too old and does not support the SSE2 extensions, without which %appname% cannot run. We recommend installing NetSurf instead.	WebPositive		Din processor är för gammal och stöder inte SSE2-tilläggen, utan vilka %appname% inte kan köras. Vi rekommenderar att du installerar NetSurf istället.
+{0, plural,one{Last line repeated # time.}other{Last line repeated # times.}}	Console Window		{0, plural,one{Sista raden upprepades # gång.}other{Sista raden upprepades # gånger.}}
+Default standard font size:	Settings Window		Förinställd storlek för standardtypsnitt:
+Custom	Settings Window		Egen inställning
+Bookmark this page	WebPositive Window		Bokmärk den här sidan
+Show tabs if only one page is open	Settings Window		Visa flikar om endast en sida är öppen
+Remove	Download Window		Ta bort
+Close tab	WebPositive Window		Stäng flik
+About	WebPositive Window		Om
+Continue downloads	WebPositive		Återuppta nedladdningar
+Proxy server requires authentication	Settings Window		Proxyservern kräver autentisiering
+Cancel	Settings Window		Avbryt
+Reset size	WebPositive Window		Återställ storlek
+History	WebPositive Window		Historik
+Do you really want to clear the browsing history?	WebPositive Window		Vill du verkligen rensa din historik?
+Find next occurrence of search terms	WebPositive Window	find bar next button tooltip	Hitta nästa förekomst av söktermer
+Fixed font:	Settings Window		Fast typsnitt:
+Quit	WebPositive Window		Avsluta
+Find previous occurrence of search terms	WebPositive Window	find bar previous button tooltip	Hitta föregående förekomst av söktermer
+Remember username and password for this site	Authentication Panel		Kom ihåg användarnamn och lösenord för den här sidan
+(Finish: %date - %duration left)	Download Window		(Avsluta: %date - %duration left)
+Cookie manager	Cookie Manager		Kakhanterare
+Show home button	Settings Window		Visa hemknapp
+Start new session	Settings Window		Starta ny session
+The cookie jar is empty!	Cookie Manager		Kakburken är tom!
+Value	Cookie Manager		Värde
+Remove missing	Download Window		Ta bort saknade
+Paste	WebPositive Window		Klistra in
+Double-click or middle-click to open new tab.	Tab Manager		Dubbelklicka eller mittenklicka för att öppna en ny flik.
+Next	WebPositive Window		Nästa
+Bookmark error	WebPositive Window		Bokmärkesfel
+OK	WebPositive Window		OK
+(%currentSize% of %expectedSize%, %rate%/s)	Download Window		(%currentSize% av %expectedSize%, %rate%/s)
+Save page as…	WebPositive Window		Spara sida som…
+Zoom text only	WebPositive Window		Zooma endast text
+Page source error	WebPositive Window		Sidkällsfel
+Auto-hide mouse pointer	Settings Window		Dölj muspekare automatiskt
+Requesting %url	WebPositive Window		Begär %url
+Flags	Cookie Manager		Flaggor
+Window	WebPositive Window		Fönster
+Proxy server address:	Settings Window		Proxyserveradress:
+Search page:	Settings Window		Söksida:
+Settings	WebPositive Window		Inställningar
+Show in Tracker	BookmarkBar		Visa i Tracker
+Clear	URL Bar		Rensa
+Loading %url	WebPositive Window		Laddar %url
+The quick brown fox jumps over the lazy dog.	Font Selection view	Don't translate this literally ! Use a phrase showing all chars from A to Z.	Yxmördaren Julia Blomqvist på fäktning i Schweiz.
+OK	BookmarkBar		OK
+Start up:	Settings Window		Börja:
+Confirmation	WebPositive Window		Bekräftelse
+Session cookie	Cookie Manager		Sessionskaka
+New name:	BookmarkBar		Nytt namn:
+No SSE2 support	WebPositive		Inget stöd för SSE2
+Open all	WebPositive Window		Öppna alla
+Cut	WebPositive Window		Klipp ut
+Downloads	Download Window		Nedladdningar
+Open blank page	Settings Window		Öppna tom sida
+Clear history	WebPositive Window		Töm historik
+Cancel	WebPositive Window		Avbryt
+Script console	Console Window		Skriptkonsoll
+Copy	URL Bar		Kopiera
+Open in new tab	BookmarkBar		Öppna i ny flik
+Open start page	Settings Window		Öppna startsida

@@ -1,0 +1,50 @@
+1	turkish	x-vnd.Be-TSKB	1763402521
+Auto-hide	PreferencesWindow		Kendiliğinden gizle
+Show all	WindowMenu		Tümünü göster
+Edit in Tracker…	PreferencesWindow		İzleyici’de düzenle…
+Menu	PreferencesWindow		Menü
+Tracker always first	PreferencesWindow		İzleyici her zaman ilk sırada
+Hide clock	TimeView		Saati gizle
+Large	PreferencesWindow		Büyük
+<Deskbar folder is empty>	DeskbarMenu		<Masaüstü Çubuğu klasörü boş>
+Recent documents	DeskbarMenu		Son kullanılan belgeler
+Applications	B_USER_DESKBAR_DIRECTORY/Applications		Uygulamalar
+%appname% preferences	PreferencesWindow		%appname% tercihleri
+Always on top	PreferencesWindow		Her zaman üstte
+Restart system	DeskbarMenu		Yeniden başlat
+Recent documents:	PreferencesWindow		Son kullanılan belgeler:
+Auto-raise	PreferencesWindow		Kendiliğinden öne getir
+Mount	DeskbarMenu		Bağla
+Icon size	PreferencesWindow		Simge boyutu
+About Haiku	DeskbarMenu		Haiku hakkında
+Small	PreferencesWindow		Küçük
+Show calendar…	TimeView		Takvimi göster…
+Find…	DeskbarMenu		Bul…
+Power off	DeskbarMenu		Kapat
+Defaults	PreferencesWindow		Saptanmışlar
+Show replicants	DeskbarMenu		Yinelenenleri göster
+No windows	WindowMenu		Pencere yok
+Show clock	Tray		Saati göster
+Close all	WindowMenu		Tümünü kapat
+About this system	DeskbarMenu		Bu sistem hakkında
+Quit application	WindowMenu		Uygulamadan çık
+Hide application names	PreferencesWindow		Uygulama adlarını gizle
+Deskbar	System name		Masaüstü Çubuğu
+Applications	PreferencesWindow		Uygulamalar
+Show application expander	PreferencesWindow		Uygulama genişleticisini göster
+Suspend	DeskbarMenu		Askıya al
+Shutdown…	DeskbarMenu		Bilgisayarı kapat…
+Demos	B_USER_DESKBAR_DIRECTORY/Demos		Demolar
+Expand new applications	PreferencesWindow		Yeni uygulamaları genişlet
+%appname% preferences…	DeskbarMenu		%appname% tercihleri…
+Recent applications:	PreferencesWindow		Son kullanılan uygulamalar:
+Recent folders:	PreferencesWindow		Son kullanılan klasörler:
+Recent folders	DeskbarMenu		Son kullanılan klasörler
+Recent applications	DeskbarMenu		Son kullanılan uygulamalar
+Hide all	WindowMenu		Tümünü gizle
+Sort applications by name	PreferencesWindow		Uygulamaları ada göre sırala
+Revert	PreferencesWindow		Eski haline döndür
+Window	PreferencesWindow		Pencere
+Preferences	B_USER_DESKBAR_DIRECTORY/Preferences		Tercihler
+Time preferences…	TimeView		Tarih ve Zaman tercihleri…
+Desktop applets	B_USER_DESKBAR_DIRECTORY/Desktop applets		Masaüstü uygulamacıkları

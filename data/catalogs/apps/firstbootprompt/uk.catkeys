@@ -1,8 +1,88 @@
-1	ukrainian	x-vnd.Haiku-FirstBootPrompt	2649051796
-Custom	BootPromptWindow		Користувацький
-Thank you for trying out Haiku! We hope you'll like it!\n\nYou can select your preferred language and keyboard layout from the list on the left which will then be used instantly. You can easily change both settings from the Desktop later on on the fly.\n\nDo you wish to run the Installer or continue booting to the Desktop?\n	BootPromptWindow	For other languages, a note could be added: \"Note: Localization of Haiku applications and other components is an on-going effort. You will frequently encounter untranslated strings, but if you like, you can join in the work at <www.haiku-os.org>.\"	Дякуємо за ваше зацікавлення Haiku. Ми сподіваємось що вона Вам сподобається!\n\nВи можете вибрати бажану мову і розкладку клавіатури зі списку зліва. Ви можете просто змінити обидва налаштування Робочого столу на льоту .\n\nВи бажаєте запустити Встановлювач чи продовжити завантаження системи?\n
-Boot to Desktop	BootPromptWindow		Завантажити на робочий стіл
+1	ukrainian	x-vnd.Haiku-FirstBootPrompt	189132197
+Japanese	KeymapNames		Японська
+US	KeymapNames		US - Американська
+Cancel	BootPromptWindow		Скасувати
+Esperanto	KeymapNames		Есперанто
+Belarusian	KeymapNames		Бiлоруська
+Brazilian	KeymapNames		Бразiльська
+Dvorak	KeymapNames		Дворак
+Polish	KeymapNames		Польська
+Try Haiku	BootPromptWindow		Спробувати Haiku
+Latin-American	KeymapNames		Латино-американська
+Ukrainian	KeymapNames		Українська
+Russian (Yawert)	KeymapNames		Російська (фонетична)
+United-Kingdom	KeymapNames		Британська
+Welcome!	BootPromptWindow		Вітаємо!
+Quit Haiku	System name		Вийти з Haiku
+Turkish (Type-F)	KeymapNames		Турецька (Type-F)
+Serbian (Cyrillic)	KeymapNames		Сербська (Кирилиця)
+Belgian (point)	KeymapNames		Бельгійська (Крапка)
+Bulgarian (Cyrillic)	KeymapNames		Болгарська (Кирилиця)
+Finnish	KeymapNames		Фінська
+Swedish	KeymapNames		Шведська
+Svorak	KeymapNames		Сворак
+German	KeymapNames		Німецька
+Swiss-German	KeymapNames		Швейцарська (Нім.)
 Keymap	BootPromptWindow		Розкладка
-Welcome to Haiku!	BootPromptWindow		Ласкаво просимо в Haiku!
+Spanish (Dvorak)	KeymapNames		Іспанська (Дворак)
+US-International	KeymapNames		US-міжнародна
+Czech	KeymapNames		Чеська
+Turkish (Type-Q)	KeymapNames		Турецька (Тип-Q)
+Slovak	KeymapNames		Словацька
+Russian (Udmurt, Komi, Mari)	KeymapNames		Російська(Удмурт., Комі, Марі)
+Thai (TIS-820.2538)	KeymapNames		Тайська (TIS-820.2538)
+Colemak	KeymapNames		Колемак
+Dvorak (programmer's)	KeymapNames		Дворак (для програмістів)
+Russian (Mac)	KeymapNames		Російська (Mac)
+German (Mac)	KeymapNames		Німецька (Mac)
+Arabic (102)	KeymapNames		Арабська (102)
+Belarusian (Latin)	KeymapNames		Білоруська (Латина)
+Belarusian (Mac)	KeymapNames		Білоруська (Mac)
+Hebrew	KeymapNames		Іврит
+Greek	KeymapNames		Грецька
+Croatian	KeymapNames		Хорватська
+Faeroese	KeymapNames		Фарерська
+Polish (Typewriter)	KeymapNames		Польська (Typewriter)
+French (Mac)	KeymapNames		Французька (Mac)
+Spanish	KeymapNames		Іспанська
+Try it out	BootPromptWindow		Спробуй
+Ukrainian (Mac)	KeymapNames		Українська (Mac)
+Estonian	KeymapNames		Естонська
+Install Haiku	BootPromptWindow		Інсталяція Haiku
+French (Bépo)	KeymapNames		Французька (Bépo)
+Restart system	BootPromptWindow		Перезапустити систему
+Serbian (Latin)	KeymapNames		Сербська (Латина)
+Russian (Typewriter)	KeymapNames		Російська (Typewriter)
+French	KeymapNames		Французька
+Italian	KeymapNames		Італійська
+Portuguese	KeymapNames		Португальська
+Swiss-French	KeymapNames		Швейцарська-Фр.
+Slovene	KeymapNames		Словенська
+French (NF Z71-300)	KeymapNames		Французька (NF Z71-300)
+Lithuanian	KeymapNames		Литовська
+ISO-9995	KeymapNames		ISO-9995
+Kazakh	KeymapNames		Казахська
 Language	BootPromptWindow		Мова
-Run Installer	BootPromptWindow		Запустити Встановлювач
+Lithuanian (Standard)	KeymapNames		Литовська (Standard)
+Belgian (comma)	KeymapNames		Бельгійська (comma)
+Custom	BootPromptWindow		Вибір користувача
+Norwegian	KeymapNames		Норвезька
+Danish	KeymapNames		Датська
+Bulgarian (Phonetic)	KeymapNames		Болгарська (фонетична)
+Canadian-French	KeymapNames		Канадська-Фр.
+Welcome to Haiku!	BootPromptWindow		Запрошуємо в Haiku!
+Russian	KeymapNames		Російська
+Hungarian	KeymapNames		Угорська
+Install	BootPromptWindow		Інсталяція
+Irish	KeymapNames		Ірландська
+Romanian	KeymapNames		Румунська
+Are you sure you want to close this window? This will restart your system!	BootPromptWindow		Ви впевнені, що хочете закрити це вікно? Це призведе до перезапуску Вашої системи!
+Thank you for trying out Haiku! We hope you'll like it!\n\nPlease select your preferred language and keymap. Both settings can also be changed later when running Haiku.\n\nDo you wish to install Haiku now, or try it out first?	BootPromptWindow	For other languages, a note could be added: \"Note: Localization of Haiku applications and other components is an on-going effort. You will frequently encounter untranslated strings, but if you like, you can join in the work at <www.haiku-os.org>.\"	Дякуємо за те, що вибрали систему Haiku!\nСподіваємося, Вам сподобається!\n\nБудь ласка, виберіть мову за вподобанням та розкладку клавіатури.\nЦі параметри можна змінити пізніше, після запуску Haiku.\n\nБажаєте встановити Haiku зараз чи спочатку спробувати?
+Czech (Mac)	KeymapNames		Чеська (Mac)
+Macedonian	KeymapNames		Македонська
+Brazilian (ABNT2)	KeymapNames		Бразильська (Mac)
+Albanian	KeymapNames		Албанська
+Dutch	KeymapNames		Датська
+Thank you for trying out our operating system! We hope you'll like it!\n\nPlease select your preferred language and keymap. Both settings can also be changed later.\n\nDo you wish to install the operating system now, or try it out first?	BootPromptWindow	This notice appears when the build of Haiku that's currently being used is unofficial, as in, not distributed by Haiku itself.For other languages, a note could be added: \"Note: Localization of Haiku applications and other components is an on-going effort. You will frequently encounter untranslated strings, but if you like, you can join in the work at <www.haiku-os.org>.\"	Дякуємо за те, що вибрали нашу операційну систему!\nСподіваємося, Вам сподобається!\n\nБудь ласка, виберіть мову за вподобанням та розкладку клавіатури.\nЦі параметри можна змінити пізніше.\n\nБажаєте встановити операційну систему зараз чи спочатку спробувати?
+Friulian	KeymapNames		Фріуліанська
+Icelandic	KeymapNames		Ісландська

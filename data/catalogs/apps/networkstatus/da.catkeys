@@ -1,0 +1,21 @@
+1	danish	x-vnd.Haiku-NetworkStatus	2510618206
+IPv6 address:	NetworkStatusView		IPv6-adresse:
+Quit	NetworkStatusView		Afslut
+Unknown	NetworkStatusView		Ukendt
+Launching the network preflet failed.\n\nError: 	NetworkStatusView		Åbning af netværksindstillinger mislykkedes.\n\nFejl: 
+Install in Deskbar	NetworkStatus		Installér i Deskbar
+Open network preferences…	NetworkStatusView		Åbn netværksindstillinger…
+NetworkStatus	System name		Netværksstatus
+Broadcast:	NetworkStatusView		Udsend:
+OK	NetworkStatusView		O.k.
+No link	NetworkStatusView		Ingen lænke
+Could not join wireless network:\n	NetworkStatusView		Kunne ikke tilslutte trådløst netværk:\n
+Network Status	NetworkStatusView		Netværksstatus
+Deskbar is not running, giving up.	NetworkStatus		Deskbar kører ikke, giver op.
+Netmask:	NetworkStatusView		Netmaske:
+No stateful configuration	NetworkStatusView		Ingen tilstandsbaseret opsætning
+IPv4 address:	NetworkStatusView		IPv4-adresse:
+%ifaceName information:\n	NetworkStatusView		Oplysninger om %ifaceName:\n
+Run in window	NetworkStatus		Kør i vindue
+<no wireless networks found>	NetworkStatusView		<fandt ingen trådløse netværk>
+Configuring	NetworkStatusView		Opsætter

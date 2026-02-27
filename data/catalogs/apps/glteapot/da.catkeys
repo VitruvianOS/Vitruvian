@@ -1,0 +1,23 @@
+1	danish	x-vnd.Haiku-GLTeapot	400822745
+Right	TeapotWindow		Højre
+Backface culling	TeapotWindow		Bortfiltrér bagvendte polygoner
+Add a teapot	TeapotWindow		Tilføj en tekande
+Yellow	TeapotWindow		Gul
+Perspective	TeapotWindow		Perspektiv
+Off	TeapotWindow		Fra
+Quit	TeapotWindow		Afslut
+Green	TeapotWindow		Grøn
+Blue	TeapotWindow		Blå
+White	TeapotWindow		Hvid
+Upper center	TeapotWindow		Øverst i midten
+Filled polygons	TeapotWindow		Udfyldte polygoner
+Lower left	TeapotWindow		Nederst til venstre
+Fog	TeapotWindow		Tåge
+FPS display	TeapotWindow		Vis billedrammer pr. sekund
+GLTeapot	System name		GLTekande
+Settings	TeapotWindow		Indstillinger
+Gouraud shading	TeapotWindow		Gouraud-shading
+Lighting	TeapotWindow		Belysning
+Z-buffered	TeapotWindow		Z-bufferet
+Red	TeapotWindow		Rød
+Lights	TeapotWindow		Lys

@@ -1,8 +1,88 @@
-1	swedish	x-vnd.Haiku-FirstBootPrompt	2649051796
-Custom	BootPromptWindow		Anpassad
-Thank you for trying out Haiku! We hope you'll like it!\n\nYou can select your preferred language and keyboard layout from the list on the left which will then be used instantly. You can easily change both settings from the Desktop later on on the fly.\n\nDo you wish to run the Installer or continue booting to the Desktop?\n	BootPromptWindow	For other languages, a note could be added: \"Note: Localization of Haiku applications and other components is an on-going effort. You will frequently encounter untranslated strings, but if you like, you can join in the work at <www.haiku-os.org>.\"	Tack för att du testar Haiku! Vi hoppas att du kommer att gilla det!\n\nDu kan välja ditt föredragna språk och tangentbordslayout från listan till vänster. Du kan enkelt byta båda inställningarna från skrivbordet vid ett senare tillfälle.\n\nVill du starta Installeraren eller gå direkt till skrivbordet?\n
-Boot to Desktop	BootPromptWindow		Starta skrivbordet
+1	swedish	x-vnd.Haiku-FirstBootPrompt	189132197
+Japanese	KeymapNames		Japanska
+US	KeymapNames		US
+Cancel	BootPromptWindow		Avbryt
+Esperanto	KeymapNames		Esperanto
+Belarusian	KeymapNames		Vitryska
+Brazilian	KeymapNames		Brasilianska
+Dvorak	KeymapNames		Dvorak
+Polish	KeymapNames		Polska
+Try Haiku	BootPromptWindow		Prova Haiku
+Latin-American	KeymapNames		Latinamerikansk
+Ukrainian	KeymapNames		Ukrainska
+Russian (Yawert)	KeymapNames		Ryska (Yawert)
+United-Kingdom	KeymapNames		Storbritannien
+Welcome!	BootPromptWindow		Välkommen!
+Quit Haiku	System name		Avsluta Haiku
+Turkish (Type-F)	KeymapNames		Turkiska (Typ-F)
+Serbian (Cyrillic)	KeymapNames		Serbiska (Kyrilliska)
+Belgian (point)	KeymapNames		Belgiska (punkt)
+Bulgarian (Cyrillic)	KeymapNames		Bulgariska (Kyrilliska)
+Finnish	KeymapNames		Finska
+Swedish	KeymapNames		Svenska
+Svorak	KeymapNames		Svorak
+German	KeymapNames		Tyska
+Swiss-German	KeymapNames		Schweizisk-Tyska
 Keymap	BootPromptWindow		Tangentbordslayout
-Welcome to Haiku!	BootPromptWindow		Välkommen till Haiku!
+Spanish (Dvorak)	KeymapNames		Spanska (Dvorak)
+US-International	KeymapNames		US-Internationell
+Czech	KeymapNames		Tjeckiska
+Turkish (Type-Q)	KeymapNames		Turkiska (Typ-Q)
+Slovak	KeymapNames		Slovakisk
+Russian (Udmurt, Komi, Mari)	KeymapNames		Ryska (Udmurt, Komi, Mari)
+Thai (TIS-820.2538)	KeymapNames		Thailändska (TIS-820.2538)
+Colemak	KeymapNames		Colemak
+Dvorak (programmer's)	KeymapNames		Dvorak (programmerarnas)
+Russian (Mac)	KeymapNames		Ryska (Mac)
+German (Mac)	KeymapNames		Tyska (Mac)
+Arabic (102)	KeymapNames		Arabiska (102)
+Belarusian (Latin)	KeymapNames		Vitryska (Latin)
+Belarusian (Mac)	KeymapNames		Vitryska (Mac)
+Hebrew	KeymapNames		Hibreiska
+Greek	KeymapNames		Grekiska
+Croatian	KeymapNames		Kroatiska
+Faeroese	KeymapNames		Färöisk
+Polish (Typewriter)	KeymapNames		Polska (skrivmaskin)
+French (Mac)	KeymapNames		Franska (Mac)
+Spanish	KeymapNames		Spanska
+Try it out	BootPromptWindow		Testa
+Ukrainian (Mac)	KeymapNames		Ukrainska (Mac)
+Estonian	KeymapNames		Estländska
+Install Haiku	BootPromptWindow		Installera Haiku
+French (Bépo)	KeymapNames		Franska (Bépo)
+Restart system	BootPromptWindow		Starta om systemet
+Serbian (Latin)	KeymapNames		Serbiska (Latin)
+Russian (Typewriter)	KeymapNames		ryska (skrivmaskin)
+French	KeymapNames		Franska
+Italian	KeymapNames		Italienska
+Portuguese	KeymapNames		Portugisiska
+Swiss-French	KeymapNames		Swiss-Franska
+Slovene	KeymapNames		Slovenska
+French (NF Z71-300)	KeymapNames		Franska (NF Z71-300)
+Lithuanian	KeymapNames		Litauiska
+ISO-9995	KeymapNames		ISO-9995
+Kazakh	KeymapNames		Kazakiska
 Language	BootPromptWindow		Språk
-Run Installer	BootPromptWindow		Starta Installeraren
+Lithuanian (Standard)	KeymapNames		Litauiska (Standard)
+Belgian (comma)	KeymapNames		Belgisk (komma)
+Custom	BootPromptWindow		Anpassad
+Norwegian	KeymapNames		Norska
+Danish	KeymapNames		Danska
+Bulgarian (Phonetic)	KeymapNames		Bulgariska (fonetiska)
+Canadian-French	KeymapNames		Kanadensisk-Franska
+Welcome to Haiku!	BootPromptWindow		Välkommen till Haiku!
+Russian	KeymapNames		Ryska
+Hungarian	KeymapNames		Ungerska
+Install	BootPromptWindow		Installera
+Irish	KeymapNames		Irländska
+Romanian	KeymapNames		Rumänska
+Are you sure you want to close this window? This will restart your system!	BootPromptWindow		Är du säker på att du vill stänga det här fönstret? Detta startar om ditt system!
+Thank you for trying out Haiku! We hope you'll like it!\n\nPlease select your preferred language and keymap. Both settings can also be changed later when running Haiku.\n\nDo you wish to install Haiku now, or try it out first?	BootPromptWindow	For other languages, a note could be added: \"Note: Localization of Haiku applications and other components is an on-going effort. You will frequently encounter untranslated strings, but if you like, you can join in the work at <www.haiku-os.org>.\"	Tack för att du provade Haiku! Vi hoppas att du kommer att gilla det!\n\nVälj vilket språk du vill ha och tangentbordslayout. Båda inställningarna kan också ändras senare när Haiku körs.\n\nVill du installera Haiku nu, eller testa det först?
+Czech (Mac)	KeymapNames		Tjeckiska (Mac)
+Macedonian	KeymapNames		Makedonska
+Brazilian (ABNT2)	KeymapNames		Brasilianska (ABNT2)
+Albanian	KeymapNames		Albanska
+Dutch	KeymapNames		Holländska
+Thank you for trying out our operating system! We hope you'll like it!\n\nPlease select your preferred language and keymap. Both settings can also be changed later.\n\nDo you wish to install the operating system now, or try it out first?	BootPromptWindow	This notice appears when the build of Haiku that's currently being used is unofficial, as in, not distributed by Haiku itself.For other languages, a note could be added: \"Note: Localization of Haiku applications and other components is an on-going effort. You will frequently encounter untranslated strings, but if you like, you can join in the work at <www.haiku-os.org>.\"	Tack för att du provade Haiku! Vi hoppas att du kommer att gilla det!\n\nVälj vilket språk du vill ha och tangentbordslayout. Båda inställningarna kan också ändras senare när Haiku körs.\n\nVill du installera Haiku nu, eller testa det först?
+Friulian	KeymapNames		Friuliska
+Icelandic	KeymapNames		Isländska

@@ -1,69 +1,108 @@
-1	danish	x-vnd.Haiku-DriveSetup	2121580188
-%ld MiB	Support		%ld MiB
-<empty>	DiskView		<tom>
-<empty>	PartitionList		<tom>
-Are you sure you want to delete the selected partition?\n\nAll data on the partition will be irretrievably lost if you do so!	MainWindow		Er du sikker på at du ønsker at slette den valgte partition?\n\nData på den valgte partition vil blive permanent slettet!
-Are you sure you want to write the changes back to disk now?\n\nAll data on the disk %s will be irretrievably lost if you do so!	MainWindow		Er du sikker på at du ønsker at skrive ændringerne tilbage til disken nu?\n\nData på disken vil blive permanent slettet!
-Are you sure you want to write the changes back to disk now?\n\nAll data on the partition %s will be irretrievably lost if you do so!	MainWindow		Er du sikker på at du ønsker at skrive ændringerne tilbage til disken nu?\n\nData på den valgte partition vil blive permanent slettet!
-Are you sure you want to write the changes back to disk now?\n\nAll data on the partition will be irretrievably lost if you do so!	MainWindow		Er du sikker på at du ønsker at skrive ændringerne tilbage til disken nu?\n\nData på den valgte partition vil blive permanent slettet!
-Are you sure you want to write the changes back to disk now?\n\nAll data on the selected disk will be irretrievably lost if you do so!	MainWindow		Er du sikker på at du ønsker at skrive ændringerne tilbage til disken nu?\n\nData på den valgte disk vil blive permanent slettet!
-Are you sure you want to write the changes back to disk now?\n\nAll data on the selected partition will be irretrievably lost if you do so!	MainWindow		Er du sikker på at du ønsker at skrive ændringerne tilbage til disken nu?\n\nData på den valgte partition vil blive permanent slettet!
-Cancel	MainWindow		Afbryd
-Cannot delete the selected partition.	MainWindow		Det er ikke muligt at slette den valgte partition.
-Continue	MainWindow		Fortsæt
-Could not aquire partitioning information.	MainWindow		Kunne ikke læse information om partitionerne.
-Could not delete the selected partition.	MainWindow		Kunne ikke slette den valgte partition.
-Could not mount partition %s.	MainWindow		Kunne ikke montere partition %s.
-Could not unmount partition %s.	MainWindow		Kunne ikke afmontere partition %s.
-Create	CreateParamsPanel		Opret
-Create…	MainWindow		Opret…
-Creation of the partition has failed.	MainWindow		Det var ikke muligt at oprette partitionen.
-Delete	MainWindow		Slet
-Delete partition	MainWindow		Slet partition
-Device	DiskView		Enhed
-Device	PartitionList		Enhed
+1	danish	x-vnd.Haiku-DriveSetup	3844018628
+Could not unmount partition %s.	MainWindow		Kunne ikke afmontere diskafsnit %s.
+Mount all	MainWindow		Montér alle
 Disk	MainWindow		Disk
-Disk system \"%s\"\" not found!	MainWindow		Disk system \"%s\"\" blev ikke fundet!
-Eject	MainWindow		Skub ud
-End: %ld MB	Support		Slut: %ld MB
-Error: 	MainWindow	in any error alert	Fejl:
-Failed to delete the partition. No changes have been written to disk.	MainWindow		Fejl i forbindelse med at slette partitionen. Der er ikke blevet skrevet nogle ændringer til disken.
-Failed to initialize the partition %s!\n	MainWindow		Initialiseringen af partitionen %s fejlede!\n
-Failed to initialize the partition. No changes have been written to disk.	MainWindow		Fejl i forbindelse med initialisering af partitionen. Der er ikke blevet skrevet nogle ændringer til disken.
-File system	PartitionList		Fil system
-Format (not implemented)	MainWindow		Formater (ikke implementeret)
-Initialization of the partition %s failed. (Nothing has been written to disk.)	MainWindow		Initialiseringen af partitionen %s fejlede. (Der er ikke blevet skrevet nogle ændringer til disken.)
-Initialize	InitParamsPanel		Initialiser
-Initialize	MainWindow		Initialiser
-Mount	MainWindow		Monter
-Mount all	MainWindow		Monter alle
+Are you sure you want to write the changes back to disk now?\n\nAll data on the selected partition will be irretrievably lost if you do so!	MainWindow		Er du sikker på, at du vil skrive ændringerne tilbage til disken nu?\n\nData på det valgte diskafsnit vil blive slettet for stedse!
+Device	PartitionList		Enhed
+Could not change the parameters of the selected partition.	MainWindow		Kunne ikke ændre parameterne for det valgte diskafsnit.
+Initialize	MainWindow		Initialisér
+PGP encrypted	Encryption utils		PGP-krypteret
+Delete partition	MainWindow		Slet diskafsnit
+Removable	PartitionList		Flytbar
+Block size	PartitionList		Blokstørrelse
+The panel experienced a problem!	MainWindow		Panelet løb ind i et problem!
+Device	DiskView		Enhed
+Are you sure you want to format the Intel Extended Partition? Any subpartitions it contains will be overwritten if you continue. You will be asked again before changes are written to the disk.	MainWindow		Er du sikker på, du vil formatere Intel Extended Partition? Hvis den indeholder underinddelinger, vil de blive overskrevet, såfremt du fortsætter. Du vil blive spurgt igen inden ændringerne skrives til disken.
+Physical block size	PartitionList		Fysisk blokstørrelse
+Unmount	MainWindow		Afmontér
+Failed to format the partition %s!\n	MainWindow		Kunne ikke formatere diskafsnit %s!\n
+Partition size	CreateParametersPanel		Diskafsnitsstørrelse
+Validation of the given parameters failed.	MainWindow		Validering af de angivne parametre mislykkedes.
+Are you sure you want to format the partition \"%s\"? You will be asked again before changes are written to the disk.	MainWindow		Er du sikker på, du vil formatere diskafsnittet \"%s\"? Du vil blive spurgt igen inden ændringerne skrives til disken.
+DriveSetup	System name		Drevopsætning
 Mounted at	PartitionList		Monteret på
-No disk devices have been recognized.	DiskView		Kunne ikke genkende nogle disk enheder.
-OK	MainWindow		OK
-Offset: %ld MB	Support		Afsæt: %ld MB
-Partition	MainWindow		Partition
-Partition %ld	DiskView		Partition %ld
-Partition name:	CreateParamsPanel		Partition navn:
-Partition size	CreateParamsPanel		Partitions størrelse
-Partition type:	CreateParamsPanel		Partition type:
-Rescan	MainWindow		Søg igen
-Select a partition from the list below.	DiskView		Vælg en partition fra liste nedenunder.
-Size	PartitionList		Størrelse
-Surface test (not implemented)	MainWindow		Overflade test (ikke implementeret)
-The currently selected partition does not have a parent partition.	MainWindow		Den valgte partition har ikke nogen over-partition.
-The currently selected partition is not empty.	MainWindow		Den valgte partition er ikke tom.
-The partition %s has been successfully initialized.\n	MainWindow		Partitionen %s er blevet initialiseret uden fejl.\n
-The partition %s is already mounted.	MainWindow		Partitionen %s er allerede monteret.
-The partition %s is already unmounted.	MainWindow		Partitionen %s er allerede monteret.
-The partition %s is currently mounted.	MainWindow		Partitionen %s er allerede monteret.
-The selected disk is read-only.	MainWindow		Der kan kun læses fra den valgte disk.
-The selected partition does not contain a partitioning system.	MainWindow		Den valgte partition indeholder ikke et partitions system.
-There was an error acquiring the partition row.	MainWindow		Fejl i forbindelse med at læse partitions række.
-There was an error preparing the disk for modifications.	MainWindow		Der skete en fejl i forbindelse med at forberede disken til ændringer.
-There's no space on the partition where a child partition could be created.	MainWindow		Der er ikke plads på partitionen til at der kan oprettes under partitioner.
-Unable to find the selected partition by ID.	MainWindow		Kunne ikke finde den valgte partition ud fra ID.
-Validation of the given creation parameters failed.	MainWindow		Validering af de angivne oprettelses parametre fejlede.
-Validation of the given initialization parameters failed.	MainWindow		Validering af de angivne initialisiations parametre fejlede.
-Volume name	PartitionList		Volume navn
+Create…	MainWindow		Opret…
 Write changes	MainWindow		Skriv ændringer
-You need to select a partition entry from the list.	MainWindow		Du skal vælge en partition fra listen.
+Validation of the given creation parameters failed.	MainWindow		Validering af de angivne oprettelses parametre mislykkedes.
+Initialization of the partition %s failed. (Nothing has been written to disk.)	MainWindow		Initialiseringen af diskafsnit %s mislykkedes. (Der er ikke blevet skrevet nogle ændringer til disken).
+Eject	MainWindow		Skub ud
+Read only	PartitionList		Skrivebeskyttet
+Surface test (not implemented)	MainWindow		Overfladetest (ikke implementeret)
+The panel could not return successfully.	MainWindow		Panelet kunne ikke returneres.
+Failed to change the parameters of the partition. No changes have been written to disk.	MainWindow		Kunne ikke ændre parametrene for diskafsnittet. Der blev ikke skrevet nogle ændringer til disken.
+Partition %ld	DiskView		Diskafsnit %ld
+There's no space on the partition where a child partition could be created.	MainWindow		Der er ikke plads på diskafsnittet til, at der kan oprettes underinddelinger.
+No disk devices have been recognized.	DiskView		Ingen drevenheder blev genkendt.
+Attributes	PartitionList		Attributter
+Failed to delete the partition. No changes have been written to disk.	MainWindow		Kunne ikke slette diskafsnittet. Der er ikke blevet skrevet nogle ændringer til disken.
+Change parameters…	MainWindow		Skift parametre…
+Format	InitializeParametersPanel		Formatér
+Could not unmount partition	MainWindow		Kunne ikke afmontere diskafsnit
+Create	CreateParametersPanel		Opret
+File system	PartitionList		Filsystem
+The selected partition does not contain a partitioning system.	MainWindow		Det valgte diskafsnit indeholder ikke et diskafsnitssystem.
+End: %s	Support		Slutning: %s
+Partition type	PartitionList		Diskafsnitstype
+Unable to find the selected partition by ID.	MainWindow		Kunne ikke finde det valgte diskafsnit ud fra id.
+The currently selected partition is not empty.	MainWindow		Det valgte diskafsnit er ikke tomt.
+The currently selected partition does not have a parent partition.	MainWindow		Det valgte diskafsnit har ikke nogen forælderdiskafsnit.
+Wipe (not implemented)	MainWindow		Stryg (ikke implementeret)
+Are you sure you want to format a raw disk? (Most people initialize the disk with a partitioning system first) You will be asked again before changes are written to the disk.	MainWindow		Er du sikker på, at du vil formatere en rå disk? (De fleste folk initialiserer først disken med et diskafsnitssystem). Du vil blive spurgt igen inden ændringerne skrives til disken.
+Validation of the given initialization parameters failed.	MainWindow		Validering af de angivne initialiseringsparametre mislykkedes.
+Failed to create the partition. No changes have been written to disk.	MainWindow		Kunne ikke oprette diskafsnittet. Der er ikke blevet skrevet nogle ændringer til disken.
+MIMEs	PartitionList		MIME'er
+Shared	PartitionList		Delt
+BitLocker encrypted	Encryption utils		BitLocker-krypteret
+You need to select a partition entry from the list.	MainWindow		Du skal vælge et diskafsnit fra listen.
+Offset: %s	Support		Forskydning: %s
+SafeBoot encrypted	Encryption utils		SafeBoot-krypteret
+Volume name	PartitionList		Diskområdenavn
+Are you sure you want to write the changes back to disk now?\n\nAll data on the partition will be irretrievably lost if you do so!	MainWindow		Er du sikker på, du vil skrive ændringerne tilbage til disken nu?\n\nData på det valgte diskafsnit vil blive slettet for stedse!
+Change	ChangeParametersPanel		Ændre
+Partition name:	ChangeParametersPanel		Diskafsnitsnavn:
+LUKS encrypted	Encryption utils		LUKS-krypteret
+Empty space	PartitionList		Tom plads
+Cancel	AbstractParametersPanel		Afbryd
+Format	MainWindow		Format
+OK	MainWindow		O.k.
+Empty space	DiskView		Tom plads
+Could not delete the selected partition.	MainWindow		Kunne ikke slette det valgte diskafsnit.
+Open with DiskProbe	MainWindow		Åbn med Disksondering
+Are you sure you want to initialize the selected disk? All data will be lost. You will be asked again before changes are written to the disk.\n	MainWindow		Er du sikker på, du vil initialisere den valgte disk? Alle data vil gå tabt. Du vil blive spurgt igen inden ændringerne skrives til disken.\n
+There was an error preparing the disk for modifications.	MainWindow		Der opstod en fejl ved forberedning af disken til ændringer.
+The disk has been successfully initialized.\n	MainWindow		Disken blev initialiseret.\n
+Should unmounting be forced?\n\nNote: If an application is currently writing to the volume, unmounting it now might result in loss of data.\n	MainWindow		Skal afmontering gennemtvinges?\n\nBemærk: Hvis et program er ved at skrive til diskområdet, så kan afmontering forårsage tab af data.\n
+Cancel	MainWindow		Afbryd
+Free space	PartitionList		Ledig plads
+Queries	PartitionList		Forespørgsler
+Force unmount	MainWindow		Gennemtving afmontering
+Change parameters	MainWindow		Ændr parametre
+Partition	MainWindow		Diskafsnit
+There was an error acquiring the partition row.	MainWindow		Der opstod en fejl ved indhentning af diskafsnitsrækken.
+Rescan	MainWindow		Skan på ny
+Failed to initialize the disk %s!\n	MainWindow		Kunne ikke initialisere disken %s!\n
+The partition cannot be unmounted.	MainWindow		Diskafsnittet kan ikke afmonteres.
+Delete	MainWindow		Slet
+Partition type:	ChangeParametersPanel		Diskafsnitstype:
+Parameters	PartitionList		Parametre
+Could not acquire partitioning information.	MainWindow		Kunne ikke indhente diskafsnitsoplysninger.
+Cannot delete the selected partition.	MainWindow		Det er ikke muligt at slette det valgte diskafsnit.
+Continue	MainWindow		Fortsæt
+Could not mount partition %s.	MainWindow		Kunne ikke montere diskafsnit %s.
+Are you sure you want to format the partition? You will be asked again before changes are written to the disk.	MainWindow		Er du sikker på, du vil formatere diskafsnittet? Du vil blive spurgt igen inden ændringerne skrives til disken.
+The selected disk is read-only.	MainWindow		Der kan kun læses fra den valgte disk.
+The partition %s is already unmounted.	MainWindow		Diskafsnittet %s er allerede monteret.
+Are you sure you want to change parameters of the selected partition?\n\nThe partition may no longer be recognized by other operating systems anymore!	MainWindow		Er du sikker på, at du vil skifte parmeterne på det valgte diskafsnit?\n\nDiskafsnittet vil måske ikke længere kunne genkendes af andre styresystemer!
+Boot	PartitionList		Opstart
+OK	AbstractParametersPanel		O.k.
+Virtual	PartitionList		Virtuel
+Virtual	DiskView		Virtuel
+Are you sure you want to write the changes back to disk now?\n\nAll data on the selected disk will be irretrievably lost if you do so!	MainWindow		Er du sikker på, at du vil skrive ændringerne tilbage til disken nu?\n\nData på den valgte disk vil blive slettet for stedse!
+Select a partition from the list below.	DiskView		Vælg et diskafsnit fra listen nedenunder.
+Active	PartitionList		Slået til
+Are you sure you want to delete the selected partition?\n\nAll data on the partition will be irretrievably lost if you do so!	MainWindow		Er du sikker på, du vil slette det valgte diskafsnit?\n\nData på det valgte diskafsnit vil blive slettet for stedse!
+The partition %s has been successfully formatted.\n	MainWindow		Diskafsnittet %s blev formateret.\n
+The partition %s is already mounted.	MainWindow		Diskafsnittet %s er allerede monteret.
+Size	PartitionList		Størrelse
+Creation of the partition has failed.	MainWindow		Det var ikke muligt at oprette diskafsnittet.
+Mount	MainWindow		Montér

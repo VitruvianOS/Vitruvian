@@ -1,9 +1,10 @@
-1	finnish	x-vnd.Haiku-KeyboardInputServerDevice	2536418998
+1	finnish	x-vnd.Haiku-KeyboardInputServerDevice	131044710
 If the application will not quit you may have to kill it.	Team monitor		Jos sovellus ei sulkeudu, se on lopetettava Pääteikkunassa kill-komennolla.
 Quit application	Team monitor		Sulje sovellus
+Open Terminal	Team monitor		Avaa Pääteikkuna
+{0, plural,one{Hold CONTROL+ALT+DELETE for # second to reboot.}other{Hold CONTROL+ALT+DELETE for # seconds to reboot.}}	Team monitor		{0, plural,one{Pidä CONTROL+ALT+DELETE -näppäimet alhaalla # sekunti uudelleenkäynnistymistä varten.}other{Pidä CONTROL+ALT+DELETE -näppäimet alhaalla # sekuntia uudelleenkäynnistymistä varten.}}
 Restart the desktop	Team monitor		Käynnistä työpöytä uudelleen
 Force reboot	Team monitor		Pakota uudelleenkäynnistys
-Select an application from the list above and click one of the buttons 'Kill application' and 'Quit application' in order to close it.\n\nHold CONTROL+ALT+DELETE for %ld seconds to reboot.	Team monitor		Sovelluksen sulkemiseksi valitse sovellus yllä olevasta luettelosta ja napsauta yhtä painikkeista ’Lopeta sovellus’ ja ’Sulje sovellus’.\n\nUudelleenkäynnistämiseksi pidä alhaalla Ctrl+Alt+Del -näppäimiä %ld sekuntia.
 Team monitor	Team monitor		Ryhmävalvonta
 Kill application	Team monitor		Lopeta sovellus
 Cancel	Team monitor		Peru

@@ -1,13 +1,60 @@
-1	esperanto	x-vnd.Haiku-ShowImage	840951462
-File	Menus		Dosiero
-Print…	Menus		Presi…
-OK	SaveToFile		Bone
-Quit	Menus		Eliri
-Close	Menus		Fermi
-Close	ClosePrompt		Fermi
-Open…	Menus		Malfermi…
-Cancel	ClosePrompt		Rezigni
+1	esperanto	x-vnd.Haiku-ShowImage	3888429101
+ShowImage	System name		La Bildmontrilo
+Page setup…	Menus		Agordo de paĝo…
+The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		La dokumento '%s' (paĝo %d) estas ŝanĝita. Ĉu vi volas fermi ĝin?
+Previous file	Menus		Antaŭa dosiero
+View	Menus		Rigardi
+Leave full screen	Menus		Malplenekrane
+Show caption in full screen mode	Menus		Montri apudskribon dum plenekrana reĝimo
+Flip left to right	Menus		Inversigi horizontale
+Full screen	Menus		Plenekrane
 Copy	Menus		Kopii
-Image	Menus		Bildo
+Height: 	PrintOptionsWindow		Alto: 
+Next file	Menus		Sekva dosiero
+Slide show	Menus		Montri foliumante
+Original size	Menus		Origina grando
+Width:	PrintOptionsWindow		Larĝo:
+Resize to (in 1/72 inches):	PrintOptionsWindow		Adapti al (per 1/72 da coloj):
+Zoom factor in %:	PrintOptionsWindow		Zoma koeficiento per %:
+Zoom out	Menus		Malzomi
 OK	Alerts		Bone
+File	Menus		Dosiero
+Close	ClosePrompt		Fermi
+Image	Menus		Bildo
+Flip top to bottom	Menus		Inversigi vertikale
+Zoom in	Menus		Zomi
+Last page	Menus		Lasta paĝo
+Cancel	ClosePrompt		Nuligi
+High-quality zooming	Menus		Bonkvalita zomado
+The document '%s' has been changed. Do you want to close the document?	ClosePrompt		La dokumento '%s' estas ŝanĝita. Ĉu vi volas malfermi ĝin?
+Close	Menus		Fermi
+Selection mode	Menus		Reĝimo de elekto
+DPI:	PrintOptionsWindow		Punktoj cole:
+Fit image to page	PrintOptionsWindow		Adapti bildon al paĝo
+Show tool bar	Menus		Montri ilbreton
+First page	Menus		Unua paĝo
+OK	SaveToFile		Bone
+Print…	Menus		Presi…
+The file '%s' could not be written.	SaveToFile		Ne povas konservi la dosieron '%s'.
+Quit	Menus		Ĉesi
+Rating	Menus		Takso
+Close document	ClosePrompt		Fermi dokumenton
+Stretch to window	Menus		Streĉi al fenestro
+Job setup	PrintOptionsWindow		Agordo de tasko
+Clear selection	Menus		Rezigni elekton
+Rotate clockwise	Menus		Turni laŭhorloĝe
+Rotate counterclockwise	Menus		Turni kontraŭhorloĝe
+Previous page	Menus		Antaŭa paĝo
+Fit to window	Menus		Adapti al fenestro
+Go to page	Menus		Al paĝo
+Browse	Menus		Rigardi
+Progress monitor	ProgressWindow		Indikilo de progreso
+Edit	Menus		Redakti
+Move to Trash	Menus		Movi en Rubujon
+Use as background…	Menus		Uzi kiel fono...
+Open…	Menus		Uzi…
 Save as…	Menus		Konservi kiel…
+Next page	Menus		Sekva paĝo
+Print options	PrintOptionsWindow		Agordo de presado
+Slide delay	Menus		Prokrasto de foliumado
+Select all	Menus		Elekti ĉion

@@ -1,17 +1,17 @@
 1	korean	x-vnd.Haiku-Bluetooth	3550394259
 Positioning	DeviceClass		위치잡이
 Controller	DeviceClass		컨트롤러
-Common ISDN access	DeviceClass		공용 종합 정보 통신망 연결
+Common ISDN access	DeviceClass		표준 ISDN 연결
 Unknown (reserved) minor device class	DeviceClass		알 수 없는 (예약된) 마이너 장치 클래스
-Uncategorized	DeviceClass		분류가 안됨
+Uncategorized	DeviceClass		분류 없음
 Keyboard	DeviceClass		키보드
 Smart phone	DeviceClass		스마트폰
-VCR	DeviceClass		비디오 카세트 녹화기
-Cellular	DeviceClass		무선 전화기
+VCR	DeviceClass		VCR
+Cellular	DeviceClass		셀룰러
 Audio	DeviceClass		오디오
 Audio/Video	DeviceClass		오디오/비디오
-Car audio	DeviceClass		차량 오디오 장치
-Major class: 	DeviceClass		메이저 클래스:
+Car audio	DeviceClass		차량 오디오
+Major class: 	DeviceClass		메이저 클래스: 
 HiFi audio device	DeviceClass		하이파이 오디오 장치
 Microphone	DeviceClass		마이크
 Capturing	DeviceClass		갈무리중

@@ -1,32 +1,67 @@
-1	portuguese	x-vnd.Haiku-Installer	1519304611
-%1ld of %2ld	InstallerWindow	number of files copied	%1ld de %2ld
-?? of ??	InstallerWindow	Unknown progress	?? de ??
-???	InstallerWindow	Unknown partition name	???
-Additional disk space required: %s	InstallerWindow		Espaço em disco adicional necessário: %s
-Additional disk space required: 0.0 KiB	InstallerWindow		Espaço em disco adicional necessário: 0.0 KiB
-Begin	InstallerWindow		Iniciar
+1	portuguese	x-vnd.Haiku-Installer	3052779865
+Performing installation.	InstallProgress		A executar a instalação.
+Please close the DriveSetup window before closing the Installer window.	InstallerWindow		Feche a janela do Gestor de Discos antes de fechar a janela do Instalador.
+No optional packages available.	PackagesView		Não há pacotes opcionais disponíveis.
+The mount point could not be retrieved.	InstallProgress		O ponto de montagem não pôde ser recuperado.
+<none>	InstallerWindow	No partition available	<nenhuma>
+Please choose target	InstallerWindow		Por favor selecione o destino
 Cancel	InstallProgress		Cancelar
-Cancel	InstallerWindow		Cancelar
-Collecting copy information.	InstallProgress		A obter informações da cópia.
-Continue	InstallerApp		Continuar
-Continue	InstallerWindow	In alert after pressing Stop	Continuar
-Hide optional packages	InstallerWindow		Ocultar pacotes opcionais
-Install anyway	InstallProgress		Instalar na mesma
-Install from:	InstallerWindow		Instalar a partir de:
-Install progress:  	InstallerWindow		Progresso da instalação:
-Installation canceled.	InstallProgress		Instalação cancelada.
-No optional packages available.	PackagesView		Não existem pacotes opcionais disponíveis.
-OK	InstallProgress		OK
-OK	InstallerApp		OK
-OK	InstallerWindow		OK
-Onto:	InstallerWindow		Em:
+Are you sure you want to to stop the installation?	InstallerWindow		Tem a certeza de que pretende interromper a instalação?
+Installer	System name		Instalador
+Are you sure you want to stop the installation?	InstallerWindow		Tem a certeza de que pretende interromper a instalação?
+README	InstallerApp		LEIA-ME
 Quit	InstallerWindow		Terminar
-Restart system	InstallerWindow		Reiniciar sistema
-Show optional packages	InstallerWindow		Mostrar pacotes opcionais
-Starting Installation.	InstallProgress		A iniciar a instalação.
-Stop	InstallerWindow	In alert after pressing Stop	Parar
-The mount point could not be retrieved.	InstallProgress		Não foi possível obter o ponto de montagem.
-Try installing anyway	InstallProgress		Tentar instalar na mesma
-Unknown Type	InstallProgress	Partition content type	Tipo desconhecido
 Write boot sector to '%s'	InstallerWindow		Escrever sector de arranque em '%s'
-scanning…	InstallerWindow		A analisar...
+Boot sector not written because of an internal error.	InstallProgress		O sector de arranque não foi escrito por causa de um erro interno.
+Welcome to the Haiku Installer!\n\n	InstallerApp		Bem-vindo ao Instalador do Haiku!\n\n
+?? of ??	InstallerWindow	Unknown progress	?? de ??
+DriveSetup, the application to configure disk partitions, could not be launched.	InstallerWindow		Não foi possível iniciar o Gestor de Discos, a aplicação para configuração de partições de disco.
+The target volume is not empty. If it already contains a Haiku installation, it will be overwritten. This will remove all installed software.\n\nIf you want to upgrade your system without removing installed software, see the Haiku User Guide's topic on the application \"SoftwareUpdater\" for update instructions.\n\nAre you sure you want to continue the installation?	InstallProgress		O volume selecionado não está vazio. Se já tiver uma instalação Haiku, esta será substituída. Isto irá remover todo o software instalado.\n\nSe quiser atualizar o sistema sem remover o software instalado, consulte o tópico do Guia do Utilizador do Haiku sobre a aplicação \"SoftwareUpdater\" para instruções de atualização.\n\nTem a certeza de que deseja continuar a instalação?
+Quit DriveSetup	InstallerWindow		Sair do Gestor de Discos
+Write boot sector	InstallerWindow		Escrever setor de arranque
+%1ld of %2ld	InstallerWindow	number of files copied	%1ld de %2ld
+Finishing installation.	InstallProgress		A terminar a instalação.
+Install from:	InstallerWindow		Instalar a partir de:
+Additional disk space required: 0.0 KiB	InstallerWindow		Espaço em disco adicional necessário: 0.0 KiB
+This is beta-quality software! It means there is a risk of losing important data. Make frequent backups! You have been warned.\n\n\n	InstallerApp		Este sotware é de qualidade beta! Isto significa que há o risco de perder dados importantes. Não se esqueça de fazer cópias de segurança frequentes.\n\n\n
+???	InstallerWindow	Unknown currently copied item	???
+Install anyway	InstallProgress		Instalar mesmo assim
+1)   If you are installing Haiku onto real hardware (not inside an emulator), you may want to prepare a hard disk partition from another OS (you could, for example, use a GParted Live-CD, which can also resize existing partitions to make room).\nYou can also set up partitions by launching DriveSetup from Installer, but you won't be able to resize existing partitions with it. While DriveSetup has been quite thoroughly tested over the years, it's recommended to have up-to-date backups of the other partitions on your system. Just in case…	InstallerApp		1)   Caso esteja a instalar o Haiku em hardware físico (não num emulador), talvez queira preparar uma partição de disco rígido a partir de outro sistema operativo (poderia, por exemplo, usar um Live-CD do GParted, que também permite redimensionar partições para reservar espaço).\nPoderá também configurar as partições iniciando o Gestor de Discos a partir do Instalador, mas desse modo não terá a opção de redimensionar as partições existentes. O Gestor de Discos foi intensivamente testado ao longo dos anos, mas é sempre recomendável ter cópias de segurança atualizadas das outras partições no seu sistema. Só para prevenir…
+2)   The Installer will make the Haiku partition itself bootable, but takes no steps to integrate Haiku into an existing boot menu. If you have GRUB already installed, you can add Haiku to it.\nFor details, please consult the guide on booting Haiku on our website at https://www.haiku-os.org/guides/booting.\nOr you can set up a boot menu from Installer's \"Tools\" menu, see the Haiku User Guide's topic on the application \"BootManager\".\n\n\n	InstallerApp		2)   O instalador vai agora tornar a partição do haiku arrancável, mas não integra o Haiku em qualquer menu de arranque existente. Se tiver o GRUB já instalado, pode adicionar-lhe o Haiku.\nPara mais detalhes, consulte o guia sobre o arranque do Haiku no nosso website em https://www.haiku-os.org/guides/booting.\nOu pode configurar um menu de arranque pelo menu \"Tools\" do instalador, veja o tópico do Guia de Utilizador Haiku na aplicação \"BootManager\".\n\n\n
+Hide optional packages	InstallerWindow		Ocultar pacotes opcionais
+???	InstallerWindow	Unknown partition name	???
+Have fun and thanks for trying out Haiku!	InstallerApp		Divirta-se, e obrigado por experimentar o Haiku!
+Quit	InstallerApp		Sair
+Error writing boot sector.	InstallProgress		Erro ao escrever no setor de arranque.
+OK	InstallerWindow		OK
+3)   When you successfully boot into Haiku for the first time, make sure to read our \"User Guide\" and take the \"Quick Tour\". There are links on the Desktop and in WebPositive's bookmarks.\n\n	InstallerApp		3)   Quando arrancar com sucesso o Haiku pela primeira vez, certifique-se de lê o nosso \"Guia do Utilizador\" e que vê a nossa \"Visita Guiada ao Haiku\". Há atalhos no ambiente de trabalho e nos marcadores do WebPositive.\n\n
+Try installing anyway	InstallProgress		Tentar instalar de qualquer modo
+IMPORTANT INFORMATION BEFORE INSTALLING HAIKU\n\n	InstallerApp		INFORMAÇÃO IMPORTANTE ANTES DE INSTALAR O HAIKU\n\n
+Additional disk space required: %s	InstallerWindow		Espaço adicional requerido em disco: %s
+Stop	InstallerWindow	In alert after pressing Stop	Parar
+Boot sector successfully written.	InstallProgress		Sector de arranque guardado com sucesso.
+Writing bootsector.	InstallProgress		A escrever o setor de arranque.
+An error was encountered and the installation was not completed:\n\nError:  %s	InstallerWindow		Ocorreu um erro e não foi possível completar a instalação:\n\nErro:  %s
+Restart	InstallerWindow		Reiniciar
+The disk can't be mounted. Please choose a different disk.	InstallProgress		O disco não pôde ser montado. Escolha um disco diferente.
+Begin	InstallerWindow		Iniciar
+Collecting copy information.	InstallProgress		A obter informações da cópia.
+Show optional packages	InstallerWindow		Mostrar pacotes opcionais
+No partitions have been found that are suitable for installation. Please set up partitions and format at least one partition with the Be File System.	InstallerWindow		Não foram encontradas partições adequadas à instalação. Por favor, configure partições e formate pelo menos uma partição com o sistema de ficheiros Be File System.
+The destination disk may not have enough space. Try choosing a different disk or choose to not install optional items.	InstallProgress		O disco de destino poderá não ter espaço suficiente. Tente escolher um disco diferente ou não escolha tantos pacotes opcionais para instalar.
+Installation canceled.	InstallProgress		Instalação cancelada.
+Stop	InstallerWindow		Parar
+Cancel	InstallerWindow		Cancelar
+Continue	InstallerWindow	In alert after pressing Stop	Continuar
+Scanning for disks…	InstallerWindow		A procurar discos…
+Running DriveSetup…\n\nClose DriveSetup to continue with the installation.	InstallerWindow		A executar o Gestor de Discos…\n\nSaia do Gestor de Discos para prosseguir com a instalação.
+The installation is not complete yet!\nAre you sure you want to stop it?	InstallerWindow		A instalação ainda não está completa!\nTem a certeza de que a pretende interromper?
+The partition can't be mounted. Please choose a different partition.	InstallProgress		Não é possível montar a partição. Escolha uma partição diferente.
+Set up partitions…	InstallerWindow		Configurar partições…
+Install progress:  	InstallerWindow		Progresso da instalação:  
+You can't install the contents of a disk onto itself. Please choose a different disk.	InstallProgress		Não é possível instalar os conteúdos de um disco nele próprio. Escolha um disco diferente.
+OK	InstallProgress		OK
+Onto:	InstallerWindow		Para:
+Tools	InstallerWindow		Ferramentas
+scanning…	InstallerWindow		a analisar…
+Continue	InstallerApp		Continuar

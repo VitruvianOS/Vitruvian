@@ -1,0 +1,50 @@
+1	turkish	x-vnd.Haiku-PowerStatus	4069361317
+Run in window	PowerStatus		Pencere içinde çalış
+Extended battery info	PowerStatus		Ek pil bilgisi
+Show status icon	PowerStatus		Durum simgesini göster
+Battery charging	PowerStatus		Pil doluyor
+Design capacity low warning: 	PowerStatus		Fabrika çıkış sığası düşük uyarısı: 
+The battery level is critical, please plug in the device immediately.	PowerStatus		Pil düzeyi kritik, lütfen aygıtınızı hemen fişe takın.
+non-rechargeable	PowerStatus		yeniden doldurulamaz
+Last full charge: 	PowerStatus		Son tam dolum: 
+ mV	PowerStatus		 mV
+Current rate: 	PowerStatus		Geçerli yüzde: 
+Show text label	PowerStatus		Metin etiketini göster
+Quit	PowerStatus		Çık
+Battery not charging	PowerStatus		Pil şarj olmuyor
+Battery low	PowerStatus		Pil düşük
+Model number: 	PowerStatus		Model numarası: 
+You can run %appname% in a window or install it in the Deskbar.	PowerStatus		%appname% uygulamasını bir pencerede çalıştırabilir veya onu Masaüstü Çubuğu’na yerleştirebilirsiniz.
+Battery unused	PowerStatus		Pil kullanılmamış
+Type: 	PowerStatus		Tür: 
+Damaged or missing battery	PowerStatus		Hasarlı veya eksik pil
+ mAh	PowerStatus		 mAh
+Battery discharging	PowerStatus		Pil boşalıyor
+Design voltage: 	PowerStatus		Fabrika çıkış voltaj: 
+discharging	PowerStatus		boşalıyor
+rechargeable	PowerStatus		yeniden doldurulabilir
+Battery info…	PowerStatus		Pil bilgisi…
+Show time	PowerStatus		Zamanı göster
+ mA	PowerStatus		 mA
+About…	PowerStatus		Hakkında…
+Serial number: 	PowerStatus		Seri numarası: 
+Battery critical	PowerStatus		Pil düzeyi kritik
+Capacity: 	PowerStatus		Sığa: 
+ mW	PowerStatus		 mW
+Show percent	PowerStatus		Yüzdeyi göster
+Capacity granularity 1: 	PowerStatus		Sığa tanecikliği 1: 
+The battery level is getting low, please plug in the device.	PowerStatus		Pil düzeyi düşük, lütfen aygıtınızı fişe takın.
+Design capacity warning: 	PowerStatus		Fabrika çıkış sığası uyarısı: 
+Capacity granularity 2: 	PowerStatus		Sığa tanecikliği 2: 
+Too bad!	PowerStatus		Neyse artık!
+Technology: 	PowerStatus		Teknoloji: 
+not charging	PowerStatus		şarj olmuyor
+No supported battery detected. %appname% cannot be used on your system.	PowerStatus		Desteklenen pil bulunamadı. %appname% sisteminizde kullanılamıyor.
+ mWh	PowerStatus		 mWh
+PowerStatus	System name		Güç Durumu
+Design capacity: 	PowerStatus		Fabrika çıkış sığası: 
+OEM info: 	PowerStatus		OEM bilgisi: 
+no battery	PowerStatus		pil yok
+Empty battery slot	PowerStatus		Boş pil yuvası
+Install in Deskbar	PowerStatus		Masaüstü Çubuğu’na kur
+charging	PowerStatus		doluyor

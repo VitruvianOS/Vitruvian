@@ -1,22 +1,23 @@
-1	japanese	x-vnd.Haiku-NetworkStatus	186344131
-Netmask	NetworkStatusView		ネットマスク
+1	japanese	x-vnd.Haiku-NetworkStatus	3050452699
+IPv6 address:	NetworkStatusView		IPv6 アドレス:
 Quit	NetworkStatusView		終了
 Unknown	NetworkStatusView		不明
 Launching the network preflet failed.\n\nError: 	NetworkStatusView		ネットワーク設定の起動に失敗しました。\n\nエラー:
-Install in Deskbar	NetworkStatus		Deskbarにインストール
-NetworkStatus options:\n\t--deskbar\tautomatically add replicant to Deskbar\n\t--help\t\tprint this info and exit	NetworkStatus		NetworkStatus options:\n\t--deskbar\tautomatically add replicant to Deskbar\n\t--help\t\tprint this info and exit
+Install in Deskbar	NetworkStatus		Deskbar にインストール
 Open network preferences…	NetworkStatusView		ネットワーク設定を開く...
-NetworkStatus	System name		ネットワーク状況
+NetworkStatus	System name		ネットワークの状態
+Broadcast:	NetworkStatusView		ブロードキャスト:
 OK	NetworkStatusView		OK
+%appname% options:\n\t--deskbar\tautomatically add replicant to Deskbar\n\t--help\t\tprint this info and exit	NetworkStatus		%appname% options:\n\t--deskbar\tautomatically add replicant to Deskbar\n\t--help\t\tprint this info and exit
 No link	NetworkStatusView		リンク無し
-Could not join wireless network:\n	NetworkStatusView		無線ネットワークに参加できませんでした:\n
-Ready	NetworkStatusView		完了
-Network Status	NetworkStatusView		ネットワーク状況
-Address	NetworkStatusView		アドレス
-Deskbar is not running, giving up.	NetworkStatus		Deskbar is not running, giving up.
+Connected	NetworkStatusView		接続済
+Could not join wireless network:\n	NetworkStatusView		無線ネットワークに参加できません:\n
+Network Status	NetworkStatusView		ネットワークの状態
+Deskbar is not running, giving up.	NetworkStatus		Deskbar が動作していないので、断念します。
+You can run %appname% in a window or install it in the Deskbar.	NetworkStatus		%appname% をウィンドウ内で実行または Deskbar 内にインストールできます。
+Netmask:	NetworkStatusView		ネットマスク:
 No stateful configuration	NetworkStatusView		ステートフル設定がありません
-You can run NetworkStatus in a window or install it in the Deskbar.	NetworkStatus		ネットワーク状況をウィンドウで動かすことや、Deskbarにインストールすることができます。
-Broadcast	NetworkStatusView		ブロードキャスト
+IPv4 address:	NetworkStatusView		IPv4 アドレス:
 %ifaceName information:\n	NetworkStatusView		%ifaceName 情報:\n
 Run in window	NetworkStatus		ウィンドウで実行
 <no wireless networks found>	NetworkStatusView		<無線ネットワークが見つかりません>

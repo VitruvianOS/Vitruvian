@@ -1,27 +1,28 @@
-1	catalan; valencian	x-vnd.Haiku-ScreenSaver	1801423325
-Could not load screen saver	ScreenSaver		No s'ha carregar cap captura de pantalla
-30 seconds	ScreenSaver		30 segons
-Start screensaver	ScreenSaver		Inicia l'estalvi de pantalla
-Password…	ScreenSaver		Contrasenya…
-Password:	ScreenSaver		Contrasenya:
-Password lock	ScreenSaver		Protecció amb contrasenya
-Screensavers	ScreenSaver		Estalvis de pantalla
+1	catalan; valencian	x-vnd.Haiku-ScreenSaver	377530480
 Display Power Management Signaling not available	ScreenSaver		El sistema d'estalvi d'energia de la pantalla (DPMS) no està disponible
-ScreenSaver	System name		Estalvi de pantalla
-Test	ScreenSaver		Prova
-General	ScreenSaver		General
-Fade now when mouse is here	ScreenSaver		Esvaeix ara quan el ratolí és aquí
-Enable screensaver	ScreenSaver		Activa l'estalvi de pantalla
-Don't fade when mouse is here	ScreenSaver		No esvaeixis quan el ratolí és aquí
-Cancel	ScreenSaver		Anul·la
-Turn off screen	ScreenSaver		Apaga la pantalla
-No options available	ScreenSaver		No hi ha cap opció disponible
-Password Window	ScreenSaver		Finestra de la contrasenya
-Screensaver settings	ScreenSaver		Opcions de l'estalvi de pantalla
-Passwords don't match. Please try again.	ScreenSaver		Les contrasenyes no coincideixen. Intenteu-ho de nou.
-OK	ScreenSaver		D'acord
 Blackness	ScreenSaver		Foscor
-Use custom password	ScreenSaver		Utilitza una contrasenya personal
-Done	ScreenSaver		Fet
+Fade now when mouse is here	ScreenSaver		Esvaeix ara quan el ratolí és aquí
+Screensavers	ScreenSaver		Estalvis de pantalla
+Enable screensaver	ScreenSaver		Habilita l'estalvi de pantalla
+Passwords don't match. Please try again.	ScreenSaver		Les contrasenyes no coincideixen. Si us plau, torneu-ho a provar.
+30 seconds	ScreenSaver		30 segons
+No options available	ScreenSaver		No hi ha cap opció disponible
+ScreenSaver	System name		Estalvi de pantalla
+Don't fade when mouse is here	ScreenSaver		No esvaeixis quan el ratolí és aquí
+Cancel	ScreenSaver		Cancel·la
+Password:	ScreenSaver		Contrasenya:
+Screensaver settings	ScreenSaver		Opcions de l'estalvi de pantalla
+Password Window	ScreenSaver		Finestra de la contrasenya
+Use system password	ScreenSaver		Usa la contrasenya del sistema
+Test	ScreenSaver		Prova
+Could not load screen saver	ScreenSaver		No s'ha carregar cap captura de pantalla
+Use custom password	ScreenSaver		Usa una contrasenya personal
+Password…	ScreenSaver		Contrasenya…
 Confirm password:	ScreenSaver		Confirmeu la contrasenya:
-Use network password	ScreenSaver		Utilitza la contrasenya de la xarxa
+Turn off screen	ScreenSaver		Atura la pantalla
+Password lock	ScreenSaver		Blocatge amb contrasenya
+OK	ScreenSaver		D'acord
+Done	ScreenSaver		Fet
+Start screensaver	ScreenSaver		Inicia l'estalvi de pantalla
+No preview available	PreviewView		No hi ha vista prèvia disponible.
+General	ScreenSaver		General

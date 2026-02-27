@@ -1,37 +1,35 @@
-1	croatian	x-vnd.Be-PRNT	874489457
-Printer: %printer_name%\nDriver:  %driver%\n	TestPageView		Pisač: %ime_pisača%\nUpravljački program:   %upravljački program%\n
-Waiting	JobListView		Čekanje
-Print test page	PrintersWindow		Ispiši test stranicu
-page	JobListView		stranica
-Cancel	AddPrinterDialog		Otkaži
-Add printer	AddPrinterDialog		Dodaj pisač
-Green	TestPageView		Zelena
-Printers	PrintersWindow		Pisači
-Add…	PrintersWindow		Dodaj ...
-Default Printer	PrinterListView		Zadani pisač
-pages	JobListView		stranice
-Printers	System name		Pisači
-Processing	JobListView		Procesiranje
-Red	TestPageView		Crvena
-Printer name:	AddPrinterDialog		Ime pisača:
-Driver: %driver%	PrinterListView		Upravljački program: %upravljački program%
-Black	TestPageView		Crna
-Restart job	PrintersWindow		Ponovno pokreni zadatak
-Add	AddPrinterDialog		Dodaj
-Make default	PrintersWindow		Napravi zadano
-Cancel job	PrintersWindow		Otkaži zadatak
-Yellow	TestPageView		Žuta
-Blue	TestPageView		Plava
+1	croatian	x-vnd.Be-PRNT	3007839174
+Test page	TestPageView		Test stranica
 Remove	PrintersWindow		Ukloni
+Red	TestPageView		Crvena
+Default Printer	PrinterListView		Zadani pisač
 <pick one>	AddPrinterDialog		<odaberi jedan>
-Print jobs for 	PrintersWindow		Ispiši zadatke za 
-Failed	JobListView		Neuspjelo
-%.2f KB	JobListView		%.2f KB
-Magenta	TestPageView		Magenta
-Completed	JobListView		Završeno
-No printer found!	TransportMenu		Nijedan pisač nije nađen!
-Print jobs: No printer selected	PrintersWindow		Zadaci za ispisivanje: Nema odabranog pisača
-Cyan	TestPageView		Svijetlo plava
-Unknown status	JobListView		Nepoznat status
 Connected to:	AddPrinterDialog		Spojen na:
+Make default	PrintersWindow		Napravi zadano
+Cyan	TestPageView		Svijetlo plava
+Completed	JobListView		Završeno
+Test page	PrintersWindow		Test stranica
+Failed	JobListView		Neuspjelo
+Blue	TestPageView		Plava
+Waiting	JobListView		Čekanje
+Processing	JobListView		Procesiranje
+Cancel	AddPrinterDialog		Otkaži
+Unknown status	JobListView		Nepoznat status
+Add printer	AddPrinterDialog		Dodaj pisač
+Printers	PrintersWindow		Pisači
+No printer found!	TransportMenu		Nijedan pisač nije nađen!
+Add…	PrintersWindow		Dodaj ...
+Magenta	TestPageView		Magenta
+Add	AddPrinterDialog		Dodaj
+Print jobs: No printer selected	PrintersWindow		Zadaci za ispisivanje: Nema odabranog pisača
+Printer name:	AddPrinterDialog		Ime pisača:
+Yellow	TestPageView		Žuta
+Black	TestPageView		Crna
 Printer type:	AddPrinterDialog		Tip pisača:
+Printers	System name		Pisači
+Green	TestPageView		Zelena
+Print test page	PrintersWindow		Ispiši test stranicu
+Restart job	PrintersWindow		Ponovno pokreni zadatak
+Driver: %driver%	PrinterListView		Upravljači program: %driver%
+Cancel job	PrintersWindow		Otkaži zadatak
+%.2f KB	JobListView		%.2f KB

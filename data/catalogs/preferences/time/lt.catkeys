@@ -1,9 +1,11 @@
-1	lithuanian	x-vnd.Haiku-Time	3968430883
+1	lithuanian	x-vnd.Haiku-Time	3691539601
 OK	Time		Gerai
 Message receiving failed	Time		Nepavyko gauti pranešimo
-Time & Date, written by:\n\n\tAndrew Edward McCall\n\tMike Berg\n\tJulun\n\tPhilippe Saint-Pierre\n\nCopyright 2004-2012, Haiku.	Time		Laikas ir data. Programos autoriai:\n\n\tAndrew Edward McCall\n\tMike Berg\n\tJulun\n\tPhilippe Saint-Pierre\n\n© 2004-2012, „Haiku“,
 Australia	Time		Australija
 America	Time		Amerika
+Reset to default server list	Time		Atkurti numatytąjį serverių sąrašą
+Could not resolve server address	Time		Nepavyko nustatyti serverio adreso
+Time & Date	System name		Laikas ir data
 Set time zone	Time		Pakeisti laiko juostą
 Waiting for answer failed	Time		Atsakymas negautas
 <Other>	Time		<Kita>
@@ -14,6 +16,7 @@ Asia	Time		Azija
 Try all servers	Time		Bandyti visus serverius
 Time	Time		Laikas
 Current time:	Time		Dabartinis laikas:
+The following error occured while synchronizing:\n%s: %s	Time		Klaida sinchronizuojant laiką:\n%s: %s
 Europe	Time		Europa
 Show day of week	Time		Rodyti savaitės dieną
 Local time (Windows compatible)	Time		Vietinis laikas (suderinama su „Windows“)
@@ -35,11 +38,11 @@ Atlantic	Time		Atlanto vandenynas
 Show clock in Deskbar	Time		Rodyti laikrodį pranešimų srityje
 Display time with seconds	Time		Rodyti sekundes
 Time	System name		Laikas
-about	Time		Apie
 Show time zone	Time		Rodyti laiko juostą
 Synchronize at boot	Time		Sinchronizuoti įkeliant sistemą
 Indian	Time		Indijos vandenynas
 Revert	Time		Atšaukti pakeitimus
 Date and time	Time		Data ir laikas
+The following error occured while synchronizing:\n%s	Time		Klaida sinchronizuojant laiką:\n%s
 Synchronize	Time		Sinchronizuoti
 Add	Time		Pridėti

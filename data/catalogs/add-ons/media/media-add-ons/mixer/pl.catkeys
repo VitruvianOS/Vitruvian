@@ -1,27 +1,24 @@
-1	polish	x-vnd.Haiku-mixer.media_addon	3450667169
-Input gain controls represent	AudioMixer		Regulacja wzmocnienia wejścia reprezentuje
-Linear interpolation	AudioMixer		Interpolacja liniowa
-Virtual output channels	AudioMixer		Wirtualne kanały wyjściowe
-Refuse output format changes	AudioMixer		Odmów zmiany formatu wyjściowego
-Output mapping	AudioMixer		Mapowanie wyjścia
-Allow input channel remapping	AudioMixer		Pozwól ponownie mapować kanał wejściowy
-Resampling algorithm	AudioMixer		Algorytm konwersji częstotliwości próbkowania
-Attenuate mixer output by 3dB (like BeOS R5)	AudioMixer		Tłum wyjście miksera o 3dB (jak w BeOS R5)
-Display balance control for stereo connections	AudioMixer		Wyświetl kontrolę balansu dla połączeń stereo
+1	polish	x-vnd.Haiku-mixer.media_addon	275473112
+Input mapping	AudioMixer		Mapowanie wejścia
+High quality (linear interpolation)	AudioMixer		Wysoka jakość (interpolacja liniowa)
 To output	AudioMixer		Do wyjścia
+Gain	AudioMixer		Wzmocnienie
+To master	AudioMixer		Do głównego
 not connected	AudioMixer		nie podłączony
-Refuse input format changes	AudioMixer		Odmów zmiany formatu wejściowego
-Drop/repeat samples	AudioMixer		Zostaw/powtórz sample
-Output channel sources	AudioMixer		Źródła kanału wyjściowego
+Master output	AudioMixer		Wyjście główne
 dB	AudioMixer		dB
 Gain controls	AudioMixer		Regulacja wzmocnienia
-Input mapping	AudioMixer		Mapowanie wejścia
-Mute	AudioMixer		Wycisz
-Input channel destinations	AudioMixer		Miejsca kanału wejściowego
-To master	AudioMixer		Do głównego
-Master output	AudioMixer		Wyjście główne
+Low quality (drop/repeat samples)	AudioMixer		Niska jakość (omijaj/powtarzaj próbki)
+Output channel sources	AudioMixer		Źródła kanału wyjściowego
+Allow input channel remapping	AudioMixer		Pozwól ponownie mapować kanał wejściowy
+Display balance control for stereo connections	AudioMixer		Wyświetl kontrolę balansu dla połączeń stereo
 Setup	AudioMixer		Ustawienia
-Use non linear gain sliders (like BeOS R5)	AudioMixer		Użyj nieliniowych suwaków wzmocnienia (jak w BeOS R5)
-Gain	AudioMixer		Wzmocnienie
-Allow output channel remapping	AudioMixer		Pozwól ponownie mapować kanał wyjściowy
 Physical input channels	AudioMixer		Fizyczne kanały wejściowe
+Input channel destinations	AudioMixer		Miejsca kanału wejściowego
+Resampling algorithm:	AudioMixer		Algorytm resamplingu:
+Mute	AudioMixer		Wycisz
+Output mapping	AudioMixer		Mapowanie wyjścia
+Virtual output channels	AudioMixer		Wirtualne kanały wyjściowe
+Allow output channel remapping	AudioMixer		Pozwól ponownie mapować kanał wyjściowy
+Input gain controls represent:	AudioMixer		Kontrolki wzmocnienia wejściowego reprezentują:
+Attenuate mixer output by 3 dB	AudioMixer		Osłab wyjście miksera o 3 dB

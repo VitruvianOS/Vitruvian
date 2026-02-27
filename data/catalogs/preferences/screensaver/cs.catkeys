@@ -1,23 +1,28 @@
-1	czech	x-vnd.Haiku-ScreenSaver	268359456
-30 seconds	ScreenSaver		30 sekund
-Add…	ScreenSaver		Přidat...
+1	czech	x-vnd.Haiku-ScreenSaver	377530480
+Display Power Management Signaling not available	ScreenSaver		Signalizace Display Power Managementu není dostupná
 Blackness	ScreenSaver		Černota
-Cancel	ScreenSaver		Zrušit
-Confirm password:	ScreenSaver		Potvrdit heslo
-Could not load screen saver	ScreenSaver		Nemohu nahrát spořič obrazovky
-Display Power Management Signaling not available	ScreenSaver		Signalizace Display Power Managementu není dostupná.
-Don't fade when	ScreenSaver		Neztmavit když
-Done	ScreenSaver		Hotovo
-Fade now when	ScreenSaver		Ztmavit když
-No options available	ScreenSaver		Nejsou dostupné žádné volby
-OK	ScreenSaver		OK
-Password Window	ScreenSaver		Okno hesla
-Password lock	ScreenSaver		Zamknout na heslo
-Password:	ScreenSaver		Heslo:
+Fade now when mouse is here	ScreenSaver		Začít stmívat když je myš zde
+Screensavers	ScreenSaver		Spořiče obrazovky
+Enable screensaver	ScreenSaver		Zapnout spořič obrazovky
 Passwords don't match. Please try again.	ScreenSaver		Hesla se neshodují. Prosím, zkuste to znovu.
-Password…	ScreenSaver		Heslo...
+30 seconds	ScreenSaver		30 sekund
+No options available	ScreenSaver		Nejsou dostupné žádné volby
+ScreenSaver	System name		Spořič obrazovky
+Don't fade when mouse is here	ScreenSaver		Nestmívat, když je myš zde
+Cancel	ScreenSaver		Zrušit
+Password:	ScreenSaver		Heslo:
+Screensaver settings	ScreenSaver		Nastavení spořiče obrazovky
+Password Window	ScreenSaver		Okno hesla
+Use system password	ScreenSaver		Použít systémové heslo
 Test	ScreenSaver		Test
-Turn off screen	ScreenSaver		Vypnout obrazovku
+Could not load screen saver	ScreenSaver		Nemohu nahrát spořič obrazovky
 Use custom password	ScreenSaver		Použít vlastní heslo
-Use network password	ScreenSaver		Použít síťové heslo
-mouse is here	ScreenSaver		myš je zde
+Password…	ScreenSaver		Heslo…
+Confirm password:	ScreenSaver		Potvrdit heslo:
+Turn off screen	ScreenSaver		Vypnout obrazovku
+Password lock	ScreenSaver		Zamknout na heslo
+OK	ScreenSaver		OK
+Done	ScreenSaver		Hotovo
+Start screensaver	ScreenSaver		Spustit spořič obrazovky
+No preview available	PreviewView		Náhled není k dispozici
+General	ScreenSaver		Obecné

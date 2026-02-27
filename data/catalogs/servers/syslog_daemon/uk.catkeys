@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-SystemLogger	57960782
-Syslog Daemon	SyslogDaemon		Демон системного журналу
-OK	SyslogDaemon		Гаразд
-%s\n\nThis daemon is responsible for collecting all system messages and write them to the system-wide log at \"%s\".\n\n	SyslogDaemon		%s\n\nЦей демон призначений для збирання всіх системних повідомлень та запису їх до системного журналу в \"%s\".\n\n
+1	ukrainian	x-vnd.Haiku-SystemLogger	2600925901
+Syslog Daemon	SyslogDaemon		Syslog Демон
+OK	SyslogDaemon		ОК
+%s\n\nThis daemon collects all system messages and writes them to the system-wide log at \"%s\".\n\n	SyslogDaemon		%s\n\nЦей демон збирає усі системні повідомлення і записує їх до системного журналу \"%s\".\n\n

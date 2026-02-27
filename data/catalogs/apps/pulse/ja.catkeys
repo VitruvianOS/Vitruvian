@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-Pulse	139895817
+1	japanese	x-vnd.Haiku-Pulse	3118820593
 Normal mode	DeskbarPulseView		ウィンドウモード
 Info	CPUButton		情報
 Quit	DeskbarPulseView		終了
@@ -6,43 +6,41 @@ Info	DeskbarPulseView		情報
 Normal mode	MiniPulseView		ウィンドウモード
 Frame color	ConfigView		フレーム色
 Error	PulseApp		エラー
-Bar colors	ConfigView		配色
+Bar colors	ConfigView		バーの色
 %.2f GHz	NormalPulseView		%.2f GHz
 Defaults	PrefsWindow		デフォルト
 %ld MHz	NormalPulseView		%ld MHz
 Mini mode	PrefsWindow		ミニモード
 CPU progress bar	NormalPulseView		CPU プログレスバー
-Fade colors	ConfigView		フェード色
-About Pulse…	PulseView		Pulse について…
-Pulse	NormalPulseView		Pulse
+Fade colors	ConfigView		バーの色をフェードさせる
 Deskbar mode	NormalPulseView		Deskbar モード
-Remove replicant	CPUButton		レプリカントを削除
+About %appname%…	PulseView		%appname% について…
+Pulse settings	PulseApp		Pulse 設定
+Remove replicant	CPUButton		レプリカントの削除
 You can't disable the last active CPU.	PulseView		最後の CPU は無効にできません。
 Width of icon:	ConfigView		アイコンの幅:
 Deskbar mode	MiniPulseView		Deskbar モード
-OK	PulseView		Ok
+OK	PulseView		OK
 %s\n\nBy David Ramsey and Arve Hjønnevåg\nRevised by Daniel Switkin\n	PulseApp		%s\n\nDavid Ramsey および Arve Hjønnevåg 作\nDaniel Switkin による修正\n
-OK	PrefsWindow		Ok
-Pulse	PulseApp		Pulse
+OK	PrefsWindow		OK
 Removing from Deskbar failed.\n%s	DeskbarPulseView		Deskbar からの削除に失敗しました。\n%s
-OK	PulseApp		Ok
-About Pulse…	CPUButton		Pulse について…
+OK	PulseApp		OK
 Deskbar mode	PrefsWindow		Deskbar モード
 Mini mode	DeskbarPulseView		ミニモード
+About %appname%…	CPUButton		%appname% について…
 You can't disable the last active CPU.	CPUButton		最後の CPU は無効にできません。
-OK	CPUButton		Ok
+OK	CPUButton		OK
 Deskbar	CPUButton		Deskbar
-Settings…	PulseView		設定…
+Settings…	PulseView		設定...
 Deskbar menu	CPUButton		Deskbar メニュー
 Mini mode	NormalPulseView		ミニモード
 Quit	MiniPulseView		終了
 Info	PulseView		情報
 Usage: Pulse [--mini] [-w width] [--width=width]\n\t[--deskbar] [--normal] [--framecolor 0xrrggbb]\n\t[--activecolor 0xrrggbb] [--idlecolor 0xrrggbb]	PulseApp		Usage: Pulse [--mini] [-w width] [--width=width]\n\t[--deskbar] [--normal] [--framecolor 0xrrggbb]\n\t[--activecolor 0xrrggbb] [--idlecolor 0xrrggbb]
-OK	DeskbarPulseView		Ok
+OK	DeskbarPulseView		OK
 Info	PulseApp		情報
 Pulse	System name		Pulse
 Active color	ConfigView		アクティブ色
 Installing in Deskbar failed\n%s	PulseApp		Deskbar へのインストールに失敗しました\n%s
 Idle color	ConfigView		アイドル色
 Normal mode	PrefsWindow		ウィンドウモード
-Pulse settings	PulseWindow		Pulse の設定

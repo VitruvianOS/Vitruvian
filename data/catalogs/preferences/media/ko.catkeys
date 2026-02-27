@@ -1,20 +1,28 @@
-1	korean	x-vnd.Haiku-Media	2605101563
-Audio mixer	Media Window		오디오 믹서
-Show volume control on Deskbar	Media views		데스크바에 볼륨 컨트롤 보여주기
-Quit	Media Window		나가기
+1	korean	x-vnd.Haiku-Media	4055972908
+Couldn't add volume control in Deskbar: %s\n	Media views		데스크바에 음량 조절기를 추가할 수 없습니다: %s\n
 Restart media services	Media views		미디어 서비스 재시작
-Couldn't add volume control in Deskbar: %s\n	Media views		데스크바에서 음량 제어판을 더할 수 없음: %s\n
+Quit	Media Window		종료
+<none>	VideoInputMenu	Used when no video input is available	<없음>
+Couldn't remove volume control in Deskbar: %s\n	Media views		데스크바에서 음량 조절기를 제거 할 수 없습니다: %s\n
+Video output:	Media views		비디오 출력:
+Video input:	Media views		비디오 입력:
+Audio output:	Media views		오디오 출력:
+Please select a SoundFont.	Midi View		사운드 폰트를 선택하십시오.
+There are no SoundFonts installed.	Midi View		설치된 사운드 폰트가 없습니다.
+Could not connect to the media server.\nWould you like to start it ?	Media Window		미디어 서버에 연결 할 수 없습니다.\n지금 시작 하시겠습니까?
+Video settings	Media Window		비디오 설정
+Audio mixer	Media Window		오디오 믹서
+Show volume control on Deskbar	Media views		데스크바에 음량 조절기 표시하기
 Start media server	Media Window		미디어 서버 시작
 Audio settings	Media Window		오디오 설정
-Couldn't remove volume control in Deskbar: %s\n	Media views		데스크바에서 음량 제어판을 제거 할 수 없음: %s\n
+Quit anyway	Media Window		그냥 종료하기
 Media	System name		미디어
-Video output:	Media views		비디오 출력:
-Audio output:	Media views		오디오 출력:
-Video input:	Media views		비디오 입력:
+Warning!	Media Window		주의!
+MIDI Settings	Media Window		MIDI 설정
+SoundFonts	Midi View		사운드 폰트
 Audio input:	Media views		오디오 입력:
 <none>	Media views		<없음>
-This hardware has no controls.	Media Window		이 하드웨어는 어떤 컨트롤도 없습니다.
 Channel:	Media views		채널:
-Defaults	Media views		기본설정
-Could not connect to the media server.\nWould you like to start it ?	Media Window		미디어 서버에 연결 할 수 없습니다.\n 당신은 시작시키시겠습니까?
-Video settings	Media Window		비디오 설정
+This hardware has no controls.	Media Window		이 하드웨어는 어떤 컨트롤도 없습니다.
+Defaults	Media views		기본값
+<none>	VideoOutputMenu	Used when no video output is available	<없음>

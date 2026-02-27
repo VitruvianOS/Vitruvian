@@ -1,4 +1,4 @@
-1	croatian	x-vnd.Haiku-SoundRecorder	4012509653
+1	croatian	x-vnd.Haiku-SoundRecorder	2187836465
 Loop	RecorderWindow		Petlja
 Cannot find default audio hardware	RecorderWindow		Progam ne može naći zadani audio hardware
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Program nemože naći privremenu datoteku koja je kreirana da čuva novi snimak
@@ -24,7 +24,7 @@ Play	RecorderWindow		Pokreni
 Channels:	RecorderWindow		Kanali:
 None	RecorderWindow		Nijedan
 Record	RecorderWindow		Snimi
-Cannot recognize this file as a media file	RecorderWindow		 Nemoguće prepoznati datoteku kao medijsku datoteku
+Cannot recognize this file as a media file	RecorderWindow		Nemoguće prepoznati datoteku kao medijsku datoteku
 Format: 	RecorderWindow		Format: 
 File name: 	RecorderWindow		Ime datoteke: 
 Cannot connect to the selected sound input	RecorderWindow		Nije se moguće spojiti sa odagranim zvučnim ulazom
@@ -35,4 +35,5 @@ Cannot find an unused name to use for the new recording	RecorderWindow		Nemoguć
 Channels: 	RecorderWindow		Kanali: 
 Save	RecorderWindow		Spremi
 Cannot connect to media server	RecorderWindow		Ne mogu se spojiti na medijski poslužitelj
+The file doesn't appear to be an audio file.	RecorderWindow		Datoteka izgleda nije audio datoteka.
 File name:	RecorderWindow		Ime datoteke:

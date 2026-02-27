@@ -1,15 +1,15 @@
-1	russian	x-vnd.Haiku-Login	336867745
+1	russian	x-vnd.Haiku-Login	2920451831
 Invalid login!	Login View		Неправильный логин!
 Error	Login App		Ошибка
---edit\tLaunch in shelf editting mode to allow customizing the desktop.\n	Login App		--edit\tЗапустить в режиме редактирования для модификации рабочего стола.\n
+Login application for Haiku\nUsage:	Login App		Приложение для входа в Haiku\nИспользование:
+--nonmodal\tDo not make the window modal	Login App		--nonmodal\tНе делать окно модальным
 Welcome to Haiku	Login Window		Добро пожаловать в Haiku
+--edit\tLaunch in shelf editing mode to allow customizing the desktop.	Login App		--edit\tЗапуск в режиме редактирования; для настройки рабочего стола.
 Halt	Login View		Выключение
-Login application for Haiku\nUsage:\n	Login App		Вход в Haiku\nИспользование:\n
---nonmodal\tDo not make the window modal\n	Login App		--nonmodal\tНе делать окно модальным\n
 Desktop	Desktop Window		Рабочий стол
 Hide password	Login View		Скрыть пароль
 Reboot	Login View		Перезагрузить
-You can customize the desktop shown behind the Login application by dropping replicants onto it.\n\nWhen you are finished just quit the application (Cmd-Q).	Login App		Для настройки рабочего стола, отображаемого за приложением Вход в систему, перетащите на него репликант.\n\nКогда вы закончите просто завершите приложение (Cmd-Q).
+You can customize the desktop shown behind the Login application by dropping replicants onto it.\n\nWhen you are finished just quit the application (Cmd-Q).	Login App		Для настройки рабочего стола, отображаемого за приложением Вход в систему, перетащите на него репликант.\n\nКогда Вы закончите, просто завершите приложение (Cmd-Q).
 OK	Login View		OK
 Info	Login App		Информация
 Login:	Login View		Имя пользователя:

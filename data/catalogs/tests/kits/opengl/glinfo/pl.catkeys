@@ -1,9 +1,27 @@
-1	polish	x-vnd.Haiku-GLInfo	3678488342
-Capability	Capabilities		Możliwość
-Information	InfoView		Informacja
+1	polish	x-vnd.Haiku-GLInfo	1282327690
+Maximum clipping planes	Capabilities		Maksymalna liczba płaszczyzn przycinania
+Maximum evaluators equation order	Capabilities		Maksymalna liczba punktów kontrolnych krzywej
+Texture stack size	Capabilities		Rozmiar stosu tekstur
 GL Info	System name		GL Info
-Capabilities	Capabilities		Możliwości
-Maximum convolution	Capabilities		Maks. liczba splotów
-Available extensions	Extensions		Dostępne rozszerzenia
-Value	Capabilities		Wartość
+Information	InfoView		Informacja
+Attributes stack size	Capabilities		Rozmiar stosu atrybutów
+Maximum lights	Capabilities		Maksymalna liczba świateł
 Extensions	Extensions		Rozszerzenia
+Available extensions	Extensions		Dostępne rozszerzenia
+Maximum recommended vertex elements	Capabilities		Maksymalna rekomendowana liczba elementów tablicy wierzchołków
+Value	Capabilities		Wartość
+Name stack size	Capabilities		Rozmiar stosu nazw
+Capabilities	Capabilities		Możliwości
+Maximum texture units	Capabilities		Maksymalna liczba jednostek tekstur
+Unknown or missing OpenGL renderer.	InfoView		Nieznany lub brakujący mechanizm renderujący OpenGL.
+Capability	Capabilities		Możliwość
+Maximum 2D texture size	Capabilities		Maksymalny rozmiar tekstury 2D
+Auxiliary buffer(s)	Capabilities		Bufor(y) pomocnicze
+Unknown vendor	InfoView		Nieznany dostawca
+Maximum convolution	Capabilities		Maks. liczba splotów
+Maximum 3D texture size	Capabilities		Maksymalny rozmiar tekstury 3D
+Maximum recommended index elements	Capabilities		Maksymalna rekomendowana liczba elementów indeksu
+Unknown version	InfoView		Nieznana wersja
+List stack size	Capabilities		Rozmiar stosu list
+Model stack size	Capabilities		Rozmiar stosu modeli
+Projection stack size	Capabilities		Rozmiar stosu projekcji

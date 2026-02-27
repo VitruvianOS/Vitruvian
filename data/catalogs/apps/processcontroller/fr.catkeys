@@ -1,4 +1,4 @@
-1	french	x-vnd.Haiku-ProcessController	168752057
+1	french	x-vnd.Haiku-ProcessController	3402929872
 Error saving file	ProcessController		Erreur à l’enregistrement du fichier
 Display priority	ProcessController		Priorité affichage
 That's no Fun!	ProcessController		C’est pas fun !
@@ -8,7 +8,6 @@ Processor %d	ProcessController		Processeur %d
 Live in the Deskbar	ProcessController		Installer dans la Deskbar
 Kill this team!	ProcessController		Tuer ce processus !
 OK	ProcessController		OK
-You can run ProcessController in a window or install it in the Deskbar.	ProcessController		Vous pouvez exécuter le Gestionnaire de tâche dans une fenêtre ou l’installer dans la Deskbar.
 Real-time priority	ProcessController		Priorité temps-réel
 Custom priority	ProcessController		Priorité personnalisée
 Debug this thread!	ProcessController		Déboguer cette tâche !
@@ -18,12 +17,11 @@ Memory usage	ProcessController		Consommation mémoire
 Ok!	ProcessController		Ok !
 Normal priority	ProcessController		Priorité normale
 Restart Deskbar	ProcessController		Redémarrer la Deskbar
-About ProcessController…	ProcessController		À propos du Gestionnaire de tâche…
 Usage: %s [-deskbar]\n	ProcessController		Utilisation : %s [-deskbar]\n
 Please confirm	ProcessController		Veuillez confirmer
+(c) 1996-2001 Georges-Edouard Berenger, berenger@francenet.fr	ProcessController		©1996-2001 Georges-Edouard Berenger, berenger@francenet.fr
 Urgent priority	ProcessController		Priorité urgente
 What do you want to do with the thread \"%s\"?	ProcessController		Que voulez vous faire de la tâche « %s » ?
-(c) 1996-2001 Georges-Edouard Berenger, berenger@francenet.fr\n	ProcessController		©1996-2001 Georges-Edouard Berenger, berenger@francenet.fr\n
 Idle priority	ProcessController		Priorité inactive
 Real-time display priority	ProcessController		Priorité affichage temps-réel
 Threads and CPU usage	ProcessController		Tâches et activité CPU
@@ -31,12 +29,12 @@ Quit application	ProcessController		Quitter l’application
 Info	ProcessController		Information
 Kill this thread!	ProcessController		Tuer cette tâche !
 This team is already gone…	ProcessController		Ce processus n’existe déjà plus…
+About %appname%…	ProcessController		À propos de %appname%…
 Gone teams…	ProcessController		Processus zombies…
 Quit an application	ProcessController		Quitter une application
 Cancel	ProcessController		Annuler
 Install in Deskbar	ProcessController		Installer dans la Deskbar
 Debug this team!	ProcessController		Déboguer ce processus !
-Low latency	ProcessController		Faible latence
 ProcessController	System name		Gestionnaire de tâche
 Lowest active priority	ProcessController		Priorité active la plus basse
 Restart Tracker	ProcessController		Redémarrer le Tracker
@@ -44,7 +42,6 @@ System resources & caches…	ProcessController		Resources du système & caches�
 Damned!	ProcessController		Damnation !
 New Terminal	ProcessController		Nouveau Terminal
 Power saving	ProcessController		Économie d’énergie
-ProcessController is already installed in Deskbar.	ProcessController		ProcessControlleur est déjà installé dans la Deskbar.
 This is the last active processor…\nYou can't turn it off!	ProcessController		C’est le dernier processeur actif…\nVous ne pouvez pas l’éteindre !
 This thread is already gone…	ProcessController		Cette tâche n’existe déjà plus…
 Run in window	ProcessController		Exécuter dans une fenêtre

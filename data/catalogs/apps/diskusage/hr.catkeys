@@ -1,5 +1,5 @@
-1	croatian	x-vnd.Haiku-DiskUsage	3802310970
-%size% in {0, plural, one{# file} other{# files}}	Info Window		%veličina% u {0, množina, jedna{# datoteka} ostalo{# datoteke}}
+1	croatian	x-vnd.Haiku-DiskUsage	2197571549
+Scanning %refName%	Scanner		Skeniram %refName%
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d datoteke
 Size	Info Window		Veličina
 Rescan	Pie View		Ponovno skeniraj
@@ -16,5 +16,5 @@ Modified	Info Window		Izmjenjeno
 Abort	Status View		Prekini
 Open with	Pie View		Otvori pomoću
 Open	Pie View		Otvori
-{0, plural, one{# file} other{# files}}	Status View		{0, množina, jedna{# datoteka} ostalo{# datoteke}}
 %a, %d %b %Y, %r	Info Window		%a, %d %b %Y, %r
+Free on %refName%	Scanner		Slobodno na %refName%

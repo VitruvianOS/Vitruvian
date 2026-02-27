@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.Haiku-MediaPlayer	1313616492
+1	hungarian	x-vnd.Haiku-MediaPlayer	3337408711
 Remove Entry into Trash	MediaPlayer-RemovePLItemsCmd		Bejegyzés Szemetesbe helyezése
 Close	MediaPlayer-PlaylistWindow		Bezárás
 Volume of background clips	MediaPlayer-SettingsWindow		Háttérbeli klippek hangereje
@@ -16,7 +16,6 @@ DrawBitmap	MediaPlayer-InfoWin		BittérképKirajzolás
 File info	MediaPlayer-InfoWin		Információk
 raw audio	MediaPlayer-InfoWin		nyers audio
 Select all	MediaPlayer-PlaylistWindow		Mind kijelölése
-New player…	MediaPlayer-Main		Új lejátszó…
 Move Entries	MediaPlayer-MovePLItemsCmd		Bejegyzések áthelyezése
 OK	MediaPlayer-Main		Rendben
 Remove	MediaPlayer-PlaylistWindow		Eltávolítás
@@ -25,7 +24,7 @@ Resume:	MediaPlayer-SettingsWindow		Folytatás:
 Duration	MediaPlayer-InfoWin		Időtartam
 Import Entries	MediaPlayer-ImportPLItemsCmd		Bejegyzések importálása
 Open network stream	MediaPlayer-Main		Hálózati műsor megnyitása
-Move file to Trash	MediaPlayer-PlaylistWindow		Fájl Szemetesbe helyezése
+%appname% settings	MediaPlayer-SettingsWindow		%appname% beállítások
 Open file…	MediaPlayer-Main		Fájl megnyitása…
 Scale controls in full screen mode	MediaPlayer-SettingsWindow		Nagyított vezérlők teljes képernyős módban
 View options	MediaPlayer-SettingsWindow		Megjelenítési beállítások
@@ -33,8 +32,10 @@ View options	MediaPlayer-SettingsWindow		Megjelenítési beállítások
 Full volume	MediaPlayer-SettingsWindow		Teljes hangerő
 <untitled>	PlaylistItem-title		<névtelen>
 Start media server	MediaPlayer-Main		Médiakiszolgáló indítása
-It appears the media server is not running.\nWould you like to start it ?	MediaPlayer-Main		Úgy tűnik a médiakiszolgáló nem fut.\nEl kívánja indítani?
+It appears the media server is not running.\nWould you like to start it ?	MediaPlayer-Main		Úgy tűnik a médiakiszolgáló nem fut.\nEl kívánod indítani?
 Location	MediaPlayer-InfoWin		Útvonal
+%lu × %lu	MediaPlayer-InfoWin	The '×' is the Unicode multiplication sign U+00D7	%lu × %lu
+Opening '%s'.	MediaPlayer-Main		%s megnyitása.
 Medium	MediaPlayer-SettingsWindow		Közepes
 Play mode	MediaPlayer-SettingsWindow		Lejátszás módja
 Playlist	MediaPlayer-PlaylistWindow		Lejátszási lista
@@ -44,10 +45,11 @@ Close	MediaPlayer-Main		Bezárás
 Save error	MediaPlayer-PlaylistWindow		Mentési hiba
 Attributes	MediaPlayer-Main		Jellemzők
 Bottom of screen	MediaPlayer-SettingsWindow		A képernyő alján
-MediaPlayer settings	MediaPlayer-SettingsWindow		Médialejátszó beállításai
 Copyright	MediaPlayer-InfoWin		Másolásvédett
-Invalid URL inserted!	MediaPlayer-NetworkStream		A megadott cím érvénytelen.
+%appname%: %title%	MediaPlayer-Main		%appname%: %title%
+Invalid URL inserted!	MediaPlayer-NetworkStream		A megadott cím érvénytelen!
 Aspect ratio	MediaPlayer-Main		Képarány
+Eject device	MediaPlayer-Main		Eszköz kiadása
 Saving the playlist failed.\n\nError: 	MediaPlayer-PlaylistWindow		Lejátszási lista mentése sikertelen.\n\nHiba:
 <no media>	MediaPlayer-InfoWin		<nincs fájl>
 Hide interface	MediaPlayer-Main		Vezérlők elrejtése
@@ -56,6 +58,7 @@ Video track	MediaPlayer-Main		Videósáv
 Playlist…	MediaPlayer-Main		Lejátszási lista…
 <unnamed media>	MediaPlayer-InfoWin		<névtelen>
 Save	MediaPlayer-PlaylistWindow		Mentés
+25% scale	MediaPlayer-Main		25% méret
 Randomize Entries	MediaPlayer-RandomizePLItemsCmd		Bejegyzések véletlenszerűsítése
 Cancel	MediaPlayer-NetworkStream		Mégse
 Nothing to Play	MediaPlayer-Main		Nincs mit lejátszani
@@ -72,17 +75,18 @@ Audio	MediaPlayer-Main		Audió
 Quit	MediaPlayer-Main		Kilépés
 Redo	MediaPlayer-PlaylistWindow		Újra
 Move Entry	MediaPlayer-MovePLItemsCmd		Bejegyzés áthelyezése
+Reset rating	MediaPlayer-Main		Értékelés visszaállítása
 <unknown>	PlaylistItem-author		<névtelen>
 Cancel	MediaPlayer-SettingsWindow		Mégse
 Large	MediaPlayer-SettingsWindow		Nagy
 Import Entry	MediaPlayer-ImportPLItemsCmd		Bejegyzés importálása
 unknown format	MediaPlayer-InfoWin		ismeretlen formátum
-Track %d	MediaPlayer-Main		Szám %d
+Track %d	MediaPlayer-Main		Sáv %d
 All files could not be moved into Trash.	MediaPlayer-RemovePLItemsCmd		Nem sikerült minden fájlt a Szemetesbe helyezni
 Total duration: %s	MediaPlayer-PlaylistWindow		Teljes időtartam: %s
 %.3f kHz	MediaPlayer-InfoWin		%.3f kHz
 Move into trash error	MediaPlayer-RemovePLItemsCmd		Szemetesbe helyezési hiba
-50% scale	MediaPlayer-Main		50%-os méret
+50% scale	MediaPlayer-Main		50% méret
 Drop files to play	MediaPlayer-Main		Húzzon ide fájlokat a lejátszáshoz
 Copy Entry	MediaPlayer-CopyPLItemsCmd		Bejegyzés másolása
 Close window after playing audio	MediaPlayer-SettingsWindow		Hangfájl lejátszása után zárja be az ablakot
@@ -95,7 +99,7 @@ Loop video	MediaPlayer-SettingsWindow		Videófájl ismétlése
 Stream URL:	MediaPlayer-NetworkStream		Műsor címe:
 <unknown>	PlaylistItem-album		<ismeretlen>
 Stream settings	MediaPlayer-Main		Film beállításai
-none	Subtitles menu		nincs 
+none	Subtitles menu		nincs
 Save Playlist	MediaPlayer-PlaylistWindow		Lejátszási lista mentése
 Overlay	MediaPlayer-InfoWin		Overlay
 2.35 : 1 (Cinemascope)	MediaPlayer-Main		2.35 : 1 (Cinemascope)
@@ -123,6 +127,7 @@ Full screen	MediaPlayer-Main		Teljes képernyő
 OK	MediaPlayer-NetworkStream		Rendben
 Internal error (locking failed). Saving the playlist failed.	MediaPlayer-PlaylistWindow		Belső hiba (nem sikerült zárolni). A lejátszási lista mentése sikertelen.
 100% scale	MediaPlayer-Main		100%-os méret
+New player	MediaPlayer-Main		Új lejátszó
 <nothing to redo>	MediaPlayer-PlaylistWindow		<nincs mit újra csinálni>
 Bad URL	MediaPlayer-NetworkStream		Hibás cím
 Save	MediaPlayer-Main		Mentés
@@ -137,7 +142,7 @@ Subtitle size:	MediaPlayer-SettingsWindow		Felirat mérete:
 No aspect correction	MediaPlayer-Main		Nincs képarányjavítás
 raw video	MediaPlayer-InfoWin		nyers videó
 Container	MediaPlayer-InfoWin		Tároló
-none	MediaPlayer-Main		nincs 
+none	MediaPlayer-Main		nincs
 Open clips	MediaPlayer-Main		Klippek megnyitása
 Some files could not be moved into Trash.	MediaPlayer-RemovePLItemsCmd		Néhány elemet nem lehetett a Szemetesbe helyezni.
 <nothing to undo>	MediaPlayer-PlaylistWindow		<nincs mit visszavonni>

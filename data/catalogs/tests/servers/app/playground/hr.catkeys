@@ -1,4 +1,4 @@
-1	croatian	x-vnd.Haiku-Playground	771694582
+1	croatian	x-vnd.Haiku-Playground	2276221232
 Line	Playground		Crta
 Fill	Playground		Ispuni
 Quit	Playground		Završi
@@ -12,6 +12,7 @@ Copy	Playground		Kopiraj
 Cancel	Playground		Otkaži
 Clear	Playground		Očisti
 Invert	Playground		Obrnuto
+Clear all drawing objects?	Playground		Očistiti sve nacrtane objekte?
 Width:	Playground		Duljina:
 Alpha	Playground		Alfa
 New object	Playground		Novi objekt
@@ -21,4 +22,5 @@ Add	Playground		Dodaj
 Playground	System name		Igralište
 Erase	Playground		Izbriši
 File	Playground		Datoteka
+<pick>	Playground		<pick>
 Ellipse	Playground		Elipsa

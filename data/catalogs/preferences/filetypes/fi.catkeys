@@ -1,5 +1,6 @@
-1	finnish	x-vnd.Haiku-FileTypes	734679611
+1	finnish	x-vnd.Haiku-FileTypes	224411584
 Left	Attribute Window	Attribute column alignment in Tracker	Vasen
+Float	Attribute ListView		Liukuluku
 Final	Application Types Window		Lopullinen
 FileTypes request	FileTypes Window		Tiedostotyyppien pyyntö
 This file type already exists	New File Type Window		Tämä tiedostotyyppi on jo olemassa
@@ -31,6 +32,7 @@ Signature:	Application Types Window		Allekirjoitus:
 None	FileTypes Window		Ei mikään
 Exclusive launch	Application Type Window		Yksinomainen käynnistys
 Removing a file type cannot be reverted.\nAre you sure you want to remove it?	FileTypes Window		Tiedostotyypin poistamista ei voi perua.\nOletko varma, että haluat poistaa sen?
+Integer 64 bit	Attribute ListView		Kokonaisluku 64-bittiä
 Cancel	New File Type Window		Peru
 Select same preferred application as	FileType Window		Valitse sama ensisijainen sovellus asetuksena
 Cancel	Type List Window		Peru
@@ -38,15 +40,18 @@ Don't save	Application Type Window		Älä tallenna
 Center	Attribute Window	Attribute column alignment in Tracker	Keskitä
 Done	Extension Window		Valmis
 Development	Application Types Window		Kehitys
+Same as…	FileType Window	The same APPLICATION as ...	Sama asetuksena…
 Abort	Application Types Window		Keskeytä
 Save	Application Type Window		Tallenna
-Same as…	FileType Window	The same APPLICATION as ...	Sama asetuksena…
 %1 application type	Application Type Window		%1-sovellustyyppi
 Icon	Application Type Window		Kuvake
+Duration	Attribute ListView		Kesto
 Version:	Application Type Window		Versio:
 Default application	FileType Window		Oletussovellus
 Internal name:	New File Type Window		Sisäinen nimi:
+Integer 8 bit	Attribute ListView		Kokonaisluku 8-bittiä
 Extension:	Extension Window		Tiedostotarkennin:
+Time	Attribute ListView		Aika
 Extensions:	FileTypes Window		Tiedostotarkentimet:
 Select preferred application	FileType Window		Valitse ensisijainen sovellus
 Description:	FileTypes Window		Kuvaus:
@@ -62,10 +67,12 @@ Done	Attribute Window		Valmis
 FileTypes request	FileTypes		Tiedostotyyppien pyyntö
 Select same type as	FileType Window		Valitse sama tyyppi asetuksena
 Version:	Application Types Window		Versio:
-Application types	Application Types Window		Sovellustyypit
 (from application)	FileTypes Window		(sovelluksesta)
+Application types	Application Types Window		Sovellustyypit
 Description:	Application Types Window		Kuvaus:
 Name:	Application Types Window		Nimi:
+Rating	Attribute ListView		Arvosana
+duration	Attribute ListView		kesto
 File could not be opened	Preferred App Menu		Tiedoston avaus epäonnistui
 Args only	Application Type Window		Vain argumentit
 Could not open \"%s\":\n%s	FileTypes		Tiedoston ”%s” avaus epäonnistui:\n%s
@@ -83,16 +90,21 @@ Type name:	FileTypes Window		Tyyppinimi:
 Visible	Attribute Window		Näkyvä
 Select preferred application	FileTypes Window		Valitse ensisijainen sovellus
 Path:	Application Types Window		Polku:
+rating	Attribute ListView		arvosanan antaminen
 Could not install file type	New File Type Window		Tiedostotyypin asentaminen epäonnistui
 Same as…	FileTypes Window		Sama asetuksena…
 Golden master	Application Type Window		Tuotantoversio
+Checkbox	Attribute ListView		Valintaruutu
 FileTypes request	Preferred App Menu		Tiedostotyyppien pyyntö
-Single launch	Application Type Window		Yksittäiskäynnistys
 no icon	FileTypes Window		ei kuvaketta
+Single launch	Application Type Window		Yksittäiskäynnistys
 %s file type	FileType Window		%s-tiedostotyyppi
+Default	Attribute ListView		Oletus
 Removing a super type cannot be reverted.\nAll file types that belong to this super type will be lost!\n\nAre you sure you want to do this? To remove the whole group, hold down the Shift key and press \"Remove\".	FileTypes Window		Kantatyypin poistamista ei voida perua.\nMenetät kaikki tiedostotyypit, jotka polveutuvat tästä kantatyypistä!\n\nOletko varma, että haluat tehdä tämän? Koko ryhmän poistamiseksi pidä Vaihto-näppäin alhaalla ja paina ”Poista”.
+String	Attribute ListView		Merkkijono
 Add type	New File Type Window		Lisää tyyppi
 Remove icon	Icon View		Poista kuvake
+Boolean	Attribute ListView		Boolean
 Cancel	Extension Window		Peru
 Alignment:	Attribute Window		Tasaus:
 Icon	FileType Window		Kuvake
@@ -101,6 +113,7 @@ Development	Application Type Window		Kehitys
 Golden master	Application Types Window		Tuotantoversio
 Add	Extension Window		Lisää
 Open…	FileTypes Window		Avaa…
+checkbox	Attribute ListView		valintaruutu
 Could not change file extensions	Extension Window		Tiedostotarkentimien vaihtaminen epäonnistui
 Could not open file	FileType Window		Tiedoston avaus epäonnistui
 Choose type	Type List Window		Valitse tyyppi
@@ -118,19 +131,19 @@ Add group	New File Type Window		Lisää ryhmä
 Cancel	Attribute Window		Peru
 Gamma	Application Types Window		Gamma
 Supported types	Application Type Window		Tuetut tyypit
+Integer 32 bit	Attribute ListView		Kokonaisluku 32-bittinen
 Beta	Application Type Window		Beeta
 Could not retrieve preferred application of this file	Preferred App Menu		Tämän tiedoston ensisijaisen sovelluksen noutaminen epäonnistui
 Application flags	Application Type Window		Sovellusliput
 OK	FileTypes		Valmis
 Group name:	New File Type Window		Ryhmänimi:
 Move up	FileTypes Window		Siirrä ylös
-Add	Attribute Window		Lisää
 File	FileTypes Window		Tiedosto
+Add	Attribute Window		Lisää
 Open file	FileTypes		Avaa tiedosto
 Version info	Application Type Window		Versiotiedot
 Final	Application Type Window		Lopullinen
 Preferred application	FileType Window		Ensisijainen sovellus
-FileTypes	FileTypes		Tiedostotyypit
 Set preferred application	Preferred App Menu		Aseta ensisijainen sovellus
 New file type	New File Type Window		Uusi tiedostotyyppi
 Short description:	Application Type Window		Lyhyt kuvaus:
@@ -142,6 +155,7 @@ Extra attributes	FileTypes Window		Lisäattribuutit
 Group:	New File Type Window		Ryhmä:
 Alpha	Application Types Window		Alfa
 Close	Application Type Window		Sulje
+Integer 16 bit	Attribute ListView		Kokonaisluku 16-bittinen
 Extension	Extension Window		Laajennus
 Rule:	FileTypes Window		Sääntö:
 FileTypes	System name		Tiedostotyyppiasetukset
@@ -153,5 +167,6 @@ Add…	FileTypes Window		Lisää…
 Edit icon…	Icon View		Muokkaa kuvaketta…
 Internal name:	Attribute Window		Sisäinen nimi:
 Show recognition rule	FileTypes Window		Näytä tunnistussääntö
+Double	Attribute ListView		Kaksoistarkkuuden liukuluku
 Move down	FileTypes Window		Siirrä alas
 Alpha	Application Type Window		Alfa

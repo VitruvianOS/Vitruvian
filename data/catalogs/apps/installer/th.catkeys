@@ -1,0 +1,59 @@
+1	thai	x-vnd.Haiku-Installer	4172419982
+Performing installation.	InstallProgress		กำลังทำการติดตั้ง
+Please close the DriveSetup window before closing the Installer window.	InstallerWindow		โปรดปิดหน้าต่าง DriveSetup ก่อนที่จะปิดหน้าต่างตัวติดตั้ง
+No optional packages available.	PackagesView		ไม่มีแพ็คเกจเสริม
+The mount point could not be retrieved.	InstallProgress		ไม่สามารถดึงจุดเชื่อมต่อได้
+<none>	InstallerWindow	No partition available	<none>
+Please choose target	InstallerWindow		กรุณาเลือกเป้าหมาย
+Cancel	InstallProgress		ยกเลิก
+Are you sure you want to to stop the installation?	InstallerWindow		คุณแน่ใจหรือไม่ว่าต้องการหยุดการติดตั้ง?
+Installer	System name		การติดตั้ง
+README	InstallerApp		อ่าน
+Quit	InstallerWindow		ปิด
+Write boot sector to '%s'	InstallerWindow		เขียนบูตเซกเตอร์ไปที่ '%s'
+Boot sector not written because of an internal error.	InstallProgress		บูตเซกเตอร์ไม่ได้ถูกเขียนเนื่องจากข้อผิดพลาดภายใน
+Welcome to the Haiku Installer!\n\n	InstallerApp		ยินดีต้อนรับสู่ Haiku Installer! \n\n
+?? of ??	InstallerWindow	Unknown progress	?? of ??
+DriveSetup, the application to configure disk partitions, could not be launched.	InstallerWindow		DriveSetup แอปพลิเคชันเพื่อกำหนดค่าพาร์ติชันดิสก์ไม่สามารถเปิดใช้งานได้
+Quit DriveSetup	InstallerWindow		ออกจาก DriveSetup
+Write boot sector	InstallerWindow		เขียนบูตเซกเตอร์
+%1ld of %2ld	InstallerWindow	number of files copied	%1ld of %2ld
+Finishing installation.	InstallProgress		จบการติดตั้ง
+Install from:	InstallerWindow		ติดตั้งจาก:
+Additional disk space required: 0.0 KiB	InstallerWindow		ต้องการพื้นที่ดิสก์เพิ่มเติม: 0.0 KiB
+This is beta-quality software! It means there is a risk of losing important data. Make frequent backups! You have been warned.\n\n\n	InstallerApp		นี่คือซอฟต์แวร์คุณภาพระดับเบต้า! หมายความว่ามีความเสี่ยงที่จะสูญเสียข้อมูลสำคัญ ทำการสำรองข้อมูลบ่อยๆ! คุณได้รับการเตือน\n\n\n
+???	InstallerWindow	Unknown currently copied item	???
+1)   If you are installing Haiku onto real hardware (not inside an emulator), you may want to prepare a hard disk partition from another OS (you could, for example, use a GParted Live-CD, which can also resize existing partitions to make room).\nYou can also set up partitions by launching DriveSetup from Installer, but you won't be able to resize existing partitions with it. While DriveSetup has been quite thoroughly tested over the years, it's recommended to have up-to-date backups of the other partitions on your system. Just in case…	InstallerApp		1) หากคุณกำลังติดตั้ง Haiku ลงบนฮาร์ดแวร์จริง (ไม่ใช่ภายในอีมูเลเตอร์) คุณอาจต้องการเตรียมพาร์ติชันฮาร์ดดิสก์จากระบบปฏิบัติการอื่น (เช่นคุณสามารถใช้ GParted Live-CD ซึ่งสามารถปรับขนาดพาร์ติชันที่มีอยู่ให้ สร้างห้อง) \nคุณยังสามารถตั้งค่าพาร์ติชันด้วยการเปิดตัว DriveSetup จากตัวติดตั้ง แต่คุณจะไม่สามารถปรับขนาดพาร์ติชันที่มีอยู่ด้วย ในขณะที่ DriveSetup ได้รับการทดสอบอย่างถี่ถ้วนในช่วงหลายปีที่ผ่านมาขอแนะนำให้ทำการสำรองข้อมูลล่าสุดของพาร์ติชั่นอื่น ๆ ในระบบของคุณ หากมี ..
+Hide optional packages	InstallerWindow		ซ่อนแพ็คเกจเสริม
+???	InstallerWindow	Unknown partition name	???
+Have fun and thanks for trying out Haiku!	InstallerApp		ขอให้สนุกและขอบคุณสำหรับการลองใช้ Haiku!
+Quit	InstallerApp		ออก
+Error writing boot sector.	InstallProgress		เกิดข้อผิดพลาดในการเขียนบูตเซกเตอร์
+OK	InstallerWindow		ตกลง
+Try installing anyway	InstallProgress		ลองติดตั้งใหม่
+IMPORTANT INFORMATION BEFORE INSTALLING HAIKU\n\n	InstallerApp		ข้อมูลสำคัญก่อนการติดตั้ง Haiku\n\n
+Additional disk space required: %s	InstallerWindow		ต้องการพื้นที่ดิสก์เพิ่มเติม: %s
+Stop	InstallerWindow	In alert after pressing Stop	หยุด
+Boot sector successfully written.	InstallProgress		บูตเซกเตอร์สำเร็จแล้ว
+An error was encountered and the installation was not completed:\n\nError:  %s	InstallerWindow		พบข้อผิดพลาดและการติดตั้งไม่เสร็จสมบูรณ์: \n\nข้อผิดพลาด:%s
+Restart	InstallerWindow		รีสตารท์
+The disk can't be mounted. Please choose a different disk.	InstallProgress		ไม่สามารถติดตั้งดิสก์ได้ โปรดเลือกดิสก์อื่น
+Begin	InstallerWindow		เริ่ม
+Collecting copy information.	InstallProgress		การรวบรวมข้อมูลการทำสำเนา
+Show optional packages	InstallerWindow		แสดงแพ็คเกจเสริม
+The destination disk may not have enough space. Try choosing a different disk or choose to not install optional items.	InstallProgress		ดิสก์ปลายทางอาจมีพื้นที่ไม่เพียงพอ ลองเลือกดิสก์อื่นหรือเลือกที่จะไม่ติดตั้งรายการเพิ่มเติม
+Installation canceled.	InstallProgress		การติดตั้งถูกยกเลิก
+Stop	InstallerWindow		หยุด
+Cancel	InstallerWindow		ยกเลิก
+Continue	InstallerWindow	In alert after pressing Stop	ต่อไป
+Scanning for disks…	InstallerWindow		กำลังสแกนหาดิสก์
+Running DriveSetup…\n\nClose DriveSetup to continue with the installation.	InstallerWindow		กำลังเรียกใช้งาน DriveSetup … \n\nปิด DriveSetup เพื่อดำเนินการติดตั้งต่อไป
+The partition can't be mounted. Please choose a different partition.	InstallProgress		ไม่สามารถติดตั้งพาร์ติชันได้ โปรดเลือกพาร์ติชันอื่น
+Set up partitions…	InstallerWindow		ตั้งค่าพาร์ติชัน
+Install progress:  	InstallerWindow		ความคืบหน้าการติดตั้ง:
+You can't install the contents of a disk onto itself. Please choose a different disk.	InstallProgress		คุณไม่สามารถติดตั้งเนื้อหาของดิสก์ลงบนตัวเอง โปรดเลือกดิสก์อื่น
+OK	InstallProgress		ตกลง
+Onto:	InstallerWindow		บน:
+Tools	InstallerWindow		เครื่องมือ
+scanning…	InstallerWindow		กำลังค้นหา
+Continue	InstallerApp		ต่อไป

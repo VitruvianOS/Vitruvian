@@ -1,67 +1,77 @@
-1	czech	x-vnd.Haiku-MediaConverter	611032470
-%.1f kHz %ld channel / %lld frames	MediaFileInfo		%.1f kHz %ld kanál / %lld snímků
-%.1f kHz mono / %lld frames	MediaFileInfo		%.1f kHz mono / %lld snímků
-%.1f kHz stereo / %lld frames	MediaFileInfo		%.1f kHz stereo / %lld snímků
-%amountOfFiles files were not recognized as supported media files:	MediaConverter		%amountOfFiles souborů nebylo rozpoznáno, jako soubory médií:
-%d bit 	MediaFileInfo		%d bitový
-%d byte 	MediaFileInfo		%d byte 
-%u x %u, %.2ffps / %Ld frames	MediaFileInfo	Width x Height, fps / frames	%u x %u, %.2ffps / %Ld snímků
-An error has occurred reading the file info.\n\nError : 	MediaConverter-FileInfo		Vyskytla se chyba načítání informací o souboru.\n\nChyba: 
-Audio encoding:	MediaConverter		Kódování zvuku:
-Audio quality not supported	MediaConverter		Nepodporovaná kvalita zvuku
-Audio quality: %3d%%	MediaConverter		Kvalita zvuku: %3d%%
-Audio:	MediaConverter-FileInfo		Zvuk:
-Cancel	MediaConverter		Zrušit
-Cancelling	MediaConverter		Rušení
-Cancelling…	MediaConverter		Rušení...
-Continue	MediaConverter		Pokračovat
-Conversion cancelled	MediaConverter		Převod zrušen
+1	czech	x-vnd.Haiku-MediaConverter	1249914255
+Input file not recognized as Audio or Video	MediaConverter		Vstupní soubor nebyl rozpoznán jako zvuk nebo obraz
+Source files	MediaConverter		Zdrojový soubor
+Error writing video frame %lld	MediaConverter		Chyba zápisu snímku videa %lld
+Audio quality: %s	MediaConverter		Kvalita zvuku: %s
+Error converting '%filename'	MediaConverter		Chyba převádění '%filename'
+Selected directory not found. Defaulting to /boot/home	MediaConverter		Vybraný adresář nebyl nalezen. Použije se výchozí /boot/home
 Conversion completed	MediaConverter		Převod dokončen
-Convert	MediaConverter		Převést
-Drop media files onto this window	MediaConverter		Soubory médií přetáhni do tohoto okna
-Duration:	MediaConverter-FileInfo		Tvání:
-Encoder parameters	MediaConverter-EncoderWindow		Parametry Enkderu
-End   [ms]: 	MediaConverter		Konec [ms]: 
-Error	MediaConverter		Chyba
-Error converting '%filename'	MediaConverter		Chyba převádění
-Error creating '%filename'	MediaConverter		Chyba vytváření '%filename'
-Error launching: %strError%	MediaConverter		Chyba otevírání: %strError%
-Error loading a file	MediaConverter		CHyba otevírání souboru
-Error loading files	MediaConverter		Chyba otevírání souborů
-Error read audio frame %Ld	MediaConverter		Chyba čtení zvukového rámce %Ld
-Error read video frame %Ld	MediaConverter		Chyba čtení video snímku %Ld
-Error writing audio frame %Ld	MediaConverter		Chyba zápisu zvukového rámce %Ld
-Error writing video frame %Ld	MediaConverter		Chyba zápisu videosnímku %Ld
-File	Menu		Soubor
-File Error	MediaConverter-FileInfo		Chyba souboru
-File details	MediaConverter		Podrobnosti souboru
-File format:	MediaConverter		Formát souboru:
-High	MediaConverter		Vysoká
-Low	MediaConverter		Nízký
+Audio:	MediaConverter-FileInfo		Zvuk:
 MediaConverter+:SaveDirectory	MediaConverter		MediaConverter+:SaveDirectory
-No audio	Audio codecs list		Bez zvuku
-No file selected	MediaConverter-FileInfo		Nebyl zvolen žádný soubor
-No video	Video codecs list		Bez videa
+Error creating video.	MediaConverter		Chyba při vytváření videa.
+Cancelling	MediaConverter		Rušení
 None available	Audio codecs		Žádný po ruce
+The file has multiple audio or video tracks, only the first one of each will be converted.	MediaConverter		Soubor obsahuje více zvukových či obrazových stop, převedeny budou pouze první z nich.
+No file selected	MediaConverter-FileInfo		Nebyl zvolen žádný soubor
+High	MediaConverter		Vysoká
+{0, plural, one{The file was not recognized as a supported media file:} other{# files were not recognized as supported media files:}}	MediaConverter		{0, plural, one{Soubor nebyl rozeznán jako podporovaný typ multimédií:} few{# soubory nebyly rozeznány jako podporované typy multimédií:} other{# souborů nebylo rozeznáno jako podporované typy multimédií:}}
+File Error	MediaConverter-FileInfo		Chyba souboru
 None available	Video codecs		Žádný po ruce
+Output format	MediaConverter		Výstupní formát
+%.1f kHz mono	MediaFileInfo		%.1f kHz mono
+%.1f kHz stereo	MediaFileInfo		%.1f kHz stereo
 OK	MediaConverter		OK
-OK	MediaConverter-FileInfo		OK
-Open…	Menu		Otevřít...
+Error creating '%filename'	MediaConverter		Chyba vytváření '%filename'
+Error loading a file	MediaConverter		CHyba otevírání souboru
+Encoder parameters	MediaConverter-EncoderWindow		Parametry Enkderu
+Open…	Menu		Otevřít…
+Audio encoding:	MediaConverter		Kódování zvuku:
+Multi-track file detected	MediaConverter		Zjištěn vícestopý soubor
+Cancelling…	MediaConverter		Rušení…
 Output file '%filename' created	MediaConverter		Byl vytvořen výstupní soubor '%filename'
 Output folder	MediaConverter		Výstupní adresář
-Output format	MediaConverter		Výstupní formát
-Preview	MediaConverter		Náhled
-Quit	Menu		Konec
-Select	MediaConverter		Zvolit
-Select this folder	MediaConverter		Zvolit tento adresář
-Source files	MediaConverter		Zdrojový soubor
-Start [ms]: 	MediaConverter		Start [ms]: 
-The file was not recognized as a supported media file:	MediaConverter		Soubor nebyl rozpoznán jako podporovaný soubor médií:
-Video encoding:	MediaConverter		Kódování videa:
-Video quality not supported	MediaConverter		Nepodporovaná videokvalita
-Video quality: %3d%%	MediaConverter		Kvalita videa: %3d%%
+Error creating track.	MediaConverter		Chyba při vytváření stopy.
+ seconds	MediaFileInfo		 sekund
 Video using parameters form settings	MediaConverter		Video používá parametry z nastavení
 Video:	MediaConverter-FileInfo		Video:
-Writing audio track: %ld%% complete	MediaConverter		Zápis zvukové stopy: %ld%% hotovo
-Writing video track: %ld%% complete	MediaConverter		Zápis video stopy: %ld%% hotovo
-seconds	MediaFileInfo		sekund
+Select	MediaConverter		Zvolit
+Conversion cancelled	MediaConverter		Převod zrušen
+Low	MediaConverter		Nízká
+Error loading files	MediaConverter		Chyba otevírání souborů
+{0, plural, one{# bit} other{# bits}}	MediaFileInfo		{0, plural, one{# bit} few{# bity} other{# bitů}}
+Video quality: %s	MediaConverter		Kvalita videa: %s
+End   [ms]: 	MediaConverter		Konec [ms]: 
+Cancel	MediaConverter		Zrušit
+OK	MediaConverter-FileInfo		OK
+Video encoding:	MediaConverter		Kódování videa:
+An error has occurred reading the file info.\n\nError : 	MediaConverter-FileInfo		Vyskytla se chyba při načítání informací o souboru.\n\nChyba: 
+Error	MediaConverter		Chyba
+File details	MediaConverter		Podrobnosti souboru
+No audio	Audio codecs list		Bez zvuku
+Drop media files onto this window	MediaConverter		Soubory médií přetáhni do tohoto okna
+{0, plural, one{# frame} other{# frames}}	MediaFileInfo		{0, plural, one{# snímek} few{# snímky} other{# snímků}}
+Error read audio frame %lld	MediaConverter		Chyba čtení zvukového snímku %lld
+Quit	Menu		Konec
+{0, plural, one{# byte} other{# bytes}}	MediaFileInfo		{0, plural, one{# bajt} other{# bajty} other{# bajtů}}
+Writing audio track: %s complete	MediaConverter		Zápis zvukové stopy: %s hotovo
+Duration:	MediaConverter-FileInfo		Tvání:
+MediaConverter	System name		Konvertor multimédií
+Writing video track: %s complete	MediaConverter		Zápis obrazové stopy: %s hotovo
+Error launching: %strError%	MediaConverter		Chyba otevírání: %strError%
+Error writing audio frame %lld	MediaConverter		Chyba při zápisu zvukového snímku %lld
+File format:	MediaConverter		Formát souboru:
+File	Menu		Soubor
+Video quality not supported	MediaConverter		Nepodporovaná videokvalita
+Select this folder	MediaConverter		Zvolit tento adresář
+%.1f kHz %ld channel	MediaFileInfo		%.1f kHz %ld kanál
+Understood	MediaConverter		Rozuměno
+%u × %u, %.2ffps	MediaFileInfo	Width × Height, fps;The '×' is the Unicode multiplication sign U+00D7	%u × %u, %.2f snímků/s
+%d bit 	MediaFileInfo		%d bitový 
+No video	Video codecs list		Bez videa
+Continue	MediaConverter		Pokračovat
+Convert	MediaConverter		Převést
+Audio quality not supported	MediaConverter		Nepodporovaná kvalita zvuku
+Error writing to location: %strPath%. Defaulting to location: /boot/home	MediaConverter		Chyba při zápisu do umístění: %strPath%. Výchozí umístění: /boot/home
+Error read video frame %lld	MediaConverter		Chyba čtení obrazového snímku %lld
+Preview	MediaConverter		Náhled
+Start [ms]: 	MediaConverter		Start [ms]: 

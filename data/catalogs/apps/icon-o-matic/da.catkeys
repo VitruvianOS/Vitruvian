@@ -1,0 +1,120 @@
+1	danish	x-vnd.haiku-icon_o_matic	3858046134
+None	Icon-O-Matic-Properties		Ingen
+Add empty	Icon-O-Matic-ShapesList		Tilføj tom
+Opening the icon failed!	Icon-O-Matic-Main		Åbning af ikonet mislykkedes!
+Reverse path	Icon-O-Matic-ReversePathCmd		Vend sti om
+Bleep!	Icon-O-Matic-Exporter	Exporter - Continue in error dialog	Bip!
+Add with path	Icon-O-Matic-ShapesList		Tilføj med sti
+Copy	Icon-O-Matic-Properties		Kopiér
+Color	Icon-O-Matic-PropertyNames		Farve
+Format	Icon-O-Matic-SavePanel		Format
+Color	Icon-O-Matic-StyleTypes		Farve
+Select	Icon-O-Matic-Properties		Vælg
+Reset transformation	Icon-O-Matic-ShapesList		Nulstil omformning
+Duplicate	Icon-O-Matic-StylesList		Duplikér
+Rotate	Icon-O-Matic-TransformationBoxStates		Rotér
+Shorten	Icon-O-Matic-PropertyNames		Afkort
+The text you are trying to import is quite long, are you sure?	Icon-O-Matic-StyledTextImport		Teksten du prøver at importere er ret lang, er du sikker?
+Paste	Icon-O-Matic-Properties		Indsæt
+Close	Icon-O-Matic-Menu-File		Luk
+Add rect	Icon-O-Matic-PathsList		Tilføj firkant
+Rotation	Icon-O-Matic-PropertyNames		Drejning
+Transform	Icon-O-Matic-PathManipulator		Omform
+Add shape with style	Icon-O-Matic-Menu-Shape		Tilføj form med stil
+Remove	Icon-O-Matic-StylesList		Fjern
+Cancel	Icon-O-Matic-Menu-Settings		Afbryd
+Transformation	Icon-O-Matic-TransformationBoxStates		Omformning
+Closed	Icon-O-Matic-PropertyNames		Lukket
+<nothing to redo>	Icon-O-Matic-Menu-Edit		<intet at omgøre>
+Height	Icon-O-Matic-PropertyNames		Højde
+warning	Icon-O-Matic-SVGExport		advarsel
+File	Icon-O-Matic-Menus		Fil
+Properties	Icon-O-Matic-Menus		Egenskaber
+Path	Icon-O-Matic-PropertyNames		Sti
+Path	Icon-O-Matic-Menus		Sti
+Stroke	Transformation		Strøg
+Flip	Icon-O-Matic-PathManipulator		Spejlvend
+Opacity	Icon-O-Matic-PropertyNames		Gennemsigtighed
+OK	Icon-O-Matic-ColorPicker		O.k.
+Error: 	Icon-O-Matic-Main		Fejl: 
+Saving your document failed!	Icon-O-Matic-Exporter		Gemning af dokumentet mislykkedes!
+Snap to grid	Icon-O-Matic-Menu-Settings		Fastgør til gitter
+Opening the document failed!	Icon-O-Matic-Main		Åbning af dokumentet mislykkedes!
+Add with path & style	Icon-O-Matic-ShapesList		Tilføj med sti og stil
+Shape	Icon-O-Matic-Menus		Form
+<unavailable>	Icon-O-Matic-StyleTypes		<utilgængelig>
+Min LOD	Icon-O-Matic-PropertyNames		Min. LOD
+Add	Icon-O-Matic-TransformersList		Tilføj
+Settings	Icon-O-Matic-Menus		Indstillinger
+Scale X	Icon-O-Matic-PropertyNames		Skalér X
+Add	Icon-O-Matic-PathsList		Tilføj
+Remove	Icon-O-Matic-PathManipulator		Fjern
+Duplicate	Icon-O-Matic-ShapesList		Duplikér
+Alpha	Icon-O-Matic-PropertyNames		Alfa
+Contour	Transformation		Omrids
+Rounding	Icon-O-Matic-PropertyNames		Afrunding
+Joins	Icon-O-Matic-PropertyNames		Sammenføjer
+Cancel	Icon-O-Matic-ColorPicker		Afbryd
+Duplicate	Icon-O-Matic-PathsList		Duplikér
+Save	Icon-O-Matic-Menu-Settings		Gem
+Export as…	Icon-O-Matic-Menu-File		Eksportér som…
+Diamond	Icon-O-Matic-StyleTypes		Diamant
+Don't save	Icon-O-Matic-Menu-Settings		Gem ikke
+Add shape with path	Icon-O-Matic-Menu-Shape		Tilføj form med sti
+Translation X	Icon-O-Matic-PropertyNames		Oversættelse X
+Rotate indices backwards	Icon-O-Matic-PathsList		Drej indekser baglæns
+Overwrite	Icon-O-Matic-SVGExport		Overskriv
+Cancel	Icon-O-Matic-SVGExport		Afbryd
+Open…	Icon-O-Matic-Menu-File		Åbn…
+Remove	Icon-O-Matic-ShapesList		Fjern
+Drop shapes	Icon-O-Matic-ShapesList		Drop former
+Linear	Icon-O-Matic-StyleTypes		Lineær
+Clean up	Icon-O-Matic-PathsList		Ryd op
+Split	Icon-O-Matic-PathManipulator		Kløv
+Move	Icon-O-Matic-TransformationBoxStates		Flyt
+Conic	Icon-O-Matic-StyleTypes		Keglesnit
+Name	Icon-O-Matic-PropertyNames		Navn
+Reset transformation	Icon-O-Matic-StylesList		Nulstil omformning
+Reverse	Icon-O-Matic-PathsList		Vend om
+Remove	Icon-O-Matic-PathsList		Fjern
+Style type	Icon-O-Matic-StyleTypes		Stiltype
+Quit	Icon-O-Matic-Menu-File		Afslut
+Gradient	Icon-O-Matic-StyleTypes		Overgang
+Add shape with path & style	Icon-O-Matic-Menu-Shape		Tilføj form med sti og stil
+Radial	Icon-O-Matic-StyleTypes		Radial
+Text too long	Icon-O-Matic-StyledTextImport		Teksten er for lang
+Caps	Icon-O-Matic-PropertyNames		Store bogstaver
+OK	Icon-O-Matic-SVGImport		O.k.
+Append…	Icon-O-Matic-Menu-File		Tilføj til slutning…
+Scale Y	Icon-O-Matic-PropertyNames		Skalér Y
+Rotate indices forwards	Icon-O-Matic-PathsList		Rotér indekser fremad
+Save	Icon-O-Matic-Menu-File		Gem
+Add circle	Icon-O-Matic-PathsList		Tilføj cirkel
+Freeze transformation	Icon-O-Matic-ShapesList		Frys omformning
+Untitled	Icon-O-Matic-Main		Unavngivet
+Max LOD	Icon-O-Matic-PropertyNames		Maks. LOD
+Save changes to current icon before closing?	Icon-O-Matic-Menu-Settings		Gem ændringer til nuværende ikon inden lukning?
+Failed to open the file '%s' as an SVG document.\n\n	Icon-O-Matic-SVGImport		Kunne ikke åbne filen '%s' som et SVG-dokument.\n\n
+Save as…	Icon-O-Matic-Menu-File		Gem som…
+Swatches	Icon-O-Matic-Menus		Pensler
+<modify path>	Icon-O-Matic-PathCmd		<redigér sti>
+Icon-O-Matic	System name		Icon-O-Matic
+<nothing to undo>	Icon-O-Matic-Menu-Edit		<intet at fortryde>
+Add	Icon-O-Matic-StylesList		Tilføj
+Translation Y	Icon-O-Matic-PropertyNames		Oversættelse Y
+Scale	Icon-O-Matic-TransformationBoxStates		Skalér
+All	Icon-O-Matic-Properties		Alle
+Transformer	Icon-O-Matic-Menus		Omformer
+Invert selection	Icon-O-Matic-Properties		Omvendt markering
+<unkown property>	Icon-O-Matic-PropertyNames		<ukendt egenskab>
+Pick a color	Icon-O-Matic-ColorPicker		Vælg en farve
+Settings…	Icon-O-Matic-SavePanel		Indstillinger…
+Add with style	Icon-O-Matic-ShapesList		Tilføj med stil
+New	Icon-O-Matic-Menu-File		Ny
+Gradient type	Icon-O-Matic-StyleTypes		Overgangstype
+Export	Icon-O-Matic-Menu-File		Eksportér
+Width	Icon-O-Matic-PropertyNames		Bredde
+Add reference image	Icon-O-Matic-ShapesList		Tilføj referencebillede
+Style	Icon-O-Matic-Menus		Stil
+Off	Icon-O-Matic-Menu-Settings		Fra
+Edit	Icon-O-Matic-Menus		Redigér

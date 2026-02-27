@@ -1,0 +1,52 @@
+1	turkish	x-vnd.Haiku-Expander	2735024965
+Destination	ExpanderWindow		Hedef
+Other	ExpanderPreferences		Diğer
+Automatically show contents listing	ExpanderPreferences		İçerik listesini kendiliğinden göster
+Expander	System name		Paketaçar
+Set source…	ExpanderMenu		Kaynak belirle…
+OK	ExpanderWindow		Tamam
+The destination is not a folder.	ExpanderWindow		Hedef bir klasör değil.
+%appname%: Choose destination	DirectoryFilePanel		%appname%: Hedef konum seç
+The folder was either moved, renamed or not supported.	ExpanderWindow		Klasör taşınmış, yeniden adlandırılmış veya desteklenmiyor olabilir.
+Close window when done expanding	ExpanderPreferences		Genişletme bittikten sonra pencereyi kapat
+Close	ExpanderMenu		Kapat
+Create	ExpanderWindow		Oluştur
+Creating listing for '%s'…	ExpanderWindow		“%s” için listeleme oluşturuluyor…
+Show contents	ExpanderMenu		İçeriği göster
+%appname% settings	ExpanderPreferences		%appname% ayarları
+Are you sure you want to stop expanding this archive? The expanded items may not be complete.	ExpanderWindow		Bu arşivi genişletmeyi durdurmak istediğinizden emin misiniz? Tüm ögeler çıkarılamamış olabilir.
+Settings	ExpanderMenu		Ayarlar
+Expand	ExpanderWindow		Genişlet
+Open destination folder after extraction	ExpanderPreferences		Çıkarma bittikten sonra hedef klasörü aç
+Same directory as source (archive) file	ExpanderPreferences		Kaynak (arşiv) dosya ile aynı dizin
+Stop	ExpanderWindow		Durdur
+Cancel	ExpanderWindow		Vazgeç
+Error when expanding archive	ExpanderWindow		Arşiv genişletilirken hata
+Expand	ExpanderMenu		Genişlet
+Failed to create the destination folder.	ExpanderWindow		Hedef klasör oluşturulamadı.
+Settings…	ExpanderMenu		Ayarlar…
+Select current	DirectoryFilePanel		Olanı seç
+Expanding '%s'…	ExpanderWindow		“%s” genişletiliyor…
+OK	ExpanderPreferences		Tamam
+File expanded	ExpanderWindow		Dosya genişletildi
+Automatically expand files	ExpanderPreferences		Dosyaları kendiliğinden genişlet
+Select	DirectoryFilePanel		Seç
+Show contents	ExpanderWindow		İçeriği göster
+Stop	ExpanderMenu		Durdur
+Select '%s'…	DirectoryFilePanel		“%s” ögesini seç…
+Expansion	ExpanderPreferences		Genişletme
+Set destination…	ExpanderMenu		Hedef belirle…
+Continue	ExpanderWindow		Sürdür
+ is not supported	ExpanderWindow		 desteklenmiyor
+Cancel	ExpanderPreferences		Vazgeç
+Use:	ExpanderPreferences		Şunu kullan:
+Destination folder	ExpanderPreferences		Hedef klasör
+Leave destination folder path empty	ExpanderPreferences		Hedef klasör yolunu boş bırak
+Destination folder doesn't exist. Would you like to create it?	ExpanderWindow		Hedef klasör yok. Oluşturulsun mu?
+The file doesn't exist	ExpanderWindow		Dosya yok
+Hide contents	ExpanderWindow		İçeriği gizle
+Source	ExpanderWindow		Kaynak
+The destination is read only.	ExpanderWindow		Hedef saltokunur.
+%appname%: Open	ExpanderWindow		%appname%: Aç
+Select	ExpanderPreferences		Seç
+File	ExpanderMenu		Dosya

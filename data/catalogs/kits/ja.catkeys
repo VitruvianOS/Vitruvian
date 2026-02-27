@@ -1,12 +1,12 @@
-1	japanese	x-vnd.Haiku-libbe	3337473349
-{0, plural, one{# byte} other{# bytes}}	StringForSize		{0, plural, one{# バイト} other{# バイト}}
+1	japanese	x-vnd.Haiku-libbe	310849835
 All Rights Reserved.	AboutWindow		All Rights Reserved.
 gold master	AboutWindow		ゴールデンマスター
 Undo	TextView		元に戻す
+OK	PrintJob		OK
+OK	Dragger		OK
 gamma	AboutWindow		γ
 development	AboutWindow		開発版
-OK	Dragger		OK
-OK	PrintJob		OK
+{0, plural, one{%s byte/s} other{%s bytes/s}}	StringForRate	units per second	{0, plural, one{%s byte/s} other{%s bytes/s}}
 Print Server is not responding.	PrintJob		プリントサーバーが応答しません。
 About %app%	AboutMenuItem		%app% について
 Warning	Dragger		警告
@@ -14,29 +14,37 @@ Green:	ColorControl		緑:
 Redo	TextView		やり直し
 No pages to print!	PrintJob		印刷するページがありません。
 beta	AboutWindow		β
+%s MiB	StringForSize	size unit	%s MiB
 OK	ZombieReplicantView		OK
 Cut	TextView		切り取り
-%3.2f GiB	StringForSize		%3.2f GiB
+Default	Default decorator about box		デフォルト
 Can't delete this replicant from its original application. Life goes on.	Dragger		このレプリカントを元々のアプリケーションから削除することはできません。現状を維持します。
+%s KiB	StringForSize	size unit	%s KiB
 Error	ZombieReplicantView		エラー
 Paste	TextView		貼り付け
 OK	AboutWindow		OK
-Special Thanks:	AboutWindow		Special Thanks:
-%.2f TiB	StringForSize		%.2f TiB
-Remove replicant	Dragger		レプリカントを削除
+%s MiB/s	StringForRate	units per second	%s MiB/s
+%s TiB	StringForSize	size unit	%s TiB
+Default Haiku window decorator.	Default decorator about box		デフォルトの Haiku ウィンドウデコレーター。
+%s GiB	StringForSize	size unit	%s GiB
+%s B	StringForSize	size unit, narrow space	%s B
+Remove replicant	Dragger		レプリカントの削除
 Version	AboutWindow		バージョン
 Red:	ColorControl		赤:
 <empty>	Menu		<空>
 Copy	TextView		コピー
 Select all	TextView		すべて選択
 alpha	AboutWindow		α
-%3.2f MiB	StringForSize		%3.2f MiB
 Error	PrintJob		エラー
+%s TiB/s	StringForRate	units per second	%s TiB/s
+About %app…	Dragger		%appについて...
 About %app%	AboutWindow		%app% について
-About %app…	Dragger		%appについて…
+{0, plural, one{%s byte} other{%s bytes}}	StringForSize	size unit	{0, plural, one{%s byte} other{%s bytes}}
+%s GiB/s	StringForRate	units per second	%s GiB/s
 Version history:	AboutWindow		改訂履歴:
 Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		このレプリカント用のアプリケーションを見つけることができません。アプリケーション識別子が提供されていません。\n%error
-%3.2f KiB	StringForSize		%3.2f KiB
+%s KiB/s	StringForRate	units per second	%s KiB/s
 Blue:	ColorControl		青:
+Special thanks:	AboutWindow		Special thanks:
 Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		\"%description\" 用のレプリカントを作成できません。\n%error
 Written by:	AboutWindow		作者:

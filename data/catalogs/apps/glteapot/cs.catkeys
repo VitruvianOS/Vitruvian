@@ -1,0 +1,24 @@
+1	czech	x-vnd.Haiku-GLTeapot	1263334963
+Right	TeapotWindow		Vpravo
+Backface culling	TeapotWindow		Ořezávání zadní strany
+Add a teapot	TeapotWindow		Přidat konvici
+Yellow	TeapotWindow		Žlutá
+Perspective	TeapotWindow		Perspektiva
+Off	TeapotWindow		Vypnuto
+Quit	TeapotWindow		Ukončit
+Green	TeapotWindow		Zelená
+Blue	TeapotWindow		Modrá
+White	TeapotWindow		Bílá
+Upper center	TeapotWindow		Nahoře uprostřed
+Filled polygons	TeapotWindow		Vyplněné polygony
+Lower left	TeapotWindow		Vlevo dole
+Fog	TeapotWindow		Mlha
+FPS display	TeapotWindow		Zobrazit snímovou frekvenci
+GLTeapot	System name		GLKonvice
+Limit FPS to refresh rate	TeapotWindow		Omezit počet snímků/s na rychlost monitoru
+Settings	TeapotWindow		Nastavení
+Gouraud shading	TeapotWindow		Goraudovo stínování
+Lighting	TeapotWindow		Osvětlení
+Z-buffered	TeapotWindow		Z-buffering
+Red	TeapotWindow		Červená
+Lights	TeapotWindow		Osvětlení

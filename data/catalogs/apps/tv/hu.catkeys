@@ -1,9 +1,8 @@
-1	hungarian	x-vnd.Haiku.TV	1995288111
+1	hungarian	x-vnd.Haiku.TV	337483365
 No menu	MainWin		Nincs menü
 No border	MainWin		Keret kikapcsolása
-force 704 x 576, display aspect 4:3	MainWin		704 x 576 kikényszerítése, 4:3-as képaránnyal
 Error, connecting to interface failed:\n\n	MainWin		Hiba, nem sikerült csatlakozni a felülethez:\n\n
-force 544 x 576, display aspect 4:3	MainWin		544 x 576 kényszerítése, 4:3-as képaránnyal
+force 720 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	kényszerített 720 × 576, képarány: 4:3
 Full screen	MainWin		Teljes képernyő
 Scale to native size	MainWin		Méretezés az eredeti méretre
 unknown	MainWin		ismeretlen
@@ -13,14 +12,16 @@ DVB - Digital Video Broadcasting TV	MainWin		DVB - Digitális videóközvetíté
 Always on top	MainWin		Mindig legyen felül az ablak
 Debug	MainWin		Hibakeresés
 Interface	MainWin		Felület
-force 720 x 576, display aspect 4:3	MainWin		720 x 576 kényszerítése, 4:3-as képaránnyal
 Quit	MainWin		Kilépés
 Channel	MainWin		Csatorna
 Previous channel	MainWin		Előző csatorna
 OK	MainWin		Rendben
-TV	MainWin		Tv
+TV	MainWin		TV
+force 544 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	kényszerített 544 × 576, képarány: 4:3
 Settings	MainWin		Beállítások
-TV	System name		Tv
+force 704 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	kényszerített 704 × 576, képarány: 4:3
+%s - %d × %d, %.3f:%.3f => %.0f × %.0f	MainWin	The '×' is the Unicode multiplication sign U+00D7	%s - %d × %d, %.3f:%.3f => %.0f × %.0f
+TV	System name		TV
 Settings…	MainWin		Beállítások…
 None	MainWin		Nincs
 Error, interface is busy:\n\n	MainWin		Hiba, a felület foglalt:\n\n

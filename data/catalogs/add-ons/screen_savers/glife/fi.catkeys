@@ -1,14 +1,14 @@
-1	finnish	x-vnd.Haiku-GLifeScreensaver	2182395945
+1	finnish	x-vnd.Haiku-GLifeScreensaver	3750244792
 by Aaron Hill	GLife ScreenSaver		tekijä: Aaron Hill
+Grid life delay: none	GLife ScreenSaver		Rasterin käyttöikäviive: ei mitään
 None	GLife ScreenSaver		Ei mitään
-none	GLife ScreenSaver		ei mitään
-Grid Height: %li	GLife ScreenSaver		Rasterikorkeus: %li
-Grid Width: 	GLife ScreenSaver		Rasterileveys: 
-Grid Border: %li	GLife ScreenSaver		Rasteriraja: %li
-Grid Border: 	GLife ScreenSaver		Rasteriraja: 
-Grid Life Delay: <number>x	This is a factor: the x represents 'times'		Rasterin elinkaariviive: <number>x
+Grid width: 	GLife ScreenSaver		Rasterileveys: 
+Grid life delay: %d×	This is a factor: the × represents 'times', don't translate '%d'		Rasterin elinkaariviive: %d×
+Grid border: %d	GLife ScreenSaver		Rasteriraja: %d
+Grid width: %d	GLife ScreenSaver		Rasterileveys: %d
+Grid border: 	GLife ScreenSaver		Rasteriraja: 
 OpenGL \"Game of Life\"	GLife ScreenSaver		OpenGL ”Elämänpeli”
-Grid Height: 	GLife ScreenSaver		Rasterin korkeus: 
+Grid height: 	GLife ScreenSaver		Rasterikorkeus: 
 4x	GLife ScreenSaver	This is a factor: the x represents 'times'	4x
-Grid Width: %li	GLife ScreenSaver		Rasterileveys: %li
-Grid Life Delay: 	GLife ScreenSaver		Rasterielinikäviive: 
+Grid life delay: 	GLife ScreenSaver		Rasterin käyttöikäviive: 
+Grid height: %d	GLife ScreenSaver		Rasterikorkeus: %d

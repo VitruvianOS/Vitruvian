@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-Appearance	663472720
+1	finnish	x-vnd.Haiku-Appearance	3146871853
 Control border	Colors tab		Säätimen reuna
 Control mark	Colors tab		Ohjausmerkki
 Off	AntialiasingSettingsView		Pois päältä
@@ -36,13 +36,14 @@ Menu font:	Font view		Valikkokirjasin:
 Bold font:	Font view		Lihavoitu kirjasin:
 %decorName\n\nAuthors:\n\t%decorAuthors\n\nURL: %decorURL\nLicense: %decorLic\n\n%decorDesc\n	DecorSettingsView		%decorName\n\nTekijät:\n\t%decorAuthors\n\nVerkko-osoite: %decorURL\nLisenssi: %decorLic\n\n%decorDesc\n
 Choose Decorator	DecorSettingsView		Valitse koristelu
-Strong	AntialiasingSettingsView		Vahva
 Failure	Colors tab		Epäonnistuminen
+Strong	AntialiasingSettingsView		Vahva
 Double:	DecorSettingsView		Kaksikko:
 Selected menu item text	Colors tab		Valitun valikkovalinnan teksti
 Size:	Font Selection view		Koko:
 Panel background	Colors tab		Paneelin tausta
 Plain font:	Font view		Tavallinen kirjasin:
+Automatically pick secondary colors	Colors tab		Poimi automaattisesti toissijaiset värit
 Window tab text	Colors tab		Ikkunavälilehden teksti
 Navigation pulse	Colors tab		Navigoinnin välke
 LCD subpixel	AntialiasingSettingsView		LCD-alipikseli
@@ -74,6 +75,5 @@ Inactive window border	Colors tab		Ei-aktiivinen ikkunaraja
 Colors	APRWindow		Värit
 About control look	DecorSettingsView		Ohjelmasta control look
 Control highlight	Colors tab		Säätimen korostus
-Status bar	Colors tab		Tilapalkki
 Link hover	Colors tab		Linkkileijunta
 Single:	DecorSettingsView		Yksikkö:

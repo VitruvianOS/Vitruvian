@@ -1,5 +1,80 @@
-1	esperanto	x-vnd.Haiku-FirstBootPrompt	416868896
+1	esperanto	x-vnd.Haiku-FirstBootPrompt	2131367349
+Japanese	KeymapNames		Japana
+US	KeymapNames		Usona
+Cancel	BootPromptWindow		Nuligi
+Esperanto	KeymapNames		Esperanta
+Belarusian	KeymapNames		Belorusa
+Brazilian	KeymapNames		Brazila
+Dvorak	KeymapNames		Dvorak
+Polish	KeymapNames		Pola
+Latin-American	KeymapNames		Latin-Amerika
+Ukrainian	KeymapNames		Ukraina
+Russian (Yawert)	KeymapNames		Rusa (Yawert)
+United-Kingdom	KeymapNames		Angluja
+Quit Haiku	System name		Forlasi Hajkon
+Turkish (Type-F)	KeymapNames		Turka (Tipo-F)
+Serbian (Cyrillic)	KeymapNames		Serba (Cirila)
+Belgian (point)	KeymapNames		Belgia (punkto)
+Bulgarian (Cyrillic)	KeymapNames		Bulgara (Cirila)
+Finnish	KeymapNames		Finna
+Swedish	KeymapNames		Sveda
+Svorak	KeymapNames		Svoraka
+German	KeymapNames		Germana
+Swiss-German	KeymapNames		Svisgermana
+Keymap	BootPromptWindow		Klavararanĝo
+Spanish (Dvorak)	KeymapNames		Hispana (Dvorak)
+US-International	KeymapNames		Usona Internacia
+Czech	KeymapNames		Ĉeĥa
+Turkish (Type-Q)	KeymapNames		Turka (Tipo-Q)
+Slovak	KeymapNames		Slovaka
+Russian (Udmurt, Komi, Mari)	KeymapNames		Rusa (Udmurt, Komi, Mari)
+Thai (TIS-820.2538)	KeymapNames		Taja (TIS-820.2538)
+Colemak	KeymapNames		Colemak
+Dvorak (programmer's)	KeymapNames		Dvorak (por programistoj)
+Russian (Mac)	KeymapNames		Rusa (Makintoŝa)
+German (Mac)	KeymapNames		Germana (Makintoŝa)
+Arabic (102)	KeymapNames		Araba (102)
+Belarusian (Latin)	KeymapNames		Belorusa (Latina)
+Belarusian (Mac)	KeymapNames		Belorusa (Makintoŝa)
+Hebrew	KeymapNames		Hebrea
+Greek	KeymapNames		Greka
+Croatian	KeymapNames		Kroata
+Faeroese	KeymapNames		Feroa
+Polish (Typewriter)	KeymapNames		Pola (Skribmaŝina)
+French (Mac)	KeymapNames		Franca (Makintoŝa)
+Spanish	KeymapNames		Hispana
+Ukrainian (Mac)	KeymapNames		Ukraina (Makintoŝa)
+Estonian	KeymapNames		Estona
+French (Bépo)	KeymapNames		Franca (Bépo)
+Restart system	BootPromptWindow		Restartigi sistemon
+Serbian (Latin)	KeymapNames		Serba (Latina)
+Russian (Typewriter)	KeymapNames		Rusa (Skribmaŝina)
+French	KeymapNames		Franca
+Italian	KeymapNames		Itala
+Portuguese	KeymapNames		Portugala
+Swiss-French	KeymapNames		Svisfranca
+Slovene	KeymapNames		Slovena
+French (NF Z71-300)	KeymapNames		Franca (NF Z71-300)
+Lithuanian	KeymapNames		Litova
+ISO-9995	KeymapNames		ISO-9995
+Kazakh	KeymapNames		Kazaĥa
 Language	BootPromptWindow		Lingvo
-Welcome to Haiku!	BootPromptWindow		Bonvenon ĉe Haiku!
-Run Installer	BootPromptWindow		Lanĉi Instalilon
-Keymap	BootPromptWindow		Klavara aranĝo
+Lithuanian (Standard)	KeymapNames		Litova (Norma)
+Belgian (comma)	KeymapNames		Belgia (komo)
+Custom	BootPromptWindow		Adaptita
+Norwegian	KeymapNames		Norvega
+Danish	KeymapNames		Dana
+Bulgarian (Phonetic)	KeymapNames		Bulgara (Fonetika)
+Canadian-French	KeymapNames		Kanadfranca
+Russian	KeymapNames		Rusa
+Hungarian	KeymapNames		Hungara
+Irish	KeymapNames		Irlanda
+Romanian	KeymapNames		Rumana
+Are you sure you want to close this window? This will restart your system!	BootPromptWindow		Ĉu vi certas ke vi volas fermi la fenestron? Tio restartigos vian sistemon!
+Czech (Mac)	KeymapNames		Ĉeĥa (Makintoŝa)
+Macedonian	KeymapNames		Makedona
+Brazilian (ABNT2)	KeymapNames		Brazila (ABNT2)
+Albanian	KeymapNames		Albana
+Dutch	KeymapNames		Nederlanda
+Friulian	KeymapNames		Friula
+Icelandic	KeymapNames		Islanda

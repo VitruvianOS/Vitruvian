@@ -1,4 +1,4 @@
-1	polish	x-vnd.Haiku-MediaPlayer	1313616492
+1	polish	x-vnd.Haiku-MediaPlayer	1545856738
 Remove Entry into Trash	MediaPlayer-RemovePLItemsCmd		Usunięcie wpisu do Kosza
 Close	MediaPlayer-PlaylistWindow		Zamknij
 Volume of background clips	MediaPlayer-SettingsWindow		Głośność klipów działających w tle
@@ -16,7 +16,6 @@ DrawBitmap	MediaPlayer-InfoWin		DrawBitmap
 File info	MediaPlayer-InfoWin		Informacja o pliku
 raw audio	MediaPlayer-InfoWin		czysty dźwięk
 Select all	MediaPlayer-PlaylistWindow		Zaznacz wszystko
-New player…	MediaPlayer-Main		Nowy odtwarzacz…
 Move Entries	MediaPlayer-MovePLItemsCmd		Przeniesienie wpisów
 OK	MediaPlayer-Main		OK
 Remove	MediaPlayer-PlaylistWindow		Usuń
@@ -25,7 +24,6 @@ Resume:	MediaPlayer-SettingsWindow		Wznów:
 Duration	MediaPlayer-InfoWin		Czas trwania
 Import Entries	MediaPlayer-ImportPLItemsCmd		Importowanie wpisów
 Open network stream	MediaPlayer-Main		Otwórz strumień sieciowy
-Move file to Trash	MediaPlayer-PlaylistWindow		Przenieś plik do Kosza
 Open file…	MediaPlayer-Main		Otwórz plik…
 Scale controls in full screen mode	MediaPlayer-SettingsWindow		Skaluj kontrolki w trybie pełnoekranowym
 View options	MediaPlayer-SettingsWindow		Opcje widoku
@@ -35,6 +33,8 @@ Full volume	MediaPlayer-SettingsWindow		Przy pełnej głośności
 Start media server	MediaPlayer-Main		Uruchom serwer mediów
 It appears the media server is not running.\nWould you like to start it ?	MediaPlayer-Main		Wygląda na to, że serwer mediów nie jest włączony.\nCzy chcesz go uruchomić ?
 Location	MediaPlayer-InfoWin		Położenie
+%lu × %lu	MediaPlayer-InfoWin	The '×' is the Unicode multiplication sign U+00D7	%lu × %lu
+Opening '%s'.	MediaPlayer-Main		Otwieranie „%s”.
 Medium	MediaPlayer-SettingsWindow		Średnie
 Play mode	MediaPlayer-SettingsWindow		Odtwarzanie
 Playlist	MediaPlayer-PlaylistWindow		Lista odtwarzania
@@ -44,10 +44,10 @@ Close	MediaPlayer-Main		Zamknij
 Save error	MediaPlayer-PlaylistWindow		Błąd zapisu
 Attributes	MediaPlayer-Main		Atrybuty
 Bottom of screen	MediaPlayer-SettingsWindow		Na dole ekranu
-MediaPlayer settings	MediaPlayer-SettingsWindow		Ustawienia programu MediaPlayer
 Copyright	MediaPlayer-InfoWin		Copyright
 Invalid URL inserted!	MediaPlayer-NetworkStream		Błędny URL!
 Aspect ratio	MediaPlayer-Main		Proporcje
+Eject device	MediaPlayer-Main		Wysuń urządzenie
 Saving the playlist failed.\n\nError: 	MediaPlayer-PlaylistWindow		Zapisywanie listy odtwarzania nie powiodło się.\n\nBłąd: 
 <no media>	MediaPlayer-InfoWin		<brak medium>
 Hide interface	MediaPlayer-Main		Ukryj interfejs
@@ -72,6 +72,7 @@ Audio	MediaPlayer-Main		Dźwięk
 Quit	MediaPlayer-Main		Zakończ
 Redo	MediaPlayer-PlaylistWindow		Powtórz
 Move Entry	MediaPlayer-MovePLItemsCmd		Przeniesienie wpisu
+Reset rating	MediaPlayer-Main		Zresetuj ocenę
 <unknown>	PlaylistItem-author		<nieznany>
 Cancel	MediaPlayer-SettingsWindow		Anuluj
 Large	MediaPlayer-SettingsWindow		Duże
@@ -123,6 +124,7 @@ Full screen	MediaPlayer-Main		Pełny ekran
 OK	MediaPlayer-NetworkStream		OK
 Internal error (locking failed). Saving the playlist failed.	MediaPlayer-PlaylistWindow		Błąd wewnętrzny (nie udało się zablokować). Zapisywanie listy odtwarzania nie powiodło się.
 100% scale	MediaPlayer-Main		100%
+New player	MediaPlayer-Main		Nowy odtwarzacz
 <nothing to redo>	MediaPlayer-PlaylistWindow		<nie ma czego powtórzyć>
 Bad URL	MediaPlayer-NetworkStream		Błędny URL
 Save	MediaPlayer-Main		Zapisz

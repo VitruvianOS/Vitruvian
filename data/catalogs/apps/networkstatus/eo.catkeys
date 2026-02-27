@@ -1,3 +1,21 @@
-1	esperanto	x-vnd.Haiku-NetworkStatus	1820458489
+1	esperanto	x-vnd.Haiku-NetworkStatus	2510618206
+IPv6 address:	NetworkStatusView		IPv6 adreso:
+Quit	NetworkStatusView		Ĉesi
+Unknown	NetworkStatusView		Nekonata
+Launching the network preflet failed.\n\nError: 	NetworkStatusView		Lanĉado de agordilo por reto malsukcesis.\n\nEraro: 
+Install in Deskbar	NetworkStatus		Instaliĝi Laborstrie
+Open network preferences…	NetworkStatusView		Agordi reton…
+NetworkStatus	System name		Retstato
+Broadcast:	NetworkStatusView		Dissendadreso:
 OK	NetworkStatusView		Bone
-Quit	NetworkStatusView		Eliri
+No link	NetworkStatusView		Konekto forestas
+Could not join wireless network:\n	NetworkStatusView		Ne povas konekti sendratan reton:\n
+Network Status	NetworkStatusView		Stato de reto
+Deskbar is not running, giving up.	NetworkStatus		Laborstrio ne estas rulata, mi rezignas.
+Netmask:	NetworkStatusView		Retmasko:
+No stateful configuration	NetworkStatusView		La agordo ne estas kompleta
+IPv4 address:	NetworkStatusView		IPv4 adreso:
+%ifaceName information:\n	NetworkStatusView		Informo pri %ifaceName:\n
+Run in window	NetworkStatus		Ekruli fenestre
+<no wireless networks found>	NetworkStatusView		<neniu sendrata reto estas trovita>
+Configuring	NetworkStatusView		Agordo

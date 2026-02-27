@@ -1,4 +1,4 @@
-1	czech	x-vnd.Haiku-SystemLogger	57960782
-%s\n\nThis daemon is responsible for collecting all system messages and write them to the system-wide log at \"%s\".\n\n	SyslogDaemon		%s\n\nTento daemon je zodpovědný za sběr všech systémových zpráv a jejich zápis do system-wide logu v \"%s\".\n\n
+1	czech	x-vnd.Haiku-SystemLogger	2600925901
+Syslog Daemon	SyslogDaemon		Služba systémového protokolu
 OK	SyslogDaemon		OK
-Syslog Daemon	SyslogDaemon		Syslog Daemon
+%s\n\nThis daemon collects all system messages and writes them to the system-wide log at \"%s\".\n\n	SyslogDaemon		%s\n\nTato služba zachycuje všechny systémové zprávy a zapisuje je do celosystémového záznamu v \"%s\".\n\n

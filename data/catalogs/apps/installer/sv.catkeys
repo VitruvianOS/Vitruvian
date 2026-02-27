@@ -1,89 +1,99 @@
-1	swedish	x-vnd.Haiku-Installer	116830250
+1	swedish	x-vnd.Haiku-Installer	2860300425
 Performing installation.	InstallProgress		Verkställer installationen.
-Choose the source disk from the pop-up menu. Then click \"Begin\".	InstallerWindow		Välj källdisk från menyn. Klicka sedan på \"Starta\".
 Please close the DriveSetup window before closing the Installer window.	InstallerWindow		Var god stäng Diskhanteringsfönstret innan du stänger fönstret för Installeraren.
 No optional packages available.	PackagesView		Inga installationspaket fanns att välja.
-Restart system	InstallerWindow		Starta om systemet
+This operating system has to be installed on a partition that uses the Be File System, but there are currently no such partitions available on your system.	InstallerWindow		Det här operativsystemet måste installeras på en partition som använder Be File System, men det finns för närvarande inga sådana partitioner tillgängliga på ditt system.
 The mount point could not be retrieved.	InstallProgress		Monteringspunkt kunde inte läsas av.
 <none>	InstallerWindow	No partition available	<ingen>
+Installation completed. Boot sector has been written to '%s'. Press 'Restart' to restart the computer or choose a new target volume to perform another installation.	InstallerWindow		Installationen slutförd. Bootsektorn har skrivits till '%s'. Tryck på "Starta om" för att starta om datorn eller välj en ny målvolym för att utföra ytterligare en installation.
+Are you sure you want to install onto the current boot disk? The %appname% will have to reboot your machine if you proceed.	InstallProgress		Är du säker på att du vill installera på den aktuella startdisketten? %appname% måste starta om din dator om du fortsätter.
+Haiku has to be installed on a partition that uses the Be File System, but there are currently no such partitions available on your system.	InstallerWindow		Haiku måste installeras på en partition som använder Be-filsystemet, men det finns för närvarande inga sådana partitioner tillgängliga på ditt system.
 Please choose target	InstallerWindow		Välj mål
+BootManager, the application to configure the Haiku boot menu, could not be launched.	InstallerWindow		BootManager, programmet för att konfigurera Haiku-startmenyn, kunde inte startas.
 Cancel	InstallProgress		Avbryt
-Installation completed. Boot sector has been written to '%s'. Press Restart to restart the computer or choose a new target volume to perform another installation.	InstallerWindow		Installationen är klar. Startsektorn har skrivits till '%s'. Klicka på Starta om för att starta om datorn, eller välj en ny volym att utföra en till installation.
+Failed to rename existing loader!	InstallProgress		Misslyckades med att byta namn på befintlig laddare!
 Are you sure you want to to stop the installation?	InstallerWindow		Är du säker på att du vill stoppa installationen?
 Installer	System name		Installerare
-Unknown Type	InstallProgress	Partition content type	Okänd Typ
-Press the Begin button to install from '%1s' onto '%2s'.	InstallerWindow		Klicka på Kör för att installera från '%1s' till '%2s'.
-Choose the disk you want to install onto from the pop-up menu. Then click \"Begin\".	InstallerWindow		Välj den disk du vill installera till. Klicka sedan på \"Starta\".
-Installation completed. Boot sector has been written to '%s'. Press Quit to leave the Installer or choose a new target volume to perform another installation.	InstallerWindow		Installationen är klar. Startsektorn har skrivits på volymen %s. Klicka på Avsluta för att lämna installationsprogrammet eller välj en ny volym att installera på.
+EFI loader successfully installed!	InstallProgress		EFI-laddaren har installerats!
+Press the 'Begin' button to install from '%1s' onto '%2s'.	InstallerWindow		Tryck på 'Börja'-knappen för att installera från '%1s' till '%2s'.
+Failed to read EFI loader file!	InstallProgress		Misslyckades med att läsa EFI-loaderfilen!
+Are you sure you want to stop the installation?	InstallerWindow		Är du säker på att du vill stoppa installationen?
+Failed to create EFI loader directory!	InstallProgress		Misslyckades med att skapa EFI-loader-katalogen!
 README	InstallerApp		LÄS MIG
 Quit	InstallerWindow		Avsluta
+Please close the BootManager window before closing the Installer window.	InstallerWindow		Stäng BootManager-fönstret innan du stänger installationsfönstret.
 Write boot sector to '%s'	InstallerWindow		Skriv startsektor till '%s'
 Boot sector not written because of an internal error.	InstallProgress		Det gick inte att skriva till bootsektorn på grund av ett internt fel.
-DriveSetup, the application to configure disk partitions, could not be launched.	InstallerWindow		DriveSetup, applikationen för att konfigurera disk partitioner kunde inte startas.
+Choose the source and destination disk from the pop-up menus. Then click 'Begin'.	InstallerWindow		Välj käll- och målskiva från popup-menyerna. Klicka sedan på "Börja".
+Running BootManager and DriveSetup…\n\nClose both applications to continue with the installation.	InstallerWindow		Kör BootManager och DriveSetup...\n\nStäng båda programmen för att fortsätta med installationen.
+Click on 'Set up partitions…' to create one.	InstallerWindow		Klicka på "Konfigurera partitioner..." för att skapa en.
 Welcome to the Haiku Installer!\n\n	InstallerApp		Välkommen till Haikus installationsprogram!\n\n
 ?? of ??	InstallerWindow	Unknown progress	?? av ??
-Quit Boot Manager	InstallerWindow		Avsluta Starthanteraren
-Running Boot Manager…\n\nClose Boot Manager to continue with the installation.	InstallerWindow		Starthanteraren körs.\n\nStäng Starthanteraren för att fortsätta med installationen.
+DriveSetup, the application to configure disk partitions, could not be launched.	InstallerWindow		DriveSetup, applikationen för att konfigurera disk partitioner kunde inte startas.
+The target volume is not empty. If it already contains a Haiku installation, it will be overwritten. This will remove all installed software.\n\nIf you want to upgrade your system without removing installed software, see the Haiku User Guide's topic on the application \"SoftwareUpdater\" for update instructions.\n\nAre you sure you want to continue the installation?	InstallProgress		Målvolymen är inte tom. Om den redan innehåller en Haiku-installation skrivs den över. Detta tar bort all installerad programvara.\n\nOm du vill uppgradera ditt system utan att ta bort installerad programvara, se avsnittet om Haiku Användarhandbok för applikationen \"SoftwareUpdater\" för uppdateringsinstruktioner. \n\nÄr du säker på att du vill fortsätta installationen?
 Quit DriveSetup	InstallerWindow		Avsluta DiskHantering
+Installation completed. Boot sector has been written to '%s'. Press 'Quit' to leave the %appname% or choose a new target volume to perform another installation.	InstallerWindow		Installationen är klar. Startsektorn har skrivits till '%s'. Tryck på 'Avsluta' för att lämna %appname% eller välj en ny målvolym för att utföra en ny installation.
 Write boot sector	InstallerWindow		Skriv bootsektor
 %1ld of %2ld	InstallerWindow	number of files copied	%1ld av %2ld
 Finishing installation.	InstallProgress		Slutför installationen.
 Install from:	InstallerWindow		Installera från:
 Additional disk space required: 0.0 KiB	InstallerWindow		Ytterligare nödvändigt diskutrymme: 0.0 KiB
 This is beta-quality software! It means there is a risk of losing important data. Make frequent backups! You have been warned.\n\n\n	InstallerApp		Detta är programvara av betakvalitet! Det betyder att det finns risk för att du förlorar viktig data. Gör frekventa säkerhetskopior! Du har blivit varnad.\n\n\n
-3)   When you successfully boot into Haiku for the first time, make sure to read our \"Welcome\" and \"Userguide\" documentation. There are links on the Desktop and in WebPositive's bookmarks.\n\n	InstallerApp		3)   När du har startat Haiku första gången. Läs gärna våra dokument \"Välkommen\" och \"Användarguid\". Det finns länkar på skrivbordet och i WebPositive's bokmärken.\n\n
 ???	InstallerWindow	Unknown currently copied item	???
-Install anyway	InstallProgress		Installera iallafall
+Rename	InstallProgress		Döpa om
+Install anyway	InstallProgress		Installera ändå
 1)   If you are installing Haiku onto real hardware (not inside an emulator), you may want to prepare a hard disk partition from another OS (you could, for example, use a GParted Live-CD, which can also resize existing partitions to make room).\nYou can also set up partitions by launching DriveSetup from Installer, but you won't be able to resize existing partitions with it. While DriveSetup has been quite thoroughly tested over the years, it's recommended to have up-to-date backups of the other partitions on your system. Just in case…	InstallerApp		1)   Om du installerar Haiku på riktig hårdvara (inte inuti en emulator) kanske du vill förbereda en hårddiskpartition från ett annat operativsystem (du kan till exempel använda en GParted Live-CD, som också kan ändra storlek på befintliga partitioner för att göra rum för nya)\nDu kan också konfigurera partitioner genom att starta DiskHanterare från installeraren, men du kommer inte att kunna ändra storlek på befintliga partitioner. Även fast DiskHanterare har testats grundligt under årens lopp rekommenderas det att ha uppdaterade säkerhetskopior av de andra partitionerna på ditt system. Utifall att…
-Choose the source and destination disk from the pop-up menus. Then click \"Begin\".	InstallerWindow		Välj käll- och måldisk från menyn. Klicka sedan på \"Starta\".
+Unknown type	InstallProgress	Partition content type	Okänd typ
+2)   The Installer will make the Haiku partition itself bootable, but takes no steps to integrate Haiku into an existing boot menu. If you have GRUB already installed, you can add Haiku to it.\nFor details, please consult the guide on booting Haiku on our website at https://www.haiku-os.org/guides/booting.\nOr you can set up a boot menu from Installer's \"Tools\" menu, see the Haiku User Guide's topic on the application \"BootManager\".\n\n\n	InstallerApp		2)   Installatören gör Haiku-partitionen själv startbar, men tar inga steg för att integrera Haiku i en befintlig startmeny. Om du redan har GRUB installerat kan du lägga till Haiku i den.\nFör mer information, se guiden för att starta Haiku på vår webbplats på https://www.haiku-os.org/guides/booting.\nEller så kan du ställa in en startmeny från Installatörens \ "Verktyg \" -meny, se avsnittet om Haiku-användarhandboken om applikationen \"BootManager\".\n\n\n
 Hide optional packages	InstallerWindow		Göm valbara paket
 ???	InstallerWindow	Unknown partition name	???
 Have fun and thanks for trying out Haiku!	InstallerApp		Ha det så kul och tack för att du provar Haiku!
+Failed to copy EFI loader to selected partition!	InstallProgress		Misslyckades med att kopiera EFI-laddaren till vald partition!
 Quit	InstallerApp		Avsluta
-Starting installation.	InstallProgress		Påbörjar installationen.
+Quit BootManager and DriveSetup	InstallerWindow		Avsluta BootManager och DriveSetup
 Error writing boot sector.	InstallProgress		Fel vid skrivning av bootsektorn.
 OK	InstallerWindow		OK
-Please close the Boot Manager and DriveSetup windows before closing the Installer window.	InstallerWindow		Vänligen stäng Starthanterarens- och DiskHanterings fönster innan du stänger Installerarens fönster.
-Failed to launch Boot Manager	InstallerWindow		Kunde inte starta Boot Manager
+Failed to find EFI loader file!	InstallProgress		Kunde inte hitta EFI-loaderfilen!
+3)   When you successfully boot into Haiku for the first time, make sure to read our \"User Guide\" and take the \"Quick Tour\". There are links on the Desktop and in WebPositive's bookmarks.\n\n	InstallerApp		3)   När du startar framgångsrikt till Haiku för första gången, se till att läsa vår \"User Guide\" och ta \"Quick Tour\". Det finns länkar på skrivbordet och i WebPositives bokmärken.\n\n
 Try installing anyway	InstallProgress		Försök installera iallafall
 IMPORTANT INFORMATION BEFORE INSTALLING HAIKU\n\n	InstallerApp		VIKTIG INFORMATION INNAN DU INSTALLERAR HAIKU\n\n
 Additional disk space required: %s	InstallerWindow		Ytterligare diskutrymme behövs: %s
 Stop	InstallerWindow	In alert after pressing Stop	Stopp
 Boot sector successfully written.	InstallProgress		Skrivning av startsektorn lyckades.
+Failed to launch BootManager	InstallerWindow		Det gick inte att starta BootManager
+Install EFI loader	InstallerWindow		Installera EFI-lastare
+Writing bootsector.	InstallProgress		Skriver till bootsektor.
 An error was encountered and the installation was not completed:\n\nError:  %s	InstallerWindow		Ett fel uppstod och installationen slutfördes inte:\n\nFel:  %s
 Restart	InstallerWindow		Starta om
+ (boot disk)	InstallProgress	Marks EFI partitions on boot disk - preserve leading space	 (boot disk)
 The disk can't be mounted. Please choose a different disk.	InstallProgress		Disken kan inte monteras. Var god välj en annan disk.
 Begin	InstallerWindow		Börja
 Collecting copy information.	InstallProgress		Förbereder inför kopiering.
+Set up boot menu…	InstallerWindow		Konfigurera startmenyn...
 Show optional packages	InstallerWindow		Visa valbara paket
+No partitions have been found that are suitable for installation. Please set up partitions and format at least one partition with the Be File System.	InstallerWindow		Inga partitioner har hittats som är lämpliga för installation. Ställ in partitioner och formatera minst en partition med Be File System.
 The destination disk may not have enough space. Try choosing a different disk or choose to not install optional items.	InstallProgress		Måldisken kan ha för lite ledigt utrymme. Försök att välja en annan disk eller välj att installera färre valbara paket.
 Installation canceled.	InstallProgress		Installationen avbröts.
-The target volume is not empty. Are you sure you want to install anyway?\n\nNote: The 'system' folder will be a clean copy from the source volume but will retain its settings folder, all other folders will be merged, whereas files and links that exist on both the source and target volume will be overwritten with the source volume version.	InstallProgress		Den tänkta volumen är inte tom. Är du säker att du villinstallera ändå?\n\nNotering: Systemfoldern kommer att vara en kopia från källans systemfolder men kommer att behålla inställningsfoldern, alla anda foldrar kommer att mergas. De filer och länkar som finns på båda ställena kommer att skrivas över med de nyare.
-OK	InstallerApp		OK
-Are you sure you want to abort the installation?	InstallerWindow		Är du säker på att du vill stoppa installationen?
 Stop	InstallerWindow		Stopp
 Cancel	InstallerWindow		Avbryt
 Continue	InstallerWindow	In alert after pressing Stop	Fortsätt
-No partitions have been found that are suitable for installation. Please set up partitions and initialize at least one partition with the Be File System.	InstallerWindow		Inga partitioner har hittats som är dugliga för installation. Var god ställ in partitioner och initialisera minst en partition med Be-filsystemet.
-Launch the DriveSetup utility to partition\navailable hard drives and other media.\nPartitions can be initialized with the\nBe File System needed for a Haiku boot\npartition.	InstallerWindow		Starta DiskHanteringsverktyget för att partitionera\ntillgängliga hårddiskar och annan media.\nPartitioner can formateras med Be-filsystemet\nsom krävs för en Haiku boot-partition.
 Scanning for disks…	InstallerWindow		Skannar efter diskar…
 Running DriveSetup…\n\nClose DriveSetup to continue with the installation.	InstallerWindow		Kör DriveSetup…\n\nStäng DriveSetup för att fortsätta med installationen.
-Abort	InstallerWindow		Avbryt
+The installation is not complete yet!\nAre you sure you want to stop it?	InstallerWindow		Installationen är inte klar än!\nÄr du säker på att du vill stoppa?
+Running BootManager…\n\nClose BootManager to continue with the installation.	InstallerWindow		Kör BootManager...\n\nStäng BootManager för att fortsätta med installationen.
 The partition can't be mounted. Please choose a different partition.	InstallProgress		Partitionen kan inte monteras. Var god välj en annan partition.
 Set up partitions…	InstallerWindow		Ställ in partitioner...
 Install progress:  	InstallerWindow		Installationsförlopp:  
 You can't install the contents of a disk onto itself. Please choose a different disk.	InstallProgress		Du kan inte installera innehållet av en disk på den själv. Var god välj en annan disk.
-Boot Manager, the application to configure the Haiku boot menu, could not be launched.	InstallerWindow		Boot Manager, den applikation man använder för att konfigurera Haiku boot meny kunde inte startas.
-Please close the Boot Manager window before closing the Installer window.	InstallerWindow		Stäng Boot Manager fönstret före du stänger installatione fönstret.
+An EFI loader is already installed on the selected partition! Would you like to rename it?	InstallProgress		En EFI-laddare är redan installerad på den valda partitionen! Vill du byta namn på den?
+Please close the BootManager and DriveSetup windows before closing the Installer window.	InstallerWindow		Stäng BootManager- och DriveSetup-fönstren innan du stänger installationsfönstret.
+Choose the source disk from the pop-up menu. Then click 'Begin'.	InstallerWindow		Välj källskivan från popup-menyn. Klicka sedan på "Börja".
+No valid EFI system data partitions found	InstallerWindow		Inga giltiga EFI-systemdatapartitioner hittades
 OK	InstallProgress		OK
-Running Boot Manager and DriveSetup…\n\nClose both applications to continue with the installation.	InstallerWindow		Kör Boot Manager och DriveSetup…\n\nStäng båda programmen för att fortsätta med installationen.
-Are you sure you want to install onto the current boot disk? The Installer will have to reboot your machine if you proceed.	InstallProgress		Är du säker på att du vill installera på den valda startdisken? Om du fortsätter måste Installeraren starta om datorn.
+Quit BootManager	InstallerWindow		Avsluta BootManager
 Onto:	InstallerWindow		Till:
-Quit Boot Manager and DriveSetup	InstallerWindow		Avsluta Starthanteraren och DiskHantering
-Installer\n\twritten by Jérôme Duval and Stephan Aßmus\n\tCopyright 2005-2010, Haiku.\n\n	InstallerApp		Installerare\n\tskriven av Jérôme Duval och Stephan Aßmus\n\tCopyright 2005-2010, Haiku.\n\n
 Tools	InstallerWindow		Verktyg
 scanning…	InstallerWindow		skannar…
-2)   The Installer will make the Haiku partition itself bootable, but takes no steps to integrate Haiku into an existing boot menu. If you have GRUB already installed, you can add Haiku to it.\nFor details, please consult the guide on booting Haiku on our website at https://www.haiku-os.org/guides/booting.\nOr you can set up a boot menu from Installer's \"Tools\" menu, see the Userguide's topic on the application \"BootManager\".\n\n\n	InstallerApp		2)   Installeraren gör själva Haiku-partitionen startbar men tar inga steg för att integrera Haiku i en befintlig startmeny. Om du redan har GRUB installerat kan du lägga till Haiku i GRUB's meny.\nFör detaljer, se guiden om att starta Haiku på adressen https://www.haiku-os.org/guides/booting.\n\nDu kan även ställa in startmenyn från installationsprogrammets verktygsmeny. Se användarhandbokens ämne på programmet \"BootManager\".\n\n\n
-Set up boot menu	InstallerWindow		Ställ in startmeny
+Failed to access installation destination!	InstallProgress		Misslyckades med att komma åt installationsmålet!
+Choose the disk you want to install onto from the pop-up menu. Then click 'Begin'.	InstallerWindow		Välj den disk du vill installera på från popup-menyn. Klicka sedan på "Börja".
 Continue	InstallerApp		Fortsätt
-Are you sure you want to abort the installation and restart the system?	InstallerWindow		Är du säker på att du vill avbryta installationen och starta om systemet?

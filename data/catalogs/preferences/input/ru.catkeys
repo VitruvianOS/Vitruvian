@@ -1,0 +1,54 @@
+1	russian	x-vnd.Haiku-Input	993392905
+Defaults	InputMouse		По умолчанию
+Scrolling	TouchpadPrefView		Прокрутка
+Long	KeyboardView		Длинная
+Cancel	TouchpadPrefView		Отменить
+Slow	TouchpadPrefView		Медленно
+Device List	InputWindow		Список устройств
+Double-click speed	SettingsView		Скорость двойного клика
+5-Button	SettingsView		Пятикнопочная
+Typing test area	KeyboardView		Тестовая область
+Fast	KeyboardView		Быстро
+Please confirm	TouchpadPrefView		Пожалуйста, подтвердите
+Trackpad speed	TouchpadPrefView		Скорость трекпада
+Mouse speed	SettingsView		Скорость курсора
+Trackpad acceleration	TouchpadPrefView		Ускорение трекпада
+Horizontal scrolling	TouchpadPrefView		Горизонтальная прокрутка
+Reverse scroll direction	TouchpadPrefView		Обратное направление прокрутки
+Keyboard lock delay	TouchpadPrefView		Задержка блокировки клавиатуры
+Input	System name		Ввод
+Quick	TouchpadPrefView		Быстро
+Short	KeyboardView		Короткая
+Revert	InputMouse		Откатить
+Slow	KeyboardView		Медленно
+2-Button	SettingsView		Двухкнопочная
+Click to focus and raise	SettingsView		Кликнуть для фокуса и поднятия окна
+Vertical	TouchpadPrefView		Вертикальная
+Low	TouchpadPrefView		Медленно
+Focus follows mouse	SettingsView		Фокус следует за курсором
+Focus mode:	SettingsView		Режим фокуса:
+Double-click test area	SettingsView		Область для проверки двойного клика
+Revert	TouchpadPrefView		Откатить
+4-Button	SettingsView		Четырёхкнопочная
+Tapping sensitivity	TouchpadPrefView		Отклик на постукивание
+Revert	InputKeyboard		Откатить
+Mouse type:	SettingsView		Тип мыши:
+Off	TouchpadPrefView		Отключить
+Never	TouchpadPrefView		Никогда
+Fast	TouchpadPrefView		Быстро
+6-Button	SettingsView		6-кнопочная
+Click to focus	SettingsView		Кликнуть для фокусировки окна
+Acceleration	TouchpadPrefView		Ускорение
+Accept first click	SettingsView		Принимать первый клик
+OK	TouchpadPrefView		ОК
+Delay until key repeat	KeyboardView		Задержка перед повтором клавиши
+Two finger scrolling	TouchpadPrefView		Прокрутка двумя пальцами
+Mouse acceleration	SettingsView		Ускорение мыши
+The new scroll area is very large and may impede normal mouse operation. Do you really want to change it?	TouchpadPrefView		Выбранная область прокрутки слишком большая и может затруднить обычные операции с мышью. Вы действительно хотите изменить её?
+High	TouchpadPrefView		Быстро
+Defaults	TouchpadPrefView		По умолчанию
+1-Button	SettingsView		Однокнопочная
+Defaults	InputKeyboard		По умолчанию
+Key repeat rate	KeyboardView		Скорость повтора клавиши
+Horizontal	TouchpadPrefView		Горизонтальная
+3-Button	SettingsView		Трёхкнопочная

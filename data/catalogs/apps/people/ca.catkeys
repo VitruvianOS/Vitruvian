@@ -1,5 +1,6 @@
-1	catalan; valencian	x-vnd.Be-PEPL	2332202134
-Launching the FileTypes preflet to configure Person attributes has failed.\n\nError: 	People		Ha fallat l'execució de les preferències dels fitxers per configurar els atributs de les persones.\n\nError: 
+1	catalan; valencian	x-vnd.Be-PEPL	2634915100
+Launching the FileTypes preflet to configure Person attributes has failed.\n\nError: 	People		Ha fallat l'execució de l'aplicació de preferències dels fitxers per configurar els atributs de les persones.\n\nError: 
+Mobile phone	People		Telèfon mòbil
 Unnamed person	People		Anònim
 New person…	People		Persona nova...
 Address	People		Adreça
@@ -9,9 +10,9 @@ Could not create %s.	People		No s'ha pogut crear %s.
 Quit	People		Surt
 Company	People		Empresa
 Name	People		Nom
-The file '%name%' could not be written.	People		No s'ha pogut escriure el fitxer '%name%'
+The file '%name%' could not be written.	People		No s'ha pogut escriure el fitxer %name%.
 Contact name	People		Nom del contacte
-Cancel	People		Anul·la
+Cancel	People		Cancel·la
 Edit	People		Edita
 Save changes before closing?	People		Voleu desar els canvis abans de tancar?
 People	System name		Persones
@@ -26,7 +27,7 @@ URL	People		URL
 %name% picture	People		Imatge %name%
 Home phone	People		Telèfon de casa
 none	Groups list		cap
-Save as…	People		Anomena i desa…
+Save as…	People		Desa com a...
 Cut	People		Retalla
 Contact information for a person.	Long mimetype description		Informació per contactar la persona.
 Remove image	People		Suprimeix la imatge
@@ -41,10 +42,10 @@ OK	People		D'acord
 File	People		Fitxer
 Redo	People		Refés
 Close	People		Tanca
-Copy	People		Còpia
+Copy	People		Copia
 Paste	People		Enganxa
-E-mail	People		Adreça de correu electrònic
+E-mail	People		Adreça electrònica
 Group	People		Grup
-Drop an image here,\nor use the contextual menu.	People		Deixeu anar una imatge aquí,\no bé fey servir el menú contextual.
+Drop an image here,\nor use the contextual menu.	People		Deixeu anar una imatge aquí\no bé useu el menú contextual.
 Load image…	People		Carrega la imatge...
 Sorry	People		Disculpeu

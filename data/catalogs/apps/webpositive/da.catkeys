@@ -1,0 +1,162 @@
+1	danish	x-vnd.Haiku-WebPositive	3120171019
+Authentication required	Authentication Panel		Godkendelse er påkrævet
+Previous	WebPositive Window		Forrige
+Copy	Console Window		Kopiér
+(Finish: %date)	Download Window		(færdig: %date)
+Open bookmarks confirmation	WebPositive Window		Åbn bogmærkebekræftelse
+Download folder:	Settings Window		Hentningsmappe:
+Close window	WebPositive Window		Luk vindue
+Find:	WebPositive Window		Søg:
+Script console	WebPositive Window		Skriptkonsol
+There was an error setting up the bookmark.	WebPositive Window		Der opstod en fejl ved opsætning af bogmærket.
+Fonts	Settings Window		Skrifttyper
+Path	Cookie Manager		Sti
+Bookmarks	WebPositive Window		Bogmærker
+Use proxy server to connect to the internet	Settings Window		Brug proxyserver til at oprette forbindelse til internettet
+%url finished	WebPositive Window	Loading URL finished. Don't translate variable %url.	%url færdig
+Auto-hide interface in full screen mode	Settings Window		Skjul automatisk brugerfladen i fuldskærmstilstand
+Delete	Cookie Manager		Slet
+There was an error retrieving the bookmark folder.\n\nError: %error	WebPositive Window	Don't translate the variable %error	Der opstod en fejl ved forsøg på at hente bogmærkemappen.\n\nFejl: %error
+(Finish: %date - Over %duration left)	Download Window		(færdig: %date - Over %duration tilbage)
+Open containing folder	Download Window		Åbn indeholdende mappe
+Find previous	WebPositive Window		Find forrige
+Full screen	WebPositive Window		Fuldskærm
+Downloads in progress	WebPositive		Igangværende overførsler
+Copy URL to clipboard	Download Window		Kopiér URL til udklipsholder
+Do you want to open %addedCount bookmarks all at once?	WebPositive Window	Don't translate variable %addedCount.	Vil du åbne %addedCount bogmærker samtidigt?
+Clone current page	Settings Window		Klon nuværende side
+Start page:	Settings Window		Startside:
+Cancel	Download Window		Afbryd
+Settings	Settings Window		Indstillinger
+Downloads	WebPositive Window		Overførsler
+Browse…	Settings Window		Gennemse…
+Resume prior session	Settings Window		Genoptag forrige session
+Match case	WebPositive Window		Skel mellem store og små bogstaver
+Proxy password:	Settings Window		Proxy-adgangskode:
+Size:	Font Selection view		Størrelse:
+Page source	WebPositive Window		Sidekilde
+Proxy server port:	Settings Window		Port for proxy-server:
+Error opening downloads folder	Download Window		Fejl ved åbning af hentningsmappe
+Show bookmark bar	WebPositive Window		Vis bogmærkelinje
+Find	WebPositive Window		Søg
+Standard font:	Settings Window		Forvalgt skrifttype:
+Open download error	Download Window		Fejl ved åbning af overførsel
+General	Settings Window		Alment
+New tabs:	Settings Window		Nye faneblade:
+%url failed	WebPositive Window	Loading URL failed. Don't translate variable %url.	%url mislykkedes
+Open downloads folder	Download Window		Åbn hentningsmappe
+Proxy server	Settings Window		Proxy-server
+Darn!	WebPositive		Pokkers!
+Decrease size	WebPositive Window		Formindsk størrelse
+Default fixed font size:	Settings Window		Forvalgt skriftstørrelse med fast bredde:
+Sans serif font:	Settings Window		Skrifttype for sans serif:
+Clear	WebPositive Window		Ryd
+The download could not be opened.	Download Window		Overførslen kunne ikke åbnes.
+Cookies for %s	Cookie Manager		Cookies til %s
+Close	Download Window		Luk
+WebPositive	System name		WebPositive
+%s - Search term	Settings Window		%s - søgeterm
+Expiration	Cookie Manager		Udløb
+Reload	WebPositive Window		Genindlæs
+Download finished	Download Window		Hentning fuldført
+Cookie manager	WebPositive Window		Cookiehåndtering
+Username:	Authentication Panel		Brugernavn:
+Hide password text	Authentication Panel		Skjul adgangskodetekst
+OK	Authentication Panel		O.k.
+Name	Cookie Manager		Navn
+Remove finished	Download Window		Fjern fuldførte
+Earlier	WebPositive Window		Tidligere
+Edit	WebPositive Window		Redigér
+Back	WebPositive Window		Tilbage
+Yesterday	WebPositive Window		I går
+Quit	WebPositive		Afslut
+Download aborted	Download Window		Overførsel afbrudt
+Number of days to keep links in History menu:	Settings Window		Antal dage, som lænker skal beholdes i historikmenuen:
+Password:	Authentication Panel		Adgangskode:
+Forward	WebPositive Window		Fremad
+Clear	Console Window		Ryd
+Cut	URL Bar		Klip
+View	WebPositive Window		Vis
+Paste	URL Bar		Indsæt
+Find next	WebPositive Window		Find næste
+Open search page	Settings Window		Åbn søgeside
+New tab	WebPositive Window		Nyt faneblad
+Increase size	WebPositive Window		Forøg størrelse
+Today	WebPositive Window		I dag
+Open location	WebPositive Window		Åbn placering
+New browser window	Download Window		Nyt browservindue
+Open	Download Window		Åbn
+New window	WebPositive Window		Nyt vindue
+New windows:	Settings Window		Nye vinduer:
+The downloads folder could not be opened.\n\nError: %error	Download Window	Don't translate variable %error	Hentningsmappen kunne ikke åbnes.\n\nFejl: %error
+Cancel	Authentication Panel		Afbryd
+Style:	Font Selection view		Stil:
+There was an error creating the bookmark file.\n\nError: %error	WebPositive Window	Don't translate variable %error	Der opstod en fejl ved oprettelse af bogmærkefilen.\n\nFejl: %error
+OK	Download Window		O.k.
+Proxy username:	Settings Window		Proxy-brugernavn:
+Manage bookmarks	WebPositive Window		Håndtér bogmærker
+/s)	Download Window	...as in 'per second'	/s)
+Restart	Download Window		Genstart
+Serif font:	Settings Window		Skrifttype for serif:
+Apply	Settings Window		Anvend
+There was an error trying to show the Bookmarks folder.\n\nError: %error	WebPositive Window	Don't translate variable %error	Der opstod en fejl ved forsøg på at vise bogmærkemappen.\n\nFejl: %error
+Revert	Settings Window		Tilbagefør
+Copy	WebPositive Window		Kopiér
+{0, plural,one{Last line repeated # time.}other{Last line repeated # times.}}	Console Window		{0, plural,one{Sidste linje gentaget # gang.}other{Sidste linje gentaget # gange.}}
+Default standard font size:	Settings Window		Forvalgt størrelse for forvalgt skrifttype:
+Custom	Settings Window		Tilpasset
+Bookmark this page	WebPositive Window		Bogmærk denne side
+Show tabs if only one page is open	Settings Window		Vis faneblade, hvis der kun er én side åben
+Remove	Download Window		Fjern
+Close tab	WebPositive Window		Luk faneblad
+About	WebPositive Window		Om
+Continue downloads	WebPositive		Fortsæt hentninger
+Proxy server requires authentication	Settings Window		Proxy-server kræver godkendelse
+Cancel	Settings Window		Afbryd
+Reset size	WebPositive Window		Nulstil størrelse
+History	WebPositive Window		Historik
+Do you really want to clear the browsing history?	WebPositive Window		Vil du rydde browserhistorikken?
+Find next occurrence of search terms	WebPositive Window	find bar next button tooltip	Find næste forekomst af søgeord
+Fixed font:	Settings Window		Skrifttype med fast bredde:
+Quit	WebPositive Window		Afslut
+Find previous occurrence of search terms	WebPositive Window	find bar previous button tooltip	Find forrige forekomster af søgeord
+Remember username and password for this site	Authentication Panel		Husk brugernavn og adgangskode for dette sted
+(Finish: %date - %duration left)	Download Window		(Færdig: %date - %duration tilbage)
+Cookie manager	Cookie Manager		Cookiehåndtering
+Show home button	Settings Window		Vis hjemknap
+Start new session	Settings Window		Start ny session
+The cookie jar is empty!	Cookie Manager		Kagedåsen er tom!
+Value	Cookie Manager		Værdi
+Remove missing	Download Window		Fjern manglende
+Paste	WebPositive Window		Indsæt
+Double-click or middle-click to open new tab.	Tab Manager		Dobbeltklik eller midterklik for at åbne nyt faneblad.
+Next	WebPositive Window		Næste
+Bookmark error	WebPositive Window		Bogmærkefejl
+OK	WebPositive Window		O.k.
+(%currentSize% of %expectedSize%, %rate%/s)	Download Window		(%currentSize% af %expectedSize%, %rate%/s)
+Save page as…	WebPositive Window		Gem side som…
+Zoom text only	WebPositive Window		Zoom kun tekst
+Page source error	WebPositive Window		Fejl ved sidekilde
+Auto-hide mouse pointer	Settings Window		Skjul automatisk musemarkør
+Requesting %url	WebPositive Window		Anmoder %url
+Flags	Cookie Manager		Flag
+Window	WebPositive Window		Vindue
+Proxy server address:	Settings Window		Adresse for proxy-server:
+Search page:	Settings Window		Søgeside:
+Settings	WebPositive Window		Indstillinger
+Clear	URL Bar		Ryd
+Loading %url	WebPositive Window		Indlæser %url
+The quick brown fox jumps over the lazy dog.	Font Selection view	Don't translate this literally ! Use a phrase showing all chars from A to Z.	Blåbærgrød med fløde i en dyb tallerken.
+Start up:	Settings Window		Opstart:
+Confirmation	WebPositive Window		Bekræftelse
+Session cookie	Cookie Manager		Sessionscookie
+No SSE2 support	WebPositive		Ingen understøttelse af SSE2
+Open all	WebPositive Window		Åbn alle
+Cut	WebPositive Window		Klip
+Downloads	Download Window		Hentninger
+Open blank page	Settings Window		Åbn tom side
+Clear history	WebPositive Window		Ryd historik
+Cancel	WebPositive Window		Afbryd
+Script console	Console Window		Skriptkonsol
+Copy	URL Bar		Kopiér
+Open start page	Settings Window		Åbn startside

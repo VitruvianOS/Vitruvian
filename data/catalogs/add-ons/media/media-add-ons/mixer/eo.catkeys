@@ -1,0 +1,19 @@
+1	esperanto	x-vnd.Haiku-mixer.media_addon	3463574286
+Input mapping	AudioMixer		Eniga mapado
+To output	AudioMixer		Al enigo
+Gain	AudioMixer		Pliigo
+To master	AudioMixer		Al majstro
+not connected	AudioMixer		nekonektanta
+Master output	AudioMixer		Majstra eligo
+dB	AudioMixer		dB
+Gain controls	AudioMixer		Pliigaj stiriloj
+Output channel sources	AudioMixer		Eligkanalaj fontoj
+Allow input channel remapping	AudioMixer		Permesi enigkanelan remapadon
+Display balance control for stereo connections	AudioMixer		Montri balancstirilon por stereofoniaj konektoj
+Setup	AudioMixer		Agordi
+Physical input channels	AudioMixer		Fizikaj enigaj kanaloj
+Input channel destinations	AudioMixer		Enigkanalaj celoj
+Mute	AudioMixer		Silentigi
+Output mapping	AudioMixer		Eliga mapado
+Virtual output channels	AudioMixer		Virtualaj eligaj kanaloj
+Allow output channel remapping	AudioMixer		Permesi eligkanalan remapadon

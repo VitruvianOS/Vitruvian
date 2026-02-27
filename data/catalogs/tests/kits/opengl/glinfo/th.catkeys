@@ -1,0 +1,24 @@
+1	thai	x-vnd.Haiku-GLInfo	2211760527
+Maximum clipping planes	Capabilities		ระนาบการตัดสูงสุด
+Maximum evaluators equation order	Capabilities		ลำดับสมการของผู้ประเมินสูงสุด
+Texture stack size	Capabilities		ขนาดสแต็กของพื้นผิว
+GL Info	System name		ข้อมูล GL
+Information	InfoView		ข้อมูล
+Attributes stack size	Capabilities		คุณสมบัติขนาดสแต็ก
+Maximum lights	Capabilities		ความสว่างสูงสุด
+Extensions	Extensions		ขยาย
+Available extensions	Extensions		ส่วนขยายที่มีอยู่
+Maximum recommended vertex elements	Capabilities		องค์ประกอบจุดสุดยอดสูงสุดที่แนะนำ
+Value	Capabilities		ค่า
+Name stack size	Capabilities		ชื่อขนาดสแต็ก
+Capabilities	Capabilities		ความสามารถ
+Maximum texture units	Capabilities		หน่วยพื้นผิวสูงสุด
+Capability	Capabilities		ความสามารถ
+Maximum 2D texture size	Capabilities		ขนาดพื้นผิว 2D สูงสุด
+Auxiliary buffer(s)	Capabilities		บัฟเฟอร์เสริม
+Maximum convolution	Capabilities		การบิดสูงสุด
+Maximum 3D texture size	Capabilities		ขนาดพื้นผิว 3 มิติสูงสุด
+Maximum recommended index elements	Capabilities		องค์ประกอบดัชนีที่แนะนำสูงสุด
+List stack size	Capabilities		รายการขนาดสแต็ก
+Model stack size	Capabilities		โมเดลสแต็กขนาด
+Projection stack size	Capabilities		ขนาดสแต็คการฉาย

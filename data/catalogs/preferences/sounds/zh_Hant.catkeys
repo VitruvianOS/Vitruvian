@@ -1,0 +1,12 @@
+1	english	x-vnd.Haiku-Sounds	762968133
+Select	SoundFilePanel		選擇
+Sounds	System name		系統聲音
+Other…	HWindow		其他…
+Sound file:	HWindow		音訊檔案:
+<none>	HEventList		<無>
+Select a sound file	SoundFilePanel		選擇一個聲音文件
+OK	HEventList		確認
+Sound	HEventList		聲音
+Event	HEventList		事件
+<none>	HWindow		<無>
+No such file or directory	HEventList		沒有這樣的檔案或目錄

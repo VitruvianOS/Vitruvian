@@ -1,42 +1,50 @@
-1	romanian	x-vnd.Haiku-libbe	3337473349
-{0, plural, one{# byte} other{# bytes}}	StringForSize		{0, plural, one{# byte} other{# bytes}}
+1	romanian	x-vnd.Haiku-libbe	310849835
 All Rights Reserved.	AboutWindow		Toate drepturile rezervate.
 gold master	AboutWindow		versiune finală
 Undo	TextView		Refă
+OK	PrintJob		OK
+OK	Dragger		OK
 gamma	AboutWindow		gamma
 development	AboutWindow		dezvoltare
-OK	Dragger		OK
-OK	PrintJob		OK
+{0, plural, one{%s byte/s} other{%s bytes/s}}	StringForRate	units per second	{0, plural, one{%s byte/s} other{%s bytes/s}}
 Print Server is not responding.	PrintJob		Serverul de imprimare nu răspunde.
 About %app%	AboutMenuItem		Despre %app%
 Warning	Dragger		Avertisment
 Green:	ColorControl		Verde:
 Redo	TextView		Repetă
-No pages to print!	PrintJob		Fără pagini de imprimat!
+No pages to print!	PrintJob		Fără pagini de tipărit!
 beta	AboutWindow		beta
+%s MiB	StringForSize	size unit	%s MiO
 OK	ZombieReplicantView		OK
 Cut	TextView		Taie
-%3.2f GiB	StringForSize		%3.2f GiB
-Can't delete this replicant from its original application. Life goes on.	Dragger		Nu se poate șterge această copie din locația originală. Viața merge mai departe.
+Default	Default decorator about box		Implicit
+Can't delete this replicant from its original application. Life goes on.	Dragger		Nu se poate șterge acest replicant din locația originală. Viața merge mai departe.
+%s KiB	StringForSize	size unit	%s KiO
 Error	ZombieReplicantView		Eroare
 Paste	TextView		Lipește
 OK	AboutWindow		OK
-Special Thanks:	AboutWindow		Mulţumiri speciale:
-%.2f TiB	StringForSize		%.2f TiB
-Remove replicant	Dragger		Elimină copie
+%s MiB/s	StringForRate	units per second	%s MiO/s
+%s TiB	StringForSize	size unit	%s TiO
+Default Haiku window decorator.	Default decorator about box		Decorator de fereastră Haiku implicit.
+%s GiB	StringForSize	size unit	%s GiO
+%s B	StringForSize	size unit, narrow space	%s B
+Remove replicant	Dragger		Elimină replicantul
 Version	AboutWindow		Versiune
 Red:	ColorControl		Roșu:
-<empty>	Menu		<liber>
+<empty>	Menu		<empty>
 Copy	TextView		Copiază
 Select all	TextView		Selectează toate
 alpha	AboutWindow		alfa
-%3.2f MiB	StringForSize		%3.2f MiB
 Error	PrintJob		Eroare
-About %app%	AboutWindow		Despre %app%
+%s TiB/s	StringForRate	units per second	%s TiO/s
 About %app…	Dragger		Despre %app…
+About %app%	AboutWindow		Despre %app%
+{0, plural, one{%s byte} other{%s bytes}}	StringForSize	size unit	{0, plural, one{%s byte} other{%s bytes}}
+%s GiB/s	StringForRate	units per second	%s GiO/s
 Version history:	AboutWindow		Istoricul versiunii:
-Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Nu se poate găsi aplicația pentru copie. Nu a fost furnizată nicio semnătură de aplicație.\n%error
-%3.2f KiB	StringForSize		%3.2f KiB
+Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Nu se poate localiza aplicația pentru replicant. Nu a fost furnizată nicio semnătură de aplicație.\n%error
+%s KiB/s	StringForRate	units per second	%s KiO/s
 Blue:	ColorControl		Albastru:
-Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		Nu se poate crea copie pentru \"%description\".\n%error
+Special thanks:	AboutWindow		Mulțumiri speciale:
+Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		Nu se poate crea replicantul pentru \„%description\”.\n%error
 Written by:	AboutWindow		Scris de:

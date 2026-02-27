@@ -1,17 +1,23 @@
-1	hungarian	x-vnd.Haiku-Magnify	94607167
+1	hungarian	x-vnd.Haiku-Magnify	3309471563
+  size must be > 4 and a multiple of 4	Console		a méretnek 4 többszörösének kell lennie
 Decrease pixel size	Magnify-Main		Képpontméret csökkentése
+no clip msg	In console, when clipboard is empty after clicking Copy image		a vágólap üres
 Increase pixel size	Magnify-Main		Képpont méretének növelése
+magnify: size must be a multiple of 4	Console		magnify: a méretnek a 4 többszörösének kell lennie
 Stick coordinates	Magnify-Main		Koordináták rögzítése
-%width x %height  @ {0, plural, one{# pixel/pixel} other{# pixels/pixel}}	Magnify-Main		%width x %height @ {0, plural, one{# képpont/képpont} other{# képpont/képpont}}
 Copy image	Magnify-Main		Kép másolása
 Decrease window size	Magnify-Main		Ablak méretének csökkentése
 Remove a crosshair	Magnify-Main		Célkereszt eltávolítása
 Add a crosshair	Magnify-Main		Egy célkereszt hozzáadása
 Freeze image	Magnify-Main		Kép megfagyasztása
+%width × %height  @ {0, plural, one{# pixel/pixel} other{# pixels/pixel}}	Magnify-Main	The '×' is the Unicode multiplication sign U+00D7	%width × %height @ {0, plural, one{# képpont/képpont} other{# képpont/képpont}}
+usage: magnify [size] (magnify size * size pixels)	Console		használat: magnify [méret] (nagyító mérete * képpont mérete)
 Increase window size	Magnify-Main		Ablak méretének növelése
 Save image	Magnify-Main		Kép mentése
 Show grid	Magnify-Main		Rács megjelenítése
 Magnify	System name		Nagyító
+height	Magnify-Main		magasság
+width	Magnify-Main		szélesség
 Info	Magnify-Main		Infó
 Show info	Magnify-Main		Információk megjelenításe
 Make square	Magnify-Main		Négyzetté alakítás

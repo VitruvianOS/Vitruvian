@@ -1,0 +1,17 @@
+1	thai	x-vnd.Haiku-Pairs	3059673093
+Pairs	System name		จับคู่
+Quit	PairsWindow		ออก
+Medium	PairsWindow		สื่อ
+Game	PairsWindow		เกม
+Expert (8x8)	PairsWindow		เชี่ยวชาญ (8x8)
+New	PairsWindow		ใหม่
+OK	Pairs		ตกลง
+You completed the game in {0, plural, one{# click} other{# clicks}}.\n	PairsWindow		คุณเล่นจบเกมใน{0, plural, one{# click} อื่นๆ{# clicks}}.\n
+Small	PairsWindow		เล็ก
+Size	PairsWindow		ขนาด
+%app%\n\twritten by Ralf Schülke\n\tCopyright 2008-2010, Haiku Inc.\n\n	PairsWindow		%app%\n\tเขียนโดย Ralf Schülke\n\tลิขสิทธิ์ 2008-2010, Haiku Inc.\n\n
+Quit game	PairsWindow		ออกจากเกม
+Large	PairsWindow		ขนาดใหญ่
+Beginner (4x4)	PairsWindow		เริ่มต้น (4x4)
+Intermediate (6x6)	PairsWindow		กลาง (6x6)
+New game	PairsWindow		เกมใหม่

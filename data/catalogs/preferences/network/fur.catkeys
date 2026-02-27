@@ -1,8 +1,6 @@
-1	friulian	x-vnd.Haiku-Network	3694799483
+1	friulian	x-vnd.Haiku-Network	3807978621
 Ethernet device	InterfaceListItem		Dispositîf ethernet
 Link speed:	IntefaceView		Velocitât colegament:
-disconnected	IntefaceView		disconetût
-IP Address:	IntefaceAddressView		Direzion IP:
 WPA	WPA protected network		WPA
 Network:	IntefaceView		Rêt:
 Received:	IntefaceView		Ricevûts:
@@ -14,11 +12,12 @@ Gateway:	IntefaceAddressView		Gateway:
 The netmask defines your local network	IntefaceAddressView		La mascare di rêt e definìs la tô rêt locâl
 Your IP address	IntefaceAddressView		La tô direzion IP
 DHCP	IntefaceAddressView		DHCP
+IP address:	IntefaceAddressView		Direzion IP:
 Netmask:	IntefaceAddressView		Mascare di rêt:
 EAP	EAP protected network		EAP
 Services	NetworkWindow		Servizis
-Installing NetworkStatus in Deskbar failed: %s	NetworkWindow		Instalazion dal Stât de Rêt tal Deskbar falît: %s
-Revert	NetworkWindow		Torne indaûr
+Installing NetworkStatus in Deskbar failed: %s	NetworkWindow		Instalazion di “Stât de Rêt” tal Deskbar falide: %s
+Revert	NetworkWindow		Ripristine
 off	ServiceListItem		off
 WEP	WEP protected network		WEP
 <no wireless networks found>	IntefaceView		<nissune rêt cence fîi cjatade>
@@ -31,7 +30,7 @@ Show network status in Deskbar	NetworkWindow		Mostre il stât de rêt tal Deskba
 Mode:	IntefaceAddressView		Modalitât:
 connected	InterfaceListItem		conetût
 OK	NetworkWindow		Va ben
-Static	IntefaceAddressView		Static
+Static	IntefaceAddressView		Statiche
 launch error	NetworkWindow		erôr di inviament
 Renegotiate	IntefaceView		Tornâ a negoziâ
 MAC address:	IntefaceView		Direzion MAC:
@@ -40,13 +39,14 @@ disabled	InterfaceListItem		disabilitât
 Dial-up connection	InterfaceListItem		Conession vie telefon
 on	ServiceListItem		on
 The method for obtaining an IP address	IntefaceAddressView		Il metodi par otignî une direzion IP
+disconnected	InterfaceListItem		disconetût
 Automatic	IntefaceAddressView		Automatic
 Choose automatically	IntefaceView		Sielç in automatic
 Status:	IntefaceView		Stât:
 Disable	IntefaceView		Disabilite
 Manage…	NetworkWindow		Gjestìs…
-open	Open network		vierç
-Network	NetworkWindow		Rêt
+open	Open network		vierte
+Network	System name		Rêt
 Your gateway to the internet	IntefaceAddressView		Il to gateway par internet
 Enable	ServiceView		Abilite
 Wireless device	InterfaceListItem		Dispositîf cence fîi

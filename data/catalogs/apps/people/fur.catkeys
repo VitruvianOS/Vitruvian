@@ -1,5 +1,6 @@
-1	friulian	x-vnd.Be-PEPL	2332202134
-Launching the FileTypes preflet to configure Person attributes has failed.\n\nError: 	People		No si è rivâts a inviâ il preflet di FileTypes par configurâ i atribûts de Persone.\n\nErôr: 
+1	friulian	x-vnd.Be-PEPL	2634915100
+Launching the FileTypes preflet to configure Person attributes has failed.\n\nError: 	People		No si è rivâts a inviâ il preflet "Gjenars di file" par configurâ i atribûts de Persone.\n\nErôr: 
+Mobile phone	People		Celulâr
 Unnamed person	People		Persone cence non
 New person…	People		Gnove persone…
 Address	People		Direzion
@@ -9,14 +10,14 @@ Could not create %s.	People		Nol è stât pussibil creâ %s.
 Quit	People		Jes
 Company	People		Aziende
 Name	People		Non
-The file '%name%' could not be written.	People		Il file '%name%' nol pues jessi scrit.
+The file '%name%' could not be written.	People		Nol è pussibil scrivi il file '%name%'.
 Contact name	People		Non dal contat
 Cancel	People		Cancele
 Edit	People		Modifiche
 Save changes before closing?	People		Salvâ lis modifichis prime di sierâ?
 People	System name		People
 Error	People		Erôr
-Revert	People		Torne indaûr
+Revert	People		Ripristine
 Country	People		Paîs
 Person	Short mimetype description		Persone
 New person	People		Gnove persone

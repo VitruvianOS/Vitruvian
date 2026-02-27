@@ -1,28 +1,28 @@
-1	ukrainian	x-vnd.Haiku-ScreenSaver	557704281
-Could not load screen saver	ScreenSaver		Не вдалося завантажити Оберігач
+1	ukrainian	x-vnd.Haiku-ScreenSaver	377530480
+Display Power Management Signaling not available	ScreenSaver		Система DPMS не підтримується
+Blackness	ScreenSaver		Чорний екран
+Fade now when mouse is here	ScreenSaver		Заставка, коли курсор знаходиться тут
+Screensavers	ScreenSaver		Екранні заставки
+Enable screensaver	ScreenSaver		Увімкнути заставку
+Passwords don't match. Please try again.	ScreenSaver		Паролі не співпадають. Будь ласка, спробуйте знову.
 30 seconds	ScreenSaver		30 секунд
-Start screensaver	ScreenSaver		Запустити Оберігач
-Password…	ScreenSaver		Гасло…
-Password:	ScreenSaver		Гасло:
-Password lock	ScreenSaver		Блокування гасла:
-Screensavers	ScreenSaver		Зберігачі екрану
-Display Power Management Signaling not available	ScreenSaver		Display Power Management Signaling не увімкнено
-ScreenSaver	System name		Оберігач екрану
+No options available	ScreenSaver		Доступні опції відсутні
+ScreenSaver	System name		ScreenSaver
+Don't fade when mouse is here	ScreenSaver		Без заставки, коли курсор знаходиться тут
+Cancel	ScreenSaver		Скасувати
+Password:	ScreenSaver		Пароль:
+Screensaver settings	ScreenSaver		Налаштування заставки
+Password Window	ScreenSaver		Вікно пароля
+Use system password	ScreenSaver		Використовувати системний пароль
 Test	ScreenSaver		Тест
-General	ScreenSaver		Основний
-Fade now when mouse is here	ScreenSaver		Задіяти зараз коли курсор знаходиться тут
-Enable screensaver	ScreenSaver		Увімкнути Оберігач
-Don't fade when mouse is here	ScreenSaver		Не зникати коли курсор знаходиться тут
-Cancel	ScreenSaver		Не задіювати коли курсор знаходиться тут
+Could not load screen saver	ScreenSaver		Не вдалося завантажити заставку
+Use custom password	ScreenSaver		Використовувати вибраний пароль
+Password…	ScreenSaver		Пароль…
+Confirm password:	ScreenSaver		Підтвердіть пароль:
 Turn off screen	ScreenSaver		Вимкнути екран
-No options available	ScreenSaver		Опції недоступні
-Password Window	ScreenSaver		Вікно гасла
-Screensaver settings	ScreenSaver		Налаштування Оберігача
-Passwords don't match. Please try again.	ScreenSaver		Гасла не збігаються. Будь ласка, спробуйте знову.
-OK	ScreenSaver		Гаразд
-Blackness	ScreenSaver		Темнота
-Use custom password	ScreenSaver		Використовувати вибране гасло
+Password lock	ScreenSaver		Блокувати паролем:
+OK	ScreenSaver		ОК
 Done	ScreenSaver		Готово
-Confirm password:	ScreenSaver		Підтвердіть гасло:
-No preview available	PreviewView		Попередній перегляд неможливий
-Use network password	ScreenSaver		Використати гасло мережі
+Start screensaver	ScreenSaver		Запуск заставки
+No preview available	PreviewView		Попередній перегляд недоступний
+General	ScreenSaver		Загальні

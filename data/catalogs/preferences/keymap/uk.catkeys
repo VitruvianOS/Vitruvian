@@ -1,127 +1,177 @@
-1	ukrainian	x-vnd.Haiku-Keymap	1039047705
+1	ukrainian	x-vnd.Haiku-Keymap	83366860
 Key	Modifier keys window	As in a computer keyboard key	Клавіша
 Japanese	KeymapNames		Японська
 US	KeymapNames		US
+PG ↑	Keyboard Layout View	Very short for 'page up'	PG ↑
+Scroll Lock	Keyboard Layout View		Scroll Lock
 Brazilian	KeymapNames		Бразильська
-Right control	Keyboard Layout View		Права Control
+ThinkPad (US)	KeyboardLayoutNames		ThinkPad (США)
+Right Option	Keyboard Layout View		Правий Option
+X-Bows Nature	KeyboardLayoutNames		X-Bows Nature
 Dvorak	KeymapNames		Dvorak
-Option:	Modifier keys window	Option key role name	Параметр:
+Option:	Modifier keys window	Option key role name	Option:
 Cancel	Modifier keys window		Скасувати
-Sample and clipboard:	Keymap window		Приклад і буфер обміну:
+Sample and clipboard:	Keymap window		Зразок & Буфер обміну:
 Polish	KeymapNames		Польська
+Right Shift	Keyboard Layout View		Правий Shift
 Latin-American	KeymapNames		Латиноамериканська
 Ukrainian	KeymapNames		Українська
+PAGE ↓	Keyboard Layout View		PAGE ↓
+DEL	Keyboard Layout View		DEL
 United-Kingdom	KeymapNames		Об'єднане королівство
 Turkish (Type-F)	KeymapNames		Турецька (Type-F)
 Serbian (Cyrillic)	KeymapNames		Сербська (Кирилиця)
 Belgian (point)	KeymapNames		Бельгійська (point)
 Finnish	KeymapNames		Фінська
-Num lock	Keyboard Layout View		Num lock
-Switch shortcut keys to Windows/Linux mode	Keymap window		Перемикати швидкі кнопки як у Linux/Windows
+Switch shortcut keys to Windows/Linux mode	Keymap window		Переключити комбінації клавіш у режим Linux/Windows
 Spanish (Dvorak)	KeymapNames		Іспанська (Dvorak)
-Option	Keyboard Layout View	Option key	Опції
-Scroll lock	Keyboard Layout View		Scroll lock
+Option	Keyboard Layout View	Option key	Option
 US-International	KeymapNames		US-міжнародна
-Right option	Keyboard Layout View		Права Option
 Turkish (Type-Q)	KeymapNames		Турецька (Тип-Q)
-Revert	Modifier keys window		Повернути
+Revert	Modifier keys window		Відкат змін
 Slovak	KeymapNames		Словацька
+CAPS LOCK	Keyboard Layout View		CAPS LOCK
 Colemak	KeymapNames		Colemak
 Dvorak (programmer's)	KeymapNames		Dvorak (для програмістів)
+PRINT	Keyboard Layout View		PRINT
 German (Mac)	KeymapNames		Німецька (Mac)
 Arabic (102)	KeymapNames		Арабська (102)
+ThinkPad	KeyboardLayoutNames		ThinkPad
 Belarusian (Mac)	KeymapNames		Білоруська (Mac)
 Croatian	KeymapNames		Хорватська
+PAGE ↑	Keyboard Layout View		PAGE ↑
 Set modifier keys	Modifier keys window		Призначити клавіші-модифікатори
+Apple Aluminium International	KeyboardLayoutNames		Apple Aluminium міжнародна
+Right Command	Keyboard Layout View		Правий Command
 Win/Cmd key	Modifier keys window	Label of the \"Windows\" key (PC)/Command key (Mac)	Клавіша Win/Cmd
+PG ↓	Keyboard Layout View	Very short for 'page down'	PG ↓
+ThinkPad X1 (US)	KeyboardLayoutNames		ThinkPad X1 (США)
 Spanish	KeymapNames		Іспанська
+Apple Aluminum	KeyboardLayoutNames		Apple Aluminum
+HOME	Keyboard Layout View		HOME
+COMMAND	Keyboard Layout View		COMMAND
 Ukrainian (Mac)	KeymapNames		Українська (Mac)
-Command:	Modifier keys window	Command key role name	Команда:
+Command:	Modifier keys window	Command key role name	Command:
 French (Bépo)	KeymapNames		Французька (Bépo)
 Russian (Typewriter)	KeymapNames		Російська (Typewriter)
+Caps Lock:	Modifier keys window	Caps Lock key role name	Caps Lock:
 Acute trigger	Keymap window		Ак'юте
+ThinkPad T400s International	KeyboardLayoutNames		ThinkPad T400s міжнародна
 Italian	KeymapNames		Італійська
+Kinesis Ergo Elan International	KeyboardLayoutNames		Kinesis Ergo Elan міжнародна
+Apple Aluminum (US)	KeyboardLayoutNames		Apple Aluminum (США)
+French (NF Z71-300)	KeymapNames		Французька (NF Z71-300)
 Modifier keys	Modifier keys window		Клавіші-модифікатори
-Kazakh	KeymapNames		Казаська
+ThinkPad X1 International	KeyboardLayoutNames		ThinkPad X1 міжнародна
+Kazakh	KeymapNames		Казахська
+Left Option	Keyboard Layout View		Лівий Option
 Save as…	Keymap window		Зберегти як…
 Lithuanian (Standard)	KeymapNames		Литовська (Standard)
-Error: duplicate keys	Modifier keys window		Помилка: дублювання клавіш
+Error: duplicate keys	Modifier keys window		Помилка: дубль клавіш
+NUM	Keyboard Layout View	Very short for 'num lock'	NUM
 Bulgarian (Phonetic)	KeymapNames		Болгарська (Фонетична)
+Kinesis Advantage	KeyboardLayoutNames		Kinesis Advantage
 Canadian-French	KeymapNames		Канадська-Французська
 Hungarian	KeymapNames		Угорська
-Control	Keyboard Layout View	Control key	Керування
+Right Control	Keyboard Layout View		Правий Control
+Control	Keyboard Layout View	Control key	Control
 Irish	KeymapNames		Ірландська
-Remove	Keyboard Layout View		Видалити
+Remove	Keyboard Layout View		Вилучити
 Tilde trigger	Keymap window		Тільда
+Caps Lock	Keyboard Layout View		Caps Lock
 Shift	Keyboard Layout View	Shift key	Shift
-Czech (Mac)	KeymapNames		Чешська (Mac)
+CONTROL	Keyboard Layout View		CONTROL
 Macedonian	KeymapNames		Македонська
-Left command	Keyboard Layout View		Ліва Сommand
+Czech (Mac)	KeymapNames		Чешська (Mac)
+Caps Lock key	Modifier keys window	Label of key above Shift, usually Caps Lock	Клавіша Caps Lock
 Albanian	KeymapNames		Албанська
 (Current)	Keymap window		(Поточна)
-Left option	Keyboard Layout View		Ліва Option
+OPT	Keyboard Layout View	Very short for 'option'	OPT
+Friulian	KeymapNames		Фріульська
+END	Keyboard Layout View		END
 Esperanto	KeymapNames		Есперанто
 Belarusian	KeymapNames		Білоруська
 Warning: left and right key roles do not match	Modifier keys window		Увага: функції лівої і правої клавіш не співпадають
 Circumflex trigger	Keymap window		Ціркумфлекс
-Caps lock	Keyboard Layout View		Caps lock
-Left shift	Keyboard Layout View		Лівий Shift
-Russian (Yawert)	KeymapNames		Російська (Yawert)
+Fizzbook NL2	KeyboardLayoutNames		Fizzbook NL2
+Russian (Yawert)	KeymapNames		Російська (фонетична)
+ThinkPad X100e International	KeyboardLayoutNames		ThinkPad X100e міжнародна
 Bulgarian (Cyrillic)	KeymapNames		Болгарська (Кирилиця)
 Swedish	KeymapNames		Шведська
-Left control	Keyboard Layout View		Ліва Control
+CAPS	Keyboard Layout View	Very short for 'caps lock'	CAPS
 Role	Modifier keys window	As in the role of a modifier key	Роль
 Svorak	KeymapNames		Svorak
+ThinkPad X100e (US)	KeyboardLayoutNames		ThinkPad X100e (США)
 German	KeymapNames		Німецька
 Swiss-German	KeymapNames		Швейцарська-Німецька
 Ctrl key	Modifier keys window	Label of key farthest from the spacebar, usually Ctrle.g. Strg for German keyboard	Клавіша Ctrl
 Czech	KeymapNames		Чешська
 Russian (Udmurt, Komi, Mari)	KeymapNames		Російська  (Udmurt, Komi, Mari)
-Control:	Modifier keys window	Control key role name	Керування:
+Thai (TIS-820.2538)	KeymapNames		Тайська (TIS-820.2538)
+Control:	Modifier keys window	Control key role name	Control:
+Generic 105-key International	KeyboardLayoutNames		Стандартна 105-клав. міжнародна
 Disabled	Modifier keys window	Do nothing	Вимкнути
 Select dead keys	Keymap window		Вибрати мертві клавіші
 Russian (Mac)	KeymapNames		Російська (Mac)
-Right shift	Keyboard Layout View		Правий Shift
+ESC	Keyboard Layout View		ESC
 Belarusian (Latin)	KeymapNames		Білоруська (Латина)
 Hebrew	KeymapNames		Іврит
-Layout	Keymap window		Макет
+Layout	Keymap window		Клавіатура
 Greek	KeymapNames		Грецька
-Revert	Keymap window		Повернути
+Revert	Keymap window		Відкат змін
+CTRL	Keyboard Layout View	Very short for 'control'	CTRL
 Grave trigger	Keymap window		Апостроф
 Menu	Keyboard Layout View	Menu key	Меню
 Faeroese	KeymapNames		Фарерська
-Quit	Keymap window		Вихід
+Quit	Keymap window		Вийти
 Polish (Typewriter)	KeymapNames		Польська (Typewriter) 
 French (Mac)	KeymapNames		Французька (Mac)
-User:	Keymap window		Користувацькі:
+User:	Keymap window		Користувача:
+Apple Aluminium Extended International	KeyboardLayoutNames		Apple Aluminium розширена міжнародна
 Alt/Opt key	Modifier keys window	Label of Alt key (PC)/Option key (Mac)	Клавіша Alt/Opt
+SHIFT	Keyboard Layout View		SHIFT
 Estonian	KeymapNames		Естонська
 Serbian (Latin)	KeymapNames		Сербська (Латина)
 French	KeymapNames		Французька
 Portuguese	KeymapNames		Португальська
 Swiss-French	KeymapNames		Швейцарська-Французька
 Shift:	Modifier keys window	Shift key role name	Shift:
-Keymap	System name		Розкладка
+Keymap	System name		Keymap
 Slovene	KeymapNames		Словенська
 Lithuanian	KeymapNames		Литовська
+Left Command	Keyboard Layout View		Лівий Command
 Set modifier keys…	Keymap window		Призначити клавіші-модифікатори...
-Switch shortcut keys to Haiku mode	Keymap window		Перемикати швидкі кнопки як у Haiku
-Defaults	Keymap window		Типово
-ISO-9995	KeymapNames		SO-9995
+Switch shortcut keys to Haiku mode	Keymap window		Переключити комбінації клавіш у режим Haiku
+Defaults	Keymap window		Типові настройки
+ISO-9995	KeymapNames		ISO-9995
 System:	Keymap window		Системні:
+ThinkPad International	KeyboardLayoutNames		ThinkPad міжнародна
+Apple Aluminum Extended (US)	KeyboardLayoutNames		Apple Aluminum Extended (США)
 Switch shortcut keys	Keymap window		Перемкнути швидкі кнопки
-Right command	Keyboard Layout View		Права Command
+NUM LOCK	Keyboard Layout View		NUM LOCK
+MENU	Keyboard Layout View		MENU
 Belgian (comma)	KeymapNames		Бельгійська (comma)
 Norwegian	KeymapNames		Норвежська
 Font	Keymap window		Шрифт
-Danish	KeymapNames		Данська
+Danish	KeymapNames		Датська
+Generic 104-key	KeyboardLayoutNames		Типова 104-клавіші
 Shift key	Modifier keys window	Label of key above Ctrl, usually Shift	Клавіша Shift
-Russian	KeymapNames		Ролсійська
+Russian	KeymapNames		Російська
+PAUSE	Keyboard Layout View		PAUSE
+TypeMatrix 2030	KeyboardLayoutNames		TypeMatrix 2030
 Romanian	KeymapNames		Румунська
+CMD	Keyboard Layout View	Very short for 'command'	CMD
 Command	Keyboard Layout View	Command key	Command
+Left Shift	Keyboard Layout View		Лівий Shift
+SCROLL	Keyboard Layout View		SCROLL
 File	Keymap window		Файл
 Brazilian (ABNT2)	KeymapNames		Бразильська (ABNT2)
-Dutch	KeymapNames		Данська
+INS	Keyboard Layout View		INS
+OPTION	Keyboard Layout View		OPTION
+Dutch	KeymapNames		Нідерландська
 Diaeresis trigger	Keymap window		Діарезіс
 Icelandic	KeymapNames		Ісландська
 Open…	Keymap window		Відкрити…
+Left Control	Keyboard Layout View		Лівий Control
+ThinkPad T400s (US)	KeyboardLayoutNames		ThinkPad T400s (США)
+Num Lock	Keyboard Layout View		Num Lock

@@ -1,0 +1,50 @@
+1	indonesian	x-vnd.Haiku-Input	130668644
+Defaults	InputMouse		Bawaan
+Scrolling	TouchpadPrefView		Menggulung
+Long	KeyboardView		Panjang
+Cancel	TouchpadPrefView		Batalkan
+Slow	TouchpadPrefView		Lambat
+Device List	InputWindow		Daftar perangkat
+Double-click speed	SettingsView		Kecepatan klik dua kali
+5-Button	SettingsView		5-Tombol
+Typing test area	KeyboardView		Area tes pengetikan
+Fast	KeyboardView		Cepat
+Please confirm	TouchpadPrefView		Mohon konfirmasi
+Mouse speed	SettingsView		Kecepatan mouse
+Horizontal scrolling	TouchpadPrefView		Pengguliran horizontal
+Keyboard lock delay	TouchpadPrefView		Jeda kuncian papan ketik
+Input	System name		Masukan
+Quick	TouchpadPrefView		Cepat
+Short	KeyboardView		Cepat
+Revert	InputMouse		Pulihkan
+Slow	KeyboardView		Lambat
+2-Button	SettingsView		2-Tombol
+Click to focus and raise	SettingsView		Klik untuk fokus dan naikkan
+Vertical	TouchpadPrefView		Vertikal
+Focus follows mouse	SettingsView		Fokus mengikuti mouse
+Focus mode:	SettingsView		Mode fokus:
+Double-click test area	SettingsView		Area pengujian klik dua kali
+Revert	TouchpadPrefView		Pulihkan
+4-Button	SettingsView		4-Tombol
+Tapping sensitivity	TouchpadPrefView		Sensitivitas penekanan
+Revert	InputKeyboard		Pulihkan
+Mouse type:	SettingsView		Jenis mouse:
+Off	TouchpadPrefView		Mati
+Never	TouchpadPrefView		Tidak pernah
+Fast	TouchpadPrefView		Cepat
+6-Button	SettingsView		6-Tombol
+Click to focus	SettingsView		Klik untuk fokus
+Acceleration	TouchpadPrefView		Percepatan
+Accept first click	SettingsView		Terima klik pertama
+OK	TouchpadPrefView		Oke
+Delay until key repeat	KeyboardView		Tunda hingga tombol berulang
+Two finger scrolling	TouchpadPrefView		Pengguliran dua jari
+Mouse acceleration	SettingsView		Akselerasi mouse
+The new scroll area is very large and may impede normal mouse operation. Do you really want to change it?	TouchpadPrefView		Area gulir baru sangat besar dan dapat menghambat operasi mouse normal. Apakah anda benar-benar ingin mengubahnya?
+High	TouchpadPrefView		Tinggi
+Defaults	TouchpadPrefView		Bawaan
+1-Button	SettingsView		1-Tombol
+Defaults	InputKeyboard		Bawaan
+Key repeat rate	KeyboardView		Rasio pengulangan tombol
+Horizontal	TouchpadPrefView		Horisontal
+3-Button	SettingsView		3-Tombol

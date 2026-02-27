@@ -10,14 +10,14 @@ Folder: %path	Main View		フォルダー: %path
 Manual	Main View		手動
 Set background image error	Main View		背景イメージ設定エラー
 Default folder	Main View		標準フォルダー
-Revert	Main View		元に戻す
+Revert	Main View		戻す
 None	Main View		無し
 All workspaces	Main View		すべてのワークスペース
 Icon label outline	Main View		アイコンラベルアウトライン
-Other…	Main View		ファイルを指定…
+Other…	Main View		ファイルの指定...
 Current workspace	Main View		現在のワークスペース
 Apply	Main View		適用
-Other folder…	Main View		フォルダーを指定…
+Other folder…	Main View		フォルダーの指定...
 Y:	Main View		Y 方向:
 Tile	Main View		並べて表示
 Select	Main View		選択

@@ -1,0 +1,38 @@
+1	esperanto	x-vnd.Haiku-libbe	2491350405
+All Rights Reserved.	AboutWindow		Ĉiuj rajtoj estas rezervitaj.
+gold master	AboutWindow		ora mastro
+Undo	TextView		Malfari
+OK	PrintJob		Bone
+OK	Dragger		Bone
+gamma	AboutWindow		gamo
+development	AboutWindow		kostrukciado
+Print Server is not responding.	PrintJob		Servilo de presado ne respondas.
+About %app%	AboutMenuItem		Pri %app%
+Warning	Dragger		Averto
+Green:	ColorControl		Verda:
+Redo	TextView		Refari
+No pages to print!	PrintJob		Paĝoj por presi forestas!
+beta	AboutWindow		beto
+OK	ZombieReplicantView		Bone
+Cut	TextView		Eltondi
+Default	Default decorator about box		Defaŭlta
+Can't delete this replicant from its original application. Life goes on.	Dragger		Ne povas foriĝi replikilon de ĝia fonta programo. Vivo daŭriĝas.
+Error	ZombieReplicantView		Eraro
+Paste	TextView		Alglui
+OK	AboutWindow		Bone
+Default Haiku window decorator.	Default decorator about box		Defaŭlta dekoraciilo por fenestroj de la Hajko
+Remove replicant	Dragger		Forigi replikilon
+Version	AboutWindow		Versio
+Red:	ColorControl		Ruĝa:
+<empty>	Menu		<malplena>
+Copy	TextView		Kopii
+Select all	TextView		Elekti ĉion
+alpha	AboutWindow		alfo
+Error	PrintJob		Eraro
+About %app…	Dragger		Pri %app…
+About %app%	AboutWindow		Pri %app%
+Version history:	AboutWindow		Historio de versioj:
+Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Ne povas trovi la programon por la replikilo. Subskribo por programo ne estas disponita.\n%error
+Blue:	ColorControl		Blua:
+Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		Ne povas krei replikilon por \"%description\".\n%error
+Written by:	AboutWindow		Kreite per:

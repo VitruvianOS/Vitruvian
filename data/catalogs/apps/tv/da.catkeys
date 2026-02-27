@@ -1,0 +1,24 @@
+1	danish	x-vnd.Haiku.TV	3120244932
+No menu	MainWin		Ingen menu
+No border	MainWin		Ingen kant
+Error, connecting to interface failed:\n\n	MainWin		Fejl, forbindelse til grænseflade mislykkedes:\n\n
+Full screen	MainWin		Fuldskærm
+Scale to native size	MainWin		Skalér til oprindelig størrelse
+unknown	MainWin		ukendt
+Next channel	MainWin		Næste kanal
+Keep aspect ratio	MainWin		Behold højde-bredde-forhold
+DVB - Digital Video Broadcasting TV	MainWin		DVB - Digital Video Broadcasting TV
+Always on top	MainWin		Altid øverst
+Debug	MainWin		Fejlfind
+Interface	MainWin		Grænseflade
+Quit	MainWin		Afslut
+Channel	MainWin		Kanal
+Previous channel	MainWin		Forrige kanal
+OK	MainWin		O.k.
+TV	MainWin		TV
+Settings	MainWin		Indstillinger
+TV	System name		TV
+Settings…	MainWin		Indstillinger…
+None	MainWin		Ingen
+Error, interface is busy:\n\n	MainWin		Fejl, grænseflade er optaget:\n\n
+pixel aspect ratio	MainWin		billedpunkters højde-bredde-forhold

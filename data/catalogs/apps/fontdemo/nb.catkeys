@@ -1,0 +1,17 @@
+1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-FontDemo	3449067186
+Stop cycling	ControlView		Stopp rotasjon
+Haiku, Inc.	FontDemoView		Haiku, Inc.
+Rotation: %d	ControlView		Rotasjon: %d
+Shear: %d	ControlView		Skjevhet: %d
+Spacing: %d	ControlView		Bokstavmellomrom: %d
+Cycle fonts	ControlView		Roter skrifttyper
+Font:	ControlView		Skrifttype:
+Drawing mode:	ControlView		Tegnemodus:
+Haiku, Inc.	ControlView		Haiku, Inc.
+Controls	FontDemo		Kontroller
+FontDemo	System name		FontDemo
+Outline: %d	ControlView		Omriss: %d
+Text:	ControlView		Tekst:
+Antialiased text	ControlView		Kantutjevnet tekst
+Bounding boxes	ControlView		Avgrensende bokser
+Size: %d	ControlView		Størrelse: %d

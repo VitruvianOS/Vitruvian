@@ -461,15 +461,22 @@ write_rgba32b(jas_matrix_t** pixels, uchar* scanline, int width)
 //	#pragma mark -	jasper I/O
 
 
+#if __GNUC__ == 2
+typedef int jasper_length_t;
+#else
+typedef unsigned int jasper_length_t;
+#endif
+
+
 static int
-Read(jas_stream_obj_t* object, char* buffer, const int length)
+Read(jas_stream_obj_t* object, char* buffer, const jasper_length_t length)
 {
 	return (*(BPositionIO**)object)->Read(buffer, length);
 }
 
 
 static int
-Write(jas_stream_obj_t* object, char* buffer, const int length)
+Write(jas_stream_obj_t* object, const char* buffer, const jasper_length_t length)
 {
 	return (*(BPositionIO**)object)->Write(buffer, length);
 }
@@ -537,8 +544,6 @@ SSlider::SSlider(const char* name, const char* label,
 	BSlider(name, label, message, minValue, maxValue,
 		posture, thumbType, flags)
 {
-	rgb_color barColor = { 0, 0, 229, 255 };
-	UseFillColor(true, &barColor);
 }
 
 
@@ -618,7 +623,7 @@ TranslatorWriteView::TranslatorWriteView(const char* name,
 	fSettings(settings)
 {
 	fQualitySlider = new SSlider("quality", B_TRANSLATE("Output quality"),
-		new BMessage(VIEW_MSG_SET_QUALITY), 0, 100);
+		new BMessage(VIEW_MSG_SET_QUALITY), 0, 100, B_HORIZONTAL, B_TRIANGLE_THUMB);
 	fQualitySlider->SetHashMarks(B_HASH_MARKS_BOTTOM);
 	fQualitySlider->SetHashMarkCount(10);
 	fQualitySlider->SetLimitLabels(B_TRANSLATE("Low"), B_TRANSLATE("High"));
@@ -714,8 +719,8 @@ TranslatorAboutView::TranslatorAboutView(const char* name)
 
 	char versionString[100];
 	snprintf(versionString, sizeof(versionString),
-		B_TRANSLATE("Version %d.%d.%d"), 
-		static_cast<int>(sTranslatorVersion >> 8), 
+		B_TRANSLATE("Version %d.%d.%d"),
+		static_cast<int>(sTranslatorVersion >> 8),
 		static_cast<int>((sTranslatorVersion >> 4) & 0xf),
 		static_cast<int>(sTranslatorVersion & 0xf));
 
@@ -725,6 +730,8 @@ TranslatorAboutView::TranslatorAboutView(const char* name)
 	BTextView* infoView = new BTextView("info");
 	infoView->SetText(sTranslatorInfo);
 	infoView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
+	infoView->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
 	infoView->MakeEditable(false);
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
@@ -744,18 +751,13 @@ TranslatorView::TranslatorView(const char* name, TranslatorSettings* settings)
 {
 	SetBorder(B_NO_BORDER);
 
-	AddTab(new TranslatorWriteView(B_TRANSLATE("Write"), 
+	AddTab(new TranslatorWriteView(B_TRANSLATE("Write"),
 		settings->Acquire()));
-	AddTab(new TranslatorReadView(B_TRANSLATE("Read"), 
+	AddTab(new TranslatorReadView(B_TRANSLATE("Read"),
 		settings->Acquire()));
 	AddTab(new TranslatorAboutView(B_TRANSLATE("About")));
 
 	settings->Release();
-
- 	BFont font;
- 	GetFont(&font);
- 	SetExplicitPreferredSize(
-		BSize((font.Size() * 380) / 12, (font.Size() * 250) / 12));
 }
 
 
@@ -1242,15 +1244,15 @@ JP2Translator::PopulateInfoFromFormat(translator_info* info,
 			info->group = formats[i].group;
 			info->quality = formats[i].quality;
 			info->capability = formats[i].capability;
-			if (strncmp(formats[i].name, 
-				"Be Bitmap Format (JPEG2000Translator)", 
-				sizeof("Be Bitmap Format (JPEG2000Translator)")) == 0) 
-				strncpy(info->name, 
-					B_TRANSLATE("Be Bitmap Format (JPEG2000Translator)"), 
+			if (strcmp(formats[i].name, B_TRANSLATOR_BITMAP_DESCRIPTION)
+				== 0) {
+				strlcpy(info->name,
+					B_TRANSLATE(B_TRANSLATOR_BITMAP_DESCRIPTION),
 					sizeof(info->name));
-			else
-				strncpy(info->name, formats[i].name, sizeof(info->name));			
-			strncpy(info->MIME,  formats[i].MIME, sizeof(info->MIME));
+			} else {
+				strlcpy(info->name, formats[i].name, sizeof(info->name));
+			}
+			strlcpy(info->MIME, formats[i].MIME, sizeof(info->MIME));
 			return B_OK;
 		}
 	}

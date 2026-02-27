@@ -1,20 +1,63 @@
-1	hungarian	x-vnd.haiku-softwareupdater	420642285
+1	hungarian	x-vnd.haiku-softwareupdater	1377379822
+Updating version	SoftwareUpdaterWindow	List item text	Jelenlegi:
+Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Kattints ide {0, plural, one{# friss csomag} other{# friss csomag}} telepítéséhez.
+Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Eltávolítandó csomagok
 No active network connection was found	UpdateManager	Error message	Nincs aktív hálózati kapcsolat.
 Quit	SoftwareUpdaterWindow	Alert button label	Kilépés
+There were no updates found.	CheckManager		Nem találtam frissítést.
+Updates have not been completed, are you sure you want to quit?	SoftwareUpdaterWindow		A frissítések telepítése még nem ért véget. Biztosan kilépsz?
+Updates found	SoftwareUpdaterWindow		Frissítéseket találtam
 Update now	SoftwareUpdaterWindow		Frissítés
+For some reason, we could not reboot your computer.	SoftwareUpdaterWindow		Egy hiba miatt nem tudom újraindítani a gépet.
+OK	UpdateManager		Rendben
+Unrecognized argument	SoftwareUpdaterApp	Error message	Ismeretlen paraméter
+There were no updates found.	CheckAction		Nem találtam frissítéseket.
 No updates available	UpdateAction		Nincs elérhető frissítés
+New packages to be installed	SoftwareUpdaterWindow	List super item label	Újonnan telepítendő csomagok
+Packages to be updated	SoftwareUpdaterWindow	List super item label	Frissítendő csomagok
+to	SoftwareUpdaterWindow	List item text	, új:
+Attempting to cancel the updates…	SoftwareUpdaterWindow		Frissítés megszakítása…
+Contacting software repositories to check for package updates.	CheckManager		Kapcsolódás a tárolókhoz frissítések kereséséhez.
 Available updates found	CheckManager		Frissítések érhetők el
-from repository	SoftwareUpdaterWindow	List item text	tárolóból
+from repository	SoftwareUpdaterWindow	List item text	tároló:
+Contacting software repositories to check for package updates.	SoftwareUpdaterWindow		Kapcsolódás a tárolókhoz frissítések kereséséhez.
 Cancelling updates	SoftwareUpdaterWindow		Frissítések megszakítása
-Cancel	SoftwareUpdaterWindow	Alert button label	Megszakít
+Cancel	SoftwareUpdaterWindow	Alert button label	Mégse
+There were no updates found.	UpdateAction		Nem találtam frissíteni valót.
+OK	SoftwareUpdaterWindow		Rendben
+Please choose from these update options:\n\nUpdate:\n\tUpdates all installed packages.\nFull sync:\n\tSynchronizes the installed packages with the repositories.	SoftwareUpdaterWindow		Kérlek válassz az alábbi opciók közül:\n\nFrissítés:\n\tMinden telepített csomag frissítése.\nTeljes szinkronizálás:\n\tAz összes telepített csomag szinkronizálása a tárolókkal.
 The following changes will be made:	SoftwareUpdaterWindow		Elvégzendő változtatások:
+Argument variables are no longer accepted\n	SoftwareUpdaterApp		A megadott paraméterek már nem használhatóak\n
+Fatal error while checking for updates: %s\n	CheckAction		Hiba történt a frissítések keresésekor: %s\n
+SoftwareUpdater	System name		Frissítéskezelő
+No active network connection was found.\n	CheckManager		Nincs internetkapcsolat.\n
 Applying changes	UpdateManager		Változtatások alkalmazása
+Full sync	SoftwareUpdaterWindow	Alert button label	Teljes szinkronizálás
 Quit	SoftwareUpdaterWindow	Button label	Kilépés
+Updates have been successfully installed.	UpdateManager		Sikeresen befejeződött a frissítés.
+Exception occurred while updating packages : %s\n	UpdateAction		Hiba történt a csomag frissítése közben: %s\n
+A reboot is necessary to complete the update process.	UpdateManager		Újraindítás szükséges a frissítés befejezéséhez.
+Exception occurred while checking for updates: %s\n	CheckAction		Hiba történt a frissítések ellenőrzésekor: %s\n
 Packages are being updated	UpdateManager		Frissítendő csomagok
-Cancel	SoftwareUpdaterWindow		Megszakít
+Cancel	SoftwareUpdaterWindow		Mégse
+Don't quit	SoftwareUpdaterWindow		Ne lépjen ki
 Checking for updates	SoftwareUpdaterWindow		Frissítések keresése
+Updates completed	UpdateManager		Sikeres frissítés
+Reboot	SoftwareUpdaterWindow		Újraindítás
+Show more details	SoftwareUpdaterWindow		Részletek
+Installing version	SoftwareUpdaterWindow	List item text	Telepítendő verzió:
 Checking for updates	CheckManager		Frissítések ellenörzése
 No remote repositories are available	UpdateManager	Error message	Egyetlen távoli tároló sem érhető el
+Software {0, plural, one{update} other{updates}} available	CheckManager		{0, plural, one{frissítés} other{frissítés}} elérhető
+Reboot	SoftwareUpdaterWindow	Button label	Újraindítás
+Update	SoftwareUpdaterWindow	Alert button label	Frissítés
+Open Repositories	SoftwareUpdaterWindow	Alert button label	Tároló megnyitása
 Updates did not complete	UpdateAction		Frissítés nem fejeződött be
+Invalid update type, cannot continue with updates	UpdateAction		Érvénytelen frissítés, nem folytatható tovább
+Uninstalling version	SoftwareUpdaterWindow	List item text	Eltávolítandó verzió:
+%i of %i	UpdateManager	Do not translate %i	%i / %i
 Quit	SoftwareUpdaterWindow		Kilépés
+No updates available	CheckManager		Nincs elérhető frissítés
+Usage:  SoftwareUpdater <command> [ <option> ]\nUpdates installed packages.\n\nCommands:\n  update     - Search repositories for updates on all packages.\n  check      - Check for available updates but only display a notification with results.\n  full-sync  - Synchronize the installed packages with the repositories.\n\nOptions:\n  -h or --help       Print this usage help\n  -v or --verbose    Output verbose information\n	SoftwareUpdaterApp	Command line usage help	Használat: SoftwareUpdater <parancs> [ <opció> ]\nTelepített csomagok frissítése.\n\nParancsok:\nupdate - Minden telepített csomag frissítése.\ncheck - Frissítések keresése és az eredmény megjelenítése.\nfull-sync - Az összes telepített csomag szinkronizálása a tárolókkal.\n\nOpciók:\n-h or --help Ennek a súgónak a kiírása\n-v or --verbose Részletes információk\n
+No remote repositories are available. Please verify that some repositories are enabled using the Repositories preflet or the 'pkgman' command.	SoftwareUpdaterWindow	Error message	Nincsenek elérhető tárolók. Kérlek ellenőrizd a Tárolók beállításoknál vagy pedig a 'pkgman' parancsal, hogy van-e engedélyezett tároló.
 Downloading packages	UpdateManager		Csomagok letöltése

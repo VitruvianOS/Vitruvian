@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-MediaPlayer	1313616492
+1	finnish	x-vnd.Haiku-MediaPlayer	334504768
 Remove Entry into Trash	MediaPlayer-RemovePLItemsCmd		Poista kappale roskakoriin
 Close	MediaPlayer-PlaylistWindow		Sulje
 Volume of background clips	MediaPlayer-SettingsWindow		Taustavideoleikkeen voimakkuus
@@ -10,13 +10,12 @@ Audio track	MediaPlayer-Main		Äänikappale
 Muted	MediaPlayer-SettingsWindow		Mykistetty
 OK	MediaPlayer-RemovePLItemsCmd		Valmis
 Open Playlist	MediaPlayer-PlaylistWindow		Avaa soittoluettelo
-Subtitles	MediaPlayer-Main		Aliotsakkeet
+Subtitles	MediaPlayer-Main		Tekstitykset
 %app% encountered an internal error. The file could not be opened.	MediaPlayer-Main		%app% kohtasi sisäisen virheen. Tiedoston avaus epäonnistui.
 DrawBitmap	MediaPlayer-InfoWin		DrawBitmap
 File info	MediaPlayer-InfoWin		Tiedostotiedot
 raw audio	MediaPlayer-InfoWin		raakaääni
 Select all	MediaPlayer-PlaylistWindow		Valitse kaikki
-New player…	MediaPlayer-Main		Uusi soitin...
 Move Entries	MediaPlayer-MovePLItemsCmd		Siirrä kappaleita
 OK	MediaPlayer-Main		Valmis
 Remove	MediaPlayer-PlaylistWindow		Poista
@@ -25,7 +24,6 @@ Resume:	MediaPlayer-SettingsWindow		Ansioluettelo:
 Duration	MediaPlayer-InfoWin		Kesto
 Import Entries	MediaPlayer-ImportPLItemsCmd		Tuo kappaleita
 Open network stream	MediaPlayer-Main		Avaa verkon suoratoistovirta
-Move file to Trash	MediaPlayer-PlaylistWindow		Siirrä tiedosto roskakoriin
 Open file…	MediaPlayer-Main		Avaa tiedosto...
 Scale controls in full screen mode	MediaPlayer-SettingsWindow		Skaalausohjaimet kokonäyttötilassa
 View options	MediaPlayer-SettingsWindow		Katso valitsimia
@@ -35,6 +33,8 @@ Full volume	MediaPlayer-SettingsWindow		Täysi äänenvoimakkuus
 Start media server	MediaPlayer-Main		Käynnistä mediapalvelin
 It appears the media server is not running.\nWould you like to start it ?	MediaPlayer-Main		Näyttää kuin mediapalvelin ei olisi käynnissä.\nHaluaisitko käynnistää sen ?
 Location	MediaPlayer-InfoWin		Sijainti
+%lu × %lu	MediaPlayer-InfoWin	The '×' is the Unicode multiplication sign U+00D7	%lu × %lu
+Opening '%s'.	MediaPlayer-Main		Avataan '%s'.
 Medium	MediaPlayer-SettingsWindow		Keskikokoinen
 Play mode	MediaPlayer-SettingsWindow		Soittotila
 Playlist	MediaPlayer-PlaylistWindow		Soittoluettelo
@@ -44,10 +44,10 @@ Close	MediaPlayer-Main		Sulje
 Save error	MediaPlayer-PlaylistWindow		Tallenna virhe
 Attributes	MediaPlayer-Main		Attribuutit
 Bottom of screen	MediaPlayer-SettingsWindow		Näytön alareuna
-MediaPlayer settings	MediaPlayer-SettingsWindow		Mediasoitinasetukset
 Copyright	MediaPlayer-InfoWin		Copyright
 Invalid URL inserted!	MediaPlayer-NetworkStream		Lisätty virheellinen verkko-osoite!
 Aspect ratio	MediaPlayer-Main		Kuvasuhde
+Eject device	MediaPlayer-Main		Poista laite
 Saving the playlist failed.\n\nError: 	MediaPlayer-PlaylistWindow		Soittoluettelon tallentaminen epäonnistui.\n\nVirhe: 
 <no media>	MediaPlayer-InfoWin		<ei mediaa>
 Hide interface	MediaPlayer-Main		Piilota käyttöliittymä
@@ -56,6 +56,7 @@ Video track	MediaPlayer-Main		Videokappale
 Playlist…	MediaPlayer-Main		Soittoluettelo...
 <unnamed media>	MediaPlayer-InfoWin		<nimeämätön media>
 Save	MediaPlayer-PlaylistWindow		Tallenna
+25% scale	MediaPlayer-Main		25% skaala
 Randomize Entries	MediaPlayer-RandomizePLItemsCmd		Satunnaista kappaleita
 Cancel	MediaPlayer-NetworkStream		Peru
 Nothing to Play	MediaPlayer-Main		Ei mitään soitettavaa
@@ -72,6 +73,7 @@ Audio	MediaPlayer-Main		Ääni
 Quit	MediaPlayer-Main		Lopeta
 Redo	MediaPlayer-PlaylistWindow		Tee uudelleen
 Move Entry	MediaPlayer-MovePLItemsCmd		Siirrä kappale
+Reset rating	MediaPlayer-Main		Nollaa arvosanat
 <unknown>	PlaylistItem-author		<tuntematon>
 Cancel	MediaPlayer-SettingsWindow		Peru
 Large	MediaPlayer-SettingsWindow		Suuri
@@ -123,6 +125,7 @@ Full screen	MediaPlayer-Main		Kokoruutunäyttö
 OK	MediaPlayer-NetworkStream		Valmis
 Internal error (locking failed). Saving the playlist failed.	MediaPlayer-PlaylistWindow		Sisäinen virhe (lukitus epäonnistui). Soittoluettelon tallentaminen epäonnistui.
 100% scale	MediaPlayer-Main		100 % skaala
+New player	MediaPlayer-Main		Uusi soittaja
 <nothing to redo>	MediaPlayer-PlaylistWindow		<ei mitään uudelleensuoritettavaa>
 Bad URL	MediaPlayer-NetworkStream		Virheellinen verkko-osoite
 Save	MediaPlayer-Main		Tallenna

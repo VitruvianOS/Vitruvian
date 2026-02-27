@@ -1,11 +1,10 @@
-1	swedish	x-vnd.Haiku-PNGTranslator	2504765797
-Version %d.%d.%d, %s	PNGTranslator		Version %d.%d.%d, %s
-Interlace Option	PNGTranslator		Sammanflätningsalternativ
-PNG Interlace Menu	PNGTranslator		PNG sammanflätningsmeny
-PNG image	PNGTranslator		PNG bild
+1	swedish	x-vnd.Haiku-PNGTranslator	993682334
 PNG Settings	PNGTranslator		PNG inställningar
-PNG image translator	PNGTranslator		PNG bildöversättning
 None	PNGTranslator		Ingen
-PNG images	PNGTranslator		PNG bilder
-Interlacing type:	PNGTranslator		Sammanflätningstyp:
-PNGTranslator Settings	PNGTranslator		PNG översättningsinställningar
+PNG image	PNGTranslator		PNG-bild
+PNG images	PNGTranslator		PNG-bilder
+Interlacing type:	PNGTranslator		Interlacing typ:
+PNGTranslator Settings	PNGTranslator		PNGTranslator-inställningar
+Version %d.%d.%d, %s	PNGTranslator		Version %d.%d.%d, %s
+PNG image translator	PNGTranslator		PNG-bildöversättare
+Interlace Option	PNGTranslator		Interlace-alternativ

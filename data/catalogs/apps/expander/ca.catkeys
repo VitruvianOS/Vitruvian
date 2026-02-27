@@ -1,33 +1,52 @@
-1	catalan; valencian	x-vnd.Haiku-Expander	2784864376
-Expand	ExpanderMenu		Expandeix
-Set destination…	ExpanderMenu		Seleccioneu el destí...
-Use:	ExpanderPreferences		Utilitza:
-Expander: Open	ExpanderWindow		Descompressor: Obre
-Expander settings	ExpanderPreferences		Paràmetres del Descompressor
-Select current	DirectoryFilePanel		Tria l'actual
-Source	ExpanderWindow		Origen
-Hide contents	ExpanderWindow		Oculta el contingut
-Cancel	ExpanderWindow		Anul·la
-Continue	ExpanderWindow		Segueix
-Destination folder	ExpanderPreferences		Carpeta de destí
-Other	ExpanderPreferences		Altre
-Cancel	ExpanderPreferences		Anul·la
-Expansion	ExpanderPreferences		Descompressió
-Select	DirectoryFilePanel		Seleccioneu
-Settings	ExpanderMenu		Paràmetres
-Settings…	ExpanderMenu		Paràmetres…
-Select	ExpanderPreferences		Seleccioneu
-Show contents	ExpanderWindow		Mostra el contingut
-OK	ExpanderPreferences		D'acord
-Create	ExpanderWindow		Crea
-The file doesn't exist	ExpanderWindow		No existeix el fitxer
-Stop	ExpanderMenu		Atura
-File	ExpanderMenu		Fitxer
-Expander	System name		Descompressor
-Expand	ExpanderWindow		Expandeix
-Close	ExpanderMenu		Tanca
+1	catalan; valencian	x-vnd.Haiku-Expander	2735024965
+Destination	ExpanderWindow		Destinació
+Other	ExpanderPreferences		Altres
+Automatically show contents listing	ExpanderPreferences		Mostra automàticament la llista de continguts
+Expander	System name		Expandidora
+Set source…	ExpanderMenu		Estableix la font...
+OK	ExpanderWindow		D'acord
 The destination is not a folder.	ExpanderWindow		La destinació no és una carpeta.
-Open destination folder after extraction	ExpanderPreferences		Obre la carpeta de destinació després de l'extracció
+%appname%: Choose destination	DirectoryFilePanel		%appname%: trieu una destinació
+The folder was either moved, renamed or not supported.	ExpanderWindow		La carpeta s'ha mogut, se n'ha canviat de nom o no és compatible.
+Close window when done expanding	ExpanderPreferences		Tanca la finestra un cop feta l'expansió.
+Close	ExpanderMenu		Tanca
+Create	ExpanderWindow		Crea
+Creating listing for '%s'…	ExpanderWindow		Es crea la llista per a %s…
 Show contents	ExpanderMenu		Mostra el contingut
-Stop	ExpanderWindow		Atura
-Destination	ExpanderWindow		Destí
+%appname% settings	ExpanderPreferences		Paràmetres per a %appname%
+Are you sure you want to stop expanding this archive? The expanded items may not be complete.	ExpanderWindow		Segur que voleu interrompre l'expansió d'aquest arxiu? Pot ser que els elements expandits no siguin complets.
+Settings	ExpanderMenu		Paràmetres
+Expand	ExpanderWindow		Expandeix
+Open destination folder after extraction	ExpanderPreferences		Obre la carpeta de destinació després de l'extracció
+Same directory as source (archive) file	ExpanderPreferences		El mateix directori que el fitxer d'origen (arxiu)
+Stop	ExpanderWindow		Interromp
+Cancel	ExpanderWindow		Cancel·la
+Error when expanding archive	ExpanderWindow		Error en expandir l'arxiu.
+Expand	ExpanderMenu		Expandeix
+Failed to create the destination folder.	ExpanderWindow		Ha fallat crear la carpeta de destinació.
+Settings…	ExpanderMenu		Paràmetres…
+Select current	DirectoryFilePanel		Selecciona l'actual
+Expanding '%s'…	ExpanderWindow		S'expandeix %s…
+OK	ExpanderPreferences		D'acord
+File expanded	ExpanderWindow		Fitxer expandit
+Automatically expand files	ExpanderPreferences		Expandeix automàticament els fitxers.
+Select	DirectoryFilePanel		Selecciona
+Show contents	ExpanderWindow		Mostra el contingut
+Stop	ExpanderMenu		Interromp
+Select '%s'…	DirectoryFilePanel		Selecciona %s…
+Expansion	ExpanderPreferences		Descompressió
+Set destination…	ExpanderMenu		Establiu-ne la destinació...
+Continue	ExpanderWindow		Segueix
+ is not supported	ExpanderWindow		 no s'admet.
+Cancel	ExpanderPreferences		Cancel·la
+Use:	ExpanderPreferences		Usa:
+Destination folder	ExpanderPreferences		Carpeta de destinació
+Leave destination folder path empty	ExpanderPreferences		Deixa buit el camí de la carpeta de destinació.
+Destination folder doesn't exist. Would you like to create it?	ExpanderWindow		La carpeta de destinació no existeix. Voleu crear-la?
+The file doesn't exist	ExpanderWindow		No existeix el fitxer
+Hide contents	ExpanderWindow		Amaga els continguts
+Source	ExpanderWindow		Origen
+The destination is read only.	ExpanderWindow		La destinació és només de lectura.
+%appname%: Open	ExpanderWindow		%appname%: obre
+Select	ExpanderPreferences		Selecciona
+File	ExpanderMenu		Fitxer

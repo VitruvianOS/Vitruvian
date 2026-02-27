@@ -1,6 +1,7 @@
-1	dutch; flemish	x-vnd.Haiku-CodyCam	1770279704
+1	dutch; flemish	x-vnd.Haiku-CodyCam	2786669505
 destination directory expected	CodyCam		doelmap verwacht
 reply: '%s'\n	SftpClient		antwoord: '%s'\n
+PASS <suppressed>  (real password sent)	FtpClient		PASS <verborgen>  (echt wachtwoord is verzonden)
 JPEG image	CodyCam		JPEG-afbeelding
 Remote host has closed the connection.\n	FtpClient		Host-op-afstand heeft de verbinding verbroken.\n
 image file format expected	CodyCam		bestandsformaat van afbeelding verwacht
@@ -27,6 +28,7 @@ Every 2 hours	CodyCam		Elke 2 uur
 Cannot get a time source	CodyCam		Kan geen tijdsbron krijgen
 Every 4 hours	CodyCam		Elke 4 uur
 cmd: '%s'\n	FtpClient		cmd: '%s'\n
+Closing the window	VideoConsumer.cpp		Venster sluiten
 Never	CodyCam		Nooit
 Every 8 hours	CodyCam		Elke 8 uur
 Cannot start the video source	CodyCam		Kan videobron niet starten
@@ -38,10 +40,10 @@ still image filename expected	CodyCam		bestandsnaam van afbeelding verwacht
 File name:	CodyCam		Bestandsnaam:
 Directory:	CodyCam		Map:
 Error setting type of output file	VideoConsumer.cpp		Fout bij het instellen van het type uitvoerbestand
+Locking the window	VideoConsumer.cpp		Venster vergrendelen
 Cannot find an available video stream	CodyCam		Kan geen beschikbare videostream vinden
 Upload…	VideoConsumer.cpp		Uploaden…
 password expected	CodyCam		wachtwoord verwacht
-PASS <suppressed>  (real password sent)\n	FtpClient		PASS <onderdrukt> (echt wachtwoord verstuurd)\n
 SFTP	CodyCam		SFTP
 Output	CodyCam		Uitvoer
 server address expected	CodyCam		serveradres verwacht
@@ -79,7 +81,6 @@ Video settings	CodyCam		Video-instellingen
 Can't find an available connection to the video window	CodyCam		Kan geen beschikbare verbinding naar het videovenster vinden
 FTP	CodyCam		FTP
 Error creating output file	VideoConsumer.cpp		Fout bij het maken van het uitvoer-bestand
-Cannot find a video source.\nYou need a webcam to use CodyCam.	CodyCam		Geen videobron gevonden.\nU heeft een webcam nodig om CodyCam te kunnen gebruiken.
 Logging in…	VideoConsumer.cpp		Inloggen...
 CodyCam	System name		CodyCam
 Error writing output file	VideoConsumer.cpp		Fout bij het maken van het uitvoerbestand

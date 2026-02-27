@@ -1,0 +1,49 @@
+1	esperanto	x-vnd.Haiku-Input	4063065788
+Defaults	InputMouse		Defaŭltoj
+Scrolling	TouchpadPrefView		Rulumado
+Long	KeyboardView		Longa
+Cancel	TouchpadPrefView		Nuligi
+Slow	TouchpadPrefView		Malrapida
+Device List	InputWindow		Listo de aparatoj
+Double-click speed	SettingsView		Rapideco de duobla alklako
+5-Button	SettingsView		5-butona
+Typing test area	KeyboardView		Areo por testi tajpadon
+Fast	KeyboardView		Rapide
+Please confirm	TouchpadPrefView		Konfirmu
+Mouse speed	SettingsView		Rapideco de muso
+Horizontal scrolling	TouchpadPrefView		Horizontala rulumado
+Input	System name		Enigo
+Quick	TouchpadPrefView		Rapide
+Short	KeyboardView		Mallonge
+Revert	InputMouse		Malfari
+Slow	KeyboardView		Malrapide
+2-Button	SettingsView		2-butona
+Click to focus and raise	SettingsView		Alklaki por enfokusigi kaj suprenigi
+Vertical	TouchpadPrefView		Vertikala
+Focus follows mouse	SettingsView		Fokuso sekvas muson
+Focus mode:	SettingsView		Reĝimo de fokusigo:
+Double-click test area	SettingsView		Loko por testi duoblalklakon
+Revert	TouchpadPrefView		Malfari
+4-Button	SettingsView		4-butona
+Tapping sensitivity	TouchpadPrefView		Frapsentemo
+Revert	InputKeyboard		Malfari
+Mouse type:	SettingsView		Speco de muso:
+Off	TouchpadPrefView		Malŝalti
+Never	TouchpadPrefView		Neniam
+Fast	TouchpadPrefView		Rapide
+6-Button	SettingsView		6-butona
+Click to focus	SettingsView		Klaki por fokusigi
+Acceleration	TouchpadPrefView		Akcelado
+Accept first click	SettingsView		Akcepti unuan klakon
+OK	TouchpadPrefView		Bone
+Delay until key repeat	KeyboardView		Prokrasto dum klava ripeto
+Two finger scrolling	TouchpadPrefView		Rulumado per du fingroj
+Mouse acceleration	SettingsView		Akcelado de muso
+The new scroll area is very large and may impede normal mouse operation. Do you really want to change it?	TouchpadPrefView		La nova areo por rulumo estas tre vasta kaj povas malhelpi operaciojn per muso. Ĉu vi vere volas ŝanĝi ĝin?
+High	TouchpadPrefView		Alta
+Defaults	TouchpadPrefView		Defaŭltoj
+1-Button	SettingsView		1-butona
+Defaults	InputKeyboard		Defaŭltoj
+Key repeat rate	KeyboardView		Klavripeta rapido
+Horizontal	TouchpadPrefView		Horizontala
+3-Button	SettingsView		3-butona

@@ -1,26 +1,28 @@
-1	czech	x-vnd.Haiku.TV	2971561976
-Always on top	MainWin		Vždy navrchu
-Channel	MainWin		Kanál
-DVB - Digital Video Broadcasting TV	MainWin		DVB - Digital Video Broadcasting TV
-Debug	MainWin		Debugovat
-Error, connecting to interface failed:\n\n	MainWin		Chyba, připojení k rozhraní selhalo:\n\n
-Error, interface is busy:\n\n	MainWin		Chyba, rozhraní je zaneprázdněno:\n\n
-Full screen	MainWin		Celá obrazovka
-Interface	MainWin		Rozhraní
-Keep aspect ratio	MainWin		Ponechat poměr stran
-Next channel	MainWin		Další kanál
-No border	MainWin		Bez okraje
+1	czech	x-vnd.Haiku.TV	337483365
 No menu	MainWin		Bez menu
-None	MainWin		Žádný
-OK	MainWin		OK
-Previous channel	MainWin		Předchozí kanál
-Quit	MainWin		Ukončit
+No border	MainWin		Bez okraje
+Error, connecting to interface failed:\n\n	MainWin		Chyba, připojení k rozhraní selhalo:\n\n
+force 720 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	vynutit 720 × 576, poměr stran 4:3
+Full screen	MainWin		Celá obrazovka
 Scale to native size	MainWin		Změnit velikost na původní
-Settings	MainWin		Nastavení
-Settings…	MainWin		Nastavení...
-TV	MainWin		TV
-force 544 x 576, display aspect 4:3	MainWin		vynutit 544 x 576, poměr stran 4:3
-force 704 x 576, display aspect 4:3	MainWin		vynutit 704 x 576, poměr stran 4:3
-force 720 x 576, display aspect 4:3	MainWin		vynutit 720 x 576, poměr stran 4:3
-pixel aspect ratio	MainWin		poměr aspektu pixelů
 unknown	MainWin		neznámý
+Next channel	MainWin		Další kanál
+Keep aspect ratio	MainWin		Ponechat poměr stran
+DVB - Digital Video Broadcasting TV	MainWin		DVB - Digitální telka
+Always on top	MainWin		Vždy navrchu
+Debug	MainWin		Debugovat
+Interface	MainWin		Rozhraní
+Quit	MainWin		Ukončit
+Channel	MainWin		Kanál
+Previous channel	MainWin		Předchozí kanál
+OK	MainWin		OK
+TV	MainWin		TV
+force 544 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	vynutit 544 × 576, poměr stran 4:3
+Settings	MainWin		Nastavení
+force 704 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	vynutit 704 × 576, poměr stran 4:3
+%s - %d × %d, %.3f:%.3f => %.0f × %.0f	MainWin	The '×' is the Unicode multiplication sign U+00D7	%s - %d × %d, %.3f:%.3f => %.0f × %.0f
+TV	System name		TV
+Settings…	MainWin		Nastavení…
+None	MainWin		Žádný
+Error, interface is busy:\n\n	MainWin		Chyba, rozhraní je zaneprázdněno:\n\n
+pixel aspect ratio	MainWin		poměr aspektu pixelů

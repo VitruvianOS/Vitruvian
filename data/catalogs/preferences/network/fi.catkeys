@@ -1,8 +1,6 @@
-1	finnish	x-vnd.Haiku-Network	3694799483
+1	finnish	x-vnd.Haiku-Network	3807978621
 Ethernet device	InterfaceListItem		Ethernet-laite
 Link speed:	IntefaceView		Yhteysnopeus:
-disconnected	IntefaceView		katkaistu
-IP Address:	IntefaceAddressView		IP-osoite:
 WPA	WPA protected network		WPA
 Network:	IntefaceView		Verkko:
 Received:	IntefaceView		Vastaanotettu:
@@ -14,6 +12,7 @@ Gateway:	IntefaceAddressView		Yhdyskäytävä:
 The netmask defines your local network	IntefaceAddressView		Verkkopeite määrittää paikallisen verkkosi
 Your IP address	IntefaceAddressView		IP-osoitteesi
 DHCP	IntefaceAddressView		DHCP
+IP address:	IntefaceAddressView		IP-osoite:
 Netmask:	IntefaceAddressView		Verkkopeite:
 EAP	EAP protected network		EAP
 Services	NetworkWindow		Palvelut
@@ -35,18 +34,19 @@ Static	IntefaceAddressView		Staattinen
 launch error	NetworkWindow		käynnistysvirhe
 Renegotiate	IntefaceView		Neuvottele uudelleen
 MAC address:	IntefaceView		MAC-osoite:
-%name% (%authenticationMode%)	WirelessNetworkMenuItem		%nimi% (%authenticationMode%)
+%name% (%authenticationMode%)	WirelessNetworkMenuItem		%name% (%authenticationMode%)
 disabled	InterfaceListItem		poissa käytöstä
 Dial-up connection	InterfaceListItem		Valintayhteys
 on	ServiceListItem		päällä
 The method for obtaining an IP address	IntefaceAddressView		IP-osoitteen hakemismenettely
+disconnected	InterfaceListItem		yhteys katkaistu
 Automatic	IntefaceAddressView		Automaattinen
 Choose automatically	IntefaceView		Valitse automaattisesti
 Status:	IntefaceView		Tila:
 Disable	IntefaceView		Poista käytöstä
 Manage…	NetworkWindow		Hallitse...
 open	Open network		avaa
-Network	NetworkWindow		Verkko
+Network	System name		Verkko
 Your gateway to the internet	IntefaceAddressView		Yhdyskäytäväsi internettiin
 Enable	ServiceView		Ota käyttöön
 Wireless device	InterfaceListItem		Langaton laite

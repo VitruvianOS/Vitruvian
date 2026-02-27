@@ -1,0 +1,116 @@
+1	thai	x-vnd.haiku-icon_o_matic	118707012
+None	Icon-O-Matic-Properties		ไม่มี
+Add empty	Icon-O-Matic-ShapesList		การเพิ่มว่างเปล่า
+Opening the icon failed!	Icon-O-Matic-Main		การเปิดไอคอนล้มเหลว!
+Add with path	Icon-O-Matic-ShapesList		เพิ่มด้วยพาธ
+Copy	Icon-O-Matic-Properties		คัดลอก
+Color	Icon-O-Matic-PropertyNames		สี
+Format	Icon-O-Matic-SavePanel		รูปแบบ
+Color	Icon-O-Matic-StyleTypes		สี
+Select	Icon-O-Matic-Properties		เลือก
+Reset transformation	Icon-O-Matic-ShapesList		รีเซ็ตการแปลง
+Duplicate	Icon-O-Matic-StylesList		ทำซ้ำ
+Rotate	Icon-O-Matic-TransformationBoxStates		หมุน
+Shorten	Icon-O-Matic-PropertyNames		สั้นลง
+The text you are trying to import is quite long, are you sure?	Icon-O-Matic-StyledTextImport		ข้อความที่คุณพยายามนำเข้าค่อนข้างยาวคุณแน่ใจหรือ?
+Paste	Icon-O-Matic-Properties		วาง
+Close	Icon-O-Matic-Menu-File		ปิด
+Add rect	Icon-O-Matic-PathsList		เพิ่มรูปสี่เหลี่ยมผืนผ้า
+Rotation	Icon-O-Matic-PropertyNames		หมุน
+Transform	Icon-O-Matic-PathManipulator		แปลง
+Add shape with style	Icon-O-Matic-Menu-Shape		เพิ่มรูปร่างด้วยสไตล์
+Remove	Icon-O-Matic-StylesList		ลบ
+Cancel	Icon-O-Matic-Menu-Settings		ยกเลิก
+Transformation	Icon-O-Matic-TransformationBoxStates		การแปลง
+Closed	Icon-O-Matic-PropertyNames		ปิด
+<nothing to redo>	Icon-O-Matic-Menu-Edit		<nothing to redo>
+Height	Icon-O-Matic-PropertyNames		ความสูง
+warning	Icon-O-Matic-SVGExport		การเตือน
+File	Icon-O-Matic-Menus		ไฟล์
+Properties	Icon-O-Matic-Menus		คุณสมบัติ
+Path	Icon-O-Matic-PropertyNames		เส้นทาง
+Path	Icon-O-Matic-Menus		พาธ
+Stroke	Transformation		ลากเส้น
+Flip	Icon-O-Matic-PathManipulator		พลิก
+Opacity	Icon-O-Matic-PropertyNames		ความทึบแสง
+OK	Icon-O-Matic-ColorPicker		ตกลง
+Error: 	Icon-O-Matic-Main		ผิดพลาด
+Saving your document failed!	Icon-O-Matic-Exporter		การบันทึกเอกสารของคุณล้มเหลว
+Snap to grid	Icon-O-Matic-Menu-Settings		ลากใส่ตาราง
+Opening the document failed!	Icon-O-Matic-Main		การเปิดเอกสารล้มเหลว
+Add with path & style	Icon-O-Matic-ShapesList		เพิ่มด้วยเส้นทางและสไตล์
+Shape	Icon-O-Matic-Menus		รูปร่าง
+<unavailable>	Icon-O-Matic-StyleTypes		<unavailable>
+Min LOD	Icon-O-Matic-PropertyNames		ขั้นต่ำ LOD
+Add	Icon-O-Matic-TransformersList		เพิ่ม
+Settings	Icon-O-Matic-Menus		ตั้งค่า
+Scale X	Icon-O-Matic-PropertyNames		สเกล X
+Add	Icon-O-Matic-PathsList		เพิ่ม
+Remove	Icon-O-Matic-PathManipulator		ลบ
+Duplicate	Icon-O-Matic-ShapesList		ทำซ้ำ
+Contour	Transformation		เส้นโค้ง
+Rounding	Icon-O-Matic-PropertyNames		ล้อม
+Joins	Icon-O-Matic-PropertyNames		เชื่อม
+Cancel	Icon-O-Matic-ColorPicker		ยกเลิก
+Duplicate	Icon-O-Matic-PathsList		ทำซ้ำ
+Save	Icon-O-Matic-Menu-Settings		บันทึก
+Export as…	Icon-O-Matic-Menu-File		ส่งออกเป็น
+Diamond	Icon-O-Matic-StyleTypes		รูปเพชร
+Don't save	Icon-O-Matic-Menu-Settings		ไม่บันทึก
+Add shape with path	Icon-O-Matic-Menu-Shape		เพิ่มรูปร่างด้วยเส้นทาง
+Translation X	Icon-O-Matic-PropertyNames		การแปล X
+Rotate indices backwards	Icon-O-Matic-PathsList		หมุนตัวชี้ย้อนกลับ
+Overwrite	Icon-O-Matic-SVGExport		เขียนทับ
+Cancel	Icon-O-Matic-SVGExport		ยกเลิก
+Open…	Icon-O-Matic-Menu-File		เปิด
+Remove	Icon-O-Matic-ShapesList		ลบ
+Drop shapes	Icon-O-Matic-ShapesList		วางรูปร่าง
+Linear	Icon-O-Matic-StyleTypes		เชิงเส้น
+Clean up	Icon-O-Matic-PathsList		ลบ
+Split	Icon-O-Matic-PathManipulator		แยก
+Move	Icon-O-Matic-TransformationBoxStates		ย้าย
+Conic	Icon-O-Matic-StyleTypes		รูปกรวย
+Name	Icon-O-Matic-PropertyNames		ชื่อ
+Reset transformation	Icon-O-Matic-StylesList		ตั้งค่าตัวแปลงใหม่
+Reverse	Icon-O-Matic-PathsList		ย้อนกลับ
+Remove	Icon-O-Matic-PathsList		ลบ
+Style type	Icon-O-Matic-StyleTypes		ชนิดของสไตล์
+Quit	Icon-O-Matic-Menu-File		ปิด
+Gradient	Icon-O-Matic-StyleTypes		การไล่ระดับสี
+Add shape with path & style	Icon-O-Matic-Menu-Shape		เพิ่มรูปร่างด้วยเส้นทางและสไตล์
+Radial	Icon-O-Matic-StyleTypes		รัศมี
+Text too long	Icon-O-Matic-StyledTextImport		ข้อความยาวเกินไป
+Caps	Icon-O-Matic-PropertyNames		ตัวพิมพ์ใหญ่
+OK	Icon-O-Matic-SVGImport		ตกลง
+Append…	Icon-O-Matic-Menu-File		ผนวก
+Scale Y	Icon-O-Matic-PropertyNames		สเกล Y
+Rotate indices forwards	Icon-O-Matic-PathsList		หมุนตัวชี้ไปข้างหน้า
+Save	Icon-O-Matic-Menu-File		บันทึก
+Add circle	Icon-O-Matic-PathsList		เพิ่มวงกลม
+Freeze transformation	Icon-O-Matic-ShapesList		หยุดตัวแปลง
+Untitled	Icon-O-Matic-Main		ไม่ได้ตั้งชื่อ
+Max LOD	Icon-O-Matic-PropertyNames		Max LOD
+Save changes to current icon before closing?	Icon-O-Matic-Menu-Settings		บันทึกการเปลี่ยนแปลงในไอคอนปัจจุบันก่อนปิดหรือไม่?
+Failed to open the file '%s' as an SVG document.\n\n	Icon-O-Matic-SVGImport		ไม่สามารถเปิดไฟล์ '%s' เป็นเอกสาร SVG ได้\n\n
+Save as…	Icon-O-Matic-Menu-File		บันทึกเป็น
+Swatches	Icon-O-Matic-Menus		การจัดการสี
+<modify path>	Icon-O-Matic-PathCmd		<modify path>
+Icon-O-Matic	System name		Icon-O-Matic
+<nothing to undo>	Icon-O-Matic-Menu-Edit		<nothing to undo>
+Add	Icon-O-Matic-StylesList		เพิ่ม
+Translation Y	Icon-O-Matic-PropertyNames		แปล Y
+Scale	Icon-O-Matic-TransformationBoxStates		ขนาด
+All	Icon-O-Matic-Properties		ทั้งหมด
+Transformer	Icon-O-Matic-Menus		ตัวแปลง
+Invert selection	Icon-O-Matic-Properties		สลับการเลือก
+<unkown property>	Icon-O-Matic-PropertyNames		<unkown property>
+Pick a color	Icon-O-Matic-ColorPicker		เลือกสี
+Settings…	Icon-O-Matic-SavePanel		การตั้งค่า
+Add with style	Icon-O-Matic-ShapesList		เพิ่มด้วยสไตล์
+New	Icon-O-Matic-Menu-File		ใหม่
+Gradient type	Icon-O-Matic-StyleTypes		ชนิดการไล่สี
+Export	Icon-O-Matic-Menu-File		ส่งออก
+Width	Icon-O-Matic-PropertyNames		ความกว้าง
+Style	Icon-O-Matic-Menus		สไตล์
+Off	Icon-O-Matic-Menu-Settings		ปิด
+Edit	Icon-O-Matic-Menus		แก้ไข

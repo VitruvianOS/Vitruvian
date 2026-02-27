@@ -1,0 +1,77 @@
+1	turkish	x-vnd.Haiku-MediaConverter	1249914255
+Input file not recognized as Audio or Video	MediaConverter		Girdi dosyası ses veya görüntü değil
+Source files	MediaConverter		Kaynak dosyaları
+Error writing video frame %lld	MediaConverter		Video çerçevesi %lld yazılırken hata
+Audio quality: %s	MediaConverter		Ses kalitesi: %s
+Error converting '%filename'	MediaConverter		“%filename” dönüştürülürken hata
+Selected directory not found. Defaulting to /boot/home	MediaConverter		Seçili dizin bulunamadı. Yerine /boot/home kullanılacak.
+Conversion completed	MediaConverter		Dönüştürme tamamlandı
+Audio:	MediaConverter-FileInfo		Ses:
+MediaConverter+:SaveDirectory	MediaConverter		Ortam Dönüştürücüsü+:KaydetmeDizini
+Error creating video.	MediaConverter		Video oluşturulurken hata.
+Cancelling	MediaConverter		İptal ediliyor
+None available	Audio codecs		Kullanılabilir bir tane yok
+The file has multiple audio or video tracks, only the first one of each will be converted.	MediaConverter		Bu dosyada birden çok ses veya video parçası var, yalnızca her birinin ilki dönüştürülecek.
+No file selected	MediaConverter-FileInfo		Seçili dosya yok
+High	MediaConverter		Yüksek
+{0, plural, one{The file was not recognized as a supported media file:} other{# files were not recognized as supported media files:}}	MediaConverter		{0, plural, one{Dosya desteklenen bir ortam dosyası olarak tanımlanamadı:} other{# dosya desteklenen bir ortam dosyası olarak tanımlanamadı:}}
+File Error	MediaConverter-FileInfo		Dosya hatası
+None available	Video codecs		Kullanılabilir bir tane yok
+Output format	MediaConverter		Çıktı biçimi
+%.1f kHz mono	MediaFileInfo		%.1f kHz tek kanallı
+%.1f kHz stereo	MediaFileInfo		%.1f kHz çift kanallı
+OK	MediaConverter		Tamam
+Error creating '%filename'	MediaConverter		“%filename” oluşturulurken hata
+Error loading a file	MediaConverter		Dosya yüklenirken hata
+Encoder parameters	MediaConverter-EncoderWindow		Kodlayıcı parametreleri
+Open…	Menu		Aç…
+Audio encoding:	MediaConverter		Ses kodlaması:
+Multi-track file detected	MediaConverter		Çok parçalı dosya algılandı
+Cancelling…	MediaConverter		İptal ediliyor…
+Output file '%filename' created	MediaConverter		“%filename” çıktı dosyası oluşturuldu
+Output folder	MediaConverter		Çıktı klasörü
+Error creating track.	MediaConverter		Parça oluşturulurken hata.
+ seconds	MediaFileInfo		 saniye
+Video using parameters form settings	MediaConverter		Video ayarlardaki parametreleri kullanıyor
+Video:	MediaConverter-FileInfo		Video:
+Select	MediaConverter		Seç
+Conversion cancelled	MediaConverter		Dönüştürme iptal edildi
+Low	MediaConverter		Düşük
+Error loading files	MediaConverter		Dosyalar yüklenirken hata
+{0, plural, one{# bit} other{# bits}}	MediaFileInfo		{0, plural, other{# bit}}
+Video quality: %s	MediaConverter		Video kalitesi: %s
+End   [ms]: 	MediaConverter		Son [ms]: 
+Cancel	MediaConverter		Vazgeç
+OK	MediaConverter-FileInfo		Tamam
+Video encoding:	MediaConverter		Video kodlaması:
+An error has occurred reading the file info.\n\nError : 	MediaConverter-FileInfo		Dosya bilgisi okunurken bir hata oluştu.\n\nError: 
+Error	MediaConverter		Hata
+File details	MediaConverter		Dosya ayrıntıları
+No audio	Audio codecs list		Ses yok
+Drop media files onto this window	MediaConverter		Bu pencereye ortam dosyalarını bırakın
+{0, plural, one{# frame} other{# frames}}	MediaFileInfo		{0, plural, other{# kare}}
+Error read audio frame %lld	MediaConverter		Ses çerçevesi %lld okunurken hata
+Quit	Menu		Çık
+{0, plural, one{# byte} other{# bytes}}	MediaFileInfo		{0, plural, other{# bayt}}
+Writing audio track: %s complete	MediaConverter		Ses izi yazılıyor: %s tamamlandı
+Duration:	MediaConverter-FileInfo		Uzunluk:
+MediaConverter	System name		Ortam Dönüştürücüsü
+Writing video track: %s complete	MediaConverter		Video izi yazılıyor: %s tamamlandı
+Error launching: %strError%	MediaConverter		Başlatılırken hata: %strError%
+Error writing audio frame %lld	MediaConverter		Ses çerçevesi %lld yazılırken hata
+File format:	MediaConverter		Dosya biçimi:
+File	Menu		Dosya
+Video quality not supported	MediaConverter		Video kalitesi desteklenmiyor
+Select this folder	MediaConverter		Bu klasörü seç
+%.1f kHz %ld channel	MediaFileInfo		%.1f kHz %ld kanal
+Understood	MediaConverter		Anlaşıldı
+%u × %u, %.2ffps	MediaFileInfo	Width × Height, fps;The '×' is the Unicode multiplication sign U+00D7	%u × %u, %.2f FPS
+%d bit 	MediaFileInfo		%d bit 
+No video	Video codecs list		Video yok
+Continue	MediaConverter		Sürdür
+Convert	MediaConverter		Dönüştür
+Audio quality not supported	MediaConverter		Ses kalitesi desteklenmiyor
+Error writing to location: %strPath%. Defaulting to location: /boot/home	MediaConverter		Konuma yazılırken hata: %strPath%. Yerine kullanılacak konum: /boot/home
+Error read video frame %lld	MediaConverter		Video çerçevesi %lld okunurken hata
+Preview	MediaConverter		Önizleme
+Start [ms]: 	MediaConverter		Başlangıç [ms]: 

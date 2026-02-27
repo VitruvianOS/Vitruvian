@@ -1,19 +1,19 @@
 1	ukrainian	x-vnd.Haiku-GIFTranslator	2201651797
-Websafe	GIFView		Придатний для Web
-Write interlaced images	GIFView		Записати зображення, що переплітаються
-Optimal	GIFView		Оптимальний
+Websafe	GIFView		Оптимізована для Web
+Write interlaced images	GIFView		Записати черезрядкові зображення
+Optimal	GIFView		Оптимальна
 Greyscale	GIFView		Відтінки сірого
 Colors:	GIFView		Кольори:
-GIF image translator	GIFTranslator		Транслятор GIFзображень
-Be Bitmap Format (GIFTranslator)	GIFTranslator		Формат Be Bitmap (Перетворювач GIF)
+GIF image translator	GIFTranslator		Транслятор зображень GIF
+Be Bitmap Format (GIFTranslator)	GIFTranslator		Формат Be Bitmap (Транслятор GIF)
 GIF image translator	GIFView		Транслятор GIF зображень
 Palette:	GIFView		Палітра:
 GIF image	GIFTranslator		Зображення GIF
-Write transparent images	GIFView		Записати прозорі зображення
+Write transparent images	GIFView		Запис прозорих зображень
 GIF images	GIFTranslator		Зображення GIF
 Version %d.%d.%d, %s	GIFView		Версія %d.%d.%d, %s
-Use RGB color	GIFView		Використовувати кольори RGB
-Use dithering	GIFView		Використовувати згладжування
+Use RGB color	GIFView		Кольори RGB
+Use dithering	GIFView		Задіяти згладжування
 GIF Settings	GIFTranslator		Налаштування GIF
-BeOS system	GIFView		Система BeOS
+BeOS system	GIFView		Системи BeOS
 Automatic (from alpha channel)	GIFView		Автоматично (з альфа каналу)

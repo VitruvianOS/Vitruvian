@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-SystemLogger	57960782
+1	japanese	x-vnd.Haiku-SystemLogger	2600925901
 Syslog Daemon	SyslogDaemon		Syslog Daemon
 OK	SyslogDaemon		OK
-%s\n\nThis daemon is responsible for collecting all system messages and write them to the system-wide log at \"%s\".\n\n	SyslogDaemon		%s\n\nこのdaemonは、すべてのシステムメッセージを集めて、システムワイドなログ、\"%s\"に書き出します。\n\n
+%s\n\nThis daemon collects all system messages and writes them to the system-wide log at \"%s\".\n\n	SyslogDaemon		%s\n\nこのデーモンはすべてのシステムメッセージを収集し、システム全体のログ \"%s\"に書き込みます。\n\n

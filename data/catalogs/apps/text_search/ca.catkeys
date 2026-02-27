@@ -1,28 +1,40 @@
-1	catalan; valencian	x-vnd.Haiku.TextSearch	293043021
-Please select the files you wish to have selected for you in Tracker.	GrepWindow		Si us plau trieu els fitxers que voleu triar al Rastrejador.
+1	catalan; valencian	x-vnd.Haiku.TextSearch	1461663588
+Please select the files you wish to have selected for you in Tracker.	GrepWindow		Si us plau, trieu els fitxers que voleu tenir seleccionats al Rastrejador.
+%appname% : %path%	GrepWindow		%appname% : %path%
+Failed to start xargs program!	Grepper		Ha fallat iniciar el programa xargs!
 Open selection	GrepWindow		Obre la selecció
 Actions	GrepWindow		Accions
 New window	GrepWindow		Finestra nova
-Encoding	GrepWindow		S'està codificant
+Encoding	GrepWindow		Codificació
+Set target to parent folder	GrepWindow		Estableix la destinació a la carpeta mare
+Clear history	GrepWindow		Neteja l'historial
 OK	GrepWindow		D'acord
+%appname% : %path% : %searchtext%	GrepWindow		%appname%: %path%: %searchtext%
 Close	GrepWindow		Tanca
 Look in sub-folders	GrepWindow		Cerca a les carpetes inferiors
-%s: Not enough room to escape the filename.	Grepper		%s: No hi ha prou espai per codificar el nom del fitxer.
-Follow symbolic links	GrepWindow		Segueix els enllaços simbòlics
+File filter:	GrepWindow		Filtre de fitxers:
+%s: Not enough room to escape the filename.	Grepper		%s: no hi ha prou espai per completar el nom del fitxer.
 Text files only	GrepWindow		Només els fitxers de text
+Follow symbolic links	GrepWindow		Segueix els enllaços simbòlics
+Regular expression	GrepWindow		Expressió regular
 Quit	GrepWindow		Surt
 Show files in Tracker	GrepWindow		Mostra els fitxers al Rastrejador
-Please select the files you wish to keep searching.	GrepWindow		Si us plau trieu els fitxers que voleu seguir cercant.
-Trim to selection	GrepWindow		Escapça per la selecció
-Set target…	GrepWindow		Seleccioneu la destinació...
-TextSearch	GrepWindow		Cerca un text
+Please select the files you wish to keep searching.	GrepWindow		Si us plau, seleccioneu els fitxers que voleu continuar cercant.
+Only search files matching the given pattern, e.g. \"*.h\".	GrepWindow		Cerca només fitxers que coincideixin amb el patró donat, p. ex.: \"*.h\".
+Trim to selection	GrepWindow		Escapça a la selecció
+Set target…	GrepWindow		Establiu-ne la destinació...
+Failed to open input pipe!	Grepper		Ha fallat obrir el conducte d'entrada!
 Search	GrepWindow		Cerca
 Copy text to clipboard	GrepWindow		Copia el text al porta-retalls
 Show lines	GrepWindow		Mostra les línies
-The unselected files will be removed from the list.	GrepWindow		Els fitxers que no estan seleccionats es suprimiran de la llista.
+Failed to open errors pipe!	Grepper		Ha fallat obrir el conducte d'errors.
+The unselected files will be removed from the list.	GrepWindow		Els fitxers no seleccionats se suprimiran de la llista.
+Open files in code editor	GrepWindow		Obre els fitxers a l’editor de codi.
 Skip folders starting with a dot	GrepWindow		Ignora les carpetes que comencen a un punt
-Cancel	GrepWindow		Anul·la
+Failed to open output pipe!	Grepper		Ha fallat obrir el conducte de sortida!
+Cancel	GrepWindow		Cancel·la
 History	GrepWindow		Historial
+TextSearch	System name		Cerca de text
 File	GrepWindow		Fitxer
 Case-sensitive	GrepWindow		Distingeix entre majúscules i minúscules
 Select all	GrepWindow		Selecciona-ho tot

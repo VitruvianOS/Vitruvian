@@ -1,25 +1,25 @@
 1	romanian	x-vnd.Haiku-WebPTranslator	828165164
-©2010-2017 Haiku Inc.	ConfigView		©2010-2017 Haiku Inc.
-Compression method:	ConfigView		Metodă de compresie:
-WebP image translator	ConfigView		Traducător imagine WebP
-Preset	ConfigView		Predefinit
-WebP images	WebPTranslator		Imagini WebP
-WebPTranslator Settings	ConfigView		Configurări TraducătorWebP
-Output quality:	ConfigView		Calitate de ieșire:
-©2010-2017 Google Inc.	ConfigView		©2010-2017 Google Inc.
-WebP Settings	main		Configurări WebP
-Text	ConfigView		Text
-Slower but better	ConfigView		Mai încet dar mai bine
-WebP image	WebPTranslator		Imagine WebP
-Output preset:	ConfigView		Ieșire prestabilită:
-Picture	ConfigView		Imagine
-Low	ConfigView		Scăzut
 High	ConfigView		Ridicat
-Drawing	ConfigView		Desenare
-Based on libwebp %version%	ConfigView		Bazat pe libwebp %version%
-Default	ConfigView		Implicit
-Fast	ConfigView		Rapid
+WebPTranslator Settings	ConfigView		Configurări WebPTranslator
+Low	ConfigView		Scăzut
+WebP image translator	ConfigView		Traducător de imagine WebP
 Photo	ConfigView		Fotografie
-Preprocessing filter	ConfigView		Filtru preprocesare
-WebP image translator	WebPTranslator		Traducător imagine WebP
-Icon	ConfigView		Pictogramă
+WebP image translator	WebPTranslator		Traducător de imagine WebP
+©2010-2017 Google Inc.	ConfigView		©2010-2017 Google Inc.
+©2010-2017 Haiku Inc.	ConfigView		©2010-2017 Haiku Inc.
+Picture	ConfigView		Poză
+Default	ConfigView		Implicit
+Text	ConfigView		Text
+Preprocessing filter	ConfigView		Filtru de preprocesare
+Compression method:	ConfigView		Metodă de comprimare:
+Preset	ConfigView		Prestabilit
+Drawing	ConfigView		Desen
+Output preset:	ConfigView		Prestabilire ieșire:
+WebP Settings	main		Configurări WebP
+Icon	ConfigView		Iconiță
+WebP image	WebPTranslator		Imagine WebP
+Output quality:	ConfigView		Calitate de ieșire:
+Slower but better	ConfigView		Mai încet dar mai bună
+Based on libwebp %version%	ConfigView		Bazat pe libwebp %version%
+Fast	ConfigView		Rapidă
+WebP images	WebPTranslator		Imagini WebP

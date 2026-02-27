@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku.TextSearch	1867528375
+1	finnish	x-vnd.Haiku.TextSearch	1461663588
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Valitse tiedostot, jotka haluat valittaviksi Seuraajassa.
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		Xargs-ohjelman käynnistäminen epäonnistui!
@@ -6,31 +6,35 @@ Open selection	GrepWindow		Avaa valinta
 Actions	GrepWindow		Toiminnot
 New window	GrepWindow		Uusi ikkuna
 Encoding	GrepWindow		Koodaus
+Set target to parent folder	GrepWindow		Aseta kohde ylimmän tason kansiolle
+Clear history	GrepWindow		Poista historia
 OK	GrepWindow		Valmis
 %appname% : %path% : %searchtext%	GrepWindow		%appname% : %path% : %searchtext%
 Close	GrepWindow		Sulje
 Look in sub-folders	GrepWindow		Etsi alikansioista
+File filter:	GrepWindow		Tiedostosuodatin:
 %s: Not enough room to escape the filename.	Grepper		%s: Ei kylliksi tilaa tiedostonimen ohittamiseen.
+Text files only	GrepWindow		Vain tekstitiedostot
 Follow symbolic links	GrepWindow		Seuraa symbolisia linkkejä
 Regular expression	GrepWindow		Säännöllinen lauseke
-Text files only	GrepWindow		Vain tekstitiedostot
 Quit	GrepWindow		Poistu
 Show files in Tracker	GrepWindow		Näytä tiedostot Seuraajassa
 Please select the files you wish to keep searching.	GrepWindow		Valitse tiedostot, jotka haluat pitää etsinnässä.
+Only search files matching the given pattern, e.g. \"*.h\".	GrepWindow		Vain etsintämalliin täsmäävät tiedostot, esim.: \"*.h\".
 Trim to selection	GrepWindow		Leikkaa valintaan
 Set target…	GrepWindow		Aseta kohde...
-TextSearch	GrepWindow		Tekstihaku
 Failed to open input pipe!	Grepper		Syöteputken avaaminen epäonnistui!
 Search	GrepWindow		Hae
 Copy text to clipboard	GrepWindow		Kopioi teksti leikepöydälle
 Show lines	GrepWindow		Näytä rivit
 Failed to open errors pipe!	Grepper		Virheputken avaaminen epäonnistui!
 The unselected files will be removed from the list.	GrepWindow		Valitsemattomat tiedostot poistetaan luettelosta.
-Skip folders starting with a dot	GrepWindow		Ohita kansiot, joiden nimet alkavat pisteellä
 Open files in code editor	GrepWindow		Avaa tiedostot koodieditorissa
+Skip folders starting with a dot	GrepWindow		Ohita kansiot, joiden nimet alkavat pisteellä
 Failed to open output pipe!	Grepper		Tulostusputken avaaminen epäonnistui!
 Cancel	GrepWindow		Peru
 History	GrepWindow		Historia
+TextSearch	System name		Tekstihaku
 File	GrepWindow		Tiedosto
 Case-sensitive	GrepWindow		Kirjainkoosta riippuva
 Select all	GrepWindow		Valitse kaikki

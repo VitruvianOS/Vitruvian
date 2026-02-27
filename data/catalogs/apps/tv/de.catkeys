@@ -1,9 +1,8 @@
-1	german	x-vnd.Haiku.TV	1995288111
+1	german	x-vnd.Haiku.TV	337483365
 No menu	MainWin		Kein Menü
 No border	MainWin		Kein Fensterrahmen
-force 704 x 576, display aspect 4:3	MainWin		Erzwinge 704 x 576, Seitenverhältnis 4:3
 Error, connecting to interface failed:\n\n	MainWin		Fehler, Verbindung zur Hardware fehlgeschlagen:\n\n
-force 544 x 576, display aspect 4:3	MainWin		Erzwinge 544 x 576, Seitenverhältnis 4:3
+force 720 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	Erzwinge 720 × 576, Seitenverhältnis 4:3
 Full screen	MainWin		Vollbild
 Scale to native size	MainWin		Originalgröße
 unknown	MainWin		unbekannt
@@ -13,15 +12,17 @@ DVB - Digital Video Broadcasting TV	MainWin		DVB - Digital Video Broadcasting TV
 Always on top	MainWin		Immer im Vordergrund
 Debug	MainWin		Debug
 Interface	MainWin		Hardware
-force 720 x 576, display aspect 4:3	MainWin		Erzwinge 720 x 576, Seitenverhältnis 4:3
 Quit	MainWin		Beenden
 Channel	MainWin		Kanal
 Previous channel	MainWin		Vorheriger Kanal
 OK	MainWin		OK
 TV	MainWin		TV
+force 544 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	Erzwinge 544 × 576, Seitenverhältnis 4:3
 Settings	MainWin		Einstellungen
+force 704 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	Erzwinge 704 × 576, Seitenverhältnis 4:3
+%s - %d × %d, %.3f:%.3f => %.0f × %.0f	MainWin	The '×' is the Unicode multiplication sign U+00D7	%s - %d × %d, %.3f:%.3f => %.0f × %.0f
 TV	System name		TV
-Settings…	MainWin		Einstellungen...
+Settings…	MainWin		Einstellungen …
 None	MainWin		Kein
 Error, interface is busy:\n\n	MainWin		Fehler, Hardware ist beschäftigt:\n\n
 pixel aspect ratio	MainWin		Pixel-Seitenverhältnis

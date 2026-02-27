@@ -1,47 +1,51 @@
-1	hungarian	x-vnd.Haiku-ActivityMonitor	1155619009
-P-faults	DataSource		P hibák
-Media nodes	DataSource		Média csomópontok
-Threads	DataSource		Szálak
-Always on top	ActivityWindow		Mindig felül
-Add graph	ActivityWindow		Grafikon hozzáadása
+1	hungarian	x-vnd.Haiku-ActivityMonitor	1159274874
+Temp	DataSource		Hőfok
+Temperature	DataSource		Hőmérséklet
 Teams	DataSource		Csapatok
-MiB	DataSource		MiB
-Network send	DataSource		Küldött adatok
-CPU usage (combined)	DataSource		Processzor használat (kombinált)
-CPU	DataSource		CPU
-Used memory	DataSource		Használt memória
-Cached memory	DataSource		Gyorsítótárazott memória
-Apps	DataSource		Programok
-Show legend	ActivityView		Magyarázat megjelenítése
+Semaphores	DataSource		Szemaforok
+TX	DataSource	Shorter version for Sending	Adás
+Block cache memory	DataSource		Blokk gyorsítótár
+%lld ms	SettingsWindow		%lld ms
+Media nodes	DataSource		Média csomópontok
 Text clipboard	DataSource		Szöveges vágólap
-Settings	ActivityWindow		Beállítások
+Network send	DataSource		Küldött adatok
+Cache	DataSource		Gyorsítótár
+Running applications	DataSource		Futó programok
+CPU usage (combined)	DataSource		Processzor használat (kombinált)
+Threads	DataSource		Szálak
 Receiving	DataSource		Fogadás
+Remove graph	ActivityView		Grafikon eltávolítása
+Swap space	DataSource		Virtuális memória
+CPU	DataSource		CPU
+ActivityMonitor	System name		Folyamatmonitor
+CPU %d	DataSource		CPU %d
+Update time interval:	SettingsWindow		Frissítési gyakoriság:
+RX	DataSource	Shorter version for Receiving.	Vétel
 Settings…	ActivityWindow		Beállítások…
+Block cache	DataSource		Blokk gyorsítótár
+Memory	DataSource		Memória
+No thermal sensor	SystemInfoHandler		Nincs hőérzékelő
+CPU usage	DataSource		Processzor használat
+CPU speed	DataSource		Processzor sebessége
+Quit	ActivityWindow		Kilépés
+Raw clipboard	DataSource		Nyers vágólap
+Settings	ActivityWindow		Beállítások
+Used memory	DataSource		Használt memória
+Show legend	ActivityView		Magyarázat megjelenítése
+Cached memory	DataSource		Gyorsítótárazott memória
+CPU %d usage	DataSource		CPU %d használat
+CPU %d speed	DataSource		%d. processzor sebessége
+File	ActivityWindow		Fájl
 Ports	DataSource		Portok
 Page faults	DataSource		Laphibák
-Sending	DataSource		Küldés
-Cache	DataSource		Gyorsítótár
-%.1f faults/s	DataSource		%.1f hiba/s
-Update time interval:	SettingsWindow		Frissítési gyakoriság:
-TX	DataSource	Shorter version for Sending	Adás
-Quit	ActivityWindow		Kilépés
-Block cache memory	DataSource		Blokk gyorsítótár
-Remove graph	ActivityView		Grafikon eltávolítása
-%lld sec.	SettingsWindow		%lld s.
-%lld ms	SettingsWindow		%lld ms
-CPU usage	DataSource		Processzor használat
-Raw clipboard	DataSource		Nyers vágólap
-Sems	DataSource		Szemaforok
-%.1f MiB	DataSource		%.1f MiB
-ActivityMonitor	System name		Folyamatmonitor
-Running applications	DataSource		Futó programok
-Semaphores	DataSource		Szemaforok
-Block cache	DataSource		Blokk gyorsítótár
-Swap space	DataSource		Virtuális memória
-Swap	DataSource		Swap
-File	ActivityWindow		Fájl
-usage	DataSource		használat
 Additional items	ActivityView		További elemek
+Apps	DataSource		Programok
+Add graph	ActivityWindow		Grafikon hozzáadása
+Sending	DataSource		Küldés
+Always on top	ActivityWindow		Mindig felül
+Swap	DataSource		Swap
+%lld sec.	SettingsWindow		%lld mp.
+P-faults	DataSource		P hibák
+Sems	DataSource		Szemaforok
 Network receive	DataSource		Fogadott adatok
-Memory	DataSource		Memória
-RX	DataSource	Shorter version for Receiving.	Vétel
+%s faults/s	DataSource		%s hiba/mp

@@ -1,0 +1,12 @@
+1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-Sounds	762968133
+Select	SoundFilePanel		Velg
+Sounds	System name		Lyder
+Other…	HWindow		Andre...
+Sound file:	HWindow		Lydfil:
+<none>	HEventList		<ingen>
+Select a sound file	SoundFilePanel		Velg en lydfil
+OK	HEventList		OK
+Sound	HEventList		Lyd
+Event	HEventList		Hendelse 
+<none>	HWindow		<ingen>
+No such file or directory	HEventList		Filen eller mappen eksisterer ikke

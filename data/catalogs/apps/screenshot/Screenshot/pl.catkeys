@@ -1,4 +1,4 @@
-1	polish	x-vnd.haiku-screenshot	3958461128
+1	polish	x-vnd.haiku-screenshot	281883787
 Include window border	ScreenshotWindow		Dołącz obramowanie okna
 Overwrite	ScreenshotWindow		Nadpisz
 Save in:	ScreenshotWindow		Zapisz w:
@@ -14,7 +14,7 @@ Screenshot	System name		Zrzut ekranu
 Desktop	ScreenshotWindow		Pulpit
 Artwork folder	ScreenshotWindow		Katalog na obrazki
 Translator Settings	ScreenshotWindow		Ustawienia translatora
-Include mouse pointer	ScreenshotWindow		Pokaż wskaźnik myszy
+Include mouse pointer	ScreenshotWindow		Dołącz wskaźnik myszy
 overwrite	ScreenshotWindow		nadpisz
 Settings…	ScreenshotWindow		Ustawienia…
 Choose folder	ScreenshotWindow		Wybierz katalog
@@ -28,4 +28,3 @@ Copy to clipboard	ScreenshotWindow		Kopiuj do schowka
 screenshot	Screenshot	Base filename of screenshot files	zrzut_ekranu
 Home folder	ScreenshotWindow		Katalog domowy
 Save	ScreenshotWindow		Zapisz
-Capture active window	ScreenshotWindow		Przechwyć aktywne okno

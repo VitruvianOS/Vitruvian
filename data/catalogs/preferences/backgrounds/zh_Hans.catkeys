@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-Backgrounds	2244817193
+1	english	x-vnd.Haiku-Backgrounds	681978856
 Backgrounds	System name		背景
 X:	Main View		X:
 Setting the background image failed:	Main View		设置背景图片失败：
@@ -6,13 +6,14 @@ Resolution: 	Image Filepanel		分辨率：
 pick one	Main View		选择其中之一
 Default	Main View		默认
 Center	Main View		居中
+Folder: %path	Main View		目录：%path
 Manual	Main View		自定义
 Set background image error	Main View		设置背景图像出错
 Default folder	Main View		默认文件夹
 Revert	Main View		恢复
 None	Main View		无
 All workspaces	Main View		所有工作区域
-Icon label outline	Main View		简略图标
+Icon label outline	Main View		图标标签轮廓
 Other…	Main View		其他…
 Current workspace	Main View		当前工作区
 Apply	Main View		应用

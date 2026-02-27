@@ -1,11 +1,10 @@
-1	czech	x-vnd.Haiku-PNGTranslator	2504765797
-Interlace Option	PNGTranslator		Volby prokladu
-Interlacing type:	PNGTranslator		Typ prokladu
-None	PNGTranslator		Neznámý
-PNG Interlace Menu	PNGTranslator		PNG Menu prokladu
+1	czech	x-vnd.Haiku-PNGTranslator	993682334
 PNG Settings	PNGTranslator		Nastavení PNG
+None	PNGTranslator		Nic
 PNG image	PNGTranslator		PNG obrázek
-PNG image translator	PNGTranslator		Převaděč PNG obrazu
-PNG images	PNGTranslator		PNG obrázky
-PNGTranslator Settings	PNGTranslator		Nastavení Převaděče PNG
+PNG images	PNGTranslator		Obrázky PNG
+Interlacing type:	PNGTranslator		Typ prokládání:
+PNGTranslator Settings	PNGTranslator		Nastavení PNGPřevaděče
 Version %d.%d.%d, %s	PNGTranslator		Verze %d.%d.%d, %s
+PNG image translator	PNGTranslator		Převaděč PNG obrázků
+Interlace Option	PNGTranslator		Možnost Rozhraní

@@ -1,437 +1,493 @@
-1	czech	x-vnd.Haiku-libtracker	2201969114
-%BytesPerSecond/s	StatusWindow		%BytesPerSecond/s
-%Ld B	WidgetAttributeText		%Ld B
-%Ld bytes	WidgetAttributeText		%Ld bytů
-%capacity (%used used -- %free free)	InfoWindow		%capacity (využito %used -- %free volných)
-%name info	InfoWindow	InfoWindow Title	%name info
-%num items	CountView		%num položek
-(%SizeProcessed of %TotalSize, %BytesPerSecond/s)	StatusWindow		(%SizeProcessed z %TotalSize, %BytesPerSecond/s)
-(%bytes bytes)	InfoWindow		(%bytes bytů)
-(Finish: %time - %finishtime minutes left)	StatusWindow		(Dokončeno: %time - %finishtime minut zbývá)
-(Finish: %time - %finishtime seconds left)	StatusWindow		(Dokončeno: %time - %finishtime sekund zbývá)
-(Finish: %time - Over %finishtime days left)	StatusWindow		(Dokončeno: %time - zbývá Přes %finishtime dnů)
-(Finish: %time - Over %finishtime hours left)	StatusWindow		(Dokončeno: %time - Přes %finishtime hodin zbývá)
-(Finish: %time)	StatusWindow		(Dokončení: %time)
-1 item	CountView		1 položka
-32 x 32	ContainerWindow		32 x 32
-32 x 32	DeskWindow		32 x 32
-40 x 40	ContainerWindow		40 x 40
-40 x 40	DeskWindow		40 x 40
-48 x 48	ContainerWindow		48 x 48
-48 x 48	DeskWindow		48 x 48
-64 x 64	ContainerWindow		64 x 64
-64 x 64	DeskWindow		64 x 64
-<No recent items>	FavoritesMenu		<Žádné časté položky>
-Add	FindPanel		Přidat
-Add current folder	FilePanelPriv		Přidat současnou složku
-Add printer…	ContainerWindow		Přidat tiskárnu...
-Add-ons	ContainerWindow		Add-ony
-Add-ons	DeskWindow		Vylepšení
-Add-ons	FilePanelPriv		Add-ony
-Add-ons	VolumeWindow		Vylepšení
-All BeOS disks	AutoMounterSettings		Všechny BeOS disky
-All disks	AutoMounterSettings		Všechny disky
-All disks	FindPanel		Všechny disky
-All files and folders	FindPanel		Všechny soubory a složky
-An item named \"%name\" already exists in this folder, and may contain\nitems with the same names. Would you like to replace them with those contained in the folder you are %verb?	FSUtils		Položka jménem \"%name\" již existuje v této složce a obsahuje pložky se stejnými názvy. Přejete si nahradit je těmi ve složce %verb?
-An item named \"%name\" already exists in this folder. Would you like to replace it with the symbolic link you are creating?	FSUtils		Položka s názvem \"%name\" již v této složce existuje. Přejete si ji nahradit symbolickým odkazem, který právě vytváříte?
-And	FindPanel		A
-Are you sure you want to delete the selected item(s)? This operation cannot be reverted.	FSUtils		Opravdu si přejete vybrané položky odstranit? Tato operace nemůže být vrácena.
-Are you sure you want to move or copy the selected item(s) to this folder?	PoseView		Opravdu chcete přesunout nebo kopírovat vybrané položky do této složky?
-Ask before delete	SettingsView		Dotaz před odstraněním
-At %func \nfind_directory() failed. \nReason: %error	TrackerInitialState		Při %func \nfind_directory() selhalo. \nDůvod: %error
-Attributes	ContainerWindow		Atributy
-Automatic disk mounting	AutoMounterSettings		Automatické připojení disku
-Cancel	ContainerWindow		Zrušit
-Cancel	FSClipBoard		Zrušit
-Cancel	FSUtils		Zrušit
-Cancel	FilePanelPriv		Zrušit
-Cancel	OpenWithWindow		Zrušit
-Cancel	PoseView		Zrušit
-Cancel	Tracker		Zrušit
-Cancel	WidgetAttributeText		Zrušit
-Cannot unmount the boot volume \"%name\".	FSUtils		Nelze odpojit zaváděcí svazek \"%name\".
-Capacity:	InfoWindow		Kapacita:
-Clean up	ContainerWindow		Vyčistit
-Clean up	DeskWindow		Vyčistit
-Clean up	VolumeWindow		Vyčistit
-Clean up all	ContainerWindow		Vyčistit vše
-Close	ContainerWindow		Zavřít
-Close	QueryContainerWindow		Zavřít
-Close	VolumeWindow		Zavřít
-Close all	ContainerWindow		Uzavřít vše
-Close all in workspace	ContainerWindow		Zavřít na všech plochách
-Copy	ContainerWindow		Kopírovat
-Copy	FilePanelPriv		Kopírovat
-Copy here	ContainerWindow		Kopíruj sem
-Copy layout	ContainerWindow		Kopírovat rozložení
-Copy more	ContainerWindow		Kopírovat více
-Copy to	ContainerWindow		Kopírovat do
-Copying: 	StatusWindow		Kopírování:
-Could not find an application to open \"%name\" (%error). 	FSUtils		Nelze najít aplikaci k otevření \"%name\" (%error).
-Could not find application \"%appname\"	OpenWithWindow		Nelze najít aplikaci \"%appname\"
-Could not open \"%document\" (Missing libraries: %library). \n	FSUtils		Nelze otevřít \"%document\" (Chybý knihovny: %library). \n
-Could not open \"%document\" (Missing symbol: %symbol). \n	FSUtils		\"%document\" nelze otevřít (Chybý symbol: %symbol). \n
-Could not open \"%document\" because application \"%app\" is in the Trash. 	FSUtils		Nelze otevřít \"%document\" protože aplikace \"%app\" je v Koši.
-Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Nelze otevřít \"%document\" v aplikaci \"%app\" (%error).
-Could not open \"%document\" with application \"%app\" (Missing libraries: %library). \n	FSUtils		Nelze otevřít \"%document\" aplikací \"%app\" (Chybějící knihovny: %library).\n
-Could not open \"%document\" with application \"%app\" (Missing symbol: %symbol). \n	FSUtils		\"%document\" nelze aplikací \"%app\" otevřít (Chybí symbol: %symbol). \n
-Could not open \"%name\" (%error). 	FSUtils		Nelze otevřít \"%name\" (%error). 
-Could not open \"%name\". The file is mistakenly marked as executable. 	FSUtils		Nelze otevřít \"%name\". Soubor je chybně označen jako spouštěcí.
-Could not update permissions of file \"%name\". %error	FSUtils		Oprávnění souboru \"%name\" nebylo možné aktualizovat . %error
-Create %s clipping	PoseView		Vytvořit %s výstřižek
-Create a Query	FindPanel		Vytvořit Dotaz
-Create a Query template	FindPanel		Vytvořit šablonu Dotazu
-Create link	ContainerWindow		Vytvořit odkaz
-Create link here	ContainerWindow		Vytvořit zde odkaz
-Create relative link	ContainerWindow		Vytvořit relativní odkaz
-Create relative link here	ContainerWindow		Vytvořit zde relativní odkaz
+1	czech	x-vnd.Haiku-libtracker	2992119353
 Created	ContainerWindow		Vytvořeno
-Created:	InfoWindow		Vytvořeno:
-Creating links: 	StatusWindow		Vytváření odkazů:
-Current folder	ContainerWindow		Současná složka
-Cut	ContainerWindow		Vyjmout
-Cut	FilePanelPriv		Vyjmout
-Cut more	ContainerWindow		Vyjmout více
-Decrease size	ContainerWindow		Zmenšit velikost
-Decrease size	DeskWindow		Zmenšit velikost
-Default application	InfoWindow		Výchozí aplikace
-Defaults	TrackerSettingsWindow		Výchozí
-Delete	ContainerWindow		Odstranit
-Delete	FSUtils		Odstranit
-Delete	FilePanelPriv		Smazat
-Delete	PoseView		Odstranit
-Deleting: 	StatusWindow		Odstraňování:
-Description:	InfoWindow		Popis:
-Desktop	Model		Plocha
-Desktop	TrackerSettingsWindow		Plocha
-Disk mount settings	AutoMounterSettings		Nastavení připojení disku
-Disk mounting during boot	AutoMounterSettings		Připojení disku během startu
-Disks	DirMenu		Disky
-Disks	Model		Disky
-Do it	FSUtils		Provést
-Does not handle file	OpenWithWindow		Neobstarává soubor
-Don't automount	AutoMounterSettings		Nepřipojovat automaticky
-Don't move files to Trash	SettingsView		Nepřesouvat soubory do Koše
-Done	AutoMounterSettings		Hotovo
-Duplicate	ContainerWindow		Duplikovat
-Edit Query template	FindPanel		Změnit šablonu Dotazu
-Edit favorites…	FilePanelPriv		Upravit oblíbené...
-Edit name	ContainerWindow		Upravit jméno
-Edit name	FilePanelPriv		Upravit název
-Edit name	InfoWindow		Upravit jméno
-Edit name	VolumeWindow		Upravit jméno
-Edit query	ContainerWindow		Změnit dotaz
-Edit templates…	TemplatesMenu		Upravit šablony...
-Eject when unmounting	AutoMounterSettings		Vysunout při odpojení
-Empty Trash	ContainerWindow		Vyprázdnit koš
-Empty Trash	InfoWindow		Vyprázdnit Koš
-Empty folder	NavMenu		Prázdná složka
-Empty folder	SlowContextPopup		Prázdná složka
-Emptying Trash… 	StatusWindow		Vyprazdňuji koš...
-Enable type-ahead filtering	SettingsView		Povolit filtrování psaním
-Error %error loading Add-On %name.	ContainerWindow		Chyba %error při načítání Add-onu %name.
-Error calculating folder size.	InfoWindow		Chyba výpočtu velikosti složky.
-Error copying file \"%name\":\n\t%error\n\nWould you like to continue?	FSUtils		Chyba kopírování souboru \"%name\":\n\t%error\n\nPřejete si pokračovat?
-Error copying folder \"%name\":\n\t%error\n\nWould you like to continue?	FSUtils		Chyba kopírování složky \"%name\":\n\t%error\n\nPřejete si pokračovat?
-Error creating link to \"%name\".	FSUtils		Chyba při vytváření odkazu na \"%name\".
-Error deleting items	FSUtils		Chyba při odstraňování položek
-Error emptying Trash!	FSUtils		Chyba vyprazdňování Koše!
-Error in regular expression:\n\n'%errstring'	PoseView		Chyba v regulárním výrazu:\n\n'%errstring'
-Error moving \"%name\"	FSUtils		Chyba přesunu \"%name\"
-Error moving \"%name\" to Trash. (%error)	FSUtils		Chyba přesunu \"%name\" do Koše. (%error)
-Error moving \"%name\".	FSUtils		Chyba přesunu \"%name\".
-Execute	FilePermissionsView		Spustit
-Favorites	FavoritesMenu		Oblíbené
-Favorites	FilePanelPriv		Oblíbené
-File	ContainerWindow		Soubor
-File	FilePanelPriv		Soubor
-Files cannot be moved or deleted from a read-only volume.	PoseView		Na svazku připojeného pouze pro čtení nelze přesouvat nebo odstraňovat soubory.
-Find	FSUtils		Najít
-Find	FindPanel		Vyhledat
-Find…	ContainerWindow		Vyhledat...
-Find…	VolumeWindow		Vyhledat...
-Force identify	ContainerWindow		Nucená identita
-Formula %formula	FindPanel	FindResultTitle	Vzorec %formula
-Free space color	SettingsView		Barva volného místa
-Get info	ContainerWindow		Získat info
-Get info	FilePanelPriv		Získat info
-Get info	VolumeWindow		Získat info
-GiB	WidgetAttributeText		GiB
-Go to parent	FilePanelPriv		Jdi na nadřazenou
-Group	FilePermissionsView		Skupina
-Handles %type	OpenWithWindow		Obstarává %type
-Handles any %type	OpenWithWindow		Obstarává jakýkoliv %type
-Handles any file	OpenWithWindow		Obstarává jakýkoliv soubor
-Icon view	ContainerWindow		Zobrazení Ikon
-Icon view	DeskWindow		Zobrazení Ikon
-Icon view	VolumeWindow		Zobrazení Ikon
-Identify	ContainerWindow		Rozpoznat
-Identify	InfoWindow		Určit
-If you %ifYouDoAction the config folder, Haiku may not behave properly! Are you sure you want to do this? To %toDoAction the config folder anyway, click \"Do it\".	FSUtils		Jestliže %ifYouDoAction konfigurační adresář, Haiku se nemusí chovat normálně! Jste si jistí, že to chcete udělat? K %toDoAction konfiguračního adresáře navzdory varování, klikněte na \"Provést\".
-If you %ifYouDoAction the mime settings, Haiku may not behave properly! Are you sure you want to do this? To %toDoAction the mime settings anyway, click \"Do it\".	FSUtils		Jestliže %ifYouDoAction volby mime, Haiku se nemusí chovat normálně! Jste si jistí, že to chcete udělat? K %toDoAction mime voleb navzdory varování, klikněte na \"Provést\".
-If you %ifYouDoAction the settings folder, Haiku may not behave properly! Are you sure you want to do this? To %toDoAction the settings folder anyway, click \"Do it\".	FSUtils		Jestliže %ifYouDoAction adresář nastavení, Haiku se nemusí chovat normálně! Jste si jistí, že to chcete udělat? K %toDoAction adresáře nastavení navzdory varování, klikněte na \"Provést\".
-If you %ifYouDoAction the system folder or its contents, you won't be able to boot Haiku! Are you sure you want to do this? To %toDoAction the system folder or its contents anyway, hold down the Shift key and click \"Do it\".	FSUtils		Jestliže %ifYouDoAction systémovou složku, nebo její obsah, nemuselo by se vám podařit Haiku vůbec spustit! Jste si jistí, že to chcete udělat? K %toDoAction systémové složky nebo jejího obsahu navzdory varování, stiskněte klávesu Shift a klikněte na \"Provést\".
-Ignore case	SelectionWindow		Ignorovat velikost znaků
-Include trash	FindPanel		Začlenit Koš
-Increase size	ContainerWindow		Zvětšit velikost
-Increase size	DeskWindow		Zvětšit velikost
-Invert	SelectionWindow		Obrátit
-Invert selection	ContainerWindow		Invertovat výběr
-Invert selection	FilePanelPriv		Invertovat výběr
-Invert selection	QueryContainerWindow		Invertovat výběr
-Invert selection	VolumeWindow		Invertovat výběr
-KiB	WidgetAttributeText		KiB
-Kind	ContainerWindow		Druh
-Kind:	InfoWindow		Druh:
-Link \"%name\" to:	InfoWindow	File dialog title for new sym link	Odkaz \"%name\" do:
-Link to:	InfoWindow		Odkaz na:
-List folders first	SettingsView		Nejdříve zobrazit složky
-List view	ContainerWindow		Zobrazení seznamu
-List view	VolumeWindow		Zobrazení seznamu
-Location	ContainerWindow		Umístnění
-Location	OpenWithWindow		Umístnění
-Location	QueryPoseView		Umístnění
-Location:	InfoWindow		Umístnění:
-Make active printer	ContainerWindow		Vytvořit aktivní tiskárnu
-MiB	WidgetAttributeText		MiB
-Mini icon view	ContainerWindow		Zobrazení Mini-ikon
-Mini icon view	DeskWindow		Zobrazení Mini-ikon
-Mini icon view	VolumeWindow		Zobrazení mini-ikon
-Modified	ContainerWindow		Upraveno
-Modified	FindPanel		Upravené
-Modified	PoseView		Upraveno
-Modified	QueryPoseView		Změněno
-Modified:	InfoWindow		Upraveno:
-Mount	ContainerWindow		Připojit
-Mount	DeskWindow		Připojit
-Mount	VolumeWindow		Připojit
-Mount all	MountMenu		Připojit všechny
-Mount all disks now	AutoMounterSettings		Připojit teď všechny disky
-Mount server error	AutoMounterSettings		Chyba mount serveru
-Mount settings…	SettingsView		Nastavení připojení...
-Mount settings…	VolumeWindow		Nastavení připojení...
-Move	PoseView		Přesun
-Move here	ContainerWindow		Přesunout sem
-Move to	ContainerWindow		Přesunout do
-Move to Trash	ContainerWindow		Přesunout do Koše
-Move to Trash	FSUtils		Přesunout do Koše
-Move to Trash	FilePanelPriv		Přesun do Koše
-Moving: 	StatusWindow		Přesouvání:
-Name	ContainerWindow		Jméno
-Name	FindPanel		Název
-Name	OpenWithWindow		Jméno
-Name	PoseView		Jméno
-Name	QueryPoseView		Název
-Name	SelectionWindow		Název
-Name = %name	FindPanel	FindResultTitle	Jméno = %name
-Name matches wildcard expression:###	SelectionWindow		Název se přesně shoduje
-New	ContainerWindow		Nový
-New	DeskWindow		Nový
-New Query	FindPanel		Nový dotaz
-New folder	ContainerWindow		Nová složka
-New folder	FSUtils		Nová složka
-New folder	FilePanelPriv		Nová složka
-New folder	TemplatesMenu		Nová složka
-New folder %ld	FSUtils		Nová složka %Id
-New folder%ld	FSUtils		Nová složka %ld
-OK	AutoMounterSettings		OK
-OK	FSUtils		OK
-OK	InfoWindow		OK
-OK	OpenWithWindow		OK
-OK	PoseView		OK
-OK	TrackerInitialState		OK
-OK	WidgetAttributeText		OK
-On	FindPanel		Zapnuto
-Only the boot disk	AutoMounterSettings		Pouze startovní disk
-Open	ContainerWindow		Otevřít
-Open	FilePanelPriv		Otevřít
-Open	InfoWindow		Otevřít
-Open	OpenWithWindow		Otevřít
-Open	VolumeWindow		Otevřít
-Open %name with:	OpenWithWindow		Otevřít %name v:
+Icon	AttributesView		Ikona
 Open and make preferred	OpenWithWindow		Otevři a nastav preferovanou
-Open parent	ContainerWindow		Otevřít nadřazenou
-Open selection with:	OpenWithWindow		Otevřít vybrané v:
-Open with…	ContainerWindow		Otevřít v...
-Opens with:	InfoWindow		Otevírá v:
+Open with…	ContainerWindow		Otevřít v…
+Kind	ContainerWindow		Druh
+Error moving \"%name\" to Trash. (%error)	FSUtils		Chyba přesunu \"%name\" do koše. (%error)
 Or	FindPanel		Nebo
-Original name	ContainerWindow		Původní název
-Other	FilePermissionsView		Jiný
-Outline selection rectangle only	SettingsView		Obtáhnout pouze rámeček výběru
-Owner	FilePermissionsView		Vlastník
-Paste	ContainerWindow		Vložit
-Paste	FilePanelPriv		Vložit
-Paste layout	ContainerWindow		Vložit rozložení
-Paste links	ContainerWindow		Vložit odkazy
-Paused: click to resume or stop	StatusWindow		Pozastaveno: kliknutím obnovíte nebo zastavíte
-Permissions	ContainerWindow		Oprávnění
-Permissions	InfoWindow		Oprávnění
-Preferences…	ContainerWindow		Nastavení...
-Preferred for %type	OpenWithWindow		Doporučeno pro %type
-Preferred for file	OpenWithWindow		Preferovaný pro soubor
-Preparing to copy items…	StatusWindow		Příprava kopírování položek...
-Preparing to create links…	StatusWindow		Připravuji vytvoření odkazů...
-Preparing to delete items…	StatusWindow		Příprava odstranění položek...
-Preparing to empty Trash…	StatusWindow		Připrava vysypání koše...
-Preparing to move items…	StatusWindow		Připravuji přesun položek...
-Preparing to restore items…	StatusWindow		Příprava obnovy položek...
-Previously mounted disks	AutoMounterSettings		Předchozí připojené disky
-Proceed	FSUtils		Pokračovat
-Prompt	FSUtils		Prompt
-Query name:	FindPanel		Název Dotazu:
-Query template	FindPanel		Šablona Dotazu
-Read	FilePermissionsView		Číst
-Recalculate folder size	InfoWindow		Přepočítat velikost složky
-Recent documents	FavoritesMenu		Časté dokumenty
-Recent folders	ContainerWindow		Časté složky
-Recent folders	FavoritesMenu		Časté složky
-Relation	OpenWithWindow		Vztah
-Remove	FindPanel		Odebrat
-Replace	FSUtils		Nahradit
-Replace	FilePanelPriv		Nahradit
-Replace all	FSUtils		Nehradit vše
-Replace other file	WidgetAttributeText		Nahradit jiný soubor
-Resize to fit	ContainerWindow		Vyplnit
-Resize to fit	QueryContainerWindow		Roztáhnout
-Resize to fit	VolumeWindow		Roztáhnout
-Restore	ContainerWindow		Obnovit
-Restoring: 	StatusWindow		Obnovuji:
-Revert	TrackerSettingsWindow		Zpět
-Save	FilePanelPriv		Ulož
-Save	FindPanel		Uložit
-Save Query as template…	FindPanel		Uložit Dotaz jako šablonu...
-Save as Query template:	FindPanel		Uložit jako šablonu Dotazu:
-Search	FindPanel		Vyhledat
-Searching for disks to mount…	StatusWindow		Vyhledávání disků pro připojení...
-Select	InfoWindow		Vybrat
-Select	SelectionWindow		Vybrat
-Select all	ContainerWindow		Vybrat vše
-Select all	DeskWindow		Vybrat vše
-Select all	FilePanelPriv		Vybrat vše
-Select all	QueryContainerWindow		Vybrat vše
-Select all	VolumeWindow		Vybrat vše
-Select…	ContainerWindow		Vybrat...
-Select…	DeskWindow		Vybrat...
-Select…	FilePanelPriv		Vybrat...
-Select…	QueryContainerWindow		Vybrat...
-Select…	VolumeWindow		Vybrat...
-Set new link target	InfoWindow		Zvolit cíl nového odkazu
-Settings…	MountMenu		Nastavení...
-Show Disks icon	SettingsView		Zobraz ikonu Disky
-Show folder location in title tab	SettingsView		Zobraz umístění složky v nadpisu panelu
-Show navigator	SettingsView		Zobrazit navigátora
-Show shared volumes on Desktop	SettingsView		Zobrazit sdílené svazky na ploše
-Show space bars on volumes	SettingsView		Zobrazit ukazatele prostoru na svazcích.
-Show volumes on Desktop	SettingsView		Zobrazit svazky na Ploše
-Single window navigation	SettingsView		Navigace jedním oknem
-Size	ContainerWindow		Velikost
-Size	FindPanel		Velikost
-Size	PoseView		Velikost
-Size	QueryPoseView		Velikost
-Size:	InfoWindow		Velikost:
-Skip	FSUtils		Přeskoč
-Some items already exist in this folder with the same names as the items you are %verb.\n \nWould you like to replace them with the ones you are %verb or be prompted for each one?	FSUtils		Některé položky již existují v této složce se stejnými názvy jako položky, které %verb.\n\nPřejete si je nahradit těmi %verb nebo se dotázat pro každou zvlášť?
-Some of the selected items cannot be moved to the Trash. Would you like to delete them instead? (This operation cannot be reverted.)	PoseView		Některé vybrané položky nemohou být přesunuty do Koše. Přejete si je místo toho odstranit? (Tato operace nemůže být vrácena.)
-Sorry, could not create a new folder.	FSUtils		Bohužel, novou složku nelze vytvořit.
-Sorry, saving more than one item is not allowed.	FilePanelPriv		Bohužel, ukládání více než jedné položky není umožněno.
-Sorry, the 'Character' attribute cannot store a multi-byte glyph.	WidgetAttributeText		Bohužel, atribut 'Písmeno' nemůže uchovávat vícebytové znaky.
-Sorry, there is not enough free space on the destination volume to copy the selection.	FSUtils		Bohužel, není dostatek volného místa v cílovém svazku pro kopírování vyběru.
-Sorry, you can't copy items to the Trash.	FSClipBoard		Bohužel, nelze kopírovat položky do Koše.
-Sorry, you can't copy items to the Trash.	PoseView		Bohužel, nelze kopírovat položky do Koše.
-Sorry, you can't create links in the Trash.	PoseView		Bohužel, nelze vytvářet odkazy v Koši.
-Sorry, you can't save things at the root of your system.	FilePanelPriv		Bohužel, nelze ukládat do kořenu systému.
-Sorry, you cannot edit that attribute.	WidgetAttributeText		Bohužel, nelze změnit atribut.
-Temporary	FindPanel		Dočasné
-That name is already taken. Please type another one.	InfoWindow		Toto jméno je již zabrané. Zvolte, prosím, jiné jméno.
-That name is already taken. Please type another one.	WidgetAttributeText		Název je již obsazen. Zvolte, prosím, jiný název.
-That name is too long. Please type another one.	InfoWindow		Název je příliš dlouhý. Zvolte prosím jiný.
-The Tracker must be running to see Info windows.	PoseView		Pro zobrazení Info oken musí být spuštěný Tracker.
-The Tracker must be running to see set the default printer.	PoseView		Tracker musí být spuštěn pro práci s výchozí tiskárnou.
-The application \"%appname\" does not support the type of document you are about to open. Are you sure you want to proceed? If you know that the application supports the document type, you should contact the publisher of the application and ask them to update their application to list the type of your document as supported.	OpenWithWindow		Aplikace \"%appname\" nepodporuje typ dokumentu, který se snažíte otevřít. Opravdu chcete pokračovat? Pokud víte, že aplikace podporuje tento typ dokumentu, měl byste kontaktovat vydavatele aplikace a požádat je, aby aktualizovali svoji aplikaci tak, aby uváděla typ vašeho dokumentu jako podporovaný.
-The file \"%name\" already exists in the specified folder. Do you want to replace it?	FilePanelPriv		Soubor \"%name\" již existuje ve zvolené složce. Přejete si ho nahradit?
-The mount server could not be contacted.	AutoMounterSettings		Nelze kontaktovat server připojení.
-The selected item cannot be moved to the Trash. Would you like to delete it instead? (This operation cannot be reverted.)	PoseView		Vybraná položka nemůže být přesunuta do Koše. Přejete si ji místo toho odstranit? (Tato operace nemůže být vrácena.)
-The specified name is already used as the name of a folder. Please choose another name.	FilePanelPriv		Zadaný název je již použit jako název složky. Zvolte, prosím, jiný název.
-The specified name is illegal. Please choose another name.	FilePanelPriv		Zadaný název je chybný. Zvolte, prosím, jiný název.
-The target disk does not support creating links.	FSUtils		Cílový disk nepodporuje vytváření odkazů.
-There was a problem trying to replace \"%name\". The item might be open or busy.	FSUtils		během nahrazování \"%name\" došlo k problému. Položka je otevřená nebo je s ní pracováno.
-There was a problem trying to save in the folder you specified. Please try another one.	FilePanelPriv		Ve vámi vybrané složce došlo během pokusu o uložení k problému. Zvolte, prosím, nějakou jinou.
-There was an error deleting \"%name\":\n\t%error	FSUtils		Při odstraňování \"%name\" došlo k chybě:\n\t%error
-There was an error resolving the link.	Tracker		Při načítání odkazu došlo k chybě.
-There was an error writing the attribute.	WidgetAttributeText		Došlo k chybě během zápisu atributu.
-TiB	WidgetAttributeText		TiB
-To: %dir	StatusWindow		Do: %dir
-Tracker preferences	TrackerSettingsWindow		Nastavení Trackeru
-Tracker status	StatusWindow		Stav Trackeru
-Trash	Model		Koš
-Trash	TrackerSettingsWindow		Koš
-Unknown	FilePermissionsView		Neznámý
-Unknown	WidgetAttributeText		Neznámý
-Unmount	ContainerWindow		Odpojit
-Unmount	InfoWindow		Odpojit
-Unmount	VolumeWindow		Odpojit
-Untitled bitmap	PoseView		Nepojmenovaná bitmapa
-Untitled clipping	PoseView		Nepojmenovaný výstřižek
-Used space color	SettingsView		Barva použitého místa
-Version	OpenWithWindow		Verze
-Version:	InfoWindow		Verze:
-Volume icons	TrackerSettingsWindow		Ikony svazků
-Warning space color	SettingsView		Barva upozornění
-Window	ContainerWindow		Okno
-Window	FilePanelPriv		Okno
-Windows	TrackerSettingsWindow		Okna
-Would you like to find a suitable application to open the file?	FSUtils		Přejete si najít vhodnou aplikaci pro otevření souboru?
-Would you like to find some other suitable application?	FSUtils		Chcete najít nějakou jinou vhodnou aplikaci?
-Write	FilePermissionsView		Zapiš
-You are trying to replace the item:\n\t%name%dest\nwith:\n\t%name%src\n\nWould you like to replace it with the one you are %movemode?	FSUtils		Pokoušíte se nahradit položku: \n\t%name%dest\npoložkou::\n\t%name%src\n\nPřejete si ji nahradit tou, kterou právě %movemode?
-You can't move a folder into itself or any of its own sub-folders.	FSUtils		složku nelze přesunout do sama sebe, nebo do vlastní pod-složky.
-You can't move or copy items to read-only volumes.	FSUtils		Na svazky přiojené pouze pro čtení nelze nic přesouvat nebo kopírovat.
-You can't move or copy the trash.	FSUtils		Nelze přesunout nebo kopírovat Koš.
-You can't replace a folder with one of its sub-folders.	FSUtils		Nelze nahradit složku jednou z pod-složek.
-You cannot copy or move the root directory.	FSUtils		Nelze kopírovat nebo přesouvat kořenový adresář.
-You cannot create a link to the root directory.	FSUtils		Nelze vytvořit odkaz v kořenovém adresáři.
-You cannot put the Trash, home or Desktop directory into the trash.	FSUtils		Adresář Koš, Domov nebo Plochu nelze umístnit do Koše.
-You cannot replace a file with a folder or a symbolic link.	FSUtils		Nelze nahradit soubor složkou nebo symbolickým odkazem.
-You cannot replace a folder or a symbolic link with a file.	FSUtils		Nelze nahradit složku nebo symbolický odkaz souborem.
-You must drop items on one of the disk icons in the \"Disks\" window.	FSClipBoard		Položky musíte pustit na ikonu jednoho disku v okně \"Disky\".
-You must drop items on one of the disk icons in the \"Disks\" window.	PoseView		Položky musíte pustit na ikonu jednoho z disků v okně \"Disky\".
-You must have at least one attribute showing.	PoseView		Musí být zobrazen alespoň jeden atribut.
-\nShould this be fixed?	FSUtils		\nMá to být opraveno?
-\n\t(%Ld bytes, 	FSUtils		\n\t(%Ld bytů,
-after	FindPanel		po
+MIME Description	AttributesView		Popis MIME
+Query	FindPanel		Dotaz
 before	FindPanel		před
-by attribute	FindPanel		podle atributu
-by formula	FindPanel		podle vzoru
-by name	FindPanel		podle jména
-calculating…	InfoWindow		počítání...
+New folder%d	FSUtils		Nový adresář%d
+Volume icons	TrackerSettingsWindow		Ikony svazků
+Ignore case	SelectionWindow		Ignorovat velikost znaků
+Save as query template:	FindPanel		Uložit jako šablonu dotazu:
+Save query:	FindPanel		Uložit dotaz:
+Current folder	ContainerWindow		Současný adresář
+Finish: %time - Over %finishtime left	StatusWindow		Konec: %time - zbývá přes %finishtime
+Mount all disks now	AutoMounterSettings		Připojit teď všechny disky
+Location:	InfoWindow		Umístnění:
+Name	PoseView		Jméno
+Kind:	InfoWindow		Druh:
 contains	FindPanel		obsahuje
-contains	SelectionWindow		obsahuje
-copy	FSUtils	filename copy	kopie
-copying	FSUtils		kopírování
-ends with	FindPanel		končící
-ends with	SelectionWindow		končící
-for %num files	InfoWindow		pro %num souborů
-greater than	FindPanel		větší než
-is	FindPanel		je
-is not	FindPanel		není
-label too long	PoseView		štítek je příliš dlouhý
-less than	FindPanel		méne než
-link	FSUtils	filename link	odkaz
-matches regular expression	SelectionWindow		Shoda s řádným výrazem
-matches wildcard expression	SelectionWindow		Shoda s výrazem se zástupnými znaky
-move	FSUtils	As in 'If you move ...'	přesunete
-move	FSUtils	As in 'To move ...'	přesunutí
-moving	FSUtils		přesun
-multiple disks	FindPanel		Více disků
-no items	CountView		žádné položky
-no supporting apps	OpenWithWindow		Žádná vhodná aplikace
-of %items	StatusWindow		z %items
-parent folder	NavMenu		nadřazená složka
-rename	InfoWindow	As in 'If you rename ...'	přejmenujete
-rename	InfoWindow	As in 'To rename ...'	přejmenování
-rename	TextWidget	As in 'If you rename ...'	přejmenujete
-rename	TextWidget	As in 'To rename ...'	přejmenování
+Open	FilePanelPriv		Otevřít
+Bitmap icon	AttributesView		Rastrová ikona
+You can't replace a folder with one of its sub-folders.	FSUtils		Nelze nahradit adresář jedním z podadresářů.
+Name	Default Query Columns		Jméno
+Unmount	ContainerWindow		Odpojit
+Eject when unmounting	AutoMounterSettings		Vysunout při odpojení
+Searching for disks to mount…	StatusWindow		Vyhledávání disků pro připojení…
+Value	AttributesView		Hodnota
+Information	InfoWindow		Informace
+Error emptying Trash	FSUtils		Chyba při vysypávání koše
+Opens with:	InfoWindow		Otevřít pomocí:
+Size	QueryPoseView		Velikost
+Disk mount	TrackerSettingsWindow		Připojení disků
+Type	AttributesView		Typ
+Prompt	FSUtils		Výzva
+Error in regular expression:\n\n'%errstring'	PoseView		Chyba v regulárním výrazu:\n\n'%errstring'
+Small bitmap icon	AttributesView		Malá rastrová ikona
+Would you like to find a suitable application to open the file?	FSUtils		Přejete si najít vhodnou aplikaci pro otevření souboru?
+You cannot replace a folder or a symbolic link with a file.	FSUtils		Nelze nahradit adresář nebo symbolický odkaz souborem.
+(unknown)	InfoWindow		(neznámo)
+{0, plural, other{<# dates>}}	AttributesView		{0, plural, one{<# datum>} other{<# datumy>}}
+Trailing \\.	libtracker		\\ na konci.
+At %func \nfind_directory() failed. \nReason: %error	Email Query Columns		V %func \nfind_directory() selhalo. \nDůvod: %error
+Handles any file	OpenWithWindow		Obstarává jakýkoliv soubor
 save text	FilePanelPriv		uložit text
+Raw data	AttributesView		Surová data
+Preparing to move items…	StatusWindow		Připravuji přesun položek…
+Size	ContainerWindow		Velikost
+Select…	ContainerWindow		Vybrat…
+Show shared volumes on Desktop	SettingsView		Zobrazit sdílené svazky na ploše
+Size	PoseView		Velikost
+matches wildcard expression	SelectionWindow		shoda s výrazu se zástupnými znaky
+Title	Bookmark Query Columns		Název
+Identify	ContainerWindow		Rozpoznat
+Create link	ContainerWindow		Vytvořit odkaz
 starts with	FindPanel		začínající
+Replace	FSUtils		Nahradit
+?+* follows nothing.	libtracker		?+* po ničem.
+Include Trash	FindPanel		Zahrnout odpadkový koš
+Rectangle	AttributesView		Obdélník
+Move to	ContainerWindow		Přesunout do
+Status	Email Query Columns		Stav
+New folder	FSUtils		Nová složka
+New Query	FindPanel		Nový dotaz
+Junk on end.	libtracker		Sajrajt na konci.
+system	B_SYSTEM_DIRECTORY		systém
+Preparing to delete items…	StatusWindow		Příprava odstranění položek…
+Open %name with:	OpenWithWindow		Otevřít %name v:
+\"%name\" is an unsupported executable.	FSUtils		\"%name\" je nepodporovaný spustitelný soubor.
+You cannot copy or move the root directory.	FSUtils		Nelze kopírovat ani přesouvat kořenový adresář.
+Plain text	AttributesView		Prostý text
+Capacity:	InfoWindow		Kapacita:
+File	ContainerWindow		Soubor
+Relation	OpenWithWindow		Vztah
+Moving: 	StatusWindow		Přesouvání: 
+Select	SelectionWindow		Vybrat
+Select	InfoWindow		Vybrat
+OK	OpenWithWindow		OK
+Clean up	ContainerWindow		Vyčistit
+Modified	FindPanel		Upravené
+ (block size: 	InfoWindow		 (velikost bloku: 
+Generate image thumbnails	SettingsView		Vytvořit náhledy
+An item named '%filename%' already exists.	FSUtils		Položka jménem '%filename%' už existuje.
+preferences	B_PREFERENCES_DIRECTORY		předvolby
+Name	Person Query Columns		Jméno
+Skip all	FSUtils		Přeskočit vše
+Atom	AttributesView		Atom
+Corrupted opcode.	libtracker		Poškozený operační kód.
+%SizeProcessed of %TotalSize, %BytesPerSecond/s	StatusWindow		%SizeProcessed z %TotalSize, %BytesPerSecond/s
+Preparing to restore items…	StatusWindow		Příprava obnovy položek…
+Mount	ContainerWindow		Připojit
+{0, plural, other{<# rectangles>}}	AttributesView		{0, plural, one{<# obdélník>} few{<# obdélníky>} other{<# obdélníků>}}
+Desktop	B_DESKTOP_DIRECTORY		Plocha
+Corrupted pointers.	libtracker		Poškozené ukazatele.
+Link to:	InfoWindow		Odkaz na:
+Copy here	ContainerWindow		Kopírovat sem
+Character	AttributesView		Znak
+All disks	FindPanel		Všechny disky
+Affine transform	AttributesView		Afinní transformace
+Window	ContainerWindow		Okno
+%BytesPerSecond/s	StatusWindow		%BytesPerSecond/s
+Remove	FindPanel		Odebrat
+Company	Person Query Columns		Společnost
+Select folders…	FindPanel		Vybrat adresáře…
+Recent documents	FavoritesMenu		Nedávné dokumenty
+Edit templates…	TemplatesMenu		Upravit šablony…
+{0, plural, one{# byte} other{# bytes}}	FSUtils		{0, plural, one{# bajt} few{# bajty} other{# bajtů}}
+8-bit integer	AttributesView		8 bitové celé číslo
+8-bit unsigned integer	AttributesView		8 bitové přirozené číslo
+%s info	InfoWindow	window title	%s informace
+%capacity (%used used -- %free free)	InfoWindow		%capacity (využito %used -- %free volných)
+Hide dotfiles	SettingsView		Skrýt soubory začínající tečkou
+Trash	Model		Koš
+copy	FSUtils	filename copy	kopie
+Enable type-ahead filtering	SettingsView		Povolit filtrování během psaní
+Location	OpenWithWindow		Umístnění
+Find	FSUtils		Najít
+List folders first	SettingsView		Adresáře na začátek
+An item named \"%name\" already exists in this folder. Would you like to replace it with the symbolic link you are creating?	FSUtils		Položka s názvem \"%name\" již v této složce existuje. Přejete si ji nahradit symbolickým odkazem, který právě vytváříte?
+List view	ContainerWindow		Seznam
+Create relative link	ContainerWindow		Vytvořit relativní odkaz
+Modified	QueryPoseView		Změněno
+Owner	FilePermissionsView		Vlastník
+Cancel	FSClipBoard		Zrušit
+Modified	PoseView		Upraveno
+Save as template…	FindPanel		Uložit jako šablonu…
+Move to Trash	ContainerWindow		Přesunout do koše
+All files and folders	FindPanel		Všechny soubory a složky
+Add-ons	ContainerWindow		Doplňky
+Too many parenthesis.	libtracker		Příliš mnoho závorek.
+Save query template:	FindPanel		Uložit šablonu dotazu:
+Increase size	ContainerWindow		Zvětšit velikost
+\nShould this be fixed?	FSUtils		\nMá to být opraveno?
+URL	Bookmark Query Columns		URL
+Floating point number	AttributesView		Číslo s plovoucí řádovou čárkou
+Cancel	ContainerWindow		Zrušit
+Attributes	ContainerWindow		Atributy
+Error deleting items	FSUtils		Chyba při odstraňování položek
+Cut	ContainerWindow		Vyjmout
+Disks	Model		Disky
+Create a Query template	FindPanel		Vytvořit šablonu Dotazu
+Size	FindPanel		Velikost
+New submenu	ContainerWindow	Folder name of New-template submenu	Nová podnabídka
+OK	Email Query Columns		OK
+Location	QueryPoseView		Umístnění
+Edit query	ContainerWindow		Změnit dotaz
+{0, plural, one{(# byte)} other{(# bytes)}}	InfoWindow		{0, plural, one{# bajt} few{# bajty} other{# bajtů}}
+Previously mounted disks	AutoMounterSettings		V minulosti připojované disky
+You cannot replace a file with a folder or a symbolic link.	FSUtils		Nelze nahradit soubor adresářem nebo symbolickým odkazem.
+The target disk does not support creating links.	FSUtils		Cílový disk nepodporuje vytváření odkazů.
+develop	B_SYSTEM_DEVELOP_DIRECTORY		vývoj
+Cut more	ContainerWindow		Vyjmout více
+64-bit integer	AttributesView		64 bitové celé číslo
+The Tracker must be running to see Info windows.	PoseView		Pro zobrazení informačních oken musí být spuštěný Tracker.
+Tracker preferences	TrackerSettingsWindow		Nastavení Trackeru
+Read	FilePermissionsView		Čtení
+There was an error writing the attribute.	WidgetAttributeText		Došlo k chybě během zápisu atributu.
+If you rename %target, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Pokud přejmenujete %target, %osName se nemusí chovat správně!\n\nOpravdu to chcete udělat?
+Filesystem:	InfoWindow		Systém souborů:
+Could not open \"%name\" (%error). 	FSUtils		Nelze otevřít \"%name\" (%error). 
+Media parameter group	AttributesView		Skupina multimediálních parametrů
+%name info	InfoWindow	InfoWindow Title	%name info
+If you move the home folder, %osName may not behave properly!\n\nAre you sure you want to do this?\n\nTo move the home folder anyway, hold down the Shift key and click \"Move\".	FSUtils		Pokud přesunete domovskou složku, %osName se může chovat nekorektně!\n\nOpravdu to chcete udělat?\n\nPokud trváte na přesunu domovské složky, podržte klávesu Shift a klikněte na \"Přesunout\".
+Property info	AttributesView		Vlastnost
+Sorry, you can't create links in the Trash.	PoseView		Bohužel, nelze vytvářet odkazy v koši.
+From	Email Query Columns		Od
+Open selection with:	OpenWithWindow		Otevřít vybrané v:
+Preferences…	ContainerWindow		Předvolby…
+Could not open \"%document\" because application \"%app\" is in the Trash. 	FSUtils		Nelze otevřít \"%document\" protože aplikace \"%app\" je v koši. 
+Work Phone	Person Query Columns		Telefon do práce
+Select folders	FindPanel		Vybrat adresáře
+Close	ContainerWindow		Zavřít
+Get info	ContainerWindow		Získat info
+MIME Type	AttributesView		Typ MIME
+There was an error resolving the link.	Tracker		Při načítání odkazu došlo k chybě.
+Show folder location in title tab	SettingsView		Zobraz umístění složky v nadpisu panelu
+There was a problem trying to save in the folder you specified. Please try another one.	FilePanelPriv		Ve vámi vybrané složce došlo během pokusu o uložení k problému. Zvolte, prosím, nějakou jinou.
+{0, plural, other{<# values>}}	AttributesView		{0, plural, one{<# hodnota>} few{<# hodnoty>} other{<# hodnot>}}
+Desktop	TrackerSettingsWindow		Plocha
+Nested *?+.	libtracker		Vnořené *?+.
+Move	FSUtils	button label	Přesunout
+Group	FilePermissionsView		Skupina
+Could not find an application to open \"%name\" (%error). 	FSUtils		Nelze najít aplikaci k otevření \"%name\" (%error). 
+Internal error.	libtracker		Vnitřní chyba.
+Geometric size	AttributesView		Geometrická velikost
+Replace	FilePanelPriv		Nahradit
+contains	SelectionWindow		obsahuje
+is not	FindPanel		není
+Keywords	Bookmark Query Columns		Klíčová slova
+Copy more	ContainerWindow		Kopírovat více
+by name	FindPanel		podle jména
+Media parameter web	AttributesView		Adresa médií
+Sorry, you can't save things at the root of your system.	FilePanelPriv		Bohužel, nelze ukládat do kořenu systému.
+Restore	ContainerWindow		Obnovit
+Location	ContainerWindow		Umístnění
+Skip	FSUtils		Přeskočit
+Warning space color	SettingsView		Barva upozornění
+Text list	AttributesView		Textový seznam
+Used space color	SettingsView		Barva použitého místa
+Cancel	FSUtils		Zrušit
+Original name	ContainerWindow		Původní název
+Unknown	WidgetAttributeText		Neznámý
+32-bit integer	AttributesView		32 bitové celé číslo
+Save as query…	FindPanel		Uložit jako dotaz…
+The specified name is already used as the name of a folder. Please choose another name.	FilePanelPriv		Zadaný název je již použit jako název složky. Zvolte jiný název.
+Modified	ContainerWindow		Upraveno
+Mini icon view	ContainerWindow		Zobrazení malých ikon
+File	FilePanelPriv		Soubor
+Search	FindPanel		Vyhledat
+Modified:	InfoWindow		Upraveno:
+Cancel	FilePanelPriv		Zrušit
+Sorry, you cannot edit that attribute.	WidgetAttributeText		Bohužel, nelze změnit atribut.
+Memory pointer	AttributesView		Ukazatel
+Cancel	OpenWithWindow		Zrušit
+There was an error deleting \"%name\":\n\t%error	FSUtils		Při odstraňování \"%name\" došlo k chybě:\n\t%error
+Files cannot be moved or deleted from a read-only volume.	PoseView		Na svazku připojeného pouze pro čtení nelze přesouvat ani odstraňovat soubory.
+Resize to fit	ContainerWindow		Přizpůsobit velikost
+Link \"%name\" to:	InfoWindow	File dialog title for new sym link	Odkaz \"%name\" do:
+Mount server error	AutoMounterSettings		Chyba připojovacího serveru
+If you rename the home folder, %osName may not behave properly!\n\nAre you sure you want to do this?\n\nTo rename the home folder anyway, hold down the Shift key and click \"Rename\".	FSUtils		Pokud přejmenujete domovskou složku, %osName se může chovat nekorektně!\n\nOpravdu to chcete udělat?\n\nPokud trváte na přejmenování domovské složky, podržte klávesu Shift a klikněte na \"Přejmenovat\".
+Boolean	AttributesView		Booleovský
+Memory size	AttributesView		Velikost paměti
+New folder	TemplatesMenu		Nový adresář
+ (broken)	InfoWindow		 (rozbité)
+Replace all	FSUtils		Nehradit vše
+The application \"%appname\" does not support the type of document you are about to open.\nAre you sure you want to proceed?\n\nIf you know that the application supports the document type, you should contact the publisher of the application and ask them to update their application to list the type of your document as supported.	OpenWithWindow		Aplikace \"%appname\" nepodporuje typ dokumentu, který se pokoušíte otevřít.\nOpravdu chcete pokračovat?\n\nPokud víte, že aplikace tento typ dokumentu podporuje, měli by jste dát vědět vývojářům, aby aktualizovali typ dokumentu v aplikaci.
+Reverse order	ContainerWindow		Opačné pořadí
+Copying: 	StatusWindow		Kopírování: 
+Show navigator	SettingsView		Zobrazit navigaci
+Double-precision floating point number	AttributesView		Desetinné číslo s dvojtou přesností
+Decrease size	ContainerWindow		Zmenšit velikost
+Recent queries	FindPanel		Poslední dotazy
+Mount all	MountMenu		Připojit všechny
+Size	Default Query Columns		Velikost
+Favorites	FavoritesMenu		Oblíbené
+<No recent items>	FavoritesMenu		<Žádné časté položky>
+Formula %formula	FindPanel	FindResultTitle	Vzorec %formula
+Preparing to create links…	StatusWindow		Připravuji vytvoření odkazů…
+Tracker status	StatusWindow		Stav Trackeru
+Handles any %type	OpenWithWindow		Obstarává jakýkoliv %type
+The mount server could not be contacted.	AutoMounterSettings		Nelze kontaktovat připojovací server.
+Query template	FindPanel		Šablona Dotazu
+Open	OpenWithWindow		Otevřít
+ends with	SelectionWindow		končící
+You must have at least one attribute showing.	PoseView		Musí být zobrazen alespoň jeden atribut.
+Finish: after several years	StatusWindow		Dokončení: za několik let
+Favorites	FilePanelPriv		Oblíbené
+Point	AttributesView		Bod
+You can't move or copy items to read-only volumes.	PoseView		Na svazky jen pro čtení nelze kopírovat či přesouvat položky.
+home	B_USER_DIRECTORY		domov
+Tracker New Templates	B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates		Nové šablony Trackeru
+Disk mounting during boot	AutoMounterSettings		Připojení disku během startu
+Don't automount	AutoMounterSettings		Nepřipojovat automaticky
+Node ref	AttributesView		Reference uzlu
+Could not find application \"%appname\"	OpenWithWindow		Nelze najít aplikaci \"%appname\"
+Unmatched parenthesis.	libtracker		Nepárové závorky.
+New folder %d	FSUtils		Nový adresář %d
+Extended attribute	AttributesView		Rozšířený atribut
+Error %error loading Add-On %name.	ContainerWindow		Chyba %error při načítání doplňku %name.
+Unmatched brackets.	libtracker		Nepárové závorky.
+You are trying to replace the item:\n\t%name%dest\nwith:\n\t%name%src\n\nWould you like to replace it with the one you are %movemode?	FSUtils		Pokoušíte se nahradit položku:\n\t%name%dest\npoložkou:\n\t%name%src\n\nPřejete si ji nahradit tou, kterou právě %movemode?
+Empty Trash	ContainerWindow		Vysypat koš
+no supporting apps	OpenWithWindow		žádná vhodná aplikace
+32-bit unsigned integer	AttributesView		32 bitové přirozené číslo
+Preparing to empty Trash…	StatusWindow		Připrava vysypání koše…
+Deleting: 	StatusWindow		Odstraňování: 
+the MIME settings	FSUtils		nastavení MIME
+You can't move or copy the trash.	FSUtils		Nelze přesunout nebo kopírovat koš.
+label too long	PoseView		štítek je příliš dlouhý
+Error creating link to \"%name\".	FSUtils		Chyba při vytváření odkazu na \"%name\".
+Unknown	FilePermissionsView		Neznámý
+Paste links	ContainerWindow		Vložit odkazy
+Restoring: 	StatusWindow		Obnovuji: 
+The Tracker must be running to set the default printer.	PoseView		Pro nastavení výchozí tiskárny musí běžet Tracker.
+calculating…	InfoWindow		počítání…
+Preferred for file	OpenWithWindow		Preferovaná pro soubor
+{0, plural, one{# selected} other{# selected}}	FindPanel	\"1 selected (singular)\" or \"2 selected (plural)\"	{0, plural, one{# vybraný} few{# vybrané} other{# vybraných}}
+OK	AutoMounterSettings		OK
+copying	FSUtils		kopírování
+MIME String	AttributesView		MIME řetězec
+Delete	ContainerWindow		Odstranit
+Execute	FilePermissionsView		Spustit
+no	AttributesView		ne
+Show volumes on Desktop	SettingsView		Zobrazit svazky na ploše
+Recent folders	ContainerWindow		Časté složky
+Desktop	Model		Plocha
+Select all	ContainerWindow		Vybrat vše
+apps	B_APPS_DIRECTORY		aplikace
+Error calculating folder size.	InfoWindow		Chyba výpočtu velikosti složky.
+Delete	FSUtils		Odstranit
+Edit name	ContainerWindow		Upravit jméno
+Could not open \"%document\" (Missing symbol: %symbol). \n	FSUtils		Nelze otevřít \"%document\" (Chybí symbol: %symbol). \n
+ASCII Text	AttributesView		ASCII text
+Atom reference	AttributesView		Atomická reference
+config	B_USER_CONFIG_DIRECTORY		konfigurace
+Error moving \"%name\".	FSUtils		Chyba přesunu \"%name\".
+Open	ContainerWindow		Otevřít
+Settings…	MountMenu		Nastavení…
+You cannot put the selected item(s) into the trash.	FSUtils		Vybrané položky nelze přesunout do koše.
+Target:	FindPanel	The disks/folders that are searched. Similar to TextSearch's 'Set target'.	Cíl:
 starts with	SelectionWindow		začíná
+Any	AttributesView		Jakýkoli
+Invert	SelectionWindow		Obrátit
+Open…	FindPanel		Otevřít…
+Would you like to find some other suitable application?	FSUtils		Chcete najít nějakou jinou vhodnou aplikaci?
+(unknown)	AttributesView		(neznámý)
+*+? operand may be empty.	libtracker		operand *+? může být prázdný.
+Recent folders	FavoritesMenu		Nedávné adresáře
+Signed memory size	AttributesView		Velikost paměti se znaménkem
+The specified name is illegal. Please choose another name.	FilePanelPriv		Zadaný název je chybný. Zvolte, prosím, jiný název.
+of %items	StatusWindow		z %items
+Error copying file \"%name\":\n\t%error\n\nWould you like to continue?	FSUtils		Chyba kopírování souboru \"%name\":\n\t%error\n\nPřejete si pokračovat?
+less than	FindPanel		méne než
+MIME Path	AttributesView		Cesta MIME
+Creating links: 	StatusWindow		Vytváření odkazů: 
+Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Nelze otevřít \"%document\" v aplikaci \"%app\" (%error). 
+Create %s clipping	PoseView		Vytvořit %s výstřižek
+Error moving \"%name\"	FSUtils		Chyba přesunu \"%name\"
+To: %dir	StatusWindow		Do: %dir
+Cancel	Tracker		Zrušit
+Paste layout	ContainerWindow		Vložit rozložení
+yes	AttributesView		ano
+Make active printer	ContainerWindow		Aktivovat tiskárnu
+Copy to	ContainerWindow		Kopírovat do
+Name	SelectionWindow		Název
+Location	Default Query Columns		Poloha
+by attribute	FindPanel		podle atributu
+Write	FilePermissionsView		Zápis
+If you alter the system folder or its contents, you won't be able to boot %osName!\n\nAre you sure you want to do this?\n\nTo alter the system folder or its contents anyway, hold down the Shift key and click \"I know what I'm doing\".	FSUtils		Pokud změníte systémový adresář nebo jeho obsah, nepůjde nastartovat %osName!\n\nOpravdu to chcete?\n\nPokud i tak chcete změnit systémový adresář nebo jeho obsah, držte klávesu Shift a klikněte na \"Vím, co dělám\".
+Save	FilePanelPriv		Uložit
+Could not open \"%document\" with application \"%app\" (Missing libraries: %library). \n	FSUtils		Nelze otevřít \"%document\" aplikací \"%app\" (Chybějící knihovny: %library). \n
+Finish: %time	StatusWindow		Dokončeno: %time
+after	FindPanel		po
+Messenger	AttributesView		Messenger
+{0, plural, one{<# data byte>} other{<# bytes of data>}}	AttributesView		{0, plural, one{<# bajt dat>} few{<# bajty dat>} other{<# bajtů dat>}}
+Version	OpenWithWindow		Verze
+The entered file name is too long.	FSUtils		Zvolené jméno souboru je příliš dlouhé.
+Some of the selected items cannot be moved to the Trash. Would you like to delete them instead? (This operation cannot be reverted.)	PoseView		Některé vybrané položky nemohou být přesunuty do Koše. Přejete si je místo toho odstranit? (Tato operace je nevratná.)
+Add printer…	ContainerWindow		Přidat tiskárnu…
+Permissions	ContainerWindow		Oprávnění
+Size:	InfoWindow		Velikost:
+Copy	ContainerWindow		Kopírovat
+The selected item cannot be moved to the Trash. Would you like to delete it instead? (This operation cannot be reverted.)	PoseView		Vybraná položka nemůže být přesunuta do Koše. Přejete si ji místo toho odstranit? (Tato operace je nevratná.)
+Sorry, the 'Character' attribute cannot store a multi-byte glyph.	WidgetAttributeText		Bohužel, atribut 'Písmeno' nemůže uchovávat vícebajtové znaky.
+And	FindPanel		a
+Palette-indexed picture	AttributesView		Obrázek s indexovanou paletou
+Drawing pattern	AttributesView		Výkresový vzor
+File offset	AttributesView		Ofset souboru
+Name = %name	FindPanel	FindResultTitle	Jméno = %name
+Subject	Email Query Columns		Předmět
+Error copying folder \"%name\":\n\t%error\n\nWould you like to continue?	FSUtils		Chyba kopírování složky \"%name\":\n\t%error\n\nPřejete si pokračovat?
+You cannot create a link to the root directory.	FSUtils		Nelze vytvořit odkaz v kořenovém adresáři.
+Other	FilePermissionsView		Ostatní
+Automatic disk mounting	AutoMounterSettings		Automatické připojení disku
+parent folder	NavMenu		nadřazený adresář
+Create link here	ContainerWindow		Vytvořit odkaz zde
+Force identify	ContainerWindow		Nucená identita
+no items	CountView		žádné položky
+Time	AttributesView		Čas
+Open parent	ContainerWindow		Otevřít nadřazený
+Find…	ContainerWindow		Vyhledat…
+moving	FSUtils		přesun
+Add	FindPanel		Přidat
+greater than	FindPanel		větší než
+Created:	InfoWindow		Vytvořeno:
+Single window navigation	SettingsView		Navigace v jednom okně
+Edit Query template	FindPanel		Změnit šablonu Dotazu
+Save query as template…	FindPanel		Uložit dotaz jako šablonu…
+All disks	AutoMounterSettings		Všechny disky
+link	FSUtils	filename link	odkaz
+16-bit unsigned integer	AttributesView		16 bitové přirozené číslo
+Proceed	FSUtils		Pokračovat
+Edit favorites…	FilePanelPriv		Upravit oblíbené…
+You can't move a folder into itself or any of its own sub-folders.	FSUtils		Adresář nelze přesunout do samo sebe, nebo do vlastního podadresáře.
+New	ContainerWindow		Nový
+You must drop items on one of the disk icons in the \"Disks\" window.	FSClipBoard		Položky musíte pustit na ikonu jednoho disku v okně \"Disky\".
+If you alter %target, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Pokud změníte %target, %osName se může začít chovat nekorektně!\n\nOpravdu to chcete udělat?
+Sorry, you can't copy items to the Trash.	FSClipBoard		Bohužel, nelze kopírovat položky do koše.
+Some items already exist in this folder with the same names as the items you are %verb.\n \nWould you like to replace them with the ones you are %verb or be prompted for each one?	FSUtils		Některé položky již existují v tomto adresáři se stejnými názvy jako položky, které %verb.\n \nPřejete si je nahradit těmi %verb nebo se dotázat pro každou zvlášť?
+When	Email Query Columns		Když
+Object	AttributesView		Objekt
+Paste	ContainerWindow		Vložit
+An item named \"%name\" already exists in this folder, and may contain\nitems with the same names. Would you like to replace them with those contained in the folder you are %verb?	FSUtils		Položka jménem \"%name\" již existuje v tomto adresáři a může obsahovat\npoložky se stejnými názvy. Chcete je nahradit položkami z adresáře, kterého se pokoušíte %verb?
+Cannot unmount the boot volume \"%name\".	FSUtils		Nelze odpojit zaváděcí svazek \"%name\".
+Could not open \"%document\" with application \"%app\" (Missing symbol: %symbol). \n	FSUtils		Nelze otevřít \"%document\" aplikací \"%app\" (Chybí symbol: %symbol). \n
+New folder	ContainerWindow		Nový adresář
+Name	OpenWithWindow		Jméno
+Get info	Tracker	Tracker's 'Get info' panel [ALT+I]	Informace
+There was a problem trying to replace \"%name\". The item might be open or busy.	FSUtils		Během nahrazování \"%name\" došlo k problému. Položka je otevřená nebo je s ní pracováno.
+Windows	TrackerSettingsWindow		Okna
+Show space bars on volumes	SettingsView		Zobrazit ukazatele volného místa na svazcích
+Could not update permissions of file \"%name\". %error	FSUtils		Oprávnění souboru \"%name\" nebylo možné aktualizovat. %error
+Emptying Trash… 	StatusWindow		Vyprazdňuji koš… 
+{0, plural, one{for # file} other{for # files}}	InfoWindow		{0, plural, one{for # soubor} few{for # soubory} other{for # souborů}}
+Revert	TrackerSettingsWindow		Vrátit zpět
+trash	B_TRASH_DIRECTORY		koš
+If you move the system folder or its contents, you won't be able to boot %osName!\n\nAre you sure you want to do this?\n\nTo move the system folder or its contents anyway, hold down the Shift key and click \"Move\".	FSUtils		Pokud přesunete systémový adresář nebo jeho obsah, nepůjde nastartovat %osName!\n\nOpravdu to chcete?\n\nPokud i tak chcete přesunout systémový adresář nebo jeho obsah, držte Shift a klikněte na \"Přesunout\".
+Open query:	FindPanel		Otevřít dotaz:
+Close all in workspace	ContainerWindow		Zavřít na všech plochách
+Corrupted expression.	libtracker		Poškozený výraz.
+Network address	AttributesView		Síťová adresa
+Finish: %time - %finishtime left	StatusWindow		Dokončení: %time - zbývá %finishtime
+Could not open \"%document\" (Missing libraries: %library). \n	FSUtils		Nelze otevřít \"%document\" (Chybí knihovny: %library). \n
+Create relative link here	ContainerWindow		Vytvořit relativní odkaz zde
+All Haiku disks	AutoMounterSettings		Všechny disky Haiku
+Close all	ContainerWindow		Uzavřít vše
+Paused: click to resume or stop	StatusWindow		Pozastaveno: kliknutím obnovíte nebo zastavíte
+Name	QueryPoseView		Název
+Error %error loading add-On %name.	ContainerWindow		Chyba %error při načítání doplňku %name.
+Does not handle file	OpenWithWindow		Neobstarává soubor
+E-mail	Person Query Columns		E-mail
+Templates	FindPanel		Šablony
+Arrange by	ContainerWindow		Uspořádat podle
+Attributes	AttributesView		Atributy
+Sorry, saving more than one item is not allowed.	FilePanelPriv		Bohužel, ukládání více než jedné položky není umožněno.
+64-bit unsigned integer	AttributesView		64 bitové přirozené číslo
+Move here	ContainerWindow		Přesunout sem
+the config folder	FSUtils		konfigurační adresář
+Sorry, could not create a new folder.	FSUtils		Bohužel, novou složku nelze vytvořit.
+MIME Signature	AttributesView		Podpis MIME
+Rename	FSUtils	button label	Přejmenovat
+Clean up all	ContainerWindow		Vyčistit vše
+Add current folder	FilePanelPriv		Přidat aktuální adresář
+Description:	InfoWindow		Popis:
+Are you sure you want to delete the selected item(s)? This operation cannot be reverted.	FSUtils		Opravdu si přejete vybrané položky odstranit? Tato operace je nevratná.
+Grayscale picture	AttributesView		Obrázek ve stupních šedi
+ends with	FindPanel		končící
+Show Disks icon	SettingsView		Zobrazit ikonu Disků
+Outline selection rectangle only	SettingsView		Obtáhnout pouze rámeček výběru
+by formula	FindPanel		podle vzoru
+is	FindPanel		je
+If you rename the system folder or its contents, you won't be able to boot %osName!\n\nAre you sure you want to do this?\n\nTo rename the system folder or its contents anyway, hold down the Shift key and click \"Rename\".	FSUtils		Pokud přejmenujete systémovou složku nebo její obsah, nebudete s to spustit %osName!\n\nOpravdu to chcete udělat?\n\nPokud trváte na přejmenování systémové složky nebo jejího obsahu, podržte klávesu Shift a klikněte na \"Přejmenovat\".
+Permissions	FilePermissionsView		Oprávnění
+\"%name\" is a legacy executable. Please obtain an updated version or recompile the application.	FSUtils		\"%name\" je zastaralý spustitelný soubor. Sežeňte prosím novější verzi nebo překompilujte aplikaci.
+Only the boot disk	AutoMounterSettings		Pouze startovní disk
+Message	AttributesView		Zpráva
+Modified	Default Query Columns		Změněno
+Default application	InfoWindow		Výchozí aplikace
+Untitled bitmap	PoseView		Nepojmenovaná bitmapa
+Invert selection	ContainerWindow		Invertovat výběr
+matches regular expression	SelectionWindow		shoda s regulárním výrazem
+Monochrome picture	AttributesView		Černobílý obrázek
+Real name	ContainerWindow		Skutečné jméno
+Could not open \"%name\". The file is mistakenly marked as executable. 	FSUtils		Nelze otevřít \"%name\". Soubor je chybně označen jako spouštěcí. 
+Save	FindPanel		Uložit
+Name	FindPanel		Název
+Cancel	WidgetAttributeText		Zrušit
+Expression too long.	libtracker		Výraz je příliš dlouhý.
+Memory corruption.	libtracker		Poškození paměti.
+Color	AttributesView		Barva
+Copy layout	ContainerWindow		Kopírovat rozložení
+Duplicate	ContainerWindow		Duplikovat
+16-bit integer	AttributesView		16 bitové celé číslo
+Untitled clipping	PoseView		Nepojmenovaný výstřižek
+The file \"%name\" already exists in the specified folder. Do you want to replace it?	FilePanelPriv		Soubor \"%name\" již existuje ve zvolené složce. Přejete si ho nahradit?
+, indexed	InfoWindow		, indexováno
+You must drop items on one of the disk icons in the \"Disks\" window.	PoseView		Položky musíte pustit na ikonu jednoho z disků v okně \"Disky\".
+Version:	InfoWindow		Verze:
+OK	PoseView		OK
+Add new submenu…	TemplatesMenu		Přidat novou podnabídku…
+Find	FindPanel		Vyhledat
+Empty folder	NavMenu		Prázdná složka
+Defaults	TrackerSettingsWindow		Výchozí
+Sorry, there is not enough free space on the destination volume to copy the selection.	FSUtils		Bohužel, není dostatek volného místa v cílovém svazku pro kopírování vyběru.
+True-color picture	AttributesView		24 bitový obrázek
+Alignment	AttributesView		Zarovnání
+Move to Trash	FSUtils		Přesunout do Koše
+Handles %type	OpenWithWindow		Obstarává %type
+Cancel	PoseView		Zrušit
+Options	FindPanel		Možnosti
+Delete	PoseView		Odstranit
+Media parameter	AttributesView		Multimediální parametr
+If you alter the home folder, %osName may not behave properly!\n\nAre you sure you want to do this?\n\nTo alter the home folder anyway, hold down the Shift key and click \"I know what I'm doing\".	FSUtils		Pokud změníte domovský adresář, %osName nemusí fungovat správně!\n\nOpravdu to chcete?\n\nPokud i tak chcete změnit domovský adresář, držte Shift a klikněte na \"Vím, co dělám\".
+Sorry, you can't copy items to the Trash.	PoseView		Bohužel, nelze kopírovat položky do koše.
+{0, plural, one{# item} other{# items}}	CountView	Number of selected items: \"1 item\" or \"2 items\"	{0, plural, one{# položka} few{# položky} other{# položek}}
+Name	AttributesView		Název
+Invalid bracket range.	libtracker		Nesprávný rozsah závorek.
+the settings folder	FSUtils		složka s nastavením
+If you move %target, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Pokud přesunete %target, %osName se může začít chovat nekorektně!\n\nOpravdu to chcete udělat?
+Create a Query	FindPanel		Vytvořit Dotaz
+I know what I'm doing	FSUtils	button label	Vím co dělám
+Preparing to copy items…	StatusWindow		Příprava kopírování položek…
+%lld B	WidgetAttributeText	The filesize symbol for byte	%lld B
+Entry ref	AttributesView		Reference položky
+Icon view	ContainerWindow		Zobrazení ikon
+The entered folder name is too long.	FSUtils		Zvolené jméno adresáře je příliš dlouhé.
+Name	ContainerWindow		Jméno
+Preferred for %type	OpenWithWindow		Doporučeno pro %type
+Free space color	SettingsView		Barva volného místa
+OK	FSUtils		OK

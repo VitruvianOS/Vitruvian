@@ -1,24 +1,28 @@
-1	czech	x-vnd.Haiku-Backgrounds	4220509773
-All workspaces	Main View		Všechny pracovní plochy
-Apply	Main View		Použít
+1	czech	x-vnd.Haiku-Backgrounds	681978856
+Backgrounds	System name		Pozadí
+X:	Main View		X:
+Setting the background image failed:	Main View		Nastavení obrázku pozadí selhalo:
+Resolution: 	Image Filepanel		Rozlišení: 
+pick one	Main View		vyberte jeden
+Default	Main View		Výchozí
 Center	Main View		Na střed
-Current workspace	Main View		Aktuální pracovní plocha
-Default	Main View		Původní
-Default folder	Main View		Implicitní složka
-Folder: 	Main View		Složka:
-Icon label outline	Main View		Obrys popisu ikony
-Image:	Main View		Obrázek:
-Manual	Main View		Ručně
+Folder: %path	Main View		Adresář: %path
+Manual	Main View		Ruční
+Set background image error	Main View		Chyba při nastavování obrázku pozadí
+Default folder	Main View		Výchozí adresář
+Revert	Main View		Vrátit
 None	Main View		Žádný
-Other folder…	Main View		Jiná složka...
-Other…	Main View		Jiné...
+All workspaces	Main View		Všechny pracovní plochy
+Icon label outline	Main View		Obrys popisu ikony
+Other…	Main View		Jiné…
+Current workspace	Main View		Aktuální pracovní plocha
+Apply	Main View		Použít
+Other folder…	Main View		Jiný adresář…
+Y:	Main View		Y:
+Tile	Main View		Vydláždit
+Select	Main View		Vybrat
+Scale to fit	Main View		Přizpůsobit velikosti obrazovky
+OK	Main View		OK
 Placement:	Main View		Umístění:
 Preview	Main View		Náhled
-Resolution: 	Image Filepanel		Rozlišení:
-Revert	Main View		Vrátit
-Scale to fit	Main View		Přizpůsobit oknu
-Select	Main View		Vybrat
-Tile	Main View		Dlaždice
-X:	Main View		X:
-Y:	Main View		Y:
-pick one	Main View		vyberte jeden
+Image:	Main View		Obrázek:

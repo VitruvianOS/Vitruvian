@@ -1,22 +1,26 @@
-1	finnish	x-vnd.Haiku-Screen	4090394050
+1	finnish	x-vnd.Haiku-Screen	2577971458
 no	Screen		ei
 bits/pixel	Screen		bittiä/pikseli
 15 bits/pixel, 32768 colors	Screen		15 bittiä/pikseli, 32768 väriä
 Rows:	Screen		Rivit:
 %.1f Hz	Screen		%.1f Hz
 The screen mode could not be set:\n\t%s\n	Screen		Näyttötilaa ei voitu asettaa:\n\t%s\n
-Keep	Screen		Pidä
+Serial no.: %s	Screen		Sarjanumero: %s
 /other…	Screen		/muut...
+Keep	Screen		Pidä
 Horizonal frequency:\t%lu - %lu kHz\nVertical frequency:\t%lu - %lu Hz\n\nMaximum pixel clock:\t%g MHz	Screen		Vaakasuora taajuus:\t%lu - %lu kHz\nPystysuora taajuus:\t%lu - %lu Hz\n\nMaksimi pikselikello:\t%g MHz
 Refresh rate:	Screen		Virkistystaajuus:
 Video format:	Screen		Videomuoto:
 Undo	Screen		Peru
 OK	Screen		Valmis
 Current workspace	Screen		Nykyinen työtila
+%ld × %ld	Screen	The '×' is the Unicode multiplication sign U+00D7	%ld × %ld
 vertically	Screen		pystysuoraan
 All workspaces	Screen		Kaikki työtilat
 Use laptop panel:	Screen		Käytä sylimikropaneelia
+Unknown	Screen		Tuntematon
 Could not write VESA mode settings file:\n\t	Screen		VESA-tila-asetustiedoston kirjoittaminen epäonnistui:\n\t
+Display info	Screen		Näyttötiedot
 Settings will revert in %seconds.	Screen		Asetukset palautuvat %seconds sekunnissa.
 Cancel	Screen		Peru
 Other…	Screen		Muut...
@@ -24,7 +28,6 @@ Screen	Screen		Näyttö
 Colors:	Screen		Värit:
 yes	Screen		kyllä
 Swap displays:	Screen		Vaihda näyttöjä:
-%sSerial no.: %s	Screen		%sSarjanumero: %s
 8 bits/pixel, 256 colors	Screen		8 bittiä/pikseli, 256 väriä
 Revert	Screen		Palauta
 always	Screen		aina
@@ -33,6 +36,7 @@ Warning	Screen		Varoitus
 24 bits/pixel, 16 Million colors	Screen		24 bittiä/pikseli, 16 miljoonaa väriä
 Hz	Screen		Hz
 Workspaces	Screen		Työtilat
+Brightness:	Screen		Kirkkaus:
 32 bits/pixel, 16 Million colors	Screen		32 bittiä/pikseli, 16 miljoonaa väriä
 Done	Screen		Valmis
 16 bits/pixel, 65536 colors	Screen		16 bittiä/pikseli, 65536 väriä

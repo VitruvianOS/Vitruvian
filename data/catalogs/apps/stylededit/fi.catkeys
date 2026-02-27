@@ -1,10 +1,11 @@
-1	finnish	x-vnd.Haiku-StyledEdit	727465241
+1	finnish	x-vnd.Haiku-StyledEdit	1077895429
 Document statistics	Statistics		Asiakirjan tilastot
 Cannot revert, file not found: \"%s\".	RevertToSavedAlert		Palauttaminen epäonnistui, tiedostoa ei löytynyt: ”%s”.
 Cut	Menus		Leikkaa
 Center	Menus		Keskitä
-Wrap-around search	FindandReplaceWindow		Kierrätä haku alkuun
+Increase size	Menus		Kasvata kokoa
 Page setup…	Menus		Sivuasetus...
+Wrap-around search	FindandReplaceWindow		Kierrätä haku alkuun
 Untitled 	StyledEditWindow		Otsikoton 
 OK	Statistics		Valmis
 Find	FindandReplaceWindow		Haku
@@ -28,11 +29,12 @@ Italic	Menus		Kursivointi
 Can't undo	Menus		Ei voi perua
 Replace…	Menus		Korvaa…
 File	Menus		Tiedosto
-Bold	Menus		Lihavointi
 Paste	Menus		Liitä
+Bold	Menus		Lihavointi
 File \"%file%\" was modified by another application, reload it?	NodeMonitorAlerts		Jokin toinen sovellus muokkasi tiedostoa ”%file%”, ladataanko se uudelleen?
 File \"%file%\" was removed by another application, recover it?	NodeMonitorAlerts		Jokin muu sovellus poisti tiedoston ”%file%”, palautetaanko se?
 Lines:	Statistics		Rivejä:
+Strikeout	Menus		Yliviivaa
 Replace in all windows	FindandReplaceWindow		Korvaa kaikissa ikkunoissa
 \"%s\" has unsaved changes.\nRevert it to the last saved version? 	RevertToSavedAlert		tiedostossa ”%s” tallentamattomia muutoksia.\nPalautetaanko se viimeiseen tallennettuun versioon? 
 Save	SaveAlert		Tallenna
@@ -50,6 +52,7 @@ OK	SaveAlert		Valmis
 Color	Menus		Väri
 Save changes to the document \"%s\"? 	QuitAlert		Tallenna muutokset asiakirjaan ”%s”? 
 StyledEdit	System name		Tyylitetty editori
+Underline	Menus		Alleviivaa
 Find:	FindandReplaceWindow		Haku:
 Undo typing	QuitAlert		Peru kirjoitus
 Error loading \"%s\":\n\t%s	LoadAlert		Virhe ladattaessa ”%s”:\n\t%s
@@ -67,15 +70,16 @@ OK	LoadAlert		Valmis
 Save	QuitAlert		Tallenna
 Case-sensitive	FindandReplaceWindow		Kirjainkoosta riippuva
 Find selection	Menus		Hakuvalinta
-Cancel	SaveAlert		Peru
 Find…	Menus		Hae…
+Cancel	SaveAlert		Peru
 Revert	RevertToSavedAlert		Palauta
 Size	Menus		Koko
+Decrease size	Menus		Pienennä kokoa
 Autodetect	Menus		Automaattinen tunnistus
 Replace next	Menus		Korvaa seuraava
 OK	QuitAlert		Valmis
-Replace with:	FindandReplaceWindow		Korvaa sisällöllä:
 Edit	Menus		Muokkaa
+Replace with:	FindandReplaceWindow		Korvaa sisällöllä:
 Open…	Menus		Avaa…
 Save as…	Menus		Tallenna nimellä...
 Replace	FindandReplaceWindow		Korvaa

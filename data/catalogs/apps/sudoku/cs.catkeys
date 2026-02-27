@@ -1,33 +1,35 @@
-1	czech	x-vnd.Haiku-Sudoku	1385218625
-Abort	ProgressWindow		Zrušit
-Advanced	SudokuWindow		Rozšířené
-Blank	SudokuWindow		Prázdné
-Copy	SudokuWindow		Kopírovat
-Could not open \"%s\":\n%s\n	SudokuWindow		Nebylo možno otevřít \"%s\":\n%s\n
-Could not set Sudoku:\n%s\n	SudokuWindow		Sudoku nebylo možno nastavit:\n%s\n
-Creating solvable field	SudokuGenerator		Vytváření řešitelného pole
-Easy	SudokuWindow		Snadné
-Export as…	SudokuWindow		Exportovat jako...
+1	czech	x-vnd.Haiku-Sudoku	3382377306
+Restore snapshot	SudokuWindow		Obnovit snímek
 File	SudokuWindow		Soubor
-HTML	SudokuWindow		HTML
-Hard	SudokuWindow		Těžké
-Help	SudokuWindow		Pomoc
 Mark invalid values	SudokuWindow		Označ neplatné položky
-Mark valid hints	SudokuWindow		Označit platné úseky
+Solve single field	SudokuWindow		Vyřešit jediné políčko
+Hard	SudokuWindow		Těžké
+Start again	SudokuWindow		Spustit znova
 New	SudokuWindow		Nový
-OK	SudokuWindow		OK
-Open file…	SudokuWindow		Otevřít soubor...
-Progress monitor	ProgressWindow		Monitor vývoje
+Easy	SudokuWindow		Snadné
+Undo	SudokuWindow		Zpět
+Export as…	SudokuWindow		Exportovat jako…
 Quit	SudokuWindow		Konec
 Redo	SudokuWindow		Znovu
-Restore snapshot	SudokuWindow		Obnovit snímek
-Searching for removable values	SudokuGenerator		Vyhledávání odstranitelných položek
-Snapshot current	SudokuWindow		Aktuální snímek
-Solve	SudokuWindow		Vyřešit
-Solve single field	SudokuWindow		Vyřešit jediné políčko
-Start again	SudokuWindow		Spustit znova
-Sudoku request	SudokuWindow		Sudoku dotaz
+Could not open \"%s\":\n%s\n	SudokuWindow		Nebylo možno otevřít \"%s\":\n%s\n
+Blank	SudokuWindow		Prázdné
 Sudoku solved - congratulations!\n	SudokuWindow		Sudoku je vyřešeno - gratuluijeme!\n
 Text	SudokuWindow		Text
-Undo	SudokuWindow		Zpět
+Copy	SudokuWindow		Kopírovat
+Solve	SudokuWindow		Vyřešit
+HTML	SudokuWindow		HTML
+Advanced	SudokuWindow		Rozšířené
+Set all hints	SudokuWindow		Nastavit všechny rady
+Searching for removable values	SudokuGenerator		Vyhledávání odstranitelných položek
+Abort	ProgressWindow		Zrušit
+Could not set Sudoku:\n%s\n	SudokuWindow		Sudoku nebylo možno nastavit:\n%s\n
+Help	SudokuWindow		Pomoc
+OK	SudokuWindow		OK
+Sudoku	System name		Sudoku
+Progress monitor	ProgressWindow		Monitor vývoje
+Creating solvable field	SudokuGenerator		Vytváření řešitelného pole
 View	SudokuWindow		Pohled
+Snapshot current	SudokuWindow		Aktuální snímek
+Mark valid hints	SudokuWindow		Označit platné úseky
+Sudoku request	SudokuWindow		Sudoku dotaz
+Open file…	SudokuWindow		Otevřít soubor…

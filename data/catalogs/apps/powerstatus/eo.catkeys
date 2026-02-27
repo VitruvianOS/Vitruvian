@@ -1,3 +1,45 @@
-1	esperanto	x-vnd.Haiku-PowerStatus	624563318
-About…	PowerStatus		pri…
-Quit	PowerStatus		Eliri
+1	esperanto	x-vnd.Haiku-PowerStatus	2460122174
+Run in window	PowerStatus		Ekruli fenestre
+Extended battery info	PowerStatus		Plia informo pri akumulilo
+Show status icon	PowerStatus		Montri piktogramon de stato
+Battery charging	PowerStatus		Ŝargado de akumulilo
+Design capacity low warning: 	PowerStatus		Konstrukcia ŝargnivelo por averto pri malpleneco: 
+The battery level is critical, please plug in the device immediately.	PowerStatus		La ŝargnivelo de akumulilo estas kriza, konektu al elektroreto tuj.
+non-rechargeable	PowerStatus		ne reŝargebla
+Last full charge: 	PowerStatus		Lasta plena ŝargo: 
+ mV	PowerStatus		 mV
+Current rate: 	PowerStatus		Nuna taksado: 
+Show text label	PowerStatus		Montri tekstan etikedon
+Quit	PowerStatus		Ĉesi
+Battery low	PowerStatus		La akumulilo estas malplena
+Model number: 	PowerStatus		Numero de modelo: 
+Battery unused	PowerStatus		Akumulilo ne estas uzata
+Type: 	PowerStatus		Speco: 
+ mAh	PowerStatus		 mAh
+Battery discharging	PowerStatus		Malŝargado de akumulilo
+Design voltage: 	PowerStatus		Konstrukcia tensio: 
+discharging	PowerStatus		malŝargado
+rechargeable	PowerStatus		reŝargebla
+Battery info…	PowerStatus		Informo pri akumulilo…
+Show time	PowerStatus		Montri tempon
+ mA	PowerStatus		 mA
+About…	PowerStatus		Pri…
+Serial number: 	PowerStatus		Numero de serio: 
+Battery critical	PowerStatus		Kriza stato de akumulilo
+Capacity: 	PowerStatus		Kapacito: 
+ mW	PowerStatus		 mW
+Show percent	PowerStatus		Montri procentojn
+Capacity granularity 1: 	PowerStatus		Proksimuma valoro de 1/100 de plena ŝargkapacito:
+The battery level is getting low, please plug in the device.	PowerStatus		La akumulilo malpleniĝas, konektu elektroreton.
+Design capacity warning: 	PowerStatus		Konstrukcia ŝrargnivelo por averto: 
+Capacity granularity 2: 	PowerStatus		Proksimuma valoro de 1/400 de plena ŝargkapacito
+Too bad!	PowerStatus		Diable!
+Technology: 	PowerStatus		Teknologio: 
+ mWh	PowerStatus		 mWh
+PowerStatus	System name		Bateriostato
+Design capacity: 	PowerStatus		Konstrukcia kapacito: 
+OEM info: 	PowerStatus		Informo pri origina aparata produktanto: 
+no battery	PowerStatus		akumulilo forestas
+Empty battery slot	PowerStatus		Akumulilingo estas malplena
+Install in Deskbar	PowerStatus		Instali Laborstrie
+charging	PowerStatus		ŝargado

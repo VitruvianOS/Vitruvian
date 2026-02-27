@@ -1,34 +1,35 @@
-1	croatian	x-vnd.Haiku-Sudoku	2463385585
+1	croatian	x-vnd.Haiku-Sudoku	3382377306
 Restore snapshot	SudokuWindow		Vrati sliku
-Could not set Sudoku:\n%s\n	SudokuWindow		Ne mogu postaviti Sudoku:\n%s\n
-Export as…	SudokuWindow		Izvezi kao...
-OK	SudokuWindow		Ok
-New	SudokuWindow		Novo
-Abort	ProgressWindow		Prekini
-Sudoku	System name		Sudoku
-Could not open \"%s\":\n%s\n	SudokuWindow		Ne mogu otvoriti \"%s\":\n%s\n
-Easy	SudokuWindow		Lagano
-Open file…	SudokuWindow		Otvori datoteku...
-Solve single field	SudokuWindow		Riješi jedno polje
-Solve	SudokuWindow		Riješi
-Redo	SudokuWindow		Uradi ponovno
 File	SudokuWindow		Datoteka
-Advanced	SudokuWindow		Napredno
-Start again	SudokuWindow		Kreni ponovo
-HTML	SudokuWindow		HTML
-Sudoku request	SudokuWindow		Sudoku zahtijev
-Copy	SudokuWindow		Kopiraj
-Mark valid hints	SudokuWindow		Označi valjane nagovještaje
-Sudoku solved - congratulations!\n	SudokuWindow		Sudoku riješen - čestitamo!\n
+Mark invalid values	SudokuWindow		Označo netočne vrijednosti
+Solve single field	SudokuWindow		Riješi jedno polje
 Hard	SudokuWindow		Teško
-Snapshot current	SudokuWindow		Slikaj trenutno
+Start again	SudokuWindow		Kreni ponovo
+New	SudokuWindow		Novo
+Easy	SudokuWindow		Lagano
+Undo	SudokuWindow		Poništi
+Export as…	SudokuWindow		Izvezi kao...
+Quit	SudokuWindow		Izlaz
+Redo	SudokuWindow		Uradi ponovno
+Could not open \"%s\":\n%s\n	SudokuWindow		Ne mogu otvoriti \"%s\":\n%s\n
+Blank	SudokuWindow		Prazno
+Sudoku solved - congratulations!\n	SudokuWindow		Sudoku riješen - čestitamo!\n
 Text	SudokuWindow		Tekst
+Copy	SudokuWindow		Kopiraj
+Solve	SudokuWindow		Riješi
+HTML	SudokuWindow		HTML
+Advanced	SudokuWindow		Napredno
+Set all hints	SudokuWindow		Postavi sve savjete
+Searching for removable values	SudokuGenerator		Traženje za uklonjive vrijednosti
+Abort	ProgressWindow		Prekini
+Could not set Sudoku:\n%s\n	SudokuWindow		Ne mogu postaviti Sudoku:\n%s\n
+Help	SudokuWindow		Pomoć
+OK	SudokuWindow		Ok
+Sudoku	System name		Sudoku
+Progress monitor	ProgressWindow		Pregled napretka
 Creating solvable field	SudokuGenerator		Stvori riješivo polje
 View	SudokuWindow		Pregled
-Progress monitor	ProgressWindow		Pregled napretka
-Mark invalid values	SudokuWindow		Označo netočne vrijednosti
-Blank	SudokuWindow		Prazno
-Help	SudokuWindow		Pomoć
-Searching for removable values	SudokuGenerator		Traženje za uklonjive vrijednosti
-Undo	SudokuWindow		Poništi
-Quit	SudokuWindow		Izlaz
+Snapshot current	SudokuWindow		Slikaj trenutno
+Mark valid hints	SudokuWindow		Označi valjane nagovještaje
+Sudoku request	SudokuWindow		Sudoku zahtijev
+Open file…	SudokuWindow		Otvori datoteku...

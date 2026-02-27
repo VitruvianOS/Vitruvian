@@ -1,0 +1,79 @@
+1	thai	x-vnd.Haiku-Devices	907968852
+ACPI bus	DevicesView		ACPI bus
+Encryption controller	Device		ตัวควบคุมการเข้ารหัส
+Devices	System name		เครื่องมือ
+Graphics Peripheral	DeviceSCSI		อุปกรณ์ต่อพ่วงกราฟิก
+Processor	Device		หน่วยประมวลผล
+Generate system information	DevicesView		สร้างข้อมูลระบบ
+Class info	DevicePCI		ข้อมูล Class
+Computer	DevicesView		คอมพิวเตอร์
+Communications	DeviceSCSI		การสื่อสาร
+Mass storage controller	Device		อุปกรณ์เก็บข้อมูลขนาดใหญ่
+Connection	DevicesView		การเชื่อมต่อ
+Printer	DeviceSCSI		เครื่องพิมพ์
+ACPI Processor Namespace '%2'	DeviceACPI		ACPI พื้นที่ชื่อโปรเซสเซอร์ '%2'
+Manufacturer	Device		ผู้ผลิต
+Scanner	DeviceSCSI		เครื่องสแกน
+Memory controller	Device		ตัวควบคุมหน่วยความจำ
+Unknown device	DevicesView		อุปกรณ์ที่ไม่รู้จัก
+Unknown	DevicePCI		ไม่รู้จัก
+ACPI node '%1'	DeviceACPI		ACPI node '%1'
+Optical Drive	DeviceSCSI		ออปติคัลไดรฟ์
+Name	PropertyList		ชื่อ
+Manufacturer	DeviceSCSI		ผู้ผลิต
+Device name	Device		ชื่ออุปกรณ์
+Satellite communications controller	Device		ตัวควบคุมการสื่อสารผ่านดาวเทียม
+Device class	DeviceSCSI		คลาสอุปกรณ์
+Device	Device		อุปกรณ์
+Input device controller	Device		ตัวควบคุมอุปกรณ์อินพุต
+ACPI System Indicator	DeviceACPI		ตัวบ่งชี้ระบบ ACPI
+PCI bus	DevicesView		PCI bus
+ACPI System Bus	DeviceACPI		ACPI System Bus
+Tape Drive	DeviceSCSI		เทปไดรฟ์
+Changer	DeviceSCSI		ตัวแปลง
+Serial bus controller	Device		Serial bus controller
+Refresh devices	DevicesView		รีเฟรชอุปกรณ์
+Category	DevicesView		หมวดหมู่
+RBC	DeviceSCSI		RBC
+Device paths	Device		paths อุปกรณ์
+Unknown device	Device		อุปกรณ์ที่ไม่รู้จัก
+Wireless controller	Device		ตัวควบคุมอุปกรณ์ไร้สาย
+Generic system peripheral	Device		อุปกรณ์ต่อพ่วงระบบทั่วไป
+Value	PropertyList		ตั้งค่า
+Devices	DevicesView		อุปกรณ์
+Device name	DeviceACPI		ชื่ออุปกรณ์
+Card Reader	DeviceSCSI		ตัวอ่านการ์ด
+Display controller	Device		ตัวควบคุมการแสดงผล
+ACPI Button '%1'	DeviceACPI		ACPI Button '%1'
+ACPI <unknown>	DeviceACPI		ACPI <unknown>
+Device name	DevicePCI		ชืออุปกรณ์
+Disk Drive	DeviceSCSI		Disk Drive
+Report compatibility	DevicesView		รายงานความเข้ากันได้
+Other	DeviceSCSI		อื่นๆ
+Computer	Device		คอมพิวเตอร์
+PCI bus	Device		PCI bus
+Enclosure	DeviceSCSI		ปิด
+ACPI Thermal Zone	DeviceACPI		ACPI Thermal Zone
+Order by:	DevicesView		สั่งโดย:
+Intelligent controller	Device		ตัวควบคุมอัจฉริยะ
+Multimedia controller	Device		ตัวควบคุมมัลติมีเดีย
+Quit	DevicesView		ปิด
+ISA bus	Device		ISA bus
+ISA bus	DevicesView		ISA bus
+Processor	DeviceSCSI		หน่วยประมวลผล
+Bridge	Device		Bridge
+Worm	DeviceSCSI		Worm
+CD-ROM	DeviceSCSI		CD-ROM
+Manufacturer	DevicePCI		ผู้ผลิต
+Bridge	DeviceSCSI		Bridge
+Signal processing controller	Device		ตัวควบคุมการประมวลผลสัญญาณ
+Device name	DeviceSCSI		ชื่ออุปกรณ์
+Docking station	Device		สถานีเชื่อมต่อ
+Array	DeviceSCSI		จัดเรียง
+Unclassified device	Device		อุปกรณ์ที่ไม่ได้จัดประเภท
+ACPI controller	Device		ตัวควบคุม ACPI
+Network controller	Device		ตัวควบคุมเครือข่าย
+Driver used	Device		ไดรเวอร์ที่ใช้
+Communication controller	Device		ตัวควบคุมการสื่อสาร
+ACPI bus	Device		ACPI bus
+unknown	Device		ไม่รู้จัก

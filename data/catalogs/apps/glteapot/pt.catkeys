@@ -1,0 +1,24 @@
+1	portuguese	x-vnd.Haiku-GLTeapot	1263334963
+Right	TeapotWindow		Direita
+Backface culling	TeapotWindow		Remover faces posteriores
+Add a teapot	TeapotWindow		Adicionar um bule
+Yellow	TeapotWindow		Amarela
+Perspective	TeapotWindow		Perspetiva
+Off	TeapotWindow		Desligada
+Quit	TeapotWindow		Sair
+Green	TeapotWindow		Verde
+Blue	TeapotWindow		Azul
+White	TeapotWindow		Branca
+Upper center	TeapotWindow		Superior central
+Filled polygons	TeapotWindow		Polígonos com preenchimento
+Lower left	TeapotWindow		Inferior esquerda
+Fog	TeapotWindow		Nevoeiro
+FPS display	TeapotWindow		Mostrar FPS
+GLTeapot	System name		GLTeapot
+Limit FPS to refresh rate	TeapotWindow		Limitar quadros por segundo (FPS) à taxa de atualização
+Settings	TeapotWindow		Definições
+Gouraud shading	TeapotWindow		Sombreamento de Gouraud
+Lighting	TeapotWindow		Iluminação
+Z-buffered	TeapotWindow		Usar Z-buffer
+Red	TeapotWindow		Vermelha
+Lights	TeapotWindow		Luzes

@@ -1,9 +1,27 @@
-1	swedish	x-vnd.Haiku-GLInfo	3678488342
-Capability	Capabilities		Kapacitet
-Information	InfoView		Information
+1	swedish	x-vnd.Haiku-GLInfo	1282327690
+Maximum clipping planes	Capabilities		Maximal klippnings nivåer
+Maximum evaluators equation order	Capabilities		Maximal utvärderingsekvationsordning
+Texture stack size	Capabilities		Textur stapelstorlek
 GL Info	System name		GL Info
-Capabilities	Capabilities		Kapaciteter
-Maximum convolution	Capabilities		Maximal convolution
-Available extensions	Extensions		Tillgängliga tillägg
-Value	Capabilities		Värde
+Information	InfoView		Information
+Attributes stack size	Capabilities		Attribut stapelstorlek
+Maximum lights	Capabilities		Maxbelysning
 Extensions	Extensions		Tillägg
+Available extensions	Extensions		Tillgängliga tillägg
+Maximum recommended vertex elements	Capabilities		Maximal rekommenderad toppunktelement
+Value	Capabilities		Värde
+Name stack size	Capabilities		Namn på stapelstorlek
+Capabilities	Capabilities		Kapaciteter
+Maximum texture units	Capabilities		Maximala strukturenheter
+Unknown or missing OpenGL renderer.	InfoView		Okänd eller saknad OpenGL-renderare.
+Capability	Capabilities		Kapacitet
+Maximum 2D texture size	Capabilities		Maximal 2D-strukturstorlek
+Auxiliary buffer(s)	Capabilities		Hjälpbuffert (er)
+Unknown vendor	InfoView		Okänd leverantör
+Maximum convolution	Capabilities		Maximal convolution
+Maximum 3D texture size	Capabilities		Maximal 3D-strukturstorlek
+Maximum recommended index elements	Capabilities		Högsta rekommenderade indexelement
+Unknown version	InfoView		Okänd version
+List stack size	Capabilities		Lista stapelstorlek
+Model stack size	Capabilities		Modellstapelstorlek
+Projection stack size	Capabilities		Projektionsstapelstorlek

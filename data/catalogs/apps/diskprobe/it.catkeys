@@ -1,4 +1,4 @@
-1	italian	x-vnd.Haiku-DiskProbe	2944605311
+1	italian	x-vnd.Haiku-DiskProbe	1130290771
 Raw editor	AttributeWindow		Editor dati grezzi
 Remove	AttributeWindow		Rimuovi
 Close	ProbeView		Chiudi
@@ -21,15 +21,17 @@ Print…	ProbeView		Stampa…
 New…	FileWindow		Nuovo…
 what: '%.4s'\n\n	TypeEditors	'What' is a message specifier that defines the type of the message.	cosa: '%.4s'\n\n
 OK	DiskProbe		OK
-DiskProbe	System name		DiskProbe
+DiskProbe	System name		Analizza Disco
 Back	ProbeView		precedente
 Device: 	ProbeView		Dispositivo: 
 Base	ProbeView	A menu item, the number that is basis for a system of calculation. The base 10 system is a decimal system. This is in the same menu window than 'Font size' and 'BlockSize'	Base
 Open file…	FileWindow		Apri file…
 32 bit unsigned pointer:	TypeEditors		Puntatore a 32 bit senza segno:
-DiskProbe request	DiskProbe		Richiesta DiskProbe
+DiskProbe request	DiskProbe		Richiesta Analizza Disco
 Hex	ProbeView	A menu item, as short as possible, noun is recommended if it is shorter than adjective.	Esadecimale
+Block %lld (0x%Lx)	ProbeView		Blocco%lld (0x%Lx)
 Writing to the file failed:\n%s\n\nAll changes will be lost when you quit.	ProbeView		Errore nella scrittura sul file:\n%s\n\nTutte le modifiche saranno perse all'uscita dall'applicazione.
+Native: %lld (0x%0*Lx)	ProbeView		Nativo: %lld (0x%0*Lx)
 Examine device:	OpenWindow		Esamina il dispositivo:
 Number editor	TypeEditors		Editor Numerico
 Icon	TypeEditors		Icona
@@ -37,11 +39,9 @@ Attribute	ProbeView		Attributo
 Don't save	ProbeView		Non salvare
 Undo	ProbeView		Annulla
 Flattened bitmap	TypeEditors		Bitmap piana
-Block %Ld (0x%Lx)	ProbeView		Blocco %Ld (0x%Lx)
 Cancel	OpenWindow		Annulla
 Unknown format	TypeEditors		Formato sconosciuto
 File: 	ProbeView		File: 
-Swapped: %Ld (0x%0*Lx)	ProbeView		Scambiato: %Ld (0x%0*Lx)
 Stop	ProbeView		Interrompi
 Cancel	ProbeView		Annulla
 Could not open \"%s\":\n%s	DiskProbe	Opening of entry reference buffer for a DiskProbe request Alert message. The name of entry reference and error message is shown.	Impossibile aprire \"%s\":\n%s
@@ -53,7 +53,7 @@ Redo	ProbeView		Ripristina
 Floating-point value:	TypeEditors		Valore in virgola mobile:
 Cancel	AttributeWindow		Annulla
 16 bit signed value:	TypeEditors		Valore a 16 bit con segno:
-DiskProbe request	AttributeWindow		Richiesta DiskProbe
+DiskProbe request	AttributeWindow		Richiesta Analizza Disco
 Next	ProbeView		Successivo
 64 bit signed offset:	TypeEditors		Compensazione 64 bit con segno:
 32 bit signed value:	TypeEditors		Valore a 32 bit con segno:
@@ -68,7 +68,7 @@ Block 0x%Lx	ProbeView		Blocco 0x%Lx
 Attribute	AttributeWindow		Attributo
 Mode:	FindWindow		Modalità:
 16 bit	TypeEditors		16 bit
-32 bit size or status:	TypeEditors		Dimensione o stato a 32 bit
+32 bit size or status:	TypeEditors		Dimensione o stato a 32 bit:
 of 	ProbeView		di 
 Contents:	TypeEditors		Contenuti:
 Could not open file \"%s\": %s\n	DiskProbe		Impossibile aprire il file \"%s\": %s\n
@@ -91,7 +91,6 @@ Type editor	ProbeView		Editor di Tipi
 File	FileWindow		File
 Grayscale	TypeEditors		Scala di grigi
 32 bit	TypeEditors		32 bit
-Native: %Ld (0x%0*Lx)	ProbeView		Nativo: %Ld (0x%0*Lx)
 Device	ProbeView		Dispositivo
 Close	AttributeWindow		Chiudi
 Type editor	AttributeWindow		Editor di Tipi
@@ -115,10 +114,12 @@ Block	ProbeView		Blocco
 Find again	ProbeView		Cerca ancora
 View	ProbeView	This is the last menubar item 'File Edit Block View'	Vista
 Could not read image	TypeEditors	Image means here a picture file, not a disk image.	Impossibile leggere l'immagine
-DiskProbe request	ProbeView		Richiesta DiskProbe
+DiskProbe request	ProbeView		Richiesta Analizza Disco
 Double precision floating-point value:	TypeEditors		Valore in virgola mobile a doppia precisione:
 Image	TypeEditors	This is the type of view	Immagine
+Swapped: %lld (0x%0*Lx)	ProbeView		Swap: %lld (0x%0*Lx)
 Save changes before closing?	ProbeView		Salvare le modifiche prima di chiudere?
+%s, %g × %g, %s	TypeEditors	The '×' is the Unicode multiplication sign U+00D7	%s, %g × %g, %s
 PNG format	TypeEditors		Formato PNG
 Number	TypeEditors	This is the type of editor	Numero
 Edit	ProbeView		Modifica
@@ -130,4 +131,4 @@ Find…	ProbeView		Trova…
 Decimal	ProbeView	A menu item, as short as possible, noun is recommended if it is shorter than adjective.	Decimale
 Image view	TypeEditors	Image means here a picture file, not a disk image.	Visuale immagine
 Paste	ProbeView		Incolla
-32 bit unsigned size:	TypeEditors		Valore 32 bit senza segno:
+32 bit unsigned size:	TypeEditors		Dimensione 32 bit senza segno:

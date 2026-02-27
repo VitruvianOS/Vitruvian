@@ -1,0 +1,174 @@
+1	turkish	x-vnd.Haiku-WebPositive	4110209091
+Authentication required	Authentication Panel		Kimlik doğrulaması gerekli
+Previous	WebPositive Window		Önceki
+Copy	Console Window		Kopyala
+(Finish: %date)	Download Window		(Bitiş: %date)
+Open bookmarks confirmation	WebPositive Window		Yer imi aç onayı
+Delete	BookmarkBar		Sil
+Download folder:	Settings Window		İndirmeler klasörü
+Close window	WebPositive Window		Pencereyi kapat
+Rename	BookmarkBar		Yeniden adlandır
+Find:	WebPositive Window		Bul:
+Script console	WebPositive Window		Betik konsolu
+There was an error setting up the bookmark.	WebPositive Window		Yer imini ayarlarken bir hata oluştu.
+Fonts	Settings Window		Yazıtipleri
+Path	Cookie Manager		Yol
+Bookmarks	WebPositive Window		Yer imleri
+Failed to remove bookmark '%leaf%' from boookmark bar.	BookmarkBar		Yer imleri çubuğundan “%leaf%” yer imi kaldırılamadı.
+Use proxy server to connect to the internet	Settings Window		İnternete bağlanmak için vekil sunucu kullan
+%url finished	WebPositive Window	Loading URL finished. Don't translate variable %url.	%url yüklendi
+Auto-hide interface in full screen mode	Settings Window		Tam ekran kipinde arayüzü kendiliğinden gizle
+Delete	Cookie Manager		Sil
+There was an error retrieving the bookmark folder.\n\nError: %error	WebPositive Window	Don't translate the variable %error	Yer imleri klasörü getirilirken bir hata oluştu.\n\nHata: %error
+(Finish: %date - Over %duration left)	Download Window		(Bitiş: %date — %duration kaldı)
+Open containing folder	Download Window		İndirildiği klasörü aç
+Find previous	WebPositive Window		Öncekini bul
+Full screen	WebPositive Window		Tam ekran
+Downloads in progress	WebPositive		Süren indirmeler
+Copy URL to clipboard	Download Window		URL’yi panoya kopyala
+Do you want to open %addedCount bookmarks all at once?	WebPositive Window	Don't translate variable %addedCount.	%addedCount yer imini aynı anda açmak istediğinizden emin misiniz?
+Clone current page	Settings Window		Geçerli sayfadan bir tane daha aç
+Start page:	Settings Window		Başlangıç sayfası:
+Cancel	Download Window		Vazgeç
+Settings	Settings Window		Ayarlar
+Downloads	WebPositive Window		İndirmeler
+Browse…	Settings Window		Göz at…
+Resume prior session	Settings Window		Bir önceki oturumu sürdür
+Match case	WebPositive Window		BÜYÜK/küçük harf duyarlı
+Proxy password:	Settings Window		Vekil parolası:
+Failed to delete bookmark:\n'%path%'	BookmarkBar		Yer imi silinemedi:\n“%path%”
+Size:	Font Selection view		Boyut:
+Page source	WebPositive Window		Sayfa kaynağı
+Proxy server port:	Settings Window		Vekil sunucu kapısı:
+Error opening downloads folder	Download Window		İndirilenler klasörü açılırken hata
+Show bookmark bar	WebPositive Window		Yer imi çubuğunu göster
+Find	WebPositive Window		Bul
+Standard font:	Settings Window		Standart yazıtipi:
+Open download error	Download Window		İndirilen açılırken hata
+General	Settings Window		Genel
+New tabs:	Settings Window		Yeni sekmeler:
+%url failed	WebPositive Window	Loading URL failed. Don't translate variable %url.	%url yüklenemedi
+Open downloads folder	Download Window		İndirilenler klasörünü aç
+Proxy server	Settings Window		Vekil sunucu
+Darn!	WebPositive		Tüh!
+Decrease size	WebPositive Window		Küçült
+Default fixed font size:	Settings Window		Saptanmış eş aralıklı yazıtipi boyutu:
+Sans serif font:	Settings Window		Sans serif yazıtipi:
+Clear	WebPositive Window		Temizle
+The download could not be opened.	Download Window		İndirilen öge açılamadı.
+Cookies for %s	Cookie Manager		%s için çerezler
+Close	Download Window		Kapat
+WebPositive	System name		WebPositive
+%s - Search term	Settings Window		%s — Arama terimi
+Old name: %s	BookmarkBar		Eski adı: %s
+Expiration	Cookie Manager		Son kullanım süresi
+Reload	WebPositive Window		Yeniden yükle
+Download finished	Download Window		İndirme bitti
+Cookie manager	WebPositive Window		Çerez yöneticisi
+Username:	Authentication Panel		Kullanıcı adı:
+Hide password text	Authentication Panel		Parola metnini gizle
+OK	Authentication Panel		Tamam
+Name	Cookie Manager		Ad
+Remove finished	Download Window		Bitenleri kaldır
+Earlier	WebPositive Window		Daha önce
+Edit	WebPositive Window		Düzen
+Back	WebPositive Window		Geri
+Yesterday	WebPositive Window		Dün
+Quit	WebPositive		Çık
+Download aborted	Download Window		İndirme iptal edildi
+Number of days to keep links in History menu:	Settings Window		Geçmiş menüsünde bağlantıların tutulacağı gün sayısı:
+Password:	Authentication Panel		Parola:
+Forward	WebPositive Window		İleri
+Clear	Console Window		Temizle
+Cut	URL Bar		Kes
+View	WebPositive Window		Görüntü
+Paste	URL Bar		Yapıştır
+Find next	WebPositive Window		Sonrakini bul
+Open search page	Settings Window		Arama sayfasını aç
+New tab	WebPositive Window		Yeni sekme
+Increase size	WebPositive Window		Büyüt
+Today	WebPositive Window		Bugün
+Open location	WebPositive Window		Konum aç
+There are still downloads in progress, do you really want to quit %appname% now?	WebPositive		Hâlâ sürmekte olan indirmeler var, %appname% uygulamasından çıkmayı gerçekten istiyor musunuz?
+New browser window	Download Window		Yeni tarayıcı penceresi
+Open	Download Window		Aç
+New window	WebPositive Window		Yeni pencere
+New windows:	Settings Window		Yeni pencereler:
+The downloads folder could not be opened.\n\nError: %error	Download Window	Don't translate variable %error	İndirilenler klasörü açılamadı.\n\nHata: %error
+Cancel	Authentication Panel		Vazgeç
+Style:	Font Selection view		Biçem:
+There was an error creating the bookmark file.\n\nError: %error	WebPositive Window	Don't translate variable %error	Yer imi dosyası oluşturulurken bir hata oluştu.\n\nHata: %error
+OK	Download Window		Tamam
+Proxy username:	Settings Window		Vekil kullanıcı adı:
+Rename bookmark	BookmarkBar		Yer imini yeniden adlandır
+Manage bookmarks	WebPositive Window		Yer imlerini yönet
+/s)	Download Window	...as in 'per second'	/sn)
+Restart	Download Window		Yeniden başlat
+Serif font:	Settings Window		Serif yazıtipi:
+Apply	Settings Window		Uygula
+There was an error trying to show the Bookmarks folder.\n\nError: %error	WebPositive Window	Don't translate variable %error	Yer imleri klasörünü açmaya çalışırken bir hata oluştu.\n\nHata: %error
+Revert	Settings Window		Eski haline döndür
+Copy	WebPositive Window		Kopyala
+Your CPU is too old and does not support the SSE2 extensions, without which %appname% cannot run. We recommend installing NetSurf instead.	WebPositive		CPU’nuz pek eski ve %appname% uygulamasının çalışması için gerekli olan SSE2 genişletmelerini desteklemiyor. Bunun yerine NetSurf uygulamasını kurmanızı öneririz.
+{0, plural,one{Last line repeated # time.}other{Last line repeated # times.}}	Console Window		{0, plural,one{Son satır # kez yinelendi.}other{Son satır # kez yinelendi.}}
+Default standard font size:	Settings Window		Saptanmış standart yazıtipi boyutu:
+Custom	Settings Window		Özel
+Bookmark this page	WebPositive Window		Bu sayfaya yer imi koy
+Show tabs if only one page is open	Settings Window		Tek bir sayfa açıksa bile sekmeleri göster
+Remove	Download Window		Kaldır
+Close tab	WebPositive Window		Sekmeyi kapat
+About	WebPositive Window		Hakkında
+Continue downloads	WebPositive		İndirmeleri sürdür
+Proxy server requires authentication	Settings Window		Vekil sunucu oturum açma gerektirir
+Cancel	Settings Window		Vazgeç
+Reset size	WebPositive Window		Boyutu sıfırla
+History	WebPositive Window		Geçmiş
+Do you really want to clear the browsing history?	WebPositive Window		Tarama geçmişini temizlemeyi gerçekten istiyor musunuz?
+Find next occurrence of search terms	WebPositive Window	find bar next button tooltip	Arama dizgisinin bir sonraki oluşumunu bul
+Fixed font:	Settings Window		Eş aralıklı yazıtipi
+Quit	WebPositive Window		Çık
+Find previous occurrence of search terms	WebPositive Window	find bar previous button tooltip	Arama dizgisinin önceki oluşumlarını bul
+Remember username and password for this site	Authentication Panel		Bu site için kullanıcı adı ve parolayı hatırla
+(Finish: %date - %duration left)	Download Window		(Bitiş: %date — %duration kaldı)
+Cookie manager	Cookie Manager		Çerez yöneticisi
+Show home button	Settings Window		Ana sayfa düğmesini göster
+Start new session	Settings Window		Yeni oturum başlat
+The cookie jar is empty!	Cookie Manager		Çerez kavanozu boş!
+Value	Cookie Manager		Değer
+Remove missing	Download Window		Bulunamayanları kaldır
+Paste	WebPositive Window		Yapıştır
+Double-click or middle-click to open new tab.	Tab Manager		Yeni bir sekme açmak için çift tıklayın veya orta fare düğmesine basın.
+Next	WebPositive Window		Sonraki
+Bookmark error	WebPositive Window		Yer imi hatası
+OK	WebPositive Window		Tamam
+(%currentSize% of %expectedSize%, %rate%/s)	Download Window		(%currentSize%/%expectedSize%, %rate%/sn)
+Save page as…	WebPositive Window		Sayfayı farklı kaydet…
+Zoom text only	WebPositive Window		Yalnızca metni büyüt
+Page source error	WebPositive Window		Sayfa kaynağı hatası
+Auto-hide mouse pointer	Settings Window		Fare imlecini kendiliğinden gizle
+Requesting %url	WebPositive Window		%url isteniyor
+Flags	Cookie Manager		Bayraklar
+Window	WebPositive Window		Pencere
+Proxy server address:	Settings Window		Vekil sunucu adresi:
+Search page:	Settings Window		Arama sayfası:
+Settings	WebPositive Window		Ayarlar
+Show in Tracker	BookmarkBar		İzleyici’de göster
+Clear	URL Bar		Temizle
+Loading %url	WebPositive Window		%url yükleniyor
+The quick brown fox jumps over the lazy dog.	Font Selection view	Don't translate this literally ! Use a phrase showing all chars from A to Z.	Pijamalı hasta, yağız şoföre çabucak güvendi.
+OK	BookmarkBar		Tamam
+Start up:	Settings Window		Başlangıç:
+Confirmation	WebPositive Window		Onaylama
+Session cookie	Cookie Manager		Oturum çerezi
+New name:	BookmarkBar		Yeni adı:
+No SSE2 support	WebPositive		SSE2 desteği yok
+Open all	WebPositive Window		Tümünü aç
+Cut	WebPositive Window		Kes
+Downloads	Download Window		İndirmeler
+Open blank page	Settings Window		Boş sayfa aç
+Clear history	WebPositive Window		Geçmişi sil
+Cancel	WebPositive Window		Vazgeç
+Script console	Console Window		Betik konsolu
+Copy	URL Bar		Kopyala
+Open in new tab	BookmarkBar		Yeni sekmede aç
+Open start page	Settings Window		Başlangıç sayfasını aç

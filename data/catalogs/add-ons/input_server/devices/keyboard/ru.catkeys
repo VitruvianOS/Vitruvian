@@ -1,10 +1,11 @@
-1	russian	x-vnd.Haiku-KeyboardInputServerDevice	2536418998
-If the application will not quit you may have to kill it.	Team monitor		Если приложение не завершится, возможно вам понадобиться убить его.
+1	russian	x-vnd.Haiku-KeyboardInputServerDevice	131044710
+If the application will not quit you may have to kill it.	Team monitor		Если приложение не завершится, остановите его принудительно.
 Quit application	Team monitor		Завершить приложение
+Open Terminal	Team monitor		Запустить Терминал
+{0, plural,one{Hold CONTROL+ALT+DELETE for # second to reboot.}other{Hold CONTROL+ALT+DELETE for # seconds to reboot.}}	Team monitor		{0, plural,one{Удерживайте CONTROL+ALT+DELETE в течение # секунды для перезагрузки.}other{Удерживайте CONTROL+ALT+DELETE в течение # секунд для перезагрузки.}}
 Restart the desktop	Team monitor		Перезапустить рабочий стол
 Force reboot	Team monitor		Перезагрузить принудительно
-Select an application from the list above and click one of the buttons 'Kill application' and 'Quit application' in order to close it.\n\nHold CONTROL+ALT+DELETE for %ld seconds to reboot.	Team monitor		Чтобы закрыть приложение выберите его из списка и нажмите на кнопку 'Убить приложение' или 'Завершить приложение'.\n\nЗажмите CONTROL+ALT+DELETE на %ld секунд для перезагрузки.
 Team monitor	Team monitor		Монитор процессов
 Kill application	Team monitor		Убить приложение
 Cancel	Team monitor		Отмена
-(This team is a system component)	Team monitor		(Этот процесс является системным компонентом)
+(This team is a system component)	Team monitor		(Этот процесс - компонент системы)

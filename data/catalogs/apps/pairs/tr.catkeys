@@ -1,0 +1,18 @@
+1	turkish	x-vnd.Haiku-Pairs	156463394
+Pairs	System name		Eşler
+Quit	PairsWindow		Çık
+Medium	PairsWindow		Orta
+Game	PairsWindow		Oyun
+Expert (8x8)	PairsWindow		Uzman (8 × 8)
+New	PairsWindow		Yeni
+OK	Pairs		Tamam
+You completed the game in {0, plural, one{# click} other{# clicks}}.\n	PairsWindow		Oyunu {0, plural, other{# tıkta}} bitirdiniz.\n
+Small	PairsWindow		Küçük
+Size	PairsWindow		Boyut
+%app%\n\twritten by Ralf Schülke\n\tCopyright 2008-2010, Haiku Inc.\n\n	PairsWindow		%app%\n\tYazan: Ralf Schülke\n\tTelif hakkı 2008–2025, Haiku Inc.\n\n
+Quit game	PairsWindow		Oyundan çık
+Large	PairsWindow		Büyük
+Beginner (4x4)	PairsWindow		Acemi (4 × 4)
+Intermediate (6x6)	PairsWindow		Deneyimli (6 × 6)
+%s did not find enough vector icons to start; it needs at least %zu, found %zu.\n	Pairs	Don't translate \"%s\" and \"%zu\", but make sure to keep them.	%s, başlamak için yeterli sayıda vektör simge bulamadı; en az %zu gerekirken %zu bulundu.\n
+New game	PairsWindow		Yeni oyun

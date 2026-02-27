@@ -1,8 +1,7 @@
-1	hungarian	x-vnd.Haiku-Network	3694799483
+1	hungarian	x-vnd.Haiku-Network	3044115400
+no link	IntefaceView		nincs kapcsolat
 Ethernet device	InterfaceListItem		Vezetékes eszköz
 Link speed:	IntefaceView		Kapcsolat sebessége:
-disconnected	IntefaceView		leválasztva
-IP Address:	IntefaceAddressView		IP-cím:
 WPA	WPA protected network		WPA
 Network:	IntefaceView		Hálózat:
 Received:	IntefaceView		Fogadott:
@@ -12,8 +11,10 @@ Other	NetworkWindow		Egyéb
 Sent:	IntefaceView		Küldött:
 Gateway:	IntefaceAddressView		Átjáró:
 The netmask defines your local network	IntefaceAddressView		A hálózati masz határozza meg a helyi hálózatot
+unknown	IntefaceView		ismeretlen
 Your IP address	IntefaceAddressView		Az Ön IP-címe
 DHCP	IntefaceAddressView		DHCP
+IP address:	IntefaceAddressView		IP-cím:
 Netmask:	IntefaceAddressView		Hálózati maszk:
 EAP	EAP protected network		EAP
 Services	NetworkWindow		Szolgáltatások
@@ -23,30 +24,33 @@ off	ServiceListItem		ki
 WEP	WEP protected network		WEP
 <no wireless networks found>	IntefaceView		<nem található vezetéknélküli hálózat>
 Enable	IntefaceView		Engedélyezés
-connected	IntefaceView		kapcsolódva
+connected	IntefaceView		csatlakozva
 Apply	IntefaceAddressView		Alkalmaz
 Disable	ServiceView		Letiltás
 WPA2	WPA2 protected network		WPA2
 Show network status in Deskbar	NetworkWindow		A felület megjelenítése az Asztalsávon
+no stateful configuration	IntefaceView		nincs működő konfiguráció
 Mode:	IntefaceAddressView		Mód:
-connected	InterfaceListItem		kapcsolódva
+connected	InterfaceListItem		csatlakozva
 OK	NetworkWindow		Rendben
 Static	IntefaceAddressView		Állandó
 launch error	NetworkWindow		indítási hiba
 Renegotiate	IntefaceView		Újracsatlakozás
+configuring	IntefaceView		konfigurálás
 MAC address:	IntefaceView		MAC-cím:
 %name% (%authenticationMode%)	WirelessNetworkMenuItem		%name% (%authenticationMode%)
 disabled	InterfaceListItem		letiltva
 Dial-up connection	InterfaceListItem		Telefonos kapcsolat
 on	ServiceListItem		be
 The method for obtaining an IP address	IntefaceAddressView		Az IP-cím megszerzésének módja
+disconnected	InterfaceListItem		szétkapcsolva
 Automatic	IntefaceAddressView		Automatikus
 Choose automatically	IntefaceView		Automatikus választás
 Status:	IntefaceView		Állapot:
 Disable	IntefaceView		Letiltás
 Manage…	NetworkWindow		Kezelés…
 open	Open network		titkosítatlan
-Network	NetworkWindow		Hálózat
+Network	System name		Hálózat
 Your gateway to the internet	IntefaceAddressView		Az átjáró az internetre
 Enable	ServiceView		Engedélyezés
 Wireless device	InterfaceListItem		Vezetéknélküli eszköz

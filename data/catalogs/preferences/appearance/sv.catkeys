@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-Appearance	663472720
+1	swedish	x-vnd.Haiku-Appearance	838951555
 Control border	Colors tab		Kontrollkant
 Control mark	Colors tab		Kontroll märke
 Off	AntialiasingSettingsView		Av
@@ -36,16 +36,18 @@ Menu font:	Font view		Menu font:
 Bold font:	Font view		Fetstil
 %decorName\n\nAuthors:\n\t%decorAuthors\n\nURL: %decorURL\nLicense: %decorLic\n\n%decorDesc\n	DecorSettingsView		%decorName\n\nUpphovsmän:\n\t%decorAuthors\n\nURL: %decorURL\nLisens: %decorLic\n\n%decorDesc\n
 Choose Decorator	DecorSettingsView		Välj dekor
-Strong	AntialiasingSettingsView		Framhävd
 Failure	Colors tab		Misslyckande
+Strong	AntialiasingSettingsView		Framhävd
 Double:	DecorSettingsView		Dubbel
 Selected menu item text	Colors tab		Textfärg för valt menyalternativ
 Size:	Font Selection view		Storlek:
 Panel background	Colors tab		Panelbakgrund
 Plain font:	Font view		Vanlig font:
-Window tab text	Colors tab		Fönsterflik text
+Automatically pick secondary colors	Colors tab		Välj automatiskt sekundära färger
+Window tab text	Colors tab		Fönsterflikstext
 Navigation pulse	Colors tab		Navigeringspuls
 LCD subpixel	AntialiasingSettingsView		LCD-subpixel
+Progress bar	Colors tab		Förloppsindikator
 Window tab	Colors tab		Fösterflik
 Link text	Colors tab		Länktext
 Tooltip background	Colors tab		Hjälprutsbakgrund
@@ -74,6 +76,5 @@ Inactive window border	Colors tab		Inaktiverad fönsterkant
 Colors	APRWindow		Färger
 About control look	DecorSettingsView		Om ControlLook
 Control highlight	Colors tab		Framhävd kontroll
-Status bar	Colors tab		Statusrad
 Link hover	Colors tab		Hovrande länk
 Single:	DecorSettingsView		Enkel:

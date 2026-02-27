@@ -1,0 +1,10 @@
+1	thai	x-vnd.Haiku-Sounds	831874831
+Sounds	System name		เสียง
+Other…	HWindow		อื่นๆ
+Sound file:	HWindow		ไฟล์เสียง:
+<none>	HEventList		<none>
+OK	HEventList		ตกลง
+Sound	HEventList		เสียง
+Event	HEventList		เหตุการณ์
+<none>	HWindow		<none>
+No such file or directory	HEventList		ไม่พบไฟล์หรือโฟลเดอร์

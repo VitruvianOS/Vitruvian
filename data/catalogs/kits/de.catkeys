@@ -1,12 +1,12 @@
-1	german	x-vnd.Haiku-libbe	3337473349
-{0, plural, one{# byte} other{# bytes}}	StringForSize		{0, plural, one{# Byte} other{# Bytes}}
+1	german	x-vnd.Haiku-libbe	310849835
 All Rights Reserved.	AboutWindow		Alle Rechte vorbehalten.
 gold master	AboutWindow		Golden Master
 Undo	TextView		Rückgängig
+OK	PrintJob		OK
+OK	Dragger		OK
 gamma	AboutWindow		Gamma
 development	AboutWindow		Entwicklung
-OK	Dragger		OK
-OK	PrintJob		OK
+{0, plural, one{%s byte/s} other{%s bytes/s}}	StringForRate	units per second	{0, plural, one{%s Byte/s} other{%s Bytes/s}}
 Print Server is not responding.	PrintJob		Drucker-Server reagiert nicht.
 About %app%	AboutMenuItem		Über %app%
 Warning	Dragger		Warnung
@@ -14,15 +14,20 @@ Green:	ColorControl		Grün:
 Redo	TextView		Wiederholen
 No pages to print!	PrintJob		Keine Seiten zum Drucken!
 beta	AboutWindow		Beta
+%s MiB	StringForSize	size unit	%s MiB
 OK	ZombieReplicantView		OK
 Cut	TextView		Ausschneiden
-%3.2f GiB	StringForSize		%3.2f GiB
+Default	Default decorator about box		Standard
 Can't delete this replicant from its original application. Life goes on.	Dragger		Dieser Replikant kann nicht von seinem Ursprungsprogramm entfernt werden. Das Leben geht weiter.
+%s KiB	StringForSize	size unit	%s KiB
 Error	ZombieReplicantView		Fehler
 Paste	TextView		Einfügen
 OK	AboutWindow		OK
-Special Thanks:	AboutWindow		Besonderen Dank an:
-%.2f TiB	StringForSize		%.2f TiB
+%s MiB/s	StringForRate	units per second	%s MiB/s
+%s TiB	StringForSize	size unit	%s TiB
+Default Haiku window decorator.	Default decorator about box		Standard-Dekorator aller Fenster
+%s GiB	StringForSize	size unit	%s GiB
+%s B	StringForSize	size unit, narrow space	%s B
 Remove replicant	Dragger		Replikant entfernen
 Version	AboutWindow		Version
 Red:	ColorControl		Rot:
@@ -30,13 +35,16 @@ Red:	ColorControl		Rot:
 Copy	TextView		Kopieren
 Select all	TextView		Alles auswählen
 alpha	AboutWindow		Alpha
-%3.2f MiB	StringForSize		%3.2f MiB
 Error	PrintJob		Fehler
+%s TiB/s	StringForRate	units per second	%s TiB/s
+About %app…	Dragger		Über %app …
 About %app%	AboutWindow		Über %app%
-About %app…	Dragger		Über %app...
-Version history:	AboutWindow		Historie:
+{0, plural, one{%s byte} other{%s bytes}}	StringForSize	size unit	{0, plural, one{%s Byte} other{%s Bytes}}
+%s GiB/s	StringForRate	units per second	%s GiB/s
+Version history:	AboutWindow		Versionsgeschichte:
 Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Das Ursprungsprogramm für den Replikanten konnte nicht gefunden werden, da keine Programm-Signatur zur Verfügung steht.\n%error
-%3.2f KiB	StringForSize		%3.2f KiB
+%s KiB/s	StringForRate	units per second	%s KiB/s
 Blue:	ColorControl		Blau:
+Special thanks:	AboutWindow		Besonderer Dank an:
 Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		Replikant für \"%description\" konnte nicht erstellt werden.\n%error
 Written by:	AboutWindow		Von:

@@ -1,0 +1,11 @@
+1	thai	x-vnd.Haiku-JPEG2000Translator	483400153
+High	JPEG2000Translator		สูง
+Low	JPEG2000Translator		ต่ำ
+Output quality	JPEG2000Translator		คุณภาพผลที่แสดง
+JPEG2000 images	JPEG2000Translator		ภาพ JPEG2000
+About	JPEG2000Translator		เกี่ยวกับ
+Write black-and-white images as RGB24	JPEG2000Translator		เขียนภาพขาวดำเป็น RGB24
+Version %d.%d.%d	JPEG2000Translator		เวอร์ชั่น %d.%d.%d
+Read	JPEG2000Translator		อ่าน
+Read greyscale images as RGB32	JPEG2000Translator		อ่านภาพระดับสีเทาเป็น RGB32
+Write	JPEG2000Translator		เขียน

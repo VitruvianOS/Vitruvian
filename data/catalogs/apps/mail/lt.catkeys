@@ -1,4 +1,4 @@
-1	lithuanian	x-vnd.Be-MAIL	3209807243
+1	lithuanian	x-vnd.Be-MAIL	2282345333
 Set to Saved	Mail		Perkelti į Išsaugotus
 Your main text contains %ld unencodable characters. Perhaps a different character set would work better? Hit Send to send it anyway (a substitute character will be used in place of the unencodable ones), or choose Cancel to go back and try fixing it up.	Mail		Laiško tekste yra %lt simboliai (-ų), kurių negalima užkoduoti naudojant pasirinktą koduotę. Galbūt norėtumėte parinkti kitą koduotę? Ar norite laišką išsiųsti nepaisant šios problemos (netinkami simboliai bus pakeisti tinkamais)? Jeigu norite pabandyti problemą išspręsti, rinkitės „Atsisakyti“.
 Text wrapping:	Mail		Teksto laužymas:
@@ -33,12 +33,8 @@ Removing attachments from a forwarded mail is not yet implemented!\nIt will not 
 Previous message	Mail		Ankstesnis laiškas
 (Address unavailable)	Mail		(Adresas nenurodytas)
 Mail	System name		Paštas
-Enclosure: %name% (Type: %type%)	Mail	Don't translate the variables %name% and %type%.	Priedas – %name% (tipas – %type%)
 Copy link location	Mail		Kopijuoti saito adresą
-Attachments: 	Mail		Priedai:
-Remove enclosure	Mail		Pašalinti priedą
 Next	Mail		Kitas
-Attachments:	Mail		Priedai:
 Show icons only	Mail		Rodyti tik piktogramas
 Subject:	Mail		Tema:
 OK	Mail		Gerai
@@ -56,7 +52,6 @@ Reply to sender	Mail		Atsakyti siuntėjui
 Copy	Mail		Kopijuoti
 Add signature	Mail		Pridėti prierašą
 %n - Full name	Mail		%n – pilnas vardas
-Remove quote	Mail		Šalinti citatą
 Signature	Mail		Prierašas
 Use default account	Mail		Naudoti numatytąją paskyrą
 draft	B_USER_DIRECTORY/mail/draft		Juodraščiai
@@ -93,8 +88,6 @@ To:	Mail		Kam:
 Need Tracker to move items to trash	Mail		Kad galėtumėte mesti objektus Šiukšlinėn, turi būti paleistas Pėdsekys
 The mail_daemon could not be started:\n\t	Mail		Pašto tarnybos (mail_daemon) paleisti nepavyko:\n\t
 <no account found>	Mail		<paskyra nerasta>
-Mail couldn't find its dictionary.	Mail		Pašto programai nepavyko rasti žodyno.
-Mail preferences	Mail		Pašto nuostatos
 helpful message	Mail		naudingas pranešimas
  Read 	Mail		Perskaitytas
 Font:	Mail		Šriftas:
@@ -147,7 +140,6 @@ New mail message	Mail		Naujas laiškas
 An error occurred trying to open this signature.	Mail		Bandant atverti šį prierašą, įvyko klaida.
 Edit signatures…	Mail		Taisyti prierašus…
 User interface	Mail		Naudotojo sąsaja
-Quote	Mail		Citata
 Inconsistency occurred in the undo/redo buffer.	Mail		Nesutapimas atšaukti/grąžinti buferyje.
 Remove attachment	Mail		Šalinti priedą
 Set to…	Mail		Nustatyti būseną į…
@@ -160,4 +152,3 @@ Delete	Mail		Šalinti
 Put your favorite e-mail queries and query templates in this folder.	Mail		Savo mėgstamas el. pašto užklausas ir jų šablonus dėkite į šį aplanką.
 Couldn't open this signature. Sorry.	Mail		Apgailestaujame, tačiau šio prierašo atverti nepavyko.
 Revert	Mail		Atšaukti pakeitimus
-Add enclosure…	Mail		Pridėti failą…

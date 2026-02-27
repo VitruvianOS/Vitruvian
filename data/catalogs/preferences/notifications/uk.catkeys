@@ -1,35 +1,32 @@
-1	ukrainian	x-vnd.Haiku-Notifications	332239666
+1	ukrainian	x-vnd.Haiku-Notifications	1250384010
 Lower left	GeneralView		Нижній лівий
-Application does not have a valid signature	NotificationView	Alert message	Додаток не має діючого підпису
+Application does not have a valid signature	NotificationView	Alert message	Програма не має дійсного підпису
 Status	NotificationView		Стан
 Add…	NotificationView		Додати…
 Lower right	GeneralView		Нижній правий
-Muted	NotificationView		Приглушити
-Window width:	GeneralView		Ширина вікна:
+Muted	NotificationView		Без звуку
  is already listed	NotificationView	Alert message	 вже перелічено
-OK	PrefletWin		Гаразд
-Notifications	PrefletWin		Оповіщення
-Notifications preflet sample	PrefletWin		Зразок префлета повідомлень
-Mute notifications from this application	NotificationView		Відключити оповіщення для цієї програми
-pixels	GeneralView		пікселі
-seconds	GeneralView		секунд
-Revert	PrefletWin		Повернути
+OK	PrefletWin		ОК
+Mute notifications from this application	NotificationView		Відключити сповіщення від цієї програми
+wide	GeneralView	Window width: Slider high text	широке
+narrow	GeneralView	Window width: Slider low text	вузьке
+Revert	PrefletWin		Відкат змін
 Applications	PrefletView		Програми
-Timeout:	GeneralView		Таймаут:
+{0, plural, =1{Timeout: # second}other{Timeout: # seconds}}	GeneralView		{0, plural, =1{Тайм-аут: # секунда}few{Тайм-аут: # секунди}other{Тайм-аут: # секунд}}
 Upper right	GeneralView		Верхній правий
 An error occurred saving the preferences.\nIt's possible you are running out of disk space.	PrefletWin		Сталася помилка при збереженні налаштувань.\nМожливо бракує дискового простору.
-Defaults	PrefletWin		Типове
+Defaults	PrefletWin		Типові настройки
 Upper left	GeneralView		Верхній лівий
+Window width	GeneralView		Вікно по ширині
 Applications	NotificationView		Програми
-Width:	GeneralView		Ширина:
-General	PrefletView		Основні
-OK	NotificationView		Гаразд
+General	PrefletView		Загальні
+OK	NotificationView		ОК
 Follow Deskbar	GeneralView		Слідкувати за Deskbar
-Notifications	System name		Оповіщення
+Notifications	System name		Notifications
 Allowed	NotificationView		Дозволити
 Duration:	GeneralView		Тривалість:
-Application	NotificationView		Програма
 Enable notifications	GeneralView		Включити оповіщення
+Application	NotificationView		Програма
 This is a test notification message	PrefletWin		Це тестове повідомлення
-Remove	NotificationView		Видалити
+Remove	NotificationView		Вилучити
 Position:	GeneralView		Позиція:

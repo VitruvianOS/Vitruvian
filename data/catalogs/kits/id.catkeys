@@ -1,12 +1,12 @@
-1	indonesian	x-vnd.Haiku-libbe	3337473349
-{0, plural, one{# byte} other{# bytes}}	StringForSize		{0, plural, one{# byte} other{# bytes}}
+1	indonesian	x-vnd.Haiku-libbe	2599604529
 All Rights Reserved.	AboutWindow		Hak Cipta dilindungi undang-undang.
 gold master	AboutWindow		master emas
 Undo	TextView		Batal
+OK	PrintJob		OKE
+OK	Dragger		OKE
 gamma	AboutWindow		gamma
 development	AboutWindow		pengembangan
-OK	Dragger		OKE
-OK	PrintJob		OKE
+{0, plural, one{%s byte/s} other{%s bytes/s}}	StringForRate	units per second	{0, plural, one{%s byte/s} other{%s bytes/s}}
 Print Server is not responding.	PrintJob		Server Cetak tidak merespon.
 About %app%	AboutMenuItem		Tentang %app%
 Warning	Dragger		Peringatan
@@ -14,15 +14,20 @@ Green:	ColorControl		Hijau:
 Redo	TextView		Ulangi
 No pages to print!	PrintJob		Tidak ada halaman untuk dicetak!
 beta	AboutWindow		beta
+%s MiB	StringForSize	size unit	%s MiB
 OK	ZombieReplicantView		OKE
 Cut	TextView		Potong
-%3.2f GiB	StringForSize		%3.2f GiB
+Default	Default decorator about box		Bawaan
 Can't delete this replicant from its original application. Life goes on.	Dragger		Tidak dapat menghapus replicant ini dari aplikasi aslinya. Hidup terus berlanjut.
+%s KiB	StringForSize	size unit	%s KiB
 Error	ZombieReplicantView		Galat
 Paste	TextView		Tempel
 OK	AboutWindow		OKE
-Special Thanks:	AboutWindow		Terima kasih terkhusus:
-%.2f TiB	StringForSize		%.2f TiB
+%s MiB/s	StringForRate	units per second	%s MiB/d
+%s TiB	StringForSize	size unit	%s TiB
+Default Haiku window decorator.	Default decorator about box		Dekorator window bawaan Haiku.
+%s GiB	StringForSize	size unit	%s GiB
+%s B	StringForSize	size unit, narrow space	%s B
 Remove replicant	Dragger		Hapus replicant
 Version	AboutWindow		Versi
 Red:	ColorControl		Merah:
@@ -30,13 +35,15 @@ Red:	ColorControl		Merah:
 Copy	TextView		Salin
 Select all	TextView		Pilih semua
 alpha	AboutWindow		alpha
-%3.2f MiB	StringForSize		%3.2f MiB
 Error	PrintJob		Galat
-About %app%	AboutWindow		Tentang %app%
+%s TiB/s	StringForRate	units per second	%s TiB/d
 About %app…	Dragger		Tentang %app…
+About %app%	AboutWindow		Tentang %app%
+{0, plural, one{%s byte} other{%s bytes}}	StringForSize	size unit	{0, plural, one{%s bita} other{%s bita}}
+%s GiB/s	StringForRate	units per second	%s GiB/d
 Version history:	AboutWindow		Sejarah versi:
 Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Tidak dapat menemukan aplikasi untuk replicant tersebut. Tidak ada tanda tangan aplikasi yang disediakan.\n%error
-%3.2f KiB	StringForSize		%3.2f KiB
+%s KiB/s	StringForRate	units per second	%s KiB/d
 Blue:	ColorControl		Biru:
 Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		Tidak dapat menciptakan replicant untuk \"%description\".\n%error
 Written by:	AboutWindow		Ditulis oleh:

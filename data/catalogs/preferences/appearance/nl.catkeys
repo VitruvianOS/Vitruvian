@@ -1,4 +1,4 @@
-1	dutch; flemish	x-vnd.Haiku-Appearance	583615507
+1	dutch; flemish	x-vnd.Haiku-Appearance	3598979163
 Control border	Colors tab		Keuzerand
 Control mark	Colors tab		Besturingsteken
 Off	AntialiasingSettingsView		Uit
@@ -8,10 +8,12 @@ Defaults	APRWindow		Standaardwaarden
 Shadow	Colors tab		Schaduw
 Document background	Colors tab		Achtergrond document
 List background	Colors tab		Achtergrond van lijst
+No effect on running applications	DecorSettingsView		Geen effect op actieve toepassingen.
 Fixed font:	Font view		Vast lettertype:
 Appearance	System name		Uiterlijk
 Reduce colored edges filter strength:	AntialiasingSettingsView		Reductie filtersterkte gekleurde randen:
 Glyph hinting:	AntialiasingSettingsView		Glyph hinting:
+Default Haiku ControlLook	DecorSettingsView		Standaard Haiku InterfaceStijl
 Menu item text	Colors tab		Tekst menu-item
 About decorator	DecorSettingsView		Over de decorator
 Antialiasing menu	AntialiasingSettingsView		Anti-aliasing menu
@@ -34,8 +36,8 @@ Menu font:	Font view		Lettertype voor menu:
 Bold font:	Font view		Vet lettertype:
 %decorName\n\nAuthors:\n\t%decorAuthors\n\nURL: %decorURL\nLicense: %decorLic\n\n%decorDesc\n	DecorSettingsView		%decorName\n\nAuteurs:\n\t%decorAuthors\n\nURL: %decorURL\nLicentie: %decorLic\n\n%decorDesc\n
 Choose Decorator	DecorSettingsView		Decorator kiezen
-Strong	AntialiasingSettingsView		Sterk
 Failure	Colors tab		Mislukt
+Strong	AntialiasingSettingsView		Sterk
 Double:	DecorSettingsView		Dubbel:
 Selected menu item text	Colors tab		Tekst geselecteerd menu-item
 Size:	Font Selection view		Grootte:
@@ -47,7 +49,9 @@ LCD subpixel	AntialiasingSettingsView		LCD-subpixel
 Window tab	Colors tab		Venstertab
 Link text	Colors tab		Linktekst
 Tooltip background	Colors tab		Achtergrond Tooltip
+ControlLook:	DecorSettingsView		InterfaceStijl:
 Scroll bar thumb	Colors tab		Schuifbalkknop
+Default	DecorSettingsView		Standaard
 Link visited	Colors tab		Bezochte link
 Selected menu item border	Colors tab		Rand geselecteerd menu-item
 Tooltip text	Colors tab		Tekst Tooltip
@@ -63,11 +67,12 @@ Antialiasing type:	AntialiasingSettingsView		Anti-aliasingtype:
 Panel text	Colors tab		Tekst paneel
 Hinting menu	AntialiasingSettingsView		Hinting-menu
 Scroll bar:	DecorSettingsView		Schuifbalk:
+Choose ControlLook	DecorSettingsView		InterfaceStijl kiezen
 Monospaced fonts only	AntialiasingSettingsView		Alleen niet-proportionele lettertypes
 Document text	Colors tab		Tekst document
 Inactive window border	Colors tab		Rand van een inactief venster
 Colors	APRWindow		Kleuren
+About control look	DecorSettingsView		Over de interface stijl
 Control highlight	Colors tab		Keuze-accent
-Status bar	Colors tab		Statusbalk
 Link hover	Colors tab		Zweven over link
 Single:	DecorSettingsView		Enkele:

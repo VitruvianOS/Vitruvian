@@ -1,0 +1,17 @@
+1	thai	x-vnd.Haiku-NetworkStatus	844078452
+Quit	NetworkStatusView		ออก
+Unknown	NetworkStatusView		ไม่รู้จัก
+Launching the network preflet failed.\n\nError: 	NetworkStatusView		การเรียกใช้ preflet เครือข่ายล้มเหลว\n\nข้อผิดพลาด:
+Install in Deskbar	NetworkStatus		ติดตั้งในเดสก์บาร์
+Open network preferences…	NetworkStatusView		เปิดการตั้งค่าเครือข่าย
+NetworkStatus	System name		สถานะเน็ตเวิร์ค
+OK	NetworkStatusView		ตกลง
+No link	NetworkStatusView		ไม่มีลิงก์
+Could not join wireless network:\n	NetworkStatusView		ไม่สามารถเข้าร่วมเครือข่ายไร้สาย:\n
+Network Status	NetworkStatusView		สถานะเน็ตเวิร์ค
+Deskbar is not running, giving up.	NetworkStatus		เดสก์บาร์ไม่ทำงาน กำลังหยุด
+No stateful configuration	NetworkStatusView		ไม่มีการกำหนดค่า stateful
+%ifaceName information:\n	NetworkStatusView		%ifaceName ข้อมูล:\n
+Run in window	NetworkStatus		ทำงานในหน้าต่าง
+<no wireless networks found>	NetworkStatusView		<no wireless networks found>
+Configuring	NetworkStatusView		การกำหนดค่า

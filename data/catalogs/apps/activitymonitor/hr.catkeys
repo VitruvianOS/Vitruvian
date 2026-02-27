@@ -1,33 +1,30 @@
-1	croatian	x-vnd.Haiku-ActivityMonitor	2555903350
-Always on top	ActivityWindow		Uvijek na vrhu
-Add graph	ActivityWindow		Dodaj grafikon
+1	croatian	x-vnd.Haiku-ActivityMonitor	1061315801
 Teams	DataSource		Timovi
-MiB	DataSource		MiB
-CPU usage (combined)	DataSource		CPU upotreba (kombinirano)
-CPU	DataSource		CPU
-Used memory	DataSource		Korištena memorija
-Apps	DataSource		Programi
-Settings	ActivityWindow		Postavke
-Receiving	DataSource		Primanje
-Settings…	ActivityWindow		Postavke...
-Ports	DataSource		Portovi
-Sending	DataSource		Slanje
-Update time interval:	SettingsWindow		Dopuni vremenski interval:
-TX	DataSource	Shorter version for Sending	TX
-Quit	ActivityWindow		Isključi
-Remove graph	ActivityView		Ukloni grafikon
-%lld sec.	SettingsWindow		%lld sek.
-%lld ms	SettingsWindow		%lld ms
-CPU usage	DataSource		CPU upotreba
-%.1f MiB	DataSource		%.1f MB
-ActivityMonitor	System name		Nadzoraktivnosti
-Running applications	DataSource		Pokretanje programa
 Semaphores	DataSource		Semafori
+TX	DataSource	Shorter version for Sending	TX
+%lld ms	SettingsWindow		%lld ms
+Running applications	DataSource		Pokretanje programa
+CPU usage (combined)	DataSource		CPU upotreba (kombinirano)
+Receiving	DataSource		Primanje
+Remove graph	ActivityView		Ukloni grafikon
 Swap space	DataSource		Swap prostor
-Swap	DataSource		Swap
-File	ActivityWindow		Datoteka
-usage	DataSource		upotreba
-Additional items	ActivityView		Dodatne stavke
-Network receive	DataSource		Mreža prima
-Memory	DataSource		Memorija
+CPU	DataSource		CPU
+ActivityMonitor	System name		Nadzoraktivnosti
+Update time interval:	SettingsWindow		Dopuni vremenski interval:
 RX	DataSource	Shorter version for Receiving.	RX
+Settings…	ActivityWindow		Postavke...
+Memory	DataSource		Memorija
+CPU usage	DataSource		CPU upotreba
+Quit	ActivityWindow		Isključi
+Settings	ActivityWindow		Postavke
+Used memory	DataSource		Korištena memorija
+File	ActivityWindow		Datoteka
+Ports	DataSource		Portovi
+Additional items	ActivityView		Dodatne stavke
+Apps	DataSource		Programi
+Add graph	ActivityWindow		Dodaj grafikon
+Sending	DataSource		Slanje
+Always on top	ActivityWindow		Uvijek na vrhu
+Swap	DataSource		Swap
+%lld sec.	SettingsWindow		%lld sek.
+Network receive	DataSource		Mreža prima

@@ -1,10 +1,11 @@
-1	indonesian	x-vnd.Haiku-KeyboardInputServerDevice	2536418998
+1	indonesian	x-vnd.Haiku-KeyboardInputServerDevice	131044710
 If the application will not quit you may have to kill it.	Team monitor		Jika aplikasi tidak mau keluar anda mungkin harus mematikannya.
-Quit application	Team monitor		Menghentikan aplikasi
-Restart the desktop	Team monitor		Restart desktop
+Quit application	Team monitor		Keluar aplikasi
+Open Terminal	Team monitor		Buka Terminal
+{0, plural,one{Hold CONTROL+ALT+DELETE for # second to reboot.}other{Hold CONTROL+ALT+DELETE for # seconds to reboot.}}	Team monitor		{0, plural,one{Tahan CONTROL+ALT+DELETE selama # detik untuk mulai ulang.}other{Tahan CONTROL+ALT+DELETE selama # detik untuk mulai ulang.}}
+Restart the desktop	Team monitor		Mulai ulang desktop
 Force reboot	Team monitor		Paksa restart
-Select an application from the list above and click one of the buttons 'Kill application' and 'Quit application' in order to close it.\n\nHold CONTROL+ALT+DELETE for %ld seconds to reboot.	Team monitor		Pilih aplikasi dari daftar diatas dan klik satu dari tombol 'matikan aplikasi' dan 'Meninggalkan aplikasi' untuk menutupnya.\n\nTahan CONTROL+ALT+DELETE for %ld detik untuk restart.
-Team monitor	Team monitor		Monitor tim
+Team monitor	Team monitor		Pemantau tim
 Kill application	Team monitor		Matikan aplikasi
 Cancel	Team monitor		Batal
 (This team is a system component)	Team monitor		(Tim ini adalah komponen sistem)

@@ -1,11 +1,10 @@
-1	indonesian	x-vnd.Haiku-PNGTranslator	2504765797
-Version %d.%d.%d, %s	PNGTranslator		Versi %d.%d.%d, %s
-Interlace Option	PNGTranslator		Opsi Jalin
-PNG Interlace Menu	PNGTranslator		Menu menjalin PNG
-PNG image	PNGTranslator		Gambar PNG
+1	indonesian	x-vnd.Haiku-PNGTranslator	993682334
 PNG Settings	PNGTranslator		Pengaturan PNG
-PNG image translator	PNGTranslator		Penerjemah gambar PNG
 None	PNGTranslator		Tidak ada
-PNG images	PNGTranslator		Gambar PNG
-Interlacing type:	PNGTranslator		Tipe interlacing:
+PNG image	PNGTranslator		Gambar PNG
+PNG images	PNGTranslator		Citra PNG
+Interlacing type:	PNGTranslator		Jenis interlacing:
 PNGTranslator Settings	PNGTranslator		Pengaturan PNGTranslator
+Version %d.%d.%d, %s	PNGTranslator		Versi %d.%d.%d, %s
+PNG image translator	PNGTranslator		Penerjemah gambar PNG
+Interlace Option	PNGTranslator		Opsi Interlace

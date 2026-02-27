@@ -15,7 +15,7 @@ Format:	RecorderWindow		Format:
 Sound List	RecorderWindow		Dateiliste
 Compression: 	RecorderWindow		Komprimierung:
 Rewind	RecorderWindow		Zurückspulen
-Sample rate:	RecorderWindow		Samplerate:
+Sample rate:	RecorderWindow		Abtastrate:
 Invalid audio files	RecorderWindow		Ungültige Audiodateien
  seconds	RecorderWindow		Sekunden
 OK	RecorderWindow		OK
@@ -23,7 +23,7 @@ Cannot open the temporary file created to hold the new recording	RecorderWindow	
 Input:	RecorderWindow		Eingang:
 Forward	RecorderWindow		Vorwärts
 Play	RecorderWindow		Wiedergabe
-SoundRecorder	System name		Audiorekorder
+SoundRecorder	System name		Audioaufnahme
 Channels:	RecorderWindow		Kanäle:
  bits	RecorderWindow		Bits
 None	RecorderWindow		Keine
@@ -40,7 +40,7 @@ Compression:	RecorderWindow		Komprimierung:
 Cannot find an unused name to use for the new recording	RecorderWindow		Für die neue Aufnahme konnte kein noch nicht verwendeter Name gefunden werden.
 Channels: 	RecorderWindow		Kanäle:
 Save	RecorderWindow		Speichern
-Sample rate: 	RecorderWindow		Samplerate:
+Sample rate: 	RecorderWindow		Abtastrate: 
 Cannot connect to media server	RecorderWindow		Es konnte keine Verbindung zum Mediaserver aufgebaut werden.
 The file doesn't appear to be an audio file.	RecorderWindow		Die Datei scheint keine Audiodatei zu sein.
 File name:	RecorderWindow		Dateiname:

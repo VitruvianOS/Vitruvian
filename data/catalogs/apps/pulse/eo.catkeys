@@ -1,9 +1,44 @@
-1	esperanto	x-vnd.Haiku-Pulse	1626291616
-OK	PrefsWindow		Bone
-Quit	DeskbarPulseView		Eliri
-OK	DeskbarPulseView		Bone
-OK	PulseApp		Bone
-Settings…	PulseView		Agordoj…
+1	esperanto	x-vnd.Haiku-Pulse	3032132277
+Normal mode	DeskbarPulseView		Norma reĝimo
+Info	CPUButton		Informo
+Quit	DeskbarPulseView		Ĉesi
+Info	DeskbarPulseView		Informo
+Normal mode	MiniPulseView		Norma reĝimo
+Frame color	ConfigView		Koloro de framo
+Error	PulseApp		Eraro
+Bar colors	ConfigView		Koloroj de paneloj
+%.2f GHz	NormalPulseView		%.2f GHz
+Defaults	PrefsWindow		Defaŭltoj
+%ld MHz	NormalPulseView		%ld MHz
+Mini mode	PrefsWindow		Eta reĝimo
+CPU progress bar	NormalPulseView		Panelo de progreso de CPU
+Fade colors	ConfigView		Fadigi kolorojn
+Deskbar mode	NormalPulseView		Reĝimo de Laborstrio
+Pulse settings	PulseApp		Agordoj de Pulso
+Remove replicant	CPUButton		Forigi replikilon
+You can't disable the last active CPU.	PulseView		Vi ne povas malŝalti la lastan aktivan CPU-on.
+Width of icon:	ConfigView		Larĝo de piktogramo:
+Deskbar mode	MiniPulseView		Reĝimo de Laborstrio
 OK	PulseView		Bone
-Quit	MiniPulseView		Eliri
+%s\n\nBy David Ramsey and Arve Hjønnevåg\nRevised by Daniel Switkin\n	PulseApp		%s\n\nDe David Ramsey kaj Arve Hjønnevåg\nReviziite per Daniel Switkin\n
+OK	PrefsWindow		Bone
+Removing from Deskbar failed.\n%s	DeskbarPulseView		Foriĝo el Laborstrio malsukcesis.\n%s
+OK	PulseApp		Bone
+Deskbar mode	PrefsWindow		Reĝimo de Laborstrio
+Mini mode	DeskbarPulseView		Eta reĝimo
+You can't disable the last active CPU.	CPUButton		Vi ne povas malŝalti la lastan aktivan CPU-on.
 OK	CPUButton		Bone
+Deskbar	CPUButton		Laborstrio
+Settings…	PulseView		Agordo…
+Deskbar menu	CPUButton		Menuo de Laborstrio
+Mini mode	NormalPulseView		Eta reĝimo
+Quit	MiniPulseView		Ĉesi
+Info	PulseView		Informo
+Usage: Pulse [--mini] [-w width] [--width=width]\n\t[--deskbar] [--normal] [--framecolor 0xrrggbb]\n\t[--activecolor 0xrrggbb] [--idlecolor 0xrrggbb]	PulseApp		Uzado: Pulse [--mini] [-w width] [--width=width]\n\t[--deskbar] [--normal] [--framecolor 0xrrggbb]\n\t[--activecolor 0xrrggbb] [--idlecolor 0xrrggbb]
+OK	DeskbarPulseView		Bone
+Info	PulseApp		Informo
+Pulse	System name		Pulso
+Active color	ConfigView		Koloro por aktiva stato
+Installing in Deskbar failed\n%s	PulseApp		Instaliĝo ĉe Laborstrio malsukcesis\n%s
+Idle color	ConfigView		Koloro por senokupa stato
+Normal mode	PrefsWindow		Norma reĝimo

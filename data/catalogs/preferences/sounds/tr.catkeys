@@ -1,0 +1,12 @@
+1	turkish	x-vnd.Haiku-Sounds	762968133
+Select	SoundFilePanel		Seç
+Sounds	System name		Sesler
+Other…	HWindow		Diğer…
+Sound file:	HWindow		Ses dosyası:
+<none>	HEventList		<yok>
+Select a sound file	SoundFilePanel		Ses dosyası seç
+OK	HEventList		Tamam
+Sound	HEventList		Ses
+Event	HEventList		Olay
+<none>	HWindow		<yok>
+No such file or directory	HEventList		Böyle bir dosya veya dizin yok

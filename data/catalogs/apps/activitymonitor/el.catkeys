@@ -1,45 +1,47 @@
-1	greek, modern (1453-)	x-vnd.Haiku-ActivityMonitor	4107381384
-P-faults	DataSource		P-σφάλματα
-Media nodes	DataSource		Κόμβοι πολυμέσων
-Threads	DataSource		Θέματα
-Add graph	ActivityWindow		Προσθήκη γραφήματος
+1	greek, modern (1453-)	x-vnd.Haiku-ActivityMonitor	1319108693
 Teams	DataSource		Ομάδες
-MiB	DataSource		MiB
-Network send	DataSource		Αποστολή δικτύου
-CPU usage (combined)	DataSource		Χρήση ΚΜΕ (συνδυασμένη)
-CPU	DataSource		ΚΜΕ
-Used memory	DataSource		Χρησιμοποιημένη μνήμη
-Cached memory	DataSource		Μνήμη προσωρινής αποθήκευσης
-Apps	DataSource		Εφαρμογές
-Show legend	ActivityView		Εμφάνιση υπομνήματος
-Text clipboard	DataSource		Πρόχειρο κειμένου
-Settings	ActivityWindow		Ρυθμίσεις
-Receiving	DataSource		Λήψη
-Settings…	ActivityWindow		Ρυθμίσεις...
-Ports	DataSource		Θύρες 
-Page faults	DataSource		Σφάλματα σελίδας
-Sending	DataSource		Αποστολή
-Cache	DataSource		Λανθάνουσα μνήμη
-%.1f faults/s	DataSource		%.1ς λάθοι/s
-Update time interval:	SettingsWindow		Ενημέρωση χρονικού διαστήματος:
-TX	DataSource	Shorter version for Sending	ΑΠ
-Quit	ActivityWindow		Έξοδος
-Block cache memory	DataSource		Αποκλεισμός λανθάνουσας μνήμης
-Remove graph	ActivityView		Αφαίρεση γραφήματος
-%lld sec.	SettingsWindow		%lld δευτ.
-%lld ms	SettingsWindow		%lld ms
-CPU usage	DataSource		Χρήση ΚΜΕ
-Raw clipboard	DataSource		Ακατέργαστο πρόχειρο
-Sems	DataSource		Sems
-ActivityMonitor	System name		ActivityMonitor
-Running applications	DataSource		Ενεργές εφαρμογές
 Semaphores	DataSource		Σηματοφόροι
-Block cache	DataSource		Αποκλεισμός cache
+TX	DataSource	Shorter version for Sending	ΑΠ
+Block cache memory	DataSource		Αποκλεισμός λανθάνουσας μνήμης
+%lld ms	SettingsWindow		%lld ms
+Media nodes	DataSource		Κόμβοι πολυμέσων
+Text clipboard	DataSource		Πρόχειρο κειμένου
+Network send	DataSource		Αποστολή δικτύου
+Cache	DataSource		Λανθάνουσα μνήμη
+Running applications	DataSource		Ενεργές εφαρμογές
+CPU usage (combined)	DataSource		Χρήση ΚΜΕ (συνδυασμένη)
+Threads	DataSource		Νήματα
+Receiving	DataSource		Λήψη
+Remove graph	ActivityView		Αφαίρεση γραφήματος
 Swap space	DataSource		Χώρος Swap
-Swap	DataSource		Swap
-File	ActivityWindow		Αρχείο
-usage	DataSource		χρήση
-Additional items	ActivityView		Επιπλέον αντικείμενα
-Network receive	DataSource		Λήψεις δικτύου
-Memory	DataSource		Μνήμη
+CPU	DataSource		ΚΜΕ
+ActivityMonitor	System name		Διαχείριση Εργασιών
+CPU %d	DataSource		ΚΜΕ %d
+Update time interval:	SettingsWindow		Ενημέρωση χρονικού διαστήματος:
 RX	DataSource	Shorter version for Receiving.	ΛΗ
+Settings…	ActivityWindow		Ρυθμίσεις…
+Block cache	DataSource		Αποκλεισμός cache
+Memory	DataSource		Μνήμη
+CPU usage	DataSource		Χρήση ΚΜΕ
+CPU speed	DataSource		Ταχύτητα ΚΜΕ
+Quit	ActivityWindow		Έξοδος
+Raw clipboard	DataSource		Ακατέργαστο πρόχειρο
+Settings	ActivityWindow		Ρυθμίσεις
+Used memory	DataSource		Χρησιμοποιημένη μνήμη
+Show legend	ActivityView		Εμφάνιση υπομνήματος
+Cached memory	DataSource		Μνήμη προσωρινής αποθήκευσης
+CPU %d usage	DataSource		Χρήση ΚΜΕ %d
+CPU %d speed	DataSource		Ταχύτητα ΚΜΕ %d
+File	ActivityWindow		Αρχείο
+Ports	DataSource		Θύρες
+Page faults	DataSource		Σφάλματα σελίδας
+Additional items	ActivityView		Επιπλέον αντικείμενα
+Apps	DataSource		Εφαρμογές
+Add graph	ActivityWindow		Προσθήκη γραφήματος
+Sending	DataSource		Αποστολή
+Always on top	ActivityWindow		Πάντα στην κορυφή
+Swap	DataSource		Swap
+%lld sec.	SettingsWindow		%lld δευτ.
+P-faults	DataSource		P-σφάλματα
+Sems	DataSource		Sems
+Network receive	DataSource		Λήψεις δικτύου

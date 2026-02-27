@@ -1,6 +1,10 @@
-1	esperanto	x-vnd.Haiku-Sounds	1676177770
-OK	SoundsHApp		Bone
-OK	HEventList		Bone
-OK	HWindow		Bone
+1	esperanto	x-vnd.Haiku-Sounds	831874831
+Sounds	System name		Sonoj
+Other…	HWindow		Aliaj…
+Sound file:	HWindow		Dosiero de sono:
 <none>	HEventList		<neniu>
+OK	HEventList		Bone
+Sound	HEventList		Sono
+Event	HEventList		Evento
 <none>	HWindow		<neniu>
+No such file or directory	HEventList		Disierujo aŭ dosiero forestas

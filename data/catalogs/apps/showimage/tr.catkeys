@@ -1,0 +1,64 @@
+1	turkish	x-vnd.Haiku-ShowImage	1471302250
+ShowImage	System name		Görsel Görüntüleyicisi
+Page setup…	Menus		Sayfa yapısı…
+The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		“%s” belgesi (sayfa %d) değiştirildi. Belgeyi kapatmak istiyor musunuz?
+Previous file	Menus		Önceki dosya
+View	Menus		Görüntü
+Leave full screen	Menus		Tam ekrandan çık
+Show caption in full screen mode	Menus		Tam ekran kipinde altyazıları göster
+Flip left to right	Menus		Soldan sağa doğru ters çevir
+Full screen	Menus		Tam ekran
+Copy	Menus		Kopyala
+Height: 	PrintOptionsWindow		Yükseklik: 
+Next file	Menus		Sonraki dosya
+Slide show	Menus		Slayt gösterisi
+Original size	Menus		Özgün boyut
+Width:	PrintOptionsWindow		Genişlik:
+Resize to (in 1/72 inches):	PrintOptionsWindow		Yeniden boyutlandır (1/72 inç):
+Zoom factor in %:	PrintOptionsWindow		% olarak yakınlaştırma derecesi:
+Zoom out	Menus		Uzaklaştır
+OK	Alerts		Tamam
+File	Menus		Dosya
+Close	ClosePrompt		Kapat
+Image	Menus		Görsel
+Flip top to bottom	Menus		Üstten alta doğru ters çevir
+Zoom in	Menus		Yakınlaştır
+Last page	Menus		Son sayfa
+Cancel	ClosePrompt		Vazgeç
+Attributes	Menus		Öznitelikler
+High-quality zooming	Menus		Yüksek kalite yakınlaştırma
+The document '%s' has been changed. Do you want to close the document?	ClosePrompt		“%s” belgesi değiştirildi. Belgeyi kapatmak istiyor musunuz?
+Close	Menus		Kapat
+Selection mode	Menus		Seçim kipi
+Reset rating	Menus		Derecelendirmeyi sıfırla
+DPI:	PrintOptionsWindow		DPI:
+Fit image to page	PrintOptionsWindow		Görseli sayfaya sığdır
+Show tool bar	Menus		Araç çubuğunu göster
+First page	Menus		İlk sayfa
+OK	SaveToFile		Tamam
+Print…	Menus		Yazdır…
+The file '%s' could not be written.	SaveToFile		“%s” dosyası yazılamadı.
+Quit	Menus		Çık
+Get info	Menus		Bilgi al
+Rating	Menus		Derecelendirme
+Close document	ClosePrompt		Belgeyi kapat
+Stretch to window	Menus		Pencereye gerdir
+Job setup	PrintOptionsWindow		İş yapısı
+Clear selection	Menus		Seçimi temizle
+Rotate clockwise	Menus		Saat yönünde döndür
+Open with…	Menus		Birlikte aç…
+Rotate counterclockwise	Menus		Saat yönünün tersine döndür
+Previous page	Menus		Önceki sayfa
+Fit to window	Menus		Pencereye sığdır
+Go to page	Menus		Sayfaya git
+Browse	Menus		Göz at
+Progress monitor	ProgressWindow		İlerleme monitörü
+Edit	Menus		Düzen
+Move to Trash	Menus		Çöpe at
+Use as background…	Menus		Arka plan olarak kullan…
+Open…	Menus		Aç…
+Save as…	Menus		Farklı kaydet…
+Next page	Menus		Sonraki sayfa
+Print options	PrintOptionsWindow		Yazdırma seçenekleri
+Slide delay	Menus		Slayt gecikmesi
+Select all	Menus		Tümünü seç

@@ -1,12 +1,17 @@
-1	czech	x-vnd.Haiku-Pairs	1126884905
-Beginner (4x4)	PairsWindow		Začátečník (4x4)
-Expert (8x8)	PairsWindow		Expert (8x8)
-Game	PairsWindow		Hra
-Intermediate (6x6)	PairsWindow		Pokročilý (6x6)
-New	PairsWindow		Nová
-New game	PairsWindow		Nová hra
-OK	PairsView		OK
-Pairs did not find enough vector icons in the system; it needs at least %d.	PairsView		Páry nenašly v systému dost vektorových ikon; potřebují alespoň %d.
+1	czech	x-vnd.Haiku-Pairs	3059673093
+Pairs	System name		Páry
 Quit	PairsWindow		Ukončit
-Quit game	PairsWindow		Ukončit hru
+Medium	PairsWindow		Střední
+Game	PairsWindow		Hra
+Expert (8x8)	PairsWindow		Expert (8x8)
+New	PairsWindow		Nová
+OK	Pairs		OK
+You completed the game in {0, plural, one{# click} other{# clicks}}.\n	PairsWindow		Dokončili jste hru na {0, plural, one{# kliknutí} few{# kliknutí} other{# kliknutí}}.\n
+Small	PairsWindow		Malé
 Size	PairsWindow		Velikost
+%app%\n\twritten by Ralf Schülke\n\tCopyright 2008-2010, Haiku Inc.\n\n	PairsWindow		%app%\n\tnapsal Ralf Schülke\n\tCopyright 2008-2010, Haiku Inc.\n\n
+Quit game	PairsWindow		Ukončit hru
+Large	PairsWindow		Velké
+Beginner (4x4)	PairsWindow		Začátečník (4x4)
+Intermediate (6x6)	PairsWindow		Pokročilý (6x6)
+New game	PairsWindow		Nová hra

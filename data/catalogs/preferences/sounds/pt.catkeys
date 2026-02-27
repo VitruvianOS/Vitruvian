@@ -1,0 +1,12 @@
+1	portuguese	x-vnd.Haiku-Sounds	762968133
+Select	SoundFilePanel		Selecionar
+Sounds	System name		Sons
+Other…	HWindow		Outro…
+Sound file:	HWindow		Ficheiro de som:
+<none>	HEventList		<nenhum>
+Select a sound file	SoundFilePanel		Seleccione um ficheiro de som
+OK	HEventList		OK
+Sound	HEventList		Som
+Event	HEventList		Evento
+<none>	HWindow		<nenhum>
+No such file or directory	HEventList		Não existe esse ficheiro ou pasta

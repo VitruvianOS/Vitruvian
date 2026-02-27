@@ -1,0 +1,54 @@
+1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-Input	993392905
+Defaults	InputMouse		Standarder
+Scrolling	TouchpadPrefView		Rulling
+Long	KeyboardView		Lang
+Cancel	TouchpadPrefView		Avbryt
+Slow	TouchpadPrefView		Treg
+Device List	InputWindow		Enhetsliste
+Double-click speed	SettingsView		Hastighet på dobbelt-klikk
+5-Button	SettingsView		5-knapper
+Typing test area	KeyboardView		Felt for skrivetesting
+Fast	KeyboardView		Rask
+Please confirm	TouchpadPrefView		Vennligst bekreft
+Trackpad speed	TouchpadPrefView		Styreflate-hastighet
+Mouse speed	SettingsView		Musens hastighet
+Trackpad acceleration	TouchpadPrefView		Styreflate-akselerasjon
+Horizontal scrolling	TouchpadPrefView		Horisontal rulling
+Reverse scroll direction	TouchpadPrefView		Omvendt rulleretning
+Keyboard lock delay	TouchpadPrefView		Tastaturlåsforsinkelse
+Input	System name		Inndata
+Quick	TouchpadPrefView		Rask
+Short	KeyboardView		Kort
+Revert	InputMouse		Tilbakestill
+Slow	KeyboardView		Treg
+2-Button	SettingsView		2-knapper
+Click to focus and raise	SettingsView		Klikk for å fokusere og heve
+Vertical	TouchpadPrefView		Vertikal
+Low	TouchpadPrefView		Lav
+Focus follows mouse	SettingsView		Fokus følger mus
+Focus mode:	SettingsView		Fokus-modus:
+Double-click test area	SettingsView		Testområde for dobbeltklikk
+Revert	TouchpadPrefView		Tilbakestill
+4-Button	SettingsView		4-knapper
+Tapping sensitivity	TouchpadPrefView		Tappefølsomhet
+Revert	InputKeyboard		Tilbakestill
+Mouse type:	SettingsView		Type mus:
+Off	TouchpadPrefView		Av
+Never	TouchpadPrefView		Aldri
+Fast	TouchpadPrefView		Fort
+6-Button	SettingsView		6-knapper
+Click to focus	SettingsView		Klikk for fokus
+Acceleration	TouchpadPrefView		Akselerasjon
+Accept first click	SettingsView		Godta første klikk
+OK	TouchpadPrefView		OK
+Delay until key repeat	KeyboardView		Forsinkelse før tasten gjentas
+Two finger scrolling	TouchpadPrefView		Rulling med to fingre
+Mouse acceleration	SettingsView		Museakselerasjon
+The new scroll area is very large and may impede normal mouse operation. Do you really want to change it?	TouchpadPrefView		Det nye rulleområdet er veldig stort og kan hindre normal bruk av mus. Vil du virkelig endre det?
+High	TouchpadPrefView		Høy
+Defaults	TouchpadPrefView		Standardinnstillinger
+1-Button	SettingsView		1-knapp
+Defaults	InputKeyboard		Standardinnstillinger
+Key repeat rate	KeyboardView		Repetisjonshastighet for taster
+Horizontal	TouchpadPrefView		Horisontal
+3-Button	SettingsView		3-knapper

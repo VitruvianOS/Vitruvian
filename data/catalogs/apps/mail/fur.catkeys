@@ -1,6 +1,6 @@
-1	friulian	x-vnd.Be-MAIL	3155788869
+1	friulian	x-vnd.Be-MAIL	3945726882
 Set to Saved	Mail		Met come Salvât
-Your main text contains %ld unencodable characters. Perhaps a different character set would work better? Hit Send to send it anyway (a substitute character will be used in place of the unencodable ones), or choose Cancel to go back and try fixing it up.	Mail		Il to test principâl al conten %ld caratars che no si puedin codificâ. Podaressial lâ ben forsit un complès di caratars diferents? Frache Invie par inviâlu distès (un caratar sostitutîf al vignarà doprât al puest di chei no codificabii), o sielç Anule par tornâ indaûr e justâ il test.
+Your main text contains %ld unencodable characters. Perhaps a different character set would work better? Hit Send to send it anyway (a substitute character will be used in place of the unencodable ones), or choose Cancel to go back and try fixing it up.	Mail		Il to test principâl al conten %ld caratars che no si puedin codificâ. Podaressie lâ ben forsit une cumbinazion di caratars diferente? Frache Invie par inviâlu distès (un caratar sostitutîf al vignarà doprât al puest di chei no codificabii), o sielç Anule par tornâ indaûr e justâ il test.
 Text wrapping:	Mail		Rie gnove automatiche:
 Show icons & labels	Mail		Mostre iconis e etichetis
 (Date unavailable)	Mail		(Date no disponibile)
@@ -13,6 +13,7 @@ Copy to new	Mail		Copie su gnûf
 Save as draft	Mail		Salve come stampon
 Encoding:	Mail		Codifiche:
 Print	Mail		Stampe
+Decrease quote level	Mail		Diminuìs nivel di citazion
 Encoding	Mail		Codifiche
 Default account:	Mail		Account predefinît:
 Message	Mail		Messaç
@@ -28,7 +29,7 @@ Paste	Mail		Tache
 E-mail draft could not be saved!	Mail		No si à podût salvâ il stampon de e-mail!
 Don't send	Mail		No sta inviâ
 sent	B_USER_DIRECTORY/mail/sent		inviade
-Only files can be added as attachments.	Mail		Al messaç a puedin jessi zontâts dome i file.
+Only files can be added as attachments.	Mail		Al messaç al è pussibil zontâ dome files.
 Close	Mail		Siere
 Untitled	Mail		Cence titul
 Removing attachments from a forwarded mail is not yet implemented!\nIt will not yet work correctly.	Mail		La rimozion des zontis di une e-mail mandade indenant no je ancjemò implementade!\nNol funzionarà ben.
@@ -36,10 +37,8 @@ Same recipient	Mail		Stes destinatari
 Previous message	Mail		Messaç precedent
 (Address unavailable)	Mail		(Direzion no disponibile)
 Mail	System name		Mail
-Enclosure: %name% (Type: %type%)	Mail	Don't translate the variables %name% and %type%.	Zonte: %name% (Tipo: %type%)
 Copy link location	Mail		Copie posizion colegament
-Attachments: 	Mail		Zontis: 
-Remove enclosure	Mail		Gjave zonte
+Add attachment…	Mail		Zonte zonte…
 Next	Mail		Sucessîf
 Attachments:	Mail		Zontis:
 Show icons only	Mail		Mostre dome lis iconis
@@ -58,8 +57,8 @@ Reply to sender	Mail		Rispuint al mitent
 \\n - Newline	Mail		\\n - Gnove rie (LF)
 Copy	Mail		Copie
 Add signature	Mail		Zonte firme
+Attachment: %name% (Type: %type%)	Mail	Don't translate the variables %name% and %type%.	Zonte: %name% (Gjenar: %type%)
 %n - Full name	Mail		%n - Non complet
-Remove quote	Mail		Gjave citazion
 Signature	Mail		Firme
 Use default account	Mail		Dopre l'account predefinît
 draft	B_USER_DIRECTORY/mail/draft		stampon
@@ -68,7 +67,7 @@ spam	B_USER_DIRECTORY/mail/spam		malvolude
 Reply to all	Mail		Rispuint a ducj
 Cancel	Mail		Anule
 Off	Mail		Disativât
-Set to %s	Mail		Stabilìs a %s
+Set to %s	Mail		Met a %s
 Signature:	Mail		Firme:
 Forward without attachments	Mail		Mande indenant cence zontis
 queries	B_USER_DIRECTORY/mail/queries		interogazions
@@ -90,15 +89,13 @@ Send	Mail		Invie
 Open draft	Mail		Vierç stampon
 Leave as 'New'	Mail	Do not translate New - this is non-localizable e-mail status	Lasse come 'Gnûf'
 Random	Mail		Casuâl
-Attach attributes:	Mail		Atribûts de zonte:
+Attach attributes:	Mail		Atribûts des zontis:
 Find again	Mail		Cjate di gnûf
 Size:	Mail		Dimension:
 To:	Mail		A:
 Need Tracker to move items to trash	Mail		Par spostâ i elements te scovacere al covente Tracker
 The mail_daemon could not be started:\n\t	Mail		Nol è stât pussibil inviâ mail_daemon:\n\t
 <no account found>	Mail		<nissun account cjatât>
-Mail couldn't find its dictionary.	Mail		Mail nol rive a cjatâ il so dizionari.
-Mail preferences	Mail		Preferencis di Mail
 helpful message	Mail		messaç util
  Read 	Mail		 Let 
 Font:	Mail		Caratar:
@@ -111,6 +108,7 @@ Move to trash	Mail		Sposte te scovacere
 <none>	Mail		<vueit>
 %d - Date	Mail		%d - Date
 Check spelling	Mail		Control ortografic
+Status:	Mail		Stât:
 Redo	Mail		Torne fâs
 Leave as '%s'	Mail		Lasse come '%s'
 Print…	Mail		Stampe…
@@ -151,7 +149,6 @@ New mail message	Mail		Gnûf messaç di pueste
 An error occurred trying to open this signature.	Mail		Si è verificât un erôr cirint di vierzi cheste firme.
 Edit signatures…	Mail		Modifiche firme…
 User interface	Mail		Interface utent
-Quote	Mail		Cite
 Inconsistency occurred in the undo/redo buffer.	Mail		Si è verificade une incoerence intal buffer 'disfe/torne fâs'.
 Remove attachment	Mail		Gjave zonte
 Set to…	Mail		Met a…
@@ -164,6 +161,6 @@ Delete	Mail		Elimine
 Put your favorite e-mail queries and query templates in this folder.	Mail		Met lis tôs interogazions di e-mail preferidis e i modei di interogazion in cheste cartele.
 Spam	Mail		Malvolude
 Couldn't open this signature. Sorry.	Mail		Impussibil vierzi cheste firme. Scuse.
-Revert	Mail		Torne indaûr
+Revert	Mail		Ripristine
 Unknown	Mail		No cognossût
-Add enclosure…	Mail		Inserìs alegât…
+Increase quote level	Mail		Aumente nivel di citazion

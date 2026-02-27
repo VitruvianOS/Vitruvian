@@ -1,11 +1,17 @@
-1	korean	x-vnd.Haiku-Pairs	2647083837
-Pairs	System name		짝맞추기
-Quit	PairsWindow		나가기
+1	korean	x-vnd.Haiku-Pairs	3059673093
+Pairs	System name		Pairs
+Quit	PairsWindow		종료
+Medium	PairsWindow		중간 크기
 Game	PairsWindow		게임
 Expert (8x8)	PairsWindow		전문가 (8x8)
 New	PairsWindow		새 게임
+OK	Pairs		확인
+You completed the game in {0, plural, one{# click} other{# clicks}}.\n	PairsWindow		게임을 {0, plural, one{# 클릭} other{# 클릭}}만에 완료하였습니다.\n
+Small	PairsWindow		작은 크기
 Size	PairsWindow		크기
-Quit game	PairsWindow		게임 나가기
+%app%\n\twritten by Ralf Schülke\n\tCopyright 2008-2010, Haiku Inc.\n\n	PairsWindow		%app%\n\tRalf Schülke 작성\n\tCopyright 2008-2010, Haiku Inc.\n\n
+Quit game	PairsWindow		게임 종료
+Large	PairsWindow		큰 크기
 Beginner (4x4)	PairsWindow		초보자 (4x4)
 Intermediate (6x6)	PairsWindow		중급자 (6x6)
 New game	PairsWindow		새 게임

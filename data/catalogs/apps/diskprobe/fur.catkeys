@@ -1,4 +1,4 @@
-1	friulian	x-vnd.Haiku-DiskProbe	2944605311
+1	friulian	x-vnd.Haiku-DiskProbe	1130290771
 Raw editor	AttributeWindow		Editôr dâts grês
 Remove	AttributeWindow		Gjave
 Close	ProbeView		Siere
@@ -15,7 +15,7 @@ Text	TypeEditors	This is the type of editor	Test
 File offset: 	ProbeView		Spostament file: 
 Add	ProbeView		Zonte
 64 bit signed value:	TypeEditors		Valôr cun segn a 64 bit:
-Do you really want to remove the attribute \"%s\" from the file \"%s\"?\n\nYou cannot undo this action.	AttributeWindow		Gjavâ par dabon l'atribût \"%s\" dal file \"%s\"?\n\nNo si pues tornâ indaûr di cheste azion.
+Do you really want to remove the attribute \"%s\" from the file \"%s\"?\n\nYou cannot undo this action.	AttributeWindow		Gjavâ par dabon l'atribût \"%s\" dal file \"%s\"?\n\nNol sarà pussibil tornâ indaûr di cheste azion.
 No type editor available	AttributeWindow		Nissun editôr di gjenars disponibii
 Print…	ProbeView		Stampe…
 New…	FileWindow		Gnûf…
@@ -29,7 +29,9 @@ Open file…	FileWindow		Vierç file…
 32 bit unsigned pointer:	TypeEditors		Pontadôr cence segn a 32 bit:
 DiskProbe request	DiskProbe		Richieste Scandai dal disc
 Hex	ProbeView	A menu item, as short as possible, noun is recommended if it is shorter than adjective.	Esadecimâl
+Block %lld (0x%Lx)	ProbeView		Bloc %lld (0x%Lx)
 Writing to the file failed:\n%s\n\nAll changes will be lost when you quit.	ProbeView		No si è rivâts a scrivi sul file:\n%s\n\nDutis lis modifichis a laran pierdudis cuant che si jessarà.
+Native: %lld (0x%0*Lx)	ProbeView		Natîf: %lld (0x%0*Lx)
 Examine device:	OpenWindow		Esamine il dispositîf:
 Number editor	TypeEditors		Editôr numeric
 Icon	TypeEditors		Icone
@@ -37,11 +39,9 @@ Attribute	ProbeView		Atribût
 Don't save	ProbeView		No sta salvâ
 Undo	ProbeView		Disfe
 Flattened bitmap	TypeEditors		Bitmap plan
-Block %Ld (0x%Lx)	ProbeView		Bloc %Ld (0x%Lx)
 Cancel	OpenWindow		Anule
 Unknown format	TypeEditors		Formât no cognossût
 File: 	ProbeView		File: 
-Swapped: %Ld (0x%0*Lx)	ProbeView		Scambiât: %Ld (0x%0*Lx)
 Stop	ProbeView		Ferme
 Cancel	ProbeView		Anule
 Could not open \"%s\":\n%s	DiskProbe	Opening of entry reference buffer for a DiskProbe request Alert message. The name of entry reference and error message is shown.	Impussibil vierzi \"%s\":\n%s
@@ -91,7 +91,6 @@ Type editor	ProbeView		Editôr di gjenars
 File	FileWindow		File
 Grayscale	TypeEditors		Scjale di grîs
 32 bit	TypeEditors		32 bit
-Native: %Ld (0x%0*Lx)	ProbeView		Natîf: %Ld (0x%0*Lx)
 Device	ProbeView		Dispositîf
 Close	AttributeWindow		Siere
 Type editor	AttributeWindow		Editôr di gjenars
@@ -118,7 +117,9 @@ Could not read image	TypeEditors	Image means here a picture file, not a disk ima
 DiskProbe request	ProbeView		Richieste Scandai dal disc
 Double precision floating-point value:	TypeEditors		Valôr in virgule mobile a dople precision:
 Image	TypeEditors	This is the type of view	Imagjin
+Swapped: %lld (0x%0*Lx)	ProbeView		Scambiât: %lld (0x%0*Lx)
 Save changes before closing?	ProbeView		Salvâ lis modifichis prime di sierâ?
+%s, %g × %g, %s	TypeEditors	The '×' is the Unicode multiplication sign U+00D7	%s, %g × %g, %s
 PNG format	TypeEditors		Formât PNG
 Number	TypeEditors	This is the type of editor	Numar
 Edit	ProbeView		Modifiche

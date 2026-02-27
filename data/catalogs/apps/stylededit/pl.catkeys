@@ -1,10 +1,11 @@
-1	polish	x-vnd.Haiku-StyledEdit	727465241
+1	polish	x-vnd.Haiku-StyledEdit	3760185556
 Document statistics	Statistics		Statystyki dokumentu
 Cannot revert, file not found: \"%s\".	RevertToSavedAlert		Nie można przywrócić, nie znaleziono pliku: „%s”.
 Cut	Menus		Wytnij
 Center	Menus		Wyśrodkuj
-Wrap-around search	FindandReplaceWindow		Szukanie owijające
+Increase size	Menus		Zwiększ rozmiar
 Page setup…	Menus		Ustawienia strony…
+Wrap-around search	FindandReplaceWindow		Szukanie owijające
 Untitled 	StyledEditWindow		Bez tytułu 
 OK	Statistics		OK
 Find	FindandReplaceWindow		Znajdź
@@ -28,8 +29,8 @@ Italic	Menus		Kursywa
 Can't undo	Menus		Nie można cofnąć
 Replace…	Menus		Zastąp…
 File	Menus		Plik
-Bold	Menus		Pogrubienie
 Paste	Menus		Wklej
+Bold	Menus		Pogrubienie
 File \"%file%\" was modified by another application, reload it?	NodeMonitorAlerts		Plik „%file%” został zmieniony przez inny program. Czy wczytać go ponownie?
 File \"%file%\" was removed by another application, recover it?	NodeMonitorAlerts		Plik „%file%” został usunięty przez inny program. Czy chcesz go przywrócić?
 Lines:	Statistics		Linie:
@@ -50,6 +51,7 @@ OK	SaveAlert		OK
 Color	Menus		Kolor
 Save changes to the document \"%s\"? 	QuitAlert		Zapisać zmiany w dokumencie „%s”? 
 StyledEdit	System name		StyledEdit
+Underline	Menus		Podkreślenie
 Find:	FindandReplaceWindow		Znajdź:
 Undo typing	QuitAlert		Cofnij pisanie
 Error loading \"%s\":\n\t%s	LoadAlert		Błąd podczas ładowania „%s”:\n\t%s
@@ -67,15 +69,16 @@ OK	LoadAlert		OK
 Save	QuitAlert		Zapisz
 Case-sensitive	FindandReplaceWindow		Uwzględnij wielkość liter
 Find selection	Menus		Znajdź zaznaczenie
-Cancel	SaveAlert		Anuluj
 Find…	Menus		Znajdź…
+Cancel	SaveAlert		Anuluj
 Revert	RevertToSavedAlert		Przywróć
 Size	Menus		Rozmiar
+Decrease size	Menus		Zmniejsz rozmiar
 Autodetect	Menus		Autodetekcja
 Replace next	Menus		Zamień następne
 OK	QuitAlert		OK
-Replace with:	FindandReplaceWindow		Zamień na:
 Edit	Menus		Edycja
+Replace with:	FindandReplaceWindow		Zamień na:
 Open…	Menus		Otwórz…
 Save as…	Menus		Zapisz jako…
 Replace	FindandReplaceWindow		Zamień

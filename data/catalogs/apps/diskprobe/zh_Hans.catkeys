@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-DiskProbe	2944605311
+1	english	x-vnd.Haiku-DiskProbe	1130290771
 Raw editor	AttributeWindow		Raw 编辑器
 Remove	AttributeWindow		删除
 Close	ProbeView		关闭
@@ -29,7 +29,9 @@ Open file…	FileWindow		打开文件…
 32 bit unsigned pointer:	TypeEditors		32 位无符号浮点数：
 DiskProbe request	DiskProbe		DiskProbe 要求
 Hex	ProbeView	A menu item, as short as possible, noun is recommended if it is shorter than adjective.	十六进制
+Block %lld (0x%Lx)	ProbeView		区块 %lld (0x%Lx)
 Writing to the file failed:\n%s\n\nAll changes will be lost when you quit.	ProbeView		写入文件失败：\n%s\n\n退出之后所有的设置将会丢失。
+Native: %lld (0x%0*Lx)	ProbeView		本地: %lld (0x%0*Lx)
 Examine device:	OpenWindow		检测硬件：
 Number editor	TypeEditors		序列号编辑器
 Icon	TypeEditors		图标
@@ -37,11 +39,9 @@ Attribute	ProbeView		属性
 Don't save	ProbeView		不保存
 Undo	ProbeView		撤销
 Flattened bitmap	TypeEditors		平面位图
-Block %Ld (0x%Lx)	ProbeView		块 %Ld（0x%Lx）
 Cancel	OpenWindow		取消
 Unknown format	TypeEditors		未知类型
-File: 	ProbeView		文件：
-Swapped: %Ld (0x%0*Lx)	ProbeView		交换：%Ld（0x%0*Lx）
+File: 	ProbeView		文件: 
 Stop	ProbeView		停止
 Cancel	ProbeView		取消
 Could not open \"%s\":\n%s	DiskProbe	Opening of entry reference buffer for a DiskProbe request Alert message. The name of entry reference and error message is shown.	无法打开 \“%s\”：\n%s
@@ -91,7 +91,6 @@ Type editor	ProbeView		类型编辑器
 File	FileWindow		文件
 Grayscale	TypeEditors		灰度模式
 32 bit	TypeEditors		32 位
-Native: %Ld (0x%0*Lx)	ProbeView		本地：%Ld（0x%0*Lx）
 Device	ProbeView		硬件设备
 Close	AttributeWindow		关闭
 Type editor	AttributeWindow		类型编辑器
@@ -118,7 +117,9 @@ Could not read image	TypeEditors	Image means here a picture file, not a disk ima
 DiskProbe request	ProbeView		磁盘扫描器要求
 Double precision floating-point value:	TypeEditors		双精度浮点型数：
 Image	TypeEditors	This is the type of view	图像
+Swapped: %lld (0x%0*Lx)	ProbeView		已交换： %lld (0x%0*Lx)
 Save changes before closing?	ProbeView		关闭之前保存？
+%s, %g × %g, %s	TypeEditors	The '×' is the Unicode multiplication sign U+00D7	%s, %g × %g, %s
 PNG format	TypeEditors		PNG 格式
 Number	TypeEditors	This is the type of editor	数字
 Edit	ProbeView		编辑

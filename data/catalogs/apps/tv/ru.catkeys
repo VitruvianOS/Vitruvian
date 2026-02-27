@@ -1,9 +1,8 @@
-1	russian	x-vnd.Haiku.TV	1995288111
+1	russian	x-vnd.Haiku.TV	337483365
 No menu	MainWin		Без меню
 No border	MainWin		Без рамки
-force 704 x 576, display aspect 4:3	MainWin		Форсировать 704 x 576, соотношение 4:3
 Error, connecting to interface failed:\n\n	MainWin		Ошибка, не удалось подключиться к интерфейсу:\n\n
-force 544 x 576, display aspect 4:3	MainWin		Форсировать 544 x 576, соотношение 4:3
+force 720 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	принудительно 720 × 576, формат 4:3
 Full screen	MainWin		На весь экран
 Scale to native size	MainWin		Оригинальный размер
 unknown	MainWin		неизвестно
@@ -13,13 +12,15 @@ DVB - Digital Video Broadcasting TV	MainWin		DVB - Цифровое Видео �
 Always on top	MainWin		Всегда сверху
 Debug	MainWin		Отладка
 Interface	MainWin		Интерфейс
-force 720 x 576, display aspect 4:3	MainWin		Форсировать 720 x 576, соотношение 4:3
 Quit	MainWin		Выход
 Channel	MainWin		Канал
 Previous channel	MainWin		Предыдущий канал
 OK	MainWin		ОК
 TV	MainWin		Телевидение
+force 544 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	принудительно 544 × 576, формат 4:3
 Settings	MainWin		Настройки
+force 704 × 576, display aspect 4:3	MainWin	The '×' is the Unicode multiplication sign U+00D7	принудительно 704 × 576, формат 4:3
+%s - %d × %d, %.3f:%.3f => %.0f × %.0f	MainWin	The '×' is the Unicode multiplication sign U+00D7	%s - %d × %d, %.3f:%.3f => %.0f × %.0f
 TV	System name		Телевидение
 Settings…	MainWin		Настройки…
 None	MainWin		Нет

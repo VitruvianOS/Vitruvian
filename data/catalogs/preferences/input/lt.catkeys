@@ -1,0 +1,46 @@
+1	lithuanian	x-vnd.Haiku-Input	775486717
+Defaults	InputMouse		Numatytai
+Scrolling	TouchpadPrefView		Slinktis
+Long	KeyboardView		Ilga
+Cancel	TouchpadPrefView		Atsisakyti
+Device List	InputWindow		Įrenginių sąrašas
+Double-click speed	SettingsView		Dvigubo spustelėjimo greitis
+5-Button	SettingsView		5 klavišų
+Typing test area	KeyboardView		Vieta rašymui išbandyti
+Fast	KeyboardView		Aukšta
+Please confirm	TouchpadPrefView		Patvirtinkite
+Mouse speed	SettingsView		Pelės greitis
+Horizontal scrolling	TouchpadPrefView		Horizontalioji slinktis
+Keyboard lock delay	TouchpadPrefView		Klaviatūros užrakinimo delsa
+Input	System name		Įvestis
+Short	KeyboardView		Trumpa
+Revert	InputMouse		Atšaukti pakeitimus
+Slow	KeyboardView		Žema
+2-Button	SettingsView		2 klavišų
+Click to focus and raise	SettingsView		Fokusavimas ir iškėlimas spustelint
+Vertical	TouchpadPrefView		Vertikalioji
+Focus follows mouse	SettingsView		Fokusavimas seka pelės žymeklį
+Focus mode:	SettingsView		Fokusavimo veiksena:
+Double-click test area	SettingsView		Vieta dvigubam spustelėjimui išbandyti
+Revert	TouchpadPrefView		Atšaukti pakeitimus
+4-Button	SettingsView		4 klavišų
+Tapping sensitivity	TouchpadPrefView		Jautrumas bakstelėjimui
+Revert	InputKeyboard		Atšaukti pakeitimus
+Mouse type:	SettingsView		Pelės tipas:
+Never	TouchpadPrefView		Niekada
+6-Button	SettingsView		6 klavišų
+Click to focus	SettingsView		Fokusavimas spustelint
+Acceleration	TouchpadPrefView		Akceleracija
+Accept first click	SettingsView		Priimti pirmąjį spustelėjimą
+OK	TouchpadPrefView		Gerai
+Delay until key repeat	KeyboardView		Delsa prieš kartojant klavišą
+Two finger scrolling	TouchpadPrefView		Slinktis dviem pirštais
+Mouse acceleration	SettingsView		Pelės akceleracija
+The new scroll area is very large and may impede normal mouse operation. Do you really want to change it?	TouchpadPrefView		Pasirinktoji slinkties zona yra neįprastai didelė ir gali kliudyti įprastam darbui su jutikliniu kilimėliu. Ar tikrai norite ją pakeisti?
+High	TouchpadPrefView		Aukštas
+Defaults	TouchpadPrefView		Numatytai
+1-Button	SettingsView		1 klavišo
+Defaults	InputKeyboard		Numatytai
+Key repeat rate	KeyboardView		Klavišo kartojimo sparta
+Horizontal	TouchpadPrefView		Horizontalioji
+3-Button	SettingsView		3 klavišų

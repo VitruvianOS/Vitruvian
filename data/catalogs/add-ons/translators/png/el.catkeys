@@ -1,11 +1,10 @@
-1	greek, modern (1453-)	x-vnd.Haiku-PNGTranslator	2504765797
-Version %d.%d.%d, %s	PNGTranslator		Έκδοση %d.%d.%d, %s
-Interlace Option	PNGTranslator		Επιλογές διεπαφής
-PNG Interlace Menu	PNGTranslator		Μενού συμπλέγματος PNG 
-PNG image	PNGTranslator		PNG Εικόνα
+1	greek, modern (1453-)	x-vnd.Haiku-PNGTranslator	993682334
 PNG Settings	PNGTranslator		Ρυθμίσεις PNG
-PNG image translator	PNGTranslator		Μεταφραστής εικόνας PNG
-None	PNGTranslator		Κανένα
-PNG images	PNGTranslator		PNG Εικόνες
-Interlacing type:	PNGTranslator		Τύπος συμπλέγματος:
-PNGTranslator Settings	PNGTranslator		Ρυθμίσεις μεταφραστή PNG
+None	PNGTranslator		Μετατροπέας PNG
+PNG image	PNGTranslator		Εικόνα PNG
+PNG images	PNGTranslator		Εικόνες PNG
+Interlacing type:	PNGTranslator		Είδος interlacing:
+PNGTranslator Settings	PNGTranslator		Ρυθμίσεις μετατροπέα PNG
+Version %d.%d.%d, %s	PNGTranslator		Έκδοση %d.%d.%d.%s
+PNG image translator	PNGTranslator		Μετατροπέας εικόνων PNG
+Interlace Option	PNGTranslator		Ρύθμιση interlace

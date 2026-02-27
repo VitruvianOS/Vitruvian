@@ -1,0 +1,22 @@
+1	spanish; castilian	application/x-vnd.Be.LoggingConsumerApp	3475739170
+MediaNodeControlApp: couldn't get node info (%ld):\n%s\n	CortexAddOnsCommonMediaNodeControlApp		MediaNodeControlApp: no se pudo obtener información del nodo (%ld):\n%s\n
+Priority	CortexAddOnsLoggingConsumer		Prioridad
+MediaNodeControlApp: couldn't find node (%ld):\n%s\n	CortexAddOnsCommonMediaNodeControlApp		MediaNodeControlApp: no se pudo encontrar el nodo (%ld):\n%s\n
+Latency	CortexAddOnsLoggingConsumer		Latencia
+Logged input	CortexAddOnsLoggingConsumer		Entrada registrada
+CPU spin percentage	CortexAddOnsLoggingConsumer		Porcentaje de la CPU activo
+NodeLogger	CortexAddOnsLoggingConsumers		NodeLogger
+Start	CortexAddOnsLoggingConsumerNodeHarnessWin		Inicio
+Thread priority	CortexAddOnsLoggingConsumer		Prioridad de hilo
+LoggingConsumer parameters	CortexAddOnsLoggingConsumer		Parámetros de LoggingConsumer
+Latency control	CortexAddOnsLoggingConsumer		Control de latencia
+CPU percentage	CortexAddOnsLoggingConsumer		Porcentaje de CPU
+LoggingConsumer	CortexAddOnsLoggingConsumer		LoggingConsumer
+Stop	CortexAddOnsLoggingConsumerNodeHarnessWin		Detener
+An add-on version of the LoggingConsumer node.\nSee the Be Developer Newsletter III.18: 5 May, 1999\nadapted by Eric Moon (4 June, 1999)	CortexAddOnsLoggingConsumer		Un complemento versión del nodo LoggingConsumer\nConsultar "Be Developer Newsletter III".18: 5 May, 1999\nAdaptado por Eric Moon (4 June, 1999)
+OK	CortexAddOnsCommonMediaNodeControlApp		Aceptar
+Controls	CortexAddOnsLoggingConsumerNodeHarnessWin		Controles
+controls	CortexAddOnsCommonMediaNodeControlApp		controles
+Connect	CortexAddOnsLoggingConsumerNodeHarnessWin		Conectar
+percent	CortexAddOnsLoggingConsumer		porcentaje
+MediaNodeControlApp: no parameters for node (%ld):\n%s\n	CortexAddOnsCommonMediaNodeControlApp		MediaNodeControlApp: sin parámetros para el nodo (%ld):\n%s\n

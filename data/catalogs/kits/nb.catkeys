@@ -1,0 +1,50 @@
+1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-libbe	310849835
+All Rights Reserved.	AboutWindow		Alle rettigheter forbeholdt.
+gold master	AboutWindow		gold master
+Undo	TextView		Tilbakestill
+OK	PrintJob		OK
+OK	Dragger		OK
+gamma	AboutWindow		gamma
+development	AboutWindow		development
+{0, plural, one{%s byte/s} other{%s bytes/s}}	StringForRate	units per second	{0, plural, one{%s byte/s} other{%s bytes/s}}
+Print Server is not responding.	PrintJob		Print Server svarer ikke.
+About %app%	AboutMenuItem		Om %app%
+Warning	Dragger		Advarsel
+Green:	ColorControl		Grønn:
+Redo	TextView		Endre
+No pages to print!	PrintJob		Ingen sider å skrive ut!
+beta	AboutWindow		beta
+%s MiB	StringForSize	size unit	%s MiB
+OK	ZombieReplicantView		OK
+Cut	TextView		Klipp ut
+Default	Default decorator about box		Standard
+Can't delete this replicant from its original application. Life goes on.	Dragger		Kan ikke slette denne replikanten fra den opprinnelige applikasjonen. Livet går videre.
+%s KiB	StringForSize	size unit	%s KiB
+Error	ZombieReplicantView		Feil
+Paste	TextView		Lim inn
+OK	AboutWindow		OK
+%s MiB/s	StringForRate	units per second	%s MiB/s
+%s TiB	StringForSize	size unit	%s TiB
+Default Haiku window decorator.	Default decorator about box		Standard Haiku vindusdekorator.
+%s GiB	StringForSize	size unit	%s GiB
+%s B	StringForSize	size unit, narrow space	%s B
+Remove replicant	Dragger		Fjern replikant
+Version	AboutWindow		Versjon
+Red:	ColorControl		Rød:
+<empty>	Menu		<tom>
+Copy	TextView		Kopier
+Select all	TextView		Velg alle
+alpha	AboutWindow		alpha
+Error	PrintJob		Feil
+%s TiB/s	StringForRate	units per second	%s TiB/s
+About %app…	Dragger		Om %app...
+About %app%	AboutWindow		Om %app%
+{0, plural, one{%s byte} other{%s bytes}}	StringForSize	size unit	{0, plural, one{%s byte} other{%s bytes}}
+%s GiB/s	StringForRate	units per second	%s GiB/s
+Version history:	AboutWindow		Versjonshistorikk:
+Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Kan ikke finne applikasjonen for replikanten. Ingen programsignatur oppgitt.\n%error
+%s KiB/s	StringForRate	units per second	%s KiB/s
+Blue:	ColorControl		Blå:
+Special thanks:	AboutWindow		Spesiell takk:
+Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		Kan ikke opprette replikanten for \"%description\".\n%error
+Written by:	AboutWindow		Skrevet av:

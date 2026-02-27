@@ -1,5 +1,5 @@
-1	italian	x-vnd.Be-MAIL	1865394837
-Set to Saved	Mail		Imposta a 'Salvato'
+1	italian	x-vnd.Be-MAIL	3945726882
+Set to Saved	Mail		Imposta come Salvato
 Your main text contains %ld unencodable characters. Perhaps a different character set would work better? Hit Send to send it anyway (a substitute character will be used in place of the unencodable ones), or choose Cancel to go back and try fixing it up.	Mail		Il testo contiene %ld caratteri non codificabili. Se premi 'Invio' questi caratteri saranno sostituiti. Premi 'Annulla' per tornare indietro e verificare il set di caratteri utilizzato.
 Text wrapping:	Mail		A capo automatico
 Show icons & labels	Mail		Mostra icone e testo
@@ -8,10 +8,12 @@ Reply	Mail		Rispondi
 Next message	Mail		Messaggio successivo
 Mailing	Mail		Invio
 Unread	Mail		Non letto
+Same sender	Mail		Stesso mittente
 Copy to new	Mail		Copia su nuovo
 Save as draft	Mail		Salva come bozza
 Encoding:	Mail		Codifica:
 Print	Mail		Stampa
+Decrease quote level	Mail		Diminuisci quota
 Encoding	Mail		Codifica
 Default account:	Mail		Account predefinito:
 Message	Mail		Messaggio
@@ -31,13 +33,12 @@ Only files can be added as attachments.	Mail		Al messaggio possono essere allega
 Close	Mail		Chiudi
 Untitled	Mail		Senza titolo
 Removing attachments from a forwarded mail is not yet implemented!\nIt will not yet work correctly.	Mail		La rimozione degli allegati da un messaggio in corso di inoltro non è stata ancora implementata!\nNon funzionerà correttamente.
+Same recipient	Mail		Stesso destinatario
 Previous message	Mail		Messaggio precedente
 (Address unavailable)	Mail		(Indirizzo non disponibile)
 Mail	System name		Mail
-Enclosure: %name% (Type: %type%)	Mail	Don't translate the variables %name% and %type%.	Allegato: %name% (Tipo: %type%)
 Copy link location	Mail		Copia collegamento
-Attachments: 	Mail		Allegati: 
-Remove enclosure	Mail		Rimuovi allegato
+Add attachment…	Mail		Aggiungi allegato…
 Next	Mail		Successivo
 Attachments:	Mail		Allegati:
 Show icons only	Mail		Mostra solo le icone
@@ -47,7 +48,7 @@ UTF-8	Mail	This string is used as a key to set default message compose encoding.
 Quit	Mail		Esci
 Title:	Mail		Titolo:
 Account from mail	Mail		Account del messaggio
-%e - E-mail address	Mail		%e - Indirizzo email
+%e - E-mail address	Mail		%e - Indirizzo e-mail
 Cc:	Mail		Cc:
 No matches	Mail		Nessun risultato
 Queries	Mail		Interrogazioni
@@ -56,8 +57,8 @@ Reply to sender	Mail		Rispondi al mittente
 \\n - Newline	Mail		\\n- Nuova linea (LF)
 Copy	Mail		Copia
 Add signature	Mail		Aggiungi firma
+Attachment: %name% (Type: %type%)	Mail	Don't translate the variables %name% and %type%.	Allegato: %name% (Tipo: %type%)
 %n - Full name	Mail		%n - Nome completo
-Remove quote	Mail		Rimuovi citazione
 Signature	Mail		Firma
 Use default account	Mail		Usa l'account predefinito
 draft	B_USER_DIRECTORY/mail/draft		bozza
@@ -74,7 +75,7 @@ View	Mail		Visualizza
 Signatures	Mail		Firme
 On	Mail		Attivo
 Find	Mail		Cerca
-Sorry, could not find an application that supports the 'Person' data type.	Mail		Il tipo di dato 'Persona' non è attualmente supportato da alcuna applicazione. Spiacente.
+Sorry, could not find an application that supports the 'Person' data type.	Mail		Spiacente, il tipo di dato 'Contatto' non è attualmente supportato da alcuna applicazione.
 Date:	Mail		Data:
 Expert	Mail		Esperto
 Automatically mark mail as read:	Mail		Contrassegna automaticamente i messaggi come già letti:
@@ -83,6 +84,7 @@ Colored quotes:	Mail		Citazioni colorate:
 Automatic	Mail		Automatico
 Open this link	Mail		Apri questo collegamento
 Auto signature:	Mail		Firma automatica:
+Same subject	Mail		Stesso oggetto
 Send	Mail		Invia
 Open draft	Mail		Apri bozza
 Leave as 'New'	Mail	Do not translate New - this is non-localizable e-mail status	Lascia come 'Nuovo'
@@ -92,13 +94,11 @@ Find again	Mail		Cerca di nuovo
 Size:	Mail		Dimensione:
 To:	Mail		A:
 Need Tracker to move items to trash	Mail		Per spostare questi oggetti nel cestino, Tracker deve essere disponibile
-The mail_daemon could not be started:\n\t	Mail		Non è stato possibile avviare il server 'mail_daemon':\n\t
+The mail_daemon could not be started:\n\t	Mail		Non è stato possibile avviare il server mail_daemon:\n\t
 <no account found>	Mail		<account non trovato>
-Mail couldn't find its dictionary.	Mail		Mail non trova il dizionario.
-Mail preferences	Mail		Preferenze Mail
 helpful message	Mail		messaggio utile
  Read 	Mail		 Letto 
-Font:	Mail		Carattere:
+Font:	Mail		Tipo di carattere:
 Accounts…	Mail		Account…
 Previous	Mail		Precedente
 Include file attributes in attachments	Mail		Mantieni gli attributi dei file da allegare
@@ -108,6 +108,7 @@ Move to trash	Mail		Sposta nel cestino
 <none>	Mail		<vuoto>
 %d - Date	Mail		%d - Data
 Check spelling	Mail		Controllo ortografico
+Status:	Mail		Stato:
 Redo	Mail		Ripeti
 Leave as '%s'	Mail		Lascia come '%s'
 Print…	Mail		Stampa…
@@ -124,7 +125,7 @@ Forward	Mail		Inoltra
 Open attachment	Mail		Apri allegato
 mail	B_USER_DIRECTORY/mail		mail
 Save this message as a draft before closing?	Mail		Salva questo messaggio come bozza prima della chiusura?
-The mail_daemon is not running. The message is queued and will be sent when the mail_daemon is started.	Mail		Il server 'mail_daemon' non è attivo. Il messaggio è in coda e sarà inviato quando il server sarà avviato.
+The mail_daemon is not running. The message is queued and will be sent when the mail_daemon is started.	Mail		Il server mail_daemon non è attivo. Il messaggio è in coda e sarà inviato quando il server sarà avviato.
 None	Mail		Nessuno
 Resend	Mail		Invia di nuovo
 Hide	Mail		Nascondi
@@ -148,8 +149,7 @@ New mail message	Mail		Nuovo messaggio
 An error occurred trying to open this signature.	Mail		Si è verificato un errore durante l'apertura del file contenente la firma.
 Edit signatures…	Mail		Modifica firme…
 User interface	Mail		Interfaccia utente
-Quote	Mail		Cita
-Inconsistency occurred in the undo/redo buffer.	Mail		Si è verificata un'inconsistenza nel buffer 'annulla/ripeti'.
+Inconsistency occurred in the undo/redo buffer.	Mail		Si è verificata un'inconsistenza nel buffer annulla/ripeti.
 Remove attachment	Mail		Rimuovi allegato
 Set to…	Mail		Imposta a…
 Edit	Mail		Modifica
@@ -163,4 +163,4 @@ Spam	Mail		Indesiderata
 Couldn't open this signature. Sorry.	Mail		Non è possibile aprire questa firma. Spiacente.
 Revert	Mail		Ripristina
 Unknown	Mail		Sconosciuto
-Add enclosure…	Mail		Inserisci allegato…
+Increase quote level	Mail		Aumenta quota

@@ -1,0 +1,10 @@
+1	bokmål, norwegian; norwegian bokmål	application/x-vnd.moon-AudioAdapter.media_addon	2282220510
+Input format	CortexAudioAdapter		Inngangsformat
+Channels:	CortexAudioAdapter		Kanaler:
+stereo	CortexAudioAdapter		stereo
+mono	CortexAudioAdapter		mono
+Output format	CortexAudioAdapter		Utgangsformat
+Audio input	CortexAddOnsCommon		Lydinngang
+Sample format:	CortexAudioAdapter		Samplingsformat:
+Audio output	CortexAddOnsCommon		Lydutgang
+%groupname% parameters	CortexAddOnsCommon		%groupname% parametre

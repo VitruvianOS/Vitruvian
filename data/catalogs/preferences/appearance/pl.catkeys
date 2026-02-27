@@ -1,4 +1,4 @@
-1	polish	x-vnd.Haiku-Appearance	583615507
+1	polish	x-vnd.Haiku-Appearance	3146871853
 Control border	Colors tab		Obramowanie kontrolki
 Control mark	Colors tab		Znak sterujący
 Off	AntialiasingSettingsView		Wyłącz
@@ -8,10 +8,12 @@ Defaults	APRWindow		Przywróć domyślne
 Shadow	Colors tab		Cień
 Document background	Colors tab		Tło dokumentu
 List background	Colors tab		Tło listy
+No effect on running applications	DecorSettingsView		Brak wpływu na uruchomione programy
 Fixed font:	Font view		Font o stałej szerokości:
 Appearance	System name		Wygląd
 Reduce colored edges filter strength:	AntialiasingSettingsView		Zmniejszenie siły kolorowych filtrów krawędzi:
 Glyph hinting:	AntialiasingSettingsView		Hintowanie fontów:
+Default Haiku ControlLook	DecorSettingsView		Domyślny wygląd kontrolek w Haiku
 Menu item text	Colors tab		Tekst elementu menu
 About decorator	DecorSettingsView		O dekoratorze
 Antialiasing menu	AntialiasingSettingsView		Menu antyaliasingu
@@ -34,20 +36,23 @@ Menu font:	Font view		Font menu:
 Bold font:	Font view		Font pogrubiony:
 %decorName\n\nAuthors:\n\t%decorAuthors\n\nURL: %decorURL\nLicense: %decorLic\n\n%decorDesc\n	DecorSettingsView		%decorName\n\nAutorzy:\n\t%decorAuthors\n\nURL: %decorURL\nLicencja: %decorLic\n\n%decorDesc\n
 Choose Decorator	DecorSettingsView		Wybierz Dekorator
-Strong	AntialiasingSettingsView		Silny
 Failure	Colors tab		Niepowodzenie
+Strong	AntialiasingSettingsView		Silny
 Double:	DecorSettingsView		Podwójne:
 Selected menu item text	Colors tab		Tekst zaznaczonego elementu menu
 Size:	Font Selection view		Rozmiar:
 Panel background	Colors tab		Tło panelu
 Plain font:	Font view		Font zwykły:
+Automatically pick secondary colors	Colors tab		Automatycznie wybierz kolory pomocnicze
 Window tab text	Colors tab		Tekst zakładki okna
 Navigation pulse	Colors tab		Puls nawigacji
 LCD subpixel	AntialiasingSettingsView		Podpikselowe LCD
 Window tab	Colors tab		Zakładka okna
 Link text	Colors tab		Tekst odnośnika
 Tooltip background	Colors tab		Tło podpowiedzi
+ControlLook:	DecorSettingsView		Wygląd kontrolek:
 Scroll bar thumb	Colors tab		Pasek przewijania
+Default	DecorSettingsView		Domyślny
 Link visited	Colors tab		Odwiedzony odnośnik
 Selected menu item border	Colors tab		Obramowanie zaznaczonego elementu menu
 Tooltip text	Colors tab		Tekst podpowiedzi
@@ -63,11 +68,12 @@ Antialiasing type:	AntialiasingSettingsView		Typ antyaliasingu:
 Panel text	Colors tab		Tekst panelu
 Hinting menu	AntialiasingSettingsView		Menu hintingu
 Scroll bar:	DecorSettingsView		Pasek przewijania:
+Choose ControlLook	DecorSettingsView		Wybierz wygląd kontrolek
 Monospaced fonts only	AntialiasingSettingsView		Tylko fonty o stałej szerokości
 Document text	Colors tab		Tekst dokumentu
 Inactive window border	Colors tab		Nieaktywne obramowanie okna
 Colors	APRWindow		Kolory
+About control look	DecorSettingsView		O wyglądzie kontrolek
 Control highlight	Colors tab		Podkreślenie kontrolki
-Status bar	Colors tab		Pasek stanu
 Link hover	Colors tab		Zaznaczony odnośnik
 Single:	DecorSettingsView		Pojedyncze:

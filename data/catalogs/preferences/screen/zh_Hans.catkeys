@@ -1,38 +1,42 @@
-1	english	x-vnd.Haiku-Screen	4090394050
+1	english	x-vnd.Haiku-Screen	2577971458
 no	Screen		否
 bits/pixel	Screen		位/像素
-15 bits/pixel, 32768 colors	Screen		15 位/像素l，32768 色
+15 bits/pixel, 32768 colors	Screen		15 位/像素，32768 色
 Rows:	Screen		行：
 %.1f Hz	Screen		%.1f Hz
 The screen mode could not be set:\n\t%s\n	Screen		屏幕模式无法设置为：\n\t%s\n
-Keep	Screen		保持
+Serial no.: %s	Screen		序列号.: %s
 /other…	Screen		/其他...
+Keep	Screen		保持
 Horizonal frequency:\t%lu - %lu kHz\nVertical frequency:\t%lu - %lu Hz\n\nMaximum pixel clock:\t%g MHz	Screen		水平频率：\t%lu - %lu kHz\n垂直频率：\t%lu - %lu Hz\n\n最大像素频率：\t%g MHz
 Refresh rate:	Screen		刷新频率：
 Video format:	Screen		视频格式：
 Undo	Screen		撤销
 OK	Screen		确定
 Current workspace	Screen		当前工作区
+%ld × %ld	Screen	The '×' is the Unicode multiplication sign U+00D7	%ld × %ld
 vertically	Screen		垂直
 All workspaces	Screen		所有工作区
 Use laptop panel:	Screen		使用笔记本面板：
+Unknown	Screen		未知
 Could not write VESA mode settings file:\n\t	Screen		无法写入 VESA 模式设置文件：\n\t
-Settings will revert in %seconds.	Screen		设置将会在 %seconds 秒后恢复。
+Display info	Screen		显示器
+Settings will revert in %seconds.	Screen		设置将会在 %seconds 秒之后恢复。
 Cancel	Screen		取消
 Other…	Screen		其他...
 Screen	Screen		屏幕
 Colors:	Screen		颜色：
 yes	Screen		是
 Swap displays:	Screen		交替显示：
-%sSerial no.: %s	Screen		%s 无序列号。：%s
 8 bits/pixel, 256 colors	Screen		8 位/像素，256 色
-Revert	Screen		还原
+Revert	Screen		恢复
 always	Screen		总是
 Confirm changes	Screen		确认修改
 Warning	Screen		警告
 24 bits/pixel, 16 Million colors	Screen		24 位/像素，16万色
 Hz	Screen		Hz
 Workspaces	Screen		工作区
+Brightness:	Screen		亮度：
 32 bits/pixel, 16 Million colors	Screen		32 位/像素，16万色
 Done	Screen		完成
 16 bits/pixel, 65536 colors	Screen		16 位/像素，65536色
@@ -43,7 +47,7 @@ Combine displays:	Screen		组合显示：
 Unknown mode	Screen		未知模式
 About	Screen		关于
 Columns:	Screen		列：
-Resolution:	Screen		分辨率
+Resolution:	Screen		分辨率:
 Apply	Screen		应用
 horizontally	Screen		水平
 disable	Screen		禁用

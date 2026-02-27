@@ -1,37 +1,48 @@
-1	korean	x-vnd.Haiku-PowerStatus	4055870417
-Design capacity low warning: 	PowerStatus		수용량 낮음 경고:
-Show percent	PowerStatus		백분율 보여주기
-Design capacity: 	PowerStatus		수용량:
-Type: 	PowerStatus		형식:
-non-rechargeable	PowerStatus		재충전 불가능
-Empty battery slot	PowerStatus		빈 배터리 슬롯
+1	korean	x-vnd.Haiku-PowerStatus	388505242
 Run in window	PowerStatus		창으로 실행
-PowerStatus	System name		전원상태
-Battery info…	PowerStatus		배터리 정보...
-Damaged battery	PowerStatus		손상된 배터리
-Show time	PowerStatus		시간 보기
-Last full charge: 	PowerStatus		마지막 완전 충전:
-Battery unused	PowerStatus		사용안한 배터리
 Extended battery info	PowerStatus		확장 배터리 정보
-Current rate: 	PowerStatus		현재 비율:
-discharging	PowerStatus		방전중
-Show text label	PowerStatus		텍스트 라벨 보여주기
-About…	PowerStatus		..에 관하여...
-Model number: 	PowerStatus		모델 숫자:
-Install in Deskbar	PowerStatus		데스크바에 설치
-Capacity: 	PowerStatus		용량:
-Battery discharging	PowerStatus		배터리 방전중
-Serial number: 	PowerStatus		시리얼 번호:
-Capacity granularity 1: 	PowerStatus		용량 정밀도 1: 
-OEM info: 	PowerStatus		OEM 정보: 
-Design voltage: 	PowerStatus		수용 전압:
-Battery charging	PowerStatus		배터리 충전중
-Design capacity warning: 	PowerStatus		수용량 경고:
-Quit	PowerStatus		나가기
-rechargeable	PowerStatus		재충전가능
-charging	PowerStatus		충전중
-You can run PowerStatus in a window or install it in the Deskbar.	PowerStatus		당신은 전원상태를 창으로 실행시키거너 데스크바에 설치할 수 있습니다.
 Show status icon	PowerStatus		상태 아이콘 보기
+Battery charging	PowerStatus		배터리 충전중
+Design capacity low warning: 	PowerStatus		설계용량 낮음 경고:
+The battery level is critical, please plug in the device immediately.	PowerStatus		배터리 수준이 매우 낮습니다. 즉시 전원을 연결 해 주십시오.
+non-rechargeable	PowerStatus		충전 불가
+Last full charge: 	PowerStatus		마지막 완전 충전:
+ mV	PowerStatus		 mV
+Current rate: 	PowerStatus		현재 비율: 
+Show text label	PowerStatus		텍스트 라벨 보기
+Quit	PowerStatus		종료
+Battery not charging	PowerStatus		배터리가 충전 중이 아닙니다
+Battery low	PowerStatus		배터리 낮음
+Model number: 	PowerStatus		모델 번호: 
+Battery unused	PowerStatus		배터리 사용 안함
+Type: 	PowerStatus		형식: 
+Damaged or missing battery	PowerStatus		배터리가 파손되었거나 없음
+ mAh	PowerStatus		 mAh
+Battery discharging	PowerStatus		배터리 방전중
+Design voltage: 	PowerStatus		설계 전압: 
+discharging	PowerStatus		방전중
+rechargeable	PowerStatus		충전 가능
+Battery info…	PowerStatus		배터리 정보...
+Show time	PowerStatus		시간 보기
+ mA	PowerStatus		 mA
+About…	PowerStatus		대하여…
+Serial number: 	PowerStatus		시리얼 번호: 
+Battery critical	PowerStatus		배터리 매우 낮음
+Capacity: 	PowerStatus		용량: 
+ mW	PowerStatus		 mW
+Show percent	PowerStatus		백분율 보기
+Capacity granularity 1: 	PowerStatus		용량 정밀도 1: 
+The battery level is getting low, please plug in the device.	PowerStatus		배터리 수준이 낮아지고 있습니다. 전원을연결 해 주십시오.
+Design capacity warning: 	PowerStatus		설계 용량 경고: 
 Capacity granularity 2: 	PowerStatus		용량 정밀도 2: 
-Technology: 	PowerStatus		기술:
+Too bad!	PowerStatus		안됬군요!
+Technology: 	PowerStatus		기술: 
+not charging	PowerStatus		충전중이 아님
+ mWh	PowerStatus		 mWh
+PowerStatus	System name		PowerStatus
+Design capacity: 	PowerStatus		설계 용량: 
+OEM info: 	PowerStatus		OEM 정보: 
 no battery	PowerStatus		배터리 없음
+Empty battery slot	PowerStatus		빈 배터리 슬롯
+Install in Deskbar	PowerStatus		데스크바에 설치
+charging	PowerStatus		충전중

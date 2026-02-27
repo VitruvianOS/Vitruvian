@@ -1,0 +1,24 @@
+1	turkish	x-vnd.Haiku-NetworkStatus	3050452699
+IPv6 address:	NetworkStatusView		IPv6 adresi:
+Quit	NetworkStatusView		Çık
+Unknown	NetworkStatusView		Bilinmeyen
+Launching the network preflet failed.\n\nError: 	NetworkStatusView		Ağ paneli başlatılamadı.\n\nHata: 
+Install in Deskbar	NetworkStatus		Masaüstü Çubuğu’na kur
+Open network preferences…	NetworkStatusView		Ağ tercihlerini aç…
+NetworkStatus	System name		Ağ Durumu
+Broadcast:	NetworkStatusView		Yayın:
+OK	NetworkStatusView		Tamam
+%appname% options:\n\t--deskbar\tautomatically add replicant to Deskbar\n\t--help\t\tprint this info and exit	NetworkStatus		%appname% seçenekleri:\n\t--deskbar\tyineleneni kendiliğinden Masaüstü Çubuğu’na ekle\n\t--help\t\tbu bilgiyi yazdır ve çık
+No link	NetworkStatusView		Bağlantı yok
+Connected	NetworkStatusView		Bağlı
+Could not join wireless network:\n	NetworkStatusView		Kablosuz ağa bağlanılamadı:\n
+Network Status	NetworkStatusView		Ağ Durumu
+Deskbar is not running, giving up.	NetworkStatus		Masaüstü Çubuğu çalışmıyor, vazgeçildi.
+You can run %appname% in a window or install it in the Deskbar.	NetworkStatus		%appname% uygulamasını bir pencerede çalıştırabilir veya onu Masaüstü Çubuğu’na yerleştirebilirsiniz.
+Netmask:	NetworkStatusView		Ağ maskesi:
+No stateful configuration	NetworkStatusView		Durum yapılandırması yok
+IPv4 address:	NetworkStatusView		IPv4 adresi:
+%ifaceName information:\n	NetworkStatusView		%ifaceName bilgisi:\n
+Run in window	NetworkStatus		Pencerede çalıştır
+<no wireless networks found>	NetworkStatusView		<kablosuz ağ bulunamadı>
+Configuring	NetworkStatusView		Yapılandırılıyor

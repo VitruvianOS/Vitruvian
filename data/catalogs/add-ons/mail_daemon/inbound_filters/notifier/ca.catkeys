@@ -1,0 +1,14 @@
+1	catalan; valencian	x-vnd.Haiku-NewMailNotification	2396784785
+Log window	NotifierConfigView		Finestra d'entrada
+none	NotifierConfigView		cap
+Alert	NotifierConfigView		Alerta
+OK	NotifierFilter		D'acord
+Central alert	NotifierConfigView		Alerta central
+Beep	NotifierConfigView		Bip
+Central beep	NotifierConfigView		Bip central
+{0, plural, one{One new message} other{# new messages}}	NotifierFilter		{0, plural, one{missatge nou} other{# missatges nous}}
+New mail notification	NotifierFilter		Notificació de correu nou
+New messages	NotifierFilter		Missatges nous
+Method:	NotifierConfigView		Mètode:
+Keyboard LEDs	NotifierConfigView		LEDs del teclat
+You have {0, plural, one{one new message} other{# new messages}} for %account.	NotifierFilter		Teniu {0, plural, one{missatge nou} other{# missatges nous}} per a %account.

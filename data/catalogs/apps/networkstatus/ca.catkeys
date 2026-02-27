@@ -1,20 +1,24 @@
-1	catalan; valencian	x-vnd.Haiku-NetworkStatus	3491552359
-Netmask	NetworkStatusView		Màscara de xarxa
+1	catalan; valencian	x-vnd.Haiku-NetworkStatus	3050452699
+IPv6 address:	NetworkStatusView		Adreça IPv6:
 Quit	NetworkStatusView		Surt
 Unknown	NetworkStatusView		Desconegut
-Launching the network preflet failed.\n\nError: 	NetworkStatusView		Ha fallat l'execució de les preferències de xarxa.\n\nError : 
-Install in Deskbar	NetworkStatus		Instal·la-ho a la Barra de l'Escriptori
+Launching the network preflet failed.\n\nError: 	NetworkStatusView		Ha fallat l'execució de l'aplicació de preferències de xarxa.\n\nError : 
+Install in Deskbar	NetworkStatus		Instal·la-ho a la barra d'escriptori
 Open network preferences…	NetworkStatusView		Obre les preferències de la xarxa...
-NetworkStatus	System name		EstatDeLaXarxa
+NetworkStatus	System name		Estat de la xarxa
+Broadcast:	NetworkStatusView		Difusió:
 OK	NetworkStatusView		D'acord
+%appname% options:\n\t--deskbar\tautomatically add replicant to Deskbar\n\t--help\t\tprint this info and exit	NetworkStatus		Opcions per a %appname%:\n\t--deskbar\tafegeix automàticament el replicant a la barra d'escriptori\n\t--help\t\tImprimeix aquesta informació i surt
 No link	NetworkStatusView		Cap enllaç
-Could not join wireless network:\n	NetworkStatusView		No ha estat possible connectar a la xarxa sense fil:\n
-Ready	NetworkStatusView		Preparat
+Connected	NetworkStatusView		Connectat
+Could not join wireless network:\n	NetworkStatusView		No s'ha pogut connectar a la xarxa sense fil:\n
 Network Status	NetworkStatusView		Estat de la xarxa
-Address	NetworkStatusView		Adreça
-No stateful configuration	NetworkStatusView		No hi ha cap configuració dinàmica
-Broadcast	NetworkStatusView		Difusió
+Deskbar is not running, giving up.	NetworkStatus		La barra d'escriptori no s'executa. Ho deixo estar.
+You can run %appname% in a window or install it in the Deskbar.	NetworkStatus		Podeu executar %appname% en una finestra o instal·lar-la a la barra de l'escriptori.
+Netmask:	NetworkStatusView		Màscara de xarxa:
+No stateful configuration	NetworkStatusView		No hi ha cap configuració dinàmica.
+IPv4 address:	NetworkStatusView		Adreça IPv4:
 %ifaceName information:\n	NetworkStatusView		Informació de %ifaceName:\n
 Run in window	NetworkStatus		Executa en una finestra
 <no wireless networks found>	NetworkStatusView		<no s'ha trobat cap xarxa sense fil>
-Configuring	NetworkStatusView		S'està configurant
+Configuring	NetworkStatusView		Es configura

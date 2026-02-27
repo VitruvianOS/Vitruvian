@@ -1,4 +1,4 @@
-1	french	x-vnd.Haiku-Appearance	663472720
+1	french	x-vnd.Haiku-Appearance	838951555
 Control border	Colors tab		Bordure des contrôles
 Control mark	Colors tab		Point de contrôle
 Off	AntialiasingSettingsView		Désactivé
@@ -36,16 +36,18 @@ Menu font:	Font view		Police des menus :
 Bold font:	Font view		Caractères gras :
 %decorName\n\nAuthors:\n\t%decorAuthors\n\nURL: %decorURL\nLicense: %decorLic\n\n%decorDesc\n	DecorSettingsView		%decorName\n\nAuteurs :\n\t%decorAuthors\n\nURL : %decorURL\nLicence : %decorLic\n\n%decorDesc\n
 Choose Decorator	DecorSettingsView		Choisir un décorateur
-Strong	AntialiasingSettingsView		Épais
 Failure	Colors tab		Échec
+Strong	AntialiasingSettingsView		Épais
 Double:	DecorSettingsView		Double :
 Selected menu item text	Colors tab		Texte de l’élément sélectionné dans le menu
 Size:	Font Selection view		Taille :
 Panel background	Colors tab		Arrière plan des panneaux
 Plain font:	Font view		Police simple :
+Automatically pick secondary colors	Colors tab		Sélection automatique des couleurs secondaires
 Window tab text	Colors tab		Texte des titres de fenêtres
 Navigation pulse	Colors tab		Pulsation de navigation
 LCD subpixel	AntialiasingSettingsView		Sous-pixel LCD
+Progress bar	Colors tab		Barre de progression
 Window tab	Colors tab		Titre des fenêtres
 Link text	Colors tab		Texte du lien
 Tooltip background	Colors tab		Arrière plan des bulles d’aide
@@ -74,6 +76,5 @@ Inactive window border	Colors tab		Bordure de fenêtre inactive
 Colors	APRWindow		Couleurs
 About control look	DecorSettingsView		À propos du Contrôleur d’aspect
 Control highlight	Colors tab		Mise en valeur de contrôle
-Status bar	Colors tab		Barre d’état
 Link hover	Colors tab		Lien survolé
 Single:	DecorSettingsView		Simple :

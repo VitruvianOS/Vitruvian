@@ -1,0 +1,53 @@
+1	portuguese	application/x-vnd.Cortex.InfoView	590006701
+Offset	InfoView		Deslocamento
+Description	DormantNodeInfoView		Descrição
+Byte order	InfoView		Ordem de bytes
+Connection	InfoView		Conexão
+Output formats	DormantNodeInfoView		Formatos de saída
+History	InfoView		Histórico
+Input formats	DormantNodeInfoView		Formatos de entrada
+Signature	AppNodeInfoView		Assinatura
+Video data between	InfoView		Dados de vídeo entre
+Any number	DormantNodeInfoView	For 'Max. instances' field	Qualquer número
+Flags	InfoView		Atributos
+Media output	InfoView		Saída de multimédia
+Active lines	InfoView		Linhas ativas
+Buffer size	InfoView		Tamanho do buffer
+\n- Quality:	FileNodeInfoView		\n- Qualidade:
+Kinds	LiveNodeInfoView		Tipos
+Application	AppNodeInfoView		Aplicação
+Max. instances	DormantNodeInfoView		Nº máx. instâncias
+\n- Duration:	FileNodeInfoView		\n- Duração:
+Dormant media node	DormantNodeInfoView		Nó de média inactivo
+Latency	LiveNodeInfoView		Latência
+Media type	InfoView		Tipo de multimédia
+Live media node	LiveNodeInfoView		Nó de média activo
+Kinds	DormantNodeInfoView		Tipos
+Node ID	LiveNodeInfoView		ID do nó
+Resolution	InfoView		Resolução
+Chunk size	InfoView		Tamanho do bloco
+File format	AppNodeInfoView		Formato de ficheiro
+Matrix mask	InfoView		Máscara de matriz
+Channel mask	InfoView		Máscara de canal
+Orientation	InfoView		Orientação
+Channels	InfoView		Canais
+Sample rate	InfoView		Taxa de amostragem
+File format	FileNodeInfoView		Formato de ficheiro
+(no file)	FileNodeInfoView		(nenhum ficheiro)
+Media input	InfoView		Entrada de multimédia
+Bit rate	InfoView		Taxa de bit
+Input format	DormantNodeInfoView		Formato de entrada
+Format	InfoView		Formato
+Version	AppNodeInfoView		Versão
+Frame size	InfoView		Tamanho de quadro
+Run mode	LiveNodeInfoView		Modo de execução
+\n- Codec:	FileNodeInfoView		\n- Codec:
+Port	LiveNodeInfoView		Porta
+Output format	DormantNodeInfoView		Formato de saída
+Aspect ratio	InfoView		Proporção
+Application-owned node	AppNodeInfoView		Nó pertencente a aplicação
+Tracks	FileNodeInfoView		Faixas
+Source	InfoView		Origem
+Destination	InfoView		Destino
+Copyright	FileNodeInfoView		Copyright
+ID:	FileNodeInfoView		ID:

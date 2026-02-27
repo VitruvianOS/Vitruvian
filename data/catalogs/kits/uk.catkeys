@@ -1,42 +1,50 @@
-1	ukrainian	x-vnd.Haiku-libbe	3337473349
-{0, plural, one{# byte} other{# bytes}}	StringForSize		{0, plural, one{# byte}, other{# bytes}}
-All Rights Reserved.	AboutWindow		Усі права застережено.
+1	ukrainian	x-vnd.Haiku-libbe	310849835
+All Rights Reserved.	AboutWindow		Всі права захищені.
 gold master	AboutWindow		золотий майстер
 Undo	TextView		Відмінити
+OK	PrintJob		ОК
+OK	Dragger		ОК
 gamma	AboutWindow		гамма
 development	AboutWindow		розробка
-OK	Dragger		Гаразд
-OK	PrintJob		Гаразд
-Print Server is not responding.	PrintJob		Принт сервер недоступний.
+{0, plural, one{%s byte/s} other{%s bytes/s}}	StringForRate	units per second	{0, plural, one{(%s байт/с)} few{(%s байти/с)} other{%s (байтів/с)}}
+Print Server is not responding.	PrintJob		Принт-сервер недоступний.
 About %app%	AboutMenuItem		Про %app%
-Warning	Dragger		Увага
+Warning	Dragger		Попередження
 Green:	ColorControl		Зелений:
-Redo	TextView		Відмінити відміну
+Redo	TextView		Повтор дії
 No pages to print!	PrintJob		Жодної сторінки для друку!
 beta	AboutWindow		бета
-OK	ZombieReplicantView		Гаразд
+%s MiB	StringForSize	size unit	%s MБ
+OK	ZombieReplicantView		ОК
 Cut	TextView		Вирізати
-%3.2f GiB	StringForSize		%3.2f GiB
-Can't delete this replicant from its original application. Life goes on.	Dragger		Неможливо видалити реплікант з рідної прграми. Життя продовжується.
+Default	Default decorator about box		За замовчуванням
+Can't delete this replicant from its original application. Life goes on.	Dragger		Не вдалося видалити реплікант з оригінальної програми. Життя продовжується.
+%s KiB	StringForSize	size unit	%s кБ
 Error	ZombieReplicantView		Помилка
 Paste	TextView		Вставити
-OK	AboutWindow		Гаразд
-Special Thanks:	AboutWindow		Особлива подяка:
-%.2f TiB	StringForSize		%.2f TiB
-Remove replicant	Dragger		Видалити реплікант
+OK	AboutWindow		ОК
+%s MiB/s	StringForRate	units per second	%s MБ/с
+%s TiB	StringForSize	size unit	%s TБ
+Default Haiku window decorator.	Default decorator about box		Декоратор вікон Haiku за замовчуванням.
+%s GiB	StringForSize	size unit	%s ГБ
+%s B	StringForSize	size unit, narrow space	%s Б
+Remove replicant	Dragger		Прибрати реплікант
 Version	AboutWindow		Версія
 Red:	ColorControl		Червоний:
 <empty>	Menu		<пусто>
 Copy	TextView		Копіювати
 Select all	TextView		Вибрати все
 alpha	AboutWindow		альфа
-%3.2f MiB	StringForSize		%3.2f MiB
 Error	PrintJob		Помилка
-About %app%	AboutWindow		Про %app%
+%s TiB/s	StringForRate	units per second	%s TБ/с
 About %app…	Dragger		Про %app…
-Version history:	AboutWindow		Історія версії:
-Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Неможливо визначити програму для репліканта. Не знайдено підпису програми.\n%error
-%3.2f KiB	StringForSize		%3.2f KiB
+About %app%	AboutWindow		Про %app%
+{0, plural, one{%s byte} other{%s bytes}}	StringForSize	size unit	{0, plural, one{(%s байт)} few{(%s байти)} other{%s (байтів)}}
+%s GiB/s	StringForRate	units per second	%s ГБ/с
+Version history:	AboutWindow		Історія версій:
+Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Неможливо визначити програму для репліканта. Не знайдено сигнатуру програми.\n%error
+%s KiB/s	StringForRate	units per second	%s кБ/с
 Blue:	ColorControl		Синій:
-Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		Неможливо створити реплікант для \"%description\".\n%error
+Special thanks:	AboutWindow		Особлива подяка:
+Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		Неможливо створити реплікант для \«%description\».\n%error
 Written by:	AboutWindow		Автор:

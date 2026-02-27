@@ -1,4 +1,4 @@
-1	russian	x-vnd.Be-MAIL	3155788869
+1	russian	x-vnd.Be-MAIL	3945726882
 Set to Saved	Mail		Послать в сохраненные
 Your main text contains %ld unencodable characters. Perhaps a different character set would work better? Hit Send to send it anyway (a substitute character will be used in place of the unencodable ones), or choose Cancel to go back and try fixing it up.	Mail		Ваш основной текст содержит %ld некодируемых символов. Возможно, другая кодировка подойдет лучше? Нажмите Отправить чтобы все равно отправить письмо (некодиуемые символы будут заменены на кодируемые), или нажмите Отмена и попробуйте исправить их вручную.
 Text wrapping:	Mail		Перенос строк:
@@ -13,6 +13,7 @@ Copy to new	Mail		Копировать в новое
 Save as draft	Mail		Сохранить как черновик
 Encoding:	Mail		Кодировка:
 Print	Mail		Печать
+Decrease quote level	Mail		Убрать префикс цитирования
 Encoding	Mail		Кодировка:
 Default account:	Mail		Аккаунт по умолчанию:
 Message	Mail		Сообщение
@@ -36,10 +37,8 @@ Same recipient	Mail		Тот же получатель
 Previous message	Mail		Предыдущее письмо
 (Address unavailable)	Mail		(Адрес недоступен)
 Mail	System name		Почта
-Enclosure: %name% (Type: %type%)	Mail	Don't translate the variables %name% and %type%.	Вложение: %name% (Tип: %type%)
 Copy link location	Mail		Копировать адрес ссылки
-Attachments: 	Mail		Вложения: 
-Remove enclosure	Mail		Удалить вложения
+Add attachment…	Mail		Добавить вложение…
 Next	Mail		Следущее
 Attachments:	Mail		Вложения:
 Show icons only	Mail		Отображать только иконки
@@ -58,8 +57,8 @@ Reply to sender	Mail		Ответить отправителю
 \\n - Newline	Mail		\\n - Новая строка
 Copy	Mail		Копия
 Add signature	Mail		Добавить подпись
+Attachment: %name% (Type: %type%)	Mail	Don't translate the variables %name% and %type%.	Вложение: %name% (Тип: %type%)
 %n - Full name	Mail		%n - Полное имя
-Remove quote	Mail		Удалить цитату
 Signature	Mail		Подпись
 Use default account	Mail		Использовать аккаунт по умолчанию
 draft	B_USER_DIRECTORY/mail/draft		Черновики
@@ -97,8 +96,6 @@ To:	Mail		Кому:
 Need Tracker to move items to trash	Mail		Для перемещение объектов в корзину требуется запущенный Tracker
 The mail_daemon could not be started:\n\t	Mail		Невозможно запустить mail_daemon:\n\t
 <no account found>	Mail		<аккаунт не найден>
-Mail couldn't find its dictionary.	Mail		Невозможно найти файл словаря.
-Mail preferences	Mail		Настройки почты
 helpful message	Mail		полезное сообщение
  Read 	Mail		 Прочитанным 
 Font:	Mail		Шрифт:
@@ -111,6 +108,7 @@ Move to trash	Mail		Переместить в корзину
 <none>	Mail		<пусто>
 %d - Date	Mail		%d - Дата
 Check spelling	Mail		Проверять орфографию
+Status:	Mail		Статус:
 Redo	Mail		Повторить
 Leave as '%s'	Mail		Оставить как '%s'
 Print…	Mail		Печать…
@@ -151,7 +149,6 @@ New mail message	Mail		Новое сообщение
 An error occurred trying to open this signature.	Mail		Возникла ошибка при попытке открытия этой подписи.
 Edit signatures…	Mail		Изменить подписи…
 User interface	Mail		Интерфейс пользователя
-Quote	Mail		Цитата
 Inconsistency occurred in the undo/redo buffer.	Mail		Произошло несоответствие в буфере отмены/повтора.
 Remove attachment	Mail		Удалить вложение
 Set to…	Mail		Пометить как…
@@ -166,4 +163,4 @@ Spam	Mail		Спам
 Couldn't open this signature. Sorry.	Mail		Невозможно открыть эту подпись. Извините.
 Revert	Mail		Вернуть
 Unknown	Mail		Неизвестно
-Add enclosure…	Mail		Добавить вложение…
+Increase quote level	Mail		Добавить префикс цитирования

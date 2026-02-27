@@ -1,10 +1,8 @@
-1	swedish	x-vnd.Haiku-MediaConverter	2251404027
-Writing audio track: %d%% complete	MediaConverter		Skriver ljudspår: %d%% färdigt.
+1	swedish	x-vnd.Haiku-MediaConverter	1249914255
 Input file not recognized as Audio or Video	MediaConverter		Indatafilen är inte igenkänd som ljud eller video
-%u x %u, %.2ffps	MediaFileInfo	Width x Height, fps	%u x %u, %.2ffps
-Video quality: %3d%%	MediaConverter		Videokvalité: %3d%%
 Source files	MediaConverter		Källfiler
-Error writing video frame %ld	MediaConverter		Fel vid skrivning av videoram %ld
+Error writing video frame %lld	MediaConverter		Fel vid skrivning av videoframe %lld
+Audio quality: %s	MediaConverter		Ljudkvalitet: %s
 Error converting '%filename'	MediaConverter		Fel vid konvertering av '%filename'
 Selected directory not found. Defaulting to /boot/home	MediaConverter		Kunde inte hitta valt bibliotek. Återgår till /boot/home
 Conversion completed	MediaConverter		Konverteringen klar
@@ -13,6 +11,7 @@ MediaConverter+:SaveDirectory	MediaConverter		MediaKonverterare+:SaveDirectory
 Error creating video.	MediaConverter		Fel vid skapande av video.
 Cancelling	MediaConverter		Avbryter
 None available	Audio codecs		Inte tillgängliga
+The file has multiple audio or video tracks, only the first one of each will be converted.	MediaConverter		Filen har flera ljud- eller videospår, bara det första av varje kommer att konverteras.
 No file selected	MediaConverter-FileInfo		Ingen fil vald
 High	MediaConverter		Hög
 {0, plural, one{The file was not recognized as a supported media file:} other{# files were not recognized as supported media files:}}	MediaConverter		{0, plural, one{Filen kändes inte igen som en mediafil:} other{# filerna kändes inte igen som mediafiler:}}
@@ -27,7 +26,7 @@ Error loading a file	MediaConverter		Fel vid inläsning av en fil
 Encoder parameters	MediaConverter-EncoderWindow		Kodningsparametrar
 Open…	Menu		Öppna...
 Audio encoding:	MediaConverter		Ljudkodning:
-Audio quality: %3d%%	MediaConverter		Ljudkvalité: %3d%%
+Multi-track file detected	MediaConverter		Flerspårsfil upptäcktes
 Cancelling…	MediaConverter		Avbryter...
 Output file '%filename' created	MediaConverter		Utfil '%filename' skapad
 Output folder	MediaConverter		Utmapp
@@ -40,10 +39,10 @@ Conversion cancelled	MediaConverter		Konverteringen avbröts
 Low	MediaConverter		Låg
 Error loading files	MediaConverter		Fel vid inläsning av filer
 {0, plural, one{# bit} other{# bits}}	MediaFileInfo		{0, plural, one{# bit} other{# bits}}
+Video quality: %s	MediaConverter		Videokvalitet: %s
 End   [ms]: 	MediaConverter		Slut [ms]:
 Cancel	MediaConverter		Avbryt
 OK	MediaConverter-FileInfo		OK
-Error read audio frame %ld	MediaConverter		Fel vid läsning av ljudram %ld
 Video encoding:	MediaConverter		Videokodning:
 An error has occurred reading the file info.\n\nError : 	MediaConverter-FileInfo		Ett fel uppstod vid inläsning av filinformationen.\n\nFel:
 Error	MediaConverter		Fel
@@ -51,24 +50,28 @@ File details	MediaConverter		Fildetaljer
 No audio	Audio codecs list		Inget ljud
 Drop media files onto this window	MediaConverter		Släpp mediafiler i detta fönster
 {0, plural, one{# frame} other{# frames}}	MediaFileInfo		{0, plural, one{# frame} other{# frames}}
+Error read audio frame %lld	MediaConverter		Fel vid läsning av ljudframe %lld
 Quit	Menu		Avsluta
 {0, plural, one{# byte} other{# bytes}}	MediaFileInfo		{0, plural, one{# byte} other{# bytes}}
+Writing audio track: %s complete	MediaConverter		Skriver ljudspår: %s klar
 Duration:	MediaConverter-FileInfo		Speltid:
 MediaConverter	System name		MediaKonverterare
+Writing video track: %s complete	MediaConverter		Skriver videospår: %s klar
 Error launching: %strError%	MediaConverter		Fel vid start: %strError%
+Error writing audio frame %lld	MediaConverter		Fel vid skrivning av ljudframe %lld
 File format:	MediaConverter		Filformat:
-Error writing audio frame %ld	MediaConverter		Fel vid skrivning av ljudram %ld
 File	Menu		Arkiv
 Video quality not supported	MediaConverter		Videokvalitén stöds ej
 Select this folder	MediaConverter		Välj denna mapp
-Error read video frame %ld	MediaConverter		Fel vid läsning av videoram %ld
 %.1f kHz %ld channel	MediaFileInfo		%.1f kHz %ld kanaler
+Understood	MediaConverter		Förstått
+%u × %u, %.2ffps	MediaFileInfo	Width × Height, fps;The '×' is the Unicode multiplication sign U+00D7	%u × %u, %.2ffps
 %d bit 	MediaFileInfo		%d bitar
 No video	Video codecs list		Inga filmer
 Continue	MediaConverter		Fortsätt
 Convert	MediaConverter		Konvertera
 Audio quality not supported	MediaConverter		Ljudkvalité stöds ej
 Error writing to location: %strPath%. Defaulting to location: /boot/home	MediaConverter		Fel vid skrivande till plats: %strPath%. Återgår till plats: /boot/home
-Writing video track: %d%% complete	MediaConverter		Skriver videospår: %d%% färdigt.
+Error read video frame %lld	MediaConverter		Fel vid läsning av videoframe %lld
 Preview	MediaConverter		Förhandsvisa
 Start [ms]: 	MediaConverter		Start [ms]:

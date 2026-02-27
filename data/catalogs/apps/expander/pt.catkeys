@@ -1,13 +1,49 @@
-1	portuguese	x-vnd.Haiku-Expander	3298829330
-Cancel	ExpanderWindow		Cancelar
-Close	ExpanderMenu		Fechar
-Continue	ExpanderWindow		Continuar
+1	portuguese	x-vnd.Haiku-Expander	2040688293
 Destination	ExpanderWindow		Destino
-Expand	ExpanderMenu		Expandir
-Expander: Open	ExpanderWindow		Expander: Abrir
-Settings	ExpanderMenu		Definições
-Source	ExpanderWindow		Fonte
-Stop	ExpanderMenu		Parar
-Stop	ExpanderWindow		Parar
+Other	ExpanderPreferences		Outro
+Automatically show contents listing	ExpanderPreferences		Mostrar automaticamente listagem do conteúdo
+Expander	System name		Expander
+Set source…	ExpanderMenu		Definir a fonte…
+OK	ExpanderWindow		OK
 The destination is not a folder.	ExpanderWindow		O destino não é uma pasta.
-is not supported	ExpanderWindow		não é suportado
+The folder was either moved, renamed or not supported.	ExpanderWindow		A pasta foi movida ou renomeada, ou não é suportada.
+Close window when done expanding	ExpanderPreferences		Fechar a janela quando terminar a expansão
+Close	ExpanderMenu		Fechar
+Create	ExpanderWindow		Criar
+Creating listing for '%s'…	ExpanderWindow		A criar listagem para '%s'…
+Show contents	ExpanderMenu		Mostrar conteúdo
+Are you sure you want to stop expanding this archive? The expanded items may not be complete.	ExpanderWindow		Tem a certeza de que pretende interromper a descompressão deste arquivo? Os itens descomprimidos poderão não estar completos.
+Settings	ExpanderMenu		Definições
+Expand	ExpanderWindow		Expandir
+Open destination folder after extraction	ExpanderPreferences		Abrir a pasta de destino após a extracção
+Same directory as source (archive) file	ExpanderPreferences		Mesma pasta que o ficheiro (arquivo) de origem
+Stop	ExpanderWindow		Parar
+Cancel	ExpanderWindow		Cancelar
+Error when expanding archive	ExpanderWindow		Erro ao expandir o ficheiro
+Expand	ExpanderMenu		Expandir
+Failed to create the destination folder.	ExpanderWindow		Falhou a criação da pasta de destino.
+Settings…	ExpanderMenu		Definições…
+Select current	DirectoryFilePanel		Seleccionar actual
+Expanding '%s'…	ExpanderWindow		A descomprimir '%s'…
+OK	ExpanderPreferences		OK
+File expanded	ExpanderWindow		Ficheiro expandido
+Automatically expand files	ExpanderPreferences		Expandir automaticamente os ficheiros
+Select	DirectoryFilePanel		Seleccionar
+Show contents	ExpanderWindow		Mostrar conteúdo
+Stop	ExpanderMenu		Parar
+Select '%s'…	DirectoryFilePanel		Selecionar '%s'…
+Expansion	ExpanderPreferences		Expansão
+Set destination…	ExpanderMenu		Definir destino…
+Continue	ExpanderWindow		Continuar
+ is not supported	ExpanderWindow		 não é suportado
+Cancel	ExpanderPreferences		Cancelar
+Use:	ExpanderPreferences		Usar:
+Destination folder	ExpanderPreferences		Pasta de destino
+Leave destination folder path empty	ExpanderPreferences		Deixar vazio o caminho para pasta de destino
+Destination folder doesn't exist. Would you like to create it?	ExpanderWindow		A pasta de destino não existe. Deseja criá-la?
+The file doesn't exist	ExpanderWindow		O ficheiro não existe
+Hide contents	ExpanderWindow		Ocultar conteúdo
+Source	ExpanderWindow		Fonte
+The destination is read only.	ExpanderWindow		O destino é só de leitura.
+Select	ExpanderPreferences		Seleccionar
+File	ExpanderMenu		Ficheiro

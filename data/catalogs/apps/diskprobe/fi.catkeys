@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-DiskProbe	2944605311
+1	finnish	x-vnd.Haiku-DiskProbe	1130290771
 Raw editor	AttributeWindow		Raakamuokkain
 Remove	AttributeWindow		Poista
 Close	ProbeView		Sulje
@@ -29,7 +29,9 @@ Open file…	FileWindow		Avaa tiedosto…
 32 bit unsigned pointer:	TypeEditors		32-bittinen etumerkitön osoitin:
 DiskProbe request	DiskProbe		Levykoestajapyyntö
 Hex	ProbeView	A menu item, as short as possible, noun is recommended if it is shorter than adjective.	Heksadesimaali
+Block %lld (0x%Lx)	ProbeView		Estä %lld (0x%Lx)
 Writing to the file failed:\n%s\n\nAll changes will be lost when you quit.	ProbeView		Tiedostoon kirjoittaminen epäonnistui:\n%s\n\nKaikki muutokset katoavat, kun poistut.
+Native: %lld (0x%0*Lx)	ProbeView		Kotoperäinen: %lld (0x%0*Lx)
 Examine device:	OpenWindow		Tutki laitetta:
 Number editor	TypeEditors		Numeromuokkain
 Icon	TypeEditors		Kuvake
@@ -37,11 +39,9 @@ Attribute	ProbeView		Attribuutti
 Don't save	ProbeView		Älä tallenna
 Undo	ProbeView		Peru
 Flattened bitmap	TypeEditors		Litistetty bittikarttatiedosto
-Block %Ld (0x%Lx)	ProbeView		Lohko %Ld (0x%Lx)
 Cancel	OpenWindow		Peru
 Unknown format	TypeEditors		Tuntematon muoto
 File: 	ProbeView		Tiedosto: 
-Swapped: %Ld (0x%0*Lx)	ProbeView		Siiretty näennäismuistiin: %Ld (0x%0*Lx)
 Stop	ProbeView		Pysäytä
 Cancel	ProbeView		Peru
 Could not open \"%s\":\n%s	DiskProbe	Opening of entry reference buffer for a DiskProbe request Alert message. The name of entry reference and error message is shown.	Puskurin ”%s” avaus epäonnistui:\n%s
@@ -91,7 +91,6 @@ Type editor	ProbeView		Tyyppimuokkain
 File	FileWindow		Tiedosto
 Grayscale	TypeEditors		Harmaasävy
 32 bit	TypeEditors		32-bittinen
-Native: %Ld (0x%0*Lx)	ProbeView		Alkuperäinen: %Ld (0x%0*Lx)
 Device	ProbeView		Laite
 Close	AttributeWindow		Sulje
 Type editor	AttributeWindow		Tyyppimuokkain
@@ -118,7 +117,9 @@ Could not read image	TypeEditors	Image means here a picture file, not a disk ima
 DiskProbe request	ProbeView		Levykoestajapyyntö
 Double precision floating-point value:	TypeEditors		Kaksoistarkkuuden liukulukuarvo:
 Image	TypeEditors	This is the type of view	Kuva
+Swapped: %lld (0x%0*Lx)	ProbeView		Vaihdettu: %lld (0x%0*Lx)
 Save changes before closing?	ProbeView		Tallennatko muutokset ennen sulkemista?
+%s, %g × %g, %s	TypeEditors	The '×' is the Unicode multiplication sign U+00D7	%s, %g × %g, %s
 PNG format	TypeEditors		PNG-muoto
 Number	TypeEditors	This is the type of editor	Numero
 Edit	ProbeView		Muokkaa

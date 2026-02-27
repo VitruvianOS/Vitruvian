@@ -1,0 +1,224 @@
+1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-HaikuDepot	2935349206
+Usage conditions download problem	ToLatestUserUsageConditionsWindow		Problem med nedlasting av bruksbetingelser
+Available packages	MainWindow		Tilgjengelige pakker
+It was not possible to create the new user.	UserLoginWindow		Det var ikke mulig å opprette brukeren.
+An unexpected error has been sent from the server [%li]	ServerHelper		En uventet feil ble sendt fra serveren [%li]
+Fetching changelog for package	PopulatePkgChangelogFromServerProcess		Henter endringslogg for pakken
+Create account	UserLoginWindow		Opprett konto
+Agree	ToLatestUserUsageConditionsWindow		Godta
+The response to the captcha was incorrect.	ServerHelper		Svaret på captchaen var feil.
+Rate package…	PackageInfoView		Vurder pakke…
+You have successfully authenticated as user %Nickname%.	UserLoginWindow		Du er logget inn som bruker %Nickname%.
+Package problems	PackageProblem	Window title	Pakkeproblemer
+It was not possible to extract necessary captcha information from the data sent back from the server.	UserLoginWindow		Det var ikke mulig å hente ut nødvendig captcha-informasjon fra dataene som ble sendt tilbake fra serveren.
+An error occurred while obtaining the package list: %message%	LocalPkgDataLoadProcess		Det oppstod en feil under henting av pakkelisten: %message%
+Update usage conditions	ToLatestUserUsageConditionsWindow		Oppdater bruksbetingelser
+No usage conditions	UserUsageConditions		Ingen bruksbetingelser
+Active	PackageListView		Aktiv
+Login or Create account	MainWindow		Logg inn eller opprett en konto
+Switch account…	MainWindow		Bytt konto…
+Preferred language:	UserLoginWindow		Foretrukket språk:
+Name	PackageListView		Navn:
+Authorization or security issue. Logout and log back in again to check that your password is correct and also check that you have agreed to the latest usage conditions.	ServerHelper		Autorisasjons- eller sikkerhetsproblem. Logg ut og logg på igjen for å sjekke at passordet ditt er riktig, og sjekk også at du har godtatt de siste bruksbetingelsene.
+don't activate package %source%	PackageProblem	don't change '%source%	ikke aktiver pakken %source%
+Rate %Package%	RatePackageWindow		Vurder %Package%
+An error occurred while initializing the package manager: %message%	LocalPkgDataLoadProcess		Det oppstod en feil under initialisering av pakkebehandlingen: %message%
+Category	FilterView		Kategori
+A response to the captcha question must be provided.	UserLoginWindow		Et svar på captcha-spørsmålet må gis.
+An unexpected error '%Message%' has arisen with property '%Property%'	UserLoginWindow		En uventet feil '%Message%' har oppstått med '%Property%'
+A requested object or an object involved in the request was not found on the server.	ServerHelper		Et forespurt objekt eller et objekt involvert i forespørselen ble ikke funnet på serveren.
+Logout	ToLatestUserUsageConditionsWindow		Logg ut
+Password requirements	UserLoginWindow		Passordkrav
+The following additional package changes have to be made:	PackageResult		Følgende ekstra pakkeendringer må utføres:
+No changelog available.	PackageInfoView		Ingen endringslogg tilgjengelig.
+The current usage conditions have been agreed to.	ToLatestUserUsageConditionsWindow		Gjeldende bruksbetingelser er godtatt.
+Cancel	PackageProblem		Avbryt
+Version	PackageListView		Versjon
+Not logged in	MainWindow		Ikke pålogget
+Featured packages	FeaturedPackagesView		Fremhevede pakker
+Available	PackageListView		Tilgjengelig
+Click a package to view information	PackageInfoView		Klikk på en pakke for å se informasjon
+Cancel	UserLoginWindow		Avbryt
+Rating not possible	MainWindow		Vurdering er ikke mulig
+Package update error	MainWindow		Feil ved oppdatering av pakke
+Click here	FeaturedPackagesView	Appears in the sentence 'Click here to search all packages.'	Klikk her
+%FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# process} other{# processes}}	ProcessCoordinator		%FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# prosess} other{# prosesser}}
+Fetching user ratings for package	PopulatePkgUserRatingsFromServerProcess		Henter brukervurderinger for pakken
+Reboot required	PackageManager		Omstart påkrevet
+All packages	PackageListView		Alle pakker
+Send	RatePackageWindow		Send
+Creating package list…	FeaturedPackagesView		Oppretter pakkeliste…
+Start package daemon	App		Start pakke-daemon
+There are problems in the supplied data:	UserLoginWindow		Det er problemer med de oppgitte dataene:
+The user '%Nickname%' has not agreed to any usage conditions.	UserUsageConditions		Brukeren '%Nickname%' har ikke godtatt noen bruksbetingelser.
+Usage conditions download problem	UserLoginWindow		Problem med nedlasting av bruksbetingelser
+install package %s from repository %s\n	PackageResult	Don't change '%s' variables	installer pakken %s fra programarkivet %s\n
+Package daemon problem	App		Problem med pakke-daemon
+No	MainWindow		Nei
+Repository	PackageListView		Programarkiv
+Close	RatePackageWindow		Lukk
+Close	UserLoginWindow		Lukk
+The email is malformed.	UserLoginWindow		E-posten er feil utformet.
+Synchronizing package data for repository '%REPO_NAME%'	ServerPkgDataUpdateProcess		Synkroniserer pakkedata for programarkivet '%REPO_NAME%'
+View the usage conditions	UserLoginWindow		Se bruksbetingelsene
+An error has arisen downloading the usage conditions required to create a new user. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	UserLoginWindow		Det har oppstått en feil ved nedlasting av bruksbetingelsene som kreves for å opprette en ny bruker. Sjekk loggen for detaljer og prøv igjen. \nInformasjon om hvordan du viser loggene er tilgjengelig i HaikuDepot-delen av Haiku-brukerveiledningen.
+Usage conditions agreed	ToLatestUserUsageConditionsWindow		Bruksbetingelser godtatt
+Size	PackageListView		Størrelse
+All categories	FilterView		Alle kategorier
+Your rating was updated.	RatePackageWindow		Din vurdering ble oppdatert.
+ignore problem for now	PackageProblem		ignorer problemet foreløpig
+n/a	PackageInfoView		n/a
+Checking user details	UserDetailVerifierProcess		Kontrollerer brukerdetaljer
+Cancel	MainWindow		Avbryt
+Refresh repositories	MainWindow		Oppdater programarkiv
+Continue	App		Fortsett
+A password is required.	UserLoginWindow		Et passord er påkrevet.
+Language	RatePackageWindow		Språk
+Status	PackageListView		Status
+Network transport error	ServerHelper		Feil ved nettverkstransport
+Cancel	PackageResult		Avbryt
+Retry	PackageProblem		Prøv igjen
+Update	RatePackageWindow		Oppdater
+Language	UserLoginWindow		Språk
+OK	UserLoginWindow		OK
+Synchronizing reference data from server	ServerReferenceDataUpdateProcess		Synkroniserer referansedata fra server
+Stability:	RatePackageWindow		Stabilitet:
+The usage agreement must be agreed to and a confirmation should be made that the person creating the user meets the minimum age requirement.	UserLoginWindow		Bruksavtalen må godkjennes og det må bekreftes at den som oppretter brukeren oppfyller alderskravet.
+solution %d:	PackageProblem	Don't change the %d variable	løsning %d:
+Source packages	MainWindow		Kildepakker
+Problem with working files	App		Problem med arbeidsfiler
+Try again	App		Prøv igjen
+Unknown	PackageListView		Ukjent
+I agree to the usage conditions	UserLoginWindow		Jeg godtar bruksbetingelsene
+Logged in as %User%	MainWindow		Pålogget som %User%
+A reboot is necessary to complete the installation process.	PackageManager		En omstart er nødvendig for å fullføre installasjonsprosessen.
+Yes	MainWindow		Ja
+{0, plural,one{I am at least one year old}other{I am # years of age or older}}	LocaleUtils		{0, plural,one{Jeg er minst ett år gammel}other{Jeg er # år eller eldre}}
+Pending…	PackageListView		Avventer…
+Search terms:	FilterView		Søkeord:
+Quit	App		Avslutt
+The nickname is malformed. The nickname may only contain digits and lower case latin characters. The nickname must be between four and sixteen characters in length.	UserLoginWindow		Brukernavnet er ugyldig. Brukernavnet kan bare inneholde sifre og latinske tegn (kun små bokstaver). Brukernavnet må være mellom fire og seksten tegn langt.
+Authentication failed	UserLoginWindow		Feil ved autentisering
+Captcha error	UserLoginWindow		Feil med Captcha
+Manage repositories…	MainWindow		Administrer programvarebiblioteker…
+The nickname must be unique, but the supplied nickname is already taken. Choose a different nickname.	UserLoginWindow		Brukernavnet må være unikt, men det oppgitte brukernavnet er allerede tatt. Velg et annet brukernavn.
+OK	UserUsageConditions		OK
+Input validation	UserLoginWindow		Validering av inndata
+Log in…	MainWindow		Logg inn…
+Client version too old	ServerHelper		Klientversjonen er for gammel
+Local repository load error	LocalPkgDataLoadProcess		Feil ved innlasting av lokalt programarkiv
+The user does not exist or the wrong password was supplied. Check your credentials and try again.	UserLoginWindow		Brukeren eksisterer ikke eller feil passord ble oppgitt. Sjekk påloggingsinformasjonen og prøv igjen.
+All repositories	MainWindow		Alle programarkiv
+Repository update error	LocalRepositoryUpdateProcess		Feil ved oppdatering av programarkiv
+Network error	ServerHelper		Nettverksfeil
+An error occurred while refreshing the repository: %error%	LocalRepositoryUpdateProcess		Det oppstod en feil under oppdatering av programarkivet: %error%
+User Created	UserLoginWindow		Bruker Opprettet
+Check for updates…	MainWindow		Se etter oppdateringer…
+Uninstalled	PackageListView		Avinstallert
+I agree to the usage conditions	ToLatestUserUsageConditionsWindow		Jeg godtar bruksbetingelsene
+Installing \"%PackageName%\"	InstallPackageProcess		Installerer \"%PackageName%\"
+OK	App		OK
+Fatal error	UninstallPackageAction		Fatal feil
+Develop packages	MainWindow		Utviklerpakker
+Starting the package daemon failed:\n\n%Error%	App		Kunne ikke starte pakke-daemonen:\n\n%Error%
+No user ratings available.	PackageInfoView		Ingen brukervurderinger tilgjengelig.
+<no info>	PackageInfoView		<ingen info>
+Usage conditions download problem	UserUsageConditions		Problem med nedlasting av bruksbetingelser
+An error has arisen downloading the password requirements required to create a new user. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	UserLoginWindow		Det har oppstått en feil ved nedlasting av passordkravene som kreves for å opprette en ny bruker. Sjekk loggen for detaljer og prøv igjen.\nInformasjon om hvordan du viser loggene er tilgjengelig i HaikuDepot-delen av Haiku-brukerveiledningen.
+Fetching screenshot	CacheScreenshotProcess		Henter skjermdump
+A network transport error has arisen communicating with the server system: %s	ServerHelper		En nettverkstransportfeil har oppstått under kommunikasjon med serversystemet: %s
+Rating	PackageListView		Vurdering
+Synchronizing icons	ServerIconExportUpdateProcess		Synkroniserer ikoner
+Show	MainWindow		Vis
+This application writes and reads some working files on your computer in order to function. It appears that there are problems writing a test file at [%TestFilePath%]. Check that there are no issues with your local disk or permissions that might prevent this application from writing files into that directory location. You may choose to acknowledge this problem and continue, but some functionality may be disabled.	App		Denne applikasjonen skriver og leser noen arbeidsfiler på datamaskinen din for å fungere. Det ser ut til at det er problemer med å skrive en testfil til [%TestFilePath%]. Sjekk at det ikke er noen problemer med din lokale disk eller tillatelser som kan hindre denne applikasjonen fra å skrive filer til den mappen. Du kan velge å godkjenne dette problemet og fortsette, men noen funksjoner kan bli deaktivert.
+Settings…	MainWindow		Innstillinger…
+<Package contents not available for remote packages>	PackageContentsView		<Pakkeinnholdet er ikke tilgjengelig for eksterne pakker>
+Ratings	PackageInfoView		Vurderinger
+The following problems have been encountered. Please select a solution for each:	PackageProblem		Følgende problemer har oppstått. Velg en løsning for hvert:
+Local	LocalPkgDataLoadProcess		Lokal
+Package changes	PackageResult	Window title	Pakkeendringer
+Would it be acceptable to send anonymous usage data to the HaikuDepotServer system from this computer? You can change your preference in the \"Settings\" window later.	MainWindow		Vil det være akseptabelt å sende anonyme bruksdata til HaikuDepotServer-systemet fra denne datamaskinen? Du kan endre valgene dine i vinduet \"Innstillinger\" senere.
+User rating	RatePackageWindow		Brukervurdering
+Installed packages	MainWindow		Installerte pakker
+Date	PackageListView		Dato
+The password must be a minimum of %MinPasswordLength% characters. %MinPasswordUppercaseChar% characters must be upper-case and %MinPasswordDigitsChar% characters must be digits.	UserLoginWindow		Passordet må bestå av minimum %MinPasswordLength% tegn. %MinPasswordUppercaseChar% tegn må være store bokstaver og %MinPasswordDigitsChar% tegn må være sifre.
+An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	ToLatestUserUsageConditionsWindow		Det har oppstått en feil ved nedlasting av bruksvilkårene. Sjekk loggen for detaljer og prøv igjen.\nInformasjon om hvordan du viser loggene er tilgjengelig i HaikuDepot-delen av Haiku-brukerveiledningen.
+There was a puzzling response from the web service.	UserLoginWindow		Det kom et gåtefullt svar fra nettjenesten.
+Opening \"%DeskbarLink%\"	OpenPackageProcess		Åpner \"%DeskbarLink%\"
+Your rating was uploaded successfully. You can update or remove it at the HaikuDepot Server website.	RatePackageWindow		Vurderingen din ble lastet opp. Du kan oppdatere eller fjerne det på HaikuDepot Server-nettstedet.
+It was not possible to communicate with the server to obtain a captcha image required to create a new user.	UserLoginWindow		Det var ikke mulig å kommunisere med serveren for å få et captcha-bilde som kreves for å opprette en ny bruker.
+The supplied response to the captcha is incorrect. A new captcha will be generated; try again.	UserLoginWindow		Det oppgitte svaret på captchaen er feil. En ny captcha vil bli generert. Prøv igjen.
+-	no package publish		-
+The password must be at least eight characters long, consist of at least two digits and one upper case character.	UserLoginWindow		Passordet må være minst åtte tegn langt, og inneholde minst to sifre og en stor bokstav.
+Contents	PackageInfoView		Innhold
+Share anonymous usage data with HaikuDepotServer	SettingsWindow		Del anonyme bruksdata med HaikuDepotServer
+Close	PackageManager		Lukk
+Changelog	PackageInfoView		Endringslogg
+ to search all packages.	FeaturedPackagesView	Appears in the sentence 'Click here to search all packages.'	 for å søke i alle pakkene.
+About	PackageInfoView		Om
+Password requirements download problem	UserLoginWindow		Problem med nedlasting av passordkrav
+Password:	UserLoginWindow		Passord:
+This application is too old to communicate with the server system. Obtain a newer version of this application by updating your system. The minimum required version of this application is \"%s\".	ServerHelper		Denne applikasjonen er for gammel til å kommunisere med serversystemet. Skaff en nyere versjon av denne applikasjonen ved å oppdatere systemet. Minste nødvendige versjon av dette programmet er \"%s\".
+Stability	RatePackageWindow		Stabilitet
+The password must be repeated in order to reduce the chance of entering the password incorrectly.	UserLoginWindow		Passordet må gjentas for å redusere sjansen for å taste inn feil passord.
+Cancel	SettingsWindow		Avbryt
+Cancel	RatePackageWindow		Avbryt
+Inactive	PackageListView		Inaktiv
+Nickname:	UserLoginWindow		Brukernavn:
+Synchronizing meta-data about repositories	ServerRepositoryDataUpdateProcess		Synkronisering av metadata for programarkiver
+OK	MainWindow		OK
+Users are required to be {0, plural, one{# year of age} other{# years of age}} or older.	UserUsageConditions		Brukere må være minst {0, plural, one{# år gamle} other{# år gamle}}.
+Version %Code%	UserUsageConditions		Versjon %Code%
+{0, plural, one{# item} other{# items}}	PackageListView		{0, plural, one{# element} other{# elementer}}
+Uninstalling \"%PackageName%\"	UninstallPackageAction		Avinstallerer \"%PackageName%\"
+Downloading:	PackageInfoView		Laster ned:
+Quit	MainWindow		Avslutt
+Success	UserLoginWindow		Suksess
+(%Votes%)	PackageInfoView		(%Votes%)
+%hd.timestamp% (version %hd.version%)	PackageInfoView		%hd.timestamp% (versjon %hd.version%)
+Settings	SettingsWindow		Innstillinger
+Login issue	MainWindow		Påloggingsproblem
+Your rating:	RatePackageWindow		Din vurdering:
+The user %Nickname% has been successfully created in the HaikuDepotServer system. You can administer your user details by using the web interface. You are now logged-in as this new user.	UserLoginWindow		Brukeren %Nickname% har blitt opprettet i HaikuDepotServer-systemet. Du kan administrere brukerdetaljene dine ved å bruke web-grensesnittet. Du er nå logget inn som denne nye brukeren.
+Repositories	MainWindow		Programarkiver
+This rating is visible to other users	RatePackageWindow		Denne vurderingen er synlig for andre brukere
+While updating package data, a problem has arisen that may cause data to be outdated or missing from the application's display. Additional details regarding this problem may be able to be obtained from the application logs.\nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	MainWindow		Under oppdatering av pakkedata har det oppstått et problem som kan føre til at data er utdaterte eller mangler på programmets visning. Ytterligere detaljer om dette problemet kan kanskje hentes fra applikasjonsloggene.\nInformasjon om hvordan du viser loggene er tilgjengelig i HaikuDepot-delen av Haiku-brukerveiledningen.
+An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	UserUsageConditions		Det har oppstått en feil ved nedlasting av bruksvilkårene. Sjekk loggen for detaljer og prøv igjen. \nInformasjon om hvordan du viser loggene er tilgjengelig i HaikuDepot-delen av Haiku-brukerveiledningen.
+View agreed usage conditions…	MainWindow		Se godtatte bruksvilkår…
+The user [%Nickname%] has authenticated, but before proceeding, you are required to agree to the most recent usage conditions.	ToLatestUserUsageConditionsWindow		Brukeren [%Nickname%] er autentisert, men før du fortsetter må du godta de nyeste bruksvilkårene.
+This package doesn't seem to be on the HaikuDepot Server, so it's not possible to create a new rating or edit an existing rating.	MainWindow		Denne pakken ser ikke ut til å være på HaikuDepot-serveren, så det er ikke mulig å opprette en ny vurdering eller redigere en eksisterende vurdering.
+Apply	SettingsWindow		Bruk
+View the password requirements	UserLoginWindow		Vis passordkravene
+The user \"%Nickname%\" has previously agreed to usage conditions, but the usage conditions have been updated since. The updated usage conditions now need to be agreed to.	ToLatestUserUsageConditionsWindow		Brukeren \"%Nickname%\" har tidligere godtatt bruksvilkårene, men bruksvilkårene har blitt oppdatert. De oppdaterte bruksvilkårene må nå godkjennes.
+Log out	MainWindow		Logg ut
+Comment language:	RatePackageWindow		Kommentarspråk:
+The password has been incorrectly repeated.	UserLoginWindow		Passordet er feilaktig gjentatt.
+The password previously supplied for the user [%Nickname%] is not currently valid. The user will be logged-out of this application and you should login again with your updated password.	MainWindow		Passordet som tidligere ble oppgitt for brukeren [%Nickname%] er ikke lenger gyldig. Brukeren vil bli logget ut av denne applikasjonen, og du må logge på igjen med ditt oppdaterte passord.
+View the usage conditions	ToLatestUserUsageConditionsWindow		Vis bruksvilkår
+OK	ServerHelper		OK
+Reading repository data	LocalPkgDataLoadProcess		Leser programarkiv-data
+Fatal error	InstallPackageProcess		Fatal feil
+A validation error has occurred	ServerHelper		Det har oppstått en valideringsfeil
+The nickname is required.	UserLoginWindow		Brukernavn er påkrevet.
+-	no package size		-
+Apply changes	PackageResult		Foreta endringer
+Server error	ServerHelper		Serverfeil
+Rate package	RatePackageWindow		Vurder pakken
+Recording view of \"%PackageName%\"	IncrementViewCounterProcess		Opptaksvisning av \"%PackageName%\"
+Sending anonymous usage data	MainWindow		Sender anonyme bruksdata
+Log in	UserLoginWindow		Logg inn
+Usage conditions	UserUsageConditions		Bruksvilkår
+Populating package sizes	PopulatePkgSizesProcess		Henter pakkestørrelser
+HaikuDepot	System name		HaikuDepot
+Screenshot	ScreenshotWindow		Skjermbilde
+Email address:	UserLoginWindow		E-postadresse:
+View latest usage conditions…	MainWindow		Se siste bruksvilkår…
+Category:	FilterView		Kategori:
+uninstall package %s\n	PackageResult	Don't change '%s' variable	avinstaller pakken %s\n
+Fetching remote repository data	LocalRepositoryUpdateProcess		Henter eksterne programarkiv-data
+Description	PackageListView		Beskrivelse
+No results? 	FeaturedPackagesView		Ingen resultater? 
+User creation error	UserLoginWindow		Feil ved opprettelse av bruker
+You need to be logged into an account before you can rate packages.	MainWindow		Du må være logget inn før du kan vurdere pakker.
+Cleaning up…	ShuttingDownWindow		Rydder opp…
+Repeat password:	UserLoginWindow		Gjenta passord:

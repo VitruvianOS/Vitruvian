@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-SystemLogger	57960782
+1	finnish	x-vnd.Haiku-SystemLogger	2600925901
 Syslog Daemon	SyslogDaemon		Järjestelmälokitaustaprosessi
 OK	SyslogDaemon		Valmis
-%s\n\nThis daemon is responsible for collecting all system messages and write them to the system-wide log at \"%s\".\n\n	SyslogDaemon		%s\n\nTämä taustaprosessi on velvollinen keräämään kaikki järjestelmäsanomat ja tallentamaan ne järjestelmänlaajuiseen lokiin osoitteessa ”%s”.\n\n
+%s\n\nThis daemon collects all system messages and writes them to the system-wide log at \"%s\".\n\n	SyslogDaemon		%s\n\nTämä taustaprosessi kerää kaikki järjestelmäviestit ja kirjoittaa ne järjestelmänlaajuiseen lokitiedostoon \"%s\".\n\n

@@ -1,0 +1,50 @@
+1	turkish	x-vnd.Haiku-libbe	310849835
+All Rights Reserved.	AboutWindow		Tüm hakları saklıdır.
+gold master	AboutWindow		altın kopya
+Undo	TextView		Geri al
+OK	PrintJob		Tamam
+OK	Dragger		Tamam
+gamma	AboutWindow		gama
+development	AboutWindow		geliştirme
+{0, plural, one{%s byte/s} other{%s bytes/s}}	StringForRate	units per second	{0, plural, one{%s bayt/sn} other{%s bayt/sn}}
+Print Server is not responding.	PrintJob		Yazdırma sunucusu yanıt vermiyor.
+About %app%	AboutMenuItem		%app% hakkında
+Warning	Dragger		Uyarı
+Green:	ColorControl		Yeşil:
+Redo	TextView		Yinele
+No pages to print!	PrintJob		Yazdırılacak bir sayfa yok!
+beta	AboutWindow		beta
+%s MiB	StringForSize	size unit	%s MiB
+OK	ZombieReplicantView		Tamam
+Cut	TextView		Kes
+Default	Default decorator about box		Saptanmış
+Can't delete this replicant from its original application. Life goes on.	Dragger		Bu yinelenen kendi özgün uygulamasından silinemiyor.
+%s KiB	StringForSize	size unit	%s KiB
+Error	ZombieReplicantView		Hata
+Paste	TextView		Yapıştır
+OK	AboutWindow		Tamam
+%s MiB/s	StringForRate	units per second	%s MiB/sn
+%s TiB	StringForSize	size unit	%s TiB
+Default Haiku window decorator.	Default decorator about box		Saptanmış Haiku pencere dekorcusu.
+%s GiB	StringForSize	size unit	%s GiB
+%s B	StringForSize	size unit, narrow space	%s B
+Remove replicant	Dragger		Yineleneni kaldır
+Version	AboutWindow		Sürüm
+Red:	ColorControl		Kırmızı:
+<empty>	Menu		<boş>
+Copy	TextView		Kopyala
+Select all	TextView		Tümünü seç
+alpha	AboutWindow		alfa
+Error	PrintJob		Hata
+%s TiB/s	StringForRate	units per second	%s TiB/sn
+About %app…	Dragger		%app hakkında…
+About %app%	AboutWindow		%app% hakkında
+{0, plural, one{%s byte} other{%s bytes}}	StringForSize	size unit	{0, plural, one{%s bayt} other{%s bayt}}
+%s GiB/s	StringForRate	units per second	%s GiB/sn
+Version history:	AboutWindow		Sürüm geçmişi:
+Cannot locate the application for the replicant. No application signature supplied.\n%error	ZombieReplicantView		Yinelenen uygulaması konumu bulunamıyor. Hiçbir uygulama imzası sağlanmamış.\n%error
+%s KiB/s	StringForRate	units per second	%s KiB/sn
+Blue:	ColorControl		Mavi:
+Special thanks:	AboutWindow		Özel teşekkürlerimizle:
+Cannot create the replicant for \"%description\".\n%error	ZombieReplicantView		“%description” için yinelenen oluşturulamıyor.\n%error
+Written by:	AboutWindow		Yazan:

@@ -1,4 +1,4 @@
-1	friulian	x-vnd.haiku-softwareupdater	369324613
+1	friulian	x-vnd.haiku-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	Inzornament de version
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Fâs clic achì par instalâ {0, plural, one{# pachet inzornât} other{# pachets inzornâts}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Pachets di disinstalâ
@@ -17,10 +17,10 @@ New packages to be installed	SoftwareUpdaterWindow	List super item label	Gnûfs 
 Packages to be updated	SoftwareUpdaterWindow	List super item label	Pachets di inzornâ
 to	SoftwareUpdaterWindow	List item text	a
 Attempting to cancel the updates…	SoftwareUpdaterWindow		Daûr a cirî di anulâ i inzornaments…
-Contacting software repositories to check for package updates.	CheckManager		Si contate i dipuesits dal software par verificâ la presince di inzornaments di pachets.
+Contacting software repositories to check for package updates.	CheckManager		Daûr a contatâ i dipuesits dal software par verificâ la presince di pachets inzornâts.
 Available updates found	CheckManager		Inzornaments disponibii cjatâts
 from repository	SoftwareUpdaterWindow	List item text	dal dipuesit
-Contacting software repositories to check for package updates.	SoftwareUpdaterWindow		Si contate i dipuesits software par verificâ la presince di inzornaments di pachets.
+Contacting software repositories to check for package updates.	SoftwareUpdaterWindow		Daûr a contatâ i dipuesits software par verificâ la presince di pachets inzornâts.
 Cancelling updates	SoftwareUpdaterWindow		Anulament dai inzornaments
 Cancel	SoftwareUpdaterWindow	Alert button label	Anule
 There were no updates found.	UpdateAction		Nissun inzornament cjatât.
@@ -38,17 +38,16 @@ Updates have been successfully installed.	UpdateManager		I inzornaments a son st
 Exception occurred while updating packages : %s\n	UpdateAction		Ecezion capitade intant che si inzornave i pachets: %s\n
 A reboot is necessary to complete the update process.	UpdateManager		Al è necessari tornâ a inviâ il sisteme par completâ il procès di inzornament.
 Exception occurred while checking for updates: %s\n	CheckAction		Ecezion capitade intant che si verificave la presince di inzornaments: %s\n
-Packages are being updated	UpdateManager		I pachets a son daûr a jessi inzornâ
+Packages are being updated	UpdateManager		I pachets a son daûr a jessi inzornâts
 Cancel	SoftwareUpdaterWindow		Anule
 Don't quit	SoftwareUpdaterWindow		No sta sierâ
-Click here to run SoftwareUpdater. Some updates will require a problem solution to be selected.	CheckManager		Fâs clic chi par eseguî SoftwareUpdater. Cualchi inzornament al domandarà di risolvi un probleme e si varà di selezionâ la soluzion.
 Checking for updates	SoftwareUpdaterWindow		Verifiche presince inzornaments
 Updates completed	UpdateManager		Inzornaments completâts
 Reboot	SoftwareUpdaterWindow		Torne invie
 Show more details	SoftwareUpdaterWindow		Mostre plui detais
 Installing version	SoftwareUpdaterWindow	List item text	Instalazion de version
 Checking for updates	CheckManager		Control presince inzornaments
-No remote repositories are available	UpdateManager	Error message	Nissun dipuesit rimot disponibil
+No remote repositories are available	UpdateManager	Error message	Nissun dipuesit lontan disponibil
 Software {0, plural, one{update} other{updates}} available	CheckManager		{0, plural, one{Inzornament software disponibil} other{Inzornaments software disponibii}}
 Reboot	SoftwareUpdaterWindow	Button label	Torne invie
 Update	SoftwareUpdaterWindow	Alert button label	Inzorne
@@ -60,5 +59,5 @@ Uninstalling version	SoftwareUpdaterWindow	List item text	Disinstalazion de vers
 Quit	SoftwareUpdaterWindow		Jes
 No updates available	CheckManager		Nissun inzornament disponibil
 Usage:  SoftwareUpdater <command> [ <option> ]\nUpdates installed packages.\n\nCommands:\n  update     - Search repositories for updates on all packages.\n  check      - Check for available updates but only display a notification with results.\n  full-sync  - Synchronize the installed packages with the repositories.\n\nOptions:\n  -h or --help       Print this usage help\n  -v or --verbose    Output verbose information\n	SoftwareUpdaterApp	Command line usage help	Ûs:  SoftwareUpdater <comant> [ <opzions> ]\nAl inzorne i pachets instalâts.\n\nComants:\n  update     - Cîr tai dipuesits inzornaments par ducj i pachets.\n  check      - Cîr inzornaments disponibii, ma mostre dome une notifiche cui risultâts.\n  full-sync  - Sincronize i pachets instalâts cui dipuesits.\n\nOpzions:\n  -h o --help       Mostre chest messaç di jutori\n  -v o --verbose    Mostre informazions plui prolissis\n
-No remote repositories are available. Please verify that some repositories are enabled using the Repositories preflet or the 'pkgman' command.	SoftwareUpdaterWindow	Error message	Nissun dipuesit rimot disponibil. Par plasê, controle che cualchi dipuesit al sedi abilitât, doprant la preflet Dipuesits o il comant 'pkgman'.
+No remote repositories are available. Please verify that some repositories are enabled using the Repositories preflet or the 'pkgman' command.	SoftwareUpdaterWindow	Error message	Nissun dipuesit lontan disponibil. Par plasê, controle che al sedi abilitât cualchi dipuesit, doprant la preflet Dipuesits o il comant 'pkgman'.
 Downloading packages	UpdateManager		Daûr a discjariâ i pachets

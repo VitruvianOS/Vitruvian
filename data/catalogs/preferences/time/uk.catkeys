@@ -1,11 +1,11 @@
-1	ukrainian	x-vnd.Haiku-Time	752043118
-OK	Time		Гаразд
+1	ukrainian	x-vnd.Haiku-Time	3691539601
+OK	Time		ОК
 Message receiving failed	Time		Не вдалось отримати повідомлення
-Time & Date, written by:\n\n\tAndrew Edward McCall\n\tMike Berg\n\tJulun\n\tPhilippe Saint-Pierre\n\nCopyright 2004-2012, Haiku.	Time		Дата та Час, автори:\n\n\t Andrew Edward McCall\n\t Mike Berg\n\t Julun\n\t Philippe Saint-Pierre\n\nВсі права застережені 2004-2012, Haiku.
 Australia	Time		Австралія
 America	Time		Америка
-Reset to default server list	Time		Скинути до типового списку сервера
+Reset to default server list	Time		Скинути список серверів за замовчуванням
 Could not resolve server address	Time		Недозволена адреса сервера
+Time & Date	System name		Час & Дата
 Set time zone	Time		Встановити часову зону
 Waiting for answer failed	Time		Відповідь не отримана
 <Other>	Time		<Інше>
@@ -16,12 +16,13 @@ Asia	Time		Азія
 Try all servers	Time		Випробувати всі сервери
 Time	Time		Час
 Current time:	Time		Поточний час:
+The following error occured while synchronizing:\n%s: %s	Time		При синхронізації сталася наступна помилка:\n%s: %s
 Europe	Time		Європа
 Show day of week	Time		Показувати день тижня
 Local time (Windows compatible)	Time		Місцевий час (сумісний з Windows)
 Hardware clock set to:	Time		Апаратний годинник встановлено на:
 Arctic	Time		Арктика
-Antarctica	Time		Отримано невірний час
+Antarctica	Time		Антарктида
 GMT (UNIX compatible)	Time		GMT (сумісний з UNIX)
 Africa	Time		Африка
 Stop	Time		Зупинити
@@ -31,17 +32,17 @@ Network time	Time		Мережевий час
 Sending request failed	Time		Не вдалося надіслати запит
 Preview time:	Time		Попередній час:
 \nNow: 	Time		\nЗараз: 
-Could not create socket	Time		Неможливо створити комірку
+Could not create socket	Time		Не вдалося створити сокет
 Pacific	Time		Тихий океан
 Atlantic	Time		Атлантичний океан
 Show clock in Deskbar	Time		Показувати час в Deskbar
 Display time with seconds	Time		Показувати секунди
-Time	System name		Час
-about	Time		про
+Time	System name		Time
 Show time zone	Time		Встановити часову зону
 Synchronize at boot	Time		Синхронізувати при завантаженні
 Indian	Time		Індійський
-Revert	Time		Повернути
+Revert	Time		Відкат змін
 Date and time	Time		Дата і час
+The following error occured while synchronizing:\n%s	Time		При синхронізації сталася наступна помилка:\n%s
 Synchronize	Time		Синхронізувати
 Add	Time		Додати

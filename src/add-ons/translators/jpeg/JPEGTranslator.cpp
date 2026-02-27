@@ -396,8 +396,6 @@ SSlider::SSlider(const char* name, const char* label,
 	: BSlider(name, label, message, minValue, maxValue,
 		posture, thumbType, flags)
 {
-	rgb_color barColor = { 0, 0, 229, 255 };
-	UseFillColor(true, &barColor);
 }
 
 
@@ -516,7 +514,7 @@ TranslatorWriteView::TranslatorWriteView(const char* name,
 		// settings should already be Acquired()
 {
 	fQualitySlider = new SSlider("quality", B_TRANSLATE("Output quality"),
-		new BMessage(VIEW_MSG_SET_QUALITY), 0, 100);
+		new BMessage(VIEW_MSG_SET_QUALITY), 0, 100, B_HORIZONTAL, B_TRIANGLE_THUMB);
 	fQualitySlider->SetHashMarks(B_HASH_MARKS_BOTTOM);
 	fQualitySlider->SetHashMarkCount(10);
 	fQualitySlider->SetLimitLabels(B_TRANSLATE("Low"), B_TRANSLATE("High"));
@@ -524,7 +522,7 @@ TranslatorWriteView::TranslatorWriteView(const char* name,
 
 	fSmoothingSlider = new SSlider("smoothing",
 		B_TRANSLATE("Output smoothing strength"),
-		new BMessage(VIEW_MSG_SET_SMOOTHING), 0, 100);
+		new BMessage(VIEW_MSG_SET_SMOOTHING), 0, 100, B_HORIZONTAL, B_TRIANGLE_THUMB);
 	fSmoothingSlider->SetHashMarks(B_HASH_MARKS_BOTTOM);
 	fSmoothingSlider->SetHashMarkCount(10);
 	fSmoothingSlider->SetLimitLabels(B_TRANSLATE("None"), B_TRANSLATE("High"));
@@ -684,6 +682,8 @@ TranslatorAboutView::TranslatorAboutView(const char* name)
 	BTextView* infoView = new BTextView("info");
 	infoView->SetText(sTranslatorInfo);
 	infoView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
+	infoView->SetFontAndColor(be_plain_font, B_FONT_ALL, &textColor);
 	infoView->MakeEditable(false);
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
@@ -705,11 +705,6 @@ TranslatorView::TranslatorView(const char* name, TranslatorSettings* settings)
 	AddTab(new TranslatorAboutView(B_TRANSLATE("About")));
 
 	settings->Release();
-
- 	BFont font;
- 	GetFont(&font);
- 	SetExplicitPreferredSize(
-		BSize((font.Size() * 380) / 12, (font.Size() * 250) / 12));
 }
 
 
@@ -1279,7 +1274,7 @@ JPEGTranslator::PopulateInfoFromFormat(translator_info* info,
 			info->quality = formats[i].quality;
 			info->capability = formats[i].capability;
 			BString str1(formats[i].name);
-			str1.ReplaceFirst("Be Bitmap Format (JPEGTranslator)", 
+			str1.ReplaceFirst("Be Bitmap Format (JPEGTranslator)",
 				B_TRANSLATE("Be Bitmap Format (JPEGTranslator)"));
 			strlcpy(info->name, str1.String(), sizeof(info->name));
 			strcpy(info->MIME,  formats[i].MIME);

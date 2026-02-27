@@ -35,7 +35,7 @@ HVIFView::HVIFView(const char* name, uint32 flags, TranslatorSettings *settings)
 	title->SetExplicitAlignment(labelAlignment);
 
 	char versionString[256];
-	snprintf(versionString, sizeof(versionString), 
+	snprintf(versionString, sizeof(versionString),
 		B_TRANSLATE("Version %d.%d.%d, %s"),
 		int(B_TRANSLATION_MAJOR_VERSION(HVIF_TRANSLATOR_VERSION)),
 		int(B_TRANSLATION_MINOR_VERSION(HVIF_TRANSLATOR_VERSION)),
@@ -54,7 +54,7 @@ HVIFView::HVIFView(const char* name, uint32 flags, TranslatorSettings *settings)
 	label << " " << renderSize;
 
 	fRenderSize = new BSlider("renderSize", label.String(),
-		NULL, 1, 32, B_HORIZONTAL);
+		NULL, 1, 32, B_HORIZONTAL, B_TRIANGLE_THUMB);
 	fRenderSize->SetValue(renderSize / 8);
 	fRenderSize->SetHashMarks(B_HASH_MARKS_BOTTOM);
 	fRenderSize->SetHashMarkCount(16);
@@ -70,11 +70,6 @@ HVIFView::HVIFView(const char* name, uint32 flags, TranslatorSettings *settings)
 		.AddGlue()
 		.Add(fRenderSize)
 		.AddGlue();
-
- 	BFont font;
- 	GetFont(&font);
- 	SetExplicitPreferredSize(
-		BSize((font.Size() * 270) / 12, (font.Size() * 100) / 12));
 }
 
 

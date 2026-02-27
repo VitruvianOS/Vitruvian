@@ -1,6 +1,6 @@
 /*****************************************************************************/
 // PNGTranslator
-// Written by Michael Wilber, OBOS Translation Kit Team
+// Written by Michael Wilber, Haiku Translation Kit Team
 //
 // PNGTranslator.cpp
 //
@@ -8,7 +8,7 @@
 // PNG images.
 //
 //
-// Copyright (c) 2003, OpenBeOS Project
+// Copyright (c) 2003, Haiku Project
 // Copyright (c) 2009, Haiku, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -299,8 +299,9 @@ void throw_error(png_structp ppng, png_const_charp error_msg)
 
 void alert_warning(png_structp ppng, png_const_charp error_msg)
 {
-	// Ignore
-	// TODO show a BAlert?
+	// These are only warnings and the image can still be decoded. We have no
+	// way to convey this to the calling app using the current translator API,
+	// so the warnings are just ignored.
 }
 
 status_t

@@ -6,12 +6,11 @@
 #define RTF_H
 
 
-#include "Stack.h"
-
 #include <List.h>
 #include <String.h>
 #include <GraphicsDefs.h>
 #include <BufferIO.h>
+#include <util/Stack.h>
 
 
 namespace RTF {
@@ -53,7 +52,7 @@ class Element {
 		Group *Parent() const;
 
 		virtual bool IsDefinitionDelimiter();
-		virtual void Parse(char first, BDataIO &stream, char &last) throw (status_t) = 0;
+		virtual void Parse(char first, BDataIO &stream, char &last) = 0;
 		virtual void PrintToStream(int32 level = 0);
 
 	private:
@@ -79,7 +78,7 @@ class Group : public Element {
 		void DetermineDestination();
 		group_destination Destination() const;
 
-		virtual void Parse(char first, BDataIO &stream, char &last) throw (status_t);
+		virtual void Parse(char first, BDataIO &stream, char &last);
 
 	protected:
 		BList				fElements;
@@ -96,7 +95,7 @@ class Header : public Group {
 
 		rgb_color Color(int32 index);
 
-		virtual void Parse(char first, BDataIO &stream, char &last) throw (status_t);
+		virtual void Parse(char first, BDataIO &stream, char &last);
 
 	private:
 		int32				fVersion;
@@ -113,7 +112,7 @@ class Text : public Element {
 		uint32 Length() const;
 
 		virtual bool IsDefinitionDelimiter();
-		virtual void Parse(char first, BDataIO &stream, char &last) throw (status_t);
+		virtual void Parse(char first, BDataIO &stream, char &last);
 
 	private:
 		BString				fText;
@@ -132,7 +131,7 @@ class Command : public Element {
 		bool HasOption() const;
 		int32 Option() const;
 
-		virtual void Parse(char first, BDataIO &stream, char &last) throw (status_t);
+		virtual void Parse(char first, BDataIO &stream, char &last);
 
 	private:
 		BString				fName;
@@ -163,7 +162,7 @@ class Worker {
 		Worker(RTF::Header &start);
 		virtual ~Worker();
 
-		void Work() throw (status_t);
+		void Work();
 
 	protected:
 		virtual void Group(RTF::Group *group);

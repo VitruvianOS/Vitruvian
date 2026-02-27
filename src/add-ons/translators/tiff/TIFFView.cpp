@@ -1,6 +1,6 @@
 /*****************************************************************************/
 // TIFFView
-// Written by Michael Wilber, OBOS Translation Kit Team
+// Written by Michael Wilber, Haiku Translation Kit Team
 // Picking the compression method added by Stephan Aßmus, <stippi@yellowbites.com>
 // Use of Layout API added by Maxime Simon, maxime.simon@gmail.com, 2009.
 //
@@ -9,7 +9,7 @@
 // This BView based object displays information about the TIFFTranslator.
 //
 //
-// Copyright (c) 2003 OpenBeOS Project
+// Copyright (c) 2003 Haiku Project
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -43,6 +43,7 @@
 #include <MenuItem.h>
 #include <PopUpMenu.h>
 
+#define TIFF_DISABLE_DEPRECATED
 #include "tiff.h"
 #include "tiffvers.h"
 
@@ -140,11 +141,6 @@ TIFFView::TIFFView(const char* name, uint32 flags,
 			// Theses 4 adding above work because we know there are 4 strings
 			// but it's fragile: one string less in the library version and the
 			// application breaks
-
-	BFont font;
-	GetFont(&font);
-	SetExplicitPreferredSize(
-		BSize((font.Size() * 350)/12, (font.Size() * 200)/12));
 }
 
 

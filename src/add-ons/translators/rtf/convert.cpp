@@ -23,8 +23,6 @@
 
 #include <AutoDeleter.h>
 
-#include "Stack.h"
-
 
 #define READ_BUFFER_SIZE 2048
 
@@ -60,7 +58,7 @@ class TextOutput : public RTF::Worker {
 		virtual void Text(RTF::Text *text);
 
 	private:
-		void PrepareTextRun(text_run *current) throw (status_t);
+		void PrepareTextRun(text_run *current);
 
 		BDataIO				*fTarget;
 		int32				fOffset;
@@ -89,7 +87,7 @@ conversion_context::Reset()
 
 static size_t
 write_text(conversion_context &context, const char *text, size_t length,
-	BDataIO *target = NULL) throw (status_t)
+	BDataIO *target = NULL)
 {
 	size_t prefix = 0;
 	if (context.new_line) {
@@ -116,7 +114,7 @@ write_text(conversion_context &context, const char *text, size_t length,
 
 static size_t
 write_text(conversion_context &context, const char *text,
-	BDataIO *target = NULL) throw (status_t)
+	BDataIO *target = NULL)
 {
 	return write_text(context, text, strlen(text), target);
 }
@@ -124,7 +122,7 @@ write_text(conversion_context &context, const char *text,
 
 static size_t
 next_line(conversion_context &context, const char *prefix,
-	BDataIO *target) throw (status_t)
+	BDataIO *target)
 {
 	size_t length = strlen(prefix);
 	context.new_line = true;
@@ -143,7 +141,7 @@ next_line(conversion_context &context, const char *prefix,
 
 static size_t
 write_unicode_char(conversion_context &context, uint32 c,
-	BDataIO *target) throw (status_t)
+	BDataIO *target)
 {
 	size_t length = 1;
 	char bytes[4];
@@ -173,7 +171,7 @@ write_unicode_char(conversion_context &context, uint32 c,
 
 static size_t
 process_command(conversion_context &context, RTF::Command *command,
-	BDataIO *target) throw (status_t)
+	BDataIO *target)
 {
 	const char *name = command->Name();
 
@@ -374,7 +372,7 @@ TextOutput::FlattenedRunArray(int32 &_size)
 
 
 void
-TextOutput::PrepareTextRun(text_run *run) throw (status_t)
+TextOutput::PrepareTextRun(text_run *run)
 {
 	if (run != NULL && fOffset == run->offset)
 		return;
@@ -459,13 +457,17 @@ TextOutput::Command(RTF::Command *command)
 		PrepareTextRun(fCurrentRun);
 		set_font_face(fCurrentRun->font, B_BOLD_FACE, command->Option() != 0);
 	} else if (!strcmp(name, "i")) {
-		// bold style
+		// italic style
 		PrepareTextRun(fCurrentRun);
 		set_font_face(fCurrentRun->font, B_ITALIC_FACE, command->Option() != 0);
 	} else if (!strcmp(name, "ul")) {
-		// bold style
+		// underscore style
 		PrepareTextRun(fCurrentRun);
 		set_font_face(fCurrentRun->font, B_UNDERSCORE_FACE, command->Option() != 0);
+	} else if (!strcmp(name, "strike")) {
+		// strikeout style
+		PrepareTextRun(fCurrentRun);
+		set_font_face(fCurrentRun->font, B_STRIKEOUT_FACE, command->Option() != 0);
 	} else if (!strcmp(name, "fs")) {
 		// font size in half points
 		PrepareTextRun(fCurrentRun);
@@ -779,6 +781,8 @@ status_t convert_styled_text_to_rtf(
 				rtfFile << "\\ul";
 			if (fontFace & B_BOLD_FACE)
 				rtfFile << "\\b";
+			if (fontFace & B_STRIKEOUT_FACE)
+				rtfFile << "\\strike";
 
 			// RTF font size unit is half-points, but BFont::Size() returns
 			// points
@@ -802,7 +806,7 @@ status_t convert_styled_text_to_rtf(
 			rtfFile << " " << segment;
 		}
 
-		delete styles;
+		BTextView::FreeRunArray(styles);
 
 		rtfFile << "}";
 	} else {

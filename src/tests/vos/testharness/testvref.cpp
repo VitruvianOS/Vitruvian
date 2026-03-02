@@ -53,14 +53,19 @@ main()
         printf("Hello from the child process! PID: %d\n", getpid());
         // The fd inherits the same permissions as the one in the father
         printf("child acquire %d\n", id);
- 		int clone_fd = acquire_vref(id);
- 		lseek(clone_fd, 0, SEEK_SET);
- 		// stat
- 		if (clone_fd < 0) {
-			printf("FAIL: acquire_vref child: %s\n", strerror(clone_fd));
+		status_t acq = acquire_vref(id);
+		if (acq != B_OK) {
+			printf("FAIL: acquire_vref child: %s\n", strerror(acq));
 			return -1;
 		}
+		int clone_fd = open_vref(id);
+		if (clone_fd < 0) {
+			printf("FAIL: open_vref child: %s\n", strerror(clone_fd));
+			return -1;
+		}
+		lseek(clone_fd, 0, SEEK_SET);
 		readfd(clone_fd);
+		close(clone_fd);
 
 		status_t ret = release_vref(id);
 		if (ret != B_OK)
@@ -77,9 +82,9 @@ main()
 	if (ret != B_OK)
 		printf("FAIL: release_vref father: %s\n", strerror(ret));
 
-	int clone_fd = acquire_vref(id);
-	if (clone_fd >= 0)
-		printf("FAIL: acquire_vref for clone and father\n");
+	status_t acq = acquire_vref(id);
+	if (acq == B_OK)
+		printf("FAIL: acquire_vref should fail after full release\n");
 
     return 0;
 }

@@ -170,6 +170,12 @@ DeclareDependency(
 #	RUNTIMES	"libwebp6 (>= 0.6.1-2.1)"
 #)
 
+DeclareDependency(
+	SHELL_ATTR
+	PACKAGES  "attr"
+	RUNTIMES  "attr"
+)
+
 # Dependencies for Debug builds
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

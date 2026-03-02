@@ -164,9 +164,30 @@ _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 status_t
 _get_next_sem_info(team_id id, int32* cookie, struct sem_info* info, size_t size)
 {
-	UNIMPLEMENTED();
-	// TODO proc
-	return B_BAD_VALUE;
+	if (cookie == NULL || info == NULL || size != sizeof(sem_info))
+		return B_BAD_VALUE;
+
+	struct nexus_sem_next_info nextInfo;
+	memset(&nextInfo, 0, sizeof(nextInfo));
+	nextInfo.team = id;
+	nextInfo.cookie = *cookie;
+
+	int nexus = BKernelPrivate::Team::GetSemDescriptor();
+	if (nexus < 0)
+		return B_ERROR;
+
+	status_t ret = nexus_io(nexus, NEXUS_SEM_NEXT_INFO, &nextInfo);
+	if (ret == B_OK) {
+		info->sem = nextInfo.info.sem;
+		info->team = nextInfo.info.team;
+		strncpy(info->name, nextInfo.info.name, B_OS_NAME_LENGTH);
+		info->name[B_OS_NAME_LENGTH - 1] = '\0';
+		info->count = nextInfo.info.count;
+		info->latest_holder = nextInfo.info.latest_holder;
+		*cookie = nextInfo.cookie;
+	}
+
+	return ret;
 }
 
 

@@ -262,6 +262,13 @@ CalcView::~CalcView()
 	delete[] fKeypad;
 	delete fOptions;
 	delete fEvaluateMessageRunner;
+
+	// Wait for evaluation thread to finish before deleting semaphore
+	if (fEvaluateThread >= 0) {
+		status_t status;
+		wait_for_thread(fEvaluateThread, &status);
+	}
+
 	delete_sem(fEvaluateSemaphore);
 }
 

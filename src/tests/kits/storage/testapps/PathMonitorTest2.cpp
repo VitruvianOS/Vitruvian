@@ -360,9 +360,9 @@ struct MonitoringInfo {
 				NotOwningEntryRef entryRef;
 				node_ref nodeRef;
 
-				if (message.FindInt32("device", &nodeRef.device) != B_OK
-					|| message.FindInt64("node", &nodeRef.node) != B_OK
-					|| message.FindInt64("directory", &entryRef.directory)
+				if (message.FindInt64("device", (int64*)&nodeRef.device) != B_OK
+					|| message.FindInt64("node", (int64*)&nodeRef.node) != B_OK
+					|| message.FindInt64("directory", (int64*)&entryRef.directory)
 						!= B_OK
 					|| message.FindString("name", (const char**)&entryRef.name)
 						!= B_OK) {
@@ -379,13 +379,13 @@ struct MonitoringInfo {
 				NotOwningEntryRef toEntryRef;
 				node_ref nodeRef;
 
-				if (message.FindInt32("node device", &nodeRef.device) != B_OK
-					|| message.FindInt64("node", &nodeRef.node) != B_OK
-					|| message.FindInt32("device", &fromEntryRef.device)
+				if (message.FindInt64("node device", (int64*)&nodeRef.device) != B_OK
+					|| message.FindInt64("node", (int64*)&nodeRef.node) != B_OK
+					|| message.FindInt64("device", (int64*)&fromEntryRef.device)
 						!= B_OK
 					|| message.FindInt64("from directory",
-						&fromEntryRef.directory) != B_OK
-					|| message.FindInt64("to directory", &toEntryRef.directory)
+						(int64*)&fromEntryRef.directory) != B_OK
+					|| message.FindInt64("to directory", (int64*)&toEntryRef.directory)
 						!= B_OK
 					|| message.FindString("from name",
 						(const char**)&fromEntryRef.name) != B_OK
@@ -404,8 +404,8 @@ struct MonitoringInfo {
 			{
 				node_ref nodeRef;
 
-				if (message.FindInt32("device", &nodeRef.device) != B_OK
-					|| message.FindInt64("node", &nodeRef.node) != B_OK) {
+				if (message.FindInt64("device", (int64*)&nodeRef.device) != B_OK
+					|| message.FindInt64("node", (int64*)&nodeRef.node) != B_OK) {
 					return false;
 				}
 
@@ -509,7 +509,7 @@ struct Test : private BLooper {
 		fName(name),
 		fFlags(0),
 		fLooperThread(-1),
-		fNotifications(10, true),
+		fNotifications(10),
 		fProcessedMonitoringInfos(),
 		fIsWatching(false)
 	{

@@ -2,7 +2,7 @@
 
 welcomeURL="\
 	https://www.haiku-os.org/docs/welcome/welcome_en.html"
-welcomeDir=/boot/system/documentation/welcome/
+welcomeDir=/system/documentation/welcome/
 welcomeFile=$welcomeDir/welcome_en.html
 localizedWelcomeFile=$welcomeDir/welcome_"$LANG".html
 

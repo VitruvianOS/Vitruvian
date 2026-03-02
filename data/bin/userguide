@@ -2,7 +2,7 @@
 
 userGuideURL="\
 	https://www.haiku-os.org/docs/userguide/en/contents.html"
-userGuideDir=/boot/system/documentation/userguide/
+userGuideDir=/system/documentation/userguide/
 userGuide=$userGuideDir/en/contents.html
 localizedUserGuide=$userGuideDir/"$LANG"/contents.html
 

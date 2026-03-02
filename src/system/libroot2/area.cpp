@@ -427,8 +427,40 @@ status_t
 _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 	size_t size)
 {
-	// TODO
-	return B_BAD_VALUE;
+	if (cookie == NULL || areaInfo == NULL || size != sizeof(area_info))
+		return B_BAD_VALUE;
+
+	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
+	if (nexus < 0)
+		return B_ERROR;
+
+	struct nexus_area_get_next gn;
+	memset(&gn, 0, sizeof(gn));
+	gn.team = (team == 0) ? getpid() : team;
+	gn.cookie = (int32_t)*cookie;
+
+	status_t ret = nexus_io(nexus, NEXUS_AREA_GET_NEXT, &gn);
+	if (ret != B_OK)
+		return B_BAD_VALUE;
+
+	areaInfo->area = gn.area;
+	strncpy(areaInfo->name, gn.name, B_OS_NAME_LENGTH);
+	areaInfo->name[B_OS_NAME_LENGTH - 1] = '\0';
+	areaInfo->size = gn.size;
+	areaInfo->lock = gn.lock;
+	areaInfo->protection = gn.protection;
+	areaInfo->team = gn.team;
+	areaInfo->ram_size = gn.size;
+
+	BKernelPrivate::LocalArea local;
+	if (BKernelPrivate::AreaPool::Get().Get(gn.area, local))
+		areaInfo->address = local.address;
+	else
+		areaInfo->address = NULL;
+
+	*cookie = (ssize_t)gn.next_cookie;
+
+	return B_OK;
 }
 
 

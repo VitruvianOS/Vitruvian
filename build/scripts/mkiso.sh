@@ -101,7 +101,7 @@ echo ${normal}
 sudo mksquashfs \
     $basedir/LIVE_BOOT/chroot \
     $basedir/LIVE_BOOT/image/live/filesystem.squashfs \
-    -b 1048576 -comp xz -Xdict-size 100% -e boot
+    -b 1048576 -comp xz -Xdict-size 100% -xattrs -e boot
 
 echo ${bold}Copy Kernel and Initramfs from Chroot to Live Directory...
 echo ${normal}

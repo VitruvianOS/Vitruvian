@@ -1,5 +1,41 @@
 UsePrivateHeaders(GLOBAL interface)
 
+add_definitions(-DNO_ELF_SYMBOL_PATCHING -DTEST_OBOS)
+
+AddOn(
+	interfacetest
+	SHARED
+
+	SOURCES
+	InterfaceKitTestAddon.cpp
+	balert/AlertTest.cpp
+	bbitmap/BitmapTest.cpp
+	bbitmap/BBitmapTester.cpp
+	bbitmap/SetBitsTester.cpp
+	bdeskbar/DeskbarTest.cpp
+	bdeskbar/DeskbarAddItemTest.cpp
+	bdeskbar/DeskbarGetItemTest.cpp
+	bdeskbar/DeskbarLocationTest.cpp
+	bpolygon/PolygonTest.cpp
+	bpolygon/CreatePolygonTest.cpp
+	bpolygon/DummyPolygon.cpp
+	bpolygon/MapPolygonTest.cpp
+	bmenu/MenuTest.cpp
+	bregion/RegionTest.cpp
+	bregion/RegionTestcase.cpp
+	bregion/RegionConstruction.cpp
+	bregion/RegionExclude.cpp
+	bregion/RegionInclude.cpp
+	bregion/RegionIntersect.cpp
+	bregion/RegionOffsetBy.cpp
+	btextcontrol/TextControlTest.cpp
+	btextview/TextViewTest.cpp
+	GraphicsDefsTest.cpp
+	OutlineListViewTest.cpp
+
+	INCLUDES
+	"${PROJECT_SOURCE_DIR}/headers/tools/cppunit/"
+)
 
 Test(ChannelSliderTest SOURCES ChannelSliderTest.cpp)
 

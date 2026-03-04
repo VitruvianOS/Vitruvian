@@ -13,6 +13,7 @@
 #include <TLS.h>
 
 #include <cppunit/Exception.h>
+#include <cppunit/SourceLine.h>
 #include <cppunit/Test.h>
 #include <cppunit/TestAssert.h>
 #include <cppunit/TestFailure.h>
@@ -402,8 +403,20 @@ BTestShell::PrintResults() {
 				     iFailure != fResultsCollector.failures().end();
 				     ++iFailure)
 				{
-					if (!(*iFailure)->isError())
-						cout << "    " << (*iFailure)->toString() << endl;
+					if (!(*iFailure)->isError()) {
+						CppUnit::SourceLine sl = (*iFailure)->sourceLine();
+						if (sl.isValid()) {
+							std::string fname = sl.fileName();
+							size_t pos = fname.find_last_of('/');
+							if (pos != std::string::npos)
+								fname = fname.substr(pos + 1);
+							cout << "    " << fname << ":" << sl.lineNumber()
+							     << " - " << (*iFailure)->failedTestName()
+							     << ": " << (*iFailure)->thrownException()->what() << endl;
+						} else {
+							cout << "    " << (*iFailure)->toString() << endl;
+						}
+					}
 				}
 			}
 			if (fResultsCollector.testErrors() > 0) {
@@ -412,8 +425,20 @@ BTestShell::PrintResults() {
 				     iFailure != fResultsCollector.failures().end();
 				     ++iFailure)
 				{
-					if ((*iFailure)->isError())
-						cout << "    " << (*iFailure)->toString() << endl;
+					if ((*iFailure)->isError()) {
+						CppUnit::SourceLine sl = (*iFailure)->sourceLine();
+						if (sl.isValid()) {
+							std::string fname = sl.fileName();
+							size_t pos = fname.find_last_of('/');
+							if (pos != std::string::npos)
+								fname = fname.substr(pos + 1);
+							cout << "    " << fname << ":" << sl.lineNumber()
+							     << " - " << (*iFailure)->failedTestName()
+							     << ": " << (*iFailure)->thrownException()->what() << endl;
+						} else {
+							cout << "    " << (*iFailure)->toString() << endl;
+						}
+					}
 				}
 			}
 

@@ -1,6 +1,7 @@
 #include <TestListener.h>
 
 #include <cppunit/Exception.h>
+#include <cppunit/SourceLine.h>
 #include <cppunit/Test.h>
 #include <cppunit/TestFailure.h>
 #include <iostream>
@@ -28,6 +29,14 @@ BTestListener::addFailure( const CppUnit::TestFailure &failure ) {
    	cout << (failure.thrownException() != NULL
    	           ? failure.thrownException()->what()
    	             : "(unknown error)");
+	CppUnit::SourceLine sl = failure.sourceLine();
+	if (sl.isValid()) {
+		std::string fname = sl.fileName();
+		size_t pos = fname.find_last_of('/');
+		if (pos != std::string::npos)
+			fname = fname.substr(pos + 1);
+		cout << " [" << fname << ":" << sl.lineNumber() << "]";
+	}
    	cout << endl;
 }
 

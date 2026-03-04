@@ -40,7 +40,9 @@ entry_ref::entry_ref()
 	device(B_INVALID_DEV),
 	directory(B_INVALID_INO),
 	name(NULL),
-	team(-1)
+	team(-1),
+	real_device(B_INVALID_DEV),
+	real_directory(B_INVALID_INO)
 {
 }
 
@@ -50,7 +52,9 @@ entry_ref::entry_ref(dev_t dev, ino_t dir, const char* name)
 	device(dev),
 	directory(dir),
 	name(NULL),
-	team(-1)
+	team(-1),
+	real_device(B_INVALID_DEV),
+	real_directory(B_INVALID_INO)
 {
 	set_name(name);
 	team = getpid();
@@ -74,8 +78,16 @@ entry_ref::entry_ref(int entryFd, const char* name)
 	device(B_INVALID_DEV),
 	directory(B_INVALID_INO),
 	name(NULL),
-	team(-1)
+	team(-1),
+	real_device(B_INVALID_DEV),
+	real_directory(B_INVALID_INO)
 {
+	struct stat st;
+	if (fstat(entryFd, &st) == 0) {
+		real_device = st.st_dev;
+		real_directory = st.st_ino;
+	}
+
 	device = get_vref_dev();
 	directory = create_vref(entryFd);
 	set_name(name);
@@ -88,7 +100,9 @@ entry_ref::entry_ref(const node_ref& ref, const char* name)
 	device(ref.dev()),
 	directory(ref.ino()),
 	name(NULL),
-	team(-1)
+	team(-1),
+	real_device(B_INVALID_DEV),
+	real_directory(B_INVALID_INO)
 {
 	set_name(name);
 	team = getpid();
@@ -103,7 +117,9 @@ entry_ref::entry_ref(const entry_ref& ref)
 	device(ref.dev()),
 	directory(ref.dir()),
 	name(NULL),
-	team(ref.team)
+	team(ref.team),
+	real_device(ref.real_device),
+	real_directory(ref.real_directory)
 {
 	set_name(ref.name);
 
@@ -175,6 +191,9 @@ entry_ref::dereference() const
 	if (!is_virtual())
 		return *this;
 
+	if (real_device != B_INVALID_DEV && real_directory != B_INVALID_INO)
+		return entry_ref(real_device, real_directory, name);
+
 	int fd = open_vref(id());
 	if (fd < 0)
 		return entry_ref(B_INVALID_DEV, B_INVALID_INO, NULL);
@@ -185,6 +204,10 @@ entry_ref::dereference() const
 		return entry_ref(B_INVALID_DEV, B_INVALID_INO, NULL);
 	}
 	close(fd);
+
+	real_device = st.st_dev;
+	real_directory = st.st_ino;
+
 	return entry_ref(st.st_dev, st.st_ino, name);
 }
 
@@ -201,11 +224,24 @@ void entry_ref::unset()
 bool
 entry_ref::operator==(const entry_ref& ref) const
 {
-	return (device == ref.device
-		&& directory == ref.directory
-		&& (name == ref.name
+	if (!(name == ref.name
 			|| (name != NULL && ref.name != NULL
-				&& strcmp(name, ref.name) == 0)));
+				&& strcmp(name, ref.name) == 0))) {
+		return false;
+	}
+
+	if (device == ref.device && directory == ref.directory)
+		return true;
+
+	// If this holds a vref then compare the dereferenced dev/ino values
+	if (is_virtual() || ref.is_virtual()) {
+		entry_ref realA = dereference();
+		entry_ref realB = ref.dereference();
+		return (realA.device == realB.device
+			&& realA.directory == realB.directory);
+	}
+
+	return false;
 }
 
 
@@ -229,6 +265,8 @@ entry_ref::operator=(const entry_ref& ref)
 	directory = ref.directory;
 	set_name(ref.name);
 	team = ref.team;
+	real_device = ref.real_device;
+	real_directory = ref.real_directory;
 
 	if (is_virtual() && directory != B_INVALID_INO)
 		acquire_vref((vref_id) directory);
@@ -971,10 +1009,24 @@ get_ref_for_path(const char* path, entry_ref* ref)
 bool
 operator<(const entry_ref& a, const entry_ref& b)
 {
-	return (a.dev() < b.dev()
-		|| (a.dev() == b.dev()
-			&& (a.dir() < b.dir()
-			|| (a.dir() == b.dir()
+	dev_t devA = a.dev();
+	dev_t devB = b.dev();
+	ino_t dirA = a.dir();
+	ino_t dirB = b.dir();
+
+	if (a.is_virtual() || b.is_virtual()) {
+		entry_ref realA = a.dereference();
+		entry_ref realB = b.dereference();
+		devA = realA.device;
+		devB = realB.device;
+		dirA = realA.directory;
+		dirB = realB.directory;
+	}
+
+	return (devA < devB
+		|| (devA == devB
+			&& (dirA < dirB
+			|| (dirA == dirB
 				&& ((a.name == NULL && b.name != NULL)
 				|| (a.name != NULL && b.name != NULL
 					&& strcmp(a.name, b.name) < 0))))));

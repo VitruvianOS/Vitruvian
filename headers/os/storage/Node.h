@@ -32,7 +32,6 @@ struct node_ref {
 
 	vref_id id() const;
 	bool is_virtual() const;
-	// TODO: we should cache the values when opening the vref
 	const node_ref dereference() const;
 	void unset();
 
@@ -52,6 +51,8 @@ public:
 
 private:
 	team_id team;
+	mutable dev_t	real_device;
+	mutable ino_t	real_node;
 };
 
 

@@ -37,7 +37,9 @@ node_ref::node_ref()
 	:
 	device(B_INVALID_DEV),
 	node(B_INVALID_INO),
-	team(-1)
+	team(-1),
+	real_device(B_INVALID_DEV),
+	real_node(B_INVALID_INO)
 {
 }
 
@@ -45,7 +47,9 @@ node_ref::node_ref()
 node_ref::node_ref(dev_t device, ino_t node)
 	:
 	device(device),
-	node(node)
+	node(node),
+	real_device(B_INVALID_DEV),
+	real_node(B_INVALID_INO)
 {
 	if (is_virtual() && node != B_INVALID_INO)
 		acquire_vref((vref_id) node);
@@ -63,17 +67,28 @@ node_ref::node_ref(dev_t device, ino_t node)
 
 node_ref::node_ref(int fd)
 	:
-	device(get_vref_dev()),
-	node(create_vref(fd))
+	device(B_INVALID_DEV),
+	node(B_INVALID_INO),
+	real_device(B_INVALID_DEV),
+	real_node(B_INVALID_INO)
 {
-	// TODO init_check
+	struct stat st;
+	if (fstat(fd, &st) == 0) {
+		real_device = st.st_dev;
+		real_node = st.st_ino;
+	}
+
+	device = get_vref_dev();
+	node = create_vref(fd);
 }
 
 
 node_ref::node_ref(const node_ref& other)
 	:
 	device(other.device),
-	node(other.node)
+	node(other.node),
+	real_device(other.real_device),
+	real_node(other.real_node)
 {
 	if (is_virtual() && node != B_INVALID_INO)
 		acquire_vref((vref_id) other.node);
@@ -124,6 +139,9 @@ node_ref::dereference() const
 	if (!is_virtual())
 		return *this;
 
+	if (real_device != B_INVALID_DEV && real_node != B_INVALID_INO)
+		return node_ref(real_device, real_node);
+
 	int fd = open_vref(id());
 	if (fd < 0)
 		return node_ref(B_INVALID_DEV, B_INVALID_INO);
@@ -134,6 +152,10 @@ node_ref::dereference() const
 		return node_ref(B_INVALID_DEV, B_INVALID_INO);
 	}
 	close(fd);
+
+	real_device = st.st_dev;
+	real_node = st.st_ino;
+
 	return node_ref(st.st_dev, st.st_ino);
 }
 
@@ -150,7 +172,17 @@ node_ref::unset()
 bool
 node_ref::operator==(const node_ref& other) const
 {
-	return (device == other.device && node == other.node);
+	if (device == other.device && node == other.node)
+		return true;
+
+	// If we hold a vref let's use the dereferenced values
+	if (is_virtual() || other.is_virtual()) {
+		const node_ref realA = dereference();
+		const node_ref realB = other.dereference();
+		return (realA.device == realB.device && realA.node == realB.node);
+	}
+
+	return false;
 }
 
 
@@ -164,6 +196,14 @@ node_ref::operator!=(const node_ref& other) const
 bool
 node_ref::operator<(const node_ref& other) const
 {
+	if (is_virtual() || other.is_virtual()) {
+		const node_ref realA = dereference();
+		const node_ref realB = other.dereference();
+		if (realA.device != realB.device)
+			return realA.device < realB.device;
+		return realA.node < realB.node;
+	}
+
 	if (this->device != other.device)
 		return this->device < other.device;
 
@@ -183,6 +223,8 @@ node_ref::operator=(const node_ref& other)
 	device = other.device;
 	node = other.node;
 	team = other.team;
+	real_device = other.real_device;
+	real_node = other.real_node;
 
 	if (is_virtual() && node != B_INVALID_INO)
 		acquire_vref((vref_id) node);
@@ -552,7 +594,6 @@ BNode::operator==(const BNode& node) const
 		return true;
 
 	if (fCStatus == B_OK && node.InitCheck() == B_OK) {
-		// compare the node_refs
 		node_ref ref1, ref2;
 		if (GetNodeRef(&ref1) != B_OK)
 			return false;

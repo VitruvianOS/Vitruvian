@@ -30,6 +30,7 @@ struct entry_ref {
 
 								~entry_ref();
 
+			//bool				is_valid() const;
 			status_t			init_check() const;
 
 			// This is an experimental V\OS API. It will change.
@@ -40,7 +41,6 @@ struct entry_ref {
 
 			vref_id				id() const;
 			bool				is_virtual() const;
-			// TODO: we should cache the values when opening the vref
 			const entry_ref 	dereference() const;
 			void				unset();
 
@@ -67,6 +67,8 @@ public:
 
 private:
 			team_id				team;
+			mutable dev_t		real_device;
+			mutable ino_t		real_directory;
 };
 
 

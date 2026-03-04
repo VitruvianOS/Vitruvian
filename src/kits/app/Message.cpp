@@ -83,6 +83,45 @@ port_id BMessage::sReplyPorts[sNumReplyPorts];
 int32 BMessage::sReplyPortInUse[sNumReplyPorts];
 
 
+static void
+_HandleMessageVRefs(const BMessage* message, bool acquire)
+{
+	dev_t vrefDev = get_vref_dev();
+
+	char* name;
+	type_code typeFound;
+	int32 count;
+	for (int32 i = 0;
+		 message->GetInfo(B_ANY_TYPE, i, &name, &typeFound, &count) == B_OK;
+		 i++) {
+		if (typeFound == B_VREF_TYPE) {
+			for (int32 j = 0; j < count; j++) {
+				vref_id vref;
+				if (message->FindVRef(name, j, &vref) == B_OK && vref >= 0) {
+					if (acquire)
+						acquire_vref(vref);
+					else
+						release_vref(vref);
+				}
+			}
+		} else if (typeFound == B_REF_TYPE && vrefDev != B_INVALID_DEV) {
+			for (int32 j = 0; j < count; j++) {
+				entry_ref ref;
+				if (message->FindRef(name, j, &ref) == B_OK) {
+					if (ref.device == vrefDev && ref.directory >= 0) {
+						vref_id vref = (vref_id)ref.directory;
+						if (acquire)
+							acquire_vref(vref);
+						else
+							release_vref(vref);
+					}
+				}
+			}
+		}
+	}
+}
+
+
 template<typename Type>
 static void
 print_to_stream_type(uint8* pointer)
@@ -237,6 +276,15 @@ BMessage::operator=(const BMessage& other)
 	fHeader->message_area = -1;
 	fFieldsAvailable = 0;
 	fDataAvailable = 0;
+
+	// Handle vrefs
+	if (other.fHeader != NULL
+			&& (other.fHeader->flags & (MESSAGE_FLAG_OWNS_VREFS
+				| MESSAGE_FLAG_WAS_DELIVERED)) != 0
+			&& fData != NULL) {
+		_HandleMessageVRefs(this, true);
+		fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
+	}
 
 	return *this;
 }
@@ -400,6 +448,10 @@ BMessage::_Clear()
 {
 	DEBUG_FUNCTION_ENTER;
 	if (fHeader != NULL) {
+		if ((fHeader->flags & (MESSAGE_FLAG_WAS_DELIVERED
+				| MESSAGE_FLAG_OWNS_VREFS)) != 0)
+			_HandleMessageVRefs(this, false);
+
 		// We're going to destroy all information of this message. If there's
 		// still someone waiting for a reply to this message, we have to send
 		// one now.
@@ -2138,6 +2190,7 @@ BMessage::_SendMessage(port_id port, team_id portOwner, int32 token,
 	char* buffer = NULL;
 	message_header* header = NULL;
 	status_t result = B_OK;
+	bool vrefsAcquired = false;
 
 	BPrivate::BDirectMessageTarget* direct = NULL;
 	BMessage* copy = NULL;
@@ -2239,6 +2292,10 @@ BMessage::_SendMessage(port_id port, team_id portOwner, int32 token,
 	header->flags |= MESSAGE_FLAG_WAS_DELIVERED;
 
 	if (direct == NULL) {
+		// We need to acquire vrefs across process boundaries
+		_HandleMessageVRefs(this, true);
+		vrefsAcquired = true;
+
 		KTRACE("BMessage send remote: team: %ld, port: %ld, token: %ld, "
 			"message: '%c%c%c%c'", portOwner, port, token,
 			char(what >> 24), char(what >> 16), char(what >> 8), (char)what);
@@ -2247,6 +2304,10 @@ BMessage::_SendMessage(port_id port, team_id portOwner, int32 token,
 			result = write_port_etc(port, kPortMessageCode, (void*)buffer,
 				size, B_RELATIVE_TIMEOUT, timeout);
 		} while (result == B_INTERRUPTED);
+
+		// If send failed then release the vrefs
+		if (result != B_OK && vrefsAcquired)
+			_HandleMessageVRefs(this, false);
 	}
 
 	if (result == B_OK && IsSourceWaiting()) {
@@ -2518,6 +2579,70 @@ DEFINE_FUNCTIONS(rgb_color, Color, B_RGB_32_BIT_TYPE);
 
 #undef DEFINE_FUNCTIONS
 
+
+status_t
+BMessage::AddVRef(const char* name, vref_id val)
+{
+	status_t error = AddData(name, B_VREF_TYPE, &val, sizeof(vref_id), true);
+	if (error == B_OK && val >= 0) {
+		acquire_vref(val);
+		fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
+	}
+	return error;
+}
+
+
+status_t
+BMessage::FindVRef(const char* name, vref_id* p) const
+{
+	return FindVRef(name, 0, p);
+}
+
+
+status_t
+BMessage::FindVRef(const char* name, int32 index, vref_id* p) const
+{
+	vref_id* ptr = NULL;
+	ssize_t bytes = 0;
+
+	*p = vref_id();
+	status_t error = FindData(name, B_VREF_TYPE, index, (const void**)&ptr,
+		&bytes);
+
+	if (error == B_OK)
+		*p = *ptr;
+
+	return error;
+}
+
+
+status_t
+BMessage::ReplaceVRef(const char* name, vref_id value)
+{
+	return ReplaceVRef(name, 0, value);
+}
+
+
+status_t
+BMessage::ReplaceVRef(const char* name, int32 index, vref_id value)
+{
+	// Release the old vref before replacing
+	if (fHeader->flags & MESSAGE_FLAG_OWNS_VREFS) {
+		vref_id old;
+		if (FindVRef(name, index, &old) == B_OK && old >= 0)
+			release_vref(old);
+	}
+
+	status_t error = ReplaceData(name, B_VREF_TYPE, index, &value,
+		sizeof(vref_id));
+	if (error == B_OK && value >= 0) {
+		acquire_vref(value);
+		fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
+	}
+	return error;
+}
+
+
 #define DEFINE_HAS_FUNCTION(typeName, typeCode)								\
 bool																		\
 BMessage::Has##typeName(const char* name, int32 index) const				\
@@ -2602,6 +2727,43 @@ DEFINE_SET_GET_FUNCTIONS(double, Double, B_DOUBLE_TYPE);
 DEFINE_SET_GET_FUNCTIONS(rgb_color, Color, B_RGB_32_BIT_TYPE);
 
 #undef DEFINE_SET_GET_FUNCTION
+
+
+vref_id
+BMessage::GetVRef(const char* name, vref_id defaultValue) const
+{
+	return GetVRef(name, 0, defaultValue);
+}
+
+
+vref_id
+BMessage::GetVRef(const char* name, int32 index, vref_id defaultValue) const
+{
+	vref_id value;
+	if (FindVRef(name, index, &value) == B_OK)
+		return value;
+
+	return defaultValue;
+}
+
+
+status_t
+BMessage::SetVRef(const char* name, vref_id value)
+{
+	// Release old vref if we own one under this name
+	if (fHeader != NULL && (fHeader->flags & MESSAGE_FLAG_OWNS_VREFS) != 0) {
+		vref_id old;
+		if (FindVRef(name, 0, &old) == B_OK && old >= 0)
+			release_vref(old);
+	}
+
+	status_t error = SetData(name, B_VREF_TYPE, &value, sizeof(vref_id));
+	if (error == B_OK && value >= 0) {
+		acquire_vref(value);
+		fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
+	}
+	return error;
+}
 
 
 const void*
@@ -2727,6 +2889,17 @@ BMessage::AddRef(const char* name, const entry_ref* ref)
 
 	if (error >= B_OK)
 		error = AddData(name, B_REF_TYPE, buffer, size, false);
+
+	if (error >= B_OK) {
+		// If the entry_ref carries a vref, acquire a reference so the vref
+		// stays valid while this BMessage is alive.
+		dev_t vrefDev = get_vref_dev();
+		if (vrefDev != B_INVALID_DEV && ref->device == vrefDev
+				&& ref->directory >= 0) {
+			acquire_vref((vref_id)ref->directory);
+			fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
+		}
+	}
 
 	return error;
 }

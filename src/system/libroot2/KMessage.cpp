@@ -1,5 +1,6 @@
 /*
  * Copyright 2005-2010, Ingo Weinhold, ingo_weinhold@gmx.de.
+ * Copyright 2026, Dario Casalinuovo
  * Distributed under the terms of the MIT License.
  */
 
@@ -39,6 +40,7 @@
 #if !defined(HAIKU_TARGET_PLATFORM_HAIKU) || defined(_BOOT_MODE) \
 	|| defined(_LOADER_MODE)
 #	define MEMALIGN(alignment, size)	malloc(size)
+#	define KMESSAGE_NO_VREF_SUPPORT 1
 	// Built as part of a build tool or the boot or runtime loader.
 #else
 #	include <malloc.h>
@@ -46,6 +48,53 @@
 	// Built as part of the kernel or userland. Using memalign allows use of
 	// special heap implementations that might otherwise return unaligned
 	// buffers for debugging purposes.
+#endif
+
+
+#ifndef KMESSAGE_NO_VREF_SUPPORT
+static void
+_HandleVRefs(const KMessage* message, bool acquire)
+{
+	dev_t vrefDev = get_vref_dev();
+
+	KMessageField field;
+	while (message->GetNextField(&field) == B_OK) {
+		type_code type = field.TypeCode();
+		int32 count = field.CountElements();
+
+		if (type == B_VREF_TYPE) {
+			for (int32 i = 0; i < count; i++) {
+				int32 size;
+				const vref_id* vref = (const vref_id*)field.ElementAt(i, &size);
+				if (vref != NULL && size == sizeof(vref_id) && *vref >= 0) {
+					if (acquire)
+						acquire_vref(*vref);
+					else
+						release_vref(*vref);
+				}
+			}
+		} else if (type == B_REF_TYPE && vrefDev != B_INVALID_DEV) {
+			for (int32 i = 0; i < count; i++) {
+				int32 size;
+				const char* data = (const char*)field.ElementAt(i, &size);
+				if (data != NULL && size >= (int32)(sizeof(dev_t) + sizeof(ino_t))) {
+					dev_t device;
+					ino_t directory;
+					memcpy(&device, data, sizeof(dev_t));
+					memcpy(&directory, data + sizeof(dev_t), sizeof(ino_t));
+
+					if (device == vrefDev && directory >= 0) {
+						vref_id vref = (vref_id)directory;
+						if (acquire)
+							acquire_vref(vref);
+						else
+							release_vref(vref);
+					}
+				}
+			}
+		}
+	}
+}
 #endif
 
 
@@ -232,6 +281,11 @@ KMessage::SetTo(const void* buffer, int32 bufferSize, uint32 flags)
 void
 KMessage::Unset()
 {
+#ifndef KMESSAGE_NO_VREF_SUPPORT
+	if ((fFlags & KMESSAGE_INIT_FROM_BUFFER) != 0)
+		_HandleVRefs(this, false);
+#endif
+
 	// free buffer
 	if (fBuffer && fBuffer != &fHeader && (fFlags & KMESSAGE_OWNS_BUFFER))
 		free(fBuffer);
@@ -515,12 +569,24 @@ KMessage::SendTo(port_id targetPort, int32 targetToken, port_id replyPort,
 
 	SetDeliveryInfo(targetToken, replyPort, replyToken, senderTeam);
 
-	// send the message
-	if (timeout < 0)
-		return write_port(targetPort, 'KMSG', fBuffer, ContentSize());
+#ifndef KMESSAGE_NO_VREF_SUPPORT
+	_HandleVRefs(this, true);
+#endif
 
-	return write_port_etc(targetPort, 'KMSG', fBuffer, ContentSize(),
-		B_RELATIVE_TIMEOUT, timeout);
+	// send the message
+	status_t result;
+	if (timeout < 0)
+		result = write_port(targetPort, 'KMSG', fBuffer, ContentSize());
+	else
+		result = write_port_etc(targetPort, 'KMSG', fBuffer, ContentSize(),
+			B_RELATIVE_TIMEOUT, timeout);
+
+#ifndef KMESSAGE_NO_VREF_SUPPORT
+	if (result != B_OK)
+		_HandleVRefs(this, false);
+#endif
+
+	return result;
 }
 
 

@@ -60,6 +60,7 @@ enum {
 	B_UINT64_TYPE					= 'ULLG',
 	B_UINT8_TYPE					= 'UBYT',
 	B_VECTOR_ICON_TYPE				= 'VICN',
+	B_VREF_TYPE						= 'VREF',
 	B_XATTR_TYPE					= 'XATR',
 	B_NETWORK_ADDRESS_TYPE			= 'NWAD',
 	B_MIME_STRING_TYPE				= 'MIMS',

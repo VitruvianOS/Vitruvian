@@ -77,8 +77,10 @@ public:
 	inline	status_t			AddInt16(const char* name, int16 value);
 	inline	status_t			AddInt32(const char* name, int32 value);
 	inline	status_t			AddInt64(const char* name, int64 value);
+	inline	status_t			AddUInt64(const char* name, uint64 value);
 	inline	status_t			AddPointer(const char* name, const void* value);
 	inline	status_t			AddString(const char* name, const char* value);
+	inline	status_t			AddVRef(const char* name, vref_id value);
 
 			status_t			FindData(const char* name, type_code type,
 									const void** data, int32* numBytes) const;
@@ -100,6 +102,9 @@ public:
 	inline	status_t			FindInt64(const char* name, int64* value) const;
 	inline	status_t			FindInt64(const char* name, int32 index,
 									int64* value) const;
+	inline	status_t			FindUInt64(const char* name, uint64* value) const;
+	inline	status_t			FindUInt64(const char* name, int32 index,
+								uint64* value) const;
 	inline	status_t			FindPointer(const char* name,
 									void** value) const;
 	inline	status_t			FindPointer(const char* name, int32 index,
@@ -108,6 +113,10 @@ public:
 									const char** value) const;
 	inline	status_t			FindString(const char* name, int32 index,
 									const char** value) const;
+	inline	status_t			FindVRef(const char* name,
+									vref_id* value) const;
+	inline	status_t			FindVRef(const char* name, int32 index,
+									vref_id* value) const;
 
 	inline	bool				GetBool(const char* name,
 									bool defaultValue) const;
@@ -137,6 +146,10 @@ public:
 									const char* defaultValue) const;
 	inline	const char*			GetString(const char* name, int32 index,
 									const char* defaultValue) const;
+	inline	vref_id				GetVRef(const char* name,
+									vref_id defaultValue) const;
+	inline	vref_id				GetVRef(const char* name, int32 index,
+									vref_id defaultValue) const;
 
 	// fixed size fields only
 			status_t			SetData(const char* name, type_code type,
@@ -324,6 +337,13 @@ KMessage::AddInt64(const char* name, int64 value)
 
 
 status_t
+KMessage::AddUInt64(const char* name, uint64 value)
+{
+	return AddData(name, B_UINT64_TYPE, &value, sizeof(uint64), true);
+}
+
+
+status_t
 KMessage::AddPointer(const char* name, const void* value)
 {
 	return AddData(name, B_POINTER_TYPE, &value, sizeof(value), true);
@@ -337,6 +357,13 @@ KMessage::AddString(const char* name, const char* value)
 	if (!value)
 		return B_BAD_VALUE;
 	return AddData(name, B_STRING_TYPE, value, strlen(value) + 1, false);
+}
+
+
+status_t
+KMessage::AddVRef(const char* name, vref_id value)
+{
+	return AddData(name, B_VREF_TYPE, &value, sizeof(vref_id), true);
 }
 
 
@@ -434,6 +461,20 @@ KMessage::FindInt64(const char* name, int32 index, int64* value) const
 
 
 status_t
+KMessage::FindUInt64(const char* name, uint64* value) const
+{
+	return FindUInt64(name, 0, value);
+}
+
+
+status_t
+KMessage::FindUInt64(const char* name, int32 index, uint64* value) const
+{
+	return _FindType(name, B_UINT64_TYPE, index, value);
+}
+
+
+status_t
 KMessage::FindPointer(const char* name, void** value) const
 {
 	return FindPointer(name, 0, value);
@@ -459,6 +500,20 @@ KMessage::FindString(const char* name, int32 index, const char** value) const
 {
 	int32 size;
 	return FindData(name, B_STRING_TYPE, index, (const void**)value, &size);
+}
+
+
+status_t
+KMessage::FindVRef(const char* name, vref_id* value) const
+{
+	return FindVRef(name, 0, value);
+}
+
+
+status_t
+KMessage::FindVRef(const char* name, int32 index, vref_id* value) const
+{
+	return _FindType(name, B_VREF_TYPE, index, value);
 }
 
 
@@ -579,6 +634,20 @@ const char*
 KMessage::GetString(const char* name, const char* defaultValue) const
 {
 	return GetString(name, 0, defaultValue);
+}
+
+
+vref_id
+KMessage::GetVRef(const char* name, vref_id defaultValue) const
+{
+	return _GetType(name, B_VREF_TYPE, 0, defaultValue);
+}
+
+
+vref_id
+KMessage::GetVRef(const char* name, int32 index, vref_id defaultValue) const
+{
+	return _GetType(name, B_VREF_TYPE, index, defaultValue);
 }
 
 

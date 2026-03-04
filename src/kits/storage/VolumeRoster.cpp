@@ -19,7 +19,7 @@
 #include <VolumeRoster.h>
 
 
-static const char kBootVolumePath[] = "/boot";
+static const char kBootVolumePath[] = "/";
 
 using namespace std;
 

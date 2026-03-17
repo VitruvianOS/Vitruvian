@@ -1,7 +1,7 @@
 name: Notify Chat on issue open/close
 on:
   issues:
-    types: [opened, closed]
+    types: [opened, closed, reopened]
 
 permissions:
   issues: read
@@ -42,23 +42,17 @@ jobs:
 
           if [ "$ACTION" = "opened" ]; then
             header="<b>New issue opened</b>"
-            meta="Repo: ${repo_link}
-Issue: ${issue_link}
-Author: $(esc "$USER")
-Labels: $(esc "$labels")"
+            meta="Repo: ${repo_link}"$'\n'"Issue: ${issue_link}"$'\n'"Author: $(esc "$USER")"$'\n'"Labels: $(esc "$labels")"
+          elif [ "$ACTION" = "reopened" ]; then
+            header="<b>Issue reopened</b>"
+            meta="Repo: ${repo_link}"$'\n'"Issue: ${issue_link}"$'\n'"Reopened by: $(esc "$ACTOR")"$'\n'"Labels: $(esc "$labels")"
           else
             header="<b>Issue closed</b>"
-            meta="Repo: ${repo_link}
-Issue: ${issue_link}
-Closed by: $(esc "$ACTOR")
-Labels: $(esc "$labels")"
+            meta="Repo: ${repo_link}"$'\n'"Issue: ${issue_link}"$'\n'"Closed by: $(esc "$ACTOR")"$'\n'"Labels: $(esc "$labels")"
           fi
 
           body_escaped="$(esc "$body_text")"
-          final="${header}
-${meta}
-
-${body_escaped}"
+          final="${header}"$'\n'"${meta}"$'\n\n'"${body_escaped}"
 
           # Write multiline output using heredoc syntax
           {

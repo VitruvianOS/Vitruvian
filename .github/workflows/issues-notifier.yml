@@ -10,73 +10,75 @@ jobs:
   notify-telegram:
     runs-on: ubuntu-latest
     steps:
-      - name: Read event JSON
-        id: event
-        run: |
-          echo "event_path=${GITHUB_EVENT_PATH}" >> "$GITHUB_OUTPUT"
-
       - name: Build Telegram message
         id: build
         env:
-          EVENT_PATH: ${{ steps.event.outputs.event_path }}
+          NUMBER:  ${{ github.event.issue.number }}
+          TITLE:   ${{ github.event.issue.title }}
+          BODY:    ${{ github.event.issue.body }}
+          USER:    ${{ github.event.issue.user.login }}
+          URL:     ${{ github.event.issue.html_url }}
+          ACTION:  ${{ github.event.action }}
+          ACTOR:   ${{ github.actor }}
+          REPO:    ${{ github.repository }}
         run: |
           set -euo pipefail
-          if command -v jq >/dev/null 2>&1; then
-            number=$(jq -r .issue.number "$EVENT_PATH")
-            title=$(jq -r .issue.title "$EVENT_PATH")
-            body_text=$(jq -r '.issue.body // ""' "$EVENT_PATH")
-            user=$(jq -r .issue.user.login "$EVENT_PATH")
-            url=$(jq -r .issue.html_url "$EVENT_PATH")
-            labels=$(jq -r '[.issue.labels[]?.name] | join(", ")' "$EVENT_PATH")
-            action=$(jq -r .action "$EVENT_PATH")
-            actor=$(jq -r '.sender.login // ""' "$EVENT_PATH")
+
+          # Collect labels via jq from the event JSON
+          labels=$(jq -r '[.issue.labels[]?.name] | if length > 0 then join(", ") else "(none)" end' "$GITHUB_EVENT_PATH")
+
+          # HTML-escape a string
+          esc() { printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
+
+          # Truncate body
+          body_text="$BODY"
+          if [ "${#body_text}" -gt 800 ]; then
+            body_text="${body_text:0:800}...(truncated)"
+          fi
+
+          repo_url="https://github.com/${REPO}"
+          repo_link="<a href=\"${repo_url}\">$(esc "$REPO")</a>"
+          issue_link="<a href=\"$(esc "$URL")\">$(esc "#${NUMBER}: ${TITLE}")</a>"
+
+          if [ "$ACTION" = "opened" ]; then
+            header="<b>New issue opened</b>"
+            meta="Repo: ${repo_link}
+Issue: ${issue_link}
+Author: $(esc "$USER")
+Labels: $(esc "$labels")"
           else
-            number="${{ github.event.issue.number }}"
-            title="${{ github.event.issue.title }}"
-            body_text="${{ github.event.issue.body || '' }}"
-            user="${{ github.event.issue.user.login }}"
-            url="${{ github.event.issue.html_url }}"
-            labels="(none)"
-            action="${{ github.event.action }}"
-            actor="${{ github.actor }}"
+            header="<b>Issue closed</b>"
+            meta="Repo: ${repo_link}
+Issue: ${issue_link}
+Closed by: $(esc "$ACTOR")
+Labels: $(esc "$labels")"
           fi
 
-          maxlen=800
-          if [ "${#body_text}" -gt "$maxlen" ]; then
-            body_text="${body_text:0:$maxlen}...(truncated)"
-          fi
+          body_escaped="$(esc "$body_text")"
+          final="${header}
+${meta}
 
-          esc() {
-            printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
-          }
+${body_escaped}"
 
-          repo="${GITHUB_REPOSITORY}"
-          repo_url="https://github.com/${repo}"
-          repo_link="<a href=\"${repo_url}\">${repo}</a>"
-          issue_link="<a href=\"${url}\">#${number} ${esc "$title"}</a>"
-
-          if [ "$action" = "opened" ]; then
-            msg_title="New issue opened"
-            body="Repo: ${repo_link}\nIssue: ${issue_link}\nAuthor: ${esc "$user"}\nLabels: ${esc "${labels:-(none)}"}\n\n${esc "$body_text"}"
-          else
-            msg_title="Issue closed"
-            body="Repo: ${repo_link}\nIssue: ${issue_link}\nClosed by: ${esc "$actor"}\nLabels: ${esc "${labels:-(none)}"}\n\n${esc "$body_text"}"
-          fi
-
-          final="<b>$(esc "$msg_title")</b>\n${body}"
-          echo "body=${final}" >> "$GITHUB_OUTPUT"
+          # Write multiline output using heredoc syntax
+          {
+            echo 'msg<<__DELIM__'
+            printf '%s' "$final"
+            echo '__DELIM__'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram notification
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          MSG:                ${{ steps.build.outputs.msg }}
         run: |
           if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
-            echo "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID; skipping."
+            echo "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID — skipping."
             exit 0
           fi
-          body="${{ steps.build.outputs.body }}"
-          curl -sS --fail -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+          curl -sS --fail -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=${body}" \
-            -d "parse_mode=HTML"
+            -d "parse_mode=HTML" \
+            --data-urlencode "text=${MSG}"

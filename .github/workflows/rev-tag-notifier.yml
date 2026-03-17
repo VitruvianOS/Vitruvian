@@ -14,98 +14,138 @@ jobs:
       - name: Checkout pushed ref (full)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0     # needed to list tags and read history
+          fetch-depth: 0
 
       - name: Configure git user
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Find latest rev tag (by ref sort)
+      - name: Check if push is a PR branch
+        id: pr_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH:   ${{ github.ref_name }}
+        run: |
+          count=$(gh pr list --head "$BRANCH" --state open --json number --jq '. | length' 2>/dev/null || echo 0)
+          if [ "$count" -gt 0 ]; then
+            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Find latest rev tag
         id: find_latest
         run: |
-          # Pattern: rev-<number>
           latest=$(git tag --list 'rev-*' --sort=-v:refname | head -n1 || true)
           if [ -z "$latest" ]; then
-            echo "::set-output name=latest::"
-            echo "::set-output name=num::"
+            echo "latest=" >> "$GITHUB_OUTPUT"
+            echo "num="    >> "$GITHUB_OUTPUT"
           else
-            num=${latest#rev-}
-            echo "::set-output name=latest::$latest"
-            echo "::set-output name=num::$num"
+            echo "latest=$latest"      >> "$GITHUB_OUTPUT"
+            echo "num=${latest#rev-}"  >> "$GITHUB_OUTPUT"
           fi
 
       - name: Determine next rev number
         id: next_rev
         run: |
-          latest="${{ steps.find_latest.outputs.latest }}"
           num="${{ steps.find_latest.outputs.num }}"
-          if [ -z "$latest" ]; then
-            next=1
+          if echo "$num" | grep -Eq '^[0-9]+$'; then
+            next=$((num + 1))
           else
-            if echo "$num" | grep -Eq '^[0-9]+$'; then
-              next=$((num + 1))
-            else
-              next=1
-            fi
+            next=1
           fi
-          tag="rev-${next}"
-          echo "::set-output name=tag::$tag"
-          echo "::set-output name=number::$next"
+          echo "tag=rev-${next}"   >> "$GITHUB_OUTPUT"
+          echo "number=${next}"    >> "$GITHUB_OUTPUT"
 
       - name: Create and push rev tag
+        if: steps.pr_check.outputs.is_pr != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${{ steps.next_rev.outputs.tag }}"
-          echo "Creating tag $tag at $GITHUB_SHA"
           git tag "$tag" "$GITHUB_SHA"
           git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" "refs/tags/${tag}"
-
-      - name: Find latest rev tag (by creation date for notification)
-        id: latest_for_notify
-        run: |
-          # find latest rev-* tag by creation date; leave empty if none
-          entry=$(git for-each-ref --sort=-creatordate --format='%(refname:short) %(creatordate:unix)' refs/tags | grep '^rev-[0-9]\+' | head -n1 || true)
-          if [ -z "$entry" ]; then
-            echo "::set-output name=tag::"
-            echo "::set-output name=ts::"
-          else
-            tag=$(echo "$entry" | awk '{print $1}')
-            ts=$(echo "$entry" | awk '{print $2}')
-            echo "::set-output name=tag::$tag"
-            echo "::set-output name=ts::$ts"
-          fi
+          echo "Created tag: $tag"
 
       - name: Build Telegram message
         id: message
+        env:
+          BEFORE:   ${{ github.event.before }}
+          AFTER:    ${{ github.event.after }}
+          IS_PR:    ${{ steps.pr_check.outputs.is_pr }}
+          REV_TAG:  ${{ steps.next_rev.outputs.tag }}
         run: |
-          repo="${GITHUB_REPOSITORY}"
           branch="${GITHUB_REF#refs/heads/}"
-          sha_full="${GITHUB_SHA}"
-          sha="${sha_full::7}"
-          author="$(git --no-pager show -s --format='%an' $GITHUB_SHA || echo '')"
-          msg="$(git --no-pager show -s --format='%s' $GITHUB_SHA || echo '')"
-          latest_tag="${{ steps.latest_for_notify.outputs.tag }}"
-          tag_part="Rev: ${latest_tag:-(none)}"
-          body="Repo: ${repo}%0ABranch: ${branch}%0ACommit: ${sha}%0AAuthor: ${author}%0AMessage: ${msg}%0A${tag_part}"
-          echo "::set-output name=body::$body"
+          repo="${GITHUB_REPOSITORY}"
+
+          # Collect commits in this push; fall back to HEAD if range is unavailable
+          zero="0000000000000000000000000000000000000000"
+          repo_url="https://github.com/${GITHUB_REPOSITORY}"
+
+          esc() { printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
+
+          make_commit_line() {
+            local sha="$1" subject="$2" author="$3"
+            local short="${sha:0:7}"
+            local url="${repo_url}/commit/${sha}"
+            printf '• <a href="%s">%s</a> %s (%s)' "$url" "$short" "$(esc "$subject")" "$(esc "$author")"
+          }
+
+          if [ "$BEFORE" = "$zero" ] || [ -z "$BEFORE" ]; then
+            commits=$(git --no-pager log -5 --reverse --format="%H %s|%an" \
+                      | while IFS='|' read -r hashsubj author; do
+                          sha="${hashsubj%% *}"
+                          subject="${hashsubj#* }"
+                          make_commit_line "$sha" "$subject" "$author"
+                          echo
+                        done)
+          else
+            commits=$(git --no-pager log --reverse --format="%H %s|%an" "${BEFORE}..${AFTER}" 2>/dev/null \
+                      | while IFS='|' read -r hashsubj author; do
+                          sha="${hashsubj%% *}"
+                          subject="${hashsubj#* }"
+                          make_commit_line "$sha" "$subject" "$author"
+                          echo
+                        done)
+          fi
+
+          if [ "$IS_PR" = "true" ]; then
+            rev_line="Rev: (PR branch — no tag created)"
+          else
+            rev_line="Rev: <b>$(esc "$REV_TAG")</b>"
+          fi
+
+          full="<b>$(esc "$repo") [$(esc "$branch")]</b>
+${rev_line}
+
+${commits}"
+
+          # Telegram HTML limit is 4096 chars — stay well under it
+          limit=3800
+          if [ "${#full}" -gt "$limit" ]; then
+            full="${full:0:$limit}
+...(truncated)"
+          fi
+
+          {
+            echo 'msg<<__DELIM__'
+            printf '%s\n' "$full"
+            echo '__DELIM__'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram notification
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          MSG:                ${{ steps.message.outputs.msg }}
         run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID secrets; skipping send."
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
+            echo "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID — skipping."
             exit 0
           fi
-          body="${{ steps.message.outputs.body }}"
-          curl -sS --fail -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+          curl -sS --fail -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
-            -d "text=${body}" \
-            -d "parse_mode=HTML"
-
-      - name: Output created tag
-        run: |
-          echo "Created tag: ${{ steps.next_rev.outputs.tag }}"
+            -d "parse_mode=HTML" \
+            --data-urlencode "text=${MSG}"

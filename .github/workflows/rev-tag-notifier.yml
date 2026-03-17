@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   increment-and-notify:
@@ -29,7 +30,7 @@ jobs:
         run: |
           count=$(gh pr list --head "$BRANCH" --state open --json number --jq '. | length' 2>/dev/null || echo 0)
           if [ "$count" -gt 0 ]; then
-            echo "is_pr=true" >> "$GITHUB_OUTPUT"
+            echo "is_pr=true"  >> "$GITHUB_OUTPUT"
           else
             echo "is_pr=false" >> "$GITHUB_OUTPUT"
           fi
@@ -42,8 +43,8 @@ jobs:
             echo "latest=" >> "$GITHUB_OUTPUT"
             echo "num="    >> "$GITHUB_OUTPUT"
           else
-            echo "latest=$latest"      >> "$GITHUB_OUTPUT"
-            echo "num=${latest#rev-}"  >> "$GITHUB_OUTPUT"
+            echo "latest=$latest"     >> "$GITHUB_OUTPUT"
+            echo "num=${latest#rev-}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Determine next rev number
@@ -55,8 +56,8 @@ jobs:
           else
             next=1
           fi
-          echo "tag=rev-${next}"   >> "$GITHUB_OUTPUT"
-          echo "number=${next}"    >> "$GITHUB_OUTPUT"
+          echo "tag=rev-${next}" >> "$GITHUB_OUTPUT"
+          echo "number=${next}"  >> "$GITHUB_OUTPUT"
 
       - name: Create and push rev tag
         if: steps.pr_check.outputs.is_pr != 'true'
@@ -71,43 +72,32 @@ jobs:
       - name: Build Telegram message
         id: message
         env:
-          BEFORE:   ${{ github.event.before }}
-          AFTER:    ${{ github.event.after }}
-          IS_PR:    ${{ steps.pr_check.outputs.is_pr }}
-          REV_TAG:  ${{ steps.next_rev.outputs.tag }}
+          BEFORE:  ${{ github.event.before }}
+          AFTER:   ${{ github.event.after }}
+          IS_PR:   ${{ steps.pr_check.outputs.is_pr }}
+          REV_TAG: ${{ steps.next_rev.outputs.tag }}
         run: |
           branch="${GITHUB_REF#refs/heads/}"
           repo="${GITHUB_REPOSITORY}"
-
-          # Collect commits in this push; fall back to HEAD if range is unavailable
+          repo_url="https://github.com/${repo}"
           zero="0000000000000000000000000000000000000000"
-          repo_url="https://github.com/${GITHUB_REPOSITORY}"
 
           esc() { printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
 
-          make_commit_line() {
-            local sha="$1" subject="$2" author="$3"
-            local short="${sha:0:7}"
-            local url="${repo_url}/commit/${sha}"
-            printf '• <a href="%s">%s</a> %s (%s)' "$url" "$short" "$(esc "$subject")" "$(esc "$author")"
+          # Build per-commit lines with links
+          make_lines() {
+            while IFS='|' read -r sha subject author; do
+              short="${sha:0:7}"
+              printf '• <a href="%s/commit/%s">%s</a> %s (%s)\n' \
+                "$repo_url" "$sha" "$short" "$(esc "$subject")" "$(esc "$author")"
+            done
           }
 
           if [ "$BEFORE" = "$zero" ] || [ -z "$BEFORE" ]; then
-            commits=$(git --no-pager log -5 --reverse --format="%H %s|%an" \
-                      | while IFS='|' read -r hashsubj author; do
-                          sha="${hashsubj%% *}"
-                          subject="${hashsubj#* }"
-                          make_commit_line "$sha" "$subject" "$author"
-                          echo
-                        done)
+            commits=$(git --no-pager log -5 --reverse --format="%H|%s|%an" | make_lines)
           else
-            commits=$(git --no-pager log --reverse --format="%H %s|%an" "${BEFORE}..${AFTER}" 2>/dev/null \
-                      | while IFS='|' read -r hashsubj author; do
-                          sha="${hashsubj%% *}"
-                          subject="${hashsubj#* }"
-                          make_commit_line "$sha" "$subject" "$author"
-                          echo
-                        done)
+            commits=$(git --no-pager log --reverse --format="%H|%s|%an" \
+                        "${BEFORE}..${AFTER}" 2>/dev/null | make_lines)
           fi
 
           if [ "$IS_PR" = "true" ]; then
@@ -116,16 +106,13 @@ jobs:
             rev_line="Rev: <b>$(esc "$REV_TAG")</b>"
           fi
 
-          full="<b>$(esc "$repo") [$(esc "$branch")]</b>
-${rev_line}
+          header="<b>$(esc "$repo") [$(esc "$branch")]</b>"
+          full="${header}"$'\n'"${rev_line}"$'\n\n'"${commits}"
 
-${commits}"
-
-          # Telegram HTML limit is 4096 chars — stay well under it
+          # Telegram HTML limit is 4096 chars — stay safely under it
           limit=3800
           if [ "${#full}" -gt "$limit" ]; then
-            full="${full:0:$limit}
-...(truncated)"
+            full="${full:0:$limit}"$'\n'"...(truncated)"
           fi
 
           {

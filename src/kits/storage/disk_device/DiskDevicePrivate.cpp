@@ -52,7 +52,7 @@ PartitionFilterVisitor::Visit(BPartition *partition, int32 level)
 // IDFinderVisitor
 
 // constructor
-IDFinderVisitor::IDFinderVisitor(int32 id)
+IDFinderVisitor::IDFinderVisitor(partition_id id)
 	: BDiskDeviceVisitor(),
 	  fID(id)
 {

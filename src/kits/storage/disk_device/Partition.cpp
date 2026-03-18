@@ -318,7 +318,7 @@ BPartition::ContentType() const
 
 	\return A unique identifier for this partition.
 */
-int32
+partition_id
 BPartition::ID() const
 {
 	return _PartitionData()->id;

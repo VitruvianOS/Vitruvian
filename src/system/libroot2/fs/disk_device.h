@@ -13,15 +13,14 @@
 #include "utils.h"
 
 
-// TODO dev_for_path
 static inline partition_id
 make_partition_id(const char* devPath)
 {
 	struct stat st;
 	if (stat(devPath, &st) < 0)
-		return -1;
+		return B_INVALID_DEV;
 
-	return (partition_id)st.st_ino;
+	return S_ISBLK(st.st_mode) ? (partition_id)st.st_rdev : (partition_id)st.st_dev;
 }
 
 static inline bool

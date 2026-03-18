@@ -357,7 +357,7 @@ BDiskDeviceList::VisitEachMountablePartition(BDiskDeviceVisitor *visitor)
 			locked or no device with ID \a id is in the list.
 */
 BDiskDevice *
-BDiskDeviceList::DeviceWithID(int32 id) const
+BDiskDeviceList::DeviceWithID(partition_id id) const
 {
 	IDFinderVisitor visitor(id);
 	return const_cast<BDiskDeviceList*>(this)->VisitEachDevice(&visitor);
@@ -373,7 +373,7 @@ BDiskDeviceList::DeviceWithID(int32 id) const
 			locked or no partition with ID \a id is in the list.
 */
 BPartition *
-BDiskDeviceList::PartitionWithID(int32 id) const
+BDiskDeviceList::PartitionWithID(partition_id id) const
 {
 	IDFinderVisitor visitor(id);
 	return const_cast<BDiskDeviceList*>(this)->VisitEachPartition(&visitor);

@@ -7,9 +7,10 @@
 
 
 #include <SupportDefs.h>
+#include <StorageDefs.h>
 
 
-typedef int32 partition_id;
+typedef dev_t partition_id;
 typedef int32 disk_system_id;
 typedef int32 disk_job_id;
 

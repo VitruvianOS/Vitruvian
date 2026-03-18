@@ -31,7 +31,7 @@ UninitializeJob::Do()
 	bool haveParent = fPartition != NULL;
 	int32 changeCounter = fChild->ChangeCounter();
 	int32 parentChangeCounter = haveParent ? fPartition->ChangeCounter() : 0;
-	partition_id parentID = haveParent ? fPartition->PartitionID() : -1;
+	partition_id parentID = haveParent ? fPartition->PartitionID() : B_INVALID_DEV;
 
 	status_t error = _kern_uninitialize_partition(fChild->PartitionID(),
 		&changeCounter, parentID, &parentChangeCounter);

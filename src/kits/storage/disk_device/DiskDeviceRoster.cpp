@@ -390,7 +390,7 @@ BDiskDeviceRoster::FindPartitionByMountPoint(const char* mountPoint,
 	- other error codes
 */
 status_t
-BDiskDeviceRoster::GetDeviceWithID(int32 id, BDiskDevice* device) const
+BDiskDeviceRoster::GetDeviceWithID(partition_id id, BDiskDevice* device) const
 {
 	if (!device)
 		return B_BAD_VALUE;
@@ -415,7 +415,7 @@ BDiskDeviceRoster::GetDeviceWithID(int32 id, BDiskDevice* device) const
 	- other error codes
 */
 status_t
-BDiskDeviceRoster::GetPartitionWithID(int32 id, BDiskDevice* device,
+BDiskDeviceRoster::GetPartitionWithID(partition_id id, BDiskDevice* device,
 	BPartition** partition) const
 {
 	if (!device || !partition)

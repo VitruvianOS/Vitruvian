@@ -15,7 +15,7 @@ namespace BPrivate {
 
 class PartitionReference : public BReferenceable {
 public:
-								PartitionReference(partition_id id = -1,
+								PartitionReference(partition_id id = B_INVALID_DEV,
 									int32 changeCounter = 0);
 								~PartitionReference();
 

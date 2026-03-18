@@ -95,13 +95,13 @@ send_device_notification(port_id port, uint32 token, uint32 opcode, dev_t device
 	message.SetTo(buffer, sizeof(buffer), B_NODE_MONITOR);
 	message.AddInt32("opcode", opcode);
 	if (opcode == B_DEVICE_MOUNTED) {
-		message.AddInt32("new device", (int32)device);
+		message.AddUInt64("new device", (uint64)device);
 		if (parentDevice != (dev_t)-1)
-			message.AddInt32("device", (int32)parentDevice);
+			message.AddUInt64("device", (uint64)parentDevice);
 		if (parentDirectory != (ino_t)-1)
-			message.AddInt64("directory", parentDirectory);
+			message.AddUInt64("directory", (uint64)parentDirectory);
 	} else {
-		message.AddInt32("device", (int32)device);
+		message.AddUInt64("device", (uint64)device);
 	}
 	message.SetDeliveryInfo(token, port, -1, find_thread(NULL));
 
@@ -113,11 +113,11 @@ static void
 send_disk_device_notification(port_id port, uint32 token, uint32 event,
 	const char* devNode)
 {
-	partition_id deviceId = -1;
+	partition_id deviceId = B_INVALID_DEV;
 	if (devNode && devNode[0])
 		deviceId = make_partition_id(devNode);
 
-	if (deviceId < 0)
+	if (deviceId == B_INVALID_DEV)
 		return;
 
 	KMessage message;
@@ -126,8 +126,8 @@ send_disk_device_notification(port_id port, uint32 token, uint32 event,
 
 	message.SetTo(buffer, sizeof(buffer), B_DEVICE_UPDATE);
 	message.AddInt32("event", event);
-	message.AddInt32("device_id", deviceId);
-	message.AddInt32("partition_id", deviceId);
+	message.AddUInt64("device_id", deviceId);
+	message.AddUInt64("partition_id", deviceId);
 	message.SetDeliveryInfo(token, port, -1, find_thread(NULL));
 
 	write_port(port, kPortMessageCode, message.Buffer(), message.ContentSize());
@@ -458,6 +458,7 @@ _kern_start_watching_disks(uint32 eventMask, port_id port, int32 token)
 	printf("start_watching_disks: mask=0x%x, port=%d, token=%d",
 		eventMask, port, token);
 
+	// TODO: we shouldn't start thread for every call
 	start_thread();
 	return B_OK;
 }
@@ -475,6 +476,7 @@ _kern_stop_watching_disks(port_id port, int32 token)
 		if (it != gDiskWatchers.end())
 			gDiskWatchers.erase(it);
 	}
+	// TODO: we shouldn't stop thread until there are listeners
 	stop_thread();
 	return B_OK;
 }

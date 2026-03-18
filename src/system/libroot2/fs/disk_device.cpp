@@ -400,12 +400,10 @@ _kern_get_next_disk_device_id(int32* cookie, size_t* neededSize)
 			struct udev_device* parent = udev_device_get_parent_with_subsystem_devtype(udev_dev, "block", "disk");
 			if (parent) {
 				udev_device_unref(udev_dev);
-				udev_unref(udev);
 				continue;
 			}
 			udev_device_unref(udev_dev);
 		}
-		udev_unref(udev);
 
 		strlcpy(iter->currentDevice, entry->d_name, sizeof(iter->currentDevice));
 		iter->deviceReturned = false;
@@ -450,7 +448,6 @@ _kern_find_disk_device(const char* filename, size_t* neededSize)
 
 			udev_device_unref(udev_dev);
 		}
-		udev_unref(udev);
 	}
 
 	char sysPath[PATH_MAX];
@@ -550,7 +547,7 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 
 		struct stat st;
 		if (stat(testPath, &st) == 0 && S_ISBLK(st.st_mode)) {
-			if ((partition_id)st.st_ino == deviceID) {
+			if ((partition_id)st.st_rdev == deviceID) {
 				strlcpy(devPath, testPath, sizeof(devPath));
 				strlcpy(devName, entry->d_name, sizeof(devName));
 				break;
@@ -673,7 +670,7 @@ _kern_unregister_file_device(partition_id deviceID, const char* filename)
 
 	FileDiskDevice* fileDev = nullptr;
 
-	if (deviceID >= 0) {
+	if (deviceID != B_INVALID_DEV) {
 		auto it = gFileDevices.find(deviceID);
 		if (it != gFileDevices.end())
 			fileDev = it->second;
@@ -832,7 +829,7 @@ _kern_get_partition_path(partition_id id, char* buffer, size_t bufferSize)
 
 		struct stat st;
 		if (stat(devPath, &st) == 0 && S_ISBLK(st.st_mode)) {
-			if ((partition_id)st.st_ino == id) {
+			if ((partition_id)st.st_rdev == id) {
 				closedir(devDir);
 				if (strlcpy(buffer, devPath, bufferSize) >= bufferSize)
 					return B_BUFFER_OVERFLOW;

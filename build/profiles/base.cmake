@@ -4,8 +4,26 @@ set(DESKBAR_APPLICATIONS
 	Sudoku
 	Pairs
 	Clock
+	AboutSystem
+	DeskCalc
 )
 ImageInclude("/system/apps" ${DESKBAR_APPLICATIONS})
+
+# Create Deskbar Applications symlinks for each DESKBAR_APPLICATIONS entry.
+# Mirrors haiku-latest HaikuBootstrap AddSymlinkToPackage for the Applications menu.
+# Adding an app to DESKBAR_APPLICATIONS above automatically gives it a Deskbar entry.
+# $ENV{DESTDIR} is prepended to the link location so CPack staging works correctly;
+# the link target stays as a bare runtime path since it's resolved at runtime.
+install(CODE "
+	file(MAKE_DIRECTORY \"\$ENV{DESTDIR}/system/data/deskbar/menu/Applications\")
+")
+foreach(app ${DESKBAR_APPLICATIONS})
+	install(CODE "
+		file(CREATE_LINK \"/system/apps/${app}\"
+			\"\$ENV{DESTDIR}/system/data/deskbar/menu/Applications/${app}\"
+			SYMBOLIC)
+	")
+endforeach()
 
 
 set(CORE_APPLICATIONS
@@ -97,17 +115,3 @@ set(BIN_DIRECTORY
 	xres
 )
 ImageInclude("/bin" ${BIN_DIRECTORY})
-
-
-list (APPEND SERVICES_LIST "${_SYSTEMD_SERVICES}")
-
-set(SYSTEMD_SERVICES
-  data/systemd/registrar.service
-  data/systemd/mount_server.service
-  data/systemd/app_server.service
-  data/systemd/input_server.service
-  data/systemd/deskbar.service
-  data/systemd/tracker.service
-)
-
-install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)

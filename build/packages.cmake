@@ -25,7 +25,9 @@ function( ImageCreateDir dest )
 endfunction()
 
 include(build/baseimage.cmake)
-include(build/profiles/default)
+include(build/profiles/base.cmake)
+include(build/profiles/debug.cmake)
+include(build/profiles/data.cmake)
 
 string(REPLACE ";" "," RESULT "${RUN_LIST}")
 

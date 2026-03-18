@@ -70,6 +70,6 @@ set(TEST_ADDONS
 )
 
 ImageInclude("/system/tests" ${TEST_BINARIES} ${TEST_VOS_BINARIES} ${TEST_KERNEL_BINARIES} ${TEST_LIBROOT_BINARIES} cppunit)
-ImageInclude("/system/tests/libs" ${TEST_ADDONS})
+ImageInclude("/system/tests/lib" ${TEST_ADDONS})
 ImageIncludeFile("src/tests/runsuite.sh" "/system/tests")
 ImageIncludeDir("src/tests/kits/storage/resources" "/system/tests")

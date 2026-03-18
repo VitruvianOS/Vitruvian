@@ -480,10 +480,23 @@ count_partitions(const char* devName)
 	if (!udev)
 		return 0;
 
+	struct udev_device* parent_dev = udev_device_new_from_subsystem_sysname(
+		udev, "block", devName);
+	if (!parent_dev) {
+		udev_unref(udev);
+		fprintf(stderr, "[count_partitions] devName='%s' - parent_dev NULL\n", devName);
+		return 0;
+	}
+
 	struct udev_enumerate* en = udev_enumerate_new(udev);
+	if (!en) {
+		udev_device_unref(parent_dev);
+		udev_unref(udev);
+		fprintf(stderr, "[count_partitions] devName='%s' - enumerate NULL\n", devName);
+		return 0;
+	}
 	udev_enumerate_add_match_subsystem(en, "block");
-	udev_enumerate_add_match_parent(en, 
-		udev_device_new_from_subsystem_sysname(udev, "block", devName));
+	udev_enumerate_add_match_parent(en, parent_dev);
 	udev_enumerate_scan_devices(en);
 
 	struct udev_list_entry* devices = udev_enumerate_get_list_entry(en);
@@ -503,6 +516,9 @@ count_partitions(const char* devName)
 		udev_device_unref(dev);
 	}
 
+	fprintf(stderr, "[count_partitions] devName='%s' count=%d\n", devName, count);
+
+	udev_device_unref(parent_dev);
 	udev_enumerate_unref(en);
 	udev_unref(udev);
 	return count;

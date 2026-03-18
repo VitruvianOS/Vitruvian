@@ -124,11 +124,13 @@ protected:
 	BPath *fTestDir;
 	int32 fTLSDebuggerCall;
 
+#ifndef NO_ELF_SYMBOL_PATCHING
 	BLocker *fPatchGroupLocker;
 	ElfSymbolPatchGroup *fPatchGroup;
 	void (*fOldDebuggerHook)(const char*);
 	image_id (*fOldLoadAddOnHook)(const char*);
 	status_t (*fOldUnloadAddOnHook)(image_id);
+#endif
 
 	//! Prints a brief description of the program.
 	virtual void PrintDescription(int argc, char *argv[]);

@@ -114,20 +114,28 @@ namespace CppUnit {
  * Just goes to show that preprocessors do have some
  * redeeming qualities.
  */
-#if CPPUNIT_HAVE_CPP_SOURCE_ANNOTATION
-/** Assertions that a condition is \c true.
- * \ingroup Assertions
- */
-#define CPPUNIT_ASSERT(condition)                          \
+#define CPPUNIT_ASSERT_FAIL(condition)                          \
   ( ::CppUnit::Asserter::failIf( !(condition),             \
                                  (#condition),             \
                                  CPPUNIT_SOURCELINE() ) )
-#else
-#define CPPUNIT_ASSERT(condition)                          \
-  ( ::CppUnit::Asserter::failIf( !(condition),             \
-                                 "",                       \
-                                 CPPUNIT_SOURCELINE() ) )
-#endif
+
+#define CPPUNIT_ASSERT_PRINT(condition) \
+    ((!(condition)) ? \
+        (printf("ASSERT FAILED: %s" \
+                " File: %s" \
+                " Line: %d\n", \
+                (#condition), \
+                __FILE__, \
+                __LINE__), \
+         (CPPUNIT_ASSERT_FAIL(condition), false)) : \
+        true)
+
+#define CPPUNIT_ASSERT(condition) \
+    do { \
+        if (!(condition)) { \
+            CPPUNIT_ASSERT_PRINT(condition); \
+        } \
+    } while(0)
 
 /** Assertion with a user specified message.
  * \ingroup Assertions

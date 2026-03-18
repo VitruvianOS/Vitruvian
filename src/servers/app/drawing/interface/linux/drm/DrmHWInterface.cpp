@@ -314,6 +314,15 @@ DrmHWInterface::GetMode(display_mode* mode)
 
 
 status_t
+DrmHWInterface::GetPreferredMode(display_mode* mode)
+{
+	CALLED();
+	*mode = fDisplayMode;
+	return B_OK;
+}
+
+
+status_t
 DrmHWInterface::GetDeviceInfo(accelerant_device_info* info)
 {
 	CALLED();

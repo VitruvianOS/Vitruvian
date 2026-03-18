@@ -22,5 +22,8 @@ _kern_get_safemode_option(const char *parameter,
 	char *buffer, size_t *_bufferSize)
 {
 	UNIMPLEMENTED();
-	return B_ERROR;
+	// TODO we could implement some kind of failsafe mode but needs
+	// investigation also in relation to the integration with the
+	// linux subsystems.
+	return B_NAME_NOT_FOUND;
 }

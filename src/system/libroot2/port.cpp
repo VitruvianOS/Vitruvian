@@ -14,7 +14,7 @@ create_port(int32 queueLength, const char* name)
 {
 	CALLED();
 
-	if (name == NULL || name[0] == '\0' || queueLength < 1
+	if (name == NULL || queueLength < 1
 			|| queueLength > PORT_MAX_QUEUE) {
 		return B_BAD_VALUE;
 	}

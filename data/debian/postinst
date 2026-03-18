@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Base directories
+
 mkdir -p /system/add-ons/
 mkdir -p /system/apps/
 mkdir -p /system/data/
@@ -15,26 +17,129 @@ ln -sf /lib /system/lib
 ln -sf /tmp /system/cache
 ln -sf /var /system/var
 
+# Home and Desktop
+
+#TODO this should be done on login by the user so that we correct
+# the right multiuser home.
 mkdir -p /home/Desktop
+ln -sf /home /home/Desktop/home2
+ln -sf / /home/Desktop/Boot
+ln -sf /system /home/Desktop/System
 
 # Deskbar menu
 
 mkdir -p /home/config/settings/deskbar/menu/
 
-#mkdir -p /home/config/settings/deskbar/menu/Applications/
-#mkdir -p /home/config/settings/deskbar/menu/Preferences/
-#mkdir -p /home/config/settings/deskbar/menu/Demos/
-#ln -sf /system/apps/Pairs /home/config/settings/deskbar/menu/Applications/Pairs
-
 mkdir -p /system/data/deskbar/menu/
-ln -sf /system/data/deskbar/menu /system/data/deskbar/menu_entries
-
 mkdir -p /system/data/deskbar/menu/Applications/
-mkdir -p /system/data/deskbar/menu/Preferences/
+mkdir -p "/system/data/deskbar/menu/Desktop applets/"
 mkdir -p /system/data/deskbar/menu/Demos/
+mkdir -p /system/data/deskbar/menu/Preferences/
 
-ln -sf /system/apps/StyledEdit /system/data/deskbar/menu/Applications/StyledEdit
-ln -sf /system/apps/Terminal /system/data/deskbar/menu/Applications/Terminal
+# Trash and boot dirs
 
+mkdir -p /home/Desktop/Trash
+mkdir -p /system/boot/post_install/
+mkdir -p /system/boot/first_login/
+mkdir -p /system/settings/etc/profile.d/
+
+# Tracker new templates and printer directories
+
+mkdir -p "/home/config/settings/Tracker/Tracker New Templates"
+mkdir -p /home/config/settings/printers/Preview
+mkdir -p "/home/config/settings/printers/Save as PDF"
+
+# BeOS-format xattr helpers using setfattr.
+#
+# addattr (the Haiku tool) is NOT used here because it loads libroot2 which
+# requires nexus IPC — unavailable when postinst runs on the host during
+# mkiso package installation.
+#
+# Format: [type:uint32 LE][data bytes]
+# Type codes (four-cc stored as little-endian uint32 on x86):
+#   B_STRING_TYPE      = 'CSTR' = 0x43535452  LE bytes: 52 54 53 43
+#   B_MIME_STRING_TYPE = 'MIMS' = 0x4d494d53  LE bytes: 53 4d 49 4d
+#
+# beos_string NAME VALUE PATH  — writes B_STRING_TYPE xattr
+# beos_mime   NAME VALUE PATH  — writes B_MIME_STRING_TYPE xattr
+
+beos_string() {
+	local name="$1" value="$2" target="$3"
+	# B_STRING_TYPE LE prefix + value bytes (no null; setfattr adds none,
+	# fs_read_attr only reads dataSize = attrSize - 4 bytes)
+	local hex
+	hex="52545343$(printf '%s' "$value" | od -A n -t x1 | tr -d ' \n')00"
+	setfattr -n "user.beos.${name}" --value="0x${hex}" "${target}"
+}
+
+beos_mime() {
+	local name="$1" value="$2" target="$3"
+	# B_MIME_STRING_TYPE LE prefix
+	local hex
+	hex="534d494d$(printf '%s' "$value" | od -A n -t x1 | tr -d ' \n')00"
+	setfattr -n "user.beos.${name}" --value="0x${hex}" "${target}"
+}
+
+# Directory identity attributes (SYS:NAME)
+# Tracker reads these to assign special folder icons.
+
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_SYSTEM_DIRECTORY:system" /system
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_DIRECTORY:home" /home
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_DESKTOP_DIRECTORY:home" /home/Desktop
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_TRASH_DIRECTORY:Trash" /home/Desktop/Trash
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_CONFIG_DIRECTORY:config" /home/config
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_APPS_DIRECTORY:apps" /system/apps
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_PREFERENCES_DIRECTORY:preferences" /system/preferences
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_SYSTEM_DEVELOP_DIRECTORY:develop" /system/develop
+beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Applications:Applications" /system/data/deskbar/menu/Applications
+beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Demos:Demos" /system/data/deskbar/menu/Demos
+beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Preferences:Preferences" /system/data/deskbar/menu/Preferences
+beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Desktop applets:Desktop applets" "/system/data/deskbar/menu/Desktop applets"
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates:Tracker New Templates" "/home/config/settings/Tracker/Tracker New Templates"
+
+# Deskbar virtual directory descriptor
+# Setting this MIME type makes Model::IsVirtualDirectory() return true, enabling
+# VirtualDirectoryEntryList to aggregate the three menu directories listed in the file.
+beos_mime BEOS:TYPE "application/x-vnd.haiku-virtual-directory" /system/data/deskbar/menu_entries
+
+# Printer directory attributes (identity + settings read by the print server)
+
+beos_mime BEOS:TYPE "application/x-vnd.Be.printer" /home/config/settings/printers/Preview
+beos_string "Printer Name" "Preview" /home/config/settings/printers/Preview
+beos_string "Driver Name" "Preview" /home/config/settings/printers/Preview
+beos_string "transport" "" /home/config/settings/printers/Preview
+beos_string "transport_address" "" /home/config/settings/printers/Preview
+beos_string "connection" "Local" /home/config/settings/printers/Preview
+beos_string "state" "free" /home/config/settings/printers/Preview
+
+beos_mime BEOS:TYPE "application/x-vnd.Be.printer" "/home/config/settings/printers/Save as PDF"
+beos_string "Printer Name" "Save as PDF" "/home/config/settings/printers/Save as PDF"
+beos_string "Driver Name" "PDF Writer" "/home/config/settings/printers/Save as PDF"
+beos_string "transport" "Print To File" "/home/config/settings/printers/Save as PDF"
+beos_string "transport_address" "" "/home/config/settings/printers/Save as PDF"
+beos_string "connection" "Local" "/home/config/settings/printers/Save as PDF"
+beos_string "state" "free" "/home/config/settings/printers/Save as PDF"
+
+# MIME type attributes for Tracker New Templates
+# (enables Tracker's File > New menu to create the right file type)
+
+beos_mime BEOS:TYPE "text/plain" "/home/config/settings/Tracker/Tracker New Templates/text file"
+beos_mime BEOS:TYPE "text/x-source-code" "/home/config/settings/Tracker/Tracker New Templates/C++ source"
+beos_mime BEOS:TYPE "text/x-source-code" "/home/config/settings/Tracker/Tracker New Templates/C++ header"
+
+# Source Vitruvian profile from bash login shells (makes Terminal show the
+# welcome message and Vitruvian environment setup)
+
+cat > /etc/profile.d/vitruvian.sh << 'VITRUVIAN_PROFILE_EOF'
+# Guard against recursive sourcing: Vitruvian's profile itself sources
+# /etc/profile.d/*.sh, which would re-enter this script and cause an
+# infinite loop printing "Welcome to Vitruvian" on every login.
+if [ -z "$_VOS_PROFILE_SOURCED" ] && [ -f /system/settings/etc/profile ]; then
+    export _VOS_PROFILE_SOURCED=1
+    . /system/settings/etc/profile
+fi
+VITRUVIAN_PROFILE_EOF
+
+# Enable system services
 
 systemctl enable registrar.service mount_server app_server.service deskbar.service tracker.service

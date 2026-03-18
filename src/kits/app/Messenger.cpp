@@ -333,6 +333,9 @@ BMessenger::_InitData(const char* signature, team_id team, status_t* _result)
 				team = data.GetInt32("team", -5);
 			}
 			if (info.port < 0) {
+		#else
+			// TODO: In Vitruvian we have no launch daemon, this functionality
+			// is planned to be provided by the janus daemon.
 		#endif
 				result = be_roster->GetAppInfo(signature, &info);
 				team = info.team;

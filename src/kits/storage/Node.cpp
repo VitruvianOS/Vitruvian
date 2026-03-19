@@ -142,21 +142,7 @@ node_ref::dereference() const
 	if (real_device != B_INVALID_DEV && real_node != B_INVALID_INO)
 		return node_ref(real_device, real_node);
 
-	int fd = open_vref(id());
-	if (fd < 0)
-		return node_ref(B_INVALID_DEV, B_INVALID_INO);
-
-	struct stat st;
-	if (fstat(fd, &st) == -1) {
-		close(fd);
-		return node_ref(B_INVALID_DEV, B_INVALID_INO);
-	}
-	close(fd);
-
-	real_device = st.st_dev;
-	real_node = st.st_ino;
-
-	return node_ref(st.st_dev, st.st_ino);
+	return node_ref(B_INVALID_DEV, B_INVALID_INO);
 }
 
 void
@@ -175,7 +161,6 @@ node_ref::operator==(const node_ref& other) const
 	if (device == other.device && node == other.node)
 		return true;
 
-	// If we hold a vref let's use the dereferenced values
 	if (is_virtual() || other.is_virtual()) {
 		const node_ref realA = dereference();
 		const node_ref realB = other.dereference();

@@ -194,21 +194,7 @@ entry_ref::dereference() const
 	if (real_device != B_INVALID_DEV && real_directory != B_INVALID_INO)
 		return entry_ref(real_device, real_directory, name);
 
-	int fd = open_vref(id());
-	if (fd < 0)
-		return entry_ref(B_INVALID_DEV, B_INVALID_INO, NULL);
-
-	struct stat st;
-	if (fstat(fd, &st) == -1) {
-		close(fd);
-		return entry_ref(B_INVALID_DEV, B_INVALID_INO, NULL);
-	}
-	close(fd);
-
-	real_device = st.st_dev;
-	real_directory = st.st_ino;
-
-	return entry_ref(st.st_dev, st.st_ino, name);
+	return entry_ref(B_INVALID_DEV, B_INVALID_INO, NULL);
 }
 
 

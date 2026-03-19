@@ -13,6 +13,9 @@ Application(test_load_image2 SOURCES test_load_image2.cpp)
 Application(test_load_image SOURCES test_load_image.cpp)
 Application(test_area SOURCES test_area.cpp)
 Application(testvref SOURCES testvref.cpp)
+Application(testsemdeletion SOURCES testsemdeletion.cpp)
+Application(teststopwatch SOURCES teststopwatch.cpp LIBS be)
+#Application(testvrefmessage SOURCES testvrefmessage.cpp LIBS be)
 
 
 add_subdirectory(port)

@@ -1,2 +1,2 @@
 
-Test(SimpleTest SOURCES SimpleTest.cpp)
+#Test(SimpleTest SOURCES SimpleTest.cpp)

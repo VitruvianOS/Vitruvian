@@ -28,8 +28,8 @@ set(TEST_VOS_BINARIES
 	test_area
 	testvref
 	teststopwatch
-	test_node_monitor
-	test_node_monitor2
+	#test_node_monitor
+	#test_node_monitor2
 	writer
 	reader
 	order

@@ -297,8 +297,9 @@ BDeskWindow::Init(const BMessage*)
 			BMessage message;
 			message.what = B_NODE_MONITOR;
 			message.AddInt32("opcode", B_ENTRY_CREATED);
-			message.AddUInt64("virtual:node", &model.NodeRef());
-			message.AddUInt64("virtual:directory", &model.EntryRef());
+			message.AddNodeRef("virtual:node", model.NodeRef());
+			message.AddRef("virtual:directory", model.EntryRef());
+
 			PostMessage(&message, PoseView());
 		}
 	}

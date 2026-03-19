@@ -2132,7 +2132,7 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 		return;
 
 	if (opcode != B_ENTRY_CREATED
-		&& message->FindInt64("node") != fNodeRef.ino())
+		&& message->GetUInt64("node", 0) != (uint64)fNodeRef.ino())
 		// bypass foreign nodes' event
 		return;
 
@@ -2155,26 +2155,20 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 
 		case B_ENTRY_MOVED:
 			{
-				int32 device = 0;
-				int64 srcFolder = 0;
-				int64 dstFolder = 0;
-				const char* name = NULL;
-				if (message->FindInt32("device", &device) != B_OK
-					|| message->FindInt64("to directory", &dstFolder) != B_OK
-					|| message->FindInt64("from directory", &srcFolder) != B_OK
-					|| message->FindString("name", &name) != B_OK)
+				entry_ref dstFolder;
+				entry_ref srcFolder;
+				if (message->FindRef("virtual:to directory", &dstFolder) != B_OK
+					|| message->FindRef("virtual:from directory", &srcFolder))
 						break;
 
-				entry_ref newRef(device, dstFolder, name);
-				BEntry entry(&newRef);
-
+				BEntry entry(&dstFolder);
 				BEntry dirEntry;
 				entry.GetParent(&dirEntry);
 
 				entry_ref ref;
 				dirEntry.GetRef(&ref);
 				fSaveMessage->ReplaceRef("directory", &ref);
-				fSaveMessage->ReplaceString("name", name);
+				fSaveMessage->ReplaceString("name", ref.name);
 
 				// store previous name - it may be useful in case
 				// we have just moved to temporary copy of file (vim case)
@@ -2186,7 +2180,7 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 					fSaveMessage->AddInt64("move time", system_time());
 				}
 
-				SetTitle(name);
+				SetTitle(ref.name);
 
 				if (srcFolder != dstFolder) {
 					_SwitchNodeMonitor(false);
@@ -2207,17 +2201,15 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 				// 2) re-create t.txt and write data to it
 				// 3) remove t.txt~
 				// go to catch this case
-				int32 device = 0;
-				int64 directory = 0;
+				entry_ref directory;
 				BString orgName;
 				if (fSaveMessage->FindString("org.name", &orgName) == B_OK
-					&& message->FindInt32("device", &device) == B_OK
-					&& message->FindInt64("directory", &directory) == B_OK)
+					&& message->FindRef("virtual:directory", &directory) == B_OK)
 				{
 					// reuse the source name if it is not too old
 					bigtime_t time = fSaveMessage->FindInt64("move time");
 					if ((system_time() - time) < 1000000) {
-						entry_ref ref(device, directory, orgName);
+						entry_ref ref(directory.dev(), directory.dir(), orgName);
 						BEntry entry(&ref);
 						if (entry.InitCheck() == B_OK) {
 							_SwitchNodeMonitor(true, &ref);

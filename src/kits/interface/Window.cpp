@@ -2914,7 +2914,7 @@ BWindow::_SetName(const char* title)
 
 	char threadName[B_OS_NAME_LENGTH];
 	strcpy(threadName, "w>");
-#ifdef __HAIKU__
+#if defined(__HAIKU__) || defined(__VOS__)
 	strlcat(threadName, title, B_OS_NAME_LENGTH);
 #else
 	int32 length = strlen(title);

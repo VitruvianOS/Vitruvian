@@ -42,6 +42,7 @@ public:
 
 	virtual	status_t			SetMode(const display_mode& mode);
 	virtual	void				GetMode(display_mode* mode);
+	virtual	status_t			GetPreferredMode(display_mode* mode);
 
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info);
 	virtual status_t			GetFrameBufferConfig(

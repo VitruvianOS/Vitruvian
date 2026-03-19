@@ -175,7 +175,6 @@ public:
 									const void* data, ssize_t numBytes,
 									bool isFixedSize = true, int32 count = 1);
 
-			status_t			AddVRef(const char* name, vref_id vref);
 			status_t			Append(const BMessage& message);
 
 	// Removing data
@@ -280,11 +279,6 @@ public:
 			status_t			FindData(const char* name, type_code type,
 									int32 index, const void** data,
 									ssize_t* numBytes) const;
-			status_t			FindVRef(const char* name,
-									vref_id* vref) const;
-			status_t			FindVRef(const char* name, int32 index,
-									vref_id* vref) const;
-
 	// Replacing data
 			status_t			ReplaceAlignment(const char* name,
 									const BAlignment& alignment);
@@ -376,9 +370,6 @@ public:
 			status_t			ReplaceData(const char* name, type_code type,
 									int32 index, const void* data,
 									ssize_t numBytes);
-			status_t			ReplaceVRef(const char* name, vref_id vref);
-			status_t			ReplaceVRef(const char* name, int32 index,
-									vref_id vref);
 
 	// Comparing data - Haiku experimental API
 			bool				HasSameData(const BMessage& other,
@@ -422,7 +413,6 @@ public:
 									const BFlattenable* object) const;
 			bool				HasData(const char* name, type_code ,
 									int32 n = 0) const;
-			bool				HasVRef(const char* name, int32 n = 0) const;
 			BRect				FindRect(const char* name, int32 n = 0) const;
 			BPoint				FindPoint(const char* name, int32 n = 0) const;
 			const char*			FindString(const char* name, int32 n = 0) const;
@@ -507,11 +497,6 @@ public:
 									const BSize& defaultValue) const;
 			BSize				GetSize(const char* name,
 									const BSize& defaultValue) const;
-			vref_id				GetVRef(const char* name,
-									vref_id defaultValue) const;
-			vref_id				GetVRef(const char* name, int32 index,
-									vref_id defaultValue) const;
-
 	// fixed size fields only
 			status_t			SetBool(const char* name, bool value);
 			status_t			SetInt8(const char* name, int8 value);
@@ -537,7 +522,6 @@ public:
 			status_t			SetData(const char* name, type_code type,
 									const void* data, ssize_t numBytes,
 									bool fixedSize = true, int count = 1);
-			status_t			SetVRef(const char* name, vref_id vref);
 
 	class Private;
 	struct message_header;

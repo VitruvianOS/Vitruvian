@@ -94,17 +94,7 @@ _HandleMessageVRefs(const BMessage* message, bool acquire)
 	for (int32 i = 0;
 		 message->GetInfo(B_ANY_TYPE, i, &name, &typeFound, &count) == B_OK;
 		 i++) {
-		if (typeFound == B_VREF_TYPE) {
-			for (int32 j = 0; j < count; j++) {
-				vref_id vref;
-				if (message->FindVRef(name, j, &vref) == B_OK && vref >= 0) {
-					if (acquire)
-						acquire_vref(vref);
-					else
-						release_vref(vref);
-				}
-			}
-		} else if (typeFound == B_REF_TYPE && vrefDev != B_INVALID_DEV) {
+		if (typeFound == B_REF_TYPE && vrefDev != B_INVALID_DEV) {
 			for (int32 j = 0; j < count; j++) {
 				entry_ref ref;
 				if (message->FindRef(name, j, &ref) == B_OK) {
@@ -2580,69 +2570,6 @@ DEFINE_FUNCTIONS(rgb_color, Color, B_RGB_32_BIT_TYPE);
 #undef DEFINE_FUNCTIONS
 
 
-status_t
-BMessage::AddVRef(const char* name, vref_id val)
-{
-	status_t error = AddData(name, B_VREF_TYPE, &val, sizeof(vref_id), true);
-	if (error == B_OK && val >= 0) {
-		acquire_vref(val);
-		fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
-	}
-	return error;
-}
-
-
-status_t
-BMessage::FindVRef(const char* name, vref_id* p) const
-{
-	return FindVRef(name, 0, p);
-}
-
-
-status_t
-BMessage::FindVRef(const char* name, int32 index, vref_id* p) const
-{
-	vref_id* ptr = NULL;
-	ssize_t bytes = 0;
-
-	*p = vref_id();
-	status_t error = FindData(name, B_VREF_TYPE, index, (const void**)&ptr,
-		&bytes);
-
-	if (error == B_OK)
-		*p = *ptr;
-
-	return error;
-}
-
-
-status_t
-BMessage::ReplaceVRef(const char* name, vref_id value)
-{
-	return ReplaceVRef(name, 0, value);
-}
-
-
-status_t
-BMessage::ReplaceVRef(const char* name, int32 index, vref_id value)
-{
-	// Release the old vref before replacing
-	if (fHeader->flags & MESSAGE_FLAG_OWNS_VREFS) {
-		vref_id old;
-		if (FindVRef(name, index, &old) == B_OK && old >= 0)
-			release_vref(old);
-	}
-
-	status_t error = ReplaceData(name, B_VREF_TYPE, index, &value,
-		sizeof(vref_id));
-	if (error == B_OK && value >= 0) {
-		acquire_vref(value);
-		fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
-	}
-	return error;
-}
-
-
 #define DEFINE_HAS_FUNCTION(typeName, typeCode)								\
 bool																		\
 BMessage::Has##typeName(const char* name, int32 index) const				\
@@ -2727,43 +2654,6 @@ DEFINE_SET_GET_FUNCTIONS(double, Double, B_DOUBLE_TYPE);
 DEFINE_SET_GET_FUNCTIONS(rgb_color, Color, B_RGB_32_BIT_TYPE);
 
 #undef DEFINE_SET_GET_FUNCTION
-
-
-vref_id
-BMessage::GetVRef(const char* name, vref_id defaultValue) const
-{
-	return GetVRef(name, 0, defaultValue);
-}
-
-
-vref_id
-BMessage::GetVRef(const char* name, int32 index, vref_id defaultValue) const
-{
-	vref_id value;
-	if (FindVRef(name, index, &value) == B_OK)
-		return value;
-
-	return defaultValue;
-}
-
-
-status_t
-BMessage::SetVRef(const char* name, vref_id value)
-{
-	// Release old vref if we own one under this name
-	if (fHeader != NULL && (fHeader->flags & MESSAGE_FLAG_OWNS_VREFS) != 0) {
-		vref_id old;
-		if (FindVRef(name, 0, &old) == B_OK && old >= 0)
-			release_vref(old);
-	}
-
-	status_t error = SetData(name, B_VREF_TYPE, &value, sizeof(vref_id));
-	if (error == B_OK && value >= 0) {
-		acquire_vref(value);
-		fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
-	}
-	return error;
-}
 
 
 const void*

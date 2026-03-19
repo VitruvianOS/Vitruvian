@@ -56,24 +56,17 @@ static void
 _HandleVRefs(const KMessage* message, bool acquire)
 {
 	dev_t vrefDev = get_vref_dev();
+	if (vrefDev == B_INVALID_DEV)
+		return;
 
 	KMessageField field;
 	while (message->GetNextField(&field) == B_OK) {
 		type_code type = field.TypeCode();
 		int32 count = field.CountElements();
 
-		if (type == B_VREF_TYPE) {
-			for (int32 i = 0; i < count; i++) {
-				int32 size;
-				const vref_id* vref = (const vref_id*)field.ElementAt(i, &size);
-				if (vref != NULL && size == sizeof(vref_id) && *vref >= 0) {
-					if (acquire)
-						acquire_vref(*vref);
-					else
-						release_vref(*vref);
-				}
-			}
-		} else if (type == B_REF_TYPE && vrefDev != B_INVALID_DEV) {
+		if (type == B_REF_TYPE) {
+			// entry_ref: dev_t + ino_t (directory) + name
+			// If device == vrefDev, directory is the vref_id
 			for (int32 i = 0; i < count; i++) {
 				int32 size;
 				const char* data = (const char*)field.ElementAt(i, &size);
@@ -84,11 +77,30 @@ _HandleVRefs(const KMessage* message, bool acquire)
 					memcpy(&directory, data + sizeof(dev_t), sizeof(ino_t));
 
 					if (device == vrefDev && directory >= 0) {
-						vref_id vref = (vref_id)directory;
 						if (acquire)
-							acquire_vref(vref);
+							acquire_vref((vref_id)directory);
 						else
-							release_vref(vref);
+							release_vref((vref_id)directory);
+					}
+				}
+			}
+		} else if (type == B_NODE_REF_TYPE) {
+			// node_ref: dev_t + ino_t (node)
+			// If device == vrefDev, node is the vref_id
+			for (int32 i = 0; i < count; i++) {
+				int32 size;
+				const char* data = (const char*)field.ElementAt(i, &size);
+				if (data != NULL && size >= (int32)(sizeof(dev_t) + sizeof(ino_t))) {
+					dev_t device;
+					ino_t node;
+					memcpy(&device, data, sizeof(dev_t));
+					memcpy(&node, data + sizeof(dev_t), sizeof(ino_t));
+
+					if (device == vrefDev && node >= 0) {
+						if (acquire)
+							acquire_vref((vref_id)node);
+						else
+							release_vref((vref_id)node);
 					}
 				}
 			}
@@ -505,6 +517,105 @@ KMessage::FindData(const char* name, type_code type, int32 index,
 		return B_BAD_INDEX;
 	if (data)
 		*data = foundData;
+	return B_OK;
+}
+
+
+status_t
+KMessage::AddRef(const char* name, dev_t device, ino_t directory, const char* refName)
+{
+	size_t nameLen = refName != NULL ? strlen(refName) + 1 : 0;
+	size_t size = sizeof(dev_t) + sizeof(ino_t) + nameLen;
+
+	char buffer[sizeof(dev_t) + sizeof(ino_t) + B_FILE_NAME_LENGTH];
+	memcpy(buffer, &device, sizeof(dev_t));
+	memcpy(buffer + sizeof(dev_t), &directory, sizeof(ino_t));
+	if (nameLen > 0)
+		memcpy(buffer + sizeof(dev_t) + sizeof(ino_t), refName, nameLen);
+
+	return AddData(name, B_REF_TYPE, buffer, (int32)size, false);
+}
+
+
+status_t
+KMessage::AddNodeRef(const char* name, dev_t device, ino_t node)
+{
+	struct {
+		dev_t device;
+		ino_t node;
+	} data = { device, node };
+
+	return AddData(name, B_NODE_REF_TYPE, &data, (int32)sizeof(data), true);
+}
+
+
+status_t
+KMessage::FindRef(const char* name, dev_t* device,
+	ino_t* directory, char* nameBuffer, size_t bufferSize) const
+{
+	return FindRef(name, 0, device, directory, nameBuffer, bufferSize);
+}
+
+
+status_t
+KMessage::FindRef(const char* name, int32 index, dev_t* device,
+	ino_t* directory, char* nameBuffer, size_t bufferSize) const
+{
+	if (!name || !device || !directory || !nameBuffer)
+		return B_BAD_VALUE;
+
+    const void* data;
+    int32 size;
+    status_t error = FindData(name, B_REF_TYPE, index, &data, &size);
+    if (error != B_OK)
+        return error;
+
+    if (size < (int32)(sizeof(dev_t) + sizeof(ino_t)))
+        return B_BAD_DATA;
+
+    const char* d = (const char*)data;
+    memcpy(device, d, sizeof(dev_t));
+    memcpy(directory, d + sizeof(dev_t), sizeof(ino_t));
+
+    const char* refName = (size > (int32)(sizeof(dev_t) + sizeof(ino_t)))
+                          ? d + sizeof(dev_t) + sizeof(ino_t) : NULL;
+
+    if (refName) {
+        if (bufferSize == 0)
+			return B_BAD_VALUE;
+        strncpy(nameBuffer, refName, bufferSize - 1);
+        nameBuffer[bufferSize - 1] = '\0';
+    } else {
+        if (bufferSize > 0)
+			nameBuffer[0] = '\0';
+    }
+
+    return B_OK;
+}
+
+
+status_t
+KMessage::FindNodeRef(const char* name, dev_t* device, ino_t* node) const
+{
+	return FindNodeRef(name, 0, device, node);
+}
+
+
+status_t
+KMessage::FindNodeRef(const char* name, int32 index, dev_t* device, ino_t* node) const
+{
+	const void* data;
+	int32 size;
+	status_t error = FindData(name, B_NODE_REF_TYPE, index, &data, &size);
+	if (error != B_OK)
+		return error;
+
+	if (size < (int32)(sizeof(dev_t) + sizeof(ino_t)))
+		return B_BAD_DATA;
+
+	const char* d = (const char*)data;
+	memcpy(&device, d, sizeof(dev_t));
+	memcpy(&node, d + sizeof(dev_t), sizeof(ino_t));
 	return B_OK;
 }
 

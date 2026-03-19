@@ -80,7 +80,11 @@ public:
 	inline	status_t			AddUInt64(const char* name, uint64 value);
 	inline	status_t			AddPointer(const char* name, const void* value);
 	inline	status_t			AddString(const char* name, const char* value);
-	inline	status_t			AddVRef(const char* name, vref_id value);
+
+			status_t			AddRef(const char* name, dev_t dev,
+									ino_t ino, const char* refName);
+			status_t			AddNodeRef(const char* name, dev_t dev,
+									ino_t ino);
 
 			status_t			FindData(const char* name, type_code type,
 									const void** data, int32* numBytes) const;
@@ -113,10 +117,23 @@ public:
 									const char** value) const;
 	inline	status_t			FindString(const char* name, int32 index,
 									const char** value) const;
-	inline	status_t			FindVRef(const char* name,
-									vref_id* value) const;
-	inline	status_t			FindVRef(const char* name, int32 index,
-									vref_id* value) const;
+
+	// NOTE: Vitruvian diverge a little bit from the API style (but hey this
+	// is private right?), the problem is that entry_ref/node_ref are libbe
+	// symbols, we can't link libroot back to libbe because of circular
+	// dependencies.
+	// TODO: inline the following functions
+			status_t			FindRef(const char* name, dev_t* device,
+									ino_t* directory, char* nameBuffer,
+									size_t bufferSize) const;
+			status_t			FindRef(const char* name, int32 index,
+									dev_t* device, ino_t* directory,
+									char* nameBuffer, size_t bufferSize) const;
+
+			status_t			FindNodeRef(const char* name,
+									dev_t* device, ino_t* node) const;
+			status_t			FindNodeRef(const char* name, int32 index,
+									dev_t* device, ino_t* node) const;
 
 	inline	bool				GetBool(const char* name,
 									bool defaultValue) const;
@@ -146,10 +163,6 @@ public:
 									const char* defaultValue) const;
 	inline	const char*			GetString(const char* name, int32 index,
 									const char* defaultValue) const;
-	inline	vref_id				GetVRef(const char* name,
-									vref_id defaultValue) const;
-	inline	vref_id				GetVRef(const char* name, int32 index,
-									vref_id defaultValue) const;
 
 	// fixed size fields only
 			status_t			SetData(const char* name, type_code type,
@@ -360,12 +373,6 @@ KMessage::AddString(const char* name, const char* value)
 }
 
 
-status_t
-KMessage::AddVRef(const char* name, vref_id value)
-{
-	return AddData(name, B_VREF_TYPE, &value, sizeof(vref_id), true);
-}
-
 
 // #pragma mark -
 
@@ -503,20 +510,6 @@ KMessage::FindString(const char* name, int32 index, const char** value) const
 }
 
 
-status_t
-KMessage::FindVRef(const char* name, vref_id* value) const
-{
-	return FindVRef(name, 0, value);
-}
-
-
-status_t
-KMessage::FindVRef(const char* name, int32 index, vref_id* value) const
-{
-	return _FindType(name, B_VREF_TYPE, index, value);
-}
-
-
 template<typename T>
 inline T
 KMessage::_GetType(const char* name, type_code type, int32 index,
@@ -634,20 +627,6 @@ const char*
 KMessage::GetString(const char* name, const char* defaultValue) const
 {
 	return GetString(name, 0, defaultValue);
-}
-
-
-vref_id
-KMessage::GetVRef(const char* name, vref_id defaultValue) const
-{
-	return _GetType(name, B_VREF_TYPE, 0, defaultValue);
-}
-
-
-vref_id
-KMessage::GetVRef(const char* name, int32 index, vref_id defaultValue) const
-{
-	return _GetType(name, B_VREF_TYPE, index, defaultValue);
 }
 
 

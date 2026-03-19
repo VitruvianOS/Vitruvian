@@ -26,7 +26,11 @@ endfunction()
 
 include(build/baseimage.cmake)
 include(build/profiles/base.cmake)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 include(build/profiles/debug.cmake)
+endif()
+
 include(build/profiles/data.cmake)
 
 string(REPLACE ";" "," RESULT "${RUN_LIST}")

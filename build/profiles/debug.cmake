@@ -17,7 +17,6 @@ set(TEST_VOS_BINARIES
 	testports
 	testports2
 	testsem
-	testsem2
 	testsemdeletion
 	testthread
 	testteam

@@ -1699,7 +1699,8 @@ HaikuControlLook::DrawActiveTab(BView* view, BRect& rect,
 		fillGradient.AddColor(tint_color(base, 1.03), 255);
 	}
 
-	static const float kRoundCornerRadius = 4.0f;
+	// BeOS-like straighter tabs (was 4.0f in Haiku)
+	static const float kRoundCornerRadius = 2.0f;
 
 	// left top corner dimensions
 	BRect leftTopCorner(rect);

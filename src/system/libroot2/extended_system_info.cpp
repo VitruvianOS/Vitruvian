@@ -1,14 +1,10 @@
 /*
- * Copyright 2010, Ingo Weinhold, ingo_weinhold@gmx.de.
- * Distributed under the terms of the MIT License.
+ * Copyright 2026, Dario Casalinuovo.
+ * Distributed under the terms of the LGPL License.
  */
 
 
 #include <extended_system_info.h>
-#include <extended_system_info_defs.h>
-
-#include <syscalls.h>
-#include <AutoDeleter.h>
 
 #include <util/KMessage.h>
 
@@ -19,43 +15,66 @@ namespace BPrivate {
 status_t
 get_extended_team_info(team_id teamID, uint32 flags, KMessage& info)
 {
-	// initial buffer size
-	size_t bufferSize = 4096;
-		// TODO: Pick it depending on the set flags.
+	char commPath[64];
+	snprintf(commPath, sizeof(commPath), "/proc/%d/comm", (int)teamID);
 
-	while (true) {
-		// allocate the buffer
-		void* buffer = malloc(bufferSize);
-		if (buffer == NULL)
-			return B_NO_MEMORY;
-		MemoryDeleter bufferDeleter(buffer);
+	FILE* commFile = fopen(commPath, "r");
+	if (!commFile)
+		return B_ENTRY_NOT_FOUND;
 
-		// get the info
-		size_t sizeNeeded;
-		status_t error = _kern_get_extended_team_info(teamID, flags, buffer,
-			bufferSize, &sizeNeeded);
-		if (error == B_OK) {
-			return info.SetTo((const void*)buffer, sizeNeeded,
-				KMessage::KMESSAGE_CLONE_BUFFER);
-				// TODO: Just transfer our buffer, if it isn't much larger.
-		}
-
-		if (error != B_BUFFER_OVERFLOW)
-			return error;
-
-		// The buffer was too small. Try again with a larger one.
-		bufferSize = (sizeNeeded + 1023) / 1024 * 1024;
+	char name[256];
+	if (!fgets(name, sizeof(name), commFile)) {
+		fclose(commFile);
+		return B_ERROR;
 	}
+	fclose(commFile);
+
+	size_t len = strlen(name);
+	if (len > 0 && name[len - 1] == '\n')
+		name[len - 1] = '\0';
+
+	char cwdPath[64];
+	snprintf(cwdPath, sizeof(cwdPath), "/proc/%d/cwd", (int)teamID);
+
+	char cwdBuffer[PATH_MAX];
+	ssize_t cwdLen = readlink(cwdPath, cwdBuffer, sizeof(cwdBuffer) - 1);
+	if (cwdLen < 0)
+		return B_ERROR;
+	cwdBuffer[cwdLen] = '\0';
+
+	struct stat cwdStat;
+	if (stat(cwdBuffer, &cwdStat) != 0)
+		return B_ERROR;
+
+	if (info.AddString("name", name) != B_OK)
+		return B_ERROR;
+
+	if (info.AddString("cwd path", cwdBuffer) != B_OK)
+		return B_ERROR;
+
+	if (info.AddInt32("cwd device", (int32)cwdStat.st_dev) != B_OK)
+		return B_ERROR;
+
+	if (info.AddInt64("cwd directory", (int64)cwdStat.st_ino) != B_OK)
+		return B_ERROR;
+
+	int fd = open(cwdBuffer, O_RDONLY);
+	if (fd < 0)
+		return B_ERROR;
+
+	vref_id vref = acquire_vref(fd);
+	if (vref < 0)
+		return B_ERROR;
+
+	if (info.AddRef("virtual:cwd directory", get_vref_dev(), (ino_t)vref,
+			name) != B_OK) {
+		close(fd);
+		return B_ERROR;
+	}
+
+	close(fd);
+	return B_OK;
 }
 
 
-}	// namespace BPrivate
-
-
-status_t
-_kern_get_extended_team_info(team_id teamID, uint32 flags,
-	void* buffer, size_t size, size_t* _sizeNeeded)
-{
-	UNIMPLEMENTED();
-	return B_UNSUPPORTED;
-}
+} // namespace BPrivate

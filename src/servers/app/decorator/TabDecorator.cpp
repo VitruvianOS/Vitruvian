@@ -208,20 +208,18 @@ TabDecorator::UpdateColors(DesktopSettings& settings)
 	// Desktop is write locked, so be quick about it.
 	fFocusFrameColor		= settings.UIColor(B_WINDOW_BORDER_COLOR);
 	fFocusTabColor			= settings.UIColor(B_WINDOW_TAB_COLOR);
-	fFocusTabColorLight		= tint_color(fFocusTabColor,
-								(B_LIGHTEN_MAX_TINT + B_LIGHTEN_2_TINT) / 2);
-	fFocusTabColorBevel		= tint_color(fFocusTabColor, B_LIGHTEN_2_TINT);
-	fFocusTabColorShadow	= tint_color(fFocusTabColor,
-								(B_DARKEN_1_TINT + B_NO_TINT) / 2);
+	// BeOS-like beveled tabs: sharp bright highlights, flat fill, dark shadows
+	fFocusTabColorLight		= tint_color(fFocusTabColor, B_LIGHTEN_1_TINT);
+	fFocusTabColorBevel		= tint_color(fFocusTabColor, B_LIGHTEN_MAX_TINT);
+	fFocusTabColorShadow	= tint_color(fFocusTabColor, B_DARKEN_2_TINT);
 	fFocusTextColor			= settings.UIColor(B_WINDOW_TEXT_COLOR);
 
 	fNonFocusFrameColor		= settings.UIColor(B_WINDOW_INACTIVE_BORDER_COLOR);
 	fNonFocusTabColor		= settings.UIColor(B_WINDOW_INACTIVE_TAB_COLOR);
-	fNonFocusTabColorLight	= tint_color(fNonFocusTabColor,
-								(B_LIGHTEN_MAX_TINT + B_LIGHTEN_2_TINT) / 2);
-	fNonFocusTabColorBevel	= tint_color(fNonFocusTabColor, B_LIGHTEN_2_TINT);
-	fNonFocusTabColorShadow	= tint_color(fNonFocusTabColor,
-								(B_DARKEN_1_TINT + B_NO_TINT) / 2);
+	// BeOS-like beveled tabs: sharp bright highlights, flat fill, dark shadows
+	fNonFocusTabColorLight	= tint_color(fNonFocusTabColor, B_LIGHTEN_1_TINT);
+	fNonFocusTabColorBevel	= tint_color(fNonFocusTabColor, B_LIGHTEN_MAX_TINT);
+	fNonFocusTabColorShadow	= tint_color(fNonFocusTabColor, B_DARKEN_2_TINT);
 	fNonFocusTextColor = settings.UIColor(B_WINDOW_INACTIVE_TEXT_COLOR);
 }
 
@@ -367,7 +365,8 @@ TabDecorator::_DoTabLayout()
 		fDrawState.Font().GetHeight(fontHeight);
 
 		if (tab->look != kLeftTitledWindowLook) {
-			const float spacing = fBorderWidth * 1.4f;
+			// BeOS-like compact proportions (was 1.4f in Haiku)
+			const float spacing = fBorderWidth * 1.2f;
 			tabRect.Set(fFrame.left - fBorderWidth,
 				fFrame.top - fBorderWidth
 					- ceilf(fontHeight.ascent + fontHeight.descent + spacing),
@@ -1066,10 +1065,11 @@ TabDecorator::_LayoutTabItems(Decorator::Tab* _tab, const BRect& tabRect)
 float
 TabDecorator::_DefaultTextOffset() const
 {
+	// BeOS-like compact text offset (was 3.4f/3.6f in Haiku)
 	if (fTopTab->look == B_FLOATING_WINDOW_LOOK
 			|| fTopTab->look == kLeftTitledWindowLook)
-		return int32(fBorderWidth * 3.4f);
-	return int32(fBorderWidth * 3.6f);
+		return int32(fBorderWidth * 3.0f);
+	return int32(fBorderWidth * 3.2f);
 }
 
 

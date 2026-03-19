@@ -108,10 +108,10 @@ BTrashWatcher::MessageReceived(BMessage* message)
 		{
 			// allow code to fall through if move is from/to trash
 			// but do nothing for moves in the same directory
-			ino_t toDir;
-			ino_t fromDir;
-			message->FindUInt64("from directory", &fromDir);
-			message->FindUInt64("to directory", &toDir);
+			entry_ref toDir;
+			entry_ref fromDir;
+			message->FindRef("virtual:from directory", &fromDir);
+			message->FindRef("virtual:to directory", &toDir);
 			if (fromDir == toDir)
 				break;
 		}
@@ -132,7 +132,7 @@ BTrashWatcher::MessageReceived(BMessage* message)
 		{
 			dev_t device;
 			BDirectory trashDir;
-			if (message->FindInt32("new device", &device) == B_OK
+			if (message->FindUInt64("new device", (uint64*)&device) == B_OK
 				&& FSGetTrashDir(&trashDir, device) == B_OK) {
 				node_ref trashNode;
 				trashDir.GetNodeRef(&trashNode);

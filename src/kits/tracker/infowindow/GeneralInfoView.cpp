@@ -414,7 +414,6 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 	switch (message->GetInt32("opcode", 0)) {
 		case B_ENTRY_MOVED:
 		{
-			#ifdef __VOS_OLD_NODE_MONITOR__
 			node_ref dirNode;
 			node_ref itemNode;
 			dirNode.device = itemNode.device = message->FindInt32("device");
@@ -444,7 +443,6 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 					B_STRING_TYPE, 0, this);
 				Invalidate();
 			}
-			#endif
 			break;
 		}
 

@@ -120,10 +120,8 @@ NodePreloader::MessageReceived(BMessage* message)
 			switch (message->FindInt32("opcode")) {
 				case B_ENTRY_REMOVED:
 				{
-					#ifdef __VOS_OLD_NODE_MONITOR__
 					AutoLock<Benaphore> locker(fLock);
-					message->FindUInt64("device", &itemNode.device);
-					message->FindUInt64("node", &itemNode.node);
+					message->FindNodeRef("virtual:node", &itemNode);
 					Model* model = FindModel(itemNode);
 					if (model == NULL)
 						break;
@@ -131,17 +129,14 @@ NodePreloader::MessageReceived(BMessage* message)
 					//PRINT(("preloader removing file %s\n", model->Name()));
 					IconCache::sIconCache->Removing(model);
 					fModelList.RemoveItem(model);
-					#endif
 					break;
 				}
 
 				case B_ATTR_CHANGED:
 				case B_STAT_CHANGED:
 				{
-					#ifdef __VOS_OLD_NODE_MONITOR__
 					AutoLock<Benaphore> locker(fLock);
-					message->FindUInt64("device", &itemNode.device);
-					message->FindUInt64("node", &itemNode.node);
+					message->FindNodeRef("virtual:node", &itemNode);
 
 					const char* attrName;
 					message->FindString("attr", &attrName);
@@ -152,7 +147,6 @@ NodePreloader::MessageReceived(BMessage* message)
 					BModelOpener opener(model);
 					IconCache::sIconCache->IconChanged(model->ResolveIfLink());
 					//PRINT(("preloader updating file %s\n", model->Name()));
-					#endif
 					break;
 				}
 			}

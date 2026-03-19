@@ -400,37 +400,26 @@ TFilePanel::FSFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 		case B_ENTRY_MOVED:
 		{
 			node_ref itemNode;
-			#ifdef __VOS_OLD_NODE_MONITOR__
-			message->FindUInt64("node", (int64*)&itemNode.node);
+			message->FindNodeRef("virtual:node", &itemNode);
 
-			node_ref dirNode;
-			message->FindUInt64("device", &dirNode.device);
-			itemNode.device = dirNode.device;
-			message->FindUInt64("to directory", (int64*)&dirNode.node);
+			entry_ref dirRef;
+			message->FindRef("virtual:to directory", &dirRef);
 
-			const char* name;
-			if (message->FindString("name", &name) != B_OK)
-				break;
-
-
+			node_ref dirNode = node_ref(dirRef.dev(), dirRef.dir());
 			// if current directory moved, update entry ref and menu
 			// but not wind title
 			if (*(panel->TargetModel()->NodeRef()) == itemNode) {
-				panel->TargetModel()->UpdateEntryRef(&dirNode, name);
+				panel->TargetModel()->UpdateEntryRef(&dirNode, dirRef.name);
 				panel->SwitchDirectory(panel->TargetModel()->EntryRef());
 				return B_SKIP_MESSAGE;
 			}
-			#endif
 			break;
 		}
 
 		case B_ENTRY_REMOVED:
 		{
 			node_ref itemNode;
-			#ifdef __VOS_OLD_NODE_MONITOR__
-			message->FindUInt64("device", &itemNode.device);
-			message->FindUInt64("node", (int64*)&itemNode.node);
-			#endif
+			message->FindNodeRef("virtual:node", &itemNode);
 
 			// if folder we're watching is deleted, switch to root
 			// or Desktop

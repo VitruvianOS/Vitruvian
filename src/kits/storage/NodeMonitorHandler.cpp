@@ -148,9 +148,9 @@ NodeMonitorHandler::HandleEntryCreated(BMessage * msg)
 	dev_t device;
 	ino_t node;
 	if ((msg->FindString("name", &name) != B_OK) ||
-        (msg->FindUInt64("directory", &directory) != B_OK) ||
-		(msg->FindUInt64("device", &device) != B_OK) ||
-		(msg->FindUInt64("node", &node) != B_OK)) {
+		(msg->FindUInt64("directory", (uint64*)&directory) != B_OK) ||
+		(msg->FindUInt64("device", (uint64*)&device) != B_OK) ||
+		(msg->FindUInt64("node", (uint64*)&node) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
 	EntryCreated(name, directory, device, node);
@@ -166,9 +166,9 @@ NodeMonitorHandler::HandleEntryRemoved(BMessage * msg)
 	dev_t device;
 	ino_t node;
 	if ((msg->FindString("name", &name) != B_OK) ||
-		(msg->FindUInt64("directory", &directory) != B_OK) ||
-		(msg->FindUInt64("device", &device) != B_OK) ||
-		(msg->FindUInt64("node", &node) != B_OK)) {
+		(msg->FindUInt64("directory", (uint64*)&directory) != B_OK) ||
+		(msg->FindUInt64("device", (uint64*)&device) != B_OK) ||
+		(msg->FindUInt64("node", (uint64*)&node) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
 	EntryRemoved(name, directory, device, node);
@@ -185,16 +185,18 @@ NodeMonitorHandler::HandleEntryMoved(BMessage * msg)
 	ino_t toDirectory;
 	dev_t device;
 	ino_t node;
-	dev_t deviceNode;
+	dev_t deviceNode = B_INVALID_DEV;
 	if ((msg->FindString("name", &name) != B_OK) ||
 		(msg->FindString("from name", &fromName) != B_OK) ||
-		(msg->FindUInt64("from directory", &fromDirectory) != B_OK) ||
-		(msg->FindUInt64("to directory", &toDirectory) != B_OK) ||
-		(msg->FindUInt64("device", &device) != B_OK) ||
-		(msg->FindUInt64("node device", &deviceNode) != B_OK) ||
-		(msg->FindUInt64("node", &node) != B_OK)) {
+		(msg->FindUInt64("from directory", (uint64*)&fromDirectory) != B_OK) ||
+		(msg->FindUInt64("to directory", (uint64*)&toDirectory) != B_OK) ||
+		(msg->FindUInt64("device", (uint64*)&device) != B_OK) ||
+		(msg->FindUInt64("node", (uint64*)&node) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
+	// "node device" is optional (absent in raw B_NODE_MONITOR from nexus).
+	if (msg->FindUInt64("node device", (uint64*)&deviceNode) != B_OK)
+		deviceNode = device;
 	EntryMoved(name, fromName, fromDirectory, toDirectory, device, node,
 		deviceNode);
 	return B_OK;
@@ -207,8 +209,8 @@ NodeMonitorHandler::HandleStatChanged(BMessage * msg)
 	ino_t node;
 	dev_t device;
 	int32 statFields;
-	if ((msg->FindUInt64("node", &node) != B_OK) ||
-		(msg->FindUInt64("device", &device) != B_OK) ||
+	if ((msg->FindUInt64("node", (uint64*)&node) != B_OK) ||
+		(msg->FindUInt64("device", (uint64*)&device) != B_OK) ||
 		(msg->FindInt32("fields", &statFields) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
@@ -222,8 +224,8 @@ NodeMonitorHandler::HandleAttrChanged(BMessage * msg)
 {
 	ino_t node;
 	dev_t device;
-	if ((msg->FindUInt64("node", &node) != B_OK) ||
-		(msg->FindUInt64("device", &device) != B_OK)) {
+	if ((msg->FindUInt64("node", (uint64*)&node) != B_OK) ||
+		(msg->FindUInt64("device", (uint64*)&device) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
 	AttrChanged(node, device);
@@ -235,13 +237,15 @@ status_t
 NodeMonitorHandler::HandleDeviceMounted(BMessage * msg)
 {
 	dev_t new_device;
-	dev_t device;
-	ino_t directory;
-	if ((msg->FindInt32("new device", &new_device) != B_OK) ||
-		(msg->FindUInt64("device", &device) != B_OK) ||
-		(msg->FindUInt64("directory", &directory) != B_OK)) {
+	dev_t device = B_INVALID_DEV;
+	ino_t directory = B_INVALID_INO;
+	// "new device" is the mounted volume's dev_t (int64 in disk_monitor).
+	if (msg->FindUInt64("new device", (uint64*)&new_device) != B_OK) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
+	// Parent device and directory are optional (may not be present).
+	msg->FindUInt64("device", (uint64*)&device);
+	msg->FindUInt64("directory", (uint64*)&directory);
 	DeviceMounted(new_device, device, directory);
 	return B_OK;
 }
@@ -251,7 +255,7 @@ status_t
 NodeMonitorHandler::HandleDeviceUnmounted(BMessage * msg)
 {
 	dev_t new_device;
-	if (msg->FindInt32("new device", &new_device) != B_OK) {
+	if (msg->FindUInt64("device", (uint64*)&new_device) != B_OK) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
 	DeviceUnmounted(new_device);

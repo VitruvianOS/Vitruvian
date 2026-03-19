@@ -229,21 +229,17 @@ BTranslatorRoster::Private::MessageReceived(BMessage* message)
 			switch (opcode) {
 				case B_ENTRY_CREATED:
 				{
-					const char* name;
-					node_ref nodeRef;
-					#ifdef __VOS_OLD_NODE_MONITOR__
-					if (message->FindUInt64("device", &nodeRef.device) != B_OK
-						|| message->FindUInt64("directory", &nodeRef.node)
-							!= B_OK
-						|| message->FindString("name", &name) != B_OK)
+					entry_ref dirRef;
+					if (message->FindRef("virtual:directory", &dirRef)
+							!= B_OK)
 						break;
-					#endif
+
 					// TODO: make this better (possible under Haiku)
 					snooze(100000);
 						// let the font be written completely before trying to
 						// open it
-
-					_EntryAdded(nodeRef, name);
+					// TODO _VOS_OLD_NODE_MONITOR
+					_EntryAdded(node_ref(dirRef.dev(), dirRef.dir()), dirRef.name);
 					break;
 				}
 
@@ -252,48 +248,41 @@ BTranslatorRoster::Private::MessageReceived(BMessage* message)
 					// has the entry been moved into a monitored directory or
 					// has it been removed from one?
 					const char* name;
-					node_ref toNodeRef;
-					node_ref fromNodeRef;
+					entry_ref toEntryRef;
+					entry_ref fromEntryRef;
 					node_ref nodeRef;
 
-					#ifdef __VOS_OLD_NODE_MONITOR__
-					if (message->FindUInt64("device", &nodeRef.device) != B_OK
-						|| message->FindUInt64("to directory", &toNodeRef.node)
+					if (message->FindRef("virtual:to directory", &toEntryRef)
 							!= B_OK
-						|| message->FindUInt64("from directory",
-							(int64*)&fromNodeRef.node) != B_OK
-						|| message->FindUInt64("node", (int64*)&nodeRef.node)
-							!= B_OK
-						|| message->FindString("name", &name) != B_OK)
+						|| message->FindRef("virtual:from directory",
+							&fromEntryRef) != B_OK
+						|| message->FindNodeRef("virtual:node", &nodeRef)
+							!= B_OK)
 						break;
 
-					fromNodeRef.device = nodeRef.device;
-					toNodeRef.device = nodeRef.device;
-					#endif
-
+					node_ref toEntryNode = node_ref(toEntryRef.dev(), toEntryRef.dir());
+					node_ref fromEntryNode = node_ref(fromEntryRef.dev(), fromEntryRef.dir());
+		
 					// Do we know this one yet?
 					translator_item* item = _FindTranslator(nodeRef);
 					if (item == NULL) {
 						// it's a new one!
-						if (_IsKnownDirectory(toNodeRef))
-							_EntryAdded(toNodeRef, name);
+						if (_IsKnownDirectory(toEntryNode))
+							_EntryAdded(toEntryNode, name);
 						break;
 					}
 
-					if (!_IsKnownDirectory(toNodeRef)) {
+					if (!_IsKnownDirectory(toEntryNode)) {
 						// translator got removed
 						_RemoveTranslators(&nodeRef);
 						break;
 					}
 
-					#ifdef __VOS_OLD_NODE_MONITOR__
 					// the name may have changed
-					item->ref.set_name(name);
-					item->ref.directory = toNodeRef.node;
-					#endif
+					item->ref.set_name(toEntryRef.name);
 
-					if (_IsKnownDirectory(fromNodeRef)
-						&& _IsKnownDirectory(toNodeRef)) {
+					if (_IsKnownDirectory(fromEntryNode)
+						&& _IsKnownDirectory(toEntryNode)) {
 						// TODO: we should rescan for the name, there might be
 						// name clashes with translators in other directories
 						// (as well as old ones revealed)
@@ -305,14 +294,13 @@ BTranslatorRoster::Private::MessageReceived(BMessage* message)
 				case B_ENTRY_REMOVED:
 				{
 					node_ref nodeRef;
-					uint64 directoryNode;
-					#ifdef __VOS_OLD_NODE_MONITOR__
-					if (message->FindUInt64("device", &nodeRef.device) != B_OK
-						|| message->FindUInt64("directory",
-							(int64*)&directoryNode) != B_OK
-						|| message->FindUInt64("node", &nodeRef.node) != B_OK)
+					entry_ref entryRef;
+	
+					if (message->FindRef("virtual:directory",
+							&entryRef) != B_OK
+						|| message->FindNodeRef("virtual:node", &nodeRef) != B_OK)
 						break;
-					#endif
+
 					translator_item* item = _FindTranslator(nodeRef);
 					if (item != NULL)
 						_RemoveTranslators(&nodeRef);

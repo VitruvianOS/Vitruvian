@@ -236,7 +236,8 @@ struct AncestorHashDefinition {
 
 	size_t HashKey(const node_ref& key) const
 	{
-		return size_t(key.dev() ^ key.ino());
+		const node_ref real = key.dereference();
+		return size_t(real.dev() ^ real.ino());
 	}
 
 	size_t Hash(Ancestor* value) const
@@ -419,7 +420,8 @@ struct NodeHashDefinition {
 
 	size_t HashKey(const node_ref& key) const
 	{
-		return size_t(key.dev() ^ key.ino());
+		const node_ref real = key.dereference();
+		return size_t(real.dev() ^ real.ino());
 	}
 
 	size_t Hash(Node* value) const
@@ -1058,15 +1060,12 @@ PathHandler::_EntryCreated(BMessage* message)
 
 	NotOwningEntryRef entryRef;
 	node_ref nodeRef;
-	#ifdef __VOS_OLD_NODE_MONITOR__
-	if (message->FindUInt64("device", &nodeRef.device) != B_OK
-		|| message->FindUInt64("node", &nodeRef.node) != B_OK
-		|| message->FindUInt64("directory", &entryRef.directory) != B_OK
-		|| message->FindString("name", (const char**)&entryRef.name) != B_OK) {
+
+	if (message->FindNodeRef("virtual:node", &nodeRef) != B_OK)
 		return;
-	}
-	entryRef.device = nodeRef.device;
-	#endif
+
+	if (message->FindRef("virtual:directory", &entryRef) != B_OK)
+		return;
 
 	if (_CheckDuplicateEntryNotification(B_ENTRY_CREATED, entryRef, nodeRef))
 		return;
@@ -1076,12 +1075,13 @@ PathHandler::_EntryCreated(BMessage* message)
 		entryRef.dir(), entryRef.name, nodeRef.dev(), nodeRef.ino());
 
 	BEntry entry;
+	node_ref entryNode;
 	struct stat st;
-	if (entry.SetTo(&entryRef) != B_OK || entry.GetStat(&st) != B_OK
-		|| nodeRef != node_ref(st.st_dev, st.st_ino)) {
-		return;
+	if (entry.SetTo(&entryRef) != B_OK || entry.GetNodeRef(&entryNode) != B_OK
+			|| nodeRef != entryNode) {
+ 		return;
 	}
-
+ 
 	_EntryCreated(entryRef, nodeRef, S_ISDIR(st.st_mode), false, true, NULL);
 }
 
@@ -1089,18 +1089,13 @@ PathHandler::_EntryCreated(BMessage* message)
 void
 PathHandler::_EntryRemoved(BMessage* message)
 {
-	NotOwningEntryRef entryRef;
+ 	NotOwningEntryRef entryRef;
 	node_ref nodeRef;
-
-	#ifdef __VOS_OLD_NODE_MONITOR__
-	if (message->FindUInt64("device", &nodeRef.device) != B_OK
-		|| message->FindUInt64("node", &nodeRef.node) != B_OK
-		|| message->FindUInt64("directory", &entryRef.directory) != B_OK
-		|| message->FindString("name", (const char**)&entryRef.name) != B_OK) {
+	if (message->FindNodeRef("virtual:node", &nodeRef) != B_OK)
 		return;
-	}
-	entryRef.device = nodeRef.device;
-	#endif
+
+	if (message->FindRef("virtual:directory", &entryRef) != B_OK)
+		return;
 
 	if (_CheckDuplicateEntryNotification(B_ENTRY_REMOVED, entryRef, nodeRef))
 		return;
@@ -1120,19 +1115,14 @@ PathHandler::_EntryMoved(BMessage* message)
 	NotOwningEntryRef toEntryRef;
 	node_ref nodeRef;
 
-	#ifdef __VOS_OLD_NODE_MONITOR__
-	if (message->FindUInt64("node device", &nodeRef.device) != B_OK
-		|| message->FindUInt64("node", &nodeRef.node) != B_OK
-		|| message->FindUInt64("device", &fromEntryRef.device) != B_OK
-		|| message->FindUInt64("from directory", &fromEntryRef.directory) != B_OK
-		|| message->FindUInt64("to directory", &toEntryRef.directory) != B_OK
-		|| message->FindString("from name", (const char**)&fromEntryRef.name)
-			!= B_OK
-		|| message->FindString("name", (const char**)&toEntryRef.name)
-			!= B_OK) {
+	if (message->FindNodeRef("virtual:node", &nodeRef) != B_OK)
 		return;
-	}
-	toEntryRef.device = fromEntryRef.device;
+
+	if (message->FindRef("virtual:from directory", &fromEntryRef) != B_OK)
+		return;
+
+	if (message->FindRef("virtual:to directory", &toEntryRef) != B_OK)
+		return;
 
 	if (_CheckDuplicateEntryNotification(B_ENTRY_MOVED, toEntryRef, nodeRef,
 			&fromEntryRef)) {
@@ -1144,17 +1134,17 @@ PathHandler::_EntryMoved(BMessage* message)
 		":%" B_PRIdINO "\n", this, fromEntryRef.dev(), fromEntryRef.dir(),
 		fromEntryRef.name, toEntryRef.dev(), toEntryRef.dir(),
 		toEntryRef.name, nodeRef.dev(), nodeRef.ino());
-	#endif
 
 	BEntry entry;
 	struct stat st;
-	// TODO __VOS__ GetRef() here and compare with that we can also compare
-	// with dereferenced entry to be sure?
-	if (entry.SetTo(&toEntryRef) != B_OK || entry.GetStat(&st) != B_OK
-		|| nodeRef != node_ref(st.st_dev, st.st_ino)) {
+	node_ref entryNode;
+
+	if (entry.SetTo(&toEntryRef) != B_OK || entry.GetStat(&st) != B_OK ||
+		entry.GetNodeRef(&entryNode) != B_OK || nodeRef != entryNode) {
 		_EntryRemoved(fromEntryRef, nodeRef, false, true, NULL);
 		return;
 	}
+
 	bool isDirectory = S_ISDIR(st.st_mode);
 
 	Ancestor* fromAncestor = _GetAncestor(fromEntryRef.DirectoryNodeRef());
@@ -1344,37 +1334,35 @@ void
 PathHandler::_NodeChanged(BMessage* message)
 {
 	node_ref nodeRef;
-	#ifdef __VOS__OLD_NODE_MONITOR__
-	if (message->FindUInt64("device", &nodeRef.device) != B_OK
-		|| message->FindUInt64("node", &nodeRef.node) != B_OK) {
+	if (message->FindNodeRef("virtual:node", &nodeRef) != B_OK)
 		return;
-	}
 
 	TRACE("%p->PathHandler::_NodeChanged(): node: %" B_PRIdDEV ":%" B_PRIdINO
-		", %s%s\n", this, nodeRef.device, nodeRef.node,
+		", %s%s\n", this, nodeRef.dev(), nodeRef.ino(),
 			message->GetInt32("opcode", B_STAT_CHANGED) == B_ATTR_CHANGED
 				? "attribute: " : "stat",
 			message->GetInt32("opcode", B_STAT_CHANGED) == B_ATTR_CHANGED
 				? message->GetString("attr", "") : "");
-	
+
 	bool isDirectory = false;
 	BString path;
-	if (Ancestor* ancestor = _GetAncestor(nodeRef)) {
-		if (ancestor != fBaseAncestor)
-			return;
-		isDirectory = ancestor->IsDirectory();
-		path = fPath;
-	} else if (Node* node = _GetNode(nodeRef)) {
-		isDirectory = node->IsDirectory();
-		path = _NodePath(node);
-	} else
-		return;
+ 	if (Ancestor* ancestor = _GetAncestor(nodeRef)) {
+ 		if (ancestor != fBaseAncestor)
+ 			return;
+ 		isDirectory = ancestor->IsDirectory();
+ 		path = fPath;
+ 	} else if (Node* node = _GetNode(nodeRef)) {
+ 		isDirectory = node->IsDirectory();
+ 		path = _NodePath(node);
+ 	} else
+ 		return;
+ 
+ 	if (isDirectory ? _WatchFilesOnly() : _WatchDirectoriesOnly())
+ 		return;
+ 
+	// The embedded vref should be forwarded properly
 
-	if (isDirectory ? _WatchFilesOnly() : _WatchDirectoriesOnly())
-		return;
-
-	_NotifyTarget(*message, path);
-	#endif
+ 	_NotifyTarget(*message, path);
 }
 
 
@@ -1856,23 +1844,17 @@ PathHandler::_NotifyEntryCreatedOrRemoved(const entry_ref& entryRef,
 		entryRef.dev(), entryRef.dir(), entryRef.name, nodeRef.dev(),
 		nodeRef.ino());
 
-	#ifdef __VOS_OLD_NODE_MONITOR__
-	BMessage message(B_PATH_MONITOR);
-	message.AddInt32("opcode", opcode);
-	message.AddUInt64("device", entryRef.device);
-	message.AddUInt64("directory", entryRef.directory);
-	message.AddUInt64("node device", nodeRef.device);
-		// This field is not in a usual node monitoring message, since the node
-		// the created/removed entry refers to always belongs to the same FS as
-		// the directory, as another FS cannot yet/no longer be mounted there.
-		// In our case, however, this can very well be the case, e.g. when the
-		// the notification is triggered in response to a directory tree having
-		// been moved into/out of our path.
-	message.AddInt64("node", nodeRef.node);
-	message.AddString("name", entryRef.name);
+ 	BMessage message(B_PATH_MONITOR);
+ 	message.AddInt32("opcode", opcode);
 
-	_NotifyTarget(message, path);
-	#endif
+	message.AddRef("virtual:directory", &entryRef);
+	// This field is not in a usual node monitoring message, since the node
+	// the created/removed entry refers to always belongs to the same FS as
+	// the directory, as another FS cannot yet/no longer be mounted there.
+	// In our case, however, this can very well be the case, e.g. when the
+	// the notification is triggered in response to a directory tree having
+	// been moved into/out of our path.
+	message.AddNodeRef("virual:node", &nodeRef);
 }
 
 
@@ -1886,22 +1868,18 @@ PathHandler::_NotifyEntryMoved(const entry_ref& fromEntryRef,
 		return;
 	}
 
-	#ifdef __VOS_OLD_NODE_MONITOR__
-	TRACE("%p->PathHandler::_NotifyEntryMoved(): entry: %" B_PRIdDEV ":%"
-		B_PRIdINO ":\"%s\" -> %" B_PRIdDEV ":%" B_PRIdINO ":\"%s\", node: %"
+ 	TRACE("%p->PathHandler::_NotifyEntryMoved(): entry: %" B_PRIdDEV ":%"
+ 		B_PRIdINO ":\"%s\" -> %" B_PRIdDEV ":%" B_PRIdINO ":\"%s\", node: %"
 		B_PRIdDEV ":%" B_PRIdINO "\n", this, fromEntryRef.device,
 		fromEntryRef.directory, fromEntryRef.name, toEntryRef.device,
 		toEntryRef.directory, toEntryRef.name, nodeRef.device, nodeRef.node);
 
-	BMessage message(B_PATH_MONITOR);
-	message.AddInt32("opcode", B_ENTRY_MOVED);
-	message.AddUInt64("device", fromEntryRef.device);
-	message.AddUInt64("from directory", fromEntryRef.directory);
-	message.AddUInt64("to directory", toEntryRef.directory);
-	message.AddUInt64("node device", nodeRef.device);
-	message.AddInt64("node", nodeRef.node);
-	message.AddString("from name", fromEntryRef.name);
-	message.AddString("name", toEntryRef.name);
+ 	BMessage message(B_PATH_MONITOR);
+ 	message.AddInt32("opcode", B_ENTRY_MOVED);
+
+	message.AddRef("virtual:from directory", &fromEntryRef);
+	message.AddRef("virtual:to directory", &toEntryRef);
+	message.AddNodeRef("virtual:node", &nodeRef);
 
 	if (wasAdded)
 		message.AddBool("added", true);
@@ -1912,7 +1890,6 @@ PathHandler::_NotifyEntryMoved(const entry_ref& fromEntryRef,
 		message.AddString("from path", fromPath);
 
 	_NotifyTarget(message, path);
-	#endif
 }
 
 

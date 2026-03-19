@@ -297,11 +297,8 @@ BDeskWindow::Init(const BMessage*)
 			BMessage message;
 			message.what = B_NODE_MONITOR;
 			message.AddInt32("opcode", B_ENTRY_CREATED);
-			message.AddInt32("device", model.NodeRef()->device);
-			message.AddInt64("node", model.NodeRef()->node);
-			message.AddInt64("directory", model.EntryRef()->directory);
-			message.AddString("name", model.EntryRef()->name);
-
+			message.AddUInt64("virtual:node", &model.NodeRef());
+			message.AddUInt64("virtual:directory", &model.EntryRef());
 			PostMessage(&message, PoseView());
 		}
 	}
@@ -586,22 +583,17 @@ BDeskWindow::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case B_PATH_MONITOR:
 		{
-			#ifdef __VOS_OLD_NODE_MONITOR__
 			const char* path = "";
 			if (!(message->FindString("path", &path) == B_OK
 					&& strcmp(path, fShortcutsSettings) == 0)) {
 
-				dev_t device;
-				ino_t node;
+				node_ref node;
 				if (fNodeRef == NULL
-					|| message->FindUInt64("device", &device) != B_OK
-					|| message->FindUInt64("node", &node) != B_OK
-					|| device != fNodeRef->device
+					|| message->FindNodeRef("virtual:node", &node) != B_OK
 					|| node != fNodeRef->node)
 					break;
 			}
 			ApplyShortcutPreferences(true);
-			#endif
 			break;
 		}
 		case B_NODE_MONITOR:

@@ -2410,11 +2410,10 @@ BPoseView::MessageReceived(BMessage* message)
 
 		case kFSClipboardChanges:
 		{
-			#ifdef __VOS_OLD_NODE_MONITOR__
-			node_ref node;
-			message->FindUInt64("device", &node.device);
-			message->FindUInt64("directory", &node.node);
+			entry_ref ref;
+			message->FindRef("virtual:directory", &ref);
 
+			node_ref node = node_ref(ref.dev(), ref.dir());
 			Model* targetModel = TargetModel();
 			if (targetModel != NULL && *targetModel->NodeRef() == node)
 				UpdatePosesClipboardModeFromClipboard(message);
@@ -2424,7 +2423,6 @@ BPoseView::MessageReceived(BMessage* message)
 				SetHasPosesInClipboard(false);
 				SetPosesClipboardMode(0);
 			}
-			#endif
 			break;
 		}
 
@@ -3032,13 +3030,17 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 			const StatStruct* stat = model->StatBuf();
 			if (stat->st_crtime < now - 5 || stat->st_crtime > now)
 				break;
-			#endif
+
 			UNIMPLEMENTED();
 
 			//PRINT(("retrying to read pose info for %s, %d\n",
 			//	model->Name(), count));
 
 			snooze(10000);
+			#else
+			// VOS doesn't have st_crtime, so don't retry
+			break;
+			#endif
 		}
 	}
 
@@ -3329,11 +3331,9 @@ BPoseView::UpdatePosesClipboardModeFromClipboard(BMessage* clipboardReport)
 	fRealPivotPose = NULL;
 	bool fullInvalidateNeeded = false;
 
-	node_ref node;
-	#ifdef __VOS_OLD_NODE_MONITOR__
-	clipboardReport->FindUInt64("device", &node.device);
-	clipboardReport->FindUInt64("directory", &node.node);
-	#endif
+	entry_ref ref;
+	clipboardReport->FindRef("virtual:directory", &ref);
+	node_ref node = node_ref(ref.dev(), ref.dir());
 
 	bool clearClipboard = clipboardReport->GetBool("clearClipboard", false);
 	if (clearClipboard && fHasPosesInClipboard) {
@@ -5416,13 +5416,10 @@ BPoseView::FSNotification(const BMessage* message)
 		{
 			ASSERT(targetModel != NULL);
 
-			message->FindUInt64("device", &itemNode.device);
-			node_ref dirNode;
-			#ifdef __VOS_OLD_NODE_MONITOR__
-			dirNode.device = itemNode.device;
-			message->FindUInt64("directory", (int64*)&dirNode.node);
-			message->FindUInt64("node", (int64*)&itemNode.node);
-			#endif
+			entry_ref ref;
+			message->FindRef("virtual:directory", &ref);
+			message->FindNodeRef("virtual:node", &itemNode);
+			node_ref dirNode = node_ref(ref.dev(), ref.dir());
 
 			int32 count = fBrokenLinks->CountItems();
 			bool createPose = true;
@@ -5490,9 +5487,7 @@ BPoseView::FSNotification(const BMessage* message)
 			break;
 
 		case B_ENTRY_REMOVED:
-			#ifdef __VOS_OLD_NODE_MONITOR_
-			message->FindUInt64("device", &itemNode.device);
-			message->FindUInt64("node", (int64*)&itemNode.node);
+			message->FindNodeRef("virtual:node", &itemNode);
 
 			// our window itself may be deleted
 			// we must check to see if this comes as a query
@@ -5537,12 +5532,11 @@ BPoseView::FSNotification(const BMessage* message)
 			 	DeletePose(&itemNode);
 				TryUpdatingBrokenLinks();
 			}
-			#endif
 			break;
 
 		case B_DEVICE_MOUNTED:
 		{
-			if (message->FindInt32("new device", &device) != B_OK)
+			if (message->FindUInt64("new device", (uint64*)&device) != B_OK)
 				break;
 
 			BVolume volume(device);
@@ -5681,17 +5675,15 @@ BPoseView::EntryCreated(const node_ref* dirNode, const node_ref* itemNode,
 bool
 BPoseView::EntryMoved(const BMessage* message)
 {
-	ino_t oldDir;
-	node_ref dirNode;
+	entry_ref oldDir;
+	entry_ref dirRef;
 	node_ref itemNode;
 
-	#ifdef __VOS_OLD_NODE_MONITOR__
-	message->FindUInt64("device", &dirNode.device);
-	itemNode.device = dirNode.device;
-	message->FindUInt64("to directory", (int64*)&dirNode.node);
-	message->FindUInt64("node", (int64*)&itemNode.node);
-	message->FindUInt64("from directory", (int64*)&oldDir);
-	#endif
+	message->FindNodeRef("virtual:node", &itemNode);
+	message->FindRef("virtual:to directory", &dirRef);
+	message->FindRef("virtual:from directory", &oldDir);
+
+	node_ref dirNode = node_ref(dirRef.dev(), dirRef.dir());
 
 	const char* name;
 	if (message->FindString("name", &name) != B_OK)
@@ -5702,8 +5694,6 @@ BPoseView::EntryMoved(const BMessage* message)
 	// is different than that of the root directory; we have to do a
 	// lookup using the new volume name and get the volume device from there
 	StatStruct st;
-	#ifdef __VOS_OLD_NODE_MONITOR__
-	// TODO dereference
 	// get the inode of the root and check if we got a notification on it
 	if (stat("/", &st) >= 0
 		&& st.st_dev == dirNode.device
@@ -5716,7 +5706,6 @@ BPoseView::EntryMoved(const BMessage* message)
 			itemNode.device = st.st_dev;
 		}
 	}
-	#endif
 
 	Model* targetModel = TargetModel();
 	ThrowOnAssert(targetModel != NULL);
@@ -5738,7 +5727,7 @@ BPoseView::EntryMoved(const BMessage* message)
 		assert_cast<BContainerWindow*>(Window())->UpdateTitle();
 	}
 
-	if (oldDir == dirNode.ino() || targetModel->IsQuery()
+	if (oldDir.dereference().dir() == dirNode.dereference().ino() || targetModel->IsQuery()
 		|| targetModel->IsVirtualDirectory()) {
 		// rename or move of entry in this directory (or query)
 
@@ -5785,12 +5774,11 @@ BPoseView::EntryMoved(const BMessage* message)
 		}
 		if (pose != NULL)
 			pendingNodeMonitorCache.PoseCreatedOrMoved(this, pose);
-	} else if (oldDir == thisDirNode.ino()) {
+	} else if (oldDir.dereference().dir() == thisDirNode.dereference().ino()) {
 		DeletePose(&itemNode);
 	} else if (dirNode.ino() == thisDirNode.ino()) {
 		EntryCreated(&dirNode, &itemNode, name);
 	}
-
 	TryUpdatingBrokenLinks();
 
 	return true;
@@ -5875,10 +5863,10 @@ BPoseView::StopWatchingParentsOf(const entry_ref* ref)
 bool
 BPoseView::AttributeChanged(const BMessage* message)
 {
-	#ifdef __VOS_OLD_NODE_MONITOR__
-	node_ref itemNode;
-	message->FindUInt64("device", &itemNode.device);
-	message->FindUInt64("node", (int64*)&itemNode.node);
+	entry_ref itemRef;
+
+	message->FindRef("virtual:node", &itemRef);
+	node_ref itemNode = node_ref(itemRef.dev(), itemRef.dir());
 
 	const char* attrName;
 	if (message->FindString("attr", &attrName) != B_OK)
@@ -6035,7 +6023,6 @@ BPoseView::AttributeChanged(const BMessage* message)
 		}
 	}
 
-	#endif
 	return true;
 }
 

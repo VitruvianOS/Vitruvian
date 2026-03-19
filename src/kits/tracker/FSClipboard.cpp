@@ -214,7 +214,6 @@ FSClipboardAddPoses(const node_ref* directory, PoseList* list,
 	if (listCount == 0 || !be_clipboard->Lock())
 		return 0;
 
-	// __VOS_OLD_NODE_MONITOR__
 	// update message to be send to all listeners
 	BMessage updateMessage(kFSClipboardChanges);
 	updateMessage.AddUInt64("device", directory->dev());
@@ -321,7 +320,6 @@ FSClipboardRemovePoses(const node_ref* directory, PoseList* list)
 	if (!be_clipboard->Lock())
 		return 0;
 
-	// __VOS_OLD_NODE_MONITOR__
 	// update message to be send to all listeners
 	BMessage updateMessage(kFSClipboardChanges);
 	updateMessage.AddUInt64("device", directory->dev());
@@ -598,7 +596,6 @@ FSClipboardRemove(Model* model)
 		tcnode.node = *model->NodeRef();
 		tcnode.moveMode = kDelete;
 		const entry_ref* ref = model->EntryRef();
-		// __VOS_OLD_NODE_MONITOR__
 		report->AddUInt64("device", ref->dev());
 		report->AddUInt64("directory", ref->dir());
 		report->AddBool("clearClipboard", false);
@@ -788,7 +785,7 @@ BClipboardRefsWatcher::Clear()
 //{
 //	BMessage message(kFSClipboardChanges);
 //	message.AddInt32("device", node->device);
-//	message.AddInt64("directory", node->node);
+//	message.AddUInt64("directory", node->node);
 //	message.AddBool("clearClipboard", clearClipboard);
 //
 //	if (Lock()) {

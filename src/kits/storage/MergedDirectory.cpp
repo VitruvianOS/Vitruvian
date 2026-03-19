@@ -11,6 +11,7 @@
 
 #include <MergedDirectory.h>
 
+#include <stdio.h>
 #include <string.h>
 
 #include <new>
@@ -122,13 +123,19 @@ BMergedDirectory::GetNextRef(entry_ref* ref)
 	if (result == 0)
 		return B_ENTRY_NOT_FOUND;
 
-	BEntry entry;
-	if (dir.GetEntry(&entry) != B_OK)
+	// Use GetNodeRef (not GetEntry) to get the node_ref of 'dir' itself.
+	// GetEntry navigates UP to the parent via _kern_open_parent_dir, giving
+	// a ref for the directory's own entry (parent_ino, "menu"). Replacing
+	// the name with localEntry->d_name would then point inside the parent
+	// ("deskbar/Applications") instead of inside 'dir' ("menu/Applications").
+	// GetNodeRef returns the vref of dir itself, so entry_ref(nref, name)
+	// correctly encodes "the entry 'name' inside dir".
+	node_ref nref;
+	status_t nrefErr = dir.GetNodeRef(&nref);
+	if (nrefErr != B_OK)
 		return B_ENTRY_NOT_FOUND;
 
-	if (entry.GetRef(ref) != B_OK)
-		return B_ENTRY_NOT_FOUND;
-
+	*ref = entry_ref(nref, NULL);
 	return ref->set_name(localEntry->d_name);
 }
 

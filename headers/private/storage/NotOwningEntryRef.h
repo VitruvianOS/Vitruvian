@@ -46,6 +46,9 @@ public:
 
 	~NotOwningEntryRef()
 	{
+		// We don't own the name pointer (set via SetTo without strdup),
+		// so null it out before unset() calls free() via set_name().
+		name = NULL;
 		unset();
 	}
 
@@ -72,7 +75,8 @@ public:
 
 	NotOwningEntryRef& SetDirectoryNodeRef(const node_ref& directoryRef)
 	{
-		return SetTo(directoryRef.dev(), directoryRef.ino());
+		const char* savedName = this->name;
+		return SetTo(directoryRef.dev(), directoryRef.ino(), savedName);
 	}
 
 	NotOwningEntryRef& operator=(const entry_ref& other)

@@ -15,7 +15,6 @@
 #include "modeset.h"
 
 
-static const char* sDriPath = "/dev/dri/card1";
 int DrmHWInterface::fFd = -1;
 
 extern "C" void seat_enable_cb(struct libseat* seat, void* data)
@@ -99,7 +98,13 @@ DrmHWInterface::_OnSessionEnable()
 		return;
 	}
 
-	fDeviceId = libseat_open_device(fSeat, sDriPath, &fFd);
+	char path[B_PATH_NAME_LENGTH];
+	for (int i = 0; i <= 9; ++i) {
+		snprintf(path, sizeof(path), "/dev/dri/card%d", i);
+		fDeviceId = libseat_open_device(fSeat, path, &fFd);
+		if (fDeviceId < 0)
+			continue;
+    }
 
 	if (fFd < 0) {
 		fprintf(stderr, "Failed to open DRM device via libseat\n");

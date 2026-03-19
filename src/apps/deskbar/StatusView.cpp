@@ -584,37 +584,22 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 	switch (opcode) {
 		case B_ENTRY_MOVED:
 		{
-			entry_ref ref;
-			ino_t todirectory;
-			ino_t node;
-			const char* name;
-			#ifdef __VOS_OLD_NODE_MONITOR__
-			if (message->FindString("name", &name) == B_OK
-				&& message->FindInt64("from directory", &(ref.directory))
-					== B_OK
-				&& message->FindInt64("to directory", &todirectory) == B_OK
-				&& message->FindInt32("device", &(ref.device)) == B_OK
-				&& message->FindInt64("node", &node) == B_OK ) {
-
-				if (name == NULL)
-					break;
-
-				ref.set_name(name);
+			entry_ref refTo;
+			node_ref node;
+			if (message->FindNodeRef("virtual:node", &node) == B_OK
+				&& message->FindRef("virtual:directory", &refTo)) {
 				// change the directory reference to
 				// the new directory
-				MoveItem(&ref, todirectory);
+				MoveItem(&entry_ref(node.dev(), node.ino()), refTo.dir());
 			}
-			#endif
 			break;
 		}
 
 		case B_ENTRY_REMOVED:
 		{
-			#ifdef __VOS_OLD_NODE_MONITOR__
 			// entry was rm'd from the device
 			node_ref nodeRef;
-			if (message->FindInt32("device", &(nodeRef.device)) == B_OK
-				&& message->FindInt64("node", &(nodeRef.node)) == B_OK) {
+			if (message->FindNodeRef("virtual:node", &nodeRef) == B_OK) {
 				DeskbarItemInfo* item = DeskbarItemFor(nodeRef);
 				if (item == NULL)
 					break;
@@ -626,7 +611,6 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 
 				UnloadAddOn(&nodeRef, NULL, true, false);
 			}
-			#endif
 			break;
 		}
 	}
@@ -743,10 +727,8 @@ TReplicantTray::UnloadAddOn(node_ref* nodeRef, dev_t* device, bool which,
 		if (item == NULL)
 			continue;
 
-		// __VOS_OLD_NODE_MONITOR__
-		// __VOS__ TODO is that a place to dereference?
 		if ((which && nodeRef != NULL && item->nodeRef == *nodeRef)
-			|| (device != NULL && item->nodeRef.dev() == *device)) {
+			|| (device != NULL && item->nodeRef.dereference().dev() == *device)) {
 
 			if (device != NULL && be_roster->IsRunning(&item->entryRef))
 				continue;

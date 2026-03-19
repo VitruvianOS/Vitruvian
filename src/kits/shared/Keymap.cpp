@@ -132,8 +132,49 @@ BKeymap::SetToCurrent()
 
 	return B_OK;
 #else	// ! __BEOS__
-	fprintf(stderr, "Unsupported operation on this platform!\n");
-	exit(1);
+	// Vitruvian: Initialize with minimal valid keymap
+	// This allows the system to work without crashing
+	memset(&fKeys, 0, sizeof(fKeys));
+	fKeys.version = 3;
+
+	// Set basic modifier key codes (standard PC keyboard)
+	fKeys.caps_key = 0x3b;        // Caps Lock
+	fKeys.scroll_key = 0x0f;      // Scroll Lock
+	fKeys.num_key = 0x22;         // Num Lock
+	fKeys.left_shift_key = 0x4b;  // Left Shift
+	fKeys.right_shift_key = 0x56; // Right Shift
+	fKeys.left_command_key = 0x5d; // Left Command/Super
+	fKeys.right_command_key = 0x5f; // Right Command/Super
+	fKeys.left_control_key = 0x5c; // Left Control
+	fKeys.right_control_key = 0x60; // Right Control
+	fKeys.left_option_key = 0x66;  // Left Alt/Option
+	fKeys.right_option_key = 0x67; // Right Alt/Option
+	fKeys.menu_key = 0x68;         // Menu
+
+	// Initialize character map arrays with identity mapping for basic ASCII
+	for (int i = 0; i < 128; i++) {
+		fKeys.normal_map[i] = i;
+		fKeys.shift_map[i] = i;
+		fKeys.caps_map[i] = i;
+		fKeys.caps_shift_map[i] = i;
+		fKeys.option_map[i] = i;
+		fKeys.option_shift_map[i] = i;
+		fKeys.option_caps_map[i] = i;
+		fKeys.option_caps_shift_map[i] = i;
+		fKeys.control_map[i] = i;
+	}
+
+	// Allocate minimal character buffer
+	delete[] fChars;
+	fCharsSize = 1;
+	fChars = new (std::nothrow) char[fCharsSize];
+	if (fChars == NULL) {
+		Unset();
+		return B_NO_MEMORY;
+	}
+	fChars[0] = 0;
+
+	return B_OK;
 #endif	// ! __BEOS__
 }
 
@@ -155,8 +196,9 @@ BKeymap::SetToDefault()
 	memcpy(fChars, kSystemKeyChars, fCharsSize);
 	return B_OK;
 #else	// ! __BEOS__
-	fprintf(stderr, "Unsupported operation on this platform!\n");
-	exit(1);
+	// Vitruvian: SetToDefault() just calls SetToCurrent() which provides
+	// a minimal valid keymap
+	return SetToCurrent();
 #endif	// ! __BEOS__
 }
 

@@ -237,24 +237,35 @@ Shell::GetActiveProcessInfo(ActiveProcessInfo& _info) const
 	if (error != B_OK)
 		return false;
 
-	// fetch the name and the current directory from the info
-	const char* name;
-	int32 cwdDevice;
-	int64 cwdDirectory = 0;
-	if (info.FindString("name", &name) != B_OK
-		|| info.FindInt32("cwd device", &cwdDevice) != B_OK
-		|| info.FindInt64("cwd directory", &cwdDirectory) != B_OK) {
-		return false;
+	dev_t dev;
+	ino_t ino;
+	char refName[B_PATH_NAME_LENGTH];
+
+#if 0
+	if (info.FindRef("virtual:cwd directory", &dev, &ino, refName,
+			B_PATH_NAME_LENGTH) == B_OK) {
+		// convert the node ref into a path
+		BPath cwdPath;
+		entry_ref cwdRef(dev, ino, ".");
+		if (cwdPath.SetTo(&cwdRef) != B_OK)
+			return false;
+
+		_info.SetTo(process, refName, cwdPath.Path());
+	} else {
+#endif
+		// fallback to cwd path and name
+		const char* cwdName;
+		if (info.FindString("name", &cwdName) != B_OK)
+			return false;
+
+		const char* path;
+		if (info.FindString("cwd path", &path) != B_OK)
+			return false;
+
+		_info.SetTo(process, cwdName, path);
+#if 0
 	}
-
-	// convert the node ref into a path
-	entry_ref cwdRef(cwdDevice, cwdDirectory, ".");
-	BPath cwdPath;
-	if (cwdPath.SetTo(&cwdRef) != B_OK)
-		return false;
-
-	// set the result
-	_info.SetTo(process, name, cwdPath.Path());
+#endif
 
 	return true;
 }

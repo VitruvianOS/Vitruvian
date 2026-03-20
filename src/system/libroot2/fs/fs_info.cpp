@@ -57,11 +57,43 @@ LinuxVolume::FillVolumeInfo(struct mntent* mountEntry, fs_info* info)
 	info->free_blocks = (uint64) volume.f_bavail;
 	info->total_nodes = (uint64) volume.f_files;
 	info->free_nodes = (uint64) volume.f_favail;
-	
+
 	if (volume.f_flag & ST_RDONLY)
 		info->flags |= B_FS_IS_READONLY;
 	if (volume.f_flag & ST_NOSUID)
 		info->flags |= B_FS_HAS_MIME;
+
+	// Mark filesystems as persistent if they are backed by a real block device
+	// (device path starts with /dev/) or are a known persistent filesystem type.
+	// The boot volume is always considered persistent.
+	const char* fsType = mountEntry->mnt_type;
+	const char* fsName = mountEntry->mnt_fsname;
+	bool isPersistent = false;
+
+	// Filesystems backed by block devices are persistent
+	if (fsName[0] == '/' && strncmp(fsName, "/dev/", 5) == 0)
+		isPersistent = true;
+
+	// Known persistent filesystem types (even without /dev/ prefix, e.g. ZFS)
+	if (strcmp(fsType, "ext2") == 0 || strcmp(fsType, "ext3") == 0
+		|| strcmp(fsType, "ext4") == 0 || strcmp(fsType, "btrfs") == 0
+		|| strcmp(fsType, "xfs") == 0 || strcmp(fsType, "f2fs") == 0
+		|| strcmp(fsType, "ntfs") == 0 || strcmp(fsType, "ntfs3") == 0
+		|| strcmp(fsType, "vfat") == 0 || strcmp(fsType, "fat32") == 0
+		|| strcmp(fsType, "exfat") == 0 || strcmp(fsType, "hfs") == 0
+		|| strcmp(fsType, "hfsplus") == 0 || strcmp(fsType, "jfs") == 0
+		|| strcmp(fsType, "reiserfs") == 0 || strcmp(fsType, "zfs") == 0
+		|| strcmp(fsType, "ufs") == 0 || strcmp(fsType, "bcachefs") == 0
+		|| strcmp(fsType, "nilfs2") == 0) {
+		isPersistent = true;
+	}
+
+	// The boot volume (mounted at "/") is always persistent
+	if (strcmp(mountEntry->mnt_dir, "/") == 0)
+		isPersistent = true;
+
+	if (isPersistent)
+		info->flags |= B_FS_IS_PERSISTENT;
 
 	const char* devName = strrchr(mountEntry->mnt_fsname, '/');
 	if (devName)
@@ -196,7 +228,7 @@ fs_stat_dev(dev_t device, fs_info* info)
 {
 	CALLED();
 
-	if (device < 0 || info == NULL)
+	if (device == B_INVALID_DEV || info == NULL)
 		return B_BAD_VALUE;
 
 	struct mntent* entry = LinuxVolume::FindVolume(device);

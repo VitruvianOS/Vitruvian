@@ -19,17 +19,17 @@ The reference boot filesystems are XFS and SquashFS, both with full extended att
 
 ### Nexus
 
-Nexus is the Vitruvian kernel subsystem that bridges Linux with the BeOS/Haiku runtime. It is implemented as a set of custom Linux kernel modules that expose BeOS-compatible kernel APIs to userspace.
-
-Key responsibilities of Nexus include:
-
-- **Node monitoring** — Filesystem event notifications (entry created/removed/moved, attributes changed, stat changed), equivalent to the BeOS `node_monitor` API
-- **Device and volume tracking** — Monitors mount/unmount events and exposes volume information through the BeOS device API
-- **Messaging bridge** — Routes kernel events to the BeOS messaging infrastructure in userspace
+Nexus is the Vitruvian kernel subsystem that bridges Linux with the BeOS/Haiku runtime. It is implemented as a set of custom Linux kernel modules that expose BeOS-compatible kernel APIs to userspace through character devices and `ioctl` interfaces.
 
 Nexus is what makes it possible to run unmodified BeOS/Haiku application source code on top of a standard Linux kernel.
 
-See the [Nexus wiki page](https://vos-wiki.vitruvian.test/docs/reference/nexus/) for more detail.
+#### Modules
+
+- **nexus** (`/dev/nexus`) — BeOS IPC primitives: ports (bounded message queues), threads (per-thread send/receive channels), semaphores (counting with timeout), and areas (named shared memory with cross-team transfer)
+- **nexus_vref** (`/dev/nexus_vref`) — Virtual file references: stable, reference-counted kernel handles to Linux file descriptors, safe to pass over IPC and persist across renames
+- **node_monitor** — Filesystem event notifications built on Linux `fsnotify`, delivering `B_ENTRY_CREATED`/`B_ENTRY_REMOVED`/`B_ENTRY_MOVED`, `B_STAT_CHANGED`, `B_ATTR_CHANGED`, and mount/unmount events to BeOS-compatible userspace listeners
+
+Nexus is included as a submodule at `src/system/kernel/nexus` and distributed as the `nexus-dkms` package. See the [Nexus reference page](https://wiki.v-os.dev/docs/reference/nexus/) for more detail.
 
 ### Join the Community
 
@@ -46,16 +46,16 @@ V\OS testing images will be made available for download. The project is currentl
 
 ### Getting Started
 
-* [Building](https://vos-wiki.vitruvian.test/docs/getting-started/building/)
-* [Coding Guidelines](https://vos-wiki.vitruvian.test/docs/development/coding-guidelines/)
-* [Filesystem Layout](https://vos-wiki.vitruvian.test/docs/development/filesystem-layout/)
-* [Full Wiki](https://vos-wiki.vitruvian.test/)
+* [Building](https://wiki.v-os.dev/docs/getting-started/building/)
+* [Coding Guidelines](https://wiki.v-os.dev/docs/development/coding-guidelines/)
+* [Filesystem Layout](https://wiki.v-os.dev/docs/development/filesystem-layout/)
+* [Full Wiki](https://wiki.v-os.dev/)
 
 We welcome contributions from the community. Check the wiki for guidelines and open issues on GitHub.
 
 ### Donate
 
-If you'd like to support the project, see the [Donate](https://vos-wiki.vitruvian.test/docs/reference/donate/) page.
+If you'd like to support the project, see the [Donate](https://wiki.v-os.dev/docs/reference/donate/) page.
 
 ### License
 

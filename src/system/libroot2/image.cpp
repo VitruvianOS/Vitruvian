@@ -157,7 +157,7 @@ _get_next_image_info(team_id team, int32* cookie,
 
 	if (*cookie == 0 && team == getpid()) {
 		char path[B_PATH_NAME_LENGTH];
-		sprintf(path, "/proc/%d/exe", team);
+		snprintf(path, sizeof(path), "/proc/%d/exe", team);
 
 		ssize_t len = readlink(path, info->name, B_PATH_NAME_LENGTH - 1);
 		if (len < 0)

@@ -56,6 +56,10 @@ macro( Application name )
 			COMMAND echo "Building resource file ${RDEF_FILE}..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
+			COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}"
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
 		)
 		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
 		endforeach()
@@ -91,6 +95,10 @@ macro( Server name )
 			COMMAND echo "Building resource file ${RDEF_FILE}..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
+			COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}"
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
 		)
 		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
 		endforeach()
@@ -125,6 +133,10 @@ macro( AddOn name type )
 			COMMAND echo "Building resource file ${RDEF_FILE}..."
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
 			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "$<TARGET_FILE:${name}>" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "$<TARGET_FILE:${name}>" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
+			COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}"
+			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
 		)
 		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
 		endforeach()

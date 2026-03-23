@@ -107,6 +107,7 @@ set(BIN_DIRECTORY
 	rmattr
 	rmindex
 	rc
+	resattr
 	setmime
 	shutdown
 	system_time
@@ -115,3 +116,49 @@ set(BIN_DIRECTORY
 	xres
 )
 ImageInclude("/bin" ${BIN_DIRECTORY})
+
+
+# App attrs tarball: each Application/Server/AddOn macro creates a zero-byte
+# placeholder at apps_attrs_staging/${name} with BeOS xattrs written by
+# resattr -O. Here we arrange them into install paths and tar with --xattrs.
+# postinst extracts to a temp dir and applies attrs to the real installed binaries.
+set(_FLAT   "${CMAKE_BINARY_DIR}/apps_attrs_staging")
+set(_FINAL  "${CMAKE_BINARY_DIR}/apps_attrs_final")
+set(_TAR    "${CMAKE_BINARY_DIR}/apps_attrs.tar")
+
+set(_ARRANGE_CMDS
+    COMMAND ${CMAKE_COMMAND} -E rm -rf   "${_FINAL}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/apps"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/servers"
+)
+
+foreach(_app ${DESKBAR_APPLICATIONS})
+    list(APPEND _ARRANGE_CMDS
+        COMMAND cp -a "${_FLAT}/${_app}" "${_FINAL}/system/apps/${_app}"
+    )
+endforeach()
+
+foreach(_app ${CORE_APPLICATIONS})
+    list(APPEND _ARRANGE_CMDS
+        COMMAND cp -a "${_FLAT}/${_app}" "${_FINAL}/system/${_app}"
+    )
+endforeach()
+
+foreach(_server ${SYSTEM_SERVERS})
+    list(APPEND _ARRANGE_CMDS
+        COMMAND cp -a "${_FLAT}/${_server}" "${_FINAL}/system/servers/${_server}"
+    )
+endforeach()
+
+list(APPEND _ARRANGE_CMDS
+    COMMAND tar --xattrs -cf "${_TAR}" -C "${_FINAL}" .
+)
+
+add_custom_target(apps_attrs ALL
+    ${_ARRANGE_CMDS}
+    DEPENDS ${DESKBAR_APPLICATIONS} ${CORE_APPLICATIONS} ${SYSTEM_SERVERS}
+    COMMENT "Packaging app attrs"
+)
+
+install(FILES "${_TAR}" DESTINATION /usr/share/vos)

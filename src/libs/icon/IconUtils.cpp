@@ -666,7 +666,6 @@ BIconUtils::GetSystemIcon(const char* iconName, BBitmap* icon)
 	rawIcon = (const uint8*)resources.LoadResource(B_LARGE_ICON_TYPE,
 		iconName, &size);
 	if (rawIcon == NULL) {
-		delete icon;
 		return B_ENTRY_NOT_FOUND;
 	}
 

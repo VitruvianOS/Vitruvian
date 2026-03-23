@@ -41,6 +41,7 @@ All rights reserved.
 
 #include "Model.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
 
@@ -693,8 +694,7 @@ Model::FinishSettingUpType()
 
 		case kVolumeNode:
 		{
-			if (NodeRef()->ino() == fEntryRef.dir()
-				&& NodeRef()->dev() == fEntryRef.dev()) {
+			if (*NodeRef() == node_ref(fEntryRef.device, fEntryRef.directory)) {
 				// promote from volume to file system root
 				fBaseType = kRootNode;
 				fMimeType = B_ROOT_MIMETYPE;
@@ -923,10 +923,8 @@ Model::WatchVolumeAndMountPoint(uint32 , BHandler* target)
 
 	if (fEntryRef.name != NULL && fVolumeName != NULL
 		&& strcmp(fEntryRef.name, "boot") == 0) {
-		// watch mount point for boot volume
-		BString bootMountPoint("/");
-		bootMountPoint += fVolumeName;
-		BEntry mountPointEntry(bootMountPoint.String());
+		// watch mount point for boot volume (at "/" in Vitruvian)
+		BEntry mountPointEntry("/");
 		Model mountPointModel(&mountPointEntry);
 
 		TTracker::WatchNode(mountPointModel.NodeRef(),

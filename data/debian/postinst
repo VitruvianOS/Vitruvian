@@ -140,6 +140,30 @@ if [ -z "$_VOS_PROFILE_SOURCED" ] && [ -f /system/settings/etc/profile ]; then
 fi
 VITRUVIAN_PROFILE_EOF
 
+# MIME database — install with xattrs preserved
+# mime_db.tar is a tarball of the mime_db/ directory tree with BeOS xattrs
+# (user.beos.*) captured via tar --xattrs during the build. CPack cannot
+# preserve xattrs in install(DIRECTORY), so we extract here instead.
+mkdir -p /system/data
+tar --xattrs -xf /usr/share/vos/mime_db.tar -C /system/data/
+
+# App binary xattrs — restore BeOS attrs to installed binaries.
+# apps_attrs.tar contains zero-byte placeholder files at the install paths,
+# carrying user.beos.* xattrs written by resattr -O during build.
+# We extract to a temp dir and apply attrs to the real installed binaries.
+if [ -f /usr/share/vos/apps_attrs.tar ]; then
+    _tmp=$(mktemp -d)
+    tar --xattrs -xf /usr/share/vos/apps_attrs.tar -C "$_tmp"
+    find "$_tmp" -type f | while IFS= read -r _src; do
+        _dst="/${_src#$_tmp/}"
+        [ -f "$_dst" ] || continue
+        getfattr -d -m user.beos -e hex "$_src" 2>/dev/null \
+            | sed "s|${_src}|${_dst}|g" \
+            | setfattr --restore - 2>/dev/null || true
+    done
+    rm -rf "$_tmp"
+fi
+
 # Enable system services
 
 systemctl enable registrar.service mount_server app_server.service deskbar.service tracker.service

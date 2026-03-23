@@ -1613,7 +1613,7 @@ FindPanel::MessageReceived(BMessage* message)
 			if (message->FindPointer("source", (void**)&invokedItem) != B_OK)
 				return;
 
-			if (message->FindInt32("device", &dev) != B_OK)
+			if (message->FindUInt64("device", (uint64*)&dev) != B_OK)
 				break;
 
 			BMenu* menu = invokedItem->Menu();
@@ -2470,7 +2470,7 @@ FindPanel::AddVolumes()
 	// ToDo: add calls to this to rebuild the menu when a volume gets mounted
 
 	BMessage* message = new BMessage(kVolumeItem);
-	message->AddInt32("device", -1);
+	message->AddUInt64("device", (uint64)-1);
 	fVolMenu->AddItem(new BMenuItem(B_TRANSLATE("All disks"), message));
 	fVolMenu->AddSeparatorItem();
 	PopUpMenuSetTitle(fVolMenu, B_TRANSLATE("All disks"));
@@ -2495,7 +2495,7 @@ FindPanel::AddVolumes()
 				continue;
 
 			message = new BMessage(kVolumeItem);
-			message->AddInt32("device", volume.Device());
+			message->AddUInt64("device", (uint64)volume.Device());
 			fVolMenu->AddItem(new ModelMenuItem(&model, model.Name(), message));
 			fVolumeItemsCount++;
 		}

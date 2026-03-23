@@ -1827,16 +1827,13 @@ BFilePanelPoseView::AdaptToVolumeChange(BMessage* message)
 		else
 			monitorMsg.AddInt32("opcode", B_ENTRY_REMOVED);
 
-		#ifdef __VOS_OLD_NODE_MONITOR__
-		monitorMsg.AddUInt64("device", model.NodeRef()->device);
-		monitorMsg.AddUInt64("node", model.NodeRef()->node);
-		monitorMsg.AddUInt64("directory", model.EntryRef()->directory);
+		monitorMsg.AddNodeRef("virtual:node", model.NodeRef());
+		monitorMsg.AddRef("virtual:directory", model.EntryRef());
 		monitorMsg.AddString("name", model.EntryRef()->name);
 
 		TrackerSettings().SetShowDisksIcon(showDisksIcon);
 
 		Window()->PostMessage(&monitorMsg, this);
-		#endif
 	}
 
 	ToggleDisksVolumes();

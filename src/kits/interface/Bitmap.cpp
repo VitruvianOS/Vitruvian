@@ -255,7 +255,8 @@ BBitmap::BBitmap(const BBitmap* source, bool acceptsViews, bool needsContiguous)
 			| (needsContiguous ? B_BITMAP_IS_CONTIGUOUS : 0);
 		_InitObject(source->Bounds(), source->ColorSpace(), flags,
 			source->BytesPerRow(), B_MAIN_SCREEN_ID);
-		if (InitCheck() == B_OK) {
+		if (InitCheck() == B_OK && Bits() != NULL
+				&& source->Bits() != NULL) {
 			memcpy(Bits(), source->Bits(), min_c(BitsLength(),
 				source->BitsLength()));
 		}
@@ -1257,6 +1258,13 @@ BBitmap::_CleanUp()
 	if ((fFlags & B_BITMAP_NO_SERVER_LINK) != 0) {
 		free(fBasePointer);
 	} else if (fServerToken != -1) {
+		// During shutdown, app_server connection may be gone. Check be_app
+		// to detect shutdown and skip cleanup if needed.
+		if (be_app == NULL) {
+			// In shutdown - skip server communication, just leak the server-side bitmap.
+			// The app_server will clean up when the team exits anyway.
+			return;
+		}
 		BPrivate::AppServerLink link;
 		// AS_DELETE_BITMAP:
 		// Attached Data:

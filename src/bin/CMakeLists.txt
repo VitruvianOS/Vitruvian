@@ -20,6 +20,7 @@ Application(mkindex SOURCES mkindex.cpp)
 Application(mvattr SOURCES mvattr.cpp)
 Application(query SOURCES query.cpp)
 Application(reindex SOURCES reindex.cpp)
+Application(resattr SOURCES resattr.cpp)
 Application(rmattr SOURCES rmattr.cpp)
 Application(rmindex SOURCES rmindex.cpp)
 Application(setmime SOURCES setmime.cpp)
@@ -33,6 +34,7 @@ else()
 
 add_subdirectory(rc)
 
+BuildModeApplication(resattr SOURCES resattr.cpp)
 BuildModeApplication(xres SOURCES xres.cpp)
 
 endif()

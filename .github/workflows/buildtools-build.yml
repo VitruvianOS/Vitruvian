@@ -53,7 +53,7 @@ jobs:
       - name: Configure project
         run: |
           cd generated.x86
-          BUILD_TYPE=Workflow ../configure
+          ../configure --build-type=Workflow
 
       - name: Archive intermediate state
         uses: actions/upload-artifact@v4

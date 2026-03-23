@@ -46,7 +46,7 @@ jobs:
         run: cd generated.x86 && export TERM=xterm-256color && ../build/scripts/setupenv.sh
 
       - name: Configure
-        run: cd generated.x86 && BUILD_TYPE=Workflow ../configure
+        run: cd generated.x86 && ../configure --build-type=Workflow --chroot-build
 
       - name: Ninja build
         run: cd generated.x86 && ninja
@@ -63,7 +63,7 @@ jobs:
       # Generate checksums for ISO
       - name: Generate ISO checksum
         run: |
-          cd generated.x86/LIVE_BOOT
+          cd generated.x86/image_tree
           for iso in *.iso; do
             sha256sum "$iso" > "$iso.sha256"
           done
@@ -74,8 +74,8 @@ jobs:
         with:
           name: Vitruvian-ISO
           path: |
-            generated.x86/LIVE_BOOT/*.iso
-            generated.x86/LIVE_BOOT/*.sha256
+            generated.x86/image_tree/*.iso
+            generated.x86/image_tree/*.sha256
 
       # Generate checksums for DEB packages
       - name: Generate DEB checksums

@@ -268,11 +268,17 @@ BHandler::MessageReceived(BMessage* message)
 		// we need to apply the next handler's filters here, too
 		BHandler* target = Looper()->_HandlerFilter(message, fNextHandler);
 		if (target != NULL && target != this) {
-			// TODO: we also need to make sure that "target" is not before
-			//	us in the handler chain - at least in case it wasn't before
-			//	the handler actually targeted with this message - this could
-			//	get ugly, though.
-			target->MessageReceived(message);
+			// Verify target appears after this in the chain to prevent
+			// backwards dispatching and potential infinite recursion (N28).
+			bool targetIsForward = false;
+			for (BHandler* h = fNextHandler; h != NULL; h = h->NextHandler()) {
+				if (h == target) {
+					targetIsForward = true;
+					break;
+				}
+			}
+			if (targetIsForward)
+				target->MessageReceived(message);
 		}
 	} else if (message->what != B_MESSAGE_NOT_UNDERSTOOD
 		&& (message->WasDropped() || message->HasSpecifiers())) {

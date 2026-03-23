@@ -16,6 +16,7 @@ target_sources(root PRIVATE
 	real_time_clock.c
 	shutdown.cpp
 	system_info.c
+	system_revision.c
 
 	SystemWatcher.cpp
 	KMessage.cpp
@@ -39,7 +40,6 @@ target_sources(root PRIVATE
 	compat/scheduler.c
 	compat/signal.cpp
 	compat/system_info.cpp
-	compat/system_revision.c
 	compat/system_ioctl.c
 	compat/time.cpp
 	compat/tls.cpp

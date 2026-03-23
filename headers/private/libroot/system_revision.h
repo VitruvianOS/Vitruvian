@@ -16,11 +16,10 @@ extern "C" {
 #endif
 
 
-/** returns the system revision */
-#ifdef _KERNEL_MODE
-const char* get_haiku_revision(void);
-#else
-const char* __get_haiku_revision(void);
+/** returns the VOS (Vitruvian OS) revision tag (e.g. "rev-42").
+    Falls back to the Linux kernel release string if no tag was baked in. */
+#ifndef _KERNEL_MODE
+const char* __get_vos_revision(void);
 #endif
 
 

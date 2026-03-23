@@ -479,7 +479,11 @@ PaletteConverter::InitializeDefault(bool useServer)
 /*static*/ void
 PaletteConverter::_InitializeDefaultAppServer()
 {
-	sPaletteConverter.SetTo(system_colors());
+	const color_map* colors = system_colors();
+	if (colors != NULL)
+		sPaletteConverter.SetTo(colors);
+	else
+		sPaletteConverter.SetTo(kSystemPalette);
 }
 
 
@@ -547,8 +551,8 @@ void
 WriteGray1(uint8 **dest, uint8 *data, int32 index)
 {
 	int32 shift = 7 - (index % 8);
-	**dest &= ~(0x01 << shift);
-	**dest |= (data[2] * 308 + data[1] * 600 + data[0] * 116) >> (17 - shift);
+	uint8 brightness = (data[2] * 308 + data[1] * 600 + data[0] * 116) >> 17;
+	**dest = (**dest & ~(0x01 << shift)) | (brightness << shift);
 	if (shift == 0)
 		(*dest)++;
 }
@@ -558,9 +562,8 @@ uint32
 ReadGray1(const uint8 **source, int32 index)
 {
 	int32 shift = 7 - (index % 8);
-	// In B_GRAY1, a set bit means black (highcolor), a clear bit means white
-	// (low/view color). So we map them to 00 and 0xFF, respectively.
-	uint32 result = ((**source >> shift) & 0x01) ? 0x00 : 0xFF;
+	// In B_GRAY1, a set bit means white (0xFF), a clear bit means black (0x00).
+	uint32 result = ((**source >> shift) & 0x01) ? 0xFF : 0x00;
 	if (shift == 0)
 		(*source)++;
 	return result;
@@ -1062,7 +1065,7 @@ ConvertBits(const srcByte *srcBits, void *dstBits, int32 srcBitsLength,
 			break;
 
 		case B_CMAP8:
-			PaletteConverter::InitializeDefault();
+			PaletteConverter::InitializeDefault(false);
 			ConvertBits(srcBits, (uint8 *)dstBits, srcBitsLength,
 				dstBitsLength, redShift - 32, greenShift - 24, blueShift - 16,
 				alphaShift - 8, alphaBits, 0xff000000, 0x00ff0000, 0x0000ff00,
@@ -1221,7 +1224,7 @@ ConvertBits(const void *srcBits, void *dstBits, int32 srcBitsLength,
 				height, false, ReadGray1);
 
 		case B_CMAP8:
-			PaletteConverter::InitializeDefault();
+			PaletteConverter::InitializeDefault(false);
 			return ConvertBits((const uint8 *)srcBits, dstBits, srcBitsLength,
 				dstBitsLength, 24, 16, 8, 32, 8, srcBytesPerRow,
 				dstBytesPerRow, 8, srcColorSpace, dstColorSpace, srcOffset,

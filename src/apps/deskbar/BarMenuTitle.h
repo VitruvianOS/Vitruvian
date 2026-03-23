@@ -48,8 +48,8 @@ class TBarView;
 
 class TBarMenuTitle : public BMenuItem {
 public:
-	TBarMenuTitle(float width, float height, const BBitmap* icon,
-		BMenu* menu, TBarView* barView = NULL);
+	TBarMenuTitle(float width, float height, BMenu* menu,
+		TBarView* barView = NULL);
 	virtual ~TBarMenuTitle();
 
 	void SetContentSize(float width, float height);
@@ -64,7 +64,6 @@ protected:
 private:
 	float fWidth;
 	float fHeight;
-	const BBitmap* fIcon;
 	BMenu* fMenu;
 	TBarView* fBarView;
 	status_t fInitStatus;

@@ -36,29 +36,32 @@ All rights reserved.
 
 #include "BarMenuTitle.h"
 
-#include <Bitmap.h>
 #include <ControlLook.h>
 #include <Debug.h>
-#include <Region.h>
+#include <Font.h>
+
+#include <Bitmap.h>
+#include <IconUtils.h>
 
 #include "BarApp.h"
 #include "BarView.h"
 #include "BarWindow.h"
 #include "DeskbarMenu.h"
+#include "ResourceSet.h"
+#include "icons.h"
 
 
-TBarMenuTitle::TBarMenuTitle(float width, float height, const BBitmap* icon,
-	BMenu* menu, TBarView* barView)
+TBarMenuTitle::TBarMenuTitle(float width, float height, BMenu* menu,
+	TBarView* barView)
 	:
 	BMenuItem(menu, new BMessage(B_REFS_RECEIVED)),
 	fWidth(width),
 	fHeight(height),
-	fIcon(icon),
 	fMenu(menu),
 	fBarView(barView),
 	fInitStatus(B_NO_INIT)
 {
-	if (fIcon == NULL || fMenu == NULL || fBarView == NULL)
+	if (fMenu == NULL || fBarView == NULL)
 		fInitStatus = B_BAD_VALUE;
 	else
 		fInitStatus = B_OK;
@@ -119,38 +122,74 @@ TBarMenuTitle::Draw()
 void
 TBarMenuTitle::DrawContent()
 {
-	if (fInitStatus != B_OK)
-		return;
-
 	BMenu* menu = Menu();
 	if (menu == NULL)
 		return;
 
-	menu->SetDrawingMode(B_OP_ALPHA);
-
 	const BRect frame(Frame());
-	BRect iconRect(fIcon->Bounds().OffsetToCopy(frame.LeftTop()));
 
-	float widthOffset = rintf((frame.Width() - iconRect.Width()) / 2);
-	float heightOffset = rintf((frame.Height() - iconRect.Height()) / 2);
+	if (fBarView != NULL && fBarView->MiniState()) {
+		// Mini mode: deskbar menu shows atom icon, team menu shows team icon
+		bool isDeskbarMenu = dynamic_cast<TDeskbarMenu*>(fMenu) != NULL;
+		int32 iconID = isDeskbarMenu ? R_AtomLogoBitmap : R_TeamIcon;
 
-	// cut-off the leaf
-	bool isLeafMenu = dynamic_cast<TDeskbarMenu*>(fMenu) != NULL;
-	if (isLeafMenu)
-		iconRect.OffsetBy(widthOffset, frame.Height() - iconRect.Height() + 2);
-	else
-		iconRect.OffsetBy(widthOffset, heightOffset);
+		size_t iconSize = 0;
+		const uint8* iconData = (const uint8*)AppResSet()->FindResource(
+			B_VECTOR_ICON_TYPE, iconID, &iconSize);
 
-	// clip to menu item frame
-	if (iconRect.Width() > frame.Width()) {
-		float diff = iconRect.Width() - frame.Width();
-		BRect mask(iconRect.InsetByCopy(floorf(diff / 2), 0));
-		BRegion clipping(mask);
-		menu->ConstrainClippingRegion(&clipping);
+		if (iconData != NULL && iconSize > 0) {
+			float side = floorf(min_c(frame.Width(), frame.Height())) - 4;
+			if (side < 8) side = 8;
+			BRect iconRect(0, 0, side - 1, side - 1);
+			BBitmap* icon = new(std::nothrow) BBitmap(iconRect, B_RGBA32);
+			if (icon != NULL && icon->InitCheck() == B_OK
+				&& BIconUtils::GetVectorIcon(iconData, iconSize, icon) == B_OK) {
+				float x = frame.left
+					+ rintf((frame.Width() - side) / 2);
+				float y = frame.top
+					+ rintf((frame.Height() - side) / 2);
+				menu->SetDrawingMode(B_OP_ALPHA);
+				menu->DrawBitmap(icon, BPoint(x, y));
+				menu->SetDrawingMode(B_OP_COPY);
+			}
+			delete icon;
+		}
+		return;
 	}
 
-	menu->DrawBitmapAsync(fIcon, iconRect);
-	menu->ConstrainClippingRegion(NULL);
+	// Expanded/full mode: draw "VitruvianOS" in brand colors
+	BFont font(be_bold_font);
+	float fontSize = min_c(be_bold_font->Size(),
+		floorf(frame.Height() * 0.62f));
+	font.SetSize(fontSize);
+	menu->SetFont(&font);
+
+	font_height fh;
+	font.GetHeight(&fh);
+
+	float vWidth = font.StringWidth("V");
+	float midWidth = font.StringWidth("itruvian");
+	float osWidth = font.StringWidth("OS");
+	float totalWidth = vWidth + midWidth + osWidth;
+
+	float x = frame.left + rintf((frame.Width() - totalWidth) / 2);
+	float y = frame.top + rintf((frame.Height() + fh.ascent - fh.descent) / 2);
+
+	menu->SetDrawingMode(B_OP_OVER);
+
+	// "V" in red
+	menu->SetHighColor(210, 0, 0);
+	menu->DrawString("V", BPoint(x, y));
+	x += vWidth;
+
+	// "itruvian" in black
+	menu->SetHighColor(0, 0, 0);
+	menu->DrawString("itruvian", BPoint(x, y));
+	x += midWidth;
+
+	// "OS" in blue
+	menu->SetHighColor(0, 80, 200);
+	menu->DrawString("OS", BPoint(x, y));
 }
 
 

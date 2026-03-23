@@ -118,19 +118,44 @@ TBarWindow::MenusBeginning()
 	entry_ref ref;
 	BEntry entry;
 
-	if (GetDeskbarSettingsDirectory(path) == B_OK
-		&& path.Append(kDeskbarMenuEntriesFileName) == B_OK
-		&& entry.SetTo(path.Path(), true) == B_OK
-		&& entry.Exists()
-		&& entry.GetRef(&ref) == B_OK) {
-		sDeskbarMenu->SetNavDir(&ref);
-	} else if (GetDeskbarDataDirectory(path) == B_OK
-		&& path.Append(kDeskbarMenuEntriesFileName) == B_OK
-		&& entry.SetTo(path.Path(), true) == B_OK
-		&& entry.Exists()
-		&& entry.GetRef(&ref) == B_OK) {
-		sDeskbarMenu->SetNavDir(&ref);
-	} else {
+
+	bool found = false;
+
+	// Try settings directory first
+	status_t settingsErr = GetDeskbarSettingsDirectory(path);
+	if (settingsErr == B_OK) {
+		status_t appendErr = path.Append(kDeskbarMenuEntriesFileName);
+		if (appendErr == B_OK) {
+			status_t setErr = entry.SetTo(path.Path(), true);
+			if (setErr == B_OK && entry.Exists()) {
+				status_t refErr = entry.GetRef(&ref);
+				if (refErr == B_OK) {
+					sDeskbarMenu->SetNavDir(&ref);
+					found = true;
+				}
+			}
+		}
+	}
+
+	if (!found) {
+		// Try data directory
+		status_t dataErr = GetDeskbarDataDirectory(path);
+		if (dataErr == B_OK) {
+			status_t appendErr = path.Append(kDeskbarMenuEntriesFileName);
+			if (appendErr == B_OK) {
+				status_t setErr = entry.SetTo(path.Path(), true);
+				if (setErr == B_OK && entry.Exists()) {
+					status_t refErr = entry.GetRef(&ref);
+					if (refErr == B_OK) {
+						sDeskbarMenu->SetNavDir(&ref);
+						found = true;
+					}
+				}
+			}
+		}
+	}
+
+	if (!found) {
 		//	this really should never happen
 		TRESPASS();
 		return;

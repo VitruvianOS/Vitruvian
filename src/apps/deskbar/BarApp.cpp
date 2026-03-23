@@ -196,7 +196,7 @@ TBarApp::QuitRequested()
 void
 TBarApp::SaveSettings()
 {
-	if (fSettingsFile->InitCheck() == B_OK) {
+	if (fSettingsFile != NULL && fSettingsFile->InitCheck() == B_OK) {
 		fSettingsFile->Seek(0, SEEK_SET);
 		BMessage prefs;
 		prefs.AddBool("vertical", fSettings.vertical);
@@ -228,7 +228,7 @@ TBarApp::SaveSettings()
 		prefs.Flatten(fSettingsFile);
 	}
 
-	if (fClockSettingsFile->InitCheck() == B_OK) {
+	if (fClockSettingsFile != NULL && fClockSettingsFile->InitCheck() == B_OK) {
 		fClockSettingsFile->Seek(0, SEEK_SET);
 		BMessage prefs;
 		prefs.AddBool("showSeconds", fClockSettings.showSeconds);
@@ -1053,6 +1053,11 @@ TBarApp::_CacheTeamIcon(BarTeamInfo* barInfo, int32 size)
 	// icon index based on icon size
 	const int32 index = (size - kMinimumIconSize) / kIconSizeInterval;
 
+	// Bounds check to prevent array overflow
+	if (index < 0 || index >= kIconCacheCount) {
+		return B_BAD_VALUE;
+	}
+
 	// first look in the icon cache
 	barInfo->icon = barInfo->iconCache[index];
 	if (barInfo->icon != NULL)
@@ -1182,7 +1187,7 @@ BarTeamInfo::BarTeamInfo(const BarTeamInfo &info)
 	flags(info.flags),
 	sig(strdup(info.sig)),
 	name(strdup(info.name)),
-	icon(new BBitmap(*info.icon))
+	icon(info.icon != NULL && info.icon->IsValid() ? new BBitmap(*info.icon) : NULL)
 {
 	_Init();
 }
@@ -1221,7 +1226,7 @@ WindowIconCache::WindowIconCache(int32 id, BBitmap* icon)
 WindowIconCache::WindowIconCache(const WindowIconCache &cache)
 	:
 	id(cache.id),
-	icon(new BBitmap(*cache.icon))
+	icon(cache.icon != NULL && cache.icon->IsValid() ? new BBitmap(*cache.icon) : NULL)
 {
 	_Init();
 }

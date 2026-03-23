@@ -117,24 +117,7 @@ TBarMenuBar::TBarMenuBar(BRect frame, const char* name, TBarView* barView)
 	TDeskbarMenu* beMenu = new TDeskbarMenu(barView);
 	TBarWindow::SetDeskbarMenu(beMenu);
 
-	BBitmap* icon = NULL;
-	size_t dataSize;
-	const void* data = AppResSet()->FindResource(B_VECTOR_ICON_TYPE,
-		R_LeafLogoBitmap, &dataSize);
-	if (data != NULL) {
-		// seems valid, scale bitmap according to be_bold_font size
-		float width = std::max(63.f, ceilf(63 * be_bold_font->Size() / 12.f));
-		float height = std::max(22.f, ceilf(22 * be_bold_font->Size() / 12.f));
-		icon = new BBitmap(BRect(0, 0, width - 1, height - 1), B_RGBA32);
-		if (icon->InitCheck() != B_OK
-			|| BIconUtils::GetVectorIcon((const uint8*)data, dataSize, icon)
-					!= B_OK) {
-			delete icon;
-			icon = NULL;
-		}
-	}
-
-	fDeskbarMenuItem = new TBarMenuTitle(0.0f, 0.0f, icon, beMenu, fBarView);
+	fDeskbarMenuItem = new TBarMenuTitle(0.0f, 0.0f, beMenu, fBarView);
 	AddItem(fDeskbarMenuItem);
 }
 
@@ -177,7 +160,7 @@ TBarMenuBar::AddTeamMenu()
 	BRect frame(Frame());
 
 	delete fAppListMenuItem;
-	fAppListMenuItem = new TBarMenuTitle(0.0f, 0.0f, FetchTeamIcon(),
+	fAppListMenuItem = new TBarMenuTitle(0.0f, 0.0f,
 		new TTeamMenu(fBarView), fBarView);
 
 	bool added = AddItem(fAppListMenuItem, fBarView->Left() ? 0 : 1);

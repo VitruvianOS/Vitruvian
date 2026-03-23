@@ -2122,7 +2122,14 @@ BMenu::_Track(int* action, long start)
 		} else if ((item = _HitTestItems(location, B_ORIGIN)) != NULL) {
 			_UpdateStateOpenSelect(item, location, navAreaRectAbove,
 				navAreaRectBelow, selectedTime, navigationAreaTime);
+#ifdef __VOS__
+			// Only set releasedOnce if the button is actually released,
+			// otherwise the menu auto-selects the first item on right-click.
+			if (buttons == 0)
+				releasedOnce = true;
+#else
 			releasedOnce = true;
+#endif
 		} else if (_OverSuper(screenLocation)
 			&& fSuper->fState != MENU_STATE_KEY_TO_SUBMENU) {
 			fState = MENU_STATE_TRACKING;

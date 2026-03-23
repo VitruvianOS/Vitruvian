@@ -393,7 +393,7 @@ BPrivateScreen::ReadBitmap(BBitmap* bitmap, bool drawCursor, BRect* bounds)
 rgb_color
 BPrivateScreen::DesktopColor(uint32 workspace)
 {
-	rgb_color color = { 51, 102, 152, 255 };
+	rgb_color color = { 78, 125, 172, 255 };
 	BPrivate::AppServerLink link;
 
 	link.StartMessage(AS_GET_DESKTOP_COLOR);

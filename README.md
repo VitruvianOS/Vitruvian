@@ -19,17 +19,9 @@ The reference boot filesystems are XFS and SquashFS, both with full extended att
 
 ### Nexus
 
-Nexus is the Vitruvian kernel subsystem that bridges Linux with the BeOS/Haiku runtime. It is implemented as a set of custom Linux kernel modules that expose BeOS-compatible kernel APIs to userspace through character devices and `ioctl` interfaces.
+Nexus is the Vitruvian kernel subsystem that bridges Linux with the BeOS/Haiku runtime, implemented as a set of custom Linux kernel modules. It is included as a submodule at `src/system/kernel/nexus` and distributed as the `nexus-dkms` package.
 
-Nexus is what makes it possible to run unmodified BeOS/Haiku application source code on top of a standard Linux kernel.
-
-#### Modules
-
-- **nexus** (`/dev/nexus`) — BeOS IPC primitives: ports (bounded message queues), threads (per-thread send/receive channels), semaphores (counting with timeout), and areas (named shared memory with cross-team transfer)
-- **nexus_vref** (`/dev/nexus_vref`) — Virtual file references: stable, reference-counted kernel handles to Linux file descriptors, safe to pass over IPC and persist across renames
-- **node_monitor** — Filesystem event notifications built on Linux `fsnotify`, delivering `B_ENTRY_CREATED`/`B_ENTRY_REMOVED`/`B_ENTRY_MOVED`, `B_STAT_CHANGED`, `B_ATTR_CHANGED`, and mount/unmount events to BeOS-compatible userspace listeners
-
-Nexus is included as a submodule at `src/system/kernel/nexus` and distributed as the `nexus-dkms` package. See the [Nexus reference page](https://wiki.v-os.dev/docs/reference/nexus/) for more detail.
+See the [Nexus repository](https://github.com/VitruvianOS/Nexus) for more detail.
 
 ### Join the Community
 

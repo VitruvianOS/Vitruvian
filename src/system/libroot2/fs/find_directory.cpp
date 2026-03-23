@@ -18,6 +18,7 @@
 
 #include <directories.h>
 #include <FindDirectory.h>
+#include <StorageDefs.h>
 #include <fs_info.h>
 #include <StackOrHeapArray.h>
 
@@ -198,14 +199,14 @@ create_path(const char *path, mode_t mode)
 	int i = 0;
 
 	if (path == NULL || ((pathLength = strlen(path)) > B_PATH_NAME_LENGTH))
-		return EINVAL;
+		return -EINVAL;
 
 	BStackOrHeapArray<char, 128> buffer(pathLength + 1);
 	if (!buffer.IsValid())
 		return B_NO_MEMORY;
 
 	while (++i < pathLength) {
-		char *slash = strchr(&path[i], '/');
+		const char *slash = strchr(&path[i], '/');
 		struct stat st;
 
 		if (slash == NULL)
@@ -272,7 +273,7 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 	char *returnedPath, int32 _pathLength)
 {
 	if (_pathLength <= 0)
-		return E2BIG;
+		return -E2BIG;
 	size_t pathLength = _pathLength;
 
 	status_t err = B_OK;
@@ -289,17 +290,23 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 
 	memset(buffer, 0, pathLength);
 
-	char* path = "/";
+	const char* path = "/";
 
 	/* fiddle with non-boot volume for items that need it */
 	switch (which) {
 		case B_DESKTOP_DIRECTORY:
 		case B_TRASH_DIRECTORY:
+		{
 			bootDevice = dev_for_path(path);
-			if (device <= 0)
+			if (device == B_INVALID_DEV)
 				device = bootDevice;
-			if (fs_stat_dev(device, &fsInfo) != B_OK)
-				return ENODEV;
+			// Vitruvian: For Desktop/Trash on boot volume, don't fail if fs_stat_dev fails
+			// We can still construct the path from $h/Desktop even without device info
+			status_t stat_result = fs_stat_dev(device, &fsInfo);
+			if (stat_result != B_OK) {
+				if (device != bootDevice)
+					return -ENODEV;
+			}
 			if (device != bootDevice) {
 #ifdef _KERNEL_MODE
 				err = _user_entry_ref_to_path(device, fsInfo.root, /*"."*/
@@ -316,6 +323,7 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 				strlcat(buffer, path, pathLength);
 			}
 			break;
+		}
 		case B_PACKAGE_LINKS_DIRECTORY:
 			// this is a directory living in rootfs
 			break;
@@ -455,31 +463,35 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 			break;
 
 		default:
-			return EINVAL;
+			return -EINVAL;
 	}
 
 	if (templatePath == NULL)
-		return ENOENT;
+		return -ENOENT;
 
 	PathBuffer pathBuffer(buffer, pathLength, strlen(buffer));
 
 	// resolve "$h" placeholder to the user's home directory
 	if (!strncmp(templatePath, "$h", 2)) {
-		if (bootDevice > -1 && device != bootDevice) {
+		if (bootDevice != B_INVALID_DEV && device != bootDevice) {
 			pathBuffer.Append("/home");
 		} else {
 			size_t length = get_user_home_path(buffer, pathLength);
 			if (length >= pathLength)
-				return E2BIG;
+				return -E2BIG;
 			pathBuffer.SetTo(buffer, pathLength, length);
 		}
 		templatePath += 2;
-	} else if (templatePath[0] != '\0')
-		pathBuffer.Append('/');
+	} else if (templatePath[0] != '\0') {
+		// Don't append slash if buffer already ends with one (e.g., root "/")
+		size_t len = pathBuffer.Length();
+		if (len == 0 || buffer[len - 1] != '/')
+			pathBuffer.Append('/');
+	}
 
 	// resolve "$a" placeholder to the architecture subdirectory, if not
 	// primary
-	if (char* dollar = strchr(templatePath, '$')) {
+	if (const char* dollar = strchr(templatePath, '$')) {
 		if (dollar[1] == 'a') {
 			pathBuffer.Append(templatePath, dollar - templatePath);
 #ifndef __VOS__
@@ -500,7 +512,7 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 	pathBuffer.Append(templatePath);
 
 	if (pathBuffer.Length() >= pathLength)
-		return E2BIG;
+		return -E2BIG;
 
 	if (createIt && stat(buffer, &st) < 0) {
 		err = create_path(buffer, 0755);

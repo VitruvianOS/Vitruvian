@@ -139,7 +139,7 @@ BBufferIO::WriteAt(off_t pos, const void* buffer, size_t size)
 	memcpy(fBuffer + pos - fBufferStart, buffer, size);
 
 	fBufferIsDirty = true;
-	fBufferUsed = max_c((size + pos), fBufferUsed);
+	fBufferUsed = max_c((off_t)(pos - fBufferStart + size), fBufferUsed);
 
 	return size;
 }

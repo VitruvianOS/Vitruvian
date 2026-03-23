@@ -453,6 +453,7 @@ AutoMounter::MessageReceived(BMessage* message)
 			break;
 
 		case B_DEVICE_UPDATE:
+		{
 			int32 event;
 			if (message->FindInt32("event", &event) != B_OK
 				|| (event != B_DEVICE_MEDIA_CHANGED
@@ -460,11 +461,12 @@ AutoMounter::MessageReceived(BMessage* message)
 				break;
 
 			partition_id deviceID;
-			if (message->FindInt32("id", &deviceID) != B_OK)
+			if (message->FindUInt64("id", (uint64*)&deviceID) != B_OK)
 				break;
 
 			_MountVolumes(kNoVolumes, fRemovableMode, false, deviceID);
 			break;
+		}
 
 #if 0
 		case B_NODE_MONITOR:
@@ -478,14 +480,6 @@ AutoMounter::MessageReceived(BMessage* message)
 				case B_ENTRY_MOVED: {
 					WRITELOG(("*** Received Mount Point Renamed Notification"));
 
-					const char *newName;
-					if (message->FindString("name", &newName) != B_OK) {
-						WRITELOG(("ERROR: Couldn't find name field in update "
-							"message"));
-						PRINT_OBJECT(*message);
-						break ;
-					}
-
 					//
 					// When the node monitor reports a move, it gives the
 					// parent device and inode that moved.  The problem is
@@ -498,16 +492,9 @@ AutoMounter::MessageReceived(BMessage* message)
 					// *new* name and directory, and then stat()ing that to
 					// find the device.
 					//
-					dev_t parentDevice;
-					if (message->FindInt32("device", &parentDevice) != B_OK) {
-						WRITELOG(("ERROR: Couldn't find 'device' field in "
-							"update message"));
-						PRINT_OBJECT(*message);
-						break;
-					}
 
-					ino_t toDirectory;
-					if (message->FindInt64("to directory", &toDirectory)
+					entry_ref toDirectory;
+					if (message->FindRef("virtual:to directory", &toDirectory)
 						!= B_OK) {
 						WRITELOG(("ERROR: Couldn't find 'to directory' field "
 							"in update message"));
@@ -515,7 +502,7 @@ AutoMounter::MessageReceived(BMessage* message)
 						break;
 					}
 
-					entry_ref root_entry(parentDevice, toDirectory, newName);
+					entry_ref root_entry(toDirectory);
 
 					BNode entryNode(&root_entry);
 					if (entryNode.InitCheck() != B_OK) {
@@ -609,8 +596,8 @@ AutoMounter::_MountVolumes(mount_mode normal, mount_mode removable,
 void
 AutoMounter::_MountVolume(const BMessage* message)
 {
-	int32 id;
-	if (message->FindInt32("id", &id) != B_OK)
+	partition_id id;
+	if (message->FindUInt64("id", (uint64*)&id) != B_OK)
 		return;
 
 	BDiskDeviceRoster roster;
@@ -762,8 +749,8 @@ AutoMounter::_UnmountAndEjectVolume(BPartition* partition, BPath& mountPoint,
 void
 AutoMounter::_UnmountAndEjectVolume(BMessage* message)
 {
-	int32 id;
-	if (message->FindInt32("id", &id) == B_OK) {
+	partition_id id;
+	if (message->FindUInt64("id", (uint64*)&id) == B_OK) {
 		BDiskDeviceRoster roster;
 		BPartition *partition;
 		BDiskDevice device;
@@ -776,9 +763,10 @@ AutoMounter::_UnmountAndEjectVolume(BMessage* message)
 	} else {
 		// see if we got a dev_t
 
-		dev_t device;
-		if (message->FindInt32("device_id", &device) != B_OK)
+		int32 rawDevice;
+		if (message->FindInt32("device_id", &rawDevice) != B_OK)
 			return;
+		dev_t device = (dev_t)rawDevice;
 
 		BVolume volume(device);
 		status_t status = volume.InitCheck();

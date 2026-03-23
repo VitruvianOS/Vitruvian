@@ -39,7 +39,7 @@ private:
 			void				_MountVolumes(mount_mode normal,
 									mount_mode removable,
 									bool initialRescan = false,
-									partition_id deviceID = -1);
+									partition_id deviceID = B_INVALID_DEV);
 			void				_MountVolume(const BMessage* message);
 			bool				_SuggestForceUnmount(const char* name,
 									status_t error);

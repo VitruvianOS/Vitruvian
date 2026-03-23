@@ -25,7 +25,8 @@ const char* kSignature = "application/x-vnd.Haiku-Sudoku";
 
 Sudoku::Sudoku()
 	:
-	BApplication(kSignature)
+	BApplication(kSignature),
+	fWindow(NULL)
 {
 }
 
@@ -46,7 +47,8 @@ Sudoku::ReadyToRun()
 void
 Sudoku::RefsReceived(BMessage* message)
 {
-	fWindow->PostMessage(message);
+	if (fWindow != NULL)
+		fWindow->PostMessage(message);
 }
 
 

@@ -204,7 +204,7 @@ ServerWindow::~ServerWindow()
 
 	BPrivate::gDefaultTokens.RemoveToken(fServerToken);
 
-	if (!fWindow->IsOffscreenWindow()) {
+	if (fWindow.IsSet() && !fWindow->IsOffscreenWindow()) {
 		fWindowAddedToDesktop = false;
 		fDesktop->RemoveWindow(fWindow.Get());
 		fDesktop = NULL;

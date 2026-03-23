@@ -492,8 +492,15 @@ EventDispatcher::GetMouse(BPoint& where, int32& buttons)
 {
 	BAutolock _(this);
 
-	where = fLastCursorPosition;
-	buttons = fLastButtons;
+	uint32 liveButtons;
+	BPoint liveWhere;
+	if (fStream != NULL && fStream->GetCurrentMouseState(liveWhere, liveButtons)) {
+		where = liveWhere;
+		buttons = (int32)liveButtons;
+	} else {
+		where = fLastCursorPosition;
+		buttons = fLastButtons;
+	}
 }
 
 

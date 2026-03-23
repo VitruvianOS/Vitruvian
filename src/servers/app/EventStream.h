@@ -36,6 +36,9 @@ class EventStream {
 		virtual status_t InsertEvent(BMessage* event) = 0;
 
 		virtual BMessage* PeekLatestMouseMoved() = 0;
+
+		virtual bool GetCurrentMouseState(BPoint& where, uint32& buttons) const
+			{ return false; }
 };
 
 

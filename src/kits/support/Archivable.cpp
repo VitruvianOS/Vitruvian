@@ -666,6 +666,7 @@ instantiate_object(BMessage* archive, image_id* _id)
 	// if find_instantiation_func() can't locate Class::Instantiate()
 	// and a signature was specified
 	if (!instantiationFunc && hasSignature) {
+#ifndef VITRUVIAN_NO_LAUNCH_DAEMON
 		// use BRoster::FindApp() to locate an app or add-on with the symbol
 		BRoster Roster;
 		entry_ref ref;
@@ -721,6 +722,15 @@ instantiate_object(BMessage* archive, image_id* _id)
 			*status = B_NAME_NOT_FOUND;
 			return NULL;
 		}
+#else
+		// Without launch_daemon, we cannot locate add-ons by MIME signature.
+		// Return B_BAD_VALUE to indicate the class was not found.
+		syslog(LOG_ERR, "instantiate_object failed: launch_daemon unavailable, "
+			"cannot look up signature \"%s\"", signature);
+		errno = B_BAD_VALUE;
+		*status = B_BAD_VALUE;
+		return NULL;
+#endif
 	} else if (instantiationFunc == NULL) {
 		syslog(LOG_ERR, "instantiate_object failed: No signature specified "
 			"in archive, looking for class \"%s\".", className);
@@ -803,11 +813,13 @@ find_instantiation_func(BMessage* archive)
 
 	const char* name = NULL;
 	const char* signature = NULL;
-	if (archive->FindString(B_CLASS_FIELD, &name) != B_OK
-		|| archive->FindString(B_ADD_ON_FIELD, &signature)) {
+	if (archive->FindString(B_CLASS_FIELD, &name) != B_OK) {
 		errno = B_BAD_VALUE;
 		return NULL;
 	}
+	// B_ADD_ON_FIELD is optional — classes without an add-on signature are
+	// instantiable locally with signature = NULL.
+	archive->FindString(B_ADD_ON_FIELD, &signature);
 
 	return find_instantiation_func(name, signature);
 }

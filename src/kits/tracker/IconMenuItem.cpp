@@ -164,7 +164,8 @@ ModelMenuItem::DrawIcon()
 
 	// draw small icon, synchronously
 	if (IsEnabled()) {
-		IconCache::sIconCache->Draw(fModel.ResolveIfLink(), Menu(), where,
+		const Model* model = fModel.ResolveIfLink();
+		IconCache::sIconCache->Draw(model, Menu(), where,
 			kNormalIcon, BSize(ListIconSize() - 1, ListIconSize() - 1));
 	} else {
 		// dimmed, for now use a special blitter; icon cache should

@@ -1139,6 +1139,7 @@ IconCache::Draw(Model* model, BView* view, BPoint where, IconDrawMode mode,
 
 	ASSERT(entry != NULL);
 	ASSERT(entry->HaveIconBitmap(mode, size));
+
 	// got the entry, now draw it
 	resultingCacheLocker->LockedItem()->Draw(entry, view, where, mode,
 		size, async);
@@ -1340,6 +1341,13 @@ IconCache::MakeTransformedIcon(const BBitmap* source, BSize /*size*/,
 		InitHighlightTable();
 
 	BBitmap* result = lazyBitmap->Get();
+
+	// Check if bitmaps have valid bits before transforming
+	if (source == NULL || source->Bits() == NULL)
+		return NULL;
+	if (result == NULL || result->Bits() == NULL)
+		return NULL;
+
 	uint8* src = (uint8*)source->Bits();
 	uint8* dst = (uint8*)result->Bits();
 
@@ -1347,7 +1355,6 @@ IconCache::MakeTransformedIcon(const BBitmap* source, BSize /*size*/,
 //		&& result->Bounds() == source->Bounds());
 	if (result->ColorSpace() != source->ColorSpace()
 		|| result->Bounds() != source->Bounds()) {
-		printf("IconCache::MakeTransformedIcon() - bitmap format mismatch!\n");
 		return NULL;
 	}
 
@@ -1888,8 +1895,18 @@ LazyBitmapAllocator::~LazyBitmapAllocator()
 BBitmap*
 LazyBitmapAllocator::Get()
 {
-	if (fBitmap == NULL)
+	if (fBitmap == NULL) {
 		fBitmap = new BBitmap(BRect(BPoint(0, 0), fSize), fColorSpace);
+		if (fBitmap != NULL) {
+			if (fBitmap->InitCheck() != B_OK) {
+				delete fBitmap;
+				fBitmap = NULL;
+			} else if (fBitmap->Bits() == NULL) {
+				delete fBitmap;
+				fBitmap = NULL;
+			}
+		}
+	}
 
 	return fBitmap;
 }

@@ -1693,14 +1693,18 @@ BContainerWindow::MessageReceived(BMessage* message)
 bool
 BContainerWindow::IsShowing(const node_ref* node) const
 {
-	return PoseView()->Represents(node);
+	// PoseView can be NULL if window failed to initialize (e.g., BDeskWindow)
+	BPoseView* poseView = PoseView();
+	return poseView != NULL && poseView->Represents(node);
 }
 
 
 bool
 BContainerWindow::IsShowing(const entry_ref* entry) const
 {
-	return PoseView()->Represents(entry);
+	// PoseView can be NULL if window failed to initialize (e.g., BDeskWindow)
+	BPoseView* poseView = PoseView();
+	return poseView != NULL && poseView->Represents(entry);
 }
 
 

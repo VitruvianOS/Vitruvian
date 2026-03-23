@@ -220,8 +220,9 @@ TermParse::_StopPtyReader()
 	}
 
 	if (fReaderThread >= 0) {
-		suspend_thread(fReaderThread);
-
+		// Vitruvian doesn't support suspend_thread
+		// Thread will exit naturally when it checks fQuitting flag (set in StopThreads)
+		// If thread is blocked on read(), wait_for_thread will wait until it unblocks
 		status_t status;
 		wait_for_thread(fReaderThread, &status);
 

@@ -50,6 +50,9 @@ target_sources(root PRIVATE
 	compat/locks/init_once.cpp
 	compat/locks/mutex.cpp
 	compat/locks/recursive_lock.cpp
+
+	posix/strdup.c
+	posix/strndup.c
 )
 
 add_dependencies(root nexus)

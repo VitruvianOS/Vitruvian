@@ -399,6 +399,45 @@ query_for_app(const char* signature, entry_ref* appRef)
 			break;
 	}
 
+#ifdef __VOS__
+	// Vitruvian fallback: queries don't work without real BeFS indices
+	// Search common app directories as fallback
+	if (error != B_OK && signature != NULL) {
+		const char* searchPaths[] = {
+			"/system/apps",
+			"/system/bin",
+			"/boot/system/apps",
+			"/boot/system/bin",
+			NULL
+		};
+
+		for (int i = 0; searchPaths[i] != NULL; i++) {
+			BDirectory dir(searchPaths[i]);
+			if (dir.InitCheck() != B_OK)
+				continue;
+
+			entry_ref ref;
+			BEntry entry;
+			while (dir.GetNextEntry(&entry) == B_OK) {
+				if (entry.GetRef(&ref) != B_OK)
+					continue;
+
+				// Check if this app has the signature we're looking for
+				BFile file(&ref, B_READ_ONLY);
+				BAppFileInfo appFileInfo(&file);
+				char fileSig[B_MIME_TYPE_LENGTH];
+				if (appFileInfo.InitCheck() == B_OK
+					&& appFileInfo.GetSignature(fileSig) == B_OK
+					&& strcasecmp(fileSig, signature) == 0
+					&& can_app_be_used(&ref) == B_OK) {
+					*appRef = ref;
+					return B_OK;
+				}
+			}
+		}
+	}
+#endif
+
 	return error;
 }
 
@@ -1327,10 +1366,12 @@ BRoster::_ShutDown(bool reboot, bool confirm, bool synchronous)
 	if (error == B_OK)
 		error = request.AddBool("synchronous", synchronous);
 
-	// send the request
+	if (error != B_OK)
+		return error;
+
+	// send the request with a reasonable timeout (5 seconds)
 	BMessage reply;
-	if (error == B_OK)
-		error = fMessenger.SendMessage(&request, &reply);
+	error = fMessenger.SendMessage(&request, &reply, 5000000LL, 5000000LL);
 
 	// evaluate the reply
 	if (error == B_OK && reply.what != B_REG_SUCCESS
@@ -2623,7 +2664,8 @@ BRoster::_SendToRunning(team_id team, int argc, const char* const* args,
 
 		// send B_ARGV_RECEIVED or B_REFS_RECEIVED or B_SILENT_RELAUNCH
 		// (if already running)
-		if (args != NULL && argc > 1) {
+		if (args != NULL && argc > 0) {
+			DBG(OUT("_SendToRunning : B_ARGV_RECEIVED\n"));
 			BMessage message(B_ARGV_RECEIVED);
 			message.AddInt32("argc", argc);
 			for (int32 i = 0; i < argc; i++)
@@ -2689,6 +2731,7 @@ BRoster::_InitMessenger()
 	}
 #else
 	port_id rosterPort = find_port(B_REGISTRAR_PORT_NAME);
+
 	port_info info;
 	if (rosterPort >= 0 && get_port_info(rosterPort, &info) == B_OK) {
 		DBG(OUT("  found roster port\n"));

@@ -27,6 +27,7 @@ VirtualDirectoryEntryList::VirtualDirectoryEntryList(Model* model)
 	fDefinitionFileRef(),
 	fMergedDirectory(BMergedDirectory::B_ALWAYS_FIRST)
 {
+
 	VirtualDirectoryManager* manager = VirtualDirectoryManager::Instance();
 	if (manager == NULL) {
 		fStatus = B_NO_MEMORY;
@@ -82,24 +83,24 @@ VirtualDirectoryEntryList::GetNextEntry(BEntry* entry, bool traverse)
 status_t
 VirtualDirectoryEntryList::GetNextRef(entry_ref* ref)
 {
-	BPrivate::Storage::LongDirEntry longEntry;
-	struct dirent* entry = longEntry.dirent();
-	BDirectory dir; // vos mod
-	int32 result = GetNextDirents(entry, sizeof(longEntry), 1);
-	if (result < 0)
-		return result;
-	if (result == 0)
-		return B_ENTRY_NOT_FOUND;
+	// Delegate to BMergedDirectory::GetNextRef which correctly resolves the
+	// parent directory device/inode via BDirectory on Linux (where struct
+	// dirent does not carry d_pdev/d_pino).
+	status_t error = fMergedDirectory.GetNextRef(ref);
+	if (error != B_OK)
+		return error;
 
-	#ifndef __VOS__
-	ref->device = entry->d_pdev;
-	ref->directory = entry->d_pino;
-	#else
-	BEntry dirEntry;
-	dir.GetEntry(&dirEntry);
-	dirEntry.GetRef(ref);
-	#endif
-	return ref->set_name(entry->d_name);
+	// Translate subdirectory entries into virtual directory references.
+	if (BEntry(ref).IsDirectory()) {
+		if (VirtualDirectoryManager* manager
+				= VirtualDirectoryManager::Instance()) {
+			AutoLocker<VirtualDirectoryManager> managerLocker(manager);
+			node_ref node(ref->dev(), ref->dir());
+			manager->TranslateDirectoryEntry(fDefinitionFileRef, *ref, node);
+		}
+	}
+
+	return B_OK;
 }
 
 
@@ -114,22 +115,9 @@ VirtualDirectoryEntryList::GetNextDirents(struct dirent* buffer, size_t length,
 	if (countRead != 1)
 		return countRead;
 
-	// deal with directories
-	entry_ref ref;
-	//BEntry entry;
-	//dir.GetEntry(&entry);
-	//entry.GetRef(&ref);
-	//ref.device = buffer->d_pdev;
-	//ref.directory = buffer->d_pino;
-	if (ref.set_name(buffer->d_name) == B_OK && BEntry(&ref).IsDirectory()) {
-		if (VirtualDirectoryManager* manager
-				= VirtualDirectoryManager::Instance()) {
-			AutoLocker<VirtualDirectoryManager> managerLocker(manager);
-			node_ref node(ref.dev(), ref.dir());
-			manager->TranslateDirectoryEntry(fDefinitionFileRef, ref, node); // mod vos
-		}
-	}
-
+	// Directory translation for GetNextDirents callers is handled in
+	// GetNextRef via fMergedDirectory.GetNextRef which has the correct
+	// parent directory context.
 	return countRead;
 }
 
@@ -157,8 +145,12 @@ VirtualDirectoryEntryList::_InitMergedDirectory(
 		return error;
 
 	int32 count = directoryPaths.CountStrings();
-	for (int32 i = 0; i < count; i++)
-		fMergedDirectory.AddDirectory(directoryPaths.StringAt(i));
+	int32 added = 0;
+	for (int32 i = 0; i < count; i++) {
+		status_t addErr = fMergedDirectory.AddDirectory(directoryPaths.StringAt(i));
+		if (addErr == B_OK)
+			added++;
+	}
 
 	return B_OK;
 }

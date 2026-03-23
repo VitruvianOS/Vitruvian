@@ -213,9 +213,9 @@ public:
 	status_t ReadDefinition(bool* _changed = NULL)
 	{
 		// open the definition file
+		const entry_ref& defRef = fInfo->DefinitionFileEntryRef();
 		BFile file;
-		status_t error = file.SetTo(&fInfo->DefinitionFileEntryRef(),
-			B_READ_ONLY);
+		status_t error = file.SetTo(&defRef, B_READ_ONLY);
 		if (error != B_OK)
 			return error;
 
@@ -326,6 +326,7 @@ VirtualDirectoryManager::ResolveDirectoryPaths(
 	const entry_ref& definitionFileEntryRef, BStringList& _directoryPaths,
 	node_ref* _definitionFileNodeRef, entry_ref* _definitionFileEntryRef)
 {
+
 	Info* info = _InfoForNodeRef(definitionFileNodeRef);
 	if (info == NULL) {
 		status_t error = _ResolveUnknownDefinitionFile(definitionFileNodeRef,
@@ -773,6 +774,7 @@ status_t
 VirtualDirectoryManager::_CreateRootInfo(const node_ref& definitionFileNodeRef,
 	const entry_ref& definitionFileEntryRef, Info*& _info)
 {
+
 	RootInfo* root = new(std::nothrow) RootInfo(definitionFileNodeRef,
 		definitionFileEntryRef);
 	if (root == NULL || root->InitCheck() != B_OK) {

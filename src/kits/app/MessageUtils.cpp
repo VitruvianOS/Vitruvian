@@ -12,6 +12,7 @@
 #include <ByteOrder.h>
 
 #include <MessageUtils.h>
+#include <Node.h>
 
 namespace BPrivate {
 
@@ -102,6 +103,43 @@ entry_ref_swap(char *buffer, size_t size)
 	ino_t *ino = (ino_t *)buffer;
 	*ino = B_SWAP_INT64(*ino);
 
+	return B_OK;
+}
+
+status_t node_ref_flatten(char* buffer, size_t* size, const node_ref* ref)
+{
+	if (*size < sizeof(dev_t) + sizeof(ino_t))
+		return B_BUFFER_OVERFLOW;
+
+	// Store device/node as-is, including vref_dev + vref_id for virtual refs.
+	// Vrefs are kernel-global objects; _HandleMessageVRefs manages acquire/
+	// release so the vref stays valid across process boundaries.
+	dev_t dev = ref->device;
+	ino_t ino = ref->node;
+
+	memcpy(buffer, &dev, sizeof(dev));
+	buffer += sizeof(dev);
+	memcpy(buffer, &ino, sizeof(ino));
+
+	*size = sizeof(dev) + sizeof(ino);
+	return B_OK;
+}
+
+
+status_t node_ref_unflatten(node_ref* ref, const char* buffer, size_t size)
+{
+	if (size < sizeof(dev_t) + sizeof(ino_t)) {
+		*ref = node_ref();
+		return B_BAD_VALUE;
+	}
+
+	dev_t dev;
+	ino_t ino;
+	memcpy(&dev, buffer, sizeof(dev));
+	buffer += sizeof(dev);
+	memcpy(&ino, buffer, sizeof(ino));
+
+	*ref = node_ref(dev, ino);
 	return B_OK;
 }
 

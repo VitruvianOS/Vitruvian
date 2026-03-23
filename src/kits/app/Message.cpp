@@ -107,6 +107,19 @@ _HandleMessageVRefs(const BMessage* message, bool acquire)
 					}
 				}
 			}
+		} else if (typeFound == B_NODE_REF_TYPE && vrefDev != B_INVALID_DEV) {
+			for (int32 j = 0; j < count; j++) {
+				node_ref ref;
+				if (message->FindNodeRef(name, j, &ref) == B_OK) {
+					if (ref.device == vrefDev && ref.node != B_INVALID_INO) {
+						vref_id vref = (vref_id)ref.node;
+						if (acquire)
+							acquire_vref(vref);
+						else
+							release_vref(vref);
+					}
+				}
+			}
 		}
 	}
 }
@@ -2798,9 +2811,10 @@ BMessage::AddRef(const char* name, const entry_ref* ref)
 status_t
 BMessage::AddNodeRef(const char* name, const node_ref* ref)
 {
-	UNIMPLEMENTED();
-	/*
-	size_t size = sizeof(node_ref);
+	if (ref == NULL)
+		return B_BAD_VALUE;
+
+	size_t size = sizeof(dev_t) + sizeof(ino_t);
 	char buffer[size];
 
 	status_t error = BPrivate::node_ref_flatten(buffer, &size, ref);
@@ -2808,8 +2822,16 @@ BMessage::AddNodeRef(const char* name, const node_ref* ref)
 	if (error >= B_OK)
 		error = AddData(name, B_NODE_REF_TYPE, buffer, size, false);
 
-	return error;*/
-	return B_ERROR;
+	if (error >= B_OK) {
+		dev_t vrefDev = get_vref_dev();
+		if (vrefDev != B_INVALID_DEV && ref->device == vrefDev
+				&& ref->node != B_INVALID_INO) {
+			acquire_vref((vref_id)ref->node);
+			fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
+		}
+	}
+
+	return error;
 }
 
 
@@ -3087,8 +3109,6 @@ BMessage::FindNodeRef(const char* name, int32 index, node_ref* ref) const
 	if (ref == NULL)
 		return B_BAD_VALUE;
 
-	UNIMPLEMENTED();
-	/*
 	void* data = NULL;
 	ssize_t size = 0;
 	status_t error = FindData(name, B_NODE_REF_TYPE, index,
@@ -3099,8 +3119,7 @@ BMessage::FindNodeRef(const char* name, int32 index, node_ref* ref) const
 	else
 		*ref = node_ref();
 
-	return error;*/
-	return B_ERROR;
+	return error;
 }
 
 

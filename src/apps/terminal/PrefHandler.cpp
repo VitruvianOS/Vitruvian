@@ -52,34 +52,35 @@ static const pref_defaults kTermDefaults[] = {
 //	of the current system fixed font if they are not
 //	available in the settings file
 
-	{ PREF_TEXT_FORE_COLOR,		"  0,   0,   0" },
-	{ PREF_TEXT_BACK_COLOR,		"255, 255, 255" },
-	{ PREF_CURSOR_FORE_COLOR,	"255, 255, 255" },
-	{ PREF_CURSOR_BACK_COLOR,	"  0,   0,   0" },
-	{ PREF_SELECT_FORE_COLOR,	"255, 255, 255" },
-	{ PREF_SELECT_BACK_COLOR,	"  0,   0,   0" },
+	// Solarized Dark theme (https://ethanschoonover.com/solarized/)
+	{ PREF_TEXT_FORE_COLOR,		"131, 148, 150" },	// base0
+	{ PREF_TEXT_BACK_COLOR,		"  0,  43,  54" },	// base03
+	{ PREF_CURSOR_FORE_COLOR,	"  0,  43,  54" },	// base03
+	{ PREF_CURSOR_BACK_COLOR,	"131, 148, 150" },	// base0
+	{ PREF_SELECT_FORE_COLOR,	"131, 148, 150" },	// base0
+	{ PREF_SELECT_BACK_COLOR,	"  7,  54,  66" },	// base02
 
-	{ PREF_IM_FORE_COLOR,		"  0,   0,   0" },
-	{ PREF_IM_BACK_COLOR,		"152, 203, 255" },
-	{ PREF_IM_SELECT_COLOR,		"255, 152, 152" },
+	{ PREF_IM_FORE_COLOR,		"131, 148, 150" },	// base0
+	{ PREF_IM_BACK_COLOR,		"  7,  54,  66" },	// base02
+	{ PREF_IM_SELECT_COLOR,		" 88, 110, 117" },	// base01
 
-	{ PREF_ANSI_BLACK_COLOR,	" 40,  40,  40" },
-	{ PREF_ANSI_RED_COLOR,		"204,   0,   0" },
-	{ PREF_ANSI_GREEN_COLOR,	" 78, 154,   6" },
-	{ PREF_ANSI_YELLOW_COLOR,	"218, 168,   0" },
-	{ PREF_ANSI_BLUE_COLOR,		" 51, 102, 152" },
-	{ PREF_ANSI_MAGENTA_COLOR,	"115,  68, 123" },
-	{ PREF_ANSI_CYAN_COLOR,		"  6, 152, 154" },
-	{ PREF_ANSI_WHITE_COLOR,	"245, 245, 245" },
+	{ PREF_ANSI_BLACK_COLOR,	"  7,  54,  66" },	// base02
+	{ PREF_ANSI_RED_COLOR,		"220,  50,  47" },	// red
+	{ PREF_ANSI_GREEN_COLOR,	"133, 153,   0" },	// green
+	{ PREF_ANSI_YELLOW_COLOR,	"181, 137,   0" },	// yellow
+	{ PREF_ANSI_BLUE_COLOR,		" 38, 139, 210" },	// blue
+	{ PREF_ANSI_MAGENTA_COLOR,	"211,  54, 130" },	// magenta
+	{ PREF_ANSI_CYAN_COLOR,		" 42, 161, 152" },	// cyan
+	{ PREF_ANSI_WHITE_COLOR,	"238, 232, 213" },	// base2
 
-	{ PREF_ANSI_BLACK_HCOLOR,	"128, 128, 128" },
-	{ PREF_ANSI_RED_HCOLOR,		"255,   0,   0" },
-	{ PREF_ANSI_GREEN_HCOLOR,	"  0, 255,   0" },
-	{ PREF_ANSI_YELLOW_HCOLOR,	"255, 255,   0" },
-	{ PREF_ANSI_BLUE_HCOLOR,	"  0,   0, 255" },
-	{ PREF_ANSI_MAGENTA_HCOLOR,	"255,   0, 255" },
-	{ PREF_ANSI_CYAN_HCOLOR,	"  0, 255, 255" },
-	{ PREF_ANSI_WHITE_HCOLOR,	"255, 255, 255" },
+	{ PREF_ANSI_BLACK_HCOLOR,	" 88, 110, 117" },	// base01
+	{ PREF_ANSI_RED_HCOLOR,		"203,  75,  22" },	// orange
+	{ PREF_ANSI_GREEN_HCOLOR,	"101, 123, 131" },	// base00
+	{ PREF_ANSI_YELLOW_HCOLOR,	"131, 148, 150" },	// base0
+	{ PREF_ANSI_BLUE_HCOLOR,	"108, 113, 196" },	// violet
+	{ PREF_ANSI_MAGENTA_HCOLOR,	"108, 113, 196" },	// violet
+	{ PREF_ANSI_CYAN_HCOLOR,	"147, 161, 161" },	// base1
+	{ PREF_ANSI_WHITE_HCOLOR,	"253, 246, 227" },	// base3
 
 	{ PREF_HISTORY_SIZE,		"10000" },
 

@@ -63,7 +63,7 @@ DeclareDependency(
 	LIBRARIES	"evdev"
 	PACKAGES	"libevdev-dev"
 	RUNTIMES	"libevdev-dev (>= 1.13.4)"
-	INCLUDES	"/usr/include/libevdev-1.0/"
+	INCLUDES	"${HEADERS_PATH_BASE}/libevdev-1.0/"
 )
 
 DeclareDependency(
@@ -110,6 +110,13 @@ DeclareDependency(
 	LIBRARIES	"blkid"
 	PACKAGES	"libblkid-dev"
 	RUNTIMES	"libblkid1 (>= 2.41-5)"
+)
+
+DeclareDependency(
+	NCURSES
+	LIBRARIES  "ncurses"
+	PACKAGES  "libncurses-dev"
+	RUNTIMES  "libncurses6 (>= 6.4)"
 )
 
 DeclareDependency(

@@ -46,3 +46,14 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_FLAGS} \
 set(GLOBAL_CFLAGS
 	#-DOPENSSL_ENABLED
 )
+
+if(NOT BUILDTOOLS_MODE STREQUAL "1")
+    # Target architecture
+    set(VITRUVIAN_TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64, arm64 = stub/unsupported)")
+    set_property(CACHE VITRUVIAN_TARGET_ARCH PROPERTY STRINGS "x86_64" "arm64")
+    set(VITRUVIAN_EFFECTIVE_ARCH "${VITRUVIAN_TARGET_ARCH}")
+    message(STATUS "Target architecture: ${VITRUVIAN_EFFECTIVE_ARCH}")
+
+    # Chroot / sysroot configuration
+    include(${CMAKE_SOURCE_DIR}/build/chroot.cmake)
+endif()

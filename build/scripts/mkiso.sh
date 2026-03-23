@@ -16,8 +16,8 @@ fi
 
 count=`ls -1 $basedir/*.deb 2>/dev/null | wc -l`
 if [ $count != 0 ]; then
-sudo mount -o bind $basedir/ $basedir/LIVE_BOOT/chroot/tmp/
-sudo mount -t proc /proc ./LIVE_BOOT/chroot/proc/
+sudo mount -o bind $basedir/ $basedir/image_tree/chroot/tmp/
+sudo mount -t proc /proc ./image_tree/chroot/proc/
 else
 echo ${bold}No deb file generated! Please run cpack inside /$basedir/
 echo ${normal}
@@ -26,21 +26,21 @@ fi
 
 cleanup() {
   echo "Unmounting..."
-  if mountpoint -q "$basedir/LIVE_BOOT/chroot/proc/"; then
-    sudo umount "$basedir/LIVE_BOOT/chroot/proc/"
+  if mountpoint -q "$basedir/image_tree/chroot/proc/"; then
+    sudo umount "$basedir/image_tree/chroot/proc/"
   fi
-  if mountpoint -q "$basedir/LIVE_BOOT/chroot/tmp/"; then
-    sudo umount "$basedir/LIVE_BOOT/chroot/tmp/"
+  if mountpoint -q "$basedir/image_tree/chroot/tmp/"; then
+    sudo umount "$basedir/image_tree/chroot/tmp/"
   fi
 }
 trap cleanup EXIT
 
-if [ -f $basedir/LIVE_BOOT/image/live/filesystem.squashfs ]; then
+if [ -f $basedir/image_tree/image/live/filesystem.squashfs ]; then
     echo "Removing previous squashfs image..."
-    rm -f $basedir/LIVE_BOOT/image/live/filesystem.squashfs
+    rm -f $basedir/image_tree/image/live/filesystem.squashfs
 fi 
 
-sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian" > /etc/hostname &\
+sudo chroot $basedir/image_tree/chroot /bin/bash -c "echo "vitruvian" > /etc/hostname &\
 apt-get install -y dkms build-essential linux-headers-$imagekernelversion && \
 apt install -y -f --reinstall /tmp/*.deb && \
 depmod -v $imagekernelversion && echo 'root:live' | chpasswd; exit"
@@ -49,7 +49,7 @@ if [ "$BUILD_TYPE" = "Debug" ]; then
     echo "${bold}Configuring SSH server for debug access..."
     echo "${normal}"
 
-    CHROOT_DIR="$basedir/LIVE_BOOT/chroot"
+    CHROOT_DIR="$basedir/image_tree/chroot"
     DROPIN_DIR="/etc/ssh/sshd_config.d"
     DROPIN_FILE="$DROPIN_DIR/debug.conf"
 
@@ -81,37 +81,37 @@ CHROOT
     echo "${normal}"
 fi
 
-if mountpoint -q "$basedir/LIVE_BOOT/chroot/proc/"; then
-  sudo umount "$basedir/LIVE_BOOT/chroot/proc/"
+if mountpoint -q "$basedir/image_tree/chroot/proc/"; then
+  sudo umount "$basedir/image_tree/chroot/proc/"
 fi
-if mountpoint -q "$basedir/LIVE_BOOT/chroot/tmp/"; then
-  sudo umount "$basedir/LIVE_BOOT/chroot/tmp/"
+if mountpoint -q "$basedir/image_tree/chroot/tmp/"; then
+  sudo umount "$basedir/image_tree/chroot/tmp/"
 fi
 
 echo ${bold}Create Directories for Live Environment Files...
 echo ${normal}
 
-mkdir -p $basedir/LIVE_BOOT/scratch
-mkdir -p $basedir/LIVE_BOOT/image/live
+mkdir -p $basedir/image_tree/scratch
+mkdir -p $basedir/image_tree/image/live
 
 echo ${bold}Chroot Environment Compression...
 echo ${normal}
 
 sudo mksquashfs \
-    $basedir/LIVE_BOOT/chroot \
-    $basedir/LIVE_BOOT/image/live/filesystem.squashfs \
+    $basedir/image_tree/chroot \
+    $basedir/image_tree/image/live/filesystem.squashfs \
     -b 1048576 -comp xz -Xdict-size 100% -xattrs -e boot
 
 echo ${bold}Copy Kernel and Initramfs from Chroot to Live Directory...
 echo ${normal}
 
-cp $basedir/LIVE_BOOT/chroot/boot/vmlinuz-* $basedir/LIVE_BOOT/image/vmlinuz
-cp $basedir/LIVE_BOOT/chroot/boot/initrd.img-* $basedir/LIVE_BOOT/image/initrd
+cp $basedir/image_tree/chroot/boot/vmlinuz-$imagekernelversion $basedir/image_tree/image/vmlinuz
+cp $basedir/image_tree/chroot/boot/initrd.img-$imagekernelversion $basedir/image_tree/image/initrd
 
 echo ${bold}Create Grub Menu...
 echo ${normal}
 
-cat <<'EOF' >$basedir/LIVE_BOOT/scratch/grub.cfg
+cat <<'EOF' >$basedir/image_tree/scratch/grub.cfg
 insmod all_video
 search --set=root --file /VITRUVIAN_CUSTOM
 set default="0"
@@ -123,22 +123,22 @@ menuentry "Vitruvian Live" {
 }
 EOF
 
-touch $basedir/LIVE_BOOT/image/VITRUVIAN_CUSTOM
+touch $basedir/image_tree/image/VITRUVIAN_CUSTOM
 
 echo ${bold}GRUB cfg...
 echo ${normal}
 
 grub-mkstandalone \
     --format=x86_64-efi \
-    --output=$basedir/LIVE_BOOT/scratch/bootx64.efi \
+    --output=$basedir/image_tree/scratch/bootx64.efi \
     --locales="" \
     --fonts="" \
-    "boot/grub/grub.cfg=$basedir/LIVE_BOOT/scratch/grub.cfg"
+    "boot/grub/grub.cfg=$basedir/image_tree/scratch/grub.cfg"
 
 echo ${bold}FAT16 Efiboot...
 echo ${normal}
 
-cd $basedir/LIVE_BOOT/scratch
+cd $basedir/image_tree/scratch
 dd if=/dev/zero of=efiboot.img bs=1M count=10
 sudo mkfs.vfat efiboot.img
 mmd -i efiboot.img efi efi/boot
@@ -149,17 +149,17 @@ echo ${normal}
 
 grub-mkstandalone \
     --format=i386-pc \
-    --output=$basedir/LIVE_BOOT/scratch/core.img \
+    --output=$basedir/image_tree/scratch/core.img \
     --install-modules="linux normal iso9660 biosdisk memdisk search tar ls" \
     --modules="linux normal iso9660 biosdisk search" \
     --locales="" \
     --fonts="" \
-    "boot/grub/grub.cfg=$basedir/LIVE_BOOT/scratch/grub.cfg"
+    "boot/grub/grub.cfg=$basedir/image_tree/scratch/grub.cfg"
 
 cat \
     /usr/lib/grub/i386-pc/cdboot.img \
-    $basedir/LIVE_BOOT/scratch/core.img \
-> $basedir/LIVE_BOOT/scratch/bios.img
+    $basedir/image_tree/scratch/core.img \
+> $basedir/image_tree/scratch/bios.img
 
 echo ${bold}Generate ISO File...
 echo ${normal}
@@ -180,16 +180,16 @@ xorriso \
     -eltorito-alt-boot \
         -e EFI/efiboot.img \
         -no-emul-boot \
-    -append_partition 2 0xef $basedir/LIVE_BOOT/scratch/efiboot.img \
-    -output "$basedir/LIVE_BOOT/vitruvian-custom.iso" \
+    -append_partition 2 0xef $basedir/image_tree/scratch/efiboot.img \
+    -output "$basedir/image_tree/vitruvian-custom.iso" \
     -graft-points \
-        "$basedir/LIVE_BOOT/image" \
-        /boot/grub/bios.img=$basedir/LIVE_BOOT/scratch/bios.img \
-        /EFI/efiboot.img=$basedir/LIVE_BOOT/scratch/efiboot.img
+        "$basedir/image_tree/image" \
+        /boot/grub/bios.img=$basedir/image_tree/scratch/bios.img \
+        /EFI/efiboot.img=$basedir/image_tree/scratch/efiboot.img
 
 echo ${bold}Finished!
 echo ${normal}
-echo "ISO created: $basedir/LIVE_BOOT/vitruvian-custom.iso"
+echo "ISO created: $basedir/image_tree/vitruvian-custom.iso"
 echo "Build type: $BUILD_TYPE"
 if [ "$BUILD_TYPE" = "Debug" ]; then
     echo ""

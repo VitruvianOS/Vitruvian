@@ -1,18 +1,89 @@
 #!/bin/sh
-
-uname -r > hostkernelversion.conf
-hostkernel=`cat ./hostkernelversion.conf`
-guestkernel=`cat ./imagekernelversion.conf`
-
-# Right now we have three build types:
+# Vitruvian configure script
+# Usage: ./configure [options]
 #
-# Release - Produce images close to an actual release
-# Debug - Enable advanced debugging features
-# Workflow - Suitable for workflow builds
+#   --build-type=TYPE       CMake build type: Debug|Release|Workflow (default: Debug)
+#   --chroot-build          Use chroot sysroot for libraries/headers
+#   --chroot-path=PATH      Path to chroot (default: <build>/LIVE_BOOT/chroot)
+#   --arch=ARCH             Target architecture: x86_64 (default), arm64 (stub/unsupported)
 
-# Override: BUILD_TYPE=Release ./configure
-BUILD_TYPE="${BUILD_TYPE:-Debug}"
+set -e
 
-cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILDTOOLS_DIR=../buildtools -DHOST_KERNEL=$hostkernel -DGUEST_KERNEL=$guestkernel .. -GNinja
+BUILD_TYPE="Debug"
+CHROOT_BUILD=0
+CHROOT_PATH=""
+TARGET_ARCH="x86_64"
+
+for arg in "$@"; do
+    case "$arg" in
+        --build-type=*)
+            BUILD_TYPE="${arg#*=}"
+            ;;
+        --chroot-build)
+            CHROOT_BUILD=1
+            ;;
+        --chroot-path=*)
+            CHROOT_PATH="${arg#*=}"
+            ;;
+        --arch=*)
+            TARGET_ARCH="${arg#*=}"
+            ;;
+        --help|-h)
+            head -n 10 "$0" | grep "^#" | sed 's/^# \?//'
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Run ./configure --help for usage."
+            exit 1
+            ;;
+    esac
+done
+
+# Validate arch
+case "$TARGET_ARCH" in
+    x86_64)
+        ;;
+    arm64)
+        echo "Error: ARM64 cross-compilation is not yet supported."
+        exit 1
+        ;;
+    *)
+        echo "Error: Unknown architecture: $TARGET_ARCH"
+        echo "Supported: x86_64 (arm64 is a stub)"
+        exit 1
+        ;;
+esac
+
+# Kernel versions
+uname -r > hostkernelversion.conf
+hostkernel=$(cat ./hostkernelversion.conf)
+
+if [ $CHROOT_BUILD -eq 1 ] && [ -f ./imagekernelversion.conf ]; then
+    guestkernel=$(cat ./imagekernelversion.conf)
+    echo "Chroot build: using guest kernel $guestkernel"
+else
+    guestkernel=$(cat ./imagekernelversion.conf 2>/dev/null || echo "$hostkernel")
+fi
+
+# Build up cmake options
+CMAKE_OPTS="-DCMAKE_BUILD_TYPE=$BUILD_TYPE"
+CMAKE_OPTS="$CMAKE_OPTS -DBUILDTOOLS_DIR=../buildtools"
+CMAKE_OPTS="$CMAKE_OPTS -DHOST_KERNEL=$hostkernel"
+CMAKE_OPTS="$CMAKE_OPTS -DKERNEL_RELEASE=$guestkernel"
+CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_TARGET_ARCH=$TARGET_ARCH"
+
+if [ $CHROOT_BUILD -eq 1 ]; then
+    CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_CHROOT_BUILD=ON"
+    if [ -n "$CHROOT_PATH" ]; then
+        CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_CHROOT_PATH=$CHROOT_PATH"
+    fi
+fi
+
+cmake $CMAKE_OPTS .. -GNinja
+
+if [ "$BUILD_TYPE" = "Debug" ]; then
+    echo "NOTE: Debug build will include an SSH server (root:vitruvio)"
+fi
 
 echo "Configured correctly!"

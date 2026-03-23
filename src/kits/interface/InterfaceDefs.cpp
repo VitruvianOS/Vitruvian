@@ -78,7 +78,7 @@ static const rgb_color _kDefaultColors[kColorWhichCount] = {
 	{226, 226, 226, 255},	// B_MENU_BACKGROUND_COLOR
 	{235, 158, 32, 255},	// B_WINDOW_TAB_COLOR (vivid orange-amber for contrast)
 	{0, 0, 229, 255},		// B_KEYBOARD_NAVIGATION_COLOR
-	{51, 102, 152, 255},	// B_DESKTOP_COLOR
+	{78, 125, 172, 255},	// B_DESKTOP_COLOR
 	{165, 155, 138, 255},	// B_MENU_SELECTED_BACKGROUND_COLOR (lighter warm selection)
 	{0, 0, 0, 255},			// B_MENU_ITEM_TEXT_COLOR
 	{0, 0, 0, 255},			// B_MENU_SELECTED_ITEM_TEXT_COLOR
@@ -124,7 +124,7 @@ static const rgb_color _kDefaultColorsDark[kColorWhichCount] = {
 	{28, 28, 28, 255},		// B_MENU_BACKGROUND_COLOR
 	{227, 73, 17, 255},		// B_WINDOW_TAB_COLOR
 	{0, 0, 229, 255},		// B_KEYBOARD_NAVIGATION_COLOR
-	{51, 102, 152, 255},	// B_DESKTOP_COLOR
+	{78, 125, 172, 255},	// B_DESKTOP_COLOR
 	{90, 90, 90, 255},		// B_MENU_SELECTED_BACKGROUND_COLOR
 	{255, 255, 255, 255},	// B_MENU_ITEM_TEXT_COLOR
 	{255, 255, 255, 255},	// B_MENU_SELECTED_ITEM_TEXT_COLOR

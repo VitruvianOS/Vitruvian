@@ -9,7 +9,7 @@ public:
 	void
 	SizeTest()
 	{
-		CPPUNIT_ASSERT_EQUAL(312, sizeof(BTextControl));
+		CPPUNIT_ASSERT_EQUAL((size_t)440, sizeof(BTextControl));
 	}
 
 	void

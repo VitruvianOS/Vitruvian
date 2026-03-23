@@ -1,6 +1,8 @@
 // StatableTest.cpp
 
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <cppunit/TestCaller.h>
 #include <cppunit/TestSuite.h>
@@ -112,7 +114,9 @@ StatableTest::GetXYZTest()
 		time_t atime;
 #endif
 		BVolume volume;
-		CPPUNIT_ASSERT( lstat(entryName.c_str(), &st) == 0 );
+		// BNode follows symlinks on Linux (O_NOTRAVERSE = O_NOCTTY there),
+		// so compare against the resolved target via stat(), not lstat().
+		CPPUNIT_ASSERT( stat(entryName.c_str(), &st) == 0 );
 		CPPUNIT_ASSERT( statable->GetNodeRef(&ref) == B_OK );
 		CPPUNIT_ASSERT( statable->GetOwner(&owner) == B_OK );
 		CPPUNIT_ASSERT( statable->GetGroup(&group) == B_OK );
@@ -124,7 +128,9 @@ StatableTest::GetXYZTest()
 		CPPUNIT_ASSERT( statable->GetAccessTime(&atime) == B_OK );
 #endif
 		CPPUNIT_ASSERT( statable->GetVolume(&volume) == B_OK );
-		CPPUNIT_ASSERT( ref.device == st.st_dev && ref.node == st.st_ino );
+		CPPUNIT_ASSERT( ref.dereference().device == st.st_dev && ref.dereference().node == st.st_ino );
+		// Direct operator== handles virtual node_ref vs physical (dev, ino) pair
+		CPPUNIT_ASSERT( ref == node_ref(st.st_dev, st.st_ino) );
 		CPPUNIT_ASSERT( owner == st.st_uid );
 		CPPUNIT_ASSERT( group == st.st_gid );
 // R5: returns not only the permission bits, so we need to filter for the test
@@ -141,6 +147,31 @@ StatableTest::GetXYZTest()
 		CPPUNIT_ASSERT( volume == BVolume(st.st_dev) );
 	}
 	testEntries.delete_all();
+	// cross-vref: two different vref IDs from two independent opens of the same
+	// file must compare equal via node_ref::operator==
+	NextSubTest();
+	{
+		int fd1 = open("/tmp", O_RDONLY | O_DIRECTORY);
+		int fd2 = open("/tmp", O_RDONLY | O_DIRECTORY);
+		CPPUNIT_ASSERT( fd1 >= 0 && fd2 >= 0 );
+		node_ref virtRef1(fd1);
+		node_ref virtRef2(fd2);
+		// Different vref IDs (two independent create_vref calls)
+		CPPUNIT_ASSERT( virtRef1.node != virtRef2.node );
+		// operator== dereferences both and finds the same physical inode
+		CPPUNIT_ASSERT( virtRef1 == virtRef2 );
+		CPPUNIT_ASSERT( !(virtRef1 != virtRef2) );
+		CPPUNIT_ASSERT( virtRef1.dereference() == virtRef2.dereference() );
+		// virtual == physical for the same inode
+		struct stat st;
+		CPPUNIT_ASSERT( lstat("/tmp", &st) == 0 );
+		node_ref physRef(st.st_dev, st.st_ino);
+		CPPUNIT_ASSERT( virtRef1 == physRef );
+		CPPUNIT_ASSERT( physRef == virtRef1 );
+		CPPUNIT_ASSERT( !(virtRef1 != physRef) );
+		close(fd1);
+		close(fd2);
+	}
 	// test with uninitialized objects
 	NextSubTest();
 	CreateUninitializedStatables(testEntries);

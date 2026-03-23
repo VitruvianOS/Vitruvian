@@ -1,6 +1,7 @@
 // EntryTest.cpp
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -327,7 +328,7 @@ examine_entry(BEntry &entry, TestEntry *testEntry, bool traverse)
 	CPPUNIT_ASSERT( entry.GetRef(&ref) == B_OK );
 	// We can't get a ref of an entry with a too long path name yet.
 	if (testEntry->path.length() < B_PATH_NAME_LENGTH)
-		CPPUNIT_ASSERT( ref == testEntry->get_ref() );
+		CPPUNIT_ASSERT( ref.dereference() == testEntry->get_ref().dereference() );
 }
 
 // InitTest1Paths
@@ -395,7 +396,7 @@ EntryTest::InitTest1DirPaths(TestEntry &_testEntry, status_t error,
 		if (!testEntry->isBad()
 			&& testEntry->path.length() < B_PATH_NAME_LENGTH) {
 //printf("%s\n", testEntry->cpath);
-			BDirectory dir("/boot/home/Desktop");
+			BDirectory dir("/tmp");
 			CPPUNIT_ASSERT( dir.InitCheck() == B_OK );
 			BEntry entry(&dir, testEntry->cpath, traverse);
 		status_t result = entry.InitCheck();
@@ -878,7 +879,7 @@ EntryTest::InitTest2DirPaths(TestEntry &_testEntry, status_t error,
 		if (!testEntry->isBad()
 			&& testEntry->path.length() < B_PATH_NAME_LENGTH) {
 //printf("%s\n", testEntry->cpath);
-			BDirectory dir("/boot/home/Desktop");
+			BDirectory dir("/tmp");
 			CPPUNIT_ASSERT( dir.InitCheck() == B_OK );
 			status_t result = entry.SetTo(&dir, testEntry->cpath, traverse);
 if (!fuzzy_equals(result, error))
@@ -2145,10 +2146,24 @@ get_entry_ref_for_entry(const char *dir, const char *leaf, entry_ref *ref)
 bool
 operator>(const entry_ref & a, const entry_ref & b)
 {
-	return (a.device > b.device
-		|| (a.device == b.device
-			&& (a.directory > b.directory
-			|| (a.directory == b.directory
+	dev_t devA = a.device;
+	dev_t devB = b.device;
+	ino_t dirA = a.directory;
+	ino_t dirB = b.directory;
+
+	if (a.is_virtual() || b.is_virtual()) {
+		entry_ref realA = a.dereference();
+		entry_ref realB = b.dereference();
+		devA = realA.device;
+		devB = realB.device;
+		dirA = realA.directory;
+		dirB = realB.directory;
+	}
+
+	return (devA > devB
+		|| (devA == devB
+			&& (dirA > dirB
+			|| (dirA == dirB
 				&& (a.name != NULL && b.name == NULL
 				|| (a.name != NULL && b.name != NULL
 					&& strcmp(a.name, b.name) > 0))))));
@@ -2181,13 +2196,17 @@ EntryTest::CFunctionsTest()
 		else {
 			CPPUNIT_ASSERT( get_ref_for_path(path, &ref) == B_OK );
 			const entry_ref &testEntryRef = testEntry->get_ref();
-			CPPUNIT_ASSERT( testEntryRef.device == ref.device );
-			CPPUNIT_ASSERT( testEntryRef.directory == ref.directory );
+			CPPUNIT_ASSERT( testEntryRef.dereference().device == ref.dereference().device );
+			CPPUNIT_ASSERT( testEntryRef.dereference().directory == ref.dereference().directory );
 			CPPUNIT_ASSERT( strcmp(testEntryRef.name, ref.name) == 0 );
+			CPPUNIT_ASSERT( strcmp(testEntryRef.dereference().name, ref.dereference().name) == 0 );
+			// operator== handles virtual↔physical transparently (stronger test)
 			CPPUNIT_ASSERT( testEntryRef == ref );
 			CPPUNIT_ASSERT( !(testEntryRef != ref) );
-			CPPUNIT_ASSERT(  ref == testEntryRef );
-			CPPUNIT_ASSERT(  !(ref != testEntryRef) );
+			CPPUNIT_ASSERT( ref == testEntryRef );
+			CPPUNIT_ASSERT( !(ref != testEntryRef) );
+			// also verify via explicit dereference for field-level sanity
+			CPPUNIT_ASSERT( testEntryRef.dereference() == ref.dereference() );
 			for (int32 k = 0; k < testEntryCount; k++) {
 				TestEntry *testEntry2 = testEntries[k];
 				const char *path2 = testEntry2->cpath;
@@ -2214,18 +2233,21 @@ EntryTest::CFunctionsTest()
 	entry_ref ref, ref2;
 	CPPUNIT_ASSERT( get_ref_for_path("/", &ref) == B_OK );
 	CPPUNIT_ASSERT( get_entry_ref_for_entry("/", ".", &ref2) == B_OK );
-	CPPUNIT_ASSERT( ref.device == ref2.device );
-	CPPUNIT_ASSERT( ref.directory == ref2.directory );
+	CPPUNIT_ASSERT( ref.dereference().device == ref2.dereference().device );
+	CPPUNIT_ASSERT( ref.dereference().directory == ref2.dereference().directory );
+	CPPUNIT_ASSERT( strcmp(ref.dereference().name, ref2.dereference().name) == 0 );
 	CPPUNIT_ASSERT( strcmp(ref.name, ref2.name) == 0 );
-	CPPUNIT_ASSERT(  ref == ref2 );
+	CPPUNIT_ASSERT( ref == ref2 );
+	CPPUNIT_ASSERT( ref.dereference() == ref2.dereference() );
 	// fs root dir
 	NextSubTest();
 	CPPUNIT_ASSERT( get_ref_for_path("/boot", &ref) == B_OK );
 	CPPUNIT_ASSERT( get_entry_ref_for_entry("/", "boot", &ref2) == B_OK );
-	CPPUNIT_ASSERT( ref.device == ref2.device );
-	CPPUNIT_ASSERT( ref.directory == ref2.directory );
+	CPPUNIT_ASSERT( ref.dereference().device == ref2.dereference().device );
+	CPPUNIT_ASSERT( ref.dereference().directory == ref2.dereference().directory );
 	CPPUNIT_ASSERT( strcmp(ref.name, ref2.name) == 0 );
-	CPPUNIT_ASSERT(  ref == ref2 );
+	CPPUNIT_ASSERT( ref == ref2 );
+	CPPUNIT_ASSERT( ref.dereference() == ref2.dereference() );
 	// uninitialized
 	NextSubTest();
 	ref = entry_ref();
@@ -2239,6 +2261,45 @@ EntryTest::CFunctionsTest()
 	CPPUNIT_ASSERT(  ref != ref2 );
 	CPPUNIT_ASSERT(  ref < ref2 );
 	CPPUNIT_ASSERT(  !(ref2 < ref) );
+	// cross-vref: two different vref IDs for the same directory must compare equal
+	// This exercises the implicit dereference path in operator==, which is distinct
+	// from comparing dereference() results explicitly.
+	NextSubTest();
+	{
+		int fd1 = open("/", O_RDONLY | O_DIRECTORY);
+		int fd2 = open("/", O_RDONLY | O_DIRECTORY);
+		CPPUNIT_ASSERT( fd1 >= 0 && fd2 >= 0 );
+		entry_ref virtRef1(fd1, ".");
+		entry_ref virtRef2(fd2, ".");
+		// Two create_vref calls on the same path produce different vref_ids
+		CPPUNIT_ASSERT( virtRef1.directory != virtRef2.directory );
+		// operator== dereferences both and finds the same physical directory
+		CPPUNIT_ASSERT( virtRef1 == virtRef2 );
+		CPPUNIT_ASSERT( !(virtRef1 != virtRef2) );
+		// dereference() also agrees (sanity)
+		CPPUNIT_ASSERT( virtRef1.dereference() == virtRef2.dereference() );
+		close(fd1);
+		close(fd2);
+	}
+	// virtual ref vs physical ref for the same directory
+	NextSubTest();
+	{
+		entry_ref physRef;
+		CPPUNIT_ASSERT( get_entry_ref_for_entry("/", ".", &physRef) == B_OK );
+		CPPUNIT_ASSERT( !physRef.is_virtual() );
+		int fd = open("/", O_RDONLY | O_DIRECTORY);
+		CPPUNIT_ASSERT( fd >= 0 );
+		entry_ref virtRef(fd, ".");
+		CPPUNIT_ASSERT( virtRef.is_virtual() );
+		// operator== handles virtual↔physical without explicit dereference()
+		CPPUNIT_ASSERT( virtRef == physRef );
+		CPPUNIT_ASSERT( physRef == virtRef );
+		CPPUNIT_ASSERT( !(virtRef != physRef) );
+		CPPUNIT_ASSERT( !(physRef != virtRef) );
+		// and dereference() is consistent
+		CPPUNIT_ASSERT( virtRef.dereference() == physRef );
+		close(fd);
+	}
 }
 
 
@@ -2364,9 +2425,14 @@ EntryTest::MiscTest()
 	
 
 
-// directory name for too long path name (70 characters)
+// directory name for too long path name (255 characters = NAME_MAX on Linux).
+// 16 levels * 256 chars/level + base path ~13 chars exceeds PATH_MAX (4096),
+// so tooLongDir16 causes ENAMETOOLONG = B_NAME_TOO_LONG on Linux as intended.
 static const char *tooLongDirname =
-	"1234567890123456789012345678901234567890123456789012345678901234567890";
+	"1234567890123456789012345678901234567890123456789012345678901234567890"
+	"1234567890123456789012345678901234567890123456789012345678901234567890"
+	"1234567890123456789012345678901234567890123456789012345678901234567890"
+	"123456789012345678901234567890123456789012345";
 
 // too long entry name (257 characters)
 static const char *tooLongEntryname = 

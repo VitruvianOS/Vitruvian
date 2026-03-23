@@ -1357,19 +1357,17 @@ QueryTest::CheckUpdateMessages(uint32 opcode, QueryTestEntry **entries,
 								== B_OK );
 				CPPUNIT_ASSERT( msgOpcode == opcode );
 				dev_t device;
-				CPPUNIT_ASSERT( message.FindInt32("device", &device)
+				CPPUNIT_ASSERT( message.FindInt64("device", (int64*)&device)
 								== B_OK );
 				CPPUNIT_ASSERT( device == dev_for_path(testMountPoint) );
-#ifndef __VOS__
 				ino_t directory;
-				CPPUNIT_ASSERT( message.FindInt64("directory", &directory)
+				CPPUNIT_ASSERT( message.FindInt64("directory", (int64*)&directory)
 								== B_OK );
 				CPPUNIT_ASSERT( directory == entry->directory );
 				ino_t node;
-				CPPUNIT_ASSERT( message.FindInt64("node", &node)
+				CPPUNIT_ASSERT( message.FindInt64("node", (int64*)&node)
 								== B_OK );
 				CPPUNIT_ASSERT( node == entry->node );
-#endif
 				if (opcode == B_ENTRY_CREATED) {
 					const char *name;
 					CPPUNIT_ASSERT( message.FindString("name", &name)

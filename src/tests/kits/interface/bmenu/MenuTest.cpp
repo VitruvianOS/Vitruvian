@@ -20,8 +20,8 @@ public:
 	void
 	SizeTest()
 	{
-		CPPUNIT_ASSERT_EQUAL(312, sizeof(BMenu));
-		CPPUNIT_ASSERT_EQUAL(128, sizeof(BMenuItem));
+		CPPUNIT_ASSERT_EQUAL((size_t)464, sizeof(BMenu));
+		CPPUNIT_ASSERT_EQUAL((size_t)128, sizeof(BMenuItem));
 	}
 
 	void

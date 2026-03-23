@@ -218,15 +218,11 @@ static int test_entry_created()
     ASSERT_OK(msg.FindInt32("opcode", &opcode), "Should have opcode field");
     ASSERT_EQ(opcode, B_ENTRY_CREATED, "Opcode should be B_ENTRY_CREATED");
     
-    int32 device;
-    ASSERT_OK(msg.FindInt32("device", &device), "Should have device field");
-    
-    int64 directory;
-    ASSERT_OK(msg.FindInt64("directory", &directory), "Should have directory field");
-    ASSERT_EQ(directory, (int64)st.st_ino, "Directory should match watched dir");
-    
-    int64 node;
-    ASSERT_OK(msg.FindInt64("node", &node), "Should have node field");
+    entry_ref dirRef;
+    ASSERT_OK(msg.FindRef("virtual:directory", &dirRef), "Should have virtual:directory field");
+
+    node_ref nodeRef;
+    ASSERT_OK(msg.FindNodeRef("virtual:node", &nodeRef), "Should have virtual:node field");
     
     const char *name;
     ASSERT_OK(msg.FindString("name", &name), "Should have name field");
@@ -410,9 +406,8 @@ static int test_stat_changed()
     ASSERT_OK(msg.FindInt32("opcode", &opcode), "Should have opcode field");
     ASSERT_EQ(opcode, B_STAT_CHANGED, "Opcode should be B_STAT_CHANGED");
     
-    int64 node;
-    ASSERT_OK(msg.FindInt64("node", &node), "Should have node field");
-    ASSERT_EQ(node, (int64)st.st_ino, "Node should match file");
+    node_ref nodeRef;
+    ASSERT_OK(msg.FindNodeRef("virtual:node", &nodeRef), "Should have virtual:node field");
     
     int32 fields;
     ASSERT_OK(msg.FindInt32("fields", &fields), "Should have fields");

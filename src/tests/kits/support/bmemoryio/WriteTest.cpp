@@ -54,7 +54,7 @@ WriteTest::PerformTest(void)
 	memset(buf, 0, 10);
 	pos = mem.Position();
 	err = mem.WriteAt(-10, writeBuf, 5);
-	CPPUNIT_ASSERT(err == 5);
+	CPPUNIT_ASSERT(err == B_BAD_VALUE);
 }
 
 

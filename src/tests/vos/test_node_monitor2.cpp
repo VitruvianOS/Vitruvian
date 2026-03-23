@@ -99,31 +99,31 @@ private:
     void PrintMessageDetails(BMessage* msg, int32 opcode)
     {
         const char* name;
-        int32 device;
-        int64 node, directory;
-        
+        node_ref nodeRef;
+        entry_ref dirRef;
+
         switch (opcode) {
             case B_ENTRY_CREATED:
             case B_ENTRY_REMOVED:
                 if (msg->FindString("name", &name) == B_OK)
                     printf(" name=\"%s\"", name);
-                if (msg->FindInt32("device", &device) == B_OK)
-                    printf(" device=%d", device);
-                if (msg->FindInt64("directory", &directory) == B_OK)
-                    printf(" dir=%lld", (long long)directory);
-                if (msg->FindInt64("node", &node) == B_OK)
-                    printf(" node=%lld", (long long)node);
+                if (msg->FindRef("virtual:directory", &dirRef) == B_OK)
+                    printf(" dir_dev=%llu dir=%lld", (unsigned long long)dirRef.device,
+                        (long long)dirRef.directory);
+                if (msg->FindNodeRef("virtual:node", &nodeRef) == B_OK)
+                    printf(" node_dev=%llu node=%lld", (unsigned long long)nodeRef.device,
+                        (long long)nodeRef.node);
                 break;
-                
+
             case B_ENTRY_MOVED:
                 if (msg->FindString("name", &name) == B_OK)
                     printf(" name=\"%s\"", name);
-                if (msg->FindInt64("from directory", &directory) == B_OK)
-                    printf(" from_dir=%lld", (long long)directory);
-                if (msg->FindInt64("to directory", &directory) == B_OK)
-                    printf(" to_dir=%lld", (long long)directory);
+                if (msg->FindRef("virtual:from directory", &dirRef) == B_OK)
+                    printf(" from_dir=%lld", (long long)dirRef.directory);
+                if (msg->FindRef("virtual:to directory", &dirRef) == B_OK)
+                    printf(" to_dir=%lld", (long long)dirRef.directory);
                 break;
-                
+
             case B_STAT_CHANGED:
                 {
                     int32 fields;
@@ -131,7 +131,7 @@ private:
                         printf(" fields=0x%x", fields);
                 }
                 break;
-                
+
             case B_ATTR_CHANGED:
                 if (msg->FindString("attr", &name) == B_OK)
                     printf(" attr=\"%s\"", name);
@@ -148,18 +148,21 @@ private:
                     }
                 }
                 break;
-                
+
             case B_DEVICE_MOUNTED:
                 {
-                    int32 newDev;
-                    if (msg->FindInt32("new device", &newDev) == B_OK)
-                        printf(" new_device=%d", newDev);
+                    partition_id newDev;
+                    if (msg->FindUInt64("new device", (uint64*)&newDev) == B_OK)
+                        printf(" new_device=%llu", (unsigned long long)newDev);
                 }
                 break;
-                
+
             case B_DEVICE_UNMOUNTED:
-                if (msg->FindInt32("device", &device) == B_OK)
-                    printf(" device=%d", device);
+                {
+                    partition_id dev;
+                    if (msg->FindUInt64("device", (uint64*)&dev) == B_OK)
+                        printf(" device=%llu", (unsigned long long)dev);
+                }
                 break;
         }
         printf("\n");

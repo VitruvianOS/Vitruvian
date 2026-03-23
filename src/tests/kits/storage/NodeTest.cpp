@@ -108,11 +108,11 @@ NodeTest::CreateRONodes(TestNodes& testEntries)
 	testEntries.add(new BNode(filename), filename);
 	filename = "/";
 	testEntries.add(new BNode(filename), filename);
-	filename = "/boot";
+	filename = "/usr";
 	testEntries.add(new BNode(filename), filename);
-	filename = "/boot/home";
+	filename = "/home";
 	testEntries.add(new BNode(filename), filename);
-	filename = "/boot/home/Desktop";
+	filename = "/home/Desktop";
 	testEntries.add(new BNode(filename), filename);
 	filename = existingFilename;
 	testEntries.add(new BNode(filename), filename);
@@ -733,16 +733,14 @@ NodeTest::AttrTest(BNode &node)
 						   B_BAD_ADDRESS, B_BAD_VALUE) );
 	CPPUNIT_ASSERT( equals(node.RemoveAttr(NULL), B_BAD_ADDRESS, B_BAD_VALUE) );
 	// too long attribute name
-// R5: Read/RemoveAttr() do not return B_NAME_TOO_LONG, but B_ENTRY_NOT_FOUND
-// R5: WriteAttr() does not return B_NAME_TOO_LONG, but B_BAD_VALUE
 	char tooLongAttrName[B_ATTR_NAME_LENGTH + 1];
 	memset(tooLongAttrName, 'a', B_ATTR_NAME_LENGTH);
 	tooLongAttrName[B_ATTR_NAME_LENGTH + 1] = 0;
 	CPPUNIT_ASSERT( node.WriteAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
-								   sizeof(buffer)) == B_BAD_VALUE );
+								   sizeof(buffer)) == B_NAME_TOO_LONG );
 	CPPUNIT_ASSERT( node.ReadAttr(tooLongAttrName, B_STRING_TYPE, 0, buffer,
-								  sizeof(buffer)) == B_ENTRY_NOT_FOUND );
-	CPPUNIT_ASSERT( node.RemoveAttr(tooLongAttrName) == B_ENTRY_NOT_FOUND );
+								  sizeof(buffer)) == B_NAME_TOO_LONG );
+	CPPUNIT_ASSERT( node.RemoveAttr(tooLongAttrName) == B_NAME_TOO_LONG );
 	// remove the attributes and try to read them
 	for (int32 i = 0; i < attrCount; i++) {
 		const char *attrName = attrNames[i];

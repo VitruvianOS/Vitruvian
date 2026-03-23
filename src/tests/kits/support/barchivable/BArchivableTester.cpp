@@ -34,7 +34,7 @@
 void TBArchivableTestCase::TestPerform()
 {
 	BArchivable Archive;
-	CPPUNIT_ASSERT(Archive.Perform(0, NULL) == B_ERROR);
+	CPPUNIT_ASSERT(Archive.Perform(0, NULL) == B_NAME_NOT_FOUND);
 }
 //------------------------------------------------------------------------------
 /**

@@ -429,7 +429,7 @@ status_t
 GameSoundBuffer::StartPlaying()
 {
 	if (fIsPlaying)
-		return EALREADY;
+		return -EALREADY;
 
 	BMediaRoster* roster = BMediaRoster::Roster();
 	BTimeSource* source = roster->MakeTimeSourceFor(fConnection->producer);
@@ -454,7 +454,7 @@ status_t
 GameSoundBuffer::StopPlaying()
 {
 	if (!fIsPlaying)
-		return EALREADY;
+		return -EALREADY;
 
 	BMediaRoster* roster = BMediaRoster::Roster();
 	roster->StopNode(fConnection->producer, 0, true);

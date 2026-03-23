@@ -241,7 +241,7 @@ BGameSoundDevice::StartPlaying(gs_id sound)
 	}
 
 	fSounds[sound - 1]->Reset();
-	return EALREADY;
+	return -EALREADY;
 }
 
 
@@ -257,7 +257,7 @@ BGameSoundDevice::StopPlaying(gs_id sound)
 		return fSounds[sound - 1]->StopPlaying();
 	}
 
-	return EALREADY;
+	return -EALREADY;
 }
 
 

@@ -143,7 +143,7 @@ status_t
 BCountry::GetPreferredLanguage(BLanguage& language) const
 {
 #if U_ICU_VERSION_MAJOR_NUM < 63
-	return ENOSYS;
+	return -ENOSYS;
 #else
 	status_t status = InitCheck();
 	if (status != B_OK)

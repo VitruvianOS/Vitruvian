@@ -1435,7 +1435,7 @@ SearchForSignatureEntryList::Rewind()
 		return fIteratorList->Rewind();
 
 	if (!fSignatures.CountStrings())
-		return ENOENT;
+		return B_ENTRY_NOT_FOUND;
 
 	// build up the iterator
 	fIteratorList = new CachedEntryIteratorList(false);

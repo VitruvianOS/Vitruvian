@@ -327,7 +327,7 @@ status_t
 BFileGameSound::SetPaused(bool isPaused, bigtime_t rampTime)
 {
 	if (fPaused == isPaused)
-		return EALREADY;
+		return -EALREADY;
 
 	Lock();
 

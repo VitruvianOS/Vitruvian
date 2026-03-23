@@ -50,14 +50,14 @@ BCatalogData::CanHaveData() const
 status_t
 BCatalogData::GetData(const char* name, BMessage* msg)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
 status_t
 BCatalogData::GetData(uint32 id, BMessage* msg)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
@@ -65,14 +65,14 @@ status_t
 BCatalogData::SetString(const char* string, const char* translated,
 	const char* context, const char* comment)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
 status_t
 BCatalogData::SetString(int32 id, const char* translated)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
@@ -86,56 +86,56 @@ BCatalogData::CanWriteData() const
 status_t
 BCatalogData::SetData(const char* name, BMessage* msg)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
 status_t
 BCatalogData::SetData(uint32 id, BMessage* msg)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
 status_t
 BCatalogData::ReadFromFile(const char* path)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
 status_t
 BCatalogData::ReadFromAttribute(const entry_ref& appOrAddOnRef)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
 status_t
 BCatalogData::ReadFromResource(const entry_ref& appOrAddOnRef)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
 status_t
 BCatalogData::WriteToFile(const char* path)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
 status_t
 BCatalogData::WriteToAttribute(const entry_ref& appOrAddOnRef)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 
 status_t
 BCatalogData::WriteToResource(const entry_ref& appOrAddOnRef)
 {
-	return EOPNOTSUPP;
+	return -EOPNOTSUPP;
 }
 
 

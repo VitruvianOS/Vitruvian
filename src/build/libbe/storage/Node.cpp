@@ -38,6 +38,14 @@ node_ref::node_ref()
 }
 
 
+node_ref::node_ref(dev_t dev, ino_t ino)
+	:
+	device(dev),
+	node(ino)
+{
+}
+
+
 node_ref::node_ref(const node_ref& other)
 	:
 	device((dev_t)-1),

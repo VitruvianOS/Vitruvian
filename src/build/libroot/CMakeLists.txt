@@ -26,6 +26,7 @@ AddOn(
 	LIBS rt dl pthread ${ZLIB_LIBRARIES}
 )
 
+target_compile_definitions(root_build PRIVATE KMESSAGE_NO_VREF_SUPPORT)
 target_include_directories(root_build PRIVATE ${LIBROOT_SOURCES} kernel)
 
 UsePrivateHeaders(root_build app shared libroot system kernel)

@@ -129,7 +129,13 @@ BDirMenu::Populate(const BEntry* startEntry, BWindow* source,
 		BEntry desktopEntry;
 		desktopDir.GetEntry(&desktopEntry);
 
+		int loopDepth = 0;
+		const int kMaxDirDepth = 256;
+
 		for (;;) {
+			if (++loopDepth > kMaxDirDepth)
+				break;
+
 			BNode node(&entry);
 			ThrowOnInitCheckError(&node);
 

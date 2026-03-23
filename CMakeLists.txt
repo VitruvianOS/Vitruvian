@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 
-project(VOS VERSION 0.2.5 LANGUAGES CXX C)
+project(VOS VERSION 0.3.0 LANGUAGES CXX C)
 
 # TODO shouldn't we resolve an absolute path here? it kind of works
 # only if buildtools is in the project source dir, which...we don't

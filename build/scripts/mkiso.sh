@@ -40,9 +40,8 @@ if [ -f $basedir/LIVE_BOOT/image/live/filesystem.squashfs ]; then
     rm -f $basedir/LIVE_BOOT/image/live/filesystem.squashfs
 fi 
 
-sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian-live" > /etc/hostname &\
-apt update && \
-apt install -y dkms build-essential linux-headers-$imagekernelversion && \
+sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo "vitruvian" > /etc/hostname &\
+apt-get install -y dkms build-essential linux-headers-$imagekernelversion && \
 apt install -y -f --reinstall /tmp/*.deb && \
 depmod -v $imagekernelversion && echo 'root:live' | chpasswd; exit"
 

@@ -53,10 +53,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-BASE_PACKAGES="apt-utils dialog linux-image-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny libbinutils openssh-server"
+BASE_PACKAGES="apt-utils dialog linux-image-rt-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny libbinutils openssh-server locales xfsprogs"
 
-sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo 'vitruvian-live' > /etc/hostname && \
+sudo chroot $basedir/LIVE_BOOT/chroot /bin/bash -c "echo 'vitruvian' > /etc/hostname && \
 apt update && apt install -y --no-install-recommends $BASE_PACKAGES $DEBUG_PACKAGES && \
+echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \
 exit"
 
 ls ./LIVE_BOOT/chroot/lib/modules | head -n1 > imagekernelversion.conf

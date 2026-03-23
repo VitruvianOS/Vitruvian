@@ -27,7 +27,7 @@ echo "[+] Loop device: $LOOP"
 sudo parted --script "$LOOP" mklabel gpt
 sudo parted --script "$LOOP" mkpart ESP fat32 1MiB 513MiB
 sudo parted --script "$LOOP" set 1 esp on
-sudo parted --script "$LOOP" mkpart primary ext4 513MiB 100%
+sudo parted --script "$LOOP" mkpart primary xfs 513MiB 100%
 sudo partprobe "$LOOP"
 
 EFI_PART="${LOOP}p1"
@@ -35,7 +35,7 @@ ROOT_PART="${LOOP}p2"
 
 # 4. Format filesystems
 sudo mkfs.vfat -F32 "$EFI_PART"
-sudo mkfs.ext4 -F "$ROOT_PART"
+sudo mkfs.xfs -f "$ROOT_PART"
 
 # 5. Mount root
 sudo mkdir -p "$MNT"
@@ -75,7 +75,7 @@ EOL
 
 apt update
 apt install -y systemd systemd-sysv sudo vim net-tools iproute2 openssh-server \
-    linux-image-amd64 grub-efi-amd64 grub-efi-amd64-bin grub-efi-amd64-signed shim-signed efibootmgr
+    linux-image-rt-amd64 grub-efi-amd64 grub-efi-amd64-bin grub-efi-amd64-signed shim-signed efibootmgr xfsprogs
 
 # Install local deb packages if available
 if ls /localdeb/*.deb >/dev/null 2>&1; then
@@ -102,7 +102,7 @@ EOL
 
 # fstab
 cat > /etc/fstab <<EOL
-/dev/vda2   /         ext4    errors=remount-ro  0 1
+/dev/vda2   /         xfs     defaults           0 1
 /dev/vda1   /boot/efi vfat    umask=0077         0 1
 host_shared $GUEST_MOUNT_POINT 9p trans=virtio,version=9p2000.L,rw 0 0
 EOL

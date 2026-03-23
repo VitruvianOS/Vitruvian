@@ -271,14 +271,11 @@ DesktopPoseView::AdaptToVolumeChange(BMessage* message)
 			}
 		}
 
-		#ifdef __VOS_OLD_NODE_MONITOR__
-		entryMessage.AddUInt64("device", model.NodeRef()->device);
-		entryMessage.AddUInt64("node", model.NodeRef()->node);
-		entryMessage.AddUInt64("directory", model.EntryRef()->directory);
+		entryMessage.AddNodeRef("virtual:node", model.NodeRef());
+		entryMessage.AddRef("virtual:directory", model.EntryRef());
 		entryMessage.AddString("name", model.EntryRef()->name);
 
 		Window()->PostMessage(&entryMessage, this);
-		#endif
 	}
 
 	ToggleDisksVolumes();

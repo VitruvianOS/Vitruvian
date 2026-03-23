@@ -21,7 +21,7 @@ AddOn(
 	${LIBROOT_SOURCES}/byteorder.cpp
 	${LIBROOT_SOURCES}/fs/normalize_path.cpp
 	${LIBROOT_SOURCES}/fs/find_directory.cpp
-	${LIBROOT_SOURCES}/fs/attr.cpp
+	${LIBROOT_SOURCES}/fs/attr_stub.cpp
 
 	LIBS rt dl pthread ${ZLIB_LIBRARIES}
 )

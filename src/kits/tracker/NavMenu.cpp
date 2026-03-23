@@ -402,8 +402,14 @@ BNavMenu::StartBuildingItemList()
 {
 	BEntry entry;
 
-	if (fNavDir.dev() == B_INVALID_DEV || entry.SetTo(&fNavDir, true) != B_OK
-		|| !entry.Exists()) {
+	if (fNavDir.dev() == B_INVALID_DEV) {
+		return false;
+	}
+	status_t setErr = entry.SetTo(&fNavDir, true);
+	if (setErr != B_OK) {
+		return false;
+	}
+	if (!entry.Exists()) {
 		return false;
 	}
 
@@ -420,8 +426,10 @@ BNavMenu::StartBuildingItemList()
 		return true;
 
 	Model startModel(&entry, true);
-	if (startModel.InitCheck() != B_OK || !startModel.IsContainer())
+
+	if (startModel.InitCheck() != B_OK || !startModel.IsContainer()) {
 		return false;
+	}
 
 	if (startModel.IsQuery()) {
 		fContainer = new QueryEntryListCollection(&startModel);
@@ -463,8 +471,9 @@ BNavMenu::StartBuildingItemList()
 			fContainer = new DirectoryEntryList(*directory);
 	}
 
-	if (fContainer == NULL || fContainer->InitCheck() != B_OK)
+	if (fContainer == NULL || fContainer->InitCheck() != B_OK) {
 		return false;
+	}
 
 	fContainer->Rewind();
 
@@ -500,7 +509,6 @@ BNavMenu::AddVolumeItems()
 			|| volume.GetRootDirectory(&root) != B_OK || root.GetEntry(&entry) != B_OK) {
 			continue;
 		}
-
 		model.SetTo(&entry);
 		AddOneItem(&model);
 	}
@@ -528,14 +536,16 @@ BNavMenu::AddNextItem()
 	}
 
 	BEntry entry;
-	if (fContainer->GetNextEntry(&entry) != B_OK) {
+	status_t nextErr = fContainer->GetNextEntry(&entry);
+	if (nextErr != B_OK) {
 		// we're finished
 		return false;
 	}
 
+	char entryName[B_FILE_NAME_LENGTH] = "(unknown)";
+	entry.GetName(entryName);
 	if (TrackerSettings().HideDotFiles()) {
-		char name[B_FILE_NAME_LENGTH];
-		if (entry.GetName(name) == B_OK && name[0] == '.')
+		if (entryName[0] == '.')
 			return true;
 	}
 

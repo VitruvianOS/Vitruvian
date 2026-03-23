@@ -109,6 +109,7 @@ static const rgb_color kIdealHaikuGreen = { 42, 131, 36, 255 };
 static const rgb_color kIdealHaikuOrange = { 255, 69, 0, 255 };
 static const rgb_color kIdealHaikuYellow = { 255, 176, 0, 255 };
 static const rgb_color kIdealBeOSBlue = { 0, 0, 200, 255 };
+static const rgb_color kIdealVOSBlue = { 0, 80, 200, 255 };
 static const rgb_color kIdealBeOSRed = { 200, 0, 0, 255 };
 static const rgb_color kBlack = { 0, 0, 0, 255 };
 static const rgb_color kWhite = { 255, 255, 255, 255 };
@@ -281,6 +282,7 @@ private:
 private:
 			BStringView*	fVersionLabelView;
 			BStringView*	fVersionInfoView;
+			BStringView*	fVOSVersionView;
 			BStringView*	fCPULabelView;
 			BStringView*	fCPUInfoView;
 			BStringView*	fMemSizeView;
@@ -597,6 +599,7 @@ SysInfoView::SysInfoView()
 	BView("AboutSystem", B_WILL_DRAW | B_PULSE_NEEDED),
 	fVersionLabelView(NULL),
 	fVersionInfoView(NULL),
+	fVOSVersionView(NULL),
 	fCPULabelView(NULL),
 	fCPUInfoView(NULL),
 	fMemSizeView(NULL),
@@ -624,6 +627,7 @@ SysInfoView::SysInfoView()
 	// OS Version / ABI
 	fVersionLabelView = _CreateLabel("oslabel", _GetOSVersion());
 	fVersionInfoView = _CreateSubtext("ostext", _GetABIVersion());
+	fVOSVersionView = _CreateSubtext("vosversion", VOS_VERSION);
 
 	// CPU count, type and clock speed
 	fCPULabelView = _CreateLabel("cpulabel", _GetCPUCount(&sysInfo));
@@ -664,6 +668,7 @@ SysInfoView::SysInfoView()
 	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
 		// Version:
 		.Add(fVersionLabelView)
+		.Add(fVOSVersionView)
 		.Add(fVersionInfoView)
 		.AddStrut(offset)
 		// Processors:
@@ -1639,8 +1644,12 @@ AboutView::_CreateCreditsView()
 	BFont font(be_bold_font);
 	font.SetSize(font.Size() + 4);
 
-	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
-	fCreditsView->Insert("Vitruvian\n\n");
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fBeOSRedColor);
+	fCreditsView->Insert("V");
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fTextColor);
+	fCreditsView->Insert("itruvian");
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &kIdealVOSBlue);
+	fCreditsView->Insert("OS\n\n");
 
 	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fLinkColor);
 	fCreditsView->InsertHyperText(B_TRANSLATE("Visit the Vitruvian website"),
@@ -1677,7 +1686,7 @@ AboutView::_CreateCreditsView()
 
 	font.SetSize(be_bold_font->Size() + 4);
 	font.SetFace(B_BOLD_FACE);
-	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fBeOSBlueColor);
 	fCreditsView->Insert(B_TRANSLATE("\nCopyrights\n\n"));
 
 	// Vitruvian license

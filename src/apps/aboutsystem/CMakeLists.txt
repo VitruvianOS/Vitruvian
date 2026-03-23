@@ -11,3 +11,5 @@ Application(
 )
 
 UsePrivateHeaders(AboutSystem interface app shared libroot)
+
+target_compile_definitions(AboutSystem PRIVATE VOS_VERSION="${PROJECT_VERSION}")

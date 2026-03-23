@@ -416,9 +416,12 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 		{
 			node_ref dirNode;
 			node_ref itemNode;
-			dirNode.device = itemNode.device = message->FindInt32("device");
-			message->FindUInt64("to directory", &dirNode.node);
-			message->FindUInt64("node", &itemNode.node);
+			message->FindNodeRef("virtual:node", &itemNode);
+			entry_ref toRef;
+			if (message->FindRef("virtual:to directory", &toRef) == B_OK) {
+				BEntry dirEntry(&toRef);
+				dirEntry.GetNodeRef(&dirNode);
+			}
 
 			const char* name;
 			if (message->FindString("name", &name) != B_OK)

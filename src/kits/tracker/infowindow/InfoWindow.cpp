@@ -421,8 +421,7 @@ BInfoWindow::MessageReceived(BMessage* message)
 				case B_ENTRY_REMOVED:
 				{
 					node_ref itemNode;
-					message->FindUInt64("device", &itemNode.device);
-					message->FindUInt64("node", &itemNode.node);
+					message->FindNodeRef("virtual:node", &itemNode);
 					// our window itself may be deleted
 					if (*TargetModel()->NodeRef() == itemNode)
 						Close();
@@ -449,7 +448,7 @@ BInfoWindow::MessageReceived(BMessage* message)
 					// mounted, we might as well quit
 					node_ref itemNode;
 					// Only the device information is available
-					message->FindUInt64("device", &itemNode.device);
+					message->FindUInt64("device", (uint64*)&itemNode.device);
 					if (TargetModel()->NodeRef()->device == itemNode.device)
 						Close();
 					break;
@@ -505,8 +504,6 @@ BInfoWindow::CalcSize(void* castToWindow)
 {
 	BInfoWindow* window = static_cast<BInfoWindow*>(castToWindow);
 	BDirectory dir(window->TargetModel()->EntryRef());
-	BDirectory trashDir;
-	FSGetTrashDir(&trashDir, window->TargetModel()->EntryRef()->device);
 	if (dir.InitCheck() != B_OK) {
 		if (window->StopCalc())
 			return B_ERROR;
@@ -518,6 +515,11 @@ BInfoWindow::CalcSize(void* castToWindow)
 		window->SetSizeString(B_TRANSLATE("Error calculating folder size."));
 		return B_ERROR;
 	}
+
+	BDirectory trashDir;
+	dev_t device = window->TargetModel()->EntryRef()->device;
+	if (device != 0 && device != (dev_t)B_INVALID_DEV)
+		FSGetTrashDir(&trashDir, device);
 
 	BEntry dirEntry, trashEntry;
 	dir.GetEntry(&dirEntry);

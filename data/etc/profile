@@ -4,7 +4,7 @@
 #
 
 echo -e "\nWelcome to Vitruvian.\n"
-PS1="\w"
+PS1="\u@\h:\w"
 
 export PS1="\["'`if [ $? = 0 ]; then echo "\e[32m";
 	else echo "\e[31m"; fi`'"\]$PS1\[\e[0m\]> "

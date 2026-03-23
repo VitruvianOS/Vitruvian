@@ -33,6 +33,8 @@ public:
 	virtual	bool					GetNextEvent(BMessage** _event);
 	virtual	status_t				InsertEvent(BMessage* event);
 	virtual	BMessage*				PeekLatestMouseMoved();
+	virtual	bool					GetCurrentMouseState(BPoint& where,
+									uint32& buttons) const override;
 
 			void					Suspend();
 			void					Resume();
@@ -67,6 +69,8 @@ private:
 			uint32					fMouseButtons;
 			uint32					fModifiers;
 			uint32					fOldModifiers;
+			bigtime_t				fLastClickTime;
+			int32					fClickCount;
 
 			bool					fKeyStates[KEY_MAX];
 			bool					fCapsLock;

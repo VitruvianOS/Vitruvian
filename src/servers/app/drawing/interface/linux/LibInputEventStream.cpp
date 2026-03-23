@@ -203,6 +203,8 @@ LibInputEventStream::LibInputEventStream(uint32 width, uint32 height, struct lib
 	fMouseButtons(0),
 	fModifiers(0),
 	fOldModifiers(0),
+	fLastClickTime(0),
+	fClickCount(0),
 	fCapsLock(false),
 	fNumLock(false),
 	fScrollLock(false),
@@ -314,6 +316,15 @@ BMessage*
 LibInputEventStream::PeekLatestMouseMoved()
 {
 	return fLatestMouseMovedEvent;
+}
+
+
+bool
+LibInputEventStream::GetCurrentMouseState(BPoint& where, uint32& buttons) const
+{
+	where = fMousePosition;
+	buttons = fMouseButtons;
+	return true;
 }
 
 
@@ -453,11 +464,22 @@ LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 
 			if (libinput_event_pointer_get_button_state(e)
 					== LIBINPUT_BUTTON_STATE_PRESSED) {
-				what = B_MOUSE_DOWN;
 				fMouseButtons |= bButton;
+				what = B_MOUSE_DOWN;
+
+				bigtime_t clickSpeed;
+				get_click_speed(&clickSpeed);
+				bigtime_t now = system_time();
+				if (now - fLastClickTime <= clickSpeed)
+					fClickCount = (fClickCount % 3) + 1;
+				else
+					fClickCount = 1;
+				fLastClickTime = now;
+
+				event->AddInt32("clicks", fClickCount);
 			} else {
-				what = B_MOUSE_UP;
 				fMouseButtons &= ~bButton;
+				what = B_MOUSE_UP;
 			}
 
 			event->AddPoint("where", fMousePosition);

@@ -34,8 +34,8 @@ struct entry_ref {
 	bool operator!=(const entry_ref &ref) const;
 	entry_ref &operator=(const entry_ref &ref);
 
-	dev_t	dev() { return device; }
-	dev_t	dir() { return directory; }
+	dev_t	dev() const { return device; }
+	ino_t	dir() const { return directory; }
 
 	dev_t	device;
 	ino_t	directory;

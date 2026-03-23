@@ -257,7 +257,7 @@ BDeskWindow::Init(const BMessage*)
 	InitAddOnsList(false);
 	ApplyShortcutPreferences(false);
 
-	_inherited::Init();
+	_inherited::Init(NULL);
 
 	entry_ref ref;
 	BPath path;

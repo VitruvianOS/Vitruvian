@@ -22,7 +22,7 @@ ln -sf /var /system/var
 #TODO this should be done on login by the user so that we correct
 # the right multiuser home.
 mkdir -p /home/Desktop
-ln -sf /home /home/Desktop/home2
+ln -sf /home /home/Desktop/Home
 ln -sf / /home/Desktop/Boot
 ln -sf /system /home/Desktop/System
 

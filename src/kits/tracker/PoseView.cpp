@@ -1296,6 +1296,8 @@ BPoseView::AddPoses(Model* model)
 
 	if (model != NULL)
 		params->ref = *model->EntryRef();
+	else
+		params->ref = *TargetModel()->EntryRef();
 
 	thread_id addPosesThread = spawn_thread(&BPoseView::AddPosesTask,
 		"add poses", B_DISPLAY_PRIORITY, params);
@@ -1595,16 +1597,12 @@ BPoseView::AddVolumePoses()
 		if (model.InitCheck() == B_OK) {
 			BMessage monitorMsg;
 			monitorMsg.what = B_NODE_MONITOR;
-
 			monitorMsg.AddInt32("opcode", B_ENTRY_CREATED);
-
-			#ifdef __VOS_OLD_NODE_MONITOR__
-			monitorMsg.AddUInt64("device", model.NodeRef()->device);
-			monitorMsg.AddUInt64("node", model.NodeRef()->node);
-			monitorMsg.AddUInt64("directory", model.EntryRef()->directory);
+			// Use AddRef/AddNodeRef so the message acquires vref ownership,
+			// keeping the vrefs alive until the message is processed.
+			monitorMsg.AddRef("virtual:directory", model.EntryRef());
+			monitorMsg.AddNodeRef("virtual:node", model.NodeRef());
 			monitorMsg.AddString("name", model.EntryRef()->name);
-			#endif
-
 			Window()->PostMessage(&monitorMsg, this);
 		}
 	} else {
@@ -1701,6 +1699,7 @@ BPoseView::AddPosesCompleted()
 		window->AddMimeTypesToMenu();
 
 	// add Trash icon to Desktop
+	// (volumes are added via AddVolumePoses called earlier in the loading flow)
 	if (IsVolumesRoot())
 		CreateTrashPose();
 
@@ -1748,14 +1747,27 @@ BPoseView::CreateVolumePose(BVolume* volume)
 	// If the volume is mounted at a directory of a persistent volume, we don't
 	// want it on the desktop or in the disks window.
 	BVolume parentVolume(ref.dereference().dev());
+#ifdef __VOS__
+	// On Vitruvian, allow the boot volume (root filesystem) to be shown even
+	// if it appears to be mounted within another persistent volume, as the
+	// Linux filesystem structure is different from Haiku's volume model
+	BVolumeRoster roster;
+	BVolume bootVolume;
+	bool isBootVolume = (roster.GetBootVolume(&bootVolume) == B_OK
+		&& bootVolume.Device() == volume->Device());
+
+	if (!isBootVolume && parentVolume.InitCheck() == B_OK && parentVolume.IsPersistent())
+		return;
+#else
 	if (parentVolume.InitCheck() == B_OK && parentVolume.IsPersistent())
 		return;
+#endif
 
 	node_ref itemNode;
 	root.GetNodeRef(&itemNode);
 
 	node_ref dirNode;
-	dirNode = node_ref(ref.dev(), ref.dir());
+	root.GetNodeRef(&dirNode);
 
 	BPose* pose = EntryCreated(&dirNode, &itemNode, ref.name, 0);
 	if (pose != NULL && !TargetModel()->IsRoot()) {
@@ -1817,6 +1829,7 @@ BPoseView::CreateTrashPose()
 		}
 	}
 }
+
 
 
 BPose*
@@ -3030,8 +3043,6 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 			const StatStruct* stat = model->StatBuf();
 			if (stat->st_crtime < now - 5 || stat->st_crtime > now)
 				break;
-
-			UNIMPLEMENTED();
 
 			//PRINT(("retrying to read pose info for %s, %d\n",
 			//	model->Name(), count));

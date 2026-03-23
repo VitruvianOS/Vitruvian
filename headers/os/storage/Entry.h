@@ -59,16 +59,19 @@ public:
 public:
 			char*				name;
 
+			friend class		node_ref;
 			friend class 		BPath;
 			friend class		BEntry;
 			friend class		BDirectory;
 			friend class		BFile;
 			friend class		BNode;
 
-private:
-			team_id				team;
+protected:
 			mutable dev_t		real_device;
 			mutable ino_t		real_directory;
+
+private:
+			team_id				team;
 };
 
 

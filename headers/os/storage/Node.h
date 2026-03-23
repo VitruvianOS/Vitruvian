@@ -49,10 +49,14 @@ public:
 	dev_t device;
 	ino_t node;
 
-private:
-	team_id team;
+protected:
 	mutable dev_t	real_device;
 	mutable ino_t	real_node;
+
+private:
+	team_id team;
+
+	friend class entry_ref;
 };
 
 

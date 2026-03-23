@@ -31,8 +31,8 @@ Arguments::Arguments(int defaultArgsNum, const char* const* defaultArgs)
 	  fFullScreen(false),
 	  fShellArgumentCount(0),
 	  fShellArguments(NULL),
-	  fTitle(NULL),
-	  fWorkingDirectory(NULL)
+	  fTitle(""),
+	  fWorkingDirectory("")
 {
 	_SetShellArguments(defaultArgsNum, defaultArgs);
 }

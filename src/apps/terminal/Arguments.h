@@ -23,8 +23,8 @@ public:
 	void Parse(int argc, const char* const* argv);
 
 	BRect Bounds() const			{ return fBounds; }
-	BString Title() const			{ return fTitle; }
-	BString WorkingDir() const		{ return fWorkingDirectory; }
+	const BString& Title() const	{ return fTitle; }
+	const BString& WorkingDir() const	{ return fWorkingDirectory; }
 	bool StandardShell() const		{ return fStandardShell; }
 	bool FullScreen() const			{ return fFullScreen; }
 	bool UsageRequested() const		{ return fUsageRequested; }

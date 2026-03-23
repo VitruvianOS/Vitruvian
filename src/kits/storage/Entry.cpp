@@ -59,8 +59,20 @@ entry_ref::entry_ref(dev_t dev, ino_t dir, const char* name)
 	set_name(name);
 	team = getpid();
 
-	if (is_virtual() && dir != B_INVALID_INO)
+	if (is_virtual() && dir != B_INVALID_INO) {
 		acquire_vref((vref_id)dir);
+		// Populate real_device/real_directory so dereference() works when
+		// this entry_ref is reconstructed from raw vref fields.
+		int fd = open_vref((vref_id)dir);
+		if (fd >= 0) {
+			struct stat st;
+			if (fstat(fd, &st) == 0) {
+				real_device = st.st_dev;
+				real_directory = st.st_ino;
+			}
+			close(fd);
+		}
+	}
 }
 
 
@@ -101,8 +113,8 @@ entry_ref::entry_ref(const node_ref& ref, const char* name)
 	directory(ref.ino()),
 	name(NULL),
 	team(-1),
-	real_device(B_INVALID_DEV),
-	real_directory(B_INVALID_INO)
+	real_device(ref.real_device),
+	real_directory(ref.real_node)
 {
 	set_name(name);
 	team = getpid();
@@ -200,9 +212,8 @@ entry_ref::dereference() const
 
 void entry_ref::unset()
 {
-	if (is_virtual() && directory != B_INVALID_DEV)
-		release_vref(id());
-
+	// operator= handles releasing the old vref; do not call release_vref
+	// here as well, or the refcount will go negative (double-release).
 	*this = entry_ref();
 }
 
@@ -257,10 +268,8 @@ entry_ref::operator=(const entry_ref& ref)
 	if (is_virtual() && directory != B_INVALID_INO)
 		acquire_vref((vref_id) directory);
 
-	#if 0
 	if (oldDevice == get_vref_dev() && oldDirectory != B_INVALID_INO)
 		release_vref((vref_id) oldDirectory);
-	#endif
 
 	return *this;
 }
@@ -525,7 +534,9 @@ BEntry::GetName(char* buffer) const
 	if (buffer == NULL)
 		return B_BAD_VALUE;
 
-	strcpy(buffer, fName);
+	// API requires caller to provide at least B_FILE_NAME_LENGTH+1 bytes;
+	// use strlcpy as a safety net against oversized names.
+	strlcpy(buffer, fName, B_FILE_NAME_LENGTH + 1);
 	return B_OK;
 }
 
@@ -900,8 +911,27 @@ status_t
 BEntry::_Rename(BEntry& target, bool clobber)
 {
 	// check, if there's an entry in the way
-	if (!clobber && target.Exists())
-		return B_FILE_EXISTS;
+	if (target.Exists()) {
+		if (!clobber)
+			return B_FILE_EXISTS;
+		// Renaming an entry onto itself is not allowed.
+		struct stat srcSt, dstSt;
+		if (_kern_read_stat(fDirFd, fName, false, &srcSt, sizeof(srcSt)) == B_OK
+			&& _kern_read_stat(target.fDirFd, target.fName, false, &dstSt,
+				sizeof(dstSt)) == B_OK) {
+			if (srcSt.st_dev == dstSt.st_dev && srcSt.st_ino == dstSt.st_ino)
+				return B_NOT_ALLOWED;
+			// On Linux, renaming onto a directory always fails (EISDIR).
+			// Haiku removes empty target dirs and returns B_DIRECTORY_NOT_EMPTY
+			// for non-empty ones.
+			if (S_ISDIR(dstSt.st_mode)) {
+				status_t removeErr = _kern_remove_dir(target.fDirFd, target.fName);
+				if (removeErr != B_OK)
+					return B_DIRECTORY_NOT_EMPTY;
+				// Empty dir removed; fall through to rename
+			}
+		}
+	}
 	// rename
 	status_t error = _kern_rename(fDirFd, fName, target.fDirFd, target.fName);
 	if (error == B_OK) {

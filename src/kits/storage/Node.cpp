@@ -51,8 +51,20 @@ node_ref::node_ref(dev_t device, ino_t node)
 	real_device(B_INVALID_DEV),
 	real_node(B_INVALID_INO)
 {
-	if (is_virtual() && node != B_INVALID_INO)
+	if (is_virtual() && node != B_INVALID_INO) {
 		acquire_vref((vref_id) node);
+		// Populate real_device/real_node so dereference() works correctly
+		// when this node_ref is constructed from an existing vref id.
+		int fd = open_vref((vref_id) node);
+		if (fd >= 0) {
+			struct stat st;
+			if (fstat(fd, &st) == 0) {
+				real_device = st.st_dev;
+				real_node = st.st_ino;
+			}
+			close(fd);
+		}
+	}
 }
 
 
@@ -148,9 +160,8 @@ node_ref::dereference() const
 void
 node_ref::unset()
 {
-	if (is_virtual() && node != B_INVALID_DEV)
-		release_vref(id());
-
+	// operator= handles releasing the old vref; do not call release_vref
+	// here as well, or the refcount will go negative (double-release).
 	*this = node_ref(B_INVALID_DEV, B_INVALID_INO);
 }
 
@@ -214,10 +225,8 @@ node_ref::operator=(const node_ref& other)
 	if (is_virtual() && node != B_INVALID_INO)
 		acquire_vref((vref_id) node);
 
-	#if 0
 	if (oldDevice == get_vref_dev() && oldNode != B_INVALID_INO)
 		release_vref((vref_id) oldNode);
-	#endif
 
 	return *this;
 }
@@ -392,7 +401,7 @@ BNode::WriteAttr(const char* attr, type_code type, off_t offset,
 
 	ssize_t result = fs_write_attr(fFd, attr, type, offset, buffer, length);
 
-	return result < 0 ? errno : result;
+	return result;
 }
 
 
@@ -408,7 +417,7 @@ BNode::ReadAttr(const char* attr, type_code type, off_t offset,
 
 	ssize_t result = fs_read_attr(fFd, attr, type, offset, buffer, length);
 
-	return result == -1 ? errno : result;
+	return result;
 }
 
 
@@ -438,7 +447,7 @@ BNode::GetAttrInfo(const char* name, struct attr_info* info) const
 	if (name == NULL || info == NULL)
 		return B_BAD_VALUE;
 
-	return fs_stat_attr(fFd, name, info) < 0 ? errno : B_OK ;
+	return fs_stat_attr(fFd, name, info);
 }
 
 
@@ -724,7 +733,7 @@ BNode::_SetTo(int fd, const char* path, bool traverse)
 			fFd = _kern_open(fd, path, O_RDONLY | O_CLOEXEC | traverseFlag, 0);
 		}
 
-		if (fFd)
+		if (fFd >= 0)
 			fNodeRef = node_ref(fFd);
 		else
 			error = fFd;
@@ -761,7 +770,7 @@ BNode::_SetTo(const entry_ref* ref, bool traverse)
 		if (ref->is_virtual()) {
 			fFd = _kern_open_virtual_ref(ref->directory, ref->name,
 					O_CLOEXEC | traverseFlag, O_RDWR);
-			if (fFd != B_OK && fFd != B_ENTRY_NOT_FOUND) {
+			if (fFd < B_OK && fFd != B_ENTRY_NOT_FOUND) {
 				fFd = _kern_open_virtual_ref(ref->directory, ref->name,
 					O_CLOEXEC | traverseFlag, O_RDONLY);
 			}

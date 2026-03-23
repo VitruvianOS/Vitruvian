@@ -1278,7 +1278,7 @@ BMimeType::SetSupportedTypes(const BMessage* types, bool fullSync)
 	if (err == B_OK)
 		err = message.AddInt32("which", B_REG_MIME_SUPPORTED_TYPES);
 
-	if (err != B_OK && types != NULL)
+	if (err == B_OK && types != NULL)
 		err = message.AddMessage("types", types);
 
 	if (err == B_OK)

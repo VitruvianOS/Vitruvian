@@ -28,7 +28,7 @@ target_sources(root PRIVATE
 	fs/disk_device.cpp
 	fs/fs_info.cpp
 	fs/mount.cpp
-	fs/attr.cpp
+	fs/attr_stub.cpp
 	fs/index.cpp
 	fs/query.cpp
 	fs/find_directory.cpp

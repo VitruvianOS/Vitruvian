@@ -15,6 +15,13 @@
 #include "KernelDebug.h"
 
 
+// Forward declarations for attribute directory support (from attr.cpp)
+extern bool _is_attr_dir_fd(int fd);
+extern ssize_t _read_attr_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount);
+extern status_t _rewind_attr_dir(int fd);
+extern status_t _close_attr_dir(int fd);
+
+
 status_t
 _kern_read_stat(int fd, const char* path, bool traverseLink,
 	struct stat* st, size_t _ignored)
@@ -53,8 +60,15 @@ _kern_open(int fd, const char* path, int openMode, int perms)
 	if (fd < 0)
 		fd = AT_FDCWD;
 
-	if (path == NULL)
+	// AT_EMPTY_PATH opens the fd itself; treat empty string same as NULL.
+	if (path == NULL || path[0] == '\0') {
 		openMode |= AT_EMPTY_PATH;
+		path = "";
+	}
+
+	// Always set O_CLOEXEC so fds don't leak across exec() boundaries,
+	// especially when load_image() uses clone()+exec().
+	openMode |= O_CLOEXEC;
 
 	int ret;
 	if (openMode & O_CREAT)
@@ -74,6 +88,10 @@ _kern_close(int fd)
 {
 	CALLED();
 
+	// Check if this is an attribute directory fd
+	if (_is_attr_dir_fd(fd))
+		return _close_attr_dir(fd);
+
 	return (close(fd) < 0) ? -errno : B_OK;
 }
 
@@ -91,12 +109,24 @@ _kern_open_dir(int fd, const char* path)
 
 	int flags = O_DIRECTORY;
 
-	if (!path)
+	if (path == NULL || path[0] == '\0') {
 		flags |= AT_EMPTY_PATH;
+		path = "";
+	}
 
 	int ret = openat(fd, path, flags);
-	if (ret < 0)
+	if (ret < 0) {
+		if (errno == ENOTDIR && path != NULL && path[0] != '\0') {
+			// Distinguish: does the path itself exist as a non-dir
+			// (B_NOT_A_DIRECTORY) or does a path component block traversal
+			// (B_ENTRY_NOT_FOUND)?
+			struct stat st;
+			if (fstatat(fd, path, &st, AT_SYMLINK_NOFOLLOW) == 0)
+				return B_NOT_A_DIRECTORY;
+			return B_ENTRY_NOT_FOUND;
+		}
 		return -errno;
+	}
 
 	return ret;
 }
@@ -162,8 +192,14 @@ _kern_open_dir_virtual_ref(vref_id id, const char* name)
 	if (fd < 0)
 		return fd;
 
-	if (name == NULL || strlen(name) == 0 || (strcmp(name, ".") == 0))
+	if (name == NULL || strlen(name) == 0 || (strcmp(name, ".") == 0)) {
+		struct stat st;
+		if (fstat(fd, &st) == 0 && !S_ISDIR(st.st_mode)) {
+			close(fd);
+			return B_NOT_A_DIRECTORY;
+		}
 		return fd;
+	}
 
 	int ret = openat(fd, name, O_DIRECTORY | O_CLOEXEC);
 	close(fd);
@@ -223,10 +259,6 @@ _kern_open_entry_ref(dev_t device, ino_t node, const char* name,
 {
 	CALLED();
 
-	printf("open entry ref %llu %llu vref dev is %llu\n",
-		(unsigned long long)device, (unsigned long long)node,
-		(unsigned long long)get_vref_dev());
-
 	if (device == B_INVALID_DEV || node == B_INVALID_INO)
 		return B_BAD_VALUE;
 
@@ -241,6 +273,8 @@ _kern_open_entry_ref(dev_t device, ino_t node, const char* name,
 		return ret;
 
 	int fd = open(path, openMode, perms);
+	if (fd < 0 && errno == EISDIR)
+		fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
 	return (fd < 0) ? -errno : fd;
 }
 
@@ -250,10 +284,6 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 	char* userPath, size_t pathLength)
 {
 	CALLED();
-
-	printf("entry ref to path %llu %llu %s\n",
-		(unsigned long long)device, (unsigned long long)node,
-		(leaf ? leaf : "(null)"));
 
 	if (leaf == NULL && (device == B_INVALID_DEV || node == B_INVALID_INO))
 		return B_BAD_VALUE;
@@ -298,21 +328,24 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 	}
 
 	if (node == st.st_ino) {
-		printf("fs: opening dev_t %lld %s\n", st.st_dev, mountEntry->mnt_dir);
-		if (snprintf(userPath, pathLength, "%s/%s",
-				mountEntry->mnt_dir, leaf) >= pathLength) {
-			BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
-			return B_BUFFER_OVERFLOW;
+		if (leaf == NULL || strcmp(leaf, ".") == 0) {
+			// Caller wants the mount directory itself (e.g. "/" for root)
+			if (strlcpy(userPath, mountEntry->mnt_dir, pathLength) >= pathLength) {
+				BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
+				return B_BUFFER_OVERFLOW;
+			}
+		} else {
+			if (snprintf(userPath, pathLength, "%s/%s",
+					mountEntry->mnt_dir, leaf) >= (int)pathLength) {
+				BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
+				return B_BUFFER_OVERFLOW;
+			}
 		}
 		BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
 		return B_OK;
 	}
 
 	BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
-
-	// TODO backtrace here
-
-	UNIMPLEMENTED();
 
 	return B_ENTRY_NOT_FOUND;
 }
@@ -338,7 +371,9 @@ status_t
 _kern_entry_ref_to_path_by_fd(int fd, team_id team, char* name,
 	char* buffer, size_t bufferSize)
 {
-	if (name == NULL)
+	// NULL or "." both mean "the fd itself" — "." is the sentinel used by
+	// BEntry for the filesystem root (where the directory is its own parent).
+	if (name == NULL || strcmp(name, ".") == 0)
 		return _kern_fd_to_path(fd, team, buffer, bufferSize);
 
 	if (name != NULL && name[0] == '/') {
@@ -451,18 +486,34 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 		flags |= AT_EMPTY_PATH;
 
 	if (statMask & B_STAT_MODE) {
-		if (fchmodat(fd, path, st->st_mode, flags) < 0)
-			return -errno;
+		// When path is NULL we operate directly on the fd.
+		if (path == NULL) {
+			if (fchmod(fd, st->st_mode) < 0)
+				return -errno;
+		} else {
+			if (fchmodat(fd, path, st->st_mode, 0) < 0)
+				return -errno;
+		}
 	}
 
 	if (statMask & B_STAT_UID) {
-		if (fchownat(fd, path, st->st_uid, -1, flags) < 0)
-			return -errno;
+		if (path == NULL) {
+			if (fchown(fd, st->st_uid, (gid_t)-1) < 0)
+				return -errno;
+		} else {
+			if (fchownat(fd, path, st->st_uid, (gid_t)-1, flags) < 0)
+				return -errno;
+		}
 	}
 
 	if (statMask & B_STAT_GID) {
-		if (fchownat(fd, path, -1, st->st_gid, flags) < 0)
-			return -errno;
+		if (path == NULL) {
+			if (fchown(fd, (uid_t)-1, st->st_gid) < 0)
+				return -errno;
+		} else {
+			if (fchownat(fd, path, (uid_t)-1, st->st_gid, flags) < 0)
+				return -errno;
+		}
 	}
 
 	if (statMask & B_STAT_SIZE && S_ISREG(st->st_mode)) {
@@ -489,8 +540,13 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 			times[1].tv_sec = 0;
 		}
 
-		if (utimensat(fd, path, times, flags) < 0)
-			return -errno;
+		if (path == NULL) {
+			if (futimens(fd, times) < 0)
+				return -errno;
+		} else {
+			if (utimensat(fd, path, times, flags) < 0)
+				return -errno;
+		}
 	}
 
 	return B_OK;
@@ -508,6 +564,10 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 	if (fd < 0)
 		return B_FILE_ERROR;
 
+	// Check if this is an attribute directory fd
+	if (_is_attr_dir_fd(fd))
+		return _read_attr_dir(fd, buffer, bufferSize, maxCount);
+
 	// linux_dirent64 header (LP64): d_ino(8) + d_off(8) + d_reclen(2) + d_type(1) = 19 bytes
 	const size_t LINUX_DIRENT64_HEADER = 8 + 8 + 2 + 1;
 
@@ -521,9 +581,10 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 	if (direntBuffer == NULL)
 		return B_NO_MEMORY;
 
-	off_t seekOffset = _kern_seek(fd, 0, SEEK_CUR);
-	if (seekOffset < 0)
-		return seekOffset;
+	// Initialize to 0; will be updated to d_off of the last processed entry
+	// in the loop below. The initial lseek(SEEK_CUR) that was here previously
+	// was dead code (overwritten in the loop) and broke on some fd types.
+	off_t seekOffset = 0;
 
 	ssize_t ret = syscall(SYS_getdents64, fd, direntBuffer, bufSize);
 	if (ret < 0) {
@@ -577,9 +638,9 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 			return offset;
 	}
 
-	if (i <= 0)
-		return B_ENTRY_NOT_FOUND;
-
+	// Return 0 for end-of-directory (not B_ENTRY_NOT_FOUND which is negative
+	// and would be misinterpreted as an error by callers such as
+	// BMergedDirectory::_GetNextDirents).
 	return i;
 }
 
@@ -630,6 +691,10 @@ _kern_rewind_dir(int fd)
 
 	if (fd < 0)
 		return B_FILE_ERROR;
+
+	// Check if this is an attribute directory fd
+	if (_is_attr_dir_fd(fd))
+		return _rewind_attr_dir(fd);
 
 	return _kern_seek(fd, 0, SEEK_SET);
 }
@@ -727,8 +792,9 @@ _kern_unlink(int fd, const char* path)
 	if (fd < 0)
 		fd = AT_FDCWD;
 
-	int flags = (path == NULL ? AT_EMPTY_PATH : 0);
-	return (unlinkat(fd, path, flags | AT_SYMLINK_NOFOLLOW) < 0) ? -errno : B_OK;
+	if (path == NULL)
+		return (unlinkat(fd, "", AT_EMPTY_PATH) < 0) ? -errno : B_OK;
+	return (unlinkat(fd, path, 0) < 0) ? -errno : B_OK;
 }
 
 

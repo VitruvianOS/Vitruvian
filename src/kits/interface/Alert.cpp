@@ -519,6 +519,9 @@ BAlert::_Init(const char* text, const char* button1, const char* button2,
 	AddButton(button3);
 
 	AddCommonFilter(new(std::nothrow) _BAlertFilter_(this));
+
+	if (CountButtons() > 0)
+		_Prepare();
 }
 
 
@@ -557,13 +560,16 @@ BAlert::_CreateTypeIcon()
 	icon = new(std::nothrow) BBitmap(BRect(BPoint(0, 0), be_control_look->ComposeIconSize(32)),
 		0, B_RGBA32);
 	if (icon == NULL || icon->InitCheck() < B_OK) {
-		FTRACE((stderr, "BAlert::_CreateTypeIcon() - No memory for bitmap\n"));
 		delete icon;
 		return NULL;
 	}
 
 	// Load the raw icon data
-	BIconUtils::GetSystemIcon(iconName, icon);
+	status_t status = BIconUtils::GetSystemIcon(iconName, icon);
+	if (status != B_OK) {
+		delete icon;
+		return NULL;
+	}
 
 	return icon;
 }
@@ -624,8 +630,9 @@ BAlert::_Prepare()
 		}
 	}
 
-	if (fButtonSpacing == B_OFFSET_SPACING && CountButtons() > 1) {
-		// Insert some strut
+	if (fButtonSpacing == B_OFFSET_SPACING && CountButtons() > 1
+		&& fButtonLayout->CountItems() <= CountButtons()) {
+		// Insert some strut (guard: CountItems() > CountButtons() means already inserted)
 		fButtonLayout->AddItem(1, BSpaceLayoutItem::CreateHorizontalStrut(
 			kButtonOffsetSpacing * fontFactor));
 	}

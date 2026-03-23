@@ -5,6 +5,7 @@
 
 #include <syscalls.h>
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
 #include <sys/resource.h>
@@ -171,6 +172,41 @@ _kern_get_system_info(system_info* info)
 
 	info->abi = 0x002000000;
 
+	// Populate memory info from /proc/meminfo
+	{
+		FILE* f = fopen("/proc/meminfo", "r");
+		if (f != NULL) {
+			char line[128];
+			unsigned long memTotalKB = 0, memAvailKB = 0, memFreeKB = 0;
+			unsigned long buffersKB = 0, cachedKB = 0;
+			while (fgets(line, sizeof(line), f) != NULL) {
+				unsigned long val = 0;
+				if (sscanf(line, "MemTotal: %lu kB", &val) == 1)
+					memTotalKB = val;
+				else if (sscanf(line, "MemAvailable: %lu kB", &val) == 1)
+					memAvailKB = val;
+				else if (sscanf(line, "MemFree: %lu kB", &val) == 1)
+					memFreeKB = val;
+				else if (sscanf(line, "Buffers: %lu kB", &val) == 1)
+					buffersKB = val;
+				else if (sscanf(line, "Cached: %lu kB", &val) == 1)
+					cachedKB = val;
+			}
+			fclose(f);
+
+			uint64 pageSize = B_PAGE_SIZE;
+			if (memTotalKB > 0) {
+				info->max_pages = (uint64)memTotalKB * 1024ULL / pageSize;
+				uint64 freekB = (memAvailKB > 0) ? memAvailKB
+					: (memFreeKB + buffersKB + cachedKB);
+				uint64 freePages = (uint64)freekB * 1024ULL / pageSize;
+				info->used_pages = (info->max_pages > freePages)
+					? info->max_pages - freePages : 0;
+				info->cached_pages = (uint64)(buffersKB + cachedKB) * 1024ULL / pageSize;
+			}
+		}
+	}
+
 	return B_OK;
 }
 
@@ -187,6 +223,108 @@ status_t
 _kern_get_cpu_topology_info(cpu_topology_node_info* topologyInfos,
 	uint32* topologyInfoCount)
 {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	if (topologyInfoCount == NULL)
+		return B_BAD_VALUE;
+
+	uint32 coreCount = (uint32)__gCPUCount;
+	if (coreCount == 0)
+		coreCount = 1;
+	// We return: 1 root + 1 package + coreCount core nodes
+	uint32 nodeCount = 2 + coreCount;
+
+	if (topologyInfos == NULL) {
+		*topologyInfoCount = nodeCount;
+		return B_OK;
+	}
+	if (*topologyInfoCount < nodeCount)
+		nodeCount = *topologyInfoCount;
+	*topologyInfoCount = nodeCount;
+
+	memset(topologyInfos, 0, nodeCount * sizeof(cpu_topology_node_info));
+
+	// Read CPU frequency: try sysfs (kHz), fall back to /proc/cpuinfo (MHz)
+	uint64 freqHz = 0;
+	{
+		FILE* f = fopen("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "r");
+		if (f != NULL) {
+			unsigned long khz = 0;
+			if (fscanf(f, "%lu", &khz) == 1)
+				freqHz = (uint64)khz * 1000ULL;
+			fclose(f);
+		}
+	}
+	if (freqHz == 0) {
+		FILE* f = fopen("/proc/cpuinfo", "r");
+		if (f != NULL) {
+			char line[256];
+			while (fgets(line, sizeof(line), f) != NULL) {
+				double mhz = 0;
+				if (sscanf(line, "cpu MHz : %lf", &mhz) == 1
+						|| sscanf(line, "cpu MHz\t: %lf", &mhz) == 1) {
+					freqHz = (uint64)(mhz * 1000000.0);
+					break;
+				}
+			}
+			fclose(f);
+		}
+	}
+
+	// Read vendor from /proc/cpuinfo "vendor_id" field
+	enum cpu_vendor vendor = B_CPU_VENDOR_UNKNOWN;
+	{
+		FILE* f = fopen("/proc/cpuinfo", "r");
+		if (f != NULL) {
+			char line[256];
+			while (fgets(line, sizeof(line), f) != NULL) {
+				char vid[64] = {0};
+				if (sscanf(line, "vendor_id : %63s", vid) == 1
+						|| sscanf(line, "vendor_id\t: %63s", vid) == 1) {
+					if (strcmp(vid, "GenuineIntel") == 0)
+						vendor = B_CPU_VENDOR_INTEL;
+					else if (strcmp(vid, "AuthenticAMD") == 0)
+						vendor = B_CPU_VENDOR_AMD;
+					break;
+				}
+			}
+			fclose(f);
+		}
+	}
+
+	uint32 idx = 0;
+
+	// ROOT
+	if (idx < nodeCount) {
+		topologyInfos[idx].id = idx;
+		topologyInfos[idx].type = B_TOPOLOGY_ROOT;
+		topologyInfos[idx].level = 0;
+#if defined(__x86_64__)
+		topologyInfos[idx].data.root.platform = B_CPU_x86_64;
+#elif defined(__i386__)
+		topologyInfos[idx].data.root.platform = B_CPU_x86;
+#else
+		topologyInfos[idx].data.root.platform = B_CPU_UNKNOWN;
+#endif
+		idx++;
+	}
+
+	// PACKAGE
+	if (idx < nodeCount) {
+		topologyInfos[idx].id = idx;
+		topologyInfos[idx].type = B_TOPOLOGY_PACKAGE;
+		topologyInfos[idx].level = 1;
+		topologyInfos[idx].data.package.vendor = vendor;
+		topologyInfos[idx].data.package.cache_line_size = 64;
+		idx++;
+	}
+
+	// CORE nodes
+	for (uint32 i = 0; i < coreCount && idx < nodeCount; i++, idx++) {
+		topologyInfos[idx].id = idx;
+		topologyInfos[idx].type = B_TOPOLOGY_CORE;
+		topologyInfos[idx].level = 2;
+		topologyInfos[idx].data.core.model = 0;
+		topologyInfos[idx].data.core.default_frequency = freqHz;
+	}
+
+	return B_OK;
 }

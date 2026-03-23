@@ -54,11 +54,12 @@ jobs:
           body_escaped="$(esc "$body_text")"
           final="${header}"$'\n'"${meta}"$'\n\n'"${body_escaped}"
 
-          # Write multiline output using heredoc syntax
+          # Write multiline output using heredoc syntax with random delimiter
+          delim="EOF_$(openssl rand -hex 8)"
           {
-            echo 'msg<<__DELIM__'
-            printf '%s' "$final"
-            echo '__DELIM__'
+            echo "msg<<${delim}"
+            printf '%s\n' "$final"
+            echo "${delim}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Send Telegram notification

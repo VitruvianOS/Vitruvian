@@ -21,6 +21,7 @@
 
 #include "../kernel/nexus/nexus/nexus.h"
 
+
 int32 __gCPUCount = BKernelPrivate::Team::GetCPUCount();
 mode_t __gUmask = BKernelPrivate::Team::GetUmask();
 int __libc_argc = 0;
@@ -118,10 +119,31 @@ init_team(int argc, char** argv)
 }
 
 
-void __attribute__ ((destructor))
+void __attribute__ ((destructor(1)))
 deinit_team()
 {
 	TRACE("deinit_team()\n");
+
+	if (gNexusSem >= 0) {
+		close(gNexusSem);
+		gNexusSem = -1;
+	}
+	if (gNexus >= 0) {
+		close(gNexus);
+		gNexus = -1;
+	}
+	if (gNexusArea >= 0) {
+		close(gNexusArea);
+		gNexusArea = -1;
+	}
+	if (gNexusVRef >= 0) {
+		close(gNexusVRef);
+		gNexusVRef = -1;
+	}
+	if (gNexusNodeMonitor >= 0) {
+		close(gNexusNodeMonitor);
+		gNexusNodeMonitor = -1;
+	}
 }
 
 void
@@ -338,7 +360,7 @@ Team::ReinitChildAtFork()
 	gNexus = open("/dev/nexus", O_RDWR);
 	if (gNexus < 0) {
 		printf("ReinitChildAtFork: Can't open Nexus IPC\n");
-		return;
+		exit(1);
 	}
 
 	thread_id id = nexus_io(gNexus, NEXUS_THREAD_CLONE_EXECUTED, 1);
@@ -371,6 +393,10 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 	}
 
 	if (pid == 0) {
+		// Set environment variable to indicate this is load_image, not fork
+		// This prevents libbe's initialize_forked_child() from running
+		setenv("__VITRUVIAN_LOAD_IMAGE", "1", 1);
+
 		TRACE("LoadImage CHILD: closing nexus fds gNexus=%d gNexusSem=%d gNexusArea=%d gNexusVRef=%d\n",
 			gNexus, gNexusSem, gNexusArea, gNexusVRef);
 
@@ -465,13 +491,15 @@ _get_team_usage_info(team_id team, int32 who, team_usage_info* info, size_t size
 	snprintf(path, sizeof(path), "/proc/%d/stat", team);
 	int fd = open(path, O_RDONLY | O_CLOEXEC);
 	if (fd < 0) {
-		close(pidfd);
+		if (pidfd >= 0)
+			close(pidfd);
 		return B_BAD_TEAM_ID;
 	}
 
 	ssize_t dataRead = read(fd, buf, sizeof(buf) - 1);
 	close(fd);
-	close(pidfd);
+	if (pidfd >= 0)
+		close(pidfd);
 	if (dataRead <= 0)
 		return B_ERROR;
 
@@ -531,11 +559,15 @@ _get_team_info(team_id id, team_info* info, size_t size)
 	if (id < 0 || info == NULL || size != sizeof(team_info))
 		return B_BAD_VALUE;
 
+	// id==0 means "current team" in Haiku — resolve before any /proc checks
+	if (id == 0)
+		id = getpid();
+
 	int pidfd = (int)syscall(SYS_pidfd_open, (pid_t)id, 0);
 
 	if (pidfd < 0) {
 		char procdir[64];
-		snprintf(procdir, sizeof(procdir), "/proc/%d", pidfd);
+		snprintf(procdir, sizeof(procdir), "/proc/%d", id);  // use id, not pidfd
 		if (access(procdir, F_OK) != 0)
 			return B_BAD_TEAM_ID;
 	}
@@ -546,14 +578,12 @@ _get_team_info(team_id id, team_info* info, size_t size)
 	char buffer[MAX_LINE_LENGTH];
 	char commandProcPath[B_PATH_NAME_LENGTH];
 
-	if (id == 0)
-		id = getpid();
-
 	snprintf(procPath, sizeof(procPath), "/proc/%d/status", id);
 	snprintf(commandProcPath, sizeof(commandProcPath), "/proc/%d/cmdline", id);
 	FILE* statusFile = fopen(procPath, "r");
 	if (statusFile == NULL) {
-		close(pidfd);
+		if (pidfd >= 0)
+			close(pidfd);
 		return B_BAD_TEAM_ID;
 	}
 
@@ -687,7 +717,8 @@ _get_team_info(team_id id, team_info* info, size_t size)
 		}
 	}
 
-	close(pidfd);
+	if (pidfd >= 0)
+		close(pidfd);
 	return B_OK;
 }
 
@@ -758,7 +789,8 @@ get_memory_properties(team_id teamID, const void* address, uint32* _protected,
 	snprintf(maps_path, sizeof(maps_path), "/proc/%d/maps", teamID);
 	FILE* maps = fopen(maps_path, "r");
 	if (maps == NULL) {
-		close(pidfd);
+		if (pidfd >= 0)
+			close(pidfd);
 		return B_BAD_TEAM_ID;
 	}
 
@@ -785,7 +817,8 @@ get_memory_properties(team_id teamID, const void* address, uint32* _protected,
 	fclose(maps);
 
 	if (!found) {
-		close(pidfd);
+		if (pidfd >= 0)
+			close(pidfd);
 		return B_BAD_VALUE;
 	}
 
@@ -815,7 +848,8 @@ get_memory_properties(team_id teamID, const void* address, uint32* _protected,
 									*_lock = 0;
 							}
 							fclose(smaps);
-							close(pidfd);
+							if (pidfd >= 0)
+								close(pidfd);
 							return B_OK;
 						}
 						if (strchr(line, '-') && strstr(line, "kB") == NULL)
@@ -830,7 +864,8 @@ get_memory_properties(team_id teamID, const void* address, uint32* _protected,
 		fclose(smaps);
 	}
 
-	close(pidfd);
+	if (pidfd >= 0)
+		close(pidfd);
 	*_lock = 0;
 	return B_OK;
 }

@@ -118,7 +118,7 @@ BVolume::GetRootDirectory(BDirectory *directory) const
 	// init the directory
 	if (error == B_OK) {
 		int dirFd = _kern_open_entry_ref(info.dev, info.root, NULL,
-			O_RDWR, 0);
+			O_RDONLY, 0);
 
 		if (dirFd < 0)
 			return dirFd;

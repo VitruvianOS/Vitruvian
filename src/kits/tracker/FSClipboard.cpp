@@ -853,38 +853,30 @@ BClipboardRefsWatcher::MessageReceived(BMessage* message)
 	switch (message->GetInt32("opcode", 0)) {
 		case B_ENTRY_MOVED:
 		{
-			#ifdef __VOS_OLD_NODE_MONITOR__
-			ino_t toDir;
-			ino_t fromDir;
 			node_ref node;
+			entry_ref toDir;
 			const char* name = NULL;
-			message->FindUInt64("from directory", &fromDir);
-			message->FindUInt64("to directory", &toDir);
-			message->FindUInt64("node", &node.node);
-			message->FindUInt64("device", &node.device);
+			message->FindNodeRef("virtual:node", &node);
+			message->FindRef("virtual:to directory", &toDir);
 			message->FindString("name", &name);
-			entry_ref ref(node.device, toDir, name);
+			entry_ref ref(toDir.dev(), toDir.dir(), name);
 			UpdateNode(&node, &ref);
-			#endif
 			break;
 		}
 
 		case B_DEVICE_UNMOUNTED:
 		{
 			dev_t device;
-			message->FindInt32("device", &device);
+			message->FindUInt64("device", (uint64*)&device);
 			RemoveNodesByDevice(device);
 			break;
 		}
 
 		case B_ENTRY_REMOVED:
 		{
-			#ifdef __VOS_OLD_NODE_MONITOR__
 			node_ref node;
-			message->FindUInt64("node", &node.node);
-			message->FindUInt64("device", &node.device);
+			message->FindNodeRef("virtual:node", &node);
 			RemoveNode(&node, true);
-			#endif
 			break;
 		}
 	}

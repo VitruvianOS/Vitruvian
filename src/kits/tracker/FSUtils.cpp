@@ -2111,11 +2111,9 @@ MoveEntryToTrash(BEntry* entry, BPoint* loc, Undo &undo)
 		BMessage message(kCloseWindowAndChildren);
 
 		node_ref parentNode;
-		#ifdef __VOS_OLD_NODE_MONITOR__
 		parentNode.device = statbuf.st_dev;
 		parentNode.node = statbuf.st_ino;
 		message.AddData("node_ref", B_RAW_TYPE, &parentNode, sizeof(node_ref));
-		#endif
 		be_app->PostMessage(&message);
 	} else {
 		// get trash directory on same volume as item being moved
@@ -2585,6 +2583,13 @@ status_t
 FSRecursiveCalcSize(BInfoWindow* window, CopyLoopControl* loopControl,
 	BDirectory* dir, off_t* _runningSize, int32* _fileCount, int32* _dirCount)
 {
+	// Get the device of the directory we're calculating size for,
+	// so we don't cross filesystem boundaries (important on Linux where
+	// the directory tree can span many different mounted filesystems)
+	node_ref dirNodeRef;
+	dir->GetNodeRef(&dirNodeRef);
+	dev_t originalDevice = dirNodeRef.device;
+
 	dir->Rewind();
 	BEntry entry;
 	while (dir->GetNextEntry(&entry) == B_OK) {
@@ -2603,6 +2608,10 @@ FSRecursiveCalcSize(BInfoWindow* window, CopyLoopControl* loopControl,
 		(*_runningSize) += statbuf.st_blocks * 512;
 
 		if (S_ISDIR(statbuf.st_mode)) {
+			// Don't cross filesystem boundaries
+			if (statbuf.st_dev != originalDevice)
+				continue;
+
 			BDirectory subdir(&entry);
 			(*_dirCount)++;
 			status = FSRecursiveCalcSize(window, loopControl, &subdir,
@@ -2612,6 +2621,7 @@ FSRecursiveCalcSize(BInfoWindow* window, CopyLoopControl* loopControl,
 		} else
 			(*_fileCount)++;
 	}
+
 	return B_OK;
 }
 
@@ -2701,6 +2711,8 @@ FSGetTrashDir(BDirectory* trashDir, dev_t dev)
 		result = trashDir->SetTo(path.Path());
 		if (result != B_OK)
 			return result;
+
+		// TODO fix vitruvian trash
 
 		// make Trash directory invisible
 		StatStruct sbuf;

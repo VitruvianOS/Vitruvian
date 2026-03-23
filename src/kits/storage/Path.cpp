@@ -446,7 +446,11 @@ BPath::Flatten(void* buffer, ssize_t size) const
 	if (status != B_OK)
 		return status;
 
-	// store the entry_ref in the buffer
+	// store the entry_ref in the buffer — use vref IDs directly, as they are
+	// the canonical identifiers in Vitruvian (real st_dev/st_ino is worthless).
+	// NOTE: no vref acquire here; the caller is responsible for keeping the
+	// underlying vref alive (e.g. by keeping the source BPath alive) until
+	// the buffer is consumed by Unflatten, which acquires its own reference.
 	flattened_entry_ref& fref = *(flattened_entry_ref*)buffer;
 	fref.device = ref.device;
 	fref.directory = ref.directory;

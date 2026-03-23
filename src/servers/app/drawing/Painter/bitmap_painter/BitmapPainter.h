@@ -8,16 +8,18 @@
 #define BITMAP_PAINTER_H
 
 #include <AutoDeleter.h>
+#include <Referenceable.h>
 
 #include "Painter.h"
 
+class ServerBitmap;
 
 class Painter::BitmapPainter {
 public:
 
 public:
 								BitmapPainter(const Painter* painter,
-									const ServerBitmap* bitmap,
+									ServerBitmap* bitmap,
 									uint32 options);
 
 			void				Draw(const BRect& sourceRect,
@@ -44,6 +46,7 @@ private:
 
 private:
 			const Painter*			fPainter;
+			BReference<ServerBitmap> fServerBitmap;
 			status_t				fStatus;
 			agg::rendering_buffer	fBitmap;
 			BRect					fBitmapBounds;

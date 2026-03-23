@@ -242,7 +242,7 @@ public:
 
 
 								// bitmaps
-			BRect				DrawBitmap(const ServerBitmap* bitmap,
+			BRect				DrawBitmap(ServerBitmap* bitmap,
 									BRect bitmapRect, BRect viewRect,
 									uint32 options) const;
 
@@ -366,12 +366,12 @@ private:
 
 			PatternHandler		fPatternHandler;
 
+	mutable	PainterAggInterface	fInternal;
+
 	// a class handling rendering and caching of glyphs
 	// it is setup to load from a specific Freetype supported
 	// font file which it gets from ServerFont
 	mutable	AGGTextRenderer		fTextRenderer;
-
-	mutable	PainterAggInterface	fInternal;
 };
 
 

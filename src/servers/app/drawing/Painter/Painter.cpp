@@ -1565,7 +1565,7 @@ Painter::StringWidth(const char* utf8String, uint32 length,
 
 // DrawBitmap
 BRect
-Painter::DrawBitmap(const ServerBitmap* bitmap, BRect bitmapRect,
+Painter::DrawBitmap(ServerBitmap* bitmap, BRect bitmapRect,
 	BRect viewRect, uint32 options) const
 {
 	CHECK_CLIPPING
@@ -1689,7 +1689,7 @@ Painter::_Align(const BPoint& point, bool centerOffset) const
 BRect
 Painter::_Clipped(const BRect& rect) const
 {
-	if (rect.IsValid())
+	if (rect.IsValid() && fClippingRegion != NULL)
 		return BRect(rect & fClippingRegion->Frame());
 
 	return BRect(rect);

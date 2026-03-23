@@ -31,13 +31,19 @@
 
 
 Painter::BitmapPainter::BitmapPainter(const Painter* painter,
-	const ServerBitmap* bitmap, uint32 options)
+	ServerBitmap* bitmap, uint32 options)
 	:
 	fPainter(painter),
+	fServerBitmap(bitmap),
 	fStatus(B_NO_INIT),
 	fOptions(options)
 {
 	if (bitmap == NULL || !bitmap->IsValid())
+		return;
+
+	// Check if bitmap has valid bits before trying to draw
+	uint8* bits = bitmap->Bits();
+	if (bits == NULL)
 		return;
 
 	fBitmapBounds = bitmap->Bounds();
@@ -47,7 +53,7 @@ Painter::BitmapPainter::BitmapPainter(const Painter* painter,
 
 	fColorSpace = bitmap->ColorSpace();
 
-	fBitmap.attach(bitmap->Bits(), bitmap->Width(), bitmap->Height(),
+	fBitmap.attach(bits, bitmap->Width(), bitmap->Height(),
 		bitmap->BytesPerRow());
 
 	fStatus = B_OK;

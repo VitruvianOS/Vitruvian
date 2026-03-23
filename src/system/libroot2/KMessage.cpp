@@ -37,11 +37,10 @@
 #endif
 
 
-#if !defined(HAIKU_TARGET_PLATFORM_HAIKU) || defined(_BOOT_MODE) \
-	|| defined(_LOADER_MODE)
+#if defined(_BOOT_MODE) || defined(_LOADER_MODE)
 #	define MEMALIGN(alignment, size)	malloc(size)
 #	define KMESSAGE_NO_VREF_SUPPORT 1
-	// Built as part of a build tool or the boot or runtime loader.
+	// Built as part of the boot or runtime loader.
 #else
 #	include <malloc.h>
 #	define MEMALIGN(alignment, size)	memalign(alignment, size)

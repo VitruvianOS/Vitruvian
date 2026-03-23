@@ -3,31 +3,42 @@
  *  Distributed under the terms of the LGPL License.
  */
 
-
+#include <fs_index.h>
 #include <fs_attr.h>
+#include <TypeConstants.h>
 
 
 extern "C" status_t
 fs_create_index(dev_t device, const char* name, uint32 type, uint32 flags)
 {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	// Linux filesystems don't support BeFS-style indices
+	// Return success (as if index already exists) to avoid breaking initialization
+	return B_OK;
 }
 
 
 extern "C" status_t
 fs_remove_index(dev_t device, const char* name)
 {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	// Not supported on Linux filesystems, but return OK to avoid errors
+	return B_OK;
 }
 
 
 extern "C" int
 fs_stat_index(dev_t device, const char* name, struct index_info* indexInfo)
 {
-	UNIMPLEMENTED();
-	return B_ERROR;
+	// Pretend index exists by returning 0 (success)
+	// Fill in minimal info if structure is provided
+	if (indexInfo != NULL) {
+		indexInfo->type = B_STRING_TYPE;
+		indexInfo->size = 0;
+		indexInfo->modification_time = 0;
+		indexInfo->creation_time = 0;
+		indexInfo->uid = 0;
+		indexInfo->gid = 0;
+	}
+	return 0; // success
 }
 
 

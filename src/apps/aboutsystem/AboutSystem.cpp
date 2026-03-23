@@ -1686,7 +1686,7 @@ AboutView::_CreateCreditsView()
 
 	font.SetSize(be_bold_font->Size() + 4);
 	font.SetFace(B_BOLD_FACE);
-	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fBeOSBlueColor);
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &kIdealVOSBlue);
 	fCreditsView->Insert(B_TRANSLATE("\nCopyrights\n\n"));
 
 	// Vitruvian license

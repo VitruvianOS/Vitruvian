@@ -124,6 +124,11 @@ InitKeyIndices()
 	char* keys;
 	get_key_map(&map, &keys);
 
+#ifdef __VOS__
+	if (map == NULL || keys == NULL)
+		return;
+#endif
+
 	for (uint8 j = 0; j < NUM_KEYS; j++) {
 		keyDescriptions[j] = NULL;
 			// default

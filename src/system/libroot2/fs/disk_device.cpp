@@ -367,9 +367,11 @@ _kern_get_next_disk_device_id(int32* cookie, size_t* neededSize)
 			snprintf(devPath, sizeof(devPath), "/dev/%s", iter->currentDevice);
 
 			if (neededSize) {
-				int partCount = BKernelPrivate::count_partitions(iter->currentDevice);
-				*neededSize = sizeof(user_disk_device_data) +
-							  partCount * sizeof(user_partition_data);
+				// BDiskDeviceRoster::GetNextDevice always calls _SetTo with
+				// deviceOnly=true, so partition data is never needed here.
+				// Calling count_partitions() triggers libudev heap operations
+				// that corrupt the allocator on some systems; skip it.
+				*neededSize = sizeof(user_disk_device_data);
 			}
 
 			return make_partition_id(devPath);

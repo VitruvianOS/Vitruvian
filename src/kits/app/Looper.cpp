@@ -123,7 +123,9 @@ BLooper::~BLooper()
 			"once it is running.");
 	}
 
-	Lock();
+	// Lock() can fail during process shutdown (e.g. when gLooperList is already
+	// destroyed). Guard all AssertLocked() callers against this case.
+	bool locked = Lock();
 
 	// In case the looper thread calls Quit() fLastMessage is not deleted.
 	if (fLastMessage) {
@@ -149,17 +151,19 @@ BLooper::~BLooper()
 		do {
 			delete ReadMessageFromPort(0);
 				// msg will automagically post generic reply
-		} while (IsMessageWaiting());
+		} while (locked && IsMessageWaiting());
 
 		delete_port(fMsgPort);
 	}
 	fDirectTarget->Release();
 
 	// Clean up our filters
-	SetCommonFilterList(NULL);
+	if (locked)
+		SetCommonFilterList(NULL);
 
 	AutoLocker<BLooperList> ListLock(gLooperList);
-	RemoveHandler(this);
+	if (locked)
+		RemoveHandler(this);
 
 	// Remove all the "child" handlers
 	int32 count = fHandlers.CountItems();
@@ -170,7 +174,8 @@ BLooper::~BLooper()
 	}
 	fHandlers.MakeEmpty();
 
-	Unlock();
+	if (locked)
+		Unlock();
 	gLooperList.RemoveLooper(this);
 	delete_sem(fLockSem);
 }
@@ -496,9 +501,9 @@ BLooper::Run()
 		return fMsgPort;
 
 	fRunCalled = true;
-	Unlock();
 
 	status_t err = resume_thread(fThread);
+	Unlock();
 	if (err < B_OK)
 		return err;
 

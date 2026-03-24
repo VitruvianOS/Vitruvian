@@ -113,6 +113,10 @@ BLocker::LockWithTimeout(bigtime_t timeout)
 void
 BLocker::Unlock()
 {
+	// If nobody holds the lock at all, Unlock is a no-op.
+	if (fRecursiveCount <= 0)
+		return;
+
 	// The Be Book explicitly allows any thread, not just the lock owner, to
 	// unlock. This is bad practice, but we must allow it for compatibility
 	// reasons. We can at least warn the developer that something is probably
@@ -202,7 +206,7 @@ BLocker::InitLocker(const char *name, bool benaphore)
 		fBenaphoreCount = 0;
 		fSemaphoreID = create_sem(0, name);
 	} else {
-		// Because this is a semaphore, initialize the benaphore count to -1
+		// Because this is a semaphore, initialize the benaphore count to 1
 		// and create the semaphore.  Because this is semaphore style, the
 		// semaphore count starts at 1 so that one thread can acquire it and
 		// the next thread to acquire it will block.

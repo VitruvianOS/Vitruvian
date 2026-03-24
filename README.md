@@ -3,9 +3,7 @@
 </p>
 <img src="https://numerio.goatcounter.com/count?p=/vitruvian-readme" alt="" width="0" height="0">
 
-## VitruvianOS
-
-**VitruvianOS** (or simply **V\OS**) is the operating system with the human at the center.
+**Vitruvian** (**VitruvianOS** or simply **V\OS**) is the operating system with the human at the center.
 
 #### Goals
 

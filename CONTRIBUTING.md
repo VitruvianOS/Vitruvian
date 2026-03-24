@@ -5,12 +5,12 @@ Thank you for your interest in contributing to Vitruvian (V\OS). Contributions o
 ## Getting Started
 
 1. Fork the repository and clone it locally
-2. Follow the [build instructions](https://vos-wiki.vitruvian.test/docs/getting-started/building/) to get a working build
+2. Follow the [build instructions](https://wiki.v-os.dev/docs/getting-started/building/) to get a working build
 3. Browse [open issues](https://github.com/VitruvianOS/Vitruvian/issues) for something to work on, or open a new issue to discuss a change before starting
 
 ## Code Contributions
 
-- Follow the [coding guidelines](https://vos-wiki.vitruvian.test/docs/development/coding-guidelines/) — Vitruvian uses Haiku-style conventions (tabs, Allman braces, fMemberVars, etc.)
+- Follow the [coding guidelines](https://wiki.v-os.dev/docs/development/coding-guidelines/) — Vitruvian uses Haiku-style conventions (tabs, Allman braces, fMemberVars, etc.)
 - Keep commits focused. One logical change per commit.
 - Write a clear commit message explaining *why* the change is made, not just what changed.
 - Open a pull request against `master`. Describe what the change does and how you tested it.

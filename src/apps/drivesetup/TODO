@@ -1,0 +1,4 @@
+* Support of more advanced options, partiticularily the option to resize (shrink) existing partitions to free up space.
+
+* Possibly support the option to do virtual changes to the disk at a higher level. Ie, write back any changes until the user invokes a command to that effect. The drawback is that warnings become more complicated and less direct. For example, if you delete a partition, there is no warning really necessary at this point, but when you later write the changes to disk, there should be a summary of warnings for all partitions you deleted, because only at this point, they are really deleted. The indirection could be confusing. On the other hand, future support to resize partitions could take a long time to execute. Then it is nice to setup a list of jobs and execute them without having to sit in front of the machine.
+

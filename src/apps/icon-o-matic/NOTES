@@ -1,0 +1,70 @@
+--------- random thoughts
+
+
+* works a bit like WonderBrush
+
+* list of vector path objects [done]
+
+* tree of object instances, such that the same vector path
+  object can be visible at different locations with different
+  fill styles [done]
+
+* instances of paths can have additional vector transformers [done]
+
+* "add points" mode is problematic when having multiple manipulators for
+  different paths showing at the same time...
+  -> "add points" only available when one path is selected, otherwise
+     "select points" is used
+
+* solve the problem of individual gradient transformation per shape [done]
+
+* IconRenderer should construct a separate StyleManager and append
+  the styles in the order of shapes, also adding styles multiple
+  times, if two or more shapes use the same style (the compound shape
+  rendering uses the style index for z ordering) [done]
+
+* add more functionality to Transformer/VertexSource interface:
+  - Cloning [done]
+
+* add more powerful listener interface to Shape
+  (TransformerAdded()/Removed()...) [done]
+
+* implement commands for the newly added editing features [done]
+
+* built-in transformation for Gradient and Shape? [done]
+
+* Transformation manipulator [done]
+
+
+--------- user interface
+
+* list of global vector paths [done]
+
+* list of shapes [done]
+
+* list of paths used by shape, but it could also be done such that
+  used paths are marked in the global list when a shape is selected [done]
+
+* list of transformers attached to the selected shape [done]
+
+* area for styles, style is either solid color or gradient [done]
+
+
+--------- icon format
+
+* 192 "built-in" (pre-defined) style definitions
+* up to 64 additional style definitions per document
+* referencing of fill style by uint8 id
+* solid colors and different types of gradients
+* uint8 precision for coordinates on a 64x64 virtual pixel grid
+(* removal (freezing) of transformations at export time
+	not sure about this one, it would remove the possiblity
+	to store vector path only once for referenced objects)
+* IFF type chunk format
+
+
+--------- rendering
+
+* compound shape single pass rendering [done]
+* auto hinting (aligning to pixels) of marked shapes [done]
+* level of detail support to hide/show shapes [done]

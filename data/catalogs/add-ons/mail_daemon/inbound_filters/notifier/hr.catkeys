@@ -1,7 +1,0 @@
-1	croatian	x-vnd.Haiku-NewMailNotification	4288308791
-Log window	NotifierConfigView		Prozor prijave
-none	NotifierConfigView		nijedan
-Alert	NotifierConfigView		Upozorenje
-OK	NotifierFilter		U redu
-New messages	NotifierFilter		Nove poruke
-Method:	NotifierConfigView		Metoda:

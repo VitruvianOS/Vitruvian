@@ -1,0 +1,30 @@
+resource app_signature "application/x-vnd.Haiku-MarkAs";
+
+resource file_types message {
+	"types" = "text/x-email",
+	"types" = "text/x-partial-email"
+};
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	/* 0 = development	1 = alpha			2 = beta
+	   3 = gamma		4 = golden master	5 = final */
+	variety = 0,
+
+	internal = 1,
+
+	short_info = "MarkAs, Copyright 2006-2009 Haiku, Inc.",
+	long_info = "A Tracker Add-on that marks emails with the chosen status."
+};
+
+resource vector_icon {
+	$"6E636966040500040178020006023A94CD3C078ABE370B3CD1394B9EF949A6E5"
+	$"00FFFCACFFE6E27C03A07D32050604BA47584A595E455E485E4254430A042246"
+	$"46585A4436350A063742234639443E46455741480A0436355A44465822460804"
+	$"3635384340475A44050A010100000A0001011001178402040A020103000A0301"
+	$"02000A030104100117820004"
+};
+

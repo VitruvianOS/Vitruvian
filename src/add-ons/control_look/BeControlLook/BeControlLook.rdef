@@ -1,0 +1,9 @@
+resource app_version {
+	major = 5,
+	middle = 0,
+	minor = 3,
+	variety = B_APPV_FINAL,
+	internal = 0,
+	short_info = "BeControlLook",
+	long_info  = "BeOS-like ControlLook add-on ©2003-2020 Haiku, Inc."
+};

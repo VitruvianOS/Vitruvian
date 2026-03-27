@@ -26,6 +26,7 @@ int32 __gCPUCount = BKernelPrivate::Team::GetCPUCount();
 mode_t __gUmask = BKernelPrivate::Team::GetUmask();
 int __libc_argc = 0;
 char** __libc_argv = NULL;
+char** argv_save = NULL;
 
 
 namespace BKernelPrivate {
@@ -108,7 +109,7 @@ init_team(int argc, char** argv)
 	TRACE("init_team() %d\n", argc);
 
 	__libc_argc = argc;
-	__libc_argv = argv;
+	__libc_argv = argv_save = argv;
 
 	__gCPUCount = BKernelPrivate::Team::GetCPUCount();
 	__gUmask = BKernelPrivate::Team::GetUmask();

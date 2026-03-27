@@ -55,6 +55,7 @@ typedef unsigned long	haiku_build_addr_t;
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
+typedef struct iovec iovec;
 #include <unistd.h>
 
 #ifdef __cplusplus

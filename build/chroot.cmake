@@ -37,6 +37,9 @@ if(VITRUVIAN_CHROOT_BUILD)
         "${VITRUVIAN_CHROOT_PATH}/usr/lib/x86_64-linux-gnu/pkgconfig:${VITRUVIAN_CHROOT_PATH}/usr/share/pkgconfig")
     set(ENV{PKG_CONFIG_PATH} "")
 
+    # Multiarch system headers (e.g. sys/uio.h, sys/types.h live here on Debian/Ubuntu)
+    include_directories(SYSTEM "${VITRUVIAN_CHROOT_PATH}/usr/include/x86_64-linux-gnu")
+
     # Linker search paths inside chroot
     link_directories(
         "${VITRUVIAN_CHROOT_PATH}/usr/lib/x86_64-linux-gnu"

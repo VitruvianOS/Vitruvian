@@ -86,7 +86,7 @@ Application(spybmessage    SOURCES spybmessage.cpp)
 Application(urlwrapper     SOURCES urlwrapper.cpp      RDEF urlwrapper.rdef)
 
 # be + bnetapi
-Application(open           SOURCES open.cpp)
+#Application(open           SOURCES open.cpp)
 #Application(waitfor        SOURCES waitfor.cpp)
 Application(checkitout     SOURCES checkitout.cpp       LIBS tracker  RDEF checkitout.rdef)
 

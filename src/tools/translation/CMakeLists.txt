@@ -1,0 +1,7 @@
+add_subdirectory(bitsinfo)
+add_subdirectory(bmpinfo)
+add_subdirectory(inspector)
+add_subdirectory(pnginfo)
+add_subdirectory(stxtinfo)
+add_subdirectory(tgainfo)
+add_subdirectory(tiffinfo)

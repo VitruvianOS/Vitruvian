@@ -1,5 +1,4 @@
 set(BIN_DIRECTORY
-	# subdirectory-based
 	addattr
 	keystore
 	linkcatkeys
@@ -7,8 +6,6 @@ set(BIN_DIRECTORY
 	pc
 	query
 	rc
-
-	# no extra libs
 	catarea
 	chop
 	clear
@@ -35,11 +32,7 @@ set(BIN_DIRECTORY
 	unchop
 	unmount
 	vmstat
-
-	# ncurses
 	watch
-
-	# be
 	beep
 	catattr
 	clipboard
@@ -63,8 +56,6 @@ set(BIN_DIRECTORY
 	trash
 	version
 	WindowShade
-
-	# be + supc++
 	alert
 	dstcheck
 	hey
@@ -76,12 +67,7 @@ set(BIN_DIRECTORY
 	settype
 	spybmessage
 	urlwrapper
-
-	# be + bnetapi
-	open
 	checkitout
-
-	# be + stdc++
 	copyattr
 	diff_zip
 	mimeset
@@ -89,12 +75,8 @@ set(BIN_DIRECTORY
 	setmime
 	sysinfo
 	xres
-
-	# be + translation
 	notify
 	translate
-
-	# be + tracker
 	filepanel
 )
 ImageInclude("/bin" ${BIN_DIRECTORY})

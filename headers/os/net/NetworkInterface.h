@@ -7,7 +7,6 @@
 
 
 #include <net/if.h>
-#include <net/if_types.h>
 
 #include <ObjectList.h>
 #include <NetworkAddress.h>
@@ -75,7 +74,9 @@ public:
 			int32				Media() const;
 			uint32				Metric() const;
 			uint32				Type() const;
+#ifndef __VOS__
 			status_t			GetStats(ifreq_stats& stats);
+#endif
 			bool				HasLink() const;
 
 			status_t			SetFlags(uint32 flags);

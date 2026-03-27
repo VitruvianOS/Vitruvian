@@ -207,7 +207,9 @@ struct error_pair {
 	E(EEXIST),
 	E(EFAULT),
 	E(EFBIG),
+#ifdef EFPOS
 	E(EFPOS),
+#endif
 #ifdef EHOSTDOWN
 	E(EHOSTDOWN),
 #endif
@@ -278,7 +280,9 @@ struct error_pair {
 	E(ERANGE),
 	E(EROFS),
 	E(ESHUTDOWN),
+#ifdef ESIGPARM
 	E(ESIGPARM),
+#endif
 	E(ESPIPE),
 	E(ESRCH),
 	E(ESTALE),
@@ -289,7 +293,9 @@ struct error_pair {
 #ifdef ETXTBSY
 	E(ETXTBSY),
 #endif
+#ifdef ENOATTR
 	E(ENOATTR),
+#endif
 #ifdef ENOTRECOVERABLE
 	E(ENOTRECOVERABLE),
 #endif

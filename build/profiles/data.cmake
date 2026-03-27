@@ -5,6 +5,7 @@ set(SYSTEMD_SERVICES
   data/systemd/mount_server.service
   data/systemd/app_server.service
   data/systemd/input_server.service
+  data/systemd/notification_server.service
   data/systemd/deskbar.service
   data/systemd/tracker.service
 )

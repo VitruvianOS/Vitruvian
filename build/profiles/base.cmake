@@ -36,8 +36,9 @@ ImageInclude("/system/" ${CORE_APPLICATIONS})
 set(SYSTEM_SERVERS
 	app_server
 	input_server
-	registrar
+	notification_server
 	mount_server
+	registrar
 )
 ImageInclude("/system/servers" ${SYSTEM_SERVERS})
 

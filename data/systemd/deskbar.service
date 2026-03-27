@@ -1,7 +1,7 @@
 [Unit]
 Description=Deskbar
 Conflicts=getty@tty1.service
-After=input_server.service
+After=notification_server.service
 
 [Service]
 ExecStartPre=/bin/sleep 1.5

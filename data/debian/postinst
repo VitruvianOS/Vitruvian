@@ -166,4 +166,4 @@ fi
 
 # Enable system services
 
-systemctl enable registrar.service mount_server app_server.service deskbar.service tracker.service
+systemctl enable registrar.service app_server.service mount_server.service notification_server.service deskbar.service tracker.service

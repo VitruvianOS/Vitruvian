@@ -215,6 +215,7 @@ function( UsePrivateHeaders target )
 		textencoding
 		tracker
 		net
+		screen_saver
 	)
 
 	foreach(arg IN LISTS ARGN)
@@ -270,6 +271,7 @@ function( UsePrivateBuildHeaders target )
 		textencoding
 		tracker
 		net
+		screen_saver
 	)
 
 	foreach(arg IN LISTS ARGN)

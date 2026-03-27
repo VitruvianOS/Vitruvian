@@ -90,33 +90,7 @@ set(SYSTEM_PREFERENCES
 ImageInclude("/system/preferences" ${SYSTEM_PREFERENCES})
 
 
-set(BIN_DIRECTORY
-	addattr
-	catarea
-	catattr
-	copyattr
-	finddir
-	hey
-	listarea
-	listattr
-	listres
-	lsindex
-	mkindex
-	mvattr
-	query
-	reindex
-	rmattr
-	rmindex
-	rc
-	resattr
-	setmime
-	shutdown
-	system_time
-	translate
-	watch
-	xres
-)
-ImageInclude("/bin" ${BIN_DIRECTORY})
+include(${CMAKE_CURRENT_LIST_DIR}/bin.cmake)
 
 
 # App attrs tarball: each Application/Server/AddOn macro creates a zero-byte

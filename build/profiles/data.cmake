@@ -12,6 +12,8 @@ set(SYSTEMD_SERVICES
 
 install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)
 
+install(FILES data/etc/modules-load.d/befs.conf DESTINATION /etc/modules-load.d/)
+
 
 # Boot scripts
 ImageIncludeFile("data/system/boot/SetupEnvironment" "/system/boot")

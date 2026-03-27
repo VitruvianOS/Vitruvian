@@ -1,0 +1,72 @@
+name: Notify Chat on discussion activity
+on:
+  discussion:
+    types: [created, answered]
+
+permissions:
+  discussions: read
+
+jobs:
+  notify-telegram:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Telegram message
+        id: build
+        env:
+          NUMBER: ${{ github.event.discussion.number }}
+          TITLE:  ${{ github.event.discussion.title }}
+          BODY:   ${{ github.event.discussion.body }}
+          USER:   ${{ github.event.discussion.user.login }}
+          URL:    ${{ github.event.discussion.html_url }}
+          ACTION: ${{ github.event.action }}
+          ACTOR:  ${{ github.actor }}
+          REPO:   ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # HTML-escape a string
+          esc() { printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
+
+          # Truncate body
+          body_text="$BODY"
+          if [ "${#body_text}" -gt 800 ]; then
+            body_text="${body_text:0:800}...(truncated)"
+          fi
+
+          repo_url="https://github.com/${REPO}"
+          repo_link="<a href=\"${repo_url}\">$(esc "$REPO")</a>"
+          disc_link="<a href=\"$(esc "$URL")\">$(esc "#${NUMBER}: ${TITLE}")</a>"
+
+          if [ "$ACTION" = "created" ]; then
+            header="<b>New discussion</b>"
+            meta="Repo: ${repo_link}"$'\n'"Discussion: ${disc_link}"$'\n'"Author: $(esc "$USER")"
+          elif [ "$ACTION" = "answered" ]; then
+            header="<b>Discussion answered</b>"
+            meta="Repo: ${repo_link}"$'\n'"Discussion: ${disc_link}"$'\n'"Answered by: $(esc "$ACTOR")"
+          fi
+
+          body_escaped="$(esc "$body_text")"
+          final="${header}"$'\n'"${meta}"$'\n\n'"${body_escaped}"
+
+          delim="EOF_$(openssl rand -hex 8)"
+          {
+            echo "msg<<${delim}"
+            printf '%s\n' "$final"
+            echo "${delim}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send Telegram notification
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          MSG:                ${{ steps.build.outputs.msg }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
+            echo "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID — skipping."
+            exit 0
+          fi
+          curl -sS --fail -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "parse_mode=HTML" \
+            --data-urlencode "text=${MSG}"

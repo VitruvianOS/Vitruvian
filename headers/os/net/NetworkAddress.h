@@ -8,7 +8,6 @@
 
 #include <net/if_dl.h>
 #include <netinet/in.h>
-#include <netinet6/in6.h>
 #include <sys/socket.h>
 
 #include <Archivable.h>

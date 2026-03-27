@@ -61,7 +61,6 @@ DEV_PACKAGES="linux-headers-rt-amd64 pkg-config libc6-dev libstdc++-14-dev libfr
 sudo chroot $basedir/image_tree/chroot /bin/bash -c "echo 'vitruvian' > /etc/hostname && \
 apt update && apt install -y --no-install-recommends $BASE_PACKAGES $DEV_PACKAGES $DEBUG_PACKAGES && \
 echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \
-echo befs >> /etc/modules && \
 exit"
 
 ls ./image_tree/chroot/lib/modules | head -n1 > imagekernelversion.conf

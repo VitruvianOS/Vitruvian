@@ -110,6 +110,13 @@ _kern_get_next_port_info(team_id team, int32* _cookie,
 
 
 status_t
+_get_next_port_info(team_id team, int32* cookie, port_info* info, size_t size)
+{
+	return _kern_get_next_port_info(team, cookie, info);
+}
+
+
+status_t
 _get_port_info(port_id id, port_info* out_info, size_t size)
 {
 	CALLED();

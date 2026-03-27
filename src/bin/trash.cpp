@@ -125,9 +125,11 @@ status_t foreach_in_trash(status_t (*iterator)(const char *))
 {
 	status_t err;
 	dev_t dev;
+	int32 cookie = 0;
 	char trash_dir[B_PATH_NAME_LENGTH];
-	for (dev = 0; ; ) {
-		if (next_dev(&dev) < B_OK)
+	for (;;) {
+		dev = next_dev(&cookie);
+		if (dev < B_OK)
 			break;
 		//for each in trash_dir
 		err = find_directory(B_TRASH_DIRECTORY, dev, false, trash_dir, B_PATH_NAME_LENGTH);

@@ -40,8 +40,15 @@
 #include <ScrollView.h>
 #include <String.h>
 #include <SupportDefs.h>
+#ifndef __VOS__
 #include <usb/USB_hid.h>
 #include <usb/USB_hid_page_consumer.h>
+#else
+#define B_HID_USAGE_PAGE_CONSUMER 0x000C
+#define B_HID_UID_CON_MUTE 0x00E2
+#define B_HID_UID_CON_VOLUME_INCREMENT 0x00E9
+#define B_HID_UID_CON_VOLUME_DECREMENT 0x00EA
+#endif
 
 #include "EditWindow.h"
 #include "KeyInfos.h"

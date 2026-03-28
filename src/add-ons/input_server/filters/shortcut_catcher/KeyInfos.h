@@ -9,6 +9,7 @@
 #define _KEY_INFOS_H
 
 
+#include <String.h>
 #include <SupportDefs.h>
 
 
@@ -29,6 +30,9 @@ int GetNumKeyIndices();
 
 // Should be called at startup.
 void InitKeyIndices();
+
+// Returns a fallback name for a key code not in the known set.
+BString GetFallbackKeyName(uint32 keyCode);
 
 
 #endif	// _KEY_INFOS_H

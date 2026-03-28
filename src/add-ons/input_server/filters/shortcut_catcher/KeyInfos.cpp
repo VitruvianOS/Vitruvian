@@ -10,11 +10,13 @@
 #include "KeyInfos.h"
 
 #include <ctype.h>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
 
 #include <InterfaceDefs.h>
+#include <String.h>
 
 
 #define NUM_KEYS 128
@@ -200,4 +202,15 @@ FindKeyCode(const char* keyName)
 
 	return 0;
 		// default to sentinel value
+}
+
+
+BString
+GetFallbackKeyName(uint32 keyCode)
+{
+	BString keyCodeName = "KeyCode ";
+	std::stringstream sstream;
+	sstream << std::hex << keyCode;
+	keyCodeName.Append(sstream.str().c_str());
+	return keyCodeName;
 }

@@ -21,8 +21,8 @@ AddOn(
 	#Geolocation.cpp
 	HashString.cpp
 	HSL.cpp
-	#IconButton.cpp
-	#IconView.cpp
+	IconButton.cpp
+	IconView.cpp
 	JsonWriter.cpp
 	JsonEventListener.cpp
 	JsonMessageWriter.cpp

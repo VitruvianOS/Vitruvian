@@ -705,8 +705,8 @@ ModulesView::MessageReceived(BMessage* message)
 					node_ref nodeRef;
 
 					message->FindString("name", &name);
-					message->FindInt32("device", &nodeRef.device);
-					message->FindInt64("directory", &nodeRef.node);
+					{ int64 device; message->FindInt64("device", &device); nodeRef.device = (dev_t)device; }
+					{ int64 node; message->FindInt64("directory", &node); nodeRef.node = (ino_t)node; }
 
 					BDirectory dir(&nodeRef);
 
@@ -893,7 +893,7 @@ ModulesView::_OpenSaver()
 	fCurrentName = fSettings.ModuleName();
 	fSaverRunner = new ScreenSaverRunner(view->Window(), view, fSettings);
 
-#ifdef __HAIKU__
+#ifdef __VOS__
 	BRect rect = fSettingsBox->InnerFrame().InsetByCopy(4, 4);
 #else
 	BRect rect = fSettingsBox->Bounds().InsetByCopy(4, 4);

@@ -78,5 +78,6 @@ set(BIN_DIRECTORY
 	notify
 	translate
 	filepanel
+	screenshot_cli
 )
 ImageInclude("/bin" ${BIN_DIRECTORY})

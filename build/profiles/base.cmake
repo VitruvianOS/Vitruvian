@@ -1,36 +1,4 @@
-set(DESKBAR_APPLICATIONS
-	StyledEdit
-	Terminal
-	Sudoku
-	Pairs
-	Clock
-	AboutSystem
-	DeskCalc
-)
-ImageInclude("/system/apps" ${DESKBAR_APPLICATIONS})
-
-# Create Deskbar Applications symlinks for each DESKBAR_APPLICATIONS entry.
-# Mirrors haiku-latest HaikuBootstrap AddSymlinkToPackage for the Applications menu.
-# Adding an app to DESKBAR_APPLICATIONS above automatically gives it a Deskbar entry.
-# $ENV{DESTDIR} is prepended to the link location so CPack staging works correctly;
-# the link target stays as a bare runtime path since it's resolved at runtime.
-install(CODE "
-	file(MAKE_DIRECTORY \"\$ENV{DESTDIR}/system/data/deskbar/menu/Applications\")
-")
-foreach(app ${DESKBAR_APPLICATIONS})
-	install(CODE "
-		file(CREATE_LINK \"/system/apps/${app}\"
-			\"\$ENV{DESTDIR}/system/data/deskbar/menu/Applications/${app}\"
-			SYMBOLIC)
-	")
-endforeach()
-
-
-set(CORE_APPLICATIONS
-	Deskbar
-	Tracker
-)
-ImageInclude("/system/" ${CORE_APPLICATIONS})
+include(${CMAKE_CURRENT_LIST_DIR}/apps.cmake)
 
 
 set(SYSTEM_SERVERS
@@ -85,9 +53,7 @@ set(SYSTEM_TRANSLATORS
 ImageInclude("/system/add-ons/Translators" ${SYSTEM_TRANSLATORS})
 
 
-set(SYSTEM_PREFERENCES
-)
-ImageInclude("/system/preferences" ${SYSTEM_PREFERENCES})
+include(${CMAKE_CURRENT_LIST_DIR}/preferences.cmake)
 
 
 include(${CMAKE_CURRENT_LIST_DIR}/bin.cmake)
@@ -106,9 +72,10 @@ set(_ARRANGE_CMDS
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/apps"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/servers"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/preferences"
 )
 
-foreach(_app ${DESKBAR_APPLICATIONS})
+foreach(_app ${SYSTEM_APPS})
     list(APPEND _ARRANGE_CMDS
         COMMAND cp -a "${_FLAT}/${_app}" "${_FINAL}/system/apps/${_app}"
     )
@@ -126,13 +93,27 @@ foreach(_server ${SYSTEM_SERVERS})
     )
 endforeach()
 
+# SYSTEM_PREFERENCES_TARGETS and SYSTEM_PREFERENCES are parallel lists:
+# targets have cmake-unique names; SYSTEM_PREFERENCES has the installed output names.
+# (Deskbar_prefs/Tracker_prefs clash with the app targets of the same name in Jam,
+# which uses per-subdirectory scoping — cmake uses a single global target namespace.)
+list(LENGTH SYSTEM_PREFERENCES_TARGETS _nprefs)
+math(EXPR _nprefs_last "${_nprefs} - 1")
+foreach(_i RANGE ${_nprefs_last})
+    list(GET SYSTEM_PREFERENCES_TARGETS ${_i} _target)
+    list(GET SYSTEM_PREFERENCES         ${_i} _outname)
+    list(APPEND _ARRANGE_CMDS
+        COMMAND cp -a "${_FLAT}/${_target}" "${_FINAL}/system/preferences/${_outname}"
+    )
+endforeach()
+
 list(APPEND _ARRANGE_CMDS
     COMMAND tar --xattrs -cf "${_TAR}" -C "${_FINAL}" .
 )
 
 add_custom_target(apps_attrs ALL
     ${_ARRANGE_CMDS}
-    DEPENDS ${DESKBAR_APPLICATIONS} ${CORE_APPLICATIONS} ${SYSTEM_SERVERS}
+    DEPENDS ${SYSTEM_APPS} ${CORE_APPLICATIONS} ${SYSTEM_SERVERS} ${SYSTEM_PREFERENCES_TARGETS}
     COMMENT "Packaging app attrs"
 )
 

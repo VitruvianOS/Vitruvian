@@ -17,7 +17,9 @@
 #include <syscalls.h>
 
 #include "tracker_private.h"
+#ifndef __VOS__
 #include "Utility.h"
+#endif
 
 
 static const uint32 kMsgAgree = 'agre';
@@ -82,11 +84,13 @@ InstallerApp::Quit()
 			// Synchronize disks
 			sync();
 
+#ifndef __VOS__
 			if (Utility::IsReadOnlyVolume("/boot")) {
 				// Unblock CD tray, and eject the CD
 				Utility::BlockMedia("/boot", false);
 				Utility::EjectMedia("/boot");
 			}
+#endif
 
 			// Quickly reboot without touching anything
 			// on disk (which we might just have ejected)

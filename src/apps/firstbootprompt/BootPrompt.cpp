@@ -10,7 +10,9 @@
 #include <stdlib.h>
 
 #include <Catalog.h>
+#ifndef __VOS__
 #include <LaunchRoster.h>
+#endif
 #include <Locale.h>
 
 #include <syscalls.h>
@@ -60,7 +62,9 @@ BootPromptApp::MessageReceived(BMessage* message)
 		// confirm box.
 		case MSG_BOOT_DESKTOP:
 		{
+#ifndef __VOS__
 			BLaunchRoster().Target("desktop");
+#endif
 			sExitValue = 1;
 
 			PostMessage(B_QUIT_REQUESTED);
@@ -68,7 +72,9 @@ BootPromptApp::MessageReceived(BMessage* message)
 		}
 		case MSG_RUN_INSTALLER:
 		{
+#ifndef __VOS__
 			BLaunchRoster().Target("installer");
+#endif
 			sExitValue = 0;
 
 			PostMessage(B_QUIT_REQUESTED);

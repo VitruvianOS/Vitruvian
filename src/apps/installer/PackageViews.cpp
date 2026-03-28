@@ -17,7 +17,9 @@
 #include <LayoutUtils.h>
 #include <Locale.h>
 #include <Messenger.h>
+#ifndef __VOS__
 #include <package/PackageInfo.h>
+#endif
 #include <Path.h>
 #include <ScrollBar.h>
 #include <String.h>
@@ -56,6 +58,7 @@ Package::PackageFromEntry(BEntry &entry)
 	BPath path;
 	entry.GetPath(&path);
 
+#ifndef __VOS__
 	BPackageKit::BPackageInfo info;
 	info.ReadFromPackageFile(path.Path());
 
@@ -65,6 +68,9 @@ Package::PackageFromEntry(BEntry &entry)
 	Package *package = new Package(path);
 	package->fName = info.Name();
 	package->fDescription = info.Summary();
+#else
+	Package *package = new Package(path);
+#endif
 
 	bool alwaysOn = false;
 	bool onByDefault = true;

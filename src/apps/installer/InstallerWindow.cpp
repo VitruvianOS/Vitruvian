@@ -144,7 +144,7 @@ LogoView::_Init()
 {
 	SetDrawingMode(B_OP_OVER);
 
-#ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
+#ifdef VITRUVIAN_OFFICIAL_RELEASE
 	rgb_color bgColor = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
 
 	if (bgColor.IsLight())
@@ -152,7 +152,7 @@ LogoView::_Init()
 	else
 		fLogo = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "logo_dark.png");
 #else
-	fLogo = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "walter_logo.png");
+	fLogo = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "logo.png");
 #endif
 }
 

@@ -256,6 +256,7 @@ Filter::NumberOfActiveCPUs() const
 	system_info info;
 	get_system_info(&info);
 	count = info.cpu_count;
+#ifndef __VOS__
 	int32 cpuCount = 0;
 	for (int i = 0; i < count; i ++) {
 		if (_kern_cpu_enabled(i))
@@ -263,6 +264,9 @@ Filter::NumberOfActiveCPUs() const
 	}
 	if (cpuCount == 0)
 		cpuCount = 1;
+#else
+	int32 cpuCount = count;
+#endif
 
 	return cpuCount;
 }

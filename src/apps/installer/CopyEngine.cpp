@@ -479,7 +479,9 @@ CopyEngine::_Copy(BEntry &source, BEntry &destination,
 		destination.SetOwner(sourceInfo.st_uid);
 		destination.SetGroup(sourceInfo.st_gid);
 		destination.SetModificationTime(sourceInfo.st_mtime);
+#ifdef __HAIKU__
 		destination.SetCreationTime(sourceInfo.st_crtime);
+#endif
 	}
 
 	return B_OK;

@@ -30,6 +30,7 @@ set(
 	"headers/os/posix/compat/sys"
 
 	"headers/os/add-ons/input_server"
+	"headers/os/add-ons/tracker"
 
 	"headers/posix"
 )

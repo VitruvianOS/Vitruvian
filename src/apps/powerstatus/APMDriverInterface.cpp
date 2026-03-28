@@ -9,9 +9,11 @@
 
 #include "APMDriverInterface.h"
 
+#ifndef __VOS__
 #include <arch/x86/apm_defs.h>
 #include <generic_syscall_defs.h>
 #include <syscalls.h>
+#endif
 
 
 const bigtime_t kUpdateInterval = 2000000;
@@ -26,6 +28,7 @@ APMDriverInterface::~APMDriverInterface()
 status_t
 APMDriverInterface::Connect()
 {
+#ifndef __VOS__
 	uint32 version = 0;
 	status_t status = _kern_generic_syscall(APM_SYSCALLS, B_SYSCALL_INFO,
 		&version, sizeof(version));
@@ -36,12 +39,16 @@ APMDriverInterface::Connect()
 	}
 
 	return status;
+#else
+	return B_NOT_SUPPORTED;
+#endif
 }
 
 
 status_t
 APMDriverInterface::GetBatteryInfo(int32 index, battery_info* info)
 {
+#ifndef __VOS__
 	if (index != 0)
 		return B_BAD_VALUE;
 
@@ -58,6 +65,9 @@ APMDriverInterface::GetBatteryInfo(int32 index, battery_info* info)
 	}
 
 	return status;
+#else
+	return B_NOT_SUPPORTED;
+#endif
 }
 
 

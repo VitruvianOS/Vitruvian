@@ -51,7 +51,11 @@
 #include <TranslationUtils.h>
 #include <TranslatorRoster.h>
 
+#ifdef __HAIKU__
 #include <posix/locale.h>
+#else
+#include <locale.h>
+#endif
 
 #include "ImageCache.h"
 #include "ProgressWindow.h"

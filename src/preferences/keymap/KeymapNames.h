@@ -1,0 +1,2 @@
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "KeymapNames"

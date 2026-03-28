@@ -129,7 +129,7 @@ Server(
 		stackandtile/Stacking.cpp
 		stackandtile/Tiling.cpp
 
-	LIBS be root localestub shared agg icon linprog ${FREETYPE_LIBRARY}
+	LIBS localestub shared agg icon linprog ${FREETYPE_LIBRARY}
 		${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES} ${SEAT_LIBRARIES}
 		${EVDEV_LIBRARIES}
 

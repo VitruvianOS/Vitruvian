@@ -8,7 +8,7 @@ Server(
 	KeyStoreServer.cpp
 
 	INCLUDES
-	LIBS be localestub shared
+	LIBS localestub shared
 	RDEF keystore_server.rdef
 )
 

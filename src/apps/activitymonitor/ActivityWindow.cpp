@@ -132,7 +132,7 @@ ActivityWindow::MessageReceived(BMessage* message)
 
 		case kMsgAddView:
 		{
-#ifdef __HAIKU__
+#if defined(__HAIKU__) || defined(__VOS__)
 			BView* firstView = fLayout->View()->ChildAt(0);
 
 			_AddDefaultView();
@@ -145,7 +145,7 @@ ActivityWindow::MessageReceived(BMessage* message)
 
 		case kMsgRemoveView:
 		{
-#ifdef __HAIKU__
+#if defined(__HAIKU__) || defined(__VOS__)
 			BView* view;
 			if (message->FindPointer("view", (void**)&view) != B_OK)
 				break;
@@ -204,7 +204,7 @@ ActivityWindow::QuitRequested()
 int32
 ActivityWindow::ActivityViewCount() const
 {
-#ifdef __HAIKU__
+#if defined(__HAIKU__) || defined(__VOS__)
 	return fLayout->View()->CountChildren();
 #else
 	return 1;
@@ -291,7 +291,7 @@ ActivityWindow::_SaveSettings()
 	if (status != B_OK)
 		return status;
 
-#ifdef __HAIKU__
+#if defined(__HAIKU__) || defined(__VOS__)
 	BView* top = fLayout->View();
 #else
 	BView* top = ChildAt(0);

@@ -6,8 +6,10 @@
 
 #include "SystemInfo.h"
 
+#ifndef __VOS__
 #include <NetworkInterface.h>
 #include <NetworkRoster.h>
+#endif
 
 #include "SystemInfoHandler.h"
 
@@ -49,7 +51,7 @@ SystemInfo::~SystemInfo()
 uint64
 SystemInfo::CachedMemory() const
 {
-#ifdef __HAIKU__
+#if defined(__HAIKU__) || defined(__VOS__)
 	return fSystemInfo.cached_pages * B_PAGE_SIZE;
 #else
 	return 0LL;
@@ -166,6 +168,7 @@ SystemInfo::_RetrieveNetwork()
 	fBytesSent = 0;
 	fRetrievedNetwork = true;
 
+#ifndef __VOS__
 	BNetworkRoster& roster = BNetworkRoster::Default();
 
 	BNetworkInterface interface;
@@ -177,6 +180,7 @@ SystemInfo::_RetrieveNetwork()
 			fBytesSent += stats.send.bytes;
 		}
 	}
+#endif
 }
 
 

@@ -64,7 +64,7 @@ public:
 
 			status_t	SaveState(BMessage& state) const;
 
-#ifdef __HAIKU__
+#if defined(__HAIKU__) || defined(__VOS__)
 			BLayoutItem* CreateHistoryLayoutItem();
 			BLayoutItem* CreateLegendLayoutItem();
 #endif
@@ -82,7 +82,7 @@ protected:
 	virtual	void		AttachedToWindow();
 	virtual	void		DetachedFromWindow();
 
-#ifdef __HAIKU__
+#if defined(__HAIKU__) || defined(__VOS__)
 	virtual	BSize		MinSize();
 #endif
 
@@ -125,7 +125,7 @@ private:
 	rgb_color			fHistoryBackgroundColor;
 	rgb_color			fLegendBackgroundColor;
 	BBitmap*			fOffscreen;
-#ifdef __HAIKU__
+#if defined(__HAIKU__) || defined(__VOS__)
 	BLayoutItem*		fHistoryLayoutItem;
 	BLayoutItem*		fLegendLayoutItem;
 #endif

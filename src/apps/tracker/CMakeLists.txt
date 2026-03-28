@@ -4,7 +4,7 @@ Application(
 	SOURCES
 	main.cpp
 
-	LIBS be localestub shared tracker
+	LIBS localestub shared tracker
 	RDEF Tracker.rdef
 )
 

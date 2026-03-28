@@ -10,6 +10,7 @@
 #include "MemoryBarMenu.h"
 #include "ProcessController.h"
 
+#include <float.h>
 #include <stdio.h>
 
 #include <Catalog.h>

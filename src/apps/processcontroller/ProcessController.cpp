@@ -451,6 +451,7 @@ ProcessController::MessageReceived(BMessage *message)
 
 		case 'CPU ':
 		{
+#ifndef __VOS__
 			uint32 cpu;
 			if (message->FindInt32("cpu", (int32*)&cpu) == B_OK) {
 				bool last = true;
@@ -472,11 +473,13 @@ ProcessController::MessageReceived(BMessage *message)
 				} else
 					_kern_set_cpu_enabled(cpu, !_kern_cpu_enabled(cpu));
 			}
+#endif
 			break;
 		}
 
 		case 'Schd':
 		{
+#ifndef __VOS__
 			BMenuItem* source;
 			if (message->FindPointer("source", (void**)&source) != B_OK)
 				break;
@@ -486,6 +489,7 @@ ProcessController::MessageReceived(BMessage *message)
 				set_scheduler_mode(SCHEDULER_MODE_LOW_LATENCY);
 			Preferences preferences(kPreferencesFileName);
 			preferences.SaveInt32(get_scheduler_mode(), "scheduler_mode");
+#endif
 			break;
 		}
 
@@ -845,8 +849,12 @@ thread_popup(void *arg)
 			BMessage* m = new BMessage('CPU ');
 			m->AddInt32("cpu", i);
 			item = new IconMenuItem (gPCView->fProcessorIcon, itemName, m);
+#ifndef __VOS__
 			if (_kern_cpu_enabled(i))
 				item->SetMarked(true);
+#else
+			item->SetMarked(true);
+#endif
 			item->SetTarget(gPCView);
 			addtopbottom(item);
 		}
@@ -854,6 +862,7 @@ thread_popup(void *arg)
 	}
 
 	// Scheduler modes
+#ifndef __VOS__
 	int32 currentMode = get_scheduler_mode();
 	Preferences preferences(kPreferencesFileName, NULL, false);
 	int32 savedMode;
@@ -868,6 +877,7 @@ thread_popup(void *arg)
 	item->SetTarget(gPCView);
 	addtopbottom(item);
 	addtopbottom(new BSeparatorItem());
+#endif
 
 	if (!be_roster->IsRunning(kTrackerSig)) {
 		item = new IconMenuItem(gPCView->fTrackerIcon,

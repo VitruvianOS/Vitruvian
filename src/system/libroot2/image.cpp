@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, Dario Casalinuovo. All rights reserved.
+ * Copyright 2019-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the LGPL License.
  */
 
@@ -23,6 +23,13 @@
 namespace BKernelPrivate {
 
 
+struct FindByBaseState {
+	ElfW(Addr)	base;
+	int32		index;
+	int32		current;
+};
+
+
 class ImagePool {
 public:
 	static image_id	Load(const char* path) {
@@ -31,14 +38,24 @@ public:
 
 		MutexLocker _(&fLock);
 
-		void* image = dlopen(path, RTLD_LAZY);
-
-		if (image == NULL)
+		void* handle = dlopen(path, RTLD_LAZY);
+		if (handle == NULL)
 			return B_ERROR;
 
-		fLoadedAddOns.insert(std::make_pair(++fId, image));
+		struct link_map* lm = NULL;
+		if (dlinfo(handle, RTLD_DI_LINKMAP, &lm) != 0 || lm == NULL) {
+			dlclose(handle);
+			return B_ERROR;
+		}
 
-		return fId;
+		image_id id = _FindIndexByBase(lm->l_addr);
+		if (id < B_OK) {
+			dlclose(handle);
+			return B_ERROR;
+		}
+
+		fLoadedAddOns[id] = handle;
+		return id;
 	}
 
 	static status_t Unload(image_id id) {
@@ -47,13 +64,14 @@ public:
 
 		MutexLocker _(&fLock);
 
-		void* image = _Find(id);
-		if (image == NULL)
+		auto it = fLoadedAddOns.find(id);
+		if (it == fLoadedAddOns.end())
 			return B_ERROR;
 
-		if (dlclose(image) != 0)
+		if (dlclose(it->second) != 0)
 			return B_ERROR;
 
+		fLoadedAddOns.erase(it);
 		return B_OK;
 	}
 
@@ -65,11 +83,11 @@ public:
 
 		MutexLocker _(&fLock);
 
-		void* image = _Find(id);
-		if (image == NULL)
+		void* handle = _Find(id);
+		if (handle == NULL)
 			return B_ERROR;
 
-		void* symbol = dlsym(image, name);
+		void* symbol = dlsym(handle, name);
 		if (symbol == NULL)
 			return B_ERROR;
 
@@ -80,22 +98,35 @@ public:
 
 private:
 	static void* _Find(image_id id) {
-		auto addon = fLoadedAddOns.find(id);
-
-		if (addon == end(fLoadedAddOns))
+		auto it = fLoadedAddOns.find(id);
+		if (it == fLoadedAddOns.end())
 			return NULL;
+		return it->second;
+	}
 
-		return addon->second;
+	static image_id _FindIndexByBase(ElfW(Addr) base) {
+		FindByBaseState state = {base, -1, 0};
+		dl_iterate_phdr([](struct dl_phdr_info* phdr, size_t size,
+				void* data) -> int {
+			FindByBaseState* s = (FindByBaseState*)data;
+			if (phdr->dlpi_addr == s->base) {
+				s->index = s->current;
+				return 1;
+			}
+			s->current++;
+			return 0;
+		}, &state);
+		if (state.index < 0)
+			return B_ERROR;
+		return (image_id)(state.index + 1);
 	}
 
 	static std::map<image_id, void*> fLoadedAddOns;
-	static image_id fId;
 	static pthread_mutex_t fLock;
 };
 
 
 std::map<image_id, void*> ImagePool::fLoadedAddOns;
-image_id ImagePool::fId = -1;
 pthread_mutex_t ImagePool::fLock = PTHREAD_MUTEX_INITIALIZER;
 
 

@@ -231,6 +231,7 @@ TermWindow::TermWindow(const Arguments& args)
 	fTitle.pattern = args.Title();
 
 	_TitleSettingsChanged();
+	SetTitle(fTitle.title);
 
 	// get the saved window position and workspaces
 	BRect frame;

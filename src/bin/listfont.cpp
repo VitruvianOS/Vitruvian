@@ -34,7 +34,7 @@ usage(void)
 	printf("\t-l  --long    long listing with more info (spacing, encoding,\n"
 		"\t\t\theight (ascent/descent/leading), ...)\n");
 	printf("\t-t  --tuned   display tuned fonts\n");
-#ifndef __HAIKU__
+#ifndef __VOS__
 	printf("\t-u            update font families\n");
 #endif
 }
@@ -48,7 +48,7 @@ main(int argc, char **argv)
 	bool displayStyles = false;
 	bool displayLong = false;
 	bool displayTuned = false;
-#ifndef __HAIKU__
+#ifndef __VOS__
 	bool updateFamilies = false;
 #endif
 
@@ -71,7 +71,7 @@ main(int argc, char **argv)
 			case 's':
 				displayStyles = true;
 				break;
-#ifndef __HAIKU__
+#ifndef __VOS__
 			case 'u':
 				updateFamilies = true;
 				break;
@@ -81,7 +81,7 @@ main(int argc, char **argv)
 
 	BApplication app("application/x-vnd.Haiku-listfont");
 
-#ifndef __HAIKU__
+#ifndef __VOS__
 	if (updateFamilies) {
 		bool changed = update_font_families(true);
 		printf("font families %s.\n", changed ? "changed" : "did not change");

@@ -124,7 +124,7 @@ NetworkStatus::ReadyToRun()
 		// if the Deskbar is not alive at this point, it might be after having
 		// acknowledged the requester below
 		BDeskbar deskbar;
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 		isDeskbarRunning = deskbar.IsRunning();
 #endif
 		isInstalled = deskbar.HasItem(kDeskbarItemName);
@@ -135,7 +135,7 @@ NetworkStatus::ReadyToRun()
 			Quit();
 			return;
 		}
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 		// wait up to 10 seconds for Deskbar to become available
 		// in case it is not running (yet?)
 		int32 tries = 10;

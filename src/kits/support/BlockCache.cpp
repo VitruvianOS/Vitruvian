@@ -11,7 +11,7 @@
 #include <new>
 
 
-#ifdef __HAIKU__
+#ifdef __VOS__
 extern "C" void heap_debug_get_allocation_info() __attribute__((weak));
 #else
 static const void* heap_debug_get_allocation_info = NULL;

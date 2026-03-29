@@ -174,9 +174,9 @@ main(int argc, char **argv)
 	}
 
 	if (quick) {
-		#ifdef __HAIKU__
+		#ifdef __VOS__
 		_kern_shutdown(gReboot);
-		#endif // __HAIKU__
+		#endif // __VOS__
 		fprintf(stderr, "Shutdown failed! (Do you have ACPI enabled?)\n");
 		return 2;
 	} else {

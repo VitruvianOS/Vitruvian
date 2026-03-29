@@ -1877,7 +1877,7 @@ AboutView::_GetLicensePath(const char* license, BPath& path)
 void
 AboutView::_AddCopyrightsFromAttribute()
 {
-#ifdef __HAIKU__
+#ifdef __VOS__
 	// open the app executable file
 	char appPath[B_PATH_NAME_LENGTH];
 	int appFD;

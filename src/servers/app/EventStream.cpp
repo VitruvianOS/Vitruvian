@@ -179,7 +179,7 @@ InputServerStream::GetNextCursorPosition(BPoint &where, bigtime_t timeout)
 		return B_ERROR;
 	}
 
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 	uint32 pos = atomic_get((int32*)&fCursorBuffer->pos);
 #else
 	uint32 pos = fCursorBuffer->pos;

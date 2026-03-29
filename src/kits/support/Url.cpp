@@ -18,11 +18,11 @@
 #include <MimeType.h>
 #include <Roster.h>
 
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 	#include <ICUWrapper.h>
 #endif
 
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 	#include <unicode/idna.h>
 	#include <unicode/stringpiece.h>
 #endif
@@ -614,7 +614,7 @@ BUrl::HasFragment() const
 }
 
 
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 status_t
 BUrl::IDNAToAscii()
 {
@@ -638,7 +638,7 @@ BUrl::IDNAToAscii()
 #endif
 
 
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 status_t
 BUrl::IDNAToUnicode()
 {
@@ -665,7 +665,7 @@ BUrl::IDNAToUnicode()
 // #pragma mark - utility functionality
 
 
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 bool
 BUrl::HasPreferredApplication() const
 {
@@ -681,7 +681,7 @@ BUrl::HasPreferredApplication() const
 #endif
 
 
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 BString
 BUrl::PreferredApplication() const
 {
@@ -695,7 +695,7 @@ BUrl::PreferredApplication() const
 #endif
 
 
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 status_t
 BUrl::OpenWithPreferredApplication(bool onProblemAskUser) const
 {

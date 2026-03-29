@@ -141,7 +141,7 @@ FlatIconExporter::Export(const Icon* icon, BNode* node,
 		return ret;
 	}
 
-#ifndef __HAIKU__
+#ifndef __VOS__
 	// work arround a BFS bug, attributes with the same name but different
 	// type fail to be written
 	node->RemoveAttr(attrName);

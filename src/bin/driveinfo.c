@@ -94,7 +94,7 @@ static void dump_misc(int dev)
 	} else {
 		printf("driver:\t%s\n", path);
 	}
-#ifdef __HAIKU__
+#ifdef __VOS__
 	if (ioctl(dev, B_GET_PATH_FOR_DEVICE, path, sizeof(path)) < 0) {
 		perror("ioctl(B_GET_PATH_FOR_DEVICE)");
 	} else {

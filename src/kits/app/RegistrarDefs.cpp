@@ -18,7 +18,7 @@ namespace BPrivate {
 
 
 // names
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 const char* kRAppLooperPortName = "rAppLooperPort";
 #else
 const char* kRAppLooperPortName = "haiku-test:rAppLooperPort";

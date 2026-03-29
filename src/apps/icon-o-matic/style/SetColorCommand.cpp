@@ -42,7 +42,7 @@ SetColorCommand::~SetColorCommand()
 status_t
 SetColorCommand::InitCheck()
 {
-#ifdef __HAIKU__
+#ifdef __VOS__
 	return fStyle && fStyle->Color() != fColor ? B_OK : B_NO_INIT;
 #else
 	rgb_color color = fStyle->Color();

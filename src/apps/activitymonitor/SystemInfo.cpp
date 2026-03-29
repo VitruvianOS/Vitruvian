@@ -51,7 +51,7 @@ SystemInfo::~SystemInfo()
 uint64
 SystemInfo::CachedMemory() const
 {
-#if defined(__HAIKU__) || defined(__VOS__)
+#if defined(__VOS__)
 	return fSystemInfo.cached_pages * B_PAGE_SIZE;
 #else
 	return 0LL;

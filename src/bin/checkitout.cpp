@@ -31,7 +31,7 @@
 
 const char* kAppSig = "application/x-vnd.Haiku-checkitout";
 const char* kTrackerSig = "application/x-vnd.Be-TRAK";
-#if __HAIKU__
+#if defined(__VOS__)
 const char* kTerminalSig = "application/x-vnd.Haiku-Terminal";
 #else
 const char* kTerminalSig = "application/x-vnd.Be-SHEL";

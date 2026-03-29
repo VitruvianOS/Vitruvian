@@ -25,7 +25,7 @@ IconView::IconView(BRect frame, const char* name)
 	  fScale((frame.Width() + 1.0) / 64.0)
 {
 	fRenderer->SetScale(fScale);
-#if __HAIKU__
+#if __VOS__
 	BSize size(frame.Width(), frame.Height());
 	SetExplicitMinSize(size);
 	SetExplicitMaxSize(size);

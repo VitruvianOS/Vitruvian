@@ -33,7 +33,7 @@ DropTargetListView::Draw(BRect updateRect)
 		SetPenSize(2);
 		BRect rect = Bounds();
 // TODO: this is an incompatibility between R5 and Haiku and should be fixed!
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 		rect.left++;
 		rect.top++;
 #else

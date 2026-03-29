@@ -148,7 +148,7 @@ DeskButton::Draw(BRect rect)
 {
 	BView::Draw(rect);
 
-#ifdef __HAIKU__
+#ifdef __VOS__
 	SetDrawingMode(B_OP_ALPHA);
 	SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
 #else

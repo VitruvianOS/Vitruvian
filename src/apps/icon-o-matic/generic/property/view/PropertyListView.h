@@ -42,7 +42,7 @@ class PropertyListView : public BView,
 	virtual	void				MouseDown(BPoint where);
 	virtual	void				MessageReceived(BMessage* message);
 
-#ifdef __HAIKU__
+#ifdef __VOS__
 	virtual	BSize				MinSize();
 	virtual	BSize				MaxSize();
 	virtual	BSize				PreferredSize();

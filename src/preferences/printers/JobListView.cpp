@@ -284,7 +284,7 @@ JobItem::DrawItem(BView *owner, BRect, bool complete)
 
 		BPoint iconPt(bounds.LeftTop() + BPoint(2.0, 2.0));
 		float iconHeight = B_MINI_ICON;
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 		if (fIcon)
 			iconHeight = fIcon->Bounds().Height();
 #endif
@@ -297,7 +297,7 @@ JobItem::DrawItem(BView *owner, BRect, bool complete)
 		BPoint sizePt(bounds.RightTop() + BPoint(-x, fntheight * 2.0));
 
 		drawing_mode mode = owner->DrawingMode();
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 	owner->SetDrawingMode(B_OP_ALPHA);
 #else
 	owner->SetDrawingMode(B_OP_OVER);

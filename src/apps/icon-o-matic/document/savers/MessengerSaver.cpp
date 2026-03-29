@@ -29,7 +29,7 @@ MessengerSaver::~MessengerSaver()
 status_t
 MessengerSaver::Save(Document* document)
 {
-#if HAIKU_TARGET_PLATFORM_HAIKU
+#if defined(__VOS__)
 	if (!fMessenger.IsValid())
 		return B_NO_INIT;
 

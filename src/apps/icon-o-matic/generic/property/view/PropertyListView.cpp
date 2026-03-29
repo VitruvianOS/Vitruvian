@@ -13,7 +13,7 @@
 
 #include <Catalog.h>
 #include <Clipboard.h>
-#ifdef __HAIKU__
+#ifdef __VOS__
 #  include <LayoutUtils.h>
 #endif
 #include <Locale.h>
@@ -259,7 +259,7 @@ PropertyListView::MessageReceived(BMessage* message)
 	}
 }
 
-#ifdef __HAIKU__
+#ifdef __VOS__
 
 BSize
 PropertyListView::MinSize()
@@ -285,7 +285,7 @@ PropertyListView::PreferredSize()
 	return BLayoutUtils::ComposeSize(ExplicitPreferredSize(), BSize(100, 50));
 }
 
-#endif // __HAIKU__
+#endif // __VOS__
 
 // #pragma mark -
 

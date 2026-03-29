@@ -148,7 +148,7 @@ NetworkStatusView::_UpdateBitmaps()
 		return;
 
 	BResources resources(&file);
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 	if (resources.InitCheck() < B_OK)
 		return;
 #endif

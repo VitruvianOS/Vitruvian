@@ -427,7 +427,7 @@ PrinterItem::DrawItem(BView *owner, BRect /*bounds*/, bool complete)
 
 
 	drawing_mode mode = owner->DrawingMode();
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 	owner->SetDrawingMode(B_OP_ALPHA);
 #else
 	owner->SetDrawingMode(B_OP_OVER);

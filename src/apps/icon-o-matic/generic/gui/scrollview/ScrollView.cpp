@@ -14,7 +14,7 @@
 #include <string.h>
 
 #include <Bitmap.h>
-#ifdef __HAIKU__
+#ifdef __VOS__
 #  include <LayoutUtils.h>
 #endif
 #include <Message.h>
@@ -298,7 +298,7 @@ ScrollView::ScrollView(BView* child, uint32 scrollingFlags, BRect frame,
 	_Init(child, scrollingFlags, borderStyle, borderFlags);
 }
 
-#ifdef __HAIKU__
+#ifdef __VOS__
 
 // constructor
 ScrollView::ScrollView(BView* child, uint32 scrollingFlags, const char* name,
@@ -310,7 +310,7 @@ ScrollView::ScrollView(BView* child, uint32 scrollingFlags, const char* name,
 	_Init(child, scrollingFlags, borderStyle, borderFlags);
 }
 
-#endif // __HAIKU__
+#endif // __VOS__
 
 // destructor
 ScrollView::~ScrollView()
@@ -386,7 +386,7 @@ void ScrollView::WindowActivated(bool activated)
 		Invalidate();
 }
 
-#ifdef __HAIKU__
+#ifdef __VOS__
 
 // MinSize
 BSize
@@ -404,7 +404,7 @@ ScrollView::PreferredSize()
 	return _Size(size);
 }
 
-#endif // __HAIKU__
+#endif // __VOS__
 
 // #pragma mark -
 
@@ -965,7 +965,7 @@ ScrollView::_MaxVisibleRect() const
 	return _GuessVisibleRect(true, true);
 }
 
-#ifdef __HAIKU__
+#ifdef __VOS__
 
 BSize
 ScrollView::_Size(BSize size)
@@ -1013,7 +1013,7 @@ ScrollView::_Size(BSize size)
 	return BLayoutUtils::ComposeSize(ExplicitMinSize(), size);
 }
 
-#endif // __HAIKU__
+#endif // __VOS__
 
 // _SetScrolling
 void

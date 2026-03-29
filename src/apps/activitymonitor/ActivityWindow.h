@@ -41,7 +41,7 @@ private:
 			void		_SetAlwaysOnTop(bool alwaysOnTop);
 
 	BMenuItem*			fAlwaysOnTop;
-#if defined(__HAIKU__) || defined(__VOS__)
+#if defined(__VOS__)
 	BGroupLayout*		fLayout;
 #endif
 	BMessenger			fSettingsWindow;

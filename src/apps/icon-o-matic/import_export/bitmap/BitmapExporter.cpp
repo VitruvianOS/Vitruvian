@@ -41,7 +41,7 @@ BitmapExporter::Export(const Icon* icon, BPositionIO* stream)
 	// render icon into bitmap with given size and transparent background
 	uint32 bitmapFlags = 0;
 
-	#if __HAIKU__
+	#if __VOS__
 	bitmapFlags |= B_BITMAP_NO_SERVER_LINK;
 	#endif
 

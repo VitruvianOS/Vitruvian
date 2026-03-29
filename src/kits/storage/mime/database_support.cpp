@@ -10,7 +10,7 @@
 
 #include <mime/database_support.h>
 
-#if defined(__HAIKU__) && !defined(HAIKU_HOST_PLATFORM_HAIKU)
+#if defined(__VOS__)
 #	include <pthread.h>
 #endif
 
@@ -84,7 +84,7 @@ const char *kMetaMimeType		= "application/x-vnd.Be-meta-mime";
 const status_t kMimeGuessFailureError	= B_ERRORS_END+1;
 
 
-#if defined(__HAIKU__) && !defined(HAIKU_HOST_PLATFORM_HAIKU)
+#if defined(__VOS__)
 
 
 static const directory_which kBaseDirectoryConstants[] = {

@@ -214,7 +214,7 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 		fUDevHandle);
 	libinput_udev_assign_seat(fInputHandle, "seat0");
 
-#ifdef HAIKU_TARGET_PLATFORM_HAIKU
+#ifdef __VOS__
 	fSettings.map.button[0] = B_PRIMARY_MOUSE_BUTTON;
 	fSettings.map.button[1] = B_SECONDARY_MOUSE_BUTTON;
 	fSettings.map.button[2] = B_TERTIARY_MOUSE_BUTTON;
@@ -785,7 +785,7 @@ MouseDevice::_RemapButtons(uint32 buttons) const
 	uint32 newButtons = 0;
 	for (int32 i = 0; buttons; i++) {
 		if (buttons & 0x1) {
-#if defined(HAIKU_TARGET_PLATFORM_HAIKU) || defined(HAIKU_TARGET_PLATFORM_DANO) || defined(__VOS__)
+#if defined(__VOS__)
 			newButtons |= fSettings.map.button[i];
 #else
 			if (i == 0)

@@ -306,17 +306,17 @@ PathManipulator::Draw(BView* into, BRect updateRect)
 	// the path is actually on top all other modifiers
 	// TODO: make this customizable in the GUI
 
-	#if __HAIKU__
+	#if __VOS__
 	uint32 flags = into->Flags();
 	into->SetFlags(flags | B_SUBPIXEL_PRECISE);
-	#endif // __HAIKU__
+	#endif // __VOS__
 
 	StrokePathIterator iterator(fCanvasView, into);
 	fPath->Iterate(&iterator, fCanvasView->ZoomLevel());
 
-	#if __HAIKU__
+	#if __VOS__
 	into->SetFlags(flags);
-	#endif // __HAIKU__
+	#endif // __VOS__
 
 	into->SetLowColor(0, 0, 0, 255);
 	BPoint point;

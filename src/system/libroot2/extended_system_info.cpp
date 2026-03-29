@@ -62,17 +62,15 @@ get_extended_team_info(team_id teamID, uint32 flags, KMessage& info)
 	if (fd < 0)
 		return B_ERROR;
 
-	vref_id vref = acquire_vref(fd);
+	vref_id vref = create_vref(fd);
+	close(fd);
 	if (vref < 0)
 		return B_ERROR;
 
 	if (info.AddRef("virtual:cwd directory", get_vref_dev(), (ino_t)vref,
-			name) != B_OK) {
-		close(fd);
+			name) != B_OK)
 		return B_ERROR;
-	}
 
-	close(fd);
 	return B_OK;
 }
 

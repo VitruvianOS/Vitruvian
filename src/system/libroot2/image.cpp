@@ -8,6 +8,10 @@
 #include <errno.h>
 #include <image.h>
 #include <dlfcn.h>
+#include <elf.h>
+#include <link.h>
+#include <string.h>
+#include <unistd.h>
 
 #include <map>
 
@@ -127,19 +131,22 @@ get_image_symbol(image_id id, const char* name,
 }
 
 
+struct ImageIterState {
+	int32		target;
+	int32		current;
+	image_info*	info;
+	bool		found;
+};
+
+
 status_t
 _get_image_info(image_id id, image_info* info, size_t infoSize)
 {
 	if (id < 0 || info == NULL || infoSize != sizeof(*info))
 		return B_BAD_VALUE;
 
-	if (id == getpid()) {
-		int32 cookie = 0;
-		return _get_next_image_info(getpid(), 
-			&cookie, info, sizeof(*info));
-	}
-
-	return B_ERROR;
+	int32 cookie = id - 1;
+	return _get_next_image_info(B_CURRENT_TEAM, &cookie, info, infoSize);
 }
 
 
@@ -148,33 +155,70 @@ _get_next_image_info(team_id team, int32* cookie,
 	image_info* info, size_t infoSize)
 {
 	if (team < 0 || *cookie < 0 || info == NULL
-			|| infoSize != sizeof(*info)) {
+			|| infoSize != sizeof(*info))
 		return B_BAD_VALUE;
-	}
 
 	if (team == 0)
 		team = getpid();
 
-	if (*cookie == 0 && team == getpid()) {
-		char path[B_PATH_NAME_LENGTH];
-		snprintf(path, sizeof(path), "/proc/%d/exe", team);
+	if (team != getpid())
+		return B_NOT_SUPPORTED;
 
-		ssize_t len = readlink(path, info->name, B_PATH_NAME_LENGTH - 1);
-		if (len < 0)
-			return B_ERROR;
+	ImageIterState state = {*cookie, 0, info, false};
 
-		info->name[len] = '\0';
-		// We use the team id to identify it's image
-		// TODO: we probably want to use something else
-		info->id = team;
-		info->type = B_APP_IMAGE;
-		info->sequence = 0;
-		info->init_order = 0;
+	dl_iterate_phdr([](struct dl_phdr_info* phdr, size_t size,
+			void* data) -> int {
+		ImageIterState* state = (ImageIterState*)data;
 
-		// TODO: Fill remaining stuff
-		*cookie+=1;
-		return B_OK;
-	}
+		if (state->current != state->target) {
+			state->current++;
+			return 0;
+		}
 
-	return B_ERROR;
+		if (phdr->dlpi_name == NULL || phdr->dlpi_name[0] == '\0') {
+			ssize_t len = readlink("/proc/self/exe",
+				state->info->name, B_PATH_NAME_LENGTH - 1);
+			if (len < 0)
+				state->info->name[0] = '\0';
+			else
+				state->info->name[len] = '\0';
+			state->info->type = B_APP_IMAGE;
+		} else {
+			strlcpy(state->info->name, phdr->dlpi_name, B_PATH_NAME_LENGTH);
+			state->info->type = B_LIBRARY_IMAGE;
+		}
+
+		state->info->id = state->current + 1;
+		state->info->sequence = 0;
+		state->info->init_order = 0;
+		state->info->text = NULL;
+		state->info->text_size = 0;
+		state->info->data = NULL;
+		state->info->data_size = 0;
+
+		for (int i = 0; i < phdr->dlpi_phnum; i++) {
+			const ElfW(Phdr)* ph = &phdr->dlpi_phdr[i];
+			if (ph->p_type != PT_LOAD)
+				continue;
+			addr_t start = (addr_t)phdr->dlpi_addr + ph->p_vaddr;
+			// PF_X executable
+			if (ph->p_flags & 0x1) {
+				state->info->text = (void*)start;
+				state->info->text_size = ph->p_memsz;
+			// PF_W writable
+			} else if (ph->p_flags & 0x2) {
+				state->info->data = (void*)start;
+				state->info->data_size = ph->p_memsz;
+			}
+		}
+
+		state->found = true;
+		return 1;
+	}, &state);
+
+	if (!state.found)
+		return B_ENTRY_NOT_FOUND;
+
+	(*cookie)++;
+	return B_OK;
 }

@@ -7,11 +7,42 @@ include(build/defs.cmake)
 include(build/deps.cmake)
 include(build/headers.cmake)
 
-# TODO: There's some amount of code duplication here...
 # TODO: Add macros for Catalog
 # TODO: Implement EnableWError( target )
 # TODO: Add possibility to set compiler defs for a target
 # TODO: Document macros
+
+function( CompileRdef target rdef_file )
+	cmake_parse_arguments(_ARG "STAGING" "" "" ${ARGN})
+
+	set(_src    "${CMAKE_CURRENT_SOURCE_DIR}/${rdef_file}")
+	set(_rsrc   "${CMAKE_CURRENT_BINARY_DIR}/${rdef_file}.rsrc")
+	set(_bin    "$<TARGET_FILE:${target}>")
+	set(_rc     "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc")
+	set(_xres   "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres")
+	set(_rsattr "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr")
+
+	if(NOT EXISTS "${_src}")
+		message(FATAL_ERROR "${_src} not found")
+	endif()
+
+	add_custom_command(TARGET ${target} POST_BUILD
+		COMMENT "Building resource file ${rdef_file}"
+		COMMAND "${_rc}" "${_src}" -o "${_rsrc}"
+		COMMAND "${_xres}"   -o "${_bin}" "${_rsrc}"
+		COMMAND "${_rsattr}" -O -o "${_bin}" "${_rsrc}"
+	)
+
+	if(_ARG_STAGING)
+		add_custom_command(TARGET ${target} POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
+			COMMAND ${CMAKE_COMMAND} -E touch           "${CMAKE_BINARY_DIR}/apps_attrs_staging/${target}"
+			COMMAND "${_rsattr}" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${target}" "${_rsrc}"
+		)
+	endif()
+
+	set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${_rsrc}")
+endfunction()
 
 # Usage:
 # Application(
@@ -46,24 +77,9 @@ macro( Application name )
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
 
-	if( _APPLICATION_RDEF )
-		foreach( RDEF_FILE ${_APPLICATION_RDEF} )
-		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}")
-			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE} not found\n")
-			return()
-		endif()
-		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Building resource file ${RDEF_FILE}..."
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
-			COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-		)
-		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
-		endforeach()
-	endif()
+	foreach( RDEF_FILE ${_APPLICATION_RDEF} )
+		CompileRdef(${name} ${RDEF_FILE} STAGING)
+	endforeach()
 endmacro()
 
 macro( Server name )
@@ -85,24 +101,9 @@ macro( Server name )
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
 
-	if( _SERVER_RDEF )
-		foreach( RDEF_FILE ${_SERVER_RDEF} )
-		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}")
-			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE} not found\n")
-			return()
-		endif()
-		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Building resource file ${RDEF_FILE}..."
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
-			COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-		)
-		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
-		endforeach()
-	endif()
+	foreach( RDEF_FILE ${_SERVER_RDEF} )
+		CompileRdef(${name} ${RDEF_FILE} STAGING)
+	endforeach()
 endmacro()
 
 macro( AddOn name type )
@@ -123,24 +124,9 @@ macro( AddOn name type )
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
 
-	if( _ADDON_RDEF )
-		foreach( RDEF_FILE ${_ADDON_RDEF} )
-		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}")
-			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE} not found\n")
-			return()
-		endif()
-		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Building resource file ${RDEF_FILE}..."
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "$<TARGET_FILE:${name}>" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "$<TARGET_FILE:${name}>" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
-			COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-		)
-		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
-		endforeach()
-	endif()
+	foreach( RDEF_FILE ${_ADDON_RDEF} )
+		CompileRdef(${name} ${RDEF_FILE} STAGING)
+	endforeach()
 endmacro()
 
 macro( Test name )
@@ -171,20 +157,9 @@ macro( Test name )
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
 
-	if( _TEST_RDEF )
-		foreach( RDEF_FILE ${_TEST_RDEF} )
-		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}")
-			message(FATAL_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE} not found\n")
-			return()
-		endif()
-		add_custom_command(TARGET ${name} POST_BUILD
-			COMMAND echo "Building resource file ${RDEF_FILE}..."
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc" "${CMAKE_CURRENT_SOURCE_DIR}/${RDEF_FILE}" -o "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}"
-			COMMAND "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres" -o "${CMAKE_CURRENT_BINARY_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc"
-		)
-		set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/${RDEF_FILE}.rsrc")
-		endforeach()
-	endif()
+	foreach( RDEF_FILE ${_TEST_RDEF} )
+		CompileRdef(${name} ${RDEF_FILE})
+	endforeach()
 endmacro()
 
 function( UsePrivateHeaders target )

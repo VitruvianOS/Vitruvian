@@ -18,7 +18,7 @@ target_sources(be_build PRIVATE
 	${SUPPORT_SOURCES}/Referenceable.cpp
 	${SUPPORT_SOURCES}/String.cpp
 	${SUPPORT_SOURCES}/StringList.cpp
-	${SUPPORT_SOURCES}/Url.cpp
+	#${SUPPORT_SOURCES}/Url.cpp
 	${SUPPORT_SOURCES}/ZlibCompressionAlgorithm.cpp
 	${SUPPORT_SOURCES}/ZstdCompressionAlgorithm.cpp
 )

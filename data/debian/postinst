@@ -158,7 +158,7 @@ if [ -f /usr/share/vos/apps_attrs.tar ]; then
         _dst="/${_src#$_tmp/}"
         [ -f "$_dst" ] || continue
         getfattr -d -m user.beos -e hex "$_src" 2>/dev/null \
-            | sed "s|${_src}|${_dst}|g" \
+            | sed "s|${_src#/}|${_dst#/}|g" \
             | setfattr --restore - 2>/dev/null || true
     done
     rm -rf "$_tmp"

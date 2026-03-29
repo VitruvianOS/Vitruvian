@@ -17,9 +17,8 @@ resource app_version {
 
 resource app_flags B_EXCLUSIVE_LAUNCH;
 
-resource(1, "logo.png") #'PNG ' import "../../../data/artwork/vitruvian-logo.png";
-resource(2, "logo_dark.png") #'PNG ' import "../../../data/artwork/vitruvian-logo.png";
-
+// resource(1, "logo.png") #'PNG ' import "data/artwork/vitruvian-logo.png";
+// resource(2, "logo_dark.png") #'PNG ' import "data/artwork/vitruvian-logo.png";
 
 resource vector_icon {
 	$"6E6369660F0500020006023861093AA03CBD302A3AE36E4A1739473BE7009A9A"

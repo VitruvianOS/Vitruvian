@@ -8,6 +8,7 @@
  */
 
 
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -297,9 +298,7 @@ BFile::SetSize(off_t size)
 		return InitCheck();
 	if (size < 0)
 		return B_BAD_VALUE;
-	struct stat statData;
-	statData.st_size = size;
-	return set_stat(statData, B_STAT_SIZE | B_STAT_SIZE_INSECURE);
+	return (ftruncate(get_fd(), size) < 0) ? -errno : B_OK;
 }
 
 

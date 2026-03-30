@@ -10,7 +10,7 @@
 #include <poll.h>
 #include <time.h>
 
-#include <thread>
+#include <Autolock.h>
 
 #include "modeset.h"
 
@@ -49,7 +49,11 @@ DrmHWInterface::DrmHWInterface()
 	fSessionActive(false),
 	fInitialized(false),
 	fRunning(false),
-	fSessionGeneration(0)
+	fSessionGeneration(0),
+	fEventThread(-1),
+	fSessionLock("drm session lock"),
+	fSessionSem(create_sem(0, "drm session sem")),
+	fSeatLock("drm seat lock")
 {
 	fSeat = libseat_open_seat(&seat_listener, this);
 	if (!fSeat) {
@@ -73,7 +77,10 @@ DrmHWInterface::DrmHWInterface()
 	}
 
 	fRunning = true;
-	fEventThread = std::thread(&DrmHWInterface::EventThreadMain, this);
+	fEventThread = spawn_thread(_EventThreadEntry, "drm event thread",
+		B_NORMAL_PRIORITY, this);
+	if (fEventThread >= 0)
+		resume_thread(fEventThread);
 }
 
 
@@ -84,16 +91,16 @@ DrmHWInterface::_OnSessionEnable()
 
 	if (fInitialized) {
 		{
-			std::lock_guard<std::mutex> lock(fSessionMutex);
+			BAutolock _(fSessionLock);
 			fSessionActive = true;
 			fSessionGeneration++;
 		}
 
-		fSessionCondition.notify_all();
-	
+		release_sem(fSessionSem);
+
 		_RestoreDisplay();
 
-		if (fEventStream)		
+		if (fEventStream)
 			fEventStream->Resume();
 		return;
 	}
@@ -135,18 +142,18 @@ DrmHWInterface::_OnSessionEnable()
 	#endif
 
 	fEventStream = new LibInputEventStream(get_dev()->width, get_dev()->height, fSeat);
-	fEventStream->SetSeatMutex(&fSeatMutex);
+	fEventStream->SetSeatLock(&fSeatLock);
 
 	fDisplayMode.virtual_width = get_dev()->width;
 	fDisplayMode.virtual_height = get_dev()->height;
 	fDisplayMode.space = B_RGB32;
 
 	{
-		std::lock_guard<std::mutex> lock(fSessionMutex);
+		BAutolock _(fSessionLock);
 		fSessionActive = true;
 		fInitialized = true;
 	}
-	fSessionCondition.notify_all();
+	release_sem(fSessionSem);
 }
 
 
@@ -159,7 +166,7 @@ DrmHWInterface::_OnSessionDisable()
 		fEventStream->Suspend();
 
 	{
-		std::lock_guard<std::mutex> lock(fSessionMutex);
+		BAutolock _(fSessionLock);
 		fSessionActive = false;
 		fSessionGeneration++;
 	}
@@ -185,63 +192,52 @@ DrmHWInterface::_RestoreDisplay()
 }
 
 
-void DrmHWInterface::EventThreadMain()
+/*static*/ int32
+DrmHWInterface::_EventThreadEntry(void* data)
+{
+	static_cast<DrmHWInterface*>(data)->_EventThreadMain();
+	return 0;
+}
+
+
+void
+DrmHWInterface::_EventThreadMain()
 {
 	int seatErrorCount = 0;
 
 	while (fRunning) {
 		int seat_fd;
 		{
-			std::lock_guard<std::mutex> seatLock(fSeatMutex);
+			BAutolock _(fSeatLock);
 			seat_fd = fSeat ? libseat_get_fd(fSeat) : -1;
 		}
 
 		if (seat_fd < 0) {
 			seatErrorCount++;
-			snooze(100);
+			snooze(100000);
 			continue;
 		}
 		seatErrorCount = 0;
 
 		bool active;
-		uint32_t gen;
 		{
-			std::lock_guard<std::mutex> lock(fSessionMutex);
+			BAutolock _(fSessionLock);
 			active = fSessionActive;
-			gen = fSessionGeneration;
 		}
 
-		if (active) {
-			struct pollfd pfd;
-			pfd.fd = seat_fd;
-			pfd.events = POLLIN;
-			pfd.revents = 0;
+		struct pollfd pfd;
+		pfd.fd = seat_fd;
+		pfd.events = POLLIN;
+		pfd.revents = 0;
 
-			int ret = poll(&pfd, 1, 100);
-			if (ret > 0 && (pfd.revents & (POLLIN | POLLHUP))) {
-			
-				std::lock_guard<std::mutex> seatLock(fSeatMutex);
-				int dret = libseat_dispatch(fSeat, 0);
-			
-			}
-		} else {
-			struct pollfd pfd;
-			pfd.fd = seat_fd;
-			pfd.events = POLLIN;
-			pfd.revents = 0;
-
-			int ret = poll(&pfd, 1, 100);
-			if (ret > 0 && (pfd.revents & (POLLIN | POLLHUP))) {
-			
-				std::lock_guard<std::mutex> seatLock(fSeatMutex);
-				int dret = libseat_dispatch(fSeat, 0);
-				if (dret < 0)
-					printf("libseat_dispatch: error\n");
-			}
+		int ret = poll(&pfd, 1, 100);
+		if (ret > 0 && (pfd.revents & (POLLIN | POLLHUP))) {
+			BAutolock _(fSeatLock);
+			int dret = libseat_dispatch(fSeat, 0);
+			if (dret < 0 && !active)
+				printf("libseat_dispatch: error\n");
 		}
 	}
-
-
 }
 
 
@@ -249,12 +245,15 @@ DrmHWInterface::~DrmHWInterface()
 {
 	CALLED();
 
-
 	fRunning = false;
-	fSessionCondition.notify_all();
+	release_sem(fSessionSem);
 
-	if (fEventThread.joinable())
-		fEventThread.join();	
+	if (fEventThread >= 0) {
+		status_t exitValue;
+		wait_for_thread(fEventThread, &exitValue);
+	}
+
+	delete_sem(fSessionSem);
 
 	if (fSeat && fDeviceId >= 0)
 		libseat_close_device(fSeat, fDeviceId);

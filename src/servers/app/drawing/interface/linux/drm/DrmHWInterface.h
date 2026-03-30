@@ -11,9 +11,8 @@ extern "C" {
 #include <libseat.h>
 }
 
-#include <mutex>
-#include <condition_variable>
-#include <thread>
+#include <OS.h>
+#include <Locker.h>
 
 #include "DrmBuffer.h"
 #include "HWInterface.h"
@@ -75,34 +74,34 @@ public:
 
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 
-			void				EventThreadMain();
-
 			void				_OnSessionEnable();
 			void				_OnSessionDisable();
 
 private:
-			void					_RestoreDisplay();
+	static	int32				_EventThreadEntry(void* data);
+			void				_EventThreadMain();
+			void				_RestoreDisplay();
 
-			static int				fFd;
+			static int			fFd;
 
-			DrmBuffer*				fFrontBuffer;
-			DrmBuffer*				fBackBuffer;
+			DrmBuffer*			fFrontBuffer;
+			DrmBuffer*			fBackBuffer;
 
-			display_mode			fDisplayMode;
+			display_mode		fDisplayMode;
 
-			LibInputEventStream* 	fEventStream;
+			LibInputEventStream* fEventStream;
 
-			struct libseat*			fSeat;
-			int						fDeviceId;
-			volatile bool			fSessionActive;
-			bool					fInitialized;
-			volatile bool			fRunning;
-			uint32_t				fSessionGeneration;
+			struct libseat*		fSeat;
+			int					fDeviceId;
+			volatile bool		fSessionActive;
+			bool				fInitialized;
+			volatile bool		fRunning;
+			uint32_t			fSessionGeneration;
 
-			std::thread				fEventThread;
-			std::mutex				fSessionMutex;
-			std::condition_variable	fSessionCondition;
-			std::mutex				fSeatMutex;
+			thread_id			fEventThread;
+			BLocker				fSessionLock;
+			sem_id				fSessionSem;
+			BLocker				fSeatLock;
 };
 
 #endif

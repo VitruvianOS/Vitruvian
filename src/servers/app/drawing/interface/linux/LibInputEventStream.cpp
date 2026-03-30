@@ -218,7 +218,7 @@ LibInputEventStream::LibInputEventStream(uint32 width, uint32 height, struct lib
 	fDeviceIdsLock("libinput device ids"),
 	fLibInputLock("libinput api lock"),
 	fLastResumeTime(0),
-	fSeatMutex(NULL)
+	fSeatLock(NULL)
 {
 	memset(fKeyStates, 0, sizeof(fKeyStates));
 
@@ -550,8 +550,8 @@ LibInputEventStream::_ScheduleEvent(libinput_event* ev)
 					}
 
 					int ret;
-					if (fSeatMutex) {
-						std::lock_guard<std::mutex> seatLock(*fSeatMutex);
+					if (fSeatLock) {
+						BAutolock _(fSeatLock);
 						ret = libseat_switch_session(fSeat, vtNum);
 					} else {
 						ret = libseat_switch_session(fSeat, vtNum);

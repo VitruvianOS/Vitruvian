@@ -13,7 +13,6 @@
 #include <libinput.h>
 #include <linux/input.h>
 #include <map>
-#include <mutex>
 
 extern "C" {
 #include <libseat.h>
@@ -44,9 +43,9 @@ public:
 			static	int				_OpenRestricted(const char* path, int flags, void* userData);
 			static	void			_CloseRestricted(int fd, void* userData);
 
-			void					SetSeatMutex(std::mutex* mutex)
+			void					SetSeatLock(BLocker* lock)
 									{
-										fSeatMutex = mutex;
+										fSeatLock = lock;
 									}
 private:
 			static	void			_PollEventsThread(void* cookie);
@@ -92,7 +91,7 @@ private:
 			bigtime_t				fLastResumeTime;
 			static const bigtime_t	kVTSwitchCooldown = 500000;
 
-			std::mutex*				fSeatMutex;
+			BLocker*				fSeatLock;
 };
 
 

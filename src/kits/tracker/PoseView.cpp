@@ -3463,8 +3463,11 @@ BPoseView::NewFileFromTemplate(const BMessage* message)
 
 	if (dir.InitCheck() == B_OK) {
 		// special handling of directories
-		if (FSCreateNewFolderIn(targetModel->NodeRef(), &destEntryRef,
-				&destNodeRef) == B_OK) {
+		node_ref dirNodeRef;
+		if (targetModel->Node() != NULL
+				&& targetModel->Node()->GetNodeRef(&dirNodeRef) == B_OK
+				&& FSCreateNewFolderIn(&dirNodeRef, &destEntryRef,
+					&destNodeRef) == B_OK) {
 			BEntry destEntry(&destEntryRef);
 			destEntry.Rename(fileName);
 		}
@@ -3530,7 +3533,10 @@ BPoseView::NewFolder(const BMessage* message)
 	entry_ref ref;
 	node_ref nodeRef;
 
-	if (FSCreateNewFolderIn(targetModel->NodeRef(), &ref, &nodeRef) == B_OK) {
+	node_ref dirNodeRef;
+	if (targetModel->Node() != NULL
+			&& targetModel->Node()->GetNodeRef(&dirNodeRef) == B_OK
+			&& FSCreateNewFolderIn(&dirNodeRef, &ref, &nodeRef) == B_OK) {
 		// try to place new folder at click point or under mouse if possible
 
 		PlaceFolder(&ref, message);

@@ -8,6 +8,8 @@
 #include <dirent.h>
 #include <poll.h>
 #include <pthread.h>
+#include <sched.h>
+#include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
 
@@ -378,13 +380,31 @@ find_thread(const char* name)
 status_t
 set_thread_priority(thread_id id, int32 priority)
 {
-	UNIMPLEMENTED();
-	// Mapping:
-	// 0, SCHED_IDLE
-	// 1-9, SCHED_OTHER 19, 1
-	// 10, SCHED_OTHER 0
-	// 11-30, SCHED_OTHER -1,-20
-	// 31-120, SCHED_FIFO, 1,99
+	struct sched_param param = {};
+
+	if (priority == 0) {
+		sched_setscheduler(id, SCHED_IDLE, &param);
+	} else if (priority >= 1 && priority <= 9) {
+		sched_setscheduler(id, SCHED_OTHER, &param);
+		setpriority(PRIO_PROCESS, id, 19 - (priority - 1));
+	} else if (priority == 10) {
+		sched_setscheduler(id, SCHED_OTHER, &param);
+		setpriority(PRIO_PROCESS, id, 0);
+	} else if (priority >= 11 && priority <= 30) {
+		sched_setscheduler(id, SCHED_OTHER, &param);
+		setpriority(PRIO_PROCESS, id, -1 - (priority - 11));
+	} else if (priority >= 31 && priority <= 120) {
+		// Try SCHED_RR — works if CAP_SYS_NICE or RLIMIT_RTPRIO allows it.
+		// If not, fall back to nice -20 (highest non-RT priority available
+		// without privileges).
+		// 31→1, 120→90
+		param.sched_priority = 1 + (priority - 31);
+		if (sched_setscheduler(id, SCHED_RR, &param) != 0) {
+			param.sched_priority = 0;
+			sched_setscheduler(id, SCHED_OTHER, &param);
+			setpriority(PRIO_PROCESS, id, -20);
+		}
+	}
 	return B_OK;
 }
 

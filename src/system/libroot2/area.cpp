@@ -12,6 +12,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
+#include <unistd.h>
 
 #include <map>
 #include <string>
@@ -341,9 +342,14 @@ resize_area(area_id id, size_t newSize)
 	if (ftruncate(local.memfd, newSize) < 0)
 		return B_ERROR;
 
-	void* newAddr = mremap(local.address, local.size, newSize, MREMAP_MAYMOVE);
-	if (newAddr == MAP_FAILED)
+	// Remap but don't invalidate pointers.
+	void* newAddr = mremap(local.address, local.size, newSize, 0);
+	if (newAddr == MAP_FAILED) {
+		// Revert the ftruncate — shrink back to the old size so no pages
+		// are wasted in the underlying memfd.
+		ftruncate(local.memfd, local.size);
 		return B_NO_MEMORY;
+	}
 
 	BKernelPrivate::AreaPool::Get().Update(id, newAddr, newSize);
 

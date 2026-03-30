@@ -328,7 +328,11 @@ Painter::BitmapPainter::_ConvertColorSpace(
 			break;
 	}
 
-	fBitmap.attach((uint8*)conversionBitmap->Bits(),
+	uint8* convertedBits = (uint8*)conversionBitmap->Bits();
+	if (convertedBits == NULL)
+		return;
+
+	fBitmap.attach(convertedBits,
 		(uint32)fBitmapBounds.IntegerWidth() + 1,
 		(uint32)fBitmapBounds.IntegerHeight() + 1,
 		conversionBitmap->BytesPerRow());

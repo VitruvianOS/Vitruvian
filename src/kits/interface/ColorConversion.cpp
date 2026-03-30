@@ -480,10 +480,17 @@ PaletteConverter::InitializeDefault(bool useServer)
 PaletteConverter::_InitializeDefaultAppServer()
 {
 	const color_map* colors = system_colors();
-	if (colors != NULL)
-		sPaletteConverter.SetTo(colors);
-	else
-		sPaletteConverter.SetTo(kSystemPalette);
+	if (colors != NULL) {
+		color_map* copy = new(nothrow) color_map;
+		if (copy != NULL) {
+			*copy = *colors;
+			sPaletteConverter.fOwnColorMap = copy;
+			sPaletteConverter.fColorMap = copy;
+			sPaletteConverter.fCStatus = B_OK;
+			return;
+		}
+	}
+	sPaletteConverter.SetTo(kSystemPalette);
 }
 
 

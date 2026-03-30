@@ -298,17 +298,26 @@ LinkReceiver::Read(void *data, ssize_t passedSize)
 		area_id sourceArea;
 		memcpy((void*)&sourceArea, fRecvBuffer + fRecvPosition, size);
 
+		void* areaAddress = NULL;
+		area_id clonedArea = B_ERROR;
+
 		area_info areaInfo;
-		if (get_area_info(sourceArea, &areaInfo) < B_OK)
-			fReadError = B_BAD_VALUE;
+		if (get_area_info(sourceArea, &areaInfo) == B_OK)
+			areaAddress = areaInfo.address;
 
-		if (fReadError >= B_OK) {
-			void* areaAddress = areaInfo.address;
+		if (areaAddress == NULL) {
+			// Area was transferred to us; clone it into our address space.
+			clonedArea = clone_area("recv_area", &areaAddress,
+				B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, sourceArea);
+			if (clonedArea < B_OK)
+				fReadError = B_BAD_VALUE;
+		}
 
-			if (areaAddress && sourceArea >= B_OK) {
-				memcpy(data, areaAddress, passedSize);
-				delete_area(sourceArea);
-			}
+		if (fReadError >= B_OK && areaAddress != NULL) {
+			memcpy(data, areaAddress, passedSize);
+			delete_area(sourceArea);
+			if (clonedArea >= B_OK)
+				delete_area(clonedArea);
 		}
 	} else {
 		memcpy(data, fRecvBuffer + fRecvPosition, size);

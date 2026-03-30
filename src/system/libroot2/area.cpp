@@ -503,8 +503,34 @@ area_id
 _kern_transfer_area(area_id id, void** _address, uint32 addressSpec,
 	team_id target)
 {
-	// TODO
-	return B_ERROR;
+	if (id < 0)
+		return B_BAD_VALUE;
+
+	// You can't transfer an area to your team
+	if (target == (team_id)getpid())
+		return B_NOT_ALLOWED;
+
+	BKernelPrivate::LocalArea local;
+	if (!BKernelPrivate::AreaPool::Get().Get(id, local))
+		return B_BAD_VALUE;
+
+	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
+	if (nexus < 0)
+		return B_ERROR;
+
+	struct nexus_area_transfer tr = {
+		.area   = id,
+		.target = target,
+	};
+
+	status_t ret = nexus_io(nexus, NEXUS_AREA_TRANSFER, &tr);
+	if (ret != B_OK)
+		return ret;
+
+	if (_address)
+		*_address = local.address;
+
+	return tr.new_area;
 }
 
 

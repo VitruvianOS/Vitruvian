@@ -184,7 +184,7 @@ LinkSender::Attach(const void *passedData, size_t passedSize)
 			port_info info;
 			status_t result = get_port_info(fPort, &info);
 			if (result != B_OK)
-				return result;
+				return fCurrentStatus = result;
 			fTargetTeam = info.team;
 		}
 		void* address = NULL;
@@ -193,10 +193,9 @@ LinkSender::Attach(const void *passedData, size_t passedSize)
 			alignedSize, B_NO_LOCK, B_READ_AREA | B_WRITE_AREA);
 
 		if (senderArea < B_OK)
-			return senderArea;
+			return fCurrentStatus = senderArea;
 
 		data = &senderArea;
-		memcpy(address, passedData, passedSize);
 
 		area_id areaID = senderArea;
 		senderArea = _kern_transfer_area(senderArea, &address,
@@ -204,8 +203,10 @@ LinkSender::Attach(const void *passedData, size_t passedSize)
 
 		if (senderArea < B_OK) {
 			delete_area(areaID);
-			return senderArea;
+			return fCurrentStatus = senderArea;
 		}
+
+		memcpy(address, passedData, passedSize);
 	}
 
 	memcpy(fBuffer + fCurrentEnd, data, size);

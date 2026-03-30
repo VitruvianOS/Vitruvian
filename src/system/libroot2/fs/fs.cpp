@@ -666,7 +666,8 @@ _kern_read(int fd, off_t pos, void* buffer, size_t bufferSize)
 	if (fd < 0)
 		return B_FILE_ERROR;
 
-	ssize_t size = pread(fd, buffer, bufferSize, pos);
+	ssize_t size = (pos < 0) ? read(fd, buffer, bufferSize)
+		: pread(fd, buffer, bufferSize, pos);
 	return (size < 0) ? -errno : size;
 }
 
@@ -679,7 +680,8 @@ _kern_write(int fd, off_t pos, const void* buffer, size_t bufferSize)
 	if (fd < 0)
 		return B_FILE_ERROR;
 
-	ssize_t size = pwrite(fd, buffer, bufferSize, pos);
+	ssize_t size = (pos < 0) ? write(fd, buffer, bufferSize)
+		: pwrite(fd, buffer, bufferSize, pos);
 	return (size < 0) ? -errno : size;
 }
 

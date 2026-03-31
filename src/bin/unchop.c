@@ -170,24 +170,19 @@ replace(char *origfile, char *newfile)
 char *
 temp_file(void)
 {
-	// The template must end with XXXXXX	
-	char *tmp = malloc(32);
-	if(!tmp)
+	const char* template = "/var/tmp/vitruvian_XXXXXX";
+	size_t len = strlen(template) + 1;
+	if (len > PATH_MAX)
 		return NULL;
-
-	// Safe copy of the template
-   	strcpy(tmp, "/var/tmp/vitruvian_XXXXXX"); // /tmp not scrivible
-
-	// mkstemp creates the file with secure permissions (0600) and returns a file descriptor
-	int fd = mkstemp(tmp);
-    
+	char *path = malloc(len);
+	if (!path)
+		return NULL;
+	memcpy(path, template, len);
+	int fd = mkstemp(path);
 	if (fd == -1) {
-		free(tmp);
+		free(path);
 		return NULL;
 	}
-
-	// We close the descriptor because fopen will reopen it (or handle it directly with fdopen)
 	close(fd);
-    
-	return tmp; 
+	return path;
 }

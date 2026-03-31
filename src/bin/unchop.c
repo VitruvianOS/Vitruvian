@@ -176,7 +176,7 @@ temp_file(void)
 		return NULL;
 
 	// Safe copy of the template
-   	strcpy(tmp, "/tmp/vitruvian_XXXXXX");
+   	strcpy(tmp, "/var/tmp/vitruvian_XXXXXX"); // /tmp not scrivible
 
 	// mkstemp creates the file with secure permissions (0600) and returns a file descriptor
 	int fd = mkstemp(tmp);

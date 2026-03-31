@@ -21,7 +21,8 @@
 
 class DrmBuffer : public RenderingBuffer {
 public:
-								DrmBuffer(int fd, modeset_dev* dev);
+								DrmBuffer(int fd, modeset_dev* dev,
+									bool isBack = false);
 	virtual						~DrmBuffer();
 
 	virtual	status_t			InitCheck() const;
@@ -32,8 +33,11 @@ public:
 	virtual	uint32				Width() const;
 	virtual	uint32				Height() const;
 
+			uint32				GetFbId() const;
+
 private:
 			modeset_dev*		fDev;
+			bool				fIsBack;
 			status_t			fErr;
 			color_space			fColorSpace;
 

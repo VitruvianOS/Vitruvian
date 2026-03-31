@@ -10,6 +10,7 @@
 extern "C" {
 #include <libseat.h>
 }
+#include <libudev.h>
 
 #include <OS.h>
 #include <Locker.h>
@@ -77,10 +78,16 @@ public:
 			void				_OnSessionEnable();
 			void				_OnSessionDisable();
 
+			status_t			CreateLease(uint32_t* connectors, int connCount,
+									uint32_t* crtcs, int crtcCount,
+									int* leaseFd);
+			void				RevokeLease(int leaseFd);
+
 private:
 	static	int32				_EventThreadEntry(void* data);
 			void				_EventThreadMain();
 			void				_RestoreDisplay();
+			void				_HandleHotplug();
 
 			static int			fFd;
 
@@ -102,6 +109,10 @@ private:
 			BLocker				fSessionLock;
 			sem_id				fSessionSem;
 			BLocker				fSeatLock;
+
+			struct udev*		fUdev;
+			struct udev_monitor* fUdevMonitor;
+			int					fUdevFd;
 };
 
 #endif

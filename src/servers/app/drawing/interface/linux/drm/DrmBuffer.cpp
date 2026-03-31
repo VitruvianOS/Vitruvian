@@ -9,9 +9,10 @@
 
 
 
-DrmBuffer::DrmBuffer(int fd, modeset_dev* dev)
+DrmBuffer::DrmBuffer(int fd, modeset_dev* dev, bool isBack)
 	:
 	fDev(dev),
+	fIsBack(isBack),
 	fErr(B_ERROR),
 	fColorSpace(B_RGB32)
 {
@@ -74,7 +75,7 @@ void*
 DrmBuffer::Bits() const
 {
 	CALLED();
-	return (void*)fDev->map;
+	return fIsBack ? (void*)fDev->back_map : (void*)fDev->map;
 }
 
 
@@ -82,7 +83,14 @@ uint32
 DrmBuffer::BytesPerRow() const
 {
 	CALLED();
-	return fDev->stride;
+	return fIsBack ? fDev->back_stride : fDev->stride;
+}
+
+
+uint32
+DrmBuffer::GetFbId() const
+{
+	return fIsBack ? fDev->back_fb : fDev->fb;
 }
 
 

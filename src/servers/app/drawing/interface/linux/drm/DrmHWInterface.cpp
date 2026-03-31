@@ -7,6 +7,7 @@
 
 #include "DrmBuffer.h"
 
+#include <algorithm>
 #include <poll.h>
 #include <time.h>
 
@@ -53,7 +54,10 @@ DrmHWInterface::DrmHWInterface()
 	fEventThread(-1),
 	fSessionLock("drm session lock"),
 	fSessionSem(create_sem(0, "drm session sem")),
-	fSeatLock("drm seat lock")
+	fSeatLock("drm seat lock"),
+	fUdev(NULL),
+	fUdevMonitor(NULL),
+	fUdevFd(-1)
 {
 	fSeat = libseat_open_seat(&seat_listener, this);
 	if (!fSeat) {
@@ -105,13 +109,19 @@ DrmHWInterface::_OnSessionEnable()
 		return;
 	}
 
-	char path[B_PATH_NAME_LENGTH];
-	for (int i = 0; i <= 9; ++i) {
-		snprintf(path, sizeof(path), "/dev/dri/card%d", i);
-		fDeviceId = libseat_open_device(fSeat, path, &fFd);
-		if (fDeviceId < 0)
-			continue;
-    }
+	const char* janusDrmFdStr = getenv("JANUS_DRM_FD");
+	if (janusDrmFdStr != NULL && janusDrmFdStr[0] != '\0') {
+		fFd = atoi(janusDrmFdStr);
+		fDeviceId = 0;
+	} else {
+		char path[B_PATH_NAME_LENGTH];
+		for (int i = 0; i <= 9; ++i) {
+			snprintf(path, sizeof(path), "/dev/dri/card%d", i);
+			fDeviceId = libseat_open_device(fSeat, path, &fFd);
+			if (fDeviceId >= 0)
+				break;
+		}
+	}
 
 	if (fFd < 0) {
 		fprintf(stderr, "Failed to open DRM device via libseat\n");
@@ -136,13 +146,24 @@ DrmHWInterface::_OnSessionEnable()
 		}
 	}
 
-	fFrontBuffer = new DrmBuffer(fFd, get_dev());
-	#ifdef DRM_BACK_BUFFER
-	fBackBuffer = new DrmBuffer(fFd, get_dev());
-	#endif
+	modeset_create_back_fb(fFd, get_dev());
+	fFrontBuffer = new DrmBuffer(fFd, get_dev(), false);
+	fBackBuffer  = new DrmBuffer(fFd, get_dev(), true);
 
 	fEventStream = new LibInputEventStream(get_dev()->width, get_dev()->height, fSeat);
 	fEventStream->SetSeatLock(&fSeatLock);
+
+	// Set up udev hotplug monitor for DRM connectors
+	fUdev = udev_new();
+	if (fUdev) {
+		fUdevMonitor = udev_monitor_new_from_netlink(fUdev, "udev");
+		if (fUdevMonitor) {
+			udev_monitor_filter_add_match_subsystem_devtype(
+				fUdevMonitor, "drm", NULL);
+			udev_monitor_enable_receiving(fUdevMonitor);
+			fUdevFd = udev_monitor_get_fd(fUdevMonitor);
+		}
+	}
 
 	fDisplayMode.virtual_width = get_dev()->width;
 	fDisplayMode.virtual_height = get_dev()->height;
@@ -225,17 +246,26 @@ DrmHWInterface::_EventThreadMain()
 			active = fSessionActive;
 		}
 
-		struct pollfd pfd;
-		pfd.fd = seat_fd;
-		pfd.events = POLLIN;
-		pfd.revents = 0;
+		struct pollfd pfds[2];
+		pfds[0].fd = seat_fd;
+		pfds[0].events = POLLIN;
+		pfds[0].revents = 0;
+		pfds[1].fd = fUdevFd;
+		pfds[1].events = POLLIN;
+		pfds[1].revents = 0;
+		int nfds = (fUdevFd >= 0) ? 2 : 1;
 
-		int ret = poll(&pfd, 1, 100);
-		if (ret > 0 && (pfd.revents & (POLLIN | POLLHUP))) {
-			BAutolock _(fSeatLock);
-			int dret = libseat_dispatch(fSeat, 0);
-			if (dret < 0 && !active)
-				printf("libseat_dispatch: error\n");
+		int ret = poll(pfds, nfds, 100);
+		if (ret > 0) {
+			if (pfds[0].revents & (POLLIN | POLLHUP)) {
+				BAutolock _(fSeatLock);
+				int dret = libseat_dispatch(fSeat, 0);
+				if (dret < 0 && !active)
+					printf("libseat_dispatch: error\n");
+			}
+			if (nfds > 1 && (pfds[1].revents & POLLIN)) {
+				_HandleHotplug();
+			}
 		}
 	}
 }
@@ -255,7 +285,12 @@ DrmHWInterface::~DrmHWInterface()
 
 	delete_sem(fSessionSem);
 
-	if (fSeat && fDeviceId >= 0)
+	if (fUdevMonitor)
+		udev_monitor_unref(fUdevMonitor);
+	if (fUdev)
+		udev_unref(fUdev);
+
+	if (fSeat && fDeviceId > 0)
 		libseat_close_device(fSeat, fDeviceId);
 
 	if (fSeat)
@@ -264,6 +299,7 @@ DrmHWInterface::~DrmHWInterface()
 	modeset_cleanup(fFd);
 
 	delete fFrontBuffer;
+	delete fBackBuffer;
 	delete fEventStream;
 }
 
@@ -465,11 +501,7 @@ RenderingBuffer*
 DrmHWInterface::BackBuffer() const
 {
 	CALLED();
-	#ifdef DRM_BACK_BUFFER
 	return fBackBuffer;
-	#else
-	return NULL;
-	#endif
 }
 
 
@@ -483,16 +515,112 @@ DrmHWInterface::IsDoubleBuffered() const
 status_t
 DrmHWInterface::CopyBackToFront(const BRect& frame)
 {
-	#ifdef DRM_BACK_BUFFER
-    //memcpy(fFrontBuffer->Bits(), fBackBuffer->Bits(),
-    //       fFrontBuffer->BitsLength());
+	if (fBackBuffer == NULL)
+		return B_ERROR;
 
-    drmModePageFlip(fFd, crtc, fBackBuffer->GetFbId(),
-                    DRM_MODE_PAGE_FLIP_EVENT, this);
-    std::swap(fFrontBuffer, fBackBuffer);
+	// Software double buffering: blit dirty rect from back (render target)
+	// to front (displayed framebuffer). No page flip, no pointer swap.
+	// FrontBuffer() must always point to the displayed framebuffer so that
+	// app_server can draw the cursor directly there.
+	uint32 bpr = fBackBuffer->BytesPerRow();
+	int32  x   = (int32)frame.left;
+	int32  y   = (int32)frame.top;
+	int32  w   = (int32)(frame.right  - frame.left + 1);
+	int32  h   = (int32)(frame.bottom - frame.top  + 1);
 
-    return B_OK;
-    #else
-	return B_UNSUPPORTED;
-	#endif
+	// Clamp to buffer bounds
+	int32 bufW = (int32)fFrontBuffer->Width();
+	int32 bufH = (int32)fFrontBuffer->Height();
+	if (x < 0) { w += x; x = 0; }
+	if (y < 0) { h += y; y = 0; }
+	if (x + w > bufW) w = bufW - x;
+	if (y + h > bufH) h = bufH - y;
+
+	if (w <= 0 || h <= 0)
+		return B_OK;
+
+	void* backBits  = fBackBuffer->Bits();
+	void* frontBits = fFrontBuffer->Bits();
+	if (backBits == NULL || frontBits == NULL)
+		return B_ERROR;
+
+	uint8* src = (uint8*)backBits  + y * bpr + x * 4;
+	uint8* dst = (uint8*)frontBits + y * bpr + x * 4;
+	for (int32 row = 0; row < h; row++) {
+		memcpy(dst, src, w * 4);
+		src += bpr;
+		dst += bpr;
+	}
+
+	// Composite software cursor on top of front buffer.
+	// _DrawCursor reads from BackBuffer (DrawingBuffer), blends the cursor
+	// bitmap, and writes the result directly into FrontBuffer via _CopyToFront.
+	_DrawCursor(IntRect(frame));
+
+	return B_OK;
+}
+
+
+void
+DrmHWInterface::_HandleHotplug()
+{
+	struct udev_device* dev = udev_monitor_receive_device(fUdevMonitor);
+	if (!dev)
+		return;
+
+	const char* hotplug = udev_device_get_property_value(dev, "HOTPLUG");
+	if (hotplug != NULL && strcmp(hotplug, "1") == 0 && fFd >= 0) {
+		fprintf(stderr, "DRM hotplug event\n");
+
+		drmModeRes* res = drmModeGetResources(fFd);
+		if (res) {
+			for (int i = 0; i < res->count_connectors; i++) {
+				drmModeConnector* conn = drmModeGetConnector(fFd,
+					res->connectors[i]);
+				if (conn) {
+					if (conn->connection == DRM_MODE_CONNECTED)
+						modeset_add_connector(fFd, conn->connector_id);
+					else
+						modeset_remove_connector(conn->connector_id);
+					drmModeFreeConnector(conn);
+				}
+			}
+			drmModeFreeResources(res);
+		}
+	}
+
+	udev_device_unref(dev);
+}
+
+
+status_t
+DrmHWInterface::CreateLease(uint32_t* connectors, int connCount,
+	uint32_t* crtcs, int crtcCount, int* leaseFd)
+{
+	if (fFd < 0)
+		return B_ERROR;
+
+	int total = connCount + crtcCount;
+	uint32_t* objects = new uint32_t[total];
+	for (int i = 0; i < connCount; i++)
+		objects[i] = connectors[i];
+	for (int i = 0; i < crtcCount; i++)
+		objects[connCount + i] = crtcs[i];
+
+	int fd = drmModeCreateLease(fFd, objects, total, 0, leaseFd);
+	delete[] objects;
+
+	if (fd < 0) {
+		fprintf(stderr, "drmModeCreateLease failed: %m\n");
+		return B_ERROR;
+	}
+	return B_OK;
+}
+
+
+void
+DrmHWInterface::RevokeLease(int leaseFd)
+{
+	if (leaseFd >= 0)
+		close(leaseFd);
 }

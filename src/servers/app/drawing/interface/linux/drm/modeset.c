@@ -1,8 +1,9 @@
 /*
  * modeset - DRM Modesetting Example
  *
- * Written 2012 by David Rheinsberg <david.rheinsberg@gmail.com>
- * Dedicated to the Public Domain.
+ * Copyright (?), David Rheinsberg <david.rheinsberg@gmail.com>
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the GPL License.
  */
 
 /*
@@ -500,6 +501,67 @@ err_destroy:
 	return ret;
 }
 
+int modeset_create_back_fb(int fd, struct modeset_dev *dev)
+{
+	struct drm_mode_create_dumb creq;
+	struct drm_mode_destroy_dumb dreq;
+	struct drm_mode_map_dumb mreq;
+	int ret;
+
+	memset(&creq, 0, sizeof(creq));
+	creq.width = dev->width;
+	creq.height = dev->height;
+	creq.bpp = 32;
+	ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq);
+	if (ret < 0) {
+		fprintf(stderr, "back fb: cannot create dumb buffer (%d): %m\n", errno);
+		return -errno;
+	}
+	dev->back_stride = creq.pitch;
+	dev->back_size   = creq.size;
+	dev->back_handle = creq.handle;
+
+	ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32,
+		dev->back_stride, dev->back_handle, &dev->back_fb);
+	if (ret) {
+		fprintf(stderr, "back fb: cannot create framebuffer (%d): %m\n", errno);
+		ret = -errno;
+		goto err_destroy;
+	}
+
+	memset(&mreq, 0, sizeof(mreq));
+	mreq.handle = dev->back_handle;
+	ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
+	if (ret) {
+		fprintf(stderr, "back fb: cannot map dumb buffer (%d): %m\n", errno);
+		ret = -errno;
+		goto err_fb;
+	}
+
+	dev->back_map = mmap(0, dev->back_size, PROT_READ | PROT_WRITE,
+		MAP_SHARED, fd, mreq.offset);
+	if (dev->back_map == MAP_FAILED) {
+		fprintf(stderr, "back fb: cannot mmap dumb buffer (%d): %m\n", errno);
+		dev->back_map = NULL;
+		ret = -errno;
+		goto err_fb;
+	}
+
+	memset(dev->back_map, 0, dev->back_size);
+	return 0;
+
+err_fb:
+	drmModeRmFB(fd, dev->back_fb);
+	dev->back_fb = 0;
+err_destroy:
+	memset(&dreq, 0, sizeof(dreq));
+	dreq.handle = dev->back_handle;
+	drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+	dev->back_handle = 0;
+	return ret;
+}
+
+
 /*
  * Finally! We have a connector with a suitable CRTC. We know which mode we want
  * to use and we have a framebuffer of the correct size that we can write to.
@@ -664,6 +726,127 @@ void modeset_draw(void)
  * all memory.
  * It should be pretty obvious how all of this works.
  */
+
+struct modeset_dev*
+modeset_dev_create(int fd, uint32_t connector_id)
+{
+	drmModeRes* res = drmModeGetResources(fd);
+	if (!res)
+		return NULL;
+
+	drmModeConnector* conn = drmModeGetConnector(fd, connector_id);
+	if (!conn) {
+		drmModeFreeResources(res);
+		return NULL;
+	}
+
+	struct modeset_dev* dev = malloc(sizeof(*dev));
+	if (!dev) {
+		drmModeFreeConnector(conn);
+		drmModeFreeResources(res);
+		return NULL;
+	}
+	memset(dev, 0, sizeof(*dev));
+	dev->conn = connector_id;
+
+	int ret = modeset_setup_dev(fd, res, conn, dev);
+	drmModeFreeConnector(conn);
+	drmModeFreeResources(res);
+
+	if (ret != 0) {
+		free(dev);
+		return NULL;
+	}
+	return dev;
+}
+
+
+void
+modeset_dev_destroy(int fd, struct modeset_dev* dev)
+{
+	if (!dev)
+		return;
+
+	if (dev->saved_crtc) {
+		drmModeSetCrtc(fd, dev->saved_crtc->crtc_id,
+			dev->saved_crtc->buffer_id,
+			dev->saved_crtc->x, dev->saved_crtc->y,
+			&dev->conn, 1, &dev->saved_crtc->mode);
+		drmModeFreeCrtc(dev->saved_crtc);
+	}
+
+	if (dev->map)
+		munmap(dev->map, dev->size);
+
+	if (dev->fb)
+		drmModeRmFB(fd, dev->fb);
+
+	if (dev->handle) {
+		struct drm_mode_destroy_dumb dreq;
+		memset(&dreq, 0, sizeof(dreq));
+		dreq.handle = dev->handle;
+		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+	}
+
+	if (dev->back_map)
+		munmap(dev->back_map, dev->back_size);
+
+	if (dev->back_fb)
+		drmModeRmFB(fd, dev->back_fb);
+
+	if (dev->back_handle) {
+		struct drm_mode_destroy_dumb dreq;
+		memset(&dreq, 0, sizeof(dreq));
+		dreq.handle = dev->back_handle;
+		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+	}
+
+	free(dev);
+}
+
+
+int
+modeset_add_connector(int fd, uint32_t connector_id)
+{
+	/* Check not already in list */
+	struct modeset_dev* iter;
+	for (iter = modeset_list; iter; iter = iter->next) {
+		if (iter->conn == connector_id)
+			return 0;
+	}
+
+	struct modeset_dev* dev = modeset_dev_create(fd, connector_id);
+	if (!dev)
+		return -ENOENT;
+
+	dev->saved_crtc = drmModeGetCrtc(fd, dev->crtc);
+	drmModeSetCrtc(fd, dev->crtc, dev->fb, 0, 0, &dev->conn, 1, &dev->mode);
+
+	dev->next = modeset_list;
+	modeset_list = dev;
+
+	fprintf(stderr, "hotplug: added connector %u (%ux%u)\n",
+		connector_id, dev->width, dev->height);
+	return 0;
+}
+
+
+void
+modeset_remove_connector(uint32_t connector_id)
+{
+	struct modeset_dev** pp = &modeset_list;
+	while (*pp) {
+		if ((*pp)->conn == connector_id) {
+			struct modeset_dev* dev = *pp;
+			*pp = dev->next;
+			fprintf(stderr, "hotplug: removed connector %u\n", connector_id);
+			free(dev);
+			return;
+		}
+		pp = &(*pp)->next;
+	}
+}
+
 
 void modeset_cleanup(int fd)
 {

@@ -1102,37 +1102,39 @@ void*
 BLooper::ReadRawFromPort(int32* msgCode, bigtime_t timeout)
 {
 	PRINT(("BLooper::ReadRawFromPort()\n"));
-	uint8* buffer = NULL;
-	ssize_t bufferSize;
 
-	do {
-		bufferSize = port_buffer_size_etc(fMsgPort, B_RELATIVE_TIMEOUT, timeout);
-	} while (bufferSize == B_INTERRUPTED);
+	for (;;) {
+		ssize_t bufferSize;
+		do {
+			bufferSize = port_buffer_size_etc(fMsgPort, B_RELATIVE_TIMEOUT,
+				timeout);
+		} while (bufferSize == B_INTERRUPTED);
 
-	if (bufferSize < B_OK) {
-		PRINT(("BLooper::ReadRawFromPort(): failed: %ld\n", bufferSize));
-		return NULL;
-	}
+		if (bufferSize < B_OK) {
+			PRINT(("BLooper::ReadRawFromPort(): failed: %ld\n", bufferSize));
+			return NULL;
+		}
 
-	if (bufferSize > 0)
-		buffer = (uint8*)malloc(bufferSize);
+		uint8* buffer = bufferSize > 0 ? (uint8*)malloc(bufferSize) : NULL;
 
-	// we don't want to wait again here, since that can only mean
-	// that someone else has read our message and our bufferSize
-	// is now probably wrong
-	PRINT(("read_port()...\n"));
-	bufferSize = read_port_etc(fMsgPort, msgCode, buffer, bufferSize,
-		B_RELATIVE_TIMEOUT, 0);
+		// Read with timeout=0: another thread may have consumed the message
+		// between port_buffer_size_etc and here. Retry rather than returning
+		// NULL and causing task_looper to spin.
+		PRINT(("read_port()...\n"));
+		ssize_t result = read_port_etc(fMsgPort, msgCode, buffer, bufferSize,
+			B_RELATIVE_TIMEOUT, 0);
 
-	if (bufferSize < B_OK) {
+		if (result >= B_OK) {
+			PRINT(("BLooper::ReadRawFromPort() read: %.4s, %p (%d bytes)\n",
+				(char*)msgCode, buffer, (int)result));
+			return buffer;
+		}
+
 		free(buffer);
-		return NULL;
+
+		if (result != B_WOULD_BLOCK && result != B_TIMED_OUT)
+			return NULL;
 	}
-
-	PRINT(("BLooper::ReadRawFromPort() read: %.4s, %p (%d bytes)\n",
-		(char*)msgCode, buffer, bufferSize));
-
-	return buffer;
 }
 
 

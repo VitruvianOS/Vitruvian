@@ -170,12 +170,20 @@ replace(char *origfile, char *newfile)
 char *
 temp_file(void)
 {
-	// creates a new, temporary file and returns its name
-	
-	char *tmp = tmpnam(NULL);
-	
-	FILE *fp = fopen(tmp, "w");
-	fclose(fp);
-	
-	return tmp;
+	// The template must end with XXXXXX	
+	char *tmp = malloc(32);
+   	strcpy(tmp, "/tmp/vitruvian_XXXXXX");
+
+	// mkstemp creates the file with secure permissions (0600) and returns a file descriptor
+	int fd = mkstemp(tmp);
+    
+    	if (fd == -1) {
+		free(tmp);
+		return NULL;
+	}
+
+	// We close the descriptor because fopen will reopen it (or handle it directly with fdopen)
+	close(fd);
+    
+	return tmp; 
 }

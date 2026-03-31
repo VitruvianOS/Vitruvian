@@ -67,6 +67,7 @@ extern int			_kern_getrlimit(int resource, struct rlimit * rlp);
 extern int			_kern_setrlimit(int resource, const struct rlimit * rlp);
 
 extern status_t		_kern_shutdown(bool reboot);
+extern status_t		_kern_suspend(void);
 extern status_t		_kern_get_safemode_option(const char *parameter,
 						char *buffer, size_t *_bufferSize);
 

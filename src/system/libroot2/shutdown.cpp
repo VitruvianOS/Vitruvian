@@ -34,3 +34,25 @@ _kern_shutdown(bool reb)
 
 	return B_ERROR;
 }
+
+
+status_t
+_kern_suspend(void)
+{
+	int fd = open("/sys/power/state", O_WRONLY);
+	if (fd < 0) {
+		fprintf(stderr, "_kern_suspend: cannot open /sys/power/state: %s\n",
+			strerror(errno));
+		return B_ERROR;
+	}
+
+	// Try S3 suspend
+	ssize_t ret = write(fd, "mem\n", 4);
+
+	// Fall back to freeze
+	if (ret < 0)
+		ret = write(fd, "freeze\n", 7);
+	close(fd);
+
+	return (ret > 0) ? B_OK : B_ERROR;
+}

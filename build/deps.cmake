@@ -178,6 +178,27 @@ DeclareDependency(
 #)
 
 DeclareDependency(
+	GL
+	LIBRARIES  "GL"
+	PACKAGES  "libgl-dev"
+	RUNTIMES  "libgl1 (>= 1.0)"
+)
+
+DeclareDependency(
+	EGL
+	LIBRARIES  "EGL"
+	PACKAGES  "libegl-dev"
+	RUNTIMES  "libegl1 (>= 1.0)"
+)
+
+DeclareDependency(
+	GBM
+	LIBRARIES  "gbm"
+	PACKAGES  "libgbm-dev"
+	RUNTIMES  "libgbm1 (>= 21.0)"
+)
+
+DeclareDependency(
 	SHELL_ATTR
 	PACKAGES  "attr"
 	RUNTIMES  "attr"

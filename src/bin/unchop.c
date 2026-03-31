@@ -177,7 +177,7 @@ temp_file(void)
 	// mkstemp creates the file with secure permissions (0600) and returns a file descriptor
 	int fd = mkstemp(tmp);
     
-    	if (fd == -1) {
+	if (fd == -1) {
 		free(tmp);
 		return NULL;
 	}

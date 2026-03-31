@@ -32,6 +32,8 @@ set(
 	"headers/os/add-ons/input_server"
 	"headers/os/add-ons/tracker"
 
+	"headers/os/opengl"
+
 	"headers/posix"
 )
 
@@ -40,6 +42,7 @@ set(
 
 	"headers/private/"
 
+	"headers/private/opengl"
 	"headers/private/input"
 	"headers/private/shared"
 	"headers/private/storage"

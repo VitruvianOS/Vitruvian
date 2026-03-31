@@ -115,7 +115,7 @@ cat <<'EOF' >$basedir/image_tree/scratch/grub.cfg
 insmod all_video
 search --set=root --file /VITRUVIAN_CUSTOM
 set default="0"
-set timeout=0
+set timeout=1
 set hidden_timeout=0
 menuentry "Vitruvian Live" {
     linux /vmlinuz boot=live quiet splash
@@ -147,6 +147,7 @@ mcopy -i efiboot.img ./bootx64.efi ::efi/boot/
 echo ${bold}Grub cfg Modules...
 echo ${normal}
 
+# Create core image for Legacy BIOS boot
 grub-mkstandalone \
     --format=i386-pc \
     --output=$basedir/image_tree/scratch/core.img \
@@ -156,6 +157,7 @@ grub-mkstandalone \
     --fonts="" \
     "boot/grub/grub.cfg=$basedir/image_tree/scratch/grub.cfg"
 
+# Combine boot image and core image for BIOS
 cat \
     /usr/lib/grub/i386-pc/cdboot.img \
     $basedir/image_tree/scratch/core.img \
@@ -178,8 +180,9 @@ xorriso \
     --grub2-boot-info \
     --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
     -eltorito-alt-boot \
-        -e EFI/efiboot.img \
-        -no-emul-boot \
+    -e EFI/efiboot.img \
+    -no-emul-boot \
+    -isohybrid-gpt-basdat \
     -append_partition 2 0xef $basedir/image_tree/scratch/efiboot.img \
     -output "$basedir/image_tree/vitruvian-custom.iso" \
     -graft-points \
@@ -198,4 +201,4 @@ if [ "$BUILD_TYPE" = "Debug" ]; then
     echo "  Password: live"
     echo "  Connect: ssh root@<guest-ip>"
 fi
-echo "" 
+echo ""

@@ -172,6 +172,10 @@ temp_file(void)
 {
 	// The template must end with XXXXXX	
 	char *tmp = malloc(32);
+	if(!tmp)
+		return NULL;
+
+	// Safe copy of the template
    	strcpy(tmp, "/tmp/vitruvian_XXXXXX");
 
 	// mkstemp creates the file with secure permissions (0600) and returns a file descriptor

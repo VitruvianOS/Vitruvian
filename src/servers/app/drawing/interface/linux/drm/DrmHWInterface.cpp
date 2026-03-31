@@ -386,77 +386,30 @@ DrmHWInterface::RetraceSemaphore()
 status_t
 DrmHWInterface::WaitForRetrace(bigtime_t timeout)
 {
-#ifdef DRM_BACK_BUFFER
-	CALLED();
-
 	if (fFd < 0)
 		return B_ERROR;
 
-	// TODO we should check if the session is active to avoid having
-	// someone stuck on this.
-
 	struct drm_wait_vblank wait;
 	memset(&wait, 0, sizeof(wait));
-	wait.request.type = DRM_VBLANK_RELATIVE | DRM_VBLANK_EVENT;
+	wait.request.type = (drm_vblank_seq_type)DRM_VBLANK_RELATIVE;
 	wait.request.sequence = 1;
 
-	if (ioctl(fFd, DRM_IOCTL_WAIT_VBLANK, &wait) < 0)
-		return B_ERROR;
-
-	struct pollfd pollFd;
-	pollFd.fd = fFd;
-	pollFd.events = POLLIN | POLLPRI;
-	pollFd.revents = 0;
-
 	bool infinite = (timeout < 0);
-	bigtime_t start_us = 0;
-	if (!infinite)
-		start_us = system_time();
+	bigtime_t start_us = infinite ? 0 : system_time();
 
 	for (;;) {
-		int timeout_ms;
-		if (infinite) {
-			timeout_ms = -1;
-		} else {
-			int64_t elapsed_us = (int64_t)(system_time() - start_us);
-			int64_t rem_us = (int64_t)timeout - elapsed_us;
-			if (rem_us <= 0) {
-				return B_TIMED_OUT;
-			}
-			timeout_ms = static_cast<int>((rem_us + 999) / 1000);
-		}
-
-		int ret = poll(&pollFd, 1, timeout_ms);
-		if (ret > 0) {
-			drmEventContext evctx;
-			memset(&evctx, 0, sizeof(evctx));
-			evctx.version = 2;
-			evctx.vblank_handler
-				= [](int, unsigned int, unsigned int, unsigned int, void*) {};
-
-			if (drmHandleEvent(fFd, &evctx) < 0)
-				return B_ERROR;
-
+		if (ioctl(fFd, DRM_IOCTL_WAIT_VBLANK, &wait) == 0)
 			return B_OK;
-		} else if (ret == 0) {
-			if (infinite)
-				continue;
-			int64_t elapsed_us = (int64_t)(system_time() - start_us);
-			if (elapsed_us >= (int64_t)timeout)
-				return B_TIMED_OUT;
 
+		if (errno == EINTR) {
+			if (!infinite) {
+				if (system_time() - start_us >= timeout)
+					return B_TIMED_OUT;
+			}
 			continue;
-		} else {
-			if (errno == EINTR)
-				continue;
-			return B_ERROR;
 		}
+		return B_ERROR;
 	}
-
-	return B_ERROR;
-#endif
-	UNIMPLEMENTED();
-	return B_UNSUPPORTED;
 }
 
 

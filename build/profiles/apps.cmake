@@ -7,65 +7,42 @@ ImageInclude("/system/" ${CORE_APPLICATIONS})
 set(SYSTEM_APPS
 	AboutSystem
 	ActivityMonitor
-	AutoRaise
+	#AutoRaise
 	Clock
 	DeskCalc
 	DiskProbe
 	DiskUsage
-	DriveSetup
+	#DriveSetup
 	Expander
 	FirstBootPrompt
-	FontDemo
+	#FontDemo
 	Gradients
 	Installer
 	LaunchBox
 	Magnify
 	Mandelbrot
 	OverlayImage
-	Pairs
+	#Pairs
 	People
 	PowerStatus
-	ProcessController
+	#ProcessController
 	Pulse
 	ResEdit
-	Screenshot
+	#Screenshot
 	ShowImage
 	StyledEdit
 	Sudoku
-	Switcher
+	#Switcher
 	Terminal
-	TextSearch
+	#TextSearch
 	Workspaces
 )
 ImageInclude("/system/apps" ${SYSTEM_APPS})
 
-set(DESKBAR_APPLICATIONS
-	AboutSystem
-	ActivityMonitor
-	DeskCalc
-	DiskProbe
-	DiskUsage
-	DriveSetup
-	Expander
-	Installer
-	LaunchBox
-	Magnify
-	People
-	ProcessController
-	ResEdit
-	Screenshot
-	ShowImage
-	StyledEdit
-	Switcher
-	Terminal
-	TextSearch
-	Workspaces
-)
-
 install(CODE "
 	file(MAKE_DIRECTORY \"\$ENV{DESTDIR}/system/data/deskbar/menu/Applications\")
 ")
-foreach(app ${DESKBAR_APPLICATIONS})
+foreach(app ${SYSTEM_APPS})
 	install(CODE "
 		file(CREATE_LINK \"/system/apps/${app}\"
 			\"\$ENV{DESTDIR}/system/data/deskbar/menu/Applications/${app}\"
@@ -74,7 +51,7 @@ foreach(app ${DESKBAR_APPLICATIONS})
 endforeach()
 
 set(DESKBAR_DEMOS
-	FontDemo
+	#FontDemo
 	Gradients
 	Mandelbrot
 	Pairs
@@ -93,7 +70,7 @@ foreach(app ${DESKBAR_DEMOS})
 endforeach()
 
 set(DESKBAR_APPLETS
-	AutoRaise
+	#AutoRaise
 	Clock
 	OverlayImage
 	PowerStatus

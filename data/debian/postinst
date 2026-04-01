@@ -23,7 +23,7 @@ ln -sf /var /system/var
 # the right multiuser home.
 mkdir -p /home/Desktop
 ln -sf /home /home/Desktop/Home
-ln -sf / /home/Desktop/Boot
+#ln -sf / /home/Desktop/Boot
 ln -sf /system /home/Desktop/System
 
 # Deskbar menu

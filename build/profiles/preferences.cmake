@@ -8,7 +8,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Input
 	Keymap
 	Locale
-	ScreenSaver
+	#ScreenSaver
 	Shortcuts
 	Tracker_prefs
 )
@@ -23,7 +23,7 @@ set(SYSTEM_PREFERENCES
 	Input
 	Keymap
 	Locale
-	ScreenSaver
+	#ScreenSaver
 	Shortcuts
 	Tracker
 )

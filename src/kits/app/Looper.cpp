@@ -1102,39 +1102,35 @@ void*
 BLooper::ReadRawFromPort(int32* msgCode, bigtime_t timeout)
 {
 	PRINT(("BLooper::ReadRawFromPort()\n"));
+	uint8* buffer = NULL;
+	ssize_t bufferSize;
 
-	for (;;) {
-		ssize_t bufferSize;
-		do {
-			bufferSize = port_buffer_size_etc(fMsgPort, B_RELATIVE_TIMEOUT,
-				timeout);
-		} while (bufferSize == B_INTERRUPTED);
+	do {
+		bufferSize = port_buffer_size_etc(fMsgPort, B_RELATIVE_TIMEOUT,
+			timeout);
+	} while (bufferSize == B_INTERRUPTED);
 
-		if (bufferSize < B_OK) {
-			PRINT(("BLooper::ReadRawFromPort(): failed: %ld\n", bufferSize));
-			return NULL;
-		}
-
-		uint8* buffer = bufferSize > 0 ? (uint8*)malloc(bufferSize) : NULL;
-
-		// Read with timeout=0: another thread may have consumed the message
-		// between port_buffer_size_etc and here. Retry rather than returning
-		// NULL and causing task_looper to spin.
-		PRINT(("read_port()...\n"));
-		ssize_t result = read_port_etc(fMsgPort, msgCode, buffer, bufferSize,
-			B_RELATIVE_TIMEOUT, 0);
-
-		if (result >= B_OK) {
-			PRINT(("BLooper::ReadRawFromPort() read: %.4s, %p (%d bytes)\n",
-				(char*)msgCode, buffer, (int)result));
-			return buffer;
-		}
-
-		free(buffer);
-
-		if (result != B_WOULD_BLOCK && result != B_TIMED_OUT)
-			return NULL;
+	if (bufferSize < B_OK) {
+		PRINT(("BLooper::ReadRawFromPort(): failed: %ld\n", bufferSize));
+		return NULL;
 	}
+
+	if (bufferSize > 0)
+		buffer = (uint8*)malloc(bufferSize);
+
+	PRINT(("read_port()...\n"));
+	bufferSize = read_port_etc(fMsgPort, msgCode, buffer, bufferSize,
+		B_RELATIVE_TIMEOUT, 0);
+
+	if (bufferSize < B_OK) {
+		free(buffer);
+		return NULL;
+	}
+
+	PRINT(("BLooper::ReadRawFromPort() read: %.4s, %p (%d bytes)\n",
+		(char*)msgCode, buffer, (int)bufferSize));
+
+	return buffer;
 }
 
 
@@ -1191,13 +1187,9 @@ BLooper::task_looper()
 	// loop: As long as we are not terminating.
 	while (!fTerminating) {
 		PRINT(("LOOPER: outer loop\n"));
-		// TODO: timeout determination algo
-		//	Read from message port (how do we determine what the timeout is?)
-		PRINT(("LOOPER: MessageFromPort()...\n"));
 		BMessage* msg = MessageFromPort();
 		PRINT(("LOOPER: ...done\n"));
 
-		//	Did we get a message?
 		if (msg)
 			_AddMessagePriv(msg);
 

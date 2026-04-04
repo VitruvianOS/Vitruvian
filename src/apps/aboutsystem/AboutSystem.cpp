@@ -1176,7 +1176,9 @@ SysInfoView::_GetKernelDateTime(system_info* sysInfo)
 	BString kernelDateTime;
 
 	BString buildDateTime;
-	buildDateTime << sysInfo->kernel_build_date << " " << sysInfo->kernel_build_time;
+	buildDateTime << sysInfo->kernel_build_date;
+	if (sysInfo->kernel_build_time[0] != '\0')
+		buildDateTime << " " << sysInfo->kernel_build_time;
 
 	time_t buildDateTimeStamp = parsedate(buildDateTime, -1);
 

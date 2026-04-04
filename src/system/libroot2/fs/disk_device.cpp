@@ -602,7 +602,7 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 	if (!BKernelPrivate::file_exists(sysPath))
 		return B_ENTRY_NOT_FOUND;
 
-	int partCount = deviceOnly ? 0 : BKernelPrivate::count_partitions(devName);
+	int partCount = deviceOnly ? BKernelPrivate::count_partitions(devName) : 0;
 	size_t needed = sizeof(user_disk_device_data) + 
 		partCount * sizeof(user_partition_data);
 

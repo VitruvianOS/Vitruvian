@@ -63,7 +63,8 @@ PulseView::PulseView(BMessage *message)
 
 void PulseView::Init() {
 	memset(cpu_times, 0, sizeof(double) * kCPUCount);
-	memset(prev_active, 0, sizeof(double) * kCPUCount);
+	memset(prev_active, 0, sizeof(bigtime_t) * kCPUCount);
+	prev_time = system_time();
 
 	popupmenu = new BPopUpMenu("PopUpMenu", false, false, B_ITEMS_IN_COLUMN);
 	popupmenu->SetFont(be_plain_font);

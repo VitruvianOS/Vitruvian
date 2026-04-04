@@ -488,7 +488,7 @@ _kern_reserve_address_range(unsigned long* address, uint32 addressSpec,
 		return B_NO_MEMORY;
 
 	if (addressSpec == B_EXACT_ADDRESS && hint && addr != hint) {
-		munmap(address, size);
+		munmap(addr, size);
 		return B_BAD_VALUE;
 	}
 

@@ -371,16 +371,14 @@ get_partition_table_type(const char* devPath, char* ptType, size_t ptSize)
 static inline bool
 is_removable_device(const char* devName)
 {
-	struct udev* udev = udev_new();
+	struct udev* udev = BKernelPrivate::Team::GetUDev();
 	if (!udev)
 		return false;
 
 	struct udev_device* dev = udev_device_new_from_subsystem_sysname(
 		udev, "block", devName);
-	if (!dev) {
-		udev_unref(udev);
+	if (!dev)
 		return false;
-	}
 
 	bool removable = false;
 	const char* val = udev_device_get_sysattr_value(dev, "removable");
@@ -395,7 +393,6 @@ is_removable_device(const char* devName)
 	}
 
 	udev_device_unref(dev);
-	udev_unref(udev);
 	return removable;
 }
 
@@ -403,16 +400,14 @@ is_removable_device(const char* devName)
 static inline bool
 is_readonly_device(const char* devName)
 {
-	struct udev* udev = udev_new();
+	struct udev* udev = BKernelPrivate::Team::GetUDev();
 	if (!udev)
 		return false;
 
 	struct udev_device* dev = udev_device_new_from_subsystem_sysname(
 		udev, "block", devName);
-	if (!dev) {
-		udev_unref(udev);
+	if (!dev)
 		return false;
-	}
 
 	bool readonly = false;
 	const char* val = udev_device_get_sysattr_value(dev, "ro");
@@ -420,7 +415,6 @@ is_readonly_device(const char* devName)
 		readonly = true;
 
 	udev_device_unref(dev);
-	udev_unref(udev);
 	return readonly;
 }
 
@@ -428,22 +422,19 @@ is_readonly_device(const char* devName)
 static inline bool
 is_whole_disk(const char* devName)
 {
-	struct udev* udev = udev_new();
+	struct udev* udev = BKernelPrivate::Team::GetUDev();
 	if (!udev)
 		return false;
 
 	struct udev_device* dev = udev_device_new_from_subsystem_sysname(
 		udev, "block", devName);
-	if (!dev) {
-		udev_unref(udev);
+	if (!dev)
 		return false;
-	}
 
 	const char* partnum = udev_device_get_sysattr_value(dev, "partition");
 	bool isDisk = (partnum == NULL);
 
 	udev_device_unref(dev);
-	udev_unref(udev);
 	return isDisk;
 }
 
@@ -451,16 +442,14 @@ is_whole_disk(const char* devName)
 static inline off_t
 get_device_size(const char* devName)
 {
-	struct udev* udev = udev_new();
+	struct udev* udev = BKernelPrivate::Team::GetUDev();
 	if (!udev)
 		return 0;
 
 	struct udev_device* dev = udev_device_new_from_subsystem_sysname(
 		udev, "block", devName);
-	if (!dev) {
-		udev_unref(udev);
+	if (!dev)
 		return 0;
-	}
 
 	off_t size = 0;
 	const char* val = udev_device_get_sysattr_value(dev, "size");
@@ -468,7 +457,6 @@ get_device_size(const char* devName)
 		size = strtoull(val, NULL, 10) * 512;
 
 	udev_device_unref(dev);
-	udev_unref(udev);
 	return size;
 }
 
@@ -476,23 +464,18 @@ get_device_size(const char* devName)
 static inline int
 count_partitions(const char* devName)
 {
-	struct udev* udev = udev_new();
+	struct udev* udev = BKernelPrivate::Team::GetUDev();
 	if (!udev)
 		return 0;
 
 	struct udev_device* parent_dev = udev_device_new_from_subsystem_sysname(
 		udev, "block", devName);
-	if (!parent_dev) {
-		udev_unref(udev);
-		fprintf(stderr, "[count_partitions] devName='%s' - parent_dev NULL\n", devName);
+	if (!parent_dev)
 		return 0;
-	}
 
 	struct udev_enumerate* en = udev_enumerate_new(udev);
 	if (!en) {
 		udev_device_unref(parent_dev);
-		udev_unref(udev);
-		fprintf(stderr, "[count_partitions] devName='%s' - enumerate NULL\n", devName);
 		return 0;
 	}
 	udev_enumerate_add_match_subsystem(en, "block");
@@ -516,11 +499,8 @@ count_partitions(const char* devName)
 		udev_device_unref(dev);
 	}
 
-	fprintf(stderr, "[count_partitions] devName='%s' count=%d\n", devName, count);
-
 	udev_device_unref(parent_dev);
 	udev_enumerate_unref(en);
-	udev_unref(udev);
 	return count;
 }
 
@@ -528,16 +508,14 @@ count_partitions(const char* devName)
 static inline bool
 get_partition_name(const char* devName, int index, char* partName, size_t partNameSize)
 {
-	struct udev* udev = udev_new();
+	struct udev* udev = BKernelPrivate::Team::GetUDev();
 	if (!udev)
 		return false;
 
 	struct udev_device* parent = udev_device_new_from_subsystem_sysname(
 		udev, "block", devName);
-	if (!parent) {
-		udev_unref(udev);
+	if (!parent)
 		return false;
-	}
 
 	struct udev_enumerate* en = udev_enumerate_new(udev);
 	udev_enumerate_add_match_subsystem(en, "block");
@@ -573,7 +551,6 @@ get_partition_name(const char* devName, int index, char* partName, size_t partNa
 
 	udev_enumerate_unref(en);
 	udev_device_unref(parent);
-	udev_unref(udev);
 	return found;
 }
 

@@ -196,6 +196,8 @@ fill_partition_info(const char* devPath, const char* sysPath,
 		mountPoint, sizeof(mountPoint), fsType, sizeof(fsType));
 
 	if (mounted) {
+		data->flags |= B_PARTITION_FILE_SYSTEM;
+		data->flags |= B_PARTITION_MOUNTED;
 		const char* bp = strrchr(mountPoint, '/');
 		if (bp && bp[1] != '\0')
 			data->content_name = strdup(bp + 1);
@@ -223,6 +225,7 @@ fill_partition_info(const char* devPath, const char* sysPath,
 	} else {
 		if (BKernelPrivate::detect_filesystem(devPath, fsType,
 				sizeof(fsType))) {
+			data->flags |= B_PARTITION_FILE_SYSTEM;
 			data->content_type = (fsType[0] ? strdup(fsType) : NULL);
 		}
 	}
@@ -367,11 +370,8 @@ _kern_get_next_disk_device_id(int32* cookie, size_t* neededSize)
 			snprintf(devPath, sizeof(devPath), "/dev/%s", iter->currentDevice);
 
 			if (neededSize) {
-				// BDiskDeviceRoster::GetNextDevice always calls _SetTo with
-				// deviceOnly=true, so partition data is never needed here.
-				// Calling count_partitions() triggers libudev heap operations
-				// that corrupt the allocator on some systems; skip it.
-				*neededSize = sizeof(user_disk_device_data);
+				*neededSize = sizeof(user_disk_device_data)
+					+ 8 * sizeof(user_partition_data);
 			}
 
 			return make_partition_id(devPath);
@@ -395,16 +395,16 @@ _kern_get_next_disk_device_id(int32* cookie, size_t* neededSize)
 			continue;
 
 		struct udev* udev = BKernelPrivate::Team::GetUDev();
-		if (!udev)
-			continue;
-		struct udev_device* udev_dev = udev_device_new_from_subsystem_sysname(udev, "block", entry->d_name);
-		if (udev_dev) {
-			struct udev_device* parent = udev_device_get_parent_with_subsystem_devtype(udev_dev, "block", "disk");
-			if (parent) {
+		if (udev) {
+			struct udev_device* udev_dev = udev_device_new_from_subsystem_sysname(udev, "block", entry->d_name);
+			if (udev_dev) {
+				struct udev_device* parent = udev_device_get_parent_with_subsystem_devtype(udev_dev, "block", "disk");
+				if (parent) {
+					udev_device_unref(udev_dev);
+					continue;
+				}
 				udev_device_unref(udev_dev);
-				continue;
 			}
-			udev_device_unref(udev_dev);
 		}
 
 		strlcpy(iter->currentDevice, entry->d_name, sizeof(iter->currentDevice));
@@ -523,11 +523,15 @@ _kern_find_file_disk_device(const char* filename, size_t* neededSize)
 }
 
 
-status_t
+	status_t
 _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 	struct user_disk_device_data* buffer, size_t bufferSize, size_t* neededSize)
 {
 	CALLED();
+
+	fprintf(stderr, "[disk_device] _kern_get_disk_device_data id=%" B_PRId32
+		" deviceOnly=%d buf=%p size=%zu\n",
+		deviceID, deviceOnly, buffer, bufferSize);
 
 	if (buffer == nullptr && neededSize == nullptr)
 		return B_BAD_VALUE;
@@ -560,6 +564,38 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 
 	if (devPath[0] == '\0')
 		return B_ENTRY_NOT_FOUND;
+
+	dev_t devNum = (dev_t)deviceID;
+	char realSysName[NAME_MAX] = {0};
+	DIR* sysDir = opendir(SYS_BLOCK_PATH);
+	if (sysDir) {
+		struct dirent* sysEntry;
+		while ((sysEntry = readdir(sysDir)) != nullptr) {
+			if (sysEntry->d_name[0] == '.')
+				continue;
+
+			char devFile[PATH_MAX];
+			snprintf(devFile, sizeof(devFile), "%s/%s/dev",
+				SYS_BLOCK_PATH, sysEntry->d_name);
+			char buf[32];
+			if (read_sysfs_string(devFile, buf, sizeof(buf))) {
+				unsigned major = 0, minor = 0;
+				if (sscanf(buf, "%u:%u", &major, &minor) == 2) {
+					if (makedev(major, minor) == devNum) {
+						strlcpy(realSysName, sysEntry->d_name,
+							sizeof(realSysName));
+						break;
+					}
+				}
+			}
+		}
+		closedir(sysDir);
+	}
+
+	if (realSysName[0] == '\0')
+		return B_ENTRY_NOT_FOUND;
+
+	strlcpy(devName, realSysName, sizeof(devName));
 
 	char sysPath[PATH_MAX];
 	snprintf(sysPath, sizeof(sysPath), "%s/%s", SYS_BLOCK_PATH, devName);

@@ -248,6 +248,8 @@ _kern_open_virtual_ref(vref_id id, const char* name,
 		return fd;
 
 	int retFd = openat(fd, name, openMode, perms);
+	if (retFd < 0 && errno == EISDIR)
+		retFd = openat(fd, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
 	close(fd);
 	return (retFd < 0) ? -errno : retFd;
 }

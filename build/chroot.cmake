@@ -18,6 +18,11 @@ if(VITRUVIAN_CHROOT_BUILD)
 
     message(STATUS "Chroot build: ${VITRUVIAN_CHROOT_PATH}")
 
+    if(CMAKE_CROSSCOMPILING)
+        message(STATUS "Using toolchain file")
+        return()
+    endif()
+
     # Full sysroot: redirects gcc's implicit header/library search into the chroot
     set(CMAKE_SYSROOT "${VITRUVIAN_CHROOT_PATH}")
 

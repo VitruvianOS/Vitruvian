@@ -12,14 +12,13 @@ add_subdirectory(rc)
 
 UsePrivateHeaders(GLOBAL app interface libroot kernel shared storage support system tracker)
 
-# No extra libs needed
 Application(catarea    SOURCES catarea.c)
 Application(chop       SOURCES chop.c)
 Application(clear      SOURCES clear.c)
 Application(driveinfo  SOURCES driveinfo.c)
 Application(error      SOURCES error.c)
 Application(finddir    SOURCES finddir.c)
-Application(fortune    SOURCES fortune.c    RDEF fortune.rdef)
+Application(fortune_vos    SOURCES fortune_vos.c    RDEF fortune_vos.rdef)
 Application(get_driver_settings SOURCES get_driver_settings.cpp)
 Application(hd         SOURCES hd.c)
 Application(listarea   SOURCES listarea.c)
@@ -30,7 +29,6 @@ Application(lsindex    SOURCES lsindex.cpp)
 Application(mount      SOURCES mount.c)
 Application(prio       SOURCES prio.c)
 Application(printenv   SOURCES printenv.c)
-Application(ps         SOURCES ps.c)
 Application(release    SOURCES release.c)
 Application(rescan     SOURCES rescan.c)
 Application(rmattr     SOURCES rmattr.cpp)
@@ -38,10 +36,6 @@ Application(rmindex    SOURCES rmindex.cpp)
 Application(system_time SOURCES system_time.cpp)
 Application(unchop     SOURCES unchop.c)
 Application(unmount    SOURCES unmount.c)
-Application(vmstat     SOURCES vmstat.cpp)
-
-# ncurses
-Application(watch      SOURCES watch.c     LIBS ncurses)
 
 # be (auto-linked, no extra libs)
 Application(beep       SOURCES beep.cpp)
@@ -68,13 +62,9 @@ Application(trash      SOURCES trash.cpp)
 Application(version    SOURCES version.cpp)
 Application(WindowShade SOURCES WindowShade.cpp)
 
-# be + shared
-# Application(launch_roster SOURCES launch_roster.cpp LIBS shared)  # BLaunchRoster not yet implemented
-
 # be + supc++ (supc++ auto-linked on Linux)
 Application(alert          SOURCES alert.cpp)
 Application(dstcheck       SOURCES dstcheck.cpp       LIBS localestub  RDEF dstcheck.rdef)
-#Application(eject          SOURCES eject.cpp)  # needs device/scsi.h (not yet ported)
 Application(hey            SOURCES hey.cpp             RDEF hey.rdef)
 Application(reindex        SOURCES reindex.cpp)
 Application(resattr        SOURCES resattr.cpp)
@@ -86,11 +76,9 @@ Application(spybmessage    SOURCES spybmessage.cpp)
 Application(urlwrapper     SOURCES urlwrapper.cpp      RDEF urlwrapper.rdef)
 
 # be + bnetapi
-#Application(open           SOURCES open.cpp)
-#Application(waitfor        SOURCES waitfor.cpp)
 Application(checkitout     SOURCES checkitout.cpp       LIBS tracker  RDEF checkitout.rdef)
 
-# be + stdc++ (stdc++ auto-linked on Linux)
+# be + stdc++
 Application(copyattr       SOURCES copyattr.cpp)
 Application(diff_zip       SOURCES diff_zip.cpp)
 Application(mimeset        SOURCES mimeset.cpp          RDEF mimeset.rdef)

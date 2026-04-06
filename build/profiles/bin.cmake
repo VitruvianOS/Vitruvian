@@ -1,4 +1,4 @@
-set(BIN_DIRECTORY
+	set(BIN_DIRECTORY
 	addattr
 	keystore
 	linkcatkeys
@@ -8,13 +8,10 @@ set(BIN_DIRECTORY
 	rc
 	catarea
 	chop
-	clear
 	driveinfo
-	error
 	finddir
-	fortune
 	get_driver_settings
-	hd
+	fortune_vos
 	listarea
 	listimage
 	listport
@@ -23,7 +20,6 @@ set(BIN_DIRECTORY
 	mount
 	prio
 	printenv
-	ps
 	release
 	rescan
 	rmattr
@@ -31,8 +27,6 @@ set(BIN_DIRECTORY
 	system_time
 	unchop
 	unmount
-	vmstat
-	watch
 	beep
 	catattr
 	clipboard

@@ -10,7 +10,7 @@
 
 
 /* ATM we don't define ssize_t for GCC2 */
-#if __GNUC__ > 2 && !defined(__ssize_t__)
+#if __GNUC__ > 2 && !defined(__ssize_t__) && defined(__x86_64__)
 #	define __ssize_t__
 typedef long signed int	ssize_t;
 #endif

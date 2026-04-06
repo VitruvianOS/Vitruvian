@@ -30,6 +30,7 @@
 #include <ScrollView.h>
 
 #include <algorithm>
+#include <cmath>
 
 #include "FractalEngine.h"
 

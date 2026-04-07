@@ -3,6 +3,7 @@
  * Distributed under the terms of the MIT License.
  *
  * Authors:
+ *		Dario Casalinuovo
  *		Tyler Dauwalder
  *		Axel Dörfler, axeld@pinc-software.de
  *		Ingo Weinhold, bonefish@users.sf.net
@@ -12,6 +13,8 @@
 #include <Path.h>
 
 #include <new>
+#include <sys/stat.h>
+#include <string.h>
 
 #include <Directory.h>
 #include <Entry.h>
@@ -408,15 +411,12 @@ BPath::TypeCode() const
 ssize_t
 BPath::FlattenedSize() const
 {
-	ssize_t size = flattened_entry_ref_size;
-	BEntry entry;
-	entry_ref ref;
-	if (InitCheck() == B_OK
-		&& entry.SetTo(Path()) == B_OK
-		&& entry.GetRef(&ref) == B_OK) {
-		size += strlen(ref.name) + 1;
-	}
-	return size;
+	if (InitCheck() != B_OK || fName == NULL)
+		return flattened_entry_ref_size;
+
+	const char* leaf = strrchr(fName, '/');
+	leaf = (leaf != NULL) ? leaf + 1 : fName;
+	return flattened_entry_ref_size + strlen(leaf) + 1;
 }
 
 
@@ -437,25 +437,43 @@ BPath::Flatten(void* buffer, ssize_t size) const
 	if (status != B_OK)
 		return status;
 
-	// convert the path to an entry_ref
-	BEntry entry;
-	entry_ref ref;
-	status = entry.SetTo(Path());
-	if (status == B_OK)
-		status = entry.GetRef(&ref);
-	if (status != B_OK)
-		return status;
+	// BPath already holds the resolved path string — use it directly.
+	// Stat the parent directory to get real (st_dev, st_ino) so the flattened
+	// form is stable across processes and survives persistence (no vref IDs).
+	// This is a Vitruvian change. Originally BPath used the dev/node pair.
+	const char* path = Path();
+	if (path == NULL)
+		return B_NO_INIT;
 
-	// store the entry_ref in the buffer — use vref IDs directly, as they are
-	// the canonical identifiers in Vitruvian (real st_dev/st_ino is worthless).
-	// NOTE: no vref acquire here; the caller is responsible for keeping the
-	// underlying vref alive (e.g. by keeping the source BPath alive) until
-	// the buffer is consumed by Unflatten, which acquires its own reference.
+	// split into directory component and leaf name
+	const char* leaf = strrchr(path, '/');
+	char dirPath[B_PATH_NAME_LENGTH];
+	if (leaf != NULL && leaf != path) {
+		size_t dirLen = leaf - path;
+		if (dirLen >= sizeof(dirPath))
+			return B_NAME_TOO_LONG;
+		memcpy(dirPath, path, dirLen);
+		dirPath[dirLen] = '\0';
+		leaf++;
+	} else if (leaf == path) {
+		// path is exactly "/something" — parent is root "/"
+		dirPath[0] = '/';
+		dirPath[1] = '\0';
+		leaf++;
+	} else {
+		// no slash — relative path, parent is "."
+		strcpy(dirPath, ".");
+		leaf = path;
+	}
+
+	struct stat st;
+	if (::stat(dirPath, &st) != 0)
+		return -errno;
+
 	flattened_entry_ref& fref = *(flattened_entry_ref*)buffer;
-	fref.device = ref.device;
-	fref.directory = ref.directory;
-	if (ref.name)
-		strcpy(fref.name, ref.name);
+	fref.device = st.st_dev;
+	fref.directory = st.st_ino;
+	strcpy(fref.name, leaf);
 
 	return B_OK;
 }

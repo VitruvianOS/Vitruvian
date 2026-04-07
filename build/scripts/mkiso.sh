@@ -41,6 +41,7 @@ if [ -f $basedir/image_tree/image/live/filesystem.squashfs ]; then
 fi 
 
 sudo chroot $basedir/image_tree/chroot /bin/bash -c "echo "vitruvian" > /etc/hostname &\
+apt remove -y vos nexus-dkms || true && \
 apt-get install -y dkms build-essential linux-headers-$imagekernelversion && \
 apt install -y -f --reinstall /tmp/*.deb && \
 depmod -v $imagekernelversion && echo 'root:live' | chpasswd; exit"

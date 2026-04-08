@@ -77,7 +77,7 @@ _kern_open_attr_dir(int fd, const char *path, bool traverseLeafLink)
 
 	// If path is provided, open the file
 	if (path != NULL) {
-		int flags = O_RDONLY;
+		int flags = O_RDONLY | O_CLOEXEC;
 		if (!traverseLeafLink)
 			flags |= O_NOFOLLOW;
 		targetFd = open(path, flags);

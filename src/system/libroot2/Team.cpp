@@ -58,12 +58,12 @@ OpenNexusDevices()
 			gNexus = atoi(nexusFdEnv);
 			unsetenv("__VITRUVIAN_NEXUS_FD");
 		} else {
-			gNexus = open("/dev/nexus", O_RDWR);
+			gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
 		}
 	}
 
 	if (gNexusSem < 0)
-		gNexusSem = open("/dev/nexus_sem", O_RDWR);
+		gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
 	if (gNexusArea < 0)
 		gNexusArea = open("/dev/nexus_area", O_RDWR | O_CLOEXEC);
 	if (gNexusVRef < 0)
@@ -182,7 +182,7 @@ Team::InitTeam()
 			unsetenv("__VITRUVIAN_NEXUS_FD");
 			TRACE("Team::InitTeam: using inherited nexus fd %d\n", gNexus);
 		} else {
-			gNexus = open("/dev/nexus", O_RDWR);
+			gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
 			if (gNexus < 0) {
 				printf("Can't open Nexus IPC\n");
 				exit(-1);
@@ -191,7 +191,7 @@ Team::InitTeam()
 	}
 
 	if (gNexusSem < 0) {
-		gNexusSem = open("/dev/nexus_sem", O_RDWR);
+		gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
 		if (gNexusSem < 0) {
 			printf("Can't open Nexus Sem\n");
 			exit(-1);
@@ -610,7 +610,7 @@ _get_team_info(team_id id, team_info* info, size_t size)
 
 	fclose(statusFile);
 
-	int cmdFd = open(commandProcPath, O_RDONLY);
+	int cmdFd = open(commandProcPath, O_RDONLY | O_CLOEXEC);
 	if (cmdFd >= 0) {
 		ssize_t n = read(cmdFd, buffer, sizeof(buffer) - 1);
 		if (n > 0) {

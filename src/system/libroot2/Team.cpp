@@ -358,15 +358,17 @@ Team::ReinitChildAtFork()
 		gUdev = NULL;
 	}
 
-	gNexus = open("/dev/nexus", O_RDWR);
+	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
 	if (gNexus < 0) {
 		printf("ReinitChildAtFork: Can't open Nexus IPC\n");
 		exit(1);
 	}
 
-	thread_id id = nexus_io(gNexus, NEXUS_THREAD_CLONE_EXECUTED, 1);
-	if (id < 0)
-		printf("clone failed (child)\n");
+	thread_id id = nexus_io(gNexus, NEXUS_THREAD_CLONE_EXECUTED, (void*)1);
+	if (id < 0) {
+		printf("ReinitChildAtFork: clone failed (%d)\n", (int)id);
+		exit(1);
+	}
 
 	gTeamOnce = PTHREAD_ONCE_INIT;
 	gPreinitDone = false;

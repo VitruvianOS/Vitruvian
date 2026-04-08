@@ -10,7 +10,7 @@
 
 namespace BPrivate {
 
-extern BCatalog gSystemCatalog;
+extern BCatalog* gSystemCatalog;
 
 }	// namespace BPrivate
 

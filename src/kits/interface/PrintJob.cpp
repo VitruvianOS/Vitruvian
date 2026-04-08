@@ -43,7 +43,7 @@ using BPrivate::gSystemCatalog;
 
 #undef B_TRANSLATE
 #define B_TRANSLATE(str) \
-	gSystemCatalog.GetString(B_TRANSLATE_MARK(str), "PrintJob")
+	gSystemCatalog->GetString(B_TRANSLATE_MARK(str), "PrintJob")
 
 
 /*!	Summary of spool file:

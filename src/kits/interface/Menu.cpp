@@ -59,7 +59,7 @@ using BPrivate::gSystemCatalog;
 
 #undef B_TRANSLATE
 #define B_TRANSLATE(str) \
-	gSystemCatalog.GetString(B_TRANSLATE_MARK(str), "Menu")
+	gSystemCatalog->GetString(B_TRANSLATE_MARK(str), "Menu")
 
 
 using std::nothrow;
@@ -2987,8 +2987,11 @@ void
 BMenu::_DeleteMenuWindow()
 {
 	if (fCachedMenuWindow != NULL) {
-		fCachedMenuWindow->Lock();
-		fCachedMenuWindow->Quit();
+		// Lock() can return false if the window was already destroyed (e.g.
+		// by an app-shutdown quit racing with _TrackTask). Skip Quit() in
+		// that case — the window is already gone.
+		if (fCachedMenuWindow->Lock())
+			fCachedMenuWindow->Quit();
 		fCachedMenuWindow = NULL;
 	}
 }

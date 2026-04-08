@@ -43,7 +43,7 @@ string_for_rate(double rate, char* string, size_t stringSize)
 
 	BString format;
 	BStringFormat formatter(
-		gSystemCatalog.GetString(kFormats[index], B_TRANSLATION_CONTEXT, "units per second"));
+		gSystemCatalog->GetString(kFormats[index], B_TRANSLATION_CONTEXT, "units per second"));
 	formatter.Format(format, rate);
 
 	BString printedRate;

@@ -66,7 +66,7 @@ initialize_before(image_id)
 }
 
 
-extern "C" void __attribute__ ((constructor))
+extern "C" void __attribute__ ((constructor(200)))
 initialize_after(image_id)
 {
 	DBG(OUT("initialize_after()\n"));

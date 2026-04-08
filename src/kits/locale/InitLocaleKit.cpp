@@ -15,7 +15,7 @@
 
 namespace BPrivate {
 
-BCatalog gSystemCatalog;
+BCatalog* gSystemCatalog = nullptr;
 
 }
 
@@ -117,5 +117,6 @@ __initialize_locale_kit()
 {
 	SetupCatalogBasics();
 
-	MutableLocaleRoster::Default()->LoadSystemCatalog(&gSystemCatalog);
+	gSystemCatalog = new BCatalog();
+	MutableLocaleRoster::Default()->LoadSystemCatalog(gSystemCatalog);
 }

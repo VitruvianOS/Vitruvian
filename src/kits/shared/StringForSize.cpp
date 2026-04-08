@@ -44,7 +44,7 @@ string_for_size(double size, char* string, size_t stringSize)
 
 	BString format;
 	BStringFormat formatter(
-		gSystemCatalog.GetString(kFormats[index], B_TRANSLATION_CONTEXT, "size unit"));
+		gSystemCatalog->GetString(kFormats[index], B_TRANSLATION_CONTEXT, "size unit"));
 	formatter.Format(format, size);
 
 	BString printedSize;

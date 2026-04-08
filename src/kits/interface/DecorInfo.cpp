@@ -273,9 +273,9 @@ DecorInfo::_Init(bool isUpdate)
 		fVersion = 0.5;
 		fInitStatus = B_OK;
 
-		fName = gSystemCatalog.GetString(B_TRANSLATE_MARK("Default"),
+		fName = gSystemCatalog->GetString(B_TRANSLATE_MARK("Default"),
 			B_TRANSLATION_CONTEXT);
-		fShortDescription = gSystemCatalog.GetString(B_TRANSLATE_MARK(
+		fShortDescription = gSystemCatalog->GetString(B_TRANSLATE_MARK(
 				"Default Haiku window decorator."),
 			B_TRANSLATION_CONTEXT);
 

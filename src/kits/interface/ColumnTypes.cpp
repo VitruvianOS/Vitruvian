@@ -24,7 +24,7 @@ using BPrivate::gSystemCatalog;
 
 #undef B_TRANSLATE_COMMENT
 #define B_TRANSLATE_COMMENT(str, comment) \
-	gSystemCatalog.GetString(B_TRANSLATE_MARK_COMMENT(str, comment), \
+	gSystemCatalog->GetString(B_TRANSLATE_MARK_COMMENT(str, comment), \
 		B_TRANSLATION_CONTEXT, (comment))
 
 
@@ -443,7 +443,7 @@ BSizeColumn::DrawField(BField* _field, BRect rect, BView* parent)
 
 	BString format;
 	BStringFormat formatter(
-		gSystemCatalog.GetString(kFormats[index], B_TRANSLATION_CONTEXT, "size unit"));
+		gSystemCatalog->GetString(kFormats[index], B_TRANSLATION_CONTEXT, "size unit"));
 	formatter.Format(format, value);
 
 	if (index == 0) {

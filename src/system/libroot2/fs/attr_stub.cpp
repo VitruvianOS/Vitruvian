@@ -115,7 +115,13 @@ _kern_open_attr_dir(int fd, const char *path, bool traverseLeafLink)
 
 	// Create attribute directory structure
 	attr_dir* attrDir = new attr_dir;
-	attrDir->fd = needClose ? targetFd : dup(targetFd);
+	int storedFd = needClose ? targetFd : fcntl(targetFd, F_DUPFD_CLOEXEC, 0);
+	if (storedFd < 0) {
+		delete attrDir;
+		free(attrList);
+		return B_ERROR;
+	}
+	attrDir->fd = storedFd;
 	attrDir->currentIndex = 0;
 
 	// Parse attribute names (null-separated list) and filter for "user.beos." prefix

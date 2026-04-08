@@ -90,7 +90,7 @@ BBufferIO::ReadAt(off_t pos, void* buffer, size_t size)
 		}
 	}
 
-	size = min_c(size, fBufferUsed);
+	size = min_c(size, fBufferUsed - (size_t)(pos - fBufferStart));
 
 	// copy data from the cache to the given buffer
 	memcpy(buffer, fBuffer + pos - fBufferStart, size);

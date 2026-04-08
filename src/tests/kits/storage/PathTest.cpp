@@ -1310,61 +1310,46 @@ PathTest::FlattenableTest()
 	NextSubTest();
 	CPPUNIT_ASSERT( path.InitCheck() == B_NO_INIT );
 	CPPUNIT_ASSERT( path.IsFixedSize() == false );
-	CPPUNIT_ASSERT( path.TypeCode() == B_REF_TYPE );
-	CPPUNIT_ASSERT( path.AllowsTypeCode(B_REF_TYPE) == true );
-	CPPUNIT_ASSERT( path.AllowsTypeCode(B_STRING_TYPE) == false );
+	CPPUNIT_ASSERT( path.TypeCode() == B_STRING_TYPE );
+	CPPUNIT_ASSERT( path.AllowsTypeCode(B_STRING_TYPE) == true );
+	CPPUNIT_ASSERT( path.AllowsTypeCode(B_REF_TYPE) == false );
 	CPPUNIT_ASSERT( path.AllowsTypeCode(B_FLOAT_TYPE) == false );
-	path.Unset();	
+	path.Unset();
 	// initialized
 	NextSubTest();
-	CPPUNIT_ASSERT( path.SetTo("/system/home") == B_OK );
+	CPPUNIT_ASSERT( path.SetTo("/home") == B_OK );
 	CPPUNIT_ASSERT( path.IsFixedSize() == false );
-	CPPUNIT_ASSERT( path.TypeCode() == B_REF_TYPE );
-	CPPUNIT_ASSERT( path.AllowsTypeCode(B_REF_TYPE) == true );
-	CPPUNIT_ASSERT( path.AllowsTypeCode(B_STRING_TYPE) == false );
+	CPPUNIT_ASSERT( path.TypeCode() == B_STRING_TYPE );
+	CPPUNIT_ASSERT( path.AllowsTypeCode(B_STRING_TYPE) == true );
+	CPPUNIT_ASSERT( path.AllowsTypeCode(B_REF_TYPE) == false );
 	CPPUNIT_ASSERT( path.AllowsTypeCode(B_FLOAT_TYPE) == false );
-	path.Unset();	
+	path.Unset();
 
 	// 2. non-trivial methods
 	char buffer[1024];
-	// uninitialized
+	// uninitialized — flattens as single NUL byte
 	NextSubTest();
 	CPPUNIT_ASSERT( path.InitCheck() == B_NO_INIT );
 	ssize_t size = path.FlattenedSize();
-	CPPUNIT_ASSERT( size == sizeof(dev_t) + sizeof(ino_t) );
+	CPPUNIT_ASSERT( size == 1 );
 	CPPUNIT_ASSERT( path.Flatten(buffer, sizeof(buffer)) == B_OK );
-	CPPUNIT_ASSERT( path.Unflatten(B_REF_TYPE, buffer, size) == B_OK );
+	CPPUNIT_ASSERT( path.Unflatten(B_STRING_TYPE, buffer, size) == B_OK );
 	CPPUNIT_ASSERT( path.InitCheck() == B_NO_INIT );
 	path.Unset();
 	// some flatten/unflatten tests
 	NextSubTest();
-	const char *paths[] = { "/", "/system", "/system/home", "/system/home/Desktop",
-							"/system/home/non-existing" };
+	const char *paths[] = { "/", "/home", "/home/Desktop" };
 	int32 pathCount = sizeof(paths) / sizeof(const char*);
 	for (int32 i = 0; i < pathCount; i++) {
 		const char *pathName = paths[i];
-		// init the path and get an equivalent entry ref
 		CPPUNIT_ASSERT( path.SetTo(pathName) == B_OK );
-		BEntry entry;
-		CPPUNIT_ASSERT( entry.SetTo(pathName) == B_OK );
-		entry_ref ref;
-		CPPUNIT_ASSERT( entry.GetRef(&ref) == B_OK );
-		// flatten the path
-		struct flattened_ref { dev_t device; ino_t directory; char name[1]; };
 		size = path.FlattenedSize();
-		ssize_t expectedSize	// hehe, that's hacky ;-)
-			= (ssize_t)((flattened_ref*)NULL)->name + strlen(ref.name) + 1;
-		CPPUNIT_ASSERT( size ==  expectedSize);
+		CPPUNIT_ASSERT( size == (ssize_t)(strlen(pathName) + 1) );
 		CPPUNIT_ASSERT( path.Flatten(buffer, sizeof(buffer)) == B_OK );
-		// check the flattened data
-		const flattened_ref &fref = *(flattened_ref*)buffer;
-		CPPUNIT_ASSERT( ref.device == fref.device );
-		CPPUNIT_ASSERT( ref.directory == fref.directory );
-		CPPUNIT_ASSERT( strcmp(ref.name, fref.name) == 0 );
-		// unflatten the path 
+		CPPUNIT_ASSERT( strcmp(buffer, pathName) == 0 );
 		path.Unset();
 		CPPUNIT_ASSERT( path.InitCheck() == B_NO_INIT );
-		CPPUNIT_ASSERT( path.Unflatten(B_REF_TYPE, buffer, size) == B_OK );
+		CPPUNIT_ASSERT( path.Unflatten(B_STRING_TYPE, buffer, size) == B_OK );
 		CPPUNIT_ASSERT( path == pathName );
 		path.Unset();
 	}

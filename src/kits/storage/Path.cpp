@@ -378,18 +378,6 @@ BPath::operator=(const char* path)
 //	#pragma mark - BFlattenable functionality
 
 
-// that's the layout of a flattened entry_ref
-struct flattened_entry_ref {
-	dev_t device;
-	ino_t directory;
-	char name[1];
-};
-
-// base size of a flattened entry ref
-static const size_t flattened_entry_ref_size
-	= sizeof(dev_t) + sizeof(ino_t);
-
-
 // Overrides BFlattenable::IsFixedSize()
 bool
 BPath::IsFixedSize() const
@@ -402,118 +390,65 @@ BPath::IsFixedSize() const
 type_code
 BPath::TypeCode() const
 {
-	return B_REF_TYPE;
+	return B_STRING_TYPE;
 }
 
 
-// Gets the size of the flattened entry_ref struct that represents
-// the path in bytes.
+// Returns the size of the flattened path string in bytes (including NUL).
 ssize_t
 BPath::FlattenedSize() const
 {
 	if (InitCheck() != B_OK || fName == NULL)
-		return flattened_entry_ref_size;
+		return 1;  // single NUL byte for empty/unset path
 
-	const char* leaf = strrchr(fName, '/');
-	leaf = (leaf != NULL) ? leaf + 1 : fName;
-	return flattened_entry_ref_size + strlen(leaf) + 1;
+	return (ssize_t)strlen(fName) + 1;
 }
 
 
-// Converts the path of the object to an entry_ref and writes it into buffer.
+// Stores the path as a plain NUL-terminated string.
 status_t
 BPath::Flatten(void* buffer, ssize_t size) const
 {
 	if (buffer == NULL)
 		return B_BAD_VALUE;
-
-	// ToDo: Reimplement for performance reasons: Don't call FlattenedSize().
-	ssize_t flattenedSize = FlattenedSize();
-	if (flattenedSize < 0)
-		return flattenedSize;
-	if (size < flattenedSize)
+	if (size < FlattenedSize())
 		return B_BAD_VALUE;
-	status_t status = InitCheck();
-	if (status != B_OK)
-		return status;
 
-	// BPath already holds the resolved path string — use it directly.
-	// Stat the parent directory to get real (st_dev, st_ino) so the flattened
-	// form is stable across processes and survives persistence (no vref IDs).
-	// This is a Vitruvian change. Originally BPath used the dev/node pair.
-	const char* path = Path();
-	if (path == NULL)
-		return B_NO_INIT;
-
-	// split into directory component and leaf name
-	const char* leaf = strrchr(path, '/');
-	char dirPath[B_PATH_NAME_LENGTH];
-	if (leaf != NULL && leaf != path) {
-		size_t dirLen = leaf - path;
-		if (dirLen >= sizeof(dirPath))
-			return B_NAME_TOO_LONG;
-		memcpy(dirPath, path, dirLen);
-		dirPath[dirLen] = '\0';
-		leaf++;
-	} else if (leaf == path) {
-		// path is exactly "/something" — parent is root "/"
-		dirPath[0] = '/';
-		dirPath[1] = '\0';
-		leaf++;
-	} else {
-		// no slash — relative path, parent is "."
-		strcpy(dirPath, ".");
-		leaf = path;
+	if (InitCheck() != B_OK || fName == NULL) {
+		((char*)buffer)[0] = '\0';
+		return B_OK;
 	}
 
-	struct stat st;
-	if (::stat(dirPath, &st) != 0)
-		return -errno;
-
-	flattened_entry_ref& fref = *(flattened_entry_ref*)buffer;
-	fref.device = st.st_dev;
-	fref.directory = st.st_ino;
-	strcpy(fref.name, leaf);
-
+	// Vitruvian change: original Haiku implementation converted the path to an
+	// entry_ref (dev_t + ino_t + leaf name). On Linux there is no unprivileged
+	// way to reopen a file by (st_dev, st_ino), so that format cannot survive
+	// persistence or cross-reboot use. Store the path string directly instead.
+	memcpy(buffer, fName, strlen(fName) + 1);
 	return B_OK;
 }
 
 
-// Checks if type code is equal to B_REF_TYPE.
+// Checks if type code is B_STRING_TYPE.
 bool
 BPath::AllowsTypeCode(type_code code) const
 {
-	return code == B_REF_TYPE;
+	return code == B_STRING_TYPE;
 }
 
 
-// Initializes the object with the flattened entry_ref data from the passed
-// in buffer.
+// Initializes the object from a flattened path string.
 status_t
 BPath::Unflatten(type_code code, const void* buffer, ssize_t size)
 {
 	Unset();
-	status_t error = B_OK;
-	// check params
-	if (!(code == B_REF_TYPE && buffer != NULL
-		  && size >= (ssize_t)flattened_entry_ref_size)) {
-		error = B_BAD_VALUE;
-	}
-	if (error == B_OK) {
-		if (size == (ssize_t)flattened_entry_ref_size) {
-			// already Unset();
-		} else {
-			// reconstruct the entry_ref from the buffer
-			const flattened_entry_ref& fref
-				= *(const flattened_entry_ref*)buffer;
-			BString name(fref.name, size - flattened_entry_ref_size);
-			entry_ref ref(fref.device, fref.directory, name.String());
-			error = SetTo(&ref);
-		}
-	}
-	if (error != B_OK)
-		fCStatus = error;
-	return error;
+	if (code != B_STRING_TYPE || buffer == NULL || size < 1)
+		return fCStatus = B_BAD_VALUE;
+
+	const char* path = (const char*)buffer;
+	if (path[0] == '\0')
+		return B_OK;  // empty path — leave Unset
+
+	return fCStatus = SetTo(path);
 }
 
 

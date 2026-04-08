@@ -58,16 +58,7 @@ void* thread_run(void* data)
 
 	delete threadData;
 
-	// TODO at the moment that's the best we can do
-	// but this will be replaced by nexus automatic thread cleanup
-	struct nexus_thread_exchange exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.return_code = B_OK;
-	int err = nexus_io(nexus, NEXUS_THREAD_EXIT, &exchange);
-	if (err < 0) {
-		TRACE("thread_run: NEXUS_THREAD_EXIT failed\n");
-		return EINVAL;
-	}
+	nexus_io(nexus, NEXUS_THREAD_SET_RETURN_CODE, (void*)(intptr_t)error);
 	return NULL;
 }
 
@@ -149,17 +140,8 @@ rename_thread(thread_id thread, const char* newName)
 void
 exit_thread(status_t status)
 {
-	struct nexus_thread_exchange exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.return_code = status;
-
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	status_t err = nexus_io(nexus, NEXUS_THREAD_EXIT, &exchange);
-	if (status < 0 || err != B_OK) {
-		pthread_exit((void*)(intptr_t) EINVAL);
-		return;
-	}
-
+	nexus_io(nexus, NEXUS_THREAD_SET_RETURN_CODE, (void*)(intptr_t)status);
 	return pthread_exit(NULL);
 }
 

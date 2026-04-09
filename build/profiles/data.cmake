@@ -12,6 +12,8 @@ set(SYSTEMD_SERVICES
 
 install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)
 
+install(FILES data/etc/systemd/journald.conf.d/vitruvian.conf DESTINATION /etc/systemd/journald.conf.d/)
+
 #install(FILES data/etc/modules-load.d/befs.conf DESTINATION /etc/modules-load.d/)
 
 

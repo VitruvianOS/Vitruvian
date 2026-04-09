@@ -228,7 +228,6 @@ extern bool debug_is_debugged_team(team_id teamID);
 extern struct arch_debug_registers* debug_get_debug_registers(int32 cpu);
 
 extern status_t _user_kernel_debugger(const char *message);
-extern void _user_register_syslog_daemon(port_id port);
 extern void	_user_debug_output(const char *userString);
 
 #ifdef __cplusplus

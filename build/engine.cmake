@@ -222,7 +222,6 @@ function( UsePrivateHeaders target )
 		storage/mime
 		storage/sniffer
 		support
-		syslog_daemon
 		system
 		textencoding
 		tracker
@@ -278,7 +277,6 @@ function( UsePrivateBuildHeaders target )
 		storage/mime
 		storage/sniffer
 		support
-		syslog_daemon
 		system
 		textencoding
 		tracker

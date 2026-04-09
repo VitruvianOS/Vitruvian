@@ -179,6 +179,9 @@ DefaultCatalog::ReadFromFile(const char *path)
 }
 
 
+#ifndef __VOS__
+
+
 /*!	This method is not currently being used, but it may be useful in the
 	future...
 */
@@ -187,6 +190,9 @@ DefaultCatalog::ReadFromAttribute(const entry_ref &appOrAddOnRef)
 {
 	return B_NOT_SUPPORTED;
 }
+
+
+#endif
 
 
 status_t
@@ -228,6 +234,9 @@ DefaultCatalog::WriteToFile(const char *path)
 }
 
 
+#ifndef __VOS__
+
+
 /*!	This method is not currently being used, but it may be useful in the
 	future...
 */
@@ -238,11 +247,15 @@ DefaultCatalog::WriteToAttribute(const entry_ref &appOrAddOnRef)
 }
 
 
+#endif
+
+
 status_t
 DefaultCatalog::WriteToResource(const entry_ref &appOrAddOnRef)
 {
 	return B_NOT_SUPPORTED;
 }
+
 
 
 /*!	Writes mimetype, language-name and signature of catalog into the

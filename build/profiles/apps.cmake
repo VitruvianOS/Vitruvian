@@ -7,32 +7,20 @@ ImageInclude("/system/" ${CORE_APPLICATIONS})
 set(SYSTEM_APPS
 	AboutSystem
 	ActivityMonitor
-	#AutoRaise
-	Clock
 	DeskCalc
 	DiskProbe
 	DiskUsage
 	#DriveSetup
 	Expander
 	FirstBootPrompt
-	#FontDemo
-	Gradients
 	Installer
 	LaunchBox
 	Magnify
-	Mandelbrot
-	OverlayImage
-	#Pairs
 	People
-	PowerStatus
-	#ProcessController
-	Pulse
 	ResEdit
 	#Screenshot
 	ShowImage
 	StyledEdit
-	Sudoku
-	#Switcher
 	Terminal
 	#TextSearch
 	Workspaces
@@ -58,6 +46,15 @@ set(DESKBAR_DEMOS
 	Sudoku
 )
 
+set(DESKBAR_DEMOS_TARGETS
+	Gradients
+	Mandelbrot
+	Pairs
+	Sudoku
+)
+
+ImageInclude("/system/apps" ${DESKBAR_DEMOS_TARGETS})
+
 install(CODE "
 	file(MAKE_DIRECTORY \"\$ENV{DESTDIR}/system/data/deskbar/menu/Demos\")
 ")
@@ -74,8 +71,11 @@ set(DESKBAR_APPLETS
 	Clock
 	OverlayImage
 	PowerStatus
+	ProcessController
 	Pulse
 )
+
+ImageInclude("/system/apps" ${DESKBAR_APPLETS})
 
 install(CODE "
 	file(MAKE_DIRECTORY \"\$ENV{DESTDIR}/system/data/deskbar/menu/Desktop applets\")

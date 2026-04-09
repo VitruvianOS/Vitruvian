@@ -81,6 +81,18 @@ foreach(_app ${SYSTEM_APPS})
     )
 endforeach()
 
+foreach(_app ${DESKBAR_DEMOS_TARGETS})
+    list(APPEND _ARRANGE_CMDS
+        COMMAND cp -a "${_FLAT}/${_app}" "${_FINAL}/system/apps/${_app}"
+    )
+endforeach()
+
+foreach(_app ${DESKBAR_APPLETS})
+    list(APPEND _ARRANGE_CMDS
+        COMMAND cp -a "${_FLAT}/${_app}" "${_FINAL}/system/apps/${_app}"
+    )
+endforeach()
+
 foreach(_app ${CORE_APPLICATIONS})
     list(APPEND _ARRANGE_CMDS
         COMMAND cp -a "${_FLAT}/${_app}" "${_FINAL}/system/${_app}"
@@ -113,7 +125,7 @@ list(APPEND _ARRANGE_CMDS
 
 add_custom_target(apps_attrs ALL
     ${_ARRANGE_CMDS}
-    DEPENDS ${SYSTEM_APPS} ${CORE_APPLICATIONS} ${SYSTEM_SERVERS} ${SYSTEM_PREFERENCES_TARGETS}
+    DEPENDS ${SYSTEM_APPS} ${DESKBAR_DEMOS_TARGETS} ${DESKBAR_APPLETS} ${CORE_APPLICATIONS} ${SYSTEM_SERVERS} ${SYSTEM_PREFERENCES_TARGETS}
     COMMENT "Packaging app attrs"
 )
 

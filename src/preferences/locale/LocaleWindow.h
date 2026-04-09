@@ -46,6 +46,7 @@ private:
 			void				_InsertPreferredLanguage(LanguageListItem* item,
 									int32 atIndex = -1);
 			void				_Defaults();
+			void				_SyncToLinuxLocale();
 
 			BButton*			fRevertButton;
 			LanguageListView*	fLanguageListView;

@@ -8,6 +8,8 @@
 #include "LocaleWindow.h"
 
 #include <iostream>
+#include <cstdio>
+#include <cstdlib>
 
 #include <Alert.h>
 #include <Application.h>
@@ -517,6 +519,7 @@ LocaleWindow::_PreferredLanguagesChanged()
 	MutableLocaleRoster::Default()->SetPreferredLanguages(&preferredLanguages);
 
 	_EnableDisableLanguages();
+	_SyncToLinuxLocale();
 }
 
 
@@ -631,6 +634,7 @@ LocaleWindow::_Defaults()
 	preferredLanguages.AddString("language", "en");
 	MutableLocaleRoster::Default()->SetPreferredLanguages(&preferredLanguages);
 	_SetPreferredLanguages(preferredLanguages);
+	_SyncToLinuxLocale();
 
 	BFormattingConventions conventions("en_US");
 	MutableLocaleRoster::Default()->SetDefaultFormattingConventions(
@@ -643,7 +647,65 @@ LocaleWindow::_Defaults()
 		if (superitem != NULL && !superitem->IsExpanded())
 			fConventionsListView->Expand(superitem);
 		fConventionsListView->Select(fConventionsListView->IndexOf(
-				fDefaultConventionsItem));
+			fDefaultConventionsItem));
 		fConventionsListView->ScrollToSelection();
+ 	}
+ }
+
+
+void
+LocaleWindow::_SyncToLinuxLocale()
+{
+	BMessage preferredLanguages;
+	BLocaleRoster::Default()->GetPreferredLanguages(&preferredLanguages);
+
+	BString langCode;
+	if (preferredLanguages.FindString("language", 0, &langCode) != B_OK)
+		return;
+
+	BString linuxLocale;
+	if (langCode.Length() > 2) {
+		linuxLocale.SetToFormat("%s.UTF-8", langCode.String());
+	} else {
+		const char* countryCode = NULL;
+		char c0 = tolower(langCode.ByteAt(0));
+		char c1 = tolower(langCode.ByteAt(1));
+		int key = (c0 << 8) | c1;
+		switch (key) {
+			case 'be': countryCode = "BY"; break;
+			case 'cs': countryCode = "CZ"; break;
+			case 'da': countryCode = "DK"; break;
+			case 'el': countryCode = "GR"; break;
+			case 'en': countryCode = "GB"; break;
+			case 'hi': countryCode = "IN"; break;
+			case 'ja': countryCode = "JP"; break;
+			case 'ko': countryCode = "KR"; break;
+			case 'nb': countryCode = "NO"; break;
+			case 'pa': countryCode = "PK"; break;
+			case 'sv': countryCode = "SE"; break;
+			case 'uk': countryCode = "UA"; break;
+			case 'zh': countryCode = "CN"; break;
+			case 'de': case 'es': case 'fi': case 'fr': case 'hr':
+			case 'hu': case 'it': case 'lt': case 'nl': case 'pl':
+			case 'pt': case 'ro': case 'ru': case 'sk':
+				countryCode = langCode.String();
+				break;
+		}
+
+		if (countryCode != NULL)
+			linuxLocale.SetToFormat("%s_%s.UTF-8", langCode.String(), countryCode);
+		else
+			linuxLocale.SetToFormat("%s.UTF-8", langCode.String());
 	}
+
+	BString content;
+	content.SetToFormat("LANG=%s\n", linuxLocale.String());
+
+	FILE* fp = fopen("/etc/default/locale", "w");
+	if (fp != NULL) {
+		fputs(content.String(), fp);
+		fclose(fp);
+	}
+
+	setenv("LANG", linuxLocale.String(), 1);
 }

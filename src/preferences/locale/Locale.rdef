@@ -120,9 +120,9 @@ resource vector_icon {
 	$"0209024065C80000000000004065C8C69779BF1CDB"
 };
 
-resource app_signature "application/x-vnd.Haiku-Locale";
+resource app_signature "application/x-vnd.Vitruvian-Locale";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Locale:System name:Locale";
+resource app_name_catalog_entry "x-vnd.Vitruvian-Locale:System name:Locale";
 
 resource app_version {
 	major  = 1,

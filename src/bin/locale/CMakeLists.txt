@@ -7,6 +7,8 @@
 #	LIBS localestub
 #)
 
+# linkcatkeys is in src/tools/locale for buildtools mode
+
 Application(linkcatkeys
 	SOURCES
 	linkcatkeys.cpp
@@ -22,7 +24,6 @@ Application(locale
 	locale.cpp
 )
 
-#UsePrivateHeaders(collectcatkeys locale shared)
 UsePrivateHeaders(linkcatkeys locale shared)
 UsePrivateHeaders(dumpcatalog locale shared)
 UsePrivateHeaders(locale locale shared)

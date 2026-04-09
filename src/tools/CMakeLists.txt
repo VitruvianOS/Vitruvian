@@ -1,3 +1,5 @@
+if(NOT BUILDTOOLS_MODE STREQUAL "1")
+
 UsePrivateHeaders(GLOBAL app storage support shared)
 
 #Application(cpuidtool                 SOURCES cpuidtool.c)
@@ -9,9 +11,15 @@ UsePrivateHeaders(GLOBAL app storage support shared)
 #Application(rm_attrs                  SOURCES rm_attrs.cpp)
 
 add_subdirectory(cppunit)
+add_subdirectory(locale)
 #add_subdirectory(hvif2png)
-#add_subdirectory(locale)      # missing HashMapCatalog.cpp
 #add_subdirectory(MsgSpy)
 #add_subdirectory(restest)
 #add_subdirectory(translation)
 #add_subdirectory(unflatten)
+
+else()
+
+add_subdirectory(locale)
+
+endif()

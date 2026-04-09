@@ -1,3 +1,4 @@
+if(BUILDTOOLS_MODE STREQUAL "1")
 
 set (APP_SOURCES ${KITS_SOURCES}/app/)
 
@@ -11,3 +12,5 @@ target_sources(be_build PRIVATE
  	${APP_SOURCES}MessageUtils.cpp
  	${APP_SOURCES}TypeConstants.cpp
 )
+
+endif()

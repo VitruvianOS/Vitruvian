@@ -1,68 +1,64 @@
 #!/bin/sh
 set -e
 
-basedir=`realpath ./`
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
 
-bold=$(tput bold)
-normal=$(tput sgr0)
+. "$LIB_DIR/common.sh"
+. "$LIB_DIR/packages.sh"
+. "$LIB_DIR/chroot.sh"
 
-echo  ${bold}Prepare Debian bootstrap and install packages...
-echo ${normal}
+CHROOT_BUILD=0
+ARCH=""
 
-if [ -d "$basedir/image_tree/chroot" ]; then
-  ts=$(date +%Y%m%d-%H%M%S)
-  backup="$basedir/image_tree/chroot.old-$ts"
-  echo "Found existing chroot, moving to $backup"
-  sudo umount -l $basedir/image_tree/chroot/proc 2>/dev/null || true
-  sudo umount -l $basedir/image_tree/chroot/sys 2>/dev/null || true
-  sudo umount -l $basedir/image_tree/chroot/dev/pts 2>/dev/null || true
-  sudo umount -l $basedir/image_tree/chroot/dev 2>/dev/null || true
-  for libdir in lib lib64 usr/lib; do
-    if mountpoint -q "$basedir/image_tree/chroot/$libdir"; then
-      sudo umount -l "$basedir/image_tree/chroot/$libdir"
-    fi
-  done
-  sudo mv "$basedir/image_tree/chroot" "$backup"
-fi
+usage() {
+    cat <<'EOF'
+Usage: setupenv.sh [options]
 
-mkdir -p $basedir/image_tree
-sudo debootstrap --arch=amd64 --variant=minbase trixie $basedir/image_tree/chroot http://deb.debian.org/debian/
+Options:
+  --chroot-build    Create a chroot for cross/arch isolation build
+  --arch=ARCH       Target architecture: amd64, arm64, arm32, riscv64 (default: amd64)
+  --help            Show this help
 
-sudo mount -t proc / $basedir/image_tree/chroot/proc
-sudo mount --rbind /sys $basedir/image_tree/chroot/sys
-sudo mount --make-rslave $basedir/image_tree/chroot/sys
-sudo mount --rbind /dev $basedir/image_tree/chroot/dev
-sudo mount --make-rslave $basedir/image_tree/chroot/dev
+Without --chroot-build, sets up for a native (host) build.
+EOF
+    exit 0
+}
 
-for libdir in lib lib64 usr/lib; do
-  if [ -d "$basedir/image_tree/chroot/$libdir" ]; then
-    sudo mount --bind "$basedir/image_tree/chroot/$libdir" "$basedir/image_tree/chroot/$libdir"
-  fi
+for arg in "$@"; do
+    case "$arg" in
+        --chroot-build)
+            CHROOT_BUILD=1
+            ;;
+        --arch=*)
+            ARCH="${arg#*=}"
+            ;;
+        --help|-h)
+            usage
+            ;;
+        *)
+            die "Unknown option: $arg"
+            ;;
+    esac
 done
 
-cleanup() {
-  echo "Unmounting chroot mounts..."
-  sudo umount -l $basedir/image_tree/chroot/proc || true
-  sudo umount -l $basedir/image_tree/chroot/sys || true
-  sudo umount -l $basedir/image_tree/chroot/dev || true
-  for libdir in lib lib64 usr/lib; do
-    if mountpoint -q "$basedir/image_tree/chroot/$libdir"; then
-      sudo umount -l "$basedir/image_tree/chroot/$libdir"
-    fi
-  done
-}
-trap cleanup EXIT
+ARCH="${ARCH:-amd64}"
 
-BASE_PACKAGES="apt-utils dialog linux-image-rt-amd64 live-boot systemd-sysv network-manager net-tools wireless-tools curl openssh-client procps vim-tiny libbinutils openssh-server locales xfsprogs fortune-mod ncurses-bin"
+case "$ARCH" in
+    amd64|arm64|arm32|riscv64) ;;
+    *) die "Unsupported architecture: $ARCH (use amd64, arm64, arm32, riscv64)" ;;
+esac
 
-# Development packages needed for isolated chroot builds
-DEV_PACKAGES="linux-headers-rt-amd64 pkg-config libc6-dev libstdc++-14-dev libfreetype6-dev libicu-dev libdrm-dev libinput-dev libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev libblkid-dev libbacktrace-dev libfl-dev libncurses-dev libgl-dev libegl-dev libgbm-dev"
+BASEDIR="$(realpath ./)"
 
-sudo chroot $basedir/image_tree/chroot /bin/bash -c "echo 'vitruvian' > /etc/hostname && \
-apt update && apt install -y --no-install-recommends $BASE_PACKAGES $DEV_PACKAGES $DEBUG_PACKAGES && \
-echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \
-exit"
+printf 'ARCH=%s\n' "$ARCH" > "$BASEDIR/buildstate.conf"
 
-ls ./image_tree/chroot/lib/modules | head -n1 > imagekernelversion.conf
+if [ "$CHROOT_BUILD" -eq 1 ]; then
+    log_step "Setting up chroot build environment ($ARCH)..."
+    chroot_create "$BASEDIR" "$ARCH"
+else
+    log_step "Native build selected ($ARCH). No chroot created."
+    log_info "buildstate.conf written with ARCH=$ARCH"
+fi
 
-echo ${normal}
+log_info "Setup complete."

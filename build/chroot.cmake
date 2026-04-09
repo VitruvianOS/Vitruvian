@@ -23,10 +23,19 @@ if(VITRUVIAN_CHROOT_BUILD)
         return()
     endif()
 
-    # Full sysroot: redirects gcc's implicit header/library search into the chroot
+    set(VITRUVIAN_MULTIARCH_TRIPLE "x86_64-linux-gnu")
+    if(DEFINED VITRUVIAN_TARGET_ARCH)
+        if(VITRUVIAN_TARGET_ARCH STREQUAL "arm64")
+            set(VITRUVIAN_MULTIARCH_TRIPLE "aarch64-linux-gnu")
+        elseif(VITRUVIAN_TARGET_ARCH STREQUAL "arm" OR VITRUVIAN_TARGET_ARCH STREQUAL "arm32")
+            set(VITRUVIAN_MULTIARCH_TRIPLE "arm-linux-gnueabihf")
+        elseif(VITRUVIAN_TARGET_ARCH STREQUAL "riscv64")
+            set(VITRUVIAN_MULTIARCH_TRIPLE "riscv64-linux-gnu")
+        endif()
+    endif()
+
     set(CMAKE_SYSROOT "${VITRUVIAN_CHROOT_PATH}")
 
-    # Direct find_* to search chroot only (programs still from host)
     set(CMAKE_FIND_ROOT_PATH "${VITRUVIAN_CHROOT_PATH}")
     set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
     set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
@@ -36,27 +45,21 @@ if(VITRUVIAN_CHROOT_BUILD)
     set(HEADERS_PATH_BASE "${VITRUVIAN_CHROOT_PATH}/usr/include"
         CACHE PATH "Base path for system headers")
 
-    # pkg-config: point at chroot .pc files
     set(ENV{PKG_CONFIG_SYSROOT_DIR} "${VITRUVIAN_CHROOT_PATH}")
     set(ENV{PKG_CONFIG_LIBDIR}
-        "${VITRUVIAN_CHROOT_PATH}/usr/lib/x86_64-linux-gnu/pkgconfig:${VITRUVIAN_CHROOT_PATH}/usr/share/pkgconfig")
+        "${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}/pkgconfig:${VITRUVIAN_CHROOT_PATH}/usr/share/pkgconfig")
     set(ENV{PKG_CONFIG_PATH} "")
 
-    # Multiarch system headers (e.g. sys/uio.h, sys/types.h live here on Debian/Ubuntu)
-    include_directories(SYSTEM "${VITRUVIAN_CHROOT_PATH}/usr/include/x86_64-linux-gnu")
+    include_directories(SYSTEM "${VITRUVIAN_CHROOT_PATH}/usr/include/${VITRUVIAN_MULTIARCH_TRIPLE}")
 
-    # Linker search paths inside chroot
     link_directories(
-        "${VITRUVIAN_CHROOT_PATH}/usr/lib/x86_64-linux-gnu"
-        "${VITRUVIAN_CHROOT_PATH}/lib/x86_64-linux-gnu"
+        "${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
+        "${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
         "${VITRUVIAN_CHROOT_PATH}/usr/lib"
     )
 
-    # Binaries are installed into the live image where libs are in standard paths;
-    # skip RPATH to avoid host/chroot path conflicts in CMake's RPATH generator.
     set(CMAKE_SKIP_RPATH TRUE)
 
-    # Kernel headers from chroot image kernel
     if(NOT KERNEL_RELEASE)
         message(FATAL_ERROR "KERNEL_RELEASE not set. Pass -DKERNEL_RELEASE=<version>.")
     endif()
@@ -74,9 +77,4 @@ else()
         set(VITRUVIAN_KERNEL_HEADERS "/lib/modules/${KERNEL_RELEASE}/build"
             CACHE PATH "Kernel headers for nexus-dkms")
     endif()
-endif()
-
-# ARM64 cross-compilation: not supported yet
-if(VITRUVIAN_TARGET_ARCH STREQUAL "arm64")
-    message(FATAL_ERROR "ARM64 cross-compilation is not yet supported.")
 endif()

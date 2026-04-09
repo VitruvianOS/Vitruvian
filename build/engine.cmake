@@ -1,4 +1,4 @@
- #  Copyright 2019-2023, Dario Casalinuovo. All rights reserved.
+ #  Copyright 2019-2026, Dario Casalinuovo. All rights reserved.
  #  Distributed under the terms of the LGPL License.
 
 include(CMakeParseArguments)
@@ -7,10 +7,47 @@ include(build/defs.cmake)
 include(build/deps.cmake)
 include(build/headers.cmake)
 
-# TODO: Add macros for Catalog
 # TODO: Implement EnableWError( target )
 # TODO: Add possibility to set compiler defs for a target
 # TODO: Document macros
+
+macro( DoCatalogs signature subdir )
+	set( _catalogs_src "${CMAKE_SOURCE_DIR}/data/catalogs/${subdir}" )
+	if( NOT EXISTS "${_catalogs_src}" )
+		return()
+	endif()
+
+	file( GLOB _catkeys_files "${_catalogs_src}/*.catkeys" )
+	list( LENGTH _catkeys_files _catkeys_count )
+	if( _catkeys_count EQUAL 0 )
+		return()
+	endif()
+
+	set( _catalog_dir "${CMAKE_BINARY_DIR}/catalogs/${signature}" )
+	set( _linkcatkeys "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/tools/locale/linkcatkeys" )
+
+	foreach( _catkeys ${_catkeys_files} )
+		get_filename_component( _lang ${_catkeys} NAME_WE )
+		set( _catalog_output "${_catalog_dir}/${_lang}.catalog" )
+
+		add_custom_command(
+			OUTPUT "${_catalog_output}"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${_catalog_dir}"
+			COMMAND "${_linkcatkeys}" -s "${signature}" -l "${_lang}" -tf -o "${_catalog_output}" "${_catkeys}"
+			DEPENDS "${_linkcatkeys}" "${_catkeys}"
+			COMMENT "Building catalog ${signature}/${_lang}"
+		)
+
+		list( APPEND _catalog_outputs "${_catalog_output}" )
+	endforeach()
+
+	add_custom_target( catalogs_${signature} ALL DEPENDS ${_catalog_outputs} )
+
+	install( DIRECTORY "${_catalog_dir}/"
+		DESTINATION /system/data/locale/catalogs
+		FILES_MATCHING PATTERN "*.catalog"
+	)
+endmacro()
 
 function( CompileRdef target rdef_file )
 	cmake_parse_arguments(_ARG "STAGING" "" "" ${ARGN})

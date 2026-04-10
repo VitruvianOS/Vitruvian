@@ -1,15 +1,13 @@
 /*
- * Copyright 2005, Jérôme DUVAL. All rights reserved.
- * Distributed under the terms of the MIT License.
+ * Copyright 2024, Vitruvian OS.
+ * All rights reserved. Distributed under the terms of the MIT License.
  */
 #ifndef INSTALLER_APP_H
 #define INSTALLER_APP_H
 
 
 #include <Application.h>
-#include <Catalog.h>
 
-#include "EULAWindow.h"
 #include "InstallerWindow.h"
 
 
@@ -21,9 +19,6 @@ public:
 
 	virtual	void				ReadyToRun();
 	virtual	void				Quit();
-
-private:
-			EULAWindow*			fEULAWindow;
 };
 
 #endif // INSTALLER_APP_H

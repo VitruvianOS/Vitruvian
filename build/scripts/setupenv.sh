@@ -55,7 +55,7 @@ trap cleanup EXIT
 
 BASE_PACKAGES="apt-utils curl dialog libbinutils linux-image-rt-amd64 live-boot locales net-tools network-manager openssh-client openssh-server pipewire-audio pipewire-bin procps systemd-sysv vim-tiny wireless-tools wireplumber xfsprogs"
 # Development packages needed for isolated chroot builds
-DEV_PACKAGES="linux-headers-rt-amd64 pkg-config libc6-dev libstdc++-14-dev libfreetype6-dev libicu-dev libdrm-dev libinput-dev libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev libblkid-dev libbacktrace-dev libfl-dev libncurses-dev libgl-dev libegl-dev libgbm-dev"
+DEV_PACKAGES="linux-headers-rt-amd64 pkg-config libc6-dev libstdc++-14-dev libfreetype6-dev libicu-dev libdrm-dev libinput-dev libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev libblkid-dev libbacktrace-dev libfl-dev libncurses-dev libgl-dev libegl-dev libgbm-dev libxkbcommon-dev"
 
 sudo chroot $basedir/image_tree/chroot /bin/bash -c "echo 'vitruvian' > /etc/hostname && \
 apt update && apt install -y --no-install-recommends $BASE_PACKAGES $DEV_PACKAGES $DEBUG_PACKAGES && \

@@ -67,6 +67,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	XKBCOMMON
+	LIBRARIES	"xkbcommon"
+	PACKAGES	"libxkbcommon-dev"
+	RUNTIMES	"libxkbcommon0 (>= 1.0.0)"
+)
+
+DeclareDependency(
 	NOTO
 	RUNTIMES	"fonts-noto-core;fonts-noto-extra;fonts-noto-mono"
 )

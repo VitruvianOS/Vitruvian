@@ -1,17 +1,16 @@
 [Unit]
-Description=mount_server
+Description=Vitruvian mount_server
 Conflicts=getty@tty1.service
-After=registrar.service
+After=janus.service registrar.service
+Requires=janus.service registrar.service
 
 [Service]
-ExecStartPre=/bin/sleep 1
-ExecStart=/system/servers/mount_server
-StandardInput=tty-force
+Type=forking
+PIDFile=/run/vitruvian/mount_server.pid
+ExecStart=/system/servers/janus_launch mount_server
 StandardOutput=append:/var/log/mount_server.log
 StandardError=append:/var/log/mount_server.log
 Restart=no
-RestartSec=500ms
-StartLimitBurst=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target

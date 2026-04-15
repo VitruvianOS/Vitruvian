@@ -1,15 +1,16 @@
 [Unit]
-Description=registrar server daemon
+Description=Vitruvian registrar (app roster)
 Conflicts=getty@tty1.service
+After=janus.service
+Requires=janus.service
 
 [Service]
-ExecStart=/system/servers/registrar
-StandardInput=tty-force
+Type=forking
+PIDFile=/run/vitruvian/registrar.pid
+ExecStart=/system/servers/janus_launch registrar
 StandardOutput=append:/var/log/registrar.log
 StandardError=append:/var/log/registrar.log
 Restart=no
-RestartSec=500ms
-StartLimitBurst=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target

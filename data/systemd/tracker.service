@@ -1,16 +1,16 @@
 [Unit]
-Description=Tracker
+Description=Vitruvian Tracker (file manager)
 Conflicts=getty@tty1.service
-After=deskbar.service
+After=janus.service deskbar.service
+Requires=janus.service
 
 [Service]
-ExecStartPre=/bin/sleep 2
-ExecStart=/system/Tracker
-StandardInput=tty-force
+Type=forking
+PIDFile=/run/vitruvian/Tracker.pid
+ExecStart=/system/servers/janus_launch Tracker
 StandardOutput=append:/var/log/tracker.log
 StandardError=append:/var/log/tracker.log
 Restart=no
-RestartSec=500ms
 
 [Install]
 WantedBy=graphical.target

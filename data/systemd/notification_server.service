@@ -1,17 +1,15 @@
 [Unit]
-Description=notification_server
-Conflicts=getty@tty1.service
-After=input_server.service
+Description=Vitruvian notification_server
+After=janus.service app_server.service
+Requires=janus.service app_server.service
 
 [Service]
-ExecStartPre=/bin/sleep 1
-ExecStart=/system/servers/notification_server
-StandardInput=tty-force
+Type=forking
+PIDFile=/run/vitruvian/notification_server.pid
+ExecStart=/system/servers/janus_launch notification_server
 StandardOutput=append:/var/log/notification_server.log
 StandardError=append:/var/log/notification_server.log
 Restart=no
-RestartSec=500ms
-StartLimitBurst=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target

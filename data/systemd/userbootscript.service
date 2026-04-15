@@ -1,7 +1,6 @@
 [Unit]
-Description=User boot script
-#TODO add other services
-After=graphical.target registrar.service app_server.service NetworkManager.service
+Description=Vitruvian user boot script
+After=graphical.target tracker.service NetworkManager.service
 Wants=graphical.target
 
 [Service]

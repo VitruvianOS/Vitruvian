@@ -1,6 +1,7 @@
 list (APPEND SERVICES_LIST "${_SYSTEMD_SERVICES}")
 
 set(SYSTEMD_SERVICES
+  data/systemd/janus.service
   data/systemd/registrar.service
   data/systemd/mount_server.service
   data/systemd/app_server.service
@@ -8,6 +9,7 @@ set(SYSTEMD_SERVICES
   data/systemd/notification_server.service
   data/systemd/deskbar.service
   data/systemd/tracker.service
+  data/systemd/userbootscript.service
 )
 
 install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)

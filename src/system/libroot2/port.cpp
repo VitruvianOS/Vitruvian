@@ -103,9 +103,32 @@ status_t
 _kern_get_next_port_info(team_id team, int32* _cookie,
 	struct port_info* info)
 {
-	UNIMPLEMENTED();
-	// Maybe this could be read from proc
-	return B_ERROR;
+	if (_cookie == NULL || info == NULL)
+		return B_BAD_VALUE;
+
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (nexus < 0)
+		return B_BAD_PORT_ID;
+
+	struct nexus_get_next_port req;
+	memset(&req, 0, sizeof(req));
+	req.team   = (pid_t)team;
+	req.cookie = *_cookie;
+
+	int ret = nexus_io(nexus, NEXUS_GET_NEXT_PORT_FOR_TEAM, &req);
+	if (ret != B_OK)
+		return ret;
+
+	info->port        = req.info.port;
+	info->team        = req.info.team;
+	info->capacity    = req.info.capacity;
+	info->queue_count = req.info.queue_count;
+	info->total_count = req.info.total_count;
+	strlcpy(info->name, req.info.name, sizeof(info->name));
+
+	// Advance cookie to the port id we just returned
+	*_cookie = req.info.port;
+	return B_OK;
 }
 
 

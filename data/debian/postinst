@@ -167,4 +167,4 @@ fi
 
 # Enable system services
 
-systemctl enable registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service
+systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript.service

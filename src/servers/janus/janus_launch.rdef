@@ -1,0 +1,19 @@
+/*
+ * janus_launch.rdef
+ */
+
+resource app_signature "application/x-vnd.vitruvian-janus-launch";
+
+resource app_flags B_BACKGROUND_APP;
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	variety = B_APPV_ALPHA,
+	internal = 0,
+
+	short_info = "janus_launch",
+	long_info = "janus_launch ©2026 Vitruvian"
+};

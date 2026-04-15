@@ -1,3 +1,4 @@
+add_subdirectory(janus)
 add_subdirectory(app)
 add_subdirectory(input)
 add_subdirectory(mount)

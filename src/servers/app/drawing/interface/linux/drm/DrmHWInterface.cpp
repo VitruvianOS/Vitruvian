@@ -44,7 +44,6 @@ DrmHWInterface::DrmHWInterface()
 	HWInterface(),
 	fFrontBuffer(NULL),
 	fBackBuffer(NULL),
-	fEventStream(NULL),
 	fSeat(NULL),
 	fDeviceId(-1),
 	fSessionActive(false),
@@ -54,7 +53,6 @@ DrmHWInterface::DrmHWInterface()
 	fEventThread(-1),
 	fSessionLock("drm session lock"),
 	fSessionSem(create_sem(0, "drm session sem")),
-	fSeatLock("drm seat lock"),
 	fUdev(NULL),
 	fUdevMonitor(NULL),
 	fUdevFd(-1)
@@ -103,9 +101,6 @@ DrmHWInterface::_OnSessionEnable()
 		release_sem(fSessionSem);
 
 		_RestoreDisplay();
-
-		if (fEventStream)
-			fEventStream->Resume();
 		return;
 	}
 
@@ -150,9 +145,6 @@ DrmHWInterface::_OnSessionEnable()
 	fFrontBuffer = new DrmBuffer(fFd, get_dev(), false);
 	fBackBuffer  = new DrmBuffer(fFd, get_dev(), true);
 
-	fEventStream = new LibInputEventStream(get_dev()->width, get_dev()->height, fSeat);
-	fEventStream->SetSeatLock(&fSeatLock);
-
 	// Set up udev hotplug monitor for DRM connectors
 	fUdev = udev_new();
 	if (fUdev) {
@@ -182,9 +174,6 @@ void
 DrmHWInterface::_OnSessionDisable()
 {
 	printf("Session disabled\n");
-
-	if (fEventStream)
-		fEventStream->Suspend();
 
 	{
 		BAutolock _(fSessionLock);
@@ -227,11 +216,7 @@ DrmHWInterface::_EventThreadMain()
 	int seatErrorCount = 0;
 
 	while (fRunning) {
-		int seat_fd;
-		{
-			BAutolock _(fSeatLock);
-			seat_fd = fSeat ? libseat_get_fd(fSeat) : -1;
-		}
+		int seat_fd = fSeat ? libseat_get_fd(fSeat) : -1;
 
 		if (seat_fd < 0) {
 			seatErrorCount++;
@@ -258,7 +243,6 @@ DrmHWInterface::_EventThreadMain()
 		int ret = poll(pfds, nfds, 100);
 		if (ret > 0) {
 			if (pfds[0].revents & (POLLIN | POLLHUP)) {
-				BAutolock _(fSeatLock);
 				int dret = libseat_dispatch(fSeat, 0);
 				if (dret < 0 && !active)
 					printf("libseat_dispatch: error\n");
@@ -300,7 +284,6 @@ DrmHWInterface::~DrmHWInterface()
 
 	delete fFrontBuffer;
 	delete fBackBuffer;
-	delete fEventStream;
 }
 
 
@@ -325,7 +308,8 @@ DrmHWInterface::Initialize()
 EventStream*
 DrmHWInterface::CreateEventStream()
 {
-	return fEventStream;
+	// Input is handled by input_server add-ons via InputServerStream.
+	return NULL;
 }
 
 

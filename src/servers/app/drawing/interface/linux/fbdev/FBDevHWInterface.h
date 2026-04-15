@@ -8,7 +8,6 @@
 
 #include "HWInterface.h"
 
-#include "LibInputEventStream.h"
 #include "TTy.h"
 
 #include <linux/fb.h>
@@ -61,8 +60,6 @@ public:
 	virtual	status_t			CopyBackToFront(const BRect& frame);
 
 private:
-			LibInputEventStream* fEventStream;
-
 			FBDevBuffer*		fBackBuffer;
 			FBDevBuffer*		fFrontBuffer;
 

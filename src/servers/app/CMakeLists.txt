@@ -119,7 +119,7 @@ Server(
 		#drawing/interface/linux/fbdev/FBDevBuffer.cpp
 		#drawing/interface/linux/fbdev/TTy.cpp
 
-		drawing/interface/linux/LibInputEventStream.cpp
+		#drawing/interface/linux/LibInputEventStream.cpp
 		#drawing/interface/linux/LibEvdevEventStream.cpp
 
 		stackandtile/SATDecorator.cpp
@@ -130,7 +130,7 @@ Server(
 		stackandtile/Tiling.cpp
 
 	LIBS localestub shared agg icon linprog ${FREETYPE_LIBRARY}
-		${INPUT_LIBRARIES} ${UDEV_LIBRARIES} ${DRM_LIBRARIES} ${SEAT_LIBRARIES}
+		${UDEV_LIBRARIES} ${DRM_LIBRARIES} ${SEAT_LIBRARIES}
 		${EVDEV_LIBRARIES}
 
 	RDEF app_server.rdef

@@ -17,7 +17,6 @@ extern "C" {
 
 #include "DrmBuffer.h"
 #include "HWInterface.h"
-#include "LibInputEventStream.h"
 #include "TTy.h"
 
 
@@ -96,8 +95,6 @@ private:
 
 			display_mode		fDisplayMode;
 
-			LibInputEventStream* fEventStream;
-
 			struct libseat*		fSeat;
 			int					fDeviceId;
 			volatile bool		fSessionActive;
@@ -108,7 +105,6 @@ private:
 			thread_id			fEventThread;
 			BLocker				fSessionLock;
 			sem_id				fSessionSem;
-			BLocker				fSeatLock;
 
 			struct udev*		fUdev;
 			struct udev_monitor* fUdevMonitor;

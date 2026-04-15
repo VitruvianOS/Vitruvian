@@ -31,7 +31,7 @@ using std::nothrow;
 #else
 //#	include "SDLInterface.h"
 #	include "DrmHWInterface.h"
-#	include "FBDevHWInterface.h"
+//#	include "FBDevHWInterface.h"
 #endif
 #else
  #	include "ViewHWInterface.h"

@@ -130,7 +130,11 @@ enum command_code {
 	B_SILENT_RELAUNCH			= 'AREL',
 	B_OBSERVER_NOTICE_CHANGE	= 'NTCH',
 	B_CONTROL_INVOKED			= 'CIVK',
-	B_CONTROL_MODIFIED			= 'CMOD'
+	B_CONTROL_MODIFIED			= 'CMOD',
+
+	// Vitruvian seat session events (sent by janus on VT switch)
+	B_SEAT_ENABLED				= 'STEN',
+	B_SEAT_DISABLED				= 'STDS'
 
 	// Media Kit reserves all reserved codes starting in 'TRI'
 };

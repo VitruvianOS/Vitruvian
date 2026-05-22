@@ -31,7 +31,8 @@
  * which may even happen before R1 hits the streets.
  */
 
-#include "multimon.h"	// the usual: DANGER WILL, ROBINSON!
+// Radeon multi-monitor tunnel not available; all multimon UI is hidden at runtime.
+#include "multimon.h"
 
 
 

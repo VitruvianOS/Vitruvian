@@ -1,8 +1,8 @@
 Application(Screen
 	SOURCES
 	AlertWindow.cpp
+	compute_display_timing.cpp
 	MonitorView.cpp
-	multimon.cpp
 	RefreshSlider.cpp
 	RefreshWindow.cpp
 	ScreenApplication.cpp
@@ -13,3 +13,5 @@ Application(Screen
 	LIBS localestub
 	RDEF Screen.rdef
 )
+
+UsePrivateHeaders(Screen graphics/common preferences)

@@ -227,6 +227,7 @@ function( UsePrivateHeaders target )
 		tracker
 		net
 		screen_saver
+		preferences
 	)
 
 	foreach(arg IN LISTS ARGN)
@@ -282,6 +283,7 @@ function( UsePrivateBuildHeaders target )
 		tracker
 		net
 		screen_saver
+		preferences
 	)
 
 	foreach(arg IN LISTS ARGN)

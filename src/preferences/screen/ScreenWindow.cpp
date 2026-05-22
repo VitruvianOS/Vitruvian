@@ -64,7 +64,8 @@
  * It will be replaced as soon as we introduce an updated accelerant interface
  * which may even happen before R1 hits the streets.
  */
-#include "multimon.h"	// the usual: DANGER WILL, ROBINSON!
+// Radeon multi-monitor tunnel not available; all multimon UI is hidden at runtime.
+#include "multimon.h"
 
 
 #undef B_TRANSLATION_CONTEXT

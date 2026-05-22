@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <syscall.h>
+#include <unistd.h>
 #include <sys/wait.h>
 
 #include <list>
@@ -18,6 +19,7 @@
 
 #include "KernelDebug.h"
 #include "syscalls.h"
+#include <syscall_process_info.h>
 
 #include "../kernel/nexus/nexus/nexus.h"
 
@@ -36,9 +38,7 @@ static pthread_once_t gTeamOnce = PTHREAD_ONCE_INIT;
 static bool gPreinitDone = false;
 
 static int gNexus = -1;
-static int gNexusSem = -1;
 static int gNexusArea = -1;
-static int gNexusVRef = -1;
 static int gNexusNodeMonitor = -1;
 static struct udev* gUdev = NULL;
 
@@ -62,12 +62,10 @@ OpenNexusDevices()
 		}
 	}
 
-	if (gNexusSem < 0)
-		gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
 	if (gNexusArea < 0)
 		gNexusArea = open("/dev/nexus_area", O_RDWR | O_CLOEXEC);
-	if (gNexusVRef < 0)
-		gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
+	if (gNexusNodeMonitor < 0)
+		gNexusNodeMonitor = open("/dev/nexus_node_monitor", O_RDWR | O_CLOEXEC);
 
 	gPreinitDone = true;
 }
@@ -125,10 +123,6 @@ deinit_team()
 {
 	TRACE("deinit_team()\n");
 
-	if (gNexusSem >= 0) {
-		close(gNexusSem);
-		gNexusSem = -1;
-	}
 	if (gNexus >= 0) {
 		close(gNexus);
 		gNexus = -1;
@@ -136,10 +130,6 @@ deinit_team()
 	if (gNexusArea >= 0) {
 		close(gNexusArea);
 		gNexusArea = -1;
-	}
-	if (gNexusVRef >= 0) {
-		close(gNexusVRef);
-		gNexusVRef = -1;
 	}
 	if (gNexusNodeMonitor >= 0) {
 		close(gNexusNodeMonitor);
@@ -190,14 +180,6 @@ Team::InitTeam()
 		}
 	}
 
-	if (gNexusSem < 0) {
-		gNexusSem = open("/dev/nexus_sem", O_RDWR | O_CLOEXEC);
-		if (gNexusSem < 0) {
-			printf("Can't open Nexus Sem\n");
-			exit(-1);
-		}
-	}
-
 	if (gNexusArea < 0) {
 		gNexusArea = open("/dev/nexus_area", O_RDWR | O_CLOEXEC);
 		if (gNexusArea < 0) {
@@ -206,21 +188,13 @@ Team::InitTeam()
 		}
 	}
 
-	if (gNexusVRef < 0) {
-		gNexusVRef = open("/dev/nexus_vref", O_RDWR | O_CLOEXEC);
-		if (gNexusVRef < 0) {
-			printf("Can't open Nexus VRef\n");
+	if (gNexusNodeMonitor < 0) {
+		gNexusNodeMonitor = open("/dev/nexus_node_monitor", O_RDWR | O_CLOEXEC);
+		if (gNexusNodeMonitor < 0) {
+			printf("Can't open Nexus Node Monitor\n");
 			exit(-1);
 		}
 	}
-
-#ifdef __ENABLE_NODE_MONITOR__
-	gNexusNodeMonitor = open("/dev/nexus_node_monitor", O_RDWR | O_CLOEXEC);
-	if (gNexusNodeMonitor < 0) {
-		printf("Can't open Nexus Node Monitor module\n");
-		exit(-1);
-	}
-#endif
 }
 
 
@@ -237,10 +211,10 @@ Team::GetNexusDescriptor()
 int
 Team::GetSemDescriptor()
 {
-	if (gNexusSem == -1)
+	if (gNexus == -1)
 		OpenNexusDevices();
 
-	return gNexusSem;
+	return gNexus;
 }
 
 
@@ -257,15 +231,15 @@ Team::GetAreaDescriptor()
 int
 Team::GetVRefDescriptor(dev_t* dev)
 {
-	if (gNexusVRef == -1)
+	if (gNexusNodeMonitor == -1)
 		OpenNexusDevices();
 
 	if (dev != NULL) {
 		struct stat st;
-		fstat(gNexusVRef, &st);
+		fstat(gNexusNodeMonitor, &st);
 		*dev = st.st_dev;
 	}
-	return gNexusVRef;
+	return gNexusNodeMonitor;
 }
 
 
@@ -337,17 +311,9 @@ Team::ReinitChildAtFork()
 		close(gNexus);
 		gNexus = -1;
 	}
-	if (gNexusSem >= 0) {
-		close(gNexusSem);
-		gNexusSem = -1;
-	}
 	if (gNexusArea >= 0) {
 		close(gNexusArea);
 		gNexusArea = -1;
-	}
-	if (gNexusVRef >= 0) {
-		close(gNexusVRef);
-		gNexusVRef = -1;
 	}
 	if (gNexusNodeMonitor >= 0) {
 		close(gNexusNodeMonitor);
@@ -386,8 +352,8 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 
 	TRACE("load_image: %s (argc=%d)\n", argv[0], argc);
 
-	TRACE("LoadImage: about to clone(), gNexus=%d gNexusSem=%d gNexusArea=%d gNexusVRef=%d\n",
-		gNexus, gNexusSem, gNexusArea, gNexusVRef);
+	TRACE("LoadImage: about to clone(), gNexus=%d gNexusArea=%d gNexusNodeMonitor=%d\n",
+		gNexus, gNexusArea, gNexusNodeMonitor);
 
 	pid_t pid = syscall(SYS_clone, SIGCHLD, 0, NULL, NULL, 0);
 	if (pid == -1) {
@@ -400,24 +366,16 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 		// This prevents libbe's initialize_forked_child() from running
 		setenv("__VITRUVIAN_LOAD_IMAGE", "1", 1);
 
-		TRACE("LoadImage CHILD: closing nexus fds gNexus=%d gNexusSem=%d gNexusArea=%d gNexusVRef=%d\n",
-			gNexus, gNexusSem, gNexusArea, gNexusVRef);
+		TRACE("LoadImage CHILD: closing nexus fds gNexus=%d gNexusArea=%d gNexusNodeMonitor=%d\n",
+			gNexus, gNexusArea, gNexusNodeMonitor);
 
 		if (gNexus >= 0) {
 			close(gNexus);
 			gNexus = -1;
 		}
-		if (gNexusSem >= 0) {
-			close(gNexusSem);
-			gNexusSem = -1;
-		}
 		if (gNexusArea >= 0) {
 			close(gNexusArea);
 			gNexusArea = -1;
-		}
-		if (gNexusVRef >= 0) {
-			close(gNexusVRef);
-			gNexusVRef = -1;
 		}
 		if (gNexusNodeMonitor >= 0) {
 			close(gNexusNodeMonitor);
@@ -735,7 +693,9 @@ _get_next_team_info(int32* cookie, team_info* info, size_t size)
 	}
 
 	if (*cookie == 0) {
-		// TODO rewrite keeping a static DIR*
+		// Clear any stale entries from a previous enumeration
+		BKernelPrivate::gTeams.clear();
+
 		DIR* procDir = opendir("/proc");
 		struct dirent* dir = NULL;
 

@@ -17,18 +17,19 @@ create_sem(int32 count, const char* name)
 	if (count < 0)
 		return B_BAD_VALUE;
 
-	struct nexus_sem_exchange ex = {
+	struct nexus_sem_create ex = {
+		.name = name,
 		.count = count,
-		.flags = 0,
-		.timeout = 0,
-		.name = name
 	};
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
 		return B_ERROR;
 
-	return nexus_io(nexus, NEXUS_SEM_CREATE, &ex);
+	status_t ret = nexus_io(nexus, NEXUS_SEM_CREATE, &ex);
+	if (ret < 0)
+		return ret;
+	return ex.id;
 }
 
 
@@ -38,7 +39,7 @@ delete_sem(sem_id id)
 	if (id < 0)
 		return B_BAD_SEM_ID;
 
-	struct nexus_sem_exchange ex = { .id = id };
+	struct nexus_sem_delete_req ex = { .id = id };
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
@@ -64,7 +65,7 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 	if (count < 1)
 		return B_BAD_VALUE;
 
-	struct nexus_sem_exchange ex = {
+	struct nexus_sem_op ex = {
 		.id = id,
 		.count = count,
 		.flags = flags,
@@ -95,7 +96,7 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 	if (count < 1)
 		return B_BAD_VALUE;
 
-	struct nexus_sem_exchange ex = {
+	struct nexus_sem_op ex = {
 		.id = id,
 		.count = count,
 		.flags = flags,
@@ -119,7 +120,7 @@ get_sem_count(sem_id id, int32* threadCount)
 	if (threadCount == NULL)
 		return B_BAD_VALUE;
 
-	struct nexus_sem_exchange ex = { .id = id };
+	struct nexus_sem_count_req ex = { .id = id };
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
@@ -142,19 +143,22 @@ _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 	if (info == NULL || infoSize != sizeof(sem_info))
 		return B_BAD_VALUE;
 
-	struct nexus_sem_info newInfo = { .sem = id };
+	struct nexus_sem_info_req req;
+	memset(&req, 0, sizeof(req));
+	req.id = id;
+
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
 		return B_ERROR;
 
-	status_t ret = nexus_io(nexus, NEXUS_SEM_INFO, &newInfo);
+	status_t ret = nexus_io(nexus, NEXUS_SEM_INFO, &req);
 	if (ret == B_OK) {
-		info->sem = newInfo.sem;
-		info->team = newInfo.team;
-		strncpy(info->name, newInfo.name, B_OS_NAME_LENGTH);
+		info->sem = req.info.sem;
+		info->team = req.info.team;
+		strncpy(info->name, req.info.name, B_OS_NAME_LENGTH);
 		info->name[B_OS_NAME_LENGTH - 1] = '\0';
-		info->count = newInfo.count;
-		info->latest_holder = newInfo.latest_holder;
+		info->count = req.info.count;
+		info->latest_holder = req.info.latest_holder;
 	}
 
 	return ret;

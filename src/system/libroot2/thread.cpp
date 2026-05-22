@@ -126,14 +126,13 @@ rename_thread(thread_id thread, const char* newName)
 	if (newName == NULL)
 		return B_BAD_VALUE;
 
-	struct nexus_thread_exchange exchange;
+	struct nexus_thread_set_name_req exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.op = NEXUS_THREAD_SET_NAME;
-	exchange.buffer = newName;
-	exchange.receiver = thread;
+	exchange.name = newName;
+	exchange.size = strlen(newName) + 1;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	return nexus_io(nexus, NEXUS_THREAD_OP, &exchange);
+	return nexus_io(nexus, NEXUS_THREAD_SET_NAME, &exchange);
 }
 
 
@@ -170,16 +169,15 @@ send_data(thread_id thread, int32 code,
 	if (buffer == NULL || bufferSize == 0)
 		return B_BAD_VALUE;
 
-	struct nexus_thread_exchange exchange;
+	struct nexus_thread_rw exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.op = NEXUS_THREAD_WRITE;
 	exchange.buffer = buffer;
 	exchange.size = bufferSize;
 	exchange.return_code = code;
 	exchange.receiver = thread;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	return nexus_io(nexus, NEXUS_THREAD_OP, &exchange);
+	return nexus_io(nexus, NEXUS_THREAD_WRITE, &exchange);
 }
 
 
@@ -191,22 +189,21 @@ receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 	if (sender == NULL || buffer == NULL || bufferSize == 0)
 		return B_BAD_VALUE;
 
-	struct nexus_thread_exchange exchange;
+	struct nexus_thread_rw exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.op = NEXUS_THREAD_READ;
 	exchange.buffer = buffer;
 	exchange.size = bufferSize;
 
 	// TODO B_INTERRUPTED
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	status_t ret = nexus_io(nexus, NEXUS_THREAD_OP, &exchange);
+	status_t ret = nexus_io(nexus, NEXUS_THREAD_READ, &exchange);
 	if (ret != B_OK)
 		return ret;
 
 	if (sender)
 		*sender = exchange.sender;
 
-	return ret;
+	return exchange.return_code;
 }
 
 
@@ -216,14 +213,13 @@ has_data(thread_id thread)
 	if (thread < 0)
 		return false;
 
-	struct nexus_thread_exchange exchange;
+	struct nexus_thread_rw exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.op = NEXUS_THREAD_HAS_DATA;
 	exchange.receiver = thread;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 
-	return nexus_io(nexus, NEXUS_THREAD_OP, &exchange) == B_OK;
+	return nexus_io(nexus, NEXUS_THREAD_HAS_DATA, &exchange) == B_OK;
 }
 
 
@@ -460,13 +456,12 @@ wait_for_thread(thread_id id, status_t* returnCode)
 		return B_BAD_THREAD_ID;
 	}
 
-	struct nexus_thread_exchange exchange;
+	struct nexus_thread_waitfor_req exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.op = NEXUS_THREAD_WAITFOR;
 	exchange.receiver = id;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	status_t ret = nexus_io(nexus, NEXUS_THREAD_OP, &exchange);
+	status_t ret = nexus_io(nexus, NEXUS_THREAD_WAITFOR, &exchange);
 	if (ret == B_BAD_THREAD_ID) {
 		if (kill(id, 0) < 0)
 			return B_BAD_THREAD_ID;

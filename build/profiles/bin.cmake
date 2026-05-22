@@ -20,8 +20,6 @@
 	mount
 	prio
 	printenv
-	release
-	rescan
 	rmattr
 	rmindex
 	system_time
@@ -45,7 +43,6 @@
 	mvattr
 	quit
 	roster
-	setversion
 	shutdown
 	trash
 	version

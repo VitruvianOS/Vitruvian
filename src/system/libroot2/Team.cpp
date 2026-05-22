@@ -874,4 +874,35 @@ get_memory_properties(team_id teamID, const void* address, uint32* _protected,
 }
 
 
+pid_t
+_kern_process_info(pid_t process, int32 which)
+{
+	switch (which) {
+		case SESSION_ID:
+			return getsid(process);
+		case GROUP_ID:
+			return getpgid(process);
+		case PARENT_ID: {
+			char path[64];
+			snprintf(path, sizeof(path), "/proc/%d/status", (int)process);
+			FILE* f = fopen(path, "r");
+			if (f == NULL)
+				return -1;
+			char line[256];
+			pid_t ppid = -1;
+			while (fgets(line, sizeof(line), f)) {
+				if (strncmp(line, "PPid:", 5) == 0) {
+					sscanf(line + 5, "%d", &ppid);
+					break;
+				}
+			}
+			fclose(f);
+			return ppid;
+		}
+		default:
+			return -1;
+	}
+}
+
+
 }

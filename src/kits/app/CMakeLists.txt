@@ -26,6 +26,7 @@ target_sources(be PRIVATE
 	Notification.cpp
 	PortLink.cpp
 	PropertyInfo.cpp
+	LaunchRoster.cpp
 	RegistrarDefs.cpp
 	Roster.cpp
 	RosterPrivate.cpp

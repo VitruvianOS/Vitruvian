@@ -13,22 +13,23 @@
 // FIXME: these should go in InterfaceDefs.h (in the same enum as B_F1_KEY), but the names would
 // clash with names in the modifiers enum also defined there, so we would need to first rename the
 // values in the modifiers enumeration.
-#define KEY_ShiftL      0x4b
-#define KEY_ShiftR      0x56
-#define KEY_ControlL    0x5c
-#define KEY_CmdL        0x5d
-#define KEY_AltL        0x5d
-#define KEY_CmdR        0x5f
-#define KEY_AltR        0x5f
-#define KEY_ControlR    0x60
-#define KEY_OptL        0x66
-#define KEY_WinL        0x66
-#define KEY_OptR        0x67
-#define KEY_WinR        0x67
-#define KEY_Menu        0x68
-#define KEY_SysRq       0x7e
-#define KEY_Break       0x7f
-#define KEY_Spacebar	0x5e // Removed from haiku
+/* Linux evdev keycodes (used as canonical keycode space on Linux) */
+#define KEY_ShiftL      42   /* KEY_LEFTSHIFT  */
+#define KEY_ShiftR      54   /* KEY_RIGHTSHIFT */
+#define KEY_ControlL    29   /* KEY_LEFTCTRL   */
+#define KEY_CmdL        56   /* KEY_LEFTALT    */
+#define KEY_AltL        56   /* KEY_LEFTALT    */
+#define KEY_CmdR        100  /* KEY_RIGHTALT   */
+#define KEY_AltR        100  /* KEY_RIGHTALT   */
+#define KEY_ControlR    97   /* KEY_RIGHTCTRL  */
+#define KEY_OptL        125  /* KEY_LEFTMETA   */
+#define KEY_WinL        125  /* KEY_LEFTMETA   */
+#define KEY_OptR        126  /* KEY_RIGHTMETA  */
+#define KEY_WinR        126  /* KEY_RIGHTMETA  */
+#define KEY_Menu        139  /* KEY_MENU       */
+#define KEY_SysRq       99   /* KEY_SYSRQ      */
+#define KEY_Break       119  /* KEY_PAUSE      */
+#define KEY_Spacebar    57   /* KEY_SPACE      */
 
 #define KB_DEFAULT_CONTROL_ALT_DEL_TIMEOUT 4000000
 

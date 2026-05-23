@@ -86,28 +86,41 @@ enum {
 };
 
 enum {
-	B_F1_KEY			= 0x02,
-	B_F2_KEY			= 0x03,
-	B_F3_KEY			= 0x04,
-	B_F4_KEY			= 0x05,
-	B_F5_KEY			= 0x06,
-	B_F6_KEY			= 0x07,
-	B_F7_KEY			= 0x08,
-	B_F8_KEY			= 0x09,
-	B_F9_KEY			= 0x0a,
-	B_F10_KEY			= 0x0b,
-	B_F11_KEY			= 0x0c,
-	B_F12_KEY			= 0x0d,
-	B_PRINT_KEY			= 0x0e,
-	B_SCROLL_KEY		= 0x0f,
-	B_PAUSE_KEY			= 0x10,
+	// VOS: physical key codes are raw Linux evdev codes (not Haiku legacy codes).
+	B_F1_KEY			= 59,	// KEY_F1
+	B_F2_KEY			= 60,	// KEY_F2
+	B_F3_KEY			= 61,	// KEY_F3
+	B_F4_KEY			= 62,	// KEY_F4
+	B_F5_KEY			= 63,	// KEY_F5
+	B_F6_KEY			= 64,	// KEY_F6
+	B_F7_KEY			= 65,	// KEY_F7
+	B_F8_KEY			= 66,	// KEY_F8
+	B_F9_KEY			= 67,	// KEY_F9
+	B_F10_KEY			= 68,	// KEY_F10
+	B_F11_KEY			= 87,	// KEY_F11
+	B_F12_KEY			= 88,	// KEY_F12
+	B_F13_KEY			= 0x41,	// KEY_F13
+	B_F14_KEY			= 0x42,	// KEY_F14
+	B_F15_KEY			= 0x43,	// KEY_F15
+	B_F16_KEY			= 0x44,	// KEY_F16
+	B_F17_KEY			= 0x45,	// KEY_F17
+	B_F18_KEY			= 0x46,	// KEY_F18
+	B_F19_KEY			= 0x47,	// KEY_F19
+	B_F20_KEY			= 0x48,	// KEY_F20
+	B_F21_KEY			= 0x49,	// KEY_F21
+	B_F22_KEY			= 0x4a,	// KEY_F22
+	B_F23_KEY			= 0x4b,	// KEY_F23
+	B_F24_KEY			= 0x4c,	// KEY_F24
+	B_PRINT_KEY			= 99,	// KEY_SYSRQ
+	B_SCROLL_KEY		= 70,	// KEY_SCROLLLOCK
+	B_PAUSE_KEY			= 119,	// KEY_PAUSE
 
-	B_NUM_LOCK_KEY		= 0x22,
+	B_NUM_LOCK_KEY		= 69,	// KEY_NUMLOCK
 
-	B_CAPS_LOCK_KEY		= 0x3b,
+	B_CAPS_LOCK_KEY		= 58,	// KEY_CAPSLOCK
 
-	B_SPACE_BAR_KEY		= 0x5e,
-	B_NUMPAD_EQUAL_KEY	= 0x6a,
+	B_SPACE_BAR_KEY		= 57,	// KEY_SPACE
+	B_NUMPAD_EQUAL_KEY	= 117,	// KEY_KPEQUAL
 
 	// For Korean keyboards
 	B_HANGUL_KEY		= 0xf0,

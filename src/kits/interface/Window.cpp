@@ -3667,7 +3667,7 @@ BWindow::_HandleKeyDown(BMessage* event)
 	}
 
 	// Deskbar's Switcher
-	if ((key == B_TAB || rawKey == 0x11) && (modifiers & B_CONTROL_KEY) != 0) {
+	if ((key == B_TAB || rawKey == 41 /* KEY_GRAVE */) && (modifiers & B_CONTROL_KEY) != 0) {
 		_Switcher(rawKey, modifiers, event->HasInt32("be:key_repeat"));
 		return true;
 	}
@@ -3808,7 +3808,7 @@ BWindow::_HandleUnmappedKeyDown(BMessage* event)
 		return false;
 
 	// Deskbar's Switcher
-	if (rawKey == 0x11 && (modifiers & B_CONTROL_KEY) != 0) {
+	if (rawKey == 41 /* KEY_GRAVE */ && (modifiers & B_CONTROL_KEY) != 0) {
 		_Switcher(rawKey, modifiers, event->HasInt32("be:key_repeat"));
 		return true;
 	}

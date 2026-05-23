@@ -37,6 +37,7 @@
 #include <TokenSpace.h>
 #include <util/DoublyLinkedList.h>
 
+#include <LaunchDaemonDefs.h>
 #include <syscalls.h>
 
 #include "AppInfoListMessagingTargetSet.h"
@@ -1196,7 +1197,24 @@ ShutdownProcess::_PrepareShutdownMessage(BMessage& message) const
 status_t
 ShutdownProcess::_ShutDown()
 {
-	PRINT("Invoking _kern_shutdown(%d)\n", fReboot);
+	PRINT("ShutdownProcess::_ShutDown(): handing off to janus, reboot=%d\n",
+		fReboot);
+
+	port_id janusPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+	if (janusPort >= 0) {
+		BMessage msg(BPrivate::B_REG_SHUTDOWN_FINISHED);
+		msg.AddBool("reboot", fReboot);
+		ssize_t size = msg.FlattenedSize();
+		char* buf = new char[size];
+		if (msg.Flatten(buf, size) == B_OK) {
+			write_port(janusPort, 0, buf, size);
+			delete[] buf;
+			return B_OK;
+		}
+		delete[] buf;
+	}
+
+	PRINT("janus unreachable, invoking _kern_shutdown(%d) directly\n", fReboot);
 	RETURN_ERROR(_kern_shutdown(fReboot));
 }
 

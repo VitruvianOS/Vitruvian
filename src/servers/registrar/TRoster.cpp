@@ -1399,14 +1399,19 @@ TRoster::GetShutdownApps(AppInfoList& userApps, AppInfoList& systemApps,
 	if (get_team_info(B_SYSTEM_TEAM, &teamInfo) == B_OK)
 		vitalSystemApps.Add(teamInfo.team);
 
-	// app server
+	// app server (signature uses capital H: x-vnd.Haiku-app_server)
 	RosterAppInfo* info
-		= fRegisteredApps.InfoFor("application/x-vnd.haiku-app_server");
+		= fRegisteredApps.InfoFor("application/x-vnd.Haiku-app_server");
 	if (info != NULL)
 		vitalSystemApps.Add(info->team);
 
 	// debug server
 	info = fRegisteredApps.InfoFor("application/x-vnd.haiku-debug_server");
+	if (info != NULL)
+		vitalSystemApps.Add(info->team);
+
+	// janus session manager — must outlive all apps to control seat teardown
+	info = fRegisteredApps.InfoFor("application/x-vnd.vitruvian-janus");
 	if (info != NULL)
 		vitalSystemApps.Add(info->team);
 

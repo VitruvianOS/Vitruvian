@@ -22,6 +22,7 @@
 #include <RosterPrivate.h>
 #include <system_info.h>
 
+
 #include "AuthenticationManager.h"
 #include "ClipboardHandler.h"
 #include "Debug.h"
@@ -195,6 +196,7 @@ Registrar::GetEventQueue() const
 {
 	return fEventQueue;
 }
+
 
 
 /*!	\brief Returns the Registrar application object.

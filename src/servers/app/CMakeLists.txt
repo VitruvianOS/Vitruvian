@@ -8,6 +8,11 @@ find_path(DRM_INCLUDE_DIR NAMES libdrm/drm.h)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBSEAT REQUIRED IMPORTED_TARGET libseat)
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
+pkg_check_modules(GBM gbm)
+
+if(GBM_FOUND)
+	add_definitions(-DHAVE_GBM)
+endif()
 
 
 Server(
@@ -115,8 +120,8 @@ Server(
 		drawing/interface/linux/drm/DrmBuffer.cpp
 		drawing/interface/linux/drm/modeset.c
 
-		#drawing/interface/linux/fbdev/FBDevHWInterface.cpp
-		#drawing/interface/linux/fbdev/FBDevBuffer.cpp
+		drawing/interface/linux/fbdev/FBDevHWInterface.cpp
+		drawing/interface/linux/fbdev/FBDevBuffer.cpp
 		#drawing/interface/linux/fbdev/TTy.cpp
 
 		#drawing/interface/linux/LibInputEventStream.cpp
@@ -131,7 +136,7 @@ Server(
 
 	LIBS localestub shared agg icon linprog ${FREETYPE_LIBRARY}
 		${UDEV_LIBRARIES} ${DRM_LIBRARIES} ${SEAT_LIBRARIES}
-		${EVDEV_LIBRARIES}
+		${EVDEV_LIBRARIES} ${GBM_LIBRARIES} backlight
 
 	RDEF app_server.rdef
 
@@ -139,6 +144,8 @@ Server(
 	${DRM_INCLUDE_DIR}/libdrm/
 	${FREETYPE_INCLUDE_DIRS}
 	${EVDEV_INCLUDES}
+	${GBM_INCLUDE_DIRS}
+	"${PROJECT_SOURCE_DIR}/src/libs/backlight/"
 	"./drawing"
 	"./drawing/interface/linux"
 	"./drawing/interface/linux/drm"

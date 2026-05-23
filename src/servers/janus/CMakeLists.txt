@@ -8,7 +8,7 @@ Server(janus
 	RDEF janus.rdef
 )
 
-UsePrivateHeaders(janus app input kernel)
+UsePrivateHeaders(janus app input kernel system)
 
 # janus_launch must not link libbe — it runs before registrar/app_server are up
 add_executable(janus_launch janus_launch.cpp)

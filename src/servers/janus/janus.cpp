@@ -3,14 +3,17 @@
  * Distributed under the terms of the GPL License.
  */
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/input.h>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -31,24 +34,13 @@ extern "C" {
 #include <LaunchDaemonDefs.h>
 #include <MessengerPrivate.h>
 #include <RegistrarDefs.h>
+#include <syscalls.h>
 
-
-// ---------------------------------------------------------------------------
-// VT switch message constants (received by input_server and app_server)
-// ---------------------------------------------------------------------------
-
-#define B_SEAT_DISABLED  'sdis'
-#define B_SEAT_ENABLED   'senb'
-
-
-// ---------------------------------------------------------------------------
-// Known servers table
-// ---------------------------------------------------------------------------
 
 struct KnownServer {
 	const char* name;
 	const char* signature;
-	const char* port_name;  // non-NULL = find_port() fallback for B_GET_LAUNCH_DATA
+	const char* port_name;
 	bool        needs_drm;
 };
 
@@ -85,15 +77,11 @@ static const KnownServer kKnownServers[] = {
 };
 
 
-// ---------------------------------------------------------------------------
-// Live app table — populated by handle_launch_job when port is resolved
-// ---------------------------------------------------------------------------
-
 struct JanusApp {
 	char    name[64];
 	char    signature[256];
 	pid_t   pid;
-	port_id port;  // -1 until readiness pipe delivers the port_id
+	port_id port;
 };
 
 #define JANUS_MAX_APPS 32
@@ -102,34 +90,103 @@ static int             sAppCount = 0;
 static pthread_mutex_t sAppsLock = PTHREAD_MUTEX_INITIALIZER;
 
 
-// ---------------------------------------------------------------------------
-// Pending launch — one slot per in-flight B_LAUNCH_JOB
-// ---------------------------------------------------------------------------
-
 struct PendingLaunch {
 	bool      active;
-	int       app_idx;     // index into sApps[]
-	int       ready_fd;    // read end of readiness pipe
-	port_id   reply_port;  // extracted from KMessage delivery info
+	int       app_idx;
+	int       ready_fd;
+	port_id   reply_port;
 	int32     reply_token;
-	bigtime_t deadline;    // system_time() + 10s
+	bigtime_t deadline;
 };
 
 #define JANUS_MAX_PENDING 8
 static PendingLaunch sPending[JANUS_MAX_PENDING];
-
-
-// ---------------------------------------------------------------------------
-// Seat / DRM state
-// ---------------------------------------------------------------------------
 
 static struct libseat* sSeat        = NULL;
 static int             sDrmFd       = -1;
 static int             sDrmDeviceId = -1;
 static volatile bool   sSessionActive = false;
 static volatile bool   sRunning       = true;
+static volatile bool   sShuttingDown  = false;
 
 static port_id sLaunchPort = -1;
+
+#define JANUS_MAX_POWER_FDS 8
+static int sPowerFds[JANUS_MAX_POWER_FDS];
+static int sPowerFdCount = 0;
+
+static void janus_handle_shutdown(bool reboot);
+
+
+static void
+send_reg_shut_down(bool reboot)
+{
+	port_id regPort = find_port(B_REGISTRAR_PORT_NAME);
+	if (regPort < 0) {
+		fprintf(stderr, "janus: cannot find registrar port\n");
+		return;
+	}
+	BMessage msg(BPrivate::B_REG_SHUT_DOWN);
+	msg.AddBool("reboot", reboot);
+	msg.AddBool("confirm", false);
+	ssize_t size = msg.FlattenedSize();
+	char* buf = new char[size];
+	if (msg.Flatten(buf, size) == B_OK)
+		write_port(regPort, 0, buf, size);
+	delete[] buf;
+}
+
+
+static void
+open_power_devices()
+{
+	DIR* dir = opendir("/dev/input");
+	if (dir == NULL)
+		return;
+
+	struct dirent* entry;
+	while ((entry = readdir(dir)) != NULL && sPowerFdCount < JANUS_MAX_POWER_FDS) {
+		if (strncmp(entry->d_name, "event", 5) != 0)
+			continue;
+
+		char path[64];
+		snprintf(path, sizeof(path), "/dev/input/%s", entry->d_name);
+		int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+		if (fd < 0)
+			continue;
+
+		// Accept dedicated power/sleep button devices:
+		// must have EV_KEY + KEY_POWER or KEY_SLEEP, must NOT have EV_REL or EV_ABS
+		// (excludes keyboards and mice that incidentally report power keys).
+		unsigned long evBits[EV_MAX / (8 * sizeof(unsigned long)) + 1] = {};
+		ioctl(fd, EVIOCGBIT(0, sizeof(evBits)), evBits);
+
+		auto hasBit = [](unsigned long* bits, int bit) -> bool {
+			return (bits[bit / (8 * sizeof(unsigned long))]
+				>> (bit % (8 * sizeof(unsigned long)))) & 1UL;
+		};
+
+		if (!hasBit(evBits, EV_KEY) || hasBit(evBits, EV_REL) || hasBit(evBits, EV_ABS)) {
+			close(fd);
+			continue;
+		}
+
+		unsigned long keyBits[KEY_MAX / (8 * sizeof(unsigned long)) + 1] = {};
+		ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keyBits)), keyBits);
+
+		if (!hasBit(keyBits, KEY_POWER) && !hasBit(keyBits, KEY_SLEEP)
+				&& !hasBit(keyBits, KEY_RESTART)) {
+			close(fd);
+			continue;
+		}
+
+		char name[128] = {};
+		ioctl(fd, EVIOCGNAME(sizeof(name)), name);
+		printf("janus: power device: %s (%s)\n", path, name);
+		sPowerFds[sPowerFdCount++] = fd;
+	}
+	closedir(dir);
+}
 
 
 static int
@@ -177,7 +234,6 @@ handle_get_launch_data(BMessage* msg)
 		return;
 	}
 
-	// 1. Live sApps[] table (ports resolved via readiness pipe)
 	pthread_mutex_lock(&sAppsLock);
 	int idx = find_app_by_sig(signature);
 	if (idx >= 0 && sApps[idx].port >= 0) {
@@ -193,7 +249,7 @@ handle_get_launch_data(BMessage* msg)
 	}
 	pthread_mutex_unlock(&sAppsLock);
 
-	// 2. Static fallback via well-known port name (registrar, app_server)
+	// Fallback
 	for (int i = 0; kKnownServers[i].name != NULL; i++) {
 		if (strcmp(kKnownServers[i].signature, signature) == 0
 				&& kKnownServers[i].port_name != NULL) {
@@ -227,7 +283,6 @@ handle_launch_job(BPrivate::KMessage& kmsg)
 		return;
 	}
 
-	// Look up in known servers
 	const KnownServer* ks = NULL;
 	for (int i = 0; kKnownServers[i].name != NULL; i++) {
 		if (strcmp(kKnownServers[i].name, name) == 0) {
@@ -242,7 +297,6 @@ handle_launch_job(BPrivate::KMessage& kmsg)
 		return;
 	}
 
-	// Resolve binary path — servers live in /system/servers/, apps in /system/
 	char path[256];
 	snprintf(path, sizeof(path), "/system/servers/%s", name);
 	if (access(path, X_OK) != 0) {
@@ -255,7 +309,6 @@ handle_launch_job(BPrivate::KMessage& kmsg)
 		}
 	}
 
-	// Readiness pipe: child writes fMsgPort after BApplication registration
 	int fds[2];
 	if (pipe(fds) != 0) {
 		perror("janus: pipe");
@@ -263,9 +316,7 @@ handle_launch_job(BPrivate::KMessage& kmsg)
 		kmsg.SendReply(&reply);
 		return;
 	}
-	// Read end is ours — set CLOEXEC so it's not inherited by child
 	fcntl(fds[0], F_SETFD, FD_CLOEXEC);
-	// Write end (fds[1]) has no CLOEXEC → survives exec in child
 
 	pid_t pid = fork();
 	if (pid < 0) {
@@ -278,8 +329,16 @@ handle_launch_job(BPrivate::KMessage& kmsg)
 	}
 
 	if (pid == 0) {
-		// Child process
 		close(fds[0]);
+
+		char logpath[256];
+		snprintf(logpath, sizeof(logpath), "/var/log/%s.log", name);
+		int logfd = open(logpath, O_WRONLY | O_CREAT | O_APPEND, 0644);
+		if (logfd >= 0) {
+			dup2(logfd, STDOUT_FILENO);
+			dup2(logfd, STDERR_FILENO);
+			close(logfd);
+		}
 
 		char buf[32];
 		snprintf(buf, sizeof(buf), "%d", fds[1]);
@@ -361,7 +420,7 @@ check_pending_launches()
 		pfd.fd      = sPending[i].ready_fd;
 		pfd.events  = POLLIN;
 		pfd.revents = 0;
-		int ret = poll(&pfd, 1, 0);  // non-blocking
+		int ret = poll(&pfd, 1, 0);
 
 		port_id port = -1;
 		bool resolved = false;
@@ -369,8 +428,9 @@ check_pending_launches()
 		if (ret > 0 && (pfd.revents & (POLLIN | POLLHUP))) {
 			ssize_t n = read(sPending[i].ready_fd, &port, sizeof(port));
 			resolved = true;
+			// check wether child died
 			if (n != (ssize_t)sizeof(port))
-				port = -1;  // child died without writing
+				port = -1;
 		} else if (system_time() > sPending[i].deadline) {
 			int idx = sPending[i].app_idx;
 			fprintf(stderr, "janus: readiness timeout for %s\n",
@@ -422,7 +482,7 @@ launch_daemon_thread(void* /*data*/)
 {
 	while (sRunning) {
 		ssize_t bufSize = port_buffer_size_etc(sLaunchPort,
-			B_RELATIVE_TIMEOUT, 50000 /* 50 ms */);
+			B_RELATIVE_TIMEOUT, 50000);
 
 		if (bufSize == B_TIMED_OUT || bufSize == B_INTERRUPTED) {
 			check_pending_launches();
@@ -449,8 +509,10 @@ launch_daemon_thread(void* /*data*/)
 			BPrivate::KMessage kmsg;
 			if (bufSize > 0)
 				kmsg.SetTo((const void*)buf, bufSize);
-			if (kmsg.What() == BPrivate::B_LAUNCH_JOB)
-				handle_launch_job(kmsg);
+			if (kmsg.What() == BPrivate::B_LAUNCH_JOB) {
+				if (!sShuttingDown)
+					handle_launch_job(kmsg);
+			}
 		} else {
 			// All other messages (B_GET_LAUNCH_DATA etc.) use BMessage (libbe)
 			BMessage* msg = new BMessage();
@@ -459,7 +521,23 @@ launch_daemon_thread(void* /*data*/)
 					case BPrivate::B_GET_LAUNCH_DATA:
 						handle_get_launch_data(msg);
 						break;
+					case BPrivate::B_REG_SHUTDOWN_FINISHED: {
+						bool reboot = false;
+						msg->FindBool("reboot", &reboot);
+						delete msg;
+						msg = NULL;
+						free(buf);
+						buf = NULL;
+						janus_handle_shutdown(reboot);
+						break;
+					}
 					default:
+						// Reply immediately so callers never hang waiting
+						// for unimplemented BLaunchRoster messages.
+						if (msg->IsSourceWaiting()) {
+							BMessage reply(B_NOT_SUPPORTED);
+							msg->SendReply(&reply);
+						}
 						break;
 				}
 			}
@@ -528,11 +606,8 @@ seat_enable_cb(struct libseat* /*seat*/, void* /*data*/)
 
 
 static void
-seat_disable_cb(struct libseat* seat, void* /*data*/)
+janus_teardown_seat()
 {
-	printf("janus: seat disabled\n");
-	sSessionActive = false;
-
 	// Sync: input_server must release grabs; app_server must release DRM master.
 	send_seat_message("application/x-vnd.Be-input_server",
 		B_SEAT_DISABLED, 2000000LL);
@@ -562,6 +637,44 @@ seat_disable_cb(struct libseat* seat, void* /*data*/)
 		BMessage msg(B_SEAT_DISABLED);
 		app.SendMessage(&msg);
 	}
+}
+
+
+static void
+janus_handle_shutdown(bool reboot)
+{
+	fprintf(stderr, "janus: shutdown handover received, reboot=%d\n", reboot);
+	sShuttingDown = true;
+
+	janus_teardown_seat();
+
+	if (sSeat != NULL) {
+		libseat_disable_seat(sSeat);
+		libseat_close_seat(sSeat);
+		sSeat = NULL;
+	}
+
+	if (sDrmFd >= 0) {
+		close(sDrmFd);
+		sDrmFd = -1;
+	}
+
+	sync();
+	_kern_shutdown(reboot);
+
+	fprintf(stderr, "janus: _kern_shutdown failed: %s\n", strerror(errno));
+	_exit(1);
+}
+
+
+static void
+seat_disable_cb(struct libseat* seat, void* /*data*/)
+{
+	printf("janus: seat disabled\n");
+	sSessionActive = false;
+
+	if (!sShuttingDown)
+		janus_teardown_seat();
 
 	libseat_disable_seat(seat);
 }
@@ -648,11 +761,11 @@ daemon_loop()
 int
 main(int /*argc*/, char** /*argv*/)
 {
-	signal(SIGTERM, sig_handler);
+	// janus exits only via B_REG_SHUTDOWN_FINISHED
+	signal(SIGTERM, SIG_IGN);
 	signal(SIGINT,  sig_handler);
 	signal(SIGCHLD, SIG_DFL);
 
-	// Ensure /run/vitruvian/ exists for PID files
 	mkdir("/run/vitruvian", 0755);
 
 	if (!init_seat())
@@ -665,7 +778,6 @@ main(int /*argc*/, char** /*argv*/)
 
 	daemon_loop();
 
-	// Cleanup
 	sRunning = false;
 	if (sLaunchPort >= 0) {
 		delete_port(sLaunchPort);

@@ -35,7 +35,6 @@ main(int argc, char** argv)
 	request.AddString("name", name);
 
 	BPrivate::KMessage reply;
-	// Send timeout 5 s, reply timeout 15 s (janus waits up to 10 s for readiness)
 	status_t err = request.SendTo(launchPort, -1, &reply,
 		5000000LL, 15000000LL, getpid());
 
@@ -57,7 +56,6 @@ main(int argc, char** argv)
 		return 1;
 	}
 
-	// Write PID file — systemd reads this for Type=forking tracking
 	mkdir("/run/vitruvian", 0755);
 	char pidpath[128];
 	snprintf(pidpath, sizeof(pidpath), "/run/vitruvian/%s.pid", name);

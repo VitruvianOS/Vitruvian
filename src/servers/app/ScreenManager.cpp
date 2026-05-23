@@ -1,9 +1,11 @@
 /*
  * Copyright 2005-2009, Haiku.
+ * Copyright 2026, The Vitruvian Project.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Axel Dörfler, axeld@pinc-software.de
+ *		Dario Casalinuovo
  */
 
 /**	Manages all available physical screens */
@@ -31,7 +33,7 @@ using std::nothrow;
 #else
 //#	include "SDLInterface.h"
 #	include "DrmHWInterface.h"
-//#	include "FBDevHWInterface.h"
+#	include "FBDevHWInterface.h"
 #endif
 #else
  #	include "ViewHWInterface.h"
@@ -217,9 +219,15 @@ ScreenManager::_ScanDrivers()
 		interface = new AccelerantHWInterface();
 	#else
 		//interface = new SDLInterface();
-		interface = new DrmHWInterface();
-//		interface = new FBDevHWInterface();
-	#endif
+		DrmHWInterface* drm = new(nothrow) DrmHWInterface();
+		if (drm != NULL && drm->InitCheck() == B_OK) {
+			interface = drm;
+		} else {
+			fprintf(stderr, "DRM backend failed, falling back to FBDev\n");
+			delete drm;
+			interface = new(nothrow) FBDevHWInterface();
+		}
+#endif
 
 		_AddHWInterface(interface);
 		initDrivers = false;

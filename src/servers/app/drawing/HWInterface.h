@@ -68,6 +68,7 @@ public:
 	// You need to WriteLock
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown() = 0;
+	virtual status_t			InitCheck() const { return B_OK; }
 
 	// allocating a DrawingEngine attached to this HWInterface
 	virtual	DrawingEngine*		CreateDrawingEngine();

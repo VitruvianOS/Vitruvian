@@ -36,32 +36,33 @@
 #define CASE_LEFT_ARROW 5
 #define CASE_RET_ENTR 6
 
-#define F1_KEY 0x02
-#define F2_KEY 0x03
-#define F3_KEY 0x04
-#define F4_KEY 0x05
-#define F5_KEY 0x06
-#define F6_KEY 0x07
-#define F7_KEY 0x08
-#define F8_KEY 0x09
-#define F9_KEY 0x0a
-#define F10_KEY 0x0b
-#define F11_KEY 0x0c
-#define F12_KEY 0x0d
+/* VOS: physical key codes are raw Linux evdev codes */
+#define F1_KEY  59		/* KEY_F1 */
+#define F2_KEY  60		/* KEY_F2 */
+#define F3_KEY  61		/* KEY_F3 */
+#define F4_KEY  62		/* KEY_F4 */
+#define F5_KEY  63		/* KEY_F5 */
+#define F6_KEY  64		/* KEY_F6 */
+#define F7_KEY  65		/* KEY_F7 */
+#define F8_KEY  66		/* KEY_F8 */
+#define F9_KEY  67		/* KEY_F9 */
+#define F10_KEY 68		/* KEY_F10 */
+#define F11_KEY 87		/* KEY_F11 */
+#define F12_KEY 88		/* KEY_F12 */
 
-#define RETURN_KEY 0x47
-#define ENTER_KEY 0x5b
+#define RETURN_KEY  28		/* KEY_ENTER */
+#define ENTER_KEY   96		/* KEY_KPENTER */
 
-#define LEFT_ARROW_KEY 0x61
-#define RIGHT_ARROW_KEY 0x63
-#define UP_ARROW_KEY 0x57
-#define DOWN_ARROW_KEY 0x62
+#define LEFT_ARROW_KEY  105	/* KEY_LEFT */
+#define RIGHT_ARROW_KEY 106	/* KEY_RIGHT */
+#define UP_ARROW_KEY    103	/* KEY_UP */
+#define DOWN_ARROW_KEY  108	/* KEY_DOWN */
 
-#define HOME_KEY 0x20
-#define INSERT_KEY 0x1f
-#define END_KEY 0x35
-#define PAGE_UP_KEY 0x21
-#define PAGE_DOWN_KEY 0x36
+#define HOME_KEY      102	/* KEY_HOME */
+#define INSERT_KEY    110	/* KEY_INSERT */
+#define END_KEY       107	/* KEY_END */
+#define PAGE_UP_KEY   104	/* KEY_PAGEUP */
+#define PAGE_DOWN_KEY 109	/* KEY_PAGEDOWN */
 
 
 #define LEFT_ARROW_KEY_CODE "\033OD"

@@ -30,6 +30,7 @@ AddOn(
 	JsonEvent.cpp
 	Json.cpp
 	Keymap.cpp
+	KeymapXkb.cpp
 	LongAndDragTrackingFilter.cpp
 	MemoryRingIO.cpp
 	MessageBuilder.cpp
@@ -55,3 +56,4 @@ AddOn(
 )
 
 UsePrivateHeaders(shared shared locale interface kernel libroot system)
+target_link_libraries(shared PRIVATE xkbcommon)

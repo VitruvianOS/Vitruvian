@@ -2714,7 +2714,6 @@ BRoster::_InitMessenger()
 	// find the registrar port
 
 
-#ifndef __VOS__
 	BMessage data;
 	if (BLaunchRoster().GetData(B_REGISTRAR_SIGNATURE, data) == B_OK) {
 		port_id port = data.GetInt32("port", -1);
@@ -2729,17 +2728,6 @@ BRoster::_InitMessenger()
 				B_PREFERRED_TOKEN);
 		}
 	}
-#else
-	port_id rosterPort = find_port(B_REGISTRAR_PORT_NAME);
-
-	port_info info;
-	if (rosterPort >= 0 && get_port_info(rosterPort, &info) == B_OK) {
-		DBG(OUT("  found roster port\n"));
-
-		BMessenger::Private(fMessenger).SetTo(info.team, rosterPort,
-			B_PREFERRED_TOKEN);
-	}
-#endif
 
 	DBG(OUT("BRoster::InitMessengers() done\n"));
 }

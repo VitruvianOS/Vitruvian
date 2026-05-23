@@ -1,11 +1,7 @@
 /*
  * Copyright 2015-2017, Haiku, Inc. All rights reserved.
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
- * Distributed under the terms of the MIT License.
- *
- * Vitruvian port: _InitMessenger uses find_port() directly since
- * BPrivate::get_launch_daemon_port() (libroot/os/launch.cpp) is not
- * yet ported.  The rest mirrors the Haiku implementation.
+ * Distributed under the terms of the GPL License.
  */
 
 

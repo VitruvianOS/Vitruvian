@@ -22,6 +22,7 @@ public:
 
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown();
+	virtual status_t			InitCheck() const;
 
 	virtual	EventStream*		CreateEventStream();
 
@@ -69,6 +70,8 @@ private:
 
 			struct fb_fix_screeninfo	fInfo;
 			struct fb_var_screeninfo	fVInfo;
+
+			EventStream*		fEventStream;
 };
 
 #endif // VIEW_GRAPHICS_CARD_H

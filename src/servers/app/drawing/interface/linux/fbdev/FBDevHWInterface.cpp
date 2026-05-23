@@ -6,6 +6,7 @@
 #include "FBDevHWInterface.h"
 
 #include "FBDevBuffer.h"
+#include "IntRect.h"
 
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -13,18 +14,21 @@
 
 FBDevHWInterface::FBDevHWInterface()
 	:
-	HWInterface(false, false),
+	HWInterface(),
 	fEventStream(NULL),
 	fFrontBuffer(NULL),
-	fBackBuffer(NULL)
+	fBackBuffer(NULL),
+	fFrameBuffer(-1)
 {
-	//TTy::InitTTy(1);
-
 	char* fbname = getenv("FRAMEBUFFER");
 	if (!fbname)
 		fbname = "/dev/fb0";
 
 	fFrameBuffer = open(fbname, O_RDWR);
+	if (fFrameBuffer < 0) {
+		fprintf(stderr, "FBDevHWInterface: cannot open %s: %m\n", fbname);
+		return;
+	}
 
 	ioctl(fFrameBuffer, FBIOGET_VSCREENINFO, &fVInfo);
 	ioctl(fFrameBuffer, FBIOGET_FSCREENINFO, &fInfo);
@@ -39,11 +43,6 @@ FBDevHWInterface::FBDevHWInterface()
 	fDisplayMode.space = B_RGB32;
 
 	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
-	//fBackBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
-
-	// Input handled by input_server add-ons via InputServerStream (not fbdev path).
-
-	//ioctl(TTy::gTTy, KDSETMODE, KD_GRAPHICS);
 }
 
 
@@ -56,11 +55,23 @@ FBDevHWInterface::~FBDevHWInterface()
 
 
 status_t
+FBDevHWInterface::InitCheck() const
+{
+	if (fFrameBuffer < 0 || fFrontBuffer == NULL)
+		return B_ERROR;
+	return fFrontBuffer->InitCheck();
+}
+
+
+status_t
 FBDevHWInterface::Initialize()
 {
 	status_t ret = HWInterface::Initialize();
 	if (ret < B_OK)
 		return ret;
+
+	if (fFrontBuffer == NULL)
+		return B_NO_INIT;
 
 	ret = fFrontBuffer->InitCheck();
 	if (ret < B_OK)
@@ -233,6 +244,9 @@ FBDevHWInterface::IsDoubleBuffered() const
 status_t
 FBDevHWInterface::CopyBackToFront(const BRect& frame)
 {
-	CALLED();
-	return B_ERROR;
+	// Single-buffer: app_server draws directly into the front buffer via
+	// DrawingBuffer() == FrontBuffer(). No back→front copy needed.
+	// Composite the software cursor on top of whatever was just drawn.
+	_DrawCursor(IntRect(frame));
+	return B_OK;
 }

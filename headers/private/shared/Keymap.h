@@ -15,6 +15,9 @@
 #include <StringList.h>
 
 
+struct xkb_keymap;
+
+
 class BKeymap {
 public:
 								BKeymap();
@@ -25,6 +28,9 @@ public:
 			status_t			SetToCurrent();
 			status_t			SetToDefault();
 			void				Unset();
+
+			// Fill from a xkb_keymap for vitruvian native keycodes support
+			status_t			PopulateFromXkb(struct xkb_keymap* keymap);
 
 			bool				IsModifierKey(uint32 keyCode) const;
 			uint32				Modifier(uint32 keyCode) const;

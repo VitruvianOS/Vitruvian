@@ -42,6 +42,11 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#include <drm/drm_fourcc.h>
+
+#ifdef HAVE_GBM
+#include <gbm.h>
+#endif
 
 /*struct modeset_dev;
 static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
@@ -436,11 +441,9 @@ int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 int modeset_create_fb(int fd, struct modeset_dev *dev)
 {
 	struct drm_mode_create_dumb creq;
-	struct drm_mode_destroy_dumb dreq;
 	struct drm_mode_map_dumb mreq;
 	int ret;
 
-	/* create dumb buffer */
 	memset(&creq, 0, sizeof(creq));
 	creq.width = dev->width;
 	creq.height = dev->height;
@@ -455,56 +458,67 @@ int modeset_create_fb(int fd, struct modeset_dev *dev)
 	dev->size = creq.size;
 	dev->handle = creq.handle;
 
-	/* create framebuffer object for the dumb-buffer */
-	ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32, dev->stride,
-			   dev->handle, &dev->fb);
-	if (ret) {
-		fprintf(stderr, "cannot create framebuffer (%d): %m\n",
-			errno);
-		ret = -errno;
-		goto err_destroy;
+	{
+		uint32_t handles[4] = { dev->handle, 0, 0, 0 };
+		uint32_t pitches[4] = { dev->stride, 0, 0, 0 };
+		uint32_t offsets[4] = { 0, 0, 0, 0 };
+		ret = drmModeAddFB2(fd, dev->width, dev->height, DRM_FORMAT_XRGB8888,
+				    handles, pitches, offsets, &dev->fb, 0);
+		if (ret) {
+			fprintf(stderr, "cannot create framebuffer (drmModeAddFB2 failed, %d): %m\n",
+				errno);
+			ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32, dev->stride,
+					   dev->handle, &dev->fb);
+			if (ret) {
+				fprintf(stderr, "cannot create framebuffer (legacy fallback failed, %d): %m\n",
+					errno);
+				ret = -errno;
+				struct drm_mode_destroy_dumb dreq = {};
+				dreq.handle = dev->handle;
+				drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+				dev->handle = 0;
+				return ret;
+			}
+		}
 	}
 
-	/* prepare buffer for memory mapping */
 	memset(&mreq, 0, sizeof(mreq));
 	mreq.handle = dev->handle;
 	ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
 	if (ret) {
 		fprintf(stderr, "cannot map dumb buffer (%d): %m\n",
 			errno);
-		ret = -errno;
-		goto err_fb;
+		drmModeRmFB(fd, dev->fb);
+		dev->fb = 0;
+		struct drm_mode_destroy_dumb dreq = {};
+		dreq.handle = dev->handle;
+		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+		dev->handle = 0;
+		return -errno;
 	}
 
 	printf("offset %d\n", mreq.offset);
-	/* perform actual memory mapping */
 	dev->map = mmap(0, dev->size, PROT_READ | PROT_WRITE, MAP_SHARED,
 		        fd, mreq.offset);
 	if (dev->map == MAP_FAILED) {
 		fprintf(stderr, "cannot mmap dumb buffer (%d): %m\n",
 			errno);
-		ret = -errno;
-		goto err_fb;
+		drmModeRmFB(fd, dev->fb);
+		dev->fb = 0;
+		struct drm_mode_destroy_dumb dreq = {};
+		dreq.handle = dev->handle;
+		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+		dev->handle = 0;
+		return -errno;
 	}
 
-	/* clear the framebuffer to 0 */
 	memset(dev->map, 0, dev->size);
-
 	return 0;
-
-err_fb:
-	drmModeRmFB(fd, dev->fb);
-err_destroy:
-	memset(&dreq, 0, sizeof(dreq));
-	dreq.handle = dev->handle;
-	drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
-	return ret;
 }
 
 int modeset_create_back_fb(int fd, struct modeset_dev *dev)
 {
 	struct drm_mode_create_dumb creq;
-	struct drm_mode_destroy_dumb dreq;
 	struct drm_mode_map_dumb mreq;
 	int ret;
 
@@ -521,12 +535,24 @@ int modeset_create_back_fb(int fd, struct modeset_dev *dev)
 	dev->back_size   = creq.size;
 	dev->back_handle = creq.handle;
 
-	ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32,
-		dev->back_stride, dev->back_handle, &dev->back_fb);
-	if (ret) {
-		fprintf(stderr, "back fb: cannot create framebuffer (%d): %m\n", errno);
-		ret = -errno;
-		goto err_destroy;
+	{
+		uint32_t handles[4] = { dev->back_handle, 0, 0, 0 };
+		uint32_t pitches[4] = { dev->back_stride, 0, 0, 0 };
+		uint32_t offsets[4] = { 0, 0, 0, 0 };
+		ret = drmModeAddFB2(fd, dev->width, dev->height, DRM_FORMAT_XRGB8888,
+				    handles, pitches, offsets, &dev->back_fb, 0);
+		if (ret) {
+			ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32,
+				dev->back_stride, dev->back_handle, &dev->back_fb);
+			if (ret) {
+				fprintf(stderr, "back fb: cannot create framebuffer (failed, %d): %m\n", errno);
+				struct drm_mode_destroy_dumb dreq = {};
+				dreq.handle = dev->back_handle;
+				drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+				dev->back_handle = 0;
+				return -errno;
+			}
+		}
 	}
 
 	memset(&mreq, 0, sizeof(mreq));
@@ -534,8 +560,13 @@ int modeset_create_back_fb(int fd, struct modeset_dev *dev)
 	ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
 	if (ret) {
 		fprintf(stderr, "back fb: cannot map dumb buffer (%d): %m\n", errno);
-		ret = -errno;
-		goto err_fb;
+		drmModeRmFB(fd, dev->back_fb);
+		dev->back_fb = 0;
+		struct drm_mode_destroy_dumb dreq = {};
+		dreq.handle = dev->back_handle;
+		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+		dev->back_handle = 0;
+		return -errno;
 	}
 
 	dev->back_map = mmap(0, dev->back_size, PROT_READ | PROT_WRITE,
@@ -543,23 +574,19 @@ int modeset_create_back_fb(int fd, struct modeset_dev *dev)
 	if (dev->back_map == MAP_FAILED) {
 		fprintf(stderr, "back fb: cannot mmap dumb buffer (%d): %m\n", errno);
 		dev->back_map = NULL;
-		ret = -errno;
-		goto err_fb;
+		drmModeRmFB(fd, dev->back_fb);
+		dev->back_fb = 0;
+		struct drm_mode_destroy_dumb dreq = {};
+		dreq.handle = dev->back_handle;
+		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+		dev->back_handle = 0;
+		return -errno;
 	}
 
 	memset(dev->back_map, 0, dev->back_size);
 	return 0;
-
-err_fb:
-	drmModeRmFB(fd, dev->back_fb);
-	dev->back_fb = 0;
-err_destroy:
-	memset(&dreq, 0, sizeof(dreq));
-	dreq.handle = dev->back_handle;
-	drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
-	dev->back_handle = 0;
-	return ret;
 }
+
 
 
 /*
@@ -801,6 +828,18 @@ modeset_dev_destroy(int fd, struct modeset_dev* dev)
 		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
 	}
 
+	if (dev->cursor_map) {
+		munmap(dev->cursor_map, dev->cursor_size);
+		dev->cursor_map = NULL;
+	}
+	if (dev->cursor_handle) {
+		struct drm_mode_destroy_dumb dreq;
+		memset(&dreq, 0, sizeof(dreq));
+		dreq.handle = dev->cursor_handle;
+		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+		dev->cursor_handle = 0;
+	}
+
 	free(dev);
 }
 
@@ -874,15 +913,208 @@ void modeset_cleanup(int fd)
 
 		/* delete framebuffer */
 		drmModeRmFB(fd, iter->fb);
-
+		if (iter->back_fb) {
+			drmModeRmFB(fd, iter->back_fb);
+			iter->back_fb = 0;
+		}
 		/* delete dumb buffer */
 		memset(&dreq, 0, sizeof(dreq));
 		dreq.handle = iter->handle;
 		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
 
+		if (iter->back_handle) {
+			struct drm_mode_destroy_dumb bdreq = {};
+			bdreq.handle = iter->back_handle;
+			drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &bdreq);
+		}
+
+		if (iter->cursor_map)
+			munmap(iter->cursor_map, iter->cursor_size);
+		if (iter->cursor_handle) {
+			memset(&dreq, 0, sizeof(dreq));
+			dreq.handle = iter->cursor_handle;
+			drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+		}
+
 		/* free allocated memory */
 		free(iter);
 	}
+}
+
+
+#ifdef HAVE_GBM
+int
+modeset_create_gbm_fb(int fd, struct gbm_device* gbm,
+                      struct modeset_dev* dev, bool isBack)
+{
+	struct gbm_bo* bo = gbm_bo_create(gbm,
+		dev->width, dev->height,
+		GBM_FORMAT_XRGB8888,
+		GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+
+	if (!bo) {
+		fprintf(stderr, "gbm_bo_create failed\n");
+		return -ENOMEM;
+	}
+
+	uint32_t handle = gbm_bo_get_handle(bo).u32;
+	uint32_t stride = gbm_bo_get_stride(bo);
+	uint64_t modifier = gbm_bo_get_modifier(bo);
+	uint32_t fb_id = 0;
+
+	int ret;
+	if (modifier != DRM_FORMAT_MOD_LINEAR && modifier != DRM_FORMAT_MOD_INVALID) {
+		uint32_t handles[4] = { handle };
+		uint32_t pitches[4] = { stride };
+		uint32_t offsets[4] = { 0 };
+		uint64_t modifiers[4] = { modifier };
+		ret = drmModeAddFB2WithModifiers(fd, dev->width, dev->height,
+			DRM_FORMAT_XRGB8888, handles, pitches, offsets, modifiers,
+			&fb_id, DRM_MODE_FB_MODIFIERS);
+	} else {
+		uint32_t handles[4] = { handle };
+		uint32_t pitches[4] = { stride };
+		uint32_t offsets[4] = { 0 };
+		ret = drmModeAddFB2(fd, dev->width, dev->height,
+			DRM_FORMAT_XRGB8888, handles, pitches, offsets, &fb_id, 0);
+	}
+
+	if (ret) {
+		fprintf(stderr, "drmModeAddFB2 for GBM bo failed: %m\n");
+		gbm_bo_destroy(bo);
+		return -errno;
+	}
+
+	uint32_t map_stride = 0;
+	void* map_data = NULL;
+	void* map = gbm_bo_map(bo, 0, 0, dev->width, dev->height,
+		GBM_BO_TRANSFER_WRITE, &map_stride, &map_data);
+
+	if (map == MAP_FAILED || map == NULL) {
+		fprintf(stderr, "gbm_bo_map failed -- falling back to dumb buffer\n");
+		drmModeRmFB(fd, fb_id);
+		gbm_bo_destroy(bo);
+		return -ENOTSUP;
+	}
+
+	if (isBack) {
+		dev->back_bo       = bo;
+		dev->back_fb       = fb_id;
+		dev->back_stride   = map_stride;
+		dev->back_map      = map;
+		dev->back_size     = map_stride * dev->height;
+		dev->back_map_data = map_data;
+	} else {
+		dev->front_bo       = bo;
+		dev->fb             = fb_id;
+		dev->stride         = map_stride;
+		dev->map            = map;
+		dev->size           = map_stride * dev->height;
+		dev->front_map_data = map_data;
+	}
+
+	return 0;
+}
+
+
+int
+modeset_create_render_fb(int fd, struct gbm_device* gbm,
+                       struct modeset_dev* dev)
+{
+	struct gbm_bo* bo = gbm_bo_create(gbm,
+		dev->width, dev->height,
+		GBM_FORMAT_XRGB8888,
+		GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+
+	if (!bo) {
+		fprintf(stderr, "gbm_bo_create failed for render buffer\n");
+		return -ENOMEM;
+	}
+
+	uint32_t handle = gbm_bo_get_handle(bo).u32;
+	uint32_t stride = gbm_bo_get_stride(bo);
+	uint64_t modifier = gbm_bo_get_modifier(bo);
+	uint32_t fb_id = 0;
+
+	int ret;
+	if (modifier != DRM_FORMAT_MOD_LINEAR && modifier != DRM_FORMAT_MOD_INVALID) {
+		uint32_t handles[4] = { handle };
+		uint32_t pitches[4] = { stride };
+		uint32_t offsets[4] = { 0 };
+		uint64_t modifiers[4] = { modifier };
+		ret = drmModeAddFB2WithModifiers(fd, dev->width, dev->height,
+			DRM_FORMAT_XRGB8888, handles, pitches, offsets, modifiers,
+			&fb_id, DRM_MODE_FB_MODIFIERS);
+	} else {
+		uint32_t handles[4] = { handle };
+		uint32_t pitches[4] = { stride };
+		uint32_t offsets[4] = { 0 };
+		ret = drmModeAddFB2(fd, dev->width, dev->height,
+			DRM_FORMAT_XRGB8888, handles, pitches, offsets, &fb_id, 0);
+	}
+
+	if (ret) {
+		fprintf(stderr, "drmModeAddFB2 for render bo failed: %m\n");
+		gbm_bo_destroy(bo);
+		return -errno;
+	}
+
+	uint32_t map_stride = 0;
+	void* map_data = NULL;
+	void* map = gbm_bo_map(bo, 0, 0, dev->width, dev->height,
+		GBM_BO_TRANSFER_WRITE, &map_stride, &map_data);
+
+	if (map == MAP_FAILED || map == NULL) {
+		fprintf(stderr, "gbm_bo_map failed for render buffer\n");
+		drmModeRmFB(fd, fb_id);
+		gbm_bo_destroy(bo);
+		return -ENOTSUP;
+	}
+
+	dev->render_bo       = bo;
+	dev->render_fb       = fb_id;
+	dev->render_stride   = map_stride;
+	dev->render_map      = map;
+	dev->render_map_data = map_data;
+
+	return 0;
+}
+#endif
+
+
+int
+modeset_create_cursor_fb(int fd, struct modeset_dev *dev)
+{
+	struct drm_mode_create_dumb creq = {};
+	creq.width  = 64;
+	creq.height = 64;
+	creq.bpp    = 32;
+	if (drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq) < 0) {
+		fprintf(stderr, "cursor: cannot create dumb buffer: %m\n");
+		return -errno;
+	}
+
+	struct drm_mode_map_dumb mreq = { .handle = creq.handle };
+	if (drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq) < 0) {
+		fprintf(stderr, "cursor: cannot map dumb buffer: %m\n");
+		return -errno;
+	}
+
+	void* map = mmap(NULL, creq.size, PROT_READ | PROT_WRITE,
+			 MAP_SHARED, fd, mreq.offset);
+	if (map == MAP_FAILED) {
+		fprintf(stderr, "cursor: mmap failed: %m\n");
+		return -errno;
+	}
+
+	memset(map, 0, creq.size);
+	dev->cursor_handle = creq.handle;
+	dev->cursor_w      = 64;
+	dev->cursor_h      = 64;
+	dev->cursor_map    = (uint8_t*)map;
+	dev->cursor_size   = creq.size;
+	dev->cursor_ok     = true;
+	return 0;
 }
 
 /*

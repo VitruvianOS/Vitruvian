@@ -12,6 +12,10 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
+#ifdef HAVE_GBM
+#include <gbm.h>
+#endif
+
 struct modeset_dev {
 	struct modeset_dev *next;
 
@@ -34,6 +38,25 @@ struct modeset_dev {
 	uint32_t conn;
 	uint32_t crtc;
 	drmModeCrtc *saved_crtc;
+
+#ifdef HAVE_GBM
+	struct gbm_bo*  front_bo;
+	struct gbm_bo*  back_bo;
+	void*           front_map_data;
+	void*           back_map_data;
+	struct gbm_bo*  render_bo;
+	void*           render_map_data;
+	uint8_t*        render_map;
+	uint32_t        render_stride;
+	uint32_t        render_fb;
+#endif
+
+	uint32_t cursor_handle;
+	uint32_t cursor_w;
+	uint32_t cursor_h;
+	uint8_t*  cursor_map;
+	uint32_t cursor_size;
+	bool      cursor_ok;
 };
 
 struct modeset_dev;
@@ -53,12 +76,22 @@ int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
 int modeset_open(int *out, const char *node);
 int modeset_prepare(int fd);
 int modeset_create_back_fb(int fd, struct modeset_dev *dev);
-void modeset_draw(void);
-void modeset_cleanup(int fd);
+
+int modeset_create_render_fb(int fd, struct gbm_device* gbm,
+                          struct modeset_dev* dev);
+
+int modeset_create_cursor_fb(int fd, struct modeset_dev *dev);
+
+#ifdef HAVE_GBM
+int modeset_create_gbm_fb(int fd, struct gbm_device* gbm,
+                          struct modeset_dev* dev, bool isBack);
+#endif
 
 // Hotplug support
 struct modeset_dev* modeset_dev_create(int fd, uint32_t connector_id);
 void modeset_dev_destroy(int fd, struct modeset_dev* dev);
+
+void modeset_cleanup(int fd);
 int  modeset_add_connector(int fd, uint32_t connector_id);
 void modeset_remove_connector(uint32_t connector_id);
 

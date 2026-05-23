@@ -14,9 +14,30 @@ DrmBuffer::DrmBuffer(int fd, modeset_dev* dev, bool isBack)
 	fDev(dev),
 	fIsBack(isBack),
 	fErr(B_ERROR),
-	fColorSpace(B_RGB32)
+	fColorSpace(B_RGB32),
+	fBits(NULL),
+	fStride(0),
+	fFbId(0),
+	fWidth(0),
+	fHeight(0)
 {
 	fErr = B_OK;
+}
+
+
+DrmBuffer::DrmBuffer(uint8_t* bits, uint32_t stride, uint32_t fbId,
+	uint32_t width, uint32_t height)
+	:
+	fDev(NULL),
+	fIsBack(false),
+	fErr(B_OK),
+	fColorSpace(B_RGB32),
+	fBits(bits),
+	fStride(stride),
+	fFbId(fbId),
+	fWidth(width),
+	fHeight(height)
+{
 }
 
 
@@ -39,35 +60,6 @@ DrmBuffer::ColorSpace() const
 {
 	CALLED();
 	return fColorSpace;
-
-/*
-drmModeConnector *connector = drmModeGetConnector(fd, connector_id);
-for (int i = 0; i < connector->count_props; i++) {
-    drmModePropertyPtr prop = drmModeGetProperty(fd, connector->props[i]);
-    if (strcmp(prop->name, "color_space") == 0) {
-        // Found color_space property, query it
-    }
-}
-	switch (drm_format) {
-        // RGB formats
-        case DRM_FORMAT_XRGB8888:
-        case DRM_FORMAT_ARGB8888:
-            return B_RGB32;  // 32-bit RGB, no alpha channel for XRGB8888, with alpha for ARGB8888
-        case DRM_FORMAT_RGB565:
-            return B_RGB16;  // 16-bit RGB format
-        // YUV formats
-        case DRM_FORMAT_NV12:
-            return B_YUV420; // NV12 is a YUV420 format
-        case DRM_FORMAT_YUV420:
-            return B_YUV420; // YUV420
-        case DRM_FORMAT_YUV422:
-            return B_YUV422; // YUV422 format
-        // Handle other formats as needed
-        default:
-            // Return a default or an error value if the format is unsupported
-            return B_NO_COLORSPACE;
-    }
-*/
 }
 
 
@@ -75,7 +67,8 @@ void*
 DrmBuffer::Bits() const
 {
 	CALLED();
-	return fIsBack ? (void*)fDev->back_map : (void*)fDev->map;
+	return fBits != NULL ? (void*)fBits
+		: (fIsBack ? (void*)fDev->back_map : (void*)fDev->map);
 }
 
 
@@ -83,14 +76,16 @@ uint32
 DrmBuffer::BytesPerRow() const
 {
 	CALLED();
-	return fIsBack ? fDev->back_stride : fDev->stride;
+	return fStride != 0 ? fStride
+		: (fIsBack ? fDev->back_stride : fDev->stride);
 }
 
 
 uint32
 DrmBuffer::GetFbId() const
 {
-	return fIsBack ? fDev->back_fb : fDev->fb;
+	return fFbId != 0 ? fFbId
+		: (fIsBack ? fDev->back_fb : fDev->fb);
 }
 
 
@@ -98,7 +93,7 @@ uint32
 DrmBuffer::Width() const
 {
 	CALLED();
-	return fDev->width;
+	return fWidth != 0 ? fWidth : fDev->width;
 }
 
 
@@ -106,5 +101,5 @@ uint32
 DrmBuffer::Height() const
 {
 	CALLED();
-	return fDev->height;
+	return fHeight != 0 ? fHeight : fDev->height;
 }

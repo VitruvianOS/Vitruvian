@@ -20,10 +20,33 @@ set(INPUT_SERVER_ADDONS
 ImageInclude("/system/add-ons/input_server/devices" ${INPUT_SERVER_ADDONS})
 
 
+#set(INPUT_SERVER_FILTERS
+#    shortcut_catcher
+#    switch_workspace
+#    minimize_all
+#)
+#ImageInclude("/system/add-ons/input_server/filters" ${INPUT_SERVER_FILTERS})
+
+
+set(OPENGL_RENDERERS
+	mesa_egl
+)
+ImageInclude("/system/add-ons/opengl" ${OPENGL_RENDERERS})
+
+
+#set(INPUT_SERVER_FILTERS
+#	shortcut_catcher
+#	switch_workspace
+#	minimize_all
+#)
+#ImageInclude("/system/add-ons/input_server/filters" ${INPUT_SERVER_FILTERS})
+
+
 set(SYSTEM_LIBS
 	root
 	be
 	game
+	opengl
 	textencoding
 	tracker
 	translation

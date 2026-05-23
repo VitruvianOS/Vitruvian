@@ -512,6 +512,16 @@ BApplication::_InitData(const char* signature, bool initGUI, status_t* _error)
 #endif	// ifndef RUN_WITHOUT_REGISTRAR
 
 	if (fInitError == B_OK) {
+		const char* readyFdEnv = getenv("JANUS_READY_FD");
+		if (readyFdEnv != NULL && readyFdEnv[0] != '\0') {
+			int readyFd = atoi(readyFdEnv);
+			if (readyFd >= 0) {
+				write(readyFd, &fMsgPort, sizeof(port_id));
+				close(readyFd);
+				unsetenv("JANUS_READY_FD");
+			}
+		}
+
 		// TODO: Not completely sure about the order, but this should be close.
 
 		// init be_app and be_app_messenger
@@ -548,11 +558,7 @@ DBG(OUT("BApplication::InitData() done\n"));
 port_id
 BApplication::_GetPort(const char* signature)
 {
-	#ifndef __VOS__
 	return BLaunchRoster().GetPort(signature, NULL);
-	#endif
-	UNIMPLEMENTED();
-	return -1;
 }
 
 

@@ -1,16 +1,20 @@
 /*
- * Copyright 2004-2008, Haiku.
+ * Copyright 2004-2020, Haiku.
+ * Copyright 2026, The Vitruvian Project
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Jérôme Duval
  *		Axel Doerfler, axeld@pinc-software.de
+ *		Pawan Yerramilli, me@pawanyerramilli.com
+ *		Dario Casalinuovo
  */
 
 //!	Keyboard input server addon
 
 #include "TeamMonitorWindow.h"
 
+#include <set>
 #include <stdio.h>
 
 #include <Application.h>
@@ -27,10 +31,11 @@
 #include <Screen.h>
 #include <SpaceLayoutItem.h>
 #include <String.h>
+#include <StringFormat.h>
 #include <StringView.h>
-#include <TextView.h>
 
 #include <syscalls.h>
+#include <syscall_process_info.h>
 #include <tracker_private.h>
 
 #include "KeyboardInputDevice.h"
@@ -125,9 +130,8 @@ private:
 			int32			fSeconds;
 			BMessageRunner*	fRebootRunner;
 			IconView*		fIconView;
-	const	char*			fInfoString;
 			BCardLayout*	fLayout;
-			BTextView*		fInfoTextView;
+			BStringView*	fInfoTextView;
 
 			BStringView*	fTeamName;
 			BStringView*	fSysComponent;
@@ -165,7 +169,7 @@ TeamMonitorWindow::TeamMonitorWindow()
 
 	layout->View()->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
-	fListView = new BListView("teams");
+	fListView = new BOutlineListView("teams");
 	fListView->SetSelectionMessage(new BMessage(TM_SELECTED_TEAM));
 
 	BScrollView* scrollView = new BScrollView("scroll_teams", fListView,
@@ -188,12 +192,15 @@ TeamMonitorWindow::TeamMonitorWindow()
 	fRestartButton = new BButton("restart", B_TRANSLATE("Restart the desktop"),
 		new BMessage(TM_RESTART_DESKTOP));
 
+	BButton* openTerminal = new BButton("terminal",
+		B_TRANSLATE("Open Terminal"), new BMessage(kMsgLaunchTerminal));
+
 	fCancelButton = new BButton("cancel", B_TRANSLATE("Cancel"),
 		new BMessage(TM_CANCEL));
 	SetDefaultButton(fCancelButton);
 
 	BGroupLayoutBuilder(layout)
-		.Add(scrollView)
+		.Add(scrollView, 10)
 		.AddGroup(B_HORIZONTAL)
 			.SetInsets(0, 0, 0, 0)
 			.Add(fKillButton)
@@ -207,6 +214,7 @@ TeamMonitorWindow::TeamMonitorWindow()
 			.AddGlue()
 			.Add(fRestartButton)
 			.AddGlue(inset)
+			.Add(openTerminal)
 			.Add(fCancelButton);
 
 	CenterOnScreen();
@@ -273,6 +281,7 @@ TeamMonitorWindow::MessageReceived(BMessage* msg)
 
 		case kMsgLaunchTerminal:
 			be_roster->Launch("application/x-vnd.Haiku-Terminal");
+			PostMessage(B_QUIT_REQUESTED);
 			break;
 
 		case TM_FORCE_REBOOT:
@@ -281,8 +290,8 @@ TeamMonitorWindow::MessageReceived(BMessage* msg)
 
 		case TM_KILL_APPLICATION:
 		{
-			TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->ItemAt(
-				fListView->CurrentSelection()));
+			TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->FullListItemAt(
+				fListView->FullListCurrentSelection()));
 			if (item != NULL) {
 				kill_team(item->GetInfo()->team);
 				_UpdateList();
@@ -291,11 +300,10 @@ TeamMonitorWindow::MessageReceived(BMessage* msg)
 		}
 		case TM_QUIT_APPLICATION:
 		{
-			TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->ItemAt(
-				fListView->CurrentSelection()));
-			if (item != NULL) {
+			TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->FullListItemAt(
+				fListView->FullListCurrentSelection()));
+			if (item != NULL)
 				QuitTeam(item);
-			}
 			break;
 		}
 		case kMsgQuitFailed:
@@ -314,9 +322,9 @@ TeamMonitorWindow::MessageReceived(BMessage* msg)
 		}
 		case TM_SELECTED_TEAM:
 		{
-			fKillButton->SetEnabled(fListView->CurrentSelection() >= 0);
-			TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->ItemAt(
-				fListView->CurrentSelection()));
+			fKillButton->SetEnabled(fListView->FullListCurrentSelection() >= 0);
+			TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->FullListItemAt(
+				fListView->FullListCurrentSelection()));
 			fDescriptionView->SetItem(item);
 			fQuitButton->SetEnabled(item != NULL && item->IsApplication());
 			break;
@@ -376,8 +384,8 @@ TeamMonitorWindow::Disable()
 	fUpdateRunner = NULL;
 	Hide();
 	fListView->DeselectAll();
-	for (int32 i = 0; i < fListView->CountItems(); i++) {
-		TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->ItemAt(i));
+	for (int32 i = 0; i < fListView->FullListCountItems(); i++) {
+		TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->FullListItemAt(i));
 		if (item != NULL)
 			item->SetRefusingToQuit(false);
 	}
@@ -391,9 +399,9 @@ TeamMonitorWindow::LocaleChanged()
 	gLocalizedNamePreferred
 		= BLocaleRoster::Default()->IsFilesystemTranslationPreferred();
 
-	for (int32 i = 0; i < fListView->CountItems(); i++) {
+	for (int32 i = 0; i < fListView->FullListCountItems(); i++) {
 		TeamListItem* item
-			= dynamic_cast<TeamListItem*>(fListView->ItemAt(i));
+			= dynamic_cast<TeamListItem*>(fListView->FullListItemAt(i));
 		if (item != NULL)
 			item->CacheLocalizedName();
 	}
@@ -441,9 +449,9 @@ TeamMonitorWindow::MarkUnquittableTeam(BMessage* message)
 		reinterpret_cast<void**>(&teamQuitter)) != B_OK)
 		return;
 
-	for (int32 i = 0; i < fListView->CountItems(); i++) {
+	for (int32 i = 0; i < fListView->FullListCountItems(); i++) {
 		TeamListItem* item
-			= dynamic_cast<TeamListItem*>(fListView->ItemAt(i));
+			= dynamic_cast<TeamListItem*>(fListView->FullListItemAt(i));
 		if (item != NULL && item->GetInfo()->team == teamQuitter->team) {
 			item->SetRefusingToQuit(true);
 			fListView->Select(i);
@@ -505,40 +513,64 @@ TeamMonitorWindow::_UpdateList()
 {
 	bool changed = false;
 
-	for (int32 i = 0; i < fListView->CountItems(); i++) {
-		TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->ItemAt(i));
+	for (int32 i = 0; i < fListView->FullListCountItems(); i++) {
+		TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->FullListItemAt(i));
 		if (item != NULL)
 			item->SetFound(false);
 	}
 
+	std::set<BString> paths;
 	int32 cookie = 0;
 	team_info info;
 	while (get_next_team_info(&cookie, &info) == B_OK) {
 		if (info.team <=16)
 			continue;
 
-		bool found = false;
-		for (int32 i = 0; i < fListView->CountItems(); i++) {
-			TeamListItem* item
-				= dynamic_cast<TeamListItem*>(fListView->ItemAt(i));
-			if (item != NULL && item->GetInfo()->team == info.team) {
-				item->SetFound(true);
-				found = true;
+		app_info ai;
+		bool isApp = be_roster->GetRunningAppInfo(info.team, &ai) == B_OK;
+
+		TeamListItem* item = fItemMap.Get(info.team);
+		if (item != NULL && isApp == item->IsApplication()) {
+			item->SetFound(true);
+			paths.insert(BString(item->Path()->Path()));
+			continue;
+		}
+
+		item = new TeamListItem(info);
+		item->SetFound(true);
+
+		TeamListItem* insertUnder = NULL;
+		if (!isApp || paths.count(item->Path()->Path()) > 0) {
+			int32 spawner_id = _kern_process_info(info.team, PARENT_ID);
+
+			insertUnder = fItemMap.Get(spawner_id);
+			while (insertUnder != NULL && !insertUnder->IsParent())
+				insertUnder = dynamic_cast<TeamListItem*>(fListView->Superitem(insertUnder));
+
+			if (insertUnder != NULL) {
+				if (isApp && *insertUnder->Path() != *item->Path())
+					insertUnder = NULL;
+				else if (!insertUnder->Found())
+					insertUnder = NULL;
 			}
 		}
 
-		if (!found) {
-			TeamListItem* item = new TeamListItem(info);
-
+		if (insertUnder != NULL)
+			fListView->AddUnder(item, insertUnder);
+		else {
+			item->SetIsParent(true);
 			fListView->AddItem(item,
-				item->IsSystemServer() ? fListView->CountItems() : 0);
-			item->SetFound(true);
-			changed = true;
+				item->IsSystemServer() ? fListView->FullListCountItems() : 0);
+			fListView->Collapse(item);
 		}
+
+		fItemMap.Put(info.team, item);
+		paths.insert(BString(item->Path()->Path()));
+		changed = true;
 	}
 
-	for (int32 i = fListView->CountItems() - 1; i >= 0; i--) {
-		TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->ItemAt(i));
+	for (int32 i = fListView->FullListCountItems() - 1; i >= 0; i--) {
+		TeamListItem* item = dynamic_cast<TeamListItem*>(fListView->FullListItemAt(i));
 		if (item != NULL && !item->Found()) {
 			if (item == fDescriptionView->Item()) {
 				fDescriptionView->SetItem(NULL);
@@ -546,6 +578,17 @@ TeamMonitorWindow::_UpdateList()
 				fQuitButton->SetEnabled(false);
 			}
 
+			if (item->IsParent()) {
+				for (int32 j = 0; j < fListView->CountItemsUnder(item, true); j++) {
+					TeamListItem* child = dynamic_cast<TeamListItem*>(
+						fListView->ItemUnderAt(item, true, j));
+					if (child != NULL && !fItemMap.Get(child->GetInfo()->team)->Found())
+						fItemMap.Remove(child->GetInfo()->team);
+				}
+			}
+
+			if (!fItemMap.Get(item->GetInfo()->team)->Found())
+				fItemMap.Remove(item->GetInfo()->team);
 			delete fListView->RemoveItem(i);
 			changed = true;
 		}
@@ -576,12 +619,6 @@ TeamDescriptionView::TeamDescriptionView()
 	fSeconds(4),
 	fRebootRunner(NULL)
 {
-	fInfoString = B_TRANSLATE(
-		"Select an application from the list above and click one of "
-		"the buttons 'Kill application' and 'Quit application' "
-		"in order to close it.\n\n"
-		"Hold CONTROL+ALT+DELETE for %ld seconds to reboot.");
-
 	fTeamName = new BStringView("team name", "team name");
 	fTeamName->SetTruncation(B_TRUNCATE_BEGINNING);
 	fTeamName->SetExplicitSize(BSize(StringWidth("x") * 60, B_SIZE_UNSET));
@@ -591,13 +628,9 @@ TeamDescriptionView::TeamDescriptionView()
 		"If the application will not quit you may have to kill it."));
 	fQuitOverdue->SetFont(be_bold_font);
 
-	fInfoTextView = new BTextView("info text");
+	fInfoTextView = new BStringView("info text", "");
 	fInfoTextView->SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
 	fInfoTextView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-	BGroupView* infoGroup = new BGroupView(B_VERTICAL);
-	BGroupLayoutBuilder(infoGroup)
-		.Add(fInfoTextView)
-		.AddGlue();
 
 	fIconView = new IconView();
 	fIconView->SetExplicitAlignment(
@@ -607,7 +640,6 @@ TeamDescriptionView::TeamDescriptionView()
 	teamPropertiesView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 	BGridLayout* layout = new BGridLayout();
 	teamPropertiesView->SetLayout(layout);
-
 
 	BLayoutBuilder::Grid<>(layout)
 		.SetInsets(0)
@@ -623,13 +655,8 @@ TeamDescriptionView::TeamDescriptionView()
 
 	fLayout = new BCardLayout();
 	SetLayout(fLayout);
-	fLayout->AddView(infoGroup);
+	fLayout->AddView(fInfoTextView);
 	fLayout->AddView(teamPropertiesView);
-
-	infoGroup->SetExplicitMinSize(BSize(StringWidth("x") * 70, B_SIZE_UNSET));
-	fInfoTextView->SetExplicitSize(BSize(B_SIZE_UNSET, be_plain_font->Size() * 7.2));
-	fInfoTextView->MakeEditable(false);
-	fInfoTextView->MakeSelectable(false);
 
 	SetItem(NULL);
 }
@@ -686,24 +713,21 @@ TeamDescriptionView::SetItem(TeamListItem* item)
 
 	if (item == NULL) {
 		if (fInfoTextView != NULL) {
-			int32 styleStart = 0;
-			int32 styleEnd = 0;
-			BString text;
+			BFont font;
+			fInfoTextView->GetFont(&font);
+			font.SetFace(B_REGULAR_FACE);
 
-			text.SetToFormat(fInfoString, fSeconds);
-			fInfoTextView->SetText(text);
-			if (fRebootRunner != NULL && fSeconds < 4) {
-				styleStart = text.FindLast('\n');
-				styleEnd = text.Length();
-			}
-
-			if (styleStart != styleEnd) {
-				BFont font;
-				fInfoTextView->GetFont(&font);
+			if (fRebootRunner != NULL && fSeconds < 4)
 				font.SetFace(B_BOLD_FACE);
-				fInfoTextView->SetStylable(true);
-				fInfoTextView->SetFontAndColor(styleStart, styleEnd, &font);
-			}
+
+			fInfoTextView->SetFont(&font);
+
+			static BStringFormat format(B_TRANSLATE("{0, plural,"
+				"one{Hold CONTROL+ALT+DELETE for # second to reboot.}"
+				"other{Hold CONTROL+ALT+DELETE for # seconds to reboot.}}"));
+			BString text;
+			format.Format(text, fSeconds);
+			fInfoTextView->SetText(text);
 		}
 	} else {
 		fTeamName->SetText(item->Path()->Path());
@@ -724,7 +748,7 @@ TeamDescriptionView::SetItem(TeamListItem* item)
 				fQuitOverdue->Hide();
 		}
 
-		fIconView->SetIcon(item->Path()->Path());
+		fIconView->SetIcon(item->LargeIcon());
 	}
 
 	if (fLayout == NULL)
@@ -737,5 +761,3 @@ TeamDescriptionView::SetItem(TeamListItem* item)
 
 	Invalidate();
 }
-
-

@@ -1,9 +1,11 @@
 /*
- * Copyright 2004-2008, Haiku.
- * Distributed under the terms of the MIT License.
+ * Copyright 2004-2025, Haiku.
+ * Copyright 2026, The Vitruvian Project
+ * Distributed under the terms of the GPL License.
  *
  * Authors:
  *		Stefano Ceccherini
+ *		Dario Casalinuovo
  */
 #ifndef MOUSE_INPUT_DEVICE_H
 #define MOUSE_INPUT_DEVICE_H
@@ -12,6 +14,7 @@
 #include <InputServerDevice.h>
 #include <InterfaceDefs.h>
 #include <Locker.h>
+#include <Point.h>
 
 #include <ObjectList.h>
 
@@ -46,6 +49,12 @@ private:
 private:
 			BObjectList<MouseDevice> fDevices;
 			BLocker			fDeviceListLock;
+
+public:
+	// Shared cursor state — all MouseDevice instances read/write this under
+	// fCursorLock so relative and absolute devices never fight over position.
+			BPoint			fCursorPosition;	// (-1,-1) = not yet initialised
+			BLocker			fCursorLock;
 };
 
 extern "C" BInputServerDevice* instantiate_input_device();

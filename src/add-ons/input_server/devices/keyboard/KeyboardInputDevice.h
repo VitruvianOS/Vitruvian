@@ -1,10 +1,12 @@
 /*
- * Copyright 2004-2008, Jérôme Duval. All rights reserved.
+ * Copyright 2004-2006, Jérôme Duval. All rights reserved.
  * Copyright 2005-2010, Axel Dörfler, axeld@pinc-software.de.
- * Copyright 2008, Stephan Aßmus, superstippi@gmx.de.
+ * Copyright 2008-2009, Stephan Aßmus, superstippi@gmx.de.
+ * Copyright 2026, Dario Casalinuovo, superstippi@gmx.de.
  *
- * Distributed under the terms of the MIT License.
+ * Distributed under the terms of the GPL License.
  */
+
 #ifndef KEYBOARD_INPUT_DEVICE_H
 #define KEYBOARD_INPUT_DEVICE_H
 
@@ -12,6 +14,11 @@
 #include <Handler.h>
 #include <InputServerDevice.h>
 #include <Locker.h>
+
+struct libevdev;
+struct xkb_context;
+struct xkb_keymap;
+struct xkb_state;
 
 #include <InputServerTypes.h>
 #include <ObjectList.h>
@@ -43,6 +50,7 @@ private:
 			int32				_ControlThread();
 			void				_ControlThreadCleanup();
 			void				_UpdateSettings(uint32 opcode);
+			void				_RebuildXkb();
 			void				_UpdateLEDs();
 			status_t			_EnqueueInlineInputMethod(int32 opcode,
 									const char* string = NULL,
@@ -54,6 +62,13 @@ private:
 			input_device_ref	fDeviceRef;
 			char				fPath[B_PATH_NAME_LENGTH];
 			int					fFD;
+			struct libevdev*	fInputHandle;
+			int					fEpollFd;
+			struct xkb_context*	fXkbContext;
+			struct xkb_keymap*	fXkbKeymap;
+			struct xkb_state*	fXkbState;
+			struct xkb_compose_table*	fXkbComposeTable;
+			struct xkb_compose_state*	fXkbComposeState;
 			thread_id			fThread;
 			kb_settings			fSettings;
 	volatile bool				fActive;
@@ -87,7 +102,7 @@ public:
 	virtual status_t			SystemShuttingDown();
 
 private:
-	friend struct KeyboardDevice;
+	friend class KeyboardDevice;
 	// TODO: needed by the control thread to remove a dead device
 	// find a better way...
 

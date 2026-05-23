@@ -2,6 +2,9 @@ AddOn(
 	keyboard
 	SHARED
 
+	LIBS
+	${INPUT_LIBRARIES} ${EVDEV_LIBRARIES} ${XKBCOMMON_LIBRARIES} be shared localestub
+
 	SOURCES
 	KeyboardInputDevice.cpp
 	Keymap.cpp
@@ -10,9 +13,9 @@ AddOn(
 
 	INCLUDES
 	"./"
-	LIBS input_server be shared localestub
-
-	RDEF Keyboard.rdef
+	"../"
+	${EVDEV_INCLUDES}
+	${XKBCOMMON_INCLUDES}
 )
 
-UsePrivateHeaders(keyboard input interface system tracker)
+UsePrivateHeaders(keyboard input interface shared tracker system)

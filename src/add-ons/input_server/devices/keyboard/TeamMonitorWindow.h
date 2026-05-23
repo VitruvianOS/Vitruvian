@@ -1,10 +1,12 @@
 /*
  * Copyright 2004-2008, Haiku.
+ * Copyright 2026, The Vitruvian Project
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Jérôme Duval
- *		Axel Doerfler, axeld@pinc-software.de
+ *		Axel Doerfler, axeld@pinc-software.de#
+ *		Dario Casalinuovo
  */
 #ifndef TEAM_MONITOR_WINDOW_H
 #define TEAM_MONITOR_WINDOW_H
@@ -12,8 +14,9 @@
 
 #include <Box.h>
 #include <Button.h>
-#include <ListView.h>
+#include <HashMap.h>
 #include <MessageFilter.h>
+#include <OutlineListView.h>
 #include <Window.h>
 
 #include "TeamListItem.h"
@@ -42,13 +45,14 @@ private:
 
 			bool			fQuitting;
 			BMessageRunner*	fUpdateRunner;
-			BListView*		fListView;
+			BOutlineListView*	fListView;
 			BButton*		fCancelButton;
 			BButton*		fKillButton;
 			BButton*		fQuitButton;
 			BButton*		fRestartButton;
 			TeamDescriptionView*	fDescriptionView;
 			BList			fTeamQuitterList;
+			HashMap<HashKey32<int32>, TeamListItem*>	fItemMap;
 };
 
 static const uint32 kMsgCtrlAltDelPressed = 'TMcp';

@@ -1,9 +1,11 @@
 /*
  * Copyright 2004-2008, Haiku.
+ * Copyright 2026, The Vitruvian Project
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Jérôme Duval
+ *		Dario Casalinuovo
  */
 #ifndef TEAM_LIST_ITEM_H
 #define TEAM_LIST_ITEM_H
@@ -36,15 +38,18 @@ public:
 	const	char*				AppSignature() { return fAppInfo.signature; };
 
 			bool				IsSystemServer();
-			bool				IsApplication() const;
+			bool				IsApplication() const { return fIsApplication; }
 
 			bool				Found() const { return fFound; }
 			void				SetFound(bool found) { fFound = found; }
 
+			bool				IsParent() const { return fIsParent; }
+			void				SetIsParent(bool isParent) { fIsParent = isParent; }
+
 			void				SetRefusingToQuit(bool refusing);
 			bool				IsRefusingToQuit();
 
-	static	int32				MinimalHeight();
+			int32				MinimalHeight();
 
 private:
 			team_info			fTeamInfo;
@@ -55,6 +60,8 @@ private:
 			BString				fLocalizedName;
 			bool				fFound;
 			bool				fRefusingToQuit;
+			bool				fIsParent;
+			bool				fIsApplication;
 };
 
 

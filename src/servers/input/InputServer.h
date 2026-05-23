@@ -251,6 +251,7 @@ class InputServer : public BApplication {
 		port_id			fAppServerPort;
 		team_id			fAppServerTeam;
 		area_id			fCursorArea;
+		bool			fRegistrationPending;
 		shared_cursor*	fCursorBuffer;
 };
 

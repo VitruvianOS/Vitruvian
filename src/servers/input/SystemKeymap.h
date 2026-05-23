@@ -17,18 +17,18 @@ const char *kSystemKeymapName = "US-International";
 
 const key_map kSystemKeymap = {
 	version:3,
-	caps_key:0x3b,
-	scroll_key:0xf,
-	num_key:0x22,
-	left_shift_key:0x4b,
-	right_shift_key:0x56,
-	left_command_key:0x5d,
-	right_command_key:0x0,
-	left_control_key:0x5c,
-	right_control_key:0x60,
-	left_option_key:0x66,
-	right_option_key:0x5f,
-	menu_key:0x68,
+	caps_key:58,		// KEY_CAPSLOCK
+	scroll_key:70,		// KEY_SCROLLLOCK
+	num_key:69,			// KEY_NUMLOCK
+	left_shift_key:42,	// KEY_LEFTSHIFT
+	right_shift_key:54,	// KEY_RIGHTSHIFT
+	left_command_key:56,	// KEY_LEFTALT  (Alt = Command in Haiku/VOS)
+	right_command_key:0,
+	left_control_key:29,	// KEY_LEFTCTRL
+	right_control_key:97,	// KEY_RIGHTCTRL
+	left_option_key:125,	// KEY_LEFTMETA (Super = Option)
+	right_option_key:100,	// KEY_RIGHTALT (AltGr = right Option)
+	menu_key:139,		// KEY_MENU
 	lock_settings:0x0,
 	control_map:
 	{

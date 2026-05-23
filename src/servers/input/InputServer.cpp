@@ -155,7 +155,8 @@ InputServer::InputServer()
 	fCursorSem(-1),
 	fAppServerPort(-1),
 	fAppServerTeam(-1),
-	fCursorArea(-1)
+	fCursorArea(-1),
+	fRegistrationPending(false)
 {
 	CALLED();
 	gInputServer = this;
@@ -371,7 +372,7 @@ InputServer::ReadyToRun()
 	CALLED();
 
 	// say hello to the app_server
-
+	fRegistrationPending = true;
 	BPrivate::AppServerLink link;
 	link.StartMessage(AS_REGISTER_INPUT_SERVER);
 	link.Flush();
@@ -393,6 +394,8 @@ InputServer::_AcquireInput(BMessage& message, BMessage& reply)
 				B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, area);
 		}
 	}
+
+	fRegistrationPending = false;
 
 	if (message.FindInt32("remote team", &fAppServerTeam) != B_OK)
 		fAppServerTeam = -1;
@@ -586,9 +589,20 @@ InputServer::MessageReceived(BMessage* message)
 		{
 			BApplication::MessageReceived(message);
 
-			BPrivate::AppServerLink link;
-			link.StartMessage(AS_REGISTER_INPUT_SERVER);
-			link.Flush();
+			// Only register if neither a registration is already in flight
+			// (fRegistrationPending) nor a port is already established
+			// (fAppServerPort >= 0). The race: ReadyToRun sends
+			// AS_REGISTER_INPUT_SERVER and sets fRegistrationPending, but
+			// _ASt can arrive before IS_ACQUIRE_INPUT comes back — if we
+			// re-send here, we get two IS_ACQUIRE_INPUT → two ports → the
+			// EventDispatcher blocks on the first port while input_server
+			// writes to the second.
+			if (!fRegistrationPending && fAppServerPort < 0) {
+				fRegistrationPending = true;
+				BPrivate::AppServerLink link;
+				link.StartMessage(AS_REGISTER_INPUT_SERVER);
+				link.Flush();
+			}
 			return;
 		}
 

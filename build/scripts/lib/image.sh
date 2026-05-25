@@ -183,10 +183,11 @@ create_iso() {
         rm -f "$_basedir/image_tree/image/live/filesystem.squashfs"
     fi
 
+    _iso_pkgs="$(get_iso_image_packages "$_arch")"
     log_step "Installing debs into chroot..."
     sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "echo 'vitruvian' > /etc/hostname && \
 apt remove -y vos nexus-dkms || true && \
-apt-get install -y dkms build-essential linux-headers-$_imagekernelversion && \
+apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs && \
 apt install -y -f --reinstall /tmp/*.deb && \
 depmod -v $_imagekernelversion && echo 'root:live' | chpasswd; exit"
 

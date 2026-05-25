@@ -5,7 +5,7 @@ get_base_packages() {
     case "$_arch" in
         amd64)
             printf '%s' \
-                "apt-utils dialog linux-image-rt-amd64 live-boot systemd-sysv" \
+                "apt-utils dialog linux-image-rt-amd64 systemd-sysv" \
                 " network-manager net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
@@ -14,7 +14,7 @@ get_base_packages() {
             ;;
         arm64)
             printf '%s' \
-                "apt-utils dialog linux-image-arm64 live-boot systemd-sysv" \
+                "apt-utils dialog linux-image-arm64 systemd-sysv" \
                 " network-manager net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
@@ -23,7 +23,7 @@ get_base_packages() {
             ;;
         arm32)
             printf '%s' \
-                "apt-utils dialog linux-image-armmp live-boot systemd-sysv" \
+                "apt-utils dialog linux-image-armmp systemd-sysv" \
                 " network-manager net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales" \
                 " fortune-mod ncurses-bin rsync" \
@@ -32,7 +32,7 @@ get_base_packages() {
             ;;
         riscv64)
             printf '%s' \
-                "apt-utils dialog linux-image-riscv64 live-boot systemd-sysv" \
+                "apt-utils dialog linux-image-riscv64 systemd-sysv" \
                 " network-manager net-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xfsprogs" \
                 " ncurses-bin rsync" \
@@ -86,6 +86,18 @@ get_dev_packages() {
             ;;
         *)
             die "No dev package list for architecture: $_arch"
+            ;;
+    esac
+}
+
+get_iso_image_packages() {
+    _arch="$1"
+    case "$_arch" in
+        amd64|arm64|arm32|riscv64)
+            printf '%s' "live-boot"
+            ;;
+        *)
+            die "No iso image package list for architecture: $_arch"
             ;;
     esac
 }

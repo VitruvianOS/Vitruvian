@@ -85,9 +85,9 @@ create_raw() {
         "$_chroot_dir/" "$_mnt/"
 
     sudo mkdir -p "$_mnt/proc" "$_mnt/sys" "$_mnt/dev" "$_mnt/run" "$_mnt/tmp"
-    sudo mount --bind /dev  "$_mnt/dev"
-    sudo mount --bind /proc "$_mnt/proc"
-    sudo mount --bind /sys  "$_mnt/sys"
+    sudo mount -t proc proc "$_mnt/proc"
+    sudo mount --rbind /sys "$_mnt/sys";  sudo mount --make-rslave "$_mnt/sys"
+    sudo mount --rbind /dev "$_mnt/dev";  sudo mount --make-rslave "$_mnt/dev"
 
     qemu_inject "$_mnt" "$_arch"
 
@@ -100,6 +100,8 @@ create_raw() {
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 apt remove -y vos nexus-dkms || true
+apt-get -y purge live-boot live-boot-initramfs-tools 2>/dev/null || true
+rm -f /usr/share/initramfs-tools/hooks/live /usr/share/initramfs-tools/scripts/live*
 apt-get update
 apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_raw_pkgs
 dpkg -i /localdeb/*.deb || true

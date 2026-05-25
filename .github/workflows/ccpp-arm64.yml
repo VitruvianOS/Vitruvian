@@ -42,10 +42,7 @@ jobs:
       - name: Create build directory
         run: mkdir -p generated.arm64
 
-      - name: Setup environment (build chroot)
-        run: cd generated.arm64 && ../build/scripts/setupenv.sh --chroot-build --arch=arm64
-
-      - name: Configure
+      - name: Configure (also creates chroot)
         run: cd generated.arm64 && ../configure --arch=arm64 --build-type=Workflow --chroot-build
 
       - name: Build ISO + RAW images

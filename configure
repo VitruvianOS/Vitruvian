@@ -11,6 +11,8 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 BUILD_TYPE="Debug"
 CHROOT_BUILD=0
 CHROOT_PATH=""
@@ -46,6 +48,8 @@ for arg in "$@"; do
     esac
 done
 
+
+# Resolve effective arch (CLI > buildstate.conf > default)
 if [ -z "$TARGET_ARCH" ]; then
     if [ -f ./buildstate.conf ]; then
         . ./buildstate.conf
@@ -53,6 +57,23 @@ if [ -z "$TARGET_ARCH" ]; then
     else
         TARGET_ARCH="x86_64"
     fi
+fi
+
+# Map user-facing arch to setupenv arch form
+case "$TARGET_ARCH" in
+    amd64|x86_64)    _setup_arch=amd64 ;;
+    arm64)           _setup_arch=arm64 ;;
+    arm32|armhf|arm) _setup_arch=arm32 ;;
+    riscv64)         _setup_arch=riscv64 ;;
+    *) echo "Error: Unknown architecture: $TARGET_ARCH"; exit 1 ;;
+esac
+
+# Invoke setupenv as needed: create chroot if --chroot-build and missing,
+# or write buildstate.conf if absent (native case).
+if [ $CHROOT_BUILD -eq 1 ] && [ ! -d ./image_tree/chroot ] && [ -z "$CHROOT_PATH" ]; then
+    "$SCRIPT_DIR/build/scripts/setupenv.sh" --chroot-build --arch="$_setup_arch"
+elif [ ! -f ./buildstate.conf ]; then
+    "$SCRIPT_DIR/build/scripts/setupenv.sh" --arch="$_setup_arch"
 fi
 
 if [ -f ./CMakeCache.txt ]; then
@@ -115,13 +136,8 @@ if [ $CHROOT_BUILD -eq 1 ]; then
     if [ -n "$CHROOT_PATH" ]; then
         [ -d "$CHROOT_PATH" ] || { echo "Error: --chroot-path $CHROOT_PATH does not exist."; exit 1; }
         CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_CHROOT_PATH=$CHROOT_PATH"
-    elif [ -d "./image_tree/chroot" ]; then
-        CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_CHROOT_PATH=$(realpath ./image_tree/chroot)"
     else
-        echo "Error: --chroot-build requested but no chroot found at ./image_tree/chroot."
-        echo "Run ./build/scripts/setupenv.sh --chroot-build --arch=<arch> first,"
-        echo "or pass --chroot-path=PATH explicitly."
-        exit 1
+        CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_CHROOT_PATH=$(realpath ./image_tree/chroot)"
     fi
 fi
 

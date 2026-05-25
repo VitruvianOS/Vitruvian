@@ -185,7 +185,7 @@ int modeset_prepare(int fd)
 {
 	drmModeRes *res;
 	drmModeConnector *conn;
-	unsigned int i;
+	int i;
 	struct modeset_dev *dev;
 	int ret;
 
@@ -285,13 +285,28 @@ int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
 	}
 
 	for (int i = 0; i < conn->count_modes; i++) {
-	fprintf(stderr, "mode %ux%u\n",
-		conn->modes[i].hdisplay, conn->modes[i].vdisplay);
+		fprintf(stderr, "mode %ux%u%s\n",
+			conn->modes[i].hdisplay, conn->modes[i].vdisplay,
+			(conn->modes[i].type & DRM_MODE_TYPE_PREFERRED)
+				? " [preferred]" : "");
 	}
-	/* copy the mode information into our device structure */
-	memcpy(&dev->mode, &conn->modes[0], sizeof(dev->mode));
-	dev->width = conn->modes[0].hdisplay;
-	dev->height = conn->modes[0].vdisplay;
+
+	/* Prefer the EDID-flagged preferred mode; fall back to modes[0]
+	 * (which is conventionally the highest-resolution mode).  Matters
+	 * for TVs/projectors where modes[0] isn't always the right pick. */
+	drmModeModeInfo* picked = NULL;
+	for (int i = 0; i < conn->count_modes; i++) {
+		if (conn->modes[i].type & DRM_MODE_TYPE_PREFERRED) {
+			picked = &conn->modes[i];
+			break;
+		}
+	}
+	if (picked == NULL)
+		picked = &conn->modes[0];
+
+	memcpy(&dev->mode, picked, sizeof(dev->mode));
+	dev->width  = picked->hdisplay;
+	dev->height = picked->vdisplay;
 	fprintf(stderr, "mode for connector %u is %ux%u\n",
 		conn->connector_id, dev->width, dev->height);
 
@@ -340,8 +355,8 @@ int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 			     struct modeset_dev *dev)
 {
 	drmModeEncoder *enc;
-	unsigned int i, j;
-	int32_t crtc;
+	int i, j;
+	uint32_t crtc;
 	struct modeset_dev *iter;
 
 	/* first try the currently conected encoder+crtc */
@@ -355,12 +370,12 @@ int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 			crtc = enc->crtc_id;
 			for (iter = modeset_list; iter; iter = iter->next) {
 				if (iter->crtc == crtc) {
-					crtc = -1;
+					crtc = 0;
 					break;
 				}
 			}
 
-			if (crtc >= 0) {
+			if (crtc != 0) {
 				drmModeFreeEncoder(enc);
 				dev->crtc = crtc;
 				return 0;
@@ -392,13 +407,13 @@ int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 			crtc = res->crtcs[j];
 			for (iter = modeset_list; iter; iter = iter->next) {
 				if (iter->crtc == crtc) {
-					crtc = -1;
+					crtc = 0;
 					break;
 				}
 			}
 
 			/* we have found a CRTC, so save it and return */
-			if (crtc >= 0) {
+			if (crtc != 0) {
 				drmModeFreeEncoder(enc);
 				dev->crtc = crtc;
 				return 0;
@@ -497,7 +512,7 @@ int modeset_create_fb(int fd, struct modeset_dev *dev)
 		return -errno;
 	}
 
-	printf("offset %d\n", mreq.offset);
+	printf("offset %llu\n", (unsigned long long)mreq.offset);
 	dev->map = mmap(0, dev->size, PROT_READ | PROT_WRITE, MAP_SHARED,
 		        fd, mreq.offset);
 	if (dev->map == MAP_FAILED) {
@@ -828,6 +843,10 @@ modeset_dev_destroy(int fd, struct modeset_dev* dev)
 		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
 	}
 
+	if (dev->cursor_fb) {
+		drmModeRmFB(fd, dev->cursor_fb);
+		dev->cursor_fb = 0;
+	}
 	if (dev->cursor_map) {
 		munmap(dev->cursor_map, dev->cursor_size);
 		dev->cursor_map = NULL;
@@ -871,7 +890,7 @@ modeset_add_connector(int fd, uint32_t connector_id)
 
 
 void
-modeset_remove_connector(uint32_t connector_id)
+modeset_remove_connector(int fd, uint32_t connector_id)
 {
 	struct modeset_dev** pp = &modeset_list;
 	while (*pp) {
@@ -879,7 +898,11 @@ modeset_remove_connector(uint32_t connector_id)
 			struct modeset_dev* dev = *pp;
 			*pp = dev->next;
 			fprintf(stderr, "hotplug: removed connector %u\n", connector_id);
-			free(dev);
+			/* full teardown — unmaps buffers, drmModeRmFB, destroys
+			 * dumb BOs, frees the struct.  Replaces the previous
+			 * bare free(dev) which leaked the framebuffer + GEM
+			 * handles on every hotplug-out. */
+			modeset_dev_destroy(fd, dev);
 			return;
 		}
 		pp = &(*pp)->next;
@@ -897,19 +920,24 @@ void modeset_cleanup(int fd)
 		iter = modeset_list;
 		modeset_list = iter->next;
 
-		/* restore saved CRTC configuration */
-		drmModeSetCrtc(fd,
-			       iter->saved_crtc->crtc_id,
-			       iter->saved_crtc->buffer_id,
-			       iter->saved_crtc->x,
-			       iter->saved_crtc->y,
-			       &iter->conn,
-			       1,
-			       &iter->saved_crtc->mode);
-		drmModeFreeCrtc(iter->saved_crtc);
+		/* restore saved CRTC configuration (only if we ever saved it
+		 * — early-init failures can leave saved_crtc NULL) */
+		if (iter->saved_crtc) {
+			drmModeSetCrtc(fd,
+				       iter->saved_crtc->crtc_id,
+				       iter->saved_crtc->buffer_id,
+				       iter->saved_crtc->x,
+				       iter->saved_crtc->y,
+				       &iter->conn,
+				       1,
+				       &iter->saved_crtc->mode);
+			drmModeFreeCrtc(iter->saved_crtc);
+			iter->saved_crtc = NULL;
+		}
 
-		/* unmap buffer */
-		munmap(iter->map, iter->size);
+		/* unmap buffer (guard NULL — same early-init concern) */
+		if (iter->map)
+			munmap(iter->map, iter->size);
 
 		/* delete framebuffer */
 		drmModeRmFB(fd, iter->fb);
@@ -928,6 +956,10 @@ void modeset_cleanup(int fd)
 			drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &bdreq);
 		}
 
+		if (iter->cursor_fb) {
+			drmModeRmFB(fd, iter->cursor_fb);
+			iter->cursor_fb = 0;
+		}
 		if (iter->cursor_map)
 			munmap(iter->cursor_map, iter->cursor_size);
 		if (iter->cursor_handle) {
@@ -1114,6 +1146,25 @@ modeset_create_cursor_fb(int fd, struct modeset_dev *dev)
 	dev->cursor_map    = (uint8_t*)map;
 	dev->cursor_size   = creq.size;
 	dev->cursor_ok     = true;
+
+	/*
+	 * Register the cursor BO as a real DRM framebuffer.  Atomic cursor
+	 * plane commits require an fb_id (drmModeAddFB-derived), not a GEM
+	 * handle.  Legacy drmModeSetCursor/SetCursor2 keep taking the GEM
+	 * handle (API contract).  See app-server-fixup.md §3a.
+	 */
+	uint32_t handles[4] = { creq.handle, 0, 0, 0 };
+	uint32_t pitches[4] = { 64 * 4,      0, 0, 0 };
+	uint32_t offsets[4] = { 0, 0, 0, 0 };
+	dev->cursor_fb = 0;
+	if (drmModeAddFB2(fd, 64, 64, DRM_FORMAT_ARGB8888,
+			handles, pitches, offsets, &dev->cursor_fb, 0) != 0) {
+		fprintf(stderr,
+			"cursor: drmModeAddFB2 failed (%d): %m -- atomic cursor "
+			"plane will be unavailable; legacy cursor still works\n",
+			errno);
+		dev->cursor_fb = 0;
+	}
 	return 0;
 }
 

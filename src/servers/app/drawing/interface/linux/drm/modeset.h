@@ -52,6 +52,7 @@ struct modeset_dev {
 #endif
 
 	uint32_t cursor_handle;
+	uint32_t cursor_fb;
 	uint32_t cursor_w;
 	uint32_t cursor_h;
 	uint8_t*  cursor_map;
@@ -93,7 +94,7 @@ void modeset_dev_destroy(int fd, struct modeset_dev* dev);
 
 void modeset_cleanup(int fd);
 int  modeset_add_connector(int fd, uint32_t connector_id);
-void modeset_remove_connector(uint32_t connector_id);
+void modeset_remove_connector(int fd, uint32_t connector_id);
 
 #ifdef __cplusplus
 }

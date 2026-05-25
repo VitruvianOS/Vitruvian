@@ -23,7 +23,7 @@ jobs:
             libtiff-dev libudev-dev libwebp-dev libseat-dev \
             libblkid-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
-            fakeroot devscripts lintian wget
+            fakeroot devscripts lintian wget qemu-utils
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
@@ -52,9 +52,9 @@ jobs:
 
       - name: Generate ISO checksum
         run: |
-          cd generated.x86/image_tree
+          cd generated.x86
           for iso in *.iso; do
-            sha256sum "$iso" > "$iso.sha256"
+            [ -e "$iso" ] && sha256sum "$iso" > "$iso.sha256"
           done
 
       - name: Upload Vitruvian ISO
@@ -63,15 +63,15 @@ jobs:
         with:
           name: Vitruvian-ISO
           path: |
-            generated.x86/image_tree/*.iso
-            generated.x86/image_tree/*.sha256
+            generated.x86/*.iso
+            generated.x86/*.iso.sha256
 
       - name: Build RAW image
         run: cd generated.x86 && ../bake build --image-type=raw
 
       - name: Generate RAW checksum
         run: |
-          cd generated.x86/output
+          cd generated.x86
           for raw in *.raw; do
             [ -e "$raw" ] && sha256sum "$raw" > "$raw.sha256"
           done
@@ -82,8 +82,8 @@ jobs:
         with:
           name: Vitruvian-RAW
           path: |
-            generated.x86/output/*.raw
-            generated.x86/output/*.sha256
+            generated.x86/*.raw
+            generated.x86/*.raw.sha256
 
       - name: Generate DEB checksums
         run: |
@@ -98,4 +98,4 @@ jobs:
           name: Vitruvian-DEB
           path: |
             generated.x86/*.deb
-            generated.x86/*.sha256
+            generated.x86/*.deb.sha256

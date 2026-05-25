@@ -1,0 +1,97 @@
+name: Build Vitruvian ISO (arm64)
+
+on: [push]
+
+jobs:
+  iso-build:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison build-essential cmake debootstrap debhelper \
+            dh-dkms dkms elfutils flex git \
+            grub-efi-arm64-bin \
+            libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
+            libgif-dev libicns-dev libicu-dev libinput-dev \
+            libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
+            libtiff-dev libudev-dev libwebp-dev libseat-dev \
+            libblkid-dev linux-headers-$(uname -r) \
+            mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
+            fakeroot devscripts lintian wget qemu-utils qemu-efi-aarch64 \
+            rsync parted dosfstools xfsprogs
+
+      - name: Configure git safe.directory
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+
+      - name: Init submodules
+        run: git submodule update --init --recursive
+
+      - name: Build buildtools
+        run: |
+          mkdir -p buildtools
+          cd buildtools
+          cmake -DBUILDTOOLS_MODE=1 .. -GNinja
+          ninja
+
+      - name: Create build directory
+        run: mkdir -p generated.arm64
+
+      - name: Setup environment (build chroot)
+        run: cd generated.arm64 && ../build/scripts/setupenv.sh --chroot-build --arch=arm64
+
+      - name: Configure
+        run: cd generated.arm64 && ../configure --arch=arm64 --build-type=Workflow --chroot-build
+
+      - name: Build ISO + RAW images
+        run: cd generated.arm64 && ../bake build --image-type=iso,raw
+
+      - name: Generate image checksums
+        run: |
+          shopt -s nullglob
+          cd generated.arm64/output
+          for f in *.iso *.raw; do
+            sha256sum "$f" > "$f.sha256"
+          done
+
+      - name: Upload Vitruvian ISO
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vitruvian-ISO-arm64
+          path: |
+            generated.arm64/output/*.iso
+            generated.arm64/output/*.iso.sha256
+          if-no-files-found: error
+
+      - name: Upload Vitruvian RAW
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vitruvian-RAW-arm64
+          path: |
+            generated.arm64/output/*.raw
+            generated.arm64/output/*.raw.sha256
+          if-no-files-found: error
+
+      - name: Generate DEB checksums
+        run: |
+          shopt -s nullglob
+          cd generated.arm64
+          for deb in *.deb; do
+            sha256sum "$deb" > "$deb.sha256"
+          done
+
+      - name: Upload Vitruvian DEB packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vitruvian-DEB-arm64
+          path: |
+            generated.arm64/*.deb
+            generated.arm64/*.deb.sha256
+          if-no-files-found: error

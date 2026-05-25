@@ -1,6 +1,7 @@
 #include <Application.h>
 #include <Screen.h>
 
+#include <cstdlib>
 #include <stdio.h>
 #include <string.h>
 

@@ -11,7 +11,7 @@ _loop_image_cleanup() {
     sudo umount -l "$_mnt/boot/firmware" 2>/dev/null || true
     sudo umount -l "$_mnt/boot"          2>/dev/null || true
     sudo umount -l "$_mnt"               2>/dev/null || true
-    [ -n "$_loop" ] && udisksctl loop-delete -b "$_loop" --no-user-interaction 2>/dev/null || true
+    [ -n "$_loop" ] && sudo losetup -d "$_loop" 2>/dev/null || true
 }
 
 _iso_cleanup() {
@@ -55,7 +55,7 @@ create_raw() {
     log_step "Creating RAW image..."
     qemu-img create "$_raw" 4G
 
-    _loop=$(udisksctl loop-setup -f "$_raw" --no-user-interaction | awk '{print $NF}' | tr -d '.')
+    _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"
     trap '_loop_image_cleanup' EXIT INT TERM
 
@@ -139,7 +139,7 @@ rm -rf /localdeb"
 
     sudo umount -l "$_mnt/boot/efi" 2>/dev/null || true
     sudo umount -l "$_mnt"          2>/dev/null || true
-    udisksctl loop-delete -b "$_loop" --no-user-interaction
+    sudo losetup -d "$_loop"
     trap - EXIT INT TERM
 
     log_step "Copying OVMF vars..."
@@ -402,7 +402,7 @@ create_raspberry() {
     log_step "Creating $(board_config "$_board" label) RAW image..."
     qemu-img create "$_raw" 4G
 
-    _loop=$(udisksctl loop-setup -f "$_raw" --no-user-interaction | awk '{print $NF}' | tr -d '.')
+    _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"
     trap '_loop_image_cleanup' EXIT INT TERM
 
@@ -528,7 +528,7 @@ FSTAB
     sudo umount -l "$_mnt/sys"           2>/dev/null || true
     sudo umount -l "$_mnt/boot/firmware" 2>/dev/null || true
     sudo umount -l "$_mnt"               2>/dev/null || true
-    udisksctl loop-delete -b "$_loop" --no-user-interaction
+    sudo losetup -d "$_loop"
     trap - EXIT INT TERM
 
     log_info "$(board_config "$_board" label) image created: $_raw"
@@ -560,7 +560,7 @@ create_uboot_board() {
     log_step "Creating $_label RAW image..."
     qemu-img create "$_raw" 4G
 
-    _loop=$(udisksctl loop-setup -f "$_raw" --no-user-interaction | awk '{print $NF}' | tr -d '.')
+    _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"
     trap '_loop_image_cleanup' EXIT INT TERM
 
@@ -696,7 +696,7 @@ FSTAB
         log_warn "U-Boot not flashed. Place idbloader.img + u-boot.itb in $_uboot_dir/"
     fi
 
-    udisksctl loop-delete -b "$_loop" --no-user-interaction
+    sudo losetup -d "$_loop"
     trap - EXIT INT TERM
 
     log_info "$_label image created: $_raw"

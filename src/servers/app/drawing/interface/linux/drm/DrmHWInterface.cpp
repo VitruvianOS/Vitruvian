@@ -11,8 +11,14 @@
 #include <errno.h>
 #include <libdrm/drm_mode.h>
 #include <poll.h>
+#include <sys/eventfd.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
+
+#if defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#endif
 
 #include "modeset.h"
 
@@ -64,6 +70,8 @@ DrmHWInterface::DrmHWInterface()
 	fPageFlipEnabled(false),
 	fPageFlipPending(false),
 	fFlipDirtyCount(0),
+	fFlipDirtyOverflow(false),
+	fWakeFd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
 	fDpmsState(B_DPMS_ON),
 	fBacklight(NULL),
 	fAtomicSupported(false),
@@ -77,25 +85,37 @@ DrmHWInterface::DrmHWInterface()
 	fVRRSupported(false),
 	fVRREnabled(false)
 {
-	fSeat = libseat_open_seat(&seat_listener, this);
-	if (!fSeat) {
-		fprintf(stderr, "Failed to open libseat session\n");
-		return;
-	}
+	// TODO move away from env vars
+	const char* janusDrmFdStr = getenv("JANUS_DRM_FD");
+	bool janusManaged = (janusDrmFdStr != NULL && janusDrmFdStr[0] != '\0');
 
-	printf("libseat opened, fSeat=%p, seat_fd=%d\n", (void*)fSeat,
-		libseat_get_fd(fSeat));
-
-	while (!fSessionActive) {
-		int ret = libseat_dispatch(fSeat, -1);
-		if (ret < 0)
-			break;
-	}
-
-	if (!fSessionActive) {
-		libseat_close_seat(fSeat);
-		fSeat = NULL;
-		return;
+	if (janusManaged) {
+		printf("DrmHWInterface: janus-managed (JANUS_DRM_FD=%s)\n",
+			janusDrmFdStr);
+		_OnSessionEnable();
+		if (!fSessionActive) {
+			fprintf(stderr,
+				"DrmHWInterface: _OnSessionEnable failed under janus\n");
+			return;
+		}
+	} else {
+		fSeat = libseat_open_seat(&seat_listener, this);
+		if (!fSeat) {
+			fprintf(stderr, "Failed to open libseat session\n");
+			return;
+		}
+		printf("libseat opened (standalone), fSeat=%p, seat_fd=%d\n",
+			(void*)fSeat, libseat_get_fd(fSeat));
+		while (!fSessionActive) {
+			int ret = libseat_dispatch(fSeat, -1);
+			if (ret < 0)
+				break;
+		}
+		if (!fSessionActive) {
+			libseat_close_seat(fSeat);
+			fSeat = NULL;
+			return;
+		}
 	}
 
 	fRunning = true;
@@ -107,22 +127,43 @@ DrmHWInterface::DrmHWInterface()
 
 
 void
+DrmHWInterface::OnSeatEnabled()
+{
+	if (LockExclusiveAccess()) {
+		_OnSessionEnable();
+		UnlockExclusiveAccess();
+	}
+}
+
+
+void
+DrmHWInterface::OnSeatDisabled()
+{
+	if (LockExclusiveAccess()) {
+		_OnSessionDisable();
+		UnlockExclusiveAccess();
+	}
+}
+
+
+void
 DrmHWInterface::_OnSessionEnable()
 {
 	printf("Session enabled\n");
 
 	if (fInitialized) {
+		if (fFd >= 0)
+			drmSetMaster(fFd);
+
 		fSessionActive = true;
 		release_sem(fSessionSem);
 
 		_RestoreDisplay();
 
-		{
-			LockExclusiveAccess();
-			Invalidate(BRect(0, 0, fDisplayMode.virtual_width - 1,
-					fDisplayMode.virtual_height - 1));
-			UnlockExclusiveAccess();
-		}
+		LockExclusiveAccess();
+		Invalidate(BRect(0, 0, fDisplayMode.virtual_width - 1,
+				fDisplayMode.virtual_height - 1));
+		UnlockExclusiveAccess();
 		return;
 	}
 
@@ -152,11 +193,7 @@ DrmHWInterface::_OnSessionEnable()
 		return;
 	}
 
-	// Save current CRTC state for restoration on exit.  Do NOT set the
-	// CRTC yet: iter->fb is still the dumb buffer allocated by
-	// modeset_prepare.  GBM front/back buffers will replace it below, and
-	// the CRTC must be configured with the same framebuffer type that page
-	// flips will target, otherwise drmModePageFlip fails on tiled memory.
+	// Save current CRTC state for restoration on exit
 	struct modeset_dev *iter;
 	for (iter = get_dev(); iter; iter = iter->next)
 		iter->saved_crtc = drmModeGetCrtc(fFd, iter->crtc);
@@ -165,23 +202,7 @@ DrmHWInterface::_OnSessionEnable()
 	fGbmDevice = gbm_create_device(fFd);
 	fUseGbm = (fGbmDevice != NULL);
 	if (!fUseGbm)
-		fprintf(stderr, "GBM unavailable, using dumb buffers (Intel FBC may not work)\n");
-
-	bool gbmOk = false;
-	if (fUseGbm) {
-		gbmOk = (modeset_create_gbm_fb(fFd, fGbmDevice, get_dev(), false) == 0);
-	}
-
-	if (!gbmOk) {
-		if (get_dev()->front_bo) {
-			drmModeRmFB(fFd, get_dev()->fb);
-			gbm_bo_destroy(get_dev()->front_bo);
-			get_dev()->front_bo = NULL;
-		}
-		modeset_create_fb(fFd, get_dev());
-	}
-#else
-	modeset_create_fb(fFd, get_dev());
+		fprintf(stderr, "GBM unavailable; OpenGL kit will be inactive\n");
 #endif
 
 	fFrontBuffer = new DrmBuffer(fFd, get_dev(), false);
@@ -190,25 +211,25 @@ DrmHWInterface::_OnSessionEnable()
 	fPageFlipEnabled = false;
 	fPageFlipPending = false;
 	fFlipDirtyCount = 0;
+	fFlipDirtyOverflow = false;
 
-#ifdef HAVE_GBM
-	if (fUseGbm
-		&& modeset_create_gbm_fb(fFd, fGbmDevice, get_dev(), true) == 0) {
-		fBackBuffer = new DrmBuffer(fFd, get_dev(), true);
-		fWriteTarget = fBackBuffer;
+	if (modeset_create_back_fb(fFd, get_dev()) == 0) {
+		fBackBuffer      = new DrmBuffer(fFd, get_dev(), true);
+		fWriteTarget     = fBackBuffer;
 		fPageFlipEnabled = true;
+	} else {
+		fprintf(stderr,
+			"[drm] back dumb-buffer creation failed; running "
+			"single-buffered with tearing\n");
 	}
-#endif
 
 	fRenderBuffer = new MallocBuffer(get_dev()->width, get_dev()->height);
 
-	// Probe atomic modesetting and discover object property IDs.
 	_ProbeAtomic();
 	if (fAtomicSupported)
 		_DiscoverProperties();
 
-	// Now that dev->fb reflects the actual front framebuffer (GBM or dumb),
-	// configure the CRTC.  Page flips must target the same memory type.
+	// Configure crtc
 	for (iter = get_dev(); iter; iter = iter->next) {
 		if (fAtomicSupported && fPrimaryPlaneId) {
 			status_t r = _AtomicModeset(iter->fb, &iter->mode);
@@ -226,39 +247,7 @@ DrmHWInterface::_OnSessionEnable()
 
 	modeset_create_cursor_fb(fFd, get_dev());
 
-	// Probe hardware cursor support before any SetCursor call so that
-	// IsDoubleBuffered() returns the correct value when the base class
-	// creates (or skips) fCursorAreaBackup.
-	{
-		struct modeset_dev* dev = get_dev();
-		if (dev && dev->cursor_handle) {
-			// Try legacy cursor first; fall back to atomic cursor plane.
-			int r = drmModeSetCursor(fFd, dev->crtc,
-				dev->cursor_handle, dev->cursor_w, dev->cursor_h);
-			if (r == 0) {
-				fHardwareCursorEnabled = true;
-				drmModeSetCursor(fFd, dev->crtc, 0, 0, 0);
-			} else if (fAtomicSupported && fCursorPlaneId) {
-				// Atomic-only driver — probe via cursor plane.
-				r = (_AtomicSetCursor(dev->cursor_handle, dev->crtc,
-					0, 0, dev->cursor_w, dev->cursor_h) == B_OK) ? 0 : -1;
-				if (r == 0) {
-					fHardwareCursorEnabled = true;
-					// Hide until a real bitmap arrives.
-					_AtomicSetCursor(0, 0, 0, 0, 0, 0);
-				} else {
-					fprintf(stderr, "DRM: hardware cursor not supported"
-						" (legacy: %s, atomic: failed),"
-						" using software cursor\n", strerror(-r));
-					fHardwareCursorEnabled = false;
-				}
-			} else {
-				fprintf(stderr, "DRM: hardware cursor not supported (%s),"
-					" using software cursor\n", strerror(-r));
-				fHardwareCursorEnabled = false;
-			}
-		}
-	}
+	_ProbeCursor();
 
 	fUdev = udev_new();
 	if (fUdev) {
@@ -290,8 +279,8 @@ DrmHWInterface::_OnSessionEnable()
 	fDisplayMode.virtual_height = get_dev()->height;
 	fDisplayMode.space = B_RGB32;
 
-	fSessionActive = true;
 	fInitialized = true;
+	fSessionActive = true;
 	release_sem(fSessionSem);
 }
 
@@ -301,11 +290,29 @@ DrmHWInterface::_OnSessionDisable()
 {
 	printf("Session disabled\n");
 
+	// Drain before disabling session
+	for (int i = 0; i < 4 && fPageFlipPending; i++) {
+		struct pollfd pfd = { fFd, POLLIN, 0 };
+		if (poll(&pfd, 1, 16) > 0 && (pfd.revents & POLLIN)) {
+			drmEventContext evctx = {
+				.version           = DRM_EVENT_CONTEXT_VERSION,
+				.page_flip_handler = _PageFlipHandler,
+			};
+			drmHandleEvent(fFd, &evctx);
+		} else
+			break;
+	}
+
 	fSessionActive = false;
 	fPageFlipPending = false;
 	fFlipDirtyCount = 0;
+	fFlipDirtyOverflow = false;
 
-	libseat_disable_seat(fSeat);
+	if (fFd >= 0)
+		drmDropMaster(fFd);
+
+	if (fSeat != NULL)
+		libseat_disable_seat(fSeat);
 }
 
 
@@ -329,7 +336,7 @@ DrmHWInterface::_RestoreDisplay()
 }
 
 
-/*static*/ int32
+int32
 DrmHWInterface::_EventThreadEntry(void* data)
 {
 	static_cast<DrmHWInterface*>(data)->_EventThreadMain();
@@ -337,7 +344,7 @@ DrmHWInterface::_EventThreadEntry(void* data)
 }
 
 
-/*static*/ void
+void
 DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	unsigned int sec, unsigned int usec, void* data)
 {
@@ -346,61 +353,101 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	std::swap(hw->fFrontBuffer, hw->fBackBuffer);
 	hw->fWriteTarget = hw->fBackBuffer;
 
-	if (hw->fRenderBuffer != NULL) {
-		for (int32 i = 0; i < hw->fFlipDirtyCount; i++)
-			hw->_BlitRect(hw->fRenderBuffer, hw->fWriteTarget,
-				hw->fFlipDirtyRects[i]);
+	if (hw->fRenderBuffer == NULL) {
+		hw->fFlipDirtyCount = 0;
+		hw->fFlipDirtyOverflow = false;
+		return;
 	}
+
+	// TODO: Full frame reblit for now but that will be improved with
+	// dirty tracking.
+	BRect full(0, 0,
+		(float)hw->fWriteTarget->Width()  - 1.0f,
+		(float)hw->fWriteTarget->Height() - 1.0f);
+	bool locked = hw->LockExclusiveAccess();
+	hw->_BlitRect(hw->fRenderBuffer, hw->fWriteTarget, full);
+	if (locked)
+		hw->UnlockExclusiveAccess();
+
+	if (!hw->fHardwareCursorEnabled) {
+		bool locked = hw->fFloatingOverlaysLock.Lock();
+		IntRect cf = hw->_CursorFrame();
+		if (cf.IsValid())
+			hw->_BlendCursor(hw->fRenderBuffer, hw->fWriteTarget, cf);
+		if (locked)
+			hw->fFloatingOverlaysLock.Unlock();
+	}
+
 	hw->fFlipDirtyCount = 0;
+	hw->fFlipDirtyOverflow = false;
 }
 
 
 void
 DrmHWInterface::_EventThreadMain()
 {
-	int seatErrorCount = 0;
-
 	while (fRunning) {
 		int seat_fd = fSeat ? libseat_get_fd(fSeat) : -1;
 
-		if (seat_fd < 0) {
-			seatErrorCount++;
-			snooze(100000);
-			continue;
-		}
-		seatErrorCount = 0;
-
 		bool active = fSessionActive.load();
 
-		struct pollfd pfds[3];
+		struct pollfd pfds[4];
 		int nfds = 0;
-
-		pfds[nfds].fd = seat_fd;
-		pfds[nfds].events = POLLIN;
-		pfds[nfds].revents = 0;
-		int seat_idx = nfds++;
-
+		int seat_idx = -1;
 		int drm_idx  = -1;
 		int udev_idx = -1;
+		int wake_idx = -1;
 
-		// DRM events (page-flip completions, etc.) are handled here.
+		if (seat_fd >= 0) {
+			pfds[nfds].fd      = seat_fd;
+			pfds[nfds].events  = POLLIN;
+			pfds[nfds].revents = 0;
+			seat_idx = nfds++;
+		}
+
 		if (active && fFd >= 0) {
-			pfds[nfds].fd = fFd;
-			pfds[nfds].events = POLLIN;
+			pfds[nfds].fd      = fFd;
+			pfds[nfds].events  = POLLIN;
 			pfds[nfds].revents = 0;
 			drm_idx = nfds++;
 		}
 
 		if (fUdevFd >= 0) {
-			pfds[nfds].fd = fUdevFd;
-			pfds[nfds].events = POLLIN;
+			pfds[nfds].fd      = fUdevFd;
+			pfds[nfds].events  = POLLIN;
 			pfds[nfds].revents = 0;
 			udev_idx = nfds++;
 		}
 
-		int ret = poll(pfds, nfds, 100);
+		if (fWakeFd >= 0) {
+			pfds[nfds].fd      = fWakeFd;
+			pfds[nfds].events  = POLLIN;
+			pfds[nfds].revents = 0;
+			wake_idx = nfds++;
+		}
+
+		// Spin protection
+		if (nfds == 0) {
+			acquire_sem_etc(fSessionSem, 1, B_RELATIVE_TIMEOUT, 100000);
+			continue;
+		}
+
+		// TODO this should be dynamic I think not 16ms hardcoded
+		int ret = poll(pfds, nfds, 16);
+		if (ret < 0) {
+			if (errno == EBADF || errno == EINVAL) {
+				acquire_sem_etc(fSessionSem, 1, B_RELATIVE_TIMEOUT, 100000);
+				continue;
+			}
+			if (errno == EINTR)
+				continue;
+			snooze(10000);
+			continue;
+		}
+
 		if (ret > 0) {
-			if (pfds[seat_idx].revents & (POLLIN | POLLHUP)) {
+			if (seat_idx >= 0
+					&& (pfds[seat_idx].revents & (POLLIN | POLLHUP))) {
 				int dret = libseat_dispatch(fSeat, 0);
 				if (dret < 0 && !active)
 					printf("libseat_dispatch: error\n");
@@ -412,27 +459,34 @@ DrmHWInterface::_EventThreadMain()
 				};
 				drmHandleEvent(fFd, &evctx);
 			}
-
-			if (fPageFlipEnabled && !fPageFlipPending
-				&& fFlipDirtyCount > 0 && fBackBuffer != NULL) {
-				struct modeset_dev* dev = get_dev();
-				int ret;
-				if (fAtomicSupported && fPrimaryPlaneId) {
-					ret = (_AtomicFlip(fWriteTarget->GetFbId(),
-						fFlipDirtyRects,
-						fFlipDirtyCount) == B_OK) ? 0 : -1;
-				} else {
-					ret = drmModePageFlip(fFd, dev->crtc,
-						fWriteTarget->GetFbId(),
-						DRM_MODE_PAGE_FLIP_EVENT, this);
-				}
-				if (ret == 0)
-					fPageFlipPending = true;
-				else
-					fFlipDirtyCount = 0;
+			if (wake_idx >= 0 && (pfds[wake_idx].revents & POLLIN)) {
+				uint64_t v;
+				read(fWakeFd, &v, sizeof(v));
 			}
 			if (udev_idx >= 0 && (pfds[udev_idx].revents & POLLIN)) {
 				_HandleHotplug();
+			}
+		}
+
+		if (active && fPageFlipEnabled && !fPageFlipPending
+				&& fFlipDirtyCount > 0 && fBackBuffer != NULL
+				&& fDpmsState == B_DPMS_ON) {
+			struct modeset_dev* dev = get_dev();
+			int r;
+			if (fAtomicSupported && fPrimaryPlaneId) {
+				r = (_AtomicFlip(fWriteTarget->GetFbId(),
+					fFlipDirtyRects,
+					fFlipDirtyCount) == B_OK) ? 0 : -1;
+			} else {
+				r = drmModePageFlip(fFd, dev->crtc,
+					fWriteTarget->GetFbId(),
+					DRM_MODE_PAGE_FLIP_EVENT, this);
+			}
+			if (r == 0)
+				fPageFlipPending = true;
+			else {
+				fFlipDirtyCount = 0;
+				fFlipDirtyOverflow = false;
 			}
 		}
 	}
@@ -446,9 +500,19 @@ DrmHWInterface::~DrmHWInterface()
 	fRunning = false;
 	release_sem(fSessionSem);
 
+	if (fWakeFd >= 0) {
+		uint64_t v = 1;
+		write(fWakeFd, &v, sizeof(v));
+	}
+
 	if (fEventThread >= 0) {
 		status_t exitValue;
 		wait_for_thread(fEventThread, &exitValue);
+	}
+
+	if (fWakeFd >= 0) {
+		close(fWakeFd);
+		fWakeFd = -1;
 	}
 
 	delete_sem(fSessionSem);
@@ -478,21 +542,6 @@ DrmHWInterface::~DrmHWInterface()
 	fRenderBuffer = NULL;
 
 #ifdef HAVE_GBM
-	struct modeset_dev* dev = get_dev();
-	if (dev) {
-		if (dev->front_bo) {
-			gbm_bo_unmap(dev->front_bo, dev->front_map_data);
-			gbm_bo_destroy(dev->front_bo);
-			dev->front_bo = NULL;
-			dev->front_map_data = NULL;
-		}
-		if (dev->back_bo) {
-			gbm_bo_unmap(dev->back_bo, dev->back_map_data);
-			gbm_bo_destroy(dev->back_bo);
-			dev->back_bo = NULL;
-			dev->back_map_data = NULL;
-		}
-	}
 	if (fGbmDevice) {
 		gbm_device_destroy(fGbmDevice);
 		fGbmDevice = NULL;
@@ -570,8 +619,11 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	if (!dev || fFd < 0)
 		return B_ERROR;
 
+	if (!LockExclusiveAccess())
+		return B_ERROR;
+
 	drmModeConnector* conn = drmModeGetConnector(fFd, dev->conn);
-	if (!conn) return B_ERROR;
+	if (!conn) { UnlockExclusiveAccess(); return B_ERROR; }
 
 	drmModeModeInfo* found = NULL;
 	for (int i = 0; i < conn->count_modes; i++) {
@@ -584,6 +636,7 @@ DrmHWInterface::SetMode(const display_mode& mode)
 
 	if (!found) {
 		drmModeFreeConnector(conn);
+		UnlockExclusiveAccess();
 		return B_BAD_VALUE;
 	}
 
@@ -591,35 +644,24 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	delete fBackBuffer;  fBackBuffer  = NULL;
 	delete fRenderBuffer; fRenderBuffer = NULL;
 
-#ifdef HAVE_GBM
-	if (dev->front_bo) {
-		gbm_bo_unmap(dev->front_bo, dev->front_map_data);
-		dev->front_map_data = NULL;
-		gbm_bo_destroy(dev->front_bo); dev->front_bo = NULL;
+	if (dev->fb) {
+		drmModeRmFB(fFd, dev->fb);
+		dev->fb = 0;
 	}
-	if (dev->back_bo) {
-		gbm_bo_unmap(dev->back_bo, dev->back_map_data);
-		dev->back_map_data = NULL;
-		gbm_bo_destroy(dev->back_bo); dev->back_bo = NULL;
-	}
-#endif
 
-	if (dev->fb)      { drmModeRmFB(fFd, dev->fb);      dev->fb = 0; }
-	if (dev->back_fb) { drmModeRmFB(fFd, dev->back_fb); dev->back_fb = 0; }
+	if (dev->back_fb) {
+		drmModeRmFB(fFd, dev->back_fb);
+		dev->back_fb = 0;
+	}
 
 	dev->width  = found->hdisplay;
 	dev->height = found->vdisplay;
 	memcpy(&dev->mode, found, sizeof(*found));
 	drmModeFreeConnector(conn);
 
-	bool ok = false;
-#ifdef HAVE_GBM
-	if (fUseGbm) {
-		ok = (modeset_create_gbm_fb(fFd, fGbmDevice, dev, false) == 0);
-	}
-#endif
-	if (!ok) {
-		ok = (modeset_create_fb(fFd, dev) == 0);
+	if (modeset_create_fb(fFd, dev) != 0) {
+		UnlockExclusiveAccess();
+		return B_ERROR;
 	}
 
 	fFrontBuffer = new DrmBuffer(fFd, dev, false);
@@ -628,30 +670,40 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	fPageFlipEnabled = false;
 	fPageFlipPending = false;
 	fFlipDirtyCount = 0;
+	fFlipDirtyOverflow = false;
 
-#ifdef HAVE_GBM
-	if (fUseGbm && modeset_create_gbm_fb(fFd, fGbmDevice, dev, true) == 0) {
+	if (modeset_create_back_fb(fFd, dev) == 0) {
 		fBackBuffer = new DrmBuffer(fFd, dev, true);
 		fWriteTarget = fBackBuffer;
 		fPageFlipEnabled = true;
+	} else {
+		fprintf(stderr,
+			"[drm] SetMode: back dumb-buffer creation failed; running "
+			"single-buffered with tearing\n");
 	}
-#endif
 
 	fRenderBuffer = new MallocBuffer(dev->width, dev->height);
 
 	int ret;
 	if (fAtomicSupported && fPrimaryPlaneId) {
-		if (_AtomicModeset(dev->fb, &dev->mode) != B_OK) return B_ERROR;
+		if (_AtomicModeset(dev->fb, &dev->mode) != B_OK) {
+			UnlockExclusiveAccess();
+			return B_ERROR;
+		}
 		ret = 0;
 	} else {
 		ret = drmModeSetCrtc(fFd, dev->crtc, dev->fb, 0, 0,
 		                     &dev->conn, 1, &dev->mode);
-		if (ret) return B_ERROR;
+		if (ret) {
+			UnlockExclusiveAccess();
+			return B_ERROR;
+		}
 	}
 
 	fDisplayMode.virtual_width  = dev->width;
 	fDisplayMode.virtual_height = dev->height;
 
+	UnlockExclusiveAccess();
 	return B_OK;
 }
 
@@ -846,7 +898,6 @@ DrmHWInterface::ProposeMode(display_mode* candidate,
 	}
 
 	if (best < 0) {
-		// Nothing in bounds — pick closest overall
 		best = 0;
 		bestDiff = UINT32_MAX;
 		for (uint32 i = 0; i < count; i++) {
@@ -884,6 +935,14 @@ DrmHWInterface::WaitForRetrace(bigtime_t timeout)
 	if (fFd < 0)
 		return B_ERROR;
 
+	// If a driver has no vblank let's store this info for next time.
+	static std::atomic<bool> sVBlankUnsupported(false);
+	if (sVBlankUnsupported.load(std::memory_order_relaxed)) {
+		// TODO: seems reasonable but double check this
+		snooze(16667);
+		return B_OK;
+	}
+
 	drm_wait_vblank wait;
 	memset(&wait, 0, sizeof(wait));
 	wait.request.type = (drm_vblank_seq_type)DRM_VBLANK_RELATIVE;
@@ -903,6 +962,13 @@ DrmHWInterface::WaitForRetrace(bigtime_t timeout)
 			}
 			continue;
 		}
+
+		if (errno == ENOTTY || errno == EINVAL
+				|| errno == EOPNOTSUPP || errno == ENOSYS) {
+			sVBlankUnsupported.store(true, std::memory_order_relaxed);
+			snooze(16667);
+			return B_OK;
+		}
 		return B_ERROR;
 	}
 }
@@ -912,7 +978,8 @@ status_t
 DrmHWInterface::SetDPMSMode(uint32 state)
 {
 	struct modeset_dev* dev = get_dev();
-	if (!dev || fFd < 0) return B_ERROR;
+	if (!dev || fFd < 0)
+		return B_ERROR;
 
 	int dpms;
 	switch (state) {
@@ -923,7 +990,6 @@ DrmHWInterface::SetDPMSMode(uint32 state)
 		default: return B_BAD_VALUE;
 	}
 
-	// Fast path: use the DPMS prop ID cached during _DiscoverConnProps.
 	if (fConnProps.dpms) {
 		int ret = drmModeConnectorSetProperty(fFd, dev->conn,
 			fConnProps.dpms, dpms);
@@ -934,9 +1000,9 @@ DrmHWInterface::SetDPMSMode(uint32 state)
 		return B_ERROR;
 	}
 
-	// Fallback for non-atomic path where _DiscoverConnProps was not called.
 	drmModeConnector* conn = drmModeGetConnector(fFd, dev->conn);
-	if (!conn) return B_ERROR;
+	if (!conn)
+		return B_ERROR;
 
 	for (int i = 0; i < conn->count_props; i++) {
 		drmModePropertyPtr prop = drmModeGetProperty(fFd, conn->props[i]);
@@ -972,7 +1038,8 @@ DrmHWInterface::DPMSCapabilities()
 status_t
 DrmHWInterface::SetBrightness(float brightness)
 {
-	if (!fBacklight) return B_UNSUPPORTED;
+	if (!fBacklight)
+		return B_UNSUPPORTED;
 	int max = (int)backlight_get_max_brightness(fBacklight);
 	int val = (int)(brightness * max + 0.5f);
 	return backlight_set_brightness(fBacklight, val) == 0 ? B_OK : B_ERROR;
@@ -982,7 +1049,8 @@ DrmHWInterface::SetBrightness(float brightness)
 status_t
 DrmHWInterface::GetBrightness(float* brightness)
 {
-	if (!fBacklight || !brightness) return B_UNSUPPORTED;
+	if (!fBacklight || !brightness)
+		return B_UNSUPPORTED;
 	int max = (int)backlight_get_max_brightness(fBacklight);
 	int cur = (int)backlight_get_brightness(fBacklight);
 	*brightness = (max > 0) ? (float)cur / max : 0.0f;
@@ -1002,7 +1070,8 @@ RenderingBuffer*
 DrmHWInterface::BackBuffer() const
 {
 	CALLED();
-	if (fRenderBuffer != NULL) return fRenderBuffer;
+	if (fRenderBuffer != NULL)
+		return fRenderBuffer;
 	return fFrontBuffer;
 }
 
@@ -1027,13 +1096,102 @@ DrmHWInterface::_BlitRect(RenderingBuffer* src, RenderingBuffer* dst,
 	if (y < 0) { h += y; y = 0; }
 	if (x + w > bufW) w = bufW - x;
 	if (y + h > bufH) h = bufH - y;
-	if (w <= 0 || h <= 0) return;
+	if (w <= 0 || h <= 0)
+		return;
 
 	uint32 srcBpr = src->BytesPerRow(), dstBpr = dst->BytesPerRow();
 	uint8* s = (uint8*)src->Bits() + y * srcBpr + x * 4;
 	uint8* d = (uint8*)dst->Bits() + y * dstBpr + x * 4;
+	int32  bytes = w * 4;
+
+#if defined(__x86_64__) || defined(__i386__)
+	static bool sAvx2 = __builtin_cpu_supports("avx2");
+	if (sAvx2
+			&& ((uintptr_t)d % 32) == 0
+			&& (dstBpr % 32) == 0
+			&& bytes >= 64) {
+		_BlitRect_AVX2(s, d, srcBpr, dstBpr, bytes, h);
+		return;
+	}
+#endif
+
 	for (int32 row = 0; row < h; row++, s += srcBpr, d += dstBpr)
-		memcpy(d, s, w * 4);
+		memcpy(d, s, bytes);
+}
+
+
+#if defined(__x86_64__) || defined(__i386__)
+__attribute__((target("avx2")))
+void
+DrmHWInterface::_BlitRect_AVX2(const uint8* s, uint8* d,
+	uint32 srcBpr, uint32 dstBpr, int32 bytes, int32 rows)
+{
+	for (int32 row = 0; row < rows; row++, s += srcBpr, d += dstBpr) {
+		int32 r = bytes;
+		const uint8* sp = s;
+		uint8* dp = d;
+		while (r >= 64) {
+			__m256i v0 = _mm256_loadu_si256((const __m256i*)sp);
+			__m256i v1 = _mm256_loadu_si256((const __m256i*)(sp + 32));
+			_mm256_stream_si256((__m256i*)dp,      v0);
+			_mm256_stream_si256((__m256i*)(dp+32), v1);
+			sp += 64; dp += 64; r -= 64;
+		}
+		if (r > 0)
+			memcpy(dp, sp, r);
+	}
+	_mm_sfence();
+}
+#endif
+
+
+void
+DrmHWInterface::_BlendCursor(RenderingBuffer* srcBg, RenderingBuffer* dst,
+	IntRect area) const
+{
+	if (srcBg == NULL || dst == NULL || !area.IsValid()
+			|| fCursorAndDragBitmap == NULL || !fCursorVisible)
+		return;
+
+	IntRect cf = _CursorFrame();
+	if (!cf.IsValid() || !area.Intersects(cf))
+		return;
+
+	area = area & IntRect(dst->Bounds());
+	area = area & cf;
+	if (!area.IsValid())
+		return;
+
+	const int32 left   = area.left;
+	const int32 top    = area.top;
+	const int32 right  = area.right;
+	const int32 bottom = area.bottom;
+
+	uint32 bgBPR = srcBg->BytesPerRow();
+	uint32 dBPR  = dst->BytesPerRow();
+	uint8* bg  = (uint8*)srcBg->Bits() + top * bgBPR + left * 4;
+	uint8* dpx = (uint8*)dst->Bits()   + top * dBPR  + left * 4;
+
+	uint8* crs    = (uint8*)fCursorAndDragBitmap->Bits();
+	uint32 crsBPR = fCursorAndDragBitmap->BytesPerRow();
+	crs += (top - (int32)floorf(cf.top))   * crsBPR
+		 + (left - (int32)floorf(cf.left)) * 4;
+
+	for (int32 y = top; y <= bottom; y++) {
+		uint8* s = bg;
+		uint8* d = dpx;
+		uint8* c = crs;
+		for (int32 x = left; x <= right; x++) {
+			int a = 255 - c[3];
+			d[0] = (uint8)(((s[0] * a + 255) >> 8) + c[0]);
+			d[1] = (uint8)(((s[1] * a + 255) >> 8) + c[1]);
+			d[2] = (uint8)(((s[2] * a + 255) >> 8) + c[2]);
+			s += 4; d += 4; c += 4;
+		}
+		bg  += bgBPR;
+		dpx += dBPR;
+		crs += crsBPR;
+	}
 }
 
 
@@ -1043,14 +1201,28 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 	if (fFrontBuffer == NULL)
 		return B_ERROR;
 
-	if (!fHardwareCursorEnabled)
+	if (fRenderBuffer == NULL)
 		return HWInterface::CopyBackToFront(frame);
 
-	if (fRenderBuffer != NULL) {
-		_BlitRect(fRenderBuffer, fWriteTarget, frame);
+	_BlitRect(fRenderBuffer, fWriteTarget, frame);
 
-		if (fPageFlipEnabled && fFlipDirtyCount < kMaxDirtyRects)
+	if (!fHardwareCursorEnabled) {
+		bool overlaysLocked = fFloatingOverlaysLock.Lock();
+		_BlendCursor(fRenderBuffer, fWriteTarget, IntRect(frame));
+		if (overlaysLocked)
+			fFloatingOverlaysLock.Unlock();
+	}
+
+	if (fPageFlipEnabled) {
+		if (fFlipDirtyCount < kMaxDirtyRects)
 			fFlipDirtyRects[fFlipDirtyCount++] = frame;
+		else
+			fFlipDirtyOverflow = true;
+	}
+
+	if (fPageFlipEnabled && fWakeFd >= 0) {
+		uint64_t v = 1;
+		write(fWakeFd, &v, sizeof(v));
 	}
 
 	return B_OK;
@@ -1063,7 +1235,8 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 	HWInterface::SetCursor(cursor);
 
 	struct modeset_dev* dev = get_dev();
-	if (!dev) return;
+	if (!dev)
+		return;
 
 	if (cursor == NULL) {
 		if (dev->cursor_ok) {
@@ -1085,16 +1258,20 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 		memcpy(dst + row * 256, src + row * cursor->BytesPerRow(), cw * 4);
 	}
 
+	const BPoint hot = cursor->GetHotSpot();
+	const int32  px  = (int32)fCursorLocation.x - (int32)hot.x;
+	const int32  py  = (int32)fCursorLocation.y - (int32)hot.y;
+
 	int ret;
-	if (fAtomicSupported && fCursorPlaneId) {
-		ret = (_AtomicSetCursor(dev->cursor_handle, dev->crtc,
-			(int32)fCursorLocation.x, (int32)fCursorLocation.y,
-			64, 64) == B_OK) ? 0 : -1;
+	if (fAtomicSupported && fCursorPlaneId && dev->cursor_fb) {
+		ret = (_AtomicSetCursor(dev->cursor_fb, dev->crtc,
+			px, py, 64, 64) == B_OK) ? 0 : -1;
 	} else {
 		ret = drmModeSetCursor2(fFd, dev->crtc,
 			dev->cursor_handle, 64, 64,
-			(int32)cursor->GetHotSpot().x,
-			(int32)cursor->GetHotSpot().y);
+			(int32)hot.x, (int32)hot.y);
+		if (ret == 0)
+			drmModeMoveCursor(fFd, dev->crtc, px, py);
 	}
 	if (ret == 0) {
 		dev->cursor_ok = true;
@@ -1112,7 +1289,8 @@ DrmHWInterface::SetCursorVisible(bool visible)
 	HWInterface::SetCursorVisible(visible);
 
 	struct modeset_dev* dev = get_dev();
-	if (!dev || !dev->cursor_ok) return;
+	if (!dev || !dev->cursor_ok)
+		return;
 
 	if (!visible) {
 		if (fAtomicSupported && fCursorPlaneId)
@@ -1120,13 +1298,20 @@ DrmHWInterface::SetCursorVisible(bool visible)
 		else
 			drmModeSetCursor(fFd, dev->crtc, 0, 0, 0);
 	} else {
-		if (fAtomicSupported && fCursorPlaneId)
-			_AtomicSetCursor(dev->cursor_handle, dev->crtc,
-				(int32)fCursorLocation.x, (int32)fCursorLocation.y,
-				dev->cursor_w, dev->cursor_h);
-		else
+		BPoint hot(0, 0);
+		if (fCursor.IsSet())
+			hot = fCursor->GetHotSpot();
+		const int32 px = (int32)fCursorLocation.x - (int32)hot.x;
+		const int32 py = (int32)fCursorLocation.y - (int32)hot.y;
+
+		if (fAtomicSupported && fCursorPlaneId && dev->cursor_fb)
+			_AtomicSetCursor(dev->cursor_fb, dev->crtc,
+				px, py, dev->cursor_w, dev->cursor_h);
+		else {
 			drmModeSetCursor(fFd, dev->crtc, dev->cursor_handle,
 				dev->cursor_w, dev->cursor_h);
+			drmModeMoveCursor(fFd, dev->crtc, px, py);
+		}
 	}
 }
 
@@ -1137,18 +1322,26 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 	HWInterface::MoveCursorTo(x, y);
 
 	struct modeset_dev* dev = get_dev();
-	if (!dev || !dev->cursor_ok) return;
+	if (!dev || !dev->cursor_ok)
+		return;
 
-	drmModeMoveCursor(fFd, dev->crtc, (int)x, (int)y);
+	BPoint hot(0, 0);
+	if (fCursor.IsSet())
+		hot = fCursor->GetHotSpot();
+	const int32 px = (int32)x - (int32)hot.x;
+	const int32 py = (int32)y - (int32)hot.y;
+
+	if (fAtomicSupported && fCursorPlaneId && dev->cursor_fb)
+		_AtomicSetCursor(dev->cursor_fb, dev->crtc,
+			px, py, dev->cursor_w, dev->cursor_h);
+	else
+		drmModeMoveCursor(fFd, dev->crtc, px, py);
 }
 
 
 void
 DrmHWInterface::_DrawCursor(IntRect area) const
 {
-	// When the hardware cursor is active, the DRM plane handles compositing
-	// independently of the framebuffer. Suppress the software cursor path
-	// entirely to prevent cursor bitmaps being baked into the framebuffer.
 	if (!fHardwareCursorEnabled)
 		HWInterface::_DrawCursor(area);
 }
@@ -1174,7 +1367,7 @@ DrmHWInterface::_HandleHotplug()
 					if (conn->connection == DRM_MODE_CONNECTED)
 						modeset_add_connector(fFd, conn->connector_id);
 					else
-						modeset_remove_connector(conn->connector_id);
+						modeset_remove_connector(fFd, conn->connector_id);
 					drmModeFreeConnector(conn);
 				}
 			}
@@ -1219,16 +1412,10 @@ DrmHWInterface::RevokeLease(int leaseFd)
 }
 
 
-// ---------------------------------------------------------------------------
-// Atomic modesetting
-// ---------------------------------------------------------------------------
-
 void
 DrmHWInterface::_ProbeAtomic()
 {
 	fAtomicSupported = false;
-	// Universal planes must be enabled first so primary + cursor planes appear
-	// in the plane list when _DiscoverProperties() queries them.
 	drmSetClientCap(fFd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
 	fAtomicSupported = (drmSetClientCap(fFd, DRM_CLIENT_CAP_ATOMIC, 1) == 0);
 	printf("DRM: atomic modesetting %s\n",
@@ -1236,11 +1423,47 @@ DrmHWInterface::_ProbeAtomic()
 }
 
 
+void
+DrmHWInterface::_ProbeCursor()
+{
+	struct modeset_dev* dev = get_dev();
+	if (dev == NULL || dev->cursor_handle == 0)
+		return;
+
+	int r = drmModeSetCursor(fFd, dev->crtc,
+		dev->cursor_handle, dev->cursor_w, dev->cursor_h);
+	if (r == 0) {
+		fHardwareCursorEnabled = true;
+		drmModeSetCursor(fFd, dev->crtc, 0, 0, 0);
+		return;
+	}
+
+	if (fAtomicSupported && fCursorPlaneId && dev->cursor_fb) {
+		r = (_AtomicSetCursor(dev->cursor_fb, dev->crtc,
+			0, 0, dev->cursor_w, dev->cursor_h) == B_OK) ? 0 : -1;
+		if (r == 0) {
+			fHardwareCursorEnabled = true;
+			_AtomicSetCursor(0, 0, 0, 0, 0, 0);
+			return;
+		}
+		fprintf(stderr,
+			"DRM: hardware cursor not supported (legacy: %s, atomic: "
+			"failed), using software cursor\n", strerror(-r));
+	} else {
+		fprintf(stderr,
+			"DRM: hardware cursor not supported (%s), using software "
+			"cursor\n", strerror(-r));
+	}
+	fHardwareCursorEnabled = false;
+}
+
+
 int
 DrmHWInterface::_CrtcIndex(uint32_t crtc_id)
 {
 	drmModeRes* res = drmModeGetResources(fFd);
-	if (!res) return 0;
+	if (!res)
+		return 0;
 	int idx = 0;
 	for (int i = 0; i < res->count_crtcs; i++) {
 		if (res->crtcs[i] == crtc_id) {
@@ -1257,25 +1480,29 @@ void
 DrmHWInterface::_DiscoverProperties()
 {
 	struct modeset_dev* dev = get_dev();
-	if (!dev) return;
+	if (!dev)
+		return;
 
-	// Find the primary plane that feeds our CRTC.
 	int crtcIdx = _CrtcIndex(dev->crtc);
 	drmModePlaneResPtr planes = drmModeGetPlaneResources(fFd);
 	if (planes) {
 		for (uint32_t i = 0; i < planes->count_planes; i++) {
 			drmModePlanePtr plane = drmModeGetPlane(fFd, planes->planes[i]);
-			if (!plane) continue;
+			if (!plane)
+				continue;
 			bool forOurCrtc = (plane->possible_crtcs & (1u << crtcIdx)) != 0;
 			drmModeFreePlane(plane);
-			if (!forOurCrtc) continue;
+			if (!forOurCrtc)
+				continue;
 
 			drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(
 				fFd, planes->planes[i], DRM_MODE_OBJECT_PLANE);
-			if (!props) continue;
+			if (!props)
+				continue;
 			for (uint32_t j = 0; j < props->count_props; j++) {
 				drmModePropertyPtr prop = drmModeGetProperty(fFd, props->props[j]);
-				if (!prop) continue;
+				if (!prop)
+					continue;
 				if (strcmp(prop->name, "type") == 0) {
 					if (props->prop_values[j] == DRM_PLANE_TYPE_PRIMARY
 							&& !fPrimaryPlaneId) {
@@ -1309,10 +1536,12 @@ DrmHWInterface::_DiscoverPlaneProps(uint32_t plane_id, PlaneProps& props)
 	memset(&props, 0, sizeof(props));
 	drmModeObjectPropertiesPtr oprops = drmModeObjectGetProperties(
 		fFd, plane_id, DRM_MODE_OBJECT_PLANE);
-	if (!oprops) return;
+	if (!oprops)
+		return;
 	for (uint32_t i = 0; i < oprops->count_props; i++) {
 		drmModePropertyPtr prop = drmModeGetProperty(fFd, oprops->props[i]);
-		if (!prop) continue;
+		if (!prop)
+			continue;
 		if      (strcmp(prop->name, "FB_ID")           == 0)
 			props.fb_id           = prop->prop_id;
 		else if (strcmp(prop->name, "CRTC_ID")         == 0)
@@ -1349,10 +1578,12 @@ DrmHWInterface::_DiscoverCrtcProps(uint32_t crtc_id)
 	memset(&fCrtcProps, 0, sizeof(fCrtcProps));
 	drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(
 		fFd, crtc_id, DRM_MODE_OBJECT_CRTC);
-	if (!props) return;
+	if (!props)
+		return;
 	for (uint32_t i = 0; i < props->count_props; i++) {
 		drmModePropertyPtr prop = drmModeGetProperty(fFd, props->props[i]);
-		if (!prop) continue;
+		if (!prop)
+			continue;
 		if      (strcmp(prop->name, "ACTIVE")      == 0)
 			fCrtcProps.active      = prop->prop_id;
 		else if (strcmp(prop->name, "MODE_ID")     == 0)
@@ -1360,7 +1591,8 @@ DrmHWInterface::_DiscoverCrtcProps(uint32_t crtc_id)
 		else if (strcmp(prop->name, "VRR_ENABLED") == 0) {
 			fCrtcProps.vrr_enabled = prop->prop_id;
 			fVRRSupported = true;
-			fVRREnabled   = true;  // auto-enable when available
+			// TODO wire to DesktopSettings
+			fVRREnabled   = false;
 		}
 		drmModeFreeProperty(prop);
 	}
@@ -1374,10 +1606,12 @@ DrmHWInterface::_DiscoverConnProps(uint32_t conn_id)
 	memset(&fConnProps, 0, sizeof(fConnProps));
 	drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(
 		fFd, conn_id, DRM_MODE_OBJECT_CONNECTOR);
-	if (!props) return;
+	if (!props)
+		return;
 	for (uint32_t i = 0; i < props->count_props; i++) {
 		drmModePropertyPtr prop = drmModeGetProperty(fFd, props->props[i]);
-		if (!prop) continue;
+		if (!prop)
+			continue;
 		if      (strcmp(prop->name, "CRTC_ID") == 0)
 			fConnProps.crtc_id = prop->prop_id;
 		else if (strcmp(prop->name, "DPMS")    == 0)
@@ -1392,9 +1626,22 @@ status_t
 DrmHWInterface::_AtomicModeset(uint32_t fb_id, drmModeModeInfo* mode)
 {
 	struct modeset_dev* dev = get_dev();
-	if (!dev || !fPrimaryPlaneId) return B_ERROR;
+	if (!dev || !fPrimaryPlaneId)
+		return B_ERROR;
 
-	// Create (or replace) the mode blob.
+	// Drain flipping events
+	for (int i = 0; i < 4 && fPageFlipPending; i++) {
+		struct pollfd pfd = { fFd, POLLIN, 0 };
+		if (poll(&pfd, 1, 16) > 0 && (pfd.revents & POLLIN)) {
+			drmEventContext evctx = {
+				.version           = DRM_EVENT_CONTEXT_VERSION,
+				.page_flip_handler = _PageFlipHandler,
+			};
+			drmHandleEvent(fFd, &evctx);
+		} else
+			break;
+	}
+
 	if (fModeBlobId) {
 		drmModeDestroyPropertyBlob(fFd, fModeBlobId);
 		fModeBlobId = 0;
@@ -1403,21 +1650,20 @@ DrmHWInterface::_AtomicModeset(uint32_t fb_id, drmModeModeInfo* mode)
 		return B_ERROR;
 
 	drmModeAtomicReq* req = drmModeAtomicAlloc();
-	if (!req) return B_NO_MEMORY;
+	if (!req)
+		return B_NO_MEMORY;
 
 	uint32_t w = (uint32_t)dev->width;
 	uint32_t h = (uint32_t)dev->height;
 
-	// Connector → CRTC binding
 	drmModeAtomicAddProperty(req, dev->conn,         fConnProps.crtc_id,    dev->crtc);
-	// CRTC: activate with mode
+
 	drmModeAtomicAddProperty(req, dev->crtc,         fCrtcProps.active,     1);
 	drmModeAtomicAddProperty(req, dev->crtc,         fCrtcProps.mode_id,    fModeBlobId);
-	// VRR
+
 	if (fVRREnabled && fCrtcProps.vrr_enabled)
 		drmModeAtomicAddProperty(req, dev->crtc,     fCrtcProps.vrr_enabled, 1);
-	// Primary plane: full-screen scanout
-	// SRC_* are in 16.16 fixed point
+
 	drmModeAtomicAddProperty(req, fPrimaryPlaneId,   fPlaneProps.crtc_id,   dev->crtc);
 	drmModeAtomicAddProperty(req, fPrimaryPlaneId,   fPlaneProps.fb_id,     fb_id);
 	drmModeAtomicAddProperty(req, fPrimaryPlaneId,   fPlaneProps.src_x,     0);
@@ -1439,12 +1685,13 @@ status_t
 DrmHWInterface::_AtomicSetCursor(uint32_t fb_id, uint32_t crtc_id,
 	int32 x, int32 y, uint32_t w, uint32_t h)
 {
-	if (!fCursorPlaneId) return B_UNSUPPORTED;
+	if (!fCursorPlaneId)
+		return B_UNSUPPORTED;
 
 	drmModeAtomicReq* req = drmModeAtomicAlloc();
-	if (!req) return B_NO_MEMORY;
+	if (!req)
+		return B_NO_MEMORY;
 
-	// Setting fb_id=0 / crtc_id=0 disables the cursor plane.
 	drmModeAtomicAddProperty(req, fCursorPlaneId,
 		fCursorPlaneProps.crtc_id, crtc_id);
 	drmModeAtomicAddProperty(req, fCursorPlaneId,
@@ -1476,53 +1723,27 @@ DrmHWInterface::_AtomicSetCursor(uint32_t fb_id, uint32_t crtc_id,
 
 
 status_t
-DrmHWInterface::_AtomicFlip(uint32_t fb_id, const BRect* dirty_rects,
-	uint32_t nrects)
+DrmHWInterface::_AtomicFlip(uint32_t fb_id, const BRect* /*dirty_rects*/,
+	uint32_t /*nrects*/)
 {
-	if (!fPrimaryPlaneId) return B_ERROR;
+	// TODO FB_DAMAGE_CLIPS comes back after dirty tracking + BRegion is stable.
+	if (!fPrimaryPlaneId)
+		return B_ERROR;
 
 	drmModeAtomicReq* req = drmModeAtomicAlloc();
-	if (!req) return B_NO_MEMORY;
+	if (!req)
+		return B_NO_MEMORY;
 
-	drmModeAtomicAddProperty(req, fPrimaryPlaneId, fPlaneProps.fb_id, fb_id);
-
-	// Encode damage rectangles as a FB_DAMAGE_CLIPS blob when supported.
-	// Skip for full-screen frames: passing a whole-screen rect as damage gives
-	// the driver no scanout savings and costs two extra kernel calls per flip.
-	bool fullScreen = (nrects == 1 && dirty_rects != NULL
-		&& dirty_rects[0].left  <= 0
-		&& dirty_rects[0].top   <= 0
-		&& dirty_rects[0].right  >= (float)(fDisplayMode.virtual_width  - 1)
-		&& dirty_rects[0].bottom >= (float)(fDisplayMode.virtual_height - 1));
-
-	uint32_t damageBlob = 0;
-	if (!fullScreen && fPlaneProps.fb_damage_clips && nrects > 0
-			&& dirty_rects != NULL) {
-		// Use stack storage for the common case (nrects == 1 with coalescing).
-		struct drm_mode_rect stackRects[4];
-		struct drm_mode_rect* rects = (nrects <= 4)
-			? stackRects
-			: new struct drm_mode_rect[nrects];
-		for (uint32_t i = 0; i < nrects; i++) {
-			rects[i].x1 = (int32_t)dirty_rects[i].left;
-			rects[i].y1 = (int32_t)dirty_rects[i].top;
-			rects[i].x2 = (int32_t)dirty_rects[i].right  + 1;
-			rects[i].y2 = (int32_t)dirty_rects[i].bottom + 1;
-		}
-		if (drmModeCreatePropertyBlob(fFd, rects,
-				nrects * sizeof(struct drm_mode_rect), &damageBlob) == 0)
-			drmModeAtomicAddProperty(req, fPrimaryPlaneId,
-				fPlaneProps.fb_damage_clips, damageBlob);
-		if (nrects > 4)
-			delete[] rects;
+	struct modeset_dev* dev = get_dev();
+	if (dev) {
+		drmModeAtomicAddProperty(req, fPrimaryPlaneId,
+			fPlaneProps.crtc_id, dev->crtc);
 	}
+	drmModeAtomicAddProperty(req, fPrimaryPlaneId, fPlaneProps.fb_id, fb_id);
 
 	int ret = drmModeAtomicCommit(fFd, req,
 		DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
 	drmModeAtomicFree(req);
-
-	if (damageBlob)
-		drmModeDestroyPropertyBlob(fFd, damageBlob);
 
 	return ret == 0 ? B_OK : B_ERROR;
 }

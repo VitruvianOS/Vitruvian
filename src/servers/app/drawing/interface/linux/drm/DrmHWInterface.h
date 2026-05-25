@@ -112,6 +112,9 @@ public:
 			void				_OnSessionEnable();
 			void				_OnSessionDisable();
 
+	virtual	void				OnSeatEnabled();
+	virtual	void				OnSeatDisabled();
+
 			status_t			CreateLease(uint32_t* connectors, int connCount,
 									uint32_t* crtcs, int crtcCount,
 									int* leaseFd);
@@ -133,8 +136,19 @@ private:
 									RenderingBuffer* dst,
 									const BRect& frame);
 
+			void				_BlendCursor(RenderingBuffer* srcBg,
+									RenderingBuffer* dst,
+									IntRect area) const;
+
+#if defined(__x86_64__) || defined(__i386__)
+	static	void				_BlitRect_AVX2(const uint8* s, uint8* d,
+									uint32 srcBpr, uint32 dstBpr,
+									int32 bytes, int32 rows);
+#endif
+
 			int					_CrtcIndex(uint32_t crtc_id);
 			void				_ProbeAtomic();
+			void				_ProbeCursor();
 			void				_DiscoverProperties();
 			void				_DiscoverPlaneProps(uint32_t plane_id,
 									PlaneProps& props);
@@ -162,7 +176,8 @@ private:
 			struct libseat*		fSeat;
 			int					fDeviceId;
 			std::atomic<bool>	fSessionActive;
-			bool				fInitialized;
+.
+			std::atomic<bool>	fInitialized;
 			std::atomic<bool>	fRunning;
 
 			thread_id			fEventThread;
@@ -180,10 +195,16 @@ private:
 			MallocBuffer*		fRenderBuffer;
 
 			bool				fPageFlipEnabled;
-			bool				fPageFlipPending;
-			static const int	kMaxDirtyRects = 32;
+			std::atomic<bool>	fPageFlipPending;
+
+			// Let's try to fit this in L1
+			static const int	kMaxDirtyRects = 256;
 			BRect				fFlipDirtyRects[kMaxDirtyRects];
 			int32				fFlipDirtyCount;
+
+			bool				fFlipDirtyOverflow;
+
+			int					fWakeFd;
 
 			uint32				fDpmsState;
 

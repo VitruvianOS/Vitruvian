@@ -97,13 +97,13 @@ HWInterface::GetDriverPath(BString &path)
 }
 
 
-virtual	void
+void
 HWInterface::OnSeatEnabled()
 {
 }
 
 
-virtual	void
+void
 HWInterface::OnSeatDisabled()
 {
 }

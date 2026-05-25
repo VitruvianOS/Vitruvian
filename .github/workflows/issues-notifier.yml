@@ -1,7 +1,8 @@
-# TEMPORARILY DISABLED — manual dispatch only. Re-enable by restoring the issues trigger. See new-build-commands.md / build refactor.
 name: Notify Chat on issue open/close
 
-on: workflow_dispatch:
+on:
+  issues:
+    types: [opened, closed, reopened]
 
 permissions:
   issues: read

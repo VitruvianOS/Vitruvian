@@ -23,7 +23,8 @@ jobs:
             libtiff-dev libudev-dev libwebp-dev libseat-dev \
             libblkid-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
-            fakeroot devscripts lintian wget qemu-utils
+            fakeroot devscripts lintian wget qemu-utils ovmf \
+            rsync parted dosfstools xfsprogs
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
@@ -47,14 +48,15 @@ jobs:
       - name: Configure
         run: cd generated.x86 && ../configure --arch=amd64 --build-type=Workflow --chroot-build
 
-      - name: Build ISO
-        run: cd generated.x86 && ../bake build --image-type=iso
+      - name: Build ISO + RAW images
+        run: cd generated.x86 && ../bake build --image-type=iso,raw
 
-      - name: Generate ISO checksum
+      - name: Generate image checksums
         run: |
-          cd generated.x86
-          for iso in *.iso; do
-            [ -e "$iso" ] && sha256sum "$iso" > "$iso.sha256"
+          shopt -s nullglob
+          cd generated.x86/output
+          for f in *.iso *.raw; do
+            sha256sum "$f" > "$f.sha256"
           done
 
       - name: Upload Vitruvian ISO
@@ -63,18 +65,9 @@ jobs:
         with:
           name: Vitruvian-ISO
           path: |
-            generated.x86/*.iso
-            generated.x86/*.iso.sha256
-
-      - name: Build RAW image
-        run: cd generated.x86 && ../bake build --image-type=raw
-
-      - name: Generate RAW checksum
-        run: |
-          cd generated.x86
-          for raw in *.raw; do
-            [ -e "$raw" ] && sha256sum "$raw" > "$raw.sha256"
-          done
+            generated.x86/output/*.iso
+            generated.x86/output/*.iso.sha256
+          if-no-files-found: error
 
       - name: Upload Vitruvian RAW
         if: always()
@@ -82,11 +75,13 @@ jobs:
         with:
           name: Vitruvian-RAW
           path: |
-            generated.x86/*.raw
-            generated.x86/*.raw.sha256
+            generated.x86/output/*.raw
+            generated.x86/output/*.raw.sha256
+          if-no-files-found: error
 
       - name: Generate DEB checksums
         run: |
+          shopt -s nullglob
           cd generated.x86
           for deb in *.deb; do
             sha256sum "$deb" > "$deb.sha256"
@@ -99,3 +94,4 @@ jobs:
           path: |
             generated.x86/*.deb
             generated.x86/*.deb.sha256
+          if-no-files-found: error

@@ -158,6 +158,7 @@ rm -rf /localdeb"
 create_iso() {
     _basedir="$1"
     _arch="$2"
+    mkdir -p "$_basedir/output"
     _efi_target="$(arch_to_efi_target "$_arch")"
     _imagekernelversion=$(cat "$_basedir/imagekernelversion.conf" 2>/dev/null || die "imagekernelversion.conf not found. Run setupenv first.")
 
@@ -331,7 +332,7 @@ EOF
             -no-emul-boot \
             -isohybrid-gpt-basdat \
             -append_partition 2 0xef "$_basedir/image_tree/scratch/efiboot.img" \
-            -output "$_basedir/vitruvian-custom.iso" \
+            -output "$_basedir/output/vitruvian-custom.iso" \
             -graft-points \
                 "$_basedir/image_tree/image" \
                 /boot/grub/bios.img="$_basedir/image_tree/scratch/bios.img" \
@@ -347,13 +348,13 @@ EOF
             -no-emul-boot \
             -isohybrid-gpt-basdat \
             -append_partition 2 0xef "$_basedir/image_tree/scratch/efiboot.img" \
-            -output "$_basedir/vitruvian-custom.iso" \
+            -output "$_basedir/output/vitruvian-custom.iso" \
             -graft-points \
                 "$_basedir/image_tree/image" \
                 /EFI/efiboot.img="$_basedir/image_tree/scratch/efiboot.img"
     fi
 
-    log_info "ISO created: $_basedir/vitruvian-custom.iso"
+    log_info "ISO created: $_basedir/output/vitruvian-custom.iso"
     log_info "Build type: $BUILD_TYPE"
     if [ "$BUILD_TYPE" = "Debug" ]; then
         log_info "Debug build - SSH: root@<guest-ip> (password: live)"

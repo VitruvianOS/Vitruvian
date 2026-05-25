@@ -176,7 +176,7 @@ private:
 			struct libseat*		fSeat;
 			int					fDeviceId;
 			std::atomic<bool>	fSessionActive;
-.
+
 			std::atomic<bool>	fInitialized;
 			std::atomic<bool>	fRunning;
 

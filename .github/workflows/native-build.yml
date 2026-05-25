@@ -37,6 +37,13 @@ jobs:
       - name: Init submodules
         run: git submodule update --init --recursive
 
+      - name: Build buildtools
+        run: |
+          mkdir -p buildtools
+          cd buildtools
+          cmake -DBUILDTOOLS_MODE=1 .. -GNinja
+          ninja
+
       - name: Create build directory
         run: mkdir -p generated.x86
 

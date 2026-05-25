@@ -608,21 +608,22 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 	if (fd < 0)
 		return B_FILE_ERROR;
 
-	struct linux_dirent {
-		long           d_ino;
-		off_t          d_off;
+	struct linux_dirent64 {
+		ino64_t        d_ino;
+		off64_t        d_off;
 		unsigned short d_reclen;
-		char           d_name[255];
+		unsigned char  d_type;
+		char           d_name[256];
 	};
 
-	size_t bufSize = sizeof(struct linux_dirent) * maxCount;
-	struct linux_dirent* direntBuffer = malloc(bufSize);
+	size_t bufSize = sizeof(struct linux_dirent64) * maxCount;
+	struct linux_dirent64* direntBuffer = (struct linux_dirent64*)malloc(bufSize);
 	if (direntBuffer == NULL)
 		return B_NO_MEMORY;
 
 	off_t seekOffset = _kern_seek(fd, 0, SEEK_CUR);
 
-	ssize_t ret = syscall(SYS_getdents, fd, direntBuffer, bufSize);
+	ssize_t ret = syscall(SYS_getdents64, fd, direntBuffer, bufSize);
 	if (ret < 0) {
 		free(direntBuffer);
 		return BKernelPrivate::posixError(errno);
@@ -631,7 +632,7 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 	int i = 0;
 	int pos = 0;
 	while (pos < ret && i < maxCount) {
-		struct linux_dirent* dir = (struct linux_dirent *) (direntBuffer + pos);
+		struct linux_dirent64* dir = (struct linux_dirent64 *) ((char*)direntBuffer + pos);
 		buffer[i].d_ino = dir->d_ino;
 		buffer[i].d_off = dir->d_off;
 		buffer[i].d_reclen = dir->d_reclen;

@@ -73,6 +73,14 @@ if(VITRUVIAN_CHROOT_BUILD)
         "${VITRUVIAN_CHROOT_PATH}/usr/lib"
     )
 
+    # Indirect dep resolution (e.g. libfoo.so pulled in by another linked .so)
+    # ignores -L and consults only -rpath-link, DT_RUNPATH, or ld defaults.
+    # Without this, ld silently falls through to the host's /usr/lib when
+    # verifying NEEDED entries, which works only when the host's library
+    # versions happen to match the chroot's (e.g. ICU 76 on Debian trixie).
+    set(_chroot_rpath_link "${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}:${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}:${VITRUVIAN_CHROOT_PATH}/usr/lib")
+    add_link_options("-Wl,-rpath-link=${_chroot_rpath_link}")
+
     set(CMAKE_SKIP_RPATH TRUE)
 
     if(NOT KERNEL_RELEASE)

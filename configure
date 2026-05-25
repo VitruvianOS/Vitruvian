@@ -2,17 +2,20 @@
 # Vitruvian configure script
 # Usage: ./configure [options]
 #
-#   --build-type=TYPE       CMake build type: Debug|Release|Workflow (default: Debug)
-#   --chroot-build          Use chroot sysroot for libraries/headers
-#   --chroot-path=PATH      Path to chroot (default: <build>/LIVE_BOOT/chroot)
-#   --arch=ARCH             Target architecture: x86_64 (default), arm64 (stub/unsupported)
+#   --build-type=TYPE           CMake build type: Debug|Release|Workflow (default: Debug)
+#   --chroot-build              Use chroot sysroot for libraries/headers
+#   --chroot-path=PATH          Path to chroot (default: <build>/LIVE_BOOT/chroot)
+#   --arch=ARCH                 Target architecture: x86_64 (default), arm64, arm32, riscv64
+#   --override-toolchain=NAME   Use a specific cross-compilation toolchain
+#                                 (e.g. arm64_raspberry)
 
 set -e
 
 BUILD_TYPE="Debug"
 CHROOT_BUILD=0
 CHROOT_PATH=""
-TARGET_ARCH="x86_64"
+TARGET_ARCH=""
+OVERRIDE_TOOLCHAIN=""
 
 for arg in "$@"; do
     case "$arg" in
@@ -28,8 +31,11 @@ for arg in "$@"; do
         --arch=*)
             TARGET_ARCH="${arg#*=}"
             ;;
+        --override-toolchain=*)
+            OVERRIDE_TOOLCHAIN="${arg#*=}"
+            ;;
         --help|-h)
-            head -n 10 "$0" | grep "^#" | sed 's/^# \?//'
+            head -n 11 "$0" | grep "^#" | sed 's/^# \?//'
             exit 0
             ;;
         *)
@@ -40,17 +46,48 @@ for arg in "$@"; do
     esac
 done
 
-# Validate arch
-case "$TARGET_ARCH" in
-    x86_64)
-        ;;
-    arm64)
-        echo "Error: ARM64 cross-compilation is not yet supported."
+if [ -z "$TARGET_ARCH" ]; then
+    if [ -f ./buildstate.conf ]; then
+        . ./buildstate.conf
+        TARGET_ARCH="${ARCH:-x86_64}"
+    else
+        TARGET_ARCH="x86_64"
+    fi
+fi
+
+if [ -f ./CMakeCache.txt ]; then
+    _cached_arch="$(grep -m1 '^VITRUVIAN_TARGET_ARCH:' ./CMakeCache.txt | cut -d= -f2)"
+    if [ -n "$_cached_arch" ] && [ "$_cached_arch" != "$TARGET_ARCH" ]; then
+        echo "Error: build tree was configured for $_cached_arch but current arch is $TARGET_ARCH."
+        echo "Remove this generated directory and start fresh."
         exit 1
+    fi
+fi
+
+case "$TARGET_ARCH" in
+    x86_64|amd64) ;;
+    arm64)
+        if [ -z "$OVERRIDE_TOOLCHAIN" ]; then
+            OVERRIDE_TOOLCHAIN="aarch64-linux-gnu"
+            echo "Note: arm64 cross-compilation — defaulting to toolchain $OVERRIDE_TOOLCHAIN."
+        fi
+        ;;
+    riscv64)
+        if [ -z "$OVERRIDE_TOOLCHAIN" ]; then
+            OVERRIDE_TOOLCHAIN="riscv64-linux-gnu"
+            echo "Note: riscv64 cross-compilation — defaulting to toolchain $OVERRIDE_TOOLCHAIN."
+        fi
+        ;;
+    arm32|armhf)
+        TARGET_ARCH="arm"
+        if [ -z "$OVERRIDE_TOOLCHAIN" ]; then
+            OVERRIDE_TOOLCHAIN="rpi-arm32"
+            echo "Note: arm32 cross-compilation — defaulting to toolchain $OVERRIDE_TOOLCHAIN."
+        fi
         ;;
     *)
         echo "Error: Unknown architecture: $TARGET_ARCH"
-        echo "Supported: x86_64 (arm64 is a stub)"
+        echo "Supported: x86_64, arm64, arm32, riscv64"
         exit 1
         ;;
 esac
@@ -76,8 +113,22 @@ CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_TARGET_ARCH=$TARGET_ARCH"
 if [ $CHROOT_BUILD -eq 1 ]; then
     CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_CHROOT_BUILD=ON"
     if [ -n "$CHROOT_PATH" ]; then
+        [ -d "$CHROOT_PATH" ] || { echo "Error: --chroot-path $CHROOT_PATH does not exist."; exit 1; }
         CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_CHROOT_PATH=$CHROOT_PATH"
+    elif [ -d "./image_tree/chroot" ]; then
+        CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_CHROOT_PATH=$(realpath ./image_tree/chroot)"
+    else
+        echo "Error: --chroot-build requested but no chroot found at ./image_tree/chroot."
+        echo "Run ./build/scripts/setupenv.sh --chroot-build --arch=<arch> first,"
+        echo "or pass --chroot-path=PATH explicitly."
+        exit 1
     fi
+fi
+
+if [ -n "$OVERRIDE_TOOLCHAIN" ]; then
+    TOOLCHAIN_FILE="../build/cross/$OVERRIDE_TOOLCHAIN.cmake"
+    [ -f "$TOOLCHAIN_FILE" ] || { echo "Toolchain not found: $TOOLCHAIN_FILE"; exit 1; }
+    CMAKE_OPTS="$CMAKE_OPTS -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE"
 fi
 
 cmake $CMAKE_OPTS .. -GNinja

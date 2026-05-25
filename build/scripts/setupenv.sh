@@ -1,67 +1,74 @@
 #!/bin/sh
 set -e
 
-basedir=`realpath ./`
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
 
-bold=$(tput bold)
-normal=$(tput sgr0)
+. "$LIB_DIR/common.sh"
+. "$LIB_DIR/packages.sh"
+. "$LIB_DIR/chroot.sh"
 
-echo  ${bold}Prepare Debian bootstrap and install packages...
-echo ${normal}
+CHROOT_BUILD=0
+ARCH=""
 
-if [ -d "$basedir/image_tree/chroot" ]; then
-  ts=$(date +%Y%m%d-%H%M%S)
-  backup="$basedir/image_tree/chroot.old-$ts"
-  echo "Found existing chroot, moving to $backup"
-  sudo umount -l $basedir/image_tree/chroot/proc 2>/dev/null || true
-  sudo umount -l $basedir/image_tree/chroot/sys 2>/dev/null || true
-  sudo umount -l $basedir/image_tree/chroot/dev/pts 2>/dev/null || true
-  sudo umount -l $basedir/image_tree/chroot/dev 2>/dev/null || true
-  for libdir in lib lib64 usr/lib; do
-    if mountpoint -q "$basedir/image_tree/chroot/$libdir"; then
-      sudo umount -l "$basedir/image_tree/chroot/$libdir"
-    fi
-  done
-  sudo mv "$basedir/image_tree/chroot" "$backup"
-fi
+usage() {
+    cat <<'EOF'
+Usage: setupenv.sh [options]
 
-mkdir -p $basedir/image_tree
-sudo debootstrap --arch=amd64 --variant=minbase trixie $basedir/image_tree/chroot http://deb.debian.org/debian/
+Options:
+  --chroot-build    Create the build chroot at image_tree/chroot
+  --arch=ARCH       Target architecture: amd64, arm64, arm32, riscv64 (default: amd64)
+  --help            Show this help
 
-sudo mount -t proc / $basedir/image_tree/chroot/proc
-sudo mount --rbind /sys $basedir/image_tree/chroot/sys
-sudo mount --make-rslave $basedir/image_tree/chroot/sys
-sudo mount --rbind /dev $basedir/image_tree/chroot/dev
-sudo mount --make-rslave $basedir/image_tree/chroot/dev
+Without --chroot-build, only writes ARCH to buildstate.conf (no chroot created).
+NOTE: image-producing builds (bake build --image-type=iso/raw) require the
+chroot, so --chroot-build is needed even when compiling natively. Only skip
+it if you do not intend to produce an image from this build tree.
+EOF
+    exit 0
+}
 
-for libdir in lib lib64 usr/lib; do
-  if [ -d "$basedir/image_tree/chroot/$libdir" ]; then
-    sudo mount --bind "$basedir/image_tree/chroot/$libdir" "$basedir/image_tree/chroot/$libdir"
-  fi
+for arg in "$@"; do
+    case "$arg" in
+        --chroot-build)
+            CHROOT_BUILD=1
+            ;;
+        --arch=*)
+            ARCH="${arg#*=}"
+            ;;
+        --help|-h)
+            usage
+            ;;
+        *)
+            die "Unknown option: $arg"
+            ;;
+    esac
 done
 
-cleanup() {
-  echo "Unmounting chroot mounts..."
-  sudo umount -l $basedir/image_tree/chroot/proc || true
-  sudo umount -l $basedir/image_tree/chroot/sys || true
-  sudo umount -l $basedir/image_tree/chroot/dev || true
-  for libdir in lib lib64 usr/lib; do
-    if mountpoint -q "$basedir/image_tree/chroot/$libdir"; then
-      sudo umount -l "$basedir/image_tree/chroot/$libdir"
+ARCH="${ARCH:-amd64}"
+
+case "$ARCH" in
+    amd64|arm64|arm32|riscv64) ;;
+    *) die "Unsupported architecture: $ARCH (use amd64, arm64, arm32, riscv64)" ;;
+esac
+
+BASEDIR="$(realpath ./)"
+
+if [ -f "$BASEDIR/buildstate.conf" ]; then
+    _prev_arch="$(. "$BASEDIR/buildstate.conf" && printf '%s' "${ARCH:-}")"
+    if [ -n "$_prev_arch" ] && [ "$_prev_arch" != "$ARCH" ]; then
+        die "This directory was set up for $_prev_arch but you requested $ARCH. Remove the generated directory and start fresh, or rerun with --arch=$_prev_arch."
     fi
-  done
-}
-trap cleanup EXIT
+fi
 
-BASE_PACKAGES="apt-utils curl dialog libbinutils linux-image-rt-amd64 live-boot locales net-tools network-manager openssh-client openssh-server pipewire-audio pipewire-bin procps systemd-sysv vim-tiny wireless-tools wireplumber xfsprogs"
-# Development packages needed for isolated chroot builds
-DEV_PACKAGES="linux-headers-rt-amd64 pkg-config libc6-dev libstdc++-14-dev libfreetype6-dev libicu-dev libdrm-dev libinput-dev libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev libblkid-dev libbacktrace-dev libfl-dev libncurses-dev libgl-dev libegl-dev libgbm-dev libxkbcommon-dev libsystemd-dev"
+printf 'ARCH=%s\nCHROOT_BUILD=%s\n' "$ARCH" "$CHROOT_BUILD" > "$BASEDIR/buildstate.conf"
 
-sudo chroot $basedir/image_tree/chroot /bin/bash -c "echo 'vitruvian' > /etc/hostname && \
-apt update && apt install -y --no-install-recommends $BASE_PACKAGES $DEV_PACKAGES $DEBUG_PACKAGES && \
-echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \
-exit"
+if [ "$CHROOT_BUILD" -eq 1 ]; then
+    log_step "Setting up chroot build environment ($ARCH)..."
+    chroot_create "$BASEDIR" "$ARCH"
+else
+    log_step "Native build selected ($ARCH). No chroot created."
+    log_info "buildstate.conf written with ARCH=$ARCH"
+fi
 
-ls ./image_tree/chroot/lib/modules | head -n1 > imagekernelversion.conf
-
-echo ${normal}
+log_info "Setup complete."

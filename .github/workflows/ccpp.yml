@@ -31,11 +31,17 @@ jobs:
       - name: Init submodules
         run: git submodule update --init --recursive
 
-      - name: Configure
-        run: ./configure --arch=amd64 --build-type=Workflow --chroot-build
+      - name: Create build directory
+        run: mkdir -p generated.x86
 
-      - name: Build
-        run: ./bake build --image-type=iso
+      - name: Setup environment (build chroot)
+        run: cd generated.x86 && ../build/scripts/setupenv.sh --chroot-build --arch=amd64
+
+      - name: Configure
+        run: cd generated.x86 && ../configure --arch=amd64 --build-type=Workflow --chroot-build
+
+      - name: Build ISO
+        run: cd generated.x86 && ../bake build --image-type=iso
 
       - name: Generate ISO checksum
         run: |
@@ -54,7 +60,7 @@ jobs:
             generated.x86/image_tree/*.sha256
 
       - name: Build RAW image
-        run: ./bake build --image-type=raw
+        run: cd generated.x86 && ../bake build --image-type=raw
 
       - name: Generate RAW checksum
         run: |

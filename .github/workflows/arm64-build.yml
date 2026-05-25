@@ -33,11 +33,17 @@ jobs:
       - name: Init submodules
         run: git submodule update --init --recursive
 
+      - name: Create build directory
+        run: mkdir -p generated.arm64
+
+      - name: Setup environment (build chroot)
+        run: cd generated.arm64 && ../build/scripts/setupenv.sh --chroot-build --arch=arm64
+
       - name: Configure
-        run: ./configure --arch=arm64 --build-type=Workflow --chroot-build
+        run: cd generated.arm64 && ../configure --arch=arm64 --build-type=Workflow --chroot-build
 
       - name: Build
-        run: ./bake build --image-type=raspberry
+        run: cd generated.arm64 && ../bake build --image-type=raspberry
 
       - name: Generate image checksum
         run: |

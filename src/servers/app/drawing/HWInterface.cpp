@@ -97,6 +97,18 @@ HWInterface::GetDriverPath(BString &path)
 }
 
 
+virtual	void
+HWInterface::OnSeatEnabled()
+{
+}
+
+
+virtual	void
+HWInterface::OnSeatDisabled()
+{
+}
+
+
 status_t
 HWInterface::GetPreferredMode(display_mode* mode)
 {

@@ -7,6 +7,7 @@
  *		Axel Dörfler, axeld@pinc-software.de
  *		Stephan Aßmus <superstippi@gmx.de>
  * 		Christian Packmann
+ *		Dario Casalinuovo
  */
 
 
@@ -22,6 +23,7 @@
 #include "BitmapManager.h"
 #include "Desktop.h"
 #include "GlobalFontManager.h"
+#include "HWInterface.h"
 #include "InputManager.h"
 #include "ScreenManager.h"
 #include "ServerProtocol.h"
@@ -138,6 +140,28 @@ AppServer::MessageReceived(BMessage* message)
 			else
 				reply.what = (uint32)B_ERROR;
 
+			message->SendReply(&reply);
+			break;
+		}
+
+		case B_SEAT_ENABLED:
+		case B_SEAT_DISABLED:
+		{
+			bool enable = (message->what == B_SEAT_ENABLED);
+			for (int32 i = 0; i < fDesktops.CountItems(); i++) {
+				Desktop* desktop = fDesktops.ItemAt(i);
+				if (desktop == NULL)
+					continue;
+				::HWInterface* hw = desktop->HWInterface();
+				if (hw == NULL)
+					continue;
+				if (enable)
+					hw->OnSeatEnabled();
+				else
+					hw->OnSeatDisabled();
+			}
+
+			BMessage reply(B_REPLY);
 			message->SendReply(&reply);
 			break;
 		}

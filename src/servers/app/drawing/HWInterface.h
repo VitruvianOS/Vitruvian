@@ -110,6 +110,9 @@ public:
 	virtual status_t			GetAccelerantPath(BString& path);
 	virtual status_t			GetDriverPath(BString& path);
 
+	virtual	void				OnSeatEnabled();
+	virtual	void				OnSeatDisabled();
+
 	// cursor handling (these do their own Read/Write locking)
 			ServerCursorReference Cursor() const;
 			ServerCursorReference CursorAndDragBitmap() const;

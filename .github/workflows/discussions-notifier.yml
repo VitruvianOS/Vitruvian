@@ -1,7 +1,7 @@
+# TEMPORARILY DISABLED — manual dispatch only. Re-enable by restoring the discussion trigger. See new-build-commands.md / build refactor.
 name: Notify Chat on discussion activity
-on:
-  discussion:
-    types: [created, answered]
+
+on: workflow_dispatch:
 
 permissions:
   discussions: read

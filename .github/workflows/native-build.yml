@@ -1,12 +1,13 @@
-name: buildtools build
+name: Native amd64 build test
+
 on:
   push:
     branches:
       - '**'
 
 jobs:
-  buildtools:
-    name: Build buildtools + configure
+  native-build:
+    name: Native amd64 build
     runs-on: ubuntu-latest
 
     steps:
@@ -26,8 +27,7 @@ jobs:
             libgif-dev libicns-dev libicu-dev libinput-dev \
             libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
             libtiff-dev libudev-dev libwebp-dev libseat-dev \
-            libblkid-dev libudev-dev libdrm-dev \
-            linux-headers-$(uname -r) \
+            libblkid-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             fakeroot devscripts lintian wget
 
@@ -37,28 +37,17 @@ jobs:
       - name: Init submodules
         run: git submodule update --init --recursive
 
-      - name: Create buildtools directory
-        run: mkdir -p buildtools
+      - name: Configure
+        run: ./configure --arch=amd64 --build-type=Workflow
 
-      - name: Build buildtools (cmake + ninja configure)
-        run: |
-          cd buildtools
-          cmake -DBUILDTOOLS_MODE=1 .. -GNinja
-          ninja -v -t clean || true
-          # Do not run the actual ninja build; only configure step completed.
+      - name: Build
+        run: cd generated.x86 && ninja
 
-      - name: Create build directory
-        run: mkdir -p generated.x86
-
-      - name: Configure project
-        run: |
-          cd generated.x86
-          ../configure --build-type=Workflow
-
-      - name: Archive intermediate state
+      - name: Upload build log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: buildtools-stage
+          name: native-build-log
           path: |
-            buildtools/**
-            generated.x86/**
+            generated.x86/CMakeFiles/CMakeOutput.log
+            generated.x86/src/servers/app/app_server

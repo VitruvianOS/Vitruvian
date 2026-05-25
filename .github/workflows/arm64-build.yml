@@ -1,9 +1,9 @@
-name: Build Vitruvian ISO
+name: Build Vitruvian ARM64 image
 
 on: [push]
 
 jobs:
-  iso-build:
+  arm64-build:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +23,9 @@ jobs:
             libtiff-dev libudev-dev libwebp-dev libseat-dev \
             libblkid-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
-            fakeroot devscripts lintian wget
+            fakeroot devscripts lintian wget \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            qemu-user-static qemu-system-aarch64
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
@@ -32,57 +34,37 @@ jobs:
         run: git submodule update --init --recursive
 
       - name: Configure
-        run: ./configure --arch=amd64 --build-type=Workflow --chroot-build
+        run: ./configure --arch=arm64 --build-type=Workflow --chroot-build
 
       - name: Build
-        run: ./bake build --image-type=iso
+        run: ./bake build --image-type=raspberry
 
-      - name: Generate ISO checksum
+      - name: Generate image checksum
         run: |
-          cd generated.x86/image_tree
-          for iso in *.iso; do
-            sha256sum "$iso" > "$iso.sha256"
+          cd generated.arm64/image_tree
+          for img in *.img *.iso; do
+            [ -e "$img" ] && sha256sum "$img" > "$img.sha256" || true
           done
 
-      - name: Upload Vitruvian ISO
-        if: always()
+      - name: Upload Vitruvian ARM64 image
         uses: actions/upload-artifact@v4
         with:
-          name: Vitruvian-ISO
+          name: Vitruvian-ARM64-ISO
           path: |
-            generated.x86/image_tree/*.iso
-            generated.x86/image_tree/*.sha256
-
-      - name: Build RAW image
-        run: ./bake build --image-type=raw
-
-      - name: Generate RAW checksum
-        run: |
-          cd generated.x86/output
-          for raw in *.raw; do
-            [ -e "$raw" ] && sha256sum "$raw" > "$raw.sha256"
-          done
-
-      - name: Upload Vitruvian RAW
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Vitruvian-RAW
-          path: |
-            generated.x86/output/*.raw
-            generated.x86/output/*.sha256
+            generated.arm64/image_tree/*
+            generated.arm64/image_tree/*.sha256
 
       - name: Generate DEB checksums
         run: |
-          cd generated.x86
+          cd generated.arm64
           for deb in *.deb; do
             sha256sum "$deb" > "$deb.sha256"
           done
 
-      - name: Upload Vitruvian DEB packages
+      - name: Upload Vitruvian ARM64 DEB packages
         uses: actions/upload-artifact@v4
         with:
-          name: Vitruvian-DEB
+          name: Vitruvian-ARM64-DEB
           path: |
-            generated.x86/*.deb
-            generated.x86/*.sha256
+            generated.arm64/*.deb
+            generated.arm64/*.sha256

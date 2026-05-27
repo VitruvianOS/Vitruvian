@@ -51,7 +51,7 @@ run_qemu() {
             esac
             ;;
         iso)
-            _iso="$_basedir/vitruvian-custom.iso"
+            _iso="$_basedir/output/vitruvian-custom.iso"
             [ -f "$_iso" ] || die "ISO image not found: $_iso"
 
             log_step "Booting ISO in QEMU ($_qemu_cmd)..."

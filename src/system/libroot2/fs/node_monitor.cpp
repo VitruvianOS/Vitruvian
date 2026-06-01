@@ -39,9 +39,13 @@ _kern_start_watching(dev_t device, ino_t node, uint32 flags,
 	if (nodeMonitor < 0)
 		return B_ENTRY_NOT_FOUND;
 
-	int nodeFD = -1;
-	if (device == get_vref_dev())
-		nodeFD = open_vref(node);
+	// Only vrefs are valid
+	if (device != get_vref_dev())
+		return B_BAD_VALUE;
+
+	int nodeFD = open_vref(node);
+	if (nodeFD < 0)
+		return B_BAD_VALUE;
 
 	struct nexus_watch_fd req = {
 		.fd = nodeFD,

@@ -668,7 +668,16 @@ BEntry::operator=(const BEntry& item)
 	if (item.fCStatus == B_OK) {
 		fDirFd = _kern_dup(item.fDirFd);
 		if (fDirFd >= 0) {
+#if 0
+			/* VOS_ENTRY_OWN_VREF: each BEntry owns a distinct vref for its
+			 * fDirFd. Blocked on create_vref() transferring fd ownership to
+			 * nexus — fDirFd would become invalid after node_ref(fDirFd).
+			 * Needs node_ref(open_vref(existing_id)) pattern instead, or a
+			 * dedicated ctor that acquires without consuming the fd. */
+			fDirRef = node_ref(fDirFd);
+#else
 			fDirRef = item.fDirRef;
+#endif
 			fCStatus = _SetName(item.fName);
 		} else
 			fCStatus = fDirFd;

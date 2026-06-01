@@ -123,8 +123,10 @@ private:
 	virtual	void				_RudeNode5();
 	virtual	void				_RudeNode6();
 
-private:
+protected:
 			status_t			set_fd(int fd);
+
+private:
 	virtual	void				close_fd();
 			void				set_status(status_t newStatus);
 

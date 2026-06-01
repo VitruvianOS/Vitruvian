@@ -400,14 +400,15 @@ query_for_app(const char* signature, entry_ref* appRef)
 	}
 
 #ifdef __VOS__
-	// Vitruvian fallback: queries don't work without real BeFS indices
-	// Search common app directories as fallback
+	// Vitruvian fast path: the kernel-side query is currently a depth-5
+	// recursive scan (correct but too slow for interactive app launch).
+	// We keep this hardcoded-paths fallback as the fast common case.
+	// Phase 2: when the real indexed query system lands this block can be
+	// deleted and BQuery becomes the only path.
 	if (error != B_OK && signature != NULL) {
 		const char* searchPaths[] = {
 			"/system/apps",
 			"/system/bin",
-			"/boot/system/apps",
-			"/boot/system/bin",
 			NULL
 		};
 

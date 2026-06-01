@@ -177,7 +177,9 @@ send_data(thread_id thread, int32 code,
 	exchange.receiver = thread;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	return nexus_io(nexus, NEXUS_THREAD_WRITE, &exchange);
+	if (nexus_io(nexus, NEXUS_THREAD_WRITE, &exchange) != 0)
+		return B_BAD_VALUE;
+	return exchange.ret;
 }
 
 
@@ -196,9 +198,10 @@ receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 
 	// TODO B_INTERRUPTED
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	status_t ret = nexus_io(nexus, NEXUS_THREAD_READ, &exchange);
-	if (ret != B_OK)
-		return ret;
+	if (nexus_io(nexus, NEXUS_THREAD_READ, &exchange) != 0)
+		return B_BAD_VALUE;
+	if (exchange.ret != B_OK)
+		return exchange.ret;
 
 	if (sender)
 		*sender = exchange.sender;
@@ -219,7 +222,9 @@ has_data(thread_id thread)
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 
-	return nexus_io(nexus, NEXUS_THREAD_HAS_DATA, &exchange) == B_OK;
+	if (nexus_io(nexus, NEXUS_THREAD_HAS_DATA, &exchange) != 0)
+		return false;
+	return exchange.ret == B_OK;
 }
 
 
@@ -461,7 +466,9 @@ wait_for_thread(thread_id id, status_t* returnCode)
 	exchange.receiver = id;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	status_t ret = nexus_io(nexus, NEXUS_THREAD_WAITFOR, &exchange);
+	if (nexus_io(nexus, NEXUS_THREAD_WAITFOR, &exchange) != 0)
+		return B_BAD_VALUE;
+	status_t ret = exchange.ret;
 	if (ret == B_BAD_THREAD_ID) {
 		if (kill(id, 0) < 0)
 			return B_BAD_THREAD_ID;

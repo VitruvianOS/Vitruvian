@@ -788,7 +788,7 @@ EditModelName(const Model* model, const char* name, size_t length)
 			undo.Remove();
 	} else if (model->IsVolume()) {
 		// write volume name
-		BVolume volume(model->NodeRef()->device);
+		BVolume volume(model->NodeRef()->dereference().dev());
 		result = volume.InitCheck();
 		if (result == B_OK && volume.IsReadOnly())
 			result = B_READ_ONLY_DEVICE;
@@ -799,7 +799,7 @@ EditModelName(const Model* model, const char* name, size_t length)
 				undo.Remove();
 		}
 	} else {
-		BVolume volume(model->NodeRef()->device);
+		BVolume volume(model->NodeRef()->dereference().dev());
 		result = volume.InitCheck();
 		if (result == B_OK && volume.IsReadOnly())
 			result = B_READ_ONLY_DEVICE;
@@ -1351,7 +1351,7 @@ CreateFileSystemCompatibleName(const BDirectory* destDir, char* destName)
 	entry_ref targetRef;
 	fs_info info;
 	if (target.GetRef(&targetRef) == B_OK
-		&& fs_stat_dev(targetRef.device, &info) == B_OK
+		&& fs_stat_dev(targetRef.dereference().dev(), &info) == B_OK
 		&& !strcmp(info.fsh_name, "fat")) {
 		bool wasInvalid = false;
 
@@ -2110,9 +2110,7 @@ MoveEntryToTrash(BEntry* entry, BPoint* loc, Undo &undo)
 
 		BMessage message(kCloseWindowAndChildren);
 
-		node_ref parentNode;
-		parentNode.device = statbuf.st_dev;
-		parentNode.node = statbuf.st_ino;
+		node_ref parentNode(statbuf.st_dev, statbuf.st_ino);
 		message.AddData("node_ref", B_RAW_TYPE, &parentNode, sizeof(node_ref));
 		be_app->PostMessage(&message);
 	} else {
@@ -2588,7 +2586,7 @@ FSRecursiveCalcSize(BInfoWindow* window, CopyLoopControl* loopControl,
 	// the directory tree can span many different mounted filesystems)
 	node_ref dirNodeRef;
 	dir->GetNodeRef(&dirNodeRef);
-	dev_t originalDevice = dirNodeRef.device;
+	dev_t originalDevice = dirNodeRef.dereference().dev();
 
 	dir->Rewind();
 	BEntry entry;
@@ -3752,7 +3750,7 @@ _TrackerLaunchDocuments(const entry_ref*, const BMessage* refs,
 			if (error == B_OK || mimesetIt != 0)
 				break;
 			if (error == B_LAUNCH_FAILED_EXECUTABLE) {
-				BVolume volume(documentRef.device);
+				BVolume volume(documentRef.dereference().dev());
 				if (volume.IsReadOnly()) {
 					BMimeType type;
 					error = BMimeType::GuessMimeType(&documentRef, &type);
@@ -4126,7 +4124,7 @@ WellKnowEntryList::MatchEntryCommon(const node_ref* node)
 {
 	uint32 count = entries.size();
 	for (uint32 index = 0; index < count; index++) {
-		if (*node == entries[index].node)
+		if (node->dereference() == entries[index].node.dereference())
 			return &entries[index];
 	}
 

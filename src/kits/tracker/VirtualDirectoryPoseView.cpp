@@ -289,7 +289,7 @@ VirtualDirectoryPoseView::_EntryRemoved(const BMessage* message)
 		|| message->FindRef("virtual:directory", &entryRef) != B_OK) {
 		return true;
 	}
-	entryRef.device = nodeRef.device;
+	entryRef = entry_ref(node_ref(nodeRef.device, nodeRef.node), entryRef.name);
 
 	// It might be our definition file.
 	if (nodeRef == *TargetModel()->NodeRef())
@@ -392,7 +392,7 @@ VirtualDirectoryPoseView::_EntryMoved(const BMessage* message)
 		|| message->FindRef("virtual:to directory", &toEntryRef) != B_OK) {
 		return true;
 	}
-	toEntryRef.device = fromEntryRef.device;
+	toEntryRef = entry_ref(node_ref(fromEntryRef.device, fromEntryRef.directory), toEntryRef.name);
 
 	// TODO: That's the lazy approach. Ideally we'd analyze the situation and
 	// forward a B_ENTRY_MOVED, if possible. There are quite a few cases to

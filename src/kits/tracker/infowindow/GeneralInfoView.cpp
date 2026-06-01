@@ -429,14 +429,11 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 
 			// ensure notification is for us
 			if (*model->NodeRef() == itemNode
-				// For volumes, the device ID is obviously not handled in a
-				// consistent way; the node monitor sends us the ID of the
-				// parent device, while the model is set to the device of the
-				// volume directly - this hack works for volumes that are
-				// mounted in the root directory
+				// For volumes, the node monitor sends the parent device ID
+				// while the model holds the volume's own device — compare
+				// only the inode (the root inode is self-referential for /).
 				|| (model->IsVolume()
-					&& itemNode.device == 1
-					&& itemNode.node == model->NodeRef()->node)) {
+					&& itemNode.dereference().node == model->NodeRef()->dereference().node)) {
 				model->UpdateEntryRef(&dirNode, name);
 				BString title;
 				title.SetToFormat(B_TRANSLATE_COMMENT("%s info",
@@ -711,7 +708,7 @@ GeneralInfoView::CheckAndSetSize()
 		bool volumeHasNoCapacity = false;
 
 		if (fModel->IsVolume()) {
-			BVolume volume(fModel->NodeRef()->device);
+			BVolume volume(fModel->NodeRef()->dereference().dev());
 			freeBytes = volume.FreeBytes();
 			capacity = volume.Capacity();
 			volumeHasNoCapacity = capacity == 0;

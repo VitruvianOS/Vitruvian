@@ -421,9 +421,13 @@ BNavMenu::StartBuildingItemList()
 	status_t status = entry.GetParent(&parent);
 
 	// if ref is the root item then build list of volume root dirs
+#ifndef __VOS__
 	fFlags = uint8((fFlags & ~kVolumesOnly) | (status == B_ENTRY_NOT_FOUND ? kVolumesOnly : 0));
 	if ((fFlags & kVolumesOnly) != 0)
 		return true;
+#else
+	fFlags &= ~kVolumesOnly;
+#endif
 
 	Model startModel(&entry, true);
 
@@ -586,9 +590,16 @@ BNavMenu::AddNextItem()
 void
 BNavMenu::AddOneItem(Model* model)
 {
-	BMenuItem* item = NewModelItem(model, &fMessage, fMessenger, false,
-		dynamic_cast<BContainerWindow*>(fParentWindow),
-		fTypesList, &fTrackingHook);
+	BMenuItem* item = NULL;
+	try {
+		item = NewModelItem(model, &fMessage, fMessenger, false,
+			dynamic_cast<BContainerWindow*>(fParentWindow),
+			fTypesList, &fTrackingHook);
+	} catch (...) {
+		// ModelMenuItem throws if the model copy fails to open (e.g. device
+		// nodes in /dev that are kUnknownNode type). Skip the item.
+		return;
+	}
 
 	if (item != NULL)
 		fItemList->AddItem(item);

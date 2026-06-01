@@ -1703,8 +1703,9 @@ NodeCacheEntry::Hash() const
 /* static */ size_t
 NodeCacheEntry::Hash(const node_ref* node)
 {
-	ino_t ino = node->ino();
-	return node->dev() ^ ((uint32*)&ino)[0]
+	const node_ref real = node->dereference();
+	ino_t ino = real.ino();
+	return real.dev() ^ ((uint32*)&ino)[0]
 		^ ((uint32*)&ino)[1];
 }
 

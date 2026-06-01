@@ -697,7 +697,8 @@ protected:
 
 		uint32 GetHashCode() const
 		{
-			return (uint32)value.device ^ (uint32)value.node;
+			const node_ref real = value.dereference();
+			return (uint32)real.device ^ (uint32)real.node;
 		}
 
 		node_ref_key operator=(const node_ref_key& other)

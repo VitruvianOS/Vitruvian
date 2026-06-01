@@ -403,14 +403,13 @@ FSClipboardPaste(Model* model, uint32 linksMode)
 
 				// If the entry_ref's directory has changed, send previous notification
 				// (if any), and start new one for the new directory
-				if (updateNodeRef.dev() != ref.dev() || updateNodeRef.ino() != ref.dir()) {
+				if (updateNodeRef != node_ref(ref.device, ref.directory)) {
 					if (!updateMessage.IsEmpty()) {
 						tracker.SendMessage(&updateMessage);
 						updateMessage.MakeEmpty();
 					}
 
-					updateNodeRef.device = ref.device;
-					updateNodeRef.node = ref.directory;
+					updateNodeRef = node_ref(ref.device, ref.directory);
 					updateMessage.AddUInt64("device", updateNodeRef.dev());
 					updateMessage.AddUInt64("directory", updateNodeRef.ino());
 				}
@@ -423,8 +422,7 @@ FSClipboardPaste(Model* model, uint32 linksMode)
 				BEntry entry(&ref);
 
 				uint32 newMoveMode = 0;
-				bool sameDirectory = destNodeRef->dev() == ref.dev()
-					&& destNodeRef->ino() == ref.dir();
+				bool sameDirectory = (*destNodeRef == node_ref(ref.device, ref.directory));
 
 				if (!entry.Exists()) {
 					// The entry doesn't exist anymore, so we'll remove

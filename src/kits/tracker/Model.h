@@ -30,6 +30,8 @@ Tracker(TM), Be(R), BeOS(R), and BeIA(TM) are trademarks or registered trademark
 of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
+
+Copyright 2026, Dario Casalinuovo. All rights reserved.
 */
 
 //	Dedicated to BModel
@@ -249,6 +251,9 @@ private:
 	};
 
 	entry_ref fEntryRef;
+	// TODO(vref): Replace with ModelStatBuf (subclass adding node_ref virtualRef)
+	// so NodeRef() can return the virtual ref instead of the physical layout cast.
+	// Blocked on all downstream comparisons using operator==(node_ref) with dereference().
 	StatStruct fStatBuf;
 	BString fMimeType;
 		// should use string that may be shared for common types
@@ -340,7 +345,7 @@ Model::EntryRef() const
 inline const node_ref*
 Model::NodeRef() const
 {
-	// the stat structure begins with a node_ref
+	// stat structure begins with st_dev/st_ino which match node_ref layout
 	return (node_ref*)&fStatBuf;
 }
 

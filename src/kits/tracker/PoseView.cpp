@@ -1746,19 +1746,10 @@ BPoseView::CreateVolumePose(BVolume* volume)
 
 	// If the volume is mounted at a directory of a persistent volume, we don't
 	// want it on the desktop or in the disks window.
+	// On Vitruvian all volumes appear mounted within the root fs, so skip
+	// the parent-volume check and show all persistent volumes on the desktop.
+#ifndef __VOS__
 	BVolume parentVolume(ref.dereference().dev());
-#ifdef __VOS__
-	// On Vitruvian, allow the boot volume (root filesystem) to be shown even
-	// if it appears to be mounted within another persistent volume, as the
-	// Linux filesystem structure is different from Haiku's volume model
-	BVolumeRoster roster;
-	BVolume bootVolume;
-	bool isBootVolume = (roster.GetBootVolume(&bootVolume) == B_OK
-		&& bootVolume.Device() == volume->Device());
-
-	if (!isBootVolume && parentVolume.InitCheck() == B_OK && parentVolume.IsPersistent())
-		return;
-#else
 	if (parentVolume.InitCheck() == B_OK && parentVolume.IsPersistent())
 		return;
 #endif
@@ -5713,14 +5704,13 @@ BPoseView::EntryMoved(const BMessage* message)
 	StatStruct st;
 	// get the inode of the root and check if we got a notification on it
 	if (stat("/", &st) >= 0
-		&& st.st_dev == dirNode.device
-		&& st.st_ino == dirNode.node) {
+		&& st.st_dev == dirNode.dereference().device
+		&& st.st_ino == dirNode.dereference().node) {
 		BString buffer;
 		buffer << "/" << name;
 		if (stat(buffer.String(), &st) >= 0) {
 			// point the dirNode to the actual volume
-			itemNode.node = st.st_ino;
-			itemNode.device = st.st_dev;
+			itemNode = node_ref(st.st_dev, st.st_ino);
 		}
 	}
 
@@ -5793,7 +5783,7 @@ BPoseView::EntryMoved(const BMessage* message)
 			pendingNodeMonitorCache.PoseCreatedOrMoved(this, pose);
 	} else if (oldDir.dereference().dir() == thisDirNode.dereference().ino()) {
 		DeletePose(&itemNode);
-	} else if (dirNode.ino() == thisDirNode.ino()) {
+	} else if (dirNode.dereference().ino() == thisDirNode.dereference().ino()) {
 		EntryCreated(&dirNode, &itemNode, name);
 	}
 	TryUpdatingBrokenLinks();
@@ -8941,7 +8931,7 @@ BPoseView::SelectedVolumeIsReadOnly() const
 			entry.SetTo(pose->TargetModel()->EntryRef());
 			if (FSGetParentVirtualDirectoryAware(entry, parent) == B_OK) {
 				parent.GetNodeRef(&nref);
-				volume.SetTo(nref.dev());
+				volume.SetTo(nref.dereference().dev());
 				if (volume.InitCheck() == B_OK && volume.IsReadOnly())
 					return true;
 			}
@@ -8960,7 +8950,7 @@ BPoseView::SelectedVolumeIsReadOnly() const
 			entry.SetTo(pose->TargetModel()->EntryRef());
 			if (FSGetParentVirtualDirectoryAware(entry, parent) == B_OK) {
 				parent.GetNodeRef(&nref);
-				volume.SetTo(nref.dev()); // not tested
+				volume.SetTo(nref.dereference().dev());
 			}
 		}
 	} else {

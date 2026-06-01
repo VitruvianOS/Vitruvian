@@ -30,6 +30,8 @@ Tracker(TM), Be(R), BeOS(R), and BeIA(TM) are trademarks or registered trademark
 of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
+
+Copyright 2026, Dario Casalinuovo. All rights reserved.
 */
 
 //	Dedicated to BModel
@@ -41,9 +43,11 @@ All rights reserved.
 
 #include "Model.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <unistd.h>
 
 #include <fs_info.h>
 #include <fs_attr.h>
@@ -77,6 +81,13 @@ All rights reserved.
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Model"
+
+
+// BNode that adopts an already-opened fd (used for O_PATH-only handles).
+class BNodeFromFd : public BNode {
+public:
+	explicit BNodeFromFd(int fd) { set_fd(fd); }
+};
 
 
 #ifdef CHECK_OPEN_MODEL_LEAKS
@@ -115,8 +126,7 @@ Model::Model(const Model& other)
 	fHasLocalizedName(other.fHasLocalizedName),
 	fLocalizedNameIsCached(other.fLocalizedNameIsCached)
 {
-	fStatBuf.st_dev = other.NodeRef()->dev();
-	fStatBuf.st_ino = other.NodeRef()->ino();
+	fStatBuf = other.fStatBuf;
 
 	if (other.IsSymLink() && other.LinkTo())
 		fLinkTo = new Model(*other.LinkTo());
@@ -490,17 +500,17 @@ Model::OpenNodeCommon(bool writable)
 			break;
 
 		default:
-#if DEBUG
-			PrintToStream();
-#endif
-			TRESPASS();
-				// this can only happen if GetStat failed before,
-				// in which case we shouldn't be here
-
-			// ToDo: Obviously, we can also be here if the type could not
-			// be determined, for example for block devices (so the TRESPASS()
-			// macro shouldn't be used here)!
-			return fStatus = B_ERROR;
+			// Device nodes, sockets, pipes: O_PATH gives an fd for stat/xattr
+			// without ever opening the underlying device.
+			BPath path(&fEntryRef);
+			int rawFd = -1;
+			if (path.InitCheck() == B_OK)
+				rawFd = open(path.Path(), O_PATH | O_CLOEXEC);
+			if (rawFd < 0)
+				return fStatus = B_ERROR;
+			delete fNode;
+			fNode = new BNodeFromFd(rawFd);
+			break;
 	}
 
 	fStatus = fNode->InitCheck();
@@ -694,12 +704,17 @@ Model::FinishSettingUpType()
 
 		case kVolumeNode:
 		{
+#ifndef __VOS__
+			// On Vitruvian, "/" is a real volume (the boot volume), not a
+			// virtual Disks root. The desktop uses IsVolumesRoot() to list
+			// volumes; kRootNode is not needed and causes wrong name/icon.
 			if (*NodeRef() == node_ref(fEntryRef.device, fEntryRef.directory)) {
 				// promote from volume to file system root
 				fBaseType = kRootNode;
 				fMimeType = B_ROOT_MIMETYPE;
 				break;
 			}
+#endif
 
 			// volumes have to have a B_VOLUME_MIMETYPE type
 			fMimeType = B_VOLUME_MIMETYPE;

@@ -446,10 +446,10 @@ BInfoWindow::MessageReceived(BMessage* message)
 				{
 					// We were watching a volume that is no longer
 					// mounted, we might as well quit
-					node_ref itemNode;
-					// Only the device information is available
-					message->FindUInt64("device", (uint64*)&itemNode.device);
-					if (TargetModel()->NodeRef()->device == itemNode.device)
+					// Only the device information is available in unmount messages
+					dev_t unmountedDev;
+					message->FindUInt64("device", (uint64*)&unmountedDev);
+					if (TargetModel()->NodeRef()->dereference().dev() == unmountedDev)
 						Close();
 					break;
 				}

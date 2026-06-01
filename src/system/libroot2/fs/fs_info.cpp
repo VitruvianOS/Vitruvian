@@ -7,9 +7,17 @@
 
 #include <fs_info.h>
 #include <syscalls.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+
+#include <pthread.h>
 
 #include "fs/utils.h"
 #include "KernelDebug.h"
+#include "Team.h"
+
+#include "../../kernel/nexus/nexus/nexus.h"
+#include "../../kernel/nexus/nexus/node_monitor.h"
 
 #define WRITE_FLAG_READONLY 0x1
 #define WRITE_DEVICE_NAME   0x2
@@ -19,6 +27,7 @@ namespace BKernelPrivate {
 
 
 static FILE* sVolumeIterator = NULL;
+static pthread_mutex_t sVolumeIteratorLock = PTHREAD_MUTEX_INITIALIZER;
 
 
 status_t
@@ -36,6 +45,12 @@ LinuxVolume::FillVolumeInfo(struct mntent* mountEntry, fs_info* info)
 		volName = mountEntry->mnt_dir;
 
 	strlcpy(info->volume_name, volName, B_FILE_NAME_LENGTH);
+
+	// WORKAROUND: hardcode the boot volume label so Tracker doesn't show "/".
+	// Proper fix: derive the label from the installed OS identity (release
+	// file, /etc/os-release, or a dedicated config), not from the mount path.
+	if (strcmp(mountEntry->mnt_dir, "/") == 0)
+		strlcpy(info->volume_name, "Vitruvian", B_FILE_NAME_LENGTH);
 	strlcpy(info->device_name, mountEntry->mnt_fsname, 128);
 	strlcpy(info->fsh_name, mountEntry->mnt_type, B_OS_NAME_LENGTH);
 
@@ -60,8 +75,15 @@ LinuxVolume::FillVolumeInfo(struct mntent* mountEntry, fs_info* info)
 
 	if (volume.f_flag & ST_RDONLY)
 		info->flags |= B_FS_IS_READONLY;
-	if (volume.f_flag & ST_NOSUID)
-		info->flags |= B_FS_HAS_MIME;
+
+	int volFd = open(mountEntry->mnt_dir, O_PATH | O_DIRECTORY | O_CLOEXEC);
+	if (volFd >= 0) {
+		struct nexus_query_volume_flags req = { .target_fd = volFd, .flags = 0 };
+		int nmfd = BKernelPrivate::Team::GetNodeMonitorDescriptor();
+		if (nmfd >= 0 && ioctl(nmfd, NEXUS_QUERY_VOLUME_FLAGS, &req) == 0)
+			info->flags |= req.flags;
+		close(volFd);
+	}
 
 	// Mark filesystems as persistent if they are backed by a real block device
 	// (device path starts with /dev/) or are a known persistent filesystem type.
@@ -115,8 +137,11 @@ LinuxVolume::FindVolume(dev_t device)
 	if (mounts == NULL)
 		return NULL;
 
+	struct mntent mountEntryBuf;
+	char mntBuf[4096];
 	struct mntent* mountEntry;
-	while ((mountEntry = getmntent(mounts)) != NULL) {
+	while ((mountEntry = getmntent_r(mounts, &mountEntryBuf, mntBuf,
+			sizeof(mntBuf))) != NULL) {
 		struct stat st;
 		if (stat(mountEntry->mnt_dir, &st) == 0 && st.st_dev == device) {
 			struct mntent* result = (struct mntent*)malloc(sizeof(struct mntent));
@@ -157,17 +182,24 @@ LinuxVolume::GetNextVolume(int32* cookie)
 	if (cookie == NULL)
 		return B_INVALID_DEV;
 
+	pthread_mutex_lock(&sVolumeIteratorLock);
+
 	if (*cookie == 0 || sVolumeIterator == NULL) {
 		if (sVolumeIterator != NULL)
 			endmntent(sVolumeIterator);
 
 		sVolumeIterator = setmntent(PROC_MOUNTS, "r");
-		if (sVolumeIterator == NULL)
+		if (sVolumeIterator == NULL) {
+			pthread_mutex_unlock(&sVolumeIteratorLock);
 			return B_INVALID_DEV;
+		}
 	}
 
+	struct mntent mountEntryBuf;
+	char mntBuf[4096];
 	struct mntent* mountEntry;
-	while ((mountEntry = getmntent(sVolumeIterator)) != NULL) {
+	while ((mountEntry = getmntent_r(sVolumeIterator, &mountEntryBuf,
+			mntBuf, sizeof(mntBuf))) != NULL) {
 		if (strcmp(mountEntry->mnt_type, "proc") == 0 ||
 			strcmp(mountEntry->mnt_type, "sysfs") == 0 ||
 			strcmp(mountEntry->mnt_type, "devtmpfs") == 0 ||
@@ -195,12 +227,14 @@ LinuxVolume::GetNextVolume(int32* cookie)
 			continue;
 
 		(*cookie)++;
+		pthread_mutex_unlock(&sVolumeIteratorLock);
 		return st.st_dev;
 	}
 
 	endmntent(sVolumeIterator);
 	sVolumeIterator = NULL;
 	*cookie = -1;
+	pthread_mutex_unlock(&sVolumeIteratorLock);
 	return B_INVALID_DEV;
 }
 

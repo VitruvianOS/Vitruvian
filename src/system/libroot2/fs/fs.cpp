@@ -15,12 +15,6 @@
 #include "KernelDebug.h"
 
 
-// Forward declarations for attribute directory support (from attr.cpp)
-extern bool _is_attr_dir_fd(int fd);
-extern ssize_t _read_attr_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount);
-extern status_t _rewind_attr_dir(int fd);
-extern status_t _close_attr_dir(int fd);
-
 
 status_t
 _kern_read_stat(int fd, const char* path, bool traverseLink,
@@ -88,10 +82,6 @@ _kern_close(int fd)
 {
 	CALLED();
 
-	// Check if this is an attribute directory fd
-	if (_is_attr_dir_fd(fd))
-		return _close_attr_dir(fd);
-
 	return (close(fd) < 0) ? -errno : B_OK;
 }
 
@@ -157,14 +147,20 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 			return ret;
 		}
 
-		char* baseName = basename(buf);
-		if (baseName == NULL) {
-			close(dirfd);
-			return B_ENTRY_NOT_FOUND;
-		}
-
-		if (strcmp(baseName, "/") == 0)
+		// Treat empty path and "/" as the root → leaf name must be "."
+		// (the GNU basename() returns "" instead of "." for these inputs).
+		char* baseName;
+		if (buf[0] == '\0' || strcmp(buf, "/") == 0) {
 			baseName = (char*)".";
+		} else {
+			baseName = basename(buf);
+			if (baseName == NULL) {
+				close(dirfd);
+				return B_ENTRY_NOT_FOUND;
+			}
+			if (baseName[0] == '\0' || strcmp(baseName, "/") == 0)
+				baseName = (char*)".";
+		}
 
 		size_t len = strlen(baseName);
 		if (len+1 > length) {
@@ -566,10 +562,6 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 	if (fd < 0)
 		return B_FILE_ERROR;
 
-	// Check if this is an attribute directory fd
-	if (_is_attr_dir_fd(fd))
-		return _read_attr_dir(fd, buffer, bufferSize, maxCount);
-
 	// linux_dirent64 header (LP64): d_ino(8) + d_off(8) + d_reclen(2) + d_type(1) = 19 bytes
 	const size_t LINUX_DIRENT64_HEADER = 8 + 8 + 2 + 1;
 
@@ -695,10 +687,6 @@ _kern_rewind_dir(int fd)
 
 	if (fd < 0)
 		return B_FILE_ERROR;
-
-	// Check if this is an attribute directory fd
-	if (_is_attr_dir_fd(fd))
-		return _rewind_attr_dir(fd);
 
 	return _kern_seek(fd, 0, SEEK_SET);
 }

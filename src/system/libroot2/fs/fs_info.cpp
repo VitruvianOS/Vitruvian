@@ -19,6 +19,8 @@
 #include "../../kernel/nexus/nexus/nexus.h"
 #include "../../kernel/nexus/nexus/node_monitor.h"
 
+#include <blkid/blkid.h>
+
 #define WRITE_FLAG_READONLY 0x1
 #define WRITE_DEVICE_NAME   0x2
 
@@ -30,6 +32,40 @@ static FILE* sVolumeIterator = NULL;
 static pthread_mutex_t sVolumeIteratorLock = PTHREAD_MUTEX_INITIALIZER;
 
 
+static void
+resolve_volume_name(struct mntent* mountEntry, char* out)
+{
+	if (strcmp(mountEntry->mnt_dir, "/") == 0) {
+		strlcpy(out, "Vitruvian", B_FILE_NAME_LENGTH);
+		return;
+	}
+
+	if (strncmp(mountEntry->mnt_fsname, "/dev/", 5) == 0) {
+		char* label = blkid_get_tag_value(NULL, "LABEL", mountEntry->mnt_fsname);
+		if (label != NULL) {
+			if (label[0] != '\0')
+				strlcpy(out, label, B_FILE_NAME_LENGTH);
+			free(label);
+			if (out[0] != '\0')
+				return;
+		}
+	}
+
+	const char* base = strrchr(mountEntry->mnt_dir, '/');
+	if (base && base[1] != '\0') {
+		strlcpy(out, base + 1, B_FILE_NAME_LENGTH);
+		return;
+	}
+
+	if (mountEntry->mnt_type[0] != '\0') {
+		strlcpy(out, mountEntry->mnt_type, B_FILE_NAME_LENGTH);
+		return;
+	}
+
+	strlcpy(out, mountEntry->mnt_dir, B_FILE_NAME_LENGTH);
+}
+
+
 status_t
 LinuxVolume::FillVolumeInfo(struct mntent* mountEntry, fs_info* info)
 {
@@ -38,19 +74,7 @@ LinuxVolume::FillVolumeInfo(struct mntent* mountEntry, fs_info* info)
 
 	memset(info, 0, sizeof(fs_info));
 
-	const char* volName = strrchr(mountEntry->mnt_dir, '/');
-	if (volName && volName[1] != '\0')
-		volName++;
-	else
-		volName = mountEntry->mnt_dir;
-
-	strlcpy(info->volume_name, volName, B_FILE_NAME_LENGTH);
-
-	// WORKAROUND: hardcode the boot volume label so Tracker doesn't show "/".
-	// Proper fix: derive the label from the installed OS identity (release
-	// file, /etc/os-release, or a dedicated config), not from the mount path.
-	if (strcmp(mountEntry->mnt_dir, "/") == 0)
-		strlcpy(info->volume_name, "Vitruvian", B_FILE_NAME_LENGTH);
+	resolve_volume_name(mountEntry, info->volume_name);
 	strlcpy(info->device_name, mountEntry->mnt_fsname, 128);
 	strlcpy(info->fsh_name, mountEntry->mnt_type, B_OS_NAME_LENGTH);
 

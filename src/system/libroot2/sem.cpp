@@ -20,15 +20,18 @@ create_sem(int32 count, const char* name)
 	struct nexus_sem_create ex = {
 		.name = name,
 		.count = count,
+		.id = 0,
+		.ret = B_OK
 	};
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
 		return B_ERROR;
 
-	status_t ret = nexus_io(nexus, NEXUS_SEM_CREATE, &ex);
-	if (ret < 0)
-		return ret;
+	if (nexus_io(nexus, NEXUS_SEM_CREATE, &ex) < 0)
+		return B_ERROR;
+	if (ex.ret != B_OK)
+		return ex.ret;
 	return ex.id;
 }
 
@@ -39,13 +42,15 @@ delete_sem(sem_id id)
 	if (id < 0)
 		return B_BAD_SEM_ID;
 
-	struct nexus_sem_delete_req ex = { .id = id };
+	struct nexus_sem_delete_req ex = { .id = id, .ret = B_OK };
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
 		return B_ERROR;
 
-	return nexus_io(nexus, NEXUS_SEM_DELETE, &ex);
+	if (nexus_io(nexus, NEXUS_SEM_DELETE, &ex) < 0)
+		return B_ERROR;
+	return ex.ret;
 }
 
 
@@ -69,14 +74,17 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 		.id = id,
 		.count = count,
 		.flags = flags,
-		.timeout = timeout
+		.timeout = timeout,
+		.ret = B_OK
 	};
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
 		return B_ERROR;
 
-	return nexus_io(nexus, NEXUS_SEM_ACQUIRE, &ex);
+	if (nexus_io(nexus, NEXUS_SEM_ACQUIRE, &ex) < 0)
+		return B_ERROR;
+	return ex.ret;
 }
 
 
@@ -100,14 +108,17 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 		.id = id,
 		.count = count,
 		.flags = flags,
-		.timeout = 0
+		.timeout = 0,
+		.ret = B_OK
 	};
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
 		return B_ERROR;
 
-	return nexus_io(nexus, NEXUS_SEM_RELEASE, &ex);
+	if (nexus_io(nexus, NEXUS_SEM_RELEASE, &ex) < 0)
+		return B_ERROR;
+	return ex.ret;
 }
 
 
@@ -120,17 +131,17 @@ get_sem_count(sem_id id, int32* threadCount)
 	if (threadCount == NULL)
 		return B_BAD_VALUE;
 
-	struct nexus_sem_count_req ex = { .id = id };
+	struct nexus_sem_count_req ex = { .id = id, .count = 0, .ret = B_OK };
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
 		return B_ERROR;
 
-	status_t ret = nexus_io(nexus, NEXUS_SEM_COUNT, &ex);
-	if (ret == B_OK)
+	if (nexus_io(nexus, NEXUS_SEM_COUNT, &ex) < 0)
+		return B_ERROR;
+	if (ex.ret == B_OK)
 		*threadCount = ex.count;
-
-	return ret;
+	return ex.ret;
 }
 
 
@@ -151,8 +162,9 @@ _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 	if (nexus < 0)
 		return B_ERROR;
 
-	status_t ret = nexus_io(nexus, NEXUS_SEM_INFO, &req);
-	if (ret == B_OK) {
+	if (nexus_io(nexus, NEXUS_SEM_INFO, &req) < 0)
+		return B_ERROR;
+	if (req.ret == B_OK) {
 		info->sem = req.info.sem;
 		info->team = req.info.team;
 		strncpy(info->name, req.info.name, B_OS_NAME_LENGTH);
@@ -160,8 +172,7 @@ _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 		info->count = req.info.count;
 		info->latest_holder = req.info.latest_holder;
 	}
-
-	return ret;
+	return req.ret;
 }
 
 
@@ -180,8 +191,9 @@ _get_next_sem_info(team_id id, int32* cookie, struct sem_info* info, size_t size
 	if (nexus < 0)
 		return B_ERROR;
 
-	status_t ret = nexus_io(nexus, NEXUS_SEM_NEXT_INFO, &nextInfo);
-	if (ret == B_OK) {
+	if (nexus_io(nexus, NEXUS_SEM_NEXT_INFO, &nextInfo) < 0)
+		return B_ERROR;
+	if (nextInfo.ret == B_OK) {
 		info->sem = nextInfo.info.sem;
 		info->team = nextInfo.info.team;
 		strncpy(info->name, nextInfo.info.name, B_OS_NAME_LENGTH);
@@ -190,8 +202,7 @@ _get_next_sem_info(team_id id, int32* cookie, struct sem_info* info, size_t size
 		info->latest_holder = nextInfo.info.latest_holder;
 		*cookie = nextInfo.cookie;
 	}
-
-	return ret;
+	return nextInfo.ret;
 }
 
 

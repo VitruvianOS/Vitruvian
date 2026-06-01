@@ -29,9 +29,10 @@ create_port(int32 queueLength, const char* name)
 	exchange.size = (uint32_t)(strlen(name) + 1);
 	exchange.capacity = queueLength;
 
-	int ret = nexus_io(nexus, NEXUS_PORT_CREATE, &exchange);
-	if (ret != B_OK)
-		return ret;
+	if (nexus_io(nexus, NEXUS_PORT_CREATE, &exchange) < 0)
+		return B_ERROR;
+	if (exchange.ret != B_OK)
+		return exchange.ret;
 
 	return exchange.id;
 }
@@ -46,13 +47,16 @@ close_port(port_id id)
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_id exchange;
+	memset(&exchange, 0, sizeof(exchange));
 	exchange.id = id;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	if (nexus < 0)
 		return B_BAD_PORT_ID;
 
-	return nexus_io(nexus, NEXUS_PORT_CLOSE, &exchange);
+	if (nexus_io(nexus, NEXUS_PORT_CLOSE, &exchange) < 0)
+		return B_ERROR;
+	return exchange.ret;
 }
 
 
@@ -69,9 +73,12 @@ delete_port(port_id id)
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_id exchange;
+	memset(&exchange, 0, sizeof(exchange));
 	exchange.id = id;
 
-	return nexus_io(nexus, NEXUS_PORT_DELETE, &exchange);
+	if (nexus_io(nexus, NEXUS_PORT_DELETE, &exchange) < 0)
+		return B_ERROR;
+	return exchange.ret;
 }
 
 
@@ -86,12 +93,14 @@ find_port(const char* name)
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_find_req exchange;
+	memset(&exchange, 0, sizeof(exchange));
 	exchange.name = name;
 	exchange.size = strlen(name)+1;
 
-	int ret = nexus_io(nexus, NEXUS_PORT_FIND, &exchange);
-	if (ret != B_OK)
-		return ret;
+	if (nexus_io(nexus, NEXUS_PORT_FIND, &exchange) < 0)
+		return B_ERROR;
+	if (exchange.ret != B_OK)
+		return exchange.ret;
 
 	return exchange.id;
 }
@@ -113,9 +122,10 @@ _kern_get_next_port_info(team_id team, int32* _cookie,
 	req.team   = (pid_t)team;
 	req.cookie = *_cookie;
 
-	int ret = nexus_io(nexus, NEXUS_GET_NEXT_PORT_FOR_TEAM, &req);
-	if (ret != B_OK)
-		return ret;
+	if (nexus_io(nexus, NEXUS_GET_NEXT_PORT_FOR_TEAM, &req) < 0)
+		return B_ERROR;
+	if (req.ret != B_OK)
+		return req.ret;
 
 	info->port        = req.info.port;
 	info->team        = req.info.team;
@@ -159,9 +169,10 @@ _get_port_info(port_id id, port_info* out_info, size_t size)
 	exchange.id = id;
 	exchange.info = &info;
 
-	int ret = nexus_io(nexus, NEXUS_PORT_INFO, &exchange);
-	if (ret != B_OK)
-		return ret;
+	if (nexus_io(nexus, NEXUS_PORT_INFO, &exchange) < 0)
+		return B_ERROR;
+	if (exchange.ret != B_OK)
+		return exchange.ret;
 
 	out_info->port = info.port;
 	out_info->team = info.team;
@@ -243,9 +254,10 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 	exchange.size = sizeof(privateInfo);
 	exchange.info = &privateInfo;
 
-	int ret = nexus_io(nexus, NEXUS_PORT_MESSAGE_INFO, &exchange);
-	if (ret != B_OK)
-		return ret;
+	if (nexus_io(nexus, NEXUS_PORT_MESSAGE_INFO, &exchange) < 0)
+		return B_ERROR;
+	if (exchange.ret != B_OK)
+		return exchange.ret;
 
 	info->size = privateInfo.size;
 	info->sender = privateInfo.sender;
@@ -275,6 +287,7 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_read exchange;
+	memset(&exchange, 0, sizeof(exchange));
 	exchange.id = id;
 	exchange.code = msgCode;
 	exchange.buffer = msgBuffer;
@@ -282,9 +295,10 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 	exchange.flags = flags;
 	exchange.timeout = timeout;
 
-	int ret = nexus_io(nexus, NEXUS_PORT_READ, &exchange);
-	if (ret != B_OK)
-		return ret;
+	if (nexus_io(nexus, NEXUS_PORT_READ, &exchange) < 0)
+		return B_ERROR;
+	if (exchange.ret != B_OK)
+		return exchange.ret;
 
 	return exchange.size;
 }
@@ -317,6 +331,7 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_write exchange;
+	memset(&exchange, 0, sizeof(exchange));
 	exchange.id = id;
 	exchange.code = &msgCode;
 	exchange.buffer = msgBuffer;
@@ -324,7 +339,9 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 	exchange.flags = flags;
 	exchange.timeout = timeout;
 
-	return nexus_io(nexus, NEXUS_PORT_WRITE, &exchange);
+	if (nexus_io(nexus, NEXUS_PORT_WRITE, &exchange) < 0)
+		return B_ERROR;
+	return exchange.ret;
 }
 
 
@@ -357,8 +374,11 @@ set_port_owner(port_id id, team_id team)
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_set_owner exchange;
+	memset(&exchange, 0, sizeof(exchange));
 	exchange.id = id;
 	exchange.team = team;
 
-	return nexus_io(nexus, NEXUS_SET_PORT_OWNER, &exchange);
+	if (nexus_io(nexus, NEXUS_SET_PORT_OWNER, &exchange) < 0)
+		return B_ERROR;
+	return exchange.ret;
 }

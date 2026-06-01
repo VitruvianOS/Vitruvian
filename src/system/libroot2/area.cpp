@@ -189,11 +189,11 @@ create_area(const char* name, void** startAddr, uint32 addrSpec,
 	create.lock = lock;
 	create.protection = protection;
 
-	status_t ret = nexus_io(nexus, NEXUS_AREA_CREATE, &create);
-	if (ret != B_OK) {
+	if (nexus_io(nexus, NEXUS_AREA_CREATE, &create) < 0
+			|| create.ret != B_OK) {
 		munmap(address, size);
 		close(memfd);
-		return ret;
+		return create.ret != B_OK ? create.ret : B_ERROR;
 	}
 
 	BKernelPrivate::LocalArea local;
@@ -229,9 +229,10 @@ clone_area(const char* name, void** destAddr, uint32 addrSpec,
 	};
 	strncpy(clone.name, name, B_OS_NAME_LENGTH - 1);
 
-	status_t ret = nexus_io(nexus, NEXUS_AREA_CLONE, &clone);
-	if (ret != B_OK)
-		return ret;
+	if (nexus_io(nexus, NEXUS_AREA_CLONE, &clone) < 0)
+		return B_ERROR;
+	if (clone.ret != B_OK)
+		return clone.ret;
 
 	int prot = BKernelPrivate::protection_to_prot(protection);
 	int flags = MAP_SHARED;
@@ -295,8 +296,10 @@ delete_area(area_id id)
 	if (nexus < 0)
 		return B_ERROR;
 
-	struct nexus_area_delete del = { .area = id };
-	return nexus_io(nexus, NEXUS_AREA_DELETE, &del);
+	struct nexus_area_delete del = { .area = id, .ret = B_OK };
+	if (nexus_io(nexus, NEXUS_AREA_DELETE, &del) < 0)
+		return B_ERROR;
+	return del.ret;
 }
 
 
@@ -318,9 +321,10 @@ find_area(const char* name)
 	struct nexus_area_find find = {};
 	strncpy(find.name, name, B_OS_NAME_LENGTH - 1);
 
-	status_t ret = nexus_io(nexus, NEXUS_AREA_FIND, &find);
-	if (ret != B_OK)
-		return B_NAME_NOT_FOUND;
+	if (nexus_io(nexus, NEXUS_AREA_FIND, &find) < 0)
+		return B_ERROR;
+	if (find.ret != B_OK)
+		return find.ret;
 
 	return find.area;
 }
@@ -357,8 +361,10 @@ resize_area(area_id id, size_t newSize)
 	if (nexus < 0)
 		return B_ERROR;
 
-	struct nexus_area_resize resize = { .area = id, .new_size = newSize };
-	return nexus_io(nexus, NEXUS_AREA_RESIZE, &resize);
+	struct nexus_area_resize resize = { .area = id, .new_size = newSize, .ret = B_OK };
+	if (nexus_io(nexus, NEXUS_AREA_RESIZE, &resize) < 0)
+		return B_ERROR;
+	return resize.ret;
 }
 
 
@@ -382,10 +388,13 @@ set_area_protection(area_id id, uint32 protection)
 
 	struct nexus_area_set_protection sp = {
 		.area = id,
-		.protection = protection
+		.protection = protection,
+		.ret = B_OK
 	};
 
-	return nexus_io(nexus, NEXUS_AREA_SET_PROTECTION, &sp);
+	if (nexus_io(nexus, NEXUS_AREA_SET_PROTECTION, &sp) < 0)
+		return B_ERROR;
+	return sp.ret;
 }
 
 
@@ -407,9 +416,10 @@ _get_area_info(area_id id, area_info* info, size_t size)
 		return B_ERROR;
 
 	struct nexus_area_get_info gi = { .area = id };
-	status_t ret = nexus_io(nexus, NEXUS_AREA_GET_INFO, &gi);
-	if (ret != B_OK)
-		return B_BAD_VALUE;
+	if (nexus_io(nexus, NEXUS_AREA_GET_INFO, &gi) < 0)
+		return B_ERROR;
+	if (gi.ret != B_OK)
+		return gi.ret;
 
 	info->area = id;
 	strncpy(info->name, gi.name, B_OS_NAME_LENGTH);
@@ -445,9 +455,10 @@ _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 	gn.team = (team == 0) ? getpid() : team;
 	gn.cookie = (int32_t)*cookie;
 
-	status_t ret = nexus_io(nexus, NEXUS_AREA_GET_NEXT, &gn);
-	if (ret != B_OK)
-		return B_BAD_VALUE;
+	if (nexus_io(nexus, NEXUS_AREA_GET_NEXT, &gn) < 0)
+		return B_ERROR;
+	if (gn.ret != B_OK)
+		return gn.ret;
 
 	areaInfo->area = gn.area;
 	strncpy(areaInfo->name, gn.name, B_OS_NAME_LENGTH);
@@ -523,9 +534,10 @@ _kern_transfer_area(area_id id, void** _address, uint32 addressSpec,
 		.target = target,
 	};
 
-	status_t ret = nexus_io(nexus, NEXUS_AREA_TRANSFER, &tr);
-	if (ret != B_OK)
-		return ret;
+	if (nexus_io(nexus, NEXUS_AREA_TRANSFER, &tr) < 0)
+		return B_ERROR;
+	if (tr.ret != B_OK)
+		return tr.ret;
 
 	if (_address)
 		*_address = local.address;

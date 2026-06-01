@@ -8,8 +8,10 @@
 
 #include <cxxabi.h>
 #include <execinfo.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 
 bool _rtDebugFlag = true;
@@ -132,7 +134,12 @@ debugger(const char* message)
 		fprintf(stderr, "  gdb -p %d\n", getpid());
 		pause();
 	} else if (action && strcmp(action, "core") == 0) {
-		fprintf(stderr, "Generating core dump...\n");
+		char cwd[4096];
+		if (getcwd(cwd, sizeof(cwd)) != NULL)
+			fprintf(stderr, "Generating core dump in: %s/core\n", cwd);
+		else
+			fprintf(stderr, "Generating core dump...\n");
+		fflush(stderr);
 		abort();
 	} else {
 		fprintf(stderr, "Exiting. Set VOS_DEBUGGER_ACTION=gdb|wait|core for debugging.\n");

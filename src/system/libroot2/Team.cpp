@@ -35,12 +35,12 @@ namespace BKernelPrivate {
 
 
 static pthread_once_t gTeamOnce = PTHREAD_ONCE_INIT;
-static bool gPreinitDone = false;
 
 static int gNexus = -1;
 static int gNexusArea = -1;
 static int gNexusNodeMonitor = -1;
 static struct udev* gUdev = NULL;
+static pthread_mutex_t gDevicesLock = PTHREAD_MUTEX_INITIALIZER;
 
 // TODO replace with DIR*
 static std::list<int> gTeams;
@@ -49,25 +49,16 @@ static std::list<int> gTeams;
 static void
 OpenNexusDevices()
 {
-	if (gPreinitDone)
-		return;
+	pthread_mutex_lock(&gDevicesLock);
 
-	if (gNexus < 0) {
-		const char* nexusFdEnv = getenv("__VITRUVIAN_NEXUS_FD");
-		if (nexusFdEnv != NULL) {
-			gNexus = atoi(nexusFdEnv);
-			unsetenv("__VITRUVIAN_NEXUS_FD");
-		} else {
-			gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
-		}
-	}
-
+	if (gNexus < 0)
+		gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
 	if (gNexusArea < 0)
 		gNexusArea = open("/dev/nexus_area", O_RDWR | O_CLOEXEC);
 	if (gNexusNodeMonitor < 0)
 		gNexusNodeMonitor = open("/dev/nexus_node_monitor", O_RDWR | O_CLOEXEC);
 
-	gPreinitDone = true;
+	pthread_mutex_unlock(&gDevicesLock);
 }
 
 
@@ -166,17 +157,10 @@ Team::InitTeam()
 	sigaction(SIGABRT, &sa, NULL);
 
 	if (gNexus < 0) {
-		const char* nexusFdEnv = getenv("__VITRUVIAN_NEXUS_FD");
-		if (nexusFdEnv != NULL) {
-			gNexus = atoi(nexusFdEnv);
-			unsetenv("__VITRUVIAN_NEXUS_FD");
-			TRACE("Team::InitTeam: using inherited nexus fd %d\n", gNexus);
-		} else {
-			gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
-			if (gNexus < 0) {
-				printf("Can't open Nexus IPC\n");
-				exit(-1);
-			}
+		gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
+		if (gNexus < 0) {
+			printf("Can't open Nexus IPC\n");
+			exit(-1);
 		}
 	}
 
@@ -337,7 +321,6 @@ Team::ReinitChildAtFork()
 	}
 
 	gTeamOnce = PTHREAD_ONCE_INIT;
-	gPreinitDone = false;
 	pthread_once(&gTeamOnce, &Team::InitTeam);
 }
 
@@ -362,10 +345,6 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 	}
 
 	if (pid == 0) {
-		// Set environment variable to indicate this is load_image, not fork
-		// This prevents libbe's initialize_forked_child() from running
-		setenv("__VITRUVIAN_LOAD_IMAGE", "1", 1);
-
 		TRACE("LoadImage CHILD: closing nexus fds gNexus=%d gNexusArea=%d gNexusNodeMonitor=%d\n",
 			gNexus, gNexusArea, gNexusNodeMonitor);
 
@@ -387,11 +366,6 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 		}
 
 		gNexus = open("/dev/nexus", O_RDWR);
-		if (gNexus >= 0) {
-			char fdStr[16];
-			snprintf(fdStr, sizeof(fdStr), "%d", gNexus);
-			setenv("__VITRUVIAN_NEXUS_FD", fdStr, 1);
-		}
 
 		int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 		thread_id id = nexus_io(nexus, NEXUS_THREAD_CLONE_EXECUTED, NULL);

@@ -49,36 +49,70 @@ macro( DoCatalogs signature subdir )
 	)
 endmacro()
 
+# Compile a single .rdef to a .rsrc file (POST_BUILD), and record the output
+# path in the target property RDEF_RSRC_FILES so LinkRdefs can embed them all
+# in one xres call.
 function( CompileRdef target rdef_file )
 	cmake_parse_arguments(_ARG "STAGING" "" "" ${ARGN})
 
 	set(_src    "${CMAKE_CURRENT_SOURCE_DIR}/${rdef_file}")
 	set(_rsrc   "${CMAKE_CURRENT_BINARY_DIR}/${rdef_file}.rsrc")
-	set(_bin    "$<TARGET_FILE:${target}>")
 	set(_rc     "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc")
-	set(_xres   "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres")
-	set(_rsattr "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr")
 
 	if(NOT EXISTS "${_src}")
 		message(FATAL_ERROR "${_src} not found")
 	endif()
 
 	add_custom_command(TARGET ${target} POST_BUILD
-		COMMENT "Building resource file ${rdef_file}"
+		COMMENT "Compiling rdef ${rdef_file}"
 		COMMAND "${_rc}" "${_src}" -o "${_rsrc}"
-		COMMAND "${_xres}"   -o "${_bin}" "${_rsrc}"
-		COMMAND "${_rsattr}" -O -o "${_bin}" "${_rsrc}"
 	)
 
+	# Accumulate rsrc paths and the staging flag on the target.
+	set_property(TARGET ${target} APPEND PROPERTY RDEF_RSRC_FILES "${_rsrc}")
 	if(_ARG_STAGING)
-		add_custom_command(TARGET ${target} POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
-			COMMAND ${CMAKE_COMMAND} -E touch           "${CMAKE_BINARY_DIR}/apps_attrs_staging/${target}"
-			COMMAND "${_rsattr}" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${target}" "${_rsrc}"
-		)
+		set_property(TARGET ${target} PROPERTY RDEF_STAGING TRUE)
 	endif()
 
 	set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${_rsrc}")
+endfunction()
+
+# Embed all accumulated .rsrc files into the binary in a single xres call.
+# Must be called after all CompileRdef() calls for a given target.
+function( LinkRdefs target )
+	set(_bin    "$<TARGET_FILE:${target}>")
+	set(_xres   "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres")
+	set(_rsattr "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr")
+
+	get_property(_rsrc_files TARGET ${target} PROPERTY RDEF_RSRC_FILES)
+	get_property(_staging    TARGET ${target} PROPERTY RDEF_STAGING)
+
+	if(NOT _rsrc_files)
+		return()
+	endif()
+
+	add_custom_command(TARGET ${target} POST_BUILD
+		COMMENT "Embedding resources into ${target}"
+		COMMAND "${_xres}" -o "${_bin}" ${_rsrc_files}
+	)
+
+	foreach(_rsrc IN LISTS _rsrc_files)
+		add_custom_command(TARGET ${target} POST_BUILD
+			COMMAND "${_rsattr}" -O -o "${_bin}" "${_rsrc}"
+		)
+	endforeach()
+
+	if(_staging)
+		add_custom_command(TARGET ${target} POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/apps_attrs_staging"
+			COMMAND ${CMAKE_COMMAND} -E touch           "${CMAKE_BINARY_DIR}/apps_attrs_staging/${target}"
+		)
+		foreach(_rsrc IN LISTS _rsrc_files)
+			add_custom_command(TARGET ${target} POST_BUILD
+				COMMAND "${_rsattr}" -O -o "${CMAKE_BINARY_DIR}/apps_attrs_staging/${target}" "${_rsrc}"
+			)
+		endforeach()
+	endif()
 endfunction()
 
 # Usage:
@@ -117,6 +151,7 @@ macro( Application name )
 	foreach( RDEF_FILE ${_APPLICATION_RDEF} )
 		CompileRdef(${name} ${RDEF_FILE} STAGING)
 	endforeach()
+	LinkRdefs(${name})
 endmacro()
 
 macro( Server name )
@@ -141,6 +176,7 @@ macro( Server name )
 	foreach( RDEF_FILE ${_SERVER_RDEF} )
 		CompileRdef(${name} ${RDEF_FILE} STAGING)
 	endforeach()
+	LinkRdefs(${name})
 endmacro()
 
 macro( AddOn name type )
@@ -164,6 +200,7 @@ macro( AddOn name type )
 	foreach( RDEF_FILE ${_ADDON_RDEF} )
 		CompileRdef(${name} ${RDEF_FILE} STAGING)
 	endforeach()
+	LinkRdefs(${name})
 endmacro()
 
 macro( Test name )
@@ -197,6 +234,7 @@ macro( Test name )
 	foreach( RDEF_FILE ${_TEST_RDEF} )
 		CompileRdef(${name} ${RDEF_FILE})
 	endforeach()
+	LinkRdefs(${name})
 endmacro()
 
 function( UsePrivateHeaders target )

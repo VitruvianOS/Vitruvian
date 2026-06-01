@@ -654,6 +654,7 @@ BNode::set_fd(int fd)
 
 	fFd = fd;
 	fNodeRef = node_ref(fd);
+	fCStatus = (fd >= 0) ? B_OK : B_NO_INIT;
 
 	return B_OK;
 }

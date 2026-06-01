@@ -1854,7 +1854,7 @@ PathHandler::_NotifyEntryCreatedOrRemoved(const entry_ref& entryRef,
 	// In our case, however, this can very well be the case, e.g. when the
 	// the notification is triggered in response to a directory tree having
 	// been moved into/out of our path.
-	message.AddNodeRef("virual:node", &nodeRef);
+	message.AddNodeRef("virtual:node", &nodeRef);
 }
 
 

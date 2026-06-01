@@ -99,10 +99,9 @@ fs_unmount_volume(const char* path, uint32 flags)
 			ret = umount2(path, MNT_DETACH);
 			if (ret < 0)
 				return -errno;
-			return B_OK;
+		} else {
+			return -err;
 		}
-
-		return -err;
 	}
 
 	return B_OK;

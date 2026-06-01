@@ -1,5 +1,6 @@
 /*
  * Copyright 2001-2009 Haiku, Inc. All rights reserved.
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT license.
  *
  * Authors:
@@ -240,6 +241,9 @@ BLocker::AcquireLock(bigtime_t timeout, status_t *error)
 				status = acquire_sem_etc(fSemaphoreID, 1, B_RELATIVE_TIMEOUT,
 					timeout);
 			} while (status == B_INTERRUPTED);
+
+			if (status != B_OK)
+				atomic_add(&fBenaphoreCount, -1);
 
 			// Note, if the lock here does time out, the benaphore count
 			// is not decremented.  By doing this, the benaphore count will

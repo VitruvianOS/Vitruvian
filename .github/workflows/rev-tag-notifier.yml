@@ -94,9 +94,9 @@ jobs:
           
           # Get changed files count and stats
           if [ "$BEFORE" = "$zero" ] || [ -z "$BEFORE" ]; then
-            file_stats=$(git --no-pager log -5 --numstat --format="" 2>/dev/null | awk '{add+=$1; sub+=$2; files[$3]++} END {printf "%d files changed, +%d lines, -%d lines", length(files), add, sub}')
+            file_stats=$(git --no-pager log -5 --numstat --format="" 2>/dev/null | awk '{add+=$1; removed+=$2; files[$3]++} END {printf "%d files changed, +%d lines, -%d lines", length(files), add, removed}')
           else
-            file_stats=$(git --no-pager log "${BEFORE}..${AFTER}" --numstat --format="" 2>/dev/null | awk '{add+=$1; sub+=$2; files[$3]++} END {printf "%d files changed, +%d lines, -%d lines", length(files), add, sub}')
+            file_stats=$(git --no-pager log "${BEFORE}..${AFTER}" --numstat --format="" 2>/dev/null | awk '{add+=$1; removed+=$2; files[$3]++} END {printf "%d files changed, +%d lines, -%d lines", length(files), add, removed}')
           fi
           
           # Categorize changes from commit messages

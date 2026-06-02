@@ -68,36 +68,97 @@ jobs:
           git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" "refs/tags/${tag}"
           echo "Created tag: $tag"
 
-      - name: Build Telegram message
-        id: message
+      - name: Analyze commits and generate synthesis
+        id: synthesis
         env:
           BEFORE:  ${{ github.event.before }}
           AFTER:   ${{ github.event.after }}
-          IS_PR:   ${{ steps.pr_check.outputs.is_pr }}
-          REV_TAG: ${{ steps.next_rev.outputs.tag }}
+        run: |
+          zero="0000000000000000000000000000000000000000"
+          
+          # Determine commit range
+          if [ "$BEFORE" = "$zero" ] || [ -z "$BEFORE" ]; then
+            log_range="-5"
+            range_desc="last 5"
+          else
+            log_range="${BEFORE}..${AFTER}"
+            range_desc="in this push"
+          fi
+          
+          # Count commits
+          commit_count=$(git --no-pager log $log_range --format="" 2>/dev/null | wc -l)
+          
+          # Get top contributors
+          top_authors=$(git --no-pager log $log_range --format="%an" 2>/dev/null | sort | uniq -c | sort -rn | head -3 | awk '{print $2 " (" $1 ")"}' | paste -sd "," - | sed 's/,/, /g')
+          
+          # Get changed files count and stats
+          if [ "$BEFORE" = "$zero" ] || [ -z "$BEFORE" ]; then
+            file_stats=$(git --no-pager log -5 --numstat --format="" 2>/dev/null | awk '{add+=$1; sub+=$2; files[$3]++} END {printf "%d files changed, +%d lines, -%d lines", length(files), add, sub}')
+          else
+            file_stats=$(git --no-pager log "${BEFORE}..${AFTER}" --numstat --format="" 2>/dev/null | awk '{add+=$1; sub+=$2; files[$3]++} END {printf "%d files changed, +%d lines, -%d lines", length(files), add, sub}')
+          fi
+          
+          # Categorize changes from commit messages
+          if [ "$BEFORE" = "$zero" ] || [ -z "$BEFORE" ]; then
+            messages=$(git --no-pager log -5 --format="%s" 2>/dev/null)
+          else
+            messages=$(git --no-pager log "${BEFORE}..${AFTER}" --format="%s" 2>/dev/null)
+          fi
+          
+          # Count change types
+          features=$(echo "$messages" | grep -ic "^feat\|add\|new" || echo 0)
+          fixes=$(echo "$messages" | grep -ic "^fix\|bug\|issue" || echo 0)
+          refactors=$(echo "$messages" | grep -ic "^refactor\|refact\|cleanup" || echo 0)
+          docs=$(echo "$messages" | grep -ic "^docs\|doc\|readme" || echo 0)
+          
+          # Build change summary line
+          changes_list=""
+          [ "$features" -gt 0 ] && changes_list="${changes_list}Added $features feature(s), "
+          [ "$fixes" -gt 0 ] && changes_list="${changes_list}Fixed $fixes bug(s), "
+          [ "$refactors" -gt 0 ] && changes_list="${changes_list}Refactored $refactors area(s), "
+          [ "$docs" -gt 0 ] && changes_list="${changes_list}Updated $docs doc(s), "
+          
+          # Remove trailing comma and space
+          changes_list=$(echo "$changes_list" | sed 's/, $//')
+          
+          # If no categorized changes, show generic message
+          if [ -z "$changes_list" ]; then
+            changes_list="Made $commit_count commit(s) with various improvements"
+          fi
+          
+          # Get most changed directories
+          if [ "$BEFORE" = "$zero" ] || [ -z "$BEFORE" ]; then
+            top_dirs=$(git --no-pager log -5 --name-only --format="" 2>/dev/null | grep -o '^[^/]*' | sort | uniq -c | sort -rn | head -3 | awk '{print $2}' | paste -sd "," - | sed 's/,/, /g')
+          else
+            top_dirs=$(git --no-pager log "${BEFORE}..${AFTER}" --name-only --format="" 2>/dev/null | grep -o '^[^/]*' | sort | uniq -c | sort -rn | head -3 | awk '{print $2}' | paste -sd "," - | sed 's/,/, /g')
+          fi
+          
+          # Output results for use in message building
+          {
+            echo "commit_count=$commit_count"
+            echo "range_desc=$range_desc"
+            echo "changes_list=$changes_list"
+            echo "file_stats=$file_stats"
+            echo "top_authors=$top_authors"
+            echo "top_dirs=$top_dirs"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build Telegram message
+        id: message
+        env:
+          IS_PR:         ${{ steps.pr_check.outputs.is_pr }}
+          REV_TAG:       ${{ steps.next_rev.outputs.tag }}
+          COMMIT_COUNT:  ${{ steps.synthesis.outputs.commit_count }}
+          RANGE_DESC:    ${{ steps.synthesis.outputs.range_desc }}
+          CHANGES_LIST:  ${{ steps.synthesis.outputs.changes_list }}
+          FILE_STATS:    ${{ steps.synthesis.outputs.file_stats }}
+          TOP_AUTHORS:   ${{ steps.synthesis.outputs.top_authors }}
+          TOP_DIRS:      ${{ steps.synthesis.outputs.top_dirs }}
         run: |
           branch="${GITHUB_REF#refs/heads/}"
           repo="${GITHUB_REPOSITORY}"
-          repo_url="https://github.com/${repo}"
-          zero="0000000000000000000000000000000000000000"
 
           esc() { printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
-
-          # Build per-commit lines with links
-          make_lines() {
-            while IFS='|' read -r sha subject author; do
-              short="${sha:0:7}"
-              printf '• <a href="%s/commit/%s">%s</a> %s (%s)\n' \
-                "$repo_url" "$sha" "$short" "$(esc "$subject")" "$(esc "$author")"
-            done
-          }
-
-          if [ "$BEFORE" = "$zero" ] || [ -z "$BEFORE" ]; then
-            commits=$(git --no-pager log -5 --reverse --format="%H|%s|%an" | make_lines)
-          else
-            commits=$(git --no-pager log --reverse --format="%H|%s|%an" \
-                        "${BEFORE}..${AFTER}" 2>/dev/null | make_lines)
-          fi
 
           if [ "$IS_PR" = "true" ]; then
             rev_line="Rev: (PR branch — no tag created)"
@@ -106,7 +167,26 @@ jobs:
           fi
 
           header="<b>$(esc "$repo") [$(esc "$branch")]</b>"
-          full="${header}"$'\n'"${rev_line}"$'\n\n'"${commits}"
+          
+          # Build synthesis section
+          commit_summary="<b>${COMMIT_COUNT}</b> commits ${RANGE_DESC}"
+          changes_section="<b>Changes:</b> ${CHANGES_LIST}"
+          stats_section="<b>Files:</b> ${FILE_STATS}"
+          
+          areas_section=""
+          if [ -n "$TOP_DIRS" ]; then
+            areas_section="<b>Main areas:</b> $(esc "$TOP_DIRS")"
+          fi
+          
+          contributors_section=""
+          if [ -n "$TOP_AUTHORS" ]; then
+            contributors_section="<b>Top contributors:</b> $(esc "$TOP_AUTHORS")"
+          fi
+
+          full="${header}"$'\n'"${rev_line}"$'\n\n'"${commit_summary}"$'\n'"${changes_section}"$'\n'"${stats_section}"
+          
+          [ -n "$areas_section" ] && full="${full}"$'\n'"${areas_section}"
+          [ -n "$contributors_section" ] && full="${full}"$'\n'"${contributors_section}"
 
           # Telegram HTML limit is 4096 chars — stay safely under it
           limit=3800

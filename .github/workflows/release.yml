@@ -14,31 +14,58 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.event.release.tag_name }}
     steps:
-      - name: Download artifact zips from last successful builds
+      - name: Fetch ISO + DEB from last successful builds
         run: |
           set -euo pipefail
-          mkdir -p release-assets
+          mkdir -p work release-assets
 
-          fetch_latest_zips() {
+          fetch_run() {
             local workflow="$1"
+            local arch="$2"
             local run_id
             run_id=$(gh run list --workflow "$workflow" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
             if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
-              echo "No successful run found for $workflow"
+              echo "No successful run for $workflow"
               return 0
             fi
-            echo "Fetching artifact list from $workflow run $run_id"
+            echo "Run for $workflow: $run_id"
+
             gh api "repos/$GH_REPO/actions/runs/$run_id/artifacts" --paginate \
               --jq '.artifacts[] | "\(.id)\t\(.name)"' \
             | while IFS=$'\t' read -r aid aname; do
-              echo "Downloading artifact $aname ($aid) as zip"
-              gh api "repos/$GH_REPO/actions/artifacts/$aid/zip" > "release-assets/${aname}.zip"
+              case "$aname" in
+                *RAW*) echo "  skip $aname"; continue ;;
+              esac
+              echo "  downloading $aname"
+              local stage="work/${aname}"
+              mkdir -p "$stage"
+              gh api "repos/$GH_REPO/actions/artifacts/$aid/zip" > "${stage}.zip"
+              unzip -q -o "${stage}.zip" -d "$stage"
+
+              # Rename ISOs to vitruvian-<tag>-<arch>.iso; keep DEBs as-is.
+              while IFS= read -r -d '' iso; do
+                local newname="vitruvian-${TAG}-${arch}.iso"
+                cp "$iso" "release-assets/${newname}"
+                if [ -f "${iso}.sha256" ]; then
+                  # Rewrite checksum line to match the new filename.
+                  awk -v n="${newname}" '{print $1"  "n}' "${iso}.sha256" \
+                    > "release-assets/${newname}.sha256"
+                fi
+              done < <(find "$stage" -type f -name '*.iso' -print0)
+
+              while IFS= read -r -d '' deb; do
+                cp "$deb" "release-assets/$(basename "$deb")"
+                if [ -f "${deb}.sha256" ]; then
+                  cp "${deb}.sha256" "release-assets/$(basename "${deb}").sha256"
+                fi
+              done < <(find "$stage" -type f -name '*.deb' -print0)
             done
           }
 
-          fetch_latest_zips ccpp.yml
-          fetch_latest_zips ccpp-arm64.yml
+          fetch_run ccpp.yml       amd64
+          fetch_run ccpp-arm64.yml arm64
 
           echo "--- release assets ---"
           ls -lh release-assets/
@@ -46,5 +73,10 @@ jobs:
       - name: Attach to release
         run: |
           set -euo pipefail
-          gh release upload "${{ github.event.release.tag_name }}" \
-            release-assets/*.zip --clobber
+          shopt -s nullglob
+          files=(release-assets/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no assets to upload"
+            exit 0
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber

@@ -1,0 +1,74 @@
+name: Attach Last-Built Images to Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download amd64 ISO
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ccpp.yml
+          workflow_conclusion: success
+          name: Vitruvian-ISO
+          path: artifacts/amd64
+          if_no_artifact_found: warn
+
+      - name: Download amd64 RAW
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ccpp.yml
+          workflow_conclusion: success
+          name: Vitruvian-RAW
+          path: artifacts/amd64
+          if_no_artifact_found: warn
+
+      - name: Download amd64 DEB
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ccpp.yml
+          workflow_conclusion: success
+          name: Vitruvian-DEB
+          path: artifacts/amd64
+          if_no_artifact_found: warn
+
+      - name: Download arm64 ISO
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ccpp-arm64.yml
+          workflow_conclusion: success
+          name: Vitruvian-ISO-arm64
+          path: artifacts/arm64
+          if_no_artifact_found: warn
+
+      - name: Download arm64 RAW
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ccpp-arm64.yml
+          workflow_conclusion: success
+          name: Vitruvian-RAW-arm64
+          path: artifacts/arm64
+          if_no_artifact_found: warn
+
+      - name: Download arm64 DEB
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ccpp-arm64.yml
+          workflow_conclusion: success
+          name: Vitruvian-DEB-arm64
+          path: artifacts/arm64
+          if_no_artifact_found: warn
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/amd64/**/*
+            artifacts/arm64/**/*
+          fail_on_unmatched_files: false

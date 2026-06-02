@@ -6,64 +6,39 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   attach:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
-      - name: Download amd64 ISO
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: ccpp.yml
-          workflow_conclusion: success
-          name: Vitruvian-ISO
-          path: artifacts/amd64
-          if_no_artifact_found: warn
+      - name: Download artifacts from last successful builds
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
 
-      - name: Download amd64 RAW
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: ccpp.yml
-          workflow_conclusion: success
-          name: Vitruvian-RAW
-          path: artifacts/amd64
-          if_no_artifact_found: warn
+          fetch_latest() {
+            local workflow="$1"
+            local outdir="$2"
+            mkdir -p "$outdir"
+            local run_id
+            run_id=$(gh run list --workflow "$workflow" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+            if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+              echo "No successful run found for $workflow"
+              return 0
+            fi
+            echo "Fetching artifacts from $workflow run $run_id"
+            gh run download "$run_id" --dir "$outdir"
+          }
 
-      - name: Download amd64 DEB
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: ccpp.yml
-          workflow_conclusion: success
-          name: Vitruvian-DEB
-          path: artifacts/amd64
-          if_no_artifact_found: warn
+          fetch_latest ccpp.yml       artifacts/amd64
+          fetch_latest ccpp-arm64.yml artifacts/arm64
 
-      - name: Download arm64 ISO
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: ccpp-arm64.yml
-          workflow_conclusion: success
-          name: Vitruvian-ISO-arm64
-          path: artifacts/arm64
-          if_no_artifact_found: warn
-
-      - name: Download arm64 RAW
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: ccpp-arm64.yml
-          workflow_conclusion: success
-          name: Vitruvian-RAW-arm64
-          path: artifacts/arm64
-          if_no_artifact_found: warn
-
-      - name: Download arm64 DEB
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: ccpp-arm64.yml
-          workflow_conclusion: success
-          name: Vitruvian-DEB-arm64
-          path: artifacts/arm64
-          if_no_artifact_found: warn
+          echo "--- artifacts laid out ---"
+          find artifacts -type f | sort
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2

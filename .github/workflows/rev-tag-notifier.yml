@@ -1,7 +1,8 @@
 # TEMPORARILY DISABLED — manual dispatch only. Re-enable by restoring the push trigger. See new-build-commands.md / build refactor.
 name: Increment rev tag and notify Telegram
 
-on: workflow_dispatch:
+on:
+  workflow_dispatch:
 
 permissions:
   contents: write

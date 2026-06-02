@@ -15,35 +15,36 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - name: Download artifacts from last successful builds
+      - name: Download artifact zips from last successful builds
         run: |
           set -euo pipefail
-          mkdir -p artifacts
+          mkdir -p release-assets
 
-          fetch_latest() {
+          fetch_latest_zips() {
             local workflow="$1"
-            local outdir="$2"
-            mkdir -p "$outdir"
             local run_id
             run_id=$(gh run list --workflow "$workflow" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
             if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
               echo "No successful run found for $workflow"
               return 0
             fi
-            echo "Fetching artifacts from $workflow run $run_id"
-            gh run download "$run_id" --dir "$outdir"
+            echo "Fetching artifact list from $workflow run $run_id"
+            gh api "repos/$GH_REPO/actions/runs/$run_id/artifacts" --paginate \
+              --jq '.artifacts[] | "\(.id)\t\(.name)"' \
+            | while IFS=$'\t' read -r aid aname; do
+              echo "Downloading artifact $aname ($aid) as zip"
+              gh api "repos/$GH_REPO/actions/artifacts/$aid/zip" > "release-assets/${aname}.zip"
+            done
           }
 
-          fetch_latest ccpp.yml       artifacts/amd64
-          fetch_latest ccpp-arm64.yml artifacts/arm64
+          fetch_latest_zips ccpp.yml
+          fetch_latest_zips ccpp-arm64.yml
 
-          echo "--- artifacts laid out ---"
-          find artifacts -type f | sort
+          echo "--- release assets ---"
+          ls -lh release-assets/
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/amd64/**/*
-            artifacts/arm64/**/*
+          files: release-assets/*.zip
           fail_on_unmatched_files: false

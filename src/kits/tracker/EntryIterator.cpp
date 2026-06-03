@@ -296,7 +296,7 @@ CachedEntryIterator::GetNextDirents(struct dirent* ent, size_t size,
 				fSortedList->MakeEmpty();
 
 			for (int32 count = 0; count < fNumEntries; count++) {
-				fSortedList->AddItem(fCurrentDirent, 0);
+				fSortedList->AddItem(fCurrentDirent);
 				fCurrentDirent = Next(fCurrentDirent);
 			}
 			fSortedList->SortItems(&_CompareInodes);

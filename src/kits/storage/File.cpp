@@ -322,8 +322,9 @@ BFile::operator=(const BFile &file)
 			int fd = _kern_dup(file.get_fd());
 			// set it
 			if (fd >= 0) {
-				fFd = fd;
+				set_fd(fd);
 				fMode = file.fMode;
+				fNodeRef = file.fNodeRef;
 				fCStatus = B_OK;
 			} else
 				fCStatus = fd;

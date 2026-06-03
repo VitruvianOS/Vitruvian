@@ -126,7 +126,7 @@ send_disk_device_notification(port_id port, uint32 token, uint32 event,
 
 	message.SetTo(buffer, sizeof(buffer), B_DEVICE_UPDATE);
 	message.AddInt32("event", event);
-	message.AddUInt64("device_id", deviceId);
+	message.AddUInt64("id", deviceId);
 	message.AddUInt64("partition_id", deviceId);
 	message.SetDeliveryInfo(token, port, -1, find_thread(NULL));
 
@@ -361,8 +361,6 @@ stop_mount_watching(port_id port, uint32 token)
 status_t
 start_volume_watching(dev_t device, port_id port, uint32 token)
 {
-	std::lock_guard<std::mutex> guard(gWatchLock);
-
 	{
 		std::lock_guard<std::mutex> guard(gWatchLock);
 		VolumeWatcher watcher = { port, token, device };
@@ -454,9 +452,6 @@ _kern_start_watching_disks(uint32 eventMask, port_id port, int32 token)
 		VolumeWatcherKey key = { port, (uint32)token };
 		gDiskWatchers[key] = eventMask;
 	}
-
-	printf("start_watching_disks: mask=0x%x, port=%d, token=%d",
-		eventMask, port, token);
 
 	// TODO: we shouldn't start thread for every call
 	start_thread();

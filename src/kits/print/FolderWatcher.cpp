@@ -90,19 +90,20 @@ void FolderWatcher::SetListener(FolderListener* listener) {
 }
 
 bool FolderWatcher::BuildEntryRef(BMessage* msg, const char* dirName, entry_ref* entry) {
+	BString fieldName("virtual:");
+	fieldName << dirName;
+	entry_ref dirRef;
 	const char* name;
-	if (msg->FindInt32("device", &entry->device) == B_OK &&
-		msg->FindInt64(dirName, &entry->directory) == B_OK &&
+	if (msg->FindRef(fieldName.String(), &dirRef) == B_OK &&
 		msg->FindString("name", &name) == B_OK) {
-		entry->set_name(name);
+		*entry = entry_ref(dirRef.dev(), dirRef.dir(), name);
 		return true;
 	}
 	return false;
 }
 
 bool FolderWatcher::BuildNodeRef(BMessage* msg, node_ref* node) {
-	return (msg->FindInt32("device", &node->device) == B_OK &&
-		msg->FindInt64("node", &node->node) == B_OK);
+	return msg->FindNodeRef("virtual:node", node) == B_OK;
 }
 
 void FolderWatcher::HandleCreatedEntry(BMessage* msg, const char* dirName) {
@@ -146,15 +147,18 @@ void FolderWatcher::MessageReceived(BMessage* msg) {
 				HandleRemovedEntry(msg);
 				break;
 			case B_ENTRY_MOVED:
+			{
 				fFolder.GetNodeRef(&folder);
-				if (msg->FindInt64("to directory", &dir) == B_OK && folder.node == dir) {
-					// entry moved into this folder
+				entry_ref toDir, fromDir;
+				bool gotTo = msg->FindRef("virtual:to directory", &toDir) == B_OK;
+				bool gotFrom = msg->FindRef("virtual:from directory", &fromDir) == B_OK;
+				if (gotTo && toDir.dir() == folder.node) {
 					HandleCreatedEntry(msg, "to directory");
-				} else if (msg->FindInt64("from directory", &dir) == B_OK && folder.node == dir) {
-					// entry removed from this folder
+				} else if (gotFrom && fromDir.dir() == folder.node) {
 					HandleRemovedEntry(msg);
 				}
 				break;
+			}
 			case B_ATTR_CHANGED: 
 				HandleChangedAttr(msg);
 				break;

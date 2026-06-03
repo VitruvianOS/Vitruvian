@@ -591,7 +591,7 @@ BDeskWindow::MessageReceived(BMessage* message)
 				node_ref node;
 				if (fNodeRef == NULL
 					|| message->FindNodeRef("virtual:node", &node) != B_OK
-					|| node != fNodeRef->node)
+					|| node != *fNodeRef)
 					break;
 			}
 			ApplyShortcutPreferences(true);

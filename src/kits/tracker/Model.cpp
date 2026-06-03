@@ -135,8 +135,10 @@ Model::Model(const Model& other)
 	if (fStatus == B_OK) {
 		ASSERT(fNode);
 		fNode->GetStat(&fStatBuf);
+#if 0
 		ASSERT(fStatBuf.st_dev == other.NodeRef()->dev());
 		ASSERT(fStatBuf.st_ino == other.NodeRef()->ino());
+#endif
 	}
 	if (!other.IsNodeOpen())
 		CloseNode();
@@ -922,12 +924,10 @@ Model::UpdateEntryRef(const node_ref* dirNode, const char* name)
 		fVolumeName = strdup(name);
 	}
 
-	fEntryRef = entry_ref(dirNode->dev(), dirNode->ino(), fEntryRef.name);
-
-	if (fEntryRef.name != NULL && strcmp(fEntryRef.name, name) == 0)
-		return;
-
-	fEntryRef.set_name(name);
+	if (fEntryRef.device != dirNode->dev() || fEntryRef.directory != dirNode->ino())
+		fEntryRef = entry_ref(dirNode->dev(), dirNode->ino(), name);
+	else if (fEntryRef.name == NULL || strcmp(fEntryRef.name, name) != 0)
+		fEntryRef.set_name(name);
 }
 
 

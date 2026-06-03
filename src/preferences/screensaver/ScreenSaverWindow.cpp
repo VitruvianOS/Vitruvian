@@ -702,11 +702,11 @@ ModulesView::MessageReceived(BMessage* message)
 				case B_ENTRY_CREATED:
 				{
 					const char* name;
-					node_ref nodeRef;
+					entry_ref dirRef;
 
 					message->FindString("name", &name);
-					{ int64 device; message->FindInt64("device", &device); nodeRef.device = (dev_t)device; }
-					{ int64 node; message->FindInt64("directory", &node); nodeRef.node = (ino_t)node; }
+					message->FindRef("virtual:directory", &dirRef);
+					node_ref nodeRef(dirRef.dev(), dirRef.dir());
 
 					BDirectory dir(&nodeRef);
 

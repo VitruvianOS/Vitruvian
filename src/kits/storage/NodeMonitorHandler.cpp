@@ -144,16 +144,14 @@ status_t
 NodeMonitorHandler::HandleEntryCreated(BMessage * msg)
 {
 	const char *name;
-	ino_t directory;
-	dev_t device;
-	ino_t node;
+	entry_ref dirRef;
+	node_ref nodeRef;
 	if ((msg->FindString("name", &name) != B_OK) ||
-		(msg->FindUInt64("directory", (uint64*)&directory) != B_OK) ||
-		(msg->FindUInt64("device", (uint64*)&device) != B_OK) ||
-		(msg->FindUInt64("node", (uint64*)&node) != B_OK)) {
+		(msg->FindRef("virtual:directory", &dirRef) != B_OK) ||
+		(msg->FindNodeRef("virtual:node", &nodeRef) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
-	EntryCreated(name, directory, device, node);
+	EntryCreated(name, dirRef.dir(), nodeRef.dev(), nodeRef.node);
 	return B_OK;
 }
 
@@ -162,16 +160,14 @@ status_t
 NodeMonitorHandler::HandleEntryRemoved(BMessage * msg)
 {
 	const char *name;
-	ino_t directory;
-	dev_t device;
-	ino_t node;
+	entry_ref dirRef;
+	node_ref nodeRef;
 	if ((msg->FindString("name", &name) != B_OK) ||
-		(msg->FindUInt64("directory", (uint64*)&directory) != B_OK) ||
-		(msg->FindUInt64("device", (uint64*)&device) != B_OK) ||
-		(msg->FindUInt64("node", (uint64*)&node) != B_OK)) {
+		(msg->FindRef("virtual:directory", &dirRef) != B_OK) ||
+		(msg->FindNodeRef("virtual:node", &nodeRef) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
-	EntryRemoved(name, directory, device, node);
+	EntryRemoved(name, dirRef.dir(), nodeRef.dev(), nodeRef.node);
 	return B_OK;
 }
 
@@ -181,24 +177,19 @@ NodeMonitorHandler::HandleEntryMoved(BMessage * msg)
 {
 	const char *name;
 	const char *fromName;
-	ino_t fromDirectory;
-	ino_t toDirectory;
-	dev_t device;
-	ino_t node;
-	dev_t deviceNode = B_INVALID_DEV;
+	entry_ref fromDir, toDir;
+	node_ref nodeRef;
 	if ((msg->FindString("name", &name) != B_OK) ||
 		(msg->FindString("from name", &fromName) != B_OK) ||
-		(msg->FindUInt64("from directory", (uint64*)&fromDirectory) != B_OK) ||
-		(msg->FindUInt64("to directory", (uint64*)&toDirectory) != B_OK) ||
-		(msg->FindUInt64("device", (uint64*)&device) != B_OK) ||
-		(msg->FindUInt64("node", (uint64*)&node) != B_OK)) {
+		(msg->FindRef("virtual:from directory", &fromDir) != B_OK) ||
+		(msg->FindRef("virtual:to directory", &toDir) != B_OK) ||
+		(msg->FindNodeRef("virtual:node", &nodeRef) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
-	// "node device" is optional (absent in raw B_NODE_MONITOR from nexus).
-	if (msg->FindUInt64("node device", (uint64*)&deviceNode) != B_OK)
-		deviceNode = device;
-	EntryMoved(name, fromName, fromDirectory, toDirectory, device, node,
-		deviceNode);
+	dev_t device = nodeRef.dev();
+	ino_t node = nodeRef.node;
+	EntryMoved(name, fromName, fromDir.dir(), toDir.dir(), device, node,
+		device);
 	return B_OK;
 }
 
@@ -206,15 +197,13 @@ NodeMonitorHandler::HandleEntryMoved(BMessage * msg)
 status_t
 NodeMonitorHandler::HandleStatChanged(BMessage * msg)
 {
-	ino_t node;
-	dev_t device;
+	node_ref nodeRef;
 	int32 statFields;
-	if ((msg->FindUInt64("node", (uint64*)&node) != B_OK) ||
-		(msg->FindUInt64("device", (uint64*)&device) != B_OK) ||
+	if ((msg->FindNodeRef("virtual:node", &nodeRef) != B_OK) ||
 		(msg->FindInt32("fields", &statFields) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
-	StatChanged(node, device, statFields);
+	StatChanged(nodeRef.node, nodeRef.dev(), statFields);
 	return B_OK;
 }
 
@@ -222,13 +211,10 @@ NodeMonitorHandler::HandleStatChanged(BMessage * msg)
 status_t
 NodeMonitorHandler::HandleAttrChanged(BMessage * msg)
 {
-	ino_t node;
-	dev_t device;
-	if ((msg->FindUInt64("node", (uint64*)&node) != B_OK) ||
-		(msg->FindUInt64("device", (uint64*)&device) != B_OK)) {
+	node_ref nodeRef;
+	if (msg->FindNodeRef("virtual:node", &nodeRef) != B_OK)
 		return B_MESSAGE_NOT_UNDERSTOOD;
-	}
-	AttrChanged(node, device);
+	AttrChanged(nodeRef.node, nodeRef.dev());
 	return B_OK;
 }
 

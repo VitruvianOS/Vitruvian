@@ -1737,7 +1737,6 @@ TTracker::NeedMoreNodeMonitors()
 		return -errno;
 	}
 	#endif
-	UNIMPLEMENTED();
 
 	return B_OK;
 }

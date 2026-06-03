@@ -1544,14 +1544,12 @@ TFilePanel::ShowCenteredAlert(const char* text, const char* button1,
 		B_WIDTH_AS_USUAL, B_WARNING_ALERT);
 	alert->MoveTo(Frame().left + 10, Frame().top + 10);
 
-#if 0
 	if (button1 != NULL && !strncmp(button1, "Cancel", 7))
 		alert->SetShortcut(0, B_ESCAPE);
 	else if (button2 != NULL && !strncmp(button2, "Cancel", 7))
 		alert->SetShortcut(1, B_ESCAPE);
 	else if (button3 != NULL && !strncmp(button3, "Cancel", 7))
 		alert->SetShortcut(2, B_ESCAPE);
-#endif
 
 	return alert->Go();
 }

@@ -480,29 +480,33 @@ AutoMounter::MessageReceived(BMessage* message)
 				case B_ENTRY_MOVED: {
 					WRITELOG(("*** Received Mount Point Renamed Notification"));
 
-					//
-					// When the node monitor reports a move, it gives the
-					// parent device and inode that moved.  The problem is
-					// that  the inode is the inode of root *in* the filesystem,
-					// which is generally always the same number for every
-					// filesystem of a type.
-					//
-					// What we'd really like is the device that the moved
-					// volume is mounted on.  Find this by using the
-					// *new* name and directory, and then stat()ing that to
-					// find the device.
-					//
+					const char* newName;
+					if (message->FindString("name", &newName) != B_OK
+						|| newName == NULL || newName[0] == '\0') {
+						WRITELOG(("ERROR: Missing or empty 'name' field "
+							"in update message"));
+						break;
+					}
 
 					entry_ref toDirectory;
 					if (message->FindRef("virtual:to directory", &toDirectory)
 						!= B_OK) {
 						WRITELOG(("ERROR: Couldn't find 'to directory' field "
 							"in update message"));
-						PRINT_OBJECT(*message);
 						break;
 					}
 
-					entry_ref root_entry(toDirectory);
+					entry_ref fromDirectory;
+					if (message->FindRef("virtual:from directory",
+							&fromDirectory) != B_OK
+						|| !(fromDirectory == toDirectory)) {
+						WRITELOG(("ERROR: cross-directory move ignored; "
+							"mount-point rename must stay in place"));
+						break;
+					}
+
+					entry_ref root_entry(toDirectory.dev(), toDirectory.dir(),
+						newName);
 
 					BNode entryNode(&root_entry);
 					if (entryNode.InitCheck() != B_OK) {
@@ -759,7 +763,7 @@ AutoMounter::_UnmountAndEjectVolume(BMessage* message)
 
 		BPath path;
 		if (partition->GetMountPoint(&path) == B_OK)
-			_UnmountAndEjectVolume(partition, path, partition->ContentName());
+			_UnmountAndEjectVolume(partition, path, partition->ContentName().String());
 	} else {
 		// see if we got a dev_t
 
@@ -1000,7 +1004,7 @@ AutoMounter::_SuggestMountFlags(const BPartition* partition, uint32* _flags)
 		// Suggest to the user to mount read-only until Haiku is more mature.
 		BString string;
 		string.SetToFormat(B_TRANSLATE("Mounting volume '%s'\n\n"),
-			partition->ContentName());
+			partition->ContentName().String());
 
 		// TODO: Use distro name instead of "Haiku"...
 		string << B_TRANSLATE("The file system on this volume is not the "

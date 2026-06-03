@@ -92,10 +92,15 @@ release_vref(vref_id id)
 dev_t
 get_vref_dev()
 {
+	static dev_t sCachedVRefDev = B_INVALID_DEV;
+	if (sCachedVRefDev != B_INVALID_DEV)
+		return sCachedVRefDev;
+
 	dev_t vrefDev = -1;
 	int nexus = BKernelPrivate::Team::GetVRefDescriptor(&vrefDev);
 	if (nexus < 0)
 		return B_INVALID_DEV;
 
-	return vrefDev;
+	sCachedVRefDev = vrefDev;
+	return sCachedVRefDev;
 }

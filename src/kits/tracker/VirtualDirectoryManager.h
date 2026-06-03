@@ -54,12 +54,6 @@ public:
 									const node_ref& subDirDefinitionRef,
 									entry_ref& _entryRef, node_ref& _nodeRef);
 
-#ifndef __VOS__
-			status_t			TranslateDirectoryEntry(
-									const node_ref& definitionFileRef,
-									dirent* buffer);
-#endif
-
 			status_t			TranslateDirectoryEntry(
 									const node_ref& definitionFileRef,
 									entry_ref& entryRef, node_ref& _nodeRef);

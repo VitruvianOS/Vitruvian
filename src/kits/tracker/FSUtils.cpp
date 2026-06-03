@@ -3614,9 +3614,11 @@ LoaderErrorDetails(const entry_ref* app, BString &details)
 		return B_ERROR;
 	}
 
-	#endif
+	#else
 	UNIMPLEMENTED();
-	// read error message from port and construct details string
+	delete_port(errorPort);
+	return B_NOT_SUPPORTED;
+	#endif
 
 	ssize_t bufferSize;
 
@@ -4124,7 +4126,7 @@ WellKnowEntryList::MatchEntryCommon(const node_ref* node)
 {
 	uint32 count = entries.size();
 	for (uint32 index = 0; index < count; index++) {
-		if (node->dereference() == entries[index].node.dereference())
+		if (*node == entries[index].node)
 			return &entries[index];
 	}
 

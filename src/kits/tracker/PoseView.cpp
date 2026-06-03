@@ -5702,10 +5702,11 @@ BPoseView::EntryMoved(const BMessage* message)
 	// is different than that of the root directory; we have to do a
 	// lookup using the new volume name and get the volume device from there
 	StatStruct st;
+	const node_ref& dirReal = dirNode.dereference();
 	// get the inode of the root and check if we got a notification on it
 	if (stat("/", &st) >= 0
-		&& st.st_dev == dirNode.dereference().device
-		&& st.st_ino == dirNode.dereference().node) {
+		&& st.st_dev == dirReal.device
+		&& st.st_ino == dirReal.node) {
 		BString buffer;
 		buffer << "/" << name;
 		if (stat(buffer.String(), &st) >= 0) {
@@ -5734,7 +5735,7 @@ BPoseView::EntryMoved(const BMessage* message)
 		assert_cast<BContainerWindow*>(Window())->UpdateTitle();
 	}
 
-	if (oldDir.dereference().dir() == dirNode.dereference().ino() || targetModel->IsQuery()
+	if (oldDir.dereference().dir() == dirReal.node || targetModel->IsQuery()
 		|| targetModel->IsVirtualDirectory()) {
 		// rename or move of entry in this directory (or query)
 
@@ -5870,10 +5871,8 @@ BPoseView::StopWatchingParentsOf(const entry_ref* ref)
 bool
 BPoseView::AttributeChanged(const BMessage* message)
 {
-	entry_ref itemRef;
-
-	message->FindRef("virtual:node", &itemRef);
-	node_ref itemNode = node_ref(itemRef.dev(), itemRef.dir());
+	node_ref itemNode;
+	message->FindNodeRef("virtual:node", &itemNode);
 
 	const char* attrName;
 	if (message->FindString("attr", &attrName) != B_OK)

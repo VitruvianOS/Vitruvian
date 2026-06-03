@@ -112,7 +112,7 @@ BTrashWatcher::MessageReceived(BMessage* message)
 			entry_ref fromDir;
 			message->FindRef("virtual:from directory", &fromDir);
 			message->FindRef("virtual:to directory", &toDir);
-			if (fromDir == toDir)
+			if (fromDir.dev() == toDir.dev() && fromDir.dir() == toDir.dir())
 				break;
 		}
 		// fall-through

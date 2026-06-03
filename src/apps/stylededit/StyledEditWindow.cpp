@@ -2131,10 +2131,13 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 	if (message->FindInt32("opcode", &opcode) != B_OK)
 		return;
 
-	if (opcode != B_ENTRY_CREATED
-		&& message->GetUInt64("node", 0) != (uint64)fNodeRef.ino())
-		// bypass foreign nodes' event
-		return;
+	if (opcode != B_ENTRY_CREATED) {
+		node_ref node;
+		if (message->FindNodeRef("virtual:node", &node) != B_OK
+			|| node != fNodeRef)
+			// bypass foreign nodes' event
+			return;
+	}
 
 	switch (opcode) {
 		case B_STAT_CHANGED:

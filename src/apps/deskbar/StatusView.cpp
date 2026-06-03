@@ -584,13 +584,14 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 	switch (opcode) {
 		case B_ENTRY_MOVED:
 		{
-			entry_ref refTo;
+			entry_ref toDir;
 			node_ref node;
+			const char* name;
 			if (message->FindNodeRef("virtual:node", &node) == B_OK
-				&& message->FindRef("virtual:directory", &refTo)) {
-				// change the directory reference to
-				// the new directory
-				MoveItem(&entry_ref(node.dev(), node.ino()), refTo.dir());
+				&& message->FindRef("virtual:to directory", &toDir) == B_OK
+				&& message->FindString("name", &name) == B_OK) {
+				entry_ref entry(toDir.dev(), toDir.dir(), name);
+				MoveItem(&entry, toDir.dir());
 			}
 			break;
 		}

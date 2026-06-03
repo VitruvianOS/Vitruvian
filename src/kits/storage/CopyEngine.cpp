@@ -14,7 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <cstddef>
 
 #include <Directory.h>
 #include <Entry.h>
@@ -292,29 +291,27 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 
 	// recurse
 	if ((fFlags & COPY_RECURSIVELY) != 0 && S_ISDIR(sourceStat.st_mode)) {
-		char buffer[offsetof(struct dirent, d_name) + B_FILE_NAME_LENGTH];
-		dirent *entry = (dirent*)buffer;
-		while (sourceDir.GetNextDirents(entry, sizeof(buffer), 1) == 1) {
-			if (strcmp(entry->d_name, ".") == 0
-				|| strcmp(entry->d_name, "..") == 0) {
+		BEntry entry;
+		while (sourceDir.GetNextEntry(&entry) == B_OK) {
+			char entryName[B_FILE_NAME_LENGTH];
+			if (entry.GetName(entryName) != B_OK)
 				continue;
-			}
 
 			// construct new entry paths
 			BPath sourceEntryPath;
-			error = sourceEntryPath.SetTo(sourcePath, entry->d_name);
+			error = sourceEntryPath.SetTo(sourcePath, entryName);
 			if (error != B_OK) {
 				return _HandleEntryError(sourcePath, error,
 					"Failed to construct entry path from dir \"%s\" and name "
-					"\"%s\": %s\n", sourcePath, entry->d_name, strerror(error));
+					"\"%s\": %s\n", sourcePath, entryName, strerror(error));
 			}
 
 			BPath destEntryPath;
-			error = destEntryPath.SetTo(destPath, entry->d_name);
+			error = destEntryPath.SetTo(destPath, entryName);
 			if (error != B_OK) {
 				return _HandleEntryError(sourcePath, error,
 					"Failed to construct entry path from dir \"%s\" and name "
-					"\"%s\": %s\n", destPath, entry->d_name, strerror(error));
+					"\"%s\": %s\n", destPath, entryName, strerror(error));
 			}
 
 			// copy the entry

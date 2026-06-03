@@ -517,6 +517,9 @@ Model::OpenNodeCommon(bool writable)
 
 	fStatus = fNode->InitCheck();
 	if (fStatus != B_OK) {
+		fprintf(stderr, "Model::OpenNodeCommon: fNode->InitCheck() failed: %s (%" B_PRId32
+			") name=%s baseType=%d\n",
+			strerror(fStatus), fStatus, Name(), fBaseType);
 		delete fNode;
 		fNode = NULL;
 		// original code snoozed an error here and returned B_OK

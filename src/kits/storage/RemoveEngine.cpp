@@ -84,21 +84,19 @@ BRemoveEngine::_RemoveEntry(const char* path)
 				"Failed to open directory \"%s\": %s\n", path, strerror(error));
 		}
 
-		char buffer[sizeof(dirent) + B_FILE_NAME_LENGTH];
-		dirent *entry = (dirent*)buffer;
-		while (directory.GetNextDirents(entry, sizeof(buffer), 1) == 1) {
-			if (strcmp(entry->d_name, ".") == 0
-				|| strcmp(entry->d_name, "..") == 0) {
+		BEntry entry;
+		while (directory.GetNextEntry(&entry) == B_OK) {
+			char entryName[B_FILE_NAME_LENGTH];
+			if (entry.GetName(entryName) != B_OK)
 				continue;
-			}
 
 			// construct child entry path
 			BPath childPath;
-			error = childPath.SetTo(path, entry->d_name);
+			error = childPath.SetTo(path, entryName);
 			if (error != B_OK) {
 				return _HandleEntryError(path, error,
 					"Failed to construct entry path from dir \"%s\" and name "
-					"\"%s\": %s\n", path, entry->d_name, strerror(error));
+					"\"%s\": %s\n", path, entryName, strerror(error));
 			}
 
 			// remove the entry

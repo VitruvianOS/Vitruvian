@@ -55,6 +55,9 @@ target_sources(root PRIVATE
 	posix/strndup.c
 )
 
+set_source_files_properties(fs/node_monitor.cpp PROPERTIES
+	COMPILE_DEFINITIONS __ENABLE_NODE_MONITOR__)
+
 add_dependencies(root nexus)
 
 target_include_directories(root PRIVATE

@@ -29,7 +29,7 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	if (path == NULL) {
 		if (!traverseLink) {
 			if (fstat(fd, st) < 0)
-				return B_ENTRY_NOT_FOUND;
+				return -errno;
 
 			return B_OK;
 		}
@@ -39,7 +39,7 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 	if (fd < 0)
 		fd = AT_FDCWD;
 
-	return fstatat(fd, path, st, flags) < 0 ? B_ENTRY_NOT_FOUND : B_OK;
+	return fstatat(fd, path, st, flags) < 0 ? -errno : B_OK;
 }
 
 
@@ -494,22 +494,14 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 		}
 	}
 
-	if (statMask & B_STAT_UID) {
+	if (statMask & (B_STAT_UID | B_STAT_GID)) {
+		uid_t uid = (statMask & B_STAT_UID) ? st->st_uid : (uid_t)-1;
+		gid_t gid = (statMask & B_STAT_GID) ? st->st_gid : (gid_t)-1;
 		if (path == NULL) {
-			if (fchown(fd, st->st_uid, (gid_t)-1) < 0)
+			if (fchown(fd, uid, gid) < 0)
 				return -errno;
 		} else {
-			if (fchownat(fd, path, st->st_uid, (gid_t)-1, flags) < 0)
-				return -errno;
-		}
-	}
-
-	if (statMask & B_STAT_GID) {
-		if (path == NULL) {
-			if (fchown(fd, (uid_t)-1, st->st_gid) < 0)
-				return -errno;
-		} else {
-			if (fchownat(fd, path, (uid_t)-1, st->st_gid, flags) < 0)
+			if (fchownat(fd, path, uid, gid, flags) < 0)
 				return -errno;
 		}
 	}
@@ -518,6 +510,13 @@ _kern_write_stat(int fd, const char* path, bool traverseLink,
 		if (ftruncate64(fd, st->st_size) < 0)
 			return -errno;
 	}
+
+	// Linux has no userspace API to set the inode birth time (btime). statx
+	// can read STATX_BTIME but no setter exists. If a caller sets only
+	// B_STAT_CREATION_TIME we report B_NOT_SUPPORTED; if combined with other
+	// flags we honour those and ignore the creation-time portion.
+	if (statMask == B_STAT_CREATION_TIME)
+		return B_NOT_SUPPORTED;
 
 	if (statMask & (B_STAT_MODIFICATION_TIME | B_STAT_ACCESS_TIME)) {
 		struct timespec times[2];

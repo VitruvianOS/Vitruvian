@@ -1997,8 +1997,13 @@ BContainerWindow::SetupNavigationMenu(BMenu* parent, const entry_ref* ref)
 
 	// always build a fresh navigation menu
 	delete fNavigationItem;
-	fNavigationItem
-		= new ModelMenuItem(&model, new BNavMenu(model.Name(), B_REFS_RECEIVED, be_app, this));
+	fNavigationItem = NULL;
+	try {
+		fNavigationItem = new ModelMenuItem(&model,
+			new BNavMenu(model.Name(), B_REFS_RECEIVED, be_app, this));
+	} catch (...) {
+		return;
+	}
 
 	// setup a navigation menu item which will dynamically load items
 	// as menu items are traversed

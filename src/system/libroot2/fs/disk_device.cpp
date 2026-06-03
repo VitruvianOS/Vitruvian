@@ -191,9 +191,40 @@ fill_partition_info(const char* devPath, const char* sysPath,
 
 	char fsType[64] = {0};
 	char mountPoint[PATH_MAX] = {0};
+	char mountOpts[256] = {0};
+	bool mounted = false;
 
-	bool mounted = BKernelPrivate::get_mount_info_by_device(devPath,
-		mountPoint, sizeof(mountPoint), fsType, sizeof(fsType));
+	FILE* mounts = fopen("/proc/mounts", "r");
+	if (mounts) {
+		char realDev[PATH_MAX];
+		if (!realpath(devPath, realDev))
+			strlcpy(realDev, devPath, sizeof(realDev));
+
+		char line[1024];
+		while (fgets(line, sizeof(line), mounts)) {
+			char dev[256], mnt[256], ftype[64], opts[256];
+			if (sscanf(line, "%255s %255s %63s %255s", dev, mnt,
+					ftype, opts) != 4)
+				continue;
+
+			bool match = strcmp(dev, devPath) == 0
+				|| strcmp(dev, realDev) == 0;
+			if (!match) {
+				char realMntDev[PATH_MAX];
+				if (realpath(dev, realMntDev))
+					match = strcmp(realDev, realMntDev) == 0;
+			}
+			if (!match)
+				continue;
+
+			strlcpy(mountPoint, mnt, sizeof(mountPoint));
+			strlcpy(fsType, ftype, sizeof(fsType));
+			strlcpy(mountOpts, opts, sizeof(mountOpts));
+			mounted = true;
+			break;
+		}
+		fclose(mounts);
+	}
 
 	if (mounted) {
 		data->flags |= B_PARTITION_FILE_SYSTEM;
@@ -206,47 +237,24 @@ fill_partition_info(const char* devPath, const char* sysPath,
 
 		if (fsType[0])
 			data->content_type = strdup(fsType);
+		if (mountOpts[0])
+			data->parameters = strdup(mountOpts);
 
-		FILE* mounts = fopen("/proc/mounts", "r");
-		if (mounts) {
-			char line[1024];
-			while (fgets(line, sizeof(line), mounts)) {
-				char dev[256], mnt[256], ftype[64], opts[256];
-				if (sscanf(line, "%255s %255s %63s %255s", dev, mnt,
-						ftype, opts) == 4) {
-					if (strcmp(dev, devPath) == 0 && strcmp(mnt, mountPoint) == 0) {
-						data->parameters = (opts[0] ? strdup(opts) : NULL);
-						break;
-					}
-				}
-			}
-			fclose(mounts);
-		}
-	} else {
-		if (BKernelPrivate::detect_filesystem(devPath, fsType,
-				sizeof(fsType))) {
-			data->flags |= B_PARTITION_FILE_SYSTEM;
-			data->content_type = (fsType[0] ? strdup(fsType) : NULL);
-		}
-	}
-
-	char mountPoint2[PATH_MAX] = {0};
-	char fsType2[64] = {0};
-		
-	if (BKernelPrivate::get_mount_info_by_device(devPath, mountPoint2,
-			sizeof(mountPoint2), fsType2, sizeof(fsType2))) {
 		struct stat st;
-		if (stat(mountPoint2, &st) == 0)
+		if (stat(mountPoint, &st) == 0)
 			data->volume = st.st_dev;
+		else
+			data->volume = -1;
 
-		if (BKernelPrivate::is_readonly_filesystem(fsType2))
+		if (BKernelPrivate::is_readonly_filesystem(fsType))
 			data->flags |= B_PARTITION_READ_ONLY;
 	} else {
 		data->volume = -1;
-
-		if (BKernelPrivate::detect_filesystem(devPath, fsType2,
-				sizeof(fsType2))) {
-			if (BKernelPrivate::is_readonly_filesystem(fsType2))
+		if (BKernelPrivate::detect_filesystem(devPath, fsType,
+				sizeof(fsType), true)) {
+			data->flags |= B_PARTITION_FILE_SYSTEM;
+			data->content_type = (fsType[0] ? strdup(fsType) : NULL);
+			if (BKernelPrivate::is_readonly_filesystem(fsType))
 				data->flags |= B_PARTITION_READ_ONLY;
 		}
 	}

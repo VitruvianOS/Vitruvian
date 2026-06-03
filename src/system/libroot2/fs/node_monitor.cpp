@@ -7,11 +7,23 @@
 #include <OS.h>
 
 #include <pthread.h>
+#include <sys/vfs.h>
 
 #include "disk_monitor.h"
+#include "fs_type_filter.h"
 #include "../kernel/nexus/nexus/nexus.h"
 #include "../kernel/nexus/nexus/node_monitor.h"
 #include "Team.h"
+
+
+static bool
+_supports_watches(int fd)
+{
+	struct statfs st;
+	if (fstatfs(fd, &st) != 0)
+		return false;
+	return fs_statfs_supports_watches(st.f_type);
+}
 
 
 extern "C" {
@@ -21,8 +33,6 @@ status_t
 _kern_start_watching(dev_t device, ino_t node, uint32 flags,
 	port_id port, uint32 token)
 {
-	printf("_kern_start_watching\n");
-
 #ifdef __ENABLE_NODE_MONITOR__
 	if (flags & B_WATCH_MOUNT) {
 		status_t err = BKernelPrivate::start_mount_watching(port, token);
@@ -31,7 +41,7 @@ _kern_start_watching(dev_t device, ino_t node, uint32 flags,
 
 		if ((flags & ~B_WATCH_MOUNT) == 0)
 			return B_OK;
-		
+
 		flags &= ~B_WATCH_MOUNT;
 	}
 
@@ -39,13 +49,17 @@ _kern_start_watching(dev_t device, ino_t node, uint32 flags,
 	if (nodeMonitor < 0)
 		return B_ENTRY_NOT_FOUND;
 
-	// Only vrefs are valid
 	if (device != get_vref_dev())
 		return B_BAD_VALUE;
 
 	int nodeFD = open_vref(node);
 	if (nodeFD < 0)
 		return B_BAD_VALUE;
+
+	if (!_supports_watches(nodeFD)) {
+		close(nodeFD);
+		return B_OK;
+	}
 
 	struct nexus_watch_fd req = {
 		.fd = nodeFD,

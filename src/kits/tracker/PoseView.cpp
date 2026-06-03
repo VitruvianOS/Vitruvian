@@ -2160,14 +2160,20 @@ BPoseView::RefreshMimeTypeList()
 	fMimeTypeList.MakeEmpty();
 	fMimeTypeListIsDirty = false;
 
+	std::unordered_set<std::string> seen;
 	for (int32 index = 0;; index++) {
 		BPose* pose = PoseAtIndex(index);
 		if (pose == NULL)
 			break;
 
 		Model* targetModel = pose->TargetModel();
-		if (targetModel != NULL)
-			AddMimeType(targetModel->MimeType());
+		if (targetModel == NULL)
+			continue;
+		const char* type = targetModel->MimeType();
+		if (type == NULL || *type == '\0')
+			continue;
+		if (seen.insert(type).second)
+			fMimeTypeList.Add(type);
 	}
 }
 

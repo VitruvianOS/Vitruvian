@@ -1064,11 +1064,8 @@ MoveTask(BObjectList<entry_ref, true>* srcList, BEntry* destEntry, BList* pointL
 		FSGetTrashDir(&destDir, srcVolumeDevice);
 		volume.SetTo(srcVolumeDevice);
 
-		BEntry entry;
-		destDir.GetEntry(&entry);
 		destDirToCheck = &destDir;
-
-		entry.GetRef(&destRef);
+		destDir.GetRef(&destRef);
 	}
 
 	// change the move mode if needed
@@ -3038,11 +3035,8 @@ empty_trash(void*)
 		if (FSGetTrashDir(&trashDirectory, volume.Device()) != B_OK)
 			continue;
 
-		BEntry entry;
-		trashDirectory.GetEntry(&entry);
-
 		entry_ref ref;
-		entry.GetRef(&ref);
+		trashDirectory.GetRef(&ref);
 		srcList.AddItem(&ref);
 
 		status = CalcItemsAndSize(&loopControl, &srcList, volume.BlockSize(),
@@ -3406,10 +3400,8 @@ FSGetParentVirtualDirectoryAware(const BEntry& entry, entry_ref& _ref)
 
 	status_t error;
 	BDirectory parent;
-	BEntry parentEntry;
 	if ((error = entry.GetParent(&parent)) != B_OK
-		|| (error = parent.GetEntry(&parentEntry)) != B_OK
-		|| (error = parentEntry.GetRef(&_ref)) != B_OK) {
+		|| (error = parent.GetRef(&_ref)) != B_OK) {
 		return error;
 	}
 

@@ -239,6 +239,27 @@ BDirectory::GetEntry(BEntry* entry) const
 }
 
 
+status_t
+BDirectory::GetRef(entry_ref* ref) const
+{
+	if (!ref)
+		return B_BAD_VALUE;
+	if (InitCheck() != B_OK)
+		return B_NO_INIT;
+
+	char name[B_FILE_NAME_LENGTH];
+	int parentFd = _kern_open_parent_dir(fDirFd, name, sizeof(name));
+	if (parentFd < 0)
+		return parentFd;
+
+	node_ref parentRef(parentFd);
+	close(parentFd);
+
+	*ref = entry_ref(parentRef, name);
+	return B_OK;
+}
+
+
 bool
 BDirectory::IsRootDirectory() const
 {

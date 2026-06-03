@@ -715,19 +715,21 @@ int32
 QueryEntryListCollection::GetNextDirents(struct dirent* buffer, size_t length,
 	int32 count)
 {
-	int32 result = 0; // vos mod
+	if (count <= 0)
+		return 0;
 
-	for (int32 queryCount = fQueryListRep->fQueryList.CountItems();
-			fQueryListRep->fQueryListIndex < queryCount;
-			fQueryListRep->fQueryListIndex++) {
-		result = fQueryListRep->fQueryList.
-			ItemAt(fQueryListRep->fQueryListIndex)->
-				GetNextDirents(buffer, length, count);
-		if (result > 0)
-			break;
-	}
+	entry_ref ref;
+	if (GetNextRef(&ref) != B_OK)
+		return 0;
 
-	return result; // end mod
+	size_t recordLength = strlen(ref.name) + sizeof(dirent);
+	if (recordLength > length)
+		return 0;
+
+	buffer->d_reclen = static_cast<ushort>(recordLength);
+	buffer->d_ino = ref.dir();
+	strcpy(buffer->d_name, ref.name);
+	return 1;
 }
 
 

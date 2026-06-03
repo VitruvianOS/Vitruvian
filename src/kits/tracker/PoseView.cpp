@@ -38,12 +38,16 @@ All rights reserved.
 #include <algorithm>
 #include <functional>
 #include <map>
+#include <string>
+#include <unordered_set>
 
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
+#include <linux/magic.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <sys/vfs.h>
 
 #include <compat/sys/stat.h>
 
@@ -1435,13 +1439,16 @@ BPoseView::AddPosesTask(void* castToParams)
 		posesResult->fModels[index] = (Model*)0xdeadbeef;
 #endif
 
+	node_ref cachedDirNode;
+	BEntry parentEntry(&ref);
+	bool dirNodeValid = parentEntry.InitCheck() == B_OK
+		&& parentEntry.GetNodeRef(&cachedDirNode) == B_OK;
+
 	try {
 		for (;;) {
 			lock.Unlock();
 
 			status_t result = B_OK;
-			char entBuf[1024];
-			dirent* eptr = (dirent*)entBuf;
 			Model* model = 0;
 			node_ref dirNode;
 			node_ref itemNode;
@@ -1457,10 +1464,14 @@ BPoseView::AddPosesTask(void* castToParams)
 					continue;
 				}
 
-				BEntry parent;
-				reff.GetParent(&parent);
 				reff.GetNodeRef(&itemNode);
-				parent.GetNodeRef(&dirNode);
+				if (dirNodeValid) {
+					dirNode = cachedDirNode;
+				} else {
+					BEntry parent;
+					reff.GetParent(&parent);
+					parent.GetNodeRef(&dirNode);
+				}
 				BPoseView::WatchNewNode(&itemNode, watchMask, lock.Target());
 					// have to node monitor ahead of time because Model will
 					// cache up the file type and preferred app
@@ -1522,12 +1533,11 @@ BPoseView::AddPosesTask(void* castToParams)
 
 			bigtime_t now = system_time();
 
-			if (count <= 0 || modelChunkIndex >= kMaxAddPosesChunk - 1
-				|| now > nextChunkTime) {
+			if (modelChunkIndex >= 0 && (count <= 0
+				|| modelChunkIndex >= kMaxAddPosesChunk - 1
+				|| now > nextChunkTime)) {
 				// keep getting models until we get <kMaxAddPosesChunk> of them
 				// or until 300000 runs out
-
-				ASSERT(modelChunkIndex >= 0);
 
 				// send of the created poses
 
@@ -1738,11 +1748,8 @@ BPoseView::CreateVolumePose(BVolume* volume)
 	if (volume->GetRootDirectory(&root) != B_OK)
 		return;
 
-	BEntry entry;
-	root.GetEntry(&entry);
-
 	entry_ref ref;
-	entry.GetRef(&ref);
+	root.GetRef(&ref);
 
 	// If the volume is mounted at a directory of a persistent volume, we don't
 	// want it on the desktop or in the disks window.
@@ -2988,8 +2995,6 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 		return;
 
 	ReadAttrResult result = kReadAttrFailed;
-	BEntry entry;
-	model->GetEntry(&entry);
 	bool isTrash = model->IsTrash() && IsDesktopView();
 
 	// special case the "root" disks icon
@@ -3009,7 +3014,6 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 		}
 	} else {
 		ASSERT(model->IsNodeOpen());
-		time_t now = time(NULL);
 
 		for (int32 count = 10; count >= 0; count--) {
 			if (model->Node() == NULL)
@@ -3438,7 +3442,8 @@ BPoseView::NewFileFromTemplate(const BMessage* message)
 	entry_ref destEntryRef;
 	node_ref destNodeRef;
 
-	BDirectory destDir(targetModel->NodeRef());
+	// TODO(T4.1 V-Vref): revert to NodeRef() once per-team vref cache lands.
+	BDirectory destDir(targetModel->EntryRef());
 	if (destDir.InitCheck() != B_OK)
 		return;
 
@@ -3454,9 +3459,11 @@ BPoseView::NewFileFromTemplate(const BMessage* message)
 
 	if (dir.InitCheck() == B_OK) {
 		// special handling of directories
+		// TODO(T4.1 V-Vref): revert to NodeRef() once per-team vref cache lands.
+		BDirectory containerDir(targetModel->EntryRef());
 		node_ref dirNodeRef;
-		if (targetModel->Node() != NULL
-				&& targetModel->Node()->GetNodeRef(&dirNodeRef) == B_OK
+		if (containerDir.InitCheck() == B_OK
+				&& containerDir.GetNodeRef(&dirNodeRef) == B_OK
 				&& FSCreateNewFolderIn(&dirNodeRef, &destEntryRef,
 					&destNodeRef) == B_OK) {
 			BEntry destEntry(&destEntryRef);
@@ -3524,16 +3531,21 @@ BPoseView::NewFolder(const BMessage* message)
 	entry_ref ref;
 	node_ref nodeRef;
 
-	node_ref dirNodeRef;
-	if (targetModel->Node() != NULL
-			&& targetModel->Node()->GetNodeRef(&dirNodeRef) == B_OK
-			&& FSCreateNewFolderIn(&dirNodeRef, &ref, &nodeRef) == B_OK) {
+	// TODO(T4.1 V-Vref): once per-team vref cache lands, NodeRef() will return
+	// a virtual ref and this workaround can be replaced with NodeRef() directly.
+	BDirectory targetDir(targetModel->EntryRef());
+	node_ref targetNodeRef;
+	if (targetDir.InitCheck() != B_OK
+			|| targetDir.GetNodeRef(&targetNodeRef) != B_OK)
+		return;
+
+	if (FSCreateNewFolderIn(&targetNodeRef, &ref, &nodeRef) == B_OK) {
 		// try to place new folder at click point or under mouse if possible
 
 		PlaceFolder(&ref, message);
 
 		int32 index;
-		BPose* pose = EntryCreated(targetModel->NodeRef(), &nodeRef, ref.name, &index);
+		BPose* pose = EntryCreated(&targetNodeRef, &nodeRef, ref.name, &index);
 
 		if (IsFiltering()) {
 			if (fFilteredPoseList->FindPose(&nodeRef, &index) == NULL) {
@@ -6208,9 +6220,9 @@ BPoseView::MoveListToTrash(BObjectList<entry_ref, true>* list, bool selectNext,
 
 inline void
 CopyOneTrashedRefAsEntry(const entry_ref* ref, BObjectList<entry_ref, true>* trashList,
-	BObjectList<entry_ref, true>* noTrashList, std::map<int32, bool>* deviceHasTrash)
+	BObjectList<entry_ref, true>* noTrashList, std::map<dev_t, bool>* deviceHasTrash)
 {
-	std::map<int32, bool> &deviceHasTrashTmp = *deviceHasTrash;
+	std::map<dev_t, bool> &deviceHasTrashTmp = *deviceHasTrash;
 		// work around stupid binding problems with EachListItem
 
 	BDirectory entryDir(ref);
@@ -6237,7 +6249,7 @@ CopyOneTrashedRefAsEntry(const entry_ref* ref, BObjectList<entry_ref, true>* tra
 
 static void
 CopyPoseOneAsEntry(BPose* pose, BObjectList<entry_ref, true>* trashList,
-	BObjectList<entry_ref, true>* noTrashList, std::map<int32, bool>* deviceHasTrash)
+	BObjectList<entry_ref, true>* noTrashList, std::map<dev_t, bool>* deviceHasTrash)
 {
 	CopyOneTrashedRefAsEntry(pose->TargetModel()->EntryRef(), trashList,
 		noTrashList, deviceHasTrash);
@@ -6269,7 +6281,7 @@ BPoseView::MoveSelectionOrEntryToTrash(const entry_ref* ref, bool selectNext)
 		BObjectList<entry_ref, true>(CountSelected());
 	BObjectList<entry_ref, true>* entriesToDeleteOnTheSpot = new
 		BObjectList<entry_ref, true>(20);
-	std::map<int32, bool> deviceHasTrash;
+	std::map<dev_t, bool> deviceHasTrash;
 
 	if (ref != NULL) {
 		if (!CheckVolumeReadOnly(ref)) {

@@ -431,10 +431,8 @@ TFilePanel::FSFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 				BDirectory root;
 				volume.GetRootDirectory(&root);
 
-				BEntry entry;
 				entry_ref ref;
-				root.GetEntry(&entry);
-				entry.GetRef(&ref);
+				root.GetRef(&ref);
 
 				panel->SwitchDirectory(&ref);
 				return B_SKIP_MESSAGE;
@@ -1506,8 +1504,7 @@ TFilePanel::SwitchDirToDesktopIfNeeded(entry_ref &ref)
 	if (FSIsDeskDir(&entry) || (!settings.ShowDisksIcon() && FSIsRootDir(&entry))) {
 		// navigated into desktop folder or hit "root" level, switch to Desktop
 
-		desktopDir.GetEntry(&entry);
-		entry.GetRef(&ref);
+		desktopDir.GetRef(&ref);
 		return true;
 	}
 

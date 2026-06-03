@@ -12,6 +12,7 @@
 #include "storage_support.h"
 
 #include <fcntl.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <compat/sys/stat.h>
@@ -29,14 +30,20 @@
 
 BDirectory::BDirectory()
 	:
-	fDirFd(-1)
+	fDirFd(-1),
+	fDentBuffer(NULL),
+	fDentBytes(0),
+	fDentPos(0)
 {
 }
 
 
 BDirectory::BDirectory(const BDirectory& dir)
 	:
-	fDirFd(-1)
+	fDirFd(-1),
+	fDentBuffer(NULL),
+	fDentBytes(0),
+	fDentPos(0)
 {
 	*this = dir;
 }
@@ -44,7 +51,10 @@ BDirectory::BDirectory(const BDirectory& dir)
 
 BDirectory::BDirectory(const entry_ref* ref)
 	:
-	fDirFd(-1)
+	fDirFd(-1),
+	fDentBuffer(NULL),
+	fDentBytes(0),
+	fDentPos(0)
 {
 	SetTo(ref);
 }
@@ -52,7 +62,10 @@ BDirectory::BDirectory(const entry_ref* ref)
 
 BDirectory::BDirectory(const node_ref* nref)
 	:
-	fDirFd(-1)
+	fDirFd(-1),
+	fDentBuffer(NULL),
+	fDentBytes(0),
+	fDentPos(0)
 {
 	SetTo(nref);
 }
@@ -60,7 +73,10 @@ BDirectory::BDirectory(const node_ref* nref)
 
 BDirectory::BDirectory(const BEntry* entry)
 	:
-	fDirFd(-1)
+	fDirFd(-1),
+	fDentBuffer(NULL),
+	fDentBytes(0),
+	fDentPos(0)
 {
 	SetTo(entry);
 }
@@ -68,7 +84,10 @@ BDirectory::BDirectory(const BEntry* entry)
 
 BDirectory::BDirectory(const char* path)
 	:
-	fDirFd(-1)
+	fDirFd(-1),
+	fDentBuffer(NULL),
+	fDentBytes(0),
+	fDentPos(0)
 {
 	SetTo(path);
 }
@@ -76,7 +95,10 @@ BDirectory::BDirectory(const char* path)
 
 BDirectory::BDirectory(const BDirectory* dir, const char* path)
 	:
-	fDirFd(-1)
+	fDirFd(-1),
+	fDentBuffer(NULL),
+	fDentBytes(0),
+	fDentPos(0)
 {
 	SetTo(dir, path);
 }
@@ -383,19 +405,33 @@ BDirectory::GetNextRef(entry_ref* ref)
 	if (InitCheck() != B_OK)
 		return B_FILE_ERROR;
 
-	BPrivate::Storage::LongDirEntry longEntry;
-	struct dirent* entry = longEntry.dirent();
-	bool next = true;
-	while (next) {
-		if (GetNextDirents(entry, sizeof(longEntry), 1) != 1)
-			return B_ENTRY_NOT_FOUND;
+	static const size_t kDentBufSize = 8192;
 
-		next = (!strcmp(entry->d_name, ".")
-			|| !strcmp(entry->d_name, ".."));
+	if (fDentBuffer == NULL) {
+		fDentBuffer = (char*)malloc(kDentBufSize);
+		if (fDentBuffer == NULL)
+			return B_NO_MEMORY;
 	}
 
-	*ref = entry_ref(fDirRef, entry->d_name);
-	return B_OK;
+	for (;;) {
+		if (fDentPos >= (size_t)fDentBytes) {
+			fDentBytes = _kern_read_dents(fDirFd, fDentBuffer, kDentBufSize);
+			if (fDentBytes < 0)
+				return (status_t)fDentBytes;
+			if (fDentBytes == 0)
+				return B_ENTRY_NOT_FOUND;
+			fDentPos = 0;
+		}
+
+		linux_dirent64* entry = (linux_dirent64*)(fDentBuffer + fDentPos);
+		fDentPos += entry->d_reclen;
+
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+
+		*ref = entry_ref(fDirRef, entry->d_name);
+		return B_OK;
+	}
 }
 
 
@@ -415,6 +451,8 @@ BDirectory::Rewind()
 {
 	if (InitCheck() != B_OK)
 		return B_FILE_ERROR;
+	fDentBytes = 0;
+	fDentPos = 0;
 	return _kern_rewind_dir(fDirFd);
 }
 
@@ -568,6 +606,10 @@ BDirectory::close_fd()
 		fDirFd = -1;
 		fDirRef = node_ref();
 	}
+	free(fDentBuffer);
+	fDentBuffer = NULL;
+	fDentBytes = 0;
+	fDentPos = 0;
 	BNode::close_fd();
 }
 

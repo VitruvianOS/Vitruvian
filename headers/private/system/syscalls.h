@@ -14,7 +14,16 @@
 #include <OS.h>
 
 #include <signal.h>
+#include <stdint.h>
 #include <sys/socket.h>
+
+struct linux_dirent64 {
+	uint64_t	d_ino;
+	int64_t		d_off;
+	uint16_t	d_reclen;
+	uint8_t		d_type;
+	char		d_name[];
+};
 
 
 #ifdef __cplusplus
@@ -304,6 +313,7 @@ extern ssize_t		_kern_writev(int fd, off_t pos, const struct iovec *vecs,
 extern status_t		_kern_ioctl(int fd, uint32 cmd, void *data, size_t length);
 extern ssize_t		_kern_read_dir(int fd, struct dirent *buffer,
 						size_t bufferSize, uint32 maxCount);
+extern ssize_t		_kern_read_dents(int fd, void *buffer, size_t bufferSize);
 extern status_t		_kern_rewind_dir(int fd);
 extern status_t		_kern_read_stat(int fd, const char *path, bool traverseLink,
 						struct stat *stat, size_t statSize);

@@ -85,6 +85,10 @@ class BDirectory : public BNode, public BEntryList {
 		uint32 _reservedData[7];
 		int fDirFd;
 		node_ref fDirRef;
+
+		char*	fDentBuffer;
+		ssize_t	fDentBytes;
+		size_t	fDentPos;
 };
 
 status_t create_directory(const char *path, mode_t mode);

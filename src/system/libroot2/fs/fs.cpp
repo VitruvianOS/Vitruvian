@@ -638,6 +638,19 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 }
 
 
+ssize_t
+_kern_read_dents(int fd, void* buffer, size_t bufferSize)
+{
+	if (buffer == NULL || bufferSize == 0)
+		return B_BAD_VALUE;
+	if (fd < 0)
+		return B_FILE_ERROR;
+
+	ssize_t ret = syscall(SYS_getdents64, fd, buffer, bufferSize);
+	return ret < 0 ? -errno : ret;
+}
+
+
 off_t
 _kern_seek(int fd, off_t pos, int seekType)
 {

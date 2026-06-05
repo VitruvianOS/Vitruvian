@@ -47,10 +47,13 @@ Copyright 2026, Dario Casalinuovo. All rights reserved.
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <fs_info.h>
 #include <fs_attr.h>
+
+#include <OS.h>
 
 #include <AppDefs.h>
 #include <Bitmap.h>
@@ -298,16 +301,25 @@ Model::SetTo(const node_ref* dirNode, const node_ref* nodeRef,
 	fBaseType = kUnknownNode;
 	fMimeType = "";
 
-	fStatBuf.st_dev = nodeRef->dereference().dev();
-	fStatBuf.st_ino = nodeRef->dereference().ino();
 	fEntryRef = entry_ref(dirNode->dev(), dirNode->ino(), name);
 
-	BEntry tmpNode(&fEntryRef);
-	fStatus = tmpNode.InitCheck();
-	if (fStatus != B_OK)
-		return fStatus;
-
-	fStatus = tmpNode.GetStat(&fStatBuf);
+	// Open the parent dir fd directly to fstatat the entry — avoids opening
+	// and vref-creating the child just to get its stat.
+	if (dirNode->is_virtual()) {
+		int dirFd = open_vref((vref_id)dirNode->node);
+		if (dirFd < 0) {
+			fStatus = (status_t)dirFd;
+			return fStatus;
+		}
+		fStatus = fstatat(dirFd, name, &fStatBuf, AT_SYMLINK_NOFOLLOW) < 0
+			? (status_t)-errno : B_OK;
+		close(dirFd);
+	} else {
+		BEntry tmpNode(&fEntryRef);
+		fStatus = tmpNode.InitCheck();
+		if (fStatus == B_OK)
+			fStatus = tmpNode.GetStat(&fStatBuf);
+	}
 	if (fStatus != B_OK)
 		return fStatus;
 
@@ -709,19 +721,6 @@ Model::FinishSettingUpType()
 
 		case kVolumeNode:
 		{
-#ifndef __VOS__
-			// On Vitruvian, "/" is a real volume (the boot volume), not a
-			// virtual Disks root. The desktop uses IsVolumesRoot() to list
-			// volumes; kRootNode is not needed and causes wrong name/icon.
-			if (*NodeRef() == node_ref(fEntryRef.device, fEntryRef.directory)) {
-				// promote from volume to file system root
-				fBaseType = kRootNode;
-				fMimeType = B_ROOT_MIMETYPE;
-				break;
-			}
-#endif
-
-			// volumes have to have a B_VOLUME_MIMETYPE type
 			fMimeType = B_VOLUME_MIMETYPE;
 			if (fIconFrom == kUnknownNotFromNode) {
 				if (WellKnowEntryList::Match(NodeRef()) > (directory_which)-1)

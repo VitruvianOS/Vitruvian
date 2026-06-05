@@ -66,6 +66,7 @@ class BDirectory : public BNode, public BEntryList {
 		friend class BNode;
 		friend class BEntry;
 		friend class BFile;
+		friend class BPath;
 
 		status_t _GetStatFor(const char *path, struct stat *st) const;
 		status_t _GetStatFor(const char *path, struct stat_beos *st) const;

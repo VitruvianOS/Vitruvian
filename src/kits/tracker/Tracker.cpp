@@ -68,6 +68,7 @@ All rights reserved.
 #include "Commands.h"
 #include "ContainerWindow.h"
 #include "DeskWindow.h"
+#include "DisksWindow.h"
 #include "FindPanel.h"
 #include "FunctionObject.h"
 #include "FSClipboard.h"
@@ -136,7 +137,6 @@ public:
 		if (message->FindPointer("function", (void**)&function) != B_OK
 			|| message->FindMessage("refs", &refs) != B_OK
 			|| message->FindBool("openWithOK", &openWithOK) != B_OK) {
-			printf("incomplete launch message\n");
 			return;
 		}
 
@@ -1101,6 +1101,15 @@ TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
 	} else if (model->IsVirtualDirectory()) {
 		// window will adopt the model
 		window = new VirtualDirectoryWindow(&fWindowList, openFlags);
+#ifdef __VOS__
+	} else if (TrackerSettings().ShowDisksIcon()
+			&& FSIsRootDir(&BEntry(model->EntryRef()))) {
+		// On Vitruvian "/" is the real boot fs. Promote the model to kRootNode
+		// so TargetModel()->IsRoot()=true, which causes AddVolumePoses to iterate
+		// all volumes (showing every persistent volume in the Disks window).
+		model->OverrideAsDisksRoot();
+		window = new BDisksWindow(&fWindowList, openFlags);
+#endif
 	} else {
 		// window will adopt the model
 		window = new BContainerWindow(&fWindowList, openFlags);

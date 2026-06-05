@@ -71,6 +71,7 @@ AddOn(
 	TrashWatcher.cpp
 	Utilities.cpp
 	ViewState.cpp
+	DisksWindow.cpp
 	VirtualDirectoryEntryList.cpp
 	VirtualDirectoryManager.cpp
 	VirtualDirectoryPoseView.cpp

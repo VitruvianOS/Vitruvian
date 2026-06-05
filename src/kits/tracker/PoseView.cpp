@@ -1453,30 +1453,29 @@ BPoseView::AddPosesTask(void* castToParams)
 			node_ref dirNode;
 			node_ref itemNode;
 
-			BEntry reff; // vos mod
-			int32 count = container->GetNextEntry(&reff) == B_OK ? 1 : 0;
+			entry_ref reff;
+			int32 count = container->GetNextRef(&reff) == B_OK ? 1 : 0;
 			if (count > 0) {
 				ASSERT(count == 1);
 
-				if ((!hideDotFiles && (!strcmp(reff.Name(), ".")
-					|| !strcmp(reff.Name(), "..")))
-					|| (hideDotFiles && reff.Name()[0] == '.')) {
+				if ((!hideDotFiles && (!strcmp(reff.name, ".")
+					|| !strcmp(reff.name, "..")))
+					|| (hideDotFiles && reff.name[0] == '.')) {
 					continue;
 				}
 
-				reff.GetNodeRef(&itemNode);
+				BEntry refEntry(&reff);
+				refEntry.GetNodeRef(&itemNode);
 				if (dirNodeValid) {
 					dirNode = cachedDirNode;
 				} else {
-					BEntry parent;
-					reff.GetParent(&parent);
-					parent.GetNodeRef(&dirNode);
+					dirNode = node_ref(reff.dev(), reff.directory);
 				}
 				BPoseView::WatchNewNode(&itemNode, watchMask, lock.Target());
 					// have to node monitor ahead of time because Model will
 					// cache up the file type and preferred app
 					// OK to call when poseView is not locked
-				model = new Model(&dirNode, &itemNode, reff.Name(), false); // end mod
+				model = new Model(&dirNode, &itemNode, reff.name, false);
 				result = model->InitCheck();
 				modelChunkIndex++;
 				posesResult->fModels[modelChunkIndex] = model;
@@ -1666,7 +1665,15 @@ BPoseView::ToggleDisksVolumes()
 
 		if (TrackerSettings().MountVolumesOntoDesktop()) {
 			RemoveRootPose();
+#ifdef __VOS__
+			// On VOS, AddVolumePoses() → CreateVolumePose() uses vref-backed
+			// BDirectory refs that are unreliable in this context. CreateRootPose()
+			// uses BEntry("/") directly and does the right thing (no override when
+			// ShowDisksIcon=false, so "/" comes back as kVolumeNode = Vitruvian).
+			CreateRootPose();
+#else
 			AddVolumePoses();
+#endif
 		} else {
 			RemoveVolumePoses();
 			CreateRootPose();
@@ -1752,14 +1759,36 @@ BPoseView::CreateVolumePose(BVolume* volume)
 	root.GetRef(&ref);
 
 	// If the volume is mounted at a directory of a persistent volume, we don't
-	// want it on the desktop or in the disks window.
-	// On Vitruvian all volumes appear mounted within the root fs, so skip
-	// the parent-volume check and show all persistent volumes on the desktop.
+	// want it on the desktop or in the disks window — except on Vitruvian where
+	// we only skip volumes whose mount-point parent IS the root volume but the
+	// volume itself is not the root (i.e. sub-mounts like /boot/efi are hidden;
+	// the root volume "/" and user-removable media at e.g. /media/user/X are shown).
+	{
+		BVolume parentVolume(ref.dereference().dev());
+		if (parentVolume.InitCheck() == B_OK && parentVolume.IsPersistent()) {
 #ifndef __VOS__
-	BVolume parentVolume(ref.dereference().dev());
-	if (parentVolume.InitCheck() == B_OK && parentVolume.IsPersistent())
-		return;
+			return;
+#else
+			// In the Disks window (IsRoot) show all persistent volumes.
+			// On the Desktop, only show the root volume "/" and removable
+			// media (under /media or /mnt); skip system sub-mounts.
+			if (!TargetModel()->IsRoot()) {
+				BEntry rootEntry;
+				root.GetEntry(&rootEntry);
+				BPath mountPath(&rootEntry);
+				if (mountPath.InitCheck() == B_OK) {
+					const char* p = mountPath.Path();
+					bool isRemovable = (strncmp(p, "/media/", 7) == 0
+						|| strncmp(p, "/mnt/", 5) == 0
+						|| strcmp(p, "/mnt") == 0);
+					bool isRoot = (strcmp(p, "/") == 0);
+					if (!isRoot && !isRemovable)
+						return;
+				}
+			}
 #endif
+		}
+	}
 
 	node_ref itemNode;
 	root.GetNodeRef(&itemNode);
@@ -1786,6 +1815,13 @@ BPoseView::CreateRootPose()
 		delete model;
 		return;
 	}
+
+#ifdef __VOS__
+	// On Vitruvian "/" is a real volume. When ShowDisksIcon is on, promote the
+	// Desktop pose to kRootNode so it displays as "Disks" and opens BDisksWindow.
+	if (TrackerSettings().ShowDisksIcon())
+		model->OverrideAsDisksRoot();
+#endif
 
 	PoseInfo info;
 	ReadPoseInfo(model, &info);
@@ -5628,6 +5664,27 @@ BPoseView::FSNotification(const BMessage* message)
 bool
 BPoseView::CreateSymlinkPoseTarget(Model* symlink)
 {
+	// Pseudo-filesystem symlinks (/dev, /proc, /sys, tmpfs) are admin/shell
+	// aliases, not user content. Resolving them is harmful: chains like
+	// /dev/stdin -> /proc/self/fd/0 -> /dev/pts/N drag traversal into /proc
+	// and stall on magic-link opens; /dev/disk/by-id/*, by-uuid/*, by-path/*
+	// all resolve to the same underlying device inode, causing duplicate
+	// fsnotify mark installs that trip the kernel's EEXIST race path.
+	// Skip resolution; the pose still appears with the generic symlink icon.
+	const entry_ref* sref = symlink->EntryRef();
+	BPath symPath(sref);
+	if (symPath.InitCheck() == B_OK) {
+		struct statfs sfs;
+		if (statfs(symPath.Path(), &sfs) == 0) {
+			switch ((unsigned long)sfs.f_type) {
+				case PROC_SUPER_MAGIC:
+				case SYSFS_MAGIC:
+				case TMPFS_MAGIC:
+					return true;
+			}
+		}
+	}
+
 	Model* newResolvedModel = NULL;
 	Model* result = symlink->LinkTo();
 

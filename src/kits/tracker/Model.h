@@ -140,6 +140,9 @@ public:
 	bool IsSymLink() const;
 	bool InRoot() const;
 	bool IsRoot() const;
+#ifdef __VOS__
+	void OverrideAsDisksRoot();
+#endif
 	bool InTrash() const;
 	bool IsTrash() const;
 	bool IsVolume() const;
@@ -251,9 +254,6 @@ private:
 	};
 
 	entry_ref fEntryRef;
-	// TODO(vref): Replace with ModelStatBuf (subclass adding node_ref virtualRef)
-	// so NodeRef() can return the virtual ref instead of the physical layout cast.
-	// Blocked on all downstream comparisons using operator==(node_ref) with dereference().
 	StatStruct fStatBuf;
 	BString fMimeType;
 		// should use string that may be shared for common types
@@ -467,6 +467,20 @@ Model::IsRoot() const
 {
 	return fBaseType == kRootNode;
 }
+
+
+#ifdef __VOS__
+inline void
+Model::OverrideAsDisksRoot()
+{
+	fBaseType = kRootNode;
+	fIconFrom = kUnknownSource;	// force icon re-lookup so Disks icon is used
+	if (fVolumeName != NULL) {
+		free(fVolumeName);
+		fVolumeName = NULL;
+	}
+}
+#endif
 
 
 inline bool

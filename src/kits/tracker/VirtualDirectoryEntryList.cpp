@@ -9,6 +9,10 @@
 
 #include "VirtualDirectoryEntryList.h"
 
+#include <sys/stat.h>
+
+#include <syscalls.h>
+
 #include <AutoLocker.h>
 #include <storage_support.h>
 
@@ -91,7 +95,13 @@ VirtualDirectoryEntryList::GetNextRef(entry_ref* ref)
 		return error;
 
 	// Translate subdirectory entries into virtual directory references.
-	if (BEntry(ref).IsDirectory()) {
+	char path[B_PATH_NAME_LENGTH];
+	struct stat st;
+	bool isDir = _kern_entry_ref_to_path(ref->device, ref->directory,
+			ref->name, path, sizeof(path)) == B_OK
+		&& lstat(path, &st) == 0
+		&& S_ISDIR(st.st_mode);
+	if (isDir) {
 		if (VirtualDirectoryManager* manager
 				= VirtualDirectoryManager::Instance()) {
 			AutoLocker<VirtualDirectoryManager> managerLocker(manager);

@@ -37,25 +37,51 @@ All rights reserved.
 
 #include <Debug.h>
 
+#include "Model.h"
 #include "PoseList.h"
+
+
+void
+PoseList::_IndexAdd(BPose* p)
+{
+	if (p != NULL && p->TargetModel() != NULL)
+		fNodeIndex[*p->TargetModel()->NodeRef()] = p;
+}
+
+
+void
+PoseList::_IndexRemove(BPose* p)
+{
+	if (p != NULL && p->TargetModel() != NULL)
+		fNodeIndex.erase(*p->TargetModel()->NodeRef());
+}
+
+
+void
+PoseList::_RebuildIndex()
+{
+	fNodeIndex.clear();
+	int32 count = CountItems();
+	fNodeIndex.reserve(count);
+	for (int32 i = 0; i < count; i++) {
+		BPose* p = ItemAt(i);
+		if (p != NULL && p->TargetModel() != NULL)
+			fNodeIndex[*p->TargetModel()->NodeRef()] = p;
+	}
+}
 
 
 BPose*
 PoseList::FindPose(const node_ref* node, int32* resultingIndex) const
 {
-	int32 count = CountItems();
-	for (int32 index = 0; index < count; index++) {
-		BPose* pose = ItemAt(index);
-		ASSERT(pose->TargetModel());
-		if (*pose->TargetModel()->NodeRef() == *node) {
-			if (resultingIndex != NULL)
-				*resultingIndex = index;
+	auto it = fNodeIndex.find(*node);
+	if (it == fNodeIndex.end())
+		return NULL;
 
-			return pose;
-		}
-	}
-
-	return NULL;
+	BPose* pose = it->second;
+	if (resultingIndex != NULL)
+		*resultingIndex = IndexOf(pose);
+	return pose;
 }
 
 

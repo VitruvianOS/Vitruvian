@@ -162,6 +162,15 @@ BDirMenu::Populate(const BEntry* startEntry, BWindow* source,
 				if (entry == root) {
 					if (showDisksIcon)
 						AddDisksIconToMenu(reverse);
+#ifdef __VOS__
+					else {
+						// On Vitruvian "/" is the real boot fs (not a virtual
+						// Disks pseudo-root), so add it as a named volume entry
+						// in the path chain even when ShowDisksIcon is off.
+						AddBootVolumeToMenu(reverse, source, addShortcuts,
+							navMenuEntries);
+					}
+#endif
 					entry = desktopEntry;
 				}
 
@@ -289,3 +298,14 @@ BDirMenu::AddDisksIconToMenu(bool atEnd)
 
 	item->SetTarget(fTarget);
 }
+
+
+#ifdef __VOS__
+void
+BDirMenu::AddBootVolumeToMenu(bool atEnd, BWindow* source, bool addShortcuts,
+	bool navMenuEntries)
+{
+	BEntry entry("/");
+	AddItemToDirMenu(&entry, source, atEnd, addShortcuts, navMenuEntries);
+}
+#endif

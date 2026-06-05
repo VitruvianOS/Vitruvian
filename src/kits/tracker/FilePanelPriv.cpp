@@ -1501,7 +1501,11 @@ TFilePanel::SwitchDirToDesktopIfNeeded(entry_ref &ref)
 
 	BDirectory desktopDir;
 	FSGetDeskDir(&desktopDir);
-	if (FSIsDeskDir(&entry) || (!settings.ShowDisksIcon() && FSIsRootDir(&entry))) {
+	if (FSIsDeskDir(&entry)
+#ifndef __VOS__
+		|| (!settings.ShowDisksIcon() && FSIsRootDir(&entry))
+#endif
+		) {
 		// navigated into desktop folder or hit "root" level, switch to Desktop
 
 		desktopDir.GetRef(&ref);

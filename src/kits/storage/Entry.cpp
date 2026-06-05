@@ -550,19 +550,17 @@ BEntry::GetNodeRef(node_ref* ref) const
 	if (ref == NULL)
 		return B_BAD_VALUE;
 
-	struct stat st;
-	status_t error = _kern_read_stat(fDirFd, fName, false, &st,
-		sizeof(struct stat));
-	if (error == B_OK) {
-		int tempFd = _kern_open(fDirFd, fName, O_RDONLY, 0);
-		if (tempFd < 0)
-			return tempFd;
+	// TODO(vref→path): when path-backed handles land, restore the full
+	// stat + re-open liveness check that was here — path refs can go stale
+	// on any rename, unlike vref (fd-backed, inode kept alive) or fh
+	// (survives rename but not unlink).
+	int tempFd = _kern_open(fDirFd, fName, O_RDONLY | O_NONBLOCK | O_NOFOLLOW, 0);
+	if (tempFd < 0)
+		return tempFd;
 
-		*ref = node_ref(tempFd);
-		close(tempFd);
-	}
-
-	return error;
+	*ref = node_ref(tempFd);
+	close(tempFd);
+	return B_OK;
 }
 
 

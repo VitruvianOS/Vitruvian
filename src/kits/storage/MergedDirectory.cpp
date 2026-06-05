@@ -114,29 +114,63 @@ BMergedDirectory::GetNextEntry(BEntry* entry, bool traverse)
 status_t
 BMergedDirectory::GetNextRef(entry_ref* ref)
 {
-	BPrivate::Storage::LongDirEntry longEntry;
-	struct dirent* localEntry = longEntry.dirent();
-	BDirectory dir;
-	int32 result = _GetNextDirents(dir, localEntry, sizeof(longEntry), 1);
-	if (result < 0)
-		return result;
-	if (result == 0)
-		return B_ENTRY_NOT_FOUND;
+	while (fDirectoryIndex < fDirectories.CountItems()) {
+		BDirectory* subDir = fDirectories.ItemAt(fDirectoryIndex);
+		entry_ref subRef;
+		status_t err = subDir->GetNextRef(&subRef);
+		if (err == B_ENTRY_NOT_FOUND) {
+			fDirectoryIndex++;
+			continue;
+		}
+		if (err != B_OK)
+			return err;
 
-	// Use GetNodeRef (not GetEntry) to get the node_ref of 'dir' itself.
-	// GetEntry navigates UP to the parent via _kern_open_parent_dir, giving
-	// a ref for the directory's own entry (parent_ino, "menu"). Replacing
-	// the name with localEntry->d_name would then point inside the parent
-	// ("deskbar/Applications") instead of inside 'dir' ("menu/Applications").
-	// GetNodeRef returns the vref of dir itself, so entry_ref(nref, name)
-	// correctly encodes "the entry 'name' inside dir".
-	node_ref nref;
-	status_t nrefErr = dir.GetNodeRef(&nref);
-	if (nrefErr != B_OK)
-		return B_ENTRY_NOT_FOUND;
+		switch (fPolicy) {
+			case B_ALLOW_DUPLICATES:
+				*ref = subRef;
+				return B_OK;
 
-	*ref = entry_ref(nref, NULL);
-	return ref->set_name(localEntry->d_name);
+			case B_ALWAYS_FIRST:
+			case B_COMPARE:
+			{
+				if (fVisitedEntries != NULL
+						&& fVisitedEntries->find(subRef.name)
+							!= fVisitedEntries->end()) {
+					continue;
+				}
+
+				if (fVisitedEntries != NULL) {
+					try {
+						fVisitedEntries->insert(subRef.name);
+					} catch (std::bad_alloc&) {
+						return B_NO_MEMORY;
+					}
+				}
+
+				if (fPolicy == B_COMPARE) {
+					// Find the best version of this entry across directories.
+					// Fall through to _FindBestEntry via the dirent path for now.
+					BPrivate::Storage::LongDirEntry longEntry;
+					struct dirent* de = longEntry.dirent();
+					strlcpy(de->d_name, subRef.name, B_FILE_NAME_LENGTH);
+					BDirectory dir;
+					dir.SetTo(subDir, ".");
+					_FindBestEntry(dir, de);
+					// Re-derive ref from whichever directory won.
+					node_ref nref;
+					if (dir.GetNodeRef(&nref) == B_OK) {
+						*ref = entry_ref(nref, NULL);
+						return ref->set_name(de->d_name);
+					}
+				}
+
+				*ref = subRef;
+				return B_OK;
+			}
+		}
+	}
+
+	return B_ENTRY_NOT_FOUND;
 }
 
 

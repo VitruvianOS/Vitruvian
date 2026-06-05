@@ -123,18 +123,15 @@ BDirectory::SetTo(const entry_ref* ref)
 	if (error != B_OK)
 		return error;
 
-	// open dir
-	fDirFd = _kern_open_dir_entry_ref(ref->device, ref->directory, ref->name);
-
+	// reuse the fd _SetTo already opened — dup so fFd and fDirFd are independent
+	fDirFd = _kern_dup(fFd);
 	if (fDirFd < 0) {
-		status_t error = fDirFd;
 		Unset();
-		return (fCStatus = error);
+		return (fCStatus = fDirFd);
 	}
 
 	fDirRef = node_ref(fDirFd);
 	fCStatus = B_OK;
-	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 
 	return B_OK;
@@ -168,16 +165,13 @@ BDirectory::SetTo(const BEntry* entry)
 	if (error != B_OK)
 		return error;
 
-	// open dir
-	fDirFd = _kern_open_dir(entry->fDirFd, entry->fName);
+	fDirFd = _kern_dup(fFd);
 	if (fDirFd < 0) {
-		status_t error = fDirFd;
 		Unset();
-		return (fCStatus = error);
+		return (fCStatus = fDirFd);
 	}
 
 	fDirRef = node_ref(fDirFd);
-	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 
 	return B_OK;
@@ -192,16 +186,13 @@ BDirectory::SetTo(const char* path)
 	if (error != B_OK)
 		return error;
 
-	// open dir
-	fDirFd = _kern_open_dir(-1, path);
+	fDirFd = _kern_dup(fFd);
 	if (fDirFd < 0) {
-		status_t error = fDirFd;
 		Unset();
-		return (fCStatus = error);
+		return (fCStatus = fDirFd);
 	}
 
 	fDirRef = node_ref(fDirFd);
-	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 
 	return B_OK;
@@ -227,21 +218,16 @@ BDirectory::SetTo(const BDirectory* dir, const char* path)
 	if (error != B_OK)
 		return error;
 
-	// open dir
-	fDirFd = _kern_open_dir(dirFD, path);
-	if (fDirFd < 0) {
-		status_t error = fDirFd;
-		Unset();
-		return (fCStatus = error);
-	}
-
-	if (dir == this) {
-		// cleanup after _SetTo()
+	if (dir == this)
 		_kern_close(dirFD);
+
+	fDirFd = _kern_dup(fFd);
+	if (fDirFd < 0) {
+		Unset();
+		return (fCStatus = fDirFd);
 	}
 
 	fDirRef = node_ref(fDirFd);
-	// set close on exec flag on dir FD
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 
 	return B_OK;

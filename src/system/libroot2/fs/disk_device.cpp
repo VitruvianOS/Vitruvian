@@ -537,10 +537,6 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 {
 	CALLED();
 
-	fprintf(stderr, "[disk_device] _kern_get_disk_device_data id=%" B_PRId32
-		" deviceOnly=%d buf=%p size=%zu\n",
-		deviceID, deviceOnly, buffer, bufferSize);
-
 	if (buffer == nullptr && neededSize == nullptr)
 		return B_BAD_VALUE;
 

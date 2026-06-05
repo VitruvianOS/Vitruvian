@@ -209,17 +209,19 @@ BPath::SetTo(const char* path, const char* leaf, bool normalize)
 status_t
 BPath::SetTo(const BDirectory* dir, const char* path, bool normalize)
 {
-	status_t error = (dir && dir->InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get the path of the BDirectory
-	BEntry entry;
-	if (error == B_OK)
-		error = dir->GetEntry(&entry);
-	BPath dirPath;
-	if (error == B_OK)
-		error = dirPath.SetTo(&entry);
-	// let the other version do the work
-	if (error == B_OK)
-		error = SetTo(dirPath.Path(), path, normalize);
+	if (dir == NULL || dir->InitCheck() != B_OK) {
+		Unset();
+		return fCStatus = B_BAD_VALUE;
+	}
+
+	char buf[B_PATH_NAME_LENGTH];
+	status_t error = _kern_fd_to_path(dir->get_fd(), -1, buf, sizeof(buf));
+	if (error != B_OK) {
+		Unset();
+		return fCStatus = error;
+	}
+
+	error = SetTo(buf, path, normalize);
 	if (error != B_OK)
 		Unset();
 	fCStatus = error;

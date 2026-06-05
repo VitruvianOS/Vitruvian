@@ -159,7 +159,9 @@ LinuxVolume::FillVolumeInfo(struct mntent* mountEntry, fs_info* info)
 		|| strcmp(fsType, "hfsplus") == 0 || strcmp(fsType, "jfs") == 0
 		|| strcmp(fsType, "reiserfs") == 0 || strcmp(fsType, "zfs") == 0
 		|| strcmp(fsType, "ufs") == 0 || strcmp(fsType, "bcachefs") == 0
-		|| strcmp(fsType, "nilfs2") == 0) {
+		|| strcmp(fsType, "nilfs2") == 0
+		|| strcmp(fsType, "squashfs") == 0 || strcmp(fsType, "iso9660") == 0
+		|| strcmp(fsType, "erofs") == 0) {
 		isPersistent = true;
 	}
 

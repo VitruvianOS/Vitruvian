@@ -8,10 +8,14 @@
 #include <DiskDeviceRoster.h>
 #include <NodeMonitor.h>
 
+#include <mntent.h>
 #include <sys/poll.h>
+#include <sys/stat.h>
 #include <libudev.h>
 #include <atomic>
 #include <map>
+#include <set>
+#include <string>
 #include <vector>
 #include <mutex>
 #include <thread>
@@ -19,6 +23,7 @@
 #include <util/KMessage.h>
 
 #include "disk_device.h"
+#include "fs_type_filter.h"
 #include "Team.h"
 #include "KernelDebug.h"
 
@@ -83,12 +88,36 @@ init_udev()
 }
 
 
+// Returns a snapshot of currently mounted filesystem dev_t's (pseudo-fs excluded).
+static std::set<dev_t>
+snapshot_mounts()
+{
+	std::set<dev_t> result;
+	FILE* mounts = setmntent("/proc/mounts", "r");
+	if (mounts == NULL)
+		return result;
+
+	struct mntent entBuf;
+	char buf[4096];
+	struct mntent* entry;
+
+	while ((entry = getmntent_r(mounts, &entBuf, buf, sizeof(buf))) != NULL) {
+		if (fs_mnttype_is_pseudo(entry->mnt_type))
+			continue;
+		struct stat st;
+		if (stat(entry->mnt_dir, &st) == 0)
+			result.insert(st.st_dev);
+	}
+
+	endmntent(mounts);
+	return result;
+}
+
+
 static void
 send_device_notification(port_id port, uint32 token, uint32 opcode, dev_t device,
 	dev_t parentDevice = -1, ino_t parentDirectory = -1)
 {
-	// TODO this code doesn't really understand mount points, we should
-	// send notifications for volumes that are actually mounted/unmounted.
 	KMessage message;
 	char buffer[256];
 	const int32 kPortMessageCode = 'pjpp';
@@ -135,19 +164,6 @@ send_disk_device_notification(port_id port, uint32 token, uint32 event,
 
 
 static uint32
-udev_action_to_opcode(const char* action)
-{
-	if (!action)
-		return 0;
-	if (strcmp(action, "add") == 0)
-		return B_DEVICE_MOUNTED;
-	if (strcmp(action, "remove") == 0)
-		return B_DEVICE_UNMOUNTED;
-	return 0;
-}
-
-
-static uint32
 udev_action_to_disk_event(const char* action)
 {
 	if (!action)
@@ -162,124 +178,144 @@ udev_action_to_disk_event(const char* action)
 }
 
 
+// Fires mount/unmount notifications by diffing mount snapshots.
+static void
+dispatch_mount_changes(const std::set<dev_t>& prev, const std::set<dev_t>& curr)
+{
+	std::vector<VolumeWatcherKey> mountTargets;
+	std::vector<VolumeWatcher> volumeWatchers;
+
+	{
+		std::lock_guard<std::mutex> guard(gWatchLock);
+		for (const auto& entry : gMountWatchers)
+			mountTargets.push_back(entry.first);
+		volumeWatchers = gVolumeWatchers;
+	}
+
+	// Newly mounted filesystems
+	for (dev_t d : curr) {
+		if (prev.count(d) == 0) {
+			for (const auto& key : mountTargets)
+				send_device_notification(key.port, key.token, B_DEVICE_MOUNTED, d);
+		}
+	}
+
+	// Unmounted filesystems
+	for (dev_t d : prev) {
+		if (curr.count(d) == 0) {
+			for (const auto& key : mountTargets)
+				send_device_notification(key.port, key.token, B_DEVICE_UNMOUNTED, d);
+			for (const auto& vw : volumeWatchers) {
+				if (vw.device == d)
+					send_device_notification(vw.port, vw.token, B_DEVICE_UNMOUNTED, d);
+			}
+		}
+	}
+}
+
+
 static void
 udev_thread_func()
 {
-	printf("udev watcher thread started\n");
-
 	struct udev_monitor* udevMonitor = nullptr;
 	{
 		std::lock_guard<std::mutex> guard(gWatchLock);
 		udevMonitor = init_udev();
-		if (!udevMonitor) {
-			printf("disk_monitor: can't get udev_monitor...exiting\n");
-			gWatchThreadRunning = false;
-			return; 
-		}
 	}
 
-	int ufd = -1;
-	{
-		std::lock_guard<std::mutex> guard(gWatchLock);
-		if (udevMonitor)
-			ufd = udev_monitor_get_fd(udevMonitor);
-	}
+	int ufd = udevMonitor != nullptr ? udev_monitor_get_fd(udevMonitor) : -1;
+
+	int mountsFd = open("/proc/mounts", O_RDONLY | O_CLOEXEC);
+
+	std::set<dev_t> mountSnapshot = snapshot_mounts();
 
 	while (!gWatcherExitRequested) {
-		if (ufd < 0) {
-			std::lock_guard<std::mutex> guard(gWatchLock);
-			if (udevMonitor)
-				ufd = udev_monitor_get_fd(udevMonitor);
-			if (ufd < 0) {
-				snooze(200);
-				continue;
-			}
+		struct pollfd pfds[2];
+		int nfds = 0;
+
+		if (ufd >= 0) {
+			pfds[nfds].fd = ufd;
+			pfds[nfds].events = POLLIN;
+			pfds[nfds].revents = 0;
+			nfds++;
 		}
 
-		struct pollfd pfd;
-		pfd.fd = ufd;
-		pfd.events = POLLIN;
-		pfd.revents = 0;
+		if (mountsFd >= 0) {
+			pfds[nfds].fd = mountsFd;
+			pfds[nfds].events = POLLERR | POLLPRI;
+			pfds[nfds].revents = 0;
+			nfds++;
+		}
 
-		int ret = poll(&pfd, 1, 500);
+		if (nfds == 0) {
+			snooze(200);
+			continue;
+		}
+
+		int ret = poll(pfds, nfds, 500);
 		if (ret < 0) {
 			if (errno == EINTR)
 				continue;
 			break;
 		}
 
-		if (ret == 0 || !(pfd.revents & POLLIN))
+		if (ret == 0)
 			continue;
 
-		struct udev_device* dev;
-		while ((dev = udev_monitor_receive_device(udevMonitor)) != nullptr) {
-			const char* action = udev_device_get_action(dev);
-			const char* devNode = udev_device_get_devnode(dev);
-
-			uint32 opcode = udev_action_to_opcode(action);
-			uint32 diskEvent = udev_action_to_disk_event(action);
-			if (opcode != 0) {
-				dev_t devnum = udev_device_get_devnum(dev);
-
-				std::vector<VolumeWatcherKey> mountTargets;
-				std::vector<VolumeWatcher> volumeTargets;
-				std::vector<std::pair<VolumeWatcherKey, uint32>> diskTargets;
-
-				{
-					std::lock_guard<std::mutex> guard(gWatchLock);
-					mountTargets.reserve(gMountWatchers.size());
-					for (const auto& entry : gMountWatchers) {
-						mountTargets.push_back(entry.first);
-					}
-					if (opcode == B_DEVICE_UNMOUNTED) {
-						for (const auto& vw : gVolumeWatchers) {
-							if (vw.device == devnum)
-								volumeTargets.push_back(vw);
-						}
-					}
-					diskTargets.reserve(gDiskWatchers.size());
-					for (const auto& entry : gDiskWatchers) {
-						diskTargets.emplace_back(entry.first, entry.second);
-					}
-				}
-
-				for (const auto& key : mountTargets) {
-					send_device_notification(key.port, key.token, opcode, devnum);
-				}
-
-				for (const auto& vw : volumeTargets) {
-					send_device_notification(vw.port, vw.token, B_DEVICE_UNMOUNTED, devnum);
-				}
-
-				for (const auto& p : diskTargets) {
-					const VolumeWatcherKey& key = p.first;
-					uint32 mask = p.second;
-					bool send = false;
-					uint32 eventToSend = 0;
-
-					if (diskEvent == B_DEVICE_ADDED && (mask & WATCH_DISK_ADD)) {
-						send = true;
-						eventToSend = B_DEVICE_ADDED;
-					} else if (diskEvent == B_DEVICE_REMOVED && (mask & WATCH_DISK_REMOVE)) {
-						send = true;
-						eventToSend = B_DEVICE_REMOVED;
-					} else if (diskEvent == B_DEVICE_MEDIA_CHANGED && (mask & WATCH_DISK_ADD)) {
-						send = true;
-						eventToSend = B_DEVICE_MEDIA_CHANGED;
-					}
-
-					if (send && eventToSend != 0) {
-						send_disk_device_notification(key.port, key.token,
-							eventToSend, devNode);
-					}
-				}
+		// Check /proc/mounts for actual mount/unmount events
+		for (int i = 0; i < nfds; i++) {
+			if (pfds[i].fd == mountsFd
+					&& (pfds[i].revents & (POLLERR | POLLPRI))) {
+				std::set<dev_t> newSnapshot = snapshot_mounts();
+				dispatch_mount_changes(mountSnapshot, newSnapshot);
+				mountSnapshot = std::move(newSnapshot);
+				break;
 			}
+		}
 
-			udev_device_unref(dev);
+		// Check udev for raw disk device events (add/remove/change)
+		if (ufd >= 0 && (pfds[0].revents & POLLIN)) {
+			struct udev_device* dev;
+			while ((dev = udev_monitor_receive_device(udevMonitor)) != nullptr) {
+				const char* action = udev_device_get_action(dev);
+				const char* devNode = udev_device_get_devnode(dev);
+				uint32 diskEvent = udev_action_to_disk_event(action);
+
+				if (diskEvent != 0) {
+					std::vector<std::pair<VolumeWatcherKey, uint32>> diskTargets;
+					{
+						std::lock_guard<std::mutex> guard(gWatchLock);
+						diskTargets.reserve(gDiskWatchers.size());
+						for (const auto& entry : gDiskWatchers)
+							diskTargets.emplace_back(entry.first, entry.second);
+					}
+
+					for (const auto& p : diskTargets) {
+						const VolumeWatcherKey& key = p.first;
+						uint32 mask = p.second;
+						uint32 eventToSend = 0;
+
+						if (diskEvent == B_DEVICE_ADDED && (mask & WATCH_DISK_ADD))
+							eventToSend = B_DEVICE_ADDED;
+						else if (diskEvent == B_DEVICE_REMOVED && (mask & WATCH_DISK_REMOVE))
+							eventToSend = B_DEVICE_REMOVED;
+						else if (diskEvent == B_DEVICE_MEDIA_CHANGED && (mask & WATCH_DISK_ADD))
+							eventToSend = B_DEVICE_MEDIA_CHANGED;
+
+						if (eventToSend != 0)
+							send_disk_device_notification(key.port, key.token, eventToSend, devNode);
+					}
+				}
+
+				udev_device_unref(dev);
+			}
 		}
 	}
 
-	{
+	if (mountsFd >= 0)
+		close(mountsFd);
+
+	if (udevMonitor != nullptr) {
 		std::lock_guard<std::mutex> guard(gWatchLock);
 		udev_monitor_unref(udevMonitor);
 	}
@@ -329,8 +365,6 @@ stop_thread()
 status_t
 start_mount_watching(port_id port, uint32 token)
 {
-	printf("start mount_watching\n");
-
 	{
 		std::lock_guard<std::mutex> guard(gWatchLock);
 		VolumeWatcherKey key = { port, token };

@@ -63,6 +63,7 @@ class BDirectory : public BNode, public BEntryList {
 		friend class BNode;
 		friend class BEntry;
 		friend class BFile;
+		friend class BPath;
 
 		virtual void _ErectorDirectory1();
 		virtual void _ErectorDirectory2();

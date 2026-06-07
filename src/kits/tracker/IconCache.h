@@ -323,6 +323,8 @@ private:
 	NodeCacheEntry* fNext;
 
 	node_ref fRef;
+	dev_t fHashDev;
+	ino_t fHashNode;
 	bool fPermanent;
 		// special cache entry that has to be deleted explicitly
 

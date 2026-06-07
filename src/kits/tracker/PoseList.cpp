@@ -45,7 +45,7 @@ void
 PoseList::_IndexAdd(BPose* p)
 {
 	if (p != NULL && p->TargetModel() != NULL)
-		fNodeIndex[*p->TargetModel()->NodeRef()] = p;
+		fNodeIndex[MakePoseNodeKey(*p->TargetModel()->NodeRef())] = p;
 }
 
 
@@ -53,7 +53,7 @@ void
 PoseList::_IndexRemove(BPose* p)
 {
 	if (p != NULL && p->TargetModel() != NULL)
-		fNodeIndex.erase(*p->TargetModel()->NodeRef());
+		fNodeIndex.erase(MakePoseNodeKey(*p->TargetModel()->NodeRef()));
 }
 
 
@@ -66,7 +66,7 @@ PoseList::_RebuildIndex()
 	for (int32 i = 0; i < count; i++) {
 		BPose* p = ItemAt(i);
 		if (p != NULL && p->TargetModel() != NULL)
-			fNodeIndex[*p->TargetModel()->NodeRef()] = p;
+			fNodeIndex[MakePoseNodeKey(*p->TargetModel()->NodeRef())] = p;
 	}
 }
 
@@ -74,7 +74,7 @@ PoseList::_RebuildIndex()
 BPose*
 PoseList::FindPose(const node_ref* node, int32* resultingIndex) const
 {
-	auto it = fNodeIndex.find(*node);
+	auto it = fNodeIndex.find(MakePoseNodeKey(*node));
 	if (it == fNodeIndex.end())
 		return NULL;
 

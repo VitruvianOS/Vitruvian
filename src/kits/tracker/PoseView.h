@@ -692,32 +692,42 @@ private:
 
 protected:
 	struct node_ref_key {
-		node_ref_key() {}
-		node_ref_key(const node_ref& value) : value(value) {}
+		node_ref_key() : device(-1), node(-1) {}
+		node_ref_key(const node_ref& value)
+		{
+			// Snapshot the dereferenced identity at construction —
+			// node_ref's real_* fields can be filled lazily, which would
+			// otherwise make GetHashCode()/operator== unstable across the
+			// key's lifetime and break HashSet's invariant.
+			const node_ref real = value.dereference();
+			device = real.device;
+			node = real.node;
+		}
 
 		uint32 GetHashCode() const
 		{
-			const node_ref real = value.dereference();
-			return (uint32)real.device ^ (uint32)real.node;
+			return (uint32)device ^ (uint32)node;
 		}
 
 		node_ref_key operator=(const node_ref_key& other)
 		{
-			value = other.value;
+			device = other.device;
+			node = other.node;
 			return *this;
 		}
 
 		bool operator==(const node_ref_key& other) const
 		{
-			return (value == other.value);
+			return device == other.device && node == other.node;
 		}
 
 		bool operator!=(const node_ref_key& other) const
 		{
-			return (value != other.value);
+			return !(*this == other);
 		}
 
-		node_ref	value;
+		dev_t	device;
+		ino_t	node;
 	};
 
 protected:

@@ -55,14 +55,27 @@ namespace BPrivate {
 class Model;
 
 
-struct NodeRefHash {
-	size_t operator()(const node_ref& r) const {
-		const node_ref real = r.dereference();
-		size_t h = std::hash<dev_t>()(real.device);
-		h ^= std::hash<ino_t>()(real.node) + 0x9e3779b9u + (h << 6) + (h >> 2);
+// Key the pose index by the snapshotted (real_device, real_node) pair.
+// node_ref's own device/node fields can refer to a virtual vref whose
+// real_* fields are resolved lazily — hashing the live node_ref would
+// produce an unstable key and break unordered_map's invariant. Storing
+// a plain pair freezes the identity at insert time.
+typedef std::pair<dev_t, ino_t> PoseNodeKey;
+
+struct PoseNodeKeyHash {
+	size_t operator()(const PoseNodeKey& k) const {
+		size_t h = std::hash<dev_t>()(k.first);
+		h ^= std::hash<ino_t>()(k.second) + 0x9e3779b9u + (h << 6) + (h >> 2);
 		return h;
 	}
 };
+
+inline PoseNodeKey
+MakePoseNodeKey(const node_ref& r)
+{
+	const node_ref real = r.dereference();
+	return PoseNodeKey(real.device, real.node);
+}
 
 
 class PoseList : private BObjectList<BPose> {
@@ -149,7 +162,7 @@ private:
 	void _RebuildIndex();
 
 	bool fOwning;
-	std::unordered_map<node_ref, BPose*, NodeRefHash> fNodeIndex;
+	std::unordered_map<PoseNodeKey, BPose*, PoseNodeKeyHash> fNodeIndex;
 };
 
 

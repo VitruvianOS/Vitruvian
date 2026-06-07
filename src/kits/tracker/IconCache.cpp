@@ -1630,6 +1630,8 @@ SharedCacheEntry::operator==(const TypeAndSignature& typeAndSignature) const
 NodeCacheEntry::NodeCacheEntry(bool permanent)
 	:
 	fNext(NULL),
+	fHashDev(-1),
+	fHashNode(-1),
 	fPermanent(permanent)
 {
 }
@@ -1641,6 +1643,12 @@ NodeCacheEntry::NodeCacheEntry(const node_ref* node, bool permanent)
 	fRef(*node),
 	fPermanent(permanent)
 {
+	// Snapshot the dereferenced identity so the hash/equality used by the
+	// open hash table is stable even if node_ref's real_* fields are
+	// resolved lazily.
+	const node_ref real = node->dereference();
+	fHashDev = real.device;
+	fHashNode = real.node;
 }
 
 
@@ -1696,7 +1704,9 @@ NodeCacheEntry::Node() const
 size_t
 NodeCacheEntry::Hash() const
 {
-	return Hash(&fRef);
+	ino_t ino = fHashNode;
+	return (size_t)fHashDev ^ ((uint32*)&ino)[0]
+		^ ((uint32*)&ino)[1];
 }
 
 
@@ -1704,8 +1714,8 @@ NodeCacheEntry::Hash() const
 NodeCacheEntry::Hash(const node_ref* node)
 {
 	const node_ref real = node->dereference();
-	ino_t ino = real.ino();
-	return real.dev() ^ ((uint32*)&ino)[0]
+	ino_t ino = real.node;
+	return (size_t)real.device ^ ((uint32*)&ino)[0]
 		^ ((uint32*)&ino)[1];
 }
 
@@ -1713,7 +1723,8 @@ NodeCacheEntry::Hash(const node_ref* node)
 bool
 NodeCacheEntry::operator==(const node_ref* node) const
 {
-	return fRef == *node;
+	const node_ref real = node->dereference();
+	return fHashDev == real.device && fHashNode == real.node;
 }
 
 

@@ -45,4 +45,5 @@ _get_next_image_info(team_id team, int32* cookie,
 status_t
 _get_image_info(image_id id, image_info* info, size_t infoSize)
 {
+	return B_ERROR;
 }

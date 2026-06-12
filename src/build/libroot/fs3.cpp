@@ -19,6 +19,14 @@
 #include "KernelDebug.h"
 
 
+// Attr-dir fake-fd (≥10000) dispatcher helpers, defined in attr_stub.cpp.
+extern bool		_is_attr_dir_fd(int fd);
+extern ssize_t	_read_attr_dir(int fd, struct dirent* buffer, size_t bufferSize,
+					uint32 maxCount);
+extern status_t	_rewind_attr_dir(int fd);
+extern status_t	_close_attr_dir(int fd);
+
+
 namespace BKernelPrivate {
 
 
@@ -38,7 +46,6 @@ getPath(ino_t node, const char* name, std::string& path)
 	pthread_mutex_lock(&sLock);
 	auto elem = gMap.find(node);
 	if (elem != end(gMap)) {
-		printf("getPath for node %d %s %s\n", node, elem->second.c_str(), name);
 		std::string ret(elem->second.c_str());
 		if (name != NULL) {
 			ret += '/';
@@ -57,10 +64,8 @@ getPath(ino_t node, const char* name, std::string& path)
 // TODO: missing dev_t
 static void
 insertPath(ino_t inode, int fd) {
-	if (inode < 0 || fd < 0) {
-		printf("insertPath: Trying to insert wrong path\n");
+	if (inode < 0 || fd < 0)
 		return;
-	}
 
 	char destPath[B_PATH_NAME_LENGTH];
 	status_t ret
@@ -225,6 +230,9 @@ _kern_close(int fd)
 {
 	CALLED();
 
+	if (_is_attr_dir_fd(fd))
+		return _close_attr_dir(fd);
+
 	return (close(fd) < 0) ? BKernelPrivate::posixError(errno) : B_OK;
 }
 
@@ -297,7 +305,7 @@ _kern_open_parent_dir(int fd, char* name, size_t length)
 			return B_BUFFER_OVERFLOW;
 		}
 
-		if (strlcpy(name, baseName, len) >= len) {
+		if (strlcpy(name, baseName, length) >= length) {
 			close(dirfd);
 			return B_BUFFER_OVERFLOW;
 		}
@@ -364,26 +372,20 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 		return B_BAD_VALUE;
 
 	if (leaf != NULL && leaf[0] == '/') {
-		if (strlcpy(userPath, leaf,
-				strlen(leaf)) >= pathLength) {
+		if (strlcpy(userPath, leaf, pathLength) >= pathLength)
 			return B_BUFFER_OVERFLOW;
-		}
 		return B_OK;
 	}
 
 #ifdef OPEN_BY_INODE_WORKAROUND
-	UNIMPLEMENTED();
-
 	std::string destPath;
 	status_t ret = BKernelPrivate::getPath(node, leaf, destPath);
 	if (ret != B_OK)
 		return ret;
 
-	if (strlcpy(userPath, destPath.c_str(),
-			pathLength) >= pathLength) {
+	if (strlcpy(userPath, destPath.c_str(), pathLength) >= pathLength)
 		return B_BUFFER_OVERFLOW;
-	}
- 
+
 	return B_OK;
 #else
 	return B_ERROR;
@@ -452,16 +454,16 @@ _kern_open_entry_ref_by_fd(int fd, team_id team, const char* name,
 
 
 status_t
-_kern_entry_ref_to_path_by_fd(int fd, team_id team, char* name,
+_kern_entry_ref_to_path_by_fd(int fd, team_id team, const char* name,
 	char* buffer, size_t bufferSize)
 {
 	if (name == NULL)
 		return _kern_fd_to_path(fd, team, buffer, bufferSize);
 
 	if (name != NULL && name[0] == '/') {
-		if (strlcpy(buffer, name, strlen(name)) >= bufferSize)
+		if (strlcpy(buffer, name, bufferSize) >= bufferSize)
 			return B_BUFFER_OVERFLOW;
-	
+
 		return B_OK;
 	}
 
@@ -608,6 +610,9 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 	if (fd < 0)
 		return B_FILE_ERROR;
 
+	if (_is_attr_dir_fd(fd))
+		return _read_attr_dir(fd, buffer, bufferSize, maxCount);
+
 	struct linux_dirent64 {
 		ino64_t        d_ino;
 		off64_t        d_off;
@@ -629,8 +634,8 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 		return BKernelPrivate::posixError(errno);
 	}
 
-	int i = 0;
-	int pos = 0;
+	uint32 i = 0;
+	ssize_t pos = 0;
 	while (pos < ret && i < maxCount) {
 		struct linux_dirent64* dir = (struct linux_dirent64 *) ((char*)direntBuffer + pos);
 		buffer[i].d_ino = dir->d_ino;
@@ -640,7 +645,7 @@ _kern_read_dir(int fd, struct dirent* buffer, size_t bufferSize, uint32 maxCount
 		if (strlcpy(buffer[i].d_name, dir->d_name, sizeof(buffer[i].d_name))
 				> sizeof(buffer[i].d_name)) {
 			free(direntBuffer);
-			close(dirfd);
+			close(fd);
 			return B_BUFFER_OVERFLOW;
 		}
 
@@ -706,6 +711,9 @@ _kern_rewind_dir(int fd)
 
 	if (fd < 0)
 		return B_FILE_ERROR;
+
+	if (_is_attr_dir_fd(fd))
+		return _rewind_attr_dir(fd);
 
 	return _kern_seek(fd, 0, SEEK_SET);
 }

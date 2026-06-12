@@ -32,14 +32,6 @@ static std::map<int, attr_dir*> sAttrDirs;
 static int sNextAttrDirFd = 10000;  // Start high to avoid conflicts
 static pthread_mutex_t sAttrDirMutex = PTHREAD_MUTEX_INITIALIZER;
 
-static DIR*
-open_attr_dir(int fd, const char* path,
-		bool traverseLeafLink) {
-	UNIMPLEMENTED();
-	return NULL;
-}
-
-
 extern "C" DIR*
 fs_open_attr_dir(const char* path)
 {
@@ -479,4 +471,15 @@ _kern_rename_attr(int fromFile, const char* fromName,
 		return B_ERROR;
 
 	return B_OK;
+}
+
+
+// Attributes live in xattrs (user.*) on the build host, not in a sidecar
+// directory; rm_attrs's parallel-directory cleanup is a no-op. The unlink
+// of the file itself removes its xattrs.
+extern "C" bool
+__get_attribute_dir_path(const struct stat* /*st*/, const char* /*path*/,
+	char* /*buffer*/)
+{
+	return false;
 }

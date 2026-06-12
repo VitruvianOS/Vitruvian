@@ -34,7 +34,8 @@ main()
 	// clo_exec
 	int fd = open("/tmp/vreftest.txt", O_RDONLY | O_CLOEXEC);
 
-	vref_id id = create_vref(fd);
+	vref_key fatherKey = 0;
+	vref_id id = create_vref(fd, &fatherKey);
 	printf("created vref %d\n", id);
 
 	if (id < 0)
@@ -53,12 +54,13 @@ main()
         printf("Hello from the child process! PID: %d\n", getpid());
         // The fd inherits the same permissions as the one in the father
         printf("child acquire %d\n", id);
-		status_t acq = acquire_vref(id);
+		vref_key childKey = 0;
+		status_t acq = acquire_vref(id, &childKey);
 		if (acq != B_OK) {
 			printf("FAIL: acquire_vref child: %s\n", strerror(acq));
 			return -1;
 		}
-		int clone_fd = open_vref(id);
+		int clone_fd = open_vref(id, childKey);
 		if (clone_fd < 0) {
 			printf("FAIL: open_vref child: %s\n", strerror(clone_fd));
 			return -1;
@@ -67,7 +69,7 @@ main()
 		readfd(clone_fd);
 		close(clone_fd);
 
-		status_t ret = release_vref(id);
+		status_t ret = release_vref(id, childKey);
 		if (ret != B_OK)
 			printf("FAIL: release_vref child: %s\n", strerror(ret));
 
@@ -78,11 +80,12 @@ main()
     }
 	snooze(1000);
 	close(fd);
-	status_t ret = release_vref(id);
+	status_t ret = release_vref(id, fatherKey);
 	if (ret != B_OK)
 		printf("FAIL: release_vref father: %s\n", strerror(ret));
 
-	status_t acq = acquire_vref(id);
+	vref_key extraKey = 0;
+	status_t acq = acquire_vref(id, &extraKey);
 	if (acq == B_OK)
 		printf("FAIL: acquire_vref should fail after full release\n");
 

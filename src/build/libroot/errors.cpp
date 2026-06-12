@@ -11,7 +11,6 @@
 
 using namespace std;
 
-static map<int, int> sToHaikuErrorMap;
 static map<int, int> sToHostErrorMap;
 static bool sErrorMapsInitialized = false;
 
@@ -23,7 +22,6 @@ init_error_map()
 		return;
 
 	#define ADD_ERROR(error) \
-		sToHaikuErrorMap[error] = HAIKU_##error; \
 		sToHostErrorMap[HAIKU_##error] = error;
 
 	ADD_ERROR(E2BIG);
@@ -161,19 +159,6 @@ to_host_error(int error)
 
 	map<int, int>::iterator it = sToHostErrorMap.find(error);
 	return (it != sToHostErrorMap.end() ? it->second : error);
-}
-
-// to_haiku_error
-static int
-to_haiku_error(int error)
-{
-	init_error_map();
-
-	map<int, int>::iterator it = sToHaikuErrorMap.find(error);
-	if (it != sToHaikuErrorMap.end())
-		return it->second;
-
-	return (error > 0 ? -error : error);
 }
 
 // _haiku_build_strerror

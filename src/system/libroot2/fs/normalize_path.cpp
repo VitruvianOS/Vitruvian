@@ -36,22 +36,6 @@ stack_append(char dst[B_PATH_NAME_LENGTH], size_t *dst_len, const char *src, siz
 }
 
 
-// Ensure trailing slash exists in dst unless dst == "/"
-static status_t
-stack_ensure_trailing_slash(char dst[B_PATH_NAME_LENGTH], size_t *dst_len)
-{
-	if (!dst || !dst_len)
-		return -EINVAL;
-	if (*dst_len == 1 && dst[0] == '/')
-		return 0;
-	if (*dst_len == 0)
-		return stack_append(dst, dst_len, "/", 1);
-	if (dst[*dst_len - 1] == '/')
-		return 0;
-	return stack_append(dst, dst_len, "/", 1);
-}
-
-
 // Pop last component from dst; keep "/" if root
 static void
 stack_pop_last_component(char dst[B_PATH_NAME_LENGTH], size_t *dst_len)

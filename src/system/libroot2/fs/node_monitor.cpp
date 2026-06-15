@@ -14,6 +14,7 @@
 #include "../kernel/nexus/nexus/nexus.h"
 #include "../kernel/nexus/nexus/node_monitor.h"
 #include "Team.h"
+#include <VRefCache.h>
 
 
 static bool
@@ -52,7 +53,7 @@ _kern_start_watching(dev_t device, ino_t node, uint32 flags,
 	if (device != get_vref_dev())
 		return B_BAD_VALUE;
 
-	int nodeFD = open_vref(node);
+	int nodeFD = BPrivate::VRefCache::Open(node);
 	if (nodeFD < 0)
 		return B_BAD_VALUE;
 

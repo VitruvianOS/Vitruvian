@@ -606,9 +606,26 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 	if (!BKernelPrivate::file_exists(sysPath))
 		return B_ENTRY_NOT_FOUND;
 
-	int partCount = deviceOnly ? BKernelPrivate::count_partitions(devName) : 0;
-	size_t needed = sizeof(user_disk_device_data) + 
-		partCount * sizeof(user_partition_data);
+	// Only enumerate children when the caller actually asked for the full
+	// tree (deviceOnly == false). The previous code had this inverted, which
+	// caused BPartition::_Unset to walk an uninitialised children[] array
+	// and segfault.
+	int partCount = deviceOnly ? 0 : BKernelPrivate::count_partitions(devName);
+
+	// GPT caps at 128 partitions; clamp paranoidly to keep the allocation
+	// bounded if count_partitions ever returns nonsense.
+	if (partCount < 0)
+		partCount = 0;
+	if (partCount > 128)
+		partCount = 128;
+
+	// user_partition_data carries children[1] as a flexible array; for N
+	// children we need (N-1) more pointer slots laid out immediately after
+	// the parent struct, before the child user_partition_data array.
+	size_t childPtrExtra = (partCount > 0)
+		? (partCount - 1) * sizeof(user_partition_data*) : 0;
+	size_t needed = sizeof(user_disk_device_data) + childPtrExtra
+		+ partCount * sizeof(user_partition_data);
 
 	if (neededSize)
 		*neededSize = needed;
@@ -632,26 +649,37 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 	buffer->device_partition_data.child_count = partCount;
 
 	if (partCount > 0) {
-		strlcpy(buffer->device_partition_data.content_type, "Intel Partition Map",
-			sizeof(buffer->device_partition_data.content_type));
-	}
+		free(buffer->device_partition_data.content_type);
+		buffer->device_partition_data.content_type
+			= strdup("Intel Partition Map");
 
-	if (!deviceOnly && partCount > 0) {
 		user_partition_data* partData = (user_partition_data*)
-			((char*)buffer + sizeof(user_disk_device_data));
+			((char*)buffer + sizeof(user_disk_device_data) + childPtrExtra);
 
+		// Only publish children that actually populated. Failed lookups are
+		// skipped instead of leaving a zero-memset struct dangling off
+		// children[i], which would crash BPartition::_SetTo downstream.
+		int published = 0;
 		for (int i = 0; i < partCount; i++) {
 			char partName[NAME_MAX];
-			if (BKernelPrivate::get_partition_name(devName, i, partName, sizeof(partName))) {
-				char partDevPath[PATH_MAX];
-				char partSysPath[PATH_MAX];
-				snprintf(partDevPath, sizeof(partDevPath), "/dev/%s", partName);
-				snprintf(partSysPath, sizeof(partSysPath), "%s/%s/%s", 
-					SYS_BLOCK_PATH, devName, partName);
-
-				fill_partition_info(partDevPath, partSysPath, &partData[i], false, i);
+			if (!BKernelPrivate::get_partition_name(devName, i, partName,
+					sizeof(partName))) {
+				continue;
 			}
+
+			char partDevPath[PATH_MAX];
+			char partSysPath[PATH_MAX];
+			snprintf(partDevPath, sizeof(partDevPath), "/dev/%s", partName);
+			snprintf(partSysPath, sizeof(partSysPath), "%s/%s/%s",
+				SYS_BLOCK_PATH, devName, partName);
+
+			fill_partition_info(partDevPath, partSysPath, &partData[published],
+				false, published);
+			buffer->device_partition_data.children[published] =
+				&partData[published];
+			published++;
 		}
+		buffer->device_partition_data.child_count = published;
 	}
 
 	return B_OK;

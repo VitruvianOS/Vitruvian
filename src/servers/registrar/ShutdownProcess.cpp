@@ -4,6 +4,7 @@
  * Copyright 2006-2008, Stephan Aßmus.
  * Copyright 2006, Ryan Leavengood.
  * Copyright 2021, Jacob Secunda.
+ * Copyright 2026, Dario Casalinuovo.
  *
  * Distributed under the terms of the MIT License.
  */
@@ -1206,12 +1207,13 @@ ShutdownProcess::_ShutDown()
 		msg.AddBool("reboot", fReboot);
 		ssize_t size = msg.FlattenedSize();
 		char* buf = new char[size];
-		if (msg.Flatten(buf, size) == B_OK) {
-			write_port(janusPort, 0, buf, size);
-			delete[] buf;
-			return B_OK;
-		}
+		status_t flatErr = msg.Flatten(buf, size);
+		status_t writeErr = B_BAD_PORT_ID;
+		if (flatErr == B_OK)
+			writeErr = write_port(janusPort, 0, buf, size);
 		delete[] buf;
+		if (flatErr == B_OK && writeErr == B_OK)
+			return B_OK;
 	}
 
 	PRINT("janus unreachable, invoking _kern_shutdown(%d) directly\n", fReboot);
@@ -1736,6 +1738,16 @@ ShutdownProcess::_QuitNonApps()
 	PRINT("ShutdownProcess::_QuitNonApps()\n");
 
 	_SetShutdownWindowText(B_TRANSLATE("Asking other processes to quit."));
+
+	// janus owns B_LAUNCH_DAEMON_PORT_NAME and must outlive every other
+	// non-vital team so _ShutDown() can hand off the final
+	// B_REG_SHUTDOWN_FINISHED message.
+	port_id launchPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+	if (launchPort >= 0) {
+		port_info launchInfo;
+		if (get_port_info(launchPort, &launchInfo) == B_OK)
+			fVitalSystemApps.Add(launchInfo.team);
+	}
 
 	// iterate through the remaining teams and send them the TERM signal
 	int32 cookie = 0;

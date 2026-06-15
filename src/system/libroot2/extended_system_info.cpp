@@ -7,6 +7,7 @@
 #include <extended_system_info.h>
 
 #include <util/KMessage.h>
+#include <VRefCache.h>
 
 
 namespace BPrivate {
@@ -62,7 +63,7 @@ get_extended_team_info(team_id teamID, uint32 flags, KMessage& info)
 	if (fd < 0)
 		return B_ERROR;
 
-	vref_id vref = create_vref(fd);
+	vref_id vref = BPrivate::VRefCache::AcquireFromFd(fd);
 	close(fd);
 	if (vref < 0)
 		return B_ERROR;

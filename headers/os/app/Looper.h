@@ -142,8 +142,6 @@ private:
 			void			_AddMessagePriv(BMessage* msg);
 	static	status_t		_task0_(void* arg);
 
-			void*			ReadRawFromPort(int32* code,
-								bigtime_t timeout = B_INFINITE_TIMEOUT);
 			BMessage*		ReadMessageFromPort(
 								bigtime_t timeout = B_INFINITE_TIMEOUT);
 	virtual	BMessage*		ConvertToMessage(void* raw, int32 code);

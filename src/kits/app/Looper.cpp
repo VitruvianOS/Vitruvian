@@ -1,5 +1,6 @@
 /*
  * Copyright 2001-2015 Haiku, Inc. All rights reserved
+ * Copyright 2026, Dario Casalinuovo.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -7,6 +8,7 @@
  *		Axel Dörfler, axeld@pinc-software.de
  *		Erik Jaesler, erik@cgsoftware.com
  *		Ingo Weinhold, bonefish@@users.sf.net
+ *		Dario Casalinuovo
  */
 
 
@@ -32,6 +34,7 @@
 #include <DirectMessageTarget.h>
 #include <LooperList.h>
 #include <MessagePrivate.h>
+#include <VRefCache.h>
 #include <TokenSpace.h>
 
 
@@ -1098,42 +1101,6 @@ BLooper::_task0_(void* arg)
 }
 
 
-void*
-BLooper::ReadRawFromPort(int32* msgCode, bigtime_t timeout)
-{
-	PRINT(("BLooper::ReadRawFromPort()\n"));
-	uint8* buffer = NULL;
-	ssize_t bufferSize;
-
-	do {
-		bufferSize = port_buffer_size_etc(fMsgPort, B_RELATIVE_TIMEOUT,
-			timeout);
-	} while (bufferSize == B_INTERRUPTED);
-
-	if (bufferSize < B_OK) {
-		PRINT(("BLooper::ReadRawFromPort(): failed: %ld\n", bufferSize));
-		return NULL;
-	}
-
-	if (bufferSize > 0)
-		buffer = (uint8*)malloc(bufferSize);
-
-	PRINT(("read_port()...\n"));
-	bufferSize = read_port_etc(fMsgPort, msgCode, buffer, bufferSize,
-		B_RELATIVE_TIMEOUT, 0);
-
-	if (bufferSize < B_OK) {
-		free(buffer);
-		return NULL;
-	}
-
-	PRINT(("BLooper::ReadRawFromPort() read: %.4s, %p (%d bytes)\n",
-		(char*)msgCode, buffer, (int)bufferSize));
-
-	return buffer;
-}
-
-
 BMessage*
 BLooper::ReadMessageFromPort(bigtime_t timeout)
 {
@@ -1141,12 +1108,81 @@ BLooper::ReadMessageFromPort(bigtime_t timeout)
 	int32 msgCode;
 	BMessage* message = NULL;
 
-	void* buffer = ReadRawFromPort(&msgCode, timeout);
-	if (buffer == NULL)
+	// read_port_with_caps so vrefs come back as (id, key) pairs we can
+	// AdoptCaps before Unflatten sees the bytes. Grow cap+message
+	// buffers on B_BUFFER_OVERFLOW.
+	ssize_t bufferSize;
+	do {
+		bufferSize = port_buffer_size_etc(fMsgPort, B_RELATIVE_TIMEOUT,
+			timeout);
+	} while (bufferSize == B_INTERRUPTED);
+	if (bufferSize < B_OK) {
+		PRINT(("BLooper::ReadMessageFromPort(): port_buffer_size_etc "
+			"failed: %ld\n", bufferSize));
 		return NULL;
+	}
+
+	void* buffer = NULL;
+	if (bufferSize > 0)
+		buffer = malloc(bufferSize);
+
+	port_cap_out stackCaps[8];
+	port_cap_out* caps = stackCaps;
+	size_t capsCapacity = sizeof(stackCaps) / sizeof(stackCaps[0]);
+	size_t actualBytes;
+	size_t actualCaps;
+	ssize_t readResult;
+	for (;;) {
+		actualBytes = bufferSize;
+		actualCaps = capsCapacity;
+		readResult = read_port_with_caps(fMsgPort, &msgCode, buffer,
+			&actualBytes, caps, &actualCaps, B_RELATIVE_TIMEOUT, 0);
+		if (readResult == B_INTERRUPTED)
+			continue;
+		if (readResult != B_BUFFER_OVERFLOW)
+			break;
+		// The kernel tells us how much more it needs. Reallocate.
+		if (actualCaps > capsCapacity) {
+			if (caps != stackCaps)
+				free(caps);
+			caps = (port_cap_out*)malloc(actualCaps * sizeof(port_cap_out));
+			if (caps == NULL) {
+				free(buffer);
+				return NULL;
+			}
+			capsCapacity = actualCaps;
+		}
+		if (actualBytes > (size_t)bufferSize) {
+			free(buffer);
+			buffer = malloc(actualBytes);
+			if (buffer == NULL) {
+				if (caps != stackCaps) free(caps);
+				return NULL;
+			}
+			bufferSize = (ssize_t)actualBytes;
+		}
+	}
+
+	if (readResult < B_OK) {
+		free(buffer);
+		if (caps != stackCaps) free(caps);
+		return NULL;
+	}
+
+	// Adopt cap-borne (id, key) pairs into VRefCache so subsequent
+	// VRefCache::Open / Release calls work. Keys stay inside the cache.
+	BPrivate::VRefCache::AdoptCaps(caps, actualCaps);
+
+	// Stamp CAPS_ADOPTED on the outer + every nested message_header so
+	// Unflatten skips the OWNS_VREFS acquire pass (caps already adopted).
+	if (actualCaps > 0 && buffer != NULL)
+		BMessage::Private::PatchAdoptedFlagsRec(buffer, actualBytes);
 
 	message = ConvertToMessage(buffer, msgCode);
+
 	free(buffer);
+	if (caps != stackCaps)
+		free(caps);
 
 	PRINT(("BLooper::ReadMessageFromPort() done: %p\n", message));
 	return message;

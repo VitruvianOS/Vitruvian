@@ -1,8 +1,9 @@
 #!/bin/sh
 
 # Shared cleanup for all loop-device image builders (create_raw, create_raspberry, create_uboot_board).
-# Reads globals: _mnt, _loop, _udisks_rule — all set before the trap is armed.
+# Reads globals: _mnt, _loop — set before the trap is armed.
 _loop_image_cleanup() {
+    sudo umount -l "$_mnt/var/cache/apt/archives" 2>/dev/null || true
     sudo umount -l "$_mnt/dev/pts"       2>/dev/null || true
     sudo umount -l "$_mnt/dev"           2>/dev/null || true
     sudo umount -l "$_mnt/sys"           2>/dev/null || true
@@ -15,6 +16,7 @@ _loop_image_cleanup() {
 }
 
 _iso_cleanup() {
+    sudo umount -l "$_chroot_dir/var/cache/apt/archives" 2>/dev/null || true
     sudo umount -l "$_chroot_dir/proc/" 2>/dev/null || true
     sudo umount -l "$_chroot_dir/tmp/"  2>/dev/null || true
 }
@@ -52,6 +54,25 @@ create_raw() {
     mkdir -p "$_basedir/output"
     mkdir -p "$_host_shared"
 
+    # Detach any loop devices that previous runs left attached to the same
+    # raw file (kill -9 / closed terminal bypassing the EXIT trap, or
+    # udisks held it open). Writing through a fresh qemu-img create while
+    # a stale loop is still open silently corrupts the new FS.
+    if [ -f "$_raw" ]; then
+        for _stale in $(sudo losetup -j "$_raw" -O NAME --noheadings 2>/dev/null); do
+            log_warn "Detaching stale loop device $_stale"
+            # Unmount everything attached to this loop, including udisks's
+            # /run/media mounts. Sort reverse so children unmount first.
+            for _mp in $(awk -v dev="$_stale" '$1 ~ dev {print $2}' /proc/mounts \
+                    | sort -r); do
+                sudo umount -l "$_mp" 2>/dev/null || true
+            done
+            sudo losetup -d "$_stale" 2>/dev/null || true
+        done
+    fi
+    sudo umount -l "$_mnt/boot/efi" 2>/dev/null || true
+    sudo umount -l "$_mnt"          2>/dev/null || true
+
     log_step "Creating RAW image..."
     qemu-img create "$_raw" 4G
 
@@ -62,7 +83,7 @@ create_raw() {
     sudo parted --script "$_loop" mklabel gpt
     sudo parted --script "$_loop" mkpart ESP fat32 1MiB 513MiB
     sudo parted --script "$_loop" set 1 esp on
-    sudo parted --script "$_loop" mkpart primary xfs 513MiB 100%
+    sudo parted --script "$_loop" mkpart primary ext4 513MiB 100%
     sudo partprobe "$_loop"
     sudo udevadm settle
 
@@ -70,7 +91,25 @@ create_raw() {
     _root_part="${_loop}p2"
 
     sudo mkfs.vfat -F32 "$_efi_part"
-    sudo mkfs.xfs -f "$_root_part"
+    # -I 512: more inline xattr headroom (~350 bytes vs ~100 with default
+    # 256-byte inodes), so BeOS-style small attrs land inline without spilling.
+    # ea_inode: per-xattr spillover into dedicated inodes up to 64KB each,
+    # removing the 4KB shared-block ceiling.
+    # ^64bit / ^orphan_file / ^metadata_csum_seed / ^casefold / ^encrypt /
+    # ^verity: turn off ext4 features that GRUB 2.12's ext2 driver doesn't
+    # cleanly handle in combination with 512-byte inodes + ea_inode. With
+    # 64bit on, GRUB's search --fs-uuid silently fails to locate root, $root
+    # stays as the ESP, and ($root)/vmlinuz then "doesn't exist" — exactly
+    # the symptom the user spent a day chasing. All exclusions must live in
+    # ONE -O argument or Debian's mke2fs.conf re-enables them.
+    sudo mkfs.ext4 -F -I 512 \
+        -O ^64bit,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
+        -L vitruvian-root "$_root_part"
+
+    _esp_uuid=$(sudo blkid -s UUID -o value "$_efi_part")
+    _root_uuid=$(sudo blkid -s UUID -o value "$_root_part")
+    [ -n "$_esp_uuid" ]  || die "Could not read ESP UUID from $_efi_part"
+    [ -n "$_root_uuid" ] || die "Could not read root UUID from $_root_part"
 
     sudo mkdir -p "$_mnt"
     sudo mount "$_root_part" "$_mnt"
@@ -88,8 +127,11 @@ create_raw() {
     sudo mount -t proc proc "$_mnt/proc"
     sudo mount --rbind /sys "$_mnt/sys";  sudo mount --make-rslave "$_mnt/sys"
     sudo mount --rbind /dev "$_mnt/dev";  sudo mount --make-rslave "$_mnt/dev"
+    sudo cp -L /etc/resolv.conf "$_mnt/etc/resolv.conf"
 
     qemu_inject "$_mnt" "$_arch"
+
+    chroot_mount_deb_cache "$_mnt" "$(chroot_cache_dir "$_basedir")"
 
     sudo mkdir -p "$_mnt/localdeb"
     sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
@@ -99,45 +141,121 @@ create_raw() {
 
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
-apt remove -y vos nexus-dkms || true
+
+# Hide host EFI variables from any package post-install that might call
+# efibootmgr — without this, the rbound /sys exposes host NVRAM.
+umount /sys/firmware/efi/efivars 2>/dev/null || true
+
+apt-get remove -y vos nexus-dkms 2>/dev/null || true
 apt-get -y purge live-boot live-boot-initramfs-tools 2>/dev/null || true
 rm -f /usr/share/initramfs-tools/hooks/live /usr/share/initramfs-tools/scripts/live*
-apt-get update
-apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_raw_pkgs
+
+apt-get install -y --no-install-recommends $_raw_pkgs
+
+# Re-derive the running kernel version from /lib/modules. linux-image
+# metapackages can land a newer ABI than imagekernelversion.conf knew about.
+_kver=\$(ls -1 /lib/modules | sort -V | tail -1)
+apt-get install -y --no-install-recommends dkms build-essential \"linux-headers-\$_kver\"
+
+# dpkg -i is expected to fail when local debs pull deps the chroot doesn't
+# yet have — apt-get install -f resolves them on the next line.
 dpkg -i /localdeb/*.deb || true
-apt-get install -f -y
-depmod -v $_imagekernelversion
+apt-get install -f -y --no-install-recommends
 
-grub-install --target=$_efi_target --efi-directory=/boot/efi --bootloader-id=debian --recheck
+depmod -v \"\$_kver\"
+
+# Ensure /vmlinuz and /initrd.img point at the installed kernel. linux-base
+# normally drops these via dpkg triggers, but when chroot apt activity is
+# weird (e.g. install order, dpkg triggers not fully processed) the
+# symlinks can be missing — and the standalone EFI bootloader resolves
+# (\$root)/vmlinuz, so a missing symlink means \"you need to load the kernel
+# first\" at the GRUB prompt.
+ln -sfn boot/vmlinuz-\$_kver /vmlinuz
+ln -sfn boot/initrd.img-\$_kver /initrd.img
+
+# os-prober would scan host disks via rbound /dev — silence it.
+sed -i '/^GRUB_DISABLE_OS_PROBER=/d' /etc/default/grub
+echo 'GRUB_DISABLE_OS_PROBER=true' >> /etc/default/grub
+sed -i 's/^GRUB_TIMEOUT=[0-9]\\\+/GRUB_TIMEOUT=0/' /etc/default/grub
+sed -i 's|^GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*|GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash loglevel=3 systemd.show_status=0 rd.udev.log_priority=3|' /etc/default/grub
+
+# No grub-install — the EFI loader is built by the host via grub-mkstandalone
+# after the chroot exits (same approach as the ISO). update-grub is still run
+# so /boot/grub/grub.cfg exists for users who later want to edit it.
 update-grub
 
-sed -i 's/GRUB_TIMEOUT=[0-9]\\\+/GRUB_TIMEOUT=0/' /etc/default/grub
-sed -i 's|GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*|GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash loglevel=3 systemd.show_status=0 rd.udev.log_priority=3|' /etc/default/grub
-update-grub
-
-cat > /etc/fstab <<'FSTABEOF'
-/dev/vda2   /         xfs     defaults           0 1
-/dev/vda1   /boot/efi vfat    umask=0077         0 1
-host_shared $_guest_mnt 9p trans=virtio,version=9p2000.L,rw 0 0
+cat > /etc/fstab <<FSTABEOF
+UUID=$_root_uuid /            ext4   defaults,relatime,errors=remount-ro  0 1
+UUID=$_esp_uuid  /boot/efi    vfat   umask=0077,shortname=mixed  0 2
+host_shared      $_guest_mnt  9p     trans=virtio,version=9p2000.L,rw,nofail,x-systemd.device-timeout=1s 0 0
 FSTABEOF
 
 mkdir -p $_guest_mnt
 rm -rf /localdeb"
+
+    case "$_arch" in
+        amd64)   _boot_efi="BOOTX64.EFI" ;;
+        arm64)   _boot_efi="BOOTAA64.EFI" ;;
+        riscv64) _boot_efi="BOOTRISCV64.EFI" ;;
+    esac
+
+    log_step "Building standalone EFI bootloader ($_efi_target)..."
+    mkdir -p "$_basedir/image_tree/scratch"
+    cat > "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" <<EOF
+insmod part_gpt
+insmod fat
+insmod ext2
+insmod search
+insmod search_fs_uuid
+insmod linux
+insmod normal
+insmod all_video
+insmod gfxterm
+set timeout=1
+search --no-floppy --fs-uuid --set=root $_root_uuid
+menuentry "Vitruvian" {
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3
+    initrd (\$root)/initrd.img
+}
+EOF
+
+    case "$_arch" in
+        amd64)
+            require_cmd grub-mkstandalone grub-common
+            grub-mkstandalone \
+                --format="$_efi_target" \
+                --output="$_basedir/image_tree/scratch/$_boot_efi" \
+                --locales="" --fonts="" \
+                "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
+            ;;
+        arm64|riscv64)
+            sudo mkdir -p "$_mnt/scratch"
+            sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" "$_mnt/scratch/grub.cfg"
+            sudo chroot "$_mnt" /usr/bin/grub-mkstandalone \
+                --directory="/usr/lib/grub/$_efi_target" \
+                --format="$_efi_target" \
+                --output="/scratch/$_boot_efi" \
+                --locales="" --fonts="" \
+                "boot/grub/grub.cfg=/scratch/grub.cfg"
+            sudo cp "$_mnt/scratch/$_boot_efi" "$_basedir/image_tree/scratch/$_boot_efi"
+            sudo rm -rf "$_mnt/scratch"
+            ;;
+    esac
+
+    sudo mkdir -p "$_mnt/boot/efi/EFI/BOOT"
+    sudo cp "$_basedir/image_tree/scratch/$_boot_efi" "$_mnt/boot/efi/EFI/BOOT/$_boot_efi"
+
+    # Remove the /EFI/debian/ tree that grub-efi-amd64's postinst dropped.
+    # Keeping it around lets OVMF persist a Boot#### entry pointing at
+    # that stale binary on first run; subsequent boots then ignore our
+    # standalone at /EFI/BOOT/BOOTX64.EFI and fail with "vmlinuz not found".
+    sudo rm -rf "$_mnt/boot/efi/EFI/debian" "$_mnt/boot/efi/EFI/Debian"
 
     qemu_eject "$_mnt" "$_arch"
 
     sudo umount -l "$_mnt/dev"  2>/dev/null || true
     sudo umount -l "$_mnt/proc" 2>/dev/null || true
     sudo umount -l "$_mnt/sys"  2>/dev/null || true
-
-    case "$_arch" in
-        amd64)   _boot_efi="BOOTX64.EFI";     _src_efi="grubx64.efi" ;;
-        arm64)   _boot_efi="BOOTAA64.EFI";    _src_efi="grubaa64.efi" ;;
-        riscv64) _boot_efi="BOOTRISCV64.EFI"; _src_efi="grubriscv64.efi" ;;
-    esac
-
-    sudo mkdir -p "$_mnt/boot/efi/EFI/BOOT"
-    sudo cp "$_mnt/boot/efi/EFI/debian/$_src_efi" "$_mnt/boot/efi/EFI/BOOT/$_boot_efi"
 
     sudo umount -l "$_mnt/boot/efi" 2>/dev/null || true
     sudo umount -l "$_mnt"          2>/dev/null || true
@@ -180,6 +298,8 @@ create_iso() {
     sudo mount -t proc proc "$_chroot_dir/proc/"
 
     qemu_inject "$_chroot_dir" "$_arch"
+
+    chroot_mount_deb_cache "$_chroot_dir" "$(chroot_cache_dir "$_basedir")"
 
     if [ -f "$_basedir/image_tree/image/live/filesystem.squashfs" ]; then
         log_info "Removing previous squashfs image..."
@@ -251,7 +371,7 @@ set default="0"
 set timeout=1
 set hidden_timeout=0
 menuentry "Vitruvian Live" {
-    linux /vmlinuz boot=live quiet splash
+    linux /vmlinuz boot=live quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3
     initrd /initrd
 }
 EOF
@@ -313,6 +433,10 @@ EOF
     cd "$_saved_pwd"
 
     log_step "Generating ISO..."
+    # ESP is published as a real GPT partition (visible to strict UEFI per
+    # issue #186) and El Torito's EFI alt-boot references that same partition
+    # via --interval:appended_partition_2 — so there is exactly one ESP on
+    # the image, not a duplicate embedded inside the ISO9660 tree.
     if [ "$_arch" = "amd64" ]; then
         xorriso \
             -as mkisofs \
@@ -327,31 +451,31 @@ EOF
                 --eltorito-catalog boot/grub/boot.cat \
             --grub2-boot-info \
             --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
+            -append_partition 2 0xef "$_basedir/image_tree/scratch/efiboot.img" \
+            -appended_part_as_gpt \
             -eltorito-alt-boot \
-            -e EFI/efiboot.img \
+            -e '--interval:appended_partition_2:all::' \
             -no-emul-boot \
             -isohybrid-gpt-basdat \
-            -append_partition 2 0xef "$_basedir/image_tree/scratch/efiboot.img" \
             -output "$_basedir/output/vitruvian-custom.iso" \
             -graft-points \
                 "$_basedir/image_tree/image" \
-                /boot/grub/bios.img="$_basedir/image_tree/scratch/bios.img" \
-                /EFI/efiboot.img="$_basedir/image_tree/scratch/efiboot.img"
+                /boot/grub/bios.img="$_basedir/image_tree/scratch/bios.img"
     else
         xorriso \
             -as mkisofs \
             -iso-level 3 \
             -full-iso9660-filenames \
             -volid "VITRUVIAN_CUSTOM" \
+            -append_partition 2 0xef "$_basedir/image_tree/scratch/efiboot.img" \
+            -appended_part_as_gpt \
             -eltorito-alt-boot \
-            -e EFI/efiboot.img \
+            -e '--interval:appended_partition_2:all::' \
             -no-emul-boot \
             -isohybrid-gpt-basdat \
-            -append_partition 2 0xef "$_basedir/image_tree/scratch/efiboot.img" \
             -output "$_basedir/output/vitruvian-custom.iso" \
             -graft-points \
-                "$_basedir/image_tree/image" \
-                /EFI/efiboot.img="$_basedir/image_tree/scratch/efiboot.img"
+                "$_basedir/image_tree/image"
     fi
 
     log_info "ISO created: $_basedir/output/vitruvian-custom.iso"
@@ -373,18 +497,33 @@ id -u $_user >/dev/null 2>&1 || useradd -m -s /bin/bash $_user
 echo '$_user:$_pass' | chpasswd
 adduser $_user sudo 2>/dev/null || true
 
-cat > /etc/apt/sources.list <<'SRCEOF'
-deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
-deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
-SRCEOF
-
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<'LOGEOF'
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --noissue --autologin $_user %I \$TERM
 TTYVTDisallocate=no
-LOGEOF"
+LOGEOF
+
+# Mask units that are noisy on QEMU / Vitruvian and provide no value:
+#  - systemd-remount-fs: we boot rw via cmdline, nothing to remount.
+#  - systemd-ssh-generator: pokes AF_VSOCK CIDs that don't exist under
+#    qemu user-mode networking; emits an error every boot.
+#  - dev-hugepages/dev-mqueue/sys-fs-fuse-connections/sys-kernel-{config,debug,tracing}:
+#    kernel pseudo-FS that this kernel build does not expose; the static
+#    mount units fail every boot for no reason. Masking is the upstream
+#    recommendation when the FS isn't available.
+for _u in \\
+    systemd-remount-fs.service \\
+    systemd-ssh-generator.service \\
+    dev-hugepages.mount \\
+    dev-mqueue.mount \\
+    sys-fs-fuse-connections.mount \\
+    sys-kernel-config.mount \\
+    sys-kernel-debug.mount \\
+    sys-kernel-tracing.mount; do
+    systemctl mask \"\$_u\" 2>/dev/null || true
+done"
 }
 
 create_raspberry() {
@@ -434,6 +573,7 @@ create_raspberry() {
     sudo mount --bind /dev "$_mnt/dev"
     sudo mount --bind /proc "$_mnt/proc"
     sudo mount --bind /sys "$_mnt/sys"
+    sudo cp -L /etc/resolv.conf "$_mnt/etc/resolv.conf"
 
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
@@ -603,6 +743,7 @@ create_uboot_board() {
     sudo mount --bind /dev "$_mnt/dev"
     sudo mount --bind /proc "$_mnt/proc"
     sudo mount --bind /sys "$_mnt/sys"
+    sudo cp -L /etc/resolv.conf "$_mnt/etc/resolv.conf"
 
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."

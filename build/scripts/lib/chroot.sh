@@ -24,6 +24,16 @@ qemu_eject() {
     sudo rm -f "$_chroot_dir/usr/bin/$_qemu_name" 2>/dev/null || true
 }
 
+# Debian mirror used by debootstrap and apt inside the chroot. Override
+# by exporting DEBIAN_MIRROR before invoking setupenv / bake.
+: "${DEBIAN_MIRROR:=http://deb.debian.org/debian/}"
+
+# Persistent .deb cache shared across chroot regenerations. Path is per
+# arch (laid down by setupenv); same arch == same cache.
+chroot_cache_dir() {
+    echo "$1/deb"
+}
+
 chroot_mount() {
     _chroot_dir="$1"
     [ -d "$_chroot_dir" ] || die "Chroot directory not found: $_chroot_dir"
@@ -42,16 +52,39 @@ chroot_mount() {
         sudo mount --make-rslave "$_chroot_dir/dev"
     fi
 
+    # Provision DNS so `apt update` inside the chroot can reach the mirrors.
+    # -L dereferences the host's systemd-resolved stub symlink.
+    sudo mkdir -p "$_chroot_dir/etc"
+    sudo cp -L /etc/resolv.conf "$_chroot_dir/etc/resolv.conf"
 }
 
 chroot_umount() {
     _chroot_dir="$1"
     [ -d "$_chroot_dir" ] || return 0
 
+    sudo umount -l "$_chroot_dir/var/cache/apt/archives" 2>/dev/null || true
     sudo umount -l "$_chroot_dir/proc" 2>/dev/null || true
     sudo umount -l "$_chroot_dir/sys" 2>/dev/null || true
     #sudo umount -l "$_chroot_dir/dev/pts" 2>/dev/null || true
     sudo umount -l "$_chroot_dir/dev" 2>/dev/null || true
+}
+
+# Bind the persistent .deb cache into the chroot. Idempotent.
+chroot_mount_deb_cache() {
+    _chroot_dir="$1"
+    _cache_dir="$2"
+    sudo mkdir -p "$_cache_dir/archives/partial"
+    sudo mkdir -p "$_chroot_dir/var/cache/apt/archives"
+    if ! mountpoint -q "$_chroot_dir/var/cache/apt/archives" 2>/dev/null; then
+        sudo mount --bind "$_cache_dir/archives" \
+            "$_chroot_dir/var/cache/apt/archives"
+    fi
+    # Make apt keep what it downloads (default config drops .debs after
+    # install, defeating the cache). Per-config-file drop so apt-get
+    # update / install honor it without touching the chroot's own conf.
+    sudo mkdir -p "$_chroot_dir/etc/apt/apt.conf.d"
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
+        | sudo tee "$_chroot_dir/etc/apt/apt.conf.d/99-keep-debs" >/dev/null
 }
 
 chroot_create() {
@@ -70,19 +103,37 @@ chroot_create() {
 
     mkdir -p "$_basedir/image_tree"
 
+    _cache_dir="$(chroot_cache_dir "$_basedir")"
+    _debootstrap_cache="$_cache_dir/debootstrap"
+    sudo mkdir -p "$_debootstrap_cache" "$_cache_dir/archives/partial"
+    log_info "Using package cache: $_cache_dir (mirror: $DEBIAN_MIRROR)"
+
     if is_cross_build "$_arch"; then
         log_step "Bootstrapping Debian trixie ($_deb_arch) [foreign]..."
         sudo debootstrap --arch="$_deb_arch" --variant=minbase --foreign \
-            trixie "$_chroot_dir" http://deb.debian.org/debian/
+            --cache-dir="$_debootstrap_cache" \
+            trixie "$_chroot_dir" "$DEBIAN_MIRROR"
         qemu_inject "$_chroot_dir" "$_arch"
     else
         log_step "Bootstrapping Debian trixie ($_deb_arch)..."
         sudo debootstrap --arch="$_deb_arch" --variant=minbase \
-            trixie "$_chroot_dir" http://deb.debian.org/debian/
+            --cache-dir="$_debootstrap_cache" \
+            trixie "$_chroot_dir" "$DEBIAN_MIRROR"
     fi
 
     trap 'chroot_umount "$_chroot_dir"' EXIT
     chroot_mount "$_chroot_dir"
+    chroot_mount_deb_cache "$_chroot_dir" "$_cache_dir"
+
+    # Force apt inside the chroot onto the same mirror so its sources.list
+    # matches what debootstrap used. debootstrap writes a default one
+    # pointing at the mirror, but make it explicit and overridable.
+    : "${DEBIAN_SECURITY_MIRROR:=http://security.debian.org/debian-security}"
+    sudo tee "$_chroot_dir/etc/apt/sources.list" >/dev/null <<EOF
+deb $DEBIAN_MIRROR trixie main contrib non-free non-free-firmware
+deb $DEBIAN_MIRROR trixie-updates main contrib non-free non-free-firmware
+deb $DEBIAN_SECURITY_MIRROR trixie-security main contrib non-free non-free-firmware
+EOF
 
     log_step "Verifying mount points before second-stage..."
     log_info "Checking proc: mountpoint=$(mountpoint -q "$_chroot_dir/proc" 2>/dev/null && echo yes || echo no), stat=$([ -f "$_chroot_dir/proc/1/stat" ] && echo exists || echo missing)"

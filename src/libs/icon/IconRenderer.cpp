@@ -449,6 +449,8 @@ IconRenderer::Render(bool showReferences)
 IconRenderer::Render()
 #endif
 {
+	if (fBitmap == NULL || fBitmap->Bits() == NULL)
+		return;
 #ifdef ICON_O_MATIC
 	_Render(fBitmap->Bounds(), showReferences);
 #else
@@ -464,6 +466,8 @@ IconRenderer::Render(const BRect& area, bool showReferences)
 IconRenderer::Render(const BRect& area)
 #endif
 {
+	if (fBitmap == NULL || fBitmap->Bits() == NULL)
+		return;
 #ifdef ICON_O_MATIC
 	_Render(fBitmap->Bounds() & area, showReferences);
 #else

@@ -673,7 +673,7 @@ BAppFileInfo::GetIconForType(const char* type, BBitmap* icon, icon_size size)
 		bytesRead, &allocatedBuffer);
 	if (error == B_OK) {
 		error = BIconUtils::GetVectorIcon((uint8*)allocatedBuffer,
-										  bytesRead, icon);
+			bytesRead, icon);
 		free(allocatedBuffer);
 		return error;
 	}

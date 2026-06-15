@@ -1,5 +1,6 @@
 /*
  * Copyright 2001-2009, Haiku Inc.
+ * Copyright 2026, Dario Casalinuovo.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -7,6 +8,7 @@
  *		DarkWyrm <bpmagic@columbus.rr.com>
  *		Stephan Aßmus <superstippi@gmx.de>
  *		Axel Dörfler, axeld@pinc-software.de
+ *		Dario Casalinuovo
  */
 
 
@@ -255,8 +257,7 @@ BBitmap::BBitmap(const BBitmap* source, bool acceptsViews, bool needsContiguous)
 			| (needsContiguous ? B_BITMAP_IS_CONTIGUOUS : 0);
 		_InitObject(source->Bounds(), source->ColorSpace(), flags,
 			source->BytesPerRow(), B_MAIN_SCREEN_ID);
-		if (InitCheck() == B_OK && Bits() != NULL
-				&& source->Bits() != NULL) {
+		if (IsValid()) {
 			memcpy(Bits(), source->Bits(), min_c(BitsLength(),
 				source->BitsLength()));
 		}
@@ -285,7 +286,7 @@ BBitmap::BBitmap(const BBitmap& source, uint32 flags)
 	_InitObject(source.Bounds(), source.ColorSpace(), flags,
 		source.BytesPerRow(), B_MAIN_SCREEN_ID);
 
-	if (InitCheck() == B_OK)
+	if (IsValid())
 		memcpy(Bits(), source.Bits(), min_c(BitsLength(), source.BitsLength()));
 }
 
@@ -488,7 +489,10 @@ BBitmap::InitCheck() const
 bool
 BBitmap::IsValid() const
 {
-	return InitCheck() == B_OK;
+	// Trigger the lazy clone first so a failed clone is reflected in
+	// fInitError; otherwise we'd report valid while Bits() is NULL.
+	const_cast<BBitmap*>(this)->_AssertPointer();
+	return InitCheck() == B_OK && fBasePointer != NULL;
 }
 
 
@@ -996,7 +1000,7 @@ BBitmap::operator=(const BBitmap& source)
 
 	_InitObject(source.Bounds(), source.ColorSpace(), source.Flags(),
 		source.BytesPerRow(), B_MAIN_SCREEN_ID);
-	if (InitCheck() == B_OK)
+	if (IsValid())
 		memcpy(Bits(), source.Bits(), min_c(BitsLength(), source.BitsLength()));
 
 	return *this;
@@ -1300,6 +1304,12 @@ BBitmap::_AssertPointer()
 		// already has its data.
 		fArea = clone_area("shared bitmap area", (void**)&fBasePointer,
 			B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, fServerArea);
+		if (fArea < B_OK) {
+			// Clone failed: surface it through fInitError so IsValid()
+			// stops claiming readiness.
+			fBasePointer = NULL;
+			fInitError = fArea;
+		}
 	}
 }
 

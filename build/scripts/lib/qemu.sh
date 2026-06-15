@@ -18,11 +18,18 @@ run_qemu() {
             log_step "Booting RAW image in QEMU ($_qemu_cmd)..."
             case "$_arch" in
                 amd64)
+                    # cache=writethrough: writes hit the backing file in
+                    # order so closing the qemu window (kill -9) never loses
+                    # data the guest thinks was flushed. Slightly slower
+                    # than the writeback default, but stops the
+                    # "reboot/close breaks the image" class of bug.
                     "$_qemu_cmd" \
-                        -m 2048 -smp 2 \
-                        -drive file="$_raw",format=raw,if=virtio \
+                        -m 4096 -cpu host -smp sockets=1,cores=2,threads=2 --enable-kvm \
+                        -drive file="$_raw",format=raw,if=virtio,cache=writethrough \
                         -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
                         -drive if=pflash,format=raw,file="$_basedir/OVMF_VARS.fd" \
+                        -netdev user,id=mynet,hostfwd=tcp::2222-:22 \
+                        -device virtio-net-pci,netdev=mynet \
                         -virtfs local,path="$_host_shared",mount_tag=host_shared,security_model=mapped-xattr,id=host_shared
                     ;;
                 arm64)
@@ -30,8 +37,10 @@ run_qemu() {
                         -m 2048 -smp 2 \
                         -machine virt \
                         -cpu cortex-a72 \
-                        -drive file="$_raw",format=raw,if=virtio \
+                        -drive file="$_raw",format=raw,if=virtio,cache=writethrough \
                         -bios /usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
+                        -netdev user,id=mynet,hostfwd=tcp::2222-:22 \
+                        -device virtio-net-pci,netdev=mynet \
                         -virtfs local,path="$_host_shared",mount_tag=host_shared,security_model=mapped-xattr,id=host_shared
                     ;;
                 arm32)

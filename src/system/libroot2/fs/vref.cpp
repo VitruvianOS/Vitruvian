@@ -13,20 +13,49 @@
 
 
 vref_id
-create_vref(int fd)
+create_vref(int fd, vref_key* outKey)
 {
 	CALLED();
+
+	if (outKey == NULL)
+		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetVRefDescriptor(nullptr);
 	if (nexus < 0)
 		return B_ERROR;
 
-	return nexus_io(nexus, NEXUS_VREF_CREATE, &fd);
+	struct nexus_vref_create req = { fd, 0, 0 };
+	long ret = nexus_io(nexus, NEXUS_VREF_CREATE, &req);
+	if (ret < 0)
+		return (vref_id)ret;
+
+	*outKey = req.key;
+	return req.id;
+}
+
+
+status_t
+acquire_vref(vref_id id, vref_key* outKey)
+{
+	if (id < 0 || outKey == NULL)
+		return B_BAD_VALUE;
+
+	int nexus = BKernelPrivate::Team::GetVRefDescriptor(nullptr);
+	if (nexus < 0)
+		return B_ERROR;
+
+	struct nexus_vref_op req = { id, 0 };
+	long ret = nexus_io(nexus, NEXUS_VREF_ACQUIRE, &req);
+	if (ret < 0)
+		return (status_t)ret;
+
+	*outKey = req.key;
+	return B_OK;
 }
 
 
 int
-open_vref(vref_id id)
+open_vref(vref_id id, vref_key key)
 {
 	CALLED();
 
@@ -37,32 +66,16 @@ open_vref(vref_id id)
 	if (nexus < 0)
 		return B_ERROR;
 
-	return nexus_io(nexus, NEXUS_VREF_OPEN, &id);
-}
-
-status_t
-acquire_vref_etc(vref_id id, int* fd)
-{
-	if (id < 0)
-		return B_BAD_VALUE;
-
-	int nexus = BKernelPrivate::Team::GetVRefDescriptor(nullptr);
-	if (nexus < 0)
-		return B_ERROR;
-
-	int ret = nexus_io(nexus, NEXUS_VREF_ACQUIRE_FD, &id);
-
+	struct nexus_vref_open req = { id, key, 0, -1 };
+	long ret = nexus_io(nexus, NEXUS_VREF_OPEN, &req);
 	if (ret < 0)
-		return ret;
-
-	if (fd != NULL)
-		*fd = ret;
-
-	return B_OK;
+		return (int)ret;
+	return req.fd_out;
 }
 
+
 status_t
-acquire_vref(vref_id id)
+release_vref(vref_id id, vref_key key)
 {
 	if (id < 0)
 		return B_BAD_VALUE;
@@ -71,21 +84,9 @@ acquire_vref(vref_id id)
 	if (nexus < 0)
 		return B_ERROR;
 
-	return nexus_io(nexus, NEXUS_VREF_ACQUIRE, &id);
-}
-
-
-status_t
-release_vref(vref_id id)
-{
-	if (id < 0)
-		return B_BAD_VALUE;
-
-	int nexus = BKernelPrivate::Team::GetVRefDescriptor(nullptr);
-	if (nexus < 0)
-		return B_ERROR;
-
-	return nexus_io(nexus, NEXUS_VREF_RELEASE, &id);
+	struct nexus_vref_op req = { id, key };
+	long ret = nexus_io(nexus, NEXUS_VREF_RELEASE, &req);
+	return (status_t)ret;
 }
 
 

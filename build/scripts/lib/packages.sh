@@ -106,15 +106,21 @@ get_raw_image_packages() {
     _arch="$1"
     case "$_arch" in
         amd64)
+            # grub-common + grub2-common provide update-grub / grub-mkstandalone.
+            # grub-efi-amd64-bin + grub-pc-bin ship the EFI and BIOS modules we embed
+            # via grub-mkstandalone. We intentionally do NOT install the signed grub
+            # or shim — Secure Boot is not required for our QEMU build, and signed
+            # grub's hard-coded /EFI/debian prefix makes it unsuitable as the
+            # /EFI/BOOT/BOOTX64.EFI fallback used by removable-media boot.
             printf '%s' \
                 "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
-                " linux-image-rt-amd64 grub-efi-amd64 grub-efi-amd64-bin" \
-                " grub-efi-amd64-signed shim-signed efibootmgr xfsprogs"
+                " linux-image-rt-amd64 grub-common grub2-common grub-efi-amd64" \
+                " grub-efi-amd64-bin grub-pc-bin xfsprogs"
             ;;
         arm64)
             printf '%s' \
                 "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 grub-efi-arm64 grub-efi-arm64-bin xfsprogs"
+                " linux-image-arm64 grub-common grub2-common grub-efi-arm64 grub-efi-arm64-bin xfsprogs"
             ;;
         arm32)
             printf '%s' \
@@ -124,7 +130,7 @@ get_raw_image_packages() {
         riscv64)
             printf '%s' \
                 "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
-                " linux-image-riscv64 grub-efi-riscv64 grub-efi-riscv64-bin xfsprogs"
+                " linux-image-riscv64 grub-common grub2-common grub-efi-riscv64 grub-efi-riscv64-bin xfsprogs"
             ;;
         *)
             die "No raw image package list for architecture: $_arch"

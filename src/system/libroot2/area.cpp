@@ -331,40 +331,9 @@ find_area(const char* name)
 
 
 status_t
-resize_area(area_id id, size_t newSize)
+resize_area(area_id /*id*/, size_t /*newSize*/)
 {
-	if (id < 0 || newSize == 0)
-		return B_BAD_VALUE;
-
-	BKernelPrivate::LocalArea local;
-	if (!BKernelPrivate::AreaPool::Get().Get(id, local))
-		return B_BAD_VALUE;
-
-	size_t pageSize = sysconf(_SC_PAGESIZE);
-	newSize = (newSize + pageSize - 1) & ~(pageSize - 1);
-
-	if (ftruncate(local.memfd, newSize) < 0)
-		return B_ERROR;
-
-	// Remap but don't invalidate pointers.
-	void* newAddr = mremap(local.address, local.size, newSize, 0);
-	if (newAddr == MAP_FAILED) {
-		// Revert the ftruncate — shrink back to the old size so no pages
-		// are wasted in the underlying memfd.
-		ftruncate(local.memfd, local.size);
-		return B_NO_MEMORY;
-	}
-
-	BKernelPrivate::AreaPool::Get().Update(id, newAddr, newSize);
-
-	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
-	if (nexus < 0)
-		return B_ERROR;
-
-	struct nexus_area_resize resize = { .area = id, .new_size = newSize, .ret = B_OK };
-	if (nexus_io(nexus, NEXUS_AREA_RESIZE, &resize) < 0)
-		return B_ERROR;
-	return resize.ret;
+	return B_NOT_SUPPORTED;
 }
 
 

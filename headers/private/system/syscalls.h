@@ -624,7 +624,7 @@ extern status_t		_kern_stop_watching_disks(port_id port, int32 token);
 // V\OS
 
 extern status_t		_kern_entry_ref_to_path_by_fd(int fd, team_id team,
-						char* name, char* buffer, size_t bufferSize);
+						const char* name, char* buffer, size_t bufferSize);
 extern status_t		_kern_fd_to_path(int fd, team_id team, char* buffer,
 						size_t bufferSize);
 extern int			_kern_open_entry_ref(dev_t device, ino_t inode,

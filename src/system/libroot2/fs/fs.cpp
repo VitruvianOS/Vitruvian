@@ -4,6 +4,7 @@
  */
 
 #include <syscalls.h>
+#include <VRefCache.h>
 
 #include <NodeMonitor.h>
 
@@ -184,7 +185,7 @@ _kern_open_dir_virtual_ref(vref_id id, const char* name)
 	if (id < 0)
 		return B_BAD_VALUE;
 
-	int fd = open_vref(id);
+	int fd = BPrivate::VRefCache::Open(id);
 	if (fd < 0)
 		return fd;
 
@@ -236,7 +237,7 @@ _kern_open_virtual_ref(vref_id id, const char* name,
 	if (id < 0)
 		return B_BAD_VALUE;
 
-	int fd = open_vref(id);
+	int fd = BPrivate::VRefCache::Open(id);
 	if (fd < 0)
 		return fd;
 
@@ -301,7 +302,7 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 		if (id < 0)
 			return B_ENTRY_NOT_FOUND;
 
-		int fd = open_vref(id);
+		int fd = BPrivate::VRefCache::Open(id);
 		if (fd < 0)
 			return fd;
 
@@ -366,7 +367,7 @@ _kern_open_entry_ref_fd(dev_t device, ino_t node, const char* name,
 
 
 status_t
-_kern_entry_ref_to_path_by_fd(int fd, team_id team, char* name,
+_kern_entry_ref_to_path_by_fd(int fd, team_id team, const char* name,
 	char* buffer, size_t bufferSize)
 {
 	// NULL or "." both mean "the fd itself" — "." is the sentinel used by

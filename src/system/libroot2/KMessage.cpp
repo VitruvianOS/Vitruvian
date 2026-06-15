@@ -8,12 +8,17 @@
 #include <util/KMessage.h>
 
 #include <stdlib.h>
+
+#include <vector>
 #include <string.h>
 
 #include <ByteOrder.h>
 #include <Debug.h>
 #include <KernelExport.h>
 #include <TypeConstants.h>
+#ifndef KMESSAGE_NO_VREF_SUPPORT
+#include <VRefCache.h>
+#endif
 
 
 #if defined(_BOOT_MODE) || defined(_LOADER_MODE)
@@ -51,6 +56,59 @@
 
 
 #ifndef KMESSAGE_NO_VREF_SUPPORT
+// Cap collector for KMessage. One port_cap_in per virtual B_REF_TYPE /
+// B_NODE_REF_TYPE element. Caller frees *outCaps.
+static status_t
+_CollectKMessageCaps(const KMessage* message, port_cap_in** outCaps,
+	size_t* outCount)
+{
+	*outCaps = NULL;
+	*outCount = 0;
+
+	dev_t vrefDev = get_vref_dev();
+	if (vrefDev == B_INVALID_DEV)
+		return B_OK;
+
+	std::vector<port_cap_in> caps;
+	KMessageField field;
+	while (message->GetNextField(&field) == B_OK) {
+		type_code type = field.TypeCode();
+		if (type != B_REF_TYPE && type != B_NODE_REF_TYPE)
+			continue;
+		int32 count = field.CountElements();
+		for (int32 i = 0; i < count; i++) {
+			int32 size;
+			const char* data = (const char*)field.ElementAt(i, &size);
+			if (data == NULL
+					|| size < (int32)(sizeof(dev_t) + sizeof(ino_t)))
+				continue;
+			dev_t device;
+			ino_t id_or_node;
+			memcpy(&device, data, sizeof(dev_t));
+			memcpy(&id_or_node, data + sizeof(dev_t), sizeof(ino_t));
+			if (device != vrefDev || id_or_node < 0)
+				continue;
+			port_cap_in cap;
+			cap.kind = B_PORT_CAP_VREF;
+			cap.vref_id_ = (int32)id_or_node;
+			cap.buffer_offset = 0;
+			cap._pad = 0;
+			caps.push_back(cap);
+		}
+	}
+	if (caps.empty())
+		return B_OK;
+
+	port_cap_in* arr = (port_cap_in*)malloc(caps.size() * sizeof(port_cap_in));
+	if (arr == NULL)
+		return B_NO_MEMORY;
+	memcpy(arr, caps.data(), caps.size() * sizeof(port_cap_in));
+	*outCaps = arr;
+	*outCount = caps.size();
+	return B_OK;
+}
+
+
 static void
 _HandleVRefs(const KMessage* message, bool acquire)
 {
@@ -77,9 +135,9 @@ _HandleVRefs(const KMessage* message, bool acquire)
 
 					if (device == vrefDev && directory >= 0) {
 						if (acquire)
-							acquire_vref((vref_id)directory);
+							BPrivate::VRefCache::Acquire((vref_id)directory);
 						else
-							release_vref((vref_id)directory);
+							BPrivate::VRefCache::Release((vref_id)directory);
 					}
 				}
 			}
@@ -97,9 +155,9 @@ _HandleVRefs(const KMessage* message, bool acquire)
 
 					if (device == vrefDev && node >= 0) {
 						if (acquire)
-							acquire_vref((vref_id)node);
+							BPrivate::VRefCache::Acquire((vref_id)node);
 						else
-							release_vref((vref_id)node);
+							BPrivate::VRefCache::Release((vref_id)node);
 					}
 				}
 			}
@@ -613,8 +671,8 @@ KMessage::FindNodeRef(const char* name, int32 index, dev_t* device, ino_t* node)
 		return B_BAD_DATA;
 
 	const char* d = (const char*)data;
-	memcpy(&device, d, sizeof(dev_t));
-	memcpy(&node, d + sizeof(dev_t), sizeof(ino_t));
+	memcpy(device, d, sizeof(dev_t));
+	memcpy(node, d + sizeof(dev_t), sizeof(ino_t));
 	return B_OK;
 }
 
@@ -679,19 +737,25 @@ KMessage::SendTo(port_id targetPort, int32 targetToken, port_id replyPort,
 
 	SetDeliveryInfo(targetToken, replyPort, replyToken, senderTeam);
 
+	port_cap_in* caps = NULL;
+	size_t capsCount = 0;
 #ifndef KMESSAGE_NO_VREF_SUPPORT
 	_HandleVRefs(this, true);
+	_CollectKMessageCaps(this, &caps, &capsCount);
 #endif
 
-	// send the message
-	status_t result;
-	if (timeout < 0)
-		result = write_port(targetPort, 'KMSG', fBuffer, ContentSize());
-	else
-		result = write_port_etc(targetPort, 'KMSG', fBuffer, ContentSize(),
-			B_RELATIVE_TIMEOUT, timeout);
+	bigtime_t effectiveTimeout = (timeout < 0) ? 0 : timeout;
+	uint32 flags = (timeout < 0) ? 0 : B_RELATIVE_TIMEOUT;
+#ifdef KMESSAGE_NO_VREF_SUPPORT
+	status_t result = write_port_etc(targetPort, 'KMSG', fBuffer,
+		ContentSize(), flags, effectiveTimeout);
+#else
+	status_t result = write_port_with_caps(targetPort, 'KMSG', fBuffer,
+		ContentSize(), caps, capsCount, flags, effectiveTimeout);
+#endif
 
 #ifndef KMESSAGE_NO_VREF_SUPPORT
+	free(caps);
 	if (result != B_OK)
 		_HandleVRefs(this, false);
 #endif
@@ -802,20 +866,55 @@ KMessage::ReceiveFrom(port_id fromPort, bigtime_t timeout,
 	if (!buffer)
 		return B_NO_MEMORY;
 
-	// read the message
 	int32 what;
-	ssize_t realSize = read_port_etc(fromPort, &what, buffer, messageInfo->size,
-		B_RELATIVE_TIMEOUT, 0);
+	port_cap_out stackCaps[8];
+	port_cap_out* caps = stackCaps;
+	size_t capsCapacity = sizeof(stackCaps) / sizeof(stackCaps[0]);
+	size_t actualBytes;
+	size_t actualCaps;
+	ssize_t realSize;
+	for (;;) {
+		actualBytes = messageInfo->size;
+		actualCaps = capsCapacity;
+#ifdef KMESSAGE_NO_VREF_SUPPORT
+		actualCaps = 0;
+		realSize = read_port_etc(fromPort, &what, buffer,
+			actualBytes, B_RELATIVE_TIMEOUT, 0);
+#else
+		realSize = read_port_with_caps(fromPort, &what, buffer,
+			&actualBytes, caps, &actualCaps, B_RELATIVE_TIMEOUT, 0);
+#endif
+		if (realSize == B_INTERRUPTED)
+			continue;
+		if (realSize != B_BUFFER_OVERFLOW)
+			break;
+		if (actualCaps > capsCapacity) {
+			if (caps != stackCaps) free(caps);
+			caps = (port_cap_out*)malloc(actualCaps * sizeof(port_cap_out));
+			if (caps == NULL) {
+				free(buffer);
+				return B_NO_MEMORY;
+			}
+			capsCapacity = actualCaps;
+		}
+	}
 	if (realSize < 0) {
+		if (caps != stackCaps) free(caps);
 		free(buffer);
 		return realSize;
 	}
-	if (messageInfo->size != (size_t)realSize) {
+	if (messageInfo->size != actualBytes) {
+		if (caps != stackCaps) free(caps);
 		free(buffer);
 		return B_ERROR;
 	}
 
-	// init the message
+#ifndef KMESSAGE_NO_VREF_SUPPORT
+	BPrivate::VRefCache::AdoptCaps(caps, actualCaps);
+#endif
+	if (caps != stackCaps)
+		free(caps);
+
 	return SetTo(buffer, messageInfo->size, 0,
 		KMESSAGE_OWNS_BUFFER | KMESSAGE_INIT_FROM_BUFFER);
 }

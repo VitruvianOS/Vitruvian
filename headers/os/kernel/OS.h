@@ -47,6 +47,7 @@ typedef int32 sem_id;
 typedef pid_t team_id;
 typedef pid_t thread_id;
 typedef int32 vref_id;
+typedef uint64 vref_key;
 
 #if defined(__cplusplus)
   #define TYPE_ASSERT(expr, msg) static_assert((expr), msg)
@@ -669,12 +670,57 @@ extern ssize_t		wait_for_objects_etc(object_wait_info* infos, int numInfos,
 
 // V\OS API
 
-extern vref_id		create_vref(int fd);
-extern status_t		acquire_vref_etc(vref_id id, int* fd);
-extern status_t		acquire_vref(vref_id id);
-extern int			open_vref(vref_id id);
-extern status_t		release_vref(vref_id id);
+// Keyed vref primitives. Every successful acquire (including create) returns
+// a fresh key bound to a private kernel slot for this team. Release consumes
+// the slot identified by (id, key). Open requires a valid (id, key) owned by
+// the calling team. Losing a key leaks the slot until team exit.
+extern vref_id		create_vref(int fd, vref_key* outKey);
+extern status_t		acquire_vref(vref_id id, vref_key* outKey);
+extern int			open_vref(vref_id id, vref_key key);
+extern status_t		release_vref(vref_id id, vref_key key);
 extern dev_t		get_vref_dev();
+
+// Port capability transport.
+//
+// A cap is a structured side-channel descriptor that travels alongside a
+// port message. Today the only kind is B_PORT_CAP_VREF: the sender names
+// a vref_id it owns; the kernel mints a fresh per-team slot for the
+// receiver and returns the new key in `port_cap_out`. The receiver
+// registers the (id, key) via BPrivate::VRefCache::AdoptCaps before
+// touching the message bytes — no separate acquire round-trip is
+// needed for cross-team handoff.
+//
+// `buffer_offset` is receiver-side bookkeeping (offset within the message
+// buffer where the corresponding wire field lives); the kernel does not
+// interpret message bytes.
+#define B_PORT_CAP_VREF		1
+
+typedef struct port_cap_in {
+	uint32			kind;
+	int32			vref_id_;
+	uint32			buffer_offset;
+	uint32			_pad;
+} port_cap_in;
+
+typedef struct port_cap_out {
+	uint32			kind;
+	int32			vref_id_;
+	uint32			buffer_offset;
+	uint32			_pad;
+	uint64			key;	// freshly minted slot in receiver team
+} port_cap_out;
+
+extern status_t		write_port_with_caps(port_id id, int32 msgCode,
+						const void* msgBuffer, size_t bufferSize,
+						const port_cap_in* caps, size_t capsCount,
+						uint32 flags, bigtime_t timeout);
+// `bufferSize` and `capsCount` are in/out: capacity in, actual out.
+// Returns `B_BUFFER_OVERFLOW` if either is insufficient — the out values
+// then tell the caller how much to reallocate.
+extern ssize_t		read_port_with_caps(port_id id, int32* msgCode,
+						void* msgBuffer, size_t* bufferSize,
+						port_cap_out* caps, size_t* capsCount,
+						uint32 flags, bigtime_t timeout);
 
 
 #ifdef __cplusplus

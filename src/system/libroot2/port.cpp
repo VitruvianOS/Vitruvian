@@ -355,6 +355,100 @@ write_port(port_id id, int32 msgCode,
 
 
 status_t
+write_port_with_caps(port_id id, int32 msgCode,
+	const void* msgBuffer, size_t bufferSize,
+	const port_cap_in* caps, size_t capsCount,
+	uint32 flags, bigtime_t timeout)
+{
+	CALLED();
+
+	if (id < 0)
+		return B_BAD_PORT_ID;
+
+	if ((msgBuffer == NULL && bufferSize > 0)
+			|| bufferSize > PORT_MAX_MESSAGE_SIZE) {
+		return B_BAD_VALUE;
+	}
+
+	if (caps == NULL && capsCount > 0)
+		return B_BAD_VALUE;
+
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (nexus < 0)
+		return B_BAD_PORT_ID;
+
+	// Userland `port_cap_in` matches `nexus_port_cap_in` byte-for-byte.
+	struct nexus_port_write_caps exchange;
+	memset(&exchange, 0, sizeof(exchange));
+	exchange.id = id;
+	exchange.code = &msgCode;
+	exchange.buffer = msgBuffer;
+	exchange.size = bufferSize;
+	exchange.caps = (const struct nexus_port_cap_in*)caps;
+	exchange.caps_count = capsCount;
+	exchange.flags = flags;
+	exchange.timeout = timeout;
+
+	if (nexus_io(nexus, NEXUS_PORT_WRITE_CAPS, &exchange) < 0)
+		return B_ERROR;
+	return exchange.ret;
+}
+
+
+ssize_t
+read_port_with_caps(port_id id, int32* msgCode,
+	void* msgBuffer, size_t* bufferSize,
+	port_cap_out* caps, size_t* capsCount,
+	uint32 flags, bigtime_t timeout)
+{
+	CALLED();
+
+	if (id < 0)
+		return B_BAD_PORT_ID;
+
+	if (bufferSize == NULL || capsCount == NULL)
+		return B_BAD_VALUE;
+
+	if ((msgBuffer == NULL && *bufferSize > 0)
+			|| *bufferSize > PORT_MAX_MESSAGE_SIZE) {
+		return B_BAD_VALUE;
+	}
+
+	if (caps == NULL && *capsCount > 0)
+		return B_BAD_VALUE;
+
+	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
+	if (nexus < 0)
+		return B_BAD_PORT_ID;
+
+	// Userland `port_cap_out` matches `nexus_port_cap_out` byte-for-byte.
+	struct nexus_port_read_caps exchange;
+	memset(&exchange, 0, sizeof(exchange));
+	exchange.id = id;
+	exchange.code = msgCode;
+	exchange.buffer = msgBuffer;
+	exchange.size = *bufferSize;
+	exchange.caps = (struct nexus_port_cap_out*)caps;
+	exchange.caps_count = *capsCount;
+	exchange.flags = flags;
+	exchange.timeout = timeout;
+
+	if (nexus_io(nexus, NEXUS_PORT_READ_CAPS, &exchange) < 0)
+		return B_ERROR;
+
+	// Kernel writes back actual size and caps_count, even on overflow,
+	// so the caller can re-size and retry.
+	*bufferSize = exchange.size;
+	*capsCount = exchange.caps_count;
+
+	if (exchange.ret != B_OK)
+		return exchange.ret;
+
+	return (ssize_t)exchange.size;
+}
+
+
+status_t
 set_port_owner(port_id id, team_id team)
 {
 	CALLED();

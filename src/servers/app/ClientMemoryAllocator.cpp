@@ -229,18 +229,13 @@ ClientMemoryAllocator::_AllocateChunk(size_t size)
 	// round up to multiple of page size
 	size = (size + B_PAGE_SIZE - 1) & ~(B_PAGE_SIZE - 1);
 
-	// At first, try to resize our existing areas
-
-	chunk_iterator iterator = fChunks.GetIterator();
-	struct chunk* chunk;
-	while ((chunk = iterator.Next()) != NULL) {
-		status_t status = resize_area(chunk->area, chunk->size + size);
-		if (status == B_OK)
-			break;
-	}
-
-	// TODO: resize and relocate while holding the write lock
-
+	// Skip resize_area entirely: when the server grows a chunk, the
+	// client's ServerMemoryAllocator returns its cached (original-size)
+	// clone_area mapping for any subsequent bitmap in that chunk, so a
+	// bitmap placed past the original chunk size lands outside the
+	// client's mapping and faults on access. Always allocate a fresh
+	// chunk; modest area overhead, no protocol changes needed.
+	struct chunk* chunk = NULL;
 	struct block* block;
 	uint8* address;
 

@@ -26,6 +26,7 @@
 #include <TypeConstants.h>
 
 #include <syscalls.h>
+#include <VRefCache.h>
 
 #include "storage_support.h"
 
@@ -52,10 +53,10 @@ node_ref::node_ref(dev_t device, ino_t node)
 	real_node(B_INVALID_INO)
 {
 	if (is_virtual() && node != B_INVALID_INO) {
-		acquire_vref((vref_id) node);
+		BPrivate::VRefCache::Acquire((vref_id) node);
 		// Populate real_device/real_node so dereference() works correctly
 		// when this node_ref is constructed from an existing vref id.
-		int fd = open_vref((vref_id) node);
+		int fd = BPrivate::VRefCache::Open((vref_id) node);
 		if (fd >= 0) {
 			struct stat st;
 			if (fstat(fd, &st) == 0) {
@@ -91,7 +92,7 @@ node_ref::node_ref(int fd)
 	}
 
 	device = get_vref_dev();
-	node = create_vref(fd);
+	node = BPrivate::VRefCache::AcquireFromFd(fd);
 }
 
 
@@ -103,14 +104,14 @@ node_ref::node_ref(const node_ref& other)
 	real_node(other.real_node)
 {
 	if (is_virtual() && node != B_INVALID_INO)
-		acquire_vref((vref_id) other.node);
+		BPrivate::VRefCache::Acquire((vref_id) other.node);
 }
 
 
 node_ref::~node_ref()
 {
 	if (is_virtual() && node != B_INVALID_INO)
-		release_vref((vref_id) node);
+		BPrivate::VRefCache::Release((vref_id) node);
 }
 
 
@@ -223,10 +224,10 @@ node_ref::operator=(const node_ref& other)
 	real_node = other.real_node;
 
 	if (is_virtual() && node != B_INVALID_INO)
-		acquire_vref((vref_id) node);
+		BPrivate::VRefCache::Acquire((vref_id) node);
 
 	if (oldDevice == get_vref_dev() && oldNode != B_INVALID_INO)
-		release_vref((vref_id) oldNode);
+		BPrivate::VRefCache::Release((vref_id) oldNode);
 
 	return *this;
 }

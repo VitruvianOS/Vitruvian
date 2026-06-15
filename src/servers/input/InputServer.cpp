@@ -1,5 +1,6 @@
 /*
  * Copyright 2002-2013 Haiku, Inc. All rights reserved.
+ * Copyright 2026, Dario Casalinuovo.
  * Distributed under the terms of the MIT License.
  */
 

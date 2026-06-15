@@ -11,6 +11,7 @@
 
 #include <Entry.h>
 #include <Node.h>
+#include <VRefCache.h>
 
 
 namespace BPrivate {
@@ -58,7 +59,7 @@ public:
 		this->directory = directory;
 		this->name = const_cast<char*>(name);
 		if (is_virtual())
-			acquire_vref((vref_id) directory);
+			BPrivate::VRefCache::Acquire((vref_id) directory);
 
 		return *this;
 	}

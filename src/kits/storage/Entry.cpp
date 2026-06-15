@@ -25,6 +25,7 @@
 #include <SymLink.h>
 
 #include <syscalls.h>
+#include <VRefCache.h>
 
 #include "storage_support.h"
 
@@ -60,10 +61,10 @@ entry_ref::entry_ref(dev_t dev, ino_t dir, const char* name)
 	team = getpid();
 
 	if (is_virtual() && dir != B_INVALID_INO) {
-		acquire_vref((vref_id)dir);
+		BPrivate::VRefCache::Acquire((vref_id)dir);
 		// Populate real_device/real_directory so dereference() works when
 		// this entry_ref is reconstructed from raw vref fields.
-		int fd = open_vref((vref_id)dir);
+		int fd = BPrivate::VRefCache::Open((vref_id)dir);
 		if (fd >= 0) {
 			struct stat st;
 			if (fstat(fd, &st) == 0) {
@@ -101,7 +102,7 @@ entry_ref::entry_ref(int entryFd, const char* name)
 	}
 
 	device = get_vref_dev();
-	directory = create_vref(entryFd);
+	directory = BPrivate::VRefCache::AcquireFromFd(entryFd);
 	set_name(name);
 	team = getpid();
 }
@@ -120,7 +121,7 @@ entry_ref::entry_ref(const node_ref& ref, const char* name)
 	team = getpid();
 
 	if (is_virtual())
-		acquire_vref(directory);
+		BPrivate::VRefCache::Acquire(directory);
 }
 
 
@@ -136,7 +137,7 @@ entry_ref::entry_ref(const entry_ref& ref)
 	set_name(ref.name);
 
 	if (is_virtual())
-		acquire_vref(directory);
+		BPrivate::VRefCache::Acquire(directory);
 }
 
 
@@ -145,7 +146,7 @@ entry_ref::~entry_ref()
 	free(name);
 
 	if (is_virtual() && directory != B_INVALID_INO)
-		release_vref((vref_id) directory);
+		BPrivate::VRefCache::Release((vref_id) directory);
 }
 
 
@@ -266,10 +267,10 @@ entry_ref::operator=(const entry_ref& ref)
 	real_directory = ref.real_directory;
 
 	if (is_virtual() && directory != B_INVALID_INO)
-		acquire_vref((vref_id) directory);
+		BPrivate::VRefCache::Acquire((vref_id) directory);
 
 	if (oldDevice == get_vref_dev() && oldDirectory != B_INVALID_INO)
-		release_vref((vref_id) oldDirectory);
+		BPrivate::VRefCache::Release((vref_id) oldDirectory);
 
 	return *this;
 }

@@ -54,6 +54,7 @@ Copyright 2026, Dario Casalinuovo. All rights reserved.
 #include <fs_attr.h>
 
 #include <OS.h>
+#include <VRefCache.h>
 
 #include <AppDefs.h>
 #include <Bitmap.h>
@@ -306,7 +307,7 @@ Model::SetTo(const node_ref* dirNode, const node_ref* nodeRef,
 	// Open the parent dir fd directly to fstatat the entry — avoids opening
 	// and vref-creating the child just to get its stat.
 	if (dirNode->is_virtual()) {
-		int dirFd = open_vref((vref_id)dirNode->node);
+		int dirFd = BPrivate::VRefCache::Open((vref_id)dirNode->node);
 		if (dirFd < 0) {
 			fStatus = (status_t)dirFd;
 			return fStatus;

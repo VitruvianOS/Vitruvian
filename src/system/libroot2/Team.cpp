@@ -221,7 +221,7 @@ Team::GetVRefDescriptor(dev_t* dev)
 	if (dev != NULL) {
 		struct stat st;
 		fstat(gNexusNodeMonitor, &st);
-		*dev = st.st_dev;
+		*dev = st.st_rdev;
 	}
 	return gNexusNodeMonitor;
 }

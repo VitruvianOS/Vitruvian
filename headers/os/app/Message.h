@@ -1,9 +1,11 @@
 /*
  * Copyright 2005-2017 Haiku, Inc. All rights reserved.
+ * Copyright 2026, Dario Casalinuovo.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Michael Lotz, mmlr@mlotz.ch
+ *		Dario Casalinuovo
  */
 #ifndef _MESSAGE_H
 #define _MESSAGE_H
@@ -573,6 +575,8 @@ private:
 	static	status_t			_SendFlattenedMessage(void* data, int32 size,
 									port_id port, int32 token,
 									bigtime_t timeout);
+	static	void				_PatchAdoptedFlagsRec(void* buffer,
+									size_t size);
 
 	static	void				_StaticInit();
 	static	void				_StaticReInitForkedChild();

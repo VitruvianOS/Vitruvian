@@ -1,9 +1,11 @@
 /*
  * Copyright 2005-2017 Haiku, Inc. All rights reserved.
+ * Copyright 2026, Dario Casalinuovo.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Michael Lotz, mmlr@mlotz.ch
+ *		Dario Casalinuovo
  */
 
 
@@ -16,6 +18,7 @@
 #include <MessengerPrivate.h>
 #include <TokenSpace.h>
 #include <util/KMessage.h>
+#include <VRefCache.h>
 
 #include <Alignment.h>
 #include <Application.h>
@@ -34,6 +37,8 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <vector>
 #include <string.h>
 
 #include "tracing_config.h"
@@ -83,10 +88,229 @@ port_id BMessage::sReplyPorts[sNumReplyPorts];
 int32 BMessage::sReplyPortInUse[sNumReplyPorts];
 
 
+// Cap-transport collector. Walks `message` recursively into nested
+// BMessages and emits one port_cap_in per virtual B_REF_TYPE /
+// B_NODE_REF_TYPE element. Returns a malloc'd array the caller frees.
+// `buffer_offset` is left as 0 — receiver matches caps to fields by
+// vref_id_ alone and uses VRefCache::AdoptCaps to register each
+// minted slot before Unflatten runs.
+static void
+_CollectMessageVRefs_walk(const BMessage* message, dev_t vrefDev,
+	std::vector<port_cap_in>& out)
+{
+	char* name;
+	type_code typeFound;
+	int32 count;
+	for (int32 i = 0;
+		 message->GetInfo(B_ANY_TYPE, i, &name, &typeFound, &count) == B_OK;
+		 i++) {
+		if (typeFound == B_REF_TYPE || typeFound == B_NODE_REF_TYPE) {
+			const size_t kHeaderBytes = sizeof(dev_t) + sizeof(ino_t);
+			for (int32 j = 0; j < count; j++) {
+				const void* data = NULL;
+				ssize_t size = 0;
+				if (message->FindData(name, typeFound, j, &data, &size) != B_OK)
+					continue;
+				if (size < (ssize_t)kHeaderBytes)
+					continue;
+				dev_t fieldDev;
+				ino_t fieldId;
+				memcpy(&fieldDev, data, sizeof(fieldDev));
+				memcpy(&fieldId, (const char*)data + sizeof(fieldDev),
+					sizeof(fieldId));
+				if (fieldDev != vrefDev || fieldId < 0)
+					continue;
+				port_cap_in cap;
+				cap.kind = B_PORT_CAP_VREF;
+				cap.vref_id_ = (int32)fieldId;
+				cap.buffer_offset = 0;
+				cap._pad = 0;
+				out.push_back(cap);
+			}
+		} else if (typeFound == B_MESSAGE_TYPE) {
+			for (int32 j = 0; j < count; j++) {
+				BMessage sub;
+				if (message->FindMessage(name, j, &sub) == B_OK)
+					_CollectMessageVRefs_walk(&sub, vrefDev, out);
+			}
+		}
+	}
+}
+
+
+static status_t
+_CollectMessageVRefCaps(const BMessage* message, port_cap_in** outCaps,
+	size_t* outCount)
+{
+	*outCaps = NULL;
+	*outCount = 0;
+
+	dev_t vrefDev = get_vref_dev();
+	if (vrefDev == B_INVALID_DEV)
+		return B_OK;
+
+	std::vector<port_cap_in> caps;
+	_CollectMessageVRefs_walk(message, vrefDev, caps);
+	if (caps.empty())
+		return B_OK;
+
+	port_cap_in* arr = (port_cap_in*)malloc(caps.size() * sizeof(port_cap_in));
+	if (arr == NULL)
+		return B_NO_MEMORY;
+	memcpy(arr, caps.data(), caps.size() * sizeof(port_cap_in));
+	*outCaps = arr;
+	*outCount = caps.size();
+	return B_OK;
+}
+
+
+static void
+_CollectSendBufferCaps_walk(char* buffer, dev_t vrefDev,
+	std::vector<port_cap_in>& caps)
+{
+	BMessage::message_header* header = (BMessage::message_header*)buffer;
+	BMessage::field_header* fields = (BMessage::field_header*)
+		(buffer + sizeof(BMessage::message_header));
+	char* dataBlob = buffer + sizeof(BMessage::message_header)
+		+ header->field_count * sizeof(BMessage::field_header);
+
+	const size_t kHeaderBytes = sizeof(dev_t) + sizeof(ino_t);
+
+	for (uint32 fi = 0; fi < header->field_count; fi++) {
+		BMessage::field_header& fh = fields[fi];
+		bool isRef = (fh.type == B_REF_TYPE || fh.type == B_NODE_REF_TYPE);
+		bool isMsg = (fh.type == B_MESSAGE_TYPE);
+		if (!isRef && !isMsg)
+			continue;
+
+		char* fieldData = dataBlob + fh.offset + fh.name_length;
+		bool fixed = (fh.flags & FIELD_FLAG_FIXED_SIZE) != 0;
+		uint32 fixedSize = (fixed && fh.count > 0)
+			? fh.data_size / fh.count : 0;
+
+		uint32 walkOffset = 0;
+		for (uint32 ei = 0; ei < fh.count; ei++) {
+			char* elem;
+			uint32 elemSize;
+			if (fixed) {
+				elem = fieldData + ei * fixedSize;
+				elemSize = fixedSize;
+			} else {
+				elemSize = *(uint32*)(fieldData + walkOffset);
+				elem = fieldData + walkOffset + sizeof(uint32);
+				walkOffset += sizeof(uint32) + elemSize;
+			}
+			if (isRef) {
+				if (elemSize < kHeaderBytes)
+					continue;
+				dev_t fieldDev;
+				ino_t fieldId;
+				memcpy(&fieldDev, elem, sizeof(fieldDev));
+				memcpy(&fieldId, elem + sizeof(fieldDev), sizeof(fieldId));
+				if (fieldDev != vrefDev || fieldId < 0)
+					continue;
+				port_cap_in cap;
+				cap.kind = B_PORT_CAP_VREF;
+				cap.vref_id_ = (int32)fieldId;
+				cap.buffer_offset = 0;
+				cap._pad = 0;
+				caps.push_back(cap);
+			} else {
+				// Nested BMessage
+				if (elemSize < sizeof(BMessage::message_header))
+					continue;
+				uint32 magic = *(uint32*)elem;
+				if (magic != MESSAGE_FORMAT_HAIKU
+						&& magic != MESSAGE_FORMAT_HAIKU_SWAPPED)
+					continue;
+				_CollectSendBufferCaps_walk(elem, vrefDev, caps);
+			}
+		}
+	}
+}
+
+
+// Stamp CAPS_ADOPTED into every nested message_header so Unflatten via
+// FindMessage skips its acquire pass — caps are already adopted at
+// every nesting level.
+void
+BMessage::_PatchAdoptedFlagsRec(void* buffer, size_t size)
+{
+	if (buffer == NULL || size < sizeof(BMessage::message_header))
+		return;
+	uint32 magic = *(uint32*)buffer;
+	if (magic != MESSAGE_FORMAT_HAIKU && magic != MESSAGE_FORMAT_HAIKU_SWAPPED)
+		return;
+
+	BMessage::message_header* header = (BMessage::message_header*)buffer;
+	header->flags |= MESSAGE_FLAG_CAPS_ADOPTED;
+
+	BMessage::field_header* fields = (BMessage::field_header*)
+		((char*)buffer + sizeof(BMessage::message_header));
+	char* dataBlob = (char*)buffer + sizeof(BMessage::message_header)
+		+ header->field_count * sizeof(BMessage::field_header);
+
+	for (uint32 fi = 0; fi < header->field_count; fi++) {
+		BMessage::field_header& fh = fields[fi];
+		if (fh.type != B_MESSAGE_TYPE)
+			continue;
+
+		char* fieldData = dataBlob + fh.offset + fh.name_length;
+		bool fixed = (fh.flags & FIELD_FLAG_FIXED_SIZE) != 0;
+		uint32 fixedSize = (fixed && fh.count > 0)
+			? fh.data_size / fh.count : 0;
+
+		uint32 walkOffset = 0;
+		for (uint32 ei = 0; ei < fh.count; ei++) {
+			char* elem;
+			uint32 elemSize;
+			if (fixed) {
+				elem = fieldData + ei * fixedSize;
+				elemSize = fixedSize;
+			} else {
+				elemSize = *(uint32*)(fieldData + walkOffset);
+				elem = fieldData + walkOffset + sizeof(uint32);
+				walkOffset += sizeof(uint32) + elemSize;
+			}
+			_PatchAdoptedFlagsRec(elem, elemSize);
+		}
+	}
+}
+
+
+static status_t
+_CollectSendBufferCaps(char* buffer, port_cap_in** outCaps, size_t* outCount)
+{
+	*outCaps = NULL;
+	*outCount = 0;
+
+	dev_t vrefDev = get_vref_dev();
+	if (vrefDev == B_INVALID_DEV)
+		return B_OK;
+
+	std::vector<port_cap_in> caps;
+	_CollectSendBufferCaps_walk(buffer, vrefDev, caps);
+	if (caps.empty())
+		return B_OK;
+
+	port_cap_in* arr = (port_cap_in*)malloc(caps.size() * sizeof(port_cap_in));
+	if (arr == NULL)
+		return B_NO_MEMORY;
+	memcpy(arr, caps.data(), caps.size() * sizeof(port_cap_in));
+	*outCaps = arr;
+	*outCount = caps.size();
+	return B_OK;
+}
+
+
 static void
 _HandleMessageVRefs(const BMessage* message, bool acquire)
 {
 	dev_t vrefDev = get_vref_dev();
+	if (vrefDev == B_INVALID_DEV)
+		return;
+
+	const size_t kHeaderBytes = sizeof(dev_t) + sizeof(ino_t);
 
 	char* name;
 	type_code typeFound;
@@ -94,32 +318,50 @@ _HandleMessageVRefs(const BMessage* message, bool acquire)
 	for (int32 i = 0;
 		 message->GetInfo(B_ANY_TYPE, i, &name, &typeFound, &count) == B_OK;
 		 i++) {
-		if (typeFound == B_REF_TYPE && vrefDev != B_INVALID_DEV) {
-			for (int32 j = 0; j < count; j++) {
-				entry_ref ref;
-				if (message->FindRef(name, j, &ref) == B_OK) {
-					if (ref.device == vrefDev && ref.directory >= 0) {
-						vref_id vref = (vref_id)ref.directory;
-						if (acquire)
-							acquire_vref(vref);
-						else
-							release_vref(vref);
-					}
-				}
-			}
-		} else if (typeFound == B_NODE_REF_TYPE && vrefDev != B_INVALID_DEV) {
-			for (int32 j = 0; j < count; j++) {
-				node_ref ref;
-				if (message->FindNodeRef(name, j, &ref) == B_OK) {
-					if (ref.device == vrefDev && ref.node != B_INVALID_INO) {
-						vref_id vref = (vref_id)ref.node;
-						if (acquire)
-							acquire_vref(vref);
-						else
-							release_vref(vref);
-					}
-				}
-			}
+		if (typeFound != B_REF_TYPE && typeFound != B_NODE_REF_TYPE)
+			continue;
+		for (int32 j = 0; j < count; j++) {
+			const void* data = NULL;
+			ssize_t size = 0;
+			if (message->FindData(name, typeFound, j, &data, &size) != B_OK)
+				continue;
+			if (size < (ssize_t)kHeaderBytes)
+				continue;
+			dev_t fieldDev;
+			ino_t fieldId;
+			memcpy(&fieldDev, data, sizeof(fieldDev));
+			memcpy(&fieldId, (const char*)data + sizeof(fieldDev),
+				sizeof(fieldId));
+			if (fieldDev != vrefDev || fieldId < 0)
+				continue;
+			vref_id vref = (vref_id)fieldId;
+			if (acquire)
+				BPrivate::VRefCache::Acquire(vref);
+			else
+				BPrivate::VRefCache::Release(vref);
+		}
+	}
+}
+
+
+// Handle vrefs in messages recursively
+static void
+_HandleMessageVRefsRec(const BMessage* message, bool acquire)
+{
+	_HandleMessageVRefs(message, acquire);
+
+	char* name;
+	type_code typeFound;
+	int32 count;
+	for (int32 i = 0;
+		 message->GetInfo(B_ANY_TYPE, i, &name, &typeFound, &count) == B_OK;
+		 i++) {
+		if (typeFound != B_MESSAGE_TYPE)
+			continue;
+		for (int32 j = 0; j < count; j++) {
+			BMessage sub;
+			if (message->FindMessage(name, j, &sub) == B_OK)
+				_HandleMessageVRefsRec(&sub, acquire);
 		}
 	}
 }
@@ -170,15 +412,49 @@ handle_reply(port_id replyPort, int32* _code, bigtime_t timeout,
 	if (!buffer.IsValid())
 		return B_NO_MEMORY;
 
-	status_t result;
-	do {
-		result = read_port(replyPort, _code, buffer, size);
-	} while (result == B_INTERRUPTED);
+	port_cap_out stackCaps[8];
+	port_cap_out* caps = stackCaps;
+	size_t capsCapacity = sizeof(stackCaps) / sizeof(stackCaps[0]);
+	size_t actualBytes;
+	size_t actualCaps;
+	ssize_t readResult;
+	for (;;) {
+		actualBytes = size;
+		actualCaps = capsCapacity;
+		readResult = read_port_with_caps(replyPort, _code, buffer,
+			&actualBytes, caps, &actualCaps, 0, 0);
+		if (readResult == B_INTERRUPTED)
+			continue;
+		if (readResult != B_BUFFER_OVERFLOW)
+			break;
+		if (actualCaps > capsCapacity) {
+			if (caps != stackCaps) free(caps);
+			caps = (port_cap_out*)malloc(actualCaps * sizeof(port_cap_out));
+			if (caps == NULL)
+				return B_NO_MEMORY;
+			capsCapacity = actualCaps;
+		}
+	}
 
-	if (result < 0 || *_code != kPortMessageCode)
-		return result < 0 ? result : B_ERROR;
+	if (readResult < 0 || *_code != kPortMessageCode) {
+		if (caps != stackCaps) free(caps);
+		return readResult < 0 ? readResult : B_ERROR;
+	}
 
-	result = reply->Unflatten(buffer);
+	BPrivate::VRefCache::AdoptCaps(caps, actualCaps);
+
+	if (actualCaps > 0 && actualBytes >= sizeof(BMessage::message_header)) {
+		uint32 format = *(uint32*)((const char*)buffer);
+		if (format == MESSAGE_FORMAT_HAIKU) {
+			BMessage::message_header* header
+				= (BMessage::message_header*)((char*)buffer);
+			header->flags |= MESSAGE_FLAG_CAPS_ADOPTED;
+		}
+	}
+
+	status_t result = reply->Unflatten(buffer);
+	if (caps != stackCaps)
+		free(caps);
 	return result;
 }
 
@@ -285,6 +561,11 @@ BMessage::operator=(const BMessage& other)
 			&& (other.fHeader->flags & (MESSAGE_FLAG_OWNS_VREFS
 				| MESSAGE_FLAG_WAS_DELIVERED)) != 0
 			&& fData != NULL) {
+		// A copy's lifecycle is independent of the original's cap
+		// adoption — we'll take a fresh top-level acquire here and the
+		// matching top-level release happens in our own _Clear. Don't
+		// inherit CAPS_ADOPTED from the source.
+		fHeader->flags &= ~MESSAGE_FLAG_CAPS_ADOPTED;
 		_HandleMessageVRefs(this, true);
 		fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
 	}
@@ -452,12 +733,16 @@ BMessage::_Clear()
 	DEBUG_FUNCTION_ENTER;
 	if (fHeader != NULL) {
 		if ((fHeader->flags & (MESSAGE_FLAG_WAS_DELIVERED
-				| MESSAGE_FLAG_OWNS_VREFS)) != 0)
-			_HandleMessageVRefs(this, false);
+				| MESSAGE_FLAG_OWNS_VREFS)) != 0) {
 
-		// We're going to destroy all information of this message. If there's
-		// still someone waiting for a reply to this message, we have to send
-		// one now.
+			// Match recursive release
+			if ((fHeader->flags & MESSAGE_FLAG_CAPS_ADOPTED) != 0)
+				_HandleMessageVRefsRec(this, false);
+			else
+				_HandleMessageVRefs(this, false);
+		}
+
+		// After this capabilities are dropped
 		if (IsSourceWaiting())
 			SendReply(B_NO_REPLY);
 
@@ -1432,7 +1717,14 @@ BMessage::Unflatten(BDataIO* stream)
 		}
 	}
 
-	return _ValidateMessage();
+	status_t valid = _ValidateMessage();
+	if (valid != B_OK)
+		return valid;
+
+	if ((fHeader->flags & MESSAGE_FLAG_OWNS_VREFS) != 0
+			&& (fHeader->flags & MESSAGE_FLAG_CAPS_ADOPTED) == 0)
+		_HandleMessageVRefs(this, true);
+	return B_OK;
 }
 
 
@@ -2303,10 +2595,16 @@ BMessage::_SendMessage(port_id port, team_id portOwner, int32 token,
 			"message: '%c%c%c%c'", portOwner, port, token,
 			char(what >> 24), char(what >> 16), char(what >> 8), (char)what);
 
+		port_cap_in* caps = NULL;
+		size_t capsCount = 0;
+		_CollectMessageVRefCaps(this, &caps, &capsCount);
+
 		do {
-			result = write_port_etc(port, kPortMessageCode, (void*)buffer,
-				size, B_RELATIVE_TIMEOUT, timeout);
+			result = write_port_with_caps(port, kPortMessageCode,
+				(void*)buffer, size, caps, capsCount,
+				B_RELATIVE_TIMEOUT, timeout);
 		} while (result == B_INTERRUPTED);
+		free(caps);
 
 		// If send failed then release the vrefs
 		if (result != B_OK && vrefsAcquired)
@@ -2490,13 +2788,18 @@ BMessage::_SendFlattenedMessage(void* data, int32 size, port_id port,
 		return B_NOT_A_MESSAGE;
 	}
 
+	port_cap_in* caps = NULL;
+	size_t capsCount = 0;
+	if (magic == MESSAGE_FORMAT_HAIKU)
+		_CollectSendBufferCaps((char*)data, &caps, &capsCount);
+
 	// send the message
 	status_t result;
-
 	do {
-		result = write_port_etc(port, kPortMessageCode, data, size,
-			B_RELATIVE_TIMEOUT, timeout);
+		result = write_port_with_caps(port, kPortMessageCode, data, size,
+			caps, capsCount, B_RELATIVE_TIMEOUT, timeout);
 	} while (result == B_INTERRUPTED);
+	free(caps);
 
 	return result;
 }
@@ -2799,7 +3102,7 @@ BMessage::AddRef(const char* name, const entry_ref* ref)
 		dev_t vrefDev = get_vref_dev();
 		if (vrefDev != B_INVALID_DEV && ref->device == vrefDev
 				&& ref->directory >= 0) {
-			acquire_vref((vref_id)ref->directory);
+			BPrivate::VRefCache::Acquire((vref_id)ref->directory);
 			fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
 		}
 	}
@@ -2826,7 +3129,7 @@ BMessage::AddNodeRef(const char* name, const node_ref* ref)
 		dev_t vrefDev = get_vref_dev();
 		if (vrefDev != B_INVALID_DEV && ref->device == vrefDev
 				&& ref->node != B_INVALID_INO) {
-			acquire_vref((vref_id)ref->node);
+			BPrivate::VRefCache::Acquire((vref_id)ref->node);
 			fHeader->flags |= MESSAGE_FLAG_OWNS_VREFS;
 		}
 	}

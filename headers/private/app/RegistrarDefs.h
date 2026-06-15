@@ -155,11 +155,6 @@ enum {
   B_REG_DEVICE_UPDATE_DEVICE_CHANGED,
 };
 
-// type constants
-enum {
-	B_REG_APP_INFO_TYPE				= 'rgai',	// app_info
-};
-
 // error constants
 #define B_REGISTRAR_ERROR_BASE		(B_ERRORS_END + 1)
 
@@ -175,21 +170,6 @@ enum {
 	B_REG_DEFAULT_APP_FLAGS			= B_MULTIPLE_LAUNCH,
 	B_REG_APP_LOOPER_PORT_CAPACITY	= 100,
 };
-
-// structs
-
-// a flat app_info -- to be found in B_REG_APP_INFO_TYPE message fields
-struct flat_app_info {
-	thread_id	thread;
-	team_id		team;
-	port_id		port;
-	uint32		flags;
-	dev_t		ref_device;
-	ino_t		ref_directory;
-	char		signature[B_MIME_TYPE_LENGTH];
-	char		ref_name[B_FILE_NAME_LENGTH + 1];
-} _PACKED;
-
 
 }	// namespace BPrivate
 

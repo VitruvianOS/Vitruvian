@@ -69,15 +69,13 @@ const BRoster* be_roster;
 //	#pragma mark - Helper functions
 
 
-/*!	Extracts an app_info from a BMessage.
+/*!	Extracts an app_info from a BMessage built by
+	TRoster::_AddMessageAppInfo. Pairs scalar fields with the entry_ref
+	"app_ref" carried via the standard B_REF_TYPE / cap-transport path.
 
-	The function searchs for a field "app_info" typed B_REG_APP_INFO_TYPE
-	and initializes \a info with the found data.
-
-	\param message The message
+	\param message The message.
 	\param info A pointer to a pre-allocated app_info to be filled in with the
 	       info found in the message.
-
 	\return A status code.
 	\retval B_OK Everything went fine.
 	\retval B_BAD_VALUE \c NULL \a message or \a info.
@@ -85,31 +83,31 @@ const BRoster* be_roster;
 static status_t
 find_message_app_info(BMessage* message, app_info* info)
 {
-	status_t error = (message && info ? B_OK : B_BAD_VALUE);
-	const flat_app_info* flatInfo = NULL;
-	ssize_t size = 0;
-	// find the flat app info in the message
-	if (error == B_OK) {
-		error = message->FindData("app_info", B_REG_APP_INFO_TYPE,
-			(const void**)&flatInfo, &size);
-	}
-	// unflatten the flat info
-	if (error == B_OK) {
-		if (size == sizeof(flat_app_info)) {
-			info->thread = flatInfo->thread;
-			info->team = flatInfo->team;
-			info->port = flatInfo->port;
-			info->flags = flatInfo->flags;
-			info->ref = entry_ref(flatInfo->ref_device, flatInfo->ref_directory, NULL);
-			info->ref.name = NULL;
-			memcpy(info->signature, flatInfo->signature, B_MIME_TYPE_LENGTH);
-			if (strlen(flatInfo->ref_name) > 0)
-				info->ref.set_name(flatInfo->ref_name);
-		} else
-			error = B_ERROR;
-	}
+	if (message == NULL || info == NULL)
+		return B_BAD_VALUE;
 
-	return error;
+	const char* signature = NULL;
+	int32 thread = 0, team = 0, port = 0, flags = 0;
+	entry_ref ref;
+
+	status_t err = message->FindInt32("thread", &thread);
+	if (err == B_OK) err = message->FindInt32("team",   &team);
+	if (err == B_OK) err = message->FindInt32("port",   &port);
+	if (err == B_OK) err = message->FindInt32("flags",  &flags);
+	if (err == B_OK) err = message->FindString("signature", &signature);
+	if (err == B_OK) err = message->FindRef("app_ref",   &ref);
+	if (err != B_OK)
+		return err;
+
+	info->thread = thread;
+	info->team   = team;
+	info->port   = port;
+	info->flags  = (uint32)flags;
+	info->ref    = ref;
+	info->signature[0] = '\0';
+	if (signature != NULL)
+		strlcpy(info->signature, signature, B_MIME_TYPE_LENGTH);
+	return B_OK;
 }
 
 
@@ -402,9 +400,8 @@ query_for_app(const char* signature, entry_ref* appRef)
 #ifdef __VOS__
 	// Vitruvian fast path: the kernel-side query is currently a depth-5
 	// recursive scan (correct but too slow for interactive app launch).
-	// We keep this hardcoded-paths fallback as the fast common case.
-	// Phase 2: when the real indexed query system lands this block can be
-	// deleted and BQuery becomes the only path.
+	// Hardcoded-paths fallback as the fast common case. Drop once BQuery
+	// is the only path.
 	if (error != B_OK && signature != NULL) {
 		const char* searchPaths[] = {
 			"/system/apps",

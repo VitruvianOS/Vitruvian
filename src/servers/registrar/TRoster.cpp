@@ -1586,37 +1586,30 @@ TRoster::_AppDeactivated(RosterAppInfo* info)
 }
 
 
-/*!	\brief Adds an app_info to a message.
+/*!	\brief Adds an app_info to a message as discrete typed fields.
 
-	The info is added as a flat_app_info to a field "app_info" with the type
-	\c B_REG_APP_INFO_TYPE.
+	Scalar fields (thread/team/port/flags/signature) go via the typed
+	Add accessors; the entry_ref goes via AddRef so its vref_id rides
+	the standard cap-transport / OWNS_VREFS lifecycle.
 
-	\param message The message
+	\param message The message.
 	\param info The app_info.
 	\return \c B_OK if everything went fine, an error code otherwise.
 */
 status_t
 TRoster::_AddMessageAppInfo(BMessage* message, const app_info* info)
 {
-	// An app_info is not completely flat. The entry_ref contains a string
-	// pointer. Therefore we flatten the info.
-	flat_app_info flatInfo;
-	flatInfo.thread = info->thread;
-	flatInfo.team = info->team;
-	flatInfo.port = info->port;
-	flatInfo.flags = info->flags;
-	flatInfo.ref_device = info->ref.dev();
-	flatInfo.ref_directory = info->ref.dir();
-	memcpy(flatInfo.signature, info->signature, B_MIME_TYPE_LENGTH);
-
-	// set the ref name to NULL and copy it into the flat structure
-	flatInfo.ref_name[0] = '\0';
-	if (info->ref.name)
-		strcpy(flatInfo.ref_name, info->ref.name);
-
-	// add the flat info
-	return message->AddData("app_info", B_REG_APP_INFO_TYPE, &flatInfo,
-		sizeof(flat_app_info));
+	// Ship each app_info field through the standard typed accessors.
+	// The entry_ref travels via AddRef, so its vref_id participates in
+	// the BMessage cap-transport / OWNS_VREFS lifecycle just like any
+	// other ref in user-built messages.
+	status_t err = message->AddInt32("thread", info->thread);
+	if (err == B_OK) err = message->AddInt32("team",   info->team);
+	if (err == B_OK) err = message->AddInt32("port",   info->port);
+	if (err == B_OK) err = message->AddInt32("flags",  (int32)info->flags);
+	if (err == B_OK) err = message->AddString("signature", info->signature);
+	if (err == B_OK) err = message->AddRef("app_ref", &info->ref);
+	return err;
 }
 
 

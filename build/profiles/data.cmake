@@ -61,3 +61,7 @@ ImageIncludeFile("src/data/deskbar/menu_entries" "/system/data/deskbar")
 # User guide and welcome launcher scripts
 ImageIncludeFile("data/bin/userguide" "/bin")
 ImageIncludeFile("data/bin/welcome" "/bin")
+
+# Build files
+ImageIncludeFile("data/develop/makefile-engine" "/etc")
+ImageIncludeFile("data/develop/vitruvian.specs" "/etc")

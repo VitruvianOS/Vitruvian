@@ -51,6 +51,8 @@ set(SYSTEM_LIBS
 	tracker
 	translation
 	textencoding
+	shared
+	localestub
 )
 ImageInclude("/lib" ${SYSTEM_LIBS})
 

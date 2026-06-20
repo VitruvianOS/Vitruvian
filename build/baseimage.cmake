@@ -1,1 +1,1 @@
-ImageIncludeDir("headers/os" "/system/develop/headers/")
+ImageIncludeDir("headers" "/system/develop/")

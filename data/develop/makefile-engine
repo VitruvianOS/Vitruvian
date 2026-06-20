@@ -1,0 +1,381 @@
+## Haiku Generic Makefile Engine v2.6 ##
+
+## Does all the hard work for the Generic Makefile, which only has to specify
+## the project parameters.
+
+## Supports Generic Makefile v2.6.
+##   Probably works with Generic Makefile v2.0+, but support is not guaranteed.
+
+# Determine the CPU type
+MACHINE=$(shell uname -m)
+ifeq ($(MACHINE), BePC)
+	CPU = x86
+else
+	CPU = $(MACHINE)
+endif
+
+# Set up defaults.
+ifeq ($(NAME), )
+	NAME = NameThisApp
+endif
+
+ifeq ($(TYPE), )
+	TYPE = APP
+endif
+
+ifeq ($(APP_MIME_SIG), )
+	APP_MIME = x.vnd-Haiku-$(NAME)
+endif
+
+ifeq ($(DRIVER_PATH), )
+	DRIVER_PATH = misc
+endif
+
+# Set the core tools if they're not already specified.
+MIMESET	:= mimeset
+XRES	:= xres
+RESCOMP	:= rc
+CC		:= $(CC)
+C++		:= $(CXX)
+
+# Set up CFLAGS.
+ifeq ($(strip $(TYPE)), DRIVER)
+	CFLAGS	+= -D_KERNEL_MODE=1
+else
+	CFLAGS += `cat /etc/vitruvian.specs`
+endif
+
+CFLAGS += -include LinuxBuildCompatibility.h
+
+# Set up optimization flags.
+ifeq ($(strip $(OPTIMIZE)), FULL)
+	OPTIMIZER	= -O3
+else
+ifeq ($(strip $(OPTIMIZE)), SOME)
+	OPTIMIZER	= -O2
+else
+ifeq ($(strip $(OPTIMIZE)), NONE)
+	OPTIMIZER	= -O0
+else
+#	OPTIMIZE isn't set, so set it to FULL
+	OPTIMIZER	= -O3
+endif
+endif
+endif
+
+# Set up debug information flags.
+ifeq ($(strip $(DEBUGGER)), TRUE)
+	DEBUG += -g
+	OPTIMIZER = -O0
+endif
+CFLAGS += $(OPTIMIZER) $(DEBUG)
+
+# Set up the warning flags.
+ifeq ($(strip $(WARNINGS)), ALL)
+	CFLAGS += -Wall -Wno-multichar -Wno-ctor-dtor-privacy
+else
+ifeq ($(strip $(WARNINGS)), NONE)
+	CFLAGS += -w
+endif
+endif
+
+# Set up the linker & linker flags.
+ifeq ($(origin LD), default)
+	LD			:= $(CC)
+endif
+LDFLAGS		+= $(DEBUG)
+
+# Binary-type-specific linker flags.
+ifeq ($(strip $(TYPE)), APP)
+	LDFLAGS += -Xlinker -soname=_APP_
+else
+ifeq ($(strip $(TYPE)), SHARED)
+	LDFLAGS += -shared -Xlinker -soname=$(NAME)
+else
+ifeq ($(strip $(TYPE)), DRIVER)
+	LDFLAGS += -nostdlib /boot/system/develop/lib/_KERNEL_ \
+				/boot/system/develop/lib/haiku_version_glue.o
+ifeq ($(CPU), x86_64)
+	LDFLAGS += -z max-page-size=0x1000
+endif
+endif
+endif
+endif
+
+# Get the compiler version.
+CC_VER = $(word 1, $(subst -, , $(subst ., , $(shell $(CC) -dumpversion))))
+
+# Set the object directory if it isn't already.
+OBJ_DIR := objects.$(CPU)-$(CC)$(CC_VER)-$(if $(DEBUGGER),debug,release)
+
+# Output the binary alongside the objects unless another directory is specified.
+ifeq ($(TARGET_DIR), )
+	TARGET_DIR	:= $(OBJ_DIR)
+endif
+
+# NOTE: make doesn't find the target if its name is enclosed in quotes.
+ifeq ($(strip $(TYPE)), STATIC)
+	TARGET		:= $(TARGET_DIR)/$(NAME).a
+else
+	TARGET		:= $(TARGET_DIR)/$(NAME)
+endif
+
+# Psuedo-function for converting a list of source files in SRCS variable to a
+# corresponding list of object files in $(OBJ_DIR)/xxx.o. The "function" strips
+# off the src file suffix (.ccp or .c or whatever) and then strips off the
+# off the directory name, leaving just the root file name. It then appends the
+# .o suffix and prepends the $(OBJ_DIR)/ path
+define SRCS_LIST_TO_OBJS
+	$(addprefix $(OBJ_DIR)/, $(addsuffix .o, $(foreach file, $(SRCS), \
+	$(basename $(notdir $(file))))))
+endef
+
+define SRCS_LIST_TO_DEPENDS
+	$(addprefix $(OBJ_DIR)/, $(addsuffix .d, $(foreach file, $(SRCS), \
+	$(basename $(notdir $(file))))))
+endef
+
+OBJS = $(SRCS_LIST_TO_OBJS)
+DEPENDS = $(SRCS_LIST_TO_DEPENDS)
+
+# Create a unique list of paths to our sourcefiles and resources.
+SRC_PATHS += $(sort $(foreach file, $(SRCS) $(RSRCS) $(RDEFS), $(dir $(file))))
+
+# Add source paths to VPATH if not already present.
+VPATH :=
+VPATH += $(addprefix :, $(subst  ,:, $(filter-out $($(subst, :, ,$(VPATH))), $(SRC_PATHS))))
+
+# Set up the local & system include paths and C++ stdlibs.
+LOC_INCLUDES = $(foreach path, $(SRC_PATHS) $(LOCAL_INCLUDE_PATHS), $(addprefix -I, $(path)))
+ifeq ($(CC_VER), 2)
+	INCLUDES = $(LOC_INCLUDES)
+	INCLUDES += -I-
+	INCLUDES += $(foreach path, $(SYSTEM_INCLUDE_PATHS), $(addprefix -I, $(path)))
+
+	STDCPPLIBS = stdc++.r4
+else
+	INCLUDES = -iquote./
+	INCLUDES += $(foreach path, $(SRC_PATHS) $(LOCAL_INCLUDE_PATHS), $(addprefix -iquote, $(path)))
+	INCLUDES += $(foreach path, $(SYSTEM_INCLUDE_PATHS), $(addprefix -isystem, $(path)))
+
+	STDCPPLIBS = stdc++ supc++
+endif
+
+
+# Add the -L prefix to all of the library paths.
+LINK_PATHS = $(foreach path, $(SRC_PATHS) $(LIBPATHS), \
+	$(addprefix -L, $(path)))
+
+# Handle the additional libraries specified. If the libraries have a .so or
+# a .a prefix, or if they are _APP_ or _KERNEL_, simply add them to the list.
+LINK_LIBS += $(filter %.so %.a _APP_ _KERNEL_, $(LIBS))
+# If the libraries do not have suffixes and are not _APP_ or _KERNEL_,
+# prepend -l to each name:(e.g. "be" becomes "-lbe").
+LINK_LIBS += $(foreach lib, $(filter-out %.so %.a _APP_ _KERNEL_, $(LIBS)), $(addprefix -l, $(lib)))
+
+# Add the linkpaths and linklibs to LDFLAGS.
+LDFLAGS += $(LINK_PATHS)  $(LINK_LIBS)
+
+# Add the defines to CFLAGS.
+CFLAGS += $(foreach define, $(DEFINES), $(addprefix -D, $(define)))
+
+# Add the additional compiler flags to CFLAGS.
+CFLAGS += $(COMPILER_FLAGS)
+
+# Add the additional linkflags to LDFLAGS
+LDFLAGS += $(LINKER_FLAGS)
+
+# Use the archiving tools to create an an archive if we're building a static
+# library, otherwise use the linker.
+ifeq ($(strip $(TYPE)), STATIC)
+	BUILD_LINE = ar -cru "$(TARGET)" $(OBJS)
+else
+	BUILD_LINE = $(LD) -o "$@" $(OBJS) $(LDFLAGS)
+endif
+
+# Pseudo-function for converting a list of resource definition files in RDEFS
+# variable to a corresponding list of object files in $(OBJ_DIR)/xxx.rsrc.
+# The "function" strips off the rdef file suffix (.rdef) and then strips
+# of the directory name, leaving just the root file name. It then appends the
+# the .rsrc suffix and prepends the $(OBJ_DIR)/ path.
+define RDEFS_LIST_TO_RSRCS
+	$(addprefix $(OBJ_DIR)/, $(addsuffix .rsrc, $(foreach file, $(RDEFS), \
+	$(basename $(notdir $(file))))))
+endef
+
+# Create the resource definitions instruction in case RDEFS is not empty.
+ifeq ($(RDEFS), )
+	RSRCS +=
+else
+	RSRCS += $(RDEFS_LIST_TO_RSRCS)
+endif
+
+# Create the resource instruction.
+ifeq ($(RSRCS), )
+	DO_RSRCS :=
+else
+	DO_RSRCS := $(XRES) -o $(TARGET) $(RSRCS)
+endif
+
+# Set the directory for internationalization sources (catkeys) if it isn't
+# already.
+CATKEYS_DIR	:= locales
+
+# Set the directory for internationalization resource data (catalogs) if it
+# isn't already.
+CATALOGS_DIR := $(OBJ_DIR)/$(APP_MIME_SIG)
+
+# Pseudo-function for converting a list of language codes in CATALOGS variable
+# to a corresponding list of catkeys files in $(CATALOGS_DIR)/xx.catalog
+# The "function" appends the .catalog suffix and prepends the
+# $(CATALOGS_DIR)/ path.
+define LOCALES_LIST_TO_CATALOGS
+	$(addprefix $(CATALOGS_DIR)/, $(addsuffix .catalog, $(foreach lang, $(LOCALES), $(lang))))
+endef
+
+CATALOGS = $(LOCALES_LIST_TO_CATALOGS)
+
+# Define the actual work to be done.
+default: $(TARGET)
+
+$(TARGET):	$(OBJ_DIR) $(OBJS) $(RSRCS)
+	$(BUILD_LINE)
+	$(DO_RSRCS)
+	$(MIMESET) -f "$@"
+
+# Create OBJ_DIR if it doesn't exist.
+$(OBJ_DIR)::
+	@[ -d $(OBJ_DIR) ] || mkdir $(OBJ_DIR) >/dev/null 2>&1
+
+# Create the localization sources directory if it doesn't exist.
+$(CATKEYS_DIR)::
+	@[ -d $(CATKEYS_DIR) ] || mkdir $(CATKEYS_DIR) >/dev/null 2>&1
+
+# Create the localization data directory if it doesn't exist.
+$(CATALOGS_DIR):: $(OBJ_DIR)
+	@[ -d $(CATALOGS_DIR) ] || mkdir $(CATALOGS_DIR) >/dev/null 2>&1
+
+# Rules to create the dependency files.
+$(OBJ_DIR)/%.d : %.c
+	mkdir -p $(OBJ_DIR); \
+	mkdepend $(LOC_INCLUDES) -p .c:$(OBJ_DIR)/%n.o -m -f "$@" $<
+$(OBJ_DIR)/%.d : %.cpp
+	mkdir -p $(OBJ_DIR); \
+	mkdepend $(LOC_INCLUDES) -p .cpp:$(OBJ_DIR)/%n.o -m -f "$@" $<
+$(OBJ_DIR)/%.d : %.cp
+	mkdir -p $(OBJ_DIR); \
+	mkdepend $(LOC_INCLUDES) -p .cp:$(OBJ_DIR)/%n.o -m -f "$@" $<
+$(OBJ_DIR)/%.d : %.cc
+	mkdir -p $(OBJ_DIR); \
+	mkdepend $(LOC_INCLUDES) -p .cc:$(OBJ_DIR)/%n.o -m -f "$@" $<
+$(OBJ_DIR)/%.d : %.cxx
+	mkdir -p $(OBJ_DIR); \
+	mkdepend $(LOC_INCLUDES) -p .cxx:$(OBJ_DIR)/%n.o -m -f "$@" $<
+$(OBJ_DIR)/%.d : %.C
+	mkdir -p $(OBJ_DIR); \
+	mkdepend $(LOC_INCLUDES) -p .C:$(OBJ_DIR)/%n.o -m -f "$@" $<
+$(OBJ_DIR)/%.d : %.CC
+	mkdir -p $(OBJ_DIR); \
+	mkdepend $(LOC_INCLUDES) -p .CC:$(OBJ_DIR)/%n.o -m -f "$@" $<
+$(OBJ_DIR)/%.d : %.CPP
+	mkdir -p $(OBJ_DIR); \
+	mkdepend $(LOC_INCLUDES) -p .CPP:$(OBJ_DIR)/%n.o -m -f "$@" $<
+$(OBJ_DIR)/%.d : %.CXX
+	mkdir -p $(OBJ_DIR); \
+	mkdepend $(LOC_INCLUDES) -p .CXX:$(OBJ_DIR)/%n.o -m -f "$@" $<
+
+-include $(DEPENDS)
+
+# Rules to make the object files.
+$(OBJ_DIR)/%.o : %.c
+	$(CC) -c $< $(INCLUDES) $(CFLAGS) -o "$@"
+$(OBJ_DIR)/%.o : %.cpp
+	$(C++) -c $< $(INCLUDES) $(CFLAGS) -o "$@"
+$(OBJ_DIR)/%.o : %.cp
+	$(CC) -c $< $(INCLUDES) $(CFLAGS) -o "$@"
+$(OBJ_DIR)/%.o : %.cc
+	$(C++) -c $< $(INCLUDES) $(CFLAGS) -o "$@"
+$(OBJ_DIR)/%.o : %.cxx
+	$(C++) -c $< $(INCLUDES) $(CFLAGS) -o "$@"
+$(OBJ_DIR)/%.o : %.C
+	$(CC) -c $< $(INCLUDES) $(CFLAGS) -o "$@"
+$(OBJ_DIR)/%.o : %.CC
+	$(C++) -c $< $(INCLUDES) $(CFLAGS) -o "$@"
+$(OBJ_DIR)/%.o : %.CPP
+	$(C++) -c $< $(INCLUDES) $(CFLAGS) -o "$@"
+$(OBJ_DIR)/%.o : %.CXX
+	$(C++) -c $< $(INCLUDES) $(CFLAGS) -o "$@"
+
+# Rules to compile the resource definition files.
+$(OBJ_DIR)/%.rsrc : %.rdef
+	$(RESCOMP) $< -o "$@"
+#	cat $< | $(CC) -E $(INCLUDES) $(CFLAGS) - | grep -av '^#' | $(RESCOMP) -I $(dir $<) -o "$@" -
+$(OBJ_DIR)/%.rsrc : %.RDEF
+	$(RESCOMP) $< -o "$@"
+#	cat $< | $(CC) -E $(INCLUDES) $(CFLAGS) - | grep -av '^#' | $(RESCOMP) -I $(dir $<) -o "$@" -
+
+# Rule to compile localization data catalogs.
+$(CATALOGS_DIR)/%.catalog : $(CATKEYS_DIR)/%.catkeys
+	linkcatkeys -o "$@" -s $(APP_MIME_SIG) -l $(notdir $(basename $@)) $<
+
+# Rule to preprocess program sources into file ready for collecting catkeys.
+$(OBJ_DIR)/$(NAME).pre : $(SRCS)
+	-cat $(SRCS) | $(CC) -E -x c++ $(INCLUDES) $(CFLAGS) -DB_COLLECTING_CATKEYS - | grep -av '^#' > $(OBJ_DIR)/$(NAME).pre
+
+# Rules to collect localization catkeys.
+catkeys : $(CATKEYS_DIR)/en.catkeys
+
+$(CATKEYS_DIR)/en.catkeys : $(CATKEYS_DIR) $(OBJ_DIR)/$(NAME).pre
+	collectcatkeys -s $(APP_MIME_SIG) $(OBJ_DIR)/$(NAME).pre -o $(CATKEYS_DIR)/en.catkeys
+
+# Rule to create localization catalogs.
+catalogs : $(CATALOGS_DIR) $(CATALOGS)
+
+# Rules to handle lex/flex and yacc/bison files.
+$(OBJ_DIR)/%.o: %.l
+	flex $<
+	$(CC) -c $(INCLUDES) $(CFLAGS) lex.yy.c -o "$@"
+$(OBJ_DIR)/%.o: %.y
+	bison -d -y $<
+	$(CC) -c $(INCLUDES) $(CFLAGS) y.tab.c -o "$@"
+
+# The generic "clean" command. (Deletes everything in the object folder.)
+.PHONY: clean
+clean:
+	-rm -rf "$(OBJ_DIR)"
+
+# Remove just the application from the object folder.
+rmapp ::
+	-rm -f $(TARGET)
+
+# Make it easy to install drivers for testing.
+USER_BIN_PATH := $(shell finddir B_USER_NONPACKAGED_ADDONS_DIRECTORY)/kernel/drivers/bin
+USER_DEV_PATH := $(shell finddir B_USER_NONPACKAGED_ADDONS_DIRECTORY)/kernel/drivers/dev
+
+driverinstall :: default
+ifeq ($(strip $(TYPE)), DRIVER)
+	copyattr --data $(TARGET) $(USER_BIN_PATH)/$(NAME)
+	mkdir -p $(USER_DEV_PATH)/$(DRIVER_PATH)
+	ln -sf $(USER_BIN_PATH)/$(NAME) $(USER_DEV_PATH)/$(DRIVER_PATH)/$(NAME)
+endif
+
+install :: default
+ifeq ($(INSTALL_DIR), )
+	@echo "No install directory specified for \"$(NAME)\" (INSTALL_DIR is empty)" >&2
+else
+	mkdir -p "$(INSTALL_DIR)"
+	cp $(TARGET) "$(INSTALL_DIR)"/$(NAME)
+endif
+
+# Set the catalog installation directory if it isn't already.
+CATALOG_INSTALL_DIR := $(shell finddir B_USER_NONPACKAGED_DATA_DIRECTORY)/locale/catalogs
+
+# Rule to install localization resources catalogs.
+catalogsinstall :: catalogs
+	mkdir -p "$(CATALOG_INSTALL_DIR)/$(APP_MIME_SIG)"
+	-cp $(CATALOGS_DIR)/*.catalog "$(CATALOG_INSTALL_DIR)/$(APP_MIME_SIG)"
+
+# Alternate way of storing localization catalogs: bind them into the program
+# executable's resources.
+bindcatalogs :
+	for lc in $(LOCALES); do linkcatkeys -o $(TARGET) -s $(APP_MIME_SIG) -tr -l $$lc $(CATKEYS_DIR)/$$lc.catkeys; done

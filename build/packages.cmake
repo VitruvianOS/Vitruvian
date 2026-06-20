@@ -5,6 +5,7 @@ function( ImageInclude path )
 	foreach(arg IN LISTS ARGN)
 		install(TARGETS ${arg}
 			COMPONENT ${path}
+			ARCHIVE DESTINATION ${path}
 			RUNTIME DESTINATION ${path}
 			LIBRARY DESTINATION ${path}
 			DESTINATION ${path}

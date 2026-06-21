@@ -756,7 +756,7 @@ TTracker::InstallTemporaryBackgroundImages()
 	}
 	path.Append("artwork");
 
-	BString defaultBackgroundImage("/HAIKU logo - white on blue - big.png");
+	BString defaultBackgroundImage("/V_OS logo.png");
 
 	BDirectory dir;
 	if (FSGetBootDeskDir(&dir) == B_OK) {

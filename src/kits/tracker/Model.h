@@ -255,6 +255,7 @@ private:
 
 	entry_ref fEntryRef;
 	StatStruct fStatBuf;
+	node_ref fNodeRef;
 	BString fMimeType;
 		// should use string that may be shared for common types
 
@@ -345,8 +346,7 @@ Model::EntryRef() const
 inline const node_ref*
 Model::NodeRef() const
 {
-	// stat structure begins with st_dev/st_ino which match node_ref layout
-	return (node_ref*)&fStatBuf;
+	return &fNodeRef;
 }
 
 

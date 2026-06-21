@@ -1060,14 +1060,24 @@ BApplication::DispatchMessage(BMessage* message, BHandler* handler)
 				if (entry.IsDirectory())
 					BRoster().AddToRecentFolders(&ref);
 				else {
-					// filter out applications, we only want to have documents
-					// in the recent files list
-					BNode node(&entry);
-					BNodeInfo info(&node);
+					// Recent files: filter out apps (their BEOS:TYPE is
+					// the app's own signature, not B_APP_MIME_TYPE).
+					BFile file(&entry, B_READ_ONLY);
+					BAppFileInfo appInfo(&file);
+					char sig[B_MIME_TYPE_LENGTH];
+					bool isApp = appInfo.InitCheck() == B_OK
+						&& appInfo.GetSignature(sig) == B_OK;
 
-					char mimeType[B_MIME_TYPE_LENGTH];
-					if (info.GetType(mimeType) != B_OK
-						|| strcasecmp(mimeType, B_APP_MIME_TYPE))
+					if (!isApp) {
+						BNode node(&entry);
+						BNodeInfo info(&node);
+						char mimeType[B_MIME_TYPE_LENGTH];
+						if (info.GetType(mimeType) == B_OK
+							&& strcasecmp(mimeType, B_APP_MIME_TYPE) == 0)
+							isApp = true;
+					}
+
+					if (!isApp)
 						BRoster().AddToRecentDocuments(&ref);
 				}
 			}

@@ -39,6 +39,9 @@ All rights reserved.
 #include <errno.h>
 #include <SupportDefs.h>
 
+#include <AppFileInfo.h>
+#include <File.h>
+
 #include "NodeWalker.h"
 
 
@@ -639,12 +642,72 @@ TVolWalker::Rewind()
 }
 
 
+#ifdef __VOS__
+static const char* const kVosAppScanDirs[] = {
+	"/system/apps",
+	"/system/preferences",
+	"/system/servers",
+	"/system",
+	"/system/bin",
+	NULL
+};
+
+
+static void
+parse_app_sig_predicate(const char* predicate,
+	BObjectList<BString, true>* allowedSigs, bool* acceptAny)
+{
+	// Extract every BEOS:APP_SIG = "..." or BEOS:APP_SIG = bareword clause.
+	*acceptAny = false;
+	const char* kAttr = "BEOS:APP_SIG";
+	const char* p = predicate;
+	while ((p = strstr(p, kAttr)) != NULL) {
+		p += strlen(kAttr);
+		while (*p == ' ' || *p == '=') p++;
+		const char* end;
+		BString sig;
+		if (*p == '"') {
+			p++;
+			end = strchr(p, '"');
+			if (end == NULL) break;
+			sig.SetTo(p, end - p);
+			p = end + 1;
+		} else {
+			end = p;
+			while (*end && *end != ' ' && *end != ')' && *end != '|'
+				&& *end != '&')
+				end++;
+			sig.SetTo(p, end - p);
+			p = end;
+		}
+		if (sig == "*") {
+			*acceptAny = true;
+		} else if (sig.Length() > 0) {
+			allowedSigs->AddItem(new BString(sig));
+		}
+	}
+}
+#endif
+
+
 TQueryWalker::TQueryWalker(const char* predicate)
 	:
 	TWalker(),
 	fTime(0)
 {
 	fPredicate = strdup(predicate);
+#ifdef __VOS__
+	fVosAppScan = false;
+	fVosAcceptAny = false;
+	fVosAllowedSigs = new BObjectList<BString, true>(20);
+	fVosDirIndex = 0;
+	if (predicate != NULL && strstr(predicate, "BEOS:APP_SIG") != NULL) {
+		fVosAppScan = true;
+		parse_app_sig_predicate(predicate, fVosAllowedSigs, &fVosAcceptAny);
+		fVosCurrentDir.SetTo(kVosAppScanDirs[0]);
+		return;
+	}
+#endif
 	NextVolume();
 }
 
@@ -653,12 +716,70 @@ TQueryWalker::~TQueryWalker()
 {
 	free((char*)fPredicate);
 	fPredicate = NULL;
+#ifdef __VOS__
+	delete fVosAllowedSigs;
+#endif
 }
+
+
+#ifdef __VOS__
+static bool
+vos_entry_matches(const entry_ref& ref, bool acceptAny,
+	BObjectList<BString, true>* allowedSigs)
+{
+	BFile file(&ref, B_READ_ONLY);
+	if (file.InitCheck() != B_OK)
+		return false;
+	BAppFileInfo info(&file);
+	if (info.InitCheck() != B_OK)
+		return false;
+	char sig[B_MIME_TYPE_LENGTH];
+	if (info.GetSignature(sig) != B_OK)
+		return false;
+	if (acceptAny)
+		return true;
+	for (int32 i = 0; i < allowedSigs->CountItems(); i++) {
+		if (allowedSigs->ItemAt(i)->ICompare(sig) == 0)
+			return true;
+	}
+	return false;
+}
+
+
+status_t
+TQueryWalker::_VosGetNextRef(entry_ref* ref)
+{
+	for (;;) {
+		entry_ref candidate;
+		status_t status = fVosCurrentDir.GetNextRef(&candidate);
+		if (status == B_OK) {
+			if (vos_entry_matches(candidate, fVosAcceptAny, fVosAllowedSigs)) {
+				*ref = candidate;
+				return B_OK;
+			}
+			continue;
+		}
+		fVosDirIndex++;
+		if (kVosAppScanDirs[fVosDirIndex] == NULL)
+			return B_ENTRY_NOT_FOUND;
+		fVosCurrentDir.SetTo(kVosAppScanDirs[fVosDirIndex]);
+	}
+}
+#endif
 
 
 status_t
 TQueryWalker::GetNextEntry(BEntry* entry, bool traverse)
 {
+#ifdef __VOS__
+	if (fVosAppScan) {
+		entry_ref ref;
+		status_t status = _VosGetNextRef(&ref);
+		if (status != B_OK)
+			return status;
+		return entry->SetTo(&ref, traverse);
+	}
+#endif
 	status_t result;
 	do {
 		result = fQuery.GetNextEntry(entry, traverse);
@@ -675,6 +796,10 @@ TQueryWalker::GetNextEntry(BEntry* entry, bool traverse)
 status_t
 TQueryWalker::GetNextRef(entry_ref* ref)
 {
+#ifdef __VOS__
+	if (fVosAppScan)
+		return _VosGetNextRef(ref);
+#endif
 	status_t result;
 
 	for (;;) {
@@ -742,6 +867,13 @@ TQueryWalker::CountEntries()
 status_t
 TQueryWalker::Rewind()
 {
+#ifdef __VOS__
+	if (fVosAppScan) {
+		fVosDirIndex = 0;
+		fVosCurrentDir.SetTo(kVosAppScanDirs[0]);
+		return B_OK;
+	}
+#endif
 	fVolRoster.Rewind();
 	return NextVolume();
 }

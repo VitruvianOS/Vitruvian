@@ -5197,7 +5197,7 @@ BPoseView::MoveSelectionInto(Model* destFolder, BContainerWindow* srcWindow,
 	}
 
 	// can't copy to read-only volume
-	BVolume destVolume(destFolder->NodeRef()->dev());
+	BVolume destVolume(destFolder->NodeRef()->dereference().dev());
 	if (destVolume.InitCheck() == B_OK && destVolume.IsReadOnly()) {
 		BAlert* alert = new BAlert("",
 			B_TRANSLATE("You can't move or copy items to read-only volumes."),
@@ -5473,7 +5473,9 @@ BPoseView::FSNotification(const BMessage* message)
 	Model* targetModel = TargetModel();
 	TrackerSettings settings;
 
-	switch (message->GetInt32("opcode", 0)) {
+	int32 opcode = message->GetInt32("opcode", 0);
+
+	switch (opcode) {
 		case B_ENTRY_CREATED:
 		{
 			ASSERT(targetModel != NULL);

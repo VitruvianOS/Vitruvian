@@ -1434,8 +1434,18 @@ SearchForSignatureEntryList::Rewind()
 	if (fIteratorList)
 		return fIteratorList->Rewind();
 
-	if (!fSignatures.CountStrings())
+	if (!fSignatures.CountStrings()) {
+#ifdef __VOS__
+		// BQuery is unimplemented and GetSupportingApps frequently returns
+		// empty (registrar in-memory table not fully populated). Fall
+		// through to the all-apps iterator so the Open With list isn't
+		// blank — the relation/filter pass still narrows the result.
+		if (!fCanAddAllApps)
+			return B_ENTRY_NOT_FOUND;
+#else
 		return B_ENTRY_NOT_FOUND;
+#endif
+	}
 
 	// build up the iterator
 	fIteratorList = new CachedEntryIteratorList(false);
@@ -1452,10 +1462,11 @@ SearchForSignatureEntryList::Rewind()
 
 	fSignatures.DoForEach(AddOnePredicateTerm, &params);
 
-	ASSERT(predicateString.Length());
 //	PRINT(("query predicate %s\n", predicateString.String()));
-	fIteratorList->AddItem(new TWalkerWrapper(
-		new BTrackerPrivate::TQueryWalker(predicateString.String())));
+	if (predicateString.Length() > 0) {
+		fIteratorList->AddItem(new TWalkerWrapper(
+			new BTrackerPrivate::TQueryWalker(predicateString.String())));
+	}
 	fIteratorList->AddItem(new ConditionalAllAppsIterator(this));
 
 	return fIteratorList->Rewind();

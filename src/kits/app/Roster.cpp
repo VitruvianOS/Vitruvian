@@ -405,6 +405,11 @@ query_for_app(const char* signature, entry_ref* appRef)
 	if (error != B_OK && signature != NULL) {
 		const char* searchPaths[] = {
 			"/system/apps",
+			"/system/preferences",
+			"/system/demos",
+			"/system/servers",
+			"/system",
+			"/system/lib",
 			"/system/bin",
 			NULL
 		};
@@ -420,13 +425,16 @@ query_for_app(const char* signature, entry_ref* appRef)
 				if (entry.GetRef(&ref) != B_OK)
 					continue;
 
-				// Check if this app has the signature we're looking for
 				BFile file(&ref, B_READ_ONLY);
 				BAppFileInfo appFileInfo(&file);
+				if (appFileInfo.InitCheck() != B_OK)
+					continue;
+
 				char fileSig[B_MIME_TYPE_LENGTH];
-				if (appFileInfo.InitCheck() == B_OK
-					&& appFileInfo.GetSignature(fileSig) == B_OK
-					&& strcasecmp(fileSig, signature) == 0
+				if (appFileInfo.GetSignature(fileSig) != B_OK)
+					continue;
+
+				if (strcasecmp(fileSig, signature) == 0
 					&& can_app_be_used(&ref) == B_OK) {
 					*appRef = ref;
 					return B_OK;
@@ -2418,6 +2426,14 @@ BRoster::_TranslateType(const char* mimeType, BMimeType* appMeta,
 			if (type.GetPreferredApp(primarySignature) != B_OK) {
 				// The type is installed, but has no preferred app.
 				primarySignature[0] = '\0';
+#ifdef __VOS__
+				// No BQuery fallback; for application/* types the sig IS
+				// the app, so seed primarySignature and let GetAppHint resolve.
+				if (strncmp(mimeType, "application/", 12) == 0) {
+					strlcpy(primarySignature, mimeType,
+						sizeof(primarySignature));
+				}
+#endif
 			} else if (!strcmp(primarySignature, secondarySignature)) {
 				// Both types have the same preferred app, there is
 				// no point in testing it twice.

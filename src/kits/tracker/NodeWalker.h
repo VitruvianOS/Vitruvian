@@ -40,6 +40,7 @@ All rights reserved.
 #endif
 #include <Directory.h>
 #include <Entry.h>
+#include <String.h>
 #include <EntryList.h>
 #include <List.h>
 #include <ObjectList.h>
@@ -168,6 +169,16 @@ private:
 	BVolume fVol;
 	bigtime_t fTime;
 	const char* fPredicate;
+
+#ifdef __VOS__
+	// BQuery fallback: walk /system/apps, filter by BEOS:APP_SIG xattr.
+	bool fVosAppScan;
+	bool fVosAcceptAny;
+	BObjectList<BString, true>* fVosAllowedSigs;
+	int32 fVosDirIndex;
+	BDirectory fVosCurrentDir;
+	status_t _VosGetNextRef(entry_ref* ref);
+#endif
 
 	typedef TQueryWalker _inherited;
 };

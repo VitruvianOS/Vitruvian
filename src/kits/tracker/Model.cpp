@@ -131,6 +131,7 @@ Model::Model(const Model& other)
 	fLocalizedNameIsCached(other.fLocalizedNameIsCached)
 {
 	fStatBuf = other.fStatBuf;
+	fNodeRef = other.fNodeRef;
 
 	if (other.IsSymLink() && other.LinkTo())
 		fLinkTo = new Model(*other.LinkTo());
@@ -139,10 +140,7 @@ Model::Model(const Model& other)
 	if (fStatus == B_OK) {
 		ASSERT(fNode);
 		fNode->GetStat(&fStatBuf);
-#if 0
-		ASSERT(fStatBuf.st_dev == other.NodeRef()->dev());
-		ASSERT(fStatBuf.st_ino == other.NodeRef()->ino());
-#endif
+		fNode->GetNodeRef(&fNodeRef);
 	}
 	if (!other.IsNodeOpen())
 		CloseNode();
@@ -252,6 +250,8 @@ Model::SetTo(const BEntry* entry, bool open, bool writable)
 		return fStatus;
 
 	fStatus = OpenNode(writable);
+	if (fStatus == B_OK && fNode != NULL)
+		fNode->GetNodeRef(&fNodeRef);
 	if (!open)
 		CloseNode();
 
@@ -284,6 +284,8 @@ Model::SetTo(const entry_ref* newRef, bool traverse, bool open, bool writable)
 		return fStatus;
 
 	fStatus = OpenNode(writable);
+	if (fStatus == B_OK && fNode != NULL)
+		fNode->GetNodeRef(&fNodeRef);
 	if (!open)
 		CloseNode();
 
@@ -325,6 +327,8 @@ Model::SetTo(const node_ref* dirNode, const node_ref* nodeRef,
 		return fStatus;
 
 	fStatus = OpenNode(writable);
+	if (fStatus == B_OK && fNode != NULL)
+		fNode->GetNodeRef(&fNodeRef);
 
 	if (!open)
 		CloseNode();
@@ -538,6 +542,8 @@ Model::OpenNodeCommon(bool writable)
 		// original code snoozed an error here and returned B_OK
 		return fStatus;
 	}
+
+	fNode->GetNodeRef(&fNodeRef);
 
 	fWritable = writable;
 

@@ -334,6 +334,11 @@ MessageAdapter::_ConvertFromKMessage(const KMessage *fromMessage,
 		}
 	}
 
+#ifndef KMESSAGE_NO_VREF_SUPPORT
+	// node_monitor pre-grants slots without AdoptCaps; take ownership.
+	BMessage::Private(toMessage).AcquireVRefsAsReceived();
+#endif
+
 	return B_OK;
 }
 

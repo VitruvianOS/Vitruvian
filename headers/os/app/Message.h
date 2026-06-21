@@ -35,6 +35,8 @@ class BStringList;
 struct entry_ref;
 struct rgb_color;
 
+namespace BPrivate { typedef uint64 vref_ticket; }
+
 
 // Name lengths and Scripting specifiers
 #define B_FIELD_NAME_LENGTH			255
@@ -532,6 +534,21 @@ public:
 private:
 	friend class Private;
 	friend class BMessageQueue;
+	friend void _HandleMessageVRefs(BMessage*, bool);
+
+	// Buffer-walking cap collector for raw-buffer transports
+	// (BView::DragMessage). Caller frees *outCaps.
+	static	status_t			_CollectSendBufferCaps(char* buffer,
+									port_cap_in** outCaps,
+									size_t* outCount);
+
+#ifndef KMESSAGE_NO_VREF_SUPPORT
+	// Merge AdoptCaps tickets into fVrefTickets; collisions release
+	// the in-process duplicate, keeping the kernel-minted ticket.
+	static	void				_RegisterAdoptedTickets(BMessage* message,
+									const port_cap_out* caps, size_t count,
+									const BPrivate::vref_ticket* tickets);
+#endif
 
 			status_t			_InitCommon(bool initHeader);
 			status_t			_InitHeader();
@@ -575,8 +592,11 @@ private:
 	static	status_t			_SendFlattenedMessage(void* data, int32 size,
 									port_id port, int32 token,
 									bigtime_t timeout);
-	static	void				_PatchAdoptedFlagsRec(void* buffer,
-									size_t size);
+
+			// Take a ticket per embedded vref id. For transports that
+			// pre-grant slots without AdoptCaps (kernel node_monitor).
+			void				_AcquireVRefsAsReceived();
+			void				_TrackOwnedVRef(vref_id id);
 
 	static	void				_StaticInit();
 	static	void				_StaticReInitForkedChild();
@@ -599,7 +619,11 @@ private:
 
 			void*				fArchivingPointer;
 
-			uint32				fReserved[8];
+			// VRefCache tickets per held vref id. Opaque
+			// std::map<vref_id, vref_ticket>*; NULL when none held.
+			void*				fVrefTickets;
+
+			uint32				fReserved[6];
 
 			enum				{ sNumReplyPorts = 3 };
 	static	port_id				sReplyPorts[sNumReplyPorts];

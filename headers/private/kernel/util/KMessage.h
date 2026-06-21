@@ -21,7 +21,18 @@ class BMessage;
 namespace BPrivate {
 
 class KMessageField;
+class KMessage;
 class MessageAdapter;
+
+}	// namespace BPrivate
+
+namespace BPrivate { typedef uint64 vref_ticket; }
+
+void _HandleVRefs(BPrivate::KMessage*, bool);
+void _RegisterAdoptedTickets(BPrivate::KMessage*, const port_cap_out*,
+	size_t, const BPrivate::vref_ticket*);
+
+namespace BPrivate {
 
 
 class KMessage {
@@ -31,6 +42,9 @@ public:
 				KMESSAGE_INIT_FROM_BUFFER	= 0x02,
 				KMESSAGE_CLONE_BUFFER		= 0x04,
 				KMESSAGE_READ_ONLY			= 0x08,
+				// Set iff this KMessage holds vref soft_refs; gates
+				// Unset's release walk against manual SetTo(buffer).
+				KMESSAGE_OWNS_VREFS			= 0x10,
 
 				KMESSAGE_FLAG_MASK			= 0x07,
 			};
@@ -211,9 +225,12 @@ public:
 			void				Dump(void (*printFunc)(const char*, ...)) const;
 
 private:
-			friend class KMessageField;
-			friend class MessageAdapter;
-			friend class ::BMessage;	// not so nice, but makes things easier
+		friend class KMessageField;
+		friend class MessageAdapter;
+		friend class ::BMessage;	// not so nice, but makes things easier
+		friend void ::_HandleVRefs(KMessage*, bool);
+		friend void ::_RegisterAdoptedTickets(KMessage*, const port_cap_out*,
+			size_t, const BPrivate::vref_ticket*);
 
 			struct Header {
 				uint32		magic;
@@ -265,6 +282,7 @@ private:
 			int32				fBufferCapacity;
 			uint32				fFlags;
 			int32				fLastFieldOffset;
+			void*				fVrefTickets;	// std::map<vref_id, uint64>*
 
 	static	const uint32		kMessageHeaderMagic;
 };

@@ -1105,12 +1105,7 @@ BMessage*
 BLooper::ReadMessageFromPort(bigtime_t timeout)
 {
 	PRINT(("BLooper::ReadMessageFromPort()\n"));
-	int32 msgCode;
-	BMessage* message = NULL;
 
-	// read_port_with_caps so vrefs come back as (id, key) pairs we can
-	// AdoptCaps before Unflatten sees the bytes. Grow cap+message
-	// buffers on B_BUFFER_OVERFLOW.
 	ssize_t bufferSize;
 	do {
 		bufferSize = port_buffer_size_etc(fMsgPort, B_RELATIVE_TIMEOUT,
@@ -1129,8 +1124,9 @@ BLooper::ReadMessageFromPort(bigtime_t timeout)
 	port_cap_out stackCaps[8];
 	port_cap_out* caps = stackCaps;
 	size_t capsCapacity = sizeof(stackCaps) / sizeof(stackCaps[0]);
-	size_t actualBytes;
-	size_t actualCaps;
+	size_t actualBytes = 0;
+	size_t actualCaps = 0;
+	int32 msgCode;
 	ssize_t readResult;
 	for (;;) {
 		actualBytes = bufferSize;
@@ -1141,7 +1137,7 @@ BLooper::ReadMessageFromPort(bigtime_t timeout)
 			continue;
 		if (readResult != B_BUFFER_OVERFLOW)
 			break;
-		// The kernel tells us how much more it needs. Reallocate.
+
 		if (actualCaps > capsCapacity) {
 			if (caps != stackCaps)
 				free(caps);
@@ -1156,7 +1152,8 @@ BLooper::ReadMessageFromPort(bigtime_t timeout)
 			free(buffer);
 			buffer = malloc(actualBytes);
 			if (buffer == NULL) {
-				if (caps != stackCaps) free(caps);
+				if (caps != stackCaps)
+					free(caps);
 				return NULL;
 			}
 			bufferSize = (ssize_t)actualBytes;
@@ -1165,20 +1162,37 @@ BLooper::ReadMessageFromPort(bigtime_t timeout)
 
 	if (readResult < B_OK) {
 		free(buffer);
-		if (caps != stackCaps) free(caps);
+		if (caps != stackCaps)
+			free(caps);
 		return NULL;
 	}
 
-	// Adopt cap-borne (id, key) pairs into VRefCache so subsequent
-	// VRefCache::Open / Release calls work. Keys stay inside the cache.
-	BPrivate::VRefCache::AdoptCaps(caps, actualCaps);
+	// Adopt the kernel-minted caps. Do NOT stamp CAPS_ADOPTED on the
+	// buffer — copies must run their own acquire pass; RegisterAdoptedTickets
+	// dedups by keeping the kernel-minted ticket.
+	std::vector<BPrivate::vref_ticket> adoptedTickets;
+	if (actualCaps > 0)
+		adoptedTickets.resize(actualCaps);
+	BPrivate::VRefCache::AdoptCaps(caps, actualCaps,
+		actualCaps > 0 ? adoptedTickets.data() : NULL);
 
-	// Stamp CAPS_ADOPTED on the outer + every nested message_header so
-	// Unflatten skips the OWNS_VREFS acquire pass (caps already adopted).
-	if (actualCaps > 0 && buffer != NULL)
-		BMessage::Private::PatchAdoptedFlagsRec(buffer, actualBytes);
+	BMessage* message = ConvertToMessage(buffer, msgCode);
 
-	message = ConvertToMessage(buffer, msgCode);
+	if (actualCaps > 0) {
+		if (message != NULL) {
+			BMessage::Private::RegisterAdoptedTickets(message,
+				caps, actualCaps, adoptedTickets.data());
+		} else {
+			for (size_t i = 0; i < actualCaps; i++) {
+				if (caps[i].kind == B_PORT_CAP_VREF
+						&& adoptedTickets[i]
+							!= BPrivate::B_INVALID_VREF_TICKET) {
+					BPrivate::VRefCache::Release(caps[i].vref_id_,
+						adoptedTickets[i]);
+				}
+			}
+		}
+	}
 
 	free(buffer);
 	if (caps != stackCaps)

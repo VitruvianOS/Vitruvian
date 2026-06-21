@@ -58,7 +58,9 @@ LinkReceiver::LinkReceiver(port_id port)
 	:
 	fReceivePort(port), fRecvBuffer(NULL), fRecvPosition(0), fRecvStart(0),
 	fRecvBufferSize(0), fDataSize(0),
-	fReplySize(0), fReadError(B_OK)
+	fReplySize(0), fReadError(B_OK),
+	fCapAware(true), fReceivedCaps(NULL), fReceivedCapCount(0),
+	fReceivedCapCapacity(0)
 {
 }
 
@@ -66,6 +68,19 @@ LinkReceiver::LinkReceiver(port_id port)
 LinkReceiver::~LinkReceiver()
 {
 	free(fRecvBuffer);
+	free(fReceivedCaps);
+}
+
+
+status_t
+LinkReceiver::TakeVRefCaps(port_cap_out** outCaps, size_t* outCount)
+{
+	*outCaps = fReceivedCaps;
+	*outCount = fReceivedCapCount;
+	fReceivedCaps = NULL;
+	fReceivedCapCount = 0;
+	fReceivedCapCapacity = 0;
+	return B_OK;
 }
 
 
@@ -233,7 +248,38 @@ LinkReceiver::ReadFromPort(bigtime_t timeout)
 
 	STRACE(("info: LinkReceiver reading port %ld.\n", fReceivePort));
 	while (true) {
-		if (timeout != B_INFINITE_TIMEOUT) {
+		if (fCapAware) {
+			// Best-effort cap pickup; overflow degrades to no-caps.
+			size_t bufSz = fRecvBufferSize;
+			port_cap_out localCaps[16];
+			size_t capCount = 16;
+			uint32 flags = (timeout != B_INFINITE_TIMEOUT)
+				? B_TIMEOUT : 0;
+			bigtime_t to = (timeout != B_INFINITE_TIMEOUT)
+				? timeout : B_INFINITE_TIMEOUT;
+			do {
+				bufSz = fRecvBufferSize;
+				capCount = 16;
+				bytesRead = read_port_with_caps(fReceivePort, &code,
+					fRecvBuffer, &bufSz, localCaps, &capCount,
+					flags, to);
+			} while (bytesRead == B_INTERRUPTED);
+			if (bytesRead >= 0) {
+				bytesRead = (ssize_t)bufSz;
+				if (capCount > 0) {
+					port_cap_out* grown = (port_cap_out*)malloc(
+						capCount * sizeof(port_cap_out));
+					if (grown != NULL) {
+						memcpy(grown, localCaps,
+							capCount * sizeof(port_cap_out));
+						free(fReceivedCaps);
+						fReceivedCaps = grown;
+						fReceivedCapCount = capCount;
+						fReceivedCapCapacity = capCount;
+					}
+				}
+			}
+		} else if (timeout != B_INFINITE_TIMEOUT) {
 			do {
 				bytesRead = read_port_etc(fReceivePort, &code, fRecvBuffer,
 					fRecvBufferSize, B_TIMEOUT, timeout);

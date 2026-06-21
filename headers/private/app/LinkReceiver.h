@@ -49,6 +49,13 @@ class LinkReceiver {
 		template <class Type> status_t Read(Type *data)
 			{ return Read(data, sizeof(Type)); }
 
+		// Cap-aware read path: SetCapAware(true) makes the next
+		// ReadFromPort capture caps; TakeVRefCaps hands them off.
+		void SetCapAware(bool aware) { fCapAware = aware; }
+		bool IsCapAware() const { return fCapAware; }
+		size_t HasVRefCaps() const { return fReceivedCapCount; }
+		status_t TakeVRefCaps(port_cap_out** outCaps, size_t* outCount);
+
 	protected:
 		virtual status_t ReadFromPort(bigtime_t timeout);
 		virtual status_t AdjustReplyBuffer(bigtime_t timeout);
@@ -65,6 +72,11 @@ class LinkReceiver {
 		int32	fReplySize;	//size of current reply message
 
 		status_t fReadError;	//Read failed for current message
+
+		bool fCapAware;
+		port_cap_out* fReceivedCaps;
+		size_t fReceivedCapCount;
+		size_t fReceivedCapCapacity;
 };
 
 }	// namespace BPrivate

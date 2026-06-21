@@ -221,10 +221,26 @@ class BMessage::Private {
 				port, token, timeout);
 		}
 
-		static void
-		PatchAdoptedFlagsRec(void* buffer, size_t size)
+		void
+		AcquireVRefsAsReceived()
 		{
-			BMessage::_PatchAdoptedFlagsRec(buffer, size);
+			fMessage->_AcquireVRefsAsReceived();
+		}
+
+		static status_t
+		CollectSendBufferCaps(char* buffer, port_cap_in** outCaps,
+			size_t* outCount)
+		{
+			return BMessage::_CollectSendBufferCaps(buffer, outCaps,
+				outCount);
+		}
+
+		static void
+		RegisterAdoptedTickets(BMessage* message,
+			const port_cap_out* caps, size_t count,
+			const BPrivate::vref_ticket* tickets)
+		{
+			BMessage::_RegisterAdoptedTickets(message, caps, count, tickets);
 		}
 
 		static void

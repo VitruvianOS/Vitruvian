@@ -1520,12 +1520,26 @@ BView::DragMessage(BMessage* message, BBitmap* image,
 	if (buffer != NULL) {
 		message->Flatten(buffer, bufferSize);
 
+		// Collect vref caps so the receiver (app_server, then drop
+		// target) can resolve embedded entry_refs. Without this the
+		// raw-buffer transport strips identity and BEntry(ref) fails
+		// downstream.
+		port_cap_in* dragCaps = NULL;
+		size_t dragCapCount = 0;
+		BMessage::Private::CollectSendBufferCaps(buffer, &dragCaps,
+			&dragCapCount);
+
 		fOwner->fLink->StartMessage(AS_VIEW_DRAG_IMAGE);
 		fOwner->fLink->Attach<int32>(image->_ServerToken());
 		fOwner->fLink->Attach<int32>((int32)dragMode);
 		fOwner->fLink->Attach<BPoint>(offset);
 		fOwner->fLink->Attach<int32>(bufferSize);
 		fOwner->fLink->Attach(buffer, bufferSize);
+
+		if (dragCapCount > 0) {
+			fOwner->fLink->AttachVRefCaps(dragCaps, dragCapCount);
+			free(dragCaps);
+		}
 
 		// we need to wait for the server
 		// to actually process this message

@@ -9,6 +9,8 @@
 
 #include <stdlib.h>
 
+#include <map>
+#include <new>
 #include <vector>
 #include <string.h>
 
@@ -55,7 +57,23 @@
 #endif
 
 
+static const size_t kVRefHeaderBytes = sizeof(dev_t) + sizeof(ino_t);
+
+
 #ifndef KMESSAGE_NO_VREF_SUPPORT
+// Parses the leading (dev_t, ino_t) from a B_REF_TYPE / B_NODE_REF_TYPE
+// element payload. Returns false if the payload is too short.
+static bool
+_ReadVRefHeader(const void* data, int32 size, dev_t* outDev, ino_t* outId)
+{
+	if (data == NULL || size < (int32)kVRefHeaderBytes)
+		return false;
+	memcpy(outDev, data, sizeof(dev_t));
+	memcpy(outId, (const char*)data + sizeof(dev_t), sizeof(ino_t));
+	return true;
+}
+
+
 // Cap collector for KMessage. One port_cap_in per virtual B_REF_TYPE /
 // B_NODE_REF_TYPE element. Caller frees *outCaps.
 static status_t
@@ -79,13 +97,10 @@ _CollectKMessageCaps(const KMessage* message, port_cap_in** outCaps,
 		for (int32 i = 0; i < count; i++) {
 			int32 size;
 			const char* data = (const char*)field.ElementAt(i, &size);
-			if (data == NULL
-					|| size < (int32)(sizeof(dev_t) + sizeof(ino_t)))
-				continue;
 			dev_t device;
 			ino_t id_or_node;
-			memcpy(&device, data, sizeof(dev_t));
-			memcpy(&id_or_node, data + sizeof(dev_t), sizeof(ino_t));
+			if (!_ReadVRefHeader(data, size, &device, &id_or_node))
+				continue;
 			if (device != vrefDev || id_or_node < 0)
 				continue;
 			port_cap_in cap;
@@ -109,59 +124,101 @@ _CollectKMessageCaps(const KMessage* message, port_cap_in** outCaps,
 }
 
 
-static void
-_HandleVRefs(const KMessage* message, bool acquire)
+typedef std::map<vref_id, uint64> KMessageVRefTicketMap;
+
+
+void
+_HandleVRefs(KMessage* message, bool acquire)
 {
 	dev_t vrefDev = get_vref_dev();
 	if (vrefDev == B_INVALID_DEV)
 		return;
 
+	KMessageVRefTicketMap* tickets =
+		reinterpret_cast<KMessageVRefTicketMap*>(message->fVrefTickets);
+
+	if (!acquire) {
+		if (tickets == NULL)
+			return;
+		for (auto& kv : *tickets) {
+			if (kv.second != BPrivate::B_INVALID_VREF_TICKET)
+				BPrivate::VRefCache::Release(kv.first, kv.second);
+		}
+		delete tickets;
+		message->fVrefTickets = NULL;
+		return;
+	}
+
+	if (tickets == NULL) {
+		tickets = new(std::nothrow) KMessageVRefTicketMap();
+		if (tickets == NULL)
+			return;
+		message->fVrefTickets = tickets;
+	}
+
 	KMessageField field;
 	while (message->GetNextField(&field) == B_OK) {
 		type_code type = field.TypeCode();
+		if (type != B_REF_TYPE && type != B_NODE_REF_TYPE)
+			continue;
+
 		int32 count = field.CountElements();
+		for (int32 i = 0; i < count; i++) {
+			int32 size;
+			const char* data = (const char*)field.ElementAt(i, &size);
+			dev_t device;
+			ino_t fieldId;
+			if (!_ReadVRefHeader(data, size, &device, &fieldId))
+				continue;
+			if (device != vrefDev || fieldId < 0)
+				continue;
 
-		if (type == B_REF_TYPE) {
-			// entry_ref: dev_t + ino_t (directory) + name
-			// If device == vrefDev, directory is the vref_id
-			for (int32 i = 0; i < count; i++) {
-				int32 size;
-				const char* data = (const char*)field.ElementAt(i, &size);
-				if (data != NULL && size >= (int32)(sizeof(dev_t) + sizeof(ino_t))) {
-					dev_t device;
-					ino_t directory;
-					memcpy(&device, data, sizeof(dev_t));
-					memcpy(&directory, data + sizeof(dev_t), sizeof(ino_t));
+			vref_id vref = (vref_id)fieldId;
+			if (tickets->find(vref) != tickets->end())
+				continue;
+			BPrivate::vref_ticket t = BPrivate::VRefCache::Acquire(vref);
+			if (t != BPrivate::B_INVALID_VREF_TICKET)
+				(*tickets)[vref] = t;
+		}
+	}
+}
 
-					if (device == vrefDev && directory >= 0) {
-						if (acquire)
-							BPrivate::VRefCache::Acquire((vref_id)directory);
-						else
-							BPrivate::VRefCache::Release((vref_id)directory);
-					}
-				}
-			}
-		} else if (type == B_NODE_REF_TYPE) {
-			// node_ref: dev_t + ino_t (node)
-			// If device == vrefDev, node is the vref_id
-			for (int32 i = 0; i < count; i++) {
-				int32 size;
-				const char* data = (const char*)field.ElementAt(i, &size);
-				if (data != NULL && size >= (int32)(sizeof(dev_t) + sizeof(ino_t))) {
-					dev_t device;
-					ino_t node;
-					memcpy(&device, data, sizeof(dev_t));
-					memcpy(&node, data + sizeof(dev_t), sizeof(ino_t));
 
-					if (device == vrefDev && node >= 0) {
-						if (acquire)
-							BPrivate::VRefCache::Acquire((vref_id)node);
-						else
-							BPrivate::VRefCache::Release((vref_id)node);
-					}
-				}
+void
+_RegisterAdoptedTickets(KMessage* message, const port_cap_out* caps,
+	size_t count, const BPrivate::vref_ticket* tickets)
+{
+	if (caps == NULL || tickets == NULL || count == 0)
+		return;
+
+	KMessageVRefTicketMap* ticketMap =
+		reinterpret_cast<KMessageVRefTicketMap*>(message->fVrefTickets);
+
+	for (size_t i = 0; i < count; i++) {
+		if (caps[i].kind != B_PORT_CAP_VREF)
+			continue;
+		if (tickets[i] == BPrivate::B_INVALID_VREF_TICKET)
+			continue;
+
+		vref_id vref = (vref_id)caps[i].vref_id_;
+
+		if (ticketMap != NULL) {
+			auto existing = ticketMap->find(vref);
+			if (existing != ticketMap->end()) {
+				BPrivate::VRefCache::Release(vref, existing->second);
+				existing->second = tickets[i];
+				continue;
 			}
 		}
+
+		if (ticketMap == NULL) {
+			ticketMap = new(std::nothrow) KMessageVRefTicketMap();
+			if (ticketMap == NULL)
+				return;
+			message->fVrefTickets = ticketMap;
+		}
+
+		(*ticketMap)[vref] = tickets[i];
 	}
 }
 #endif
@@ -262,7 +319,8 @@ KMessage::KMessage()
 	fBuffer(NULL),
 	fBufferCapacity(0),
 	fFlags(0),
-	fLastFieldOffset(0)
+	fLastFieldOffset(0),
+	fVrefTickets(NULL)
 {
 	Unset();
 }
@@ -273,7 +331,8 @@ KMessage::KMessage(uint32 what)
 	fBuffer(NULL),
 	fBufferCapacity(0),
 	fFlags(0),
-	fLastFieldOffset(0)
+	fLastFieldOffset(0),
+	fVrefTickets(NULL)
 {
 	Unset();
 	SetWhat(what);
@@ -283,6 +342,10 @@ KMessage::KMessage(uint32 what)
 KMessage::~KMessage()
 {
 	Unset();
+	if (fVrefTickets != NULL) {
+		delete reinterpret_cast<std::map<vref_id, uint64>*>(fVrefTickets);
+		fVrefTickets = NULL;
+	}
 }
 
 
@@ -351,7 +414,7 @@ void
 KMessage::Unset()
 {
 #ifndef KMESSAGE_NO_VREF_SUPPORT
-	if ((fFlags & KMESSAGE_INIT_FROM_BUFFER) != 0)
+	if ((fFlags & KMESSAGE_OWNS_VREFS) != 0)
 		_HandleVRefs(this, false);
 #endif
 
@@ -582,13 +645,13 @@ status_t
 KMessage::AddRef(const char* name, dev_t device, ino_t directory, const char* refName)
 {
 	size_t nameLen = refName != NULL ? strlen(refName) + 1 : 0;
-	size_t size = sizeof(dev_t) + sizeof(ino_t) + nameLen;
+	size_t size = kVRefHeaderBytes + nameLen;
 
-	char buffer[sizeof(dev_t) + sizeof(ino_t) + B_FILE_NAME_LENGTH];
+	char buffer[kVRefHeaderBytes + B_FILE_NAME_LENGTH];
 	memcpy(buffer, &device, sizeof(dev_t));
 	memcpy(buffer + sizeof(dev_t), &directory, sizeof(ino_t));
 	if (nameLen > 0)
-		memcpy(buffer + sizeof(dev_t) + sizeof(ino_t), refName, nameLen);
+		memcpy(buffer + kVRefHeaderBytes, refName, nameLen);
 
 	return AddData(name, B_REF_TYPE, buffer, (int32)size, false);
 }
@@ -621,33 +684,32 @@ KMessage::FindRef(const char* name, int32 index, dev_t* device,
 	if (!name || !device || !directory || !nameBuffer)
 		return B_BAD_VALUE;
 
-    const void* data;
-    int32 size;
-    status_t error = FindData(name, B_REF_TYPE, index, &data, &size);
-    if (error != B_OK)
-        return error;
+	const void* data;
+	int32 size;
+	status_t error = FindData(name, B_REF_TYPE, index, &data, &size);
+	if (error != B_OK)
+		return error;
 
-    if (size < (int32)(sizeof(dev_t) + sizeof(ino_t)))
-        return B_BAD_DATA;
+	if (size < (int32)kVRefHeaderBytes)
+		return B_BAD_DATA;
 
-    const char* d = (const char*)data;
-    memcpy(device, d, sizeof(dev_t));
-    memcpy(directory, d + sizeof(dev_t), sizeof(ino_t));
+	const char* d = (const char*)data;
+	memcpy(device, d, sizeof(dev_t));
+	memcpy(directory, d + sizeof(dev_t), sizeof(ino_t));
 
-    const char* refName = (size > (int32)(sizeof(dev_t) + sizeof(ino_t)))
-                          ? d + sizeof(dev_t) + sizeof(ino_t) : NULL;
+	const char* refName = size > (int32)kVRefHeaderBytes
+		? d + kVRefHeaderBytes : NULL;
 
-    if (refName) {
-        if (bufferSize == 0)
+	if (refName != NULL) {
+		if (bufferSize == 0)
 			return B_BAD_VALUE;
-        strncpy(nameBuffer, refName, bufferSize - 1);
-        nameBuffer[bufferSize - 1] = '\0';
-    } else {
-        if (bufferSize > 0)
-			nameBuffer[0] = '\0';
-    }
+		strncpy(nameBuffer, refName, bufferSize - 1);
+		nameBuffer[bufferSize - 1] = '\0';
+	} else if (bufferSize > 0) {
+		nameBuffer[0] = '\0';
+	}
 
-    return B_OK;
+	return B_OK;
 }
 
 
@@ -667,7 +729,7 @@ KMessage::FindNodeRef(const char* name, int32 index, dev_t* device, ino_t* node)
 	if (error != B_OK)
 		return error;
 
-	if (size < (int32)(sizeof(dev_t) + sizeof(ino_t)))
+	if (size < (int32)kVRefHeaderBytes)
 		return B_BAD_DATA;
 
 	const char* d = (const char*)data;
@@ -741,6 +803,7 @@ KMessage::SendTo(port_id targetPort, int32 targetToken, port_id replyPort,
 	size_t capsCount = 0;
 #ifndef KMESSAGE_NO_VREF_SUPPORT
 	_HandleVRefs(this, true);
+	fFlags |= KMESSAGE_OWNS_VREFS;
 	_CollectKMessageCaps(this, &caps, &capsCount);
 #endif
 
@@ -756,8 +819,10 @@ KMessage::SendTo(port_id targetPort, int32 targetToken, port_id replyPort,
 
 #ifndef KMESSAGE_NO_VREF_SUPPORT
 	free(caps);
-	if (result != B_OK)
+	if (result != B_OK) {
 		_HandleVRefs(this, false);
+		fFlags &= ~KMESSAGE_OWNS_VREFS;
+	}
 #endif
 
 	return result;
@@ -910,13 +975,32 @@ KMessage::ReceiveFrom(port_id fromPort, bigtime_t timeout,
 	}
 
 #ifndef KMESSAGE_NO_VREF_SUPPORT
-	BPrivate::VRefCache::AdoptCaps(caps, actualCaps);
+	std::vector<BPrivate::vref_ticket> adoptedTickets;
+	if (actualCaps > 0)
+		adoptedTickets.resize(actualCaps);
+	BPrivate::VRefCache::AdoptCaps(caps, actualCaps,
+		actualCaps > 0 ? adoptedTickets.data() : NULL);
+#endif
+
+	status_t setToResult = SetTo(buffer, messageInfo->size, 0,
+		KMESSAGE_OWNS_BUFFER | KMESSAGE_INIT_FROM_BUFFER);
+#ifndef KMESSAGE_NO_VREF_SUPPORT
+	if (setToResult == B_OK && actualCaps > 0) {
+		fFlags |= KMESSAGE_OWNS_VREFS;
+		_RegisterAdoptedTickets(this, caps, actualCaps, adoptedTickets.data());
+	} else if (setToResult != B_OK && actualCaps > 0) {
+		for (size_t i = 0; i < actualCaps; i++) {
+			if (caps[i].kind == B_PORT_CAP_VREF
+					&& adoptedTickets[i] != BPrivate::B_INVALID_VREF_TICKET) {
+				BPrivate::VRefCache::Release(caps[i].vref_id_,
+					adoptedTickets[i]);
+			}
+		}
+	}
 #endif
 	if (caps != stackCaps)
 		free(caps);
-
-	return SetTo(buffer, messageInfo->size, 0,
-		KMESSAGE_OWNS_BUFFER | KMESSAGE_INIT_FROM_BUFFER);
+	return setToResult;
 }
 
 

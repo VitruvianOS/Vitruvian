@@ -61,7 +61,11 @@ LinkSender::LinkSender(port_id port)
 
 	fCurrentEnd(0),
 	fCurrentStart(0),
-	fCurrentStatus(B_OK)
+	fCurrentStatus(B_OK),
+
+	fPendingCaps(NULL),
+	fPendingCapCount(0),
+	fPendingCapCapacity(0)
 {
 }
 
@@ -69,6 +73,49 @@ LinkSender::LinkSender(port_id port)
 LinkSender::~LinkSender()
 {
 	free(fBuffer);
+	free(fPendingCaps);
+}
+
+
+status_t
+LinkSender::AttachVRefCap(const port_cap_in& cap)
+{
+	if (fPendingCapCount == fPendingCapCapacity) {
+		size_t newCap = fPendingCapCapacity == 0 ? 4
+			: fPendingCapCapacity * 2;
+		port_cap_in* grown = (port_cap_in*)realloc(fPendingCaps,
+			newCap * sizeof(port_cap_in));
+		if (grown == NULL)
+			return B_NO_MEMORY;
+		fPendingCaps = grown;
+		fPendingCapCapacity = newCap;
+	}
+	fPendingCaps[fPendingCapCount++] = cap;
+	return B_OK;
+}
+
+
+status_t
+LinkSender::AttachVRefCaps(const port_cap_in* caps, size_t count)
+{
+	if (count == 0 || caps == NULL)
+		return B_OK;
+	if (fPendingCapCount + count > fPendingCapCapacity) {
+		size_t newCap = fPendingCapCapacity == 0 ? count
+			: fPendingCapCapacity;
+		while (newCap < fPendingCapCount + count)
+			newCap *= 2;
+		port_cap_in* grown = (port_cap_in*)realloc(fPendingCaps,
+			newCap * sizeof(port_cap_in));
+		if (grown == NULL)
+			return B_NO_MEMORY;
+		fPendingCaps = grown;
+		fPendingCapCapacity = newCap;
+	}
+	memcpy(fPendingCaps + fPendingCapCount, caps,
+		count * sizeof(port_cap_in));
+	fPendingCapCount += count;
+	return B_OK;
 }
 
 
@@ -146,6 +193,7 @@ LinkSender::CancelMessage()
 {
 	fCurrentEnd = fCurrentStart;
 	fCurrentStatus = B_OK;
+	fPendingCapCount = 0;
 }
 
 
@@ -435,7 +483,18 @@ LinkSender::Flush(bigtime_t timeout, bool needsReply)
 		fCurrentEnd, fPort));
 
 	status_t err;
-	if (timeout != B_INFINITE_TIMEOUT) {
+	bool haveCaps = fPendingCapCount > 0;
+	if (haveCaps) {
+		bigtime_t to = (timeout == B_INFINITE_TIMEOUT)
+			? B_INFINITE_TIMEOUT : timeout;
+		uint32 flags = (timeout == B_INFINITE_TIMEOUT) ? 0
+			: B_RELATIVE_TIMEOUT;
+		do {
+			err = write_port_with_caps(fPort, kLinkCode, fBuffer,
+				fCurrentEnd, fPendingCaps, fPendingCapCount,
+				flags, to);
+		} while (err == B_INTERRUPTED);
+	} else if (timeout != B_INFINITE_TIMEOUT) {
 		do {
 			err = write_port_etc(fPort, kLinkCode, fBuffer,
 				fCurrentEnd, B_RELATIVE_TIMEOUT, timeout);
@@ -449,6 +508,9 @@ LinkSender::Flush(bigtime_t timeout, bool needsReply)
 	if (err < B_OK) {
 		STRACE(("error info: LinkSender Flush() failed for %ld bytes (%s) on port %ld.\n",
 			fCurrentEnd, strerror(err), fPort));
+		// Drop the caps even on failure — they apply to this aborted
+		// message only, and the next message must not inherit them.
+		fPendingCapCount = 0;
 		return err;
 	}
 
@@ -457,6 +519,7 @@ LinkSender::Flush(bigtime_t timeout, bool needsReply)
 
 	fCurrentEnd = 0;
 	fCurrentStart = 0;
+	fPendingCapCount = 0;
 
 	return B_OK;
 }

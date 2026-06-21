@@ -25,9 +25,13 @@
 #include <ToolTipManager.h>
 #include <View.h>
 
+#include <VRefCache.h>
+
 #include <new>
 #include <stdio.h>
 #include <string.h>
+#include <utility>
+#include <vector>
 
 
 //#define TRACE_EVENTS
@@ -628,6 +632,33 @@ EventDispatcher::SetDragMessage(BMessage& message,
 
 
 void
+EventDispatcher::SetDragMessage(BMessage& message,
+	std::vector<std::pair<vref_id, BPrivate::vref_ticket>>&& tickets,
+	ServerBitmap* bitmap, const BPoint& offsetFromCursor)
+{
+	ETRACE(("EventDispatcher::SetDragMessage() [with tickets]\n"));
+
+	BAutolock _(this);
+
+	if (fLastButtons == 0) {
+		for (auto& kv : tickets)
+			BPrivate::VRefCache::Release(kv.first, kv.second);
+		return;
+	}
+
+	for (auto& kv : fDragTickets)
+		BPrivate::VRefCache::Release(kv.first, kv.second);
+	fDragTickets = std::move(tickets);
+
+	fHWInterface->SetDragBitmap(bitmap, offsetFromCursor);
+
+	fDragMessage = message;
+	fDraggingMessage = true;
+	fDragOffset = offsetFromCursor;
+}
+
+
+void
 EventDispatcher::SetDesktop(Desktop* desktop)
 {
 	fDesktop = desktop;
@@ -743,6 +774,10 @@ EventDispatcher::_DeliverDragMessage()
 		_SendMessage(fPreviousMouseTarget->Messenger(),
 			&fDragMessage, 100.0);
 	}
+
+	for (auto& kv : fDragTickets)
+		BPrivate::VRefCache::Release(kv.first, kv.second);
+	fDragTickets.clear();
 
 	fDragMessage.MakeEmpty();
 	fDragMessage.what = 0;

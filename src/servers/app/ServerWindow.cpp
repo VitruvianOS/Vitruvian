@@ -44,6 +44,10 @@
 #include <GradientConic.h>
 
 #include <MessagePrivate.h>
+#include <VRefCache.h>
+
+#include <utility>
+#include <vector>
 #include <PortLink.h>
 #include <ShapePrivate.h>
 #include <ServerProtocolStructs.h>
@@ -277,6 +281,8 @@ ServerWindow::Init(BRect frame, window_look look, window_feel feel,
 
 	fLink.SetSenderPort(fClientReplyPort);
 	fLink.SetReceiverPort(fMessagePort);
+	// Cap-aware so we can forward DragMessage vref grants downstream.
+	fLink.SetReceiverCapAware(true);
 
 	// We cannot call MakeWindow in the constructor, since it
 	// is a virtual function!
@@ -2311,15 +2317,51 @@ fDesktop->LockSingleWindow();
 			if (bufferSize > 0) {
 				char* buffer = new (nothrow) char[bufferSize];
 				BMessage dragMessage;
-				if (link.Read(buffer, bufferSize) == B_OK
-					&& dragMessage.Unflatten(buffer) == B_OK) {
+				if (link.Read(buffer, bufferSize) == B_OK) {
+					// Adopt any vref caps attached by the client.
+					port_cap_out* caps = NULL;
+					size_t capCount = 0;
+					link.TakeVRefCaps(&caps, &capCount);
+					std::vector<BPrivate::vref_ticket> adoptedTickets;
+					if (capCount > 0) {
+						adoptedTickets.resize(capCount);
+						BPrivate::VRefCache::AdoptCaps(caps, capCount,
+							adoptedTickets.data());
+					}
+					if (dragMessage.Unflatten(buffer) == B_OK) {
+						std::vector<std::pair<vref_id,
+							BPrivate::vref_ticket>> dragTickets;
+						if (capCount > 0) {
+							BMessage::Private::RegisterAdoptedTickets(
+								&dragMessage, caps, capCount,
+								adoptedTickets.data());
+							for (size_t i = 0; i < capCount; i++) {
+								if (caps[i].kind == B_PORT_CAP_VREF
+										&& adoptedTickets[i]
+											!= BPrivate::B_INVALID_VREF_TICKET)
+									dragTickets.push_back(
+										{caps[i].vref_id_, adoptedTickets[i]});
+							}
+						}
+						free(caps);
 						BReference<ServerBitmap> bitmap(
 							fServerApp->GetBitmap(bitmapToken), true);
 						// TODO: possible deadlock
 fDesktop->UnlockSingleWindow();
 						fDesktop->EventDispatcher().SetDragMessage(dragMessage,
-							bitmap, offset);
+							std::move(dragTickets), bitmap, offset);
 fDesktop->LockSingleWindow();
+					} else {
+						for (size_t i = 0; i < capCount; i++) {
+							if (caps[i].kind == B_PORT_CAP_VREF
+									&& adoptedTickets[i]
+										!= BPrivate::B_INVALID_VREF_TICKET) {
+								BPrivate::VRefCache::Release(caps[i].vref_id_,
+									adoptedTickets[i]);
+							}
+						}
+						free(caps);
+					}
 				}
 				delete[] buffer;
 			}
@@ -2345,13 +2387,49 @@ fDesktop->LockSingleWindow();
 			if (bufferSize > 0) {
 				char* buffer = new (nothrow) char[bufferSize];
 				BMessage dragMessage;
-				if (link.Read(buffer, bufferSize) == B_OK
-					&& dragMessage.Unflatten(buffer) == B_OK) {
+				if (link.Read(buffer, bufferSize) == B_OK) {
+					port_cap_out* caps = NULL;
+					size_t capCount = 0;
+					link.TakeVRefCaps(&caps, &capCount);
+					std::vector<BPrivate::vref_ticket> adoptedTickets;
+					if (capCount > 0) {
+						adoptedTickets.resize(capCount);
+						BPrivate::VRefCache::AdoptCaps(caps, capCount,
+							adoptedTickets.data());
+					}
+					if (dragMessage.Unflatten(buffer) == B_OK) {
+						std::vector<std::pair<vref_id,
+							BPrivate::vref_ticket>> dragTickets;
+						if (capCount > 0) {
+							BMessage::Private::RegisterAdoptedTickets(
+								&dragMessage, caps, capCount,
+								adoptedTickets.data());
+							for (size_t i = 0; i < capCount; i++) {
+								if (caps[i].kind == B_PORT_CAP_VREF
+										&& adoptedTickets[i]
+											!= BPrivate::B_INVALID_VREF_TICKET)
+									dragTickets.push_back(
+										{caps[i].vref_id_, adoptedTickets[i]});
+							}
+						}
+						free(caps);
 						// TODO: possible deadlock
 fDesktop->UnlockSingleWindow();
 						fDesktop->EventDispatcher().SetDragMessage(dragMessage,
+							std::move(dragTickets),
 							NULL /* should be dragRect */, offset);
 fDesktop->LockSingleWindow();
+					} else {
+						for (size_t i = 0; i < capCount; i++) {
+							if (caps[i].kind == B_PORT_CAP_VREF
+									&& adoptedTickets[i]
+										!= BPrivate::B_INVALID_VREF_TICKET) {
+								BPrivate::VRefCache::Release(caps[i].vref_id_,
+									adoptedTickets[i]);
+							}
+						}
+						free(caps);
+					}
 				}
 				delete[] buffer;
 			}

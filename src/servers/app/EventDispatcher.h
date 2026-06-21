@@ -15,6 +15,9 @@
 #include <MessageFilter.h>
 #include <Messenger.h>
 #include <ObjectList.h>
+#include <VRefCache.h>
+
+#include <vector>
 
 
 class Desktop;
@@ -92,6 +95,9 @@ class EventDispatcher : public BLocker {
 
 		void SetDragMessage(BMessage& message, ServerBitmap* bitmap,
 				const BPoint& offsetFromCursor);
+		void SetDragMessage(BMessage& message,
+				std::vector<std::pair<vref_id, BPrivate::vref_ticket>>&& tickets,
+				ServerBitmap* bitmap, const BPoint& offsetFromCursor);
 			// the message should be delivered on the next
 			// "mouse up".
 			// if the mouse is not pressed, it should
@@ -151,6 +157,8 @@ class EventDispatcher : public BLocker {
 		bigtime_t		fLastUpdate;
 
 		BMessage		fDragMessage;
+		std::vector<std::pair<vref_id, BPrivate::vref_ticket>>
+						fDragTickets;
 		bool			fDraggingMessage;
 		BPoint			fDragOffset;
 

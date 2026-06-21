@@ -44,6 +44,12 @@ class LinkSender {
 		status_t AttachRegion(const BRegion& region);
 		status_t AttachShape(BShape& shape);
 		status_t AttachGradient(const BGradient& gradient);
+
+		// Queue vref caps for the next Flush (switches to
+		// write_port_with_caps). Caller retains the array.
+		status_t AttachVRefCap(const port_cap_in& cap);
+		status_t AttachVRefCaps(const port_cap_in* caps, size_t count);
+		bool HasVRefCaps() const { return fPendingCapCount > 0; }
 		status_t AttachAffineTransform(const BAffineTransform& transform)
 		{
 			return Attach(&transform.sx, sizeof(double) * 6);
@@ -71,6 +77,10 @@ class LinkSender {
 		uint32	fCurrentStart;		// start of current message
 
 		status_t fCurrentStatus;
+
+		port_cap_in* fPendingCaps;
+		size_t fPendingCapCount;
+		size_t fPendingCapCapacity;
 };
 
 

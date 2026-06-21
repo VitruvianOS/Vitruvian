@@ -8,8 +8,11 @@
 #include <syscalls.h>
 
 #include <linux/connector.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "system_info.h"
 #include "KernelDebug.h"
@@ -60,30 +63,29 @@ SystemWatcher::Run()
 		return B_ERROR;
 	}
 
-	struct
-	{
-		union {
-			struct nlmsghdr header;
-			char padding[NLMSG_HDRLEN];
-		};
+	// Connector payload must live in cn_msg.data[] (flex array);
+	// declaring it as a sibling silently breaks the LISTEN.
+	enum { _kReqLen = NLMSG_HDRLEN
+		+ sizeof(struct cn_msg) + sizeof(enum proc_cn_mcast_op) };
+	char _reqBuf[_kReqLen] __attribute__((aligned(NLMSG_ALIGNTO)));
+	memset(_reqBuf, 0, sizeof(_reqBuf));
 
-		enum proc_cn_mcast_op op;
-		struct cn_msg msg;
-	} __attribute__((packed, aligned(NLMSG_ALIGNTO))) request;
+	struct nlmsghdr* _nlh = (struct nlmsghdr*)_reqBuf;
+	struct cn_msg* _cn = (struct cn_msg*)NLMSG_DATA(_nlh);
+	enum proc_cn_mcast_op* _op = (enum proc_cn_mcast_op*)_cn->data;
 
-	memset(&request, 0, sizeof(request));
+	_nlh->nlmsg_len = sizeof(_reqBuf);
+	_nlh->nlmsg_type = NLMSG_DONE;
+	_nlh->nlmsg_pid = getpid();
 
-	request.op = PROC_CN_MCAST_LISTEN;
+	_cn->id.idx = CN_IDX_PROC;
+	_cn->id.val = CN_VAL_PROC;
+	_cn->len = sizeof(*_op);
 
-	request.msg.id.idx = CN_IDX_PROC;
-	request.msg.id.val = CN_VAL_PROC;
-	request.msg.len = sizeof(request.op);
+	*_op = PROC_CN_MCAST_LISTEN;
 
-	request.header.nlmsg_pid = getpid();
-	request.header.nlmsg_type = NLMSG_DONE;
-	request.header.nlmsg_len = sizeof(request);
-
-	if (send(fSocket, &request, sizeof(request), 0) == -1) {
+	ssize_t _sendRet = send(fSocket, _reqBuf, sizeof(_reqBuf), 0);
+	if (_sendRet == -1) {
 		close(fSocket);
 		TRACE("SystemWatcher: Error sending request\n");
 		return B_ERROR;

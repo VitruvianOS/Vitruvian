@@ -10,6 +10,7 @@
 #include <new>
 #include <ctype.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <StorageDefs.h>
 #include <SupportDefs.h>
@@ -493,7 +494,19 @@ void escape_path(char *str)
 bool
 device_is_root_device(dev_t device)
 {
+#ifdef __VOS__
+	// No dev_t==1 sentinel on Linux; resolve boot device via stat("/"),
+	// cached (AppMetaMimeCreator hits this per entry).
+	static dev_t sRootDevice = (dev_t)-1;
+	if (sRootDevice == (dev_t)-1) {
+		struct stat st;
+		if (stat("/", &st) == 0)
+			sRootDevice = st.st_dev;
+	}
+	return device == sRootDevice;
+#else
 	return device == 1;
+#endif
 }
 
 // Close

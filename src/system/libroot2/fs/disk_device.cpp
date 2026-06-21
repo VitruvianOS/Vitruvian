@@ -6,6 +6,8 @@
 #include "disk_device.h"
 
 #include <dirent.h>
+#include <errno.h>
+#include <stdio.h>
 #include <linux/fs.h>
 #include <linux/loop.h>
 #include <syscalls.h>

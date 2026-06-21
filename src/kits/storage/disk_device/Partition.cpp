@@ -493,18 +493,25 @@ BPartition::GetIcon(uint8** _data, size_t* _size, type_code* _type) const
 status_t
 BPartition::GetMountPoint(BPath* mountPoint) const
 {
-	if (mountPoint == NULL || !ContainsFileSystem())
+	if (mountPoint == NULL)
 		return B_BAD_VALUE;
 
-	// if the partition is mounted, return the actual mount point
-	BVolume volume;
-	if (GetVolume(&volume) == B_OK) {
+	// Mounted partitions: resolve via the volume's root, bypassing the
+	// possibly-unreliable ContainsFileSystem() check.
+	if (IsMounted()) {
+		BVolume volume;
+		status_t error = GetVolume(&volume);
+		if (error != B_OK)
+			return error;
 		BDirectory dir;
-		status_t error = volume.GetRootDirectory(&dir);
+		error = volume.GetRootDirectory(&dir);
 		if (error == B_OK)
 			error = mountPoint->SetTo(&dir, NULL);
 		return error;
 	}
+
+	if (!ContainsFileSystem())
+		return B_BAD_VALUE;
 
 	// partition not mounted
 	// get the volume name

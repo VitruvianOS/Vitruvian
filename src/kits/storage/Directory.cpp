@@ -24,8 +24,23 @@
 #include <Path.h>
 #include <SymLink.h>
 
+#include <sys/stat.h>
 #include <syscalls.h>
 #include <umask.h>
+
+
+// Linux's open() doesn't enforce O_DIRECTORY here; fstat to match
+// Haiku's _kern_open_dir_entry_ref semantics.
+static status_t
+_validate_directory_fd(int fd)
+{
+	struct stat st;
+	if (fstat(fd, &st) != 0)
+		return B_FILE_ERROR;
+	if (!S_ISDIR(st.st_mode))
+		return B_NOT_A_DIRECTORY;
+	return B_OK;
+}
 
 
 BDirectory::BDirectory()
@@ -130,6 +145,12 @@ BDirectory::SetTo(const entry_ref* ref)
 		return (fCStatus = fDirFd);
 	}
 
+	error = _validate_directory_fd(fDirFd);
+	if (error != B_OK) {
+		Unset();
+		return (fCStatus = error);
+	}
+
 	fDirRef = node_ref(fDirFd);
 	fCStatus = B_OK;
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
@@ -171,6 +192,12 @@ BDirectory::SetTo(const BEntry* entry)
 		return (fCStatus = fDirFd);
 	}
 
+	error = _validate_directory_fd(fDirFd);
+	if (error != B_OK) {
+		Unset();
+		return (fCStatus = error);
+	}
+
 	fDirRef = node_ref(fDirFd);
 	fcntl(fDirFd, F_SETFD, FD_CLOEXEC);
 
@@ -190,6 +217,12 @@ BDirectory::SetTo(const char* path)
 	if (fDirFd < 0) {
 		Unset();
 		return (fCStatus = fDirFd);
+	}
+
+	error = _validate_directory_fd(fDirFd);
+	if (error != B_OK) {
+		Unset();
+		return (fCStatus = error);
 	}
 
 	fDirRef = node_ref(fDirFd);
@@ -225,6 +258,12 @@ BDirectory::SetTo(const BDirectory* dir, const char* path)
 	if (fDirFd < 0) {
 		Unset();
 		return (fCStatus = fDirFd);
+	}
+
+	error = _validate_directory_fd(fDirFd);
+	if (error != B_OK) {
+		Unset();
+		return (fCStatus = error);
 	}
 
 	fDirRef = node_ref(fDirFd);

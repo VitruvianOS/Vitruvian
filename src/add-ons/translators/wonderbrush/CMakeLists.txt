@@ -1,5 +1,6 @@
-Application(
-	WonderbrushTranslator
+
+TranslatorAddOn(
+	WonderbrushTranslator SHARED
 
 	SOURCES
 	support/bitmap_compression.cpp

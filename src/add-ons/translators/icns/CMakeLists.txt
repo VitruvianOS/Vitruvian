@@ -1,6 +1,6 @@
 
-Application(
-	ICNSTranslator
+TranslatorAddOn(
+	ICNSTranslator SHARED
 
 	SOURCES
 	ConfigView.cpp

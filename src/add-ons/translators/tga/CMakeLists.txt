@@ -1,5 +1,6 @@
-Application(
-	TGATranslator
+
+TranslatorAddOn(
+	TGATranslator SHARED
 
 	SOURCES
 	TGAMain.cpp

@@ -1,6 +1,6 @@
 
-Application(
-	TIFFTranslator
+TranslatorAddOn(
+	TIFFTranslator SHARED
 
 	SOURCES
 	TIFFMain.cpp	

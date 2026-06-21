@@ -1,6 +1,6 @@
 
-Application(
-	PNGTranslator
+TranslatorAddOn(
+	PNGTranslator SHARED
 
 	SOURCES
 	PNGMain.cpp	

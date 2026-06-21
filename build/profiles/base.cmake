@@ -56,26 +56,37 @@ ImageInclude("/lib" ${SYSTEM_LIBS})
 
 
 set(SYSTEM_TRANSLATORS
-#	BMPTranslator
-#	EXRTranslator
-#	GIFTranslator
+	BMPTranslator
+	GIFTranslator
 	HVIFTranslator
-#	ICNSTranslator
-#	ICOTranslator
-#	JPEGTranslator
-#	PNGTranslator
-#	PPMTranslator
-#	PSDTranslator
+	ICNSTranslator
+	ICOTranslator
+	JPEGTranslator
+	PCXTranslator
+	PNGTranslator
+	PPMTranslator
+	PSDTranslator
 	RAWTranslator
-#	RTFTranslator
-#	SGITranslator
-#	STXTTranslator
-#	TGATranslator
-#	TIFFTranslator
-#	WEBPTranslator
-#	WonderbrushTranslator
+	RTFTranslator
+	SGITranslator
+	STXTTranslator
+	TGATranslator
+	TIFFTranslator
+	WEBPTranslator
+	WonderbrushTranslator
 )
 ImageInclude("/system/add-ons/Translators" ${SYSTEM_TRANSLATORS})
+
+
+set(TRACKER_ADDONS
+	FileType
+	IconVader
+	OpenTargetFolder
+	OpenTerminal
+	ZipOMatic
+#	mark_as: needs libmail (not ported); skipped
+)
+ImageInclude("/system/add-ons/Tracker" ${TRACKER_ADDONS})
 
 
 include(${CMAKE_CURRENT_LIST_DIR}/preferences.cmake)
@@ -98,6 +109,8 @@ set(_ARRANGE_CMDS
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/servers"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/preferences"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/add-ons/Tracker"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/add-ons/Translators"
 )
 
 foreach(_app ${SYSTEM_APPS})
@@ -144,14 +157,68 @@ foreach(_i RANGE ${_nprefs_last})
     )
 endforeach()
 
+foreach(_addon ${TRACKER_ADDONS})
+    list(APPEND _ARRANGE_CMDS
+        COMMAND cp -a "${_FLAT}/${_addon}" "${_FINAL}/system/add-ons/Tracker/${_addon}"
+    )
+endforeach()
+
+foreach(_translator ${SYSTEM_TRANSLATORS})
+    list(APPEND _ARRANGE_CMDS
+        COMMAND cp -a "${_FLAT}/${_translator}" "${_FINAL}/system/add-ons/Translators/${_translator}"
+    )
+endforeach()
+
 list(APPEND _ARRANGE_CMDS
     COMMAND tar --xattrs -cf "${_TAR}" -C "${_FINAL}" .
 )
 
 add_custom_target(apps_attrs ALL
     ${_ARRANGE_CMDS}
-    DEPENDS ${SYSTEM_APPS} ${DESKBAR_DEMOS_TARGETS} ${DESKBAR_APPLETS} ${CORE_APPLICATIONS} ${SYSTEM_SERVERS} ${SYSTEM_PREFERENCES_TARGETS}
+    DEPENDS ${SYSTEM_APPS} ${DESKBAR_DEMOS_TARGETS} ${DESKBAR_APPLETS} ${CORE_APPLICATIONS} ${SYSTEM_SERVERS} ${SYSTEM_PREFERENCES_TARGETS} ${TRACKER_ADDONS} ${SYSTEM_TRANSLATORS}
     COMMENT "Packaging app attrs"
 )
 
 install(FILES "${_TAR}" DESTINATION /usr/share/vos)
+
+
+# Tracker "New" templates need BEOS:TYPE xattrs so Tracker's New submenu
+# can classify them and pick the right MIME icon. Source files in the tree
+# carry no xattrs (git doesn't preserve them); stage + tar with --xattrs.
+set(_TPL_SRC    "${CMAKE_SOURCE_DIR}/src/data/settings/tracker_new_templates")
+set(_TPL_STAGE  "${CMAKE_BINARY_DIR}/templates_staging")
+set(_TPL_TAR    "${CMAKE_BINARY_DIR}/templates_attrs.tar")
+
+# Template -> BEOS:TYPE mapping. SMIM prefix is the B_MIME_STRING_TYPE
+# type code (see Haiku's TypeConstants.h).
+set(_TPL_NAMES        "C++ header" "C++ source" "Makefile" "Person"          "text file")
+set(_TPL_MIME_TYPES   "text/x-source-code"
+                      "text/x-source-code"
+                      "text/x-makefile"
+                      "application/x-person"
+                      "text/plain")
+
+set(_TPL_CMDS
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${_TPL_STAGE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_TPL_STAGE}"
+)
+list(LENGTH _TPL_NAMES _ntpl)
+math(EXPR _ntpl_last "${_ntpl} - 1")
+foreach(_i RANGE ${_ntpl_last})
+    list(GET _TPL_NAMES      ${_i} _name)
+    list(GET _TPL_MIME_TYPES ${_i} _mime)
+    list(APPEND _TPL_CMDS
+        COMMAND ${CMAKE_COMMAND} -E copy "${_TPL_SRC}/${_name}" "${_TPL_STAGE}/${_name}"
+        COMMAND setfattr -n user.beos.BEOS:TYPE -v "SMIM${_mime}" "${_TPL_STAGE}/${_name}"
+    )
+endforeach()
+list(APPEND _TPL_CMDS
+    COMMAND tar --xattrs -cf "${_TPL_TAR}" -C "${_TPL_STAGE}" .
+)
+
+add_custom_target(templates_attrs ALL
+    ${_TPL_CMDS}
+    COMMENT "Packaging Tracker template attrs"
+)
+
+install(FILES "${_TPL_TAR}" DESTINATION /usr/share/vos)

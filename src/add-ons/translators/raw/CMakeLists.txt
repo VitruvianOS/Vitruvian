@@ -1,5 +1,6 @@
-Application(
-	RAWTranslator
+
+TranslatorAddOn(
+	RAWTranslator SHARED
 
 	SOURCES
 	main.cpp

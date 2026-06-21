@@ -1,6 +1,6 @@
 
-Application(
-	GIFTranslator
+TranslatorAddOn(
+	GIFTranslator SHARED
 
 	SOURCES
 	GIFLoad.cpp	

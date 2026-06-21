@@ -56,6 +56,7 @@ function( CompileRdef target rdef_file )
 	cmake_parse_arguments(_ARG "STAGING" "" "" ${ARGN})
 
 	set(_src    "${CMAKE_CURRENT_SOURCE_DIR}/${rdef_file}")
+	set(_pp     "${CMAKE_CURRENT_BINARY_DIR}/${rdef_file}.pp")
 	set(_rsrc   "${CMAKE_CURRENT_BINARY_DIR}/${rdef_file}.rsrc")
 	set(_rc     "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc")
 
@@ -63,9 +64,13 @@ function( CompileRdef target rdef_file )
 		message(FATAL_ERROR "${_src} not found")
 	endif()
 
+	# Haiku's jam runs cpp on .rdef files before rc; mirror that so rdefs
+	# can use #ifdef HAIKU_TARGET_PLATFORM_HAIKU etc.
 	add_custom_command(TARGET ${target} POST_BUILD
 		COMMENT "Compiling rdef ${rdef_file}"
-		COMMAND "${_rc}" "${_src}" -o "${_rsrc}"
+		COMMAND "${CMAKE_C_COMPILER}" -E -x c -DHAIKU_TARGET_PLATFORM_HAIKU
+			-D__VOS__ -P "${_src}" -o "${_pp}"
+		COMMAND "${_rc}" "${_pp}" -o "${_rsrc}"
 	)
 
 	# Accumulate rsrc paths and the staging flag on the target.
@@ -123,6 +128,13 @@ endfunction()
 #	INCLUDES
 #	{includesList}
 # )
+#
+# TODO: BeOS/Haiku translators are dual-mode (double-click = config app,
+# load_add_on = translator). Linux dlopen refuses PIE executables, so the
+# translators under src/add-ons/translators/ currently build as SHARED
+# add-ons only (see their CMakeLists). Restore dual-mode by teaching
+# Application() to emit a dlopen-able binary (entry shim + -shared -Wl,-E),
+# then flip those translators back to Application().
 
 macro( Application name )
 
@@ -195,12 +207,30 @@ macro( AddOn name type )
 	list ( APPEND _ADDON_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} )
 	target_include_directories(${name} PRIVATE ${_ADDON_INCLUDES})
 
-	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
+	# -fvisibility-inlines-hidden: keep inline/template method instantiations
+	# private to this add-on so they cannot collide with same-named symbols
+	# exported by libbe.so (e.g. global TReadHelper from MessageUtils.h vs
+	# a translator-local helper of the same name). Regular non-inline
+	# entry points (make_nth_translator, process_refs, ...) are unaffected.
+	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h -fvisibility-inlines-hidden")
 
 	foreach( RDEF_FILE ${_ADDON_RDEF} )
 		CompileRdef(${name} ${RDEF_FILE} STAGING)
 	endforeach()
 	LinkRdefs(${name})
+endmacro()
+
+# Bare output name (no "lib" prefix, no ".so" suffix) — Tracker's
+# add-on menu and BTranslatorRoster enumerate by directory walk and use
+# the filename as the menu label.
+macro( TrackerAddOn name )
+	AddOn(${name} ${ARGN})
+	set_target_properties(${name} PROPERTIES PREFIX "" SUFFIX "")
+endmacro()
+
+macro( TranslatorAddOn name )
+	AddOn(${name} ${ARGN})
+	set_target_properties(${name} PROPERTIES PREFIX "" SUFFIX "")
 endmacro()
 
 macro( Test name )

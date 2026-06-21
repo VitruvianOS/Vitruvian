@@ -1,6 +1,6 @@
 
-Application(
-	EXRTranslator
+TranslatorAddOn(
+	EXRTranslator SHARED
 
 	SOURCES
 	ConfigView.cpp

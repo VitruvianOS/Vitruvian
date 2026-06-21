@@ -8,6 +8,13 @@ function( ImageInclude path )
 			RUNTIME DESTINATION ${path}
 			LIBRARY DESTINATION ${path}
 			DESTINATION ${path}
+			# Tracker's add-on enumerator and BTranslatorRoster require
+			# the +x bit (IsExecutable filter in LoadAddOnDir). CMake's
+			# default for shared libraries is 644.
+			PERMISSIONS
+				OWNER_READ OWNER_WRITE OWNER_EXECUTE
+				GROUP_READ GROUP_EXECUTE
+				WORLD_READ WORLD_EXECUTE
 		)
 	endforeach()
 endfunction()

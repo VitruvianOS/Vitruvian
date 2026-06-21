@@ -1,5 +1,6 @@
-Application(
-	STXTTranslator
+
+TranslatorAddOn(
+	STXTTranslator SHARED
 
 	SOURCES
 	STXTMain.cpp

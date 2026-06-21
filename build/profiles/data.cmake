@@ -36,6 +36,9 @@ ImageIncludeDir("data/system/data/network" "/system/data/")
 ImageIncludeDir("data/system/data/licenses" "/system/data/")
 ImageIncludeDir("data/system/data/fonts" "/system/data/")
 
+# Default desktop wallpaper (V\OS logo, transparent PNG)
+install(FILES "data/artwork/V_OS logo.png" DESTINATION "/system/data/artwork")
+
 # Profile, inputrc, and profile.d scripts for Terminal
 ImageIncludeFile("data/etc/profile" "/system/settings/etc")
 ImageIncludeFile("data/etc/inputrc" "/system/settings/etc")
@@ -51,8 +54,9 @@ ImageIncludeFile("data/settings/first_login" "/home/config/settings")
 # Deskbar menu entries descriptor file
 ImageIncludeFile("src/data/deskbar/menu_entries" "/system/data/deskbar")
 
-# Tracker New Templates (installed flat into the target directory)
-install(DIRECTORY "src/data/settings/tracker_new_templates/" DESTINATION "/home/config/settings/Tracker/Tracker New Templates")
+# Tracker New Templates: shipped as templates_attrs.tar (see base.cmake)
+# and extracted with xattrs in postinst. Plain install(DIRECTORY) loses
+# the BEOS:TYPE attrs that Tracker's New submenu needs.
 
 # User guide and welcome launcher scripts
 ImageIncludeFile("data/bin/userguide" "/bin")

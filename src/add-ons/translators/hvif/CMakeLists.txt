@@ -1,5 +1,6 @@
-Application(
-	HVIFTranslator
+
+TranslatorAddOn(
+	HVIFTranslator SHARED
 
 	SOURCES
 	HVIFMain.cpp

@@ -1,5 +1,6 @@
-Application(
-	RTFTranslator
+
+TranslatorAddOn(
+	RTFTranslator SHARED
 
 	SOURCES
 	ConfigView.cpp

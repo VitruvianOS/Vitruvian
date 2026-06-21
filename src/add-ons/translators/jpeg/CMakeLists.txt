@@ -1,6 +1,6 @@
 
-Application(
-	JPEGTranslator
+TranslatorAddOn(
+	JPEGTranslator SHARED
 
 	SOURCES
 	be_jdatadst.cpp

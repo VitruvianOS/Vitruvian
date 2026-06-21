@@ -1,5 +1,6 @@
-Application(
-	SGITranslator
+
+TranslatorAddOn(
+	SGITranslator SHARED
 
 	SOURCES
 	SGIImage.cpp

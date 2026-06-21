@@ -1,5 +1,5 @@
 
-AddOn(
+TranslatorAddOn(
 	translatorutils
 	STATIC
 

@@ -148,6 +148,13 @@ VITRUVIAN_PROFILE_EOF
 mkdir -p /system/data
 tar --xattrs -xf /usr/share/vos/mime_db.tar -C /system/data/
 
+# Tracker New Templates — extract files+xattrs into the user template dir.
+if [ -f /usr/share/vos/templates_attrs.tar ]; then
+    mkdir -p "/home/config/settings/Tracker/Tracker New Templates"
+    tar --xattrs -xf /usr/share/vos/templates_attrs.tar \
+        -C "/home/config/settings/Tracker/Tracker New Templates"
+fi
+
 # App binary xattrs — restore BeOS attrs to installed binaries.
 # apps_attrs.tar contains zero-byte placeholder files at the install paths,
 # carrying user.beos.* xattrs written by resattr -O during build.

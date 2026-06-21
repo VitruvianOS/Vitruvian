@@ -1,6 +1,6 @@
 
-Application(
-	BMPTranslator
+TranslatorAddOn(
+	BMPTranslator SHARED
 
 	SOURCES
 	BMPMain.cpp

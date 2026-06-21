@@ -1,6 +1,6 @@
 
-Application(
-	PSDTranslator
+TranslatorAddOn(
+	PSDTranslator SHARED
 
 	SOURCES
 	ConfigView.cpp	

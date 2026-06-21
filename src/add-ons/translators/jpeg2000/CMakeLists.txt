@@ -1,6 +1,6 @@
 
-Application(
-	JPEG2000Translator
+TranslatorAddOn(
+	JPEG2000Translator SHARED
 
 	SOURCES
 	JPEG2000Translator.cpp

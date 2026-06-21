@@ -1,6 +1,6 @@
 
-Application(
-	ICOTranslator
+TranslatorAddOn(
+	ICOTranslator SHARED
 
 	SOURCES
 	ConfigView.cpp

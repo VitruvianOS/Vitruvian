@@ -1,5 +1,6 @@
-Application(
-	WEBPTranslator
+
+TranslatorAddOn(
+	WEBPTranslator SHARED
 
 	SOURCES
 	ConfigView.cpp

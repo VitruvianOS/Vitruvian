@@ -1,6 +1,6 @@
 
-Application(
-	PPMTranslator
+TranslatorAddOn(
+	PPMTranslator SHARED
 
 	SOURCES
 	colorspace.cpp	

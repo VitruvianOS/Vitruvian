@@ -59,6 +59,8 @@ All rights reserved.
 #include <Volume.h>
 #include <VolumeRoster.h>
 
+#include <VRefCache.h>
+
 #include <tracker_private.h>
 
 #include "Attributes.h"
@@ -144,6 +146,18 @@ public:
 			function(&appRef, &refs, openWithOK);
 		else
 			function(NULL, &refs, openWithOK);
+
+		// Release the vref tickets that AsynchLaunchBinder acquired to
+		// keep the slots alive across the in-process async hop.
+		int64 id, ticket;
+		for (int32 i = 0;
+			 message->FindInt64("__launch_vref_ids", i, &id) == B_OK
+				&& message->FindInt64("__launch_vref_tickets", i,
+					&ticket) == B_OK;
+			 i++) {
+			BPrivate::VRefCache::Release((vref_id)id,
+				(BPrivate::vref_ticket)ticket);
+		}
 	}
 };
 
@@ -211,7 +225,7 @@ GetVolumeFlags(Model* model)
 		}
 		return B_FS_HAS_ATTR;
 	}
-	if (!fs_stat_dev(model->NodeRef()->dev(),&info))
+	if (!fs_stat_dev(model->NodeRef()->dereference().dev(), &info))
 		return info.flags;
 
 	return B_FS_HAS_ATTR;

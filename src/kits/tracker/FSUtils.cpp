@@ -47,8 +47,12 @@ respective holders. All rights reserved.
 
 #include <ctype.h>
 #include <errno.h>
+#include <stdio.h>
 #include <strings.h>
 #include <unistd.h>
+
+#include <algorithm>
+#include <vector>
 
 #include <Alert.h>
 #include <Application.h>
@@ -73,6 +77,7 @@ respective holders. All rights reserved.
 #include <sys/utsname.h>
 
 #include <AutoLocker.h>
+#include <VRefCache.h>
 #include <libroot/libroot_private.h>
 #include <system/syscalls.h>
 //#include <system/syscall_load_image.h>
@@ -3460,6 +3465,23 @@ TrackerOpenWith(const BMessage* refs)
 
 
 static void
+_CollectVRefIds(const BMessage* msg, dev_t vrefDev,
+	std::vector<vref_id>& out)
+{
+	if (msg == NULL)
+		return;
+	entry_ref ref;
+	for (int32 i = 0; msg->FindRef("refs", i, &ref) == B_OK; i++) {
+		if (ref.device == vrefDev && ref.directory >= 0)
+			out.push_back((vref_id)ref.directory);
+	}
+	BMessage nested;
+	for (int32 i = 0; msg->FindMessage("refs", i, &nested) == B_OK; i++)
+		_CollectVRefIds(&nested, vrefDev, out);
+}
+
+
+static void
 AsynchLaunchBinder(void (*func)(const entry_ref*, const BMessage*, bool on),
 	const entry_ref* appRef, const BMessage* refs, bool openWithOK)
 {
@@ -3469,6 +3491,27 @@ AsynchLaunchBinder(void (*func)(const entry_ref*, const BMessage*, bool on),
 	task->AddBool("openWithOK", openWithOK);
 	if (appRef != NULL)
 		task->AddRef("appRef", appRef);
+
+	// In-process PostMessage skips cap transport, so pin a VRefCache
+	// ticket per unique vref_id in the task; LaunchLooper releases them.
+	dev_t vrefDev = get_vref_dev();
+	if (vrefDev != B_INVALID_DEV) {
+		std::vector<vref_id> ids;
+		_CollectVRefIds(refs, vrefDev, ids);
+		if (appRef != NULL && appRef->device == vrefDev
+				&& appRef->directory >= 0) {
+			ids.push_back((vref_id)appRef->directory);
+		}
+		std::sort(ids.begin(), ids.end());
+		ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+		for (vref_id id : ids) {
+			BPrivate::vref_ticket t = BPrivate::VRefCache::Acquire(id);
+			if (t == BPrivate::B_INVALID_VREF_TICKET)
+				continue;
+			task->AddInt64("__launch_vref_ids", (int64)id);
+			task->AddInt64("__launch_vref_tickets", (int64)t);
+		}
+	}
 
 	extern BLooper* gLaunchLooper;
 	gLaunchLooper->PostMessage(task);

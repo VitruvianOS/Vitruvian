@@ -27,6 +27,7 @@
 
 #include <syscalls.h>
 #include <VRefCache.h>
+#include <VRefTrack.h>
 
 #include "storage_support.h"
 
@@ -34,13 +35,39 @@
 //	#pragma mark - node_ref
 
 
+void
+node_ref::_AcquireNodeSlot()
+{
+	if (!is_virtual() || node == B_INVALID_INO)
+		return;
+
+	cache_ticket = BPrivate::VRefCache::Acquire((vref_id)node);
+	if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET) {
+		device = B_INVALID_DEV;
+		node = B_INVALID_INO;
+	}
+}
+
+
+void
+node_ref::_ReleaseNodeSlot()
+{
+	if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET)
+		return;
+
+	BPrivate::VRefCache::Release((vref_id)node, cache_ticket);
+	cache_ticket = BPrivate::B_INVALID_VREF_TICKET;
+}
+
+
 node_ref::node_ref()
 	:
 	device(B_INVALID_DEV),
 	node(B_INVALID_INO),
-	team(-1),
 	real_device(B_INVALID_DEV),
-	real_node(B_INVALID_INO)
+	real_node(B_INVALID_INO),
+	cache_ticket(BPrivate::B_INVALID_VREF_TICKET),
+	team(-1)
 {
 }
 
@@ -50,32 +77,28 @@ node_ref::node_ref(dev_t device, ino_t node)
 	device(device),
 	node(node),
 	real_device(B_INVALID_DEV),
-	real_node(B_INVALID_INO)
+	real_node(B_INVALID_INO),
+	cache_ticket(BPrivate::B_INVALID_VREF_TICKET),
+	team(-1)
 {
-	if (is_virtual() && node != B_INVALID_INO) {
-		BPrivate::VRefCache::Acquire((vref_id) node);
-		// Populate real_device/real_node so dereference() works correctly
-		// when this node_ref is constructed from an existing vref id.
-		int fd = BPrivate::VRefCache::Open((vref_id) node);
-		if (fd >= 0) {
-			struct stat st;
-			if (fstat(fd, &st) == 0) {
-				real_device = st.st_dev;
-				real_node = st.st_ino;
-			}
-			close(fd);
-		}
+	_AcquireNodeSlot();
+
+	// Eagerly populate real_* so dereference() works when reconstructed
+	// from raw vref fields. TODO: drop once VRefCache::GetIdentity lands.
+	if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET)
+		return;
+
+	int fd = BPrivate::VRefCache::Open((vref_id)node);
+	if (fd < 0)
+		return;
+
+	struct stat st;
+	if (fstat(fd, &st) == 0) {
+		real_device = st.st_dev;
+		real_node = st.st_ino;
 	}
+	close(fd);
 }
-
-
-//node_ref::node_ref(vref_id id, uint32 flags)
-//	:
-//	device(get_vref_dev()),
-//	node((ino_t)id)
-//{
-	// TODO: supports overriding the acquire_vref.
-//}
 
 
 node_ref::node_ref(int fd)
@@ -83,7 +106,9 @@ node_ref::node_ref(int fd)
 	device(B_INVALID_DEV),
 	node(B_INVALID_INO),
 	real_device(B_INVALID_DEV),
-	real_node(B_INVALID_INO)
+	real_node(B_INVALID_INO),
+	cache_ticket(BPrivate::B_INVALID_VREF_TICKET),
+	team(-1)
 {
 	struct stat st;
 	if (fstat(fd, &st) == 0) {
@@ -91,8 +116,13 @@ node_ref::node_ref(int fd)
 		real_node = st.st_ino;
 	}
 
+	BPrivate::vref_handle h = BPrivate::VRefCache::AcquireFromFd(fd);
+	if (h.id < 0)
+		return;
+
 	device = get_vref_dev();
-	node = BPrivate::VRefCache::AcquireFromFd(fd);
+	node = h.id;
+	cache_ticket = h.ticket;
 }
 
 
@@ -101,50 +131,45 @@ node_ref::node_ref(const node_ref& other)
 	device(other.device),
 	node(other.node),
 	real_device(other.real_device),
-	real_node(other.real_node)
+	real_node(other.real_node),
+	cache_ticket(BPrivate::B_INVALID_VREF_TICKET),
+	team(other.team)
 {
-	if (is_virtual() && node != B_INVALID_INO)
-		BPrivate::VRefCache::Acquire((vref_id) other.node);
+	_AcquireNodeSlot();
 }
 
 
 node_ref::~node_ref()
 {
-	if (is_virtual() && node != B_INVALID_INO)
-		BPrivate::VRefCache::Release((vref_id) node);
+	_ReleaseNodeSlot();
 }
 
 
 status_t
 node_ref::init_check() const
 {
-	if (is_virtual()) {
-		// TODO
-	}
+	if (device == B_INVALID_DEV && node == B_INVALID_INO)
+		return B_ENTRY_NOT_FOUND;
 	return B_OK;
 }
+
 
 bool
 node_ref::is_virtual() const
 {
 	dev_t dev = get_vref_dev();
-	if (dev == B_INVALID_DEV)
-		return false;
-
-	if (device == dev)
-		return true;
-
-	return false;
+	return dev != B_INVALID_DEV && device == dev;
 }
+
 
 vref_id
 node_ref::id() const
 {
 	if (!is_virtual())
 		return B_BAD_VALUE;
-
-	return (vref_id) node;
+	return (vref_id)node;
 }
+
 
 const node_ref
 node_ref::dereference() const
@@ -158,12 +183,13 @@ node_ref::dereference() const
 	return node_ref(B_INVALID_DEV, B_INVALID_INO);
 }
 
+
 void
 node_ref::unset()
 {
-	// operator= handles releasing the old vref; do not call release_vref
-	// here as well, or the refcount will go negative (double-release).
-	*this = node_ref(B_INVALID_DEV, B_INVALID_INO);
+	// operator= handles releasing the old vref; releasing here would
+	// double-release.
+	*this = node_ref();
 }
 
 
@@ -173,13 +199,12 @@ node_ref::operator==(const node_ref& other) const
 	if (device == other.device && node == other.node)
 		return true;
 
-	if (is_virtual() || other.is_virtual()) {
-		const node_ref realA = dereference();
-		const node_ref realB = other.dereference();
-		return (realA.device == realB.device && realA.node == realB.node);
-	}
+	if (!is_virtual() && !other.is_virtual())
+		return false;
 
-	return false;
+	node_ref a = dereference();
+	node_ref b = other.dereference();
+	return a.device == b.device && a.node == b.node;
 }
 
 
@@ -193,18 +218,13 @@ node_ref::operator!=(const node_ref& other) const
 bool
 node_ref::operator<(const node_ref& other) const
 {
-	if (is_virtual() || other.is_virtual()) {
-		const node_ref realA = dereference();
-		const node_ref realB = other.dereference();
-		if (realA.device != realB.device)
-			return realA.device < realB.device;
-		return realA.node < realB.node;
-	}
+	node_ref a = (is_virtual() || other.is_virtual()) ? dereference() : *this;
+	node_ref b = (is_virtual() || other.is_virtual())
+		? other.dereference() : other;
 
-	if (this->device != other.device)
-		return this->device < other.device;
-
-	return this->node < other.node;
+	if (a.device != b.device)
+		return a.device < b.device;
+	return a.node < b.node;
 }
 
 
@@ -216,18 +236,21 @@ node_ref::operator=(const node_ref& other)
 
 	dev_t oldDevice = device;
 	ino_t oldNode = node;
+	uint64 oldTicket = cache_ticket;
 
 	device = other.device;
 	node = other.node;
 	team = other.team;
 	real_device = other.real_device;
 	real_node = other.real_node;
+	cache_ticket = BPrivate::B_INVALID_VREF_TICKET;
 
-	if (is_virtual() && node != B_INVALID_INO)
-		BPrivate::VRefCache::Acquire((vref_id) node);
+	_AcquireNodeSlot();
 
-	if (oldDevice == get_vref_dev() && oldNode != B_INVALID_INO)
-		BPrivate::VRefCache::Release((vref_id) oldNode);
+	if (oldDevice == get_vref_dev() && oldNode != B_INVALID_INO
+		&& oldTicket != BPrivate::B_INVALID_VREF_TICKET) {
+		BPrivate::VRefCache::Release((vref_id)oldNode, oldTicket);
+	}
 
 	return *this;
 }

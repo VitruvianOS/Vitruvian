@@ -52,8 +52,12 @@ public:
 protected:
 	mutable dev_t	real_device;
 	mutable ino_t	real_node;
+	uint64 cache_ticket;
 
 private:
+	void _AcquireNodeSlot();
+	void _ReleaseNodeSlot();
+
 	team_id team;
 
 	friend class entry_ref;

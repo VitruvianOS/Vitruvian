@@ -55,11 +55,23 @@ public:
 
 	NotOwningEntryRef& SetTo(dev_t device, ino_t directory, const char* name)
 	{
+		// Drop any previously held slot before re-targeting.
+		if (is_virtual() && this->directory != B_INVALID_INO
+			&& cache_ticket != BPrivate::B_INVALID_VREF_TICKET) {
+			BPrivate::VRefCache::Release((vref_id) this->directory,
+				cache_ticket);
+		}
+		cache_ticket = BPrivate::B_INVALID_VREF_TICKET;
 		this->device = device;
 		this->directory = directory;
 		this->name = const_cast<char*>(name);
-		if (is_virtual())
-			BPrivate::VRefCache::Acquire((vref_id) directory);
+		if (is_virtual() && directory != B_INVALID_INO) {
+			cache_ticket = BPrivate::VRefCache::Acquire((vref_id) directory);
+			if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET) {
+				this->directory = B_INVALID_INO;
+				this->device = B_INVALID_DEV;
+			}
+		}
 
 		return *this;
 	}

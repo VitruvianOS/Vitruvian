@@ -26,6 +26,7 @@
 
 #include <syscalls.h>
 #include <VRefCache.h>
+#include <VRefTrack.h>
 
 #include "storage_support.h"
 
@@ -36,14 +37,40 @@ using namespace std;
 //	#pragma mark - struct entry_ref
 
 
+void
+entry_ref::_AcquireDirSlot()
+{
+	if (!is_virtual() || directory == B_INVALID_INO)
+		return;
+
+	cache_ticket = BPrivate::VRefCache::Acquire((vref_id)directory);
+	if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET) {
+		device = B_INVALID_DEV;
+		directory = B_INVALID_INO;
+	}
+}
+
+
+void
+entry_ref::_ReleaseDirSlot()
+{
+	if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET)
+		return;
+
+	BPrivate::VRefCache::Release((vref_id)directory, cache_ticket);
+	cache_ticket = BPrivate::B_INVALID_VREF_TICKET;
+}
+
+
 entry_ref::entry_ref()
 	:
 	device(B_INVALID_DEV),
 	directory(B_INVALID_INO),
 	name(NULL),
-	team(-1),
 	real_device(B_INVALID_DEV),
-	real_directory(B_INVALID_INO)
+	real_directory(B_INVALID_INO),
+	cache_ticket(BPrivate::B_INVALID_VREF_TICKET),
+	team(-1)
 {
 }
 
@@ -53,37 +80,30 @@ entry_ref::entry_ref(dev_t dev, ino_t dir, const char* name)
 	device(dev),
 	directory(dir),
 	name(NULL),
-	team(-1),
 	real_device(B_INVALID_DEV),
-	real_directory(B_INVALID_INO)
+	real_directory(B_INVALID_INO),
+	cache_ticket(BPrivate::B_INVALID_VREF_TICKET),
+	team(getpid())
 {
 	set_name(name);
-	team = getpid();
+	_AcquireDirSlot();
 
-	if (is_virtual() && dir != B_INVALID_INO) {
-		BPrivate::VRefCache::Acquire((vref_id)dir);
-		// Populate real_device/real_directory so dereference() works when
-		// this entry_ref is reconstructed from raw vref fields.
-		int fd = BPrivate::VRefCache::Open((vref_id)dir);
-		if (fd >= 0) {
-			struct stat st;
-			if (fstat(fd, &st) == 0) {
-				real_device = st.st_dev;
-				real_directory = st.st_ino;
-			}
-			close(fd);
-		}
+	// Eagerly populate real_* so dereference() works when reconstructed
+	// from raw vref fields. TODO: drop once VRefCache::GetIdentity lands.
+	if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET)
+		return;
+
+	int fd = BPrivate::VRefCache::Open((vref_id)dir);
+	if (fd < 0)
+		return;
+
+	struct stat st;
+	if (fstat(fd, &st) == 0) {
+		real_device = st.st_dev;
+		real_directory = st.st_ino;
 	}
+	close(fd);
 }
-
-
-//entry_ref::entry_ref(vref_id id, const char* name, uint32 flags)
-//	:
-//	device(get_vref_dev()),
-//	directory((ino_t)id)
-//{
-	// TODO allow to override the acquire_ref.
-//}
 
 
 entry_ref::entry_ref(int entryFd, const char* name)
@@ -91,9 +111,10 @@ entry_ref::entry_ref(int entryFd, const char* name)
 	device(B_INVALID_DEV),
 	directory(B_INVALID_INO),
 	name(NULL),
-	team(-1),
 	real_device(B_INVALID_DEV),
-	real_directory(B_INVALID_INO)
+	real_directory(B_INVALID_INO),
+	cache_ticket(BPrivate::B_INVALID_VREF_TICKET),
+	team(-1)
 {
 	struct stat st;
 	if (fstat(entryFd, &st) == 0) {
@@ -101,8 +122,13 @@ entry_ref::entry_ref(int entryFd, const char* name)
 		real_directory = st.st_ino;
 	}
 
+	BPrivate::vref_handle h = BPrivate::VRefCache::AcquireFromFd(entryFd);
+	if (h.id < 0)
+		return;
+
 	device = get_vref_dev();
-	directory = BPrivate::VRefCache::AcquireFromFd(entryFd);
+	directory = h.id;
+	cache_ticket = h.ticket;
 	set_name(name);
 	team = getpid();
 }
@@ -113,40 +139,35 @@ entry_ref::entry_ref(const node_ref& ref, const char* name)
 	device(ref.dev()),
 	directory(ref.ino()),
 	name(NULL),
-	team(-1),
 	real_device(ref.real_device),
-	real_directory(ref.real_node)
+	real_directory(ref.real_node),
+	cache_ticket(BPrivate::B_INVALID_VREF_TICKET),
+	team(getpid())
 {
 	set_name(name);
-	team = getpid();
-
-	if (is_virtual())
-		BPrivate::VRefCache::Acquire(directory);
+	_AcquireDirSlot();
 }
 
 
 entry_ref::entry_ref(const entry_ref& ref)
 	:
-	device(ref.dev()),
-	directory(ref.dir()),
+	device(ref.device),
+	directory(ref.directory),
 	name(NULL),
-	team(ref.team),
 	real_device(ref.real_device),
-	real_directory(ref.real_directory)
+	real_directory(ref.real_directory),
+	cache_ticket(BPrivate::B_INVALID_VREF_TICKET),
+	team(ref.team)
 {
 	set_name(ref.name);
-
-	if (is_virtual())
-		BPrivate::VRefCache::Acquire(directory);
+	_AcquireDirSlot();
 }
 
 
 entry_ref::~entry_ref()
 {
 	free(name);
-
-	if (is_virtual() && directory != B_INVALID_INO)
-		BPrivate::VRefCache::Release((vref_id) directory);
+	_ReleaseDirSlot();
 }
 
 
@@ -167,24 +188,20 @@ entry_ref::set_name(const char* name)
 }
 
 
-status_t entry_ref::init_check() const
+status_t
+entry_ref::init_check() const
 {
-	if (is_virtual()) {
-		// TODO
-	}
+	if (device == B_INVALID_DEV && directory == B_INVALID_INO)
+		return B_ENTRY_NOT_FOUND;
 	return B_OK;
 }
 
-bool entry_ref::is_virtual() const
+
+bool
+entry_ref::is_virtual() const
 {
 	dev_t dev = get_vref_dev();
-	if (dev == B_INVALID_DEV)
-		return false;
-
-	if (device == dev)
-		return true;
-
-	return false;
+	return dev != B_INVALID_DEV && device == dev;
 }
 
 
@@ -193,7 +210,6 @@ entry_ref::id() const
 {
 	if (is_virtual())
 		return (vref_id)directory;
-
 	return B_BAD_VALUE;
 }
 
@@ -211,10 +227,11 @@ entry_ref::dereference() const
 }
 
 
-void entry_ref::unset()
+void
+entry_ref::unset()
 {
-	// operator= handles releasing the old vref; do not call release_vref
-	// here as well, or the refcount will go negative (double-release).
+	// operator= handles releasing the old vref; releasing here would
+	// double-release.
 	*this = entry_ref();
 }
 
@@ -222,24 +239,20 @@ void entry_ref::unset()
 bool
 entry_ref::operator==(const entry_ref& ref) const
 {
-	if (!(name == ref.name
-			|| (name != NULL && ref.name != NULL
-				&& strcmp(name, ref.name) == 0))) {
+	bool sameName = name == ref.name
+		|| (name != NULL && ref.name != NULL && strcmp(name, ref.name) == 0);
+	if (!sameName)
 		return false;
-	}
 
 	if (device == ref.device && directory == ref.directory)
 		return true;
 
-	// If this holds a vref then compare the dereferenced dev/ino values
-	if (is_virtual() || ref.is_virtual()) {
-		entry_ref realA = dereference();
-		entry_ref realB = ref.dereference();
-		return (realA.device == realB.device
-			&& realA.directory == realB.directory);
-	}
+	if (!is_virtual() && !ref.is_virtual())
+		return false;
 
-	return false;
+	entry_ref a = dereference();
+	entry_ref b = ref.dereference();
+	return a.device == b.device && a.directory == b.directory;
 }
 
 
@@ -258,6 +271,7 @@ entry_ref::operator=(const entry_ref& ref)
 
 	dev_t oldDevice = device;
 	ino_t oldDirectory = directory;
+	uint64 oldTicket = cache_ticket;
 
 	device = ref.device;
 	directory = ref.directory;
@@ -265,12 +279,14 @@ entry_ref::operator=(const entry_ref& ref)
 	team = ref.team;
 	real_device = ref.real_device;
 	real_directory = ref.real_directory;
+	cache_ticket = BPrivate::B_INVALID_VREF_TICKET;
 
-	if (is_virtual() && directory != B_INVALID_INO)
-		BPrivate::VRefCache::Acquire((vref_id) directory);
+	_AcquireDirSlot();
 
-	if (oldDevice == get_vref_dev() && oldDirectory != B_INVALID_INO)
-		BPrivate::VRefCache::Release((vref_id) oldDirectory);
+	if (oldDevice == get_vref_dev() && oldDirectory != B_INVALID_INO
+		&& oldTicket != BPrivate::B_INVALID_VREF_TICKET) {
+		BPrivate::VRefCache::Release((vref_id)oldDirectory, oldTicket);
+	}
 
 	return *this;
 }
@@ -1033,27 +1049,18 @@ get_ref_for_path(const char* path, entry_ref* ref)
 bool
 operator<(const entry_ref& a, const entry_ref& b)
 {
-	dev_t devA = a.dev();
-	dev_t devB = b.dev();
-	ino_t dirA = a.dir();
-	ino_t dirB = b.dir();
+	entry_ref realA = (a.is_virtual() || b.is_virtual()) ? a.dereference() : a;
+	entry_ref realB = (a.is_virtual() || b.is_virtual()) ? b.dereference() : b;
 
-	if (a.is_virtual() || b.is_virtual()) {
-		entry_ref realA = a.dereference();
-		entry_ref realB = b.dereference();
-		devA = realA.device;
-		devB = realB.device;
-		dirA = realA.directory;
-		dirB = realB.directory;
-	}
-
-	return (devA < devB
-		|| (devA == devB
-			&& (dirA < dirB
-			|| (dirA == dirB
-				&& ((a.name == NULL && b.name != NULL)
-				|| (a.name != NULL && b.name != NULL
-					&& strcmp(a.name, b.name) < 0))))));
+	if (realA.device != realB.device)
+		return realA.device < realB.device;
+	if (realA.directory != realB.directory)
+		return realA.directory < realB.directory;
+	if (a.name == NULL)
+		return b.name != NULL;
+	if (b.name == NULL)
+		return false;
+	return strcmp(a.name, b.name) < 0;
 }
 
 

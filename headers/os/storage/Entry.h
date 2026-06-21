@@ -69,8 +69,12 @@ public:
 protected:
 			mutable dev_t		real_device;
 			mutable ino_t		real_directory;
+			uint64				cache_ticket;
 
 private:
+			void				_AcquireDirSlot();
+			void				_ReleaseDirSlot();
+
 			team_id				team;
 };
 

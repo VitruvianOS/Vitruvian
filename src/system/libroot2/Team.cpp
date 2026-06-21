@@ -8,10 +8,14 @@
 #include "Team.h"
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdio.h>
+#include <string.h>
 #include <syscall.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 #include <list>

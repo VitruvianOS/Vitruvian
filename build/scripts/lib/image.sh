@@ -147,8 +147,19 @@ create_raw() {
 umount /sys/firmware/efi/efivars 2>/dev/null || true
 
 apt-get remove -y vos nexus-dkms 2>/dev/null || true
-apt-get -y purge live-boot live-boot-initramfs-tools 2>/dev/null || true
-rm -f /usr/share/initramfs-tools/hooks/live /usr/share/initramfs-tools/scripts/live*
+
+# live-boot comes in via prior ISO builds rsync'd into this chroot. apt-get
+# purge runs update-initramfs through dpkg triggers, which executes the
+# live hook BEFORE the package file is unlinked — so purge itself trips
+# the hook and aborts. Strip the hook/script files first, then force-purge
+# so dpkg state matches the filesystem and no later kernel postinst
+# resurrects the failure.
+rm -f /usr/share/initramfs-tools/hooks/live*
+rm -f /usr/share/initramfs-tools/scripts/live*
+rm -f /etc/initramfs-tools/conf.d/live*
+dpkg --purge --force-all live-boot live-boot-initramfs-tools \
+    live-config live-config-systemd live-tools 2>/dev/null || true
+apt-get -y autoremove --purge 2>/dev/null || true
 
 apt-get install -y --no-install-recommends $_raw_pkgs
 

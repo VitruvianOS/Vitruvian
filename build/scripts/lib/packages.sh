@@ -55,7 +55,8 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev"
+                " libxkbcommon-dev libsystemd-dev" \
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         arm64)
             printf '%s' \
@@ -64,7 +65,8 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev"
+                " libxkbcommon-dev libsystemd-dev" \
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         arm32)
             printf '%s' \
@@ -73,7 +75,8 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev"
+                " libxkbcommon-dev libsystemd-dev" \
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         riscv64)
             printf '%s' \
@@ -82,7 +85,8 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev"
+                " libxkbcommon-dev libsystemd-dev" \
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         *)
             die "No dev package list for architecture: $_arch"

@@ -13,15 +13,14 @@ static inline int
 futex_wait(int32* addr, int32 expected, bigtime_t timeout)
 {
 	struct timespec ts;
+	struct timespec* tsp = NULL;
 	if (timeout > 0) {
-		ts.tv_sec = timeout / 1000000000;
-		ts.tv_nsec = timeout % 1000000000;
-		return syscall(SYS_futex, addr, FUTEX_WAIT,
-			expected, &ts, NULL, 0);
-	} else {
-		return syscall(SYS_futex, addr, FUTEX_WAIT,
-			expected, NULL, NULL, 0);
+		ts.tv_sec = timeout / 1000000;
+		ts.tv_nsec = (timeout % 1000000) * 1000;
+		tsp = &ts;
 	}
+	return syscall(SYS_futex, addr, FUTEX_WAIT,
+		expected, tsp, NULL, 0);
 }
 
 
@@ -36,15 +35,13 @@ status_t
 _kern_mutex_lock(int32* mutex, const char* name, uint32 flags,
 		bigtime_t timeout)
 {
-	int32 expected = 0;
 	while (__atomic_exchange_n(mutex, 1, __ATOMIC_ACQUIRE) != 0) {
-		if (timeout > 0) {
-			if (futex_wait(mutex, expected, timeout) == -1) {
-				if (errno == EAGAIN)
-					return B_TIMED_OUT;
-			}
-		} else {
-			while (*mutex != 0);
+		int result = futex_wait(mutex, 1, timeout);
+		if (timeout > 0 && result == -1) {
+			if (errno == ETIMEDOUT)
+				return B_TIMED_OUT;
+			if (errno == EINTR)
+				return B_INTERRUPTED;
 		}
 	}
 	return B_OK;

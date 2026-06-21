@@ -24,6 +24,7 @@ target_sources(root PRIVATE
 	fs/fs.cpp
 	fs/vref.cpp
 	fs/VRefCache.cpp
+	fs/VRefTrack.cpp
 	fs/node_monitor.cpp
 	fs/disk_monitor.cpp
 	fs/disk_device.cpp
@@ -56,8 +57,7 @@ target_sources(root PRIVATE
 	posix/strndup.c
 )
 
-set_source_files_properties(fs/node_monitor.cpp PROPERTIES
-	COMPILE_DEFINITIONS __ENABLE_NODE_MONITOR__)
+target_compile_definitions(root PRIVATE ENABLE_VREF_TRACKING)
 
 add_dependencies(root nexus)
 

@@ -6,6 +6,9 @@ Before=graphical.target
 [Service]
 Type=simple
 ExecStartPre=-/bin/mkdir -p /run/vitruvian
+ExecStartPre=-/bin/mkdir -p /var/log/vref
+Environment=VREF_TRACE=/var/log/vref
+Environment=ICON_TRACE=1
 ExecStart=/system/servers/janus
 Restart=on-failure
 RestartSec=1s

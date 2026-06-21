@@ -63,13 +63,16 @@ get_extended_team_info(team_id teamID, uint32 flags, KMessage& info)
 	if (fd < 0)
 		return B_ERROR;
 
-	vref_id vref = BPrivate::VRefCache::AcquireFromFd(fd);
+	BPrivate::vref_handle h = BPrivate::VRefCache::AcquireFromFd(fd);
 	close(fd);
-	if (vref < 0)
+	if (h.id < 0)
 		return B_ERROR;
 
-	if (info.AddRef("virtual:cwd directory", get_vref_dev(), (ino_t)vref,
-			name) != B_OK)
+	status_t addErr = info.AddRef("virtual:cwd directory", get_vref_dev(),
+		(ino_t)h.id, name);
+	// AddRef takes its own slot via VRefCache; drop ours.
+	BPrivate::VRefCache::Release(h.id, h.ticket);
+	if (addErr != B_OK)
 		return B_ERROR;
 
 	return B_OK;

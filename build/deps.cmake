@@ -140,49 +140,54 @@ DeclareDependency(
 	RUNTIMES  "libdrm2 (>= 2.4.114-1)"
 )
 
-#DeclareDependency(
-#	ICNS
-#	LIBRARIES	"icns"
-#	PACKAGES	"libicns-dev"
-#	RUNTIMES	"libicns1 (>= 0.8.1-3.1)"
-#)
+DeclareDependency(
+	ICNS
+	LIBRARIES	"icns"
+	PACKAGES	"libicns-dev"
+	RUNTIMES	"libicns1 (>= 0.8.1-3.1)"
+)
 
+# EXR: translator source is OpenEXR 2.x era (halfFunction.h gone in 3.x);
+# stays disabled until ported. See src/add-ons/translators/CMakeLists.txt.
 #DeclareDependency(
 #	EXR
-#	LIBRARIES	"IlmImf;Half"
+#	LIBRARIES	"OpenEXR;Imath"
 #	PACKAGES	"libopenexr-dev"
-#	RUNTIMES	"libopenexr25 (>= 2.5.4-2)"
-#	INCLUDES	"${HEADERS_PATH_BASE}/OpenEXR/"
+#	RUNTIMES	"libopenexr-3-1-30 (>= 3.1)"
+#	INCLUDES	"${HEADERS_PATH_BASE}/OpenEXR/;${HEADERS_PATH_BASE}/Imath/"
 #)
 
-#DeclareDependency(
-#	JPEG
-#	LIBRARIES	"jpeg"
-#	PACKAGES	"libjpeg-dev"
-#	RUNTIMES	"libjpeg62-turbo (>= 2.0.6-4)"
-#)
+DeclareDependency(
+	JPEG
+	LIBRARIES	"jpeg"
+	PACKAGES	"libjpeg-dev"
+	RUNTIMES	"libjpeg62-turbo (>= 2.0.6-4)"
+)
 
-#DeclareDependency(
-#	PNG
-#	LIBRARIES	"png"
-#	PACKAGES	"libpng-dev"
-#	RUNTIMES	"libpng16-16 (>= 1.6.37-3)"
-#	INCLUDES	"${HEADERS_PATH_BASE}/libpng/"
-#)
+DeclareDependency(
+	PNG
+	LIBRARIES	"png"
+	PACKAGES	"libpng-dev"
+	RUNTIMES	"libpng16-16 (>= 1.6.37-3)"
+	INCLUDES	"${HEADERS_PATH_BASE}/libpng/"
+)
 
-#DeclareDependency(
-#	TIFF
-#	LIBRARIES	"tiff"
-#	PACKAGES	"libtiff-dev"
-#	RUNTIMES	"libtiff6 (>= 4.5.0-1)"
-#)
+DeclareDependency(
+	TIFF
+	LIBRARIES	"tiff"
+	PACKAGES	"libtiff-dev"
+	RUNTIMES	"libtiff6 (>= 4.5.0-1)"
+)
 
-#DeclareDependency(
-#	WEBP
-#	LIBRARIES	"webp"
-#	PACKAGES	"libwebp-dev"
-#	RUNTIMES	"libwebp6 (>= 0.6.1-2.1)"
-#)
+DeclareDependency(
+	WEBP
+	LIBRARIES	"webp"
+	PACKAGES	"libwebp-dev"
+	RUNTIMES	"libwebp7 (>= 1.2.0)"
+)
+
+# JASPER (libjasper-dev) was removed from Debian for unfixed CVEs; the
+# jpeg2000 translator that uses it stays disabled until ported to OpenJPEG.
 
 DeclareDependency(
 	GL

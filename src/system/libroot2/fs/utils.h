@@ -19,6 +19,7 @@
 #include <sys/statvfs.h>
 
 #include "Team.h"
+#include "fs/fs_caps_user.h"
 
 
 namespace BKernelPrivate {
@@ -109,11 +110,6 @@ static const FsNameMapping kLinuxToHaikuFs[] = {
 };
 
 
-static const char* const kReadOnlyFilesystems[] = {
-	"squashfs", "iso9660", "udf", "erofs", NULL
-};
-
-
 static inline bool
 file_exists(const char* path)
 {
@@ -155,14 +151,7 @@ is_linux_filesystem(const char* name)
 static inline bool
 is_readonly_filesystem(const char* fsType)
 {
-	if (fsType == NULL)
-		return false;
-
-	for (int i = 0; kReadOnlyFilesystems[i] != NULL; i++) {
-		if (strcasecmp(fsType, kReadOnlyFilesystems[i]) == 0)
-			return true;
-	}
-	return false;
+	return ::BPrivate::FsCaps::is_readonly(fsType);
 }
 
 

@@ -9,11 +9,15 @@
 #include <syscalls.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <sys/mount.h>
+#include <sys/statvfs.h>
 
 #include <pthread.h>
 
 #include "fs/fs_type_filter.h"
+#include "fs/fs_caps_user.h"
 #include "fs/utils.h"
+#include <MountInfo.h>
 #include "KernelDebug.h"
 #include "Team.h"
 
@@ -29,20 +33,20 @@
 namespace BKernelPrivate {
 
 
-static FILE* sVolumeIterator = NULL;
-static pthread_mutex_t sVolumeIteratorLock = PTHREAD_MUTEX_INITIALIZER;
-
-
 static void
-resolve_volume_name(struct mntent* mountEntry, char* out)
+resolve_volume_name(const BPrivate::MountEntry& entry, char* out)
 {
-	if (strcmp(mountEntry->mnt_dir, "/") == 0) {
+	const char* mntDir = entry.mount_point.String();
+	const char* mntFsname = entry.device_path.String();
+	const char* mntType = entry.fs_type.String();
+
+	if (strcmp(mntDir, "/") == 0) {
 		strlcpy(out, "Vitruvian", B_FILE_NAME_LENGTH);
 		return;
 	}
 
-	if (strncmp(mountEntry->mnt_fsname, "/dev/", 5) == 0) {
-		char* label = blkid_get_tag_value(NULL, "LABEL", mountEntry->mnt_fsname);
+	if (strncmp(mntFsname, "/dev/", 5) == 0) {
+		char* label = blkid_get_tag_value(NULL, "LABEL", mntFsname);
 		if (label != NULL) {
 			if (label[0] != '\0')
 				strlcpy(out, label, B_FILE_NAME_LENGTH);
@@ -52,275 +56,154 @@ resolve_volume_name(struct mntent* mountEntry, char* out)
 		}
 	}
 
-	const char* base = strrchr(mountEntry->mnt_dir, '/');
+	const char* base = strrchr(mntDir, '/');
 	if (base && base[1] != '\0') {
 		strlcpy(out, base + 1, B_FILE_NAME_LENGTH);
 		return;
 	}
 
-	if (mountEntry->mnt_type[0] != '\0') {
-		strlcpy(out, mountEntry->mnt_type, B_FILE_NAME_LENGTH);
+	if (mntType[0] != '\0') {
+		strlcpy(out, mntType, B_FILE_NAME_LENGTH);
 		return;
 	}
 
-	strlcpy(out, mountEntry->mnt_dir, B_FILE_NAME_LENGTH);
+	strlcpy(out, mntDir, B_FILE_NAME_LENGTH);
 }
 
 
 static struct {
-	pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-	dev_t device = B_INVALID_DEV;
-	fs_info info;
-	struct timespec stamp = {0, 0};
-	bool valid = false;
-} sLastInfo;
+	pthread_mutex_t	lock = PTHREAD_MUTEX_INITIALIZER;
+	dev_t			device = B_INVALID_DEV;
+	fs_info			info;
+	uint64_t		gen = (uint64_t)-1;
+	bool			valid = false;
+} sInfoCache;
 
-static const long kInfoCacheNs = 2L * 1000L * 1000L * 1000L;
 
 status_t
-LinuxVolume::FillVolumeInfo(struct mntent* mountEntry, fs_info* info)
+LinuxVolume::FillVolumeInfo(const BPrivate::MountEntry& entry, fs_info* info)
 {
-	if (mountEntry == NULL || info == NULL)
+	if (info == NULL)
 		return B_BAD_VALUE;
 
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
+	const uint64_t gen = BPrivate::MountInfo::Generation();
+	const char* mntDir = entry.mount_point.String();
 
-	struct stat dirStat;
-	if (stat(mountEntry->mnt_dir, &dirStat) == 0) {
-		pthread_mutex_lock(&sLastInfo.lock);
-		if (sLastInfo.valid && sLastInfo.device == dirStat.st_dev) {
-			long age = (now.tv_sec - sLastInfo.stamp.tv_sec) * 1000000000L
-				+ (now.tv_nsec - sLastInfo.stamp.tv_nsec);
-			if (age < kInfoCacheNs) {
-				*info = sLastInfo.info;
-				pthread_mutex_unlock(&sLastInfo.lock);
-				return B_OK;
-			}
-		}
-		pthread_mutex_unlock(&sLastInfo.lock);
+	pthread_mutex_lock(&sInfoCache.lock);
+	if (sInfoCache.valid && sInfoCache.device == entry.dev
+			&& sInfoCache.gen == gen) {
+		*info = sInfoCache.info;
+		pthread_mutex_unlock(&sInfoCache.lock);
+		return B_OK;
 	}
+	pthread_mutex_unlock(&sInfoCache.lock);
 
 	memset(info, 0, sizeof(fs_info));
 
-	resolve_volume_name(mountEntry, info->volume_name);
-	strlcpy(info->device_name, mountEntry->mnt_fsname, 128);
-	strlcpy(info->fsh_name, mountEntry->mnt_type, B_OS_NAME_LENGTH);
-
-	struct statvfs volume;
-	if (statvfs(mountEntry->mnt_dir, &volume) != 0)
-		return -errno;
-
 	struct stat st;
-	if (stat(mountEntry->mnt_dir, &st) < 0)
+	if (stat(mntDir, &st) < 0)
 		return B_ENTRY_NOT_FOUND;
-
-	info->dev = st.st_dev;
+	info->dev = entry.dev;
 	info->root = st.st_ino;
-	info->flags = 0;
+	strlcpy(info->device_name, entry.device_path.String(), 128);
+	strlcpy(info->fsh_name, entry.fs_type.String(), B_OS_NAME_LENGTH);
+	resolve_volume_name(entry, info->volume_name);
 
-	info->block_size = (int32) volume.f_bsize;
-	info->io_size = (int32) (volume.f_frsize ? volume.f_frsize : volume.f_bsize);
-	info->total_blocks = (uint64) volume.f_blocks;
-	info->free_blocks = (uint64) volume.f_bavail;
-	info->total_nodes = (uint64) volume.f_files;
-	info->free_nodes = (uint64) volume.f_favail;
+	struct statvfs vfs;
+	if (statvfs(mntDir, &vfs) != 0)
+		return -errno;
+	info->block_size = (int32) vfs.f_bsize;
+	info->io_size = (int32) (vfs.f_frsize ? vfs.f_frsize : vfs.f_bsize);
+	info->total_blocks = (uint64) vfs.f_blocks;
+	info->free_blocks = (uint64) vfs.f_bavail;
+	info->total_nodes = (uint64) vfs.f_files;
+	info->free_nodes = (uint64) vfs.f_favail;
 
-	if (volume.f_flag & ST_RDONLY)
+	const char* fsType = entry.fs_type.String();
+	const BPrivate::FsCaps::Entry* caps = BPrivate::FsCaps::by_name(fsType);
+
+	bool isPersistent = false;
+	if (caps != NULL && (caps->flags & BPrivate::FsCaps::PERSISTENT))
+		isPersistent = true;
+	if (entry.device_path.Length() > 0
+			&& strncmp(entry.device_path.String(), "/dev/", 5) == 0)
+		isPersistent = true;
+	if (strcmp(mntDir, "/") == 0)
+		isPersistent = true;
+	if (isPersistent)
+		info->flags |= B_FS_IS_PERSISTENT;
+
+	if ((vfs.f_flag & ST_RDONLY) != 0
+			|| (entry.flags & MS_RDONLY) != 0
+			|| (caps != NULL && (caps->flags & BPrivate::FsCaps::READONLY)))
 		info->flags |= B_FS_IS_READONLY;
 
-	int volFd = open(mountEntry->mnt_dir, O_PATH | O_DIRECTORY | O_CLOEXEC);
+	int volFd = open(mntDir, O_PATH | O_DIRECTORY | O_CLOEXEC);
 	if (volFd >= 0) {
 		struct nexus_query_volume_flags req = { .target_fd = volFd, .flags = 0 };
 		int nmfd = BKernelPrivate::Team::GetNodeMonitorDescriptor();
 		if (nmfd >= 0 && ioctl(nmfd, NEXUS_QUERY_VOLUME_FLAGS, &req) == 0)
-			info->flags |= req.flags;
+			info->flags |= (req.flags & ~B_FS_IS_READONLY);
 		close(volFd);
 	}
 
-	// Mark filesystems as persistent if they are backed by a real block device
-	// (device path starts with /dev/) or are a known persistent filesystem type.
-	// The boot volume is always considered persistent.
-	const char* fsType = mountEntry->mnt_type;
-	const char* fsName = mountEntry->mnt_fsname;
-	bool isPersistent = false;
-
-	// Filesystems backed by block devices are persistent
-	if (fsName[0] == '/' && strncmp(fsName, "/dev/", 5) == 0)
-		isPersistent = true;
-
-	// Known persistent filesystem types (even without /dev/ prefix, e.g. ZFS)
-	if (strcmp(fsType, "ext2") == 0 || strcmp(fsType, "ext3") == 0
-		|| strcmp(fsType, "ext4") == 0 || strcmp(fsType, "btrfs") == 0
-		|| strcmp(fsType, "xfs") == 0 || strcmp(fsType, "f2fs") == 0
-		|| strcmp(fsType, "ntfs") == 0 || strcmp(fsType, "ntfs3") == 0
-		|| strcmp(fsType, "vfat") == 0 || strcmp(fsType, "fat32") == 0
-		|| strcmp(fsType, "exfat") == 0 || strcmp(fsType, "hfs") == 0
-		|| strcmp(fsType, "hfsplus") == 0 || strcmp(fsType, "jfs") == 0
-		|| strcmp(fsType, "reiserfs") == 0 || strcmp(fsType, "zfs") == 0
-		|| strcmp(fsType, "ufs") == 0 || strcmp(fsType, "bcachefs") == 0
-		|| strcmp(fsType, "nilfs2") == 0
-		|| strcmp(fsType, "squashfs") == 0 || strcmp(fsType, "iso9660") == 0
-		|| strcmp(fsType, "erofs") == 0) {
-		isPersistent = true;
-	}
-
-	// The boot volume (mounted at "/") is always persistent
-	if (strcmp(mountEntry->mnt_dir, "/") == 0)
-		isPersistent = true;
-
-	if (isPersistent)
-		info->flags |= B_FS_IS_PERSISTENT;
-
-	const char* devName = strrchr(mountEntry->mnt_fsname, '/');
-	if (devName)
-		devName++;
-	else
-		devName = mountEntry->mnt_fsname;
-
+	const char* devName = strrchr(entry.device_path.String(), '/');
+	devName = devName ? devName + 1 : entry.device_path.String();
 	if (devName[0] != '\0' && is_removable_device(devName))
 		info->flags |= B_FS_IS_REMOVABLE;
 
-	pthread_mutex_lock(&sLastInfo.lock);
-	sLastInfo.device = info->dev;
-	sLastInfo.info = *info;
-	sLastInfo.stamp = now;
-	sLastInfo.valid = true;
-	pthread_mutex_unlock(&sLastInfo.lock);
+	pthread_mutex_lock(&sInfoCache.lock);
+	sInfoCache.device = info->dev;
+	sInfoCache.info = *info;
+	sInfoCache.gen = gen;
+	sInfoCache.valid = true;
+	pthread_mutex_unlock(&sInfoCache.lock);
 
 	return B_OK;
 }
 
 
-static struct mntent*
-clone_mntent(const struct mntent* src)
+status_t
+LinuxVolume::FillVolumeInfoForDev(dev_t device, fs_info* info)
 {
-	struct mntent* result = (struct mntent*)malloc(sizeof(struct mntent));
-	if (result == NULL)
-		return NULL;
-	result->mnt_fsname = strdup(src->mnt_fsname);
-	result->mnt_dir = strdup(src->mnt_dir);
-	result->mnt_type = strdup(src->mnt_type);
-	result->mnt_opts = strdup(src->mnt_opts);
-	result->mnt_freq = src->mnt_freq;
-	result->mnt_passno = src->mnt_passno;
-	return result;
-}
+	if (device == B_INVALID_DEV || info == NULL)
+		return B_BAD_VALUE;
 
+	BPrivate::MountEntry entry;
+	if (!BPrivate::MountInfo::FindByDev(device, &entry))
+		return B_BAD_VALUE;
+	if (BPrivate::FsCaps::is_pseudo(entry.fs_type.String()))
+		return B_BAD_VALUE;
 
-static struct {
-	pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-	dev_t device = B_INVALID_DEV;
-	struct mntent* entry = NULL;
-	struct timespec stamp = {0, 0};
-} sLastVolume;
-
-static const long kVolumeCacheNs = 1000L * 1000L * 1000L;
-
-struct mntent*
-LinuxVolume::FindVolume(dev_t device)
-{
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-
-	pthread_mutex_lock(&sLastVolume.lock);
-	if (sLastVolume.entry != NULL && sLastVolume.device == device) {
-		long age = (now.tv_sec - sLastVolume.stamp.tv_sec) * 1000000000L
-			+ (now.tv_nsec - sLastVolume.stamp.tv_nsec);
-		if (age < kVolumeCacheNs) {
-			struct mntent* hit = clone_mntent(sLastVolume.entry);
-			pthread_mutex_unlock(&sLastVolume.lock);
-			return hit;
-		}
-	}
-	pthread_mutex_unlock(&sLastVolume.lock);
-
-	FILE* mounts = setmntent(PROC_MOUNTS, "r");
-	if (mounts == NULL)
-		return NULL;
-
-	struct mntent mountEntryBuf;
-	char mntBuf[4096];
-	struct mntent* mountEntry;
-	while ((mountEntry = getmntent_r(mounts, &mountEntryBuf, mntBuf,
-			sizeof(mntBuf))) != NULL) {
-		struct stat st;
-		if (stat(mountEntry->mnt_dir, &st) == 0 && st.st_dev == device
-				&& !fs_mnttype_is_pseudo(mountEntry->mnt_type)) {
-			struct mntent* result = clone_mntent(mountEntry);
-			endmntent(mounts);
-
-			if (result != NULL) {
-				pthread_mutex_lock(&sLastVolume.lock);
-				if (sLastVolume.entry != NULL)
-					LinuxVolume::FreeVolumeEntry(sLastVolume.entry);
-				sLastVolume.entry = clone_mntent(result);
-				sLastVolume.device = device;
-				sLastVolume.stamp = now;
-				pthread_mutex_unlock(&sLastVolume.lock);
-			}
-			return result;
-		}
-	}
-
-	endmntent(mounts);
-	return NULL;
-}
-
-
-void
-LinuxVolume::FreeVolumeEntry(struct mntent* entry)
-{
-	if (entry) {
-		free(entry->mnt_fsname);
-		free(entry->mnt_dir);
-		free(entry->mnt_type);
-		free(entry->mnt_opts);
-		free(entry);
-	}
+	return FillVolumeInfo(entry, info);
 }
 
 
 dev_t
 LinuxVolume::GetNextVolume(int32* cookie)
 {
-	if (cookie == NULL)
+	if (cookie == NULL || *cookie < 0)
 		return B_INVALID_DEV;
 
-	pthread_mutex_lock(&sVolumeIteratorLock);
-
-	if (*cookie == 0 || sVolumeIterator == NULL) {
-		if (sVolumeIterator != NULL)
-			endmntent(sVolumeIterator);
-
-		sVolumeIterator = setmntent(PROC_MOUNTS, "r");
-		if (sVolumeIterator == NULL) {
-			pthread_mutex_unlock(&sVolumeIteratorLock);
-			return B_INVALID_DEV;
-		}
+	auto snap = BPrivate::MountInfo::Snapshot();
+	if (!snap) {
+		*cookie = -1;
+		return B_INVALID_DEV;
 	}
 
-	struct mntent mountEntryBuf;
-	char mntBuf[4096];
-	struct mntent* mountEntry;
-	while ((mountEntry = getmntent_r(sVolumeIterator, &mountEntryBuf,
-			mntBuf, sizeof(mntBuf))) != NULL) {
-		if (fs_mnttype_is_pseudo(mountEntry->mnt_type))
+	int32 idx = *cookie;
+	const int32 n = (int32) snap->size();
+	while (idx < n) {
+		const BPrivate::MountEntry& e = (*snap)[idx++];
+		if (BPrivate::FsCaps::is_pseudo(e.fs_type.String()))
 			continue;
-
-		struct stat st;
-		if (stat(mountEntry->mnt_dir, &st) < 0)
+		if (e.is_bind)
 			continue;
-
-		(*cookie)++;
-		pthread_mutex_unlock(&sVolumeIteratorLock);
-		return st.st_dev;
+		*cookie = idx;
+		return e.dev;
 	}
 
-	endmntent(sVolumeIterator);
-	sVolumeIterator = NULL;
 	*cookie = -1;
-	pthread_mutex_unlock(&sVolumeIteratorLock);
 	return B_INVALID_DEV;
 }
 
@@ -348,17 +231,7 @@ fs_stat_dev(dev_t device, fs_info* info)
 {
 	CALLED();
 
-	if (device == B_INVALID_DEV || info == NULL)
-		return B_BAD_VALUE;
-
-	struct mntent* entry = LinuxVolume::FindVolume(device);
-	if (entry == NULL)
-		return B_BAD_VALUE;
-
-	status_t result = LinuxVolume::FillVolumeInfo(entry, info);
-	LinuxVolume::FreeVolumeEntry(entry);
-
-	return result;
+	return LinuxVolume::FillVolumeInfoForDev(device, info);
 }
 
 
@@ -386,156 +259,6 @@ _kern_read_fs_info(dev_t device, fs_info* info)
 status_t
 _kern_write_fs_info(dev_t device, const struct fs_info* info, int mask)
 {
-#if 0
-	if (info == NULL)
-		return B_BAD_VALUE;
-
-	if ((mask & (WRITE_FLAG_READONLY | WRITE_DEVICE_NAME)) == 0)
-		return B_OK;
-
-	if (geteuid() != 0)
-		return B_NOT_ALLOWED;
-
-	const char* fstab_path = "/etc/fstab";
-	char tmp_path[PATH_MAX];
-
-	snprintf(tmp_path, sizeof(tmp_path), "%s.%ld.tmp",
-		fstab_path, (long)getpid());
-
-	FILE* in = fopen(fstab_path, "r");
-	if (!in)
-		return -errno;
-
-	FILE* out = fopen(tmp_path, "w");
-	if (!out) {
-		int saved = -errno;
-		fclose(in);
-		return saved;
-	}
-
-	status_t ret_status = B_OK;
-	char* line = NULL;
-	size_t linelen = 0;
-
-	while (getline(&line, &linelen, in) != -1) {
-		char* p = line;
-		while (*p == ' ' || *p == '\t') ++p;
-		if (*p == '#' || *p == '\n' || *p == '\0') {
-			fputs(line, out);
-			continue;
-		}
-
-		char* copy = strdup(line);
-		if (!copy) {
-			ret_status = B_NO_MEMORY;
-			break;
-		}
-
-		char* saveptr = NULL;
-		char* fs_spec = strtok_r(copy, " \t\n", &saveptr);
-		char* fs_file = strtok_r(NULL, " \t\n", &saveptr);
-		char* fs_vfstype = strtok_r(NULL, " \t\n", &saveptr);
-		char* fs_mntops = strtok_r(NULL, " \t\n", &saveptr);
-		char* fs_freq = strtok_r(NULL, " \t\n", &saveptr);
-		char* fs_passno = strtok_r(NULL, " \t\n", &saveptr);
-
-		if (!fs_spec || !fs_file) {
-			fputs(line, out);
-			free(copy);
-			continue;
-		}
-
-		struct stat st;
-		if (stat(fs_file, &st) != 0) {
-			fputs(line, out);
-			free(copy);
-			continue;
-		}
-
-		if (st.st_dev == device) {
-			char new_fs_spec[sizeof(((fs_info*)0)->device_name)];
-			char new_mntops[1024] = {0};
-
-			if ((mask & WRITE_DEVICE_NAME) && info->device_name[0] != '\0') {
-				strncpy(new_fs_spec, info->device_name, sizeof(new_fs_spec) - 1);
-				new_fs_spec[sizeof(new_fs_spec) - 1] = '\0';
-			} else {
-				strncpy(new_fs_spec, fs_spec, sizeof(new_fs_spec) - 1);
-				new_fs_spec[sizeof(new_fs_spec) - 1] = '\0';
-			}
-
-			int want_ro = (info->flags & B_FS_IS_READONLY) ? 1 : 0;
-
-			if (fs_mntops) {
-				char* opts_dup = strdup(fs_mntops);
-				if (!opts_dup) {
-					free(copy);
-					ret_status = ENOMEM;
-					break;
-				}
-
-				char* tok, *o_save;
-				for (tok = strtok_r(opts_dup, ",", &o_save); tok;
-						tok = strtok_r(NULL, ",", &o_save)) {
-
-					if (strcmp(tok, "ro") == 0 || strcmp(tok, "rw") == 0)
-						continue;
-
-					if (new_mntops[0] != '\0')
-						strlcat(new_mntops, ",", sizeof(new_mntops));
-
-					strlcat(new_mntops, tok, sizeof(new_mntops));
-				}
-				free(opts_dup);
-			}
-
-			if (mask & WRITE_FLAG_READONLY) {
-				if (new_mntops[0] != '\0')
-					strlcat(new_mntops, ",", sizeof(new_mntops));
-
-				strlcat(new_mntops, want_ro ? "ro" : "rw", sizeof(new_mntops));
-			} else {
-				if (fs_mntops)
-					strlcpy(new_mntops, fs_mntops, sizeof(new_mntops));
-			}
-
-			fprintf(out, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				new_fs_spec,
-				fs_file,
-				fs_vfstype ? fs_vfstype : "-",
-				new_mntops[0] ? new_mntops : "-",
-				fs_freq ? fs_freq : "0",
-				fs_passno ? fs_passno : "0");
-
-			free(copy);
-		} else {
-			fputs(line, out);
-			free(copy);
-		}
-	}
-
-	free(line);
-	fclose(in);
-
-	if (ret_status != B_OK) {
-		fclose(out);
-		unlink(tmp_path);
-		return ret_status;
-	}
-
-	if (fflush(out) != 0 || fsync(fileno(out)) != 0 || fclose(out) != 0) {
-		unlink(tmp_path);
-		return -errno;
-	}
-
-	if (rename(tmp_path, fstab_path) != 0) {
-		unlink(tmp_path);
-		return -errno;
-	}
-
-	return B_OK;
-#endif
-
 	UNIMPLEMENTED();
 	return B_NOT_SUPPORTED;
 }

@@ -313,40 +313,29 @@ _kern_entry_ref_to_path(dev_t device, ino_t node, const char* leaf,
 		return ret;
 	}
 
-	// This is an exception to support opening volumes. If the dev_t, ino_t
-	// and leaf match, then we open the entry ref.
-	struct mntent* mountEntry = BKernelPrivate::LinuxVolume::FindVolume(device);
-	if (!mountEntry) {
+	// Exception to support opening volume roots: if dev_t/ino_t/leaf match
+	// the mount point, hand back the mount-point path.
+	BPrivate::MountEntry mountEntry;
+	if (!BPrivate::MountInfo::FindByDev(device, &mountEntry))
 		return B_ENTRY_NOT_FOUND;
-	}
 
+	const char* mntDir = mountEntry.mount_point.String();
 	struct stat st;
-	if (stat(mountEntry->mnt_dir, &st) < 0) {
-		BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
+	if (stat(mntDir, &st) < 0)
 		return -errno;
+
+	if (node != st.st_ino)
+		return B_ENTRY_NOT_FOUND;
+
+	if (leaf == NULL || strcmp(leaf, ".") == 0) {
+		if (strlcpy(userPath, mntDir, pathLength) >= pathLength)
+			return B_BUFFER_OVERFLOW;
+	} else {
+		if (snprintf(userPath, pathLength, "%s/%s", mntDir, leaf)
+				>= (int)pathLength)
+			return B_BUFFER_OVERFLOW;
 	}
-
-	if (node == st.st_ino) {
-		if (leaf == NULL || strcmp(leaf, ".") == 0) {
-			// Caller wants the mount directory itself (e.g. "/" for root)
-			if (strlcpy(userPath, mountEntry->mnt_dir, pathLength) >= pathLength) {
-				BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
-				return B_BUFFER_OVERFLOW;
-			}
-		} else {
-			if (snprintf(userPath, pathLength, "%s/%s",
-					mountEntry->mnt_dir, leaf) >= (int)pathLength) {
-				BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
-				return B_BUFFER_OVERFLOW;
-			}
-		}
-		BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
-		return B_OK;
-	}
-
-	BKernelPrivate::LinuxVolume::FreeVolumeEntry(mountEntry);
-
-	return B_ENTRY_NOT_FOUND;
+	return B_OK;
 }
 
 

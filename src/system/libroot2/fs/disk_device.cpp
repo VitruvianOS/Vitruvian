@@ -20,6 +20,7 @@
 #include <thread>
 
 #include "KernelDebug.h"
+#include <MountInfo.h>
 
 #define MOUNT_OPTIONS_SIZE 256
 
@@ -196,36 +197,33 @@ fill_partition_info(const char* devPath, const char* sysPath,
 	char mountOpts[256] = {0};
 	bool mounted = false;
 
-	FILE* mounts = fopen("/proc/mounts", "r");
-	if (mounts) {
-		char realDev[PATH_MAX];
-		if (!realpath(devPath, realDev))
-			strlcpy(realDev, devPath, sizeof(realDev));
+	char realDev[PATH_MAX];
+	if (!realpath(devPath, realDev))
+		strlcpy(realDev, devPath, sizeof(realDev));
 
-		char line[1024];
-		while (fgets(line, sizeof(line), mounts)) {
-			char dev[256], mnt[256], ftype[64], opts[256];
-			if (sscanf(line, "%255s %255s %63s %255s", dev, mnt,
-					ftype, opts) != 4)
-				continue;
-
-			bool match = strcmp(dev, devPath) == 0
-				|| strcmp(dev, realDev) == 0;
-			if (!match) {
+	BPrivate::MountEntry e;
+	bool found = BPrivate::MountInfo::FindByDevicePath(devPath, &e)
+		|| BPrivate::MountInfo::FindByDevicePath(realDev, &e);
+	if (!found) {
+		auto snap = BPrivate::MountInfo::Snapshot();
+		if (snap) {
+			for (const auto& m : *snap) {
 				char realMntDev[PATH_MAX];
-				if (realpath(dev, realMntDev))
-					match = strcmp(realDev, realMntDev) == 0;
+				if (realpath(m.device_path.String(), realMntDev) == NULL)
+					continue;
+				if (strcmp(realDev, realMntDev) == 0) {
+					e = m;
+					found = true;
+					break;
+				}
 			}
-			if (!match)
-				continue;
-
-			strlcpy(mountPoint, mnt, sizeof(mountPoint));
-			strlcpy(fsType, ftype, sizeof(fsType));
-			strlcpy(mountOpts, opts, sizeof(mountOpts));
-			mounted = true;
-			break;
 		}
-		fclose(mounts);
+	}
+	if (found) {
+		strlcpy(mountPoint, e.mount_point.String(), sizeof(mountPoint));
+		strlcpy(fsType, e.fs_type.String(), sizeof(fsType));
+		strlcpy(mountOpts, e.opts.String(), sizeof(mountOpts));
+		mounted = true;
 	}
 
 	if (mounted) {

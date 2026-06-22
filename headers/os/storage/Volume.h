@@ -16,6 +16,8 @@
 
 class BDirectory;
 class BBitmap;
+class BPath;
+class BString;
 
 
 class BVolume {
@@ -51,6 +53,12 @@ public:
 			bool			KnowsMime() const;
 			bool			KnowsAttr() const;
 			bool			KnowsQuery() const;
+
+			// Vitruvian extensions.
+			status_t		MountPoint(BPath* out) const;
+			status_t		DeviceNode(BString* out) const;
+			bool			IsVirtual() const;
+			status_t		Refresh();
 
 			bool			operator==(const BVolume& volume) const;
 			bool			operator!=(const BVolume& volume) const;

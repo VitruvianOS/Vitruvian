@@ -29,6 +29,7 @@ target_sources(root PRIVATE
 	fs/disk_monitor.cpp
 	fs/disk_device.cpp
 	fs/fs_info.cpp
+	fs/MountInfo.cpp
 	fs/mount.cpp
 	fs/attr.cpp
 	fs/index.cpp

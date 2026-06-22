@@ -9,7 +9,6 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <mntent.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -18,6 +17,7 @@
 #include <unistd.h>
 
 #include "Team.h"
+#include <MountInfo.h>
 
 #include "../../kernel/nexus/nexus/nexus.h"
 
@@ -40,26 +40,13 @@ map_index_errno(int err)
 static int
 open_volume_root_for_dev(dev_t dev)
 {
-	FILE *f = setmntent("/proc/self/mounts", "r");
-	if (f == NULL)
+	BPrivate::MountEntry e;
+	if (!BPrivate::MountInfo::FindByDev(dev, &e)) {
+		errno = ENODEV;
 		return -1;
-
-	int volFd = -1;
-	struct mntent *ent;
-
-	while ((ent = getmntent(f)) != NULL) {
-		struct stat st;
-		if (stat(ent->mnt_dir, &st) != 0)
-			continue;
-		if (st.st_dev == dev) {
-			volFd = open(ent->mnt_dir,
-				O_PATH | O_DIRECTORY | O_CLOEXEC);
-			break;
-		}
 	}
-
-	endmntent(f);
-
+	int volFd = open(e.mount_point.String(),
+		O_PATH | O_DIRECTORY | O_CLOEXEC);
 	if (volFd < 0)
 		errno = ENODEV;
 	return volFd;

@@ -27,6 +27,8 @@
 #include "Team.h"
 #include "KernelDebug.h"
 
+#include <MountInfo.h>
+
 
 namespace BKernelPrivate {
 
@@ -88,28 +90,18 @@ init_udev()
 }
 
 
-// Returns a snapshot of currently mounted filesystem dev_t's (pseudo-fs excluded).
+// Snapshot of currently mounted dev_t's (pseudo-fs excluded). Reads via
+// BPrivate::MountInfo so the cache and the watcher share one source.
 static std::set<dev_t>
 snapshot_mounts()
 {
 	std::set<dev_t> result;
-	FILE* mounts = setmntent("/proc/mounts", "r");
-	if (mounts == NULL)
-		return result;
-
-	struct mntent entBuf;
-	char buf[4096];
-	struct mntent* entry;
-
-	while ((entry = getmntent_r(mounts, &entBuf, buf, sizeof(buf))) != NULL) {
-		if (fs_mnttype_is_pseudo(entry->mnt_type))
+	auto snap = BPrivate::MountInfo::Snapshot();
+	for (const auto& e : *snap) {
+		if (fs_mnttype_is_pseudo(e.fs_type.String()))
 			continue;
-		struct stat st;
-		if (stat(entry->mnt_dir, &st) == 0)
-			result.insert(st.st_dev);
+		result.insert(e.dev);
 	}
-
-	endmntent(mounts);
 	return result;
 }
 
@@ -266,6 +258,9 @@ udev_thread_func()
 		for (int i = 0; i < nfds; i++) {
 			if (pfds[i].fd == mountsFd
 					&& (pfds[i].revents & (POLLERR | POLLPRI))) {
+				// Invalidate first so any listener that calls fs_stat_dev
+				// in response to the notification sees the post-event view.
+				BPrivate::MountInfo::Invalidate();
 				std::set<dev_t> newSnapshot = snapshot_mounts();
 				dispatch_mount_changes(mountSnapshot, newSnapshot);
 				mountSnapshot = std::move(newSnapshot);
@@ -282,6 +277,9 @@ udev_thread_func()
 				uint32 diskEvent = udev_action_to_disk_event(action);
 
 				if (diskEvent != 0) {
+					// udev raw events may precede a mount/unmount; invalidate
+					// the snapshot so the next Snapshot() reparses.
+					BPrivate::MountInfo::Invalidate();
 					std::vector<std::pair<VolumeWatcherKey, uint32>> diskTargets;
 					{
 						std::lock_guard<std::mutex> guard(gWatchLock);

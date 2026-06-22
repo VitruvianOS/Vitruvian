@@ -1,10 +1,12 @@
 /*
  * Copyright 2002-2009, Haiku Inc. All Rights Reserved.
+ * Copyright 2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
  *		Tyler Dauwalder
  *		Ingo Weinhold
+ *		Dario Casalinuovo
  */
 
 
@@ -15,48 +17,48 @@
 #include <Directory.h>
 #include <fs_info.h>
 #include <Node.h>
+#include <OS.h>
 #include <Path.h>
+#include <String.h>
 #include <Volume.h>
 
 #include <storage_support.h>
 #include <syscalls.h>
+#include <MountInfo.h>
 
 #include <fs_interface.h>
 
 
-// Creates an uninitialized BVolume object.
 BVolume::BVolume()
 	: fDevice((dev_t)-1),
 	  fCStatus(B_NO_INIT)
 {
+	memset(_reserved, 0, sizeof(_reserved));
 }
 
 
-// Creates a BVolume and initializes it to the volume specified by the
-// supplied device ID.
 BVolume::BVolume(dev_t device)
 	: fDevice((dev_t)-1),
 	  fCStatus(B_NO_INIT)
 {
+	memset(_reserved, 0, sizeof(_reserved));
 	SetTo(device);
 }
 
 
-// Creates a copy of the supplied BVolume object.
 BVolume::BVolume(const BVolume &volume)
 	: fDevice(volume.fDevice),
 	  fCStatus(volume.fCStatus)
 {
+	memset(_reserved, 0, sizeof(_reserved));
 }
 
 
-// Destroys the object and frees all associated resources.
 BVolume::~BVolume()
 {
 }
 
 
-// Returns the initialization status.
 status_t
 BVolume::InitCheck(void) const
 {
@@ -64,30 +66,29 @@ BVolume::InitCheck(void) const
 }
 
 
-// Initializes the object to refer to the volume specified by the supplied
-// device ID.
 status_t
 BVolume::SetTo(dev_t device)
 {
-	// uninitialize
 	Unset();
-	// check the parameter
-	status_t error = (device != B_INVALID_DEV ? B_OK : B_BAD_VALUE);
-	if (error == B_OK) {
-		fs_info info;
-		if (fs_stat_dev(device, &info) != 0)
-			error = errno;
-	}
-	// set the new value
-	if (error == B_OK)
+	if (device == B_INVALID_DEV)
+		return fCStatus = B_BAD_VALUE;
+
+	if (device == get_vref_dev()) {
 		fDevice = device;
-	// set the init status variable
-	fCStatus = error;
+		fCStatus = B_OK;
+		return fCStatus;
+	}
+
+	fs_info info;
+	if (fs_stat_dev(device, &info) != 0)
+		return fCStatus = (errno != 0 ? (status_t)errno : B_BAD_VALUE);
+
+	fDevice = device;
+	fCStatus = B_OK;
 	return fCStatus;
 }
 
 
-// Brings the BVolume object to an uninitialized state.
 void
 BVolume::Unset()
 {
@@ -96,7 +97,6 @@ BVolume::Unset()
 }
 
 
-// Returns the device ID of the volume the object refers to.
 dev_t
 BVolume::Device() const
 {
@@ -104,111 +104,86 @@ BVolume::Device() const
 }
 
 
-// Writes the root directory of the volume referred to by this object into
-// directory.
 status_t
 BVolume::GetRootDirectory(BDirectory *directory) const
 {
-	// check parameter and initialization
-	status_t error = (directory && InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
-	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	// init the directory
-	if (error == B_OK) {
-		int dirFd = _kern_open_entry_ref(info.dev, info.root, NULL,
-			O_RDONLY | O_CLOEXEC, 0);
+	if (directory == NULL || InitCheck() != B_OK)
+		return B_BAD_VALUE;
 
-		if (dirFd < 0)
-			return dirFd;
-
-		node_ref ref(dirFd);
-		close(dirFd);
-		error = directory->SetTo(&ref);
-	}
-	return error;
-}
-
-
-// Returns the total storage capacity of the volume.
-off_t
-BVolume::Capacity() const
-{
-	// check initialization
-	status_t error = (InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
-	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	return (error == B_OK ? info.total_blocks * info.block_size : error);
-}
-
-
-// Returns the amount of unused space on the volume (in bytes).
-off_t
-BVolume::FreeBytes() const
-{
-	// check initialization
-	status_t error = (InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
-	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	return (error == B_OK ? info.free_blocks * info.block_size : error);
-}
-
-
-// Returns the size of one block (in bytes).
-off_t
-BVolume::BlockSize() const
-{
-	// check initialization
-	if (InitCheck() != B_OK)
-		return B_NO_INIT;
-
-	// get FS stat
 	fs_info info;
 	if (fs_stat_dev(fDevice, &info) != 0)
 		return -errno;
 
+	int dirFd = _kern_open_entry_ref(info.dev, info.root, NULL,
+		O_RDONLY | O_CLOEXEC, 0);
+	if (dirFd < 0)
+		return dirFd;
+
+	node_ref ref(dirFd);
+	close(dirFd);
+	return directory->SetTo(&ref);
+}
+
+
+off_t
+BVolume::Capacity() const
+{
+	fs_info info;
+	if (InitCheck() != B_OK || fs_stat_dev(fDevice, &info) != 0)
+		return B_BAD_VALUE;
+	return (off_t)info.total_blocks * info.block_size;
+}
+
+
+off_t
+BVolume::FreeBytes() const
+{
+	fs_info info;
+	if (InitCheck() != B_OK || fs_stat_dev(fDevice, &info) != 0)
+		return B_BAD_VALUE;
+	return (off_t)info.free_blocks * info.block_size;
+}
+
+
+off_t
+BVolume::BlockSize() const
+{
+	if (InitCheck() != B_OK)
+		return B_NO_INIT;
+	fs_info info;
+	if (fs_stat_dev(fDevice, &info) != 0)
+		return -errno;
 	return info.block_size;
 }
 
 
-// Copies the name of the volume into the provided buffer.
 status_t
 BVolume::GetName(char *name) const
 {
-	// check parameter and initialization
-	status_t error = (name && InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
+	if (name == NULL || InitCheck() != B_OK)
+		return B_BAD_VALUE;
 	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	// copy the name
-	if (error == B_OK)
-		strncpy(name, info.volume_name, B_FILE_NAME_LENGTH);
-	return error;
+	if (fs_stat_dev(fDevice, &info) != 0)
+		return -errno;
+	strncpy(name, info.volume_name, B_FILE_NAME_LENGTH);
+	return B_OK;
 }
 
 
-// Sets the name of the volume.
 status_t
 BVolume::SetName(const char *name)
 {
-	// check initialization
 	if (!name || InitCheck() != B_OK)
 		return B_BAD_VALUE;
 	if (strlen(name) >= B_FILE_NAME_LENGTH)
 		return B_NAME_TOO_LONG;
-	// get the FS stat (including the old name) first
+
 	fs_info oldInfo;
 	if (fs_stat_dev(fDevice, &oldInfo) != 0)
 		return -errno;
 	if (strcmp(name, oldInfo.volume_name) == 0)
 		return B_OK;
-	// set the volume name
+
 	fs_info newInfo;
 	strlcpy(newInfo.volume_name, name, sizeof(newInfo.volume_name));
 	status_t error = _kern_write_fs_info(fDevice, &newInfo,
@@ -216,17 +191,11 @@ BVolume::SetName(const char *name)
 	if (error != B_OK)
 		return error;
 
-	// change the name of the mount point
-
 	// R5 implementation checks if an entry with the volume's old name
 	// exists in the root directory and renames that entry, if it is indeed
 	// the mount point of the volume (or a link referring to it). In all other
 	// cases, nothing is done (even if the mount point is named like the
 	// volume, but lives in a different directory).
-	// We follow suit for the time being.
-	// NOTE: If the volume name itself is actually "boot", then this code
-	// tries to rename /boot, but that is prevented in the kernel.
-
 	BPath entryPath;
 	BEntry entry;
 	BEntry traversedEntry;
@@ -246,20 +215,14 @@ BVolume::SetName(const char *name)
 }
 
 
-// Writes the volume's icon into icon.
 status_t
 BVolume::GetIcon(BBitmap *icon, icon_size which) const
 {
-	// check initialization
 	if (InitCheck() != B_OK)
 		return B_NO_INIT;
-
-	// get FS stat for the device name
 	fs_info info;
 	if (fs_stat_dev(fDevice, &info) != 0)
 		return -errno;
-
-	// get the icon
 	return get_device_icon(info.device_name, icon, which);
 }
 
@@ -267,120 +230,129 @@ BVolume::GetIcon(BBitmap *icon, icon_size which) const
 status_t
 BVolume::GetIcon(uint8** _data, size_t* _size, type_code* _type) const
 {
-	// check initialization
 	if (InitCheck() != B_OK)
 		return B_NO_INIT;
-
-	// get FS stat for the device name
 	fs_info info;
 	if (fs_stat_dev(fDevice, &info) != 0)
 		return -errno;
-
-	// get the icon
 	return get_device_icon(info.device_name, _data, _size, _type);
 }
 
 
-// Returns whether or not the volume is removable.
 bool
 BVolume::IsRemovable() const
 {
-	// check initialization
-	status_t error = (InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
 	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	return (error == B_OK && (info.flags & B_FS_IS_REMOVABLE));
+	return InitCheck() == B_OK && fs_stat_dev(fDevice, &info) == 0
+		&& (info.flags & B_FS_IS_REMOVABLE);
 }
 
 
-// Returns whether or not the volume is read-only.
 bool
 BVolume::IsReadOnly(void) const
 {
-	// check initialization
-	status_t error = (InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
 	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	return (error == B_OK && (info.flags & B_FS_IS_READONLY));
+	return InitCheck() == B_OK && fs_stat_dev(fDevice, &info) == 0
+		&& (info.flags & B_FS_IS_READONLY);
 }
 
 
-// Returns whether or not the volume is persistent.
 bool
 BVolume::IsPersistent(void) const
 {
-	// check initialization
-	status_t error = (InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
 	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	return (error == B_OK && (info.flags & B_FS_IS_PERSISTENT));
+	return InitCheck() == B_OK && fs_stat_dev(fDevice, &info) == 0
+		&& (info.flags & B_FS_IS_PERSISTENT);
 }
 
 
-// Returns whether or not the volume is shared.
 bool
 BVolume::IsShared(void) const
 {
-	// check initialization
-	status_t error = (InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
 	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	return (error == B_OK && (info.flags & B_FS_IS_SHARED));
+	return InitCheck() == B_OK && fs_stat_dev(fDevice, &info) == 0
+		&& (info.flags & B_FS_IS_SHARED);
 }
 
 
-// Returns whether or not the volume supports MIME-types.
 bool
 BVolume::KnowsMime(void) const
 {
-	// check initialization
-	status_t error = (InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
 	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	return (error == B_OK && (info.flags & B_FS_HAS_MIME));
+	return InitCheck() == B_OK && fs_stat_dev(fDevice, &info) == 0
+		&& (info.flags & B_FS_HAS_MIME);
 }
 
 
-// Returns whether or not the volume supports attributes.
 bool
 BVolume::KnowsAttr(void) const
 {
-	// check initialization
-	status_t error = (InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
 	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	return (error == B_OK && (info.flags & B_FS_HAS_ATTR));
+	return InitCheck() == B_OK && fs_stat_dev(fDevice, &info) == 0
+		&& (info.flags & B_FS_HAS_ATTR);
 }
 
 
-// Returns whether or not the volume supports queries.
 bool
 BVolume::KnowsQuery(void) const
 {
-	// check initialization
-	status_t error = (InitCheck() == B_OK ? B_OK : B_BAD_VALUE);
-	// get FS stat
 	fs_info info;
-	if (error == B_OK && fs_stat_dev(fDevice, &info) != 0)
-		error = errno;
-	return (error == B_OK && (info.flags & B_FS_HAS_QUERY));
+	return InitCheck() == B_OK && fs_stat_dev(fDevice, &info) == 0
+		&& (info.flags & B_FS_HAS_QUERY);
 }
 
 
-// Returns whether or not the supplied BVolume object is a equal
-// to this object.
+status_t
+BVolume::MountPoint(BPath* out) const
+{
+	if (out == NULL)
+		return B_BAD_VALUE;
+	if (InitCheck() != B_OK)
+		return B_NO_INIT;
+	if (IsVirtual())
+		return B_ENTRY_NOT_FOUND;
+	BPrivate::MountEntry e;
+	if (!BPrivate::MountInfo::FindByDev(fDevice, &e)
+		|| e.mount_point.IsEmpty())
+		return B_ENTRY_NOT_FOUND;
+	return out->SetTo(e.mount_point.String());
+}
+
+
+status_t
+BVolume::DeviceNode(BString* out) const
+{
+	if (out == NULL)
+		return B_BAD_VALUE;
+	if (InitCheck() != B_OK)
+		return B_NO_INIT;
+	BPrivate::MountEntry e;
+	if (BPrivate::MountInfo::FindByDev(fDevice, &e)) {
+		*out = e.device_path;
+	} else {
+		fs_info info;
+		if (fs_stat_dev(fDevice, &info) != 0)
+			return -errno;
+		*out = info.device_name;
+	}
+	return B_OK;
+}
+
+
+bool
+BVolume::IsVirtual() const
+{
+	return fCStatus == B_OK && fDevice == get_vref_dev();
+}
+
+
+status_t
+BVolume::Refresh()
+{
+	return InitCheck();
+}
+
+
 bool
 BVolume::operator==(const BVolume &volume) const
 {
@@ -388,8 +360,7 @@ BVolume::operator==(const BVolume &volume) const
 			|| fDevice == volume.fDevice);
 }
 
-// Returns whether or not the supplied BVolume object is NOT equal
-// to this object.
+
 bool
 BVolume::operator!=(const BVolume &volume) const
 {
@@ -397,19 +368,17 @@ BVolume::operator!=(const BVolume &volume) const
 }
 
 
-// Assigns the supplied BVolume object to this volume.
 BVolume&
 BVolume::operator=(const BVolume &volume)
 {
 	if (&volume != this) {
-		this->fDevice = volume.fDevice;
-		this->fCStatus = volume.fCStatus;
+		fDevice = volume.fDevice;
+		fCStatus = volume.fCStatus;
 	}
 	return *this;
 }
 
 
-// FBC
 void BVolume::_TurnUpTheVolume1() {}
 void BVolume::_TurnUpTheVolume2() {}
 void BVolume::_TurnUpTheVolume3() {}

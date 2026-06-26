@@ -1,1 +1,1 @@
-add_subdirectory(mesa_egl)
+add_subdirectory(mesa_surfaceless)

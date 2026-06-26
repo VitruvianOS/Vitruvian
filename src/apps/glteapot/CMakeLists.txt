@@ -7,7 +7,9 @@ Application(GLTeapot
 	FPS.cpp
 	error.cpp
 
-	LIBS opengl game ${GL_LIBRARIES} localestub
+	LIBS opengl GL GLU game localestub
 
 	RDEF GLTeapot.rdef
 )
+
+install(TARGETS GLTeapot DESTINATION /system/apps/)

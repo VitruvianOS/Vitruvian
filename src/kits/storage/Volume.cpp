@@ -81,7 +81,7 @@ BVolume::SetTo(dev_t device)
 
 	fs_info info;
 	if (fs_stat_dev(device, &info) != 0)
-		return fCStatus = (errno != 0 ? (status_t)errno : B_BAD_VALUE);
+		return fCStatus = (errno != 0 ? -errno : B_BAD_VALUE);
 
 	fDevice = device;
 	fCStatus = B_OK;

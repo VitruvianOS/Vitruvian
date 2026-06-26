@@ -74,9 +74,12 @@ respective holders. All rights reserved.
 
 #include <fs_attr.h>
 #include <fs_info.h>
+#include <sys/stat.h>
 #include <sys/utsname.h>
 
 #include <AutoLocker.h>
+#include <MountInfo.h>
+#include "TrashInfo.h"
 #include <VRefCache.h>
 #include <libroot/libroot_private.h>
 #include <system/syscalls.h>
@@ -1738,9 +1741,10 @@ CopyFolder(BEntry* srcEntry, BDirectory* destDir,
 
 
 status_t
-RecursiveMove(BEntry* entry, BDirectory* destDir, CopyLoopControl* loopControl)
+RecursiveMove(BEntry* entry, BDirectory* destDir,
+	CopyLoopControl* loopControl, const char* newName = NULL)
 {
-	const char* name = entry->Name();
+	const char* name = newName != NULL ? newName : entry->Name();
 
 	if (destDir->Contains(name)) {
 		BPath path (destDir, name);
@@ -1756,8 +1760,8 @@ RecursiveMove(BEntry* entry, BDirectory* destDir, CopyLoopControl* loopControl)
 					RecursiveMove(&current, &subDir, loopControl);
 					current.Remove();
 				} else {
-					name = current.Name();
-					if (loopControl->OverwriteOnConflict(&current, name,
+					const char* childName = current.Name();
+					if (loopControl->OverwriteOnConflict(&current, childName,
 							&subDir, true, false)
 								!= TrackerCopyLoopControl::kSkip) {
 						MoveError::FailOnError(current.MoveTo(&subDir,
@@ -1768,7 +1772,7 @@ RecursiveMove(BEntry* entry, BDirectory* destDir, CopyLoopControl* loopControl)
 		}
 		entry->Remove();
 	} else
-		MoveError::FailOnError(entry->MoveTo(destDir));
+		MoveError::FailOnError(entry->MoveTo(destDir, newName));
 
 	return B_OK;
 }
@@ -1900,7 +1904,7 @@ MoveItem(BEntry* entry, BDirectory* destDir, BPoint* loc, uint32 moveMode,
 			// size is irrelevant when simply moving to a new folder
 			loopControl->UpdateStatus(ref.name, ref, 1);
 			if (entry->IsDirectory())
-				return RecursiveMove(entry, destDir, loopControl);
+				return RecursiveMove(entry, destDir, loopControl, newName);
 
 			MoveError::FailOnError(entry->MoveTo(destDir, newName));
 		} else {
@@ -2145,11 +2149,21 @@ MoveEntryToTrash(BEntry* entry, BPoint* loc, Undo &undo)
 
 	BNode node(entry);
 	BPath path;
-	// Get path of entry before it's moved to the trash
-	// and write it to the file as an attribute
+	// Get path of entry before it's moved to the trash and write it both
+	// as a Tracker xattr (legacy restore path) and as an XDG .trashinfo
+	// file (interop with gio / GNOME Files / KDE Dolphin).
 	if (node.InitCheck() == B_OK && entry->GetPath(&path) == B_OK) {
 		BString originalPath(path.Path());
 		node.WriteAttrString(kAttrOriginalPath, &originalPath);
+
+		BString chosenName;
+		if (BPrivate::TrashInfo::Write(trash_dir, name, originalPath.String(),
+				&chosenName) == B_OK
+			&& chosenName.Length() > 0
+			&& chosenName != name) {
+			strlcpy(name, chosenName.String(), sizeof(name));
+			undo.UpdateEntry(entry, name);
+		}
 	}
 
 	TrackerCopyLoopControl loopControl;
@@ -2685,48 +2699,76 @@ CalcItemsAndSize(CopyLoopControl* loopControl,
 }
 
 
+// XDG Trash spec routing for the home volume.
+// Real trash lives at ~/.local/share/Trash/{files,info}. No filesystem
+// trickery on Desktop — the Trash icon is a synthetic pose injected by
+// BPoseView::CreateTrashPose, and Trash window content is aggregated
+// from every volume via BPoseView::AddTrashPoses (per the XDG spec,
+// each volume has its own trash; the UI unifies them).
+//
+// Other volumes (external mounts): <mount>/.Trash-<uid>/files/.
+
+static status_t
+_get_home_trash_dir(BDirectory* trashDir)
+{
+	const char* home = getenv("HOME");
+	if (home == NULL || home[0] != '/')
+		return B_ENTRY_NOT_FOUND;
+
+	BPath filesDir(home, ".local/share/Trash/files");
+	BPath infoDir(home, ".local/share/Trash/info");
+
+	if (create_directory(filesDir.Path(), 0700) != B_OK)
+		return B_IO_ERROR;
+	if (create_directory(infoDir.Path(), 0700) != B_OK)
+		return B_IO_ERROR;
+
+	return trashDir->SetTo(filesDir.Path());
+}
+
+
+static status_t
+_get_topdir_trash_dir(BDirectory* trashDir, dev_t dev)
+{
+	BPrivate::MountEntry entry;
+	if (!BPrivate::MountInfo::FindByDev(dev, &entry))
+		return B_ENTRY_NOT_FOUND;
+
+	BString perUser;
+	perUser << entry.mount_point.String() << "/.Trash-" << getuid();
+	BPath filesDir(perUser.String(), "files");
+	BPath infoDir(perUser.String(), "info");
+
+	if (create_directory(filesDir.Path(), 0700) != B_OK)
+		return B_IO_ERROR;
+	if (create_directory(infoDir.Path(), 0700) != B_OK)
+		return B_IO_ERROR;
+
+	return trashDir->SetTo(filesDir.Path());
+}
+
+
 status_t
 FSGetTrashDir(BDirectory* trashDir, dev_t dev)
 {
 	if (trashDir == NULL)
 		return B_BAD_VALUE;
 
+	// BVolume(dev).InitCheck() may fail on anonymous devs (overlay);
+	// real RO errors surface at write time.
 	BVolume volume(dev);
-	status_t result = volume.InitCheck();
-	if (result != B_OK)
-		return result;
+	if (volume.InitCheck() == B_OK && volume.IsReadOnly())
+		return B_READ_ONLY_DEVICE;
 
-	BPath path;
-	result = find_directory(B_TRASH_DIRECTORY, &path, false, &volume);
-	if (result != B_OK)
-		return result;
+	const char* home = getenv("HOME");
+	dev_t homeDev = home != NULL ? dev_for_path(home) : dev_for_path("/");
 
-	result = trashDir->SetTo(path.Path());
-	if (result != B_OK) {
-		// Trash directory does not exist yet, create it.
-		result = create_directory(path.Path(), 0755);
-		if (result != B_OK)
-			return result;
-
-		result = trashDir->SetTo(path.Path());
-		if (result != B_OK)
-			return result;
-
-		// TODO fix vitruvian trash
-
-		// make Trash directory invisible
-		StatStruct sbuf;
-		trashDir->GetStat(&sbuf);
-
-		PoseInfo poseInfo;
-		poseInfo.fInvisible = true;
-		poseInfo.fInitedDirectory = sbuf.st_ino;
-		trashDir->WriteAttr(kAttrPoseInfo, B_RAW_TYPE, 0, &poseInfo, sizeof(PoseInfo));
-	}
-
-	// icon attributes set by TrashWatcher
-
-	return B_OK;
+	if (dev == homeDev)
+		return _get_home_trash_dir(trashDir);
+	if (_get_topdir_trash_dir(trashDir, dev) == B_OK)
+		return B_OK;
+	// Cross-volume fallback: home trash absorbs (per XDG spec).
+	return _get_home_trash_dir(trashDir);
 }
 
 
@@ -2833,7 +2875,37 @@ FSIsPrintersDir(const BEntry* entry)
 bool
 FSIsTrashDir(const BEntry* entry)
 {
-	return FSIsDirFlavor(entry, B_TRASH_DIRECTORY);
+	// Compare against FSGetTrashDir (the single source of truth for the
+	// XDG trash location) rather than find_directory, whose templatePath
+	// expansion under uid 0 doesn't match $HOME on Linux.
+	// Compare by canonical path: BEntry/BDirectory may report different
+	// dev_t (vref-virtual vs raw Linux st_dev) depending on how they were
+	// resolved, so node_ref equality is unreliable here.
+	BPath entryPath;
+	if (entry->GetPath(&entryPath) != B_OK)
+		return false;
+
+	StatStruct entryStat;
+	if (entry->GetStat(&entryStat) != B_OK)
+		return false;
+
+	BDirectory trashDir;
+	if (FSGetTrashDir(&trashDir, entryStat.st_dev) != B_OK) {
+		// Try home trash explicitly — entryStat.st_dev may not match the
+		// home device when vref/overlay paths are in play.
+		const char* home = getenv("HOME");
+		if (home == NULL || FSGetTrashDir(&trashDir, dev_for_path(home)) != B_OK)
+			return false;
+	}
+
+	BEntry trashEntry;
+	if (trashDir.GetEntry(&trashEntry) != B_OK)
+		return false;
+	BPath trashPath;
+	if (trashEntry.GetPath(&trashPath) != B_OK)
+		return false;
+
+	return entryPath == trashPath;
 }
 
 
@@ -3072,6 +3144,22 @@ empty_trash(void*)
 			BEntry entry;
 			trashDirectory.GetEntry(&entry);
 			status = FSDeleteFolder(&entry, &loopControl, true, false);
+
+			// Also wipe sibling info/ so .trashinfo entries don't
+			// outlive their files/ payloads (XDG Trash spec).
+			BPath filesPath;
+			if (entry.GetPath(&filesPath) == B_OK) {
+				BPath trashRoot;
+				if (filesPath.GetParent(&trashRoot) == B_OK) {
+					BPath infoPath(trashRoot.Path(), "info");
+					BEntry infoEntry(infoPath.Path());
+					if (infoEntry.InitCheck() == B_OK
+						&& infoEntry.Exists()) {
+						FSDeleteFolder(&infoEntry, &loopControl,
+							true, false, false);
+					}
+				}
+			}
 		}
 	}
 
@@ -3223,10 +3311,27 @@ _RestoreTask(BObjectList<entry_ref, true>* list)
 				BDirectory dir(parentPath.Path());
 				if (dir.InitCheck() == B_OK) {
 					const char* leafName = originalEntry.Name();
+
+					// Capture trash-side filesDir + name *before* MoveTo,
+					// so we can delete the paired .trashinfo afterwards.
+					BString nameInTrash(ref.name);
+					BDirectory trashFilesDir;
+					BEntry trashParent;
+					bool haveTrashCtx = false;
+					if (entry.GetParent(&trashParent) == B_OK
+						&& trashFilesDir.SetTo(&trashParent) == B_OK
+						&& FSIsTrashDir(&trashParent)) {
+						haveTrashCtx = true;
+					}
+
 					if (entry.MoveTo(&dir, leafName) == B_OK) {
 						BNode node(&entry);
 						if (node.InitCheck() == B_OK)
 							node.RemoveAttr(kAttrOriginalPath);
+						if (haveTrashCtx) {
+							TrashInfo::Remove(trashFilesDir,
+								nameInTrash.String());
+						}
 					}
 				}
 			}
@@ -4077,6 +4182,24 @@ FSGetOriginalPath(BEntry* entry, BPath* result)
 	// Only call the routine for entries in the trash
 	if (!FSInTrashDir(&ref))
 		return B_ERROR;
+
+	// Prefer the XDG .trashinfo entry (canonical) over the legacy
+	// _trk/original_path xattr — out-of-band tools (e.g. `gio trash`)
+	// only write the .trashinfo file.
+	{
+		BEntry parentEntry;
+		if (entry->GetParent(&parentEntry) == B_OK) {
+			BDirectory parentDir(&parentEntry);
+			if (parentDir.InitCheck() == B_OK && FSIsTrashDir(&parentEntry)) {
+				BString origPath;
+				if (TrashInfo::Read(parentDir, ref.name, &origPath, NULL)
+						== B_OK
+					&& origPath.Length() > 0) {
+					return result->SetTo(origPath.String());
+				}
+			}
+		}
+	}
 
 	BNode node(entry);
 	BString originalPath;

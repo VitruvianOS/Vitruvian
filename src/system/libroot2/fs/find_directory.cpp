@@ -339,9 +339,13 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 				templatePath = "$h/Desktop";
 			break;
 		case B_TRASH_DIRECTORY:
-			// TODO: eventually put that into the file system API?
+			// XDG Trash spec. Home volume → $h/.local/share/Trash/files.
+			// FAT (legacy) → RECYCLED/_BEOS_. Other external volumes are
+			// routed by FSGetTrashDir via MountInfo to <mount>/.Trash-<uid>/
+			// files (this template stays NULL so callers that ask without
+			// volume context get -ENOENT, matching Haiku).
 			if (device == bootDevice || !strcmp(fsInfo.fsh_name, "bfs"))
-				templatePath = "$h/Desktop/Trash";
+				templatePath = "$h/.local/share/Trash/files";
 			else if (!strcmp(fsInfo.fsh_name, "fat"))
 				templatePath = "RECYCLED/_BEOS_";
 			break;
@@ -473,7 +477,9 @@ __find_directory(directory_which which, dev_t device, bool createIt,
 
 	// resolve "$h" placeholder to the user's home directory
 	if (!strncmp(templatePath, "$h", 2)) {
-		if (bootDevice != B_INVALID_DEV && device != bootDevice) {
+		// B_TRASH_DIRECTORY is per-user, not per-volume.
+		if (which != B_TRASH_DIRECTORY
+			&& bootDevice != B_INVALID_DEV && device != bootDevice) {
 			pathBuffer.Append("/home");
 		} else {
 			size_t length = get_user_home_path(buffer, pathLength);

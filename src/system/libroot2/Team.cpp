@@ -219,12 +219,12 @@ Team::GetAreaDescriptor()
 int
 Team::GetVRefDescriptor(dev_t* dev)
 {
-	if (gNexusNodeMonitor == -1)
+	if (gNexusNodeMonitor == -1 || gNexus == -1)
 		OpenNexusDevices();
 
 	if (dev != NULL) {
 		struct stat st;
-		fstat(gNexusNodeMonitor, &st);
+		fstat(gNexus, &st);
 		*dev = st.st_rdev;
 	}
 	return gNexusNodeMonitor;

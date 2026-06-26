@@ -39,6 +39,7 @@ All rights reserved.
 
 #include <Debug.h>
 #include <Directory.h>
+#include <Entry.h>
 #include <NodeMonitor.h>
 #include <Path.h>
 #include <Volume.h>
@@ -48,6 +49,27 @@ All rights reserved.
 #include "Bitmaps.h"
 #include "FSUtils.h"
 #include "Tracker.h"
+
+
+// Resolve the sibling info/ dir for a given Trash files/ dir.
+// Returns the dir path in *outPath; does not require it to exist.
+static status_t
+_trash_info_dir_for_files(const BDirectory& filesDir, BPath* outPath)
+{
+	BEntry entry;
+	status_t r = filesDir.GetEntry(&entry);
+	if (r != B_OK)
+		return r;
+	BPath filesPath;
+	r = entry.GetPath(&filesPath);
+	if (r != B_OK)
+		return r;
+	BPath trashRoot;
+	r = filesPath.GetParent(&trashRoot);
+	if (r != B_OK)
+		return r;
+	return outPath->SetTo(trashRoot.Path(), "info");
+}
 
 
 //	 #pragma mark - BTrashWatcher
@@ -119,6 +141,7 @@ BTrashWatcher::MessageReceived(BMessage* message)
 		case B_DEVICE_UNMOUNTED:
 		case B_ENTRY_REMOVED:
 		{
+			ReconcileTrashDirs();
 			bool full = CheckTrashDirs();
 			if (fTrashFull != full) {
 				fTrashFull = full;
@@ -188,7 +211,8 @@ BTrashWatcher::WatchTrashDirs()
 	volRoster.Rewind();
 	BVolume	volume;
 	while (volRoster.GetNextVolume(&volume) == B_OK) {
-		if (volume.IsReadOnly() || !volume.IsPersistent())
+		// IsPersistent dropped: overlayfs reports non-persistent.
+		if (volume.IsReadOnly())
 			continue;
 
 		BDirectory trashDir;
@@ -197,6 +221,64 @@ BTrashWatcher::WatchTrashDirs()
 			trashDir.GetNodeRef(&trash_node);
 			watch_node(&trash_node, B_WATCH_DIRECTORY, this);
 			fTrashNodeList.AddItem(new node_ref(trash_node));
+
+			// Also watch the sibling info/ dir so out-of-band tools
+			// (e.g. `gio trash`, manual rm) trigger reconciliation.
+			BPath infoPath;
+			if (_trash_info_dir_for_files(trashDir, &infoPath) == B_OK) {
+				BDirectory infoDir(infoPath.Path());
+				if (infoDir.InitCheck() == B_OK) {
+					node_ref info_node;
+					infoDir.GetNodeRef(&info_node);
+					watch_node(&info_node, B_WATCH_DIRECTORY, this);
+				}
+			}
+		}
+	}
+}
+
+
+void
+BTrashWatcher::ReconcileTrashDirs()
+{
+	// Prune orphan .trashinfo entries (a .trashinfo whose paired entry
+	// under files/ has gone away — typically because someone deleted
+	// from files/ out of band, or because a previous move-to-trash
+	// failed between the rename and the trashinfo write).
+	BVolumeRoster volRoster;
+	volRoster.Rewind();
+	BVolume volume;
+	while (volRoster.GetNextVolume(&volume) == B_OK) {
+		if (volume.IsReadOnly())
+			continue;
+
+		BDirectory filesDir;
+		if (FSGetTrashDir(&filesDir, volume.Device()) != B_OK)
+			continue;
+		BPath infoPath;
+		if (_trash_info_dir_for_files(filesDir, &infoPath) != B_OK)
+			continue;
+
+		BDirectory infoDir(infoPath.Path());
+		if (infoDir.InitCheck() != B_OK)
+			continue;
+
+		infoDir.Rewind();
+		BEntry infoEntry;
+		while (infoDir.GetNextEntry(&infoEntry) == B_OK) {
+			char name[B_FILE_NAME_LENGTH];
+			if (infoEntry.GetName(name) != B_OK)
+				continue;
+			size_t len = strlen(name);
+			static const char kSuffix[] = ".trashinfo";
+			const size_t kSuffixLen = sizeof(kSuffix) - 1;
+			if (len <= kSuffixLen
+				|| strcmp(name + len - kSuffixLen, kSuffix) != 0) {
+				continue;
+			}
+			BString base(name, len - kSuffixLen);
+			if (!filesDir.Contains(base.String()))
+				infoEntry.Remove();
 		}
 	}
 }
@@ -209,7 +291,7 @@ BTrashWatcher::CheckTrashDirs()
 	volRoster.Rewind();
 	BVolume	volume;
 	while (volRoster.GetNextVolume(&volume) == B_OK) {
-		if (volume.IsReadOnly() || !volume.IsPersistent() || volume.Capacity() == 0)
+		if (volume.IsReadOnly() || volume.Capacity() == 0)
 			continue;
 
 		BDirectory trashDir;

@@ -44,6 +44,7 @@ All rights reserved.
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
+#include <stdio.h>
 #include <linux/magic.h>
 #include <stdlib.h>
 #include <strings.h>
@@ -5770,6 +5771,7 @@ BPoseView::EntryMoved(const BMessage* message)
 
 	node_ref dirNode = node_ref(dirRef.dev(), dirRef.dir());
 
+
 	const char* name;
 	if (message->FindString("name", &name) != B_OK)
 		return true;
@@ -5860,7 +5862,22 @@ BPoseView::EntryMoved(const BMessage* message)
 		if (pose != NULL)
 			pendingNodeMonitorCache.PoseCreatedOrMoved(this, pose);
 	} else if (oldDir.dereference().dir() == thisDirNode.dereference().ino()) {
-		DeletePose(&itemNode);
+		// Primary lookup is by node_ref (itemNode). If that misses
+		// (e.g. the vref id in virtual:node doesn't match the one the
+		// pose was created with — happens for directories whose
+		// enumeration-time vref differs from the kernel's
+		// FS_MOVED_FROM vref), fall back to name-based lookup so the
+		// stale pose is still removed.
+		int32 fallbackIndex;
+		BPose* fallbackPose = fPoseList->FindPose(&itemNode, &fallbackIndex);
+		if (fallbackPose == NULL && name != NULL && name[0] != '\0')
+			fallbackPose = fPoseList->FindPoseByFileName(name, &fallbackIndex);
+		if (fallbackPose != NULL) {
+			DeletePose(fallbackPose->TargetModel()->NodeRef(),
+				fallbackPose, fallbackIndex);
+		} else {
+			DeletePose(&itemNode);
+		}
 	} else if (dirNode.dereference().ino() == thisDirNode.dereference().ino()) {
 		EntryCreated(&dirNode, &itemNode, name);
 	}
@@ -5890,8 +5907,13 @@ BPoseView::WatchParentOf(const entry_ref* ref)
 	node_ref nref;
 	BNode(path.Path()).GetNodeRef(&nref);
 
-	if (nref != *TargetModel()->NodeRef())
-		watch_node(&nref, B_WATCH_DIRECTORY, this);
+	if (nref != *TargetModel()->NodeRef()) {
+		node_ref_key key(nref);
+		if (!fWatchedBrokenParents.Contains(key)) {
+			if (watch_node(&nref, B_WATCH_DIRECTORY, this) == B_OK)
+				fWatchedBrokenParents.Add(key);
+		}
+	}
 }
 
 
@@ -5938,8 +5960,10 @@ BPoseView::StopWatchingParentsOf(const entry_ref* ref)
 				keep = true;
 			}
 		}
-		if (!keep)
+		if (!keep) {
 			watch_node(&dirNode, B_STOP_WATCHING, this);
+			fWatchedBrokenParents.Remove(node_ref_key(dirNode));
+		}
 	}
 	delete brokenLinksCopy;
 }

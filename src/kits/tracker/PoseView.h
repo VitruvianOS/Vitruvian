@@ -757,6 +757,7 @@ private:
 	BObjectList<BColumn, true>* fColumnList;
 	BStringList fMimeTypeList;
 	BObjectList<Model>* fBrokenLinks;
+	HashSet<node_ref_key> fWatchedBrokenParents;
 	BCountView* fCountView;
 	float fListElemHeight;
 	float fListOffset;

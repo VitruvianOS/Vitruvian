@@ -68,6 +68,7 @@ AddOn(
 	TrackerSettings.cpp
 	TrackerSettingsWindow.cpp
 	TrackerString.cpp
+	TrashInfo.cpp
 	TrashWatcher.cpp
 	Utilities.cpp
 	ViewState.cpp

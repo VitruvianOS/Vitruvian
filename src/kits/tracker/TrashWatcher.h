@@ -58,6 +58,7 @@ protected:
 private:
 	void WatchTrashDirs();
 	void UpdateTrashIcons();
+	void ReconcileTrashDirs();
 
 	bool fTrashFull;
 	BObjectList<node_ref, true> fTrashNodeList;

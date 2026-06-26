@@ -13,9 +13,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <AppFileInfo.h>
 #include <ControlLook.h>
+#include <File.h>
 #include <FindDirectory.h>
 #include <LocaleRoster.h>
+#include <Mime.h>
 #include <NodeInfo.h>
 #include <Path.h>
 #include <View.h>
@@ -35,37 +38,56 @@ TeamListItem::TeamListItem(team_info &teamInfo)
 	fIsParent(false)
 {
 	int32 cookie = 0;
-	image_info info;
-	if (get_next_image_info(teamInfo.team, &cookie, &info) == B_OK) {
-		fPath = BPath(info.name);
-		BNode node(info.name);
-		BNodeInfo nodeInfo(&node);
-		nodeInfo.GetTrackerIcon(&fMiniIcon, (icon_size)-1);
-		nodeInfo.GetTrackerIcon(&fLargeIcon, (icon_size)-1);
+	image_info imageInfo;
+	if (get_next_image_info(teamInfo.team, &cookie, &imageInfo) == B_OK) {
+		fPath = BPath(imageInfo.name);
 	} else {
-		// get_next_image_info only works for the current process on VOS.
-		// Fall back to reading /proc/PID/exe for all other teams.
+		// get_next_image_info only works for the current process on VOS,
+		// so fall back to /proc/<pid>/exe and then to the cmdline / comm
+		// name for teams without a readable exe symlink.
 		char procExe[64];
 		char exePath[B_PATH_NAME_LENGTH];
 		snprintf(procExe, sizeof(procExe), "/proc/%d/exe",
 			(int)teamInfo.team);
-		ssize_t len = readlink(procExe, exePath, sizeof(exePath) - 1);
-		if (len > 0) {
-			exePath[len] = '\0';
+
+		ssize_t length = readlink(procExe, exePath, sizeof(exePath) - 1);
+		if (length > 0) {
+			exePath[length] = '\0';
 			fPath = BPath(exePath);
 		} else if (teamInfo.args[0] != '\0') {
-			// Last resort: use first token of cmdline
-			char argsCopy[sizeof(teamInfo.args)];
-			strlcpy(argsCopy, teamInfo.args, sizeof(argsCopy));
-			char* sp = strchr(argsCopy, ' ');
-			if (sp != NULL) *sp = '\0';
-			fPath = BPath(argsCopy);
-		}
+			char args[sizeof(teamInfo.args)];
+			strlcpy(args, teamInfo.args, sizeof(args));
+			char* space = strchr(args, ' ');
+			if (space != NULL)
+				*space = '\0';
+			fPath = BPath(args);
+		} else if (teamInfo.name[0] != '\0')
+			fPath = BPath(teamInfo.name);
 	}
 
 	fIsApplication = be_roster->GetRunningAppInfo(fTeamInfo.team, &fAppInfo) == B_OK;
 
+	_FetchIcons();
 	CacheLocalizedName();
+}
+
+
+void
+TeamListItem::_FetchIcons()
+{
+	if (fPath.Path() != NULL && fPath.Path()[0] == '/') {
+		BNode node(fPath.Path());
+		if (node.InitCheck() == B_OK) {
+			BNodeInfo nodeInfo(&node);
+			if (nodeInfo.GetTrackerIcon(&fMiniIcon, B_MINI_ICON) == B_OK
+				&& nodeInfo.GetTrackerIcon(&fLargeIcon, B_LARGE_ICON) == B_OK)
+				return;
+		}
+	}
+
+	BMimeType genericApp(B_APP_MIME_TYPE);
+	genericApp.GetIcon(&fMiniIcon, B_MINI_ICON);
+	genericApp.GetIcon(&fLargeIcon, B_LARGE_ICON);
 }
 
 

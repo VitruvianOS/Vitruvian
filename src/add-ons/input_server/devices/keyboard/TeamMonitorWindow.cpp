@@ -42,6 +42,42 @@
 #include "TeamListItem.h"
 
 
+// PF_KTHREAD lives in field 9 of /proc/<pid>/stat. The comm field can hold
+// spaces and parens, so anchor on the trailing ')' before tokenising.
+static bool
+is_kernel_thread(pid_t pid)
+{
+	char path[64];
+	snprintf(path, sizeof(path), "/proc/%d/stat", (int)pid);
+
+	FILE* file = fopen(path, "r");
+	if (file == NULL)
+		return false;
+
+	char line[4096];
+	size_t length = fread(line, 1, sizeof(line) - 1, file);
+	fclose(file);
+	if (length == 0)
+		return false;
+	line[length] = '\0';
+
+	char* rparen = strrchr(line, ')');
+	if (rparen == NULL || rparen[1] != ' ')
+		return false;
+
+	// After ')' the fields are: state ppid pgrp session tty tpgid flags...
+	char* saveptr = NULL;
+	char* token = strtok_r(rparen + 2, " ", &saveptr);
+	for (int i = 0; token != NULL && i < 6; i++)
+		token = strtok_r(NULL, " ", &saveptr);
+	if (token == NULL)
+		return false;
+
+	const unsigned long PF_KTHREAD = 0x00200000UL;
+	return (strtoul(token, NULL, 10) & PF_KTHREAD) != 0;
+}
+
+
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Team monitor"
 
@@ -523,7 +559,8 @@ TeamMonitorWindow::_UpdateList()
 	int32 cookie = 0;
 	team_info info;
 	while (get_next_team_info(&cookie, &info) == B_OK) {
-		if (info.team <=16)
+		// Hide init and kernel threads — Haiku exposes only kernel_team.
+		if (info.team <= 1 || is_kernel_thread(info.team))
 			continue;
 
 		app_info ai;

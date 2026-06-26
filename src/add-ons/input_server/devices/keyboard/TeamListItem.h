@@ -52,6 +52,9 @@ public:
 			int32				MinimalHeight();
 
 private:
+			void				_FetchIcons();
+
+private:
 			team_info			fTeamInfo;
 			app_info			fAppInfo;
 			BBitmap				fMiniIcon;

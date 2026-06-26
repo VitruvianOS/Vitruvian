@@ -27,7 +27,7 @@ static const char* kRendererDir = "/system/add-ons/opengl";
 BGLView::BGLView(BRect rect, const char* name, ulong resizingMode,
 	ulong mode, ulong options)
 	:
-	BView(rect, name, resizingMode, mode | B_FRAME_EVENTS),
+	BView(rect, name, resizingMode, mode | B_FRAME_EVENTS | B_WILL_DRAW),
 	fGc(NULL),
 	fOptions(options),
 	fDitherCount(0),
@@ -40,6 +40,7 @@ BGLView::BGLView(BRect rect, const char* name, ulong resizingMode,
 	fBounds(rect)
 {
 	memset(fErrorBuffer, 0, sizeof(fErrorBuffer));
+	SetViewColor(B_TRANSPARENT_COLOR);
 	_LoadRenderer();
 }
 

@@ -2678,7 +2678,7 @@ BRoster::_SendToRunning(team_id team, int argc, const char* const* args,
 
 		// send B_ARGV_RECEIVED or B_REFS_RECEIVED or B_SILENT_RELAUNCH
 		// (if already running)
-		if (args != NULL && argc > 0) {
+		if (args != NULL && argc > 1) {
 			DBG(OUT("_SendToRunning : B_ARGV_RECEIVED\n"));
 			BMessage message(B_ARGV_RECEIVED);
 			message.AddInt32("argc", argc);

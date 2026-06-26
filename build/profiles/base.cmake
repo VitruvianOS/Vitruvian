@@ -29,7 +29,7 @@ ImageInclude("/system/add-ons/input_server/devices" ${INPUT_SERVER_ADDONS})
 
 
 set(OPENGL_RENDERERS
-	mesa_egl
+	mesa_surfaceless
 )
 ImageInclude("/system/add-ons/opengl" ${OPENGL_RENDERERS})
 

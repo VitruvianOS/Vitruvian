@@ -24,7 +24,7 @@ jobs:
             libblkid-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             fakeroot devscripts lintian wget qemu-utils qemu-efi-aarch64 \
-            rsync parted dosfstools xfsprogs
+            rsync parted dosfstools xfsprogs attr
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE

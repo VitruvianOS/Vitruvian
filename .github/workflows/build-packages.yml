@@ -1,0 +1,187 @@
+name: Build Packages
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build-vos:
+    name: vos (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            build_dir: generated.x86
+            setup_arch: amd64
+            configure_arch: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            build_dir: generated.arm64
+            setup_arch: arm64
+            configure_arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison build-essential cmake debootstrap debhelper \
+            dh-dkms dkms elfutils flex git \
+            grub-efi-${{ matrix.arch }}-bin \
+            libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
+            libgif-dev libicu-dev libinput-dev \
+            libevdev-dev libncurses-dev libseat-dev \
+            libudev-dev libblkid-dev libxkbcommon-dev \
+            libgl-dev libegl-dev libgbm-dev \
+            linux-headers-$(uname -r) \
+            ninja-build sudo zlib1g-dev \
+            fakeroot devscripts lintian wget \
+            attr libsystemd-dev
+
+      - name: Configure git safe.directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build buildtools
+        run: |
+          mkdir -p buildtools
+          cd buildtools
+          cmake -DBUILDTOOLS_MODE=1 .. -GNinja
+          ninja
+
+      - name: Setup environment
+        run: |
+          mkdir -p ${{ matrix.build_dir }}
+          cd ${{ matrix.build_dir }}
+          ../build/scripts/setupenv.sh --chroot-build --arch=${{ matrix.setup_arch }}
+
+      - name: Configure
+        run: |
+          cd ${{ matrix.build_dir }}
+          ../configure --arch=${{ matrix.configure_arch }} --build-type=Release --chroot-build
+
+      - name: Build
+        run: cd ${{ matrix.build_dir }} && ninja
+
+      - name: Package vos .deb
+        run: cd ${{ matrix.build_dir }} && cpack
+
+      - name: Generate checksums
+        run: |
+          cd ${{ matrix.build_dir }}
+          for deb in *.deb; do
+            sha256sum "$deb" > "$deb.sha256"
+          done
+
+      - name: Upload vos .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: vos-${{ matrix.arch }}
+          path: |
+            ${{ matrix.build_dir }}/*.deb
+            ${{ matrix.build_dir }}/*.deb.sha256
+          if-no-files-found: error
+
+  build-nexus:
+    name: nexus-dkms
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential debhelper dkms fakeroot devscripts
+
+      - name: Configure git safe.directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build nexus-dkms .deb
+        run: |
+          cd src/system/kernel/nexus
+          dpkg-buildpackage -us -uc -b
+
+      - name: Generate checksums
+        run: |
+          cd src/system/kernel/nexus
+          for deb in ../../../*.deb; do
+            sha256sum "$deb" > "$deb.sha256"
+          done
+
+      - name: Upload nexus-dkms .deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-dkms
+          path: |
+            *.deb
+            *.deb.sha256
+          if-no-files-found: error
+
+  test-install:
+    name: Test install (${{ matrix.arch }})
+    needs: [build-vos, build-nexus]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64]
+
+    steps:
+      - name: Download vos
+        uses: actions/download-artifact@v4
+        with:
+          name: vos-${{ matrix.arch }}
+          path: debs/
+
+      - name: Download nexus-dkms
+        uses: actions/download-artifact@v4
+        with:
+          name: nexus-dkms
+          path: debs/
+
+      - name: Test install in Debian trixie container
+        run: |
+          docker run --rm -v "$(pwd)/debs:/debs:ro" debian:trixie bash -c '
+            set -e
+            echo "=== Installing packages ==="
+            apt-get update
+            apt-get install -y /debs/nexus-dkms_*.deb || true
+            echo "=== Verifying nexus-dkms ==="
+            dpkg -l nexus-dkms && echo "nexus-dkms: OK"
+            echo "=== Done ==="
+          '
+
+  dispatch-publish:
+    name: Dispatch to repo
+    needs: [build-vos, build-nexus]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger publish in repo
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          repository: ${{ vars.REPO_REPO || 'vitruvian-os/repo' }}
+          event-type: packages-built
+          client-payload: |
+            {"source_repo": "${{ github.repository }}", "run_id": "${{ github.run_id }}"}

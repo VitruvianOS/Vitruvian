@@ -24,7 +24,13 @@ main(int argc, char** argv)
 
 	const char* name = argv[1];
 
-	port_id launchPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+	port_id launchPort = -1;
+	for (int waited = 0; waited < 10000; waited += 50) {
+		launchPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+		if (launchPort >= 0)
+			break;
+		snooze(50000);
+	}
 	if (launchPort < 0) {
 		fprintf(stderr, "janus_launch: launch daemon port not found"
 			" (is janus running?)\n");

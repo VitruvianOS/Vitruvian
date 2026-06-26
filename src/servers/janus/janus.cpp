@@ -761,8 +761,10 @@ daemon_loop()
 int
 main(int /*argc*/, char** /*argv*/)
 {
-	// janus exits only via B_REG_SHUTDOWN_FINISHED
-	signal(SIGTERM, SIG_IGN);
+	// SIGTERM = systemd shutdown request; treat as clean exit so the
+	// daemon_loop drops its libseat/port refs (and closes any held
+	// /dev/nexus fds) before systemd starts umounting rootfs.
+	signal(SIGTERM, sig_handler);
 	signal(SIGINT,  sig_handler);
 	signal(SIGCHLD, SIG_DFL);
 

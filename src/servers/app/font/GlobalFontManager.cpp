@@ -831,17 +831,12 @@ GlobalFontManager::_AddPath(BEntry& entry, font_directory** _newDirectory)
 	directory->group = stat.st_gid;
 	directory->scanned = false;
 
-	status = watch_node(&nodeRef, B_WATCH_DIRECTORY, this);
-	if (status != B_OK) {
-		// we cannot watch this directory - while this is unfortunate,
-		// it's not a critical error
-		printf("could not watch directory %" B_PRIdDEV ":%" B_PRIdINO "\n",
-			nodeRef.device, nodeRef.node);
-			// TODO: should go into syslog()
-	} else {
-		BPath path(&entry);
-		FTRACE(("FontManager: now watching: %s\n", path.Path()));
-	}
+	// Live font-dir hot-reload disabled: fontconfig writes sentinel
+	// files (.uuid, .cache-N) inside font dirs at scan time, which would
+	// fire FS_CLOSE_WRITE back to this watcher and re-trigger the scan
+	// in a tight loop. Restart app_server to pick up new fonts.
+	(void)nodeRef;
+	(void)entry;
 
 	fDirectories.AddItem(directory);
 

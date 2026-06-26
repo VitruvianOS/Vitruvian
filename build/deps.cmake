@@ -197,6 +197,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	GLU
+	LIBRARIES  "GLU"
+	PACKAGES  "libglu1-mesa-dev"
+	RUNTIMES  "libglu1-mesa"
+)
+
+DeclareDependency(
 	EGL
 	LIBRARIES  "EGL"
 	PACKAGES  "libegl-dev"

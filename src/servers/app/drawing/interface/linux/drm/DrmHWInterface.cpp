@@ -275,9 +275,31 @@ DrmHWInterface::_OnSessionEnable()
 		}
 	}
 
-	fDisplayMode.virtual_width = get_dev()->width;
-	fDisplayMode.virtual_height = get_dev()->height;
+	struct modeset_dev* initDev = get_dev();
+	fDisplayMode.virtual_width = initDev->width;
+	fDisplayMode.virtual_height = initDev->height;
 	fDisplayMode.space = B_RGB32;
+
+	drmModeModeInfo& m = initDev->mode;
+	fDisplayMode.timing.pixel_clock  = m.clock;
+	fDisplayMode.timing.h_display    = m.hdisplay;
+	fDisplayMode.timing.h_sync_start = m.hsync_start;
+	fDisplayMode.timing.h_sync_end   = m.hsync_end;
+	fDisplayMode.timing.h_total      = m.htotal;
+	fDisplayMode.timing.v_display    = m.vdisplay;
+	fDisplayMode.timing.v_sync_start = m.vsync_start;
+	fDisplayMode.timing.v_sync_end   = m.vsync_end;
+	fDisplayMode.timing.v_total      = m.vtotal;
+	fDisplayMode.timing.flags = 0;
+	if (m.flags & DRM_MODE_FLAG_PHSYNC)
+		fDisplayMode.timing.flags |= B_POSITIVE_HSYNC;
+	if (m.flags & DRM_MODE_FLAG_PVSYNC)
+		fDisplayMode.timing.flags |= B_POSITIVE_VSYNC;
+	if (m.flags & DRM_MODE_FLAG_INTERLACE)
+		fDisplayMode.timing.flags |= B_TIMING_INTERLACED;
+	fDisplayMode.h_display_start = 0;
+	fDisplayMode.v_display_start = 0;
+	fDisplayMode.flags = 0;
 
 	fInitialized = true;
 	fSessionActive = true;
@@ -702,6 +724,30 @@ DrmHWInterface::SetMode(const display_mode& mode)
 
 	fDisplayMode.virtual_width  = dev->width;
 	fDisplayMode.virtual_height = dev->height;
+	fDisplayMode.space = B_RGB32;
+
+	drmModeModeInfo& m = dev->mode;
+	fDisplayMode.timing.pixel_clock  = m.clock;
+	fDisplayMode.timing.h_display    = m.hdisplay;
+	fDisplayMode.timing.h_sync_start = m.hsync_start;
+	fDisplayMode.timing.h_sync_end   = m.hsync_end;
+	fDisplayMode.timing.h_total      = m.htotal;
+	fDisplayMode.timing.v_display    = m.vdisplay;
+	fDisplayMode.timing.v_sync_start = m.vsync_start;
+	fDisplayMode.timing.v_sync_end   = m.vsync_end;
+	fDisplayMode.timing.v_total      = m.vtotal;
+	fDisplayMode.timing.flags = 0;
+	if (m.flags & DRM_MODE_FLAG_PHSYNC)
+		fDisplayMode.timing.flags |= B_POSITIVE_HSYNC;
+	if (m.flags & DRM_MODE_FLAG_PVSYNC)
+		fDisplayMode.timing.flags |= B_POSITIVE_VSYNC;
+	if (m.flags & DRM_MODE_FLAG_INTERLACE)
+		fDisplayMode.timing.flags |= B_TIMING_INTERLACED;
+	fDisplayMode.h_display_start = 0;
+	fDisplayMode.v_display_start = 0;
+	fDisplayMode.flags = 0;
+
+	_NotifyFrameBufferChanged();
 
 	UnlockExclusiveAccess();
 	return B_OK;

@@ -2135,7 +2135,6 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 		node_ref node;
 		if (message->FindNodeRef("virtual:node", &node) != B_OK
 			|| node != fNodeRef)
-			// bypass foreign nodes' event
 			return;
 	}
 
@@ -2160,18 +2159,23 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 			{
 				entry_ref dstFolder;
 				entry_ref srcFolder;
+				const char* name = NULL;
 				if (message->FindRef("virtual:to directory", &dstFolder) != B_OK
-					|| message->FindRef("virtual:from directory", &srcFolder))
+					|| message->FindRef("virtual:from directory", &srcFolder) != B_OK
+					|| message->FindString("name", &name) != B_OK)
 						break;
 
+				// virtual:to directory is the file's new location as
+				// entry_ref{parent_dir_vref, new_name}; its GetParent
+				// gives the new parent directory itself.
 				BEntry entry(&dstFolder);
 				BEntry dirEntry;
 				entry.GetParent(&dirEntry);
 
-				entry_ref ref;
-				dirEntry.GetRef(&ref);
-				fSaveMessage->ReplaceRef("directory", &ref);
-				fSaveMessage->ReplaceString("name", ref.name);
+				entry_ref dirRef;
+				dirEntry.GetRef(&dirRef);
+				fSaveMessage->ReplaceRef("directory", &dirRef);
+				fSaveMessage->ReplaceString("name", name);
 
 				// store previous name - it may be useful in case
 				// we have just moved to temporary copy of file (vim case)
@@ -2183,7 +2187,7 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 					fSaveMessage->AddInt64("move time", system_time());
 				}
 
-				SetTitle(ref.name);
+				SetTitle(name);
 
 				if (srcFolder != dstFolder) {
 					_SwitchNodeMonitor(false);

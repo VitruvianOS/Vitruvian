@@ -14,6 +14,7 @@ extern "C" {
 
 #include <OS.h>
 #include <Region.h>
+#include <pthread.h>
 #include <atomic>
 
 #include "DrmBuffer.h"
@@ -103,11 +104,15 @@ public:
 	virtual	bool				IsDoubleBuffered() const;
 
 	virtual	status_t			CopyBackToFront(const BRect& frame);
+	virtual	status_t			CopyBackToFront(const BRegion& region);
 
 	virtual	void				SetCursor(ServerCursor* cursor);
 	virtual	void				SetCursorVisible(bool visible);
 	virtual	void				MoveCursorTo(float x, float y);
 	virtual	void				_DrawCursor(IntRect area) const;
+
+	virtual	void				SetDragBitmap(const ServerBitmap* bitmap,
+									const BPoint& offsetFromCursor);
 
 			void				_OnSessionEnable();
 			void				_OnSessionDisable();
@@ -136,9 +141,12 @@ private:
 									RenderingBuffer* dst,
 									const BRect& frame);
 
-			void				_BlendCursor(RenderingBuffer* srcBg,
-									RenderingBuffer* dst,
-									IntRect area) const;
+		void				_BlendCursor(RenderingBuffer* srcBg,
+								RenderingBuffer* dst,
+								IntRect area) const;
+
+		void				_PushCursorTrackDirty(int32 oldX, int32 oldY,
+								int32 newX, int32 newY);
 
 #if defined(__x86_64__) || defined(__i386__)
 	static	void				_BlitRect_AVX2(const uint8* s, uint8* d,
@@ -157,9 +165,9 @@ private:
 
 			status_t			_AtomicModeset(uint32_t fb_id,
 									drmModeModeInfo* mode);
-			status_t			_AtomicFlip(uint32_t fb_id,
-									const BRect* dirty_rects,
-									uint32_t nrects);
+		status_t			_AtomicFlip(uint32_t fb_id,
+								const BRect* dirty_rects,
+								uint32_t nrects);
 			status_t			_AtomicSetCursor(uint32_t fb_id,
 									uint32_t crtc_id,
 									int32 x, int32 y,
@@ -197,12 +205,14 @@ private:
 			bool				fPageFlipEnabled;
 			std::atomic<bool>	fPageFlipPending;
 
-			// Let's try to fit this in L1
-			static const int	kMaxDirtyRects = 256;
-			BRect				fFlipDirtyRects[kMaxDirtyRects];
-			int32				fFlipDirtyCount;
-
-			bool				fFlipDirtyOverflow;
+			// Dirty-rect accumulator (replaces fixed fFlipDirtyRects array).
+			// fAccumulatedDirty collects damage between flips. On flip
+			// completion the union of accumulated + previous is blitted
+			// (covering double-buffer staleness), then previous <- current
+			// and current is cleared.
+			BRegion				fAccumulatedDirty;
+			BRegion				fPreviousDirty;
+			pthread_mutex_t		fDirtyMutex;
 
 			int					fWakeFd;
 

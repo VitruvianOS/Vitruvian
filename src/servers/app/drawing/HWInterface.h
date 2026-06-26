@@ -152,6 +152,7 @@ public:
 	virtual	status_t			Invalidate(const BRect& frame);
 	// while CopyBackToFront() actually performs the operation
 	virtual	status_t			CopyBackToFront(const BRect& frame);
+	virtual	status_t			CopyBackToFront(const BRegion& region);
 
 protected:
 	virtual	void				_CopyBackToFront(/*const*/ BRegion& region);

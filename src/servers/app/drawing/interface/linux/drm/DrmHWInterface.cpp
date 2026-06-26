@@ -69,8 +69,6 @@ DrmHWInterface::DrmHWInterface()
 	fRenderBuffer(NULL),
 	fPageFlipEnabled(false),
 	fPageFlipPending(false),
-	fFlipDirtyCount(0),
-	fFlipDirtyOverflow(false),
 	fWakeFd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
 	fDpmsState(B_DPMS_ON),
 	fBacklight(NULL),
@@ -85,6 +83,8 @@ DrmHWInterface::DrmHWInterface()
 	fVRRSupported(false),
 	fVRREnabled(false)
 {
+	pthread_mutex_init(&fDirtyMutex, NULL);
+
 	// TODO move away from env vars
 	const char* janusDrmFdStr = getenv("JANUS_DRM_FD");
 	bool janusManaged = (janusDrmFdStr != NULL && janusDrmFdStr[0] != '\0');
@@ -210,8 +210,11 @@ DrmHWInterface::_OnSessionEnable()
 	fWriteTarget = fFrontBuffer;
 	fPageFlipEnabled = false;
 	fPageFlipPending = false;
-	fFlipDirtyCount = 0;
-	fFlipDirtyOverflow = false;
+
+	pthread_mutex_lock(&fDirtyMutex);
+	fAccumulatedDirty.MakeEmpty();
+	fPreviousDirty.MakeEmpty();
+	pthread_mutex_unlock(&fDirtyMutex);
 
 	if (modeset_create_back_fb(fFd, get_dev()) == 0) {
 		fBackBuffer      = new DrmBuffer(fFd, get_dev(), true);
@@ -327,8 +330,11 @@ DrmHWInterface::_OnSessionDisable()
 
 	fSessionActive = false;
 	fPageFlipPending = false;
-	fFlipDirtyCount = 0;
-	fFlipDirtyOverflow = false;
+
+	pthread_mutex_lock(&fDirtyMutex);
+	fAccumulatedDirty.MakeEmpty();
+	fPreviousDirty.MakeEmpty();
+	pthread_mutex_unlock(&fDirtyMutex);
 
 	if (fFd >= 0)
 		drmDropMaster(fFd);
@@ -372,36 +378,46 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 {
 	DrmHWInterface* hw = static_cast<DrmHWInterface*>(data);
 	hw->fPageFlipPending = false;
+
 	std::swap(hw->fFrontBuffer, hw->fBackBuffer);
 	hw->fWriteTarget = hw->fBackBuffer;
 
-	if (hw->fRenderBuffer == NULL) {
-		hw->fFlipDirtyCount = 0;
-		hw->fFlipDirtyOverflow = false;
+	if (hw->fRenderBuffer == NULL)
 		return;
-	}
 
-	// TODO: Full frame reblit for now but that will be improved with
-	// dirty tracking.
-	BRect full(0, 0,
-		(float)hw->fWriteTarget->Width()  - 1.0f,
-		(float)hw->fWriteTarget->Height() - 1.0f);
-	bool locked = hw->LockExclusiveAccess();
-	hw->_BlitRect(hw->fRenderBuffer, hw->fWriteTarget, full);
-	if (locked)
-		hw->UnlockExclusiveAccess();
+	// Build the dirty region: union of this frame's accumulated damage
+	// with the previous frame's (covers double-buffer staleness). Then
+	// rotate: previous <- accumulated, accumulated <- empty.
+	BRegion toBlit;
+	pthread_mutex_lock(&hw->fDirtyMutex);
+	if (hw->fPreviousDirty.CountRects() > 0) {
+		toBlit.Include(&hw->fPreviousDirty);
+		toBlit.Include(&hw->fAccumulatedDirty);
+	} else
+		toBlit.Include(&hw->fAccumulatedDirty);
+	hw->fPreviousDirty = hw->fAccumulatedDirty;
+	hw->fAccumulatedDirty.MakeEmpty();
+	pthread_mutex_unlock(&hw->fDirtyMutex);
 
-	if (!hw->fHardwareCursorEnabled) {
-		bool locked = hw->fFloatingOverlaysLock.Lock();
-		IntRect cf = hw->_CursorFrame();
-		if (cf.IsValid())
-			hw->_BlendCursor(hw->fRenderBuffer, hw->fWriteTarget, cf);
+	if (toBlit.CountRects() > 0) {
+		bool locked = hw->LockExclusiveAccess();
+		int32 count = toBlit.CountRects();
+		for (int32 i = 0; i < count; i++)
+			hw->_BlitRect(hw->fRenderBuffer, hw->fWriteTarget,
+				toBlit.RectAt(i));
 		if (locked)
-			hw->fFloatingOverlaysLock.Unlock();
-	}
+			hw->UnlockExclusiveAccess();
 
-	hw->fFlipDirtyCount = 0;
-	hw->fFlipDirtyOverflow = false;
+		if (!hw->fHardwareCursorEnabled) {
+			bool cursorLocked = hw->fFloatingOverlaysLock.Lock();
+			IntRect cf = hw->_CursorFrame();
+			if (cf.IsValid())
+				hw->_BlendCursor(hw->fRenderBuffer,
+					hw->fWriteTarget, cf);
+			if (cursorLocked)
+				hw->fFloatingOverlaysLock.Unlock();
+		}
+	}
 }
 
 
@@ -491,24 +507,31 @@ DrmHWInterface::_EventThreadMain()
 		}
 
 		if (active && fPageFlipEnabled && !fPageFlipPending
-				&& fFlipDirtyCount > 0 && fBackBuffer != NULL
+				&& fBackBuffer != NULL
 				&& fDpmsState == B_DPMS_ON) {
-			struct modeset_dev* dev = get_dev();
-			int r;
-			if (fAtomicSupported && fPrimaryPlaneId) {
+			pthread_mutex_lock(&fDirtyMutex);
+			bool hasDirty = (fAccumulatedDirty.CountRects() > 0);
+			pthread_mutex_unlock(&fDirtyMutex);
+
+			if (hasDirty) {
+				struct modeset_dev* dev = get_dev();
+				int r;
+				if (fAtomicSupported && fPrimaryPlaneId) {
 				r = (_AtomicFlip(fWriteTarget->GetFbId(),
-					fFlipDirtyRects,
-					fFlipDirtyCount) == B_OK) ? 0 : -1;
-			} else {
-				r = drmModePageFlip(fFd, dev->crtc,
-					fWriteTarget->GetFbId(),
-					DRM_MODE_PAGE_FLIP_EVENT, this);
-			}
-			if (r == 0)
-				fPageFlipPending = true;
-			else {
-				fFlipDirtyCount = 0;
-				fFlipDirtyOverflow = false;
+					NULL, 0) == B_OK) ? 0 : -1;
+				} else {
+					r = drmModePageFlip(fFd, dev->crtc,
+						fWriteTarget->GetFbId(),
+						DRM_MODE_PAGE_FLIP_EVENT, this);
+				}
+				if (r == 0)
+					fPageFlipPending = true;
+				else {
+					pthread_mutex_lock(&fDirtyMutex);
+					fAccumulatedDirty.MakeEmpty();
+					fPreviousDirty.MakeEmpty();
+					pthread_mutex_unlock(&fDirtyMutex);
+				}
 			}
 		}
 	}
@@ -587,6 +610,8 @@ DrmHWInterface::~DrmHWInterface()
 		libseat_close_seat(fSeat);
 
 	modeset_cleanup(fFd);
+
+	pthread_mutex_destroy(&fDirtyMutex);
 }
 
 
@@ -648,11 +673,34 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	if (!conn) { UnlockExclusiveAccess(); return B_ERROR; }
 
 	drmModeModeInfo* found = NULL;
-	for (int i = 0; i < conn->count_modes; i++) {
-		if (conn->modes[i].hdisplay == mode.virtual_width &&
-		    conn->modes[i].vdisplay == mode.virtual_height) {
-			found = &conn->modes[i];
-			break;
+
+	float targetRefresh = 0;
+	if (mode.timing.h_total > 0 && mode.timing.v_total > 0) {
+		targetRefresh = float(mode.timing.pixel_clock * 1000)
+			/ float(mode.timing.h_total * mode.timing.v_total);
+	}
+
+	if (targetRefresh > 0) {
+		float bestDiff = 999;
+		for (int i = 0; i < conn->count_modes; i++) {
+			if (conn->modes[i].hdisplay != mode.virtual_width ||
+			    conn->modes[i].vdisplay != mode.virtual_height)
+				continue;
+			float modeRefresh = float(conn->modes[i].clock * 1000)
+				/ float(conn->modes[i].htotal * conn->modes[i].vtotal);
+			float diff = fabsf(modeRefresh - targetRefresh);
+			if (diff < bestDiff) {
+				bestDiff = diff;
+				found = &conn->modes[i];
+			}
+		}
+	} else {
+		for (int i = 0; i < conn->count_modes; i++) {
+			if (conn->modes[i].hdisplay == mode.virtual_width &&
+			    conn->modes[i].vdisplay == mode.virtual_height) {
+				found = &conn->modes[i];
+				break;
+			}
 		}
 	}
 
@@ -691,8 +739,11 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	fWriteTarget = fFrontBuffer;
 	fPageFlipEnabled = false;
 	fPageFlipPending = false;
-	fFlipDirtyCount = 0;
-	fFlipDirtyOverflow = false;
+
+	pthread_mutex_lock(&fDirtyMutex);
+	fAccumulatedDirty.MakeEmpty();
+	fPreviousDirty.MakeEmpty();
+	pthread_mutex_unlock(&fDirtyMutex);
 
 	if (modeset_create_back_fb(fFd, dev) == 0) {
 		fBackBuffer = new DrmBuffer(fFd, dev, true);
@@ -1250,6 +1301,34 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 	if (fRenderBuffer == NULL)
 		return HWInterface::CopyBackToFront(frame);
 
+	if (fPageFlipEnabled) {
+		pthread_mutex_lock(&fDirtyMutex);
+		fAccumulatedDirty.Include(frame);
+		pthread_mutex_unlock(&fDirtyMutex);
+
+		// When no flip is in flight, blit immediately so the back
+		// buffer is ready for the next page flip. When a flip IS
+		// pending, the flip handler will blit the accumulated region
+		// on completion.
+		if (!fPageFlipPending) {
+			_BlitRect(fRenderBuffer, fWriteTarget, frame);
+
+			if (!fHardwareCursorEnabled) {
+				bool overlaysLocked = fFloatingOverlaysLock.Lock();
+				_BlendCursor(fRenderBuffer, fWriteTarget,
+					IntRect(frame));
+				if (overlaysLocked)
+					fFloatingOverlaysLock.Unlock();
+			}
+		}
+
+		if (fWakeFd >= 0) {
+			uint64_t v = 1;
+			write(fWakeFd, &v, sizeof(v));
+		}
+		return B_OK;
+	}
+
 	_BlitRect(fRenderBuffer, fWriteTarget, frame);
 
 	if (!fHardwareCursorEnabled) {
@@ -1259,16 +1338,61 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 			fFloatingOverlaysLock.Unlock();
 	}
 
+	return B_OK;
+}
+
+
+status_t
+DrmHWInterface::CopyBackToFront(const BRegion& region)
+{
+	if (fFrontBuffer == NULL)
+		return B_ERROR;
+
+	if (fRenderBuffer == NULL)
+		return HWInterface::CopyBackToFront(region);
+
+	int32 count = region.CountRects();
+	if (count == 0)
+		return B_OK;
+
 	if (fPageFlipEnabled) {
-		if (fFlipDirtyCount < kMaxDirtyRects)
-			fFlipDirtyRects[fFlipDirtyCount++] = frame;
-		else
-			fFlipDirtyOverflow = true;
+		pthread_mutex_lock(&fDirtyMutex);
+		fAccumulatedDirty.Include(&region);
+		pthread_mutex_unlock(&fDirtyMutex);
+
+		if (!fPageFlipPending) {
+			for (int32 i = 0; i < count; i++)
+				_BlitRect(fRenderBuffer, fWriteTarget,
+					region.RectAt(i));
+
+			if (!fHardwareCursorEnabled) {
+				bool overlaysLocked = fFloatingOverlaysLock.Lock();
+				IntRect cf = _CursorFrame();
+				if (cf.IsValid())
+					_BlendCursor(fRenderBuffer,
+						fWriteTarget, cf);
+				if (overlaysLocked)
+					fFloatingOverlaysLock.Unlock();
+			}
+		}
+
+		if (fWakeFd >= 0) {
+			uint64_t v = 1;
+			write(fWakeFd, &v, sizeof(v));
+		}
+		return B_OK;
 	}
 
-	if (fPageFlipEnabled && fWakeFd >= 0) {
-		uint64_t v = 1;
-		write(fWakeFd, &v, sizeof(v));
+	for (int32 i = 0; i < count; i++)
+		_BlitRect(fRenderBuffer, fWriteTarget, region.RectAt(i));
+
+	if (!fHardwareCursorEnabled) {
+		bool overlaysLocked = fFloatingOverlaysLock.Lock();
+		IntRect cf = _CursorFrame();
+		if (cf.IsValid())
+			_BlendCursor(fRenderBuffer, fWriteTarget, cf);
+		if (overlaysLocked)
+			fFloatingOverlaysLock.Unlock();
 	}
 
 	return B_OK;
@@ -1278,6 +1402,9 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 void
 DrmHWInterface::SetCursor(ServerCursor* cursor)
 {
+	if (fDragBitmap.IsSet())
+		return;
+
 	HWInterface::SetCursor(cursor);
 
 	struct modeset_dev* dev = get_dev();
@@ -1287,7 +1414,7 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 	if (cursor == NULL) {
 		if (dev->cursor_ok) {
 			drmModeSetCursor(fFd, dev->crtc, 0, 0, 0);
-			fHardwareCursorEnabled = true;
+			fHardwareCursorEnabled = false;
 		} else {
 			fHardwareCursorEnabled = false;
 		}
@@ -1332,6 +1459,9 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 void
 DrmHWInterface::SetCursorVisible(bool visible)
 {
+	if (fDragBitmap.IsSet())
+		return;
+
 	HWInterface::SetCursorVisible(visible);
 
 	struct modeset_dev* dev = get_dev();
@@ -1363,25 +1493,74 @@ DrmHWInterface::SetCursorVisible(bool visible)
 
 
 void
+DrmHWInterface::SetDragBitmap(const ServerBitmap* bitmap,
+	const BPoint& offsetFromCursor)
+{
+	struct modeset_dev* dev = get_dev();
+
+	if (bitmap != NULL) {
+		// Disable the HW sprite before delegating to base so the
+		// software composite path owns the drag visual. Use the
+		// atomic path when supported — legacy drmModeSetCursor can
+		// return success without clearing the plane FB on atomic
+		// drivers (root cause of the "two cursors" symptom).
+		if (dev && dev->cursor_ok && fHardwareCursorEnabled) {
+			if (fAtomicSupported && fCursorPlaneId)
+				_AtomicSetCursor(0, 0, 0, 0, 0, 0);
+			else
+				drmModeSetCursor(fFd, dev->crtc, 0, 0, 0);
+		}
+		fHardwareCursorEnabled = false;
+		fCursorObscured = false;
+		fCursorVisible = true;
+		HWInterface::SetDragBitmap(bitmap, offsetFromCursor);
+		if (fPageFlipEnabled && fWakeFd >= 0) {
+			uint64_t v = 1;
+			write(fWakeFd, &v, sizeof(v));
+		}
+	} else {
+		HWInterface::SetDragBitmap(bitmap, offsetFromCursor);
+		// Force a full sprite content re-arm. SetCursor always
+		// re-uploads cursor_map + drmModeSetCursor2 / _AtomicSetCursor
+		// regardless of pointer identity, so even if fCursor is the
+		// same ServerCursor the sprite is refreshed.
+		if (fCursor.IsSet())
+			SetCursor(fCursor);
+	}
+}
+
+
+void
 DrmHWInterface::MoveCursorTo(float x, float y)
 {
+	BPoint hot(0, 0);
+	if (fCursor.IsSet())
+		hot = fCursor->GetHotSpot();
+
+	const int32 oldPx = (int32)floorf(fCursorLocation.x - hot.x);
+	const int32 oldPy = (int32)floorf(fCursorLocation.y - hot.y);
+
 	HWInterface::MoveCursorTo(x, y);
+
+	// When the HW sprite is off (software composite / drag), the base
+	// MoveCursorTo already handled the cursor draw — no plane update.
+	if (!fHardwareCursorEnabled)
+		return;
 
 	struct modeset_dev* dev = get_dev();
 	if (!dev || !dev->cursor_ok)
 		return;
 
-	BPoint hot(0, 0);
-	if (fCursor.IsSet())
-		hot = fCursor->GetHotSpot();
-	const int32 px = (int32)x - (int32)hot.x;
-	const int32 py = (int32)y - (int32)hot.y;
+	const int32 px = (int32)floorf(x - hot.x);
+	const int32 py = (int32)floorf(y - hot.y);
 
 	if (fAtomicSupported && fCursorPlaneId && dev->cursor_fb)
 		_AtomicSetCursor(dev->cursor_fb, dev->crtc,
 			px, py, dev->cursor_w, dev->cursor_h);
 	else
 		drmModeMoveCursor(fFd, dev->crtc, px, py);
+
+	_PushCursorTrackDirty(oldPx, oldPy, px, py);
 }
 
 
@@ -1390,6 +1569,34 @@ DrmHWInterface::_DrawCursor(IntRect area) const
 {
 	if (!fHardwareCursorEnabled)
 		HWInterface::_DrawCursor(area);
+}
+
+
+void
+DrmHWInterface::_PushCursorTrackDirty(int32 oldX, int32 oldY,
+	int32 newX, int32 newY)
+{
+	struct modeset_dev* dev = get_dev();
+	if (!dev || dev->cursor_w <= 0 || dev->cursor_h <= 0)
+		return;
+
+	BRegion track;
+	track.Include(BRect(oldX, oldY,
+		oldX + dev->cursor_w - 1, oldY + dev->cursor_h - 1));
+	track.Include(BRect(newX, newY,
+		newX + dev->cursor_w - 1, newY + dev->cursor_h - 1));
+
+	if (track.CountRects() == 0)
+		return;
+
+	pthread_mutex_lock(&fDirtyMutex);
+	fAccumulatedDirty.Include(&track);
+	pthread_mutex_unlock(&fDirtyMutex);
+
+	if (fPageFlipEnabled && fWakeFd >= 0) {
+		uint64_t v = 1;
+		write(fWakeFd, &v, sizeof(v));
+	}
 }
 
 

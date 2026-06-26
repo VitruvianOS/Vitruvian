@@ -364,6 +364,16 @@ HWInterface::CopyBackToFront(const BRect& frame)
 }
 
 
+status_t
+HWInterface::CopyBackToFront(const BRegion& region)
+{
+	int32 count = region.CountRects();
+	for (int32 i = 0; i < count; i++)
+		CopyBackToFront(region.RectAt(i));
+	return B_OK;
+}
+
+
 void
 HWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 {

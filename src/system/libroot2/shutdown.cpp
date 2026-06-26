@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <linux/reboot.h>
 #include <sys/syscall.h>
 
@@ -21,6 +22,12 @@ _kern_shutdown(bool reb)
 		return B_NOT_ALLOWED;
 	}
 
+	// Defer to systemd so umount/remount-ro runs; raw reboot(2) skips
+	// it and corrupts the journal.
+	if (system(reb ? "systemctl reboot" : "systemctl poweroff") == 0)
+		return B_OK;
+
+	fprintf(stderr, "_kern_shutdown: systemctl failed, falling back\n");
 	sync();
 
 	long result = syscall(SYS_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,

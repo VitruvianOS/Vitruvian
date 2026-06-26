@@ -1,3 +1,28 @@
 #!/bin/sh
+# Runs before dpkg removes Vitruvian's files. Stop services first so they
+# don't keep handles on libraries / sockets / fds we're about to wipe.
+#
+# `prerm remove` and `prerm upgrade` both fire here; we tolerate failures
+# (`|| true`) because dpkg should keep going even if a service unit was
+# already removed or was never enabled.
 
-systemctl disable app_server.service input_server.service deskbar.service registrar.service
+set -e
+
+SERVICES="
+janus.service
+registrar.service
+app_server.service
+input_server.service
+mount_server.service
+notification_server.service
+deskbar.service
+tracker.service
+userbootscript.service
+"
+
+for svc in $SERVICES; do
+    systemctl stop "$svc" 2>/dev/null || true
+    systemctl disable "$svc" 2>/dev/null || true
+done
+
+exit 0

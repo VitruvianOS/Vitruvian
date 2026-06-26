@@ -98,6 +98,12 @@ chroot_create() {
         _backup="$_chroot_dir.old-$_ts"
         log_info "Found existing chroot, moving to $_backup"
         chroot_umount "$_chroot_dir"
+        # Keep only the most recent backup — older ones balloon disk usage.
+        for _stale in "$_chroot_dir".old-*; do
+            [ -e "$_stale" ] || continue
+            log_info "Removing stale chroot backup: $_stale"
+            sudo rm -rf "$_stale"
+        done
         sudo mv "$_chroot_dir" "$_backup"
     fi
 
@@ -209,6 +215,12 @@ chroot_regenerate() {
 
     _ts=$(date +%Y%m%d-%H%M%S)
     _backup="$_chroot_dir.old-$_ts"
+    # Keep only the most recent backup.
+    for _stale in "$_chroot_dir".old-*; do
+        [ -e "$_stale" ] || continue
+        log_info "Removing stale chroot backup: $_stale"
+        sudo rm -rf "$_stale"
+    done
     sudo mv "$_chroot_dir" "$_backup"
 
     chroot_create "$_basedir" "$_arch"

@@ -1,18 +1,45 @@
 #!/bin/sh
 
 # Shared cleanup for all loop-device image builders (create_raw, create_raspberry, create_uboot_board).
-# Reads globals: _mnt, _loop — set before the trap is armed.
+# Reads globals: _mnt, _loop, _raw — set before the trap is armed.
+# Safe to call multiple times (success path + trap). Synchronous: waits for
+# lazy umounts to actually release the loop, retries losetup -d, and as a
+# last resort detaches every loop still backed by $_raw.
 _loop_image_cleanup() {
-    sudo umount -l "$_mnt/var/cache/apt/archives" 2>/dev/null || true
-    sudo umount -l "$_mnt/dev/pts"       2>/dev/null || true
-    sudo umount -l "$_mnt/dev"           2>/dev/null || true
-    sudo umount -l "$_mnt/sys"           2>/dev/null || true
-    sudo umount -l "$_mnt/proc"          2>/dev/null || true
-    sudo umount -l "$_mnt/boot/efi"      2>/dev/null || true
-    sudo umount -l "$_mnt/boot/firmware" 2>/dev/null || true
-    sudo umount -l "$_mnt/boot"          2>/dev/null || true
-    sudo umount -l "$_mnt"               2>/dev/null || true
-    [ -n "$_loop" ] && sudo losetup -d "$_loop" 2>/dev/null || true
+    # Unmount everything beneath $_mnt, deepest first, so lazy umounts on
+    # parents don't get blocked by mounted children.
+    if [ -n "$_mnt" ]; then
+        for _mp in $(awk -v m="$_mnt" '$2 ~ "^"m {print $2}' /proc/mounts | sort -r); do
+            sudo umount "$_mp" 2>/dev/null \
+                || sudo umount -l "$_mp" 2>/dev/null || true
+        done
+    fi
+
+    sudo udevadm settle 2>/dev/null || true
+
+    # Retry losetup -d a few times — lazy umounts release the bdev
+    # asynchronously, so an immediate detach can hit EBUSY.
+    if [ -n "$_loop" ]; then
+        _i=0
+        while [ $_i -lt 10 ]; do
+            sudo losetup -d "$_loop" 2>/dev/null && break
+            _i=$((_i + 1))
+            sleep 0.2
+        done
+    fi
+
+    # Belt-and-braces: if anything is still attached to $_raw (subshells,
+    # udisks auto-mounts, partition children), detach them all.
+    if [ -n "$_raw" ] && [ -f "$_raw" ]; then
+        for _stale in $(sudo losetup -j "$_raw" -O NAME --noheadings 2>/dev/null); do
+            for _mp in $(awk -v dev="$_stale" '$1 ~ dev {print $2}' /proc/mounts \
+                    | sort -r); do
+                sudo umount "$_mp" 2>/dev/null \
+                    || sudo umount -l "$_mp" 2>/dev/null || true
+            done
+            sudo losetup -d "$_stale" 2>/dev/null || true
+        done
+    fi
 }
 
 _iso_cleanup() {
@@ -92,18 +119,14 @@ create_raw() {
 
     sudo mkfs.vfat -F32 "$_efi_part"
     # -I 512: more inline xattr headroom (~350 bytes vs ~100 with default
-    # 256-byte inodes), so BeOS-style small attrs land inline without spilling.
-    # ea_inode: per-xattr spillover into dedicated inodes up to 64KB each,
-    # removing the 4KB shared-block ceiling.
-    # ^64bit / ^orphan_file / ^metadata_csum_seed / ^casefold / ^encrypt /
-    # ^verity: turn off ext4 features that GRUB 2.12's ext2 driver doesn't
-    # cleanly handle in combination with 512-byte inodes + ea_inode. With
-    # 64bit on, GRUB's search --fs-uuid silently fails to locate root, $root
-    # stays as the ESP, and ($root)/vmlinuz then "doesn't exist" — exactly
-    # the symptom the user spent a day chasing. All exclusions must live in
-    # ONE -O argument or Debian's mke2fs.conf re-enables them.
+    # 256-byte inodes), so BeOS-style small attrs land inline.
+    # ea_inode is intentionally NOT enabled — GRUB 2.12 can't read it, and
+    # our attr usage stays under the 4KB shared-block ceiling.
+    # ^orphan_file / ^metadata_csum_seed / ^casefold / ^encrypt / ^verity:
+    # features GRUB 2.12 doesn't handle. All exclusions must live in ONE
+    # -O argument or Debian's mke2fs.conf re-enables them.
     sudo mkfs.ext4 -F -I 512 \
-        -O ^64bit,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
+        -O ^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
         -L vitruvian-root "$_root_part"
 
     _esp_uuid=$(sudo blkid -s UUID -o value "$_efi_part")
@@ -225,7 +248,7 @@ insmod gfxterm
 set timeout=1
 search --no-floppy --fs-uuid --set=root $_root_uuid
 menuentry "Vitruvian" {
-    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel
     initrd (\$root)/initrd.img
 }
 EOF
@@ -264,13 +287,7 @@ EOF
 
     qemu_eject "$_mnt" "$_arch"
 
-    sudo umount -l "$_mnt/dev"  2>/dev/null || true
-    sudo umount -l "$_mnt/proc" 2>/dev/null || true
-    sudo umount -l "$_mnt/sys"  2>/dev/null || true
-
-    sudo umount -l "$_mnt/boot/efi" 2>/dev/null || true
-    sudo umount -l "$_mnt"          2>/dev/null || true
-    sudo losetup -d "$_loop"
+    _loop_image_cleanup
     trap - EXIT INT TERM
 
     log_step "Copying OVMF vars..."
@@ -382,7 +399,7 @@ set default="0"
 set timeout=1
 set hidden_timeout=0
 menuentry "Vitruvian Live" {
-    linux /vmlinuz boot=live quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3
+    linux /vmlinuz boot=live quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel oops=panic panic_on_warn=1 panic=0
     initrd /initrd
 }
 EOF
@@ -524,6 +541,7 @@ LOGEOF
 #    kernel pseudo-FS that this kernel build does not expose; the static
 #    mount units fail every boot for no reason. Masking is the upstream
 #    recommendation when the FS isn't available.
+
 for _u in \\
     systemd-remount-fs.service \\
     systemd-ssh-generator.service \\
@@ -678,12 +696,7 @@ FSTAB
 
     qemu_eject "$_mnt" "$_board_arch"
 
-    sudo umount -l "$_mnt/dev"           2>/dev/null || true
-    sudo umount -l "$_mnt/proc"          2>/dev/null || true
-    sudo umount -l "$_mnt/sys"           2>/dev/null || true
-    sudo umount -l "$_mnt/boot/firmware" 2>/dev/null || true
-    sudo umount -l "$_mnt"               2>/dev/null || true
-    sudo losetup -d "$_loop"
+    _loop_image_cleanup
     trap - EXIT INT TERM
 
     log_info "$(board_config "$_board" label) image created: $_raw"
@@ -852,7 +865,7 @@ FSTAB
         log_warn "U-Boot not flashed. Place idbloader.img + u-boot.itb in $_uboot_dir/"
     fi
 
-    sudo losetup -d "$_loop"
+    _loop_image_cleanup
     trap - EXIT INT TERM
 
     log_info "$_label image created: $_raw"

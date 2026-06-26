@@ -30,6 +30,8 @@ Build options:
                           rockchip, allwinner, allwinner-h3, beagle,
                           beaglebone, nxp, amlogic, visionfive2, licheerv
   --run-qemu             Boot image in QEMU after build
+  --enable-console-log   Write serial output to vitruvian-console.log
+  --enable-console-stdout  Stream serial output to stdio (combine with --enable-console-log to tee)
   --regenerate-chroot    Recreate the chroot before building
   --arch=ARCH            Target architecture: amd64, arm64, arm32, riscv64
                           (reads from buildstate.conf if omitted)
@@ -67,6 +69,8 @@ cmd_build() {
     _regenerate=0
     _arch=""
     _list_boards=0
+    _console_log=0
+    _console_stdout=0
 
     for arg in "$@"; do
         case "$arg" in
@@ -84,6 +88,12 @@ cmd_build() {
                 ;;
             --list-boards)
                 _list_boards=1
+                ;;
+            --enable-console-log)
+                _console_log=1
+                ;;
+            --enable-console-stdout)
+                _console_stdout=1
                 ;;
             --help|-h)
                 usage
@@ -189,13 +199,15 @@ cmd_build() {
 
     if [ "$_run_qemu" -eq 1 ]; then
         # exactly one type at this point
-        for _t in $_types; do run_qemu "$BASEDIR" "$ARCH" "$_t"; done
+        for _t in $_types; do run_qemu "$BASEDIR" "$ARCH" "$_t" "$_console_log" "$_console_stdout"; done
     fi
 }
 
 cmd_boot() {
     _image_type=""
     _arch=""
+    _console_log=0
+    _console_stdout=0
 
     for arg in "$@"; do
         case "$arg" in
@@ -204,6 +216,12 @@ cmd_boot() {
                 ;;
             --arch=*)
                 _arch="${arg#*=}"
+                ;;
+            --enable-console-log)
+                _console_log=1
+                ;;
+            --enable-console-stdout)
+                _console_stdout=1
                 ;;
             --help|-h)
                 usage
@@ -239,7 +257,7 @@ cmd_boot() {
             ;;
     esac
 
-    run_qemu "$BASEDIR" "$ARCH" "$_image_type"
+    run_qemu "$BASEDIR" "$ARCH" "$_image_type" "$_console_log" "$_console_stdout"
 }
 
 [ $# -eq 0 ] && usage

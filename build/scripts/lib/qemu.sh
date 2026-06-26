@@ -4,9 +4,23 @@ run_qemu() {
     _basedir="$1"
     _arch="$2"
     _image_type="$3"
+    _console_log="${4:-0}"
+    _console_stdout="${5:-0}"
     _qemu_cmd="$(arch_to_qemu "$_arch")"
 
     require_cmd "$_qemu_cmd" "qemu-system for $_arch"
+
+    # Default (no flags): write serial to vitruvian-console.log (original).
+    # --enable-console-stdout alone: serial to stdio, no file.
+    # Both flags: tee stdio + file via logfile= chardev.
+    _logfile="$_basedir/vitruvian-console.log"
+    if [ "$_console_stdout" -eq 1 ] && [ "$_console_log" -eq 1 ]; then
+        _serial_args="-chardev stdio,id=ch0,mux=on,signal=off,logfile=$_logfile -serial chardev:ch0"
+    elif [ "$_console_stdout" -eq 1 ]; then
+        _serial_args="-serial mon:stdio"
+    else
+        _serial_args="-serial file:$_logfile"
+    fi
 
     case "$_image_type" in
         raw)
@@ -30,7 +44,8 @@ run_qemu() {
                         -drive if=pflash,format=raw,file="$_basedir/OVMF_VARS.fd" \
                         -netdev user,id=mynet,hostfwd=tcp::2222-:22 \
                         -device virtio-net-pci,netdev=mynet \
-                        -virtfs local,path="$_host_shared",mount_tag=host_shared,security_model=mapped-xattr,id=host_shared
+                        -virtfs local,path="$_host_shared",mount_tag=host_shared,security_model=mapped-xattr,id=host_shared \
+                        $_serial_args
                     ;;
                 arm64)
                     "$_qemu_cmd" \
@@ -70,7 +85,8 @@ run_qemu() {
                         -cdrom "$_iso" -boot menu=on \
                         -m 8G -cpu host -smp sockets=1,cores=2,threads=2 --enable-kvm \
                         -netdev user,id=mynet,hostfwd=tcp::2222-:22 \
-                        -device virtio-net-pci,netdev=mynet
+                        -device virtio-net-pci,netdev=mynet \
+                        $_serial_args
                     ;;
                 arm64)
                     "$_qemu_cmd" \

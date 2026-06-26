@@ -48,6 +48,18 @@ set(CORE_DEPS "${RESULT}")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${CORE_DEPS})
 SET(CPACK_GENERATOR "DEB")
 SET(CPACK_DEBIAN_PACKAGE_ARCHITECTURE ${VITRUVIAN_TARGET_ARCH})
-set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postinst" "${CMAKE_CURRENT_SOURCE_DIR}/data/debian/prerm")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postinst"
+	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/prerm"
+	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postrm")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")
 INCLUDE(CPack)
+
+# Make `ninja clean` (and `make clean`) wipe CPack outputs too. CPack writes
+# its artifacts into the build root, so they normally survive `clean` and
+# accumulate stale .deb files across reconfigurations.
+set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
+	ADDITIONAL_CLEAN_FILES
+		"${CMAKE_BINARY_DIR}/_CPack_Packages"
+		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}.deb"
+)

@@ -13,6 +13,11 @@ mkdir -p /system/servers/
 mkdir -p /system/settings/
 
 ln -sf /bin /system/bin
+# /system/lib MUST become a symlink, not a real dir. `ln -sf SRC DST` when
+# DST is an existing dir creates DST/<basename SRC> inside it (silent
+# trap). Anything CPack-installed to /system/lib/ has already moved to
+# /lib by the time we get here, so it's safe to wipe.
+rm -rf /system/lib
 ln -sf /lib /system/lib
 ln -sf /tmp /system/cache
 ln -sf /var /system/var
@@ -37,9 +42,11 @@ mkdir -p /system/data/deskbar/menu/Demos/
 mkdir -p /system/data/deskbar/menu/Preferences/
 
 
-# Trash and boot dirs
+# Boot dirs. The trash dir is NOT pre-created here — Vitruvian uses the
+# XDG Trash spec layout ($HOME/.local/share/Trash/{files,info}), which
+# Tracker provisions on demand via FSGetTrashDir. The on-Desktop Trash
+# icon is a synthetic pose injected by BPoseView::CreateTrashPose.
 
-mkdir -p /home/Desktop/Trash
 mkdir -p /system/boot/post_install/
 mkdir -p /system/boot/first_login/
 mkdir -p /system/settings/etc/profile.d/
@@ -87,7 +94,6 @@ beos_mime() {
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_SYSTEM_DIRECTORY:system" /system
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_DIRECTORY:home" /home
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_DESKTOP_DIRECTORY:home" /home/Desktop
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_TRASH_DIRECTORY:Trash" /home/Desktop/Trash
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_CONFIG_DIRECTORY:config" /home/config
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_APPS_DIRECTORY:apps" /system/apps
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_PREFERENCES_DIRECTORY:preferences" /system/preferences

@@ -2,16 +2,16 @@
 Description=Vitruvian Janus - privileged server launcher and launch daemon
 DefaultDependencies=no
 Before=graphical.target
+After=systemd-modules-load.service local-fs.target
+Wants=systemd-modules-load.service
 
 [Service]
 Type=simple
 ExecStartPre=-/bin/mkdir -p /run/vitruvian
-ExecStartPre=-/bin/mkdir -p /var/log/vref
-Environment=VREF_TRACE=/var/log/vref
-Environment=ICON_TRACE=1
 ExecStart=/system/servers/janus
 Restart=on-failure
 RestartSec=1s
+TimeoutStopSec=10s
 StandardOutput=append:/var/log/janus.log
 StandardError=append:/var/log/janus.log
 User=root

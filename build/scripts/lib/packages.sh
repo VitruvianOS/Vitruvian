@@ -56,7 +56,8 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev" \
-                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libglu1-mesa-dev"
             ;;
         arm64)
             printf '%s' \
@@ -66,7 +67,8 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev" \
-                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libglu1-mesa-dev"
             ;;
         arm32)
             printf '%s' \

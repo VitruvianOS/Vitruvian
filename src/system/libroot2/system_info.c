@@ -249,6 +249,37 @@ _kern_get_system_info(system_info* info)
 		}
 	}
 
+	// Count teams via /proc — same source _get_next_team_info enumerates —
+	// so callers sizing buffers from used_teams won't truncate.
+	info->used_teams = 0;
+	info->used_threads = 0;
+
+	FILE* loadavg = fopen("/proc/loadavg", "r");
+	if (loadavg != NULL) {
+		double load1, load5, load15;
+		unsigned int running = 0, total = 0;
+		if (fscanf(loadavg, "%lf %lf %lf %u/%u", &load1, &load5, &load15,
+				&running, &total) >= 5) {
+			info->used_threads = total;
+		}
+		fclose(loadavg);
+	}
+
+	DIR* procDir = opendir("/proc");
+	if (procDir != NULL) {
+		struct dirent* entry;
+		while ((entry = readdir(procDir)) != NULL) {
+			if (atoi(entry->d_name) > 0)
+				info->used_teams++;
+		}
+		closedir(procDir);
+	}
+
+	if (info->used_threads < info->used_teams)
+		info->used_threads = info->used_teams;
+
+	info->max_teams = info->max_threads;
+
 	return B_OK;
 }
 

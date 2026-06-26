@@ -311,37 +311,51 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 status_t
 _get_next_thread_info(team_id team, int32* cookie, thread_info* info, size_t size)
 {
-	if (cookie == NULL || info == NULL || size != sizeof(thread_info))
+	if (cookie == NULL || *cookie < 0 || info == NULL
+		|| size != sizeof(thread_info)) {
 		return B_BAD_VALUE;
+	}
 
 	if (team == 0)
 		team = getpid();
 
-	char path[64];
-	snprintf(path, sizeof(path), "/proc/%d/task", team);
+	// The cookie holds the open /proc/<team>/task fd between calls,
+	// encoded as fd+1 so that 0 still means "start fresh".
+	int fd;
+	if (*cookie == 0) {
+		char path[64];
+		snprintf(path, sizeof(path), "/proc/%d/task", team);
+		fd = _kern_open_dir(-1, path);
+		if (fd < 0)
+			return B_BAD_TEAM_ID;
+	} else
+		fd = *cookie - 1;
 
-	DIR* dir = opendir(path);
-	if (dir == NULL)
-		return B_BAD_TEAM_ID;
+	union {
+		struct dirent entry;
+		char buffer[sizeof(struct dirent) + NAME_MAX + 1];
+	} dirent;
 
-	struct dirent* entry;
-	int32 index = 0;
+	while (true) {
+		ssize_t count = _kern_read_dir(fd, &dirent.entry, sizeof(dirent), 1);
+		if (count <= 0) {
+			_kern_close(fd);
+			*cookie = 0;
+			return B_BAD_VALUE;
+		}
 
-	while ((entry = readdir(dir)) != NULL) {
-		if (entry->d_name[0] == '.')
+		if (dirent.entry.d_name[0] == '.')
 			continue;
 
-		if (index == *cookie) {
-			thread_id tid = atoi(entry->d_name);
-			closedir(dir);
-			(*cookie)++;
-			return _get_thread_info(tid, info, size);
-		}
-		index++;
-	}
+		thread_id tid = atoi(dirent.entry.d_name);
+		if (tid <= 0)
+			continue;
 
-	closedir(dir);
-	return B_BAD_VALUE;
+		if (_get_thread_info(tid, info, size) == B_OK) {
+			*cookie = fd + 1;
+			return B_OK;
+		}
+	}
 }
 
 

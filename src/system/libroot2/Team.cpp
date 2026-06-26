@@ -18,7 +18,6 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#include <list>
 #include <string>
 
 #include "KernelDebug.h"
@@ -45,10 +44,6 @@ static int gNexusArea = -1;
 static int gNexusNodeMonitor = -1;
 static struct udev* gUdev = NULL;
 static pthread_mutex_t gDevicesLock = PTHREAD_MUTEX_INITIALIZER;
-
-// TODO replace with DIR*
-static std::list<int> gTeams;
-
 
 static void
 OpenNexusDevices()
@@ -527,8 +522,26 @@ _get_team_info(team_id id, team_info* info, size_t size)
 	}
 
 	info->team = id;
+	info->name[0] = '\0';
+
 	while (fgets(buffer, sizeof(buffer), statusFile) != NULL) {
-		if (strncmp(buffer, "Uid:", 4) == 0) {
+		if (strncmp(buffer, "Name:", 5) == 0) {
+			const char* name = buffer + 5;
+			while (*name == ' ' || *name == '\t')
+				name++;
+
+			size_t length = 0;
+			while (length < B_OS_NAME_LENGTH - 1) {
+				unsigned char c = (unsigned char)name[length];
+				if (c == '\0' || c == '\n' || c == '\r'
+					|| c < 0x20 || c == 0x7f) {
+					break;
+				}
+				info->name[length] = name[length];
+				length++;
+			}
+			info->name[length] = '\0';
+		} else if (strncmp(buffer, "Uid:", 4) == 0) {
 			uid_t ruid = 0, euid = 0, suid = 0, fuid = 0;
 			sscanf(buffer + 4, "%u %u %u %u", &ruid, &euid, &suid, &fuid);
 			info->real_uid = ruid;
@@ -548,111 +561,118 @@ _get_team_info(team_id id, team_info* info, size_t size)
 
 	fclose(statusFile);
 
+	info->argc = 0;
+	info->args[0] = '\0';
+
 	int cmdFd = open(commandProcPath, O_RDONLY | O_CLOEXEC);
 	if (cmdFd >= 0) {
-		ssize_t n = read(cmdFd, buffer, sizeof(buffer) - 1);
-		if (n > 0) {
+		ssize_t length = read(cmdFd, buffer, sizeof(buffer) - 1);
+		close(cmdFd);
+
+		if (length > 0) {
 			int argc = 0;
-			for (ssize_t i = 0; i < n; i++) {
-				if (buffer[i] == '\0') {
+			for (ssize_t i = 0; i < length; i++) {
+				unsigned char c = (unsigned char)buffer[i];
+				if (c == '\0') {
 					argc++;
+					buffer[i] = ' ';
+				} else if (c < 0x20 || c == 0x7f) {
+					// Processes can poke arbitrary bytes into their cmdline.
 					buffer[i] = ' ';
 				}
 			}
-			if (n > 0 && argc == 0)
-				argc = 1;
-			buffer[n] = '\0';
 
-			info->argc = argc;
-			strncpy(info->args, buffer, sizeof(info->args) - 1);
-			info->args[sizeof(info->args) - 1] = '\0';
+			while (length > 0 && buffer[length - 1] == ' ')
+				length--;
+			buffer[length] = '\0';
+
+			if (length > 0) {
+				info->argc = (argc > 0) ? argc : 1;
+				strlcpy(info->args, buffer, sizeof(info->args));
+			}
 		}
-		close(cmdFd);
-	} else {
-		info->argc = 0;
-		info->args[0] = '\0';
 	}
 
-	{
-		char mapsPath[B_PATH_NAME_LENGTH];
-		snprintf(mapsPath, sizeof(mapsPath), "/proc/%d/maps", id);
-		FILE* maps = fopen(mapsPath, "r");
-		if (maps) {
-			int images = 0;
-			int areas = 0;
-			char lastPath[PATH_MAX] = {0};
-			while (fgets(buffer, sizeof(buffer), maps)) {
-				areas++;
-				char* p = strchr(buffer, '/');
-				if (p) {
-					char* nl = strchr(p, '\n');
-					if (nl) *nl = '\0';
-					if (lastPath[0] == '\0' || strcmp(p, lastPath) != 0) {
-						images++;
-						strncpy(lastPath, p, sizeof(lastPath) - 1);
-						lastPath[sizeof(lastPath) - 1] = '\0';
-					}
+	char mapsPath[B_PATH_NAME_LENGTH];
+	snprintf(mapsPath, sizeof(mapsPath), "/proc/%d/maps", id);
+	FILE* maps = fopen(mapsPath, "r");
+	if (maps != NULL) {
+		int images = 0;
+		int areas = 0;
+		char lastPath[PATH_MAX] = {0};
+		while (fgets(buffer, sizeof(buffer), maps)) {
+			areas++;
+			char* p = strchr(buffer, '/');
+			if (p != NULL) {
+				char* nl = strchr(p, '\n');
+				if (nl != NULL)
+					*nl = '\0';
+				if (lastPath[0] == '\0' || strcmp(p, lastPath) != 0) {
+					images++;
+					strlcpy(lastPath, p, sizeof(lastPath));
 				}
 			}
-			fclose(maps);
-			info->image_count = images;
-			info->area_count = areas;
-		} else {
-			info->image_count = 0;
-			info->area_count = 0;
 		}
+		fclose(maps);
+		info->image_count = images;
+		info->area_count = areas;
 	}
 
 	info->debugger_nub_thread = -1;
 	info->debugger_nub_port = 0;
 
-	{
-		char statPath[B_PATH_NAME_LENGTH];
-		snprintf(statPath, sizeof(statPath), "/proc/%d/stat", id);
-		FILE* stat = fopen(statPath, "r");
-		if (stat) {
-			char statbuf[4096];
-			size_t r = fread(statbuf, 1, sizeof(statbuf) - 1, stat);
-			statbuf[r] = '\0';
-			char* rp = strrchr(statbuf, ')');
-			if (rp) {
-				char* rest = rp + 2;
-				char* saveptr = NULL;
-				(void)strtok_r(rest, " ", &saveptr);
-				(void)strtok_r(NULL, " ", &saveptr);
-				char* tok = strtok_r(NULL, " ", &saveptr);
-				if (tok) info->group_id = (pid_t)strtol(tok, NULL, 10);
-				tok = strtok_r(NULL, " ", &saveptr);
-				if (tok) info->session_id = (pid_t)strtol(tok, NULL, 10);
+	char statPath[B_PATH_NAME_LENGTH];
+	snprintf(statPath, sizeof(statPath), "/proc/%d/stat", id);
+	FILE* statFile = fopen(statPath, "r");
+	if (statFile != NULL) {
+		char statBuffer[4096];
+		size_t length = fread(statBuffer, 1, sizeof(statBuffer) - 1, statFile);
+		statBuffer[length] = '\0';
+		fclose(statFile);
 
-				int field = 5;
-				while (field < 22 && (tok = strtok_r(NULL, " ", &saveptr)))
-					field++;
-				if (tok) {
-					unsigned long long starttime = strtoull(tok, NULL, 10);
-					if (starttime != 0) {
-						long ticks = sysconf(_SC_CLK_TCK);
-						if (ticks <= 0) ticks = 100;
+		char* rparen = strrchr(statBuffer, ')');
+		if (rparen != NULL) {
+			char* saveptr = NULL;
+			(void)strtok_r(rparen + 2, " ", &saveptr);
+			(void)strtok_r(NULL, " ", &saveptr);
 
-						FILE* uptime = fopen("/proc/uptime", "r");
-						double up = 0.0;
-						if (uptime) {
-							if (fscanf(uptime, "%lf", &up) != 1)
-								up = 0.0;
-							fclose(uptime);
-						}
+			char* token = strtok_r(NULL, " ", &saveptr);
+			if (token != NULL)
+				info->group_id = (pid_t)strtol(token, NULL, 10);
 
-						struct timespec now;
-						if (clock_gettime(CLOCK_REALTIME, &now) == 0 && up > 0.0) {
-							double boot_time = now.tv_sec - up;
-							double proc_start_secs = ((double)starttime) / (double)ticks;
-							double proc_start_time = boot_time + proc_start_secs;
-							info->start_time = (bigtime_t)(proc_start_time * 1e6);
-						}
+			token = strtok_r(NULL, " ", &saveptr);
+			if (token != NULL)
+				info->session_id = (pid_t)strtol(token, NULL, 10);
+
+			int field = 5;
+			while (field < 22 && (token = strtok_r(NULL, " ", &saveptr)))
+				field++;
+
+			if (token != NULL) {
+				unsigned long long starttime = strtoull(token, NULL, 10);
+				if (starttime != 0) {
+					long ticks = sysconf(_SC_CLK_TCK);
+					if (ticks <= 0)
+						ticks = 100;
+
+					double uptime = 0.0;
+					FILE* uptimeFile = fopen("/proc/uptime", "r");
+					if (uptimeFile != NULL) {
+						if (fscanf(uptimeFile, "%lf", &uptime) != 1)
+							uptime = 0.0;
+						fclose(uptimeFile);
+					}
+
+					struct timespec now;
+					if (clock_gettime(CLOCK_REALTIME, &now) == 0
+						&& uptime > 0.0) {
+						double bootTime = now.tv_sec - uptime;
+						double startSeconds = (double)starttime / (double)ticks;
+						info->start_time
+							= (bigtime_t)((bootTime + startSeconds) * 1e6);
 					}
 				}
 			}
-			fclose(stat);
 		}
 	}
 
@@ -666,38 +686,42 @@ status_t
 _get_next_team_info(int32* cookie, team_info* info, size_t size)
 {
 	if (cookie == NULL || *cookie < 0 || info == NULL
-			|| size != sizeof(team_info)) {
+		|| size != sizeof(team_info)) {
 		return B_BAD_VALUE;
 	}
 
+	// The cookie holds the open /proc fd between calls, encoded as fd+1 so
+	// that 0 still means "start fresh".
+	int fd;
 	if (*cookie == 0) {
-		// Clear any stale entries from a previous enumeration
-		BKernelPrivate::gTeams.clear();
-
-		DIR* procDir = opendir("/proc");
-		struct dirent* dir = NULL;
-
-		if (procDir != NULL) {
-			while ((dir = readdir(procDir)) != NULL) {
-				if (atoi(dir->d_name) > 0)
-					BKernelPrivate::gTeams.push_front(atoi(dir->d_name));
-			}
-		} else
+		fd = _kern_open_dir(-1, "/proc");
+		if (fd < 0)
 			return B_ERROR;
+	} else
+		fd = *cookie - 1;
 
-		closedir(procDir);
+	union {
+		struct dirent entry;
+		char buffer[sizeof(struct dirent) + NAME_MAX + 1];
+	} dirent;
+
+	while (true) {
+		ssize_t count = _kern_read_dir(fd, &dirent.entry, sizeof(dirent), 1);
+		if (count <= 0) {
+			_kern_close(fd);
+			*cookie = 0;
+			return B_BAD_VALUE;
+		}
+
+		pid_t pid = (pid_t)atoi(dirent.entry.d_name);
+		if (pid <= 0)
+			continue;
+
+		if (_get_team_info((team_id)pid, info, size) == B_OK) {
+			*cookie = fd + 1;
+			return B_OK;
+		}
 	}
-
-	if (*cookie >= (int32)BKernelPrivate::gTeams.size())
-		return B_BAD_VALUE;
-
-	std::list<int>::iterator gTeamsIt = BKernelPrivate::gTeams.begin();
-	std::advance(gTeamsIt, *cookie);
-	unsigned int cur_pid = *gTeamsIt;
-	(*cookie)++;
-
-	return get_team_info(cur_pid, info);
-
 }
 
 

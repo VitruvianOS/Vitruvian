@@ -13,6 +13,7 @@ set(SYSTEM_APPS
 	#DriveSetup
 	Expander
 	FirstBootPrompt
+	GLTeapot
 	Installer
 	LaunchBox
 	Magnify

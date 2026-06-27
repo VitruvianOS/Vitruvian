@@ -39,7 +39,7 @@ https://www.freelists.org/list/vitruvian
 
 ### Installation
 
-V\OS testing images will be made available for download. The project is currently in an experimental stage — check back soon, or build from source in the meantime.
+See https://v-os.dev/download/ and https://wiki.v-os.dev/docs/getting-started/how-to-install/
 
 ### Getting Started
 

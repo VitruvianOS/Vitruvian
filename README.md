@@ -12,6 +12,8 @@
 
 ---
 
+<img width="1284" height="804" alt="0 4 1-thumbnail" src="https://github.com/user-attachments/assets/3eb7a173-ef91-440a-9d0d-de194283fd89" />
+
 ### Overview
 
 Vitruvian is an operating system based on Linux, heavily inspired by BeOS, bringing the elegance and simplicity of a classic operating system to modern hardware. It leverages Linux's hardware support while maintaining the responsive, user-friendly nature of BeOS.

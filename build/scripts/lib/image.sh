@@ -231,6 +231,7 @@ rm -rf /localdeb"
         amd64)   _boot_efi="BOOTX64.EFI" ;;
         arm64)   _boot_efi="BOOTAA64.EFI" ;;
         riscv64) _boot_efi="BOOTRISCV64.EFI" ;;
+        i386)    _boot_efi="BOOTIA32.EFI" ;;
     esac
 
     log_step "Building standalone EFI bootloader ($_efi_target)..."
@@ -261,6 +262,13 @@ EOF
                 --output="$_basedir/image_tree/scratch/$_boot_efi" \
                 --locales="" --fonts="" \
                 "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
+            if [ -d /usr/lib/grub/i386-efi ]; then
+                grub-mkstandalone \
+                    --format=i386-efi \
+                    --output="$_basedir/image_tree/scratch/BOOTIA32.EFI" \
+                    --locales="" --fonts="" \
+                    "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
+            fi
             ;;
         arm64|riscv64)
             sudo mkdir -p "$_mnt/scratch"
@@ -278,6 +286,9 @@ EOF
 
     sudo mkdir -p "$_mnt/boot/efi/EFI/BOOT"
     sudo cp "$_basedir/image_tree/scratch/$_boot_efi" "$_mnt/boot/efi/EFI/BOOT/$_boot_efi"
+    if [ "$_arch" = "amd64" ] && [ -f "$_basedir/image_tree/scratch/BOOTIA32.EFI" ]; then
+        sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_mnt/boot/efi/EFI/BOOT/BOOTIA32.EFI"
+    fi
 
     # Remove the /EFI/debian/ tree that grub-efi-amd64's postinst dropped.
     # Keeping it around lets OVMF persist a Boot#### entry pointing at
@@ -420,6 +431,15 @@ EOF
             --locales="" \
             --fonts="" \
             "boot/grub/grub.cfg=$_basedir/image_tree/scratch/grub.cfg"
+        if [ -d /usr/lib/grub/i386-efi ]; then
+            log_step "Building 32-bit EFI bootloader (i386-efi)..."
+            grub-mkstandalone \
+                --format=i386-efi \
+                --output="$_basedir/image_tree/scratch/bootia32.efi" \
+                --locales="" \
+                --fonts="" \
+                "boot/grub/grub.cfg=$_basedir/image_tree/scratch/grub.cfg"
+        fi
     else
         sudo mkdir -p "$_basedir/image_tree/chroot/scratch"
         sudo cp "$_basedir/image_tree/scratch/grub.cfg" "$_basedir/image_tree/chroot/scratch/"
@@ -440,6 +460,9 @@ EOF
     sudo mkfs.vfat efiboot.img
     mmd -i efiboot.img efi efi/boot
     mcopy -i efiboot.img "./$_efi_name" ::efi/boot/
+    if [ "$_arch" = "amd64" ] && [ -f "./bootia32.efi" ]; then
+        mcopy -i efiboot.img "./bootia32.efi" ::efi/boot/
+    fi
 
     if [ "$_arch" = "amd64" ]; then
         log_step "Building legacy BIOS bootloader..."

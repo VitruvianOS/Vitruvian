@@ -10,7 +10,7 @@ get_base_packages() {
                 " procps vim-tiny libbinutils openssh-server locales xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber" \
-                " grub-common grub-efi-amd64-bin grub-pc-bin"
+                " grub-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin"
             ;;
         arm64)
             printf '%s' \
@@ -121,7 +121,7 @@ get_raw_image_packages() {
             printf '%s' \
                 "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
                 " linux-image-rt-amd64 grub-common grub2-common grub-efi-amd64" \
-                " grub-efi-amd64-bin grub-pc-bin xfsprogs"
+                " grub-efi-amd64-bin grub-efi-ia32 grub-efi-ia32-bin grub-pc-bin xfsprogs"
             ;;
         arm64)
             printf '%s' \

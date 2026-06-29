@@ -127,9 +127,17 @@ beos_string "transport_address" "" "/home/config/settings/printers/Save as PDF"
 beos_string "connection" "Local" "/home/config/settings/printers/Save as PDF"
 beos_string "state" "free" "/home/config/settings/printers/Save as PDF"
 
+# Tracker New Templates — extract files+xattrs into the user template dir.
+# Must run before the beos_mime calls below, which stamp MIME types onto
+# these template files.
+if [ -f /usr/share/vos/templates_attrs.tar ]; then
+    mkdir -p "/home/config/settings/Tracker/Tracker New Templates"
+    tar --xattrs -xf /usr/share/vos/templates_attrs.tar \
+        -C "/home/config/settings/Tracker/Tracker New Templates"
+fi
+
 # MIME type attributes for Tracker New Templates
 # (enables Tracker's File > New menu to create the right file type)
-
 beos_mime BEOS:TYPE "text/plain" "/home/config/settings/Tracker/Tracker New Templates/text file"
 beos_mime BEOS:TYPE "text/x-source-code" "/home/config/settings/Tracker/Tracker New Templates/C++ source"
 beos_mime BEOS:TYPE "text/x-source-code" "/home/config/settings/Tracker/Tracker New Templates/C++ header"
@@ -153,13 +161,6 @@ VITRUVIAN_PROFILE_EOF
 # preserve xattrs in install(DIRECTORY), so we extract here instead.
 mkdir -p /system/data
 tar --xattrs -xf /usr/share/vos/mime_db.tar -C /system/data/
-
-# Tracker New Templates — extract files+xattrs into the user template dir.
-if [ -f /usr/share/vos/templates_attrs.tar ]; then
-    mkdir -p "/home/config/settings/Tracker/Tracker New Templates"
-    tar --xattrs -xf /usr/share/vos/templates_attrs.tar \
-        -C "/home/config/settings/Tracker/Tracker New Templates"
-fi
 
 # App binary xattrs — restore BeOS attrs to installed binaries.
 # apps_attrs.tar contains zero-byte placeholder files at the install paths,

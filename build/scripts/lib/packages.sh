@@ -120,8 +120,8 @@ get_raw_image_packages() {
             # /EFI/BOOT/BOOTX64.EFI fallback used by removable-media boot.
             printf '%s' \
                 "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
-                " linux-image-rt-amd64 grub-common grub2-common grub-efi-amd64" \
-                " grub-efi-amd64-bin grub-efi-ia32 grub-efi-ia32-bin grub-pc-bin xfsprogs"
+                " linux-image-rt-amd64 grub-common grub2-common" \
+                " grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin xfsprogs"
             ;;
         arm64)
             printf '%s' \

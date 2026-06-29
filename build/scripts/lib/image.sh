@@ -207,11 +207,17 @@ depmod -v \"\$_kver\"
 ln -sfn boot/vmlinuz-\$_kver /vmlinuz
 ln -sfn boot/initrd.img-\$_kver /initrd.img
 
-# os-prober would scan host disks via rbound /dev — silence it.
-sed -i '/^GRUB_DISABLE_OS_PROBER=/d' /etc/default/grub
-echo 'GRUB_DISABLE_OS_PROBER=true' >> /etc/default/grub
-sed -i 's/^GRUB_TIMEOUT=[0-9]\\\+/GRUB_TIMEOUT=0/' /etc/default/grub
-sed -i 's|^GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*|GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash loglevel=3 systemd.show_status=0 rd.udev.log_priority=3|' /etc/default/grub
+# Write /etc/default/grub from scratch — grub-common's postinst doesn't
+# always populate it in a fresh chroot, and we own every setting here.
+mkdir -p /etc/default
+cat > /etc/default/grub <<'GRUBEOF'
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=0
+GRUB_DISTRIBUTOR=\"Vitruvian\"
+GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash loglevel=3 systemd.show_status=0 rd.udev.log_priority=3\"
+GRUB_CMDLINE_LINUX=\"\"
+GRUB_DISABLE_OS_PROBER=true
+GRUBEOF
 
 # No grub-install — the EFI loader is built by the host via grub-mkstandalone
 # after the chroot exits (same approach as the ISO). update-grub is still run

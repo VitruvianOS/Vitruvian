@@ -222,6 +222,9 @@ GRUBEOF
 # No grub-install — the EFI loader is built by the host via grub-mkstandalone
 # after the chroot exits (same approach as the ISO). update-grub is still run
 # so /boot/grub/grub.cfg exists for users who later want to edit it.
+# /boot/grub is normally created by grub-pc / grub-efi-amd64 postinst, which
+# we don't install (the -bin packages alone don't create it).
+mkdir -p /boot/grub
 update-grub
 
 cat > /etc/fstab <<FSTABEOF

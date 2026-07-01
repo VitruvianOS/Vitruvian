@@ -234,6 +234,18 @@ DeclareDependency(
 	RUNTIMES  "libbacktrace-dev (>= 0.1-4)"
 )
 
+DeclareDependency(
+	GDB
+	PACKAGES  "gdb"
+	RUNTIMES  "gdb"
+)
+
+DeclareDependency(
+	STRACE
+	PACKAGES  "strace"
+	RUNTIMES  "strace"
+)
+
 endif()
 
 # TODO

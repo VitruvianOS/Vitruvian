@@ -39,9 +39,9 @@ _init_locked()
 {
 	const char* dir = getenv("VREF_TRACE");
 	if (dir == NULL || dir[0] == '\0')
-		dir = "/var/log/vref";
+		dir = "/tmp";
 
-	mkdir(dir, 0755);
+	mkdir(dir, 01777);
 
 	char comm[64] = "unknown";
 	int fd = open("/proc/self/comm", O_RDONLY);

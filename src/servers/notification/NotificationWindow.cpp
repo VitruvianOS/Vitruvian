@@ -374,6 +374,13 @@ NotificationWindow::_LoadSettings(bool startMonitor)
 
 	path.Append(kSettingsFile);
 
+	// kSettingsFile is "system/notifications" — ensure the parent dir
+	// exists, otherwise BFile(B_CREATE_FILE) fails silently and the
+	// later watch_node trips a misleading alert.
+	BPath parent;
+	if (path.GetParent(&parent) == B_OK)
+		create_directory(parent.Path(), 0755);
+
 	BFile file(path.Path(), B_READ_ONLY | B_CREATE_FILE);
 	settings.Unflatten(&file);
 

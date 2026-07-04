@@ -4,6 +4,9 @@ set(CORE_APPLICATIONS
 )
 ImageInclude("/system/" ${CORE_APPLICATIONS})
 
+# Greeter binary — /system/servers/ so janus finds it by name.
+ImageInclude("/system/servers" vitruvian-login)
+
 set(SYSTEM_APPS
 	AboutSystem
 	ActivityMonitor

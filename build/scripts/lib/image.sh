@@ -160,7 +160,6 @@ create_raw() {
     sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
 
     log_step "Configuring system, installing Vitruvian, and setting up bootloader..."
-    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass"
 
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
@@ -234,7 +233,10 @@ host_shared      $_guest_mnt  9p     trans=virtio,version=9p2000.L,rw,nofail,x-s
 FSTABEOF
 
 mkdir -p $_guest_mnt
-rm -rf /localdeb"
+rm -rf /localdeb" || die "raw chroot bash-c failed"
+
+    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
+        || die "_common_chroot_setup failed"
 
     case "$_arch" in
         amd64)   _boot_efi="BOOTX64.EFI" ;;
@@ -356,11 +358,14 @@ create_iso() {
 
     _iso_pkgs="$(get_iso_image_packages "$_arch")"
     log_step "Installing debs into chroot..."
-    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "echo 'vitruvian' > /etc/hostname && \
-apt remove -y vos nexus-dkms || true && \
-apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs && \
-apt install -y -f --reinstall /tmp/*.deb && \
-depmod -v $_imagekernelversion && echo 'root:live' | chpasswd; exit"
+    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+apt remove -y vos nexus-dkms || true
+apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
+apt install -y -f --reinstall /tmp/*.deb
+depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel stage)"
+
+    _common_chroot_setup "$_chroot_dir" "vitruvian" "vitruvio" "live" \
+        || die "_common_chroot_setup failed"
 
     if [ "$BUILD_TYPE" = "Debug" ]; then
         log_step "Configuring SSH server for debug access..."
@@ -553,9 +558,14 @@ _common_chroot_setup() {
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 echo '$_hostname' > /etc/hostname
 echo 'root:$_pass' | chpasswd
-id -u $_user >/dev/null 2>&1 || useradd -m -s /bin/bash $_user
+# useradd -m skips the skel copy if the home already exists (stale chroot).
+userdel -f $_user || echo 'userdel: no such user (ok on first build)' >&2
+rm -rf /home/$_user
+useradd -m -s /bin/bash $_user
 echo '$_user:$_pass' | chpasswd
-adduser $_user sudo 2>/dev/null || true
+adduser $_user sudo
+for g in input video render; do adduser $_user \$g; done
+test -s /home/$_user/config/settings/boot/UserBootscript
 
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<'LOGEOF'
@@ -584,7 +594,7 @@ for _u in \\
     sys-kernel-debug.mount \\
     sys-kernel-tracing.mount; do
     systemctl mask \"\$_u\" 2>/dev/null || true
-done"
+done" || die "_common_chroot_setup chroot bash-c failed"
 }
 
 create_raspberry() {
@@ -646,12 +656,13 @@ create_raspberry() {
     fi
 
     log_step "Configuring system..."
-    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass"
-
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "apt update && apt install -y $_board_pkgs
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
-fi"
+fi" || die "raspberry chroot bash-c failed"
+
+    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
+        || die "_common_chroot_setup failed"
 
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
     log_info "Kernel version: $_kver"
@@ -811,12 +822,13 @@ create_uboot_board() {
     fi
 
     log_step "Configuring $_label system..."
-    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass"
-
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "apt update && apt install -y $_board_pkgs u-boot-menu
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
-fi"
+fi" || die "uboot chroot bash-c failed"
+
+    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
+        || die "_common_chroot_setup failed"
 
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
     log_info "Kernel version: $_kver"

@@ -9,8 +9,10 @@ set(SYSTEMD_SERVICES
   data/systemd/notification_server.service
   data/systemd/deskbar.service
   data/systemd/tracker.service
-  data/systemd/userbootscript.service
+  data/systemd/userbootscript@.service
 )
+
+ImageIncludeFile("data/pam.d/vitruvian-session" "/etc/pam.d")
 
 install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)
 
@@ -44,12 +46,12 @@ ImageIncludeFile("data/etc/profile" "/system/settings/etc")
 ImageIncludeFile("data/etc/inputrc" "/system/settings/etc")
 ImageIncludeDir("data/etc/profile.d" "/system/settings/etc/")
 
-# User config boot scripts
-ImageIncludeFile("data/config/boot/UserBootscript" "/home/config/settings/boot")
-ImageIncludeFile("data/config/boot/UserSetupEnvironment.sample" "/home/config/settings/boot")
+# Skel: copied into each user's ~/config by useradd -m.
+ImageIncludeFile("data/config/boot/UserBootscript" "/etc/skel/config/settings/boot")
+ImageIncludeFile("data/config/boot/UserSetupEnvironment.sample" "/etc/skel/config/settings/boot")
 
-# User first-login flag
-ImageIncludeFile("data/settings/first_login" "/home/config/settings")
+# The first_login marker is written by /system/boot/first_login/* on first
+# successful run. Do NOT ship it — that would signal "already provisioned".
 
 # Deskbar menu entries descriptor file
 ImageIncludeFile("src/data/deskbar/menu_entries" "/system/data/deskbar")

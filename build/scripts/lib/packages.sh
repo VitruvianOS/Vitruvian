@@ -55,7 +55,7 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev" \
+                " libxkbcommon-dev libsystemd-dev libpam0g-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libglu1-mesa-dev"
             ;;
@@ -66,7 +66,7 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev" \
+                " libxkbcommon-dev libsystemd-dev libpam0g-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libglu1-mesa-dev"
             ;;
@@ -77,7 +77,7 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev" \
+                " libxkbcommon-dev libsystemd-dev libpam0g-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         riscv64)
@@ -87,7 +87,7 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev" \
+                " libxkbcommon-dev libsystemd-dev libpam0g-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         *)

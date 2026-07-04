@@ -25,7 +25,8 @@ function( ImageIncludeFile source dest )
 endfunction()
 
 function( ImageIncludeDir source dest )
-	install(DIRECTORY ${source} DESTINATION ${dest})
+	# Preserve +x on shipped scripts (e.g. /system/boot/first_login/*).
+	install(DIRECTORY ${source} DESTINATION ${dest} USE_SOURCE_PERMISSIONS)
 endfunction()
 
 function( ImageCreateDir dest )

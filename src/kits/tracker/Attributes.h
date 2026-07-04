@@ -98,6 +98,8 @@ namespace BPrivate {
 
 #define kAttrPoseInfo_be					"_trk/pinfo"
 #define kAttrPoseInfo_le					"_trk/pinfo_le"
+
+#define kAttrHidden							"SYS:HIDDEN"
 #define kAttrDisksPoseInfo_be				"_trk/d_pinfo"
 #define kAttrDisksPoseInfo_le				"_trk/d_pinfo_le"
 #define kAttrTrashPoseInfo_be				"_trk/t_pinfo"

@@ -22,7 +22,7 @@ static const bool kDefaultSingleWindowBrowse = false;
 static const bool kDefaultShowNavigator = false;
 static const bool kDefaultTransparentSelection = true;
 static const bool kDefaultSortFolderNamesFirst = true;
-static const bool kDefaultHideDotFiles = false;
+static const bool kDefaultHideDotFiles = true;
 static const bool kDefaultTypeAheadFiltering = false;
 static const bool kDefaultGenerateImageThumbnails = true;
 

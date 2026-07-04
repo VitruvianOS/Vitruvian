@@ -1,7 +1,7 @@
 # Copyright 2019-2026, The Vitruvian Project. All rights reserved.
 # Distributed under the terms of the MIT License.
 
-export HOME=/home
+# HOME comes from PAM/login (from /etc/passwd) — do not override.
 export LC_CTYPE="en_US.UTF-8"
 
 BUILDHOME=/system/develop

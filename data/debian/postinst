@@ -22,18 +22,10 @@ ln -sf /lib /system/lib
 ln -sf /tmp /system/cache
 ln -sf /var /system/var
 
-# Home and Desktop
+# Per-user Desktop/Home and Desktop/System symlinks are created on first
+# login by /system/boot/first_login/00-desktop-shortcuts, not here.
 
-#TODO this should be done on login by the user so that we correct
-# the right multiuser home.
-mkdir -p /home/Desktop
-ln -sf /home /home/Desktop/Home
-#ln -sf / /home/Desktop/Boot
-ln -sf /system /home/Desktop/System
-
-# Deskbar menu
-
-mkdir -p /home/config/settings/deskbar/menu/
+mkdir -p /etc/skel/config/settings/deskbar/menu/
 
 mkdir -p /system/data/deskbar/menu/
 mkdir -p /system/data/deskbar/menu/Applications/
@@ -51,11 +43,9 @@ mkdir -p /system/boot/post_install/
 mkdir -p /system/boot/first_login/
 mkdir -p /system/settings/etc/profile.d/
 
-# Tracker new templates and printer directories
-
-mkdir -p "/home/config/settings/Tracker/Tracker New Templates"
-mkdir -p /home/config/settings/printers/Preview
-mkdir -p "/home/config/settings/printers/Save as PDF"
+mkdir -p "/etc/skel/config/settings/Tracker/Tracker New Templates"
+mkdir -p /etc/skel/config/settings/printers/Preview
+mkdir -p "/etc/skel/config/settings/printers/Save as PDF"
 
 # BeOS-format xattr helpers using setfattr.
 #
@@ -88,13 +78,22 @@ beos_mime() {
 	setfattr -n "user.beos.${name}" --value="0x${hex}" "${target}"
 }
 
+# B_UINT32_TYPE = 'UINT' = 0x554e4954, LE bytes 54 49 4e 55.
+# Value: little-endian uint32 == 1.
+beos_hidden() {
+	local target="$1"
+	[ -e "$target" ] || return 0
+	setfattr -n "user.beos.SYS:HIDDEN" --value="0x54494e5501000000" "${target}" 2>/dev/null || true
+}
+
 # Directory identity attributes (SYS:NAME)
 # Tracker reads these to assign special folder icons.
 
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_SYSTEM_DIRECTORY:system" /system
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_DIRECTORY:home" /home
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_DESKTOP_DIRECTORY:home" /home/Desktop
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_CONFIG_DIRECTORY:config" /home/config
+# B_DESKTOP_DIRECTORY xattr is stamped per-user at first login (there is
+# no shared /home/Desktop). B_USER_CONFIG_DIRECTORY rides skel via cp -a.
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_CONFIG_DIRECTORY:config" /etc/skel/config
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_APPS_DIRECTORY:apps" /system/apps
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_PREFERENCES_DIRECTORY:preferences" /system/preferences
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_SYSTEM_DEVELOP_DIRECTORY:develop" /system/develop
@@ -102,7 +101,14 @@ beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Applications:Applic
 beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Demos:Demos" /system/data/deskbar/menu/Demos
 beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Preferences:Preferences" /system/data/deskbar/menu/Preferences
 beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Desktop applets:Desktop applets" "/system/data/deskbar/menu/Desktop applets"
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates:Tracker New Templates" "/home/config/settings/Tracker/Tracker New Templates"
+beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates:Tracker New Templates" "/etc/skel/config/settings/Tracker/Tracker New Templates"
+
+# Hide Linux-userland root dirs; /boot /system /home /dev /tmp stay visible.
+for _p in /bin /sbin /lib /lib32 /lib64 /libx32 /etc /proc /sys /run \
+		/usr /var /mnt /media /opt /srv /root /lost+found /initrd.img \
+		/initrd.img.old /vmlinuz /vmlinuz.old /localdeb; do
+	beos_hidden "$_p"
+done
 
 # Deskbar virtual directory descriptor
 # Setting this MIME type makes Model::IsVirtualDirectory() return true, enabling
@@ -111,36 +117,36 @@ beos_mime BEOS:TYPE "application/x-vnd.haiku-virtual-directory" /system/data/des
 
 # Printer directory attributes (identity + settings read by the print server)
 
-beos_mime BEOS:TYPE "application/x-vnd.Be.printer" /home/config/settings/printers/Preview
-beos_string "Printer Name" "Preview" /home/config/settings/printers/Preview
-beos_string "Driver Name" "Preview" /home/config/settings/printers/Preview
-beos_string "transport" "" /home/config/settings/printers/Preview
-beos_string "transport_address" "" /home/config/settings/printers/Preview
-beos_string "connection" "Local" /home/config/settings/printers/Preview
-beos_string "state" "free" /home/config/settings/printers/Preview
+beos_mime BEOS:TYPE "application/x-vnd.Be.printer" /etc/skel/config/settings/printers/Preview
+beos_string "Printer Name" "Preview" /etc/skel/config/settings/printers/Preview
+beos_string "Driver Name" "Preview" /etc/skel/config/settings/printers/Preview
+beos_string "transport" "" /etc/skel/config/settings/printers/Preview
+beos_string "transport_address" "" /etc/skel/config/settings/printers/Preview
+beos_string "connection" "Local" /etc/skel/config/settings/printers/Preview
+beos_string "state" "free" /etc/skel/config/settings/printers/Preview
 
-beos_mime BEOS:TYPE "application/x-vnd.Be.printer" "/home/config/settings/printers/Save as PDF"
-beos_string "Printer Name" "Save as PDF" "/home/config/settings/printers/Save as PDF"
-beos_string "Driver Name" "PDF Writer" "/home/config/settings/printers/Save as PDF"
-beos_string "transport" "Print To File" "/home/config/settings/printers/Save as PDF"
-beos_string "transport_address" "" "/home/config/settings/printers/Save as PDF"
-beos_string "connection" "Local" "/home/config/settings/printers/Save as PDF"
-beos_string "state" "free" "/home/config/settings/printers/Save as PDF"
+beos_mime BEOS:TYPE "application/x-vnd.Be.printer" "/etc/skel/config/settings/printers/Save as PDF"
+beos_string "Printer Name" "Save as PDF" "/etc/skel/config/settings/printers/Save as PDF"
+beos_string "Driver Name" "PDF Writer" "/etc/skel/config/settings/printers/Save as PDF"
+beos_string "transport" "Print To File" "/etc/skel/config/settings/printers/Save as PDF"
+beos_string "transport_address" "" "/etc/skel/config/settings/printers/Save as PDF"
+beos_string "connection" "Local" "/etc/skel/config/settings/printers/Save as PDF"
+beos_string "state" "free" "/etc/skel/config/settings/printers/Save as PDF"
 
 # Tracker New Templates — extract files+xattrs into the user template dir.
 # Must run before the beos_mime calls below, which stamp MIME types onto
 # these template files.
 if [ -f /usr/share/vos/templates_attrs.tar ]; then
-    mkdir -p "/home/config/settings/Tracker/Tracker New Templates"
+    mkdir -p "/etc/skel/config/settings/Tracker/Tracker New Templates"
     tar --xattrs -xf /usr/share/vos/templates_attrs.tar \
-        -C "/home/config/settings/Tracker/Tracker New Templates"
+        -C "/etc/skel/config/settings/Tracker/Tracker New Templates"
 fi
 
 # MIME type attributes for Tracker New Templates
 # (enables Tracker's File > New menu to create the right file type)
-beos_mime BEOS:TYPE "text/plain" "/home/config/settings/Tracker/Tracker New Templates/text file"
-beos_mime BEOS:TYPE "text/x-source-code" "/home/config/settings/Tracker/Tracker New Templates/C++ source"
-beos_mime BEOS:TYPE "text/x-source-code" "/home/config/settings/Tracker/Tracker New Templates/C++ header"
+beos_mime BEOS:TYPE "text/plain" "/etc/skel/config/settings/Tracker/Tracker New Templates/text file"
+beos_mime BEOS:TYPE "text/x-source-code" "/etc/skel/config/settings/Tracker/Tracker New Templates/C++ source"
+beos_mime BEOS:TYPE "text/x-source-code" "/etc/skel/config/settings/Tracker/Tracker New Templates/C++ header"
 
 # Source Vitruvian profile from bash login shells (makes Terminal show the
 # welcome message and Vitruvian environment setup)
@@ -181,4 +187,4 @@ fi
 
 # Enable system services
 
-systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript.service
+systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript@vitruvio.service

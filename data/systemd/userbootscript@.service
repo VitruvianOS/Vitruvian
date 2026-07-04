@@ -1,0 +1,17 @@
+[Unit]
+Description=Vitruvian user boot script for %i
+After=janus.service
+Before=tracker.service deskbar.service
+Wants=janus.service
+
+[Service]
+Type=oneshot
+User=%i
+Group=%i
+Environment=HOME=/home/%i
+ExecStart=/bin/sh /home/%i/config/settings/boot/UserBootscript
+StandardOutput=append:/var/log/userbootscript-%i.log
+StandardError=append:/var/log/userbootscript-%i.log
+
+[Install]
+WantedBy=graphical.target

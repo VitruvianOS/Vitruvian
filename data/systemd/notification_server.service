@@ -1,4 +1,5 @@
 [Unit]
+ConditionPathExists=!/var/lib/vitruvian/greeter-enabled
 Description=Vitruvian notification_server
 After=janus.service app_server.service
 Requires=janus.service app_server.service

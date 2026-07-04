@@ -1,6 +1,6 @@
 [Unit]
+ConditionPathExists=!/var/lib/vitruvian/greeter-enabled
 Description=Vitruvian app_server (display server)
-Conflicts=getty@tty1.service
 After=janus.service registrar.service
 Requires=janus.service registrar.service
 

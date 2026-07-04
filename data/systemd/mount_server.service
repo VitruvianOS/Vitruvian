@@ -1,6 +1,5 @@
 [Unit]
 Description=Vitruvian mount_server
-Conflicts=getty@tty1.service
 After=janus.service registrar.service
 Requires=janus.service registrar.service
 

@@ -1,6 +1,6 @@
 [Unit]
+ConditionPathExists=!/var/lib/vitruvian/greeter-enabled
 Description=Vitruvian Deskbar
-Conflicts=getty@tty1.service
 After=janus.service input_server.service notification_server.service
 Requires=janus.service
 

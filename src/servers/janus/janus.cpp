@@ -22,8 +22,10 @@
 #include <unistd.h>
 
 extern "C" {
+#include <crypt.h>
 #include <libseat.h>
 #include <security/pam_appl.h>
+#include <shadow.h>
 }
 
 #include <AppDefs.h>
@@ -46,6 +48,8 @@ struct KnownServer {
 	const char* signature;
 	const char* port_name;
 	bool        needs_drm;
+	// Drop to sUserUid on exec. janus is the sole privilege holder;
+	// everything else should be run_as_user.
 	bool        run_as_user;
 };
 
@@ -53,15 +57,16 @@ static const KnownServer kKnownServers[] = {
 	{ "registrar",
 	  B_REGISTRAR_SIGNATURE,
 	  B_REGISTRAR_PORT_NAME,
-	  false, false },
+	  false, true  },
 	{ "app_server",
 	  "application/x-vnd.Haiku-app_server",
 	  "picasso",
-	  true,  false },
+	  true,  true  },
 	{ "input_server",
 	  "application/x-vnd.Be-input_server",
 	  NULL,
 	  false, true  },
+	// Root: mount(2) needs CAP_SYS_ADMIN.
 	{ "mount_server",
 	  "application/x-vnd.Haiku-mount_server",
 	  NULL,
@@ -78,21 +83,66 @@ static const KnownServer kKnownServers[] = {
 	  "application/x-vnd.Be-TRAK",
 	  NULL,
 	  false, true  },
+	{ "vitruvian-login",
+	  "application/x-vnd.Vitruvian-login",
+	  NULL,
+	  false, true  },
 	{ NULL, NULL, NULL, false, false }
 };
 
 
-// Desktop user resolved once from $VITRUVIAN_DEFAULT_USER (default vitruvio).
+// System mode: janus started as root, resolves $VITRUVIAN_DEFAULT_USER.
+// User mode: janus started via `systemctl --user`, inherits caller's uid.
 static char  sUserName[64]        = "";
 static char  sUserHome[PATH_MAX]  = "";
 static uid_t sUserUid             = (uid_t)-1;
 static gid_t sUserGid             = (gid_t)-1;
+static bool  sSystemMode          = false;
+static char  sRuntimeDir[PATH_MAX]= "";
+// Set from sentinel /var/lib/vitruvian/greeter-enabled: spawn the
+// pre-auth chain as vos_login, swap to authenticated user on LOGIN_OK.
+static bool  sGreeterMode         = false;
+
+
+static const char*
+runtime_dir()
+{
+	if (sRuntimeDir[0] != '\0')
+		return sRuntimeDir;
+
+	const char* xdg = getenv("XDG_RUNTIME_DIR");
+	if (xdg != NULL && *xdg != '\0') {
+		snprintf(sRuntimeDir, sizeof(sRuntimeDir), "%s/vitruvian", xdg);
+	} else {
+		snprintf(sRuntimeDir, sizeof(sRuntimeDir), "/run/vitruvian");
+	}
+	mkdir(sRuntimeDir, 0755);
+	return sRuntimeDir;
+}
 
 
 static bool
 resolve_user()
 {
-	const char* name = getenv("VITRUVIAN_DEFAULT_USER");
+	if (getuid() != 0) {
+		struct passwd* pw = getpwuid(getuid());
+		if (pw == NULL)
+			return false;
+		strncpy(sUserName, pw->pw_name, sizeof(sUserName) - 1);
+		strncpy(sUserHome, pw->pw_dir,  sizeof(sUserHome) - 1);
+		sUserUid = pw->pw_uid;
+		sUserGid = pw->pw_gid;
+		sSystemMode = false;
+		return true;
+	}
+
+	sSystemMode = true;
+
+	// Greeter mode: initial sUserUid = vos_login. handle_login_ok flips
+	// it to the authenticated user before spawning the post-auth chain.
+	const char* name = sGreeterMode
+		? "vos_login"
+		: getenv("VITRUVIAN_DEFAULT_USER");
 	if (name == NULL || *name == '\0')
 		name = "vitruvio";
 
@@ -127,6 +177,12 @@ pam_null_conv(int num, const struct pam_message** /*msg*/,
 static bool
 init_pam_session()
 {
+	if (!sSystemMode) {
+		// pam_systemd from the login shell already owns the session.
+		printf("janus: user-mode, inheriting PAM environment from login\n");
+		return true;
+	}
+
 	static struct pam_conv conv = { pam_null_conv, NULL };
 	int r = pam_start("vitruvian-session", sUserName, &conv, &sPamHandle);
 	if (r != PAM_SUCCESS) {
@@ -218,12 +274,16 @@ run_first_login_for_user()
 		return;
 	}
 	if (pid == 0) {
-		if (initgroups(sUserName, sUserGid) != 0
-				|| setgid(sUserGid) != 0
-				|| setuid(sUserUid) != 0) {
-			fprintf(stderr, "janus: first_login setuid failed: %s\n",
-				strerror(errno));
-			_exit(1);
+		// User-mode: already running as target user; setuid to self
+		// would EPERM without CAP_SETUID.
+		if (sSystemMode) {
+			if (initgroups(sUserName, sUserGid) != 0
+					|| setgid(sUserGid) != 0
+					|| setuid(sUserUid) != 0) {
+				fprintf(stderr, "janus: first_login setuid failed: %s\n",
+					strerror(errno));
+				_exit(1);
+			}
 		}
 		setenv("HOME",    sUserHome, 1);
 		setenv("USER",    sUserName, 1);
@@ -474,7 +534,10 @@ handle_get_launch_data(BMessage* msg)
 static void
 handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
-	if (sender_uid != 0) {
+	// System-mode: only accept from root. User-mode: only accept from
+	// our own uid (i.e. from own-session processes).
+	uid_t allowed = sSystemMode ? (uid_t)0 : sUserUid;
+	if (sender_uid != allowed) {
 		fprintf(stderr, "janus: B_LAUNCH_JOB rejected from uid=%u\n",
 			(unsigned)sender_uid);
 		BPrivate::KMessage reply(B_NOT_ALLOWED);
@@ -559,6 +622,10 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 			}
 		}
 
+		// Pre-auth app_server reads evdev directly; input_server isn't up.
+		if (sGreeterMode && strcmp(name, "app_server") == 0)
+			setenv("APP_SERVER_EMBED_INPUT", "1", 1);
+
 		if (sUserUid != (uid_t)-1) {
 			snprintf(buf, sizeof(buf), "%u", (unsigned)sUserUid);
 			setenv("SUDO_UID", buf, 1);
@@ -566,7 +633,8 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 			setenv("SUDO_GID", buf, 1);
 		}
 
-		if (ks->run_as_user) {
+		// User-mode: already correct uid; initgroups would need CAP_SETGID.
+		if (ks->run_as_user && sSystemMode) {
 			if (sUserUid == (uid_t)-1) {
 				fprintf(stderr, "janus: %s wants run_as_user but user "
 					"not resolved\n", name);
@@ -654,6 +722,209 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 }
 
 
+// Verify plaintext password against /etc/shadow. Assumes the caller has
+// already gated on sender_uid.
+static bool
+verify_password(const char* username, const char* password)
+{
+	if (username == NULL || *username == '\0' || password == NULL)
+		return false;
+
+	struct spwd sp_buf;
+	struct spwd* sp = NULL;
+	char buf[4096];
+	if (getspnam_r(username, &sp_buf, buf, sizeof(buf), &sp) != 0
+			|| sp == NULL || sp->sp_pwdp == NULL || *sp->sp_pwdp == '\0') {
+		return false;
+	}
+
+	// Reject locked / disabled accounts (leading ! or *).
+	if (sp->sp_pwdp[0] == '!' || sp->sp_pwdp[0] == '*')
+		return false;
+
+	struct crypt_data cd;
+	memset(&cd, 0, sizeof(cd));
+	const char* hashed = crypt_r(password, sp->sp_pwdp, &cd);
+	if (hashed == NULL)
+		return false;
+	return strcmp(hashed, sp->sp_pwdp) == 0;
+}
+
+
+// SIGTERM the pre-auth chain and wait (up to ~2s) for actual exit —
+// DRM master isn't released until the process is reaped.
+static void
+kill_pre_auth_chain()
+{
+	pid_t victims[JANUS_MAX_APPS];
+	int   n = 0;
+
+	pthread_mutex_lock(&sAppsLock);
+	for (int i = 0; i < sAppCount; i++) {
+		bool preauth = strcmp(sApps[i].name, "vitruvian-login") == 0
+			|| strcmp(sApps[i].name, "app_server") == 0;
+		if (preauth && sApps[i].pid > 0)
+			victims[n++] = sApps[i].pid;
+	}
+	pthread_mutex_unlock(&sAppsLock);
+
+	for (int i = 0; i < n; i++)
+		kill(victims[i], SIGTERM);
+
+	for (int wait_ms = 0; wait_ms < 2000; wait_ms += 50) {
+		bool all_gone = true;
+		for (int i = 0; i < n; i++) {
+			if (victims[i] > 0 && kill(victims[i], 0) == 0) {
+				all_gone = false;
+				break;
+			}
+		}
+		if (all_gone)
+			break;
+		usleep(50 * 1000);
+	}
+	for (int i = 0; i < n; i++) {
+		if (kill(victims[i], 0) == 0) {
+			fprintf(stderr, "janus: pre-auth pid=%d slow to exit; SIGKILL\n",
+				(int)victims[i]);
+			kill(victims[i], SIGKILL);
+		}
+	}
+
+	// Purge stale entries so sApps[] doesn't reference dead pids.
+	pthread_mutex_lock(&sAppsLock);
+	int keep = 0;
+	for (int i = 0; i < sAppCount; i++) {
+		bool preauth = strcmp(sApps[i].name, "vitruvian-login") == 0
+			|| strcmp(sApps[i].name, "app_server") == 0;
+		if (preauth)
+			continue;
+		if (i != keep)
+			sApps[keep] = sApps[i];
+		keep++;
+	}
+	sAppCount = keep;
+	pthread_mutex_unlock(&sAppsLock);
+}
+
+
+// Self-fire the post-auth chain via janus_launch (B_LAUNCH_JOB back
+// into our own daemon_loop).
+static void
+spawn_post_auth_chain()
+{
+	static const char* const kChain[] = {
+		"app_server", "input_server", "mount_server",
+		"notification_server", "Deskbar", "Tracker", NULL
+	};
+	for (int i = 0; kChain[i] != NULL; i++) {
+		pid_t pid = fork();
+		if (pid < 0) {
+			fprintf(stderr, "janus: post-auth fork(%s): %s\n",
+				kChain[i], strerror(errno));
+			continue;
+		}
+		if (pid == 0) {
+			execl("/system/servers/janus_launch",
+				"janus_launch", kChain[i], NULL);
+			_exit(127);
+		}
+	}
+}
+
+
+static void
+handle_login_ok(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	struct passwd* vl = getpwnam("vos_login");
+	uid_t allowed = (vl != NULL) ? vl->pw_uid : (uid_t)-1;
+	if (allowed == (uid_t)-1 || sender_uid != allowed) {
+		fprintf(stderr, "janus: B_JANUS_LOGIN_OK rejected from uid=%u "
+			"(expected vos_login=%u)\n",
+			(unsigned)sender_uid, (unsigned)allowed);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	const char* user = NULL;
+	if (kmsg.FindString("user", &user) != B_OK || user == NULL) {
+		BPrivate::KMessage reply(B_BAD_VALUE);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	struct passwd* pw = getpwnam(user);
+	if (pw == NULL) {
+		fprintf(stderr, "janus: LOGIN_OK for unknown user %s\n", user);
+		BPrivate::KMessage reply(B_NAME_NOT_FOUND);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	printf("janus: LOGIN_OK — switching session to %s (uid=%u)\n",
+		user, (unsigned)pw->pw_uid);
+
+	// Reply first — the greeter needs to know it can exit before SIGTERM.
+	BPrivate::KMessage reply(B_OK);
+	kmsg.SendReply(&reply);
+
+	close_pam_session();
+	kill_pre_auth_chain();
+
+	strncpy(sUserName, pw->pw_name, sizeof(sUserName) - 1);
+	sUserName[sizeof(sUserName) - 1] = '\0';
+	strncpy(sUserHome, pw->pw_dir,  sizeof(sUserHome) - 1);
+	sUserHome[sizeof(sUserHome) - 1] = '\0';
+	sUserUid = pw->pw_uid;
+	sUserGid = pw->pw_gid;
+
+	if (!init_pam_session())
+		fprintf(stderr, "janus: post-auth PAM open failed; continuing\n");
+	run_first_login_for_user();
+
+	spawn_post_auth_chain();
+}
+
+
+static void
+handle_auth_request(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	// Only vos_login may ask janus to verify credentials.
+	struct passwd* vl = getpwnam("vos_login");
+	uid_t allowed = (vl != NULL) ? vl->pw_uid : (uid_t)-1;
+	if (allowed == (uid_t)-1 || sender_uid != allowed) {
+		fprintf(stderr, "janus: B_JANUS_AUTH_REQUEST rejected from uid=%u "
+			"(expected vos_login=%u)\n",
+			(unsigned)sender_uid, (unsigned)allowed);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	const char* user = NULL;
+	const char* pass = NULL;
+	if (kmsg.FindString("user", &user) != B_OK
+			|| kmsg.FindString("password", &pass) != B_OK
+			|| user == NULL || pass == NULL) {
+		BPrivate::KMessage reply(B_BAD_VALUE);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	bool ok = verify_password(user, pass);
+	if (!ok) {
+		BPrivate::KMessage reply(B_PERMISSION_DENIED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	BPrivate::KMessage reply(B_OK);
+	reply.AddString("user", user);
+	kmsg.SendReply(&reply);
+}
+
+
 static void
 check_pending_launches()
 {
@@ -699,8 +970,8 @@ check_pending_launches()
 
 			// Write PID file for systemd (Type=forking + PIDFile=)
 			char pidpath[128];
-			snprintf(pidpath, sizeof(pidpath), "/run/vitruvian/%s.pid",
-				sApps[idx].name);
+			snprintf(pidpath, sizeof(pidpath), "%s/%s.pid",
+				runtime_dir(), sApps[idx].name);
 			FILE* f = fopen(pidpath, "w");
 			if (f != NULL) {
 				fprintf(f, "%d\n", (int)sApps[idx].pid);
@@ -759,6 +1030,12 @@ launch_daemon_thread(void* /*data*/)
 			if (kmsg.What() == BPrivate::B_LAUNCH_JOB) {
 				if (!sShuttingDown)
 					handle_launch_job(kmsg, mi.sender);
+			} else if (kmsg.What() == BPrivate::B_JANUS_AUTH_REQUEST) {
+				if (!sShuttingDown)
+					handle_auth_request(kmsg, mi.sender);
+			} else if (kmsg.What() == BPrivate::B_JANUS_LOGIN_OK) {
+				if (!sShuttingDown)
+					handle_login_ok(kmsg, mi.sender);
 			}
 		} else {
 			// All other messages (B_GET_LAUNCH_DATA etc.) use BMessage (libbe)
@@ -1027,11 +1304,15 @@ main(int /*argc*/, char** /*argv*/)
 	signal(SIGINT,  sig_handler);
 	signal(SIGCHLD, SIG_DFL);
 
-	mkdir("/run/vitruvian", 0755);
+	runtime_dir();
+
+	if (access("/var/lib/vitruvian/greeter-enabled", F_OK) == 0)
+		sGreeterMode = true;
 
 	if (!resolve_user()) {
-		fprintf(stderr, "janus: desktop user not found "
-			"(check VITRUVIAN_DEFAULT_USER)\n");
+		fprintf(stderr, "janus: desktop user not resolved "
+			"(user-mode: getpwuid failed; system-mode: check "
+			"VITRUVIAN_DEFAULT_USER)\n");
 	} else if (init_pam_session()) {
 		run_first_login_for_user();
 	}
@@ -1043,6 +1324,24 @@ main(int /*argc*/, char** /*argv*/)
 
 	if (!init_launch_daemon_port())
 		return 1;
+
+	// Fire the pre-auth chain; the graphical-target units skip
+	// themselves via ConditionPathExists until LOGIN_OK arrives.
+	if (sGreeterMode && sSystemMode) {
+		printf("janus: greeter mode enabled — spawning pre-auth chain\n");
+		pid_t p1 = fork();
+		if (p1 == 0) {
+			execl("/system/servers/janus_launch",
+				"janus_launch", "app_server", NULL);
+			_exit(127);
+		}
+		pid_t p2 = fork();
+		if (p2 == 0) {
+			execl("/system/servers/janus_launch",
+				"janus_launch", "vitruvian-login", NULL);
+			_exit(127);
+		}
+	}
 
 	daemon_loop();
 

@@ -46,6 +46,10 @@ enum {
 	B_GET_LAUNCH_TARGET_INFO	= 'lntI',
 	B_GET_LAUNCH_JOB_INFO		= 'lnjI',
 	B_GET_LAUNCH_LOG			= 'lnLL',
+
+	// Janus login broker; sender_uid-gated to vos_login uid.
+	B_JANUS_AUTH_REQUEST		= 'jnaR',
+	B_JANUS_LOGIN_OK			= 'jnlO',
 };
 
 

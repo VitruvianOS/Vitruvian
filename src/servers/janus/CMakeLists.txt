@@ -3,7 +3,7 @@ Server(janus
 	SOURCES
 	janus.cpp
 
-	LIBS be ${SEAT_LIBRARIES} pam
+	LIBS be ${SEAT_LIBRARIES} pam crypt
 
 	RDEF janus.rdef
 )

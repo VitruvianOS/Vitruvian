@@ -217,8 +217,13 @@ create_desktop_connection(ServerLink* link, const char* name, int32 capacity)
 
 	link->SetReceiverPort(clientPort);
 
+	uid_t desktop_uid = getuid();
+	const char* sudo_uid = getenv("SUDO_UID");
+	if (sudo_uid != NULL && *sudo_uid != '\0')
+		desktop_uid = (uid_t)strtoul(sudo_uid, NULL, 10);
+
 	BMessage request(AS_GET_DESKTOP);
-	request.AddInt32("user", getuid());
+	request.AddInt32("user", (int32)desktop_uid);
 	request.AddInt32("version", AS_PROTOCOL_VERSION);
 	request.AddString("target", getenv("TARGET_SCREEN"));
 

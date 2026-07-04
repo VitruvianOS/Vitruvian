@@ -3,7 +3,7 @@ Server(janus
 	SOURCES
 	janus.cpp
 
-	LIBS be ${SEAT_LIBRARIES}
+	LIBS be ${SEAT_LIBRARIES} pam
 
 	RDEF janus.rdef
 )

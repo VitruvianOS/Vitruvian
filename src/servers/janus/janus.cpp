@@ -6,9 +6,12 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
+#include <limits.h>
 #include <linux/input.h>
 #include <poll.h>
 #include <pthread.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +23,7 @@
 
 extern "C" {
 #include <libseat.h>
+#include <security/pam_appl.h>
 }
 
 #include <AppDefs.h>
@@ -42,39 +46,233 @@ struct KnownServer {
 	const char* signature;
 	const char* port_name;
 	bool        needs_drm;
+	bool        run_as_user;
 };
 
 static const KnownServer kKnownServers[] = {
 	{ "registrar",
 	  B_REGISTRAR_SIGNATURE,
 	  B_REGISTRAR_PORT_NAME,
-	  false },
+	  false, false },
 	{ "app_server",
 	  "application/x-vnd.Haiku-app_server",
 	  "picasso",
-	  true  },
+	  true,  false },
 	{ "input_server",
 	  "application/x-vnd.Be-input_server",
 	  NULL,
-	  false },
+	  false, true  },
 	{ "mount_server",
 	  "application/x-vnd.Haiku-mount_server",
 	  NULL,
-	  false },
+	  false, false },
 	{ "notification_server",
 	  "application/x-vnd.Haiku-notification_server",
 	  NULL,
-	  false },
+	  false, true  },
 	{ "Deskbar",
 	  "application/x-vnd.Be-TSKB",
 	  NULL,
-	  false },
+	  false, true  },
 	{ "Tracker",
 	  "application/x-vnd.Be-TRAK",
 	  NULL,
-	  false },
-	{ NULL, NULL, NULL, false }
+	  false, true  },
+	{ NULL, NULL, NULL, false, false }
 };
+
+
+// Desktop user resolved once from $VITRUVIAN_DEFAULT_USER (default vitruvio).
+static char  sUserName[64]        = "";
+static char  sUserHome[PATH_MAX]  = "";
+static uid_t sUserUid             = (uid_t)-1;
+static gid_t sUserGid             = (gid_t)-1;
+
+
+static bool
+resolve_user()
+{
+	const char* name = getenv("VITRUVIAN_DEFAULT_USER");
+	if (name == NULL || *name == '\0')
+		name = "vitruvio";
+
+	struct passwd* pw = getpwnam(name);
+	if (pw == NULL)
+		return false;
+
+	strncpy(sUserName, pw->pw_name, sizeof(sUserName) - 1);
+	strncpy(sUserHome, pw->pw_dir,  sizeof(sUserHome) - 1);
+	sUserUid = pw->pw_uid;
+	sUserGid = pw->pw_gid;
+	return true;
+}
+
+
+// PAM session for the desktop user — runs pam_env / pam_limits / pam_umask
+// / pam_systemd so session-stage forks inherit XDG_RUNTIME_DIR etc.
+
+static pam_handle_t* sPamHandle = NULL;
+static char**        sPamEnv    = NULL;
+
+
+static int
+pam_null_conv(int num, const struct pam_message** /*msg*/,
+	struct pam_response** resp, void* /*data*/)
+{
+	*resp = (struct pam_response*)calloc(num, sizeof(struct pam_response));
+	return *resp != NULL ? PAM_SUCCESS : PAM_BUF_ERR;
+}
+
+
+static bool
+init_pam_session()
+{
+	static struct pam_conv conv = { pam_null_conv, NULL };
+	int r = pam_start("vitruvian-session", sUserName, &conv, &sPamHandle);
+	if (r != PAM_SUCCESS) {
+		fprintf(stderr, "janus: pam_start failed (%d)\n", r);
+		sPamHandle = NULL;
+		return false;
+	}
+	pam_set_item(sPamHandle, PAM_TTY,   "tty1");
+	pam_set_item(sPamHandle, PAM_RUSER, "root");
+
+	r = pam_setcred(sPamHandle, PAM_ESTABLISH_CRED);
+	if (r != PAM_SUCCESS) {
+		fprintf(stderr, "janus: pam_setcred failed: %s\n",
+			pam_strerror(sPamHandle, r));
+		pam_end(sPamHandle, r);
+		sPamHandle = NULL;
+		return false;
+	}
+
+	r = pam_open_session(sPamHandle, 0);
+	if (r != PAM_SUCCESS) {
+		fprintf(stderr, "janus: pam_open_session failed: %s\n",
+			pam_strerror(sPamHandle, r));
+		pam_setcred(sPamHandle, PAM_DELETE_CRED);
+		pam_end(sPamHandle, r);
+		sPamHandle = NULL;
+		return false;
+	}
+
+	sPamEnv = pam_getenvlist(sPamHandle);
+	printf("janus: PAM session opened for %s\n", sUserName);
+	return true;
+}
+
+
+static void
+close_pam_session()
+{
+	if (sPamHandle == NULL)
+		return;
+	pam_close_session(sPamHandle, 0);
+	pam_setcred(sPamHandle, PAM_DELETE_CRED);
+	pam_end(sPamHandle, PAM_SUCCESS);
+	sPamHandle = NULL;
+
+	if (sPamEnv != NULL) {
+		for (char** e = sPamEnv; *e != NULL; e++)
+			free(*e);
+		free(sPamEnv);
+		sPamEnv = NULL;
+	}
+}
+
+
+// scandir(3) filter: skip . / .. / hidden.
+static int
+first_login_filter(const struct dirent* de)
+{
+	return de->d_name[0] != '.';
+}
+
+
+// Runs /system/boot/first_login/* once per user, gated by
+// ~/config/settings/first_login. Alphasort like run-parts(8).
+static void
+run_first_login_for_user()
+{
+	if (sUserUid == (uid_t)-1 || sUserHome[0] == '\0')
+		return;
+
+	char marker[PATH_MAX];
+	snprintf(marker, sizeof(marker), "%s/config/settings/first_login",
+		sUserHome);
+	if (access(marker, F_OK) == 0)
+		return;
+
+	static const char kDir[] = "/system/boot/first_login";
+	struct dirent** entries = NULL;
+	int n = scandir(kDir, &entries, first_login_filter, alphasort);
+	if (n < 0)
+		return;
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		for (int i = 0; i < n; i++)
+			free(entries[i]);
+		free(entries);
+		fprintf(stderr, "janus: first_login fork: %s\n", strerror(errno));
+		return;
+	}
+	if (pid == 0) {
+		if (initgroups(sUserName, sUserGid) != 0
+				|| setgid(sUserGid) != 0
+				|| setuid(sUserUid) != 0) {
+			fprintf(stderr, "janus: first_login setuid failed: %s\n",
+				strerror(errno));
+			_exit(1);
+		}
+		setenv("HOME",    sUserHome, 1);
+		setenv("USER",    sUserName, 1);
+		setenv("LOGNAME", sUserName, 1);
+
+		for (int i = 0; i < n; i++) {
+			char path[PATH_MAX];
+			snprintf(path, sizeof(path), "%s/%s", kDir, entries[i]->d_name);
+			if (access(path, X_OK) != 0)
+				continue;
+
+			pid_t child = fork();
+			if (child < 0)
+				continue;
+			if (child == 0) {
+				char* const argv[] = { path, NULL };
+				execv(path, argv);
+				_exit(127);
+			}
+			int status;
+			waitpid(child, &status, 0);
+			if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+				fprintf(stderr, "janus: first_login: %s exited %d\n",
+					entries[i]->d_name, status);
+			}
+		}
+
+		// Write the marker last so a failed script doesn't gate future
+		// retries.
+		char m[PATH_MAX];
+		snprintf(m, sizeof(m), "%s/config/settings", sUserHome);
+		mkdir(m, 0755);
+		snprintf(m, sizeof(m), "%s/config/settings/first_login", sUserHome);
+		int fd = open(m, O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
+		if (fd >= 0)
+			close(fd);
+		_exit(0);
+	}
+
+	for (int i = 0; i < n; i++)
+		free(entries[i]);
+	free(entries);
+
+	int status;
+	waitpid(pid, &status, 0);
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+		fprintf(stderr, "janus: first_login runner exited %d\n", status);
+	}
+}
 
 
 struct JanusApp {
@@ -274,8 +472,16 @@ handle_get_launch_data(BMessage* msg)
 
 
 static void
-handle_launch_job(BPrivate::KMessage& kmsg)
+handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
+	if (sender_uid != 0) {
+		fprintf(stderr, "janus: B_LAUNCH_JOB rejected from uid=%u\n",
+			(unsigned)sender_uid);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
 	const char* name = NULL;
 	if (kmsg.FindString("name", &name) != B_OK || name == NULL) {
 		BPrivate::KMessage reply(B_BAD_VALUE);
@@ -350,6 +556,45 @@ handle_launch_job(BPrivate::KMessage& kmsg)
 			if (ifd >= 0) {
 				snprintf(buf, sizeof(buf), "%d", ifd);
 				setenv("JANUS_DRM_FD", buf, 1);
+			}
+		}
+
+		if (sUserUid != (uid_t)-1) {
+			snprintf(buf, sizeof(buf), "%u", (unsigned)sUserUid);
+			setenv("SUDO_UID", buf, 1);
+			snprintf(buf, sizeof(buf), "%u", (unsigned)sUserGid);
+			setenv("SUDO_GID", buf, 1);
+		}
+
+		if (ks->run_as_user) {
+			if (sUserUid == (uid_t)-1) {
+				fprintf(stderr, "janus: %s wants run_as_user but user "
+					"not resolved\n", name);
+				_exit(125);
+			}
+			if (sPamEnv != NULL) {
+				for (char** e = sPamEnv; *e != NULL; ++e) {
+					char* eq = strchr(*e, '=');
+					if (eq == NULL)
+						continue;
+					*eq = '\0';
+					setenv(*e, eq + 1, 1);
+					*eq = '=';
+				}
+			}
+			setenv("HOME",    sUserHome, 1);
+			setenv("USER",    sUserName, 1);
+			setenv("LOGNAME", sUserName, 1);
+			if (initgroups(sUserName, sUserGid) != 0
+					|| setgid(sUserGid) != 0
+					|| setuid(sUserUid) != 0) {
+				fprintf(stderr, "janus: drop-priv for %s failed: %s\n",
+					name, strerror(errno));
+				_exit(126);
+			}
+			if (chdir(sUserHome) != 0) {
+				fprintf(stderr, "janus: chdir(%s) for %s: %s\n",
+					sUserHome, name, strerror(errno));
 			}
 		}
 
@@ -481,16 +726,18 @@ static int32
 launch_daemon_thread(void* /*data*/)
 {
 	while (sRunning) {
-		ssize_t bufSize = port_buffer_size_etc(sLaunchPort,
+		port_message_info mi = {};
+		status_t infoRc = get_port_message_info_etc(sLaunchPort, &mi,
 			B_RELATIVE_TIMEOUT, 50000);
 
-		if (bufSize == B_TIMED_OUT || bufSize == B_INTERRUPTED) {
+		if (infoRc == B_TIMED_OUT || infoRc == B_INTERRUPTED) {
 			check_pending_launches();
 			continue;
 		}
-		if (bufSize < B_OK)
+		if (infoRc < B_OK)
 			break;
 
+		ssize_t bufSize = (ssize_t)mi.size;
 		int32 code = 0;
 		void* buf = (bufSize > 0) ? malloc(bufSize) : NULL;
 
@@ -511,7 +758,7 @@ launch_daemon_thread(void* /*data*/)
 				kmsg.SetTo((const void*)buf, bufSize);
 			if (kmsg.What() == BPrivate::B_LAUNCH_JOB) {
 				if (!sShuttingDown)
-					handle_launch_job(kmsg);
+					handle_launch_job(kmsg, mi.sender);
 			}
 		} else {
 			// All other messages (B_GET_LAUNCH_DATA etc.) use BMessage (libbe)
@@ -644,8 +891,22 @@ static void
 janus_handle_shutdown(bool reboot)
 {
 	fprintf(stderr, "janus: shutdown handover received, reboot=%d\n", reboot);
+
+	// Set sShuttingDown BEFORE _kern_shutdown so the poll-loop reaper
+	// stops stealing the systemctl child's waitpid status.
 	sShuttingDown = true;
 
+	sync();
+
+	status_t status = _kern_shutdown(reboot);
+	if (status != B_OK) {
+		fprintf(stderr, "janus: _kern_shutdown failed (0x%x); "
+			"returning to main loop so systemd can retry\n", status);
+		return;
+	}
+
+	// systemd is now driving shutdown. Release our resources so it can
+	// finish cleanly; do not _exit(1) — Restart=on-failure would respawn.
 	janus_teardown_seat();
 
 	if (sSeat != NULL) {
@@ -659,11 +920,7 @@ janus_handle_shutdown(bool reboot)
 		sDrmFd = -1;
 	}
 
-	sync();
-	_kern_shutdown(reboot);
-
-	fprintf(stderr, "janus: _kern_shutdown failed: %s\n", strerror(errno));
-	_exit(1);
+	close_pam_session();
 }
 
 
@@ -752,7 +1009,9 @@ daemon_loop()
 		if (ret > 0 && sSeat)
 			libseat_dispatch(sSeat, 0);
 
-		while (waitpid(-1, NULL, WNOHANG) > 0)
+		// Stop reaping once shutdown starts: _kern_shutdown forks systemctl
+		// and needs its own waitpid to succeed.
+		while (!sShuttingDown && waitpid(-1, NULL, WNOHANG) > 0)
 			;
 	}
 }
@@ -769,6 +1028,13 @@ main(int /*argc*/, char** /*argv*/)
 	signal(SIGCHLD, SIG_DFL);
 
 	mkdir("/run/vitruvian", 0755);
+
+	if (!resolve_user()) {
+		fprintf(stderr, "janus: desktop user not found "
+			"(check VITRUVIAN_DEFAULT_USER)\n");
+	} else if (init_pam_session()) {
+		run_first_login_for_user();
+	}
 
 	if (!init_seat())
 		fprintf(stderr, "janus: running without seat session\n");
@@ -790,5 +1056,6 @@ main(int /*argc*/, char** /*argv*/)
 	if (sSeat)
 		libseat_close_seat(sSeat);
 
+	close_pam_session();
 	return 0;
 }

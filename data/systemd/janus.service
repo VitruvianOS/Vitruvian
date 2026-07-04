@@ -7,6 +7,7 @@ Wants=systemd-modules-load.service
 
 [Service]
 Type=simple
+Environment=VITRUVIAN_DEFAULT_USER=vitruvio
 ExecStartPre=-/bin/mkdir -p /run/vitruvian
 ExecStart=/system/servers/janus
 Restart=on-failure

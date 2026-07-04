@@ -188,3 +188,34 @@ fi
 # Enable system services
 
 systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript@vitruvio.service
+
+# TTY-intermediate scaffolding (dormant). The vos-session user unit and
+# profile.d hook are installed but only wire in when the operator runs
+# `systemctl --user enable vos-session` — see phase3-login.md Stage A.
+install -m 0644 -D /usr/share/vos/systemd/vos-session.service \
+	/etc/systemd/user/vos-session.service 2>/dev/null || true
+install -m 0644 -D /usr/share/vos/profile.d/vos-session.sh \
+	/etc/profile.d/vos-session.sh 2>/dev/null || true
+
+# vos_login: pre-auth graphical uid (greeter + FirstBootPrompt +
+# live-media Installer). No shell, no home content — janus supplies
+# everything needed via env + /var/lib/vos_login runtime dir.
+# Membership: video (DRM), input (evdev fallback), tty (VT switching for
+# kill+restart), vitruvio (nexus IPC access — same group that owns
+# /dev/nexus). See phase3-login.md Stage C.
+if ! getent passwd vos_login >/dev/null; then
+	useradd --system --no-create-home \
+		--home-dir /var/lib/vos_login \
+		--shell /usr/sbin/nologin \
+		--comment "Vitruvian pre-auth graphical uid" \
+		vos_login || true
+fi
+for _g in video input tty vitruvio; do
+	getent group "$_g" >/dev/null && adduser vos_login "$_g" >/dev/null 2>&1 || true
+done
+install -d -m 0755 -o vos_login -g vos_login /var/lib/vos_login 2>/dev/null || true
+install -d -m 0755 /var/lib/vitruvian 2>/dev/null || true
+# Greeter mode is opt-in: `touch /var/lib/vitruvian/greeter-enabled` and
+# reboot to switch from autologin to the graphical greeter. The vitruvio
+# chain services skip themselves while the sentinel is present; janus
+# spawns app_server + vitruvian-login instead.

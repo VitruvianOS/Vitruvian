@@ -50,7 +50,7 @@ public:
 	void						Resume();
 
 private:
-	static	void				_PollEventsThread(void* cookie);
+	static	int32				_PollEventsThread(void* cookie);
 			void				_PollEvents();
 
 	// Device management

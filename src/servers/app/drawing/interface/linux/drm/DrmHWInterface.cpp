@@ -6,8 +6,10 @@
 #include "DrmHWInterface.h"
 
 #include "DrmBuffer.h"
+#include "LibEvdevEventStream.h"
 
 #include <algorithm>
+#include <new>
 #include <errno.h>
 #include <libdrm/drm_mode.h>
 #include <poll.h>
@@ -542,6 +544,11 @@ DrmHWInterface::~DrmHWInterface()
 {
 	CALLED();
 
+	// Drop the master before fd teardown so the next app_server's
+	// drmSetMaster doesn't hit EACCES.
+	if (fFd >= 0 && fSessionActive.load())
+		drmDropMaster(fFd);
+
 	fRunning = false;
 	release_sem(fSessionSem);
 
@@ -645,7 +652,20 @@ DrmHWInterface::InitCheck() const
 EventStream*
 DrmHWInterface::CreateEventStream()
 {
-	return NULL;
+	// Greeter pre-auth path only: input_server isn't up yet, and it
+	// wouldn't share vos_login's session anyway.
+	if (getenv("APP_SERVER_EMBED_INPUT") == NULL)
+		return NULL;
+	uint32 w = fDisplayMode.virtual_width  > 0 ? fDisplayMode.virtual_width  : 1920;
+	uint32 h = fDisplayMode.virtual_height > 0 ? fDisplayMode.virtual_height : 1080;
+	LibEvdevEventStream* s = new (std::nothrow) LibEvdevEventStream(w, h, fSeat);
+	if (s == NULL)
+		return NULL;
+	if (!s->IsValid()) {
+		delete s;
+		return NULL;
+	}
+	return s;
 }
 
 
@@ -653,6 +673,10 @@ status_t
 DrmHWInterface::Shutdown()
 {
 	CALLED();
+	if (fFd >= 0 && fSessionActive.load()) {
+		drmDropMaster(fFd);
+		fSessionActive = false;
+	}
 	return B_OK;
 }
 

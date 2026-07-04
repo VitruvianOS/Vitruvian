@@ -255,7 +255,8 @@ LibEvdevEventStream::_OpenDevice(const char* path)
 
 	EvdevDevice dev;
 	dev.fd = fd;
-	dev.seatDeviceId = deviceId;
+	// libseat device ids apply only to the janus-side seat open path.
+	dev.seatDeviceId = -1;
 	dev.evdev = evdev;
 	dev.path = strdup(path);
 	dev.isKeyboard = isKeyboard;
@@ -349,11 +350,12 @@ LibEvdevEventStream::PeekLatestMouseMoved()
 }
 
 
-void
+int32
 LibEvdevEventStream::_PollEventsThread(void* cookie)
 {
 	LibEvdevEventStream* owner = (LibEvdevEventStream*)cookie;
 	owner->_PollEvents();
+	return B_OK;
 }
 
 

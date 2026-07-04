@@ -13,7 +13,9 @@
 
 #include "AppServer.h"
 
+#include <signal.h>
 #include <syslog.h>
+#include <unistd.h>
 
 #include <AutoDeleter.h>
 #include <LaunchRoster.h>
@@ -119,10 +121,22 @@ AppServer::MessageReceived(BMessage* message)
 			int32 version = message->GetInt32("version", 0);
 			const char* targetScreen = message->GetString("target");
 
+			// Client-supplied "user" must match the kernel-attested writer
+			// uid unless we're running as root (system-mode).
+			uid_t senderUid = message->SenderUid();
+			uid_t serverUid = getuid();
+			bool acceptable = (serverUid == 0)
+				|| (senderUid != (uid_t)-1
+					&& (int32)senderUid == userID);
+
 			if (version != AS_PROTOCOL_VERSION) {
 				syslog(LOG_ERR, "Application for user %" B_PRId32 " does not "
 					"support the current server protocol (%" B_PRId32 ").\n",
 					userID, version);
+			} else if (!acceptable) {
+				syslog(LOG_ERR, "AS_GET_DESKTOP: sender uid %u does not match "
+					"requested user %" B_PRId32 "; refusing.\n",
+					(unsigned)senderUid, userID);
 			} else {
 				desktop = _FindDesktop(userID, targetScreen);
 				if (desktop == NULL) {
@@ -178,26 +192,26 @@ AppServer::MessageReceived(BMessage* message)
 bool
 AppServer::QuitRequested()
 {
-#if TEST_MODE
+	// Tear down desktops so the HWInterface destructor drops the DRM
+	// master — otherwise the next app_server hits EACCES on drmSetMaster.
 	while (fDesktops.CountItems() > 0) {
 		Desktop *desktop = fDesktops.RemoveItemAt(0);
 
 		thread_id thread = desktop->Thread();
 		desktop->PostMessage(B_QUIT_REQUESTED);
 
-		// we just wait for the desktop to kill itself
 		status_t status;
 		wait_for_thread(thread, &status);
 	}
 
+#if TEST_MODE
 	delete this;
 	exit(0);
 
 	return SERVER_BASE::QuitRequested();
 #else
-	return false;
+	return true;
 #endif
-
 }
 
 
@@ -256,10 +270,29 @@ AppServer::_FindDesktop(uid_t userID, const char* targetScreen)
 //	#pragma mark -
 
 
+// Async-signal-safe: post B_QUIT_REQUESTED so the looper unwinds the
+// C++ teardown (Desktop → HWInterface dtor → drmDropMaster).
+static void
+signal_quit(int /*signo*/)
+{
+	if (gAppServerPort >= 0)
+		write_port_etc(gAppServerPort, B_QUIT_REQUESTED, NULL, 0,
+			B_RELATIVE_TIMEOUT, 0);
+}
+
+
 int
 main(int argc, char** argv)
 {
 	srand(real_time_clock_usecs());
+
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = signal_quit;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART;
+	sigaction(SIGTERM, &sa, NULL);
+	sigaction(SIGINT,  &sa, NULL);
 
 	status_t status;
 	AppServer* server = new AppServer(&status);

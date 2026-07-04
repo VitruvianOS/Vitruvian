@@ -1,0 +1,97 @@
+#!/bin/sh
+# Runs after dpkg has removed Vitruvian's managed files. Cleans up the
+# postinst-created bits that dpkg doesn't track:
+#   - /system/{bin,lib,cache,var} symlinks
+#   - /etc/profile.d/vitruvian.sh
+#   - tar-extracted MIME db, Tracker templates, app xattrs (the tarballs
+#     under /usr/share/vos are gone by now, the extracted trees aren't)
+#   - the /system/* scaffolding dirs created by postinst
+#   - the SYS:NAME xattrs on /system, /home, etc. (cleared when the dirs
+#     themselves go away)
+#
+# On `purge`, we additionally remove the /etc/skel/config template tree
+# and best-effort clean per-user copies under each /home/*/config. On
+# plain `remove`, those stay so a reinstall preserves Tracker layout,
+# printers, deskbar menu, etc.
+#
+# Tolerate every failure: dpkg must keep going regardless.
+
+set -e
+
+ACTION="$1"
+
+# --- remove the postinst symlinks ----------------------------------------
+for link in /system/bin /system/lib /system/cache /system/var; do
+    [ -L "$link" ] && rm -f "$link" || true
+done
+
+# --- remove the /etc/profile.d hook --------------------------------------
+rm -f /etc/profile.d/vitruvian.sh || true
+
+# --- remove tar-extracted trees ------------------------------------------
+# mime_db.tar was extracted into /system/data/mime_db/
+rm -rf /system/data/mime_db || true
+# apps_attrs.tar / templates_attrs.tar wrote into existing trees; the
+# binaries themselves are gone via dpkg, so the placeholder xattrs they
+# applied are also gone.
+
+# --- remove the /system scaffolding --------------------------------------
+# These are postinst-created dirs that contained dpkg-tracked files which
+# are already removed. Empty dirs are safe to drop; non-empty ones (e.g.
+# /system/settings carrying foreign packages' state) are left alone via
+# `rmdir` (refuses non-empty).
+for dir in \
+    /system/data/deskbar/menu/Applications \
+    "/system/data/deskbar/menu/Desktop applets" \
+    /system/data/deskbar/menu/Demos \
+    /system/data/deskbar/menu/Preferences \
+    /system/data/deskbar/menu \
+    /system/data/deskbar \
+    /system/data \
+    /system/add-ons \
+    /system/apps \
+    /system/demos \
+    /system/develop \
+    /system/documentation \
+    /system/preferences \
+    /system/servers \
+    /system/settings/etc/profile.d \
+    /system/settings/etc \
+    /system/settings \
+    /system/boot/post_install \
+    /system/boot/first_login \
+    /system/boot \
+    /system; do
+    rmdir "$dir" 2>/dev/null || true
+done
+
+if [ "$ACTION" = "purge" ]; then
+    # Wipe the skel template we planted.
+    rm -rf /etc/skel/config || true
+    rm -rf /etc/skel/Desktop || true
+    rm -f  /etc/skel/.vitruvian/provisioned 2>/dev/null || true
+    rmdir /etc/skel/.vitruvian 2>/dev/null || true
+
+    # Best-effort per-user cleanup. Only touch subtrees we own; leave
+    # user-authored content alone.
+    for home in /home/*; do
+        [ -d "$home" ] || continue
+        rm -rf "$home/config/settings/deskbar" || true
+        rm -rf "$home/config/settings/Tracker" || true
+        rm -rf "$home/config/settings/printers" || true
+        rmdir "$home/config/settings" 2>/dev/null || true
+        rmdir "$home/config" 2>/dev/null || true
+        rm -f "$home/.vitruvian/provisioned" 2>/dev/null || true
+        rmdir "$home/.vitruvian" 2>/dev/null || true
+        # Desktop symlinks
+        for link in "$home/Desktop/Home" "$home/Desktop/System"; do
+            [ -L "$link" ] && rm -f "$link" || true
+        done
+        rmdir "$home/Desktop" 2>/dev/null || true
+    done
+
+    # XDG Trash is user data; respect that even on purge — if the
+    # user wants it gone they'll delete it themselves.
+fi
+
+exit 0

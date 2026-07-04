@@ -1128,11 +1128,15 @@ BLooper::ReadMessageFromPort(bigtime_t timeout)
 	size_t actualCaps = 0;
 	int32 msgCode;
 	ssize_t readResult;
+	port_message_info senderInfo;
+	memset(&senderInfo, 0, sizeof(senderInfo));
+	senderInfo.sender = (uid_t)-1;
 	for (;;) {
 		actualBytes = bufferSize;
 		actualCaps = capsCapacity;
-		readResult = read_port_with_caps(fMsgPort, &msgCode, buffer,
-			&actualBytes, caps, &actualCaps, B_RELATIVE_TIMEOUT, 0);
+		readResult = read_port_with_caps_etc(fMsgPort, &msgCode, buffer,
+			&actualBytes, caps, &actualCaps, B_RELATIVE_TIMEOUT, 0,
+			&senderInfo);
 		if (readResult == B_INTERRUPTED)
 			continue;
 		if (readResult != B_BUFFER_OVERFLOW)
@@ -1177,6 +1181,8 @@ BLooper::ReadMessageFromPort(bigtime_t timeout)
 		actualCaps > 0 ? adoptedTickets.data() : NULL);
 
 	BMessage* message = ConvertToMessage(buffer, msgCode);
+	if (message != NULL)
+		BMessage::Private(message).SetSenderUid(senderInfo.sender);
 
 	if (actualCaps > 0) {
 		if (message != NULL) {

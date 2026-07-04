@@ -92,6 +92,8 @@ public:
 			bool				WasDelivered() const;
 			bool				IsSourceWaiting() const;
 			bool				IsSourceRemote() const;
+			// Kernel-attested writer uid; (uid_t)-1 if never traversed a port.
+			uid_t				SenderUid() const;
 			BMessenger			ReturnAddress() const;
 			const BMessage*		Previous() const;
 			bool				WasDropped() const;
@@ -623,7 +625,9 @@ private:
 			// std::map<vref_id, vref_ticket>*; NULL when none held.
 			void*				fVrefTickets;
 
-			uint32				fReserved[6];
+			uid_t				fSenderUid;
+
+			uint32				fReserved[5];
 
 			enum				{ sNumReplyPorts = 3 };
 	static	port_id				sReplyPorts[sNumReplyPorts];

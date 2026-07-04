@@ -721,6 +721,14 @@ extern ssize_t		read_port_with_caps(port_id id, int32* msgCode,
 						void* msgBuffer, size_t* bufferSize,
 						port_cap_out* caps, size_t* capsCount,
 						uint32 flags, bigtime_t timeout);
+// Same as read_port_with_caps, but also returns the writer's uid/gid/team
+// via `senderInfo` (kernel-populated on the message actually consumed).
+// Pass NULL to ignore.
+extern ssize_t		read_port_with_caps_etc(port_id id, int32* msgCode,
+						void* msgBuffer, size_t* bufferSize,
+						port_cap_out* caps, size_t* capsCount,
+						uint32 flags, bigtime_t timeout,
+						port_message_info* senderInfo);
 
 
 #ifdef __cplusplus

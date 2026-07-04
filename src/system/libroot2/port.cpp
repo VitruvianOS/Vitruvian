@@ -396,10 +396,11 @@ write_port_with_caps(port_id id, int32 msgCode,
 
 
 ssize_t
-read_port_with_caps(port_id id, int32* msgCode,
+read_port_with_caps_etc(port_id id, int32* msgCode,
 	void* msgBuffer, size_t* bufferSize,
 	port_cap_out* caps, size_t* capsCount,
-	uint32 flags, bigtime_t timeout)
+	uint32 flags, bigtime_t timeout,
+	port_message_info* senderInfo)
 {
 	CALLED();
 
@@ -441,10 +442,28 @@ read_port_with_caps(port_id id, int32* msgCode,
 	*bufferSize = exchange.size;
 	*capsCount = exchange.caps_count;
 
+	if (senderInfo != NULL) {
+		senderInfo->size = exchange.size;
+		senderInfo->sender = (uid_t)exchange.sender_uid;
+		senderInfo->sender_group = (gid_t)exchange.sender_gid;
+		senderInfo->sender_team = (team_id)exchange.sender_team;
+	}
+
 	if (exchange.ret != B_OK)
 		return exchange.ret;
 
 	return (ssize_t)exchange.size;
+}
+
+
+ssize_t
+read_port_with_caps(port_id id, int32* msgCode,
+	void* msgBuffer, size_t* bufferSize,
+	port_cap_out* caps, size_t* capsCount,
+	uint32 flags, bigtime_t timeout)
+{
+	return read_port_with_caps_etc(id, msgCode, msgBuffer, bufferSize,
+		caps, capsCount, flags, timeout, NULL);
 }
 
 

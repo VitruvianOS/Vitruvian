@@ -732,6 +732,7 @@ BMessage::_InitCommon(bool initHeader)
 
 	fArchivingPointer = NULL;
 	fVrefTickets = NULL;
+	fSenderUid = (uid_t)-1;
 
 	if (initHeader)
 		return _InitHeader();
@@ -1235,6 +1236,13 @@ BMessage::IsSourceRemote() const
 	return fHeader != NULL
 		&& (fHeader->flags & MESSAGE_FLAG_WAS_DELIVERED) != 0
 		&& fHeader->reply_team != BPrivate::current_team();
+}
+
+
+uid_t
+BMessage::SenderUid() const
+{
+	return fSenderUid;
 }
 
 

@@ -138,6 +138,12 @@ class BMessage::Private {
 		}
 
 		void
+		SetSenderUid(uid_t uid)
+		{
+			fMessage->fSenderUid = uid;
+		}
+
+		void
 		SetWasDropped(bool wasDropped)
 		{
 			if (wasDropped)

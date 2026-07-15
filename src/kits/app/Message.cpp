@@ -212,7 +212,7 @@ _CollectSendBufferCaps_walk(char* buffer, dev_t vrefDev,
 				elem = fieldData + ei * fixedSize;
 				elemSize = fixedSize;
 			} else {
-				elemSize = *(uint32*)(fieldData + walkOffset);
+				elemSize = read_analigned<uint32>(fieldData + walkOffset);
 				elem = fieldData + walkOffset + sizeof(uint32);
 				walkOffset += sizeof(uint32) + elemSize;
 			}
@@ -228,7 +228,7 @@ _CollectSendBufferCaps_walk(char* buffer, dev_t vrefDev,
 
 			if (elemSize < sizeof(BMessage::message_header))
 				continue;
-			uint32 magic = *(uint32*)elem;
+			uint32 magic = read_analigned<uint32>(elem);
 			if (magic != MESSAGE_FORMAT_HAIKU
 					&& magic != MESSAGE_FORMAT_HAIKU_SWAPPED) {
 				continue;
@@ -1028,7 +1028,7 @@ BMessage::_PrintToStream(const char* indent) const
 			}
 
 			if ((field->flags & FIELD_FLAG_FIXED_SIZE) == 0) {
-				size = *(uint32*)pointer;
+				size = read_analigned<uint32>(pointer);
 				pointer += sizeof(uint32);
 			}
 
@@ -1689,7 +1689,7 @@ BMessage::Unflatten(const char* flatBuffer)
 	if (flatBuffer == NULL)
 		return B_BAD_VALUE;
 
-	uint32 format = *(uint32*)flatBuffer;
+	uint32 format = read_analigned<uint32>(flatBuffer);
 	if (format != MESSAGE_FORMAT_HAIKU)
 		return BPrivate::MessageAdapter::Unflatten(format, this, flatBuffer);
 
@@ -2299,11 +2299,11 @@ BMessage::RemoveData(const char* name, int32 index)
 	} else {
 		uint8* pointer = fData + offset;
 		for (int32 i = 0; i < index; i++) {
-			offset += *(uint32*)pointer + sizeof(uint32);
+			offset += read_analigned<uint32>(pointer) + sizeof(uint32);
 			pointer = fData + offset;
 		}
 
-		size_t currentSize = *(uint32*)pointer + sizeof(uint32);
+		size_t currentSize = read_analigned<uint32>(pointer) + sizeof(uint32);
 		result = _ResizeData(offset, -currentSize);
 		if (result != B_OK)
 			return result;
@@ -2373,11 +2373,11 @@ BMessage::FindData(const char* name, type_code type, int32 index,
 	} else {
 		uint8* pointer = fData + field->offset + field->name_length;
 		for (int32 i = 0; i < index; i++)
-			pointer += *(uint32*)pointer + sizeof(uint32);
+			pointer += read_analigned<uint32>(pointer) + sizeof(uint32);
 
 		*data = pointer + sizeof(uint32);
 		if (numBytes != NULL)
-			*numBytes = *(uint32*)pointer;
+			*numBytes = read_analigned<uint32>(pointer);
 	}
 
 	return B_OK;
@@ -2419,11 +2419,11 @@ BMessage::ReplaceData(const char* name, type_code type, int32 index,
 		uint8* pointer = fData + offset;
 
 		for (int32 i = 0; i < index; i++) {
-			offset += *(uint32*)pointer + sizeof(uint32);
+			offset += read_analigned<uint32>(pointer) + sizeof(uint32);
 			pointer = fData + offset;
 		}
 
-		size_t currentSize = *(uint32*)pointer;
+		size_t currentSize = read_analigned<uint32>(pointer);
 		int32 change = numBytes - currentSize;
 		result = _ResizeData(offset, change);
 		if (result != B_OK)
@@ -2824,7 +2824,7 @@ BMessage::_SendFlattenedMessage(void* data, int32 size, port_id port,
 	if (data == NULL)
 		return B_BAD_VALUE;
 
-	uint32 magic = *(uint32*)data;
+	uint32 magic = read_analigned<uint32>(data);
 
 	if (magic == MESSAGE_FORMAT_HAIKU
 		|| magic == MESSAGE_FORMAT_HAIKU_SWAPPED) {
@@ -2836,7 +2836,7 @@ BMessage::_SendFlattenedMessage(void* data, int32 size, port_id port,
 		header += sizeof(uint32) /* magic */ + sizeof(uint32) /* checksum */
 			+ sizeof(ssize_t) /* flattenedSize */ + sizeof(int32) /* what */
 			+ sizeof(uint8) /* flags */;
-		*(int32*)header = token;
+		write_unaligned<int32>(header, token);
 	} else if (((KMessage::Header*)data)->magic
 			== KMessage::kMessageHeaderMagic) {
 		KMessage::Header* header = (KMessage::Header*)data;
@@ -3290,7 +3290,7 @@ BMessage::Append(const BMessage& other)
 
 		for (uint32 j = 0; j < field->count; j++) {
 			if (!isFixed) {
-				size = *(uint32*)data;
+				size = read_analigned<uint32>(data);
 				data = (const void*)((const char*)data + sizeof(uint32));
 			}
 
@@ -3418,14 +3418,17 @@ BMessage::FindPointer(const char* name, int32 index, void** pointer) const
 	if (pointer == NULL)
 		return B_BAD_VALUE;
 
-	void** data = NULL;
+	const void* data = NULL;
 	ssize_t size = 0;
-	status_t error = FindData(name, B_POINTER_TYPE, index,
-		(const void**)&data, &size);
+	status_t error = FindData(name, B_POINTER_TYPE, index, &data, &size);
 
-	if (error == B_OK)
-		*pointer = *data;
-	else
+	if (error == B_OK) {
+		if (size == (ssize_t)sizeof(*pointer))
+			memcpy(pointer, data, sizeof(*pointer));
+		else
+			error = B_BAD_DATA;
+	}
+	if (error != B_OK)
 		*pointer = NULL;
 
 	return error;
@@ -3446,14 +3449,17 @@ BMessage::FindMessenger(const char* name, int32 index,
 	if (messenger == NULL)
 		return B_BAD_VALUE;
 
-	BMessenger* data = NULL;
+	const void* data = NULL;
 	ssize_t size = 0;
-	status_t error = FindData(name, B_MESSENGER_TYPE, index,
-		(const void**)&data, &size);
+	status_t error = FindData(name, B_MESSENGER_TYPE, index, &data, &size);
 
-	if (error == B_OK)
-		*messenger = *data;
-	else
+	if (error == B_OK) {
+		if (size == (ssize_t)sizeof(*messenger))
+			memcpy((void*)messenger, data, sizeof(*messenger));
+		else
+			error = B_BAD_DATA;
+	}
+	if (error != B_OK)
 		*messenger = BMessenger();
 
 	return error;

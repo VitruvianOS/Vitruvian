@@ -56,6 +56,22 @@ enum {
 	// app-defined specifiers start at B_SPECIFIERS_END + 1
 };
 
+template <typename Type>
+static inline Type
+read_analigned(const void* address)
+{
+	Type value;
+	memcpy(&value, address, sizeof(value));
+	return value;
+}
+
+
+template <typename Type>
+static inline void
+write_unaligned(void* address, Type value)
+{
+	memcpy(address, &value, sizeof(value));
+}
 
 class BMessage {
 public:

@@ -10,7 +10,7 @@
 #   --build-type=TYPE           CMake build type: Debug|Release|Workflow (default: Debug)
 #   --chroot-build              Use chroot sysroot for libraries/headers
 #   --chroot-path=PATH          Path to chroot (default: <build>/LIVE_BOOT/chroot)
-#   --arch=ARCH                 Target architecture: x86_64, arm64, arm32, riscv64
+#   --arch=ARCH                 Target architecture: x86_64, arm64, arm32, riscv64, sparc64
 #                                 (default: autodetected from `uname -m` for native builds)
 #   --override-toolchain=NAME   Use a specific cross-compilation toolchain
 #                                 (e.g. arm64_raspberry)
@@ -140,6 +140,7 @@ case "$TARGET_ARCH" in
     arm64)           _setup_arch=arm64 ;;
     arm32|armhf|arm) _setup_arch=arm32 ;;
     riscv64)         _setup_arch=riscv64 ;;
+    sparc64)         _setup_arch=sparc64 ;;
     *) echo "Error: Unknown architecture: $TARGET_ARCH"; exit 1 ;;
 esac
 
@@ -174,6 +175,12 @@ case "$TARGET_ARCH" in
             echo "Note: riscv64 cross-compilation — defaulting to toolchain $OVERRIDE_TOOLCHAIN."
         fi
         ;;
+    sparc64)
+        if [ -z "$OVERRIDE_TOOLCHAIN" ]; then
+            OVERRIDE_TOOLCHAIN="sparc64-linux-gnu"
+            echo "Note: sparc64 cross-compilation — defaulting to toolchain $OVERRIDE_TOOLCHAIN."
+        fi
+        ;;
     arm32|armhf)
         TARGET_ARCH="arm"
         if [ -z "$OVERRIDE_TOOLCHAIN" ]; then
@@ -183,7 +190,7 @@ case "$TARGET_ARCH" in
         ;;
     *)
         echo "Error: Unknown architecture: $TARGET_ARCH"
-        echo "Supported: x86_64, arm64, arm32, riscv64"
+        echo "Supported: x86_64, arm64, arm32, riscv64, sparc64"
         exit 1
         ;;
 esac

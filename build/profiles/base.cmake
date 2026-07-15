@@ -28,10 +28,12 @@ ImageInclude("/system/add-ons/input_server/devices" ${INPUT_SERVER_ADDONS})
 #ImageInclude("/system/add-ons/input_server/filters" ${INPUT_SERVER_FILTERS})
 
 
+if(VITRUVIAN_ENABLE_OPENGL)
 set(OPENGL_RENDERERS
 	mesa_surfaceless
 )
 ImageInclude("/system/add-ons/opengl" ${OPENGL_RENDERERS})
+endif()
 
 
 #set(INPUT_SERVER_FILTERS
@@ -47,7 +49,6 @@ set(SYSTEM_LIBS
 	be
 	game
 	media2
-	opengl
 	textencoding
 	tracker
 	translation
@@ -55,6 +56,9 @@ set(SYSTEM_LIBS
 	shared
 	localestub
 )
+if(VITRUVIAN_ENABLE_OPENGL)
+	list(APPEND SYSTEM_LIBS opengl)
+endif()
 ImageInclude("/lib" ${SYSTEM_LIBS})
 
 
@@ -62,7 +66,6 @@ set(SYSTEM_TRANSLATORS
 	BMPTranslator
 	GIFTranslator
 	HVIFTranslator
-	ICNSTranslator
 	ICOTranslator
 	JPEGTranslator
 	PCXTranslator
@@ -78,6 +81,9 @@ set(SYSTEM_TRANSLATORS
 	WEBPTranslator
 	WonderbrushTranslator
 )
+if(VITRUVIAN_ENABLE_ICNS)
+	list(APPEND SYSTEM_TRANSLATORS ICNSTranslator)
+endif()
 ImageInclude("/system/add-ons/Translators" ${SYSTEM_TRANSLATORS})
 
 

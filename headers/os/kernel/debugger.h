@@ -37,7 +37,7 @@
 	typedef struct arm_debug_cpu_state debug_cpu_state;
 #elif (defined(__riscv) && __riscv_xlen == 64)
 	typedef struct riscv64_debug_cpu_state debug_cpu_state;
-#elif defined(__sparc64__)
+#elif defined(__sparc64__) || (defined(__sparc__) && defined(__sparc_v9__) && defined(__arch64__))
 	typedef struct sparc_debug_cpu_state debug_cpu_state;
 #elif defined(__aarch64__) || defined(__arm64__)
 	typedef struct arm64_debug_cpu_state debug_cpu_state;

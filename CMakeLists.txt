@@ -17,6 +17,11 @@ message(STATUS "Build config written to: ${CMAKE_BINARY_DIR}/buildconfig.conf")
 
 include(build/engine.cmake)
 
+option(VITRUVIAN_ENABLE_ICNS "Build ICNS translator" ON)
+option(VITRUVIAN_ENABLE_DRM "Build Linux DRM/GBM app_server backend" ON)
+option(VITRUVIAN_ENABLE_NEXUS "Build Nexus kernel module integration" ON)
+option(VITRUVIAN_ENABLE_OPENGL "Build OpenGL kit, add-ons, and applications" ON)
+
 add_subdirectory(src)
 
 if(NOT BUILDTOOLS_MODE STREQUAL "1")

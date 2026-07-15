@@ -76,7 +76,7 @@
 #	define __HAIKU_ARCH_ABI				"riscv128"
 #	define __HAIKU_ARCH_RISCV128			1
 #	define __HAIKU_ARCH_BITS			128
-#elif defined(__sparc64__)
+#elif defined(__sparc64__) || (defined(__sparc__) && defined(__sparc_v9__) && defined(__arch64__))
 #	define __HAIKU_ARCH					sparc64
 #	define __HAIKU_ARCH_ABI				"sparc"
 #	define __HAIKU_ARCH_SPARC			1

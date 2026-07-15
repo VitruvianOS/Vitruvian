@@ -60,7 +60,9 @@ target_sources(root PRIVATE
 
 target_compile_definitions(root PRIVATE ENABLE_VREF_TRACKING)
 
-add_dependencies(root nexus)
+if(VITRUVIAN_ENABLE_NEXUS)
+	add_dependencies(root nexus)
+endif()
 
 target_include_directories(root PRIVATE
 	"./"

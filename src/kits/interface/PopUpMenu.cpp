@@ -404,15 +404,15 @@ BPopUpMenu::_thread_entry(void* menuData)
 	if (data->async && data->window)
 		_set_menu_sem_(data->window, B_BAD_SEM_ID);
 
-	delete_sem(data->lock);
-
 	// Commit suicide if needed
 	if (data->async && menu->fAutoDestruct) {
 		menu->fTrackThread = -1;
 		delete menu;
 	}
 
-	if (data->async)
+	bool isAsync = data->async;
+	delete_sem(data->lock);
+	if (isAsync)
 		delete data;
 
 	return 0;
@@ -423,7 +423,7 @@ BMenuItem*
 BPopUpMenu::_StartTrack(BPoint where, bool autoInvoke, bool startOpened,
 	BRect* _specialRect)
 {
-	// I know, this doesn't look senseful, but don't be fooled,
+	// I know, this doesn't look sense full, but don't be fooled,
 	// fUseWhere is used in ScreenLocation(), which is a virtual
 	// called by BMenu::Track()
 	fWhere = where;
@@ -461,8 +461,8 @@ BPopUpMenu::_WaitMenu(void* _data)
 	popup_menu_data* data = static_cast<popup_menu_data*>(_data);
 	BWindow* window = data->window;
 	sem_id sem = data->lock;
-	if (window != NULL) {
-		while (acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, 50000) != B_BAD_SEM_ID)
+	while (acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, 50000) != B_BAD_SEM_ID) {
+		if (window != NULL)
 			window->UpdateIfNeeded();
 	}
 

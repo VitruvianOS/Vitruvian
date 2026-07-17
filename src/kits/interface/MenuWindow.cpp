@@ -186,8 +186,9 @@ BMenuFrame::AttachedToWindow()
 {
 	BView::AttachedToWindow();
 
-	if (fMenu != NULL)
+	if (fMenu != NULL) {
 		AddChild(fMenu);
+	}
 
 	ResizeTo(Window()->Bounds().Width(), Window()->Bounds().Height());
 	if (fMenu != NULL) {

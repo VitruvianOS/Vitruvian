@@ -27,6 +27,7 @@ jobs:
             libgif-dev libicns-dev libicu-dev libinput-dev \
             libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
             libtiff-dev libudev-dev libwebp-dev libseat-dev \
+            libpam0g-dev libsystemd-dev libevdev-dev \
             libblkid-dev libxkbcommon-dev libgl1-mesa-dev libgbm-dev \
             libglu1-mesa-dev \
             libegl-dev libgl-dev linux-headers-$(uname -r) \

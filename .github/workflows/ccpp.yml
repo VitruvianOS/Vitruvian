@@ -21,6 +21,7 @@ jobs:
             libgif-dev libicns-dev libicu-dev libinput-dev \
             libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
             libtiff-dev libudev-dev libwebp-dev libseat-dev \
+            libpam0g-dev libsystemd-dev libevdev-dev \
             libblkid-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             fakeroot devscripts lintian wget qemu-utils ovmf \

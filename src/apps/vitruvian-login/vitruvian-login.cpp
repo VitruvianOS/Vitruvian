@@ -58,22 +58,22 @@ LoginWindow::LoginWindow()
 	top->SetHighUIColor(B_PANEL_TEXT_COLOR);
 	AddChild(top);
 
-	BRect box_frame(Bounds());
-	box_frame.InsetBy(10, 10);
-	BBox* box = new BBox(box_frame, "box", B_FOLLOW_NONE);
+	BRect boxFrame(Bounds());
+	boxFrame.InsetBy(10, 10);
+	BBox* box = new BBox(boxFrame, "box", B_FOLLOW_NONE);
 	box->SetLabel("Log in");
 	top->AddChild(box);
 
 	// Pre-fill with our own login name unless we are vos_login.
-	const char* deflt = "";
+	const char* defaultUser = "";
 	struct passwd* self = getpwuid(getuid());
 	if (self != NULL && self->pw_name != NULL
 			&& strcmp(self->pw_name, "vos_login") != 0) {
-		deflt = self->pw_name;
+		defaultUser = self->pw_name;
 	}
 
 	BRect r(20, 30, 380, 55);
-	fUser = new BTextControl(r, "user", "Username:", deflt, NULL,
+	fUser = new BTextControl(r, "user", "Username:", defaultUser, NULL,
 		B_FOLLOW_NONE);
 	fUser->SetDivider(be_plain_font->StringWidth("Password:") + 12);
 	box->AddChild(fUser);
@@ -95,7 +95,7 @@ LoginWindow::LoginWindow()
 	fLoginButton->MakeDefault(true);
 	box->AddChild(fLoginButton);
 
-	if (*deflt != '\0')
+	if (*defaultUser != '\0')
 		fPassword->MakeFocus(true);
 	else
 		fUser->MakeFocus(true);
@@ -121,9 +121,9 @@ LoginWindow::MessageReceived(BMessage* msg)
 			fLoginButton->SetEnabled(false);
 			fStatus->SetText("Authenticating...");
 			status_t s = _SendAuthRequest(user, pass);
+			fPassword->SetText("");
 			if (s != B_OK) {
 				_ShowError("Authentication failed.");
-				fPassword->SetText("");
 				fLoginButton->SetEnabled(true);
 				break;
 			}

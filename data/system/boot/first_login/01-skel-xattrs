@@ -1,0 +1,9 @@
+#!/bin/sh
+# Replay /etc/skel with user.* xattrs preserved. useradd -m copies file
+# bodies but strips xattrs, so BEOS:TYPE / SYS:NAME on Tracker templates,
+# printer dirs, etc. never reach the user's home. Fixup once per user.
+if [ -d /etc/skel ] && command -v tar >/dev/null; then
+	tar --xattrs --xattrs-include='user.*' -cf - -C /etc/skel . 2>/dev/null \
+		| tar --xattrs --xattrs-include='user.*' \
+			--no-overwrite-dir -xf - -C "$HOME" 2>/dev/null || true
+fi

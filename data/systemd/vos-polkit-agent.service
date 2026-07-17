@@ -1,0 +1,14 @@
+[Unit]
+Description=Vitruvian polkit authentication agent
+PartOf=graphical-session.target
+Requires=dbus.socket
+After=dbus.socket
+
+[Service]
+Type=simple
+ExecStart=/system/servers/vos-polkit-agent
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=graphical-session.target

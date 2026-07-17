@@ -1,0 +1,15 @@
+resource app_signature "application/x-vnd.Vitruvian-User";
+
+resource app_name_catalog_entry "x-vnd.Vitruvian-User:System name:User";
+
+resource app_version {
+	major     = 1,
+	middle    = 0,
+	minor     = 0,
+	variety   = B_APPV_FINAL,
+	internal  = 0,
+	short_info = "User",
+	long_info  = "Manage your account: full name, password, autologin"
+};
+
+resource app_flags B_SINGLE_LAUNCH;

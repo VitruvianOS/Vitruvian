@@ -1,12 +1,12 @@
 [Unit]
-ConditionPathExists=!/var/lib/vitruvian/greeter-enabled
+ConditionPathExists=!/var/lib/vos/greeter-enabled
 Description=Vitruvian Deskbar
 After=janus.service input_server.service notification_server.service
 Requires=janus.service
 
 [Service]
 Type=forking
-PIDFile=/run/vitruvian/Deskbar.pid
+PIDFile=/run/vos/Deskbar.pid
 ExecStart=/system/servers/janus_launch Deskbar
 StandardOutput=append:/var/log/deskbar.log
 StandardError=append:/var/log/deskbar.log

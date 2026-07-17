@@ -1,12 +1,12 @@
 [Unit]
+ConditionPathExists=!/var/lib/vos/greeter-enabled
 Description=Vitruvian Tracker (file manager)
-Conflicts=getty@tty1.service
 After=janus.service deskbar.service
 Requires=janus.service
 
 [Service]
 Type=forking
-PIDFile=/run/vitruvian/Tracker.pid
+PIDFile=/run/vos/Tracker.pid
 ExecStart=/system/servers/janus_launch Tracker
 StandardOutput=append:/var/log/tracker.log
 StandardError=append:/var/log/tracker.log

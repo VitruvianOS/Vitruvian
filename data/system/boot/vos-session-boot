@@ -1,0 +1,26 @@
+#!/bin/sh
+# Fires the graphical chain after janus is up in user mode. Mirrors what
+# graphical.target does in system mode by starting the per-server units.
+# Each janus_launch call sends B_LAUNCH_JOB to janus; janus's daemon_loop
+# picks it up and forks the server as the current uid.
+
+set -e
+
+# Small wait so janus's daemon_loop has claimed the port before we send.
+for i in 1 2 3 4 5; do
+	if [ -e "${XDG_RUNTIME_DIR:-/run/vos}/vos/janus.ready" ] \
+			|| [ -e /run/vos/janus.ready ]; then
+		break
+	fi
+	sleep 0.2
+done
+
+LAUNCH=/system/servers/janus_launch
+
+"$LAUNCH" registrar
+"$LAUNCH" app_server
+"$LAUNCH" input_server
+"$LAUNCH" mount_server
+"$LAUNCH" notification_server
+"$LAUNCH" Deskbar
+"$LAUNCH" Tracker

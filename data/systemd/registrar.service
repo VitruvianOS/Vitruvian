@@ -1,12 +1,12 @@
 [Unit]
 Description=Vitruvian registrar (app roster)
-Conflicts=getty@tty1.service
+ConditionPathExists=!/var/lib/vos/greeter-enabled
 After=janus.service
 Requires=janus.service
 
 [Service]
 Type=forking
-PIDFile=/run/vitruvian/registrar.pid
+PIDFile=/run/vos/registrar.pid
 ExecStart=/system/servers/janus_launch registrar
 StandardOutput=append:/var/log/registrar.log
 StandardError=append:/var/log/registrar.log

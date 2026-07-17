@@ -1,4 +1,17 @@
 #!/bin/sh
+# Vitruvian dpkg postinst — runs on `configure`; idempotent.
+# First-install-only actions guard on `[ -z "$2" ]`.
+
+set -e
+
+case "$1" in
+    configure) ;;
+    abort-upgrade|abort-remove|abort-deconfigure|triggered) exit 0 ;;
+    *) echo "postinst: unknown action $1" >&2; exit 0 ;;
+esac
+
+_first_install=0
+[ -z "$2" ] && _first_install=1
 
 # Base directories
 
@@ -187,35 +200,56 @@ fi
 
 # Enable system services
 
-systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript@vitruvio.service
+systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript@vos-live.service
 
-# TTY-intermediate scaffolding (dormant). The vos-session user unit and
-# profile.d hook are installed but only wire in when the operator runs
-# `systemctl --user enable vos-session` — see phase3-login.md Stage A.
 install -m 0644 -D /usr/share/vos/systemd/vos-session.service \
 	/etc/systemd/user/vos-session.service 2>/dev/null || true
+install -m 0644 -D /usr/share/vos/systemd/vos-polkit-agent.service \
+	/etc/systemd/user/vos-polkit-agent.service 2>/dev/null || true
 install -m 0644 -D /usr/share/vos/profile.d/vos-session.sh \
 	/etc/profile.d/vos-session.sh 2>/dev/null || true
 
-# vos_login: pre-auth graphical uid (greeter + FirstBootPrompt +
-# live-media Installer). No shell, no home content — janus supplies
-# everything needed via env + /var/lib/vos_login runtime dir.
-# Membership: video (DRM), input (evdev fallback), tty (VT switching for
-# kill+restart), vitruvio (nexus IPC access — same group that owns
-# /dev/nexus). See phase3-login.md Stage C.
+install -m 0644 -D /usr/share/vos/pam.d/vitruvian-auth \
+	/etc/pam.d/vitruvian-auth 2>/dev/null || true
+
+# Recovery TTY if janus wedges.
+systemctl enable getty@tty2.service 2>/dev/null || true
+
+install -d -m 0755 /etc/vos /var/lib/vos /usr/share/vos 2>/dev/null || true
+
+# vos_login: pre-auth graphical uid (greeter + FBP + live Installer).
 if ! getent passwd vos_login >/dev/null; then
 	useradd --system --no-create-home \
-		--home-dir /var/lib/vos_login \
+		--home-dir /system/login \
 		--shell /usr/sbin/nologin \
 		--comment "Vitruvian pre-auth graphical uid" \
 		vos_login || true
 fi
-for _g in video input tty vitruvio; do
+for _g in video input tty nexus; do
 	getent group "$_g" >/dev/null && adduser vos_login "$_g" >/dev/null 2>&1 || true
 done
-install -d -m 0755 -o vos_login -g vos_login /var/lib/vos_login 2>/dev/null || true
-install -d -m 0755 /var/lib/vitruvian 2>/dev/null || true
-# Greeter mode is opt-in: `touch /var/lib/vitruvian/greeter-enabled` and
-# reboot to switch from autologin to the graphical greeter. The vitruvio
-# chain services skip themselves while the sentinel is present; janus
-# spawns app_server + vitruvian-login instead.
+install -d -m 0755 -o vos_login -g vos_login /system/login 2>/dev/null || true
+for _sub in config config/settings config/cache; do
+	install -d -m 0755 -o vos_login -g vos_login \
+		/system/login/$_sub 2>/dev/null || true
+done
+# First install only — upgrades preserve the admin's autologin choice.
+if [ "${1:-}" = "configure" ] && [ -z "${2:-}" ]; then
+    touch /var/lib/vos/greeter-enabled
+fi
+
+# vos-live: ephemeral live persona; gated on /etc/vos/live.
+if [ -e /etc/vos/live ]; then
+    if ! getent passwd vos-live >/dev/null; then
+        useradd --system --create-home \
+            --home-dir /home/vos-live \
+            --shell /bin/bash \
+            --comment "Vitruvian live/try persona" \
+            vos-live || true
+        passwd -l vos-live 2>/dev/null || true
+    fi
+    for _g in sudo video render input plugdev nexus; do
+        getent group "$_g" >/dev/null \
+            && adduser vos-live "$_g" >/dev/null 2>&1 || true
+    done
+fi

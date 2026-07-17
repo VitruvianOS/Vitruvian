@@ -1,0 +1,18 @@
+[Unit]
+Description=Vitruvian OS user session (janus + graphical chain)
+Requires=dbus.socket
+After=dbus.socket
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/system/servers/janus
+ExecStartPost=/system/servers/vos-session-boot
+Restart=on-failure
+RestartSec=1s
+TimeoutStopSec=10s
+StandardOutput=append:%h/.local/log/janus.log
+StandardError=append:%h/.local/log/janus.log
+
+[Install]
+WantedBy=default.target

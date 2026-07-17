@@ -1,0 +1,8 @@
+# vos-live: passwordless sudo for the live/try persona.
+#
+# Ships in the vos package. Only consulted when /etc/vos/live is
+# present — Installer's --commit-setup deletes this file, the marker,
+# and the vos-live account atomically on install so a target ships
+# WITHOUT this snippet. Do not add this rule for any real user.
+
+vos-live ALL=(ALL) NOPASSWD:ALL

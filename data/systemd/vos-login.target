@@ -1,0 +1,11 @@
+[Unit]
+Description=Vitruvian pre-auth login environment
+Documentation=man:systemd.special(7)
+Requires=basic.target
+After=basic.target
+AllowIsolate=no
+
+# Pulled in when BLaunchRoster::Target("login") fires (janus routes
+# it to systemd StartUnit). System-mode graphical units bound to
+# the greeter / FBP chain should attach with:
+#   [Install] WantedBy=vos-login.target

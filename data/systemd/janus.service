@@ -1,22 +1,27 @@
 [Unit]
 Description=Vitruvian Janus - privileged server launcher and launch daemon
 DefaultDependencies=no
-Before=graphical.target
-After=systemd-modules-load.service local-fs.target
-Wants=systemd-modules-load.service
+Before=graphical.target shutdown.target
+Conflicts=shutdown.target
+After=systemd-modules-load.service local-fs.target dbus.socket systemd-logind.service
+Wants=systemd-modules-load.service dbus.socket systemd-logind.service
 
 [Service]
 Type=simple
-Environment=VITRUVIAN_DEFAULT_USER=vitruvio
-ExecStartPre=-/bin/mkdir -p /run/vitruvian
+Environment=VOS_DEFAULT_USER=vos-live
+ExecStartPre=-/bin/mkdir -p /run/vos
 ExecStart=/system/servers/janus
 Restart=on-failure
 RestartSec=1s
 TimeoutStopSec=10s
-StandardOutput=append:/var/log/janus.log
-StandardError=append:/var/log/janus.log
+# Fork bursts starve the default RLIMIT_NPROC.
+LimitNPROC=4096
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
 User=root
 Group=root
 
 [Install]
-WantedBy=sysinit.target
+WantedBy=graphical.target
+Alias=display-manager.service

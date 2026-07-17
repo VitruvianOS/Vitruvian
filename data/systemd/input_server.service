@@ -1,12 +1,12 @@
 [Unit]
-ConditionPathExists=!/var/lib/vitruvian/greeter-enabled
+ConditionPathExists=!/var/lib/vos/greeter-enabled
 Description=Vitruvian input_server
 After=janus.service app_server.service
 Requires=janus.service app_server.service
 
 [Service]
 Type=forking
-PIDFile=/run/vitruvian/input_server.pid
+PIDFile=/run/vos/input_server.pid
 ExecStart=/system/servers/janus_launch input_server
 StandardOutput=append:/var/log/input_server.log
 StandardError=append:/var/log/input_server.log

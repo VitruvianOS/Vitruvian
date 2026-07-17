@@ -27,6 +27,7 @@
 #include <Message.h>
 #include <MessageRunner.h>
 #include <Roster.h>
+#include <RosterPrivate.h>
 #include <ScrollView.h>
 #include <Screen.h>
 #include <SpaceLayoutItem.h>
@@ -321,7 +322,7 @@ TeamMonitorWindow::MessageReceived(BMessage* msg)
 			break;
 
 		case TM_FORCE_REBOOT:
-			_kern_shutdown(true);
+			BRoster::Private(be_roster).ShutDown(true, false, false);
 			break;
 
 		case TM_KILL_APPLICATION:

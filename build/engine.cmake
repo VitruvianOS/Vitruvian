@@ -44,7 +44,7 @@ macro( DoCatalogs signature subdir )
 	add_custom_target( catalogs_${signature} ALL DEPENDS ${_catalog_outputs} )
 
 	install( DIRECTORY "${_catalog_dir}/"
-		DESTINATION /system/data/locale/catalogs
+		DESTINATION "/system/data/locale/catalogs/${signature}"
 		FILES_MATCHING PATTERN "*.catalog"
 	)
 endmacro()

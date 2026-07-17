@@ -42,7 +42,7 @@ C++		:= $(CXX)
 ifeq ($(strip $(TYPE)), DRIVER)
 	CFLAGS	+= -D_KERNEL_MODE=1
 else
-	CFLAGS += `cat /etc/vitruvian.specs`
+	CFLAGS += `cat /etc/vos.specs`
 endif
 
 CFLAGS += -include LinuxBuildCompatibility.h

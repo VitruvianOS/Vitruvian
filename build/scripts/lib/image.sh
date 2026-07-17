@@ -72,8 +72,8 @@ create_raw() {
     _raw="$_basedir/output/vitruvian.raw"
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
-    _user="vitruvio"
-    _pass="vitruvio"
+    _user=""
+    _pass=""
     _ovmf_vars="$_basedir/OVMF_VARS.fd"
     _host_shared="$_basedir/shared"
     _guest_mnt="/mnt/host_shared"
@@ -364,7 +364,7 @@ apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso
 apt install -y -f --reinstall /tmp/*.deb
 depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel stage)"
 
-    _common_chroot_setup "$_chroot_dir" "vitruvian" "vitruvio" "live" \
+    _common_chroot_setup "$_chroot_dir" "vitruvian" "" "" \
         || die "_common_chroot_setup failed"
 
     if [ "$BUILD_TYPE" = "Debug" ]; then
@@ -553,25 +553,38 @@ EOF
 _common_chroot_setup() {
     _mnt="$1"
     _hostname="$2"
-    _user="$3"
-    _pass="$4"
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 echo '$_hostname' > /etc/hostname
-echo 'root:$_pass' | chpasswd
-# useradd -m skips the skel copy if the home already exists (stale chroot).
-userdel -f $_user || echo 'userdel: no such user (ok on first build)' >&2
-rm -rf /home/$_user
-useradd -m -s /bin/bash $_user
-echo '$_user:$_pass' | chpasswd
-adduser $_user sudo
-for g in input video render; do adduser $_user \$g; done
-test -s /home/$_user/config/settings/boot/UserBootscript
+# Root locked; Installer's Advanced mode is the only way to set a root
+# password on a target.
+passwd -l root 2>/dev/null || true
+
+# Live/raw markers — Installer strips these on --commit-setup.
+mkdir -p /etc/vos
+: > /etc/vos/live
+: > /etc/vos/debug
+if ! getent passwd vos-live >/dev/null; then
+    useradd --system --create-home --home-dir /home/vos-live \\
+        --shell /bin/bash --comment 'Vitruvian live/try persona' \\
+        vos-live
+    passwd -l vos-live
+    for g in sudo video render input plugdev nexus; do
+        getent group \$g >/dev/null && adduser vos-live \$g || true
+    done
+fi
+# vos_login needs /dev/nexus for the pre-auth chain.
+getent group nexus >/dev/null && \\
+    getent passwd vos_login >/dev/null && \\
+    adduser vos_login nexus >/dev/null 2>&1 || true
+
+echo 'vos-live' > /etc/vos/autologin
+chmod 0644 /etc/vos/autologin
 
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<'LOGEOF'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --noissue --autologin $_user %I \$TERM
+ExecStart=-/sbin/agetty --noissue --autologin vos-live %I \$TERM
 TTYVTDisallocate=no
 LOGEOF
 
@@ -592,7 +605,8 @@ for _u in \\
     sys-fs-fuse-connections.mount \\
     sys-kernel-config.mount \\
     sys-kernel-debug.mount \\
-    sys-kernel-tracing.mount; do
+    sys-kernel-tracing.mount \\
+    ctrl-alt-del.target; do
     systemctl mask \"\$_u\" 2>/dev/null || true
 done" || die "_common_chroot_setup chroot bash-c failed"
 }
@@ -605,8 +619,8 @@ create_raspberry() {
     _raw="$_basedir/output/vitruvian-$_board.raw"
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
-    _user="vitruvio"
-    _pass="vitruvio"
+    _user=""
+    _pass=""
     _boot_size=$(board_config "$_board" boot_size_mb)
     _dtb_files=$(board_config "$_board" dtb_files)
     _board_pkgs="$(get_board_packages "$_board")"
@@ -763,8 +777,8 @@ create_uboot_board() {
     _raw="$_basedir/output/vitruvian-$_board.raw"
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
-    _user="vitruvio"
-    _pass="vitruvio"
+    _user=""
+    _pass=""
 
     mkdir -p "$_basedir/output"
 

@@ -18,3 +18,4 @@ add_subdirectory(shortcuts)
 #add_subdirectory(sounds)       # needs media kit
 #add_subdirectory(time)         # needs bnetapi
 add_subdirectory(tracker)
+add_subdirectory(user)

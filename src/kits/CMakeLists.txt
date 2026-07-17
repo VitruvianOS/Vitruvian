@@ -4,7 +4,7 @@ AddOn(
 	be
 	SHARED
 
-	LIBS root icon ${ICU_LIBRARIES} agg ${ZLIB_LIBRARIES} pthread localestub shared
+	LIBS root icon ${ICU_LIBRARIES} agg ${ZLIB_LIBRARIES} pthread localestub shared systemd
 )
 
 UsePrivateHeaders(be app interface kernel print shared locale libroot shared system)

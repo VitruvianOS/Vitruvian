@@ -7,6 +7,9 @@ ImageInclude("/system/" ${CORE_APPLICATIONS})
 # Greeter binary — /system/servers/ so janus finds it by name.
 ImageInclude("/system/servers" vitruvian-login)
 
+# Polkit authentication agent (auto-started with the graphical session).
+ImageInclude("/system/servers" vos-polkit-agent)
+
 set(SYSTEM_APPS
 	AboutSystem
 	ActivityMonitor

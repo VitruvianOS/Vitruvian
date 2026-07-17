@@ -7,7 +7,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-rt-amd64 systemd-sysv" \
                 " network-manager net-tools wireless-tools curl openssh-client" \
-                " procps vim-tiny libbinutils openssh-server locales xfsprogs" \
+                " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber" \
                 " grub-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin"
@@ -16,7 +16,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-arm64 systemd-sysv" \
                 " network-manager net-tools wireless-tools curl openssh-client" \
-                " procps vim-tiny libbinutils openssh-server locales xfsprogs" \
+                " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber" \
                 " grub-common grub-efi-arm64-bin"
@@ -25,7 +25,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-armmp systemd-sysv" \
                 " network-manager net-tools wireless-tools curl openssh-client" \
-                " procps vim-tiny libbinutils openssh-server locales" \
+                " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber" \
                 " grub-common"
@@ -34,7 +34,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-riscv64 systemd-sysv" \
                 " network-manager net-tools curl openssh-client" \
-                " procps vim-tiny libbinutils openssh-server locales xfsprogs" \
+                " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber" \
                 " grub-common grub-efi-riscv64-bin"
@@ -55,7 +55,7 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev libpam0g-dev" \
+                " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libglu1-mesa-dev"
             ;;
@@ -66,7 +66,7 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev libpam0g-dev" \
+                " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libglu1-mesa-dev"
             ;;
@@ -77,7 +77,7 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev libpam0g-dev" \
+                " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         riscv64)
@@ -87,7 +87,7 @@ get_dev_packages() {
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
-                " libxkbcommon-dev libsystemd-dev libpam0g-dev" \
+                " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         *)
@@ -119,23 +119,23 @@ get_raw_image_packages() {
             # grub's hard-coded /EFI/debian prefix makes it unsuitable as the
             # /EFI/BOOT/BOOTX64.EFI fallback used by removable-media boot.
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-rt-amd64 grub-common grub2-common" \
                 " grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin xfsprogs"
             ;;
         arm64)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-arm64 grub-common grub2-common grub-efi-arm64 grub-efi-arm64-bin xfsprogs"
             ;;
         arm32)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-armmp xfsprogs"
             ;;
         riscv64)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-riscv64 grub-common grub2-common grub-efi-riscv64 grub-efi-riscv64-bin xfsprogs"
             ;;
         *)
@@ -149,57 +149,57 @@ get_board_packages() {
     case "$_board" in
         raspberry)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-arm64 raspi-firmware dosfstools rsync"
             ;;
         rpi-arm32)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-armmp raspi-firmware dosfstools rsync"
             ;;
         rockchip)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-arm64 u-boot-rockchip dosfstools rsync"
             ;;
         allwinner)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-arm64 u-boot-sunxi dosfstools rsync"
             ;;
         allwinner-h3)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-armmp u-boot-sunxi dosfstools rsync"
             ;;
         beagle)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-arm64 u-boot-beagle dosfstools rsync"
             ;;
         beaglebone)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-armmp u-boot-beaglebone dosfstools rsync"
             ;;
         nxp)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-arm64 u-boot-imx dosfstools rsync"
             ;;
         amlogic)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-arm64 u-boot-meson dosfstools rsync"
             ;;
         visionfive2)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-riscv64 dosfstools rsync"
             ;;
         licheerv)
             printf '%s' \
-                "systemd systemd-sysv sudo vim net-tools iproute2 openssh-server" \
+                "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-riscv64 dosfstools rsync"
             ;;
         *)

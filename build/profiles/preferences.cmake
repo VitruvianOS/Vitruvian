@@ -12,6 +12,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	#ScreenSaver
 	Shortcuts
 	Tracker_prefs
+	User
 )
 
 # Installed binary names (OUTPUT_NAME where it differs) — used for symlinks and staging
@@ -28,6 +29,7 @@ set(SYSTEM_PREFERENCES
 	#ScreenSaver
 	Shortcuts
 	Tracker
+	User
 )
 
 ImageInclude("/system/preferences" ${SYSTEM_PREFERENCES_TARGETS})

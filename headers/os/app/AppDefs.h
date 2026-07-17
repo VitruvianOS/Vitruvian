@@ -134,7 +134,13 @@ enum command_code {
 
 	// Vitruvian seat session events (sent by janus on VT switch)
 	B_SEAT_ENABLED				= 'STEN',
-	B_SEAT_DISABLED				= 'STDS'
+	B_SEAT_DISABLED				= 'STDS',
+
+	// Vitruvian system power events (broadcast by registrar on logind
+	// PrepareForSleep). Fields: none in v1. Fire-and-forget; the
+	// registrar waits ~2s before releasing the sleep inhibit.
+	B_SYSTEM_SUSPENDING			= '_sSU',
+	B_SYSTEM_RESUMED			= '_sRE'
 
 	// Media Kit reserves all reserved codes starting in 'TRI'
 };

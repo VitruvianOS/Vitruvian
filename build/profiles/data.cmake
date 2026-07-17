@@ -10,11 +10,51 @@ set(SYSTEMD_SERVICES
   data/systemd/deskbar.service
   data/systemd/tracker.service
   data/systemd/userbootscript@.service
+  data/systemd/vos-login.target
 )
 
+install(FILES data/tmpfiles.d/vos.conf
+  DESTINATION /usr/lib/tmpfiles.d/)
+
+install(PROGRAMS data/libexec/vos-firstboot-commit
+  DESTINATION /usr/libexec/)
+
+install(PROGRAMS data/libexec/vos-install-helper
+  DESTINATION /usr/libexec/)
+
+install(FILES data/etc/installer/excludes.list
+  DESTINATION /usr/share/vos/installer/)
+
+install(PROGRAMS data/libexec/vos-set-autologin
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.user.policy
+  DESTINATION /usr/share/polkit-1/actions/)
+
+# Consulted only when /etc/vos/live exists; Installer strips it on commit.
+install(FILES data/sudoers.d/vos-live
+  DESTINATION /etc/sudoers.d/
+  PERMISSIONS OWNER_READ GROUP_READ)
+
+install(FILES data/systemd/sleep.conf.d/50-vos.conf
+  DESTINATION /etc/systemd/sleep.conf.d/)
+
+install(FILES data/systemd/logind.conf.d/50-vos.conf
+  DESTINATION /etc/systemd/logind.conf.d/)
+
+install(FILES data/etc/security/pwquality.conf.d/50-vos.conf
+  DESTINATION /etc/security/pwquality.conf.d/)
+
 ImageIncludeFile("data/pam.d/vitruvian-session" "/etc/pam.d")
+ImageIncludeFile("data/pam.d/vitruvian-greeter" "/etc/pam.d")
+install(FILES data/pam.d/vitruvian-auth DESTINATION /usr/share/vos/pam.d/)
 
 install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)
+
+# TTY-intermediate scaffolding — dormant unless enabled at runtime.
+install(FILES data/systemd/vos-session.service       DESTINATION /usr/share/vos/systemd/)
+install(FILES data/systemd/vos-polkit-agent.service  DESTINATION /usr/share/vos/systemd/)
+install(FILES data/profile.d/vos-session.sh          DESTINATION /usr/share/vos/profile.d/)
+install(PROGRAMS data/system/boot/vos-session-boot DESTINATION /system/servers/)
 
 install(FILES data/etc/systemd/journald.conf.d/vitruvian.conf DESTINATION /etc/systemd/journald.conf.d/)
 
@@ -66,4 +106,4 @@ ImageIncludeFile("data/bin/welcome" "/bin")
 
 # Build files
 ImageIncludeFile("data/develop/makefile-engine" "/etc")
-ImageIncludeFile("data/develop/vitruvian.specs" "/etc")
+ImageIncludeFile("data/develop/vos.specs" "/etc")

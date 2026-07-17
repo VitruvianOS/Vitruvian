@@ -19,5 +19,6 @@ else()
 
 add_subdirectory(build)
 add_subdirectory(bin)
+add_subdirectory(tools)
 
 endif()

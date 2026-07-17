@@ -8,3 +8,5 @@ Application(Locale
 	RDEF Locale.rdef
 )
 UsePrivateHeaders(Locale locale)
+
+DoCatalogs("x-vnd.Vitruvian-Locale" preferences/locale)

@@ -165,6 +165,8 @@ fill_partition_info(const char* devPath, const char* sysPath,
 	data->block_size = get_block_size(devPath);
 	data->index = partIndex;
 	data->status = B_PARTITION_VALID;
+	if (wholeDevice)
+		data->flags |= B_PARTITION_IS_DEVICE;
 
 	char namePath[PATH_MAX];
 	snprintf(namePath, sizeof(namePath), "%s/partition", sysPath);
@@ -635,6 +637,7 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 
 	memset(buffer, 0, bufferSize);
 
+	buffer->path = strdup(devPath);
 	buffer->device_flags = B_DISK_DEVICE_HAS_MEDIA;
 
 	if (is_removable_device(sysPath))

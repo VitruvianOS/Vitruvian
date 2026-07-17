@@ -5,6 +5,7 @@
 
 
 #include <errno.h>
+#include <limits.h>
 #include <new>
 #include <unistd.h>
 #include <stdio.h>
@@ -365,15 +366,38 @@ BPartition::GetPath(BPath* path) const
 	if (error != B_OK)
 		return error;
 
-	char indexBuffer[24];
+	// Big enough for any real leaf name; dm-crypt / lvm names commonly
+	// run 40+ chars, and Linux allows up to NAME_MAX. Small allocations
+	// hidden truncations here silently return a wrong /dev path as B_OK.
+	char indexBuffer[NAME_MAX + 1];
 
 	if (Parent()->IsDevice()) {
-		// Our parent is a device, so we replace `raw' by our index.
+		// Our parent is a device. Haiku path convention: `.../raw` →
+		// replace `raw` with the partition index. Vitruvian/Linux
+		// convention: `/dev/vdb` → `/dev/vdb1` (or `/dev/nvme0n1p1`
+		// when the leaf ends in a digit). Prefer the on-disk partition
+		// number (Name(), read from sysfs) over Index() so gaps in the
+		// GPT numbering are preserved.
 		const char* leaf = path->Leaf();
-		if (!leaf || strcmp(leaf, "raw") != B_OK)
+		if (!leaf)
 			return B_ERROR;
-
-		snprintf(indexBuffer, sizeof(indexBuffer), "%" B_PRId32, Index());
+		if (strcmp(leaf, "raw") == 0) {
+			snprintf(indexBuffer, sizeof(indexBuffer), "%" B_PRId32,
+				Index());
+		} else {
+			const char* partNum = Name();
+			int32 fallback = Index() + 1;
+			size_t leafLen = strlen(leaf);
+			bool trailingDigit = (leafLen > 0
+				&& leaf[leafLen - 1] >= '0' && leaf[leafLen - 1] <= '9');
+			if (partNum != NULL && *partNum) {
+				snprintf(indexBuffer, sizeof(indexBuffer), "%s%s%s",
+					leaf, trailingDigit ? "p" : "", partNum);
+			} else {
+				snprintf(indexBuffer, sizeof(indexBuffer), "%s%s%" B_PRId32,
+					leaf, trailingDigit ? "p" : "", fallback);
+			}
+		}
 	} else {
 		// Our parent is a normal partition, no device: Append our index.
 		snprintf(indexBuffer, sizeof(indexBuffer), "%s_%" B_PRId32,

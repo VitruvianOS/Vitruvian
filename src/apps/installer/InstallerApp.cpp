@@ -12,9 +12,8 @@
 
 #include <Alert.h>
 #include <Roster.h>
+#include <RosterPrivate.h>
 #include <TextView.h>
-
-#include <syscalls.h>
 
 #include "tracker_private.h"
 #ifndef __VOS__
@@ -94,7 +93,8 @@ InstallerApp::Quit()
 
 			// Quickly reboot without touching anything
 			// on disk (which we might just have ejected)
-			_kern_shutdown(true);
+			BRoster::Private((BRoster*)be_roster).ShutDown(true, false,
+				false);
 		} else {
 			// Return to FirstBootPrompt if the user hasn't
 			// installed Haiku yet

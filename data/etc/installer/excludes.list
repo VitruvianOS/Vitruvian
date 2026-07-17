@@ -1,0 +1,29 @@
+# Paths rsync must skip when cloning the running system into /target.
+# Live-media specifics (overlay/tmpfs), volatile kernel-owned trees,
+# per-boot machine identity, and the target mount itself.
+/proc/*
+/sys/*
+/dev/*
+/run/*
+/tmp/*
+/mnt/*
+/media/*
+/target/*
+/var/tmp/*
+/var/cache/apt/archives/*.deb
+/var/lib/apt/lists/*
+/var/log/*.gz
+/var/log/*.[0-9]
+/var/log/*.[0-9].gz
+/lost+found
+/etc/machine-id
+/var/lib/dbus/machine-id
+/etc/hostname
+/etc/hosts
+/etc/fstab
+/etc/crypttab
+/etc/mtab
+/etc/ssh/ssh_host_*
+/home/*/.cache/*
+/var/lib/vos/first-boot-done
+/run/vos/*

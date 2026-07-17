@@ -1,0 +1,254 @@
+#!/bin/sh
+# vos-install-helper — target-side configuration for the Installer.
+#
+# Two modes:
+#   TARGET               post-rsync config: machine-id, fstab, initramfs,
+#                        GRUB. Removes the sentinel so the freshly-copied
+#                        target boots into first-time setup.
+#   --commit-setup TARGET
+#                        reads setup fields on stdin, hashes passwords
+#                        under root, writes /run/vos/setup.conf, and
+#                        invokes vos-firstboot-commit --root=TARGET.
+#                        Also strips the live persona from the target:
+#                        userdel vos-live, /etc/vos/live, sudoers.d.
+#
+# Invoked by the Installer via pkexec. Assumes /target is mounted.
+
+set -eu
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "vos-install-helper must run as root (invoke via pkexec)" >&2
+    exit 1
+fi
+
+log() { printf '[vos-install-helper] %s\n' "$*" >&2; }
+
+MODE="config"
+if [ "${1:-}" = "--commit-setup" ]; then
+    MODE="commit-setup"
+    shift
+fi
+
+_arg="${1:-}"
+if [ -z "$_arg" ]; then
+    echo "usage: vos-install-helper [--commit-setup] /path/to/target" >&2
+    exit 1
+fi
+
+TARGET="$(realpath -e "$_arg" 2>/dev/null || true)"
+if [ -z "$TARGET" ] || [ ! -d "$TARGET" ]; then
+    log "target path does not exist: $_arg"
+    exit 1
+fi
+
+# In config mode (rsync target) we refuse to operate on /. commit-setup
+# is legal on / because it's the in-place raw first-boot path — user
+# creation happens on the running root, not a mounted target chroot.
+if [ "$MODE" = "config" ]; then
+    if [ "$TARGET" = "/" ]; then
+        log "refusing to operate on / in config mode"
+        exit 2
+    fi
+    if ! mountpoint -q "$TARGET"; then
+        log "target is not a mountpoint: $TARGET"
+        exit 2
+    fi
+fi
+
+# ============================ commit-setup ============================
+if [ "$MODE" = "commit-setup" ]; then
+    # Read key=value fields from stdin. We must never trust these to be
+    # safe shell — parse as data. Only whitelisted keys survive.
+    _language=""
+    _keymap=""
+    _username=""
+    _full_name=""
+    _hostname=""
+    _sudo_enabled=1
+    _autologin=0
+    _password=""
+    _root_password=""
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        case "$_line" in ''|\#*) continue ;; esac
+        _k=${_line%%=*}
+        _v=${_line#*=}
+        case "$_k" in
+            language)      _language=$_v ;;
+            keymap)        _keymap=$_v ;;
+            username)      _username=$_v ;;
+            full_name)     _full_name=$_v ;;
+            hostname)      _hostname=$_v ;;
+            sudo_enabled)  _sudo_enabled=$_v ;;
+            autologin)     _autologin=$_v ;;
+            password)      _password=$_v ;;
+            root_password) _root_password=$_v ;;
+            *) log "ignoring unknown key: $_k" ;;
+        esac
+    done
+
+    if [ -z "$_username" ] || [ -z "$_password" ]; then
+        log "commit-setup: missing username or password"
+        exit 2
+    fi
+
+    # Hash under root so the plaintext never touches a user-writable
+    # file. mkpasswd (whois pkg) is our preferred hasher; openssl is the
+    # documented fallback.
+    _hash_password() {
+        if command -v mkpasswd >/dev/null 2>&1; then
+            printf '%s' "$1" | mkpasswd -m sha-512 -s
+        elif command -v openssl >/dev/null 2>&1; then
+            printf '%s' "$1" | openssl passwd -6 -stdin
+        else
+            log "no password hasher available (need mkpasswd or openssl)"
+            return 1
+        fi
+    }
+
+    _pw_hash=$(_hash_password "$_password")
+    _password=""
+    _root_hash=""
+    if [ -n "$_root_password" ]; then
+        _root_hash=$(_hash_password "$_root_password")
+        _root_password=""
+    fi
+
+    # Write the conf into /run so nothing survives a reboot. 0600 root.
+    mkdir -p /run/vos
+    CONF=/run/vos/setup.conf
+    umask 077
+    : > "$CONF"
+    {
+        [ -n "$_language" ]  && printf 'language=%s\n'      "$_language"
+        [ -n "$_keymap" ]    && printf 'keymap=%s\n'        "$_keymap"
+        [ -n "$_hostname" ]  && printf 'hostname=%s\n'      "$_hostname"
+        [ -n "$_full_name" ] && printf 'full_name=%s\n'     "$_full_name"
+        printf 'username=%s\n'       "$_username"
+        printf 'password_hash=%s\n'  "$_pw_hash"
+        [ -n "$_root_hash" ] && printf 'root_hash=%s\n'     "$_root_hash"
+        printf 'sudo_enabled=%s\n'   "$_sudo_enabled"
+        printf 'autologin=%s\n'      "$_autologin"
+    } > "$CONF"
+    chown root:root "$CONF"
+    chmod 0600 "$CONF"
+
+    /usr/libexec/vos-firstboot-commit --root="$TARGET" "$CONF"
+    _rc=$?
+    # setup.conf is unlink'd by vos-firstboot-commit on success; make
+    # sure it's gone even on failure so a retry starts clean.
+    rm -f "$CONF"
+    if [ $_rc -ne 0 ]; then
+        log "vos-firstboot-commit failed (rc=$_rc)"
+        exit $_rc
+    fi
+
+    # Set up the in-target chroot wrapper for the remaining steps.
+    if [ "$TARGET" = "/" ]; then
+        _in=""
+    else
+        _in="chroot $TARGET"
+    fi
+
+    # nexus device access: real user needs to be in the "nexus" group
+    # (created by nexus-dkms postinst) so /dev/nexus{,_area,_node_monitor}
+    # open. vos-live had it via image.sh; the real user must be enrolled
+    # explicitly.
+    if $_in getent group nexus >/dev/null 2>&1; then
+        $_in usermod -aG nexus "$_username" \
+            || log "warn: could not add $_username to nexus group"
+    fi
+
+    # --- Strip the live persona from the target -----------------------
+    # These are MUST-SUCCEED: leaving vos-live behind ships the target
+    # with a passwordless-sudo account. When TARGET is /, we run the
+    # commands directly (in-place raw first-boot).
+    $_in userdel -f -r vos-live 2>/dev/null || true
+    if $_in getent passwd vos-live >/dev/null 2>&1; then
+        log "userdel vos-live failed on target"; exit 3
+    fi
+    rm -f "$TARGET/etc/vos/live" || {
+        log "cannot remove /etc/vos/live"; exit 3; }
+    rm -f "$TARGET/etc/vos/debug" || true
+    rm -f "$TARGET/etc/sudoers.d/vos-live" || {
+        log "cannot remove sudoers.d/vos-live"; exit 3; }
+    # If the live session enabled the debug SSH affordance, don't carry
+    # it into the target. `start` doesn't persist across boots, but
+    # disable is idempotent and cheap.
+    $_in systemctl disable ssh.service 2>/dev/null || true
+    $_in systemctl disable sshd.service 2>/dev/null || true
+
+    log "commit-setup complete for user $_username"
+    exit 0
+fi
+
+# ============================ config mode ============================
+
+_live_source="$(findmnt -no SOURCE / || true)"
+_target_source="$(findmnt -no SOURCE "$TARGET" || true)"
+_target_fstype="$(findmnt -no FSTYPE "$TARGET" || true)"
+
+if [ -z "$_target_source" ] || [ -z "$_target_fstype" ]; then
+    log "cannot resolve target block device / fstype"
+    exit 2
+fi
+if [ -n "$_live_source" ] && [ "$_target_source" = "$_live_source" ]; then
+    log "target device matches live root ($_target_source); refusing"
+    exit 2
+fi
+
+log "config: target=$TARGET (source=$_target_source fstype=$_target_fstype)"
+
+# The trap must be armed before the first rbind so a mid-loop failure
+# still tears the mounts down.
+_cleanup() {
+    for _fs in run sys proc dev/pts dev; do
+        umount -R "$TARGET/$_fs" 2>/dev/null || true
+    done
+}
+trap _cleanup EXIT INT TERM
+
+: > "$TARGET/etc/machine-id"
+rm -f "$TARGET/var/lib/dbus/machine-id"
+systemd-machine-id-setup --root="$TARGET"
+
+_target_uuid="$(blkid -s UUID -o value "$_target_source" || true)"
+if [ -z "$_target_uuid" ]; then
+    log "cannot resolve target UUID"
+    exit 2
+fi
+
+# btrfs doesn't accept errors=remount-ro; every other supported fs does.
+_fsck_pass=1
+case "$_target_fstype" in
+    btrfs) _root_opts="defaults" ; _fsck_pass=0 ;;
+    *)     _root_opts="errors=remount-ro" ;;
+esac
+
+cat > "$TARGET/etc/fstab" <<EOF
+# /etc/fstab — written by vos-install-helper
+UUID=$_target_uuid  /  $_target_fstype  $_root_opts  0  $_fsck_pass
+tmpfs               /tmp  tmpfs  defaults,nosuid,nodev  0  0
+EOF
+
+for _fs in dev proc sys run; do
+    mkdir -p "$TARGET/$_fs"
+    mount --rbind "/$_fs" "$TARGET/$_fs"
+done
+
+chroot "$TARGET" update-initramfs -u -k all
+
+_target_disk="$(lsblk -no PKNAME "$_target_source" | head -n1)"
+if [ -z "$_target_disk" ]; then
+    log "cannot resolve parent disk of $_target_source"
+    exit 2
+fi
+chroot "$TARGET" grub-install "/dev/$_target_disk"
+chroot "$TARGET" update-grub
+
+# Sentinel is written by --commit-setup after this run, once the user
+# creation finishes. Make sure any stale copy from the source root is
+# gone so the target boots into setup.
+rm -f "$TARGET/var/lib/vos/first-boot-done"
+
+log "config complete"
+exit 0

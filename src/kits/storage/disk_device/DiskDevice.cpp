@@ -188,11 +188,36 @@ BDiskDevice::Update(bool* updated)
 }
 
 
+// _FreePartitionStrings — walks the partition tree freeing the
+// strdup'd string fields (name/type/content_name/content_type/
+// parameters/content_parameters) that libroot2's fill_partition_info
+// allocates. Haiku's kernel-side impl packs these into the flat buffer;
+// on Vitruvian we allocate per-field so they must be released here.
+static void
+_FreePartitionStrings(user_partition_data* data)
+{
+	if (data == NULL)
+		return;
+	free(data->name);              data->name = NULL;
+	free(data->content_name);      data->content_name = NULL;
+	free(data->type);              data->type = NULL;
+	free(data->content_type);      data->content_type = NULL;
+	free(data->parameters);        data->parameters = NULL;
+	free(data->content_parameters); data->content_parameters = NULL;
+	for (int32 i = 0; i < data->child_count; i++)
+		_FreePartitionStrings(data->children[i]);
+}
+
+
 // Unset
 void
 BDiskDevice::Unset()
 {
 	BPartition::_Unset();
+	if (fDeviceData != NULL) {
+		free(fDeviceData->path);
+		_FreePartitionStrings(&fDeviceData->device_partition_data);
+	}
 	free(fDeviceData);
 	fDeviceData = NULL;
 }

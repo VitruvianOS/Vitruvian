@@ -94,7 +94,9 @@ BDiskDeviceRoster::GetNextDevice(BDiskDevice* device)
 	if (id < 0)
 		return id;
 
-	return device->_SetTo(id, true, neededSize);
+	// deviceOnly=false so libroot2 populates the partition children;
+	// callers rely on VisitEachDescendant walking the full tree.
+	return device->_SetTo(id, false, neededSize);
 }
 
 

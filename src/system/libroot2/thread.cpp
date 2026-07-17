@@ -412,46 +412,38 @@ wait_for_remote_thread(thread_id id, status_t* returnCode)
 	CALLED();
 
 	if (id <= 0)
-		return B_BAD_VALUE;
+		return B_BAD_THREAD_ID;
 
-	errno = 0;
 	int pfd = syscall(SYS_pidfd_open, id, 0);
 	if (pfd < 0)
-		return pfd;
+		return B_BAD_THREAD_ID;
 
 	struct pollfd p = { .fd = pfd, .events = POLLIN };
 	int pollfd = poll(&p, 1, -1);
+
 	if (pollfd < 0) {
 		int saved = errno;
 		close(pfd);
 		if (saved == EINTR)
 			return B_INTERRUPTED;
-		return B_ERROR;
+		return B_BAD_THREAD_ID;
 	}
 
+	status_t exitStatus = B_OK;
 	siginfo_t si;
 	memset(&si, 0, sizeof(si));
-	if (waitid(P_PIDFD, pfd, &si, WEXITED | WNOWAIT) != 0) {
-		int saved = errno;
-		close(pfd);
-		if (saved == ECHILD)
-			return B_ENTRY_NOT_FOUND;
-		return B_ERROR;
+
+	if (waitid(P_PIDFD, pfd, &si, WEXITED) == 0) {
+		if (si.si_code == CLD_EXITED)
+			exitStatus = (status_t)si.si_status;
+		else if (si.si_code == CLD_KILLED || si.si_code == CLD_DUMPED)
+			exitStatus = (status_t)(-si.si_status);
 	}
 
-	status_t status = B_ERROR;
-	if (si.si_code == CLD_EXITED) {
-		status = (status_t)si.si_status;
-	} else if (si.si_code == CLD_KILLED || si.si_code == CLD_DUMPED) {
-		status = (status_t)(-si.si_status);
-	} else
-		status = B_ERROR;
-
-	waitid(P_PIDFD, pfd, &si, WEXITED);
 	close(pfd);
 
-	if (returnCode)
-		*returnCode = status;
+	if (returnCode != NULL)
+		*returnCode = exitStatus;
 
 	return B_OK;
 }
@@ -465,11 +457,6 @@ wait_for_thread(thread_id id, status_t* returnCode)
 	if (id < 0)
 		return B_BAD_THREAD_ID;
 
-	if (id == getpid()) {
-		debugger("wait_for_thread: you can't wait for your own team!");
-		return B_BAD_TEAM_ID;
-	}
-
 	if (id == find_thread(NULL)) {
 		debugger("wait_for_thread: do you really want to wait for yourself?");
 		return B_BAD_THREAD_ID;
@@ -480,29 +467,20 @@ wait_for_thread(thread_id id, status_t* returnCode)
 	exchange.receiver = id;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus_io(nexus, NEXUS_THREAD_WAITFOR, &exchange) != 0)
-		return B_BAD_VALUE;
-	status_t ret = exchange.ret;
-	if (ret == B_BAD_THREAD_ID) {
-		if (kill(id, 0) < 0)
-			return B_BAD_THREAD_ID;
+	int nio = nexus_io(nexus, NEXUS_THREAD_WAITFOR, &exchange);
 
-		if (kill(id, SIGCONT) < 0)
-			return -errno;
-
-		return wait_for_remote_thread(id, returnCode);
+	if (nio == 0) {
+		status_t ret = exchange.ret;
+		if (ret == B_OK) {
+			if (returnCode != NULL)
+				*returnCode = exchange.return_code;
+			return B_OK;
+		}
+		if (ret == B_INTERRUPTED)
+			return B_INTERRUPTED;
 	}
 
-	if (ret == B_INTERRUPTED)
-		return B_INTERRUPTED;
-
-	if (ret != B_OK)
-		return ret;
-
-	if (returnCode != NULL)
-		*returnCode = exchange.return_code;
-
-	return B_OK;
+	return wait_for_remote_thread(id, returnCode);
 }
 
 

@@ -89,6 +89,8 @@ public:
 
 		void* symbol = dlsym(handle, name);
 		if (symbol == NULL)
+			symbol = dlsym(RTLD_DEFAULT, name);
+		if (symbol == NULL)
 			return B_ERROR;
 
 		*pptr = symbol;

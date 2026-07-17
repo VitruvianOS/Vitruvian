@@ -1,6 +1,6 @@
 /*
  * Copyright 2005-2009, Haiku.
- * Copyright 2026, The Vitruvian Project.
+ * Copyright 2026, Dario Casalinuovo <b.vitruvio@gmail.com>.
  * Distributed under the terms of the MIT License.
  *
  * Authors:

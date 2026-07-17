@@ -1,6 +1,7 @@
 /*
  * Copyright 2010, Stephan Aßmus <superstippi@gmx.de>
  * Copyright 2020, Panagiotis "Ivory" Vasilopoulos <git@n0toose.net>
+ * Copyright 2026, Dario Casalinuovo <b.vitruvio@gmail.com>.
  * All rights reserved. Distributed under the terms of the MIT License.
  */
 
@@ -9,13 +10,14 @@
 
 #include <stdlib.h>
 
-#include <Catalog.h>
 #ifndef __VOS__
 #include <LaunchRoster.h>
+#else
+#include <kernel/util/KMessage.h>
+#include <LaunchDaemonDefs.h>
 #endif
-#include <Locale.h>
-
-#include <syscalls.h>
+#include <Roster.h>
+#include <RosterPrivate.h>
 
 
 static int sExitValue;
@@ -48,41 +50,37 @@ void
 BootPromptApp::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
-		// Booting the desktop or running the installer both result
-		// in sending a B_QUIT_REQUESTED message that ultimately
-		// closes the FirstBootPrompt window. However, according to
-		// BootPromptWindow::QuitRequested(), if the BootPromptWindow
-		// is not running on a desktop and the user decides to close
-		// the window using the button, the user will be asked if
-		// they wish to reboot their system.
-		//
-		// Asking that in the former scenarios would not make much
-		// sense. "dont_reboot" explicitly states that the user does
-		// not wish to reboot their system, which suppresses the
-		// confirm box.
 		case MSG_BOOT_DESKTOP:
 		{
-#ifndef __VOS__
+#ifdef __VOS__
+			port_id janusPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+			if (janusPort >= 0) {
+				BPrivate::KMessage msg(BPrivate::B_JANUS_LOGIN_OK);
+				msg.AddString("user", "vos-live");
+				msg.AddString("mode", "live");
+				if (message->GetBool("enable_ssh", false))
+					msg.AddInt32("enable_ssh", 1);
+				BPrivate::KMessage reply;
+				msg.SendTo(janusPort, -1, &reply,
+					2000000LL, 5000000LL, getpid());
+			}
+#else
 			BLaunchRoster().Target("desktop");
 #endif
 			sExitValue = 1;
-
 			PostMessage(B_QUIT_REQUESTED);
 			break;
 		}
 		case MSG_RUN_INSTALLER:
 		{
-#ifndef __VOS__
-			BLaunchRoster().Target("installer");
-#endif
+			be_roster->Launch("application/x-vnd.Haiku-Installer");
 			sExitValue = 0;
-
 			PostMessage(B_QUIT_REQUESTED);
 			break;
 		}
 		case MSG_REBOOT_REQUESTED:
 		{
-			_kern_shutdown(true);
+			BRoster::Private(be_roster).ShutDown(true, false, false);
 			sExitValue = -1;
 			break;
 		}
@@ -96,7 +94,6 @@ BootPromptApp::MessageReceived(BMessage* message)
 void
 BootPromptApp::ReadyToRun()
 {
-	// Prompt the user to select his preferred language.
 	new BootPromptWindow();
 }
 
@@ -104,10 +101,6 @@ BootPromptApp::ReadyToRun()
 bool
 BootPromptApp::QuitRequested()
 {
-	// Override the default QuitRequested because we don't want to ask the
-	// window. The window QuitRequested is used when closing the window, and
-	// offers to reboot the system. When we get here, it means we got the
-	// message from one of the Desktop/Installer buttons and we should just
-	// exit.
+	// Skip the window's reboot prompt: we got here from a button, not close.
 	return true;
 }

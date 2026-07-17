@@ -56,6 +56,7 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
+                " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libglu1-mesa-dev"
             ;;
@@ -67,6 +68,7 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
+                " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libglu1-mesa-dev"
             ;;
@@ -78,6 +80,7 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
+                " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         riscv64)
@@ -88,6 +91,7 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
+                " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
             ;;
         *)

@@ -242,9 +242,6 @@ BLocker::AcquireLock(bigtime_t timeout, status_t *error)
 					timeout);
 			} while (status == B_INTERRUPTED);
 
-			if (status != B_OK)
-				atomic_add(&fBenaphoreCount, -1);
-
 			// Note, if the lock here does time out, the benaphore count
 			// is not decremented.  By doing this, the benaphore count will
 			// never go back to zero.  This means that the locking essentially

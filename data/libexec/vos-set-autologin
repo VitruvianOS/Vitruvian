@@ -1,0 +1,64 @@
+#!/bin/sh
+# vos-set-autologin — write /etc/vos/autologin, gated by pkexec.
+#
+# Usage: vos-set-autologin <username>   → enable
+#        vos-set-autologin ""           → disable
+#
+# Runs as root under pkexec (see polkit action
+# org.vitruvian.user.set-autologin). Validates the username against the
+# same regex the first-boot commit helper uses so a caller can't smuggle
+# arbitrary bytes into the file that janus reads at boot.
+set -eu
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "must run as root" >&2
+    exit 1
+fi
+
+NAME="${1:-}"
+mkdir -p /etc/vos
+chmod 0755 /etc/vos
+
+if [ -z "$NAME" ]; then
+    rm -f /etc/vos/autologin
+    exit 0
+fi
+
+case "$NAME" in
+    root|daemon|sys|bin|vos_login|nobody)
+        echo "reserved username: $NAME" >&2; exit 2 ;;
+esac
+case "$NAME" in
+    [a-z_]*[!a-z0-9_-]*|[!a-z_]*)
+        echo "invalid username: $NAME" >&2; exit 2 ;;
+esac
+if [ ${#NAME} -gt 32 ]; then
+    echo "username too long: $NAME" >&2; exit 2
+fi
+_pwline="$(getent passwd "$NAME" || true)"
+if [ -z "$_pwline" ]; then
+    echo "unknown user: $NAME" >&2; exit 2
+fi
+_uid="$(printf '%s' "$_pwline" | cut -d: -f3)"
+case "$_uid" in
+    ''|*[!0-9]*)
+        echo "cannot parse uid for $NAME" >&2; exit 2 ;;
+esac
+# Real interactive accounts only — system daemons (sshd, messagebus,
+# _apt, …) live below 1000 and must not be autologin targets even if
+# their shell isn't nologin.
+if [ "$_uid" -lt 1000 ] || [ "$_uid" -ge 60000 ]; then
+    echo "not a regular user (uid=$_uid): $NAME" >&2; exit 2
+fi
+_shell="$(printf '%s' "$_pwline" | cut -d: -f7)"
+case "$_shell" in
+    */nologin|*/false|'')
+        echo "user $NAME has no interactive shell ($_shell)" >&2; exit 2 ;;
+esac
+
+_tmp="$(mktemp /etc/vos/.autologin.XXXXXX)"
+printf '%s\n' "$NAME" > "$_tmp"
+chmod 0644 "$_tmp"
+chown root:root "$_tmp"
+mv -f "$_tmp" /etc/vos/autologin
+exit 0

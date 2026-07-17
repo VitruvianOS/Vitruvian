@@ -62,9 +62,9 @@ main(int argc, char** argv)
 		return 1;
 	}
 
-	mkdir("/run/vitruvian", 0755);
+	mkdir("/run/vos", 0755);
 	char pidpath[128];
-	snprintf(pidpath, sizeof(pidpath), "/run/vitruvian/%s.pid", name);
+	snprintf(pidpath, sizeof(pidpath), "/run/vos/%s.pid", name);
 	FILE* f = fopen(pidpath, "w");
 	if (f == NULL) {
 		fprintf(stderr, "janus_launch: could not write %s: %s\n",

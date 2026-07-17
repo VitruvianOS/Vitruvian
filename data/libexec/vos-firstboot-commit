@@ -1,0 +1,252 @@
+#!/bin/sh
+# vos-firstboot-commit: applies the setup conf on first boot OR into
+# an install target chroot.
+#
+# Modes:
+#   --root=DIR   apply into DIR (default /). Used by Installer with
+#                --root=/target after rsync + bind-mounts.
+#   CONF         path to the setup conf (default /run/vos/setup.conf).
+#
+# The conf is always written by vos-install-helper as root, 0600. It
+# is NEVER sourced — parsed as data, every value quoted.
+
+set -eu
+
+ROOT="/"
+CONF=""
+for _arg in "$@"; do
+    case "$_arg" in
+        --root=*) ROOT="${_arg#--root=}" ;;
+        --root)   echo "--root requires =DIR" >&2; exit 2 ;;
+        --*)      echo "unknown flag: $_arg" >&2; exit 2 ;;
+        *)        CONF="$_arg" ;;
+    esac
+done
+[ -z "$CONF" ] && CONF="/run/vos/setup.conf"
+
+case "$ROOT" in
+    /|/*) ;;
+    *) echo "--root must be absolute: $ROOT" >&2; exit 2 ;;
+esac
+[ -d "$ROOT" ] || { echo "root not a directory: $ROOT" >&2; exit 2; }
+
+SENTINEL="$ROOT/var/lib/vos/first-boot-done"
+STATE_DIR="$ROOT/var/lib/vos"
+
+# In chroot mode, run inside the target so PAM/passwd/etc. resolve
+# against target files. Bare "chroot $ROOT" when ROOT != /, else empty.
+if [ "$ROOT" = "/" ]; then
+    IN=""
+else
+    IN="chroot $ROOT"
+fi
+
+if [ -e "$SENTINEL" ]; then
+    echo "first-boot already done in $ROOT, skipping" >&2
+    exit 0
+fi
+
+if [ ! -r "$CONF" ]; then
+    echo "conf not readable: $CONF" >&2
+    exit 1
+fi
+
+if [ -L "$CONF" ]; then
+    echo "conf is a symlink, refusing: $CONF" >&2
+    exit 1
+fi
+
+_owner=$(stat -c '%U' "$CONF" 2>/dev/null || echo unknown)
+case "$_owner" in
+    root) ;;
+    *) echo "conf owner not root: $_owner" >&2; exit 1 ;;
+esac
+
+mkdir -p "$STATE_DIR"
+: > "$STATE_DIR/first-boot.inflight"
+trap 'echo "first-boot commit FAILED in $ROOT, partial state left" >&2' EXIT
+
+language=en
+keymap=us
+username=
+password_hash=
+root_hash=
+sudo_enabled=1
+autologin=0
+hostname=
+full_name=
+
+while IFS= read -r _line || [ -n "$_line" ]; do
+    case "$_line" in
+        ''|\#*) continue ;;
+    esac
+    _key=${_line%%=*}
+    _val=${_line#*=}
+    case "$_key" in
+        *[!a-z0-9_]*|'') echo "bad key: $_key" >&2; continue ;;
+    esac
+    case "$_key" in
+        language)      language=$_val ;;
+        keymap)        keymap=$_val ;;
+        username)      username=$_val ;;
+        password_hash) password_hash=$_val ;;
+        root_hash)     root_hash=$_val ;;
+        sudo_enabled)  sudo_enabled=$_val ;;
+        autologin)     autologin=$_val ;;
+        hostname)      hostname=$_val ;;
+        full_name)     full_name=$_val ;;
+        *) echo "ignoring unknown key: $_key" >&2 ;;
+    esac
+done < "$CONF"
+
+if [ -z "$username" ] || [ -z "$password_hash" ]; then
+    echo "missing username or password_hash" >&2
+    exit 2
+fi
+
+case "$username" in
+    root|daemon|sys|bin|vos_login|vos-live|_vitruvian-login|nobody)
+        echo "reserved username: $username" >&2; exit 2 ;;
+esac
+case "$username" in
+    [a-z_]*[!a-z0-9_-]*|[!a-z_]*)
+        echo "invalid username: $username" >&2; exit 2 ;;
+esac
+if [ ${#username} -gt 32 ]; then
+    echo "username too long: $username" >&2; exit 2
+fi
+
+case "$keymap" in
+    ''|[a-z]*) ;;
+    *) echo "invalid keymap: $keymap" >&2; exit 2 ;;
+esac
+[ -z "$keymap" ] && keymap=us
+case "$hostname" in
+    ''|[a-z0-9]*) ;;
+    *) echo "invalid hostname: $hostname" >&2; exit 2 ;;
+esac
+case "$sudo_enabled" in 0|1) ;; *) sudo_enabled=0 ;; esac
+case "$autologin"    in 0|1) ;; *) autologin=0 ;; esac
+
+if [ -z "$hostname" ]; then
+    hostname="vitruvian-$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 4)"
+fi
+printf '%s\n' "$hostname" > "$ROOT/etc/hostname"
+
+case "$language" in
+    en) locale="en_US.UTF-8" ;;
+    fr) locale="fr_FR.UTF-8" ;;
+    de) locale="de_DE.UTF-8" ;;
+    es) locale="es_ES.UTF-8" ;;
+    it) locale="it_IT.UTF-8" ;;
+    pt) locale="pt_PT.UTF-8" ;;
+    nl) locale="nl_NL.UTF-8" ;;
+    ru) locale="ru_RU.UTF-8" ;;
+    ja) locale="ja_JP.UTF-8" ;;
+    zh) locale="zh_CN.UTF-8" ;;
+    ko) locale="ko_KR.UTF-8" ;;
+    pl) locale="pl_PL.UTF-8" ;;
+    sv) locale="sv_SE.UTF-8" ;;
+    no|nb) locale="nb_NO.UTF-8" ;;
+    fi) locale="fi_FI.UTF-8" ;;
+    da) locale="da_DK.UTF-8" ;;
+    cs) locale="cs_CZ.UTF-8" ;;
+    hu) locale="hu_HU.UTF-8" ;;
+    tr) locale="tr_TR.UTF-8" ;;
+    el) locale="el_GR.UTF-8" ;;
+    *)  locale="en_US.UTF-8" ;;
+esac
+if ! grep -qE "^${locale} UTF-8" "$ROOT/etc/locale.gen" 2>/dev/null; then
+    printf '%s UTF-8\n' "$locale" >> "$ROOT/etc/locale.gen"
+fi
+# A failed locale-gen must not abort the commit: the sentinel wouldn't
+# get touched, forcing a re-run that then duplicates the useradd.
+$IN locale-gen || echo "locale-gen failed for $locale" >&2
+$IN update-locale "LANG=${locale}" || echo "update-locale failed" >&2
+
+printf 'KEYMAP=%s\n' "$keymap" > "$ROOT/etc/vconsole.conf"
+cat > "$ROOT/etc/default/keyboard" <<KBD
+XKBMODEL="pc105"
+XKBLAYOUT="$keymap"
+XKBVARIANT=""
+XKBOPTIONS=""
+BACKSPACE="guess"
+KBD
+[ -x "$ROOT/usr/sbin/setupcon" ] && \
+    $IN setupcon --force --save-only 2>/dev/null || true
+
+if ! $IN getent passwd "$username" >/dev/null; then
+    set -- -m -s /bin/bash
+    if [ -n "$full_name" ]; then
+        set -- "$@" -c "$full_name"
+    fi
+    $IN useradd "$@" -- "$username"
+    _home=$($IN getent passwd "$username" | cut -d: -f6)
+    if [ -n "$_home" ] && [ -d "$ROOT/etc/skel" ]; then
+        (cd "$ROOT/etc/skel" && find . \( -type d -o -type f \) 2>/dev/null) \
+        | while IFS= read -r _rel; do
+            _src="$ROOT/etc/skel/${_rel#./}"
+            _dst="$ROOT$_home/${_rel#./}"
+            [ -e "$_dst" ] || continue
+            getfattr -d -m user.beos -e hex "$_src" 2>/dev/null \
+                | sed "s|$ROOT/etc/skel/|$ROOT$_home/|g" \
+                | setfattr --restore - 2>/dev/null || true
+        done
+        $IN chown -R "$username:$username" "$_home" 2>/dev/null || true
+    fi
+fi
+# printf, not echo: dash's echo mangles backslashes in crypt hashes.
+# Last must-succeed step: after chpasswd -e passes, the account exists
+# and its password is valid — sentinel is safe to touch.
+printf '%s:%s\n' "$username" "$password_hash" | $IN chpasswd -e
+
+if [ -n "$root_hash" ]; then
+    printf '%s:%s\n' "root" "$root_hash" | $IN chpasswd -e
+fi
+
+# --- Sentinel: past this point the commit is considered SUCCEEDED. ---
+trap - EXIT
+mkdir -p "$(dirname "$SENTINEL")"
+touch "$SENTINEL"
+rm -f "$STATE_DIR/first-boot.inflight"
+rm -f "$CONF"
+
+if [ "$sudo_enabled" = "1" ]; then
+    if $IN getent group sudo >/dev/null; then
+        $IN usermod -aG sudo "$username" || echo "usermod sudo failed" >&2
+    else
+        echo "sudo group missing; skipping sudoer add" >&2
+    fi
+fi
+
+mkdir -p "$ROOT/etc/vos"
+
+if [ "$autologin" = "1" ]; then
+    umask 022
+    printf '%s\n' "$username" > "$ROOT/etc/vos/autologin" || \
+        echo "cannot write $ROOT/etc/vos/autologin" >&2
+    chmod 0644 "$ROOT/etc/vos/autologin" 2>/dev/null || true
+else
+    rm -f "$ROOT/etc/vos/autologin"
+fi
+
+if command -v xdg-user-dirs-update >/dev/null 2>&1; then
+    $IN runuser -u "$username" -- xdg-user-dirs-update 2>/dev/null || \
+        echo "xdg-user-dirs-update failed" >&2
+else
+    echo "xdg-user-dirs not installed; skipping" >&2
+fi
+
+{
+    printf 'language=%s\n'  "$language"
+    printf 'keymap=%s\n'    "$keymap"
+    printf 'username=%s\n'  "$username"
+    printf 'hostname=%s\n'  "$hostname"
+    printf 'sudo=%s\n'      "$sudo_enabled"
+    printf 'autologin=%s\n' "$autologin"
+    printf 'root_set=%s\n'  "$([ -n "$root_hash" ] && echo 1 || echo 0)"
+} > "$STATE_DIR/first-boot.conf" 2>/dev/null || \
+    echo "audit-record write failed" >&2
+chmod 0600 "$STATE_DIR/first-boot.conf" 2>/dev/null || true
+
+echo "first-boot commit complete for user $username (root=$ROOT)"

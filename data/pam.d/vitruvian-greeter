@@ -1,0 +1,13 @@
+# Session stack for the pre-auth greeter (vos_login).
+# class=greeter suppresses graphical-session.target user services
+# (pipewire, dbus, ...) — matches gdm-greeter / sddm-greeter.
+
+auth       required     pam_permit.so
+account    required     pam_permit.so
+password   required     pam_permit.so
+
+session    optional     pam_loginuid.so
+session    optional     pam_env.so
+session    required     pam_limits.so
+session    optional     pam_umask.so
+session    optional     pam_systemd.so class=greeter type=vos

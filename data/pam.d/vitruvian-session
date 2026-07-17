@@ -1,16 +1,9 @@
-# PAM stack for the Vitruvian desktop session.
-# Called by janus at boot to open a real logind session for the desktop
-# user (autologin — no password prompt). Anything the login binary would
-# normally run is delegated here so session-stage servers see the same
-# environment (HOME, XDG_RUNTIME_DIR, LANG, umask, ulimits) as any other
-# Linux login.
-
+# Desktop session PAM stack (janus opens the session; autologin, no auth).
 auth       required     pam_permit.so
-account    required     pam_permit.so
-password   required     pam_permit.so
+@include   common-account
+@include   common-password
 
-session    optional     pam_loginuid.so
-session    optional     pam_env.so
-session    required     pam_limits.so
-session    optional     pam_umask.so
-session    optional     pam_systemd.so
+# pam_loginuid must fire before pam_systemd (via common-session).
+session    required     pam_loginuid.so
+session    optional     pam_keyinit.so force revoke
+@include   common-session

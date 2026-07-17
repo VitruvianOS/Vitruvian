@@ -22,10 +22,9 @@
 #include <unistd.h>
 
 extern "C" {
-#include <crypt.h>
 #include <libseat.h>
 #include <security/pam_appl.h>
-#include <shadow.h>
+#include <systemd/sd-bus.h>
 }
 
 #include <AppDefs.h>
@@ -48,8 +47,6 @@ struct KnownServer {
 	const char* signature;
 	const char* port_name;
 	bool        needs_drm;
-	// Drop to sUserUid on exec. janus is the sole privilege holder;
-	// everything else should be run_as_user.
 	bool        run_as_user;
 };
 
@@ -66,8 +63,7 @@ static const KnownServer kKnownServers[] = {
 	  "application/x-vnd.Be-input_server",
 	  NULL,
 	  false, true  },
-	// Root: mount(2) needs CAP_SYS_ADMIN.
-	{ "mount_server",
+	{ "mount_server",  // root: mount(2) needs CAP_SYS_ADMIN
 	  "application/x-vnd.Haiku-mount_server",
 	  NULL,
 	  false, false },
@@ -87,20 +83,21 @@ static const KnownServer kKnownServers[] = {
 	  "application/x-vnd.Vitruvian-login",
 	  NULL,
 	  false, true  },
+	{ "FirstBootPrompt",
+	  "application/x-vnd.Haiku-FirstBootPrompt",
+	  NULL,
+	  false, true  },
 	{ NULL, NULL, NULL, false, false }
 };
 
 
-// System mode: janus started as root, resolves $VITRUVIAN_DEFAULT_USER.
-// User mode: janus started via `systemctl --user`, inherits caller's uid.
 static char  sUserName[64]        = "";
 static char  sUserHome[PATH_MAX]  = "";
 static uid_t sUserUid             = (uid_t)-1;
 static gid_t sUserGid             = (gid_t)-1;
 static bool  sSystemMode          = false;
 static char  sRuntimeDir[PATH_MAX]= "";
-// Set from sentinel /var/lib/vitruvian/greeter-enabled: spawn the
-// pre-auth chain as vos_login, swap to authenticated user on LOGIN_OK.
+static bool is_graphical_login_allowed(struct passwd* pw);
 static bool  sGreeterMode         = false;
 
 
@@ -112,9 +109,9 @@ runtime_dir()
 
 	const char* xdg = getenv("XDG_RUNTIME_DIR");
 	if (xdg != NULL && *xdg != '\0') {
-		snprintf(sRuntimeDir, sizeof(sRuntimeDir), "%s/vitruvian", xdg);
+		snprintf(sRuntimeDir, sizeof(sRuntimeDir), "%s/vos", xdg);
 	} else {
-		snprintf(sRuntimeDir, sizeof(sRuntimeDir), "/run/vitruvian");
+		snprintf(sRuntimeDir, sizeof(sRuntimeDir), "/run/vos");
 	}
 	mkdir(sRuntimeDir, 0755);
 	return sRuntimeDir;
@@ -138,13 +135,32 @@ resolve_user()
 
 	sSystemMode = true;
 
-	// Greeter mode: initial sUserUid = vos_login. handle_login_ok flips
-	// it to the authenticated user before spawning the post-auth chain.
-	const char* name = sGreeterMode
-		? "vos_login"
-		: getenv("VITRUVIAN_DEFAULT_USER");
-	if (name == NULL || *name == '\0')
-		name = "vitruvio";
+	char autoName[64] = "";
+	FILE* alf = fopen("/etc/vos/autologin", "r");
+	if (alf != NULL) {
+		if (fgets(autoName, sizeof(autoName), alf) != NULL) {
+			size_t len = strlen(autoName);
+			while (len > 0 && (autoName[len - 1] == '\n'
+					|| autoName[len - 1] == '\r'
+					|| autoName[len - 1] == ' '
+					|| autoName[len - 1] == '\t'))
+				autoName[--len] = '\0';
+		}
+		fclose(alf);
+	}
+
+	const char* name;
+	if (autoName[0] != '\0'
+			&& is_graphical_login_allowed(getpwnam(autoName))) {
+		name = autoName;
+		sGreeterMode = false;
+	} else if (sGreeterMode) {
+		name = "vos_login";
+	} else {
+		name = getenv("VOS_DEFAULT_USER");
+		if (name == NULL || *name == '\0')
+			name = "vos-live";
+	}
 
 	struct passwd* pw = getpwnam(name);
 	if (pw == NULL)
@@ -184,7 +200,9 @@ init_pam_session()
 	}
 
 	static struct pam_conv conv = { pam_null_conv, NULL };
-	int r = pam_start("vitruvian-session", sUserName, &conv, &sPamHandle);
+	// class=greeter stops systemd from starting pipewire/dbus/etc. for vos_login.
+	const char* stack = sGreeterMode ? "vitruvian-greeter" : "vitruvian-session";
+	int r = pam_start(stack, sUserName, &conv, &sPamHandle);
 	if (r != PAM_SUCCESS) {
 		fprintf(stderr, "janus: pam_start failed (%d)\n", r);
 		sPamHandle = NULL;
@@ -247,13 +265,15 @@ first_login_filter(const struct dirent* de)
 
 // Runs /system/boot/first_login/* once per user, gated by
 // ~/config/settings/first_login. Alphasort like run-parts(8).
+// Blocking — callers wanting to keep the main dispatcher live should
+// use run_first_login_for_user_detached() below.
 static void
 run_first_login_for_user()
 {
 	if (sUserUid == (uid_t)-1 || sUserHome[0] == '\0')
 		return;
 
-	char marker[PATH_MAX];
+	char marker[PATH_MAX + 32];
 	snprintf(marker, sizeof(marker), "%s/config/settings/first_login",
 		sUserHome);
 	if (access(marker, F_OK) == 0)
@@ -274,8 +294,7 @@ run_first_login_for_user()
 		return;
 	}
 	if (pid == 0) {
-		// User-mode: already running as target user; setuid to self
-		// would EPERM without CAP_SETUID.
+		// User-mode: already the target user; setuid would EPERM.
 		if (sSystemMode) {
 			if (initgroups(sUserName, sUserGid) != 0
 					|| setgid(sUserGid) != 0
@@ -311,9 +330,8 @@ run_first_login_for_user()
 			}
 		}
 
-		// Write the marker last so a failed script doesn't gate future
-		// retries.
-		char m[PATH_MAX];
+		// Marker last so a failed script doesn't gate the next retry.
+		char m[PATH_MAX + 32];
 		snprintf(m, sizeof(m), "%s/config/settings", sUserHome);
 		mkdir(m, 0755);
 		snprintf(m, sizeof(m), "%s/config/settings/first_login", sUserHome);
@@ -332,6 +350,28 @@ run_first_login_for_user()
 	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
 		fprintf(stderr, "janus: first_login runner exited %d\n", status);
 	}
+}
+
+
+// Detached so the IPC dispatcher doesn't block on script I/O.
+static void*
+_first_login_thread(void*)
+{
+	run_first_login_for_user();
+	return NULL;
+}
+
+
+static void
+run_first_login_for_user_detached()
+{
+	pthread_t th;
+	if (pthread_create(&th, NULL, _first_login_thread, NULL) != 0) {
+		fprintf(stderr, "janus: first_login pthread_create: %s\n",
+			strerror(errno));
+		return;
+	}
+	pthread_detach(th);
 }
 
 
@@ -360,6 +400,8 @@ struct PendingLaunch {
 #define JANUS_MAX_PENDING 8
 static PendingLaunch sPending[JANUS_MAX_PENDING];
 
+static const bigtime_t kLaunchReadinessTimeoutUsec = 10 * 1000000LL;
+
 static struct libseat* sSeat        = NULL;
 static int             sDrmFd       = -1;
 static int             sDrmDeviceId = -1;
@@ -369,82 +411,7 @@ static volatile bool   sShuttingDown  = false;
 
 static port_id sLaunchPort = -1;
 
-#define JANUS_MAX_POWER_FDS 8
-static int sPowerFds[JANUS_MAX_POWER_FDS];
-static int sPowerFdCount = 0;
-
 static void janus_handle_shutdown(bool reboot);
-
-
-static void
-send_reg_shut_down(bool reboot)
-{
-	port_id regPort = find_port(B_REGISTRAR_PORT_NAME);
-	if (regPort < 0) {
-		fprintf(stderr, "janus: cannot find registrar port\n");
-		return;
-	}
-	BMessage msg(BPrivate::B_REG_SHUT_DOWN);
-	msg.AddBool("reboot", reboot);
-	msg.AddBool("confirm", false);
-	ssize_t size = msg.FlattenedSize();
-	char* buf = new char[size];
-	if (msg.Flatten(buf, size) == B_OK)
-		write_port(regPort, 0, buf, size);
-	delete[] buf;
-}
-
-
-static void
-open_power_devices()
-{
-	DIR* dir = opendir("/dev/input");
-	if (dir == NULL)
-		return;
-
-	struct dirent* entry;
-	while ((entry = readdir(dir)) != NULL && sPowerFdCount < JANUS_MAX_POWER_FDS) {
-		if (strncmp(entry->d_name, "event", 5) != 0)
-			continue;
-
-		char path[64];
-		snprintf(path, sizeof(path), "/dev/input/%s", entry->d_name);
-		int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-		if (fd < 0)
-			continue;
-
-		// Accept dedicated power/sleep button devices:
-		// must have EV_KEY + KEY_POWER or KEY_SLEEP, must NOT have EV_REL or EV_ABS
-		// (excludes keyboards and mice that incidentally report power keys).
-		unsigned long evBits[EV_MAX / (8 * sizeof(unsigned long)) + 1] = {};
-		ioctl(fd, EVIOCGBIT(0, sizeof(evBits)), evBits);
-
-		auto hasBit = [](unsigned long* bits, int bit) -> bool {
-			return (bits[bit / (8 * sizeof(unsigned long))]
-				>> (bit % (8 * sizeof(unsigned long)))) & 1UL;
-		};
-
-		if (!hasBit(evBits, EV_KEY) || hasBit(evBits, EV_REL) || hasBit(evBits, EV_ABS)) {
-			close(fd);
-			continue;
-		}
-
-		unsigned long keyBits[KEY_MAX / (8 * sizeof(unsigned long)) + 1] = {};
-		ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keyBits)), keyBits);
-
-		if (!hasBit(keyBits, KEY_POWER) && !hasBit(keyBits, KEY_SLEEP)
-				&& !hasBit(keyBits, KEY_RESTART)) {
-			close(fd);
-			continue;
-		}
-
-		char name[128] = {};
-		ioctl(fd, EVIOCGNAME(sizeof(name)), name);
-		printf("janus: power device: %s (%s)\n", path, name);
-		sPowerFds[sPowerFdCount++] = fd;
-	}
-	closedir(dir);
-}
 
 
 static int
@@ -507,7 +474,6 @@ handle_get_launch_data(BMessage* msg)
 	}
 	pthread_mutex_unlock(&sAppsLock);
 
-	// Fallback
 	for (int i = 0; kKnownServers[i].name != NULL; i++) {
 		if (strcmp(kKnownServers[i].signature, signature) == 0
 				&& kKnownServers[i].port_name != NULL) {
@@ -569,12 +535,15 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	char path[256];
 	snprintf(path, sizeof(path), "/system/servers/%s", name);
 	if (access(path, X_OK) != 0) {
-		snprintf(path, sizeof(path), "/system/%s", name);
+		snprintf(path, sizeof(path), "/system/apps/%s", name);
 		if (access(path, X_OK) != 0) {
-			fprintf(stderr, "janus: server not found: %s\n", name);
-			BPrivate::KMessage reply(B_ERROR);
-			kmsg.SendReply(&reply);
-			return;
+			snprintf(path, sizeof(path), "/system/%s", name);
+			if (access(path, X_OK) != 0) {
+				fprintf(stderr, "janus: binary not found: %s\n", name);
+				BPrivate::KMessage reply(B_ERROR);
+				kmsg.SendReply(&reply);
+				return;
+			}
 		}
 	}
 
@@ -622,8 +591,13 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 			}
 		}
 
-		// Pre-auth app_server reads evdev directly; input_server isn't up.
-		if (sGreeterMode && strcmp(name, "app_server") == 0)
+		// LibEvdevEventStream (hardcoded US scancode table) is dormant
+		// by default — input_server runs pre-auth and drives xkbcommon
+		// from /etc/vconsole.conf. Set VITRUVIAN_FALLBACK_INPUT=1 in
+		// the environment before spawning janus if you want the embed
+		// path back (emergency / no-libinput scenarios).
+		if (sGreeterMode && strcmp(name, "app_server") == 0
+				&& getenv("VITRUVIAN_FALLBACK_INPUT") != NULL)
 			setenv("APP_SERVER_EMBED_INPUT", "1", 1);
 
 		if (sUserUid != (uid_t)-1) {
@@ -632,6 +606,14 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 			snprintf(buf, sizeof(buf), "%u", (unsigned)sUserGid);
 			setenv("SUDO_GID", buf, 1);
 		}
+
+		// SESSION_TYPE=vos is Vitruvian-native; x11/wayland-only toolkits
+		// fall back to their default backend.
+		setenv("XDG_SESSION_TYPE",    "vos",        1);
+		setenv("XDG_CURRENT_DESKTOP", "Vitruvian",  1);
+		setenv("XDG_SESSION_DESKTOP", "vitruvian",  1);
+		setenv("XDG_DATA_DIRS",   "/system/data:/usr/local/share:/usr/share", 0);
+		setenv("XDG_CONFIG_DIRS", "/system/settings:/etc/xdg",                0);
 
 		// User-mode: already correct uid; initgroups would need CAP_SETGID.
 		if (ks->run_as_user && sSystemMode) {
@@ -671,10 +653,8 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		_exit(127);
 	}
 
-	// Parent: close write end — only child holds it now
 	close(fds[1]);
 
-	// Register in sApps[]
 	pthread_mutex_lock(&sAppsLock);
 	int app_idx = -1;
 	if (sAppCount < JANUS_MAX_APPS) {
@@ -694,11 +674,10 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		return;
 	}
 
-	// Extract reply info from KMessage delivery header before losing scope
 	port_id replyPort  = kmsg.ReplyPort();
 	int32   replyToken = kmsg.ReplyToken();
 
-	// Find a free sPending[] slot — reply is deferred until pipe fires
+	// Deferred reply — the child writes its port on the pipe.
 	for (int i = 0; i < JANUS_MAX_PENDING; i++) {
 		if (!sPending[i].active) {
 			sPending[i].active      = true;
@@ -706,14 +685,13 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 			sPending[i].ready_fd    = fds[0];
 			sPending[i].reply_port  = replyPort;
 			sPending[i].reply_token = replyToken;
-			sPending[i].deadline    = system_time() + 10000000LL; // 10 s
+			sPending[i].deadline    = system_time() + kLaunchReadinessTimeoutUsec;
 			printf("janus: launched %s pid=%d, awaiting readiness\n",
 				name, (int)pid);
 			return;
 		}
 	}
 
-	// sPending[] full — reply immediately with pid, port stays -1
 	fprintf(stderr, "janus: sPending[] full for %s, replying without port\n", name);
 	close(fds[0]);
 	BPrivate::KMessage reply(B_OK);
@@ -722,37 +700,164 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 }
 
 
-// Verify plaintext password against /etc/shadow. Assumes the caller has
-// already gated on sender_uid.
+static int
+pam_auth_conv(int num, const struct pam_message** msg,
+	struct pam_response** resp, void* data)
+{
+	const char* password = (const char*)data;
+	if (num <= 0 || msg == NULL || resp == NULL)
+		return PAM_CONV_ERR;
+
+	struct pam_response* r = (struct pam_response*)calloc(num,
+		sizeof(struct pam_response));
+	if (r == NULL)
+		return PAM_BUF_ERR;
+
+	for (int i = 0; i < num; i++) {
+		// Only ECHO_OFF gets the password. ECHO_ON is used for username /
+		// second-factor prompts — never leak the password into those.
+		const char* answer = NULL;
+		if (msg[i]->msg_style == PAM_PROMPT_ECHO_OFF)
+			answer = (password != NULL) ? password : "";
+		else if (msg[i]->msg_style == PAM_PROMPT_ECHO_ON)
+			answer = "";
+		if (answer == NULL)
+			continue;
+		r[i].resp = strdup(answer);
+		if (r[i].resp == NULL) {
+			for (int j = 0; j < i; j++)
+				free(r[j].resp);
+			free(r);
+			return PAM_BUF_ERR;
+		}
+	}
+	*resp = r;
+	return PAM_SUCCESS;
+}
+
+
+// Binds AUTH and LOGIN_OK: one-shot, cleared on consume or on failed auth.
+static char      sAuthenticatedUser[64] = "";
+static bigtime_t sAuthenticatedAt = 0;
+static const bigtime_t kAuthWindowUsec = 30 * 1000000LL;	// 30s
+
+
+// vos-live: allowed only when /etc/vos/live exists AND sentinel doesn't.
+static bool
+is_live_persona_allowed()
+{
+	struct stat st;
+	if (stat("/etc/vos/live", &st) != 0)
+		return false;
+	if (stat("/var/lib/vos/first-boot-done", &st) == 0)
+		return false;
+	return true;
+}
+
+
+// Sets vos-live's password to "live" and starts sshd. Caller must
+// already have checked /etc/vos/debug exists.
+static void
+enable_ssh_debug()
+{
+	pid_t pid = fork();
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) {
+			dup2(devnull, STDOUT_FILENO);
+			dup2(devnull, STDERR_FILENO);
+			close(devnull);
+		}
+		execlp("sh", "sh", "-c",
+			"echo 'vos-live:live' | chpasswd 2>/dev/null; "
+			"systemctl start ssh.service 2>/dev/null || "
+			"systemctl start sshd.service 2>/dev/null",
+			(char*)NULL);
+		_exit(127);
+	}
+	if (pid > 0) {
+		int status = 0;
+		while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+			;
+	}
+	fprintf(stderr, "janus: debug SSH enabled (vos-live/live)\n");
+}
+
+
+// root/system accounts are refused; sudo is the only path to uid=0.
+static bool
+is_graphical_login_allowed(struct passwd* pw)
+{
+	if (pw == NULL)
+		return false;
+	if (pw->pw_uid == 0)
+		return false;
+	// vos_login is a system sysuser used only by the pre-auth chain.
+	if (strcmp(pw->pw_name, "vos_login") == 0)
+		return false;
+	// Nologin / false shells: not real interactive accounts.
+	if (pw->pw_shell != NULL
+			&& (strstr(pw->pw_shell, "nologin") != NULL
+				|| strstr(pw->pw_shell, "/false") != NULL))
+		return false;
+	// vos-live: dual-gate.
+	if (strcmp(pw->pw_name, "vos-live") == 0)
+		return is_live_persona_allowed();
+	// All other users: require a real uid.
+	if (pw->pw_uid < 1000)
+		return false;
+	return true;
+}
+
+
+// Runs the /etc/pam.d/vitruvian-auth stack.
 static bool
 verify_password(const char* username, const char* password)
 {
 	if (username == NULL || *username == '\0' || password == NULL)
 		return false;
-
-	struct spwd sp_buf;
-	struct spwd* sp = NULL;
-	char buf[4096];
-	if (getspnam_r(username, &sp_buf, buf, sizeof(buf), &sp) != 0
-			|| sp == NULL || sp->sp_pwdp == NULL || *sp->sp_pwdp == '\0') {
+	if (!is_graphical_login_allowed(getpwnam(username))) {
+		fprintf(stderr, "janus: graphical login refused for %s\n", username);
 		return false;
 	}
 
-	// Reject locked / disabled accounts (leading ! or *).
-	if (sp->sp_pwdp[0] == '!' || sp->sp_pwdp[0] == '*')
+	struct pam_conv conv = { pam_auth_conv, (void*)password };
+	pam_handle_t* h = NULL;
+	int r = pam_start("vitruvian-auth", username, &conv, &h);
+	if (r != PAM_SUCCESS)
 		return false;
 
-	struct crypt_data cd;
-	memset(&cd, 0, sizeof(cd));
-	const char* hashed = crypt_r(password, sp->sp_pwdp, &cd);
-	if (hashed == NULL)
-		return false;
-	return strcmp(hashed, sp->sp_pwdp) == 0;
+	// Attribution for faillock, audit, and lastlog. PAM_TTY must be a
+	// real device name (not ":0" — that's a DISPLAY string), or
+	// pam_faillock keys every failure across every seat into a single
+	// bucket. tty1 matches the seat0 VT janus's greeter runs on.
+	pam_set_item(h, PAM_RUSER, "vos_login");
+	pam_set_item(h, PAM_RHOST, "");
+	pam_set_item(h, PAM_TTY,   "tty1");
+
+	r = pam_authenticate(h, 0);
+	if (r == PAM_SUCCESS)
+		r = pam_acct_mgmt(h, 0);
+	bool ok = (r == PAM_SUCCESS);
+	if (!ok)
+		fprintf(stderr, "janus: PAM auth for %s: %s\n", username,
+			pam_strerror(h, r));
+
+	pam_end(h, r);
+	return ok;
 }
 
 
-// SIGTERM the pre-auth chain and wait (up to ~2s) for actual exit —
-// DRM master isn't released until the process is reaped.
+static bool
+_is_pre_auth_server(const char* name)
+{
+	return strcmp(name, "vitruvian-login") == 0
+		|| strcmp(name, "FirstBootPrompt") == 0
+		|| strcmp(name, "app_server") == 0
+		|| strcmp(name, "registrar") == 0;
+}
+
+
 static void
 kill_pre_auth_chain()
 {
@@ -761,8 +866,7 @@ kill_pre_auth_chain()
 
 	pthread_mutex_lock(&sAppsLock);
 	for (int i = 0; i < sAppCount; i++) {
-		bool preauth = strcmp(sApps[i].name, "vitruvian-login") == 0
-			|| strcmp(sApps[i].name, "app_server") == 0;
+		bool preauth = _is_pre_auth_server(sApps[i].name);
 		if (preauth && sApps[i].pid > 0)
 			victims[n++] = sApps[i].pid;
 	}
@@ -771,32 +875,36 @@ kill_pre_auth_chain()
 	for (int i = 0; i < n; i++)
 		kill(victims[i], SIGTERM);
 
-	for (int wait_ms = 0; wait_ms < 2000; wait_ms += 50) {
+	// Reap first: DRM master isn't released until app_server exits.
+	for (int wait_ms = 0; wait_ms < 3000; wait_ms += 20) {
 		bool all_gone = true;
 		for (int i = 0; i < n; i++) {
-			if (victims[i] > 0 && kill(victims[i], 0) == 0) {
+			if (victims[i] <= 0)
+				continue;
+			int status = 0;
+			pid_t r = waitpid(victims[i], &status, WNOHANG);
+			if (r == victims[i] || (r < 0 && errno == ECHILD))
+				victims[i] = 0;
+			else
 				all_gone = false;
-				break;
-			}
 		}
 		if (all_gone)
 			break;
-		usleep(50 * 1000);
+		usleep(20 * 1000);
 	}
 	for (int i = 0; i < n; i++) {
-		if (kill(victims[i], 0) == 0) {
+		if (victims[i] > 0) {
 			fprintf(stderr, "janus: pre-auth pid=%d slow to exit; SIGKILL\n",
 				(int)victims[i]);
 			kill(victims[i], SIGKILL);
+			waitpid(victims[i], NULL, 0);
 		}
 	}
 
-	// Purge stale entries so sApps[] doesn't reference dead pids.
 	pthread_mutex_lock(&sAppsLock);
 	int keep = 0;
 	for (int i = 0; i < sAppCount; i++) {
-		bool preauth = strcmp(sApps[i].name, "vitruvian-login") == 0
-			|| strcmp(sApps[i].name, "app_server") == 0;
+		bool preauth = _is_pre_auth_server(sApps[i].name);
 		if (preauth)
 			continue;
 		if (i != keep)
@@ -808,29 +916,267 @@ kill_pre_auth_chain()
 }
 
 
-// Self-fire the post-auth chain via janus_launch (B_LAUNCH_JOB back
-// into our own daemon_loop).
+static void
+fire_janus_launch(const char* name)
+{
+	pid_t pid = fork();
+	if (pid < 0) {
+		fprintf(stderr, "janus: post-auth fork(%s): %s\n",
+			name, strerror(errno));
+		return;
+	}
+	if (pid == 0) {
+		execl("/system/servers/janus_launch",
+			"janus_launch", name, NULL);
+		_exit(127);
+	}
+}
+
+
+static bool
+wait_for_server_ready(const char* name, int timeout_ms)
+{
+	for (int waited = 0; waited < timeout_ms; waited += 50) {
+		pthread_mutex_lock(&sAppsLock);
+		bool ready = false;
+		for (int i = 0; i < sAppCount; i++) {
+			if (strcmp(sApps[i].name, name) == 0 && sApps[i].port > 0) {
+				ready = true;
+				break;
+			}
+		}
+		pthread_mutex_unlock(&sAppsLock);
+		if (ready)
+			return true;
+		usleep(50 * 1000);
+	}
+	return false;
+}
+
+
+static void*
+post_auth_thread(void* /*arg*/)
+{
+	fire_janus_launch("registrar");
+	if (!wait_for_server_ready("registrar", 5000))
+		fprintf(stderr, "janus: post-auth registrar not ready in 5s\n");
+
+	fire_janus_launch("app_server");
+	if (!wait_for_server_ready("app_server", 5000))
+		fprintf(stderr, "janus: post-auth app_server not ready in 5s\n");
+
+	static const char* const kFanOut[] = {
+		"input_server", "mount_server", "notification_server",
+		"Deskbar", "Tracker", NULL
+	};
+	for (int i = 0; kFanOut[i] != NULL; i++)
+		fire_janus_launch(kFanOut[i]);
+	return NULL;
+}
+
+
 static void
 spawn_post_auth_chain()
 {
-	static const char* const kChain[] = {
-		"app_server", "input_server", "mount_server",
-		"notification_server", "Deskbar", "Tracker", NULL
-	};
-	for (int i = 0; kChain[i] != NULL; i++) {
-		pid_t pid = fork();
-		if (pid < 0) {
-			fprintf(stderr, "janus: post-auth fork(%s): %s\n",
-				kChain[i], strerror(errno));
-			continue;
+	pthread_t th;
+	if (pthread_create(&th, NULL, post_auth_thread, NULL) != 0) {
+		fprintf(stderr, "janus: post_auth_thread: %s\n", strerror(errno));
+		return;
+	}
+	pthread_detach(th);
+}
+
+
+// Set by logind_watch_thread on PrepareForShutdown(true). Read by
+// handle_logout to decline mid-shutdown logout requests. Plain bool is
+// safe: single writer (watch thread), single reader (daemon loop),
+// monotonic transition (false -> true), no re-entry needed.
+static volatile bool sShutdownInFlight = false;
+
+
+static void*
+logind_watch_thread(void* /*arg*/)
+{
+	sd_bus* bus = NULL;
+	if (sd_bus_open_system(&bus) < 0)
+		return NULL;
+
+	// Match PrepareForShutdown on org.freedesktop.login1.Manager.
+	sd_bus_match_signal(bus, NULL, "org.freedesktop.login1",
+		"/org/freedesktop/login1", "org.freedesktop.login1.Manager",
+		"PrepareForShutdown", NULL, NULL);
+
+	while (sRunning) {
+		sd_bus_message* m = NULL;
+		int r = sd_bus_process(bus, &m);
+		if (r < 0)
+			break;
+		if (m != NULL) {
+			const char* member = sd_bus_message_get_member(m);
+			int active = 0;
+			if (member != NULL
+					&& strcmp(member, "PrepareForShutdown") == 0
+					&& sd_bus_message_read(m, "b", &active) >= 0
+					&& active != 0) {
+				sShutdownInFlight = true;
+			}
+			sd_bus_message_unref(m);
 		}
-		if (pid == 0) {
-			execl("/system/servers/janus_launch",
-				"janus_launch", kChain[i], NULL);
-			_exit(127);
+		if (r == 0)
+			sd_bus_wait(bus, 500000);
+	}
+	sd_bus_unref(bus);
+	return NULL;
+}
+
+
+static void
+kill_post_auth_chain()
+{
+	pid_t victims[JANUS_MAX_APPS];
+	int   n = 0;
+
+	pthread_mutex_lock(&sAppsLock);
+	for (int i = 0; i < sAppCount; i++) {
+		bool preauth = _is_pre_auth_server(sApps[i].name);
+		if (!preauth && sApps[i].pid > 0)
+			victims[n++] = sApps[i].pid;
+	}
+	pthread_mutex_unlock(&sAppsLock);
+
+	for (int i = 0; i < n; i++)
+		kill(victims[i], SIGTERM);
+
+	for (int wait_ms = 0; wait_ms < 1500; wait_ms += 20) {
+		bool all_gone = true;
+		for (int i = 0; i < n; i++) {
+			if (victims[i] <= 0)
+				continue;
+			int status = 0;
+			pid_t r = waitpid(victims[i], &status, WNOHANG);
+			if (r == victims[i] || (r < 0 && errno == ECHILD))
+				victims[i] = 0;
+			else
+				all_gone = false;
+		}
+		if (all_gone)
+			break;
+		usleep(20 * 1000);
+	}
+	for (int i = 0; i < n; i++) {
+		if (victims[i] > 0) {
+			kill(victims[i], SIGKILL);
+			waitpid(victims[i], NULL, 0);
 		}
 	}
+
+	// Purge post-auth entries before kill_pre_auth_chain does its own —
+	// stale port_ids would otherwise survive across relogin.
+	pthread_mutex_lock(&sAppsLock);
+	int keep = 0;
+	for (int i = 0; i < sAppCount; i++) {
+		if (_is_pre_auth_server(sApps[i].name)) {
+			if (i != keep)
+				sApps[keep] = sApps[i];
+			keep++;
+		}
+	}
+	sAppCount = keep;
+	pthread_mutex_unlock(&sAppsLock);
+
+	kill_pre_auth_chain();
 }
+
+
+static void*
+pre_auth_thread(void* /*arg*/)
+{
+	// Sentinel present → greeter. Absent → FirstBootPrompt.
+	const char* frontend =
+		access("/var/lib/vos/first-boot-done", F_OK) == 0
+			? "vitruvian-login"
+			: "FirstBootPrompt";
+
+	fire_janus_launch("registrar");
+	if (!wait_for_server_ready("registrar", 5000))
+		fprintf(stderr, "janus: pre-auth registrar not ready in 5s\n");
+
+	fire_janus_launch("app_server");
+	if (!wait_for_server_ready("app_server", 5000))
+		fprintf(stderr, "janus: pre-auth app_server not ready in 5s\n");
+
+	fire_janus_launch(frontend);
+	if (!wait_for_server_ready(frontend, 5000))
+		fprintf(stderr, "janus: pre-auth %s not ready in 5s\n", frontend);
+	return NULL;
+}
+
+
+// MUST be on a separate thread — during logout the caller is the
+// launch_daemon dispatcher, and blocking it deadlocks the readiness
+// signals from the servers we're about to spawn.
+static void
+spawn_pre_auth_chain()
+{
+	pthread_t th;
+	if (pthread_create(&th, NULL, pre_auth_thread, NULL) != 0) {
+		fprintf(stderr, "janus: pre_auth_thread: %s\n", strerror(errno));
+		return;
+	}
+	pthread_detach(th);
+}
+
+
+static void
+handle_logout(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	printf("janus: B_JANUS_LOGOUT received from uid=%u (session uid=%u)\n",
+		(unsigned)sender_uid, (unsigned)sUserUid);
+
+	struct passwd* vl = getpwnam("vos_login");
+	uid_t voslogin = (vl != NULL) ? vl->pw_uid : (uid_t)-1;
+	if (sUserUid == (uid_t)-1 || sUserUid == voslogin
+			|| sender_uid != sUserUid) {
+		fprintf(stderr, "janus: B_JANUS_LOGOUT rejected sender_uid=%u "
+			"(session uid=%u)\n",
+			(unsigned)sender_uid, (unsigned)sUserUid);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	if (sShutdownInFlight) {
+		fprintf(stderr, "janus: B_JANUS_LOGOUT ignored (shutdown in flight)\n");
+		BPrivate::KMessage reply(B_BUSY);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	printf("janus: LOGOUT — tearing down session for %s (uid=%u)\n",
+		sUserName, (unsigned)sUserUid);
+
+	BPrivate::KMessage reply(B_OK);
+	kmsg.SendReply(&reply);
+
+	close_pam_session();
+	kill_post_auth_chain();
+
+	sUserUid = voslogin;
+	sUserGid = (vl != NULL) ? vl->pw_gid : (gid_t)-1;
+	strncpy(sUserName, "vos_login", sizeof(sUserName) - 1);
+	sUserName[sizeof(sUserName) - 1] = '\0';
+	if (vl != NULL) {
+		strncpy(sUserHome, vl->pw_dir, sizeof(sUserHome) - 1);
+		sUserHome[sizeof(sUserHome) - 1] = '\0';
+	}
+	sGreeterMode = true;
+
+	if (!init_pam_session())
+		fprintf(stderr, "janus: greeter PAM open failed; continuing\n");
+	spawn_pre_auth_chain();
+}
+
+
 
 
 static void
@@ -854,6 +1200,44 @@ handle_login_ok(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		return;
 	}
 
+	// mode=live + user=vos-live skips the password ladder; anything
+	// else must have a prior verified AUTH_REQUEST.
+	const char* mode = NULL;
+	bool livePath = kmsg.FindString("mode", &mode) == B_OK
+		&& mode != NULL && strcmp(mode, "live") == 0
+		&& strcmp(user, "vos-live") == 0;
+
+	if (livePath) {
+		if (!is_live_persona_allowed()) {
+			fprintf(stderr, "janus: live LOGIN_OK refused — persona "
+				"not enabled on this root\n");
+			BPrivate::KMessage reply(B_NOT_ALLOWED);
+			kmsg.SendReply(&reply);
+			return;
+		}
+		int32 enableSsh = 0;
+		if (kmsg.FindInt32("enable_ssh", &enableSsh) == B_OK && enableSsh
+				&& access("/etc/vos/debug", F_OK) == 0) {
+			enable_ssh_debug();
+		}
+	} else {
+		// Must pair with a prior AUTH_REQUEST for the same user.
+		bigtime_t now = system_time();
+		if (sAuthenticatedUser[0] == '\0'
+				|| strcmp(sAuthenticatedUser, user) != 0
+				|| (now - sAuthenticatedAt) > kAuthWindowUsec) {
+			fprintf(stderr, "janus: LOGIN_OK for %s without matching "
+				"AUTH\n", user);
+			sAuthenticatedUser[0] = '\0';
+			sAuthenticatedAt = 0;
+			BPrivate::KMessage reply(B_NOT_ALLOWED);
+			kmsg.SendReply(&reply);
+			return;
+		}
+		sAuthenticatedUser[0] = '\0';
+		sAuthenticatedAt = 0;
+	}
+
 	struct passwd* pw = getpwnam(user);
 	if (pw == NULL) {
 		fprintf(stderr, "janus: LOGIN_OK for unknown user %s\n", user);
@@ -861,11 +1245,17 @@ handle_login_ok(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		kmsg.SendReply(&reply);
 		return;
 	}
+	if (!is_graphical_login_allowed(pw)) {
+		fprintf(stderr, "janus: LOGIN_OK refused for %s (root/system)\n", user);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
 
 	printf("janus: LOGIN_OK — switching session to %s (uid=%u)\n",
 		user, (unsigned)pw->pw_uid);
 
-	// Reply first — the greeter needs to know it can exit before SIGTERM.
+	// Reply BEFORE SIGTERM so the greeter can quit cleanly.
 	BPrivate::KMessage reply(B_OK);
 	kmsg.SendReply(&reply);
 
@@ -879,11 +1269,14 @@ handle_login_ok(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	sUserUid = pw->pw_uid;
 	sUserGid = pw->pw_gid;
 
+	// Without this the respawned app_server keeps APP_SERVER_EMBED_INPUT=1
+	// and fights input_server over /dev/input/event*.
+	sGreeterMode = false;
+
 	if (!init_pam_session())
 		fprintf(stderr, "janus: post-auth PAM open failed; continuing\n");
-	run_first_login_for_user();
-
 	spawn_post_auth_chain();
+	run_first_login_for_user_detached();
 }
 
 
@@ -913,11 +1306,21 @@ handle_auth_request(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	}
 
 	bool ok = verify_password(user, pass);
+
+	// `pass` points into kmsg's internal storage; scrub after PAM.
+	explicit_bzero(const_cast<char*>(pass), strlen(pass));
+
 	if (!ok) {
+		sAuthenticatedUser[0] = '\0';
+		sAuthenticatedAt = 0;
 		BPrivate::KMessage reply(B_PERMISSION_DENIED);
 		kmsg.SendReply(&reply);
 		return;
 	}
+
+	strncpy(sAuthenticatedUser, user, sizeof(sAuthenticatedUser) - 1);
+	sAuthenticatedUser[sizeof(sAuthenticatedUser) - 1] = '\0';
+	sAuthenticatedAt = system_time();
 
 	BPrivate::KMessage reply(B_OK);
 	reply.AddString("user", user);
@@ -944,7 +1347,6 @@ check_pending_launches()
 		if (ret > 0 && (pfd.revents & (POLLIN | POLLHUP))) {
 			ssize_t n = read(sPending[i].ready_fd, &port, sizeof(port));
 			resolved = true;
-			// check wether child died
 			if (n != (ssize_t)sizeof(port))
 				port = -1;
 		} else if (system_time() > sPending[i].deadline) {
@@ -968,7 +1370,7 @@ check_pending_launches()
 			printf("janus: %s ready, pid=%d port=%d\n",
 				sApps[idx].name, (int)sApps[idx].pid, (int)port);
 
-			// Write PID file for systemd (Type=forking + PIDFile=)
+			// systemd Type=forking + PIDFile= expects this on disk.
 			char pidpath[128];
 			snprintf(pidpath, sizeof(pidpath), "%s/%s.pid",
 				runtime_dir(), sApps[idx].name);
@@ -982,7 +1384,6 @@ check_pending_launches()
 			}
 		}
 
-		// Send deferred reply to janus_launch via KMessage
 		BPrivate::KMessage reply(port >= 0 ? B_OK : B_ERROR);
 		if (port >= 0)
 			reply.AddInt32("pid", (int32)sApps[idx].pid);
@@ -1036,6 +1437,9 @@ launch_daemon_thread(void* /*data*/)
 			} else if (kmsg.What() == BPrivate::B_JANUS_LOGIN_OK) {
 				if (!sShuttingDown)
 					handle_login_ok(kmsg, mi.sender);
+			} else if (kmsg.What() == BPrivate::B_JANUS_LOGOUT) {
+				if (!sShuttingDown)
+					handle_logout(kmsg, mi.sender);
 			}
 		} else {
 			// All other messages (B_GET_LAUNCH_DATA etc.) use BMessage (libbe)
@@ -1297,6 +1701,13 @@ daemon_loop()
 int
 main(int /*argc*/, char** /*argv*/)
 {
+	// stdout/stderr are redirected to /var/log/janus.log; unbuffer so
+	// progress lines land in the log immediately, not once the 4 KiB
+	// stdio buffer fills. A frozen log with the process still running
+	// otherwise looks like a real hang.
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
+
 	// SIGTERM = systemd shutdown request; treat as clean exit so the
 	// daemon_loop drops its libseat/port refs (and closes any held
 	// /dev/nexus fds) before systemd starts umounting rootfs.
@@ -1306,13 +1717,13 @@ main(int /*argc*/, char** /*argv*/)
 
 	runtime_dir();
 
-	if (access("/var/lib/vitruvian/greeter-enabled", F_OK) == 0)
+	if (access("/var/lib/vos/greeter-enabled", F_OK) == 0)
 		sGreeterMode = true;
 
 	if (!resolve_user()) {
 		fprintf(stderr, "janus: desktop user not resolved "
 			"(user-mode: getpwuid failed; system-mode: check "
-			"VITRUVIAN_DEFAULT_USER)\n");
+			"VOS_DEFAULT_USER)\n");
 	} else if (init_pam_session()) {
 		run_first_login_for_user();
 	}
@@ -1325,21 +1736,24 @@ main(int /*argc*/, char** /*argv*/)
 	if (!init_launch_daemon_port())
 		return 1;
 
-	// Fire the pre-auth chain; the graphical-target units skip
-	// themselves via ConditionPathExists until LOGIN_OK arrives.
-	if (sGreeterMode && sSystemMode) {
-		printf("janus: greeter mode enabled — spawning pre-auth chain\n");
-		pid_t p1 = fork();
-		if (p1 == 0) {
-			execl("/system/servers/janus_launch",
-				"janus_launch", "app_server", NULL);
-			_exit(127);
-		}
-		pid_t p2 = fork();
-		if (p2 == 0) {
-			execl("/system/servers/janus_launch",
-				"janus_launch", "vitruvian-login", NULL);
-			_exit(127);
+	// Start logind PrepareForShutdown watcher (race guard for logout).
+	{
+		pthread_t th;
+		if (pthread_create(&th, NULL, logind_watch_thread, NULL) == 0)
+			pthread_detach(th);
+		else
+			fprintf(stderr, "janus: logind_watch_thread: %s\n",
+				strerror(errno));
+	}
+
+	if (sSystemMode) {
+		if (sGreeterMode) {
+			printf("janus: greeter mode enabled — spawning pre-auth chain\n");
+			spawn_pre_auth_chain();
+		} else {
+			printf("janus: autologin as %s — spawning post-auth chain\n",
+				sUserName);
+			spawn_post_auth_chain();
 		}
 	}
 

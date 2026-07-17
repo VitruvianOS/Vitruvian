@@ -1,0 +1,18 @@
+# Auth stack for janus's B_JANUS_AUTH_REQUEST broker.
+#
+# pam_faillock's authfail/authsucc bracket requires the auth-decision
+# module to use "success=1 default=bad" so success jumps *past* authfail
+# and lands on authsucc. `@include common-auth` doesn't give us that
+# jump (its own control expressions apply only inside the include), so
+# authfail would run on every attempt — success or fail — and die.
+# We therefore call pam_unix directly here. LDAP/Kerberos/SSSD support
+# would slot in above pam_unix with the same "success=1 default=bad"
+# pattern (or "success=done") when needed.
+auth       required     pam_faillock.so preauth
+auth       [success=1 default=bad] pam_unix.so nullok
+auth       [default=die] pam_faillock.so authfail
+auth       sufficient   pam_faillock.so authsucc
+auth       required     pam_deny.so
+
+account    required     pam_nologin.so
+@include   common-account

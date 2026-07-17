@@ -1,12 +1,17 @@
+find_library(PAM_LIBRARIES NAMES pam REQUIRED)
+find_path(PAM_INCLUDE_DIRS NAMES security/pam_appl.h REQUIRED)
+
 Server(janus
 
 	SOURCES
 	janus.cpp
 
-	LIBS be ${SEAT_LIBRARIES} pam crypt
+	LIBS be ${SEAT_LIBRARIES} ${PAM_LIBRARIES} systemd
 
 	RDEF janus.rdef
 )
+
+target_include_directories(janus PRIVATE ${PAM_INCLUDE_DIRS})
 
 UsePrivateHeaders(janus app input kernel system)
 

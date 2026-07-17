@@ -123,7 +123,6 @@ main(int argc, char** argv)
 		setlocale(LC_ALL, "");
 
 		TimeApplication app;
-		setuid(0);
 		app.Run();
 	}
 

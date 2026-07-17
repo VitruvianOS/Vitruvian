@@ -125,6 +125,10 @@ Server(
 		#drawing/interface/linux/fbdev/TTy.cpp
 
 		#drawing/interface/linux/LibInputEventStream.cpp
+		# LibEvdevEventStream: fallback event stream (hardcoded US
+		# scancode table, no xkbcommon). Dormant unless the caller
+		# sets APP_SERVER_EMBED_INPUT=1 at spawn time — the default
+		# input path is input_server, run pre-auth via janus.
 		drawing/interface/linux/LibEvdevEventStream.cpp
 
 		stackandtile/SATDecorator.cpp
@@ -136,14 +140,14 @@ Server(
 
 	LIBS localestub shared agg icon linprog ${FREETYPE_LIBRARY}
 		${UDEV_LIBRARIES} ${DRM_LIBRARIES} ${SEAT_LIBRARIES}
-		${EVDEV_LIBRARIES} ${GBM_LIBRARIES} backlight
+		${LIBEVDEV_LIBRARIES} ${GBM_LIBRARIES} backlight
 
 	RDEF app_server.rdef
 
 	INCLUDES
 	${DRM_INCLUDE_DIR}/libdrm/
 	${FREETYPE_INCLUDE_DIRS}
-	${EVDEV_INCLUDES}
+	${LIBEVDEV_INCLUDE_DIRS}
 	${GBM_INCLUDE_DIRS}
 	"${PROJECT_SOURCE_DIR}/src/libs/backlight/"
 	"./drawing"

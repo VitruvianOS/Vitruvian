@@ -544,9 +544,10 @@ DrmHWInterface::~DrmHWInterface()
 {
 	CALLED();
 
-	// Drop the master before fd teardown so the next app_server's
-	// drmSetMaster doesn't hit EACCES.
-	if (fFd >= 0 && fSessionActive.load())
+	// Janus-shared fd is a dup() of janus's open — dropping master here
+	// would revoke janus's too, and the non-root successor can't reacquire.
+	if (fFd >= 0 && fSessionActive.load()
+			&& getenv("JANUS_DRM_FD") == NULL)
 		drmDropMaster(fFd);
 
 	fRunning = false;
@@ -673,7 +674,8 @@ status_t
 DrmHWInterface::Shutdown()
 {
 	CALLED();
-	if (fFd >= 0 && fSessionActive.load()) {
+	if (fFd >= 0 && fSessionActive.load()
+			&& getenv("JANUS_DRM_FD") == NULL) {
 		drmDropMaster(fFd);
 		fSessionActive = false;
 	}

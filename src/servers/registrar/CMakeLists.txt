@@ -12,6 +12,7 @@ Server(
 	Event.cpp
 	EventMaskWatcher.cpp
 	EventQueue.cpp
+	LogindBridge.cpp
 	MessageDeliverer.cpp
 	MessageEvent.cpp
 	MessageHandler.cpp
@@ -38,7 +39,7 @@ Server(
 
 	INCLUDES
 	"mime"
-	LIBS localestub
+	LIBS localestub systemd
 	RDEF registrar.rdef
 )
 

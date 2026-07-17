@@ -50,6 +50,11 @@ enum {
 	// Janus login broker; sender_uid-gated to vos_login uid.
 	B_JANUS_AUTH_REQUEST		= 'jnaR',
 	B_JANUS_LOGIN_OK			= 'jnlO',
+	// Janus logout: sender_uid-gated to the currently authenticated
+	// user's uid; ignored if a system shutdown is already in flight.
+	B_JANUS_LOGOUT				= 'jnlX',
+	// FirstBootPrompt asks janus to run first-boot.service. sender_uid
+	// gated to vos_login; refused once the sentinel exists.
 };
 
 

@@ -27,6 +27,7 @@
 #include "ClipboardHandler.h"
 #include "Debug.h"
 #include "EventQueue.h"
+#include "LogindBridge.h"
 #include "MessageDeliverer.h"
 #include "MessageEvent.h"
 #include "MessageRunnerManager.h"
@@ -63,8 +64,9 @@ Registrar::Registrar(status_t* _error)
 	fEventQueue(NULL),
 	fMessageRunnerManager(NULL),
 	fShutdownProcess(NULL),
-	fAuthenticationManager(NULL)//,
-	//fPackageWatchingManager(NULL)
+	fAuthenticationManager(NULL),
+	fPackageWatchingManager(NULL),
+	fLogindBridge(NULL)
 {
 	FUNCTION_START();
 
@@ -81,9 +83,12 @@ Registrar::~Registrar()
 {
 	FUNCTION_START();
 	Lock();
+	if (fLogindBridge != NULL) {
+		fLogindBridge->Stop();
+		delete fLogindBridge;
+		fLogindBridge = NULL;
+	}
 	fEventQueue->Die();
-	//delete fAuthenticationManager;
-	//delete fPackageWatchingManager;
 	delete fMessageRunnerManager;
 	delete fEventQueue;
 	fMIMEManager->Lock();
@@ -137,10 +142,6 @@ Registrar::ReadyToRun()
 	// create event queue
 	fEventQueue = new EventQueue(kEventQueueName);
 
-	// create authentication manager
-	//fAuthenticationManager = new AuthenticationManager;
-	//fAuthenticationManager->Init();
-
 	// create roster
 	fRoster = new TRoster;
 	fRoster->Init();
@@ -159,9 +160,6 @@ Registrar::ReadyToRun()
 	// init the global be_roster
 	BRoster::Private().SetTo(be_app_messenger, BMessenger(NULL, fMIMEManager));
 
-	// create the package watching manager
-	//fPackageWatchingManager = new PackageWatchingManager;
-
 	// Sanity check roster after team deletion
 	BMessenger target(this);
 	BMessenger::Private messengerPrivate(target);
@@ -171,6 +169,16 @@ Registrar::ReadyToRun()
 	__start_watching_system(-1, B_WATCH_SYSTEM_TEAM_DELETION, port, token);
 	fRoster->CheckSanity();
 		// Clean up any teams that exited before we started watching
+
+	// Bring up logind bridge: delay inhibit locks + PrepareForShutdown /
+	// PrepareForSleep signal subscription. See LogindBridge.h.
+	fLogindBridge = new(nothrow) LogindBridge(BMessenger(this));
+	if (fLogindBridge == NULL || fLogindBridge->Start() != B_OK) {
+		fprintf(stderr, "Registrar: LogindBridge init failed; bottom-up "
+			"shutdown/sleep will bypass the quit dance.\n");
+		delete fLogindBridge;
+		fLogindBridge = NULL;
+	}
 
 	FUNCTION_END();
 }
@@ -249,6 +257,12 @@ Registrar::_MessageReceived(BMessage *message)
 			_HandleIsShutDownInProgress(message);
 			break;
 		}
+		case kMsgLogindPrepareForShutdown:
+			_HandleLogindPrepareForShutdown(message);
+			break;
+		case kMsgLogindPrepareForSleep:
+			_HandleLogindPrepareForSleep(message);
+			break;
 		case B_REG_TEAM_DEBUGGER_ALERT:
 		{
 			if (fShutdownProcess != NULL)
@@ -344,15 +358,6 @@ Registrar::_MessageReceived(BMessage *message)
 			fMessageRunnerManager->HandleGetRunnerInfo(message);
 			break;
 
-		// package watching requests
-		//case B_REG_PACKAGE_START_WATCHING:
-		//case B_REG_PACKAGE_STOP_WATCHING:
-		//	fPackageWatchingManager->HandleStartStopWatching(message);
-		//	break;
-		//case B_PACKAGE_UPDATE:
-		//	fPackageWatchingManager->NotifyWatchers(message);
-		//	break;
-
 		// internal messages
 		case B_SYSTEM_OBJECT_UPDATE:
 		{
@@ -367,6 +372,9 @@ Registrar::_MessageReceived(BMessage *message)
 					fShutdownProcess);
 				fShutdownProcess = NULL;
 			}
+			// Quit dance done; let logind proceed with poweroff.
+			if (fLogindBridge != NULL)
+				fLogindBridge->ReleaseShutdownInhibit();
 			break;
 
 		case kMsgAppServerStarted:
@@ -429,6 +437,76 @@ Registrar::_HandleIsShutDownInProgress(BMessage *request)
 }
 
 
+/*!	\brief Handle logind PrepareForShutdown(active).
+
+	Two-level shutdown collaboration. Reentrancy guard: if
+	fShutdownProcess is already running, this is the systemctl → logind
+	loop reflecting our own top-down shutdown back at us; just release
+	the inhibit fd and return.
+
+	Otherwise this is a bottom-up trigger (power button, systemctl
+	poweroff, shutdown -h now) and we run the quit dance WITHOUT the
+	refusal window (delay-lock semantics: cannot veto once the signal
+	fires) then release the inhibit.
+*/
+void
+Registrar::_HandleLogindPrepareForShutdown(BMessage *request)
+{
+	bool active = false;
+	if (request->FindBool("active", &active) != B_OK || !active)
+		return;
+
+	if (fShutdownProcess != NULL) {
+		// Our own shutdown is already in flight (top-down BRoster::Shutdown
+		// → _kern_shutdown → systemctl → PrepareForShutdown loop). Don't
+		// re-enter. Inhibit will be released when B_REG_SHUTDOWN_FINISHED
+		// fires from ShutdownProcess.
+		return;
+	}
+
+	// Fabricate a B_REG_SHUT_DOWN request with confirm=false (skip the
+	// refusal window; bottom-up cannot be vetoed) and dispatch through
+	// the normal handler so all downstream code paths are shared. Do NOT
+	// release the inhibit here — ShutdownProcess::Run() returns immediately
+	// and the dance runs async. Release happens in the
+	// B_REG_SHUTDOWN_FINISHED case when the dance actually completes.
+	BMessage synthetic(B_REG_SHUT_DOWN);
+	synthetic.AddBool("reboot", false);
+	synthetic.AddBool("confirm", false);
+	_HandleShutDown(&synthetic);
+}
+
+
+/*!	\brief Handle logind PrepareForSleep(active).
+
+	Broadcast B_SYSTEM_SUSPENDING/B_SYSTEM_RESUMED to registered apps
+	via TRoster's existing broadcast primitive, then (on suspend)
+	release the sleep inhibit so systemd proceeds. Fire-and-forget:
+	no ack protocol in v1; caller-side handlers must be quick.
+*/
+void
+Registrar::_HandleLogindPrepareForSleep(BMessage *request)
+{
+	bool active = false;
+	if (request->FindBool("active", &active) != B_OK)
+		return;
+
+	BMessage payload(active ? B_SYSTEM_SUSPENDING : B_SYSTEM_RESUMED);
+	BMessage broadcast(B_REG_BROADCAST);
+	broadcast.AddInt32("team", -1);
+	broadcast.AddMessage("message", &payload);
+	broadcast.AddMessenger("reply_target", BMessenger(this));
+	fRoster->HandleBroadcast(&broadcast);
+
+	if (active && fLogindBridge != NULL) {
+		// 2 s cap for handlers to run; then release. Bridge auto-
+		// reacquires the sleep lock when PrepareForSleep(false) fires.
+		snooze(2000000);
+		fLogindBridge->ReleaseSleepInhibit();
+	}
+}
+
+
 
 //	#pragma mark -
 
@@ -442,6 +520,11 @@ Registrar::_HandleIsShutDownInProgress(BMessage *request)
 int
 main()
 {
+	// stdout/stderr redirected to /var/log/registrar.log; unbuffer so
+	// timing traces reflect reality instead of stdio buffer flush events.
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
+
 	FUNCTION_START();
 
 	// Create the global be_clipboard manually -- it will not work, since it

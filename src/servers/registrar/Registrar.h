@@ -33,6 +33,7 @@ class AuthenticationManager;
 class ClipboardHandler;
 class DiskDeviceManager;
 class EventQueue;
+class LogindBridge;
 class MessageEvent;
 class MessageRunnerManager;
 class MIMEManager;
@@ -59,6 +60,8 @@ private:
 	void _MessageReceived(BMessage *message);
 	void _HandleShutDown(BMessage *message);
 	void _HandleIsShutDownInProgress(BMessage *message);
+	void _HandleLogindPrepareForShutdown(BMessage *message);
+	void _HandleLogindPrepareForSleep(BMessage *message);
 
 	TRoster					*fRoster;
 	ClipboardHandler		*fClipboardHandler;
@@ -68,6 +71,7 @@ private:
 	ShutdownProcess			*fShutdownProcess;
 	AuthenticationManager	*fAuthenticationManager;
 	PackageWatchingManager	*fPackageWatchingManager;
+	LogindBridge			*fLogindBridge;
 };
 
 #endif	// REGISTRAR_H

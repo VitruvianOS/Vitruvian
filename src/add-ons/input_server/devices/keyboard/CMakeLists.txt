@@ -18,4 +18,4 @@ AddOn(
 	${XKBCOMMON_INCLUDES}
 )
 
-UsePrivateHeaders(keyboard input interface shared tracker system)
+UsePrivateHeaders(keyboard app input interface shared tracker system)

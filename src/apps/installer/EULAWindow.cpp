@@ -32,15 +32,15 @@ EULAWindow::EULAWindow()
 {
 	BString infoText;
 	infoText << B_TRANSLATE(
-		"Welcome to the Haiku Installer!\n\n");
+		"Welcome to the V\\OS Installer!\n\n");
 	infoText << B_TRANSLATE(
-		"IMPORTANT INFORMATION BEFORE INSTALLING HAIKU\n\n");
+		"IMPORTANT INFORMATION BEFORE INSTALLING V\\OS\n\n");
 	infoText << B_TRANSLATE(
 		"This is beta-quality software! It means there is a risk of "
 		"losing important data. Make frequent backups! You have been "
 		"warned.\n\n\n");
 	infoText << B_TRANSLATE(
-		"1)   If you are installing Haiku onto real hardware (not inside an "
+		"1)   If you are installing V\\OS onto real hardware (not inside an "
 		"emulator), you may want to prepare a hard disk partition from "
 		"another OS (you could, for example, use a GParted Live-CD, which "
 		"can also resize existing partitions to make room).\n"
@@ -51,20 +51,18 @@ EULAWindow::EULAWindow()
 		"partitions on your system. Just in case" B_UTF8_ELLIPSIS);
 	infoText << "\n\n\n";
 	infoText << B_TRANSLATE(
-		"2)   The Installer will make the Haiku partition itself bootable, "
-		"but takes no steps to integrate Haiku into an existing boot menu. "
-		"If you have GRUB already installed, you can add Haiku to it.\n"
-		"For details, please consult the guide on booting Haiku on our "
-		"website at https://www.haiku-os.org/guides/booting.\n"
+		"2)   The Installer will make the V\\OS partition itself bootable, "
+		"but takes no steps to integrate V\\OS into an existing boot menu. "
+		"If you have GRUB already installed, you can add V\\OS to it.\n"
 		"Or you can set up a boot menu from Installer's \"Tools\" menu, see "
-		"the Haiku User Guide's topic on the application \"BootManager\"."
+		"the User Guide's topic on the application \"BootManager\"."
 		"\n\n\n");
 	infoText << B_TRANSLATE(
-		"3)   When you successfully boot into Haiku for the first time, make "
+		"3)   When you successfully boot into V\\OS for the first time, make "
 		"sure to read our \"User Guide\" and take the \"Quick Tour\". There "
 		"are links on the Desktop and in WebPositive's bookmarks.\n\n");
 	infoText << B_TRANSLATE(
-		"Have fun and thanks for trying out Haiku!");
+		"Have fun and thanks for trying out V\\OS!");
 
 	BTextView* textView = new BTextView("eula", be_plain_font, NULL, B_WILL_DRAW);
 	textView->SetInsets(10, 10, 10, 10);

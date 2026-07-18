@@ -36,6 +36,8 @@ All rights reserved.
 //	fast display
 //
 
+#include <unistd.h>
+
 #include <Debug.h>
 #include <Directory.h>
 #include <Entry.h>
@@ -202,6 +204,13 @@ NodePreloader::PreloadOne(const char* dirPath)
 void
 NodePreloader::Preload()
 {
+	// Live media: warmup value is zero (user won't return to hit the cache),
+	// cost is real (squashfs+overlay walk).
+	if (access("/etc/vos/live", F_OK) == 0) {
+		fLock.Unlock();
+		return;
+	}
+
 	for (int32 count = 100; count >= 0; count--) {
 		// wait for a little bit before going ahead to reduce disk access
 		// contention

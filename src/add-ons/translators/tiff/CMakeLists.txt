@@ -14,3 +14,4 @@ TranslatorAddOn(
 
 	RDEF TIFFTranslator.rdef
 )
+DoCatalogs("x-vnd.Haiku-TIFFTranslator" add-ons/translators/tiff)

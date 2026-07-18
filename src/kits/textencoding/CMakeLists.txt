@@ -12,3 +12,4 @@ AddOn(
 )
 
 UsePrivateHeaders( textencoding textencoding )
+DoCatalogs("x-vnd.Haiku-libtextencoding" kits/textencoding)

@@ -17,3 +17,4 @@ TranslatorAddOn(
 
 	RDEF JPEGTranslator.rdef
 )
+DoCatalogs("x-vnd.Haiku-JPEGTranslator" add-ons/translators/jpeg)

@@ -15,3 +15,4 @@ TranslatorAddOn(
 
 	RDEF ICNSTranslator.rdef
 )
+DoCatalogs("x-vnd.Haiku-ICNSTranslator" add-ons/translators/icns)

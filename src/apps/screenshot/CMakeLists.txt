@@ -18,3 +18,5 @@ Application(screenshot_cli
 )
 set_target_properties(screenshot_cli PROPERTIES OUTPUT_NAME screenshot)
 UsePrivateHeaders(screenshot_cli interface shared)
+DoCatalogs("x-vnd.haiku-screenshot-cli" apps/screenshot/screenshot)
+DoCatalogs("x-vnd.haiku-screenshot" apps/screenshot/Screenshot)

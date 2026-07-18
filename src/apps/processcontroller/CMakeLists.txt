@@ -21,3 +21,4 @@ Application(ProcessController
 	RDEF ProcessController.rdef
 )
 UsePrivateHeaders(ProcessController app interface shared system)
+DoCatalogs("x-vnd.Haiku-ProcessController" apps/processcontroller)

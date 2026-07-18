@@ -13,3 +13,4 @@ Application(Network
 	LIBS bnetapi shared localestub
 	RDEF Network.rdef InterfaceIcons.rdef
 )
+DoCatalogs("x-vnd.Haiku-Network" preferences/network)

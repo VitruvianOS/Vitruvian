@@ -14,3 +14,4 @@ Application(DriveSetup
 	RDEF DriveSetup.rdef
 )
 UsePrivateHeaders(DriveSetup interface shared storage tracker)
+DoCatalogs("x-vnd.Haiku-DriveSetup" apps/drivesetup)

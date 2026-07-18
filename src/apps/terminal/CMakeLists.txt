@@ -42,3 +42,4 @@ Application(
 )
 
 UsePrivateHeaders(Terminal textencoding kernel libroot system)
+DoCatalogs("x-vnd.Haiku-Terminal" apps/terminal)

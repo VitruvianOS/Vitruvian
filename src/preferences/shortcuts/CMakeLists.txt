@@ -16,3 +16,4 @@ Application(Shortcuts
 )
 target_include_directories(Shortcuts PRIVATE
 	${PROJECT_SOURCE_DIR}/src/add-ons/input_server/filters/shortcut_catcher)
+DoCatalogs("x-vnd.Haiku-Shortcuts" preferences/shortcuts)

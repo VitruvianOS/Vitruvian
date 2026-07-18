@@ -15,3 +15,4 @@ TranslatorAddOn(
 
 	RDEF PNGTranslator.rdef
 )
+DoCatalogs("x-vnd.Haiku-PNGTranslator" add-ons/translators/png)

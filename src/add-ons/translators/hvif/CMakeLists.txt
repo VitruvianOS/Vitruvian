@@ -14,3 +14,4 @@ TranslatorAddOn(
 
 	RDEF HVIFTranslator.rdef
 )
+DoCatalogs("x-vnd.Haiku-HVIFTranslator" add-ons/translators/hvif)

@@ -18,3 +18,4 @@ TranslatorAddOn(
 
 	RDEF GIFTranslator.rdef
 )
+DoCatalogs("x-vnd.Haiku-GIFTranslator" add-ons/translators/gif)

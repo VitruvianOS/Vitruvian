@@ -16,3 +16,4 @@ Application(DiskProbe
 )
 UsePrivateHeaders(DiskProbe interface shared)
 target_include_directories(DiskProbe PRIVATE ${PROJECT_SOURCE_DIR}/src/libs/mapm)
+DoCatalogs("x-vnd.Haiku-DiskProbe" apps/diskprobe)

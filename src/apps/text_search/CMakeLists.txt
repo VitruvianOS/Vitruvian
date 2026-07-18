@@ -13,3 +13,4 @@ Application(TextSearch
 	RDEF TextSearch.rdef
 )
 UsePrivateHeaders(TextSearch shared storage)
+DoCatalogs("x-vnd.Haiku.TextSearch" apps/text_search)

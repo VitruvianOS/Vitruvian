@@ -6,3 +6,4 @@ Application(Deskbar_prefs
 set_target_properties(Deskbar_prefs PROPERTIES OUTPUT_NAME Deskbar)
 target_include_directories(Deskbar_prefs PRIVATE
 	${PROJECT_SOURCE_DIR}/src/apps/deskbar)
+DoCatalogs("x-vnd.Haiku-DeskbarPreferences" preferences/deskbar)

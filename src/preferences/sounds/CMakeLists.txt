@@ -7,3 +7,4 @@ Application(Sounds
 	LIBS game tracker localestub
 	RDEF Sounds.rdef
 )
+DoCatalogs("x-vnd.Haiku-Sounds" preferences/sounds)

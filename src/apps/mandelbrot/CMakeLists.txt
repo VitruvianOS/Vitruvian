@@ -6,3 +6,4 @@ Application(Mandelbrot
 	RDEF Mandelbrot.rdef
 )
 UsePrivateHeaders(Mandelbrot interface shared system)
+DoCatalogs("x-vnd.Haiku-Mandelbrot" apps/mandelbrot)

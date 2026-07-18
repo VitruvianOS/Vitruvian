@@ -9,3 +9,4 @@ Application(Backgrounds
 )
 target_include_directories(Backgrounds PRIVATE
 	${PROJECT_SOURCE_DIR}/headers/private/preferences)
+DoCatalogs("x-vnd.Haiku-Backgrounds" preferences/backgrounds)

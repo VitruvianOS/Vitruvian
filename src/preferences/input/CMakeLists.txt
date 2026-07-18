@@ -16,3 +16,4 @@ Application(Input
 	LIBS localestub
 	RDEF Input.rdef
 )
+DoCatalogs("x-vnd.Haiku-Input" preferences/input)

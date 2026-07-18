@@ -7,3 +7,4 @@ Application(FontDemo
 	RDEF FontDemo.rdef
 )
 UsePrivateHeaders(FontDemo shared interface app)
+DoCatalogs("x-vnd.Haiku-FontDemo" apps/fontdemo)

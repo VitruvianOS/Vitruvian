@@ -44,3 +44,4 @@ Server(
 )
 
 UsePrivateHeaders(registrar app kernel libroot system tracker)
+DoCatalogs("x-vnd.haiku-registrar" servers/registrar)

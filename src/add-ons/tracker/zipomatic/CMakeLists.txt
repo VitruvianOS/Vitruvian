@@ -14,3 +14,4 @@ TrackerAddOn(
 )
 
 UsePrivateHeaders(ZipOMatic tracker shared interface storage support)
+DoCatalogs("x-vnd.haiku.zip-o-matic" add-ons/tracker/zipomatic)

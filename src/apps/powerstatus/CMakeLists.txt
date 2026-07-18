@@ -13,3 +13,4 @@ Application(PowerStatus
 UsePrivateHeaders(PowerStatus interface shared)
 target_include_directories(PowerStatus PRIVATE
 	${PROJECT_SOURCE_DIR}/headers/private/device)
+DoCatalogs("x-vnd.Haiku-PowerStatus" apps/powerstatus)

@@ -8,3 +8,4 @@ Application(DataTranslations
 	RDEF DataTranslations.rdef
 )
 UsePrivateHeaders(DataTranslations shared)
+DoCatalogs("x-vnd.Haiku-DataTranslations" preferences/datatranslations)

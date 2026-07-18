@@ -111,3 +111,4 @@ target_compile_definitions(tracker PRIVATE
 	_BUILDING_tracker=1
 	_SUPPORTS_RESOURCES=1
 )
+DoCatalogs("x-vnd.Haiku-libtracker" kits/tracker)

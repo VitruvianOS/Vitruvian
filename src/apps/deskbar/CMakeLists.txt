@@ -39,3 +39,4 @@ target_compile_definitions(Deskbar PRIVATE
 )
 
 UsePrivateHeaders(Deskbar app interface tracker kernel)
+DoCatalogs("x-vnd.Be-TSKB" apps/deskbar)

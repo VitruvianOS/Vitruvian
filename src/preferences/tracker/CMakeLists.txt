@@ -4,3 +4,4 @@ Application(Tracker_prefs
 	RDEF TrackerPreferences.rdef
 )
 set_target_properties(Tracker_prefs PROPERTIES OUTPUT_NAME Tracker)
+DoCatalogs("x-vnd.Haiku-TrackerPreferences" preferences/tracker)

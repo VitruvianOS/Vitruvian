@@ -16,3 +16,4 @@ Application(Time
 	LIBS bnetapi shared localestub
 	RDEF Time.rdef
 )
+DoCatalogs("x-vnd.Haiku-Time" preferences/time)

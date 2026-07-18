@@ -20,3 +20,4 @@ Application(FileTypes
 )
 target_include_directories(FileTypes PRIVATE
 	${PROJECT_SOURCE_DIR}/headers/libs/icon)
+DoCatalogs("x-vnd.Haiku-FileTypes" preferences/filetypes)

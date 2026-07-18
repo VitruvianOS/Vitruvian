@@ -10,3 +10,4 @@ Server(
 )
 
 UsePrivateHeaders(mount_server app mount shared storage)
+DoCatalogs("x-vnd.Haiku-mount_server" servers/mount)

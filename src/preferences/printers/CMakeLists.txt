@@ -13,3 +13,4 @@ Application(Printers
 	LIBS translation localestub
 	RDEF Printers.rdef
 )
+DoCatalogs("x-vnd.Be-PRNT" preferences/printers)

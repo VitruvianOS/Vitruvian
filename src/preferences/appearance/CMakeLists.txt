@@ -12,3 +12,4 @@ Application(Appearance
 	LIBS shared localestub
 	RDEF Appearance.rdef
 )
+DoCatalogs("x-vnd.Haiku-Appearance" preferences/appearance)

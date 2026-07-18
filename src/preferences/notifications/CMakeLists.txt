@@ -10,3 +10,4 @@ Application(Notifications
 	LIBS translation tracker localestub
 	RDEF Notifications.rdef
 )
+DoCatalogs("x-vnd.Haiku-Notifications" preferences/notifications)

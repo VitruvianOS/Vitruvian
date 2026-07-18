@@ -14,3 +14,4 @@ Application(DiskUsage
 	RDEF DiskUsage.rdef
 )
 UsePrivateHeaders(DiskUsage mount shared tracker storage)
+DoCatalogs("x-vnd.Haiku-DiskUsage" apps/diskusage)

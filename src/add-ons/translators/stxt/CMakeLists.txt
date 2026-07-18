@@ -16,3 +16,4 @@ TranslatorAddOn(
 )
 
 UsePrivateHeaders(STXTTranslator textencoding)
+DoCatalogs("x-vnd.Haiku-STXTTranslator" add-ons/translators/stxt)

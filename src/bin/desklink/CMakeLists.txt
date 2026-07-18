@@ -12,3 +12,4 @@ Application(desklink
 )
 
 UsePrivateHeaders(desklink app interface shared)
+DoCatalogs("x-vnd.Haiku-desklink" bin/desklink)

@@ -10,3 +10,4 @@ Application(screen_blanker
 )
 
 UsePrivateHeaders(screen_blanker interface screen_saver)
+DoCatalogs("x-vnd.Haiku.screenblanker" bin/screen_blanker)

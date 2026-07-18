@@ -9,3 +9,4 @@ Application(
 )
 
 UsePrivateHeaders(Tracker shared tracker)
+DoCatalogs("x-vnd.Be-TRAK" apps/tracker)

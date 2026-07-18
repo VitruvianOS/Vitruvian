@@ -9,3 +9,4 @@
 #	RDEF NetworkStatus.rdef NetworkStatusIcons.rdef
 #)
 #UsePrivateHeaders(NetworkStatus interface net)
+DoCatalogs("x-vnd.Haiku-NetworkStatus" apps/networkstatus)

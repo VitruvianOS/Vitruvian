@@ -13,3 +13,4 @@ Application(Expander
 	RDEF Expander.rdef
 )
 UsePrivateHeaders(Expander shared)
+DoCatalogs("x-vnd.Haiku-Expander" apps/expander)

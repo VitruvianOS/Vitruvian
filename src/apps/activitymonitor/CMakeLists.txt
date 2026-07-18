@@ -11,3 +11,4 @@ Application(ActivityMonitor
 	RDEF ActivityMonitor.rdef
 )
 UsePrivateHeaders(ActivityMonitor interface shared system)
+DoCatalogs("x-vnd.Haiku-ActivityMonitor" apps/activitymonitor)

@@ -13,3 +13,4 @@ Application(GLTeapot
 )
 
 install(TARGETS GLTeapot DESTINATION /system/apps/)
+DoCatalogs("x-vnd.Haiku-GLTeapot" apps/glteapot)

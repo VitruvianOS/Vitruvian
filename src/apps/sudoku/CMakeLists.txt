@@ -13,3 +13,4 @@ Application(
 
 	LIBS tracker shared localestub
 )
+DoCatalogs("x-vnd.Haiku-Sudoku" apps/sudoku)

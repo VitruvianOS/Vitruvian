@@ -10,3 +10,4 @@ Application(People
 	RDEF People.rdef
 )
 UsePrivateHeaders(People shared)
+DoCatalogs("x-vnd.Be-PEPL" apps/people)

@@ -12,3 +12,4 @@ Application(Installer
 	RDEF Installer.rdef
 )
 UsePrivateHeaders(Installer app interface shared storage tracker system)
+DoCatalogs("x-vnd.Haiku-Installer" apps/installer)

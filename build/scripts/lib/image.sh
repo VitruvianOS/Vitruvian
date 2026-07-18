@@ -577,9 +577,6 @@ getent group nexus >/dev/null && \\
     getent passwd vos_login >/dev/null && \\
     adduser vos_login nexus >/dev/null 2>&1 || true
 
-echo 'vos-live' > /etc/vos/autologin
-chmod 0644 /etc/vos/autologin
-
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<'LOGEOF'
 [Service]

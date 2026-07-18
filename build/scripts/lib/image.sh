@@ -424,7 +424,7 @@ set default="0"
 set timeout=1
 set hidden_timeout=0
 menuentry "Vitruvian Live" {
-    linux /vmlinuz boot=live quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel oops=panic panic_on_warn=1 panic=0
+    linux /vmlinuz boot=live noeject quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel oops=panic panic_on_warn=1 panic=0
     initrd /initrd
 }
 EOF

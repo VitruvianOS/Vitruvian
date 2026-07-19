@@ -46,6 +46,7 @@ set(SYSTEM_LIBS
 	root
 	be
 	game
+	media2
 	opengl
 	textencoding
 	tracker

@@ -34,6 +34,8 @@ set(
 
 	"headers/os/opengl"
 
+	"headers/os/media2"
+
 	"headers/posix"
 )
 

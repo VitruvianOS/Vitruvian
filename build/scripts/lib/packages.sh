@@ -9,7 +9,7 @@ get_base_packages() {
                 " network-manager net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
-                " pipewire-audio pipewire-bin wireplumber" \
+                " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " grub-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin"
             ;;
         arm64)
@@ -18,7 +18,7 @@ get_base_packages() {
                 " network-manager net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
-                " pipewire-audio pipewire-bin wireplumber" \
+                " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " grub-common grub-efi-arm64-bin"
             ;;
         arm32)
@@ -27,7 +27,7 @@ get_base_packages() {
                 " network-manager net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping" \
                 " fortune-mod ncurses-bin rsync" \
-                " pipewire-audio pipewire-bin wireplumber" \
+                " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " grub-common"
             ;;
         riscv64)
@@ -36,7 +36,7 @@ get_base_packages() {
                 " network-manager net-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " ncurses-bin rsync" \
-                " pipewire-audio pipewire-bin wireplumber" \
+                " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " grub-common grub-efi-riscv64-bin"
             ;;
         *)
@@ -58,6 +58,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev" \
                 " libglu1-mesa-dev"
             ;;
         arm64)
@@ -70,6 +71,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev" \
                 " libglu1-mesa-dev"
             ;;
         arm32)
@@ -81,7 +83,8 @@ get_dev_packages() {
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev" \
-                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev"
             ;;
         riscv64)
             printf '%s' \
@@ -92,7 +95,8 @@ get_dev_packages() {
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev" \
-                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev"
+                " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev"
             ;;
         *)
             die "No dev package list for architecture: $_arch"

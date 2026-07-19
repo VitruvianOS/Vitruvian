@@ -49,11 +49,19 @@ jobs:
       - name: Build ISO + RAW images
         run: cd generated.x86 && ../bake build --image-type=iso,raw
 
+      - name: Compress RAW images
+        run: |
+          shopt -s nullglob
+          cd generated.x86/output
+          for f in *.raw; do
+            zstd -T0 --long=27 -19 --rm "$f"
+          done
+
       - name: Generate image checksums
         run: |
           shopt -s nullglob
           cd generated.x86/output
-          for f in *.iso *.raw; do
+          for f in *.iso *.raw.zst; do
             sha256sum "$f" > "$f.sha256"
           done
 
@@ -73,8 +81,8 @@ jobs:
         with:
           name: Vitruvian-RAW
           path: |
-            generated.x86/output/*.raw
-            generated.x86/output/*.raw.sha256
+            generated.x86/output/*.raw.zst
+            generated.x86/output/*.raw.zst.sha256
           if-no-files-found: error
 
       - name: Generate DEB checksums

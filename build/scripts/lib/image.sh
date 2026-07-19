@@ -307,10 +307,68 @@ EOF
     # standalone at /EFI/BOOT/BOOTX64.EFI and fail with "vmlinuz not found".
     sudo rm -rf "$_mnt/boot/efi/EFI/debian" "$_mnt/boot/efi/EFI/Debian"
 
+    # First-boot resize: grow root partition to fill the target disk and
+    # resize the ext4 FS. Enabled during install; the unit disables itself
+    # after running so upgrades don't repeat the resize.
+    sudo tee "$_mnt/usr/local/sbin/vos-resize-root" >/dev/null <<'RSZEOF'
+#!/bin/sh
+set -e
+_root=$(findmnt -no SOURCE /)
+_disk=$(lsblk -no PKNAME "$_root")
+[ -n "$_disk" ] || exit 0
+_part=$(echo "$_root" | sed "s|.*[^0-9]||")
+sgdisk -e "/dev/$_disk" 2>/dev/null || true
+parted -s "/dev/$_disk" resizepart "$_part" 100% || true
+partprobe "/dev/$_disk" || true
+resize2fs "$_root" || true
+systemctl disable vos-resize-root.service || true
+RSZEOF
+    sudo chmod +x "$_mnt/usr/local/sbin/vos-resize-root"
+    sudo tee "$_mnt/etc/systemd/system/vos-resize-root.service" >/dev/null <<'UNITEOF'
+[Unit]
+Description=Grow root filesystem to fill disk (first boot)
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=local-fs-pre.target
+Wants=local-fs-pre.target
+ConditionPathExists=/usr/local/sbin/vos-resize-root
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vos-resize-root
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+    sudo chroot "$_mnt" systemctl enable vos-resize-root.service 2>/dev/null || true
+
     qemu_eject "$_mnt" "$_arch"
 
     _loop_image_cleanup
     trap - EXIT INT TERM
+
+    # Shrink the raw to what's actually used, then let CI compress it.
+    # Users can dd the .raw.zst straight to disk; vos-resize-root grows
+    # the root partition on first boot.
+    log_step "Shrinking raw image..."
+    _shrink_loop=$(sudo losetup --show -f -P "$_raw")
+    _shrink_root="${_shrink_loop}p2"
+    sudo e2fsck -fy "$_shrink_root" || true
+    sudo resize2fs -M "$_shrink_root"
+    _fs_bs=$(sudo tune2fs -l "$_shrink_root" | awk -F: '/Block size/{gsub(/ /,"",$2);print $2}')
+    _fs_blocks=$(sudo tune2fs -l "$_shrink_root" | awk -F: '/Block count/{gsub(/ /,"",$2);print $2}')
+    _fs_bytes=$((_fs_blocks * _fs_bs))
+    _part_start=$(sudo parted -s "$_shrink_loop" unit B print | \
+        awk '$1=="2"{gsub(/B/,"",$2);print $2}')
+    _new_part_end=$((_part_start + _fs_bytes - 1))
+    sudo losetup -d "$_shrink_loop"
+    sudo parted -s "$_raw" ---pretend-input-tty resizepart 2 ${_new_part_end}B <<<"yes" || true
+    # secondary GPT lives at end-of-disk; leave slack for it + alignment
+    _new_size=$((_new_part_end + 1 + 34*512 + 1048576))
+    truncate -s "$_new_size" "$_raw"
+    sudo sgdisk -e "$_raw" 2>/dev/null || true
+    log_info "Raw shrunk to $(du -h "$_raw" | cut -f1)"
 
     log_step "Copying OVMF vars..."
     if [ -f /usr/share/OVMF/OVMF_VARS_4M.fd ]; then

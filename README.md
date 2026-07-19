@@ -20,7 +20,7 @@ Vitruvian is an operating system based on Linux, heavily inspired by BeOS, bring
 
 Custom-built kernel modules and real-time patches deliver a low-latency desktop experience. Vitruvian supports the BeOS/Haiku API on Linux with minimal to no changes required to application source code.
 
-The reference boot filesystems are XFS and SquashFS, both with full extended attribute support. XFS is the reference for standard desktop installs; SquashFS is used for live images and embedded targets. Ext4 and most other Linux filesystems with extended attribute support are also supported. The default kernel ships with PREEMPT_RT real-time patches; non-RT kernels are also supported. Filesystem indexing and live queries are planned for a future release.
+The default boot filesystem is ext4, with SquashFS for live images. Both support Linux extended attributes, which Vitruvian uses to carry BFS-style metadata. Full support for XFS and Btrfs is on the roadmap, tied to the DriveSetup rewrite. The default kernel ships with PREEMPT_RT real-time patches; non-RT kernels are also supported. Filesystem indexing and live queries are planned for a future release.
 
 ### Nexus
 

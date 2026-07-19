@@ -858,6 +858,75 @@ _is_pre_auth_server(const char* name)
 }
 
 
+// Copy a single settings file from vos_login's config into a target user's
+// config, creating parent dirs and chowning. Silently no-ops if the source
+// doesn't exist (FBP may not have touched every knob).
+static void
+copy_settings_file(const char* srcPath, const char* dstDir,
+	const char* fileName, uid_t uid, gid_t gid)
+{
+	int src = open(srcPath, O_RDONLY | O_CLOEXEC);
+	if (src < 0)
+		return;
+
+	if (mkdir(dstDir, 0755) < 0 && errno != EEXIST) {
+		close(src);
+		return;
+	}
+	if (chown(dstDir, uid, gid) < 0) { /* best effort */ }
+
+	char dstPath[PATH_MAX];
+	snprintf(dstPath, sizeof(dstPath), "%s/%s", dstDir, fileName);
+	int dst = open(dstPath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+	if (dst < 0) {
+		close(src);
+		return;
+	}
+
+	char buf[8192];
+	ssize_t n;
+	while ((n = read(src, buf, sizeof(buf))) > 0) {
+		ssize_t off = 0;
+		while (off < n) {
+			ssize_t w = write(dst, buf + off, n - off);
+			if (w < 0) { if (errno == EINTR) continue; goto done; }
+			off += w;
+		}
+	}
+done:
+	close(src);
+	close(dst);
+	if (chown(dstPath, uid, gid) < 0) { /* best effort */ }
+}
+
+
+// Ferry FBP-picked language/keymap from vos_login's settings dir to the
+// authenticated user's config so the desktop session boots in the right locale.
+static void
+seed_user_settings_from_preauth(const char* userHome, uid_t uid, gid_t gid)
+{
+	if (userHome == NULL || userHome[0] == '\0')
+		return;
+
+	// Ensure ~/config exists (chowned) so the settings dir lands correctly.
+	char configDir[PATH_MAX];
+	char settingsDir[PATH_MAX];
+	snprintf(configDir,   sizeof(configDir),   "%s/config", userHome);
+	snprintf(settingsDir, sizeof(settingsDir), "%s/config/settings", userHome);
+
+	if (mkdir(configDir, 0755) < 0 && errno != EEXIST) return;
+	if (chown(configDir, uid, gid) < 0) { /* best effort */ }
+
+	static const char* kSrcDir = "/system/login/config/settings";
+	static const char* kFiles[] = { "Locale settings", "Key_map", NULL };
+	for (int i = 0; kFiles[i] != NULL; i++) {
+		char src[PATH_MAX];
+		snprintf(src, sizeof(src), "%s/%s", kSrcDir, kFiles[i]);
+		copy_settings_file(src, settingsDir, kFiles[i], uid, gid);
+	}
+}
+
+
 static void
 kill_pre_auth_chain()
 {
@@ -1272,6 +1341,8 @@ handle_login_ok(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	// Without this the respawned app_server keeps APP_SERVER_EMBED_INPUT=1
 	// and fights input_server over /dev/input/event*.
 	sGreeterMode = false;
+
+	seed_user_settings_from_preauth(sUserHome, sUserUid, sUserGid);
 
 	if (!init_pam_session())
 		fprintf(stderr, "janus: post-auth PAM open failed; continuing\n");

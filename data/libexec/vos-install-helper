@@ -158,6 +158,23 @@ if [ "$MODE" = "commit-setup" ]; then
             || log "warn: could not add $_username to nexus group"
     fi
 
+    # Ferry FBP-selected locale/keymap into the target user's config so the
+    # first desktop login boots in the picked language. FBP wrote these into
+    # vos_login's config as it walked the user through the flow.
+    _pre_settings=/system/login/config/settings
+    _tgt_home=$($_in getent passwd "$_username" | cut -d: -f6)
+    if [ -n "$_tgt_home" ]; then
+        _tgt_settings="$TARGET$_tgt_home/config/settings"
+        mkdir -p "$_tgt_settings"
+        for _f in "Locale settings" Key_map; do
+            [ -f "$_pre_settings/$_f" ] || continue
+            cp -p "$_pre_settings/$_f" "$_tgt_settings/$_f" \
+                || log "warn: could not copy $_f to $_tgt_settings"
+        done
+        $_in chown -R "$_username:$_username" "$_tgt_home/config" \
+            || log "warn: could not chown $_tgt_home/config"
+    fi
+
     # --- Strip the live persona from the target -----------------------
     # These are MUST-SUCCEED: leaving vos-live behind ships the target
     # with a passwordless-sudo account. When TARGET is /, we run the

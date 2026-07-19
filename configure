@@ -72,31 +72,41 @@ if [ $BUILDTOOLS_ONLY -eq 1 ]; then
     exit 0
 fi
 
-# Main configure requires an explicit --buildtools=PATH pointing at a
-# tree that already has rc / xres / resattr built. Fail loudly rather
-# than silently defaulting.
+# On native Vitruvian (self-hosting) the resource toolchain (rc / xres /
+# resattr / linkcatkeys) is installed system-wide and picked up from PATH,
+# so --buildtools is optional. /dev/nexus is the reliable presence check.
+_is_vitruvian_native=0
+if [ -e /dev/nexus ]; then
+    _is_vitruvian_native=1
+fi
+
 if [ -z "$BUILDTOOLS_DIR" ]; then
-    echo "Error: --buildtools=PATH is required."
-    echo "First run: ./configure --build-buildtools"
-    echo "Then:      ./configure --buildtools=../buildtools [other opts]"
-    exit 1
-fi
-if [ ! -d "$BUILDTOOLS_DIR" ]; then
-    echo "Error: --buildtools path does not exist: $BUILDTOOLS_DIR"
-    exit 1
-fi
-# Validate presence of the built binaries via an absolute lookup, but
-# pass the user's path form verbatim to cmake. engine.cmake resolves
-# BUILDTOOLS_DIR against CMAKE_BINARY_DIR — feeding it an absolute
-# path here breaks that concatenation and yields malformed ninja rules.
-_abs_buildtools="$(cd "$BUILDTOOLS_DIR" && pwd)"
-for _tool in rc xres resattr; do
-    if [ ! -x "$_abs_buildtools/src/bin/$_tool" ]; then
-        echo "Error: $BUILDTOOLS_DIR looks incomplete — missing $_tool binary."
-        echo "Run ./configure --build-buildtools first."
+    if [ $_is_vitruvian_native -eq 1 ]; then
+        echo "Native Vitruvian host detected — building without a buildtools tree."
+    else
+        echo "Error: --buildtools=PATH is required on non-Vitruvian hosts."
+        echo "First run: ./configure --build-buildtools"
+        echo "Then:      ./configure --buildtools=../buildtools [other opts]"
         exit 1
     fi
-done
+else
+    if [ ! -d "$BUILDTOOLS_DIR" ]; then
+        echo "Error: --buildtools path does not exist: $BUILDTOOLS_DIR"
+        exit 1
+    fi
+    # Validate presence of the built binaries via an absolute lookup, but
+    # pass the user's path form verbatim to cmake. engine.cmake resolves
+    # BUILDTOOLS_DIR against CMAKE_BINARY_DIR — feeding it an absolute
+    # path here breaks that concatenation and yields malformed ninja rules.
+    _abs_buildtools="$(cd "$BUILDTOOLS_DIR" && pwd)"
+    for _tool in rc xres resattr; do
+        if [ ! -x "$_abs_buildtools/src/bin/$_tool" ]; then
+            echo "Error: $BUILDTOOLS_DIR looks incomplete — missing $_tool binary."
+            echo "Run ./configure --build-buildtools first."
+            exit 1
+        fi
+    done
+fi
 
 
 # Resolve effective arch (CLI > buildstate.conf > autodetect from `uname -m`).

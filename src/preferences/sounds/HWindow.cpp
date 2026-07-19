@@ -34,7 +34,9 @@
 #include <PathFinder.h>
 #include <Roster.h>
 #include <ScrollView.h>
-#include <Sound.h>
+// <Sound.h> was a haiku-latest kitchen-sink include — unused here, and on
+// media2 it pulls in media2/MediaDefs.h which collides with legacy
+// <MediaFiles.h>'s transitive include of media/MediaDefs.h. Dropped.
 #include <StringView.h>
 
 #include <fs_attr.h>

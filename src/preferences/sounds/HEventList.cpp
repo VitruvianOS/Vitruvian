@@ -17,6 +17,7 @@
 #include <MediaFiles.h>
 #include <Path.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 
 #undef B_TRANSLATION_CONTEXT

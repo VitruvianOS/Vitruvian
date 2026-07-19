@@ -11,6 +11,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Screen
 	#ScreenSaver
 	Shortcuts
+	Sounds
 	Tracker_prefs
 	User
 )
@@ -28,6 +29,7 @@ set(SYSTEM_PREFERENCES
 	Screen
 	#ScreenSaver
 	Shortcuts
+	Sounds
 	Tracker
 	User
 )

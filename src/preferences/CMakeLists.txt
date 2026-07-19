@@ -15,7 +15,7 @@ add_subdirectory(locale)
 add_subdirectory(screen)
 add_subdirectory(screensaver)
 add_subdirectory(shortcuts)
-#add_subdirectory(sounds)       # needs media kit
+add_subdirectory(sounds)
 #add_subdirectory(time)         # needs bnetapi
 add_subdirectory(tracker)
 add_subdirectory(user)

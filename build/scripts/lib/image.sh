@@ -577,13 +577,11 @@ getent group nexus >/dev/null && \\
     getent passwd vos_login >/dev/null && \\
     adduser vos_login nexus >/dev/null 2>&1 || true
 
-mkdir -p /etc/systemd/system/getty@tty1.service.d
-cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<'LOGEOF'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --noissue --autologin vos-live %I \$TERM
-TTYVTDisallocate=no
-LOGEOF
+# Janus owns tty1's DRM VT for the graphical pre-auth chain; a getty on
+# tty1 (autologin or not) would give vos-live / vos_login a shell before
+# authentication whenever the graphical plane is not covering it.
+# getty@tty2 stays enabled in postinst for recovery.
+systemctl mask getty@tty1.service 2>/dev/null || true
 
 # Mask units that are noisy on QEMU / Vitruvian and provide no value:
 #  - systemd-remount-fs: we boot rw via cmdline, nothing to remount.

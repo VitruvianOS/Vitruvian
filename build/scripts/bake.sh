@@ -170,6 +170,19 @@ cmd_build() {
         _has_chroot=1
     fi
 
+    # Image creation calls sudo many times from deep inside subshells,
+    # where a mid-run password prompt can eat Ctrl+C. Prime the sudo
+    # timestamp upfront so all later calls hit the cache silently. If
+    # the user aborts (Ctrl+C at the prompt), we exit cleanly here.
+    if ! sudo -v; then
+        die "sudo authentication required for image creation."
+    fi
+    # Keep the sudo timestamp fresh during long builds so it doesn't
+    # expire mid-flight and re-prompt. Killed when the parent exits.
+    ( while true; do sleep 60; sudo -n true 2>/dev/null || exit; kill -0 "$$" 2>/dev/null || exit; done ) &
+    _sudo_keepalive_pid=$!
+    trap 'kill "$_sudo_keepalive_pid" 2>/dev/null || true' EXIT INT TERM
+
     log_step "Running ninja build..."
     ninja
 

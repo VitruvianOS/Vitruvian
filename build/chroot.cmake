@@ -96,6 +96,14 @@ else()
     set(HEADERS_PATH_BASE "/usr/include"
         CACHE PATH "Base path for system headers")
 
+    if(NOT VITRUVIAN_MULTIARCH_TRIPLE)
+        if(CMAKE_LIBRARY_ARCHITECTURE)
+            set(VITRUVIAN_MULTIARCH_TRIPLE "${CMAKE_LIBRARY_ARCHITECTURE}")
+        else()
+            set(VITRUVIAN_MULTIARCH_TRIPLE "x86_64-linux-gnu")
+        endif()
+    endif()
+
     if(KERNEL_RELEASE)
         set(VITRUVIAN_KERNEL_HEADERS "/lib/modules/${KERNEL_RELEASE}/build"
             CACHE PATH "Kernel headers for nexus-dkms")

@@ -14,6 +14,7 @@
 
 struct node_ref;
 struct stat_beos;
+struct statx;
 class BVolume;
 
 
@@ -28,7 +29,12 @@ private:
 		// provided for BeOS compatibility
 
 public:
-	virtual status_t GetStat(struct stat* stat) const = 0;
+	// Deprecated on V\OS: prefer GetStatX (real btime, nsec timestamps).
+	// Retained for POSIX-facing paths that genuinely need `struct stat`.
+	virtual status_t GetStat(struct stat* stat) const
+		__attribute__((deprecated("use GetStatX"))) = 0;
+
+	virtual status_t GetStatX(struct statx* stx) const;
 
 	bool IsFile() const;
 	bool IsDirectory() const;

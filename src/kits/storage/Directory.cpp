@@ -710,6 +710,23 @@ BDirectory::GetStatFor(const char* path, struct stat* st) const
 {
 	return _GetStatFor(path, st);
 }
+
+
+status_t
+BDirectory::GetStatXFor(const char* path, struct statx* stx) const
+{
+	if (stx == NULL)
+		return B_BAD_VALUE;
+	if (InitCheck() != B_OK)
+		return B_NO_INIT;
+	if (path != NULL) {
+		if (path[0] == '\0')
+			return B_ENTRY_NOT_FOUND;
+		return _kern_read_statx(fDirFd, path, false,
+			STATX_BASIC_STATS | STATX_BTIME, stx);
+	}
+	return GetStatX(stx);
+}
 #endif
 
 

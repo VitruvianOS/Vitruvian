@@ -891,6 +891,16 @@ BNode::GetStat(struct stat* stat) const
 {
 	return _GetStat(stat);
 }
+
+
+status_t
+BNode::GetStatX(struct statx* stx) const
+{
+	return fCStatus != B_OK
+		? fCStatus
+		: _kern_read_statx(fFd, NULL, false, STATX_BASIC_STATS | STATX_BTIME,
+			stx);
+}
 #endif
 
 

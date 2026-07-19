@@ -45,7 +45,9 @@ class BDirectory : public BNode, public BEntryList {
 		bool Contains(const char *path, int32 nodeFlags = B_ANY_NODE) const;
 		bool Contains(const BEntry *entry, int32 nodeFlags = B_ANY_NODE) const;
 
-		status_t GetStatFor(const char *path, struct stat *st) const;
+		status_t GetStatFor(const char *path, struct stat *st) const
+			__attribute__((deprecated("use GetStatXFor")));
+		status_t GetStatXFor(const char *path, struct statx *stx) const;
 
 		virtual status_t GetNextEntry(BEntry *entry, bool traverse = false);
 		virtual status_t GetNextRef(entry_ref *ref);

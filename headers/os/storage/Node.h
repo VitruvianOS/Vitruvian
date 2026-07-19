@@ -77,6 +77,7 @@ public:
 			status_t			InitCheck() const;
 
 	virtual	status_t			GetStat(struct stat* st) const;
+	virtual	status_t			GetStatX(struct statx* stx) const;
 
 			status_t			SetTo(const entry_ref* ref);
 			status_t			SetTo(const BEntry* entry);

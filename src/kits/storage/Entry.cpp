@@ -1070,6 +1070,16 @@ BEntry::GetStat(struct stat* st) const
 {
 	return _GetStat(st);
 }
+
+
+status_t
+BEntry::GetStatX(struct statx* stx) const
+{
+	if (fCStatus != B_OK)
+		return B_NO_INIT;
+	return _kern_read_statx(fDirFd, fName, false,
+		STATX_BASIC_STATS | STATX_BTIME, stx);
+}
 #endif
 
 

@@ -10,11 +10,68 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
+#include <sys/sysmacros.h>
 
 #include "LinuxVolume.h"
 #include "KernelDebug.h"
 
+
+
+status_t
+_kern_read_statx(int fd, const char* path, bool traverseLink,
+	unsigned int mask, struct statx* stx)
+{
+	CALLED();
+
+	if (stx == NULL || (fd < 0 && path == NULL))
+		return B_BAD_VALUE;
+
+	int flags = traverseLink ? 0 : AT_SYMLINK_NOFOLLOW;
+	if (path == NULL || path[0] == '\0') {
+		flags |= AT_EMPTY_PATH;
+		path = "";
+	}
+
+	if (fd < 0)
+		fd = AT_FDCWD;
+
+	if (::statx(fd, path, flags, mask, stx) == 0)
+		return B_OK;
+
+	// Kernel/filesystem without statx (pre-4.11 or unusual FS): fall back to
+	// fstatat and synthesize a struct statx without STATX_BTIME.
+	if (errno != ENOSYS)
+		return -errno;
+
+	struct stat st;
+	if (fstatat(fd, path, &st, flags & ~AT_EMPTY_PATH) < 0)
+		return -errno;
+
+	memset(stx, 0, sizeof(*stx));
+	stx->stx_mask = STATX_BASIC_STATS;
+	stx->stx_blksize = st.st_blksize;
+	stx->stx_nlink = st.st_nlink;
+	stx->stx_uid = st.st_uid;
+	stx->stx_gid = st.st_gid;
+	stx->stx_mode = st.st_mode;
+	stx->stx_ino = st.st_ino;
+	stx->stx_size = st.st_size;
+	stx->stx_blocks = st.st_blocks;
+	stx->stx_atime.tv_sec = st.st_atim.tv_sec;
+	stx->stx_atime.tv_nsec = st.st_atim.tv_nsec;
+	stx->stx_mtime.tv_sec = st.st_mtim.tv_sec;
+	stx->stx_mtime.tv_nsec = st.st_mtim.tv_nsec;
+	stx->stx_ctime.tv_sec = st.st_ctim.tv_sec;
+	stx->stx_ctime.tv_nsec = st.st_ctim.tv_nsec;
+	stx->stx_dev_major = major(st.st_dev);
+	stx->stx_dev_minor = minor(st.st_dev);
+	stx->stx_rdev_major = major(st.st_rdev);
+	stx->stx_rdev_minor = minor(st.st_rdev);
+	return B_OK;
+}
 
 
 status_t
@@ -23,24 +80,30 @@ _kern_read_stat(int fd, const char* path, bool traverseLink,
 {
 	CALLED();
 
-	if (fd < 0 && path == NULL)
-		return B_ERROR;
+	struct statx stx;
+	status_t err = _kern_read_statx(fd, path, traverseLink,
+		STATX_BASIC_STATS, &stx);
+	if (err != B_OK)
+		return err;
 
-	int flags = traverseLink == false ? AT_SYMLINK_NOFOLLOW : 0;
-	if (path == NULL) {
-		if (!traverseLink) {
-			if (fstat(fd, st) < 0)
-				return -errno;
-
-			return B_OK;
-		}
-		flags |= AT_EMPTY_PATH;
-	}
-
-	if (fd < 0)
-		fd = AT_FDCWD;
-
-	return fstatat(fd, path, st, flags) < 0 ? -errno : B_OK;
+	memset(st, 0, sizeof(*st));
+	st->st_dev = makedev(stx.stx_dev_major, stx.stx_dev_minor);
+	st->st_ino = stx.stx_ino;
+	st->st_mode = stx.stx_mode;
+	st->st_nlink = stx.stx_nlink;
+	st->st_uid = stx.stx_uid;
+	st->st_gid = stx.stx_gid;
+	st->st_rdev = makedev(stx.stx_rdev_major, stx.stx_rdev_minor);
+	st->st_size = stx.stx_size;
+	st->st_blksize = stx.stx_blksize;
+	st->st_blocks = stx.stx_blocks;
+	st->st_atim.tv_sec = stx.stx_atime.tv_sec;
+	st->st_atim.tv_nsec = stx.stx_atime.tv_nsec;
+	st->st_mtim.tv_sec = stx.stx_mtime.tv_sec;
+	st->st_mtim.tv_nsec = stx.stx_mtime.tv_nsec;
+	st->st_ctim.tv_sec = stx.stx_ctime.tv_sec;
+	st->st_ctim.tv_nsec = stx.stx_ctime.tv_nsec;
+	return B_OK;
 }
 
 

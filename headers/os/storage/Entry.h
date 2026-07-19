@@ -96,6 +96,7 @@ public:
 			const char*			Name() const;
 
 	virtual status_t			GetStat(struct stat* stat) const;
+	virtual status_t			GetStatX(struct statx* stx) const;
 
 			status_t			SetTo(const BDirectory* dir, const char* path,
 								   bool traverse = false);

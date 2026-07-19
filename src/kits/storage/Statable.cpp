@@ -10,7 +10,9 @@
 
 #include <Statable.h>
 
+#include <string.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 
 #include <compat/sys/stat.h>
 
@@ -44,13 +46,54 @@ BStatable::~BStatable()
 #endif
 
 
+// Default: derive statx from the classic stat. Subclasses that can hit
+// _kern_read_statx directly (Node/Entry/Directory) override this to get real
+// btime + nsec timestamps.
+status_t
+BStatable::GetStatX(struct statx* stx) const
+{
+	if (stx == NULL)
+		return B_BAD_VALUE;
+
+	struct stat st;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+	status_t err = GetStat(&st);
+#pragma GCC diagnostic pop
+	if (err != B_OK)
+		return err;
+
+	memset(stx, 0, sizeof(*stx));
+	stx->stx_mask = STATX_BASIC_STATS;
+	stx->stx_blksize = st.st_blksize;
+	stx->stx_nlink = st.st_nlink;
+	stx->stx_uid = st.st_uid;
+	stx->stx_gid = st.st_gid;
+	stx->stx_mode = st.st_mode;
+	stx->stx_ino = st.st_ino;
+	stx->stx_size = st.st_size;
+	stx->stx_blocks = st.st_blocks;
+	stx->stx_atime.tv_sec = st.st_atim.tv_sec;
+	stx->stx_atime.tv_nsec = st.st_atim.tv_nsec;
+	stx->stx_mtime.tv_sec = st.st_mtim.tv_sec;
+	stx->stx_mtime.tv_nsec = st.st_mtim.tv_nsec;
+	stx->stx_ctime.tv_sec = st.st_ctim.tv_sec;
+	stx->stx_ctime.tv_nsec = st.st_ctim.tv_nsec;
+	stx->stx_dev_major = major(st.st_dev);
+	stx->stx_dev_minor = minor(st.st_dev);
+	stx->stx_rdev_major = major(st.st_rdev);
+	stx->stx_rdev_minor = minor(st.st_rdev);
+	return B_OK;
+}
+
+
 // Returns whether or not the current node is a file.
 bool
 BStatable::IsFile() const
 {
-	struct stat stat;
-	if (GetStat(&stat) == B_OK)
-		return S_ISREG(stat.st_mode);
+	struct statx stx;
+	if (GetStatX(&stx) == B_OK)
+		return S_ISREG(stx.stx_mode);
 	else
 		return false;
 }
@@ -60,9 +103,9 @@ BStatable::IsFile() const
 bool
 BStatable::IsDirectory() const
 {
-	struct stat stat;
-	if (GetStat(&stat) == B_OK)
-		return S_ISDIR(stat.st_mode);
+	struct statx stx;
+	if (GetStatX(&stx) == B_OK)
+		return S_ISDIR(stx.stx_mode);
 	else
 		return false;
 }
@@ -72,9 +115,9 @@ BStatable::IsDirectory() const
 bool
 BStatable::IsSymLink() const
 {
-	struct stat stat;
-	if (GetStat(&stat) == B_OK)
-		return S_ISLNK(stat.st_mode);
+	struct statx stx;
+	if (GetStatX(&stx) == B_OK)
+		return S_ISLNK(stx.stx_mode);
 	else
 		return false;
 }
@@ -105,15 +148,13 @@ BStatable::GetNodeRef(node_ref* ref) const
 status_t
 BStatable::GetOwner(uid_t* owner) const
 {
-	status_t result = (owner ? B_OK : B_BAD_VALUE);
-	struct stat stat;
+	if (owner == NULL)
+		return B_BAD_VALUE;
 
+	struct statx stx;
+	status_t result = GetStatX(&stx);
 	if (result == B_OK)
-		result = GetStat(&stat);
-
-	if (result == B_OK)
-		*owner = stat.st_uid;
-
+		*owner = stx.stx_uid;
 	return result;
 }
 
@@ -133,15 +174,13 @@ BStatable::SetOwner(uid_t owner)
 status_t
 BStatable::GetGroup(gid_t* group) const
 {
-	status_t result = (group ? B_OK : B_BAD_VALUE);
-	struct stat stat;
+	if (group == NULL)
+		return B_BAD_VALUE;
 
+	struct statx stx;
+	status_t result = GetStatX(&stx);
 	if (result == B_OK)
-		result = GetStat(&stat);
-
-	if (result == B_OK)
-		*group = stat.st_gid;
-
+		*group = stx.stx_gid;
 	return result;
 }
 
@@ -161,15 +200,13 @@ BStatable::SetGroup(gid_t group)
 status_t
 BStatable::GetPermissions(mode_t* permissions) const
 {
-	status_t result = (permissions ? B_OK : B_BAD_VALUE);
-	struct stat stat;
+	if (permissions == NULL)
+		return B_BAD_VALUE;
 
+	struct statx stx;
+	status_t result = GetStatX(&stx);
 	if (result == B_OK)
-		result = GetStat(&stat);
-
-	if (result == B_OK)
-		*permissions = (stat.st_mode & S_IUMSK);
-
+		*permissions = (stx.stx_mode & S_IUMSK);
 	return result;
 }
 
@@ -191,15 +228,13 @@ BStatable::SetPermissions(mode_t permissions)
 status_t
 BStatable::GetSize(off_t* size) const
 {
-	status_t result = (size ? B_OK : B_BAD_VALUE);
-	struct stat stat;
+	if (size == NULL)
+		return B_BAD_VALUE;
 
+	struct statx stx;
+	status_t result = GetStatX(&stx);
 	if (result == B_OK)
-		result = GetStat(&stat);
-
-	if (result == B_OK)
-		*size = stat.st_size;
-
+		*size = stx.stx_size;
 	return result;
 }
 
@@ -208,15 +243,13 @@ BStatable::GetSize(off_t* size) const
 status_t
 BStatable::GetModificationTime(time_t* mtime) const
 {
-	status_t result = (mtime ? B_OK : B_BAD_VALUE);
-	struct stat stat;
+	if (mtime == NULL)
+		return B_BAD_VALUE;
 
+	struct statx stx;
+	status_t result = GetStatX(&stx);
 	if (result == B_OK)
-		result = GetStat(&stat);
-
-	if (result == B_OK)
-		*mtime = stat.st_mtime;
-
+		*mtime = stx.stx_mtime.tv_sec;
 	return result;
 }
 
@@ -236,20 +269,28 @@ BStatable::SetModificationTime(time_t mtime)
 status_t
 BStatable::GetCreationTime(time_t* ctime) const
 {
-	status_t result = (ctime ? B_OK : B_BAD_VALUE);
+	if (ctime == NULL)
+		return B_BAD_VALUE;
+
+#ifdef __VOS__
+	struct statx stx;
+	status_t result = GetStatX(&stx);
+	if (result != B_OK)
+		return result;
+	// overlayfs / squashfs / older kernels may not report btime; fall back to
+	// mtime so callers get a plausible timestamp instead of the epoch.
+	if (stx.stx_mask & STATX_BTIME)
+		*ctime = stx.stx_btime.tv_sec;
+	else
+		*ctime = stx.stx_mtime.tv_sec;
+	return B_OK;
+#else
 	struct stat stat;
-
-	if (result == B_OK)
-		result = GetStat(&stat);
-
-#ifndef __VOS__
+	status_t result = GetStat(&stat);
 	if (result == B_OK)
 		*ctime = stat.st_crtime;
-#else
-	if (result == B_OK)
-		*ctime = stat.st_mtime;
-#endif
 	return result;
+#endif
 }
 
 
@@ -272,15 +313,13 @@ BStatable::SetCreationTime(time_t ctime)
 status_t
 BStatable::GetAccessTime(time_t* atime) const
 {
-	status_t result = (atime ? B_OK : B_BAD_VALUE);
-	struct stat stat;
+	if (atime == NULL)
+		return B_BAD_VALUE;
 
+	struct statx stx;
+	status_t result = GetStatX(&stx);
 	if (result == B_OK)
-		result = GetStat(&stat);
-
-	if (result == B_OK)
-		*atime = stat.st_atime;
-
+		*atime = stx.stx_atime.tv_sec;
 	return result;
 }
 
@@ -300,14 +339,13 @@ BStatable::SetAccessTime(time_t atime)
 status_t
 BStatable::GetVolume(BVolume* volume) const
 {
-	status_t result = (volume ? B_OK : B_BAD_VALUE);
-	struct stat stat;
-	if (result == B_OK)
-		result = GetStat(&stat);
+	if (volume == NULL)
+		return B_BAD_VALUE;
 
+	struct statx stx;
+	status_t result = GetStatX(&stx);
 	if (result == B_OK)
-		result = volume->SetTo(stat.st_dev);
-
+		result = volume->SetTo(makedev(stx.stx_dev_major, stx.stx_dev_minor));
 	return result;
 }
 

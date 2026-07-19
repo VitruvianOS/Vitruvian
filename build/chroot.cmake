@@ -18,6 +18,17 @@ if(VITRUVIAN_CHROOT_BUILD)
 
     message(STATUS "Chroot build: ${VITRUVIAN_CHROOT_PATH}")
 
+    set(VITRUVIAN_MULTIARCH_TRIPLE "x86_64-linux-gnu")
+    if(DEFINED VITRUVIAN_TARGET_ARCH)
+        if(VITRUVIAN_TARGET_ARCH STREQUAL "arm64")
+            set(VITRUVIAN_MULTIARCH_TRIPLE "aarch64-linux-gnu")
+        elseif(VITRUVIAN_TARGET_ARCH STREQUAL "arm" OR VITRUVIAN_TARGET_ARCH STREQUAL "arm32")
+            set(VITRUVIAN_MULTIARCH_TRIPLE "arm-linux-gnueabihf")
+        elseif(VITRUVIAN_TARGET_ARCH STREQUAL "riscv64")
+            set(VITRUVIAN_MULTIARCH_TRIPLE "riscv64-linux-gnu")
+        endif()
+    endif()
+
     if(CMAKE_CROSSCOMPILING)
         message(STATUS "Using toolchain file")
         set(HEADERS_PATH_BASE "${VITRUVIAN_CHROOT_PATH}/usr/include"
@@ -29,17 +40,6 @@ if(VITRUVIAN_CHROOT_BUILD)
             "${VITRUVIAN_CHROOT_PATH}/usr/src/linux-headers-${KERNEL_RELEASE}"
             CACHE PATH "Kernel headers for nexus-dkms")
         return()
-    endif()
-
-    set(VITRUVIAN_MULTIARCH_TRIPLE "x86_64-linux-gnu")
-    if(DEFINED VITRUVIAN_TARGET_ARCH)
-        if(VITRUVIAN_TARGET_ARCH STREQUAL "arm64")
-            set(VITRUVIAN_MULTIARCH_TRIPLE "aarch64-linux-gnu")
-        elseif(VITRUVIAN_TARGET_ARCH STREQUAL "arm" OR VITRUVIAN_TARGET_ARCH STREQUAL "arm32")
-            set(VITRUVIAN_MULTIARCH_TRIPLE "arm-linux-gnueabihf")
-        elseif(VITRUVIAN_TARGET_ARCH STREQUAL "riscv64")
-            set(VITRUVIAN_MULTIARCH_TRIPLE "riscv64-linux-gnu")
-        endif()
     endif()
 
     # For native builds (same arch as host), don't set sysroot

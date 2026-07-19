@@ -52,7 +52,9 @@ jobs:
             linux-headers-$(uname -r) \
             ninja-build sudo zlib1g-dev \
             fakeroot devscripts lintian wget \
-            attr libsystemd-dev libpam0g-dev
+            attr libsystemd-dev libpam0g-dev \
+            libpipewire-0.3-dev libspa-0.2-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"

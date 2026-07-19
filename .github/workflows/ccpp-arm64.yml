@@ -22,7 +22,7 @@ jobs:
             libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
             libtiff-dev libudev-dev libwebp-dev libseat-dev \
             libpam0g-dev libsystemd-dev libevdev-dev \
-            libblkid-dev linux-headers-$(uname -r) \
+            libblkid-dev libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             fakeroot devscripts lintian wget qemu-utils qemu-efi-aarch64 \
             rsync parted dosfstools xfsprogs attr

@@ -32,12 +32,12 @@
 #include <GameSoundDefs.h>
 
 
-class BMediaNode;
 class GameSoundBuffer;
-struct Connection;
 
-class BGameSoundDevice { 
+class BGameSoundDevice {
 public:
+			class Mixer;
+
 									BGameSoundDevice();
 	virtual							~BGameSoundDevice();
 
@@ -78,13 +78,14 @@ protected:
 
 private:
 			int32					AllocateSound();
-			
+
 			status_t				fInitError;
-		
 			bool					fIsConnected;
-			
 			int32					fSoundCount;
 			GameSoundBuffer **		fSounds;
+			Mixer*					fMixer;
+
+	friend class Mixer;
 };
 
 BGameSoundDevice* 	GetDefaultDevice();

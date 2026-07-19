@@ -10,8 +10,9 @@
 #include <SimpleGameSound.h>
 
 #include <Entry.h>
-#include <MediaFile.h>
-#include <MediaTrack.h>
+#include <media2/MediaFile.h>
+#include <media2/MediaFormat.h>
+#include <media2/MediaTrack.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -145,74 +146,51 @@ status_t
 BSimpleGameSound::Init(const entry_ref* inFile)
 {
 	BMediaFile file(inFile);
-	gs_audio_format gsformat;
-	media_format mformat;
-	int64 framesRead, framesTotal = 0;
-
 	if (file.InitCheck() != B_OK)
 		return file.InitCheck();
 
 	BMediaTrack* audioStream = file.TrackAt(0);
-	audioStream->EncodedFormat(&mformat);
-	if (!mformat.IsAudio())
+	if (audioStream == NULL)
 		return B_ERROR;
 
-	int64 frames = audioStream->CountFrames();
-
-	mformat.Clear();
-	mformat.type = B_MEDIA_RAW_AUDIO;
-//	mformat.u.raw_audio.byte_order
-//		= (B_HOST_IS_BENDIAN) ? B_MEDIA_BIG_ENDIAN : B_MEDIA_LITTLE_ENDIAN;
-	status_t error = audioStream->DecodedFormat(&mformat);
+	BMediaFormat mfmt;
+	status_t error = audioStream->DecodedFormat(&mfmt);
 	if (error != B_OK)
 		return error;
+	if (!mfmt.IsRawAudio())
+		return B_ERROR;
 
-	memset(&gsformat, 0, sizeof(gs_audio_format));
-	media_to_gs_format(&gsformat, &mformat.u.raw_audio);
+	const int64 frames = audioStream->CountFrames();
+	if (frames <= 0)
+		return B_ERROR;
 
-	if (mformat.u.raw_audio.format == media_raw_audio_format::B_AUDIO_CHAR) {
-		// The GameKit doesnt support this format so we will have to reformat
-		// the data into something the GameKit does support.
-		char * buffer = new char[gsformat.buffer_size];
-		uchar * data = new uchar[frames * gsformat.channel_count];
+	gs_audio_format gsformat;
+	memset(&gsformat, 0, sizeof(gsformat));
+	media_to_gs_format(&gsformat, &mfmt.format.u.raw_audio);
 
-		while (framesTotal < frames) {
-			// read the next chunck from the stream
-			memset(buffer, 0, gsformat.buffer_size);
-			audioStream->ReadFrames(buffer, &framesRead);
+	const size_t frameSize
+		= get_sample_size(gsformat.format) * gsformat.channel_count;
+	char* data = new char[frames * frameSize];
+	gsformat.buffer_size = frames * frameSize;
 
-			// refomat the buffer from
-			int64 position = framesTotal * gsformat.channel_count;
-			for (int32 i = 0; i < (int32)gsformat.buffer_size; i++)
-				data[i + position] = buffer[i] + 128;
-
-			framesTotal += framesRead;
-		}
-		delete [] buffer;
-
-		gsformat.format = gs_audio_format::B_GS_U8;
-
-		error = Init(data, frames, &gsformat);
-
-		// free the buffers we no longer need
-	} else {
-		// We need to determine the size, in bytes, of a single sample.
-		// At the same time, we will store the format of the audio buffer
-		size_t frameSize
-			= get_sample_size(gsformat.format) * gsformat.channel_count;
-		char * data = new char[frames * frameSize];
-		gsformat.buffer_size = frames * frameSize;
-
-		while (framesTotal < frames) {
-			char * position = &data[framesTotal * frameSize];
-			audioStream->ReadFrames(position, &framesRead);
-
-			framesTotal += framesRead;
-		}
-
-		error = Init(data, frames, &gsformat);
+	int64 framesTotal = 0;
+	int64 framesRead  = 0;
+	while (framesTotal < frames) {
+		char* pos = &data[framesTotal * frameSize];
+		int64 want = frames - framesTotal;
+		framesRead = want;
+		status_t e = audioStream->ReadFrames(pos, &framesRead);
+		if (e != B_OK && e != B_LAST_BUFFER_ERROR)
+			break;
+		if (framesRead <= 0)
+			break;
+		framesTotal += framesRead;
+		if (e == B_LAST_BUFFER_ERROR)
+			break;
 	}
 
+	error = Init(data, framesTotal, &gsformat);
+	delete[] data;
 	file.ReleaseTrack(audioStream);
 	return error;
 }

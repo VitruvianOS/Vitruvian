@@ -28,7 +28,7 @@
 
 
 #include <GameSoundDefs.h>
-#include <MediaDefs.h>
+#include <media2/MediaDefs.h>
 
 
 struct _gs_ramp

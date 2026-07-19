@@ -11,8 +11,9 @@
 
 
 #include <GameSound.h>
-#include <Locker.h>
 #include <SupportDefs.h>
+
+#include <mutex>
 
 
 class BStreamingGameSound : public BGameSound
@@ -83,7 +84,10 @@ private:
 private:
 			hook		fStreamHook;
 			void*		fStreamCookie;
-			BLocker		fLock;
+			std::mutex	fLock;	// Vitruvian: was BLocker in haiku-latest;
+								// changed because BLocker on Linux is a
+								// nexus semaphore (heavier than pthread).
+								// Source-compatible — fLock is private.
 
 			uint32		_reserved[12];
 };

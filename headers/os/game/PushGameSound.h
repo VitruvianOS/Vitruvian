@@ -6,6 +6,7 @@
 #define _PUSHGAMESOUND_H
 
 
+#include <OS.h>
 #include <StreamingGameSound.h>
 
 

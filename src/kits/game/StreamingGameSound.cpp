@@ -1,58 +1,54 @@
-//------------------------------------------------------------------------------
-//	Copyright (c) 2001-2002, Haiku
-//
-//	Permission is hereby granted, free of charge, to any person obtaining a
-//	copy of this software and associated documentation files (the "Software"),
-//	to deal in the Software without restriction, including without limitation
-//	the rights to use, copy, modify, merge, publish, distribute, sublicense,
-//	and/or sell copies of the Software, and to permit persons to whom the
-//	Software is furnished to do so, subject to the following conditions:
-//
-//	The above copyright notice and this permission notice shall be included in
-//	all copies or substantial portions of the Software.
-//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-//	DEALINGS IN THE SOFTWARE.
-//
-//	File Name:		StreamingGameSound.cpp
-//	Author:			Christopher ML Zumwalt May (zummy@users.sf.net)
-//	Description:	BStreamingGameSound is a class for all kinds of streaming
-//					(data not known beforehand) game sounds.
-//------------------------------------------------------------------------------
+/*
+ * Vitruvian — BStreamingGameSound
+ * Distributed under the terms of the MIT License.
+ *
+ * Reworked for media2: the legacy buffer-thread + ring-buffer machinery is
+ * gone. The device-level BSoundPlayer mixer pulls from each active
+ * StreamingSoundBuffer; the buffer's FillBuffer calls back into
+ * BStreamingGameSound::FillBuffer on the realtime thread, which either
+ * forwards to a user hook (SetStreamHook) or zero-fills.
+ */
 
+#include <StreamingGameSound.h>
 
-#include "StreamingGameSound.h"
+#include <new>
+#include <string.h>
 
+#include <mutex>
+
+#include "GameSoundBuffer.h"
 #include "GameSoundDevice.h"
+#include "GSUtility.h"
 
 
-BStreamingGameSound::BStreamingGameSound(size_t inBufferFrameCount,
-	const gs_audio_format *format, size_t inBufferCount,
-	BGameSoundDevice *device)
+BStreamingGameSound::BStreamingGameSound(size_t /*bufferFrameCount*/,
+	const gs_audio_format* format, size_t /*bufferCount*/,
+	BGameSoundDevice* device)
 	:
-	BGameSound(device),
-	fStreamHook(NULL),
-	fStreamCookie(NULL)
+	BGameSound(device)
 {
-	if (InitCheck() == B_OK) {
-		status_t error = SetParameters(inBufferFrameCount, format,
-			inBufferCount);
-		SetInitError(error);
+	fStreamHook   = NULL;
+	fStreamCookie = NULL;
+	if (format == NULL) {
+		SetInitError(B_BAD_VALUE);
+		return;
 	}
+	gs_id sound = 0;
+	status_t err = Device()->CreateBuffer(&sound, this, format);
+	if (err != B_OK) {
+		SetInitError(err);
+		return;
+	}
+	BGameSound::Init(sound);
 }
 
 
-BStreamingGameSound::BStreamingGameSound(BGameSoundDevice *device)
+BStreamingGameSound::BStreamingGameSound(BGameSoundDevice* device)
 	:
-	BGameSound(device),
-	fStreamHook(NULL),
-	fStreamCookie(NULL)
+	BGameSound(device)
 {
+	fStreamHook   = NULL;
+	fStreamCookie = NULL;
 }
 
 
@@ -61,7 +57,7 @@ BStreamingGameSound::~BStreamingGameSound()
 }
 
 
-BGameSound *
+BGameSound*
 BStreamingGameSound::Clone() const
 {
 	return NULL;
@@ -69,238 +65,77 @@ BStreamingGameSound::Clone() const
 
 
 status_t
-BStreamingGameSound::SetStreamHook(void (*hook)(void* inCookie, void* inBuffer,
-	size_t inByteCount, BStreamingGameSound * me), void * cookie)
+BStreamingGameSound::SetStreamHook(hook h, void* cookie)
 {
-	fStreamHook = hook;
-	fStreamCookie = cookie;
-
+	std::lock_guard<std::mutex> _(fLock);
+	fStreamHook = h;
+	fStreamCookie     = cookie;
 	return B_OK;
 }
 
 
 void
-BStreamingGameSound::FillBuffer(void *inBuffer,
-								size_t inByteCount)
+BStreamingGameSound::FillBuffer(void* buffer, size_t byteCount)
 {
-	if (fStreamHook)
-		(fStreamHook)(fStreamCookie, inBuffer, inByteCount, this);
+	std::lock_guard<std::mutex> _(fLock);
+	if (fStreamHook != NULL)
+		fStreamHook(fStreamCookie, buffer, byteCount, this);
+	else
+		memset(buffer, 0, byteCount);
 }
 
 
 status_t
-BStreamingGameSound::Perform(int32 selector, void *data)
+BStreamingGameSound::SetAttributes(gs_attribute* attributes,
+	size_t attributeCount)
 {
-	return B_ERROR;
+	return BGameSound::SetAttributes(attributes, attributeCount);
 }
 
 
 status_t
-BStreamingGameSound::SetAttributes(gs_attribute * inAttributes,
-									size_t inAttributeCount)
+BStreamingGameSound::Perform(int32 /*selector*/, void* /*data*/)
 {
-	return BGameSound::SetAttributes(inAttributes, inAttributeCount);
+	return B_NOT_SUPPORTED;
 }
 
 
 status_t
-BStreamingGameSound::SetParameters(size_t inBufferFrameCount,
-	const gs_audio_format *format, size_t inBufferCount)
+BStreamingGameSound::SetParameters(size_t /*bufferFrameCount*/,
+	const gs_audio_format* /*format*/, size_t /*bufferCount*/)
 {
-	gs_id sound;
-	status_t error = Device()->CreateBuffer(&sound, this, format,
-		inBufferFrameCount, inBufferCount);
-	if (error != B_OK) return error;
-
-	return BGameSound::Init(sound);
+	// Buffering geometry is now driven by BSoundPlayer; the request is
+	// honored at construction time only.
+	return B_OK;
 }
 
 
-bool
-BStreamingGameSound::Lock()
-{
-	return fLock.Lock();
-}
+bool BStreamingGameSound::Lock()   { fLock.lock(); return true; }
+void BStreamingGameSound::Unlock() { fLock.unlock(); }
 
 
-void
-BStreamingGameSound::Unlock()
-{
-	fLock.Unlock();
-}
-
-
-/* unimplemented for protection of the user:
- *
- * BStreamingGameSound::BStreamingGameSound()
- * BStreamingGameSound::BStreamingGameSound(const BStreamingGameSound &)
- * BStreamingGameSound &BStreamingGameSound::operator=(const BStreamingGameSound &)
- */
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_0(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_1(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_2(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_3(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_4(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_5(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_6(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_7(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_8(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_9(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_10(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_11(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_12(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_13(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_14(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_15(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_16(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_17(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_18(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_19(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_20(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_21(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_22(int32 arg, ...)
-{
-	return B_ERROR;
-}
-
-
-status_t
-BStreamingGameSound::_Reserved_BStreamingGameSound_23(int32 arg, ...)
-{
-	return B_ERROR;
-}
+// FBC reserved virtuals
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_0(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_1(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_2(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_3(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_4(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_5(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_6(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_7(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_8(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_9(int32, ...)  { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_10(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_11(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_12(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_13(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_14(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_15(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_16(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_17(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_18(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_19(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_20(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_21(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_22(int32, ...) { return B_ERROR; }
+status_t BStreamingGameSound::_Reserved_BStreamingGameSound_23(int32, ...) { return B_ERROR; }

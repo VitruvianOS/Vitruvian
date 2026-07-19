@@ -10,7 +10,7 @@
 #include "GSUtility.h"
 
 #include <GameSoundDefs.h>
-#include <MediaDefs.h>
+#include <media2/MediaDefs.h>
 
 #include <new>
 

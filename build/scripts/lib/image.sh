@@ -363,7 +363,7 @@ UNITEOF
         awk '$1=="2"{gsub(/B/,"",$2);print $2}')
     _new_part_end=$((_part_start + _fs_bytes - 1))
     sudo losetup -d "$_shrink_loop"
-    sudo parted -s "$_raw" ---pretend-input-tty resizepart 2 ${_new_part_end}B <<<"yes" || true
+    echo "yes" | sudo parted "$_raw" ---pretend-input-tty resizepart 2 ${_new_part_end}B || true
     # secondary GPT lives at end-of-disk; leave slack for it + alignment
     _new_size=$((_new_part_end + 1 + 34*512 + 1048576))
     truncate -s "$_new_size" "$_raw"

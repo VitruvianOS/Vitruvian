@@ -25,7 +25,7 @@ jobs:
             libblkid-dev libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             fakeroot devscripts lintian wget qemu-utils qemu-efi-aarch64 \
-            rsync parted dosfstools xfsprogs attr
+            rsync parted gdisk zstd dosfstools e2fsprogs attr
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
@@ -44,7 +44,7 @@ jobs:
         run: mkdir -p generated.arm64
 
       - name: Configure (also creates chroot)
-        run: cd generated.arm64 && ../configure --arch=arm64 --build-type=Workflow --chroot-build
+        run: cd generated.arm64 && ../configure --arch=arm64 --build-type=Workflow --chroot-build --buildtools=../buildtools
 
       - name: Build ISO + RAW images
         run: cd generated.arm64 && ../bake build --image-type=iso,raw

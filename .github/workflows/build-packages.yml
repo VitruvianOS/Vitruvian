@@ -75,7 +75,7 @@ jobs:
       - name: Configure
         run: |
           cd ${{ matrix.build_dir }}
-          ../configure --arch=${{ matrix.configure_arch }} --build-type=Release --chroot-build
+          ../configure --arch=${{ matrix.configure_arch }} --build-type=Release --chroot-build --buildtools=../buildtools
 
       - name: Build
         run: cd ${{ matrix.build_dir }} && ninja

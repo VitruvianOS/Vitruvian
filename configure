@@ -2,10 +2,16 @@
 # Vitruvian configure script
 # Usage: ./configure [options]
 #
+#   --build-buildtools          Configure + build the host buildtools tree,
+#                                 then exit
+#   --buildtools=PATH           Path to an already-built buildtools tree.
+#                                 REQUIRED for a main configure. Must contain
+#                                 built rc / xres / resattr binaries.
 #   --build-type=TYPE           CMake build type: Debug|Release|Workflow (default: Debug)
 #   --chroot-build              Use chroot sysroot for libraries/headers
 #   --chroot-path=PATH          Path to chroot (default: <build>/LIVE_BOOT/chroot)
-#   --arch=ARCH                 Target architecture: x86_64 (default), arm64, arm32, riscv64
+#   --arch=ARCH                 Target architecture: x86_64, arm64, arm32, riscv64
+#                                 (default: autodetected from `uname -m` for native builds)
 #   --override-toolchain=NAME   Use a specific cross-compilation toolchain
 #                                 (e.g. arm64_raspberry)
 
@@ -18,9 +24,17 @@ CHROOT_BUILD=0
 CHROOT_PATH=""
 TARGET_ARCH=""
 OVERRIDE_TOOLCHAIN=""
+BUILDTOOLS_ONLY=0
+BUILDTOOLS_DIR=""
 
 for arg in "$@"; do
     case "$arg" in
+        --build-buildtools)
+            BUILDTOOLS_ONLY=1
+            ;;
+        --buildtools=*)
+            BUILDTOOLS_DIR="${arg#*=}"
+            ;;
         --build-type=*)
             BUILD_TYPE="${arg#*=}"
             ;;
@@ -37,7 +51,7 @@ for arg in "$@"; do
             OVERRIDE_TOOLCHAIN="${arg#*=}"
             ;;
         --help|-h)
-            head -n 11 "$0" | grep "^#" | sed 's/^# \?//'
+            head -n 17 "$0" | grep "^#" | sed 's/^# \?//'
             exit 0
             ;;
         *)
@@ -48,15 +62,64 @@ for arg in "$@"; do
     esac
 done
 
+# --build-buildtools shortcut: build the host buildtools tree and exit.
+if [ $BUILDTOOLS_ONLY -eq 1 ]; then
+    mkdir -p "$SCRIPT_DIR/buildtools"
+    cd "$SCRIPT_DIR/buildtools"
+    cmake -DBUILDTOOLS_MODE=1 .. -GNinja
+    ninja
+    echo "buildtools built in $SCRIPT_DIR/buildtools"
+    exit 0
+fi
 
-# Resolve effective arch (CLI > buildstate.conf > default)
+# Main configure requires an explicit --buildtools=PATH pointing at a
+# tree that already has rc / xres / resattr built. Fail loudly rather
+# than silently defaulting.
+if [ -z "$BUILDTOOLS_DIR" ]; then
+    echo "Error: --buildtools=PATH is required."
+    echo "First run: ./configure --build-buildtools"
+    echo "Then:      ./configure --buildtools=../buildtools [other opts]"
+    exit 1
+fi
+if [ ! -d "$BUILDTOOLS_DIR" ]; then
+    echo "Error: --buildtools path does not exist: $BUILDTOOLS_DIR"
+    exit 1
+fi
+for _tool in rc xres resattr; do
+    if [ ! -x "$BUILDTOOLS_DIR/src/bin/$_tool" ]; then
+        echo "Error: $BUILDTOOLS_DIR looks incomplete — missing $_tool binary."
+        echo "Run ./configure --build-buildtools first."
+        exit 1
+    fi
+done
+# Normalise to an absolute path so cmake sees a stable value regardless
+# of where the build dir sits relative to the source tree.
+BUILDTOOLS_DIR="$(cd "$BUILDTOOLS_DIR" && pwd)"
+
+
+# Resolve effective arch (CLI > buildstate.conf > autodetect from `uname -m`).
+# Autodetection only fires for native builds; passing --override-toolchain
+# or --arch skips it. Cross-compilation always requires --arch.
 if [ -z "$TARGET_ARCH" ]; then
     if [ -f ./buildstate.conf ]; then
         . ./buildstate.conf
-        TARGET_ARCH="${ARCH:-x86_64}"
-    else
-        TARGET_ARCH="x86_64"
+        TARGET_ARCH="${ARCH:-}"
     fi
+fi
+if [ -z "$TARGET_ARCH" ]; then
+    _host_machine=$(uname -m)
+    case "$_host_machine" in
+        x86_64|amd64)      TARGET_ARCH="x86_64" ;;
+        aarch64|arm64)     TARGET_ARCH="arm64" ;;
+        armv7*|armv6*|armhf) TARGET_ARCH="arm32" ;;
+        riscv64)           TARGET_ARCH="riscv64" ;;
+        *)
+            echo "Error: cannot autodetect a supported arch from 'uname -m' = $_host_machine."
+            echo "Supported: x86_64, arm64, arm32, riscv64. Pass --arch=<name> explicitly."
+            exit 1
+            ;;
+    esac
+    echo "Autodetected target arch: $TARGET_ARCH (host: $_host_machine)"
 fi
 
 # Map user-facing arch to setupenv arch form
@@ -126,7 +189,7 @@ fi
 
 # Build up cmake options
 CMAKE_OPTS="-DCMAKE_BUILD_TYPE=$BUILD_TYPE"
-CMAKE_OPTS="$CMAKE_OPTS -DBUILDTOOLS_DIR=../buildtools"
+CMAKE_OPTS="$CMAKE_OPTS -DBUILDTOOLS_DIR=$BUILDTOOLS_DIR"
 CMAKE_OPTS="$CMAKE_OPTS -DHOST_KERNEL=$hostkernel"
 CMAKE_OPTS="$CMAKE_OPTS -DKERNEL_RELEASE=$guestkernel"
 CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_TARGET_ARCH=$TARGET_ARCH"

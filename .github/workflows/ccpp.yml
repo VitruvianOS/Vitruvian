@@ -25,7 +25,7 @@ jobs:
             libblkid-dev libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             fakeroot devscripts lintian wget qemu-utils ovmf \
-            rsync parted gdisk zstd dosfstools e2fsprogs attr
+            rsync parted zstd dosfstools attr
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE

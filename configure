@@ -85,16 +85,18 @@ if [ ! -d "$BUILDTOOLS_DIR" ]; then
     echo "Error: --buildtools path does not exist: $BUILDTOOLS_DIR"
     exit 1
 fi
+# Validate presence of the built binaries via an absolute lookup, but
+# pass the user's path form verbatim to cmake. engine.cmake resolves
+# BUILDTOOLS_DIR against CMAKE_BINARY_DIR — feeding it an absolute
+# path here breaks that concatenation and yields malformed ninja rules.
+_abs_buildtools="$(cd "$BUILDTOOLS_DIR" && pwd)"
 for _tool in rc xres resattr; do
-    if [ ! -x "$BUILDTOOLS_DIR/src/bin/$_tool" ]; then
+    if [ ! -x "$_abs_buildtools/src/bin/$_tool" ]; then
         echo "Error: $BUILDTOOLS_DIR looks incomplete — missing $_tool binary."
         echo "Run ./configure --build-buildtools first."
         exit 1
     fi
 done
-# Normalise to an absolute path so cmake sees a stable value regardless
-# of where the build dir sits relative to the source tree.
-BUILDTOOLS_DIR="$(cd "$BUILDTOOLS_DIR" && pwd)"
 
 
 # Resolve effective arch (CLI > buildstate.conf > autodetect from `uname -m`).

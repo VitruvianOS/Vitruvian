@@ -136,6 +136,8 @@ BBufferIO::WriteAt(off_t pos, const void* buffer, size_t size)
 		}
 	}
 
+	size = min_c(size, fBufferSize - (size_t)(pos - fBufferStart));
+
 	memcpy(fBuffer + pos - fBufferStart, buffer, size);
 
 	fBufferIsDirty = true;

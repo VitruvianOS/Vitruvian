@@ -1011,7 +1011,7 @@ SizeAttributeText::ReadValue()
 	// get the size
 
 	if (fModel->IsVolume()) {
-		BVolume volume(fModel->NodeRef()->dereference().dev());
+		BVolume volume(fModel->NodeRef()->device());
 		fValueIsDefined = volume.Capacity() != 0;
 		return volume.Capacity();
 	}

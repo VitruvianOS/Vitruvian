@@ -103,9 +103,9 @@ DumpItem(DeskbarItemInfo* item)
 {
 	printf("is addon: %i, id: %" B_PRId32 "\n", item->isAddOn, item->id);
 	printf("entry_ref:  %" B_PRIdDEV ", %" B_PRIdINO ", %s\n",
-		item->entryRef.dev(), item->entryRef.dir(), item->entryRef.name);
-	printf("node_ref:  %" B_PRIdDEV ", %" B_PRIdINO "\n", item->nodeRef.dev(),
-		item->nodeRef.ino());
+		item->entryRef.vdevice(), item->entryRef.vdirectory(), item->entryRef.name);
+	printf("node_ref:  %" B_PRIdDEV ", %" B_PRIdINO "\n", item->nodeRef.vdevice(),
+		item->nodeRef.vnode());
 }
 
 
@@ -590,8 +590,8 @@ TReplicantTray::HandleEntryUpdate(BMessage* message)
 			if (message->FindNodeRef("virtual:node", &node) == B_OK
 				&& message->FindRef("virtual:to directory", &toDir) == B_OK
 				&& message->FindString("name", &name) == B_OK) {
-				entry_ref entry(toDir.dev(), toDir.dir(), name);
-				MoveItem(&entry, toDir.dir());
+				entry_ref entry(toDir.vdevice(), toDir.vdirectory(), name);
+				MoveItem(&entry, toDir.vdirectory());
 			}
 			break;
 		}
@@ -729,7 +729,7 @@ TReplicantTray::UnloadAddOn(node_ref* nodeRef, dev_t* device, bool which,
 			continue;
 
 		if ((which && nodeRef != NULL && item->nodeRef == *nodeRef)
-			|| (device != NULL && item->nodeRef.dereference().dev() == *device)) {
+			|| (device != NULL && item->nodeRef.device() == *device)) {
 
 			if (device != NULL && be_roster->IsRunning(&item->entryRef))
 				continue;
@@ -793,9 +793,9 @@ TReplicantTray::MoveItem(entry_ref* ref, ino_t toDirectory)
 			continue;
 
 		if (strcmp(item->entryRef.name, ref->name) == 0
-			&& item->entryRef.dereference().dev() == ref->dereference().dev()
-			&& item->entryRef.dereference().dir() == ref->dereference().dir()) {
-			item->entryRef = entry_ref(ref->dev(), toDirectory, ref->name);
+			&& item->entryRef.device() == ref->device()
+			&& item->entryRef.directory() == ref->directory()) {
+			item->entryRef = entry_ref(ref->vdevice(), toDirectory, ref->name);
 			break;
 		}
 	}

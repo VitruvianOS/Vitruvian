@@ -145,7 +145,7 @@ can_app_be_used(const entry_ref* ref)
 	BDirectory directory;
 	BVolume volume;
 	if (error == B_OK
-		&& volume.SetTo(ref->dereference().dev()) == B_OK
+		&& volume.SetTo(ref->device()) == B_OK
 		&& find_directory(B_TRASH_DIRECTORY, &trashPath, false, &volume)
 			== B_OK
 		&& directory.SetTo(trashPath.Path()) == B_OK

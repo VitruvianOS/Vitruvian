@@ -69,7 +69,7 @@ class BList;
 	size_t
 	operator()(node_ref ref) const
 	{
-		return ref.ino();
+		return ref.vnode();
 	}
 };*/
 
@@ -695,13 +695,8 @@ protected:
 		node_ref_key() : device(-1), node(-1) {}
 		node_ref_key(const node_ref& value)
 		{
-			// Snapshot the dereferenced identity at construction —
-			// node_ref's real_* fields can be filled lazily, which would
-			// otherwise make GetHashCode()/operator== unstable across the
-			// key's lifetime and break HashSet's invariant.
-			const node_ref real = value.dereference();
-			device = real.device;
-			node = real.node;
+			device = value.device();
+			node = value.node();
 		}
 
 		uint32 GetHashCode() const

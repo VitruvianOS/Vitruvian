@@ -187,8 +187,8 @@ template<>
 inline void
 byte_swap(entry_ref &data)
 {
-	dev_t dev = data.dev();
-	ino_t dir = data.dir();
+	dev_t dev = data.vdevice();
+	ino_t dir = data.vdirectory();
 	byte_swap(dev);
 	byte_swap(dir);
 	data = entry_ref(dev, dir, data.name);

@@ -386,7 +386,7 @@ ShowImageView::SetImage(const entry_ref* ref, BBitmap* bitmap,
 	fBitmap = bitmap;
 	fBitmapOwner = bitmapOwner;
 	if (ref == NULL)
-		fCurrentRef.device = -1;
+		fCurrentRef.set_to(-1, -1);
 	else
 		fCurrentRef = *ref;
 

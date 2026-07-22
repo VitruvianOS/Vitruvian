@@ -409,23 +409,7 @@ build_dirent(const BEntry* source, struct dirent* ent,
 	// info about this node
 	ent->d_reclen = static_cast<ushort>(recordLength);
 	strcpy(ent->d_name, ref.name);
-	ent->d_ino = ref.dir();
-
-	#ifndef __VOS__
-	// info about the parent
-	BEntry parent;
-	source->GetParent(&parent);
-	if (parent.InitCheck() == B_OK) {
-		entry_ref parentRef;
-		parent.GetRef(&parentRef);
-
-		ent->d_pdev = parentRef.device;
-		ent->d_pino = parentRef.directory;
-	} else {
-		ent->d_pdev = 0;
-		ent->d_pino = 0;
-	}
-	#endif
+	ent->d_ino = ref.vdirectory();
 
 	return 1;
 }
@@ -476,7 +460,7 @@ TNodeWalker::GetNextDirents(struct dirent* ent, size_t size, int32 count)
 			|| ((ent->d_type == DT_UNKNOWN || ent->d_type == DT_LNK)
 				&& fTopDir->Contains(ent->d_name, B_DIRECTORY_NODE));
 		if (isDir) {
-			entry_ref ref(dirNodeRef.device, dirNodeRef.node, ent->d_name);
+			entry_ref ref(dirNodeRef.vdevice(), dirNodeRef.vnode(), ent->d_name);
 			PushDirCommon(&ref);
 		}
 		ent = (dirent*)((char*)ent + ent->d_reclen);

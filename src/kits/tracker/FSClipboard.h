@@ -45,13 +45,6 @@ All rights reserved.
 
 namespace BPrivate {
 
-typedef struct {
-	node_ref node;
-	uint32 moveMode;
-} TClipboardNodeRef;
-const int32 T_CLIPBOARD_NODE = 'TCNR';
-
-
 class BClipboardRefsWatcher : public BLooper {
 	public:
 		BClipboardRefsWatcher();

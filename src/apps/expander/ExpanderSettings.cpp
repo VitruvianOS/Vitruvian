@@ -98,21 +98,26 @@ ExpanderSettings::ExpanderSettings()
 	BPoint position;
 	char name[B_FILE_NAME_LENGTH] = {'\0'};
 	int32 nameSize;
+	dev_t refDev;
+	ino_t refDir;
 	if (read_data(file, unknown)
 		&& read_data(file, automaticallyExpandFiles)
 		&& read_data(file, closeWhenDone)
 		&& read_data(file, destinationFolder)
 		&& read_data(file, unknown)
-		&& read_data(file, ref.device)
-		&& read_data(file, ref.directory)
+		&& read_data(file, refDev)
+		&& read_data(file, refDir)
 		&& read_data(file, nameSize)
 		&& (nameSize <= 0 || file.Read(name, nameSize) == nameSize)
 		&& read_data(file, openDestinationFolder)
 		&& read_data(file, showContentsListing)
-		&& read_data(file, position)) {	
+		&& read_data(file, position)) {
+		// Persisted (dev, ino) may be stale under the vref model.
 		if (nameSize > 0 && nameSize < B_FILE_NAME_LENGTH) {
 			name[nameSize] = '\0';
-			ref.set_name(name);
+			ref.set_to(refDev, refDir, name);
+		} else {
+			ref.set_to(refDev, refDir);
 		}
 
 		// check if the window position is on screen at all
@@ -174,8 +179,10 @@ ExpanderSettings::~ExpanderSettings()
 		file.Write(&destinationFolder, sizeof(destinationFolder));
 		unknown = 0;
 		file.Write(&unknown, sizeof(unknown));
-		file.Write(&ref.device, sizeof(ref.device));
-		file.Write(&ref.directory, sizeof(ref.directory));
+		dev_t refDev = ref.vdevice();
+		ino_t refDir = ref.vdirectory();
+		file.Write(&refDev, sizeof(refDev));
+		file.Write(&refDir, sizeof(refDir));
 		int32 nameSize = 0;
 		if (ref.name)
 			nameSize = strlen(ref.name);

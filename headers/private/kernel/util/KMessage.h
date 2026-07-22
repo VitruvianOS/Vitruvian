@@ -42,8 +42,6 @@ public:
 				KMESSAGE_INIT_FROM_BUFFER	= 0x02,
 				KMESSAGE_CLONE_BUFFER		= 0x04,
 				KMESSAGE_READ_ONLY			= 0x08,
-				// Set iff this KMessage holds vref soft_refs; gates
-				// Unset's release walk against manual SetTo(buffer).
 				KMESSAGE_OWNS_VREFS			= 0x10,
 
 				KMESSAGE_FLAG_MASK			= 0x07,

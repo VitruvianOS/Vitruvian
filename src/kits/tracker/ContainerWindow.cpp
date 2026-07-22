@@ -2271,7 +2271,7 @@ BContainerWindow::PopulateMoveCopyNavMenu(BNavMenu* navMenu, uint32 what, const 
 	BEntry entry;
 	BPath path;
 	Model model;
-	dev_t device = ref->dereference().dev();
+	dev_t device = ref->device();
 
 	int32 volumeCount = 0;
 

@@ -706,7 +706,7 @@ ModulesView::MessageReceived(BMessage* message)
 
 					message->FindString("name", &name);
 					message->FindRef("virtual:directory", &dirRef);
-					node_ref nodeRef(dirRef.dev(), dirRef.dir());
+					node_ref nodeRef(dirRef.vdevice(), dirRef.vdirectory());
 
 					BDirectory dir(&nodeRef);
 

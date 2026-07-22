@@ -1116,8 +1116,8 @@ SortByName(const RelationCachingModelProxy* proxy1,
 		return 1;
 
 	// if app names match, sort by volume name
-	BVolume volume1(proxy1->fModel->NodeRef()->dereference().dev());
-	BVolume volume2(proxy2->fModel->NodeRef()->dereference().dev());
+	BVolume volume1(proxy1->fModel->NodeRef()->device());
+	BVolume volume2(proxy2->fModel->NodeRef()->device());
 	char volumeName1[B_FILE_NAME_LENGTH];
 	char volumeName2[B_FILE_NAME_LENGTH];
 	if (volume1.InitCheck() == B_OK && volume2.InitCheck() == B_OK
@@ -1229,8 +1229,8 @@ OpenWithMenu::DoneBuildingItemList()
 			nameRepeats[index] = nameRepeats[index + 1] = true;
 
 			// check if volume name repeats
-			BVolume volume(model->NodeRef()->dereference().dev());
-			BVolume nextVol(next->NodeRef()->dereference().dev());
+			BVolume volume(model->NodeRef()->device());
+			BVolume nextVol(next->NodeRef()->device());
 			char volumeName[B_FILE_NAME_LENGTH];
 			char nextVolName[B_FILE_NAME_LENGTH];
 			if (volume.InitCheck() == B_OK && nextVol.InitCheck() == B_OK
@@ -1260,7 +1260,7 @@ OpenWithMenu::DoneBuildingItemList()
 			if (!volumeRepeats[index]) {
 				// different volume, print
 				// [volume name] app name
-				BVolume volume(model->NodeRef()->dereference().dev());
+				BVolume volume(model->NodeRef()->device());
 				if (volume.InitCheck() == B_OK) {
 					char volumeName[B_FILE_NAME_LENGTH];
 					if (volume.GetName(volumeName) == B_OK)

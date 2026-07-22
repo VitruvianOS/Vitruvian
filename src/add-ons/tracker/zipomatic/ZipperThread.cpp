@@ -72,7 +72,7 @@ ZipperThread::ThreadStartup()
 		fThreadDataStore->FindRef("refs", index, &ref);
 
 		if (index > 0) {
-			if (lastRef.directory != ref.directory) {
+			if (lastRef.vdirectory() != ref.vdirectory()) {
 				sameFolder = false;
 				break;
 			}

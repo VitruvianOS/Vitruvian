@@ -274,8 +274,7 @@ BPrinter::StartWatching(const BMessenger& listener)
 		return B_NO_MEMORY;
 
 	node_ref nodeRef;
-	nodeRef.device = fPrinterEntryRef.device;
-	nodeRef.node = fPrinterEntryRef.directory;
+	nodeRef.set_to(fPrinterEntryRef.vdevice(), fPrinterEntryRef.vdirectory());
 
 	return watch_node(&nodeRef, B_WATCH_DIRECTORY, *fListener);
 }

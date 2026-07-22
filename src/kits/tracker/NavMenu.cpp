@@ -402,7 +402,7 @@ BNavMenu::StartBuildingItemList()
 {
 	BEntry entry;
 
-	if (fNavDir.dev() == B_INVALID_DEV) {
+	if (fNavDir.vdevice() == B_INVALID_DEV) {
 		return false;
 	}
 	status_t setErr = entry.SetTo(&fNavDir, true);

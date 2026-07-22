@@ -640,7 +640,7 @@ StyledEditWindow::MessageReceived(BMessage* message)
 			bool readOnly = !fTextView->IsEditable();
 			message->AddBool("readOnly", readOnly);
 			if (readOnly) {
-				BVolume volume(fNodeRef.dereference().dev());
+				BVolume volume(fNodeRef.device());
 				message->AddBool("canUnlock", !volume.IsReadOnly());
 			}
 			fStatusView->SetStatus(message);
@@ -1574,7 +1574,7 @@ StyledEditWindow::_LoadFile(entry_ref* ref, const char* forceEncoding)
 		bool editable = (getuid() == st.st_uid && S_IWUSR & st.st_mode)
 					|| (getgid() == st.st_gid && S_IWGRP & st.st_mode)
 					|| (S_IWOTH & st.st_mode);
-		BVolume volume(ref->dereference().dev());
+		BVolume volume(ref->device());
 		editable = editable && !volume.IsReadOnly();
 		_SetReadOnly(!editable);
 	}
@@ -2216,7 +2216,7 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 					// reuse the source name if it is not too old
 					bigtime_t time = fSaveMessage->FindInt64("move time");
 					if ((system_time() - time) < 1000000) {
-						entry_ref ref(directory.dev(), directory.dir(), orgName);
+						entry_ref ref(directory.vdevice(), directory.vdirectory(), orgName);
 						BEntry entry(&ref);
 						if (entry.InitCheck() == B_OK) {
 							_SwitchNodeMonitor(true, &ref);

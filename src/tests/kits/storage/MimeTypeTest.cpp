@@ -607,7 +607,7 @@ dump_ref(entry_ref *ref, char* name = "ref") {
 			printf("%s == '%s'", name, path.Path());
 		} else
 			printf("%s == ERROR", name);
-		printf(" == (%ld, %Ld, '%s')\n", ref->device, ref->directory, ref->name);
+		printf(" == (%ld, %Ld, '%s')\n", (long)ref->vdevice(), (long long)ref->vdirectory(), ref->name);
 
 	} else
 		printf("%s == (NULL)\n", name);

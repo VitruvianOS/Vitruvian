@@ -727,7 +727,7 @@ QueryEntryListCollection::GetNextDirents(struct dirent* buffer, size_t length,
 		return 0;
 
 	buffer->d_reclen = static_cast<ushort>(recordLength);
-	buffer->d_ino = ref.dir();
+	buffer->d_ino = ref.vdirectory();
 	strcpy(buffer->d_name, ref.name);
 	return 1;
 }

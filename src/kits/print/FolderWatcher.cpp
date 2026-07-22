@@ -96,7 +96,7 @@ bool FolderWatcher::BuildEntryRef(BMessage* msg, const char* dirName, entry_ref*
 	const char* name;
 	if (msg->FindRef(fieldName.String(), &dirRef) == B_OK &&
 		msg->FindString("name", &name) == B_OK) {
-		*entry = entry_ref(dirRef.dev(), dirRef.dir(), name);
+		*entry = entry_ref(dirRef.vdevice(), dirRef.vdirectory(), name);
 		return true;
 	}
 	return false;
@@ -152,9 +152,9 @@ void FolderWatcher::MessageReceived(BMessage* msg) {
 				entry_ref toDir, fromDir;
 				bool gotTo = msg->FindRef("virtual:to directory", &toDir) == B_OK;
 				bool gotFrom = msg->FindRef("virtual:from directory", &fromDir) == B_OK;
-				if (gotTo && toDir.dir() == folder.node) {
+				if (gotTo && toDir.directory() == folder.node()) {
 					HandleCreatedEntry(msg, "to directory");
-				} else if (gotFrom && fromDir.dir() == folder.node) {
+				} else if (gotFrom && fromDir.directory() == folder.node()) {
 					HandleRemovedEntry(msg);
 				}
 				break;

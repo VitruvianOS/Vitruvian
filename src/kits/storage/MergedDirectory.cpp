@@ -279,7 +279,7 @@ BMergedDirectory::_FindBestEntry(BDirectory& dir, dirent* direntBuffer)
 	dir.GetEntry(&entry);
 	entry.GetNodeRef(&node);
 
-	entry_ref bestEntry = entry_ref(node.dev(), node.ino(), direntBuffer->d_name);
+	entry_ref bestEntry = entry_ref(node.vdevice(), node.vnode(), direntBuffer->d_name);
 
 	if (bestEntry.name == NULL)
 		return;
@@ -294,7 +294,7 @@ BMergedDirectory::_FindBestEntry(BDirectory& dir, dirent* direntBuffer)
 			&& !ShallPreferFirstEntry(bestEntry, bestIndex, ref, i)) {
 			// TODO __VOS__ are we actually populating all dirent* buffers correctly?
 			direntBuffer->d_ino = st.st_ino;
-			bestEntry = entry_ref(ref.dev(), ref.dir(), bestEntry.name);
+			bestEntry = entry_ref(ref.vdevice(), ref.vdirectory(), bestEntry.name);
 			bestIndex = i;
 		}
 	}

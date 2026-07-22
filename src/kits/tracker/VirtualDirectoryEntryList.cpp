@@ -97,7 +97,7 @@ VirtualDirectoryEntryList::GetNextRef(entry_ref* ref)
 	// Translate subdirectory entries into virtual directory references.
 	char path[B_PATH_NAME_LENGTH];
 	struct stat st;
-	bool isDir = _kern_entry_ref_to_path(ref->device, ref->directory,
+	bool isDir = _kern_entry_ref_to_path(ref->vdevice(), ref->vdirectory(),
 			ref->name, path, sizeof(path)) == B_OK
 		&& lstat(path, &st) == 0
 		&& S_ISDIR(st.st_mode);
@@ -105,7 +105,7 @@ VirtualDirectoryEntryList::GetNextRef(entry_ref* ref)
 		if (VirtualDirectoryManager* manager
 				= VirtualDirectoryManager::Instance()) {
 			AutoLocker<VirtualDirectoryManager> managerLocker(manager);
-			node_ref node(ref->dev(), ref->dir());
+			node_ref node(ref->vdevice(), ref->vdirectory());
 			manager->TranslateDirectoryEntry(fDefinitionFileRef, *ref, node);
 		}
 	}

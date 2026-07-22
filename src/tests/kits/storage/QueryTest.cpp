@@ -1308,10 +1308,10 @@ QueryTest::AddLiveEntries(QueryTestEntry **entries, int32 entryCount,
 		CPPUNIT_ASSERT( node.InitCheck() == B_OK );
 		node_ref nref;
 		CPPUNIT_ASSERT( node.GetNodeRef(&nref) == B_OK );
-		entry->node = nref.node;
+		entry->node = nref.vnode();
 		entry_ref ref;
 		CPPUNIT_ASSERT( get_ref_for_path(entry->cpath, &ref) == B_OK );
-		entry->directory = ref.directory;
+		entry->directory = ref.vdirectory();
 		entry->name = ref.name;
 	}
 	CheckUpdateMessages(B_ENTRY_CREATED, queryEntries, queryEntryCount);

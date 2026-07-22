@@ -73,8 +73,7 @@ struct PoseNodeKeyHash {
 inline PoseNodeKey
 MakePoseNodeKey(const node_ref& r)
 {
-	const node_ref real = r.dereference();
-	return PoseNodeKey(real.device, real.node);
+	return PoseNodeKey(r.device(), r.node());
 }
 
 

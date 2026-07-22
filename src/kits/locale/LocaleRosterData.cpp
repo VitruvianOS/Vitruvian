@@ -372,8 +372,7 @@ LocaleRosterData::_InitializeCatalogAddOns()
 
 					// we have found (what should be) a catalog-add-on:
 					#ifndef __VOS__
- 					eref.device = dent->d_pdev;
- 					eref.directory = dent->d_pino;
+ 					eref.set_to((dev_t)dent->d_pdev, (ino_t)dent->d_pino);
  					eref.set_name(dent->d_name);
 					#else
 					BEntry dirEntry;

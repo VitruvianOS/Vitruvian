@@ -360,7 +360,7 @@ GeneralInfoView::InitStrings(const Model* model)
 	} else if (model->IsVolume()) {
 		const node_ref* modelNodeRef = fModel->NodeRef();
 		fs_info modelInfo;
-		if (fs_stat_dev(modelNodeRef->device, &modelInfo) == B_OK)
+		if (fs_stat_dev(modelNodeRef->device(), &modelInfo) == B_OK)
 		{
 			fFileSystemStr = modelInfo.fsh_name;
 			fFileSystemStr << B_TRANSLATE(" (block size: ")
@@ -433,7 +433,7 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 				// while the model holds the volume's own device — compare
 				// only the inode (the root inode is self-referential for /).
 				|| (model->IsVolume()
-					&& itemNode.dereference().node == model->NodeRef()->dereference().node)) {
+					&& itemNode.node() == model->NodeRef()->node())) {
 				model->UpdateEntryRef(&dirNode, name);
 				BString title;
 				title.SetToFormat(B_TRANSLATE_COMMENT("%s info",
@@ -708,7 +708,7 @@ GeneralInfoView::CheckAndSetSize()
 		bool volumeHasNoCapacity = false;
 
 		if (fModel->IsVolume()) {
-			BVolume volume(fModel->NodeRef()->dereference().dev());
+			BVolume volume(fModel->NodeRef()->device());
 			freeBytes = volume.FreeBytes();
 			capacity = volume.Capacity();
 			volumeHasNoCapacity = capacity == 0;

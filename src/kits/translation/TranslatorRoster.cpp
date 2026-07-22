@@ -97,7 +97,7 @@ QuarantineTranslatorImage::QuarantineTranslatorImage(
 
 QuarantineTranslatorImage::~QuarantineTranslatorImage()
 {
-	if (fRef.dev() == B_INVALID_DEV || !fRemove)
+	if (fRef.vdevice() == B_INVALID_DEV || !fRemove)
 		return;
 
 	fRoster.RemoveTranslators(fRef);
@@ -239,7 +239,7 @@ BTranslatorRoster::Private::MessageReceived(BMessage* message)
 						// let the font be written completely before trying to
 						// open it
 					// TODO _VOS_OLD_NODE_MONITOR
-					_EntryAdded(node_ref(dirRef.dev(), dirRef.dir()), dirRef.name);
+					_EntryAdded(node_ref(dirRef.vdevice(), dirRef.vdirectory()), dirRef.name);
 					break;
 				}
 
@@ -260,8 +260,8 @@ BTranslatorRoster::Private::MessageReceived(BMessage* message)
 							!= B_OK)
 						break;
 
-					node_ref toEntryNode = node_ref(toEntryRef.dev(), toEntryRef.dir());
-					node_ref fromEntryNode = node_ref(fromEntryRef.dev(), fromEntryRef.dir());
+					node_ref toEntryNode = node_ref(toEntryRef.vdevice(), toEntryRef.vdirectory());
+					node_ref fromEntryNode = node_ref(fromEntryRef.vdevice(), fromEntryRef.vdirectory());
 		
 					// Do we know this one yet?
 					translator_item* item = _FindTranslator(nodeRef);
@@ -594,7 +594,7 @@ BTranslatorRoster::Private::CreateTranslators(const entry_ref& ref,
 		int32 created = 0;
 		for (int32 n = 0; (translator = makeNthTranslator(n, image, 0)) != NULL;
 				n++) {
-			if (AddTranslator(translator, image, &ref, nodeRef.ino()) == B_OK) {
+			if (AddTranslator(translator, image, &ref, nodeRef.vnode()) == B_OK) {
 				if (update)
 					update->AddInt32("translator_id", translator->fID);
 				fImageOrigins.insert(std::make_pair(translator, image));
@@ -631,7 +631,7 @@ BTranslatorRoster::Private::CreateTranslators(const entry_ref& ref,
 	}
 
 	if (status == B_OK)
-		status = AddTranslator(translator, image, &ref, nodeRef.ino());
+		status = AddTranslator(translator, image, &ref, nodeRef.vnode());
 
 	if (status == B_OK) {
 		if (update)
@@ -1004,15 +1004,15 @@ BTranslatorRoster::Private::_FindTranslator(entry_ref& ref) const
 translator_item*
 BTranslatorRoster::Private::_FindTranslator(node_ref& nodeRef)
 {
-	if (nodeRef.dev() == B_INVALID_DEV)
+	if (nodeRef.vdevice() == B_INVALID_DEV)
 		return NULL;
 
 	TranslatorMap::iterator iterator = fTranslators.begin();
 
 	while (iterator != fTranslators.end()) {
 		translator_item& item = iterator->second;
-		if (item.ref.dev() == nodeRef.dev()
-			&& item.node == nodeRef.ino())
+		if (item.ref.vdevice() == nodeRef.vdevice()
+			&& item.node == nodeRef.vnode())
 			return &item;
 
 		iterator++;
@@ -1034,8 +1034,8 @@ BTranslatorRoster::Private::_CompareTranslatorDirectoryPriority(
 {
 	// priority is determined by the order in the list
 
-	node_ref nodeRefA(a.dev(), a.dir());
-	node_ref nodeRefB(b.dev(), b.dir());
+	node_ref nodeRefA(a.vdevice(), a.vdirectory());
+	node_ref nodeRefB(b.vdevice(), b.vdirectory());
 
 	NodeRefList::const_iterator iterator = fDirectories.begin();
 
@@ -1084,8 +1084,8 @@ BTranslatorRoster::Private::_RemoveTranslators(const node_ref* nodeRef,
 
 		const translator_item& item = iterator->second;
 		if ((ref != NULL && item.ref == *ref)
-			|| (nodeRef != NULL && item.ref.dev() == nodeRef->dev()
-				&& item.node == nodeRef->ino())) {
+			|| (nodeRef != NULL && item.ref.vdevice() == nodeRef->vdevice()
+				&& item.node == nodeRef->vnode())) {
 			item.translator->Release();
 			update.AddInt32("translator_id", iterator->first);
 
@@ -1103,7 +1103,7 @@ void
 BTranslatorRoster::Private::_EntryAdded(const node_ref& nodeRef,
 	const char* name)
 {
-	entry_ref ref(nodeRef.dev(), nodeRef.ino(), name);
+	entry_ref ref(nodeRef.vdevice(), nodeRef.vnode(), name);
 
 	_EntryAdded(ref);
 }

@@ -207,8 +207,8 @@ BVolume::SetName(const char *name)
 		&& entry.Exists()
 		&& traversedEntry.SetTo(entryPath.Path(), true) == B_OK
 		&& traversedEntry.GetNodeRef(&entryNodeRef) == B_OK
-		&& entryNodeRef.dereference().dev() == fDevice
-		&& entryNodeRef.dereference().ino() == oldInfo.root) {
+		&& entryNodeRef.device() == fDevice
+		&& entryNodeRef.node() == oldInfo.root) {
 		entry.Rename(name, false);
 	}
 	return error;

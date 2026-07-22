@@ -165,7 +165,7 @@ BDirectory::SetTo(const node_ref* nref)
 	Unset();
 	status_t error = (nref ? B_OK : B_BAD_VALUE);
 	if (error == B_OK) {
-		entry_ref ref(nref->dev(), nref->ino(), ".");
+		entry_ref ref(nref->vdevice(), nref->vnode(), ".");
 		error = SetTo(&ref);
 	}
 	set_status(error);
@@ -313,11 +313,10 @@ BDirectory::IsRootDirectory() const
 	node_ref ref;
 	if (GetNodeRef(&ref) != B_OK)
 		return false;
-	const node_ref real = ref.dereference();
 	fs_info info;
-	if (fs_stat_dev(real.dev(), &info) != 0)
+	if (fs_stat_dev(ref.device(), &info) != 0)
 		return false;
-	return real.ino() == info.root;
+	return ref.node() == info.root;
 }
 
 

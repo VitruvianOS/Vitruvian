@@ -115,8 +115,8 @@ test_path(const BString& maybeRelativePath)
 static BString
 node_ref_to_string(const node_ref& nodeRef)
 {
-	return BString().SetToFormat("%" B_PRIdDEV ":%" B_PRIdINO, nodeRef.device,
-		nodeRef.node);
+	return BString().SetToFormat("%" B_PRIdDEV ":%" B_PRIdINO, nodeRef.vdevice(),
+		nodeRef.vnode());
 }
 
 
@@ -124,7 +124,7 @@ static BString
 entry_ref_to_string(const entry_ref& entryRef)
 {
 	return BString().SetToFormat("%" B_PRIdDEV ":%" B_PRIdINO ":\"%s\"",
-		entryRef.device, entryRef.directory, entryRef.name);
+		entryRef.vdevice(), entryRef.vdirectory(), entryRef.name);
 }
 
 
@@ -359,16 +359,17 @@ struct MonitoringInfo {
 			{
 				NotOwningEntryRef entryRef;
 				node_ref nodeRef;
+				int64 dev, node, dir;
+				const char* name;
 
-				if (message.FindInt64("device", (int64*)&nodeRef.device) != B_OK
-					|| message.FindInt64("node", (int64*)&nodeRef.node) != B_OK
-					|| message.FindInt64("directory", (int64*)&entryRef.directory)
-						!= B_OK
-					|| message.FindString("name", (const char**)&entryRef.name)
-						!= B_OK) {
+				if (message.FindInt64("device", &dev) != B_OK
+					|| message.FindInt64("node", &node) != B_OK
+					|| message.FindInt64("directory", &dir) != B_OK
+					|| message.FindString("name", &name) != B_OK) {
 					return false;
 				}
-				entryRef.device = nodeRef.device;
+				nodeRef.set_to((dev_t)dev, (ino_t)node);
+				entryRef.SetTo((dev_t)dev, (ino_t)dir, name);
 
 				return nodeRef == fNodeRef && entryRef == fEntryRef;
 			}
@@ -378,22 +379,22 @@ struct MonitoringInfo {
 				NotOwningEntryRef fromEntryRef;
 				NotOwningEntryRef toEntryRef;
 				node_ref nodeRef;
+				int64 nodeDev, node, dev, fromDir, toDir;
+				const char* fromName;
+				const char* toName;
 
-				if (message.FindInt64("node device", (int64*)&nodeRef.device) != B_OK
-					|| message.FindInt64("node", (int64*)&nodeRef.node) != B_OK
-					|| message.FindInt64("device", (int64*)&fromEntryRef.device)
-						!= B_OK
-					|| message.FindInt64("from directory",
-						(int64*)&fromEntryRef.directory) != B_OK
-					|| message.FindInt64("to directory", (int64*)&toEntryRef.directory)
-						!= B_OK
-					|| message.FindString("from name",
-						(const char**)&fromEntryRef.name) != B_OK
-					|| message.FindString("name",
-						(const char**)&toEntryRef.name) != B_OK) {
+				if (message.FindInt64("node device", &nodeDev) != B_OK
+					|| message.FindInt64("node", &node) != B_OK
+					|| message.FindInt64("device", &dev) != B_OK
+					|| message.FindInt64("from directory", &fromDir) != B_OK
+					|| message.FindInt64("to directory", &toDir) != B_OK
+					|| message.FindString("from name", &fromName) != B_OK
+					|| message.FindString("name", &toName) != B_OK) {
 					return false;
 				}
-				toEntryRef.device = fromEntryRef.device;
+				nodeRef.set_to((dev_t)nodeDev, (ino_t)node);
+				fromEntryRef.SetTo((dev_t)dev, (ino_t)fromDir, fromName);
+				toEntryRef.SetTo((dev_t)dev, (ino_t)toDir, toName);
 
 				return nodeRef == fNodeRef && toEntryRef == fEntryRef
 					&& fromEntryRef == fFromEntryRef;
@@ -403,11 +404,13 @@ struct MonitoringInfo {
 			case B_ATTR_CHANGED:
 			{
 				node_ref nodeRef;
+				int64 dev, node;
 
-				if (message.FindInt64("device", (int64*)&nodeRef.device) != B_OK
-					|| message.FindInt64("node", (int64*)&nodeRef.node) != B_OK) {
+				if (message.FindInt64("device", &dev) != B_OK
+					|| message.FindInt64("node", &node) != B_OK) {
 					return false;
 				}
+				nodeRef.set_to((dev_t)dev, (ino_t)node);
 
 				return nodeRef == fNodeRef;
 			}

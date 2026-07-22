@@ -150,8 +150,7 @@ void
 FontStyle::UpdatePath(const node_ref& parentNodeRef)
 {
 	entry_ref ref;
-	ref.device = parentNodeRef.device;
-	ref.directory = parentNodeRef.node;
+	ref.set_to(parentNodeRef.vdevice(), parentNodeRef.vnode());
 	ref.set_name(fPath.Leaf());
 
 	fPath.SetTo(&ref);

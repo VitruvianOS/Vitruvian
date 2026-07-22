@@ -225,7 +225,7 @@ GetVolumeFlags(Model* model)
 		}
 		return B_FS_HAS_ATTR;
 	}
-	if (!fs_stat_dev(model->NodeRef()->dereference().dev(), &info))
+	if (!fs_stat_dev(model->NodeRef()->device(), &info))
 		return info.flags;
 
 	return B_FS_HAS_ATTR;

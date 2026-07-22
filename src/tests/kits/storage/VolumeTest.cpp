@@ -126,8 +126,7 @@ CheckVolume(BVolume &volume, dev_t device, status_t error)
 		BDirectory rootDir;
 		CHK(volume.GetRootDirectory(&rootDir) == B_OK);
 		node_ref rootNode;
-		rootNode.device = device;
-		rootNode.node = info.root;
+		rootNode.set_to(device, info.root);
 		BDirectory actualRootDir(&rootNode);
 		CHK(rootDir == actualRootDir);
 		// capacity, free bytes
@@ -545,8 +544,8 @@ CheckWatchingMessage(bool mounted, dev_t expectedDevice, BTestHandler &handler,
 		CHK(message.FindInt64("directory", (int64*)&directory) == B_OK);
 		CHK(opcode == B_DEVICE_MOUNTED);
 		CHK(device == expectedDevice);
-		CHK(parentDevice == nodeRef.device);
-		CHK(directory == nodeRef.node);
+		CHK(parentDevice == nodeRef.vdevice());
+		CHK(directory == nodeRef.vnode());
 	} else {
 		// volume unmounted
 		int32 opcode;

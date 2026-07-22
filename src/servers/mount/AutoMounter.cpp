@@ -505,7 +505,7 @@ AutoMounter::MessageReceived(BMessage* message)
 						break;
 					}
 
-					entry_ref root_entry(toDirectory.dev(), toDirectory.dir(),
+					entry_ref root_entry(toDirectory.vdevice(), toDirectory.vdirectory(),
 						newName);
 
 					BNode entryNode(&root_entry);
@@ -523,9 +523,9 @@ AutoMounter::MessageReceived(BMessage* message)
 					}
 
 					WRITELOG(("Attempt to rename device %li to %s",
-						mountPointNode.device, newName));
+						mountPointNode.device(), newName));
 
-					Partition *partition = FindPartition(mountPointNode.device);
+					Partition *partition = FindPartition(mountPointNode.device());
 					if (partition != NULL) {
 						WRITELOG(("Found device, changing name."));
 
@@ -539,7 +539,7 @@ AutoMounter::MessageReceived(BMessage* message)
 						break;
 					} else {
 						WRITELOG(("ERROR: Device %li does not appear to be "
-							"present", mountPointNode.device));
+							"present", mountPointNode.device()));
 					}
 				}
 			}

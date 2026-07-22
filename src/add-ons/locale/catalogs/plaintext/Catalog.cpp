@@ -85,8 +85,7 @@ PlainTextCatalog::PlainTextCatalog(const entry_ref &owner, const char *language,
 	app_info appInfo;
 	be_app->GetAppInfo(&appInfo);
 	node_ref nref;
-	nref.device = appInfo.ref.device;
-	nref.node = appInfo.ref.directory;
+	nref.set_to(appInfo.ref.vdevice(), appInfo.ref.vdirectory());
 	BDirectory appDir(&nref);
 	BString catalogName("locale/");
 	catalogName << kCatFolder

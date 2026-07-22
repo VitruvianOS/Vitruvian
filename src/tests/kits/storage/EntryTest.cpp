@@ -328,7 +328,7 @@ examine_entry(BEntry &entry, TestEntry *testEntry, bool traverse)
 	CPPUNIT_ASSERT( entry.GetRef(&ref) == B_OK );
 	// We can't get a ref of an entry with a too long path name yet.
 	if (testEntry->path.length() < B_PATH_NAME_LENGTH)
-		CPPUNIT_ASSERT( ref.dereference() == testEntry->get_ref().dereference() );
+		CPPUNIT_ASSERT( ref == testEntry->get_ref() );
 }
 
 // InitTest1Paths
@@ -2134,9 +2134,7 @@ get_entry_ref_for_entry(const char *dir, const char *leaf, entry_ref *ref)
 	status_t error = (dir && leaf ? B_OK : B_BAD_VALUE);
 	struct stat dirStat;
 	if (lstat(dir, &dirStat) == 0) {
-		ref->device = dirStat.st_dev;
-		ref->directory = dirStat.st_ino;
-		ref->set_name(leaf);
+		ref->set_to(dirStat.st_dev, dirStat.st_ino, leaf);
 	} else
 		error = errno;
 	return error;
@@ -2146,19 +2144,10 @@ get_entry_ref_for_entry(const char *dir, const char *leaf, entry_ref *ref)
 bool
 operator>(const entry_ref & a, const entry_ref & b)
 {
-	dev_t devA = a.device;
-	dev_t devB = b.device;
-	ino_t dirA = a.directory;
-	ino_t dirB = b.directory;
-
-	if (a.is_virtual() || b.is_virtual()) {
-		entry_ref realA = a.dereference();
-		entry_ref realB = b.dereference();
-		devA = realA.device;
-		devB = realB.device;
-		dirA = realA.directory;
-		dirB = realB.directory;
-	}
+	dev_t devA = a.device();
+	dev_t devB = b.device();
+	ino_t dirA = a.directory();
+	ino_t dirB = b.directory();
 
 	return (devA > devB
 		|| (devA == devB
@@ -2196,17 +2185,13 @@ EntryTest::CFunctionsTest()
 		else {
 			CPPUNIT_ASSERT( get_ref_for_path(path, &ref) == B_OK );
 			const entry_ref &testEntryRef = testEntry->get_ref();
-			CPPUNIT_ASSERT( testEntryRef.dereference().device == ref.dereference().device );
-			CPPUNIT_ASSERT( testEntryRef.dereference().directory == ref.dereference().directory );
-			CPPUNIT_ASSERT( strcmp(testEntryRef.name, ref.name) == 0 );
-			CPPUNIT_ASSERT( strcmp(testEntryRef.dereference().name, ref.dereference().name) == 0 );
-			// operator== handles virtual↔physical transparently (stronger test)
-			CPPUNIT_ASSERT( testEntryRef == ref );
+			CPPUNIT_ASSERT( testEntryRef.device() == ref.device() );
+			CPPUNIT_ASSERT( testEntryRef.directory() == ref.directory() );
+		CPPUNIT_ASSERT( strcmp(testEntryRef.name, ref.name) == 0 );
+		CPPUNIT_ASSERT( testEntryRef == ref );
 			CPPUNIT_ASSERT( !(testEntryRef != ref) );
 			CPPUNIT_ASSERT( ref == testEntryRef );
 			CPPUNIT_ASSERT( !(ref != testEntryRef) );
-			// also verify via explicit dereference for field-level sanity
-			CPPUNIT_ASSERT( testEntryRef.dereference() == ref.dereference() );
 			for (int32 k = 0; k < testEntryCount; k++) {
 				TestEntry *testEntry2 = testEntries[k];
 				const char *path2 = testEntry2->cpath;
@@ -2233,21 +2218,18 @@ EntryTest::CFunctionsTest()
 	entry_ref ref, ref2;
 	CPPUNIT_ASSERT( get_ref_for_path("/", &ref) == B_OK );
 	CPPUNIT_ASSERT( get_entry_ref_for_entry("/", ".", &ref2) == B_OK );
-	CPPUNIT_ASSERT( ref.dereference().device == ref2.dereference().device );
-	CPPUNIT_ASSERT( ref.dereference().directory == ref2.dereference().directory );
-	CPPUNIT_ASSERT( strcmp(ref.dereference().name, ref2.dereference().name) == 0 );
+	CPPUNIT_ASSERT( ref.device() == ref2.device() );
+	CPPUNIT_ASSERT( ref.directory() == ref2.directory() );
 	CPPUNIT_ASSERT( strcmp(ref.name, ref2.name) == 0 );
 	CPPUNIT_ASSERT( ref == ref2 );
-	CPPUNIT_ASSERT( ref.dereference() == ref2.dereference() );
 	// fs root dir
 	NextSubTest();
 	CPPUNIT_ASSERT( get_ref_for_path("/boot", &ref) == B_OK );
 	CPPUNIT_ASSERT( get_entry_ref_for_entry("/", "boot", &ref2) == B_OK );
-	CPPUNIT_ASSERT( ref.dereference().device == ref2.dereference().device );
-	CPPUNIT_ASSERT( ref.dereference().directory == ref2.dereference().directory );
+	CPPUNIT_ASSERT( ref.device() == ref2.device() );
+	CPPUNIT_ASSERT( ref.directory() == ref2.directory() );
 	CPPUNIT_ASSERT( strcmp(ref.name, ref2.name) == 0 );
 	CPPUNIT_ASSERT( ref == ref2 );
-	CPPUNIT_ASSERT( ref.dereference() == ref2.dereference() );
 	// uninitialized
 	NextSubTest();
 	ref = entry_ref();
@@ -2272,12 +2254,10 @@ EntryTest::CFunctionsTest()
 		entry_ref virtRef1(fd1, ".");
 		entry_ref virtRef2(fd2, ".");
 		// Two create_vref calls on the same path produce different vref_ids
-		CPPUNIT_ASSERT( virtRef1.directory != virtRef2.directory );
+		CPPUNIT_ASSERT( virtRef1.vdirectory() != virtRef2.vdirectory() );
 		// operator== dereferences both and finds the same physical directory
 		CPPUNIT_ASSERT( virtRef1 == virtRef2 );
 		CPPUNIT_ASSERT( !(virtRef1 != virtRef2) );
-		// dereference() also agrees (sanity)
-		CPPUNIT_ASSERT( virtRef1.dereference() == virtRef2.dereference() );
 		close(fd1);
 		close(fd2);
 	}
@@ -2291,13 +2271,10 @@ EntryTest::CFunctionsTest()
 		CPPUNIT_ASSERT( fd >= 0 );
 		entry_ref virtRef(fd, ".");
 		CPPUNIT_ASSERT( virtRef.is_virtual() );
-		// operator== handles virtual↔physical without explicit dereference()
 		CPPUNIT_ASSERT( virtRef == physRef );
 		CPPUNIT_ASSERT( physRef == virtRef );
 		CPPUNIT_ASSERT( !(virtRef != physRef) );
 		CPPUNIT_ASSERT( !(physRef != virtRef) );
-		// and dereference() is consistent
-		CPPUNIT_ASSERT( virtRef.dereference() == physRef );
 		close(fd);
 	}
 }

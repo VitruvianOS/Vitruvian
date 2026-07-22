@@ -42,8 +42,8 @@ status_t entry_ref_flatten(char *buffer, size_t *size, const entry_ref *ref)
 	if (*size < sizeof(dev_t) + sizeof(ino_t))
 		return B_BUFFER_OVERFLOW;
 
-	dev_t dev = ref->dev();
-	ino_t dir = ref->dir();
+	dev_t dev = ref->vdevice();
+	ino_t dir = ref->vdirectory();
 	memcpy((void *)buffer, (const void *)&dev, sizeof(dev));
 	buffer += sizeof(dev);
 	memcpy((void *)buffer, (const void *)&dir, sizeof(dir));
@@ -114,8 +114,8 @@ status_t node_ref_flatten(char* buffer, size_t* size, const node_ref* ref)
 	// Store device/node as-is, including vref_dev + vref_id for virtual refs.
 	// Vrefs are kernel-global objects; _HandleMessageVRefs manages acquire/
 	// release so the vref stays valid across process boundaries.
-	dev_t dev = ref->device;
-	ino_t ino = ref->node;
+	dev_t dev = ref->vdevice();
+	ino_t ino = ref->vnode();
 
 	memcpy(buffer, &dev, sizeof(dev));
 	buffer += sizeof(dev);

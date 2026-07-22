@@ -102,7 +102,7 @@ BTrashWatcher::IsTrashNode(const node_ref* testNode) const
 	int32 count = fTrashNodeList.CountItems();
 	for (int32 index = 0; index < count; index++) {
 		node_ref* nref = fTrashNodeList.ItemAt(index);
-		if (nref->dereference().ino() == testNode->dereference().ino() && nref->dereference().dev() == testNode->dereference().dev())
+		if (nref->node() == testNode->node() && nref->device() == testNode->device())
 			return true;
 	}
 
@@ -134,7 +134,7 @@ BTrashWatcher::MessageReceived(BMessage* message)
 			entry_ref fromDir;
 			message->FindRef("virtual:from directory", &fromDir);
 			message->FindRef("virtual:to directory", &toDir);
-			if (fromDir.dev() == toDir.dev() && fromDir.dir() == toDir.dir())
+			if (fromDir.vdevice() == toDir.vdevice() && fromDir.vdirectory() == toDir.vdirectory())
 				break;
 		}
 		// fall-through

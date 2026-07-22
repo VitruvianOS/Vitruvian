@@ -128,8 +128,7 @@ StatableTest::GetXYZTest()
 		CPPUNIT_ASSERT( statable->GetAccessTime(&atime) == B_OK );
 #endif
 		CPPUNIT_ASSERT( statable->GetVolume(&volume) == B_OK );
-		CPPUNIT_ASSERT( ref.dereference().device == st.st_dev && ref.dereference().node == st.st_ino );
-		// Direct operator== handles virtual node_ref vs physical (dev, ino) pair
+		CPPUNIT_ASSERT( ref.device() == st.st_dev && ref.node() == st.st_ino );
 		CPPUNIT_ASSERT( ref == node_ref(st.st_dev, st.st_ino) );
 		CPPUNIT_ASSERT( owner == st.st_uid );
 		CPPUNIT_ASSERT( group == st.st_gid );
@@ -157,11 +156,11 @@ StatableTest::GetXYZTest()
 		node_ref virtRef1(fd1);
 		node_ref virtRef2(fd2);
 		// Different vref IDs (two independent create_vref calls)
-		CPPUNIT_ASSERT( virtRef1.node != virtRef2.node );
+		CPPUNIT_ASSERT( virtRef1.vnode() != virtRef2.vnode() );
 		// operator== dereferences both and finds the same physical inode
 		CPPUNIT_ASSERT( virtRef1 == virtRef2 );
 		CPPUNIT_ASSERT( !(virtRef1 != virtRef2) );
-		CPPUNIT_ASSERT( virtRef1.dereference() == virtRef2.dereference() );
+		CPPUNIT_ASSERT( virtRef1 == virtRef2 );
 		// virtual == physical for the same inode
 		struct stat st;
 		CPPUNIT_ASSERT( lstat("/tmp", &st) == 0 );

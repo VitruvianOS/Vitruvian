@@ -395,7 +395,7 @@ BMediaRecorder::SetOutputFile(BFile* file, const BMediaFormat& fmt)
 	if (status != B_OK)
 		return status;
 	char resolved[B_PATH_NAME_LENGTH];
-	status = _kern_entry_ref_to_path(nref.device, nref.node, NULL,
+	status = _kern_entry_ref_to_path(nref.vdevice(), nref.vnode(), NULL,
 		resolved, sizeof(resolved));
 	if (status != B_OK)
 		return status;

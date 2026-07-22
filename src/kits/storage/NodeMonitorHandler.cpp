@@ -151,7 +151,7 @@ NodeMonitorHandler::HandleEntryCreated(BMessage * msg)
 		(msg->FindNodeRef("virtual:node", &nodeRef) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
-	EntryCreated(name, dirRef.dir(), nodeRef.dev(), nodeRef.node);
+	EntryCreated(name, dirRef.vdirectory(), nodeRef.vdevice(), nodeRef.vnode());
 	return B_OK;
 }
 
@@ -167,7 +167,7 @@ NodeMonitorHandler::HandleEntryRemoved(BMessage * msg)
 		(msg->FindNodeRef("virtual:node", &nodeRef) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
-	EntryRemoved(name, dirRef.dir(), nodeRef.dev(), nodeRef.node);
+	EntryRemoved(name, dirRef.vdirectory(), nodeRef.vdevice(), nodeRef.vnode());
 	return B_OK;
 }
 
@@ -186,9 +186,9 @@ NodeMonitorHandler::HandleEntryMoved(BMessage * msg)
 		(msg->FindNodeRef("virtual:node", &nodeRef) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
-	dev_t device = nodeRef.dev();
-	ino_t node = nodeRef.node;
-	EntryMoved(name, fromName, fromDir.dir(), toDir.dir(), device, node,
+	dev_t device = nodeRef.vdevice();
+	ino_t node = nodeRef.vnode();
+	EntryMoved(name, fromName, fromDir.vdirectory(), toDir.vdirectory(), device, node,
 		device);
 	return B_OK;
 }
@@ -203,7 +203,7 @@ NodeMonitorHandler::HandleStatChanged(BMessage * msg)
 		(msg->FindInt32("fields", &statFields) != B_OK)) {
 		return B_MESSAGE_NOT_UNDERSTOOD;
 	}
-	StatChanged(nodeRef.node, nodeRef.dev(), statFields);
+	StatChanged(nodeRef.vnode(), nodeRef.vdevice(), statFields);
 	return B_OK;
 }
 
@@ -214,7 +214,7 @@ NodeMonitorHandler::HandleAttrChanged(BMessage * msg)
 	node_ref nodeRef;
 	if (msg->FindNodeRef("virtual:node", &nodeRef) != B_OK)
 		return B_MESSAGE_NOT_UNDERSTOOD;
-	AttrChanged(nodeRef.node, nodeRef.dev());
+	AttrChanged(nodeRef.vnode(), nodeRef.vdevice());
 	return B_OK;
 }
 

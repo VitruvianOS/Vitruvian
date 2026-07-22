@@ -19,6 +19,8 @@
 class BDirectory;
 class BPath;
 
+namespace BPrivate { class VRefTrackAccess; }
+
 
 struct entry_ref {
 								entry_ref();
@@ -33,28 +35,27 @@ struct entry_ref {
 			//bool				is_valid() const;
 			status_t			init_check() const;
 
-			// This is an experimental V\OS API. It will change.
-			dev_t				dev() const { return device; }
-			ino_t				dir() const { return directory; }
+			dev_t				vdevice() const;
+			ino_t				vdirectory() const;
+
+			dev_t				device() const;
+			ino_t				directory() const;
+
+			void				set_to(dev_t dev, ino_t dir, const char* name = NULL);
 
 			status_t			set_name(const char* name);
 
 			vref_id				id() const;
 			bool				is_virtual() const;
-			const entry_ref 	dereference() const;
 			void				unset();
 
 			bool				operator==(const entry_ref& ref) const;
 			bool				operator!=(const entry_ref& ref) const;
 			entry_ref&			operator=(const entry_ref& ref);
 
-#ifdef __VOS_NEW_ENTRY_REF__
 protected:
-#else
-public:
-#endif
-			dev_t				device;
-			ino_t				directory;
+			dev_t				virtual_device;
+			ino_t				virtual_directory;
 
 public:
 			char*				name;
@@ -62,13 +63,14 @@ public:
 			friend class		node_ref;
 			friend class 		BPath;
 			friend class		BEntry;
-			friend class		BDirectory;
-			friend class		BFile;
-			friend class		BNode;
+		friend class		BDirectory;
+		friend class		BFile;
+		friend class		BNode;
+		friend class		BPrivate::VRefTrackAccess;
 
 protected:
-			mutable dev_t		real_device;
-			mutable ino_t		real_directory;
+			dev_t		real_device;
+			ino_t		real_directory;
 			uint64				cache_ticket;
 
 private:

@@ -84,6 +84,34 @@ vref_track_enabled()
 }
 
 
+dev_t
+VRefTrackAccess::vdevice(const entry_ref& r)
+{
+	return r.virtual_device;
+}
+
+
+ino_t
+VRefTrackAccess::vdirectory(const entry_ref& r)
+{
+	return r.virtual_directory;
+}
+
+
+dev_t
+VRefTrackAccess::vdevice(const node_ref& r)
+{
+	return r.virtual_device;
+}
+
+
+ino_t
+VRefTrackAccess::vnode(const node_ref& r)
+{
+	return r.virtual_node;
+}
+
+
 static const char*
 _op_name(vref_track_event op)
 {
@@ -179,7 +207,7 @@ vref_track_eref(vref_track_event op, const entry_ref* ref,
 	}
 	_emitf(_op_name(op),
 		"this=%p dev=%d dir=%lld name=\"%s\" at=%s",
-		(const void*)ref, (int)ref->device, (long long)ref->directory,
+		(const void*)ref, (int)VRefTrackAccess::vdevice(*ref), (long long)VRefTrackAccess::vdirectory(*ref),
 		ref->name ? ref->name : "", site);
 }
 
@@ -198,7 +226,7 @@ vref_track_nref(vref_track_event op, const node_ref* ref,
 	}
 	_emitf(_op_name(op),
 		"this=%p dev=%d node=%lld at=%s",
-		(const void*)ref, (int)ref->device, (long long)ref->node, site);
+		(const void*)ref, (int)VRefTrackAccess::vdevice(*ref), (long long)VRefTrackAccess::vnode(*ref), site);
 }
 
 
@@ -241,13 +269,13 @@ vref_track_flatten(vref_track_event op, const entry_ref* eref,
 	if (eref != NULL) {
 		_emitf(_op_name(op),
 			"this=%p dev=%d dir=%lld name=\"%s\" size=%zu hex=%s at=%s",
-			(const void*)eref, (int)eref->device, (long long)eref->directory,
+			(const void*)eref, (int)VRefTrackAccess::vdevice(*eref), (long long)VRefTrackAccess::vdirectory(*eref),
 			eref->name ? eref->name : "",
 			size, hex, site);
 	} else if (nref != NULL) {
 		_emitf(_op_name(op),
 			"this=%p dev=%d node=%lld size=%zu hex=%s at=%s",
-			(const void*)nref, (int)nref->device, (long long)nref->node,
+			(const void*)nref, (int)VRefTrackAccess::vdevice(*nref), (long long)VRefTrackAccess::vnode(*nref),
 			size, hex, site);
 	} else {
 		_emitf(_op_name(op), "size=%zu hex=%s at=%s", size, hex, site);
@@ -277,7 +305,7 @@ vref_track_msg(vref_track_event op, uint32 what, const char* name,
 		_emitf(_op_name(op),
 			"what=%s field=\"%s\" dev=%d dir=%lld name=\"%s\" at=%s",
 			what4, name ? name : "",
-			(int)eref->device, (long long)eref->directory,
+			(int)VRefTrackAccess::vdevice(*eref), (long long)VRefTrackAccess::vdirectory(*eref),
 			eref->name ? eref->name : "", site);
 	} else {
 		_emitf(_op_name(op), "what=%s field=\"%s\" at=%s",

@@ -643,7 +643,7 @@ FindWindow::SaveQueryAsAttributes(BNode* file, BEntry* entry, bool queryTemplate
 			dev_t device;
 			if (message->FindUInt64("device", &device) != B_OK)
 				continue;
-			if (device == ref->dereference().dev())
+			if (device == ref->device())
 				item->SetMarked(true);
 		}
 	}

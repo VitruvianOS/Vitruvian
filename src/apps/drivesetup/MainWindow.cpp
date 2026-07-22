@@ -928,7 +928,7 @@ MainWindow::SaveDiskImage(void* data)
 	BDirectory* targetdir = new BDirectory(targetfolder);
 	node_ref node;
 	targetdir->GetNodeRef(&node);
-	BVolume volume(node.device);
+	BVolume volume(node.device());
 
 	if (volume.InitCheck()) {
 		FileErrorAlert(B_TRANSLATE("Cannot init target volume."), NULL,

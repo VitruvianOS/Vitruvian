@@ -118,7 +118,7 @@ BPath::SetTo(const entry_ref* ref)
 
 	char path[B_PATH_NAME_LENGTH];
 
-	fCStatus = _kern_entry_ref_to_path(ref->device, ref->directory,
+	fCStatus = _kern_entry_ref_to_path(ref->vdevice(), ref->vdirectory(),
 		ref->name, path, sizeof(path));
 
 	if (fCStatus != B_OK)

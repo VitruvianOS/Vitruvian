@@ -59,7 +59,7 @@ public:
 	{
 		CALLED();
 		entry_ref ref;
-		make_entry_ref(entryInfo->dir_nref.dev(), entryInfo->dir_nref.ino(),
+		make_entry_ref(entryInfo->dir_nref.vdevice(), entryInfo->dir_nref.vnode(),
 			entryInfo->name, &ref);
 		BEntry entry(&ref, false);
 
@@ -70,7 +70,7 @@ public:
 	{
 		CALLED();
 		entry_ref ref;
-		make_entry_ref(entryInfo->dir_nref.dev(), entryInfo->dir_nref.ino(),
+		make_entry_ref(entryInfo->dir_nref.vdevice(), entryInfo->dir_nref.vnode(),
 			entryInfo->name, &ref);
 		BEntry entry(&ref, false);
 

@@ -159,7 +159,7 @@ ChangeListSource(BObjectList<entry_ref, true> &list, BEntry &entry)
 	for (int32 index = 0; index < list.CountItems(); index++) {
 		entry_ref* ref = list.ItemAt(index);
 
-		*ref = entry_ref(source.dev(), source.ino(), NULL);
+		*ref = entry_ref(source.vdevice(), source.vnode(), NULL);
 	}
 
 	return B_OK;

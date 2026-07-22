@@ -205,8 +205,8 @@ TRoster::HandleAddApplication(BMessage* request)
 	// entry_ref
 	if (error == B_OK) {
 		PRINT("flags: %" B_PRIx32 "\n", flags);
-		PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device,
-			ref.directory, ref.name);
+		PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.vdevice(),
+			ref.vdirectory(), ref.name);
 		// check single/exclusive launchers
 		RosterAppInfo* info = NULL;
 		if ((launchFlags == B_SINGLE_LAUNCH
@@ -256,7 +256,7 @@ TRoster::HandleAddApplication(BMessage* request)
 			bool addingSuccess = false;
 			if (team >= 0) {
 				PRINT("added ref: %" B_PRId32 ", %" B_PRId64 ", %s\n",
-					info->ref.device, info->ref.directory, info->ref.name);
+					info->ref.vdevice(), info->ref.vdirectory(), info->ref.name);
 				addingSuccess = (AddApp(info) == B_OK);
 				if (addingSuccess && fullReg)
 					_AppAdded(info);
@@ -388,7 +388,7 @@ TRoster::HandleIsAppRegistered(BMessage* request)
 		token = 0;
 
 	PRINT("team: %" B_PRId32 ", token: %" B_PRIu32 "\n", team, token);
-	PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device, ref.directory,
+	PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.vdevice(), ref.vdirectory(),
 		ref.name);
 
 	// check the parameters
@@ -673,8 +673,8 @@ TRoster::HandleGetAppInfo(BMessage* request)
 	if (hasTeam)
 		PRINT("team: %" B_PRId32 "\n", team);
 	if (hasRef) {
-		PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.device,
-			ref.directory, ref.name);
+		PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.vdevice(),
+			ref.vdirectory(), ref.name);
 	}
 	if (hasSignature)
 		PRINT("signature: %s\n", signature);

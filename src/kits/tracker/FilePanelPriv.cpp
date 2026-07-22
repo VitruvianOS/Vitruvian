@@ -405,7 +405,7 @@ TFilePanel::FSFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 			entry_ref dirRef;
 			message->FindRef("virtual:to directory", &dirRef);
 
-			node_ref dirNode = node_ref(dirRef.dev(), dirRef.dir());
+			node_ref dirNode = node_ref(dirRef.vdevice(), dirRef.vdirectory());
 			// if current directory moved, update entry ref and menu
 			// but not wind title
 			if (*(panel->TargetModel()->NodeRef()) == itemNode) {

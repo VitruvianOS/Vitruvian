@@ -61,6 +61,14 @@ enum vref_track_event {
 
 bool vref_track_enabled();
 
+class VRefTrackAccess {
+public:
+	static dev_t vdevice(const entry_ref& r);
+	static ino_t vdirectory(const entry_ref& r);
+	static dev_t vdevice(const node_ref& r);
+	static ino_t vnode(const node_ref& r);
+};
+
 void vref_track_eref(vref_track_event op, const entry_ref* ref,
 	const void* caller);
 

@@ -237,8 +237,8 @@ KeyCommandMap::MessageReceived(BMessage* message)
 				ino_t node;
 				if (message->FindUInt64("device", &device) != B_OK
 					|| message->FindUInt64("node", &node) != B_OK
-					|| device != fNodeRef.device
-					|| node != fNodeRef.node) {
+					|| device != fNodeRef.vdevice()
+					|| node != fNodeRef.vnode()) {
 					break;
 				}
 			}

@@ -56,20 +56,22 @@ public:
 	NotOwningEntryRef& SetTo(dev_t device, ino_t directory, const char* name)
 	{
 		// Drop any previously held slot before re-targeting.
-		if (is_virtual() && this->directory != B_INVALID_INO
+		if (is_virtual() && this->virtual_directory != B_INVALID_INO
 			&& cache_ticket != BPrivate::B_INVALID_VREF_TICKET) {
-			BPrivate::VRefCache::Release((vref_id) this->directory,
+			BPrivate::VRefCache::Release((vref_id) this->virtual_directory,
 				cache_ticket);
 		}
 		cache_ticket = BPrivate::B_INVALID_VREF_TICKET;
-		this->device = device;
-		this->directory = directory;
+		this->virtual_device = device;
+		this->virtual_directory = directory;
+		this->real_device = device;
+		this->real_directory = directory;
 		this->name = const_cast<char*>(name);
 		if (is_virtual() && directory != B_INVALID_INO) {
 			cache_ticket = BPrivate::VRefCache::Acquire((vref_id) directory);
 			if (cache_ticket == BPrivate::B_INVALID_VREF_TICKET) {
-				this->directory = B_INVALID_INO;
-				this->device = B_INVALID_DEV;
+				this->virtual_directory = B_INVALID_INO;
+				this->virtual_device = B_INVALID_DEV;
 			}
 		}
 
@@ -78,23 +80,23 @@ public:
 
 	NotOwningEntryRef& SetTo(const node_ref& directoryRef, const char* name)
 	{
-		return SetTo(directoryRef.dev(), directoryRef.ino(), name);
+		return SetTo(directoryRef.vdevice(), directoryRef.vnode(), name);
 	}
 
 	node_ref DirectoryNodeRef() const
 	{
-		return node_ref(device, directory);
+		return node_ref(virtual_device, virtual_directory);
 	}
 
 	NotOwningEntryRef& SetDirectoryNodeRef(const node_ref& directoryRef)
 	{
 		const char* savedName = this->name;
-		return SetTo(directoryRef.dev(), directoryRef.ino(), savedName);
+		return SetTo(directoryRef.vdevice(), directoryRef.vnode(), savedName);
 	}
 
 	NotOwningEntryRef& operator=(const entry_ref& other)
 	{
-		return SetTo(other.dev(), other.dir(), other.name);
+		return SetTo(other.vdevice(), other.vdirectory(), other.name);
 	}
 };
 

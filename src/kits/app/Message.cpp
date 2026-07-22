@@ -1099,7 +1099,7 @@ BMessage::_PrintToStream(const char* indent) const
 					BPrivate::entry_ref_unflatten(&ref, (char*)pointer, size);
 
 					printf("entry_ref(device=%d, directory=%" B_PRIdINO
-						", name=\"%s\", ", (int)ref.device, ref.directory,
+						", name=\"%s\", ", (int)ref.vdevice(), ref.vdirectory(),
 						ref.name);
 
 					BPath path(&ref);
@@ -1113,7 +1113,7 @@ BMessage::_PrintToStream(const char* indent) const
 					BPrivate::node_ref_unflatten(&ref, (char*)pointer, size);
 
 					printf("node_ref(device=%d, node=%" B_PRIdINO ", ",
-						(int)ref.device, ref.node);
+						(int)ref.vdevice(), ref.vnode());
 					break;
 				}*/
 
@@ -3191,10 +3191,10 @@ BMessage::AddRef(const char* name, const entry_ref* ref)
 	if (error < B_OK)
 		return error;
 
-	dev_t vrefDev = get_vref_dev();
-	if (vrefDev != B_INVALID_DEV && ref->device == vrefDev
-			&& ref->directory >= 0) {
-		_TrackOwnedVRef((vref_id)ref->directory);
+	if (ref->is_virtual()) {
+		vref_id id = ref->id();
+		if (id >= 0)
+			_TrackOwnedVRef(id);
 	}
 
 	return error;
@@ -3216,10 +3216,10 @@ BMessage::AddNodeRef(const char* name, const node_ref* ref)
 	if (error < B_OK)
 		return error;
 
-	dev_t vrefDev = get_vref_dev();
-	if (vrefDev != B_INVALID_DEV && ref->device == vrefDev
-			&& ref->node != B_INVALID_INO) {
-		_TrackOwnedVRef((vref_id)ref->node);
+	if (ref->is_virtual()) {
+		vref_id id = ref->id();
+		if (id >= 0)
+			_TrackOwnedVRef(id);
 	}
 
 	return error;

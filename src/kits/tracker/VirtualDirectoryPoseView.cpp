@@ -117,7 +117,7 @@ VirtualDirectoryPoseView::SetViewMode(uint32 newMode)
 EntryListBase*
 VirtualDirectoryPoseView::InitDirentIterator(const entry_ref* ref)
 {
-	if (fRootDefinitionFileRef.ino() == B_INVALID_INO || *ref != *TargetModel()->EntryRef())
+	if (fRootDefinitionFileRef.vnode() == B_INVALID_INO || *ref != *TargetModel()->EntryRef())
 		return NULL;
 
 	Model sourceModel(ref, false, true);
@@ -217,8 +217,8 @@ VirtualDirectoryPoseView::_EntryCreated(const BMessage* message)
 				entry_ref ref;
 				dirEntry.GetRef(&ref);
 				_DispatchEntryCreatedOrRemovedMessage(B_ENTRY_CREATED,
-					node_ref(ref.dev(), ref.dir()),
-					NotOwningEntryRef(ref.dev(), ref.dir(),
+					node_ref(ref.vdevice(), ref.vdirectory()),
+					NotOwningEntryRef(ref.vdevice(), ref.vdirectory(),
 						entry.d_name),
 					NULL, false); // end mod
 			}
@@ -289,7 +289,7 @@ VirtualDirectoryPoseView::_EntryRemoved(const BMessage* message)
 		|| message->FindRef("virtual:directory", &entryRef) != B_OK) {
 		return true;
 	}
-	entryRef = entry_ref(node_ref(nodeRef.device, nodeRef.node), entryRef.name);
+	entryRef = entry_ref(node_ref(nodeRef.vdevice(), nodeRef.vnode()), entryRef.name);
 
 	// It might be our definition file.
 	if (nodeRef == *TargetModel()->NodeRef())
@@ -392,7 +392,7 @@ VirtualDirectoryPoseView::_EntryMoved(const BMessage* message)
 		|| message->FindRef("virtual:to directory", &toEntryRef) != B_OK) {
 		return true;
 	}
-	toEntryRef = entry_ref(node_ref(fromEntryRef.device, fromEntryRef.directory), toEntryRef.name);
+	toEntryRef = entry_ref(node_ref(fromEntryRef.vdevice(), fromEntryRef.vdirectory()), toEntryRef.name);
 
 	// TODO: That's the lazy approach. Ideally we'd analyze the situation and
 	// forward a B_ENTRY_MOVED, if possible. There are quite a few cases to

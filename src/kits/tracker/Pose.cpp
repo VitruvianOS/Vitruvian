@@ -90,7 +90,7 @@ BPose::BPose(Model* model, BPoseView* view, uint32 clipboardMode, bool selected)
 
 	if (model->IsVolume() && !model->IsRoot()) {
 		fs_info info;
-		dev_t device = model->NodeRef()->dereference().dev();
+		dev_t device = model->NodeRef()->device();
 		BVolume* volume = new BVolume(device);
 		if (volume->InitCheck() == B_OK && fs_stat_dev(device, &info) == B_OK) {
 			// Philosophy here:

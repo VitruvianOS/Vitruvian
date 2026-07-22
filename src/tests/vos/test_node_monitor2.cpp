@@ -108,20 +108,20 @@ private:
                 if (msg->FindString("name", &name) == B_OK)
                     printf(" name=\"%s\"", name);
                 if (msg->FindRef("virtual:directory", &dirRef) == B_OK)
-                    printf(" dir_dev=%llu dir=%lld", (unsigned long long)dirRef.device,
-                        (long long)dirRef.directory);
+                    printf(" dir_dev=%llu dir=%lld", (unsigned long long)dirRef.vdevice(),
+                        (long long)dirRef.vdirectory());
                 if (msg->FindNodeRef("virtual:node", &nodeRef) == B_OK)
-                    printf(" node_dev=%llu node=%lld", (unsigned long long)nodeRef.device,
-                        (long long)nodeRef.node);
+                    printf(" node_dev=%llu node=%lld", (unsigned long long)nodeRef.vdevice(),
+                        (long long)nodeRef.vnode());
                 break;
 
             case B_ENTRY_MOVED:
                 if (msg->FindString("name", &name) == B_OK)
                     printf(" name=\"%s\"", name);
                 if (msg->FindRef("virtual:from directory", &dirRef) == B_OK)
-                    printf(" from_dir=%lld", (long long)dirRef.directory);
+                    printf(" from_dir=%lld", (long long)dirRef.vdirectory());
                 if (msg->FindRef("virtual:to directory", &dirRef) == B_OK)
-                    printf(" to_dir=%lld", (long long)dirRef.directory);
+                    printf(" to_dir=%lld", (long long)dirRef.vdirectory());
                 break;
 
             case B_STAT_CHANGED:

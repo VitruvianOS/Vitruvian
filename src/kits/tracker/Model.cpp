@@ -946,8 +946,8 @@ Model::WatchVolumeAndMountPoint(uint32 , BHandler* target)
 	ASSERT(IsVolume());
 
 	if (fEntryRef.name != NULL && fVolumeName != NULL
-		&& strcmp(fEntryRef.name, "boot") == 0) {
-		// watch mount point for boot volume (at "/" in Vitruvian)
+		&& strcmp(fEntryRef.name, "/") == 0) {
+		// watch mount point for root volume
 		BEntry mountPointEntry("/");
 		Model mountPointModel(&mountPointEntry);
 

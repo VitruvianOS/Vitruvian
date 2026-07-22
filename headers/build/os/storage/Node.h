@@ -34,6 +34,10 @@ struct node_ref {
 	dev_t dev() { return device; }
 	dev_t ino() { return node; }
 
+	// Host build has no vref layer: virtual identity == the plain fields.
+	dev_t vdevice() const { return device; }
+	ino_t vnode() const { return node; }
+
 	dev_t device;
 	ino_t node;
 };

@@ -304,12 +304,12 @@ Model::SetTo(const node_ref* dirNode, const node_ref* nodeRef,
 	fBaseType = kUnknownNode;
 	fMimeType = "";
 
-	fEntryRef = entry_ref(dirNode->dev(), dirNode->ino(), name);
+	fEntryRef = entry_ref(*dirNode, name);
 
 	// Open the parent dir fd directly to fstatat the entry — avoids opening
 	// and vref-creating the child just to get its stat.
 	if (dirNode->is_virtual()) {
-		int dirFd = BPrivate::VRefCache::Open((vref_id)dirNode->node);
+		int dirFd = BPrivate::VRefCache::Open(dirNode->id());
 		if (dirFd < 0) {
 			fStatus = (status_t)dirFd;
 			return fStatus;
@@ -369,13 +369,13 @@ Model::CompareFolderNamesFirst(const Model* compare) const
 	// sort volume as a directory if capacity is 0
 
 	if (meIsVolume) {
-		BVolume volume(resolved->NodeRef()->dereference().dev());
+		BVolume volume(resolved->NodeRef()->device());
 		if (volume.InitCheck() == B_OK && volume.Capacity() == 0)
 			meIsVolume = false;
 	}
 
 	if (otherIsVolume) {
-		BVolume volume(resolvedCompare->NodeRef()->dereference().dev());
+		BVolume volume(resolvedCompare->NodeRef()->device());
 		if (volume.InitCheck() == B_OK && volume.Capacity() == 0)
 			otherIsVolume = false;
 	}
@@ -737,7 +737,7 @@ Model::FinishSettingUpType()
 			}
 
 			char name[B_FILE_NAME_LENGTH];
-			BVolume volume(NodeRef()->dereference().dev());
+			BVolume volume(NodeRef()->device());
 			if (volume.InitCheck() == B_OK && volume.GetName(name) == B_OK) {
 				if (fVolumeName != NULL)
 					DeletePreferredAppVolumeNameLinkTo();
@@ -933,8 +933,8 @@ Model::UpdateEntryRef(const node_ref* dirNode, const char* name)
 		fVolumeName = strdup(name);
 	}
 
-	if (fEntryRef.device != dirNode->dev() || fEntryRef.directory != dirNode->ino())
-		fEntryRef = entry_ref(dirNode->dev(), dirNode->ino(), name);
+	if (fEntryRef.device() != dirNode->device() || fEntryRef.directory() != dirNode->node())
+		fEntryRef = entry_ref(*dirNode, name);
 	else if (fEntryRef.name == NULL || strcmp(fEntryRef.name, name) != 0)
 		fEntryRef.set_name(name);
 }
@@ -1406,9 +1406,9 @@ Model::PrintToStream(int32 level, bool deep)
 		B_PRIdDEV ", directory inode %" B_PRIdINO "\n",
 		Name() ? Name() : "**empty name**",
 		EntryRef()->name ? EntryRef()->name : "**empty ref name**",
-		NodeRef()->node,
-		NodeRef()->device,
-		EntryRef()->directory));
+		NodeRef()->vnode(),
+		NodeRef()->vdevice(),
+		EntryRef()->vdirectory()));
 	PRINT(("type %s \n", MimeType()));
 
 	PRINT(("model type: "));
@@ -1513,7 +1513,7 @@ Model::PrintToStream(int32 level, bool deep)
 		node_ref nodeRef;
 		fNode->GetNodeRef(&nodeRef);
 		PRINT(("node ref of open Node %" B_PRIdINO " %" B_PRIdDEV "\n",
-			nodeRef.node, nodeRef.device));
+			nodeRef.vnode(), nodeRef.vdevice()));
 	}
 
 	if (deep && IsSymLink()) {
@@ -1555,7 +1555,7 @@ Model::TrackIconSource(icon_size size)
 	}
 
 	if (fBaseType == kVolumeNode) {
-		BVolume volume(NodeRef()->dereference().dev()); //? dereference().device
+		BVolume volume(NodeRef()->device());
 		status_t result = volume.GetIcon(&bitmap, size);
 		PRINT(("getting icon from volume %s\n", strerror(result)));
 	} else {

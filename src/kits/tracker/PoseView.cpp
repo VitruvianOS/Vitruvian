@@ -785,7 +785,7 @@ BPoseView::SavePoseLocations(BRect* frameIfDesktop)
 	Model* targetModel = TargetModel();
 	ThrowOnAssert(targetModel != NULL);
 
-	BVolume volume(TargetModel()->NodeRef()->dereference().dev());
+	BVolume volume(TargetModel()->NodeRef()->device());
 	if (volume.InitCheck() != B_OK)
 		return;
 
@@ -807,9 +807,9 @@ BPoseView::SavePoseLocations(BRect* frameIfDesktop)
 			poseInfo.fInvisible = false;
 
 			if (model->IsRoot())
-				poseInfo.fInitedDirectory = targetModel->NodeRef()->ino();
+				poseInfo.fInitedDirectory = targetModel->NodeRef()->vnode();
 			else
-				poseInfo.fInitedDirectory = model->EntryRef()->dir();
+				poseInfo.fInitedDirectory = model->EntryRef()->vdirectory();
 
 			poseInfo.fLocation = pose->Location(this);
 
@@ -1470,7 +1470,7 @@ BPoseView::AddPosesTask(void* castToParams)
 				if (dirNodeValid) {
 					dirNode = cachedDirNode;
 				} else {
-					dirNode = node_ref(reff.dev(), reff.directory);
+					dirNode = node_ref(reff.vdevice(), reff.vdirectory());
 				}
 				BPoseView::WatchNewNode(&itemNode, watchMask, lock.Target());
 					// have to node monitor ahead of time because Model will
@@ -1765,7 +1765,7 @@ BPoseView::CreateVolumePose(BVolume* volume)
 	// volume itself is not the root (i.e. sub-mounts like /boot/efi are hidden;
 	// the root volume "/" and user-removable media at e.g. /media/user/X are shown).
 	{
-		BVolume parentVolume(ref.dereference().dev());
+		BVolume parentVolume(ref.device());
 		if (parentVolume.InitCheck() == B_OK && parentVolume.IsPersistent()) {
 #ifndef __VOS__
 			return;
@@ -2467,7 +2467,7 @@ BPoseView::MessageReceived(BMessage* message)
 			entry_ref ref;
 			message->FindRef("virtual:directory", &ref);
 
-			node_ref node = node_ref(ref.dev(), ref.dir());
+			node_ref node = node_ref(ref.vdevice(), ref.vdirectory());
 			Model* targetModel = TargetModel();
 			if (targetModel != NULL && *targetModel->NodeRef() == node)
 				UpdatePosesClipboardModeFromClipboard(message);
@@ -3097,9 +3097,9 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 		poseInfo->fInitedDirectory = -1LL;
 		poseInfo->fInvisible = false;
 	} else if (TargetModel() == NULL
-		|| (poseInfo->fInitedDirectory != model->EntryRef()->dir()
+		|| (poseInfo->fInitedDirectory != model->EntryRef()->vdirectory()
 			&& (poseInfo->fInitedDirectory
-				!= TargetModel()->NodeRef()->ino()))) {
+				!= TargetModel()->NodeRef()->vnode()))) {
 		// info was read properly but it's not for this directory
 		poseInfo->fInitedDirectory = -1LL;
 	} else if (poseInfo->fLocation.x < -kSanePoseLocation
@@ -3382,7 +3382,7 @@ BPoseView::UpdatePosesClipboardModeFromClipboard(BMessage* clipboardReport)
 
 	entry_ref ref;
 	clipboardReport->FindRef("virtual:directory", &ref);
-	node_ref node = node_ref(ref.dev(), ref.dir());
+	node_ref node = node_ref(ref.vdevice(), ref.vdirectory());
 
 	bool clearClipboard = clipboardReport->GetBool("clearClipboard", false);
 	if (clearClipboard && fHasPosesInClipboard) {
@@ -3400,21 +3400,24 @@ BPoseView::UpdatePosesClipboardModeFromClipboard(BMessage* clipboardReport)
 	bool hasPosesInClipboard = false;
 	int32 foundNodeIndex = 0;
 
-	TClipboardNodeRef* clipNode = NULL;
-	ssize_t size;
-	for (int32 index = 0; clipboardReport->FindData("tcnode", T_CLIPBOARD_NODE,
-			index, (const void**)&clipNode, &size) == B_OK; index++) {
-		BPose* pose = fPoseList->FindPose(&clipNode->node, &foundNodeIndex);
+	node_ref clipNode;
+	uint32 clipMode = 0;
+	for (int32 index = 0;
+			clipboardReport->FindNodeRef("tcnode:node", index, &clipNode) == B_OK;
+			index++) {
+		if (clipboardReport->FindUInt32("tcnode:mode", index, &clipMode) != B_OK)
+			break;
+		BPose* pose = fPoseList->FindPose(&clipNode, &foundNodeIndex);
 		if (pose == NULL)
 			break;
 
-		if (clipNode->moveMode != pose->ClipboardMode() || pose->IsSelected()) {
-			pose->SetClipboardMode(clipNode->moveMode);
+		if (clipMode != pose->ClipboardMode() || pose->IsSelected()) {
+			pose->SetClipboardMode(clipMode);
 
 			if (!fullInvalidateNeeded) {
 				if (ViewMode() == kListMode) {
 					if (IsFiltering())
-						pose = fFilteredPoseList->FindPose(&clipNode->node, &foundNodeIndex);
+						pose = fFilteredPoseList->FindPose(&clipNode, &foundNodeIndex);
 
 					if (pose != NULL) {
 						loc.y = foundNodeIndex * fListElemHeight;
@@ -3431,7 +3434,7 @@ BPoseView::UpdatePosesClipboardModeFromClipboard(BMessage* clipboardReport)
 					}
 				}
 			}
-			if (clipNode->moveMode)
+			if (clipMode)
 				hasPosesInClipboard = true;
 		}
 	}
@@ -3469,7 +3472,7 @@ BPoseView::PlaceFolder(const entry_ref* ref, const BMessage* message)
 	if (setPosition) {
 		Model* targetModel = TargetModel();
 		if (targetModel != NULL && targetModel->NodeRef() != NULL) {
-			FSSetPoseLocation(targetModel->NodeRef()->ino(), &node,
+			FSSetPoseLocation(targetModel->NodeRef()->vnode(), &node,
 				location);
 		}
 	}
@@ -4445,7 +4448,7 @@ BPoseView::TrySettingPoseLocation(BNode* node, BPoint point)
 	ASSERT(targetModel != NULL);
 
 	if (targetModel != NULL && targetModel->NodeRef() != NULL
-		&& FSSetPoseLocation(targetModel->NodeRef()->ino(), node, point)
+		&& FSSetPoseLocation(targetModel->NodeRef()->vnode(), node, point)
 			== B_OK) {
 		// get rid of opposite endianness attribute
 		node->RemoveAttr(kAttrPoseInfoForeign);
@@ -5198,7 +5201,7 @@ BPoseView::MoveSelectionInto(Model* destFolder, BContainerWindow* srcWindow,
 	}
 
 	// can't copy to read-only volume
-	BVolume destVolume(destFolder->NodeRef()->dereference().dev());
+	BVolume destVolume(destFolder->NodeRef()->device());
 	if (destVolume.InitCheck() == B_OK && destVolume.IsReadOnly()) {
 		BAlert* alert = new BAlert("",
 			B_TRANSLATE("You can't move or copy items to read-only volumes."),
@@ -5334,10 +5337,10 @@ void
 BPoseView::PoseHandleDeviceUnmounted(BPose* pose, Model* model, int32 index,
 	BPoseView* poseView, dev_t device)
 {
-	if (model->NodeRef()->device == device)
+	if (model->NodeRef()->device() == device)
 		poseView->DeletePose(model->NodeRef());
 	else if (model->IsSymLink() && model->LinkTo() != NULL
-		&& model->LinkTo()->NodeRef()->device == device) {
+		&& model->LinkTo()->NodeRef()->device() == device) {
 		poseView->DeleteSymLinkPoseTarget(model->LinkTo()->NodeRef(),
 			pose, index);
 	}
@@ -5484,7 +5487,7 @@ BPoseView::FSNotification(const BMessage* message)
 			entry_ref ref;
 			message->FindRef("virtual:directory", &ref);
 			message->FindNodeRef("virtual:node", &itemNode);
-			node_ref dirNode = node_ref(ref.dev(), ref.dir());
+			node_ref dirNode = node_ref(ref.vdevice(), ref.vdirectory());
 
 			int32 count = fBrokenLinks->CountItems();
 			bool createPose = true;
@@ -5639,7 +5642,7 @@ BPoseView::FSNotification(const BMessage* message)
 		case B_DEVICE_UNMOUNTED:
 			if (message->FindUInt64("device", &device) == B_OK) {
 				ASSERT(targetModel != NULL);
-				if (targetModel->NodeRef()->dev() == device) {
+				if (targetModel->NodeRef()->vdevice() == device) {
 					if (IsFilePanel()) {
 						// reset location to home directory
 						BMessage message(kSwitchToHome);
@@ -5698,7 +5701,7 @@ BPoseView::CreateSymlinkPoseTarget(Model* symlink)
 			entry_ref eref;
 			entry.GetNodeRef(&nref);
 			entry.GetRef(&eref);
-			if (eref.dir() != TargetModel()->NodeRef()->ino())
+			if (eref.vdirectory() != TargetModel()->NodeRef()->vnode())
 				WatchNewNode(&nref, B_WATCH_STAT | B_WATCH_ATTR | B_WATCH_NAME
 					| B_WATCH_INTERIM_STAT, this);
 			newResolvedModel = new Model(&entry, true);
@@ -5769,7 +5772,7 @@ BPoseView::EntryMoved(const BMessage* message)
 	message->FindRef("virtual:to directory", &dirRef);
 	message->FindRef("virtual:from directory", &oldDir);
 
-	node_ref dirNode = node_ref(dirRef.dev(), dirRef.dir());
+	node_ref dirNode = node_ref(dirRef.vdevice(), dirRef.vdirectory());
 
 
 	const char* name;
@@ -5781,11 +5784,10 @@ BPoseView::EntryMoved(const BMessage* message)
 	// is different than that of the root directory; we have to do a
 	// lookup using the new volume name and get the volume device from there
 	StatStruct st;
-	const node_ref& dirReal = dirNode.dereference();
 	// get the inode of the root and check if we got a notification on it
 	if (stat("/", &st) >= 0
-		&& st.st_dev == dirReal.device
-		&& st.st_ino == dirReal.node) {
+		&& st.st_dev == dirNode.device()
+		&& st.st_ino == dirNode.node()) {
 		BString buffer;
 		buffer << "/" << name;
 		if (stat(buffer.String(), &st) >= 0) {
@@ -5800,7 +5802,7 @@ BPoseView::EntryMoved(const BMessage* message)
 	node_ref thisDirNode;
 	if (TargetModel()->IsTrash()) {
 		BDirectory trashDir;
-		if (FSGetTrashDir(&trashDir, itemNode.dev()) != B_OK)
+		if (FSGetTrashDir(&trashDir, itemNode.vdevice()) != B_OK)
 			return true;
 
 		trashDir.GetNodeRef(&thisDirNode);
@@ -5814,7 +5816,7 @@ BPoseView::EntryMoved(const BMessage* message)
 		assert_cast<BContainerWindow*>(Window())->UpdateTitle();
 	}
 
-	if (oldDir.dereference().dir() == dirReal.node || targetModel->IsQuery()
+	if (oldDir.directory() == dirNode.node() || targetModel->IsQuery()
 		|| targetModel->IsVirtualDirectory()) {
 		// rename or move of entry in this directory (or query)
 
@@ -5861,13 +5863,7 @@ BPoseView::EntryMoved(const BMessage* message)
 		}
 		if (pose != NULL)
 			pendingNodeMonitorCache.PoseCreatedOrMoved(this, pose);
-	} else if (oldDir.dereference().dir() == thisDirNode.dereference().ino()) {
-		// Primary lookup is by node_ref (itemNode). If that misses
-		// (e.g. the vref id in virtual:node doesn't match the one the
-		// pose was created with — happens for directories whose
-		// enumeration-time vref differs from the kernel's
-		// FS_MOVED_FROM vref), fall back to name-based lookup so the
-		// stale pose is still removed.
+	} else if (oldDir.directory() == thisDirNode.node()) {
 		int32 fallbackIndex;
 		BPose* fallbackPose = fPoseList->FindPose(&itemNode, &fallbackIndex);
 		if (fallbackPose == NULL && name != NULL && name[0] != '\0')
@@ -5878,7 +5874,7 @@ BPoseView::EntryMoved(const BMessage* message)
 		} else {
 			DeletePose(&itemNode);
 		}
-	} else if (dirNode.dereference().ino() == thisDirNode.dereference().ino()) {
+	} else if (dirNode.node() == thisDirNode.node()) {
 		EntryCreated(&dirNode, &itemNode, name);
 	}
 	TryUpdatingBrokenLinks();
@@ -6319,7 +6315,7 @@ CopyOneTrashedRefAsEntry(const entry_ref* ref, BObjectList<entry_ref, true>* tra
 		// volumes will get unmounted
 
 	// see if pose's device has a trash
-	int32 device = ref->dev();
+	int32 device = ref->vdevice();
 	BDirectory trashDir;
 
 	// cache up the result in a map so that we don't have to keep calling
@@ -6348,7 +6344,7 @@ CopyPoseOneAsEntry(BPose* pose, BObjectList<entry_ref, true>* trashList,
 static bool
 CheckVolumeReadOnly(const entry_ref* ref)
 {
-	BVolume volume (ref->dereference().dev());
+	BVolume volume (ref->device());
 	if (volume.IsReadOnly()) {
 		BAlert* alert = new BAlert("",
 			B_TRANSLATE("Files cannot be moved or deleted from a read-only "
@@ -8469,7 +8465,7 @@ BPoseView::CanUnmountSelection()
 		if (!model->IsVolume())
 			return false;
 
-		BVolume volume(model->NodeRef()->dereference().dev());
+		BVolume volume(model->NodeRef()->device());
 		if (volume.InitCheck() != B_OK)
 			continue;
 
@@ -8499,7 +8495,7 @@ BPoseView::UnmountSelectedVolumes()
 		if (!model->IsVolume())
 			continue;
 
-		BVolume volume(model->NodeRef()->dereference().dev());
+		BVolume volume(model->NodeRef()->device());
 		if (volume.InitCheck() != B_OK)
 			continue;
 
@@ -9031,7 +9027,7 @@ BPoseView::SelectedVolumeIsReadOnly() const
 			entry.SetTo(pose->TargetModel()->EntryRef());
 			if (FSGetParentVirtualDirectoryAware(entry, parent) == B_OK) {
 				parent.GetNodeRef(&nref);
-				volume.SetTo(nref.dereference().dev());
+				volume.SetTo(nref.device());
 				if (volume.InitCheck() == B_OK && volume.IsReadOnly())
 					return true;
 			}
@@ -9044,18 +9040,18 @@ BPoseView::SelectedVolumeIsReadOnly() const
 			return true;
 		} else if (pose->TargetModel()->IsVolume()) {
 			// determine if read-only based on pose's volume
-			volume.SetTo(pose->TargetModel()->NodeRef()->dereference().dev());
+			volume.SetTo(pose->TargetModel()->NodeRef()->device());
 		} else {
 			// determine if read-only based on pose's parent directory
 			entry.SetTo(pose->TargetModel()->EntryRef());
 			if (FSGetParentVirtualDirectoryAware(entry, parent) == B_OK) {
 				parent.GetNodeRef(&nref);
-				volume.SetTo(nref.dereference().dev());
+				volume.SetTo(nref.device());
 			}
 		}
 	} else {
 		// no items selected, check target volume instead
-		volume.SetTo(TargetModel()->NodeRef()->dereference().dev());
+		volume.SetTo(TargetModel()->NodeRef()->device());
 	}
 
 	return volume.InitCheck() == B_OK && volume.IsReadOnly();
@@ -9066,7 +9062,7 @@ bool
 BPoseView::TargetVolumeIsReadOnly() const
 {
 	Model* target = TargetModel();
-	BVolume volume(target->NodeRef()->dereference().dev());
+	BVolume volume(target->NodeRef()->device());
 
 	return target->IsQuery() || target->IsQueryTemplate() || target->IsVirtualDirectory()
 		|| (volume.InitCheck() == B_OK && volume.IsReadOnly());

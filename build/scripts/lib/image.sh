@@ -609,6 +609,13 @@ if ! getent passwd vos-live >/dev/null; then
     for g in sudo video render input plugdev nexus; do
         getent group \$g >/dev/null && adduser vos-live \$g || true
     done
+    # shadow-utils useradd copy_tree does not preserve user.* xattrs on
+    # all Debian versions, so BEOS:TYPE and friends on skel files get
+    # dropped — Tracker's \"New\" menu then can't identify templates and
+    # falls back to only \"New Folder\". Re-sync from /etc/skel with
+    # xattr-preserving cp to restore them.
+    cp -a --preserve=all /etc/skel/. /home/vos-live/
+    chown -R vos-live:vos-live /home/vos-live/
 fi
 # vos_login needs /dev/nexus for the pre-auth chain.
 getent group nexus >/dev/null && \\

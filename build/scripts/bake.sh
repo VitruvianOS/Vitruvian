@@ -20,10 +20,26 @@ Commands:
   clean                  Run ninja clean
   build                  Build and create image
   boot                   Boot existing image in QEMU (no rebuild)
+  create disk            Create a blank raw disk image (install target / USB)
+
+Create options:
+  --output=PATH          Where to write the image (required)
+  --size=SIZE            Disk size, qemu-img syntax, e.g. 16G (required)
 
 Boot options:
   --image-type=TYPE      Image type to boot (required)
   --arch=ARCH            Target architecture (reads from buildstate.conf if omitted)
+  --shared-folder=DIR    Expose host DIR to the guest as a mountable data volume
+                          (QEMU vvfat FAT disk; rw but fragile under heavy writes).
+                          This is a data share, NOT an install target.
+  --target-disk=PATH     Attach an existing disk image as an install target
+                          (make one with `bake create disk`). This is what the
+                          Installer sees as a destination volume.
+  --usb-disk=PATH        Attach PATH as a removable USB stick. A directory is
+                          exposed via vvfat; a file or block device is a raw disk.
+  --enable-console-log   Write serial output to vitruvian-console.log
+  --enable-console-stdout  Stream serial output to stdio (combine to tee)
+                          (shared-folder/usb-disk: amd64, arm64, riscv64)
 
 Build options:
   --image-type=TYPE      Image type(s), comma-separated: raw, iso, raspberry, rpi-arm32,
@@ -71,6 +87,9 @@ cmd_build() {
     _list_boards=0
     _console_log=0
     _console_stdout=0
+    _shared_folder=""
+    _usb_disk=""
+    _target_disk=""
 
     for arg in "$@"; do
         case "$arg" in
@@ -94,6 +113,15 @@ cmd_build() {
                 ;;
             --enable-console-stdout)
                 _console_stdout=1
+                ;;
+            --shared-folder=*)
+                _shared_folder="${arg#*=}"
+                ;;
+            --usb-disk=*)
+                _usb_disk="${arg#*=}"
+                ;;
+            --target-disk=*)
+                _target_disk="${arg#*=}"
                 ;;
             --help|-h)
                 usage
@@ -212,7 +240,7 @@ cmd_build() {
 
     if [ "$_run_qemu" -eq 1 ]; then
         # exactly one type at this point
-        for _t in $_types; do run_qemu "$BASEDIR" "$ARCH" "$_t" "$_console_log" "$_console_stdout"; done
+        for _t in $_types; do run_qemu "$BASEDIR" "$ARCH" "$_t" "$_console_log" "$_console_stdout" "$_shared_folder" "$_usb_disk" "$_target_disk"; done
     fi
 }
 
@@ -221,6 +249,9 @@ cmd_boot() {
     _arch=""
     _console_log=0
     _console_stdout=0
+    _shared_folder=""
+    _usb_disk=""
+    _target_disk=""
 
     for arg in "$@"; do
         case "$arg" in
@@ -235,6 +266,15 @@ cmd_boot() {
                 ;;
             --enable-console-stdout)
                 _console_stdout=1
+                ;;
+            --shared-folder=*)
+                _shared_folder="${arg#*=}"
+                ;;
+            --usb-disk=*)
+                _usb_disk="${arg#*=}"
+                ;;
+            --target-disk=*)
+                _target_disk="${arg#*=}"
                 ;;
             --help|-h)
                 usage
@@ -270,7 +310,39 @@ cmd_boot() {
             ;;
     esac
 
-    run_qemu "$BASEDIR" "$ARCH" "$_image_type" "$_console_log" "$_console_stdout"
+    run_qemu "$BASEDIR" "$ARCH" "$_image_type" "$_console_log" "$_console_stdout" \
+        "$_shared_folder" "$_usb_disk" "$_target_disk"
+}
+
+cmd_create() {
+    _what="${1:-}"
+    [ -n "$_what" ] && shift
+    case "$_what" in
+        disk) ;;
+        ""|--help|-h) die "Usage: bake create disk --output=PATH --size=SIZE" ;;
+        *) die "Unknown create target: $_what (only 'disk' is supported)" ;;
+    esac
+
+    _output=""
+    _size=""
+    for arg in "$@"; do
+        case "$arg" in
+            --output=*) _output="${arg#*=}" ;;
+            --size=*)   _size="${arg#*=}" ;;
+            --help|-h)  die "Usage: bake create disk --output=PATH --size=SIZE" ;;
+            *)          die "Unknown option: $arg" ;;
+        esac
+    done
+
+    [ -n "$_output" ] || die "Missing --output=PATH"
+    [ -n "$_size" ] || die "Missing --size=SIZE (e.g. --size=16G)"
+    [ -e "$_output" ] && die "refusing to overwrite existing file: $_output"
+
+    require_cmd qemu-img "qemu-utils"
+    log_step "Creating blank $_size disk image: $_output"
+    qemu-img create -f raw "$_output" "$_size" >/dev/null \
+        || die "failed to create disk image: $_output"
+    log_info "Attach it with: bake boot --image-type=iso --target-disk=$_output"
 }
 
 [ $# -eq 0 ] && usage
@@ -288,7 +360,10 @@ case "$_cmd" in
     boot)
         cmd_boot "$@"
         ;;
+    create)
+        cmd_create "$@"
+        ;;
     *)
-        die "Unknown command: $_cmd (use 'clean', 'build', or 'boot')"
+        die "Unknown command: $_cmd (use 'clean', 'build', 'boot', or 'create')"
         ;;
 esac

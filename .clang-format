@@ -1,0 +1,75 @@
+---
+# VitruvianOS / Haiku-style Coding Guidelines
+Language: Cpp
+
+# Indentation: Use tabs, not spaces. A tab displays as 4 characters.
+UseTab: Always
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
+
+# Pointers and references: Attach * and & to the type, not the variable.
+PointerAlignment: Left
+
+# Control flow: always on its own line.
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: false
+
+# Braces: Opening braces go on their own line for function and class definitions. 
+# For control flow (if, for, while), the brace goes at the end of the line.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterStruct: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterControlStatement: false
+  AfterNamespace: false
+  AfterUnion: true
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+
+# Function return types go on the line above the qualified name (for definitions).
+AlwaysBreakAfterReturnType: AllDefinitions
+
+# Alignment settings for continuation lines
+AlignAfterOpenBracket: Align
+AlignOperands: Align
+AlignTrailingComments: true
+
+# Include order grouping
+# 1. Own header (handled automatically by clang-format)
+# 2. C system
+# 3. C++ system
+# 4. Project public (BeOS API)
+# 5. Project private ("")
+IncludeBlocks: Regroup
+IncludeCategories:
+  # C++ system headers (typically no extension)
+  - Regex:           '^<[^.]*>$'
+    Priority:        3
+  # C system headers and Project Public (BeOS API) headers 
+  # Note: distinguishing standard C headers from BeOS <...h> headers via regex alone is tricky, 
+  # but they both fall under system-level <> includes.
+  - Regex:           '^<.*\.h>$'
+    Priority:        2
+  # Project private headers (" ")
+  - Regex:           '^".*"'
+    Priority:        5
+
+# General spacing & line breaks
+MaxEmptyLinesToKeep: 2
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+# No unnecessary visual grouping - formatting will mostly leave scopes alone
+# but we prevent clang-format from inserting spaces before assignment
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInCStyleCastParentheses: false
+...

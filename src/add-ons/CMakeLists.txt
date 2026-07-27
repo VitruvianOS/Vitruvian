@@ -1,4 +1,6 @@
 add_subdirectory(input_server)
-add_subdirectory(opengl)
+if(VITRUVIAN_ENABLE_OPENGL)
+	add_subdirectory(opengl)
+endif()
 add_subdirectory(tracker)
 add_subdirectory(translators)

@@ -48,8 +48,8 @@ done
 ARCH="${ARCH:-amd64}"
 
 case "$ARCH" in
-    amd64|arm64|arm32|riscv64) ;;
-    *) die "Unsupported architecture: $ARCH (use amd64, arm64, arm32, riscv64)" ;;
+    amd64|arm64|arm32|riscv64|sparc64) ;;
+    *) die "Unsupported architecture: $ARCH (use amd64, arm64, arm32, riscv64, sparc64)" ;;
 esac
 
 BASEDIR="$(realpath ./)"

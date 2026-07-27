@@ -19,7 +19,6 @@ set(SYSTEM_APPS
 	#DriveSetup
 	Expander
 	FirstBootPrompt
-	GLTeapot
 	Installer
 	LaunchBox
 	Magnify
@@ -32,6 +31,9 @@ set(SYSTEM_APPS
 	#TextSearch
 	Workspaces
 )
+if(VITRUVIAN_ENABLE_OPENGL)
+	list(APPEND SYSTEM_APPS GLTeapot)
+endif()
 ImageInclude("/system/apps" ${SYSTEM_APPS})
 
 install(CODE "

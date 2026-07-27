@@ -4,3 +4,4 @@ Makefile.in
 .*.sw*
 *.out
 generated*
+buildtools

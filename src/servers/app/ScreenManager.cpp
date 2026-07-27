@@ -32,7 +32,9 @@ using std::nothrow;
 #	include "AccelerantHWInterface.h"
 #else
 //#	include "SDLInterface.h"
+#ifdef VITRUVIAN_ENABLE_DRM
 #	include "DrmHWInterface.h"
+#endif
 #	include "FBDevHWInterface.h"
 #endif
 #else
@@ -219,6 +221,7 @@ ScreenManager::_ScanDrivers()
 		interface = new AccelerantHWInterface();
 	#else
 		//interface = new SDLInterface();
+#ifdef VITRUVIAN_ENABLE_DRM
 		DrmHWInterface* drm = new(nothrow) DrmHWInterface();
 		if (drm != NULL && drm->InitCheck() == B_OK) {
 			interface = drm;
@@ -227,6 +230,9 @@ ScreenManager::_ScanDrivers()
 			delete drm;
 			interface = new(nothrow) FBDevHWInterface();
 		}
+#else
+		interface = new(nothrow) FBDevHWInterface();
+#endif
 #endif
 
 		_AddHWInterface(interface);

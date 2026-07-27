@@ -1,19 +1,31 @@
 find_package(Freetype REQUIRED)
 
-find_library(DRM_LIBRARY NAMES drm)
-find_path(DRM_INCLUDE_DIR NAMES libdrm/drm.h)
-
 # TODO would be cool if DeclareDependency in deps.cmake accepted
 # a parameter that will use PkgConfig automatically when available
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBSEAT REQUIRED IMPORTED_TARGET libseat)
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
-pkg_check_modules(GBM gbm)
 
-if(GBM_FOUND)
+set(APP_SERVER_DRM_SOURCES)
+set(APP_SERVER_DRM_LIBS)
+set(APP_SERVER_DRM_INCLUDES)
+
+if(VITRUVIAN_ENABLE_DRM)
+	find_library(DRM_LIBRARY REQUIRED NAMES drm)
+	find_path(DRM_INCLUDE_DIR REQUIRED NAMES libdrm/drm.h)
+	pkg_check_modules(GBM REQUIRED gbm)
 	add_definitions(-DHAVE_GBM)
-endif()
+	add_definitions(-DVITRUVIAN_ENABLE_DRM)
 
+	list(APPEND APP_SERVER_DRM_SOURCES
+		drawing/interface/linux/drm/DrmHWInterface.cpp
+		drawing/interface/linux/drm/DrmBuffer.cpp
+		drawing/interface/linux/drm/modeset.c
+	)
+	list(APPEND APP_SERVER_DRM_LIBS ${DRM_LIBRARY} ${GBM_LIBRARIES})
+	list(APPEND APP_SERVER_DRM_INCLUDES ${DRM_INCLUDE_DIR}/libdrm/
+		${GBM_INCLUDE_DIRS} "./drawing/interface/linux/drm")
+endif()
 
 Server(
 	app_server
@@ -116,9 +128,7 @@ Server(
 		#drawing/interface/local/AccelerantBuffer.cpp
 		#drawing/interface/local/AccelerantHWInterface.cpp
 
-		drawing/interface/linux/drm/DrmHWInterface.cpp
-		drawing/interface/linux/drm/DrmBuffer.cpp
-		drawing/interface/linux/drm/modeset.c
+		${APP_SERVER_DRM_SOURCES}
 
 		drawing/interface/linux/fbdev/FBDevHWInterface.cpp
 		drawing/interface/linux/fbdev/FBDevBuffer.cpp
@@ -140,19 +150,17 @@ Server(
 
 	LIBS localestub shared agg icon linprog ${FREETYPE_LIBRARY}
 		${UDEV_LIBRARIES} ${DRM_LIBRARIES} ${SEAT_LIBRARIES}
-		${LIBEVDEV_LIBRARIES} ${GBM_LIBRARIES} backlight
+		${LIBEVDEV_LIBRARIES} ${APP_SERVER_DRM_LIBS} backlight
 
 	RDEF app_server.rdef
 
 	INCLUDES
-	${DRM_INCLUDE_DIR}/libdrm/
 	${FREETYPE_INCLUDE_DIRS}
 	${LIBEVDEV_INCLUDE_DIRS}
-	${GBM_INCLUDE_DIRS}
 	"${PROJECT_SOURCE_DIR}/src/libs/backlight/"
+	${APP_SERVER_DRM_INCLUDES}
 	"./drawing"
 	"./drawing/interface/linux"
-	"./drawing/interface/linux/drm"
 	"./drawing/interface/linux/fbdev"
 	"./drawing/interface/local"
 	"./drawing/interface/remote"

@@ -38,6 +38,8 @@ endif()
 # TODO: get rid of runtime loader
 UsePrivateHeaders(root app shared libroot2 system kernel runtime_loader)
 
-add_subdirectory(kernel)
+if(VITRUVIAN_ENABLE_NEXUS)
+	add_subdirectory(kernel)
+endif()
 add_subdirectory(libroot)
 add_subdirectory(libroot2)

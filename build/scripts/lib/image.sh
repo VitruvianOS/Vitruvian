@@ -417,6 +417,10 @@ PermitEmptyPasswords no
 EOF
 chmod 0644 /etc/ssh/sshd_config.d/debug.conf
 chown root:root /etc/ssh/sshd_config.d/debug.conf
+# _common_chroot_setup locks root (passwd -l). For debug images we advertise
+# "root / password: live" over SSH, so actually set (and thereby unlock) it —
+# chpasswd replaces the "!"-locked field with a valid hash.
+echo 'root:live' | chpasswd
 mkdir -p /root/.ssh
 chmod 0700 /root/.ssh
 chown root:root /root/.ssh

@@ -52,9 +52,22 @@ if(VITRUVIAN_CHROOT_BUILD)
 
     set(CMAKE_FIND_ROOT_PATH "${VITRUVIAN_CHROOT_PATH}")
     set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
-    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
-    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+    # Resolve libraries/headers/packages ONLY from the chroot sysroot, never the
+    # host. The chroot carries every build -dev package (see packages.sh
+    # get_dev_packages), so host fallback only causes harm: on a host with a
+    # newer glibc than the chroot, a host .so (e.g. libpam, libm) drags in
+    # symbol versions the target glibc lacks (GLIBC_2.43 vs trixie's 2.41) and
+    # the binary fails to start. PROGRAM stays NEVER — build tools are the host's.
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+
+    # Anchor find_package(ICU) to the chroot. The global -isystem below makes
+    # <unicode/*> resolve to the chroot's ICU (76 on trixie), so its libraries
+    # must come from the chroot too. Without this, on a host whose ICU major
+    # differs (e.g. Ubuntu 26.04 ships ICU 78), find_package resolves ICU_LIBRARIES
+    # to the host .so and every icu_NN-namespaced symbol goes undefined at link.
+    set(ICU_ROOT "${VITRUVIAN_CHROOT_PATH}/usr")
 
     set(HEADERS_PATH_BASE "${VITRUVIAN_CHROOT_PATH}/usr/include"
         CACHE PATH "Base path for system headers")
@@ -78,8 +91,22 @@ if(VITRUVIAN_CHROOT_BUILD)
     # Without this, ld silently falls through to the host's /usr/lib when
     # verifying NEEDED entries, which works only when the host's library
     # versions happen to match the chroot's (e.g. ICU 76 on Debian trixie).
-    set(_chroot_rpath_link "${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}:${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}:${VITRUVIAN_CHROOT_PATH}/usr/lib")
+    # Only the multiarch system dirs go here — NOT ${chroot}/usr/lib, which is
+    # where a prior image build installs VOS's own libs (libbe, libmedia2, …).
+    # Including it would let a stale installed copy shadow the freshly built
+    # one during indirect resolution; VOS libs must come from the build tree
+    # (per-target rpath-link entries CMake adds for src/kits/*).
+    set(_chroot_rpath_link "${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}:${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}")
     add_link_options("-Wl,-rpath-link=${_chroot_rpath_link}")
+
+    # Link the implicit C runtime (crt*.o, libc, libm) from the chroot so glibc
+    # symbol *versions* bind to the target's glibc, not the host's. On a host
+    # with a newer glibc than the chroot (e.g. Ubuntu 26.04 = 2.43 vs trixie =
+    # 2.41), plain math symbols like sqrtf/atan2f would otherwise pin to
+    # sqrtf@GLIBC_2.43 and fail at runtime with "version GLIBC_2.43 not found".
+    # libstdc++ still comes from the host gcc (its GLIBCXX use here stays within
+    # what the chroot provides), so we scope this to the C runtime via --sysroot.
+    add_link_options("--sysroot=${VITRUVIAN_CHROOT_PATH}")
 
     set(CMAKE_SKIP_RPATH TRUE)
 

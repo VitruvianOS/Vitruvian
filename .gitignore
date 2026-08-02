@@ -4,3 +4,10 @@ Makefile.in
 .*.sw*
 *.out
 generated*
+
+# Host buildtools tree (./configure --build-buildtools)
+/buildtools/
+
+# IDEs
+.idea/
+.vscode/

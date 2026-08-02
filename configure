@@ -114,8 +114,9 @@ fi
 # or --arch skips it. Cross-compilation always requires --arch.
 if [ -z "$TARGET_ARCH" ]; then
     if [ -f ./buildstate.conf ]; then
-        . ./buildstate.conf
-        TARGET_ARCH="${ARCH:-}"
+        # Read ARCH in a subshell so sourcing buildstate.conf can't clobber
+        # CLI-set variables (notably CHROOT_BUILD from --chroot-build).
+        TARGET_ARCH="$(. ./buildstate.conf && printf '%s' "${ARCH:-}")"
     fi
 fi
 if [ -z "$TARGET_ARCH" ]; then
@@ -153,7 +154,16 @@ fi
 
 if [ -f ./CMakeCache.txt ]; then
     _cached_arch="$(grep -m1 '^VITRUVIAN_TARGET_ARCH:' ./CMakeCache.txt | cut -d= -f2)"
-    if [ -n "$_cached_arch" ] && [ "$_cached_arch" != "$TARGET_ARCH" ]; then
+    # Normalize the cached arch to the same setupenv form as _setup_arch so
+    # equivalent names (e.g. x86_64/amd64) don't trigger a false mismatch.
+    case "$_cached_arch" in
+        amd64|x86_64)    _cached_setup_arch=amd64 ;;
+        arm64)           _cached_setup_arch=arm64 ;;
+        arm32|armhf|arm) _cached_setup_arch=arm32 ;;
+        riscv64)         _cached_setup_arch=riscv64 ;;
+        *)               _cached_setup_arch="$_cached_arch" ;;
+    esac
+    if [ -n "$_cached_arch" ] && [ "$_cached_setup_arch" != "$_setup_arch" ]; then
         echo "Error: build tree was configured for $_cached_arch but current arch is $TARGET_ARCH."
         echo "Remove this generated directory and start fresh."
         exit 1

@@ -51,6 +51,14 @@ load_buildstate() {
 
     if [ -f "$BASEDIR/CMakeCache.txt" ]; then
         _cached_arch="$(grep -m1 '^VITRUVIAN_TARGET_ARCH:' "$BASEDIR/CMakeCache.txt" | cut -d= -f2)"
+        # Normalize the cmake arch to the setupenv form (buildstate ARCH) so
+        # equivalent names (e.g. x86_64/amd64) don't trigger a false mismatch.
+        case "$_cached_arch" in
+            amd64|x86_64)    _cached_arch=amd64 ;;
+            arm64)           _cached_arch=arm64 ;;
+            arm32|armhf|arm) _cached_arch=arm32 ;;
+            riscv64)         _cached_arch=riscv64 ;;
+        esac
         if [ -n "$_cached_arch" ] && [ "$_cached_arch" != "$ARCH" ]; then
             die "Arch mismatch: buildstate.conf says $ARCH but cmake was configured for $_cached_arch. Remove this generated directory and start fresh."
         fi

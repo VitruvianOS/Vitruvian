@@ -174,6 +174,19 @@ macro( Application name )
 
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h")
 
+	# Replicants: BShelf revives an archived BView by dlopen()ing the donor
+	# application and resolving its instantiation function (the load_add_on
+	# path of instantiate_object). Applications therefore must export their
+	# symbols, and must stay dlopen-able: glibc refuses any object whose
+	# DT_FLAGS_1 carries DF_1_PIE, so that marker is cleared after linking
+	# (the kernel ignores it; execve/ASLR are unaffected). This also covers
+	# the dual-mode translator TODO above.
+	target_link_options(${name} PRIVATE "-Wl,--export-dynamic")
+	add_custom_command(TARGET ${name} POST_BUILD
+		COMMAND python3 "${CMAKE_SOURCE_DIR}/build/scripts/clear_df1_pie.py" "$<TARGET_FILE:${name}>"
+		COMMENT "Clearing DF_1_PIE on ${name}"
+	)
+
 	foreach( RDEF_FILE ${_APPLICATION_RDEF} )
 		CompileRdef(${name} ${RDEF_FILE} STAGING)
 	endforeach()

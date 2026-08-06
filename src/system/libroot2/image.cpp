@@ -29,6 +29,13 @@ struct FindByBaseState {
 	int32		current;
 };
 
+struct FindNameState {
+	int32		target;
+	int32		current;
+	bool		found;
+	char		name[B_PATH_NAME_LENGTH];
+};
+
 
 class ImagePool {
 public:
@@ -85,6 +92,8 @@ public:
 
 		void* handle = _Find(id);
 		if (handle == NULL)
+			handle = _OpenEnumerated(id);
+		if (handle == NULL)
 			return B_ERROR;
 
 		void* symbol = dlsym(handle, name);
@@ -106,6 +115,54 @@ private:
 		return it->second;
 	}
 
+	// Resolve a handle for an image that was enumerated via
+	// get_next_image_info() but never went through load_add_on(): the
+	// running program itself, libbe, and every other already-mapped
+	// library. IDs share one numbering (dl_iterate_phdr index + 1) with
+	// Load(), so the index can be walked directly. The image is already
+	// mapped, hence RTLD_NOLOAD only bumps a refcount; handles are cached
+	// and never dlclose()d — these images belong to the process, not to
+	// the add-on pool (Unload() intentionally cannot reach them). This is
+	// what instantiate_object() relies on when reviving archived views:
+	// the in-team pass walks all images looking for the instantiation
+	// function, including classes living in libbe or the app binary.
+	static void* _OpenEnumerated(image_id id) {
+		auto it = fEnumerated.find(id);
+		if (it != fEnumerated.end())
+			return it->second;
+
+		FindNameState state = {(int32)id - 1, 0, false, {0}};
+		dl_iterate_phdr([](struct dl_phdr_info* phdr, size_t size,
+				void* data) -> int {
+			FindNameState* s = (FindNameState*)data;
+			if (s->current != s->target) {
+				s->current++;
+				return 0;
+			}
+			if (phdr->dlpi_name != NULL)
+				strlcpy(s->name, phdr->dlpi_name, sizeof(s->name));
+			s->found = true;
+			return 1;
+		}, &state);
+
+		if (!state.found)
+			return NULL;
+
+		void* handle;
+		if (state.name[0] == '\0') {
+			// The main program: dlopen(NULL) hands out its global handle.
+			handle = dlopen(NULL, RTLD_LAZY);
+		} else {
+			// Anything else (the vdso, for one) that RTLD_NOLOAD cannot
+			// open simply has no reachable symbols; callers iterate on.
+			handle = dlopen(state.name, RTLD_LAZY | RTLD_NOLOAD);
+		}
+
+		if (handle != NULL)
+			fEnumerated[id] = handle;
+		return handle;
+	}
+
 	static image_id _FindIndexByBase(ElfW(Addr) base) {
 		FindByBaseState state = {base, -1, 0};
 		dl_iterate_phdr([](struct dl_phdr_info* phdr, size_t size,
@@ -124,11 +181,13 @@ private:
 	}
 
 	static std::map<image_id, void*> fLoadedAddOns;
+	static std::map<image_id, void*> fEnumerated;
 	static pthread_mutex_t fLock;
 };
 
 
 std::map<image_id, void*> ImagePool::fLoadedAddOns;
+std::map<image_id, void*> ImagePool::fEnumerated;
 pthread_mutex_t ImagePool::fLock = PTHREAD_MUTEX_INITIALIZER;
 
 

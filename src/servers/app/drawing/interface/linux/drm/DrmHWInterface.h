@@ -212,6 +212,7 @@ private:
 			// and current is cleared.
 			BRegion				fAccumulatedDirty;
 			BRegion				fPreviousDirty;
+			bool				fNeedsFlip;
 			pthread_mutex_t		fDirtyMutex;
 
 			int					fWakeFd;

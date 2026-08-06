@@ -71,6 +71,7 @@ DrmHWInterface::DrmHWInterface()
 	fRenderBuffer(NULL),
 	fPageFlipEnabled(false),
 	fPageFlipPending(false),
+	fNeedsFlip(false),
 	fWakeFd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
 	fDpmsState(B_DPMS_ON),
 	fBacklight(NULL),
@@ -216,6 +217,7 @@ DrmHWInterface::_OnSessionEnable()
 	pthread_mutex_lock(&fDirtyMutex);
 	fAccumulatedDirty.MakeEmpty();
 	fPreviousDirty.MakeEmpty();
+	fNeedsFlip = false;
 	pthread_mutex_unlock(&fDirtyMutex);
 
 	if (modeset_create_back_fb(fFd, get_dev()) == 0) {
@@ -336,6 +338,7 @@ DrmHWInterface::_OnSessionDisable()
 	pthread_mutex_lock(&fDirtyMutex);
 	fAccumulatedDirty.MakeEmpty();
 	fPreviousDirty.MakeEmpty();
+	fNeedsFlip = false;
 	pthread_mutex_unlock(&fDirtyMutex);
 
 	if (fFd >= 0)
@@ -379,10 +382,12 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	unsigned int sec, unsigned int usec, void* data)
 {
 	DrmHWInterface* hw = static_cast<DrmHWInterface*>(data);
-	hw->fPageFlipPending = false;
 
+	// Swap before clearing the flag, or CopyBackToFront() writes into the
+	// buffer the CRTC just started scanning out.
 	std::swap(hw->fFrontBuffer, hw->fBackBuffer);
 	hw->fWriteTarget = hw->fBackBuffer;
+	hw->fPageFlipPending = false;
 
 	if (hw->fRenderBuffer == NULL)
 		return;
@@ -399,6 +404,9 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 		toBlit.Include(&hw->fAccumulatedDirty);
 	hw->fPreviousDirty = hw->fAccumulatedDirty;
 	hw->fAccumulatedDirty.MakeEmpty();
+	// Damage copied while this flip was in flight reached the buffer that
+	// just left the screen; ask for a follow-up flip.
+	hw->fNeedsFlip = (hw->fPreviousDirty.CountRects() > 0);
 	pthread_mutex_unlock(&hw->fDirtyMutex);
 
 	if (toBlit.CountRects() > 0) {
@@ -512,7 +520,8 @@ DrmHWInterface::_EventThreadMain()
 				&& fBackBuffer != NULL
 				&& fDpmsState == B_DPMS_ON) {
 			pthread_mutex_lock(&fDirtyMutex);
-			bool hasDirty = (fAccumulatedDirty.CountRects() > 0);
+			bool hasDirty = (fAccumulatedDirty.CountRects() > 0)
+				|| fNeedsFlip;
 			pthread_mutex_unlock(&fDirtyMutex);
 
 			if (hasDirty) {
@@ -526,13 +535,23 @@ DrmHWInterface::_EventThreadMain()
 						fWriteTarget->GetFbId(),
 						DRM_MODE_PAGE_FLIP_EVENT, this);
 				}
-				if (r == 0)
+				if (r == 0) {
 					fPageFlipPending = true;
-				else {
 					pthread_mutex_lock(&fDirtyMutex);
-					fAccumulatedDirty.MakeEmpty();
-					fPreviousDirty.MakeEmpty();
+					fNeedsFlip = false;
 					pthread_mutex_unlock(&fDirtyMutex);
+				} else {
+					// EBUSY is routine on real hardware. Keep the
+					// damage and retry; dropping it here leaves that
+					// region alternating between the two buffers.
+					// Do not reclaim the DRM master on EACCES: losing
+					// it means another app_server is taking over.
+					static bool sReported = false;
+					if (!sReported) {
+						fprintf(stderr, "[drm] page flip failed "
+							"(%s); retrying\n", strerror(errno));
+						sReported = true;
+					}
 				}
 			}
 		}
@@ -769,6 +788,7 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	pthread_mutex_lock(&fDirtyMutex);
 	fAccumulatedDirty.MakeEmpty();
 	fPreviousDirty.MakeEmpty();
+	fNeedsFlip = false;
 	pthread_mutex_unlock(&fDirtyMutex);
 
 	if (modeset_create_back_fb(fFd, dev) == 0) {

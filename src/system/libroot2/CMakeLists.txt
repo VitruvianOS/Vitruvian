@@ -58,7 +58,8 @@ target_sources(root PRIVATE
 	posix/strndup.c
 )
 
-target_compile_definitions(root PRIVATE ENABLE_VREF_TRACKING)
+# Debug-only vref tracing, off by default: set VREF_TRACE=/dir and re-add this.
+# target_compile_definitions(root PRIVATE ENABLE_VREF_TRACKING)
 
 add_dependencies(root nexus)
 

@@ -10,7 +10,8 @@ AddOn(
 UsePrivateHeaders(be app interface kernel print shared locale libroot shared system)
 
 target_compile_options(be PRIVATE -std=c++17)
-target_compile_definitions(be PRIVATE ENABLE_VREF_TRACKING)
+# Debug-only vref tracing, off by default: set VREF_TRACE=/dir and re-add this.
+# target_compile_definitions(be PRIVATE ENABLE_VREF_TRACKING)
 
 AddOn(
 	be_bootstrap

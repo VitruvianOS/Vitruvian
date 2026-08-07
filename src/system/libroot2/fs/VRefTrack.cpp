@@ -37,9 +37,12 @@ static pthread_mutex_t sLock = PTHREAD_MUTEX_INITIALIZER;
 static void
 _init_locked()
 {
+	// Opt-in only: tracking is active solely when VREF_TRACE names a directory.
 	const char* dir = getenv("VREF_TRACE");
-	if (dir == NULL || dir[0] == '\0')
-		dir = "/tmp";
+	if (dir == NULL || dir[0] == '\0') {
+		sState.store(-1);
+		return;
+	}
 
 	mkdir(dir, 01777);
 

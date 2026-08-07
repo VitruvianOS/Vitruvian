@@ -1,3 +1,8 @@
+# TODO: MethodReplicant lives in this binary and Deskbar load_add_on()s it via
+# INPUTSERVER_SIGNATURE to instantiate the input-method replicant. A plain Server
+# is not a dlopen-able ET_DYN, so that lookup fails (grey zombie). Either switch
+# this to RunnableAddOn (make the server itself runnable+dlopen-able) or extract
+# MethodReplicant into its own add-on .so and archive add_on against that instead.
 Server(
 	input_server
 

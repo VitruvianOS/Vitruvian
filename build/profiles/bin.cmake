@@ -17,15 +17,11 @@
 	listport
 	listsem
 	lsindex
-	mount
 	prio
-	printenv
 	rmattr
 	rmindex
 	system_time
 	unchop
-	unmount
-	beep
 	catattr
 	clipboard
 	diskimage
@@ -43,7 +39,6 @@
 	mvattr
 	quit
 	roster
-	shutdown
 	trash
 	version
 	WindowShade

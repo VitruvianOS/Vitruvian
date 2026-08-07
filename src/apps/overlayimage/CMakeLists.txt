@@ -1,4 +1,4 @@
-Application(OverlayImage
+RunnableAddOn(OverlayImage
 	SOURCES
 	OverlayApp.cpp
 	OverlayView.cpp

@@ -1,4 +1,4 @@
-Application(Pulse
+RunnableAddOn(Pulse
 	SOURCES
 	ConfigView.cpp
 	CPUButton.cpp

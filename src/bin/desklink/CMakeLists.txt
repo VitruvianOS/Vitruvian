@@ -1,4 +1,4 @@
-Application(desklink
+RunnableAddOn(desklink
 	SOURCES
 	desklink.cpp
 	DeskButton.cpp

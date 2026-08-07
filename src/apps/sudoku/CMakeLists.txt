@@ -1,4 +1,4 @@
-Application(
+RunnableAddOn(
 	Sudoku
 
 	SOURCES

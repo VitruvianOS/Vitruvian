@@ -1,4 +1,4 @@
-Application(ActivityMonitor
+RunnableAddOn(ActivityMonitor
 	SOURCES
 	ActivityMonitor.cpp
 	ActivityView.cpp

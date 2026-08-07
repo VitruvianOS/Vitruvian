@@ -1,4 +1,4 @@
-Application(AutoRaise
+RunnableAddOn(AutoRaise
 	SOURCES
 	AutoRaiseApp.cpp
 	AutoRaiseIcon.cpp

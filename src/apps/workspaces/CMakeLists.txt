@@ -1,4 +1,4 @@
-Application(Workspaces
+RunnableAddOn(Workspaces
 	SOURCES Workspaces.cpp
 	LIBS shared localestub
 	RDEF Workspaces.rdef

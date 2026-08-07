@@ -1,4 +1,4 @@
-Application(ProcessController
+RunnableAddOn(ProcessController
 	SOURCES
 	AutoIcon.cpp
 	IconMenuItem.cpp

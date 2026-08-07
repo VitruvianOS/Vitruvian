@@ -1,4 +1,4 @@
-Application(PowerStatus
+RunnableAddOn(PowerStatus
 	SOURCES
 	ACPIDriverInterface.cpp
 	APMDriverInterface.cpp

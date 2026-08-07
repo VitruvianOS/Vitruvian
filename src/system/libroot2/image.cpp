@@ -36,8 +36,6 @@ public:
 		if (path == NULL)
 			return B_BAD_VALUE;
 
-		MutexLocker _(&fLock);
-
 		void* handle = dlopen(path, RTLD_LAZY);
 		if (handle == NULL)
 			return B_ERROR;
@@ -54,6 +52,7 @@ public:
 			return B_ERROR;
 		}
 
+		MutexLocker _(&fLock);
 		fLoadedAddOns[id] = handle;
 		return id;
 	}
@@ -85,16 +84,15 @@ public:
 
 		void* handle = _Find(id);
 		if (handle == NULL)
+			handle = _BorrowHandle(id);
+		if (handle == NULL)
 			return B_ERROR;
 
 		void* symbol = dlsym(handle, name);
 		if (symbol == NULL)
-			symbol = dlsym(RTLD_DEFAULT, name);
-		if (symbol == NULL)
 			return B_ERROR;
 
 		*pptr = symbol;
-
 		return B_OK;
 	}
 
@@ -104,6 +102,32 @@ private:
 		if (it == fLoadedAddOns.end())
 			return NULL;
 		return it->second;
+	}
+
+	static void* _BorrowHandle(image_id id) {
+		auto it = fBorrowed.find(id);
+		if (it != fBorrowed.end())
+			return it->second;
+
+		image_info info;
+		if (::_get_image_info(id, &info, sizeof(info)) != B_OK)
+			return NULL;
+
+		void* handle = NULL;
+		if (info.type == B_APP_IMAGE) {
+			// Main program. MUST use dlopen(NULL) — dlopen'ing the exe by path
+			// would try to load it as a library and hit glibc's DF_1_PIE wall.
+			handle = dlopen(NULL, RTLD_LAZY);
+		} else if (info.name[0] != '\0') {
+			// Already-loaded shared object (libbe, ...). RTLD_NOLOAD returns
+			// the existing handle without reloading.
+			handle = dlopen(info.name, RTLD_NOLOAD | RTLD_LAZY);
+		}
+		if (handle == NULL)
+			return NULL;
+
+		fBorrowed[id] = handle;
+		return handle;
 	}
 
 	static image_id _FindIndexByBase(ElfW(Addr) base) {
@@ -124,11 +148,15 @@ private:
 	}
 
 	static std::map<image_id, void*> fLoadedAddOns;
+
+	// Handles for already-loaded, non-add-on images
+	static std::map<image_id, void*> fBorrowed;
 	static pthread_mutex_t fLock;
 };
 
 
 std::map<image_id, void*> ImagePool::fLoadedAddOns;
+std::map<image_id, void*> ImagePool::fBorrowed;
 pthread_mutex_t ImagePool::fLock = PTHREAD_MUTEX_INITIALIZER;
 
 

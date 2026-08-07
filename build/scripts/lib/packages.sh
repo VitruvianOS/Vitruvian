@@ -6,24 +6,27 @@ get_base_packages() {
         amd64)
             printf '%s' \
                 "apt-utils dialog linux-image-rt-amd64 systemd-sysv" \
+                " polkitd pkexec sudo dbus-user-session" \
                 " network-manager net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
-                " grub-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin"
+                " grub-common grub2-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin"
             ;;
         arm64)
             printf '%s' \
                 "apt-utils dialog linux-image-arm64 systemd-sysv" \
+                " polkitd pkexec sudo dbus-user-session" \
                 " network-manager net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
-                " grub-common grub-efi-arm64-bin"
+                " grub-common grub2-common grub-efi-arm64-bin"
             ;;
         arm32)
             printf '%s' \
                 "apt-utils dialog linux-image-armmp systemd-sysv" \
+                " polkitd pkexec sudo dbus-user-session" \
                 " network-manager net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping" \
                 " fortune-mod ncurses-bin rsync" \
@@ -33,11 +36,12 @@ get_base_packages() {
         riscv64)
             printf '%s' \
                 "apt-utils dialog linux-image-riscv64 systemd-sysv" \
+                " polkitd pkexec sudo dbus-user-session" \
                 " network-manager net-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
-                " grub-common grub-efi-riscv64-bin"
+                " grub-common grub2-common grub-efi-riscv64-bin"
             ;;
         *)
             die "No package list for architecture: $_arch"
@@ -120,12 +124,6 @@ get_raw_image_packages() {
     _arch="$1"
     case "$_arch" in
         amd64)
-            # grub-common + grub2-common provide update-grub / grub-mkstandalone.
-            # grub-efi-amd64-bin + grub-pc-bin ship the EFI and BIOS modules we embed
-            # via grub-mkstandalone. We intentionally do NOT install the signed grub
-            # or shim — Secure Boot is not required for our QEMU build, and signed
-            # grub's hard-coded /EFI/debian prefix makes it unsuitable as the
-            # /EFI/BOOT/BOOTX64.EFI fallback used by removable-media boot.
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
                 " linux-image-rt-amd64 grub-common grub2-common" \

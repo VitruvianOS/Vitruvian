@@ -17,6 +17,7 @@
 
 
 class BMenu;
+class ProgressReporter;
 
 
 class WorkerThread : public BLooper {
@@ -26,9 +27,10 @@ public:
 
 	virtual	void				MessageReceived(BMessage* message);
 
-			void				ScanDisksPartitions(BMenu* dstMenu);
+		void				ScanDisksPartitions(BMenu* dstMenu,
+								BMenu* efiMenu = NULL);
 
-			bool				Cancel();
+		bool				Cancel();
 			void				SetLock(sem_id cancelSemaphore)
 									{ fCancelSemaphore = cancelSemaphore; }
 			// Scrubbed on destruction and after the helper runs.
@@ -39,13 +41,28 @@ public:
 
 			void				StartInstall(partition_id targetPartitionID);
 
+		// Posted to this looper so fork()+waitpid() never blocks the caller.
+		void				InstallBootloader(partition_id id);
+
+		// Runs `bootloader --setup` (list entries; no default/timeout
+		// change) via the same off-thread pkexec + output-capture path.
+		void				BootloaderSetup();
+
 private:
 			status_t			_PerformInstall(partition_id targetPartitionID);
 			status_t			_PerformInPlaceInstall();
-			status_t			_RunHelper(const char* mountPoint);
+			status_t			_RunFullInstall(const char* devicePath,
+									BString* detail = NULL);
+			void				_DoInstallBootloader(partition_id id);
+			void				_DoBootloaderSetup();
 			status_t			_CommitSetup(const char* target);
-			status_t			_InstallationError(status_t error);
+			status_t			_InstallationError(status_t error,
+									const BString& detail = BString());
 			void				_SetStatusMessage(const char* status);
+			// Returns true if the line was a progress2 percentage (and
+			// handled it); otherwise the caller should log it.
+			bool				_HandleProgressLine(const char* line,
+									ProgressReporter* reporter);
 
 private:
 			BMessenger			fOwner;
@@ -53,6 +70,7 @@ private:
 			sem_id				fCancelSemaphore;
 			BString				fSetupConf;
 			bool				fInPlace;
+			int					fLastReportedPercent;
 };
 
 

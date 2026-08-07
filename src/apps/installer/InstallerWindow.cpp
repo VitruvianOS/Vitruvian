@@ -21,9 +21,11 @@
 #include <Button.h>
 #include <Catalog.h>
 #include <CheckBox.h>
+#include <DiskDeviceRoster.h>
 #include <LayoutBuilder.h>
 #include <Locale.h>
 #include <Menu.h>
+#include <MenuBar.h>
 #include <MenuField.h>
 #include <MenuItem.h>
 #include <PopUpMenu.h>
@@ -188,8 +190,20 @@ InstallerWindow::InstallerWindow()
 		.Add(fRootConfirmField)
 		.Add(fPasswordStatus);
 
+	fMenuBar = new BMenuBar("main menu");
+	fToolsMenu = new BMenu(B_TRANSLATE("Tools"));
+	fBootloaderMenu = new BMenu(B_TRANSLATE("Install bootloader"));
+	fBootloaderSetupItem = new BMenuItem(
+		B_TRANSLATE("Configure boot menu" B_UTF8_ELLIPSIS),
+		new BMessage(MSG_BOOTLOADER_SETUP));
+	fBootloaderSetupItem->SetEnabled(false);
+	fToolsMenu->AddItem(fBootloaderSetupItem);
+	fToolsMenu->AddItem(fBootloaderMenu);
+	fMenuBar->AddItem(fToolsMenu);
+
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_ITEM_SPACING)
 		.SetInsets(B_USE_WINDOW_INSETS)
+		.Add(fMenuBar)
 		.AddGroup(B_HORIZONTAL)
 			.Add(fDestMenuField)
 		.End()
@@ -207,12 +221,17 @@ InstallerWindow::InstallerWindow()
 	CenterOnScreen();
 	Show();
 
+	// Subscribe to disk device add/remove so a USB stick plugged in while
+	// the installer is open triggers a rescan of the target menu.
+	BDiskDeviceRoster().StartWatching(BMessenger(this));
+
 	PostMessage(kMsgInit);
 }
 
 
 InstallerWindow::~InstallerWindow()
 {
+	BDiskDeviceRoster().StopWatching(BMessenger(this));
 	_SetCopyEngineCancelSemaphore(-1);
 }
 
@@ -238,6 +257,18 @@ InstallerWindow::MessageReceived(BMessage* message)
 			_UpdateControls();
 			break;
 		}
+
+		case MSG_INSTALL_BOOTLOADER:
+		{
+			int64 id = -1;
+			if (message->FindInt64("id", &id) == B_OK)
+				fWorkerThread->InstallBootloader((partition_id)id);
+			break;
+		}
+
+		case MSG_BOOTLOADER_SETUP:
+			fWorkerThread->BootloaderSetup();
+			break;
 
 		case kMsgAdvancedToggled:
 			_UpdateAdvancedEnabled();
@@ -300,6 +331,7 @@ InstallerWindow::MessageReceived(BMessage* message)
 			fAdvancedCheck->SetEnabled(false);
 			fRootPasswordField->SetEnabled(false);
 			fRootConfirmField->SetEnabled(false);
+			fBootloaderSetupItem->SetEnabled(false);
 
 			sem_id cancelSem = create_sem(0, "installer_cancel");
 			_SetCopyEngineCancelSemaphore(cancelSem);
@@ -316,15 +348,9 @@ InstallerWindow::MessageReceived(BMessage* message)
 			const char* text = NULL;
 			if (message->FindString("status", &text) == B_OK)
 				fProgressBar->SetText(text);
-			off_t bytesWritten = 0;
-			if (message->FindInt64("current bytes", &bytesWritten) == B_OK) {
-				off_t total = 100;
-				message->FindInt64("total bytes", &total);
-				float pct = 0.0f;
-				if (total > 0)
-					pct = 100.0f * bytesWritten / total;
-				fProgressBar->SetTo(pct);
-			}
+			float progress = 0.0f;
+			if (message->FindFloat("progress", &progress) == B_OK)
+				fProgressBar->SetTo(progress);
 			break;
 		}
 
@@ -334,12 +360,32 @@ InstallerWindow::MessageReceived(BMessage* message)
 			fInstallStatus = kFinished;
 			fProgressBar->SetTo(100.0f);
 
-			BAlert* alert = new BAlert(B_TRANSLATE("Installation complete"),
-				B_TRANSLATE("Installation completed successfully. "
-					"You can now reboot into the installed system."),
-				B_TRANSLATE("Quit"), NULL, NULL,
-				B_WIDTH_AS_USUAL, B_INFO_ALERT);
-			alert->Go();
+			PartitionMenuItem* target =
+				(PartitionMenuItem*)fDestMenu->FindMarked();
+			bool canBootloader = target != NULL
+				&& target->ID() != kInPlacePartitionId;
+
+			if (canBootloader) {
+				BAlert* alert = new BAlert(B_TRANSLATE("Installation complete"),
+					B_TRANSLATE("Installation completed successfully.\n\n"
+						"Install the bootloader on the target disk now? Skip "
+						"this if you manage your own bootloader or are "
+						"dual-booting."),
+					B_TRANSLATE("Skip"), B_TRANSLATE("Install bootloader"),
+					NULL, B_WIDTH_AS_USUAL, B_INFO_ALERT);
+				alert->SetShortcut(0, B_ESCAPE);
+				if (alert->Go() == 1) {
+					fWorkerThread->InstallBootloader(target->ID());
+					break;
+				}
+			} else {
+				BAlert* alert = new BAlert(B_TRANSLATE("Installation complete"),
+					B_TRANSLATE("Installation completed successfully. "
+						"You can now reboot into the installed system."),
+					B_TRANSLATE("Quit"), NULL, NULL,
+					B_WIDTH_AS_USUAL, B_INFO_ALERT);
+				alert->Go();
+			}
 			be_app->PostMessage(B_QUIT_REQUESTED);
 			break;
 		}
@@ -361,10 +407,16 @@ InstallerWindow::MessageReceived(BMessage* message)
 			fAutologinCheck->SetEnabled(true);
 			fAdvancedCheck->SetEnabled(true);
 			_UpdateAdvancedEnabled();
+			fBootloaderSetupItem->SetEnabled(fDestMenu->FindMarked() != NULL);
+
+			BString detail;
+			message->FindString("detail", &detail);
 
 			BString msg;
 			msg.SetToFormat("%s: %s",
 				B_TRANSLATE("Installation failed"), strerror(err));
+			if (!detail.IsEmpty())
+				msg << "\n\n" << detail;
 			BAlert* alert = new BAlert(B_TRANSLATE("Installation failed"),
 				msg.String(), B_TRANSLATE("OK"), NULL, NULL,
 				B_WIDTH_AS_USUAL, B_STOP_ALERT);
@@ -374,6 +426,11 @@ InstallerWindow::MessageReceived(BMessage* message)
 
 		case kMsgQuit:
 			PostMessage(B_QUIT_REQUESTED);
+			break;
+
+		case B_DEVICE_UPDATE:
+			if (fInstallStatus == kReadyForInstall)
+				_ScanPartitions();
 			break;
 
 		default:
@@ -406,8 +463,17 @@ InstallerWindow::_ScanPartitions()
 	BMenuItem* item;
 	while ((item = fDestMenu->RemoveItem((int32)0)) != NULL)
 		delete item;
+	while ((item = fBootloaderMenu->RemoveItem((int32)0)) != NULL)
+		delete item;
 
-	fWorkerThread->ScanDisksPartitions(fDestMenu);
+	fWorkerThread->ScanDisksPartitions(fDestMenu, fBootloaderMenu);
+
+	if (fBootloaderMenu->CountItems() == 0) {
+		BMenuItem* noEsp = new BMenuItem(
+			B_TRANSLATE("No EFI System Partitions found"), NULL);
+		noEsp->SetEnabled(false);
+		fBootloaderMenu->AddItem(noEsp);
+	}
 
 	if (_in_place_available()) {
 		PartitionMenuItem* inPlace = new PartitionMenuItem("current",
@@ -434,6 +500,7 @@ InstallerWindow::_UpdateControls()
 {
 	BString err;
 	fInstallButton->SetEnabled(_ValidateSetup(err));
+	fBootloaderSetupItem->SetEnabled(fDestMenu->FindMarked() != NULL);
 }
 
 
@@ -569,7 +636,6 @@ InstallerWindow::_ComposeSetupConf()
 	conf << "autologin=" <<
 		(fAutologinCheck->Value() == B_CONTROL_ON ? "1" : "0") << "\n";
 
-	// Helper hashes under root; conf goes via stdin, never to disk.
 	conf << "password=" << fPasswordField->Text() << "\n";
 	if (fAdvancedCheck->Value() == B_CONTROL_ON)
 		conf << "root_password=" << fRootPasswordField->Text() << "\n";

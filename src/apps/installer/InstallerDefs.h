@@ -13,6 +13,9 @@ static const uint32 MSG_STATUS_MESSAGE = 'iSTM';
 static const uint32 MSG_INSTALL_FINISHED = 'iIFN';
 static const uint32 MSG_RESET = 'iRSI';
 static const uint32 MSG_START_INSTALLING = 'eSRT';
+static const uint32 MSG_INSTALL_BOOTLOADER = 'iBLR';
+static const uint32 MSG_BOOTLOADER_SETUP = 'iBLS';
+static const uint32 MSG_BOOTLOADER_INSTALL_DONE = 'iBLD';
 
 
 #endif	// INSTALLER_DEFS_H

@@ -118,15 +118,8 @@ create_raw() {
     _root_part="${_loop}p2"
 
     sudo mkfs.vfat -F32 "$_efi_part"
-    # -I 512: more inline xattr headroom (~350 bytes vs ~100 with default
-    # 256-byte inodes), so BeOS-style small attrs land inline.
-    # ea_inode is intentionally NOT enabled — GRUB 2.12 can't read it, and
-    # our attr usage stays under the 4KB shared-block ceiling.
-    # ^orphan_file / ^metadata_csum_seed / ^casefold / ^encrypt / ^verity:
-    # features GRUB 2.12 doesn't handle. All exclusions must live in ONE
-    # -O argument or Debian's mke2fs.conf re-enables them.
     sudo mkfs.ext4 -F -I 512 \
-        -O ^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
+        -O ^ea_inode,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
         -L vitruvian-root "$_root_part"
 
     _esp_uuid=$(sudo blkid -s UUID -o value "$_efi_part")
@@ -164,18 +157,10 @@ create_raw() {
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 
-# Hide host EFI variables from any package post-install that might call
-# efibootmgr — without this, the rbound /sys exposes host NVRAM.
 umount /sys/firmware/efi/efivars 2>/dev/null || true
 
 apt-get remove -y vos nexus-dkms 2>/dev/null || true
 
-# live-boot comes in via prior ISO builds rsync'd into this chroot. apt-get
-# purge runs update-initramfs through dpkg triggers, which executes the
-# live hook BEFORE the package file is unlinked — so purge itself trips
-# the hook and aborts. Strip the hook/script files first, then force-purge
-# so dpkg state matches the filesystem and no later kernel postinst
-# resurrects the failure.
 rm -f /usr/share/initramfs-tools/hooks/live*
 rm -f /usr/share/initramfs-tools/scripts/live*
 rm -f /etc/initramfs-tools/conf.d/live*
@@ -206,8 +191,6 @@ depmod -v \"\$_kver\"
 ln -sfn boot/vmlinuz-\$_kver /vmlinuz
 ln -sfn boot/initrd.img-\$_kver /initrd.img
 
-# Write /etc/default/grub from scratch — grub-common's postinst doesn't
-# always populate it in a fresh chroot, and we own every setting here.
 mkdir -p /etc/default
 cat > /etc/default/grub <<'GRUBEOF'
 GRUB_DEFAULT=0
@@ -218,11 +201,6 @@ GRUB_CMDLINE_LINUX=\"\"
 GRUB_DISABLE_OS_PROBER=true
 GRUBEOF
 
-# No grub-install — the EFI loader is built by the host via grub-mkstandalone
-# after the chroot exits (same approach as the ISO). update-grub is still run
-# so /boot/grub/grub.cfg exists for users who later want to edit it.
-# /boot/grub is normally created by grub-pc / grub-efi-amd64 postinst, which
-# we don't install (the -bin packages alone don't create it).
 mkdir -p /boot/grub
 update-grub
 
@@ -257,12 +235,25 @@ insmod linux
 insmod normal
 insmod all_video
 insmod gfxterm
-set timeout=1
 search --no-floppy --fs-uuid --set=root $_root_uuid
+set timeout=1
 menuentry "Vitruvian" {
     linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel
     initrd (\$root)/initrd.img
 }
+menuentry "Vitruvian (Safe Mode)" {
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
+    initrd (\$root)/initrd.img
+}
+menuentry "Vitruvian (SSH Debug)" {
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    initrd (\$root)/initrd.img
+}
+if [ "\$grub_platform" = "efi" ]; then
+    menuentry "UEFI Firmware Settings" {
+        fwsetup
+    }
+fi
 EOF
 
     case "$_arch" in
@@ -301,15 +292,8 @@ EOF
         sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_mnt/boot/efi/EFI/BOOT/BOOTIA32.EFI"
     fi
 
-    # Remove the /EFI/debian/ tree that grub-efi-amd64's postinst dropped.
-    # Keeping it around lets OVMF persist a Boot#### entry pointing at
-    # that stale binary on first run; subsequent boots then ignore our
-    # standalone at /EFI/BOOT/BOOTX64.EFI and fail with "vmlinuz not found".
     sudo rm -rf "$_mnt/boot/efi/EFI/debian" "$_mnt/boot/efi/EFI/Debian"
 
-    # First-boot resize: grow root partition to fill the target disk and
-    # resize the ext4 FS. Enabled during install; the unit disables itself
-    # after running so upgrades don't repeat the resize.
     sudo tee "$_mnt/usr/local/sbin/vos-resize-root" >/dev/null <<'RSZEOF'
 #!/bin/sh
 # First-boot only: grow the root partition to fill the target disk and
@@ -368,10 +352,10 @@ create_iso() {
     _efi_target="$(arch_to_efi_target "$_arch")"
     _imagekernelversion=$(cat "$_basedir/imagekernelversion.conf" 2>/dev/null || die "imagekernelversion.conf not found. Run setupenv first.")
 
-    BUILD_TYPE="Release"
+    BUILD_TYPE="Debug"
     if [ -f "$_basedir/buildconfig.conf" ]; then
         . "$_basedir/buildconfig.conf"
-        BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
+        BUILD_TYPE="${CMAKE_BUILD_TYPE:-Debug}"
     fi
 
     _count=$(ls -1 "$_basedir"/*.deb 2>/dev/null | wc -l)
@@ -422,6 +406,7 @@ chmod 0700 /root/.ssh
 chown root:root /root/.ssh
 if command -v systemctl >/dev/null 2>&1; then
     systemctl enable ssh.service 2>/dev/null || true
+    systemctl enable vos-sshdebug.service 2>/dev/null || true
 fi
 SSHEOF
         log_info "SSH server configured."
@@ -448,7 +433,7 @@ SSHEOF
     sudo mksquashfs \
         "$_chroot_dir" \
         "$_basedir/image_tree/image/live/filesystem.squashfs" \
-        -b 1048576 -comp xz -Xdict-size 100% -xattrs -e boot
+        -b 1048576 -comp xz -Xdict-size 100% -xattrs
 
     log_step "Copying kernel and initramfs..."
     cp "$_chroot_dir/boot/vmlinuz-$_imagekernelversion" "$_basedir/image_tree/image/vmlinuz"
@@ -459,10 +444,14 @@ SSHEOF
 insmod all_video
 search --set=root --file /VITRUVIAN_CUSTOM
 set default="0"
-set timeout=1
+set timeout=5
 set hidden_timeout=0
 menuentry "Vitruvian Live" {
     linux /vmlinuz boot=live noeject quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel oops=panic panic_on_warn=1 panic=0
+    initrd /initrd
+}
+menuentry "Vitruvian Live (Safe Mode)" {
+    linux /vmlinuz boot=live noeject quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons console=tty0 console=ttyS0,115200
     initrd /initrd
 }
 EOF
@@ -685,7 +674,7 @@ create_raspberry() {
     _root_part="${_loop}p2"
 
     sudo mkfs.vfat -F32 "$_boot_part"
-    sudo mkfs.ext4 -F "$_root_part"
+    sudo mkfs.ext4 -F -O ^ea_inode "$_root_part"
 
     sudo mkdir -p "$_mnt"
     sudo mount "$_root_part" "$_mnt"
@@ -850,7 +839,7 @@ create_uboot_board() {
     sudo mkfs.vfat -F32 "$_boot_part"
     case "$_root_fs" in
         xfs)  sudo mkfs.xfs -f "$_root_part" ;;
-        ext4) sudo mkfs.ext4 -F "$_root_part" ;;
+        ext4) sudo mkfs.ext4 -F -O ^ea_inode "$_root_part" ;;
     esac
 
     sudo mkdir -p "$_mnt"

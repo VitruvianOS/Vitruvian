@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Vitruvian</vendor>
+  <vendor_url>https://vitruvian.dev/</vendor_url>
+
+  <action id="org.vitruvian.installer.write-target">
+    <description>Install Vitruvian to a target disk</description>
+    <message>Authentication is required to install Vitruvian to the selected disk.</message>
+    <!--
+      Default is auth_admin everywhere. The live-only exception for vos-live
+      (locked password) is granted in rules.d/49-vitruvian-installer.rules;
+      that account is deleted on install, so installed systems always fall
+      back to this auth_admin default.
+    -->
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/vos-install-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

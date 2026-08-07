@@ -1,6 +1,5 @@
 Application(Installer
 	SOURCES
-	CopyEngine.cpp
 	EULAWindow.cpp
 	InstallerApp.cpp
 	InstallerDefs.cpp

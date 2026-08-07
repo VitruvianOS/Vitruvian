@@ -1,0 +1,15 @@
+// Live media only. Grants the installer action to whichever user is logged
+// into the live session -- no username or subject.active/local check, because
+// VOS runs its desktop via janus (not a logind graphical session) and the live
+// operator may be vos-live, vos_login, or any configured default user.
+//
+// This is safe because the grant self-disables off live media on two counts:
+//   1. vos-install-helper deletes THIS rule file from the target on install
+//      (commit-setup), so an installed system has no rule and falls through to
+//      auth_admin in org.vitruvian.installer.policy.
+//   2. The helper also refuses --full-install unless /etc/vos/live exists.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.vitruvian.installer.write-target") {
+        return polkit.Result.YES;
+    }
+});

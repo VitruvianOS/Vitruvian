@@ -16,7 +16,9 @@ class BBox;
 class BButton;
 class BCheckBox;
 class BMenu;
+class BMenuBar;
 class BMenuField;
+class BMenuItem;
 class BStatusBar;
 class BStringView;
 class BTextControl;
@@ -52,6 +54,11 @@ private:
 
 			BMenu*				fDestMenu;
 			BMenuField*			fDestMenuField;
+
+			BMenuBar*			fMenuBar;
+			BMenu*				fToolsMenu;
+			BMenu*				fBootloaderMenu;
+			BMenuItem*			fBootloaderSetupItem;
 
 			BTextControl*		fHostnameField;
 			BTextControl*		fFullNameField;

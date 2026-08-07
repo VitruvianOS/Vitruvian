@@ -1,0 +1,19 @@
+[Unit]
+Description=Vitruvian debug SSH (opt-in via vitruvian.sshdebug on the kernel cmdline)
+# Pulled into multi-user.target on Debug builds, but the Condition keeps it
+# inert unless the "SSH Debug" GRUB entry was chosen, so a normal boot never
+# starts sshd. ssh.service stays disabled (commit-setup disables it); we only
+# `start` it here for this boot.
+ConditionKernelCommandLine=vitruvian.sshdebug
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Install drops /etc/ssh/ssh_host_* (excludes.list), so the target has no host
+# keys and sshd refuses to start. Generate the missing ones first.
+ExecStartPre=/usr/bin/ssh-keygen -A
+ExecStart=/usr/bin/systemctl start ssh.service
+
+[Install]
+WantedBy=multi-user.target

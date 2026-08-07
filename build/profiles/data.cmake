@@ -29,6 +29,10 @@ install(PROGRAMS data/libexec/vos-set-autologin
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.user.policy
   DESTINATION /usr/share/polkit-1/actions/)
+install(FILES data/polkit-1/actions/org.vitruvian.installer.policy
+  DESTINATION /usr/share/polkit-1/actions/)
+install(FILES data/polkit-1/rules.d/49-vitruvian-installer.rules
+  DESTINATION /usr/share/polkit-1/rules.d/)
 
 # Consulted only when /etc/vos/live exists; Installer strips it on commit.
 install(FILES data/sudoers.d/vos-live
@@ -57,6 +61,10 @@ install(FILES data/profile.d/vos-session.sh          DESTINATION /usr/share/vos/
 install(PROGRAMS data/system/boot/vos-session-boot DESTINATION /system/servers/)
 
 install(FILES data/etc/systemd/journald.conf.d/vitruvian.conf DESTINATION /etc/systemd/journald.conf.d/)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  install(FILES data/systemd/vos-sshdebug.service DESTINATION /etc/systemd/system/)
+endif()
 
 #install(FILES data/etc/modules-load.d/befs.conf DESTINATION /etc/modules-load.d/)
 

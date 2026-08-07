@@ -1,18 +1,4 @@
 #!/bin/sh
-# vos-install-helper — target-side configuration for the Installer.
-#
-# Two modes:
-#   TARGET               post-rsync config: machine-id, fstab, initramfs,
-#                        GRUB. Removes the sentinel so the freshly-copied
-#                        target boots into first-time setup.
-#   --commit-setup TARGET
-#                        reads setup fields on stdin, hashes passwords
-#                        under root, writes /run/vos/setup.conf, and
-#                        invokes vos-firstboot-commit --root=TARGET.
-#                        Also strips the live persona from the target:
-#                        userdel vos-live, /etc/vos/live, sudoers.d.
-#
-# Invoked by the Installer via pkexec. Assumes /target is mounted.
 
 set -eu
 
@@ -21,44 +7,17 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
+export PATH
+
 log() { printf '[vos-install-helper] %s\n' "$*" >&2; }
 
-MODE="config"
-if [ "${1:-}" = "--commit-setup" ]; then
-    MODE="commit-setup"
-    shift
-fi
+EXCLUDES=/usr/share/vos/installer/excludes.list
+FULL_INSTALL_MOUNT=/run/vos/target
 
-_arg="${1:-}"
-if [ -z "$_arg" ]; then
-    echo "usage: vos-install-helper [--commit-setup] /path/to/target" >&2
-    exit 1
-fi
+_do_commit_setup() {
+    TARGET="$1"
 
-TARGET="$(realpath -e "$_arg" 2>/dev/null || true)"
-if [ -z "$TARGET" ] || [ ! -d "$TARGET" ]; then
-    log "target path does not exist: $_arg"
-    exit 1
-fi
-
-# In config mode (rsync target) we refuse to operate on /. commit-setup
-# is legal on / because it's the in-place raw first-boot path — user
-# creation happens on the running root, not a mounted target chroot.
-if [ "$MODE" = "config" ]; then
-    if [ "$TARGET" = "/" ]; then
-        log "refusing to operate on / in config mode"
-        exit 2
-    fi
-    if ! mountpoint -q "$TARGET"; then
-        log "target is not a mountpoint: $TARGET"
-        exit 2
-    fi
-fi
-
-# ============================ commit-setup ============================
-if [ "$MODE" = "commit-setup" ]; then
-    # Read key=value fields from stdin. We must never trust these to be
-    # safe shell — parse as data. Only whitelisted keys survive.
     _language=""
     _keymap=""
     _username=""
@@ -88,12 +47,68 @@ if [ "$MODE" = "commit-setup" ]; then
 
     if [ -z "$_username" ] || [ -z "$_password" ]; then
         log "commit-setup: missing username or password"
-        exit 2
+        return 2
     fi
 
-    # Hash under root so the plaintext never touches a user-writable
-    # file. mkpasswd (whois pkg) is our preferred hasher; openssl is the
-    # documented fallback.
+    _validate_input() {
+        # username: [a-z_][a-z0-9_-]{0,31}, not reserved, <=32.
+        case "$_username" in
+            [!a-z_]*) log "invalid username (must start [a-z_]): $_username"; return 2 ;;
+        esac
+        case "$_username" in
+            *[!a-z0-9_-]*) log "invalid username (bad char): $_username"; return 2 ;;
+        esac
+        if [ "${#_username}" -gt 32 ]; then
+            log "username too long (>32): $_username"; return 2
+        fi
+        for _r in root daemon sys bin vos_login vos-live \
+                  _vitruvian-login nobody; do
+            if [ "$_username" = "$_r" ]; then
+                log "reserved username: $_username"; return 2
+            fi
+        done
+
+        # full_name: no ':' (passwd delimiter) or newline, <=80 (GECOS).
+        case "$_full_name" in
+            *:*) log "invalid full_name (contains ':')"; return 2 ;;
+        esac
+        case "$_full_name" in
+            *'
+'*) log "invalid full_name (contains newline)"; return 2 ;;
+        esac
+        if [ -n "$_full_name" ] && [ "${#_full_name}" -gt 80 ]; then
+            log "full_name too long (>80)"; return 2
+        fi
+
+        # hostname: RFC 1123 [a-z0-9-]{1,63}, no leading/trailing '-'.
+        if [ -n "$_hostname" ]; then
+            case "$_hostname" in
+                -*|*-) log "invalid hostname (leading/trailing '-')"; return 2 ;;
+                *[!a-z0-9-]*) log "invalid hostname (bad char): $_hostname"; return 2 ;;
+            esac
+            if [ "${#_hostname}" -gt 63 ]; then
+                log "hostname too long (>63): $_hostname"; return 2
+            fi
+        fi
+
+        # keymap / language: lowercase-alpha whitelist.
+        case "$_keymap" in
+            ''|[a-z]*) ;;
+            *) log "invalid keymap: $_keymap"; return 2 ;;
+        esac
+        case "$_language" in
+            ''|[a-z]*) ;;
+            *) log "invalid language: $_language"; return 2 ;;
+        esac
+
+        # boolean fields: exactly 0 or 1.
+        case "$_sudo_enabled" in 0|1) ;; *) log "invalid sudo_enabled: $_sudo_enabled"; return 2 ;; esac
+        case "$_autologin" in 0|1) ;; *) log "invalid autologin: $_autologin"; return 2 ;; esac
+
+        return 0
+    }
+    _validate_input || return 2
+
     _hash_password() {
         if command -v mkpasswd >/dev/null 2>&1; then
             printf '%s' "$1" | mkpasswd -m sha-512 -s
@@ -113,7 +128,6 @@ if [ "$MODE" = "commit-setup" ]; then
         _root_password=""
     fi
 
-    # Write the conf into /run so nothing survives a reboot. 0600 root.
     mkdir -p /run/vos
     CONF=/run/vos/setup.conf
     umask 077
@@ -134,33 +148,23 @@ if [ "$MODE" = "commit-setup" ]; then
 
     /usr/libexec/vos-firstboot-commit --root="$TARGET" "$CONF"
     _rc=$?
-    # setup.conf is unlink'd by vos-firstboot-commit on success; make
-    # sure it's gone even on failure so a retry starts clean.
     rm -f "$CONF"
     if [ $_rc -ne 0 ]; then
         log "vos-firstboot-commit failed (rc=$_rc)"
-        exit $_rc
+        return $_rc
     fi
 
-    # Set up the in-target chroot wrapper for the remaining steps.
     if [ "$TARGET" = "/" ]; then
         _in=""
     else
         _in="chroot $TARGET"
     fi
 
-    # nexus device access: real user needs to be in the "nexus" group
-    # (created by nexus-dkms postinst) so /dev/nexus{,_area,_node_monitor}
-    # open. vos-live had it via image.sh; the real user must be enrolled
-    # explicitly.
     if $_in getent group nexus >/dev/null 2>&1; then
         $_in usermod -aG nexus "$_username" \
             || log "warn: could not add $_username to nexus group"
     fi
 
-    # Ferry FBP-selected locale/keymap into the target user's config so the
-    # first desktop login boots in the picked language. FBP wrote these into
-    # vos_login's config as it walked the user through the flow.
     _pre_settings=/system/login/config/settings
     _tgt_home=$($_in getent passwd "$_username" | cut -d: -f6)
     if [ -n "$_tgt_home" ]; then
@@ -175,97 +179,447 @@ if [ "$MODE" = "commit-setup" ]; then
             || log "warn: could not chown $_tgt_home/config"
     fi
 
-    # --- Strip the live persona from the target -----------------------
-    # These are MUST-SUCCEED: leaving vos-live behind ships the target
-    # with a passwordless-sudo account. When TARGET is /, we run the
-    # commands directly (in-place raw first-boot).
     $_in userdel -f -r vos-live 2>/dev/null || true
     if $_in getent passwd vos-live >/dev/null 2>&1; then
-        log "userdel vos-live failed on target"; exit 3
+        log "userdel vos-live failed on target"; return 3
     fi
+    $_in systemctl disable userbootscript@vos-live.service 2>/dev/null || true
     rm -f "$TARGET/etc/vos/live" || {
-        log "cannot remove /etc/vos/live"; exit 3; }
+        log "cannot remove /etc/vos/live"; return 3; }
     rm -f "$TARGET/etc/vos/debug" || true
     rm -f "$TARGET/etc/sudoers.d/vos-live" || {
-        log "cannot remove sudoers.d/vos-live"; exit 3; }
-    # If the live session enabled the debug SSH affordance, don't carry
-    # it into the target. `start` doesn't persist across boots, but
-    # disable is idempotent and cheap.
+        log "cannot remove sudoers.d/vos-live"; return 3; }
+    rm -f "$TARGET/usr/share/polkit-1/rules.d/49-vitruvian-installer.rules" || {
+        log "cannot remove installer polkit rule"; return 3; }
     $_in systemctl disable ssh.service 2>/dev/null || true
     $_in systemctl disable sshd.service 2>/dev/null || true
 
     log "commit-setup complete for user $_username"
-    exit 0
-fi
+    return 0
+}
 
-# ============================ config mode ============================
-
-_live_source="$(findmnt -no SOURCE / || true)"
-_target_source="$(findmnt -no SOURCE "$TARGET" || true)"
-_target_fstype="$(findmnt -no FSTYPE "$TARGET" || true)"
-
-if [ -z "$_target_source" ] || [ -z "$_target_fstype" ]; then
-    log "cannot resolve target block device / fstype"
-    exit 2
-fi
-if [ -n "$_live_source" ] && [ "$_target_source" = "$_live_source" ]; then
-    log "target device matches live root ($_target_source); refusing"
-    exit 2
-fi
-
-log "config: target=$TARGET (source=$_target_source fstype=$_target_fstype)"
-
-# The trap must be armed before the first rbind so a mid-loop failure
-# still tears the mounts down.
-_cleanup() {
+_unmount_binds() {
     for _fs in run sys proc dev/pts dev; do
-        umount -R "$TARGET/$_fs" 2>/dev/null || true
+        umount -R "$1/$_fs" 2>/dev/null || true
     done
 }
-trap _cleanup EXIT INT TERM
 
-: > "$TARGET/etc/machine-id"
-rm -f "$TARGET/var/lib/dbus/machine-id"
-systemd-machine-id-setup --root="$TARGET"
+_do_config() {
+    TARGET="$1"
 
-_target_uuid="$(blkid -s UUID -o value "$_target_source" || true)"
-if [ -z "$_target_uuid" ]; then
-    log "cannot resolve target UUID"
-    exit 2
-fi
+    _live_source="$(findmnt -no SOURCE / || true)"
+    _target_source="$(findmnt -no SOURCE "$TARGET" || true)"
+    _target_fstype="$(findmnt -no FSTYPE "$TARGET" || true)"
 
-# btrfs doesn't accept errors=remount-ro; every other supported fs does.
-_fsck_pass=1
-case "$_target_fstype" in
-    btrfs) _root_opts="defaults" ; _fsck_pass=0 ;;
-    *)     _root_opts="errors=remount-ro" ;;
-esac
+    if [ -z "$_target_source" ] || [ -z "$_target_fstype" ]; then
+        log "cannot resolve target block device / fstype"
+        return 2
+    fi
+    if [ -n "$_live_source" ] && [ "$_target_source" = "$_live_source" ]; then
+        log "target device matches live root ($_target_source); refusing"
+        return 2
+    fi
 
-cat > "$TARGET/etc/fstab" <<EOF
+    log "config: target=$TARGET (source=$_target_source fstype=$_target_fstype)"
+
+    : > "$TARGET/etc/machine-id"
+    rm -f "$TARGET/var/lib/dbus/machine-id"
+    systemd-machine-id-setup --root="$TARGET"
+
+    _target_uuid="$(blkid -s UUID -o value "$_target_source" || true)"
+    if [ -z "$_target_uuid" ]; then
+        log "cannot resolve target UUID"
+        return 2
+    fi
+
+    _fsck_pass=1
+    case "$_target_fstype" in
+        btrfs) _root_opts="defaults" ; _fsck_pass=0 ;;
+        *)     _root_opts="errors=remount-ro" ;;
+    esac
+
+    cat > "$TARGET/etc/fstab" <<EOF
 # /etc/fstab — written by vos-install-helper
 UUID=$_target_uuid  /  $_target_fstype  $_root_opts  0  $_fsck_pass
 tmpfs               /tmp  tmpfs  defaults,nosuid,nodev  0  0
 EOF
 
-for _fs in dev proc sys run; do
-    mkdir -p "$TARGET/$_fs"
-    mount --rbind "/$_fs" "$TARGET/$_fs"
-done
+    _target_disk="$(lsblk -no PKNAME "$_target_source" | head -n1)"
+    _esp_part=""
+    if [ -n "$_target_disk" ]; then
+        for _cand in $(lsblk -lnpo NAME "/dev/$_target_disk" 2>/dev/null | tail -n +2); do
+            [ "$(lsblk -no PARTTYPE "$_cand" 2>/dev/null | head -n1)" \
+                = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" ] || continue
+            _esp_part="$_cand"; break
+        done
+    fi
+    if [ -n "$_esp_part" ]; then
+        _esp_uuid="$(blkid -s UUID -o value "$_esp_part" || true)"
+        [ -n "$_esp_uuid" ] && printf 'UUID=%s  /boot/efi  vfat  umask=0077,shortname=mixed  0  2\n' \
+            "$_esp_uuid" >> "$TARGET/etc/fstab"
+    fi
 
-chroot "$TARGET" update-initramfs -u -k all
+    for _fs in dev proc sys; do
+        mkdir -p "$TARGET/$_fs"
+        mount --rbind "/$_fs" "$TARGET/$_fs"
+    done
+    mkdir -p "$TARGET/run"
+    mount -t tmpfs tmpfs "$TARGET/run"
 
-_target_disk="$(lsblk -no PKNAME "$_target_source" | head -n1)"
-if [ -z "$_target_disk" ]; then
-    log "cannot resolve parent disk of $_target_source"
+    rm -f "$TARGET"/usr/share/initramfs-tools/hooks/live* \
+          "$TARGET"/usr/share/initramfs-tools/scripts/live* \
+          "$TARGET"/etc/initramfs-tools/conf.d/live* 2>/dev/null || true
+    chroot "$TARGET" dpkg --purge --force-all \
+        live-boot live-boot-initramfs-tools live-config live-config-systemd \
+        live-tools 2>/dev/null || log "warn: live-boot purge incomplete"
+    chroot "$TARGET" update-initramfs -u -k all \
+        || log "warn: update-initramfs failed"
+
+    _kver="$(ls -1 "$TARGET"/boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1 | sed 's|.*/vmlinuz-||')"
+    if [ -n "$_kver" ]; then
+        ln -sfn "boot/vmlinuz-$_kver"    "$TARGET/vmlinuz"
+        ln -sfn "boot/initrd.img-$_kver" "$TARGET/initrd.img"
+    else
+        log "warn: no /boot/vmlinuz-* on target; /vmlinuz symlink not created"
+    fi
+
+    _unmount_binds "$TARGET"
+
+    rm -f "$TARGET/var/lib/vos/first-boot-done"
+
+    log "config complete (bootloader is a separate step)"
+    return 0
+}
+
+_BOOTROOT=/run/vos/bootroot
+
+_write_shim_grubcfg() {
+    _su="$1"; _sc="$2"; _kv="$3"
+    cat > "$_sc" <<EOF
+insmod part_gpt
+insmod fat
+insmod ext2
+insmod search
+insmod search_fs_uuid
+insmod linux
+insmod normal
+insmod all_video
+insmod gfxterm
+search --no-floppy --fs-uuid --set=root $_su
+set timeout=5
+menuentry "Vitruvian" {
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash
+    initrd (\$root)/boot/initrd.img-$_kv
+}
+menuentry "Vitruvian (Safe Mode)" {
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
+    initrd (\$root)/boot/initrd.img-$_kv
+}
+menuentry "Vitruvian (SSH Debug)" {
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw console=tty0 console=ttyS0,115200 vitruvian.sshdebug
+    initrd (\$root)/boot/initrd.img-$_kv
+}
+if [ "\$grub_platform" = "efi" ]; then
+    menuentry "UEFI Firmware Settings" {
+        fwsetup
+    }
+fi
+EOF
+}
+
+_install_grub_efi() {
+    _esp="$1"; _ruuid="$2"; _rmount="$3"
+    command -v grub-mkstandalone >/dev/null 2>&1 || {
+        log "grub-mkstandalone not found (grub-common missing)"; return 1; }
+    _kver="$(ls -1 "$_rmount"/boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1 | sed 's|.*/vmlinuz-||')"
+    if [ -z "$_kver" ]; then
+        log "no /boot/vmlinuz-* in target root; cannot build boot entry"; return 1
+    fi
+    case "$(uname -m)" in
+        x86_64)          _efi_fmt="x86_64-efi";  _boot_efi="BOOTX64.EFI" ;;
+        aarch64|arm64)   _efi_fmt="arm64-efi";   _boot_efi="BOOTAA64.EFI" ;;
+        riscv64)         _efi_fmt="riscv64-efi"; _boot_efi="BOOTRISCV64.EFI" ;;
+        i386|i486|i586|i686) _efi_fmt="i386-efi"; _boot_efi="BOOTIA32.EFI" ;;
+        *) log "unsupported arch for EFI GRUB: $(uname -m)"; return 1 ;;
+    esac
+    _tmpcfg="$(mktemp)" || return 1
+    _write_shim_grubcfg "$_ruuid" "$_tmpcfg" "$_kver"
+    mkdir -p "$_esp/EFI/BOOT"
+    if ! grub-mkstandalone --format="$_efi_fmt" \
+            --output="$_esp/EFI/BOOT/$_boot_efi" --locales="" --fonts="" \
+            "boot/grub/grub.cfg=$_tmpcfg"; then
+        rm -f "$_tmpcfg"; log "grub-mkstandalone ($_efi_fmt) failed"; return 1
+    fi
+    rm -f "$_tmpcfg"
+    log "EFI bootloader installed: $_esp/EFI/BOOT/$_boot_efi"
+    return 0
+}
+
+_install_grub_bios() {
+    _disk="$1"; _root="$2"
+    [ -d /usr/lib/grub/i386-pc ] || {
+        log "no i386-pc GRUB modules; skipping BIOS bootloader"; return 1; }
+    command -v grub-install >/dev/null 2>&1 || {
+        log "grub-install not found; skipping BIOS bootloader"; return 1; }
+    mkdir -p "$_root/boot/grub"
+    if ! grub-install --target=i386-pc --boot-directory="$_root/boot" \
+            --modules="part_gpt" "$_disk" >/dev/null 2>&1; then
+        log "grub-install i386-pc failed (no bios_grub partition on $_disk?)"
+        return 1
+    fi
+    log "BIOS bootloader (i386-pc) installed to $_disk"
+    return 0
+}
+
+_bootloader_cleanup() {
+    _unmount_binds "$_BOOTROOT"
+    umount "$_BOOTROOT/boot/efi" 2>/dev/null || true
+    umount -R "$_BOOTROOT" 2>/dev/null || true
+    rmdir "$_BOOTROOT" 2>/dev/null || true
+}
+
+_do_bootloader() {
+    _arg="${1:-}"
+    if [ -z "$_arg" ]; then
+        echo "usage: vos-install-helper bootloader <device-on-target-disk>" >&2
+        return 1
+    fi
+    if [ ! -b "$_arg" ]; then
+        log "not a block device: $_arg"; return 2
+    fi
+
+    # Resolve the whole disk ($_arg may be a partition or the disk itself).
+    _disk="$(lsblk -no PKNAME "$_arg" 2>/dev/null | head -n1)"
+    [ -n "$_disk" ] && _disk="/dev/$_disk" || _disk="$_arg"
+    [ -b "$_disk" ] || { log "cannot resolve target disk from $_arg"; return 2; }
+
+    _esp_part=""; _root_part=""
+    for _p in $(lsblk -lnpo NAME "$_disk" 2>/dev/null | tail -n +2); do
+        case "$(lsblk -no PARTTYPE "$_p" 2>/dev/null | head -n1)" in
+            c12a7328-f81f-11d2-ba4b-00a0c93ec93b) [ -z "$_esp_part" ] && _esp_part="$_p" ;;
+        esac
+        case "$(blkid -s LABEL -o value "$_p" 2>/dev/null || true)" in
+            vitruvian-data|vitruvian-root) _root_part="$_p" ;;
+        esac
+    done
+    if [ -z "$_root_part" ]; then
+        _rc=0
+        for _p in $(lsblk -lnpo NAME "$_disk" 2>/dev/null | tail -n +2); do
+            case "$(blkid -s TYPE -o value "$_p" 2>/dev/null || true)" in
+                ext4|ext3) _rc=$((_rc + 1)); _root_part="$_p" ;;
+            esac
+        done
+        if [ "$_rc" -gt 1 ]; then
+            log "multiple ext partitions on $_disk and none labelled vitruvian-*; refusing to guess"
+            return 2
+        fi
+    fi
+    [ -n "$_root_part" ] || { log "no Vitruvian root filesystem found on $_disk"; return 2; }
+    _ruuid="$(blkid -s UUID -o value "$_root_part" || true)"
+    [ -n "$_ruuid" ] || { log "cannot read root UUID of $_root_part"; return 2; }
+
+    mkdir -p "$_BOOTROOT"
+    if mountpoint -q "$_BOOTROOT"; then
+        log "bootroot scratch mount already in use: $_BOOTROOT"; return 2
+    fi
+    mount "$_root_part" "$_BOOTROOT" || { log "cannot mount root $_root_part"; return 2; }
+    trap '_bootloader_cleanup' EXIT INT TERM
+
+    _esp_mounted=""
+    if [ -n "$_esp_part" ]; then
+        mkdir -p "$_BOOTROOT/boot/efi"
+        if mount "$_esp_part" "$_BOOTROOT/boot/efi" \
+                && mountpoint -q "$_BOOTROOT/boot/efi"; then
+            _esp_mounted=1
+        else
+            log "warn: could not mount ESP $_esp_part; skipping EFI bootloader"
+            _esp_part=""
+        fi
+    fi
+    for _fs in dev proc sys run; do
+        mkdir -p "$_BOOTROOT/$_fs"; mount --rbind "/$_fs" "$_BOOTROOT/$_fs"
+    done
+
+    _kver="$(ls -1 "$_BOOTROOT"/boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1 | sed 's|.*/vmlinuz-||')"
+    if [ -n "$_kver" ]; then
+        mkdir -p "$_BOOTROOT/boot/grub"
+        _write_shim_grubcfg "$_ruuid" "$_BOOTROOT/boot/grub/grub.cfg" "$_kver" \
+            || log "warn: could not write /boot/grub/grub.cfg (BIOS menu may be minimal)"
+    else
+        log "warn: no /boot/vmlinuz-* under target; skipping BIOS grub.cfg"
+    fi
+
+    _efi_ok=1; _bios_ok=1
+    if [ -n "$_esp_part" ]; then
+        _install_grub_efi "$_BOOTROOT/boot/efi" "$_ruuid" "$_BOOTROOT" && _efi_ok=0
+    else
+        log "no ESP on $_disk; skipping EFI bootloader"
+    fi
+    _install_grub_bios "$_disk" "$_BOOTROOT" && _bios_ok=0
+
+    if [ "$_efi_ok" -ne 0 ] && [ "$_bios_ok" -ne 0 ]; then
+        log "bootloader install failed: neither EFI nor BIOS succeeded on $_disk"
+        return 3
+    fi
+    log "bootloader install complete on $_disk (efi=$_efi_ok bios=$_bios_ok; 0=ok)"
+    return 0
+}
+
+_do_bootloader_setup() {
+    _new_default="${1:-}"
+    _new_timeout="${2:-}"
+
+    _cfg=/boot/grub/grub.cfg
+    if [ -f "$_cfg" ]; then
+        log "current GRUB menu entries:"
+        grep -n '^menuentry ' "$_cfg" | sed "s/^/  /" >&2
+    else
+        log "warn: $_cfg not found; nothing to list"
+    fi
+
+    [ -n "$_new_default" ] || [ -n "$_new_timeout" ] || return 0
+
+    if [ ! -f "$_cfg" ]; then
+        log "cannot set default/timeout: $_cfg not found"
+        return 2
+    fi
+
+    if [ -n "$_new_default" ]; then
+        case "$_new_default" in
+            *[!0-9]*) log "invalid default (must be a numeric menu index): $_new_default"; return 2 ;;
+        esac
+        if grep -q '^set default=' "$_cfg"; then
+            sed -i "s/^set default=.*/set default=$_new_default/" "$_cfg"
+        else
+            sed -i "/^search .*--set=root/a set default=$_new_default" "$_cfg"
+        fi
+    fi
+    if [ -n "$_new_timeout" ]; then
+        case "$_new_timeout" in
+            *[!0-9]*) log "invalid timeout (must be numeric seconds): $_new_timeout"; return 2 ;;
+        esac
+        if grep -q '^set timeout=' "$_cfg"; then
+            sed -i "s/^set timeout=.*/set timeout=$_new_timeout/" "$_cfg"
+        else
+            sed -i "/^search .*--set=root/a set timeout=$_new_timeout" "$_cfg"
+        fi
+    fi
+
+    log "bootloader setup complete (default=${_new_default:-unchanged} timeout=${_new_timeout:-unchanged})"
+    return 0
+}
+
+# ============================== dispatch ===================================
+
+if [ "${1:-}" = "bootloader" ]; then
+    shift
+    if [ "${1:-}" = "--setup" ]; then
+        shift
+        _do_bootloader_setup "${1:-}" "${2:-}"
+        exit $?
+    fi
+    _do_bootloader "${1:-}"
+    exit $?
+fi
+
+if [ "${1:-}" = "--full-install" ]; then
+    shift
+    DEV="${1:-}"
+    if [ -z "$DEV" ]; then
+        echo "usage: vos-install-helper --full-install /dev/DEVICE" >&2
+        exit 1
+    fi
+    if [ ! -b "$DEV" ]; then
+        log "not a block device: $DEV"
+        exit 1
+    fi
+
+    # Defense in depth: refuse to run the destructive install pipeline off live media.
+    if [ ! -e /etc/vos/live ]; then
+        log "refusing --full-install: not on live media (/etc/vos/live absent)"
+        exit 2
+    fi
+
+    MNT="$FULL_INSTALL_MOUNT"
+    mkdir -p "$MNT"
+
+    if mountpoint -q "$MNT"; then
+        log "already mounted: $MNT"
+        exit 2
+    fi
+
+    mount "$DEV" "$MNT"
+
+    _full_install_cleanup() {
+        _unmount_binds "$MNT"
+        umount -R "$MNT" 2>/dev/null || true
+    }
+    trap _full_install_cleanup EXIT INT TERM
+
+    TARGET="$(realpath -e "$MNT")"
+    if [ "$TARGET" = "/" ]; then
+        log "refusing to operate on / as install target"
+        exit 2
+    fi
+
+    log "full-install: mounted $DEV at $TARGET"
+
+    _src_kib="$(du -sx -k / 2>/dev/null | awk 'NR==1{print $1}')"
+    _free_kib="$(df -P -k "$TARGET" 2>/dev/null | awk 'NR==2{print $4}')"
+    if [ -n "$_src_kib" ] && [ -n "$_free_kib" ]; then
+        # 5% headroom for fs metadata rounding / journal growth during copy.
+        _need_kib=$(( _src_kib + _src_kib / 20 ))
+        if [ "$_need_kib" -gt "$_free_kib" ]; then
+            log "target too small: need ~$(( _need_kib / 1024 )) MiB, have $(( _free_kib / 1024 )) MiB free on $DEV"
+            exit 2
+        fi
+        log "space check ok: need ~$(( _need_kib / 1024 )) MiB, have $(( _free_kib / 1024 )) MiB"
+    else
+        log "warn: could not compute free space (src=$_src_kib free=$_free_kib); skipping check"
+    fi
+
+    rsync -aAX --outbuf=N --info=progress2 --exclude-from="$EXCLUDES" / "$TARGET/"
+
+    _do_config "$TARGET"
+
+    _do_commit_setup "$TARGET"
+
+    umount -R "$TARGET" 2>/dev/null || true
+    trap - EXIT INT TERM
+
+    log "full-install complete for $DEV"
+    exit 0
+fi
+
+MODE="config"
+if [ "${1:-}" = "--commit-setup" ]; then
+    MODE="commit-setup"
+    shift
+fi
+
+_arg="${1:-}"
+if [ -z "$_arg" ]; then
+    echo "usage: vos-install-helper [--commit-setup] /path/to/target" >&2
+    echo "       vos-install-helper --full-install /dev/DEVICE" >&2
+    exit 1
+fi
+
+TARGET="$(realpath -e "$_arg" 2>/dev/null || true)"
+if [ -z "$TARGET" ] || [ ! -d "$TARGET" ]; then
+    log "target path does not exist: $_arg"
+    exit 1
+fi
+
+if [ "$TARGET" = "/" ]; then
+        log "refusing to operate on / in config mode"
     exit 2
 fi
-chroot "$TARGET" grub-install "/dev/$_target_disk"
-chroot "$TARGET" update-grub
 
-# Sentinel is written by --commit-setup after this run, once the user
-# creation finishes. Make sure any stale copy from the source root is
-# gone so the target boots into setup.
-rm -f "$TARGET/var/lib/vos/first-boot-done"
+if [ "$MODE" = "commit-setup" ]; then
+    _do_commit_setup "$TARGET"
+    exit $?
+fi
 
-log "config complete"
-exit 0
+trap '_unmount_binds "$TARGET"' EXIT INT TERM
+_do_config "$TARGET"
+exit $?

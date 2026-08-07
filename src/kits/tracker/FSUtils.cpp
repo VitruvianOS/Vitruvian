@@ -465,8 +465,22 @@ CheckDevicesEqual(const entry_ref* srcRef, const Model* targetModel)
 }
 
 
+// Persists the pose's parent-directory path in kAttrPoseInfoDir, separate
+// from the fixed-size PoseInfo blob, so ReadPoseInfo() can match it after
+// a reboot.
+static void
+WritePoseInfoDirPath(BNode* destNode, const char* destDirPath)
+{
+	if (destNode == NULL || destDirPath == NULL || destDirPath[0] == '\0')
+		return;
+	destNode->WriteAttr(kAttrPoseInfoDir, B_STRING_TYPE, 0, destDirPath,
+		strlen(destDirPath) + 1);
+}
+
+
 status_t
-FSSetPoseLocation(ino_t destDirInode, BNode* destNode, BPoint point)
+FSSetPoseLocation(ino_t destDirInode, BNode* destNode, BPoint point,
+	const char* destDirPath)
 {
 	PoseInfo poseInfo;
 	poseInfo.fInvisible = false;
@@ -475,6 +489,8 @@ FSSetPoseLocation(ino_t destDirInode, BNode* destNode, BPoint point)
 
 	status_t result = destNode->WriteAttr(kAttrPoseInfo, B_RAW_TYPE, 0,
 		&poseInfo, sizeof(poseInfo));
+
+	WritePoseInfoDirPath(destNode, destDirPath);
 
 	if (result == sizeof(poseInfo))
 		return B_OK;
@@ -501,7 +517,17 @@ FSSetPoseLocation(BEntry* entry, BPoint point)
 	if (result != B_OK)
 		return result;
 
-	return FSSetPoseLocation(destNodeRef.vnode(), &node, point);
+	// Resolve the parent's real path so ReadPoseInfo() can match it after a
+	// reboot, when this session's vnode ids no longer mean anything.
+	BPath parentPath;
+	BEntry parentEntry;
+	const char* pathArg = NULL;
+	if (parent.GetEntry(&parentEntry) == B_OK
+		&& parentEntry.GetPath(&parentPath) == B_OK) {
+		pathArg = parentPath.Path();
+	}
+
+	return FSSetPoseLocation(destNodeRef.vnode(), &node, point, pathArg);
 }
 
 
@@ -524,9 +550,20 @@ FSGetPoseLocation(const BNode* node, BPoint* point)
 }
 
 
+// Resolves a BDirectory's absolute path for kAttrPoseInfoDir; returns an
+// empty path (Path() == NULL) on failure.
+static void
+GetDirectoryPath(BDirectory* dir, BPath* path)
+{
+	BEntry dirEntry;
+	if (dir->GetEntry(&dirEntry) == B_OK)
+		dirEntry.GetPath(path);
+}
+
+
 static void
 SetupPoseLocation(ino_t sourceParentIno, ino_t destParentIno, const BNode* sourceNode,
-	BNode* destNode, BPoint* loc)
+	BNode* destNode, BPoint* loc, const char* destDirPath = NULL)
 {
 	BPoint point;
 	if (loc == NULL
@@ -544,7 +581,7 @@ SetupPoseLocation(ino_t sourceParentIno, ino_t destParentIno, const BNode* sourc
 		// where copying positions would not work
 		// ToSo:
 		// should push all this logic to upper levels
-		FSSetPoseLocation(destParentIno, destNode, *loc);
+		FSSetPoseLocation(destParentIno, destNode, *loc, destDirPath);
 	}
 }
 
@@ -1202,6 +1239,9 @@ MoveTask(BObjectList<entry_ref, true>* srcList, BEntry* destEntry, BList* pointL
 					poseInfo.fLocation = *loc;
 					sourceNode->WriteAttr(kAttrPoseInfo, B_RAW_TYPE, 0, &poseInfo,
 						sizeof(poseInfo));
+					BPath destDirPath;
+					GetDirectoryPath(&destDir, &destDirPath);
+					WritePoseInfoDirPath(sourceNode, destDirPath.Path());
 				}
 				delete sourceNode;
 			}
@@ -1404,9 +1444,11 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 
 		node_ref destNodeRef;
 		destDir->GetNodeRef(&destNodeRef);
+		BPath destDirPath;
+		GetDirectoryPath(destDir, &destDirPath);
 		// copy or write new pose location as a first thing
 		SetupPoseLocation(ref.vdirectory(), destNodeRef.vnode(), &srcLink,
-			&newLink, loc);
+			&newLink, loc, destDirPath.Path());
 
 		BNodeInfo nodeInfo(&newLink);
 		nodeInfo.SetType(B_LINK_MIMETYPE);
@@ -1463,9 +1505,11 @@ LowLevelCopy(BEntry* srcEntry, StatStruct* srcStat, BDirectory* destDir,
 
 	node_ref destNodeRef;
 	destDir->GetNodeRef(&destNodeRef);
+	BPath destDirPath;
+	GetDirectoryPath(destDir, &destDirPath);
 	// copy or write new pose location as a first thing
 	SetupPoseLocation(ref.vdirectory(), destNodeRef.vnode(), &srcFile,
-		&destFile, loc);
+		&destFile, loc, destDirPath.Path());
 
 	char* buffer = new char[bufsize];
 	try {
@@ -1702,8 +1746,10 @@ CopyFolder(BEntry* srcEntry, BDirectory* destDir,
 	// copy or write new pose location
 	node_ref destNodeRef;
 	destDir->GetNodeRef(&destNodeRef);
+	BPath destDirPath;
+	GetDirectoryPath(destDir, &destDirPath);
 	SetupPoseLocation(ref.vdirectory(), destNodeRef.vnode(), &srcDir,
-		&newDir, loc);
+		&newDir, loc, destDirPath.Path());
 
 	while (srcDir.GetNextEntry(&entry) == B_OK) {
 
@@ -1890,6 +1936,9 @@ MoveItem(BEntry* entry, BDirectory* destDir, BPoint* loc, uint32 moveMode,
 			if (loc && loc != (BPoint*)-1) {
 				link.WriteAttr(kAttrPoseInfo, B_RAW_TYPE, 0, &poseInfo,
 					sizeof(PoseInfo));
+				BPath destDirPath;
+				GetDirectoryPath(destDir, &destDirPath);
+				WritePoseInfoDirPath(&link, destDirPath.Path());
 			}
 
 			BNodeInfo nodeInfo(&link);
@@ -2144,6 +2193,9 @@ MoveEntryToTrash(BEntry* entry, BPoint* loc, Undo &undo)
 		poseInfo.fInitedDirectory = statbuf.st_ino;
 		poseInfo.fLocation = *loc;
 		sourceNode->WriteAttr(kAttrPoseInfo, B_RAW_TYPE, 0, &poseInfo, sizeof(poseInfo));
+		BPath trashDirPath;
+		GetDirectoryPath(&trash_dir, &trashDirPath);
+		WritePoseInfoDirPath(sourceNode, trashDirPath.Path());
 		delete sourceNode;
 	}
 

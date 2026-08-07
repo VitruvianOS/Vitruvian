@@ -945,8 +945,12 @@ Model::WatchVolumeAndMountPoint(uint32 , BHandler* target)
 {
 	ASSERT(IsVolume());
 
-	if (fEntryRef.name != NULL && fVolumeName != NULL
-		&& strcmp(fEntryRef.name, "/") == 0) {
+	// Every volume-root Model's fEntryRef.name is "." (never "/"), and that's
+	// true for every mounted volume's root, so compare the resolved path instead.
+	BEntry entry(&fEntryRef);
+	BPath path;
+	if (fVolumeName != NULL && entry.InitCheck() == B_OK
+		&& entry.GetPath(&path) == B_OK && strcmp(path.Path(), "/") == 0) {
 		// watch mount point for root volume
 		BEntry mountPointEntry("/");
 		Model mountPointModel(&mountPointEntry);

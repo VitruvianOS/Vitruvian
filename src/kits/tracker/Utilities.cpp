@@ -43,6 +43,9 @@ All rights reserved.
 #include <stdlib.h>
 #include <time.h>
 
+#include <syscalls.h>
+#include <driver_settings.h>
+
 #include <BitmapStream.h>
 #include <Catalog.h>
 #include <ControlLook.h>
@@ -1682,8 +1685,10 @@ PositionPassingMenuItem::Invoke(BMessage* message)
 bool
 BootedInSafeMode()
 {
-	const char* safeMode = getenv("SAFEMODE");
-	return (safeMode && strcmp(safeMode, "yes") == 0);
+	char buffer[32];
+	size_t size = sizeof(buffer);
+	return _kern_get_safemode_option(B_SAFEMODE_SAFE_MODE, buffer, &size)
+		== B_OK;
 }
 
 

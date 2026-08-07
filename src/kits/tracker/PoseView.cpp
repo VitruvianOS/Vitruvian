@@ -799,6 +799,15 @@ BPoseView::SavePoseLocations(BRect* frameIfDesktop)
 
 	bool isDesktop = !IsFilePanel() && IsDesktopView() && (frameIfDesktop != NULL);
 
+	// Resolved once, outside the loop: targetPath is written to each pose's
+	// kAttrPoseInfoDir below so ReadPoseInfo() can match it after a reboot.
+	BPath targetPath;
+	BEntry targetEntry;
+	if (targetModel->EntryRef() != NULL
+		&& targetEntry.SetTo(targetModel->EntryRef()) == B_OK) {
+		targetEntry.GetPath(&targetPath);
+	}
+
 	int32 poseCount = fPoseList->CountItems();
 	for (int32 index = 0; index < poseCount; index++) {
 		BPose* pose = fPoseList->ItemAt(index);
@@ -875,6 +884,12 @@ BPoseView::SavePoseLocations(BRect* frameIfDesktop)
 				model->WriteAttrKillForeign(kAttrPoseInfo,
 					kAttrPoseInfoForeign, B_RAW_TYPE, 0, &poseInfo,
 					sizeof(poseInfo));
+
+				// Persist so ReadPoseInfo() can match this location after a reboot.
+				if (targetPath.Path() != NULL && model->Node() != NULL) {
+					model->Node()->WriteAttr(kAttrPoseInfoDir, B_STRING_TYPE, 0,
+						targetPath.Path(), strlen(targetPath.Path()) + 1);
+				}
 
 				if (isDesktop) {
 					model->WriteAttrKillForeign(kAttrExtendedPoseInfo,
@@ -3096,16 +3111,46 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 	if (result == kReadAttrFailed) {
 		poseInfo->fInitedDirectory = -1LL;
 		poseInfo->fInvisible = false;
-	} else if (TargetModel() == NULL
-		|| (poseInfo->fInitedDirectory != model->EntryRef()->vdirectory()
-			&& (poseInfo->fInitedDirectory
-				!= TargetModel()->NodeRef()->vnode()))) {
-		// info was read properly but it's not for this directory
+	} else if (TargetModel() == NULL) {
 		poseInfo->fInitedDirectory = -1LL;
-	} else if (poseInfo->fLocation.x < -kSanePoseLocation
-		|| poseInfo->fLocation.x > kSanePoseLocation
-		|| poseInfo->fLocation.y < -kSanePoseLocation
-		|| poseInfo->fLocation.y > kSanePoseLocation) {
+	} else {
+		// Prefer the reboot-stable kAttrPoseInfoDir path; fall back to the
+		// legacy vnode id compare when a node has no path attribute.
+		bool directoryMatches = false;
+		char savedDirPath[B_PATH_NAME_LENGTH];
+		ssize_t pathLen = -1;
+		if (model->Node() != NULL) {
+			pathLen = model->Node()->ReadAttr(kAttrPoseInfoDir, B_STRING_TYPE,
+				0, savedDirPath, sizeof(savedDirPath) - 1);
+		}
+		if (pathLen > 0) {
+			savedDirPath[pathLen] = '\0';
+			BEntry targetEntry;
+			BPath targetPath;
+			if (TargetModel()->EntryRef() != NULL
+				&& targetEntry.SetTo(TargetModel()->EntryRef()) == B_OK
+				&& targetEntry.GetPath(&targetPath) == B_OK
+				&& targetPath.Path() != NULL
+				&& strcmp(savedDirPath, targetPath.Path()) == 0) {
+				directoryMatches = true;
+			}
+		} else {
+			// No path attribute: legacy within-session identity check.
+			directoryMatches =
+				poseInfo->fInitedDirectory == model->EntryRef()->vdirectory()
+				|| poseInfo->fInitedDirectory
+					== TargetModel()->NodeRef()->vnode();
+		}
+
+		if (!directoryMatches)
+			poseInfo->fInitedDirectory = -1LL;
+	}
+
+	if (poseInfo->fInitedDirectory != -1LL
+		&& (poseInfo->fLocation.x < -kSanePoseLocation
+			|| poseInfo->fLocation.x > kSanePoseLocation
+			|| poseInfo->fLocation.y < -kSanePoseLocation
+			|| poseInfo->fLocation.y > kSanePoseLocation)) {
 		// location values not realistic, probably screwed up, force reset
 		poseInfo->fInitedDirectory = -1LL;
 	}

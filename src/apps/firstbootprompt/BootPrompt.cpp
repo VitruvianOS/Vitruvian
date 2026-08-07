@@ -58,8 +58,6 @@ BootPromptApp::MessageReceived(BMessage* message)
 				BPrivate::KMessage msg(BPrivate::B_JANUS_LOGIN_OK);
 				msg.AddString("user", "vos-live");
 				msg.AddString("mode", "live");
-				if (message->GetBool("enable_ssh", false))
-					msg.AddInt32("enable_ssh", 1);
 				BPrivate::KMessage reply;
 				msg.SendTo(janusPort, -1, &reply,
 					2000000LL, 5000000LL, getpid());

@@ -18,7 +18,6 @@ enum {
 
 
 class BButton;
-class BCheckBox;
 class BLanguage;
 class BListView;
 class BMenuItem;
@@ -48,9 +47,6 @@ private:
 			void				_ApplyLocaleToSession();
 			void				_LaunchInstaller();
 
-			bool				_DebugBuild() const;
-			bool				_SshRequested() const;
-
 private:
 			BTextView*			fInfoTextView;
 			BStringView*		fLanguagesLabelView;
@@ -60,8 +56,6 @@ private:
 			BMenuItem*			fDefaultKeymapItem;
 			BButton*			fTryItButton;
 			BButton*			fInstallButton;
-			// Debug builds only (visible when /etc/vos/debug exists).
-			BCheckBox*			fEnableSshCheck;
 };
 
 

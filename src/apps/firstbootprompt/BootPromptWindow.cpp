@@ -20,7 +20,6 @@
 #include <Bitmap.h>
 #include <Button.h>
 #include <Catalog.h>
-#include <CheckBox.h>
 #include <ControlLook.h>
 #include <Directory.h>
 #include <Entry.h>
@@ -177,11 +176,6 @@ BootPromptWindow::BootPromptWindow()
 		new BMessage(MSG_RUN_INSTALLER));
 	fInstallButton->SetIcon(&installerIcon);
 
-	fEnableSshCheck = new BCheckBox("enableSsh",
-		B_TRANSLATE("Enable debug SSH access"), NULL);
-	if (!_DebugBuild())
-		fEnableSshCheck->Hide();
-
 	data = (const uint8_t*)res->LoadResource('VICN', "Language", &size);
 	IconView* languageIcon = new IconView(B_LARGE_ICON);
 	languageIcon->SetIcon(data, size, B_LARGE_ICON);
@@ -247,7 +241,6 @@ BootPromptWindow::BootPromptWindow()
 		.AddGroup(B_VERTICAL)
 			.SetInsets(0)
 			.Add(fInfoTextView)
-			.Add(fEnableSshCheck)
 			.AddGroup(B_HORIZONTAL)
 				.SetInsets(0)
 				.AddGlue()
@@ -301,8 +294,6 @@ BootPromptWindow::MessageReceived(BMessage* message)
 		case MSG_BOOT_DESKTOP:
 		case MSG_RUN_INSTALLER:
 			_ApplyLocaleToSession();
-			if (message->what == MSG_BOOT_DESKTOP && _SshRequested())
-				message->AddBool("enable_ssh", true);
 			be_app->PostMessage(message);
 			break;
 
@@ -338,19 +329,6 @@ BootPromptWindow::_ApplyLocaleToSession()
 }
 
 
-bool
-BootPromptWindow::_DebugBuild() const
-{
-	return access("/etc/vos/debug", F_OK) == 0;
-}
-
-
-bool
-BootPromptWindow::_SshRequested() const
-{
-	return _DebugBuild() && fEnableSshCheck != NULL
-		&& fEnableSshCheck->Value() == B_CONTROL_ON;
-}
 
 
 bool

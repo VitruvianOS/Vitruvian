@@ -19,7 +19,7 @@
 #include <sys/statvfs.h>
 
 #include "Team.h"
-#include "fs/fs_caps_user.h"
+#include "../../kernel/nexus/nexus/fs_caps.h"
 
 
 namespace BKernelPrivate {
@@ -152,6 +152,15 @@ static inline bool
 is_readonly_filesystem(const char* fsType)
 {
 	return ::BPrivate::FsCaps::is_readonly(fsType);
+}
+
+
+// vfat/exfat/ntfs are NOT idmap-capable; they use uid=/gid= instead (see
+// build_mount_options).
+static inline bool
+is_idmap_capable_filesystem(const char* fsType)
+{
+	return ::BPrivate::FsCaps::is_idmap_capable(fsType);
 }
 
 
@@ -458,6 +467,55 @@ is_readonly_device(const char* devName)
 }
 
 
+// Reads a udev block-device property; needs no open() of the device node,
+// unlike a raw blkid probe.
+static inline bool
+get_udev_property(const char* devName, const char* propertyName,
+	char* out, size_t outSize)
+{
+	struct udev* udev = BKernelPrivate::Team::GetUDev();
+	if (!udev)
+		return false;
+
+	struct udev_device* dev = udev_device_new_from_subsystem_sysname(
+		udev, "block", devName);
+	if (!dev)
+		return false;
+
+	bool found = false;
+	const char* value = udev_device_get_property_value(dev, propertyName);
+	if (value && value[0]) {
+		strlcpy(out, value, outSize);
+		found = true;
+	}
+
+	udev_device_unref(dev);
+	return found;
+}
+
+
+static inline bool
+get_udev_fs_type(const char* devName, char* typeOut, size_t typeSize)
+{
+	return get_udev_property(devName, "ID_FS_TYPE", typeOut, typeSize);
+}
+
+
+// The GPT type GUID or MBR type id; the value BPartition::Type() must expose.
+static inline bool
+get_udev_part_type(const char* devName, char* typeOut, size_t typeSize)
+{
+	return get_udev_property(devName, "ID_PART_ENTRY_TYPE", typeOut, typeSize);
+}
+
+
+static inline bool
+get_udev_fs_label(const char* devName, char* labelOut, size_t labelSize)
+{
+	return get_udev_property(devName, "ID_FS_LABEL", labelOut, labelSize);
+}
+
+
 static inline bool
 is_whole_disk(const char* devName)
 {
@@ -596,6 +654,7 @@ get_partition_name(const char* devName, int index, char* partName, size_t partNa
 
 static inline void
 build_mount_options(const char* fsType, const char* userOptions,
+	uid_t owner, gid_t ownerGroup,
 	char* options, size_t optionsSize)
 {
 	options[0] = '\0';
@@ -605,12 +664,16 @@ build_mount_options(const char* fsType, const char* userOptions,
 
 	if (strcmp(fsType, "ntfs3") == 0 || strcmp(fsType, "ntfs") == 0 ||
 		strcmp(fsType, "vfat") == 0 || strcmp(fsType, "exfat") == 0) {
+		// FAT-family fs carry no on-disk ownership; mount all files as the
+		// requesting user, not the (possibly root) calling process.
+		uid_t u = (owner != (uid_t)-1) ? owner : getuid();
+		gid_t g = (ownerGroup != (gid_t)-1) ? ownerGroup : getgid();
 		if (options[0] != '\0')
 			strlcat(options, ",", optionsSize);
 
 		char uidgid[64];
-		snprintf(uidgid, sizeof(uidgid), "uid=%d,gid=%d,dmask=022,fmask=133",
-			getuid(), getgid());
+		snprintf(uidgid, sizeof(uidgid), "uid=%u,gid=%u,dmask=022,fmask=133",
+			(unsigned)u, (unsigned)g);
 		strlcat(options, uidgid, optionsSize);
 	}
 }

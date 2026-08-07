@@ -11,6 +11,7 @@
 #include <DiskDeviceDefs.h>
 #include <Messenger.h>
 #include <Mime.h>
+#include <sys/types.h>
 
 
 class BBitmap;
@@ -53,6 +54,8 @@ public:
 			uint32				Flags() const;
 
 			const char*			Name() const;
+			// Returns by value (may synthesize); use RawContentName() for
+			// the raw stored pointer.
 			BString				ContentName() const;
 			const char*			RawContentName() const;
 			const char*			Type() const;			// See DiskDeviceTypes.h
@@ -68,11 +71,13 @@ public:
 			status_t			GetIcon(BBitmap* icon, icon_size which) const;
 			status_t			GetIcon(uint8** _data, size_t* _size,
 									type_code* _type) const;
-			status_t			GetMountPoint(BPath* mountPoint) const;
+			status_t			GetMountPoint(BPath* mountPoint,
+									uid_t owner = (uid_t)-1) const;
 
 			status_t			Mount(const char* mountPoint = NULL,
 									uint32 mountFlags = 0,
-									const char* parameters = NULL);
+									const char* parameters = NULL,
+									uid_t owner = (uid_t)-1);
 			status_t			Unmount(uint32 unmountFlags = 0);
 
 	// Hierarchy Info

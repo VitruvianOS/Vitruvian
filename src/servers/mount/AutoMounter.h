@@ -41,6 +41,8 @@ private:
 									bool initialRescan = false,
 									partition_id deviceID = B_INVALID_DEV);
 			void				_MountVolume(const BMessage* message);
+	static	void				_NotifyMountError(const char* volumeName,
+									status_t status);
 			bool				_SuggestForceUnmount(const char* name,
 									status_t error);
 			void				_ReportUnmountError(const char* name,

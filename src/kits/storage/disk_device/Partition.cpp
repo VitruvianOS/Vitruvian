@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <new>
+#include <pwd.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -31,6 +32,32 @@
 #include <syscalls.h>
 
 #include "PartitionDelegate.h"
+
+
+// mkdir -p: creates `path` and every missing ancestor (EEXIST is success).
+static status_t
+make_dir_recursive(const char* path, mode_t mode)
+{
+	if (path == NULL || path[0] == '\0')
+		return B_BAD_VALUE;
+
+	char buf[B_PATH_NAME_LENGTH];
+	if (strlcpy(buf, path, sizeof(buf)) >= sizeof(buf))
+		return B_NAME_TOO_LONG;
+
+	// Create each intermediate component, then the final one.
+	for (char* p = buf + 1; *p != '\0'; p++) {
+		if (*p != '/')
+			continue;
+		*p = '\0';
+		if (mkdir(buf, mode) < 0 && errno != EEXIST)
+			return -errno;
+		*p = '/';
+	}
+	if (mkdir(buf, mode) < 0 && errno != EEXIST)
+		return -errno;
+	return B_OK;
+}
 
 
 //#define TRACE_PARTITION
@@ -515,7 +542,7 @@ BPartition::GetIcon(uint8** _data, size_t* _size, type_code* _type) const
 	\return \c B_OK, if everything went fine, an error code otherwise.
 */
 status_t
-BPartition::GetMountPoint(BPath* mountPoint) const
+BPartition::GetMountPoint(BPath* mountPoint, uid_t owner) const
 {
 	if (mountPoint == NULL)
 		return B_BAD_VALUE;
@@ -539,17 +566,29 @@ BPartition::GetMountPoint(BPath* mountPoint) const
 
 	// partition not mounted
 	// get the volume name
-	const char* volumeName = ContentName();
-	if (volumeName == NULL || strlen(volumeName) == 0)
+	// Note: ContentName() returns BString by value -- hold it, don't bind
+	// the result directly to a const char* (dangling temporary).
+	BString volumeName = ContentName();
+	if (volumeName.IsEmpty())
 		volumeName = Name();
-	if (volumeName == NULL || strlen(volumeName) == 0)
+	if (volumeName.IsEmpty())
 		volumeName = "unnamed volume";
 
-	// construct a path name from the volume name
-	// replace '/'s and prepend a '/'
-	BString mountPointPath(volumeName);
-	mountPointPath.ReplaceAll('/', '-');
-	mountPointPath.Insert("/", 0);
+	// Nest under /media/<username> when an owner is given, so each session's
+	// volumes are isolated on disk (still under "/media/" for Tracker's pose filter).
+	static const char* const kMountBase = "/media";
+	BString mountPointPath(kMountBase);
+	if (owner != (uid_t)-1) {
+		struct passwd* pw = getpwuid(owner);
+		if (pw != NULL && pw->pw_name != NULL && pw->pw_name[0] != '\0')
+			mountPointPath << "/" << pw->pw_name;
+	}
+	BString mountLeaf(volumeName);
+	mountLeaf.ReplaceAll('/', '-');
+	// Guard against an empty leaf, which would spin the uniqueness loop below.
+	if (mountLeaf.IsEmpty())
+		mountLeaf = "unnamed volume";
+	mountPointPath << "/" << mountLeaf;
 
 	// make the name unique
 	BString basePath(mountPointPath);
@@ -557,6 +596,10 @@ BPartition::GetMountPoint(BPath* mountPoint) const
 	while (true) {
 		BEntry entry;
 		status_t error = entry.SetTo(mountPointPath.String());
+		// A missing parent (/media or /media/<user>) just means this name
+		// is free; the parents get mkdir -p'd in Mount().
+		if (error == B_ENTRY_NOT_FOUND)
+			break;
 		if (error != B_OK)
 			return error;
 
@@ -592,7 +635,8 @@ BPartition::GetMountPoint(BPath* mountPoint) const
 	\return \c B_NOT_ALLOWED if a permission error occurs.
 */
 status_t
-BPartition::Mount(const char* mountPoint, uint32 mountFlags, const char* parameters)
+BPartition::Mount(const char* mountPoint, uint32 mountFlags, const char* parameters,
+	uid_t owner)
 {
 	if (IsMounted())
 		return B_BUSY;
@@ -611,13 +655,24 @@ BPartition::Mount(const char* mountPoint, uint32 mountFlags, const char* paramet
 	BPath mountPointPath, markerPath;
 	if (!mountPoint) {
 		// get a unique mount point
-		error = GetMountPoint(&mountPointPath);
+		error = GetMountPoint(&mountPointPath, owner);
 		if (error != B_OK)
 			return error;
 
 		mountPoint = mountPointPath.Path();
 		markerPath = mountPointPath;
 		markerPath.Append(skAutoCreatePrefix);
+
+		// mkdir -p the parents (a plain mkdir of the immediate parent isn't
+		// enough when /media itself is also absent).
+		BPath mountParent;
+		if (mountPointPath.GetParent(&mountParent) == B_OK
+			&& mountParent.Path() != NULL) {
+			error = make_dir_recursive(mountParent.Path(),
+				S_IRWXU | S_IRWXG | S_IRWXO);
+			if (error != B_OK)
+				return error;
+		}
 
 		// create the directory
 		if (mkdir(mountPoint, S_IRWXU | S_IRWXG | S_IRWXO) < 0)
@@ -632,20 +687,26 @@ BPartition::Mount(const char* mountPoint, uint32 mountFlags, const char* paramet
 	}
 
 	// mount the partition
-	dev_t device = fs_mount_volume(mountPoint, partitionPath.Path(), NULL,
-		mountFlags, parameters);
+	//
+	// Pass the already-known ContentType() instead of NULL: re-detecting it
+	// would open() the raw device, which an unprivileged caller can't do.
+	dev_t device = fs_mount_volume(mountPoint, partitionPath.Path(),
+		ContentType(), mountFlags, parameters, owner);
 
-	// delete the mount point on error, if we created it
-	if (device < B_OK && deleteMountPoint) {
-		rmdir(markerPath.Path());
-		rmdir(mountPoint);
+	// dev_t is unsigned so "< B_OK" never fires; capture errno before the
+	// rmdir cleanup below can clobber it.
+	if (device == B_INVALID_DEV) {
+		status_t mountError = (errno != 0) ? (status_t)-errno : B_ERROR;
+		// delete the mount point on error, if we created it
+		if (deleteMountPoint) {
+			rmdir(markerPath.Path());
+			rmdir(mountPoint);
+		}
+		return mountError;
 	}
 
 	// update object, if successful
-	if (device >= 0)
-		return Device()->Update();
-
-	return device;
+	return Device()->Update();
 }
 
 

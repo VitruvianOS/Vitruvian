@@ -2,15 +2,14 @@
  *  Copyright 2026, Dario Casalinuovo. All rights reserved.
  *  Distributed under the terms of the LGPL License.
  *
- *  Thin compatibility shims over BPrivate::FsCaps (fs_caps_user.h).
- *  The canonical table lives in fs_caps.json; both this header and the
- *  kernel module consume generated views with a shared checksum.
+ *  Thin compatibility shims over BPrivate::FsCaps. The canonical table
+ *  (nexus/fs_caps.h) is shared verbatim with the kernel module.
  */
 
 #ifndef _LIBROOT_FS_TYPE_FILTER_H
 #define _LIBROOT_FS_TYPE_FILTER_H
 
-#include "fs_caps_user.h"
+#include "../../kernel/nexus/nexus/fs_caps.h"
 
 
 static inline bool

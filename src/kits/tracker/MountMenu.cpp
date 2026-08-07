@@ -42,10 +42,13 @@ All rights reserved.
 #include <Debug.h>
 #include <Locale.h>
 #include <MenuItem.h>
+#include <Messenger.h>
 #include <Mime.h>
 #include <InterfaceDefs.h>
 #include <VolumeRoster.h>
 #include <Volume.h>
+
+#include <MountServer.h>
 
 #include <fs_info.h>
 
@@ -135,7 +138,8 @@ AddMenuItemVisitor::Visit(BPartition* partition, int32 level)
 
 	BMessage* message = new BMessage(partition->IsMounted() ?
 		kUnmountVolume : kMountVolume);
-	message->AddInt32("id", partition->ID());
+	// partition_id is dev_t (8 bytes on this port), so Int64 not Int32.
+	message->AddInt64("id", partition->ID());
 
 	// TODO: for now, until we actually have disk device icons
 	BMenuItem* item;
@@ -231,7 +235,9 @@ MountMenu::AddDynamicItem(add_state)
 		new BMessage(kRunAutomounterSettings));
 	AddItem(mountSettings);
 
-	SetTargetForItems(be_app);
+	// These messages are handled by mount_server's AutoMounter, a separate
+	// process, so route by signature rather than to the local be_app.
+	SetTargetForItems(BMessenger(kMountServerSignature));
 
 	return false;
 }

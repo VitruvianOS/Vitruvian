@@ -500,9 +500,9 @@ UrlWrapper::ArgvReceived(int32 argc, char** argv)
 		uint32 flags = 0;
 		fprintf(stderr, "parms:'%s'\n", parameter.String());
 		volume = fs_mount_volume(prettyPath.String(), NULL, "nfs4", flags,
-			parameter.String());
-		if (volume < B_OK) {
-			fprintf(stderr, "fs_mount_volume: %s\n", strerror(volume));
+			parameter.String(), (uid_t)-1);
+		if (volume == B_INVALID_DEV) {
+			fprintf(stderr, "fs_mount_volume failed\n");
 			return;
 		}
 

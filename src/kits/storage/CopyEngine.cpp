@@ -130,22 +130,18 @@ BCopyEngine::CopyEntry(const Entry& sourceEntry, const Entry& destEntry)
 status_t
 BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 {
-	// apply entry filter
 	if (fController != NULL && !fController->EntryStarted(sourcePath))
 		return B_OK;
 
-	// stat source
 	struct stat sourceStat;
 	if (lstat(sourcePath, &sourceStat) < 0) {
 		return _HandleEntryError(sourcePath, errno,
 			"Couldn't access \"%s\": %s\n", sourcePath, strerror(errno));
 	}
 
-	// stat destination
 	struct stat destStat;
 	bool destExists = lstat(destPath, &destStat) == 0;
 
-	// check whether to delete/create the destination
 	bool unlinkDest = destExists;
 	bool createDest = true;
 	if (destExists) {
@@ -154,12 +150,11 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 				|| (fFlags & MERGE_EXISTING_DIRECTORIES) == 0) {
 				return _HandleEntryError(sourcePath, B_FILE_EXISTS,
 					"Can't copy \"%s\", since directory \"%s\" is in the "
-					"way.\n", sourcePath, destPath);
-			}
+				"way.\n", sourcePath, destPath);
+		}
 
-			if (S_ISDIR(sourceStat.st_mode)) {
-				// both are dirs; nothing to do
-				unlinkDest = false;
+		if (S_ISDIR(sourceStat.st_mode)) {
+			unlinkDest = false;
 				destExists = false;
 			}
 		} else if ((fFlags & UNLINK_DESTINATION) == 0) {
@@ -169,7 +164,6 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 		}
 	}
 
-	// unlink the destination
 	if (unlinkDest) {
 		if (unlink(destPath) < 0) {
 			return _HandleEntryError(sourcePath, errno,
@@ -177,7 +171,6 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 		}
 	}
 
-	// open source node
 	BNode _sourceNode;
 	BFile sourceFile;
 	BDirectory sourceDir;
@@ -219,7 +212,6 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 
 			destNode = &destDir;
 		} else if (S_ISREG(sourceStat.st_mode)) {
-			// create file
 			error = BDirectory().CreateFile(destPath, &destFile);
 			if (error != B_OK) {
 				return _HandleEntryError(sourcePath, error,
@@ -229,7 +221,6 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 
 			destNode = &destFile;
 
-			// copy file contents
 			error = _CopyFileData(sourcePath, sourceFile, destPath, destFile);
 			if (error != B_OK) {
 				if (fController != NULL
@@ -239,20 +230,17 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 				return error;
 			}
 		} else if (S_ISLNK(sourceStat.st_mode)) {
-			// read symlink
 			char* linkTo = fBuffer;
 			ssize_t bytesRead = readlink(sourcePath, linkTo, fBufferSize - 1);
 			if (bytesRead < 0) {
 				return _HandleEntryError(sourcePath, errno,
 					"Failed to read symlink \"%s\": %s\n", sourcePath,
-					strerror(errno));
-			}
+				strerror(errno));
+		}
 
-			// null terminate the link contents
-			linkTo[bytesRead] = '\0';
+		linkTo[bytesRead] = '\0';
 
-			// create symlink
-			error = BDirectory().CreateSymLink(destPath, linkTo, &destSymLink);
+		error = BDirectory().CreateSymLink(destPath, linkTo, &destSymLink);
 			if (error != B_OK) {
 				return _HandleEntryError(sourcePath, error,
 					"Failed to create symlink \"%s\": %s\n", destPath,
@@ -286,10 +274,8 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 		destNode->SetModificationTime(sourceStat.st_mtime);
 	}
 
-	// the destination node is no longer needed
 	destNode->Unset();
 
-	// recurse
 	if ((fFlags & COPY_RECURSIVELY) != 0 && S_ISDIR(sourceStat.st_mode)) {
 		BEntry entry;
 		while (sourceDir.GetNextEntry(&entry) == B_OK) {
@@ -297,7 +283,6 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 			if (entry.GetName(entryName) != B_OK)
 				continue;
 
-			// construct new entry paths
 			BPath sourceEntryPath;
 			error = sourceEntryPath.SetTo(sourcePath, entryName);
 			if (error != B_OK) {
@@ -314,7 +299,6 @@ BCopyEngine::_CopyEntry(const char* sourcePath, const char* destPath)
 					"\"%s\": %s\n", destPath, entryName, strerror(error));
 			}
 
-			// copy the entry
 			error = _CopyEntry(sourceEntryPath.Path(), destEntryPath.Path());
 			if (error != B_OK) {
 				if (fController != NULL
@@ -338,7 +322,6 @@ BCopyEngine::_CopyFileData(const char* sourcePath, BFile& source,
 {
 	off_t offset = 0;
 	while (true) {
-		// read
 		ssize_t bytesRead = source.ReadAt(offset, fBuffer, fBufferSize);
 		if (bytesRead < 0) {
 			_NotifyError(bytesRead, "Failed to read from file \"%s\": %s\n",
@@ -349,7 +332,6 @@ BCopyEngine::_CopyFileData(const char* sourcePath, BFile& source,
 		if (bytesRead == 0)
 			return B_OK;
 
-		// write
 		ssize_t bytesWritten = destination.WriteAt(offset, fBuffer, bytesRead);
 		if (bytesWritten < 0) {
 			_NotifyError(bytesWritten, "Failed to write to file \"%s\": %s\n",
@@ -406,15 +388,12 @@ BCopyEngine::_CopyAttributes(const char* sourcePath, BNode& source,
 
 		// copy the attribute
 		off_t offset = 0;
-		off_t bytesLeft = attrInfo.size;
-		// go at least once through the loop, so that an empty attribute will be
-		// created as well
+	off_t bytesLeft = attrInfo.size;
 		do {
 			size_t toRead = fBufferSize;
 			if ((off_t)toRead > bytesLeft)
 				toRead = bytesLeft;
 
-			// read
 			ssize_t bytesRead = source.ReadAttr(attrName, attrInfo.type,
 				offset, fBuffer, toRead);
 			if (bytesRead < 0) {
@@ -430,7 +409,6 @@ BCopyEngine::_CopyAttributes(const char* sourcePath, BNode& source,
 			if (bytesRead == 0 && offset > 0)
 				break;
 
-			// write
 			ssize_t bytesWritten = destination.WriteAttr(attrName,
 				attrInfo.type, offset, fBuffer, bytesRead);
 			if (bytesWritten < 0) {

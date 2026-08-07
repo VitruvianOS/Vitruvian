@@ -15,7 +15,7 @@
 #include <pthread.h>
 
 #include "fs/fs_type_filter.h"
-#include "fs/fs_caps_user.h"
+#include "../../kernel/nexus/nexus/fs_caps.h"
 #include "fs/utils.h"
 #include <MountInfo.h>
 #include "KernelDebug.h"

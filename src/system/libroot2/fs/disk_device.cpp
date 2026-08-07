@@ -181,17 +181,14 @@ fill_partition_info(const char* devPath, const char* sysPath,
 		fclose(f);
 	}
 
-	char typePath[PATH_MAX];
-	snprintf(typePath, sizeof(typePath), "%s/type", sysPath);
-	f = fopen(typePath, "r");
-	if (f) {
-		char buf[256];
-		if (fgets(buf, sizeof(buf), f)) {
-			size_t l = strlen(buf);
-			if (l && buf[l-1] == '\n') buf[l-1] = '\0';
-			data->type = (buf[0] ? strdup(buf) : NULL);
-		}
-		fclose(f);
+	// Partition type is udev's ID_PART_ENTRY_TYPE property, not a sysfs
+	// attribute (partitions have no /sys/.../type file).
+	const char* typeSysname = strrchr(devPath, '/');
+	typeSysname = typeSysname ? typeSysname + 1 : devPath;
+	char partType[128] = {0};
+	if (BKernelPrivate::get_udev_part_type(typeSysname, partType,
+			sizeof(partType)) && partType[0]) {
+		data->type = strdup(partType);
 	}
 
 	char fsType[64] = {0};
@@ -252,12 +249,37 @@ fill_partition_info(const char* devPath, const char* sysPath,
 			data->flags |= B_PARTITION_READ_ONLY;
 	} else {
 		data->volume = -1;
-		if (BKernelPrivate::detect_filesystem(devPath, fsType,
+
+		// Prefer udev's already-probed property: needs no open() of the
+		// device node, unlike the blkid fallback below.
+		const char* sysname = strrchr(devPath, '/');
+		sysname = sysname ? sysname + 1 : devPath;
+
+		char udevType[64] = {0};
+		if (BKernelPrivate::get_udev_fs_type(sysname, udevType,
+				sizeof(udevType))) {
+			data->flags |= B_PARTITION_FILE_SYSTEM;
+			data->content_type = strdup(udevType);
+			if (BKernelPrivate::is_readonly_filesystem(udevType))
+				data->flags |= B_PARTITION_READ_ONLY;
+
+			char udevLabel[256] = {0};
+			if (BKernelPrivate::get_udev_fs_label(sysname, udevLabel,
+					sizeof(udevLabel))) {
+				data->content_name = strdup(udevLabel);
+			}
+		} else if (BKernelPrivate::detect_filesystem(devPath, fsType,
 				sizeof(fsType), true)) {
 			data->flags |= B_PARTITION_FILE_SYSTEM;
 			data->content_type = (fsType[0] ? strdup(fsType) : NULL);
 			if (BKernelPrivate::is_readonly_filesystem(fsType))
 				data->flags |= B_PARTITION_READ_ONLY;
+
+			char label[256] = {0};
+			if (BKernelPrivate::get_volume_label(devPath, label,
+					sizeof(label)) && label[0]) {
+				data->content_name = strdup(label);
+			}
 		}
 	}
 }
@@ -573,35 +595,71 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 
 	dev_t devNum = (dev_t)deviceID;
 	char realSysName[NAME_MAX] = {0};
-	DIR* sysDir = opendir(SYS_BLOCK_PATH);
-	if (sysDir) {
-		struct dirent* sysEntry;
-		while ((sysEntry = readdir(sysDir)) != nullptr) {
-			if (sysEntry->d_name[0] == '.')
-				continue;
 
-			char devFile[PATH_MAX];
-			snprintf(devFile, sizeof(devFile), "%s/%s/dev",
-				SYS_BLOCK_PATH, sysEntry->d_name);
-			char buf[32];
-			if (read_sysfs_string(devFile, buf, sizeof(buf))) {
-				unsigned major = 0, minor = 0;
-				if (sscanf(buf, "%u:%u", &major, &minor) == 2) {
-					if (makedev(major, minor) == devNum) {
-						strlcpy(realSysName, sysEntry->d_name,
-							sizeof(realSysName));
-						break;
+	// Resolve via udev first: a partition id (e.g. "vda1") has no
+	// top-level /sys/block entry, so resolve to its parent disk instead.
+	struct udev* udev = BKernelPrivate::Team::GetUDev();
+	if (udev) {
+		struct udev_device* dev = udev_device_new_from_devnum(udev, 'b', devNum);
+		if (dev) {
+			const char* devtype = udev_device_get_devtype(dev);
+			if (devtype && strcmp(devtype, "partition") == 0) {
+				// Parent is owned by dev; do not unref it separately.
+				struct udev_device* parent
+					= udev_device_get_parent_with_subsystem_devtype(
+						dev, "block", "disk");
+				if (parent) {
+					const char* parentName = udev_device_get_sysname(parent);
+					if (parentName)
+						strlcpy(realSysName, parentName, sizeof(realSysName));
+				}
+			} else {
+				const char* name = udev_device_get_sysname(dev);
+				if (name)
+					strlcpy(realSysName, name, sizeof(realSysName));
+			}
+			udev_device_unref(dev);
+		}
+	}
+
+	if (realSysName[0] == '\0') {
+		// Fallback when udev is unavailable: only resolves whole-disk ids.
+		DIR* sysDir = opendir(SYS_BLOCK_PATH);
+		if (sysDir) {
+			struct dirent* sysEntry;
+			while ((sysEntry = readdir(sysDir)) != nullptr) {
+				if (sysEntry->d_name[0] == '.')
+					continue;
+
+				char devFile[PATH_MAX];
+				snprintf(devFile, sizeof(devFile), "%s/%s/dev",
+					SYS_BLOCK_PATH, sysEntry->d_name);
+				char buf[32];
+				if (read_sysfs_string(devFile, buf, sizeof(buf))) {
+					unsigned major = 0, minor = 0;
+					if (sscanf(buf, "%u:%u", &major, &minor) == 2) {
+						if (makedev(major, minor) == devNum) {
+							strlcpy(realSysName, sysEntry->d_name,
+								sizeof(realSysName));
+							break;
+						}
 					}
 				}
 			}
+			closedir(sysDir);
 		}
-		closedir(sysDir);
 	}
 
 	if (realSysName[0] == '\0')
 		return B_ENTRY_NOT_FOUND;
 
-	strlcpy(devName, realSysName, sizeof(devName));
+	// realSysName may be the parent disk of the id's own partition; rebuild
+	// devPath/devName to refer to it so fill_partition_info() fills the
+	// disk's data, not the partition's.
+	if (strcmp(devName, realSysName) != 0) {
+		strlcpy(devName, realSysName, sizeof(devName));
+		snprintf(devPath, sizeof(devPath), "/dev/%s", devName);
+	}
 
 	char sysPath[PATH_MAX];
 	snprintf(sysPath, sizeof(sysPath), "%s/%s", SYS_BLOCK_PATH, devName);
@@ -632,8 +690,10 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 	if (neededSize)
 		*neededSize = needed;
 
+	// Always signal B_BUFFER_OVERFLOW for a missing/too-small buffer, even
+	// when the caller passed buffer==NULL to discover the size.
 	if (buffer == nullptr || bufferSize < needed)
-		return (buffer == nullptr) ? B_OK : B_BUFFER_OVERFLOW;
+		return B_BUFFER_OVERFLOW;
 
 	memset(buffer, 0, bufferSize);
 
@@ -987,10 +1047,10 @@ _kern_mount_partition(partition_id id, const char* mountPoint,
 		mountFlags |= MS_RDONLY;
 
 	char options[MOUNT_OPTIONS_SIZE] = {0};
-	if (strcmp(fsType, "ntfs3") == 0 || strcmp(fsType, "ntfs") == 0 ||
-		strcmp(fsType, "vfat") == 0 || strcmp(fsType, "exfat") == 0) {
-		strlcpy(options, "uid=1000,gid=1000,dmask=022,fmask=133", sizeof(options));
-	}
+	// _kern_mount_partition has no threaded owner, so pass (uid_t)-1 ->
+	// the caller's own ids.
+	BKernelPrivate::build_mount_options(fsType, nullptr, (uid_t)-1, (gid_t)-1,
+		options, sizeof(options));
 
 	const char* mountData = options[0] != '\0' ? options : nullptr;
 

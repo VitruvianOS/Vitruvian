@@ -12,8 +12,12 @@
 
 #include <new>
 
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <syscalls.h>
+#include <driver_settings.h>
 
 #include <Alert.h>
 #include <AutoLocker.h>
@@ -33,6 +37,7 @@
 #include <Message.h>
 #include <Node.h>
 #include <NodeMonitor.h>
+#include <Notification.h>
 #include <Path.h>
 #include <PropertyInfo.h>
 #include <String.h>
@@ -110,8 +115,10 @@ private:
 static bool
 BootedInSafeMode()
 {
-	const char* safeMode = getenv("SAFEMODE");
-	return safeMode != NULL && strcmp(safeMode, "yes") == 0;
+	char buffer[32];
+	size_t size = sizeof(buffer);
+	return _kern_get_safemode_option(B_SAFEMODE_SAFE_MODE, buffer, &size)
+		== B_OK;
 }
 
 
@@ -600,71 +607,114 @@ AutoMounter::_MountVolumes(mount_mode normal, mount_mode removable,
 void
 AutoMounter::_MountVolume(const BMessage* message)
 {
-	partition_id id;
-	if (message->FindUInt64("id", (uint64*)&id) != B_OK)
+	// Kernel-attested uid, stamped by nexus on the originally-delivered
+	// message. (uid_t)-1 means it never crossed a port, so reject rather
+	// than mount as unowned/root-owned.
+	uid_t owner = message->SenderUid();
+	if (owner == (uid_t)-1) {
+		_NotifyMountError(B_TRANSLATE("volume"), B_PERMISSION_DENIED);
 		return;
+	}
+
+	// partition_id is dev_t (8 bytes); read via a local int64 to match
+	// FindInt64's exact-type requirement, then narrow.
+	int64 rawId;
+	if (message->FindInt64("id", &rawId) != B_OK)
+		return;
+	partition_id id = (partition_id)rawId;
 
 	BDiskDeviceRoster roster;
 	BPartition *partition;
 	BDiskDevice device;
-	if (roster.GetPartitionWithID(id, &device, &partition) != B_OK)
+	status_t lookupStatus = roster.GetPartitionWithID(id, &device, &partition);
+	if (lookupStatus != B_OK) {
+		// Report the actual status, not a hardcoded B_DEVICE_NOT_FOUND.
+		_NotifyMountError(B_TRANSLATE("volume"), lookupStatus);
 		return;
+	}
 
 	uint32 mountFlags;
-	if (!_SuggestMountFlags(partition, &mountFlags))
+	if (!_SuggestMountFlags(partition, &mountFlags)) {
+		_NotifyMountError(B_TRANSLATE("volume"), B_ERROR);
 		return;
-
-	status_t status = partition->Mount(NULL, mountFlags);
-	if (status < B_OK && InitGUIContext() == B_OK) {
-		char text[512];
-		snprintf(text, sizeof(text),
-			B_TRANSLATE("Error mounting volume:\n\n%s"), strerror(status));
-		BAlert* alert = new BAlert(B_TRANSLATE("Mount error"), text,
-			B_TRANSLATE("OK"));
-		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-		alert->Go(NULL);
 	}
+
+	// Grab a human-readable name before the partition object potentially
+	// becomes unavailable on mount failure.
+	BString volumeName = partition->ContentName();
+	if (volumeName.IsEmpty())
+		volumeName = partition->Name();
+	if (volumeName.IsEmpty()) {
+		BPath path;
+		if (partition->GetPath(&path) == B_OK)
+			volumeName = path.Path();
+	}
+	if (volumeName.IsEmpty())
+		volumeName = B_TRANSLATE("volume");
+
+	status_t status = partition->Mount(NULL, mountFlags, NULL, owner);
+	if (status < B_OK)
+		_NotifyMountError(volumeName.String(), status);
+}
+
+
+/*static*/ void
+AutoMounter::_NotifyMountError(const char* volumeName, status_t status)
+{
+	// mount_server has no app_server connection, so route failures through
+	// notification_server instead of a BAlert.
+	BNotification notification(B_ERROR_NOTIFICATION);
+	notification.SetGroup(B_TRANSLATE("Disk & Volumes"));
+	notification.SetTitle(B_TRANSLATE("Mount failed"));
+
+	char text[512];
+	snprintf(text, sizeof(text),
+		B_TRANSLATE("Could not mount \"%s\": %s"), volumeName,
+		strerror(status));
+	notification.SetContent(text);
+
+	notification.Send();
 }
 
 
 bool
 AutoMounter::_SuggestForceUnmount(const char* name, status_t error)
 {
-	if (InitGUIContext() != B_OK)
-		return false;
+	// mount_server can't show the Cancel/Force-unmount BAlert (headless), so
+	// notify instead; getting an actual user decision needs a dialog agent
+	// (not yet implemented).
+	BNotification notification(B_ERROR_NOTIFICATION);
+	notification.SetGroup(B_TRANSLATE("Disk & Volumes"));
+	notification.SetTitle(B_TRANSLATE("Could not unmount"));
 
 	char text[1024];
 	snprintf(text, sizeof(text),
-		B_TRANSLATE("Could not unmount disk \"%s\":\n\t%s\n\n"
-			"Should unmounting be forced?\n\n"
-			"Note: If an application is currently writing to the volume, "
-			"unmounting it now might result in loss of data.\n"),
+		B_TRANSLATE("Could not unmount disk \"%s\": %s\n\n"
+			"Not forced: unmounting was not confirmed (no interactive "
+			"session available to ask). Use the Force option from a "
+			"desktop session, or a filesystem tool, if the volume is safe "
+			"to force-detach."),
 		name, strerror(error));
+	notification.SetContent(text);
+	notification.Send();
 
-	BAlert* alert = new BAlert(B_TRANSLATE("Force unmount"), text,
-		B_TRANSLATE("Cancel"), B_TRANSLATE("Force unmount"), NULL,
-		B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-	alert->SetShortcut(0, B_ESCAPE);
-	int32 choice = alert->Go();
-
-	return choice == 1;
+	return false;
 }
 
 
 void
 AutoMounter::_ReportUnmountError(const char* name, status_t error)
 {
-	if (InitGUIContext() != B_OK)
-		return;
+	// Same as _SuggestForceUnmount() above: notify instead of a BAlert.
+	BNotification notification(B_ERROR_NOTIFICATION);
+	notification.SetGroup(B_TRANSLATE("Disk & Volumes"));
+	notification.SetTitle(B_TRANSLATE("Unmount failed"));
 
 	char text[512];
 	snprintf(text, sizeof(text), B_TRANSLATE("Could not unmount disk "
-		"\"%s\":\n\t%s"), name, strerror(error));
-
-	BAlert* alert = new BAlert(B_TRANSLATE("Unmount error"), text,
-		B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-	alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-	alert->Go(NULL);
+		"\"%s\": %s"), name, strerror(error));
+	notification.SetContent(text);
+	notification.Send();
 }
 
 
@@ -689,7 +739,23 @@ AutoMounter::_UnmountAndEjectVolume(BPartition* partition, BPath& mountPoint,
 	else
 		status = fs_unmount_volume(mountPoint.Path(), 0);
 
-	if (status != B_OK) {
+	if (status == B_BUSY) {
+		// mount_server can't pop the force-unmount alert, so fall straight
+		// to a forced (lazy-detach) unmount and just notify that it happened.
+		BNotification notification(B_INFORMATION_NOTIFICATION);
+		notification.SetGroup(B_TRANSLATE("Disk & Volumes"));
+		notification.SetTitle(B_TRANSLATE("Volume was busy"));
+		char text[512];
+		snprintf(text, sizeof(text), B_TRANSLATE("\"%s\" was busy; "
+			"forcing unmount."), name);
+		notification.SetContent(text);
+		notification.Send();
+
+		if (partition != NULL)
+			status = partition->Unmount(B_FORCE_UNMOUNT);
+		else
+			status = fs_unmount_volume(mountPoint.Path(), B_FORCE_UNMOUNT);
+	} else if (status != B_OK) {
 		if (!_SuggestForceUnmount(name, status))
 			return;
 
@@ -753,12 +819,17 @@ AutoMounter::_UnmountAndEjectVolume(BPartition* partition, BPath& mountPoint,
 void
 AutoMounter::_UnmountAndEjectVolume(BMessage* message)
 {
+	// See _MountVolume(): MountMenu posts "id" as an Int64 partition_id;
+	// FindInt64() needs an exact int64*, so read into a local then narrow.
+	int64 rawId;
 	partition_id id;
-	if (message->FindUInt64("id", (uint64*)&id) == B_OK) {
+	if (message->FindInt64("id", &rawId) == B_OK) {
+		id = (partition_id)rawId;
 		BDiskDeviceRoster roster;
 		BPartition *partition;
 		BDiskDevice device;
-		if (roster.GetPartitionWithID(id, &device, &partition) != B_OK)
+		status_t lookup = roster.GetPartitionWithID(id, &device, &partition);
+		if (lookup != B_OK)
 			return;
 
 		BPath path;

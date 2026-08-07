@@ -21,13 +21,25 @@ Commands:
   build                  Build and create image
   boot                   Boot existing image in QEMU (no rebuild)
   create disk            Create a blank raw disk image (install target / USB)
+  generate               Create a raw GPT disk with a formatted partition
+                          (a ready-to-mount / installable target)
 
 Create options:
   --output=PATH          Where to write the image (required)
   --size=SIZE            Disk size, qemu-img syntax, e.g. 16G (required)
 
+Generate options:
+  --ext4                 Format the single GPT partition as ext4 (required)
+  --size=SIZE            Disk size, qemu-img syntax (default 8G)
+  PATH                   Output image path (positional), e.g.
+                          bake generate --ext4 /tmp/target.img
+
 Boot options:
-  --image-type=TYPE      Image type to boot (required)
+  --image-type=TYPE      Image type to boot (required). Use 'disk' to boot an
+                          arbitrary raw disk image as the primary UEFI disk
+                          (pair with --disk-image=PATH), e.g. an installed target.
+  --disk-image=PATH      With --image-type=disk, the raw disk image to boot as
+                          the primary drive (e.g. a disk produced by the Installer).
   --arch=ARCH            Target architecture (reads from buildstate.conf if omitted)
   --shared-folder=DIR    Expose host DIR to the guest as a mountable data volume
                           (QEMU vvfat FAT disk; rw but fragile under heavy writes).
@@ -67,7 +79,9 @@ load_buildstate() {
 
     if [ -f "$BASEDIR/CMakeCache.txt" ]; then
         _cached_arch="$(grep -m1 '^VITRUVIAN_TARGET_ARCH:' "$BASEDIR/CMakeCache.txt" | cut -d= -f2)"
-        if [ -n "$_cached_arch" ] && [ "$_cached_arch" != "$ARCH" ]; then
+        _canon_arch() { case "$1" in x86_64) echo amd64 ;; aarch64) echo arm64 ;; *) echo "$1" ;; esac; }
+        if [ -n "$_cached_arch" ] \
+                && [ "$(_canon_arch "$_cached_arch")" != "$(_canon_arch "$ARCH")" ]; then
             die "Arch mismatch: buildstate.conf says $ARCH but cmake was configured for $_cached_arch. Remove this generated directory and start fresh."
         fi
     fi
@@ -188,8 +202,19 @@ cmd_build() {
         die "--run-qemu requires a single --image-type."
     fi
 
-    _has_chroot=0
-    [ -d "$BASEDIR/image_tree/chroot" ] && _has_chroot=1
+    require_cmd ninja "ninja-build"
+
+    if [ "$_regenerate" -eq 1 ]; then
+        chroot_regenerate "$BASEDIR" "$ARCH"
+        _has_chroot=1
+    fi
+
+    if ! sudo -v; then
+        die "sudo authentication required for image creation."
+    fi
+    ( while true; do sleep 60; sudo -n true 2>/dev/null || exit; kill -0 "$$" 2>/dev/null || exit; done ) &
+    _sudo_keepalive_pid=$!
+    trap 'kill "$_sudo_keepalive_pid" 2>/dev/null || true' EXIT INT TERM
 
     require_cmd ninja "ninja-build"
 
@@ -198,18 +223,9 @@ cmd_build() {
         _has_chroot=1
     fi
 
-    # Image creation calls sudo many times from deep inside subshells,
-    # where a mid-run password prompt can eat Ctrl+C. Prime the sudo
-    # timestamp upfront so all later calls hit the cache silently. If
-    # the user aborts (Ctrl+C at the prompt), we exit cleanly here.
     if ! sudo -v; then
         die "sudo authentication required for image creation."
     fi
-    # Keep the sudo timestamp fresh during long builds so it doesn't
-    # expire mid-flight and re-prompt. Killed when the parent exits.
-    ( while true; do sleep 60; sudo -n true 2>/dev/null || exit; kill -0 "$$" 2>/dev/null || exit; done ) &
-    _sudo_keepalive_pid=$!
-    trap 'kill "$_sudo_keepalive_pid" 2>/dev/null || true' EXIT INT TERM
 
     log_step "Running ninja build..."
     ninja
@@ -252,11 +268,15 @@ cmd_boot() {
     _shared_folder=""
     _usb_disk=""
     _target_disk=""
+    _disk_image=""
 
     for arg in "$@"; do
         case "$arg" in
             --image-type=*)
                 _image_type="${arg#*=}"
+                ;;
+            --disk-image=*)
+                _disk_image="${arg#*=}"
                 ;;
             --arch=*)
                 _arch="${arg#*=}"
@@ -296,6 +316,9 @@ cmd_boot() {
 
     case "$_image_type" in
         raw|iso) ;;
+        disk)
+            [ -n "$_disk_image" ] || die "--image-type=disk requires --disk-image=PATH"
+            ;;
         raspberry|rockchip|allwinner|beagle|nxp|amlogic)
             ARCH="arm64"
             ;;
@@ -311,7 +334,7 @@ cmd_boot() {
     esac
 
     run_qemu "$BASEDIR" "$ARCH" "$_image_type" "$_console_log" "$_console_stdout" \
-        "$_shared_folder" "$_usb_disk" "$_target_disk"
+        "$_shared_folder" "$_usb_disk" "$_target_disk" "$_disk_image"
 }
 
 cmd_create() {
@@ -345,6 +368,95 @@ cmd_create() {
     log_info "Attach it with: bake boot --image-type=iso --target-disk=$_output"
 }
 
+cmd_generate() {
+    _output=""
+    _size="8G"
+    _fs=""
+    for arg in "$@"; do
+        case "$arg" in
+            --ext4)     _fs="ext4" ;;
+            --size=*)   _size="${arg#*=}" ;;
+            --output=*) _output="${arg#*=}" ;;
+            --help|-h)  die "Usage: bake generate --ext4 [--size=SIZE] /path/to/disk.img" ;;
+            --*)        die "Unknown option: $arg" ;;
+            *)
+                [ -z "$_output" ] || die "Multiple output paths given: $_output and $arg"
+                _output="$arg"
+                ;;
+        esac
+    done
+
+    [ -n "$_output" ] || die "Missing output path. Usage: bake generate --ext4 [--size=SIZE] /path/to/disk.img"
+    [ -n "$_fs" ] || die "Missing filesystem. Only --ext4 is supported."
+    [ -e "$_output" ] && die "refusing to overwrite existing file: $_output"
+
+    PATH="/usr/sbin:/sbin:$PATH"
+    require_cmd truncate coreutils
+    require_cmd sfdisk util-linux
+    require_cmd dd coreutils
+    require_cmd "mkfs.ext4" e2fsprogs
+    require_cmd "mkfs.vfat" dosfstools
+
+    log_step "Creating raw GPT disk with bios_grub + ESP + ext4 root ($_size): $_output"
+
+    _bios_start_sectors=2048
+    _bios_size_sectors=2048
+    _esp_start_sectors=$((_bios_start_sectors + _bios_size_sectors))
+    _esp_size_sectors=1048576
+    _root_start_sectors=$((_esp_start_sectors + _esp_size_sectors))
+    _esp_offset_bytes=$((_esp_start_sectors * 512))
+    _root_offset_bytes=$((_root_start_sectors * 512))
+
+    _bios_type=21686148-6449-6E6F-744E-656564454649
+
+    truncate -s "$_size" "$_output" || die "failed to create disk image: $_output"
+
+    if ! printf 'label: gpt\nstart=%s, size=%s, type=%s, name="vitruvian-bios"\nstart=%s, size=%s, type=uefi, name="vitruvian-esp"\nstart=%s, type=linux, name="vitruvian-data"\n' \
+            "$_bios_start_sectors" "$_bios_size_sectors" "$_bios_type" \
+            "$_esp_start_sectors" "$_esp_size_sectors" \
+            "$_root_start_sectors" \
+            | sfdisk --quiet "$_output"; then
+        rm -f "$_output"
+        die "sfdisk failed to write the GPT partition table"
+    fi
+
+    _root_sectors="$(sfdisk -d "$_output" 2>/dev/null | awk '
+        /name="vitruvian-data"/ && match($0, /size=[ ]*[0-9]+/) {
+            s = substr($0, RSTART, RLENGTH); gsub(/[^0-9]/, "", s); print s; exit
+        }')"
+    [ -n "$_root_sectors" ] && [ "$_root_sectors" -gt 0 ] 2>/dev/null \
+        || { rm -f "$_output"; die "could not read root partition size from sfdisk"; }
+
+    _root_blocks=$((_root_sectors / 8))
+
+    _esp_tmp="$(mktemp "${_output}.esp.XXXXXX")" \
+        || die "could not create temp file for ESP"
+    trap 'rm -f "$_esp_tmp"' EXIT
+    truncate -s "$((_esp_size_sectors * 512))" "$_esp_tmp" \
+        || { die "failed to size ESP temp file"; }
+    if ! mkfs.vfat -F32 -n VITRUVIAN "$_esp_tmp" >/dev/null; then
+        rm -f "$_output" "$_esp_tmp"
+        die "mkfs.vfat failed"
+    fi
+    if ! dd if="$_esp_tmp" of="$_output" bs=512 seek="$_esp_start_sectors" \
+            conv=notrunc status=none; then
+        rm -f "$_output" "$_esp_tmp"
+        die "failed to write ESP into disk image"
+    fi
+    rm -f "$_esp_tmp"
+    trap - EXIT
+
+    if ! mkfs.ext4 -F -q -b 4096 -I 512 \
+            -O ^ea_inode,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
+            -L vitruvian-data -E offset="$_root_offset_bytes" "$_output" "$_root_blocks"; then
+        rm -f "$_output"
+        die "mkfs.ext4 failed"
+    fi
+
+    log_info "Created $_output (GPT: 1MiB bios_grub + 512MiB ESP fat32 'VITRUVIAN' + ext4 'vitruvian-data')."
+    log_info "Attach it with: bake boot --image-type=iso --target-disk=$_output"
+}
+
 [ $# -eq 0 ] && usage
 
 _cmd="$1"
@@ -363,7 +475,10 @@ case "$_cmd" in
     create)
         cmd_create "$@"
         ;;
+    generate)
+        cmd_generate "$@"
+        ;;
     *)
-        die "Unknown command: $_cmd (use 'clean', 'build', 'boot', or 'create')"
+        die "Unknown command: $_cmd (use 'clean', 'build', 'boot', 'create', or 'generate')"
         ;;
 esac

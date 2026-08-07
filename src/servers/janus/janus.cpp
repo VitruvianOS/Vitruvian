@@ -13,9 +13,11 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -412,6 +414,7 @@ static volatile bool   sShuttingDown  = false;
 static port_id sLaunchPort = -1;
 
 static void janus_handle_shutdown(bool reboot);
+static void jdbg(const char* fmt, ...);
 
 
 static int
@@ -1174,10 +1177,32 @@ pre_auth_thread(void* /*arg*/)
 	if (!wait_for_server_ready("app_server", 5000))
 		fprintf(stderr, "janus: pre-auth app_server not ready in 5s\n");
 
+	jdbg("pre_auth_thread() launching frontend=%s", frontend);
 	fire_janus_launch(frontend);
 	if (!wait_for_server_ready(frontend, 5000))
 		fprintf(stderr, "janus: pre-auth %s not ready in 5s\n", frontend);
 	return NULL;
+}
+
+
+// TEMP: fsync'd log for shutdown-flash diagnosis; remove once located.
+static void
+jdbg(const char* fmt, ...)
+{
+	FILE* f = fopen("/var/log/janus-dbg.log", "a");
+	if (f == NULL)
+		return;
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	fprintf(f, "[%ld.%03ld] ", (long)ts.tv_sec, ts.tv_nsec / 1000000);
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(f, fmt, ap);
+	va_end(ap);
+	fputc('\n', f);
+	fflush(f);
+	fsync(fileno(f));
+	fclose(f);
 }
 
 
@@ -1187,6 +1212,7 @@ pre_auth_thread(void* /*arg*/)
 static void
 spawn_pre_auth_chain()
 {
+	jdbg("spawn_pre_auth_chain() CALLED");
 	pthread_t th;
 	if (pthread_create(&th, NULL, pre_auth_thread, NULL) != 0) {
 		fprintf(stderr, "janus: pre_auth_thread: %s\n", strerror(errno));
@@ -1199,6 +1225,8 @@ spawn_pre_auth_chain()
 static void
 handle_logout(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
+	jdbg("handle_logout() ENTER sender_uid=%u session_uid=%u shutdownInFlight=%d",
+		(unsigned)sender_uid, (unsigned)sUserUid, (int)sShutdownInFlight);
 	printf("janus: B_JANUS_LOGOUT received from uid=%u (session uid=%u)\n",
 		(unsigned)sender_uid, (unsigned)sUserUid);
 
@@ -1509,6 +1537,8 @@ launch_daemon_thread(void* /*data*/)
 				if (!sShuttingDown)
 					handle_login_ok(kmsg, mi.sender);
 			} else if (kmsg.What() == BPrivate::B_JANUS_LOGOUT) {
+				jdbg("MSG B_JANUS_LOGOUT received (shuttingDown=%d)",
+					(int)sShuttingDown);
 				if (!sShuttingDown)
 					handle_logout(kmsg, mi.sender);
 			}
@@ -1523,6 +1553,8 @@ launch_daemon_thread(void* /*data*/)
 					case BPrivate::B_REG_SHUTDOWN_FINISHED: {
 						bool reboot = false;
 						msg->FindBool("reboot", &reboot);
+						jdbg("MSG B_REG_SHUTDOWN_FINISHED received reboot=%d",
+							(int)reboot);
 						delete msg;
 						msg = NULL;
 						free(buf);
@@ -1579,6 +1611,8 @@ init_launch_daemon_port()
 static void
 seat_enable_cb(struct libseat* /*seat*/, void* /*data*/)
 {
+	jdbg("seat_enable_cb() shuttingDown=%d greeterMode=%d",
+		(int)sShuttingDown, (int)sGreeterMode);
 	printf("janus: seat enabled\n");
 	sSessionActive = true;
 
@@ -1642,7 +1676,14 @@ janus_teardown_seat()
 static void
 janus_handle_shutdown(bool reboot)
 {
+	jdbg("janus_handle_shutdown() ENTER reboot=%d", reboot);
 	fprintf(stderr, "janus: shutdown handover received, reboot=%d\n", reboot);
+
+	// Mark shutdown-in-progress in tmpfs before anything can exit us.
+	int shutdownMarkerFd = open("/run/vos/shutting-down",
+		O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
+	if (shutdownMarkerFd >= 0)
+		close(shutdownMarkerFd);
 
 	// Set sShuttingDown BEFORE _kern_shutdown so the poll-loop reaper
 	// stops stealing the systemctl child's waitpid status.
@@ -1654,6 +1695,9 @@ janus_handle_shutdown(bool reboot)
 	if (status != B_OK) {
 		fprintf(stderr, "janus: _kern_shutdown failed (0x%x); "
 			"returning to main loop so systemd can retry\n", status);
+		// Shutdown did not actually start -- clear the marker so a later
+		// crash-restart can still bring the desktop back up.
+		unlink("/run/vos/shutting-down");
 		return;
 	}
 
@@ -1679,6 +1723,7 @@ janus_handle_shutdown(bool reboot)
 static void
 seat_disable_cb(struct libseat* seat, void* /*data*/)
 {
+	jdbg("seat_disable_cb() shuttingDown=%d", (int)sShuttingDown);
 	printf("janus: seat disabled\n");
 	sSessionActive = false;
 
@@ -1818,7 +1863,12 @@ main(int /*argc*/, char** /*argv*/)
 	}
 
 	if (sSystemMode) {
-		if (sGreeterMode) {
+		// A janus restarted by Restart=on-failure during a reboot must not
+		// bring the session back up (flashes the greeter before shutdown).
+		if (access("/run/vos/shutting-down", F_OK) == 0) {
+			jdbg("startup: shutdown in progress — NOT spawning session chain");
+			fprintf(stderr, "janus: shutdown in progress; not spawning session\n");
+		} else if (sGreeterMode) {
 			printf("janus: greeter mode enabled — spawning pre-auth chain\n");
 			spawn_pre_auth_chain();
 		} else {

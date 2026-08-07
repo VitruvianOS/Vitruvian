@@ -225,6 +225,20 @@ rm -rf /localdeb" || die "raw chroot bash-c failed"
 
     log_step "Building standalone EFI bootloader ($_efi_target)..."
     mkdir -p "$_basedir/image_tree/scratch"
+
+    BUILD_TYPE="Debug"
+    if [ -f "$_basedir/buildconfig.conf" ]; then
+        . "$_basedir/buildconfig.conf"
+        BUILD_TYPE="${CMAKE_BUILD_TYPE:-Debug}"
+    fi
+    _debug_menuentry=""
+    if [ "$BUILD_TYPE" = "Debug" ]; then
+        _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    initrd (\$root)/initrd.img
+}"
+    fi
+
     cat > "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" <<EOF
 insmod part_gpt
 insmod fat
@@ -245,10 +259,7 @@ menuentry "Vitruvian (Safe Mode)" {
     linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
     initrd (\$root)/initrd.img
 }
-menuentry "Vitruvian (SSH Debug)" {
-    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
-    initrd (\$root)/initrd.img
-}
+$_debug_menuentry
 if [ "\$grub_platform" = "efi" ]; then
     menuentry "UEFI Firmware Settings" {
         fwsetup
@@ -456,6 +467,23 @@ menuentry "Vitruvian Live (Safe Mode)" {
 }
 EOF
 
+    if [ "$BUILD_TYPE" = "Debug" ]; then
+        cat <<'EOF' >>"$_basedir/image_tree/scratch/grub.cfg"
+menuentry "Vitruvian Live (Debug)" {
+    linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    initrd /initrd
+}
+EOF
+    fi
+
+    cat <<'EOF' >>"$_basedir/image_tree/scratch/grub.cfg"
+if [ "$grub_platform" = "efi" ]; then
+    menuentry "UEFI Firmware Settings" {
+        fwsetup
+    }
+fi
+EOF
+
     touch "$_basedir/image_tree/image/VITRUVIAN_CUSTOM"
 
     case "$_arch" in
@@ -586,10 +614,9 @@ echo '$_hostname' > /etc/hostname
 # password on a target.
 passwd -l root 2>/dev/null || true
 
-# Live/raw markers — Installer strips these on --commit-setup.
+# Live/raw marker — Installer strips this on --commit-setup.
 mkdir -p /etc/vos
 : > /etc/vos/live
-: > /etc/vos/debug
 if ! getent passwd vos-live >/dev/null; then
     useradd --system --create-home --home-dir /home/vos-live \\
         --shell /bin/bash --comment 'Vitruvian live/try persona' \\

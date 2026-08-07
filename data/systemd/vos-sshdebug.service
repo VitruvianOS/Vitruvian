@@ -1,7 +1,7 @@
 [Unit]
 Description=Vitruvian debug SSH (opt-in via vitruvian.sshdebug on the kernel cmdline)
 # Pulled into multi-user.target on Debug builds, but the Condition keeps it
-# inert unless the "SSH Debug" GRUB entry was chosen, so a normal boot never
+# inert unless the "Debug" GRUB entry was chosen, so a normal boot never
 # starts sshd. ssh.service stays disabled (commit-setup disables it); we only
 # `start` it here for this boot.
 ConditionKernelCommandLine=vitruvian.sshdebug

@@ -758,35 +758,6 @@ is_live_persona_allowed()
 }
 
 
-// Sets vos-live's password to "live" and starts sshd. Caller must
-// already have checked /etc/vos/debug exists.
-static void
-enable_ssh_debug()
-{
-	pid_t pid = fork();
-	if (pid == 0) {
-		int devnull = open("/dev/null", O_WRONLY);
-		if (devnull >= 0) {
-			dup2(devnull, STDOUT_FILENO);
-			dup2(devnull, STDERR_FILENO);
-			close(devnull);
-		}
-		execlp("sh", "sh", "-c",
-			"echo 'vos-live:live' | chpasswd 2>/dev/null; "
-			"systemctl start ssh.service 2>/dev/null || "
-			"systemctl start sshd.service 2>/dev/null",
-			(char*)NULL);
-		_exit(127);
-	}
-	if (pid > 0) {
-		int status = 0;
-		while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
-			;
-	}
-	fprintf(stderr, "janus: debug SSH enabled (vos-live/live)\n");
-}
-
-
 // root/system accounts are refused; sudo is the only path to uid=0.
 static bool
 is_graphical_login_allowed(struct passwd* pw)
@@ -1311,11 +1282,6 @@ handle_login_ok(BPrivate::KMessage& kmsg, uid_t sender_uid)
 			BPrivate::KMessage reply(B_NOT_ALLOWED);
 			kmsg.SendReply(&reply);
 			return;
-		}
-		int32 enableSsh = 0;
-		if (kmsg.FindInt32("enable_ssh", &enableSsh) == B_OK && enableSsh
-				&& access("/etc/vos/debug", F_OK) == 0) {
-			enable_ssh_debug();
 		}
 	} else {
 		// Must pair with a prior AUTH_REQUEST for the same user.

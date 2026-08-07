@@ -186,7 +186,6 @@ _do_commit_setup() {
     $_in systemctl disable userbootscript@vos-live.service 2>/dev/null || true
     rm -f "$TARGET/etc/vos/live" || {
         log "cannot remove /etc/vos/live"; return 3; }
-    rm -f "$TARGET/etc/vos/debug" || true
     rm -f "$TARGET/etc/sudoers.d/vos-live" || {
         log "cannot remove sudoers.d/vos-live"; return 3; }
     rm -f "$TARGET/usr/share/polkit-1/rules.d/49-vitruvian-installer.rules" || {
@@ -294,7 +293,17 @@ EOF
 _BOOTROOT=/run/vos/bootroot
 
 _write_shim_grubcfg() {
-    _su="$1"; _sc="$2"; _kv="$3"
+    _su="$1"; _sc="$2"; _kv="$3"; _troot="$4"
+
+    # Debug builds ship vos-sshdebug.service; only then offer the Debug entry.
+    _debug_menuentry=""
+    if [ -f "$_troot/etc/systemd/system/vos-sshdebug.service" ]; then
+        _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    initrd (\$root)/boot/initrd.img-$_kv
+}"
+    fi
+
     cat > "$_sc" <<EOF
 insmod part_gpt
 insmod fat
@@ -315,10 +324,7 @@ menuentry "Vitruvian (Safe Mode)" {
     linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
     initrd (\$root)/boot/initrd.img-$_kv
 }
-menuentry "Vitruvian (SSH Debug)" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw console=tty0 console=ttyS0,115200 vitruvian.sshdebug
-    initrd (\$root)/boot/initrd.img-$_kv
-}
+$_debug_menuentry
 if [ "\$grub_platform" = "efi" ]; then
     menuentry "UEFI Firmware Settings" {
         fwsetup
@@ -343,7 +349,7 @@ _install_grub_efi() {
         *) log "unsupported arch for EFI GRUB: $(uname -m)"; return 1 ;;
     esac
     _tmpcfg="$(mktemp)" || return 1
-    _write_shim_grubcfg "$_ruuid" "$_tmpcfg" "$_kver"
+    _write_shim_grubcfg "$_ruuid" "$_tmpcfg" "$_kver" "$_rmount"
     mkdir -p "$_esp/EFI/BOOT"
     if ! grub-mkstandalone --format="$_efi_fmt" \
             --output="$_esp/EFI/BOOT/$_boot_efi" --locales="" --fonts="" \
@@ -443,7 +449,7 @@ _do_bootloader() {
     _kver="$(ls -1 "$_BOOTROOT"/boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1 | sed 's|.*/vmlinuz-||')"
     if [ -n "$_kver" ]; then
         mkdir -p "$_BOOTROOT/boot/grub"
-        _write_shim_grubcfg "$_ruuid" "$_BOOTROOT/boot/grub/grub.cfg" "$_kver" \
+        _write_shim_grubcfg "$_ruuid" "$_BOOTROOT/boot/grub/grub.cfg" "$_kver" "$_BOOTROOT" \
             || log "warn: could not write /boot/grub/grub.cfg (BIOS menu may be minimal)"
     else
         log "warn: no /boot/vmlinuz-* under target; skipping BIOS grub.cfg"

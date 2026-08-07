@@ -7,6 +7,37 @@ include(build/defs.cmake)
 include(build/deps.cmake)
 include(build/headers.cmake)
 
+# Program interpreter path for RunnableAddOn (a .so that is also execve-able).
+if(NOT DEFINED VOS_DYNAMIC_LINKER)
+	execute_process(
+		COMMAND ${CMAKE_C_COMPILER} -dumpmachine
+		OUTPUT_VARIABLE _vos_triple OUTPUT_STRIP_TRAILING_WHITESPACE)
+	if(_vos_triple STREQUAL "x86_64-linux-gnu")
+		set(VOS_DYNAMIC_LINKER "/lib64/ld-linux-x86-64.so.2")
+	elseif(_vos_triple STREQUAL "aarch64-linux-gnu")
+		set(VOS_DYNAMIC_LINKER "/lib/ld-linux-aarch64.so.1")
+	elseif(_vos_triple STREQUAL "riscv64-linux-gnu")
+		set(VOS_DYNAMIC_LINKER "/lib/ld-linux-riscv64-lp64d.so.1")
+	else()
+		message(FATAL_ERROR "RunnableAddOn: unknown interpreter for ${_vos_triple}")
+	endif()
+endif()
+
+# An explicit .interp section makes ld emit PT_INTERP for a -shared link (which
+# -Wl,--dynamic-linker does not); same trick glibc uses to make libc.so.6 runnable.
+set(VOS_RUNNABLE_INTERP_S "${CMAKE_BINARY_DIR}/runnable_addon_interp.S")
+file(WRITE "${VOS_RUNNABLE_INTERP_S}"
+	".section .interp,\"a\"\n.asciz \"${VOS_DYNAMIC_LINKER}\"\n")
+# Pre-assemble to an object (the project enables only C/CXX, not ASM).
+set(VOS_RUNNABLE_INTERP_O "${CMAKE_BINARY_DIR}/runnable_addon_interp.o")
+execute_process(
+	COMMAND ${CMAKE_C_COMPILER} -c "${VOS_RUNNABLE_INTERP_S}"
+		-o "${VOS_RUNNABLE_INTERP_O}"
+	RESULT_VARIABLE _vos_interp_rc)
+if(NOT _vos_interp_rc EQUAL 0)
+	message(FATAL_ERROR "RunnableAddOn: failed to assemble .interp object")
+endif()
+
 # TODO: Implement EnableWError( target )
 # TODO: Add possibility to set compiler defs for a target
 # TODO: Document macros
@@ -75,6 +106,7 @@ function( CompileRdef target rdef_file )
 
 	# Haiku's jam runs cpp on .rdef files before rc; mirror that so rdefs
 	# can use #ifdef HAIKU_TARGET_PLATFORM_HAIKU etc.
+	# TODO maybe we should clean that
 	add_custom_command(TARGET ${target} POST_BUILD
 		COMMENT "Compiling rdef ${rdef_file}"
 		COMMAND "${CMAKE_C_COMPILER}" -E -x c -DHAIKU_TARGET_PLATFORM_HAIKU
@@ -143,12 +175,8 @@ endfunction()
 #	{includesList}
 # )
 #
-# TODO: BeOS/Haiku translators are dual-mode (double-click = config app,
-# load_add_on = translator). Linux dlopen refuses PIE executables, so the
-# translators under src/add-ons/translators/ currently build as SHARED
-# add-ons only (see their CMakeLists). Restore dual-mode by teaching
-# Application() to emit a dlopen-able binary (entry shim + -shared -Wl,-E),
-# then flip those translators back to Application().
+# TODO: translators under src/add-ons/translators/ build as SHARED add-ons only
+# and lose their config GUI. Flip them to RunnableAddOn to restore dual-mode.
 
 macro( Application name )
 
@@ -221,11 +249,8 @@ macro( AddOn name type )
 	list ( APPEND _ADDON_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR} )
 	target_include_directories(${name} PRIVATE ${_ADDON_INCLUDES})
 
-	# -fvisibility-inlines-hidden: keep inline/template method instantiations
-	# private to this add-on so they cannot collide with same-named symbols
-	# exported by libbe.so (e.g. global TReadHelper from MessageUtils.h vs
-	# a translator-local helper of the same name). Regular non-inline
-	# entry points (make_nth_translator, process_refs, ...) are unaffected.
+	# -fvisibility-inlines-hidden: keep inline/template instantiations add-on-local
+	# so they don't collide with same-named symbols exported by libbe.so.
 	set_target_properties(${name} PROPERTIES COMPILE_FLAGS "-include LinuxBuildCompatibility.h -fvisibility-inlines-hidden")
 
 	foreach( RDEF_FILE ${_ADDON_RDEF} )
@@ -240,6 +265,46 @@ endmacro()
 macro( TrackerAddOn name )
 	AddOn(${name} ${ARGN})
 	set_target_properties(${name} PROPERTIES PREFIX "" SUFFIX "")
+endmacro()
+
+# A .so that is dlopen-able as an add-on and ALSO execve-able (PT_INTERP + _start
+# -> main()).
+macro( RunnableAddOn name )
+	AddOn(${name} SHARED ${ARGN})
+
+	# Auto-link be+root like Application (plain AddOn does not); --no-undefined
+	# turns any missing symbol into a link error instead of a runtime crash.
+	target_link_libraries(${name} PUBLIC be root)
+	target_link_options(${name} PRIVATE "-Wl,--no-undefined")
+
+	set_target_properties(${name} PROPERTIES PREFIX "" SUFFIX "")
+
+	target_link_options(${name} PRIVATE
+		"-Wl,-e,_start"                                # entry -> CRT _start
+		"-nostartfiles"                                # we add Scrt1.o ourselves
+		)
+	# Stock PIE CRT: Scrt1.o provides _start -> __libc_start_main(main,...);
+	# crti/crtn re-added because -nostartfiles dropped them.
+	execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=Scrt1.o
+		OUTPUT_VARIABLE _vos_scrt1 OUTPUT_STRIP_TRAILING_WHITESPACE)
+	execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=crti.o
+		OUTPUT_VARIABLE _vos_crti OUTPUT_STRIP_TRAILING_WHITESPACE)
+	execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=crtn.o
+		OUTPUT_VARIABLE _vos_crtn OUTPUT_STRIP_TRAILING_WHITESPACE)
+	# crtbeginS.o/crtendS.o (the -shared CRT bookends, also dropped by
+	# -nostartfiles) define __dso_handle, needed by static-local dtors.
+	execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=crtbeginS.o
+		OUTPUT_VARIABLE _vos_crtbeginS OUTPUT_STRIP_TRAILING_WHITESPACE)
+	execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=crtendS.o
+		OUTPUT_VARIABLE _vos_crtendS OUTPUT_STRIP_TRAILING_WHITESPACE)
+	target_link_options(${name} PRIVATE
+		"${VOS_RUNNABLE_INTERP_O}"                     # .interp -> PT_INTERP
+		"${_vos_crti}" "${_vos_scrt1}" "${_vos_crtbeginS}"
+		"${_vos_crtendS}" "${_vos_crtn}")
+
+	# double-clickable / execve-able on disk
+	set_target_properties(${name} PROPERTIES
+		LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 endmacro()
 
 macro( TranslatorAddOn name )

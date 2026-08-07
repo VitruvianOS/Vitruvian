@@ -1,14 +1,4 @@
 #!/bin/sh
-# vos-firstboot-commit: applies the setup conf on first boot OR into
-# an install target chroot.
-#
-# Modes:
-#   --root=DIR   apply into DIR (default /). Used by Installer with
-#                --root=/target after rsync + bind-mounts.
-#   CONF         path to the setup conf (default /run/vos/setup.conf).
-#
-# The conf is always written by vos-install-helper as root, 0600. It
-# is NEVER sourced — parsed as data, every value quoted.
 
 set -eu
 
@@ -33,8 +23,6 @@ esac
 SENTINEL="$ROOT/var/lib/vos/first-boot-done"
 STATE_DIR="$ROOT/var/lib/vos"
 
-# In chroot mode, run inside the target so PAM/passwd/etc. resolve
-# against target files. Bare "chroot $ROOT" when ROOT != /, else empty.
 if [ "$ROOT" = "/" ]; then
     IN=""
 else
@@ -159,8 +147,6 @@ esac
 if ! grep -qE "^${locale} UTF-8" "$ROOT/etc/locale.gen" 2>/dev/null; then
     printf '%s UTF-8\n' "$locale" >> "$ROOT/etc/locale.gen"
 fi
-# A failed locale-gen must not abort the commit: the sentinel wouldn't
-# get touched, forcing a re-run that then duplicates the useradd.
 $IN locale-gen || echo "locale-gen failed for $locale" >&2
 $IN update-locale "LANG=${locale}" || echo "update-locale failed" >&2
 
@@ -183,28 +169,18 @@ if ! $IN getent passwd "$username" >/dev/null; then
     $IN useradd "$@" -- "$username"
     _home=$($IN getent passwd "$username" | cut -d: -f6)
     if [ -n "$_home" ] && [ -d "$ROOT/etc/skel" ]; then
-        (cd "$ROOT/etc/skel" && find . \( -type d -o -type f \) 2>/dev/null) \
-        | while IFS= read -r _rel; do
-            _src="$ROOT/etc/skel/${_rel#./}"
-            _dst="$ROOT$_home/${_rel#./}"
-            [ -e "$_dst" ] || continue
-            getfattr -d -m user.beos -e hex "$_src" 2>/dev/null \
-                | sed "s|$ROOT/etc/skel/|$ROOT$_home/|g" \
-                | setfattr --restore - 2>/dev/null || true
-        done
+        $IN cp -a /etc/skel/. "$_home/" 2>/dev/null \
+            || echo "skel xattr copy failed" >&2
         $IN chown -R "$username:$username" "$_home" 2>/dev/null || true
     fi
 fi
-# printf, not echo: dash's echo mangles backslashes in crypt hashes.
-# Last must-succeed step: after chpasswd -e passes, the account exists
-# and its password is valid — sentinel is safe to touch.
+
 printf '%s:%s\n' "$username" "$password_hash" | $IN chpasswd -e
 
 if [ -n "$root_hash" ]; then
     printf '%s:%s\n' "root" "$root_hash" | $IN chpasswd -e
 fi
 
-# --- Sentinel: past this point the commit is considered SUCCEEDED. ---
 trap - EXIT
 mkdir -p "$(dirname "$SENTINEL")"
 touch "$SENTINEL"
@@ -218,6 +194,12 @@ if [ "$sudo_enabled" = "1" ]; then
         echo "sudo group missing; skipping sudoer add" >&2
     fi
 fi
+
+for _g in input video render; do
+    if $IN getent group "$_g" >/dev/null 2>&1; then
+        $IN usermod -aG "$_g" "$username" || echo "usermod $_g failed" >&2
+    fi
+done
 
 mkdir -p "$ROOT/etc/vos"
 

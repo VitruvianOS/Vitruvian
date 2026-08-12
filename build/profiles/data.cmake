@@ -11,6 +11,7 @@ set(SYSTEMD_SERVICES
   data/systemd/tracker.service
   data/systemd/userbootscript@.service
   data/systemd/vos-login.target
+  data/systemd/appstamp-icons.service
 )
 
 install(FILES data/tmpfiles.d/vos.conf

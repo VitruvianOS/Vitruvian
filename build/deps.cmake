@@ -172,6 +172,13 @@ DeclareDependency(
 	INCLUDES	"${HEADERS_PATH_BASE}/libpng/"
 )
 
+# Runtime only: appstamp shells out to rsvg-convert for SVG-only icon themes
+# (most modern apps ship scalable/ only). Not linked, so no LIBRARIES/PACKAGES.
+DeclareDependency(
+	RSVG
+	RUNTIMES	"librsvg2-bin"
+)
+
 DeclareDependency(
 	TIFF
 	LIBRARIES	"tiff"

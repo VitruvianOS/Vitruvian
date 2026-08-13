@@ -20,6 +20,8 @@ struct RosterAppInfo : app_info {
 		// token is meaningful only if state is APP_STATE_PRE_REGISTERED and
 		// team is -1.
 	bigtime_t			registration_time;	// time of first addition
+	team_id				launcher;
+		// Launcher of pre-registered app; -1 once registered
 
 	RosterAppInfo();
 	void Init(thread_id thread, team_id team, port_id port, uint32 flags,

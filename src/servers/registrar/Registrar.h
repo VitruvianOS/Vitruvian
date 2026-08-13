@@ -67,6 +67,8 @@ private:
 	ClipboardHandler		*fClipboardHandler;
 	MIMEManager				*fMIMEManager;
 	EventQueue				*fEventQueue;
+	MessageEvent			*fSanityCheckEvent;
+		// re-armed after each fire; reaps stale roster/pre-reg entries
 	MessageRunnerManager	*fMessageRunnerManager;
 	ShutdownProcess			*fShutdownProcess;
 	AuthenticationManager	*fAuthenticationManager;

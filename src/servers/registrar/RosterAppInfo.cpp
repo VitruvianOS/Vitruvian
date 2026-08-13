@@ -22,7 +22,8 @@ RosterAppInfo::RosterAppInfo()
 	: app_info(),
 	state(APP_STATE_UNREGISTERED),
 	token(0),
-	registration_time(0)
+	registration_time(0),
+	launcher(-1)
 {
 }
 

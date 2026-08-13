@@ -50,6 +50,14 @@ using namespace BPrivate;
 //! Name of the event queue.
 static const char *kEventQueueName = "timer_thread";
 
+//! Message code for the periodic roster sanity check event.
+static const uint32 kMsgRosterSanityCheck = 'rSAN';
+
+// Half of kMaximalEarlyPreRegistrationPeriod, so an expired early pre-reg
+// is reaped at most one interval late even if HandleAddApplication's lazy
+// check never gets a chance to run (e.g. no further launch is attempted).
+static const bigtime_t kSanityCheckInterval = 30000000LL;
+
 
 /*!	\brief Creates the registrar application class.
 	\param error Passed to the BApplication constructor for returning an
@@ -62,6 +70,7 @@ Registrar::Registrar(status_t* _error)
 	fClipboardHandler(NULL),
 	fMIMEManager(NULL),
 	fEventQueue(NULL),
+	fSanityCheckEvent(NULL),
 	fMessageRunnerManager(NULL),
 	fShutdownProcess(NULL),
 	fAuthenticationManager(NULL),
@@ -89,6 +98,7 @@ Registrar::~Registrar()
 		fLogindBridge = NULL;
 	}
 	fEventQueue->Die();
+	delete fSanityCheckEvent;
 	delete fMessageRunnerManager;
 	delete fEventQueue;
 	fMIMEManager->Lock();
@@ -166,9 +176,22 @@ Registrar::ReadyToRun()
 
 	port_id port = messengerPrivate.Port();
 	int32 token = messengerPrivate.Token();
-	__start_watching_system(-1, B_WATCH_SYSTEM_TEAM_DELETION, port, token);
+	// Pidfd watching is the primary; use global subscription as fallback.
+	if (!fRoster->IsWatchingTeams())
+		__start_watching_system(-1, B_WATCH_SYSTEM_TEAM_DELETION, port, token);
 	fRoster->CheckSanity();
 		// Clean up any teams that exited before we started watching
+
+	// Re-armed on each fire (see kMsgRosterSanityCheck handler below); the
+	// general safety net for stale early pre-registrations whose launcher
+	// never dies, since CheckSanity() above only ever runs once at startup.
+	fSanityCheckEvent = new(nothrow) MessageEvent(
+		system_time() + kSanityCheckInterval, BMessenger(this),
+		kMsgRosterSanityCheck);
+	if (fSanityCheckEvent != NULL) {
+		fSanityCheckEvent->SetAutoDelete(false);
+		fEventQueue->AddEvent(fSanityCheckEvent);
+	}
 
 	// Bring up logind bridge: delay inhibit locks + PrepareForShutdown /
 	// PrepareForSleep signal subscription. See LogindBridge.h.
@@ -221,6 +244,14 @@ void
 Registrar::_MessageReceived(BMessage *message)
 {
 	switch (message->what) {
+		case kMsgRosterSanityCheck:
+			fRoster->CheckSanity();
+			if (fSanityCheckEvent != NULL) {
+				fSanityCheckEvent->SetTime(system_time() + kSanityCheckInterval);
+				fEventQueue->AddEvent(fSanityCheckEvent);
+			}
+			break;
+
 		// general requests
 		case B_REG_GET_MIME_MESSENGER:
 		{

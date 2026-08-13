@@ -19,6 +19,7 @@ Server(
 	MessageRunnerManager.cpp
 	MIMEManager.cpp
 	#PackageWatchingManager.cpp
+	PidWatcher.cpp
 	PriorityMessageQueue.cpp
 	RecentApps.cpp
 	RecentEntries.cpp

@@ -25,6 +25,7 @@
 using std::map;
 
 class BMessage;
+class PidWatcher;
 class WatchingService;
 
 typedef map<int32, BMessageQueue*>	IARRequestMap;
@@ -64,6 +65,9 @@ public:
 
 			status_t		Init();
 
+			bool			IsWatchingTeams() const
+								{ return fPidWatcher != NULL; }
+
 			status_t		AddApp(RosterAppInfo* info);
 			void			RemoveApp(RosterAppInfo* info);
 			void			UpdateActiveApp(RosterAppInfo* info);
@@ -96,6 +100,12 @@ private:
 
 			void			_AddIARRequest(IARRequestMap& map, int32 key,
 								BMessage* request);
+			void			_WithdrawPreRegistrationsOf(team_id team);
+			RosterAppInfo*	_EarlyPreRegInfoFor(const entry_ref* ref);
+			RosterAppInfo*	_EarlyPreRegInfoFor(const char* signature);
+			RosterAppInfo*	_DiscardIfStale(RosterAppInfo* info);
+			void			_FlushIARRequests(IARRequestMap& map, int32 key,
+								const RosterAppInfo* info);
 			void			_ReplyToIARRequests(BMessageQueue* requests,
 								const RosterAppInfo* info);
 			void			_ReplyToIARRequest(BMessage* request,
@@ -126,6 +136,8 @@ private:
 			bool			fShuttingDown;
 			BPath			fSystemAppPath;
 			BPath			fSystemServerPath;
+			PidWatcher*		fPidWatcher;
+				// Per-team exit watching; NULL leaves __start_watching_system
 };
 
 #endif	// T_ROSTER_H

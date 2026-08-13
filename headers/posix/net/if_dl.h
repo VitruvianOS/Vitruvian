@@ -8,6 +8,10 @@
 
 #include <stdint.h>
 
+#ifndef AF_LINK
+#define AF_LINK		4
+#endif
+
 
 /* Link level sockaddr structure */
 struct sockaddr_dl {

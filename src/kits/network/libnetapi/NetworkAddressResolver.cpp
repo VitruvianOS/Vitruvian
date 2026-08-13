@@ -180,8 +180,12 @@ BNetworkAddressResolver::SetTo(int family, const char* host,
 	switch (status) {
 		case EAI_ADDRFAMILY:
 		case EAI_BADFLAGS:
+#ifdef EAI_PROTOCOL
 		case EAI_PROTOCOL:
+#endif
+#ifdef EAI_BADHINTS
 		case EAI_BADHINTS:
+#endif
 		case EAI_SOCKTYPE:
 		case EAI_SERVICE:
 		case EAI_NONAME:

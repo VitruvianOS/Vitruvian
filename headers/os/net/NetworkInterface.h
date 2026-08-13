@@ -10,6 +10,8 @@
 
 #include <ObjectList.h>
 #include <NetworkAddress.h>
+#include <String.h>
+
 
 
 class BNetworkInterface;
@@ -74,9 +76,7 @@ public:
 			int32				Media() const;
 			uint32				Metric() const;
 			uint32				Type() const;
-#ifndef __VOS__
 			status_t			GetStats(ifreq_stats& stats);
-#endif
 			bool				HasLink() const;
 
 			status_t			SetFlags(uint32 flags);
@@ -120,6 +120,7 @@ public:
 private:
 			char				fName[IF_NAMESIZE];
 			BList				fAddresses;
+	mutable	BString				fDevicePath;
 };
 
 

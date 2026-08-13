@@ -52,6 +52,7 @@ enum {
 #if defined(__cplusplus) && !defined(_KERNEL_MODE)
 
 #include <NetworkAddress.h>
+#include <String.h>
 
 
 struct wireless_network {
@@ -137,6 +138,7 @@ public:
 
 private:
 			char				fName[IF_NAMESIZE];
+			BString				fDevicePath;
 };
 
 #endif	// __cplusplus && !_KERNEL_MODE

@@ -11,15 +11,24 @@
 
 #include <MessengerPrivate.h>
 #include <generic_syscall_defs.h>
+#ifndef __VOS__
 #include <syscalls.h>
+#endif
 
 
 static status_t
 check_for_notifications_syscall(void)
 {
+#ifdef __VOS__
+	// No Haiku kernel/generic-syscall interface under __VOS__; NetworkKit's
+	// NM-backed StartWatching()/StopWatching() (NetworkRoster.cpp) is the
+	// real notification path there.
+	return B_NOT_SUPPORTED;
+#else
 	uint32 version = 0;
 	return _kern_generic_syscall(NET_NOTIFICATIONS_SYSCALLS, B_SYSCALL_INFO,
 		&version, sizeof(version));
+#endif
 }
 
 
@@ -32,6 +41,9 @@ start_watching_network(uint32 flags, const BMessenger& target)
 	if (check_for_notifications_syscall() != B_OK)
 		return B_NOT_SUPPORTED;
 
+#ifdef __VOS__
+	return B_NOT_SUPPORTED;
+#else
 	BMessenger::Private targetPrivate(const_cast<BMessenger&>(target));
 	net_notifications_control control;
 	control.flags = flags;
@@ -41,6 +53,7 @@ start_watching_network(uint32 flags, const BMessenger& target)
 	return _kern_generic_syscall(NET_NOTIFICATIONS_SYSCALLS,
 		NET_NOTIFICATIONS_CONTROL_WATCHING, &control,
 		sizeof(net_notifications_control));
+#endif
 }
 
 

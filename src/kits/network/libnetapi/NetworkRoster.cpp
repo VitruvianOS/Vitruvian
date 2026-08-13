@@ -1,304 +1,18 @@
 /*
- * Copyright 2010, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
-
+#include "NMBackend.h"
 #include <NetworkRoster.h>
-
-#include <errno.h>
-#include <sys/sockio.h>
-
-#include <NetworkDevice.h>
 #include <NetworkInterface.h>
+#include <Message.h>
 
-#include <net_notifications.h>
-#include <AutoDeleter.h>
-#include <NetServer.h>
-
-
-// TODO: using AF_INET for the socket isn't really a smart idea, as one
-// could completely remove IPv4 support from the stack easily.
-// Since in the stack, device_interfaces are pretty much interfaces now, we
-// could get rid of them more or less, and make AF_LINK provide the same
-// information as AF_INET for the interface functions mostly.
+#include <stdio.h>
+#include <string.h>
 
 
 BNetworkRoster BNetworkRoster::sDefault;
-
-
-/*static*/ BNetworkRoster&
-BNetworkRoster::Default()
-{
-	return sDefault;
-}
-
-
-size_t
-BNetworkRoster::CountInterfaces() const
-{
-	FileDescriptorCloser socket(::socket(AF_INET, SOCK_DGRAM, 0));
-	if (!socket.IsSet())
-		return 0;
-
-	ifconf config;
-	config.ifc_len = sizeof(config.ifc_value);
-	if (ioctl(socket.Get(), SIOCGIFCOUNT, &config, sizeof(struct ifconf)) != 0)
-		return 0;
-
-	return (size_t)config.ifc_value;
-}
-
-
-status_t
-BNetworkRoster::GetNextInterface(uint32* cookie,
-	BNetworkInterface& interface) const
-{
-	// TODO: think about caching the interfaces!
-
-	if (cookie == NULL)
-		return B_BAD_VALUE;
-
-	// get a list of all interfaces
-
-	FileDescriptorCloser socket (::socket(AF_INET, SOCK_DGRAM, 0));
-	if (!socket.IsSet())
-		return -errno;
-
-	ifconf config;
-	config.ifc_len = sizeof(config.ifc_value);
-	if (ioctl(socket.Get(), SIOCGIFCOUNT, &config, sizeof(struct ifconf)) < 0)
-		return -errno;
-
-	size_t count = (size_t)config.ifc_value;
-	if (count == 0)
-		return B_BAD_VALUE;
-
-	char* buffer = (char*)malloc(count * sizeof(struct ifreq));
-	if (buffer == NULL)
-		return B_NO_MEMORY;
-
-	MemoryDeleter deleter(buffer);
-
-	config.ifc_len = count * sizeof(struct ifreq);
-	config.ifc_buf = buffer;
-	if (ioctl(socket.Get(), SIOCGIFCONF, &config, sizeof(struct ifconf)) < 0)
-		return -errno;
-
-	ifreq* interfaces = (ifreq*)buffer;
-	ifreq* end = (ifreq*)(buffer + config.ifc_len);
-
-	for (uint32 i = 0; interfaces < end; i++) {
-		interface.SetTo(interfaces[0].ifr_name);
-		if (i == *cookie) {
-			(*cookie)++;
-			return B_OK;
-		}
-
-		interfaces = (ifreq*)((uint8*)interfaces
-			+ _SIZEOF_ADDR_IFREQ(interfaces[0]));
-	}
-
-	return B_BAD_VALUE;
-}
-
-
-status_t
-BNetworkRoster::AddInterface(const char* name)
-{
-	FileDescriptorCloser socket (::socket(AF_INET, SOCK_DGRAM, 0));
-	if (!socket.IsSet())
-		return -errno;
-
-	ifaliasreq request;
-	memset(&request, 0, sizeof(ifaliasreq));
-	strlcpy(request.ifra_name, name, IF_NAMESIZE);
-
-	if (ioctl(socket.Get(), SIOCAIFADDR, &request, sizeof(request)) != 0)
-		return -errno;
-
-	return B_OK;
-}
-
-
-status_t
-BNetworkRoster::AddInterface(const BNetworkInterface& interface)
-{
-	return AddInterface(interface.Name());
-}
-
-
-status_t
-BNetworkRoster::RemoveInterface(const char* name)
-{
-	FileDescriptorCloser socket(::socket(AF_INET, SOCK_DGRAM, 0));
-	if (!socket.IsSet())
-		return -errno;
-
-	ifreq request;
-	strlcpy(request.ifr_name, name, IF_NAMESIZE);
-
-	request.ifr_addr.sa_family = AF_UNSPEC;
-
-	if (ioctl(socket.Get(), SIOCDIFADDR, &request, sizeof(request)) != 0)
-		return -errno;
-
-	return B_OK;
-}
-
-
-status_t
-BNetworkRoster::RemoveInterface(const BNetworkInterface& interface)
-{
-	return RemoveInterface(interface.Name());
-}
-
-
-int32
-BNetworkRoster::CountPersistentNetworks() const
-{
-	BMessenger networkServer(kNetServerSignature);
-	BMessage message(kMsgCountPersistentNetworks);
-	BMessage reply;
-	if (networkServer.SendMessage(&message, &reply) != B_OK)
-		return 0;
-
-	int32 count = 0;
-	if (reply.FindInt32("count", &count) != B_OK)
-		return 0;
-
-	return count;
-}
-
-
-status_t
-BNetworkRoster::GetNextPersistentNetwork(uint32* cookie,
-	wireless_network& network) const
-{
-	BMessenger networkServer(kNetServerSignature);
-	BMessage message(kMsgGetPersistentNetwork);
-	message.AddInt32("index", (int32)*cookie);
-
-	BMessage reply;
-	status_t result = networkServer.SendMessage(&message, &reply);
-	if (result != B_OK)
-		return result;
-
-	status_t status;
-	if (reply.FindInt32("status", &status) != B_OK)
-		return B_ERROR;
-	if (status != B_OK)
-		return status;
-
-	BMessage networkMessage;
-	if (reply.FindMessage("network", &networkMessage) != B_OK)
-		return B_ERROR;
-
-	BString networkName;
-	if (networkMessage.FindString("name", &networkName) != B_OK)
-		return B_ERROR;
-
-	memset(network.name, 0, sizeof(network.name));
-	strlcpy(network.name, networkName.String(), sizeof(network.name));
-
-	BNetworkAddress address;
-	if (networkMessage.FindFlat("address", &network.address) != B_OK)
-		network.address.Unset();
-
-	if (networkMessage.FindUInt32("flags", &network.flags) != B_OK)
-		network.flags = 0;
-
-	if (networkMessage.FindUInt32("authentication_mode",
-			&network.authentication_mode) != B_OK) {
-		network.authentication_mode = B_NETWORK_AUTHENTICATION_NONE;
-	}
-
-	if (networkMessage.FindUInt32("cipher", &network.cipher) != B_OK)
-		network.cipher = B_NETWORK_CIPHER_NONE;
-
-	if (networkMessage.FindUInt32("group_cipher", &network.group_cipher)
-			!= B_OK) {
-		network.group_cipher = B_NETWORK_CIPHER_NONE;
-	}
-
-	if (networkMessage.FindUInt32("key_mode", &network.key_mode) != B_OK)
-		network.key_mode = B_KEY_MODE_NONE;
-
-	return B_OK;
-}
-
-
-status_t
-BNetworkRoster::AddPersistentNetwork(const wireless_network& network)
-{
-	BMessage message(kMsgAddPersistentNetwork);
-	BString networkName;
-	networkName.SetTo(network.name, sizeof(network.name));
-	status_t status = message.AddString("name", networkName);
-	if (status == B_OK) {
-		BNetworkAddress address = network.address;
-		status = message.AddFlat("address", &address);
-	}
-
-	if (status == B_OK)
-		status = message.AddUInt32("flags", network.flags);
-	if (status == B_OK) {
-		status = message.AddUInt32("authentication_mode",
-			network.authentication_mode);
-	}
-	if (status == B_OK)
-		status = message.AddUInt32("cipher", network.cipher);
-	if (status == B_OK)
-		status = message.AddUInt32("group_cipher", network.group_cipher);
-	if (status == B_OK)
-		status = message.AddUInt32("key_mode", network.key_mode);
-
-	if (status != B_OK)
-		return status;
-
-	BMessenger networkServer(kNetServerSignature);
-	BMessage reply;
-	status = networkServer.SendMessage(&message, &reply);
-	if (status == B_OK)
-		reply.FindInt32("status", &status);
-
-	return status;
-}
-
-
-status_t
-BNetworkRoster::RemovePersistentNetwork(const char* name)
-{
-	BMessage message(kMsgRemovePersistentNetwork);
-	status_t status = message.AddString("name", name);
-	if (status != B_OK)
-		return status;
-
-	BMessenger networkServer(kNetServerSignature);
-	BMessage reply;
-	status = networkServer.SendMessage(&message, &reply);
-	if (status == B_OK)
-		reply.FindInt32("status", &status);
-
-	return status;
-}
-
-
-status_t
-BNetworkRoster::StartWatching(const BMessenger& target, uint32 eventMask)
-{
-	return start_watching_network(eventMask, target);
-}
-
-
-void
-BNetworkRoster::StopWatching(const BMessenger& target)
-{
-	stop_watching_network(target);
-}
-
-
-// #pragma mark - private
 
 
 BNetworkRoster::BNetworkRoster()
@@ -308,4 +22,154 @@ BNetworkRoster::BNetworkRoster()
 
 BNetworkRoster::~BNetworkRoster()
 {
+}
+
+
+BNetworkRoster&
+BNetworkRoster::Default()
+{
+	return sDefault;
+}
+
+
+size_t
+BNetworkRoster::CountInterfaces() const
+{
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return 0;
+
+	BMessage devices;
+	if (backend->GetDevices(&devices) != B_OK)
+		return 0;
+
+	int32 deviceCount = 0;
+	devices.FindInt32("device_count", &deviceCount);
+	return (size_t)deviceCount;
+}
+
+
+status_t
+BNetworkRoster::GetNextInterface(uint32* cookie, BNetworkInterface& interface) const
+{
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return B_ERROR;
+
+	if (cookie == NULL)
+		return B_BAD_VALUE;
+
+	BMessage devices;
+	status_t result = backend->GetDevices(&devices);
+	if (result != B_OK)
+		return result;
+
+	int32 deviceCount = 0;
+	if (devices.FindInt32("device_count", &deviceCount) != B_OK)
+		return B_ERROR;
+
+	if (*cookie >= (uint32)deviceCount)
+		return B_ENTRY_NOT_FOUND;
+
+	// Get device at current cookie index
+	BMessage deviceInfo;
+	char deviceName[32];
+	snprintf(deviceName, sizeof(deviceName), "device_%" B_PRIu32, *cookie);
+
+	if (devices.FindMessage(deviceName, &deviceInfo) != B_OK)
+		return B_ERROR;
+
+	// NMBackend::GetDevices() stores the kernel interface name under
+	// kNMFieldInterface ("name" is never added).
+	const char* interfaceName;
+	if (deviceInfo.FindString(kNMFieldInterface, &interfaceName) != B_OK)
+		return B_ERROR;
+
+	interface.SetTo(interfaceName);
+	(*cookie)++;
+
+	return B_OK;
+}
+
+
+status_t
+BNetworkRoster::AddInterface(const char* name)
+{
+	// Creating virtual interfaces isn't exposed by NetworkManager's D-Bus
+	// API in a way NMBackend wraps yet.
+	return B_NOT_SUPPORTED;
+}
+
+
+status_t
+BNetworkRoster::AddInterface(const BNetworkInterface& interface)
+{
+	return B_NOT_SUPPORTED;
+}
+
+
+status_t
+BNetworkRoster::RemoveInterface(const char* name)
+{
+	return B_NOT_SUPPORTED;
+}
+
+
+status_t
+BNetworkRoster::RemoveInterface(const BNetworkInterface& interface)
+{
+	return B_NOT_SUPPORTED;
+}
+
+
+int32
+BNetworkRoster::CountPersistentNetworks() const
+{
+	// Persistent (saved) wireless network profiles aren't yet exposed
+	// through NMBackend.
+	return 0;
+}
+
+
+status_t
+BNetworkRoster::GetNextPersistentNetwork(uint32* cookie,
+	wireless_network& network) const
+{
+	return B_ENTRY_NOT_FOUND;
+}
+
+
+status_t
+BNetworkRoster::AddPersistentNetwork(const wireless_network& network)
+{
+	return B_NOT_SUPPORTED;
+}
+
+
+status_t
+BNetworkRoster::RemovePersistentNetwork(const char* name)
+{
+	return B_NOT_SUPPORTED;
+}
+
+
+status_t
+BNetworkRoster::StartWatching(const BMessenger& target, uint32 eventMask)
+{
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return B_ERROR;
+
+	return backend->StartWatching(target, eventMask);
+}
+
+
+void
+BNetworkRoster::StopWatching(const BMessenger& target)
+{
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return;
+
+	backend->StopWatching(target);
 }

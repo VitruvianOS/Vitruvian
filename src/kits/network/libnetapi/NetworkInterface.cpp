@@ -1,98 +1,36 @@
 /*
- * Copyright 2010, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
+#include "NMBackend.h"
 #include <NetworkInterface.h>
+#include <NetworkAddress.h>
+#include <Message.h>
+#include <net/if_types.h>
 
-#include <errno.h>
-#include <net/if.h>
-#include <sys/sockio.h>
-
-#include <AutoDeleter.h>
-#include <Messenger.h>
-#include <NetServer.h>
-#include <NetworkRoute.h>
+#include <ifaddrs.h>
+#include <stdio.h>
+#include <string.h>
 
 
-static int
-family_from_interface_address(const BNetworkInterfaceAddress& address)
+// Resolves and caches fDevicePath for fName; NMBackend's calls are keyed on
+// the D-Bus object path, not the interface name. Returns NULL if there is
+// no backend or NM doesn't know this interface.
+static NMBackend*
+_ResolvedBackend(const char* name, BString& devicePath)
 {
-	if (address.Address().Family() != AF_UNSPEC)
-		return address.Address().Family();
-	if (address.Mask().Family() != AF_UNSPEC)
-		return address.Mask().Family();
-	if (address.Destination().Family() != AF_UNSPEC)
-		return address.Destination().Family();
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return NULL;
 
-	return AF_INET;
-}
-
-
-static status_t
-do_ifaliasreq(const char* name, int32 option, BNetworkInterfaceAddress& address,
-	bool readBack = false)
-{
-	int family = AF_INET;
-	if (!readBack)
-		family = family_from_interface_address(address);
-
-	FileDescriptorCloser socket(::socket(family, SOCK_DGRAM, 0));
-	if (!socket.IsSet())
-		return -errno;
-
-	ifaliasreq request;
-	strlcpy(request.ifra_name, name, IF_NAMESIZE);
-	request.ifra_index = address.Index();
-	request.ifra_flags = address.Flags();
-
-	memcpy(&request.ifra_addr, &address.Address().SockAddr(),
-		address.Address().Length());
-	memcpy(&request.ifra_mask, &address.Mask().SockAddr(),
-		address.Mask().Length());
-	memcpy(&request.ifra_broadaddr, &address.Broadcast().SockAddr(),
-		address.Broadcast().Length());
-
-	if (ioctl(socket.Get(), option, &request, sizeof(struct ifaliasreq)) < 0)
-		return -errno;
-
-	if (readBack) {
-		address.SetFlags(request.ifra_flags);
-		address.Address().SetTo(request.ifra_addr);
-		address.Mask().SetTo(request.ifra_mask);
-		address.Broadcast().SetTo(request.ifra_broadaddr);
+	if (devicePath.Length() == 0
+		&& backend->_ResolveDevicePath(name, devicePath) != B_OK) {
+		return NULL;
 	}
 
-	return B_OK;
+	return backend;
 }
-
-
-static status_t
-do_ifaliasreq(const char* name, int32 option,
-	const BNetworkInterfaceAddress& address)
-{
-	return do_ifaliasreq(name, option,
-		const_cast<BNetworkInterfaceAddress&>(address));
-}
-
-
-template<typename T> status_t
-do_request(int family, T& request, const char* name, int option)
-{
-	FileDescriptorCloser socket(::socket(family, SOCK_DGRAM, 0));
-	if (!socket.IsSet())
-		return -errno;
-
-	strlcpy(((struct ifreq&)request).ifr_name, name, IF_NAMESIZE);
-
-	if (ioctl(socket.Get(), option, &request, sizeof(T)) < 0)
-		return -errno;
-
-	return B_OK;
-}
-
-
-// #pragma mark -
 
 
 BNetworkInterfaceAddress::BNetworkInterfaceAddress()
@@ -112,7 +50,8 @@ status_t
 BNetworkInterfaceAddress::SetTo(const BNetworkInterface& interface, int32 index)
 {
 	fIndex = index;
-	return do_ifaliasreq(interface.Name(), B_SOCKET_GET_ALIAS, *this, true);
+	// TODO: Query NetworkManager for address information
+	return B_OK;
 }
 
 
@@ -181,6 +120,7 @@ void
 BNetworkInterface::Unset()
 {
 	fName[0] = '\0';
+	fDevicePath.Truncate(0);
 }
 
 
@@ -188,20 +128,15 @@ void
 BNetworkInterface::SetTo(const char* name)
 {
 	strlcpy(fName, name, IF_NAMESIZE);
+	fDevicePath.Truncate(0);
 }
 
 
 status_t
 BNetworkInterface::SetTo(uint32 index)
 {
-	ifreq request;
-	request.ifr_index = index;
-
-	status_t status = do_request(AF_INET, request, "", SIOCGIFNAME);
-	if (status != B_OK)
-		return status;
-
-	strlcpy(fName, request.ifr_name, IF_NAMESIZE);
+	// TODO: Query NetworkManager to get interface name from index
+	strlcpy(fName, "", IF_NAMESIZE);
 	return B_OK;
 }
 
@@ -209,8 +144,12 @@ BNetworkInterface::SetTo(uint32 index)
 bool
 BNetworkInterface::Exists() const
 {
-	ifreq request;
-	return do_request(AF_INET, request, Name(), SIOCGIFINDEX) == B_OK;
+	NMBackend* backend = _ResolvedBackend(fName, fDevicePath);
+	if (backend == NULL)
+		return false;
+
+	BMessage deviceInfo;
+	return backend->GetDeviceInfo(fDevicePath.String(), &deviceInfo) == B_OK;
 }
 
 
@@ -224,358 +163,262 @@ BNetworkInterface::Name() const
 uint32
 BNetworkInterface::Index() const
 {
-	ifreq request;
-	if (do_request(AF_INET, request, Name(), SIOCGIFINDEX) != B_OK)
-		return 0;
-
-	return request.ifr_index;
+	// TODO: Query NetworkManager for interface index
+	return 0;
 }
 
 
 uint32
 BNetworkInterface::Flags() const
 {
-	ifreq request;
-	if (do_request(AF_INET, request, Name(), SIOCGIFFLAGS) != B_OK)
+	// NMBackend's GetDeviceInfo() has no "flags" field -- IFF_* flags are a
+	// kernel/glibc concept NM doesn't model, so read them straight from
+	// getifaddrs() the way BNetworkDevice::Flags() does.
+	uint32 flags = 0;
+	struct ifaddrs* addrs;
+	if (getifaddrs(&addrs) != 0)
 		return 0;
 
-	return request.ifr_flags;
+	for (struct ifaddrs* addr = addrs; addr != NULL; addr = addr->ifa_next) {
+		if (strcmp(addr->ifa_name, fName) == 0) {
+			flags = addr->ifa_flags;
+			break;
+		}
+	}
+
+	freeifaddrs(addrs);
+	return flags;
 }
 
 
 uint32
 BNetworkInterface::MTU() const
 {
-	ifreq request;
-	if (do_request(AF_INET, request, Name(), SIOCGIFMTU) != B_OK)
-		return 0;
+	NMBackend* backend = _ResolvedBackend(fName, fDevicePath);
+	if (backend == NULL)
+		return 1500; // Default MTU
 
-	return request.ifr_mtu;
+	BMessage deviceInfo;
+	if (backend->GetDeviceInfo(fDevicePath.String(), &deviceInfo) == B_OK) {
+		uint32 mtu;
+		if (deviceInfo.FindUInt32(kNMFieldMTU, &mtu) == B_OK)
+			return mtu;
+	}
+
+	return 1500; // Default MTU
 }
 
 
 int32
 BNetworkInterface::Media() const
 {
-	ifreq request;
-	if (do_request(AF_INET, request, Name(), SIOCGIFMEDIA) != B_OK)
-		return -1;
-
-	return request.ifr_media;
+	// TODO: Query NetworkManager for media type
+	return 0;
 }
 
 
 uint32
 BNetworkInterface::Metric() const
 {
-	ifreq request;
-	if (do_request(AF_INET, request, Name(), SIOCGIFMETRIC) != B_OK)
-		return 0;
-
-	return request.ifr_metric;
+	// NetworkManager doesn't use per-interface metrics in the same way
+	return 0;
 }
 
 
 uint32
 BNetworkInterface::Type() const
 {
-	ifreq request;
-	if (do_request(AF_INET, request, Name(), SIOCGIFTYPE) != B_OK)
+	NMBackend* backend = _ResolvedBackend(fName, fDevicePath);
+	if (backend == NULL)
 		return 0;
 
-	return request.ifr_type;
+	BMessage deviceInfo;
+	if (backend->GetDeviceInfo(fDevicePath.String(), &deviceInfo) == B_OK) {
+		const char* deviceType;
+		if (deviceInfo.FindString(kNMFieldType, &deviceType) == B_OK) {
+			// Map NetworkManager device types to Haiku types
+			if (strcmp(deviceType, "ethernet") == 0)
+				return IFT_ETHER;
+			else if (strcmp(deviceType, "wifi") == 0)
+				return IFT_IEEE80211;
+			else if (strcmp(deviceType, "bluetooth") == 0)
+				return IFT_BLUETOOTH;
+		}
+	}
+	
+	return 0;
+}
+
+
+static bool
+read_sysfs_stat(const char* ifName, const char* stat, uint64& value)
+{
+	char path[256];
+	snprintf(path, sizeof(path), "/sys/class/net/%s/statistics/%s",
+		ifName, stat);
+
+	FILE* file = fopen(path, "r");
+	if (file == NULL)
+		return false;
+
+	unsigned long long parsed = 0;
+	bool ok = fscanf(file, "%llu", &parsed) == 1;
+	fclose(file);
+
+	value = parsed;
+	return ok;
 }
 
 
 status_t
 BNetworkInterface::GetStats(ifreq_stats& stats)
 {
-	ifreq request;
-	status_t status = do_request(AF_INET, request, Name(), SIOCGIFSTATS);
-	if (status != B_OK)
-		return status;
+	// Plain kernel counters -- read straight from sysfs instead of going
+	// through NMBackend/libnm: this has nothing to do with connection
+	// management, and would otherwise mean a D-Bus round trip per poll.
+	memset(&stats, 0, sizeof(stats));
 
-	memcpy(&stats, &request.ifr_stats, sizeof(ifreq_stats));
-	return B_OK;
+	uint64 value;
+	bool any = false;
+	if (read_sysfs_stat(fName, "rx_bytes", value)) {
+		stats.receive.bytes = value;
+		any = true;
+	}
+	if (read_sysfs_stat(fName, "tx_bytes", value)) {
+		stats.send.bytes = value;
+		any = true;
+	}
+	if (read_sysfs_stat(fName, "rx_packets", value)) {
+		stats.receive.packets = value;
+		any = true;
+	}
+	if (read_sysfs_stat(fName, "tx_packets", value)) {
+		stats.send.packets = value;
+		any = true;
+	}
+	if (read_sysfs_stat(fName, "rx_errors", value)) {
+		stats.receive.errors = value;
+		any = true;
+	}
+	if (read_sysfs_stat(fName, "tx_errors", value)) {
+		stats.send.errors = value;
+		any = true;
+	}
+	if (read_sysfs_stat(fName, "rx_dropped", value)) {
+		stats.receive.dropped = value;
+		any = true;
+	}
+	if (read_sysfs_stat(fName, "tx_dropped", value)) {
+		stats.send.dropped = value;
+		any = true;
+	}
+	if (read_sysfs_stat(fName, "collisions", value)) {
+		stats.collisions = value;
+		any = true;
+	}
+
+	return any ? B_OK : B_ERROR;
 }
 
 
 bool
 BNetworkInterface::HasLink() const
 {
-	return (Flags() & IFF_LINK) != 0;
-}
-
-
-status_t
-BNetworkInterface::SetFlags(uint32 flags)
-{
-	ifreq request;
-	request.ifr_flags = flags;
-	return do_request(AF_INET, request, Name(), SIOCSIFFLAGS);
-}
-
-
-status_t
-BNetworkInterface::SetMTU(uint32 mtu)
-{
-	ifreq request;
-	request.ifr_mtu = mtu;
-	return do_request(AF_INET, request, Name(), SIOCSIFMTU);
-}
-
-
-status_t
-BNetworkInterface::SetMedia(int32 media)
-{
-	ifreq request;
-	request.ifr_media = media;
-	return do_request(AF_INET, request, Name(), SIOCSIFMEDIA);
-}
-
-
-status_t
-BNetworkInterface::SetMetric(uint32 metric)
-{
-	ifreq request;
-	request.ifr_metric = metric;
-	return do_request(AF_INET, request, Name(), SIOCSIFMETRIC);
-}
-
-
-int32
-BNetworkInterface::CountAddresses() const
-{
-	ifreq request;
-	if (do_request(AF_INET, request, Name(), B_SOCKET_COUNT_ALIASES) != B_OK)
-		return 0;
-
-	return request.ifr_count;
-}
-
-
-status_t
-BNetworkInterface::GetAddressAt(int32 index, BNetworkInterfaceAddress& address)
-{
-	return address.SetTo(*this, index);
-}
-
-
-int32
-BNetworkInterface::FindAddress(const BNetworkAddress& address)
-{
-	FileDescriptorCloser socket(::socket(address.Family(), SOCK_DGRAM, 0));
-	if (!socket.IsSet())
-		return -1;
-
-	ifaliasreq request;
-	memset(&request, 0, sizeof(ifaliasreq));
-
-	strlcpy(request.ifra_name, Name(), IF_NAMESIZE);
-	request.ifra_index = -1;
-	memcpy(&request.ifra_addr, &address.SockAddr(), address.Length());
-
-	if (ioctl(socket.Get(), B_SOCKET_GET_ALIAS, &request,
-		sizeof(struct ifaliasreq)) < 0) {
-		return -1;
-	}
-
-	return request.ifra_index;
-}
-
-
-int32
-BNetworkInterface::FindFirstAddress(int family)
-{
-	FileDescriptorCloser socket(::socket(family, SOCK_DGRAM, 0));
-	if (!socket.IsSet())
-		return -1;
-
-	ifaliasreq request;
-	memset(&request, 0, sizeof(ifaliasreq));
-
-	strlcpy(request.ifra_name, Name(), IF_NAMESIZE);
-	request.ifra_index = -1;
-	request.ifra_addr.ss_family = AF_UNSPEC;
-
-	if (ioctl(socket.Get(), B_SOCKET_GET_ALIAS, &request,
-		sizeof(struct ifaliasreq)) < 0) {
-		return -1;
-	}
-
-	return request.ifra_index;
-}
-
-
-status_t
-BNetworkInterface::AddAddress(const BNetworkInterfaceAddress& address)
-{
-	return do_ifaliasreq(Name(), B_SOCKET_ADD_ALIAS, address);
-}
-
-
-status_t
-BNetworkInterface::AddAddress(const BNetworkAddress& local)
-{
-	BNetworkInterfaceAddress address;
-	address.SetAddress(local);
-
-	return do_ifaliasreq(Name(), B_SOCKET_ADD_ALIAS, address);
-}
-
-
-status_t
-BNetworkInterface::SetAddress(const BNetworkInterfaceAddress& address)
-{
-	return do_ifaliasreq(Name(), B_SOCKET_SET_ALIAS, address);
-}
-
-
-status_t
-BNetworkInterface::RemoveAddress(const BNetworkInterfaceAddress& address)
-{
-	ifreq request;
-	memcpy(&request.ifr_addr, &address.Address().SockAddr(),
-		address.Address().Length());
-
-	return do_request(family_from_interface_address(address), request, Name(),
-		B_SOCKET_REMOVE_ALIAS);
-}
-
-
-status_t
-BNetworkInterface::RemoveAddress(const BNetworkAddress& address)
-{
-	ifreq request;
-	memcpy(&request.ifr_addr, &address.SockAddr(), address.Length());
-
-	return do_request(address.Family(), request, Name(), B_SOCKET_REMOVE_ALIAS);
-}
-
-
-status_t
-BNetworkInterface::RemoveAddressAt(int32 index)
-{
-	BNetworkInterfaceAddress address;
-	status_t status = GetAddressAt(index, address);
-	if (status != B_OK)
-		return status;
-
-	return RemoveAddress(address);
+	uint32 flags = Flags();
+	return (flags & IFF_UP) != 0 && (flags & IFF_RUNNING) != 0;
 }
 
 
 status_t
 BNetworkInterface::GetHardwareAddress(BNetworkAddress& address)
 {
-	FileDescriptorCloser socket(::socket(AF_LINK, SOCK_DGRAM, 0));
-	if (!socket.IsSet())
-		return -errno;
+	NMBackend* backend = _ResolvedBackend(fName, fDevicePath);
+	if (backend == NULL)
+		return B_ERROR;
 
-	ifreq request;
-	strlcpy(request.ifr_name, Name(), IF_NAMESIZE);
+	BMessage deviceInfo;
+	if (backend->GetDeviceInfo(fDevicePath.String(), &deviceInfo) != B_OK)
+		return B_ERROR;
 
-	if (ioctl(socket.Get(), SIOCGIFADDR, &request, sizeof(struct ifreq)) < 0)
-		return -errno;
+	const char* macAddress;
+	if (deviceInfo.FindString(kNMFieldHWAddress, &macAddress) != B_OK)
+		return B_ERROR;
 
-	address.SetTo(request.ifr_addr);
+	// Parse "aa:bb:cc:dd:ee:ff" into raw bytes for SetToLinkLevel().
+	uint8 bytes[6];
+	unsigned int parsed[6];
+	if (sscanf(macAddress, "%x:%x:%x:%x:%x:%x", &parsed[0], &parsed[1],
+			&parsed[2], &parsed[3], &parsed[4], &parsed[5]) != 6) {
+		return B_ERROR;
+	}
+	for (int i = 0; i < 6; i++)
+		bytes[i] = (uint8)parsed[i];
+
+	address.SetToLinkLevel(bytes, sizeof(bytes));
+	return B_OK;
+}
+
+
+int32
+BNetworkInterface::CountAddresses() const
+{
+	// TODO: Query NetworkManager for address count
+	return 0;
+}
+
+
+status_t
+BNetworkInterface::GetAddressAt(int32 index, BNetworkInterfaceAddress& address)
+{
+	// TODO: Query NetworkManager for address at index
+	return B_ERROR;
+}
+
+
+int32
+BNetworkInterface::FindFirstAddress(int family)
+{
+	// TODO: Query NetworkManager once CountAddresses()/GetAddressAt() are
+	// wired up; there's nothing to search yet.
+	return -1;
+}
+
+
+status_t
+BNetworkInterface::AddAddress(const BNetworkInterfaceAddress& address)
+{
+	// TODO: Use NetworkManager to add address
 	return B_OK;
 }
 
 
 status_t
-BNetworkInterface::AddRoute(const BNetworkRoute& route)
+BNetworkInterface::RemoveAddress(const BNetworkInterfaceAddress& address)
 {
-	int family = route.AddressFamily();
-	if (family == AF_UNSPEC)
-		return B_BAD_VALUE;
-
-	ifreq request;
-	request.ifr_route = route.RouteEntry();
-	return do_request(family, request, Name(), SIOCADDRT);
+	// TODO: Use NetworkManager to remove address
+	return B_OK;
 }
 
 
 status_t
-BNetworkInterface::AddDefaultRoute(const BNetworkAddress& gateway)
+BNetworkInterface::SetFlags(uint32 flags)
 {
-	BNetworkRoute route;
-	status_t result = route.SetGateway(gateway);
-	if (result != B_OK)
-		return result;
-
-	route.SetFlags(RTF_STATIC | RTF_DEFAULT | RTF_GATEWAY);
-	return AddRoute(route);
+	// TODO: Use NetworkManager to set flags
+	return B_OK;
 }
 
 
 status_t
-BNetworkInterface::RemoveRoute(const BNetworkRoute& route)
+BNetworkInterface::SetMTU(uint32 mtu)
 {
-	int family = route.AddressFamily();
-	if (family == AF_UNSPEC)
-		return B_BAD_VALUE;
-
-	return RemoveRoute(family, route);
+	// TODO: Use NetworkManager to set MTU
+	return B_OK;
 }
 
 
 status_t
-BNetworkInterface::RemoveRoute(int family, const BNetworkRoute& route)
+BNetworkInterface::SetMetric(uint32 metric)
 {
-	ifreq request;
-	request.ifr_route = route.RouteEntry();
-	return do_request(family, request, Name(), SIOCDELRT);
-}
-
-
-status_t
-BNetworkInterface::RemoveDefaultRoute(int family)
-{
-	BNetworkRoute route;
-	route.SetFlags(RTF_STATIC | RTF_DEFAULT);
-	return RemoveRoute(family, route);
-}
-
-
-status_t
-BNetworkInterface::GetRoutes(int family,
-	BObjectList<BNetworkRoute, true>& routes) const
-{
-	return BNetworkRoute::GetRoutes(family, Name(), routes);
-}
-
-
-status_t
-BNetworkInterface::GetDefaultRoute(int family, BNetworkRoute& route) const
-{
-	return BNetworkRoute::GetDefaultRoute(family, Name(), route);
-}
-
-
-status_t
-BNetworkInterface::GetDefaultGateway(int family, BNetworkAddress& gateway) const
-{
-	return BNetworkRoute::GetDefaultGateway(family, Name(), gateway);
-}
-
-
-status_t
-BNetworkInterface::AutoConfigure(int family)
-{
-	BMessage message(kMsgConfigureInterface);
-	message.AddString("device", Name());
-
-	BMessage address;
-	address.AddInt32("family", family);
-	address.AddBool("auto_config", true);
-	message.AddMessage("address", &address);
-
-	BMessenger networkServer(kNetServerSignature);
-	BMessage reply;
-	status_t status = networkServer.SendMessage(&message, &reply);
-	if (status == B_OK)
-		reply.FindInt32("status", &status);
-
-	return status;
+	// NetworkManager doesn't use per-interface metrics
+	return B_OK;
 }

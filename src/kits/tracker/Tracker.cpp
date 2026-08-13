@@ -136,19 +136,24 @@ public:
 		bool openWithOK;
 		entry_ref appRef;
 
-		if (message->FindPointer("function", (void**)&function) != B_OK
-			|| message->FindMessage("refs", &refs) != B_OK
-			|| message->FindBool("openWithOK", &openWithOK) != B_OK) {
-			return;
+		bool dispatch = message->FindPointer("function",
+				(void**)&function) == B_OK
+			&& message->FindBool("openWithOK", &openWithOK) == B_OK;
+
+		if (dispatch) {
+			// Absent for a document-less launch, which the callee accepts.
+			const BMessage* refsArg
+				= message->FindMessage("refs", &refs) == B_OK ? &refs : NULL;
+
+			if (message->FindRef("appRef", &appRef) == B_OK)
+				function(&appRef, refsArg, openWithOK);
+			else
+				function(NULL, refsArg, openWithOK);
 		}
 
-		if (message->FindRef("appRef", &appRef) == B_OK)
-			function(&appRef, &refs, openWithOK);
-		else
-			function(NULL, &refs, openWithOK);
-
 		// Release the vref tickets that AsynchLaunchBinder acquired to
-		// keep the slots alive across the in-process async hop.
+		// keep the slots alive across the in-process async hop. Must happen
+		// even when the task was malformed, or the slots leak.
 		int64 id, ticket;
 		for (int32 i = 0;
 			 message->FindInt64("__launch_vref_ids", i, &id) == B_OK

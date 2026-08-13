@@ -35,7 +35,10 @@ All rights reserved.
 #define _FILE_PANEL_PRIV_H
 
 
+#include <set>
+
 #include <FilePanel.h>
+#include <Locker.h>
 
 #include "ContainerWindow.h"
 #include "PoseView.h"
@@ -70,6 +73,13 @@ public:
 	BFilePanelPoseView* PoseView() const;
 
 	virtual bool QuitRequested();
+	virtual void Quit();
+
+	// BFilePanel::~BFilePanel() may run after the app's shutdown sequence
+	// has already Quit() this window (BApplication quits file panels along
+	// with regular windows); IsLive() lets it check without touching the
+	// (possibly freed) window.
+	static bool IsLive(const BWindow* window);
 	virtual void MenusBeginning();
 	virtual void MenusEnded();
 	virtual void DispatchMessage(BMessage* message, BHandler* handler);
@@ -168,6 +178,11 @@ private:
 	bool fHideWhenDone;
 	bool fIsTrackingMenu;
 	bool fDefaultStateRestored;
+
+	// Tracks windows not yet Quit(), so BFilePanel::~BFilePanel() can tell
+	// whether the app's shutdown sequence already tore this one down.
+	static BLocker sLiveWindowsLock;
+	static std::set<const BWindow*> sLiveWindows;
 
 	typedef BContainerWindow _inherited;
 };

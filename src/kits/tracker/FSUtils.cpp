@@ -3647,7 +3647,10 @@ AsynchLaunchBinder(void (*func)(const entry_ref*, const BMessage*, bool on),
 {
 	BMessage* task = new BMessage;
 	task->AddPointer("function", (void*)func);
-	task->AddMessage("refs", refs);
+	// A document-less launch passes no refs; AddMessage() rejects NULL, so the
+	// field stays absent and the receiver must treat it as optional.
+	if (refs != NULL)
+		task->AddMessage("refs", refs);
 	task->AddBool("openWithOK", openWithOK);
 	if (appRef != NULL)
 		task->AddRef("appRef", appRef);

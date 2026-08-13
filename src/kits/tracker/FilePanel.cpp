@@ -41,6 +41,7 @@ All rights reserved.
 #include <Debug.h>
 #include <FilePanel.h>
 #include <Looper.h>
+#include <Messenger.h>
 #include <Screen.h>
 #include <Window.h>
 
@@ -84,7 +85,13 @@ BFilePanel::BFilePanel(file_panel_mode mode, BMessenger* target,
 
 BFilePanel::~BFilePanel()
 {
-	if (fWindow->Lock())
+	// The app's shutdown sequence (BApplication::_WindowQuitLoop) quits
+	// file panel windows along with regular ones, which can beat us here
+	// (e.g. this object is a member destroyed after BApplication::Run()
+	// returns). Touching fWindow after that is a use-after-free -- check
+	// the tracker-owned registry, populated/cleared by TFilePanel itself,
+	// before dereferencing it.
+	if (TFilePanel::IsLive(fWindow) && fWindow->Lock())
 		fWindow->Quit();
 }
 

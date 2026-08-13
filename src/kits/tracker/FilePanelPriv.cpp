@@ -37,6 +37,8 @@ All rights reserved.
 
 #include <string.h>
 
+#include <set>
+
 #include <Alert.h>
 #include <Application.h>
 #include <Button.h>
@@ -47,6 +49,7 @@ All rights reserved.
 #include <FindDirectory.h>
 #include <GridView.h>
 #include <Locale.h>
+#include <Locker.h>
 #include <MenuBar.h>
 #include <MenuField.h>
 #include <MenuItem.h>
@@ -191,6 +194,11 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target, const BEntry* s
 	Lock();
 	InitIconPreloader();
 
+	{
+		AutoLock<BLocker> registryLock(sLiveWindowsLock);
+		sLiveWindows.insert(this);
+	}
+
 	fIsSavePanel = (mode == B_SAVE_PANEL);
 
 	const float labelSpacing = be_control_look->DefaultLabelSpacing();
@@ -294,10 +302,44 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target, const BEntry* s
 
 TFilePanel::~TFilePanel()
 {
+	{
+		AutoLock<BLocker> registryLock(sLiveWindowsLock);
+		sLiveWindows.erase(this);
+	}
+
 	BMessenger tracker(kTrackerSignature);
 	BHandler::StopWatching(tracker, kDesktopFilePanelRootChanged);
 
 	delete fMessage;
+}
+
+
+BLocker TFilePanel::sLiveWindowsLock("file panel registry");
+std::set<const BWindow*> TFilePanel::sLiveWindows;
+
+
+void
+TFilePanel::Quit()
+{
+	// Mark this window gone before BContainerWindow::Quit() runs (and
+	// eventually self-deletes via BLooper::Quit()), so a racing
+	// BFilePanel::~BFilePanel() -- e.g. when the app's shutdown sequence
+	// quits this window ahead of the client's own teardown -- knows not
+	// to touch it again.
+	{
+		AutoLock<BLocker> registryLock(sLiveWindowsLock);
+		sLiveWindows.erase(this);
+	}
+
+	_inherited::Quit();
+}
+
+
+bool
+TFilePanel::IsLive(const BWindow* window)
+{
+	AutoLock<BLocker> registryLock(sLiveWindowsLock);
+	return sLiveWindows.find(window) != sLiveWindows.end();
 }
 
 

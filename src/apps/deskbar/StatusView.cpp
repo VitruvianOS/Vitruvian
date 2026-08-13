@@ -1218,6 +1218,13 @@ TReplicantTray::LocationForReplicant(int32 index, float replicantWidth)
 				break;
 			}
 
+			// A replicant too wide for even an empty row fits nowhere; without
+			// this the search never terminates and freezes the window thread.
+			if (replicantRect.left == rowRect.left) {
+				loc = replicantRect.LeftTop();
+				break;
+			}
+
 			// check next row
 		}
 	} else {

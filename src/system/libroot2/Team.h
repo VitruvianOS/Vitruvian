@@ -37,6 +37,12 @@ public:
 };
 
 
+// Cached find_thread(NULL) invalidation; defined in thread.cpp.
+// Must be called first thing in Team::ReinitChildAtFork(), before any
+// code that may call find_thread(NULL) and re-cache the parent's tid.
+void ResetCachedThreadId();
+
+
 }
 
 

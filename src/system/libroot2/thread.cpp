@@ -66,6 +66,25 @@ void* thread_run(void* data)
 }
 
 
+namespace {
+// 0 means "not cached yet"; a real tid is never 0.
+__thread thread_id sCachedTid = 0;
+}
+
+
+namespace BKernelPrivate {
+
+
+void
+ResetCachedThreadId()
+{
+	sCachedTid = 0;
+}
+
+
+}
+
+
 extern "C" {
 
 
@@ -362,8 +381,11 @@ _get_next_thread_info(team_id team, int32* cookie, thread_info* info, size_t siz
 thread_id
 find_thread(const char* name)
 {
-	if (name == NULL)
-		return syscall(SYS_gettid);
+	if (name == NULL) {
+		if (sCachedTid == 0)
+			sCachedTid = syscall(SYS_gettid);
+		return sCachedTid;
+	}
 
 	debugger("You are calling find_thread with something different than NULL");
 

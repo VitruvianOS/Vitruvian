@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+#include <set>
 #include <string>
 
 #include "KernelDebug.h"
@@ -44,6 +45,29 @@ static int gNexusArea = -1;
 static int gNexusNodeMonitor = -1;
 static struct udev* gUdev = NULL;
 static pthread_mutex_t gDevicesLock = PTHREAD_MUTEX_INITIALIZER;
+
+// Pids this team spawned via LoadImage(), reaped opportunistically so they
+// don't sit as zombies against RLIMIT_NPROC. Never touches pids we didn't
+// create ourselves, so it can't steal children waited on elsewhere (janus).
+static pthread_mutex_t gLoadedPidsLock = PTHREAD_MUTEX_INITIALIZER;
+static std::set<pid_t> gLoadedPids;
+static const size_t kMaxTrackedPids = 256;
+
+
+// Reaps already-exited tracked pids with WNOHANG. Called with gLoadedPidsLock held.
+static void
+ReapLoadedPidsLocked()
+{
+	for (std::set<pid_t>::iterator it = gLoadedPids.begin();
+			it != gLoadedPids.end(); ) {
+		int status;
+		pid_t result = waitpid(*it, &status, WNOHANG);
+		if (result == *it || (result == -1 && errno == ECHILD))
+			gLoadedPids.erase(it++);
+		else
+			++it;
+	}
+}
 
 static void
 OpenNexusDevices()
@@ -138,11 +162,14 @@ Team::InitTeam()
 
 	setenv("TARGET_SCREEN", "root", 1);
 
-	// Register atfork handlers. This should be good for us - we register the
-	// first set of callbacks that will be executed before any other set the
-	// user may register. Calling pthread_atfork again adds to the list.
-	pthread_atfork(&Team::PrepareFatherAtFork,
-		&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
+	// Register once per image: handlers inherit across fork(), but re-running
+	// in ReinitChildAtFork() would duplicate the handlers each generation.
+	static bool sAtForkRegistered = false;
+	if (!sAtForkRegistered) {
+		sAtForkRegistered = true;
+		pthread_atfork(&Team::PrepareFatherAtFork,
+			&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
+	}
 
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
@@ -285,6 +312,9 @@ Team::SyncFatherAtFork()
 void
 Team::ReinitChildAtFork()
 {
+	// Reset tid cache before find_thread(NULL) — parent's stale tid must not persist.
+	ResetCachedThreadId();
+
 	TRACE("ReinitChildAtFork()\n");
 
 	__gCPUCount = BKernelPrivate::Team::GetCPUCount();
@@ -306,6 +336,15 @@ Team::ReinitChildAtFork()
 		udev_unref(gUdev);
 		gUdev = NULL;
 	}
+
+	// Locks are inherited in whatever state they had at fork time; another
+	// thread may have held one, deadlocking the first user of it here.
+	pthread_mutex_init(&gLoadedPidsLock, NULL);
+	pthread_mutex_init(&gDevicesLock, NULL);
+
+	// Inherited pids belong to the parent's LoadImage() calls, not ours;
+	// waiting on them here would race the parent's own reaping.
+	gLoadedPids.clear();
 
 	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
 	if (gNexus < 0) {
@@ -337,9 +376,14 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 	TRACE("LoadImage: about to clone(), gNexus=%d gNexusArea=%d gNexusNodeMonitor=%d\n",
 		gNexus, gNexusArea, gNexusNodeMonitor);
 
+	pthread_mutex_lock(&gLoadedPidsLock);
+	ReapLoadedPidsLocked();
+	pthread_mutex_unlock(&gLoadedPidsLock);
+
 	pid_t pid = syscall(SYS_clone, SIGCHLD, 0, NULL, NULL, 0);
 	if (pid == -1) {
 		TRACE("load_image: clone failed: %s\n", strerror(errno));
+		fprintf(stderr, "load_image: clone failed: %s\n", strerror(errno));
 		return -errno;
 	}
 
@@ -364,17 +408,25 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 			gUdev = NULL;
 		}
 
+		// Deliberately no O_CLOEXEC: nexus_release() tears the team down
+		// when open_count hits 0, which would fire in the window between
+		// this open() and the exec below if the fd carried CLOEXEC.
 		gNexus = open("/dev/nexus", O_RDWR);
 
 		int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-		thread_id id = nexus_io(nexus, NEXUS_THREAD_CLONE_EXECUTED, NULL);
-		if (id < 0)
-			printf("Fork failed\n");
+
+		// arg=2: don't arm father's WAIT_NEWBORN latch — father already knows pid synchronously.
+		thread_id id = nexus_io(nexus, NEXUS_THREAD_CLONE_EXECUTED, (void*)2);
+		if (id < 0) {
+			fprintf(stderr, "load_image child: nexus announce failed (%d)\n",
+				(int)id);
+			_exit(127);
+		}
 
 		execvpe(argv[0], const_cast<char* const*>(argv),
 			envp ? const_cast<char* const*>(envp) : environ);
 
-		TRACE("load_image child: exec failed for '%s': %s\n",
+		fprintf(stderr, "load_image child: exec failed for '%s': %s\n",
 			argv[0], strerror(errno));
 
 		 // command not found
@@ -382,11 +434,19 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 	}
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	thread_id id = nexus_io(nexus, NEXUS_THREAD_WAIT_NEWBORN, NULL);
+	// Synchronous pre-creation: kernel validates pid and creates child team/thread records.
+	thread_id id = nexus_io(nexus, NEXUS_THREAD_WAIT_NEWBORN, (void*)(intptr_t)pid);
 	if (id < 0) {
 		printf("Fork failed\n");
 		return B_BAD_THREAD_ID;
 	}
+
+	pthread_mutex_lock(&gLoadedPidsLock);
+	if (gLoadedPids.size() >= kMaxTrackedPids)
+		ReapLoadedPidsLocked();
+	if (gLoadedPids.size() < kMaxTrackedPids)
+		gLoadedPids.insert(pid);
+	pthread_mutex_unlock(&gLoadedPidsLock);
 
 	TRACE("load_image: success\n");
 	return id;

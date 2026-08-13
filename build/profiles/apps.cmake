@@ -13,6 +13,7 @@ ImageInclude("/system/servers" vos-polkit-agent)
 set(SYSTEM_APPS
 	AboutSystem
 	ActivityMonitor
+	BluetoothStatus
 	DeskCalc
 	DiskProbe
 	DiskUsage
@@ -23,6 +24,7 @@ set(SYSTEM_APPS
 	Installer
 	LaunchBox
 	Magnify
+	NetworkStatus
 	People
 	ResEdit
 	#Screenshot

@@ -415,6 +415,7 @@ chown root:root /etc/ssh/sshd_config.d/debug.conf
 mkdir -p /root/.ssh
 chmod 0700 /root/.ssh
 chown root:root /root/.ssh
+getent passwd vos-live >/dev/null && echo "vos-live:live" | chpasswd || true
 if command -v systemctl >/dev/null 2>&1; then
     systemctl enable ssh.service 2>/dev/null || true
     systemctl enable vos-sshdebug.service 2>/dev/null || true
@@ -601,7 +602,7 @@ EOF
     log_info "ISO created: $_basedir/output/vitruvian-custom.iso"
     log_info "Build type: $BUILD_TYPE"
     if [ "$BUILD_TYPE" = "Debug" ]; then
-        log_info "Debug build - SSH: root@<guest-ip> (password: live)"
+        log_info "Debug build - SSH: vos-live@<guest-ip> (password: live)"
     fi
 }
 

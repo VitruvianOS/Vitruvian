@@ -9,7 +9,8 @@ add_subdirectory(input)
 #add_subdirectory(joysticks)    # needs device kit
 add_subdirectory(keymap)
 add_subdirectory(locale)
-#add_subdirectory(network)      # needs bnetapi
+add_subdirectory(network)
+add_subdirectory(bluetooth)
 #add_subdirectory(notifications) # missing libnotification
 #add_subdirectory(printers)     # needs print kit
 add_subdirectory(screen)

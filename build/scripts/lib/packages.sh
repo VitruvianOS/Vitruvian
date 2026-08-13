@@ -7,7 +7,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-rt-amd64 systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
-                " network-manager net-tools wireless-tools curl openssh-client" \
+                " network-manager bluez net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
@@ -17,7 +17,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-arm64 systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
-                " network-manager net-tools wireless-tools curl openssh-client" \
+                " network-manager bluez net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
@@ -27,7 +27,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-armmp systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
-                " network-manager net-tools wireless-tools curl openssh-client" \
+                " network-manager bluez net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
@@ -37,7 +37,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-riscv64 systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
-                " network-manager net-tools curl openssh-client" \
+                " network-manager bluez net-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
                 " ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
@@ -63,7 +63,7 @@ get_dev_packages() {
                 " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev" \
-                " libglu1-mesa-dev"
+                " libglu1-mesa-dev libnm-dev libbluetooth-dev"
             ;;
         arm64)
             printf '%s' \
@@ -76,7 +76,7 @@ get_dev_packages() {
                 " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev" \
-                " libglu1-mesa-dev"
+                " libglu1-mesa-dev libnm-dev libbluetooth-dev"
             ;;
         arm32)
             printf '%s' \
@@ -88,7 +88,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev"
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libnm-dev libbluetooth-dev"
             ;;
         riscv64)
             printf '%s' \
@@ -100,7 +100,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev"
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libnm-dev libbluetooth-dev"
             ;;
         *)
             die "No dev package list for architecture: $_arch"

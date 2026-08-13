@@ -14,6 +14,7 @@ set(
 	"headers/os/add-ons/file_system"
 	"headers/os/add-ons/graphics"
 	"headers/os/add-ons/registrar"
+	"headers/os/add-ons/network_settings"
 	"headers/os/app"
 	"headers/os/arch/x86_64"
 	"headers/os/device"

@@ -2,12 +2,14 @@
 set(SYSTEM_PREFERENCES_TARGETS
 	Appearance
 	Backgrounds
+	Bluetooth
 	DataTranslations
 	Deskbar_prefs
 	FileTypes
 	Input
 	Keymap
 	Locale
+	Network
 	Screen
 	#ScreenSaver
 	Shortcuts
@@ -20,12 +22,14 @@ set(SYSTEM_PREFERENCES_TARGETS
 set(SYSTEM_PREFERENCES
 	Appearance
 	Backgrounds
+	Bluetooth
 	DataTranslations
 	Deskbar
 	FileTypes
 	Input
 	Keymap
 	Locale
+	Network
 	Screen
 	#ScreenSaver
 	Shortcuts

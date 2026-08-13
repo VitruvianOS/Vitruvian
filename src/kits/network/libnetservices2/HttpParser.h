@@ -10,7 +10,8 @@
 #include <functional>
 #include <optional>
 
-#include <HttpResult.h>
+// Quoted+relative: avoid colliding with libnetservices' HttpResult.h
+#include "../../../../headers/private/netservices2/HttpResult.h"
 
 #include "HttpBuffer.h"
 

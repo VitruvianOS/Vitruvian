@@ -18,8 +18,9 @@
 #include <DataIO.h>
 #include <ErrorsExt.h>
 #include <HttpFields.h>
-#include <HttpRequest.h>
-#include <HttpResult.h>
+// Quoted+relative: avoid colliding with libnetservices' HttpRequest.h/HttpResult.h
+#include "../../../../headers/private/netservices2/HttpRequest.h"
+#include "../../../../headers/private/netservices2/HttpResult.h"
 #include <HttpSession.h>
 #include <Locker.h>
 #include <Messenger.h>

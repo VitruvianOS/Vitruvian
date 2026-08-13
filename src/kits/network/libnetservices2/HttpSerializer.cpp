@@ -9,7 +9,8 @@
 #include "HttpSerializer.h"
 
 #include <DataIO.h>
-#include <HttpRequest.h>
+// Quoted+relative: avoid colliding with libnetservices' HttpRequest.h
+#include "../../../../headers/private/netservices2/HttpRequest.h"
 #include <NetServicesDefs.h>
 
 #include "HttpBuffer.h"

@@ -8,7 +8,9 @@
  *		Niels Sascha Reedijk, niels.reedijk@gmail.com
  */
 
-#include <HttpTime.h>
+// Quoted+relative: libnetservices (v1) also ships a HttpTime.h on the same
+// flat include path, and <HttpTime.h> would ambiguously resolve to it.
+#include "../../../../headers/private/netservices2/HttpTime.h"
 
 #include <list>
 #include <new>

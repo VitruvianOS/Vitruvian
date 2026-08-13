@@ -6,7 +6,8 @@
  *		Niels Sascha Reedijk, niels.reedijk@gmail.com
  */
 
-#include <HttpRequest.h>
+// Quoted+relative: avoid colliding with libnetservices' HttpRequest.h
+#include "../../../../headers/private/netservices2/HttpRequest.h"
 
 #include <algorithm>
 #include <ctype.h>

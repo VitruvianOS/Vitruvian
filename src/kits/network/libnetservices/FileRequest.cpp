@@ -170,7 +170,7 @@ BFileRequest::_ProtocolLoop()
 
 			node_ref ref;
 			if (entry.GetNodeRef(&ref) == B_OK)
-				eplf << "i" << ref.vdevice() << "." << ref.vdirectory() << ",";
+				eplf << "i" << ref.vdevice() << "." << ref.vnode() << ",";
 
 			entry.GetName(name);
 			eplf << "\t" << name << "\r\n";

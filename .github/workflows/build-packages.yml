@@ -54,6 +54,7 @@ jobs:
             fakeroot devscripts lintian wget \
             attr libsystemd-dev libpam0g-dev \
             libpipewire-0.3-dev libspa-0.2-dev \
+            libbluetooth-dev libnm-dev libglib2.0-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 
       - name: Configure git safe.directory

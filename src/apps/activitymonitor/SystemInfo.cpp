@@ -6,10 +6,8 @@
 
 #include "SystemInfo.h"
 
-#ifndef __VOS__
 #include <NetworkInterface.h>
 #include <NetworkRoster.h>
-#endif
 
 #include "SystemInfoHandler.h"
 
@@ -168,7 +166,6 @@ SystemInfo::_RetrieveNetwork()
 	fBytesSent = 0;
 	fRetrievedNetwork = true;
 
-#ifndef __VOS__
 	BNetworkRoster& roster = BNetworkRoster::Default();
 
 	BNetworkInterface interface;
@@ -180,7 +177,6 @@ SystemInfo::_RetrieveNetwork()
 			fBytesSent += stats.send.bytes;
 		}
 	}
-#endif
 }
 
 

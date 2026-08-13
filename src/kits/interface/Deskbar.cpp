@@ -348,7 +348,6 @@ BDeskbar::MaxItemHeight() const
 
 //	#pragma mark - Item modification methods
 
-
 status_t
 BDeskbar::AddItem(BView* view, int32* _id)
 {

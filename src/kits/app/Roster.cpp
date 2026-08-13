@@ -2094,6 +2094,16 @@ BRoster::_LaunchApp(const char* mimeType, const entry_ref* ref,
 	DBG(OUT("BRoster::_LaunchApp() done: %s (%" B_PRIx32 ")\n",
 		strerror(error), error));
 
+	// Names the app that was actually resolved, not just the request: a
+	// launch that fails here has otherwise no trace of which executable the
+	// signature/ref lookup picked.
+	if (error != B_OK && error != B_ALREADY_RUNNING) {
+		fprintf(stderr, "BRoster::_LaunchApp(): %s team=%" B_PRId32
+			" thread=%" B_PRId32 " failed: %s (%" B_PRIx32 ")\n",
+			mimeType != NULL ? mimeType : "(ref)", team, appThread,
+			strerror(error), error);
+	}
+
 	return error;
 }
 

@@ -393,6 +393,9 @@ static pthread_mutex_t sAppsLock = PTHREAD_MUTEX_INITIALIZER;
 struct PendingLaunch {
 	bool      active;
 	int       app_idx;
+	// Slots are recycled on restart, so app_idx alone can name a different
+	// app by the time readiness resolves; pid pins it to the right one.
+	pid_t     pid;
 	int       ready_fd;
 	port_id   reply_port;
 	int32     reply_token;
@@ -424,6 +427,25 @@ find_app_by_sig(const char* sig)
 		if (strcmp(sApps[i].signature, sig) == 0)
 			return i;
 	return -1;
+}
+
+
+// Marks a reaped entry dead so a stale port/team is never handed out by
+// handle_get_launch_data. pid == -1 is the dead sentinel; a launched-but-
+// not-yet-ready app still has pid > 0 with port == -1, so the two states
+// stay distinguishable.
+static void
+invalidate_app_by_pid(pid_t pid)
+{
+	pthread_mutex_lock(&sAppsLock);
+	for (int i = 0; i < sAppCount; i++) {
+		if (sApps[i].pid == pid) {
+			sApps[i].pid  = -1;
+			sApps[i].port = -1;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&sAppsLock);
 }
 
 
@@ -660,8 +682,18 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 
 	pthread_mutex_lock(&sAppsLock);
 	int app_idx = -1;
-	if (sAppCount < JANUS_MAX_APPS) {
+	// Reuse a dead slot for the same signature so a restart doesn't leave
+	// find_app_by_sig() returning the old, dead entry forever.
+	for (int i = 0; i < sAppCount; i++) {
+		if (sApps[i].pid == -1
+				&& strcmp(sApps[i].signature, ks->signature) == 0) {
+			app_idx = i;
+			break;
+		}
+	}
+	if (app_idx < 0 && sAppCount < JANUS_MAX_APPS)
 		app_idx = sAppCount++;
+	if (app_idx >= 0) {
 		strlcpy(sApps[app_idx].name,      name,          sizeof(sApps[app_idx].name));
 		strlcpy(sApps[app_idx].signature, ks->signature, sizeof(sApps[app_idx].signature));
 		sApps[app_idx].pid  = pid;
@@ -685,6 +717,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		if (!sPending[i].active) {
 			sPending[i].active      = true;
 			sPending[i].app_idx     = app_idx;
+			sPending[i].pid         = pid;
 			sPending[i].ready_fd    = fds[0];
 			sPending[i].reply_port  = replyPort;
 			sPending[i].reply_token = replyToken;
@@ -828,7 +861,8 @@ _is_pre_auth_server(const char* name)
 	return strcmp(name, "vitruvian-login") == 0
 		|| strcmp(name, "FirstBootPrompt") == 0
 		|| strcmp(name, "app_server") == 0
-		|| strcmp(name, "registrar") == 0;
+		|| strcmp(name, "registrar") == 0
+		|| strcmp(name, "input_server") == 0;
 }
 
 
@@ -901,6 +935,58 @@ seed_user_settings_from_preauth(const char* userHome, uid_t uid, gid_t gid)
 }
 
 
+// Finds processes named like a pre-auth server and still running as the login
+// persona, skipping any pid already in `known`. Returns how many were stored.
+static int
+_collect_persona_strays(pid_t* out, int max, const pid_t* known, int knownCount)
+{
+	if (max <= 0 || sUserUid == 0)
+		return 0;
+
+	DIR* proc = opendir("/proc");
+	if (proc == NULL)
+		return 0;
+
+	int found = 0;
+	struct dirent* ent;
+	while ((ent = readdir(proc)) != NULL && found < max) {
+		pid_t pid = (pid_t)atoi(ent->d_name);
+		if (pid <= 0 || pid == getpid())
+			continue;
+
+		char path[64];
+		struct stat st;
+		snprintf(path, sizeof(path), "/proc/%d", (int)pid);
+		if (stat(path, &st) != 0 || st.st_uid != sUserUid)
+			continue;
+
+		snprintf(path, sizeof(path), "/proc/%d/comm", (int)pid);
+		FILE* f = fopen(path, "r");
+		if (f == NULL)
+			continue;
+		char comm[64] = { 0 };
+		if (fgets(comm, sizeof(comm), f) != NULL)
+			comm[strcspn(comm, "\n")] = '\0';
+		fclose(f);
+
+		if (!_is_pre_auth_server(comm))
+			continue;
+
+		bool dup = false;
+		for (int i = 0; i < knownCount && !dup; i++)
+			dup = (known[i] == pid);
+		if (dup)
+			continue;
+
+		fprintf(stderr, "janus: pre-auth stray %s pid=%d uid=%u, terminating\n",
+			comm, (int)pid, (unsigned)sUserUid);
+		out[found++] = pid;
+	}
+	closedir(proc);
+	return found;
+}
+
+
 static void
 kill_pre_auth_chain()
 {
@@ -914,6 +1000,12 @@ kill_pre_auth_chain()
 			victims[n++] = sApps[i].pid;
 	}
 	pthread_mutex_unlock(&sAppsLock);
+
+	// sApps[] only records what janus launched, so a pre-auth server started
+	// by its systemd unit survives the handoff and then fights the new
+	// session's instance over /dev/input. Sweep by identity instead: any
+	// pre-auth-named process still owned by the login persona.
+	n += _collect_persona_strays(victims + n, JANUS_MAX_APPS - n, victims, n);
 
 	for (int i = 0; i < n; i++)
 		kill(victims[i], SIGTERM);
@@ -1429,8 +1521,15 @@ check_pending_launches()
 
 		if (port >= 0) {
 			pthread_mutex_lock(&sAppsLock);
-			sApps[idx].port = port;
+			bool stale = sApps[idx].pid != sPending[i].pid;
+			if (!stale)
+				sApps[idx].port = port;
 			pthread_mutex_unlock(&sAppsLock);
+			if (stale)
+				port = -1;
+		}
+
+		if (port >= 0) {
 
 			printf("janus: %s ready, pid=%d port=%d\n",
 				sApps[idx].name, (int)sApps[idx].pid, (int)port);
@@ -1774,8 +1873,9 @@ daemon_loop()
 
 		// Stop reaping once shutdown starts: _kern_shutdown forks systemctl
 		// and needs its own waitpid to succeed.
-		while (!sShuttingDown && waitpid(-1, NULL, WNOHANG) > 0)
-			;
+		pid_t reaped;
+		while (!sShuttingDown && (reaped = waitpid(-1, NULL, WNOHANG)) > 0)
+			invalidate_app_by_pid(reaped);
 	}
 }
 

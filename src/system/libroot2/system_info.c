@@ -15,6 +15,10 @@
 #include <sys/utsname.h>
 #include <time.h>
 
+#if defined(__i386__) || defined(__x86_64__)
+#include <cpuid.h>
+#endif
+
 
 extern int32 __gCPUCount;
 
@@ -381,6 +385,18 @@ read_cpu_freq(void)
 }
 
 
+static uint32
+read_cpu_signature(void)
+{
+#if defined(__i386__) || defined(__x86_64__)
+	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+	if (__get_cpuid(1, &eax, &ebx, &ecx, &edx))
+		return (uint32)eax;
+#endif
+	return 0;
+}
+
+
 static enum cpu_vendor
 read_cpu_vendor(void)
 {
@@ -468,11 +484,12 @@ _kern_get_cpu_topology_info(cpu_topology_node_info* topologyInfos,
 		index++;
 	}
 
+	uint32 cpuSignature = read_cpu_signature();
 	for (uint32 i = 0; i < coreCount && index < nodeCount; i++, index++) {
 		topologyInfos[index].id = index;
 		topologyInfos[index].type = B_TOPOLOGY_CORE;
 		topologyInfos[index].level = 2;
-		topologyInfos[index].data.core.model = 0;
+		topologyInfos[index].data.core.model = cpuSignature;
 		topologyInfos[index].data.core.default_frequency = freqHz;
 	}
 

@@ -11,6 +11,10 @@
 
 #include <algorithm>
 
+#if defined(__x86_64__) || defined(__i386__)
+#include <cpuid.h>
+#endif
+
 #include <syscalls.h>
 #include <system_info.h>
 
@@ -172,7 +176,16 @@ _get_cpu_info_etc(uint32 firstCPU, uint32 cpuCount, cpu_info* info,
 status_t
 get_cpuid(cpuid_info *info, uint32 eaxRegister, uint32 cpuNum)
 {
-	//return _kern_get_cpuid(info, eaxRegister, cpuNum);
+	if (info == NULL)
+		return B_BAD_VALUE;
+
+	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+	__cpuid_count(eaxRegister, 0, eax, ebx, ecx, edx);
+
+	info->regs.eax = eax;
+	info->regs.ebx = ebx;
+	info->regs.ecx = ecx;
+	info->regs.edx = edx;
 	return B_OK;
 }
 #endif

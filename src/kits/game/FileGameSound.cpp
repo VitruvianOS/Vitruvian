@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include <mutex>
+#include <stdint.h>
 
 #include <Entry.h>
 #include <ObjectList.h>
@@ -38,7 +39,28 @@ struct FileGameSoundState {
 	gs_audio_format	format;
 	uint32			frameStride;
 	bool			eos;
+
+	_gs_ramp*		pausing;
+	bool			paused;
+	float			pauseGain;
 };
+
+
+template<typename T, int32 min, int32 middle, int32 max>
+static bool
+ApplyRampCopy(_gs_ramp* ramp, T* dest, const T* src, size_t* bytes)
+{
+	size_t samples = *bytes / sizeof(T);
+	for (size_t i = 0; i < samples; i++) {
+		float gain = *ramp->value;
+		dest[i] = clamp<T, min, max>(float(src[i] - middle) * gain + middle);
+		if (ChangeRamp(ramp)) {
+			*bytes = i * sizeof(T);
+			return true;
+		}
+	}
+	return false;
+}
 
 
 static std::mutex          sStateLock;
@@ -68,6 +90,9 @@ AttachState(BFileGameSound* self)
 	s->track       = NULL;
 	s->frameStride = 0;
 	s->eos         = false;
+	s->pausing     = NULL;
+	s->paused      = false;
+	s->pauseGain   = 1.0f;
 	memset(&s->format, 0, sizeof(s->format));
 
 	std::lock_guard<std::mutex> _(sStateLock);
@@ -85,6 +110,7 @@ DetachState(BFileGameSound* self)
 		if (sStateOwners.ItemAt(i) == self) {
 			FileGameSoundState* s = sStates.ItemAt(i);
 			if (s != NULL) {
+				delete s->pausing;
 				delete s->file;	// owns BMediaFile -> ReleaseTrack on dtor
 				delete s;
 			}
@@ -257,6 +283,11 @@ BFileGameSound::FillBuffer(void* buffer, size_t byteCount)
 		return;
 	}
 
+	if (s->paused && s->pausing == NULL) {
+		memset(buffer, 0, byteCount);
+		return;
+	}
+
 	int64 wantFrames = byteCount / s->frameStride;
 	int64 gotFrames  = wantFrames;
 	status_t err = s->track->ReadFrames(buffer, &gotFrames);
@@ -284,30 +315,88 @@ BFileGameSound::FillBuffer(void* buffer, size_t byteCount)
 		return;
 	}
 
-	const size_t got = (size_t)gotFrames * s->frameStride;
+	size_t got = (size_t)gotFrames * s->frameStride;
+
+	if (s->pausing != NULL) {
+		Lock();
+		bool rampDone = false;
+		size_t rampBytes = got;
+		switch (s->format.format) {
+			case gs_audio_format::B_GS_U8:
+				rampDone = ApplyRampCopy<uint8_t, 0, 128, UINT8_MAX>(
+					s->pausing, (uint8_t*)buffer, (const uint8_t*)buffer,
+					&rampBytes);
+				break;
+			case gs_audio_format::B_GS_S16:
+				rampDone = ApplyRampCopy<int16_t, INT16_MIN, 0, INT16_MAX>(
+					s->pausing, (int16_t*)buffer, (const int16_t*)buffer,
+					&rampBytes);
+				break;
+			case gs_audio_format::B_GS_S32:
+				rampDone = ApplyRampCopy<int32_t, INT32_MIN, 0, INT32_MAX>(
+					s->pausing, (int32_t*)buffer, (const int32_t*)buffer,
+					&rampBytes);
+				break;
+			case gs_audio_format::B_GS_F:
+				rampDone = ApplyRampCopy<float, -1, 0, 1>(s->pausing,
+					(float*)buffer, (const float*)buffer, &rampBytes);
+				break;
+		}
+		if (rampBytes < got) {
+			if (s->paused)
+				memset((uint8_t*)buffer + rampBytes, 0, got - rampBytes);
+		}
+		if (rampDone) {
+			delete s->pausing;
+			s->pausing = NULL;
+		}
+		Unlock();
+	}
+
 	if (got < byteCount)
 		memset((uint8_t*)buffer + got, 0, byteCount - got);
 }
 
 
 status_t
-BFileGameSound::Perform(int32 /*selector*/, void* /*data*/)
+BFileGameSound::SetPaused(bool isPaused, bigtime_t rampTime)
 {
-	return B_NOT_SUPPORTED;
-}
+	FileGameSoundState* s = GetState(this);
+	if (s == NULL)
+		return B_NO_INIT;
+	if (s->paused == isPaused)
+		return EALREADY;
 
+	Lock();
+	delete s->pausing;
+	s->pausing = NULL;
+	if (rampTime > 100000) {
+		s->pausing = InitRamp(&s->pauseGain, isPaused ? 0.0f : 1.0f,
+			s->format.frame_rate, rampTime);
+	}
+	s->paused = isPaused;
+	Unlock();
 
-status_t
-BFileGameSound::SetPaused(bool /*isPaused*/, bigtime_t /*rampTime*/)
-{
-	return B_NOT_SUPPORTED;
+	return B_OK;
 }
 
 
 int32
 BFileGameSound::IsPaused()
 {
-	return B_NOT_PAUSED;
+	FileGameSoundState* s = GetState(this);
+	if (s == NULL)
+		return B_NOT_PAUSED;
+	if (s->pausing != NULL)
+		return B_PAUSE_IN_PROGRESS;
+	return s->paused ? B_PAUSED : B_NOT_PAUSED;
+}
+
+
+status_t
+BFileGameSound::Perform(int32, void*)
+{
+	return B_ERROR;
 }
 
 

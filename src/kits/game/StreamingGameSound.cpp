@@ -96,17 +96,21 @@ BStreamingGameSound::SetAttributes(gs_attribute* attributes,
 status_t
 BStreamingGameSound::Perform(int32 /*selector*/, void* /*data*/)
 {
-	return B_NOT_SUPPORTED;
+	return B_ERROR;
 }
 
 
 status_t
-BStreamingGameSound::SetParameters(size_t /*bufferFrameCount*/,
-	const gs_audio_format* /*format*/, size_t /*bufferCount*/)
+BStreamingGameSound::SetParameters(size_t bufferFrameCount,
+	const gs_audio_format* format, size_t bufferCount)
 {
-	// Buffering geometry is now driven by BSoundPlayer; the request is
-	// honored at construction time only.
-	return B_OK;
+	gs_id sound;
+	status_t error = Device()->CreateBuffer(&sound, this, format,
+		bufferFrameCount, bufferCount);
+	if (error != B_OK)
+		return error;
+
+	return BGameSound::Init(sound);
 }
 
 

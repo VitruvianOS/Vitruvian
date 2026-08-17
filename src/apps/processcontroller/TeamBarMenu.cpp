@@ -7,6 +7,7 @@
 #include "TeamBarMenu.h"
 #include "ThreadBarMenu.h"
 #include "TeamBarMenuItem.h"
+#include "KernelTeamBarMenuItem.h"
 #include "NoiseBarMenuItem.h"
 #include "ProcessController.h"
 
@@ -20,16 +21,19 @@
 #define EXTRA 10
 
 
-TeamBarMenu::TeamBarMenu(const char* title, info_pack* infos, int32 teamCount)
+TeamBarMenu::TeamBarMenu(const char* title, info_pack* infos, int32 teamCount,
+	bool kernelThreads)
 	: BMenu(title),
 	fTeamCount(teamCount+EXTRA),
-	fFirstShow(true)
+	fFirstShow(true),
+	fKernelThreads(kernelThreads)
 {
 	SetFlags(Flags() | B_PULSE_NEEDED);
 	fTeamList = (team_id*)malloc(sizeof(team_id) * fTeamCount);
-	int	k;
-	for (k = 0; k < teamCount; k++) {
-		fTeamList[k] = infos[k].team_info.team;
+	int	k = 0;
+	for (int i = 0; i < teamCount; i++) {
+		if (is_kernel_thread(infos[i].team_info.team) == fKernelThreads)
+			fTeamList[k++] = infos[i].team_info.team;
 	}
 	while (k < fTeamCount) {
 		fTeamList[k++] = -1;
@@ -39,7 +43,12 @@ TeamBarMenu::TeamBarMenu(const char* title, info_pack* infos, int32 teamCount)
 	SetFont(be_plain_font);
 	gCurrentThreadBarMenu = NULL;
 	fLastTotalTime = system_time();
-	AddItem(new NoiseBarMenuItem());
+
+	if (!fKernelThreads)
+		AddItem(new NoiseBarMenuItem());
+
+	fKernelLastTime = fLastTotalTime;
+	fKernelPrevUsage = fKernelThreads ? 0 : SumKernelUsage();
 }
 
 
@@ -62,6 +71,23 @@ TeamBarMenu::Draw(BRect updateRect)
 }
 
 
+bigtime_t
+TeamBarMenu::SumKernelUsage()
+{
+	bigtime_t sum = 0;
+	int32 cookie = 0;
+	team_info info;
+	while (get_next_team_info(&cookie, &info) == B_OK) {
+		if (!is_kernel_thread(info.team))
+			continue;
+		team_usage_info usage;
+		if (get_team_usage_info(info.team, B_TEAM_USAGE_SELF, &usage) == B_OK)
+			sum += usage.user_time + usage.kernel_time;
+	}
+	return sum;
+}
+
+
 void
 TeamBarMenu::Pulse()
 {
@@ -73,7 +99,8 @@ TeamBarMenu::Pulse()
 	int	k;
 	TeamBarMenuItem *item;
 	double total = 0;
-	for (k = 1; (item = (TeamBarMenuItem*)ItemAt(k)) != NULL; k++) {
+	for (k = fKernelThreads ? 0 : 2;
+			(item = (TeamBarMenuItem*)ItemAt(k)) != NULL; k++) {
 		item->BarUpdate();
 		if (item->fKernel < 0) {
 			if (lastRecycle == fRecycleCount) {
@@ -97,11 +124,22 @@ TeamBarMenu::Pulse()
 	int32 cookie = 0;
 	info_pack infos;
 	item = NULL;
+	bigtime_t kernelUsageSum = 0;
 	while (get_next_team_info(&cookie, &infos.team_info) == B_OK) {
+		bool isKernel = is_kernel_thread(infos.team_info.team);
+		if (!fKernelThreads && isKernel) {
+			team_usage_info usage;
+			if (get_team_usage_info(infos.team_info.team, B_TEAM_USAGE_SELF, &usage) == B_OK)
+				kernelUsageSum += usage.user_time + usage.kernel_time;
+		}
+
 		int	j = 0;
 		while (j < fTeamCount && infos.team_info.team != fTeamList[j])
 			j++;
-		if (infos.team_info.team != fTeamList[j]) {
+		if (j == fTeamCount) {
+			if (isKernel != fKernelThreads)
+				continue;
+
 			// new team
 			team_info info;
 			j = 0;
@@ -152,12 +190,27 @@ TeamBarMenu::Pulse()
 	if (firstRecycle < lastRecycle)
 		RemoveItems(IndexOf(fRecycleList[firstRecycle].item), lastRecycle - firstRecycle, true);
 
+	if (!fKernelThreads) {
+		// Kernel threads have no items here, so their CPU time would
+		// otherwise vanish from the idle math.
+		bigtime_t now = system_time();
+		if (now > fKernelLastTime)
+			total += double(kernelUsageSum - fKernelPrevUsage) / double(now - fKernelLastTime);
+		fKernelPrevUsage = kernelUsageSum;
+		fKernelLastTime = now;
+
+		KernelTeamBarMenuItem* kernelItem = (KernelTeamBarMenuItem*)ItemAt(1);
+		if (kernelItem != NULL)
+			kernelItem->BarUpdate(kernelUsageSum, now);
+	}
+
 	total /= gCPUcount;
 	total = 1 - total;
 
 	fLastTotalTime = system_time();
 	NoiseBarMenuItem* noiseItem;
-	if ((noiseItem = (NoiseBarMenuItem*)ItemAt(0)) != NULL) {
+	if (!fKernelThreads
+		&& (noiseItem = (NoiseBarMenuItem*)ItemAt(0)) != NULL) {
 		noiseItem->SetBusyWaiting(0);
 		if (total >= 0)
 			noiseItem->SetLost(total);

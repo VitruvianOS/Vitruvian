@@ -14,6 +14,9 @@ extern const char* kTrackerSig;
 extern const char* kDeskbarSig;
 extern const char* kTerminalSig;
 
+// Vector icon resource in ProcessController.rdef.
+extern const char* kKernelIconName;
+
 extern const char* kPosPrefName;
 extern const char* kPreferencesFileName;
 

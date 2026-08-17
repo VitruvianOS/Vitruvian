@@ -39,6 +39,7 @@
 #include "PCWorld.h"
 #include "Preferences.h"
 #include "QuitMenu.h"
+#include "KernelTeamBarMenuItem.h"
 #include "TeamBarMenu.h"
 #include "TeamBarMenuItem.h"
 #include "ThreadBarMenu.h"
@@ -170,6 +171,7 @@ ProcessController::ProcessController(BRect frame, bool temp)
 	fTrackerIcon(kTrackerSig),
 	fDeskbarIcon(kDeskbarSig),
 	fTerminalIcon(kTerminalSig),
+	fKernelIcon(kKernelIconName, kResourceIcon),
 	kCPUCount(sysconf(_SC_NPROCESSORS_CONF)),
 	fTemp(temp),
 	fLastBarHeight(new float[kCPUCount]),
@@ -194,6 +196,7 @@ ProcessController::ProcessController(BMessage *data)
 	fTrackerIcon(kTrackerSig),
 	fDeskbarIcon(kDeskbarSig),
 	fTerminalIcon(kTerminalSig),
+	fKernelIcon(kKernelIconName, kResourceIcon),
 	kCPUCount(sysconf(_SC_NPROCESSORS_CONF)),
 	fTemp(false),
 	fLastBarHeight(new float[kCPUCount]),
@@ -213,6 +216,7 @@ ProcessController::ProcessController(BSize size)
 	fTrackerIcon(kTrackerSig),
 	fDeskbarIcon(kDeskbarSig),
 	fTerminalIcon(kTerminalSig),
+	fKernelIcon(kKernelIconName, kResourceIcon),
 	kCPUCount(sysconf(_SC_NPROCESSORS_CONF)),
 	fTemp(false),
 	fLastBarHeight(new float[kCPUCount]),
@@ -811,7 +815,8 @@ thread_popup(void *arg)
 	infos, systemInfo);
 	int64 committedMemory = (int64)systemInfo.used_pages * B_PAGE_SIZE / 1024;
 	for (m = 0; m < systemInfo.used_teams; m++) {
-		if (infos[m].team_info.team >= 0) {
+		if (infos[m].team_info.team >= 0
+			&& !is_kernel_thread(infos[m].team_info.team)) {
 			MemoryBarMenuItem* memoryItem =
 				new MemoryBarMenuItem(infos[m].team_name,
 					infos[m].team_info.team, infos[m].team_icon, false, NULL);
@@ -825,8 +830,18 @@ thread_popup(void *arg)
 	// CPU Load section
 	TeamBarMenu* CPUPopup = new TeamBarMenu(B_TRANSLATE("Threads and CPU "
 	"usage"), infos, systemInfo.used_teams);
+
+	TeamBarMenu* KernelTeamPopup = new TeamBarMenu(B_TRANSLATE("Kernel Team"),
+		infos, systemInfo.used_teams, true);
+	KernelTeamPopup->SetFont(be_plain_font);
+	CPUPopup->AddItem(new KernelTeamBarMenuItem(KernelTeamPopup,
+		gPCView->fKernelIcon), 1);
+
 	for (m = 0; m < systemInfo.used_teams; m++) {
 		if (infos[m].team_info.team >= 0) {
+			bool kernel = is_kernel_thread(infos[m].team_info.team);
+			TeamBarMenu* targetMenu = kernel ? KernelTeamPopup : CPUPopup;
+
 			ThreadBarMenu* TeamPopup = new ThreadBarMenu(infos[m].team_name,
 				infos[m].team_info.team, infos[m].team_info.thread_count);
 			BMessage* kill_team = new BMessage('KlTm');
@@ -834,7 +849,7 @@ thread_popup(void *arg)
 			TeamBarMenuItem* item = new TeamBarMenuItem(TeamPopup, kill_team,
 				infos[m].team_info.team, infos[m].team_icon, false);
 			item->SetTarget(gPCView);
-			CPUPopup->AddItem(item);
+			targetMenu->AddItem(item);
 		}
 	}
 

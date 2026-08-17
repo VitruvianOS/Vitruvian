@@ -21,7 +21,8 @@ typedef struct {
 
 class TeamBarMenu : public BMenu {
 	public:
-						TeamBarMenu(const char* title, info_pack* infos, int32 teamCount);
+						TeamBarMenu(const char* title, info_pack* infos, int32 teamCount,
+							bool kernelThreads = false);
 		virtual			~TeamBarMenu();
 
 		virtual	void	Draw(BRect updateRect);
@@ -33,6 +34,15 @@ class TeamBarMenu : public BMenu {
 		int				fRecycleCount;
 		bigtime_t		fLastTotalTime;
 		bool			fFirstShow;
+		bool			fKernelThreads;
+
+		// The "Kernel Team" submenu only pulses while it's visible, so the
+		// top-level menu tracks kernel usage itself rather than reading it
+		// back from those items.
+		bigtime_t		fKernelPrevUsage;
+		bigtime_t		fKernelLastTime;
+
+		bigtime_t		SumKernelUsage();
 };
 
 #endif // _TEAM_BAR_MENU_H_

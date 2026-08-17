@@ -43,6 +43,7 @@ class ProcessController : public BView {
 		AutoIcon		fTrackerIcon;
 		AutoIcon		fDeskbarIcon;
 		AutoIcon		fTerminalIcon;
+		AutoIcon		fKernelIcon;
 
 	private:
 		void			Init();

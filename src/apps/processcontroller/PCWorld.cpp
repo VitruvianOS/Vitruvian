@@ -34,6 +34,11 @@ public:
 
 	virtual	void				ReadyToRun();
 	virtual	void				ArgvReceived(int32 argc, char** argv);
+
+			status_t			DeskbarInstallStatus() const
+									{ return fDeskbarInstallStatus; }
+private:
+			status_t			fDeskbarInstallStatus;
 };
 
 
@@ -41,6 +46,7 @@ const char* kSignature = "application/x-vnd.Haiku-ProcessController";
 const char* kTrackerSig = "application/x-vnd.Be-TRAK";
 const char* kDeskbarSig = "application/x-vnd.Be-TSKB";
 const char* kTerminalSig = "application/x-vnd.Haiku-Terminal";
+const char* kKernelIconName = "kernel team";
 const char* kPreferencesFileName = "ProcessController Prefs";
 
 const char*	kPosPrefName = "Position";
@@ -52,7 +58,8 @@ thread_id id = 0;
 
 PCApplication::PCApplication()
 	:
-	BApplication(kSignature)
+	BApplication(kSignature),
+	fDeskbarInstallStatus(B_OK)
 {
 }
 
@@ -82,7 +89,7 @@ PCApplication::ReadyToRun()
 		if (alert->Go() != 0) {
 			BDeskbar deskbar;
 			if (!deskbar.HasItem(kDeskbarItemName))
-				move_to_deskbar(deskbar);
+				fDeskbarInstallStatus = move_to_deskbar(deskbar);
 			Quit();
 			return;
 		}
@@ -137,7 +144,7 @@ PCApplication::ArgvReceived(int32 argc, char **argv)
 	} else if (argc == 2 && strcmp(argv[1], "-deskbar") == 0) {
 		BDeskbar deskbar;
 		if (!gInDeskbar && !deskbar.HasItem(kDeskbarItemName))
-			move_to_deskbar(deskbar);
+			fDeskbarInstallStatus = move_to_deskbar(deskbar);
 	} else if (argc > 1) {
 		// print a simple usage string
 		printf(B_TRANSLATE("Usage: %s [-deskbar]\n"), argv[0]);
@@ -158,6 +165,6 @@ main()
 	PCApplication application;
 	application.Run();
 
-	return B_OK;
+	return application.DeskbarInstallStatus();
 }
 

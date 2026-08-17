@@ -7,6 +7,7 @@
 #include "MemoryBarMenu.h"
 #include "MemoryBarMenuItem.h"
 #include "KernelMemoryBarMenuItem.h"
+#include "KernelTeamMemoryBarMenuItem.h"
 #include "ProcessController.h"
 
 #include <Bitmap.h>
@@ -31,9 +32,10 @@ MemoryBarMenu::MemoryBarMenu(const char* name, info_pack* infos, system_info& sy
 
 	fTeamList = (team_id*)malloc(sizeof (team_id) * fTeamCount);
 
-	unsigned int k;
-	for (k = 0; k < systemInfo.used_teams; k++) {
-		fTeamList[k] = infos[k].team_info.team;
+	unsigned int k = 0;
+	for (unsigned int i = 0; i < systemInfo.used_teams; i++) {
+		if (!is_kernel_thread(infos[i].team_info.team))
+			fTeamList[k++] = infos[i].team_info.team;
 	}
 
 	while (k < fTeamCount) {
@@ -48,6 +50,7 @@ MemoryBarMenu::MemoryBarMenu(const char* name, info_pack* infos, system_info& sy
 	fRecycleList = (MRecycleItem*)malloc(sizeof(MRecycleItem) * fRecycleCount);
 	SetFont(be_plain_font);
 	AddItem(new KernelMemoryBarMenuItem(systemInfo));
+	AddItem(new KernelTeamMemoryBarMenuItem(systemInfo, gPCView->fKernelIcon));
 }
 
 
@@ -85,7 +88,8 @@ MemoryBarMenu::Pulse()
 	int	k;
 	MemoryBarMenuItem* item;
 	int	total = 0;
-	for (k = 1; (item = (MemoryBarMenuItem*)ItemAt(k)) != NULL; k++) {
+	// Items 0 and 1 are the two kernel rows, not per-team ones.
+	for (k = 2; (item = (MemoryBarMenuItem*)ItemAt(k)) != NULL; k++) {
 		int64 m = item->UpdateSituation(committedMemory);
 		if (m < 0) {
 			if (lastRecycle == fRecycleCount) {
@@ -116,6 +120,9 @@ MemoryBarMenu::Pulse()
 		}
 
 		if (j == fTeamCount) {
+			if (is_kernel_thread(infos.team_info.team))
+				continue;
+
 			// new team
 			team_info info;
 			j = 0;
@@ -171,6 +178,10 @@ MemoryBarMenu::Pulse()
 	KernelMemoryBarMenuItem	*kernelItem;
 	if ((kernelItem = (KernelMemoryBarMenuItem*)ItemAt(0)) != NULL)
 		kernelItem->UpdateSituation(committedMemory, cachedMemory);
+
+	KernelTeamMemoryBarMenuItem* kernelTeamItem;
+	if ((kernelTeamItem = (KernelTeamMemoryBarMenuItem*)ItemAt(1)) != NULL)
+		kernelTeamItem->UpdateSituation();
 
 	Window()->EndViewTransaction();
 	Window()->Flush();

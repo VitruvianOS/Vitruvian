@@ -3,6 +3,8 @@ RunnableAddOn(ProcessController
 	AutoIcon.cpp
 	IconMenuItem.cpp
 	KernelMemoryBarMenuItem.cpp
+	KernelTeamBarMenuItem.cpp
+	KernelTeamMemoryBarMenuItem.cpp
 	MemoryBarMenu.cpp
 	MemoryBarMenuItem.cpp
 	NoiseBarMenuItem.cpp

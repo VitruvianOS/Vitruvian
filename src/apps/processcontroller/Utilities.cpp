@@ -22,7 +22,58 @@
 #include <Window.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+#include <map>
+
+
+// Cached because both popup menus re-scan every team on every pulse. No lock
+// needed: gPopupFlag keeps a single thread_popup() alive at a time.
+static std::map<team_id, bool> sKernelThreadCache;
+
+#define KERNEL_THREAD_CACHE_LIMIT 4096
+
+
+bool
+is_kernel_thread(team_id team)
+{
+	std::map<team_id, bool>::iterator found = sKernelThreadCache.find(team);
+	if (found != sKernelThreadCache.end())
+		return found->second;
+
+	if (sKernelThreadCache.size() > KERNEL_THREAD_CACHE_LIMIT)
+		sKernelThreadCache.clear();
+
+	bool isKernel = false;
+
+	char path[64];
+	snprintf(path, sizeof(path), "/proc/%d/status", (int)team);
+	FILE* file = fopen(path, "r");
+	if (file != NULL) {
+		bool sawKthread = false;
+		bool sawVmSize = false;
+		char line[256];
+		while (fgets(line, sizeof(line), file) != NULL) {
+			if (strncmp(line, "Kthread:", 8) == 0) {
+				sawKthread = true;
+				isKernel = atoi(line + 8) != 0;
+				break;
+			}
+			if (strncmp(line, "VmSize:", 7) == 0)
+				sawVmSize = true;
+		}
+		if (!sawKthread) {
+			// Pre-6.4 kernels have no Kthread: field; fall back to "no
+			// VmSize means no mm". This also matches zombies.
+			isKernel = !sawVmSize;
+		}
+		fclose(file);
+	}
+
+	sKernelThreadCache[team] = isKernel;
+	return isKernel;
+}
 
 
 bool
@@ -129,13 +180,13 @@ find_self(entry_ref& ref)
 }
 
 
-void
+status_t
 move_to_deskbar(BDeskbar& deskbar)
 {
 	entry_ref ref;
 	find_self(ref);
 
-	deskbar.AddItem(&ref);
+	return deskbar.AddItem(&ref);
 }
 
 

@@ -15,15 +15,15 @@ catopen(const char *name, int oflag)
 
 
 char *
-catgets(nl_catd cat, int setID, int msgID, const char *defaultMessage)
+catgets(nl_catd cat, int setID, int msgID, const char *defaultMessage) throw()
 {
 	// should return "const char *"...
 	return const_cast<char *>(defaultMessage);
 }
 
 
-int 
-catclose(nl_catd)
+int
+catclose(nl_catd) throw()
 {
 	return 0;
 }

@@ -16,7 +16,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.event.release.tag_name }}
     steps:
-      - name: Fetch ISO + DEB from last successful builds
+      - name: Fetch ISO + RAW from last successful builds
         run: |
           set -euo pipefail
           mkdir -p work release-assets
@@ -36,7 +36,7 @@ jobs:
               --jq '.artifacts[] | "\(.id)\t\(.name)"' \
             | while IFS=$'\t' read -r aid aname; do
               case "$aname" in
-                *RAW*) echo "  skip $aname"; continue ;;
+                *DEB*) echo "  skip $aname"; continue ;;
               esac
               echo "  downloading $aname"
               local stage="work/${aname}"
@@ -44,23 +44,25 @@ jobs:
               gh api "repos/$GH_REPO/actions/artifacts/$aid/zip" > "${stage}.zip"
               unzip -q -o "${stage}.zip" -d "$stage"
 
-              # Rename ISOs to vitruvian-<tag>-<arch>.iso; keep DEBs as-is.
-              while IFS= read -r -d '' iso; do
-                local newname="vitruvian-${TAG}-${arch}.iso"
-                cp "$iso" "release-assets/${newname}"
-                if [ -f "${iso}.sha256" ]; then
+              # Rename images to vitruvian-<tag>-<arch>.<ext>.
+              rename_into_release() {
+                local src="$1"
+                local newname="vitruvian-${TAG}-${arch}.$2"
+                cp "$src" "release-assets/${newname}"
+                if [ -f "${src}.sha256" ]; then
                   # Rewrite checksum line to match the new filename.
-                  awk -v n="${newname}" '{print $1"  "n}' "${iso}.sha256" \
+                  awk -v n="${newname}" '{print $1"  "n}' "${src}.sha256" \
                     > "release-assets/${newname}.sha256"
                 fi
+              }
+
+              while IFS= read -r -d '' iso; do
+                rename_into_release "$iso" iso
               done < <(find "$stage" -type f -name '*.iso' -print0)
 
-              while IFS= read -r -d '' deb; do
-                cp "$deb" "release-assets/$(basename "$deb")"
-                if [ -f "${deb}.sha256" ]; then
-                  cp "${deb}.sha256" "release-assets/$(basename "${deb}").sha256"
-                fi
-              done < <(find "$stage" -type f -name '*.deb' -print0)
+              while IFS= read -r -d '' raw; do
+                rename_into_release "$raw" raw.zst
+              done < <(find "$stage" -type f -name '*.raw.zst' -print0)
             done
           }
 

@@ -1,6 +1,13 @@
 #!/bin/sh
 
-# install ProcessController, NetworkStatus & volume control in the Deskbar
-#/system/apps/ProcessController -deskbar
-#/system/apps/NetworkStatus --deskbar
-#/bin/desklink --add-volume
+install_item() {
+	if ! "$@"; then
+		echo "default_deskbar_items: ${1} failed" >&2
+	fi
+}
+
+install_item /system/apps/ProcessController -deskbar
+install_item /system/apps/NetworkStatus --deskbar
+install_item /system/apps/AudioMixer --deskbar
+
+exit 0

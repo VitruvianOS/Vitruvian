@@ -18,8 +18,8 @@ static const bool kDefaultDesktopFilePanelRoot = true;
 static const bool kDefaultShowSelectionWhenInactive = true;
 
 static const bool kDefaultShowFullPathInTitleBar = false;
-static const bool kDefaultSingleWindowBrowse = false;
-static const bool kDefaultShowNavigator = false;
+static const bool kDefaultSingleWindowBrowse = true;
+static const bool kDefaultShowNavigator = true;
 static const bool kDefaultTransparentSelection = true;
 static const bool kDefaultSortFolderNamesFirst = true;
 static const bool kDefaultHideDotFiles = true;

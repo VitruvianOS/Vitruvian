@@ -60,7 +60,7 @@ static const int32 kMsgDoubleScrollBarArrows = 'dsba';
 static const int32 kMsgArrowStyleSingle = 'mass';
 static const int32 kMsgArrowStyleDouble = 'masd';
 
-static const bool kDefaultDoubleScrollBarArrowsSetting = false;
+static const bool kDefaultDoubleScrollBarArrowsSetting = true;
 
 
 //	#pragma mark - LookAndFeelSettingsView

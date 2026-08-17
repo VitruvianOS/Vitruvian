@@ -60,7 +60,7 @@ DesktopSettingsPrivate::_SetDefaults()
 
 	// init scrollbar info
 	fScrollBarInfo.proportional = true;
-	fScrollBarInfo.double_arrows = false;
+	fScrollBarInfo.double_arrows = true;
 	fScrollBarInfo.knob = 0;
 		// look of the knob (R5: (0, 1, 2), 1 = default)
 		// change default = 0 (no knob) in Haiku

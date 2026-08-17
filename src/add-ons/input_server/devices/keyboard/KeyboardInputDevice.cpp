@@ -34,7 +34,9 @@
 #include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-compose.h>
 #include <AppDefs.h>
+#include <private/app/LaunchDaemonDefs.h>
 #include <private/app/RegistrarDefs.h>
+#include <private/kernel/util/KMessage.h>
 
 
 
@@ -436,12 +438,14 @@ KeyboardDevice::_ControlThread()
 		}
 	}
 
-	// VT switching setup
-	int consoleFd = open("/dev/tty0", O_RDWR);
+	// /dev/tty0 is root-only, so VT_GETSTATE isn't reachable from here.
 	bool hasRealVT = false;
-	if (consoleFd >= 0) {
-		struct vt_stat vtState;
-		hasRealVT = (ioctl(consoleFd, VT_GETSTATE, &vtState) == 0);
+	FILE* vtFile = fopen("/sys/class/tty/tty0/active", "r");
+	if (vtFile != NULL) {
+		char active[32] = {0};
+		hasRealVT = fgets(active, sizeof(active), vtFile) != NULL
+			&& strncmp(active, "tty", 3) == 0;
+		fclose(vtFile);
 	}
 
 	bool isVM = false;
@@ -633,7 +637,7 @@ KeyboardDevice::_ControlThread()
 		else if (ev.code == KEY_Menu)      menuKeyDown = isKeyDown;
 
 		// VT switch: Ctrl+Alt+Fn (native) or Alt+Fn (VM, left alt only)
-		if (hasRealVT && isKeyDown && consoleFd >= 0) {
+		if (hasRealVT && isKeyDown) {
 			uint32 fn = 0;
 			if (ev.code >= KEY_F1 && ev.code <= KEY_F10)
 				fn = ev.code - KEY_F1 + 1;
@@ -646,7 +650,16 @@ KeyboardDevice::_ControlThread()
 					? (vtAlt && !vtCtrl && !vtRalt)
 					: (vtCtrl && vtAlt);
 				if (trigger) {
-					ioctl(consoleFd, VT_ACTIVATE, fn);
+					port_id janusPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+					if (janusPort >= 0) {
+						BPrivate::KMessage msg(BPrivate::B_JANUS_SWITCH_VT);
+						msg.AddInt32("vt", (int32)fn);
+						// No reply: waiting would stall the evdev loop.
+						msg.SendTo(janusPort, -1, (BPrivate::KMessage*)NULL);
+					} else {
+						fprintf(stderr, "KeyboardInputDevice: janus port not "
+							"found; can't switch VT\n");
+					}
 					continue;
 				}
 			}
@@ -961,9 +974,6 @@ KeyboardDevice::_ControlThread()
 
 		lastKeyCode = isKeyDown ? keycode : 0;
 	}
-
-	if (consoleFd >= 0)
-		close(consoleFd);
 
 	return 0;
 }

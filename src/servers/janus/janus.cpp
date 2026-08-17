@@ -1363,6 +1363,51 @@ spawn_pre_auth_chain()
 }
 
 
+// input_server can't VT_ACTIVATE for itself: /dev/tty0 is root-only and it
+// runs as the session user. Going through libseat also drives the
+// disable/enable callbacks, which a raw ioctl would race.
+static void
+handle_switch_vt(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	struct passwd* vl = getpwnam("vos_login");
+	uid_t voslogin = (vl != NULL) ? vl->pw_uid : (uid_t)-1;
+
+	// The greeter's input_server is vos_login, the desktop's is the user.
+	if (sender_uid != sUserUid
+			&& (voslogin == (uid_t)-1 || sender_uid != voslogin)) {
+		fprintf(stderr, "janus: B_JANUS_SWITCH_VT rejected from uid=%u\n",
+			(unsigned)sender_uid);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	int32 vt = 0;
+	if (kmsg.FindInt32("vt", &vt) != B_OK || vt < 1 || vt > 63) {
+		BPrivate::KMessage reply(B_BAD_VALUE);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	if (sSeat == NULL) {
+		BPrivate::KMessage reply(B_NO_INIT);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	jdbg("handle_switch_vt() vt=%d sender_uid=%u", (int)vt,
+		(unsigned)sender_uid);
+
+	status_t status = libseat_switch_session(sSeat, (int)vt) == 0
+		? B_OK : B_ERROR;
+	if (status != B_OK)
+		fprintf(stderr, "janus: libseat_switch_session(%d) failed\n", (int)vt);
+
+	BPrivate::KMessage reply(status);
+	kmsg.SendReply(&reply);
+}
+
+
 static void
 handle_logout(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
@@ -1679,6 +1724,9 @@ launch_daemon_thread(void* /*data*/)
 			} else if (kmsg.What() == BPrivate::B_JANUS_LOGIN_OK) {
 				if (!sShuttingDown)
 					handle_login_ok(kmsg, mi.sender);
+			} else if (kmsg.What() == BPrivate::B_JANUS_SWITCH_VT) {
+				if (!sShuttingDown)
+					handle_switch_vt(kmsg, mi.sender);
 			} else if (kmsg.What() == BPrivate::B_JANUS_LOGOUT) {
 				jdbg("MSG B_JANUS_LOGOUT received (shuttingDown=%d)",
 					(int)sShuttingDown);

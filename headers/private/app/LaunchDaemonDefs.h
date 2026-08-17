@@ -55,6 +55,10 @@ enum {
 	B_JANUS_LOGOUT				= 'jnlX',
 	// FirstBootPrompt asks janus to run first-boot.service. sender_uid
 	// gated to vos_login; refused once the sentinel exists.
+
+	// input_server asks janus to switch VT ("vt" int32); /dev/tty0 is
+	// root-only, so it can't VT_ACTIVATE for itself.
+	B_JANUS_SWITCH_VT			= 'jnvt',
 };
 
 

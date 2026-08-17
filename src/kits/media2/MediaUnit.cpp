@@ -15,6 +15,13 @@
 #include "PipeWireBackend.h"
 
 
+// PipeWire 1.2.0 and later declare this; it is only a property key, and an
+// older server ignores one it doesn't know.
+#ifndef PW_KEY_PORT_GROUP
+#	define PW_KEY_PORT_GROUP "port.group"
+#endif
+
+
 using namespace BPrivate::media;
 
 

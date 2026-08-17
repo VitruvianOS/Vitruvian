@@ -245,6 +245,24 @@ DeclareDependency(
 	INCLUDES   "${HEADERS_PATH_BASE}/gstreamer-1.0/;${HEADERS_PATH_BASE}/glib-2.0/;${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}/glib-2.0/include/"
 )
 
+DeclareDependency(
+	BLUETOOTH
+	PACKAGES   "libbluetooth-dev"
+	RUNTIMES   "bluez"
+)
+
+DeclareDependency(
+	NETWORKMANAGER
+	PACKAGES   "libnm-dev"
+	RUNTIMES   "network-manager"
+)
+
+DeclareDependency(
+	GLIB
+	PACKAGES   "libglib2.0-dev"
+	RUNTIMES   "libglib2.0-0"
+)
+
 # Dependencies for Debug builds
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

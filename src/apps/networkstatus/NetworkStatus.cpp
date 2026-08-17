@@ -35,11 +35,15 @@ class NetworkStatus : public BApplication {
 		virtual	void	ArgvReceived(int32 argc, char** argv);
 		virtual	void	ReadyToRun();
 		virtual void	AboutRequested();
-	private:
-				void	_InstallReplicantInDeskbar();
 
-				bool	fAutoInstallInDeskbar;
-				bool	fQuitImmediately;
+			status_t	DeskbarInstallStatus() const
+								{ return fDeskbarInstallStatus; }
+	private:
+			status_t	_InstallReplicantInDeskbar();
+
+			bool	fAutoInstallInDeskbar;
+			bool	fQuitImmediately;
+			status_t	fDeskbarInstallStatus;
 };
 
 
@@ -69,7 +73,8 @@ NetworkStatus::NetworkStatus()
 	:
 	BApplication(kSignature),
 	fAutoInstallInDeskbar(false),
-	fQuitImmediately(false)
+	fQuitImmediately(false),
+	fDeskbarInstallStatus(B_OK)
 {
 }
 
@@ -101,7 +106,7 @@ NetworkStatus::ArgvReceived(int32 argc, char** argv)
 		if (!IsLaunching()) {
 			BDeskbar deskbar;
 			if (deskbar.IsRunning() && !deskbar.HasItem(kDeskbarItemName))
-				_InstallReplicantInDeskbar();
+				fDeskbarInstallStatus = _InstallReplicantInDeskbar();
 		}
 	}
 }
@@ -155,7 +160,7 @@ NetworkStatus::ReadyToRun()
 			return;
 		}
 
-		_InstallReplicantInDeskbar();
+		fDeskbarInstallStatus = _InstallReplicantInDeskbar();
 		Quit();
 		return;
 	}
@@ -169,7 +174,7 @@ NetworkStatus::ReadyToRun()
 			NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
 
 		if (alert->Go() == 1) {
-			_InstallReplicantInDeskbar();
+			fDeskbarInstallStatus = _InstallReplicantInDeskbar();
 			Quit();
 			return;
 		}
@@ -197,7 +202,7 @@ NetworkStatus::AboutRequested()
 }
 
 
-void
+status_t
 NetworkStatus::_InstallReplicantInDeskbar()
 {
 	image_info info;
@@ -206,8 +211,9 @@ NetworkStatus::_InstallReplicantInDeskbar()
 	if (our_image(info) == B_OK
 		&& get_ref_for_path(info.name, &ref) == B_OK) {
 		BDeskbar deskbar;
-		deskbar.AddItem(&ref);
+		return deskbar.AddItem(&ref);
 	}
+	return B_ERROR;
 }
 
 
@@ -220,6 +226,6 @@ main(int, char**)
 	NetworkStatus app;
 	app.Run();
 
-	return 0;
+	return app.DeskbarInstallStatus();
 }
 

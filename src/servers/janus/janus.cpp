@@ -19,6 +19,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/ioctl.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -265,6 +266,49 @@ first_login_filter(const struct dirent* de)
 }
 
 
+// getgrouplist() goes through NSS, which talks to systemd over a socket and
+// blocks forever when called in a forked child of a threaded process. Callers
+// must resolve here, before forking, and hand the result to drop_to_user().
+// Falls back to the primary gid alone rather than ever leaving root's groups
+// in place. Caller frees.
+static bool
+resolve_user_groups(gid_t** _groups, int* _count)
+{
+	int count = 32;
+	gid_t* groups = (gid_t*)malloc(count * sizeof(gid_t));
+	if (groups == NULL)
+		return false;
+
+	if (getgrouplist(sUserName, sUserGid, groups, &count) < 0) {
+		gid_t* resized = (gid_t*)realloc(groups, count * sizeof(gid_t));
+		if (resized != NULL) {
+			groups = resized;
+			if (getgrouplist(sUserName, sUserGid, groups, &count) < 0) {
+				groups[0] = sUserGid;
+				count = 1;
+			}
+		} else {
+			groups[0] = sUserGid;
+			count = 1;
+		}
+	}
+
+	*_groups = groups;
+	*_count = count;
+	return true;
+}
+
+
+// Only syscalls, so it is safe between fork() and exec().
+static bool
+drop_to_user(const gid_t* groups, int count)
+{
+	return setgroups(count, groups) == 0
+		&& setgid(sUserGid) == 0
+		&& setuid(sUserUid) == 0;
+}
+
+
 // Runs /system/boot/first_login/* once per user, gated by
 // ~/config/settings/first_login. Alphasort like run-parts(8).
 // Blocking — callers wanting to keep the main dispatcher live should
@@ -287,78 +331,87 @@ run_first_login_for_user()
 	if (n < 0)
 		return;
 
-	pid_t pid = fork();
-	if (pid < 0) {
+	gid_t* groups = NULL;
+	int ngroups = 0;
+	if (sSystemMode && !resolve_user_groups(&groups, &ngroups)) {
+		fprintf(stderr, "janus: first_login: cannot resolve groups for %s\n",
+			sUserName);
 		for (int i = 0; i < n; i++)
 			free(entries[i]);
 		free(entries);
-		fprintf(stderr, "janus: first_login fork: %s\n", strerror(errno));
 		return;
 	}
-	if (pid == 0) {
-		// User-mode: already the target user; setuid would EPERM.
-		if (sSystemMode) {
-			if (initgroups(sUserName, sUserGid) != 0
-					|| setgid(sUserGid) != 0
-					|| setuid(sUserUid) != 0) {
+
+	for (int i = 0; i < n; i++) {
+		char path[PATH_MAX];
+		snprintf(path, sizeof(path), "%s/%s", kDir, entries[i]->d_name);
+		if (access(path, X_OK) != 0)
+			continue;
+
+		pid_t child = fork();
+		if (child < 0)
+			continue;
+		if (child == 0) {
+			setenv("HOME",    sUserHome, 1);
+			setenv("USER",    sUserName, 1);
+			setenv("LOGNAME", sUserName, 1);
+
+			// User-mode: already the target user; setuid would EPERM.
+			if (sSystemMode && !drop_to_user(groups, ngroups)) {
 				fprintf(stderr, "janus: first_login setuid failed: %s\n",
 					strerror(errno));
 				_exit(1);
 			}
+
+			char* const argv[] = { path, NULL };
+			execv(path, argv);
+			_exit(127);
 		}
-		setenv("HOME",    sUserHome, 1);
-		setenv("USER",    sUserName, 1);
-		setenv("LOGNAME", sUserName, 1);
-
-		for (int i = 0; i < n; i++) {
-			char path[PATH_MAX];
-			snprintf(path, sizeof(path), "%s/%s", kDir, entries[i]->d_name);
-			if (access(path, X_OK) != 0)
-				continue;
-
-			pid_t child = fork();
-			if (child < 0)
-				continue;
-			if (child == 0) {
-				char* const argv[] = { path, NULL };
-				execv(path, argv);
-				_exit(127);
-			}
-			int status;
-			waitpid(child, &status, 0);
-			if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-				fprintf(stderr, "janus: first_login: %s exited %d\n",
-					entries[i]->d_name, status);
-			}
+		int status;
+		waitpid(child, &status, 0);
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+			fprintf(stderr, "janus: first_login: %s exited %d\n",
+				entries[i]->d_name, status);
 		}
-
-		// Marker last so a failed script doesn't gate the next retry.
-		char m[PATH_MAX + 32];
-		snprintf(m, sizeof(m), "%s/config/settings", sUserHome);
-		mkdir(m, 0755);
-		snprintf(m, sizeof(m), "%s/config/settings/first_login", sUserHome);
-		int fd = open(m, O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
-		if (fd >= 0)
-			close(fd);
-		_exit(0);
 	}
 
 	for (int i = 0; i < n; i++)
 		free(entries[i]);
 	free(entries);
+	free(groups);
 
-	int status;
-	waitpid(pid, &status, 0);
-	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-		fprintf(stderr, "janus: first_login runner exited %d\n", status);
+	// Marker last so a failed script doesn't gate the next retry.
+	char m[PATH_MAX + 32];
+	snprintf(m, sizeof(m), "%s/config", sUserHome);
+	mkdir(m, 0755);
+	if (sSystemMode)
+		chown(m, sUserUid, sUserGid);
+	snprintf(m, sizeof(m), "%s/config/settings", sUserHome);
+	mkdir(m, 0755);
+	if (sSystemMode)
+		chown(m, sUserUid, sUserGid);
+	snprintf(m, sizeof(m), "%s/config/settings/first_login", sUserHome);
+	int fd = open(m, O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
+	if (fd >= 0) {
+		close(fd);
+		if (sSystemMode)
+			chown(m, sUserUid, sUserGid);
 	}
 }
+
+
+static bool wait_for_server_ready(const char* name, int timeout_ms);
 
 
 // Detached so the IPC dispatcher doesn't block on script I/O.
 static void*
 _first_login_thread(void*)
 {
+	if (!wait_for_server_ready("Deskbar", 15000)) {
+		fprintf(stderr, "janus: first_login: Deskbar not ready in 15s; "
+			"running anyway (replicants may not install)\n");
+	}
+
 	run_first_login_for_user();
 	return NULL;
 }
@@ -572,9 +625,20 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		}
 	}
 
+	gid_t* groups = NULL;
+	int ngroups = 0;
+	if (ks->run_as_user && sSystemMode
+			&& !resolve_user_groups(&groups, &ngroups)) {
+		fprintf(stderr, "janus: cannot resolve groups for %s\n", sUserName);
+		BPrivate::KMessage reply(B_ERROR);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
 	int fds[2];
 	if (pipe(fds) != 0) {
 		perror("janus: pipe");
+		free(groups);
 		BPrivate::KMessage reply(B_ERROR);
 		kmsg.SendReply(&reply);
 		return;
@@ -586,6 +650,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		perror("janus: fork");
 		close(fds[0]);
 		close(fds[1]);
+		free(groups);
 		BPrivate::KMessage reply(B_ERROR);
 		kmsg.SendReply(&reply);
 		return;
@@ -640,7 +705,21 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		setenv("XDG_DATA_DIRS",   "/system/data:/usr/local/share:/usr/share", 0);
 		setenv("XDG_CONFIG_DIRS", "/system/settings:/etc/xdg",                0);
 
-		// User-mode: already correct uid; initgroups would need CAP_SETGID.
+		if (sUserUid != (uid_t)-1) {
+			char runtimeDir[64];
+			snprintf(runtimeDir, sizeof(runtimeDir), "/run/user/%u",
+				(unsigned)sUserUid);
+			struct stat st;
+			if (stat(runtimeDir, &st) == 0 && S_ISDIR(st.st_mode))
+				setenv("XDG_RUNTIME_DIR", runtimeDir, 0);
+			else {
+				fprintf(stderr, "janus: %s not usable for %s, "
+					"XDG_RUNTIME_DIR left unset (%s)\n", runtimeDir, name,
+					strerror(errno));
+			}
+		}
+
+		// User-mode: already correct uid; the drop would need CAP_SETGID.
 		if (ks->run_as_user && sSystemMode) {
 			if (sUserUid == (uid_t)-1) {
 				fprintf(stderr, "janus: %s wants run_as_user but user "
@@ -660,9 +739,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 			setenv("HOME",    sUserHome, 1);
 			setenv("USER",    sUserName, 1);
 			setenv("LOGNAME", sUserName, 1);
-			if (initgroups(sUserName, sUserGid) != 0
-					|| setgid(sUserGid) != 0
-					|| setuid(sUserUid) != 0) {
+			if (!drop_to_user(groups, ngroups)) {
 				fprintf(stderr, "janus: drop-priv for %s failed: %s\n",
 					name, strerror(errno));
 				_exit(126);
@@ -679,6 +756,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	}
 
 	close(fds[1]);
+	free(groups);
 
 	pthread_mutex_lock(&sAppsLock);
 	int app_idx = -1;
@@ -1805,10 +1883,37 @@ static struct libseat_seat_listener sSeatListener = {
 };
 
 
+static bool sSeatForking = false;
+static char* sArgvBegin = NULL;
+static size_t sArgvSpan = 0;
+
+
+static void
+seat_fork_child_cb()
+{
+	if (!sSeatForking)
+		return;
+
+	prctl(PR_SET_NAME, "seatd", 0, 0, 0);
+
+	if (sArgvBegin == NULL || sArgvSpan == 0)
+		return;
+
+	memset(sArgvBegin, 0, sArgvSpan);
+	const char name[] = "janus (seatd)";
+	size_t len = sizeof(name) - 1;
+	if (len > sArgvSpan)
+		len = sArgvSpan;
+	memcpy(sArgvBegin, name, len);
+}
+
+
 static bool
 init_seat()
 {
+	sSeatForking = true;
 	sSeat = libseat_open_seat(&sSeatListener, NULL);
+	sSeatForking = false;
 	if (!sSeat) {
 		fprintf(stderr, "janus: libseat_open_seat failed\n");
 		return false;
@@ -1881,8 +1986,14 @@ daemon_loop()
 
 
 int
-main(int /*argc*/, char** /*argv*/)
+main(int argc, char** argv)
 {
+	if (argc > 0 && argv[0] != NULL) {
+		sArgvBegin = argv[0];
+		sArgvSpan = argv[argc - 1] + strlen(argv[argc - 1]) + 1 - argv[0];
+	}
+	pthread_atfork(NULL, NULL, seat_fork_child_cb);
+
 	// stdout/stderr are redirected to /var/log/janus.log; unbuffer so
 	// progress lines land in the log immediately, not once the 4 KiB
 	// stdio buffer fills. A frozen log with the process still running
@@ -1902,12 +2013,14 @@ main(int /*argc*/, char** /*argv*/)
 	if (access("/var/lib/vos/greeter-enabled", F_OK) == 0)
 		sGreeterMode = true;
 
+	bool deferFirstLogin = false;
+
 	if (!resolve_user()) {
 		fprintf(stderr, "janus: desktop user not resolved "
 			"(user-mode: getpwuid failed; system-mode: check "
 			"VOS_DEFAULT_USER)\n");
 	} else if (init_pam_session()) {
-		run_first_login_for_user();
+		deferFirstLogin = !sGreeterMode;
 	}
 
 	if (!init_seat())
@@ -1943,6 +2056,9 @@ main(int /*argc*/, char** /*argv*/)
 			spawn_post_auth_chain();
 		}
 	}
+
+	if (deferFirstLogin)
+		run_first_login_for_user_detached();
 
 	daemon_loop();
 

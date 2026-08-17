@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -29,12 +30,15 @@ public:
 			const void*		Data() const;
 			size_t			Size() const;
 
+			bool			GetDataAt(off_t offset, void* buffer,
+								size_t bufferSize, size_t* outUsed);
+
 			BSound*			Acquire();
 			BSound*			AcquireRef() { return Acquire(); }
-								// haiku-latest spelling
+
 			bool			Release();
 			int32			RefCount() const { return fRefCount; }
-								// haiku-latest: documented as unreliable
+
 
 private:
 			entry_ref		fEntry;
@@ -48,4 +52,4 @@ private:
 };
 
 
-#endif // _MEDIA2_SOUND_H
+#endif

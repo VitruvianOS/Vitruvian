@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -48,9 +48,6 @@ GStreamerBackend::GetInstance()
 	});
 	return sInstance;
 }
-
-
-// #pragma mark - format conversions
 
 
 void
@@ -232,9 +229,6 @@ GStreamerBackend::GstCapsToEncodedVideo(const GstCaps* caps, BMediaFormat* out)
 }
 
 
-// #pragma mark - pipelines
-
-
 const char*
 GStreamerBackend::_NativeAudioFormatToGst(uint32 nativeFmt, uint32 byteOrder)
 {
@@ -310,9 +304,6 @@ GStreamerBackend::RawAudioToGstCaps(const BMediaFormat& fmt)
 	}
 	return caps;
 }
-
-
-// #pragma mark - raw video conversion
 
 
 static const char*
@@ -396,9 +387,6 @@ GStreamerBackend::RawVideoToGstCaps(const BMediaFormat& fmt)
 }
 
 
-// #pragma mark - encode profile mapping
-
-
 struct CodecMime {
 	media_codec_type	codec;
 	const char*			audioCaps;
@@ -423,7 +411,7 @@ LookupCodecMime(int32 encoding)
 		if (kCodecMimeTable[i].codec == (media_codec_type)encoding)
 			return &kCodecMimeTable[i];
 	}
-	return &kCodecMimeTable[5];	// default to WAV
+	return &kCodecMimeTable[5];
 }
 
 
@@ -451,12 +439,9 @@ BuildEncodingProfile(const BMediaFormat& fmt)
 }
 
 
-// #pragma mark - hardware encoder rank boosting
-
-
 namespace {
 	struct EncoderRank { const char* name; GstRank original; bool boosted; };
-	// In priority order — first matching factory wins inside each codec.
+
 	EncoderRank kHwEncoders[] = {
 		{ "v4l2slh264enc", (GstRank)0, false },
 		{ "v4l2h264enc",   (GstRank)0, false },
@@ -548,9 +533,6 @@ GStreamerBackend::_RestoreDecoderRanks()
 }
 
 
-// #pragma mark - encode pipeline
-
-
 GstElement*
 GStreamerBackend::CreateEncodePipeline(const char* path,
 	const BMediaFormat& outputFormat)
@@ -604,16 +586,11 @@ GStreamerBackend::CreateEncodePipeline(const char* path,
 }
 
 
-// #pragma mark - decode pipeline (defined later for symbol ordering)
-
-
 GstElement*
 GStreamerBackend::CreateDecodePipeline(const char* uri)
 {
-	// uri may be a filesystem path or a gst URI (file:///...). decodebin
-	// handles both via uridecodebin-style auto-plugging; we use the
-	// simpler filesrc+decodebin chain for explicit error reporting and
-	// build an appsink dynamically when a pad is exposed.
+
+
 	const char* swForcedEnv = getenv("VITRUVIAN_MEDIA_SW_ONLY");
 	const bool boost = fPreferHwCodecs && swForcedEnv == NULL;
 	if (boost)
@@ -635,4 +612,4 @@ GStreamerBackend::CreateDecodePipeline(const char* uri)
 }
 
 
-} } // namespace BPrivate::media
+} }

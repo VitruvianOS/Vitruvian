@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2009, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -21,4 +22,4 @@ status_t stop_sound(sound_handle handle);
 status_t wait_for_sound(sound_handle handle);
 
 
-#endif // _PLAY_SOUND_H
+#endif

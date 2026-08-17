@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -19,37 +19,24 @@ class GStreamerBackend {
 public:
 	static GStreamerBackend*	GetInstance();
 
-	// ── Raw audio junction conversion (decode side) ─────────────────────
 	static bool					GstCapsToRawAudio(const GstCaps* caps,
 									BMediaFormat* out);
 
-	// ── Encoded informational conversion (decode side) ──────────────────
 	static bool					GstCapsToEncodedAudio(const GstCaps* caps,
 									BMediaFormat* out);
 	static bool					GstCapsToEncodedVideo(const GstCaps* caps,
 									BMediaFormat* out);
 
-	// ── Raw audio junction conversion (encode side) ─────────────────────
 	static GstCaps*				RawAudioToGstCaps(const BMediaFormat& fmt);
-		// Caller must gst_caps_unref the result. Returns NULL on failure.
 
-	// ── Raw video junction conversion ────────────────────────────────────
 	static bool					GstCapsToRawVideo(const GstCaps* caps,
 									BMediaFormat* out);
 	static GstCaps*				RawVideoToGstCaps(const BMediaFormat& fmt);
 
-	// ── Hardware codec preference ───────────────────────────────────────
 	void						SetPreferHardwareCodecs(bool prefer);
-		// Default: prefer hw. Env var VITRUVIAN_MEDIA_SW_ONLY=1 overrides.
 
-	// ── Pipeline construction ───────────────────────────────────────────
-	// Decode: filesrc location=<path> ! decodebin
-	// The returned pipeline is in NULL state — caller transitions to PLAYING.
 	GstElement*					CreateDecodePipeline(const char* uri);
 
-	// Encode: appsrc ! encodebin ! filesink
-	// outputFormat must be IsEncodedAudio() (or IsEncodedVideo() once video
-	// encode lands). Returns NULL on failure.
 	GstElement*					CreateEncodePipeline(const char* path,
 									const BMediaFormat& outputFormat);
 
@@ -79,7 +66,7 @@ private:
 };
 
 
-} } // namespace BPrivate::media
+} }
 
 
-#endif // _VITRUVIAN_MEDIA2_GSTREAMER_BACKEND_H
+#endif

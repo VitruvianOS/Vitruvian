@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -174,8 +174,6 @@ ExtractFromSPAAudio(const spa_audio_info_raw& spa, BMediaFormat* out)
 }
 
 
-// #pragma mark - video
-
 
 spa_video_format
 NativeVideoFormatToSPA(uint32 colorSpace)
@@ -240,4 +238,4 @@ ExtractFromSPAVideo(const spa_video_info_raw& spa, BMediaFormat* out)
 }
 
 
-} } // namespace BPrivate::media
+} }

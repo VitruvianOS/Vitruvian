@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -26,26 +27,26 @@ public:
 								BMediaAutomation(BControllable* target);
 	virtual						~BMediaAutomation();
 
-	// Recording
+
 			status_t			StartRecording();
 			status_t			StopRecording();
 			bool				IsRecording() const;
 
-	// Playback
+
 			status_t			StartPlayback(bigtime_t startTime = 0);
 			status_t			StopPlayback();
 			bool				IsPlaying() const;
 
-	// Edit
+
 			status_t			AddPoint(int32 paramId, bigtime_t time,
 									float value);
 			status_t			AddPoint(int32 paramId, bigtime_t time,
-									int32 value);	// discrete
+									int32 value);
 			status_t			RemovePoint(int32 paramId, bigtime_t time);
 			status_t			ClearParameter(int32 paramId);
 			status_t			ClearAll();
 
-	// Query
+
 			int32				CountParameters() const;
 			int32				ParameterIdAt(int32 index) const;
 			int32				CountPoints(int32 paramId) const;
@@ -57,7 +58,7 @@ public:
 									interpolation_mode mode);
 			interpolation_mode	Interpolation(int32 paramId) const;
 
-	// BFlattenable
+
 	virtual	bool				IsFixedSize() const override;
 	virtual	type_code			TypeCode() const override;
 	virtual	ssize_t				FlattenedSize() const override;
@@ -72,4 +73,4 @@ private:
 };
 
 
-#endif // _MEDIA2_MEDIA_AUTOMATION_H
+#endif

@@ -1,0 +1,30 @@
+/*
+ * Copyright 2026, Vitruvian Project.
+ * Distributed under the terms of the MIT License.
+ */
+
+resource app_signature "application/x-vnd.Haiku-AudioMixer";
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+	variety = B_APPV_FINAL,
+	internal = 0
+};
+
+resource app_flags {
+	B_SINGLE_LAUNCH | B_ARGV_ONLY | B_BACKGROUND_APP
+};
+
+resource vector_icon {
+	$"6E63696F6E0205006601000001000000000000"
+};
+
+resource large_icon {
+	$"6E63696F6E0205006601000001000000000000"
+};
+
+resource mini_icon {
+	$"6E63696F6E0205006601000001000000000000"
+};

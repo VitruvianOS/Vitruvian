@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -21,7 +22,7 @@ class BContinuousParameter;
 class BDiscreteParameter;
 
 
-// Kind constants — strings (legacy DefaultMediaTheme calls strcmp on Kind()).
+
 extern const char* const B_GENERIC;
 extern const char* const B_MASTER_GAIN;
 extern const char* const B_GAIN;
@@ -54,7 +55,7 @@ extern const char* const B_ENABLE;
 extern const char* const B_MUTE;
 
 
-// Parameter flags.
+
 enum {
 	B_HIDDEN_PARAMETER = 0x01
 };
@@ -161,7 +162,7 @@ protected:
 			float					fMin;
 			float					fMax;
 			float					fStep;
-			float*					fValues;	// per-channel
+			float*					fValues;
 			bigtime_t				fLastChange;
 };
 
@@ -275,7 +276,7 @@ public:
 										const char* unit, float minValue,
 										float maxValue, float valueStep);
 
-	// BFlattenable
+
 	virtual	bool					IsFixedSize() const override;
 	virtual	type_code				TypeCode() const override;
 	virtual	ssize_t					FlattenedSize() const override;
@@ -289,8 +290,5 @@ private:
 };
 
 
-// B_MEDIA_PARAMETER_WEB_TYPE is defined in <TypeConstants.h> as 'BMCW'.
-// BParameterWeb::TypeCode() reports that value.
 
-
-#endif // _MEDIA2_PARAMETER_WEB_H
+#endif

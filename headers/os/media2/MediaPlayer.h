@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -33,6 +34,21 @@ public:
 		B_PLAYER_END_OF_STREAM     = 'pleo'
 	};
 
+	enum sound_player_notification {
+		B_STARTED = 1,
+		B_STOPPED,
+		B_SOUND_DONE
+	};
+
+	typedef void (*BufferPlayerFunc)(void* cookie, void* buffer, size_t size,
+		const media_raw_audio_format& format);
+	typedef void (*EventNotifierFunc)(void* cookie,
+		sound_player_notification what, ...);
+
+
+	typedef BufferPlayerFunc	FillFunc;
+	typedef EventNotifierFunc	Notifier;
+
 								BMediaPlayer();
 								BMediaPlayer(const entry_ref* ref);
 	virtual						~BMediaPlayer();
@@ -40,6 +56,9 @@ public:
 			status_t			InitCheck() const;
 
 			status_t			SetTo(const entry_ref* ref);
+
+			const BMediaFormat&	Format() const;
+			status_t			SetFormat(const BMediaFormat& format);
 
 			status_t			Play();
 			status_t			Pause();
@@ -52,20 +71,36 @@ public:
 			player_state		State() const;
 			bool				IsPlaying() const;
 
-			status_t			SetVolume(float volume);	// 0..1
+			status_t			SetVolume(float volume);
 			float				Volume() const;
 
 			void				SetTarget(BMessenger target);
-				// Receives B_PLAYER_* notification BMessages.
 
 			void				SetVideoView(BView* view);
-				// Stored but unused — video decode/render lands when the
-				// MediaPlayer app needs it.
+
+
+			status_t			SetHooks(BufferPlayerFunc fillFunc = NULL,
+									EventNotifierFunc notifyFunc = NULL,
+									void* cookie = NULL);
+			void				SetCallbacks(FillFunc fillFunc = NULL,
+									Notifier notifyFunc = NULL,
+									void* cookie = NULL);
+
+			bool				HasData() const;
+			void				SetHasData(bool hasData);
+
+			size_t				BufferSize() const;
+
+protected:
+	virtual	void				BufferReceived(void* buffer, size_t size,
+									const media_raw_audio_format& format);
 
 private:
 			class Impl;
 			Impl*				fImpl;
+
+	friend class Impl;
 };
 
 
-#endif // _MEDIA2_MEDIA_PLAYER_H
+#endif

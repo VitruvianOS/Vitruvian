@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2009, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -37,7 +38,7 @@ public:
 			status_t			SetAudioGainFor(const char* type,
 									const char* item, float gain);
 
-	// TODO: Rename this to "ClearRefFor" when breaking BC.
+
 	virtual	status_t			RemoveRefFor(const char* type,
 									const char* item, const entry_ref& ref);
 
@@ -45,11 +46,7 @@ public:
 
 	static	const char			B_SOUNDS[];
 
-	// TODO: Needs Perform() for FBC reasons!
-
 private:
-	// FBC padding
-
 			status_t			_Reserved_MediaFiles_0(void*, ...);
 	virtual	status_t			_Reserved_MediaFiles_1(void*, ...);
 	virtual	status_t			_Reserved_MediaFiles_2(void*, ...);
@@ -70,5 +67,5 @@ private:
 			int					fItemIndex;
 };
 
-#endif // _MEDIA_FILES_H
 
+#endif

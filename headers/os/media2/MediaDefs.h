@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -11,18 +12,17 @@
 #include <GraphicsDefs.h>
 
 
-// Values pinned to match legacy <MediaDefs.h>.
 enum media_type {
 	B_MEDIA_NO_TYPE         = -1,
 	B_MEDIA_UNKNOWN_TYPE    = 0,
 	B_MEDIA_RAW_AUDIO       = 1,
 	B_MEDIA_RAW_VIDEO       = 2,
-	B_MEDIA_VBL             = 3,	// reserved (legacy parity)
-	B_MEDIA_TIMECODE        = 4,	// reserved (legacy parity)
+	B_MEDIA_VBL             = 3,
+	B_MEDIA_TIMECODE        = 4,
 	B_MEDIA_MIDI            = 5,
-	B_MEDIA_TEXT            = 6,	// reserved (legacy parity)
-	B_MEDIA_HTML            = 7,	// reserved (legacy parity)
-	B_MEDIA_MULTISTREAM     = 8,	// reserved (legacy parity)
+	B_MEDIA_TEXT            = 6,
+	B_MEDIA_HTML            = 7,
+	B_MEDIA_MULTISTREAM     = 8,
 	B_MEDIA_PARAMETERS      = 9,
 	B_MEDIA_ENCODED_AUDIO   = 10,
 	B_MEDIA_ENCODED_VIDEO   = 11,
@@ -31,7 +31,6 @@ enum media_type {
 };
 
 
-// Values pinned to match legacy <MediaDefs.h>.
 enum {
 	B_MEDIA_BIG_ENDIAN     = 1,
 	B_MEDIA_LITTLE_ENDIAN  = 2,
@@ -64,11 +63,6 @@ struct media_raw_audio_format {
 };
 
 
-// color_space is inherited from <GraphicsDefs.h> (included above).
-// We use the canonical Haiku values: B_RGB32=0x0008, B_RGBA32=0x2008,
-// B_YCbCr422=0x4000, B_YUV420=0x4024.
-
-// Video orientation (legacy MediaDefs.h parity).
 enum {
 	B_VIDEO_TOP_LEFT_RIGHT = 0,
 	B_VIDEO_BOTTOM_LEFT_RIGHT = 1
@@ -102,11 +96,11 @@ struct media_raw_video_format {
 
 enum media_codec_type {
 	B_CODEC_TYPE_UNKNOWN = 0,
-	B_CODEC_TYPE_PCM     = 1,	// raw PCM in a WAV container
+	B_CODEC_TYPE_PCM     = 1,
 	B_CODEC_TYPE_MP3     = 2,
 	B_CODEC_TYPE_AAC     = 3,
-	B_CODEC_TYPE_OGG     = 4,	// Vorbis-in-Ogg
-	B_CODEC_TYPE_OPUS    = 5,	// Opus-in-Ogg
+	B_CODEC_TYPE_OGG     = 4,
+	B_CODEC_TYPE_OPUS    = 5,
 	B_CODEC_TYPE_FLAC    = 6,
 	B_CODEC_TYPE_WAV     = 7
 };
@@ -114,7 +108,7 @@ enum media_codec_type {
 
 struct media_encoded_audio_format {
 	media_raw_audio_format	output;
-	int32					encoding;	// media_codec_type value
+	int32					encoding;
 	float					bit_rate;
 	size_t					frame_size;
 };
@@ -177,9 +171,6 @@ extern const media_raw_audio_format media_raw_audio_format_wildcard;
 extern const media_raw_video_format media_raw_video_format_wildcard;
 
 
-// Per-type media header substructs. We don't decode video frames in media2
-// directly yet; structs exist so apps can build/inspect headers without
-// pulling legacy.
 struct media_audio_header {
 	uint32	field_flags;
 	uint32	_reserved_[8];
@@ -198,24 +189,20 @@ struct media_encoded_video_header {
 };
 
 
-// Per-buffer flags carried in media_header::flags. Values match legacy.
 enum {
 	B_MEDIA_KEY_FRAME = 0x01
 };
 
 
-// Codec descriptor — used by BMediaFile::CreateTrack and BMediaTrack info.
-// Trimmed from legacy: kept the fields apps actually reference.
 struct media_codec_info {
 	char	pretty_name[96];
 	char	short_name[32];
-	int32	id;				// media_codec_type value
+	int32	id;
 	uint32	sub_id;
 	uint32	_reserved_[16];
 };
 
 
-// File-container descriptor.
 struct media_file_format {
 	enum {
 		B_KNOWS_RAW_VIDEO   = 0x01,
@@ -225,7 +212,7 @@ struct media_file_format {
 		B_WRITABLE          = 0x20000000
 	};
 	uint32	capabilities;
-	int32	family;			// reserved
+	int32	family;
 	int32	version;
 	char	mime_type[64];
 	char	pretty_name[64];
@@ -235,9 +222,6 @@ struct media_file_format {
 };
 
 
-// File-system convenience: returns a populated array of known file formats
-// the GStreamer backend supports (declared here so callers don't pull in
-// GStreamerBackend.h). Implementation in MediaFormats.cpp (Batch C.2b).
 status_t	get_next_file_format(int32* cookie, media_file_format* outFormat);
 status_t	get_next_encoder(int32* cookie, media_codec_info* outCodecInfo);
 status_t	get_next_encoder(int32* cookie, const media_file_format* fileFormat,
@@ -245,4 +229,4 @@ status_t	get_next_encoder(int32* cookie, const media_file_format* fileFormat,
 				media_codec_info* outCodecInfo);
 
 
-#endif // _MEDIA2_MEDIA_DEFS_H
+#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -16,11 +16,8 @@
 namespace {
 
 
-// Snapshots are captured the first time *cookie == 0 and freed when the
-// caller iterates past the end (or never — leak is bounded by process
-// lifetime since there's one snapshot per kind).
 struct Snapshot {
-	GList* list = NULL;	// owned; freed via gst_plugin_feature_list_free
+	GList* list = NULL;
 	int    size = 0;
 
 	~Snapshot()
@@ -51,8 +48,6 @@ ResetSnapshot(Snapshot& s, GstElementFactoryListType type)
 }
 
 
-// Maps a GstStructure mime name (from the muxer's src-template caps) back to
-// a media_codec_type for the common containers.
 static int32
 MimeToCodecType(const char* mime)
 {
@@ -69,7 +64,6 @@ MimeToCodecType(const char* mime)
 }
 
 
-// Best-effort: pull the first mime type from a factory's src-pad template.
 static const char*
 FirstSrcMime(GstElementFactory* factory)
 {
@@ -85,9 +79,7 @@ FirstSrcMime(GstElementFactory* factory)
 		}
 		GstStructure* s = gst_caps_get_structure(caps, 0);
 		const char* mime = s != NULL ? gst_structure_get_name(s) : NULL;
-		// gst_structure_get_name returns a const pointer into the structure's
-		// arena. The caps unref below is fine because GStreamer caches the
-		// quark-backed name string; safe to return.
+
 		gst_caps_unref(caps);
 		return mime;
 	}
@@ -95,7 +87,7 @@ FirstSrcMime(GstElementFactory* factory)
 }
 
 
-} // anonymous namespace
+}
 
 
 status_t
@@ -175,9 +167,6 @@ get_next_encoder(int32* cookie, media_codec_info* outCodecInfo)
 }
 
 
-// 5-arg overload — filters by the requested file_format's codec id and by the
-// input format's media kind (audio vs video). The output format is filled
-// with an encoded format whose `encoding` matches the codec.
 status_t
 get_next_encoder(int32* cookie, const media_file_format* fileFormat,
 	const media_format* inputFormat, media_format* outOutputFormat,
@@ -195,14 +184,9 @@ get_next_encoder(int32* cookie, const media_file_format* fileFormat,
 		if (err != B_OK)
 			return err;
 
-		// fileFormat filter: if supplied, require codec id consistency. The
-		// fileFormat carries mime_type; we accept any encoder whose codec id
-		// is non-unknown and (when fileFormat is given) compatible.
 		if (fileFormat != NULL && ci.id == B_CODEC_TYPE_UNKNOWN)
 			continue;
 
-		// Media-kind filter: encoder factory metadata klass contains "Audio"
-		// or "Video"; we approximate via the codec id.
 		const bool encIsAudio = ci.id == B_CODEC_TYPE_MP3
 			|| ci.id == B_CODEC_TYPE_AAC || ci.id == B_CODEC_TYPE_OGG
 			|| ci.id == B_CODEC_TYPE_OPUS || ci.id == B_CODEC_TYPE_FLAC

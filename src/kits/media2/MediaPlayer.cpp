@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -12,17 +12,42 @@
 
 #include <Message.h>
 
+#include <media2/MediaConnection.h>
 #include <media2/MediaFile.h>
 #include <media2/MediaTrack.h>
-#include <media2/SoundPlayer.h>
+#include <media2/SimpleMediaNode.h>
+
+
+namespace {
+
+
+class _OutputConnection : public BMediaOutput {
+public:
+	_OutputConnection()
+		:
+		BMediaConnection(B_MEDIA_OUTPUT, "BMediaPlayer-out"),
+		BMediaOutput("BMediaPlayer-out")
+	{}
+	virtual ~_OutputConnection() {}
+
+protected:
+	virtual status_t PrepareToConnect(BMediaFormat*) { return B_OK; }
+	virtual status_t FormatProposal(BMediaFormat*)   { return B_OK; }
+};
+
+
+}
 
 
 class BMediaPlayer::Impl {
 public:
-	Impl();
+	Impl(BMediaPlayer* owner);
 	~Impl();
 
 	status_t SetTo(const entry_ref* ref);
+
+	const BMediaFormat& Format() const { return fFormat; }
+	status_t SetFormat(const BMediaFormat& fmt);
 
 	status_t Play();
 	status_t Pause();
@@ -41,53 +66,131 @@ public:
 	void     SetTarget(BMessenger target);
 	void     SetVideoView(BView* /*view*/) {}	// no-op for now
 
+	status_t SetHooks(BMediaPlayer::BufferPlayerFunc fillFunc,
+		BMediaPlayer::EventNotifierFunc notifyFunc, void* cookie);
+
+	bool  HasData() const     { return fHasData; }
+	void  SetHasData(bool v)  { fHasData = v; }
+
+	size_t BufferSize() const { return fFormat.format.u.raw_audio.buffer_size; }
+
 	status_t InitCheck() const { return fInitErr; }
 
 private:
-	static void _FillCallback(void* cookie, void* buffer, size_t size,
-		const media_raw_audio_format& fmt);
+	static void _ProcessHook(void* cookie, void* buffer, size_t size,
+		uint32 frameCount, const BMediaFormat& format);
+
+	void _FillFromTrack(void* buffer, size_t size,
+		const media_raw_audio_format& format);
 
 	void _SetState(BMediaPlayer::player_state s);
 	void _PostNotification(uint32 what);
 
+	BMediaPlayer*		fOwner;
+	BMediaFormat		fFormat;
+	BSimpleMediaNode*	fNode;
+	_OutputConnection*	fOutput;
+	status_t			fInitErr;
+	bool				fHasData;
+	float				fVolume;
+
+	BMediaPlayer::BufferPlayerFunc		fFillFunc;
+	BMediaPlayer::EventNotifierFunc	fNotifyFunc;
+	void*								fCookie;
+
 	BMediaFile*			fFile;
 	BMediaTrack*		fTrack;
-	BSoundPlayer*		fPlayer;
 	std::mutex			fLock;	// guards fTrack reads + fState transitions
 	std::atomic<BMediaPlayer::player_state>	fState;
 	std::atomic<bool>	fEOS;
 	uint32				fFrameStride;
 	bigtime_t			fDuration;
-	float				fVolume;
 	BMessenger			fTarget;
 	bool				fHasTarget;
-	status_t			fInitErr;
 };
 
 
-BMediaPlayer::Impl::Impl()
+BMediaPlayer::Impl::Impl(BMediaPlayer* owner)
 	:
+	fOwner(owner),
+	fFormat(),
+	fNode(NULL),
+	fOutput(NULL),
+	fInitErr(B_NO_INIT),
+	fHasData(false),
+	fVolume(1.0f),
+	fFillFunc(NULL),
+	fNotifyFunc(NULL),
+	fCookie(NULL),
 	fFile(NULL),
 	fTrack(NULL),
-	fPlayer(NULL),
 	fState(BMediaPlayer::B_PLAYER_STOPPED),
 	fEOS(false),
 	fFrameStride(0),
 	fDuration(0),
-	fVolume(1.0f),
-	fHasTarget(false),
-	fInitErr(B_NO_INIT)
+	fHasTarget(false)
 {
+	fFormat.SetToDefault();
+
+	fNode = new(std::nothrow) BSimpleMediaNode("BMediaPlayer",
+		B_MEDIA_RAW_AUDIO, B_MEDIA_PLAYER);
+	if (fNode == NULL) {
+		fInitErr = B_NO_MEMORY;
+		return;
+	}
+	if (fNode->InitCheck() != B_OK) {
+		fInitErr = fNode->InitCheck();
+		return;
+	}
+	fNode->SetFormat(fFormat);
+	fNode->SetProcessHook(&Impl::_ProcessHook, this);
+
+	fOutput = new(std::nothrow) _OutputConnection();
+	if (fOutput == NULL) {
+		fInitErr = B_NO_MEMORY;
+		return;
+	}
+	if (fNode->RegisterOutput(fOutput) != B_OK) {
+		fInitErr = B_ERROR;
+		return;
+	}
+	fInitErr = B_OK;
 }
 
 
 BMediaPlayer::Impl::~Impl()
 {
-	if (fPlayer != NULL) {
-		fPlayer->Stop(true, true);
-		delete fPlayer;
+	if (fNode != NULL) {
+		fNode->Stop();
+		if (fOutput != NULL)
+			fNode->UnregisterOutput(fOutput);
 	}
+	delete fOutput;
+	delete fNode;
 	delete fFile;	// BMediaFile owns the track
+}
+
+
+status_t
+BMediaPlayer::Impl::SetFormat(const BMediaFormat& fmt)
+{
+	if (fNode == NULL)
+		return B_NO_INIT;
+	if (fNode->IsStarted())
+		return B_NOT_ALLOWED;
+	fFormat = fmt;
+	return fNode->SetFormat(fmt);
+}
+
+
+status_t
+BMediaPlayer::Impl::SetHooks(BMediaPlayer::BufferPlayerFunc fillFunc,
+	BMediaPlayer::EventNotifierFunc notifyFunc, void* cookie)
+{
+	fFillFunc   = fillFunc;
+	fNotifyFunc = notifyFunc;
+	fCookie     = cookie;
+	return B_OK;
 }
 
 
@@ -97,11 +200,8 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 	std::lock_guard<std::mutex> _(fLock);
 
 	// Tear down any existing playback.
-	if (fPlayer != NULL) {
-		fPlayer->Stop(true, true);
-		delete fPlayer;
-		fPlayer = NULL;
-	}
+	if (fNode != NULL)
+		fNode->Stop();
 	delete fFile;
 	fFile  = NULL;
 	fTrack = NULL;
@@ -129,12 +229,9 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 		* raw.channel_count;
 	fDuration = fTrack->Duration();
 
-	fPlayer = new(std::nothrow) BSoundPlayer(&fmt, "BMediaPlayer",
-		&Impl::_FillCallback, NULL, this);
-	if (fPlayer == NULL)
-		return (fInitErr = B_NO_MEMORY);
-	if (fPlayer->InitCheck() != B_OK)
-		return (fInitErr = fPlayer->InitCheck());
+	err = SetFormat(fmt);
+	if (err != B_OK)
+		return (fInitErr = err);
 
 	_PostNotification(BMediaPlayer::B_PLAYER_DURATION_CHANGED);
 	fInitErr = B_OK;
@@ -145,20 +242,22 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 status_t
 BMediaPlayer::Impl::Play()
 {
-	if (fPlayer == NULL)
+	if (fNode == NULL)
 		return B_NO_INIT;
 	const BMediaPlayer::player_state s = fState.load();
 	if (s == BMediaPlayer::B_PLAYER_PLAYING)
 		return B_OK;
-	if (s == BMediaPlayer::B_PLAYER_STOPPED && fEOS.load()) {
+	if (s == BMediaPlayer::B_PLAYER_STOPPED && fEOS.load() && fTrack != NULL) {
 		bigtime_t t = 0;
 		fTrack->SeekToTime(&t);
 		fEOS = false;
 	}
-	fPlayer->SetHasData(true);
-	status_t err = fPlayer->Start();
+	fHasData = true;
+	status_t err = fNode->IsStarted() ? B_OK : fNode->Start();
 	if (err != B_OK)
 		return err;
+	if (fNotifyFunc != NULL)
+		fNotifyFunc(fCookie, BMediaPlayer::B_STARTED);
 	_SetState(BMediaPlayer::B_PLAYER_PLAYING);
 	return B_OK;
 }
@@ -167,11 +266,11 @@ BMediaPlayer::Impl::Play()
 status_t
 BMediaPlayer::Impl::Pause()
 {
-	if (fPlayer == NULL)
+	if (fNode == NULL)
 		return B_NO_INIT;
 	if (fState.load() != BMediaPlayer::B_PLAYER_PLAYING)
 		return B_OK;
-	fPlayer->SetHasData(false);
+	fHasData = false;
 	_SetState(BMediaPlayer::B_PLAYER_PAUSED);
 	return B_OK;
 }
@@ -180,9 +279,13 @@ BMediaPlayer::Impl::Pause()
 status_t
 BMediaPlayer::Impl::Stop()
 {
-	if (fPlayer == NULL)
+	if (fNode == NULL)
 		return B_OK;
-	fPlayer->Stop(true, true);
+	if (fNode->IsStarted()) {
+		fNode->Stop();
+		if (fNotifyFunc != NULL)
+			fNotifyFunc(fCookie, BMediaPlayer::B_STOPPED);
+	}
 	bigtime_t t = 0;
 	if (fTrack != NULL)
 		fTrack->SeekToTime(&t);
@@ -221,8 +324,6 @@ BMediaPlayer::Impl::SetVolume(float v)
 	if (v < 0.0f) v = 0.0f;
 	if (v > 1.0f) v = 1.0f;
 	fVolume = v;
-	if (fPlayer != NULL)
-		fPlayer->SetVolume(v);
 	return B_OK;
 }
 
@@ -258,28 +359,29 @@ BMediaPlayer::Impl::_PostNotification(uint32 what)
 
 
 void
-BMediaPlayer::Impl::_FillCallback(void* cookie, void* buffer, size_t size,
-	const media_raw_audio_format& /*fmt*/)
+BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
+	const media_raw_audio_format&)
 {
-	Impl* self = (Impl*)cookie;
-	if (self->fEOS.load() || self->fTrack == NULL
-			|| self->fState.load() != BMediaPlayer::B_PLAYER_PLAYING) {
+	if (fEOS.load() || fTrack == NULL
+			|| fState.load() != BMediaPlayer::B_PLAYER_PLAYING) {
 		memset(buffer, 0, size);
 		return;
 	}
 
-	int64 wantFrames = size / self->fFrameStride;
+	int64 wantFrames = size / fFrameStride;
 	int64 gotFrames  = wantFrames;
-	status_t err = self->fTrack->ReadFrames(buffer, &gotFrames);
+	status_t err = fTrack->ReadFrames(buffer, &gotFrames);
 
 	if (err == B_LAST_BUFFER_ERROR) {
-		self->fEOS = true;
-		const size_t got = (size_t)gotFrames * self->fFrameStride;
+		fEOS = true;
+		const size_t got = (size_t)gotFrames * fFrameStride;
 		if (got < size)
 			memset((uint8_t*)buffer + got, 0, size - got);
 		// Transition + notify on the RT thread is fine — BMessenger is safe.
-		self->_SetState(BMediaPlayer::B_PLAYER_STOPPED);
-		self->_PostNotification(BMediaPlayer::B_PLAYER_END_OF_STREAM);
+		_SetState(BMediaPlayer::B_PLAYER_STOPPED);
+		_PostNotification(BMediaPlayer::B_PLAYER_END_OF_STREAM);
+		if (fNotifyFunc != NULL)
+			fNotifyFunc(fCookie, BMediaPlayer::B_SOUND_DONE);
 		return;
 	}
 	if (err != B_OK) {
@@ -287,9 +389,34 @@ BMediaPlayer::Impl::_FillCallback(void* cookie, void* buffer, size_t size,
 		return;
 	}
 	if (gotFrames < wantFrames) {
-		const size_t got = (size_t)gotFrames * self->fFrameStride;
+		const size_t got = (size_t)gotFrames * fFrameStride;
 		memset((uint8_t*)buffer + got, 0, size - got);
 	}
+}
+
+
+void
+BMediaPlayer::Impl::_ProcessHook(void* cookie, void* buffer, size_t size,
+	uint32, const BMediaFormat& format)
+{
+	Impl* self = (Impl*)cookie;
+	const media_raw_audio_format& raw = format.format.u.raw_audio;
+
+	if (!self->fHasData) {
+		memset(buffer, 0, size);
+		return;
+	}
+	if (self->fFillFunc != NULL) {
+		self->fFillFunc(self->fCookie, buffer, size, raw);
+		return;
+	}
+	if (self->fTrack != NULL) {
+		self->_FillFromTrack(buffer, size, raw);
+		return;
+	}
+	memset(buffer, 0, size);
+	if (self->fOwner != NULL)
+		self->fOwner->BufferReceived(buffer, size, raw);
 }
 
 
@@ -298,17 +425,23 @@ BMediaPlayer::Impl::_FillCallback(void* cookie, void* buffer, size_t size,
 
 BMediaPlayer::BMediaPlayer()
 	:
-	fImpl(new(std::nothrow) Impl())
+	fImpl(new(std::nothrow) Impl(this))
 {
 }
 
 
 BMediaPlayer::BMediaPlayer(const entry_ref* ref)
 	:
-	fImpl(new(std::nothrow) Impl())
+	fImpl(new(std::nothrow) Impl(this))
 {
 	if (fImpl != NULL && ref != NULL)
 		fImpl->SetTo(ref);
+}
+
+
+void
+BMediaPlayer::BufferReceived(void*, size_t, const media_raw_audio_format&)
+{
 }
 
 
@@ -332,3 +465,39 @@ status_t   BMediaPlayer::SetVolume(float v) { return fImpl ? fImpl->SetVolume(v)
 float      BMediaPlayer::Volume() const     { return fImpl ? fImpl->Volume() : 0.0f; }
 void       BMediaPlayer::SetTarget(BMessenger t) { if (fImpl) fImpl->SetTarget(t); }
 void       BMediaPlayer::SetVideoView(BView* v) { if (fImpl) fImpl->SetVideoView(v); }
+bool       BMediaPlayer::HasData() const    { return fImpl && fImpl->HasData(); }
+void       BMediaPlayer::SetHasData(bool v) { if (fImpl) fImpl->SetHasData(v); }
+size_t     BMediaPlayer::BufferSize() const { return fImpl ? fImpl->BufferSize() : 0; }
+
+
+const BMediaFormat&
+BMediaPlayer::Format() const
+{
+	static BMediaFormat sEmpty;
+	return fImpl != NULL ? fImpl->Format() : sEmpty;
+}
+
+
+status_t
+BMediaPlayer::SetFormat(const BMediaFormat& fmt)
+{
+	return fImpl ? fImpl->SetFormat(fmt) : B_NO_INIT;
+}
+
+
+void
+BMediaPlayer::SetCallbacks(FillFunc fillFunc, Notifier notifyFunc, void* cookie)
+{
+	if (fImpl != NULL)
+		fImpl->SetHooks(fillFunc, notifyFunc, cookie);
+}
+
+
+status_t
+BMediaPlayer::SetHooks(BufferPlayerFunc fillFunc, EventNotifierFunc notifyFunc,
+	void* cookie)
+{
+	if (fImpl == NULL)
+		return B_NO_INIT;
+	return fImpl->SetHooks(fillFunc, notifyFunc, cookie);
+}

@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2006, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -68,7 +69,6 @@ class BMediaTheme {
 		static BControl* MakeFallbackViewFor(BParameter* control);
 
 	private:
-		BMediaTheme();		/* private unimplemented */
 		BMediaTheme(const BMediaTheme& other);
 		BMediaTheme& operator=(const BMediaTheme& other);
 
@@ -93,11 +93,11 @@ class BMediaTheme {
 };
 
 
-// Theme add-ons should export these functions:
+
 #if defined(_BUILDING_THEME_ADDON)
 extern "C" BMediaTheme* make_theme(int32 id, image_id you);
 extern "C" status_t get_theme_at(int32 index, const char** _name,
 	const char** _info, int32* _id);
-#endif	// _BUILDING_THEME_ADDON
+#endif
 
-#endif	// _CONTROL_THEME_H
+#endif

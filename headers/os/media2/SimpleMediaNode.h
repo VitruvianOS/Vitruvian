@@ -1,4 +1,5 @@
 /*
+ * Copyright 2015-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -41,7 +42,6 @@ protected:
 	virtual	void					ProcessCallback(BMediaConnection* connection,
 										void* buffer, size_t bufferSize,
 										uint32 frameCount) override;
-	virtual	status_t				GetStreamFormat(BMediaFormat* outFormat) const override;
 
 private:
 			notify_hook				fNotifyHook;
@@ -53,4 +53,4 @@ private:
 };
 
 
-#endif // _MEDIA2_SIMPLE_MEDIA_NODE_H
+#endif

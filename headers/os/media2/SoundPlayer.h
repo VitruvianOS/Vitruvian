@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -10,6 +11,9 @@
 #include <media2/MediaFormat.h>
 
 
+class BSound;
+
+
 class BSoundPlayer {
 public:
 	enum sound_player_notification {
@@ -18,18 +22,15 @@ public:
 		B_SOUND_DONE
 	};
 
-	// haiku-latest names. media2 spellings (PlayBuffer / Notifier) used to
-	// alias these but conflict with the protected virtual method
-	// PlayBuffer() below — kept as a single set of names matching legacy.
 	typedef void (*BufferPlayerFunc)(void* cookie, void* buffer, size_t size,
 		const media_raw_audio_format& format);
 	typedef void (*EventNotifierFunc)(void* cookie,
 		sound_player_notification what, ...);
 
-	// Convenience aliases retained for media2 call sites — these are
-	// pointer-typedefs, no class-member name conflict.
 	typedef BufferPlayerFunc	PlayBufferFunc;
 	typedef EventNotifierFunc	NotifyFunc;
+
+	typedef int32 play_id;
 
 								BSoundPlayer(const BMediaFormat* format,
 									const char* name = NULL,
@@ -51,7 +52,7 @@ public:
 			void				Stop(bool block = true, bool flush = true);
 			bool				IsPlaying() const;
 
-			status_t			SetVolume(float volume);	// 0..1
+			status_t			SetVolume(float volume);
 			float				Volume() const;
 			status_t			SetVolumeDB(float dB);
 			float				VolumeDB() const;
@@ -60,7 +61,7 @@ public:
 									EventNotifierFunc notifyFunc = NULL,
 									void* cookie = NULL);
 
-			// haiku-latest split setters — both delegate to SetCallbacks.
+
 			void				SetBufferPlayer(BufferPlayerFunc playFunc);
 			void				SetNotifier(EventNotifierFunc notifyFunc);
 			void*				Cookie() const;
@@ -72,12 +73,25 @@ public:
 			bool				HasData() const;
 			void				SetHasData(bool hasData);
 
+			bigtime_t			CurrentTime() const;
+			bigtime_t			PerformanceTime() const;
+			status_t			Preroll();
+
+			play_id				StartPlaying(BSound* sound,
+									bigtime_t atTime = 0);
+			play_id				StartPlaying(BSound* sound,
+									bigtime_t atTime, float withVolume);
+			status_t			SetSoundVolume(play_id id, float newVolume);
+			bool				IsPlaying(play_id id);
+			status_t			StopPlaying(play_id id);
+			status_t			WaitForSound(play_id id);
+
+
+			status_t			GetVolumeInfo(int32* _parameterID,
+									float* _minDB, float* _maxDB);
+
 protected:
-	// Legacy override path. Default implementations route to the function
-	// pointers set via SetCallbacks / SetBufferPlayer / SetNotifier. To
-	// supply audio by subclassing, override PlayBuffer and leave the
-	// function pointer unset. The RT-thread contract is identical either
-	// way: fill `buffer` with `size` bytes of PCM in `format`.
+
 	virtual	void				PlayBuffer(void* buffer, size_t size,
 									const media_raw_audio_format& format);
 	virtual	void				Notify(sound_player_notification what, ...);
@@ -90,4 +104,4 @@ private:
 };
 
 
-#endif // _MEDIA2_SOUND_PLAYER_H
+#endif

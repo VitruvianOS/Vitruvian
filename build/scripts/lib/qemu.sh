@@ -78,6 +78,7 @@ run_qemu() {
                 -drive if=pflash,format=raw,file="$_disk_vars" \
                 -netdev user,id=mynet,hostfwd=tcp::2222-:22 \
                 -device virtio-net-pci,netdev=mynet \
+                -device intel-hda -device hda-duplex,audiodev=snd0 -audiodev pa,id=snd0 \
                 $_extra_drives \
                 $_serial_args
             ;;
@@ -97,6 +98,7 @@ run_qemu() {
                         -drive if=pflash,format=raw,file="$_basedir/OVMF_VARS.fd" \
                         -netdev user,id=mynet,hostfwd=tcp::2222-:22 \
                         -device virtio-net-pci,netdev=mynet \
+                        -device intel-hda -device hda-duplex,audiodev=snd0 -audiodev pa,id=snd0 \
                         -virtfs local,path="$_host_shared",mount_tag=host_shared,security_model=mapped-xattr,id=host_shared \
                         $_extra_drives \
                         $_serial_args
@@ -142,6 +144,7 @@ run_qemu() {
                         -m 8G -cpu host -smp sockets=1,cores=2,threads=2 --enable-kvm \
                         -netdev user,id=mynet,hostfwd=tcp::2222-:22 \
                         -device virtio-net-pci,netdev=mynet \
+                        -device intel-hda -device hda-duplex,audiodev=snd0 -audiodev pa,id=snd0 \
                         $_extra_drives \
                         $_serial_args
                     ;;

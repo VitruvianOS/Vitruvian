@@ -1,13 +1,11 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
 #include <media2/MediaDefs.h>
 
 
-// Wildcards: zero-initialized; legacy semantics treat a zero-field
-// audio/video format as "any".
 const media_raw_audio_format media_raw_audio_format_wildcard = {};
 const media_raw_video_format media_raw_video_format_wildcard = {};
 
@@ -18,7 +16,7 @@ const media_raw_video_format& media_raw_video_format::wildcard
 	= media_raw_video_format_wildcard;
 
 
-// Kind constants — strings, legacy DefaultMediaTheme uses strcmp.
+
 extern const char* const B_GAIN                = "B_GAIN";
 extern const char* const B_MASTER_GAIN         = "B_MASTER_GAIN";
 extern const char* const B_BALANCE             = "B_BALANCE";

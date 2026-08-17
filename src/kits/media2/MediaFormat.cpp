@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -149,12 +149,10 @@ BMediaFormat::Matches(const BMediaFormat& other) const
 		}
 		return true;
 	}
-	// Encoded / video: byte-compare the union for now.
+
 	return memcmp(&format.u, &other.format.u, sizeof(format.u)) == 0;
 }
 
-
-// #pragma mark - BMediaFormatBuilder
 
 
 BMediaFormatBuilder::BMediaFormatBuilder(media_type type)

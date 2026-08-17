@@ -15,15 +15,18 @@ AddOn(media2
 	MediaFormats.cpp
 	MediaGraph.cpp
 	MediaNode.cpp
+	MediaUnit.cpp
+	MidiUnit.cpp
 	MediaAutomation.cpp
 	MediaPlayer.cpp
 	MediaRecorder.cpp
 	MediaTheme.cpp
 	ParameterWeb.cpp
+	PeakMeter.cpp
 	PipeWireBackend.cpp
 	PlaySound.cpp
-	SimpleMediaClient.cpp
 	SimpleMediaNode.cpp
+	SimpleMediaUnit.cpp
 	Sound.cpp
 	SoundPlayer.cpp
 	TimeCode.cpp

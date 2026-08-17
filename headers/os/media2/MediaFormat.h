@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -50,7 +51,7 @@ public:
 public:
 			media_format		format;
 
-			// Extensions valid when format.type == B_MEDIA_RAW_AUDIO
+
 			media_channel_position	channel_positions[B_AUDIO_MAX_CHANNELS];
 			bool					is_planar;
 };
@@ -78,4 +79,4 @@ private:
 };
 
 
-#endif // _MEDIA2_MEDIA_FORMAT_H
+#endif

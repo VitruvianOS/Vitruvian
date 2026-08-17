@@ -219,6 +219,7 @@ BSlider::_InitBarColor()
 {
 	SetBarColor(be_control_look->SliderBarColor(
 		ui_color(B_PANEL_BACKGROUND_COLOR)));
+	fFillColor = BarColor();
 	UseFillColor(false, NULL);
 }
 

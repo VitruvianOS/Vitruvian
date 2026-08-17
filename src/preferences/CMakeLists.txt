@@ -11,6 +11,7 @@ add_subdirectory(keymap)
 add_subdirectory(locale)
 add_subdirectory(network)
 add_subdirectory(bluetooth)
+add_subdirectory(media)
 #add_subdirectory(notifications) # missing libnotification
 #add_subdirectory(printers)     # needs print kit
 add_subdirectory(screen)

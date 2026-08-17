@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2025-2026, The Vitruvian Project. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -32,7 +33,6 @@ public:
 
 			BParameterWeb*			Web() const;
 			status_t				SetParameterWeb(BParameterWeb* web);
-				// Takes ownership of `web`.
 
 	virtual	status_t				GetParameterValue(int32 id,
 										bigtime_t* lastChangeTime,
@@ -46,8 +46,6 @@ public:
 			void					BroadcastChangedParameter(int32 id);
 
 	virtual	BView*					MakeView();
-				// Default returns NULL — full BMediaTheme support arrives in
-				// Batch G when Media pref needs UI generation.
 
 private:
 			struct ValueEntry;
@@ -59,4 +57,4 @@ private:
 };
 
 
-#endif // _MEDIA2_CONTROLLABLE_H
+#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -94,19 +94,25 @@ public:
 		if (path.InitCheck() != B_OK)
 			return path.InitCheck();
 
-		// Ensure GStreamer is initialised.
-		if (GStreamerBackend::GetInstance() == NULL)
-			return B_NO_INIT;
-
 		gchar* uri = gst_filename_to_uri(path.Path(), NULL);
 		if (uri == NULL)
 			return B_BAD_VALUE;
+		status_t status = OpenUri(uri);
+		g_free(uri);
+		return status;
+	}
+
+	status_t OpenUri(const char* uri)
+	{
+		if (uri == NULL)
+			return B_BAD_VALUE;
+
+		if (GStreamerBackend::GetInstance() == NULL)
+			return B_NO_INIT;
 
 		fPipeline = gst_element_factory_make("playbin", "vitruvian-playbin");
-		if (fPipeline == NULL) {
-			g_free(uri);
+		if (fPipeline == NULL)
 			return B_ERROR;
-		}
 
 		// Restrict the audio sink to F32LE interleaved so the rest of the
 		// kit deals with a known format. PipeWire and BSoundPlayer can both
@@ -119,7 +125,6 @@ public:
 		fAppSink = gst_element_factory_make("appsink", "vitruvian-appsink");
 		if (fAppSink == NULL) {
 			gst_caps_unref(caps);
-			g_free(uri);
 			gst_object_unref(fPipeline);
 			fPipeline = NULL;
 			return B_ERROR;
@@ -139,7 +144,6 @@ public:
 			"audio-sink",  fAppSink,
 			"video-sink",  fakeVideo,
 			NULL);
-		g_free(uri);
 
 		// PAUSED runs preroll — by the time it completes, caps are negotiated.
 		GstStateChangeReturn r = gst_element_set_state(fPipeline,
@@ -329,6 +333,16 @@ BMediaFile::BMediaFile(const entry_ref* ref, int32 /*flags*/)
 	if (fImpl == NULL)
 		return;
 	fImpl->fInitErr = fImpl->Open(ref);
+}
+
+
+BMediaFile::BMediaFile(const BUrl& url)
+	:
+	fImpl(new(std::nothrow) Impl())
+{
+	if (fImpl == NULL)
+		return;
+	fImpl->fInitErr = fImpl->OpenUri(url.UrlString().String());
 }
 
 

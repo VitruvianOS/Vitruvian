@@ -9,6 +9,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Input
 	Keymap
 	Locale
+	Media
 	Network
 	Screen
 	#ScreenSaver
@@ -29,6 +30,7 @@ set(SYSTEM_PREFERENCES
 	Input
 	Keymap
 	Locale
+	Media
 	Network
 	Screen
 	#ScreenSaver

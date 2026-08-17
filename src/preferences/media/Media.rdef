@@ -1,0 +1,39 @@
+/*
+ * Copyright 2026, Vitruvian Project.
+ * Distributed under the terms of the MIT License.
+ */
+
+resource app_signature "application/x-vnd.Haiku-Media";
+
+resource app_name_catalog_entry "x-vnd.Haiku-Media:System name:Media";
+
+resource app_flags B_SINGLE_LAUNCH;
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	/* 0 = development	1 = alpha			2 = beta
+	   3 = gamma		4 = golden master	5 = final */
+	variety = 2,
+
+	internal = 0,
+
+	short_info = "Media",
+	long_info  = "Media ©2026 Vitruvian Project"
+};
+
+/* Placeholder HVIF — to be replaced with the Haiku Prefs_Media icon in
+ * C.3 once the IMSG→HVIF conversion is wired. */
+resource vector_icon {
+	$"6E63696F6E0205006601000001000000000000"
+};
+
+resource large_icon {
+	$"6E63696F6E0205006601000001000000000000"
+};
+
+resource mini_icon {
+	$"6E63696F6E0205006601000001000000000000"
+};

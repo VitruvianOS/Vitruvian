@@ -4,6 +4,7 @@ add_subdirectory(addattr)
 # add_subdirectory(desklink)  # media kit not yet implemented
 add_subdirectory(keystore)
 add_subdirectory(locale)
+add_subdirectory(media_client)
 add_subdirectory(pc)
 add_subdirectory(query)
 add_subdirectory(rc)

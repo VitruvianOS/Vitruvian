@@ -3,6 +3,7 @@
 	keystore
 	linkcatkeys
 	dumpcatalog
+	media_client
 	pc
 	query
 	rc

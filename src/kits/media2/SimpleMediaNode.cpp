@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2015-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -74,31 +74,19 @@ BSimpleMediaNode::HandleSeek(bigtime_t mediaTime, bigtime_t performanceTime)
 
 
 void
-BSimpleMediaNode::ProcessCallback(BMediaConnection* /*conn*/, void* buffer,
+BSimpleMediaNode::ProcessCallback(BMediaConnection* connection, void* buffer,
 	size_t bufferSize, uint32 frameCount)
 {
 	if (fProcessHook == NULL) {
-		// Default: silence on output, ignore on input.
 		BMediaClient::ProcessCallback(NULL, buffer, bufferSize, frameCount);
 		return;
 	}
-	fProcessHook(fProcessCookie, buffer, bufferSize, frameCount, fFormat);
-}
 
+	BMediaFormat format;
+	if (connection != NULL)
+		format = connection->Format();
+	else
+		format.SetToDefault();
 
-status_t
-BSimpleMediaNode::GetStreamFormat(BMediaFormat* outFormat) const
-{
-	if (outFormat == NULL)
-		return B_BAD_VALUE;
-	if (fFormatHook != NULL) {
-		BMediaFormat fmt = fFormat;
-		status_t err = fFormatHook(fFormatCookie, &fmt);
-		if (err == B_OK) {
-			*outFormat = fmt;
-			return B_OK;
-		}
-	}
-	*outFormat = fFormat;
-	return B_OK;
+	fProcessHook(fProcessCookie, buffer, bufferSize, frameCount, format);
 }

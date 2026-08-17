@@ -1,4 +1,5 @@
 /*
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Copyright 2009, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -10,18 +11,18 @@
 #include <SupportDefs.h>
 
 
-// Time code is always in the form HH:MM:SS:FF, it's the definition of "FF"
-// that varies
+
+
 enum timecode_type {
 	B_TIMECODE_DEFAULT,
 	B_TIMECODE_100,
-	B_TIMECODE_75,			// CD
-	B_TIMECODE_30,			// MIDI
-	B_TIMECODE_30_DROP_2,	// NTSC
-	B_TIMECODE_30_DROP_4,	// Brazil
-	B_TIMECODE_25,			// PAL
-	B_TIMECODE_24,			// Film
-	B_TIMECODE_18			// Super8
+	B_TIMECODE_75,
+	B_TIMECODE_30,
+	B_TIMECODE_30_DROP_2,
+	B_TIMECODE_30_DROP_4,
+	B_TIMECODE_25,
+	B_TIMECODE_24,
+	B_TIMECODE_18
 };
 
 
@@ -31,8 +32,8 @@ struct timecode_info {
 	int				every_nth;
 	int				except_nth;
 	int				fps_div;
-	char			name[32];		// For popup menus and such
-	char			format[32];		// For sprintf(fmt, h, m, s, f)
+	char			name[32];
+	char			format[32];
 
 	char			_reserved_[64];
 };
@@ -95,7 +96,7 @@ public:
 			bigtime_t			Microseconds() const;
 			int32				LinearFrames() const;
 
-			// Make sure the passed buffer is at least 24 bytes large.
+
 			void				GetString(char* string) const;
 
 private:
@@ -106,4 +107,4 @@ private:
 			timecode_info		fInfo;
 };
 
-#endif // _TIME_CODE_H
+#endif

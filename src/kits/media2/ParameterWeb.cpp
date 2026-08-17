@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026, Dario Casalinuovo. All Rights Reserved.
+ * Copyright 2025-2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -11,9 +11,6 @@
 
 #include <Message.h>
 #include <TypeConstants.h>
-
-
-// #pragma mark - BParameter
 
 
 BParameter::BParameter(int32 id, media_type mediaType, media_parameter_type type,
@@ -79,9 +76,6 @@ status_t    BParameter::AddOutput(BParameter* p) {
 }
 
 
-// #pragma mark - BNullParameter
-
-
 BNullParameter::BNullParameter(int32 id, media_type mediaType, const char* name,
 	const char* kind)
 	:
@@ -95,9 +89,6 @@ BNullParameter::ValueType()
 {
 	return 0;
 }
-
-
-// #pragma mark - BContinuousParameter
 
 
 BContinuousParameter::BContinuousParameter(int32 id, media_type mediaType,
@@ -171,9 +162,6 @@ BContinuousParameter::SetValue(void* value, size_t size, bigtime_t when)
 	fLastChange = when;
 	return B_OK;
 }
-
-
-// #pragma mark - BDiscreteParameter
 
 
 BDiscreteParameter::BDiscreteParameter(int32 id, media_type mediaType,
@@ -264,9 +252,6 @@ BDiscreteParameter::SetValue(void* value, size_t size, bigtime_t when)
 }
 
 
-// #pragma mark - BTextParameter
-
-
 BTextParameter::BTextParameter(int32 id, media_type mediaType,
 	const char* name, const char* kind, size_t maxBytes)
 	:
@@ -325,9 +310,6 @@ BTextParameter::SetValue(void* value, size_t size, bigtime_t when)
 	fLastChange = when;
 	return B_OK;
 }
-
-
-// #pragma mark - BParameterGroup
 
 
 BParameterGroup::BParameterGroup(BParameterWeb* web, const char* name)
@@ -425,9 +407,6 @@ BParameterGroup::MakeGroup(const char* name)
 }
 
 
-// #pragma mark - BParameterWeb
-
-
 BParameterWeb::BParameterWeb()
 	:
 	fGroups()
@@ -494,7 +473,7 @@ BParameterWeb::MakeContinuousParameter(int32 id, media_type mediaType,
 	const char* name, const char* kind, const char* unit, float minValue,
 	float maxValue, float valueStep)
 {
-	// Convenience: synthesise a single-group web for callers that don't care.
+
 	BParameterGroup* g = fGroups.CountItems() > 0
 		? fGroups.ItemAt(0)
 		: MakeGroup("default");
@@ -503,9 +482,6 @@ BParameterWeb::MakeContinuousParameter(int32 id, media_type mediaType,
 	return g->MakeContinuousParameter(id, mediaType, name, kind, unit,
 		minValue, maxValue, valueStep);
 }
-
-
-// #pragma mark - BFlattenable
 
 
 static void
@@ -613,7 +589,6 @@ UnpackGroup(const BMessage& in, BParameterGroup* dest)
 
 bool       BParameterWeb::IsFixedSize() const  { return false; }
 type_code  BParameterWeb::TypeCode() const     { return B_MEDIA_PARAMETER_WEB_TYPE; }
-	// Defined in <TypeConstants.h> as 'BMCW'.
 
 
 bool
@@ -660,7 +635,6 @@ BParameterWeb::Unflatten(type_code code, const void* buffer, ssize_t size)
 		return err;
 	(void)size;
 
-	// Clear existing groups before unpacking.
 	while (fGroups.CountItems() > 0) {
 		BParameterGroup* g = fGroups.RemoveItemAt(0);
 		delete g;

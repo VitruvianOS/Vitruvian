@@ -6,12 +6,17 @@
 #include <OS.h>
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/prctl.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 #include <syscalls.h>
 
@@ -28,12 +33,26 @@ static __thread pthread_key_t sOnExitKey;
 
 
 struct thread_data {
-	const char* name;
+	char name[B_OS_NAME_LENGTH];
 	thread_id father;
 
 	thread_func func;
 	void* data;
 };
+
+
+// comm holds 15 characters against B_OS_NAME_LENGTH's 32, and PR_SET_NAME
+// fails with ERANGE without setting anything, so truncate by hand.
+static void
+SetOsThreadName(const char* name)
+{
+	if (name == NULL)
+		return;
+
+	char buffer[16];
+	strlcpy(buffer, name, sizeof(buffer));
+	prctl(PR_SET_NAME, buffer, 0, 0, 0);
+}
 
 
 void* thread_run(void* data)
@@ -52,6 +71,10 @@ void* thread_run(void* data)
 		return EINVAL;
 	}
 
+	// nexus can't read the name back, so _get_thread_info() takes it from
+	// /proc/<tid>/comm.
+	SetOsThreadName(threadData->name);
+
 	pthread_detach(pthread_self());
 
 	status_t error = threadData->func(threadData->data);
@@ -69,6 +92,101 @@ void* thread_run(void* data)
 namespace {
 // 0 means "not cached yet"; a real tid is never 0.
 __thread thread_id sCachedTid = 0;
+
+
+// utime/stime are /proc/<id>/stat fields 14/15; the strrchr(')') is needed
+// because a thread name can itself contain spaces and parentheses.
+void
+GetThreadCpuTimes(thread_id id, bigtime_t* userTime, bigtime_t* kernelTime)
+{
+	*userTime = 0;
+	*kernelTime = 0;
+
+	char path[64];
+	char buf[4096];
+	snprintf(path, sizeof(path), "/proc/%d/stat", (int)id);
+
+	int fd = open(path, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+		return;
+
+	ssize_t dataRead = read(fd, buf, sizeof(buf) - 1);
+	close(fd);
+	if (dataRead <= 0)
+		return;
+
+	buf[dataRead] = '\0';
+
+	char* paren = strrchr(buf, ')');
+	if (paren == NULL)
+		return;
+
+	char* p = paren + 2;
+	unsigned long utime_ticks = 0, stime_ticks = 0;
+	int field = 3;
+	char* save = NULL;
+	char* token = strtok_r(p, " ", &save);
+
+	while (token) {
+		if (field == 14) {
+			utime_ticks = strtoul(token, NULL, 10);
+		} else if (field == 15) {
+			stime_ticks = strtoul(token, NULL, 10);
+			break;
+		}
+		field++;
+		token = strtok_r(NULL, " ", &save);
+	}
+
+	long hz = sysconf(_SC_CLK_TCK);
+	if (hz <= 0)
+		hz = 100;
+
+	*userTime = (bigtime_t)((utime_ticks * 1000000ULL) / (unsigned long)hz);
+	*kernelTime = (bigtime_t)((stime_ticks * 1000000ULL) / (unsigned long)hz);
+}
+
+
+// Inverts the mapping set_thread_priority() applies. Anything unreadable or
+// outside the known ranges falls back to 10 rather than guess.
+int32
+GetThreadPriority(thread_id id)
+{
+	int policy = sched_getscheduler((pid_t)id);
+	if (policy < 0)
+		return 10;
+
+	if (policy == SCHED_IDLE)
+		return 0;
+
+	if (policy == SCHED_RR || policy == SCHED_FIFO) {
+		struct sched_param param;
+		memset(&param, 0, sizeof(param));
+		if (sched_getparam((pid_t)id, &param) == 0
+			&& param.sched_priority >= 1 && param.sched_priority <= 90) {
+			// inverse of: sched_priority = 1 + (priority - 31)
+			return 31 + (param.sched_priority - 1);
+		}
+		return 10;
+	}
+
+	errno = 0;
+	int nice = getpriority(PRIO_PROCESS, (id_t)id);
+	if (nice == -1 && errno != 0)
+		return 10;
+
+	if (nice == 0)
+		return 10;
+	if (nice > 0 && nice <= 19)
+		// inverse of: nice = 19 - (priority - 1), priority in [1, 9]
+		return 20 - nice;
+	if (nice < 0 && nice >= -20)
+		// inverse of: nice = -1 - (priority - 11), priority in [11, 30]
+		return 10 - nice;
+
+	return 10;
+}
+
 }
 
 
@@ -102,9 +220,12 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 	if (threadData == NULL)
 		return B_NO_MEMORY;
 
-	threadData->name = name;
-	threadData->father = find_thread(NULL); 
-	threadData->func = func;	
+	if (name != NULL)
+		strlcpy(threadData->name, name, sizeof(threadData->name));
+	else
+		threadData->name[0] = '\0';
+	threadData->father = find_thread(NULL);
+	threadData->func = func;
 	threadData->data = data;
 
 	pthread_t pThread;
@@ -145,13 +266,20 @@ rename_thread(thread_id thread, const char* newName)
 	if (newName == NULL)
 		return B_BAD_VALUE;
 
+	if (thread != find_thread(NULL))
+		return B_NOT_ALLOWED;
+
 	struct nexus_thread_set_name_req exchange;
 	memset(&exchange, 0, sizeof(exchange));
 	exchange.name = newName;
 	exchange.size = strlen(newName) + 1;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	return nexus_io(nexus, NEXUS_THREAD_SET_NAME, &exchange);
+	if (nexus_io(nexus, NEXUS_THREAD_SET_NAME, &exchange) < 0)
+		return B_ERROR;
+
+	BKernelPrivate::SetOsThreadName(newName);
+	return B_OK;
 }
 
 
@@ -283,8 +411,10 @@ _get_thread_info(thread_id id, thread_info* info, size_t size)
 	}
 
 	info->state = B_THREAD_RUNNING;
-	info->priority = 10;
+	info->priority = GetThreadPriority(id);
 	info->team = id;
+
+	GetThreadCpuTimes(id, &info->user_time, &info->kernel_time);
 
 	snprintf(path, sizeof(path), "/proc/%d/status", id);
 	fd = open(path, O_RDONLY);
@@ -387,11 +517,9 @@ find_thread(const char* name)
 		return sCachedTid;
 	}
 
-	debugger("You are calling find_thread with something different than NULL");
-
-	// TODO: deprecate
-
-	UNIMPLEMENTED();
+	// Deliberately unsupported: names aren't unique, and an id matched on a
+	// non-unique string can be recycled before the caller uses it.
+	debugger("find_thread() by name is not supported");
 	return B_NAME_NOT_FOUND;
 }
 

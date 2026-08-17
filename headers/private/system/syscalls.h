@@ -540,6 +540,11 @@ extern void			_kern_clear_caches(void *address, size_t length,
 extern bool			_kern_cpu_enabled(int32 cpu);
 extern status_t		_kern_set_cpu_enabled(int32 cpu, bool enabled);
 
+// Kernel's own memory footprint (Slab + KernelStack + PageTables, in
+// bytes), not otherwise exposed via system_info. Linux-only accessor,
+// implemented by parsing /proc/meminfo; see libroot2/system_info.c.
+extern status_t		_kern_get_kernel_memory_footprint(uint64* _bytes);
+
 #if defined(__i386__) || defined(__x86_64__)
 // our only x86 only syscall
 extern status_t		_kern_get_cpuid(cpuid_info *info, uint32 eax, uint32 cpu);

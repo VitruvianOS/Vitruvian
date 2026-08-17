@@ -8,13 +8,20 @@
 #include <KernelExport.h>
 #include <OS.h>
 
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
 #include <map>
+#include <new>
 #include <string>
 
 #include "MutexLock.h"
@@ -117,6 +124,31 @@ private:
 
 	std::map<area_id, LocalArea>	fAreasMap;
 	pthread_mutex_t 				fLock;
+};
+
+
+// smaps is a seq_file: seeking backward in it can force the kernel to
+// regenerate the output from the start, so slurp it once and walk an
+// in-memory offset instead of holding a FILE* across calls.
+enum AreaScanMode {
+	kAreaScanSmaps,	// per-mapping data, same-uid teams only
+	kAreaScanStatm	// whole-team totals synthesized into 2 records, any team
+};
+
+
+struct AreaScanState {
+	AreaScanMode	mode;
+	team_id			team;
+
+	// kAreaScanSmaps
+	char*			buffer;
+	size_t			length;
+	size_t			offset;
+
+	// kAreaScanStatm: precomputed at open time, handed out one per call.
+	uint64			privateBytes;
+	uint64			sharedBytes;
+	int				statmNext;	// 0 = private pending, 1 = shared pending, 2 = done
 };
 
 
@@ -408,43 +440,270 @@ _get_area_info(area_id id, area_info* info, size_t size)
 }
 
 
+// smaps needs PTRACE_MODE_READ_FSCREDS, so it only works for same-uid teams;
+// statm has no ptrace check and works for any team, at the cost of per-area
+// granularity. The caller must drain the enumeration or the state leaks.
 status_t
 _get_next_area_info(team_id team, ssize_t* cookie, area_info* areaInfo,
 	size_t size)
 {
-	if (cookie == NULL || areaInfo == NULL || size != sizeof(area_info))
+	if (cookie == NULL || *cookie < 0 || areaInfo == NULL
+		|| size != sizeof(area_info)) {
 		return B_BAD_VALUE;
+	}
 
-	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
-	if (nexus < 0)
-		return B_ERROR;
+	if (team == 0)
+		team = getpid();
 
-	struct nexus_area_get_next gn;
-	memset(&gn, 0, sizeof(gn));
-	gn.team = (team == 0) ? getpid() : team;
-	gn.cookie = (int32_t)*cookie;
+	using namespace BKernelPrivate;
 
-	if (nexus_io(nexus, NEXUS_AREA_GET_NEXT, &gn) < 0)
-		return B_ERROR;
-	if (gn.ret != B_OK)
-		return gn.ret;
+	AreaScanState* state;
+	if (*cookie == 0) {
+		char path[64];
+		snprintf(path, sizeof(path), "/proc/%d/smaps", (int)team);
 
-	areaInfo->area = gn.area;
-	strncpy(areaInfo->name, gn.name, B_OS_NAME_LENGTH);
+		int fd = open(path, O_RDONLY | O_CLOEXEC);
+		if (fd < 0) {
+			if (errno != EACCES && errno != EPERM)
+				return B_BAD_TEAM_ID;
+
+			// smaps is off-limits for this team; fall back to the
+			// world-readable statm whole-team totals.
+			char statmPath[64];
+			snprintf(statmPath, sizeof(statmPath), "/proc/%d/statm",
+				(int)team);
+
+			int statmFd = open(statmPath, O_RDONLY | O_CLOEXEC);
+			if (statmFd < 0) {
+				if (errno == ENOENT)
+					return B_BAD_TEAM_ID;
+				return B_PERMISSION_DENIED;
+			}
+
+			char statmBuf[256];
+			ssize_t statmLen = read(statmFd, statmBuf,
+				sizeof(statmBuf) - 1);
+			close(statmFd);
+			if (statmLen <= 0)
+				return B_PERMISSION_DENIED;
+			statmBuf[statmLen] = '\0';
+
+			// proc(5): size resident shared text lib data dt (pages).
+			unsigned long long pages = 0, residentPages = 0, sharedPages = 0;
+			if (sscanf(statmBuf, "%llu %llu %llu", &pages, &residentPages,
+					&sharedPages) < 3) {
+				return B_PERMISSION_DENIED;
+			}
+
+			unsigned long long privatePages =
+				(residentPages > sharedPages)
+					? residentPages - sharedPages : 0;
+
+			long pageSize = sysconf(_SC_PAGESIZE);
+			if (pageSize <= 0)
+				pageSize = B_PAGE_SIZE;
+
+			state = new (std::nothrow) AreaScanState();
+			if (state == NULL)
+				return B_NO_MEMORY;
+			state->mode = kAreaScanStatm;
+			state->team = team;
+			state->buffer = NULL;
+			state->length = 0;
+			state->offset = 0;
+			state->privateBytes = privatePages * (unsigned long long)pageSize;
+			state->sharedBytes = sharedPages * (unsigned long long)pageSize;
+			state->statmNext = 0;
+		} else {
+			size_t capacity = 256 * 1024;
+			char* buffer = (char*)malloc(capacity);
+			if (buffer == NULL) {
+				close(fd);
+				return B_NO_MEMORY;
+			}
+
+			size_t length = 0;
+			for (;;) {
+				if (length == capacity) {
+					capacity *= 2;
+					char* grown = (char*)realloc(buffer, capacity);
+					if (grown == NULL) {
+						free(buffer);
+						close(fd);
+						return B_NO_MEMORY;
+					}
+					buffer = grown;
+				}
+
+				ssize_t got = read(fd, buffer + length, capacity - length);
+				if (got < 0) {
+					if (errno == EINTR)
+						continue;
+					free(buffer);
+					close(fd);
+					return B_ERROR;
+				}
+				if (got == 0)
+					break;
+				length += (size_t)got;
+			}
+			close(fd);
+
+			state = new (std::nothrow) AreaScanState();
+			if (state == NULL) {
+				free(buffer);
+				return B_NO_MEMORY;
+			}
+			state->mode = kAreaScanSmaps;
+			state->buffer = buffer;
+			state->length = length;
+			state->offset = 0;
+			state->team = team;
+		}
+	} else {
+		state = (AreaScanState*)*cookie;
+	}
+
+	if (state->mode == kAreaScanStatm) {
+		while (state->statmNext < 2) {
+			int which = state->statmNext++;
+			uint64 bytes = (which == 0) ? state->privateBytes
+				: state->sharedBytes;
+			if (bytes == 0)
+				continue;
+
+			memset(areaInfo, 0, sizeof(area_info));
+			areaInfo->area = B_ERROR;
+			strncpy(areaInfo->name, (which == 0) ? "[private]" : "[shared]",
+				B_OS_NAME_LENGTH - 1);
+			areaInfo->name[B_OS_NAME_LENGTH - 1] = '\0';
+			areaInfo->size = (size_t)bytes;
+			areaInfo->lock = B_NO_LOCK;
+			areaInfo->protection = (which == 0)
+				? (B_READ_AREA | B_WRITE_AREA) : B_READ_AREA;
+			areaInfo->team = state->team;
+			areaInfo->ram_size = (uint32)bytes;
+			areaInfo->address = NULL;
+
+			*cookie = (ssize_t)state;
+			return B_OK;
+		}
+
+		delete state;
+		*cookie = 0;
+		return B_BAD_VALUE;
+	}
+
+	char line[1024];
+	unsigned long long start = 0, end = 0;
+	char perms[8] = {0};
+	char pathname[PATH_MAX] = {0};
+	unsigned long rssKb = 0;
+	bool haveRecord = false;
+
+	while (state->offset < state->length) {
+		size_t lineStart = state->offset;
+		size_t nl = lineStart;
+		while (nl < state->length && state->buffer[nl] != '\n')
+			nl++;
+		size_t nextOffset = (nl < state->length) ? nl + 1 : state->length;
+
+		size_t lineLen = nl - lineStart;
+		if (lineLen >= sizeof(line))
+			lineLen = sizeof(line) - 1;
+		memcpy(line, state->buffer + lineStart, lineLen);
+		line[lineLen] = '\0';
+
+		unsigned long long s = 0, e = 0;
+		char p[8] = {0};
+		char rest[900] = {0};
+		int matched = sscanf(line, "%llx-%llx %7s %*s %*s %*s %899[^\n]",
+			&s, &e, p, rest);
+
+		bool isHeader = (matched >= 3 && e > s);
+
+		if (isHeader && haveRecord)
+			break;
+
+		state->offset = nextOffset;
+
+		if (isHeader) {
+			haveRecord = true;
+			start = s;
+			end = e;
+			strncpy(perms, p, sizeof(perms) - 1);
+			if (matched >= 4) {
+				// %[^\n] does not skip the leading whitespace that pads the
+				// pathname column, so trim it by hand.
+				const char* p2 = rest;
+				while (*p2 == ' ' || *p2 == '\t')
+					p2++;
+				strncpy(pathname, p2, sizeof(pathname) - 1);
+			}
+		} else if (haveRecord && strncmp(line, "Rss:", 4) == 0) {
+			sscanf(line + 4, "%lu", &rssKb);
+		}
+	}
+
+	if (!haveRecord) {
+		free(state->buffer);
+		delete state;
+		*cookie = 0;
+		return B_BAD_VALUE;
+	}
+
+	char name[B_OS_NAME_LENGTH];
+	if (pathname[0] == '\0') {
+		strncpy(name, "[anon]", sizeof(name) - 1);
+		name[sizeof(name) - 1] = '\0';
+	} else if (strncmp(pathname, "/memfd:", 7) == 0) {
+		char* n = pathname + 7;
+		char* deleted = strstr(n, " (deleted)");
+		if (deleted != NULL)
+			*deleted = '\0';
+		strncpy(name, n, sizeof(name) - 1);
+		name[sizeof(name) - 1] = '\0';
+	} else if (pathname[0] == '[') {
+		// Pseudo mapping such as [heap], [stack], [vdso]: keep as-is.
+		strncpy(name, pathname, sizeof(name) - 1);
+		name[sizeof(name) - 1] = '\0';
+	} else {
+		const char* base = strrchr(pathname, '/');
+		base = (base != NULL) ? base + 1 : pathname;
+		strncpy(name, base, sizeof(name) - 1);
+		name[sizeof(name) - 1] = '\0';
+	}
+
+	uint32 protection = 0;
+	if (perms[0] == 'r')
+		protection |= B_READ_AREA;
+	if (perms[1] == 'w')
+		protection |= B_WRITE_AREA;
+	if (perms[2] == 'x')
+		protection |= B_EXECUTE_AREA;
+	if (perms[3] == 's')
+		protection |= B_CLONEABLE_AREA;
+
+	area_id areaId = B_ERROR;
+	if (team == getpid()) {
+		area_id local = BKernelPrivate::AreaPool::Get().FindByAddress(
+			(void*)(uintptr_t)start);
+		if (local != B_ERROR)
+			areaId = local;
+	}
+
+	memset(areaInfo, 0, sizeof(area_info));
+	areaInfo->area = areaId;
+	strncpy(areaInfo->name, name, B_OS_NAME_LENGTH - 1);
 	areaInfo->name[B_OS_NAME_LENGTH - 1] = '\0';
-	areaInfo->size = gn.size;
-	areaInfo->lock = gn.lock;
-	areaInfo->protection = gn.protection;
-	areaInfo->team = gn.team;
-	areaInfo->ram_size = gn.size;
+	areaInfo->size = (size_t)(end - start);
+	areaInfo->lock = B_NO_LOCK;
+	areaInfo->protection = protection;
+	areaInfo->team = team;
+	areaInfo->ram_size = (uint32)(rssKb * 1024);
+	areaInfo->address = (void*)(uintptr_t)start;
 
-	BKernelPrivate::LocalArea local;
-	if (BKernelPrivate::AreaPool::Get().Get(gn.area, local))
-		areaInfo->address = local.address;
-	else
-		areaInfo->address = NULL;
-
-	*cookie = (ssize_t)gn.next_cookie;
+	*cookie = (ssize_t)state;
 
 	return B_OK;
 }

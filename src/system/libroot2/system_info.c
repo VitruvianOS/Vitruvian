@@ -289,6 +289,39 @@ _kern_get_system_info(system_info* info)
 
 
 status_t
+_kern_get_kernel_memory_footprint(uint64* _bytes)
+{
+	if (_bytes == NULL)
+		return B_BAD_VALUE;
+
+	FILE* file = fopen("/proc/meminfo", "r");
+	if (file == NULL)
+		return B_ERROR;
+
+	char line[128];
+	unsigned long slabKB = 0;
+	unsigned long kernelStackKB = 0;
+	unsigned long pageTablesKB = 0;
+
+	while (fgets(line, sizeof(line), file) != NULL) {
+		unsigned long value = 0;
+		if (sscanf(line, "Slab: %lu kB", &value) == 1)
+			slabKB = value;
+		else if (sscanf(line, "KernelStack: %lu kB", &value) == 1)
+			kernelStackKB = value;
+		else if (sscanf(line, "PageTables: %lu kB", &value) == 1)
+			pageTablesKB = value;
+	}
+	fclose(file);
+
+	// VmallocUsed is excluded: it can double-count memory already backed by
+	// Slab allocations.
+	*_bytes = (uint64)(slabKB + kernelStackKB + pageTablesKB) * 1024ULL;
+	return B_OK;
+}
+
+
+status_t
 _kern_get_cpu_info(uint32 firstCPU, uint32 cpuCount, cpu_info* info)
 {
 	if (info == NULL || cpuCount == 0)

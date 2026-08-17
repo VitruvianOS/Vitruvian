@@ -653,6 +653,13 @@ _get_team_info(team_id id, team_info* info, size_t size)
 		}
 	}
 
+	// Kernel threads have an empty cmdline; fall back to Name: in brackets
+	// so callers that only look at args don't render a blank row.
+	if (info->args[0] == '\0' && info->name[0] != '\0') {
+		snprintf(info->args, sizeof(info->args), "[%s]", info->name);
+		info->argc = 1;
+	}
+
 	char mapsPath[B_PATH_NAME_LENGTH];
 	snprintf(mapsPath, sizeof(mapsPath), "/proc/%d/maps", id);
 	FILE* maps = fopen(mapsPath, "r");

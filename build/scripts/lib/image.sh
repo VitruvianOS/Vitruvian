@@ -275,13 +275,18 @@ EOF
                 --output="$_basedir/image_tree/scratch/$_boot_efi" \
                 --locales="" --fonts="" \
                 "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
-            if [ -d /usr/lib/grub/i386-efi ]; then
-                grub-mkstandalone \
-                    --format=i386-efi \
-                    --output="$_basedir/image_tree/scratch/BOOTIA32.EFI" \
-                    --locales="" --fonts="" \
-                    "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
-            fi
+            log_step "Building 32-bit EFI stub (BOOTIA32.EFI) for 32-bit UEFI firmware..."
+            sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
+                "$_mnt/tmp/grub_ia32.cfg"
+            sudo chroot "$_mnt" grub-mkstandalone \
+                --directory=/usr/lib/grub/i386-efi \
+                --format=i386-efi \
+                --output=/tmp/BOOTIA32.EFI \
+                --locales="" --fonts="" \
+                "boot/grub/grub.cfg=/tmp/grub_ia32.cfg"
+            sudo cp "$_mnt/tmp/BOOTIA32.EFI" \
+                "$_basedir/image_tree/scratch/BOOTIA32.EFI"
+            sudo rm -f "$_mnt/tmp/BOOTIA32.EFI" "$_mnt/tmp/grub_ia32.cfg"
             ;;
         arm64|riscv64)
             sudo mkdir -p "$_mnt/scratch"
@@ -501,15 +506,19 @@ EOF
             --locales="" \
             --fonts="" \
             "boot/grub/grub.cfg=$_basedir/image_tree/scratch/grub.cfg"
-        if [ -d /usr/lib/grub/i386-efi ]; then
-            log_step "Building 32-bit EFI bootloader (i386-efi)..."
-            grub-mkstandalone \
-                --format=i386-efi \
-                --output="$_basedir/image_tree/scratch/bootia32.efi" \
-                --locales="" \
-                --fonts="" \
-                "boot/grub/grub.cfg=$_basedir/image_tree/scratch/grub.cfg"
-        fi
+        log_step "Building 32-bit EFI bootloader (i386-efi) for 32-bit UEFI firmware..."
+        sudo cp "$_basedir/image_tree/scratch/grub.cfg" \
+            "$_chroot_dir/tmp/grub_ia32.cfg"
+        sudo chroot "$_chroot_dir" grub-mkstandalone \
+            --directory=/usr/lib/grub/i386-efi \
+            --format=i386-efi \
+            --output=/tmp/bootia32.efi \
+            --locales="" \
+            --fonts="" \
+            "boot/grub/grub.cfg=/tmp/grub_ia32.cfg"
+        sudo cp "$_chroot_dir/tmp/bootia32.efi" \
+            "$_basedir/image_tree/scratch/bootia32.efi"
+        sudo rm -f "$_chroot_dir/tmp/bootia32.efi" "$_chroot_dir/tmp/grub_ia32.cfg"
     else
         sudo mkdir -p "$_basedir/image_tree/chroot/scratch"
         sudo cp "$_basedir/image_tree/scratch/grub.cfg" "$_basedir/image_tree/chroot/scratch/"

@@ -213,10 +213,17 @@ else
 fi
 
 if command -v xdg-user-dirs-update >/dev/null 2>&1; then
-    $IN runuser -u "$username" -- xdg-user-dirs-update 2>/dev/null || \
-        echo "xdg-user-dirs-update failed" >&2
+    _xdg_home=$($IN getent passwd "$username" | cut -d: -f6)
+    if [ -n "$_xdg_home" ]; then
+        $IN runuser -u "$username" -- \
+            env XDG_CONFIG_HOME="$_xdg_home/config/settings" \
+            xdg-user-dirs-update 2>/dev/null || \
+            echo "xdg-user-dirs-update failed" >&2
+    else
+        echo "cannot resolve home for $username, skipping xdg-user-dirs" >&2
+    fi
 else
-    echo "xdg-user-dirs not installed; skipping" >&2
+    echo "xdg-user-dirs not installed, skipping" >&2
 fi
 
 {

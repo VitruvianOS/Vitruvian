@@ -54,7 +54,7 @@ mkdir -p /system/data/deskbar/menu/Preferences/
 
 mkdir -p /system/boot/post_install/
 mkdir -p /system/boot/first_login/
-mkdir -p /system/settings/etc/profile.d/
+mkdir -p /system/data/profile.d/
 
 mkdir -p "/etc/skel/config/settings/Tracker/Tracker New Templates"
 mkdir -p /etc/skel/config/settings/printers/Preview

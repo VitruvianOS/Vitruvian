@@ -620,6 +620,19 @@ _common_chroot_setup() {
     _hostname="$2"
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 echo '$_hostname' > /etc/hostname
+
+# Rewrite /etc/hosts so it has the correct hostname.
+cat > /etc/hosts <<HOSTSEOF
+127.0.0.1	localhost
+127.0.1.1	$_hostname
+
+# The following lines are desirable for IPv6 capable hosts
+::1     localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+HOSTSEOF
+chmod 0644 /etc/hosts
+
 # Root locked; Installer's Advanced mode is the only way to set a root
 # password on a target.
 passwd -l root 2>/dev/null || true

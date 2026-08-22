@@ -6,7 +6,14 @@ set -e
 
 case "$1" in
     configure) ;;
-    abort-upgrade|abort-remove|abort-deconfigure|triggered) exit 0 ;;
+    triggered)
+        # A .desktop entry changed (see debian/triggers): restamp Deskbar
+        # icons. Guarded on nexus (absent in the build chroot); never fails.
+        if [ -e /dev/nexus_node_monitor ] && command -v appstamp >/dev/null 2>&1; then
+            appstamp --all >/dev/null 2>&1 || true
+        fi
+        exit 0 ;;
+    abort-upgrade|abort-remove|abort-deconfigure) exit 0 ;;
     *) echo "postinst: unknown action $1" >&2; exit 0 ;;
 esac
 
@@ -200,7 +207,7 @@ fi
 
 # Enable system services
 
-systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript@vos-live.service
+systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript@vos-live.service appstamp-icons.service
 
 install -m 0644 -D /usr/share/vos/systemd/vos-session.service \
 	/etc/systemd/user/vos-session.service 2>/dev/null || true

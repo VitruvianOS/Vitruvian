@@ -1,0 +1,25 @@
+[Unit]
+Description=Stamp Deskbar icons and names onto installed applications
+# Applications baked into the image are not stamped at build time: the dpkg
+# trigger runs in the chroot where nexus is absent and skips. This sweep does
+# it on every boot — idempotent (already-stamped binaries are skipped in
+# milliseconds), so the cost is negligible and it also catches anything the
+# trigger missed or that was installed outside dpkg.
+DefaultDependencies=no
+After=systemd-modules-load.service local-fs.target
+Before=graphical.target
+ConditionPathExists=/bin/appstamp
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# appstamp writes attributes through libroot2 -> /dev/nexus_node_monitor,
+# which udev (60-nexus.rules) creates AFTER systemd-modules-load issues the
+# modprobe. Wait briefly for the node, then sweep regardless — never block
+# boot on its absence.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do [ -e /dev/nexus_node_monitor ] && break; sleep 0.2; done'
+ExecStart=/bin/appstamp --all
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -705,6 +705,24 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		setenv("XDG_DATA_DIRS",   "/system/data:/usr/local/share:/usr/share", 0);
 		setenv("XDG_CONFIG_DIRS", "/system/settings:/etc/xdg",                0);
 
+		// Per-user base dirs follow the BeOS layout ($HOME/config/...) instead
+		// of ~/.config, ~/.local/share and ~/.cache. Login shells derive the
+		// same values through finddir in profile.d/xdg_basedirs.sh.
+		// Overwrite 0 like the *_DIRS above, so anything already
+		// in the environment wins.
+		if (sUserHome[0] != '\0') {
+			// PATH_MAX + slack: sUserHome is itself PATH_MAX, so the
+			// suffixes below would trip -Wformat-truncation otherwise.
+			char xdgPath[PATH_MAX + 32];
+			snprintf(xdgPath, sizeof(xdgPath), "%s/config/settings",
+				sUserHome);
+			setenv("XDG_CONFIG_HOME", xdgPath, 0);
+			snprintf(xdgPath, sizeof(xdgPath), "%s/config/data", sUserHome);
+			setenv("XDG_DATA_HOME", xdgPath, 0);
+			snprintf(xdgPath, sizeof(xdgPath), "%s/config/cache", sUserHome);
+			setenv("XDG_CACHE_HOME", xdgPath, 0);
+		}
+
 		if (sUserUid != (uid_t)-1) {
 			char runtimeDir[64];
 			snprintf(runtimeDir, sizeof(runtimeDir), "/run/user/%u",

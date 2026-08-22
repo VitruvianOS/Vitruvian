@@ -92,7 +92,7 @@ install(FILES "data/artwork/V_OS logo.png" DESTINATION "/system/data/artwork")
 # Profile, inputrc, and profile.d scripts for Terminal
 ImageIncludeFile("data/etc/profile" "/system/settings/etc")
 ImageIncludeFile("data/etc/inputrc" "/system/settings/etc")
-ImageIncludeDir("data/etc/profile.d" "/system/settings/etc/")
+ImageIncludeDir("data/etc/profile.d" "/system/data/")
 
 # Skel: copied into each user's ~/config by useradd -m.
 ImageIncludeFile("data/config/boot/UserBootscript" "/etc/skel/config/settings/boot")

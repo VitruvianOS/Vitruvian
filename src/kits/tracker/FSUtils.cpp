@@ -2752,23 +2752,36 @@ CalcItemsAndSize(CopyLoopControl* loopControl,
 
 
 // XDG Trash spec routing for the home volume.
-// Real trash lives at ~/.local/share/Trash/{files,info}. No filesystem
-// trickery on Desktop — the Trash icon is a synthetic pose injected by
-// BPoseView::CreateTrashPose, and Trash window content is aggregated
-// from every volume via BPoseView::AddTrashPoses (per the XDG spec,
-// each volume has its own trash; the UI unifies them).
+// Real trash lives at $XDG_DATA_HOME/Trash/{files,info}, defaulting to
+// ~/.local/share when that is unset. No filesystem trickery on Desktop —
+// the Trash icon is a synthetic pose injected by BPoseView::CreateTrashPose,
+// and Trash window content is aggregated from every volume via
+// BPoseView::AddTrashPoses (per the XDG spec, each volume has its own
+// trash; the UI unifies them).
 //
 // Other volumes (external mounts): <mount>/.Trash-<uid>/files/.
 
 static status_t
 _get_home_trash_dir(BDirectory* trashDir)
 {
-	const char* home = getenv("HOME");
-	if (home == NULL || home[0] != '/')
+	// The spec puts the home trash under $XDG_DATA_HOME, which janus points
+	// at $HOME/config/data. Fall back to the spec default when it is unset,
+	// so Tracker, trash(1) and gio all agree.
+	BPath dataHome;
+	const char* xdgDataHome = getenv("XDG_DATA_HOME");
+	if (xdgDataHome != NULL && xdgDataHome[0] == '/')
+		dataHome.SetTo(xdgDataHome);
+	else {
+		const char* home = getenv("HOME");
+		if (home == NULL || home[0] != '/')
+			return B_ENTRY_NOT_FOUND;
+		dataHome.SetTo(home, ".local/share");
+	}
+	if (dataHome.InitCheck() != B_OK)
 		return B_ENTRY_NOT_FOUND;
 
-	BPath filesDir(home, ".local/share/Trash/files");
-	BPath infoDir(home, ".local/share/Trash/info");
+	BPath filesDir(dataHome.Path(), "Trash/files");
+	BPath infoDir(dataHome.Path(), "Trash/info");
 
 	if (create_directory(filesDir.Path(), 0700) != B_OK)
 		return B_IO_ERROR;

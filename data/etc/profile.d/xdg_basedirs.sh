@@ -1,29 +1,30 @@
 #
-# Haiku setup for
+# Vitruvian setup for the
 # XDG Base Directory Specification
 #
 # http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html
+#
+# Sourced by /system/settings/etc/profile for login shells: Terminal, SSH, etc.
+
 
 # defaults to ~/.config
-export XDG_CONFIG_HOME="`finddir B_USER_SETTINGS_DIRECTORY`"
+_vos_dir="`finddir B_USER_SETTINGS_DIRECTORY 2>/dev/null`"
+[ -n "$_vos_dir" ] && export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$_vos_dir}"
 
 # defaults to ~/.local/share
-export XDG_DATA_HOME="`finddir B_USER_NONPACKAGED_DATA_DIRECTORY`"
-
-# defaults to /etc/xdg
-export XDG_CONFIG_DIRS="`finddir B_SYSTEM_SETTINGS_DIRECTORY`"
-# XXX: Should we add B_USER_ETC_DIRECTORY?
-
-# default to /usr/local/share/:/usr/share/
-export XDG_DATA_DIRS="`finddir B_SYSTEM_NONPACKAGED_DATA_DIRECTORY`:\
-`finddir B_SYSTEM_DATA_DIRECTORY`"
+_vos_dir="`finddir B_USER_DATA_DIRECTORY 2>/dev/null`"
+[ -n "$_vos_dir" ] && export XDG_DATA_HOME="${XDG_DATA_HOME:-$_vos_dir}"
 
 # defaults to ~/.cache
-export XDG_CACHE_HOME="`finddir B_USER_CACHE_DIRECTORY`"
+_vos_dir="`finddir B_USER_CACHE_DIRECTORY 2>/dev/null`"
+[ -n "$_vos_dir" ] && export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$_vos_dir}"
 
-# TODO:
-# This one is used for session stuff (sockets, pipes...)
-# It must be owned by the user, with permissions 0700.
-# It is supposed to be cleaned up on last log-out.
-# Apps will fall back to /tmp usually anyway.
-#export XDG_RUNTIME_DIR="`finddir B_USER_VAR_DIRECTORY`/tmp"
+# defaults to /etc/xdg
+_vos_dir="`finddir B_SYSTEM_SETTINGS_DIRECTORY 2>/dev/null`"
+[ -n "$_vos_dir" ] && export XDG_CONFIG_DIRS="${XDG_CONFIG_DIRS:-$_vos_dir:/etc/xdg}"
+
+# defaults to /usr/local/share/:/usr/share/
+_vos_dir="`finddir B_SYSTEM_DATA_DIRECTORY 2>/dev/null`"
+[ -n "$_vos_dir" ] && export XDG_DATA_DIRS="${XDG_DATA_DIRS:-$_vos_dir:/usr/local/share:/usr/share}"
+
+unset _vos_dir

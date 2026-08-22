@@ -225,6 +225,14 @@ _do_config() {
     rm -f "$TARGET/var/lib/dbus/machine-id"
     systemd-machine-id-setup --root="$TARGET"
 
+    # Create host keys
+    mkdir -p "$TARGET/etc/ssh"
+    ssh-keygen -A -f "$TARGET" || log "warn: ssh-keygen -A returned an error"
+    # ssh-keygen -A exits 0 even when every key write failed, so verify
+    if [ ! -f "$TARGET/etc/ssh/ssh_host_ed25519_key" ]; then
+        log "warn: no sshd host keys in $TARGET/etc/sshd sshd will not start"
+    fi
+
     _target_uuid="$(blkid -s UUID -o value "$_target_source" || true)"
     if [ -z "$_target_uuid" ]; then
         log "cannot resolve target UUID"

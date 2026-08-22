@@ -10,8 +10,8 @@ After=network.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# Install drops /etc/ssh/ssh_host_* (excludes.list), so the target has no host
-# keys and sshd refuses to start. Generate the missing ones first.
+# vos-install-helper generates host keys on the target at install time, so
+# this is a fallback for keys removed since
 ExecStartPre=/usr/bin/ssh-keygen -A
 ExecStart=/usr/bin/systemctl start ssh.service
 

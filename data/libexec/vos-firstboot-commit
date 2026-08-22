@@ -121,6 +121,18 @@ if [ -z "$hostname" ]; then
 fi
 printf '%s\n' "$hostname" > "$ROOT/etc/hostname"
 
+# Write the initial /etc/hosts 
+cat > "$ROOT/etc/hosts" <<HOSTSEOF
+127.0.0.1	localhost
+127.0.1.1	$hostname
+
+# The following lines are desirable for IPv6 capable hosts
+::1     localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+HOSTSEOF
+chmod 0644 "$ROOT/etc/hosts"
+
 case "$language" in
     en) locale="en_US.UTF-8" ;;
     fr) locale="fr_FR.UTF-8" ;;

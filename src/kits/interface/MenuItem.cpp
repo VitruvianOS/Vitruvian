@@ -17,7 +17,6 @@
 
 #include <algorithm>
 
-#include <Bitmap.h>
 #include <ControlLook.h>
 #include <MenuItem.h>
 #include <Shape.h>
@@ -766,37 +765,39 @@ BMenuItem::_DrawShortcutSymbol(bool submenus)
 	} else
 		fSuper->DrawChar(fShortcutChar, where + BPoint(0, ascent));
 
-	where.y += (fBounds.Height() - 11) / 2 - 1;
-	where.x -= 4;
+	// Center the caps on the shortcut text.
+	font_height fontHeight;
+	font.GetHeight(&fontHeight);
+	where.y += floorf((fontHeight.ascent + fontHeight.descent
+		- MenuPrivate::KeyCapHeight(fSuper)) / 2);
+	where.x -= ceilf(font.Size() / 3.0f);
 
-	// TODO: It would be nice to draw these taking into account the text (low)
-	// color.
 	if ((fModifiers & B_COMMAND_KEY) != 0) {
-		const BBitmap* command = MenuPrivate::MenuItemCommand();
-		const BRect &rect = command->Bounds();
-		where.x -= rect.Width() + 1;
-		fSuper->DrawBitmap(command, where);
+		const char* label = MenuPrivate::MenuItemCommand();
+		const float width = MenuPrivate::KeyCapWidth(fSuper, label);
+		where.x -= width + 1;
+		MenuPrivate::DrawKeyCap(fSuper, where, width, label);
 	}
 
 	if ((fModifiers & B_CONTROL_KEY) != 0) {
-		const BBitmap* control = MenuPrivate::MenuItemControl();
-		const BRect &rect = control->Bounds();
-		where.x -= rect.Width() + 1;
-		fSuper->DrawBitmap(control, where);
+		const char* label = MenuPrivate::MenuItemControl();
+		const float width = MenuPrivate::KeyCapWidth(fSuper, label);
+		where.x -= width + 1;
+		MenuPrivate::DrawKeyCap(fSuper, where, width, label);
 	}
 
 	if ((fModifiers & B_OPTION_KEY) != 0) {
-		const BBitmap* option = MenuPrivate::MenuItemOption();
-		const BRect &rect = option->Bounds();
-		where.x -= rect.Width() + 1;
-		fSuper->DrawBitmap(option, where);
+		const char* label = MenuPrivate::MenuItemOption();
+		const float width = MenuPrivate::KeyCapWidth(fSuper, label);
+		where.x -= width + 1;
+		MenuPrivate::DrawKeyCap(fSuper, where, width, label);
 	}
 
 	if ((fModifiers & B_SHIFT_KEY) != 0) {
-		const BBitmap* shift = MenuPrivate::MenuItemShift();
-		const BRect &rect = shift->Bounds();
-		where.x -= rect.Width() + 1;
-		fSuper->DrawBitmap(shift, where);
+		const char* label = MenuPrivate::MenuItemShift();
+		const float width = MenuPrivate::KeyCapWidth(fSuper, label);
+		where.x -= width + 1;
+		MenuPrivate::DrawKeyCap(fSuper, where, width, label);
 	}
 }
 

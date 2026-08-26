@@ -58,23 +58,18 @@ public:
 			void				QuitTracking(bool thisMenuOnly = true);
 			bool				HasSubmenus() { return fMenu->fHasSubmenus; }
 
-	static	status_t			CreateBitmaps();
-	static	void				DeleteBitmaps();
+	static	const char*			MenuItemShift();
+	static	const char*			MenuItemControl();
+	static	const char*			MenuItemOption();
+	static	const char*			MenuItemCommand();
 
-	static	const BBitmap*		MenuItemShift();
-	static	const BBitmap*		MenuItemControl();
-	static	const BBitmap*		MenuItemOption();
-	static	const BBitmap*		MenuItemCommand();
-	static	const BBitmap*		MenuItemMenu();
+	static	float				KeyCapWidth(BView* view, const char* label);
+	static	float				KeyCapHeight(BView* view);
+	static	void				DrawKeyCap(BView* view, BPoint leftTop,
+									float width, const char* label);
 
 private:
 			BMenu*				fMenu;
-
-	static	BBitmap*			sMenuItemShift;
-	static	BBitmap*			sMenuItemControl;
-	static	BBitmap*			sMenuItemOption;
-	static	BBitmap*			sMenuItemAlt;
-	static	BBitmap*			sMenuItemMenu;
 
 };
 

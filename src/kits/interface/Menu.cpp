@@ -2677,20 +2677,20 @@ BMenu::_ComputeColumnLayout(int32 index, bool bestFit, bool moveItems,
 
 	// Compute the extra space needed for shortcuts and submenus
 	if (command) {
-		frame.right
-			+= BPrivate::MenuPrivate::MenuItemCommand()->Bounds().Width() + 1;
+		frame.right += BPrivate::MenuPrivate::KeyCapWidth(this,
+			BPrivate::MenuPrivate::MenuItemCommand()) + 1;
 	}
 	if (control) {
-		frame.right
-			+= BPrivate::MenuPrivate::MenuItemControl()->Bounds().Width() + 1;
+		frame.right += BPrivate::MenuPrivate::KeyCapWidth(this,
+			BPrivate::MenuPrivate::MenuItemControl()) + 1;
 	}
 	if (option) {
-		frame.right
-			+= BPrivate::MenuPrivate::MenuItemOption()->Bounds().Width() + 1;
+		frame.right += BPrivate::MenuPrivate::KeyCapWidth(this,
+			BPrivate::MenuPrivate::MenuItemOption()) + 1;
 	}
 	if (shift) {
-		frame.right
-			+= BPrivate::MenuPrivate::MenuItemShift()->Bounds().Width() + 1;
+		frame.right += BPrivate::MenuPrivate::KeyCapWidth(this,
+			BPrivate::MenuPrivate::MenuItemShift()) + 1;
 	}
 	if (submenu) {
 		frame.right += ItemAt(0)->Frame().Height() / 2;

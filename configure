@@ -150,6 +150,24 @@ if [ -f ./CMakeCache.txt ]; then
         echo "Remove this generated directory and start fresh."
         exit 1
     fi
+
+    _cached_chroot="$(grep -m1 '^VITRUVIAN_CHROOT_BUILD:' ./CMakeCache.txt | cut -d= -f2)"
+    if [ -n "$_cached_chroot" ]; then
+        case "$_cached_chroot" in
+            ON|on|1|TRUE|true|YES|yes|Y|y) _cmake_chroot=1 ;;
+            *) _cmake_chroot=0 ;;
+        esac
+        if [ "$CHROOT_BUILD" -ne "$_cmake_chroot" ]; then
+            if [ "$CHROOT_BUILD" -eq 1 ]; then
+                echo "Error: build tree was configured as a host build, but --chroot-build was requested."
+            else
+                echo "Error: build tree was configured with --chroot-build, but that flag was not passed."
+            fi
+            echo "Chroot settings cannot be changed in place."
+            echo "Remove this generated directory and start again."
+            exit 1
+        fi
+    fi
 fi
 
 case "$TARGET_ARCH" in

@@ -84,6 +84,17 @@ load_buildstate() {
                 && [ "$(_canon_arch "$_cached_arch")" != "$(_canon_arch "$ARCH")" ]; then
             die "Arch mismatch: buildstate.conf says $ARCH but cmake was configured for $_cached_arch. Remove this generated directory and start fresh."
         fi
+
+        _cached_chroot="$(grep -m1 '^VITRUVIAN_CHROOT_BUILD:' "$BASEDIR/CMakeCache.txt" | cut -d= -f2)"
+        if [ -n "$_cached_chroot" ]; then
+            case "$_cached_chroot" in
+                ON|on|1|TRUE|true|YES|yes|Y|y) _cmake_chroot=1 ;;
+                *) _cmake_chroot=0 ;;
+            esac
+            if [ "${CHROOT_BUILD:-0}" -ne "$_cmake_chroot" ]; then
+                die "Chroot mismatch: buildstate.conf says CHROOT_BUILD=${CHROOT_BUILD:-0} but cmake was configured with VITRUVIAN_CHROOT_BUILD=$_cached_chroot. Remove this directory and start again."
+            fi
+        fi
     fi
 }
 
@@ -104,6 +115,7 @@ cmd_build() {
     _shared_folder=""
     _usb_disk=""
     _target_disk=""
+    _has_chroot=0
 
     for arg in "$@"; do
         case "$arg" in
@@ -161,6 +173,10 @@ cmd_build() {
         ARCH="$_arch"
     fi
 
+    if [ -d "$BASEDIR/image_tree/chroot" ]; then
+        _has_chroot=1
+    fi
+
     if [ -z "$_image_type" ]; then
         require_cmd ninja "ninja-build"
         if [ "$_regenerate" -eq 1 ]; then
@@ -202,6 +218,11 @@ cmd_build() {
         die "--run-qemu requires a single --image-type."
     fi
 
+    # Check for chroot at the beginning
+    if [ "$_has_chroot" -eq 0 ] && [ "$_regenerate" -eq 0 ]; then
+        die "Image build requires a chroot at $BASEDIR/image_tree/chroot. Reconfigure with --chroot-build, or pass --regenerate-chroot."
+    fi
+
     require_cmd ninja "ninja-build"
 
     if [ "$_regenerate" -eq 1 ]; then
@@ -216,17 +237,6 @@ cmd_build() {
     _sudo_keepalive_pid=$!
     trap 'kill "$_sudo_keepalive_pid" 2>/dev/null || true' EXIT INT TERM
 
-    require_cmd ninja "ninja-build"
-
-    if [ "$_regenerate" -eq 1 ]; then
-        chroot_regenerate "$BASEDIR" "$ARCH"
-        _has_chroot=1
-    fi
-
-    if ! sudo -v; then
-        die "sudo authentication required for image creation."
-    fi
-
     log_step "Running ninja build..."
     ninja
 
@@ -236,19 +246,15 @@ cmd_build() {
     for _t in $_types; do
         case "$_t" in
             raw)
-                [ "$_has_chroot" -eq 0 ] && die "Raw image requires a chroot. Run setupenv with --chroot-build first."
                 create_raw "$BASEDIR" "$ARCH"
                 ;;
             iso)
-                [ "$_has_chroot" -eq 0 ] && die "ISO image requires a chroot. Run setupenv with --chroot-build first."
                 create_iso "$BASEDIR" "$ARCH"
                 ;;
             raspberry|rpi-arm32)
-                [ "$_has_chroot" -eq 0 ] && die "Raspberry image requires a chroot. Run setupenv with --chroot-build first."
                 create_raspberry "$BASEDIR" "$_t"
                 ;;
             rockchip|allwinner|allwinner-h3|beagle|beaglebone|nxp|amlogic|visionfive2|licheerv)
-                [ "$_has_chroot" -eq 0 ] && die "Board image requires a chroot. Run setupenv with --chroot-build first."
                 create_uboot_board "$BASEDIR" "$_t"
                 ;;
         esac

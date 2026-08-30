@@ -259,7 +259,7 @@ if [ -e /etc/vos/live ]; then
             vos-live || true
         passwd -l vos-live 2>/dev/null || true
     fi
-    for _g in sudo video render input plugdev nexus; do
+    for _g in sudo audio video render input plugdev nexus; do
         getent group "$_g" >/dev/null \
             && adduser vos-live "$_g" >/dev/null 2>&1 || true
     done

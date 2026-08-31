@@ -59,6 +59,7 @@ Application(dstcheck       SOURCES dstcheck.cpp       LIBS localestub  RDEF dstc
 Application(hey            SOURCES hey.cpp             RDEF hey.rdef)
 Application(reindex        SOURCES reindex.cpp)
 Application(resattr        SOURCES resattr.cpp)
+Application(appstamp       SOURCES appstamp.cpp    LIBS ${PNG_LIBRARIES} INCLUDES ${PNG_INCLUDES})
 Application(screeninfo     SOURCES screeninfo.cpp)
 Application(setcontrollook SOURCES setcontrollook.cpp)
 Application(setdecor       SOURCES setdecor.cpp)

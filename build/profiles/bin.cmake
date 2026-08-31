@@ -1,5 +1,6 @@
 	set(BIN_DIRECTORY
 	addattr
+	appstamp
 	keystore
 	linkcatkeys
 	dumpcatalog

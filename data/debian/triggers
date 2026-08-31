@@ -1,0 +1,4 @@
+# Restamp Deskbar icons/names whenever a package adds or removes a .desktop
+# entry. noawait: do not hold up the package that caused the change — the
+# postinst `triggered` branch runs appstamp --all asynchronously afterwards.
+interest-noawait /usr/share/applications

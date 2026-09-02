@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 
 project(VOS VERSION 0.6.1 LANGUAGES CXX C)
 
+#   ln -s generated.amd64/compile_commands.json compile_commands.json
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # TODO shouldn't we resolve an absolute path here? it kind of works
 # only if buildtools is in the project source dir, which...we don't
 # really want to constrain.

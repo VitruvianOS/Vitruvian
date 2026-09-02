@@ -94,6 +94,67 @@ BControlLook::ShouldDraw(BView* view, const BRect& rect, const BRect& updateRect
 }
 
 
+// Returns the corners of a triangle inscribed in rect, pointing in the given
+// direction, with points[1] as the apex of the triangle.
+void
+BControlLook::GetArrowShape(BRect rect, uint32 direction, BPoint points[3])
+{
+	const float centerX = (rect.left + rect.right) / 2;
+	const float centerY = (rect.top + rect.bottom) / 2;
+
+	switch (direction) {
+		case B_LEFT_ARROW:
+			points[0].Set(rect.right, rect.top);
+			points[1].Set(rect.left, centerY);
+			points[2].Set(rect.right, rect.bottom);
+			break;
+
+		case B_RIGHT_ARROW:
+			points[0].Set(rect.left, rect.top);
+			points[1].Set(rect.right, centerY);
+			points[2].Set(rect.left, rect.bottom);
+			break;
+
+		case B_UP_ARROW:
+			points[0].Set(rect.left, rect.bottom);
+			points[1].Set(centerX, rect.top);
+			points[2].Set(rect.right, rect.bottom);
+			break;
+
+		case B_DOWN_ARROW:
+		default:
+			points[0].Set(rect.left, rect.top);
+			points[1].Set(centerX, rect.bottom);
+			points[2].Set(rect.right, rect.top);
+			break;
+
+		case B_LEFT_UP_ARROW:
+			points[0].Set(rect.left, rect.bottom);
+			points[1].Set(rect.left, rect.top);
+			points[2].Set(rect.right, rect.top);
+			break;
+
+		case B_RIGHT_UP_ARROW:
+			points[0].Set(rect.left, rect.top);
+			points[1].Set(rect.right, rect.top);
+			points[2].Set(rect.right, rect.bottom);
+			break;
+
+		case B_RIGHT_DOWN_ARROW:
+			points[0].Set(rect.right, rect.top);
+			points[1].Set(rect.right, rect.bottom);
+			points[2].Set(rect.left, rect.bottom);
+			break;
+
+		case B_LEFT_DOWN_ARROW:
+			points[0].Set(rect.right, rect.bottom);
+			points[1].Set(rect.left, rect.bottom);
+			points[2].Set(rect.left, rect.top);
+			break;
+	}
+}
+
+
 void
 BControlLook::DrawLabel(BView* view, const char* label, const BBitmap* icon,
 	BRect rect, const BRect& updateRect, const rgb_color& base, uint32 flags,

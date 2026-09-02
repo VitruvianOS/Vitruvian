@@ -20,6 +20,7 @@
 #include <Bitmap.h>
 #include <ControlLook.h>
 #include <Errors.h>
+#include <Font.h>
 #include <LayoutUtils.h>
 #include <Message.h>
 #include <Region.h>
@@ -31,6 +32,25 @@
 
 #define USE_OFF_SCREEN_VIEW 0
 
+
+//	The default font size is 12, so everything should scale realtive to that.
+static float
+scaled(float value)
+{
+	return ceilf(value * std::max(1.0f, be_plain_font->Size() / 12.0f));
+}
+
+static float
+thumb_inset(thumb_style style)
+{
+	return style == B_BLOCK_THUMB ? scaled(8.0) : scaled(7.0);
+}
+
+static float
+thumb_length(thumb_style style)
+{
+	return style == B_BLOCK_THUMB ? scaled(17.0) : scaled(12.0);
+}
 
 BSlider::BSlider(
 	BRect frame, const char* name, const char* label, BMessage* message,
@@ -219,7 +239,6 @@ BSlider::_InitBarColor()
 {
 	SetBarColor(be_control_look->SliderBarColor(
 		ui_color(B_PANEL_BACKGROUND_COLOR)));
-	fFillColor = BarColor();
 	UseFillColor(false, NULL);
 }
 
@@ -1039,12 +1058,13 @@ BSlider::UpdateTextChanged()
 	if (fUpdateText != NULL)
 		oldWidth = StringWidth(fUpdateText);
 
-	const char* oldUpdateText = fUpdateText;
+	bool hadUpdateText = fUpdateText != NULL;
 	free(fUpdateText);
 
-	fUpdateText = strdup(UpdateText());
-	bool updateTextOnOff = (fUpdateText == NULL && oldUpdateText != NULL)
-		|| (fUpdateText != NULL && oldUpdateText == NULL);
+	const char* updateText = UpdateText();
+	fUpdateText = updateText != NULL ? strdup(updateText) : NULL;
+
+	bool updateTextOnOff = (bool)fUpdateText ^ hadUpdateText;
 
 	float newWidth = 0.0;
 	if (fUpdateText != NULL)
@@ -1091,19 +1111,18 @@ BSlider::BarFrame() const
 	float textHeight = ceilf(fontHeight.ascent) + ceilf(fontHeight.descent);
 	float leading = ceilf(fontHeight.leading);
 
-	float thumbInset;
-	if (fStyle == B_BLOCK_THUMB)
-		thumbInset = 8.0;
-	else
-		thumbInset = 7.0;
+	const float thumbInset = thumb_inset(fStyle);
+
+	const float barThickness = scaled(fBarThickness);
 
 	if (Orientation() == B_HORIZONTAL) {
 		frame.left = thumbInset;
-		frame.top = 6.0 + (Label() || fUpdateText ? textHeight + 4.0 : 0.0);
+		frame.top = scaled(6.0)
+			+ (Label() || fUpdateText ? textHeight + scaled(4.0) : 0.0);
 		frame.right -= thumbInset;
-		frame.bottom = frame.top + fBarThickness;
+		frame.bottom = frame.top + barThickness;
 	} else {
-		frame.left = floorf((frame.Width() - fBarThickness) / 2.0);
+		frame.left = floorf((frame.Width() - barThickness) / 2.0);
 		frame.top = thumbInset;
 		if (Label() != NULL)
 			frame.top += textHeight;
@@ -1114,7 +1133,7 @@ BSlider::BarFrame() const
 				frame.top += leading;
 		}
 
-		frame.right = frame.left + fBarThickness;
+		frame.right = frame.left + barThickness;
 		frame.bottom = frame.bottom - thumbInset;
 		if (fMinLimitLabel != NULL)
 			frame.bottom -= textHeight;
@@ -1136,11 +1155,11 @@ BSlider::HashMarksFrame() const
 	BRect frame(BarFrame());
 
 	if (fOrientation == B_HORIZONTAL) {
-		frame.top -= 6.0;
-		frame.bottom += 6.0;
+		frame.top -= scaled(6.0);
+		frame.bottom += scaled(6.0);
 	} else {
-		frame.left -= 6.0;
-		frame.right += 6.0;
+		frame.left -= scaled(6.0);
+		frame.right += scaled(6.0);
 	}
 
 	return frame;
@@ -1150,44 +1169,38 @@ BSlider::HashMarksFrame() const
 BRect
 BSlider::ThumbFrame() const
 {
-	// TODO: The slider looks really ugly and broken when it is too little.
-	// I would suggest using BarFrame() here to get the top and bottom coords
-	// and spread them further apart for the thumb
+	// Everything here is relative to the bar, so that the math is clearer.
+	const BRect bar = BarFrame();
+	BRect frame = bar;
 
-	BRect frame = Bounds();
-
-	font_height fontHeight;
-	GetFontHeight(&fontHeight);
-
-	float textHeight = ceilf(fontHeight.ascent) + ceilf(fontHeight.descent);
+	const float position = floorf(Position()
+		* (_MaxPosition() - _MinPosition()) + _MinPosition());
 
 	if (fStyle == B_BLOCK_THUMB) {
+		// the block straddles the bar, overhanging it on both sides
 		if (Orientation() == B_HORIZONTAL) {
-			frame.left = floorf(Position() * (_MaxPosition()
-				- _MinPosition()) + _MinPosition()) - 8;
-			frame.top = 2 + (Label() || fUpdateText ? textHeight + 4 : 0);
-			frame.right = frame.left + 17;
-			frame.bottom = frame.top + fBarThickness + 7;
+			frame.top = bar.top - scaled(4);
+			frame.bottom = bar.bottom + scaled(3);
+			frame.left = position - scaled(8);
+			frame.right = frame.left + thumb_length(fStyle);
 		} else {
-			frame.left = floor((frame.Width() - fBarThickness) / 2) - 4;
-			frame.top = floorf(Position() * (_MaxPosition()
-				- _MinPosition()) + _MinPosition()) - 8;
-			frame.right = frame.left + fBarThickness + 7;
-			frame.bottom = frame.top + 17;
+			frame.left = bar.left - scaled(4);
+			frame.right = bar.right + scaled(3);
+			frame.top = position - scaled(8);
+			frame.bottom = frame.top + thumb_length(fStyle);
 		}
 	} else {
+		// the triangle hangs off the far edge of the bar
 		if (Orientation() == B_HORIZONTAL) {
-			frame.left = floorf(Position() * (_MaxPosition()
-				- _MinPosition()) + _MinPosition()) - 6;
-			frame.right = frame.left + 12;
-			frame.top = 3 + fBarThickness + (Label() ? textHeight + 4 : 0);
-			frame.bottom = frame.top + 8;
+			frame.top = bar.bottom - scaled(3);
+			frame.bottom = frame.top + scaled(8);
+			frame.left = position - scaled(6);
+			frame.right = frame.left + thumb_length(fStyle);
 		} else {
-			frame.left = floorf((frame.Width() + fBarThickness) / 2) - 3;
-			frame.top = floorf(Position() * (_MaxPosition()
-				- _MinPosition())) + _MinPosition() - 6;
-			frame.right = frame.left + 8;
-			frame.bottom = frame.top + 12;
+			frame.left = bar.right - scaled(3);
+			frame.right = frame.left + scaled(8);
+			frame.top = position - scaled(6);
+			frame.bottom = frame.top + thumb_length(fStyle);
 		}
 	}
 
@@ -1661,8 +1674,12 @@ BSlider::_ValidateMinSize()
 	if (fMaxUpdateTextWidth < 0.0f)
 		fMaxUpdateTextWidth = MaxUpdateTextWidth();
 
+	// minAlongAxis has to be big enough to hold both bar insets
+	const float minAlongAxis = 2 * thumb_inset(fStyle)
+		+ 2 * thumb_length(fStyle);
+
 	if (Orientation() == B_HORIZONTAL) {
-		height = 12.0f + fBarThickness;
+		height = scaled(12.0f + fBarThickness);
 		int32 rows = 0;
 
 		float labelWidth = 0;
@@ -1695,18 +1712,18 @@ BSlider::_ValidateMinSize()
 		if (labelWidth > width)
 			width = labelWidth;
 
-		if (width < 32.0f)
-			width = 32.0f;
+		if (width < minAlongAxis)
+			width = minAlongAxis;
 
 		if (MinLimitLabel() || MaxLimitLabel())
 			rows++;
 
 		height += rows * (ceilf(fontHeight.ascent)
-			+ ceilf(fontHeight.descent) + 4.0);
+			+ ceilf(fontHeight.descent) + scaled(4.0));
 	} else {
 		// B_VERTICAL
-		width = 12.0f + fBarThickness;
-		height = 32.0f;
+		width = scaled(12.0f + fBarThickness);
+		height = minAlongAxis;
 
 		float lineHeightNoLeading = ceilf(fontHeight.ascent)
 			+ ceilf(fontHeight.descent);

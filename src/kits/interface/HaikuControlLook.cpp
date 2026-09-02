@@ -370,7 +370,7 @@ HaikuControlLook::DrawStatusBar(BView* view, BRect& rect, const BRect& updateRec
 	if (!ShouldDraw(view, rect, updateRect))
 		return;
 
-	_DrawOuterResessedFrame(view, rect, base, 0.6);
+	_DrawOuterResessedFrame(view, rect, tint_color(base, 0.6));
 
 	// colors
 	rgb_color dark1BorderColor = tint_color(base, 1.3);
@@ -464,6 +464,7 @@ HaikuControlLook::DrawCheckBox(BView* view, BRect& rect, const BRect& updateRect
 
 	rgb_color markColor;
 	if (_RadioButtonAndCheckBoxMarkColor(base, markColor, flags)) {
+		view->PushState();
 		view->SetHighColor(markColor);
 
 		BFont font;
@@ -491,6 +492,7 @@ HaikuControlLook::DrawCheckBox(BView* view, BRect& rect, const BRect& updateRect
 			view->StrokeLine(rect.LeftTop(), rect.RightBottom());
 			view->StrokeLine(rect.LeftBottom(), rect.RightTop());
 		}
+		view->PopState();
 	}
 }
 
@@ -1557,6 +1559,10 @@ HaikuControlLook::DrawSliderHashMarks(BView* view, BRect& rect,
 		startPos = rect.top + 1;
 	}
 
+	// scale the mark lengths from the default font size
+	const float markLength = ceilf(4 * std::max(1.0f,
+		be_plain_font->Size() / 12.0f));
+
 	if (location & B_HASH_MARKS_TOP) {
 		view->BeginLineArray(hashMarkCount * 2);
 
@@ -1564,9 +1570,9 @@ HaikuControlLook::DrawSliderHashMarks(BView* view, BRect& rect,
 			float pos = startPos;
 			for (int32 i = 0; i < hashMarkCount; i++) {
 				view->AddLine(BPoint(pos, rect.top),
-							  BPoint(pos, rect.top + 4), darkColor);
+							  BPoint(pos, rect.top + markLength), darkColor);
 				view->AddLine(BPoint(pos + 1, rect.top),
-							  BPoint(pos + 1, rect.top + 4), lightColor);
+							  BPoint(pos + 1, rect.top + markLength), lightColor);
 
 				pos += factor;
 			}
@@ -1574,9 +1580,9 @@ HaikuControlLook::DrawSliderHashMarks(BView* view, BRect& rect,
 			float pos = startPos;
 			for (int32 i = 0; i < hashMarkCount; i++) {
 				view->AddLine(BPoint(rect.left, pos),
-							  BPoint(rect.left + 4, pos), darkColor);
+							  BPoint(rect.left + markLength, pos), darkColor);
 				view->AddLine(BPoint(rect.left, pos + 1),
-							  BPoint(rect.left + 4, pos + 1), lightColor);
+							  BPoint(rect.left + markLength, pos + 1), lightColor);
 
 				pos += factor;
 			}
@@ -1591,9 +1597,9 @@ HaikuControlLook::DrawSliderHashMarks(BView* view, BRect& rect,
 		if (orientation == B_HORIZONTAL) {
 			float pos = startPos;
 			for (int32 i = 0; i < hashMarkCount; i++) {
-				view->AddLine(BPoint(pos, rect.bottom - 4),
+				view->AddLine(BPoint(pos, rect.bottom - markLength),
 							  BPoint(pos, rect.bottom), darkColor);
-				view->AddLine(BPoint(pos + 1, rect.bottom - 4),
+				view->AddLine(BPoint(pos + 1, rect.bottom - markLength),
 							  BPoint(pos + 1, rect.bottom), lightColor);
 
 				pos += factor;
@@ -1601,9 +1607,9 @@ HaikuControlLook::DrawSliderHashMarks(BView* view, BRect& rect,
 		} else {
 			float pos = startPos;
 			for (int32 i = 0; i < hashMarkCount; i++) {
-				view->AddLine(BPoint(rect.right - 4, pos),
+				view->AddLine(BPoint(rect.right - markLength, pos),
 							  BPoint(rect.right, pos), darkColor);
-				view->AddLine(BPoint(rect.right - 4, pos + 1),
+				view->AddLine(BPoint(rect.right - markLength, pos + 1),
 							  BPoint(rect.right, pos + 1), lightColor);
 
 				pos += factor;

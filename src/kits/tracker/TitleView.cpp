@@ -49,6 +49,7 @@ All rights reserved.
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/param.h>
 
 #include "Commands.h"
 #include "ContainerWindow.h"
@@ -62,6 +63,9 @@ All rights reserved.
 static const float kMinFontSize = 8.0f;
 static const float kMinTitleHeight = 13.0f;
 static const float kTitleSpacing = 1.4f;
+static const float kSortArrowScale = 0.6f;
+// gap between the arrow and the title text
+static const float kSortArrowGap = 2.5f;
 
 
 static void
@@ -528,18 +532,21 @@ BColumnTitle::Draw(BView* view, bool pressed)
 	if (secondary
 		|| (fColumn->AttrHash() == fParent->PoseView()->PrimarySort())) {
 
-		BPoint center(titleLocation.x - 6,
+		BFont font;
+		view->GetFont(&font);
+
+		// The arrow is drawn in the left margin, so it can only grow
+		// until it fills it.
+		const float wanted = floorf(font.Size() * kSortArrowScale);
+		const float room = kTitleColumnLeftExtraMargin - kSortArrowGap;
+		const float arrowWidth = wanted < room ? wanted : room;
+
+		BPoint center(titleLocation.x - arrowWidth / 2 - kSortArrowGap,
 			roundf((bounds.top + bounds.bottom) / 2.0));
 		BPoint triangle[3];
-		if (fParent->PoseView()->ReverseSort()) {
-			triangle[0] = center + BPoint(-3.5, 1.5);
-			triangle[1] = center + BPoint(3.5, 1.5);
-			triangle[2] = center + BPoint(0.0, -2.0);
-		} else {
-			triangle[0] = center + BPoint(-3.5, -1.5);
-			triangle[1] = center + BPoint(3.5, -1.5);
-			triangle[2] = center + BPoint(0.0, 2.0);
-		}
+		BControlLook::GetArrowShape(center, BSize(arrowWidth, arrowWidth / 2),
+			fParent->PoseView()->ReverseSort() ? BControlLook::B_UP_ARROW
+				: BControlLook::B_DOWN_ARROW, triangle);
 
 		uint32 flags = view->Flags();
 		view->SetFlags(flags | B_SUBPIXEL_PRECISE);

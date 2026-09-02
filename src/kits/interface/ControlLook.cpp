@@ -94,6 +94,17 @@ BControlLook::ShouldDraw(BView* view, const BRect& rect, const BRect& updateRect
 }
 
 
+// Centered variant, for an arrow of the given size sitting on a point.
+void
+BControlLook::GetArrowShape(BPoint center, BSize size, uint32 direction,
+	BPoint points[3])
+{
+	GetArrowShape(BRect(center.x - size.width / 2, center.y - size.height / 2,
+		center.x + size.width / 2, center.y + size.height / 2), direction,
+		points);
+}
+
+
 // Returns the corners of a triangle inscribed in rect, pointing in the given
 // direction, with points[1] as the apex of the triangle.
 void

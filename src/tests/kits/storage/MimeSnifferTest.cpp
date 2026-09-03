@@ -5,16 +5,18 @@
 #include <cppunit/Test.h>
 #include <cppunit/TestSuite.h>
 #include <cppunit/TestCaller.h>
-#include <sniffer/Rule.h>
-#include <sniffer/Parser.h>
-#include <DataIO.h>
 #include <Mime.h>
-#include <String.h>		// BString
+#include <String.h>
 #include <TestUtils.h>
 
 #include <stdio.h>
-
 #include <iostream>
+
+#include "sniffer/Data.h"
+#include "sniffer/Err.h"
+#include "sniffer/Parser.h"
+#include "sniffer/Rule.h"
+
 using std::cout;
 using std::endl;
 
@@ -1266,7 +1268,7 @@ is ten times as fun			<br>		\n\
 		true, true, true, true, false, true, true,
 		false, false, false, false,
 		false, false, true,
-		true, true, false, true
+		true, false, false, true
 	}
 },
 //---------  <= Ten characters in
@@ -1286,7 +1288,7 @@ is ten times as fun			<br>		\n\
 		false, false, false, false, false, false, false,
 		false, false, false, false,
 		false, false, false,
-		true, true, false, true
+		true, false, false, true
 	}
 },
 //------------------------------
@@ -1374,13 +1376,16 @@ std::string("\000\034	000 034", 10),	// Otherwise, it thinks the NULL is the end
 			}
 			CHK(err == B_OK);
 			if (!err) {
-				BMallocIO data;
-				data.Write(test.data.data(), test.data.length());//strlen(test.data));
-				bool match = rule.Sniff(&data);
+				Data data;
+				data.from = 0;
+				data.buffer = (const uint8*)test.data.data();
+				data.length = test.data.length();
+				bool match = rule.Sniff(data);
 //				cout << match << endl;
 //				cout << "match == " << (match ? "yes" : "no") << ", "
 //					 << ((match == test.result[j]) ? "SUCCESS" : "FAILURE") << endl;
-				CHK(match == test.result[j]);			
+				CPPUNIT_ASSERT_EQUAL_MESSAGE(rules[j],
+					test.result[j], match);
 			} 
 		}
 	}

@@ -213,6 +213,7 @@ BDeskWindow::BDeskWindow(LockingList<BWindow>* windowList, uint32 openFlags)
 			| B_NOT_MINIMIZABLE | B_NOT_RESIZABLE | B_ASYNCHRONOUS_CONTROLS,
 		B_ALL_WORKSPACES, false),
 	fDeskShelf(NULL),
+	fNodeRef(NULL),
 	fShortcutsSettings(NULL)
 {
 	// create pose view
@@ -359,8 +360,10 @@ BDeskWindow::ApplyShortcutPreferences(bool update)
 	BMessage fileMsg;
 	if (shortcutSettings.InitCheck() != B_OK
 		|| fileMsg.Unflatten(&shortcutSettings) != B_OK) {
+		fNodeRef = NULL;
 		return;
 	}
+	shortcutSettings.GetNodeRef(fNodeRef);
 
 	int32 i = 0;
 	BMessage message;
@@ -580,11 +583,16 @@ BDeskWindow::MessageReceived(BMessage* message)
 		case B_PATH_MONITOR:
 		{
 			const char* path = "";
-			if (message->FindString("watched_path", &path) == B_OK
-					&& strcmp(path, fShortcutsSettings) == 0) {
-				ApplyShortcutPreferences(true);
-			}
+			if (!(message->FindString("watched_path", &path) == B_OK
+					&& strcmp(path, fShortcutsSettings) == 0)) {
 
+				node_ref node;
+				if (fNodeRef == NULL
+					|| message->FindNodeRef("virtual:node", &node) != B_OK
+					|| node != *fNodeRef)
+					break;
+			}
+			ApplyShortcutPreferences(true);
 			break;
 		}
 		case B_NODE_MONITOR:

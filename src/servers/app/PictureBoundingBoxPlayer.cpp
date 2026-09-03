@@ -157,8 +157,7 @@ public:
 	virtual void DrawEllipse(const BRect& rect, bool fill);
 	virtual void DrawPolygon(size_t numPoints, const BPoint points[], bool isClosed, bool fill);
 	virtual void DrawShape(const BShape& shape, bool fill);
-	virtual void DrawString(const char* string, size_t length, float spaceEscapement,
-		float nonSpaceEscapement);
+	virtual void DrawString(const char* string, size_t length, const escapement_delta& delta);
 	virtual void DrawPixels(const BRect& source, const BRect& destination, uint32 width,
 		uint32 height, size_t bytesPerRow, color_space pixelFormat, uint32 flags, const void* data,
 		size_t length);
@@ -178,7 +177,7 @@ public:
 	virtual void SetPenSize(float size);
 	virtual void SetForeColor(const rgb_color& color);
 	virtual void SetBackColor(const rgb_color& color);
-	virtual void SetStipplePattern(const pattern& patter);
+	virtual void SetStipplePattern(const pattern& pattern);
 	virtual void SetScale(float scale);
 	virtual void SetFontFamily(const char* familyName, size_t length);
 	virtual void SetFontStyle(const char* styleName, size_t length);
@@ -445,13 +444,12 @@ BoundingBoxCallbacks::DrawShape(const BShape& shape, bool fill)
 
 void
 BoundingBoxCallbacks::DrawString(const char* string, size_t length,
-	float deltaSpace, float deltaNonSpace)
+	const escapement_delta& delta)
 {
 	TRACE_BB("%p string '%s'\n", fState, string);
 
 	ServerFont font = fState->GetDrawState()->Font();
 
-	escapement_delta delta = { deltaSpace, deltaNonSpace };
 	BRect rect;
 	font.GetBoundingBoxesForStrings((char**)&string, &length, 1, &rect,
 		B_SCREEN_METRIC, &delta);
@@ -494,7 +492,7 @@ BoundingBoxCallbacks::DrawPicture(const BPoint& where, int32 token)
 void
 BoundingBoxCallbacks::SetClippingRects(size_t numRects, const clipping_rect rects[])
 {
-	TRACE_BB("%p cliping rects (%ld rects)\n", fState, numRects);
+	TRACE_BB("%p clipping rects (%ld rects)\n", fState, numRects);
 
 	// TODO
 	(void)rects;

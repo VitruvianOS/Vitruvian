@@ -231,7 +231,7 @@ struct BilinearDefault :
 
 	void DrawToClipRect(int32 xIndexL, int32 xIndexR, int32 y1, int32 y2)
 	{
-		// In this mode we anticipate many pixels wich need filtering,
+		// In this mode we anticipate many pixels which need filtering,
 		// there are no special cases for direct hit pixels except for
 		// the last column/row and the right/bottom corner pixel.
 
@@ -310,7 +310,8 @@ struct BilinearDefault :
 		// pixel in bottom right corner if necessary
 		if (yMax < y2 && xIndexMax < xIndexR) {
 			const uint8* s = src + this->fWeightsX[xIndexR].index;
-			*(uint32*)d = *(uint32*)s;
+			uint32 t[4] = {s[0], s[1], s[2], s[3]};
+			DrawMode::Blend(d, &t[0]);
 		}
 	}
 };

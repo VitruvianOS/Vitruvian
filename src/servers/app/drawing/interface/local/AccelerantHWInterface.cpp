@@ -634,7 +634,7 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 
 	_UpdateHooksAfterModeChange();
 
-	// update backbuffer if neccessary
+	// update backbuffer if necessary
 	if (!fBackBuffer.IsSet()
 		|| fBackBuffer->Width() != fFrontBuffer->Width()
 		|| fBackBuffer->Height() != fFrontBuffer->Height()
@@ -728,14 +728,6 @@ AccelerantHWInterface::GetDeviceInfo(accelerant_device_info* info)
 	}
 
 	return GetAccelerantDeviceInfo(info);
-}
-
-
-status_t
-AccelerantHWInterface::GetFrameBufferConfig(frame_buffer_config& config)
-{
-	config = fFrameBufferConfig;
-	return B_OK;
 }
 
 
@@ -1246,14 +1238,16 @@ AccelerantHWInterface::SetCursor(ServerCursor* cursor)
 		uint16 xHotSpot = (uint16)cursor->GetHotSpot().x;
 		uint16 yHotSpot = (uint16)cursor->GetHotSpot().y;
 
-		uint16 width = (uint16)cursor->Bounds().Width();
-		uint16 height = (uint16)cursor->Bounds().Height();
+		uint16 width = (uint16)cursor->Width();
+		uint16 height = (uint16)cursor->Height();
 
 		// Time to talk to the accelerant!
 		cursorSet = fAccSetCursorBitmap(width, height, xHotSpot,
 			yHotSpot, cursor->ColorSpace(), (uint16)cursor->BytesPerRow(),
 			cursor->Bits()) == B_OK;
-	} else if (cursor->CursorData() != NULL && fAccSetCursorShape != NULL) {
+	}
+
+	if (!cursorSet && cursor->CursorData() != NULL && fAccSetCursorShape != NULL) {
 		// BeOS BCursor, 16x16 monochrome
 		uint8 size = cursor->CursorData()[0];
 		// CursorData()[1] is color depth (always monochrome)
@@ -1429,8 +1423,8 @@ AccelerantHWInterface::_RegionToRectParams(/*const*/ BRegion* region,
 uint32
 AccelerantHWInterface::_NativeColor(const rgb_color& color) const
 {
-	// NOTE: This functions looks somehow suspicios to me.
-	// It assumes that all graphics cards have the same native endianess, no?
+	// NOTE: This functions looks somehow suspicious to me.
+	// It assumes that all graphics cards have the same native endianness, no?
 	switch (fDisplayMode.space) {
 		case B_CMAP8:
 		case B_GRAY8:

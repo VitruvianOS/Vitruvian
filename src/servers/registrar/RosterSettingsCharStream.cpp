@@ -9,9 +9,7 @@
 
 #include "RosterSettingsCharStream.h"
 
-#include <sniffer/Err.h>
 #include <StorageDefs.h>
-
 #include <stdio.h>
 
 #include "Debug.h"
@@ -25,19 +23,17 @@ const status_t RosterSettingsCharStream::kComment;
 const status_t RosterSettingsCharStream::kUnexpectedState;
 const status_t RosterSettingsCharStream::kStringTooLong;
 
-using namespace BPrivate::Storage::Sniffer;
 
-
-RosterSettingsCharStream::RosterSettingsCharStream(const std::string &string)
+RosterSettingsCharStream::RosterSettingsCharStream(const BString& string)
 	:
-	CharStream(string)
+	BPrivate::CharStream(string)
 {
 }
 
 
 RosterSettingsCharStream::RosterSettingsCharStream()
 	:
-	CharStream()
+	BPrivate::CharStream(BString())
 {
 }
 
@@ -59,7 +55,7 @@ RosterSettingsCharStream::~RosterSettingsCharStream()
 	  signatures, integers, or Recent{Doc,Folder,App}, this does not
 	  currently pose a problem.
 	- Quotes are " or '
-	- An unquoted string begins with any character execept whitespace
+	- An unquoted string begins with any character except whitespace
 	  or a quote and continues until a whitespace character, newline,
 	  or comment is encountered. Whitespace may be included in the
 	  unquoted string if each whitespace character is escaped with a
@@ -86,9 +82,7 @@ status_t
 RosterSettingsCharStream::GetString(char *result)
 {
 	status_t error = result ? B_OK : B_BAD_VALUE;
-	if (!error)
-		error = InitCheck();
-	if (error)
+	if (error != B_OK)
 		return error;
 
 	enum RosterSettingsScannerState {
@@ -271,7 +265,7 @@ RosterSettingsCharStream::GetString(char *result)
 
 	// Read past any comments
 	if (error == kComment) {
-		// Read to the end of the line. If a valid read still occured,
+		// Read to the end of the line. If a valid read still occurred,
 		// leave the newline in the stream for next time.
 		char ch;
 		while (true) {

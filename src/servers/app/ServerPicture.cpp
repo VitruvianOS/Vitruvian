@@ -239,7 +239,7 @@ ShapePainter::Draw(BRect frame, bool filled)
 
 class CanvasCallbacks: public BPrivate::PicturePlayerCallbacks {
 public:
-	CanvasCallbacks(Canvas* const canvas);
+	CanvasCallbacks(Canvas* const canvas, BObjectList<ServerPicture>& pictures);
 
 	virtual void MovePenBy(const BPoint& where);
 	virtual void StrokeLine(const BPoint& start, const BPoint& end);
@@ -251,8 +251,7 @@ public:
 	virtual void DrawEllipse(const BRect& rect, bool fill);
 	virtual void DrawPolygon(size_t numPoints, const BPoint points[], bool isClosed, bool fill);
 	virtual void DrawShape(const BShape& shape, bool fill);
-	virtual void DrawString(const char* string, size_t length, float spaceEscapement,
-		float nonSpaceEscapement);
+	virtual void DrawString(const char* string, size_t length, const escapement_delta& delta);
 	virtual void DrawPixels(const BRect& source, const BRect& destination, uint32 width,
 		uint32 height, size_t bytesPerRow, color_space pixelFormat, uint32 flags, const void* data,
 		size_t length);
@@ -272,7 +271,7 @@ public:
 	virtual void SetPenSize(float size);
 	virtual void SetForeColor(const rgb_color& color);
 	virtual void SetBackColor(const rgb_color& color);
-	virtual void SetStipplePattern(const pattern& patter);
+	virtual void SetStipplePattern(const pattern& pattern);
 	virtual void SetScale(float scale);
 	virtual void SetFontFamily(const char* familyName, size_t length);
 	virtual void SetFontStyle(const char* styleName, size_t length);
@@ -309,12 +308,14 @@ public:
 
 private:
 	Canvas* const fCanvas;
+	BObjectList<ServerPicture>& fPictures;
 };
 
 
-CanvasCallbacks::CanvasCallbacks(Canvas* const canvas)
+CanvasCallbacks::CanvasCallbacks(Canvas* const canvas, BObjectList<ServerPicture>& pictures)
 	:
-	fCanvas(canvas)
+	fCanvas(canvas),
+	fPictures(pictures)
 {
 }
 
@@ -587,18 +588,16 @@ CanvasCallbacks::StrokeLineGradient(const BPoint& _start, const BPoint& _end,
 
 
 void
-CanvasCallbacks::DrawString(const char* string, size_t length, float deltaSpace,
-	float deltaNonSpace)
+CanvasCallbacks::DrawString(const char* string, size_t length, const escapement_delta& delta)
 {
 	// NOTE: the picture data was recorded with a "set pen location"
 	// command inserted before the "draw string" command, so we can
 	// use PenLocation()
 	BPoint location = fCanvas->CurrentState()->PenLocation();
 
-	escapement_delta delta = { deltaSpace, deltaNonSpace };
 	fCanvas->PenToScreenTransform().Apply(&location);
 	location = fCanvas->GetDrawingEngine()->DrawString(string, length,
-		location, &delta);
+		location, const_cast<escapement_delta*>(&delta));
 
 	fCanvas->PenToScreenTransform().Apply(&location);
 	fCanvas->CurrentState()->SetPenLocation(location);
@@ -655,7 +654,7 @@ CanvasCallbacks::DrawPixels(const BRect& src, const BRect& _dest, uint32 width,
 void
 CanvasCallbacks::DrawPicture(const BPoint& where, int32 token)
 {
-	BReference<ServerPicture> picture(fCanvas->GetPicture(token), true);
+	BReference<ServerPicture> picture(fPictures.ItemAt(token), false);
 	if (picture != NULL) {
 		fCanvas->PushState();
 		fCanvas->SetDrawingOrigin(where);
@@ -690,7 +689,7 @@ void
 CanvasCallbacks::ClipToPicture(int32 pictureToken, const BPoint& where,
 	bool clipToInverse)
 {
-	BReference<ServerPicture> picture(fCanvas->GetPicture(pictureToken), true);
+	BReference<ServerPicture> picture(fPictures.ItemAt(pictureToken), false);
 	if (picture == NULL)
 		return;
 	BReference<AlphaMask> mask(new(std::nothrow) PictureAlphaMask(fCanvas->GetAlphaMask(),
@@ -911,7 +910,7 @@ void
 CanvasCallbacks::SetFontShear(float shear)
 {
 	ServerFont font;
-	font.SetShear(shear);
+	font.SetShear(shear * (180 / M_PI) + 90);
 	fCanvas->CurrentState()->SetFont(font, B_FONT_SHEAR);
 }
 
@@ -1205,7 +1204,7 @@ ServerPicture::WriteFontState(const ServerFont& font, uint16 mask)
 	}
 
 	if (mask & B_FONT_SHEAR) {
-		WriteSetFontShear(font.Shear());
+		WriteSetFontShear((font.Shear() - 90) * (M_PI / 180));
 	}
 
 	if (mask & B_FONT_ROTATION) {
@@ -1246,7 +1245,7 @@ ServerPicture::Play(Canvas* target)
 	if (mallocIO == NULL)
 		return;
 
-	CanvasCallbacks callbacks(target);
+	CanvasCallbacks callbacks(target, *fPictures.Get());
 
 	BPrivate::PicturePlayer player(mallocIO->Buffer(),
 		mallocIO->BufferLength(), PictureList::Private(fPictures.Get()).AsBList());
@@ -1283,17 +1282,21 @@ ServerPicture::AppendPicture(ServerPicture* picture)
 }
 
 
-bool
+int32
 ServerPicture::NestPicture(ServerPicture* picture)
 {
 	if (!fPictures.IsSet())
 		fPictures.SetTo(new(std::nothrow) PictureList);
 
-	if (!fPictures.IsSet() || !fPictures->AddItem(picture))
-		return false;
+	if (!fPictures.IsSet())
+		return -1;
+
+	int32 index = fPictures->CountItems();
+	if (!fPictures->AddItem(picture))
+		return -1;
 
 	picture->AcquireReference();
-	return true;
+	return index;
 }
 
 

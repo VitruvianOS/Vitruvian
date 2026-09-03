@@ -414,7 +414,7 @@ ServerFont::GetTransformedFace(bool rotate, bool shear) const
 		smatrix.yx = (FT_Fixed)(0);
 		smatrix.yy = (FT_Fixed)(0x10000);
 
-		// Multiply togheter and apply transform
+		// Multiply together and apply transform
 		FT_Matrix_Multiply(&rmatrix, &smatrix);
 		FT_Set_Transform(face, &smatrix, NULL);
 	}
@@ -565,7 +565,7 @@ ParseFcMap(FcChar32 charMap[], FcChar32 baseCodePoint, unicode_block& blocksForM
 				while (startBlock <= endBlock) {
 					// if the starting codepoint is found in a different block
 					// than the ending codepoint, we should add all the blocks
-					// inbetween.
+					// in between.
 					blocksForMap = blocksForMap
 						| kUnicodeBlockMap[startBlock].block;
 					++startBlock;
@@ -595,7 +595,7 @@ ParseFcMap(FcChar32 charMap[], FcChar32 baseCodePoint, unicode_block& blocksForM
 			while (startBlock <= endBlock) {
 				// if the starting codepoint is found in a different block
 				// than the ending codepoint, we should add all the blocks
-				// inbetween.
+				// in between.
 				blocksForMap = blocksForMap
 					| kUnicodeBlockMap[startBlock].block;
 				++startBlock;
@@ -1029,7 +1029,7 @@ ServerFont::GetBoundingBoxes(const char* string, int32 numBytes, int32 numChars,
 status_t
 ServerFont::GetBoundingBoxesForStrings(char *charArray[], size_t lengthArray[],
 	int32 numStrings, BRect rectArray[], font_metric_mode mode,
-	escapement_delta deltaArray[])
+	const escapement_delta deltaArray[])
 {
 	// TODO: The font_metric_mode is never used
 	if (charArray == NULL || lengthArray == NULL || numStrings <= 0

@@ -55,7 +55,6 @@ public:
 		bool navMenuEntries = false);
 	void AddItemToDirMenu(const BEntry*, BWindow* source,
 		bool atEnd, bool addShortcuts, bool navMenuEntries = false);
-	void AddDisksIconToMenu(bool reverse = false);
 #ifdef __VOS__
 	void AddBootVolumeToMenu(bool atEnd, BWindow* source, bool addShortcuts,
 		bool navMenuEntries);

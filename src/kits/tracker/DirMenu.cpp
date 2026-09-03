@@ -103,31 +103,41 @@ BDirMenu::Populate(const BEntry* startEntry, BWindow* source,
 
 		BEntry entry(*startEntry);
 
-		bool showDesktop, showDisksIcon;
+		bool desktopIsRoot, showDisksIcon;
 		{
 			TrackerSettings settings;
-			showDesktop = settings.DesktopFilePanelRoot();
+			desktopIsRoot = settings.DesktopFilePanelRoot();
 			showDisksIcon = settings.ShowDisksIcon();
 		}
 
 		// might start one level above startEntry
 		if (!includeStartEntry) {
-			BDirectory parent;
-			BDirectory dir(&entry);
-
-			if (!showDesktop && dir.InitCheck() == B_OK && dir.IsRootDirectory()) {
-				// if we're at the root directory skip "mnt" and
-				// go straight to "/"
-				parent.SetTo("/");
-				parent.GetEntry(&entry);
-			} else
+			if (!desktopIsRoot) {
+				BDirectory startDir(&entry);
+				if (startDir.InitCheck() == B_OK && startDir.IsRootDirectory()) {
+					// if we're at the root directory skip "/mnt" and go straight to "/"
+					BDirectory parent;
+					parent.SetTo("/");
+					parent.GetEntry(&entry);
+				}
+			} else {
+				// set start entry to parent directory
 				FSGetParentVirtualDirectoryAware(entry, entry);
+			}
 		}
 
 		BDirectory desktopDir;
 		FSGetDeskDir(&desktopDir);
 		BEntry desktopEntry;
 		desktopDir.GetEntry(&desktopEntry);
+
+		BVolume boot;
+		BVolumeRoster volumeRoster;
+		volumeRoster.GetBootVolume(&boot);
+		BDirectory trashDir;
+		FSGetTrashDir(&trashDir, boot.Device());
+		BEntry trashEntry;
+		trashDir.GetEntry(&trashEntry);
 
 		int loopDepth = 0;
 		const int kMaxDirDepth = 256;
@@ -147,21 +157,28 @@ BDirMenu::Populate(const BEntry* startEntry, BWindow* source,
 			BEntry parentEntry;
 			bool hitRoot = false;
 
-			BDirectory dir(&entry);
-			if (!showDesktop && dir.InitCheck() == B_OK && dir.IsRootDirectory()) {
-				// if we're at the root directory skip "mnt" and
-				// go straight to "/"
+			BDirectory startDir(&entry);
+			if (!desktopIsRoot && startDir.InitCheck() == B_OK && startDir.IsRootDirectory()) {
+				// if we're at the root directory skip "mnt" and go straight to "/"
 				hitRoot = true;
 				parentEntry.SetTo("/");
-			} else
+			} else {
+				// set parent entry
 				FSGetParentVirtualDirectoryAware(entry, parentEntry);
+			}
 
-			if (showDesktop) {
-				BEntry root("/");
-				// warp from "/" to Desktop properly
-				if (entry == root) {
+			if (entry == trashEntry) {
+				// Trash appears to be on Desktop
+				parentEntry = desktopEntry;
+					// warp from Trash to Desktop
+			}
+
+			BEntry rootEntry("/");
+			if (desktopIsRoot) {
+				if (entry == rootEntry) {
+					// Disks appears to be on Desktop
 					if (showDisksIcon)
-						AddDisksIconToMenu(reverse);
+						AddItemToDirMenu(&rootEntry, source, reverse, addShortcuts, navMenuEntries);
 #ifdef __VOS__
 					else {
 						// On Vitruvian "/" is the real boot fs (not a virtual
@@ -172,20 +189,21 @@ BDirMenu::Populate(const BEntry* startEntry, BWindow* source,
 					}
 #endif
 					entry = desktopEntry;
+						// warp from "/" to Desktop
 				}
 
 				if (entry == desktopEntry)
 					hitRoot = true;
 			}
 
-			if (result == kReadAttrFailed || !info.fInvisible
-				|| (showDesktop && desktopEntry == entry)) {
+			if (result == kReadAttrFailed || (!info.fInvisible || entry == trashEntry)
+				|| (desktopIsRoot && entry == desktopEntry)) {
 				AddItemToDirMenu(&entry, source, reverse, addShortcuts, navMenuEntries);
 			}
 
 			if (hitRoot) {
-				if (!showDesktop && showDisksIcon && *startEntry != "/")
-					AddDisksIconToMenu(reverse);
+				if (!desktopIsRoot && showDisksIcon && *startEntry != "/")
+					AddItemToDirMenu(&rootEntry, source, reverse, addShortcuts, navMenuEntries);
 				break;
 			}
 
@@ -269,34 +287,6 @@ BDirMenu::AddItemToDirMenu(const BEntry* entry, BWindow* source,
 			item->SetMarked(true);
 		}
 	}
-}
-
-
-void
-BDirMenu::AddDisksIconToMenu(bool atEnd)
-{
-	BEntry entry("/");
-	Model model(&entry);
-	if (model.InitCheck() != B_OK)
-		return;
-
-	entry_ref ref;
-	entry.GetRef(&ref);
-	BMessage* message = new BMessage(fCommand);
-	message->AddRef(fEntryName.String(), &ref);
-
-	BNavMenu* subMenu = new BNavMenu(model.Name(), fCommand, fTarget);
-	subMenu->SetNavDir(&ref);
-	ModelMenuItem* item = new ModelMenuItem(&model, subMenu);
-	item->SetLabel(model.Name());
-	item->SetMessage(message);
-
-	if (atEnd)
-		AddItem(item);
-	else
-		AddItem(item, 0);
-
-	item->SetTarget(fTarget);
 }
 
 

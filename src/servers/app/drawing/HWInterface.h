@@ -83,8 +83,6 @@ public:
 	virtual	void				GetMode(display_mode* mode) = 0;
 
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info) = 0;
-	virtual status_t			GetFrameBufferConfig(
-									frame_buffer_config& config) = 0;
 	virtual status_t			GetModeList(display_mode** _modeList,
 									uint32* _count) = 0;
 	virtual status_t			GetPixelClockLimits(display_mode* mode,
@@ -191,7 +189,7 @@ public:
 	// draw the cursor for almost every drawing operation.
 	// It seems to me BeOS hides the cursor (in laymans words) before
 	// BView::Draw() is called (if the cursor is within that views clipping region),
-	// then, after all drawing commands that triggered have been caried out,
+	// then, after all drawing commands that triggered have been carried out,
 	// it shows the cursor again. This approach would have the advantage of
 	// the code not cluttering/slowing down DrawingEngine.
 	// For now, we hide the cursor for any drawing operation that has

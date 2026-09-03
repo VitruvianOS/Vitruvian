@@ -1209,7 +1209,7 @@ TRoster::ClearRecentApps()
 /*!	\brief Initializes the roster.
 
 	Currently only adds the registrar to the roster.
-	The application must already be running, more precisly Run() must have
+	The application must already be running, more precisely Run() must have
 	been called.
 
 	\return
@@ -1376,7 +1376,7 @@ TRoster::CheckSanity()
 }
 
 
-/*!	\brief Tells the roster whether a shutdown process is in progess at the
+/*!	\brief Tells the roster whether a shutdown process is in progress at the
 		   moment.
 
 	After this method is called with \a shuttingDown == \c true, no more
@@ -2010,7 +2010,7 @@ TRoster::_LoadRosterSettings(const char* path)
 	}
 	if (!error) {
 		data[size] = 0;
-		error = stream.SetTo(std::string(data));
+		error = stream.SetTo(BString(data));
 	}
 
 	delete[] data;
@@ -2135,7 +2135,7 @@ TRoster::_LoadRosterSettings(const char* path)
 		}
 
 		// Now we must sort our lists of documents and folders by the
-		// indicies we read for each entry (largest index first)
+		// indices we read for each entry (largest index first)
 		fRecentDocuments.fEntryList.sort(larger_index);
 		fRecentFolders.fEntryList.sort(larger_index);
 

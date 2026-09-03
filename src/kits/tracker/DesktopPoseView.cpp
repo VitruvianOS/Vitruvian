@@ -193,6 +193,17 @@ DesktopPoseView::AddPosesThreadValid(const entry_ref*) const
 }
 
 
+void
+DesktopPoseView::AddPosesCompleted()
+{
+	_inherited::AddPosesCompleted();
+
+	// Create Trash pose after other poses have been added
+	// so that it is positioned in the next available space.
+	CreateTrashPose();
+}
+
+
 bool
 DesktopPoseView::Represents(const node_ref* ref) const
 {

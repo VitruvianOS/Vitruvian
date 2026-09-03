@@ -70,6 +70,7 @@ All rights reserved.
 
 #include "Attributes.h"
 #include "AutoLock.h"
+#include "Background.h"
 #include "BackgroundImage.h"
 #include "Bitmaps.h"
 #include "Commands.h"
@@ -375,7 +376,8 @@ TTracker::QuitRequested()
 			= dynamic_cast<BContainerWindow*>(fWindowList.ItemAt(i));
 
 		if (window != NULL && window->Lock()) {
-			if (window->TargetModel() != NULL && !window->TargetModel()->IsDesktop()) {
+			if (window->TargetModel() != NULL && window->PoseView() != NULL
+				&& !window->PoseView()->IsDesktopView()) {
 				if (window->TargetModel()->IsRoot()) {
 					message.AddBool("open_disks_window", true);
 				} else {
@@ -584,12 +586,11 @@ TTracker::MessageReceived(BMessage* message)
 			MountServer().SendMessage(message);
 			break;
 
-		case kRestoreBackgroundImage:
+		case B_RESTORE_BACKGROUND_IMAGE:
 		{
 			BDeskWindow* desktop = GetDeskWindow();
 			AutoLock<BWindow> lock(desktop);
-			desktop->UpdateDesktopBackgroundImages();
-			desktop->PostMessage(message, desktop->PoseView());
+			desktop->PostMessage(message, desktop);
 			break;
 		}
 

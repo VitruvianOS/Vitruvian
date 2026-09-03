@@ -120,6 +120,8 @@ public:
 
 	virtual bool IsFilePanel() const;
 	virtual bool IsDesktopView() const;
+	virtual bool IsOpenWithView() const;
+	virtual bool IsQueryView() const;
 
 	// state saving/restoring
 	virtual void SaveState(AttributeStreamNode* node);
@@ -294,14 +296,11 @@ public:
 	virtual void OpenParent();
 	virtual bool CanOpenParent();
 
-	virtual void OpenSelection(BPose* clicked_pose = NULL,
-		int32* index = NULL);
-	void OpenSelectionUsing(BPose* clicked_pose = NULL,
-		int32* index = NULL);
+	virtual void OpenSelection(BPose* clicked_pose = NULL, int32* index = NULL);
+	void OpenSelectionUsing(BPose* clicked_pose = NULL, int32* index = NULL);
 		// launches the open with window
 	virtual void MoveSelectionTo(BPoint, BPoint, BContainerWindow*);
-	void DuplicateSelection(BPoint* dropStart = NULL,
-		BPoint* dropEnd = NULL);
+	void DuplicateSelection(BPoint* dropStart = NULL,BPoint* dropEnd = NULL);
 
 	// Move to trash calls try to select the next pose in the view
 	// when they are dones
@@ -323,6 +322,8 @@ public:
 	void AddRemovePoseFromSelection(BPose* pose, int32 index,
 		bool select);
 	int32 CountSelected() const;
+	bool ExtendSelection() const;
+
 	bool SelectedVolumeIsReadOnly() const;
 	bool TargetVolumeIsReadOnly() const;
 	bool CanEditName() const;
@@ -384,9 +385,9 @@ public:
 	void MoveSelectionInto(Model* destFolder, BContainerWindow* srcWindow, bool forceCopy,
 		bool forceMove = false, bool createLink = false, bool relativeLink = false);
 	static void MoveSelectionInto(Model* destFolder, BContainerWindow* srcWindow,
-		BContainerWindow* destWindow, uint32 buttons, BPoint loc, bool forceCopy,
+		BContainerWindow* destWindow, uint32 buttons, BPoint dropPoint, bool forceCopy,
 		bool forceMove = false, bool createLink = false, bool relativeLink = false,
-		BPoint where = B_ORIGIN, bool pinToGrid = false);
+		BPoint dragStart = B_ORIGIN, bool pinToGrid = false);
 
 	bool UpdateDropTarget(BPoint, const BMessage*, bool trackingContextMenu);
 		// return true if drop target changed
@@ -511,8 +512,6 @@ protected:
 	virtual void CreateRootPose();
 	virtual void RemoveRootPose();
 
-	void CreateTrashPose();
-
 	virtual bool AddPosesThreadValid(const entry_ref*) const;
 		// verifies whether or not the current set of AddPoses threads
 		// are valid and allowed to be adding poses -- returns false
@@ -590,6 +589,7 @@ protected:
 	virtual uint32 WatchNewNodeMask();
 		// override to change different watch modes for query pose
 		// view, etc.
+	status_t StopWatchingNode(const node_ref* item);
 
 	// drag&drop handling
 	static bool EachItemInDraggedSelection(const BMessage* message,
@@ -663,6 +663,7 @@ protected:
 	// background AddPoses task calls
 	static status_t AddPosesTask(void*);
 	virtual void AddPosesCompleted();
+	virtual void CreateTrashPose();
 	bool IsValidAddPosesThread(thread_id) const;
 
 	// typeahead filtering
@@ -954,11 +955,24 @@ BPoseView::SelectionList() const
 	return fSelectionList;
 }
 
+
 inline int32
 BPoseView::CountSelected() const
 {
 	return fSelectionList->CountItems();
 }
+
+
+inline bool
+BPoseView::ExtendSelection() const
+{
+	if (!fMultipleSelection)
+		return false;
+
+	uint32 mods = modifiers();
+	return fTrackMouseUp && ((mods & B_COMMAND_KEY) != 0 || (mods & B_SHIFT_KEY) != 0);
+}
+
 
 inline BStringList*
 BPoseView::MimeTypesInSelection()
@@ -1046,6 +1060,20 @@ BPoseView::IsFilePanel() const
 
 inline bool
 BPoseView::IsDesktopView() const
+{
+	return false;
+}
+
+
+inline bool
+BPoseView::IsOpenWithView() const
+{
+	return false;
+}
+
+
+inline bool
+BPoseView::IsQueryView() const
 {
 	return false;
 }

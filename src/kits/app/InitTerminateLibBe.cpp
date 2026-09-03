@@ -15,6 +15,7 @@
 #include <pthread.h>
 #endif
 
+#include <Application.h>
 #include <AppMisc.h>
 #include <LooperList.h>
 #include <MessagePrivate.h>
@@ -41,8 +42,11 @@ initialize_forked_child()
 
 	BMessage::Private::StaticReInitForkedChild();
 	BPrivate::gLooperList.InitAfterFork();
-	BPrivate::gDefaultTokens.InitAfterFork();
 	BPrivate::init_team_after_fork();
+
+	// Continuing to use BApplication after forking is not supported.
+	if (be_app != NULL)
+		be_app = (BApplication*)-1;
 
 	DBG(OUT("initialize_forked_child() done\n"));
 }
@@ -82,10 +86,12 @@ terminate_after(image_id)
 {
 	DBG(OUT("terminate_after()\n"));
 
+	if (be_app == (BApplication*)-1)
+		debugger("exit() called after fork from a BApplication");
+
 	BRoster::Private::DeleteBeRoster();
 	BMessage::Private::StaticCleanup();
 	BMessage::Private::StaticCacheCleanup();
 
 	DBG(OUT("terminate_after() done\n"));
 }
-

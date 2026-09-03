@@ -269,8 +269,7 @@ BPose::UpdateWidgetAndModel(const char* attrName, uint32 attrType, int32, BPoint
 			for (int32 i = 0; i < count; i++) {
 				BTextWidget* widget = fWidgetList.ItemAt(i);
 				BColumn* column = poseView->ColumnFor(widget->AttrHash());
-				if (column != NULL
-					&& strcmp(column->AttrName(), attrName) == 0) {
+				if (column != NULL && strcmp(column->AttrName(), attrName) == 0) {
 					widget->CheckAndUpdate(poseLoc, column, poseView, visible);
 					break;
 				}
@@ -537,6 +536,9 @@ BPose::Draw(BRect rect, const BRect& updateRect, BPoseView* poseView, BView* dra
 		fBackgroundClean = false;
 
 	bool direct = drawView == poseView;
+	bool dragging = false;
+	if (!direct && poseView->Window() != NULL && poseView->Window()->CurrentMessage() != NULL)
+		dragging = poseView->Window()->CurrentMessage()->what == kMsgMouseDragged;
 	bool windowActive = poseView->Window()->IsActive();
 	bool showSelectionWhenInactive = poseView->ShowSelectionWhenInactive();
 	bool drawIconUnselected = !windowActive && !showSelectionWhenInactive;
@@ -544,11 +546,20 @@ BPose::Draw(BRect rect, const BRect& updateRect, BPoseView* poseView, BView* dra
 	if (direct)
 		poseView->PushState();
 
-	// This is so that the cut icon will be drawn semi-transparent.
-	if (fClipboardMode == kMoveSelectionTo) {
+	// This is so that cut and dragged items will be drawn semi-transparent.
+	if (fClipboardMode == kMoveSelectionTo || dragging) {
 		drawView->SetDrawingMode(B_OP_ALPHA);
 		drawView->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_COMPOSITE);
-		uint8 alpha = 128; // set the level of opacity by value
+		uint8 alpha;
+		if (fClipboardMode == kMoveSelectionTo && dragging)
+			alpha = 64; // cut and dragging, 25% opaque
+		else if (dragging)
+			alpha = 128; // dragging, 50% opaque
+		else if (fClipboardMode == kMoveSelectionTo)
+			alpha = 192; // cut, 75% opaque
+		else
+			alpha = 255;
+
 		if (poseView->HighColor().IsDark())
 			drawView->SetHighColor(0, 0, 0, alpha);
 		else
@@ -640,36 +651,34 @@ BPose::DrawTextWidget(BRect rect, BRect textRect, BTextWidget* widget,
 	widget->Draw(rect, textRect, poseView, drawView, selected, fClipboardMode, offset);
 
 	if (selected) {
+		// the selection rect is alpha-blended on top
 		BRect invertRect(textRect.OffsetByCopy(offset));
 		invertRect.left = ceilf(invertRect.left);
 		invertRect.top = ceilf(invertRect.top);
 		invertRect.right = floorf(invertRect.right);
 		invertRect.bottom = floorf(invertRect.bottom);
+
 		if (windowActive || isDrawingSelectionRect) {
 			// invert colors to select label using "reverse video"
 			drawView->InvertRect(invertRect);
-			if (clipboardMode == kMoveSelectionTo) {
-				// blend selected cut item background with gray
-				drawView->SetDrawingMode(B_OP_BLEND);
-				drawView->SetHighColor(128, 128, 128, 128);
-				drawView->FillRect(invertRect);
-				drawView->SetDrawingMode(B_OP_OVER);
-			}
 		} else if (!windowActive && showSelectionWhenInactive) {
 			if (direct)
 				drawView->PushState();
 
-			// the selection rect is alpha-blended on top for inactive windows
+			// invert colors to select label using "reverse video"
 			drawView->InvertRect(invertRect);
+
 			drawView->SetDrawingMode(B_OP_BLEND);
-			// blend cut item background with less contrast
 			if (clipboardMode == kMoveSelectionTo) {
+				// blend inactive cut item background with less contrast
 				if (drawView->LowColor().IsLight())
 					drawView->SetHighColor(192, 192, 192, 255);
 				else
 					drawView->SetHighColor(64, 64, 64, 255);
-			} else
+			} else {
+				// blend inactive background with gray
 				drawView->SetHighColor(128, 128, 128, 255);
+			}
 			drawView->FillRect(invertRect);
 			drawView->SetDrawingMode(B_OP_OVER);
 
@@ -932,7 +941,7 @@ BPose::CalcRect(const BPoseView* poseView) const
 	BTextWidget* widget = WidgetFor(poseView->FirstColumn()->AttrHash());
 	BPoint location = Location(poseView);
 	BRect rect(_IconRect(poseView, location));
-	float textWidth = (widget != NULL ? widget->TextWidth(poseView) : 0);
+	float textWidth = (widget != NULL ? widget->TextWidth(poseView) + 4 : 0);
 
 	if (poseView->ViewMode() == kIconMode) {
 		// icon mode
@@ -940,14 +949,13 @@ BPose::CalcRect(const BPoseView* poseView) const
 			rect.left += roundf((rect.Width() - textWidth) / 2.f);
 			rect.right = rect.left + ceilf(textWidth);
 		}
+		rect.bottom = rect.top + ceilf(poseView->IconPoseHeight()) + 3;
 	} else {
 		// mini icon mode
 		if (widget != NULL)
 			rect.right += kMiniIconSeparator + ceilf(textWidth);
+		rect.bottom = rect.top + ceilf(poseView->IconPoseHeight()) + 1;
 	}
-
-	rect.bottom = rect.top + ceilf(poseView->IconPoseHeight());
-
 	return rect;
 }
 

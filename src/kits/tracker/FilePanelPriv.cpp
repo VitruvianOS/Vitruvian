@@ -182,7 +182,7 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target, const BEntry* s
 	uint32 openFlags, window_look look, window_feel feel, uint32 windowFlags, uint32 workspace,
 	bool hideWhenDone)
 	:
-	BContainerWindow(0, openFlags, look, feel, windowFlags, workspace, false),
+	BContainerWindow(0, openFlags, look, feel, windowFlags, workspace, false, false),
 	fDirMenu(NULL),
 	fDirMenuField(NULL),
 	fTextControl(NULL),
@@ -194,7 +194,6 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target, const BEntry* s
 	fIsTrackingMenu(false),
 	fDefaultStateRestored(false)
 {
-	Lock();
 	InitIconPreloader();
 
 	{
@@ -266,7 +265,6 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target, const BEntry* s
 
 	fTaskLoop = new PiggybackTaskLoop;
 
-	AutoLock<BWindow> lock(this);
 	fBorderedView = new BorderedView;
 	CreatePoseView(model);
 	fBorderedView->GroupLayout()->SetInsets(1);
@@ -299,7 +297,7 @@ TFilePanel::TFilePanel(file_panel_mode mode, BMessenger* target, const BEntry* s
 	if (StateNeedsSaving())
 		SaveState(false);
 
-	Unlock();
+	Run();
 }
 
 
@@ -598,15 +596,7 @@ TFilePanel::SwitchDirectory(const entry_ref* ref)
 
 	PoseView()->SetIsDesktop(isDesktop);
 	_inherited::SwitchDirectory(&setToRef);
-
-	if (PoseView()->IsDesktop())
-		PoseView()->AddVolumePoses();
-
-	AddShortcut('D', B_COMMAND_KEY, new BMessage(kSwitchToDesktop));
-	AddShortcut('H', B_COMMAND_KEY, new BMessage(kSwitchToHome));
-		// our shortcut got possibly removed because the home
-		// menu item got removed - we shouldn't really have to do
-		// this - this is a workaround for a kit bug.
+		// calls AddPosesCompleted() for the rest
 
 	// update the menu field
 	for (int32 index = fDirMenu->CountItems() - 1; index >= 0; index--)
@@ -852,9 +842,6 @@ TFilePanel::Init(const BMessage*)
 	AddShortcut('W', B_COMMAND_KEY, new BMessage(kCancelButton));
 	AddShortcut('D', B_COMMAND_KEY, new BMessage(kSwitchToDesktop));
 	AddShortcut('H', B_COMMAND_KEY, new BMessage(kSwitchToHome));
-	AddShortcut(B_DELETE, B_NO_COMMAND_KEY | B_SHIFT_KEY, new BMessage(kDeleteSelection),
-		PoseView());
-	AddShortcut(B_DELETE, B_NO_COMMAND_KEY, new BMessage(kMoveSelectionToTrash), PoseView());
 	AddShortcut('A', B_COMMAND_KEY | B_SHIFT_KEY, new BMessage(kShowSelectionWindow));
 	AddShortcut('A', B_COMMAND_KEY, new BMessage(B_SELECT_ALL), this);
 	AddShortcut('S', B_COMMAND_KEY, new BMessage(kInvertSelection), PoseView());
@@ -1848,6 +1835,12 @@ BFilePanelPoseView::AddPosesCompleted()
 	Window()->AddShortcut('H', B_COMMAND_KEY, new BMessage(kSwitchToHome));
 
 	_inherited::AddPosesCompleted();
+
+	// add volume poses and Trash to Desktop
+	if (IsVolumesRoot()) {
+		AddVolumePoses();
+		CreateTrashPose();
+	}
 }
 
 

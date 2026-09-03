@@ -155,9 +155,9 @@ namespace BPrivate {
 #define kAttrQueryMoreOptions 				kAttrQueryMoreOptions_le
 #define kAttrQueryMoreOptionsForeign 		kAttrQueryMoreOptions_be
 #define kAttrExtendedPoseInfo				kAttrExtendedPoseInfo_le
-#define kAttrExtendedPoseInfoForegin		kAttrExtendedPoseInfo_be
+#define kAttrExtendedPoseInfoForeign		kAttrExtendedPoseInfo_be
 #define kAttrExtendedDisksPoseInfo			kAttrExtendedDisksPoseInfo_le
-#define kAttrExtendedDisksPoseInfoForegin	kAttrExtendedDisksPoseInfo_be
+#define kAttrExtendedDisksPoseInfoForeign	kAttrExtendedDisksPoseInfo_be
 
 #else
 
@@ -191,9 +191,9 @@ namespace BPrivate {
 #define kAttrQueryMoreOptions 				kAttrQueryMoreOptions_be
 #define kAttrQueryMoreOptionsForeign 		kAttrQueryMoreOptions_le
 #define kAttrExtendedPoseInfo				kAttrExtendedPoseInfo_be
-#define kAttrExtendedPoseInfoForegin		kAttrExtendedPoseInfo_le
+#define kAttrExtendedPoseInfoForeign		kAttrExtendedPoseInfo_le
 #define kAttrExtendedDisksPoseInfo			kAttrExtendedDisksPoseInfo_be
-#define kAttrExtendedDisksPoseInfoForegin	kAttrExtendedDisksPoseInfo_le
+#define kAttrExtendedDisksPoseInfoForeign	kAttrExtendedDisksPoseInfo_le
 
 #endif
 

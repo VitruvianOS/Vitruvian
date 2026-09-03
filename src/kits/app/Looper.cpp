@@ -43,17 +43,6 @@
 #define DBG(x)	;
 #define PRINT(x)	DBG({ printf("[%6" B_PRId32 "] ", find_thread(NULL)); printf x; })
 
-/*
-#include <Autolock.h>
-#include <Locker.h>
-static BLocker sDebugPrintLocker("BLooper debug print");
-#define PRINT(x)	DBG({						\
-	BAutolock _(sDebugPrintLocker);				\
-	debug_printf("[%6ld] ", find_thread(NULL));	\
-	debug_printf x;								\
-})
-*/
-
 
 #define FILTER_LIST_BLOCK_SIZE	5
 #define DATA_BLOCK_SIZE			5

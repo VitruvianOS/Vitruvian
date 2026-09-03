@@ -258,8 +258,8 @@ ExpanderThread::PipeCommand(int argc, const char** argv, int& in, int& out,
 		// "load" command.
 		execv(argv[0], (char *const *)argv);
 
-		// shouldn't return
-		return -1;
+		// shouldn't get here
+		_exit(-1);
 	}
 
 	// parent

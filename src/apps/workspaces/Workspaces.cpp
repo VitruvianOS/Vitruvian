@@ -410,13 +410,11 @@ WorkspacesView::_AboutRequested()
 		NULL
 	};
 
-	const char* extraInfo = "Send windows behind using the Option key. "
-		"Move windows to front using the Control key.\n";
-
 	window->AddCopyright(2002, "Haiku, Inc.",
 			extraCopyrights);
 	window->AddAuthors(authors);
-	window->AddExtraInfo(extraInfo);
+	window->AddExtraInfo(B_TRANSLATE("Send windows behind using the Option key. "
+		"Move windows to front using the Control key.\n"));
 
 	window->Show();
 }
@@ -1018,7 +1016,7 @@ WorkspacesApp::AboutRequested()
 void
 WorkspacesApp::Usage(const char *programName)
 {
-	printf(B_TRANSLATE("Usage: %s [options] [workspace]\n"
+	printf(B_TRANSLATE("Usage: %s [options] [workspace|direction]\n"
 		"where \"options\" are:\n"
 		"  --notitle\t\ttitle bar removed, border and resize kept\n"
 		"  --noborder\t\ttitle, border, and resize removed\n"
@@ -1026,11 +1024,13 @@ WorkspacesApp::Usage(const char *programName)
 		"keyboard events\n"
 		"  --alwaysontop\t\tkeeps window on top\n"
 		"  --notmovable\t\twindow can't be moved around\n"
-		"  --autoraise\t\tauto-raise the workspace window when it's at the "
+		"  --autoraise\t\tauto-raise the workspace window when mouse is at the "
 		"screen edge\n"
 		"  --help\t\tdisplay this help and exit\n"
-		"and \"workspace\" is the number of the Workspace to which to switch "
-		"(0-31)\n"),
+		"  -i\t\t\tdisplay workspace layout and exit\n"
+		"\"workspace\" is the number of the Workspace to which to switch (+|-|0-31)\n"
+		"and \"direction\" is the direction of the Workspace to switch to "
+		"(left|right|up|down)\n"),
 		programName);
 
 	// quit only if we aren't running already
@@ -1063,29 +1063,36 @@ WorkspacesApp::ArgvReceived(int32 argc, char **argv)
 
 				Usage(programName);
 			}
-		} else if (isdigit(*argv[i])) {
-			// check for a numeric arg, if not already given
-			activate_workspace(atoi(argv[i]));
+		} else {
+			uint32 columns, rows;
+			BPrivate::get_workspaces_layout(&columns, &rows);
+			if (isdigit(*argv[i])) {
+				// check for a numeric arg, if not already given
+				activate_workspace(atoi(argv[i]));
+			} else if (!strcmp(argv[i], "-i")) {
+				printf("layout (columns,rows): %" B_PRId32 "x%" B_PRId32 "\n", columns, rows);
+			} else if (!strcmp(argv[i], "-")) {
+				activate_workspace(current_workspace() - 1);
+			} else if (!strcmp(argv[i], "+")) {
+				activate_workspace(current_workspace() + 1);
+			} else if (!strcmp(argv[i], "up")) {
+				activate_workspace((current_workspace() - columns) % (columns * rows));
+			} else if (!strcmp(argv[i], "down")) {
+				activate_workspace((current_workspace() + columns) % (columns * rows));
+			} else if (!strcmp(argv[i], "left")) {
+				activate_workspace(
+					current_workspace() / rows * rows + ((current_workspace() - 1) % rows));
+			} else if (!strcmp(argv[i], "right")) {
+				activate_workspace(
+					current_workspace() / rows * rows + ((current_workspace() + 1) % rows));
+			} else {
+				// some unknown arguments were specified
+				fprintf(stderr, B_TRANSLATE("Invalid argument: %s\n"), argv[i]);
+			}
 
 			// if the app is running, don't quit
 			// but if it isn't, cancel the complete run, so it doesn't
 			// open any window
-			if (IsLaunching())
-				Quit();
-		} else if (!strcmp(argv[i], "-")) {
-			activate_workspace(current_workspace() - 1);
-
-			if (IsLaunching())
-				Quit();
-		} else if (!strcmp(argv[i], "+")) {
-			activate_workspace(current_workspace() + 1);
-
-			if (IsLaunching())
-				Quit();
-		} else {
-			// some unknown arguments were specified
-			fprintf(stderr, B_TRANSLATE("Invalid argument: %s\n"), argv[i]);
-
 			if (IsLaunching())
 				Quit();
 		}

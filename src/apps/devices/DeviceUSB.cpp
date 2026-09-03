@@ -9,11 +9,18 @@
 
 #include "DeviceUSB.h"
 
+#include <new>
 #include <sstream>
 #include <stdlib.h>
 
 #include <Catalog.h>
+#include <Directory.h>
+#include <Entry.h>
+#include <Path.h>
+
+#include <USBKit.h>
 #include <bus/USB.h>
+#include <usb/USB_hid.h>
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "DeviceUSB"
@@ -21,6 +28,24 @@
 extern "C" {
 #include "dm_wrapper.h"
 #include "usb-utils.h"
+}
+
+
+#define USB_SELF_POWERED	0x40
+#define USB_REMOTE_WAKEUP	0x20
+
+
+static uint8
+MajorVersion(uint16 version)
+{
+	return version >> 8;
+}
+
+
+static uint8
+MinorVersion(uint16 version)
+{
+	return version & 0xff;
 }
 
 
@@ -44,6 +69,234 @@ static BString ToHex(uint16 num)
 	ss.flags(std::ios::hex | std::ios::showbase);
 	ss << num;
 	return BString(ss.str().c_str());
+}
+
+
+static BString
+FindDevicePath(const char* currentPath, uint16 vendor, uint16 product)
+{
+	BDirectory dir(currentPath);
+	if (dir.InitCheck() != B_OK)
+		return "";
+
+	BEntry entry;
+	while (dir.GetNextEntry(&entry) == B_OK) {
+		BPath pathObj;
+		entry.GetPath(&pathObj);
+
+		if (BString(pathObj.Leaf()) == "hub")
+			continue;
+
+		if (entry.IsDirectory()) {
+			BString result = FindDevicePath(pathObj.Path(), vendor, product);
+			if (result != "")
+				return result;
+		} else {
+			BUSBDevice testDevice(pathObj.Path());
+			if (testDevice.InitCheck() == B_OK && testDevice.VendorID() == vendor
+				&& testDevice.ProductID() == product) {
+
+				return BString(pathObj.Path());
+			}
+		}
+	}
+
+	return "";
+}
+
+
+static ssize_t
+FetchReportDescriptor(BUSBDevice& device, uint16 interfaceNumber, uint8* buffer, uint16 length)
+{
+	return device.ControlTransfer(USB_REQTYPE_INTERFACE_IN, USB_REQUEST_GET_DESCRIPTOR,
+		B_USB_HID_DESCRIPTOR_REPORT << 8, interfaceNumber, length, buffer);
+}
+
+
+static BString
+GetHIDReportDescriptor(BUSBDevice& device, const BUSBInterface& interface)
+{
+	// A descriptor's length field is 1 byte, so a descriptor could be 256 bytes total
+	uint8 buffer[256];
+	usb_hid_descriptor* hidDescriptor = NULL;
+	// 128 is a limit to avoid potential infinite loops
+	for (uint32 i = 0; i < 128; i++) {
+		usb_descriptor* generic = reinterpret_cast<usb_descriptor*>(buffer);
+		if (interface.OtherDescriptorAt(i, generic, sizeof(buffer)) != B_OK)
+			break;
+		if (generic->generic.descriptor_type == B_USB_HID_DESCRIPTOR_HID) {
+			hidDescriptor = reinterpret_cast<usb_hid_descriptor*>(buffer);
+			break;
+		}
+	}
+
+	if (hidDescriptor == NULL)
+		return "";
+
+	uint16 reportLength = 0;
+	for (uint8 i = 0; i < hidDescriptor->num_descriptors; i++) {
+		if (hidDescriptor->descriptor_info[i].descriptor_type == B_USB_HID_DESCRIPTOR_REPORT) {
+			reportLength = hidDescriptor->descriptor_info[i].descriptor_length;
+			break;
+		}
+	}
+
+	if (reportLength == 0)
+		return "";
+
+	uint8* reportBuffer = new(std::nothrow) uint8[reportLength];
+
+	if (reportBuffer == NULL)
+		return "";
+
+	BString result;
+	ssize_t read = FetchReportDescriptor(device, interface.Descriptor()->interface_number,
+		reportBuffer, reportLength);
+
+	if (read <= 0) {
+		delete[] reportBuffer;
+		return "";
+	}
+
+	for (ssize_t i = 0; i < read; i++) {
+		char hex[4];
+		snprintf(hex, sizeof(hex), "%02x ", reportBuffer[i]);
+		result << hex;
+	}
+	result.Trim();
+
+	delete[] reportBuffer;
+	return result;
+}
+
+
+static void
+BuildUSBTree(BUSBDevice& device, DeviceUSB* node)
+{
+	node->SetAttribute("usb/path", device.Location());
+	if (device.ManufacturerString())
+		node->SetAttribute("usb/manufacturer", device.ManufacturerString());
+	if (device.ProductString())
+		node->SetAttribute("usb/product", device.ProductString());
+	if (device.SerialNumberString())
+		node->SetAttribute("usb/serial_number", device.SerialNumberString());
+
+	BString usbVersion;
+	usbVersion.SetToFormat(B_TRANSLATE("%d.%d"),
+		MajorVersion(device.USBVersion()),
+		MinorVersion(device.USBVersion()));
+	node->SetAttribute("usb/version", usbVersion);
+
+	for (uint32 i = 0; i < device.CountConfigurations(); i++) {
+		const BUSBConfiguration* config = device.ConfigurationAt(i);
+		if (!config)
+			continue;
+
+		BString confPath;
+		confPath << "usb/config/" << i;
+
+		BString powerValue;
+		powerValue.SetToFormat(B_TRANSLATE("%d mA"), config->Descriptor()->max_power * 2);
+		node->SetAttribute(BString(confPath) << "/max_power", powerValue);
+
+		uint8 attr = config->Descriptor()->attributes;
+		if (attr & USB_SELF_POWERED)
+			node->SetAttribute(BString(confPath) << "/self_powered", "true");
+		if (attr & USB_REMOTE_WAKEUP)
+			node->SetAttribute(BString(confPath) << "/remote_wakeup", "true");
+
+		if (config->ConfigurationString())
+			node->SetAttribute(BString(confPath) << "/name", config->ConfigurationString());
+
+		for (uint32 j = 0; j < config->CountInterfaces(); j++) {
+			const BUSBInterface* interface = config->InterfaceAt(j);
+			if (!interface)
+				continue;
+
+			BString intfPath;
+			intfPath << confPath << "/interface/" << j;
+
+			for (uint32 k = 0; k < interface->CountAlternates(); k++) {
+				const BUSBInterface* alt = interface->AlternateAt(k);
+				if (!alt)
+					continue;
+
+				BString altPath;
+				altPath << intfPath << "/alt/" << k;
+
+				if (k == interface->AlternateIndex())
+					node->SetAttribute(BString(altPath) << "/active", "true");
+
+				char classInfo[128];
+				usb_get_class_info(alt->Class(), alt->Subclass(), alt->Protocol(), classInfo,
+					sizeof(classInfo));
+
+				BString classVal;
+				classVal.SetToFormat(B_TRANSLATE("0x%02x, Sub: 0x%02x (%s)"), alt->Class(),
+					alt->Subclass(), classInfo);
+
+				node->SetAttribute(BString(altPath) << "/class_info", classVal);
+
+				if (alt->InterfaceString())
+					node->SetAttribute(BString(altPath) << "/name", alt->InterfaceString());
+
+				for (uint32 e = 0; e < alt->CountEndpoints(); e++) {
+					const BUSBEndpoint* endpoint = alt->EndpointAt(e);
+					if (!endpoint)
+						continue;
+
+					BString endpointPath;
+					endpointPath << altPath << "/endpoint/" << e;
+
+					const usb_endpoint_descriptor* endpointDesc = endpoint->Descriptor();
+
+					BString endpointAddress;
+					endpointAddress.SetToFormat(B_TRANSLATE("0x%02x (%s)"),
+						endpointDesc->endpoint_address,
+						(endpointDesc->endpoint_address & USB_ENDPOINT_ADDR_DIR_MASK)
+								== USB_ENDPOINT_ADDR_DIR_IN
+							? B_TRANSLATE("IN")
+							: B_TRANSLATE("OUT"));
+					node->SetAttribute(BString(endpointPath) << "/address", endpointAddress);
+
+					const char* type = B_TRANSLATE("Unknown");
+					switch (endpointDesc->attributes & USB_ENDPOINT_ATTR_MASK) {
+						case USB_ENDPOINT_ATTR_CONTROL:
+							type = B_TRANSLATE("Control");
+							break;
+						case USB_ENDPOINT_ATTR_ISOCHRONOUS:
+							type = B_TRANSLATE("Isochronous");
+							break;
+						case USB_ENDPOINT_ATTR_BULK:
+							type = B_TRANSLATE("Bulk");
+							break;
+						case USB_ENDPOINT_ATTR_INTERRUPT:
+							type = B_TRANSLATE("Interrupt");
+							break;
+					}
+					node->SetAttribute(BString(endpointPath) << "/type", type);
+
+					BString maxPacket;
+					maxPacket << endpointDesc->max_packet_size;
+					node->SetAttribute(BString(endpointPath) << "/max_packet_size", maxPacket);
+
+					if ((endpointDesc->attributes & USB_ENDPOINT_ATTR_MASK)
+						== USB_ENDPOINT_ATTR_INTERRUPT) {
+						BString interval;
+						interval.SetToFormat(B_TRANSLATE("%u ms"), endpointDesc->interval);
+						node->SetAttribute(BString(endpointPath) << "/interval", interval);
+					}
+				}
+				if (alt->Class() == USB_HID_DEVICE_CLASS) {
+					BString reportDescriptor = GetHIDReportDescriptor(device, *alt);
+					if (reportDescriptor.Length() > 0) {
+						node->SetAttribute(BString(altPath) << "/hid_report_descriptor",
+							reportDescriptor);
+					}
+				}
+			}
+		}
+	}
 }
 
 
@@ -77,27 +330,20 @@ DeviceUSB::InitFromAttributes()
 	usb_get_vendor_info(fVendorId, &vendorName);
 	usb_get_device_info(fVendorId, fDeviceId, &deviceName);
 	if (vendorName == NULL) {
-		manufacturerLabel << B_TRANSLATE("Unknown");
+		manufacturerLabel << B_TRANSLATE("unknown");
 	} else {
 		manufacturerLabel << vendorName;
 	};
 
 	// Fetch DeviceName
 	if (deviceName == NULL) {
-		deviceLabel << B_TRANSLATE("Unknown");
+		deviceLabel << B_TRANSLATE("unknown");
 	} else {
 		deviceLabel << deviceName;
 	}
 
 	SetAttribute(B_TRANSLATE("Device name"), deviceLabel);
 	SetAttribute(B_TRANSLATE("Manufacturer"), manufacturerLabel);
-#if 0
-	// These are a source of confusion for users, leading them to think there
-	// is no driver for their device. Until we can display something useful,
-	// let's not show the lines at all.
-	SetAttribute(B_TRANSLATE("Driver used"), B_TRANSLATE("Not implemented"));
-	SetAttribute(B_TRANSLATE("Device paths"), B_TRANSLATE("Not implemented"));
-#endif
 	SetAttribute(B_TRANSLATE("Class info"), classInfo);
 	switch (fClassBaseId) {
 		case 0x1:
@@ -124,4 +370,13 @@ DeviceUSB::InitFromAttributes()
 	BString outlineName;
 	outlineName << manufacturerLabel << " " << deviceLabel;
 	SetText(outlineName.String());
+
+	// Fetch USB attributes
+	BString path = FindDevicePath("/dev/bus/usb/", fVendorId, fDeviceId);
+
+	if (path.Length() > 0) {
+		BUSBDevice device(path.String());
+		if (device.InitCheck() == B_OK)
+			BuildUSBTree(device, this);
+	}
 }

@@ -61,10 +61,10 @@ Device::Device(Device* physicalParent, BusType busType, Category category,
 	fCategory(category),
 	fPhysicalParent(physicalParent)
 {
-	SetAttribute(B_TRANSLATE("Device name"), B_TRANSLATE(name));
-	SetAttribute(B_TRANSLATE("Manufacturer"), B_TRANSLATE(manufacturer));
-	SetAttribute(B_TRANSLATE("Driver used"), B_TRANSLATE(driverUsed));
-	SetAttribute(B_TRANSLATE("Device paths"), B_TRANSLATE(devPathsPublished));
+	SetAttribute(B_TRANSLATE("Device name"), B_TRANSLATE_NOCOLLECT(name));
+	SetAttribute(B_TRANSLATE("Manufacturer"), B_TRANSLATE_NOCOLLECT(manufacturer));
+	SetAttribute(B_TRANSLATE("Driver used"), B_TRANSLATE_NOCOLLECT(driverUsed));
+	SetAttribute(B_TRANSLATE("Device paths"), B_TRANSLATE_NOCOLLECT(devPathsPublished));
 }
 
 
@@ -74,30 +74,42 @@ Device::~Device()
 
 
 BString
-Device::GetName()
+Device::GetName() const
 {
-	return fAttributeMap[B_TRANSLATE("Device name")];
+	AttributeMapIterator it = fAttributeMap.find(B_TRANSLATE("Device name"));
+	if (it != fAttributeMap.end())
+		return it->second;
+	return BString("unknown");
 }
 
 
 BString
-Device::GetManufacturer()
+Device::GetManufacturer() const
 {
-	return fAttributeMap[B_TRANSLATE("Manufacturer")];
+	AttributeMapIterator it = fAttributeMap.find(B_TRANSLATE("Manufacturer"));
+	if (it != fAttributeMap.end())
+		return it->second;
+	return BString("unknown");
 }
 
 
 BString
-Device::GetDriverUsed()
+Device::GetDriverUsed() const
 {
-	return fAttributeMap[B_TRANSLATE("Driver used")];
+	AttributeMapIterator it = fAttributeMap.find(B_TRANSLATE("Driver used"));
+	if (it != fAttributeMap.end())
+		return it->second;
+	return BString("unknown");
 }
 
 
 BString
-Device::GetDevPathsPublished()
+Device::GetDevPathsPublished() const
 {
-	return fAttributeMap[B_TRANSLATE("Device paths")];
+	AttributeMapIterator it = fAttributeMap.find(B_TRANSLATE("Device paths"));
+	if (it != fAttributeMap.end())
+		return it->second;
+	return BString("unknown");
 }
 
 
@@ -112,7 +124,7 @@ Device::SetAttribute(const BString& name, const BString& value)
 
 
 Attributes
-Device::GetAllAttributes()
+Device::GetAllAttributes() const
 {
 	Attributes attributes;
 	AttributeMapIterator iter;
@@ -124,7 +136,7 @@ Device::GetAllAttributes()
 
 
 BString
-Device::GetAllStrings()
+Device::GetAllStrings() const
 {
 	BString str;
 	AttributeMapIterator iter;

@@ -25,11 +25,9 @@
 App::App()
 	:
 	BApplication("application/x-vnd.Haiku-LaunchBox"),
-	fSettingsChanged(false),
 	fNamePanelSize(200, 50),
 	fAutoStart(false)
 {
-	SetPulseRate(3000000);
 }
 
 
@@ -41,8 +39,7 @@ App::~App()
 bool
 App::QuitRequested()
 {
-	_StoreSettingsIfNeeded();
-	return true;
+    return true;
 }
 
 
@@ -101,26 +98,20 @@ App::MessageReceived(BMessage* message)
 			if (wasCloned)
 				window->MoveBy(10, 10);
 			window->Show();
-			fSettingsChanged = true;
+			_StoreSettings();
 			break;
 		}
 		case MSG_TOGGLE_AUTOSTART:
-			ToggleAutoStart();
+			fAutoStart = !AutoStart();
+			_StoreSettings();
 			break;
 		case MSG_SETTINGS_CHANGED:
-			fSettingsChanged = true;
+			_StoreSettings();
 			break;
 		default:
 			BApplication::MessageReceived(message);
 			break;
 	}
-}
-
-
-void
-App::Pulse()
-{
-	_StoreSettingsIfNeeded();
 }
 
 
@@ -131,14 +122,6 @@ App::SetNamePanelSize(const BSize& size)
 		fNamePanelSize = size;
 		Unlock();
 	}
-}
-
-
-void
-App::ToggleAutoStart()
-{
-	fSettingsChanged = true;
-	fAutoStart = !AutoStart();
 }
 
 
@@ -155,11 +138,8 @@ App::NamePanelSize()
 
 
 void
-App::_StoreSettingsIfNeeded()
+App::_StoreSettings()
 {
-	if (!fSettingsChanged)
-		return;
-
 	BMessage settings('sett');
 	for (int32 i = 0; BWindow* window = WindowAt(i); i++) {
 		if (MainWindow* padWindow = dynamic_cast<MainWindow*>(window)) {
@@ -177,6 +157,4 @@ App::_StoreSettingsIfNeeded()
 	settings.AddBool("autostart", AutoStart());
 
 	save_settings(&settings, "main_settings", "LaunchBox");
-
-	fSettingsChanged = false;
 }

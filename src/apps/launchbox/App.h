@@ -22,17 +22,13 @@ public:
 	virtual	bool				QuitRequested();
 	virtual	void				ReadyToRun();
 	virtual	void				MessageReceived(BMessage* message);
-	virtual	void				Pulse();
 
 			void				SetNamePanelSize(const BSize& size);
 			BSize				NamePanelSize();
-			void				ToggleAutoStart();
 			bool				AutoStart() { return fAutoStart; }
 
 private:
-			void				_StoreSettingsIfNeeded();
-
-			bool				fSettingsChanged;
+			void				_StoreSettings();
 
 			BSize				fNamePanelSize;
 			bool				fAutoStart;

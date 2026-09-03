@@ -16,6 +16,13 @@
 
 #include <iostream>
 
+#include <Drivers.h>
+#include <StorageDefs.h>
+
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+
 #include "DevicesView.h"
 
 #undef B_TRANSLATION_CONTEXT
@@ -65,12 +72,15 @@ DevicesView::CreateLayout()
 	// why? Bug? In scrollview or in outlinelistview?
 
 	BPopUpMenu* orderByPopupMenu = new BPopUpMenu("orderByMenu");
+	BMenuItem* byBus = new BMenuItem(B_TRANSLATE("Bus"),
+		new BMessage(kMsgOrderBus));
 	BMenuItem* byCategory = new BMenuItem(B_TRANSLATE("Category"),
 		new BMessage(kMsgOrderCategory));
 	BMenuItem* byConnection = new BMenuItem(B_TRANSLATE("Connection"),
 		new BMessage(kMsgOrderConnection));
 	byCategory->SetMarked(true);
 	fOrderBy = byCategory->IsMarked() ? ORDER_BY_CATEGORY : ORDER_BY_CONNECTION;
+	orderByPopupMenu->AddItem(byBus);
 	orderByPopupMenu->AddItem(byCategory);
 	orderByPopupMenu->AddItem(byConnection);
 	fOrderByMenu = new BMenuField(B_TRANSLATE("Order by:"), orderByPopupMenu);
@@ -121,6 +131,11 @@ DevicesView::DeleteDevices()
 		delete fDevices.back();
 		fDevices.pop_back();
 	}
+
+	CategoryMapIterator iter;
+	for (iter = fCategoryMap.begin(); iter != fCategoryMap.end(); iter++)
+		delete iter->second;
+	fCategoryMap.clear();
 }
 
 
@@ -179,14 +194,28 @@ DevicesView::RebuildDevicesOutline()
 	// Rearranges existing Devices into the proper hierarchy
 	fDevicesOutline->MakeEmpty();
 
-	if (fOrderBy == ORDER_BY_CONNECTION) {
-		for (unsigned int i = 0; i < fDevices.size(); i++) {
-			if (fDevices[i]->GetPhysicalParent() == NULL) {
-				// process each parent device and its children
+	if (fOrderBy == ORDER_BY_BUS) {
+		// add all bus controllers to the outline
+		for (unsigned int i = 0; i < fDevices.size(); i++)
+			if (fDevices[i]->GetCategory() == CAT_BUS)
 				fDevicesOutline->AddItem(fDevices[i]);
-				AddChildrenToOutlineByConnection(fDevices[i]);
+
+		// attach devices to their bus
+		for (unsigned int i = 0; i < fDevices.size(); i++) {
+			if (fDevices[i]->GetCategory() != CAT_BUS) {
+				Device* busParent = fDevices[i]->GetPhysicalParent();
+
+				while (busParent != NULL && busParent->GetCategory() != CAT_BUS) {
+					busParent = busParent->GetPhysicalParent();
+				}
+
+				if (busParent != NULL)
+					fDevicesOutline->AddUnder(fDevices[i], busParent);
+				else
+					fDevicesOutline->AddItem(fDevices[i]);
 			}
 		}
+		fDevicesOutline->SortItemsUnder(NULL, true, SortItemsCompare);
 	} else if (fOrderBy == ORDER_BY_CATEGORY) {
 		// Add all categories to the outline
 		CategoryMapIterator iter;
@@ -208,8 +237,15 @@ DevicesView::RebuildDevicesOutline()
 			}
 		}
 		fDevicesOutline->SortItemsUnder(NULL, true, SortItemsCompare);
+	} else if (fOrderBy == ORDER_BY_CONNECTION) {
+		for (unsigned int i = 0; i < fDevices.size(); i++) {
+			if (fDevices[i]->GetPhysicalParent() == NULL) {
+				// process each parent device and its children
+				fDevicesOutline->AddItem(fDevices[i]);
+				AddChildrenToOutlineByConnection(fDevices[i]);
+			}
+		}
 	}
-	// TODO: Implement BY_BUS
 }
 
 
@@ -331,6 +367,7 @@ DevicesView::AddDeviceAndChildren(device_node_cookie *node, Device* parent)
 		if (attributes[i].fName == "controller_name") {
 			newDevice = new Device(parent, BUS_PCI,
 				CAT_MASS, attributes[i].fValue);
+			break;
 		}
 
 		// SCSI device node
@@ -354,10 +391,31 @@ DevicesView::AddDeviceAndChildren(device_node_cookie *node, Device* parent)
 			CAT_NONE, B_TRANSLATE("Unknown device"));
 	}
 
+	struct device_attr_info driverAttrInfo;
+	driverAttrInfo.node_cookie = *node;
+	driverAttrInfo.cookie = 0;
+	dm_get_driver_path(&driverAttrInfo);
+
+	bool hasPublishedPath = false;
+
 	// Add its attributes to the device, initialize it and add to the list.
 	for (unsigned int i = 0; i < attributes.size(); i++) {
+		if (attributes[i].fName == B_DEVICE_PUBLISHED_PATH) {
+			newDevice->SetAttribute(B_TRANSLATE("Device paths"), attributes[i].fValue);
+			hasPublishedPath = true;
+			continue;
+		}
+
 		newDevice->SetAttribute(attributes[i].fName, attributes[i].fValue);
 	}
+
+	if (driverAttrInfo.value.string[0] != '\0')
+		newDevice->SetAttribute(B_TRANSLATE("Driver used"), driverAttrInfo.value.string);
+	else
+		newDevice->SetAttribute(B_TRANSLATE("Driver used"), B_TRANSLATE("unknown"));
+	if (!hasPublishedPath)
+		newDevice->SetAttribute(B_TRANSLATE("Device paths"), B_TRANSLATE("none"));
+
 	newDevice->InitFromAttributes();
 	fDevices.push_back(newDevice);
 
@@ -392,6 +450,14 @@ DevicesView::MessageReceived(BMessage *msg)
 				fAttributesView->AddAttributes(device->GetAllAttributes());
 				fAttributesView->Invalidate();
 			}
+			break;
+		}
+
+		case kMsgOrderBus:
+		{
+			fOrderBy = ORDER_BY_BUS;
+			RescanDevices();
+			RebuildDevicesOutline();
 			break;
 		}
 

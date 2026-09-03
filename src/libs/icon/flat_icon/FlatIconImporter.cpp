@@ -324,7 +324,7 @@ FlatIconImporter::_ParseStyles(LittleEndianBuffer& buffer,
 			if (!style)
 				return B_NO_MEMORY;
 		} else {
-			// unkown style type, skip tag
+			// unknown style type, skip tag
 			uint16 tagLength;
 			if (!buffer.Read(tagLength))
 				return B_ERROR;
@@ -545,7 +545,7 @@ _ReadTransformer(LittleEndianBuffer& buffer, VertexSource& source,
 			return stroke;
 		}
 		default: {
-			// unkown transformer, skip tag
+			// unknown transformer, skip tag
 			uint16 tagLength;
 			if (!buffer.Read(tagLength))
 				return NULL;
@@ -675,7 +675,7 @@ FlatIconImporter::_ParseShapes(LittleEndianBuffer& buffer,
 			if (!shape)
 				return B_NO_MEMORY;
 		} else {
-			// unkown shape type, skip tag
+			// unknown shape type, skip tag
 			uint16 tagLength;
 			if (!buffer.Read(tagLength))
 				return B_ERROR;

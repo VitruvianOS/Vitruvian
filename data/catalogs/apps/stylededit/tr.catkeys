@@ -1,12 +1,10 @@
-1	turkish	x-vnd.Haiku-StyledEdit	1077895429
+1	turkish	x-vnd.Haiku-StyledEdit	73700260
 Document statistics	Statistics		Belge istatistikleri
-Cannot revert, file not found: \"%s\".	RevertToSavedAlert		Geri alınamıyor, dosya bulunamadı: “%s”.
 Cut	Menus		Kes
 Center	Menus		Orta
 Increase size	Menus		Büyüt
 Page setup…	Menus		Sayfa yapısı…
 Wrap-around search	FindandReplaceWindow		Tüm dosyada ara
-Untitled 	StyledEditWindow		Adsız 
 OK	Statistics		Tamam
 Find	FindandReplaceWindow		Bul
 New	Menus		Yeni
@@ -15,6 +13,8 @@ Search backwards	FindandReplaceWindow		Geriye doğru ara
 Find again	Menus		Yeniden bul
 Read-only	StatusView		Saltokunur
 Save	Menus		Kaydet
+Untitled %d	Window title		Başlıksız %d
+Cannot revert, file not found: \"%filename%\".	RevertToSavedAlert		Geri alınamıyor; dosya bulunamadı: “%filename%”.
 Cancel	QuitAlert		Vazgeç
 Copy	Menus		Kopyala
 Reload	NodeMonitorAlerts		Yeniden yükle
@@ -22,12 +22,13 @@ line %d, column %d	StatusView		%d. satır, %d. sütun
 Words:	Statistics		Sözcük:
 ???	LoadAlert		???
 Recover	NodeMonitorAlerts		Kurtar
-Error saving \"%s\":\n%s	SaveAlert		“%s” kaydedilirken hata:\n%s
+Unable to unlock file\n\t%error%	QuitAlert		Dosya kilitlenemiyor:\n\t%error%
 OK	RevertToSavedAlert		Tamam
 Unlock file	StatusView		Dosya kilidini aç
 Italic	Menus		Eğik
 Can't undo	Menus		Değişiklik yok
 Replace…	Menus		Değiştir…
+This file is marked read-only. Save changes to the document \"%filename%\"? 	SaveAlert		Bu dosya saltokunur olarak imlenmiş. “%filename%” dosyasına yapılan değişiklikler kaydedilsin mi?
 File	Menus		Dosya
 Paste	Menus		Yapıştır
 Bold	Menus		Kalın
@@ -36,8 +37,11 @@ File \"%file%\" was removed by another application, recover it?	NodeMonitorAlert
 Lines:	Statistics		Satır:
 Strikeout	Menus		Üzeri çizili
 Replace in all windows	FindandReplaceWindow		Tüm pencerelerde değiştir
-\"%s\" has unsaved changes.\nRevert it to the last saved version? 	RevertToSavedAlert		“%s” içinde kaydedilmeyen değişiklikler var.\nDeğişiklikleri yok saymak istediğinizden emin misiniz?
+Error saving \"%filename%\":\n%error%	SaveAlert		“%filename%” dosyası kaydedilirken hata:\n\t%error%
+Save changes to the document \"%title%\"?	QuitAlert		“%title%” belgesine yapılan değişiklikler kaydedilsin mi?
+Style	Menus		Biçem
 Save	SaveAlert		Kaydet
+\"%title%\" has unsaved changes.\nRevert it to the last saved version?	RevertToSavedAlert		“%title%” belgesinde kaydedilmemiş değişiklikler var.\nSon kaydedilmiş sürüme geri dönülsün mü?
 Default	Open_and_SaveAsPanel		Saptanmış
 Cancel	RevertToSavedAlert		Vazgeç
 Cancel	FindandReplaceWindow		Vazgeç
@@ -45,17 +49,14 @@ Statistics…	Menus		İstatistikler…
 Encoding	Open_and_SaveAsPanel		Kodlama
 Replace all	FindandReplaceWindow		Tümünü değiştir
 Close	Menus		Kapat
-Error loading \"%s\":\n\tUnsupported format	LoadAlert		“%s” yüklenirken hata:\n\tDesteklenmeyen biçim
 Left	Menus		Sol
 Default	Menus		Saptanmış
 OK	SaveAlert		Tamam
 Color	Menus		Renk
-Save changes to the document \"%s\"? 	QuitAlert		“%s” içindeki değişiklikler kaydedilsin mi?
 StyledEdit	System name		StyledEdit
 Underline	Menus		Altı çizili
 Find:	FindandReplaceWindow		Bul:
 Undo typing	QuitAlert		Yazımı geri al
-Error loading \"%s\":\n\t%s	LoadAlert		“%s” yüklenirken hata:\n\t%s
 Don't save	SaveAlert		Kaydetme
 Reload…	Menus		Yeniden yükle…
 Print…	Menus		Yazdır…
@@ -64,7 +65,6 @@ Redo typing	QuitAlert		Yazımı yinele
 Ignore	NodeMonitorAlerts		Yok say
 Wrap lines	Menus		Satırları kaydır
 Text encoding	Menus		Metin kodlaması
-Unable to unlock file\n\t%s	QuitAlert		Dosya kilidi açılamıyor\n\t%s
 Modified	StatusView		Değiştirildi
 OK	LoadAlert		Tamam
 Save	QuitAlert		Kaydet
@@ -84,9 +84,10 @@ Open…	Menus		Aç…
 Save as…	Menus		Farklı kaydet…
 Replace	FindandReplaceWindow		Değiştir
 Characters:	Statistics		Karakter:
+Error loading \"%filename%\":\n\tUnsupported format	LoadAlert		“%filename%” yüklenirken hata:\n\tDesteklenmeyen biçim
 Don't save	QuitAlert		Kaydetme
-This file is marked read-only. Save changes to the document \"%s\"? 	SaveAlert		Bu dosya saltokunur olarak imlenmiş. “%s” belgesindeki değişiklikler kaydedilsin mi? 
 Align	Menus		Hizalama
 Font	Menus		Yazıtipi
 Select all	Menus		Tümünü seç
 Right	Menus		Sağ
+Error loading \"%filename%\":\n\t%error%	LoadAlert		“%filename%” yüklenirken hata:\n\t%error%

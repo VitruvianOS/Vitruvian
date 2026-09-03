@@ -1,12 +1,10 @@
-1	catalan; valencian	x-vnd.Haiku-StyledEdit	1077895429
+1	catalan; valencian	x-vnd.Haiku-StyledEdit	73700260
 Document statistics	Statistics		Estadístiques del document
-Cannot revert, file not found: \"%s\".	RevertToSavedAlert		No es pot revertir: el fitxer no es troba: \"%s\".
 Cut	Menus		Retalla
 Center	Menus		Centrat
 Increase size	Menus		Augmenta'n la mida
 Page setup…	Menus		Configuració de la pàgina...
 Wrap-around search	FindandReplaceWindow		Cerca cíclica
-Untitled 	StyledEditWindow		Sense títol 
 OK	Statistics		D'acord
 Find	FindandReplaceWindow		Troba
 New	Menus		Nou
@@ -15,6 +13,8 @@ Search backwards	FindandReplaceWindow		Cerca enrere
 Find again	Menus		Repeteix la cerca
 Read-only	StatusView		Només de lectura
 Save	Menus		Desa
+Untitled %d	Window title		%d sense títol
+Cannot revert, file not found: \"%filename%\".	RevertToSavedAlert		No es pot revertir. No s'ha trobat el fitxer \"%filename%\".
 Cancel	QuitAlert		Cancel·la
 Copy	Menus		Copia
 Reload	NodeMonitorAlerts		Torna a carregar
@@ -22,12 +22,13 @@ line %d, column %d	StatusView		línia %d, columna %d
 Words:	Statistics		Paraules:
 ???	LoadAlert		???
 Recover	NodeMonitorAlerts		Recupera
-Error saving \"%s\":\n%s	SaveAlert		Error en desar \"%s\":\n%s
+Unable to unlock file\n\t%error%	QuitAlert		No s'ha pogut desblocar el fitxer\n\t%error%
 OK	RevertToSavedAlert		D'acord
 Unlock file	StatusView		Desbloca el fitxer
 Italic	Menus		Cursiva
 Can't undo	Menus		No es pot refer
 Replace…	Menus		Reemplaça...
+This file is marked read-only. Save changes to the document \"%filename%\"? 	SaveAlert		Aquest fitxer està marcat com a només de lectura. Voleu desar els canvis al document \"%filename%\"?
 File	Menus		Fitxer
 Paste	Menus		Enganxa
 Bold	Menus		Negreta
@@ -36,8 +37,11 @@ File \"%file%\" was removed by another application, recover it?	NodeMonitorAlert
 Lines:	Statistics		Línies:
 Strikeout	Menus		Ratllat
 Replace in all windows	FindandReplaceWindow		Reemplaça-ho a totes les finestres
-\"%s\" has unsaved changes.\nRevert it to the last saved version? 	RevertToSavedAlert		\"%s\" té canvis sense desar.\nVoleu revertir-lo a la darrera versió desada? 
+Error saving \"%filename%\":\n%error%	SaveAlert		Hi ha hagut un error en desar \"%filename%\":\n%error%
+Save changes to the document \"%title%\"?	QuitAlert		Voleu desar els canvis al document \"%title%\"?
+Style	Menus		Estil
 Save	SaveAlert		Desa
+\"%title%\" has unsaved changes.\nRevert it to the last saved version?	RevertToSavedAlert		El fitxer \"%title%\" té canvis no desats.\nVoleu revertir-lo a la darrera versió desada?
 Default	Open_and_SaveAsPanel		Per defecte
 Cancel	RevertToSavedAlert		Cancel·la
 Cancel	FindandReplaceWindow		Cancel·la
@@ -45,17 +49,14 @@ Statistics…	Menus		Estadístiques...
 Encoding	Open_and_SaveAsPanel		Codificació
 Replace all	FindandReplaceWindow		Reemplaça-ho tot
 Close	Menus		Tanca
-Error loading \"%s\":\n\tUnsupported format	LoadAlert		Error en carregar \"%s\":\n\tFormat no admès.
 Left	Menus		Esquerra
 Default	Menus		Per defecte
 OK	SaveAlert		D'acord
 Color	Menus		Color
-Save changes to the document \"%s\"? 	QuitAlert		Voleu desar els canvis al document \"%s\"? 
 StyledEdit	System name		Editor d'estil
 Underline	Menus		Subratllat
 Find:	FindandReplaceWindow		Troba:
 Undo typing	QuitAlert		Desfés el tecleig
-Error loading \"%s\":\n\t%s	LoadAlert		Error en carregar \"%s\":\n\t%s
 Don't save	SaveAlert		No ho desis
 Reload…	Menus		Torna a carregar...
 Print…	Menus		Imprimeix...
@@ -64,7 +65,6 @@ Redo typing	QuitAlert		Refés el tecleig
 Ignore	NodeMonitorAlerts		Ignora-ho
 Wrap lines	Menus		Ajusta les línies
 Text encoding	Menus		Codificació del text
-Unable to unlock file\n\t%s	QuitAlert		No es pot desblocar el fitxer\n\t%s
 Modified	StatusView		Modificat
 OK	LoadAlert		D'acord
 Save	QuitAlert		Desa
@@ -84,9 +84,10 @@ Open…	Menus		Obre...
 Save as…	Menus		Desa com a...
 Replace	FindandReplaceWindow		Reemplaça
 Characters:	Statistics		Caràcters:
+Error loading \"%filename%\":\n\tUnsupported format	LoadAlert		Hi ha hagut un error en carregar \"%filename%\":\n\tFormat no compatible
 Don't save	QuitAlert		No ho desis
-This file is marked read-only. Save changes to the document \"%s\"? 	SaveAlert		Aquest fitxer és només de lectura. Voleu desar els canvis al document \"%s\"? 
 Align	Menus		Alinea
 Font	Menus		Lletra
 Select all	Menus		Selecciona-ho tot
 Right	Menus		Dreta
+Error loading \"%filename%\":\n\t%error%	LoadAlert		Hi ha hagut un error en carregar \"%filename%\":\n\t%error%

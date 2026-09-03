@@ -1,12 +1,10 @@
-1	ukrainian	x-vnd.Haiku-StyledEdit	1077895429
+1	ukrainian	x-vnd.Haiku-StyledEdit	73700260
 Document statistics	Statistics		Статистика документу
-Cannot revert, file not found: \"%s\".	RevertToSavedAlert		Неможливо зробити відкат, файл не знайдено: \"%s\".
 Cut	Menus		Вирізати
 Center	Menus		Центр
 Increase size	Menus		Збільшити розмір
 Page setup…	Menus		Налаштування сторінки…
 Wrap-around search	FindandReplaceWindow		Шукати по всьому документу
-Untitled 	StyledEditWindow		Без назви 
 OK	Statistics		ОК
 Find	FindandReplaceWindow		Знайти
 New	Menus		Новий
@@ -15,29 +13,35 @@ Search backwards	FindandReplaceWindow		Шукати від верху до ни�
 Find again	Menus		Знайти далі
 Read-only	StatusView		Тільки читання
 Save	Menus		Зберегти
+Untitled %d	Window title		Без назви %d
+Cannot revert, file not found: \"%filename%\".	RevertToSavedAlert		Відкат назад неможливий, файл не знайдено: \«%filename%\».
 Cancel	QuitAlert		Скасувати
 Copy	Menus		Копіювати
 Reload	NodeMonitorAlerts		Перезавантажити
-line %d, column %d	StatusView		рядок %d, колонка %d
+line %d, column %d	StatusView		рядок %d, стовпець %d
 Words:	Statistics		Слів:
 ???	LoadAlert		???
 Recover	NodeMonitorAlerts		Відновити
-Error saving \"%s\":\n%s	SaveAlert		Помилка збереження \"%s\":\n%s
+Unable to unlock file\n\t%error%	QuitAlert		Не вдається розблокувати файл\n\t%error%
 OK	RevertToSavedAlert		ОК
 Unlock file	StatusView		Розблокувати
 Italic	Menus		Курсив
-Can't undo	Menus		Неможливо відмінити
+Can't undo	Menus		Відкат дії неможливий
 Replace…	Menus		Замінити…
+This file is marked read-only. Save changes to the document \"%filename%\"? 	SaveAlert		Цей файл має атрибут «тільки для читання». Зберегти зміни в документі \«%filename%\»? 
 File	Menus		Файл
 Paste	Menus		Вставити
 Bold	Menus		Жирний
-File \"%file%\" was modified by another application, reload it?	NodeMonitorAlerts		Файл \"%file%\" був змінений іншою програмою, перезавантажити його?
-File \"%file%\" was removed by another application, recover it?	NodeMonitorAlerts		Файл \"%file%\" був вилучений іншою програмою, відновити його?
+File \"%file%\" was modified by another application, reload it?	NodeMonitorAlerts		Файл \«%file%\» був змінений іншою програмою, перезавантажити його?
+File \"%file%\" was removed by another application, recover it?	NodeMonitorAlerts		Файл \«%file%\» був видалений іншою програмою, відновити його?
 Lines:	Statistics		Рядків:
 Strikeout	Menus		Закреслений
 Replace in all windows	FindandReplaceWindow		Замінити у всіх вікнах
-\"%s\" has unsaved changes.\nRevert it to the last saved version? 	RevertToSavedAlert		\"%s\" має незбережені зміни.\nЗробити відкат до його останньої збереженої версії? 
+Error saving \"%filename%\":\n%error%	SaveAlert		Помилка збереження \«%filename%\»:\n%error%
+Save changes to the document \"%title%\"?	QuitAlert		Зберегти зміни в документі \«%title%\»?
+Style	Menus		Стиль
 Save	SaveAlert		Зберегти
+\"%title%\" has unsaved changes.\nRevert it to the last saved version?	RevertToSavedAlert		\«%title%\» має незбережені зміни.\nВідновити останню збережену версію?
 Default	Open_and_SaveAsPanel		За замовчуванням
 Cancel	RevertToSavedAlert		Скасувати
 Cancel	FindandReplaceWindow		Скасувати
@@ -45,17 +49,14 @@ Statistics…	Menus		Статистика…
 Encoding	Open_and_SaveAsPanel		Кодування
 Replace all	FindandReplaceWindow		Замінити все
 Close	Menus		Закрити
-Error loading \"%s\":\n\tUnsupported format	LoadAlert		Помилка завантаження \"%s\":\n\tФормат не підтримується
 Left	Menus		Вліво
 Default	Menus		Стандартний
 OK	SaveAlert		ОК
 Color	Menus		Колір
-Save changes to the document \"%s\"? 	QuitAlert		Зберегти зміни в документі \"%s\" ? 
 StyledEdit	System name		StyledEdit
 Underline	Menus		Підкреслений
 Find:	FindandReplaceWindow		Знайти:
 Undo typing	QuitAlert		Відмінити набір тексту
-Error loading \"%s\":\n\t%s	LoadAlert		Помилка завантаження \"%s\":\n\t%s
 Don't save	SaveAlert		Не зберігати
 Reload…	Menus		Перезавантажити…
 Print…	Menus		Друкувати…
@@ -64,7 +65,6 @@ Redo typing	QuitAlert		Повторити введення тексту
 Ignore	NodeMonitorAlerts		Ігнорувати
 Wrap lines	Menus		Перенос по словах
 Text encoding	Menus		Кодування
-Unable to unlock file\n\t%s	QuitAlert		Неможливо розблокувати файл\n\t%s
 Modified	StatusView		Змінений
 OK	LoadAlert		ОК
 Save	QuitAlert		Зберегти
@@ -78,15 +78,16 @@ Decrease size	Menus		Зменшити розмір
 Autodetect	Menus		Автовизначення
 Replace next	Menus		Замінити наступний
 OK	QuitAlert		ОК
-Edit	Menus		Редагувати
+Edit	Menus		Коректив
 Replace with:	FindandReplaceWindow		Замінити на:
 Open…	Menus		Відкрити…
 Save as…	Menus		Зберегти як…
 Replace	FindandReplaceWindow		Замінити
 Characters:	Statistics		Символів:
+Error loading \"%filename%\":\n\tUnsupported format	LoadAlert		Помилка завантаження \«%filename%\»:\n\tФормат не підтримується
 Don't save	QuitAlert		Не зберігати
-This file is marked read-only. Save changes to the document \"%s\"? 	SaveAlert		Для цього файлу встановлений атрибут тільки читання. Зберегти зміни в документі \"%s\"?  
 Align	Menus		Вирівняти
 Font	Menus		Шрифт
 Select all	Menus		Вибрати все
 Right	Menus		Вправо
+Error loading \"%filename%\":\n\t%error%	LoadAlert		Помилка завантаження \«%filename%\»:\n\t%error%

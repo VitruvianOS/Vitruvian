@@ -37,6 +37,7 @@ typedef struct {
 		 */
 } io_resource;
 
+
 /* attribute of a device node */
 typedef struct {
 	const char		*name;
@@ -149,6 +150,8 @@ struct driver_module_info {
 
 #define B_DEVICE_UNIQUE_ID			"device/unique id"			/* string */
 
+#define B_DEVICE_PUBLISHED_PATH		"device/published path"
+
 /* device flags */
 #define B_FIND_CHILD_ON_DEMAND		0x01
 #define B_FIND_MULTIPLE_CHILDREN	0x02
@@ -186,5 +189,6 @@ struct device_module_info {
 	status_t (*select)(void *cookie, uint8 event, selectsync *sync);
 	status_t (*deselect)(void *cookie, uint8 event, selectsync *sync);
 };
+
 
 #endif	/* _DEVICE_MANAGER_H */

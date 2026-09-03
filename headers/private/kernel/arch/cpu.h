@@ -29,10 +29,10 @@ status_t arch_cpu_init_post_vm(struct kernel_args *args);
 status_t arch_cpu_init_post_modules(struct kernel_args *args);
 status_t arch_cpu_shutdown(bool reboot);
 
-void arch_cpu_invalidate_TLB_range(addr_t start, addr_t end);
-void arch_cpu_invalidate_TLB_list(addr_t pages[], int num_pages);
-void arch_cpu_user_TLB_invalidate(void);
-void arch_cpu_global_TLB_invalidate(void);
+void arch_cpu_invalidate_tlb_range(intptr_t context, addr_t start, addr_t end);
+void arch_cpu_invalidate_tlb_list(intptr_t context, addr_t pages[], int num_pages);
+void arch_cpu_user_tlb_invalidate(intptr_t context);
+void arch_cpu_global_tlb_invalidate(void);
 
 void arch_cpu_sync_icache(void *address, size_t length);
 

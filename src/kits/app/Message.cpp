@@ -17,7 +17,7 @@
 #include <DirectMessageTarget.h>
 #include <MessengerPrivate.h>
 #include <TokenSpace.h>
-#include <util/KMessage.h>
+#include <kernel/util/KMessage.h>
 #include <VRefCache.h>
 #include <VRefTrack.h>
 

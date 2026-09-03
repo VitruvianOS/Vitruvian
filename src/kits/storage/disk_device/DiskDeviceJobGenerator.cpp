@@ -441,7 +441,7 @@ DiskDeviceJobGenerator::_GenerateRemainingJobs(BPartition* parent,
 					&& contentDiskSystem.IsFileSystem();
 
 			if (contentIsFileSystem
-				&& ((changeFlags & B_PARTITION_CHANGED_NAME)
+				&& ((changeFlags & B_PARTITION_CHANGED_CONTENT_NAME)
 					|| compare_string(partition->ContentName(),
 						partitionData->content_name))) {
 				status_t error = _GenerateSetContentNameJob(partition);

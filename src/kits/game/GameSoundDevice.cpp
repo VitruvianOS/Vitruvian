@@ -355,7 +355,7 @@ static int32            sDefaultDeviceRefs = 0;
 
 
 BGameSoundDevice*
-GetDefaultDevice()
+BGameSoundDevice::GetDefaultDevice()
 {
 	std::lock_guard<std::mutex> _(sDefaultDeviceLock);
 	if (sDefaultDevice == NULL) {
@@ -369,7 +369,7 @@ GetDefaultDevice()
 
 
 void
-ReleaseDevice()
+BGameSoundDevice::ReleaseDevice()
 {
 	std::lock_guard<std::mutex> _(sDefaultDeviceLock);
 	if (sDefaultDeviceRefs > 0)

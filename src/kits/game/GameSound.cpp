@@ -4,7 +4,6 @@
  *
  * Authors:
  *		Christopher ML Zumwalt May (zummy@users.sf.net)
- *
  */
 
 
@@ -30,7 +29,7 @@ BGameSound::BGameSound(BGameSoundDevice *device)
 	// TODO: device is ignored!
 	// NOTE: BeBook documents that BGameSoundDevice must currently always
 	// be NULL...
-	fDevice = GetDefaultDevice();
+	fDevice = BGameSoundDevice::GetDefaultDevice();
 	fInitError = fDevice->InitCheck();
 }
 
@@ -41,7 +40,7 @@ BGameSound::BGameSound(const BGameSound &other)
 {
 	memcpy(&fFormat, &other.fFormat, sizeof(gs_audio_format));
 	// TODO: device from other is ignored!
-	fDevice = GetDefaultDevice();
+	fDevice = BGameSoundDevice::GetDefaultDevice();
 
 	fInitError = fDevice->InitCheck();
 }
@@ -52,7 +51,7 @@ BGameSound::~BGameSound()
 	if (fSound >= 0)
 		fDevice->ReleaseBuffer(fSound);
 
-	ReleaseDevice();
+	BGameSoundDevice::ReleaseDevice();
 }
 
 

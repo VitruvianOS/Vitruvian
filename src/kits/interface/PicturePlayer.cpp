@@ -19,6 +19,7 @@
 
 #include <AffineTransform.h>
 #include <DataIO.h>
+#include <Font.h>
 #include <Gradient.h>
 #include <PictureProtocol.h>
 #include <Shape.h>
@@ -47,8 +48,7 @@ public:
 	virtual void DrawEllipse(const BRect& rect, bool fill);
 	virtual void DrawPolygon(size_t numPoints, const BPoint points[], bool isClosed, bool fill);
 	virtual void DrawShape(const BShape& shape, bool fill);
-	virtual void DrawString(const char* string, size_t length, float spaceEscapement,
-		float nonSpaceEscapement);
+	virtual void DrawString(const char* string, size_t length, const escapement_delta& delta);
 	virtual void DrawPixels(const BRect& source, const BRect& destination, uint32 width,
 		uint32 height, size_t bytesPerRow, color_space pixelFormat, uint32 flags, const void* data,
 		size_t length);
@@ -224,11 +224,11 @@ CallbackAdapterPlayer::DrawShape(const BShape& shape, bool fill)
 
 void
 CallbackAdapterPlayer::DrawString(const char* _string, size_t length,
-	float deltaSpace, float deltaNonSpace)
+	const escapement_delta& delta)
 {
 	char* string = strndup(_string, length);
 
-	fCallbacks->draw_string(fUserData, string, deltaSpace, deltaNonSpace);
+	fCallbacks->draw_string(fUserData, string, delta.nonspace, delta.space);
 
 	free(string);
 }
@@ -1162,17 +1162,14 @@ PicturePlayer::_Play(PicturePlayerCallbacks& callbacks,
 			{
 				const int32* length;
 				const char* string;
-				const float* escapementSpace;
-				const float* escapementNonSpace;
+				const escapement_delta* delta;
 				if (!reader.Get(length)
 					|| !reader.Get(string, *length)
-					|| !reader.Get(escapementSpace)
-					|| !reader.Get(escapementNonSpace)) {
+					|| !reader.Get(delta)) {
 					break;
 				}
 
-				callbacks.DrawString(string, *length,
-					*escapementSpace, *escapementNonSpace);
+				callbacks.DrawString(string, *length, *delta);
 				break;
 			}
 
@@ -1203,19 +1200,19 @@ PicturePlayer::_Play(PicturePlayerCallbacks& callbacks,
 				const uint32* bytesPerRow;
 				const uint32* colorSpace;
 				const uint32* flags;
-				const void* data;
-				size_t length;
+				const int32* length;
+				const uint8* data;
 				if (!reader.Get(sourceRect)
 					|| !reader.Get(destinationRect) || !reader.Get(width)
 					|| !reader.Get(height) || !reader.Get(bytesPerRow)
 					|| !reader.Get(colorSpace) || !reader.Get(flags)
-					|| !reader.GetRemaining(data, length)) {
+					|| !reader.Get(length) || !reader.Get(data, *length)) {
 					break;
 				}
 
 				callbacks.DrawPixels(*sourceRect, *destinationRect,
 					*width, *height, *bytesPerRow, (color_space)*colorSpace,
-					*flags, data, length);
+					*flags, data, *length);
 				break;
 			}
 
@@ -1522,11 +1519,13 @@ PicturePlayer::_Play(PicturePlayerCallbacks& callbacks,
 
 			case B_PIC_SET_TRANSFORM:
 			{
-				const BAffineTransform* transform;
-				if (!reader.Get(transform))
+				const double* transformValues;
+				if (!reader.Get(transformValues, 6))
 					break;
 
-				callbacks.SetTransform(*transform);
+				BAffineTransform transform;
+				memcpy(&transform.sx, transformValues, 6 * sizeof(double));
+				callbacks.SetTransform(transform);
 				break;
 			}
 

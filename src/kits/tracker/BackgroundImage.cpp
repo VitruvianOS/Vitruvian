@@ -234,7 +234,10 @@ BackgroundImage::Show(BackgroundImageInfo* info, BView* view)
 			}
 			// else fall thru
 		case kAtOffset:
-			destinationBitmapBounds.OffsetTo(info->fOffset);
+			if (!fIsDesktop && poseView != NULL)
+				destinationBitmapBounds.OffsetTo(poseView->Extent().LeftTop() + info->fOffset);
+			else
+				destinationBitmapBounds.OffsetTo(info->fOffset);
 			break;
 
 		case kTiled:
@@ -242,6 +245,9 @@ BackgroundImage::Show(BackgroundImageInfo* info, BView* view)
 				destinationBitmapBounds.OffsetBy(
 					(viewBounds.Width() - bitmapBounds.Width()) / 2,
 					(viewBounds.Height() - bitmapBounds.Height()) / 2);
+			} else if (poseView != NULL) {
+				// tile from top left of window even if scrolled over
+				destinationBitmapBounds.OffsetTo(poseView->Extent().LeftTop());
 			}
 			options |= B_TILE_BITMAP;
 			break;
@@ -384,7 +390,7 @@ BackgroundImage::Refresh(BackgroundImage* oldBackgroundImage,
 	}
 
 	BackgroundImage* backgroundImage = GetBackgroundImage(fromNode, desktop);
-	if (backgroundImage != NULL && poseView->ViewMode() != kListMode)
+	if (backgroundImage != NULL && poseView != NULL && poseView->ViewMode() != kListMode)
 		backgroundImage->Show(poseView, current_workspace());
 
 	return backgroundImage;

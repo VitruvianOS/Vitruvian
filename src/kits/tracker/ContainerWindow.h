@@ -102,7 +102,7 @@ public:
 		window_look look = B_DOCUMENT_WINDOW_LOOK,
 		window_feel feel = B_NORMAL_WINDOW_FEEL,
 		uint32 windowFlags = B_WILL_ACCEPT_FIRST_CLICK | B_NO_WORKSPACE_ACTIVATION,
-		uint32 workspace = B_CURRENT_WORKSPACE, bool useLayout = true);
+		uint32 workspace = B_CURRENT_WORKSPACE, bool useLayout = true, bool runIt = true);
 
 	virtual ~BContainerWindow();
 
@@ -159,7 +159,10 @@ public:
 	bool SaveStateIsEnabled() const;
 	void SetSaveStateEnabled(bool);
 
-	void UpdateBackgroundImage();
+	virtual void UpdateBackgroundImage();
+		// public: V's BPoseView calls this after switching directories
+		// (upstream r1beta6 keeps it protected; V's PoseView.cpp has
+		// called it since hrev52990, so it stays reachable).
 
 	static status_t GetLayoutState(BNode*, BMessage*);
 	static status_t SetLayoutState(BNode*, const BMessage*);
@@ -253,13 +256,10 @@ protected:
 	virtual void PopulateMoveCopyNavMenu(BNavMenu*, uint32,
 		const entry_ref*, bool);
 
-	virtual void SetupOpenWithMenu(BMenu*);
 	virtual void SetupOpenWithMenu(BMenu*, const entry_ref* ref);
 	virtual void SetupNewTemplatesMenu(BMenu*, MenuContext context);
-	virtual void SetupEditQueryItem(BMenu*);
 	virtual void SetupEditQueryItem(BMenu*, const entry_ref* ref);
 	virtual void SetupDiskMenu(BMenu*);
-	virtual void SetupMountMenu(BMenu*, MenuContext context);
 	virtual void SetupMountMenu(BMenu*, MenuContext context, const entry_ref* ref);
 	BMenuItem* DetachMountMenu();
 

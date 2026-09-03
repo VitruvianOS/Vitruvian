@@ -195,7 +195,7 @@ BControlLook::GetInsets(frame_type frameType, background_type backgroundType,
 float
 BControlLook::GetScrollBarWidth(orientation orientation)
 {
-	return ComposeSpacing(B_USE_CORNER_SPACING);
+	return std::max(ComposeSpacing(B_USE_CORNER_SPACING), 14.0f);
 }
 
 

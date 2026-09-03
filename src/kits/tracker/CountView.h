@@ -35,6 +35,7 @@ All rights reserved.
 #define _COUNT_VIEW_H
 
 
+#include <NumberFormat.h>
 #include <String.h>
 #include <View.h>
 
@@ -60,6 +61,8 @@ public:
 	void StartBarberPole();
 	void EndBarberPole();
 
+	bool ShouldHaveDirectoryPopUpMenu();
+
 	void SetTypeAhead(const char*);
 	const char* TypeAhead() const;
 	bool IsTypingAhead() const;
@@ -73,8 +76,7 @@ public:
 private:
 	BRect BarberPoleInnerRect() const;
 	BRect BarberPoleOuterRect() const;
-	BRect TextInvalRect() const;
-	BRect TextAndBarberPoleRect() const;
+	BRect TextRect() const;
 	void TrySpinningBarberPole();
 
 	int32 fLastCount;
@@ -86,6 +88,7 @@ private:
 	bigtime_t fStartSpinningAfter;
 	BString fTypeAheadString;
 	BString fFilterString;
+	BNumberFormat fNumberFormat;
 };
 
 } // namespace BPrivate

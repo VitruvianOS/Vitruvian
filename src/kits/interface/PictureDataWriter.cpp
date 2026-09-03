@@ -203,11 +203,11 @@ PictureDataWriter::WriteSetScale(const float& scale)
 
 
 status_t
-PictureDataWriter::WriteSetTransform(BAffineTransform transform)
+PictureDataWriter::WriteSetTransform(const BAffineTransform& transform)
 {
 	try {
 		BeginOp(B_PIC_SET_TRANSFORM);
-		Write<BAffineTransform>(transform);
+		WriteData(&transform.sx, 6 * sizeof(double));
 		EndOp();
 	} catch (status_t& status) {
 		return status;
@@ -494,8 +494,8 @@ PictureDataWriter::WriteDrawString(const BPoint& where, const char* string,
 		BeginOp(B_PIC_DRAW_STRING);
 		Write<int32>(length);
 		WriteData(string, length);
-		Write<float>(escapement.space);
 		Write<float>(escapement.nonspace);
+		Write<float>(escapement.space);
 		EndOp();
 	} catch (status_t& status) {
 		return status;
@@ -711,6 +711,7 @@ PictureDataWriter::WriteDrawBitmap(const BRect& srcRect, const BRect& dstRect,
 		Write<int32>(bytesPerRow);
 		Write<int32>(colorSpace);
 		Write<int32>(flags);
+		Write<int32>(length);
 		WriteData(data, length);
 		EndOp();
 	} catch (status_t& status) {

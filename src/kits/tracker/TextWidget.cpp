@@ -136,8 +136,8 @@ BTextWidget::ColumnRect(BPoint poseLoc, const BColumn* column,
 	BRect rect;
 	rect.left = column->Offset() + poseLoc.x;
 	rect.right = rect.left + column->Width();
-	rect.bottom = poseLoc.y + roundf((view->ListElemHeight() + ActualFontHeight(view)) / 2.f);
-	rect.top = rect.bottom - floorf(ActualFontHeight(view));
+	rect.bottom = poseLoc.y + roundf((view->ListElemHeight() + view->FontHeight()) / 2.f);
+	rect.top = rect.bottom - view->FontHeight();
 
 	return rect;
 }
@@ -150,15 +150,18 @@ BTextWidget::CalcRectCommon(BPoint poseLoc, const BColumn* column,
 	BRect rect;
 	float viewWidth;
 
+	poseLoc.x = roundf(poseLoc.x);
+	poseLoc.y = roundf(poseLoc.y);
+
 	if (view->ViewMode() == kListMode) {
-		viewWidth = ceilf(std::min(column->Width(), textWidth));
+		viewWidth = roundf(std::min(column->Width(), textWidth));
 
 		poseLoc.x += column->Offset();
 
 		switch (fAlignment) {
 			case B_ALIGN_LEFT:
 				rect.left = poseLoc.x;
-				rect.right = rect.left + viewWidth;
+				rect.right = rect.left + viewWidth - 1;
 				break;
 
 			case B_ALIGN_CENTER:
@@ -166,12 +169,12 @@ BTextWidget::CalcRectCommon(BPoint poseLoc, const BColumn* column,
 				if (rect.left < 0)
 					rect.left = 0;
 
-				rect.right = rect.left + viewWidth;
+				rect.right = rect.left + viewWidth - 1;
 				break;
 
 			case B_ALIGN_RIGHT:
 				rect.right = poseLoc.x + column->Width();
-				rect.left = rect.right - viewWidth;
+				rect.left = rect.right - viewWidth + 1;
 				if (rect.left < 0)
 					rect.left = 0;
 				break;
@@ -181,30 +184,26 @@ BTextWidget::CalcRectCommon(BPoint poseLoc, const BColumn* column,
 				break;
 		}
 
-		rect.bottom = poseLoc.y + roundf((view->ListElemHeight() + ActualFontHeight(view)) / 2.f);
-		rect.top = rect.bottom - floorf(ActualFontHeight(view));
+		rect.bottom = poseLoc.y + roundf((view->ListElemHeight() + view->FontHeight()) / 2.f);
+		rect.top = rect.bottom - view->FontHeight() + 1;
 	} else {
 		float iconSize = (float)view->IconSizeInt();
-		textWidth = floorf(textWidth);
-			// prevent drawing artifacts from selection rect drawing an extra pixel
-
 		if (view->ViewMode() == kIconMode) {
 			// icon mode
-			viewWidth = ceilf(std::min(view->StringWidth("M") * 30, textWidth));
+			viewWidth = roundf(std::min(view->StringWidth("M") * 30, textWidth));
 
 			rect.left = poseLoc.x + roundf((iconSize - viewWidth) / 2.f);
 			rect.bottom = poseLoc.y + ceilf(view->IconPoseHeight());
-			rect.top = rect.bottom - floorf(ActualFontHeight(view));
 		} else {
 			// mini icon mode
-			viewWidth = ceilf(textWidth);
+			viewWidth = roundf(textWidth);
 
 			rect.left = poseLoc.x + iconSize + kMiniIconSeparator;
-			rect.bottom = poseLoc.y + roundf((iconSize + ActualFontHeight(view)) / 2.f);
-			rect.top = poseLoc.y;
+			rect.bottom = poseLoc.y + roundf((iconSize + view->FontHeight()) / 2.f);
 		}
 
-		rect.right = rect.left + viewWidth;
+		rect.top = rect.bottom - view->FontHeight() + 1;
+		rect.right = rect.left + viewWidth - 1;
 	}
 
 	return rect;
@@ -245,21 +244,19 @@ BTextWidget::CalcClickRect(BPoint poseLoc, const BColumn* column, const BPoseVie
 void
 BTextWidget::CheckExpiration()
 {
-	if (IsEditable() && fParams.pose->IsSelected() && fLastClickedTime) {
+	if (fLastClickedTime > 0 && IsEditable() && fParams.pose->IsSelected()) {
 		bigtime_t doubleClickSpeed;
 		get_click_speed(&doubleClickSpeed);
 
 		bigtime_t delta = system_time() - fLastClickedTime;
 
 		if (delta > doubleClickSpeed) {
-			// at least 'doubleClickSpeed' microseconds ellapsed and no click
-			// was registered since.
+			// at least 'doubleClickSpeed' microseconds elapsed with no click
 			fLastClickedTime = 0;
 			StartEdit(fParams.bounds, fParams.poseView, fParams.pose);
 		}
 	} else {
-		fLastClickedTime = 0;
-		fParams.poseView->SetTextWidgetToCheck(NULL);
+		CancelWait();
 	}
 }
 
@@ -446,10 +443,6 @@ BTextWidget::StartEdit(BRect bounds, BPoseView* view, BPose* pose)
 	if (!IsEditable() || IsActive())
 		return;
 
-	// do not start edit while dragging
-	if (view->IsDragging())
-		return;
-
 	view->SetActiveTextWidget(this);
 
 	// The initial text color has to be set differently on Desktop
@@ -460,9 +453,10 @@ BTextWidget::StartEdit(BRect bounds, BPoseView* view, BPose* pose)
 		initialTextColor = view->HighColor();
 
 	BRect rect(bounds);
-	rect.OffsetBy(view->ViewMode() == kListMode ? -2 : 0, -2);
-	BTextView* textView = new BTextView(rect, "WidgetTextView", rect, be_plain_font,
-		&initialTextColor, B_FOLLOW_ALL, B_WILL_DRAW);
+	rect.OffsetTo(roundf(rect.left), roundf(rect.top));
+
+	BTextView* textView = new BTextView(rect.InsetByCopy(-2, -2), "WidgetTextView",
+		rect.OffsetToCopy(2, 2), be_plain_font, &initialTextColor, B_FOLLOW_ALL, B_WILL_DRAW);
 
 	textView->SetWordWrap(false);
 	textView->SetInsets(2, 2, 2, 2);
@@ -496,8 +490,8 @@ BTextWidget::StartEdit(BRect bounds, BPoseView* view, BPose* pose)
 		textView->AddFilter(new BMessageFilter(B_PASTE, TextViewPasteFilter));
 
 	// get full text length
-	rect.right = rect.left + textView->LineWidth();
-	rect.bottom = rect.top + textView->LineHeight() - 1 + 4;
+	rect.right = rect.left + textView->LineWidth() - 1;
+	rect.bottom = rect.top + textView->LineHeight() - 1;
 
 	if (view->ViewMode() == kListMode) {
 		// limit max width to column width in list mode
@@ -508,17 +502,17 @@ BTextWidget::StartEdit(BRect bounds, BPoseView* view, BPose* pose)
 		// limit max width to 30em in icon and mini icon mode
 		fMaxWidth = textView->StringWidth("M") * 30;
 
-		if (textView->LineWidth() > fMaxWidth
-			|| view->ViewMode() == kMiniIconMode) {
-			// compensate for text going over right inset
-			rect.OffsetBy(-2, 0);
+		// center under the icon if text is longer than column-width
+		if (view->ViewMode() == kIconMode && rect.Width() > bounds.Width()) {
+			float newWidth = std::min(fMaxWidth, rect.Width());
+			rect.OffsetBy(roundf((bounds.Width() - newWidth) / 2), 0);
+			textView->MoveTo(rect.left - 2, rect.top - 2);
 		}
 	}
 
 	// resize textView
-	textView->MoveTo(rect.LeftTop());
-	textView->ResizeTo(std::min(fMaxWidth, rect.Width()), rect.Height());
-	textView->SetTextRect(rect);
+	textView->ResizeTo(std::min(fMaxWidth, rect.Width()) + 4, rect.Height() + 4);
+	textView->SetTextRect(rect.OffsetToCopy(2, 2));
 
 	// set alignment before adding textView so it doesn't redraw
 	switch (view->ViewMode()) {
@@ -651,52 +645,52 @@ BTextWidget::Draw(BRect eraseRect, BRect textRect, BPoseView* view, BView* drawV
 	// BPose::Draw before and after calling this function.
 
 	bool direct = drawView == view;
+	bool dragging = false;
+	if (!direct && view->Window() != NULL && view->Window()->CurrentMessage() != NULL)
+		dragging = view->Window()->CurrentMessage()->what == kMsgMouseDragged;
+	bool drawOutlines = view->WidgetTextOutline() && !selected && (direct || dragging);
+	bool drawCut = clipboardMode == kMoveSelectionTo;
 
 	if (selected) {
-		// erase selection rect background
-		drawView->SetDrawingMode(B_OP_COPY);
-		BRect invertRect(textRect);
-		invertRect.left = ceilf(invertRect.left);
-		invertRect.top = ceilf(invertRect.top);
-		invertRect.right = floorf(invertRect.right);
-		invertRect.bottom = floorf(invertRect.bottom);
-		drawView->FillRect(invertRect, B_SOLID_LOW);
+		if (dragging) {
+			drawView->SetDrawingMode(B_OP_ALPHA);
+			drawView->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_COMPOSITE);
+		} else {
+			// erase selection rect background
+			drawView->SetDrawingMode(B_OP_COPY);
+		}
+
+		drawView->FillRect(textRect, B_SOLID_LOW);
 
 		// High color is set to inverted low, then the whole thing is
 		// inverted again so that the background color "shines through".
 		drawView->SetHighColor(InvertColorSmart(drawView->LowColor()));
-	} else if (clipboardMode == kMoveSelectionTo) {
-		drawView->SetDrawingMode(B_OP_ALPHA);
-		drawView->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_COMPOSITE);
-		uint8 alpha = 128; // set the level of opacity by value
-		if (drawView->LowColor().IsLight())
-			drawView->SetHighColor(0, 0, 0, alpha);
-		else
-			drawView->SetHighColor(255, 255, 255, alpha);
 	} else {
-		drawView->SetDrawingMode(B_OP_OVER);
 		if (view->IsDesktopView())
 			drawView->SetHighColor(view->HighColor());
 		else
 			drawView->SetHighUIColor(view->HighUIColor());
 	}
 
-	float decenderHeight = roundf(view->FontInfo().descent);
-	BPoint location(textRect.left, textRect.bottom - decenderHeight);
+	if (drawOutlines || dragging || (direct && drawCut)) {
+		drawView->SetDrawingMode(B_OP_ALPHA);
+		drawView->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_COMPOSITE);
+	} else {
+		drawView->SetDrawingMode(B_OP_OVER);
+	}
+
+	// high color and drawing mode are set to draw text
+
+	BPoint location(textRect.left, roundf(textRect.top) + view->FontInfo().ascent + 1);
+		// let's determine the baseline position
 
 	const char* fittingText = fText->FittingText(view);
 
-	// Draw text outline unless selected or column resizing.
-	// The direct parameter is false when dragging or column resizing.
-	if (!selected && direct && view->WidgetTextOutline()) {
+	// Draw text outline if enabled unless selected or column resizing.
+	if (drawOutlines) {
 		// draw a halo around the text by using the "false bold"
 		// feature for text rendering. Either black or white is used for
 		// the glow (whatever acts as contrast) with a some alpha value,
-		if (direct && clipboardMode != kMoveSelectionTo) {
-			drawView->SetDrawingMode(B_OP_ALPHA);
-			drawView->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_OVERLAY);
-		}
-
 		BFont font;
 		drawView->GetFont(&font);
 
@@ -741,9 +735,6 @@ BTextWidget::Draw(BRect eraseRect, BRect textRect, BPoseView* view, BView* drawV
 			drawView->DrawString(fittingText, location + BPoint(1, 1));
 		}
 
-		if (direct && clipboardMode != kMoveSelectionTo)
-			drawView->SetDrawingMode(B_OP_OVER);
-
 		drawView->SetHighColor(textColor);
 	}
 
@@ -753,23 +744,12 @@ BTextWidget::Draw(BRect eraseRect, BRect textRect, BPoseView* view, BView* drawV
 		// TODO:
 		// this should be exported to the WidgetAttribute class, probably
 		// by having a per widget kind style
-		if (direct && clipboardMode != kMoveSelectionTo) {
-			rgb_color underlineColor = drawView->HighColor();
-			underlineColor.alpha = 180;
-
-			drawView->SetDrawingMode(B_OP_ALPHA);
-			drawView->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_OVERLAY);
-			drawView->SetHighColor(underlineColor);
-		}
-
-		BRect lineRect(textRect.OffsetByCopy(0, decenderHeight > 2 ? -(decenderHeight - 2) : 0));
-			// move underline 2px under text
+		BRect lineRect(textRect);
+		lineRect.OffsetTo(location.x, std::min(location.y + 2, textRect.bottom));
+			// underline goes 2px under the baseline
 		lineRect.InsetBy(roundf(textRect.Width() - fText->Width(view)), 0);
 			// only underline text part
-		drawView->StrokeLine(lineRect.LeftBottom(), lineRect.RightBottom(), B_MIXED_COLORS);
-
-		if (direct && clipboardMode != kMoveSelectionTo)
-			drawView->SetDrawingMode(B_OP_OVER);
+		drawView->StrokeLine(lineRect.LeftTop(), lineRect.RightTop(), B_MIXED_COLORS);
 	}
 
 	drawView->ConstrainClippingRegion(NULL);

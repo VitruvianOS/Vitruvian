@@ -596,8 +596,8 @@ BNetworkSettings::_Load(const char* name, uint32* _type)
 		if (status == B_OK) {
 			// Convert settings for simpler consumption
 			BMessage network;
-			for (int32 index = 0; fNetworks.FindMessage("network", index,
-					&network); index++) {
+			for (int32 index = 0; fNetworks.FindMessage("network", index, &network) == B_OK;
+				index++) {
 				if (_ConvertNetworkFromSettings(network) == B_OK)
 					fNetworks.ReplaceMessage("network", index, &network);
 			}
@@ -638,8 +638,7 @@ BNetworkSettings::_Save(const char* name)
 		// Convert settings to storage format
 		BMessage networks = fNetworks;
 		BMessage network;
-		for (int32 index = 0; networks.FindMessage("network", index,
-				&network); index++) {
+		for (int32 index = 0; networks.FindMessage("network", index, &network) == B_OK; index++) {
 			if (_ConvertNetworkToSettings(network) == B_OK)
 				networks.ReplaceMessage("network", index, &network);
 		}
@@ -796,8 +795,6 @@ BNetworkSettings::_ConvertNetworkFromSettings(BMessage& message)
 
 	const char* authentication = NULL;
 	if (message.FindString("authentication", &authentication) == B_OK) {
-		message.RemoveName("authentication");
-
 		if (strcasecmp(authentication, "none") == 0) {
 			message.AddUInt32("authentication_mode",
 				B_NETWORK_AUTHENTICATION_NONE);
@@ -811,6 +808,8 @@ BNetworkSettings::_ConvertNetworkFromSettings(BMessage& message)
 			message.AddUInt32("authentication_mode",
 				B_NETWORK_AUTHENTICATION_WPA2);
 		}
+
+		message.RemoveName("authentication");
 	}
 
 	int32 index = 0;

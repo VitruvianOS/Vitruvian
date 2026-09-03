@@ -1,5 +1,6 @@
-1	catalan; valencian	x-vnd.Haiku-HaikuDepot	3945138144
+1	catalan; valencian	x-vnd.Haiku-HaikuDepot	4230673291
 Usage conditions download problem	ToLatestUserUsageConditionsWindow		Problema de baixada de les condicions d'ús
+User ratings loading…	PackageInfoView		Es carreguen les valoracions dels usuaris...
 Available packages	MainWindow		Paquets disponibles
 It was not possible to create the new user.	UserLoginWindow		No s'ha pogut crear l'usuari nou.
 An unexpected error has been sent from the server [%li]	ServerHelper		S'ha enviat un error inesperat des del servidor [%li]
@@ -44,13 +45,16 @@ Cancel	UserLoginWindow		Cancel·la
 Rating not possible	MainWindow		La puntuació no és possible.
 Package update error	MainWindow		Error d'actualització de paquet
 Click here	FeaturedPackagesView	Appears in the sentence 'Click here to search all packages.'	Cliqueu aquí
+No screenshot available.	PackageInfoView		No hi ha cap captura de pantalla disponible.
 %FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# process} other{# processes}}	ProcessCoordinator		%FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# procés} other{# processos}}
 Fetching user ratings for package	PopulatePkgUserRatingsFromServerProcess		S'obtenen les valoracions dels usuaris per al paquet.
 Reboot required	PackageManager		Cal reiniciar
 All packages	PackageListView		Tots els paquets
+Checking server information	ServerRuntimeInformationVerifierProcess		Es comprova la informació del servidor.
 Send	RatePackageWindow		Envia
 Creating package list…	FeaturedPackagesView		Es crea la llista de paquets...
 Start package daemon	App		Inicia el dimoni de paquets
+Changelog loading…	PackageInfoView		Es carrega el registre de canvis...
 There are problems in the supplied data:	UserLoginWindow		Hi ha problemes en les dades subministrades:
 Desktop and non-desktop packages	MainWindow		Paquets d'escriptori i no d'escriptori
 The user '%Nickname%' has not agreed to any usage conditions.	UserUsageConditions		L'usuari %Nickname% no ha acceptat cap condició d'ús.
@@ -80,6 +84,7 @@ Continue	App		Continua
 A password is required.	UserLoginWindow		Cal una contrasenya.
 Language	RatePackageWindow		Llengua
 Open %DeskbarLink%	PackageAction		Obre %DeskbarLink%
+Login disabled	MainWindow		Entrada inhabilitada
 Status	PackageListView		Estat
 Network transport error	ServerHelper		Error de transport de xarxa
 Cancel	PackageResult		Cancel·la
@@ -138,6 +143,8 @@ Rating	PackageListView		Puntuació
 Synchronizing icons	ServerIconExportUpdateProcess		Sincronització de les icones
 No, quit	App		No, tanca't
 Show	MainWindow		Mostra...
+Timestamp discrepancy	ServerRuntimeInformationVerifierProcess		Discrepància de marca de temps
+No contents available.	PackageInfoView		No hi ha contingut disponible.
 This application writes and reads some working files on your computer in order to function. It appears that there are problems writing a test file at [%TestFilePath%]. Check that there are no issues with your local disk or permissions that might prevent this application from writing files into that directory location. You may choose to acknowledge this problem and continue, but some functionality may be disabled.	App		Aquesta aplicació escriu i llegeix alguns fitxers de treball de l'ordinador per tal de funcionar. Sembla que hi ha problemes per escriure un fitxer de prova a [%TestFilePath%]. Comproveu que no hi ha cap problema amb el disc local o els permisos que pugui evitar que aquesta aplicació escrigui fitxers a la ubicació del directori. Podeu optar per reconèixer aquest problema i continuar, però és possible que alguna funcionalitat estigui inhabilitada.
 Settings…	MainWindow		Paràmetres...
 <Package contents not available for remote packages>	PackageContentsView		<El contingut del paquet no està disponible per als paquets remots>
@@ -146,10 +153,11 @@ The following problems have been encountered. Please select a solution for each:
 Local	LocalPkgDataLoadProcess		Local
 Package changes	PackageResult	Window title	Canvis de paquets
 Would it be acceptable to send anonymous usage data to the HaikuDepotServer system from this computer? You can change your preference in the \"Settings\" window later.	MainWindow		Seria acceptable enviar dades d’ús anònimes al sistema del Servidor del dipòsit del Haiku des d’aquest ordinador? En podeu canviar les preferències a la finestra de \Paràmetres\ més endavant.
-User rating	RatePackageWindow		Puntuació de l'usuari
 Installed packages	MainWindow		Paquets instal·lats
+User rating	RatePackageWindow		Puntuació de l'usuari
 Date	PackageListView		Data
 The password must be a minimum of %MinPasswordLength% characters. %MinPasswordUppercaseChar% characters must be upper-case and %MinPasswordDigitsChar% characters must be digits.	UserLoginWindow		La contrasenya ha de tenir un mínim de %MinPasswordLength% caràcters. Els caràcters %MinPasswordUppercaseChar% han de ser majúscules i els caràcters %MinPasswordDigitsChar% han de ser dígits.
+Screenshot loading…	PackageInfoView		Es carrega la captura de pantalla...
 An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	ToLatestUserUsageConditionsWindow		S'ha produït un error en baixar les condicions d'ús. Comproveu el registre per obtenir-ne més informació i torneu-ho a provar. \nLa informació sobre com veure els registres està disponible a la secció del Dipòsit del Haiku de la Guia d'usuari del Haiku.
 There was a puzzling response from the web service.	UserLoginWindow		Hi ha hagut una resposta desconcertant del servei web.
 Opening \"%DeskbarLink%\"	OpenPackageProcess		S'obre \"%DeskbarLink%\"
@@ -170,8 +178,8 @@ This application is too old to communicate with the server system. Obtain a newe
 Stability	RatePackageWindow		Estabilitat
 The password must be repeated in order to reduce the chance of entering the password incorrectly.	UserLoginWindow		Cal repetir la contrasenya per reduir la possibilitat d’introduir-la incorrectament.
 Cancel	SettingsWindow		Cancel·la
-Cancel	RatePackageWindow		Cancel·la
 Inactive	PackageListView		Inactiu
+Cancel	RatePackageWindow		Cancel·la
 Nickname:	UserLoginWindow		Sobrenom:
 Synchronizing meta-data about repositories	ServerRepositoryDataUpdateProcess		Se sincronitzen les metadades dels repositoris.
 OK	MainWindow		D'acord
@@ -189,8 +197,8 @@ Login issue	MainWindow		Problema d’inici de sessió
 Your rating:	RatePackageWindow		La vostra puntuació:
 The user %Nickname% has been successfully created in the HaikuDepotServer system. You can administer your user details by using the web interface. You are now logged-in as this new user.	UserLoginWindow		L'usuari %Nickname% s'ha creat correctament al sistema del Servidor del dipòsit del Haiku. Podeu administrar les dades de l'usuari mitjançant la interfície web. Ara hi heu entrat com a usuari nou.
 Repositories	MainWindow		Repositoris
-This rating is visible to other users	RatePackageWindow		Aquesta puntuació és visible per a altres usuaris.
 While updating package data, a problem has arisen that may cause data to be outdated or missing from the application's display. Additional details regarding this problem may be able to be obtained from the application logs.\nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	MainWindow		En actualitzar les dades del paquet, s’ha produït un problema que pot fer que les dades quedin obsoletes o que faltin a la visualització de l’aplicació. És possible que es puguin obtenir detalls addicionals sobre aquest problema als registres de l'aplicació.\nHi ha informació sobre com visualitzar els registres a la secció del Dipòsit del Haiku de la Guia de l’usuari del Haiku.
+This rating is visible to other users	RatePackageWindow		Aquesta puntuació és visible per a altres usuaris.
 An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	UserUsageConditions		S'ha produït un error en baixar les condicions d'ús. Comproveu el registre per obtenir-ne més informació i torneu-ho a provar. \nLa informació sobre com veure els registres està disponible a la secció del Dipòsit del Haiku de la Guia d'usuari del Haiku.
 Stop network use	ServerHelper		Atura l'ús de la xarxa
 View agreed usage conditions…	MainWindow		Consulteu les condicions d’ús acordades...
@@ -216,6 +224,7 @@ The nickname is required.	UserLoginWindow		Cal el sobrenom.
 Apply changes	PackageResult		Aplica els canvis
 Server error	ServerHelper		Error de servidor
 Rate package	RatePackageWindow		Puntueu el paquet
+The server and this computer have a discrepancy in the current timestamp of around %DiscrepancySeconds% seconds. This may cause issues for HaikuDepot communicating with the server. Check your computer's clock settings and correct the current time if necessary.	ServerRuntimeInformationVerifierProcess		El servidor i aquest ordinador tenen una discrepància de marca de temps actual d'uns %DiscrepancySeconds% segons. Això pot causar problemes per a la comunicació de del Dipòsit del Haiku amb el servidor. Comproveu la configuració del rellotge de l'ordinador i corregiu-ne l'hora actual si cal.
 Recording view of \"%PackageName%\"	IncrementViewCounterProcess		Es registra la vista de paquet \"%PackageName%\"
 Sending anonymous usage data	MainWindow		S'envien dades d'ús anònimes
 Log in	UserLoginWindow		Entreu

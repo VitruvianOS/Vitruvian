@@ -1,8 +1,8 @@
-1	russian	x-vnd.Haiku-ProcessController	2724038695
+1	russian	x-vnd.Haiku-ProcessController	3503705742
 Error saving file	ProcessController		Ошибка при сохранении файла
 Display priority	ProcessController		Приоритет отображения
 That's no Fun!	ProcessController		Это не смешно!
-What do you want to do with the team \"%s\"?	ProcessController		Что вы хотите сделать с потоком \"%s\"?
+What do you want to do with the team \"%s\"?	ProcessController		Что вы хотите сделать с потоком \«%s\»?
 Your setting file could not be saved!\n(%s)	ProcessController		Невозможно сохранить настройки!\n(%s)
 Processor %d	ProcessController		Процессор %d
 Live in the Deskbar	ProcessController		Отображать в Deskbar
@@ -15,13 +15,14 @@ Low priority	ProcessController		Низкий приортитет
 Urgent display priority	ProcessController		Срочный приоритет отображения
 Memory usage	ProcessController		Использование памяти
 Ok!	ProcessController		ОК!
+%appname% is already installed in Deskbar.	ProcessController		%appname% уже установлен в Deskbar.
 Normal priority	ProcessController		Нормальный приоритет
 Restart Deskbar	ProcessController		Перезапустить Deskbar
 Usage: %s [-deskbar]\n	ProcessController		Использование: %s [-deskbar]\n
 Please confirm	ProcessController		Пожалуйста, подтвердите
 (c) 1996-2001 Georges-Edouard Berenger, berenger@francenet.fr	ProcessController		(c) 1996-2001 Georges-Edouard Berenger, berenger@francenet.fr
 Urgent priority	ProcessController		Срочный приоритет
-What do you want to do with the thread \"%s\"?	ProcessController		Что вы хотите сделать с потоком \"%s\"?
+What do you want to do with the thread \"%s\"?	ProcessController		Что вы хотите сделать с потоком \«%s\»?
 Idle priority	ProcessController		Приоритет бездействия
 Real-time display priority	ProcessController		Приоритет отображения реального времени
 Threads and CPU usage	ProcessController		Потоки и загрузка процессора
@@ -29,7 +30,9 @@ Quit application	ProcessController		Завершить приложение
 Info	ProcessController		Информация
 Kill this thread!	ProcessController		Убить этот поток!
 This team is already gone…	ProcessController		Этого приложения уже не существует…
+About %appname%…	ProcessController		О программе %appname%…
 Gone teams…	ProcessController		Завершённые приложения
+You can run %appname% in a window or install it in the Deskbar.	ProcessController		Вы можете запустить %appname% в окне или установить в Deskbar.
 Quit an application	ProcessController		Завершить приложение
 Cancel	ProcessController		Отмена
 Install in Deskbar	ProcessController		Установить в Deskbar

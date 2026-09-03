@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-libtracker	734452449
+1	swedish	x-vnd.Haiku-libtracker	3033621663
 Created	ContainerWindow		Skapad
 Icon	AttributesView		Ikon
 Open and make preferred	OpenWithWindow		Öppna och gör till förval
@@ -32,7 +32,6 @@ Value	AttributesView		Värde
 Information	InfoWindow		Information
 Error emptying Trash	FSUtils		Ett fel uppstod när Papperskorgen skulle tömmas
 Opens with:	InfoWindow		Öppnas med:
-You cannot copy or move the Printers directory.	FSUtils		Du kan inte kopiera eller flytta skrivarkatalogen.
 Size	QueryPoseView		Storlek
 Disk mount	TrackerSettingsWindow		Diskmontering
 Type	AttributesView		Typ
@@ -44,7 +43,6 @@ You cannot replace a folder or a symbolic link with a file.	FSUtils		Du kan inte
 (unknown)	InfoWindow		(okänd)
 {0, plural, other{<# dates>}}	AttributesView		{0, plural, other{<# datum>}}
 Trailing \\.	libtracker		Efterföljande \\.
-At %func \nfind_directory() failed. \nReason: %error	Email Query Columns		I %func \nfind_directory() misslyckades. \nOrsak: %error
 Handles any file	OpenWithWindow		Hanterar alla filtyper
 save text	FilePanelPriv		spara text
 Raw data	AttributesView		Rådata
@@ -59,6 +57,7 @@ Identify	ContainerWindow		Identifiera
 Create link	ContainerWindow		Skapa länk
 starts with	FindPanel		börjar med
 Replace	FSUtils		Ersätt
+At %func \nfind_directory() failed. \nReason: %error	TrackerInitialState		I %func \nfind_directory() misslyckades. \nOrsak: %error
 ?+* follows nothing.	libtracker		?+* följer ingenting.
 Include Trash	FindPanel		Inkludera papperskorgen
 Rectangle	AttributesView		Rektangel
@@ -104,6 +103,7 @@ Affine transform	AttributesView		Affin transformering
 Window	ContainerWindow		Fönster
 %BytesPerSecond/s	StatusWindow		%BytesPerSecond/s
 Remove	FindPanel		Ta bort
+You cannot create a link to the %trash% directory.	FSUtils		Du kan inte skapa en länk till katalogen %trash%.
 Company	Person Query Columns		Företag
 Select folders…	FindPanel		Välj mappar...
 Recent documents	FavoritesMenu		Senaste dokumenten
@@ -145,7 +145,6 @@ Disks	Model		Volymer
 Create a Query template	FindPanel		Skapa en sökmall
 Size	FindPanel		Storlek
 New submenu	ContainerWindow	Folder name of New-template submenu	Ny undermeny
-OK	Email Query Columns		OK
 Location	QueryPoseView		Plats
 Edit query	ContainerWindow		Redigera sökning
 {0, plural, one{(# byte)} other{(# bytes)}}	InfoWindow		{0, plural, one{(# byte)} other{(# bytes)}}
@@ -174,6 +173,7 @@ Preferences…	ContainerWindow		Inställningar...
 Could not open \"%document\" because application \"%app\" is in the Trash. 	FSUtils		Kunde inte öppna \"%document\" för att programmet \"%app\" ligger i Papperskorgen. 
 Work Phone	Person Query Columns		Jobbtelefon
 Select folders	FindPanel		Välj mappar
+OK	TrackerInitialState		OK
 Close	ContainerWindow		Stäng
 Get info	ContainerWindow		Visa information
 MIME Type	AttributesView		MIME-typ
@@ -198,8 +198,8 @@ Media parameter web	AttributesView		Mediaparameter väv
 Sorry, you can't save things at the root of your system.	FilePanelPriv		Du kan inte spara i roten på filsystemet.
 Restore	ContainerWindow		Återställ
 Location	ContainerWindow		Plats
-Skip	FSUtils		Hoppa över
 Warning space color	SettingsView		Färg för utrymmesvarning
+Skip	FSUtils		Hoppa över
 Text list	AttributesView		Textlista
 Used space color	SettingsView		Färg för diskanvändning
 Cancel	FSUtils		Avbryt
@@ -253,7 +253,6 @@ Favorites	FilePanelPriv		Favoriter
 Point	AttributesView		Punkt
 You can't move or copy items to read-only volumes.	PoseView		Du kan inte flytta eller kopiera objekt till skrivskyddade volymer
 home	B_USER_DIRECTORY		hem
-You cannot create a link to the Trash directory.	FSUtils		Du kan inte skapa en länk till papperskorgen.
 Tracker New Templates	B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates		Tracker Nya Mallar
 Disk mounting during boot	AutoMounterSettings		Diskmontering under uppstart
 Don't automount	AutoMounterSettings		Automontera inte
@@ -264,6 +263,7 @@ New folder %d	FSUtils		Ny mapp %d
 Extended attribute	AttributesView		Utökat attribut
 Error %error loading Add-On %name.	ContainerWindow		Fel %error vid laddning av Tillägg %name.
 Unmatched brackets.	libtracker		Omatchade paranteser.
+You cannot copy or move the 'printers' directory.	FSUtils		Du kan inte kopiera eller flytta katalogen 'printers'.
 You are trying to replace the item:\n\t%name%dest\nwith:\n\t%name%src\n\nWould you like to replace it with the one you are %movemode?	FSUtils		Du försöker ersätta objektet:\n\t%name%dest\nmed\n\t%name%src\n\nVill du ersätta den med den som du %movemode?
 Empty Trash	ContainerWindow		Töm Papperskorgen
 no supporting apps	OpenWithWindow		program saknas
@@ -276,6 +276,7 @@ label too long	PoseView		etiketten är för lång
 Error creating link to \"%name\".	FSUtils		Fel vid skapande av länk till \"%name\".
 Unknown	FilePermissionsView		Okänd
 Paste links	ContainerWindow		Klistra in länkar
+You cannot copy or move the %trash% directory.	FSUtils		Du kan inte kopiera eller flytta katalogen %trash%.
 Restoring: 	StatusWindow		Återställer:
 The Tracker must be running to set the default printer.	PoseView		Tracker måste ha startats för att kunna sätta förvald printer.
 calculating…	InfoWindow		beräknar...
@@ -315,7 +316,6 @@ Would you like to find some other suitable application?	FSUtils		Vill du söka e
 Recent folders	FavoritesMenu		Senaste mapparna
 Signed memory size	AttributesView		Signerad minnesstorlek
 The specified name is illegal. Please choose another name.	FilePanelPriv		Det valda namnet är otillåtet. Var god välj ett annat namn.
-You cannot copy or move the Trash directory.	FSUtils		Du kan inte kopiera eller flytta papperskorgen.
 of %items	StatusWindow		av %items
 Error copying file \"%name\":\n\t%error\n\nWould you like to continue?	FSUtils		Fel vid kopiering av filen \"%name\":\n\t%error\n\nVill du fortsätta?
 less than	FindPanel		mindre än
@@ -325,8 +325,8 @@ Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Kunde
 Create %s clipping	PoseView		Skapa %s förkortning
 Error moving \"%name\"	FSUtils		Fel vid flyttande av \"%name\"
 To: %dir	StatusWindow		Till: %dir
-Cancel	Tracker		Avbryt
 Paste layout	ContainerWindow		Klistra in layout
+Cancel	Tracker		Avbryt
 yes	AttributesView		ja
 Make active printer	ContainerWindow		Gör till aktiv skrivare
 Copy to	ContainerWindow		Kopiera till
@@ -346,11 +346,13 @@ The entered file name is too long.	FSUtils		Det angivna filnamnet är för lång
 Some of the selected items cannot be moved to the Trash. Would you like to delete them instead? (This operation cannot be reverted.)	PoseView		Vissa av de markerade objekten kan inte flyttas till Papperskorgen. Vill du ta bort dem istället? (Denna operation kan inte ångras.)
 Add printer…	ContainerWindow		Lägg till skrivare...
 Permissions	ContainerWindow		Behörigheter
+Trash	FSUtils		Skräp
 Size:	InfoWindow		Storlek:
 Copy	ContainerWindow		Kopiera
 The selected item cannot be moved to the Trash. Would you like to delete it instead? (This operation cannot be reverted.)	PoseView		Det markerade objektet kan inte flyttas till Papperskorgen. Vill du ta bort den istället? (Denna operation kan inte ångras.)
 Sorry, the 'Character' attribute cannot store a multi-byte glyph.	WidgetAttributeText		Ledsen, attributet 'Character' kan inte spara ett multibyte tecken.
 And	FindPanel		Och
+copy	PoseView	filename copy	kopiera
 Palette-indexed picture	AttributesView		Palettindexerad bild
 Drawing pattern	AttributesView		Ritningsmönster
 File offset	AttributesView		Filoffset
@@ -426,6 +428,7 @@ Move here	ContainerWindow		Flytta hit
 the config folder	FSUtils		konfigurationsmappen
 Sorry, could not create a new folder.	FSUtils		Kan inte skapa en ny mapp.
 MIME Signature	AttributesView		MIME-signatur
+%ld × %ld	ContainerWindow	The '×' is the Unicode multiplication sign U+00D7	%ld × %ld
 Rename	FSUtils	button label	Döp om
 Clean up all	ContainerWindow		Sortera om
 Add current folder	FilePanelPriv		Lägg till nuvarande katalog

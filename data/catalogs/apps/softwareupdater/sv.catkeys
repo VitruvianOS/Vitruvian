@@ -1,4 +1,4 @@
-1	swedish	x-vnd.haiku-softwareupdater	3021634705
+1	swedish	x-vnd.haiku-softwareupdater	2012285635
 Updating version	SoftwareUpdaterWindow	List item text	Uppdaterar version
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Klicka här för att installera {0, plural, one{# uppdaterat paket} other{# uppdaterade paket}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Paket att avinstallera
@@ -8,6 +8,7 @@ There were no updates found.	CheckManager		Inga uppdateringar kunde hittas.
 Updates have not been completed, are you sure you want to quit?	SoftwareUpdaterWindow		Uppdateringarna har inte slutförts. Är du säker på att du vill avsluta?
 Updates found	SoftwareUpdaterWindow		Uppdateringar hittades
 Update now	SoftwareUpdaterWindow		Uppdatera nu
+Settings	SoftwareUpdaterWindow		Inställningar
 For some reason, we could not reboot your computer.	SoftwareUpdaterWindow		Av någon anledning kunde vi inte starta om din dator.
 OK	UpdateManager		OK
 Unrecognized argument	SoftwareUpdaterApp	Error message	Argumentet känns inte igen
@@ -18,6 +19,7 @@ Packages to be updated	SoftwareUpdaterWindow	List super item label	Paket som kom
 to	SoftwareUpdaterWindow	List item text	till
 Click here to run %appname%. Some updates will require a problem solution to be selected.	CheckManager		Klicka här för att köra %appname%. Vissa uppdateringar kräver att en problemlösning väljs.
 Attempting to cancel the updates…	SoftwareUpdaterWindow		Försöker avbryta uppdateringarna…
+Automatically clean up old install states	SoftwareUpdaterWindow		Rensa automatiskt gamla installationstillstånd
 Contacting software repositories to check for package updates.	CheckManager		Kontaktar repositorier för att leta efter uppdaterade paket.
 Available updates found	CheckManager		Tillgängliga uppdateringar hittades
 from repository	SoftwareUpdaterWindow	List item text	från repositoriet
@@ -52,9 +54,10 @@ No remote repositories are available	UpdateManager	Error message	Inga externa re
 Software {0, plural, one{update} other{updates}} available	CheckManager		{0, plural, one{En} other{Flera}} {0, plural, one{uppdatering} other{uppdateringar}} finns {0, plural, one{tillgänglig} other{tillgängliga}}.
 Reboot	SoftwareUpdaterWindow	Button label	Omstart
 Update	SoftwareUpdaterWindow	Alert button label	Uppdatera
-Open Repositories	SoftwareUpdaterWindow	Alert button label	Öppna Repositorier
 Updates did not complete	UpdateAction		Uppdateringen slutfördes inte
+Open Repositories	SoftwareUpdaterWindow	Alert button label	Öppna Repositorier
 Invalid update type, cannot continue with updates	UpdateAction		Ogiltig uppdateringstyp, kan inte fortsätta att uppdatera
+Settings…	SoftwareUpdaterWindow		Inställningar...
 Uninstalling version	SoftwareUpdaterWindow	List item text	Avinstallerar version
 %i of %i	UpdateManager	Do not translate %i	%i av %i
 Quit	SoftwareUpdaterWindow		Avsluta

@@ -1,4 +1,4 @@
-1	german	x-vnd.haiku-softwareupdater	3021634705
+1	german	x-vnd.haiku-softwareupdater	2012285635
 Updating version	SoftwareUpdaterWindow	List item text	Aktualisieren der Version
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Hier klicken, um {0, plural, one{# aktualisiertes Paket} other{# aktualisierte Pakete}} zu installieren.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Zu deinstallierende Pakete
@@ -7,7 +7,8 @@ Quit	SoftwareUpdaterWindow	Alert button label	Beenden
 There were no updates found.	CheckManager		Keine Aktualisierungen gefunden.
 Updates have not been completed, are you sure you want to quit?	SoftwareUpdaterWindow		Aktualisierungen noch nicht abgeschlossen, trotzdem beenden?
 Updates found	SoftwareUpdaterWindow		Aktualisierungen gefunden
-Update now	SoftwareUpdaterWindow		Jetzt aktualisieren
+Update now	SoftwareUpdaterWindow		Aktualisieren
+Settings	SoftwareUpdaterWindow		Einstellungen
 For some reason, we could not reboot your computer.	SoftwareUpdaterWindow		Aus unerfindlichen Gründen konnte der Computer nicht neu gestartet werden.
 OK	UpdateManager		OK
 Unrecognized argument	SoftwareUpdaterApp	Error message	Unbekannter Parameter
@@ -18,6 +19,7 @@ Packages to be updated	SoftwareUpdaterWindow	List super item label	Pakete werden
 to	SoftwareUpdaterWindow	List item text	auf
 Click here to run %appname%. Some updates will require a problem solution to be selected.	CheckManager		Hier klicken, um %appname% zu starten. Für einige Aktualisierungen muss eine Problemlösung gewählt werden.
 Attempting to cancel the updates…	SoftwareUpdaterWindow		Versuche die Aktualisierungen abzubrechen …
+Automatically clean up old install states	SoftwareUpdaterWindow		Alte Installationsdaten automatisch entfernen
 Contacting software repositories to check for package updates.	CheckManager		Um nach Aktualisierungen zu suchen, wird eine Verbindung mit den Paketquellen hergestellt.
 Available updates found	CheckManager		Aktualisierungen gefunden
 from repository	SoftwareUpdaterWindow	List item text	von Paketquelle
@@ -27,7 +29,7 @@ Cancel	SoftwareUpdaterWindow	Alert button label	Abbrechen
 There were no updates found.	UpdateAction		Es wurden keine Aktualisierungen gefunden.
 OK	SoftwareUpdaterWindow		OK
 Please choose from these update options:\n\nUpdate:\n\tUpdates all installed packages.\nFull sync:\n\tSynchronizes the installed packages with the repositories.	SoftwareUpdaterWindow		Bitte aus diesen Aktualisierungsoptionen wählen:\n\nUpdate:\n\tAktualisiert alle installierten Pakete.\nFull sync:\n\tSynchronisiert alle installierten Pakete mit den Paktequellen.
-The following changes will be made:	SoftwareUpdaterWindow		Folgenden Änderungen werden durchgeführt:
+The following changes will be made:	SoftwareUpdaterWindow		Folgende Änderungen werden durchgeführt:
 Argument variables are no longer accepted\n	SoftwareUpdaterApp		Parametervariablen werden nicht mehr akzeptiert\n
 Fatal error while checking for updates: %s\n	CheckAction		Fehler bei Suche nach Aktualisierungen: %s\n
 SoftwareUpdater	System name		SoftwareUpdater
@@ -52,9 +54,10 @@ No remote repositories are available	UpdateManager	Error message	Es sind keine P
 Software {0, plural, one{update} other{updates}} available	CheckManager		Software{0, plural, one{aktualisierung} other{aktualisierungen}} verfügbar
 Reboot	SoftwareUpdaterWindow	Button label	Neustarten
 Update	SoftwareUpdaterWindow	Alert button label	Aktualisieren
-Open Repositories	SoftwareUpdaterWindow	Alert button label	Paketquellen öffnen
 Updates did not complete	UpdateAction		Aktualisierungen wurden nicht abgeschlossen
+Open Repositories	SoftwareUpdaterWindow	Alert button label	Paketquellen öffnen
 Invalid update type, cannot continue with updates	UpdateAction		Ungültiger Aktualisierungstyp, Aktualisierung wird abgebrochen
+Settings…	SoftwareUpdaterWindow		Einstellungen …
 Uninstalling version	SoftwareUpdaterWindow	List item text	Deinstallieren der Version
 %i of %i	UpdateManager	Do not translate %i	%i von %i
 Quit	SoftwareUpdaterWindow		Beenden

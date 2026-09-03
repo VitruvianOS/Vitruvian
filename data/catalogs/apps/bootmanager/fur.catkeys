@@ -1,4 +1,4 @@
-1	friulian	x-vnd.Haiku-BootManager	1012731949
+1	friulian	x-vnd.Haiku-BootManager	3553759389
 Old Master Boot Record backup failure	BootManagerController	Title	Faliment dal Backup dal Master Boot Record vieli
 At least one partition must be selected!	BootManagerController		Tu âs di selezionâ almancul une partizion!
 No space available!	DrivesPage	Cannot install	Spazi insuficient!
@@ -31,6 +31,7 @@ USB Drive	DrivesPage	Default disk name	Unitât USB
 Restore MBR	BootManagerController	Button	Ripristine MBR
 Hard Drive	DrivesPage	Default disk name	Disc fis
 Drives	DrivesPage	Title	Unitâts
+%appname% is unable to read the partition table!	BootManagerController		%appname% nol rive a lei la tabele des partizions!
 The following partitions were detected. Please check the box next to the partitions to be included in the boot menu. You can also set the names of the partitions as you would like them to appear in the boot menu.	PartitionsPage		A son stadis rilevadis chestis partizions. Par plasê, segne la casele in bande des partizions par inserîlis tal menù di inviament. Al è pussibil ancje stabilî i nons des partizions di visualizâ tal menù di inviament.
 After five seconds	DefaultPartitionPage		Dopo cinc seconts
 Timeout: %s	DefaultPartitionPage		Timp di spiete: %s
@@ -47,6 +48,7 @@ Previous	WizardView	Button	Precedent
 Uninstallation of boot menu failed	BootManagerController	Title	Disinstalazion dal menù di inviament falide
 Incompatible format!	DrivesPage	Cannot install	Formât incompatibil!
 Old Master Boot Record saved	BootManagerController	Title	Master Boot Record vieli salvât
+The partition table of the first hard disk is not compatible.\n%appname% only works with IBM PC MBR partitions.	BootManagerController		La tabele des partizions dal prin disc fis no je compatibile.\n%appname% al funzione nome cu lis partizions MBR di PC IBM.
 Please specify a default partition and a timeout.\nThe boot menu will load the default partition after the timeout unless you select another partition. You can also have the boot menu wait indefinitely for you to select a partition.\nKeep the 'ALT' key pressed to disable the timeout at boot time.	DefaultPartitionPage		Par plasê, specifiche une partizion predefinide e un timp di spiete.\nIl menù di inviament al cjariarà la partizion predefinide daspò il timp di spiete, gjavant che no si selezioni une altre partizion. Al è pussibil ancje fâ in mût che il menù di inviament al spieti par simpri la selezion di une partizion.\nTen fracât il tast 'ALT' par disativâ il timp di spiete dilunc l'inviament.
 Partitions	PartitionsPage	Title	Partizions
 Uninstallation of boot menu completed	BootManagerController	Title	Disinstalazion dal menù di inviament completade
@@ -59,6 +61,7 @@ Please locate the Master Boot Record (MBR) save file to restore from. This is th
 Please locate the Master Boot Record (MBR) save file to restore from. This is the file that was created when the boot manager was first installed.	BootManagerController		Par plasê, indiche la posizion dal file dal Master Boot Record salvât di ripristinâ. Chest al è il file che al è stât creât cuant che si à instalât, la volte passade, il gjestôr di inviament.
 About to restore the Master Boot Record (MBR) of %disk from %file. Do you wish to continue?	BootManagerController	Don't translate the place holders: %disk and %file	Si sta par ripristinâ il Master Boot Record (MBR) di %disk dal file %file. Continuâ?
 Install	DrivesPage	Button	Instale
+The first partition on the disk starts too early and does not leave enough space free for a boot menu.\n%appname% needs 2 KiB available space before the first partition.	BootManagerController		La prime partizion sul disc e rive masse adore e no lasse avonde spazi libar par un menù di inviament.\nA %appname% i coventin 2 KiB di spazi disponibil prime de prime partizion.
 File:	FileSelectionPage	Text control label	File:
 Error reading partition table	BootManagerController	Title	Erôr tal lei la tabele des partizions
 Back	BootManagerController	Button	Indaûr

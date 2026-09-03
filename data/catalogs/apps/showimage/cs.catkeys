@@ -1,7 +1,6 @@
-1	czech	x-vnd.Haiku-ShowImage	1471302250
+1	czech	x-vnd.Haiku-ShowImage	1444474662
 ShowImage	System name		Prohlížeč obrázků
 Page setup…	Menus		Nastavení stránky…
-The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		Dokument '%s' (stránka %d) byl změněn. Chcete jej zavřít?
 Previous file	Menus		Předchozí soubor
 View	Menus		Zobrazit
 Leave full screen	Menus		Opustit celou obrazovku
@@ -13,6 +12,7 @@ Height: 	PrintOptionsWindow		Výška:
 Next file	Menus		Další soubor
 Slide show	Menus		Slideshow
 Original size	Menus		Původní velikost
+The document '%filename%' has been changed. Do you want to close the document?	ClosePrompt		Dokument '%filename%' byl upraven. Chceš zavřít dokument?
 Width:	PrintOptionsWindow		Šířka:
 Resize to (in 1/72 inches):	PrintOptionsWindow		Změnit velikost na (v 1/72 palce):
 Zoom factor in %:	PrintOptionsWindow		Přiblížení v %:
@@ -27,7 +27,6 @@ Last page	Menus		Poslední stránka
 Cancel	ClosePrompt		Zrušit
 Attributes	Menus		Atributy
 High-quality zooming	Menus		Vysoce kvalitní přiblížení
-The document '%s' has been changed. Do you want to close the document?	ClosePrompt		Dokument '%s' byl změněn. Chcete jej zavřít?
 Close	Menus		Zavřít
 Selection mode	Menus		Režim výběru
 Reset rating	Menus		Vynulovat hodnocení
@@ -48,6 +47,7 @@ Clear selection	Menus		Zrušit výběr
 Rotate clockwise	Menus		Otočit po směru hodinových ručiček
 Open with…	Menus		Otevřít pomocí…
 Rotate counterclockwise	Menus		Otočit proti směru hodinových ručiček
+The document '%filename%' (page %number%) has been changed. Do you want to close the document?	ClosePrompt		Dokument '%filename%' (strana %number%) byl upraven. Chceš zavřít dokument?
 Previous page	Menus		Předchozí stránka
 Fit to window	Menus		Přizpůsobit oknu
 Go to page	Menus		Jít na stránku

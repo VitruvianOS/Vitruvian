@@ -1,7 +1,6 @@
-1	hungarian	x-vnd.Haiku-ShowImage	1471302250
+1	hungarian	x-vnd.Haiku-ShowImage	1444474662
 ShowImage	System name		Képmegjelenítő
 Page setup…	Menus		Oldalbeállítás…
-The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		A '%s' nevű dokumentum %d. oldala megváltozott. Bezárja a dokumentumot?
 Previous file	Menus		Előző fájl
 View	Menus		Nézet
 Leave full screen	Menus		Kilépés a teljes képernyős módból
@@ -13,6 +12,7 @@ Height: 	PrintOptionsWindow		Magasság:
 Next file	Menus		Következő fájl
 Slide show	Menus		Bemutató
 Original size	Menus		Eredeti méret
+The document '%filename%' has been changed. Do you want to close the document?	ClosePrompt		%filename% megváltozott. Bezárod a dokumentumot?
 Width:	PrintOptionsWindow		Szélesség:
 Resize to (in 1/72 inches):	PrintOptionsWindow		Átméretezés (1/72 colban):
 Zoom factor in %:	PrintOptionsWindow		Nagyítás mértéke százalékban:
@@ -27,7 +27,6 @@ Last page	Menus		Utolsó oldal
 Cancel	ClosePrompt		Mégse
 Attributes	Menus		Jellemzők
 High-quality zooming	Menus		Magas minőségű nagyítás
-The document '%s' has been changed. Do you want to close the document?	ClosePrompt		A '%s' nevű dokumentum megváltozott. Biztosan be szeretnéd zárni?
 Close	Menus		Bezárás
 Selection mode	Menus		Kijelölés mód
 Reset rating	Menus		Értékelés visszaállítása
@@ -48,6 +47,7 @@ Clear selection	Menus		Kijelölés törlése
 Rotate clockwise	Menus		Forgatás az óramutató irányába
 Open with…	Menus		Megnyitás ezzel…
 Rotate counterclockwise	Menus		Óramutató járásával ellentétes irányú forgatás
+The document '%filename%' (page %number%) has been changed. Do you want to close the document?	ClosePrompt		%filename% (%number%. oldal) megváltozott. Bezárod a dokumentumot?
 Previous page	Menus		Előző oldal
 Fit to window	Menus		Illesztés az ablakhoz
 Go to page	Menus		Oldalra ugrás

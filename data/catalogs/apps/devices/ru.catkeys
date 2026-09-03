@@ -1,77 +1,68 @@
-1	russian	x-vnd.Haiku-Devices	911816421
+1	russian	x-vnd.Haiku-Devices	1230536917
 ACPI bus	DevicesView		Шина ACPI
 Encryption controller	Device		Контроллер шифрования
 Devices	System name		Устройства
 USB bus	DevicesView		Шина USB
-Graphics Peripheral	DeviceSCSI		Переферийная графика
 Processor	Device		Процессор
 Generate system information	DevicesView		Сгенерировать информацию о системе
-Unknown	DeviceACPI		Неизвестно
 Class info	DevicePCI		Информация о классе
 USB bus	Device		Шина USB
 Computer	DevicesView		Компьютер
 Communications	DeviceSCSI		Устройства связи
 Mass storage controller	Device		Контроллер накопителей
-Connection	DevicesView		подключению
 Printer	DeviceSCSI		Принтер
-ACPI Processor Namespace '%2'	DeviceACPI		Пространство имен процессора ACPI '%2'
+Connection	DevicesView		подключению
 Manufacturer	Device		Производитель
 Scanner	DeviceSCSI		Сканер
 Memory controller	Device		Контроллер памяти
 Unknown device	DevicesView		Неизвестное устройство
-Unknown	DevicePCI		Неизвестное
-ACPI node '%1'	DeviceACPI		ACPI нода '%1'
-Optical Drive	DeviceSCSI		Оптический привод
-Name	PropertyList		Имя
+ACPI node '%1'	DeviceACPI		ACPI нода «%1»
+Name	PropertyList		Название
 Manufacturer	DeviceSCSI		Производитель
 Device name	Device		Название устройства
 Satellite communications controller	Device		Контроллер спутниковой связи
 Device class	DeviceSCSI		Класс устройства
 Device	Device		Устройство
 Input device controller	Device		Контроллер устройств ввода
-ACPI System Indicator	DeviceACPI		Системный индикатор ACPI
 PCI bus	DevicesView		Шина PCI
-ACPI System Bus	DeviceACPI		Системная шина ACPI
-Tape Drive	DeviceSCSI		Накопитель на ленте
 Changer	DeviceSCSI		Changer
 Serial bus controller	Device		Контроллер последовательной шины
 Refresh devices	DevicesView		Обновить список устройств
 Category	DevicesView		категориям
 RBC	DeviceSCSI		RBC
-Device paths	Device		Путь к устройству
 Unknown device	Device		Неизвестное устройство
+Device paths	Device		Путь к устройству
 Wireless controller	Device		Беспроводной контроллер
 Generic system peripheral	Device		Общая системная периферия
 Value	PropertyList		Значение
 Devices	DevicesView		Устройства
 Device name	DeviceACPI		Название устройства
-Card Reader	DeviceSCSI		Кардридер
 Display controller	Device		Контроллер дисплея
-ACPI Button '%1'	DeviceACPI		ACPI кнопка '%1'
+Bus	DevicesView		типу шины
 ACPI <unknown>	DeviceACPI		ACPI <неизвестно>
 Device name	DevicePCI		Название устройства
-Disk Drive	DeviceSCSI		Дисковод
-Report compatibility	DevicesView		Отчёт о совместимости
 Other	DeviceSCSI		Другие
+Report compatibility	DevicesView		Отчёт о совместимости
 Computer	Device		Компьютер
 PCI bus	Device		Шина PCI
 Enclosure	DeviceSCSI		Enclosure
-ACPI Thermal Zone	DeviceACPI		Термодатчик ACPI
 Order by:	DevicesView		Сортировать по:
 Intelligent controller	Device		Интеллектуальный контроллер
 Multimedia controller	Device		Мультимедийный контроллер
-Quit	DevicesView		Выход
+Quit	DevicesView		Выйти
 ISA bus	Device		Шина ISA
 ISA bus	DevicesView		Шина ISA
+Basic information	PropertyList		Общая информация
 Processor	DeviceSCSI		Процессор
 Bridge	Device		Мост
+Attributes	PropertyList		Атрибуты
 Worm	DeviceSCSI		Worm
 CD-ROM	DeviceSCSI		Компакт диск
 Manufacturer	DevicePCI		Производитель
 Bridge	DeviceSCSI		Мост
 Signal processing controller	Device		Контроллер обработки сигналов
-Device name	DeviceSCSI		Имя устройства
-Docking station	Device		Кредл
+Device name	DeviceSCSI		Название устройства
+Docking station	Device		Док-станция
 Array	DeviceSCSI		Массив
 Unclassified device	Device		Неклассифицированные устройства
 Manufacturer	DeviceACPI		Производитель
@@ -80,4 +71,4 @@ Network controller	Device		Сетевой контроллер
 Driver used	Device		Используемый драйвер
 Communication controller	Device		Контроллер связи
 ACPI bus	Device		Шина ACPI
-unknown	Device		Неизвестен
+unknown	Device		неизвестно

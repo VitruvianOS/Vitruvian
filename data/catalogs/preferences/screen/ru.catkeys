@@ -1,4 +1,4 @@
-1	russian	x-vnd.Haiku-Screen	2577971458
+1	russian	x-vnd.Haiku-Screen	677808371
 no	Screen		нет
 bits/pixel	Screen		бита на пиксель
 15 bits/pixel, 32768 colors	Screen		15 бит на пиксель, 32768 цветов
@@ -11,7 +11,7 @@ Keep	Screen		Сохранить
 Horizonal frequency:\t%lu - %lu kHz\nVertical frequency:\t%lu - %lu Hz\n\nMaximum pixel clock:\t%g MHz	Screen		Горизонтальная частота:\t%lu - %lu кГц\nВертикальная частота:\t\t%lu - %lu Гц\n\nЧастота пикселизации:\t\t%g MГц
 Refresh rate:	Screen		Частота обновления:
 Video format:	Screen		Видео формат:
-Undo	Screen		Отменить
+Undo	Screen		Отмена
 OK	Screen		ОК
 Current workspace	Screen		Текущий рабочий стол
 %ld × %ld	Screen	The '×' is the Unicode multiplication sign U+00D7	%ld × %ld
@@ -19,25 +19,24 @@ vertically	Screen		вертикально
 All workspaces	Screen		Все рабочие столы
 Use laptop panel:	Screen		Использовать экран ноутбука:
 Unknown	Screen		Неизвестно
-Could not write VESA mode settings file:\n\t	Screen		Ну удалось записать файл настроек VESA режима:\n\t
+Could not write VESA mode settings file:\n\t	Screen		Не удалось записать файл настроек VESA режима:\n\t
 Display info	Screen		Информация о дисплее
+30 bits/pixel, 1 billion colors	Screen		30 бит на пиксель, 1 миллиард цветов
 Settings will revert in %seconds.	Screen		Настройки будут отменены через %seconds секунд.
-Cancel	Screen		Отмена
+Cancel	Screen		Отменить
 Other…	Screen		Другая…
 Screen	Screen		Экран
 Colors:	Screen		Цвета:
 yes	Screen		да
 Swap displays:	Screen		Поменять экраны местами:
 8 bits/pixel, 256 colors	Screen		8 бит на пиксель, 256 цветов
-Revert	Screen		Вернуть
+Revert	Screen		Откатить
 always	Screen		всегда
 Confirm changes	Screen		Подтвердить изменения
 Warning	Screen		Предупреждение
-24 bits/pixel, 16 Million colors	Screen		24 бита на пиксель, 16 миллионов цветов
 Hz	Screen		Гц
 Workspaces	Screen		Рабочие столы
 Brightness:	Screen		Яркость:
-32 bits/pixel, 16 Million colors	Screen		32 бита на пиксель, 16 миллионов цветов
 Done	Screen		Готово
 16 bits/pixel, 65536 colors	Screen		16 бит на пиксель, 65536 цветов
 Screen preferences by the Haiku team	Screen		Настройки экрана от команды Haiku
@@ -52,6 +51,7 @@ Apply	Screen		Применить
 horizontally	Screen		горизонтально
 disable	Screen		отключить
 Set background…	Screen		Изменить фон…
+24 bits/pixel, 16 million colors	Screen		24 бита на пиксель, 16 миллионов цветов
 Type or use the left and right arrow keys.	Screen		Наберите число или используйте левую или правую стрелку.
 Screen	System name		Экран
 Do you wish to keep these settings?	Screen		Вы хотите сохранить эти настройки?

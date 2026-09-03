@@ -1,4 +1,4 @@
-1	russian	x-vnd.Haiku-Appearance	3146871853
+1	russian	x-vnd.Haiku-Appearance	838951555
 Control border	Colors tab		Граница элемента
 Control mark	Colors tab		Отметка
 Off	AntialiasingSettingsView		Выключить
@@ -24,7 +24,7 @@ Arrow style	DecorSettingsView		Стиль стрелок
 On	AntialiasingSettingsView		Включить
 Decorator:	DecorSettingsView		Декоратор:
 Menu background	Colors tab		Фон меню
-Revert	APRWindow		Вернуть
+Revert	APRWindow		Откатить
 List item text	Colors tab		Текст списка
 OK	DecorSettingsView		ОК
 Control text	Colors tab		Текст элемента
@@ -47,6 +47,7 @@ Automatically pick secondary colors	Colors tab		Автоматически по�
 Window tab text	Colors tab		Текст заголовка окна
 Navigation pulse	Colors tab		Навигационная пульсация
 LCD subpixel	AntialiasingSettingsView		Субпиксельное сглаживание
+Progress bar	Colors tab		Индикатор выполнения (прогресс)
 Window tab	Colors tab		Заголовок окна
 Link text	Colors tab		Текст ссылки
 Tooltip background	Colors tab		Фон подсказки

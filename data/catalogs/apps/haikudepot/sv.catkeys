@@ -1,5 +1,6 @@
-1	swedish	x-vnd.Haiku-HaikuDepot	3945138144
+1	swedish	x-vnd.Haiku-HaikuDepot	4230673291
 Usage conditions download problem	ToLatestUserUsageConditionsWindow		Nedladdningsproblem för användningsvillkor
+User ratings loading…	PackageInfoView		Användarbetyg laddas...
 Available packages	MainWindow		Tillgängliga paket
 It was not possible to create the new user.	UserLoginWindow		Det gick inte att skapa den nya användaren.
 An unexpected error has been sent from the server [%li]	ServerHelper		Ett oväntat fel har skickats från servern [%li]
@@ -44,13 +45,16 @@ Cancel	UserLoginWindow		Avbryt
 Rating not possible	MainWindow		Betyg ej möjligt
 Package update error	MainWindow		Paketuppdateringsfel
 Click here	FeaturedPackagesView	Appears in the sentence 'Click here to search all packages.'	Klicka här
+No screenshot available.	PackageInfoView		Ingen skärmdump tillgänglig.
 %FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# process} other{# processes}}	ProcessCoordinator		%FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# process} other{# processer}}
 Fetching user ratings for package	PopulatePkgUserRatingsFromServerProcess		Hämta användarbetyg för paket
 Reboot required	PackageManager		Omstart krävs
 All packages	PackageListView		Alla paket
+Checking server information	ServerRuntimeInformationVerifierProcess		Kontrollerar serverinformation
 Send	RatePackageWindow		Skicka
 Creating package list…	FeaturedPackagesView		Skapar paketlista...
 Start package daemon	App		Starta paket-servicen
+Changelog loading…	PackageInfoView		Ändringsloggen laddar...
 There are problems in the supplied data:	UserLoginWindow		Det finns problem med de angivna uppgifterna:
 Desktop and non-desktop packages	MainWindow		Stationära och icke-stationära paket
 The user '%Nickname%' has not agreed to any usage conditions.	UserUsageConditions		Användaren '%Nickname%' har inte samtyckt till några användningsvillkor.
@@ -80,6 +84,7 @@ Continue	App		Fortsätt
 A password is required.	UserLoginWindow		Ett lösenord krävs.
 Language	RatePackageWindow		Språk
 Open %DeskbarLink%	PackageAction		Öppna %DeskbarLink%
+Login disabled	MainWindow		Inloggning avaktiverad
 Status	PackageListView		Status
 Network transport error	ServerHelper		Nättransportfel
 Cancel	PackageResult		Avbryt
@@ -138,6 +143,8 @@ Rating	PackageListView		Betyg
 Synchronizing icons	ServerIconExportUpdateProcess		Synkroniserar ikoner
 No, quit	App		Nej, avsluta
 Show	MainWindow		Visa
+Timestamp discrepancy	ServerRuntimeInformationVerifierProcess		Avvikelse i tidsstämpel
+No contents available.	PackageInfoView		Inget innehåll tillgängligt.
 This application writes and reads some working files on your computer in order to function. It appears that there are problems writing a test file at [%TestFilePath%]. Check that there are no issues with your local disk or permissions that might prevent this application from writing files into that directory location. You may choose to acknowledge this problem and continue, but some functionality may be disabled.	App		Denna applikation skriver och läser några arbetsfiler på din dator för att fungera. Det verkar som om det finns problem med att skriva en testfil på [%TestFilePath%]. Kontrollera att det inte finns några problem med din hårdisk eller behörigheter som kan förhindra programmet från att skriva filer till katalogplatsen. Du kan välja att bara notera detta problem och fortsätta, men vissa funktioner kan vara inaktiverade.
 Settings…	MainWindow		Inställningar...
 <Package contents not available for remote packages>	PackageContentsView		<Paketinehållet är inte tillgängligt för externa paket>
@@ -146,10 +153,11 @@ The following problems have been encountered. Please select a solution for each:
 Local	LocalPkgDataLoadProcess		Lokal
 Package changes	PackageResult	Window title	Paketändringar
 Would it be acceptable to send anonymous usage data to the HaikuDepotServer system from this computer? You can change your preference in the \"Settings\" window later.	MainWindow		Skulle det vara acceptabelt att skicka anonyma användningsdata till HaikuDepotServer-systemet från den här datorn? Du kan ändra dina preferenser i fönstret \"Inställningar \" senare.
-User rating	RatePackageWindow		Användarbetyg
 Installed packages	MainWindow		Installerade paket
+User rating	RatePackageWindow		Användarbetyg
 Date	PackageListView		Datum
 The password must be a minimum of %MinPasswordLength% characters. %MinPasswordUppercaseChar% characters must be upper-case and %MinPasswordDigitsChar% characters must be digits.	UserLoginWindow		Lösenordet måste vara minst %MinPasswordLength% tecken. %MinPasswordUppercaseChar% -tecken måste vara versaler och %MinPasswordDigitsChar% -tecken måste vara siffror.
+Screenshot loading…	PackageInfoView		Skärmdump laddas...
 An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	ToLatestUserUsageConditionsWindow		Ett fel har uppstått vid nedladdning av användningsvillkoren. Kontrollera loggen för detaljer och försök igen. \nInformation om hur man visar loggarna finns i HaikuDepot-delen av Haiku User Guide.
 There was a puzzling response from the web service.	UserLoginWindow		Det komm ett konstigt meddelande från webb servicen.
 Opening \"%DeskbarLink%\"	OpenPackageProcess		Öppnar \"%DeskbarLink%\"
@@ -170,8 +178,8 @@ This application is too old to communicate with the server system. Obtain a newe
 Stability	RatePackageWindow		Stabilitet
 The password must be repeated in order to reduce the chance of entering the password incorrectly.	UserLoginWindow		Lösenordet måste upprepas för att minska risken att det anges felaktigt.
 Cancel	SettingsWindow		Avbryt
-Cancel	RatePackageWindow		Avbryt
 Inactive	PackageListView		Inaktiv
+Cancel	RatePackageWindow		Avbryt
 Nickname:	UserLoginWindow		Användarnamn:
 Synchronizing meta-data about repositories	ServerRepositoryDataUpdateProcess		Synkroniserar metadata från repositorier
 OK	MainWindow		OK
@@ -189,8 +197,8 @@ Login issue	MainWindow		Inloggnings problem
 Your rating:	RatePackageWindow		Dina betyg:
 The user %Nickname% has been successfully created in the HaikuDepotServer system. You can administer your user details by using the web interface. You are now logged-in as this new user.	UserLoginWindow		Användaren %Nickname% har framgångsrikt skapats i HaikuDepotServer-systemet. Du kan administrera dina användarinformation genom att använda webbgränssnittet. Du är nu inloggad som den här nya användaren.
 Repositories	MainWindow		Repositorier
-This rating is visible to other users	RatePackageWindow		Detta betyg är synligt för andra användare
 While updating package data, a problem has arisen that may cause data to be outdated or missing from the application's display. Additional details regarding this problem may be able to be obtained from the application logs.\nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	MainWindow		Under uppdateringen av paketdata har ett problem uppstått som kan leda till att data är föråldrade eller saknas från programmets skärm. Ytterligare information om detta problem kan hämtas från applikationsloggarna.\nInformation om hur du ser loggarna finns i avsnittet HaikuDepot i Haiku användarhandbok.
+This rating is visible to other users	RatePackageWindow		Detta betyg är synligt för andra användare
 An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	UserUsageConditions		Ett fel har uppstått vid nedladdning av användningsvillkoren. Kontrollera loggen för detaljer och försök igen. \nInformation om hur man visar loggarna finns i HaikuDepot-delen av Haiku User Guide.
 Stop network use	ServerHelper		Stoppa nätverksanvändning
 View agreed usage conditions…	MainWindow		Visa godkända användarvillkor…
@@ -216,6 +224,7 @@ The nickname is required.	UserLoginWindow		Ett användarnamn krävs.
 Apply changes	PackageResult		Applicera förändringar
 Server error	ServerHelper		Serverfel
 Rate package	RatePackageWindow		Betygsatt paket
+The server and this computer have a discrepancy in the current timestamp of around %DiscrepancySeconds% seconds. This may cause issues for HaikuDepot communicating with the server. Check your computer's clock settings and correct the current time if necessary.	ServerRuntimeInformationVerifierProcess		Det råder en skillnad på cirka %DiscrepancySeconds% sekunder mellan serverns och den här datorns aktuella tidsangivelse. Detta kan orsaka problem för HaikuDepot vid kommunikation med servern. Kontrollera datorns klockinställningar och korrigera tiden vid behov.
 Recording view of \"%PackageName%\"	IncrementViewCounterProcess		Inspelningsvy av \"%PackageName%\"
 Sending anonymous usage data	MainWindow		Skickar anonym användningsinformation
 Log in	UserLoginWindow		Logga in

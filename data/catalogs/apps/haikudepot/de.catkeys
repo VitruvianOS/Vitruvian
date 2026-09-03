@@ -1,5 +1,6 @@
-1	german	x-vnd.Haiku-HaikuDepot	3945138144
+1	german	x-vnd.Haiku-HaikuDepot	4230673291
 Usage conditions download problem	ToLatestUserUsageConditionsWindow		Problem beim Herunterladen der Nutzungsbedingungen
+User ratings loading…	PackageInfoView		Bewertungen werden geladen …
 Available packages	MainWindow		Verfügbare Pakete
 It was not possible to create the new user.	UserLoginWindow		Das neue Benutzerkonto konnte nicht angelegt werden.
 An unexpected error has been sent from the server [%li]	ServerHelper		Der Server hat einen unerwarteten Fehler gesendet [%li]
@@ -44,13 +45,16 @@ Cancel	UserLoginWindow		Abbrechen
 Rating not possible	MainWindow		Bewertung nicht möglich
 Package update error	MainWindow		Fehler bei Paketaktualisierung
 Click here	FeaturedPackagesView	Appears in the sentence 'Click here to search all packages.'	Hier klicken
+No screenshot available.	PackageInfoView		Kein Screenshot verfügbar.
 %FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# process} other{# processes}}	ProcessCoordinator		%FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# Prozess} other{# Prozesse}}
 Fetching user ratings for package	PopulatePkgUserRatingsFromServerProcess		Bewertungen des Pakets werden geladen
 Reboot required	PackageManager		Neustart erforderlich
 All packages	PackageListView		Alle Pakete
+Checking server information	ServerRuntimeInformationVerifierProcess		Prüfen der Server-Informationen
 Send	RatePackageWindow		Senden
 Creating package list…	FeaturedPackagesView		Erzeuge Paketliste…
 Start package daemon	App		Paket-Daemon starten
+Changelog loading…	PackageInfoView		Änderungsprotokoll wird geladen …
 There are problems in the supplied data:	UserLoginWindow		Es gibt Probleme mit den eingegebenen Daten:
 Desktop and non-desktop packages	MainWindow		Desktop und nicht-Desktop Pakete
 The user '%Nickname%' has not agreed to any usage conditions.	UserUsageConditions		'%Nickname%' hat keinen Nutzungsbedingungen zugestimmt.
@@ -80,6 +84,7 @@ Continue	App		Weiter
 A password is required.	UserLoginWindow		Es wird ein Kennwort benötigt.
 Language	RatePackageWindow		Sprache
 Open %DeskbarLink%	PackageAction		%DeskbarLink% öffnen
+Login disabled	MainWindow		Login deaktiviert
 Status	PackageListView		Status
 Network transport error	ServerHelper		Netzwerk-Transportfehler
 Cancel	PackageResult		Abbrechen
@@ -138,6 +143,8 @@ Rating	PackageListView		Bewertung
 Synchronizing icons	ServerIconExportUpdateProcess		Synchronisiere Icons
 No, quit	App		Nein, Beenden
 Show	MainWindow		Anzeigen
+Timestamp discrepancy	ServerRuntimeInformationVerifierProcess		Zeitstempel stimmen nicht überein
+No contents available.	PackageInfoView		Paketinhalt nicht verfügbar.
 This application writes and reads some working files on your computer in order to function. It appears that there are problems writing a test file at [%TestFilePath%]. Check that there are no issues with your local disk or permissions that might prevent this application from writing files into that directory location. You may choose to acknowledge this problem and continue, but some functionality may be disabled.	App		Diese Anwendung schreibt und liest einige Arbeitsdateien auf diesem Computer, um richtig zu funktionieren. Eine Testdatei konnte jedoch nicht nach [%TestFilePath%] geschrieben werden. Bitte prüfen, ob es Probleme mit der lokalen Festplatte gibt oder ob für diesen Ordner nötige Schreibrechte fehlen. Dieses Problem kann zwar ignoriert werden, allerdings wird die Anwendung dann nur eingeschränkt funktionieren.
 Settings…	MainWindow		Einstellungen …
 <Package contents not available for remote packages>	PackageContentsView		<Der Inhalt kann nur für bereits heruntergeladene Pakete angezeigt werden>
@@ -146,10 +153,11 @@ The following problems have been encountered. Please select a solution for each:
 Local	LocalPkgDataLoadProcess		Lokal
 Package changes	PackageResult	Window title	Paket-Änderungen
 Would it be acceptable to send anonymous usage data to the HaikuDepotServer system from this computer? You can change your preference in the \"Settings\" window later.	MainWindow		Dürfen anonyme Nutzungsdaten von diesem Computer an den HaikuDepotServer geschickt werden? Die Option kann jederzeit im \"Einstellungen\" Fenster geändert werden.
-User rating	RatePackageWindow		Bewertung
 Installed packages	MainWindow		Installierte Pakete
+User rating	RatePackageWindow		Bewertung
 Date	PackageListView		Datum
 The password must be a minimum of %MinPasswordLength% characters. %MinPasswordUppercaseChar% characters must be upper-case and %MinPasswordDigitsChar% characters must be digits.	UserLoginWindow		Das Kennwort muss mindestens %MinPasswordLength% Zeichen lang sein. Es muss zumindest %MinPasswordUppercaseChar% Großbuchstaben und %MinPasswordDigitsChar% Ziffern enthalten.
+Screenshot loading…	PackageInfoView		Screenshot wird geladen …
 An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	ToLatestUserUsageConditionsWindow		Beim Herunterladen der Nutzungsbedingungen ist ein Fehler aufgetreten. Bitte Log prüfen und nochmal probieren.\nWie diese Logdateien angezeigt werden können, steht im Kapitel 'HaikuDepot' des Haiku User Guide.
 There was a puzzling response from the web service.	UserLoginWindow		Der Web-Dienst hat mit einer wirren Meldung geantwortet.
 Opening \"%DeskbarLink%\"	OpenPackageProcess		\"%DeskbarLink%\" wird geöffnet
@@ -170,8 +178,8 @@ This application is too old to communicate with the server system. Obtain a newe
 Stability	RatePackageWindow		Stabilität
 The password must be repeated in order to reduce the chance of entering the password incorrectly.	UserLoginWindow		Das Kennwort muss wiederholt werden, um die Wahrscheinlichket einer Falscheingabe zu verringern.
 Cancel	SettingsWindow		Abbrechen
-Cancel	RatePackageWindow		Abbrechen
 Inactive	PackageListView		Deaktiviert
+Cancel	RatePackageWindow		Abbrechen
 Nickname:	UserLoginWindow		Benutzername:
 Synchronizing meta-data about repositories	ServerRepositoryDataUpdateProcess		Synchronisieren der Metadaten von Paketquellen
 OK	MainWindow		OK
@@ -189,8 +197,8 @@ Login issue	MainWindow		Anmeldungsproblem
 Your rating:	RatePackageWindow		Eigene Bewertung:
 The user %Nickname% has been successfully created in the HaikuDepotServer system. You can administer your user details by using the web interface. You are now logged-in as this new user.	UserLoginWindow		Der Nutzer %Nickname% wurde erfolgreich im HaikuDepotServer System angelegt. Nutzerdaten können im Webinterface verwaltet werden. Der neu angelegte Nutzer ist jetzt angemeldet.
 Repositories	MainWindow		Paketquellen
-This rating is visible to other users	RatePackageWindow		Diese Bewertung is für andere Nutzer sichtbar
 While updating package data, a problem has arisen that may cause data to be outdated or missing from the application's display. Additional details regarding this problem may be able to be obtained from the application logs.\nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	MainWindow		Bei der Aktualisierung von Paketdaten trat ein Problem auf. Dadurch könnten die angezeigten Daten der Anwendung veraltet sein oder fehlen. Weitere Details zu diesem Problem können dem Anwendungs-Log entnommen werden.\nWie diese Logdateien angezeigt werden können, steht im Kapitel 'HaikuDepot' des Haiku User Guide.
+This rating is visible to other users	RatePackageWindow		Diese Bewertung is für andere Nutzer sichtbar
 An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	UserUsageConditions		Beim Herunterladen der Nutzungsbedingungen ist ein Fehler aufgetreten. Bitte Log prüfen und nochmal probieren.\nWie diese Logdateien angezeigt werden können, steht im Kapitel 'HaikuDepot' des Haiku User Guide.
 Stop network use	ServerHelper		Netzwerknutzung stoppen
 View agreed usage conditions…	MainWindow		Zugestimmte Nutzungsbedingungen lesen …
@@ -216,6 +224,7 @@ The nickname is required.	UserLoginWindow		Der Benutzername wird benötigt.
 Apply changes	PackageResult		Änderungen übernehmen
 Server error	ServerHelper		Server-Fehler
 Rate package	RatePackageWindow		Paket bewerten
+The server and this computer have a discrepancy in the current timestamp of around %DiscrepancySeconds% seconds. This may cause issues for HaikuDepot communicating with the server. Check your computer's clock settings and correct the current time if necessary.	ServerRuntimeInformationVerifierProcess		Die Zeitstempel von Server und diesem Computer unterscheiden sich um etwa %DiscrepancySeconds%. Dadurch kann es zu Problemen bei der Kommunikation zwischen HaikuDepot und dem Server kommen.  Die Zeiteinstellungen des Computers sollten überprüft und ggf. korrigiert werden.
 Recording view of \"%PackageName%\"	IncrementViewCounterProcess		Seitenaufruf von \"%PackageName%\" zählen
 Sending anonymous usage data	MainWindow		Sende anonyme Nutzungsdaten
 Log in	UserLoginWindow		Anmelden

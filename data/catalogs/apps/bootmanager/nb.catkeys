@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-BootManager	1012731949
+1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-BootManager	3553759389
 Old Master Boot Record backup failure	BootManagerController	Title	Sikkerhetskopiering av den gamle hovedpartisjonssektor feilet
 At least one partition must be selected!	BootManagerController		Minst én partisjon må være valgt!
 No space available!	DrivesPage	Cannot install	Ingen ledig plass!
@@ -31,6 +31,7 @@ USB Drive	DrivesPage	Default disk name	USB-disk
 Restore MBR	BootManagerController	Button	Gjennopprett MBR
 Hard Drive	DrivesPage	Default disk name	Harddisk
 Drives	DrivesPage	Title	Disker
+%appname% is unable to read the partition table!	BootManagerController		%appname% kan ikke lese partisjonstabellen!
 The following partitions were detected. Please check the box next to the partitions to be included in the boot menu. You can also set the names of the partitions as you would like them to appear in the boot menu.	PartitionsPage		Følgende partisjoner ble oppdaget. Vennligst merk av i boksen ved siden av partisjonene du vil ha inkludert i oppstartsmenyen. Du kan også navngi partisjonene slik du vil de skal vises i oppstartsmenyen.
 After five seconds	DefaultPartitionPage		Etter fem sekunder
 Timeout: %s	DefaultPartitionPage		Tidsavbrudd: %s
@@ -47,6 +48,7 @@ Previous	WizardView	Button	Forrige
 Uninstallation of boot menu failed	BootManagerController	Title	Avinstallering av oppstartsmeny var mislykket
 Incompatible format!	DrivesPage	Cannot install	Inkompatibelt format!
 Old Master Boot Record saved	BootManagerController	Title	Gammel hovedpartisjonssektor lagret
+The partition table of the first hard disk is not compatible.\n%appname% only works with IBM PC MBR partitions.	BootManagerController		Partisjonstabellen på den første harddisken er ikke kompatibel.\n%appname% fungerer bare med IBM PC MBR-partisjoner.
 Please specify a default partition and a timeout.\nThe boot menu will load the default partition after the timeout unless you select another partition. You can also have the boot menu wait indefinitely for you to select a partition.\nKeep the 'ALT' key pressed to disable the timeout at boot time.	DefaultPartitionPage		Vennligst spesifiser en standardpartisjon og et tidsavbrudd.\nOppstartsmenyen vil laste standardpartisjonen etter tidsavbruddet hvis du ikke velger en annen partisjon. Du kan også la oppstartsmenyen vente ubegrenset på at du skal velge en partisjon.\nHold nede 'ALT'-knappen for å deaktivere tidsavbrudd under oppstart. 
 Partitions	PartitionsPage	Title	Partisjoner
 Uninstallation of boot menu completed	BootManagerController	Title	Avinstallering av oppstartsmeny fullført
@@ -59,6 +61,7 @@ Please locate the Master Boot Record (MBR) save file to restore from. This is th
 Please locate the Master Boot Record (MBR) save file to restore from. This is the file that was created when the boot manager was first installed.	BootManagerController		Vennligst finn filen som inneholder hovedpartisjonssektoren (MBR) som skal gjennopprettes. Dette er filen som ble laget da oppstartsbehandleren ble installert.
 About to restore the Master Boot Record (MBR) of %disk from %file. Do you wish to continue?	BootManagerController	Don't translate the place holders: %disk and %file	Vil nå gjennopprette hovedpartisjonssektoren (MBR) for %disk fra %file. Ønsker du å fortsette?
 Install	DrivesPage	Button	Installer
+The first partition on the disk starts too early and does not leave enough space free for a boot menu.\n%appname% needs 2 KiB available space before the first partition.	BootManagerController		Den første partisjonen på disken starter for tidlig og gir ikke nok plass til en oppstartsmeny.\n%appname% trenger 2 KiB tilgjengelig plass før den første partisjonen.
 File:	FileSelectionPage	Text control label	Fil:
 Error reading partition table	BootManagerController	Title	Feil ved lesing av partisjonstabell
 Back	BootManagerController	Button	Tilbake

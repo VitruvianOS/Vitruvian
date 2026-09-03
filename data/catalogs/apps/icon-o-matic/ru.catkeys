@@ -1,4 +1,4 @@
-1	russian	x-vnd.haiku-icon_o_matic	150011047
+1	russian	x-vnd.haiku-icon_o_matic	1029251628
 None	Icon-O-Matic-Properties		Ничего
 Clean up path	Icon-O-Matic-CleanUpPathCmd		Очистить контур
 16 × 16	Icon-O-Matic-Menu-Settings	The '×' is the Unicode multiplication sign U+00D7	16 × 16
@@ -38,7 +38,7 @@ PNG set	Icon-O-Matic-SavePanel		Набор PNG
 Transformation	Icon-O-Matic-TransformationBoxStates		Преобразование
 Move {0, plural, one{path} other{paths}}	Icon-O-Matic-MovePathsCmd		Переместить {0, plural, one{контур} few{контура} other{ко́нтуров}}
 Closed	Icon-O-Matic-PropertyNames		Замкнут
-<nothing to redo>	Icon-O-Matic-Menu-Edit		<нечего возвращать>
+<nothing to redo>	Icon-O-Matic-Menu-Edit		<нечего повторять>
 Height	Icon-O-Matic-PropertyNames		Высота
 warning	Icon-O-Matic-SVGExport		предупреждение
 File	Icon-O-Matic-Menus		Файл
@@ -55,10 +55,12 @@ OK	Icon-O-Matic-ColorPicker		ОК
 Multi-set %property%	Icon-O-Matic-Properties	Don't translate %property%	Мультисет %property%
 Error: 	Icon-O-Matic-Main		Ошибка: 
 Reset {0, plural, one{transformation} other{transformations}}	Icon-O-Matic-ResetTransformationCmd		Сбросить {0, plural, one{преобразование} few{преобразования} other{преобразований}}
+SVG does not support some gradient types (conic, diamond, xy, sqrt_xy).\n\nThey will be exported as linear approximations and may look different in other viewers.	Icon-O-Matic-SVGExport		SVG не поддерживает некоторые типы градиентов (конические, ромбы, xy, sqrt_xy).\n\nБудут экспортированы их линейные аппроксимации; в других программах они могут выглядеть иначе.
 Assign style	Icon-O-Matic-AssignStyleCmd		Определить стиль
 Saving your document failed!	Icon-O-Matic-Exporter		Не удалось сохранить документ!
 Snap to grid	Icon-O-Matic-Menu-Settings		Выровнять по сетке
 Opening the document failed!	Icon-O-Matic-Main		Не удалось открыть документ!
+SVG export	Icon-O-Matic-SVGExport		Экспорт SVG
 Remove {0, plural, one{style} other{styles}}	Icon-O-Matic-RemoveStylesCmd		Убрать {0, plural, one{стиль} few{стиля} other{стилей}}
 One or more of the paths have too many vertices. The HVIF format supports a maximum of 255 vertices per path.	Icon-O-Matic-FlatIconExporter		Один или несколько контуров содержат слишком много точек. HVIF поддерживает максимум 255 точек на контур.
 Add with path & style	Icon-O-Matic-ShapesList		Добавить с контуром & стилем
@@ -76,6 +78,7 @@ Add {0, plural, one{style} other{styles}}	Icon-O-Matic-AddStylesCmd		Добав�
 Remove	Icon-O-Matic-PathManipulator		Удалить
 Duplicate	Icon-O-Matic-ShapesList		Дублировать
 Alpha	Icon-O-Matic-PropertyNames		Альфа
+OK	Icon-O-Matic-SVGExport		OK
 Contour	Transformation		Обводка
 Add {0, plural, one{transformer} other{transformers}}	Icon-O-Matic-AddTransformersCmd		Добавить {0, plural, one{трансформер} few{трансформера} other{трансформеров}}
 Miter limit	Icon-O-Matic-PropertyNames		Граница острия
@@ -93,6 +96,7 @@ Freeze {0, plural, one{shape} other{shapes}}	Icon-O-Matic-FreezeTransformationCm
 Remove {0, plural, one{shape} other{shapes}}	Icon-O-Matic-RemoveShapesCmd		Убрать {0, plural, one{форму} few{формы} other{форм}}
 Undo: %action%	Icon-O-Matic-Main		Откатить: %action%
 Diamond	Icon-O-Matic-StyleTypes		Ромбовидный
+%appname% might not have interpreted all data from the SVG when it was loaded. By overwriting the original file, this information would now be lost.	Icon-O-Matic-SVGExport		%appname% не удалось интерпретировать все данные из SVG при его загрузке. При перезаписи исходного файла они будут утеряны.
 Don't save	Icon-O-Matic-Menu-Settings		Не сохранять
 Add shape with path	Icon-O-Matic-Menu-Shape		Добавить форму с контуром
 Bummer	Icon-O-Matic-Main	Cancel button - error alert	Досадно
@@ -149,7 +153,7 @@ Rotate path indices	Icon-O-Matic-RotatePathIndiciesCmd		Обход точек к
 Add {0, plural, one{item} other{items}}	Icon-O-Matic-AddItemsCmd		Добавить {0, plural, one{элемент} few{элемента} other{элементов}}
 Rotate indices forwards	Icon-O-Matic-PathsList		Переместить начало контура вперед
 Save	Icon-O-Matic-Menu-File		Сохранить
-Cancel	Icon-O-Matic-StyledTextImport		Отмена
+Cancel	Icon-O-Matic-StyledTextImport		Отменить
 Add circle	Icon-O-Matic-PathsList		Добавить окружность
 Freeze transformation	Icon-O-Matic-ShapesList		Зафиксировать преобразование
 META:ICON attribute	Icon-O-Matic-SavePanel		Атрибут META:ICON
@@ -157,6 +161,7 @@ Untitled	Icon-O-Matic-Main		Новый значок
 Max LOD	Icon-O-Matic-PropertyNames		Макс. LOD
 Save changes to current icon before closing?	Icon-O-Matic-Menu-Settings		Сохранить изменения теущего значка перед закрытием?
 Failed to open the file '%s' as an SVG document.\n\n	Icon-O-Matic-SVGImport		Не удалось открыть файл «%s» как документ SVG.\n\n
+<unknown property>	Icon-O-Matic-PropertyNames		<неизвестное свойство>
 Save as…	Icon-O-Matic-Menu-File		Сохранить как…
 Swatches	Icon-O-Matic-Menus		Палитра
 <modify path>	Icon-O-Matic-PathCmd		<изменить контур>
@@ -174,7 +179,6 @@ Transformer	Icon-O-Matic-Menus		Трансформер
 Flip {0, plural, one{vertex} other{vertices}}	Icon-O-Matic-FlipPointsCmd		Отзеркалить {0, plural, one{точку} few{точки} other{точек}}
 Invert selection	Icon-O-Matic-Properties		Инвертировать выделение
 to attach transformers.	Icon-O-Matic-TransformersList	Empty transformers list - 2nd line	чтобы прикрепить трансформеры.
-<unkown property>	Icon-O-Matic-PropertyNames		<неизвестное свойство>
 Pick a color	Icon-O-Matic-ColorPicker		Выберите цвет
 Settings…	Icon-O-Matic-SavePanel		Настройки…
 Select all	Icon-O-Matic-PathManipulator		Выделить все
@@ -189,4 +193,4 @@ Width	Icon-O-Matic-PropertyNames		Ширина
 Add reference image	Icon-O-Matic-ShapesList		Добавить референсное изображение
 Style	Icon-O-Matic-Menus		Стиль
 Off	Icon-O-Matic-Menu-Settings		Без сетки
-Edit	Icon-O-Matic-Menus		Изменить
+Edit	Icon-O-Matic-Menus		Правка

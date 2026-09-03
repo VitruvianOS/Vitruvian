@@ -1,31 +1,32 @@
-1	russian	x-vnd.Haiku-Notifications	1250384010
+1	russian	x-vnd.Haiku-Notifications	2326916557
+%prefname% preflet sample	PrefletWin		пример префлета %prefname%
 Lower left	GeneralView		Внизу слева
 Application does not have a valid signature	NotificationView	Alert message	Приложение не имеет действительной подписи
 Status	NotificationView		Статус
 Add…	NotificationView		Добавить…
 Lower right	GeneralView		Внизу справа
-Muted	NotificationView		Приглушено
+Muted	NotificationView		Отключено
  is already listed	NotificationView	Alert message	 уже есть в списке
 OK	PrefletWin		ОК
-Mute notifications from this application	NotificationView		Приглушить уведомления от этого приложения
+Mute notifications from this application	NotificationView		Отключить уведомления этого приложения
 wide	GeneralView	Window width: Slider high text	широкая
 narrow	GeneralView	Window width: Slider low text	узкая
-Revert	PrefletWin		Вернуть
+Revert	PrefletWin		Откатить
 Applications	PrefletView		Приложения
 {0, plural, =1{Timeout: # second}other{Timeout: # seconds}}	GeneralView		{0, plural, =1{Время ожидания: # секунда} few{Время ожидания: # секунды} other{Время ожидания: # секунд}}
 Upper right	GeneralView		Вверху справа
-An error occurred saving the preferences.\nIt's possible you are running out of disk space.	PrefletWin		Произошла ошибка при сохранении настроек.\nВозможно кончилось место на диске.
+An error occurred saving the preferences.\nIt's possible you are running out of disk space.	PrefletWin		Произошла ошибка при сохранении настроек.\nВозможно, недостаточно места на диске.
 Defaults	PrefletWin		По умолчанию
 Upper left	GeneralView		Вверху слева
 Window width	GeneralView		Ширина окна
 Applications	NotificationView		Приложения
-General	PrefletView		Основные
+General	PrefletView		Общие
 OK	NotificationView		ОК
-Follow Deskbar	GeneralView		Следовать за Deskbar
+Follow Deskbar	GeneralView		Рядом с Deskbar
 Notifications	System name		Уведомления
-Allowed	NotificationView		Разрешено
+Allowed	NotificationView		Подключено
 Duration:	GeneralView		Длительность:
-Enable notifications	GeneralView		Включить уведомления
+Enable notifications	GeneralView		Подключить уведомления
 Application	NotificationView		Приложение
 This is a test notification message	PrefletWin		Это тестовое уведомление
 Remove	NotificationView		Удалить

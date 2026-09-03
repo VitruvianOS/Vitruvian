@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-libtracker	2433311519
+1	english	x-vnd.Haiku-libtracker	3881286823
 Created	ContainerWindow		創建
 Icon	AttributesView		圖標
 Open and make preferred	OpenWithWindow		開啓並設為首選
@@ -32,7 +32,6 @@ Value	AttributesView		數值
 Information	InfoWindow		資訊
 Error emptying Trash	FSUtils		清空資源回收筒出錯
 Opens with:	InfoWindow		開啓以：
-You cannot copy or move the Printers directory.	FSUtils		印表機目录無法複製或移動。
 Size	QueryPoseView		大小
 Disk mount	TrackerSettingsWindow		磁碟掛載
 Type	AttributesView		類型
@@ -44,7 +43,6 @@ You cannot replace a folder or a symbolic link with a file.	FSUtils		您不能�
 (unknown)	InfoWindow		（未知）
 {0, plural, other{<# dates>}}	AttributesView		{0, plural, other{<# 日>}}
 Trailing \\.	libtracker		跟隨中 \\.
-At %func \nfind_directory() failed. \nReason: %error	Email Query Columns		At %func \nfind_directory() failed. \nReason: %error
 Handles any file	OpenWithWindow		處理任何檔案
 save text	FilePanelPriv		存储文字
 Raw data	AttributesView		原始數據
@@ -145,7 +143,6 @@ Disks	Model		磁碟
 Create a Query template	FindPanel		建立查詢模板
 Size	FindPanel		大小
 New submenu	ContainerWindow	Folder name of New-template submenu	新子選單
-OK	Email Query Columns		確認
 Location	QueryPoseView		位置
 Edit query	ContainerWindow		編輯查詢
 {0, plural, one{(# byte)} other{(# bytes)}}	InfoWindow		{0, plural, one{(# byte)} other{(# bytes)}}
@@ -197,8 +194,8 @@ Media parameter web	AttributesView		媒體參數網
 Sorry, you can't save things at the root of your system.	FilePanelPriv		抱歉，您無法將內容存储在系統根目錄中。
 Restore	ContainerWindow		恢復
 Location	ContainerWindow		位置
-Skip	FSUtils		跳過
 Warning space color	SettingsView		警告空間顔色
+Skip	FSUtils		跳過
 Text list	AttributesView		文字列表
 Used space color	SettingsView		使用的空間色彩
 Cancel	FSUtils		取消
@@ -252,7 +249,6 @@ Favorites	FilePanelPriv		收藏夾
 Point	AttributesView		點
 You can't move or copy items to read-only volumes.	PoseView		您無法將項目移動或複製到唯讀磁碟卷。
 home	B_USER_DIRECTORY		主資料夾
-You cannot create a link to the Trash directory.	FSUtils		無法在資源回收筒建立連結。
 Tracker New Templates	B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates		Tracker新模板
 Disk mounting during boot	AutoMounterSettings		啟動時挂載磁碟
 Don't automount	AutoMounterSettings		不要自動掛載
@@ -313,7 +309,6 @@ Would you like to find some other suitable application?	FSUtils		您想找到其
 Recent folders	FavoritesMenu		近期資料夾
 Signed memory size	AttributesView		已標記的記憶體大小
 The specified name is illegal. Please choose another name.	FilePanelPriv		指定的名稱不合法。請選擇其他名稱。
-You cannot copy or move the Trash directory.	FSUtils		資源回收筒目录無法複製或移動。
 of %items	StatusWindow		的 %items
 Error copying file \"%name\":\n\t%error\n\nWould you like to continue?	FSUtils		複製檔案 \"%name\"時發生錯誤:\n\t%error\n\n您想繼續嗎？
 less than	FindPanel		少於
@@ -323,8 +318,8 @@ Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		無�
 Create %s clipping	PoseView		建立 %s 剪輯
 Error moving \"%name\"	FSUtils		移動 \"%name\" 時發生錯誤
 To: %dir	StatusWindow		至：%dir
-Cancel	Tracker		取消
 Paste layout	ContainerWindow		貼上版面
+Cancel	Tracker		取消
 yes	AttributesView		是的
 Make active printer	ContainerWindow		設定活躍印表機
 Copy to	ContainerWindow		複製到

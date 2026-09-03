@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.Haiku-libtracker	734452449
+1	catalan; valencian	x-vnd.Haiku-libtracker	3033621663
 Created	ContainerWindow		Creat
 Icon	AttributesView		Icona
 Open and make preferred	OpenWithWindow		Obre-ho i fes-ho preferit
@@ -32,7 +32,6 @@ Value	AttributesView		Valor
 Information	InfoWindow		Informació
 Error emptying Trash	FSUtils		Error en buidar la paperera
 Opens with:	InfoWindow		S'obre amb:
-You cannot copy or move the Printers directory.	FSUtils		No podeu ni copiar ni moure el directori Impressores.
 Size	QueryPoseView		Mida
 Disk mount	TrackerSettingsWindow		Muntatge de discs
 Type	AttributesView		Tipus
@@ -44,7 +43,6 @@ You cannot replace a folder or a symbolic link with a file.	FSUtils		No podeu re
 (unknown)	InfoWindow		(desconegut)
 {0, plural, other{<# dates>}}	AttributesView		{0, plural, other{<# dates>}}
 Trailing \\.	libtracker		Final \\.
-At %func \nfind_directory() failed. \nReason: %error	Email Query Columns		A %func \nha fallat find_directory(). \nRaó: %error
 Handles any file	OpenWithWindow		Gestiona qualsevol fitxer
 save text	FilePanelPriv		desa el text
 Raw data	AttributesView		Dades en cru
@@ -59,6 +57,7 @@ Identify	ContainerWindow		Identifica com a
 Create link	ContainerWindow		Crea un enllaç
 starts with	FindPanel		comença amb
 Replace	FSUtils		Reemplaça
+At %func \nfind_directory() failed. \nReason: %error	TrackerInitialState		A %func \nfind_directory() ha fallat. \nMotiu: %error
 ?+* follows nothing.	libtracker		?+* sense res després.
 Include Trash	FindPanel		Inclou-hi la paperera
 Rectangle	AttributesView		Rectangle
@@ -104,6 +103,7 @@ Affine transform	AttributesView		Transformació afí
 Window	ContainerWindow		Finestra
 %BytesPerSecond/s	StatusWindow		%BytesPerSecond/s
 Remove	FindPanel		Suprimeix
+You cannot create a link to the %trash% directory.	FSUtils		No podeu crear un enllaç al directori %trash%.
 Company	Person Query Columns		Companyia
 Select folders…	FindPanel		Selecció de carpetes...
 Recent documents	FavoritesMenu		Documents recents
@@ -145,7 +145,6 @@ Disks	Model		Discs
 Create a Query template	FindPanel		Crea una plantilla de consulta
 Size	FindPanel		Mida
 New submenu	ContainerWindow	Folder name of New-template submenu	Submenú nou
-OK	Email Query Columns		D'acord
 Location	QueryPoseView		Ubicació
 Edit query	ContainerWindow		Edita la consulta
 {0, plural, one{(# byte)} other{(# bytes)}}	InfoWindow		{0, plural, one{(# byte)} other{(# bytes)}}
@@ -174,6 +173,7 @@ Preferences…	ContainerWindow		Preferències…
 Could not open \"%document\" because application \"%app\" is in the Trash. 	FSUtils		No s'ha pogut obrir \"%document\" ja que l'aplicació \"%app\" és a la paperera. 
 Work Phone	Person Query Columns		Telèfon de la feina
 Select folders	FindPanel		Selecció de carpetes
+OK	TrackerInitialState		D'acord
 Close	ContainerWindow		Tanca
 Get info	ContainerWindow		Informació
 MIME Type	AttributesView		Tipus MIME
@@ -198,8 +198,8 @@ Media parameter web	AttributesView		Paràmetre web multimèdia
 Sorry, you can't save things at the root of your system.	FilePanelPriv		Disculpeu, no podeu desar fitxers a la carpeta d'arrel del sistema.
 Restore	ContainerWindow		Restaura
 Location	ContainerWindow		Ubicació
-Skip	FSUtils		Omet
 Warning space color	SettingsView		L'espai de color és feble
+Skip	FSUtils		Omet
 Text list	AttributesView		Llista de text
 Used space color	SettingsView		Espai de color usat
 Cancel	FSUtils		Cancel·la
@@ -253,7 +253,6 @@ Favorites	FilePanelPriv		Preferits
 Point	AttributesView		Punt
 You can't move or copy items to read-only volumes.	PoseView		No podeu moure ni copiar elements a volums de només lectura.
 home	B_USER_DIRECTORY		inici
-You cannot create a link to the Trash directory.	FSUtils		No podeu crear un enllaç al directori Paperera.
 Tracker New Templates	B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates		Plantilles noves del Rastrejador
 Disk mounting during boot	AutoMounterSettings		Muntatge de disc a l'arrencada
 Don't automount	AutoMounterSettings		No el muntis automàticament
@@ -264,6 +263,7 @@ New folder %d	FSUtils		Carpeta nova %d
 Extended attribute	AttributesView		Atribut ampliat
 Error %error loading Add-On %name.	ContainerWindow		Hi ha hagut un error (%error) en carregar el complement %name.
 Unmatched brackets.	libtracker		Claudàtors no coincidents.
+You cannot copy or move the 'printers' directory.	FSUtils		No podeu copiar ni moure el directori d'impressores.
 You are trying to replace the item:\n\t%name%dest\nwith:\n\t%name%src\n\nWould you like to replace it with the one you are %movemode?	FSUtils		Esteu intentant reemplaçar l'element\n\t%name%dest\nper\n\t%name%src\n\nSegur que el voleu reemplaçar per %movemode?
 Empty Trash	ContainerWindow		Buida la paperera
 no supporting apps	OpenWithWindow		aplicacions no compatibles
@@ -276,6 +276,7 @@ label too long	PoseView		l'etiqueta és massa llarga
 Error creating link to \"%name\".	FSUtils		Hi ha hagut un error en enllaçar amb \"%name\".
 Unknown	FilePermissionsView		Desconegut
 Paste links	ContainerWindow		Enganxa els enllaços
+You cannot copy or move the %trash% directory.	FSUtils		No podeu copiar ni moure el directori %trash%.
 Restoring: 	StatusWindow		Es restaura: 
 The Tracker must be running to set the default printer.	PoseView		El Rastrejador ha d'executar-se per establir la impressora predeterminada.
 calculating…	InfoWindow		es calcula...
@@ -315,7 +316,6 @@ Would you like to find some other suitable application?	FSUtils		Voleu trobar un
 Recent folders	FavoritesMenu		Carpetes recents
 Signed memory size	AttributesView		Mida de memòria signada
 The specified name is illegal. Please choose another name.	FilePanelPriv		El nom especificat és il·legal. Si us plau, trieu-ne un altre.
-You cannot copy or move the Trash directory.	FSUtils		No podeu ni copiar ni moure el directori Paperera.
 of %items	StatusWindow		de %items
 Error copying file \"%name\":\n\t%error\n\nWould you like to continue?	FSUtils		Error en copiar el fitxer \"%name\":\n\t%error\n\nVoleu continuar?
 less than	FindPanel		menys que
@@ -325,8 +325,8 @@ Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		No s'
 Create %s clipping	PoseView		Crea un retall de %s
 Error moving \"%name\"	FSUtils		Error en moure \"%name\"
 To: %dir	StatusWindow		A: %dir
-Cancel	Tracker		Cancel·la
 Paste layout	ContainerWindow		Enganxa la disposició
+Cancel	Tracker		Cancel·la
 yes	AttributesView		sí
 Make active printer	ContainerWindow		Estableix com a impressora activa
 Copy to	ContainerWindow		Copia a
@@ -346,11 +346,13 @@ The entered file name is too long.	FSUtils		El nom de fitxer introduït és mass
 Some of the selected items cannot be moved to the Trash. Would you like to delete them instead? (This operation cannot be reverted.)	PoseView		Alguns dels elements seleccionats no es poden moure a la paperera. Els voleu suprimir? (Aquesta operació no es pot desfer.)
 Add printer…	ContainerWindow		Afegeix-hi una impressora...
 Permissions	ContainerWindow		Permisos
+Trash	FSUtils		Paperera
 Size:	InfoWindow		Mida:
 Copy	ContainerWindow		Copia
 The selected item cannot be moved to the Trash. Would you like to delete it instead? (This operation cannot be reverted.)	PoseView		L'element seleccionat no es pot moure a la paperera. El voleu suprimir? (Aquesta operació no es pot desfer.)
 Sorry, the 'Character' attribute cannot store a multi-byte glyph.	WidgetAttributeText		Disculpeu, l'atribut "Caràcter" no pot contenir un glif multibyte.
 And	FindPanel		I
+copy	PoseView	filename copy	copia
 Palette-indexed picture	AttributesView		Una imatge indexada per paleta
 Drawing pattern	AttributesView		Patró de dibuix
 File offset	AttributesView		Compensació de fitxer
@@ -426,6 +428,7 @@ Move here	ContainerWindow		Mou aquí
 the config folder	FSUtils		la carpeta de configuració
 Sorry, could not create a new folder.	FSUtils		Disculpeu, no s'ha pogut preparar una carpeta nova.
 MIME Signature	AttributesView		Signatura de MIME
+%ld × %ld	ContainerWindow	The '×' is the Unicode multiplication sign U+00D7	%ld × %ld
 Rename	FSUtils	button label	Canvia'n el nom
 Clean up all	ContainerWindow		Neteja-ho tot
 Add current folder	FilePanelPriv		Afegeix la carpeta actual

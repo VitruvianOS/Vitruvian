@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.haiku-softwareupdater	3021634705
+1	catalan; valencian	x-vnd.haiku-softwareupdater	2012285635
 Updating version	SoftwareUpdaterWindow	List item text	S'actualitza la versió
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Cliqueu aquí per instal·lar {0, plural, one{# paquet actualitzat} other{# paquets actualitzats}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Paquets per desinstal·lar
@@ -8,6 +8,7 @@ There were no updates found.	CheckManager		No s'ha trobat cap actualització.
 Updates have not been completed, are you sure you want to quit?	SoftwareUpdaterWindow		No s’han completat les actualitzacions, segur que voleu deixar-ho?
 Updates found	SoftwareUpdaterWindow		S'han trobat actualitzacions.
 Update now	SoftwareUpdaterWindow		Actualitza-ho ara
+Settings	SoftwareUpdaterWindow		Paràmetres
 For some reason, we could not reboot your computer.	SoftwareUpdaterWindow		Per algun motiu, no hem pogut reiniciar l'ordinador.
 OK	UpdateManager		D'acord
 Unrecognized argument	SoftwareUpdaterApp	Error message	Argument no reconegut
@@ -18,6 +19,7 @@ Packages to be updated	SoftwareUpdaterWindow	List super item label	Paquets per a
 to	SoftwareUpdaterWindow	List item text	a
 Click here to run %appname%. Some updates will require a problem solution to be selected.	CheckManager		Cliqueu aquí per executar %appname%. Algunes actualitzacions requeriran la selecció d'una solució al problema.
 Attempting to cancel the updates…	SoftwareUpdaterWindow		S'intenta cancel·lar les actualitzacions...
+Automatically clean up old install states	SoftwareUpdaterWindow		Neteja automàticament els estats d'instal·lació antics
 Contacting software repositories to check for package updates.	CheckManager		Es contacta amb els repositoris de programari per comprovar si hi ha actualitzacions de paquets.
 Available updates found	CheckManager		S'han trobat actualitzacions disponibles.
 from repository	SoftwareUpdaterWindow	List item text	del repositori
@@ -52,9 +54,10 @@ No remote repositories are available	UpdateManager	Error message	No hi ha reposi
 Software {0, plural, one{update} other{updates}} available	CheckManager		{0, plural, one{Actualització} other{Actualitzacions}} disponible/s
 Reboot	SoftwareUpdaterWindow	Button label	Reinicia
 Update	SoftwareUpdaterWindow	Alert button label	Actualitza
-Open Repositories	SoftwareUpdaterWindow	Alert button label	Obre els repositoris
 Updates did not complete	UpdateAction		Les actualitzacions no s'han completat.
+Open Repositories	SoftwareUpdaterWindow	Alert button label	Obre els repositoris
 Invalid update type, cannot continue with updates	UpdateAction		El tipus d’actualització no és vàlid, no es poden continuar les actualitzacions.
+Settings…	SoftwareUpdaterWindow		Paràmetres...
 Uninstalling version	SoftwareUpdaterWindow	List item text	Es desinstal·la la versió
 %i of %i	UpdateManager	Do not translate %i	%i de %i
 Quit	SoftwareUpdaterWindow		Surt

@@ -1,4 +1,4 @@
-1	turkish	x-vnd.Haiku-libtracker	2408323945
+1	turkish	x-vnd.Haiku-libtracker	412525863
 Created	ContainerWindow		Oluşturulma
 Icon	AttributesView		Simge
 Open and make preferred	OpenWithWindow		Aç ve tercih edilen kıl
@@ -32,7 +32,6 @@ Value	AttributesView		Değer
 Information	InfoWindow		Bilgi
 Error emptying Trash	FSUtils		Çöp boşaltılırken hata
 Opens with:	InfoWindow		Şununla açılır:
-You cannot copy or move the Printers directory.	FSUtils		Yazıcılar dizinini kopyalayamaz veya taşıyamazsınız.
 Size	QueryPoseView		Boyut
 Disk mount	TrackerSettingsWindow		Disk bağlama
 Type	AttributesView		Tür
@@ -44,7 +43,6 @@ You cannot replace a folder or a symbolic link with a file.	FSUtils		Bir klasör
 (unknown)	InfoWindow		(bilinmiyor)
 {0, plural, other{<# dates>}}	AttributesView		{0, plural, other{<# tarih>}}
 Trailing \\.	libtracker		İzleyen \\.
-At %func \nfind_directory() failed. \nReason: %error	Email Query Columns		%func işlevinde \nfind_directory() başarısız oldu. \nSebep: %error
 Handles any file	OpenWithWindow		Her tür dosyayı işler
 save text	FilePanelPriv		metni kaydet
 Raw data	AttributesView		Ham veri
@@ -59,6 +57,7 @@ Identify	ContainerWindow		Tanımla
 Create link	ContainerWindow		Bağlantı oluştur
 starts with	FindPanel		ile başlar
 Replace	FSUtils		Değiştir
+At %func \nfind_directory() failed. \nReason: %error	TrackerInitialState		%func içinde, find_directory()\nbaşarısız oldu.\nGerekçe: %error
 ?+* follows nothing.	libtracker		?+*, hiçbir şeyden sonra gelmiyor.
 Include Trash	FindPanel		Çöpte de ara
 Rectangle	AttributesView		Dikdörtgen
@@ -104,6 +103,7 @@ Affine transform	AttributesView		Afin dönüşüm
 Window	ContainerWindow		Pencere
 %BytesPerSecond/s	StatusWindow		%BytesPerSecond/sn
 Remove	FindPanel		Kaldır
+You cannot create a link to the %trash% directory.	FSUtils		“%trash” dizinine bir bağlantı oluşturamazsınız.
 Company	Person Query Columns		Şirket
 Select folders…	FindPanel		Klasörler seç…
 Recent documents	FavoritesMenu		Son belgeler
@@ -145,7 +145,6 @@ Disks	Model		Diskler
 Create a Query template	FindPanel		Bir sorgu şablonu oluştur
 Size	FindPanel		Boyut
 New submenu	ContainerWindow	Folder name of New-template submenu	Yeni alt menü
-OK	Email Query Columns		Tamam
 Location	QueryPoseView		Konum
 Edit query	ContainerWindow		Sorguyu düzenle
 {0, plural, one{(# byte)} other{(# bytes)}}	InfoWindow		{0, plural, other{(# bayt)}}
@@ -174,6 +173,7 @@ Preferences…	ContainerWindow		Tercihler…
 Could not open \"%document\" because application \"%app\" is in the Trash. 	FSUtils		“%document” açılamadı; çünkü “%app” uygulaması çöpte. 
 Work Phone	Person Query Columns		İş telefonu
 Select folders	FindPanel		Klasörler seç
+OK	TrackerInitialState		Tamam
 Close	ContainerWindow		Kapat
 Get info	ContainerWindow		Bilgi al
 MIME Type	AttributesView		MIME türü
@@ -198,8 +198,8 @@ Media parameter web	AttributesView		Ortam parametre ağı
 Sorry, you can't save things at the root of your system.	FilePanelPriv		Üzgünüm, sistem kök dizinine dosya kaydedilemez.
 Restore	ContainerWindow		Geri yükle
 Location	ContainerWindow		Konum
-Skip	FSUtils		Atla
 Warning space color	SettingsView		Uyarı alanı rengi
+Skip	FSUtils		Atla
 Text list	AttributesView		Metin listesi
 Used space color	SettingsView		Kullanılan alan rengi
 Cancel	FSUtils		Vazgeç
@@ -253,7 +253,6 @@ Favorites	FilePanelPriv		Favoriler
 Point	AttributesView		Nokta
 You can't move or copy items to read-only volumes.	PoseView		Saltokunur disk bölümlerine ögeleri taşıyamaz veya kopyalayamazsınız.
 home	B_USER_DIRECTORY		ana klasör
-You cannot create a link to the Trash directory.	FSUtils		Çöp dizinine bir bağlantı oluşturamazsınız.
 Tracker New Templates	B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates		Yeni İzleyici Şablonları
 Disk mounting during boot	AutoMounterSettings		Önyükleme sırasında bağlama
 Don't automount	AutoMounterSettings		Otomatik bağlama yok
@@ -264,6 +263,7 @@ New folder %d	FSUtils		Yeni klasör %d
 Extended attribute	AttributesView		Genişletilmiş öznitelik
 Error %error loading Add-On %name.	ContainerWindow		%name eklentisi yüklenirken %error hatası
 Unmatched brackets.	libtracker		Eşleşmeyen köşeli parantezler.
+You cannot copy or move the 'printers' directory.	FSUtils		“printers” dizinini kopyalayamaz veya taşıyamazsınız.
 You are trying to replace the item:\n\t%name%dest\nwith:\n\t%name%src\n\nWould you like to replace it with the one you are %movemode?	FSUtils		\t%name%dest\nögesini şununla değiştirmeye çalışıyorsunuz:\n\t%name%src\n\nBu ögeyi %movemode ögeyle değiştirmek istediğinizden emin misiniz?
 Empty Trash	ContainerWindow		Çöpü boşalt
 no supporting apps	OpenWithWindow		destekleyen uygulama yok
@@ -276,6 +276,7 @@ label too long	PoseView		etiket çok uzun
 Error creating link to \"%name\".	FSUtils		“%name” ögesine bağlantı yaratılırken hata.
 Unknown	FilePermissionsView		Bilinmeyen
 Paste links	ContainerWindow		Bağlantıları yapıştır
+You cannot copy or move the %trash% directory.	FSUtils		“%trash” dizinini kopyalayamaz veya taşıyamazsınız.
 Restoring: 	StatusWindow		Eski haline getiriliyor: 
 The Tracker must be running to set the default printer.	PoseView		Saptanmış yazıcıyı ayarlamak için İzleyici çalışıyor olmalıdır.
 calculating…	InfoWindow		hesaplanıyor…
@@ -315,7 +316,6 @@ Would you like to find some other suitable application?	FSUtils		Uygun başka bi
 Recent folders	FavoritesMenu		Son kullanılan klasörler
 Signed memory size	AttributesView		İmzalı bellek boyutu
 The specified name is illegal. Please choose another name.	FilePanelPriv		Belirtilen ad kullanılamaz. Lütfen başka bir ad seçin.
-You cannot copy or move the Trash directory.	FSUtils		Çöp dizinini kopyalayamaz veya taşıyamazsınız.
 of %items	StatusWindow		/ %items
 Error copying file \"%name\":\n\t%error\n\nWould you like to continue?	FSUtils		“%name” dosyasını kopyalarken hata:\n\t%error\n\nİşlem sürdürülsün mü?
 less than	FindPanel		daha az
@@ -325,8 +325,8 @@ Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		“%d
 Create %s clipping	PoseView		%s kırpma oluştur
 Error moving \"%name\"	FSUtils		“%name” taşınırken hata
 To: %dir	StatusWindow		Konum: %dir
-Cancel	Tracker		Vazgeç
 Paste layout	ContainerWindow		Yerleşimi yapıştır
+Cancel	Tracker		Vazgeç
 yes	AttributesView		evet
 Make active printer	ContainerWindow		Etkin yazıcı kıl
 Copy to	ContainerWindow		Kopyala
@@ -346,11 +346,13 @@ The entered file name is too long.	FSUtils		Girilen dosya adı pek uzun.
 Some of the selected items cannot be moved to the Trash. Would you like to delete them instead? (This operation cannot be reverted.)	PoseView		Seçili ögelerden bazıları çöpe taşınamaz. Bunun yerine doğrudan silmek ister misiniz (bu işlem geri alınamaz)?
 Add printer…	ContainerWindow		Yazıcı ekle…
 Permissions	ContainerWindow		İzinler
+Trash	FSUtils		Çöp
 Size:	InfoWindow		Boyut:
 Copy	ContainerWindow		Kopyala
 The selected item cannot be moved to the Trash. Would you like to delete it instead? (This operation cannot be reverted.)	PoseView		Seçili öge çöpe taşınamaz. Bunun yerine doğrudan silmek ister misiniz? (Bu işlem geri alınamaz.)
 Sorry, the 'Character' attribute cannot store a multi-byte glyph.	WidgetAttributeText		Üzgünüm, “Karakter” özniteliği bir çoklu bayt glifini depolayamaz.
 And	FindPanel		ve
+copy	PoseView	filename copy	kopya
 Palette-indexed picture	AttributesView		Palet sıralı resim
 Drawing pattern	AttributesView		Çizim deseni
 File offset	AttributesView		Dosya ofseti
@@ -426,6 +428,7 @@ Move here	ContainerWindow		Buraya taşı
 the config folder	FSUtils		yapılandırma klasörü
 Sorry, could not create a new folder.	FSUtils		Üzgünüm, yeni bir klasör oluşturulamadı.
 MIME Signature	AttributesView		MIME İmzası
+%ld × %ld	ContainerWindow	The '×' is the Unicode multiplication sign U+00D7	%ld × %ld
 Rename	FSUtils	button label	Yeniden adlandır
 Clean up all	ContainerWindow		Hepsini toparla
 Add current folder	FilePanelPriv		Geçerli klasörü ekle

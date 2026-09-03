@@ -1,74 +1,77 @@
-1	hungarian	x-vnd.Haiku-Devices	911816421
+1	hungarian	x-vnd.Haiku-Devices	2752258547
 ACPI bus	DevicesView		ACPI port
 Encryption controller	Device		Titkosító vezérlő
 Devices	System name		Eszközök
 USB bus	DevicesView		USB busz
-Graphics Peripheral	DeviceSCSI		Grafikus periféria
 Processor	Device		Processzor
 Generate system information	DevicesView		Rendszerinformáció létrehozása
-Unknown	DeviceACPI		Ismeretlen
 Class info	DevicePCI		Osztály-információk
 USB bus	Device		USB busz
 Computer	DevicesView		Számítógép
 Communications	DeviceSCSI		Kommunikáció
+ACPI thermal zone	DeviceACPI		ACPI hő-zóna
 Mass storage controller	Device		Háttértároló vezérlő
-Connection	DevicesView		Csatlakozás
 Printer	DeviceSCSI		Nyomtató
-ACPI Processor Namespace '%2'	DeviceACPI		ACPI processzor névtér '%2'
+Connection	DevicesView		Csatlakozás
 Manufacturer	Device		Gyártó
 Scanner	DeviceSCSI		Lapolvasó
 Memory controller	Device		Memóriavezérlő
 Unknown device	DevicesView		Ismeretlen eszköz
-Unknown	DevicePCI		Ismeretlen
 ACPI node '%1'	DeviceACPI		ACPI csomópont '%1'
-Optical Drive	DeviceSCSI		Optikai meghajtó
 Name	PropertyList		Név
 Manufacturer	DeviceSCSI		Gyártó
+Graphics peripheral	DeviceSCSI		Grafikus eszköz
 Device name	Device		Eszköznév
+unknown	DeviceACPI		ismeretlen
 Satellite communications controller	Device		Műholdas kommunikációs vezérlő
 Device class	DeviceSCSI		Eszközosztály
 Device	Device		Eszközök
 Input device controller	Device		Beviteli eszköz vezérlő
-ACPI System Indicator	DeviceACPI		ACPI rendszerjelző
 PCI bus	DevicesView		PCI port
-ACPI System Bus	DeviceACPI		ACPI rendszerbusz
-Tape Drive	DeviceSCSI		Szalagos meghajtó
 Changer	DeviceSCSI		Cserélő
 Serial bus controller	Device		Soros busz vezérlő
 Refresh devices	DevicesView		Eszközök frissítése
 Category	DevicesView		Kategória
 RBC	DeviceSCSI		RBC
-Device paths	Device		Útvonal
 Unknown device	Device		Ismeretlen eszköz
+Device paths	Device		Útvonal
 Wireless controller	Device		Vezeték nélküli vezérlő
 Generic system peripheral	Device		Általános rendszer periféria
 Value	PropertyList		Érték
 Devices	DevicesView		Eszközök
 Device name	DeviceACPI		Eszköznév
-Card Reader	DeviceSCSI		Kártyaolvasó
+Optical drive	DeviceSCSI		Optikai eszköz
+unknown	DevicePCI		ismeretlen
 Display controller	Device		Kijelző vezérlő
-ACPI Button '%1'	DeviceACPI		ACPI gomb '%1'
+Bus	DevicesView		Busz
 ACPI <unknown>	DeviceACPI		ACPI <ismeretlen>
 Device name	DevicePCI		Eszköznév
-Disk Drive	DeviceSCSI		Lemezmeghajtó
-Report compatibility	DevicesView		Kompatibilitás jelentése
 Other	DeviceSCSI		Egyéb
+Report compatibility	DevicesView		Kompatibilitás jelentése
 Computer	Device		Számítógép
 PCI bus	Device		PCI port
 Enclosure	DeviceSCSI		Doboz
-ACPI Thermal Zone	DeviceACPI		ACPI hőzóna
+Tape drive	DeviceSCSI		Szalagos eszköz
 Order by:	DevicesView		Rendezés alapja:
 Intelligent controller	Device		Intelligens vezérlő
+ACPI processor namespace '%2'	DeviceACPI		ACPI feldolgozó névtér '%2'
 Multimedia controller	Device		Multimedia vezérlő
 Quit	DevicesView		Kilépés
 ISA bus	Device		ISA port
 ISA bus	DevicesView		ISA port
+Basic information	PropertyList		Alapvető információk
 Processor	DeviceSCSI		Processzor
+Card reader	DeviceSCSI		Kártyaolvasó
 Bridge	Device		Híd
+ACPI button '%1'	DeviceACPI		ACPI gomb '%1'
+Attributes	PropertyList		Jellemzők
 Worm	DeviceSCSI		Féreg
+Disk drive	DeviceSCSI		Lemez-eszköz
 CD-ROM	DeviceSCSI		CD meghajtó
 Manufacturer	DevicePCI		Gyártó
 Bridge	DeviceSCSI		Híd
+ACPI system indicator	DeviceACPI		ACPI rendszer jelző
+ACPI system bus	DeviceACPI		ACPI rendszer busz
 Signal processing controller	Device		Jelfeldolgozó vezérlő
 Device name	DeviceSCSI		Eszköznév
 Docking station	Device		Dokkolóállomás

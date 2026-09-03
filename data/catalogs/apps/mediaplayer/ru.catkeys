@@ -1,4 +1,4 @@
-1	russian	x-vnd.Haiku-MediaPlayer	334504768
+1	russian	x-vnd.Haiku-MediaPlayer	3337408711
 Remove Entry into Trash	MediaPlayer-RemovePLItemsCmd		Переместить запись в корзину
 Close	MediaPlayer-PlaylistWindow		Закрыть
 Volume of background clips	MediaPlayer-SettingsWindow		Проигрывать фоновые клипы
@@ -24,6 +24,7 @@ Resume:	MediaPlayer-SettingsWindow		Возобновить:
 Duration	MediaPlayer-InfoWin		Длительность
 Import Entries	MediaPlayer-ImportPLItemsCmd		импортирование записей
 Open network stream	MediaPlayer-Main		Открыть сетевой поток
+%appname% settings	MediaPlayer-SettingsWindow		Настройки %appname%
 Open file…	MediaPlayer-Main		Открыть файл…
 Scale controls in full screen mode	MediaPlayer-SettingsWindow		Масштабировать кнопки управления в полноэкранном режиме
 View options	MediaPlayer-SettingsWindow		Настройки вида
@@ -34,7 +35,7 @@ Start media server	MediaPlayer-Main		Запустить медиа сервер
 It appears the media server is not running.\nWould you like to start it ?	MediaPlayer-Main		Похоже, что медиа сервер не запущен\nВы хотите его запустить?
 Location	MediaPlayer-InfoWin		Путь
 %lu × %lu	MediaPlayer-InfoWin	The '×' is the Unicode multiplication sign U+00D7	%lu × %lu
-Opening '%s'.	MediaPlayer-Main		Открытие '%s'.
+Opening '%s'.	MediaPlayer-Main		Открытие «%s».
 Medium	MediaPlayer-SettingsWindow		cредний
 Play mode	MediaPlayer-SettingsWindow		Режим проигрывания
 Playlist	MediaPlayer-PlaylistWindow		Плейлист
@@ -45,6 +46,7 @@ Save error	MediaPlayer-PlaylistWindow		Ошибка сохранения
 Attributes	MediaPlayer-Main		Атрибуты
 Bottom of screen	MediaPlayer-SettingsWindow		нижняя часть экрана
 Copyright	MediaPlayer-InfoWin		Авторские права
+%appname%: %title%	MediaPlayer-Main		%appname%: %title%
 Invalid URL inserted!	MediaPlayer-NetworkStream		Указан неверный URL!
 Aspect ratio	MediaPlayer-Main		Соотношение сторон
 Eject device	MediaPlayer-Main		Извлечь устройство
@@ -75,7 +77,7 @@ Redo	MediaPlayer-PlaylistWindow		Повторить
 Move Entry	MediaPlayer-MovePLItemsCmd		Переместить запись
 Reset rating	MediaPlayer-Main		Сбросить рейтинг
 <unknown>	PlaylistItem-author		<неизвестно>
-Cancel	MediaPlayer-SettingsWindow		Отмена
+Cancel	MediaPlayer-SettingsWindow		Отменить
 Large	MediaPlayer-SettingsWindow		крупный
 Import Entry	MediaPlayer-ImportPLItemsCmd		импортирование записи
 unknown format	MediaPlayer-InfoWin		неизвестный формат
@@ -88,7 +90,7 @@ Move into trash error	MediaPlayer-RemovePLItemsCmd		Ошибка перемещ�
 Drop files to play	MediaPlayer-Main		Перетащите файлы для проигрывания
 Copy Entry	MediaPlayer-CopyPLItemsCmd		Копировать запись
 Close window after playing audio	MediaPlayer-SettingsWindow		Закрыть окно после проигрывания музыки
-Edit	MediaPlayer-PlaylistWindow		Изменить
+Edit	MediaPlayer-PlaylistWindow		Правка
 Copy Entries	MediaPlayer-CopyPLItemsCmd		Копировать записи
 Always on top	MediaPlayer-Main		Всегда сверху
 Open	MediaPlayer-PlaylistWindow		Открыть
@@ -126,7 +128,7 @@ OK	MediaPlayer-NetworkStream		ОК
 Internal error (locking failed). Saving the playlist failed.	MediaPlayer-PlaylistWindow		Внутренняя ошибка (не сработала блокировка). Не удалось сохранить плейлист.
 100% scale	MediaPlayer-Main		Масштаб 100%
 New player	MediaPlayer-Main		Новый Плеер
-<nothing to redo>	MediaPlayer-PlaylistWindow		<нечего возвращать>
+<nothing to redo>	MediaPlayer-PlaylistWindow		<нечего повторять>
 Bad URL	MediaPlayer-NetworkStream		Неверный URL
 Save	MediaPlayer-Main		Сохранить
 Close window after playing video	MediaPlayer-SettingsWindow		Закрыть окно после проигрывания видео

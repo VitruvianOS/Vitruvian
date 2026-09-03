@@ -1,6 +1,6 @@
-1	russian	x-vnd.Haiku-DriveSetup	2072134749
+1	russian	x-vnd.Haiku-DriveSetup	2351839435
 Could not unmount partition %s.	MainWindow		Невозможно отключить раздел %s.
-Register disk image…	MainWindow		Зарегистрировать образ диска…
+Register disk image…	MainWindow		Монтировать образ диска…
 Mount all	MainWindow		Подключить все
 Disk	MainWindow		Диск
 Disk image has been added.	MainWindow		Образ диска был добавлен.
@@ -9,40 +9,48 @@ Device	PartitionList		Устройство
 Could not change the parameters of the selected partition.	MainWindow		Невозможно изменить параметры выбранного раздела.
 Initialize	MainWindow		Инициализировать
 Are you sure you want to write the changes back to disk now?\n\nAll data on the partition \"%s\" will be irretrievably lost if you do so!	MainWindow		Вы действительно хотите записать изменения на диск прямо сейчас?\n\nЕсли это сделать, все данные на разделе \«%s\» будут безвозвратно утеряны!
-PGP encrypted	Encryption utils		Зашифрован с PGP
+PGP encrypted	Encryption utils		Зашифрован PGP
 Delete partition	MainWindow		Удалить раздел
 Write	MainWindow		Записать
 Removable	PartitionList		Съёмный
 Block size	PartitionList		Размер блока
 The panel experienced a problem!	MainWindow		С панелью возникла проблема!
 Device	DiskView		Устройство
-Are you sure you want to format the Intel Extended Partition? Any subpartitions it contains will be overwritten if you continue. You will be asked again before changes are written to the disk.	MainWindow		Вы уверены, что хотите отформатировать Расширенный раздел? Все разделы, которые содержатся в нём будут перезаписаны если Вы продолжите. Повторный запрос будет выдан непосредственно перед записью изменений на диск.
+Are you sure you want to format the Intel Extended Partition? Any subpartitions it contains will be overwritten if you continue. You will be asked again before changes are written to the disk.	MainWindow		Вы уверены, что хотите форматировать Расширенный раздел? Все разделы, которые содержатся в нём будут перезаписаны если Вы продолжите. Повторный запрос будет выдан непосредственно перед записью изменений на диск.
 Physical block size	PartitionList		Размер физического блока
 Unmount	MainWindow		Отключить
-Failed to format the partition %s!\n	MainWindow		Не удалось инициализировать раздел %s!\n
+Failed to format the partition %s!\n	MainWindow		Не удалось отформатировать раздел %s!\n
 Partition size	CreateParametersPanel		Размер раздела
 Validation of the given parameters failed.	MainWindow		Проверка введённых параметров не удалась.
-Are you sure you want to format the partition \"%s\"? You will be asked again before changes are written to the disk.	MainWindow		Вы уверены, что хотите инициализировать раздел \«%s\»?\nПовторный запрос будет выдан непосредственно перед записью изменений на диск.
+Cannot init target partition.	MainWindow		Не удалось инициализировать целевой раздел.
+Are you sure you want to format the partition \"%s\"? You will be asked again before changes are written to the disk.	MainWindow		Вы уверены, что хотите форматировать раздел \«%s\»?\nПовторный запрос будет выдан непосредственно перед записью изменений на диск.
 DriveSetup	System name		Разметка диска
+Error:	MainWindow	in any error alert	Ошибка:
 Mounted at	PartitionList		Подключен как
 Disk system %s not found!	MainWindow		Дисковая система %s не найдена!
 Create…	MainWindow		Создать…
+Failed to register file disk device: %s	MainWindow		Сбой монтирования файла дискового устройства: %s
 Write changes	MainWindow		Записать изменения
 Validation of the given creation parameters failed.	MainWindow		Не удалось применить введённые при создании параметры.
 Initialization of the partition %s failed. (Nothing has been written to disk.)	MainWindow		Не удалось инициализировать раздел %s. (Изменения не были записаны на диск.)
 Eject	MainWindow		Извлечь
+There is not enough free space on target device.	MainWindow		На целевом устройстве недостаточно места.
 Read only	PartitionList		Только для чтения
 Surface test (not implemented)	MainWindow		Тест поверхности (ещё не реализовано)
+Creating disk image	MainWindow		Создание образа диска
 The panel could not return successfully.	MainWindow		Панели не удалось корректно вернуться.
 Failed to change the parameters of the partition. No changes have been written to disk.	MainWindow		Не удалось изменить параметры раздела. Изменения не были записаны на диск.
 Partition %ld	DiskView		Раздел %ld
 There's no space on the partition where a child partition could be created.	MainWindow		Недостаточно места на разделе, где можно было бы создать подраздел.
+%s does not refer to a file disk device.	MainWindow		%s не относится к файлу дискового устройства.
 No disk devices have been recognized.	DiskView		Ни одно из дисковых устройств не распознано.
 Attributes	PartitionList		Атрибуты
+'%s' is not a regular file.	MainWindow		«%s» – это не обычный файл.
 Failed to delete the partition. No changes have been written to disk.	MainWindow		Не удалось удалить раздел. Изменения не были записаны на диск.
 Change parameters…	MainWindow		Изменить параметры…
 Format	InitializeParametersPanel		Форматировать
 Could not unmount partition	MainWindow		Невозможно отключить раздел
+Target partition is read only.	MainWindow		Целевой раздел только для чтения.
 Create	CreateParametersPanel		Создать
 File system	PartitionList		Файловая система
 Unknown (%s)	PartitionList		Неизвестно (%s)
@@ -52,63 +60,85 @@ Partition type	PartitionList		Тип раздела
 Unable to find the selected partition by ID.	MainWindow		Невозможно найти выбранный раздел по ID.
 The currently selected partition is not empty.	MainWindow		Текущий выбранный раздел не является пустым.
 The currently selected partition does not have a parent partition.	MainWindow		Выбранный раздел не имеет родительского раздела.
-Wipe (not implemented)	MainWindow		Форматировать (ещё не реализовано)
+Wipe (not implemented)	MainWindow		Стереть (ещё не реализовано)
 Are you sure you want to format a raw disk? (Most people initialize the disk with a partitioning system first) You will be asked again before changes are written to the disk.	MainWindow		Вы уверены, что хотите отформатировать весь диск? (Обычно на диске сначала создаются разделы) Повторный запрос будет выдан непосредственно перед записью изменений на диск.
 Validation of the given initialization parameters failed.	MainWindow		Не удалось применить параметры, введённые при инициализации.
 Failed to create the partition. No changes have been written to disk.	MainWindow		Не удалось создать раздел. Изменения не были записаны на диск.
 MIMEs	PartitionList		MIME типы
 Shared	PartitionList		Разделяемый
-BitLocker encrypted	Encryption utils		Зашифрован с BitLocker
+BitLocker encrypted	Encryption utils		Зашифрован BitLocker
+Cannot init target volume.	MainWindow		Не удаётся инициализировать целевой том.
 You need to select a partition entry from the list.	MainWindow		Вам нужно выбрать раздел из списка.
 Offset: %s	Support		Смещение: %s
-SafeBoot encrypted	Encryption utils		Зашифрован с SafeBoot
+SafeBoot encrypted	Encryption utils		Зашифрован SafeBoot
 Volume name	PartitionList		Название тома
+Disk image	MainWindow		Образ диска
+Save image…	MainWindow		Сохранить образ…
 Are you sure you want to write the changes back to disk now?\n\nAll data on the partition will be irretrievably lost if you do so!	MainWindow		Вы уверены, что хотите записать изменения на диск прямо сейчас?\n\nЕсли вы продолжите, то все данные на выбранном разделе будут безвозвратно потеряны!
 Change	ChangeParametersPanel		Изменить
 Partition name:	ChangeParametersPanel		Название раздела:
-LUKS encrypted	Encryption utils		Зашифрован с LUKS
+LUKS encrypted	Encryption utils		Зашифрован LUKS
 Empty space	PartitionList		Без разметки
-Cancel	AbstractParametersPanel		Отмена
-Format	MainWindow		Инициализировать
+Cancel	AbstractParametersPanel		Отменить
+%appname%: Save disk image	MainWindow		%appname%: Сохранение образа диска
+Format	MainWindow		Форматировать
 OK	MainWindow		ОК
+Cannot init target file.	MainWindow		Не удаётся инициализировать целевой файл.
+Disk image successfully created.	MainWindow		Образ диска успешно создан.
+Unregister disk image	MainWindow		Размонтировать образ диска
+The target partition is smaller than the image file.	MainWindow		Целевой раздел меньше файла образа.
 Empty space	DiskView		Без разметки
 Could not delete the selected partition.	MainWindow		Невозможно удалить выбранный раздел.
+Failed to get information about '%s'.	MainWindow		Сбой получения информации о «%s».
 Open with DiskProbe	MainWindow		Открыть в Редакторе диска
 Are you sure you want to initialize the selected disk? All data will be lost. You will be asked again before changes are written to the disk.\n	MainWindow		Вы уверены, что хотите инициализировать выбранный диск? Все данные на этом диске будут потеряны.\nПовторный запрос будет выдан непосредственно перед записью изменений на диск.\n
 There was an error preparing the disk for modifications.	MainWindow		Произошла ошибка при сохранении изменений на диск.
 The disk has been successfully initialized.\n	MainWindow		Диск был успешно инициализирован.\n
 Should unmounting be forced?\n\nNote: If an application is currently writing to the volume, unmounting it now might result in loss of data.\n	MainWindow		Отключить этот раздел принудительно?\n\nВнимание: если какое-нибудь приложение в данный момент записывает данные на этот раздел, то его отключение может привести к потере данных.\n
-Cancel	MainWindow		Отмена
+Disk image has been removed.	MainWindow		Образ диска был удалён.
+No file disk device found with the given ID, trying file '%s'.	MainWindow		Файл дискового устройства с указанным ID не найден, будет использован «%s».
+Cancel	MainWindow		Отменить
 Free space	PartitionList		Свободное место
 Queries	PartitionList		Запросы
+Register	MainWindow		Монтировать
 Force unmount	MainWindow		Отключить принудительно
 Change parameters	MainWindow		Изменить параметры
 Partition	MainWindow		Раздел
 There was an error acquiring the partition row.	MainWindow		Произошла ошибка при получении списка разделов.
 Rescan	MainWindow		Пересканировать
 Failed to initialize the disk %s!\n	MainWindow		Не удалось инициализировать раздел %s!\n
-The partition cannot be unmounted.	MainWindow		Раздел не удаётся отмонтировать.
+The partition cannot be unmounted.	MainWindow		Раздел не удаётся размонтировать.
 Delete	MainWindow		Удалить
 Partition type:	ChangeParametersPanel		Тип раздела:
 Parameters	PartitionList		Параметры
+Disk image successfully written to the target.	MainWindow		Образ успешно записан на целевой диск.
 Could not acquire partitioning information.	MainWindow		Невозможно получить информацию о разделах.
 Cannot delete the selected partition.	MainWindow		Невозможно удалить выбранный раздел.
 Continue	MainWindow		Продолжить
 Could not mount partition %s.	MainWindow		Невозможно подключить раздел %s.
-Are you sure you want to format the partition? You will be asked again before changes are written to the disk.	MainWindow		Вы уверены, что хотите инициализировать раздел?\nПовторный запрос будет выдан непосредственно перед записью изменений на диск.
+Are you sure you want to format the partition? You will be asked again before changes are written to the disk.	MainWindow		Вы уверены, что хотите форматировать раздел?\nПовторный запрос будет выдан непосредственно перед записью изменений на диск.
+%appname% error	MainWindow		%appname% ошибка
 The selected disk is read-only.	MainWindow		Выбранный диск доступен только для чтения.
+Failed to unregister file disk device %s.	MainWindow		Сбой при размонтировании файла дискового устройства %s.
 The partition %s is already unmounted.	MainWindow		Раздел %s уже отключен.
+Target volume is read only.	MainWindow		Целевой том только для чтения.
 Are you sure you want to change parameters of the selected partition?\n\nThe partition may no longer be recognized by other operating systems anymore!	MainWindow		Вы уверены, что хотите изменить параметры выбранного раздела?\n\nРаздел может больше не распознаваться другими операционными системами!
+Cannot init source volume.	MainWindow		Не удаётся инициализировать исходный том.
 Boot	PartitionList		Загрузочный
+%appname%: Select disk image	MainWindow		%appname%: Выбор образа диска
 OK	AbstractParametersPanel		ОК
 Virtual	PartitionList		Виртуальный
 Are you sure you want to write the changes back to disk now?\n\nAll data on the disk \"%s\" will be irretrievably lost if you do so!	MainWindow		Вы действительно хотите записать изменения на диск прямо сейчас?\n\nЕсли это сделать, все данные на диске \«%s\» будут безвозвратно утеряны!
 Virtual	DiskView		Виртуальный
-Are you sure you want to write the changes back to disk now?\n\nAll data on the selected disk will be irretrievably lost if you do so!	MainWindow		Вы уверены, что хотите записать изменения на диск прямо сейчас?\n\nВсе данные на выбранном диске будут безвозвратно потеряны, если Вы продолжите!
+Are you sure you want to write the changes back to disk now?\n\nAll data on the selected disk will be irretrievably lost if you do so!	MainWindow		Вы уверены, что хотите записать изменения на диск прямо сейчас?\n\nЕсли Вы продолжите, все данные на выбранном диске будут безвозвратно потеряны!
 Select a partition from the list below.	DiskView		Выберите раздел из списка ниже
-Active	PartitionList		Загрузочный
-Are you sure you want to delete the selected partition?\n\nAll data on the partition will be irretrievably lost if you do so!	MainWindow		Вы уверены, что хотите удалить выбранный раздел?\n\nВсе данные на этом разделе будут безвозвратно потеряны, если Вы продолжите!
-The partition %s has been successfully formatted.\n	MainWindow		Раздел %s был успешно инициализирован.\n
+Active	PartitionList		Активный
+Are you sure you want to delete the selected partition?\n\nAll data on the partition will be irretrievably lost if you do so!	MainWindow		Вы уверены, что хотите удалить выбранный раздел?\n\nЕсли Вы продолжите, все данные на этом разделе будут безвозвратно потеряны!
+Failed to unregister file disk device.	MainWindow		Сбой при размонтировании файла дискового устройства.
+Writing image to disk	MainWindow		Запись образа на диск
+The partition %s has been successfully formatted.\n	MainWindow		Раздел %s был успешно отформатирован.\n
+%appname%: Register disk image	MainWindow		%appname%: Монтирование образа диска
+Write image…	MainWindow		Записать образ…
 The partition %s is already mounted.	MainWindow		Раздел %s уже отключен.
 Size	PartitionList		Размер
 Creation of the partition has failed.	MainWindow		Не удалось создать раздел.

@@ -1,4 +1,4 @@
-1	japanese	x-vnd.haiku-icon_o_matic	147386950
+1	japanese	x-vnd.haiku-icon_o_matic	1029251628
 None	Icon-O-Matic-Properties		解除
 Clean up path	Icon-O-Matic-CleanUpPathCmd		パスのクリーンアップ
 16 × 16	Icon-O-Matic-Menu-Settings	The '×' is the Unicode multiplication sign U+00D7	16 × 16
@@ -161,6 +161,7 @@ Untitled	Icon-O-Matic-Main		無題
 Max LOD	Icon-O-Matic-PropertyNames		Max LOD
 Save changes to current icon before closing?	Icon-O-Matic-Menu-Settings		閉じる前に作業中のアイコンへの変更を保存しますか?
 Failed to open the file '%s' as an SVG document.\n\n	Icon-O-Matic-SVGImport		ファイル '%s' を SVG ドキュメントとして開くのに失敗しました。\n\n
+<unknown property>	Icon-O-Matic-PropertyNames		<不明なプロパティ>
 Save as…	Icon-O-Matic-Menu-File		名前を付けて保存...
 Swatches	Icon-O-Matic-Menus		色見本
 <modify path>	Icon-O-Matic-PathCmd		<パスの修正>
@@ -178,7 +179,6 @@ Transformer	Icon-O-Matic-Menus		トランスフォーマー
 Flip {0, plural, one{vertex} other{vertices}}	Icon-O-Matic-FlipPointsCmd		{0, plural, one{個の頂点} other{個の頂点}}の反転
 Invert selection	Icon-O-Matic-Properties		選択範囲の反転
 to attach transformers.	Icon-O-Matic-TransformersList	Empty transformers list - 2nd line	トランスフォーマーの追加。
-<unkown property>	Icon-O-Matic-PropertyNames		<不明なプロパティ>
 Pick a color	Icon-O-Matic-ColorPicker		カラーの選択
 Settings…	Icon-O-Matic-SavePanel		設定...
 Select all	Icon-O-Matic-PathManipulator		すべて選択

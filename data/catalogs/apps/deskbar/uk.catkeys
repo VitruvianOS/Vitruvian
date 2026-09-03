@@ -1,14 +1,16 @@
-1	ukrainian	x-vnd.Be-TSKB	1826478880
+1	ukrainian	x-vnd.Be-TSKB	2381744795
 Auto-hide	PreferencesWindow		Ховати автоматично
 Show all	WindowMenu		Показати все
 Edit in Tracker…	PreferencesWindow		Змінити меню у Tracker…
 Menu	PreferencesWindow		Меню
+Location	PreferencesWindow		Розташування
 Tracker always first	PreferencesWindow		Tracker завжди перший
 Hide clock	TimeView		Сховати годинник
 Large	PreferencesWindow		Великі
 <Deskbar folder is empty>	DeskbarMenu		<Папка Deskbar порожня>
 Recent documents	DeskbarMenu		Недавні документи
 Applications	B_USER_DESKBAR_DIRECTORY/Applications		Програми
+%appname% preferences	PreferencesWindow		Налаштування %appname%
 Always on top	PreferencesWindow		Завжди зверху
 Restart system	DeskbarMenu		Перезапустити систему
 Recent documents:	PreferencesWindow		Недавні документи:
@@ -35,6 +37,7 @@ Suspend	DeskbarMenu		Призупинити
 Shutdown…	DeskbarMenu		Завершити роботу...
 Demos	B_USER_DESKBAR_DIRECTORY/Demos		Демонстраційні
 Expand new applications	PreferencesWindow		Розкривати список після запуску
+%appname% preferences…	DeskbarMenu		Налаштування %appname%…
 Recent applications:	PreferencesWindow		Недавні програми:
 Recent folders:	PreferencesWindow		Недавні папки:
 Recent folders	DeskbarMenu		Недавні папки

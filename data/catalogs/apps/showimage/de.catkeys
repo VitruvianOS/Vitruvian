@@ -1,7 +1,6 @@
-1	german	x-vnd.Haiku-ShowImage	1471302250
+1	german	x-vnd.Haiku-ShowImage	1444474662
 ShowImage	System name		Bildbetrachter
 Page setup…	Menus		Seite einrichten …
-The document '%s' (page %d) has been changed. Do you want to close the document?	ClosePrompt		Das Dokument '%s' (Seite %d) wurde verändert. Trotzdem schließen?
 Previous file	Menus		Vorherige Datei
 View	Menus		Ansicht
 Leave full screen	Menus		Vollbild verlassen
@@ -13,6 +12,7 @@ Height: 	PrintOptionsWindow		Höhe:
 Next file	Menus		Nächste Datei
 Slide show	Menus		Diashow
 Original size	Menus		Originalgröße
+The document '%filename%' has been changed. Do you want to close the document?	ClosePrompt		as Bild '%filename%' wurde verändert. Trotzdem schließen?
 Width:	PrintOptionsWindow		Breite:
 Resize to (in 1/72 inches):	PrintOptionsWindow		Größe ändern zu (in 1/72 Zoll):
 Zoom factor in %:	PrintOptionsWindow		Vergrößerungsfaktor in %:
@@ -27,7 +27,6 @@ Last page	Menus		Letzte Seite
 Cancel	ClosePrompt		Abbrechen
 Attributes	Menus		Attribute
 High-quality zooming	Menus		Zoomen mit hoher Qualität
-The document '%s' has been changed. Do you want to close the document?	ClosePrompt		Das Bild '%s' wurde verändert. Trotzdem schließen?
 Close	Menus		Schließen
 Selection mode	Menus		Auswahlmodus
 Reset rating	Menus		Bewertung zurücksetzen
@@ -48,6 +47,7 @@ Clear selection	Menus		Auswahl aufheben
 Rotate clockwise	Menus		Im Uhrzeigersinn rotieren
 Open with…	Menus		Öffnen mit …
 Rotate counterclockwise	Menus		Gegen Uhrzeigersinn rotieren
+The document '%filename%' (page %number%) has been changed. Do you want to close the document?	ClosePrompt		Das Dokument '%filename%' (Seite %number%) wurde verändert. Trotzdem schließen?
 Previous page	Menus		Vorherige Seite
 Fit to window	Menus		An Fenstergröße anpassen
 Go to page	Menus		Gehe zu Seite

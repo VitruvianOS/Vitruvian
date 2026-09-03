@@ -1,24 +1,20 @@
-1	slovak	x-vnd.Haiku-Devices	2347806408
+1	slovak	x-vnd.Haiku-Devices	1509979255
 ACPI bus	DevicesView		Zbernica ACPI
 Encryption controller	Device		Radič šifrovania
 Devices	System name		Zariadenia
-Graphics Peripheral	DeviceSCSI		Grafické periférie
 Processor	Device		Procesor
 Generate system information	DevicesView		Vytvoriť informácie o systéme
 Class info	DevicePCI		Info o triede
 Computer	DevicesView		Počítač
 Communications	DeviceSCSI		Komunikácia
 Mass storage controller	Device		Radič hromadného úložiska
-Connection	DevicesView		Pripojenie
 Printer	DeviceSCSI		Tlačiareň
-ACPI Processor Namespace '%2'	DeviceACPI		Menný priestor procesora ACPI „%2“
+Connection	DevicesView		Pripojenie
 Manufacturer	Device		Výrobca
 Scanner	DeviceSCSI		Skener
 Memory controller	Device		Radič pamäte
 Unknown device	DevicesView		Neznáme zariadenie
-Unknown	DevicePCI		Neznáme
 ACPI node '%1'	DeviceACPI		Uzol ACPI „%1“
-Optical Drive	DeviceSCSI		Optická jednotka
 Name	PropertyList		Názov
 Manufacturer	DeviceSCSI		Výrobca
 Device name	Device		Názov zariadenia
@@ -26,32 +22,26 @@ Satellite communications controller	Device		Radič satelitnej komunikácie
 Device class	DeviceSCSI		Trieda zariadenia
 Device	Device		Zariadenie
 Input device controller	Device		Radič vstupných zariadení
-ACPI System Indicator	DeviceACPI		Indikátor systému ACPI
 PCI bus	DevicesView		Zbernica PCI
-ACPI System Bus	DeviceACPI		Zbernica systému ACPI
-Tape Drive	DeviceSCSI		Pásková jednotka
 Changer	DeviceSCSI		Menič
 Serial bus controller	Device		Radič sériovej zbernice
 Refresh devices	DevicesView		Obnoviť zariadenia
 Category	DevicesView		Kategória
 RBC	DeviceSCSI		RBC
-Device paths	Device		Cesty k zariadeniam
 Unknown device	Device		Neznáme zariadenie
+Device paths	Device		Cesty k zariadeniam
 Wireless controller	Device		Radič bezdrôtových sietí
 Generic system peripheral	Device		Všeobecné periférie systému
 Value	PropertyList		Hodnota
 Devices	DevicesView		Zariadenia
 Device name	DeviceACPI		Názov zariadenia
-Card Reader	DeviceSCSI		Čítačka kariet
 Display controller	Device		Radič zobrazovania
 Device name	DevicePCI		Názov zariadenia
-Disk Drive	DeviceSCSI		Disková jednotka
-Report compatibility	DevicesView		Nahlásiť kompatibilitu
 Other	DeviceSCSI		Iné
+Report compatibility	DevicesView		Nahlásiť kompatibilitu
 Computer	Device		Počítač
 PCI bus	Device		Zbernica PCI
 Enclosure	DeviceSCSI		Skrinka
-ACPI Thermal Zone	DeviceACPI		Tepelná oblasť ACPI
 Order by:	DevicesView		Zoradiť podľa:
 Intelligent controller	Device		Inteligentný radič
 Multimedia controller	Device		Radič multimédií

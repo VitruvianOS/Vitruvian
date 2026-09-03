@@ -1,7 +1,8 @@
-1	japanese	x-vnd.Haiku-HaikuDepot	3945138144
+1	japanese	x-vnd.Haiku-HaikuDepot	4230673291
 Usage conditions download problem	ToLatestUserUsageConditionsWindow		使用条件のダウンロードで問題
+User ratings loading…	PackageInfoView		ユーザー評価読み込み中…
 Available packages	MainWindow		使用可能なパッケージ
-It was not possible to create the new user.	UserLoginWindow		新しいユーザーを作成できません。
+It was not possible to create the new user.	UserLoginWindow		新規ユーザーを作成できません。
 An unexpected error has been sent from the server [%li]	ServerHelper		サーバーから予期しないエラーが送信されました [%li]
 Fetching changelog for package	PopulatePkgChangelogFromServerProcess		パッケージの変更記録の取得中
 Create account	UserLoginWindow		アカウントの作成
@@ -44,13 +45,16 @@ Cancel	UserLoginWindow		中止
 Rating not possible	MainWindow		評価不能
 Package update error	MainWindow		パッケージアップデートエラー
 Click here	FeaturedPackagesView	Appears in the sentence 'Click here to search all packages.'	ここをクリック
+No screenshot available.	PackageInfoView		スクリーンショットは利用できません。
 %FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# process} other{# processes}}	ProcessCoordinator		%FIRST_PROCESS_DESCRIPTION% +{0, plural, one{# プロセス} other{# プロセス}}
 Fetching user ratings for package	PopulatePkgUserRatingsFromServerProcess		パッケージのユーザー評価を取得中
 Reboot required	PackageManager		再起動が必要です
 All packages	PackageListView		すべてのパッケージ
+Checking server information	ServerRuntimeInformationVerifierProcess		サーバー情報をチェック中
 Send	RatePackageWindow		送信する
 Creating package list…	FeaturedPackagesView		パッケージリストを作成中…
 Start package daemon	App		パッケージデーモンの起動
+Changelog loading…	PackageInfoView		変更履歴読み込み中…
 There are problems in the supplied data:	UserLoginWindow		入力されたデータに問題があります:
 Desktop and non-desktop packages	MainWindow		デスクトップと非デスクトップパッケージ
 The user '%Nickname%' has not agreed to any usage conditions.	UserUsageConditions		ユーザー '%Nickname%' は利用条件に同意していません。
@@ -65,7 +69,7 @@ Close	UserLoginWindow		閉じる
 The email is malformed.	UserLoginWindow		メールアドレスの形式が正しくありません。
 Synchronizing package data for repository '%REPO_NAME%'	ServerPkgDataUpdateProcess		リポジトリ '%REPO_NAME%' のパッケージデータを同期中
 View the usage conditions	UserLoginWindow		使用条件を見る
-An error has arisen downloading the usage conditions required to create a new user. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	UserLoginWindow		新しいユーザー作成に必要な使用条件のダウンロード中にエラーが発生しました。詳細はログをチェックして、再度試してみてください。\nログの見方は、HaikuユーザーガイドのHaikuDepotの章で得られます。
+An error has arisen downloading the usage conditions required to create a new user. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	UserLoginWindow		新規ユーザー作成に必要な使用条件のダウンロード中にエラーが発生しました。詳細はログをチェックして、再度試してみてください。\nログの見方は、HaikuユーザーガイドのHaikuDepotの章で得られます。
 Usage conditions agreed	ToLatestUserUsageConditionsWindow		利用条件が同意されました
 Size	PackageListView		サイズ
 All categories	FilterView		すべての分類
@@ -80,6 +84,7 @@ Continue	App		続行
 A password is required.	UserLoginWindow		パスワードが必要です。
 Language	RatePackageWindow		言語
 Open %DeskbarLink%	PackageAction		%DeskbarLink% を開く
+Login disabled	MainWindow		ログイン無効
 Status	PackageListView		状態
 Network transport error	ServerHelper		ネットワーク転送エラー
 Cancel	PackageResult		キャンセル
@@ -107,7 +112,7 @@ The nickname is malformed. The nickname may only contain digits and lower case l
 Authentication failed	UserLoginWindow		認証に失敗しました
 Captcha error	UserLoginWindow		キャプチャエラー
 Manage repositories…	MainWindow		リポジトリの管理...
-The nickname must be unique, but the supplied nickname is already taken. Choose a different nickname.	UserLoginWindow		ニックネームはユニークである必要がありますが、入力されたニックネームはすでに取られています。別のニックネームを選んでください。
+The nickname must be unique, but the supplied nickname is already taken. Choose a different nickname.	UserLoginWindow		ニックネームはユニークである必要がありますが、入力されたニックネームはすでに使用されています。別のニックネームを選んでください。
 OK	UserUsageConditions		OK
 Input validation	UserLoginWindow		入力検証
 Log in…	MainWindow		ログイン...
@@ -138,6 +143,8 @@ Rating	PackageListView		評価
 Synchronizing icons	ServerIconExportUpdateProcess		アイコンを同期しています。
 No, quit	App		いいえ、終了します
 Show	MainWindow		表示
+Timestamp discrepancy	ServerRuntimeInformationVerifierProcess		タイムスタンプの不一致
+No contents available.	PackageInfoView		コンテンツは利用できません。
 This application writes and reads some working files on your computer in order to function. It appears that there are problems writing a test file at [%TestFilePath%]. Check that there are no issues with your local disk or permissions that might prevent this application from writing files into that directory location. You may choose to acknowledge this problem and continue, but some functionality may be disabled.	App		このアプリケーションは動作するためにあなたのコンピューター上のいくつかの作業ファイルを読み書きします。テストファイルの [%TestFilePath%] への書き込みに問題があるようです。ローカルディスクに問題がないことや、そのディレクトリにアプリケーションが書込みできない権限になっているかをチェックしてください。この問題を認識して続行することもできますが、いくつかの機能が無効となるかもしれません。
 Settings…	MainWindow		設定...
 <Package contents not available for remote packages>	PackageContentsView		<リモートパッケージには利用できません>
@@ -146,15 +153,16 @@ The following problems have been encountered. Please select a solution for each:
 Local	LocalPkgDataLoadProcess		ローカル
 Package changes	PackageResult	Window title	パッケージの変更
 Would it be acceptable to send anonymous usage data to the HaikuDepotServer system from this computer? You can change your preference in the \"Settings\" window later.	MainWindow		このコンピューターから匿名の使用情報を HaikuDepotServer システムに送信することを受け入れますか?あとから、\"設定\" ウィンドウで選択を変えられます。
-User rating	RatePackageWindow		ユーザーによる評価
 Installed packages	MainWindow		インストール済パッケージ
+User rating	RatePackageWindow		ユーザー評価
 Date	PackageListView		日付
 The password must be a minimum of %MinPasswordLength% characters. %MinPasswordUppercaseChar% characters must be upper-case and %MinPasswordDigitsChar% characters must be digits.	UserLoginWindow		パスワードは %MinPasswordLength% 文字以上である必要があります。%MinPasswordUppercaseChar% 個の文字は大文字で、%MinPasswordDigitsChar% 個の文字は数字である必要があります。
-An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	ToLatestUserUsageConditionsWindow		新しいユーザー作成に必要な使用条件のダウンロード中にエラーが発生しました。詳細はログをチェックして、再度試してみてください。\nログの見方は、HaikuユーザーガイドのHaikuDepotの章で得られます。
+Screenshot loading…	PackageInfoView		スクリーンショットを読み込み中…
+An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	ToLatestUserUsageConditionsWindow		新規ユーザー作成に必要な使用条件のダウンロード中にエラーが発生しました。詳細はログをチェックして、再度試してみてください。\nログの見方は、HaikuユーザーガイドのHaikuDepotの章で得られます。
 There was a puzzling response from the web service.	UserLoginWindow		ウェブサービスから不可解なレスポンスがあった。
 Opening \"%DeskbarLink%\"	OpenPackageProcess		\"%DeskbarLink%\" を開く
 Your rating was uploaded successfully. You can update or remove it at the HaikuDepot Server website.	RatePackageWindow		評価が正常に更新されました。HaikuDepot Server のウェブサイトで評価を更新または削除できます。
-It was not possible to communicate with the server to obtain a captcha image required to create a new user.	UserLoginWindow		新しいユーザーを作成するために必要なキャプチャの取得のためのサーバーとの通信ができませんでした。
+It was not possible to communicate with the server to obtain a captcha image required to create a new user.	UserLoginWindow		新規ユーザーを作成するために必要なキャプチャの取得のためのサーバーとの通信ができませんでした。
 The supplied response to the captcha is incorrect. A new captcha will be generated; try again.	UserLoginWindow		キャプチャへの返答が間違っています。新しいキャプチャが生成されます、もう一度試してください。
 -	no package publish		-
 The password must be at least eight characters long, consist of at least two digits and one upper case character.	UserLoginWindow		パスワードは、最小8文字以上の長さで、少なくとも2つの数字と1つの英大文字を含む必要があります。
@@ -170,8 +178,8 @@ This application is too old to communicate with the server system. Obtain a newe
 Stability	RatePackageWindow		安定度
 The password must be repeated in order to reduce the chance of entering the password incorrectly.	UserLoginWindow		間違って入力する可能性を減らすため、パスワードを繰り返す必要があります。
 Cancel	SettingsWindow		キャンセル
-Cancel	RatePackageWindow		中止
 Inactive	PackageListView		無効
+Cancel	RatePackageWindow		中止
 Nickname:	UserLoginWindow		ニックネーム:
 Synchronizing meta-data about repositories	ServerRepositoryDataUpdateProcess		リポジトリに関するメタデータを同期中
 OK	MainWindow		OK
@@ -189,8 +197,8 @@ Login issue	MainWindow		ログインに問題
 Your rating:	RatePackageWindow		評価:
 The user %Nickname% has been successfully created in the HaikuDepotServer system. You can administer your user details by using the web interface. You are now logged-in as this new user.	UserLoginWindow		ユーザー %Nickname% が、HaikuDepotServer システム内に正常に作成されました。ユーザーの詳細をウェブインターフェースで管理できます。あなたは現在新規ユーザーとしてログインしています。
 Repositories	MainWindow		リポジトリ
-This rating is visible to other users	RatePackageWindow		この評価はほかのユーザーからも見られます
 While updating package data, a problem has arisen that may cause data to be outdated or missing from the application's display. Additional details regarding this problem may be able to be obtained from the application logs.\nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	MainWindow		パッケージデータの更新中に問題が発生しました。そのためデータが期限切れに、つまりアプリケーションの表示から消えてしまいます。この問題の詳細は、アプリケーションのログから得られるでしょう。\nログの見方についての情報は、HaikuユーザーガイドのHaikuDepotの章で得られます。
+This rating is visible to other users	RatePackageWindow		この評価はほかのユーザーからも見られます
 An error has arisen downloading the usage conditions. Check the log for details and try again. \nInformation about how to view the logs is available in the HaikuDepot section of the Haiku User Guide.	UserUsageConditions		使用条件のダウンロード中にエラーが発生しました。詳細はログをチェックして、再度試してみてください。\nログの見方は、HaikuユーザーガイドのHaikuDepotの章で得られます。
 Stop network use	ServerHelper		ネットワークの使用を中止
 View agreed usage conditions…	MainWindow		同意した使用条件を見る...
@@ -216,6 +224,7 @@ The nickname is required.	UserLoginWindow		ニックネームが必要です。
 Apply changes	PackageResult		変更を適用
 Server error	ServerHelper		サーバーエラー
 Rate package	RatePackageWindow		パッケージを評価
+The server and this computer have a discrepancy in the current timestamp of around %DiscrepancySeconds% seconds. This may cause issues for HaikuDepot communicating with the server. Check your computer's clock settings and correct the current time if necessary.	ServerRuntimeInformationVerifierProcess		サーバーとコンピューターには現在のタイムスタンプにおよそ%DiscrepancySeconds%秒のずれがあります。これは HaikuDepot がサーバーと通信するための障害となります。コンピューターの時計設定をチェックして、必要なら現在時刻を修正してください。
 Recording view of \"%PackageName%\"	IncrementViewCounterProcess		\"%PackageName%\" のビューを記録中
 Sending anonymous usage data	MainWindow		匿名の使用状況データーを送信する
 Log in	UserLoginWindow		ログイン

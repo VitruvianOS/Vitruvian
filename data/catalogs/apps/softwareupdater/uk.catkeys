@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.haiku-softwareupdater	1377379822
+1	ukrainian	x-vnd.haiku-softwareupdater	2012285635
 Updating version	SoftwareUpdaterWindow	List item text	Оновлення версії
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Натисніть щоб встановити {0, plural, one{# оновлений пакет} few{# оновлених пакета} other{# оновлених пакетів}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Пакети будуть деінстальовані
@@ -8,6 +8,7 @@ There were no updates found.	CheckManager		Оновлень не знайден�
 Updates have not been completed, are you sure you want to quit?	SoftwareUpdaterWindow		Оновлення не було завершене, Ви впевнені, що хочете вийти?
 Updates found	SoftwareUpdaterWindow		Знайдено оновлення
 Update now	SoftwareUpdaterWindow		Оновити зараз
+Settings	SoftwareUpdaterWindow		Налаштування
 For some reason, we could not reboot your computer.	SoftwareUpdaterWindow		З якоїсь причини не вдалося перезавантажити комп'ютер.
 OK	UpdateManager		ОК
 Unrecognized argument	SoftwareUpdaterApp	Error message	Нерозпізнаний аргумент
@@ -16,7 +17,9 @@ No updates available	UpdateAction		Немає доступних оновлен�
 New packages to be installed	SoftwareUpdaterWindow	List super item label	Нові пакети будуть інстальовані
 Packages to be updated	SoftwareUpdaterWindow	List super item label	Наступні пакети будуть оновлені
 to	SoftwareUpdaterWindow	List item text	до
+Click here to run %appname%. Some updates will require a problem solution to be selected.	CheckManager		Натисніть тут, щоб запустити %appname%. Для деяких оновлень потрібно буде вибрати варіант вирішення проблеми.
 Attempting to cancel the updates…	SoftwareUpdaterWindow		Спроба скасувати оновлення…
+Automatically clean up old install states	SoftwareUpdaterWindow		Автоматично очищати старі інсталяції
 Contacting software repositories to check for package updates.	CheckManager		Встановлюється зв'язок з репозитаріями щоб перевірити наявність оновлень.
 Available updates found	CheckManager		Знайдені доступні оновлення
 from repository	SoftwareUpdaterWindow	List item text	з репозитарія
@@ -51,9 +54,10 @@ No remote repositories are available	UpdateManager	Error message	Віддале�
 Software {0, plural, one{update} other{updates}} available	CheckManager		Доступно {0, plural, one{оновлення} few{оновлення} other{оновлень}} програмного забезпечення
 Reboot	SoftwareUpdaterWindow	Button label	Перезавантажити
 Update	SoftwareUpdaterWindow	Alert button label	Оновити
-Open Repositories	SoftwareUpdaterWindow	Alert button label	Відкрити Репозитарії
 Updates did not complete	UpdateAction		Оновлення не завершені
+Open Repositories	SoftwareUpdaterWindow	Alert button label	Відкрити Репозитарії
 Invalid update type, cannot continue with updates	UpdateAction		Недійсний тип оновлення, неможливо продовжити оновлення
+Settings…	SoftwareUpdaterWindow		Налаштування…
 Uninstalling version	SoftwareUpdaterWindow	List item text	Деінсталяція версії
 %i of %i	UpdateManager	Do not translate %i	%i з %i
 Quit	SoftwareUpdaterWindow		Вийти

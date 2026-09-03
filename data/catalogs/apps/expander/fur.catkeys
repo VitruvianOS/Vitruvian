@@ -1,4 +1,4 @@
-1	friulian	x-vnd.Haiku-Expander	2040688293
+1	friulian	x-vnd.Haiku-Expander	2735024965
 Destination	ExpanderWindow		Destinazion
 Other	ExpanderPreferences		Altri
 Automatically show contents listing	ExpanderPreferences		Mostre in automatic il listât dai contignûts
@@ -6,12 +6,14 @@ Expander	System name		Espansôr
 Set source…	ExpanderMenu		Stabilìs la sorzint…
 OK	ExpanderWindow		Va ben
 The destination is not a folder.	ExpanderWindow		La destinazion no je une cartele.
+%appname%: Choose destination	DirectoryFilePanel		%appname%: sielç destinazion
 The folder was either moved, renamed or not supported.	ExpanderWindow		O la cartele e je stade spostade, o e à cambiât non opûr no je supuartade.
 Close window when done expanding	ExpanderPreferences		Siere il barcon une volte finide la espansion
 Close	ExpanderMenu		Siere
 Create	ExpanderWindow		Cree
 Creating listing for '%s'…	ExpanderWindow		Creazion de liste par '%s'…
 Show contents	ExpanderMenu		Mostre contignût
+%appname% settings	ExpanderPreferences		Impostazions di %appname%
 Are you sure you want to stop expanding this archive? The expanded items may not be complete.	ExpanderWindow		Fermâ pardabon la espansion di chest archivi? Al è pussibil che i elements espandûts a sedin incomplets.
 Settings	ExpanderMenu		Impostazions
 Expand	ExpanderWindow		Espant
@@ -45,5 +47,6 @@ The file doesn't exist	ExpanderWindow		Il file nol esist
 Hide contents	ExpanderWindow		Plate il contignût
 Source	ExpanderWindow		Sorzint
 The destination is read only.	ExpanderWindow		La destinazion e je in dome-leture.
+%appname%: Open	ExpanderWindow		%appname%: vierç
 Select	ExpanderPreferences		Selezione
 File	ExpanderMenu		File

@@ -39,7 +39,7 @@
 #include <OS.h>
 #include <Path.h>
 
-#include <util/KMessage.h>
+#include <kernel/util/KMessage.h>
 
 #include <extended_system_info.h>
 #include <extended_system_info_defs.h>
@@ -453,7 +453,7 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 			snprintf(handshake.msg, sizeof(handshake.msg),
 				"could not set session leader.");
 			send_handshake_message(terminalThread, handshake);
-			exit(1);
+			_exit(1);
 		}
 
 		/* open slave pty */
@@ -463,7 +463,7 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 			snprintf(handshake.msg, sizeof(handshake.msg),
 				"can't open tty (%s).", ttyName);
 			send_handshake_message(terminalThread, handshake);
-			exit(1);
+			_exit(1);
 		}
 
 		/* set signal default */
@@ -508,7 +508,7 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 			snprintf(handshake.msg, sizeof(handshake.msg),
 				"failed set terminal interface (TERMIOS).");
 			send_handshake_message(terminalThread, handshake);
-			exit(1);
+			_exit(1);
 		}
 
 		/*
@@ -524,7 +524,7 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 			snprintf(handshake.msg, sizeof(handshake.msg),
 				"mismatch handshake.");
 			send_handshake_message(terminalThread, handshake);
-			exit(1);
+			_exit(1);
 		}
 
 		struct winsize ws = { handshake.row, handshake.col };
@@ -574,7 +574,7 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 				"-l", NULL);
 		}
 
-		exit(1);
+		_exit(1);
 	}
 
 	/*

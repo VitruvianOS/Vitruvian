@@ -110,22 +110,6 @@ enum {
 };
 
 
-// This is temporary solution for building BString with printf like format.
-// will be removed in the future.
-static void
-bs_printf(BString* string, const char* format, ...)
-{
-	va_list ap;
-	char* buf;
-
-	va_start(ap, format);
-	vasprintf(&buf, format, ap);
-	string->SetTo(buf);
-	free(buf);
-	va_end(ap);
-}
-
-
 //	#pragma mark -- ShowImageWindow
 
 
@@ -259,6 +243,8 @@ ShowImageWindow::ShowImageWindow(BRect frame, const entry_ref& ref,
 		hScrollBarContainer->GroupLayout()->SetInsets(0, -1, -1, -1);
 		gridLayout->AddView(hScrollBarContainer, 1, 1);
 	}
+
+	fToolBar->ResizeTo(-fVScrollBar->PreferredSize().width, fToolBar->MinSize().height);
 
 	fVScrollBar->SetTarget(fImageView);
 	fHScrollBar->SetTarget(fImageView);
@@ -545,9 +531,8 @@ ShowImageWindow::_ResizeWindowToImage()
 
 	// TODO: use View::GetPreferredSize() instead?
 	BRect r(bitmap->Bounds());
-	float width = r.Width() + be_control_look->GetScrollBarWidth(B_VERTICAL);
-	float height = r.Height() + 1 + fBar->Frame().Height()
-		+ be_control_look->GetScrollBarWidth(B_HORIZONTAL);
+	float width = r.Width() + fVScrollBar->PreferredSize().width;
+	float height = r.Height() + 1 + fBar->Frame().Height() + fHScrollBar->PreferredSize().height;
 
 	BRect frame = screen.Frame();
 	const float windowBorder = 5;
@@ -1305,15 +1290,16 @@ ShowImageWindow::_ClosePrompt()
 	BString prompt;
 
 	if (count > 1) {
-		bs_printf(&prompt,
-			B_TRANSLATE("The document '%s' (page %d) has been changed. Do you "
-				"want to close the document?"),
-			fImageView->Image()->name, page);
+		BString pageString;
+		pageString << page;
+		prompt = B_TRANSLATE("The document '%filename%' (page %number%)"
+			" has been changed. Do you want to close the document?");
+		prompt.ReplaceFirst("%filename%", fImageView->Image()->name);
+		prompt.ReplaceFirst("%number%", pageString);
 	} else {
-		bs_printf(&prompt,
-			B_TRANSLATE("The document '%s' has been changed. Do you want to "
-				"close the document?"),
-			fImageView->Image()->name);
+		prompt = B_TRANSLATE("The document '%filename%' has been changed."
+			" Do you want to close the document?"),
+		prompt.ReplaceFirst("%filename%", fImageView->Image()->name);
 	}
 
 	BAlert* alert = new BAlert(B_TRANSLATE("Close document"), prompt.String(),
@@ -1382,8 +1368,8 @@ ShowImageWindow::_ToggleFullScreen()
 		fWindowFrame = Frame();
 		frame = screen.Frame();
 		frame.top -= fBar->Bounds().Height() + 1;
-		frame.right += be_control_look->GetScrollBarWidth(B_VERTICAL);
-		frame.bottom += be_control_look->GetScrollBarWidth(B_HORIZONTAL);
+		frame.right += fVScrollBar->PreferredSize().width;
+		frame.bottom += fHScrollBar->PreferredSize().height;
 
 		SetFlags(Flags() | B_NOT_RESIZABLE | B_NOT_MOVABLE);
 

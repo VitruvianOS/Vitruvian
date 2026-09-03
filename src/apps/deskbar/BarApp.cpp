@@ -457,7 +457,7 @@ TBarApp::MessageReceived(BMessage* message)
 
 		case kStateChanged:
 			if (fPreferencesWindow != NULL)
-				fPreferencesWindow->PostMessage(kStateChanged);
+				fPreferencesWindow->PostMessage(message);
 			break;
 
 		case kShowDeskbarMenu:

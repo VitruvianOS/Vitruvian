@@ -285,6 +285,7 @@ TermView::_InitObject(const ShellParameters& shellParameters)
 	fTextBackColor = kWhiteColor;
 	fSelectForeColor = kWhiteColor;
 	fSelectBackColor = kBlackColor;
+	fCursorForeColor = fTextBackColor;
 	fCursorBackColor = fTextForeColor;
 	fScrollOffset = 0;
 	fLastSyncTime = 0;

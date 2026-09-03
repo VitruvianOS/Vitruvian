@@ -1066,7 +1066,7 @@ GrepWindow::_OnNodeMonitorEvent(BMessage* message)
 		}
 
 		default:
-			TRACE_NM("unkown op code\n");
+			TRACE_NM("unknown op code\n");
 			break;
 	}
 

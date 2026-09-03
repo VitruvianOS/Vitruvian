@@ -85,7 +85,7 @@ public:
 			const BBitmap*	SmallIcon() const { return fSmallIcon; }
 			const BBitmap*	LargeIcon() const { return fLargeIcon; }
 
-			void			CacheTeamIcons(int32 small, int32 large);
+			status_t		CacheTeamIcons(int32 small, int32 large);
 
 private:
 			BList*			fTeams;
@@ -389,7 +389,7 @@ TTeamGroup::Draw(BView* view, BRect bounds, bool main)
 }
 
 
-void
+status_t
 TTeamGroup::CacheTeamIcons(int32 smallIconSize, int32 largeIconSize)
 {
 	TBarApp* app = static_cast<TBarApp*>(be_app);
@@ -399,6 +399,11 @@ TTeamGroup::CacheTeamIcons(int32 smallIconSize, int32 largeIconSize)
 		fSmallIcon = app->FetchTeamIcon(team, smallIconSize);
 		fLargeIcon = app->FetchTeamIcon(team, largeIconSize);
 	}
+
+	if (fLargeIcon == NULL || fSmallIcon == NULL)
+		return B_ERROR;
+
+	return B_OK;
 }
 
 
@@ -457,8 +462,10 @@ TSwitchManager::TSwitchManager()
 
 		TTeamGroup* group = new TTeamGroup(barTeamInfo->teams,
 			barTeamInfo->flags, barTeamInfo->name, barTeamInfo->sig);
-		group->CacheTeamIcons(fSmallIconSize, fLargeIconSize);
-		fGroupList.AddItem(group);
+		if (group->CacheTeamIcons(fSmallIconSize, fLargeIconSize) == B_OK)
+			fGroupList.AddItem(group);
+		else
+			delete group;
 
 		barTeamInfo->teams = NULL;
 		barTeamInfo->name = NULL;
@@ -528,9 +535,12 @@ TSwitchManager::MessageReceived(BMessage* message)
 
 			TTeamGroup* group = new TTeamGroup(teams, flags, strdup(name),
 				signature);
-			group->CacheTeamIcons(fSmallIconSize, fLargeIconSize);
-			fGroupList.AddItem(group);
-			fWindow->Redraw(fGroupList.CountItems() - 1);
+			if (group->CacheTeamIcons(fSmallIconSize, fLargeIconSize) == B_OK) {
+				fGroupList.AddItem(group);
+				fWindow->Redraw(fGroupList.CountItems() - 1);
+			} else {
+				delete group;
+			}
 			break;
 		}
 
@@ -544,10 +554,8 @@ TSwitchManager::MessageReceived(BMessage* message)
 				TTeamGroup* group = (TTeamGroup*)fGroupList.ItemAt(index);
 				ASSERT(group);
 				if (strcasecmp(group->Signature(), signature) == 0) {
-					if (!group->TeamList()->HasItem((void*)(addr_t)team)) {
-						group->CacheTeamIcons(fSmallIconSize, fLargeIconSize);
+					if (!group->TeamList()->HasItem((void*)(addr_t)team))
 						group->TeamList()->AddItem((void*)(addr_t)team);
-					}
 					break;
 				}
 			}

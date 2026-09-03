@@ -66,21 +66,6 @@ const char* kInfoAttributeName = "StyledEdit-info";
 #define B_TRANSLATION_CONTEXT "StyledEditWindow"
 
 
-// This is a temporary solution for building BString with printf like format.
-// will be removed in the future.
-static void
-bs_printf(BString* string, const char* format, ...)
-{
-	va_list ap;
-	va_start(ap, format);
-	char* buf;
-	vasprintf(&buf, format, ap);
-	string->SetTo(buf);
-	free(buf);
-	va_end(ap);
-}
-
-
 // #pragma mark -
 
 
@@ -147,9 +132,9 @@ StyledEditWindow::QuitRequested()
 	if (fTextView->TextLength() == 0 && fSaveMessage == NULL)
 		return true;
 
-	BString alertText;
-	bs_printf(&alertText,
-		B_TRANSLATE("Save changes to the document \"%s\"? "), Title());
+	BString alertText =
+		B_TRANSLATE("Save changes to the document \"%title%\"?");
+	alertText.ReplaceFirst("%title%", Title());
 
 	int32 index = _ShowAlert(alertText, B_TRANSLATE("Cancel"),
 		B_TRANSLATE("Don't save"), B_TRANSLATE("Save"),	B_WARNING_ALERT);
@@ -673,11 +658,10 @@ StyledEditWindow::MessageReceived(BMessage* message)
 		{
 			status_t status = _UnlockFile();
 			if (status != B_OK) {
-				BString text;
-				bs_printf(&text,
-					B_TRANSLATE("Unable to unlock file\n\t%s"),
-					strerror(status));
-				_ShowAlert(text, B_TRANSLATE("OK"), "", "", B_STOP_ALERT);
+				BString alertText
+					= B_TRANSLATE("Unable to unlock file\n\t%error%");
+				alertText.ReplaceFirst("%error%", strerror(status));
+				_ShowAlert(alertText, B_TRANSLATE("OK"), "", "", B_STOP_ALERT);
 			}
 			PostMessage(UPDATE_STATUS);
 			break;
@@ -855,9 +839,9 @@ StyledEditWindow::Save(BMessage* message)
 			if (!((getuid() == st.st_uid && (S_IWUSR & st.st_mode))
 				|| (getgid() == st.st_gid && (S_IWGRP & st.st_mode))
 				|| (S_IWOTH & st.st_mode))) {
-				BString alertText;
-				bs_printf(&alertText, B_TRANSLATE("This file is marked "
-					"read-only. Save changes to the document \"%s\"? "), name);
+				BString alertText = B_TRANSLATE("This file is marked read-only."
+					" Save changes to the document \"%filename%\"? ");
+				alertText.ReplaceFirst("%filename%", name);
 				switch (_ShowAlert(alertText, B_TRANSLATE("Cancel"),
 						B_TRANSLATE("Don't save"),
 						B_TRANSLATE("Save"), B_WARNING_ALERT)) {
@@ -875,9 +859,10 @@ StyledEditWindow::Save(BMessage* message)
 	}
 
 	if (status != B_OK) {
-		BString alertText;
-		bs_printf(&alertText, B_TRANSLATE("Error saving \"%s\":\n%s"), name,
-			strerror(status));
+		BString alertText =
+			B_TRANSLATE("Error saving \"%filename%\":\n%error%");
+		alertText.ReplaceFirst("%filename%", name);
+		alertText.ReplaceFirst("%error%", strerror(status));
 
 		_ShowAlert(alertText, B_TRANSLATE("OK"), "", "", B_STOP_ALERT);
 		return status;
@@ -1231,6 +1216,33 @@ StyledEditWindow::_InitWindow(uint32 encoding)
 		new BMessage(MENU_REPLACE_SAME), 'T');
 	fReplaceSameItem->SetEnabled(false);
 
+	// Font menu
+	fFontMenu = new BMenu(B_TRANSLATE("Font"));
+	fCurrentFontItem = 0;
+	fCurrentStyleItem = 0;
+
+	BMenu* subMenu(NULL);
+	int32 numFamilies = count_font_families();
+	for (int32 i = 0; i < numFamilies; i++) {
+		font_family family;
+		if (get_font_family(i, &family) == B_OK) {
+			subMenu = new BMenu(family);
+			subMenu->SetRadioMode(true);
+			fFontMenu->AddItem(new BMenuItem(subMenu, new BMessage(FONT_FAMILY)));
+
+			int32 numStyles = count_font_styles(family);
+			for (int32 j = 0; j < numStyles; j++) {
+				font_style style;
+				uint32 flags;
+				if (get_font_style(family, j, &style, &flags) == B_OK) {
+					subMenu->AddItem(new BMenuItem(style, new BMessage(FONT_STYLE)));
+				}
+			}
+		}
+	}
+
+	// Style menu
+	fStyleMenu = new BMenu(B_TRANSLATE("Style"));
 	fFontSizeMenu = new BMenu(B_TRANSLATE("Size"));
 	fFontSizeMenu->SetRadioMode(true);
 
@@ -1246,6 +1258,11 @@ StyledEditWindow::_InitWindow(uint32 encoding)
 		if (fontSizes[i] == (int32)be_plain_font->Size())
 			menuItem->SetMarked(true);
 	}
+	fFontSizeMenu->AddSeparatorItem();
+	fFontSizeMenu->AddItem(
+		menuItem = new BMenuItem(B_TRANSLATE("Increase size"), new BMessage(kMsgSetFontUp), '+'));
+	fFontSizeMenu->AddItem(
+		menuItem = new BMenuItem(B_TRANSLATE("Decrease size"), new BMessage(kMsgSetFontDown), '-'));
 
 	fFontColorMenu = new BMenu(B_TRANSLATE("Color"), 0, 0);
 	fFontColorMenu->SetRadioMode(true);
@@ -1267,46 +1284,6 @@ StyledEditWindow::_InitWindow(uint32 encoding)
 	fStrikeoutItem = new BMenuItem(B_TRANSLATE("Strikeout"),
 		new BMessage(kMsgSetStrikeout));
 	fStrikeoutItem->SetShortcut('K', 0);
-
-	fFontMenu = new BMenu(B_TRANSLATE("Font"));
-	fCurrentFontItem = 0;
-	fCurrentStyleItem = 0;
-
-	// premake font menu since we cant add members dynamically later
-	BLayoutBuilder::Menu<>(fFontMenu)
-		.AddItem(fFontSizeMenu)
-		.AddItem(fFontColorMenu)
-		.AddSeparator()
-		.AddItem(B_TRANSLATE("Increase size"), kMsgSetFontUp, '+')
-		.AddItem(B_TRANSLATE("Decrease size"), kMsgSetFontDown, '-')
-		.AddItem(fBoldItem)
-		.AddItem(fItalicItem)
-		.AddItem(fUnderlineItem)
-		.AddItem(fStrikeoutItem)
-		.AddSeparator()
-	.End();
-
-	BMenu* subMenu;
-	int32 numFamilies = count_font_families();
-	for (int32 i = 0; i < numFamilies; i++) {
-		font_family family;
-		if (get_font_family(i, &family) == B_OK) {
-			subMenu = new BMenu(family);
-			subMenu->SetRadioMode(true);
-			fFontMenu->AddItem(new BMenuItem(subMenu,
-				new BMessage(FONT_FAMILY)));
-
-			int32 numStyles = count_font_styles(family);
-			for (int32 j = 0; j < numStyles; j++) {
-				font_style style;
-				uint32 flags;
-				if (get_font_style(family, j, &style, &flags) == B_OK) {
-					subMenu->AddItem(new BMenuItem(style,
-						new BMessage(FONT_STYLE)));
-				}
-			}
-		}
-	}
 
 	// "Align"-subMenu:
 	BMenu* alignMenu = new BMenu(B_TRANSLATE("Align"));
@@ -1345,8 +1322,7 @@ StyledEditWindow::_InitWindow(uint32 encoding)
 			.AddItem(openItem)
 			.AddSeparator()
 			.AddItem(fSaveItem)
-			.AddItem(B_TRANSLATE("Save as" B_UTF8_ELLIPSIS),
-				MENU_SAVEAS, 'S', B_SHIFT_KEY)
+			.AddItem(B_TRANSLATE("Save as" B_UTF8_ELLIPSIS), MENU_SAVEAS, 'S', B_SHIFT_KEY)
 			.AddItem(fReloadItem)
 			.AddItem(B_TRANSLATE("Close"), MENU_CLOSE, 'W')
 			.AddSeparator()
@@ -1370,7 +1346,17 @@ StyledEditWindow::_InitWindow(uint32 encoding)
 			.AddItem(fReplaceItem)
 			.AddItem(fReplaceSameItem)
 		.End()
-		.AddItem(fFontMenu)
+		.AddMenu(fFontMenu)
+		.End()
+		.AddMenu(fStyleMenu)
+			.AddItem(fFontSizeMenu)
+			.AddItem(fFontColorMenu)
+			.AddSeparator()
+			.AddItem(fBoldItem)
+			.AddItem(fItalicItem)
+			.AddItem(fUnderlineItem)
+			.AddItem(fStrikeoutItem)
+		.End()
 		.AddMenu(B_TRANSLATE("Document"))
 			.AddItem(alignMenu)
 			.AddItem(fWrapItem)
@@ -1424,8 +1410,7 @@ StyledEditWindow::_BuildFontColorMenu(BMenu* menu)
 			topLeft.y + itemHeight);
 		buttonArea.OffsetBy(margin, itemHeight + margin + margin);
 		menu->AddItem(
-			new ColorMenuItem("", palette[i], new BMessage(msgTemplate)),
-			buttonArea);
+			new ColorMenuItem("", palette[i], new BMessage(msgTemplate)), buttonArea);
 		buttonArea.OffsetBy(margin, margin);
 		matrixArea = matrixArea | buttonArea;
 	}
@@ -1552,19 +1537,21 @@ StyledEditWindow::_LoadFile(entry_ref* ref, const char* forceEncoding)
 	}
 
 	if (status != B_OK) {
-		// If an error occured, bail out and tell the user what happened
 		BEntry entry(ref, true);
 		char name[B_FILE_NAME_LENGTH];
 		if (entry.GetName(name) != B_OK)
 			strlcpy(name, B_TRANSLATE("???"), sizeof(name));
 
 		BString text;
-		if (status == B_BAD_TYPE)
-			bs_printf(&text,
-				B_TRANSLATE("Error loading \"%s\":\n\tUnsupported format"), name);
-		else
-			bs_printf(&text, B_TRANSLATE("Error loading \"%s\":\n\t%s"),
-				name, strerror(status));
+		if (status == B_BAD_TYPE) {
+			text = B_TRANSLATE("Error loading \"%filename%\""
+				":\n\tUnsupported format");
+			text.ReplaceFirst("%filename%", name);
+		} else {
+			text = B_TRANSLATE("Error loading \"%filename%\":\n\t%error%");
+			text.ReplaceFirst("%filename%", name);
+			text.ReplaceFirst("%error%", strerror(status));
+		}
 
 		_ShowAlert(text, B_TRANSLATE("OK"), "", "", B_STOP_ALERT);
 		return status;
@@ -1625,18 +1612,18 @@ StyledEditWindow::_ReloadDocument(BMessage* message)
 		status = entry.GetRef(&ref);
 
 	if (status != B_OK || !entry.Exists()) {
-		BString alertText;
-		bs_printf(&alertText,
-			B_TRANSLATE("Cannot revert, file not found: \"%s\"."), name);
+		BString alertText =
+			B_TRANSLATE("Cannot revert, file not found: \"%filename%\".");
+		alertText.ReplaceFirst("%filename%", name);
 		_ShowAlert(alertText, B_TRANSLATE("OK"), "", "", B_STOP_ALERT);
 		return;
 	}
 
 	if (!fClean) {
-		BString alertText;
-		bs_printf(&alertText,
-			B_TRANSLATE("\"%s\" has unsaved changes.\n"
-				"Revert it to the last saved version? "), Title());
+		BString alertText = B_TRANSLATE("\"%title%\" has unsaved changes.\n"
+			"Revert it to the last saved version?");
+		alertText.ReplaceFirst("%title%", Title());
+
 		if (_ShowAlert(alertText, B_TRANSLATE("Cancel"), B_TRANSLATE("Revert"),
 			"", B_WARNING_ALERT) != 1)
 			return;
@@ -1999,6 +1986,7 @@ StyledEditWindow::_SetReadOnly(bool readOnly)
 	fReplaceItem->SetEnabled(!readOnly);
 	fReplaceSameItem->SetEnabled(!readOnly);
 	fFontMenu->SetEnabled(!readOnly);
+	fStyleMenu->SetEnabled(!readOnly);
 	fAlignLeft->Menu()->SetEnabled(!readOnly);
 	fWrapItem->SetEnabled(!readOnly);
 	fTextView->MakeEditable(!readOnly);

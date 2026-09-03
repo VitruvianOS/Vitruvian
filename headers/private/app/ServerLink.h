@@ -16,9 +16,11 @@
 #include <LinkReceiver.h>
 #include <LinkSender.h>
 
+
 class BShape;
 class BString;
 class BGradient;
+
 
 /*
  * Error checking rules: (for if you don't want to check every return code)

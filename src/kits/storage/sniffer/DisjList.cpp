@@ -1,34 +1,26 @@
-//----------------------------------------------------------------------
-//  This software is part of the OpenBeOS distribution and is covered 
-//  by the MIT License.
-//---------------------------------------------------------------------
+/*
+ * Copyright 2002, Haiku, Inc. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Tyler Dauwalder
+ */
+
 /*!
 	\file DisjList.cpp
 	MIME sniffer Disjunction List class implementation
 */
 
-#include <sniffer/DisjList.h>
+#include "DisjList.h"
 
 using namespace BPrivate::Storage::Sniffer;
 
+
 DisjList::DisjList()
-	: fCaseInsensitive(false)
 {
 }
 
-DisjList::~DisjList() {
+
+DisjList::~DisjList()
+{
 }
-
-void
-DisjList::SetCaseInsensitive(bool how) {
-	fCaseInsensitive = how;
-}
-
-bool
-DisjList::IsCaseInsensitive() {
-	return fCaseInsensitive;
-}
-
-
-
-

@@ -25,11 +25,13 @@
 #include <mime/DatabaseDirectory.h>
 #include <mime/DatabaseLocation.h>
 #include <mime/MimeSniffer.h>
-#include <sniffer/Parser.h>
-#include <sniffer/Rule.h>
 #include <StorageDefs.h>
 #include <storage_support.h>
 #include <String.h>
+
+#include "../sniffer/Parser.h"
+#include "../sniffer/Rule.h"
+#include "../sniffer/Data.h"
 
 
 #define DBG(x) x
@@ -441,8 +443,11 @@ SnifferRules::GuessMimeType(BFile* file, const void *buffer, int32 length,
 	if (err)
 		return err;
 
-	// wrap the buffer by a BMemoryIO
-	BMemoryIO data(buffer, length);
+	// wrap the buffer in Sniffer::Data
+	Sniffer::Data data;
+	data.from = 0;
+	data.buffer = (const uint8*)buffer;
+	data.length = length;
 
 	if (!fHaveDoneFullBuild)
 		err = BuildRuleList();
@@ -470,7 +475,7 @@ SnifferRules::GuessMimeType(BFile* file, const void *buffer, int32 length,
 					return B_OK;
 				}
 
-				if (i->rule->Sniff(&data)) {
+				if (i->rule->Sniff(data)) {
 					type->SetTo(i->type.c_str());
 					return B_OK;
 				}

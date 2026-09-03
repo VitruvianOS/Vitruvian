@@ -1,0 +1,53 @@
+/*
+ * Copyright 2002, Haiku, Inc. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Tyler Dauwalder
+ */
+
+/*!
+	\file sniffer/RPatternList.h
+	MIME sniffer rpattern list declarations
+*/
+
+#ifndef _SNIFFER_R_PATTERN_LIST_H
+#define _SNIFFER_R_PATTERN_LIST_H
+
+#include <vector>
+
+#include "DisjList.h"
+
+
+namespace BPrivate {
+namespace Storage {
+namespace Sniffer {
+
+class Err;
+class RPattern;
+
+
+//! A list of patterns, each of which is to be searched over its own specified range.
+class RPatternList : public DisjList {
+public:
+	RPatternList();
+	virtual ~RPatternList();
+
+	status_t InitCheck() const;
+	Err* GetErr() const;
+
+	virtual bool Sniff(const Data& data) const;
+	virtual ssize_t BytesNeeded() const;
+	void Add(RPattern *rpattern);
+
+private:
+	std::vector<RPattern*> fList;
+};
+
+
+}; // namespace Sniffer
+}; // namespace Storage
+}; // namespace BPrivate
+
+
+#endif // _SNIFFER_R_PATTERN_LIST_H

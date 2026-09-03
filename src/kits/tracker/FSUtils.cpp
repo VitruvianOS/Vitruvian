@@ -1283,8 +1283,12 @@ MoveTask(BObjectList<entry_ref, true>* srcList, BEntry* destEntry, BList* pointL
 				loc = (BPoint*)pointList->ItemAt(i);
 
 				BNode* sourceNode = GetWritableNode(&sourceEntry);
-				if (sourceNode != NULL && sourceNode->InitCheck() == B_OK)
-					FSSetPoseLocation(deststat.st_ino, sourceNode, *loc);
+				if (sourceNode != NULL && sourceNode->InitCheck() == B_OK) {
+					BPath destDirPath;
+					GetDirectoryPath(&destDir, &destDirPath);
+					FSSetPoseLocation(deststat.st_ino, sourceNode, *loc,
+						destDirPath.Path());
+				}
 				delete sourceNode;
 			}
 
@@ -2218,7 +2222,9 @@ MoveEntryToTrash(BEntry* entry, BPoint* loc, Undo &undo)
 	BNode* sourceNode = 0;
 	if (loc && loc != (BPoint*)-1 && (sourceNode = GetWritableNode(entry, &statbuf)) != 0) {
 		trash_dir.GetStat(&statbuf);
-		FSSetPoseLocation(statbuf.st_ino, sourceNode, *loc);
+		BPath trashDirPath;
+		GetDirectoryPath(&trash_dir, &trashDirPath);
+		FSSetPoseLocation(statbuf.st_ino, sourceNode, *loc, trashDirPath.Path());
 		delete sourceNode;
 	}
 

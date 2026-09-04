@@ -1,7 +1,4 @@
 #!/bin/sh
-# Vitruvian dpkg postinst — runs on `configure`; idempotent.
-# First-install-only actions guard on `[ -z "$2" ]`.
-
 set -e
 
 case "$1" in
@@ -12,8 +9,6 @@ esac
 
 _first_install=0
 [ -z "$2" ] && _first_install=1
-
-# Base directories
 
 mkdir -p /system/add-ons/
 mkdir -p /system/apps/
@@ -26,10 +21,8 @@ mkdir -p /system/servers/
 mkdir -p /system/settings/
 
 ln -sf /bin /system/bin
-# /system/lib MUST become a symlink, not a real dir. `ln -sf SRC DST` when
-# DST is an existing dir creates DST/<basename SRC> inside it (silent
-# trap). Anything CPack-installed to /system/lib/ has already moved to
-# /lib by the time we get here, so it's safe to wipe.
+# `ln -sf SRC DST` silently creates DST/<basename SRC> when DST already
+# exists as a dir, so /system/lib must be removed before relinking.
 rm -rf /system/lib
 ln -sf /lib /system/lib
 ln -sf /tmp /system/cache
@@ -47,10 +40,8 @@ mkdir -p /system/data/deskbar/menu/Demos/
 mkdir -p /system/data/deskbar/menu/Preferences/
 
 
-# Boot dirs. The trash dir is NOT pre-created here — Vitruvian uses the
-# XDG Trash spec layout ($HOME/.local/share/Trash/{files,info}), which
-# Tracker provisions on demand via FSGetTrashDir. The on-Desktop Trash
-# icon is a synthetic pose injected by BPoseView::CreateTrashPose.
+# The trash dir is NOT pre-created here; Tracker provisions the XDG Trash
+# layout on demand via FSGetTrashDir.
 
 mkdir -p /system/boot/post_install/
 mkdir -p /system/boot/first_login/
@@ -60,19 +51,8 @@ mkdir -p "/etc/skel/config/settings/Tracker/Tracker New Templates"
 mkdir -p /etc/skel/config/settings/printers/Preview
 mkdir -p "/etc/skel/config/settings/printers/Save as PDF"
 
-# BeOS-format xattr helpers using setfattr.
-#
-# addattr (the Haiku tool) is NOT used here because it loads libroot2 which
-# requires nexus IPC — unavailable when postinst runs on the host during
-# mkiso package installation.
-#
-# Format: [type:uint32 LE][data bytes]
-# Type codes (four-cc stored as little-endian uint32 on x86):
-#   B_STRING_TYPE      = 'CSTR' = 0x43535452  LE bytes: 52 54 53 43
-#   B_MIME_STRING_TYPE = 'MIMS' = 0x4d494d53  LE bytes: 53 4d 49 4d
-#
-# beos_string NAME VALUE PATH  — writes B_STRING_TYPE xattr
-# beos_mime   NAME VALUE PATH  — writes B_MIME_STRING_TYPE xattr
+# addattr (the Haiku tool) is not used here: it loads libroot2, which needs
+# nexus IPC that is unavailable when postinst runs on the host.
 
 beos_string() {
 	local name="$1" value="$2" target="$3"
@@ -91,16 +71,12 @@ beos_mime() {
 	setfattr -n "user.beos.${name}" --value="0x${hex}" "${target}"
 }
 
-# B_UINT32_TYPE = 'UINT' = 0x554e4954, LE bytes 54 49 4e 55.
-# Value: little-endian uint32 == 1.
+# 0x54494e5501000000 = B_UINT32_TYPE ('UINT') LE prefix + value 1.
 beos_hidden() {
 	local target="$1"
 	[ -e "$target" ] || return 0
 	setfattr -n "user.beos.SYS:HIDDEN" --value="0x54494e5501000000" "${target}" 2>/dev/null || true
 }
-
-# Directory identity attributes (SYS:NAME)
-# Tracker reads these to assign special folder icons.
 
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_SYSTEM_DIRECTORY:system" /system
 beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_DIRECTORY:home" /home
@@ -123,12 +99,9 @@ for _p in /bin /sbin /lib /lib32 /lib64 /libx32 /etc /proc /sys /run \
 	beos_hidden "$_p"
 done
 
-# Deskbar virtual directory descriptor
-# Setting this MIME type makes Model::IsVirtualDirectory() return true, enabling
-# VirtualDirectoryEntryList to aggregate the three menu directories listed in the file.
+# This MIME type makes Model::IsVirtualDirectory() return true, so Tracker
+# aggregates the three menu directories listed in the file.
 beos_mime BEOS:TYPE "application/x-vnd.haiku-virtual-directory" /system/data/deskbar/menu_entries
-
-# Printer directory attributes (identity + settings read by the print server)
 
 beos_mime BEOS:TYPE "application/x-vnd.Be.printer" /etc/skel/config/settings/printers/Preview
 beos_string "Printer Name" "Preview" /etc/skel/config/settings/printers/Preview
@@ -146,7 +119,6 @@ beos_string "transport_address" "" "/etc/skel/config/settings/printers/Save as P
 beos_string "connection" "Local" "/etc/skel/config/settings/printers/Save as PDF"
 beos_string "state" "free" "/etc/skel/config/settings/printers/Save as PDF"
 
-# Tracker New Templates — extract files+xattrs into the user template dir.
 # Must run before the beos_mime calls below, which stamp MIME types onto
 # these template files.
 if [ -f /usr/share/vos/templates_attrs.tar ]; then
@@ -155,36 +127,26 @@ if [ -f /usr/share/vos/templates_attrs.tar ]; then
         -C "/etc/skel/config/settings/Tracker/Tracker New Templates"
 fi
 
-# MIME type attributes for Tracker New Templates
-# (enables Tracker's File > New menu to create the right file type)
 beos_mime BEOS:TYPE "text/plain" "/etc/skel/config/settings/Tracker/Tracker New Templates/text file"
 beos_mime BEOS:TYPE "text/x-source-code" "/etc/skel/config/settings/Tracker/Tracker New Templates/C++ source"
 beos_mime BEOS:TYPE "text/x-source-code" "/etc/skel/config/settings/Tracker/Tracker New Templates/C++ header"
 
-# Source Vitruvian profile from bash login shells (makes Terminal show the
-# welcome message and Vitruvian environment setup)
-
 cat > /etc/profile.d/vitruvian.sh << 'VITRUVIAN_PROFILE_EOF'
 # Guard against recursive sourcing: Vitruvian's profile itself sources
-# /etc/profile.d/*.sh, which would re-enter this script and cause an
-# infinite loop printing "Welcome to Vitruvian" on every login.
+# /etc/profile.d/*.sh, which would otherwise re-enter this file.
 if [ -z "$_VOS_PROFILE_SOURCED" ] && [ -f /system/settings/etc/profile ]; then
     export _VOS_PROFILE_SOURCED=1
     . /system/settings/etc/profile
 fi
 VITRUVIAN_PROFILE_EOF
 
-# MIME database — install with xattrs preserved
-# mime_db.tar is a tarball of the mime_db/ directory tree with BeOS xattrs
-# (user.beos.*) captured via tar --xattrs during the build. CPack cannot
-# preserve xattrs in install(DIRECTORY), so we extract here instead.
+# CPack cannot preserve xattrs in install(DIRECTORY), so the BeOS-xattr'd
+# mime_db tree is extracted here instead from a tar --xattrs archive.
 mkdir -p /system/data
 tar --xattrs -xf /usr/share/vos/mime_db.tar -C /system/data/
 
-# App binary xattrs — restore BeOS attrs to installed binaries.
-# apps_attrs.tar contains zero-byte placeholder files at the install paths,
-# carrying user.beos.* xattrs written by resattr -O during build.
-# We extract to a temp dir and apply attrs to the real installed binaries.
+# apps_attrs.tar holds zero-byte placeholders carrying the user.beos.*
+# xattrs to restore onto the real installed binaries.
 if [ -f /usr/share/vos/apps_attrs.tar ]; then
     _tmp=$(mktemp -d)
     tar --xattrs -xf /usr/share/vos/apps_attrs.tar -C "$_tmp"
@@ -198,14 +160,11 @@ if [ -f /usr/share/vos/apps_attrs.tar ]; then
     rm -rf "$_tmp"
 fi
 
-# Enable system services
-
 systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript@vos-live.service
 
 install -m 0644 -D /usr/share/vos/systemd/vos-session.service \
 	/etc/systemd/user/vos-session.service 2>/dev/null || true
-install -m 0644 -D /usr/share/vos/systemd/vos-polkit-agent.service \
-	/etc/systemd/user/vos-polkit-agent.service 2>/dev/null || true
+# vos-polkit-agent is launched by janus_session's own fan-out, not here.
 install -m 0644 -D /usr/share/vos/profile.d/vos-session.sh \
 	/etc/profile.d/vos-session.sh 2>/dev/null || true
 
@@ -264,9 +223,8 @@ if [ -e /etc/vos/live ]; then
             && adduser vos-live "$_g" >/dev/null 2>&1 || true
     done
 
-    # The desktop never opens a logind session of its own, so without
-    # lingering the user manager, and with it pipewire, exists only while
-    # someone is logged in over ssh and dies again on logout.
+    # Without lingering, the user manager (and pipewire with it) exists
+    # only while someone is logged in over ssh.
     mkdir -p /var/lib/systemd/linger 2>/dev/null || true
     touch /var/lib/systemd/linger/vos-live 2>/dev/null || true
 fi

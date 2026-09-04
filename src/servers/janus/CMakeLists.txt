@@ -6,7 +6,7 @@ Server(janus
 	SOURCES
 	janus.cpp
 
-	LIBS be ${SEAT_LIBRARIES} ${PAM_LIBRARIES} systemd
+	LIBS be ${PAM_LIBRARIES} systemd
 
 	RDEF janus.rdef
 )

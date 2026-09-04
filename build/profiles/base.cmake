@@ -3,6 +3,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/apps.cmake)
 
 set(SYSTEM_SERVERS
 	janus
+	janus_session
 	janus_launch
 	app_server
 	input_server

@@ -53,12 +53,20 @@ enum {
 	// Janus logout: sender_uid-gated to the currently authenticated
 	// user's uid; ignored if a system shutdown is already in flight.
 	B_JANUS_LOGOUT				= 'jnlX',
-	// FirstBootPrompt asks janus to run first-boot.service. sender_uid
-	// gated to vos_login; refused once the sentinel exists.
 
-	// input_server asks janus to switch VT ("vt" int32); /dev/tty0 is
-	// root-only, so it can't VT_ACTIVATE for itself.
+	// input_server asks janus to switch VT ("vt" int32); relayed to the
+	// current janus_session's control port, since that owns the seat.
 	B_JANUS_SWITCH_VT			= 'jnvt',
+
+	// janus_session -> supervisor at startup ("port" string, "uid" int32,
+	// "greeter" bool): registers this login's local control port.
+	B_JANUS_SESSION_HELLO		= 'jnsH',
+	// janus_session -> supervisor per spawned child ("name", "signature"
+	// strings, "pid", "port" int32): mirrors it into the app registry.
+	B_JANUS_REGISTER_APP		= 'jnrA',
+	// janus_session -> supervisor when a child is reaped ("signature"
+	// string, "pid" int32): drops that row from the app registry.
+	B_JANUS_UNREGISTER_APP		= 'jnuA',
 };
 
 

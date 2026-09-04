@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -24,9 +25,15 @@ main(int argc, char** argv)
 
 	const char* name = argv[1];
 
+	// janus_session sets JANUS_LAUNCH_PORT_NAME so its own fan-out targets
+	// its local launch port instead of the supervisor's well-known one.
+	const char* portName = getenv("JANUS_LAUNCH_PORT_NAME");
+	if (portName == NULL || *portName == '\0')
+		portName = B_LAUNCH_DAEMON_PORT_NAME;
+
 	port_id launchPort = -1;
 	for (int waited = 0; waited < 10000; waited += 50) {
-		launchPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+		launchPort = find_port(portName);
 		if (launchPort >= 0)
 			break;
 		snooze(50000);

@@ -162,9 +162,6 @@ DrmHWInterface::_OnSessionEnable()
 	printf("Session enabled\n");
 
 	if (fInitialized) {
-		if (fFd >= 0)
-			drmSetMaster(fFd);
-
 		fSessionActive = true;
 		release_sem(fSessionSem);
 
@@ -352,8 +349,14 @@ DrmHWInterface::_OnSessionDisable()
 	// out our stale sprite.
 	_DisableHardwareCursor();
 
-	if (fFd >= 0)
-		drmDropMaster(fFd);
+	if (fFd >= 0 && drmDropMaster(fFd) != 0) {
+		static bool sReported = false;
+		if (!sReported) {
+			fprintf(stderr, "[drm] drmDropMaster failed (%s)\n",
+				strerror(errno));
+			sReported = true;
+		}
+	}
 
 	if (fSeat != NULL)
 		libseat_disable_seat(fSeat);
@@ -363,19 +366,28 @@ DrmHWInterface::_OnSessionDisable()
 void
 DrmHWInterface::_RestoreDisplay()
 {
-
 	if (fFd < 0) {
-	
+		fprintf(stderr, "[drm] _RestoreDisplay: called with fFd < 0\n");
 		return;
 	}
 
 	struct modeset_dev *iter;
 	for (iter = get_dev(); iter; iter = iter->next) {
-		if (fAtomicSupported && fPrimaryPlaneId)
-			_AtomicModeset(iter->fb, &iter->mode);
-		else
-			drmModeSetCrtc(fFd, iter->crtc, iter->fb, 0, 0,
-						 &iter->conn, 1, &iter->mode);
+		// Not iter->fb: stale after any flip, zeroed by resize.
+		// fFrontBuffer is what the CRTC was actually scanning out.
+		uint32_t fb = fFrontBuffer != NULL ? fFrontBuffer->GetFbId() : iter->fb;
+
+		if (fAtomicSupported && fPrimaryPlaneId) {
+			status_t r = _AtomicModeset(fb, &iter->mode);
+			if (r != B_OK)
+				fprintf(stderr, "[drm] _RestoreDisplay: atomic modeset "
+					"failed for connector %u fb=%u: status=%#x errno=%s\n",
+					iter->conn, fb, (unsigned)r, strerror(errno));
+		} else if (drmModeSetCrtc(fFd, iter->crtc, fb, 0, 0,
+				&iter->conn, 1, &iter->mode) != 0)
+			fprintf(stderr, "[drm] _RestoreDisplay: drmModeSetCrtc "
+				"failed for connector %u fb=%u: %s\n", iter->conn,
+				fb, strerror(errno));
 	}
 }
 
@@ -2579,6 +2591,18 @@ DrmHWInterface::_AtomicModeset(uint32_t fb_id, drmModeModeInfo* mode)
 	struct modeset_dev* dev = get_dev();
 	if (!dev || !fPrimaryPlaneId)
 		return B_ERROR;
+
+	// drmModeAtomicAddProperty() silently drops a property id of 0;
+	// the commit then reports success without reaching the kernel.
+	if (!fConnProps.crtc_id || !fCrtcProps.active || !fCrtcProps.mode_id
+			|| !fPlaneProps.crtc_id || !fPlaneProps.fb_id) {
+		fprintf(stderr, "[drm] _AtomicModeset: missing property id(s) "
+			"(conn.crtc_id=%u crtc.active=%u crtc.mode_id=%u "
+			"plane.crtc_id=%u plane.fb_id=%u); refusing\n",
+			fConnProps.crtc_id, fCrtcProps.active, fCrtcProps.mode_id,
+			fPlaneProps.crtc_id, fPlaneProps.fb_id);
+		return B_ERROR;
+	}
 
 	_DrainPendingFlip();
 

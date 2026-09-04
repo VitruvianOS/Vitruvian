@@ -20,6 +20,7 @@
 #include <time.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/eventfd.h>
 #include <sys/wait.h>
 #include <sys/xattr.h>
 #include <unistd.h>
@@ -194,6 +195,10 @@ pam_null_conv(int num, const struct pam_message** /*msg*/,
 
 
 static void close_pam_session();
+static bool init_seat();
+static bool open_drm_device();
+static void close_seat_and_device();
+static status_t submit_seat_request(int type, int vt);
 
 
 static bool
@@ -478,10 +483,29 @@ static PendingLaunch sPending[JANUS_MAX_PENDING];
 
 static const bigtime_t kLaunchReadinessTimeoutUsec = 10 * 1000000LL;
 
+// No lock may span a libseat call: it runs seat callbacks inline,
+// and janus_teardown_seat() blocks up to 2s per server inside them.
 static struct libseat* sSeat        = NULL;
 static int             sDrmFd       = -1;
 static int             sDrmDeviceId = -1;
 static volatile bool   sSessionActive = false;
+
+enum {
+	kSeatReqNone = 0,
+	kSeatReqReopen,
+	kSeatReqClose,
+	kSeatReqSwitchVt,
+};
+
+static int              sSeatWakeFd    = -1;
+static pthread_mutex_t  sSeatSubmitLock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t  sSeatReqLock   = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t   sSeatReqCond   = PTHREAD_COND_INITIALIZER;
+static int              sSeatReqType   = kSeatReqNone;
+static int              sSeatReqVt     = 0;
+static bool             sSeatReqDone   = true;
+static status_t         sSeatReqResult = B_OK;
+static volatile bool    sDaemonLoopActive = false;
 static volatile bool   sRunning       = true;
 static volatile bool   sShuttingDown  = false;
 
@@ -1495,19 +1519,10 @@ handle_switch_vt(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		return;
 	}
 
-	if (sSeat == NULL) {
-		BPrivate::KMessage reply(B_NO_INIT);
-		kmsg.SendReply(&reply);
-		return;
-	}
-
 	jdbg("handle_switch_vt() vt=%d sender_uid=%u", (int)vt,
 		(unsigned)sender_uid);
 
-	status_t status = libseat_switch_session(sSeat, (int)vt) == 0
-		? B_OK : B_ERROR;
-	if (status != B_OK)
-		fprintf(stderr, "janus: libseat_switch_session(%d) failed\n", (int)vt);
+	status_t status = submit_seat_request(kSeatReqSwitchVt, (int)vt);
 
 	BPrivate::KMessage reply(status);
 	kmsg.SendReply(&reply);
@@ -1547,6 +1562,7 @@ handle_logout(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	BPrivate::KMessage reply(B_OK);
 	kmsg.SendReply(&reply);
 
+	submit_seat_request(kSeatReqClose, 0);
 	close_pam_session();
 	kill_post_auth_chain();
 
@@ -1562,6 +1578,7 @@ handle_logout(BPrivate::KMessage& kmsg, uid_t sender_uid)
 
 	if (!init_pam_session())
 		fprintf(stderr, "janus: greeter PAM open failed; continuing\n");
+	submit_seat_request(kSeatReqReopen, 0);
 	spawn_pre_auth_chain();
 }
 
@@ -1643,6 +1660,7 @@ handle_login_ok(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	BPrivate::KMessage reply(B_OK);
 	kmsg.SendReply(&reply);
 
+	submit_seat_request(kSeatReqClose, 0);
 	close_pam_session();
 	kill_pre_auth_chain();
 
@@ -1661,6 +1679,7 @@ handle_login_ok(BPrivate::KMessage& kmsg, uid_t sender_uid)
 
 	if (!init_pam_session())
 		fprintf(stderr, "janus: post-auth PAM open failed; continuing\n");
+	submit_seat_request(kSeatReqReopen, 0);
 	spawn_post_auth_chain();
 	run_first_login_for_user_detached();
 }
@@ -2002,16 +2021,7 @@ janus_handle_shutdown(bool reboot)
 	// finish cleanly; do not _exit(1) — Restart=on-failure would respawn.
 	janus_teardown_seat();
 
-	if (sSeat != NULL) {
-		libseat_disable_seat(sSeat);
-		libseat_close_seat(sSeat);
-		sSeat = NULL;
-	}
-
-	if (sDrmFd >= 0) {
-		close(sDrmFd);
-		sDrmFd = -1;
-	}
+	submit_seat_request(kSeatReqClose, 0);
 
 	close_pam_session();
 }
@@ -2076,6 +2086,27 @@ open_drm_device()
 }
 
 
+// libseat binds the seat to the PAM session live at open time; a
+// session swap strands it unless closed here first and reopened after.
+static void
+close_seat_and_device()
+{
+	if (sDrmDeviceId >= 0 && sSeat) {
+		libseat_close_device(sSeat, sDrmDeviceId);
+		sDrmDeviceId = -1;
+	}
+	if (sDrmFd >= 0) {
+		close(sDrmFd);
+		sDrmFd = -1;
+	}
+	if (sSeat) {
+		libseat_close_seat(sSeat);
+		sSeat = NULL;
+	}
+	sSessionActive = false;
+}
+
+
 static void
 sig_handler(int /*sig*/)
 {
@@ -2083,25 +2114,148 @@ sig_handler(int /*sig*/)
 }
 
 
+static status_t
+apply_seat_request(int type, int vt)
+{
+	status_t result = B_OK;
+	switch (type) {
+		case kSeatReqReopen:
+			close_seat_and_device();
+			if (!init_seat()) {
+				fprintf(stderr, "janus: running without seat session\n");
+				result = B_ERROR;
+			} else if (!open_drm_device())
+				result = B_ERROR;
+			break;
+
+		case kSeatReqClose:
+			close_seat_and_device();
+			break;
+
+		case kSeatReqSwitchVt:
+			if (sSeat == NULL) {
+				result = B_NO_INIT;
+			} else if (libseat_switch_session(sSeat, vt) != 0) {
+				result = B_ERROR;
+				fprintf(stderr,
+					"janus: libseat_switch_session(%d) failed\n", vt);
+				// Do not reopen to recover: that hands out a fresh DRM
+				// fd while app_server still holds the old one.
+			}
+			break;
+	}
+	return result;
+}
+
+
+static status_t
+submit_seat_request(int type, int vt)
+{
+	pthread_mutex_lock(&sSeatSubmitLock);
+
+	if (!sDaemonLoopActive) {
+		status_t result = apply_seat_request(type, vt);
+		pthread_mutex_unlock(&sSeatSubmitLock);
+		return result;
+	}
+
+	pthread_mutex_lock(&sSeatReqLock);
+	sSeatReqType = type;
+	sSeatReqVt   = vt;
+	sSeatReqDone = false;
+	pthread_mutex_unlock(&sSeatReqLock);
+
+	if (sSeatWakeFd >= 0) {
+		uint64_t one = 1;
+		if (write(sSeatWakeFd, &one, sizeof(one)) < 0)
+			fprintf(stderr, "janus: seat wake write failed: %s\n",
+				strerror(errno));
+	}
+
+	struct timespec deadline;
+	clock_gettime(CLOCK_REALTIME, &deadline);
+	deadline.tv_sec += 5;
+
+	pthread_mutex_lock(&sSeatReqLock);
+	status_t result = B_OK;
+	while (!sSeatReqDone) {
+		int r = pthread_cond_timedwait(&sSeatReqCond, &sSeatReqLock,
+			&deadline);
+		if (r == ETIMEDOUT) {
+			fprintf(stderr, "janus: seat request %d timed out\n", type);
+			result = B_TIMED_OUT;
+			break;
+		}
+	}
+	if (sSeatReqDone)
+		result = sSeatReqResult;
+	pthread_mutex_unlock(&sSeatReqLock);
+
+	pthread_mutex_unlock(&sSeatSubmitLock);
+	return result;
+}
+
+
+static void
+process_seat_request()
+{
+	pthread_mutex_lock(&sSeatReqLock);
+	int type = sSeatReqType;
+	int vt   = sSeatReqVt;
+	sSeatReqType = kSeatReqNone;
+	pthread_mutex_unlock(&sSeatReqLock);
+
+	if (type == kSeatReqNone)
+		return;
+
+	status_t result = apply_seat_request(type, vt);
+
+	pthread_mutex_lock(&sSeatReqLock);
+	sSeatReqResult = result;
+	sSeatReqDone = true;
+	pthread_mutex_unlock(&sSeatReqLock);
+	pthread_cond_broadcast(&sSeatReqCond);
+}
+
+
 static void
 daemon_loop()
 {
-	int seat_fd = sSeat ? libseat_get_fd(sSeat) : -1;
+	sDaemonLoopActive = true;
 
 	while (sRunning) {
-		if (seat_fd < 0) {
-			sleep(1);
-			continue;
+		int seat_fd = sSeat ? libseat_get_fd(sSeat) : -1;
+
+		struct pollfd pfds[2];
+		int nfds = 0, seatIdx = -1, wakeIdx = -1;
+		if (seat_fd >= 0) {
+			pfds[nfds].fd      = seat_fd;
+			pfds[nfds].events  = POLLIN;
+			pfds[nfds].revents = 0;
+			seatIdx = nfds++;
+		}
+		if (sSeatWakeFd >= 0) {
+			pfds[nfds].fd      = sSeatWakeFd;
+			pfds[nfds].events  = POLLIN;
+			pfds[nfds].revents = 0;
+			wakeIdx = nfds++;
 		}
 
-		struct pollfd pfd;
-		pfd.fd      = seat_fd;
-		pfd.events  = POLLIN;
-		pfd.revents = 0;
+		if (nfds == 0) {
+			sleep(1);
+		} else {
+			int ret = poll(pfds, nfds, 1000);
+			if (ret > 0) {
+				if (seatIdx >= 0 && (pfds[seatIdx].revents & POLLIN) && sSeat)
+					libseat_dispatch(sSeat, 0);
+				if (wakeIdx >= 0 && (pfds[wakeIdx].revents & POLLIN)) {
+					uint64_t v;
+					read(sSeatWakeFd, &v, sizeof(v));
+				}
+			}
+		}
 
-		int ret = poll(&pfd, 1, 1000);
-		if (ret > 0 && sSeat)
-			libseat_dispatch(sSeat, 0);
+		process_seat_request();
 
 		// Stop reaping once shutdown starts: _kern_shutdown forks systemctl
 		// and needs its own waitpid to succeed.
@@ -2109,6 +2263,13 @@ daemon_loop()
 		while (!sShuttingDown && (reaped = waitpid(-1, NULL, WNOHANG)) > 0)
 			invalidate_app_by_pid(reaped);
 	}
+
+	// Held so a submitter can't pass the active-check as it clears:
+	// it either queues before this drain or applies inline after.
+	pthread_mutex_lock(&sSeatSubmitLock);
+	process_seat_request();
+	sDaemonLoopActive = false;
+	pthread_mutex_unlock(&sSeatSubmitLock);
 }
 
 
@@ -2144,6 +2305,10 @@ main(int argc, char** argv)
 		deferFirstLogin = !sGreeterMode;
 	}
 
+	sSeatWakeFd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+	if (sSeatWakeFd < 0)
+		fprintf(stderr, "janus: eventfd failed: %s\n", strerror(errno));
+
 	if (!init_seat())
 		fprintf(stderr, "janus: running without seat session\n");
 	else
@@ -2163,6 +2328,10 @@ main(int argc, char** argv)
 	}
 
 	if (sSystemMode) {
+		// Crashed-generation servers hold a stale DRM fd and can never
+		// regain master; found by name/uid since sApps[] is empty here.
+		kill_post_auth_chain();
+
 		// A janus restarted by Restart=on-failure during a reboot must not
 		// bring the session back up (flashes the greeter before shutdown).
 		if (access("/run/vos/shutting-down", F_OK) == 0) {

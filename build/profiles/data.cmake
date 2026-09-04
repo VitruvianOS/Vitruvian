@@ -34,6 +34,11 @@ install(FILES data/polkit-1/actions/org.vitruvian.installer.policy
 install(FILES data/polkit-1/rules.d/49-vitruvian-installer.rules
   DESTINATION /usr/share/polkit-1/rules.d/)
 
+install(PROGRAMS data/libexec/privilegedguy-helper
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.privilegedguy.policy
+  DESTINATION /usr/share/polkit-1/actions/)
+
 # Consulted only when /etc/vos/live exists; Installer strips it on commit.
 install(FILES data/sudoers.d/vos-live
   DESTINATION /etc/sudoers.d/

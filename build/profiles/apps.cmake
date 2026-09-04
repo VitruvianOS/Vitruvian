@@ -26,6 +26,7 @@ set(SYSTEM_APPS
 	LaunchBox
 	Magnify
 	NetworkStatus
+	PackageManager
 	People
 	ResEdit
 	#Screenshot
@@ -53,6 +54,7 @@ set(DESKBAR_DEMOS
 	Gradients
 	Mandelbrot
 	Pairs
+	PrivilegedGuy
 	Sudoku
 )
 
@@ -60,6 +62,7 @@ set(DESKBAR_DEMOS_TARGETS
 	Gradients
 	Mandelbrot
 	Pairs
+	PrivilegedGuy
 	Sudoku
 )
 

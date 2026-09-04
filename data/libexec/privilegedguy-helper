@@ -1,0 +1,25 @@
+#!/bin/sh
+
+# Smoke-test helper for PrivilegedGuy. Invoked only via pkexec under
+# org.vitruvian.privilegedguy.run (auth_admin, unconditional). Takes no
+# arguments and does nothing destructive or parameterized on purpose --
+# this exists only to prove the auth_admin + polkit-agent prompt path
+# actually works end-to-end, not to perform a real privileged operation.
+
+set -eu
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "privilegedguy-helper must run as root (invoke via pkexec)" >&2
+    exit 1
+fi
+
+LOG=/var/log/privilegedguy.log
+
+# PKEXEC_UID is set by pkexec to the uid of the original caller.
+CALLER_UID="${PKEXEC_UID:-unknown}"
+STAMP="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+printf '%s caller_uid=%s helper_uid=%s\n' "$STAMP" "$CALLER_UID" "$(id -u)" >>"$LOG"
+chmod 600 "$LOG"
+
+echo "privilegedguy-helper: ok, wrote $LOG as uid $(id -u) (caller uid $CALLER_UID)"

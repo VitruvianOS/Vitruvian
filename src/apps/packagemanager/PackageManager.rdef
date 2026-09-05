@@ -1,0 +1,24 @@
+
+resource app_signature "application/x-vnd.Vitruvian-PackageManager";
+
+resource app_name_catalog_entry
+	"x-vnd.Vitruvian-PackageManager:System name:PackageManager";
+
+resource app_version {
+	major  = 0,
+	middle = 1,
+	minor  = 0,
+
+	/* 0 = development	1 = alpha			2 = beta
+	   3 = gamma		4 = golden master	5 = final */
+	variety = 0,
+
+	internal = 0,
+
+	short_info = "PackageManager",
+	long_info  = "PackageManager ©2026 Vitruvian OS"
+};
+
+resource app_flags B_SINGLE_LAUNCH;
+
+/* TODO Phase 1: add the vector_icon resource once the HVIF art exists. */

@@ -35,7 +35,7 @@ jobs:
              libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libegl-dev libgl-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
-            fakeroot devscripts lintian wget attr
+            libapt-pkg-dev fakeroot devscripts lintian wget attr
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE

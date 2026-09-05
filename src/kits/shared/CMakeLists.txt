@@ -7,7 +7,7 @@ AddOn(
 	AttributeUtilities.cpp
 	# TODO: this should be a separate lib
 	#ExpressionParser.cpp
-	#BarberPole.cpp
+	BarberPole.cpp
 	BitmapButton.cpp
 	CalendarView.cpp
 	ColorItem.cpp

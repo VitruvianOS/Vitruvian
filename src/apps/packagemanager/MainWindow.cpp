@@ -148,8 +148,28 @@ MainWindow::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgRefreshList:
+		{
+			// Only this path warns: the startup and post-transaction
+			// refreshes must consume marks silently.
+			int32 marked = _CountMarked();
+			if (marked > 0 && !fTransactionActive) {
+				BString text(B_TRANSLATE(
+					"There are %count% marked changes that have not been "
+					"applied. Refreshing now will discard them."));
+				BString countText;
+				countText << marked;
+				text.ReplaceFirst("%count%", countText);
+				BAlert* alert = new BAlert(B_TRANSLATE("Package manager"),
+					text.String(), B_TRANSLATE("Cancel"),
+					B_TRANSLATE("Refresh anyway"), NULL, B_WIDTH_AS_USUAL,
+					B_WARNING_ALERT);
+				alert->SetShortcut(0, B_ESCAPE);
+				if (alert->Go() != 1)
+					break;
+			}
 			fWorker->PostMessage(kMsgRefreshList);
 			break;
+		}
 
 		case kMsgReloadLog:
 			fWorker->PostMessage(kMsgLoadLog);

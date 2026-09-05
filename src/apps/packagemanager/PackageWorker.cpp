@@ -404,6 +404,25 @@ PackageWorker::_OnQueryError(BMessage* message)
 	BString detail;
 	message->FindString("detail", &detail);
 
+	// A failed query never sends its reply; pop the FIFO slot so the
+	// next package does not match against a stale one.
+	BString name;
+	if (message->FindString("name", &name) == B_OK) {
+		for (int32 i = 0; i < fPendingDetailNames.CountItems(); i++) {
+			if (*fPendingDetailNames.ItemAt(i) != name)
+				continue;
+
+			// fPendingDetailInfo belongs to the head; only drop it
+			// when the head slot is the one being removed.
+			if (i == 0) {
+				fPendingDetailInfo.Unset();
+				fHaveDetailReply = false;
+			}
+			fPendingDetailNames.RemoveItemAt(i);
+			break;
+		}
+	}
+
 	_ReportError(_MapError((v_package_error)error), detail.String());
 }
 

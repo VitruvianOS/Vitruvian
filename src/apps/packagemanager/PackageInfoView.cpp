@@ -118,6 +118,9 @@ PackageInfoView::SetPackage(PackageInfo* package)
 	fVersionView->SetFullText(package->Version().String());
 	fChannelView->SetFullText(package->ChannelLabel());
 	fDescriptionView->SetText(package->Summary().String());
+	// Replies land later; drop the previous package's data now.
+	fContentsView->MakeEmpty();
+	fChangelogView->SetText("");
 	_UpdateSelectButton();
 }
 

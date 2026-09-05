@@ -39,22 +39,28 @@ if(VITRUVIAN_CHROOT_BUILD)
         set(VITRUVIAN_KERNEL_HEADERS
             "${VITRUVIAN_CHROOT_PATH}/usr/src/linux-headers-${KERNEL_RELEASE}"
             CACHE PATH "Kernel headers for nexus-dkms")
-        return()
-    endif()
-
-    # For native builds (same arch as host), don't set sysroot
-    # Let CMAKE_FIND_ROOT_PATH handle library search instead
-    if(NOT CMAKE_CROSSCOMPILING)
-        set(CMAKE_SYSROOT "")
+        # Fall through so cross builds inherit the same chroot library
+        # search paths as native builds (link_directories + rpath-link
+        # below). The early return here used to skip them, which made the
+        # cross linker bind system libs like -lapt-pkg against the host's
+        # multiarch dir (SONAME libapt-pkg.so.6.0 on Ubuntu 24.04) while
+        # the chroot carries Debian trixie's libapt-pkg.so.7.0 — the final
+        # executable link then could not resolve the NEEDED entry at all.
+        # The toolchain file already sets CMAKE_SYSROOT for cross builds,
+        # so do not override it with the native empty value below. Cross
+        # toolchains also already set CMAKE_FIND_ROOT_PATH_MODE_* to ONLY,
+        # so the mode assignments below must stay native-only as well.
     else()
-        set(CMAKE_SYSROOT "${VITRUVIAN_CHROOT_PATH}")
+        set(CMAKE_SYSROOT "")
     endif()
 
     set(CMAKE_FIND_ROOT_PATH "${VITRUVIAN_CHROOT_PATH}")
-    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
-    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
-    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+    if(NOT CMAKE_CROSSCOMPILING)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
+        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+    endif()
 
     set(HEADERS_PATH_BASE "${VITRUVIAN_CHROOT_PATH}/usr/include"
         CACHE PATH "Base path for system headers")

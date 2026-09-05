@@ -523,14 +523,18 @@ AptBackend::_CheckDpkgLock()
 		char mode[16] = { 0 };
 		char rw[16] = { 0 };
 		int pid = -1;
-		if (sscanf(line.String(), "%d: %15s %15s %15s %d", &id, type, mode,
-				rw, &pid) == 5) {
+		bool havePid = sscanf(line.String(), "%d: %15s %15s %15s %d", &id,
+			type, mode, rw, &pid) == 5;
+		if (havePid)
 			fLockHolderPid = (pid_t)pid;
-		}
 		fLockPath.SetTo(kLockPaths[i]);
 
 		BString detail;
-		detail.SetToFormat("%s held by pid %d", kLockPaths[i], pid);
+		if (havePid)
+			detail.SetToFormat("%s held by pid %d", kLockPaths[i], pid);
+		else
+			detail.SetToFormat("%s held by an unknown process",
+				kLockPaths[i]);
 		_SetError(kAptErrorLockHeld, detail.String());
 		return false;
 	}

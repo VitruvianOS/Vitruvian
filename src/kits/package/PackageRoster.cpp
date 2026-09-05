@@ -48,7 +48,8 @@ private:
 
 			VPackageInfo*		_BuildInfo(const apt_raw_package& raw);
 			void				_ReplyError(const BMessenger& replyTo,
-									status_t status);
+									status_t status,
+									const char* name = NULL);
 
 			AptCacheAdapter		fAdapter;
 };
@@ -98,12 +99,14 @@ VPackageRoster::Worker::_BuildInfo(const apt_raw_package& raw)
 
 void
 VPackageRoster::Worker::_ReplyError(const BMessenger& replyTo,
-	status_t status)
+	status_t status, const char* name)
 {
 	BMessage reply(kVMsgQueryError);
 	reply.AddInt32("status", status);
 	reply.AddInt32("error", (int32)V_PACKAGE_ERROR_UNKNOWN);
 	reply.AddString("detail", strerror(status));
+	if (name != NULL)
+		reply.AddString("name", name);
 	replyTo.SendMessage(&reply);
 }
 
@@ -139,7 +142,7 @@ VPackageRoster::Worker::_DoGetPackageInfo(const char* name,
 	apt_raw_package raw;
 	status_t status = fAdapter.GetPackageDetails(name, &raw);
 	if (status != B_OK) {
-		_ReplyError(replyTo, status);
+		_ReplyError(replyTo, status, name);
 		return;
 	}
 
@@ -157,7 +160,7 @@ VPackageRoster::Worker::_DoGetPackageContents(const char* name,
 	BObjectList<BString, true> paths(256);
 	status_t status = fAdapter.GetPackageContents(name, &paths);
 	if (status != B_OK) {
-		_ReplyError(replyTo, status);
+		_ReplyError(replyTo, status, name);
 		return;
 	}
 
@@ -193,7 +196,7 @@ VPackageRoster::Worker::_DoGetChangelog(const char* name,
 	BString text;
 	status_t status = fAdapter.GetChangelog(name, &text);
 	if (status != B_OK) {
-		_ReplyError(replyTo, status);
+		_ReplyError(replyTo, status, name);
 		return;
 	}
 

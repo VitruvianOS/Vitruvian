@@ -16,7 +16,8 @@
 // The kit's read entry point: every query is request-in/reply-out via
 // a BMessenger, never a synchronous container return. Each reply
 // (codes in PackageDefs.h) carries int32 "status"; on failure it is
-// kVMsgQueryError with int32 "error" and BString "detail". On success:
+// kVMsgQueryError with int32 "error" and BString "detail", plus
+// BString "name" when the failed request named a package. On success:
 //   kVMsgPackageListReply: repeated B_POINTER "package"; ownership of
 //     each reference transfers to the receiver (wrap in VPackageInfoRef
 //     or ReleaseReference() it).

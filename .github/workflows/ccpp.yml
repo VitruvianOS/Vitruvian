@@ -2,6 +2,10 @@ name: Build Vitruvian ISO
 
 on: [push]
 
+concurrency:
+  group: build-amd64-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   iso-build:
     runs-on: ubuntu-latest

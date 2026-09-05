@@ -60,7 +60,7 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
-                " libgcrypt20-dev" \
+                " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev"
@@ -73,7 +73,7 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
-                " libgcrypt20-dev" \
+                " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev"
@@ -86,7 +86,7 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
-                " libgcrypt20-dev" \
+                " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libnm-dev libbluetooth-dev"
             ;;
@@ -98,7 +98,7 @@ get_dev_packages() {
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
-                " libgcrypt20-dev" \
+                " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libnm-dev libbluetooth-dev"
             ;;

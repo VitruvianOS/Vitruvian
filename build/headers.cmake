@@ -37,6 +37,9 @@ set(
 
 	"headers/os/media2"
 
+	"headers/os/experimental"
+	"headers/os/experimental/package"
+
 	"headers/posix"
 )
 

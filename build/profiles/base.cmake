@@ -49,6 +49,7 @@ set(SYSTEM_LIBS
 	translation
 	textencoding
 	shared
+	vpackage
 	localestub
 )
 ImageInclude("/lib" ${SYSTEM_LIBS})

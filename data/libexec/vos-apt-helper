@@ -1,0 +1,121 @@
+#!/bin/sh
+#
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+#
+# vos-apt-helper: the only part of the package manager that runs as
+# root. Invoked exclusively via pkexec under
+# org.vitruvian.packagemanager.modify (auth_admin, no passwordless rule).
+#
+# Implements HELPER-CONTRACT.md. Read that before changing anything here:
+# every rule below exists because package names cross a privilege
+# boundary in this file.
+
+set -u
+
+PATH=/usr/bin:/bin
+export PATH LANG=C LC_ALL=C DEBIAN_FRONTEND=noninteractive
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "vos-apt-helper must run as root (invoke via pkexec)" >&2
+    exit 1
+fi
+
+if [ $# -lt 1 ]; then
+    echo "usage: vos-apt-helper <verb> [name ...]" >&2
+    exit 2
+fi
+
+verb="$1"
+shift
+
+# Bounded, per HELPER-CONTRACT.md section 3. Anti-DoS, not correctness.
+if [ $# -gt 256 ]; then
+    echo "vos-apt-helper: too many packages ($# > 256)" >&2
+    exit 2
+fi
+
+# Explicit character-class walk against
+#   ^[a-z0-9][a-z0-9+.-]*(:[a-z0-9-]+)?$
+# The leading-character test alone rejects every "-"-prefixed argument,
+# so no name can be reinterpreted as an apt option; it is checked again
+# explicitly below as a second gate.
+validate_name() {
+    _n="$1"
+
+    case "$_n" in
+        -*)   return 1 ;;   # second gate, deliberately redundant
+        "")   return 1 ;;
+    esac
+
+    if [ "${#_n}" -gt 256 ]; then
+        return 1
+    fi
+
+    # Split off at most one arch qualifier.
+    case "$_n" in
+        *:*:*)  return 1 ;;
+        *:*)
+            _arch="${_n##*:}"
+            _n="${_n%%:*}"
+            [ -n "$_arch" ] || return 1
+            case "$_arch" in
+                *[!a-z0-9-]*) return 1 ;;
+            esac
+            ;;
+    esac
+
+    [ -n "$_n" ] || return 1
+    case "$_n" in
+        [a-z0-9]*) ;;
+        *) return 1 ;;
+    esac
+    case "$_n" in
+        *[!a-z0-9+.-]*) return 1 ;;
+    esac
+
+    return 0
+}
+
+# Validate the WHOLE batch before doing anything. A partially-honoured
+# privileged request is how you get a surprise removal.
+for name in "$@"; do
+    if ! validate_name "$name"; then
+        echo "vos-apt-helper: rejected package name: $name" >&2
+        echo "vos-apt-helper: no action taken" >&2
+        exit 2
+    fi
+done
+
+# Fixed verb table, never a lookup built from input. A verb that takes
+# no arguments and got some is a hard failure.
+case "$verb" in
+    install|remove|purge)
+        [ $# -ge 1 ] || { echo "vos-apt-helper: $verb needs at least one package" >&2; exit 2; }
+        exec apt-get -y \
+            -o Dpkg::Options::=--force-confdef \
+            -o Dpkg::Options::=--force-confold \
+            -o APT::Status-Fd=1 \
+            "$verb" -- "$@"
+        ;;
+    update)
+        [ $# -eq 0 ] || { echo "vos-apt-helper: update takes no packages" >&2; exit 2; }
+        exec apt-get -o APT::Status-Fd=1 update
+        ;;
+    upgrade|full-upgrade)
+        [ $# -eq 0 ] || { echo "vos-apt-helper: $verb takes no packages" >&2; exit 2; }
+        exec apt-get -y \
+            -o Dpkg::Options::=--force-confdef \
+            -o Dpkg::Options::=--force-confold \
+            -o APT::Status-Fd=1 \
+            "$verb"
+        ;;
+    configure-pending)
+        [ $# -eq 0 ] || { echo "vos-apt-helper: configure-pending takes no packages" >&2; exit 2; }
+        exec dpkg --configure -a
+        ;;
+    *)
+        echo "vos-apt-helper: unknown verb: $verb" >&2
+        exit 2
+        ;;
+esac

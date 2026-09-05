@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Vitruvian</vendor>
+  <vendor_url>https://vitruvian.dev/</vendor_url>
+
+  <action id="org.vitruvian.packagemanager.modify">
+    <description>Install, remove or upgrade software packages</description>
+    <message>Authentication is required to change installed software.</message>
+    <!--
+      auth_admin in all three slots, deliberately. Unlike
+      org.vitruvian.privilegedguy.run, this action takes ARGUMENTS: the
+      package names reach a root process. So it must never be weakened
+      to "yes", and no rules.d grant may make it passwordless.
+
+      auth_admin (not auth_admin_keep) means every batch re-prompts.
+      That is the intended starting point; see DECISIONS.md. Relaxing to
+      auth_admin_keep is a maintainer decision, not a cleanup.
+    -->
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/vos-apt-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

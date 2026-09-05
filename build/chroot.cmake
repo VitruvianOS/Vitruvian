@@ -39,22 +39,17 @@ if(VITRUVIAN_CHROOT_BUILD)
         set(VITRUVIAN_KERNEL_HEADERS
             "${VITRUVIAN_CHROOT_PATH}/usr/src/linux-headers-${KERNEL_RELEASE}"
             CACHE PATH "Kernel headers for nexus-dkms")
-        return()
-    endif()
-
-    # For native builds (same arch as host), don't set sysroot
-    # Let CMAKE_FIND_ROOT_PATH handle library search instead
-    if(NOT CMAKE_CROSSCOMPILING)
-        set(CMAKE_SYSROOT "")
     else()
-        set(CMAKE_SYSROOT "${VITRUVIAN_CHROOT_PATH}")
+        set(CMAKE_SYSROOT "")
     endif()
 
     set(CMAKE_FIND_ROOT_PATH "${VITRUVIAN_CHROOT_PATH}")
-    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
-    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
-    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+    if(NOT CMAKE_CROSSCOMPILING)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
+        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+    endif()
 
     set(HEADERS_PATH_BASE "${VITRUVIAN_CHROOT_PATH}/usr/include"
         CACHE PATH "Base path for system headers")
@@ -67,17 +62,13 @@ if(VITRUVIAN_CHROOT_BUILD)
     include_directories(SYSTEM "${VITRUVIAN_CHROOT_PATH}/usr/include/${VITRUVIAN_MULTIARCH_TRIPLE}")
     include_directories(SYSTEM "${VITRUVIAN_CHROOT_PATH}/usr/include")
 
-    link_directories(
-        "${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
-        "${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
-        "${VITRUVIAN_CHROOT_PATH}/usr/lib"
+    set(_chroot_link_dirs
+        "-L${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
+        "-L${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
+        "-L${VITRUVIAN_CHROOT_PATH}/usr/lib"
     )
+    add_link_options(${_chroot_link_dirs})
 
-    # Indirect dep resolution (e.g. libfoo.so pulled in by another linked .so)
-    # ignores -L and consults only -rpath-link, DT_RUNPATH, or ld defaults.
-    # Without this, ld silently falls through to the host's /usr/lib when
-    # verifying NEEDED entries, which works only when the host's library
-    # versions happen to match the chroot's (e.g. ICU 76 on Debian trixie).
     set(_chroot_rpath_link "${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}:${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}:${VITRUVIAN_CHROOT_PATH}/usr/lib")
     add_link_options("-Wl,-rpath-link=${_chroot_rpath_link}")
 

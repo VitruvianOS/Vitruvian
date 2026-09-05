@@ -30,6 +30,11 @@ set(CMAKE_CXX_FLAGS_INIT "${CMAKE_C_FLAGS_INIT}")
 
 include_directories(SYSTEM "${VITRUVIAN_CHROOT_PATH}/usr/include")
 
-set(CMAKE_EXE_LINKER_FLAGS_INIT "-flto -L${VITRUVIAN_CHROOT_PATH}/lib -L${VITRUVIAN_CHROOT_PATH}/usr/lib")
+# Multiarch dirs MUST come before any host default dir so "-l apt-pkg"
+# resolves against the chroot's Debian trixie libapt-pkg.so.7.0, not the
+# host runner's Ubuntu 24.04 libapt-pkg.so.6.0 (which only grows
+# pkgCache::FindPkg(APT::StringView) and misses the std::string_view
+# overload the tree calls). Mirrors arm64_raspberry.cmake / amd64.cmake.
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-flto -L${VITRUVIAN_CHROOT_PATH}/lib/aarch64-linux-gnu -L${VITRUVIAN_CHROOT_PATH}/usr/lib/aarch64-linux-gnu -L${VITRUVIAN_CHROOT_PATH}/usr/lib -L${VITRUVIAN_CHROOT_PATH}/lib")
 set(CMAKE_SHARED_LINKER_FLAGS_INIT "${CMAKE_EXE_LINKER_FLAGS_INIT}")
 set(CMAKE_MODULE_LINKER_FLAGS_INIT "${CMAKE_EXE_LINKER_FLAGS_INIT}")

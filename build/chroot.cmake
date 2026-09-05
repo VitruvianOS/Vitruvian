@@ -73,11 +73,22 @@ if(VITRUVIAN_CHROOT_BUILD)
     include_directories(SYSTEM "${VITRUVIAN_CHROOT_PATH}/usr/include/${VITRUVIAN_MULTIARCH_TRIPLE}")
     include_directories(SYSTEM "${VITRUVIAN_CHROOT_PATH}/usr/include")
 
-    link_directories(
-        "${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
-        "${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
-        "${VITRUVIAN_CHROOT_PATH}/usr/lib"
+    # link_directories() only affects targets created in the *current*
+    # directory, not targets defined in add_subdirectory() trees (e.g.
+    # src/apps/packagemanager). A plain "-l apt-pkg" there would therefore
+    # miss the chroot multiarch dir and bind the host compiler's default
+    # library dir (Ubuntu 24.04 libapt-pkg.so.6.0, whose
+    # pkgCache::FindPkg takes APT::StringView) instead of the chroot's
+    # Debian trixie libapt-pkg.so.7.0 (pkgCache::FindPkg(std::string_view)),
+    # producing "undefined reference to pkgCache::FindPkg(...)" at link time.
+    # add_link_options() propagates to every target in the directory tree, so
+    # the chroot search dirs are unconditionally on the link line.
+    set(_chroot_link_dirs
+        "-L${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
+        "-L${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}"
+        "-L${VITRUVIAN_CHROOT_PATH}/usr/lib"
     )
+    add_link_options(${_chroot_link_dirs})
 
     # Indirect dep resolution (e.g. libfoo.so pulled in by another linked .so)
     # ignores -L and consults only -rpath-link, DT_RUNPATH, or ld defaults.

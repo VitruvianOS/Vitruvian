@@ -10,11 +10,17 @@
 
 #include "Scanner.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <Catalog.h>
 #include <Directory.h>
+#include <Entry.h>
+#include <Path.h>
+
+#include <MountInfo.h>
 
 #include "DiskUsage.h"
 
@@ -22,7 +28,6 @@
 #define B_TRANSLATION_CONTEXT "Scanner"
 
 using std::vector;
-
 
 Scanner::Scanner(BVolume *v, BHandler *handler)
 	:
@@ -144,6 +149,34 @@ void
 Scanner::_RunScan(FileInfo* startInfo)
 {
 	fQuitRequested = false;
+	fVolumeDev = fVolume->Device();
+	fSubmountDevs.clear();
+	fSeenInodes.clear();
+	fVisitedDirs.clear();
+
+	BString rootPath;
+	BPrivate::MountEntry rootMount;
+	if (BPrivate::MountInfo::FindByDev(fVolumeDev, &rootMount))
+		rootPath = rootMount.mount_point;
+
+	BPrivate::MountSnapshot mounts = BPrivate::MountInfo::Snapshot();
+	if (mounts != NULL) {
+		BString prefix(rootPath);
+		if (prefix.Length() > 0 && prefix.ByteAt(prefix.Length() - 1) != '/')
+			prefix << "/";
+		for (size_t i = 0; i < mounts->size(); i++) {
+			const BPrivate::MountEntry& e = (*mounts)[i];
+			if (e.dev == fVolumeDev)
+				continue;
+			if (rootPath.Length() == 0 || rootPath == "/"
+					|| e.mount_point == rootPath
+					|| e.mount_point.StartsWith(prefix.String())) {
+				fSubmountDevs.insert(e.dev);
+			}
+		}
+	}
+
+
 	BString stringScan(B_TRANSLATE("Scanning %refName%"));
 
 	if (startInfo == NULL || startInfo == fSnapshot->rootDir) {
@@ -152,6 +185,8 @@ Scanner::_RunScan(FileInfo* startInfo)
 		stringScan.ReplaceFirst("%refName%", fSnapshot->name.c_str());
 		fTask = stringScan.String();
 		fVolumeBytesInUse = fSnapshot->capacity - fSnapshot->freeBytes;
+		if (fVolumeBytesInUse <= 0)
+			fVolumeBytesInUse = fSnapshot->capacity > 0 ? fSnapshot->capacity : 1;
 		fVolumeBytesScanned = 0;
 		fProgress = 0.0;
 		fLastReport = -1.0;
@@ -185,6 +220,8 @@ Scanner::_RunScan(FileInfo* startInfo)
 		stringScan.ReplaceFirst("%refName%", startInfo->ref.name);
 		fTask = stringScan.String();
 		fVolumeBytesInUse = fSnapshot->capacity - fSnapshot->freeBytes;
+		if (fVolumeBytesInUse <= 0)
+			fVolumeBytesInUse = fSnapshot->capacity > 0 ? fSnapshot->capacity : 1;
 		fVolumeBytesScanned = fVolumeBytesInUse - startInfo->size; //best guess
 		fProgress = fVolumeBytesScanned / fVolumeBytesInUse;
 		fLastReport = -1.0;
@@ -235,25 +272,39 @@ Scanner::_GetFileInfo(BDirectory* dir, FileInfo* parent)
 	thisDir->parent = parent;
 	thisDir->count = 0;
 
+	if (dir->InitCheck() != B_OK)
+		return thisDir;
+
+	struct stat dirStat;
+	if (dir->GetStat(&dirStat) == B_OK)
+		fVisitedDirs.insert(std::make_pair(dirStat.st_dev, dirStat.st_ino));
+
 	while (true) {
 		if (fQuitRequested) {
 			delete thisDir;
 			return NULL;
 		}
 
-		if (dir->GetNextEntry(&entry) == B_ENTRY_NOT_FOUND)
+		if (dir->GetNextEntry(&entry) != B_OK)
 			break;
 		if (entry.IsSymLink())
 			continue;
 
 
 		if (entry.IsFile()) {
-			entry_ref ref;
-			if ((entry.GetRef(&ref) == B_OK) && (ref.device() != Device()))
+			struct stat st;
+			if (entry.GetStat(&st) != B_OK)
 				continue;
+
+			if (st.st_nlink > 1 && !fSeenInodes.insert(
+					std::make_pair(st.st_dev, st.st_ino)).second) {
+				thisDir->count++;
+				continue;
+			}
+
 			FileInfo *child = new FileInfo;
 			entry.GetRef(&child->ref);
-			entry.GetSize(&child->size);
+			child->size = (off_t)st.st_blocks * 512;
 			child->parent = thisDir;
 			child->color = -1;
 			thisDir->children.push_back(child);
@@ -267,8 +318,34 @@ Scanner::_GetFileInfo(BDirectory* dir, FileInfo* parent)
 			}
 		}
 		else if (entry.IsDirectory()) {
+			struct stat st;
+			if (entry.GetStat(&st) != B_OK) {
+				thisDir->count++;
+				continue;
+			}
+
+			if (_IsForeignMount(st.st_dev)) {
+				thisDir->count++;
+				continue;
+			}
+
+			if (!fVisitedDirs.insert(
+					std::make_pair(st.st_dev, st.st_ino)).second) {
+				thisDir->count++;
+				continue;
+			}
 			BDirectory childDir(&entry);
-			thisDir->children.push_back(_GetFileInfo(&childDir, thisDir));
+			if (childDir.InitCheck() != B_OK) {
+				thisDir->count++;
+				continue;
+			}
+			FileInfo* childInfo = _GetFileInfo(&childDir, thisDir);
+			if (childInfo == NULL) {
+
+				delete thisDir;
+				return NULL;
+			}
+			thisDir->children.push_back(childInfo);
 		}
 		thisDir->count++;
 	}
@@ -281,6 +358,14 @@ Scanner::_GetFileInfo(BDirectory* dir, FileInfo* parent)
 	}
 
 	return thisDir;
+}
+
+
+bool
+Scanner::_IsForeignMount(dev_t childDev) const
+{
+	return childDev != fVolumeDev
+		&& fSubmountDevs.find(childDev) != fSubmountDevs.end();
 }
 
 

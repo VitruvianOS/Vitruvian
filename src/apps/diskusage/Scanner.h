@@ -10,11 +10,14 @@
 #define SCANNER_H
 
 
+#include <set>
 #include <string>
+#include <utility>
 
 #include <Looper.h>
 #include <Message.h>
 #include <Messenger.h>
+#include <String.h>
 #include <Volume.h>
 
 #include "Snapshot.h"
@@ -57,6 +60,7 @@ private:
 			void				_ChangeToDesired();
 			bool				_DirectoryContains(FileInfo* currentDir,
 									entry_ref* ref);
+			bool				_IsForeignMount(dev_t childDev) const;
 
 			BMessenger			fListener;
 			BMessage			fDoneMessage;
@@ -72,6 +76,10 @@ private:
 			string				fTask;
 			bool				fBusy;
 			bool				fQuitRequested;
+			dev_t				fVolumeDev;
+			std::set<dev_t>		fSubmountDevs;
+			std::set<std::pair<dev_t, ino_t> > fSeenInodes;
+			std::set<std::pair<dev_t, ino_t> > fVisitedDirs;
 };
 
 #endif // SCANNER_H

@@ -455,7 +455,10 @@ PieView::_DrawDirectory(BRect b, FileInfo* info, float parentSpan,
 			// the center circle, with the used segment representing the
 			// volume's root directory.
 			off_t volCapacity = snapshot->capacity;
-			mySpan = 360.0 * (volCapacity - snapshot->freeBytes) / volCapacity;
+			off_t volInUse = volCapacity - snapshot->freeBytes;
+			if (volInUse < 0)
+				volInUse = 0;
+			mySpan = volCapacity > 0 ? 360.0 * volInUse / volCapacity : 0.0;
 
 			SetHighColor(kEmptySpcColor);
 			FillEllipse(BPoint(cx, cy), kPieCenterSize, kPieCenterSize);

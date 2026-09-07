@@ -1,7 +1,4 @@
 /*
- * Copyright 2026 Angelo Scarnà <angelo.scarna@primanotanet.it>. All rights reserved.
- *
- *
  * Copyright (c) 2008 Stephan Aßmus <superstippi@gmx.de>. All rights reserved.
  * Distributed under the terms of the MIT/X11 license.
  *
@@ -152,10 +149,6 @@ void
 Scanner::_RunScan(FileInfo* startInfo)
 {
 	fQuitRequested = false;
-
-	// Work out which device IDs belong to this volume and which are
-	// foreign filesystems mounted inside it, so the walk can stop at
-	// mount boundaries. Also reset the per-scan dedup/loop-guard sets.
 	fVolumeDev = fVolume->Device();
 	fSubmountDevs.clear();
 	fSeenInodes.clear();
@@ -175,10 +168,6 @@ Scanner::_RunScan(FileInfo* startInfo)
 			const BPrivate::MountEntry& e = (*mounts)[i];
 			if (e.dev == fVolumeDev)
 				continue;
-			// If we could not resolve our own mount point, be strict:
-			// treat every other device as foreign (bounds the scan to a
-			// single filesystem). Otherwise only mounts at or below our
-			// mount point count as foreign.
 			if (rootPath.Length() == 0 || rootPath == "/"
 					|| e.mount_point == rootPath
 					|| e.mount_point.StartsWith(prefix.String())) {
@@ -196,8 +185,6 @@ Scanner::_RunScan(FileInfo* startInfo)
 		stringScan.ReplaceFirst("%refName%", fSnapshot->name.c_str());
 		fTask = stringScan.String();
 		fVolumeBytesInUse = fSnapshot->capacity - fSnapshot->freeBytes;
-		// Read-only media (squashfs) report free == capacity; keep the
-		// progress fraction finite.
 		if (fVolumeBytesInUse <= 0)
 			fVolumeBytesInUse = fSnapshot->capacity > 0 ? fSnapshot->capacity : 1;
 		fVolumeBytesScanned = 0;
@@ -285,15 +272,9 @@ Scanner::_GetFileInfo(BDirectory* dir, FileInfo* parent)
 	thisDir->parent = parent;
 	thisDir->count = 0;
 
-	// An unreadable directory (permission denied, a vanished mount, a
-	// pseudo-fs entry) still counts as one node but contributes nothing.
-	// Without this guard GetNextEntry() below can spin without ever
-	// returning B_ENTRY_NOT_FOUND.
 	if (dir->InitCheck() != B_OK)
 		return thisDir;
 
-	// Remember this directory so a bind mount or fs quirk pointing back
-	// at an ancestor cannot send the walk into an endless loop.
 	struct stat dirStat;
 	if (dir->GetStat(&dirStat) == B_OK)
 		fVisitedDirs.insert(std::make_pair(dirStat.st_dev, dirStat.st_ino));
@@ -315,9 +296,6 @@ Scanner::_GetFileInfo(BDirectory* dir, FileInfo* parent)
 			if (entry.GetStat(&st) != B_OK)
 				continue;
 
-			// BFS had no file hard links; on ext4/xfs (.git trees,
-			// package caches, backups) they are everywhere. Count the
-			// inode once per scan.
 			if (st.st_nlink > 1 && !fSeenInodes.insert(
 					std::make_pair(st.st_dev, st.st_ino)).second) {
 				thisDir->count++;
@@ -326,8 +304,6 @@ Scanner::_GetFileInfo(BDirectory* dir, FileInfo* parent)
 
 			FileInfo *child = new FileInfo;
 			entry.GetRef(&child->ref);
-			// Allocated blocks, not the apparent size: keeps sparse
-			// files and transparent btrfs/xfs compression honest.
 			child->size = (off_t)st.st_blocks * 512;
 			child->parent = thisDir;
 			child->color = -1;
@@ -347,14 +323,12 @@ Scanner::_GetFileInfo(BDirectory* dir, FileInfo* parent)
 				thisDir->count++;
 				continue;
 			}
-			// Don't cross into another filesystem mounted inside this
-			// volume (another disk, /proc, /sys, a separately mounted
-			// btrfs subvolume...).
+
 			if (_IsForeignMount(st.st_dev)) {
 				thisDir->count++;
 				continue;
 			}
-			// Already walked this exact directory (bind mount / loop).
+
 			if (!fVisitedDirs.insert(
 					std::make_pair(st.st_dev, st.st_ino)).second) {
 				thisDir->count++;
@@ -367,8 +341,7 @@ Scanner::_GetFileInfo(BDirectory* dir, FileInfo* parent)
 			}
 			FileInfo* childInfo = _GetFileInfo(&childDir, thisDir);
 			if (childInfo == NULL) {
-				// Quit requested somewhere below: unwind cleanly instead
-				// of storing a NULL child the aggregation would deref.
+
 				delete thisDir;
 				return NULL;
 			}
@@ -391,10 +364,6 @@ Scanner::_GetFileInfo(BDirectory* dir, FileInfo* parent)
 bool
 Scanner::_IsForeignMount(dev_t childDev) const
 {
-	// The volume's own device is never foreign. btrfs subvolumes of the
-	// same filesystem carry their own anonymous device but are not listed
-	// in /proc/self/mountinfo, so they are not in fSubmountDevs and get
-	// walked normally. Everything actually mounted inside the volume is.
 	return childDev != fVolumeDev
 		&& fSubmountDevs.find(childDev) != fSubmountDevs.end();
 }

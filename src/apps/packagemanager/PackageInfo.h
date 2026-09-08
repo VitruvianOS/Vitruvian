@@ -10,9 +10,6 @@
 #include "PackageManagerDefs.h"
 
 
-class BBitmap;
-
-
 class PackageInfo {
 public:
 								PackageInfo(const char* name);
@@ -64,11 +61,6 @@ public:
 			void				SetMark(package_mark mark);
 			void				SetHasDetails(bool hasDetails);
 
-			// PackageInfo takes ownership of the icon.
-			const BBitmap*		Icon() const
-									{ return fIcon; }
-			void				SetIcon(BBitmap* icon);
-
 			const char*			ChannelLabel() const;
 
 private:
@@ -87,7 +79,6 @@ private:
 			package_channel		fChannel;
 			package_mark		fMark;
 			bool				fHasDetails;
-			BBitmap*			fIcon;
 };
 
 

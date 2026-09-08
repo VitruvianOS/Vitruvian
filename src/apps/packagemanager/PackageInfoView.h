@@ -7,15 +7,20 @@
 
 #include <GroupView.h>
 
+#include <HashMap.h>
+#include <HashString.h>
+
 #include "PackageManagerDefs.h"
 #include "TruncatingStringView.h"
 
 
+class BBitmap;
 class BButton;
 class BMessage;
-class BOutlineListView;
 class BTabView;
 class BTextView;
+class ContentsItem;
+class ContentsListView;
 class PackageInfo;
 
 
@@ -52,6 +57,16 @@ public:
 private:
 			void				_UpdateSelectButton();
 
+			void				_BuildContentsTree(const BMessage* details);
+			ContentsItem*		_EnsureDir(
+									HashMap<HashString, ContentsItem*>& dirs,
+									const BString& prefix,
+									ContentsItem* dataRoot);
+			void				_AddMetaRow(ContentsItem* metaRoot,
+									const char* label, const BString& value);
+			BBitmap*			_IconFor(ContentsItem* item);
+			void				_FreeIconCache();
+
 			TruncatingStringView* fTitleView;
 			TruncatingStringView* fVersionView;
 			TruncatingStringView* fChannelView;
@@ -59,10 +74,13 @@ private:
 			BButton*			fApplyButton;
 			BTabView*			fTabView;
 			BTextView*			fDescriptionView;
-			BOutlineListView*	fContentsView;
+			ContentsListView*	fContentsView;
 			BTextView*			fChangelogView;
 			PackageInfo*		fPackage;
 			bool				fTransactionActive;
+			HashMap<HashString, BBitmap*> fIconCache;
+
+			friend class ContentsItem;
 };
 
 

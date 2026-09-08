@@ -73,6 +73,8 @@ public:
 private:
 			class CacheHandle;
 
+	static const int32			kMaxChangelogBytes	= 256 * 1024;
+
 			bool				_EnsureCacheOpen();
 
 	static	bool				_ReadFile(const char* path, BString* out);
@@ -81,6 +83,10 @@ private:
 
 			status_t			_RunQuery(const char* const argv[],
 									BObjectList<BString, true>* lines);
+
+			bool				_ReadLocalChangelog(const char* name,
+									BString* out);
+			void				_TruncateChangelog(BString* text);
 
 			// Kept for the adapter's lifetime; does not notice a
 			// concurrent "apt update"/"dpkg -i".

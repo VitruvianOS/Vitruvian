@@ -11,7 +11,7 @@ Application(PackageManager
 	PackageRow.cpp
 	PackageWorker.cpp
 	WorkStatusView.cpp
-	LIBS shared tracker localestub vpackage
+	LIBS shared tracker localestub vpackage apt-pkg
 	RDEF PackageManager.rdef
 )
 UsePrivateHeaders(PackageManager app interface shared storage tracker)

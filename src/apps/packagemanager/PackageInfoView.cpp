@@ -5,10 +5,15 @@
 
 #include "PackageInfoView.h"
 
+#include <Bitmap.h>
 #include <Button.h>
 #include <Catalog.h>
+#include <Entry.h>
 #include <LayoutBuilder.h>
 #include <Message.h>
+#include <MimeType.h>
+#include <NodeInfo.h>
+#include <ObjectList.h>
 #include <OutlineListView.h>
 #include <ScrollView.h>
 #include <StringForSize.h>
@@ -22,6 +27,108 @@
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "PackageInfoView"
+
+
+static const float kIconSize = 16.0f;
+
+
+class ContentsItem : public BStringItem {
+public:
+	enum kind {
+		kRoot,
+		kMeta,
+		kDir,
+		kFile,
+		kDep
+	};
+
+							ContentsItem(const BString& text, kind type,
+								PackageInfoView* view,
+								const BString& path = "");
+
+	virtual	void			DrawItem(BView* owner, BRect frame,
+								bool complete);
+
+			kind			Type() const
+								{ return fType; }
+			const BString&	Path() const
+								{ return fPath; }
+
+protected:
+			PackageInfoView* fView;
+			kind			fType;
+			BString			fPath;
+			BBitmap*		fIcon;
+};
+
+
+ContentsItem::ContentsItem(const BString& text, kind type,
+	PackageInfoView* view, const BString& path)
+	:
+	BStringItem(text),
+	fView(view),
+	fType(type),
+	fPath(path),
+	fIcon(NULL)
+{
+}
+
+
+void
+ContentsItem::DrawItem(BView* owner, BRect frame, bool complete)
+{
+	if (fIcon == NULL && fView != NULL)
+		fIcon = fView->_IconFor(this);
+
+	if (IsSelected()) {
+		owner->SetLowUIColor(B_LIST_SELECTED_BACKGROUND_COLOR);
+		owner->FillRect(frame, B_SOLID_LOW);
+		owner->SetHighUIColor(B_LIST_SELECTED_ITEM_TEXT_COLOR);
+	} else {
+		if (complete) {
+			owner->SetLowUIColor(B_LIST_BACKGROUND_COLOR);
+			owner->FillRect(frame, B_SOLID_LOW);
+		}
+		owner->SetHighUIColor(B_LIST_ITEM_TEXT_COLOR);
+	}
+
+	float textInset = 4.0f;
+	if (fIcon != NULL) {
+		owner->SetDrawingMode(B_OP_ALPHA);
+		owner->DrawBitmap(fIcon, BPoint(frame.left + 2.0f,
+			frame.top + (frame.Height() - kIconSize) / 2.0f));
+		owner->SetDrawingMode(B_OP_COPY);
+		textInset += kIconSize;
+	}
+
+	BString text(Text());
+	be_plain_font->TruncateString(&text, B_TRUNCATE_END,
+		frame.Width() - textInset - 4.0f);
+	owner->MovePenTo(frame.left + textInset,
+		frame.top + 4.0f + be_plain_font->Size());
+	owner->DrawString(text.String());
+}
+
+
+class ContentsListView : public BOutlineListView {
+	typedef BOutlineListView Inherited;
+public:
+							ContentsListView();
+};
+
+
+ContentsListView::ContentsListView()
+	:
+	Inherited("contents")
+{
+}
+
+
+static int
+compare_paths(const BString* a, const BString* b)
+{
+	return strcmp(a->String(), b->String());
+}
 
 
 static BTextView*
@@ -61,7 +168,7 @@ PackageInfoView::PackageInfoView()
 	fApplyButton->SetEnabled(false);
 
 	fDescriptionView = make_read_only_text_view("description");
-	fContentsView = new BOutlineListView("contents");
+	fContentsView = new ContentsListView();
 	fChangelogView = make_read_only_text_view("changelog");
 
 	fTabView = new BTabView("detail tabs", B_WIDTH_FROM_LABEL);
@@ -92,6 +199,7 @@ PackageInfoView::PackageInfoView()
 
 PackageInfoView::~PackageInfoView()
 {
+	_FreeIconCache();
 }
 
 
@@ -118,6 +226,9 @@ PackageInfoView::SetPackage(PackageInfo* package)
 	fVersionView->SetFullText(package->Version().String());
 	fChannelView->SetFullText(package->ChannelLabel());
 	fDescriptionView->SetText(package->Summary().String());
+	// Replies land later; drop the previous package's data now.
+	fContentsView->MakeEmpty();
+	fChangelogView->SetText("");
 	_UpdateSelectButton();
 }
 
@@ -158,16 +269,7 @@ PackageInfoView::SetDetails(const BMessage* details)
 		text << B_TRANSLATE("Depends: ") << depends << "\n";
 	fDescriptionView->SetText(text.String());
 
-	fContentsView->MakeEmpty();
-	type_code type;
-	int32 count = 0;
-	if (details->GetInfo("path", &type, &count) == B_OK) {
-		for (int32 i = 0; i < count; i++) {
-			const char* path = NULL;
-			if (details->FindString("path", i, &path) == B_OK)
-				fContentsView->AddItem(new BStringItem(path));
-		}
-	}
+	_BuildContentsTree(details);
 }
 
 
@@ -262,4 +364,162 @@ PackageInfoView::_UpdateSelectButton()
 	}
 
 	fSelectButton->SetEnabled(true);
+}
+
+
+void
+PackageInfoView::_BuildContentsTree(const BMessage* details)
+{
+	fContentsView->MakeEmpty();
+	_FreeIconCache();
+
+	ContentsItem* dataRoot = new ContentsItem(B_TRANSLATE("data"),
+		ContentsItem::kRoot, this);
+	ContentsItem* metaRoot = new ContentsItem(B_TRANSLATE("metadata"),
+		ContentsItem::kRoot, this);
+	fContentsView->AddItem(dataRoot);
+	fContentsView->AddItem(metaRoot);
+
+	_AddMetaRow(metaRoot, B_TRANSLATE("Name"), fPackage->Name());
+	_AddMetaRow(metaRoot, B_TRANSLATE("Installed version"),
+		fPackage->Version());
+	_AddMetaRow(metaRoot, B_TRANSLATE("Candidate version"),
+		fPackage->CandidateVersion());
+	_AddMetaRow(metaRoot, B_TRANSLATE("Architecture"),
+		fPackage->Architecture());
+
+	const char* section = "";
+	details->FindString("section", &section);
+	_AddMetaRow(metaRoot, B_TRANSLATE("Section"), section);
+
+	_AddMetaRow(metaRoot, B_TRANSLATE("Channel"),
+		fPackage->ChannelLabel());
+
+	int64 installedSize = 0;
+	details->FindInt64("installed_size", &installedSize);
+	char sizeText[64];
+	string_for_size((double)installedSize, sizeText, sizeof(sizeText));
+	_AddMetaRow(metaRoot, B_TRANSLATE("Installed size"), sizeText);
+
+	char downloadText[64];
+	string_for_size((double)fPackage->DownloadSize(), downloadText,
+		sizeof(downloadText));
+	_AddMetaRow(metaRoot, B_TRANSLATE("Download size"), downloadText);
+
+	_AddMetaRow(metaRoot, B_TRANSLATE("Summary"), fPackage->Summary());
+
+	BObjectList<BString, true> paths(1024);
+	type_code type;
+	int32 count = 0;
+	if (details->GetInfo("path", &type, &count) == B_OK) {
+		for (int32 i = 0; i < count; i++) {
+			const char* path = NULL;
+			if (details->FindString("path", i, &path) == B_OK
+					&& path[0] == '/' && path[1] != '\0')
+				paths.AddItem(new BString(path));
+		}
+	}
+
+	// Sorted order puts every directory before the entries below it.
+	paths.SortItems(compare_paths);
+
+	HashMap<HashString, ContentsItem*> dirs;
+	for (int32 i = 0; i < paths.CountItems(); i++) {
+		const BString& path = *paths.ItemAt(i);
+		int32 lastSlash = path.FindLast('/');
+
+		ContentsItem* parent = dataRoot;
+		if (lastSlash > 0)
+			parent = _EnsureDir(dirs, BString(path.String(), lastSlash),
+				dataRoot);
+
+		// The path itself may already exist as a directory entry.
+		if (dirs.ContainsKey(HashString(path.String())))
+			continue;
+
+		fContentsView->AddUnder(new ContentsItem(
+			path.String() + lastSlash + 1, ContentsItem::kFile, this, path),
+			parent);
+	}
+}
+
+
+ContentsItem*
+PackageInfoView::_EnsureDir(HashMap<HashString, ContentsItem*>& dirs,
+	const BString& prefix, ContentsItem* dataRoot)
+{
+	ContentsItem* existing = dirs.Get(HashString(prefix.String()));
+	if (existing != NULL)
+		return existing;
+
+	int32 lastSlash = prefix.FindLast('/');
+	ContentsItem* parent = dataRoot;
+	if (lastSlash > 0)
+		parent = _EnsureDir(dirs, BString(prefix.String(), lastSlash),
+			dataRoot);
+
+	BString label;
+	prefix.CopyInto(label, lastSlash + 1, prefix.Length() - lastSlash - 1);
+
+	ContentsItem* dir = new ContentsItem(label, ContentsItem::kDir, this,
+		prefix);
+	fContentsView->AddUnder(dir, parent);
+	dirs.Put(HashString(prefix.String()), dir);
+	return dir;
+}
+
+
+void
+PackageInfoView::_AddMetaRow(ContentsItem* metaRoot, const char* label,
+	const BString& value)
+{
+	BString text(label);
+	text << ": " << value;
+	fContentsView->AddUnder(new ContentsItem(text, ContentsItem::kMeta, this),
+		metaRoot);
+}
+
+
+BBitmap*
+PackageInfoView::_IconFor(ContentsItem* item)
+{
+	if (item->Path().IsEmpty())
+		return NULL;
+
+	BBitmap* cached = fIconCache.Get(HashString(item->Path().String()));
+	if (cached != NULL)
+		return cached;
+
+	BBitmap* icon = new BBitmap(
+		BRect(0, 0, kIconSize - 1, kIconSize - 1), B_RGBA32);
+	BEntry entry(item->Path().String());
+	entry_ref ref;
+	bool fetched = entry.Exists() && entry.GetRef(&ref) == B_OK
+		&& BNodeInfo::GetTrackerIcon(&ref, icon, B_MINI_ICON) == B_OK;
+	if (!fetched) {
+		delete icon;
+		BMimeType type;
+		if (BMimeType::GuessMimeType(item->Path().String(), &type) != B_OK)
+			type.SetTo(B_FILE_MIME_TYPE);
+		icon = new BBitmap(
+			BRect(0, 0, kIconSize - 1, kIconSize - 1), B_RGBA32);
+		fetched = type.GetIcon(icon, B_MINI_ICON) == B_OK;
+		if (!fetched) {
+			delete icon;
+			return NULL;
+		}
+	}
+
+	fIconCache.Put(HashString(item->Path().String()), icon);
+	return icon;
+}
+
+
+void
+PackageInfoView::_FreeIconCache()
+{
+	HashMap<HashString, BBitmap*>::Iterator it = fIconCache.GetIterator();
+	while (it.HasNext())
+		delete it.Next().value;
+	fIconCache.Clear();
 }

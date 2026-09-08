@@ -25,6 +25,8 @@
 
 
 static const char* kDpkg = "/usr/bin/dpkg";
+static const char* kAptGet = "/usr/bin/apt-get";
+static const char* kZcat = "/bin/zcat";
 
 static const char* kAptHistoryLog = "/var/log/apt/history.log";
 static const char* kAptTermLog = "/var/log/apt/term.log";
@@ -398,12 +400,35 @@ AptCacheAdapter::GetChangelog(const char* name, BString* out)
 		return B_BAD_VALUE;
 
 	// A package name never contains '/'; reject rather than let it steer
-	// the path below, the same discipline as the privileged helper side.
+	// the paths below, the same discipline as the privileged helper side.
 	if (strchr(name, '/') != NULL) {
 		out->SetTo("No changelog available.");
 		return B_OK;
 	}
 
+	if (_ReadLocalChangelog(name, out))
+		return B_OK;
+
+	// Second tier: the repository copy. apt-get changelog downloads
+	// read-only as the calling user; no dpkg lock, no helper.
+	const char* const argv[] = { kAptGet, "changelog", "--", name, NULL };
+	BObjectList<BString, true> lines(128);
+	if (_RunQuery(argv, &lines) != B_OK) {
+		out->SetTo("No changelog available.");
+		return B_OK;
+	}
+
+	out->SetTo("");
+	for (int32 i = 0; i < lines.CountItems(); i++)
+		*out << *lines.ItemAt(i) << "\n";
+	_TruncateChangelog(out);
+	return B_OK;
+}
+
+
+bool
+AptCacheAdapter::_ReadLocalChangelog(const char* name, BString* out)
+{
 	// No arch just means that filename candidate is skipped, not a failure.
 	BString arch;
 	if (_EnsureCacheOpen()) {
@@ -420,7 +445,6 @@ AptCacheAdapter::GetChangelog(const char* name, BString* out)
 	}
 	candidates[2].SetToFormat("/usr/share/doc/%s/changelog.gz", name);
 
-	static const char* kZcat = "/bin/zcat";
 	for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
 		if (candidates[i].Length() == 0
 			|| access(candidates[i].String(), R_OK) != 0) {
@@ -435,11 +459,24 @@ AptCacheAdapter::GetChangelog(const char* name, BString* out)
 		out->SetTo("");
 		for (int32 j = 0; j < lines.CountItems(); j++)
 			*out << *lines.ItemAt(j) << "\n";
-		return B_OK;
+		_TruncateChangelog(out);
+		return true;
 	}
+	return false;
+}
 
-	out->SetTo("No changelog available.");
-	return B_OK;
+
+void
+AptCacheAdapter::_TruncateChangelog(BString* text)
+{
+	if (text->Length() <= kMaxChangelogBytes)
+		return;
+
+	BString tail;
+	tail.SetToFormat("\n\n[%d more bytes not shown]",
+		(int)(text->Length() - kMaxChangelogBytes));
+	text->Truncate(kMaxChangelogBytes);
+	*text << tail;
 }
 
 

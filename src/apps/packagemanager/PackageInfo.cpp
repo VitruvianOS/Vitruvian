@@ -5,7 +5,6 @@
 
 #include "PackageInfo.h"
 
-#include <Bitmap.h>
 #include <Catalog.h>
 
 
@@ -21,15 +20,13 @@ PackageInfo::PackageInfo(const char* name)
 	fState(kPackageAvailable),
 	fChannel(kChannelUnknown),
 	fMark(kMarkNone),
-	fHasDetails(false),
-	fIcon(NULL)
+	fHasDetails(false)
 {
 }
 
 
 PackageInfo::~PackageInfo()
 {
-	delete fIcon;
 }
 
 
@@ -128,17 +125,6 @@ void
 PackageInfo::SetHasDetails(bool hasDetails)
 {
 	fHasDetails = hasDetails;
-}
-
-
-void
-PackageInfo::SetIcon(BBitmap* icon)
-{
-	if (fIcon == icon)
-		return;
-
-	delete fIcon;
-	fIcon = icon;
 }
 
 

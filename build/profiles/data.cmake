@@ -72,6 +72,8 @@ install(PROGRAMS data/system/boot/vos-session-boot DESTINATION /system/servers/)
 
 install(FILES data/etc/systemd/journald.conf.d/vitruvian.conf DESTINATION /etc/systemd/journald.conf.d/)
 
+install(FILES data/etc/ssh/sshd_config.d/10-vitruvian-paths.conf DESTINATION /etc/ssh/sshd_config.d/)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   install(FILES data/systemd/vos-sshdebug.service DESTINATION /etc/systemd/system/)
 endif()
@@ -107,6 +109,9 @@ ImageIncludeDir("data/etc/profile.d" "/system/data/")
 # Skel: copied into each user's ~/config by useradd -m.
 ImageIncludeFile("data/config/boot/UserBootscript" "/etc/skel/config/settings/boot")
 ImageIncludeFile("data/config/boot/UserSetupEnvironment.sample" "/etc/skel/config/settings/boot")
+
+install(DIRECTORY DESTINATION /etc/skel/config/settings/ssh
+	DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
 
 # The first_login marker is written by /system/boot/first_login/* on first
 # successful run. Do NOT ship it — that would signal "already provisioned".

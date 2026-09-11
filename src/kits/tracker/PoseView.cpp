@@ -528,7 +528,7 @@ BPoseView::AddColumnList(BObjectList<BColumn>* list)
 		column->SetOffset(nextLeftEdge);
 
 		nextLeftEdge = column->Offset() + column->Width()
-			- kRoomForLine / 2.0f + kTitleColumnExtraMargin;
+			- kRoomForLine / 2.0f + title_column_margin();
 		fColumnList->AddItem(column);
 
 		if (!IsWatchingDateFormatChange()
@@ -2900,7 +2900,7 @@ BPoseView::RemoveColumn(BColumn* columnToRemove, bool runAlert)
 	for (int32 index = columnIndex; index < count; index++) {
 		BColumn* column = ColumnAt(index);
 		column->SetOffset(column->Offset()
-			- (attrWidth + kTitleColumnExtraMargin));
+			- (attrWidth + title_column_margin()));
 	}
 
 	BRect rect(Bounds());
@@ -2952,7 +2952,7 @@ BPoseView::AddColumn(BColumn* newColumn, const BColumn* after)
 	float offset;
 	int32 afterColumnIndex;
 	if (after != NULL) {
-		offset = after->Offset() + after->Width() + kTitleColumnExtraMargin;
+		offset = after->Offset() + after->Width() + title_column_margin();
 		afterColumnIndex = IndexOfColumn(after);
 	} else {
 		offset = StartOffset();
@@ -2991,7 +2991,7 @@ BPoseView::AddColumn(BColumn* newColumn, const BColumn* after)
 		BColumn* column = ColumnAt(index);
 		ASSERT(newColumn != column);
 
-		column->SetOffset(column->Offset() + attrWidth + kTitleColumnExtraMargin);
+		column->SetOffset(column->Offset() + attrWidth + title_column_margin());
 	}
 
 	rect.left = offset;
@@ -9222,7 +9222,7 @@ BPoseView::ListModeExtent() const
 
 	BRect rect;
 	rect.left = rect.top = 0;
-	rect.right = column->Offset() + column->Width() + kTitleColumnRightExtraMargin
+	rect.right = column->Offset() + column->Width() + title_column_right_margin()
 		- kRoomForLine / 2.f;
 	rect.bottom = fListElemHeight * CurrentPoseList()->CountItems();
 
@@ -9837,7 +9837,7 @@ BPoseView::ResizeColumnToWidest(BColumn* column)
 
 	// returns true if actually resized
 
-	float maxWidth = kMinColumnWidth;
+	float maxWidth = min_column_width();
 
 	PoseList* poseList = CurrentPoseList();
 	int32 poseCount = poseList->CountItems();
@@ -9850,7 +9850,7 @@ BPoseView::ResizeColumnToWidest(BColumn* column)
 		}
 	}
 
-	if (maxWidth > kMinColumnWidth || maxWidth < column->Width()) {
+	if (maxWidth > min_column_width() || maxWidth < column->Width()) {
 		ResizeColumn(column, maxWidth);
 		return true;
 	}
@@ -9876,9 +9876,9 @@ BPoseView::ResizeColumn(BColumn* column, float newSize, float* lastLineDrawPos,
 
 	bool shrinking = newSize < column->Width();
 	columnDrawRect.left = column->Offset();
-	columnDrawRect.right = column->Offset() + kTitleColumnRightExtraMargin
+	columnDrawRect.right = column->Offset() + title_column_right_margin()
 		- kRoomForLine + newSize;
-	sourceRect.left = column->Offset() + kTitleColumnRightExtraMargin
+	sourceRect.left = column->Offset() + title_column_right_margin()
 		- kRoomForLine + column->Width();
 	destRect.left = columnDrawRect.right;
 	destRect.right = destRect.left + sourceRect.Width();
@@ -9893,7 +9893,7 @@ BPoseView::ResizeColumn(BColumn* column, float newSize, float* lastLineDrawPos,
 		column = fColumnList->ItemAt(index);
 		column->SetOffset(offset);
 		BColumn* last = column;
-		offset = last->Offset() + last->Width() + kTitleColumnExtraMargin;
+		offset = last->Offset() + last->Width() + title_column_margin();
 	}
 
 	if (shrinking) {
@@ -9949,7 +9949,7 @@ BPoseView::MoveColumnTo(BColumn* src, BColumn* dest)
 		BColumn* column = fColumnList->ItemAt(index);
 		column->SetOffset(offset);
 		BColumn* last = column;
-		offset = last->Offset() + last->Width() + kTitleColumnExtraMargin
+		offset = last->Offset() + last->Width() + title_column_margin()
 			- kRoomForLine / 2;
 	}
 

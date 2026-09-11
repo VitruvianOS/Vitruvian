@@ -37,8 +37,11 @@ All rights reserved.
 
 #include <Cursor.h>
 #include <DataIO.h>
+#include <Font.h>
 #include <ObjectList.h>
 #include <View.h>
+
+#include <math.h>
 
 
 namespace BPrivate {
@@ -50,13 +53,51 @@ class BColumnTitle;
 class ColumnTrackState;
 class OffscreenBitmap;
 
-const int32 kEdgeSize = 6;
-const int32 kTitleColumnLeftExtraMargin = 11;
-const int32 kTitleColumnRightExtraMargin = 5;
-const int32 kTitleColumnExtraMargin = kTitleColumnLeftExtraMargin
-	+ kTitleColumnRightExtraMargin;
-const int32 kMinColumnWidth = 20;
-const int32 kRemoveTitleMargin = 10;
+// Size helpers to make the geometry math clearer later and provide a single
+// place to tweak them. Shared by TitleView and PoseView.
+inline float
+column_resize_edge()
+{
+	return ceilf(be_plain_font->Size() * 0.5);
+}
+
+
+// The left margin holds the sort arrow, so it needs to be larger than the right
+// margin.
+inline float
+title_column_left_margin()
+{
+	return ceilf(be_plain_font->Size() * 0.9);
+}
+
+
+inline float
+title_column_right_margin()
+{
+	return ceilf(be_plain_font->Size() * 0.4);
+}
+
+
+inline float
+title_column_margin()
+{
+	return title_column_left_margin() + title_column_right_margin();
+}
+
+
+inline float
+min_column_width()
+{
+	return roundf(be_plain_font->Size() * 5.0 / 3.0);
+}
+
+
+// vertical slop for dragging a column out of the title bar
+inline float
+remove_title_margin()
+{
+	return roundf(be_plain_font->Size() * 0.85);
+}
 
 
 class BTitleView : public BView {

@@ -35,7 +35,8 @@ jobs:
              libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libegl-dev libgl-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
-            libapt-pkg-dev fakeroot devscripts lintian wget attr
+            libapt-pkg-dev fakeroot devscripts lintian wget attr \
+            catch2
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
@@ -57,7 +58,7 @@ jobs:
         run: cd generated.x86 && ../build/scripts/setupenv.sh --arch=amd64
 
       - name: Configure
-        run: cd generated.x86 && ../configure --arch=amd64 --build-type=Workflow --buildtools=../buildtools
+        run: cd generated.x86 && ../configure --arch=amd64 --build-type=Workflow --buildtools=../buildtools --tests
 
       - name: Build
         run: cd generated.x86 && ninja

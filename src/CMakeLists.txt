@@ -11,8 +11,13 @@ add_subdirectory(apps)
 add_subdirectory(preferences)
 add_subdirectory(data)
 
+# The old cppunit tests need the cppunit tool and the test image, so they stay
+# tied to Debug builds. The Catch2 tests only need Catch2 itself.
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 	add_subdirectory(tests)
+endif()
+
+if(BUILD_TESTS)
 	add_subdirectory(tests-new)
 endif()
 

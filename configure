@@ -6,6 +6,8 @@
 #                                 (default: autodetected from `uname -m` for native builds)
 #   --override-toolchain=NAME   Use a specific cross-compilation toolchain
 #                                 (e.g. arm64_raspberry)
+#   --tests, --no-tests         Build the unit tests in src/tests-new
+#                                 (default: only for Debug builds)
 
 set -e
 
@@ -18,6 +20,7 @@ TARGET_ARCH=""
 OVERRIDE_TOOLCHAIN=""
 BUILDTOOLS_ONLY=0
 BUILDTOOLS_DIR=""
+BUILD_TESTS=""
 
 for arg in "$@"; do
     case "$arg" in
@@ -41,6 +44,12 @@ for arg in "$@"; do
             ;;
         --override-toolchain=*)
             OVERRIDE_TOOLCHAIN="${arg#*=}"
+            ;;
+        --tests)
+            BUILD_TESTS="ON"
+            ;;
+        --no-tests)
+            BUILD_TESTS="OFF"
             ;;
         --help|-h)
             head -n 17 "$0" | grep "^#" | sed 's/^# \?//'
@@ -215,6 +224,10 @@ CMAKE_OPTS="$CMAKE_OPTS -DBUILDTOOLS_DIR=$BUILDTOOLS_DIR"
 CMAKE_OPTS="$CMAKE_OPTS -DHOST_KERNEL=$hostkernel"
 CMAKE_OPTS="$CMAKE_OPTS -DKERNEL_RELEASE=$guestkernel"
 CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_TARGET_ARCH=$TARGET_ARCH"
+
+if [ -n "$BUILD_TESTS" ]; then
+    CMAKE_OPTS="$CMAKE_OPTS -DBUILD_TESTS=$BUILD_TESTS"
+fi
 
 if [ $CHROOT_BUILD -eq 1 ]; then
     CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_CHROOT_BUILD=ON"

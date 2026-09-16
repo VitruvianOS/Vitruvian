@@ -1,7 +1,6 @@
 # Test binaries and test suites
 set(TEST_BINARIES
 	UnitTester
-	compression_test
 	PortLinkTest
 	HandlerLooperMessageTest
 	NodeMonitorTest

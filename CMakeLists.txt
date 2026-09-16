@@ -25,6 +25,10 @@ message(STATUS "Build config written to: ${CMAKE_BINARY_DIR}/buildconfig.conf")
 
 include(build/engine.cmake)
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+	enable_testing()
+endif()
+
 add_subdirectory(src)
 
 if(NOT BUILDTOOLS_MODE STREQUAL "1")

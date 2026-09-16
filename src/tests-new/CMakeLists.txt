@@ -6,8 +6,8 @@ set(UNIT_TEST_UTILS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/utils")
 # UnitTest(name SOURCES <files...> [LIBS <libs...>])
 #
 # Builds a Catch2 unit test executable against the Vitruvian API and registers
-# each of its test cases with CTest. libbe and libroot are always linked, and
-# the headers in utils/ are on the include path.
+# each of its test cases with CTest. libbe and libroot are linked and the
+# headers in utils/ are on the include path.
 function(UnitTest name)
 	cmake_parse_arguments(ARG "" "" "SOURCES;LIBS" ${ARGN})
 
@@ -15,7 +15,19 @@ function(UnitTest name)
 	target_include_directories(${name} PRIVATE "${UNIT_TEST_UTILS_DIR}")
 	target_compile_options(${name} PRIVATE -include LinuxBuildCompatibility.h)
 	target_link_libraries(${name} PRIVATE be root ${ARG_LIBS} Catch2::Catch2WithMain)
-	catch_discover_tests(${name} DISCOVERY_MODE PRE_TEST)
+
+	# Tests tagged [needs-registrar] only work with the registrar running, so
+	# they are registered with a CTest label of the same name and can be left
+	# out with "ctest -LE needs-registrar".
+	catch_discover_tests(${name}
+		TEST_SPEC "~[needs-registrar]"
+		DISCOVERY_MODE PRE_TEST
+	)
+	catch_discover_tests(${name}
+		TEST_SPEC "[needs-registrar]"
+		PROPERTIES LABELS "needs-registrar"
+		DISCOVERY_MODE PRE_TEST
+	)
 endfunction()
 
 # These tests can use the Catch2-provided main

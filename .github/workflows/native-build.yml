@@ -63,6 +63,37 @@ jobs:
       - name: Build
         run: cd generated.x86 && ninja
 
+      # The unit tests need the nexus kernel module. 
+      - name: Load the nexus kernel module
+        run: |
+          cd generated.x86
+          echo "Runner kernel: $(uname -r)"
+          if ! sudo dpkg -i nexus-dkms_1_all.deb; then
+            echo "----- DKMS make.log -----"
+            sudo cat /var/lib/dkms/nexus/1/build/make.log \
+              || echo "(make.log not found)"
+            echo "-------------------------"
+            exit 1
+          fi
+          sudo modprobe nexus
+          sudo modprobe nexus_node_monitor
+          ls -l /dev/nexus*
+
+      # Run the unit tests that only need the kernel module. 
+      - name: Run unit tests
+        run: |
+          cd generated.x86
+          sudo ctest --output-on-failure --label-exclude needs-registrar \
+            --timeout 300 --no-tests=error
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-log
+          path: generated.x86/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4

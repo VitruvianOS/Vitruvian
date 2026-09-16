@@ -132,7 +132,8 @@ TEST_CASE("instantiate_object: without a usable archive",
 }
 
 
-TEST_CASE("instantiate_object: unknown signature", "[BArchivable][support]")
+TEST_CASE("instantiate_object: unknown signature",
+	"[BArchivable][support][needs-registrar]")
 {
 	UnloadRemoteAddOn();
 	image_id id = B_OK;
@@ -185,29 +186,37 @@ TEST_CASE("instantiate_object: class in a loaded add-on",
 	BMessage archive;
 	archive.AddString("class", kRemoteClassName);
 
-	SECTION("without a signature")
-	{
-		BArchivable* object = instantiate_object(&archive, &id);
-		CHECK(object != NULL);
-		CHECK(id == addOn.Image());
-		delete object;
-	}
+	BArchivable* object = instantiate_object(&archive, &id);
+	CHECK(object != NULL);
+	CHECK(id == addOn.Image());
 
-	SECTION("with its own signature")
-	{
-		ScopedSignature signature;
+	delete object;
+}
 
-		archive.AddString("add_on", kRemoteSignature);
-		BArchivable* object = instantiate_object(&archive, &id);
-		CHECK(object != NULL);
-		CHECK(id == addOn.Image());
-		delete object;
-	}
+
+TEST_CASE("instantiate_object: class in a loaded add-on, by signature",
+	"[BArchivable][support][needs-registrar]")
+{
+	UnloadRemoteAddOn();
+	ScopedAddOn addOn;
+	REQUIRE(addOn.Image() >= 0);
+	ScopedSignature signature;
+
+	image_id id = B_OK;
+	BMessage archive;
+	archive.AddString("class", kRemoteClassName);
+	archive.AddString("add_on", kRemoteSignature);
+
+	BArchivable* object = instantiate_object(&archive, &id);
+	CHECK(object != NULL);
+	CHECK(id == addOn.Image());
+
+	delete object;
 }
 
 
 TEST_CASE("instantiate_object: add-on loaded by signature",
-	"[BArchivable][support]")
+	"[BArchivable][support][needs-registrar]")
 {
 	UnloadRemoteAddOn();
 	ScopedSignature signature;

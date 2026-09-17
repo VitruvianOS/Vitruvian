@@ -135,11 +135,6 @@ if [ "$RUN_SYSTEM" -eq 1 ]; then
     #run_test "libroot-system_watching"     "$TESTBIN/system_watching_test"
 
     echo ""
-    echo "  [Support Kit System Tests]"
-    #run_test "support-compression"         "$TESTBIN/compression_test"  # utility, needs input/output files
-    run_test "support-string_utf8"         "$TESTBIN/string_utf8_tests"
-
-    echo ""
     echo "  [App Kit System Tests]"
     run_test "app-portlink"                "$TESTBIN/PortLinkTest"
 fi
@@ -152,18 +147,6 @@ if [ "$RUN_BEAPI" -eq 1 ]; then
     echo "------------------------------------------"
     echo " BeAPI Tests (libbe + full runtime)"
     echo "------------------------------------------"
-
-    echo ""
-    echo "  [Support Kit CppUnit]"
-    run_cppunit "BArchivable"   "support-BArchivable"
-    run_cppunit "BAutolock"     "support-BAutolock"
-    run_cppunit "BDateTime"     "support-BDateTime"
-    run_cppunit "BLocker"       "support-BLocker"
-    run_cppunit "BMemoryIO"     "support-BMemoryIO"
-    run_cppunit "BMallocIO"     "support-BMallocIO"
-    run_cppunit "BString"       "support-BString"
-    run_cppunit "BBlockCache"   "support-BBlockCache"
-    run_cppunit "ByteOrder"     "support-ByteOrder"
 
     echo ""
     echo "  [Storage Kit CppUnit]"

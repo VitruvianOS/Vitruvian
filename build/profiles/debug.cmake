@@ -1,8 +1,6 @@
 # Test binaries and test suites
 set(TEST_BINARIES
 	UnitTester
-	compression_test
-	string_utf8_tests
 	PortLinkTest
 	HandlerLooperMessageTest
 	NodeMonitorTest
@@ -89,7 +87,6 @@ set(TEST_GUI_BINARIES
 )
 
 set(TEST_ADDONS
-	supporttest
 	storagetest
 	apptest
 	interfacetest

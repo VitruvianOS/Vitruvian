@@ -25,6 +25,21 @@ message(STATUS "Build config written to: ${CMAKE_BINARY_DIR}/buildconfig.conf")
 
 include(build/engine.cmake)
 
+# The Catch2 unit tests in src/tests-new are built for Debug builds, and for
+# any other build type when configured with --tests (-DBUILD_TESTS=ON), so
+# that CI can build them without a full Debug build.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+	set(_build_tests_default ON)
+else()
+	set(_build_tests_default OFF)
+endif()
+
+option(BUILD_TESTS "Build the unit tests" ${_build_tests_default})
+
+if(BUILD_TESTS)
+	enable_testing()
+endif()
+
 add_subdirectory(src)
 
 if(NOT BUILDTOOLS_MODE STREQUAL "1")

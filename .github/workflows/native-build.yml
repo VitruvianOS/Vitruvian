@@ -35,7 +35,8 @@ jobs:
              libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libegl-dev libgl-dev linux-headers-$(uname -r) \
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
-            libapt-pkg-dev fakeroot devscripts lintian wget attr
+            libapt-pkg-dev fakeroot devscripts lintian wget attr \
+            catch2
 
       - name: Configure git safe.directory
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
@@ -57,10 +58,48 @@ jobs:
         run: cd generated.x86 && ../build/scripts/setupenv.sh --arch=amd64
 
       - name: Configure
-        run: cd generated.x86 && ../configure --arch=amd64 --build-type=Workflow --buildtools=../buildtools
+        run: cd generated.x86 && ../configure --arch=amd64 --build-type=Workflow --buildtools=../buildtools --tests
 
       - name: Build
         run: cd generated.x86 && ninja
+
+      # The unit tests need the nexus kernel module, which is built by DKMS for
+      # whatever kernel the runner has. If the module isn't compatible with the
+      # kernel, warn and skip the tests.
+      - name: Load the nexus kernel module
+        id: nexus
+        run: |
+          cd generated.x86
+          echo "Runner kernel: $(uname -r)"
+          if sudo dpkg -i nexus-dkms_1_all.deb \
+              && sudo modprobe nexus \
+              && sudo modprobe nexus_node_monitor; then
+            ls -l /dev/nexus*
+            echo "loaded=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "----- DKMS make.log -----"
+            sudo cat /var/lib/dkms/nexus/1/build/make.log \
+              || echo "(make.log not found)"
+            echo "-------------------------"
+            echo "::warning title=Unit tests skipped::The nexus module could not be loaded on runner kernel $(uname -r), so the unit tests were built but not run. See the make.log above."
+            echo "loaded=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Run the unit tests that only need the kernel module.
+      - name: Run unit tests
+        if: steps.nexus.outputs.loaded == 'true'
+        run: |
+          cd generated.x86
+          sudo ctest --output-on-failure --label-exclude needs-registrar \
+            --timeout 300 --no-tests=error
+
+      - name: Upload test log
+        if: always() && steps.nexus.outputs.loaded == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-log
+          path: generated.x86/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
 
       - name: Upload build log
         if: always()

@@ -102,26 +102,17 @@ TEST_CASE("BMemoryIO: Read", "[BMemoryIO][support]")
 
 - Name test cases `"<Class>: <what is tested>"`.
 - Tag every test case with the class and the kit, e.g. `[BMemoryIO][support]`.
-- Prefer `CHECK` so one failure does not hide the rest. Use `REQUIRE` only
-  when continuing would be meaningless or crash (e.g. a failed allocation).
-- Write comparisons as plain expressions (`CHECK(a == b)`), not
-  `CHECK(strcmp(...) == 0)` so that Catch2 can print both values on failure. For C
-  strings compare `std::string` values.
-- Catch2 re-runs the whole test case from the top for each `SECTION`. Use
-  sections for steps that are independent of each other. When each step
-  depends on the state left by the previous one (a stream position, a buffer
-  size), write the checks in sequence without sections.
+- Use `CHECK` when possible so that one failure doesn't hide any others.
+- Use `REQUIRE` when continuing would be meaningless or crash.
 
 ### Recording a known bug
 
-A test for behaviour that is currently broken is tagged `[!shouldfail]`, so
-Catch2 reports it as "failed as expected" and the run passes. Once the
-bug is fixed the test passes, which Catch2 then reports as a failure, and
-whoever fixed it removes the tag.
+A test that is known broken tagged `[!shouldfail]`, so Catch2 reports it as
+"failed as expected" and the run passes. Once the bug is fixed the test passes
+which is reported as a failure so the test can be flipped.
 
-ctest only sees whether the executable failed, so such a test otherwise shows
-up as an ordinary pass. Put `KNOWN BUG: ` at the start of the test case name,
-and state what is broken, so it is visible in ctest output:
+ctest only sees whether the executable failed, so put `KNOWN BUG: ` at the start
+of the test case name so it's easy to find.
 
 ```cpp
 TEST_CASE("KNOWN BUG: wait_for_thread does not wait for the thread to finish",
@@ -131,34 +122,15 @@ TEST_CASE("KNOWN BUG: wait_for_thread does not wait for the thread to finish",
 Also add the `[known-bug]` tag, so that `<executable> --list-tests "[known-bug]"`
 lists them.
 
-### Porting cppunit tests from `src/tests`
-
-| cppunit                                | Catch2                                  |
-| -------------------------------------- | --------------------------------------- |
-| `BTestCase` subclass + `PerformTest()` | `TEST_CASE(...)`                        |
-| `suite()` / `*TestSuite()` / add-on    | nothing, CTest discovers test cases     |
-| `NextSubTest()`                        | `SECTION` or sequential checks (above)  |
-| `CPPUNIT_ASSERT(expr)`, `CHK(expr)`    | `CHECK(expr)`                           |
-| `#ifndef TEST_R5` / `TEST_OBOS`        | remove, keep the non-R5 code            |
-
-Once a port builds and passes, remove the old test from `src/tests`: its
-sources from the add-on's `CMakeLists.txt`, its registration in the
-`*TestAddon.cpp`, its `run_cppunit` line in `runsuite.sh`, and the files
-themselves.
-
 ## Utilities
 
 Shared test helpers live in `utils/`, which `UnitTest()` puts on the include
 path.
 
-- `StringMakers.h`: Catch2 printers for Vitruvian types so a failed `CHECK(a == b)` shows both values instead of `{?}`.
-  Include it after `<catch2/catch_test_macros.hpp>`. Add a printer here when a new type shows up in checks.
+- `StringMakers.h`: Catch2 printers for various types
 - `ThreadedTest.h`: runs several threads in one test case. Catch2's assertion
   macros are not thread safe, so worker threads use `THREAD_CHECK` and
-  `THREAD_REQUIRE`, which record failures; `Run()` reports them on the main
-  thread once every thread has finished. `THREAD_REQUIRE` ends its own thread,
-  like `CPPUNIT_ASSERT` did, so a failing loop reports once instead of
-  thousands of times.
+  `THREAD_REQUIRE`
 
   ```cpp
   ThreadedTest test;
@@ -167,13 +139,9 @@ path.
   test.Run();
   ```
 
-  Note it joins threads with a semaphore rather than `wait_for_thread()`,
-  which currently returns immediately instead of waiting. Its own tests are in
-  `ThreadedTestTest.cpp`, built as `utils-tests`.
 - `ScopedMemoryLimit.h`: temporarily caps how much more memory the process
-  may use. Use it when a test expects a huge allocation to fail: Linux
-  overcommits memory, so without a limit the allocation can succeed and the
-  test gets killed instead.
+  may use for testing overallocation. Linux overcommits memory, so without this
+  the allocation can succeed and the test gets OOM killed instead.
 
   ```cpp
   BString string("Base");

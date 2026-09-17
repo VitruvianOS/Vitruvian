@@ -6,3 +6,6 @@ Makefile.in
 generated*
 compile_commands.json
 .cache/
+/docs/build.log
+/docs/out/html
+/docs/warnings.log

@@ -2,15 +2,293 @@
 
 set -eu
 
+PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
+export PATH
+
+log() { printf '[vos-install-helper] %s\n' "$*" >&2; }
+
+# Read-only, root-free; runs before the lib is sourced, so self-contained.
+_do_partition_capabilities() {
+    _requested="${1:-}"
+
+    _cap_one() {
+        _fs="$1"
+        case "$_fs" in
+            intel)   _tools="sfdisk";    _create_tool="sfdisk" ;;
+            gpt)     _tools="sfdisk";    _create_tool="sfdisk" ;;
+            ext4)    _tools="mkfs.ext4 dumpe2fs e2fsck resize2fs tune2fs"
+                     _create_tool="mkfs.ext4" ;;
+            fat)     _tools="mkfs.fat fsck.fat fatlabel"
+                     _create_tool="mkfs.fat" ;;
+            xfs)     _tools="mkfs.xfs xfs_admin xfs_db xfs_growfs xfs_repair"
+                     _create_tool="mkfs.xfs" ;;
+            btrfs)   _tools="mkfs.btrfs btrfs btrfstune"
+                     _create_tool="mkfs.btrfs" ;;
+            linux-swap) _tools="mkswap swaplabel"; _create_tool="mkswap" ;;
+            luks)    _tools="cryptsetup"; _create_tool="" ;;
+                     # luks_create not wired in apply yet; create stays "none".
+            *)       return 1 ;;
+        esac
+
+        _present=""
+        _missing=""
+        for _t in $_tools; do
+            if command -v "$_t" >/dev/null 2>&1; then
+                _present="$_present${_present:+ }$_t"
+            else
+                _missing="$_missing${_missing:+ }$_t"
+            fi
+        done
+
+        _create="none"
+        _read_uuid="none"
+        _read_label="none"
+        if [ -n "$_create_tool" ] && command -v "$_create_tool" >/dev/null 2>&1
+        then
+            _create="external"
+            case "$_fs" in
+                intel|gpt) ;;
+                *) _read_uuid="external"; _read_label="external" ;;
+            esac
+        fi
+
+        _grow="none"; _shrink="none"; _check="none"; _write_label="none"
+        _move="none"
+        _online_grow="0"; _online_shrink="0"
+        _have() { command -v "$1" >/dev/null 2>&1; }
+        case "$_fs" in
+            ext4)
+                _have resize2fs && _grow="external" && _shrink="external"
+                _have e2fsck && _check="external"
+                _have e2label && _write_label="external"
+                ;;
+            xfs)
+                # No shrink tool exists for xfs (P3-2/P3-3).
+                _have xfs_growfs && _grow="external"
+                _have xfs_repair && _check="external"
+                _have xfs_admin && _write_label="external"
+                ;;
+            fat)
+                # FAT resize: permanent; no libparted, fatresize unsafe.
+                _have fsck.fat && _check="external"
+                _have fatlabel && _write_label="external"
+                ;;
+            btrfs)
+                _have btrfs && _check="external" && _write_label="external"
+                _have btrfs && _grow="external" && _shrink="external"
+                _have btrfs && _online_grow="1" && _online_shrink="1"
+                ;;
+            linux-swap)
+                # mkswap recreates, not resizes; no grow or shrink capability.
+                _have swaplabel && _write_label="external"
+                ;;
+        esac
+        case "$_fs" in
+            ext4|fat|xfs|btrfs|linux-swap)
+                _have sfdisk && _move="external"
+                ;;
+        esac
+
+        printf 'filesystem=%s\n' "$_fs"
+        printf 'create=%s\n' "$_create"
+        printf 'grow=%s\n' "$_grow"
+        printf 'shrink=%s\n' "$_shrink"
+        printf 'move=%s\n' "$_move"
+        printf 'check=%s\n' "$_check"
+        printf 'read_label=%s\n' "$_read_label"
+        printf 'write_label=%s\n' "$_write_label"
+        printf 'read_uuid=%s\n' "$_read_uuid"
+        printf 'write_uuid=none\n'
+        printf 'online_grow=%s\n' "$_online_grow"
+        printf 'online_shrink=%s\n' "$_online_shrink"
+        for _t in $_present; do printf 'tools_present=%s\n' "$_t"; done
+        for _t in $_missing; do printf 'tools_missing=%s\n' "$_t"; done
+        printf 'minSizeMiB=\n'
+        printf 'maxSizeMiB=\n'
+    }
+
+    _kMustTier="intel gpt ext4 fat xfs btrfs linux-swap luks"
+
+    if [ -n "$_requested" ]; then
+        case " $_kMustTier " in
+            *" $_requested "*) ;;
+            *) log "capabilities: unknown filesystem: $_requested"; return 1 ;;
+        esac
+        _cap_one "$_requested"
+        return 0
+    fi
+
+    for _fs in $_kMustTier; do
+        printf '[filesystem]\n'
+        _cap_one "$_fs"
+    done
+    return 0
+}
+
+if [ "${1:-}" = "partition" ] && [ "${2:-}" = "capabilities" ]; then
+    shift 2
+    _do_partition_capabilities "${1:-}"
+    exit $?
+fi
+
+# Per-instance, not per-filesystem like capabilities; reads raw device
+# metadata, so it is privileged (dispatched after the root check).
+_do_partition_size_limits() {
+    _sl_target="${1:-}"
+    _sl_fs="${2:-}"
+
+    if [ -z "$_sl_target" ] || [ ! -b "$_sl_target" ]; then
+        log "size-limits: not a block device: $_sl_target"
+        return 2
+    fi
+
+    if [ -z "$_sl_fs" ]; then
+        _sl_t="$(blkid -p -s TYPE -o value "$_sl_target" 2>/dev/null)"
+        case "$_sl_t" in
+            ext2|ext3|ext4) _sl_fs="ext4" ;;
+            vfat)           _sl_fs="fat32" ;;
+            *)              _sl_fs="$_sl_t" ;;
+        esac
+    fi
+    if [ -z "$_sl_fs" ]; then
+        log "size-limits: could not detect filesystem on $_sl_target"
+        return 1
+    fi
+
+    # Permanent: no libparted by design; fatresize unsafe. See P3-2c.
+    case "$_sl_fs" in
+        fat32|fat|vfat)
+            log "size-limits: fat32 is not resizable (permanent decision, see P3-2c)"
+            return 1
+            ;;
+    esac
+
+    _sl_disk="$(lsblk -no PKNAME "$_sl_target" 2>/dev/null | head -n1)"
+    [ -n "$_sl_disk" ] && _sl_disk="/dev/$_sl_disk"
+    if [ -z "$_sl_disk" ] || [ ! -b "$_sl_disk" ]; then
+        log "size-limits: cannot resolve parent disk of $_sl_target"
+        return 2
+    fi
+
+    _sl_disk_bytes="$(blockdev --getsize64 "$_sl_disk" 2>/dev/null || echo 0)"
+
+    _sl_max_mib="$(sfdisk --dump "$_sl_disk" 2>/dev/null | awk -v want="$_sl_target" -v diskbytes="$_sl_disk_bytes" '
+        /^sector-size:/ { ss = $2 }
+        /^\// {
+            # sfdisk right-aligns; start=/size= may be one field or two.
+            node = $1; st = ""; sz = ""
+            for (i = 2; i <= NF; i++) {
+                if ($i == "start=") { st = $(i + 1); gsub(",", "", st) }
+                else if ($i ~ /^start=[0-9]/) { st = $i; gsub("start=|,", "", st) }
+                if ($i == "size=") { sz = $(i + 1); gsub(",", "", sz) }
+                else if ($i ~ /^size=[0-9]/) { sz = $i; gsub("size=|,", "", sz) }
+            }
+            n++; NODE[n] = node; STARTB[n] = st * ss; SIZEB[n] = sz * ss
+        }
+        END {
+            idx = ""
+            for (i = 1; i <= n; i++) if (NODE[i] == want) idx = i
+            if (idx == "") exit 1
+            myendb = STARTB[idx] + SIZEB[idx]
+            nextb = diskbytes
+            for (i = 1; i <= n; i++) {
+                if (STARTB[i] >= myendb && STARTB[i] < nextb) nextb = STARTB[i]
+            }
+            gap = nextb - myendb
+            if (gap < 0) gap = 0
+            printf "%d\n", (SIZEB[idx] + gap) / 1048576
+        }
+    ')"
+    if [ -z "$_sl_max_mib" ]; then
+        log "size-limits: could not locate $_sl_target on $_sl_disk"
+        return 1
+    fi
+
+    _sl_cur_mib="$(_partlib_part_size_mib "$_sl_disk" "$_sl_target")"
+
+    # usedMiB is best-effort: filled only where the data is already at hand;
+    # empty means "disable the usage bar", not an oversight.
+    _sl_used_mib=""
+    case "$_sl_fs" in
+        ext4)
+            _sl_blocks="$(resize2fs -P "$_sl_target" 2>/dev/null | sed -n 's/^.*: *//p' | tail -n1)"
+            _sl_dumpe2fs="$(dumpe2fs -h "$_sl_target" 2>/dev/null)"
+            _sl_bs="$(printf '%s\n' "$_sl_dumpe2fs" | awk -F': *' '/^Block size:/ { print $2 }')"
+            if [ -z "$_sl_blocks" ] || [ -z "$_sl_bs" ]; then
+                log "size-limits: could not read ext4 minimum size for $_sl_target"
+                return 1
+            fi
+            _sl_min_mib=$(( (_sl_blocks * _sl_bs + 1048575) / 1048576 ))
+
+            _sl_block_count="$(printf '%s\n' "$_sl_dumpe2fs" | awk -F': *' '/^Block count:/ { print $2 }')"
+            _sl_free_blocks="$(printf '%s\n' "$_sl_dumpe2fs" | awk -F': *' '/^Free blocks:/ { print $2 }')"
+            if [ -n "$_sl_block_count" ] && [ -n "$_sl_free_blocks" ]; then
+                _sl_used_mib=$(( ((_sl_block_count - _sl_free_blocks) * _sl_bs) / 1048576 ))
+            fi
+            ;;
+        xfs)
+            [ -n "$_sl_cur_mib" ] || { log "size-limits: could not read current size of $_sl_target"; return 1; }
+            _sl_min_mib="$_sl_cur_mib"
+            ;;
+        btrfs)
+            # btrfs min-dev-size needs a mounted path, not the raw device.
+            mkdir -p /run/vos-partition-helper 2>/dev/null || true
+            _sl_mnt="$(mktemp -d /run/vos-partition-helper/mnt-XXXXXX 2>/dev/null)"
+            if [ -z "$_sl_mnt" ]; then
+                log "size-limits: could not create a temporary mountpoint for btrfs min-dev-size"
+                return 1
+            fi
+            if ! mount "$_sl_target" "$_sl_mnt" 2>/dev/null; then
+                log "size-limits: could not mount $_sl_target for btrfs min-dev-size"
+                rmdir "$_sl_mnt" 2>/dev/null || true
+                return 1
+            fi
+            _partlib_mount_track "$_sl_mnt"
+            _sl_min_bytes="$(btrfs inspect-internal min-dev-size "$_sl_mnt" 2>/dev/null | awk '{ print $1 }')"
+            # df's used figure; btrfs raw accounting double-counts metadata.
+            _sl_used_bytes="$(df -B1 --output=used "$_sl_mnt" 2>/dev/null | tail -n1 | tr -d ' ')"
+            _partlib_safe_umount "$_sl_mnt"
+            _partlib_mount_untrack "$_sl_mnt"
+            rmdir "$_sl_mnt" 2>/dev/null || true
+            if [ -z "$_sl_min_bytes" ]; then
+                log "size-limits: could not read btrfs minimum size for $_sl_target"
+                return 1
+            fi
+            _sl_min_mib=$(( (_sl_min_bytes + 1048575) / 1048576 ))
+            case "$_sl_used_bytes" in
+                ''|*[!0-9]*) ;;
+                *) _sl_used_mib=$(( _sl_used_bytes / 1048576 )) ;;
+            esac
+            ;;
+        swap)
+            log "size-limits: swap has no shrink floor; it is recreated, not resized (see _partlib_resize's swap:* arm)"
+            return 1
+            ;;
+        *)
+            log "size-limits: unsupported filesystem for size-limits: $_sl_fs"
+            return 1
+            ;;
+    esac
+
+    printf 'target=%s\n' "$_sl_target"
+    printf 'filesystem=%s\n' "$_sl_fs"
+    printf 'minSizeMiB=%s\n' "$_sl_min_mib"
+    printf 'maxSizeMiB=%s\n' "$_sl_max_mib"
+    printf 'usedMiB=%s\n' "$_sl_used_mib"
+    return 0
+}
+
 if [ "$(id -u)" -ne 0 ]; then
     echo "vos-install-helper must run as root (invoke via pkexec)" >&2
     exit 1
 fi
 
-PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
-export PATH
-
-log() { printf '[vos-install-helper] %s\n' "$*" >&2; }
+_HELPER_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+if [ -f "$_HELPER_DIR/vos-partition-lib.sh" ]; then
+    . "$_HELPER_DIR/vos-partition-lib.sh"
+else
+    . /usr/libexec/vos-partition-lib.sh
+fi
 
 EXCLUDES=/usr/share/vos/installer/excludes.list
 FULL_INSTALL_MOUNT=/run/vos/target
@@ -542,7 +820,626 @@ _do_bootloader_setup() {
     return 0
 }
 
+# =========================== partition plan ================================
+
+_PLAN_MAX_BYTES=65536
+
+_partition_front_door() {
+    _plan="${1:-}"
+    if [ -z "$_plan" ]; then
+        echo "usage: vos-install-helper partition {validate|apply} <plan>" >&2
+        return 1
+    fi
+    if [ ! -f "$_plan" ]; then
+        log "plan file does not exist: $_plan"
+        return 2
+    fi
+    _plan_size="$(wc -c < "$_plan" 2>/dev/null || echo 0)"
+    if [ "$_plan_size" -gt "$_PLAN_MAX_BYTES" ]; then
+        log "plan file too large (>${_PLAN_MAX_BYTES} bytes): $_plan"
+        return 2
+    fi
+
+    _plan_version=""
+    _plan_disk=""
+    _plan_table_type=""
+    while IFS= read -r _pfd_line || [ -n "$_pfd_line" ]; do
+        case "$_pfd_line" in
+            ''|'#'*) continue ;;
+            \[*) break ;;
+        esac
+        _partlib_kv_split "$_pfd_line" || {
+            log "plan: malformed header line: $_pfd_line"; return 2; }
+        case "$_KV_KEY" in
+            plan_version) _plan_version="$_KV_VAL" ;;
+            disk)         _plan_disk="$_KV_VAL" ;;
+            table_type)   _plan_table_type="$_KV_VAL" ;;
+            *) log "plan: unknown header key: $_KV_KEY"; return 2 ;;
+        esac
+    done < "$_plan"
+
+    if [ "$_plan_version" != "1" ]; then
+        log "unsupported plan_version: ${_plan_version:-<missing>}"
+        return 2
+    fi
+
+    case "$_plan_disk" in
+        /dev/[A-Za-z0-9_/-]*) ;;
+        *) log "invalid or missing disk path: $_plan_disk"; return 2 ;;
+    esac
+    [ -b "$_plan_disk" ] || { log "not a block device: $_plan_disk"; return 2; }
+
+    case "$_plan_table_type" in
+        gpt|mbr|'') ;;
+        *) log "invalid table_type: $_plan_table_type"; return 2 ;;
+    esac
+
+    return 0
+}
+
+_partition_check_int() {
+    case "$1" in
+        -1) return 0 ;;
+        *[!0-9]*) return 1 ;;
+        '') return 1 ;;
+    esac
+    return 0
+}
+
+_partition_check_devnode() {
+    case "$1" in
+        /dev/[A-Za-z0-9_/-]*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+_validate_rc=0
+_validate_seen_ids=""
+_validate_esp_warned=0
+_validate_op_count=0
+
+_validate_one_op() {
+    case "$_RECORD_KIND" in
+        op) ;;
+        *) log "plan: unknown section [$_RECORD_KIND]"
+           _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+    esac
+
+    _op="$(_partlib_rec_get kind)"
+    _id="$(_partlib_rec_get id)"
+    _validate_op_count=$((_validate_op_count + 1))
+
+    if [ -z "$_op" ] || [ -z "$_id" ]; then
+        log "[op] #$_validate_op_count: missing kind or id"
+        _validate_rc=2; _PARTLIB_ABORT=1; return
+    fi
+    case "$_id" in
+        *[!A-Za-z0-9_-]*)
+            log "[op] #$_validate_op_count: invalid id (must be [A-Za-z0-9_-]+): $_id"
+            _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+    esac
+    case " $_validate_seen_ids " in
+        *" $_id "*)
+            log "[op] #$_validate_op_count: duplicate id '$_id'"
+            _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+    esac
+    _validate_seen_ids="$_validate_seen_ids $_id"
+
+    case "$_op" in
+        create_table)
+            _t="$(_partlib_rec_get type)"
+            case "$_t" in
+                gpt|mbr) ;;
+                *) log "[$_id]: invalid create_table type: $_t"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            log "  [$_id] create_table type=$_t"
+            ;;
+        create)
+            _start="$(_partlib_rec_get start_mib)"
+            _size="$(_partlib_rec_get size_mib)"
+            _partition_check_int "$_start" || {
+                log "[$_id]: invalid start_mib: $_start"
+                _validate_rc=2; _PARTLIB_ABORT=1; return; }
+            _partition_check_int "$_size" || {
+                log "[$_id]: invalid size_mib: $_size"
+                _validate_rc=2; _PARTLIB_ABORT=1; return; }
+            if [ "$_start" -lt 0 ] || [ "$_start" -ge "$_disk_size_mib" ]; then
+                log "[$_id]: start_mib out of range: $_start"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if [ "$_size" -ne -1 ] && [ "$_size" -le 0 ]; then
+                log "[$_id]: size_mib must be positive or -1: $_size"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if [ "$_size" -ne -1 ] && [ $(( _start + _size )) -gt "$_disk_size_mib" ]; then
+                log "[$_id]: create extends past end of disk"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if [ -z "$(_partlib_rec_get gpt_type)" ]; then
+                log "[$_id]: missing gpt_type (partition type not set)"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            log "  [$_id] create start=${_start}MiB size=${_size}MiB"
+            ;;
+        delete)
+            _tref="$(_partlib_rec_get target_ref)"
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            case " $_validate_seen_ids " in
+                *" $_tref "*) ;;
+                *) _partition_check_devnode "$_tref" || {
+                       log "[$_id]: target_ref resolves to neither a plan id nor a devnode: $_tref"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;} ;;
+            esac
+            # In-plan ids have no devnode yet; -b is checked only for devnodes.
+            if _partition_check_devnode "$_tref" && [ ! -b "$_tref" ]; then
+                log "[$_id]: not a block device: $_tref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            log "  [$_id] delete target_ref=$_tref"
+            ;;
+        format)
+            _tref="$(_partlib_rec_get target_ref)"
+            _fs="$(_partlib_rec_get filesystem)"
+            _role="$(_partlib_rec_get role)"
+            [ -n "$_role" ] || _role="none"
+            case "$_fs" in
+                ext4|fat32|btrfs|xfs|swap) ;;
+                *) log "[$_id]: unsupported filesystem: $_fs"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            case "$_role" in
+                esp|boot|root|home|swap|none) ;;
+                *) log "[$_id]: invalid role: $_role"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            case " $_validate_seen_ids " in
+                *" $_tref "*) ;;
+                *) _partition_check_devnode "$_tref" || {
+                       log "[$_id]: target_ref resolves to neither a plan id nor a devnode: $_tref"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;} ;;
+            esac
+            if [ "$_role" = "esp" ] && _partition_check_devnode "$_tref" \
+                    && [ "$_validate_esp_warned" -eq 0 ]; then
+                log "  WARNING [$_id]: format targets an existing device with role=esp;"
+                log "    apply refuses this without --allow-reformat-esp (never clobber a shared ESP)"
+                _validate_esp_warned=1
+            fi
+            log "  [$_id] format target_ref=$_tref filesystem=$_fs role=$_role"
+            ;;
+        resize)
+            _tref="$(_partlib_rec_get target_ref)"
+            _newsize="$(_partlib_rec_get new_size_mib)"
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            case " $_validate_seen_ids " in
+                *" $_tref "*) ;;
+                *) _partition_check_devnode "$_tref" || {
+                       log "[$_id]: target_ref resolves to neither a plan id nor a devnode: $_tref"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;} ;;
+            esac
+            _partition_check_int "$_newsize" || {
+                log "[$_id]: invalid new_size_mib: $_newsize"
+                _validate_rc=2; _PARTLIB_ABORT=1; return; }
+            if [ "$_newsize" -le 0 ]; then
+                log "[$_id]: new_size_mib must be positive: $_newsize"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            log "  [$_id] resize target_ref=$_tref new_size_mib=$_newsize"
+            ;;
+        move)
+            _tref="$(_partlib_rec_get target_ref)"
+            _newstart="$(_partlib_rec_get new_start_mib)"
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            case " $_validate_seen_ids " in
+                *" $_tref "*) ;;
+                *) _partition_check_devnode "$_tref" || {
+                       log "[$_id]: target_ref resolves to neither a plan id nor a devnode: $_tref"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;} ;;
+            esac
+            _partition_check_int "$_newstart" || {
+                log "[$_id]: invalid new_start_mib: $_newstart"
+                _validate_rc=2; _PARTLIB_ABORT=1; return; }
+            if [ "$_newstart" -lt 0 ]; then
+                log "[$_id]: new_start_mib must not be negative: $_newstart"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            log "  [$_id] move target_ref=$_tref new_start_mib=$_newstart"
+            ;;
+        erase)
+            _tref="$(_partlib_rec_get target_ref)"
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            case " $_validate_seen_ids " in
+                *" $_tref "*) ;;
+                *) _partition_check_devnode "$_tref" || {
+                       log "[$_id]: target_ref resolves to neither a plan id nor a devnode: $_tref"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;} ;;
+            esac
+            log "  [$_id] erase target_ref=$_tref"
+            ;;
+        repair)
+            _tref="$(_partlib_rec_get target_ref)"
+            _fs="$(_partlib_rec_get filesystem)"
+            _check_only="$(_partlib_rec_get check_only)"
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            case "$_fs" in
+                ext4|fat32|btrfs|xfs|'') ;;
+                    # Empty allowed: apply probes the fs via blkid when omitted.
+                *) log "[$_id]: unsupported filesystem for repair: $_fs"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            case "$_check_only" in
+                0|1) ;;
+                *) log "[$_id]: check_only must be 0 or 1: $_check_only"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            log "  [$_id] repair target_ref=$_tref filesystem=$_fs check_only=$_check_only"
+            ;;
+        set_string)
+            _tref="$(_partlib_rec_get target_ref)"
+            # "kind" is taken (rec_get returns last match), hence string_kind.
+            _skind="$(_partlib_rec_get string_kind)"
+            _value="$(_partlib_rec_get value)"
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            case "$_skind" in
+                label|gpt_name) ;;
+                *) log "[$_id]: invalid string_kind: $_skind (must be label|gpt_name)"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            log "  [$_id] set_string target_ref=$_tref string_kind=$_skind value=$_value"
+            ;;
+        set_flags)
+            _tref="$(_partlib_rec_get target_ref)"
+            [ -n "$_tref" ] || {
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return; }
+            _flags="$(_partlib_rec_get_all flag)"
+            if [ -z "$_flags" ]; then
+                log "[$_id]: set_flags with no flags"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            for _f in $_flags; do
+                case "$_f" in
+                    boot|legacy_boot|no_automount|read_only|esp) ;;
+                    *) log "[$_id]: unknown flag: $_f"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+                esac
+            done
+            log "  [$_id] set_flags target_ref=$_tref flags=$_flags"
+            ;;
+        luks_create)
+            log "  [$_id] luks_create (accepted, apply defers to milestone 7)"
+            ;;
+        *)
+            log "[$_id]: unknown op: $_op"
+            _validate_rc=2; _PARTLIB_ABORT=1; return
+            ;;
+    esac
+}
+
+_do_partition_validate() {
+    _plan="${1:-}"
+    _partition_front_door "$_plan" || return $?
+
+    _disk_size_mib=$(( $(lsblk -bdno SIZE "$_plan_disk" 2>/dev/null || echo 0) / 1048576 ))
+    if [ "$_disk_size_mib" -le 0 ]; then
+        log "cannot read size of $_plan_disk"
+        return 2
+    fi
+
+    log "plan: disk=$_plan_disk table_type=${_plan_table_type:-<unchanged>}"
+
+    _validate_rc=0
+    _validate_seen_ids=""
+    _validate_esp_warned=0
+    _validate_op_count=0
+
+    _partlib_foreach_record "$_plan" _validate_one_op
+
+    [ "$_validate_rc" -eq 0 ] || return "$_validate_rc"
+
+    log "plan valid: $_validate_op_count operation(s), disk=$_plan_disk"
+    return 0
+}
+
+_partition_resolve_target() {
+    _ref="$1"
+    _resolved="$(_partlib_id_map_get "$_ref")"
+    if [ -n "$_resolved" ]; then
+        printf '%s\n' "$_resolved"
+    else
+        printf '%s\n' "$_ref"
+    fi
+}
+
+_partition_apply_cleanup() {
+    _partlib_luks_close_all
+    _partlib_umount_all
+}
+
+_partition_detect_fs() {
+    _devnode="$1"
+    _t="$(blkid -p -s TYPE -o value "$_devnode" 2>/dev/null)"
+    case "$_t" in
+        ext2|ext3|ext4) printf 'ext4\n' ;;
+        vfat)           printf 'fat32\n' ;;
+        *)              printf '%s\n' "$_t" ;;
+    esac
+}
+
+# Plan values cannot contain newlines; fold them to "; ".
+_partition_flatten() {
+    printf '%s' "$1" | tr '\n' ';' | sed 's/;/; /g; s/[; ]*$//'
+}
+
+_apply_one_op() {
+    _op="$(_partlib_rec_get kind)"
+    _id="$(_partlib_rec_get id)"
+
+    if [ "$_stop" -ne 0 ]; then
+        {
+            printf '[op]\n'
+            printf 'id=%s\n' "$_id"
+            printf 'kind=%s\n' "$_op"
+            printf 'status=not_attempted\n'
+            printf 'detail=\n'
+        } >> "$_ops_out"
+        return
+    fi
+
+    _status="ok"
+    _detail=""
+
+    case "$_op" in
+        create_table)
+            _t="$(_partlib_rec_get type)"
+            if ! _partlib_create_table "$_plan_disk" "$_t"; then
+                _status="failed"; _detail="sfdisk create_table failed"
+            fi
+            ;;
+        create)
+            _start="$(_partlib_rec_get start_mib)"
+            _size="$(_partlib_rec_get size_mib)"
+            _gtype="$(_partlib_rec_get gpt_type)"
+            if _node="$(_partlib_create "$_plan_disk" "$_start" "$_size" "$_gtype")"; then
+                _partlib_id_map_set "$_id" "$_node"
+                _detail="$_node"
+            else
+                _status="failed"; _detail="sfdisk create failed"
+            fi
+            ;;
+        delete)
+            _tref="$(_partlib_rec_get target_ref)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            if _partlib_delete "$_plan_disk" "$_devnode"; then
+                _detail="$_devnode"
+            else
+                _status="failed"; _detail="delete failed for $_devnode"
+            fi
+            ;;
+        format)
+            _tref="$(_partlib_rec_get target_ref)"
+            _fs="$(_partlib_rec_get filesystem)"
+            _role="$(_partlib_rec_get role)"
+            [ -n "$_role" ] || _role="none"
+            _label="$(_partlib_rec_get label)"
+            _ext4_extra="$(_partlib_rec_get_all ext4_feature_exclude)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+
+            _is_preexisting=1
+            [ -n "$(_partlib_id_map_get "$_tref")" ] && _is_preexisting=0
+
+            if [ "$_role" = "esp" ] && [ "$_is_preexisting" -eq 1 ] \
+                    && [ "$_allow_esp" -eq 0 ]; then
+                _status="failed"
+                _detail="refused: reformatting an existing ESP requires --allow-reformat-esp"
+            elif _uuid="$(_partlib_format "$_devnode" "$_fs" "$_label" "$_ext4_extra")"; then
+                _detail="$_devnode"
+                {
+                    printf '[volume]\n'
+                    printf 'op_id=%s\n' "$_id"
+                    printf 'role=%s\n' "$_role"
+                    printf 'devnode=%s\n' "$_devnode"
+                    printf 'uuid=%s\n' "$_uuid"
+                    printf 'filesystem=%s\n' "$_fs"
+                } >> "$_vols_out"
+            else
+                _status="failed"; _detail="mkfs failed for $_devnode"
+            fi
+            ;;
+        set_flags)
+            _tref="$(_partlib_rec_get target_ref)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            _flags="$(_partlib_rec_get_all flag | tr '\n' ' ')"
+            if _partlib_set_flags "$_plan_disk" "$_devnode" "$_flags"; then
+                _detail="$_devnode"
+            else
+                _status="failed"; _detail="set_flags failed for $_devnode"
+            fi
+            ;;
+        resize)
+            _tref="$(_partlib_rec_get target_ref)"
+            _newsize="$(_partlib_rec_get new_size_mib)"
+            _target="$(_partition_resolve_target "$_tref")"
+            _rfs="$(_partlib_rec_get filesystem)"
+            [ -n "$_rfs" ] || _rfs="$(_partition_detect_fs "$_target")"
+            if _partlib_resize "$_plan_disk" "$_target" "$_rfs" "$_newsize"; then
+                _detail="$_target"
+            else
+                _status="failed"; _detail="resize failed for $_target"
+            fi
+            ;;
+        move)
+            _tref="$(_partlib_rec_get target_ref)"
+            _newstart="$(_partlib_rec_get new_start_mib)"
+            _target="$(_partition_resolve_target "$_tref")"
+            if _partlib_move "$_plan_disk" "$_target" "$_newstart"; then
+                _detail="$_target"
+            else
+                _status="failed"; _detail="move failed for $_target"
+            fi
+            ;;
+        erase)
+            _tref="$(_partlib_rec_get target_ref)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            if _partlib_erase "$_devnode"; then
+                _detail="$_devnode"
+            else
+                _status="failed"; _detail="erase failed for $_devnode"
+            fi
+            ;;
+        repair)
+            _tref="$(_partlib_rec_get target_ref)"
+            _rfs="$(_partlib_rec_get filesystem)"
+            _check_only="$(_partlib_rec_get check_only)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            [ -n "$_rfs" ] || _rfs="$(_partition_detect_fs "$_devnode")"
+            if _partlib_repair "$_devnode" "$_rfs" "$_check_only"; then
+                _detail="$_devnode"
+            else
+                _status="failed"; _detail="repair failed for $_devnode"
+            fi
+            ;;
+        set_string)
+            _tref="$(_partlib_rec_get target_ref)"
+            _skind="$(_partlib_rec_get string_kind)"
+            _value="$(_partlib_rec_get value)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            case "$_skind" in
+                label)
+                    _rfs="$(_partlib_rec_get filesystem)"
+                    [ -n "$_rfs" ] || _rfs="$(_partition_detect_fs "$_devnode")"
+                    if _partlib_set_label "$_devnode" "$_rfs" "$_value"; then
+                        _detail="$_devnode"
+                    else
+                        _status="failed"; _detail="set_label failed for $_devnode"
+                    fi
+                    ;;
+                gpt_name)
+                    if _partlib_set_gpt_name "$_plan_disk" "$_devnode" "$_value"; then
+                        _detail="$_devnode"
+                    else
+                        _status="failed"; _detail="set_gpt_name failed for $_devnode"
+                    fi
+                    ;;
+                *)
+                    _status="failed"; _detail="unknown set_string string_kind: $_skind"
+                    ;;
+            esac
+            ;;
+        luks_create)
+            _status="failed"
+            _detail="$_op not yet implemented in apply (see plan-format.md, milestone 7)"
+            ;;
+        *)
+            _status="failed"; _detail="unknown op: $_op"
+            ;;
+    esac
+
+    _detail="$(_partition_flatten "$_detail")"
+    {
+        printf '[op]\n'
+        printf 'id=%s\n' "$_id"
+        printf 'kind=%s\n' "$_op"
+        printf 'status=%s\n' "$_status"
+        printf 'detail=%s\n' "$_detail"
+    } >> "$_ops_out"
+
+    if [ "$_status" = "ok" ]; then
+        _any_ok=1
+    else
+        _stop=1
+        _failed_op="$_id"
+        log "apply: [$_id] $_op failed: $_detail"
+    fi
+}
+
+_do_partition_apply() {
+    _plan="${1:-}"
+    [ $# -gt 0 ] && shift
+    _allow_esp=0
+    for _a in "$@"; do
+        [ "$_a" = "--allow-reformat-esp" ] && _allow_esp=1
+    done
+
+    _do_partition_validate "$_plan" || return $?
+
+    trap '_partition_apply_cleanup' EXIT INT TERM
+
+    _ID_MAP=""
+    _PARTLIB_SETTLE_MS=0
+    _ops_out="$(mktemp)"
+    _vols_out="$(mktemp)"
+    _stop=0
+    _any_ok=0
+    _failed_op=""
+
+    _partlib_foreach_record "$_plan" _apply_one_op
+
+    if [ "$_stop" -eq 0 ]; then
+        _overall="ok"
+    elif [ "$_any_ok" -eq 1 ]; then
+        _overall="partial"
+    else
+        _overall="failed"
+    fi
+
+    _result_file="${_plan}.result"
+    {
+        printf 'status=%s\n' "$_overall"
+        printf 'settle_ms=%s\n' "$_PARTLIB_SETTLE_MS"
+        printf 'failed_op=%s\n' "$_failed_op"
+        printf '\n'
+        cat "$_vols_out"
+        printf '\n'
+        cat "$_ops_out"
+    } > "$_result_file"
+    rm -f "$_ops_out" "$_vols_out"
+
+    log "apply: $_overall (results: $_result_file)"
+
+    trap - EXIT INT TERM
+    _partition_apply_cleanup
+
+    [ "$_overall" = "ok" ] && return 0
+    return 3
+}
+
 # ============================== dispatch ===================================
+
+if [ "${1:-}" = "partition" ]; then
+    shift
+    case "${1:-}" in
+        validate)    shift; _do_partition_validate "${1:-}"; exit $? ;;
+        apply)       shift; _do_partition_apply "$@"; exit $? ;;
+        size-limits) shift; _do_partition_size_limits "${1:-}" "${2:-}"; exit $? ;;
+        *) printf 'usage: vos-install-helper partition {validate|apply} <plan> [--allow-reformat-esp]\n' >&2
+           printf '       vos-install-helper partition capabilities [<filesystem>]\n' >&2
+           printf '       vos-install-helper partition size-limits <target> [<filesystem>] (privileged)\n' >&2
+           exit 1 ;;
+    esac
+fi
 
 if [ "${1:-}" = "bootloader" ]; then
     shift

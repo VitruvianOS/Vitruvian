@@ -337,9 +337,22 @@ get_volume_label(const char* devPath, char* label, size_t labelSize)
 }
 
 
+static inline bool get_udev_property(const char* devName,
+	const char* propertyName, char* out, size_t outSize);
+
+
 static inline bool
 get_partition_table_type(const char* devPath, char* ptType, size_t ptSize)
 {
+	// udev first: raw probes need the disk group; this works unprivileged.
+	const char* devName = strrchr(devPath, '/');
+	devName = devName ? devName + 1 : devPath;
+	if (get_udev_property(devName, "ID_PART_TABLE_TYPE", ptType, ptSize)
+			&& ptType[0]) {
+		return true;
+	}
+
+	// Fall back: udev misses loop/file-backed devices; root can raw-probe.
 	int fd = open(devPath, O_RDONLY | O_CLOEXEC);
 	if (fd < 0)
 		return false;

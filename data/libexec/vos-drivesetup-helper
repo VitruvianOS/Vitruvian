@@ -1,0 +1,8 @@
+#!/bin/sh
+# Distinct pkexec exec.path for org.vitruvian.drivesetup.modify-partitions.
+# See drivesetup-polkit-notes.md: reusing vos-install-helper's own path
+# here would make two .policy files annotate the same exec.path, which
+# polkit resolves ambiguously. Forwards argv unchanged to the real helper,
+# already running as root under pkexec.
+set -eu
+exec /usr/libexec/vos-install-helper "$@"

@@ -1,0 +1,21 @@
+#!/bin/sh
+# Whitelist gate: allow_active=yes here makes a bare forward an escalation.
+set -eu
+
+case "${1:-}" in
+    partition)
+        case "${2:-}" in
+            size-limits|capabilities) ;;
+            *)
+                echo "vos-drivesetup-query: refused (not a read-only partition subcommand): ${2:-}" >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        echo "vos-drivesetup-query: refused (not a whitelisted command): ${1:-}" >&2
+        exit 1
+        ;;
+esac
+
+exec /usr/libexec/vos-install-helper "$@"

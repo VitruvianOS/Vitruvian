@@ -35,29 +35,57 @@ struct DiskSystemInfo {
 	bool			isReadOnly;
 };
 
+#define PARTITIONING_SYSTEM_BASE \
+	(B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_MOVING \
+		| B_DISK_SYSTEM_SUPPORTS_SETTING_TYPE \
+		| B_DISK_SYSTEM_SUPPORTS_RESIZING_CHILD \
+		| B_DISK_SYSTEM_SUPPORTS_MOVING_CHILD \
+		| B_DISK_SYSTEM_SUPPORTS_CREATING_CHILD \
+		| B_DISK_SYSTEM_SUPPORTS_DELETING_CHILD)
+#define PARTITIONING_SYSTEM_NAMED \
+	(PARTITIONING_SYSTEM_BASE | B_DISK_SYSTEM_SUPPORTS_SETTING_NAME \
+		| B_DISK_SYSTEM_SUPPORTS_NAME)
+
+// Every FS entry needs this or the kit treats it as a partitioning system.
+#define FS (B_DISK_SYSTEM_IS_FILE_SYSTEM)
+
+// INIT only where vos-install-helper can really do the job.
+#define INIT (B_DISK_SYSTEM_SUPPORTS_INITIALIZING)
+
 static DiskSystemInfo gDiskSystems[] = {
-	{ 0, "intel", "intel", "Intel Partition Map", B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_MOVING | B_DISK_SYSTEM_SUPPORTS_SETTING_TYPE, false, false },
-	{ 1, "gpt", "gpt", "GUID Partition Table", B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_MOVING | B_DISK_SYSTEM_SUPPORTS_SETTING_TYPE, false, false },
-	{ 2, "apple", "apple", "Apple Partition Map", B_DISK_SYSTEM_SUPPORTS_RESIZING | B_DISK_SYSTEM_SUPPORTS_MOVING | B_DISK_SYSTEM_SUPPORTS_SETTING_TYPE, false, false },
+	{ 0, "intel", "intel", "Intel Partition Map", INIT | PARTITIONING_SYSTEM_BASE, false, false },
+	{ 1, "gpt", "gpt", "GUID Partition Table", INIT | PARTITIONING_SYSTEM_NAMED, false, false },
+	{ 2, "apple", "apple", "Apple Partition Map", PARTITIONING_SYSTEM_NAMED, false, false },
 
-	{ 3, "bfs", "bfs", "Be File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 4, "ext2", "ext2", "EXT2 File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 5, "ext3", "ext3", "EXT3 File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 6, "ext4", "ext4", "EXT4 File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 7, "ntfs", "ntfs", "NTFS File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 8, "fat", "fat", "FAT File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 9, "exfat", "exfat", "exFAT File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 10, "xfs", "xfs", "XFS File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 11, "btrfs", "btrfs", "Btrfs File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
-	{ 12, "f2fs", "f2fs", "F2FS File System", B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	// "befs" is the Linux name ("bfs" is SCO's); driver read-only, no mkfs.
+	{ 3, "befs", "befs", "Be File System", FS | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, true },
+	{ 4, "ext2", "ext2", "EXT2 File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	{ 5, "ext3", "ext3", "EXT3 File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	// resize2fs grows and shrinks ext4; others have no shrink tool.
+	{ 6, "ext4", "ext4", "EXT4 File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME | B_DISK_SYSTEM_SUPPORTS_RESIZING, true, false },
+	{ 7, "ntfs", "ntfs", "NTFS File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	{ 8, "fat", "fat", "FAT File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	{ 9, "exfat", "exfat", "exFAT File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	// xfs_growfs only grows; no direction bit, so leave the flag unset.
+	{ 10, "xfs", "xfs", "XFS File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	{ 11, "btrfs", "btrfs", "Btrfs File System", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	// f2fs.resize grows only.
+	{ 12, "f2fs", "f2fs", "F2FS File System", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	{ 13, "linux-swap", "swap", "Linux Swap", INIT | FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
+	// cryptsetup luksFormat/luksAddKey; LUKS2 grows only (no shrink tool).
+	{ 14, "luks", "luks", "LUKS Encrypted Volume", FS | B_DISK_SYSTEM_SUPPORTS_WRITING | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, false },
 
-	{ 13, "squashfs", "squashfs", "SquashFS File System", B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, true },
-	{ 14, "iso9660", "iso9660", "ISO9660 File System", B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, true },
-	{ 15, "udf", "udf", "UDF File System", B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, true },
-	{ 16, "erofs", "erofs", "EROFS File System", B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, true },
+	{ 15, "squashfs", "squashfs", "SquashFS File System", FS | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, true },
+	{ 16, "iso9660", "iso9660", "ISO9660 File System", FS | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, true },
+	{ 17, "udf", "udf", "UDF File System", FS | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, true },
+	{ 18, "erofs", "erofs", "EROFS File System", FS | B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME, true, true },
 
 	{ -1, "", "", "", 0, false, false }
 };
+
+#undef PARTITIONING_SYSTEM_BASE
+#undef PARTITIONING_SYSTEM_NAMED
+#undef FS
 
 static int gDiskSystemCount = -1;
 
@@ -139,6 +167,52 @@ should_include_device(const char* devName)
 }
 
 
+/*!	GetDiskSystem() reads disk_system as a gDiskSystems[] index.*/
+static void
+apply_disk_system_id(user_partition_data* data)
+{
+	data->disk_system = -1;
+
+	if (data->content_type == NULL || data->content_type[0] == '\0')
+		return;
+
+	for (int i = 0; gDiskSystems[i].id >= 0; i++) {
+		if (strcmp(data->content_type, gDiskSystems[i].name) == 0
+			|| strcmp(data->content_type, gDiskSystems[i].shortName) == 0
+			|| strcmp(data->content_type, gDiskSystems[i].prettyName) == 0) {
+			data->disk_system = gDiskSystems[i].id;
+			return;
+		}
+	}
+}
+
+
+/*!	Map Linux probe names so _kern_find_disk_system() can find them.*/
+static const char*
+normalize_fs_content_type(const char* fsType)
+{
+	static const struct { const char* linux_; const char* haiku; } kMap[] = {
+		{ "vfat",    "fat" },
+		{ "msdos",   "fat" },
+		{ "ntfs3",   "ntfs" },
+		{ "ntfs-3g", "ntfs" },
+		{ "fuseblk", "ntfs" },
+		{ "swap",    "linux-swap" },
+		{ NULL, NULL }
+	};
+
+	if (fsType == NULL)
+		return NULL;
+
+	for (int i = 0; kMap[i].linux_ != NULL; i++) {
+		if (strcmp(fsType, kMap[i].linux_) == 0)
+			return kMap[i].haiku;
+	}
+
+	return fsType;
+}
+
+
 static void
 fill_partition_info(const char* devPath, const char* sysPath, 
 	user_partition_data* data, bool wholeDevice, int partIndex)
@@ -165,8 +239,25 @@ fill_partition_info(const char* devPath, const char* sysPath,
 	data->block_size = get_block_size(devPath);
 	data->index = partIndex;
 	data->status = B_PARTITION_VALID;
-	if (wholeDevice)
+
+	bool hasPartitionTable = false;
+	if (wholeDevice) {
 		data->flags |= B_PARTITION_IS_DEVICE;
+
+		char ptType[32] = {0};
+		if (BKernelPrivate::get_partition_table_type(devPath, ptType,
+				sizeof(ptType)) && ptType[0]) {
+			const char* name = ptType;
+			if (strcmp(ptType, "dos") == 0)
+				name = "intel";
+			else if (strcmp(ptType, "mac") == 0)
+				name = "apple";
+
+			data->content_type = strdup(name);
+			data->flags |= B_PARTITION_PARTITIONING_SYSTEM;
+			hasPartitionTable = true;
+		}
+	}
 
 	char namePath[PATH_MAX];
 	snprintf(namePath, sizeof(namePath), "%s/partition", sysPath);
@@ -189,6 +280,11 @@ fill_partition_info(const char* devPath, const char* sysPath,
 	if (BKernelPrivate::get_udev_part_type(typeSysname, partType,
 			sizeof(partType)) && partType[0]) {
 		data->type = strdup(partType);
+	}
+
+	if (hasPartitionTable) {
+		apply_disk_system_id(data);
+		return;
 	}
 
 	char fsType[64] = {0};
@@ -242,7 +338,7 @@ fill_partition_info(const char* devPath, const char* sysPath,
 		}
 
 		if (fsType[0])
-			data->content_type = strdup(fsType);
+			data->content_type = strdup(normalize_fs_content_type(fsType));
 		if (mountOpts[0])
 			data->parameters = strdup(mountOpts);
 
@@ -266,7 +362,7 @@ fill_partition_info(const char* devPath, const char* sysPath,
 		if (BKernelPrivate::get_udev_fs_type(sysname, udevType,
 				sizeof(udevType))) {
 			data->flags |= B_PARTITION_FILE_SYSTEM;
-			data->content_type = strdup(udevType);
+			data->content_type = strdup(normalize_fs_content_type(udevType));
 			if (BKernelPrivate::is_readonly_filesystem(udevType))
 				data->flags |= B_PARTITION_READ_ONLY;
 
@@ -278,7 +374,8 @@ fill_partition_info(const char* devPath, const char* sysPath,
 		} else if (BKernelPrivate::detect_filesystem(devPath, fsType,
 				sizeof(fsType), true)) {
 			data->flags |= B_PARTITION_FILE_SYSTEM;
-			data->content_type = (fsType[0] ? strdup(fsType) : NULL);
+			data->content_type = (fsType[0]
+				? strdup(normalize_fs_content_type(fsType)) : NULL);
 			if (BKernelPrivate::is_readonly_filesystem(fsType))
 				data->flags |= B_PARTITION_READ_ONLY;
 
@@ -289,6 +386,8 @@ fill_partition_info(const char* devPath, const char* sysPath,
 			}
 		}
 	}
+
+	apply_disk_system_id(data);
 }
 
 
@@ -673,11 +772,8 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 	if (!BKernelPrivate::file_exists(sysPath))
 		return B_ENTRY_NOT_FOUND;
 
-	// Only enumerate children when the caller actually asked for the full
-	// tree (deviceOnly == false). The previous code had this inverted, which
-	// caused BPartition::_Unset to walk an uninitialised children[] array
-	// and segfault.
-	int partCount = deviceOnly ? 0 : BKernelPrivate::count_partitions(devName);
+	// deviceOnly limits accepted ids; children are always returned.
+	int partCount = BKernelPrivate::count_partitions(devName);
 
 	// GPT caps at 128 partitions; clamp paranoidly to keep the allocation
 	// bounded if count_partitions ever returns nonsense.
@@ -719,9 +815,13 @@ _kern_get_disk_device_data(partition_id deviceID, bool deviceOnly,
 	buffer->device_partition_data.child_count = partCount;
 
 	if (partCount > 0) {
-		free(buffer->device_partition_data.content_type);
-		buffer->device_partition_data.content_type
-			= strdup("Intel Partition Map");
+		// Last resort: only when the udev probe named no table type.
+		if (buffer->device_partition_data.content_type == NULL) {
+			buffer->device_partition_data.content_type = strdup("intel");
+			buffer->device_partition_data.flags
+				|= B_PARTITION_PARTITIONING_SYSTEM;
+			apply_disk_system_id(&buffer->device_partition_data);
+		}
 
 		user_partition_data* partData = (user_partition_data*)
 			((char*)buffer + sizeof(user_disk_device_data) + childPtrExtra);
@@ -917,7 +1017,8 @@ _kern_find_disk_system(const char* name, struct user_disk_system_info* info)
 	int count = get_disk_system_count();
 	for (int i = 0; i < count; i++) {
 		if (strcmp(gDiskSystems[i].name, name) == 0 ||
-			strcmp(gDiskSystems[i].shortName, name) == 0) {
+			strcmp(gDiskSystems[i].shortName, name) == 0 ||
+			strcmp(gDiskSystems[i].prettyName, name) == 0) {
 			info->id = gDiskSystems[i].id;
 			strlcpy(info->name, gDiskSystems[i].name, sizeof(info->name));
 			strlcpy(info->short_name, gDiskSystems[i].shortName, sizeof(info->short_name));
@@ -1026,7 +1127,8 @@ _kern_mount_partition(partition_id id, const char* mountPoint,
 	char detectedFs[64] = {0};
 
 	if (diskSystem && diskSystem[0] != '\0') {
-		fsType = diskSystem;
+		// Callers pass Haiku names; mount(2) wants Linux names.
+		fsType = BKernelPrivate::translate_fs_to_linux(diskSystem);
 	} else if (BKernelPrivate::detect_filesystem(devPath, detectedFs,
 			sizeof(detectedFs))) {
 		fsType = detectedFs;

@@ -5,8 +5,10 @@
 
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <fs_attr.h>
 #include <TypeConstants.h>
@@ -57,7 +59,7 @@ test_read(int fd, const char* attribute, type_code type, const char* data,
 int
 main(int argc, char** argv)
 {
-	int fd = open(kTestFileName, O_CREAT | O_TRUNC | O_WRONLY);
+	int fd = open(kTestFileName, O_CREAT | O_TRUNC | O_WRONLY, 0644);
 	if (fd < 0) {
 		fprintf(stderr, "Creating test file \"%s\" failed: %s\n", kTestFileName,
 			strerror(errno));

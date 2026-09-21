@@ -90,7 +90,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   install(FILES data/systemd/vos-sshdebug.service DESTINATION /etc/systemd/system/)
 endif()
 
-#install(FILES data/etc/modules-load.d/befs.conf DESTINATION /etc/modules-load.d/)
+# Read-only Linux befs driver; harmless if the kernel lacks the module.
+install(FILES data/etc/modules-load.d/befs.conf DESTINATION /etc/modules-load.d/)
 
 
 # Boot scripts

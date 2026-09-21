@@ -22,7 +22,6 @@
 #include <PopUpMenu.h>
 #include <String.h>
 #include <TextControl.h>
-#include <Variant.h>
 
 #include "Support.h"
 
@@ -65,11 +64,6 @@ ChangeParametersPanel::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case MSG_PARTITION_TYPE:
-			if (fEditor != NULL) {
-				const char* type;
-				if (message->FindString("type", &type) == B_OK)
-					fEditor->ParameterChanged("type", BVariant(type));
-			}
 			break;
 
 		default:
@@ -145,6 +139,12 @@ ChangeParametersPanel::CreateChangeControls(BPartition* partition,
 				item->SetMarked(true);
 			}
 		}
+	}
+
+	// Haiku's BFS default doesn't exist here; mark the first offered type.
+	if (fTypePopUpMenu->FindMarked() == NULL
+		&& fTypePopUpMenu->CountItems() > 0) {
+		fTypePopUpMenu->ItemAt(0)->SetMarked(true);
 	}
 
 	fTypeMenuField = new BMenuField(B_TRANSLATE("Partition type:"),

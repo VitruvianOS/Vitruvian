@@ -12,7 +12,6 @@
 
 #include <LayoutBuilder.h>
 #include <Partition.h>
-#include <PartitionParameterEditor.h>
 #include <Window.h>
 
 #include "Support.h"
@@ -49,8 +48,6 @@ protected:
 protected:
 			BButton*			fOkButton;
 			status_t			fReturnStatus;
-
-			BPartitionParameterEditor* fEditor;
 
 private:
 	class EscapeFilter;

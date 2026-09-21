@@ -16,8 +16,6 @@
 
 #include <Button.h>
 #include <Catalog.h>
-#include <DiskSystemAddOn.h>
-#include <DiskSystemAddOnManager.h>
 #include <GroupLayout.h>
 #include <MessageFilter.h>
 #include <String.h>
@@ -80,7 +78,6 @@ AbstractParametersPanel::AbstractParametersPanel(BWindow* window)
 		B_ASYNCHRONOUS_CONTROLS | B_AUTO_UPDATE_SIZE_LIMITS),
 	fOkButton(new BButton(B_TRANSLATE("OK"), new BMessage(kMsgOk))),
 	fReturnStatus(B_CANCELED),
-	fEditor(NULL),
 	fEscapeFilter(new EscapeFilter(this)),
 	fExitSemaphore(create_sem(0, "AbstractParametersPanel exit")),
 	fWindow(window)
@@ -124,7 +121,7 @@ AbstractParametersPanel::MessageReceived(BMessage* message)
 			break;
 
 		case kParameterChanged:
-			fOkButton->SetEnabled(fEditor->ValidateParameters());
+			fOkButton->SetEnabled(true);
 			break;
 
 		default:
@@ -150,36 +147,13 @@ AbstractParametersPanel::Cancel()
 
 
 void
-AbstractParametersPanel::Init(B_PARAMETER_EDITOR_TYPE type,
-	const BString& diskSystem, BPartition* partition)
+AbstractParametersPanel::Init(B_PARAMETER_EDITOR_TYPE /*type*/,
+	const BString& /*diskSystem*/, BPartition* /*partition*/)
 {
-	// Create partition parameter editor
-
-	status_t status = B_ERROR;
-	if (diskSystem.IsEmpty()) {
-		status = partition->GetParameterEditor(type, &fEditor);
-	} else {
-		DiskSystemAddOnManager* manager = DiskSystemAddOnManager::Default();
-		BDiskSystemAddOn* addOn = manager->GetAddOn(diskSystem);
-		if (addOn != NULL) {
-			// put the add-on
-			manager->PutAddOn(addOn);
-
-			status = addOn->GetParameterEditor(type, &fEditor);
-		}
-	}
-	if (status != B_OK && status != B_NOT_SUPPORTED)
-		fReturnStatus = status;
-
-	// Create controls
-
 	BLayoutBuilder::Group<> builder = BLayoutBuilder::Group<>(this,
 		B_VERTICAL);
 
-	if (fEditor == NULL)
-		AddControls(builder, NULL);
-	else
-		AddControls(builder, fEditor->View());
+	AddControls(builder, NULL);
 
 	builder.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 			.AddGlue()
@@ -189,19 +163,13 @@ AbstractParametersPanel::Init(B_PARAMETER_EDITOR_TYPE type,
 		.SetInsets(B_USE_DEFAULT_SPACING);
 
 	SetDefaultButton(fOkButton);
-
-	if (fEditor != NULL) {
-		fEditor->SetTo(partition);
-		fEditor->SetModificationMessage(new BMessage(kParameterChanged));
-	}
 }
 
 
 status_t
 AbstractParametersPanel::Go(BString& parameters, BMessage& storage)
 {
-	// Without an editor, we cannot change anything, anyway
-	if (fEditor == NULL && NeedsEditor()) {
+	if (NeedsEditor()) {
 		parameters = "";
 		if (ValidWithoutEditor() && fReturnStatus == B_CANCELED)
 			fReturnStatus = B_OK;
@@ -233,15 +201,8 @@ AbstractParametersPanel::Go(BString& parameters, BMessage& storage)
 		if (!Lock())
 			return B_CANCELED;
 
-		if (fReturnStatus == B_OK) {
-			if (fEditor != NULL && fEditor->ValidateParameters()) {
-				status_t status = fEditor->GetParameters(parameters);
-				if (status != B_OK)
-					fReturnStatus = status;
-			}
-			if (fReturnStatus == B_OK)
-				fReturnStatus = ParametersReceived(parameters, storage);
-		}
+		if (fReturnStatus == B_OK)
+			fReturnStatus = ParametersReceived(parameters, storage);
 	}
 
 	status_t status = fReturnStatus;

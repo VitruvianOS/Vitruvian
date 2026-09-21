@@ -46,6 +46,7 @@ enum {
 	kMountedAtColumn,
 	kSizeColumn,
 	kFreeSizeColumn,
+	kUsedPercentColumn,
 	kBlockSizeColumn,
 	kPhysicalBlockSizeColumn,
 	kParametersColumn,
@@ -338,6 +339,16 @@ PartitionListRow::PartitionListRow(BPartition* partition)
 	} else
 		SetField(new BStringField(kUnavailableString), kFreeSizeColumn);
 
+	// Mounted only; offline use would need a privileged call per row.
+	if (volume.InitCheck() == B_OK && volume.Capacity() > 0) {
+		off_t used = volume.Capacity() - volume.FreeBytes();
+		int32 percent = (int32)((used * 100) / volume.Capacity());
+		BString percentStr;
+		percentStr << percent << "%";
+		SetField(new BStringField(percentStr.String()), kUsedPercentColumn);
+	} else
+		SetField(new BStringField(kUnavailableString), kUsedPercentColumn);
+
 	char blocksize[16];
 	snprintf(blocksize, sizeof(blocksize), "%" B_PRIu32,
 		partition->BlockSize());
@@ -427,6 +438,8 @@ PartitionListView::PartitionListView()
 		B_TRUNCATE_END, B_ALIGN_RIGHT), kSizeColumn);
 	AddColumn(new PartitionColumn(B_TRANSLATE("Free space"), 80, 50, 500,
 		B_TRUNCATE_END, B_ALIGN_RIGHT), kFreeSizeColumn);
+	AddColumn(new PartitionColumn(B_TRANSLATE("Used"), 50, 50, 200,
+		B_TRUNCATE_END, B_ALIGN_RIGHT), kUsedPercentColumn);
 	AddColumn(new PartitionColumn(B_TRANSLATE("Block size"), 50, 50, 500,
 		B_TRUNCATE_END, B_ALIGN_RIGHT), kBlockSizeColumn);
 	AddColumn(new PartitionColumn(B_TRANSLATE("Physical block size"), 50, 50, 500,

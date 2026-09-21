@@ -517,9 +517,18 @@ find_thread(const char* name)
 		return sCachedTid;
 	}
 
-	// Deliberately unsupported: names aren't unique, and an id matched on a
-	// non-unique string can be recycled before the caller uses it.
-	debugger("find_thread() by name is not supported");
+	// Names are stored truncated to 15 chars; truncate the query to match.
+	char truncated[16];
+	strlcpy(truncated, name, sizeof(truncated));
+
+	team_id team = getpid();
+	int32 cookie = 0;
+	thread_info info;
+	while (_get_next_thread_info(team, &cookie, &info, sizeof(info)) == B_OK) {
+		if (strcmp(info.name, truncated) == 0)
+			return info.thread;
+	}
+
 	return B_NAME_NOT_FOUND;
 }
 

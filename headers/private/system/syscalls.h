@@ -573,6 +573,10 @@ extern status_t		_kern_unregister_file_device(partition_id deviceID,
 extern status_t		_kern_get_file_disk_device_path(partition_id id,
 						char* buffer, size_t bufferSize);
 
+// V\OS: implemented in src/system/libroot2/fs/disk_device.cpp
+extern status_t		_kern_get_partition_path(partition_id id, char* buffer,
+						size_t bufferSize);
+
 // disk systems
 extern status_t		_kern_get_disk_system_info(disk_system_id id,
 						struct user_disk_system_info *info);

@@ -57,7 +57,7 @@ jobs:
         run: cd generated.x86 && ../build/scripts/setupenv.sh --arch=amd64
 
       - name: Configure
-        run: cd generated.x86 && ../configure --arch=amd64 --build-type=Workflow --buildtools=../buildtools
+        run: cd generated.x86 && ../configure --arch=amd64 --build-type=Release --buildtools=../buildtools
 
       - name: Build
         run: cd generated.x86 && ninja

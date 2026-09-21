@@ -48,7 +48,7 @@ jobs:
         run: mkdir -p generated.arm64
 
       - name: Configure (also creates chroot)
-        run: cd generated.arm64 && ../configure --arch=arm64 --build-type=Workflow --chroot-build --buildtools=../buildtools
+        run: cd generated.arm64 && ../configure --arch=arm64 --build-type=Release --chroot-build --buildtools=../buildtools
 
       - name: Build ISO + RAW images
         run: cd generated.arm64 && ../bake build --image-type=iso,raw

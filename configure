@@ -1,5 +1,5 @@
 #!/bin/sh
-#   --build-type=TYPE           CMake build type: Debug|Release|Workflow (default: Debug)
+#   --build-type=TYPE           CMake build type: Debug|Release (default: Debug)
 #   --chroot-build              Use chroot sysroot for libraries/headers
 #   --chroot-path=PATH          Path to chroot (default: <build>/LIVE_BOOT/chroot)
 #   --arch=ARCH                 Target architecture: amd64, arm64, arm32, riscv64
@@ -208,6 +208,18 @@ if [ $CHROOT_BUILD -eq 1 ] && [ -f ./imagekernelversion.conf ]; then
 else
     guestkernel=$(cat ./imagekernelversion.conf 2>/dev/null || echo "$hostkernel")
 fi
+
+# Only build types with flags defined in build/defs.cmake are accepted. An
+# unrecognised value is passed straight to CMake, which then finds no
+# CMAKE_<LANG>_FLAGS_<TYPE> and silently compiles with no optimisation flags
+# at all, which is what the old "Workflow" type did.
+case "$BUILD_TYPE" in
+    Debug|Release) ;;
+    *)
+        echo "Error: unknown --build-type=$BUILD_TYPE (expected Debug or Release)." >&2
+        exit 1
+        ;;
+esac
 
 # Build up cmake options
 CMAKE_OPTS="-DCMAKE_BUILD_TYPE=$BUILD_TYPE"

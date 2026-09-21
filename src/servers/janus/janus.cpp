@@ -170,6 +170,7 @@ static port_id sLaunchPort = -1;
 
 static void janus_handle_shutdown(bool reboot);
 static void jdbg(const char* fmt, ...);
+static void mount_server_registrar_ready();
 
 
 static int
@@ -283,6 +284,10 @@ handle_register_app(BPrivate::KMessage& kmsg)
 		sApps[idx].port = (port_id)port;
 	}
 	pthread_mutex_unlock(&sAppsLock);
+
+	// mount_server needs the login's registrar; start it once it exists.
+	if (strcmp(name, "registrar") == 0)
+		mount_server_registrar_ready();
 }
 
 
@@ -1309,18 +1314,60 @@ init_launch_daemon_port()
 }
 
 
-// Only the greeter-enabled path: the non-greeter path has its own systemd
-// unit that execs janus_launch instead.
 static void
 spawn_mount_server()
 {
-	if (!sGreeterMode)
-		return;
-
 	BPrivate::KMessage req(BPrivate::B_LAUNCH_JOB);
 	req.AddString("name", "mount_server");
 	BPrivate::KMessage reply;
 	req.SendTo(sLaunchPort, -1, &reply, 5000000LL, 15000000LL, getpid());
+}
+
+
+// Runs detached: answering B_LAUNCH_JOB inline would deadlock the reply.
+static void*
+mount_server_restart_thread(void*)
+{
+	const char* signature = NULL;
+	for (int i = 0; kKnownServers[i].name != NULL; i++) {
+		if (strcmp(kKnownServers[i].name, "mount_server") == 0) {
+			signature = kKnownServers[i].signature;
+			break;
+		}
+	}
+
+	pthread_mutex_lock(&sAppsLock);
+	int idx = (signature != NULL) ? find_app_by_sig(signature) : -1;
+	pid_t old = (idx >= 0) ? sApps[idx].pid : -1;
+	pthread_mutex_unlock(&sAppsLock);
+
+	// A survivor of the last login holds a dead be_roster; kill it.
+	if (old > 0) {
+		kill(old, SIGTERM);
+		// Races daemon_loop()'s reaper; ECHILD is fine too.
+		for (int waitMs = 0; waitMs < 2000; waitMs += 20) {
+			if (waitpid(old, NULL, WNOHANG) != 0)
+				break;
+			usleep(20 * 1000);
+		}
+		invalidate_app_by_pid(old);
+	}
+
+	spawn_mount_server();
+	return NULL;
+}
+
+
+static void
+mount_server_registrar_ready()
+{
+	pthread_t th;
+	if (pthread_create(&th, NULL, mount_server_restart_thread, NULL) != 0) {
+		fprintf(stderr, "janus: mount_server restart thread: %s\n",
+			strerror(errno));
+		return;
+	}
+	pthread_detach(th);
 }
 
 
@@ -1416,7 +1463,7 @@ main(int argc, char** argv)
 				strerror(errno));
 	}
 
-	spawn_mount_server();
+	// mount_server needs the login's registrar; see mount_server_registrar_ready().
 
 	if (sSystemMode && haveIdentity) {
 		// A janus restarted during a reboot must not flash the greeter.

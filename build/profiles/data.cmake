@@ -21,6 +21,8 @@ install(PROGRAMS data/libexec/vos-firstboot-commit
 
 install(PROGRAMS data/libexec/vos-install-helper
   DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-partition-lib.sh
+  DESTINATION /usr/libexec/)
 
 install(FILES data/etc/installer/excludes.list
   DESTINATION /usr/share/vos/installer/)
@@ -33,6 +35,16 @@ install(FILES data/polkit-1/actions/org.vitruvian.installer.policy
   DESTINATION /usr/share/polkit-1/actions/)
 install(FILES data/polkit-1/rules.d/49-vitruvian-installer.rules
   DESTINATION /usr/share/polkit-1/rules.d/)
+
+install(PROGRAMS data/libexec/vos-drivesetup-helper
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.drivesetup.policy
+  DESTINATION /usr/share/polkit-1/actions/)
+
+install(PROGRAMS data/libexec/vos-drivesetup-query
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.drivesetup-query.policy
+  DESTINATION /usr/share/polkit-1/actions/)
 
 install(PROGRAMS data/libexec/privilegedguy-helper
   DESTINATION /usr/libexec/)

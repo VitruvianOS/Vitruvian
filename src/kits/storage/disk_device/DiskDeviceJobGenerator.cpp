@@ -27,6 +27,8 @@
 #include "MoveJob.h"
 #include "RepairJob.h"
 #include "ResizeJob.h"
+#include <DiskSystem.h>
+
 #include "SetStringJob.h"
 #include "UninitializeJob.h"
 
@@ -432,9 +434,16 @@ DiskDeviceJobGenerator::_GenerateRemainingJobs(BPartition* parent,
 			// partition not (re-)initialized, set content properties
 
 			// content name
-			if ((changeFlags & B_PARTITION_CHANGED_NAME)
-				|| compare_string(partition->ContentName(),
-					partitionData->content_name)) {
+			// a partition map on a whole disk is not a filesystem
+			BDiskSystem contentDiskSystem;
+			bool contentIsFileSystem
+				= partition->GetDiskSystem(&contentDiskSystem) == B_OK
+					&& contentDiskSystem.IsFileSystem();
+
+			if (contentIsFileSystem
+				&& ((changeFlags & B_PARTITION_CHANGED_NAME)
+					|| compare_string(partition->ContentName(),
+						partitionData->content_name))) {
 				status_t error = _GenerateSetContentNameJob(partition);
 				if (error != B_OK)
 					return error;
@@ -509,6 +518,14 @@ DiskDeviceJobGenerator::_GenerateInitializeJob(BPartition* partition)
 		delete job;
 		return error;
 	}
+
+	BString role;
+	BMessage options;
+	if (BMutablePartition* shadow = _GetMutablePartition(partition)) {
+		role = shadow->Role();
+		options = shadow->Options();
+	}
+	job->SetPlanMetadata(partition->IsDevice(), role.String(), options);
 
 	return _AddJob(job);
 }
@@ -635,6 +652,9 @@ DiskDeviceJobGenerator::_GenerateCreateChildJob(BPartition* parent,
 		delete job;
 		return error;
 	}
+
+	if (BMutablePartition* shadow = _GetMutablePartition(partition))
+		job->SetRole(shadow->Role());
 
 	return _AddJob(job);
 }

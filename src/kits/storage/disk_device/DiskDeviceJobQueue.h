@@ -9,6 +9,10 @@
 #include <ObjectList.h>
 
 
+class BDiskDevice;
+class BMessage;
+
+
 namespace BPrivate {
 
 
@@ -23,6 +27,10 @@ public:
 			status_t			AddJob(DiskDeviceJob* job);
 
 			status_t			Execute();
+
+			// one pkexec prompt, not one per job
+			status_t			ExecuteViaHelper(BDiskDevice* device,
+									BMessage* outResult = NULL);
 
 private:
 	typedef	BObjectList<DiskDeviceJob, true> JobList;

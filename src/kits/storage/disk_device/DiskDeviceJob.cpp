@@ -32,3 +32,12 @@ DiskDeviceJob::~DiskDeviceJob()
 	if (fChild)
 		fChild->ReleaseReference();
 }
+
+
+// AddToPlan
+status_t
+DiskDeviceJob::AddToPlan(PartitionPlanBuilder& /*plan*/,
+	const BString& /*opID*/, PartitionOpIdMap& /*createdIds*/)
+{
+	return B_NOT_SUPPORTED;
+}

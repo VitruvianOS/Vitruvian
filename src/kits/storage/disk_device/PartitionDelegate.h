@@ -5,13 +5,8 @@
 #ifndef _PARTITION_DELEGATE_H
 #define _PARTITION_DELEGATE_H
 
-#include <DiskSystemAddOn.h>
 #include <MutablePartition.h>
 #include <Partition.h>
-
-
-class BDiskSystemAddOn;
-class BPartitionHandle;
 
 
 class BPartition::Delegate {
@@ -101,13 +96,8 @@ public:
 			status_t			DeleteChild(Delegate* child);
 
 private:
-			void				_FreeHandle();
-
-private:
 			BPartition*			fPartition;
 			BMutablePartition	fMutablePartition;
-			BDiskSystemAddOn*	fDiskSystem;
-			BPartitionHandle*	fPartitionHandle;
 };
 
 

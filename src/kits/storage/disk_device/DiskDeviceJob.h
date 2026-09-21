@@ -5,6 +5,8 @@
 #ifndef _DISK_DEVICE_JOB_H
 #define _DISK_DEVICE_JOB_H
 
+#include <Message.h>
+#include <String.h>
 #include <SupportDefs.h>
 
 
@@ -12,6 +14,8 @@ namespace BPrivate {
 
 
 class PartitionReference;
+class PartitionPlanBuilder;
+class PartitionOpIdMap;
 
 
 class DiskDeviceJob {
@@ -21,6 +25,11 @@ public:
 	virtual						~DiskDeviceJob();
 
 	virtual	status_t			Do() = 0;
+
+	// createdIds maps ids for children created earlier in the commit
+	virtual	status_t			AddToPlan(PartitionPlanBuilder& plan,
+									const BString& opID,
+									PartitionOpIdMap& createdIds);
 
 protected:
 			PartitionReference*	fPartition;

@@ -19,6 +19,9 @@ public:
 	virtual						~DeleteChildJob();
 
 	virtual	status_t			Do();
+	virtual	status_t			AddToPlan(PartitionPlanBuilder& plan,
+									const BString& opID,
+									PartitionOpIdMap& createdIds);
 };
 
 

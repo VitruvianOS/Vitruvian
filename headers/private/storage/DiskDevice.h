@@ -10,6 +10,7 @@
 
 
 struct user_disk_device_data;
+class BMessage;
 
 class BDiskDevice : public BPartition {
 public:
@@ -34,7 +35,8 @@ public:
 			status_t			PrepareModifications();
 			status_t			CommitModifications(bool synchronously = true,
 									BMessenger progressMessenger = BMessenger(),
-									bool receiveCompleteProgressUpdates = true);
+									bool receiveCompleteProgressUpdates = true,
+									BMessage* outResult = NULL);
 			status_t			CancelModifications();
 
 			bool				IsFile() const;

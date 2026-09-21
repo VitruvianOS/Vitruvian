@@ -83,20 +83,18 @@ target_sources(be PRIVATE
 	disk_device/DiskDeviceRoster.cpp
 	disk_device/DiskDeviceTypes.cpp
 	disk_device/DiskDeviceVisitor.cpp
-	disk_device/DiskScannerAddOn.cpp
-	disk_device/DiskSystemAddOn.cpp
-	disk_device/DiskSystemAddOnManager.cpp
 	disk_device/DiskSystem.cpp
 	disk_device/MutablePartition.cpp
 	disk_device/Partition.cpp
 	disk_device/PartitionDelegate.cpp
-	disk_device/PartitioningDialog.cpp
 	disk_device/PartitioningInfo.cpp
-	disk_device/PartitionParameterEditor.cpp
+	disk_device/PartitionCapabilities.cpp
+	disk_device/PartitionPlanBuilder.cpp
 	disk_device/PartitionReference.cpp
 
 	disk_device/jobs/CreateChildJob.cpp
 	disk_device/jobs/RepairJob.cpp
+	disk_device/jobs/SetFlagsJob.cpp
 	disk_device/jobs/DefragmentJob.cpp
 	disk_device/jobs/ResizeJob.cpp
 	disk_device/jobs/DeleteChildJob.cpp

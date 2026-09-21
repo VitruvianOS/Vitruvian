@@ -9,6 +9,7 @@
 #include <syscalls.h>
 
 #include "DiskDeviceUtils.h"
+#include "PartitionPlanBuilder.h"
 #include "PartitionReference.h"
 
 
@@ -101,3 +102,52 @@ SetStringJob::Do()
 	return B_OK;
 }
 
+
+// AddToPlan
+// only content label and GPT name map to the plan; the rest do not
+status_t
+SetStringJob::AddToPlan(PartitionPlanBuilder& plan, const BString& opID,
+	PartitionOpIdMap& createdIds)
+{
+	switch (fJobType) {
+		case B_DISK_DEVICE_JOB_SET_CONTENT_NAME:
+		{
+			// same-plan creates lack a devnode; use create op id
+			BString targetRef;
+			if (const BString* createID = createdIds.Get(fPartition))
+				targetRef = *createID;
+			else {
+				char devPath[B_PATH_NAME_LENGTH];
+				status_t error = _kern_get_partition_path(
+					fPartition->PartitionID(), devPath, sizeof(devPath));
+				if (error != B_OK)
+					return error;
+				targetRef = devPath;
+			}
+
+			plan.AddSetLabel(opID.String(), targetRef.String(), "", fString);
+			return B_OK;
+		}
+
+		case B_DISK_DEVICE_JOB_SET_NAME:
+		{
+			BString targetRef;
+			if (const BString* createID = createdIds.Get(fChild))
+				targetRef = *createID;
+			else {
+				char devPath[B_PATH_NAME_LENGTH];
+				status_t error = _kern_get_partition_path(
+					fChild->PartitionID(), devPath, sizeof(devPath));
+				if (error != B_OK)
+					return error;
+				targetRef = devPath;
+			}
+
+			plan.AddSetGptName(opID.String(), targetRef.String(), fString);
+			return B_OK;
+		}
+
+		default:
+			return B_NOT_SUPPORTED;
+	}
+}

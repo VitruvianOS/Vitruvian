@@ -12,6 +12,7 @@
 #include <syscalls.h>
 
 #include "DiskDeviceUtils.h"
+#include "PartitionPlanBuilder.h"
 #include "PartitionReference.h"
 
 
@@ -94,3 +95,27 @@ MoveJob::Do()
 	return B_OK;
 }
 
+
+// AddToPlan
+// nested fContents move with the partition; nothing separate to send
+status_t
+MoveJob::AddToPlan(PartitionPlanBuilder& plan, const BString& opID,
+	PartitionOpIdMap& createdIds)
+{
+	// same-plan creates have no devnode yet; reference the create op id
+	BString targetRef;
+	if (const BString* createID = createdIds.Get(fChild))
+		targetRef = *createID;
+	else {
+		char devPath[B_PATH_NAME_LENGTH];
+		status_t error = _kern_get_partition_path(fChild->PartitionID(), devPath,
+			sizeof(devPath));
+		if (error != B_OK)
+			return error;
+		targetRef = devPath;
+	}
+
+	plan.AddMove(opID.String(), targetRef.String(),
+		fOffset / (1024 * 1024));
+	return B_OK;
+}

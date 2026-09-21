@@ -30,7 +30,9 @@ BMutablePartition::UninitializeContents()
 	SetContentName(NULL);
 	SetContentParameters(NULL);
 	SetContentSize(0);
-	SetBlockSize(Parent()->BlockSize());
+	// this can run on the device itself, whose Parent() is NULL
+	if (Parent() != NULL)
+		SetBlockSize(Parent()->BlockSize());
 	SetContentType(NULL);
 	SetStatus(B_PARTITION_UNINITIALIZED);
 	ClearFlags(B_PARTITION_FILE_SYSTEM | B_PARTITION_PARTITIONING_SYSTEM);
@@ -326,6 +328,40 @@ BMutablePartition::SetContentParameters(const char* parameters)
 		return B_NO_MEMORY;
 
 	Changed(B_PARTITION_CHANGED_CONTENT_PARAMETERS);
+	return B_OK;
+}
+
+
+// Role
+const char*
+BMutablePartition::Role() const
+{
+	return fRole.String();
+}
+
+
+// SetRole
+status_t
+BMutablePartition::SetRole(const char* role)
+{
+	fRole = role;
+	return B_OK;
+}
+
+
+// Options
+const BMessage&
+BMutablePartition::Options() const
+{
+	return fOptions;
+}
+
+
+// SetOptions
+status_t
+BMutablePartition::SetOptions(const BMessage& options)
+{
+	fOptions = options;
 	return B_OK;
 }
 

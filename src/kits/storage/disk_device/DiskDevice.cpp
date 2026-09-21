@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 #include <DiskDevice.h>
@@ -26,7 +27,6 @@
 #include "DiskDeviceJob.h"
 #include "DiskDeviceJobGenerator.h"
 #include "DiskDeviceJobQueue.h"
-#include <DiskSystemAddOnManager.h>
 
 
 //#define TRACE_DISK_DEVICE
@@ -289,13 +289,6 @@ BDiskDevice::PrepareModifications()
 		return B_BAD_VALUE;
 	}
 
-	// make sure the disk system add-ons are loaded
-	error = DiskSystemAddOnManager::Default()->LoadDiskSystems();
-	if (error != B_OK) {
-		TRACE("  failed to load disk systems\n");
-		return error;
-	}
-
 	// recursively create the delegates
 	error = _CreateDelegates();
 
@@ -309,7 +302,6 @@ BDiskDevice::PrepareModifications()
 	if (error != B_OK) {
 		TRACE("  failed to init delegates\n");
 		_DeleteDelegates();
-		DiskSystemAddOnManager::Default()->UnloadDiskSystems();
 	}
 
 	return error;
@@ -328,9 +320,10 @@ BDiskDevice::PrepareModifications()
  */
 status_t
 BDiskDevice::CommitModifications(bool synchronously,
-	BMessenger progressMessenger, bool receiveCompleteProgressUpdates)
+	BMessenger progressMessenger, bool receiveCompleteProgressUpdates,
+	BMessage* outResult)
 {
-// TODO: Support parameters!
+	// TODO: helper call is always synchronous; progress params ignored
 	status_t error = InitCheck();
 	if (error != B_OK)
 		return error;
@@ -342,12 +335,11 @@ BDiskDevice::CommitModifications(bool synchronously,
 	DiskDeviceJobQueue jobQueue;
 	error = DiskDeviceJobGenerator(this, &jobQueue).GenerateJobs();
 
-	// do the jobs
+	// the _kern_* stubs are unprivileged; commit ships one helper plan
 	if (error == B_OK)
-		error = jobQueue.Execute();
+		error = jobQueue.ExecuteViaHelper(this, outResult);
 
 	_DeleteDelegates();
-	DiskSystemAddOnManager::Default()->UnloadDiskSystems();
 
 	if (error == B_OK)
 		error = _SetTo(ID(), true, 0);
@@ -372,7 +364,6 @@ BDiskDevice::CancelModifications()
 		return B_BAD_VALUE;
 
 	_DeleteDelegates();
-	DiskSystemAddOnManager::Default()->UnloadDiskSystems();
 
 	if (error == B_OK)
 		error = _SetTo(ID(), true, 0);

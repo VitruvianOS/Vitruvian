@@ -7,6 +7,7 @@
 
 #include <syscalls.h>
 
+#include "PartitionPlanBuilder.h"
 #include "PartitionReference.h"
 
 
@@ -38,3 +39,12 @@ DefragmentJob::Do()
 	return B_OK;
 }
 
+
+// AddToPlan
+// no plan-format defrag op exists; override makes the omission explicit
+status_t
+DefragmentJob::AddToPlan(PartitionPlanBuilder& /*plan*/,
+	const BString& /*opID*/, PartitionOpIdMap& /*createdIds*/)
+{
+	return B_NOT_SUPPORTED;
+}

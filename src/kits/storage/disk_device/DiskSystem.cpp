@@ -5,13 +5,10 @@
 
 #include <DiskSystem.h>
 
-#include <DiskSystemAddOn.h>
 #include <Partition.h>
 
 #include <ddm_userland_interface_defs.h>
 #include <syscalls.h>
-
-#include "DiskSystemAddOnManager.h"
 
 
 // constructor
@@ -311,18 +308,8 @@ BDiskSystem::GetTypeForContentType(const char* contentType, BString* type) const
 	if (!contentType || !type || !IsPartitioningSystem())
 		return B_BAD_VALUE;
 
-	// get the disk system add-on
-	DiskSystemAddOnManager* manager = DiskSystemAddOnManager::Default();
-	BDiskSystemAddOn* addOn = manager->GetAddOn(fName.String());
-	if (!addOn)
-		return B_ENTRY_NOT_FOUND;
-
-	status_t result = addOn->GetTypeForContentType(contentType, type);
-
-	// put the add-on
-	manager->PutAddOn(addOn);
-
-	return result;
+	// No per-disk-system type catalog without the add-on ABI.
+	return B_NOT_SUPPORTED;
 }
 
 

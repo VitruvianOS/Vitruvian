@@ -8,6 +8,7 @@
 #include <syscalls.h>
 
 #include "DiskDeviceUtils.h"
+#include "PartitionPlanBuilder.h"
 #include "PartitionReference.h"
 
 
@@ -41,3 +42,19 @@ DeleteChildJob::Do()
 	return B_OK;
 }
 
+
+// AddToPlan
+status_t
+DeleteChildJob::AddToPlan(PartitionPlanBuilder& plan, const BString& opID,
+	PartitionOpIdMap& /*createdIds*/)
+{
+	// deletes never target same-commit creates; no id mapping needed
+	char devPath[B_PATH_NAME_LENGTH];
+	status_t error = _kern_get_partition_path(fChild->PartitionID(), devPath,
+		sizeof(devPath));
+	if (error != B_OK)
+		return error;
+
+	plan.AddDelete(opID.String(), devPath);
+	return B_OK;
+}

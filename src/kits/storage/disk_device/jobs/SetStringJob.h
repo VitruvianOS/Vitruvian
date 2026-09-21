@@ -21,6 +21,9 @@ public:
 			status_t			Init(const char* string, uint32 jobType);
 
 	virtual	status_t			Do();
+	virtual	status_t			AddToPlan(PartitionPlanBuilder& plan,
+									const BString& opID,
+									PartitionOpIdMap& createdIds);
 
 protected:
 			char*				fString;

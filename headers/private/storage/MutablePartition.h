@@ -6,7 +6,9 @@
 #define _MUTABLE_PARTITION_H
 
 #include <List.h>
+#include <Message.h>
 #include <Partition.h>
+#include <String.h>
 
 
 struct user_partition_data;
@@ -58,6 +60,13 @@ public:
 			const char*			ContentParameters() const;
 			status_t			SetContentParameters(const char* parameters);
 
+			// client-side only; kept out of the DDM wire struct
+			const char*			Role() const;
+			status_t			SetRole(const char* role);
+
+			const BMessage&		Options() const;
+			status_t			SetOptions(const BMessage& options);
+
 			status_t			CreateChild(int32 index,
 									BMutablePartition** child);
 			status_t			CreateChild(int32 index, const char* type,
@@ -101,6 +110,8 @@ private:
 			BList				fChildren;
 			uint32				fChangeFlags;
 			void*				fChildCookie;
+			BString				fRole;
+			BMessage			fOptions;
 };
 
 

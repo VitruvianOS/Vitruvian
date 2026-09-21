@@ -9,6 +9,7 @@
 #include <syscalls.h>
 
 #include "DiskDeviceUtils.h"
+#include "PartitionPlanBuilder.h"
 #include "PartitionReference.h"
 
 
@@ -70,3 +71,37 @@ CreateChildJob::Do()
 	return B_OK;
 }
 
+
+// SetRole
+void
+CreateChildJob::SetRole(const char* role)
+{
+	fRole = role;
+}
+
+
+// AddToPlan
+status_t
+CreateChildJob::AddToPlan(PartitionPlanBuilder& plan, const BString& opID,
+	PartitionOpIdMap& createdIds)
+{
+	static const off_t kMiB = 1024 * 1024;
+
+	// snap to MiB: round the start up and the size down, never the reverse
+	off_t startMiB = (fOffset + kMiB - 1) / kMiB;
+
+	off_t sizeMiB;
+	if (fSize < 0) {
+		// unbounded: the rest of the free span
+		sizeMiB = -1;
+	} else {
+		off_t alignedStart = startMiB * kMiB;
+		off_t end = fOffset + fSize;
+		off_t shrunkSize = end - alignedStart;
+		sizeMiB = shrunkSize > 0 ? shrunkSize / kMiB : 0;
+	}
+
+	plan.AddCreate(opID.String(), startMiB, sizeMiB, fType, fRole.String());
+	createdIds.Set(fChild, opID);
+	return B_OK;
+}

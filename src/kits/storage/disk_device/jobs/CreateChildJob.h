@@ -22,7 +22,12 @@ public:
 									const char* type, const char* name,
 									const char* parameters);
 
+			void				SetRole(const char* role);
+
 	virtual	status_t			Do();
+	virtual	status_t			AddToPlan(PartitionPlanBuilder& plan,
+									const BString& opID,
+									PartitionOpIdMap& createdIds);
 
 protected:
 			off_t				fOffset;
@@ -30,6 +35,7 @@ protected:
 			char*				fType;
 			char*				fName;
 			char*				fParameters;
+			BString				fRole;
 };
 
 

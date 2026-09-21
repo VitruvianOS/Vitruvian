@@ -91,7 +91,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libnm-dev libbluetooth-dev"
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libglu1-mesa-dev libnm-dev libbluetooth-dev"
             ;;
         riscv64)
             printf '%s' \
@@ -103,7 +103,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
-                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libnm-dev libbluetooth-dev"
+                " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libglu1-mesa-dev libnm-dev libbluetooth-dev"
             ;;
         *)
             die "No dev package list for architecture: $_arch"

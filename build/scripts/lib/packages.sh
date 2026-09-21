@@ -9,6 +9,7 @@ get_base_packages() {
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager bluez net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
+                " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " grub-common grub2-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin"
@@ -19,6 +20,7 @@ get_base_packages() {
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager bluez net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
+                " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " grub-common grub2-common grub-efi-arm64-bin"
@@ -39,6 +41,7 @@ get_base_packages() {
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager bluez net-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
+                " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " grub-common grub2-common grub-efi-riscv64-bin"

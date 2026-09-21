@@ -18,7 +18,7 @@ set(SYSTEM_APPS
 	DeskCalc
 	DiskProbe
 	DiskUsage
-	#DriveSetup
+	DriveSetup
 	Expander
 	FirstBootPrompt
 	GLTeapot

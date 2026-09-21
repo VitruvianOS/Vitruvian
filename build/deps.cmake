@@ -125,6 +125,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	FDISK
+	LIBRARIES	"fdisk"
+	PACKAGES	"libfdisk-dev"
+	RUNTIMES	"libfdisk1 (>= 2.41-5)"
+)
+
+DeclareDependency(
 	NCURSES
 	LIBRARIES  "ncurses"
 	PACKAGES  "libncurses-dev"

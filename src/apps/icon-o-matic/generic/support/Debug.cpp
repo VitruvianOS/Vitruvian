@@ -13,6 +13,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <OS.h>
@@ -43,7 +44,7 @@ init_debugging()
 	if (init_counter++ == 0) {
 		// open the file
 		#if DEBUG_PRINT
-			out = open(DEBUG_PRINT_FILE, O_RDWR | O_CREAT | O_TRUNC);
+			out = open(DEBUG_PRINT_FILE, O_RDWR | O_CREAT | O_TRUNC, 0644);
 			if (out < 0) {
 				error = errno;
 				init_counter--;

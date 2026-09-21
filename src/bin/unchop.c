@@ -83,7 +83,7 @@ main(int argc, char *argv[])
 void
 do_unchop(char *outfile, char *basename)
 {
-	int fdout = open(outfile, O_WRONLY|O_CREAT|O_APPEND);
+	int fdout = open(outfile, O_WRONLY|O_CREAT|O_APPEND, 0644);
 	if (fdout < 0)
 		fprintf(stderr, "can't open '%s': %s\n", outfile, strerror(errno));
 	

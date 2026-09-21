@@ -211,7 +211,7 @@ chop_file(int fdin, char *fname, off_t fsize)
 			// start a new output file
 			sprintf(fnameN,  "%s%02d", fname, index++);
 
-			fdout = open(fnameN, O_WRONLY|O_CREAT);
+			fdout = open(fnameN, O_WRONLY|O_CREAT, 0644);
 			if (fdout < 0) {
 				fprintf(stderr, "unable to create chunk file '%s': %s\n", fnameN, strerror(errno));
 				return;

@@ -1,5 +1,3 @@
-add_subdirectory(control_look)
-add_subdirectory(decorators)
 add_subdirectory(input_server)
 add_subdirectory(opengl)
 add_subdirectory(tracker)

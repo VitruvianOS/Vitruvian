@@ -686,7 +686,8 @@ BClipboardRefsWatcher::RemoveNodesByDevice(dev_t device)
 
 	BMessage* clip = be_clipboard->Data();
 	if (clip != NULL) {
-		char deviceName[6];
+		// dev_t is 64-bit here; a 6 byte buffer overflowed the stack.
+		char deviceName[64];
 		sprintf(deviceName, "r%" B_PRIdDEV "_", device);
 
 		int32 index = 0;

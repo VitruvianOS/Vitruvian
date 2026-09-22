@@ -54,6 +54,19 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/prerm"
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postrm")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")
+
+execute_process(
+	COMMAND git rev-parse --short HEAD
+	WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+	OUTPUT_VARIABLE VOS_GIT_SHA
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+	ERROR_QUIET)
+if(VOS_GIT_SHA)
+	set(CPACK_DEBIAN_PACKAGE_VERSION "${PROJECT_VERSION}+git${VOS_GIT_SHA}")
+	message(STATUS "VOS package version: ${CPACK_DEBIAN_PACKAGE_VERSION}")
+else()
+	message(WARNING "no git sha available - package version stays ${PROJECT_VERSION}, which collides in the pool on the next rebuild")
+endif()
 INCLUDE(CPack)
 
 # Make `ninja clean` (and `make clean`) wipe CPack outputs too. CPack writes

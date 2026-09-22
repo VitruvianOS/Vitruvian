@@ -67,6 +67,25 @@ if(VOS_GIT_SHA)
 else()
 	message(WARNING "no git sha available - package version stays ${PROJECT_VERSION}, which collides in the pool on the next rebuild")
 endif()
+
+if(DEFINED ENV{VOS_SOURCE_DATE_EPOCH} AND NOT "$ENV{VOS_SOURCE_DATE_EPOCH}" STREQUAL "")
+	set(VOS_SOURCE_DATE_EPOCH "$ENV{VOS_SOURCE_DATE_EPOCH}")
+else()
+	execute_process(
+		COMMAND git log -1 --format=%ct
+		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+		OUTPUT_VARIABLE VOS_SOURCE_DATE_EPOCH
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		ERROR_QUIET)
+endif()
+if(VOS_SOURCE_DATE_EPOCH)
+	set(CPACK_DEB_PACKAGE_MTIME "${VOS_SOURCE_DATE_EPOCH}")
+	# Some CPack internals read the env, not the variable.
+	set(ENV{SOURCE_DATE_EPOCH} "${VOS_SOURCE_DATE_EPOCH}")
+	message(STATUS "VOS SOURCE_DATE_EPOCH: ${VOS_SOURCE_DATE_EPOCH}")
+else()
+	message(WARNING "no git commit timestamp available - package build will not be byte-reproducible")
+endif()
 INCLUDE(CPack)
 
 # Make `ninja clean` (and `make clean`) wipe CPack outputs too. CPack writes

@@ -37,6 +37,8 @@ AddOn(
 	"${PROJECT_SOURCE_DIR}/headers/tools/cppunit/"
 )
 
+Test(ArrowShapeTest SOURCES ArrowShapeTest.cpp)
+
 Test(ChannelSliderTest SOURCES ChannelSliderTest.cpp)
 
 #Test(CheckBoxTest SOURCES CheckBoxTest.cpp)

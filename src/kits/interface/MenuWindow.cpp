@@ -76,8 +76,20 @@ public:
 
 using namespace BPrivate;
 
+// Scroller geometry helpers to make the math more readable elsewhere.
+static float
+scroller_height()
+{
+	return ceilf(be_plain_font->Size());
+}
 
-const int kScrollerHeight = 12;
+
+static BSize
+scroller_arrow_size(bool vertical)
+{
+	const float span = scroller_height() - 2;
+	return vertical ? BSize(span, span / 2) : BSize(span / 2, span);
+}
 
 
 BMenuScroller::BMenuScroller(BRect frame)
@@ -130,9 +142,12 @@ UpperScroller::Draw(BRect updateRect)
 
 	FillRect(Bounds(), B_SOLID_LOW);
 
-	FillTriangle(BPoint(middle, (kScrollerHeight / 2) - 3),
-		BPoint(middle + 5, (kScrollerHeight / 2) + 2),
-		BPoint(middle - 5, (kScrollerHeight / 2) + 2));
+	const float center = scroller_height() / 2;
+
+	BPoint triangle[3];
+	BControlLook::GetArrowShape(BPoint(middle, center),
+		scroller_arrow_size(true), BControlLook::B_UP_ARROW, triangle);
+	FillTriangle(triangle[0], triangle[1], triangle[2]);
 }
 
 
@@ -164,9 +179,12 @@ LowerScroller::Draw(BRect updateRect)
 
 	float middle = Bounds().right / 2;
 
-	FillTriangle(BPoint(middle, frame.bottom - (kScrollerHeight / 2) + 3),
-		BPoint(middle + 5, frame.bottom - (kScrollerHeight / 2) - 2),
-		BPoint(middle - 5, frame.bottom - (kScrollerHeight / 2) - 2));
+	const float center = frame.bottom - scroller_height() / 2;
+
+	BPoint triangle[3];
+	BControlLook::GetArrowShape(BPoint(middle, center),
+		scroller_arrow_size(true), BControlLook::B_DOWN_ARROW, triangle);
+	FillTriangle(triangle[0], triangle[1], triangle[2]);
 }
 
 
@@ -392,7 +410,7 @@ BMenuWindow::AttachScrollers()
 
 	BRect frame = Bounds();
 	float newLimit = fMenu->Bounds().Height()
-		- (frame.Height() - 2 * kScrollerHeight);
+		- (frame.Height() - 2 * scroller_height());
 
 	if (!HasScrollers())
 		fValue = 0;
@@ -403,25 +421,25 @@ BMenuWindow::AttachScrollers()
 
 	if (fUpperScroller == NULL) {
 		fUpperScroller = new UpperScroller(
-			BRect(0, 0, frame.right, kScrollerHeight - 1));
+			BRect(0, 0, frame.right, scroller_height() - 1));
 		AddChild(fUpperScroller);
 	}
 
 	if (fLowerScroller == NULL) {
 		fLowerScroller = new LowerScroller(
-			BRect(0, frame.bottom - kScrollerHeight + 1, frame.right,
+			BRect(0, frame.bottom - scroller_height() + 1, frame.right,
 				frame.bottom));
 		AddChild(fLowerScroller);
 	}
 
-	fUpperScroller->ResizeTo(frame.right, kScrollerHeight - 1);
-	fLowerScroller->ResizeTo(frame.right, kScrollerHeight - 1);
+	fUpperScroller->ResizeTo(frame.right, scroller_height() - 1);
+	fLowerScroller->ResizeTo(frame.right, scroller_height() - 1);
 
 	fUpperScroller->SetEnabled(fValue > 0);
 	fLowerScroller->SetEnabled(fValue < fLimit);
 
-	fMenuFrame->ResizeTo(frame.Width(), frame.Height() - 2 * kScrollerHeight);
-	fMenuFrame->MoveTo(0, kScrollerHeight);
+	fMenuFrame->ResizeTo(frame.Width(), frame.Height() - 2 * scroller_height());
+	fMenuFrame->MoveTo(0, scroller_height());
 }
 
 

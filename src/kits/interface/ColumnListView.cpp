@@ -80,50 +80,6 @@ All rights reserved.
 
 namespace BPrivate {
 
-static const unsigned char kDownSortArrow8x8[] = {
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
-	0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff,
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff
-};
-
-static const unsigned char kUpSortArrow8x8[] = {
-	0xff, 0xff, 0xff, 0x00, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
-	0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff
-};
-
-static const unsigned char kDownSortArrow8x8Invert[] = {
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0x1f, 0x1f, 0x1f, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0x1f, 0xff, 0xff, 0xff, 0xff
-};
-
-static const unsigned char kUpSortArrow8x8Invert[] = {
-	0xff, 0xff, 0xff, 0x1f, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0x1f, 0x1f, 0x1f, 0xff, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0xff, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0xff, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0xff,
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-};
-
 static const float kTintedLineTint = 1.04;
 static const float kTintedLineTintDark = 0.90;
 
@@ -131,6 +87,7 @@ static const float kTintedLineTintDark = 0.90;
 static const float kMinTitleHeight = 16.0;
 static const float kMinRowHeight = 16.0;
 static const float kTitleSpacing = 1.4;
+static const float kSortArrowScale = 0.6;
 static const float kRowSpacing = 1.4;
 static const float kLatchWidth = 15.0;
 
@@ -141,7 +98,6 @@ static const float kOutlineLevelIndent = kLatchWidth;
 static const float kColumnResizeAreaWidth = 10.0;
 static const float kRowDragSensitivity = 5.0;
 static const float kDoubleClickMoveSensitivity = 4.0;
-static const float kSortIndicatorWidth = 9.0;
 static const float kDropHighlightLineHeight = 2.0;
 
 static const uint32 kToggleColumn = 'BTCL';
@@ -248,8 +204,6 @@ private:
 			BPoint				fCurrentDragPosition;
 
 
-			BBitmap*			fUpSortArrow;
-			BBitmap*			fDownSortArrow;
 
 			BCursor*			fResizeCursor;
 			BCursor*			fMinResizeCursor;
@@ -2384,12 +2338,6 @@ TitleView::TitleView(BRect rect, OutlineView* horizontalSlave,
 {
 	SetViewColor(B_TRANSPARENT_COLOR);
 
-	fUpSortArrow = new BBitmap(BRect(0, 0, 7, 7), B_CMAP8);
-	fDownSortArrow = new BBitmap(BRect(0, 0, 7, 7), B_CMAP8);
-
-	fUpSortArrow->SetBits((const void*) kUpSortArrow8x8, 64, 0, B_CMAP8);
-	fDownSortArrow->SetBits((const void*) kDownSortArrow8x8, 64, 0, B_CMAP8);
-
 	fResizeCursor = new BCursor(B_CURSOR_ID_RESIZE_EAST_WEST);
 	fMinResizeCursor = new BCursor(B_CURSOR_ID_RESIZE_EAST);
 	fMaxResizeCursor = new BCursor(B_CURSOR_ID_RESIZE_WEST);
@@ -2403,9 +2351,6 @@ TitleView::~TitleView()
 {
 	delete fColumnPop;
 	fColumnPop = NULL;
-
-	delete fUpSortArrow;
-	delete fDownSortArrow;
 
 	delete fResizeCursor;
 	delete fMaxResizeCursor;
@@ -2750,7 +2695,8 @@ TitleView::DrawTitle(BView* view, BRect rect, BColumn* column, bool depressed)
 	int sortIndex = fSortColumns->IndexOf(column);
 	if (sortIndex >= 0) {
 		// Draw sort notation.
-		BPoint upperLeft(drawRect.right - kSortIndicatorWidth, baseline);
+		const float indicatorWidth = ceilf(font.Size() * 1.5);
+		BPoint upperLeft(drawRect.right - indicatorWidth, baseline);
 
 		if (fSortColumns->CountItems() > 1) {
 			char str[256];
@@ -2759,28 +2705,27 @@ TitleView::DrawTitle(BView* view, BRect rect, BColumn* column, bool depressed)
 			upperLeft.x -= w;
 
 			view->SetDrawingMode(B_OP_COPY);
-			view->MovePenTo(BPoint(upperLeft.x + kSortIndicatorWidth,
-				baseline));
+			view->MovePenTo(BPoint(upperLeft.x + indicatorWidth, baseline));
 			view->DrawString(str);
 		}
 
-		float bmh = fDownSortArrow->Bounds().Height()+1;
-
 		view->SetDrawingMode(B_OP_OVER);
 
-		if (column->fSortAscending) {
-			BPoint leftTop(upperLeft.x, drawRect.top + (drawRect.IntegerHeight()
-				- fDownSortArrow->Bounds().IntegerHeight()) / 2);
-			view->DrawBitmapAsync(fDownSortArrow, leftTop);
-		} else {
-			BPoint leftTop(upperLeft.x, drawRect.top + (drawRect.IntegerHeight()
-				- fUpSortArrow->Bounds().IntegerHeight()) / 2);
-			view->DrawBitmapAsync(fUpSortArrow, leftTop);
-		}
+		const float arrowWidth = floorf(font.Size() * kSortArrowScale);
+		BPoint center(upperLeft.x + indicatorWidth / 2,
+			drawRect.top + drawRect.Height() / 2);
+		BPoint triangle[3];
+		BControlLook::GetArrowShape(center, BSize(arrowWidth, arrowWidth / 2),
+			column->fSortAscending ? BControlLook::B_DOWN_ARROW
+				: BControlLook::B_UP_ARROW, triangle);
 
-		upperLeft.y = baseline - bmh + floor((fh.ascent + fh.descent - bmh) / 2);
-		if (upperLeft.y < drawRect.top)
-			upperLeft.y = drawRect.top;
+		uint32 flags = view->Flags();
+		view->SetFlags(flags | B_SUBPIXEL_PRECISE);
+
+		view->SetHighUIColor(B_PANEL_BACKGROUND_COLOR, 1.6);
+		view->FillTriangle(triangle[0], triangle[1], triangle[2]);
+
+		view->SetFlags(flags);
 
 		// Adjust title stuff for sort indicator
 		drawRect.right = upperLeft.x - 2;

@@ -9,6 +9,7 @@
 #include <Alignment.h>
 #include <Font.h>
 #include <Rect.h>
+#include <Size.h>
 #include <Slider.h>
 
 
@@ -432,6 +433,11 @@ public:
 
 	static	bool				ShouldDraw(BView* view, const BRect& rect,
 									const BRect& updateRect);
+
+	static	void				GetArrowShape(BRect rect, uint32 direction,
+									BPoint points[3]);
+	static	void				GetArrowShape(BPoint center, BSize size,
+									uint32 direction, BPoint points[3]);
 
 private:
 	// FBC padding

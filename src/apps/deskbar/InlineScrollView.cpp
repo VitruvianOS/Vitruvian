@@ -21,7 +21,21 @@
 
 
 const int kDefaultScrollStep = 19;
-const int kScrollerDimension = 12;
+
+// Scroller geometry helpers to make the math more readable elsewhere.
+static float
+scroller_dimension()
+{
+	return ceilf(be_plain_font->Size());
+}
+
+
+static BSize
+scroller_arrow_size(bool vertical)
+{
+	const float span = scroller_dimension() - 2;
+	return vertical ? BSize(span, span / 2) : BSize(span / 2, span);
+}
 
 
 class ScrollArrow : public BView {
@@ -133,9 +147,12 @@ UpScrollArrow::Draw(BRect updateRect)
 	FillRect(Bounds(), B_SOLID_LOW);
 
 	float middle = Bounds().right / 2;
-	FillTriangle(BPoint(middle, (kScrollerDimension / 2) - 3),
-		BPoint(middle + 5, (kScrollerDimension / 2) + 2),
-		BPoint(middle - 5, (kScrollerDimension / 2) + 2));
+	const float center = scroller_dimension() / 2;
+
+	BPoint triangle[3];
+	BControlLook::GetArrowShape(BPoint(middle, center),
+		scroller_arrow_size(true), BControlLook::B_UP_ARROW, triangle);
+	FillTriangle(triangle[0], triangle[1], triangle[2]);
 }
 
 
@@ -198,9 +215,12 @@ DownScrollArrow::Draw(BRect updateRect)
 	FillRect(frame, B_SOLID_LOW);
 
 	float middle = Bounds().right / 2;
-	FillTriangle(BPoint(middle, frame.bottom - (kScrollerDimension / 2) + 3),
-		BPoint(middle + 5, frame.bottom - (kScrollerDimension / 2) - 2),
-		BPoint(middle - 5, frame.bottom - (kScrollerDimension / 2) - 2));
+	const float center = frame.bottom - scroller_dimension() / 2;
+
+	BPoint triangle[3];
+	BControlLook::GetArrowShape(BPoint(middle, center),
+		scroller_arrow_size(true), BControlLook::B_DOWN_ARROW, triangle);
+	FillTriangle(triangle[0], triangle[1], triangle[2]);
 }
 
 
@@ -262,9 +282,12 @@ LeftScrollArrow::Draw(BRect updateRect)
 	FillRect(Bounds(), B_SOLID_LOW);
 
 	float middle = Bounds().bottom / 2;
-	FillTriangle(BPoint((kScrollerDimension / 2) - 3, middle),
-		BPoint((kScrollerDimension / 2) + 2, middle + 5),
-		BPoint((kScrollerDimension / 2) + 2, middle - 5));
+	const float center = scroller_dimension() / 2;
+
+	BPoint triangle[3];
+	BControlLook::GetArrowShape(BPoint(center, middle),
+		scroller_arrow_size(false), BControlLook::B_LEFT_ARROW, triangle);
+	FillTriangle(triangle[0], triangle[1], triangle[2]);
 }
 
 
@@ -326,9 +349,12 @@ RightScrollArrow::Draw(BRect updateRect)
 	FillRect(frame, B_SOLID_LOW);
 
 	float middle = Bounds().bottom / 2;
-	FillTriangle(BPoint(kScrollerDimension / 2 + 3, middle),
-		BPoint(kScrollerDimension / 2 - 2, middle + 5),
-		BPoint(kScrollerDimension / 2 - 2, middle - 5));
+	const float center = scroller_dimension() / 2;
+
+	BPoint triangle[3];
+	BControlLook::GetArrowShape(BPoint(center, middle),
+		scroller_arrow_size(false), BControlLook::B_RIGHT_ARROW, triangle);
+	FillTriangle(triangle[0], triangle[1], triangle[2]);
 }
 
 
@@ -446,10 +472,10 @@ TInlineScrollView::AttachScrollers()
 	if (HasScrollers()) {
 		if (fOrientation == B_VERTICAL) {
 			fScrollLimit = fTarget->Bounds().Height()
-				- (frame.Height() - 2 * kScrollerDimension);
+				- (frame.Height() - 2 * scroller_dimension());
 		} else {
 			fScrollLimit = fTarget->Bounds().Width()
-				- (frame.Width() - 2 * kScrollerDimension);
+				- (frame.Width() - 2 * scroller_dimension());
 		}
 
 		if (fScrollValue > fScrollLimit) {
@@ -471,40 +497,40 @@ TInlineScrollView::AttachScrollers()
 		if (fBeginScrollArrow == NULL) {
 			fBeginScrollArrow = new UpScrollArrow(
 				BRect(frame.left, frame.top, frame.right,
-					kScrollerDimension - 1));
+					scroller_dimension() - 1));
 			AddChild(fBeginScrollArrow);
 		}
 
 		if (fEndScrollArrow == NULL) {
 			fEndScrollArrow = new DownScrollArrow(
-				BRect(0, frame.bottom - 2 * kScrollerDimension + 1, frame.right,
-					frame.bottom - kScrollerDimension));
+				BRect(0, frame.bottom - 2 * scroller_dimension() + 1, frame.right,
+					frame.bottom - scroller_dimension()));
 			fTarget->AddChild(fEndScrollArrow);
 		}
 
-		fTarget->MoveBy(0, kScrollerDimension);
+		fTarget->MoveBy(0, scroller_dimension());
 
 		fScrollLimit = fTarget->Bounds().Height()
-			- (frame.Height() - 2 * kScrollerDimension);
+			- (frame.Height() - 2 * scroller_dimension());
 	} else {
 		if (fBeginScrollArrow == NULL) {
 			fBeginScrollArrow = new LeftScrollArrow(
 				BRect(frame.left, frame.top,
-					frame.left + kScrollerDimension - 1, frame.bottom));
+					frame.left + scroller_dimension() - 1, frame.bottom));
 			AddChild(fBeginScrollArrow);
 		}
 
 		if (fEndScrollArrow == NULL) {
 			fEndScrollArrow = new RightScrollArrow(
-				BRect(frame.right - 2 * kScrollerDimension + 1, frame.top,
+				BRect(frame.right - 2 * scroller_dimension() + 1, frame.top,
 					frame.right, frame.bottom));
 			fTarget->AddChild(fEndScrollArrow);
 		}
 
-		fTarget->MoveBy(kScrollerDimension, 0);
+		fTarget->MoveBy(scroller_dimension(), 0);
 
 		fScrollLimit = fTarget->Bounds().Width()
-			- (frame.Width() - 2 * kScrollerDimension);
+			- (frame.Width() - 2 * scroller_dimension());
 	}
 
 	fBeginScrollArrow->SetEnabled(false);
@@ -536,9 +562,9 @@ TInlineScrollView::DetachScrollers()
 		// We don't remember the position where the last scrolling
 		// ended, so scroll back to the beginning.
 		if (fOrientation == B_VERTICAL)
-			fTarget->MoveBy(0, -kScrollerDimension);
+			fTarget->MoveBy(0, -scroller_dimension());
 		else
-			fTarget->MoveBy(-kScrollerDimension, 0);
+			fTarget->MoveBy(-scroller_dimension(), 0);
 
 		fTarget->ScrollTo(0, 0);
 		fScrollValue = 0;

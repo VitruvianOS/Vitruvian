@@ -762,7 +762,11 @@ create_raspberry() {
     sudo mount "$_boot_part" "$_mnt/boot/firmware"
 
     log_step "Bootstrapping Debian trixie ($_deb_arch) for $(board_config "$_board" label)..."
-    sudo debootstrap --arch="$_deb_arch" --foreign trixie "$_mnt" http://deb.debian.org/debian
+    # Same debootstrap cache the base chroot uses.
+    _dbcache="$_basedir/deb/archives"
+    mkdir -p "$_dbcache"
+    sudo debootstrap --arch="$_deb_arch" --foreign --cache-dir="$_dbcache" \
+        trixie "$_mnt" http://deb.debian.org/debian
 
     sudo mount --bind /dev "$_mnt/dev"
     sudo mount --bind /proc "$_mnt/proc"
@@ -966,7 +970,11 @@ create_uboot_board() {
     sudo mount "$_boot_part" "$_mnt/boot"
 
     log_step "Bootstrapping Debian trixie ($_deb_arch) for $_label..."
-    sudo debootstrap --arch="$_deb_arch" --foreign trixie "$_mnt" http://deb.debian.org/debian
+    # Reuse the tree's debootstrap cache; see create_raspberry for why.
+    _dbcache="$_basedir/deb/archives"
+    mkdir -p "$_dbcache"
+    sudo debootstrap --arch="$_deb_arch" --foreign --cache-dir="$_dbcache" \
+        trixie "$_mnt" http://deb.debian.org/debian
 
     sudo mount --bind /dev "$_mnt/dev"
     sudo mount --bind /proc "$_mnt/proc"

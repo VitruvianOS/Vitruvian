@@ -141,6 +141,27 @@ deb $DEBIAN_MIRROR trixie-updates main contrib non-free non-free-firmware
 deb $DEBIAN_SECURITY_MIRROR trixie-security main contrib non-free non-free-firmware
 EOF
 
+    # Written only when a key is supplied: an unverifiable repo fails the
+    # whole apt update, taking Debian access down with it.
+    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
+    : "${VOS_REPO_SUITE:=trixie-testing}"
+    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        sudo install -d -m 755 "$_chroot_dir/etc/apt/keyrings"
+        sudo install -m 644 "$VOS_REPO_KEY" \
+            "$_chroot_dir/etc/apt/keyrings/vitruvian-archive-keyring.asc"
+        sudo install -d -m 755 "$_chroot_dir/etc/apt/sources.list.d"
+        sudo tee "$_chroot_dir/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSEOF
+Types: deb
+URIs: $VOS_REPO_URL
+Suites: $VOS_REPO_SUITE
+Components: main
+Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
+VOSEOF
+        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
+    else
+        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
+    fi
+
     log_step "Verifying mount points before second-stage..."
     log_info "Checking proc: mountpoint=$(mountpoint -q "$_chroot_dir/proc" 2>/dev/null && echo yes || echo no), stat=$([ -f "$_chroot_dir/proc/1/stat" ] && echo exists || echo missing)"
     if mountpoint -q "$_chroot_dir/proc" 2>/dev/null; then

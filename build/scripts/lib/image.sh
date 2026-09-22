@@ -986,7 +986,13 @@ label vitruvian
 EXTLINUX
     sudo sed -i "s/EXTROOTFS/$_root_fs/" "$_mnt/boot/extlinux/extlinux.conf"
 
-    sudo cp "$_mnt/boot/vmlinuz-$_kver" "$_mnt/boot/vmlinuz"
+    # riscv64's linux-image ships an uncompressed vmlinux-<ver> (no vmlinuz-);
+    # see the same fallback in create_iso() above.
+    if [ ! -f "$_mnt/boot/vmlinuz-$_kver" ] && [ -f "$_mnt/boot/vmlinux-$_kver" ]; then
+        sudo cp "$_mnt/boot/vmlinux-$_kver" "$_mnt/boot/vmlinuz"
+    else
+        sudo cp "$_mnt/boot/vmlinuz-$_kver" "$_mnt/boot/vmlinuz"
+    fi
     sudo cp "$_mnt/boot/initrd.img-$_kver" "$_mnt/boot/initrd.img"
 
     case "$_root_fs" in

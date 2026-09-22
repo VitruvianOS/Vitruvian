@@ -718,7 +718,14 @@ create_raspberry() {
     _board="${2:-raspberry}"
     _board_arch="$(board_config "$_board" arch)"
     _deb_arch="$(arch_to_deb "$_board_arch")"
-    _raw="$_basedir/output/vitruvian-$_board.raw"
+    # The fleet collector looks for "vos-raspberry.raw" specifically (legacy
+    # naming predating the vitruvian- rebrand of the other board outputs);
+    # every other board keeps the vitruvian-<board>.raw convention.
+    if [ "$_board" = "raspberry" ]; then
+        _raw="$_basedir/output/vos-raspberry.raw"
+    else
+        _raw="$_basedir/output/vitruvian-$_board.raw"
+    fi
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
     _user=""

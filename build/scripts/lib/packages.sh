@@ -8,7 +8,7 @@ get_base_packages() {
                 "apt-utils dialog linux-image-rt-amd64 systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager bluez net-tools wireless-tools curl openssh-client" \
-                " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
+                " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
@@ -19,7 +19,7 @@ get_base_packages() {
                 "apt-utils dialog linux-image-arm64 systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager bluez net-tools wireless-tools curl openssh-client" \
-                " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
+                " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
@@ -30,7 +30,7 @@ get_base_packages() {
                 "apt-utils dialog linux-image-armmp systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager bluez net-tools wireless-tools curl openssh-client" \
-                " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping" \
+                " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " grub-common"
@@ -40,7 +40,7 @@ get_base_packages() {
                 "apt-utils dialog linux-image-riscv64 systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager bluez net-tools wireless-tools curl openssh-client" \
-                " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping xfsprogs" \
+                " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \

@@ -64,6 +64,10 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
+                # Verified present in the built rootfs 2026-09-14.
+                uboot_variant)  printf 'rock-pi-4-rk3399' ;;
+                spl_blob)       printf 'idbloader.img' ;;
+                uboot_blob)     printf 'u-boot.itb' ;;
                 spl_offset_sectors) printf '64' ;;
                 uboot_offset_sectors) printf '16384' ;;
                 extra_pkgs)     printf 'u-boot-rockchip' ;;
@@ -79,8 +83,15 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
+                # Variant list verified against u-boot-sunxi 2025.01-3+deb13u1;
+                # pine64_plus matches this board's sun50i-a64-pine64.dtb.
+                uboot_variant)  printf 'pine64_plus' ;;
+                # sunxi loads one combined blob at 8KiB; there is no separate
+                # u-boot stage, and sector 65536 falls inside the boot partition.
+                spl_blob)       printf 'u-boot-sunxi-with-spl.bin' ;;
+                uboot_blob)     printf '' ;;
                 spl_offset_sectors) printf '16' ;;
-                uboot_offset_sectors) printf '65536' ;;
+                uboot_offset_sectors) printf '0' ;;
                 extra_pkgs)     printf 'u-boot-sunxi' ;;
                 dtb_files)      printf 'allwinner/sun50i-h6-orangepi-3.dtb allwinner/sun50i-h616-orangepi-zero2.dtb allwinner/sun50i-a64-pine64.dtb' ;;
             esac
@@ -94,8 +105,11 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
+                # sunxi loads one combined blob at 8KiB; no separate stage.
+                spl_blob)       printf 'u-boot-sunxi-with-spl.bin' ;;
+                uboot_blob)     printf '' ;;
                 spl_offset_sectors) printf '16' ;;
-                uboot_offset_sectors) printf '65536' ;;
+                uboot_offset_sectors) printf '0' ;;
                 extra_pkgs)     printf 'u-boot-sunxi' ;;
                 dtb_files)      printf 'sun8i-h2-plus-orangepi-zero.dtb sun8i-h3-orangepi-one.dtb sun8i-h3-orangepi-pc.dtb' ;;
             esac
@@ -109,9 +123,12 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
+                uboot_variant)  printf '' ;;
                 spl_offset_sectors) printf '1' ;;
                 uboot_offset_sectors) printf '65536' ;;
-                extra_pkgs)     printf 'u-boot-beagle' ;;
+                # u-boot-beagle does not exist and u-boot-omap is armhf-only;
+                # booting needs vendor blobs in firmware/beagle/.
+                extra_pkgs)     printf '' ;;
                 dtb_files)      printf 'ti/k3/am625-beagleplay.dtb' ;;
             esac
             ;;
@@ -139,9 +156,12 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
+                # u-boot-imx is armhf-only; no arm64 U-Boot package exists.
+                uboot_variant)  printf '' ;;
                 spl_offset_sectors) printf '64' ;;
                 uboot_offset_sectors) printf '16384' ;;
-                extra_pkgs)     printf 'u-boot-imx' ;;
+                # Booting this board needs vendor blobs in firmware/nxp/.
+                extra_pkgs)     printf '' ;;
                 dtb_files)      printf 'nxp/imx/imx8mq-librem5-devkit.dtb nxp/imx/imx8mp-venice-gw74xx.dtb' ;;
             esac
             ;;
@@ -154,9 +174,16 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
+                # Mainline u-boot only; the G12B BootROM requires the vendor
+                # FIP-signed blob, vendored in firmware/amlogic/.
+                uboot_variant)  printf 'odroid-n2' ;;
+                spl_blob)       printf 'u-boot.bin.sd.bin' ;;
+                uboot_blob)     printf '' ;;
                 spl_offset_sectors) printf '1' ;;
-                uboot_offset_sectors) printf '65536' ;;
-                extra_pkgs)     printf 'u-boot-meson' ;;
+                uboot_offset_sectors) printf '0' ;;
+                # u-boot-meson does not exist in Debian; the package is
+                # u-boot-amlogic-binaries.
+                extra_pkgs)     printf 'u-boot-amlogic-binaries' ;;
                 dtb_files)      printf 'amlogic/meson-g12b-odroid-n2.dtb amlogic/meson-sm1-khadas-vim3l.dtb amlogic/meson-a1-ad401.dtb' ;;
             esac
             ;;

@@ -154,6 +154,10 @@ EOF
     mountpoint -q "$_chroot_dir/dev" || die "dev mount failed"
 
     if is_cross_build "$_arch"; then
+        # The second stage unpacks from /var/cache/apt/archives, which is
+        # bound to $_cache_dir/archives; debootstrap cached elsewhere.
+        sudo sh -c 'cp -n "$1"/*.deb "$2"/ 2>/dev/null || true' _ \
+            "$_debootstrap_cache" "$_cache_dir/archives"
         log_step "Running debootstrap second stage..."
         sudo chroot "$_chroot_dir" /debootstrap/debootstrap --second-stage
         log_step "Re-mounting after second-stage..."

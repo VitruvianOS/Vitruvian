@@ -766,6 +766,7 @@ create_raspberry() {
     _dbcache="$_basedir/deb/archives"
     mkdir -p "$_dbcache"
     sudo debootstrap --arch="$_deb_arch" --foreign --cache-dir="$_dbcache" \
+        --include=ca-certificates \
         trixie "$_mnt" http://deb.debian.org/debian
 
     sudo mount --bind /dev "$_mnt/dev"
@@ -776,6 +777,11 @@ create_raspberry() {
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
     sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+
+    # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
+    # ca-certificates); a copied bundle without that symlink does not verify.
+    sudo chroot "$_mnt" test -s /usr/lib/ssl/cert.pem \
+        || die "no usable CA trust in $_mnt (/usr/lib/ssl/cert.pem missing): the https VOS repo cannot verify"
 
     if ls "$_basedir"/*.deb >/dev/null 2>&1; then
         sudo mkdir -p "$_mnt/localdeb"
@@ -815,6 +821,15 @@ VOSSRC
     # one-line form returned the trailing if-block and hid apt failures.
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 apt update
+# apt downgrades an unreachable source to a warning, so prove the repo
+# resolved a candidate instead of shipping without VitruvianOS.
+if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
+    apt-cache policy vos | grep Candidate | grep -qv none || {
+        echo refusing-empty-vos-repo >&2
+        echo VitruvianOS repo is configured but unusable: refusing to build a board image with no VitruvianOS packages in it. >&2
+        exit 1
+    }
+fi
 apt install -y $_board_pkgs
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
@@ -978,6 +993,7 @@ create_uboot_board() {
     _dbcache="$_basedir/deb/archives"
     mkdir -p "$_dbcache"
     sudo debootstrap --arch="$_deb_arch" --foreign --cache-dir="$_dbcache" \
+        --include=ca-certificates \
         trixie "$_mnt" http://deb.debian.org/debian
 
     sudo mount --bind /dev "$_mnt/dev"
@@ -988,6 +1004,11 @@ create_uboot_board() {
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
     sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+
+    # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
+    # ca-certificates); a copied bundle without that symlink does not verify.
+    sudo chroot "$_mnt" test -s /usr/lib/ssl/cert.pem \
+        || die "no usable CA trust in $_mnt (/usr/lib/ssl/cert.pem missing): the https VOS repo cannot verify"
 
     if ls "$_basedir"/*.deb >/dev/null 2>&1; then
         sudo mkdir -p "$_mnt/localdeb"
@@ -1023,6 +1044,14 @@ VOSSRC
     log_step "Configuring $_label system..."
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 apt update
+# See create_raspberry: prove the VOS repo actually resolved a candidate.
+if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
+    apt-cache policy vos | grep Candidate | grep -qv none || {
+        echo refusing-empty-vos-repo >&2
+        echo VitruvianOS repo is configured but unusable: refusing to build a board image with no VitruvianOS packages in it. >&2
+        exit 1
+    }
+fi
 apt install -y $_board_pkgs u-boot-menu
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y

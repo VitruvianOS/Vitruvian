@@ -210,6 +210,13 @@ VOSEOF
     _dev_pkgs="$(get_dev_packages "$_arch")"
 
     log_step "Installing packages..."
+    # dpkg's per-file fsyncs are pure overhead on a chroot that gets
+    # discarded; opt-in so it is never silently on for a local tree.
+    if [ "${VOS_UNSAFE_IO:-0}" = 1 ]; then
+        sudo install -d -m 755 "$_chroot_dir/etc/dpkg/dpkg.cfg.d"
+        printf 'force-unsafe-io\n' \
+          | sudo tee "$_chroot_dir/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io" >/dev/null
+    fi
     sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "\
 echo 'vitruvian' > /etc/hostname && \
 apt update && apt install -y --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES && \

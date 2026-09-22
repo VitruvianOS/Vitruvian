@@ -711,6 +711,9 @@ done
 # never stops this one; systemd.generator(7) masks it via symlink.
 mkdir -p /etc/systemd/system-generators
 ln -sf /dev/null /etc/systemd/system-generators/systemd-ssh-generator" || die "_common_chroot_setup chroot bash-c failed"
+
+    # Build-time trade; every image path passes here so it never ships.
+    sudo rm -f "$_mnt/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io"
 }
 
 create_raspberry() {
@@ -814,6 +817,13 @@ VOSSRC
         log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
     else
         log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
+    fi
+
+    # Opt-in unsafe I/O for the disposable rootfs; removed again by
+    # _common_chroot_setup so it never ships.
+    if [ "${VOS_UNSAFE_IO:-0}" = 1 ]; then
+        sudo install -d -m 755 "$_mnt/etc/dpkg/dpkg.cfg.d"
+        printf 'force-unsafe-io\n' | sudo tee "$_mnt/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io" >/dev/null
     fi
 
     log_step "Configuring system..."
@@ -1039,6 +1049,12 @@ VOSSRC
         log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
     else
         log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
+    fi
+
+    # Opt-in unsafe I/O for the build only; see create_raspberry for why.
+    if [ "${VOS_UNSAFE_IO:-0}" = 1 ]; then
+        sudo install -d -m 755 "$_mnt/etc/dpkg/dpkg.cfg.d"
+        printf 'force-unsafe-io\n' | sudo tee "$_mnt/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io" >/dev/null
     fi
 
     log_step "Configuring $_label system..."

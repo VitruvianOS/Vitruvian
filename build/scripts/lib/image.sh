@@ -764,13 +764,14 @@ create_raspberry() {
     sudo mkdir -p "$_mnt/boot/firmware"
     sudo mount "$_boot_part" "$_mnt/boot/firmware"
 
-    log_step "Bootstrapping Debian trixie ($_deb_arch) for $(board_config "$_board" label)..."
+    : "${VOS_BASE_SUITE:=trixie}"
+    log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) for $(board_config "$_board" label)..."
     # Same debootstrap cache the base chroot uses.
     _dbcache="$_basedir/deb/archives"
     mkdir -p "$_dbcache"
     sudo debootstrap --arch="$_deb_arch" --foreign --cache-dir="$_dbcache" \
         --include=ca-certificates \
-        trixie "$_mnt" http://deb.debian.org/debian
+        "$VOS_BASE_SUITE" "$_mnt" http://deb.debian.org/debian
 
     sudo mount --bind /dev "$_mnt/dev"
     sudo mount --bind /proc "$_mnt/proc"
@@ -794,9 +795,9 @@ create_raspberry() {
     # debootstrap writes a main-only sources.list, but raspi-firmware and
     # several u-boot variants live in contrib/non-free/non-free-firmware.
     sudo tee "$_mnt/etc/apt/sources.list" >/dev/null <<APTSRC
-deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
-deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian $VOS_BASE_SUITE main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian $VOS_BASE_SUITE-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
 APTSRC
 
     # Same key-gated VitruvianOS repo as chroot.sh; these paths run their
@@ -998,13 +999,14 @@ create_uboot_board() {
     sudo mkdir -p "$_mnt/boot"
     sudo mount "$_boot_part" "$_mnt/boot"
 
-    log_step "Bootstrapping Debian trixie ($_deb_arch) for $_label..."
+    : "${VOS_BASE_SUITE:=trixie}"
+    log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) for $_label..."
     # Reuse the tree's debootstrap cache; see create_raspberry for why.
     _dbcache="$_basedir/deb/archives"
     mkdir -p "$_dbcache"
     sudo debootstrap --arch="$_deb_arch" --foreign --cache-dir="$_dbcache" \
         --include=ca-certificates \
-        trixie "$_mnt" http://deb.debian.org/debian
+        "$VOS_BASE_SUITE" "$_mnt" http://deb.debian.org/debian
 
     sudo mount --bind /dev "$_mnt/dev"
     sudo mount --bind /proc "$_mnt/proc"
@@ -1027,9 +1029,9 @@ create_uboot_board() {
 
     # Same sources.list fix as create_raspberry.
     sudo tee "$_mnt/etc/apt/sources.list" >/dev/null <<APTSRC
-deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
-deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian $VOS_BASE_SUITE main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian $VOS_BASE_SUITE-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
 APTSRC
 
     # Same key-gated VitruvianOS repo as create_raspberry.

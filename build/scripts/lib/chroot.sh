@@ -28,6 +28,10 @@ qemu_eject() {
 # by exporting DEBIAN_MIRROR before invoking setupenv / bake.
 : "${DEBIAN_MIRROR:=http://deb.debian.org/debian/}"
 
+# Debian suite bootstrapped for the chroot and every board rootfs; trixie
+# is the only suite proven against so far.
+: "${VOS_BASE_SUITE:=trixie}"
+
 # Persistent .deb cache shared across chroot regenerations. Path is per
 # arch (laid down by setupenv); same arch == same cache.
 chroot_cache_dir() {
@@ -115,16 +119,16 @@ chroot_create() {
     log_info "Using package cache: $_cache_dir (mirror: $DEBIAN_MIRROR)"
 
     if is_cross_build "$_arch"; then
-        log_step "Bootstrapping Debian trixie ($_deb_arch) [foreign]..."
+        log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) [foreign]..."
         sudo debootstrap --arch="$_deb_arch" --variant=minbase --foreign \
             --cache-dir="$_debootstrap_cache" \
-            trixie "$_chroot_dir" "$DEBIAN_MIRROR"
+            "$VOS_BASE_SUITE" "$_chroot_dir" "$DEBIAN_MIRROR"
         qemu_inject "$_chroot_dir" "$_arch"
     else
-        log_step "Bootstrapping Debian trixie ($_deb_arch)..."
+        log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch)..."
         sudo debootstrap --arch="$_deb_arch" --variant=minbase \
             --cache-dir="$_debootstrap_cache" \
-            trixie "$_chroot_dir" "$DEBIAN_MIRROR"
+            "$VOS_BASE_SUITE" "$_chroot_dir" "$DEBIAN_MIRROR"
     fi
 
     trap 'chroot_umount "$_chroot_dir"' EXIT
@@ -136,9 +140,9 @@ chroot_create() {
     # pointing at the mirror, but make it explicit and overridable.
     : "${DEBIAN_SECURITY_MIRROR:=http://security.debian.org/debian-security}"
     sudo tee "$_chroot_dir/etc/apt/sources.list" >/dev/null <<EOF
-deb $DEBIAN_MIRROR trixie main contrib non-free non-free-firmware
-deb $DEBIAN_MIRROR trixie-updates main contrib non-free non-free-firmware
-deb $DEBIAN_SECURITY_MIRROR trixie-security main contrib non-free non-free-firmware
+deb $DEBIAN_MIRROR $VOS_BASE_SUITE main contrib non-free non-free-firmware
+deb $DEBIAN_MIRROR $VOS_BASE_SUITE-updates main contrib non-free non-free-firmware
+deb $DEBIAN_SECURITY_MIRROR $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
 EOF
 
     # Written only when a key is supplied: an unverifiable repo fails the

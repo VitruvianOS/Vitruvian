@@ -945,7 +945,11 @@ create_uboot_board() {
     else
         sudo parted --script "$_loop" mklabel msdos
     fi
-    sudo parted --script "$_loop" mkpart primary fat32 4MiB "$_boot_size"MiB
+    # 16MiB gap: rockchip's u-boot.itb sits at sector 16384, and a 4MiB
+    # partition start overlapped the bootloader area with the FAT filesystem.
+    _part_start_mib=4
+    [ "$(board_config "$_board" bootloader)" = "u-boot" ] && _part_start_mib=16
+    sudo parted --script "$_loop" mkpart primary fat32 "${_part_start_mib}MiB" "$_boot_size"MiB
     if [ "$_part_fmt" = "gpt" ]; then
         sudo parted --script "$_loop" set 1 esp on
     else
@@ -1078,6 +1082,25 @@ EXTLINUX
 /dev/mmcblk0p1  /boot    vfat         defaults          0 2
 FSTAB
 
+    # Stage U-Boot out of the rootfs before unmounting: Debian's packages
+    # put per-board blobs under /usr/lib/u-boot/<variant>/. The old code
+    # looked only in firmware/<board>/ on the host, which no build populated.
+    #
+    # U-Boot is per-BOARD, not per-SoC-family, so a family image has to pick
+    # one. VOS_UBOOT_VARIANT overrides the board table's default for a build
+    # targeting a specific machine.
+    _uboot_stage=""
+    _variant="${VOS_UBOOT_VARIANT:-$(board_config "$_board" uboot_variant)}"
+    if [ -n "$_variant" ] && [ -d "$_mnt/usr/lib/u-boot/$_variant" ]; then
+        _uboot_stage="$(mktemp -d)"
+        sudo cp -a "$_mnt/usr/lib/u-boot/$_variant/." "$_uboot_stage/"
+        log_info "Staged U-Boot variant '$_variant' from the rootfs"
+    elif [ -d "$_mnt/usr/lib/u-boot" ]; then
+        log_warn "U-Boot variant '${_variant:-<unset>}' not found in the rootfs."
+        log_warn "Available: $(ls "$_mnt/usr/lib/u-boot" 2>/dev/null | tr '\n' ' ')"
+        log_warn "Set VOS_UBOOT_VARIANT to one of these, or add uboot_variant to boards.sh."
+    fi
+
     qemu_eject "$_mnt" "$_board_arch"
 
     sudo umount -l "$_mnt/dev"  2>/dev/null || true
@@ -1087,30 +1110,63 @@ FSTAB
     sudo umount -l "$_mnt"      2>/dev/null || true
 
     log_step "Flashing U-Boot/SPL..."
+    # A hand-placed firmware/<board>/ still wins: some SoCs need vendor blobs
+    # Debian does not ship (e.g. amlogic's FIP-signed image). Otherwise use
+    # what was staged from the rootfs above.
     _uboot_dir="$_basedir/firmware/$_board"
-    if [ -d "$_uboot_dir" ]; then
-        if [ -f "$_uboot_dir/idbloader.img" ]; then
-            sudo dd if="$_uboot_dir/idbloader.img" of="$_loop" bs=512 seek="$_spl_off" conv=notrunc
-            log_info "  SPL written at sector $_spl_off"
+    [ -d "$_uboot_dir" ] || _uboot_dir="$_uboot_stage"
+
+    # Per-SoC blob choice, not guessable: a first-match order picks the bare
+    # u-boot.bin on sunxi, which no BootROM can load. Boards name their blobs
+    # via boards.sh's spl_blob/uboot_blob fields.
+    _spl_blob="$(board_config "$_board" spl_blob)"
+    _uboot_blob="$(board_config "$_board" uboot_blob)"
+    _part_start_sectors=$(( ${_part_start_mib:-4} * 2048 ))
+    _flashed=0
+
+    # Refuse to write a blob that would reach into the first partition.
+    _flash_blob() {
+        _bf="$1"; _boff="$2"; _what="$3"
+        [ -n "$_bf" ] || return 0
+        if [ ! -f "$_uboot_dir/$_bf" ]; then
+            log_warn "  $_what blob '$_bf' not present in $_uboot_dir"
+            return 1
         fi
-        if [ -f "$_uboot_dir/u-boot.itb" ]; then
-            sudo dd if="$_uboot_dir/u-boot.itb" of="$_loop" bs=512 seek="$_uboot_off" conv=notrunc
-            log_info "  U-Boot written at sector $_uboot_off"
-        elif [ -f "$_uboot_dir/u-boot.bin" ]; then
-            sudo dd if="$_uboot_dir/u-boot.bin" of="$_loop" bs=512 seek="$_uboot_off" conv=notrunc
-            log_info "  U-Boot written at sector $_uboot_off"
-        elif [ -f "$_uboot_dir/u-boot.img" ]; then
-            sudo dd if="$_uboot_dir/u-boot.img" of="$_loop" bs=512 seek="$_uboot_off" conv=notrunc
-            log_info "  U-Boot written at sector $_uboot_off"
+        _bsz=$(stat -c %s "$_uboot_dir/$_bf")
+        _bend=$(( _boff + (_bsz + 511) / 512 ))
+        if [ "$_bend" -gt "$_part_start_sectors" ]; then
+            log_error "  $_what '$_bf' ($_bsz bytes at sector $_boff) would overrun"
+            log_error "  the partition start at sector $_part_start_sectors; refusing."
+            return 1
         fi
+        sudo dd if="$_uboot_dir/$_bf" of="$_loop" bs=512 seek="$_boff" conv=notrunc status=none
+        log_info "  $_what written at sector $_boff ($_bsz bytes, from $_bf)"
+        _flashed=$(( _flashed + 1 ))
+        return 0
+    }
+
+    if [ -n "$_uboot_dir" ] && [ -d "$_uboot_dir" ]; then
+        _flash_blob "$_spl_blob"   "$_spl_off"   "SPL"    || true
+        _flash_blob "$_uboot_blob" "$_uboot_off" "U-Boot" || true
         if [ -f "$_uboot_dir/trust.bin" ]; then
-            sudo dd if="$_uboot_dir/trust.bin" of="$_loop" bs=512 seek=$(( _uboot_off + 2048 )) conv=notrunc
-            log_info "  trust.bin written"
+            _flash_blob "trust.bin" $(( _uboot_off + 2048 )) "trust.bin" || true
         fi
     else
-        log_warn "No firmware found at $_uboot_dir"
-        log_warn "U-Boot not flashed. Place idbloader.img + u-boot.itb in $_uboot_dir/"
+        log_warn "No U-Boot blobs available for $_board."
     fi
+
+    # An unbootable image that exits 0 is worse than a failed build: it gets
+    # published. Boards that declare a bootloader must actually get one.
+    if [ "$(board_config "$_board" bootloader)" = "u-boot" ] && [ "$_flashed" -eq 0 ]; then
+        log_error "No bootloader was written for '$_board'; this image cannot boot."
+        log_error "Place the required blobs in $_basedir/firmware/$_board/ and rebuild."
+        [ -n "$_uboot_stage" ] && sudo rm -rf "$_uboot_stage"
+        _loop_image_cleanup
+        trap - EXIT INT TERM
+        return 1
+    fi
+
+    [ -n "$_uboot_stage" ] && sudo rm -rf "$_uboot_stage"
 
     _loop_image_cleanup
     trap - EXIT INT TERM

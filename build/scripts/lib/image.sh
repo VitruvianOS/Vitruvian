@@ -778,11 +778,49 @@ create_raspberry() {
         sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
     fi
 
+    # debootstrap writes a main-only sources.list, but raspi-firmware and
+    # several u-boot variants live in contrib/non-free/non-free-firmware.
+    sudo tee "$_mnt/etc/apt/sources.list" >/dev/null <<APTSRC
+deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+APTSRC
+
+    # Same key-gated VitruvianOS repo as chroot.sh; these paths run their
+    # own debootstrap and never went through it.
+    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
+    : "${VOS_REPO_SUITE:=trixie-testing}"
+    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
+        sudo install -m 644 "$VOS_REPO_KEY" \
+            "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"
+        sudo tee "$_mnt/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSSRC
+Types: deb
+URIs: $VOS_REPO_URL
+Suites: $VOS_REPO_SUITE
+Components: main
+Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
+VOSSRC
+        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
+    else
+        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
+    fi
+
     log_step "Configuring system..."
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "apt update && apt install -y $_board_pkgs
+    # set -e: bash -c returns the status of its LAST command, so the old
+    # one-line form returned the trailing if-block and hid apt failures.
+    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+apt update
+apt install -y $_board_pkgs
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
 fi" || die "raspberry chroot bash-c failed"
+
+    # Prove the firmware landed; the board cannot boot without it.
+    for _fw in start4.elf fixup4.dat; do
+        [ -f "$_mnt/boot/firmware/$_fw" ] \
+            || die "board firmware missing after install: $_fw (image would not boot)"
+    done
 
     _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
         || die "_common_chroot_setup failed"
@@ -944,8 +982,36 @@ create_uboot_board() {
         sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
     fi
 
+    # Same sources.list fix as create_raspberry.
+    sudo tee "$_mnt/etc/apt/sources.list" >/dev/null <<APTSRC
+deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+APTSRC
+
+    # Same key-gated VitruvianOS repo as create_raspberry.
+    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
+    : "${VOS_REPO_SUITE:=trixie-testing}"
+    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
+        sudo install -m 644 "$VOS_REPO_KEY" \
+            "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"
+        sudo tee "$_mnt/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSSRC
+Types: deb
+URIs: $VOS_REPO_URL
+Suites: $VOS_REPO_SUITE
+Components: main
+Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
+VOSSRC
+        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
+    else
+        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
+    fi
+
     log_step "Configuring $_label system..."
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "apt update && apt install -y $_board_pkgs u-boot-menu
+    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+apt update
+apt install -y $_board_pkgs u-boot-menu
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
 fi" || die "uboot chroot bash-c failed"

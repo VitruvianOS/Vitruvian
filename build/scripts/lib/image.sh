@@ -448,10 +448,20 @@ SSHEOF
     done
 
     log_step "Compressing chroot..."
+    # zstd by default: a live ISO pays decompression on every file read for
+    # the whole session, and xz's ~19% smaller media is not worth the slower
+    # reads. Both compressors are supported by the shipped kernel
+    # (CONFIG_SQUASHFS_ZSTD=y) and mksquashfs, so this is a runtime choice.
+    case "${VOS_SQUASHFS_COMP:-zstd}" in
+        zstd) _sq_comp_args="-comp zstd -Xcompression-level ${VOS_SQUASHFS_LEVEL:-15}" ;;
+        xz)   _sq_comp_args="-comp xz -Xdict-size 100%" ;;
+        *)    die "VOS_SQUASHFS_COMP must be xz or zstd (got '${VOS_SQUASHFS_COMP}')" ;;
+    esac
+    log_info "squashfs compressor: ${VOS_SQUASHFS_COMP:-zstd}"
     sudo mksquashfs \
         "$_chroot_dir" \
         "$_basedir/image_tree/image/live/filesystem.squashfs" \
-        -b 1048576 -comp xz -Xdict-size 100% -xattrs
+        -b 1048576 $_sq_comp_args -xattrs
 
     log_step "Copying kernel and initramfs..."
     # riscv64's linux-image ships an uncompressed vmlinux-<ver> (no vmlinuz-);

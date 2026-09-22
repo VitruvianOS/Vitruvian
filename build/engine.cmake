@@ -279,14 +279,47 @@ macro( RunnableAddOn name )
 
 	set_target_properties(${name} PROPERTIES PREFIX "" SUFFIX "")
 
+	# riscv64: _start references __global_pointer$; a -shared link defines it
+	# only when a small-data section exists, and --no-undefined then rejects
+	# the reference ("undefined reference to __global_pointer$"). PIC code
+	# addresses through pc-relative forms and never reads the gp register, so
+	# defining it to 0 is safe. Verified against the trixie cross toolchain
+	# 2026-09-17: --no-undefined fails without the defsym, links with it.
+	# Set BEFORE target_link_options uses it below.
+	if(_vos_triple STREQUAL "riscv64-linux-gnu")
+		set(VOS_RUNNABLE_GP_DEF "-Wl,--defsym=__global_pointer$=0")
+	endif()
 	target_link_options(${name} PRIVATE
 		"-Wl,-e,_start"                                # entry -> CRT _start
 		"-nostartfiles"                                # we add Scrt1.o ourselves
+		${VOS_RUNNABLE_GP_DEF}                         # riscv64 only, see above
 		)
 	# Stock PIE CRT: Scrt1.o provides _start -> __libc_start_main(main,...);
 	# crti/crtn re-added because -nostartfiles dropped them.
 	execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=Scrt1.o
 		OUTPUT_VARIABLE _vos_scrt1 OUTPUT_STRIP_TRAILING_WHITESPACE)
+	# riscv64: recent glibc Scrt1.o carries .preinit_array(+.rela), which ld
+	# refuses inside a -shared link ("nonrepresentable section on output");
+	# amd64/arm64 CRTs have no such section. Strip both into a copy — nothing
+	# in these add-ons uses preinit constructors. Verified 2026-09-16 by
+	# linking a test DSO both ways with the trixie riscv64 cross toolchain.
+	if(_vos_triple STREQUAL "" )
+		execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpmachine
+			OUTPUT_VARIABLE _vos_triple OUTPUT_STRIP_TRAILING_WHITESPACE)
+	endif()
+	if(_vos_triple STREQUAL "riscv64-linux-gnu")
+		find_program(VOS_RISCV64_OBJCOPY riscv64-linux-gnu-objcopy REQUIRED)
+		set(VOS_SCRT1_NOPI "${CMAKE_BINARY_DIR}/Scrt1.nopreinit.o")
+		execute_process(
+			COMMAND ${VOS_RISCV64_OBJCOPY}
+				-R .preinit_array -R .rela.preinit_array
+				"${_vos_scrt1}" "${VOS_SCRT1_NOPI}"
+			RESULT_VARIABLE _vos_nopi_rc)
+		if(NOT _vos_nopi_rc EQUAL 0)
+			message(FATAL_ERROR "RunnableAddOn: failed to strip .preinit_array from Scrt1.o")
+		endif()
+		set(_vos_scrt1 "${VOS_SCRT1_NOPI}")
+	endif()
 	execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=crti.o
 		OUTPUT_VARIABLE _vos_crti OUTPUT_STRIP_TRAILING_WHITESPACE)
 	execute_process(COMMAND ${CMAKE_C_COMPILER} -print-file-name=crtn.o

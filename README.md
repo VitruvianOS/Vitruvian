@@ -1,6 +1,7 @@
 <p align="center">
   <img src="https://v-os.dev/img/vitruvianos-logo.svg" width="220" alt="VitruvianOS">
 </p>
+
 <img src="https://numerio.goatcounter.com/count?p=/vitruvian-readme" alt="" width="0" height="0">
 
 **Vitruvian** (**VitruvianOS** or simply **V\OS**) is the human-centric Operating System.
@@ -31,10 +32,12 @@ See the [Nexus repository](https://github.com/VitruvianOS/Nexus) for more detail
 ### Join the Community
 
 #### Telegram
-- **Discussions**: https://t.me/vitruvian_official_chat
-- **Updates**: https://t.me/vitruvian_official
+
+* **Discussions**: https://t.me/vitruvian_official_chat
+* **Updates**: https://t.me/vitruvian_official
 
 #### Mailing list
+
 https://www.freelists.org/list/vitruvian
 
 ### Installation
@@ -57,3 +60,7 @@ If you'd like to support the project, see the [Donate](https://wiki.v-os.dev/doc
 ### License
 
 VitruvianOS is released under a hybrid [GPL](https://www.gnu.org/licenses/gpl-3.0.html) / [MIT](https://opensource.org/licenses/MIT) license scheme.
+
+---
+
+**Disclaimer:** VitruvianOS is an independent project and is **not affiliated with, endorsed by, sponsored by, or otherwise associated with Haiku, Inc. or the Haiku project**, nor with any current or former members of the Haiku, Inc. development team. References to BeOS, Haiku, or their respective APIs and technologies are made solely to describe compatibility, inspiration, or technical relationships.

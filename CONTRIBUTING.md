@@ -5,7 +5,7 @@ Hey, thanks for wanting to help out. Vitruvian (sometimes called V\OS) is a big 
 ## Getting started
 
 1. Fork the repo and clone it locally.
-2. Get a working build following the [build instructions](https://docs.v-os.dev.dev/docs/getting-started/building/). This is the first hurdle — if something doesn't build for you, that's already a useful bug to report.
+2. Get a working build following the [build instructions](https://docs.v-os.dev/docs/getting-started/building/). This is the first hurdle — if something doesn't build for you, that's already a useful bug to report.
 3. Look through the [open issues](https://github.com/VitruvianOS/Vitruvian/issues) for something that interests you, or open a new issue if you want to propose a change before diving in.
 
 ## Code

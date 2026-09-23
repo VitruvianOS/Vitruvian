@@ -39,20 +39,20 @@ https://www.freelists.org/list/vitruvian
 
 ### Installation
 
-See https://v-os.dev/download/ and https://docs.dev/docs/getting-started/how-to-install/
+See https://v-os.dev/download/ and https://docs.v-os.dev.dev/docs/getting-started/how-to-install/
 
 ### Getting Started
 
-* [Building](https://docs.dev/docs/getting-started/building/)
-* [Coding Guidelines](https://docs.dev/docs/development/coding-guidelines/)
-* [Filesystem Layout](https://docs.dev/docs/development/filesystem-layout/)
-* [Full Wiki](https://docs.dev/)
+* [Building](https://docs.v-os.dev.dev/docs/getting-started/building/)
+* [Coding Guidelines](https://docs.v-os.dev.dev/docs/development/coding-guidelines/)
+* [Filesystem Layout](https://docs.v-os.dev.dev/docs/development/filesystem-layout/)
+* [Full Wiki](https://docs.v-os.dev.dev/)
 
 We welcome contributions from the community. Check the wiki for guidelines and open issues on GitHub.
 
 ### Donate
 
-If you'd like to support the project, see the [Donate](https://docs.dev/docs/reference/donate/) page.
+If you'd like to support the project, see the [Donate](https://docs.v-os.dev.dev/docs/reference/donate/) page.
 
 ### License
 

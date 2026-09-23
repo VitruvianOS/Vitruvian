@@ -5,14 +5,14 @@ Hey, thanks for wanting to help out. Vitruvian (sometimes called V\OS) is a big 
 ## Getting started
 
 1. Fork the repo and clone it locally.
-2. Get a working build following the [build instructions](https://wiki.v-os.dev/docs/getting-started/building/). This is the first hurdle — if something doesn't build for you, that's already a useful bug to report.
+2. Get a working build following the [build instructions](https://docs.v-os.dev.dev/docs/getting-started/building/). This is the first hurdle — if something doesn't build for you, that's already a useful bug to report.
 3. Look through the [open issues](https://github.com/VitruvianOS/Vitruvian/issues) for something that interests you, or open a new issue if you want to propose a change before diving in.
 
 ## Code
 
 A few things we care about:
 
-- **Style matters.** We follow Haiku coding conventions (tabs, not spaces; Allman braces; `fMemberVar` naming; return type on its own line; `NULL` not `nullptr`). The [coding guidelines](https://wiki.v-os.dev/docs/development/coding-guidelines/) have the full rundown. Code that doesn't match the surrounding style stands out — and not in a good way.
+- **Style matters.** We follow Haiku coding conventions (tabs, not spaces; Allman braces; `fMemberVar` naming; return type on its own line; `NULL` not `nullptr`). The [coding guidelines](https://docs.v-os.dev.dev/docs/development/coding-guidelines/) have the full rundown. Code that doesn't match the surrounding style stands out — and not in a good way.
 - **One thing per commit.** Don't bundle unrelated changes. It makes review harder and bisection painful down the road.
 - **Explain the *why*.** Commit messages should say why a change is needed, not just what was changed. "Fix crash" is weak; "Guard against null connector in SetMode when hot-unplugging" is better.
 - **Test before you PR.** Open a pull request against `master` and tell us what you changed, how you tested it, and anything you're unsure about.

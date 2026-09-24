@@ -409,6 +409,15 @@ EOF
         sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI"
     fi
 
+    # Staged next to the EFI binaries; ESP assembly mcopy's it into the image.
+    sudo mkdir -p "$_esp_dir/boot/grub"
+    sudo chroot "$_root_dir" grub-editenv /.vos-grubenv create 2>/dev/null \
+        && sudo cp "$_root_dir/.vos-grubenv" "$_esp_dir/boot/grub/grubenv" \
+        || sudo tee "$_esp_dir/boot/grub/grubenv" >/dev/null <<'GRUBENVEOF'
+# GRUB Environment Block
+GRUBENVEOF
+    sudo rm -f "$_root_dir/.vos-grubenv"
+
     _install_resize_root "$_root_dir"
 
     qemu_eject "$_root_dir" "$_arch"
@@ -430,11 +439,12 @@ EOF
     # directly and need no mount, no loop device, no root.
     truncate -s "${_esp_size_mib}M" "$_esp_img"
     mkfs.vfat -F32 -i "$_esp_volid" "$_esp_img" >/dev/null
-    mmd -i "$_esp_img" ::/EFI ::/EFI/BOOT
+    mmd -i "$_esp_img" ::/EFI ::/EFI/BOOT ::/boot ::/boot/grub
     mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/$_boot_efi" "::/EFI/BOOT/$_boot_efi"
     if [ "$_arch" = amd64 ]; then
         mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI" ::/EFI/BOOT/BOOTIA32.EFI
     fi
+    mcopy -i "$_esp_img" "$_esp_dir/boot/grub/grubenv" ::/boot/grub/grubenv
 
     # Root: mke2fs -d populates the filesystem from a directory in one shot,
     # preserving ownership/permissions/xattrs/symlinks; no mount involved.

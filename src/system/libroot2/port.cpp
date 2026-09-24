@@ -5,8 +5,13 @@
 
 #include "Team.h"
 #include "KernelDebug.h"
+#include "IdGenerationGuard.h"
 
 #include "../kernel/nexus/nexus/nexus.h"
+
+
+// Generation guard: detects stale port handles that survived a recycle.
+static BPrivate::IdGenerationGuard<port_id> sPortGuard;
 
 
 port_id
@@ -34,7 +39,7 @@ create_port(int32 queueLength, const char* name)
 	if (exchange.ret != B_OK)
 		return exchange.ret;
 
-	return exchange.id;
+	return sPortGuard.Register(exchange.id);
 }
 
 
@@ -43,12 +48,13 @@ close_port(port_id id)
 {
 	CALLED();
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_id exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
+	exchange.id = kernelId;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	if (nexus < 0)
@@ -65,7 +71,8 @@ delete_port(port_id id)
 {
 	CALLED();
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
@@ -74,10 +81,12 @@ delete_port(port_id id)
 
 	struct nexus_port_id exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
+	exchange.id = kernelId;
 
 	if (nexus_io(nexus, NEXUS_PORT_DELETE, &exchange) < 0)
 		return B_ERROR;
+	if (exchange.ret == B_OK)
+		sPortGuard.Unregister(id);
 	return exchange.ret;
 }
 
@@ -152,7 +161,8 @@ _get_port_info(port_id id, port_info* out_info, size_t size)
 {
 	CALLED();
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	if (out_info == NULL || size != sizeof(*out_info))
@@ -166,7 +176,7 @@ _get_port_info(port_id id, port_info* out_info, size_t size)
 	struct nexus_port_info info;
 	memset(&info, 0, sizeof(info));
 
-	exchange.id = id;
+	exchange.id = kernelId;
 	exchange.info = &info;
 
 	if (nexus_io(nexus, NEXUS_PORT_INFO, &exchange) < 0)
@@ -215,7 +225,8 @@ port_buffer_size_etc(port_id id, uint32 flags, bigtime_t timeout)
 {
 	CALLED();
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	port_message_info info;
@@ -234,7 +245,8 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 {
 	CALLED();
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	if (info == NULL /*|| infoSize != sizeof(*info)*/)
@@ -248,7 +260,7 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 	struct nexus_port_message_info privateInfo;
 	memset(&privateInfo, 0, sizeof(privateInfo));
 
-	exchange.id = id;
+	exchange.id = kernelId;
 	exchange.flags = flags;
 	exchange.timeout = timeout;
 	exchange.size = sizeof(privateInfo);
@@ -274,7 +286,8 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 {
 	CALLED();
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	if ((msgBuffer == NULL && bufferSize > 0)
@@ -288,7 +301,7 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 
 	struct nexus_port_read exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
+	exchange.id = kernelId;
 	exchange.code = msgCode;
 	exchange.buffer = msgBuffer;
 	exchange.size = bufferSize;
@@ -318,7 +331,8 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 {
 	CALLED();
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	if ((msgBuffer == NULL && bufferSize > 0)
@@ -332,7 +346,7 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 
 	struct nexus_port_write exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
+	exchange.id = kernelId;
 	exchange.code = &msgCode;
 	exchange.buffer = msgBuffer;
 	exchange.size = bufferSize;
@@ -362,7 +376,8 @@ write_port_with_caps(port_id id, int32 msgCode,
 {
 	CALLED();
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	if ((msgBuffer == NULL && bufferSize > 0)
@@ -380,7 +395,7 @@ write_port_with_caps(port_id id, int32 msgCode,
 	// Userland `port_cap_in` matches `nexus_port_cap_in` byte-for-byte.
 	struct nexus_port_write_caps exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
+	exchange.id = kernelId;
 	exchange.code = &msgCode;
 	exchange.buffer = msgBuffer;
 	exchange.size = bufferSize;
@@ -404,7 +419,8 @@ read_port_with_caps_etc(port_id id, int32* msgCode,
 {
 	CALLED();
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	if (bufferSize == NULL || capsCount == NULL)
@@ -425,7 +441,7 @@ read_port_with_caps_etc(port_id id, int32* msgCode,
 	// Userland `port_cap_out` matches `nexus_port_cap_out` byte-for-byte.
 	struct nexus_port_read_caps exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
+	exchange.id = kernelId;
 	exchange.code = msgCode;
 	exchange.buffer = msgBuffer;
 	exchange.size = *bufferSize;
@@ -476,7 +492,8 @@ set_port_owner(port_id id, team_id team)
 	// and introduce a mechanism that requires
 	// the target process approval.
 
-	if (id < 0)
+	int32 kernelId = sPortGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_PORT_ID;
 
 	if (team < 0)
@@ -488,7 +505,7 @@ set_port_owner(port_id id, team_id team)
 
 	struct nexus_port_set_owner exchange;
 	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
+	exchange.id = kernelId;
 	exchange.team = team;
 
 	if (nexus_io(nexus, NEXUS_SET_PORT_OWNER, &exchange) < 0)

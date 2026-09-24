@@ -25,8 +25,13 @@
 #include <string>
 
 #include "MutexLock.h"
+#include "IdGenerationGuard.h"
 #include "../kernel/nexus/nexus/nexus.h"
 #include "Team.h"
+
+
+// Generation guard: detects stale area handles that survived a recycle.
+static BPrivate::IdGenerationGuard<area_id> sAreaGuard;
 
 
 namespace BKernelPrivate {
@@ -240,7 +245,7 @@ create_area(const char* name, void** startAddr, uint32 addrSpec,
 	if (startAddr)
 		*startAddr = address;
 
-	return create.area;
+	return sAreaGuard.Register(create.area);
 }
 
 
@@ -248,7 +253,11 @@ area_id
 clone_area(const char* name, void** destAddr, uint32 addrSpec,
 	uint32 protection, area_id source)
 {
-	if (name == NULL || name[0] == '\0' || source < 0)
+	if (name == NULL || name[0] == '\0')
+		return B_BAD_VALUE;
+
+	int32 kernelSource = sAreaGuard.Validate(source);
+	if (kernelSource < 0)
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
@@ -256,7 +265,7 @@ clone_area(const char* name, void** destAddr, uint32 addrSpec,
 		return B_ERROR;
 
 	struct nexus_area_clone clone = {
-		.source = source,
+		.source = kernelSource,
 		.protection = protection
 	};
 	strncpy(clone.name, name, B_OS_NAME_LENGTH - 1);
@@ -274,7 +283,7 @@ clone_area(const char* name, void** destAddr, uint32 addrSpec,
 		flags |= MAP_FIXED;
 	else if (addrSpec == B_CLONE_ADDRESS) {
 		BKernelPrivate::LocalArea src;
-		if (BKernelPrivate::AreaPool::Get().Get(source, src))
+		if (BKernelPrivate::AreaPool::Get().Get(kernelSource, src))
 			hint = src.address;
 	}
 
@@ -306,18 +315,19 @@ clone_area(const char* name, void** destAddr, uint32 addrSpec,
 	if (destAddr)
 		*destAddr = address;
 
-	return clone.area;
+	return sAreaGuard.Register(clone.area);
 }
 
 
 status_t
 delete_area(area_id id)
 {
-	if (id < 0)
+	int32 kernelId = sAreaGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_VALUE;
 
 	BKernelPrivate::LocalArea local;
-	if (BKernelPrivate::AreaPool::Get().Remove(id, local)) {
+	if (BKernelPrivate::AreaPool::Get().Remove(kernelId, local)) {
 		if (local.address && local.address != MAP_FAILED)
 			munmap(local.address, local.size);
 		if (local.memfd >= 0)
@@ -328,9 +338,11 @@ delete_area(area_id id)
 	if (nexus < 0)
 		return B_ERROR;
 
-	struct nexus_area_delete del = { .area = id, .ret = B_OK };
+	struct nexus_area_delete del = { .area = kernelId, .ret = B_OK };
 	if (nexus_io(nexus, NEXUS_AREA_DELETE, &del) < 0)
 		return B_ERROR;
+	if (del.ret == B_OK)
+		sAreaGuard.Unregister(id);
 	return del.ret;
 }
 
@@ -372,11 +384,12 @@ resize_area(area_id /*id*/, size_t /*newSize*/)
 status_t
 set_area_protection(area_id id, uint32 protection)
 {
-	if (id < 0)
+	int32 kernelId = sAreaGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_VALUE;
 
 	BKernelPrivate::LocalArea local;
-	if (!BKernelPrivate::AreaPool::Get().Get(id, local))
+	if (!BKernelPrivate::AreaPool::Get().Get(kernelId, local))
 		return B_BAD_VALUE;
 
 	int prot = BKernelPrivate::protection_to_prot(protection);
@@ -388,7 +401,7 @@ set_area_protection(area_id id, uint32 protection)
 		return B_ERROR;
 
 	struct nexus_area_set_protection sp = {
-		.area = id,
+		.area = kernelId,
 		.protection = protection,
 		.ret = B_OK
 	};
@@ -409,14 +422,15 @@ area_for(void* address)
 status_t
 _get_area_info(area_id id, area_info* info, size_t size)
 {
-	if (id < 0 || info == NULL || size != sizeof(area_info))
+	int32 kernelId = sAreaGuard.Validate(id);
+	if (kernelId < 0 || info == NULL || size != sizeof(area_info))
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
 	if (nexus < 0)
 		return B_ERROR;
 
-	struct nexus_area_get_info gi = { .area = id };
+	struct nexus_area_get_info gi = { .area = kernelId };
 	if (nexus_io(nexus, NEXUS_AREA_GET_INFO, &gi) < 0)
 		return B_ERROR;
 	if (gi.ret != B_OK)
@@ -431,7 +445,7 @@ _get_area_info(area_id id, area_info* info, size_t size)
 	info->ram_size = gi.size;
 
 	BKernelPrivate::LocalArea local;
-	if (BKernelPrivate::AreaPool::Get().Get(id, local))
+	if (BKernelPrivate::AreaPool::Get().Get(kernelId, local))
 		info->address = local.address;
 	else
 		info->address = NULL;
@@ -742,7 +756,8 @@ area_id
 _kern_transfer_area(area_id id, void** _address, uint32 addressSpec,
 	team_id target)
 {
-	if (id < 0)
+	int32 kernelId = sAreaGuard.Validate(id);
+	if (kernelId < 0)
 		return B_BAD_VALUE;
 
 	// You can't transfer an area to your team
@@ -750,7 +765,7 @@ _kern_transfer_area(area_id id, void** _address, uint32 addressSpec,
 		return B_NOT_ALLOWED;
 
 	BKernelPrivate::LocalArea local;
-	if (!BKernelPrivate::AreaPool::Get().Get(id, local))
+	if (!BKernelPrivate::AreaPool::Get().Get(kernelId, local))
 		return B_BAD_VALUE;
 
 	int nexus = BKernelPrivate::Team::GetAreaDescriptor();
@@ -758,7 +773,7 @@ _kern_transfer_area(area_id id, void** _address, uint32 addressSpec,
 		return B_ERROR;
 
 	struct nexus_area_transfer tr = {
-		.area   = id,
+		.area   = kernelId,
 		.target = target,
 	};
 
@@ -770,7 +785,7 @@ _kern_transfer_area(area_id id, void** _address, uint32 addressSpec,
 	if (_address)
 		*_address = local.address;
 
-	return tr.new_area;
+	return sAreaGuard.Register(tr.new_area);
 }
 
 

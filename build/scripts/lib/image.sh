@@ -201,12 +201,18 @@ rm -rf /localdeb" || die "raw chroot bash-c failed"
     log_step "Building standalone EFI bootloader ($_efi_target)..."
 
     BUILD_TYPE="Debug"
+    _sshdebug=0
     if [ -f "$_basedir/buildconfig.conf" ]; then
         . "$_basedir/buildconfig.conf"
         BUILD_TYPE="${CMAKE_BUILD_TYPE:-Debug}"
+        [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
+    fi
+    # The Debug GRUB entry advertises sshdebug; stage the SSH side to match.
+    if [ "$_sshdebug" = 1 ]; then
+        _debug_ssh_setup "$_root_dir" || die "_debug_ssh_setup failed"
     fi
     _debug_menuentry=""
-    if [ "$BUILD_TYPE" = "Debug" ]; then
+    if [ "$_sshdebug" = 1 ]; then
         _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
     linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
     initrd (\$root)/initrd.img
@@ -364,9 +370,11 @@ create_iso() {
     _imagekernelversion=$(cat "$_basedir/imagekernelversion.conf" 2>/dev/null || die "imagekernelversion.conf not found. Run setupenv first.")
 
     BUILD_TYPE="Debug"
+    _sshdebug=0
     if [ -f "$_basedir/buildconfig.conf" ]; then
         . "$_basedir/buildconfig.conf"
         BUILD_TYPE="${CMAKE_BUILD_TYPE:-Debug}"
+        [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
     fi
 
     _count=$(ls -1 "$_basedir"/*.deb 2>/dev/null | wc -l)
@@ -400,29 +408,8 @@ depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel st
     _common_chroot_setup "$_chroot_dir" "vitruvian" "" "" \
         || die "_common_chroot_setup failed"
 
-    if [ "$BUILD_TYPE" = "Debug" ]; then
-        log_step "Configuring SSH server for debug access..."
-        sudo chroot "$_chroot_dir" /bin/bash -eux <<'SSHEOF'
-export DEBIAN_FRONTEND=noninteractive
-mkdir -p /etc/ssh/sshd_config.d
-cat > /etc/ssh/sshd_config.d/debug.conf <<'EOF'
-PermitRootLogin yes
-PasswordAuthentication yes
-PermitEmptyPasswords no
-EOF
-chmod 0644 /etc/ssh/sshd_config.d/debug.conf
-chown root:root /etc/ssh/sshd_config.d/debug.conf
-mkdir -p /root/.ssh
-chmod 0700 /root/.ssh
-chown root:root /root/.ssh
-getent passwd vos-live >/dev/null && echo "vos-live:live" | chpasswd || true
-if command -v systemctl >/dev/null 2>&1; then
-    # ssh.service stays disabled; vos-sshdebug.service starts sshd for one
-    # boot when vitruvian.sshdebug is on the cmdline.
-    systemctl enable vos-sshdebug.service 2>/dev/null || true
-fi
-SSHEOF
-        log_info "SSH server configured."
+    if [ "$_sshdebug" = 1 ]; then
+        _debug_ssh_setup "$_chroot_dir" || die "_debug_ssh_setup failed"
     fi
 
     qemu_eject "$_chroot_dir" "$_arch"
@@ -487,7 +474,7 @@ menuentry "Vitruvian Live (Safe Mode)" {
 }
 EOF
 
-    if [ "$BUILD_TYPE" = "Debug" ]; then
+    if [ "$_sshdebug" = 1 ]; then
         cat <<'EOF' >>"$_basedir/image_tree/scratch/grub.cfg"
 menuentry "Vitruvian Live (Debug)" {
     linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
@@ -624,8 +611,8 @@ EOF
 
     log_info "ISO created: $_basedir/output/vitruvian-custom.iso"
     log_info "Build type: $BUILD_TYPE"
-    if [ "$BUILD_TYPE" = "Debug" ]; then
-        log_info "Debug build - SSH: vos-live@<guest-ip> (password: live)"
+    if [ "$_sshdebug" = 1 ]; then
+        log_info "Debug entry staged - SSH: root or vos-live@<guest-ip> (password: live)"
     fi
 }
 
@@ -719,6 +706,61 @@ ln -sf /dev/null /etc/systemd/system-generators/systemd-ssh-generator" || die "_
 
     # Build-time trade; every image path passes here so it never ships.
     sudo rm -f "$_mnt/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io"
+}
+
+_debug_ssh_setup() {
+    # Stage the opt-in debug SSH path. _common_chroot_setup leaves exactly
+    # one way to start sshd at boot: vos-sshdebug.service, inert unless the
+    # Debug GRUB entry put vitruvian.sshdebug on the cmdline. The unit is
+    # shipped from staging because the vos deb only carries it when the deb
+    # itself was built Debug, which need not match this image.
+    local _chroot="$1"
+    sudo chroot "$_chroot" /bin/bash -eux <<'SSHEOF'
+export DEBIAN_FRONTEND=noninteractive
+mkdir -p /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/debug.conf <<'EOF'
+PermitRootLogin yes
+PasswordAuthentication yes
+PermitEmptyPasswords no
+EOF
+chmod 0644 /etc/ssh/sshd_config.d/debug.conf
+chown root:root /etc/ssh/sshd_config.d/debug.conf
+mkdir -p /root/.ssh
+chmod 0700 /root/.ssh
+chown root:root /root/.ssh
+# root is locked by _common_chroot_setup; without a password the
+# PermitRootLogin above is dead config.
+echo 'root:live' | chpasswd
+getent passwd vos-live >/dev/null && echo 'vos-live:live' | chpasswd || true
+mkdir -p /etc/systemd/system
+cat > /etc/systemd/system/vos-sshdebug.service <<'EOF'
+[Unit]
+Description=Vitruvian debug SSH (opt-in via vitruvian.sshdebug on the kernel cmdline)
+ConditionKernelCommandLine=vitruvian.sshdebug
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# vos-install-helper generates host keys on the target at install time, so
+# this is a fallback for keys removed since
+ExecStartPre=/usr/bin/ssh-keygen -A
+# ssh.service is canonical (sshd.service is its alias); trying the alias
+# too makes unit-name drift a loud failure instead of a silent no-op.
+ExecStart=/bin/sh -c '/usr/bin/systemctl start ssh.service || /usr/bin/systemctl start sshd.service'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+chmod 0644 /etc/systemd/system/vos-sshdebug.service
+chown root:root /etc/systemd/system/vos-sshdebug.service
+# No "|| true": if the unit cannot be enabled the image must not build.
+systemctl enable vos-sshdebug.service
+# Config drift must fail the build, not the debug boot.
+if [ -x /usr/sbin/sshd ]; then
+    /usr/sbin/sshd -t
+fi
+SSHEOF
 }
 
 create_raspberry() {

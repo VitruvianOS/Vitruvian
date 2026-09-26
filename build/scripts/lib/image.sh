@@ -48,13 +48,20 @@ _iso_cleanup() {
     sudo umount -l "$_chroot_dir/tmp/"  2>/dev/null || true
 }
 
+# EFI raw image assembled without loop devices or partition mounts, so the
+# build runs in sandboxed/container environments: the root tree is staged as
+# a plain directory and written in one shot with mke2fs -d, the ESP with
+# mtools, the disk image as an sfdisk table plus dd writes at the partition
+# offsets. UUIDs/volume IDs are generated up front so fstab and the embedded
+# grub.cfg are written before any filesystem exists.
 create_raw() {
     _basedir="$1"
     _arch="$2"
-    _efi_target="$(arch_to_efi_target "$_arch")"
-    if [ -z "$_efi_target" ]; then
-        die "EFI raw images not supported on $_arch. Use a board-specific image type instead."
+    if [ "$_arch" != amd64 ]; then
+        die "raw assembly is only implemented for amd64."
     fi
+    _efi_target="$(arch_to_efi_target "$_arch")"
+    [ -n "$_efi_target" ] || die "EFI raw images not supported on $_arch."
 
     _chroot_dir="$_basedir/image_tree/chroot"
     [ -d "$_chroot_dir" ] || die "No chroot at $_chroot_dir. Run setupenv first."
@@ -68,9 +75,13 @@ create_raw() {
     fi
 
     require_cmd rsync rsync
+    require_cmd sfdisk util-linux
+    require_cmd mke2fs e2fsprogs
+    require_cmd mkfs.vfat dosfstools
+    require_cmd mcopy mtools
+    require_cmd mmd mtools
 
     _raw="$_basedir/output/vitruvian.raw"
-    _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
     _user=""
     _pass=""
@@ -78,84 +89,63 @@ create_raw() {
     _host_shared="$_basedir/shared"
     _guest_mnt="/mnt/host_shared"
 
-    mkdir -p "$_basedir/output"
-    mkdir -p "$_host_shared"
+    # Same layout as the loop path: 4 GiB disk, 1MiB-513MiB ESP (512 MiB),
+    # 513MiB-100% root (3583 MiB). Kept identical on purpose so the
+    # differential harness compares like-for-like partition geometry.
+    _disk_mib=4096
+    _esp_start_mib=1
+    _esp_size_mib=512
+    _root_start_mib=513
+    _root_size_mib=$((_disk_mib - _root_start_mib - 1))  # -1MiB for GPT backup
 
-    # Detach any loop devices that previous runs left attached to the same
-    # raw file (kill -9 / closed terminal bypassing the EXIT trap, or
-    # udisks held it open). Writing through a fresh qemu-img create while
-    # a stale loop is still open silently corrupts the new FS.
-    if [ -f "$_raw" ]; then
-        for _stale in $(sudo losetup -j "$_raw" -O NAME --noheadings 2>/dev/null); do
-            log_warn "Detaching stale loop device $_stale"
-            # Unmount everything attached to this loop, including udisks's
-            # /run/media mounts. Sort reverse so children unmount first.
-            for _mp in $(awk -v dev="$_stale" '$1 ~ dev {print $2}' /proc/mounts \
-                    | sort -r); do
-                sudo umount -l "$_mp" 2>/dev/null || true
-            done
-            sudo losetup -d "$_stale" 2>/dev/null || true
-        done
-    fi
-    sudo umount -l "$_mnt/boot/efi" 2>/dev/null || true
-    sudo umount -l "$_mnt"          2>/dev/null || true
+    _root_dir="$_basedir/image_tree/raw_root"
+    _esp_dir="$_basedir/image_tree/raw_esp"
+    _root_img="$_basedir/image_tree/scratch/root.img"
+    _esp_img="$_basedir/image_tree/scratch/esp.img"
 
-    log_step "Creating RAW image..."
-    qemu-img create "$_raw" 4G
+    sudo rm -rf "$_root_dir" "$_esp_dir"
+    mkdir -p "$_basedir/output" "$_host_shared" "$_basedir/image_tree/scratch"
+    sudo mkdir -p "$_root_dir" "$_esp_dir"
 
-    _loop=$(sudo losetup --show -f -P "$_raw")
-    log_info "Loop device: $_loop"
-    trap '_loop_image_cleanup' EXIT INT TERM
+    # Pre-generate the identifiers create_raw would otherwise read back from
+    # blkid after mkfs on the loop device; here nothing is mkfs'd until
+    # the directory trees are complete, so fstab/grub.cfg need them first.
+    _root_uuid="$(cat /proc/sys/kernel/random/uuid)"
+    _esp_volid="$(od -An -tx4 -N4 /dev/urandom | tr -d ' \n' | tr 'a-f' 'A-F')"
+    _esp_uuid="${_esp_volid%????}-${_esp_volid#????}"
 
-    sudo parted --script "$_loop" mklabel gpt
-    sudo parted --script "$_loop" mkpart ESP fat32 1MiB 513MiB
-    sudo parted --script "$_loop" set 1 esp on
-    sudo parted --script "$_loop" mkpart primary ext4 513MiB 100%
-    sudo partprobe "$_loop"
-    sudo udevadm settle
-
-    _efi_part="${_loop}p1"
-    _root_part="${_loop}p2"
-
-    sudo mkfs.vfat -F32 "$_efi_part"
-    sudo mkfs.ext4 -F -I 512 \
-        -O ^ea_inode,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
-        -L vitruvian-root "$_root_part"
-
-    _esp_uuid=$(sudo blkid -s UUID -o value "$_efi_part")
-    _root_uuid=$(sudo blkid -s UUID -o value "$_root_part")
-    [ -n "$_esp_uuid" ]  || die "Could not read ESP UUID from $_efi_part"
-    [ -n "$_root_uuid" ] || die "Could not read root UUID from $_root_part"
-
-    sudo mkdir -p "$_mnt"
-    sudo mount "$_root_part" "$_mnt"
-    sudo mkdir -p "$_mnt/boot/efi"
-    sudo mount "$_efi_part" "$_mnt/boot/efi"
-
-    log_step "Copying chroot into RAW image (rsync)..."
+    log_step "Assembling root filesystem tree (no loop device)..."
     sudo rsync -aHAXx --numeric-ids \
         --exclude='/proc/*' --exclude='/sys/*' --exclude='/dev/*' \
         --exclude='/tmp/*'  --exclude='/run/*'  --exclude='/localdeb' \
         --exclude='/scratch' \
-        "$_chroot_dir/" "$_mnt/"
+        "$_chroot_dir/" "$_root_dir/"
 
-    sudo mkdir -p "$_mnt/proc" "$_mnt/sys" "$_mnt/dev" "$_mnt/run" "$_mnt/tmp"
-    sudo mount -t proc proc "$_mnt/proc"
-    sudo mount --rbind /sys "$_mnt/sys";  sudo mount --make-rslave "$_mnt/sys"
-    sudo mount --rbind /dev "$_mnt/dev";  sudo mount --make-rslave "$_mnt/dev"
-    sudo cp -L /etc/resolv.conf "$_mnt/etc/resolv.conf"
+    sudo mkdir -p "$_root_dir/proc" "$_root_dir/sys" "$_root_dir/dev" \
+        "$_root_dir/run" "$_root_dir/tmp" "$_root_dir/boot/efi"
+    sudo mount -t proc proc "$_root_dir/proc"
+    sudo mount --rbind /sys "$_root_dir/sys"; sudo mount --make-rslave "$_root_dir/sys"
+    sudo mount --rbind /dev "$_root_dir/dev"; sudo mount --make-rslave "$_root_dir/dev"
+    sudo cp -L /etc/resolv.conf "$_root_dir/etc/resolv.conf"
 
-    qemu_inject "$_mnt" "$_arch"
+    _assembly_cleanup() {
+        for _mp in "$_root_dir/var/cache/apt/archives" "$_root_dir/proc" \
+                   "$_root_dir/sys" "$_root_dir/dev"; do
+            sudo umount -l "$_mp" 2>/dev/null || true
+        done
+    }
+    trap '_assembly_cleanup' EXIT INT TERM
 
-    chroot_mount_deb_cache "$_mnt" "$(chroot_cache_dir "$_basedir")"
+    qemu_inject "$_root_dir" "$_arch"
+    chroot_mount_deb_cache "$_root_dir" "$(chroot_cache_dir "$_basedir")"
 
-    sudo mkdir -p "$_mnt/localdeb"
-    sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
+    sudo mkdir -p "$_root_dir/localdeb"
+    sudo cp "$_basedir"/*.deb "$_root_dir/localdeb/"
 
     log_step "Configuring system, installing Vitruvian, and setting up bootloader..."
 
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    sudo chroot "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 
 umount /sys/firmware/efi/efivars 2>/dev/null || true
 
@@ -170,24 +160,14 @@ apt-get -y autoremove --purge 2>/dev/null || true
 
 apt-get install -y --no-install-recommends $_raw_pkgs
 
-# Re-derive the running kernel version from /lib/modules. linux-image
-# metapackages can land a newer ABI than imagekernelversion.conf knew about.
 _kver=\$(ls -1 /lib/modules | sort -V | tail -1)
 apt-get install -y --no-install-recommends dkms build-essential \"linux-headers-\$_kver\"
 
-# dpkg -i is expected to fail when local debs pull deps the chroot doesn't
-# yet have — apt-get install -f resolves them on the next line.
 dpkg -i /localdeb/*.deb || true
 apt-get install -f -y --no-install-recommends
 
 depmod -v \"\$_kver\"
 
-# Ensure /vmlinuz and /initrd.img point at the installed kernel. linux-base
-# normally drops these via dpkg triggers, but when chroot apt activity is
-# weird (e.g. install order, dpkg triggers not fully processed) the
-# symlinks can be missing — and the standalone EFI bootloader resolves
-# (\$root)/vmlinuz, so a missing symlink means \"you need to load the kernel
-# first\" at the GRUB prompt.
 ln -sfn boot/vmlinuz-\$_kver /vmlinuz
 ln -sfn boot/initrd.img-\$_kver /initrd.img
 
@@ -213,18 +193,12 @@ FSTABEOF
 mkdir -p $_guest_mnt
 rm -rf /localdeb" || die "raw chroot bash-c failed"
 
-    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
+    _common_chroot_setup "$_root_dir" "$_hostname" "$_user" "$_pass" \
         || die "_common_chroot_setup failed"
 
-    case "$_arch" in
-        amd64)   _boot_efi="BOOTX64.EFI" ;;
-        arm64)   _boot_efi="BOOTAA64.EFI" ;;
-        riscv64) _boot_efi="BOOTRISCV64.EFI" ;;
-        i386)    _boot_efi="BOOTIA32.EFI" ;;
-    esac
+    _boot_efi="BOOTX64.EFI"
 
     log_step "Building standalone EFI bootloader ($_efi_target)..."
-    mkdir -p "$_basedir/image_tree/scratch"
 
     BUILD_TYPE="Debug"
     if [ -f "$_basedir/buildconfig.conf" ]; then
@@ -267,50 +241,33 @@ if [ "\$grub_platform" = "efi" ]; then
 fi
 EOF
 
-    case "$_arch" in
-        amd64)
-            require_cmd grub-mkstandalone grub-common
-            grub-mkstandalone \
-                --format="$_efi_target" \
-                --output="$_basedir/image_tree/scratch/$_boot_efi" \
-                --locales="" --fonts="" \
-                "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
-            log_step "Building 32-bit EFI stub (BOOTIA32.EFI) for 32-bit UEFI firmware..."
-            sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
-                "$_mnt/tmp/grub_ia32.cfg"
-            sudo chroot "$_mnt" grub-mkstandalone \
-                --directory=/usr/lib/grub/i386-efi \
-                --format=i386-efi \
-                --output=/tmp/BOOTIA32.EFI \
-                --locales="" --fonts="" \
-                "boot/grub/grub.cfg=/tmp/grub_ia32.cfg"
-            sudo cp "$_mnt/tmp/BOOTIA32.EFI" \
-                "$_basedir/image_tree/scratch/BOOTIA32.EFI"
-            sudo rm -f "$_mnt/tmp/BOOTIA32.EFI" "$_mnt/tmp/grub_ia32.cfg"
-            ;;
-        arm64|riscv64)
-            sudo mkdir -p "$_mnt/scratch"
-            sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" "$_mnt/scratch/grub.cfg"
-            sudo chroot "$_mnt" /usr/bin/grub-mkstandalone \
-                --directory="/usr/lib/grub/$_efi_target" \
-                --format="$_efi_target" \
-                --output="/scratch/$_boot_efi" \
-                --locales="" --fonts="" \
-                "boot/grub/grub.cfg=/scratch/grub.cfg"
-            sudo cp "$_mnt/scratch/$_boot_efi" "$_basedir/image_tree/scratch/$_boot_efi"
-            sudo rm -rf "$_mnt/scratch"
-            ;;
-    esac
+    require_cmd grub-mkstandalone grub-common
+    grub-mkstandalone \
+        --format="$_efi_target" \
+        --output="$_basedir/image_tree/scratch/$_boot_efi" \
+        --locales="" --fonts="" \
+        "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
+    log_step "Building 32-bit EFI stub (BOOTIA32.EFI) for 32-bit UEFI firmware..."
+    sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
+        "$_root_dir/tmp/grub_ia32.cfg"
+    sudo chroot "$_root_dir" grub-mkstandalone \
+        --directory=/usr/lib/grub/i386-efi \
+        --format=i386-efi \
+        --output=/tmp/BOOTIA32.EFI \
+        --locales="" --fonts="" \
+        "boot/grub/grub.cfg=/tmp/grub_ia32.cfg"
+    sudo cp "$_root_dir/tmp/BOOTIA32.EFI" \
+        "$_basedir/image_tree/scratch/BOOTIA32.EFI"
+    sudo rm -f "$_root_dir/tmp/BOOTIA32.EFI" "$_root_dir/tmp/grub_ia32.cfg"
 
-    sudo mkdir -p "$_mnt/boot/efi/EFI/BOOT"
-    sudo cp "$_basedir/image_tree/scratch/$_boot_efi" "$_mnt/boot/efi/EFI/BOOT/$_boot_efi"
-    if [ "$_arch" = "amd64" ] && [ -f "$_basedir/image_tree/scratch/BOOTIA32.EFI" ]; then
-        sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_mnt/boot/efi/EFI/BOOT/BOOTIA32.EFI"
-    fi
+    # Unlike create_raw, these EFI binaries go into the SEPARATE ESP staging
+    # directory, not into $_root_dir; the ESP is a different filesystem
+    # that is never mounted underneath the root tree here.
+    sudo mkdir -p "$_esp_dir/EFI/BOOT"
+    sudo cp "$_basedir/image_tree/scratch/$_boot_efi" "$_esp_dir/EFI/BOOT/$_boot_efi"
+    sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI"
 
-    sudo rm -rf "$_mnt/boot/efi/EFI/debian" "$_mnt/boot/efi/EFI/Debian"
-
-    sudo tee "$_mnt/usr/local/sbin/vos-resize-root" >/dev/null <<'RSZEOF'
+    sudo tee "$_root_dir/usr/local/sbin/vos-resize-root" >/dev/null <<'RSZEOF'
 #!/bin/sh
 # First-boot only: grow the root partition to fill the target disk and
 # resize the ext4 FS. Uses sfdisk (util-linux) and resize2fs (e2fsprogs),
@@ -325,8 +282,8 @@ partprobe "/dev/$_disk" 2>/dev/null || true
 resize2fs "$_root" || true
 systemctl disable vos-resize-root.service || true
 RSZEOF
-    sudo chmod +x "$_mnt/usr/local/sbin/vos-resize-root"
-    sudo tee "$_mnt/etc/systemd/system/vos-resize-root.service" >/dev/null <<'UNITEOF'
+    sudo chmod +x "$_root_dir/usr/local/sbin/vos-resize-root"
+    sudo tee "$_root_dir/etc/systemd/system/vos-resize-root.service" >/dev/null <<'UNITEOF'
 [Unit]
 Description=Grow root filesystem to fill disk (first boot)
 DefaultDependencies=no
@@ -343,12 +300,49 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 UNITEOF
-    sudo chroot "$_mnt" systemctl enable vos-resize-root.service 2>/dev/null || true
+    sudo chroot "$_root_dir" systemctl enable vos-resize-root.service 2>/dev/null || true
 
-    qemu_eject "$_mnt" "$_arch"
+    qemu_eject "$_root_dir" "$_arch"
 
-    _loop_image_cleanup
+    _assembly_cleanup
     trap - EXIT INT TERM
+
+    log_step "Building populated filesystem images (no mount)..."
+    rm -f "$_esp_img" "$_root_img"
+
+    # ESP: build an empty FAT32 filesystem of the exact partition size, then
+    # inject files with mtools; mcopy/mmd operate on the image file
+    # directly and need no mount, no loop device, no root.
+    truncate -s "${_esp_size_mib}M" "$_esp_img"
+    mkfs.vfat -F32 -i "$_esp_volid" "$_esp_img" >/dev/null
+    mmd -i "$_esp_img" ::/EFI ::/EFI/BOOT
+    mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/BOOTX64.EFI" ::/EFI/BOOT/BOOTX64.EFI
+    mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI" ::/EFI/BOOT/BOOTIA32.EFI
+
+    # Root: mke2fs -d populates the filesystem from a directory in one shot,
+    # preserving ownership/permissions/xattrs/symlinks; no mount involved.
+    sudo mke2fs -F -t ext4 -I 512 \
+        -O ^ea_inode,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
+        -L vitruvian-root -U "$_root_uuid" \
+        -d "$_root_dir" "$_root_img" "${_root_size_mib}M" >/dev/null
+    sudo chown "$(id -u)":"$(id -g)" "$_root_img"
+
+    log_step "Writing partition table and assembling the disk image..."
+    rm -f "$_raw"
+    truncate -s "${_disk_mib}M" "$_raw"
+    sfdisk --quiet "$_raw" <<SFDISKEOF
+label: gpt
+unit: sectors
+
+start=$((_esp_start_mib * 2048)), size=$((_esp_size_mib * 2048)), type=U, name="ESP"
+start=$((_root_start_mib * 2048)), size=$((_root_size_mib * 2048)), type=L, name="primary"
+SFDISKEOF
+
+    dd if="$_esp_img"  of="$_raw" bs=1M seek="$_esp_start_mib"  conv=notrunc status=none
+    dd if="$_root_img" of="$_raw" bs=1M seek="$_root_start_mib" conv=notrunc status=none
+
+    rm -f "$_esp_img" "$_root_img"
+    sudo rm -rf "$_root_dir" "$_esp_dir"
 
     log_step "Copying OVMF vars..."
     if [ -f /usr/share/OVMF/OVMF_VARS_4M.fd ]; then
@@ -360,6 +354,7 @@ UNITEOF
 
     log_info "RAW image created: $_raw"
 }
+
 
 create_iso() {
     _basedir="$1"

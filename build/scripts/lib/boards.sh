@@ -179,7 +179,8 @@ board_config() {
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
                 # Mainline u-boot only; the G12B BootROM requires the vendor
-                # FIP-signed blob, vendored in firmware/amlogic/.
+                # FIP-signed blob, assembled at build time by fip.sh from
+                # hardkernel/u-boot (travis/odroidn2-189, 430749ab).
                 uboot_variant)  printf 'odroid-n2' ;;
                 spl_blob)       printf 'u-boot.bin.sd.bin' ;;
                 uboot_blob)     printf '' ;;

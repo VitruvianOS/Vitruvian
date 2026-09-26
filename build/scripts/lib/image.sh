@@ -1154,6 +1154,21 @@ FSTAB
     # what was staged from the rootfs above.
     _uboot_dir="$_basedir/firmware/$_board"
     [ -d "$_uboot_dir" ] || _uboot_dir="$_uboot_stage"
+    # Some SoCs need a FIP-signed blob Debian cannot provide; assemble it
+    # from the pinned upstream when it is missing.
+    if [ -n "$(board_config "$_board" spl_blob 2>/dev/null)" ] && \
+       [ ! -f "$_uboot_dir/$(board_config "$_board" spl_blob)" ]; then
+        log_step "Assembling Amlogic FIP blob..."
+        _fip_helper="$(dirname "$0")/fip.sh"
+        [ -f "$_fip_helper" ] || die "FIP helper not found at $_fip_helper"
+        # shellcheck disable=SC1090
+        . "$_fip_helper"
+        if ! fip_amlogic_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
+            log_error "FIP assembly failed (pinned hardkernel/u-boot $FIP_UBOOT_SHA)."
+            log_error "Requires gcc-aarch64-linux-gnu and gcc-arm-none-eabi."
+            die "Cannot assemble FIP blob for $_board (pinned $FIP_UBOOT_SHA)"
+        fi
+    fi
 
     # Per-SoC blob choice, not guessable: a first-match order picks the bare
     # u-boot.bin on sunxi, which no BootROM can load. Boards name their blobs

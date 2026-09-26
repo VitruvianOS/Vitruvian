@@ -1090,15 +1090,25 @@ FSTAB
     # one. VOS_UBOOT_VARIANT overrides the board table's default for a build
     # targeting a specific machine.
     _uboot_stage=""
-    _variant="${VOS_UBOOT_VARIANT:-$(board_config "$_board" uboot_variant)}"
-    if [ -n "$_variant" ] && [ -d "$_mnt/usr/lib/u-boot/$_variant" ]; then
-        _uboot_stage="$(mktemp -d)"
-        sudo cp -a "$_mnt/usr/lib/u-boot/$_variant/." "$_uboot_stage/"
-        log_info "Staged U-Boot variant '$_variant' from the rootfs"
-    elif [ -d "$_mnt/usr/lib/u-boot" ]; then
-        log_warn "U-Boot variant '${_variant:-<unset>}' not found in the rootfs."
-        log_warn "Available: $(ls "$_mnt/usr/lib/u-boot" 2>/dev/null | tr '\n' ' ')"
-        log_warn "Set VOS_UBOOT_VARIANT to one of these, or add uboot_variant to boards.sh."
+    # Multiple variants may be needed by one board (k3/BeaglePlay: the R5
+    # SPL dir carries tiboot3.bin, the A53 dir carries tispl.bin/u-boot.img),
+    # so uboot_variant is a space-separated list, staged in order.
+    _variants="${VOS_UBOOT_VARIANT:-$(board_config "$_board" uboot_variant)}"
+    if [ -n "$_variants" ]; then
+        _found_any=0
+        for _variant in $_variants; do
+            if [ -d "$_mnt/usr/lib/u-boot/$_variant" ]; then
+                [ -n "$_uboot_stage" ] || _uboot_stage="$(mktemp -d)"
+                sudo cp -a "$_mnt/usr/lib/u-boot/$_variant/." "$_uboot_stage/"
+                log_info "Staged U-Boot variant '$_variant' from the rootfs"
+                _found_any=1
+            fi
+        done
+        if [ "$_found_any" != 1 ] && [ -d "$_mnt/usr/lib/u-boot" ]; then
+            log_warn "U-Boot variants '${_variants}' not found in the rootfs."
+            log_warn "Available: $(ls "$_mnt/usr/lib/u-boot" 2>/dev/null | tr '\n' ' ')"
+            log_warn "Set VOS_UBOOT_VARIANT to one of these, or fix uboot_variant in boards.sh."
+        fi
     fi
 
     qemu_eject "$_mnt" "$_board_arch"

@@ -126,9 +126,13 @@ board_config() {
                 uboot_variant)  printf '' ;;
                 spl_offset_sectors) printf '1' ;;
                 uboot_offset_sectors) printf '65536' ;;
-                # u-boot-beagle does not exist and u-boot-omap is armhf-only;
-                # booting needs vendor blobs in firmware/beagle/.
-                extra_pkgs)     printf '' ;;
+                # u-boot-sitara-binaries splits the k3 chain across two
+                # variants: am62x_evm_r5 has tiboot3.bin, am62x_evm_a53 has
+                # tispl.bin and u-boot.img.
+                uboot_variant)  printf 'am62x_evm_r5 am62x_evm_a53' ;;
+                spl_blob)       printf 'tiboot3.bin' ;;
+                uboot_blob)     printf 'u-boot.img' ;;
+                extra_pkgs)     printf 'u-boot-sitara-binaries' ;;
                 dtb_files)      printf 'ti/k3/am625-beagleplay.dtb' ;;
             esac
             ;;
@@ -196,9 +200,13 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
+                # JH7110 boot chain, in the sectors the BootROM scans.
+                uboot_variant)  printf 'starfive_visionfive2' ;;
+                spl_blob)       printf 'u-boot-spl.bin.normal.out' ;;
+                uboot_blob)     printf 'u-boot.itb' ;;
                 spl_offset_sectors) printf '4096' ;;
                 uboot_offset_sectors) printf '16384' ;;
-                extra_pkgs)     printf '' ;;
+                extra_pkgs)     printf 'u-boot-starfive' ;;
                 dtb_files)      printf 'starfive/jh7110-starfive-visionfive-2-v1.3b.dtb' ;;
             esac
             ;;

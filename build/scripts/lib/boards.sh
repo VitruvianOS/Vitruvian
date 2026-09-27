@@ -189,6 +189,7 @@ board_config() {
                 # u-boot-meson does not exist in Debian; the package is
                 # u-boot-amlogic-binaries.
                 extra_pkgs)     printf 'u-boot-amlogic-binaries' ;;
+                fip_assemble)   printf '1' ;;
                 dtb_files)      printf 'amlogic/meson-g12b-odroid-n2.dtb amlogic/meson-sm1-khadas-vim3l.dtb amlogic/meson-a1-ad401.dtb' ;;
             esac
             ;;

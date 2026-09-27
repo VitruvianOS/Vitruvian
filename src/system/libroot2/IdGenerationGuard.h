@@ -18,9 +18,11 @@
  *   int32 kid = sSemGuard.Validate(encoded);           // on any op
  *   sSemGuard.Unregister(encoded);                      // on delete
  *
- * Layout: upper 8 bits = generation (0..255), lower 24 bits = kernel ID.
+ * Layout: bits 24..30 = generation (0..127), lower 24 bits = kernel ID.
  * Valid kernel IDs are non-negative; the guard preserves that invariant
- * (generation 0 with kernel_id 0..16777215 yields values 0..16777215).
+ * for ENCODED HANDLES too (bit 31 is never set), so callers can use a
+ * single `if (id < 0)` convention for both "create failed" and
+ * "handle is stale" without ever aliasing a live object.
  */
 
 #ifndef _LIBROOT2_ID_GENERATION_GUARD_H
@@ -41,9 +43,12 @@ namespace BPrivate {
 // Maximum kernel-ID value that fits in 24 bits.
 static const int32 kMaxGuardedId = 0x00FFFFFF;
 
-// Number of generation bits (256 distinct generations before wrap).
-static const int kGenerationBits = 8;
-static const uint32 kGenerationMask = 0xFF000000;
+// Number of generation bits (128 distinct generations before wrap).
+// The generation lives in bits 24..30 ONLY: bit 31 (the sign bit) is
+// kept clear so an encoded handle is never negative and can never be
+// confused with an error code at the callers' `if (id < 0)` checks.
+static const int kGenerationBits = 7;
+static const uint32 kGenerationMask = 0x7F000000;
 static const uint32 kIdMask         = 0x00FFFFFF;
 
 
@@ -78,7 +83,7 @@ public:
 		uint8 gen = 0;
 		if (it != fSlots.end()) {
 			// Slot existed — bump generation to invalidate old handles.
-			gen = (uint8)((it->second.generation + 1) & 0xFF);
+			gen = (uint8)((it->second.generation + 1) & (kGenerationMask >> 24));
 			it->second.generation = gen;
 			it->second.valid = true;
 		} else {

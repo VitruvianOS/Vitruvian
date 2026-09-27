@@ -57,9 +57,6 @@ _iso_cleanup() {
 create_raw() {
     _basedir="$1"
     _arch="$2"
-    if [ "$_arch" != amd64 ]; then
-        die "raw assembly is only implemented for amd64."
-    fi
     _efi_target="$(arch_to_efi_target "$_arch")"
     [ -n "$_efi_target" ] || die "EFI raw images not supported on $_arch."
 
@@ -107,9 +104,9 @@ create_raw() {
     mkdir -p "$_basedir/output" "$_host_shared" "$_basedir/image_tree/scratch"
     sudo mkdir -p "$_root_dir" "$_esp_dir"
 
-    # Pre-generate the identifiers create_raw would otherwise read back from
-    # blkid after mkfs on the loop device; here nothing is mkfs'd until
-    # the directory trees are complete, so fstab/grub.cfg need them first.
+    # Pre-generate the identifiers the loop-based path read back from blkid
+    # after mkfs; here nothing is mkfs'd until the directory trees are
+    # complete, so fstab/grub.cfg need them first.
     _root_uuid="$(cat /proc/sys/kernel/random/uuid)"
     _esp_volid="$(od -An -tx4 -N4 /dev/urandom | tr -d ' \n' | tr 'a-f' 'A-F')"
     _esp_uuid="${_esp_volid%????}-${_esp_volid#????}"
@@ -196,7 +193,11 @@ rm -rf /localdeb" || die "raw chroot bash-c failed"
     _common_chroot_setup "$_root_dir" "$_hostname" "$_user" "$_pass" \
         || die "_common_chroot_setup failed"
 
-    _boot_efi="BOOTX64.EFI"
+    case "$_arch" in
+        amd64)   _boot_efi="BOOTX64.EFI" ;;
+        arm64)   _boot_efi="BOOTAA64.EFI" ;;
+        riscv64) _boot_efi="BOOTRISCV64.EFI" ;;
+    esac
 
     log_step "Building standalone EFI bootloader ($_efi_target)..."
 
@@ -247,31 +248,50 @@ if [ "\$grub_platform" = "efi" ]; then
 fi
 EOF
 
-    require_cmd grub-mkstandalone grub-common
-    grub-mkstandalone \
-        --format="$_efi_target" \
-        --output="$_basedir/image_tree/scratch/$_boot_efi" \
-        --locales="" --fonts="" \
-        "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
-    log_step "Building 32-bit EFI stub (BOOTIA32.EFI) for 32-bit UEFI firmware..."
-    sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
-        "$_root_dir/tmp/grub_ia32.cfg"
-    sudo chroot "$_root_dir" grub-mkstandalone \
-        --directory=/usr/lib/grub/i386-efi \
-        --format=i386-efi \
-        --output=/tmp/BOOTIA32.EFI \
-        --locales="" --fonts="" \
-        "boot/grub/grub.cfg=/tmp/grub_ia32.cfg"
-    sudo cp "$_root_dir/tmp/BOOTIA32.EFI" \
-        "$_basedir/image_tree/scratch/BOOTIA32.EFI"
-    sudo rm -f "$_root_dir/tmp/BOOTIA32.EFI" "$_root_dir/tmp/grub_ia32.cfg"
+    if [ "$_arch" = amd64 ]; then
+        require_cmd grub-mkstandalone grub-common
+        grub-mkstandalone \
+            --format="$_efi_target" \
+            --output="$_basedir/image_tree/scratch/$_boot_efi" \
+            --locales="" --fonts="" \
+            "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
+        log_step "Building 32-bit EFI stub (BOOTIA32.EFI) for 32-bit UEFI firmware..."
+        sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
+            "$_root_dir/tmp/grub_ia32.cfg"
+        sudo chroot "$_root_dir" grub-mkstandalone \
+            --directory=/usr/lib/grub/i386-efi \
+            --format=i386-efi \
+            --output=/tmp/BOOTIA32.EFI \
+            --locales="" --fonts="" \
+            "boot/grub/grub.cfg=/tmp/grub_ia32.cfg"
+        sudo cp "$_root_dir/tmp/BOOTIA32.EFI" \
+            "$_basedir/image_tree/scratch/BOOTIA32.EFI"
+        sudo rm -f "$_root_dir/tmp/BOOTIA32.EFI" "$_root_dir/tmp/grub_ia32.cfg"
+    else
+        # The host rarely carries foreign-arch grub modules; the configured
+        # root has them (grub-efi-arm64-bin etc. via get_raw_image_packages).
+        sudo mkdir -p "$_root_dir/scratch"
+        sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
+            "$_root_dir/scratch/grub.cfg"
+        sudo chroot "$_root_dir" /usr/bin/grub-mkstandalone \
+            --directory="/usr/lib/grub/$_efi_target" \
+            --format="$_efi_target" \
+            --output="/scratch/$_boot_efi" \
+            --locales="" --fonts="" \
+            "boot/grub/grub.cfg=/scratch/grub.cfg"
+        sudo cp "$_root_dir/scratch/$_boot_efi" \
+            "$_basedir/image_tree/scratch/$_boot_efi"
+        sudo rm -rf "$_root_dir/scratch"
+    fi
 
-    # Unlike create_raw, these EFI binaries go into the SEPARATE ESP staging
-    # directory, not into $_root_dir; the ESP is a different filesystem
-    # that is never mounted underneath the root tree here.
+    # These EFI binaries go into the separate ESP staging directory, not into
+    # $_root_dir; the ESP is a different filesystem that is never mounted
+    # underneath the root tree here.
     sudo mkdir -p "$_esp_dir/EFI/BOOT"
     sudo cp "$_basedir/image_tree/scratch/$_boot_efi" "$_esp_dir/EFI/BOOT/$_boot_efi"
-    sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI"
+    if [ "$_arch" = amd64 ]; then
+        sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI"
+    fi
 
     sudo tee "$_root_dir/usr/local/sbin/vos-resize-root" >/dev/null <<'RSZEOF'
 #!/bin/sh
@@ -322,8 +342,10 @@ UNITEOF
     truncate -s "${_esp_size_mib}M" "$_esp_img"
     mkfs.vfat -F32 -i "$_esp_volid" "$_esp_img" >/dev/null
     mmd -i "$_esp_img" ::/EFI ::/EFI/BOOT
-    mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/BOOTX64.EFI" ::/EFI/BOOT/BOOTX64.EFI
-    mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI" ::/EFI/BOOT/BOOTIA32.EFI
+    mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/$_boot_efi" "::/EFI/BOOT/$_boot_efi"
+    if [ "$_arch" = amd64 ]; then
+        mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI" ::/EFI/BOOT/BOOTIA32.EFI
+    fi
 
     # Root: mke2fs -d populates the filesystem from a directory in one shot,
     # preserving ownership/permissions/xattrs/symlinks; no mount involved.

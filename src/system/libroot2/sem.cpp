@@ -8,14 +8,7 @@
 #include <sys/ioctl.h>
 
 #include "Team.h"
-#include "IdGenerationGuard.h"
 #include "../kernel/nexus/nexus/nexus.h"
-
-
-// Generation guard: detects stale semaphore handles that survived a
-// recycle.  Each create increments the generation for the kernel-ID
-// slot; validate rejects encoded IDs whose generation no longer matches.
-static BPrivate::IdGenerationGuard<sem_id> sSemGuard;
 
 
 sem_id
@@ -39,19 +32,17 @@ create_sem(int32 count, const char* name)
 		return B_ERROR;
 	if (ex.ret != B_OK)
 		return ex.ret;
-	return sSemGuard.Register(ex.id);
+	return ex.id;
 }
 
 
 status_t
 delete_sem(sem_id id)
 {
-	// Validate the generation-encoded handle.
-	int32 kernelId = sSemGuard.Validate(id);
-	if (kernelId < 0)
+	if (id < 0)
 		return B_BAD_SEM_ID;
 
-	struct nexus_sem_delete_req ex = { .id = kernelId, .ret = B_OK };
+	struct nexus_sem_delete_req ex = { .id = id, .ret = B_OK };
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
@@ -59,8 +50,6 @@ delete_sem(sem_id id)
 
 	if (nexus_io(nexus, NEXUS_SEM_DELETE, &ex) < 0)
 		return B_ERROR;
-	if (ex.ret == B_OK)
-		sSemGuard.Unregister(id);
 	return ex.ret;
 }
 
@@ -75,15 +64,14 @@ acquire_sem(sem_id id)
 status_t
 acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 {
-	int32 kernelId = sSemGuard.Validate(id);
-	if (kernelId < 0)
+	if (id < 0)
 		return B_BAD_SEM_ID;
 
 	if (count < 1)
 		return B_BAD_VALUE;
 
 	struct nexus_sem_op ex = {
-		.id = kernelId,
+		.id = id,
 		.count = count,
 		.flags = flags,
 		.timeout = timeout,
@@ -110,15 +98,14 @@ release_sem(sem_id id)
 status_t
 release_sem_etc(sem_id id, int32 count, uint32 flags)
 {
-	int32 kernelId = sSemGuard.Validate(id);
-	if (kernelId < 0)
+	if (id < 0)
 		return B_BAD_SEM_ID;
 
 	if (count < 1)
 		return B_BAD_VALUE;
 
 	struct nexus_sem_op ex = {
-		.id = kernelId,
+		.id = id,
 		.count = count,
 		.flags = flags,
 		.timeout = 0,
@@ -138,14 +125,13 @@ release_sem_etc(sem_id id, int32 count, uint32 flags)
 status_t
 get_sem_count(sem_id id, int32* threadCount)
 {
-	int32 kernelId = sSemGuard.Validate(id);
-	if (kernelId < 0)
+	if (id < 0)
 		return B_BAD_SEM_ID;
 
 	if (threadCount == NULL)
 		return B_BAD_VALUE;
 
-	struct nexus_sem_count_req ex = { .id = kernelId, .count = 0, .ret = B_OK };
+	struct nexus_sem_count_req ex = { .id = id, .count = 0, .ret = B_OK };
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
@@ -162,8 +148,7 @@ get_sem_count(sem_id id, int32* threadCount)
 status_t
 _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 {
-	int32 kernelId = sSemGuard.Validate(id);
-	if (kernelId < 0)
+	if (id < 0)
 		return B_BAD_SEM_ID;
 
 	if (info == NULL || infoSize != sizeof(sem_info))
@@ -171,7 +156,7 @@ _get_sem_info(sem_id id, struct sem_info* info, size_t infoSize)
 
 	struct nexus_sem_info_req req;
 	memset(&req, 0, sizeof(req));
-	req.id = kernelId;
+	req.id = id;
 
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)

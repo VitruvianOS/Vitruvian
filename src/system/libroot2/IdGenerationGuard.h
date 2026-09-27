@@ -62,11 +62,15 @@ public:
 
 	// Encode a generation-tracked ID from a raw kernel ID.
 	// Called after a successful create_* ioctl.
-	// Returns B_BAD_VALUE if kernel_id is out of range.
+	// Returns a negative error (B_BAD_VALUE) if kernel_id is out of
+	// range.  NOTE: B_BAD_VALUE is already negative in this codebase
+	// (-EINVAL), so it must NOT be sign-flipped here: a positive value
+	// would pass the callers' `if (id < 0)` checks and alias a live
+	// kernel slot.
 	IdType Register(int32 kernelId)
 	{
 		if (kernelId < 0 || kernelId > kMaxGuardedId)
-			return (IdType)(-B_BAD_VALUE);
+			return (IdType)B_BAD_VALUE;
 
 		pthread_mutex_lock(&fLock);
 
@@ -92,15 +96,17 @@ public:
 	}
 
 	// Validate that an encoded ID is still live.
-	// Returns the raw kernel ID on success, or a negative error on failure.
-	// The caller should use this kernel ID for the actual nexus ioctl.
+	// Returns the raw (non-negative) kernel ID on success, or a negative
+	// error on failure.  All call sites test `if (kernelId < 0)`, so the
+	// error MUST be negative: B_BAD_VALUE is already -EINVAL here, do not
+	// negate it again or rejection becomes a positive, aliasable slot id.
 	int32 Validate(IdType encoded) const
 	{
 		int32 kernelId = DecodeKernelId(encoded);
 		uint8 gen      = DecodeGeneration(encoded);
 
 		if (kernelId < 0 || kernelId > kMaxGuardedId)
-			return -B_BAD_VALUE;
+			return B_BAD_VALUE;
 
 		pthread_mutex_lock(&fLock);
 
@@ -110,7 +116,7 @@ public:
 			&& it->second.generation == gen;
 
 		pthread_mutex_unlock(&fLock);
-		return ok ? kernelId : -B_BAD_VALUE;
+		return ok ? kernelId : B_BAD_VALUE;
 	}
 
 	// Mark a slot as invalid (called on delete_*).

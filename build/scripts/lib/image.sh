@@ -1240,16 +1240,28 @@ FSTAB
     # Debian does not ship (e.g. amlogic's FIP-signed image). Otherwise use
     # what was staged from the rootfs above.
     _uboot_dir="$_basedir/firmware/$_board"
-    [ -d "$_uboot_dir" ] || _uboot_dir="$_uboot_stage"
-    # Some SoCs need a FIP-signed blob Debian cannot provide; assemble it
-    # from the pinned upstream when it is missing.
-    if [ -n "$(board_config "$_board" spl_blob 2>/dev/null)" ] && \
-       [ ! -f "$_uboot_dir/$(board_config "$_board" spl_blob)" ]; then
-        log_step "Assembling Amlogic FIP blob..."
-        _fip_helper="$(dirname "$0")/fip.sh"
-        [ -f "$_fip_helper" ] || die "FIP helper not found at $_fip_helper"
-        # shellcheck disable=SC1090
-        . "$_fip_helper"
+     [ -d "$_uboot_dir" ] || _uboot_dir="$_uboot_stage"
+     # Some SoCs need a FIP-signed blob Debian cannot provide; assemble it
+     # from the pinned upstream when it is missing.
+     if [ -n "$(board_config "$_board" spl_blob 2>/dev/null)" ] && \
+        [ ! -f "$_uboot_dir/$(board_config "$_board" spl_blob)" ]; then
+         log_step "Assembling Amlogic FIP blob..."
+         # image.sh is SOURCED by bake.sh, so $0 is bake.sh's path and
+         # dirname "$0" is wherever bake runs from (generated.<arch>/) --
+         # the helper actually lives in the source tree, 1-2 levels up.
+         # Measured 2026-09-27: odroid-n2 attempt 2 died after 2773 s with
+         # "FIP helper not found at ../fip.sh" on exactly this.
+         _fip_helper=""
+         for _fip_dir in "$_basedir" "$_basedir/.." "$_basedir/../.."; do
+             if [ -f "$_fip_dir/build/scripts/lib/fip.sh" ]; then
+                 _fip_helper="$_fip_dir/build/scripts/lib/fip.sh"
+                 break
+             fi
+         done
+         [ -n "$_fip_helper" ] || _fip_helper="$(dirname "$0")/fip.sh"
+         [ -f "$_fip_helper" ] || die "FIP helper not found (tried $_basedir, $_basedir/.., $_basedir/../.., dirname \"\$0\")"
+         # shellcheck disable=SC1090
+         . "$_fip_helper"
         if ! fip_amlogic_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
             log_error "FIP assembly failed (pinned hardkernel/u-boot $FIP_UBOOT_SHA)."
             log_error "Requires gcc-aarch64-linux-gnu and gcc-arm-none-eabi."

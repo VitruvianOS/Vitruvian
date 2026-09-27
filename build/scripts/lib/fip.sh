@@ -46,6 +46,16 @@ SHIMEOF
     find "$_dir" -name "Makefile" \
         -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-error=implicit-function-declaration/g' {} \; 2>/dev/null || true
 
+    # 2b. GCC 14 promotes int-conversion (pointer -> integer in initializers)
+    #     to a hard error. Measured 2026-09-27 on the odroid-n2 proof builds:
+    #     attempts 1-3 all died at common/bootm.c:333/350 ("initialization of
+    #     'long long unsigned int' from 'void *'"). The old tree initializes
+    #     u64 fields from pointer values on purpose; -Wno-error above does NOT
+    #     neutralize GCC 14's promoted diagnostics, so disable the promoted
+    #     check explicitly on the KBUILD_CFLAGS line.
+    find "$_dir" -maxdepth 1 -name "Makefile" \
+        -exec sed -i '/^KBUILD_CFLAGS.*:=/s/:=/:= -Wno-error=int-conversion /' {} \; 2>/dev/null || true
+
     # The parent exports aarch64-linux-gnu- as CROSS_COMPILE; scp_task
     # must keep its own arm-none-eabi- values.
     _scp_mk="$_dir/arch/arm/cpu/armv8/g12b/firmware/scp_task/Makefile"

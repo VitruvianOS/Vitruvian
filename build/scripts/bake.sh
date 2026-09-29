@@ -59,6 +59,9 @@ Build options:
                           rockchip, allwinner, allwinner-h3, beagle,
                           beaglebone, nxp, amlogic, visionfive2, licheerv
   --run-qemu             Boot image in QEMU after build
+  --output-dir=DIR       Copy all artifacts (images + debs) to DIR and
+                          generate MANIFEST there. Used by the nightly
+                          path to place build output in /out.
   --enable-console-log   Write serial output to vitruvian-console.log
   --enable-console-stdout  Stream serial output to stdio (combine with --enable-console-log to tee)
   --use-bochs-drm        Use QEMU's std VGA (bochs-drm) instead of virtio-gpu
@@ -118,6 +121,7 @@ cmd_build() {
     _usb_disk=""
     _target_disk=""
     _has_chroot=0
+    _output_dir=""
 
     for arg in "$@"; do
         case "$arg" in
@@ -132,6 +136,9 @@ cmd_build() {
                 ;;
             --arch=*)
                 _arch="${arg#*=}"
+                ;;
+            --output-dir=*)
+                _output_dir="${arg#*=}"
                 ;;
             --list-boards)
                 _list_boards=1
@@ -190,6 +197,19 @@ cmd_build() {
         fi
         log_step "Running ninja build..."
         ninja
+
+        # Packages-only: still generate MANIFEST and honour --output-dir.
+        mkdir -p "$BASEDIR/output"
+        for _deb in "$BASEDIR"/*.deb; do
+            [ -f "$_deb" ] || continue
+            cp -f "$_deb" "$BASEDIR/output/"
+        done
+        generate_manifest "$BASEDIR/output" "$ARCH"
+        if [ -n "$_output_dir" ]; then
+            mkdir -p "$_output_dir"
+            cp -f "$BASEDIR/output"/* "$_output_dir/"
+            log_info "Artifacts copied to $_output_dir"
+        fi
         log_info "No image type specified - packages built."
         exit 0
     fi
@@ -269,6 +289,22 @@ cmd_build() {
     if [ "$_run_qemu" -eq 1 ]; then
         # exactly one type at this point
         for _t in $_types; do run_qemu "$BASEDIR" "$ARCH" "$_t" "$_console_log" "$_console_stdout" "$_shared_folder" "$_usb_disk" "$_target_disk"; done
+    fi
+
+    # output/ may already exist from create_raw/iso; mkdir -p covers packages-only too.
+    _artifacts_dir="$BASEDIR/output"
+    mkdir -p "$_artifacts_dir"
+    for _deb in "$BASEDIR"/*.deb; do
+        [ -f "$_deb" ] || continue
+        cp -f "$_deb" "$_artifacts_dir/"
+    done
+    generate_manifest "$_artifacts_dir" "$ARCH"
+
+    if [ -n "$_output_dir" ]; then
+        mkdir -p "$_output_dir"
+        log_step "Copying artifacts to $_output_dir ..."
+        cp -f "$_artifacts_dir"/* "$_output_dir/"
+        log_info "Artifacts copied to $_output_dir"
     fi
 }
 

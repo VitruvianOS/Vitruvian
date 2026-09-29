@@ -1777,6 +1777,19 @@ BPoseView::CreateVolumePose(BVolume* volume)
 	entry_ref ref;
 	root.GetRef(&ref);
 
+#ifdef __VOS__
+	// The boot volume's entry_ref has an empty leaf, so the generic
+	// EntryCreated() route below silently zombies the model. Not in the
+	// Disks window, which handles the root pose itself.
+	if (!TargetModel()->IsRoot()) {
+		BEntry rootEntry;
+		if (root.GetEntry(&rootEntry) == B_OK && FSIsRootDir(&rootEntry)) {
+			CreateRootPose();
+			return;
+		}
+	}
+#endif
+
 	// If the volume is mounted at a directory of a persistent volume, we don't
 	// want it on the desktop or in the disks window — except on Vitruvian where
 	// we only skip volumes whose mount-point parent IS the root volume but the

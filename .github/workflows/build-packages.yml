@@ -2,10 +2,10 @@ name: Build Packages
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [master]
 
 permissions:
   contents: read

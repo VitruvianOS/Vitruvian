@@ -1,6 +1,11 @@
 name: Build Vitruvian ISO
 
-on: [push]
+# master is built by factory-release.yml, which allocates a rev and
+# archives the result. Building it here too would run the same build
+# twice per push.
+on:
+  push:
+    branches-ignore: [master]
 
 jobs:
   iso-build:

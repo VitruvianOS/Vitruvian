@@ -1,10 +1,13 @@
-# Link a published release to the Factory rev that built it.
+# Attach a published release's images, taken from the Factory rev that
+# built the tagged commit.
 #
-# Images are not copied here. VitruvianFactory holds one release per build
-# and is public, so a release points at the rev its tag was built from
-# instead of keeping a second copy of every image in this repository.
+# Releases are tagged here, in this repository: a version tag is part of
+# the source history and belongs with it. Factory holds the rev archive,
+# one release per build, which is the churn that should not accumulate
+# here. So the images come FROM Factory and are attached to the release
+# rather than rebuilt, which would produce different bytes.
 
-name: Link release to its Factory rev
+name: Attach release images from Factory
 
 on:
   release:
@@ -17,7 +20,7 @@ env:
   FACTORY_REPO: VitruvianOS/VitruvianFactory
 
 jobs:
-  link:
+  attach:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the tagged commit
@@ -34,28 +37,43 @@ jobs:
           set -euo pipefail
           sha=$(git rev-parse HEAD)
           # Each Factory release records the commit it was built from, so
-          # the mapping is a lookup rather than a guess at build order.
+          # this is a lookup rather than a guess at build order.
           tag=$(gh api "repos/$FACTORY_REPO/releases?per_page=100" --paginate \
                   --jq --arg sha "$sha" \
                   'map(select(.body | contains($sha))) | .[0].tag_name // empty')
           if [ -z "$tag" ]; then
             echo "No Factory release records a build from $sha." >&2
-            echo "Publishing a release for a commit that was never built" \
-                 "would leave the release pointing at nothing." >&2
+            echo "Tag a commit that has been built, or run Factory release" \
+                 "on it first." >&2
             exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "$sha was built as $tag"
 
-      - name: Append the download links to the release notes
+      - name: Download that rev's images
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
+          REV: ${{ steps.rev.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          gh release download "$REV" --repo "$FACTORY_REPO" --dir assets
+          ls -lh assets
+
+      # Names are left exactly as Factory published them. They already
+      # carry the version, arch, board, rev and sha, and each .sha256
+      # names its file in its contents, so renaming would invalidate the
+      # checksums as well as break the link back to the rev.
+      - name: Attach to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.release.tag_name }}
           REV: ${{ steps.rev.outputs.tag }}
         run: |
           set -euo pipefail
+          gh release upload "$TAG" assets/* --clobber
           url="https://github.com/$FACTORY_REPO/releases/tag/$REV"
           notes=$(gh release view "$TAG" --json body --jq '.body')
-          printf '%s\n\n---\n\nImages for this release: [%s](%s)\n' \
-            "$notes" "$REV" "$url" > notes.md
+          printf '%s\n\n---\n\nBuilt as [%s](%s).\n' "$notes" "$REV" "$url" \
+            > notes.md
           gh release edit "$TAG" --notes-file notes.md

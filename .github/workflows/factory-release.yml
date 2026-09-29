@@ -27,6 +27,11 @@ concurrency:
 
 env:
   FACTORY_REPO: VitruvianOS/VitruvianFactory
+  # The counter ran to rev-114 as tags in this repository before it moved
+  # to Factory. Numbering continues from there rather than restarting, so
+  # a rev still means one thing across the whole history. Only relevant
+  # until Factory passes it; after that the published maximum wins.
+  REV_FLOOR: "114"
 
 jobs:
   allocate:
@@ -56,10 +61,15 @@ jobs:
           GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
         run: |
           set -euo pipefail
-          latest=$(gh api "repos/$FACTORY_REPO/releases?per_page=100" \
+          latest=$(gh api "repos/$FACTORY_REPO/releases?per_page=100" --paginate \
                      --jq '[.[] | .tag_name | select(test("^rev-[0-9]+$")) | ltrimstr("rev-") | tonumber] | max // 0')
-          echo "rev=$((latest + 1))" >> "$GITHUB_OUTPUT"
-          echo "latest in Factory: $latest, allocating $((latest + 1))"
+          if [ "$latest" -lt "$REV_FLOOR" ]; then
+            base="$REV_FLOOR"
+          else
+            base="$latest"
+          fi
+          echo "rev=$((base + 1))" >> "$GITHUB_OUTPUT"
+          echo "latest in Factory: $latest, floor: $REV_FLOOR, allocating $((base + 1))"
 
   build:
     needs: allocate

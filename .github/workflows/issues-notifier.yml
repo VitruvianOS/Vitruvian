@@ -67,6 +67,8 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Testing topic: t.me/vitruvian_official_chat/2244
+          TELEGRAM_TOPIC:     "2244"
           MSG:                ${{ steps.build.outputs.msg }}
         run: |
           if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
@@ -76,5 +78,6 @@ jobs:
           curl -sS --fail -X POST \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "message_thread_id=${TELEGRAM_TOPIC}" \
             -d "parse_mode=HTML" \
             --data-urlencode "text=${MSG}"

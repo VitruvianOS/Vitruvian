@@ -211,8 +211,10 @@ jobs:
             --notes "Built from ${{ github.repository }}@${{ github.sha }}" \
             assets/*
 
+      # Off for now. Set the repository variable TELEGRAM_ENABLED to 'true'
+      # to turn announcements back on.
       - name: Announce on Telegram
-        if: success()
+        if: success() && vars.TELEGRAM_ENABLED == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}

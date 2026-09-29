@@ -18,11 +18,12 @@ on:
     branches: [master]
   workflow_dispatch:
 
-# Two pushes in flight would otherwise read the same latest rev and both
-# claim the next one.
+# A newer push supersedes this run. Cancelling is safe for the counter:
+# allocation reads the highest rev already PUBLISHED, so a cancelled
+# run's number is simply taken by the next one.
 concurrency:
-  group: factory-rev
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FACTORY_REPO: VitruvianOS/VitruvianFactory

@@ -7,10 +7,9 @@
 # Prerequisites, both outside this file:
 #   - VitruvianFactory has at least one commit, so a release has something
 #     to tag. An empty repository cannot hold one.
-#   - REPO_DISPATCH_TOKEN reaches VitruvianFactory with contents:write.
-#     GITHUB_TOKEN cannot write to another repository, so a PAT is the
-#     only option; this one already exists for the cross-repo dispatch in
-#     build-packages.yml.
+#   - FACTORY_TOKEN: contents:write on VitruvianFactory. GITHUB_TOKEN is
+#     scoped to the repository running the workflow and cannot write to
+#     another one, so a PAT is the only option.
 
 name: Factory release
 
@@ -38,22 +37,22 @@ jobs:
       # later, after a full build has already run.
       - name: Check the Factory credentials are configured
         env:
-          GH_TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
         run: |
           set -euo pipefail
           [ -n "${GH_TOKEN:-}" ] || {
-            echo "REPO_DISPATCH_TOKEN is not set. It needs contents:write on $FACTORY_REPO." >&2
+            echo "FACTORY_TOKEN is not set. It needs contents:write on $FACTORY_REPO." >&2
             exit 1
           }
           gh api "repos/$FACTORY_REPO" --jq '.full_name' >/dev/null || {
-            echo "Cannot read $FACTORY_REPO with REPO_DISPATCH_TOKEN; check the token's scope covers it." >&2
+            echo "Cannot read $FACTORY_REPO with FACTORY_TOKEN; check the token's scope covers it." >&2
             exit 1
           }
 
       - name: Allocate the next rev from Factory
         id: next
         env:
-          GH_TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
         run: |
           set -euo pipefail
           latest=$(gh api "repos/$FACTORY_REPO/releases?per_page=100" \
@@ -189,7 +188,7 @@ jobs:
 
       - name: Publish rev to Factory
         env:
-          GH_TOKEN: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
           REV: ${{ needs.allocate.outputs.rev }}
         run: |
           set -euo pipefail

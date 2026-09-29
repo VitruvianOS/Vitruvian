@@ -86,8 +86,55 @@ endif()
 if(NOT VOS_PKG_REVISION MATCHES "^[0-9A-Za-z.+~]+$")
 	message(FATAL_ERROR "VOS_PKG_REVISION='${VOS_PKG_REVISION}' is not a valid Debian packaging revision ([0-9A-Za-z.+~]+)")
 endif()
+# The build number is what makes versions order. A sha does not: dpkg
+# compares digit runs numerically and letter runs as text, so roughly half
+# of all consecutive commit pairs sort backwards and apt reports a
+# downgrade. VOS_PKG_REV comes from the CI run number and is strictly
+# increasing; 0 marks a build that no pipeline allocated, so any official
+# package outranks anything built by hand.
+# Same rev-N tags src/system/CMakeLists.txt already compiles into libroot
+# as VOS_REVISION, so the package version and the running system agree on
+# which build they came from. The env overrides it for a pipeline that
+# allocates the number itself.
+if(DEFINED ENV{VOS_PKG_REV} AND NOT "$ENV{VOS_PKG_REV}" STREQUAL "")
+	set(VOS_PKG_REV "$ENV{VOS_PKG_REV}")
+else()
+	execute_process(
+		COMMAND git describe --tags --match "rev-*" --abbrev=0
+		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+		OUTPUT_VARIABLE _vos_rev_tag
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		ERROR_QUIET)
+	string(REGEX REPLACE "^rev-" "" VOS_PKG_REV "${_vos_rev_tag}")
+	if(NOT VOS_PKG_REV)
+		set(VOS_PKG_REV "0")
+	endif()
+endif()
+if(NOT VOS_PKG_REV MATCHES "^[0-9]+$")
+	message(FATAL_ERROR "VOS_PKG_REV='${VOS_PKG_REV}' is not a build number ([0-9]+)")
+endif()
+
+# Untracked files do not reach the package, so only tracked modifications
+# count as dirty.
+execute_process(
+	COMMAND git diff-index --quiet HEAD --
+	WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+	RESULT_VARIABLE _vos_tree_dirty
+	ERROR_QUIET)
+if(_vos_tree_dirty EQUAL 0)
+	set(_vos_dirty "")
+else()
+	# '~' sorts below the empty string, so a dirty build never shadows the
+	# clean one it was derived from.
+	set(_vos_dirty "~dirty")
+endif()
+
+# The rev must sit before the sha, inside the upstream part: the revision
+# field after the final '-' is only a tiebreak, and upstream is compared
+# first.
 if(VOS_GIT_SHA)
-	set(CPACK_DEBIAN_PACKAGE_VERSION "${PROJECT_VERSION}+git${VOS_GIT_SHA}-${VOS_PKG_REVISION}")
+	set(CPACK_DEBIAN_PACKAGE_VERSION
+		"${PROJECT_VERSION}+git${VOS_PKG_REV}.${VOS_GIT_SHA}${_vos_dirty}-${VOS_PKG_REVISION}")
 	message(STATUS "VOS package version: ${CPACK_DEBIAN_PACKAGE_VERSION}")
 else()
 	message(WARNING "no git sha available - package version stays ${PROJECT_VERSION}, which collides in the pool on the next rebuild")

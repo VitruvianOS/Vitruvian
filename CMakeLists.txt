@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 
-project(VOS VERSION 0.6.2 LANGUAGES CXX C)
+project(VOS VERSION 0.6.3 LANGUAGES CXX C)
 
 # Every install() that predates the component split, and every one in src/,
 # omits COMPONENT. Without a default they land in "Unspecified" and CPack

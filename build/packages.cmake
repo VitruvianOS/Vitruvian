@@ -92,23 +92,13 @@ endif()
 # downgrade. VOS_PKG_REV comes from the CI run number and is strictly
 # increasing; 0 marks a build that no pipeline allocated, so any official
 # package outranks anything built by hand.
-# Same rev-N tags src/system/CMakeLists.txt already compiles into libroot
-# as VOS_REVISION, so the package version and the running system agree on
-# which build they came from. The env overrides it for a pipeline that
-# allocates the number itself.
+# The number is allocated outside this repo and handed in, so no build
+# counter is kept in the source history. Nothing derives it from local
+# tags: a checkout that happens to carry one must not mint versions.
 if(DEFINED ENV{VOS_PKG_REV} AND NOT "$ENV{VOS_PKG_REV}" STREQUAL "")
 	set(VOS_PKG_REV "$ENV{VOS_PKG_REV}")
 else()
-	execute_process(
-		COMMAND git describe --tags --match "rev-*" --abbrev=0
-		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-		OUTPUT_VARIABLE _vos_rev_tag
-		OUTPUT_STRIP_TRAILING_WHITESPACE
-		ERROR_QUIET)
-	string(REGEX REPLACE "^rev-" "" VOS_PKG_REV "${_vos_rev_tag}")
-	if(NOT VOS_PKG_REV)
-		set(VOS_PKG_REV "0")
-	endif()
+	set(VOS_PKG_REV "0")
 endif()
 if(NOT VOS_PKG_REV MATCHES "^[0-9]+$")
 	message(FATAL_ERROR "VOS_PKG_REV='${VOS_PKG_REV}' is not a build number ([0-9]+)")

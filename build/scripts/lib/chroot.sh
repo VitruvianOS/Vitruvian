@@ -28,6 +28,10 @@ qemu_eject() {
 # by exporting DEBIAN_MIRROR before invoking setupenv / bake.
 : "${DEBIAN_MIRROR:=http://deb.debian.org/debian/}"
 
+# Debian suite bootstrapped for the chroot and every board rootfs; trixie
+# is the only suite proven against so far.
+: "${VOS_BASE_SUITE:=trixie}"
+
 # Persistent .deb cache shared across chroot regenerations. Path is per
 # arch (laid down by setupenv); same arch == same cache.
 chroot_cache_dir() {
@@ -115,16 +119,16 @@ chroot_create() {
     log_info "Using package cache: $_cache_dir (mirror: $DEBIAN_MIRROR)"
 
     if is_cross_build "$_arch"; then
-        log_step "Bootstrapping Debian trixie ($_deb_arch) [foreign]..."
+        log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) [foreign]..."
         sudo debootstrap --arch="$_deb_arch" --variant=minbase --foreign \
             --cache-dir="$_debootstrap_cache" \
-            trixie "$_chroot_dir" "$DEBIAN_MIRROR"
+            "$VOS_BASE_SUITE" "$_chroot_dir" "$DEBIAN_MIRROR"
         qemu_inject "$_chroot_dir" "$_arch"
     else
-        log_step "Bootstrapping Debian trixie ($_deb_arch)..."
+        log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch)..."
         sudo debootstrap --arch="$_deb_arch" --variant=minbase \
             --cache-dir="$_debootstrap_cache" \
-            trixie "$_chroot_dir" "$DEBIAN_MIRROR"
+            "$VOS_BASE_SUITE" "$_chroot_dir" "$DEBIAN_MIRROR"
     fi
 
     trap 'chroot_umount "$_chroot_dir"' EXIT
@@ -136,10 +140,31 @@ chroot_create() {
     # pointing at the mirror, but make it explicit and overridable.
     : "${DEBIAN_SECURITY_MIRROR:=http://security.debian.org/debian-security}"
     sudo tee "$_chroot_dir/etc/apt/sources.list" >/dev/null <<EOF
-deb $DEBIAN_MIRROR trixie main contrib non-free non-free-firmware
-deb $DEBIAN_MIRROR trixie-updates main contrib non-free non-free-firmware
-deb $DEBIAN_SECURITY_MIRROR trixie-security main contrib non-free non-free-firmware
+deb $DEBIAN_MIRROR $VOS_BASE_SUITE main contrib non-free non-free-firmware
+deb $DEBIAN_MIRROR $VOS_BASE_SUITE-updates main contrib non-free non-free-firmware
+deb $DEBIAN_SECURITY_MIRROR $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
 EOF
+
+    # Written only when a key is supplied: an unverifiable repo fails the
+    # whole apt update, taking Debian access down with it.
+    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
+    : "${VOS_REPO_SUITE:=trixie-testing}"
+    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        sudo install -d -m 755 "$_chroot_dir/etc/apt/keyrings"
+        sudo install -m 644 "$VOS_REPO_KEY" \
+            "$_chroot_dir/etc/apt/keyrings/vitruvian-archive-keyring.asc"
+        sudo install -d -m 755 "$_chroot_dir/etc/apt/sources.list.d"
+        sudo tee "$_chroot_dir/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSEOF
+Types: deb
+URIs: $VOS_REPO_URL
+Suites: $VOS_REPO_SUITE
+Components: main
+Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
+VOSEOF
+        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
+    else
+        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
+    fi
 
     log_step "Verifying mount points before second-stage..."
     log_info "Checking proc: mountpoint=$(mountpoint -q "$_chroot_dir/proc" 2>/dev/null && echo yes || echo no), stat=$([ -f "$_chroot_dir/proc/1/stat" ] && echo exists || echo missing)"
@@ -154,6 +179,10 @@ EOF
     mountpoint -q "$_chroot_dir/dev" || die "dev mount failed"
 
     if is_cross_build "$_arch"; then
+        # The second stage unpacks from /var/cache/apt/archives, which is
+        # bound to $_cache_dir/archives; debootstrap cached elsewhere.
+        sudo sh -c 'cp -n "$1"/*.deb "$2"/ 2>/dev/null || true' _ \
+            "$_debootstrap_cache" "$_cache_dir/archives"
         log_step "Running debootstrap second stage..."
         sudo chroot "$_chroot_dir" /debootstrap/debootstrap --second-stage
         log_step "Re-mounting after second-stage..."
@@ -185,6 +214,13 @@ EOF
     _dev_pkgs="$(get_dev_packages "$_arch")"
 
     log_step "Installing packages..."
+    # dpkg's per-file fsyncs are pure overhead on a chroot that gets
+    # discarded; opt-in so it is never silently on for a local tree.
+    if [ "${VOS_UNSAFE_IO:-0}" = 1 ]; then
+        sudo install -d -m 755 "$_chroot_dir/etc/dpkg/dpkg.cfg.d"
+        printf 'force-unsafe-io\n' \
+          | sudo tee "$_chroot_dir/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io" >/dev/null
+    fi
     sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "\
 echo 'vitruvian' > /etc/hostname && \
 apt update && apt install -y --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES && \

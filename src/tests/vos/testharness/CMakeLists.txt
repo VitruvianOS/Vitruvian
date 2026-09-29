@@ -15,6 +15,7 @@ Application(test_area SOURCES test_area.cpp)
 Application(testvref SOURCES testvref.cpp)
 Application(testsemdeletion SOURCES testsemdeletion.cpp)
 Application(teststopwatch SOURCES teststopwatch.cpp)
+Application(test_stale_id SOURCES test_stale_id.cpp)
 #Application(testvrefmessage SOURCES testvrefmessage.cpp)
 
 

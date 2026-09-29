@@ -196,7 +196,7 @@ get_board_packages() {
         beagle)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 u-boot-beagle dosfstools rsync"
+                " linux-image-arm64 dosfstools rsync"  # u-boot-beagle does not exist
             ;;
         beaglebone)
             printf '%s' \
@@ -206,17 +206,17 @@ get_board_packages() {
         nxp)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 u-boot-imx dosfstools rsync"
+                " linux-image-arm64 dosfstools rsync"  # u-boot-imx is armhf-only
             ;;
         amlogic)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 u-boot-meson dosfstools rsync"
+                " linux-image-arm64 u-boot-amlogic-binaries dosfstools rsync"
             ;;
         visionfive2)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-riscv64 dosfstools rsync"
+                " linux-image-riscv64 u-boot-starfive dosfstools rsync"
             ;;
         licheerv)
             printf '%s' \

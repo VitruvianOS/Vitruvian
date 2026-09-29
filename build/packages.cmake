@@ -54,6 +54,49 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/prerm"
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postrm")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "The Vitruvian Project")
+
+execute_process(
+	COMMAND git rev-parse --short HEAD
+	WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+	OUTPUT_VARIABLE VOS_GIT_SHA
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+	ERROR_QUIET)
+
+if(DEFINED ENV{VOS_SOURCE_DATE_EPOCH} AND NOT "$ENV{VOS_SOURCE_DATE_EPOCH}" STREQUAL "")
+	set(VOS_SOURCE_DATE_EPOCH "$ENV{VOS_SOURCE_DATE_EPOCH}")
+else()
+	execute_process(
+		COMMAND git log -1 --format=%ct
+		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+		OUTPUT_VARIABLE VOS_SOURCE_DATE_EPOCH
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		ERROR_QUIET)
+endif()
+if(VOS_SOURCE_DATE_EPOCH)
+	set(CPACK_DEB_PACKAGE_MTIME "${VOS_SOURCE_DATE_EPOCH}")
+	# Some CPack internals read the env, not the variable.
+	set(ENV{SOURCE_DATE_EPOCH} "${VOS_SOURCE_DATE_EPOCH}")
+	message(STATUS "VOS SOURCE_DATE_EPOCH: ${VOS_SOURCE_DATE_EPOCH}")
+else()
+	message(WARNING "no git commit timestamp available - package build will not be byte-reproducible")
+endif()
+
+if(DEFINED ENV{VOS_PKG_REVISION} AND NOT "$ENV{VOS_PKG_REVISION}" STREQUAL "")
+	set(VOS_PKG_REVISION "$ENV{VOS_PKG_REVISION}")
+else()
+	set(VOS_PKG_REVISION "1")
+endif()
+# '-' would be ambiguous (dpkg splits on the last hyphen); anything outside
+# Debian's alphabet is rejected by reprepro after the build already ran.
+if(NOT VOS_PKG_REVISION MATCHES "^[0-9A-Za-z.+~]+$")
+	message(FATAL_ERROR "VOS_PKG_REVISION='${VOS_PKG_REVISION}' is not a valid Debian packaging revision ([0-9A-Za-z.+~]+)")
+endif()
+if(VOS_GIT_SHA)
+	set(CPACK_DEBIAN_PACKAGE_VERSION "${PROJECT_VERSION}+git${VOS_GIT_SHA}-${VOS_PKG_REVISION}")
+	message(STATUS "VOS package version: ${CPACK_DEBIAN_PACKAGE_VERSION}")
+else()
+	message(WARNING "no git sha available - package version stays ${PROJECT_VERSION}, which collides in the pool on the next rebuild")
+endif()
 INCLUDE(CPack)
 
 # Make `ninja clean` (and `make clean`) wipe CPack outputs too. CPack writes

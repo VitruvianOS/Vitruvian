@@ -872,8 +872,9 @@ APTSRC
     # Same key-gated VitruvianOS repo as chroot.sh; these paths run their
     # own debootstrap and never went through it.
     : "${VOS_REPO_URL:=https://repo.v-os.dev}"
-    : "${VOS_REPO_SUITE:=trixie-testing}"
     if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        # No default suite; see chroot.sh.
+        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
         sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
         sudo install -m 644 "$VOS_REPO_KEY" \
             "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"
@@ -1105,8 +1106,9 @@ APTSRC
 
     # Same key-gated VitruvianOS repo as create_raspberry.
     : "${VOS_REPO_URL:=https://repo.v-os.dev}"
-    : "${VOS_REPO_SUITE:=trixie-testing}"
     if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        # No default suite; see chroot.sh.
+        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
         sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
         sudo install -m 644 "$VOS_REPO_KEY" \
             "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"

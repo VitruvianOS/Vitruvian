@@ -78,7 +78,7 @@ create_raw() {
     require_cmd mcopy mtools
     require_cmd mmd mtools
 
-    _raw="$_basedir/output/vitruvian.raw"
+    _raw="$_basedir/output/vos-uefi.raw"
     _hostname="vitruvian"
     _user=""
     _pass=""
@@ -610,7 +610,7 @@ EOF
             -e '--interval:appended_partition_2:all::' \
             -no-emul-boot \
             -isohybrid-gpt-basdat \
-            -output "$_basedir/output/vitruvian-custom.iso" \
+            -output "$_basedir/output/vos-uefi.iso" \
             -graft-points \
                 "$_basedir/image_tree/image" \
                 /boot/grub/bios.img="$_basedir/image_tree/scratch/bios.img"
@@ -626,12 +626,12 @@ EOF
             -e '--interval:appended_partition_2:all::' \
             -no-emul-boot \
             -isohybrid-gpt-basdat \
-            -output "$_basedir/output/vitruvian-custom.iso" \
+            -output "$_basedir/output/vos-uefi.iso" \
             -graft-points \
                 "$_basedir/image_tree/image"
     fi
 
-    log_info "ISO created: $_basedir/output/vitruvian-custom.iso"
+    log_info "ISO created: $_basedir/output/vos-uefi.iso"
     log_info "Build type: $BUILD_TYPE"
     if [ "$_sshdebug" = 1 ]; then
         log_info "Debug entry staged - SSH: root or vos-live@<guest-ip> (password: live)"
@@ -790,14 +790,7 @@ create_raspberry() {
     _board="${2:-raspberry}"
     _board_arch="$(board_config "$_board" arch)"
     _deb_arch="$(arch_to_deb "$_board_arch")"
-    # The fleet collector looks for "vos-raspberry.raw" specifically (legacy
-    # naming predating the vitruvian- rebrand of the other board outputs);
-    # every other board keeps the vitruvian-<board>.raw convention.
-    if [ "$_board" = "raspberry" ]; then
-        _raw="$_basedir/output/vos-raspberry.raw"
-    else
-        _raw="$_basedir/output/vitruvian-$_board.raw"
-    fi
+    _raw="$_basedir/output/vos-$_board.raw"
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
     _user=""
@@ -1021,7 +1014,7 @@ create_uboot_board() {
     _dtb_files=$(board_config "$_board" dtb_files)
     _board_pkgs="$(get_board_packages "$_board")"
 
-    _raw="$_basedir/output/vitruvian-$_board.raw"
+    _raw="$_basedir/output/vos-$_board.raw"
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
     _user=""

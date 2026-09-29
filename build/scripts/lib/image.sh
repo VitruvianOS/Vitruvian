@@ -1240,20 +1240,24 @@ FSTAB
     # Debian does not ship (e.g. amlogic's FIP-signed image). Otherwise use
     # what was staged from the rootfs above.
     _uboot_dir="$_basedir/firmware/$_board"
-     [ -d "$_uboot_dir" ] || _uboot_dir="$_uboot_stage"
+     if [ ! -d "$_uboot_dir" ]; then
+         if [ -n "$_uboot_stage" ]; then
+             _uboot_dir="$_uboot_stage"
+         else
+             # No staged blobs either: give the pinned-upstream assembler a
+             # destination (licheerv/D1 ships no u-boot in Debian).
+             mkdir -p "$_uboot_dir"
+         fi
+     fi
      # Some SoCs need a FIP-signed blob Debian cannot provide; assemble it
      # from the pinned upstream when it is missing.
      if [ -n "$(board_config "$_board" spl_blob 2>/dev/null)" ] && \
         [ ! -f "$_uboot_dir/$(board_config "$_board" spl_blob)" ]; then
-         # FIP assembly is an amlogic-only path (hardkernel-signed blobs).
-         # Any other board reaching this point has simply failed to stage
-         # its blobs - say so precisely instead of dying inside fip.sh on
-         # an empty dest_dir (2026-09-27, riscv64 visionfive2).
+         # Dispatch to the assembler for this board's SoC family.
          [ "$(board_config "$_board" fip_assemble 2>/dev/null)" = "1" ] || {
              [ -n "$_uboot_dir" ] || _uboot_dir="(unset)"
              die "no U-Boot blobs for $_board: firmware/$_board absent and rootfs staging empty (boards.sh extra_pkgs: $(board_config "$_board" extra_pkgs 2>/dev/null); Debian pkg installed?)"
          }
-         log_step "Assembling Amlogic FIP blob..."
          # image.sh is SOURCED by bake.sh, so $0 is bake.sh's path and
          # dirname "$0" is wherever bake runs from (generated.<arch>/) --
          # the helper actually lives in the source tree, 1-2 levels up.
@@ -1271,11 +1275,27 @@ FSTAB
          # shellcheck disable=SC1090
          . "$_fip_helper"
         [ -n "$_uboot_dir" ] || die "FIP assembly for $_board: no destination dir (firmware/$_board and rootfs staging both empty)"
-        if ! fip_amlogic_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
-            log_error "FIP assembly failed (pinned hardkernel/u-boot $FIP_UBOOT_SHA)."
-            log_error "Requires gcc-aarch64-linux-gnu and gcc-arm-none-eabi."
-            die "Cannot assemble FIP blob for $_board (pinned $FIP_UBOOT_SHA)"
-        fi
+        case "$_board" in
+            amlogic)
+                log_step "Assembling Amlogic FIP blob..."
+                if ! fip_amlogic_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
+                    log_error "FIP assembly failed (pinned hardkernel/u-boot $FIP_UBOOT_SHA)."
+                    log_error "Requires gcc-aarch64-linux-gnu and gcc-arm-none-eabi."
+                    die "Cannot assemble FIP blob for $_board (pinned $FIP_UBOOT_SHA)"
+                fi
+                ;;
+            licheerv)
+                log_step "Assembling Allwinner D1 (LicheeRV) FIP blob..."
+                if ! fip_licheerv_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
+                    log_error "FIP assembly failed (pinned smaeul/u-boot $FIP_LICHEERV_UBOOT_SHA)."
+                    log_error "Requires gcc-riscv64-linux-gnu and device-tree-compiler."
+                    die "Cannot assemble FIP blob for $_board (pinned $FIP_LICHEERV_UBOOT_SHA)"
+                fi
+                ;;
+            *)
+                die "FIP assembly not implemented for board: $_board"
+                ;;
+        esac
     fi
 
     # Per-SoC blob choice, not guessable: a first-match order picks the bare

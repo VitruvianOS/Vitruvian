@@ -1118,7 +1118,7 @@ MainWindow::_WriteDiskImage(BMessenger messenger, BFile source, BFile target,
 
 	source.GetSize(&sourcesize);
 
-	char maximumBuffer[16], currentBuffer[16];
+	char maximumBuffer[1024], currentBuffer[1024];
 	BString statusprogress;
 
 	BNotification progress(B_PROGRESS_NOTIFICATION);
@@ -1136,8 +1136,8 @@ MainWindow::_WriteDiskImage(BMessenger messenger, BFile source, BFile target,
 			targetbytes += bytes;
 
 			statusprogress.SetToFormat("%s: %s / %s", targetpath,
-				string_for_size(targetbytes, currentBuffer, 16),
-				string_for_size(sourcesize, maximumBuffer, 16));
+				string_for_size(targetbytes, currentBuffer, sizeof(currentBuffer)),
+				string_for_size(sourcesize, maximumBuffer, sizeof(maximumBuffer)));
 
 			progress.SetContent(statusprogress);
 			progress.SetProgress((float)targetbytes / sourcesize);
@@ -1549,15 +1549,15 @@ void
 MainWindow::_DisplayPartitionError(BString _message,
 	const BPartition* partition, status_t error, const BMessage* result) const
 {
-	char message[1024];
+	BString message;
 
 	if (partition && _message.FindFirst("%s") >= 0) {
 		BString name;
 		name << "\"" << partition->ContentName() << "\"";
-		snprintf(message, sizeof(message), _message.String(), name.String());
+		message.SetToFormat(_message.String(), name.String());
 	} else {
 		_message.ReplaceAll("%s", "");
-		strlcpy(message, _message.String(), sizeof(message));
+		message = _message;
 	}
 
 	BString detail;
@@ -1565,18 +1565,15 @@ MainWindow::_DisplayPartitionError(BString _message,
 		result->FindString("detail", &detail);
 
 	if (!detail.IsEmpty()) {
-		BString helper = message;
-		snprintf(message, sizeof(message), "%s\n\n%s", helper.String(),
-			detail.String());
+		message << "\n\n" << detail;
 	} else if (error < B_OK) {
-		BString helper = message;
 		const char* errorString
 			= B_TRANSLATE_COMMENT("Error:", "in any error alert");
-		snprintf(message, sizeof(message), "%s\n\n%s %s", helper.String(),
-			errorString, strerror(error));
+		message << "\n\n" << errorString << " " << strerror(error);
 	}
 
-	BAlert* alert = new BAlert("error", message, B_TRANSLATE("OK"), NULL, NULL,
+	BAlert* alert = new BAlert("error", message.String(),
+		B_TRANSLATE("OK"), NULL, NULL,
 		B_WIDTH_FROM_WIDEST, error < B_OK ? B_STOP_ALERT : B_INFO_ALERT);
 	alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 	alert->Go(NULL);

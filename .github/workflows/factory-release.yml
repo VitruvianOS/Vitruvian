@@ -161,6 +161,8 @@ jobs:
           name: factory-${{ matrix.arch }}
           path: staging/*
           if-no-files-found: error
+          # Only a handoff to the publish job. Factory keeps the real copy.
+          retention-days: 1
 
   publish:
     needs: [allocate, build]
@@ -197,3 +199,23 @@ jobs:
             --title "rev-$REV" \
             --notes "Built from ${{ github.repository }}@${{ github.sha }}" \
             assets/*
+
+      - name: Announce on Telegram
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          REV:                ${{ needs.allocate.outputs.rev }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
+            echo "Telegram not configured, skipping."
+            exit 0
+          fi
+          short=$(echo "${{ github.sha }}" | cut -c1-9)
+          msg=$(printf '<b>rev-%s</b> published to VitruvianFactory\nfrom %s@%s\nhttps://github.com/%s/releases/tag/rev-%s' \
+                  "$REV" "${{ github.repository }}" "$short" "$FACTORY_REPO" "$REV")
+          curl -sS --fail -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "parse_mode=HTML" \
+            --data-urlencode "text=${msg}"

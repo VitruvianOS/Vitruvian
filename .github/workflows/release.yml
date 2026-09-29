@@ -1,4 +1,10 @@
-name: Attach Last-Built Images to Release
+# Link a published release to the Factory rev that built it.
+#
+# Images are not copied here. VitruvianFactory holds one release per build
+# and is public, so a release points at the rev its tag was built from
+# instead of keeping a second copy of every image in this repository.
+
+name: Link release to its Factory rev
 
 on:
   release:
@@ -6,79 +12,50 @@ on:
 
 permissions:
   contents: write
-  actions: read
+
+env:
+  FACTORY_REPO: VitruvianOS/VitruvianFactory
 
 jobs:
-  attach:
+  link:
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: ${{ github.repository }}
-      TAG: ${{ github.event.release.tag_name }}
     steps:
-      - name: Fetch ISO + RAW from last successful builds
+      - name: Checkout the tagged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 1
+
+      - name: Find the Factory rev built from this commit
+        id: rev
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p work release-assets
-
-          fetch_run() {
-            local workflow="$1"
-            local arch="$2"
-            local run_id
-            run_id=$(gh run list --workflow "$workflow" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-            if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
-              echo "No successful run for $workflow"
-              return 0
-            fi
-            echo "Run for $workflow: $run_id"
-
-            gh api "repos/$GH_REPO/actions/runs/$run_id/artifacts" --paginate \
-              --jq '.artifacts[] | "\(.id)\t\(.name)"' \
-            | while IFS=$'\t' read -r aid aname; do
-              case "$aname" in
-                *DEB*) echo "  skip $aname"; continue ;;
-              esac
-              echo "  downloading $aname"
-              local stage="work/${aname}"
-              mkdir -p "$stage"
-              gh api "repos/$GH_REPO/actions/artifacts/$aid/zip" > "${stage}.zip"
-              unzip -q -o "${stage}.zip" -d "$stage"
-
-              # Rename images to vitruvian-<tag>-<arch>.<ext>.
-              rename_into_release() {
-                local src="$1"
-                local newname="vitruvian-${TAG}-${arch}.$2"
-                cp "$src" "release-assets/${newname}"
-                if [ -f "${src}.sha256" ]; then
-                  # Rewrite checksum line to match the new filename.
-                  awk -v n="${newname}" '{print $1"  "n}' "${src}.sha256" \
-                    > "release-assets/${newname}.sha256"
-                fi
-              }
-
-              while IFS= read -r -d '' iso; do
-                rename_into_release "$iso" iso
-              done < <(find "$stage" -type f -name '*.iso' -print0)
-
-              while IFS= read -r -d '' raw; do
-                rename_into_release "$raw" raw.zst
-              done < <(find "$stage" -type f -name '*.raw.zst' -print0)
-            done
-          }
-
-          fetch_run ccpp.yml       amd64
-          fetch_run ccpp-arm64.yml arm64
-
-          echo "--- release assets ---"
-          ls -lh release-assets/
-
-      - name: Attach to release
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          files=(release-assets/*)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "no assets to upload"
-            exit 0
+          sha=$(git rev-parse HEAD)
+          # Each Factory release records the commit it was built from, so
+          # the mapping is a lookup rather than a guess at build order.
+          tag=$(gh api "repos/$FACTORY_REPO/releases?per_page=100" --paginate \
+                  --jq --arg sha "$sha" \
+                  'map(select(.body | contains($sha))) | .[0].tag_name // empty')
+          if [ -z "$tag" ]; then
+            echo "No Factory release records a build from $sha." >&2
+            echo "Publishing a release for a commit that was never built" \
+                 "would leave the release pointing at nothing." >&2
+            exit 1
           fi
-          gh release upload "$TAG" "${files[@]}" --clobber
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "$sha was built as $tag"
+
+      - name: Append the download links to the release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          REV: ${{ steps.rev.outputs.tag }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/$FACTORY_REPO/releases/tag/$REV"
+          notes=$(gh release view "$TAG" --json body --jq '.body')
+          printf '%s\n\n---\n\nImages for this release: [%s](%s)\n' \
+            "$notes" "$REV" "$url" > notes.md
+          gh release edit "$TAG" --notes-file notes.md

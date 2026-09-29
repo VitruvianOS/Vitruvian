@@ -173,18 +173,3 @@ jobs:
             dpkg -l nexus-dkms && echo "nexus-dkms: OK"
             echo "=== Done ==="
           '
-
-  dispatch-publish:
-    name: Dispatch to repo
-    needs: [build-vos, build-nexus]
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger publish in repo
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
-          repository: ${{ vars.REPO_REPO || 'vitruvian-os/repo' }}
-          event-type: packages-built
-          client-payload: |
-            {"source_repo": "${{ github.repository }}", "run_id": "${{ github.run_id }}"}

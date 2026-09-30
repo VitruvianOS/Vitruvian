@@ -3,8 +3,8 @@
 "\e[5~": history-search-backward
 "\e[6~": history-search-forward
 "\e[3~": delete-char
-"\eO5D": backward-word
-"\eO5C": forward-word
+"\e[1;5D": backward-word
+"\e[1;5C": forward-word
 
 # UTF-8 support
 set meta-flag on

@@ -288,6 +288,20 @@ Registrar::_MessageReceived(BMessage *message)
 			_HandleIsShutDownInProgress(message);
 			break;
 		}
+		case B_REG_REQUEST_SLEEP:
+		{
+			PRINT("B_REG_REQUEST_SLEEP\n");
+
+			_HandleRequestSleep(message);
+			break;
+		}
+		case B_REG_IS_SLEEP_AVAILABLE:
+		{
+			PRINT("B_REG_IS_SLEEP_AVAILABLE\n");
+
+			_HandleIsSleepAvailable(message);
+			break;
+		}
 		case kMsgLogindPrepareForShutdown:
 			_HandleLogindPrepareForShutdown(message);
 			break;
@@ -464,6 +478,66 @@ Registrar::_HandleIsShutDownInProgress(BMessage *request)
 {
 	BMessage reply(B_REG_SUCCESS);
 	reply.AddBool("in-progress", fShutdownProcess != NULL);
+	request->SendReply(&reply);
+}
+
+
+/*!	\brief Handle a suspend/hibernate request.
+
+	Asks logind to run the sleep. Reply goes out as soon as the request
+	is accepted; the registrar looper must not sit through the sleep.
+*/
+void
+Registrar::_HandleRequestSleep(BMessage *request)
+{
+	const char* which = NULL;
+	if (request->FindString("sleep", &which) != B_OK || which == NULL) {
+		BMessage reply(B_REG_ERROR);
+		reply.AddInt32("error", B_BAD_VALUE);
+		request->SendReply(&reply);
+		return;
+	}
+
+	status_t error = B_BAD_VALUE;
+	if (fLogindBridge == NULL)
+		error = B_NO_INIT;
+	else if (strcmp(which, "suspend") == 0)
+		error = fLogindBridge->Suspend();
+	else if (strcmp(which, "hibernate") == 0)
+		error = fLogindBridge->Hibernate();
+
+	BMessage reply(error == B_OK ? B_REG_SUCCESS : B_REG_ERROR);
+	if (error != B_OK)
+		reply.AddInt32("error", error);
+	request->SendReply(&reply);
+}
+
+
+/*!	\brief Handle a sleep-availability query.
+
+	Replies with "available" for the requested sleep kind.
+*/
+void
+Registrar::_HandleIsSleepAvailable(BMessage *request)
+{
+	const char* which = NULL;
+	if (request->FindString("sleep", &which) != B_OK || which == NULL) {
+		BMessage reply(B_REG_ERROR);
+		reply.AddInt32("error", B_BAD_VALUE);
+		request->SendReply(&reply);
+		return;
+	}
+
+	bool available = false;
+	if (fLogindBridge != NULL) {
+		if (strcmp(which, "suspend") == 0)
+			available = fLogindBridge->CanSuspend();
+		else if (strcmp(which, "hibernate") == 0)
+			available = fLogindBridge->CanHibernate();
+	}
+
+	BMessage reply(B_REG_SUCCESS);
+	reply.AddBool("available", available);
 	request->SendReply(&reply);
 }
 

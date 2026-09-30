@@ -66,6 +66,7 @@ const uint32 kShutdownSystem = 301;
 const uint32 kRebootSystem = 302;
 const uint32 kSuspendSystem = 304;
 const uint32 kLogOutUser = 305;
+const uint32 kHibernateSystem = 306;
 
 // icon size constants
 const int32 kIconPadding = B_USE_SMALL_SPACING;

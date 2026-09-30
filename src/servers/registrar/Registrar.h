@@ -60,6 +60,8 @@ private:
 	void _MessageReceived(BMessage *message);
 	void _HandleShutDown(BMessage *message);
 	void _HandleIsShutDownInProgress(BMessage *message);
+	void _HandleRequestSleep(BMessage *message);
+	void _HandleIsSleepAvailable(BMessage *message);
 	void _HandleLogindPrepareForShutdown(BMessage *message);
 	void _HandleLogindPrepareForSleep(BMessage *message);
 

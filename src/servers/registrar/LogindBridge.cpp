@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <systemd/sd-bus.h>
@@ -20,6 +21,12 @@ static const char* kLogin1Bus       = "org.freedesktop.login1";
 static const char* kLogin1Path      = "/org/freedesktop/login1";
 static const char* kLogin1Manager   = "org.freedesktop.login1.Manager";
 
+enum sleep_request {
+	kSleepRequestNone = 0,
+	kSleepRequestSuspend,
+	kSleepRequestHibernate,
+};
+
 
 LogindBridge::LogindBridge(const BMessenger& target)
 	:
@@ -28,7 +35,11 @@ LogindBridge::LogindBridge(const BMessenger& target)
 	fShutdownFd(-1),
 	fSleepFd(-1),
 	fThread(-1),
-	fRunning(false)
+	fRunning(false),
+	fPendingSleep(kSleepRequestNone),
+	fSleepCheckTime(0),
+	fCanSuspend(false),
+	fCanHibernate(false)
 {
 }
 
@@ -154,6 +165,121 @@ LogindBridge::ReleaseSleepInhibit()
 }
 
 
+bool
+LogindBridge::CanSuspend()
+{
+	_UpdateSleepAvailability();
+	return fCanSuspend;
+}
+
+
+bool
+LogindBridge::CanHibernate()
+{
+	_UpdateSleepAvailability();
+	return fCanHibernate;
+}
+
+
+status_t
+LogindBridge::Suspend()
+{
+	return _RequestSleep("Suspend");
+}
+
+
+status_t
+LogindBridge::Hibernate()
+{
+	return _RequestSleep("Hibernate");
+}
+
+
+void
+LogindBridge::_UpdateSleepAvailability()
+{
+	// Deskbar asks on every menu build; the answers rarely change.
+	bigtime_t now = system_time();
+	if (fSleepCheckTime != 0 && now - fSleepCheckTime < 60000000)
+		return;
+	fSleepCheckTime = now;
+
+	// Fresh connection: the bridge thread owns fBus for signals.
+	sd_bus* bus = NULL;
+	if (sd_bus_open_system(&bus) < 0) {
+		fCanSuspend = fCanHibernate = false;
+		return;
+	}
+	fCanSuspend = _CanSleep(bus, "CanSuspend");
+	fCanHibernate = _CanSleep(bus, "CanHibernate");
+	sd_bus_unref(bus);
+}
+
+
+bool
+LogindBridge::_CanSleep(void* busHandle, const char* method)
+{
+	sd_bus* bus = (sd_bus*)busHandle;
+	sd_bus_error err = SD_BUS_ERROR_NULL;
+	sd_bus_message* reply = NULL;
+	const char* answer = NULL;
+	int r = sd_bus_call_method(bus, kLogin1Bus, kLogin1Path, kLogin1Manager,
+		method, &err, &reply, NULL);
+	if (r >= 0)
+		r = sd_bus_message_read(reply, "s", &answer);
+	bool available = r >= 0 && answer != NULL
+		&& (strcmp(answer, "yes") == 0 || strcmp(answer, "challenge") == 0);
+	sd_bus_message_unref(reply);
+	sd_bus_error_free(&err);
+	return available;
+}
+
+
+status_t
+LogindBridge::_RequestSleep(const char* method)
+{
+	if (!fRunning)
+		return B_NO_INIT;
+
+	// Hand off to the bridge thread so the caller's looper is never
+	// blocked across a polkit prompt or the sleep itself.
+	atomic_set(&fPendingSleep, strcmp(method, "Suspend") == 0
+		? kSleepRequestSuspend : kSleepRequestHibernate);
+	return B_OK;
+}
+
+
+void
+LogindBridge::_ProcessPendingSleep()
+{
+	int32 request = atomic_get_and_set(&fPendingSleep, kSleepRequestNone);
+	if (request == kSleepRequestNone)
+		return;
+
+	const char* method = request == kSleepRequestSuspend
+		? "Suspend" : "Hibernate";
+
+	// Use a dedicated connection so the signal bus keeps running; interactive=true lets polkit ask.
+	sd_bus* bus = NULL;
+	int r = sd_bus_open_system(&bus);
+	if (r < 0) {
+		fprintf(stderr, "LogindBridge: %s: sd_bus_open_system: %s\n", method,
+			strerror(-r));
+		return;
+	}
+
+	sd_bus_error err = SD_BUS_ERROR_NULL;
+	r = sd_bus_call_method(bus, kLogin1Bus, kLogin1Path, kLogin1Manager,
+		method, &err, NULL, "b", 1);
+	if (r < 0) {
+		fprintf(stderr, "LogindBridge: %s refused: %s\n", method,
+			err.message != NULL ? err.message : strerror(-r));
+	}
+	sd_bus_error_free(&err);
+	sd_bus_unref(bus);
+}
+
+
 int32
 LogindBridge::_ThreadEntry(void* self)
 {
@@ -196,11 +322,15 @@ LogindBridge::_ThreadLoop()
 			sd_bus_message_unref(m);
 		}
 
+		_ProcessPendingSleep();
+
 		if (r > 0)
 			continue;
 
 		// r == 0: block until next event (500ms cap so fRunning flip is seen).
 		sd_bus_wait(bus, 500000);
+
+		_ProcessPendingSleep();
 	}
 	return 0;
 }

@@ -688,8 +688,18 @@ TBarApp::MessageReceived(BMessage* message)
 			break;
 
 		case kSuspendSystem:
-			// TODO: Call BRoster?
+		case kHibernateSystem:
+		{
+			BRoster roster;
+			BRoster::Private rosterPrivate(roster);
+			status_t error = message->what == kSuspendSystem
+				? rosterPrivate.Suspend()
+				: rosterPrivate.Hibernate();
+			if (error != B_OK)
+				fprintf(stderr, "Sleep request failed: %s\n",
+					strerror(error));
 			break;
+		}
 
 		case kLogOutUser:
 		{

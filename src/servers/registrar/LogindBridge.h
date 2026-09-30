@@ -35,12 +35,26 @@ public:
 	// is automatically re-acquired inside LogindBridge on PrepareForSleep(false).
 	void			ReleaseSleepInhibit();
 
+	// Manager.CanSuspend / CanHibernate. Available when the answer is
+	// "yes" or "challenge"; "no" and "na" count as unavailable.
+	bool			CanSuspend();
+	bool			CanHibernate();
+
+	// Calls Manager.Suspend/Hibernate with interactive=true so polkit can ask.
+	// The bridge thread runs the call, so the caller's looper never blocks on a polkit prompt.
+	status_t		Suspend();
+	status_t		Hibernate();
+
 private:
 	static int32	_ThreadEntry(void* self);
 	int32			_ThreadLoop();
 
 	status_t		_AcquireShutdownInhibit();
 	status_t		_AcquireSleepInhibit();
+	void			_UpdateSleepAvailability();
+	bool			_CanSleep(void* bus, const char* method);
+	status_t		_RequestSleep(const char* method);
+	void			_ProcessPendingSleep();
 
 	BMessenger		fTarget;
 	void*			fBus;			// sd_bus*
@@ -48,6 +62,10 @@ private:
 	int				fSleepFd;		// delay inhibit for sleep
 	thread_id		fThread;
 	bool			fRunning;
+	int32			fPendingSleep;	// sleep_request the bridge thread runs
+	bigtime_t		fSleepCheckTime;
+	bool			fCanSuspend;
+	bool			fCanHibernate;
 };
 
 

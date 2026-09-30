@@ -44,6 +44,7 @@ All rights reserved.
 #include <Menu.h>
 #include <MenuItem.h>
 #include <Roster.h>
+#include <RosterPrivate.h>
 
 #include "BarApp.h"
 #include "BarView.h"
@@ -310,16 +311,31 @@ B_TRANSLATE_MARK_VOID("About this system")
 	item->SetEnabled(!dragging);
 	shutdownMenu->AddItem(item);
 
-	B_TRANSLATE_MARK_VOID("Suspend");
+	// Suspend/Hibernate only when logind can actually do them.
+	// No confirmation; nothing in the session quits.
+	BRoster roster;
+	BRoster::Private rosterPrivate(roster);
+	bool canSuspend = false;
+	bool canHibernate = false;
+	rosterPrivate.CanSuspend(&canSuspend);
+	rosterPrivate.CanHibernate(&canHibernate);
 
-#ifdef APM_SUPPORT
-	if (_kapm_control_(APM_CHECK_ENABLED) == B_OK) {
+	B_TRANSLATE_MARK_VOID("Suspend");
+	B_TRANSLATE_MARK_VOID("Hibernate");
+
+	if (canSuspend) {
 		item = new BMenuItem(B_TRANSLATE_NOCOLLECT("Suspend"),
 			new BMessage(kSuspendSystem));
 		item->SetEnabled(!dragging);
 		shutdownMenu->AddItem(item);
 	}
-#endif
+
+	if (canHibernate) {
+		item = new BMenuItem(B_TRANSLATE_NOCOLLECT("Hibernate"),
+			new BMessage(kHibernateSystem));
+		item->SetEnabled(!dragging);
+		shutdownMenu->AddItem(item);
+	}
 
 	shutdownMenu->SetTargetForItems(be_app);
 
@@ -384,6 +400,7 @@ TDeskbarMenu::ResetTargets()
 				case kTrackerFirst:
 				case kRebootSystem:
 				case kSuspendSystem:
+				case kHibernateSystem:
 				case kShutdownSystem:
 				case kRealignReplicants:
 				case kShowHideTime:

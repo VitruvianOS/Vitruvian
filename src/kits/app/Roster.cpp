@@ -1418,6 +1418,67 @@ BRoster::_IsShutDownInProgress(bool* inProgress)
 	return error;
 }
 
+
+/*!	Ask logind to suspend or hibernate the machine.
+
+	\a which is "suspend" or "hibernate". The registrar replies once the
+	request is accepted; sleep itself runs asynchronously via logind.
+*/
+status_t
+BRoster::_RequestSleep(const char* which)
+{
+	if (which == NULL)
+		return B_BAD_VALUE;
+
+	BMessage request(B_REG_REQUEST_SLEEP);
+	status_t error = request.AddString("sleep", which);
+	if (error != B_OK)
+		return error;
+
+	BMessage reply;
+	error = fMessenger.SendMessage(&request, &reply, 5000000LL, 5000000LL);
+
+	if (error == B_OK && reply.what != B_REG_SUCCESS
+		&& reply.FindInt32("error", &error) != B_OK) {
+		error = B_ERROR;
+	}
+
+	return error;
+}
+
+
+/*!	Ask the registrar whether the given sleep kind is available.
+
+	\a which is "suspend" or "hibernate".
+*/
+status_t
+BRoster::_IsSleepAvailable(const char* which, bool* available)
+{
+	if (which == NULL)
+		return B_BAD_VALUE;
+
+	BMessage request(B_REG_IS_SLEEP_AVAILABLE);
+	status_t error = request.AddString("sleep", which);
+	if (error != B_OK)
+		return error;
+
+	BMessage reply;
+	error = fMessenger.SendMessage(&request, &reply, 5000000LL, 5000000LL);
+
+	if (error == B_OK) {
+		if (reply.what == B_REG_SUCCESS) {
+			if (available != NULL
+				&& reply.FindBool("available", available) != B_OK) {
+				error = B_ERROR;
+			}
+		} else if (reply.FindInt32("error", &error) != B_OK)
+			error = B_ERROR;
+	}
+
+	return error;
+}
+
+
 /*!	(Pre-)Registers an application with the registrar.
 
 	This methods is invoked either to register or to pre-register an

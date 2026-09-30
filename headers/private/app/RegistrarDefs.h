@@ -47,6 +47,8 @@ enum {
 	B_REG_GET_DISK_DEVICE_MESSENGER			= 'rgdm',
 	B_REG_SHUT_DOWN							= 'rgsh',
 	B_REG_IS_SHUT_DOWN_IN_PROGRESS			= 'rgsi',
+	B_REG_REQUEST_SLEEP						= 'rgsl',
+	B_REG_IS_SLEEP_AVAILABLE				= 'rgsa',
 
 	// roster requests
 	B_REG_ADD_APP							= 'rgaa',

@@ -677,6 +677,11 @@ if ! getent passwd vos-live >/dev/null; then
     cp -a --preserve=all /etc/skel/. /home/vos-live/
     chown -R vos-live:vos-live /home/vos-live/
 fi
+# Live ISO only: postinst cannot see /etc/vos/live (it runs before this
+# function creates the marker), so enable the live persona's boot script here.
+if [ \"$_live\" = 1 ]; then
+    systemctl enable userbootscript@vos-live.service 2>/dev/null || true
+fi
 # vos_login needs /dev/nexus for the pre-auth chain.
 getent group nexus >/dev/null && \\
     getent passwd vos_login >/dev/null && \\

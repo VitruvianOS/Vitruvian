@@ -145,4 +145,25 @@ enum command_code {
 	// Media Kit reserves all reserved codes starting in 'TRI'
 };
 
+// Field of the B_QUIT_REQUESTED message that marks the quit as part of a
+// session log-out, as opposed to the user closing the app individually, or
+// a system shutdown (the latter carries the private "_shutdown_" field set
+// by the registrar's ShutdownProcess). When the session supervisor asks an
+// app to quit for log-out, the quit message carries this field with a
+// value of true:
+//
+//	BMessage(B_QUIT_REQUESTED).AddBool(B_LOGOUT_FIELD, true)
+//
+// The quit message itself is dispatched as usual; apps inspect the flag
+// through CurrentMessage() in their QuitRequested() override:
+//
+//	bool MyApp::QuitRequested()
+//	{
+//		bool loggingOut = false;
+//		if (CurrentMessage() != NULL)
+//			CurrentMessage()->FindBool(B_LOGOUT_FIELD, &loggingOut);
+//		...
+//	}
+#define B_LOGOUT_FIELD	"be:logout"
+
 #endif	// _APP_DEFS_H

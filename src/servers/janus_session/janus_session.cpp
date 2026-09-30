@@ -820,6 +820,99 @@ handle_switch_vt(BPrivate::KMessage& kmsg, uid_t sender_uid)
 }
 
 
+// Log-out dance, session side: ask every app this login spawned to quit
+// politely instead of dying by SIGTERM. Each app receives a
+// B_QUIT_REQUESTED message carrying B_LOGOUT_FIELD (see <AppDefs.h>), so
+// it can tell log-out from a plain quit. Apps that are gone or refuse to
+// exit within the window are left to the supervisor's fallback teardown
+// (SIGTERM via kill_fanout()). This blocks the launch thread for at most
+// ~5s — acceptable only because the session is ending either way.
+static void
+handle_logout_dance(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	// Trust model matches handle_switch_vt(): only the supervisor (uid 0)
+	// may start the dance on this port.
+	if (sender_uid != 0) {
+		fprintf(stderr, "janus_session: B_JANUS_LOGOUT_DANCE rejected from "
+			"uid=%u\n", (unsigned)sender_uid);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	if (sShuttingDown) {
+		// SIGTERM arrived first — teardown already started, no dance.
+		BPrivate::KMessage reply(B_BUSY);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	printf("janus_session: log-out dance — asking apps to quit\n");
+
+	struct {
+		pid_t   pid;
+		port_id port;
+	} victims[JANUS_MAX_APPS];
+	int n = 0;
+	pthread_mutex_lock(&sAppsLock);
+	for (int i = 0; i < sAppCount; i++) {
+		// Rows without a port are still launching; the fallback teardown
+		// SIGTERMs them, so they are deliberately not part of the dance.
+		if (sApps[i].pid > 0 && sApps[i].port >= 0) {
+			victims[n].pid  = sApps[i].pid;
+			victims[n].port = sApps[i].port;
+			n++;
+		}
+	}
+	pthread_mutex_unlock(&sAppsLock);
+
+	for (int i = 0; i < n; i++) {
+		BMessenger app;
+		BMessenger::Private(app).SetTo(victims[i].pid, victims[i].port,
+			B_PREFERRED_TOKEN);
+		BMessage msg(B_QUIT_REQUESTED);
+		msg.AddBool(B_LOGOUT_FIELD, true);
+		// Fire-and-forget with a bounded delivery timeout so one wedged
+		// app port cannot stall the whole dance.
+		status_t err = app.SendMessage(&msg, (BHandler*)NULL, 1000000LL);
+		if (err != B_OK) {
+			fprintf(stderr, "janus_session: quit request to pid=%d: %s\n",
+				(int)victims[i].pid, strerror(err));
+		}
+	}
+
+	// Bounded window for the apps to actually exit. daemon_loop() reaps
+	// concurrently; a victim it reaped first shows up here as ECHILD,
+	// which counts as gone just the same.
+	bool all_gone = (n == 0);
+	for (int waited_ms = 0; !all_gone && waited_ms < 4000; waited_ms += 20) {
+		all_gone = true;
+		for (int i = 0; i < n; i++) {
+			if (victims[i].pid <= 0)
+				continue;
+			int status = 0;
+			pid_t r = waitpid(victims[i].pid, &status, WNOHANG);
+			if (r == victims[i].pid || (r < 0 && errno == ECHILD)) {
+				invalidate_app_by_pid(victims[i].pid);
+				victims[i].pid = 0;
+			} else
+				all_gone = false;
+		}
+		if (!all_gone)
+			usleep(20 * 1000);
+	}
+
+	if (all_gone)
+		printf("janus_session: log-out dance done — %d app(s) quit\n", n);
+	else
+		fprintf(stderr, "janus_session: log-out dance timed out; stragglers "
+			"left to the teardown\n");
+
+	BPrivate::KMessage reply(all_gone ? B_OK : B_WOULD_BLOCK);
+	kmsg.SendReply(&reply);
+}
+
+
 static void
 launch_port_dispatch()
 {
@@ -854,6 +947,11 @@ launch_port_dispatch()
 		} else if (kmsg.What() == BPrivate::B_JANUS_SWITCH_VT) {
 			if (!sShuttingDown)
 				handle_switch_vt(kmsg, mi.sender);
+		} else if (kmsg.What() == BPrivate::B_JANUS_LOGOUT_DANCE) {
+			// Dispatched unconditionally: the handler answers B_BUSY
+			// when the teardown already started, so the supervisor's
+			// bounded wait ends early instead of timing out.
+			handle_logout_dance(kmsg, mi.sender);
 		}
 	} else {
 		BMessage* msg = new BMessage();

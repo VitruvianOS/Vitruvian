@@ -821,7 +821,44 @@ purge_session_apps()
 struct SessionTransition {
 	char user[64];
 	bool greeter;
+	bool logout;
 };
+
+// Supervisor half of the log-out dance: give the outgoing janus_session
+// a bounded window to quit its apps politely (B_QUIT_REQUESTED carrying
+// B_LOGOUT_FIELD, see <AppDefs.h>) before the session is torn down.
+// Best effort: on missing port, delivery failure, or refusal/timeout we
+// just log and return — the normal teardown (terminate_and_wait_session,
+// then kill_fanout() on the session side) remains the fallback and the
+// final guarantee either way.
+static void
+run_logout_dance(const char* controlPortName)
+{
+	port_id port = find_port(controlPortName);
+	if (port < 0) {
+		fprintf(stderr, "janus: log-out dance: session control port \"%s\" "
+			"not found; falling back to teardown\n", controlPortName);
+		return;
+	}
+
+	jdbg("run_logout_dance() asking %s to quit its apps", controlPortName);
+
+	BPrivate::KMessage dance(BPrivate::B_JANUS_LOGOUT_DANCE);
+	BPrivate::KMessage reply;
+	status_t err = dance.SendTo(port, -1, &reply, 2000000LL, 6000000LL,
+		getpid());
+	if (err != B_OK) {
+		fprintf(stderr, "janus: log-out dance failed (%s); falling back "
+			"to teardown\n", strerror(err));
+		return;
+	}
+
+	if (reply.What() == B_OK)
+		printf("janus: log-out dance done — apps quit gracefully\n");
+	else
+		fprintf(stderr, "janus: log-out dance: apps busy or refusing "
+			"(0x%08x); falling back to teardown\n", (int)reply.What());
+}
 
 static void*
 session_transition_thread(void* arg)
@@ -830,7 +867,15 @@ session_transition_thread(void* arg)
 
 	pthread_mutex_lock(&sSessionLock);
 	pid_t oldPid = sSession.pid;
+	char controlPort[64];
+	strlcpy(controlPort, sSession.controlPort, sizeof(controlPort));
 	pthread_mutex_unlock(&sSessionLock);
+
+	// Log-out only: let the outgoing session run the quit dance before
+	// we tear it down. Everything else (initial spawn, user switch) goes
+	// straight to the teardown.
+	if (t->logout && controlPort[0] != '\0')
+		run_logout_dance(controlPort);
 
 	// Two janus_sessions alive at once would race libseat over the seat.
 	terminate_and_wait_session(oldPid);
@@ -859,11 +904,12 @@ session_transition_thread(void* arg)
 
 
 static void
-spawn_session_transition(const char* user, bool greeter)
+spawn_session_transition(const char* user, bool greeter, bool logout)
 {
 	SessionTransition* t = new SessionTransition();
 	strlcpy(t->user, user, sizeof(t->user));
 	t->greeter = greeter;
+	t->logout  = logout;
 
 	pthread_t th;
 	if (pthread_create(&th, NULL, session_transition_thread, t) != 0) {
@@ -997,7 +1043,7 @@ handle_logout(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	BPrivate::KMessage reply(B_OK);
 	kmsg.SendReply(&reply);
 
-	spawn_session_transition("vos_login", true);
+	spawn_session_transition("vos_login", true, true);
 }
 
 
@@ -1074,7 +1120,7 @@ handle_login_ok(BPrivate::KMessage& kmsg, uid_t sender_uid)
 
 	seed_user_settings_from_preauth(pw->pw_dir, pw->pw_uid, pw->pw_gid);
 
-	spawn_session_transition(user, false);
+	spawn_session_transition(user, false, false);
 }
 
 
@@ -1473,10 +1519,10 @@ main(int argc, char** argv)
 		} else {
 			printf("janus: spawning initial janus_session for %s "
 				"(greeter=%d)\n", initialUser, (int)initialGreeter);
-			spawn_session_transition(initialUser, initialGreeter);
+			spawn_session_transition(initialUser, initialGreeter, false);
 		}
 	} else if (!sSystemMode && haveIdentity) {
-		spawn_session_transition(initialUser, false);
+		spawn_session_transition(initialUser, false, false);
 	}
 
 	daemon_loop();

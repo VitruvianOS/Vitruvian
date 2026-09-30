@@ -53,6 +53,14 @@ enum {
 	// Janus logout: sender_uid-gated to the currently authenticated
 	// user's uid; ignored if a system shutdown is already in flight.
 	B_JANUS_LOGOUT				= 'jnlX',
+	// Log-out dance, supervisor -> janus_session on the session's control
+	// port (see B_JANUS_SESSION_HELLO): "quit your apps politely via
+	// B_QUIT_REQUESTED + B_LOGOUT_FIELD before I tear the session down."
+	// sender_uid-gated to 0 (the supervisor). Replies B_OK once every
+	// app exited, B_BUSY if the session is already tearing down, and
+	// B_WOULD_BLOCK on timeout — the supervisor then falls back to the
+	// plain SIGTERM/SIGKILL teardown.
+	B_JANUS_LOGOUT_DANCE		= 'jnlD',
 
 	// input_server asks janus to switch VT ("vt" int32); relayed to the
 	// current janus_session's control port, since that owns the seat.

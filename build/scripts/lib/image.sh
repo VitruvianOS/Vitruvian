@@ -841,6 +841,11 @@ create_raspberry() {
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
     sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+    # The second stage unmounts /proc and /sys on exit; systemd >= 262
+    # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
+    for _m in dev proc sys; do
+        mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
+    done
 
     # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
     # ca-certificates); a copied bundle without that symlink does not verify.
@@ -1077,6 +1082,11 @@ create_uboot_board() {
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
     sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+    # The second stage unmounts /proc and /sys on exit; systemd >= 262
+    # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
+    for _m in dev proc sys; do
+        mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
+    done
 
     # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
     # ca-certificates); a copied bundle without that symlink does not verify.

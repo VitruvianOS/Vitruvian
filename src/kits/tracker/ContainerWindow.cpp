@@ -461,6 +461,7 @@ BContainerWindow::BContainerWindow(LockingList<BWindow>* list, uint32 openFlags,
 		tracker->StartWatching(this, kWindowsShowFullPathChanged);
 		tracker->StartWatching(this, kSingleWindowBrowseChanged);
 		tracker->StartWatching(this, kShowNavigatorChanged);
+		tracker->StartWatching(this, kSnapToGridChanged);
 		tracker->Unlock();
 	}
 
@@ -481,6 +482,7 @@ BContainerWindow::~BContainerWindow()
 		tracker->StopWatching(this, kWindowsShowFullPathChanged);
 		tracker->StopWatching(this, kSingleWindowBrowseChanged);
 		tracker->StopWatching(this, kShowNavigatorChanged);
+		tracker->StopWatching(this, kSnapToGridChanged);
 		tracker->Unlock();
 	}
 
@@ -1669,6 +1671,12 @@ BContainerWindow::MessageReceived(BMessage* message)
 							SetPathWatchingEnabled(false);
 						}
 						SetSingleWindowBrowseShortcuts(settings.SingleWindowBrowse());
+						break;
+
+					case kSnapToGridChanged:
+						// the Desktop's pose view watches this itself
+						if (!PoseView()->IsDesktopView())
+							PoseView()->AdaptToSnapToGridChange(message);
 						break;
 
 					default:

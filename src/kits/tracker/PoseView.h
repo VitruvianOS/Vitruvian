@@ -440,10 +440,10 @@ public:
 	virtual void AdaptToSnapToGridChange(BMessage*);
 
 	void SnapPoseToGrid(BPose* pose, BRect& viewBounds);
-		// snap the pose to the desktop icon grid, moving it to the
-		// next free slot when the nearest grid cell is taken; does
-		// nothing unless this is the desktop in icon mode and the
-		// "SnapToGrid" setting is on
+		// snap the pose to the icon grid, moving it to the next free
+		// slot when the nearest grid cell is taken; does nothing in
+		// list mode or unless the "SnapToGrid" setting is on
+	void SnapAllPosesToGrid();
 
 	void SetTextWidgetToCheck(BTextWidget*, BTextWidget* = NULL);
 

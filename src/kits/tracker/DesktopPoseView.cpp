@@ -298,33 +298,6 @@ DesktopPoseView::AdaptToDesktopIntegrationChange(BMessage* message)
 
 
 void
-DesktopPoseView::AdaptToSnapToGridChange(BMessage* message)
-{
-	if (Window() == NULL || !TrackerSettings().SnapToGrid())
-		return;
-
-	// settle all desktop icons onto the grid; poses already on a free
-	// grid slot are left alone
-	BRect bounds(Bounds());
-	int32 poseCount = fPoseList->CountItems();
-	for (int32 index = 0; index < poseCount; index++) {
-		BPose* pose = fPoseList->ItemAt(index);
-
-		BRect oldBounds(pose->CalcRect(this));
-		SnapPoseToGrid(pose, bounds);
-		BRect newBounds(pose->CalcRect(this));
-
-		if (newBounds != oldBounds) {
-			Invalidate(oldBounds);
-			Invalidate(newBounds);
-		}
-	}
-
-	RecalcExtent();
-}
-
-
-void
 DesktopPoseView::AdaptToBackgroundColorChange()
 {
 	// The Desktop text color is chosen independently for the Desktop.

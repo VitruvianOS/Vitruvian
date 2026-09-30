@@ -191,7 +191,7 @@ DesktopSettingsView::DesktopSettingsView()
 		new BMessage(kVolumesOnDesktopChanged));
 
 	fSnapToGridCheckBox = new BCheckBox("",
-		B_TRANSLATE("Snap desktop icons to grid"),
+		B_TRANSLATE("Snap icons to grid"),
 		new BMessage(kSnapToGridChanged));
 
 	const float spacing = be_control_look->DefaultItemSpacing();

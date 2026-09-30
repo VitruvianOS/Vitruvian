@@ -2113,8 +2113,7 @@ BPoseView::CreatePoses(Model** models, PoseInfo* poseInfoArray, int32 count,
 			AddToVSList(pose);
 
 			SnapPoseToGrid(pose, viewBounds);
-				// on the desktop, restored locations have to end up
-				// on a free grid slot
+				// restored locations have to end up on a free grid slot
 		}
 
 		BRect poseBounds;
@@ -3372,6 +3371,9 @@ BPoseView::SetViewMode(uint32 newMode)
 		AddToVSList(pose);
 	}
 
+	// saved icon locations predate the grid, settle them now
+	SnapAllPosesToGrid();
+
 	SortPoses();
 	if (newMode != kListMode)
 		RecalcExtent();
@@ -3790,7 +3792,7 @@ BPoseView::Cleanup(bool doAll)
 void
 BPoseView::SnapPoseToGrid(BPose* pose, BRect& viewBounds)
 {
-	if (pose == NULL || !IsDesktopView() || ViewMode() != kIconMode
+	if (pose == NULL || ViewMode() == kListMode
 		|| !TrackerSettings().SnapToGrid())
 		return;
 
@@ -4030,8 +4032,7 @@ BPoseView::CheckPoseVisibility(BRect* newFrame)
 
 			BRect viewBounds(Bounds());
 			SnapPoseToGrid(pose, viewBounds);
-				// on the desktop, the new location has to end up on a
-				// free grid slot
+				// the new location has to end up on a free grid slot
 		}
 	}
 }
@@ -5310,8 +5311,8 @@ BPoseView::MoveSelectionInto(Model* destFolder, BContainerWindow* srcWindow,
 			// remove and reinsert pose to keep VSlist sorted
 			targetView->AddToVSList(pose);
 
-			// on the desktop, the drop location has to end up on a free
-			// grid slot (does nothing when the grid is off)
+			// the drop location has to end up on a free grid slot
+			// (does nothing when the grid is off)
 			targetView->SnapPoseToGrid(pose, viewBounds);
 		}
 
@@ -5428,10 +5429,9 @@ BPoseView::MoveSelectionTo(BPoint dropPoint, BPoint where, BContainerWindow* src
 
 	uint32 buttons = (uint32)window->CurrentMessage()->FindInt32("buttons");
 	bool pinToGrid = (modifiers() & B_COMMAND_KEY) != 0;
-	if (IsDesktopView() && TrackerSettings().SnapToGrid())
+	if (TrackerSettings().SnapToGrid())
 		pinToGrid = true;
-			// on the desktop, drops always snap to the grid when the
-			// setting is on
+			// drops always snap to the grid when the setting is on
 	MoveSelectionInto(TargetModel(), srcWindow, window, buttons, dropPoint,
 		false, false, false, false, where, pinToGrid);
 }
@@ -10623,6 +10623,24 @@ BPoseView::AdaptToDesktopIntegrationChange(BMessage*)
 void
 BPoseView::AdaptToSnapToGridChange(BMessage*)
 {
+	SnapAllPosesToGrid();
+}
+
+
+void
+BPoseView::SnapAllPosesToGrid()
+{
+	if (Window() == NULL || ViewMode() == kListMode
+		|| !TrackerSettings().SnapToGrid())
+		return;
+
+	// poses already on a free grid slot are left alone
+	BRect bounds(Bounds());
+	int32 poseCount = fPoseList->CountItems();
+	for (int32 index = 0; index < poseCount; index++)
+		SnapPoseToGrid(fPoseList->ItemAt(index), bounds);
+
+	RecalcExtent();
 }
 
 

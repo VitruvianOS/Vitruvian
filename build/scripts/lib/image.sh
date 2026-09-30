@@ -189,7 +189,7 @@ FSTABEOF
 mkdir -p $_guest_mnt
 rm -rf /localdeb" || die "raw chroot bash-c failed"
 
-    _common_chroot_setup "$_root_dir" "$_hostname" "$_user" "$_pass" \
+    _common_chroot_setup "$_root_dir" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
 
     case "$_arch" in
@@ -421,7 +421,7 @@ apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso
 apt install -y -f --reinstall /tmp/*.deb
 depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel stage)"
 
-    _common_chroot_setup "$_chroot_dir" "vitruvian" "" "" \
+    _common_chroot_setup "$_chroot_dir" "vitruvian" "" "" 1 \
         || die "_common_chroot_setup failed"
 
     _debug_ssh_setup "$_chroot_dir" || die "_debug_ssh_setup failed"
@@ -631,6 +631,8 @@ EOF
 _common_chroot_setup() {
     _mnt="$1"
     _hostname="$2"
+    # $5: 1 = live ISO (boots via boot=live), 0 = installed-like image.
+    _live="${5:-0}"
     sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 echo '$_hostname' > /etc/hostname
 
@@ -687,7 +689,6 @@ getent group nexus >/dev/null && \\
 systemctl mask getty@tty1.service 2>/dev/null || true
 
 # Mask units that are noisy on QEMU / Vitruvian and provide no value:
-#  - systemd-remount-fs: we boot rw via cmdline, nothing to remount.
 #  - systemd-ssh-generator: pokes AF_VSOCK CIDs that don't exist under
 #    qemu user-mode networking; emits an error every boot.
 #  - serial-getty@ttyS0: some hypervisors (e.g. VirtualBox) don't expose
@@ -698,7 +699,6 @@ systemctl mask getty@tty1.service 2>/dev/null || true
 #    recommendation when the FS isn't available.
 
 for _u in \\
-    systemd-remount-fs.service \\
     systemd-ssh-generator.service \\
     serial-getty@ttyS0.service \\
     dev-hugepages.mount \\
@@ -710,6 +710,13 @@ for _u in \\
     ctrl-alt-del.target; do
     systemctl mask \"\$_u\" 2>/dev/null || true
 done
+
+# Only the live ISO boots ro via cmdline; installed-like images need systemd-remount-fs to bring root rw.
+if [ \"$_live\" = 1 ]; then
+    systemctl mask systemd-remount-fs.service 2>/dev/null || true
+else
+    systemctl unmask systemd-remount-fs.service 2>/dev/null || true
+fi
 
 # Generators run before any unit exists, so masking the .service above
 # never stops this one; systemd.generator(7) masks it via symlink.
@@ -917,7 +924,7 @@ fi" || die "raspberry chroot bash-c failed"
             || die "board firmware missing after install: $_fw (image would not boot)"
     done
 
-    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
+    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
 
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
@@ -1146,7 +1153,7 @@ if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
 fi" || die "uboot chroot bash-c failed"
 
-    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
+    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
 
     _kver=$(ls "$_mnt/lib/modules" | head -n1)

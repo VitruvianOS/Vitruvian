@@ -585,6 +585,10 @@ EOF
     chroot "$TARGET" dpkg --purge --force-all \
         live-boot live-boot-initramfs-tools live-config live-config-systemd \
         live-tools 2>/dev/null || log "warn: live-boot purge incomplete"
+    # Installed targets boot with rw from GRUB; remount-fs must stay enabled
+    # (the live ISO image build masks it). See #271.
+    chroot "$TARGET" systemctl unmask systemd-remount-fs.service 2>/dev/null \
+        || log "warn: could not unmask systemd-remount-fs on target"
     chroot "$TARGET" update-initramfs -u -k all \
         || log "warn: update-initramfs failed"
 

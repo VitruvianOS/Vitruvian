@@ -144,6 +144,7 @@ ScreenConfigurations::Set(int32 id, const monitor_info* info,
 		configuration->rotation = -1;
 		// Unlike rotation, reflection has no auto/hardware-detected state.
 		configuration->reflection = 0;
+		configuration->temperature = 6500.0f;
 
 		fConfigurations.AddItem(configuration);
 	}
@@ -230,6 +231,27 @@ ScreenConfigurations::Brightness(int32 id)
 
 
 void
+ScreenConfigurations::SetTemperature(int32 id, float temperature)
+{
+	screen_configuration* configuration = _FindByID(id);
+	if (configuration != NULL)
+		configuration->temperature = temperature;
+}
+
+
+float
+ScreenConfigurations::Temperature(int32 id)
+{
+	screen_configuration* configuration = _FindByID(id);
+
+	if (configuration == NULL)
+		return 6500.0f;
+
+	return configuration->temperature;
+}
+
+
+void
 ScreenConfigurations::Remove(screen_configuration* configuration)
 {
 	if (configuration == NULL)
@@ -273,6 +295,7 @@ ScreenConfigurations::Store(BMessage& settings) const
 		screenSettings.AddFloat("brightness", configuration->brightness);
 		screenSettings.AddInt32("rotation", configuration->rotation);
 		screenSettings.AddInt32("reflection", configuration->reflection);
+		screenSettings.AddFloat("temperature", configuration->temperature);
 
 		settings.AddMessage("screen", &screenSettings);
 	}
@@ -339,6 +362,8 @@ ScreenConfigurations::Restore(const BMessage& settings)
 			configuration->rotation = -1;
 		if (stored.FindInt32("reflection", &configuration->reflection) != B_OK)
 			configuration->reflection = 0;
+		if (stored.FindFloat("temperature", &configuration->temperature) != B_OK)
+			configuration->temperature = 6500.0f;
 
 		fConfigurations.AddItem(configuration);
 	}

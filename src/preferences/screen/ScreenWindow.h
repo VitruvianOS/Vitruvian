@@ -15,6 +15,7 @@
 
 
 #include <Window.h>
+#include <CheckBox.h>
 
 #include "ScreenMode.h"
 
@@ -109,6 +110,13 @@ private:
 			BMenuField*		fTVStandardField;
 
 			BSlider*		fBrightnessSlider;
+
+			BSlider*		fTemperatureSlider;
+			BCheckBox*		fTemperatureEnabled;
+			float			fTemperature;
+			bool			fTemperatureOn;
+			float			fOriginalTemperature;
+			bool			fOriginalTemperatureOn;
 
 			BPopUpMenu*		fOutputMenu;
 			BMenuField*		fOutputField;

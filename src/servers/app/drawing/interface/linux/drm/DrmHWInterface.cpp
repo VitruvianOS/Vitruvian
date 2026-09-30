@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <new>
 #include <errno.h>
+#include <math.h>
 #include <libdrm/drm_mode.h>
 #include <poll.h>
 #include <sys/eventfd.h>
@@ -79,6 +80,7 @@ DrmHWInterface::DrmHWInterface()
 	fWakeFd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
 	fDpmsState(B_DPMS_ON),
 	fBacklight(NULL),
+	fTemperature(6500.0f),
 	fAtomicSupported(false),
 	fPrimaryPlaneId(0),
 	fCursorPlaneId(0),
@@ -1330,6 +1332,92 @@ DrmHWInterface::GetBrightness(float* brightness)
 	int max = (int)backlight_get_max_brightness(fBacklight);
 	int cur = (int)backlight_get_brightness(fBacklight);
 	*brightness = (max > 0) ? (float)cur / max : 0.0f;
+	return B_OK;
+}
+
+
+static void
+_kelvin_to_rgb(float kelvin, float& r, float& g, float& b)
+{
+	// Standard color-temperature-to-RGB approximation (Tanner Helland /
+	// redshift).  Maps a Planckian-locus correlated color temperature in
+	// Kelvin to linear [0..1] scale factors for R, G, B.
+	float temp = kelvin / 100.0f;
+
+	// Red
+	if (temp <= 66.0f) {
+		r = 1.0f;
+	} else {
+		r = temp - 60.0f;
+		r = 329.698727446f * powf(r, -0.1332047592f);
+		r /= 255.0f;
+	}
+	r = std::max(0.0f, std::min(1.0f, r));
+
+	// Green
+	if (temp <= 66.0f) {
+		g = temp;
+		g = 99.4708025861f * logf(g) - 161.1195681661f;
+	} else {
+		g = temp - 60.0f;
+		g = 288.1221695283f * powf(g, -0.0755148492f);
+	}
+	g = std::max(0.0f, std::min(1.0f, g / 255.0f));
+
+	// Blue
+	if (temp >= 66.0f) {
+		b = 1.0f;
+	} else if (temp <= 19.0f) {
+		b = 0.0f;
+	} else {
+		b = temp - 10.0f;
+		b = 138.5177312231f * logf(b) - 305.0447927307f;
+		b /= 255.0f;
+	}
+	b = std::max(0.0f, std::min(1.0f, b));
+}
+
+
+status_t
+DrmHWInterface::SetTemperature(float kelvin)
+{
+	if (fFd < 0)
+		return B_ERROR;
+
+	if (kelvin < 1000.0f)
+		kelvin = 1000.0f;
+	else if (kelvin > 6500.0f)
+		kelvin = 6500.0f;
+
+	struct modeset_dev* dev = get_dev();
+	if (!dev)
+		return B_ERROR;
+
+	float rScale, gScale, bScale;
+	_kelvin_to_rgb(kelvin, rScale, gScale, bScale);
+
+	uint16_t rampR[256], rampG[256], rampB[256];
+	for (int i = 0; i < 256; i++) {
+		rampR[i] = (uint16_t)(i * 257.0f * rScale);
+		rampG[i] = (uint16_t)(i * 257.0f * gScale);
+		rampB[i] = (uint16_t)(i * 257.0f * bScale);
+	}
+
+	int ret = drmModeCrtcSetGamma(fFd, dev->crtc, 256, rampR, rampG, rampB);
+	if (ret == 0) {
+		fTemperature = kelvin;
+		return B_OK;
+	}
+	return B_ERROR;
+}
+
+
+status_t
+DrmHWInterface::GetTemperature(float* kelvin)
+{
+	if (!kelvin)
+		return B_BAD_VALUE;
+	*kelvin = fTemperature;
 	return B_OK;
 }
 

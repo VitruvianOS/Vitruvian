@@ -251,6 +251,39 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 		fOriginalBrightness = -1;
 	}
 
+	// color temperature controls
+
+	fTemperatureOn = false;
+	fOriginalTemperatureOn = false;
+	fTemperature = 6500.0f;
+	fOriginalTemperature = 6500.0f;
+
+	float currentTemp;
+	if (screen.GetTemperature(&currentTemp) == B_OK) {
+		fTemperature = currentTemp;
+		fOriginalTemperature = currentTemp;
+		fTemperatureOn = (currentTemp < 6500.0f);
+		fOriginalTemperatureOn = fTemperatureOn;
+	}
+
+	fTemperatureEnabled = new BCheckBox("temperature_enabled",
+		B_TRANSLATE("Color temperature"),
+		new BMessage(TOGGLE_TEMPERATURE_MSG));
+	groupView->AddChild(fTemperatureEnabled);
+	fTemperatureEnabled->SetValue(fTemperatureOn ? B_CONTROL_ON : B_CONTROL_OFF);
+
+	// Temperature slider: 1000K (warm) to 6500K (neutral), horizontal
+	fTemperatureSlider = new BSlider("temperature",
+		B_TRANSLATE("Temperature:"), NULL, 1000, 6500, B_HORIZONTAL);
+	groupView->AddChild(fTemperatureSlider);
+
+	fTemperatureSlider->SetModificationMessage(
+		new BMessage(SLIDER_TEMPERATURE_MSG));
+	fTemperatureSlider->SetValue((int32)fTemperature);
+
+	if (!fTemperatureOn)
+		fTemperatureSlider->Hide();
+
 	// box on the left below the screen box with workspaces
 
 	BBox* workspacesBox = new BBox("workspaces box");
@@ -1376,6 +1409,17 @@ ScreenWindow::MessageReceived(BMessage* message)
 			screen.SetBrightness(fOriginalBrightness);
 			fBrightnessSlider->SetValue(fOriginalBrightness * 255);
 
+			screen.SetTemperature(fOriginalTemperature);
+			fTemperature = fOriginalTemperature;
+			fTemperatureOn = fOriginalTemperatureOn;
+			fTemperatureEnabled->SetValue(fTemperatureOn
+				? B_CONTROL_ON : B_CONTROL_OFF);
+			fTemperatureSlider->SetValue((int32)fTemperature);
+			if (fTemperatureOn)
+				fTemperatureSlider->Show();
+			else
+				fTemperatureSlider->Hide();
+
 			fScreenMode.SetRotation(fOriginalRotation);
 			BMenuItem* rotationItem
 				= fRotationMenu->ItemAt(fOriginalRotation + 1);
@@ -1408,6 +1452,31 @@ ScreenWindow::MessageReceived(BMessage* message)
 			BScreen screen(this);
 			screen.SetBrightness(message->FindInt32("be:value") / 255.f);
 			_CheckApplyEnabled();
+			break;
+		}
+
+		case TOGGLE_TEMPERATURE_MSG:
+		{
+			fTemperatureOn = (fTemperatureEnabled->Value() == B_CONTROL_ON);
+			if (fTemperatureOn) {
+				fTemperatureSlider->Show();
+				BScreen screen(this);
+				screen.SetTemperature(fTemperature);
+			} else {
+				fTemperatureSlider->Hide();
+				BScreen screen(this);
+				screen.SetTemperature(6500.0f);
+			}
+			break;
+		}
+
+		case SLIDER_TEMPERATURE_MSG:
+		{
+			fTemperature = (float)message->FindInt32("be:value");
+			if (fTemperatureOn) {
+				BScreen screen(this);
+				screen.SetTemperature(fTemperature);
+			}
 			break;
 		}
 

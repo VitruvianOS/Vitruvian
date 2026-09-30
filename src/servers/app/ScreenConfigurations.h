@@ -24,6 +24,7 @@ struct screen_configuration {
 	float			brightness;
 	int32			rotation;
 	int32			reflection;
+	float			temperature;
 	bool			has_info;
 	bool			is_current;
 };
@@ -47,6 +48,8 @@ public:
 			int32				Rotation(int32 id);
 			void				SetReflection(int32 id, int32 reflection);
 			int32				Reflection(int32 id);
+			void				SetTemperature(int32 id, float temperature);
+			float				Temperature(int32 id);
 			void				Remove(screen_configuration* configuration);
 
 			status_t			Store(BMessage& settings) const;

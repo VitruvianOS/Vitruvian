@@ -21,7 +21,8 @@ qemu_eject() {
         return 0
     fi
     _qemu_name="$(arch_to_qemu_user "$_target_arch")"
-    sudo rm -f "$_chroot_dir/usr/bin/$_qemu_name" 2>/dev/null || true
+    sudo rm -f "$_chroot_dir/usr/bin/$_qemu_name" \
+        "$_chroot_dir/usr/bin/${_qemu_name%-static}" 2>/dev/null || true
 }
 
 # Debian mirror used by debootstrap and apt inside the chroot. Override

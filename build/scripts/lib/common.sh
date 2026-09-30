@@ -93,15 +93,18 @@ arch_to_qemu_user() {
     esac
 }
 
+# Debian forky's qemu-user ships the static binaries without the -static
+# suffix (qemu-aarch64), so accept both names.
 find_qemu_user_binary() {
     _qemu="$(arch_to_qemu_user "$1")"
-    for _path in "/usr/bin/$_qemu" "/usr/local/bin/$_qemu"; do
+    for _path in "/usr/bin/$_qemu" "/usr/local/bin/$_qemu" \
+                 "/usr/bin/${_qemu%-static}" "/usr/local/bin/${_qemu%-static}"; do
         if [ -f "$_path" ]; then
             printf '%s' "$_path"
             return 0
         fi
     done
-    die "$_qemu not found. Install qemu-user-static for $1 cross-build support."
+    die "$_qemu not found. Install qemu-user-static (qemu-user on forky) for $1 cross-build support."
 }
 
 register_binfmt() {

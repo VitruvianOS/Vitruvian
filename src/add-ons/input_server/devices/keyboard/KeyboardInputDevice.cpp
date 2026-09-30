@@ -835,8 +835,12 @@ KeyboardDevice::_ControlThread()
 			}
 		}
 
-		xkb_state_update_key(fXkbState, xkbCode,
-			isKeyDown ? XKB_KEY_DOWN : XKB_KEY_UP);
+		// xkb counts every DOWN; a repeat fed as a press needs its own
+		// release, so a held Shift would stay latched after the key-up.
+		if (ev.value != 2) {
+			xkb_state_update_key(fXkbState, xkbCode,
+				isKeyDown ? XKB_KEY_DOWN : XKB_KEY_UP);
+		}
 
 		uint32 oldModifiers = fModifiers;
 		uint32 newModifiers = 0;

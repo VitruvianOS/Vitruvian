@@ -269,13 +269,11 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 	fTemperatureEnabled = new BCheckBox("temperature_enabled",
 		B_TRANSLATE("Color temperature"),
 		new BMessage(TOGGLE_TEMPERATURE_MSG));
-	groupView->AddChild(fTemperatureEnabled);
 	fTemperatureEnabled->SetValue(fTemperatureOn ? B_CONTROL_ON : B_CONTROL_OFF);
 
 	// Temperature slider: 1000K (warm) to 6500K (neutral), horizontal
 	fTemperatureSlider = new BSlider("temperature",
 		B_TRANSLATE("Temperature:"), NULL, 1000, 6500, B_HORIZONTAL);
-	groupView->AddChild(fTemperatureSlider);
 
 	fTemperatureSlider->SetModificationMessage(
 		new BMessage(SLIDER_TEMPERATURE_MSG));
@@ -675,7 +673,9 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 			.Add(fRotationField->CreateMenuBarLayoutItem(), 1, 7)
 			.Add(fReflectionField->CreateLabelLayoutItem(), 0, 8)
 			.Add(fReflectionField->CreateMenuBarLayoutItem(), 1, 8)
-		.End();
+		.End()
+		.Add(fTemperatureEnabled)
+		.Add(fTemperatureSlider);
 
 	// Output enable/disable per monitor
 

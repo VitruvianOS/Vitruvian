@@ -620,8 +620,12 @@ BPrintJob::PrinterType(void*) const
 
 	char printer[256];
 	printer[0] = '\0';
-	if (fSetupMessage != NULL)
-		fSetupMessage->FindString(PSRV_FIELD_CURRENT_PRINTER, printer);
+	if (fSetupMessage != NULL) {
+		const char* name = NULL;
+		if (fSetupMessage->FindString(PSRV_FIELD_CURRENT_PRINTER, &name) == B_OK
+			&& name != NULL)
+			strlcpy(printer, name, sizeof(printer));
+	}
 	if (printer[0] == '\0' && gPrintCupsApi.DefaultQueue != NULL)
 		gPrintCupsApi.DefaultQueue(printer, sizeof(printer));
 

@@ -59,11 +59,17 @@ private:
 			void			_UpdateOriginal();
 			void			_UpdateMonitor();
 			void			_UpdateColorLabel();
+			void			_UpdateOutputMenu();
+			void			_UpdateProfileMenu();
 
 			void			_Apply();
 
 			status_t		_WriteVesaModeFile(const screen_mode& mode) const;
 			bool			_IsVesa() const { return fIsVesa; }
+
+			status_t		_SaveProfile(const char* name);
+			status_t		_DeleteProfile(const char* name);
+			status_t		_ApplyProfile(const char* name);
 
 private:
 			ScreenSettings*	fSettings;
@@ -103,6 +109,14 @@ private:
 			BMenuField*		fTVStandardField;
 
 			BSlider*		fBrightnessSlider;
+
+			BPopUpMenu*		fOutputMenu;
+			BMenuField*		fOutputField;
+
+			BPopUpMenu*		fProfileMenu;
+			BMenuField*		fProfileField;
+			BButton*		fSaveProfileButton;
+			BButton*		fDeleteProfileButton;
 
 			BButton*		fDefaultsButton;
 			BButton*		fApplyButton;

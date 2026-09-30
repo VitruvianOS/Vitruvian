@@ -208,17 +208,12 @@ rm -rf /localdeb" || die "raw chroot bash-c failed"
         BUILD_TYPE="${CMAKE_BUILD_TYPE:-Debug}"
         [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
     fi
-    # The Debug GRUB entry advertises sshdebug; stage the SSH side to match.
-    if [ "$_sshdebug" = 1 ]; then
-        _debug_ssh_setup "$_root_dir" || die "_debug_ssh_setup failed"
-    fi
-    _debug_menuentry=""
-    if [ "$_sshdebug" = 1 ]; then
-        _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
-    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    # The Debug GRUB entry boots with sshdebug; stage the SSH side to match.
+    _debug_ssh_setup "$_root_dir" || die "_debug_ssh_setup failed"
+    _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd (\$root)/initrd.img
 }"
-    fi
 
     cat > "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" <<EOF
 insmod part_gpt
@@ -430,9 +425,7 @@ depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel st
     _common_chroot_setup "$_chroot_dir" "vitruvian" "" "" \
         || die "_common_chroot_setup failed"
 
-    if [ "$_sshdebug" = 1 ]; then
-        _debug_ssh_setup "$_chroot_dir" || die "_debug_ssh_setup failed"
-    fi
+    _debug_ssh_setup "$_chroot_dir" || die "_debug_ssh_setup failed"
 
     qemu_eject "$_chroot_dir" "$_arch"
 
@@ -496,14 +489,12 @@ menuentry "Vitruvian Live (Safe Mode)" {
 }
 EOF
 
-    if [ "$_sshdebug" = 1 ]; then
-        cat <<'EOF' >>"$_basedir/image_tree/scratch/grub.cfg"
+    cat <<EOF >>"$_basedir/image_tree/scratch/grub.cfg"
 menuentry "Vitruvian Live (Debug)" {
-    linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd /initrd
 }
 EOF
-    fi
 
     cat <<'EOF' >>"$_basedir/image_tree/scratch/grub.cfg"
 if [ "$grub_platform" = "efi" ]; then
@@ -779,8 +770,15 @@ chown root:root /etc/systemd/system/vos-sshdebug.service
 # No "|| true": if the unit cannot be enabled the image must not build.
 systemctl enable vos-sshdebug.service
 # Config drift must fail the build, not the debug boot.
+# sshd -t needs its privilege separation dir, which only exists at runtime.
 if [ -x /usr/sbin/sshd ]; then
-    /usr/sbin/sshd -t
+    if [ -d /run/sshd ]; then
+        /usr/sbin/sshd -t
+    else
+        mkdir -p /run/sshd
+        /usr/sbin/sshd -t
+        rmdir /run/sshd
+    fi
 fi
 SSHEOF
 }

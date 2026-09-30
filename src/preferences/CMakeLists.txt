@@ -10,6 +10,7 @@ add_subdirectory(input)
 add_subdirectory(keymap)
 add_subdirectory(locale)
 add_subdirectory(network)
+add_subdirectory(power)
 add_subdirectory(bluetooth)
 add_subdirectory(media)
 #add_subdirectory(notifications) # missing libnotification

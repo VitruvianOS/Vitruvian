@@ -37,6 +37,7 @@
 
 #include <TokenSpace.h>
 #include <util/DoublyLinkedList.h>
+#include <util/KMessage.h>
 
 #include <LaunchDaemonDefs.h>
 #include <syscalls.h>
@@ -660,6 +661,7 @@ ShutdownProcess::ShutdownProcess(TRoster* roster, EventQueue* eventQueue)
 	fShutdownError(B_ERROR),
 	fHasGUI(false),
 	fReboot(false),
+	fLogOut(false),
 	fRequestReplySent(false),
 	fWindow(NULL)
 {
@@ -769,6 +771,10 @@ ShutdownProcess::Init(BMessage* request)
 	fRequest = request;
 
 	if (fRequest->FindBool("reboot", &fReboot) != B_OK)
+		fReboot = false;
+	if (fRequest->FindBool("logout", &fLogOut) != B_OK)
+		fLogOut = false;
+	if (fLogOut)
 		fReboot = false;
 
 	resume_thread(fWorker);
@@ -1190,6 +1196,10 @@ ShutdownProcess::_PrepareShutdownMessage(BMessage& message) const
 {
 	message.what = B_QUIT_REQUESTED;
 	message.AddBool("_shutdown_", true);
+	if (fLogOut)
+		message.AddBool(B_LOGOUT_FIELD, true);
+	else if (fReboot)
+		message.AddBool(B_REBOOT_FIELD, true);
 
 	BMessage::Private(message).SetReply(BMessenger(fQuitRequestReplyHandler));
 }
@@ -1218,6 +1228,26 @@ ShutdownProcess::_ShutDown()
 
 	PRINT("janus unreachable, invoking _kern_shutdown(%d) directly\n", fReboot);
 	RETURN_ERROR(_kern_shutdown(fReboot));
+}
+
+
+status_t
+ShutdownProcess::_LogOut()
+{
+	PRINT("ShutdownProcess::_LogOut(): handing off to janus\n");
+
+	port_id janusPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+	if (janusPort < 0)
+		RETURN_ERROR(janusPort);
+
+	// janus replies before it tears the session (and us) down
+	BPrivate::KMessage request(BPrivate::B_JANUS_LOGOUT);
+	BPrivate::KMessage reply;
+	status_t error = request.SendTo(janusPort, -1, &reply, 2000000LL,
+		2000000LL);
+	if (error == B_OK)
+		error = reply.What();
+	RETURN_ERROR(error);
 }
 
 
@@ -1335,7 +1365,19 @@ ShutdownProcess::_WorkerDoShutdown()
 
 	// ask the user to confirm the shutdown, if desired
 	bool askUser;
-	if (fHasGUI && fRequest->FindBool("confirm", &askUser) == B_OK && askUser) {
+	if (fHasGUI && fLogOut && fRequest->FindBool("confirm", &askUser) == B_OK
+		&& askUser) {
+		BAlert* alert = new BAlert(B_TRANSLATE("Log out?"),
+			B_TRANSLATE("Do you really want to log out?"),
+			B_TRANSLATE("Cancel"), B_TRANSLATE("Log out"), NULL,
+			B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+		alert->SetFeel(B_NORMAL_WINDOW_FEEL);
+		alert->SetFlags(alert->Flags() | B_NOT_MINIMIZABLE | B_CLOSE_ON_ESCAPE);
+		alert->SetWorkspaces(B_ALL_WORKSPACES);
+		if (alert->Go() != 1)
+			throw_error(B_SHUTDOWN_CANCELLED);
+	} else if (fHasGUI && fRequest->FindBool("confirm", &askUser) == B_OK
+		&& askUser) {
 		const char* restart = B_TRANSLATE("Restart");
 		const char* shutdown = B_TRANSLATE("Shut down");
 		BString title = B_TRANSLATE("%action%?");
@@ -1406,6 +1448,20 @@ ShutdownProcess::_WorkerDoShutdown()
 	_SetPhase(SYSTEM_APP_TERMINATION_PHASE);
 	_QuitApps(fSystemApps, true);
 	_WaitForDebuggedTeams();
+
+	if (fLogOut) {
+		// background apps and other processes belong to the session;
+		// janus tears them down with it
+		_SetPhase(DONE_PHASE);
+		_SetShutdownWindowText(B_TRANSLATE("Logging out" B_UTF8_ELLIPSIS));
+		status_t error = _LogOut();
+		if (error != B_OK)
+			throw_error(error);
+
+		// wait for janus to end the session
+		snooze(30000000);
+		throw_error(B_TIMED_OUT);
+	}
 
 	// phase 3: terminate the background apps
 	_SetPhase(BACKGROUND_APP_TERMINATION_PHASE);

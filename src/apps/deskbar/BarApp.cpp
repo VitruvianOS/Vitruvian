@@ -58,9 +58,7 @@ All rights reserved.
 #include <Roster.h>
 
 #include <DeskbarPrivate.h>
-#include <LaunchDaemonDefs.h>
 #include <RosterPrivate.h>
-#include <kernel/util/KMessage.h>
 #include "tracker_private.h"
 
 #include "BarView.h"
@@ -695,21 +693,14 @@ TBarApp::MessageReceived(BMessage* message)
 
 		case kLogOutUser:
 		{
-			// Send B_JANUS_LOGOUT (KMessage) to janus. Janus verifies
-			// sender_uid matches the session uid; if a system shutdown
-			// is in flight, the request is declined.
-			port_id janusPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
-			if (janusPort < 0) {
-				fprintf(stderr, "Deskbar: janus port not found; can't "
-					"log out\n");
-				break;
-			}
-			BPrivate::KMessage msg(BPrivate::B_JANUS_LOGOUT);
-			// Do NOT wait for reply — janus's handler blocks for
-			// several seconds SIGTERMing the post-auth chain (which
-			// includes us). Waiting here would freeze the Deskbar
-			// UI until we're SIGKILLed.
-			msg.SendTo(janusPort, -1, (BPrivate::KMessage*)NULL);
+			// Same path as shut down and restart: the registrar quits the
+			// apps with the status window, then asks janus to end the
+			// session.
+			BRoster roster;
+			BRoster::Private rosterPrivate(roster);
+			status_t error = rosterPrivate.LogOut(false);
+			if (error != B_OK)
+				fprintf(stderr, "Log out failed: %s\n", strerror(error));
 			break;
 		}
 

@@ -59,6 +59,7 @@ public:
 private:
 	void _MessageReceived(BMessage *message);
 	void _HandleShutDown(BMessage *message);
+	status_t _CreateShutdownProcess(BMessage *request);
 	void _HandleIsShutDownInProgress(BMessage *message);
 	void _HandleRequestSleep(BMessage *message);
 	void _HandleIsSleepAvailable(BMessage *message);

@@ -77,6 +77,13 @@ LogindBridge::Start()
 		"PrepareForShutdown", NULL, this);
 	if (r < 0)
 		fprintf(stderr, "LogindBridge: match PrepareForShutdown: %s\n", strerror(-r));
+	// systemd >= v257: carries type= "reboot"/"poweroff"/... . Emitted
+	// before PrepareForShutdown, so a match here wins the race.
+	r = sd_bus_match_signal(bus, NULL, kLogin1Bus, kLogin1Path, kLogin1Manager,
+		"PrepareForShutdownWithMetadata", NULL, this);
+	if (r < 0)
+		fprintf(stderr, "LogindBridge: match PrepareForShutdownWithMetadata: %s\n",
+			strerror(-r));
 	r = sd_bus_match_signal(bus, NULL, kLogin1Bus, kLogin1Path, kLogin1Manager,
 		"PrepareForSleep", NULL, this);
 	if (r < 0)
@@ -304,9 +311,35 @@ LogindBridge::_ThreadLoop()
 				int active = 0;
 				if (sd_bus_message_read(m, "b", &active) >= 0) {
 					BMessage post;
-					if (strcmp(member, "PrepareForShutdown") == 0) {
+					if (strcmp(member, "PrepareForShutdown") == 0
+						|| strcmp(member,
+							"PrepareForShutdownWithMetadata") == 0) {
 						post.what = kMsgLogindPrepareForShutdown;
 						post.AddBool("active", active != 0);
+						if (strcmp(member,
+								"PrepareForShutdownWithMetadata") == 0) {
+							const char* type = NULL;
+							if (sd_bus_message_enter_container(m,
+									'a', "{sv}") >= 0) {
+								while (sd_bus_message_enter_container(
+										m, 'e', "sv") > 0) {
+									const char* key = NULL;
+									if (sd_bus_message_read(m, "s",
+											&key) >= 0
+										&& key != NULL
+										&& strcmp(key, "type") == 0) {
+										sd_bus_message_read(m, "v",
+											"s", &type);
+									} else {
+										sd_bus_message_skip(m, "v");
+									}
+									sd_bus_message_exit_container(m);
+								}
+								sd_bus_message_exit_container(m);
+							}
+							if (type != NULL)
+								post.AddString("type", type);
+						}
 						fTarget.SendMessage(&post);
 					} else if (strcmp(member, "PrepareForSleep") == 0) {
 						post.what = kMsgLogindPrepareForSleep;

@@ -442,32 +442,39 @@ Registrar::_MessageReceived(BMessage *message)
 void
 Registrar::_HandleShutDown(BMessage *request)
 {
-	status_t error = B_OK;
-
 	// check, whether we're already shutting down
-	if (fShutdownProcess)
-		error = B_SHUTTING_DOWN;
+	status_t error = B_SHUTTING_DOWN;
+	if (fShutdownProcess == NULL)
+		error = _CreateShutdownProcess(request);
 
-	bool needsReply = true;
-	if (error == B_OK) {
-		// create a ShutdownProcess
-		fShutdownProcess = new(nothrow) ShutdownProcess(fRoster, fEventQueue);
-		if (fShutdownProcess) {
-			error = fShutdownProcess->Init(request);
-			if (error == B_OK) {
-				DetachCurrentMessage();
-				fShutdownProcess->Run();
-				needsReply = false;
-			} else {
-				delete fShutdownProcess;
-				fShutdownProcess = NULL;
-			}
-		} else
-			error = B_NO_MEMORY;
+	if (error != B_OK) {
+		ShutdownProcess::SendReply(request, error);
+		return;
 	}
 
-	if (needsReply)
-		ShutdownProcess::SendReply(request, error);
+	// the ShutdownProcess owns the request now
+	DetachCurrentMessage();
+	fShutdownProcess->Run();
+}
+
+
+/*!	rief Creates and initializes fShutdownProcess for  request.
+
+	On success the process takes ownership of \a request once it runs.
+*/
+status_t
+Registrar::_CreateShutdownProcess(BMessage *request)
+{
+	fShutdownProcess = new(nothrow) ShutdownProcess(fRoster, fEventQueue);
+	if (fShutdownProcess == NULL)
+		return B_NO_MEMORY;
+
+	status_t error = fShutdownProcess->Init(request);
+	if (error != B_OK) {
+		delete fShutdownProcess;
+		fShutdownProcess = NULL;
+	}
+	return error;
 }
 
 /*!	\brief Handle a is shut down in progress request message.
@@ -553,6 +560,9 @@ Registrar::_HandleIsSleepAvailable(BMessage *request)
 	poweroff, shutdown -h now) and we run the quit dance WITHOUT the
 	refusal window (delay-lock semantics: cannot veto once the signal
 	fires) then release the inhibit.
+
+	Reboot vs poweroff comes from PrepareForShutdownWithMetadata's
+	"type" field (systemd >= v257). Without it we default to poweroff.
 */
 void
 Registrar::_HandleLogindPrepareForShutdown(BMessage *request)
@@ -569,16 +579,26 @@ Registrar::_HandleLogindPrepareForShutdown(BMessage *request)
 		return;
 	}
 
-	// Fabricate a B_REG_SHUT_DOWN request with confirm=false (skip the
-	// refusal window; bottom-up cannot be vetoed) and dispatch through
-	// the normal handler so all downstream code paths are shared. Do NOT
-	// release the inhibit here — ShutdownProcess::Run() returns immediately
-	// and the dance runs async. Release happens in the
-	// B_REG_SHUTDOWN_FINISHED case when the dance actually completes.
-	BMessage synthetic(B_REG_SHUT_DOWN);
-	synthetic.AddBool("reboot", false);
-	synthetic.AddBool("confirm", false);
-	_HandleShutDown(&synthetic);
+	bool reboot = false;
+	const char* type = NULL;
+	if (request->FindString("type", &type) == B_OK && type != NULL
+		&& (strcmp(type, "reboot") == 0
+			|| strcmp(type, "kexec") == 0
+			|| strcmp(type, "soft-reboot") == 0))
+		reboot = true;
+
+	// Fabricate a B_REG_SHUT_DOWN request with confirm=false and run the same ShutdownProcess as the
+	// BeAPI path. Release the inhibit in B_REG_SHUTDOWN_FINISHED, not here, since Run() returns immediately.
+	BMessage* synthetic = new(nothrow) BMessage(B_REG_SHUT_DOWN);
+	if (synthetic == NULL)
+		return;
+	synthetic->AddBool("reboot", reboot);
+	synthetic->AddBool("confirm", false);
+	if (_CreateShutdownProcess(synthetic) != B_OK) {
+		delete synthetic;
+		return;
+	}
+	fShutdownProcess->Run();
 }
 
 

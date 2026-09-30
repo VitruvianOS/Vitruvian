@@ -15,6 +15,8 @@ static const uint32 kMsgLogindPrepareForShutdown = 'lPfS';
 static const uint32 kMsgLogindPrepareForSleep    = 'lPfL';
 
 // Field: "active" (bool) — true = about to happen, false = resume.
+// Field: "type" (string, optional), from PrepareForShutdownWithMetadata:
+// "poweroff", "reboot", "halt", "kexec", "soft-reboot", ...
 
 
 class LogindBridge {

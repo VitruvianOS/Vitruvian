@@ -221,6 +221,7 @@ DesktopPoseView::StartSettingsWatch()
 		tracker->StartWatching(this, kShowDisksIconChanged);
 		tracker->StartWatching(this, kVolumesOnDesktopChanged);
 		tracker->StartWatching(this, kDesktopIntegrationChanged);
+		tracker->StartWatching(this, kSnapToGridChanged);
 		tracker->UnlockLooper();
 	}
 }
@@ -234,6 +235,7 @@ DesktopPoseView::StopSettingsWatch()
 		tracker->StopWatching(this, kShowDisksIconChanged);
 		tracker->StopWatching(this, kVolumesOnDesktopChanged);
 		tracker->StopWatching(this, kDesktopIntegrationChanged);
+		tracker->StopWatching(this, kSnapToGridChanged);
 		tracker->UnlockLooper();
 	}
 }
@@ -292,6 +294,33 @@ void
 DesktopPoseView::AdaptToDesktopIntegrationChange(BMessage* message)
 {
 	ToggleDisksVolumes();
+}
+
+
+void
+DesktopPoseView::AdaptToSnapToGridChange(BMessage* message)
+{
+	if (Window() == NULL || !TrackerSettings().SnapToGrid())
+		return;
+
+	// settle all desktop icons onto the grid; poses already on a free
+	// grid slot are left alone
+	BRect bounds(Bounds());
+	int32 poseCount = fPoseList->CountItems();
+	for (int32 index = 0; index < poseCount; index++) {
+		BPose* pose = fPoseList->ItemAt(index);
+
+		BRect oldBounds(pose->CalcRect(this));
+		SnapPoseToGrid(pose, bounds);
+		BRect newBounds(pose->CalcRect(this));
+
+		if (newBounds != oldBounds) {
+			Invalidate(oldBounds);
+			Invalidate(newBounds);
+		}
+	}
+
+	RecalcExtent();
 }
 
 

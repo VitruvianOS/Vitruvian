@@ -72,6 +72,7 @@ protected:
 
 	void AdaptToVolumeChange(BMessage*);
 	void AdaptToDesktopIntegrationChange(BMessage*);
+	void AdaptToSnapToGridChange(BMessage*);
 	void AdaptToBackgroundColorChange();
 
 private:

@@ -170,9 +170,11 @@ DesktopSettingsView::DesktopSettingsView()
 	fShowDisksIconRadioButton(NULL),
 	fMountVolumesOntoDesktopRadioButton(NULL),
 	fMountSharedVolumesOntoDesktopCheckBox(NULL),
+	fSnapToGridCheckBox(NULL),
 	fShowDisksIcon(kDefaultShowDisksIcon),
 	fMountVolumesOntoDesktop(kDefaultMountVolumesOntoDesktop),
 	fMountSharedVolumesOntoDesktop(kDefaultMountSharedVolumesOntoDesktop),
+	fSnapToGrid(kDefaultSnapToGrid),
 	fIntegrateNonBootBeOSDesktops(false),
 	fEjectWhenUnmounting(kDefaultEjectWhenUnmounting)
 {
@@ -188,6 +190,10 @@ DesktopSettingsView::DesktopSettingsView()
 		B_TRANSLATE("Show shared volumes on Desktop"),
 		new BMessage(kVolumesOnDesktopChanged));
 
+	fSnapToGridCheckBox = new BCheckBox("",
+		B_TRANSLATE("Snap desktop icons to grid"),
+		new BMessage(kSnapToGridChanged));
+
 	const float spacing = be_control_look->DefaultItemSpacing();
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
@@ -197,6 +203,7 @@ DesktopSettingsView::DesktopSettingsView()
 			.Add(fMountSharedVolumesOntoDesktopCheckBox)
 			.SetInsets(spacing * 2, 0, 0, 0)
 			.End()
+		.Add(fSnapToGridCheckBox)
 		.AddGlue()
 		.SetInsets(spacing);
 }
@@ -208,6 +215,7 @@ DesktopSettingsView::AttachedToWindow()
 	fShowDisksIconRadioButton->SetTarget(this);
 	fMountVolumesOntoDesktopRadioButton->SetTarget(this);
 	fMountSharedVolumesOntoDesktopCheckBox->SetTarget(this);
+	fSnapToGridCheckBox->SetTarget(this);
 }
 
 
@@ -286,6 +294,24 @@ DesktopSettingsView::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kSnapToGridChanged:
+		{
+			// Set the new setting in the tracker:
+			settings.SetSnapToGrid(fSnapToGridCheckBox->Value() == 1);
+
+			// Construct the notification message:
+			BMessage notificationMessage;
+			notificationMessage.AddBool("SnapToGrid",
+				fSnapToGridCheckBox->Value() == 1);
+
+			// Send the notification message:
+			tracker->SendNotices(kSnapToGridChanged, &notificationMessage);
+
+			// Tell the settings window the contents have changed:
+			Window()->PostMessage(kSettingsContentsModified);
+			break;
+		}
+
 		default:
 			_inherited::MessageReceived(message);
 			break;
@@ -302,6 +328,7 @@ DesktopSettingsView::SetDefaults()
 	settings.SetShowDisksIcon(kDefaultShowDisksIcon);
 	settings.SetMountVolumesOntoDesktop(kDefaultMountVolumesOntoDesktop);
 	settings.SetMountSharedVolumesOntoDesktop(kDefaultMountSharedVolumesOntoDesktop);
+	settings.SetSnapToGrid(kDefaultSnapToGrid);
 	settings.SetEjectWhenUnmounting(kDefaultEjectWhenUnmounting);
 
 	ShowCurrentSettings();
@@ -317,6 +344,7 @@ DesktopSettingsView::IsDefaultable() const
 	return settings.ShowDisksIcon() != kDefaultShowDisksIcon
 		|| settings.MountVolumesOntoDesktop() != kDefaultMountVolumesOntoDesktop
 		|| settings.MountSharedVolumesOntoDesktop() != kDefaultMountSharedVolumesOntoDesktop
+		|| settings.SnapToGrid() != kDefaultSnapToGrid
 		|| settings.EjectWhenUnmounting() != kDefaultEjectWhenUnmounting;
 }
 
@@ -329,6 +357,7 @@ DesktopSettingsView::Revert()
 	settings.SetShowDisksIcon(fShowDisksIcon);
 	settings.SetMountVolumesOntoDesktop(fMountVolumesOntoDesktop);
 	settings.SetMountSharedVolumesOntoDesktop(fMountSharedVolumesOntoDesktop);
+	settings.SetSnapToGrid(fSnapToGrid);
 	settings.SetEjectWhenUnmounting(fEjectWhenUnmounting);
 
 	ShowCurrentSettings();
@@ -351,9 +380,12 @@ DesktopSettingsView::_SendNotices()
 		fMountVolumesOntoDesktopRadioButton->Value() == 1);
 	notificationMessage.AddBool("MountSharedVolumesOntoDesktop",
 		fMountSharedVolumesOntoDesktopCheckBox->Value() == 1);
+	notificationMessage.AddBool("SnapToGrid",
+		fSnapToGridCheckBox->Value() == 1);
 
 	// Send notices to the tracker about the change:
 	tracker->SendNotices(kVolumesOnDesktopChanged, &notificationMessage);
+	tracker->SendNotices(kSnapToGridChanged, &notificationMessage);
 	tracker->SendNotices(kDesktopIntegrationChanged, &notificationMessage);
 }
 
@@ -371,6 +403,8 @@ DesktopSettingsView::ShowCurrentSettings()
 		settings.MountSharedVolumesOntoDesktop());
 	fMountSharedVolumesOntoDesktopCheckBox->SetEnabled(
 		settings.MountVolumesOntoDesktop());
+
+	fSnapToGridCheckBox->SetValue(settings.SnapToGrid());
 }
 
 
@@ -382,6 +416,7 @@ DesktopSettingsView::RecordRevertSettings()
 	fShowDisksIcon = settings.ShowDisksIcon();
 	fMountVolumesOntoDesktop = settings.MountVolumesOntoDesktop();
 	fMountSharedVolumesOntoDesktop = settings.MountSharedVolumesOntoDesktop();
+	fSnapToGrid = settings.SnapToGrid();
 	fEjectWhenUnmounting = settings.EjectWhenUnmounting();
 }
 
@@ -393,7 +428,8 @@ DesktopSettingsView::IsRevertable() const
 		|| fMountVolumesOntoDesktop !=
 			(fMountVolumesOntoDesktopRadioButton->Value() > 0)
 		|| fMountSharedVolumesOntoDesktop !=
-			(fMountSharedVolumesOntoDesktopCheckBox->Value() > 0);
+			(fMountSharedVolumesOntoDesktopCheckBox->Value() > 0)
+		|| fSnapToGrid != (fSnapToGridCheckBox->Value() > 0);
 }
 
 

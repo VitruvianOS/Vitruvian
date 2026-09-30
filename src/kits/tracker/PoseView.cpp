@@ -100,6 +100,7 @@ All rights reserved.
 #include "Tests.h"
 #include "Thread.h"
 #include "Tracker.h"
+#include "TrackerSettings.h"
 #include "TrackerString.h"
 #include "WidgetAttributeText.h"
 #include "WidthBuffer.h"
@@ -2110,6 +2111,10 @@ BPoseView::CreatePoses(Model** models, PoseInfo* poseInfoArray, int32 count,
 			PinPointToValidRange(poseInfo->fLocation);
 			pose->SetLocation(poseInfo->fLocation, this);
 			AddToVSList(pose);
+
+			SnapPoseToGrid(pose, viewBounds);
+				// on the desktop, restored locations have to end up
+				// on a free grid slot
 		}
 
 		BRect poseBounds;
@@ -2782,6 +2787,10 @@ BPoseView::MessageReceived(BMessage* message)
 
 					case kVolumesOnDesktopChanged:
 						AdaptToVolumeChange(message);
+						break;
+
+					case kSnapToGridChanged:
+						AdaptToSnapToGridChange(message);
 						break;
 
 					case kDesktopIntegrationChanged:
@@ -3779,6 +3788,51 @@ BPoseView::Cleanup(bool doAll)
 
 
 void
+BPoseView::SnapPoseToGrid(BPose* pose, BRect& viewBounds)
+{
+	if (pose == NULL || !IsDesktopView() || ViewMode() != kIconMode
+		|| !TrackerSettings().SnapToGrid())
+		return;
+
+	// remove pose from VSlist so it doesn't "bump" into itself
+	RemoveFromVSList(pose);
+
+	// nothing to do if the pose is already on a free and valid grid slot
+	BPoint location(pose->Location(this));
+	BPoint newLocation(PinToGrid(location, fGrid, fOffset));
+	if (newLocation == location && IsValidLocation(pose)) {
+		BRect rect(pose->CalcRect(this));
+		rect.InsetBy(-3, 0);
+		if (!SlotOccupied(rect, viewBounds)) {
+			AddToVSList(pose);
+			return;
+		}
+	}
+
+	// try new grid location
+	BRect oldBounds(pose->CalcRect(this));
+	BRect poseBounds(oldBounds);
+	pose->MoveTo(newLocation, this);
+	poseBounds = pose->CalcRect(this);
+	poseBounds.InsetBy(-3, 0);
+	if (SlotOccupied(poseBounds, viewBounds) || !IsValidLocation(pose)) {
+		ResetPosePlacementHint();
+		PlacePose(pose, viewBounds);
+		poseBounds = pose->CalcRect(this);
+	}
+
+	pose->SetSaveLocation();
+	AddToVSList(pose);
+	AddToExtent(poseBounds);
+
+	if (viewBounds.Intersects(poseBounds))
+		Invalidate(poseBounds);
+	if (viewBounds.Intersects(oldBounds))
+		Invalidate(oldBounds);
+}
+
+
+void
 BPoseView::PlacePose(BPose* pose, BRect &viewBounds)
 {
 	// move pose to probable location
@@ -3973,6 +4027,11 @@ BPoseView::CheckPoseVisibility(BRect* newFrame)
 				// add it at the new location
 			Invalidate(pose->CalcRect(this));
 				// make sure the new pose location updates properly
+
+			BRect viewBounds(Bounds());
+			SnapPoseToGrid(pose, viewBounds);
+				// on the desktop, the new location has to end up on a
+				// free grid slot
 		}
 	}
 }
@@ -5224,6 +5283,7 @@ BPoseView::MoveSelectionInto(Model* destFolder, BContainerWindow* srcWindow,
 		}
 
 		BPoint delta = loc - where;
+		BRect viewBounds(targetView->Bounds());
 		int32 selectCount = targetView->CountSelected();
 		for (int32 index = 0; index < selectCount; index++) {
 			BPose* pose = targetView->SelectionList()->ItemAt(index);
@@ -5249,6 +5309,10 @@ BPoseView::MoveSelectionInto(Model* destFolder, BContainerWindow* srcWindow,
 
 			// remove and reinsert pose to keep VSlist sorted
 			targetView->AddToVSList(pose);
+
+			// on the desktop, the drop location has to end up on a free
+			// grid slot (does nothing when the grid is off)
+			targetView->SnapPoseToGrid(pose, viewBounds);
 		}
 
 		return;
@@ -5364,6 +5428,10 @@ BPoseView::MoveSelectionTo(BPoint dropPoint, BPoint where, BContainerWindow* src
 
 	uint32 buttons = (uint32)window->CurrentMessage()->FindInt32("buttons");
 	bool pinToGrid = (modifiers() & B_COMMAND_KEY) != 0;
+	if (IsDesktopView() && TrackerSettings().SnapToGrid())
+		pinToGrid = true;
+			// on the desktop, drops always snap to the grid when the
+			// setting is on
 	MoveSelectionInto(TargetModel(), srcWindow, window, buttons, dropPoint,
 		false, false, false, false, where, pinToGrid);
 }
@@ -10548,6 +10616,12 @@ BPoseView::AdaptToVolumeChange(BMessage*)
 
 void
 BPoseView::AdaptToDesktopIntegrationChange(BMessage*)
+{
+}
+
+
+void
+BPoseView::AdaptToSnapToGridChange(BMessage*)
 {
 }
 

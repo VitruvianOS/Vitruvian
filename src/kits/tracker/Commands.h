@@ -129,6 +129,7 @@ const uint32 kDisksIconChanged = 'Dicn';
 const uint32 kDesktopIntegrationChanged = 'Dint';
 const uint32 kShowDisksIconChanged = 'Sdic';
 const uint32 kVolumesOnDesktopChanged = 'Codc';
+const uint32 kSnapToGridChanged = 'Sntg';
 const uint32 kEjectWhenUnmountingChanged = 'Ewum';
 
 const uint32 kWindowsShowFullPathChanged = 'Wsfp';

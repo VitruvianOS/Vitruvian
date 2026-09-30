@@ -1,440 +1,417 @@
 /*
- * Copyright 2001-2011, Haiku.
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
- * Authors:
- *		Michael Pfeiffer
- *		Philippe Houdoin
+ * Printers preflet: list CUPS queues, set default, show/cancel jobs,
+ * add driverless IPP printers. No PPD handling.
  */
-
 
 #include "PrintersWindow.h"
 
-#include <stdio.h>
-
-#include <Application.h>
+#include <Alert.h>
+#include <Box.h>
 #include <Button.h>
 #include <Catalog.h>
-#include <ControlLook.h>
-#include <FindDirectory.h>
-#include <GroupLayout.h>
-#include <Layout.h>
 #include <LayoutBuilder.h>
 #include <ListView.h>
 #include <Locale.h>
-#include <PrintJob.h>
+#include <Menu.h>
+#include <Message.h>
+#include <MenuItem.h>
+#include <PopUpMenu.h>
 #include <ScrollView.h>
+#include <SeparatorItem.h>
+#include <String.h>
+#include <StringItem.h>
+#include <TextControl.h>
+#include <View.h>
 
-#include "pr_server.h"
-#include "AddPrinterDialog.h"
-#include "Globals.h"
-#include "JobListView.h"
+#include <stdio.h>
+
 #include "Messages.h"
-#include "PrinterListView.h"
-#include "TestPageView.h"
-#include "ScreenSettings.h"
-#include "SpoolFolder.h"
+#include "printcups.h"
+#include "pr_server.h"
 
 
 #undef B_TRANSLATION_CONTEXT
-#define B_TRANSLATION_CONTEXT "PrintersWindow"
+#define B_TRANSLATION_CONTEXT "Printers"
 
 
-class TestPageWindow : public BWindow {
-public:
-						TestPageWindow(BPrintJob* job, PrinterItem* printer);
-	virtual				~TestPageWindow();
-
-			void		MessageReceived(BMessage* message);
-private:
-			BPrintJob*	fJob;
-			TestPageView*	fTestPage;
-};
+static const int32 kMaxQueues = 64;
+static const int32 kMaxJobs = 128;
 
 
-TestPageWindow::TestPageWindow(BPrintJob* job, PrinterItem* printer)
-	: BWindow(job->PaperRect().OffsetByCopy(-20000, -20000),
-		B_TRANSLATE("Test page"),
-		B_TITLED_WINDOW, 0), fJob(job)
+PrintersWindow::PrintersWindow()
+	:
+	BWindow(BRect(80, 80, 520, 480), "Printers",
+		B_TITLED_WINDOW, B_NOT_RESIZABLE | B_NOT_ZOOMABLE),
+	fQueueList(NULL),
+	fJobList(NULL),
+	fAddNameField(NULL),
+	fAddUriField(NULL),
+	fDefaultButton(NULL),
+	fCancelButton(NULL),
+	fAddButton(NULL),
+	fRemoveButton(NULL)
 {
-	fTestPage = new TestPageView(job->PrintableRect(), printer);
+	BView* top = new BView(Bounds(), "top", B_FOLLOW_ALL, 0);
+	top->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	AddChild(top);
 
-	// SetLayout(new BGroupLayout(B_VERTICAL));
-	AddChild(fTestPage);
-}
+	fQueueList = new BListView(BRect(0, 0, 200, 200), "queues",
+		B_SINGLE_SELECTION_LIST, B_FOLLOW_ALL);
+	BScrollView* queueScroll = new BScrollView("queueScroll", fQueueList,
+		B_FOLLOW_ALL, 0, false, true);
+	fQueueList->SetSelectionMessage(new BMessage(kMsgPrinterSelected));
+	fQueueList->SetTarget(this);
 
+	fJobList = new BListView(BRect(0, 0, 260, 200), "jobs",
+		B_SINGLE_SELECTION_LIST, B_FOLLOW_ALL);
+	BScrollView* jobScroll = new BScrollView("jobScroll", fJobList,
+		B_FOLLOW_ALL, 0, false, true);
+	fJobList->SetSelectionMessage(new BMessage(kMsgJobSelected));
+	fJobList->SetTarget(this);
 
-TestPageWindow::~TestPageWindow()
-{
-	delete fJob;
+	fDefaultButton = new BButton("default", B_TRANSLATE("Set default"),
+		new BMessage(kMsgMakeDefaultPrinter));
+	fCancelButton = new BButton("cancel", B_TRANSLATE("Cancel job"),
+		new BMessage(kMsgCancelJob));
+	fRemoveButton = new BButton("remove", B_TRANSLATE("Remove"),
+		new BMessage(kMsgRemovePrinter));
+
+	fAddNameField = new BTextControl("addName", B_TRANSLATE("Name:"), NULL,
+		new BMessage(kMsgAddPrinter));
+	fAddUriField = new BTextControl("addUri", B_TRANSLATE("URI:"), NULL,
+		new BMessage(kMsgAddPrinter));
+	fAddUriField->SetText("ipp://printer.local/ipp/print");
+	fAddButton = new BButton("add", B_TRANSLATE("Add (IPP Everywhere)"),
+		new BMessage(kMsgAddPrinter));
+
+	BBox* queueBox = new BBox("queueBox", B_FOLLOW_ALL, B_WILL_DRAW);
+	queueBox->SetLabel(B_TRANSLATE("Queues"));
+	queueBox->AddChild(queueScroll);
+
+	BBox* jobBox = new BBox("jobBox", B_FOLLOW_ALL, B_WILL_DRAW);
+	jobBox->SetLabel(B_TRANSLATE("Jobs"));
+	jobBox->AddChild(jobScroll);
+
+	BBox* addBox = new BBox("addBox", B_FOLLOW_ALL, B_WILL_DRAW);
+	addBox->SetLabel(B_TRANSLATE("Add printer (driverless IPP)"));
+	addBox->AddChild(fAddNameField);
+	addBox->AddChild(fAddUriField);
+	addBox->AddChild(fAddButton);
+
+	top->AddChild(queueBox);
+	top->AddChild(jobBox);
+	top->AddChild(addBox);
+	top->AddChild(fDefaultButton);
+	top->AddChild(fCancelButton);
+	top->AddChild(fRemoveButton);
+
+	// Simple absolute layout, matching the older preflet placement.
+	BRect bounds = Bounds();
+	queueBox->SetResizingMode(B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP);
+	jobBox->SetResizingMode(B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP);
+	addBox->SetResizingMode(B_FOLLOW_LEFT_RIGHT | B_FOLLOW_BOTTOM);
+
+	queueBox->MoveTo(10, 10);
+	queueBox->ResizeTo(bounds.Width() - 20, 160);
+	jobBox->MoveTo(10, 180);
+	jobBox->ResizeTo(bounds.Width() - 20, 160);
+	addBox->MoveTo(10, 350);
+	addBox->ResizeTo(bounds.Width() - 20, 110);
+	fAddNameField->MoveTo(10, 24);
+	fAddNameField->ResizeTo(200, fAddNameField->Frame().Height());
+	fAddUriField->MoveTo(220, 24);
+	fAddUriField->ResizeTo(bounds.Width() - 250, fAddUriField->Frame().Height());
+	fAddButton->MoveTo(10, 56);
+	fDefaultButton->MoveTo(10, bounds.bottom - 40);
+	fCancelButton->MoveTo(130, bounds.bottom - 40);
+	fRemoveButton->MoveTo(250, bounds.bottom - 40);
+
+	queueScroll->SetResizingMode(B_FOLLOW_ALL);
+	jobScroll->SetResizingMode(B_FOLLOW_ALL);
+
+	_UpdateQueues();
+	_UpdateJobs();
 }
 
 
 void
-TestPageWindow::MessageReceived(BMessage* message)
+PrintersWindow::MessageReceived(BMessage* message)
 {
-	if (message->what != kMsgPrintTestPage) {
-		BWindow::MessageReceived(message);
-		return;
+	switch (message->what) {
+		case kMsgPrinterSelected:
+			_UpdateJobs();
+			break;
+
+		case kMsgMakeDefaultPrinter:
+			_SetDefault();
+			break;
+
+		case kMsgCancelJob:
+			_CancelJob();
+			break;
+
+		case kMsgAddPrinter:
+			_AddPrinter();
+			break;
+
+		case kMsgRemovePrinter:
+			_RemovePrinter();
+			break;
+
+		case PRINTERS_ADD_PRINTER:
+			// InterfaceDefs run_add_printer_panel()
+			_UpdateQueues();
+			break;
+
+		case B_PRINTER_CHANGED:
+			_UpdateQueues();
+			_UpdateJobs();
+			break;
+
+		default:
+			BWindow::MessageReceived(message);
+			break;
 	}
-
-	fJob->BeginJob();
-
-	fJob->DrawView(fTestPage, fTestPage->Bounds(), B_ORIGIN);
-	fJob->SpoolPage();
-
-	if (!fJob->CanContinue())
-		return;
-
-	fJob->CommitJob();
-
-	Quit();
-}
-
-
-// #pragma mark PrintersWindow main class
-
-
-PrintersWindow::PrintersWindow(ScreenSettings* settings)
-	:
-	BWindow(settings->WindowFrame(), B_TRANSLATE_SYSTEM_NAME("Printers"),
-		B_TITLED_WINDOW, B_AUTO_UPDATE_SIZE_LIMITS),
-	fSettings(settings),
-	fSelectedPrinter(NULL),
-	fAddingPrinter(false)
-{
-	_BuildGUI();
-	MoveOnScreen();
-}
-
-
-PrintersWindow::~PrintersWindow()
-{
-	delete fSettings;
 }
 
 
 bool
 PrintersWindow::QuitRequested()
 {
-	fSettings->SetWindowFrame(Frame());
+	return BWindow::QuitRequested();
+}
 
-	bool result = Inherited::QuitRequested();
-	if (result)
-		be_app->PostMessage(B_QUIT_REQUESTED);
 
-	return result;
+BStringItem*
+PrintersWindow::_SelectedQueue() const
+{
+	return dynamic_cast<BStringItem*>(fQueueList->ItemAt(
+		fQueueList->CurrentSelection()));
+}
+
+
+BString
+PrintersWindow::_SelectedJobName() const
+{
+	BStringItem* item = dynamic_cast<BStringItem*>(fJobList->ItemAt(
+		fJobList->CurrentSelection()));
+	if (item == NULL)
+		return BString();
+
+	// Job list items: "id state name"
+	const char* text = item->Text();
+	int32 id = 0;
+	char name[256];
+	name[0] = '\0';
+	if (sscanf(text, "%d %*s %255[^\n]", &id, name) >= 1)
+		return BString(name);
+	return BString(text);
+}
+
+
+int32
+PrintersWindow::_SelectedJobId() const
+{
+	BStringItem* item = dynamic_cast<BStringItem*>(fJobList->ItemAt(
+		fJobList->CurrentSelection()));
+	if (item == NULL)
+		return -1;
+
+	int32 id = -1;
+	if (sscanf(item->Text(), "%d", &id) != 1)
+		return -1;
+	return id;
 }
 
 
 void
-PrintersWindow::MessageReceived(BMessage* msg)
+PrintersWindow::_UpdateQueues()
 {
-	switch (msg->what) {
-		case kMsgPrinterSelected:
-		{
-			fSelectedPrinter = fPrinterListView->SelectedItem();
-			if (fSelectedPrinter) {
-				BString text = B_TRANSLATE("Print jobs for %printer_name%");
-				text.ReplaceFirst("%printer_name%", fSelectedPrinter->Name());
+	fQueueList->MakeEmpty();
 
-				fJobsBox->SetLabel(text);
-				fMakeDefault->SetEnabled(true);
-				fRemove->SetEnabled(true);
-				fJobListView->SetSpoolFolder(fSelectedPrinter->Folder());
-			} else {
-				fJobsBox->SetLabel(
-					B_TRANSLATE("Print jobs: No printer selected"));
-				fMakeDefault->SetEnabled(false);
-				fRemove->SetEnabled(false);
-				fSelectedPrinter = NULL;
-				fJobListView->SetSpoolFolder(NULL);
-			}
-			_UpdateJobButtons();
-			_UpdatePrinterButtons();
-			break;
-		}
+	printcups_queue_info queues[kMaxQueues];
+	int count = printcups_list_queues(queues, kMaxQueues);
+	if (count < 0)
+		count = 0;
 
-		case kMsgAddPrinter:
-			if (!fAddingPrinter) {
-				fAddingPrinter = true;
-				new AddPrinterDialog(this);
-			}
-			break;
-
-		case kMsgAddPrinterClosed:
-			fAddingPrinter = false;
-			break;
-
-		case kMsgRemovePrinter:
-		{
-			fSelectedPrinter = fPrinterListView->SelectedItem();
-			if (fSelectedPrinter)
-				fSelectedPrinter->Remove(fPrinterListView);
-			break;
-		}
-
-		case kMsgMakeDefaultPrinter:
-		{
-			PrinterItem* printer = fPrinterListView->SelectedItem();
-			if (printer && printer == fPrinterListView->ActivePrinter())
-				break;
-			BMessenger msgr;
-			if (printer && GetPrinterServerMessenger(msgr) == B_OK) {
-				BMessage setActivePrinter(B_SET_PROPERTY);
-				setActivePrinter.AddSpecifier("ActivePrinter");
-				setActivePrinter.AddString("data", printer->Name());
-				msgr.SendMessage(&setActivePrinter);
-				_UpdatePrinterButtons();
-			}
-			break;
-		}
-
-		case kMsgPrintTestPage:
-		{
-			fSelectedPrinter = fPrinterListView->SelectedItem();
-			if (fSelectedPrinter)
-				PrintTestPage(fSelectedPrinter);
-			break;
-		}
-
-		case kMsgCancelJob:
-			fJobListView->CancelJob();
-			break;
-
-		case kMsgRestartJob:
-			fJobListView->RestartJob();
-			break;
-
-		case kMsgJobSelected:
-			_UpdateJobButtons();
-			break;
-
-		case B_PRINTER_CHANGED:
-		{
-			// active printer could have been changed, even outside of prefs
-			BString activePrinterName(ActivePrinterName());
-			PrinterItem* item = fPrinterListView->ActivePrinter();
-			if (item && item->Name() != activePrinterName)
-				fPrinterListView->UpdateItem(item);
-
-			for (int32 i = 0; i < fPrinterListView->CountItems(); ++i) {
-				item = dynamic_cast<PrinterItem*>(fPrinterListView->ItemAt(i));
-				if (item && item->Name() == activePrinterName) {
-					fPrinterListView->UpdateItem(item);
-					fPrinterListView->SetActivePrinter(item);
-					break;
-				}
-			}
-		}	break;
-
-		default:
-			Inherited::MessageReceived(msg);
+	for (int32 i = 0; i < count; i++) {
+		BString label(queues[i].name);
+		if (queues[i].is_default)
+			label << "  [default]";
+		if (queues[i].make_model[0] != '\0')
+			label << "  (" << queues[i].make_model << ")";
+		fQueueList->AddItem(new BStringItem(label.String()));
 	}
+
+	if (count == 0)
+		fQueueList->AddItem(new BStringItem(
+			B_TRANSLATE("No printers configured")));
 }
 
 
 void
-PrintersWindow::PrintTestPage(PrinterItem* printer)
+PrintersWindow::_UpdateJobs()
 {
-	BPrintJob* job = new BPrintJob(B_TRANSLATE("Test page"));
-	job->ConfigPage();
+	fJobList->MakeEmpty();
 
-	// job->ConfigJob();
+	BStringItem* queueItem = _SelectedQueue();
+	const char* queue = NULL;
+	if (queueItem != NULL && queueItem->Text()[0] != '\0'
+		&& strstr(queueItem->Text(), "No printers") == NULL) {
+		// Strip " [default] (...)" suffix.
+		BString name(queueItem->Text());
+		int32 sp = name.FindFirst("  [");
+		if (sp >= 0)
+			name.Truncate(sp);
+		int32 paren = name.FindFirst("  (");
+		if (paren >= 0 && (sp < 0 || paren < sp))
+			name.Truncate(paren);
+		queue = name.String();
+	}
 
-	BMessage* settings = job->Settings();
-	if (settings == NULL) {
-		delete job;
+	printcups_job jobs[kMaxJobs];
+	int count = printcups_list_jobs(queue, jobs, kMaxJobs);
+	if (count < 0)
+		count = 0;
+
+	for (int32 i = 0; i < count; i++) {
+		const char* state = "unknown";
+		switch (jobs[i].state) {
+			case 0: state = "pending"; break;
+			case 1: state = "held"; break;
+			case 2: state = "processing"; break;
+			case 3: state = "stopped"; break;
+			case 4: state = "canceled"; break;
+			case 5: state = "aborted"; break;
+			case 6: state = "completed"; break;
+		}
+		BString label;
+		label << jobs[i].id << " " << state << " " << jobs[i].name;
+		fJobList->AddItem(new BStringItem(label.String()));
+	}
+
+	if (count == 0)
+		fJobList->AddItem(new BStringItem(B_TRANSLATE("No jobs")));
+}
+
+
+void
+PrintersWindow::_SetDefault()
+{
+	BStringItem* item = _SelectedQueue();
+	if (item == NULL)
+		return;
+
+	BString name(item->Text());
+	int32 sp = name.FindFirst("  [");
+	if (sp >= 0)
+		name.Truncate(sp);
+
+	if (printcups_set_default(name.String()) != B_OK) {
+		BAlert* alert = new BAlert(B_TRANSLATE("Printers"),
+			B_TRANSLATE("Could not set the default printer."),
+			B_TRANSLATE("OK"));
+		alert->Go();
 		return;
 	}
 
-	// enforce job config properties
-	settings->AddInt32("copies", 1);
-	settings->AddInt32("first_page", 1);
-	settings->AddInt32("last_page", -1);
-
-	BWindow* win = new TestPageWindow(job, printer);
-	win->Show();
-	win->PostMessage(kMsgPrintTestPage);
+	_UpdateQueues();
+	_UpdateJobs();
 }
 
 
 void
-PrintersWindow::AddJob(SpoolFolder* folder, Job* job)
+PrintersWindow::_CancelJob()
 {
-	if (_IsSelected(folder->Item()))
-		fJobListView->AddJob(job);
-	fPrinterListView->UpdateItem(folder->Item());
-	_UpdatePrinterButtons();
-}
+	int32 id = _SelectedJobId();
+	if (id < 0)
+		return;
 
-
-void
-PrintersWindow::RemoveJob(SpoolFolder* folder, Job* job)
-{
-	if (_IsSelected(folder->Item()))
-		fJobListView->RemoveJob(job);
-	fPrinterListView->UpdateItem(folder->Item());
-	_UpdatePrinterButtons();
-}
-
-
-void
-PrintersWindow::UpdateJob(SpoolFolder* folder, Job* job)
-{
-	if (_IsSelected(folder->Item())) {
-		fJobListView->UpdateJob(job);
-		_UpdateJobButtons();
+	BStringItem* queueItem = _SelectedQueue();
+	const char* queue = NULL;
+	BString queueName;
+	if (queueItem != NULL) {
+		queueName = queueItem->Text();
+		int32 sp = queueName.FindFirst("  [");
+		if (sp >= 0)
+			queueName.Truncate(sp);
+		queue = queueName.String();
 	}
-	fPrinterListView->UpdateItem(folder->Item());
-	_UpdatePrinterButtons();
-}
 
+	if (queue == NULL || queue[0] == '\0')
+		return;
 
-// #pragma mark -
-
-
-void
-PrintersWindow::_BuildGUI()
-{
-// ------------------------ Next, build the printers overview box
-	BBox* printersBox = new BBox("printersBox");
-	printersBox->SetFont(be_bold_font);
-	printersBox->SetLabel(B_TRANSLATE("Printers"));
-
-		// Add Button
-	BButton* addButton = new BButton("add",
-		B_TRANSLATE("Add" B_UTF8_ELLIPSIS), new BMessage(kMsgAddPrinter));
-	addButton->SetExplicitMaxSize(
-		BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
-		// Remove button
-	fRemove = new BButton("remove",
-		B_TRANSLATE("Remove"), new BMessage(kMsgRemovePrinter));
-	fRemove->SetExplicitMaxSize(
-		BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
-		// Make Default button
-	fMakeDefault = new BButton("default",
-		B_TRANSLATE("Make default"), new BMessage(kMsgMakeDefaultPrinter));
-	fMakeDefault->SetExplicitMaxSize(
-		BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
-		// Print Test Page button
-	fPrintTestPage = new BButton("print_test_page",
-		B_TRANSLATE("Print test page"), new BMessage(kMsgPrintTestPage));
-	fPrintTestPage->SetExplicitMaxSize(
-		BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
-		// Disable all selection-based buttons
-	fRemove->SetEnabled(false);
-	fMakeDefault->SetEnabled(false);
-	fPrintTestPage->SetEnabled(false);
-
-		// Create listview with scroller
-	fPrinterListView = new PrinterListView(BRect());
-	BScrollView* printerScrollView = new BScrollView("printer_scroller",
-		fPrinterListView, B_FOLLOW_ALL, B_WILL_DRAW | B_FRAME_EVENTS,
-		false, true, B_FANCY_BORDER);
-
-	printerScrollView->SetExplicitMinSize(
-		BSize(be_plain_font->Size() * 30, B_SIZE_UNSET));
-
-	float padding = be_control_look->DefaultItemSpacing();
-
-	BLayoutBuilder::Group<>(printersBox, B_HORIZONTAL, padding)
-		.SetInsets(padding, padding * 2, padding, padding)
-		.Add(printerScrollView)
-		.AddGroup(B_VERTICAL, padding / 2, 0.0f)
-			.SetInsets(0)
-			.Add(addButton)
-			.Add(fRemove)
-			.Add(fMakeDefault)
-			.Add(fPrintTestPage)
-			.AddGlue();
-
-// ------------------------ Lastly, build the jobs overview box
-	fJobsBox = new BBox("jobsBox");
-	fJobsBox->SetFont(be_bold_font);
-	fJobsBox->SetLabel(B_TRANSLATE("Print jobs: No printer selected"));
-
-		// Cancel Job Button
-	fCancel = new BButton("cancel",
-		B_TRANSLATE("Cancel job"), new BMessage(kMsgCancelJob));
-	fCancel->SetExplicitMaxSize(
-		BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
-		// Restart Job button
-	fRestart = new BButton("restart",
-		B_TRANSLATE("Restart job"), new BMessage(kMsgRestartJob));
-	fRestart->SetExplicitMaxSize(
-		BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
-		// Disable all selection-based buttons
-	fCancel->SetEnabled(false);
-	fRestart->SetEnabled(false);
-
-		// Create listview with scroller
-	fJobListView = new JobListView(BRect());
-	BScrollView* jobScrollView = new BScrollView("jobs_scroller",
-		fJobListView, B_FOLLOW_ALL, B_WILL_DRAW | B_FRAME_EVENTS,
-		false, true, B_FANCY_BORDER);
-
-	BLayoutBuilder::Group<>(fJobsBox, B_HORIZONTAL, padding)
-		.SetInsets(padding, padding * 2, padding, padding)
-		.Add(jobScrollView)
-		.AddGroup(B_VERTICAL, padding / 2, 0.0f)
-			.SetInsets(0)
-			.Add(fCancel)
-			.Add(fRestart)
-			.AddGlue();
-
-	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
-		.SetInsets(B_USE_WINDOW_SPACING)
-		.Add(printersBox)
-		.AddStrut(B_USE_DEFAULT_SPACING)
-		.Add(fJobsBox);
-
-		// There is a better solution?
-	Layout(true);
-	if (fPrintTestPage->Bounds().Width() > fRestart->Bounds().Width())
-		fRestart->SetExplicitMinSize(
-			BSize(fPrintTestPage->Bounds().Width(), B_SIZE_UNSET));
-	else
-		fPrintTestPage->SetExplicitMinSize(
-			BSize(fRestart->Bounds().Width(), B_SIZE_UNSET));
-}
-
-
-bool
-PrintersWindow::_IsSelected(PrinterItem* printer)
-{
-	return fSelectedPrinter && fSelectedPrinter == printer;
-}
-
-
-void
-PrintersWindow::_UpdatePrinterButtons()
-{
-	PrinterItem* item = fPrinterListView->SelectedItem();
-	fRemove->SetEnabled(item && !item->HasPendingJobs());
-	fMakeDefault->SetEnabled(item && !item->IsActivePrinter());
-	fPrintTestPage->SetEnabled(item);
-}
-
-
-void
-PrintersWindow::_UpdateJobButtons()
-{
-	JobItem* item = fJobListView->SelectedItem();
-	if (item != NULL) {
-		Job* job = item->GetJob();
-		fCancel->SetEnabled(job->Status() != kProcessing);
-		fRestart->SetEnabled(job->Status() == kFailed);
-	} else {
-		fCancel->SetEnabled(false);
-		fRestart->SetEnabled(false);
+	if (printcups_cancel_job(queue, id) != B_OK) {
+		BAlert* alert = new BAlert(B_TRANSLATE("Printers"),
+			B_TRANSLATE("Could not cancel the job."),
+			B_TRANSLATE("OK"));
+		alert->Go();
+		return;
 	}
+
+	_UpdateJobs();
 }
 
 
+void
+PrintersWindow::_AddPrinter()
+{
+	const char* name = fAddNameField->Text();
+	const char* uri = fAddUriField->Text();
+	if (name == NULL || name[0] == '\0' || uri == NULL || uri[0] == '\0') {
+		BAlert* alert = new BAlert(B_TRANSLATE("Printers"),
+			B_TRANSLATE("Enter a printer name and URI."),
+			B_TRANSLATE("OK"));
+		alert->Go();
+		return;
+	}
+
+	status_t status = printcups_add_printer_everywhere(name, uri);
+	if (status != B_OK) {
+		// Fall back to lpadmin -m everywhere (needs local admin).
+		char cmd[1024];
+		snprintf(cmd, sizeof(cmd),
+			"lpadmin -p %s -v %s -m everywhere -E 2>/dev/null", name, uri);
+		if (system(cmd) != 0) {
+			BAlert* alert = new BAlert(B_TRANSLATE("Printers"),
+				B_TRANSLATE("Could not add the printer. Driverless IPP "
+					"needs a reachable IPP Everywhere device."),
+				B_TRANSLATE("OK"));
+			alert->Go();
+			return;
+		}
+	}
+
+	_UpdateQueues();
+	_UpdateJobs();
+}
+
+
+void
+PrintersWindow::_RemovePrinter()
+{
+	BStringItem* item = _SelectedQueue();
+	if (item == NULL)
+		return;
+
+	BString name(item->Text());
+	int32 sp = name.FindFirst("  [");
+	if (sp >= 0)
+		name.Truncate(sp);
+
+	char cmd[512];
+	snprintf(cmd, sizeof(cmd), "lpadmin -x %s 2>/dev/null", name.String());
+	if (system(cmd) != 0) {
+		BAlert* alert = new BAlert(B_TRANSLATE("Printers"),
+			B_TRANSLATE("Could not remove the printer."),
+			B_TRANSLATE("OK"));
+		alert->Go();
+		return;
+	}
+
+	_UpdateQueues();
+	_UpdateJobs();
+}

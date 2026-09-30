@@ -1,10 +1,8 @@
 /*
- * Copyright 2001-2007, Haiku.
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
- * Authors:
- *		Michael Pfeiffer
- *		Philippe Houdoin
+ * Messages for the Printers preflet.
  */
 #ifndef _MESSAGES_H
 #define _MESSAGES_H
@@ -22,5 +20,6 @@ const uint32 kMsgCancelJob          = 'CncJ';
 const uint32 kMsgRestartJob         = 'RstJ';
 const uint32 kMsgJobSelected        = 'JSel';
 const uint32 kMsgPrintTestPage		= 'PtPg';
+
 
 #endif // _MESSAGES_H

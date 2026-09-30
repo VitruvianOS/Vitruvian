@@ -44,6 +44,7 @@ set(SYSTEM_LIBS
 	game
 	media2
 	opengl
+	printcups
 	textencoding
 	tracker
 	translation

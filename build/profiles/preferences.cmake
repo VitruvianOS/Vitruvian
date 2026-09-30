@@ -12,6 +12,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Media
 	Network
 	Power
+	Printers
 	Screen
 	#ScreenSaver
 	Shortcuts
@@ -34,6 +35,7 @@ set(SYSTEM_PREFERENCES
 	Media
 	Network
 	Power
+	Printers
 	Screen
 	#ScreenSaver
 	Shortcuts

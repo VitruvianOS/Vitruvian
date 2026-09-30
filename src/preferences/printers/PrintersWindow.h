@@ -1,64 +1,48 @@
 /*
- * Copyright 2001-2010, Haiku.
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
- *
- * Authors:
- *		Michael Pfeiffer
  */
 #ifndef _PRINTERS_WINDOW_H
 #define _PRINTERS_WINDOW_H
 
 
-#include <Box.h>
 #include <Window.h>
 
 
-class PrintersWindow;
-class PrinterListView;
-class JobListView;
-class Job;
-class SpoolFolder;
-class PrinterItem;
-class ScreenSettings;
+class BButton;
+class BListView;
+class BStringItem;
+class BTextControl;
 
 
 class PrintersWindow : public BWindow {
 public:
-				PrintersWindow(ScreenSettings *settings);
-	virtual		~PrintersWindow();
+						PrintersWindow();
 
-	void		MessageReceived(BMessage* msg);
-	bool		QuitRequested();
-
-	void		PrintTestPage(PrinterItem* printer);
-
-	void		AddJob(SpoolFolder* folder, Job* job);
-	void		RemoveJob(SpoolFolder* folder, Job* job);
-	void		UpdateJob(SpoolFolder* folder, Job* job);
+	virtual void		MessageReceived(BMessage* message);
+	virtual bool		QuitRequested();
 
 private:
-	ScreenSettings*	fSettings;
-	void		_BuildGUI();
-	bool		_IsSelected(PrinterItem* printer);
-	void		_UpdatePrinterButtons();
-	void		_UpdateJobButtons();
+	void				_UpdateQueues();
+	void				_UpdateJobs();
+	void				_SetDefault();
+	void				_CancelJob();
+	void				_AddPrinter();
+	void				_RemovePrinter();
 
-	typedef BWindow Inherited;
+	class BStringItem*	_SelectedQueue() const;
+	BString				_SelectedJobName() const;
+	int32				_SelectedJobId() const;
 
-	PrinterListView*	fPrinterListView;
-	BButton*	fMakeDefault;
-	BButton*	fRemove;
-	BButton*	fPrintTestPage;
-
-	JobListView*	fJobListView;
-	BButton*	fRestart;
-	BButton*    fCancel;
-
-	BBox*		fJobsBox;
-
-	PrinterItem*	fSelectedPrinter;
-
-	bool		fAddingPrinter;
+	BListView*		fQueueList;
+	BListView*		fJobList;
+	BTextControl*	fAddNameField;
+	BTextControl*	fAddUriField;
+	BButton*		fDefaultButton;
+	BButton*		fCancelButton;
+	BButton*		fAddButton;
+	BButton*		fRemoveButton;
 };
 
-#endif	// _PRINTERS_WINDOW_H
+
+#endif // _PRINTERS_WINDOW_H

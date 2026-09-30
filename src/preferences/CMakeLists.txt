@@ -14,7 +14,7 @@ add_subdirectory(power)
 add_subdirectory(bluetooth)
 add_subdirectory(media)
 #add_subdirectory(notifications) # missing libnotification
-#add_subdirectory(printers)     # needs print kit
+add_subdirectory(printers)
 add_subdirectory(screen)
 add_subdirectory(screensaver)
 add_subdirectory(shortcuts)

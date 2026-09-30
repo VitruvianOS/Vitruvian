@@ -828,6 +828,7 @@ MouseDevice::_ControlThread()
 			int32 xdelta = 0, ydelta = 0;
 			int32 wheel_xdelta = 0, wheel_ydelta = 0;
 			int32 currentAbsX = fLastAbsX, currentAbsY = fLastAbsY;
+			bool touchChanged = false;
 			bigtime_t timestamp = system_time();
 
 			struct input_event iev;
@@ -871,13 +872,8 @@ MouseDevice::_ControlThread()
 						case ABS_Y: currentAbsY = iev.value; break;
 					}
 				} else if (iev.type == EV_KEY) {
-					if (fIsAbsoluteTouchpad && iev.code == BTN_TOOL_FINGER
-						&& iev.value == 0) {
-						// Finger lifted: drop the reference or the
-						// next touch-down jumps the cursor.
-						fLastAbsX = -1;
-						fLastAbsY = -1;
-					}
+					if (iev.code == BTN_TOOL_FINGER || iev.code == BTN_TOUCH)
+						touchChanged = true;
 					uint32 bit = 0;
 					switch (iev.code) {
 						case BTN_LEFT:   bit = 0x01; break;
@@ -932,15 +928,27 @@ MouseDevice::_ControlThread()
 					fTarget.fCursorLock.Unlock();
 				}
 
-				if (fIsAbsoluteTouchpad && currentAbsX >= 0) {
-					// Touchpad sample is finger position on the pad,
-					// not screen.
-					if (fLastAbsX >= 0) {
-						xdelta += currentAbsX - fLastAbsX;
-						ydelta += currentAbsY - fLastAbsY;
+				if (fIsAbsoluteTouchpad) {
+					// A touchpad reports finger position on the pad, not screen position.
+					// A touch-down only sets the reference, or the cursor jumps.
+					int touchCode = libevdev_has_event_code(fEvdevHandle,
+						EV_KEY, BTN_TOUCH) ? BTN_TOUCH : BTN_TOOL_FINGER;
+					if (libevdev_get_event_value(fEvdevHandle, EV_KEY,
+							touchCode) == 0) {
+						fLastAbsX = -1;
+						fLastAbsY = -1;
+					} else {
+						int32 x = libevdev_get_event_value(fEvdevHandle,
+							EV_ABS, ABS_X);
+						int32 y = libevdev_get_event_value(fEvdevHandle,
+							EV_ABS, ABS_Y);
+						if (fLastAbsX >= 0 && !touchChanged) {
+							xdelta += x - fLastAbsX;
+							ydelta += y - fLastAbsY;
+						}
+						fLastAbsX = x;
+						fLastAbsY = y;
 					}
-					fLastAbsX = currentAbsX;
-					fLastAbsY = currentAbsY;
 				}
 
 				if (xdelta != 0 || ydelta != 0) {

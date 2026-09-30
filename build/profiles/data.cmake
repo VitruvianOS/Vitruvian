@@ -27,6 +27,13 @@ install(PROGRAMS data/libexec/vos-partition-lib.sh
 install(FILES data/etc/installer/excludes.list
   DESTINATION /usr/share/vos/installer/)
 
+# update-grub must yield rw root and keep the Safe Mode/Debug entries.
+# 40_vos goes to /etc/grub.d, and /etc/default/grub is left to the image and installer writers.
+install(PROGRAMS data/etc/grub.d/40_vos
+  DESTINATION /etc/grub.d/)
+install(FILES data/etc/default/grub
+  DESTINATION /usr/share/vos/grub/)
+
 install(PROGRAMS data/libexec/vos-set-autologin
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.user.policy

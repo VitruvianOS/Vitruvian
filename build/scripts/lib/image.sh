@@ -169,14 +169,13 @@ ln -sfn boot/vmlinuz-\$_kver /vmlinuz
 ln -sfn boot/initrd.img-\$_kver /initrd.img
 
 mkdir -p /etc/default
-cat > /etc/default/grub <<'GRUBEOF'
-GRUB_DEFAULT=0
-GRUB_TIMEOUT=0
-GRUB_DISTRIBUTOR=\"Vitruvian\"
-GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash loglevel=3 systemd.show_status=0 rd.udev.log_priority=3\"
-GRUB_CMDLINE_LINUX=\"\"
-GRUB_DISABLE_OS_PROBER=true
-GRUBEOF
+# update-grub's generated entries need rw root, or the installed system hangs at boot.
+# Safe Mode/Debug come from the vos package's /etc/grub.d/40_vos.
+if [ ! -f /usr/share/vos/grub/grub ]; then
+    echo missing packaged /usr/share/vos/grub/grub >&2
+    exit 1
+fi
+cp /usr/share/vos/grub/grub /etc/default/grub
 
 mkdir -p /boot/grub
 update-grub

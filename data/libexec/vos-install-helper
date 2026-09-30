@@ -548,6 +548,15 @@ UUID=$_target_uuid  /  $_target_fstype  $_root_opts  0  $_fsck_pass
 tmpfs               /tmp  tmpfs  defaults,nosuid,nodev  0  0
 EOF
 
+    # update-grub on the target must yield rw root, but the live rootfs often has no
+    # /etc/default/grub, so copy the packaged one from /usr/share/vos/grub/.
+    mkdir -p "$TARGET/etc/default"
+    if [ ! -f "$TARGET/usr/share/vos/grub/grub" ]; then
+        log "missing packaged /usr/share/vos/grub/grub on target; cannot write /etc/default/grub"
+        return 1
+    fi
+    cp "$TARGET/usr/share/vos/grub/grub" "$TARGET/etc/default/grub"
+
     _target_disk="$(lsblk -no PKNAME "$_target_source" | head -n1)"
     _esp_part=""
     if [ -n "$_target_disk" ]; then

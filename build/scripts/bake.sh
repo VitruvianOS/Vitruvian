@@ -267,6 +267,8 @@ cmd_build() {
     ninja
 
     log_step "Packaging debs..."
+    # Drop older VOS builds first: the image installs every *.deb here.
+    rm -f "$BASEDIR"/VOS-*-Linux-*.deb
     cpack
 
     for _t in $_types; do
@@ -294,6 +296,7 @@ cmd_build() {
     # output/ may already exist from create_raw/iso; mkdir -p covers packages-only too.
     _artifacts_dir="$BASEDIR/output"
     mkdir -p "$_artifacts_dir"
+    rm -f "$_artifacts_dir"/*.deb
     for _deb in "$BASEDIR"/*.deb; do
         [ -f "$_deb" ] || continue
         cp -f "$_deb" "$_artifacts_dir/"

@@ -72,7 +72,7 @@ create_raw() {
     fi
 
     require_cmd rsync rsync
-    require_cmd sfdisk util-linux
+    require_cmd sfdisk fdisk
     require_cmd mke2fs e2fsprogs
     require_cmd mkfs.vfat dosfstools
     require_cmd mcopy mtools

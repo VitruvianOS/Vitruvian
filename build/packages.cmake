@@ -57,6 +57,20 @@ execute_process(
 	OUTPUT_STRIP_TRAILING_WHITESPACE
 	ERROR_QUIET)
 
+# The sha is read at configure time: reconfigure whenever HEAD moves.
+execute_process(
+	COMMAND git rev-parse --absolute-git-dir
+	WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+	OUTPUT_VARIABLE _vos_git_dir
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+	ERROR_QUIET)
+foreach(_head HEAD logs/HEAD)
+	if(_vos_git_dir AND EXISTS "${_vos_git_dir}/${_head}")
+		set_property(DIRECTORY APPEND PROPERTY
+			CMAKE_CONFIGURE_DEPENDS "${_vos_git_dir}/${_head}")
+	endif()
+endforeach()
+
 if(DEFINED ENV{VOS_SOURCE_DATE_EPOCH} AND NOT "$ENV{VOS_SOURCE_DATE_EPOCH}" STREQUAL "")
 	set(VOS_SOURCE_DATE_EPOCH "$ENV{VOS_SOURCE_DATE_EPOCH}")
 else()
@@ -159,7 +173,7 @@ endif()
 set(CPACK_DEBIAN_DEV_PACKAGE_NAME "vos-dev")
 set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "vos (= ${_vos_runtime_version})")
 set(CPACK_DEBIAN_DEV_PACKAGE_DESCRIPTION
-	"V\\:OS development files: public headers, libraries, and pkg-config")
+	"V\\\\OS development files: public headers, libraries, and pkg-config")
 
 # Make `ninja clean` (and `make clean`) wipe CPack outputs too. CPack writes
 # its artifacts into the build root, so they normally survive `clean` and

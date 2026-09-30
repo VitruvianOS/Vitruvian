@@ -64,6 +64,13 @@ arch_to_efi_target() {
     esac
 }
 
+# Debian leaves the sbin dirs off a normal user's PATH, but sfdisk, mke2fs
+# and mkfs.vfat live there.
+case ":$PATH:" in
+    *:/usr/sbin:*) ;;
+    *) PATH="$PATH:/usr/sbin:/sbin"; export PATH ;;
+esac
+
 require_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1 (install $2)"
 }

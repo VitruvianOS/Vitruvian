@@ -282,6 +282,8 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 }
 
 
+// Linux has no way to kill one thread: SIGKILL to a tid takes down its whole
+// thread group, so this kills the thread's team. Documented in OS.h.
 status_t
 kill_thread(thread_id thread)
 {
@@ -681,6 +683,7 @@ wait_for_thread(thread_id id, status_t* returnCode)
 }
 
 
+// Not supported on V\OS, by design. Documented in OS.h.
 status_t
 suspend_thread(thread_id id)
 {

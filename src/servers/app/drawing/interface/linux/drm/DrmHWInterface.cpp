@@ -12,13 +12,17 @@
 #include <algorithm>
 #include <new>
 #include <errno.h>
+#include <fcntl.h>
 #include <math.h>
 #include <libdrm/drm_mode.h>
 #include <poll.h>
+#include <stdlib.h>
 #include <sys/eventfd.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+
+#include <device/DrmDeviceSelect.h>
 
 #if defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h>
@@ -185,12 +189,21 @@ DrmHWInterface::_OnSessionEnable()
 		fFd = atoi(janusDrmFdStr);
 		fDeviceId = 0;
 	} else {
-		char path[B_PATH_NAME_LENGTH];
-		for (int i = 0; i <= 9; ++i) {
-			snprintf(path, sizeof(path), "/dev/dri/card%d", i);
-			fDeviceId = libseat_open_device(fSeat, path, &fFd);
-			if (fDeviceId >= 0)
-				break;
+		int deviceId = -1;
+		int fd = -1;
+		int cardIndex = -1;
+		const char* why = NULL;
+		if (!drm_select_seat_device(fSeat, deviceId, fd, cardIndex, why)) {
+			fDeviceId = -1;
+			fFd = -1;
+		} else {
+			char path[B_PATH_NAME_LENGTH];
+			snprintf(path, sizeof(path), "/dev/dri/card%d",
+				cardIndex);
+			fDeviceId = deviceId;
+			fFd = fd;
+			printf("DrmHWInterface: opened DRM device %s fd=%d (%s)\n",
+				path, fFd, why);
 		}
 	}
 

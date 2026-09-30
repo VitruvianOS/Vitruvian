@@ -35,6 +35,7 @@ extern "C" {
 #include <Messenger.h>
 #include <OS.h>
 
+#include <device/DrmDeviceSelect.h>
 #include <kernel/util/KMessage.h>
 
 #include <LaunchDaemonDefs.h>
@@ -978,17 +979,23 @@ open_drm_device()
 {
 	if (!sSeat)
 		return false;
-	char path[64];
-	for (int i = 0; i <= 9; i++) {
-		snprintf(path, sizeof(path), "/dev/dri/card%d", i);
-		sDrmDeviceId = libseat_open_device(sSeat, path, &sDrmFd);
-		if (sDrmDeviceId >= 0 && sDrmFd >= 0) {
-			printf("janus_session: opened DRM device %s fd=%d\n", path, sDrmFd);
-			return true;
-		}
+
+	int deviceId = -1;
+	int fd = -1;
+	int cardIndex = -1;
+	const char* why = NULL;
+	if (!drm_select_seat_device(sSeat, deviceId, fd, cardIndex, why)) {
+		fprintf(stderr, "janus_session: could not open any DRM device\n");
+		return false;
 	}
-	fprintf(stderr, "janus_session: could not open any DRM device\n");
-	return false;
+
+	char path[64];
+	snprintf(path, sizeof(path), "/dev/dri/card%d", cardIndex);
+	sDrmDeviceId = deviceId;
+	sDrmFd = fd;
+	printf("janus_session: opened DRM device %s fd=%d (%s)\n",
+		path, sDrmFd, why);
+	return true;
 }
 
 

@@ -275,6 +275,20 @@ DeclareDependency(
 	RUNTIMES   "libglib2.0-0"
 )
 
+DeclareDependency(
+	CUPS
+	LIBRARIES  "cups"
+	PACKAGES   "libcups2-dev"
+	RUNTIMES   "libcups2t64"
+)
+
+DeclareDependency(
+	CAIRO
+	LIBRARIES  "cairo"
+	PACKAGES   "libcairo2-dev"
+	RUNTIMES   "libcairo2"
+)
+
 # Dependencies for Debug builds
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

@@ -7,6 +7,7 @@
 	pc
 	query
 	rc
+	jam
 	catarea
 	chop
 	driveinfo

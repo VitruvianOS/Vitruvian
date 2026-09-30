@@ -283,6 +283,14 @@ DrmHWInterface::_OnSessionEnable()
 				drmModeConnector* conn = drmModeGetConnector(fFd, dev->conn);
 				if (conn) {
 					fBacklight = backlight_init(udevDev, conn->connector_type);
+					if (fBacklight != NULL) {
+						fprintf(stderr, "DRM: backlight bound to %s "
+							"(type %d, max %d)\n", fBacklight->path,
+							fBacklight->type, fBacklight->max_brightness);
+					} else {
+						fprintf(stderr, "DRM: no backlight device found "
+							"(connector type %u)\n", conn->connector_type);
+					}
 					drmModeFreeConnector(conn);
 				}
 				udev_device_unref(udevDev);

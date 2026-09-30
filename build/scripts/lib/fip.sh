@@ -251,13 +251,14 @@ fip_licheerv_assemble() {
     fi
 
     # --- Build U-Boot (SPL + U-Boot proper) ---
-    _uboot_dir="$_cache/$FIP_LICHEERV_UBOOT_SHA"
-    _uboot_work="$_uboot_dir/.build"
+    # Sourced into image.sh: _uboot_dir there is the flash source, don't reuse it.
+    _lrv_uboot_dir="$_cache/$FIP_LICHEERV_UBOOT_SHA"
+    _uboot_work="$_lrv_uboot_dir/.build"
     if [ -d "$_uboot_work/.git" ]; then
         _fip_log "Using existing U-Boot clone at $_uboot_work"
     else
         _fip_log "Cloning smaeul/u-boot (branch $FIP_LICHEERV_UBOOT_BRANCH, shallow)..."
-        mkdir -p "$_uboot_dir"
+        mkdir -p "$_lrv_uboot_dir"
         rm -rf "$_uboot_work"
         git clone --depth 1 --branch "$FIP_LICHEERV_UBOOT_BRANCH" \
             "$FIP_LICHEERV_UBOOT_REPO" "$_uboot_work" || {
@@ -270,9 +271,9 @@ fip_licheerv_assemble() {
     if ! make -C "$_uboot_work" \
             CROSS_COMPILE="$FIP_LICHEERV_CROSS_COMPILE" \
             "$FIP_LICHEERV_DEFCONFIG" \
-            >"$_uboot_dir/fip-defconfig.log" 2>&1; then
-        tail -20 "$_uboot_dir/fip-defconfig.log" >&2
-        _fip_die "U-Boot defconfig failed (log: $_uboot_dir/fip-defconfig.log)."
+            >"$_lrv_uboot_dir/fip-defconfig.log" 2>&1; then
+        tail -20 "$_lrv_uboot_dir/fip-defconfig.log" >&2
+        _fip_die "U-Boot defconfig failed (log: $_lrv_uboot_dir/fip-defconfig.log)."
         return 1
     fi
 
@@ -285,9 +286,9 @@ fip_licheerv_assemble() {
             NO_PYTHON=1 \
             spl/sunxi-spl.bin u-boot.bin \
             -j"$(nproc 2>/dev/null || echo 4)" \
-            >"$_uboot_dir/fip-build.log" 2>&1; then
-        tail -30 "$_uboot_dir/fip-build.log" >&2
-        _fip_die "U-Boot build failed (log: $_uboot_dir/fip-build.log)."
+            >"$_lrv_uboot_dir/fip-build.log" 2>&1; then
+        tail -30 "$_lrv_uboot_dir/fip-build.log" >&2
+        _fip_die "U-Boot build failed (log: $_lrv_uboot_dir/fip-build.log)."
         return 1
     fi
 

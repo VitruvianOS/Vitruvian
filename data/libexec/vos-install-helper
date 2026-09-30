@@ -490,6 +490,15 @@ _do_commit_setup() {
     $_in systemctl disable sshd.service 2>/dev/null || true
     $_in systemctl disable ssh.socket 2>/dev/null || true
 
+    # janus's VOS_DEFAULT_USER must name the account this install created;
+    # the unit ships vos-live for the live ISO.
+    mkdir -p "$TARGET/etc/systemd/system/janus.service.d"
+    cat > "$TARGET/etc/systemd/system/janus.service.d/50-install-user.conf" <<EOF
+[Service]
+Environment=VOS_DEFAULT_USER=$_username
+EOF
+    $_in systemctl daemon-reload 2>/dev/null || true
+
     log "commit-setup complete for user $_username"
     return 0
 }

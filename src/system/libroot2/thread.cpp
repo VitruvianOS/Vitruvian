@@ -34,7 +34,6 @@ static __thread pthread_key_t sOnExitKey;
 
 struct thread_data {
 	char name[B_OS_NAME_LENGTH];
-	thread_id father;
 
 	thread_func func;
 	void* data;
@@ -84,7 +83,7 @@ void* thread_run(void* data)
 
 	// Already registered by the creator: this only parks us until
 	// resume_thread().
-	nexus_thread_spawn spawnInfo = { threadData->name, threadData->father };
+	nexus_thread_spawn spawnInfo = { threadData->name };
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	status_t ret = nexus_io(nexus, NEXUS_THREAD_SPAWN, &spawnInfo);
@@ -247,7 +246,6 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 		strlcpy(threadData->name, name, sizeof(threadData->name));
 	else
 		threadData->name[0] = '\0';
-	threadData->father = find_thread(NULL);
 	threadData->func = func;
 	threadData->data = data;
 	pthread_mutex_init(&threadData->lock, NULL);

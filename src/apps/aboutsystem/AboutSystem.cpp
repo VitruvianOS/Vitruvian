@@ -1677,6 +1677,18 @@ AboutView::_CreateCreditsView()
 		"Maxim Kutnij\n"
 		"\n");
 
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuOrangeColor);
+	fCreditsView->Insert(B_TRANSLATE("Contributors:\n"));
+
+	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
+	fCreditsView->Insert(
+		"Ivan Gualandri\n"
+		"Vladislav Janeček\n"
+		"Adam Milner\n"
+		"Mas Ahmad Muhammad\n"
+		"Angelo Scarnà\n"
+		"\n");
+
 	// copyrights for various projects we use
 
 	BPath mitPath;

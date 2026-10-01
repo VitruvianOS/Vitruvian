@@ -13,6 +13,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Joysticks
 	Keymap
 	Locale
+	Location
 	Media
 	Network
 	Power
@@ -41,6 +42,7 @@ set(SYSTEM_PREFERENCES
 	Joysticks
 	Keymap
 	Locale
+	Location
 	Media
 	Network
 	Power

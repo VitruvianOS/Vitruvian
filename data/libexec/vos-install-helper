@@ -509,6 +509,89 @@ _unmount_binds() {
     done
 }
 
+# Hibernate needs a resume device with a known offset. Sized to RAM (capped at 32GiB) and skipped on
+# an unsupported fs or tight headroom. Sets _SWAP_CREATED and _SWAP_RESUME_OFFSET (4096-unit blocks on ext4).
+_setup_swapfile() {
+    _sw_target="$1"; _sw_fstype="$2"
+
+    case "$_sw_fstype" in
+        ext4) : ;;
+        *)
+            log "hibernate: $_sw_fstype target, swapfile support not wired up for it; skipping"
+            return 0
+            ;;
+    esac
+
+    _mem_kb="$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null)"
+    case "$_mem_kb" in
+        ''|*[!0-9]*)
+            log "hibernate: cannot read MemTotal; skipping swapfile"
+            return 0
+            ;;
+    esac
+    _swap_mib=$((_mem_kb / 1024))
+    _cap_mib=$((32 * 1024))
+    [ "$_swap_mib" -gt "$_cap_mib" ] && _swap_mib=$_cap_mib
+    [ "$_swap_mib" -lt 1 ] && _swap_mib=1
+
+    _avail_kb="$(df -Pk "$_sw_target" 2>/dev/null | awk 'NR==2 {print $4}')"
+    case "$_avail_kb" in
+        ''|*[!0-9]*)
+            log "hibernate: cannot read free space on $_sw_target; skipping swapfile"
+            return 0
+            ;;
+    esac
+    _avail_mib=$((_avail_kb / 1024))
+    _need_mib=$((_swap_mib + 10 * 1024))
+    if [ "$_avail_mib" -lt "$_need_mib" ]; then
+        log "hibernate: only ${_avail_mib}MiB free on target (need ${_need_mib}MiB for a ${_swap_mib}MiB swapfile plus headroom); skipping swapfile"
+        return 0
+    fi
+
+    _swapfile="$_sw_target/swapfile"
+    rm -f "$_swapfile"
+    if ! fallocate -l "${_swap_mib}M" "$_swapfile" 2>/dev/null; then
+        log "hibernate: fallocate failed, falling back to dd (slow)"
+        if ! dd if=/dev/zero of="$_swapfile" bs=1M count="$_swap_mib" status=none 2>/dev/null; then
+            log "hibernate: could not create swapfile; skipping"
+            rm -f "$_swapfile"
+            return 0
+        fi
+    fi
+    if ! chmod 600 "$_swapfile"; then
+        log "hibernate: chmod 600 on swapfile failed; skipping"
+        rm -f "$_swapfile"
+        return 0
+    fi
+    if ! mkswap "$_swapfile" >/dev/null 2>&1; then
+        log "hibernate: mkswap failed; skipping swapfile"
+        rm -f "$_swapfile"
+        return 0
+    fi
+
+    _SWAP_CREATED=1
+    log "hibernate: swapfile created ($_swapfile, ${_swap_mib}MiB)"
+
+    if ! command -v filefrag >/dev/null 2>&1; then
+        log "hibernate: filefrag not available; swap is usable but resume_offset cannot be computed"
+        return 0
+    fi
+    _frag="$(filefrag -v "$_swapfile" 2>/dev/null)"
+    _extents="$(printf '%s\n' "$_frag" | grep -c '^ *[0-9][0-9]*: ')"
+    if [ "$_extents" -gt 1 ]; then
+        log "hibernate: swapfile has $_extents extents (fragmented); resume still works, the fs driver bmaps the rest"
+    fi
+    _offset="$(printf '%s\n' "$_frag" | awk '$1=="0:" {x=$4; sub(/\.\.$/, "", x); print x; exit}')"
+    case "$_offset" in
+        ''|*[!0-9]*)
+            log "hibernate: could not parse filefrag output; resume_offset unavailable"
+            return 0
+            ;;
+    esac
+    _SWAP_RESUME_OFFSET="$_offset"
+    return 0
+}
+
 _do_config() {
     TARGET="$1"
 
@@ -551,11 +634,18 @@ _do_config() {
         *)     _root_opts="errors=remount-ro" ;;
     esac
 
+    _SWAP_CREATED=0
+    _SWAP_RESUME_OFFSET=""
+    _setup_swapfile "$TARGET" "$_target_fstype"
+
     cat > "$TARGET/etc/fstab" <<EOF
 # /etc/fstab — written by vos-install-helper
 UUID=$_target_uuid  /  $_target_fstype  $_root_opts  0  $_fsck_pass
 tmpfs               /tmp  tmpfs  defaults,nosuid,nodev  0  0
 EOF
+    if [ "$_SWAP_CREATED" -eq 1 ]; then
+        printf '/swapfile  none  swap  sw  0  0\n' >> "$TARGET/etc/fstab"
+    fi
 
     # update-grub on the target must yield rw root, but the live rootfs often has no
     # /etc/default/grub, so copy the packaged one from /usr/share/vos/grub/.
@@ -598,13 +688,28 @@ EOF
     # (the live ISO image build masks it). See #271.
     chroot "$TARGET" systemctl unmask systemd-remount-fs.service 2>/dev/null \
         || log "warn: could not unmask systemd-remount-fs on target"
-    # The target has no swap in fstab; never record the live system's.
-    # Dropped afterwards so the target's own regenerations find its swap.
     mkdir -p "$TARGET/etc/initramfs-tools/conf.d"
-    echo RESUME=none > "$TARGET/etc/initramfs-tools/conf.d/resume"
+    if [ "$_SWAP_CREATED" -eq 1 ] && [ -n "$_SWAP_RESUME_OFFSET" ]; then
+        # Hibernate: the resume device is the root fs UUID and the offset is the swapfile's first block.
+        # initramfs-tools needs this before update-initramfs; _write_shim_grubcfg adds the kernel cmdline.
+        cat > "$TARGET/etc/initramfs-tools/conf.d/resume" <<EOF
+RESUME=UUID=$_target_uuid
+RESUME_OFFSET=$_SWAP_RESUME_OFFSET
+EOF
+        mkdir -p "$TARGET/etc/vos"
+        printf 'resume=UUID=%s resume_offset=%s\n' \
+            "$_target_uuid" "$_SWAP_RESUME_OFFSET" > "$TARGET/etc/vos/resume-cmdline"
+        log "hibernate: resume configured (UUID=$_target_uuid offset=$_SWAP_RESUME_OFFSET)"
+    else
+        # No swap in fstab; never record the live system's.
+        # Dropped afterwards so the target's own regenerations find its swap.
+        echo RESUME=none > "$TARGET/etc/initramfs-tools/conf.d/resume"
+    fi
     chroot "$TARGET" update-initramfs -u -k all \
         || log "warn: update-initramfs failed"
-    rm -f "$TARGET/etc/initramfs-tools/conf.d/resume"
+    if [ "$_SWAP_CREATED" -ne 1 ]; then
+        rm -f "$TARGET/etc/initramfs-tools/conf.d/resume"
+    fi
 
     _kver="$(ls -1 "$TARGET"/boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1 | sed 's|.*/vmlinuz-||')"
     if [ -n "$_kver" ]; then
@@ -627,11 +732,18 @@ _BOOTROOT=/run/vos/bootroot
 _write_shim_grubcfg() {
     _su="$1"; _sc="$2"; _kv="$3"; _troot="$4"
 
+    # Hibernate: _do_config leaves the resume= kernel params here when it provisioned a swapfile.
+    # Read fresh each call, since bootloader runs separately. Safe Mode never resumes, as it is the way out of a bad image.
+    _resume_cmdline=""
+    if [ -f "$_troot/etc/vos/resume-cmdline" ]; then
+        _resume_cmdline="$(cat "$_troot/etc/vos/resume-cmdline")"
+    fi
+
     # Debug builds ship vos-sshdebug.service; only then offer the Debug entry.
     _debug_menuentry=""
     if [ -f "$_troot/etc/systemd/system/vos-sshdebug.service" ]; then
         _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug $_resume_cmdline
     initrd (\$root)/boot/initrd.img-$_kv
 }"
     fi
@@ -649,11 +761,11 @@ insmod gfxterm
 search --no-floppy --fs-uuid --set=root $_su
 set timeout=5
 menuentry "Vitruvian" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash $_resume_cmdline
     initrd (\$root)/boot/initrd.img-$_kv
 }
 menuentry "Vitruvian (Safe Mode)" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons noresume
     initrd (\$root)/boot/initrd.img-$_kv
 }
 $_debug_menuentry

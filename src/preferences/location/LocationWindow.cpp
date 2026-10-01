@@ -10,6 +10,7 @@
 #include <LayoutBuilder.h>
 #include <Locale.h>
 #include <Message.h>
+#include <Messenger.h>
 #include <TabView.h>
 
 
@@ -51,9 +52,12 @@ LocationWindow::LocationWindow()
 LocationWindow::~LocationWindow()
 {
 	if (fProvider != NULL) {
+		if (fSettingsView != NULL)
+			fProvider->Unwatch(BMessenger(fSettingsView));
+		// Quit() must run with the looper locked; it deletes the looper
+		// on its own thread once teardown finishes.
+		fProvider->Lock();
 		fProvider->Quit();
-		// Quit() deletes the looper on its own thread; drop our ref only
-		// after it has finished tearing down.
 		fProvider = NULL;
 	}
 }
@@ -71,7 +75,9 @@ LocationWindow::QuitRequested()
 {
 	fSettings.SaveSettings();
 	if (fProvider != NULL) {
-		fProvider->Stop();
+		if (fSettingsView != NULL)
+			fProvider->Unwatch(BMessenger(fSettingsView));
+		fProvider->Lock();
 		fProvider->Quit();
 		fProvider = NULL;
 	}

@@ -62,6 +62,7 @@ namespace BPrivate {
 };
 
 
+class PowerManager;
 class Desktop : public DesktopObservable, public MessageLooper,
 	public ScreenOwner {
 public:
@@ -345,6 +346,7 @@ private:
 								fSettings;
 			port_id				fMessagePort;
 			::EventDispatcher	fEventDispatcher;
+			PowerManager*		fPowerManager;
 			area_id				fSharedReadOnlyArea;
 			server_read_only_memory* fServerReadOnlyMemory;
 

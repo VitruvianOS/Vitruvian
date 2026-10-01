@@ -89,6 +89,11 @@ class EventDispatcher : public BLocker {
 		void GetMouse(BPoint& where, int32& buttons);
 		void SendFakeMouseMoved(EventTarget& target, int32 viewToken);
 		bigtime_t IdleTime();
+		// Set by PowerManager when it turns the display off for idle; the
+		// next input event turns it back on.
+		bool IsDisplayAsleep() { return atomic_get(&fDisplayAsleep) != 0; }
+		void SetDisplayAsleep(bool asleep)
+			{ atomic_set(&fDisplayAsleep, asleep ? 1 : 0); }
 
 		bool HasCursorThread();
 		void SetHWInterface(HWInterface* interface);
@@ -155,6 +160,7 @@ class EventDispatcher : public BLocker {
 		BPoint			fLastCursorPosition;
 		int32			fLastButtons;
 		bigtime_t		fLastUpdate;
+		int32			fDisplayAsleep;
 
 		BMessage		fDragMessage;
 		std::vector<std::pair<vref_id, BPrivate::vref_ticket>>

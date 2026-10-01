@@ -1286,6 +1286,7 @@ DrmHWInterface::SetDPMSMode(uint32 state)
 			fConnProps.dpms, dpms);
 		if (ret == 0) {
 			fDpmsState = state;
+			_RepaintAfterDPMS();
 			return B_OK;
 		}
 		return B_ERROR;
@@ -1302,6 +1303,7 @@ DrmHWInterface::SetDPMSMode(uint32 state)
 			drmModeFreeProperty(prop);
 			drmModeFreeConnector(conn);
 			fDpmsState = state;
+			_RepaintAfterDPMS();
 			return B_OK;
 		}
 		if (prop) drmModeFreeProperty(prop);
@@ -1309,6 +1311,23 @@ DrmHWInterface::SetDPMSMode(uint32 state)
 
 	drmModeFreeConnector(conn);
 	return B_UNSUPPORTED;
+}
+
+
+// Flips stop while the display is off and damage piles up; flip it all
+// as soon as the display is back on.
+void
+DrmHWInterface::_RepaintAfterDPMS()
+{
+	if (fDpmsState != B_DPMS_ON)
+		return;
+	pthread_mutex_lock(&fDirtyMutex);
+	fNeedsFlip = true;
+	pthread_mutex_unlock(&fDirtyMutex);
+	if (fWakeFd >= 0) {
+		uint64_t v = 1;
+		write(fWakeFd, &v, sizeof(v));
+	}
 }
 
 

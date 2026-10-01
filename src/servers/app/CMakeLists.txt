@@ -34,6 +34,7 @@ Server(
 		DirectWindowInfo.cpp
 		DrawState.cpp
 		EventDispatcher.cpp
+		PowerManager.cpp
 		EventStream.cpp
 		InputManager.cpp
 		IntPoint.cpp
@@ -138,7 +139,7 @@ Server(
 		stackandtile/Stacking.cpp
 		stackandtile/Tiling.cpp
 
-	LIBS localestub shared agg icon linprog ${FREETYPE_LIBRARY}
+	LIBS localestub shared agg icon linprog systemd ${FREETYPE_LIBRARY}
 		${UDEV_LIBRARIES} ${DRM_LIBRARIES} ${SEAT_LIBRARIES}
 		${LIBEVDEV_LIBRARIES} ${GBM_LIBRARIES} backlight
 

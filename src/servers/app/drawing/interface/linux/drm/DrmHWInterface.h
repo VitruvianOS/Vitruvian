@@ -150,6 +150,7 @@ private:
 	static	int32				_EventThreadEntry(void* data);
 			void				_EventThreadMain();
 			void				_RestoreDisplay();
+			void				_RepaintAfterDPMS();
 			void				_HandleHotplug();
 			void				_DrainPendingFlip();
 			void				_ScheduleResize();

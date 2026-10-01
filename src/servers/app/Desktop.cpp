@@ -22,6 +22,7 @@
 
 
 #include "Desktop.h"
+#include "PowerManager.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -430,6 +431,7 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 	fUserID(userID),
 	fTargetScreen(strdup(targetScreen)),
 	fSettings(NULL),
+	fPowerManager(NULL),
 	fSharedReadOnlyArea(-1),
 	fApplicationsLock("application list"),
 	fShutdownSemaphore(-1),
@@ -481,6 +483,7 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 
 Desktop::~Desktop()
 {
+	delete fPowerManager;
 	delete_area(fSharedReadOnlyArea);
 	delete_port(fMessagePort);
 
@@ -621,6 +624,10 @@ Desktop::Init()
 		_LaunchInputServer();
 
 	fEventDispatcher.SetHWInterface(fVirtualScreen.HWInterface());
+
+	fPowerManager = new(std::nothrow) PowerManager(this);
+	if (fPowerManager != NULL)
+		fPowerManager->Start();
 
 	fEventDispatcher.SetMouseFilter(new MouseFilter(this));
 	fEventDispatcher.SetKeyboardFilter(new KeyboardFilter(this));

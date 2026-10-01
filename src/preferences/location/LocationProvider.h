@@ -7,8 +7,8 @@
  * registered BMessenger/BHandler watchers as B_LOCATION_CHANGED.
  *
  * Prototype: the gpsd backend is the only source wired up. ModemManager
- * and geoclue2 are planned layers on top (see REPORT.md); this class is
- * the BeAPI surface those layers will feed.
+ * and geoclue2 are planned layers on top; this class is the BeAPI
+ * surface those layers will feed.
  */
 #ifndef LOCATION_PROVIDER_H
 #define LOCATION_PROVIDER_H
@@ -67,20 +67,20 @@ public:
 
 			status_t		Start();
 			void			Stop();
-			bool			IsEnabled() const { return fEnabled; }
+			bool			IsEnabled() const;
 
 			status_t		Watch(BMessenger target);
 			status_t		Watch(BHandler* handler);
 			status_t		Unwatch(BMessenger target);
 			status_t		Unwatch(BHandler* handler);
 
-			bool			IsConnected() const { return fConnected; }
+			bool			IsConnected() const;
 			int32			FixType() const;
 			int32			SatellitesInView() const;
 			int32			SatellitesInUse() const;
-			const char*		DevicePath() const { return fDevicePath.String(); }
-			const char*		SourceName() const { return fSourceName.String(); }
-			const char*		LastError() const { return fLastError.String(); }
+			const char*		DevicePath() const;
+			const char*		SourceName() const;
+			const char*		LastError() const;
 
 			void			LastLocation(double* latitude, double* longitude,
 								double* altitude, double* accuracy,
@@ -88,7 +88,7 @@ public:
 								int64* timestamp) const;
 
 			void			SetAccuracyLevel(int32 level);
-			int32			AccuracyLevel() const { return fAccuracyLevel; }
+			int32			AccuracyLevel() const;
 
 			const char*		Host() const { return fHost.String(); }
 			uint16			Port() const { return fPort; }
@@ -97,18 +97,30 @@ private:
 			void			_NotifyStatus();
 			void			_Publish();
 			void			_ApplyAccuracy(double* latitude,
-								double* longitude, double* accuracy) const;
+								double* longitude, double* accuracy,
+								int32 level) const;
 
-			bool			_Connect();
-			void			_Disconnect();
+			status_t		_Connect();
 			void			_ReadLoop();
-			void			_HandleLine(const BString& line);
-			void			_HandleJson(const BString& json);
-			void			_HandleNmea(const BString& sentence);
+			void			_HandleLine(const BString& line, BString* device,
+								BString* source);
+			void			_HandleJson(const BString& json, BString* device,
+								BString* source);
+			void			_HandleNmea(const BString& sentence,
+								BString* device, BString* source);
 			void			_SplitNmea(const BString& sentence,
 								BString* type, BStringList* fields) const;
-			void			_SetFix(int32 fix);
-			void			_SetError(const char* error);
+
+			void			_PostPosition(double latitude, double longitude,
+								double altitude, double accuracy, double speed,
+								double heading, int32 fix, int32 satellites,
+								int32 satellitesView, const char* source,
+								const char* device);
+			void			_PostStatus(bool connected, const char* error,
+								int32 fix, int32 satellites,
+								int32 satellitesView, const char* source,
+								const char* device,
+								double accuracy = 0.0);
 
 	static	int32			_ThreadEntry(void* data);
 
@@ -120,8 +132,8 @@ private:
 			uint16			fPort;
 			BSocket			fSocket;
 			thread_id		fThread;
-			volatile bool	fEnabled;
-			volatile bool	fConnected;
+			bool			fEnabled;
+			bool			fConnected;
 			volatile bool	fQuitRequested;
 
 			BString			fSourceName;

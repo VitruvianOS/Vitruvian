@@ -214,9 +214,8 @@ LocationSettingsView::AttachedToWindow()
 
 	fProvider.Watch(BMessenger(this));
 
-	// Pull whatever the provider already knows.
-	if (fSettings.Enabled())
-		fProvider.Start();
+	// Start is owned by LocationWindow; only refresh from whatever the
+	// provider already knows.
 	RefreshFromProvider();
 }
 

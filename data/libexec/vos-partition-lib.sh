@@ -399,9 +399,9 @@ _PARTLIB_MOVE_JOURNAL_DIR="${VOS_MOVE_JOURNAL_DIR:-/var/lib/vos/move-journal}"
 _PARTLIB_MOVE_CHUNK="${VOS_MOVE_CHUNK:-4194304}"
 
 _partlib_fsync_path() {
-    _fp="$1"
+    sync "$1" 2>/dev/null && return 0
     python3 -c 'import os,sys; fd=os.open(sys.argv[1], os.O_RDONLY); os.fsync(fd); os.close(fd)' \
-        "$_fp" 2>/dev/null || true
+        "$1" 2>/dev/null || true
 }
 
 _partlib_move_journal_name() {
@@ -434,6 +434,7 @@ _partlib_move_journal_write() {
         printf 'new_start=%s\n' "$_MJ_NEW"
         printf 'size=%s\n' "$_MJ_SIZE"
         printf 'copied=%s\n' "$_MJ_COPIED"
+        printf 'rb_copied=%s\n' "${_MJ_RB_COPIED:-0}"
         printf 'state=%s\n' "$_MJ_STATE"
     } > "$_mj_tmp" || return 1
     _partlib_fsync_path "$_mj_tmp"
@@ -447,7 +448,8 @@ _partlib_move_journal_read() {
     _mj_path="$1"
     [ -f "$_mj_path" ] || return 1
     MJ_VERSION=""; MJ_DISK=""; MJ_PARTNO=""; MJ_TARGET=""
-    MJ_OLD=""; MJ_NEW=""; MJ_SIZE=""; MJ_COPIED=""; MJ_STATE=""
+    MJ_OLD=""; MJ_NEW=""; MJ_SIZE=""; MJ_COPIED=""; MJ_RB_COPIED=""
+    MJ_STATE=""
     while IFS= read -r _mj_line || [ -n "$_mj_line" ]; do
         case "$_mj_line" in
             ''|'#'*) continue ;;
@@ -462,6 +464,7 @@ _partlib_move_journal_read() {
             new_start) MJ_NEW="$_KV_VAL" ;;
             size)      MJ_SIZE="$_KV_VAL" ;;
             copied)    MJ_COPIED="$_KV_VAL" ;;
+            rb_copied) MJ_RB_COPIED="$_KV_VAL" ;;
             state)     MJ_STATE="$_KV_VAL" ;;
         esac
     done < "$_mj_path"
@@ -526,136 +529,134 @@ _partlib_move_table_switch() {
     return 0
 }
 
-# Copy len bytes from src_off to dst_off on the same disk. forward=0 walks high to low, so
-# overlapping ranges never overwrite source bytes that are still unread.
-_partlib_move_copy_chunk() {
-    _dc_disk="$1"
-    _dc_src="$2"
-    _dc_dst="$3"
-    _dc_len="$4"
-    _dc_forward="$5"
-    _dc_journal="$6"
+# Copy the span [lo, hi) from src_base to dst_base on one device, memmove-style (high to low when
+# dst_base > src_base). Chunks never exceed the shift, so replaying an unrecorded chunk is harmless.
+_partlib_move_copy_span() {
+    _cs_disk="$1"
+    _cs_src="$2"
+    _cs_dst="$3"
+    _cs_lo="$4"
+    _cs_hi="$5"
+    _cs_done="$6"
+    _cs_journal="$7"
+    _cs_field="$8"
 
-    _dc_pos=0
-    while [ "$_dc_pos" -lt "$_dc_len" ]; do
-        _dc_n="$_PARTLIB_MOVE_CHUNK"
-        _dc_rem=$(( _dc_len - _dc_pos ))
-        if [ "$_dc_rem" -lt "$_dc_n" ]; then
-            _dc_n=$_dc_rem
-        fi
-        if [ "$_dc_forward" -eq 1 ]; then
-            _dc_so=$(( _dc_src + _dc_pos ))
-            _dc_do=$(( _dc_dst + _dc_pos ))
+    if [ "$_cs_dst" -gt "$_cs_src" ]; then
+        _cs_down=1
+        _cs_gap=$(( _cs_dst - _cs_src ))
+    else
+        _cs_down=0
+        _cs_gap=$(( _cs_src - _cs_dst ))
+    fi
+    [ "$_cs_gap" -gt 0 ] || return 0
+    _cs_max="$_PARTLIB_MOVE_CHUNK"
+    [ "$_cs_gap" -lt "$_cs_max" ] && _cs_max=$_cs_gap
+    _cs_total=$(( _cs_hi - _cs_lo ))
+
+    while [ "$_cs_done" -lt "$_cs_total" ]; do
+        _cs_n=$_cs_max
+        _cs_rem=$(( _cs_total - _cs_done ))
+        [ "$_cs_rem" -lt "$_cs_n" ] && _cs_n=$_cs_rem
+        if [ "$_cs_down" -eq 1 ]; then
+            _cs_off=$(( _cs_hi - _cs_done - _cs_n ))
         else
-            _dc_so=$(( _dc_src + _dc_len - _dc_pos - _dc_n ))
-            _dc_do=$(( _dc_dst + _dc_len - _dc_pos - _dc_n ))
+            _cs_off=$(( _cs_lo + _cs_done ))
         fi
-        if ! dd if="$_dc_disk" of="$_dc_disk" bs="$_PARTLIB_MOVE_CHUNK" \
+        if ! dd if="$_cs_disk" of="$_cs_disk" bs="$_cs_max" \
             iflag=fullblock,count_bytes,skip_bytes oflag=seek_bytes \
-            skip="$_dc_so" seek="$_dc_do" count="$_dc_n" \
-            conv=notrunc,fsync 2>/dev/null; then
-            log "move: copy failed at offset $_dc_so"
+            skip=$(( _cs_src + _cs_off )) seek=$(( _cs_dst + _cs_off )) \
+            count="$_cs_n" conv=notrunc,fsync status=none 2>/dev/null; then
+            log "move: copy failed at offset $(( _cs_src + _cs_off ))"
             return 1
         fi
-        _dc_pos=$(( _dc_pos + _dc_n ))
-        if [ -n "$_dc_journal" ] && [ -f "$_dc_journal" ]; then
-            if _partlib_move_journal_read "$_dc_journal"; then
-                MJ_COPIED=$_dc_pos
-                _partlib_move_journal_write "$_dc_journal" || true
-            fi
+        _cs_done=$(( _cs_done + _cs_n ))
+        if [ -n "$_cs_journal" ]; then
+            case "$_cs_field" in
+                copied)    _MJ_COPIED=$_cs_done ;;
+                rb_copied) _MJ_RB_COPIED=$_cs_done ;;
+            esac
+            _partlib_move_journal_write "$_cs_journal" || return 1
         fi
     done
     return 0
 }
 
-# Resume a journaled move to completion: finish the copy, switch table,
-# clear the journal.
-_partlib_move_finish_from_journal() {
-    _mf_path="$1"
-    _partlib_move_journal_read "$_mf_path" || {
-        log "move: cannot read journal $_mf_path"
-        return 1
-    }
-    if [ -z "$MJ_TARGET" ] || { [ ! -e "$MJ_TARGET" ] && [ ! -b "$MJ_TARGET" ]; }
-    then
-        log "move: journal target missing: ${MJ_TARGET:-<empty>}"
-        return 1
-    fi
-    if [ -z "$MJ_OLD" ] || [ -z "$MJ_NEW" ] || [ -z "$MJ_SIZE" ]; then
-        log "move: journal incomplete: $_mf_path"
-        return 1
-    fi
-    [ -n "$MJ_COPIED" ] || MJ_COPIED=0
-    if [ "$MJ_COPIED" -lt 0 ] 2>/dev/null; then
-        MJ_COPIED=0
-    fi
-    if [ "$MJ_COPIED" -gt "$MJ_SIZE" ] 2>/dev/null; then
-        MJ_COPIED="$MJ_SIZE"
-    fi
-
-    _mf_old_mib=$(( MJ_OLD / 1048576 ))
-    _mf_new_mib=$(( MJ_NEW / 1048576 ))
-    _mf_remain=$(( MJ_SIZE - MJ_COPIED ))
-
-    if [ "$_mf_remain" -gt 0 ]; then
-        if [ "$MJ_NEW" -gt "$MJ_OLD" ]; then
-            _mf_forward=0
-        else
-            _mf_forward=1
-        fi
-        _mf_src=$(( MJ_OLD + MJ_COPIED ))
-        _mf_dst=$(( MJ_NEW + MJ_COPIED ))
-        log "move: resuming copy for $MJ_TARGET ($_mf_remain bytes left)"
-        if ! _partlib_move_copy_chunk "$MJ_DISK" "$_mf_src" "$_mf_dst" \
-            "$_mf_remain" "$_mf_forward" "$_mf_path"; then
-            return 1
-        fi
-    fi
-
-    _partlib_fsync_path "$MJ_DISK"
-    MJ_STATE=table_pending
-    MJ_COPIED="$MJ_SIZE"
-    _partlib_move_journal_write "$_mf_path" || true
-    if ! _partlib_move_table_switch "$MJ_DISK" "$MJ_PARTNO" "$_mf_new_mib"
-    then
-        log "move: table switch failed after copy for $MJ_TARGET"
-        return 1
-    fi
-    _partlib_move_journal_clear "$_mf_path"
-    log "move: recovered $MJ_TARGET ($_mf_old_mib MiB -> $_mf_new_mib MiB)"
+# Loads a journal into the _MJ_* globals journal_write records.
+_partlib_move_journal_load() {
+    _partlib_move_journal_read "$1" || return 1
+    _MJ_DISK="$MJ_DISK"; _MJ_PARTNO="$MJ_PARTNO"; _MJ_TARGET="$MJ_TARGET"
+    _MJ_OLD="$MJ_OLD"; _MJ_NEW="$MJ_NEW"; _MJ_SIZE="$MJ_SIZE"
+    _MJ_COPIED="${MJ_COPIED:-0}"; _MJ_RB_COPIED="${MJ_RB_COPIED:-0}"
+    _MJ_STATE="${MJ_STATE:-copying}"
+    case "$_MJ_COPIED$_MJ_RB_COPIED$_MJ_OLD$_MJ_NEW$_MJ_SIZE" in
+        *[!0-9]*|'') log "move: malformed journal $1"; return 1 ;;
+    esac
+    [ "$_MJ_COPIED" -gt "$_MJ_SIZE" ] && _MJ_COPIED="$_MJ_SIZE"
     return 0
 }
 
-# Undo a journaled move: put the already-copied prefix back at the old
-# start, then clear the journal. The table stays at the old start.
+# Resume a journaled move to completion: finish the copy, switch table,
+# clear the journal. A move whose rollback had started finishes the
+# rollback instead.
+_partlib_move_finish_from_journal() {
+    _mf_path="$1"
+    _partlib_move_journal_load "$_mf_path" || return 1
+    if [ "$_MJ_STATE" = rolling_back ]; then
+        _partlib_move_rollback_journal "$_mf_path"
+        return $?
+    fi
+
+    if [ "$_MJ_COPIED" -lt "$_MJ_SIZE" ]; then
+        log "move: resuming copy for $_MJ_TARGET ($(( _MJ_SIZE - _MJ_COPIED )) bytes left)"
+        _partlib_move_copy_span "$_MJ_DISK" "$_MJ_OLD" "$_MJ_NEW" \
+            0 "$_MJ_SIZE" "$_MJ_COPIED" "$_mf_path" copied || return 1
+    fi
+
+    _partlib_fsync_path "$_MJ_DISK"
+    _MJ_STATE=table_pending
+    _partlib_move_journal_write "$_mf_path" || return 1
+    if ! _partlib_move_table_switch "$_MJ_DISK" "$_MJ_PARTNO" \
+        $(( _MJ_NEW / 1048576 )); then
+        log "move: table switch failed after copy for $_MJ_TARGET"
+        return 1
+    fi
+    _partlib_move_journal_clear "$_mf_path"
+    log "move: recovered $_MJ_TARGET ($(( _MJ_OLD / 1048576 )) MiB -> $(( _MJ_NEW / 1048576 )) MiB)"
+    return 0
+}
+
+# Undo a journaled move: copy the moved part back to the old start, then clear the journal.
+# Once the copy is complete (table_pending) the move can only be resumed.
 _partlib_move_rollback_journal() {
     _mr_path="$1"
-    _partlib_move_journal_read "$_mr_path" || {
-        log "move: cannot read journal $_mr_path"
+    _partlib_move_journal_load "$_mr_path" || return 1
+    if [ "$_MJ_STATE" = table_pending ]; then
+        log "move: $_MJ_TARGET finished copying; resume it instead"
         return 1
-    }
-    [ -n "$MJ_COPIED" ] || MJ_COPIED=0
-    if [ "$MJ_COPIED" -le 0 ] 2>/dev/null; then
-        _partlib_move_journal_clear "$_mr_path"
-        log "move: rolled back $MJ_TARGET (nothing copied)"
-        return 0
     fi
-    if [ "$MJ_COPIED" -gt "$MJ_SIZE" ] 2>/dev/null; then
-        MJ_COPIED="$MJ_SIZE"
-    fi
-    if [ "$MJ_NEW" -gt "$MJ_OLD" ]; then
-        _mr_forward=1
+
+    # A move to a lower start copied the low offsets first.
+    if [ "$_MJ_NEW" -lt "$_MJ_OLD" ]; then
+        _mr_lo=0
+        _mr_hi=$_MJ_COPIED
     else
-        _mr_forward=0
+        _mr_lo=$(( _MJ_SIZE - _MJ_COPIED ))
+        _mr_hi=$_MJ_SIZE
     fi
-    if ! _partlib_move_copy_chunk "$MJ_DISK" "$MJ_NEW" "$MJ_OLD" \
-        "$MJ_COPIED" "$_mr_forward" ""; then
-        log "move: rollback copy failed for $MJ_TARGET"
+
+    if [ "$_MJ_STATE" != rolling_back ]; then
+        _MJ_STATE=rolling_back
+        _MJ_RB_COPIED=0
+        _partlib_move_journal_write "$_mr_path" || return 1
+    fi
+    if ! _partlib_move_copy_span "$_MJ_DISK" "$_MJ_NEW" "$_MJ_OLD" \
+        "$_mr_lo" "$_mr_hi" "$_MJ_RB_COPIED" "$_mr_path" rb_copied; then
+        log "move: rollback copy failed for $_MJ_TARGET"
         return 1
     fi
-    _partlib_fsync_path "$MJ_DISK"
+    _partlib_fsync_path "$_MJ_DISK"
     _partlib_move_journal_clear "$_mr_path"
-    log "move: rolled back $MJ_TARGET to start $MJ_OLD"
+    log "move: rolled back $_MJ_TARGET to start $_MJ_OLD"
     return 0
 }
 
@@ -774,6 +775,7 @@ _partlib_move() {
     _MJ_NEW="$_new_start"
     _MJ_SIZE="$_size"
     _MJ_COPIED=0
+    _MJ_RB_COPIED=0
     _MJ_STATE=copying
     _journal="$(_partlib_move_journal_path "$_disk" "$_partno")"
     if ! _partlib_move_journal_write "$_journal"; then
@@ -781,21 +783,15 @@ _partlib_move() {
         return 1
     fi
 
-    if [ "$_new_start" -gt "$_old_start" ]; then
-        _forward=0
-    else
-        _forward=1
-    fi
-    if ! _partlib_move_copy_chunk "$_disk" "$_old_start" "$_new_start" \
-        "$_size" "$_forward" "$_journal"; then
+    if ! _partlib_move_copy_span "$_disk" "$_old_start" "$_new_start" \
+        0 "$_size" 0 "$_journal" copied; then
         log "move: data copy failed for $_target; journal left at $_journal"
         return 1
     fi
 
     _partlib_fsync_path "$_disk"
-    _MJ_COPIED="$_size"
     _MJ_STATE=table_pending
-    _partlib_move_journal_write "$_journal" || true
+    _partlib_move_journal_write "$_journal" || return 1
 
     if ! _partlib_move_table_switch "$_disk" "$_partno" "$_new_start_mib"
     then

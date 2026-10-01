@@ -15,6 +15,8 @@ else()
 #
 # When WPE packages are available the compositor/event/bridge layer
 # from private/ is compiled in and BWebView delegates to it.
+# The wpe-backend-vos library replaces wpebackend-fdo, providing a
+# Wayland-free path for SHM frame export.
 # Otherwise a stub library is built so the netplus app still links.
 
 find_package(PkgConfig)
@@ -31,8 +33,9 @@ if(PKG_CONFIG_FOUND)
 	pkg_check_modules(GLIB glib-2.0 QUIET)
 	pkg_check_modules(WAYLAND wayland-server QUIET)
 
-	if(WPE_WEBKIT_FOUND AND WPE_FDO_FOUND)
+	if(WPE_WEBKIT_FOUND)
 		set(WEB_PRIVATE_SOURCES
+			backend-vos/wpe-backend-vos.cpp
 			private/CompositorAdapter.cpp
 			private/DomainFilter.cpp
 			private/DownloadHandler.cpp
@@ -61,6 +64,7 @@ target_include_directories(web PUBLIC
 if(WEB_PRIVATE_SOURCES)
 	target_include_directories(web PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/private
+		${CMAKE_CURRENT_SOURCE_DIR}/backend-vos
 		${WPE_WEBKIT_INCLUDE_DIRS}
 		${WPE_FDO_INCLUDE_DIRS}
 		${GLIB_INCLUDE_DIRS}

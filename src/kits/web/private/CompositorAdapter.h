@@ -8,7 +8,7 @@
 
 #include <Bitmap.h>
 #include <wpe/wpe.h>
-#include <wpe/fdo.h>
+#include "wpe-backend-vos.h"
 
 #include <algorithm>
 #include <atomic>
@@ -17,35 +17,35 @@
 
 
 struct CompositorAdapter {
-								CompositorAdapter(int width, int height);
-								~CompositorAdapter();
+							CompositorAdapter(int width, int height);
+							~CompositorAdapter();
 
-			void				Resize(int newWidth, int newHeight);
+		void				Resize(int newWidth, int newHeight);
 
-			BBitmap*			AcquireFront();
-			void				ReleaseFront();
+		BBitmap*			AcquireFront();
+		void				ReleaseFront();
 
 	struct	wpe_view_backend*	Backend() const { return fBackend; }
 
-			std::function<void()> onFrameReady;
+		std::function<void()> onFrameReady;
 
 private:
-			void				_AllocateBitmaps();
-			void				_BlitSHMFrame(const uint8_t* data, int stride,
-									int srcW, int srcH);
-			void				_SwapBuffersLocked();
+		void				_AllocateBitmaps();
+		void				_BlitSHMFrame(const uint8_t* data, int stride,
+								int srcW, int srcH);
+		void				_SwapBuffersLocked();
 
-			struct wpe_view_backend_exportable_fdo* fExportable;
+		wpe_backend_vos_exportable* fExportable;
 	struct	wpe_view_backend*	fBackend;
 
-			BBitmap*			frontBitmap;
-			BBitmap*			fBackBitmap;
+		BBitmap*			frontBitmap;
+		BBitmap*			fBackBitmap;
 
-			int					fWidth;
-			int					fHeight;
+		int					fWidth;
+		int					fHeight;
 
-			std::mutex				fBitmapMutex;
-			std::atomic<bool>		fFrameReady;
+		std::mutex				fBitmapMutex;
+		std::atomic<bool>		fFrameReady;
 };
 
 

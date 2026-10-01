@@ -7,6 +7,8 @@ UsePrivateHeaders(testxkbfuzz shared)
 
 Application(testwatch SOURCES testwatch.cpp)
 
+Application(testsuspend SOURCES testsuspend.cpp)
+
 add_executable(testinject testinject.cpp)
 
 # CUPS end-to-end test (V\OS printing, no print server).

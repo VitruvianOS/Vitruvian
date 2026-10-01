@@ -31,6 +31,7 @@ set(TEST_VOS_BINARIES
 	testinput
 	testinject
 	testwatch
+	testsuspend
 	testxkbfuzz
 	#test_node_monitor
 	#test_node_monitor2

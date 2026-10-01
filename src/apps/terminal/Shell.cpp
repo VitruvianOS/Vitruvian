@@ -132,12 +132,16 @@ Shell::Open(int row, int col, const ShellParameters& parameters)
 void
 Shell::Close()
 {
+	// Hang up before deleting TermParse, whose destructor waits for the
+	// reader; it only leaves read() once the slave side closes.
+	if (fFd >= 0)
+		kill(-fShellInfo.ProcessID(), SIGHUP);
+
 	delete fTermParse;
 	fTermParse = NULL;
 
 	if (fFd >= 0) {
 		close(fFd);
-		kill(-fShellInfo.ProcessID(), SIGHUP);
 		fShellInfo.SetProcessID(-1);
 		int status;
 		wait(&status);
@@ -287,6 +291,9 @@ void
 Shell::DetachBuffer()
 {
 	if (fAttached) {
+		// Same as Close(): hang up before StopThreads() waits for the reader.
+		if (fFd >= 0)
+			kill(-fShellInfo.ProcessID(), SIGHUP);
 		fTermParse->StopThreads();
 		fAttached = false;
 	}

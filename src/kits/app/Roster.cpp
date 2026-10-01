@@ -1357,7 +1357,7 @@ BRoster::AddToRecentFolders(const entry_ref* folder,
 	\retval B_SHUTDOWN_CANCELLED, when the user cancelled the shutdown process,
 */
 status_t
-BRoster::_ShutDown(bool reboot, bool confirm, bool synchronous)
+BRoster::_ShutDown(bool reboot, bool confirm, bool synchronous, bool logOut)
 {
 	status_t error = B_OK;
 
@@ -1371,6 +1371,9 @@ BRoster::_ShutDown(bool reboot, bool confirm, bool synchronous)
 
 	if (error == B_OK)
 		error = request.AddBool("synchronous", synchronous);
+
+	if (error == B_OK && logOut)
+		error = request.AddBool("logout", true);
 
 	if (error != B_OK)
 		return error;

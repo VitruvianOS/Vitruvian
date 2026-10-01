@@ -94,6 +94,10 @@ public:
 			status_t			GetReflection(int32*);
 			status_t			SetReflection(int32);
 
+			// Color temperature in Kelvin; 6500 is neutral, lower is warmer.
+			status_t			GetTemperature(float*);
+			status_t			SetTemperature(float);
+
 			void*				BaseAddress();
 			uint32				BytesPerRow();
 

@@ -145,4 +145,23 @@ enum command_code {
 	// Media Kit reserves all reserved codes starting in 'TRI'
 };
 
+// Fields of the B_QUIT_REQUESTED message the registrar sends when the
+// session ends, telling apps why they are asked to quit:
+//
+//	B_LOGOUT_FIELD	true when the user logs out
+//	B_REBOOT_FIELD	true when the system restarts
+//
+// Neither set means the system is shutting down. A quit request without
+// them came from the user or another app. Check them in QuitRequested():
+//
+//	bool MyApp::QuitRequested()
+//	{
+//		bool loggingOut = false;
+//		if (CurrentMessage() != NULL)
+//			CurrentMessage()->FindBool(B_LOGOUT_FIELD, &loggingOut);
+//		...
+//	}
+#define B_LOGOUT_FIELD	"be:logout"
+#define B_REBOOT_FIELD	"be:reboot"
+
 #endif	// _APP_DEFS_H

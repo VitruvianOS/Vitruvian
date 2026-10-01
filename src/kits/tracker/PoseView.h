@@ -437,6 +437,13 @@ public:
 	void UpdateDateColumns(BMessage*);
 	virtual void AdaptToVolumeChange(BMessage*);
 	virtual void AdaptToDesktopIntegrationChange(BMessage*);
+	virtual void AdaptToSnapToGridChange(BMessage*);
+
+	void SnapPoseToGrid(BPose* pose, BRect& viewBounds);
+		// snap the pose to the icon grid, moving it to the next free
+		// slot when the nearest grid cell is taken; does nothing in
+		// list mode or unless the "SnapToGrid" setting is on
+	void SnapAllPosesToGrid();
 
 	void SetTextWidgetToCheck(BTextWidget*, BTextWidget* = NULL);
 

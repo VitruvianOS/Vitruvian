@@ -57,7 +57,7 @@ private:
 			off_t				fSize;
 			off_t				fMaxPartitionSize;
 			uint32				fGranularity;
-	mutable	char				fStatusLabel[64];
+	mutable	char				fStatusLabel[1024];
 };
 
 

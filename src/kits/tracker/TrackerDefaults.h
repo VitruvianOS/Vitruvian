@@ -12,6 +12,7 @@
 static const bool kDefaultShowDisksIcon = false;
 static const bool kDefaultMountVolumesOntoDesktop = true;
 static const bool kDefaultMountSharedVolumesOntoDesktop = true;
+static const bool kDefaultSnapToGrid = true;
 static const bool kDefaultEjectWhenUnmounting = true;
 
 static const bool kDefaultDesktopFilePanelRoot = true;

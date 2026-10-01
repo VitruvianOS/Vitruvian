@@ -1,0 +1,14 @@
+// Power preferences application resource definition
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	variety = B_APPV_BETA,
+	internal = 0,
+
+	short_info = "Power",
+	long_info = "Power preferences - Copyright 2026, Dario Casalinuovo"
+};
+
+resource app_signature "application/x-vnd.Haiku-Power";

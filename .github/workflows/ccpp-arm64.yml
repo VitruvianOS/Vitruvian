@@ -1,6 +1,18 @@
 name: Build Vitruvian ISO (arm64)
 
-on: [push]
+# master is built by factory-release.yml, which allocates a rev and
+# archives the result. Building it here too would run the same build
+# twice per push.
+on:
+  push:
+    branches-ignore: [master]
+
+# A newer push supersedes this run; there is no value in finishing a
+# build of code that is no longer the head. Keyed per ref so branches
+# do not cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   iso-build:

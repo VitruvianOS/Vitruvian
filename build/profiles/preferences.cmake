@@ -11,6 +11,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Locale
 	Media
 	Network
+	Power
 	Screen
 	#ScreenSaver
 	Shortcuts
@@ -32,6 +33,7 @@ set(SYSTEM_PREFERENCES
 	Locale
 	Media
 	Network
+	Power
 	Screen
 	#ScreenSaver
 	Shortcuts

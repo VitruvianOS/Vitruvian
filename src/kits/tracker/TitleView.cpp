@@ -49,6 +49,7 @@ All rights reserved.
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/param.h>
 
 #include "Commands.h"
 #include "ContainerWindow.h"
@@ -62,6 +63,9 @@ All rights reserved.
 static const float kMinFontSize = 8.0f;
 static const float kMinTitleHeight = 13.0f;
 static const float kTitleSpacing = 1.4f;
+static const float kSortArrowScale = 0.6f;
+// gap between the arrow and the title text
+static const float kSortArrowGap = 2.5f;
 
 
 static void
@@ -454,8 +458,8 @@ bool
 BColumnTitle::InColumnResizeArea(BPoint where) const
 {
 	BRect edge(Bounds());
-	edge.left = edge.right - kEdgeSize;
-	edge.right += kEdgeSize;
+	edge.left = edge.right - column_resize_edge();
+	edge.right += column_resize_edge();
 
 	return edge.Contains(where);
 }
@@ -464,9 +468,9 @@ BColumnTitle::InColumnResizeArea(BPoint where) const
 BRect
 BColumnTitle::Bounds() const
 {
-	BRect bounds(fColumn->Offset() - kTitleColumnLeftExtraMargin, 0, 0,
+	BRect bounds(fColumn->Offset() - title_column_left_margin(), 0, 0,
 		fParent->Bounds().Height());
-	bounds.right = bounds.left + fColumn->Width() + kTitleColumnExtraMargin;
+	bounds.right = bounds.left + fColumn->Width() + title_column_margin();
 
 	return bounds;
 }
@@ -498,13 +502,13 @@ BColumnTitle::Draw(BView* view, bool pressed)
 
 	BString titleString(fColumn->Title());
 	view->TruncateString(&titleString, B_TRUNCATE_END,
-		bounds.Width() - kTitleColumnExtraMargin);
+		bounds.Width() - title_column_margin());
 	float resultingWidth = view->StringWidth(titleString.String());
 
 	switch (fColumn->Alignment()) {
 		case B_ALIGN_LEFT:
 		default:
-			titleLocation.x = bounds.left + 1 + kTitleColumnLeftExtraMargin;
+			titleLocation.x = bounds.left + 1 + title_column_left_margin();
 			break;
 
 		case B_ALIGN_CENTER:
@@ -514,7 +518,7 @@ BColumnTitle::Draw(BView* view, bool pressed)
 
 		case B_ALIGN_RIGHT:
 			titleLocation.x = bounds.right - resultingWidth
-				- kTitleColumnRightExtraMargin;
+				- title_column_right_margin();
 			break;
 	}
 
@@ -528,18 +532,21 @@ BColumnTitle::Draw(BView* view, bool pressed)
 	if (secondary
 		|| (fColumn->AttrHash() == fParent->PoseView()->PrimarySort())) {
 
-		BPoint center(titleLocation.x - 6,
+		BFont font;
+		view->GetFont(&font);
+
+		// The arrow is drawn in the left margin, so it can only grow
+		// until it fills it.
+		const float wanted = floorf(font.Size() * kSortArrowScale);
+		const float room = title_column_left_margin() - kSortArrowGap;
+		const float arrowWidth = wanted < room ? wanted : room;
+
+		BPoint center(titleLocation.x - arrowWidth / 2 - kSortArrowGap,
 			roundf((bounds.top + bounds.bottom) / 2.0));
 		BPoint triangle[3];
-		if (fParent->PoseView()->ReverseSort()) {
-			triangle[0] = center + BPoint(-3.5, 1.5);
-			triangle[1] = center + BPoint(3.5, 1.5);
-			triangle[2] = center + BPoint(0.0, -2.0);
-		} else {
-			triangle[0] = center + BPoint(-3.5, -1.5);
-			triangle[1] = center + BPoint(3.5, -1.5);
-			triangle[2] = center + BPoint(0.0, 2.0);
-		}
+		BControlLook::GetArrowShape(center, BSize(arrowWidth, arrowWidth / 2),
+			fParent->PoseView()->ReverseSort() ? BControlLook::B_UP_ARROW
+				: BControlLook::B_DOWN_ARROW, triangle);
 
 		uint32 flags = view->Flags();
 		view->SetFlags(flags | B_SUBPIXEL_PRECISE);
@@ -623,8 +630,8 @@ ColumnResizeState::ValueChanged(BPoint where)
 {
 	float newWidth = where.x + fInitialTrackOffset
 		- fTitle->fColumn->Offset();
-	if (newWidth < kMinColumnWidth)
-		newWidth = kMinColumnWidth;
+	if (newWidth < min_column_width())
+		newWidth = min_column_width();
 
 	return newWidth != fTitle->fColumn->Width();
 }
@@ -635,8 +642,8 @@ ColumnResizeState::Moved(BPoint where, uint32)
 {
 	float newWidth = where.x + fInitialTrackOffset
 		- fTitle->fColumn->Offset();
-	if (newWidth < kMinColumnWidth)
-		newWidth = kMinColumnWidth;
+	if (newWidth < min_column_width())
+		newWidth = min_column_width();
 
 	BPoseView* poseView = fTitleView->PoseView();
 
@@ -725,7 +732,7 @@ ColumnDragState::Moved(BPoint where, uint32)
 	bool overTitleView = titleBounds.Contains(where);
 	BColumnTitle* overTitle = overTitleView ? fTitleView->FindColumnTitle(where) : 0;
 	BRect titleBoundsWithMargin(titleBounds);
-	titleBoundsWithMargin.InsetBy(0, -kRemoveTitleMargin);
+	titleBoundsWithMargin.InsetBy(0, -remove_title_margin());
 	bool inMarginRect = overTitleView || titleBoundsWithMargin.Contains(where);
 
 	bool drawOutline = false;

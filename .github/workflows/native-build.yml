@@ -5,6 +5,13 @@ on:
     branches:
       - '**'
 
+# A newer push supersedes this run; there is no value in finishing a
+# build of code that is no longer the head. Keyed per ref so branches
+# do not cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   native-build:
     name: Native amd64 build

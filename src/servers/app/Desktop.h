@@ -135,6 +135,8 @@ public:
 			int32				Rotation(int32 id) const;
 			status_t			SetReflection(int32 id, int32 reflection);
 			int32				Reflection(int32 id) const;
+			status_t			SetTemperature(int32 id, float kelvin);
+			float				Temperature(int32 id) const;
 
 			MultiLocker&		ScreenLocker() { return fScreenLock; }
 

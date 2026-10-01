@@ -351,6 +351,24 @@ BScreen::SetBrightness(float brightness)
 }
 
 
+status_t
+BScreen::GetTemperature(float* kelvin)
+{
+	if (fScreen != NULL)
+		return fScreen->GetTemperature(kelvin);
+	return B_ERROR;
+}
+
+
+status_t
+BScreen::SetTemperature(float kelvin)
+{
+	if (fScreen != NULL)
+		return fScreen->SetTemperature(kelvin);
+	return B_ERROR;
+}
+
+
 //	#pragma mark - Deprecated methods
 
 

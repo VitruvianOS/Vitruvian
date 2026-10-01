@@ -599,6 +599,10 @@ Desktop::Init()
 	if (brightness > 0)
 		HWInterface()->SetBrightness(brightness);
 
+	float temperature = fWorkspaces[0].StoredScreenConfiguration().Temperature(0);
+	if (temperature > 0 && temperature < 6500.0f)
+		HWInterface()->SetTemperature(temperature);
+
 	fVirtualScreen.HWInterface()->MoveCursorTo(
 		fVirtualScreen.Frame().Width() / 2,
 		fVirtualScreen.Frame().Height() / 2);
@@ -1058,6 +1062,37 @@ int32
 Desktop::Reflection(int32 id) const
 {
 	return HWInterface()->PanelReflection();
+}
+
+
+status_t
+Desktop::SetTemperature(int32 id, float kelvin)
+{
+	status_t result = HWInterface()->SetTemperature(kelvin);
+
+	if (result == B_OK) {
+		ScreenConfigurations& stored
+			= fWorkspaces[0].StoredScreenConfiguration();
+		if (stored.CurrentByID(id) == NULL) {
+			screen_configuration* current
+				= fWorkspaces[0].CurrentScreenConfiguration().CurrentByID(id);
+			stored.Set(id, current->has_info ? &current->info : NULL,
+				current->frame, current->mode);
+		}
+		stored.SetTemperature(id, kelvin);
+		StoreWorkspaceConfiguration(0);
+	}
+
+	return result;
+}
+
+
+float
+Desktop::Temperature(int32 id) const
+{
+	float temp = 6500.0f;
+	HWInterface()->GetTemperature(&temp);
+	return temp;
 }
 
 

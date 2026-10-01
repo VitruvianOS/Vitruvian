@@ -115,6 +115,9 @@ public:
 	virtual status_t			SetBrightness(float brightness);
 	virtual status_t			GetBrightness(float* brightness);
 
+	virtual status_t			SetTemperature(float kelvin);
+	virtual status_t			GetTemperature(float* kelvin);
+
 	virtual	RenderingBuffer*	FrontBuffer() const;
 	virtual	RenderingBuffer*	BackBuffer() const;
 	virtual	bool				IsDoubleBuffered() const;
@@ -255,6 +258,8 @@ private:
 			uint32				fDpmsState;
 
 			struct backlight*	fBacklight;
+
+			float				fTemperature;
 
 			bool				fAtomicSupported;
 			uint32_t			fPrimaryPlaneId;

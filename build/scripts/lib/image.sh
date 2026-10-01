@@ -72,13 +72,13 @@ create_raw() {
     fi
 
     require_cmd rsync rsync
-    require_cmd sfdisk util-linux
+    require_cmd sfdisk fdisk
     require_cmd mke2fs e2fsprogs
     require_cmd mkfs.vfat dosfstools
     require_cmd mcopy mtools
     require_cmd mmd mtools
 
-    _raw="$_basedir/output/vitruvian.raw"
+    _raw="$_basedir/output/vos-uefi.raw"
     _hostname="vitruvian"
     _user=""
     _pass=""
@@ -260,17 +260,12 @@ rm -rf /var/lib/apt/lists/*" || die "raw chroot bash-c failed"
         BUILD_TYPE="${CMAKE_BUILD_TYPE:-Debug}"
         [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
     fi
-    # The Debug GRUB entry advertises sshdebug; stage the SSH side to match.
-    if [ "$_sshdebug" = 1 ]; then
-        _debug_ssh_setup "$_root_dir" || die "_debug_ssh_setup failed"
-    fi
-    _debug_menuentry=""
-    if [ "$_sshdebug" = 1 ]; then
-        _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
-    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    # The Debug GRUB entry boots with sshdebug; stage the SSH side to match.
+    _debug_ssh_setup "$_root_dir" || die "_debug_ssh_setup failed"
+    _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd (\$root)/initrd.img
 }"
-    fi
 
     cat > "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" <<EOF
 insmod part_gpt
@@ -482,9 +477,7 @@ depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel st
     _common_chroot_setup "$_chroot_dir" "vitruvian" "" "" \
         || die "_common_chroot_setup failed"
 
-    if [ "$_sshdebug" = 1 ]; then
-        _debug_ssh_setup "$_chroot_dir" || die "_debug_ssh_setup failed"
-    fi
+    _debug_ssh_setup "$_chroot_dir" || die "_debug_ssh_setup failed"
 
     qemu_eject "$_chroot_dir" "$_arch"
 
@@ -548,14 +541,12 @@ menuentry "Vitruvian Live (Safe Mode)" {
 }
 EOF
 
-    if [ "$_sshdebug" = 1 ]; then
-        cat <<'EOF' >>"$_basedir/image_tree/scratch/grub.cfg"
+    cat <<EOF >>"$_basedir/image_tree/scratch/grub.cfg"
 menuentry "Vitruvian Live (Debug)" {
-    linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd /initrd
 }
 EOF
-    fi
 
     cat <<'EOF' >>"$_basedir/image_tree/scratch/grub.cfg"
 if [ "$grub_platform" = "efi" ]; then
@@ -662,7 +653,7 @@ EOF
             -e '--interval:appended_partition_2:all::' \
             -no-emul-boot \
             -isohybrid-gpt-basdat \
-            -output "$_basedir/output/vitruvian-custom.iso" \
+            -output "$_basedir/output/vos-uefi.iso" \
             -graft-points \
                 "$_basedir/image_tree/image" \
                 /boot/grub/bios.img="$_basedir/image_tree/scratch/bios.img"
@@ -678,12 +669,12 @@ EOF
             -e '--interval:appended_partition_2:all::' \
             -no-emul-boot \
             -isohybrid-gpt-basdat \
-            -output "$_basedir/output/vitruvian-custom.iso" \
+            -output "$_basedir/output/vos-uefi.iso" \
             -graft-points \
                 "$_basedir/image_tree/image"
     fi
 
-    log_info "ISO created: $_basedir/output/vitruvian-custom.iso"
+    log_info "ISO created: $_basedir/output/vos-uefi.iso"
     log_info "Build type: $BUILD_TYPE"
     if [ "$_sshdebug" = 1 ]; then
         log_info "Debug entry staged - SSH: root or vos-live@<guest-ip> (password: live)"
@@ -831,8 +822,15 @@ chown root:root /etc/systemd/system/vos-sshdebug.service
 # No "|| true": if the unit cannot be enabled the image must not build.
 systemctl enable vos-sshdebug.service
 # Config drift must fail the build, not the debug boot.
+# sshd -t needs its privilege separation dir, which only exists at runtime.
 if [ -x /usr/sbin/sshd ]; then
-    /usr/sbin/sshd -t
+    if [ -d /run/sshd ]; then
+        /usr/sbin/sshd -t
+    else
+        mkdir -p /run/sshd
+        /usr/sbin/sshd -t
+        rmdir /run/sshd
+    fi
 fi
 SSHEOF
 }
@@ -842,14 +840,7 @@ create_raspberry() {
     _board="${2:-raspberry}"
     _board_arch="$(board_config "$_board" arch)"
     _deb_arch="$(arch_to_deb "$_board_arch")"
-    # The fleet collector looks for "vos-raspberry.raw" specifically (legacy
-    # naming predating the vitruvian- rebrand of the other board outputs);
-    # every other board keeps the vitruvian-<board>.raw convention.
-    if [ "$_board" = "raspberry" ]; then
-        _raw="$_basedir/output/vos-raspberry.raw"
-    else
-        _raw="$_basedir/output/vitruvian-$_board.raw"
-    fi
+    _raw="$_basedir/output/vos-$_board.raw"
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
     _user=""
@@ -902,6 +893,11 @@ create_raspberry() {
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
     sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+    # The second stage unmounts /proc and /sys on exit; systemd >= 262
+    # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
+    for _m in dev proc sys; do
+        mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
+    done
 
     # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
     # ca-certificates); a copied bundle without that symlink does not verify.
@@ -924,8 +920,9 @@ APTSRC
     # Same key-gated VitruvianOS repo as chroot.sh; these paths run their
     # own debootstrap and never went through it.
     : "${VOS_REPO_URL:=https://repo.v-os.dev}"
-    : "${VOS_REPO_SUITE:=trixie-testing}"
     if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        # No default suite; see chroot.sh.
+        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
         sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
         sudo install -m 644 "$VOS_REPO_KEY" \
             "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"
@@ -1072,7 +1069,7 @@ create_uboot_board() {
     _dtb_files=$(board_config "$_board" dtb_files)
     _board_pkgs="$(get_board_packages "$_board")"
 
-    _raw="$_basedir/output/vitruvian-$_board.raw"
+    _raw="$_basedir/output/vos-$_board.raw"
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
     _user=""
@@ -1137,6 +1134,11 @@ create_uboot_board() {
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
     sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+    # The second stage unmounts /proc and /sys on exit; systemd >= 262
+    # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
+    for _m in dev proc sys; do
+        mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
+    done
 
     # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
     # ca-certificates); a copied bundle without that symlink does not verify.
@@ -1157,8 +1159,9 @@ APTSRC
 
     # Same key-gated VitruvianOS repo as create_raspberry.
     : "${VOS_REPO_URL:=https://repo.v-os.dev}"
-    : "${VOS_REPO_SUITE:=trixie-testing}"
     if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        # No default suite; see chroot.sh.
+        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
         sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
         sudo install -m 644 "$VOS_REPO_KEY" \
             "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"
@@ -1292,20 +1295,24 @@ FSTAB
     # Debian does not ship (e.g. amlogic's FIP-signed image). Otherwise use
     # what was staged from the rootfs above.
     _uboot_dir="$_basedir/firmware/$_board"
-     [ -d "$_uboot_dir" ] || _uboot_dir="$_uboot_stage"
+     if [ ! -d "$_uboot_dir" ]; then
+         if [ -n "$_uboot_stage" ]; then
+             _uboot_dir="$_uboot_stage"
+         else
+             # No staged blobs either: give the pinned-upstream assembler a
+             # destination (licheerv/D1 ships no u-boot in Debian).
+             mkdir -p "$_uboot_dir"
+         fi
+     fi
      # Some SoCs need a FIP-signed blob Debian cannot provide; assemble it
      # from the pinned upstream when it is missing.
      if [ -n "$(board_config "$_board" spl_blob 2>/dev/null)" ] && \
         [ ! -f "$_uboot_dir/$(board_config "$_board" spl_blob)" ]; then
-         # FIP assembly is an amlogic-only path (hardkernel-signed blobs).
-         # Any other board reaching this point has simply failed to stage
-         # its blobs - say so precisely instead of dying inside fip.sh on
-         # an empty dest_dir (2026-09-27, riscv64 visionfive2).
+         # Dispatch to the assembler for this board's SoC family.
          [ "$(board_config "$_board" fip_assemble 2>/dev/null)" = "1" ] || {
              [ -n "$_uboot_dir" ] || _uboot_dir="(unset)"
              die "no U-Boot blobs for $_board: firmware/$_board absent and rootfs staging empty (boards.sh extra_pkgs: $(board_config "$_board" extra_pkgs 2>/dev/null); Debian pkg installed?)"
          }
-         log_step "Assembling Amlogic FIP blob..."
          # image.sh is SOURCED by bake.sh, so $0 is bake.sh's path and
          # dirname "$0" is wherever bake runs from (generated.<arch>/) --
          # the helper actually lives in the source tree, 1-2 levels up.
@@ -1323,11 +1330,27 @@ FSTAB
          # shellcheck disable=SC1090
          . "$_fip_helper"
         [ -n "$_uboot_dir" ] || die "FIP assembly for $_board: no destination dir (firmware/$_board and rootfs staging both empty)"
-        if ! fip_amlogic_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
-            log_error "FIP assembly failed (pinned hardkernel/u-boot $FIP_UBOOT_SHA)."
-            log_error "Requires gcc-aarch64-linux-gnu and gcc-arm-none-eabi."
-            die "Cannot assemble FIP blob for $_board (pinned $FIP_UBOOT_SHA)"
-        fi
+        case "$_board" in
+            amlogic)
+                log_step "Assembling Amlogic FIP blob..."
+                if ! fip_amlogic_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
+                    log_error "FIP assembly failed (pinned hardkernel/u-boot $FIP_UBOOT_SHA)."
+                    log_error "Requires gcc-aarch64-linux-gnu and gcc-arm-none-eabi."
+                    die "Cannot assemble FIP blob for $_board (pinned $FIP_UBOOT_SHA)"
+                fi
+                ;;
+            licheerv)
+                log_step "Assembling Allwinner D1 (LicheeRV) FIP blob..."
+                if ! fip_licheerv_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
+                    log_error "FIP assembly failed (pinned smaeul/u-boot $FIP_LICHEERV_UBOOT_SHA)."
+                    log_error "Requires gcc-riscv64-linux-gnu and device-tree-compiler."
+                    die "Cannot assemble FIP blob for $_board (pinned $FIP_LICHEERV_UBOOT_SHA)"
+                fi
+                ;;
+            *)
+                die "FIP assembly not implemented for board: $_board"
+                ;;
+        esac
     fi
 
     # Per-SoC blob choice, not guessable: a first-match order picks the bare

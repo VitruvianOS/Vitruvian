@@ -921,7 +921,8 @@ TShortcuts::UpdateCleanupItem(BMenuItem* item)
 	item->SetShortcut(item->Shortcut(), B_COMMAND_KEY | (modifiers() & B_SHIFT_KEY));
 
 	if (fInWindow) {
-		item->SetEnabled(true);
+		item->SetEnabled(!(PoseView()->IsDesktopView()
+			&& TrackerSettings().SnapToGrid()));
 		item->SetTarget(PoseView());
 	}
 }

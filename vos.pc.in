@@ -1,0 +1,9 @@
+prefix=/usr
+includedir=${prefix}/include/vos
+libdir=${prefix}/lib/@VITRUVIAN_MULTIARCH_TRIPLE@
+
+Name: vos
+Description: V\:OS: BeOS-compatible application framework for Linux
+Version: @CPACK_PACKAGE_VERSION@
+Libs: -L${libdir} -lbe -lroot
+Cflags: @VOS_PC_CFLAGS@

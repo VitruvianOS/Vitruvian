@@ -34,10 +34,16 @@ static __thread pthread_key_t sOnExitKey;
 
 struct thread_data {
 	char name[B_OS_NAME_LENGTH];
-	thread_id father;
 
 	thread_func func;
 	void* data;
+
+	// Creator handshake: the child publishes its tid, the creator registers
+	// it with nexus before spawn_thread() returns, then releases the child.
+	pthread_mutex_t lock;
+	pthread_cond_t cond;
+	thread_id tid;
+	status_t registered;	// 0 pending, 1 registered, < 0 failed
 };
 
 
@@ -60,8 +66,24 @@ void* thread_run(void* data)
 	CALLED();
 
 	thread_data* threadData = (thread_data*)data;
-	// TODO do we need to pass father?
-	nexus_thread_spawn spawnInfo = { threadData->name, threadData->father };
+
+	pthread_mutex_lock(&threadData->lock);
+	threadData->tid = find_thread(NULL);
+	pthread_cond_signal(&threadData->cond);
+	while (threadData->registered == 0)
+		pthread_cond_wait(&threadData->cond, &threadData->lock);
+	status_t registered = threadData->registered;
+	pthread_mutex_unlock(&threadData->lock);
+
+	if (registered < 0) {
+		delete threadData;
+		pthread_detach(pthread_self());
+		return NULL;
+	}
+
+	// Already registered by the creator: this only parks us until
+	// resume_thread().
+	nexus_thread_spawn spawnInfo = { threadData->name };
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	status_t ret = nexus_io(nexus, NEXUS_THREAD_SPAWN, &spawnInfo);
@@ -224,26 +246,44 @@ spawn_thread(thread_func func, const char* name, int32 priority, void* data)
 		strlcpy(threadData->name, name, sizeof(threadData->name));
 	else
 		threadData->name[0] = '\0';
-	threadData->father = find_thread(NULL);
 	threadData->func = func;
 	threadData->data = data;
+	pthread_mutex_init(&threadData->lock, NULL);
+	pthread_cond_init(&threadData->cond, NULL);
+	threadData->tid = 0;
+	threadData->registered = 0;
 
 	pthread_t pThread;
 	int32 ret = pthread_create(&pThread, NULL,
 		BKernelPrivate::thread_run, threadData);
 	if (ret != 0) {
 		delete threadData;
-		return -errno;
+		return -ret;
 	}
 
+	// From here the child owns threadData; it only frees it after we
+	// release it below, and we don't touch it after that.
+	pthread_mutex_lock(&threadData->lock);
+	while (threadData->tid == 0)
+		pthread_cond_wait(&threadData->cond, &threadData->lock);
+	thread_id tid = threadData->tid;
+
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	thread_id id = nexus_io(nexus, NEXUS_THREAD_WAIT_NEWBORN, NULL);
+	thread_id id = nexus_io(nexus, NEXUS_THREAD_REGISTER,
+		(void*)(intptr_t)tid);
+
+	threadData->registered = id >= 0 ? 1 : id;
+	pthread_cond_signal(&threadData->cond);
+	pthread_mutex_unlock(&threadData->lock);
+
 	if (id < 0)
 		return B_BAD_THREAD_ID;
-	return id;
+	return tid;
 }
 
 
+// Linux has no way to kill one thread: SIGKILL to a tid takes down its whole
+// thread group, so this kills the thread's team. Documented in OS.h.
 status_t
 kill_thread(thread_id thread)
 {
@@ -643,6 +683,7 @@ wait_for_thread(thread_id id, status_t* returnCode)
 }
 
 
+// Not supported on V\OS, by design. Documented in OS.h.
 status_t
 suspend_thread(thread_id id)
 {

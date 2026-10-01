@@ -93,7 +93,7 @@ run_qemu() {
                 $_serial_args
             ;;
         raw)
-            _raw="$_basedir/output/vitruvian.raw"
+            _raw="$_basedir/output/vos-uefi.raw"
             [ -f "$_raw" ] || die "RAW image not found: $_raw"
             _host_shared="$_basedir/shared"
             mkdir -p "$_host_shared"
@@ -144,7 +144,7 @@ run_qemu() {
             esac
             ;;
         iso)
-            _iso="$_basedir/output/vitruvian-custom.iso"
+            _iso="$_basedir/output/vos-uefi.iso"
             [ -f "$_iso" ] || die "ISO image not found: $_iso"
 
             log_step "Booting ISO in QEMU ($_qemu_cmd)..."
@@ -219,7 +219,7 @@ run_qemu() {
                 -device virtio-net-pci,netdev=mynet
             ;;
         rockchip|allwinner|beagle|nxp|amlogic)
-            _raw="$_basedir/output/vitruvian-$_image_type.raw"
+            _raw="$_basedir/output/vos-$_image_type.raw"
             [ -f "$_raw" ] || die "$_image_type image not found: $_raw"
 
             log_warn "QEMU boot for $_image_type boards is not fully supported."
@@ -234,7 +234,7 @@ run_qemu() {
                 -device virtio-net-pci,netdev=mynet
             ;;
         allwinner-h3|beaglebone)
-            _raw="$_basedir/output/vitruvian-$_image_type.raw"
+            _raw="$_basedir/output/vos-$_image_type.raw"
             [ -f "$_raw" ] || die "$_image_type image not found: $_raw"
 
             log_warn "QEMU boot for $_image_type boards is not fully supported."
@@ -248,7 +248,7 @@ run_qemu() {
                 -device virtio-net-pci,netdev=mynet
             ;;
         visionfive2|licheerv)
-            _raw="$_basedir/output/vitruvian-$_image_type.raw"
+            _raw="$_basedir/output/vos-$_image_type.raw"
             [ -f "$_raw" ] || die "$_image_type image not found: $_raw"
 
             log_warn "QEMU boot for $_image_type boards is not fully supported."

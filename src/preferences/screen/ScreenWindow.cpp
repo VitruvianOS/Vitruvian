@@ -49,6 +49,7 @@
 
 #include <InterfacePrivate.h>
 #include <PanelOrientationTransform.h>
+#include <PrivateScreen.h>
 
 #include "AlertWindow.h"
 #include "Constants.h"
@@ -249,6 +250,37 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 		fBrightnessSlider->Hide();
 		fOriginalBrightness = -1;
 	}
+
+	// color temperature controls
+
+	fTemperatureOn = false;
+	fOriginalTemperatureOn = false;
+	fTemperature = 6500.0f;
+	fOriginalTemperature = 6500.0f;
+
+	float currentTemp;
+	if (screen.GetTemperature(&currentTemp) == B_OK) {
+		fTemperature = currentTemp;
+		fOriginalTemperature = currentTemp;
+		fTemperatureOn = (currentTemp < 6500.0f);
+		fOriginalTemperatureOn = fTemperatureOn;
+	}
+
+	fTemperatureEnabled = new BCheckBox("temperature_enabled",
+		B_TRANSLATE("Color temperature"),
+		new BMessage(TOGGLE_TEMPERATURE_MSG));
+	fTemperatureEnabled->SetValue(fTemperatureOn ? B_CONTROL_ON : B_CONTROL_OFF);
+
+	// Temperature slider: 1000K (warm) to 6500K (neutral), horizontal
+	fTemperatureSlider = new BSlider("temperature",
+		B_TRANSLATE("Temperature:"), NULL, 1000, 6500, B_HORIZONTAL);
+
+	fTemperatureSlider->SetModificationMessage(
+		new BMessage(SLIDER_TEMPERATURE_MSG));
+	fTemperatureSlider->SetValue((int32)fTemperature);
+
+	if (!fTemperatureOn)
+		fTemperatureSlider->Hide();
 
 	// box on the left below the screen box with workspaces
 
@@ -641,7 +673,46 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 			.Add(fRotationField->CreateMenuBarLayoutItem(), 1, 7)
 			.Add(fReflectionField->CreateLabelLayoutItem(), 0, 8)
 			.Add(fReflectionField->CreateMenuBarLayoutItem(), 1, 8)
-		.End();
+		.End()
+		.Add(fTemperatureEnabled)
+		.Add(fTemperatureSlider);
+
+	// Output enable/disable per monitor
+
+	fOutputMenu = new BPopUpMenu("Outputs", true, true);
+	fOutputField = new BMenuField("OutputMenu",
+		B_TRANSLATE("Outputs:"), fOutputMenu);
+	fOutputField->SetAlignment(B_ALIGN_RIGHT);
+	_UpdateOutputMenu();
+
+	// Profile save / delete
+
+	fProfileMenu = new BPopUpMenu("Profiles", true, true);
+	fProfileField = new BMenuField("ProfileMenu",
+		B_TRANSLATE("Profile:"), fProfileMenu);
+	fProfileField->SetAlignment(B_ALIGN_RIGHT);
+	_UpdateProfileMenu();
+
+	fSaveProfileButton = new BButton("SaveProfileButton",
+		B_TRANSLATE("Save" B_UTF8_ELLIPSIS),
+		new BMessage(BUTTON_PROFILE_SAVE_MSG));
+
+	fDeleteProfileButton = new BButton("DeleteProfileButton",
+		B_TRANSLATE("Delete"),
+		new BMessage(BUTTON_PROFILE_DELETE_MSG));
+	fDeleteProfileButton->SetEnabled(false);
+
+	BLayoutBuilder::Group<>(outerControlsView)
+		.AddGrid(B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING)
+			.Add(fOutputField->CreateLabelLayoutItem(), 0, 9)
+			.Add(fOutputField->CreateMenuBarLayoutItem(), 1, 9)
+			.Add(fProfileField->CreateLabelLayoutItem(), 0, 10)
+			.Add(fProfileField->CreateMenuBarLayoutItem(), 1, 10)
+		.End()
+		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fSaveProfileButton)
+			.Add(fDeleteProfileButton)
+			.AddGlue();
 
 	// TODO: we don't support getting the screen's preferred settings
 	/* fDefaultsButton = new BButton(buttonRect, "DefaultsButton", "Defaults",
@@ -1338,6 +1409,17 @@ ScreenWindow::MessageReceived(BMessage* message)
 			screen.SetBrightness(fOriginalBrightness);
 			fBrightnessSlider->SetValue(fOriginalBrightness * 255);
 
+			screen.SetTemperature(fOriginalTemperature);
+			fTemperature = fOriginalTemperature;
+			fTemperatureOn = fOriginalTemperatureOn;
+			fTemperatureEnabled->SetValue(fTemperatureOn
+				? B_CONTROL_ON : B_CONTROL_OFF);
+			fTemperatureSlider->SetValue((int32)fTemperature);
+			if (fTemperatureOn)
+				fTemperatureSlider->Show();
+			else
+				fTemperatureSlider->Hide();
+
 			fScreenMode.SetRotation(fOriginalRotation);
 			BMenuItem* rotationItem
 				= fRotationMenu->ItemAt(fOriginalRotation + 1);
@@ -1370,6 +1452,94 @@ ScreenWindow::MessageReceived(BMessage* message)
 			BScreen screen(this);
 			screen.SetBrightness(message->FindInt32("be:value") / 255.f);
 			_CheckApplyEnabled();
+			break;
+		}
+
+		case TOGGLE_TEMPERATURE_MSG:
+		{
+			fTemperatureOn = (fTemperatureEnabled->Value() == B_CONTROL_ON);
+			if (fTemperatureOn) {
+				fTemperatureSlider->Show();
+				BScreen screen(this);
+				screen.SetTemperature(fTemperature);
+			} else {
+				fTemperatureSlider->Hide();
+				BScreen screen(this);
+				screen.SetTemperature(6500.0f);
+			}
+			break;
+		}
+
+		case SLIDER_TEMPERATURE_MSG:
+		{
+			fTemperature = (float)message->FindInt32("be:value");
+			if (fTemperatureOn) {
+				BScreen screen(this);
+				screen.SetTemperature(fTemperature);
+			}
+			break;
+		}
+
+		case POP_OUTPUT_TOGGLE_MSG:
+		{
+			// Output enable/disable toggled
+			int32 outputID;
+			bool enabled;
+			if (message->FindInt32("output_id", &outputID) == B_OK
+				&& message->FindBool("enabled", &enabled) == B_OK) {
+				screen_id sid;
+				sid.id = outputID;
+				BScreen screen(sid);
+				if (screen.IsValid()) {
+					screen.SetDPMS(enabled ? B_DPMS_ON : B_DPMS_OFF);
+				}
+			}
+			break;
+		}
+
+		case POP_PROFILE_SELECT_MSG:
+		{
+			const char* profileName;
+			if (message->FindString("profile_name", &profileName) == B_OK) {
+				fDeleteProfileButton->SetEnabled(true);
+				_ApplyProfile(profileName);
+			}
+			break;
+		}
+
+		case BUTTON_PROFILE_SAVE_MSG:
+		{
+			// Show a simple alert asking for a profile name
+			BAlert* alert = new BAlert(B_TRANSLATE("Save Profile"),
+				B_TRANSLATE("Enter the profile name in the window title "
+					"and press OK to save."),
+				B_TRANSLATE("OK"), B_TRANSLATE("Cancel"), NULL,
+				B_WIDTH_AS_USUAL, B_INFO_ALERT);
+			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+			int32 result = alert->Go();
+			if (result == 0) {
+				// Save with a default name based on resolution
+				BString profileName;
+				profileName.SetToFormat("%" B_PRId32 "x%" B_PRId32,
+					fSelected.width, fSelected.height);
+				_SaveProfile(profileName.String());
+				_UpdateProfileMenu();
+			}
+			break;
+		}
+
+		case BUTTON_PROFILE_DELETE_MSG:
+		{
+			BMenuItem* marked = fProfileMenu->FindMarked();
+			if (marked != NULL) {
+				const char* profileName;
+				if (marked->Message()->FindString("profile_name",
+						&profileName) == B_OK) {
+					_DeleteProfile(profileName);
+					_UpdateProfileMenu();
+					fDeleteProfileButton->SetEnabled(false);
+				}
+			}
 			break;
 		}
 
@@ -1601,4 +1771,279 @@ ScreenWindow::_Apply()
 		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 		alert->Go();
 	}
+}
+
+
+void
+ScreenWindow::_UpdateOutputMenu()
+{
+	fOutputMenu->RemoveItems(0, fOutputMenu->CountItems(), true);
+
+	// Enumerate available screen outputs using BPrivateScreen
+	int32 screenID = -1;
+	BPrivate::BPrivateScreen* ps = BPrivate::BPrivateScreen::Get(this);
+	if (ps == NULL) {
+		// Fallback: add the main screen only
+		BMessage* msg = new BMessage(POP_OUTPUT_TOGGLE_MSG);
+		msg->AddInt32("output_id", 0);
+		msg->AddBool("enabled", true);
+		fOutputMenu->AddItem(new BMenuItem(
+			B_TRANSLATE("Main display"), msg));
+		fOutputMenu->ItemAt(0)->SetMarked(true);
+		return;
+	}
+
+	// Get the current screen's ID first
+	screenID = ps->ID();
+	BPrivate::BPrivateScreen::Put(ps);
+
+	// Enumerate all screens
+	int32 id = 0;
+	int32 count = 0;
+
+	// Enumerate screens by probing IDs 0..15
+	for (id = 0; id < 16; id++) {
+		screen_id sid;
+		sid.id = id;
+		BScreen screen(sid);
+		if (screen.IsValid()) {
+			BString name;
+			accelerant_device_info info;
+			if (screen.GetDeviceInfo(&info) == B_OK && info.name[0]) {
+				name.SetToFormat("%" B_PRId32 ": %s", id, info.name);
+			} else {
+				name.SetToFormat(B_TRANSLATE("Display %" B_PRId32), id);
+			}
+
+			BMessage* msg = new BMessage(POP_OUTPUT_TOGGLE_MSG);
+			msg->AddInt32("output_id", id);
+			msg->AddBool("enabled", true);
+			fOutputMenu->AddItem(new BMenuItem(name.String(), msg));
+
+			if (id == screenID) {
+				fOutputMenu->ItemAt(count)->SetMarked(true);
+			}
+			count++;
+		}
+	}
+
+	if (count == 0) {
+		BMessage* msg = new BMessage(POP_OUTPUT_TOGGLE_MSG);
+		msg->AddInt32("output_id", 0);
+		msg->AddBool("enabled", true);
+		fOutputMenu->AddItem(new BMenuItem(
+			B_TRANSLATE("Main display"), msg));
+		fOutputMenu->ItemAt(0)->SetMarked(true);
+	}
+}
+
+
+static BPath
+_profileDirectory()
+{
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) < B_OK)
+		return path;
+
+	path.Append("screen_profiles");
+	create_directory(path.Path(), 0755);
+	return path;
+}
+
+
+void
+ScreenWindow::_UpdateProfileMenu()
+{
+	// Remove all existing items
+	fProfileMenu->RemoveItems(0, fProfileMenu->CountItems(), true);
+
+	BPath dir = _profileDirectory();
+	if (dir.InitCheck() < B_OK) {
+		fProfileMenu->AddItem(new BMenuItem(
+			B_TRANSLATE("No profiles"), new BMessage()));
+		return;
+	}
+
+	BDirectory directory(dir.Path());
+	if (directory.InitCheck() < B_OK) {
+		fProfileMenu->AddItem(new BMenuItem(
+			B_TRANSLATE("No profiles"), new BMessage()));
+		return;
+	}
+
+	BEntry entry;
+	int32 count = 0;
+	while (directory.GetNextEntry(&entry) == B_OK) {
+		BPath entryPath;
+		if (entry.GetPath(&entryPath) != B_OK)
+			continue;
+
+		// Only include .screenprofile files
+		const char* name = entryPath.Leaf();
+		const char* ext = strrchr(name, '.');
+		if (ext == NULL || strcmp(ext, ".screenprofile") != 0)
+			continue;
+
+		// Strip extension for display
+		BString displayName(name);
+		int32 dotPos = displayName.FindLast('.');
+		if (dotPos >= 0)
+			displayName.Truncate(dotPos);
+
+		BMessage* msg = new BMessage(POP_PROFILE_SELECT_MSG);
+		msg->AddString("profile_name", displayName.String());
+		fProfileMenu->AddItem(new BMenuItem(displayName.String(), msg));
+		count++;
+	}
+
+	if (count == 0) {
+		fProfileMenu->AddItem(new BMenuItem(
+			B_TRANSLATE("No profiles"), new BMessage()));
+	}
+}
+
+
+status_t
+ScreenWindow::_SaveProfile(const char* name)
+{
+	BPath dir = _profileDirectory();
+	if (dir.InitCheck() < B_OK)
+		return dir.InitCheck();
+
+	BString fileName(name);
+	fileName << ".screenprofile";
+	dir.Append(fileName.String());
+
+	BFile file(dir.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+	if (file.InitCheck() < B_OK)
+		return file.InitCheck();
+
+	// Write the screen_mode fields as a simple text format
+	char buffer[512];
+	snprintf(buffer, sizeof(buffer),
+		"width %" B_PRId32 "\n"
+		"height %" B_PRId32 "\n"
+		"space %" B_PRId32 "\n"
+		"refresh %g\n"
+		"combine %" B_PRId32 "\n"
+		"swap_displays %d\n"
+		"use_laptop_panel %d\n"
+		"tv_standard %" B_PRId32 "\n",
+		fSelected.width,
+		fSelected.height,
+		(int32)fSelected.space,
+		fSelected.refresh,
+		(int32)fSelected.combine,
+		(int32)fSelected.swap_displays,
+		(int32)fSelected.use_laptop_panel,
+		fSelected.tv_standard);
+
+	ssize_t written = file.Write(buffer, strlen(buffer));
+	if (written < (ssize_t)strlen(buffer))
+		return B_ERROR;
+
+	return B_OK;
+}
+
+
+status_t
+ScreenWindow::_DeleteProfile(const char* name)
+{
+	BPath dir = _profileDirectory();
+	if (dir.InitCheck() < B_OK)
+		return dir.InitCheck();
+
+	BString fileName(name);
+	fileName << ".screenprofile";
+	dir.Append(fileName.String());
+
+	return BEntry(dir.Path()).Remove();
+}
+
+
+status_t
+ScreenWindow::_ApplyProfile(const char* name)
+{
+	BPath dir = _profileDirectory();
+	if (dir.InitCheck() < B_OK)
+		return dir.InitCheck();
+
+	BString fileName(name);
+	fileName << ".screenprofile";
+	dir.Append(fileName.String());
+
+	BFile file(dir.Path(), B_READ_ONLY);
+	if (file.InitCheck() < B_OK)
+		return file.InitCheck();
+
+	// Read the profile
+	char buffer[512];
+	ssize_t bytesRead = file.Read(buffer, sizeof(buffer) - 1);
+	if (bytesRead <= 0)
+		return B_ERROR;
+	buffer[bytesRead] = '\0';
+
+	// Parse the simple text format
+	screen_mode profile;
+	memset(&profile, 0, sizeof(profile));
+	profile.combine = kCombineDisable;
+
+	const char* p = buffer;
+	char key[64];
+
+	while (p != NULL && *p) {
+		// Skip whitespace
+		while (*p == ' ' || *p == '\t' || *p == '\n')
+			p++;
+		if (*p == '\0')
+			break;
+
+		// Read key
+		const char* keyStart = p;
+		while (*p && *p != ' ' && *p != '\t' && *p != '\n')
+			p++;
+		int32 keyLen = p - keyStart;
+		if (keyLen >= (int32)sizeof(key))
+			break;
+		memcpy(key, keyStart, keyLen);
+		key[keyLen] = '\0';
+
+		// Skip space
+		while (*p == ' ' || *p == '\t')
+			p++;
+
+		// Read value
+		const char* valStart = p;
+		while (*p && *p != '\n')
+			p++;
+
+		if (strcmp(key, "width") == 0) {
+			profile.width = atol(valStart);
+		} else if (strcmp(key, "height") == 0) {
+			profile.height = atol(valStart);
+		} else if (strcmp(key, "space") == 0) {
+			profile.space = (color_space)atol(valStart);
+		} else if (strcmp(key, "refresh") == 0) {
+			profile.refresh = atof(valStart);
+		} else if (strcmp(key, "combine") == 0) {
+			profile.combine = (combine_mode)atol(valStart);
+		} else if (strcmp(key, "swap_displays") == 0) {
+			profile.swap_displays = atoi(valStart) != 0;
+		} else if (strcmp(key, "use_laptop_panel") == 0) {
+			profile.use_laptop_panel = atoi(valStart) != 0;
+		} else if (strcmp(key, "tv_standard") == 0) {
+			profile.tv_standard = atol(valStart);
+		}
+
+		// Move past newline
+		while (*p == '\n')
+			p++;
+	}
+
+	// Apply the profile
+	fSelected = profile;
+	_UpdateControls();
+	_CheckApplyEnabled();
+
+	return B_OK;
 }

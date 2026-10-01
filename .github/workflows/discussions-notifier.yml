@@ -9,6 +9,8 @@ permissions:
 
 jobs:
   notify-telegram:
+    # Disabled: Discussions are being retired in favour of the forum.
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Build Telegram message

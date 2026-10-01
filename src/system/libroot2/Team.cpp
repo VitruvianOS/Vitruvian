@@ -167,8 +167,7 @@ Team::InitTeam()
 	static bool sAtForkRegistered = false;
 	if (!sAtForkRegistered) {
 		sAtForkRegistered = true;
-		pthread_atfork(&Team::PrepareFatherAtFork,
-			&Team::SyncFatherAtFork, &Team::ReinitChildAtFork);
+		pthread_atfork(NULL, NULL, &Team::ReinitChildAtFork);
 	}
 
 	struct sigaction sa;
@@ -291,25 +290,6 @@ Team::GetCPUCount()
 
 
 void
-Team::PrepareFatherAtFork()
-{
-	TRACE("PrepareFatherAtFork()\n");
-}
-
-
-void
-Team::SyncFatherAtFork()
-{
-	TRACE("SyncFatherAtFork()\n");
-
-	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	thread_id id = nexus_io(nexus, NEXUS_THREAD_WAIT_NEWBORN, NULL);
-	if (id < 0)
-		printf("Fork failed\n");
-}
-
-
-void
 Team::ReinitChildAtFork()
 {
 	// Reset tid cache before find_thread(NULL) — parent's stale tid must not persist.
@@ -346,15 +326,10 @@ Team::ReinitChildAtFork()
 	// waiting on them here would race the parent's own reaping.
 	gLoadedPids.clear();
 
+	// Opening /dev/nexus creates our team; nothing to park on here.
 	gNexus = open("/dev/nexus", O_RDWR | O_CLOEXEC);
 	if (gNexus < 0) {
 		printf("ReinitChildAtFork: Can't open Nexus IPC\n");
-		exit(1);
-	}
-
-	thread_id id = nexus_io(gNexus, NEXUS_THREAD_CLONE_EXECUTED, (void*)1);
-	if (id < 0) {
-		printf("ReinitChildAtFork: clone failed (%d)\n", (int)id);
 		exit(1);
 	}
 
@@ -415,10 +390,10 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 
 		int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 
-		// arg=2: don't arm father's WAIT_NEWBORN latch — father already knows pid synchronously.
-		thread_id id = nexus_io(nexus, NEXUS_THREAD_CLONE_EXECUTED, (void*)2);
+		// Park until the creator's resume_thread().
+		thread_id id = nexus_io(nexus, NEXUS_THREAD_CLONE_EXECUTED, NULL);
 		if (id < 0) {
-			fprintf(stderr, "load_image child: nexus announce failed (%d)\n",
+			fprintf(stderr, "load_image child: nexus park failed (%d)\n",
 				(int)id);
 			_exit(127);
 		}
@@ -434,8 +409,9 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 	}
 
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	// Synchronous pre-creation: kernel validates pid and creates child team/thread records.
-	thread_id id = nexus_io(nexus, NEXUS_THREAD_WAIT_NEWBORN, (void*)(intptr_t)pid);
+	// Creator-side registration: nexus pre-creates the child's team, so a
+	// resume_thread() that lands before the child opens /dev/nexus is kept.
+	thread_id id = nexus_io(nexus, NEXUS_THREAD_REGISTER, (void*)(intptr_t)pid);
 	if (id < 0) {
 		printf("Fork failed\n");
 		return B_BAD_THREAD_ID;

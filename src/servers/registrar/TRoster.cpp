@@ -423,9 +423,10 @@ TRoster::HandleIsAppRegistered(BMessage* request)
 			&& (info = fEarlyPreRegisteredApps.InfoFor(&ref)) != NULL) {
 			PRINT("found ref in fEarlyRegisteredApps (by ref)\n");
 			// pre-registered and has no team ID assigned yet -- queue the
-			// request
+			// request under the info's token: every cleanup path
+			// drains fIARRequestsByToken, not fIARRequestsByID.
 			be_app->DetachCurrentMessage();
-			_AddIARRequest(fIARRequestsByID, team, request);
+			_AddIARRequest(fIARRequestsByToken, (int32)info->token, request);
 		} else {
 			PRINT("didn't find team or ref\n");
 			// team not registered, ref/token not early pre-registered

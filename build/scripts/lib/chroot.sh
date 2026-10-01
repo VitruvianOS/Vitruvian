@@ -21,7 +21,8 @@ qemu_eject() {
         return 0
     fi
     _qemu_name="$(arch_to_qemu_user "$_target_arch")"
-    sudo rm -f "$_chroot_dir/usr/bin/$_qemu_name" 2>/dev/null || true
+    sudo rm -f "$_chroot_dir/usr/bin/$_qemu_name" \
+        "$_chroot_dir/usr/bin/${_qemu_name%-static}" 2>/dev/null || true
 }
 
 # Debian mirror used by debootstrap and apt inside the chroot. Override
@@ -148,8 +149,12 @@ EOF
     # Written only when a key is supplied: an unverifiable repo fails the
     # whole apt update, taking Debian access down with it.
     : "${VOS_REPO_URL:=https://repo.v-os.dev}"
-    : "${VOS_REPO_SUITE:=trixie-testing}"
     if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        # No default suite on purpose. The retired trixie-testing sat here
+        # for months and kept resolving to a suite that no longer exists;
+        # with four suites now, defaulting to any one of them is the same
+        # bug one rename later.
+        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
         sudo install -d -m 755 "$_chroot_dir/etc/apt/keyrings"
         sudo install -m 644 "$VOS_REPO_KEY" \
             "$_chroot_dir/etc/apt/keyrings/vitruvian-archive-keyring.asc"

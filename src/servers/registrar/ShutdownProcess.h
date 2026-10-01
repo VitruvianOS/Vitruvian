@@ -43,6 +43,7 @@ private:
 
 			void				_PrepareShutdownMessage(BMessage& message) const;
 			status_t			_ShutDown();
+			status_t			_LogOut();
 
 			status_t			_PushEvent(uint32 eventType, team_id team,
 									int32 phase);
@@ -118,6 +119,7 @@ private:
 			status_t			fShutdownError;
 			bool				fHasGUI;
 			bool				fReboot;
+			bool				fLogOut;
 			bool				fRequestReplySent;
 			ShutdownWindow*		fWindow;
 };

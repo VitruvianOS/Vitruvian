@@ -353,8 +353,12 @@ typedef struct {
 
 extern thread_id	spawn_thread(thread_func, const char *name, int32 priority,
 						void *data);
+/* V\OS: Linux cannot kill a single thread, so kill_thread() kills the
+ * whole team the thread belongs to (it is kill_team() on that team). To stop
+ * one thread, have it return and wait_for_thread() on it. */
 extern status_t		kill_thread(thread_id thread);
 extern status_t		resume_thread(thread_id thread);
+/* V\OS: not supported, always returns B_NOT_SUPPORTED. */
 extern status_t		suspend_thread(thread_id thread);
 
 extern status_t		rename_thread(thread_id thread, const char *newName);

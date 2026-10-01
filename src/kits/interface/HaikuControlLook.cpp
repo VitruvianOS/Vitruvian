@@ -1501,15 +1501,14 @@ HaikuControlLook::DrawSliderTriangle(BView* view, BRect& rect,
 
 	rect.InsetBy(1, 1);
 	shape.Clear();
-	if (orientation == B_HORIZONTAL) {
-		shape.MoveTo(BPoint(rect.left, rect.bottom + 1));
-		shape.LineTo(BPoint(rect.right + 1, rect.bottom + 1));
-		shape.LineTo(BPoint(centerh + 0.5, rect.top));
-	} else {
-		shape.MoveTo(BPoint(rect.right + 1, rect.top));
-		shape.LineTo(BPoint(rect.right + 1, rect.bottom + 1));
-		shape.LineTo(BPoint(rect.left, centerv + 0.5));
-	}
+	BRect fillRect(rect.left, rect.top, rect.right + 1, rect.bottom + 1);
+
+	BPoint triangle[3];
+	GetArrowShape(fillRect, orientation == B_HORIZONTAL ? B_UP_ARROW
+		: B_LEFT_ARROW, triangle);
+	shape.MoveTo(triangle[0]);
+	shape.LineTo(triangle[1]);
+	shape.LineTo(triangle[2]);
 	shape.Close();
 
 	BGradientLinear gradient;
@@ -3002,12 +3001,10 @@ HaikuControlLook::_DrawPopUpMarker(BView* view, const BRect& rect,
 {
 	BPoint center(roundf((rect.left + rect.right) / 2.0),
 		roundf((rect.top + rect.bottom) / 2.0));
-	const float metric = roundf(rect.Width() * 3.125f) / 10.0f,
-		offset = ceilf((metric * 0.2f) * 10.0f) / 10.0f;
+	const float metric = roundf(rect.Width() * 3.125f) / 10.0f;
+
 	BPoint triangle[3];
-	triangle[0] = center + BPoint(-metric, -offset);
-	triangle[1] = center + BPoint(metric, -offset);
-	triangle[2] = center + BPoint(0.0, metric * 0.8f);
+	GetArrowShape(center, BSize(metric * 2, metric), B_DOWN_ARROW, triangle);
 
 	const uint32 viewFlags = view->Flags();
 	view->SetFlags(viewFlags | B_SUBPIXEL_PRECISE);

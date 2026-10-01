@@ -221,6 +221,7 @@ DesktopPoseView::StartSettingsWatch()
 		tracker->StartWatching(this, kShowDisksIconChanged);
 		tracker->StartWatching(this, kVolumesOnDesktopChanged);
 		tracker->StartWatching(this, kDesktopIntegrationChanged);
+		tracker->StartWatching(this, kSnapToGridChanged);
 		tracker->UnlockLooper();
 	}
 }
@@ -234,6 +235,7 @@ DesktopPoseView::StopSettingsWatch()
 		tracker->StopWatching(this, kShowDisksIconChanged);
 		tracker->StopWatching(this, kVolumesOnDesktopChanged);
 		tracker->StopWatching(this, kDesktopIntegrationChanged);
+		tracker->StopWatching(this, kSnapToGridChanged);
 		tracker->UnlockLooper();
 	}
 }

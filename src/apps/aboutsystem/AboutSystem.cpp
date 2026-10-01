@@ -1660,7 +1660,7 @@ AboutView::_CreateCreditsView()
 	fCreditsView->Insert(" | ");
 	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fLinkColor);
 	fCreditsView->InsertHyperText(B_TRANSLATE("Donate"),
-		new URLAction("https://wiki.v-os.dev/docs/reference/donate/"));
+		new URLAction("https://v-os.dev/donate/"));
 	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
 	fCreditsView->Insert("\n\n");
 
@@ -1675,6 +1675,18 @@ AboutView::_CreateCreditsView()
 		"Dario Casalinuovo\n"
 		"Alberto Calamari\n"
 		"Maxim Kutnij\n"
+		"\n");
+
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuOrangeColor);
+	fCreditsView->Insert(B_TRANSLATE("Contributors:\n"));
+
+	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
+	fCreditsView->Insert(
+		"Ivan Gualandri\n"
+		"Vladislav Janeček\n"
+		"Adam Milner\n"
+		"Mas Ahmad Muhammad\n"
+		"Angelo Scarnà\n"
 		"\n");
 
 	// copyrights for various projects we use

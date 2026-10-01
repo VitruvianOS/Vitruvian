@@ -7,6 +7,15 @@ include(build/defs.cmake)
 include(build/deps.cmake)
 include(build/headers.cmake)
 
+# Normalize BUILDTOOLS_DIR to an absolute path once at the entry point so
+# every downstream macro/function can use ${BUILDTOOLS_DIR}/… directly
+# without per-callsite IS_ABSOLUTE() guards.  The configure script passes
+# paths relative to the build directory, so resolve against CMAKE_BINARY_DIR.
+if(BUILDTOOLS_DIR AND NOT IS_ABSOLUTE "${BUILDTOOLS_DIR}")
+	get_filename_component(BUILDTOOLS_DIR
+		"${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}" ABSOLUTE)
+endif()
+
 # Program interpreter path for RunnableAddOn (a .so that is also execve-able).
 if(NOT DEFINED VOS_DYNAMIC_LINKER)
 	execute_process(
@@ -56,7 +65,7 @@ macro( DoCatalogs signature subdir )
 
 	set( _catalog_dir "${CMAKE_BINARY_DIR}/catalogs/${signature}" )
 	if( BUILDTOOLS_DIR )
-		set( _linkcatkeys "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/tools/locale/linkcatkeys" )
+		set( _linkcatkeys "${BUILDTOOLS_DIR}/src/tools/locale/linkcatkeys" )
 	else()
 		# Self-hosting on Vitruvian: use the linkcatkeys installed system-wide.
 		set( _linkcatkeys "linkcatkeys" )
@@ -95,7 +104,7 @@ function( CompileRdef target rdef_file )
 	set(_pp     "${CMAKE_CURRENT_BINARY_DIR}/${rdef_file}.pp")
 	set(_rsrc   "${CMAKE_CURRENT_BINARY_DIR}/${rdef_file}.rsrc")
 	if(BUILDTOOLS_DIR)
-		set(_rc "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc")
+		set(_rc "${BUILDTOOLS_DIR}/src/bin/rc/rc")
 	else()
 		set(_rc "rc")
 	endif()
@@ -128,8 +137,8 @@ endfunction()
 function( LinkRdefs target )
 	set(_bin    "$<TARGET_FILE:${target}>")
 	if(BUILDTOOLS_DIR)
-		set(_xres   "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres")
-		set(_rsattr "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr")
+		set(_xres   "${BUILDTOOLS_DIR}/src/bin/xres")
+		set(_rsattr "${BUILDTOOLS_DIR}/src/bin/resattr")
 	else()
 		set(_xres   "xres")
 		set(_rsattr "resattr")

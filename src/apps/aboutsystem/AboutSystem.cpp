@@ -1111,10 +1111,20 @@ SysInfoView::_GetCPUInfo()
 
 	delete[] topology;
 
+	// Either part can be unknown (ARM has no vendor id, for one).
 	BString cpuType;
-	cpuType << get_cpu_vendor_string(cpuVendor) << " "
-		<< get_cpu_model_string(platform, cpuVendor, cpuModel)
-		<< " @ " << _GetCPUFrequency();
+	const char* vendor = get_cpu_vendor_string(cpuVendor);
+	const char* model = get_cpu_model_string(platform, cpuVendor, cpuModel);
+	if (vendor != NULL)
+		cpuType << vendor;
+	if (model != NULL) {
+		if (!cpuType.IsEmpty())
+			cpuType << " ";
+		cpuType << model;
+	}
+	if (!cpuType.IsEmpty())
+		cpuType << " ";
+	cpuType << "@ " << _GetCPUFrequency();
 
 	return cpuType;
 }

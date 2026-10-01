@@ -425,6 +425,27 @@ read_cpu_signature(void)
 	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
 	if (__get_cpuid(1, &eax, &ebx, &ecx, &edx))
 		return (uint32)eax;
+#elif defined(__aarch64__) || defined(__arm__)
+	// MIDR layout, from the first core's /proc/cpuinfo fields:
+	// implementer[31:24] variant[23:20] part[15:4] revision[3:0].
+	FILE* file = fopen("/proc/cpuinfo", "r");
+	if (file == NULL)
+		return 0;
+
+	unsigned int implementer = 0, variant = 0, part = 0, revision = 0;
+	int found = 0;
+	char line[256];
+	while (found < 4 && fgets(line, sizeof(line), file) != NULL) {
+		if (sscanf(line, "CPU implementer : %x", &implementer) == 1
+			|| sscanf(line, "CPU variant : %x", &variant) == 1
+			|| sscanf(line, "CPU part : %x", &part) == 1
+			|| sscanf(line, "CPU revision : %u", &revision) == 1)
+			found++;
+	}
+	fclose(file);
+
+	return ((uint32)(implementer & 0xff) << 24) | ((variant & 0xf) << 20)
+		| ((part & 0xfff) << 4) | (revision & 0xf);
 #endif
 	return 0;
 }

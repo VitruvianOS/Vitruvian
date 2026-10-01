@@ -1621,31 +1621,40 @@ if [ "${1:-}" = "partition" ]; then
                 _partlib_move_recover_disk "$_mr_disk" "$_mr_what"
                 exit 0
             fi
-            if [ "$_mr_what" != "status" ]; then
-                log "move-recovery: disk path required for $_mr_what"
-                exit 1
-            fi
+            # No disk: act on every disk that has a journal, and print a
+            # single summary for all of them.
             _mr_dir="$_PARTLIB_MOVE_JOURNAL_DIR"
-            _mr_pending=0
+            _mr_disks=""
             if [ -d "$_mr_dir" ]; then
                 for _mr_path in "$_mr_dir"/*.journal; do
                     [ -f "$_mr_path" ] || continue
                     _partlib_move_journal_read "$_mr_path" || continue
-                    _mr_pending=1
-                    printf 'journal=%s\n' "$_mr_path"
-                    printf 'j_disk=%s\n' "$MJ_DISK"
-                    printf 'j_partno=%s\n' "$MJ_PARTNO"
-                    printf 'j_target=%s\n' "${MJ_TARGET:-}"
-                    printf 'j_copied=%s\n' "${MJ_COPIED:-0}"
-                    printf 'j_size=%s\n' "$MJ_SIZE"
-                    printf 'j_state=%s\n' "${MJ_STATE:-unknown}"
+                    case " $_mr_disks " in
+                        *" $MJ_DISK "*) ;;
+                        *) _mr_disks="$_mr_disks $MJ_DISK" ;;
+                    esac
                 done
             fi
-            if [ "$_mr_pending" -eq 0 ]; then
+            if [ -z "$_mr_disks" ]; then
                 printf 'move_recovery=none\n'
-            else
-                printf 'move_recovery=pending\n'
+                printf 'move_recovery_detail=no pending move journals\n'
+                exit 0
             fi
+            _mr_overall=""
+            _mr_detail=""
+            for _mr_d in $_mr_disks; do
+                _mr_out="$(_partlib_move_recover_disk "$_mr_d" "$_mr_what")"
+                printf '%s\n' "$_mr_out" | grep -v '^move_recovery'
+                _mr_r="$(printf '%s\n' "$_mr_out" \
+                    | sed -n 's/^move_recovery=//p' | tail -n1)"
+                _mr_t="$(printf '%s\n' "$_mr_out" \
+                    | sed -n 's/^move_recovery_detail=//p' | tail -n1)"
+                [ "$_mr_r" = failed ] && _mr_overall=failed
+                [ -z "$_mr_overall" ] && _mr_overall="$_mr_r"
+                _mr_detail="${_mr_detail:+$_mr_detail; }$_mr_t"
+            done
+            printf 'move_recovery=%s\n' "$_mr_overall"
+            printf 'move_recovery_detail=%s\n' "$_mr_detail"
             exit 0
             ;;
         *)

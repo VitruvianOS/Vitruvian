@@ -5,6 +5,7 @@
 
 #include "PartitionPlanBuilder.h"
 
+#include <dirent.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -676,10 +677,40 @@ PartitionPlanBuilder::RunPlan(const BString& plan, BMessage& result,
 }
 
 
-// QueryMoveRecovery is read-only: it lists leftover move journals, so a killed Move is visible.
+// Lists leftover partition-move journals, so a killed Move is visible.
+// Must match _PARTLIB_MOVE_JOURNAL_DIR in vos-partition-lib.sh.
+static const char* kMoveJournalDir = "/var/lib/vos/move-journal";
+
+
+static bool
+has_move_journal()
+{
+	DIR* dir = opendir(kMoveJournalDir);
+	if (dir == NULL)
+		return false;
+
+	bool found = false;
+	struct dirent* entry;
+	while (!found && (entry = readdir(dir)) != NULL) {
+		size_t length = strlen(entry->d_name);
+		found = length > 8
+			&& strcmp(entry->d_name + length - 8, ".journal") == 0;
+	}
+	closedir(dir);
+	return found;
+}
+
+
 status_t
 PartitionPlanBuilder::QueryMoveRecovery(BMessage& result)
 {
+	// The journal directory is world-readable: only ask polkit when a
+	// move was actually interrupted, not on every DriveSetup start.
+	if (!has_move_journal()) {
+		result.AddString("move_recovery", "none");
+		return B_OK;
+	}
+
 	const char* argv[] = { "pkexec", kInstallHelper, "partition",
 		"move-recovery", "status", NULL };
 	BString text;

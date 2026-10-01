@@ -142,7 +142,12 @@ create_raw() {
     log_step "Configuring system, installing Vitruvian, and setting up bootloader..."
 
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
+    _raw_kver="$(ls -1 "$_root_dir/lib/modules" | sort -V | tail -1)"
     sudo chroot "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+apt-get install -y --download-only --no-install-recommends $_raw_pkgs \
+    dkms build-essential linux-headers-$_raw_kver /localdeb/*.deb" \
+        || die "raw package download failed"
+    chroot_isolated "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 
 umount /sys/firmware/efi/efivars 2>/dev/null || true
 
@@ -252,7 +257,7 @@ EOF
         log_step "Building 32-bit EFI stub (BOOTIA32.EFI) for 32-bit UEFI firmware..."
         sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
             "$_root_dir/tmp/grub_ia32.cfg"
-        sudo chroot "$_root_dir" grub-mkstandalone \
+        chroot_isolated "$_root_dir" grub-mkstandalone \
             --directory=/usr/lib/grub/i386-efi \
             --format=i386-efi \
             --output=/tmp/BOOTIA32.EFI \
@@ -267,7 +272,7 @@ EOF
         sudo mkdir -p "$_root_dir/scratch"
         sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
             "$_root_dir/scratch/grub.cfg"
-        sudo chroot "$_root_dir" /usr/bin/grub-mkstandalone \
+        chroot_isolated "$_root_dir" /usr/bin/grub-mkstandalone \
             --directory="/usr/lib/grub/$_efi_target" \
             --format="$_efi_target" \
             --output="/scratch/$_boot_efi" \
@@ -320,7 +325,7 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 UNITEOF
-    sudo chroot "$_root_dir" systemctl enable vos-resize-root.service 2>/dev/null || true
+    chroot_isolated "$_root_dir" systemctl enable vos-resize-root.service 2>/dev/null || true
 
     qemu_eject "$_root_dir" "$_arch"
 
@@ -416,6 +421,9 @@ create_iso() {
     _iso_pkgs="$(get_iso_image_packages "$_arch")"
     log_step "Installing debs into chroot..."
     sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+apt-get install -y --download-only dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs /tmp/*.deb" \
+        || die "iso package download failed"
+    chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 apt remove -y vos nexus-dkms || true
 apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
 apt install -y -f --reinstall /tmp/*.deb
@@ -522,7 +530,7 @@ EOF
         log_step "Building 32-bit EFI bootloader (i386-efi) for 32-bit UEFI firmware..."
         sudo cp "$_basedir/image_tree/scratch/grub.cfg" \
             "$_chroot_dir/tmp/grub_ia32.cfg"
-        sudo chroot "$_chroot_dir" grub-mkstandalone \
+        chroot_isolated "$_chroot_dir" grub-mkstandalone \
             --directory=/usr/lib/grub/i386-efi \
             --format=i386-efi \
             --output=/tmp/bootia32.efi \
@@ -535,7 +543,7 @@ EOF
     else
         sudo mkdir -p "$_basedir/image_tree/chroot/scratch"
         sudo cp "$_basedir/image_tree/scratch/grub.cfg" "$_basedir/image_tree/chroot/scratch/"
-        sudo chroot "$_basedir/image_tree/chroot" /usr/bin/grub-mkstandalone \
+        chroot_isolated "$_basedir/image_tree/chroot" /usr/bin/grub-mkstandalone \
             --directory="/usr/lib/grub/$_efi_target" \
             --format="$_efi_target" \
             --output="/scratch/$_efi_name" \
@@ -633,7 +641,7 @@ _common_chroot_setup() {
     _hostname="$2"
     # $5: 1 = live ISO (boots via boot=live), 0 = installed-like image.
     _live="${5:-0}"
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 echo '$_hostname' > /etc/hostname
 
 # Rewrite /etc/hosts so it has the correct hostname.
@@ -739,7 +747,7 @@ _debug_ssh_setup() {
     # shipped from staging because the vos deb only carries it when the deb
     # itself was built Debug, which need not match this image.
     local _chroot="$1"
-    sudo chroot "$_chroot" /bin/bash -eux <<'SSHEOF'
+    chroot_isolated "$_chroot" /bin/bash -eux <<'SSHEOF'
 export DEBIAN_FRONTEND=noninteractive
 mkdir -p /etc/ssh/sshd_config.d
 cat > /etc/ssh/sshd_config.d/debug.conf <<'EOF'
@@ -851,7 +859,7 @@ create_raspberry() {
 
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
-    sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+    chroot_isolated "$_mnt" /debootstrap/debootstrap --second-stage
     # The second stage unmounts /proc and /sys on exit; systemd >= 262
     # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
     for _m in dev proc sys; do
@@ -918,6 +926,9 @@ if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
         exit 1
     }
 fi
+apt install -y --download-only $_board_pkgs \$(ls /localdeb/*.deb 2>/dev/null)" \
+        || die "raspberry chroot bash-c failed"
+    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 apt install -y $_board_pkgs
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
@@ -1092,7 +1103,7 @@ create_uboot_board() {
 
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
-    sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+    chroot_isolated "$_mnt" /debootstrap/debootstrap --second-stage
     # The second stage unmounts /proc and /sys on exit; systemd >= 262
     # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
     for _m in dev proc sys; do
@@ -1153,6 +1164,9 @@ if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
         exit 1
     }
 fi
+apt install -y --download-only $_board_pkgs u-boot-menu \$(ls /localdeb/*.deb 2>/dev/null)" \
+        || die "uboot chroot bash-c failed"
+    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 apt install -y $_board_pkgs u-boot-menu
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y

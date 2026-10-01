@@ -63,6 +63,26 @@ chroot_mount() {
     sudo cp -L /etc/resolv.conf "$_chroot_dir/etc/resolv.conf"
 }
 
+# chroot_isolated ROOT CMD [ARGS...]
+# Runs CMD chrooted into ROOT with its own network, hostname, IPC, PID and mount namespaces and a
+# read-only /proc/sys and /sys, so maintainer scripts cannot touch the host. /dev stays the host's.
+_CHROOT_ISOLATED_INNER='r="$1"; shift
+ip link set lo up 2>/dev/null
+mount -t proc proc "$r/proc" || exit 1
+mount --bind "$r/proc/sys" "$r/proc/sys" || exit 1
+mount -o remount,bind,ro "$r/proc/sys" || exit 1
+if mountpoint -q "$r/sys"; then umount -R "$r/sys" || exit 1; fi
+mount -t sysfs -o ro sysfs "$r/sys" || exit 1
+exec chroot "$r" "$@"'
+
+chroot_isolated() {
+    _ci_root="$1"
+    shift
+    sudo mkdir -p "$_ci_root/proc" "$_ci_root/sys"
+    sudo unshare --net --uts --ipc --pid --fork --mount --propagation private \
+        /bin/sh -c "$_CHROOT_ISOLATED_INNER" sh "$_ci_root" "$@"
+}
+
 chroot_umount() {
     _chroot_dir="$1"
     [ -d "$_chroot_dir" ] || return 0
@@ -189,7 +209,7 @@ VOSEOF
         sudo sh -c 'cp -n "$1"/*.deb "$2"/ 2>/dev/null || true' _ \
             "$_debootstrap_cache" "$_cache_dir/archives"
         log_step "Running debootstrap second stage..."
-        sudo chroot "$_chroot_dir" /debootstrap/debootstrap --second-stage
+        chroot_isolated "$_chroot_dir" /debootstrap/debootstrap --second-stage
         log_step "Re-mounting after second-stage..."
         chroot_mount "$_chroot_dir"
     fi
@@ -226,9 +246,12 @@ VOSEOF
         printf 'force-unsafe-io\n' \
           | sudo tee "$_chroot_dir/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io" >/dev/null
     fi
+    # Download with the network, install isolated: cups-pdf's postinst ran lpadmin against the host's cupsd.
     sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "\
 echo 'vitruvian' > /etc/hostname && \
-apt update && apt install -y --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES && \
+apt update && apt install -y --download-only --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES"
+    chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "\
+apt install -y --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES && \
 echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \
 exit"
 

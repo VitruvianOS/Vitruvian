@@ -492,39 +492,69 @@ CupsBridge::ListJobs(const char* queue, printcups_job* jobs, int maxJobs)
 }
 
 
+static status_t
+AdminRequest(ipp_t* request)
+{
+	// cupsd answers admin operations only to members of its @SYSTEM
+	// group (lpadmin); everyone else gets IPP_STATUS_ERROR_FORBIDDEN.
+	ipp_t* response = cupsDoRequest(CUPS_HTTP_DEFAULT, request, "/admin/");
+	if (response == NULL) {
+		fprintf(stderr, "printcups: %s\n", cupsLastErrorString());
+		return B_ERROR;
+	}
+
+	ipp_status_t status = ippGetStatusCode(response);
+	ippDelete(response);
+	if (status > IPP_STATUS_OK_CONFLICTING) {
+		fprintf(stderr, "printcups: %s\n", cupsLastErrorString());
+		return status == IPP_STATUS_ERROR_FORBIDDEN
+			|| status == IPP_STATUS_ERROR_NOT_AUTHORIZED
+			? B_PERMISSION_DENIED : B_ERROR;
+	}
+	return B_OK;
+}
+
+
+static ipp_t*
+NewPrinterRequest(ipp_op_t op, const char* name)
+{
+	char printerUri[HTTP_MAX_URI];
+	httpAssembleURIf(HTTP_URI_CODING_ALL, printerUri, sizeof(printerUri),
+		"ipp", NULL, "localhost", 0, "/printers/%s", name);
+
+	ipp_t* request = ippNewRequest(op);
+	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri",
+		NULL, printerUri);
+	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_NAME,
+		"requesting-user-name", NULL, cupsUser());
+	return request;
+}
+
+
 status_t
 CupsBridge::AddPrinterEverywhere(const char* name, const char* uri)
 {
 	if (name == NULL || name[0] == '\0' || uri == NULL || uri[0] == '\0')
 		return B_BAD_VALUE;
 
-	// lpadmin -p NAME -v URI -m everywhere -E
-	// Equivalent IPP CUPS request: CUPS_ADD_PRINTER with everywhere model.
-	http_t* http = httpConnect2(cupsServer(), ippPort(), NULL, AF_UNSPEC,
-		HTTP_ENCRYPTION_IF_REQUESTED, 1, 30000, NULL);
-	if (http == NULL)
-		return B_ERROR;
-
-	ipp_t* request = ippNewRequest(CUPS_ADD_PRINTER);
-	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_NAME, "printer-name",
-		NULL, name);
-	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "device-uri",
+	// Same request as lpadmin -p NAME -v URI -m everywhere -E.
+	ipp_t* request = NewPrinterRequest(IPP_OP_CUPS_ADD_MODIFY_PRINTER, name);
+	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_NAME, "ppd-name",
+		NULL, "everywhere");
+	ippAddString(request, IPP_TAG_PRINTER, IPP_TAG_URI, "device-uri",
 		NULL, uri);
-	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD,
-		"ppd-name", NULL, "everywhere");
-	ippAddBoolean(request, IPP_TAG_OPERATION, "printer-is-accepting-jobs",
-		1);
-	ippAddInteger(request, IPP_TAG_OPERATION, IPP_TAG_ENUM,
-		"printer-state", IPP_PRINTER_IDLE);
+	ippAddBoolean(request, IPP_TAG_PRINTER, "printer-is-accepting-jobs", 1);
+	ippAddInteger(request, IPP_TAG_PRINTER, IPP_TAG_ENUM, "printer-state",
+		IPP_PSTATE_IDLE);
+	return AdminRequest(request);
+}
 
-	// Adding a printer needs admin auth; rely on cups-files.conf DefaultAuthType.
-	ipp_t* response = cupsDoRequest(http, request, "/admin/");
-	httpClose(http);
 
-	if (response == NULL)
-		return B_ERROR;
+status_t
+CupsBridge::RemovePrinter(const char* name)
+{
+	if (name == NULL || name[0] == '\0')
+		return B_BAD_VALUE;
 
-	ipp_status_t status = ippGetStatusCode(response);
-	ippDelete(response);
-	return status == IPP_STATUS_OK ? B_OK : B_ERROR;
+	return AdminRequest(NewPrinterRequest(IPP_OP_CUPS_DELETE_PRINTER, name));
 }

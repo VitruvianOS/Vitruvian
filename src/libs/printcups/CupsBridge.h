@@ -34,6 +34,7 @@ public:
 								int maxJobs);
 		status_t			AddPrinterEverywhere(const char* name,
 								const char* uri);
+		status_t			RemovePrinter(const char* name);
 
 private:
 		void				_FillFromDest(const void* dest,

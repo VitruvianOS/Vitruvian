@@ -515,4 +515,12 @@ printcups_add_printer_everywhere(const char* name, const char* uri)
 }
 
 
+status_t
+printcups_remove_printer(const char* name)
+{
+	CupsBridge bridge;
+	return bridge.RemovePrinter(name);
+}
+
+
 }	// extern "C"

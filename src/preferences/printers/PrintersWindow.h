@@ -6,12 +6,12 @@
 #define _PRINTERS_WINDOW_H
 
 
+#include <String.h>
 #include <Window.h>
 
 
 class BButton;
 class BListView;
-class BStringItem;
 class BTextControl;
 
 
@@ -20,28 +20,27 @@ public:
 						PrintersWindow();
 
 	virtual void		MessageReceived(BMessage* message);
-	virtual bool		QuitRequested();
 
 private:
 	void				_UpdateQueues();
 	void				_UpdateJobs();
+	void				_UpdateButtons();
 	void				_SetDefault();
 	void				_CancelJob();
 	void				_AddPrinter();
 	void				_RemovePrinter();
+	void				_ShowError(const char* text, status_t status);
 
-	class BStringItem*	_SelectedQueue() const;
-	BString				_SelectedJobName() const;
-	int32				_SelectedJobId() const;
+	BString				_SelectedQueue() const;
 
-	BListView*		fQueueList;
-	BListView*		fJobList;
-	BTextControl*	fAddNameField;
-	BTextControl*	fAddUriField;
-	BButton*		fDefaultButton;
-	BButton*		fCancelButton;
-	BButton*		fAddButton;
-	BButton*		fRemoveButton;
+	BListView*			fQueueList;
+	BListView*			fJobList;
+	BTextControl*		fAddNameField;
+	BTextControl*		fAddUriField;
+	BButton*			fDefaultButton;
+	BButton*			fRemoveButton;
+	BButton*			fCancelButton;
+	BButton*			fAddButton;
 };
 
 

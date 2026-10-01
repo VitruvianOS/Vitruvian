@@ -83,9 +83,11 @@ status_t	printcups_set_default(const char* queue);
 status_t	printcups_cancel_job(const char* queue, int32 jobId);
 int			printcups_list_jobs(const char* queue, printcups_job* jobs,
 					int maxJobs);
-// Driverless IPP Everywhere queue creation (lpadmin -m everywhere).
+// Driverless IPP Everywhere queue creation (lpadmin -m everywhere) and
+// removal. Both need lpadmin group membership: B_PERMISSION_DENIED.
 status_t	printcups_add_printer_everywhere(const char* name,
 					const char* uri);
+status_t	printcups_remove_printer(const char* name);
 
 }	// extern "C"
 

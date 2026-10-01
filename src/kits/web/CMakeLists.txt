@@ -25,12 +25,17 @@ if(WEB_COMPILE_ONLY)
 		${GLIB2_INCLUDE_DIRS}
 	)
 	target_compile_options(web_process_manager PRIVATE -std=c++17 -fsyntax-only)
+
+	# WebDefs constants — needed by apps that include <web/WebDefs.h>
+	add_library(web_defs STATIC WebDefs.cpp)
+	target_compile_options(web_defs PRIVATE -std=c++17 -fsyntax-only -include LinuxBuildCompatibility.h)
 else()
 	AddOn(
 		web
 		SHARED
 
 		SOURCES
+			WebDefs.cpp
 			private/CompositorAdapter.cpp
 			private/ProcessManager.cpp
 			private/WebkitBridge.cpp

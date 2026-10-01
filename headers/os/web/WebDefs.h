@@ -24,6 +24,12 @@ enum {
 	B_WEB_PAGE_CONFIRM				= 'Wcnf',
 	B_WEB_PAGE_PROMPT				= 'Wpmt',
 	B_WEB_NEW_WINDOW_REQUESTED		= 'Wnwr',
+	B_WEB_PAGE_TITLE_CHANGED	= 'WhTt',
+	B_WEB_PAGE_URL_CHANGED		= 'WhUc',
+	B_WEB_PAGE_PROGRESS_CHANGED	= 'WhPr',
+	B_WEB_PAGE_LOAD_FINISHED	= 'WhLf',
+	B_WEB_PAGE_LOAD_FAILED		= 'WhFl',
+	B_WEB_FRAME_READY			= 'WhFr'
 };
 
 // Web page notification message field names
@@ -33,6 +39,12 @@ extern const char* const B_WEB_PROGRESS_FIELD;
 extern const char* const B_WEB_ERROR_FIELD;
 extern const char* const B_WEB_FRAME_FIELD;
 extern const char* const B_WEB_MESSAGE_FIELD;
+#define B_WEB_TITLE_FIELD		"web:title"
+#define B_WEB_URL_FIELD			"web:url"
+#define B_WEB_PROGRESS_FIELD	"web:progress"
+#define B_WEB_ERROR_FIELD		"web:error"
+#define B_WEB_FRAME_FIELD		"web:frame"
+#define B_WEB_MESSAGE_FIELD		"web:message"
 
 
 #endif /* _WEB_DEFS_H */

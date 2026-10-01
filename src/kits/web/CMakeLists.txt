@@ -11,6 +11,76 @@ if(NOT WPEWEBKIT_FOUND OR NOT WPEFDO_FOUND OR NOT GLIB2_FOUND)
 	set(WEB_COMPILE_ONLY TRUE)
 else()
 	set(WEB_COMPILE_ONLY FALSE)
+# Web kit — WPE WebKit2 BWebView wrapper for Vitruvian
+#
+# When WPE packages are available the compositor/event/bridge layer
+# from private/ is compiled in and BWebView delegates to it.
+# Otherwise a stub library is built so the netplus app still links.
+
+find_package(PkgConfig)
+
+set(WEB_SOURCES
+	WebView.cpp
+)
+
+set(WEB_PRIVATE_SOURCES "")
+
+if(PKG_CONFIG_FOUND)
+	pkg_check_modules(WPE_WEBKIT wpe-webkit-2.0 QUIET)
+	pkg_check_modules(WPE_FDO wpebackend-fdo-1.0 QUIET)
+	pkg_check_modules(GLIB glib-2.0 QUIET)
+	pkg_check_modules(WAYLAND wayland-server QUIET)
+
+	if(WPE_WEBKIT_FOUND AND WPE_FDO_FOUND)
+		set(WEB_PRIVATE_SOURCES
+			private/CompositorAdapter.cpp
+			private/DomainFilter.cpp
+			private/DownloadHandler.cpp
+			private/EventAdapter.cpp
+			private/FocusAndCursor.cpp
+			private/FrameNotifier.cpp
+			private/Logging.cpp
+			private/ProcessManager.cpp
+			private/SessionAdapter.cpp
+			private/SettingsParser.cpp
+			private/UrlSchemeAdapter.cpp
+			private/WebkitBridge.cpp
+		)
+	else()
+		message(STATUS "web kit: WPE packages not found, building stubs")
+	endif()
+endif()
+
+add_library(web SHARED ${WEB_SOURCES} ${WEB_PRIVATE_SOURCES})
+
+target_include_directories(web PUBLIC
+	${PROJECT_SOURCE_DIR}/headers
+	${PROJECT_SOURCE_DIR}/headers/os
+)
+
+if(WEB_PRIVATE_SOURCES)
+	target_include_directories(web PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/private
+		${WPE_WEBKIT_INCLUDE_DIRS}
+		${WPE_FDO_INCLUDE_DIRS}
+		${GLIB_INCLUDE_DIRS}
+		${WAYLAND_INCLUDE_DIRS}
+	)
+	target_compile_definitions(web PRIVATE HAS_WPE=1)
+	target_compile_options(web PRIVATE
+		${WPE_WEBKIT_CFLAGS_OTHER}
+		${WPE_FDO_CFLAGS_OTHER}
+		${GLIB_CFLAGS_OTHER}
+		${WAYLAND_CFLAGS_OTHER}
+	)
+	target_link_libraries(web PRIVATE
+		be root pthread
+		${WPE_WEBKIT_LIBRARIES}
+		${WPE_FDO_LIBRARIES}
+		${GLIB_LIBRARIES}
+		${WAYLAND_LIBRARIES}
+	)
+	target_link_libraries(web PRIVATE be root pthread)
 endif()
 
 if(WEB_COMPILE_ONLY)

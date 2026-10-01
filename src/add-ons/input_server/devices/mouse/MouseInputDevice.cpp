@@ -843,6 +843,26 @@ MouseDevice::_ControlThread()
 							LIBEVDEV_READ_FLAG_SYNC, &iev)
 							== LIBEVDEV_READ_STATUS_SYNC)
 						;
+					// The sync brought libevdev's state up to date, so take the buttons from it;
+					// otherwise a release dropped meanwhile (e.g. across suspend) leaves a button stuck down.
+					static const struct { int code; uint32 bit; }
+						kButtonBits[] = {
+							{ BTN_LEFT, 0x01 }, { BTN_RIGHT, 0x02 },
+							{ BTN_MIDDLE, 0x04 }, { BTN_SIDE, 0x08 },
+							{ BTN_EXTRA, 0x10 }
+						};
+					currentButtons = 0;
+					for (const auto& button : kButtonBits) {
+						if (libevdev_get_event_value(fEvdevHandle, EV_KEY,
+								button.code) > 0)
+							currentButtons |= button.bit;
+					}
+					if (fIsAbsolute) {
+						currentAbsX = libevdev_get_event_value(fEvdevHandle,
+							EV_ABS, ABS_X);
+						currentAbsY = libevdev_get_event_value(fEvdevHandle,
+							EV_ABS, ABS_Y);
+					}
 					continue;
 				}
 				if (rc < 0) {

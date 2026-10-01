@@ -279,8 +279,12 @@ LogindBridge::_ProcessPendingSleep()
 	r = sd_bus_call_method(bus, kLogin1Bus, kLogin1Path, kLogin1Manager,
 		method, &err, NULL, "b", 1);
 	if (r < 0) {
-		fprintf(stderr, "LogindBridge: %s refused: %s\n", method,
-			err.message != NULL ? err.message : strerror(-r));
+		const char* reason = err.message != NULL ? err.message : strerror(-r);
+		fprintf(stderr, "LogindBridge: %s refused: %s\n", method, reason);
+		BMessage refused(kMsgLogindSleepRefused);
+		refused.AddBool("hibernate", request == kSleepRequestHibernate);
+		refused.AddString("reason", reason);
+		fTarget.SendMessage(&refused);
 	}
 	sd_bus_error_free(&err);
 	sd_bus_unref(bus);

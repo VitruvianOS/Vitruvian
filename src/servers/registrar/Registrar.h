@@ -26,6 +26,7 @@
 #ifndef REGISTRAR_H
 #define REGISTRAR_H
 
+#include <Messenger.h>
 #include <Server.h>
 
 
@@ -65,6 +66,9 @@ private:
 	void _HandleIsSleepAvailable(BMessage *message);
 	void _HandleLogindPrepareForShutdown(BMessage *message);
 	void _HandleLogindPrepareForSleep(BMessage *message);
+	void _HandleSleepTimer(BMessage *message);
+	void _ShowSleepWindow(bool hibernate);
+	void _ShowSleepFailure(bool hibernate, const char *reason);
 
 	TRoster					*fRoster;
 	ClipboardHandler		*fClipboardHandler;
@@ -77,6 +81,13 @@ private:
 	AuthenticationManager	*fAuthenticationManager;
 	PackageWatchingManager	*fPackageWatchingManager;
 	LogindBridge			*fLogindBridge;
+
+	BMessenger				fSleepWindow;
+	int32					fSleepCycle;
+	bool					fSleepHibernate;
+	bigtime_t				fSleepClockOffset;
+	bool					fSleepRequestHibernate;
+	bigtime_t				fSleepRequestTime;
 };
 
 #endif	// REGISTRAR_H

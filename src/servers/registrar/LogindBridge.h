@@ -13,6 +13,9 @@
 // Internal registrar messages posted by LogindBridge when logind signals fire.
 static const uint32 kMsgLogindPrepareForShutdown = 'lPfS';
 static const uint32 kMsgLogindPrepareForSleep    = 'lPfL';
+// A Suspend/Hibernate request logind refused. Fields: "hibernate" (bool),
+// "reason" (string).
+static const uint32 kMsgLogindSleepRefused       = 'lSlR';
 
 // Field: "active" (bool) — true = about to happen, false = resume.
 // Field: "type" (string, optional), from PrepareForShutdownWithMetadata:

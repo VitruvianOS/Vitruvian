@@ -10,16 +10,19 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include <exception>
 
 #include <Application.h>
+#include <Catalog.h>
 #include <Clipboard.h>
 #include <Message.h>
 #include <MessengerPrivate.h>
 #include <OS.h>
 #include <RegistrarDefs.h>
 #include <RosterPrivate.h>
+#include <String.h>
 #include <system_info.h>
 
 
@@ -34,6 +37,7 @@
 #include "MIMEManager.h"
 #include "PackageWatchingManager.h"
 #include "ShutdownProcess.h"
+#include "SleepWindow.h"
 #include "TRoster.h"
 
 
@@ -58,6 +62,29 @@ static const uint32 kMsgRosterSanityCheck = 'rSAN';
 // check never gets a chance to run (e.g. no further launch is attempted).
 static const bigtime_t kSanityCheckInterval = 30000000LL;
 
+// Sleep timing: how long apps get after B_SYSTEM_SUSPENDING, when the window closes, and how
+// recent our own request must be to name the sleep kind and how much sleep proves a sleep.
+static const uint32 kMsgSleepCloseWindow = 'slCw';
+static const uint32 kMsgSleepRelease = 'slRl';
+static const bigtime_t kSleepHandlerTime = 2000000LL;
+static const bigtime_t kSleepWindowCloseTime = 250000LL;
+static const bigtime_t kSleepRequestValidity = 60000000LL;
+static const bigtime_t kSleptThreshold = 100000LL;
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Registrar"
+
+
+static bigtime_t
+sleep_clock_offset()
+{
+	struct timespec boot, monotonic;
+	clock_gettime(CLOCK_BOOTTIME, &boot);
+	clock_gettime(CLOCK_MONOTONIC, &monotonic);
+	return (bigtime_t)(boot.tv_sec - monotonic.tv_sec) * 1000000
+		+ (boot.tv_nsec - monotonic.tv_nsec) / 1000;
+}
+
 
 /*!	\brief Creates the registrar application class.
 	\param error Passed to the BApplication constructor for returning an
@@ -75,7 +102,12 @@ Registrar::Registrar(status_t* _error)
 	fShutdownProcess(NULL),
 	fAuthenticationManager(NULL),
 	fPackageWatchingManager(NULL),
-	fLogindBridge(NULL)
+	fLogindBridge(NULL),
+	fSleepCycle(0),
+	fSleepHibernate(false),
+	fSleepClockOffset(0),
+	fSleepRequestHibernate(false),
+	fSleepRequestTime(0)
 {
 	FUNCTION_START();
 
@@ -308,6 +340,14 @@ Registrar::_MessageReceived(BMessage *message)
 		case kMsgLogindPrepareForSleep:
 			_HandleLogindPrepareForSleep(message);
 			break;
+		case kMsgLogindSleepRefused:
+			_ShowSleepFailure(message->GetBool("hibernate", false),
+				message->GetString("reason", NULL));
+			break;
+		case kMsgSleepCloseWindow:
+		case kMsgSleepRelease:
+			_HandleSleepTimer(message);
+			break;
 		case B_REG_TEAM_DEBUGGER_ALERT:
 		{
 			if (fShutdownProcess != NULL)
@@ -513,6 +553,11 @@ Registrar::_HandleRequestSleep(BMessage *request)
 	else if (strcmp(which, "hibernate") == 0)
 		error = fLogindBridge->Hibernate();
 
+	if (error == B_OK) {
+		fSleepRequestHibernate = strcmp(which, "hibernate") == 0;
+		fSleepRequestTime = system_time();
+	}
+
 	BMessage reply(error == B_OK ? B_REG_SUCCESS : B_REG_ERROR);
 	if (error != B_OK)
 		reply.AddInt32("error", error);
@@ -616,6 +661,25 @@ Registrar::_HandleLogindPrepareForSleep(BMessage *request)
 	if (request->FindBool("active", &active) != B_OK)
 		return;
 
+	// Stale timers of an earlier cycle must not release this one's lock.
+	fSleepCycle++;
+
+	if (active) {
+		// Only our own request says which kind; logind's signal does not.
+		fSleepHibernate = fSleepRequestHibernate
+			&& system_time() - fSleepRequestTime < kSleepRequestValidity;
+		fSleepRequestTime = 0;
+		fSleepClockOffset = sleep_clock_offset();
+		_ShowSleepWindow(fSleepHibernate);
+	} else {
+		// CLOCK_BOOTTIME runs on during sleep, CLOCK_MONOTONIC stops: if
+		// their offset did not grow, the kernel backed out.
+		if (sleep_clock_offset() - fSleepClockOffset > kSleptThreshold)
+			fSleepWindow.SendMessage(B_QUIT_REQUESTED);
+		else
+			_ShowSleepFailure(fSleepHibernate, NULL);
+	}
+
 	BMessage payload(active ? B_SYSTEM_SUSPENDING : B_SYSTEM_RESUMED);
 	BMessage broadcast(B_REG_BROADCAST);
 	broadcast.AddInt32("team", -1);
@@ -624,11 +688,72 @@ Registrar::_HandleLogindPrepareForSleep(BMessage *request)
 	fRoster->HandleBroadcast(&broadcast);
 
 	if (active && fLogindBridge != NULL) {
-		// 2 s cap for handlers to run; then release. Bridge auto-
-		// reacquires the sleep lock when PrepareForSleep(false) fires.
-		snooze(2000000);
-		fLogindBridge->ReleaseSleepInhibit();
+		// Give handlers kSleepHandlerTime, then release the delay lock for the bridge to reacquire.
+		// A suspend closes the window first so the resumed screen never shows it.
+		BMessage timer(fSleepHibernate ? kMsgSleepRelease : kMsgSleepCloseWindow);
+		timer.AddInt32("cycle", fSleepCycle);
+		fEventQueue->AddEvent(new(std::nothrow) MessageEvent(
+			system_time() + (fSleepHibernate ? kSleepHandlerTime
+				: kSleepHandlerTime - kSleepWindowCloseTime), this, &timer));
 	}
+}
+
+
+void
+Registrar::_HandleSleepTimer(BMessage *message)
+{
+	if (message->GetInt32("cycle", -1) != fSleepCycle)
+		return;
+
+	if (message->what == kMsgSleepCloseWindow) {
+		// Let app_server redraw what the window covered before freezing.
+		fSleepWindow.SendMessage(B_QUIT_REQUESTED);
+		BMessage timer(kMsgSleepRelease);
+		timer.AddInt32("cycle", fSleepCycle);
+		fEventQueue->AddEvent(new(std::nothrow) MessageEvent(
+			system_time() + kSleepWindowCloseTime, this, &timer));
+		return;
+	}
+
+	if (fLogindBridge != NULL)
+		fLogindBridge->ReleaseSleepInhibit();
+}
+
+
+void
+Registrar::_ShowSleepWindow(bool hibernate)
+{
+	fSleepWindow.SendMessage(B_QUIT_REQUESTED);
+	if (InitGUIContext() != B_OK)
+		return;
+
+	SleepWindow* window = new(std::nothrow) SleepWindow(hibernate);
+	if (window == NULL)
+		return;
+	fSleepWindow = BMessenger(window);
+	window->Go(NULL);
+}
+
+
+void
+Registrar::_ShowSleepFailure(bool hibernate, const char *reason)
+{
+	BString text(hibernate
+		? B_TRANSLATE("The system could not hibernate.")
+		: B_TRANSLATE("The system could not suspend."));
+	text << "\n\n";
+	if (reason != NULL)
+		text << reason;
+	else
+		text << B_TRANSLATE("A device or program refused to sleep; the "
+			"system log has the details.");
+
+	if (!fSleepWindow.IsValid())
+		_ShowSleepWindow(hibernate);
+
+	BMessage failed(kMsgSleepFailed);
+	failed.AddString("text", text);
+	fSleepWindow.SendMessage(&failed);
 }
 
 

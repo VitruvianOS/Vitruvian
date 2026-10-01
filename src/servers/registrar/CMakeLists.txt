@@ -27,6 +27,7 @@ Server(
 	RosterAppInfo.cpp
 	RosterSettingsCharStream.cpp
 	ShutdownProcess.cpp
+	SleepWindow.cpp
 	TRoster.cpp
 	Watcher.cpp
 	WatchingService.cpp

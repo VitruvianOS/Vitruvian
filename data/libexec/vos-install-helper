@@ -599,10 +599,12 @@ EOF
     chroot "$TARGET" systemctl unmask systemd-remount-fs.service 2>/dev/null \
         || log "warn: could not unmask systemd-remount-fs on target"
     # The target has no swap in fstab; never record the live system's.
+    # Dropped afterwards so the target's own regenerations find its swap.
     mkdir -p "$TARGET/etc/initramfs-tools/conf.d"
     echo RESUME=none > "$TARGET/etc/initramfs-tools/conf.d/resume"
     chroot "$TARGET" update-initramfs -u -k all \
         || log "warn: update-initramfs failed"
+    rm -f "$TARGET/etc/initramfs-tools/conf.d/resume"
 
     _kver="$(ls -1 "$TARGET"/boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1 | sed 's|.*/vmlinuz-||')"
     if [ -n "$_kver" ]; then

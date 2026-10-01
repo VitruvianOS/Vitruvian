@@ -202,6 +202,22 @@ LogindBridge::Hibernate()
 }
 
 
+// logind only checks for swap. Without a resume device the initramfs
+// ignores the image and the hibernated session is lost at the next boot.
+static bool
+resume_configured()
+{
+	FILE* file = fopen("/sys/power/resume", "r");
+	if (file == NULL)
+		return false;
+	char device[32] = "";
+	bool configured = fgets(device, sizeof(device), file) != NULL
+		&& strncmp(device, "0:0", 3) != 0;
+	fclose(file);
+	return configured;
+}
+
+
 void
 LogindBridge::_UpdateSleepAvailability()
 {
@@ -218,7 +234,7 @@ LogindBridge::_UpdateSleepAvailability()
 		return;
 	}
 	fCanSuspend = _CanSleep(bus, "CanSuspend");
-	fCanHibernate = _CanSleep(bus, "CanHibernate");
+	fCanHibernate = _CanSleep(bus, "CanHibernate") && resume_configured();
 	sd_bus_unref(bus);
 }
 

@@ -7,6 +7,7 @@
 #include "PowerView.h"
 
 #include <errno.h>
+#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -257,7 +258,8 @@ PowerView::Create()
 	PowerView* view = new PowerView();
 	view->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
-	// Hibernate entries only where it can work (swap, resume device).
+	// Hibernate entries only where it can work: logind checks for swap, the
+	// kernel must also know the resume device or the image is never read.
 	sd_bus* bus = NULL;
 	if (sd_bus_open_system(&bus) >= 0) {
 		sd_bus_message* reply = NULL;
@@ -270,6 +272,15 @@ PowerView::Create()
 				|| strcmp(answer, "challenge") == 0;
 		sd_bus_message_unref(reply);
 		sd_bus_flush_close_unref(bus);
+	}
+	if (view->fCanHibernate) {
+		FILE* resume = fopen("/sys/power/resume", "r");
+		char device[32] = "";
+		view->fCanHibernate = resume != NULL
+			&& fgets(device, sizeof(device), resume) != NULL
+			&& strncmp(device, "0:0", 3) != 0;
+		if (resume != NULL)
+			fclose(resume);
 	}
 
 	BBox* batteryBox = titled_box("battery", B_TRANSLATE("Battery"));
@@ -505,15 +516,14 @@ PowerView::_HelperThread(void* data)
 {
 	HelperJob* job = (HelperJob*)data;
 
+	// posix_spawn, not fork(): no fork handlers run in this
+	// multithreaded process for a child that only execs.
+	char* argv[] = { (char*)"pkexec", (char*)kHelper,
+		(char*)job->arguments[0].String(),
+		job->count > 1 ? (char*)job->arguments[1].String() : NULL, NULL };
 	int status = -1;
-	pid_t pid = fork();
-	if (pid == 0) {
-		execlp("pkexec", "pkexec", kHelper, job->arguments[0].String(),
-			job->count > 1 ? job->arguments[1].String() : (char*)NULL,
-			(char*)NULL);
-		_exit(127);
-	}
-	if (pid > 0) {
+	pid_t pid;
+	if (posix_spawnp(&pid, "pkexec", NULL, NULL, argv, environ) == 0) {
 		while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
 			;
 	}

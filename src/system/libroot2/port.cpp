@@ -247,7 +247,7 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 
 	struct nexus_port_get_message_info exchange;
 	struct nexus_port_message_info privateInfo;
-	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	bigtime_t deadline = BKernelPrivate::wait_deadline(&flags, &timeout);
 	do {
 		memset(&privateInfo, 0, sizeof(privateInfo));
 		memset(&exchange, 0, sizeof(exchange));
@@ -292,7 +292,7 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_read exchange;
-	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	bigtime_t deadline = BKernelPrivate::wait_deadline(&flags, &timeout);
 	do {
 		memset(&exchange, 0, sizeof(exchange));
 		exchange.id = id;
@@ -340,7 +340,7 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_write exchange;
-	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	bigtime_t deadline = BKernelPrivate::wait_deadline(&flags, &timeout);
 	do {
 		memset(&exchange, 0, sizeof(exchange));
 		exchange.id = id;
@@ -392,7 +392,7 @@ write_port_with_caps(port_id id, int32 msgCode,
 
 	// Userland `port_cap_in` matches `nexus_port_cap_in` byte-for-byte.
 	struct nexus_port_write_caps exchange;
-	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	bigtime_t deadline = BKernelPrivate::wait_deadline(&flags, &timeout);
 	do {
 		memset(&exchange, 0, sizeof(exchange));
 		exchange.id = id;
@@ -441,7 +441,7 @@ read_port_with_caps_etc(port_id id, int32* msgCode,
 
 	// Userland `port_cap_out` matches `nexus_port_cap_out` byte-for-byte.
 	struct nexus_port_read_caps exchange;
-	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	bigtime_t deadline = BKernelPrivate::wait_deadline(&flags, &timeout);
 	do {
 		memset(&exchange, 0, sizeof(exchange));
 		exchange.id = id;

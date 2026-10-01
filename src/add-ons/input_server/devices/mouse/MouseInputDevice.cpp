@@ -27,6 +27,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <AppDefs.h>
 #include <Autolock.h>
 #include <Debug.h>
 #include <Directory.h>
@@ -145,6 +146,7 @@ public:
 
 			status_t			UpdateSettings();
 			status_t			UpdateTouchpadSettings(const BMessage* message);
+			void				HandleSeatMessage(uint32 what);
 
 			void				UpdateScreenBounds(BRect frame,
 									int32 orientation, int32 reflection);
@@ -260,6 +262,10 @@ private:
 			// volatile; matches the keyboard add-on.
 			int32				fUpdateSettings;
 
+			// Atomic pending B_SEAT_DISABLED / B_SEAT_ENABLED /
+			// B_SYSTEM_RESUMED, 0 = none.
+			int32				fSeatCommand;
+
 			bool				fIsTouchpad;
 			TouchpadMovement	fTouchpadMovementMaker;
 			BMessage*			fTouchpadSettingsMessage;
@@ -327,6 +333,7 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fThread(-1),
 	fActive(false),
 	fUpdateSettings(0),
+	fSeatCommand(0),
 	fIsTouchpad(false),
 	fTouchpadSettingsMessage(NULL),
 	fTouchpadSettingsLock("Touchpad settings lock")
@@ -576,6 +583,13 @@ MouseDevice::UpdateSettings()
 }
 
 
+void
+MouseDevice::HandleSeatMessage(uint32 what)
+{
+	atomic_set(&fSeatCommand, (int32)what);
+}
+
+
 status_t
 MouseDevice::UpdateTouchpadSettings(const BMessage* message)
 {
@@ -812,8 +826,32 @@ MouseDevice::_ControlThread()
 			if (atomic_get_and_set(&fUpdateSettings, 0) != 0)
 				_UpdateSettings();
 
+			// B_SEAT_DISABLED forces every button up like a real release, so nothing stays down across a VT
+			// switch. B_SEAT_ENABLED/B_SYSTEM_RESUMED re-read the hardware state to catch a dropped release.
+			bool forceFlush = false;
+			int32 seatCmd = atomic_get_and_set(&fSeatCommand, 0);
+			if (seatCmd == (int32)B_SEAT_DISABLED) {
+				currentButtons = 0;
+				forceFlush = true;
+			} else if (seatCmd == (int32)B_SEAT_ENABLED
+				|| seatCmd == (int32)B_SYSTEM_RESUMED) {
+				static const struct { int code; uint32 bit; }
+					kButtonBits[] = {
+						{ BTN_LEFT, 0x01 }, { BTN_RIGHT, 0x02 },
+						{ BTN_MIDDLE, 0x04 }, { BTN_SIDE, 0x08 },
+						{ BTN_EXTRA, 0x10 }
+					};
+				currentButtons = 0;
+				for (const auto& button : kButtonBits) {
+					if (libevdev_get_event_value(fEvdevHandle, EV_KEY,
+							button.code) > 0)
+						currentButtons |= button.bit;
+				}
+				forceFlush = true;
+			}
+
 			struct epoll_event fired;
-			int n = epoll_wait(fEpollFd, &fired, 1, 100);
+			int n = forceFlush ? 1 : epoll_wait(fEpollFd, &fired, 1, 100);
 			if (n < 0) {
 				if (errno == EINTR)
 					continue;
@@ -1773,6 +1811,12 @@ MouseInputDevice::Control(const char* name, void* cookie,
 
 	if (command == B_SCREEN_BOUNDS_CHANGED)
 		return _UpdateScreenBounds(device, message);
+
+	if (command == B_SEAT_DISABLED || command == B_SEAT_ENABLED
+		|| command == B_SYSTEM_RESUMED) {
+		device->HandleSeatMessage(command);
+		return B_OK;
+	}
 
 	if (command >= B_MOUSE_TYPE_CHANGED
 		&& command <= B_MOUSE_ACCELERATION_CHANGED)

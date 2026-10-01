@@ -147,6 +147,7 @@ KeyboardDevice::KeyboardDevice(KeyboardInputDevice* owner, const char* path)
 	fControlKey(0),
 	fKeyboardID(0),
 	fSettingsCommand(0),
+	fSeatCommand(0),
 	fKeymapLock("keymap lock")
 {
 	CALLED();
@@ -309,6 +310,13 @@ KeyboardDevice::UpdateSettings(uint32 opcode)
 	atomic_set(&fSettingsCommand, (int32)opcode);
 
 	return B_OK;
+}
+
+
+void
+KeyboardDevice::HandleSeatMessage(uint32 what)
+{
+	atomic_set(&fSeatCommand, (int32)what);
 }
 
 
@@ -497,15 +505,29 @@ KeyboardDevice::_ControlThread()
 	const uint32 kHaikuRightShift = linux_to_haiku_keycode(KEY_RIGHTSHIFT);
 	// Roles come from keymap, not fixed keys; ctrl-mode swaps them
 
+	bool forceResyncNow = false;
+
 	while (fActive) {
 		uint32 pending = (uint32)atomic_get_and_set(&fSettingsCommand, 0);
 		if (pending != 0)
 			_UpdateSettings(pending);
 
+		int32 seatCmd = atomic_get_and_set(&fSeatCommand, 0);
+		if (seatCmd == (int32)B_SEAT_DISABLED) {
+			_ReleaseHeldKeys(states, vtLCtrl, vtRCtrl, vtAlt, vtRalt,
+				menuKeyDown, ctrlAltDelPressed);
+		} else if (seatCmd == (int32)B_SEAT_ENABLED
+			|| seatCmd == (int32)B_SYSTEM_RESUMED) {
+			// Locks (Caps/Num/Scroll) resync now; held-key state resyncs on the next idle pass, forced immediate.
+			_SyncLocksFromLEDs();
+			forceResyncNow = true;
+		}
+
 		// Drain libevdev queue before epoll wait (prevents lost key-up events)
 		struct epoll_event fired;
 		if (libevdev_has_event_pending(fInputHandle) <= 0
-			&& epoll_wait(fEpollFd, &fired, 1, 100) <= 0) {
+			&& epoll_wait(fEpollFd, &fired, 1, forceResyncNow ? 0 : 100) <= 0) {
+			forceResyncNow = false;
 			// Reconcile shadow state with kernel via EVIOCGKEY (recovers dropped UP events)
 #ifndef EVIOCGKEY
 #define EVIOCGKEY(len) _IOC(_IOC_READ, 'E', 0x18, len)
@@ -1071,6 +1093,57 @@ KeyboardDevice::_SyncLocksFromLEDs()
 }
 
 
+// B_SEAT_DISABLED: the seat is gone until B_SEAT_ENABLED, so release everything the shadow
+// state still has down and apps never see a key or modifier stuck across a VT switch.
+void
+KeyboardDevice::_ReleaseHeldKeys(uint8* states, bool& vtLCtrl, bool& vtRCtrl,
+	bool& vtAlt, bool& vtRalt, bool& menuKeyDown, bool& ctrlAltDelPressed)
+{
+	BAutolock lock(fKeymapLock);
+
+	for (uint32 haiku = 1; haiku < 128; haiku++) {
+		if (!(states[haiku >> 3] & (1 << (7 - (haiku & 7)))))
+			continue;
+
+		BMessage* upMsg = new(std::nothrow) BMessage(B_UNMAPPED_KEY_UP);
+		if (upMsg != NULL) {
+			upMsg->AddInt64("when", system_time());
+			upMsg->AddInt32("key", haiku);
+			upMsg->AddInt32("modifiers", fModifiers);
+			upMsg->AddData("states", B_UINT8_TYPE, states, 16);
+			if (fOwner->EnqueueMessage(upMsg) != B_OK)
+				delete upMsg;
+		}
+	}
+	memset(states, 0, 16);
+
+	// Rebuild xkb state fresh: cheaper and more certain than walking back
+	// every modifier/lock key it might have latched.
+	if (fXkbState != NULL && fXkbKeymap != NULL) {
+		xkb_state_unref(fXkbState);
+		fXkbState = xkb_state_new(fXkbKeymap);
+	}
+
+	vtLCtrl = vtRCtrl = vtAlt = vtRalt = menuKeyDown = false;
+	ctrlAltDelPressed = false;
+
+	uint32 oldModifiers = fModifiers;
+	// Locks (Caps/Num/Scroll) are toggle state, not held, so keep them.
+	fModifiers &= (B_CAPS_LOCK | B_NUM_LOCK | B_SCROLL_LOCK);
+	if (fModifiers != oldModifiers) {
+		BMessage* m = new(std::nothrow) BMessage(B_MODIFIERS_CHANGED);
+		if (m != NULL) {
+			m->AddInt64("when", system_time());
+			m->AddInt32("be:old_modifiers", oldModifiers);
+			m->AddInt32("modifiers", fModifiers);
+			m->AddData("states", B_UINT8_TYPE, states, 16);
+			if (fOwner->EnqueueMessage(m) != B_OK)
+				delete m;
+		}
+	}
+}
+
+
 void
 KeyboardDevice::_RebuildXkb()
 {
@@ -1458,6 +1531,10 @@ KeyboardInputDevice::Control(const char* name, void* cookie,
 	} else if (command == B_GET_DEVICE_DESCRIPTION) {
 		KeyboardDevice* device = (KeyboardDevice*)cookie;
 		return device->GetDescription(message);
+	} else if (command == B_SEAT_DISABLED || command == B_SEAT_ENABLED
+		|| command == B_SYSTEM_RESUMED) {
+		KeyboardDevice* device = (KeyboardDevice*)cookie;
+		device->HandleSeatMessage(command);
 	}
 	return B_OK;
 }

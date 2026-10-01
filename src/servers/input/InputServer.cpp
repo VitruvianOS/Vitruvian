@@ -594,6 +594,17 @@ InputServer::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case B_SEAT_DISABLED:
+		case B_SEAT_ENABLED:
+		case B_SYSTEM_RESUMED:
+		{
+			// janus_session sends these around a VT switch or resume; forward them to every device add-on
+			// so keyboards drop held keys and pointing devices resync their buttons.
+			ControlDevices(NULL, B_KEYBOARD_DEVICE, message->what, NULL);
+			ControlDevices(NULL, B_POINTING_DEVICE, message->what, NULL);
+			break;
+		}
+
 		// device looper related
 		case IS_FIND_DEVICES:
 		case IS_WATCH_DEVICES:

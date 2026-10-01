@@ -42,6 +42,7 @@ public:
 			void				Stop();
 
 			status_t			UpdateSettings(uint32 opcode = 0);
+			void				HandleSeatMessage(uint32 what);
 
 			const char*			Path() const { return fPath; }
 			input_device_ref*	DeviceRef() { return &fDeviceRef; }
@@ -59,6 +60,11 @@ private:
 			void				_UpdateSettings(uint32 pending);
 			void				_RebuildXkb();
 			void				_SyncLocksFromLEDs();
+			void				_ReleaseHeldKeys(uint8* states,
+										bool& vtLCtrl, bool& vtRCtrl,
+										bool& vtAlt, bool& vtRalt,
+										bool& menuKeyDown,
+										bool& ctrlAltDelPressed);
 			void				_UpdateLEDs();
 			status_t			_EnqueueInlineInputMethod(int32 opcode,
 									const char* string = NULL,
@@ -93,6 +99,10 @@ private:
 			// volatile-qualified uint32 only type-checks under
 			// -fpermissive.
 			int32				fSettingsCommand;
+
+			// Pending B_SEAT_DISABLED, B_SEAT_ENABLED or B_SYSTEM_RESUMED, 0 = none. A single command,
+			// not a bitmask like fSettingsCommand, since these are mutually exclusive.
+			int32				fSeatCommand;
 
 			Keymap				fKeymap;
 			BLocker				fKeymapLock;

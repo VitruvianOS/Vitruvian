@@ -25,6 +25,8 @@ set(SYSTEM_APPS
 	Magnify
 	MediaConverter
 	MediaPlayer
+	NetworkStatus
+	NetPlus
 	PackageManager
 	People
 	ResEdit

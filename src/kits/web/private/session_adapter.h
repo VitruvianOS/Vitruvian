@@ -1,0 +1,1 @@
+SessionAdapter.h

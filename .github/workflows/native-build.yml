@@ -30,7 +30,7 @@ jobs:
             bison build-essential cmake debootstrap debhelper \
             dh-dkms dkms elfutils flex git \
             grub-efi-amd64-bin grub-pc-bin \
-            libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
+            libcairo2-dev libcups2-dev libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
             libgif-dev libicns-dev libicu-dev libinput-dev \
             libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
             libtiff-dev libudev-dev libwebp-dev libseat-dev \

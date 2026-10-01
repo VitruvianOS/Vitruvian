@@ -62,7 +62,7 @@ get_dev_packages() {
         amd64)
             printf '%s' \
                 "linux-headers-rt-amd64 pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
-                " libfreetype6-dev libicu-dev libdrm-dev libinput-dev" \
+                " libfreetype6-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
@@ -75,7 +75,7 @@ get_dev_packages() {
         arm64)
             printf '%s' \
                 "linux-headers-arm64 pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
-                " libfreetype6-dev libicu-dev libdrm-dev libinput-dev" \
+                " libfreetype6-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
@@ -88,7 +88,7 @@ get_dev_packages() {
         arm32)
             printf '%s' \
                 "linux-headers-armmp pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
-                " libfreetype6-dev libicu-dev libdrm-dev libinput-dev" \
+                " libfreetype6-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \
@@ -100,7 +100,7 @@ get_dev_packages() {
         riscv64)
             printf '%s' \
                 "linux-headers-riscv64 pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
-                " libfreetype6-dev libicu-dev libdrm-dev libinput-dev" \
+                " libfreetype6-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
                 " libgl-dev libegl-dev libgbm-dev" \

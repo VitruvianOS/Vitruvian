@@ -32,7 +32,7 @@ private:
 			thread_id			fThread;
 			int32				fQuit;
 			bigtime_t			fDisplayOff;
-			time_t				fSettingsTime;
+			bigtime_t			fSettingsTime;
 			bool				fIdleHint;
 			sd_bus*				fBus;
 };

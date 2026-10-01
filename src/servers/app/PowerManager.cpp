@@ -13,6 +13,7 @@
 #include <systemd/sd-bus.h>
 
 #include <Accelerant.h>
+#include <Autolock.h>
 #include <File.h>
 #include <FindDirectory.h>
 #include <Message.h>
@@ -85,13 +86,19 @@ PowerManager::_Run()
 		_LoadSettings();
 
 		::EventDispatcher& dispatcher = fDesktop->EventDispatcher();
-		bigtime_t idle = dispatcher.IdleTime();
-		if (fDisplayOff > 0 && idle >= fDisplayOff
-			&& !dispatcher.IsDisplayAsleep()) {
-			// Asleep even when the driver refused, so a display without
-			// DPMS is not asked again every interval; input clears it.
-			dispatcher.SetDisplayAsleep(true);
-			fDesktop->HWInterface()->SetDPMSMode(B_DPMS_OFF);
+		bigtime_t idle;
+		{
+			// Under the lock the event loop holds while it wakes the
+			// display, so input cannot slip between check and turn-off.
+			BAutolock _(dispatcher);
+			idle = dispatcher.IdleTime();
+			if (fDisplayOff > 0 && idle >= fDisplayOff
+				&& !dispatcher.IsDisplayAsleep()) {
+				// Asleep even when the driver refused, so a display
+				// without DPMS is not asked again; input clears it.
+				dispatcher.SetDisplayAsleep(true);
+				fDesktop->HWInterface()->SetDPMSMode(B_DPMS_OFF);
+			}
 		}
 
 		bool idleHint = idle >= kIdleHintAfter;
@@ -115,9 +122,11 @@ PowerManager::_LoadSettings()
 		fSettingsTime = -1;
 		return;
 	}
-	if (st.st_mtime == fSettingsTime)
+	bigtime_t changed = (bigtime_t)st.st_mtim.tv_sec * 1000000
+		+ st.st_mtim.tv_nsec / 1000;
+	if (changed == fSettingsTime)
 		return;
-	fSettingsTime = st.st_mtime;
+	fSettingsTime = changed;
 
 	BFile file(path.Path(), B_READ_ONLY);
 	BMessage settings;

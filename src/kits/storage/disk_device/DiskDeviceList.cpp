@@ -756,8 +756,14 @@ BDiskDeviceList::_MediaChanged(BMessage *message)
 void
 BDiskDeviceList::_DeviceAdded(BMessage *message)
 {
-	int32 id;
-	if (message->FindInt32("device_id", &id) == B_OK && !DeviceWithID(id)) {
+	// libroot2 disk_monitor posts "id"/"partition_id" as UInt64 partition_id.
+	uint64 rawID;
+	if (message->FindUInt64("id", &rawID) != B_OK
+			&& message->FindUInt64("partition_id", &rawID) != B_OK)
+		return;
+
+	partition_id id = (partition_id)rawID;
+	if (!DeviceWithID(id)) {
 		BDiskDevice *device = new(nothrow) BDiskDevice;
 		if (BDiskDeviceRoster().GetDeviceWithID(id, device) == B_OK) {
 			fDevices.AddItem(device);
@@ -790,10 +796,11 @@ BDiskDeviceList::_DeviceRemoved(BMessage *message)
 BDiskDevice *
 BDiskDeviceList::_FindDevice(BMessage *message)
 {
+	// disk_monitor posts "id" as UInt64 partition_id.
 	BDiskDevice *device = NULL;
-	int32 id;
-	if (message->FindInt32("device_id", &id) == B_OK)
-		device = DeviceWithID(id);
+	uint64 rawID;
+	if (message->FindUInt64("id", &rawID) == B_OK)
+		device = DeviceWithID((partition_id)rawID);
 	return device;
 }
 
@@ -806,10 +813,11 @@ BDiskDeviceList::_FindDevice(BMessage *message)
 BPartition *
 BDiskDeviceList::_FindPartition(BMessage *message)
 {
+	// disk_monitor posts "partition_id" as UInt64 partition_id.
 	BPartition *partition = NULL;
-	int32 id;
-	if (message->FindInt32("partition_id", &id) == B_OK)
-		partition = PartitionWithID(id);
+	uint64 rawID;
+	if (message->FindUInt64("partition_id", &rawID) == B_OK)
+		partition = PartitionWithID((partition_id)rawID);
 	return partition;
 }
 

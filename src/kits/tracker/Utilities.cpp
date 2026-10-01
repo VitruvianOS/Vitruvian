@@ -295,6 +295,7 @@ PoseInfo::EndianSwap(void* castToThis)
 	PRINT(("swapping PoseInfo\n"));
 
 	STATIC_ASSERT(sizeof(ino_t) == sizeof(int64));
+	STATIC_ASSERT(sizeof(dev_t) == sizeof(int64));
 	self->fInitedDirectory = SwapInt64(self->fInitedDirectory);
 	swap_data(B_POINT_TYPE, &self->fLocation, sizeof(BPoint), B_SWAP_ALWAYS);
 

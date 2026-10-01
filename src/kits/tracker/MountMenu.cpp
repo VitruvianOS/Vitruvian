@@ -214,7 +214,8 @@ MountMenu::AddDynamicItem(add_state)
 			}
 
 			BMessage* message = new BMessage(kUnmountVolume);
-			message->AddInt32("device_id", volume.Device());
+			// volume.Device() is dev_t; match AutoMounter's FindInt64.
+			message->AddInt64("device_id", (int64)volume.Device());
 			char volumeName[B_FILE_NAME_LENGTH];
 			volume.GetName(volumeName);
 

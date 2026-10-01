@@ -358,7 +358,8 @@ public:
 			if (partition->CountChildren() > 0)
 				name << partition->Type();
 			else
-				name.SetToFormat(B_TRANSLATE("Partition %ld"), (long int)partition->ID());
+				name.SetToFormat(B_TRANSLATE("Partition %" B_PRIdDEV),
+					partition->ID());
 		}
 		partition_id id = partition->ID();
 		PartitionView* view = new PartitionView(name.String(), scale, offset,

@@ -8644,7 +8644,8 @@ BPoseView::UnmountSelectedVolumes()
 			continue;
 
 		BMessage message(kUnmountVolume);
-		message.AddInt32("device_id", volume.Device());
+		// volume.Device() is dev_t; post as Int64 for mount_server.
+		message.AddInt64("device_id", (int64)volume.Device());
 		be_app->PostMessage(&message);
 	}
 }

@@ -157,12 +157,12 @@ private:
 		if (getenv("VOS_DEBUG_MENUS") != NULL) {
 			BPath path;
 			partition->GetPath(&path);
-			fprintf(stderr, "[DriveSetup rows] %-12s id=%" B_PRId32
-				" parentID=%" B_PRId32 " contentType=%s isDevice=%d "
+			fprintf(stderr, "[DriveSetup rows] %-12s id=%" B_PRIdDEV
+				" parentID=%" B_PRIdDEV " contentType=%s isDevice=%d "
 				"containsPS=%d containsFS=%d\n",
 				path.Path() ? path.Path() : "(no path)",
 				partition->ID(),
-				partition->Parent() ? partition->Parent()->ID() : -1,
+				partition->Parent() ? partition->Parent()->ID() : (partition_id)-1,
 				partition->ContentType() ? partition->ContentType() : "(null)",
 				partition->IsDevice(),
 				partition->ContainsPartitioningSystem(),
@@ -733,7 +733,8 @@ MainWindow::MessageReceived(BMessage* message)
 
 			msg->AddString("source", row->DevicePath());
 			msg->AddString("target", path.Path());
-			msg->AddInt32("partitionID", row->ID());
+			// partition_id is dev_t; keep the full width across threads.
+			msg->AddInt64("partitionID", (int64)row->ID());
 			msg->AddMessenger("messenger", BMessenger(this));
 
 			thread_id save_thread = spawn_thread(SaveDiskImage, "SaveDiskImage",
@@ -1012,13 +1013,14 @@ MainWindow::SaveDiskImage(void* data)
 	const char* sourcepath;
 	const char* targetpath;
 	const char* targetfolder;
-	int32 partitionID;
+	// partition_id is dev_t; SaveDiskImage posts/receives Int64.
+	int64 partitionID;
 	BMessenger messenger;
 
 	msg->FindString("source", &sourcepath);
 	msg->FindString("target", &targetpath);
 	msg->FindString("targetfolder", &targetfolder);
-	msg->FindInt32("partitionID", &partitionID);
+	msg->FindInt64("partitionID", &partitionID);
 	msg->FindMessenger("messenger", &messenger);
 
 	BFile source(sourcepath, B_READ_ONLY);

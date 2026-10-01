@@ -173,7 +173,7 @@ BDiskDeviceRoster::UnregisterFileDevice(const char* filename)
 status_t
 BDiskDeviceRoster::UnregisterFileDevice(partition_id device)
 {
-	if (device < 0)
+	if ((int64)device < 0)
 		return B_BAD_VALUE;
 	return _kern_unregister_file_device(device, NULL);
 }
@@ -712,14 +712,15 @@ BDiskDeviceRoster::RewindFileSystems()
 	- other error codes
 */
 status_t
-BDiskDeviceRoster::_GetObjectWithID(const char *fieldName, int32 id,
+BDiskDeviceRoster::_GetObjectWithID(const char *fieldName, partition_id id,
 	BDiskDevice *device) const
 {
 	status_t error = (device ? B_OK : B_BAD_VALUE);
 	// compose request message
 	BMessage request(B_REG_GET_DISK_DEVICE);
 	if (error == B_OK)
-		error = request.AddInt32(fieldName, id);
+		// partition_id is dev_t; Int32 would truncate large IDs.
+		error = request.AddInt64(fieldName, (int64)id);
 	// send request
 	BMessage reply;
 	if (error == B_OK)

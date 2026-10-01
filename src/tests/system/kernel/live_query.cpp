@@ -157,13 +157,14 @@ LiveQuery::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case kMsgAddQuery:
 		{
-			int32 device;
+			// volume.Device() is dev_t; keep the full width.
+			int64 device;
 			const char* predicate;
-			if (message->FindInt32("volume", &device) != B_OK
+			if (message->FindInt64("volume", &device) != B_OK
 				|| message->FindString("predicate", &predicate) != B_OK)
 				break;
 
-			BVolume volume(device);
+			BVolume volume((dev_t)device);
 			BQuery* query = new BQuery;
 
 			// Set up the volume and predicate for the query.
@@ -181,9 +182,10 @@ LiveQuery::MessageReceived(BMessage* message)
 			int32 what;
 			message->FindInt32("opcode", &what);
 
-			int32 device;
-			int64 directory;
-			int64 node;
+			// node monitor posts device/directory/node as UInt64.
+			uint64 device;
+			uint64 directory;
+			uint64 node;
 			const char* name;
 			message->FindUInt64("device", &device);
 			message->FindUInt64("directory", &directory);
@@ -230,7 +232,8 @@ void
 LiveQuery::_AddQuery(BVolume& volume, const char* predicate)
 {
 	BMessage add(kMsgAddQuery);
-	add.AddInt32("volume", volume.Device());
+	// volume.Device() is dev_t; post as Int64 for the query thread.
+	add.AddInt64("volume", (int64)volume.Device());
 	add.AddString("predicate", predicate);
 
 	PostMessage(&add);

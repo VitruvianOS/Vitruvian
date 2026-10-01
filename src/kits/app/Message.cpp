@@ -1098,8 +1098,8 @@ BMessage::_PrintToStream(const char* indent) const
 					entry_ref ref;
 					BPrivate::entry_ref_unflatten(&ref, (char*)pointer, size);
 
-					printf("entry_ref(device=%d, directory=%" B_PRIdINO
-						", name=\"%s\", ", (int)ref.vdevice(), ref.vdirectory(),
+					printf("entry_ref(device=%" B_PRIdDEV ", directory=%" B_PRIdINO
+						", name=\"%s\", ", ref.vdevice(), ref.vdirectory(),
 						ref.name);
 
 					BPath path(&ref);
@@ -1112,8 +1112,8 @@ BMessage::_PrintToStream(const char* indent) const
 					node_ref ref;
 					BPrivate::node_ref_unflatten(&ref, (char*)pointer, size);
 
-					printf("node_ref(device=%d, node=%" B_PRIdINO ", ",
-						(int)ref.vdevice(), ref.vnode());
+					printf("node_ref(device=%" B_PRIdDEV ", node=%" B_PRIdINO ", ",
+						ref.vdevice(), ref.vnode());
 					break;
 				}*/
 

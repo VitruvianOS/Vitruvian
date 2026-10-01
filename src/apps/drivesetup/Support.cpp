@@ -55,7 +55,7 @@ dump_partition_info(const BPartition* partition)
 	printf("\tContentName(): %s\n", partition->RawContentName());
 	printf("\tType(): %s\n", partition->Type());
 	printf("\tContentType(): %s\n", partition->ContentType());
-	printf("\tID(): %" B_PRIx32 "\n\n", partition->ID());
+	printf("\tID(): %" B_PRIXDEV "\n\n", partition->ID());
 }
 
 

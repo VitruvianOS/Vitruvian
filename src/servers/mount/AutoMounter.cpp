@@ -869,10 +869,9 @@ AutoMounter::_UnmountAndEjectVolume(BMessage* message)
 		if (partition->GetMountPoint(&path) == B_OK)
 			_UnmountAndEjectVolume(partition, path, partition->ContentName().String());
 	} else {
-		// see if we got a dev_t
-
-		int32 rawDevice;
-		if (message->FindInt32("device_id", &rawDevice) != B_OK)
+		// see if we got a dev_t; Tracker posts device_id as Int64
+		int64 rawDevice;
+		if (message->FindInt64("device_id", &rawDevice) != B_OK)
 			return;
 		dev_t device = (dev_t)rawDevice;
 

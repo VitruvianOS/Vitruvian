@@ -194,6 +194,30 @@ FSTABEOF
 mkdir -p $_guest_mnt
 rm -rf /localdeb" || die "raw chroot bash-c failed"
 
+    # 9p over virtio has no suspend support: its queues die after S3 and the share hangs.
+    # Unmount before sleep, rebind the device for fresh queues and remount after.
+    sudo mkdir -p "$_root_dir/usr/lib/systemd/system-sleep"
+    sudo tee "$_root_dir/usr/lib/systemd/system-sleep/vos-host-shared" \
+        >/dev/null <<SLEEPEOF
+#!/bin/sh
+D=/sys/bus/virtio/drivers/9pnet_virtio
+case "\$1" in
+pre)
+    umount $_guest_mnt 2>/dev/null || umount -l $_guest_mnt 2>/dev/null
+    ;;
+post)
+    for d in "\$D"/virtio*; do
+        [ -e "\$d" ] || continue
+        n=\$(basename "\$d")
+        echo "\$n" > "\$D/unbind" && echo "\$n" > "\$D/bind"
+    done
+    mount $_guest_mnt 2>/dev/null
+    ;;
+esac
+exit 0
+SLEEPEOF
+    sudo chmod 0755 "$_root_dir/usr/lib/systemd/system-sleep/vos-host-shared"
+
     _common_chroot_setup "$_root_dir" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
 

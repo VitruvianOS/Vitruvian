@@ -8,7 +8,10 @@
 #include <new>
 #include <string.h>
 
+#include <atomic>
+
 #include <pipewire/filter.h>
+#include <pipewire/loop.h>
 #include <spa/param/audio/format.h>
 #include <spa/pod/builder.h>
 
@@ -34,15 +37,24 @@ struct BMediaUnit::Impl {
 	uint32					sampleRate;
 	bigtime_t				cycleStartTime;
 
+	// Same deferred-fault scheme as BMediaClient (see MediaClient.cpp): state_changed only flags
+	// faultPending and wakes faultEvent, and _OnFaultEvent() rebuilds outside any emit.
+	std::atomic<bool>		faultPending;
+	pw_loop*				faultLoop;
+	spa_source*				faultEvent;
+
 	static const pw_filter_events kFilterEvents;
 	static void _OnProcess(void* data, struct spa_io_position* position);
 	static void _OnStateChanged(void* data, enum pw_filter_state old,
 		enum pw_filter_state state, const char* error);
+	static void _OnFaultEvent(void* data, uint64_t count);
 };
 
 
 const pw_filter_events BMediaUnit::Impl::kFilterEvents = {
-	PW_VERSION_FILTER_EVENTS,
+	.version = PW_VERSION_FILTER_EVENTS,
+	.state_changed = &BMediaUnit::Impl::_OnStateChanged,
+	.process = &BMediaUnit::Impl::_OnProcess,
 };
 
 
@@ -64,6 +76,9 @@ BMediaUnit::BMediaUnit(const char* name, media_client_kinds kinds)
 	fImpl->quantum    = 0;
 	fImpl->sampleRate = 0;
 	fImpl->cycleStartTime = 0;
+	fImpl->faultPending = false;
+	fImpl->faultLoop  = NULL;
+	fImpl->faultEvent = NULL;
 	memset(&fImpl->listener, 0, sizeof(fImpl->listener));
 }
 
@@ -190,6 +205,28 @@ BMediaUnit::Start()
 	if (fImpl->filter != NULL)
 		return B_OK;
 
+	status_t result = _BuildFilter();
+	if (result != B_OK)
+		return result;
+
+	if (fImpl->faultEvent == NULL) {
+		PipeWireBackend* backend = PipeWireBackend::GetInstance();
+		if (backend != NULL) {
+			backend->Lock();
+			fImpl->faultLoop = backend->GetMainLoop();
+			fImpl->faultEvent = pw_loop_add_event(fImpl->faultLoop,
+				&Impl::_OnFaultEvent, fImpl);
+			backend->Unlock();
+		}
+	}
+
+	return BMediaClient::Start();
+}
+
+
+status_t
+BMediaUnit::_BuildFilter()
+{
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
 	if (backend == NULL)
 		return B_DEVICE_NOT_FOUND;
@@ -320,7 +357,7 @@ BMediaUnit::Start()
 		goto error;
 
 	fImpl->filter = filter;
-	return BMediaClient::Start();
+	return B_OK;
 
 error:
 	backend->Lock();
@@ -348,13 +385,40 @@ BMediaUnit::Stop()
 	if (fImpl == NULL || fImpl->filter == NULL)
 		return B_OK;
 
+	if (fImpl->faultEvent != NULL) {
+		PipeWireBackend* backend = PipeWireBackend::GetInstance();
+		if (backend != NULL) {
+			// As in BMediaClient::Stop(), this waits out any fault-event dispatch before the source is destroyed.
+			backend->Lock();
+			pw_loop_destroy_source(fImpl->faultLoop, fImpl->faultEvent);
+			backend->Unlock();
+		}
+		fImpl->faultEvent = NULL;
+		fImpl->faultLoop = NULL;
+	}
+
+	_TeardownFilter();
+
+	return BMediaClient::Stop();
+}
+
+
+void
+BMediaUnit::_TeardownFilter()
+{
+	if (fImpl == NULL || fImpl->filter == NULL)
+		return;
+
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
 	if (backend == NULL)
-		return B_DEVICE_NOT_FOUND;
+		return;
 
 	backend->Lock();
-	pw_filter_destroy(fImpl->filter);
+	pw_filter* filter = fImpl->filter;
+	// Clear before destroying: pw_filter_destroy() can reenter state_changed, which uses a NULL
+	// fImpl->filter to spot an intentional teardown.
 	fImpl->filter = NULL;
+	pw_filter_destroy(filter);
 
 	for (int32 i = 0; i < CountOutputs(); i++) {
 		BMediaOutput* output = OutputAt(i);
@@ -367,8 +431,19 @@ BMediaUnit::Stop()
 			input->_SetFilterPort(NULL);
 	}
 	backend->Unlock();
+}
 
-	return BMediaClient::Stop();
+
+void
+BMediaUnit::_Restart()
+{
+	// The filter's node died under us (graph restart or ALSA reset across a suspend). Rebuild from
+	// scratch, which also gives a fresh clock/latency estimate.
+	if (fImpl == NULL || !IsStarted())
+		return;
+
+	_TeardownFilter();
+	_BuildFilter();
 }
 
 
@@ -488,7 +563,7 @@ BMediaUnit::Impl::_OnStateChanged(void* data, enum pw_filter_state,
 	if (impl == NULL || impl->owner == NULL)
 		return;
 
-	if (state == PW_FILTER_STATE_UNCONNECTED) {
+	if (state == PW_FILTER_STATE_UNCONNECTED || state == PW_FILTER_STATE_ERROR) {
 		for (int32 i = 0; i < impl->owner->CountInputs(); i++) {
 			BMediaInput* input = impl->owner->InputAt(i);
 			if (input != NULL)
@@ -499,6 +574,29 @@ BMediaUnit::Impl::_OnStateChanged(void* data, enum pw_filter_state,
 			if (output != NULL)
 				output->Disconnected();
 		}
+
+		// An unexpected drop while started means the graph lost our node. Rebuilding here would destroy
+		// the filter mid-emit, so flag it and wake the fault event for _OnFaultEvent() to restart.
+		if (impl->filter != NULL && impl->owner->IsStarted()) {
+			impl->faultPending.store(true);
+			if (impl->faultEvent != NULL)
+				pw_loop_signal_event(impl->faultLoop, impl->faultEvent);
+		}
+	}
+}
+
+
+void
+BMediaUnit::Impl::_OnFaultEvent(void* data, uint64_t)
+{
+	Impl* impl = (Impl*)data;
+	if (impl == NULL || impl->owner == NULL)
+		return;
+
+	// Re-check here: this runs asynchronously, so the unit may have been stopped or restarted.
+	if (impl->faultPending.exchange(false) && impl->filter != NULL
+			&& impl->owner->IsStarted()) {
+		impl->owner->_Restart();
 	}
 }
 

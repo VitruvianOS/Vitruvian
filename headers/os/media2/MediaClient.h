@@ -74,6 +74,10 @@ protected:
 	virtual	status_t				_StartConnections(void* backend);
 	virtual	void					_StopConnections();
 
+	// Called when a connection's pw_stream dies while the client is still started (server restart,
+	// device reset across a suspend). The default is a no-op; BMediaNode reconnects the stream.
+	virtual	void					_StreamFault(BMediaConnection* connection);
+
 	static const struct pw_stream_events*	_GetStreamEvents();
 
 private:

@@ -173,18 +173,84 @@ BMediaNode::_StopConnections()
 	for (int32 i = 0; i < CountOutputs(); i++) {
 		BMediaOutput* output = OutputAt(i);
 		if (output != NULL && output->fStream != NULL) {
-			backend->DestroyStream((pw_stream*)output->fStream);
+			pw_stream* stream = (pw_stream*)output->fStream;
+			// Clear before destroying: destroy can reenter state_changed, which uses a NULL fStream to spot
+			// an intentional teardown.
 			output->fStream = NULL;
+			backend->DestroyStream(stream);
 		}
 	}
 
 	for (int32 i = 0; i < CountInputs(); i++) {
 		BMediaInput* input = InputAt(i);
 		if (input != NULL && input->fStream != NULL) {
-			backend->DestroyStream((pw_stream*)input->fStream);
+			pw_stream* stream = (pw_stream*)input->fStream;
 			input->fStream = NULL;
+			backend->DestroyStream(stream);
 		}
 	}
+}
+
+
+void
+BMediaNode::_StreamFault(BMediaConnection* conn)
+{
+	if (conn == NULL || !IsStarted())
+		return;
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return;
+
+	pw_stream* badStream = (pw_stream*)conn->fStream;
+	if (badStream == NULL)
+		return;
+	conn->fStream = NULL;
+
+	BMediaConnection* binding = conn->Binding();
+
+	// The dead stream's node is gone, so any link we had tracked for it is
+	// already gone on the graph side; just drop our bookkeeping.
+	{
+		BAutolock _(fLinksLock);
+		auto it = fLinks.find(badStream);
+		if (it != fLinks.end()) {
+			for (size_t i = 0; i < it->second.size(); i++)
+				fLinkInfos.erase(it->second[i]);
+			fLinks.erase(it);
+		}
+	}
+
+	backend->DestroyStream(badStream);
+
+	BMediaFormat format = conn->Format();
+	if (format.Type() == B_MEDIA_NO_TYPE)
+		format = fFormat;
+
+	BMediaOutput* output = dynamic_cast<BMediaOutput*>(conn);
+	BMediaInput* input = dynamic_cast<BMediaInput*>(conn);
+	pw_direction direction = (output != NULL) ? PW_DIRECTION_OUTPUT : PW_DIRECTION_INPUT;
+
+	// A brand new stream also means a brand new clock/latency estimate
+	// instead of trying to make up for however long we were gone.
+	pw_stream* stream = backend->CreateAndConnectStream(conn->Name(),
+		direction, format, _GetStreamEvents(), conn);
+	if (stream == NULL)
+		return;
+
+	conn->fStream = stream;
+
+	if (binding == NULL)
+		return;
+
+	pw_core* core = backend->GetCore();
+	if (core == NULL)
+		return;
+
+	if (output != NULL)
+		_CreateLink(output, dynamic_cast<BMediaInput*>(binding), core);
+	else if (input != NULL)
+		_CreateLink(dynamic_cast<BMediaOutput*>(binding), input, core);
 }
 
 

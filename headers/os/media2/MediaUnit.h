@@ -43,6 +43,10 @@ public:
 			void*					_GetFilter() const;
 
 private:
+			status_t				_BuildFilter();
+			void					_TeardownFilter();
+			void					_Restart();
+
 			struct Impl;
 			Impl*					fImpl;
 };

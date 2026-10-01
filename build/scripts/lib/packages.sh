@@ -15,7 +15,7 @@ get_base_packages() {
                 " grub-common grub2-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin" \
                 " firmware-misc-nonfree firmware-realtek firmware-iwlwifi firmware-atheros firmware-ath9k-htc firmware-brcm80211" \
                 " firmware-amd-graphics firmware-nvidia-graphics firmware-sof-signed firmware-cirrus intel-microcode amd64-microcode" \
-                " libnm0 libbluetooth3 "
+                " firmware-linux-nonfree libnm0 libbluetooth3 "
             ;;
         arm64)
             printf '%s' \
@@ -29,7 +29,7 @@ get_base_packages() {
                 " grub-common grub2-common grub-efi-arm64-bin" \
                 " firmware-misc-nonfree firmware-realtek firmware-iwlwifi firmware-atheros firmware-ath9k-htc firmware-brcm80211" \
                 " firmware-amd-graphics firmware-nvidia-graphics firmware-sof-signed firmware-cirrus" \
-                " libnm0 libbluetooth3"
+                " firmware-linux-nonfree libnm0 libbluetooth3"
             ;;
         arm32)
             printf '%s' \
@@ -42,7 +42,7 @@ get_base_packages() {
                 " grub-common" \
                 " firmware-misc-nonfree firmware-realtek firmware-iwlwifi firmware-atheros firmware-ath9k-htc firmware-brcm80211" \
                 " firmware-sof-signed firmware-cirrus "\
-                " libnm0 libbluetooth3"
+                " firmware-linux-nonfree libnm0 libbluetooth3"
             ;;
         riscv64)
             printf '%s' \
@@ -56,7 +56,7 @@ get_base_packages() {
                 " grub-common grub2-common grub-efi-riscv64-bin" \
                 " firmware-misc-nonfree firmware-realtek firmware-atheros firmware-ath9k-htc firmware-brcm80211" \
                 " firmware-sof-signed firmware-cirrus " \
-                " libnm0 libbluetooth3"
+                " firmware-linux-nonfree libnm0 libbluetooth3"
             ;;
         *)
             die "No package list for architecture: $_arch"

@@ -19,7 +19,7 @@
  * receive_data, a thread never resumed) and must still be there, then end
  * normally when released at exit. Suspends are detected here
  * (CLOCK_BOOTTIME runs on, CLOCK_MONOTONIC stops). Runs 600 seconds by
- * default; exits non-zero if any check failed.
+ * default; exits 1 if any check failed, 77 if no suspend happened.
  *
  * The parked threads also cover systemd's cgroup freezer, which must stop
  * every one of them without a suspend:
@@ -726,8 +726,15 @@ main(int argc, char** argv)
 	int64 failed = 0;
 	for (int i = 0; i < CHECK_COUNT; i++)
 		failed += sFailed[i];
-	if (atomic_get(&sSuspends) == 0)
-		printf("WARNING: no suspend detected; nothing was tested\n");
-	printf("%s\n", failed == 0 ? "PASS" : "FAIL");
-	return failed == 0 ? 0 : 1;
+	if (failed != 0) {
+		printf("FAIL\n");
+		return 1;
+	}
+	if (atomic_get(&sSuspends) == 0) {
+		// The automake "skipped" status: nothing was tested.
+		printf("SKIP: no suspend detected\n");
+		return 77;
+	}
+	printf("PASS\n");
+	return 0;
 }

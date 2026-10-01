@@ -69,6 +69,7 @@ private:
 	void _HandleSleepTimer(BMessage *message);
 	void _ShowSleepWindow(bool hibernate);
 	void _ShowSleepFailure(bool hibernate, const char *reason);
+	void _CheckBattery();
 
 	TRoster					*fRoster;
 	ClipboardHandler		*fClipboardHandler;
@@ -88,6 +89,7 @@ private:
 	bigtime_t				fSleepClockOffset;
 	bool					fSleepRequestHibernate;
 	bigtime_t				fSleepRequestTime;
+	bool					fBatteryActed;
 };
 
 #endif	// REGISTRAR_H

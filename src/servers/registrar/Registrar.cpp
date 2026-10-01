@@ -8,7 +8,10 @@
 
 #include "Registrar.h"
 
+#include <dirent.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
@@ -17,9 +20,12 @@
 #include <Application.h>
 #include <Catalog.h>
 #include <Clipboard.h>
+#include <File.h>
+#include <FindDirectory.h>
 #include <Message.h>
 #include <MessengerPrivate.h>
 #include <OS.h>
+#include <Path.h>
 #include <RegistrarDefs.h>
 #include <RosterPrivate.h>
 #include <String.h>
@@ -71,6 +77,11 @@ static const bigtime_t kSleepWindowCloseTime = 250000LL;
 static const bigtime_t kSleepRequestValidity = 60000000LL;
 static const bigtime_t kSleptThreshold = 100000LL;
 
+// Critical battery: checked this often, acted on at this charge.
+static const uint32 kMsgBatteryCheck = 'btCk';
+static const bigtime_t kBatteryCheckInterval = 30000000LL;
+static const int kBatteryCriticalPercent = 3;
+
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Registrar"
 
@@ -107,7 +118,8 @@ Registrar::Registrar(status_t* _error)
 	fSleepHibernate(false),
 	fSleepClockOffset(0),
 	fSleepRequestHibernate(false),
-	fSleepRequestTime(0)
+	fSleepRequestTime(0),
+	fBatteryActed(false)
 {
 	FUNCTION_START();
 
@@ -217,6 +229,9 @@ Registrar::ReadyToRun()
 	// Re-armed on each fire (see kMsgRosterSanityCheck handler below); the
 	// general safety net for stale early pre-registrations whose launcher
 	// never dies, since CheckSanity() above only ever runs once at startup.
+	fEventQueue->AddEvent(new(nothrow) MessageEvent(
+		system_time() + kBatteryCheckInterval, this, kMsgBatteryCheck));
+
 	fSanityCheckEvent = new(nothrow) MessageEvent(
 		system_time() + kSanityCheckInterval, BMessenger(this),
 		kMsgRosterSanityCheck);
@@ -347,6 +362,11 @@ Registrar::_MessageReceived(BMessage *message)
 		case kMsgSleepCloseWindow:
 		case kMsgSleepRelease:
 			_HandleSleepTimer(message);
+			break;
+		case kMsgBatteryCheck:
+			_CheckBattery();
+			fEventQueue->AddEvent(new(nothrow) MessageEvent(
+				system_time() + kBatteryCheckInterval, this, kMsgBatteryCheck));
 			break;
 		case B_REG_TEAM_DEBUGGER_ALERT:
 		{
@@ -717,6 +737,115 @@ Registrar::_HandleSleepTimer(BMessage *message)
 
 	if (fLogindBridge != NULL)
 		fLogindBridge->ReleaseSleepInhibit();
+}
+
+
+static bool
+read_sysfs(const char* dir, const char* name, char* buffer, size_t size)
+{
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "/sys/class/power_supply/%s/%s", dir, name);
+	FILE* file = fopen(path, "r");
+	if (file == NULL)
+		return false;
+	bool ok = fgets(buffer, size, file) != NULL;
+	fclose(file);
+	if (ok)
+		buffer[strcspn(buffer, "\n")] = '\0';
+	return ok;
+}
+
+
+/*!	rief Run the user's critical-battery action once per discharge.
+
+	Nothing else does it: upower is not installed. The action comes from
+	the Power preferences ("power:battery_critical_action").
+*/
+void
+Registrar::_CheckBattery()
+{
+	DIR* dir = opendir("/sys/class/power_supply");
+	if (dir == NULL)
+		return;
+
+	int count = 0;
+	int capacitySum = 0;
+	bool discharging = false;
+	bool criticalLevel = false;
+	char value[64];
+	while (struct dirent* entry = readdir(dir)) {
+		if (entry->d_name[0] == '.'
+			|| !read_sysfs(entry->d_name, "type", value, sizeof(value))
+			|| strcmp(value, "Battery") != 0)
+			continue;
+		// Mice and headsets report a "Device" scope; only system
+		// batteries power the machine.
+		if (read_sysfs(entry->d_name, "scope", value, sizeof(value))
+			&& strcmp(value, "Device") == 0)
+			continue;
+		if (!read_sysfs(entry->d_name, "capacity", value, sizeof(value)))
+			continue;
+		count++;
+		capacitySum += atoi(value);
+		if (read_sysfs(entry->d_name, "status", value, sizeof(value))
+			&& strcmp(value, "Discharging") == 0)
+			discharging = true;
+		if (read_sysfs(entry->d_name, "capacity_level", value, sizeof(value))
+			&& strcmp(value, "Critical") == 0)
+			criticalLevel = true;
+	}
+	closedir(dir);
+
+	if (count == 0)
+		return;
+	if (!discharging) {
+		fBatteryActed = false;
+		return;
+	}
+	bool critical = capacitySum / count <= kBatteryCriticalPercent
+		|| (count == 1 && criticalLevel);
+	if (!critical || fBatteryActed)
+		return;
+	fBatteryActed = true;
+
+	BString action("hibernate");
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK
+		&& path.Append("Power settings") == B_OK) {
+		BFile file(path.Path(), B_READ_ONLY);
+		BMessage settings;
+		if (file.InitCheck() == B_OK && settings.Unflatten(&file) == B_OK)
+			action = settings.GetString("power:battery_critical_action",
+				action.String());
+	}
+	fprintf(stderr, "registrar: battery critical (%d%%), action %s\n",
+		capacitySum / count, action.String());
+
+	if (fLogindBridge == NULL || action == "ignore")
+		return;
+	if (action == "suspend") {
+		fLogindBridge->Suspend();
+		return;
+	}
+	if (action == "hibernate" && fLogindBridge->CanHibernate()) {
+		fLogindBridge->Hibernate();
+		return;
+	}
+
+	// Power off, also when hibernate is not available: the same quit
+	// dance as BRoster::ShutDown(), without the confirmation.
+	if (fShutdownProcess != NULL)
+		return;
+	BMessage* request = new(nothrow) BMessage(B_REG_SHUT_DOWN);
+	if (request == NULL)
+		return;
+	request->AddBool("reboot", false);
+	request->AddBool("confirm", false);
+	if (_CreateShutdownProcess(request) != B_OK) {
+		delete request;
+		return;
+	}
+	fShutdownProcess->Run();
 }
 
 

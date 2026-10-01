@@ -869,6 +869,14 @@ create_raspberry() {
     sudo mkfs.vfat -F32 "$_boot_part"
     sudo mkfs.ext4 -F -O ^ea_inode "$_root_part"
 
+    # The SD card is mmcblk0 or mmcblk1 depending on the board and kernel
+    # (mainline enumerates the Pi 4's SD as mmcblk1): name partitions by id.
+    _root_partuuid=$(sudo blkid -s PARTUUID -o value "$_root_part")
+    _root_fsuuid=$(sudo blkid -s UUID -o value "$_root_part")
+    _boot_fsuuid=$(sudo blkid -s UUID -o value "$_boot_part")
+    [ -n "$_root_partuuid" ] && [ -n "$_root_fsuuid" ] && [ -n "$_boot_fsuuid" ] \
+        || die "could not read partition ids of $_loop"
+
     sudo mkdir -p "$_mnt"
     sudo mount "$_root_part" "$_mnt"
     sudo mkdir -p "$_mnt/boot/firmware"
@@ -1042,7 +1050,7 @@ RPICFG32
     fi
 
     sudo sh -c "cat > '$_mnt/boot/firmware/cmdline.txt'" <<CMDLINE
-root=/dev/mmcblk0p2 rootfstype=ext4 rw rootwait console=serial0,115200 console=tty1 $_rpi_cmdline_tail
+root=PARTUUID=$_root_partuuid rootfstype=ext4 rw rootwait console=serial0,115200 console=ttyS1,115200 console=tty1 $_rpi_cmdline_tail
 CMDLINE
 
     log_step "Copying kernel and initrd to boot firmware..."
@@ -1050,8 +1058,8 @@ CMDLINE
     sudo cp "$_mnt/boot/initrd.img-$_kver" "$_mnt/boot/firmware/initrd.img"
 
     sudo sh -c "cat > '$_mnt/etc/fstab'" <<FSTAB
-/dev/mmcblk0p2  /            ext4    defaults,noatime  0 1
-/dev/mmcblk0p1  /boot/firmware vfat   defaults          0 2
+UUID=$_root_fsuuid  /               ext4  defaults,noatime  0 1
+UUID=$_boot_fsuuid  /boot/firmware  vfat  defaults          0 2
 FSTAB
 
     qemu_eject "$_mnt" "$_board_arch"

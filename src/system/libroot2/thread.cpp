@@ -6,6 +6,7 @@
 #include <OS.h>
 
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
@@ -16,6 +17,7 @@
 #include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <syscalls.h>
@@ -356,16 +358,20 @@ send_data(thread_id thread, int32 code,
 	if (buffer == NULL || bufferSize == 0)
 		return B_BAD_VALUE;
 
-	struct nexus_thread_rw exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.buffer = buffer;
-	exchange.size = bufferSize;
-	exchange.return_code = code;
-	exchange.receiver = thread;
-
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus_io(nexus, NEXUS_THREAD_WRITE, &exchange) != 0)
-		return B_BAD_VALUE;
+
+	// B_INTERRUPTED comes before anything was sent; only a kill ends
+	// Haiku's send_data().
+	struct nexus_thread_rw exchange;
+	do {
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.buffer = buffer;
+		exchange.size = bufferSize;
+		exchange.return_code = code;
+		exchange.receiver = thread;
+		if (nexus_io(nexus, NEXUS_THREAD_WRITE, &exchange) != 0)
+			return B_BAD_VALUE;
+	} while (exchange.ret == B_INTERRUPTED);
 	return exchange.ret;
 }
 
@@ -378,15 +384,18 @@ receive_data(thread_id* sender, void* buffer, size_t bufferSize)
 	if (sender == NULL || buffer == NULL || bufferSize == 0)
 		return B_BAD_VALUE;
 
-	struct nexus_thread_rw exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.buffer = buffer;
-	exchange.size = bufferSize;
-
-	// TODO B_INTERRUPTED
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	if (nexus_io(nexus, NEXUS_THREAD_READ, &exchange) != 0)
-		return B_BAD_VALUE;
+
+	// B_INTERRUPTED comes before any data arrived; only a kill ends
+	// Haiku's receive_data().
+	struct nexus_thread_rw exchange;
+	do {
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.buffer = buffer;
+		exchange.size = bufferSize;
+		if (nexus_io(nexus, NEXUS_THREAD_READ, &exchange) != 0)
+			return B_BAD_VALUE;
+	} while (exchange.ret == B_INTERRUPTED);
 	if (exchange.ret != B_OK)
 		return exchange.ret;
 
@@ -618,13 +627,13 @@ wait_for_remote_thread(thread_id id, status_t* returnCode)
 		return B_BAD_THREAD_ID;
 
 	struct pollfd p = { .fd = pfd, .events = POLLIN };
-	int pollfd = poll(&p, 1, -1);
+	int pollfd;
+	do {
+		pollfd = poll(&p, 1, -1);
+	} while (pollfd < 0 && errno == EINTR);
 
 	if (pollfd < 0) {
-		int saved = errno;
 		close(pfd);
-		if (saved == EINTR)
-			return B_INTERRUPTED;
 		return B_BAD_THREAD_ID;
 	}
 
@@ -661,22 +670,22 @@ wait_for_thread(thread_id id, status_t* returnCode)
 		return B_BAD_THREAD_ID;
 	}
 
-	struct nexus_thread_waitfor_req exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.receiver = id;
-
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
-	int nio = nexus_io(nexus, NEXUS_THREAD_WAITFOR, &exchange);
 
-	if (nio == 0) {
-		status_t ret = exchange.ret;
-		if (ret == B_OK) {
-			if (returnCode != NULL)
-				*returnCode = exchange.return_code;
-			return B_OK;
-		}
-		if (ret == B_INTERRUPTED)
-			return B_INTERRUPTED;
+	// Haiku restarts an interrupted wait_for_thread(); nexus returns
+	// B_INTERRUPTED for any signal and for the freezer during suspend.
+	struct nexus_thread_waitfor_req exchange;
+	int nio;
+	do {
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.receiver = id;
+		nio = nexus_io(nexus, NEXUS_THREAD_WAITFOR, &exchange);
+	} while (nio == 0 && exchange.ret == B_INTERRUPTED);
+
+	if (nio == 0 && exchange.ret == B_OK) {
+		if (returnCode != NULL)
+			*returnCode = exchange.return_code;
+		return B_OK;
 	}
 
 	return wait_for_remote_thread(id, returnCode);
@@ -714,23 +723,31 @@ resume_thread(thread_id id)
 
 
 status_t
-snooze(bigtime_t time)
-{
-	return usleep(time);
-}
-
-
-status_t
 snooze_until(bigtime_t time, int timeBase)
 {
 	if (timeBase != B_SYSTEM_TIMEBASE)
 		return B_ERROR;
 
-	bigtime_t now = system_time();
-	if (time <= now)
+	// system_time() is CLOCK_MONOTONIC. The suspend freezer restarts the sleep transparently,
+	// and only a signal handler ends it early, reported as B_INTERRUPTED.
+	struct timespec deadline;
+	deadline.tv_sec = time / 1000000;
+	deadline.tv_nsec = (time % 1000000) * 1000;
+	int error = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &deadline,
+		NULL);
+	if (error == EINTR)
+		return B_INTERRUPTED;
+	return error == 0 ? B_OK : B_ERROR;
+}
+
+
+status_t
+snooze(bigtime_t time)
+{
+	if (time <= 0)
 		return B_OK;
 
-	return snooze(time - now);
+	return snooze_until(system_time() + time, B_SYSTEM_TIMEBASE);
 }
 
 

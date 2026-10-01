@@ -4,6 +4,7 @@
  */
 
 #include "Team.h"
+#include "InterruptedWait.h"
 #include "KernelDebug.h"
 
 #include "../kernel/nexus/nexus/nexus.h"
@@ -246,16 +247,20 @@ _get_port_message_info_etc(port_id id, port_message_info* info,
 
 	struct nexus_port_get_message_info exchange;
 	struct nexus_port_message_info privateInfo;
-	memset(&privateInfo, 0, sizeof(privateInfo));
+	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	do {
+		memset(&privateInfo, 0, sizeof(privateInfo));
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.id = id;
+		exchange.flags = flags;
+		exchange.timeout = timeout;
+		exchange.size = sizeof(privateInfo);
+		exchange.info = &privateInfo;
 
-	exchange.id = id;
-	exchange.flags = flags;
-	exchange.timeout = timeout;
-	exchange.size = sizeof(privateInfo);
-	exchange.info = &privateInfo;
-
-	if (nexus_io(nexus, NEXUS_PORT_MESSAGE_INFO, &exchange) < 0)
-		return B_ERROR;
+		if (nexus_io(nexus, NEXUS_PORT_MESSAGE_INFO, &exchange) < 0)
+			return B_ERROR;
+	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
+		&timeout));
 	if (exchange.ret != B_OK)
 		return exchange.ret;
 
@@ -287,16 +292,20 @@ read_port_etc(port_id id, int32* msgCode, void* msgBuffer,
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_read exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
-	exchange.code = msgCode;
-	exchange.buffer = msgBuffer;
-	exchange.size = bufferSize;
-	exchange.flags = flags;
-	exchange.timeout = timeout;
+	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	do {
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.id = id;
+		exchange.code = msgCode;
+		exchange.buffer = msgBuffer;
+		exchange.size = bufferSize;
+		exchange.flags = flags;
+		exchange.timeout = timeout;
 
-	if (nexus_io(nexus, NEXUS_PORT_READ, &exchange) < 0)
-		return B_ERROR;
+		if (nexus_io(nexus, NEXUS_PORT_READ, &exchange) < 0)
+			return B_ERROR;
+	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
+		&timeout));
 	if (exchange.ret != B_OK)
 		return exchange.ret;
 
@@ -331,16 +340,20 @@ write_port_etc(port_id id, int32 msgCode, const void* msgBuffer,
 		return B_BAD_PORT_ID;
 
 	struct nexus_port_write exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
-	exchange.code = &msgCode;
-	exchange.buffer = msgBuffer;
-	exchange.size = bufferSize;
-	exchange.flags = flags;
-	exchange.timeout = timeout;
+	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	do {
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.id = id;
+		exchange.code = &msgCode;
+		exchange.buffer = msgBuffer;
+		exchange.size = bufferSize;
+		exchange.flags = flags;
+		exchange.timeout = timeout;
 
-	if (nexus_io(nexus, NEXUS_PORT_WRITE, &exchange) < 0)
-		return B_ERROR;
+		if (nexus_io(nexus, NEXUS_PORT_WRITE, &exchange) < 0)
+			return B_ERROR;
+	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
+		&timeout));
 	return exchange.ret;
 }
 
@@ -379,18 +392,22 @@ write_port_with_caps(port_id id, int32 msgCode,
 
 	// Userland `port_cap_in` matches `nexus_port_cap_in` byte-for-byte.
 	struct nexus_port_write_caps exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
-	exchange.code = &msgCode;
-	exchange.buffer = msgBuffer;
-	exchange.size = bufferSize;
-	exchange.caps = (const struct nexus_port_cap_in*)caps;
-	exchange.caps_count = capsCount;
-	exchange.flags = flags;
-	exchange.timeout = timeout;
+	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	do {
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.id = id;
+		exchange.code = &msgCode;
+		exchange.buffer = msgBuffer;
+		exchange.size = bufferSize;
+		exchange.caps = (const struct nexus_port_cap_in*)caps;
+		exchange.caps_count = capsCount;
+		exchange.flags = flags;
+		exchange.timeout = timeout;
 
-	if (nexus_io(nexus, NEXUS_PORT_WRITE_CAPS, &exchange) < 0)
-		return B_ERROR;
+		if (nexus_io(nexus, NEXUS_PORT_WRITE_CAPS, &exchange) < 0)
+			return B_ERROR;
+	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
+		&timeout));
 	return exchange.ret;
 }
 
@@ -424,18 +441,22 @@ read_port_with_caps_etc(port_id id, int32* msgCode,
 
 	// Userland `port_cap_out` matches `nexus_port_cap_out` byte-for-byte.
 	struct nexus_port_read_caps exchange;
-	memset(&exchange, 0, sizeof(exchange));
-	exchange.id = id;
-	exchange.code = msgCode;
-	exchange.buffer = msgBuffer;
-	exchange.size = *bufferSize;
-	exchange.caps = (struct nexus_port_cap_out*)caps;
-	exchange.caps_count = *capsCount;
-	exchange.flags = flags;
-	exchange.timeout = timeout;
+	bigtime_t deadline = BKernelPrivate::wait_deadline(flags, timeout);
+	do {
+		memset(&exchange, 0, sizeof(exchange));
+		exchange.id = id;
+		exchange.code = msgCode;
+		exchange.buffer = msgBuffer;
+		exchange.size = *bufferSize;
+		exchange.caps = (struct nexus_port_cap_out*)caps;
+		exchange.caps_count = *capsCount;
+		exchange.flags = flags;
+		exchange.timeout = timeout;
 
-	if (nexus_io(nexus, NEXUS_PORT_READ_CAPS, &exchange) < 0)
-		return B_ERROR;
+		if (nexus_io(nexus, NEXUS_PORT_READ_CAPS, &exchange) < 0)
+			return B_ERROR;
+	} while (BKernelPrivate::wait_again(&exchange.ret, flags, deadline,
+		&timeout));
 
 	// Kernel writes back actual size and caps_count, even on overflow,
 	// so the caller can re-size and retry.

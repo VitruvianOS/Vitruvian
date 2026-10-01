@@ -11,12 +11,16 @@ set(SYSTEMD_SERVICES
   data/systemd/tracker.service
   data/systemd/userbootscript@.service
   data/systemd/vos-login.target
+  data/systemd/vos-pdf-printer.service
 )
 
 install(FILES data/tmpfiles.d/vos.conf
   DESTINATION /usr/lib/tmpfiles.d/)
 
 install(PROGRAMS data/libexec/vos-firstboot-commit
+  DESTINATION /usr/libexec/)
+
+install(PROGRAMS data/libexec/vos-pdf-printer
   DESTINATION /usr/libexec/)
 
 install(PROGRAMS data/libexec/vos-install-helper

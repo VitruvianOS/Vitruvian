@@ -167,6 +167,7 @@ if [ "$(dpkg-query -W -f='${Status}' live-boot 2>/dev/null || true)" = "install 
 fi
 # Printing goes straight to cupsd, with no legacy print server on V\OS.
 systemctl enable cups.service 2>/dev/null || true
+systemctl enable vos-pdf-printer.service 2>/dev/null || true
 
 install -m 0644 -D /usr/share/vos/systemd/vos-session.service \
 	/etc/systemd/user/vos-session.service 2>/dev/null || true

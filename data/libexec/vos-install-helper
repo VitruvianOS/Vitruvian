@@ -275,6 +275,9 @@ _do_partition_size_limits() {
     printf 'minSizeMiB=%s\n' "$_sl_min_mib"
     printf 'maxSizeMiB=%s\n' "$_sl_max_mib"
     printf 'usedMiB=%s\n' "$_sl_used_mib"
+    _do_partition_move_recovery_report "$_sl_disk" status
+    printf 'move_recovery=%s\n' "$_move_recovery"
+    printf 'move_recovery_detail=%s\n' "$_move_recovery_detail"
     return 0
 }
 
@@ -1277,6 +1280,22 @@ _validate_one_op() {
     esac
 }
 
+# Captures move-recovery status for a disk into _move_recovery and
+# _move_recovery_detail. action=status|resume|rollback.
+_do_partition_move_recovery_report() {
+    _mr_disk="$1"
+    _mr_action="${2:-status}"
+    _move_recovery="none"
+    _move_recovery_detail=""
+    _mr_out="$(_partlib_move_recover_disk "$_mr_disk" "$_mr_action")" || true
+    _move_recovery="$(printf '%s\n' "$_mr_out" \
+        | sed -n 's/^move_recovery=//p' | tail -n1)"
+    _move_recovery_detail="$(printf '%s\n' "$_mr_out" \
+        | sed -n 's/^move_recovery_detail=//p' | tail -n1)"
+    [ -n "$_move_recovery" ] || _move_recovery="none"
+    return 0
+}
+
 _do_partition_validate() {
     _plan="${1:-}"
     _partition_front_door "$_plan" || return $?
@@ -1289,6 +1308,12 @@ _do_partition_validate() {
 
     log "plan: disk=$_plan_disk table_type=${_plan_table_type:-<unchanged>}"
 
+    # Leftover move journal: a previous Move was killed mid-copy.
+    _do_partition_move_recovery_report "$_plan_disk" status
+    if [ "$_move_recovery" != "none" ]; then
+        log "move-recovery pending on $_plan_disk: $_move_recovery_detail"
+    fi
+
     _validate_rc=0
     _validate_seen_ids=""
     _validate_esp_warned=0
@@ -1298,6 +1323,8 @@ _do_partition_validate() {
 
     [ "$_validate_rc" -eq 0 ] || return "$_validate_rc"
 
+    printf 'move_recovery=%s\n' "$_move_recovery"
+    printf 'move_recovery_detail=%s\n' "$_move_recovery_detail"
     log "plan valid: $_validate_op_count operation(s), disk=$_plan_disk"
     return 0
 }
@@ -1526,6 +1553,12 @@ _do_partition_apply() {
 
     trap '_partition_apply_cleanup' EXIT INT TERM
 
+    # Finish or report any interrupted Move on this disk before new ops.
+    _do_partition_move_recovery_report "$_plan_disk" resume
+    if [ "$_move_recovery" != "none" ]; then
+        log "move-recovery on $_plan_disk: $_move_recovery=$_move_recovery_detail"
+    fi
+
     _ID_MAP=""
     _PARTLIB_SETTLE_MS=0
     _ops_out="$(mktemp)"
@@ -1549,6 +1582,8 @@ _do_partition_apply() {
         printf 'status=%s\n' "$_overall"
         printf 'settle_ms=%s\n' "$_PARTLIB_SETTLE_MS"
         printf 'failed_op=%s\n' "$_failed_op"
+        printf 'move_recovery=%s\n' "$_move_recovery"
+        printf 'move_recovery_detail=%s\n' "$_move_recovery_detail"
         printf '\n'
         cat "$_vols_out"
         printf '\n'
@@ -1566,16 +1601,58 @@ _do_partition_apply() {
 }
 
 # ============================== dispatch ===================================
-
 if [ "${1:-}" = "partition" ]; then
     shift
     case "${1:-}" in
         validate)    shift; _do_partition_validate "${1:-}"; exit $? ;;
         apply)       shift; _do_partition_apply "$@"; exit $? ;;
         size-limits) shift; _do_partition_size_limits "${1:-}" "${2:-}"; exit $? ;;
-        *) printf 'usage: vos-install-helper partition {validate|apply} <plan> [--allow-reformat-esp]\n' >&2
+        move-recovery)
+            shift
+            _mr_what="${1:-status}"
+            _mr_disk="${2:-}"
+            case "$_mr_what" in
+                status|resume|rollback) ;;
+                *)
+                    log "move-recovery: unknown action: $_mr_what"
+                    exit 1 ;;
+            esac
+            if [ -n "$_mr_disk" ]; then
+                _partlib_move_recover_disk "$_mr_disk" "$_mr_what"
+                exit 0
+            fi
+            if [ "$_mr_what" != "status" ]; then
+                log "move-recovery: disk path required for $_mr_what"
+                exit 1
+            fi
+            _mr_dir="$_PARTLIB_MOVE_JOURNAL_DIR"
+            _mr_pending=0
+            if [ -d "$_mr_dir" ]; then
+                for _mr_path in "$_mr_dir"/*.journal; do
+                    [ -f "$_mr_path" ] || continue
+                    _partlib_move_journal_read "$_mr_path" || continue
+                    _mr_pending=1
+                    printf 'journal=%s\n' "$_mr_path"
+                    printf 'j_disk=%s\n' "$MJ_DISK"
+                    printf 'j_partno=%s\n' "$MJ_PARTNO"
+                    printf 'j_target=%s\n' "${MJ_TARGET:-}"
+                    printf 'j_copied=%s\n' "${MJ_COPIED:-0}"
+                    printf 'j_size=%s\n' "$MJ_SIZE"
+                    printf 'j_state=%s\n' "${MJ_STATE:-unknown}"
+                done
+            fi
+            if [ "$_mr_pending" -eq 0 ]; then
+                printf 'move_recovery=none\n'
+            else
+                printf 'move_recovery=pending\n'
+            fi
+            exit 0
+            ;;
+        *)
+           printf 'usage: vos-install-helper partition {validate|apply} <plan> [--allow-reformat-esp]\n' >&2
            printf '       vos-install-helper partition capabilities [<filesystem>]\n' >&2
            printf '       vos-install-helper partition size-limits <target> [<filesystem>] (privileged)\n' >&2
+           printf '       vos-install-helper partition move-recovery {status|resume|rollback} [<disk>]\n' >&2
            exit 1 ;;
     esac
 fi

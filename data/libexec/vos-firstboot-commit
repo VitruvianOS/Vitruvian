@@ -227,7 +227,7 @@ if [ "$sudo_enabled" = "1" ]; then
     fi
 fi
 
-for _g in input video render; do
+for _g in input video render lpadmin; do
     if $IN getent group "$_g" >/dev/null 2>&1; then
         $IN usermod -aG "$_g" "$username" || echo "usermod $_g failed" >&2
     fi

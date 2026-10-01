@@ -666,7 +666,7 @@ if ! getent passwd vos-live >/dev/null; then
         --shell /bin/bash --comment 'Vitruvian live/try persona' \\
         vos-live
     passwd -l vos-live
-    for g in sudo video render input plugdev nexus; do
+    for g in sudo video render input plugdev lpadmin nexus; do
         getent group \$g >/dev/null && adduser vos-live \$g || true
     done
     # shadow-utils useradd copy_tree does not preserve user.* xattrs on

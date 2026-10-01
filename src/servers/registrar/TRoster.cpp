@@ -795,6 +795,26 @@ TRoster::HandleUpdateActiveApp(BMessage* request)
 /*!	\brief Handles a Broadcast() request.
 	\param request The request message
 */
+/*!	\brief Messengers of all registered apps except the registrar, for a
+	broadcast that waits for each app (synchronous sends).
+*/
+void
+TRoster::GetAppMessengers(std::vector<BMessenger>& messengers)
+{
+	BAutolock _(fLock);
+
+	for (AppInfoList::Iterator it = fRegisteredApps.It(); it.IsValid(); ++it) {
+		RosterAppInfo* info = *it;
+		if (info->team == be_app->Team())
+			continue;
+		BMessenger messenger;
+		BMessenger::Private(messenger).SetTo(info->team, info->port,
+			B_PREFERRED_TOKEN);
+		messengers.push_back(messenger);
+	}
+}
+
+
 void
 TRoster::HandleBroadcast(BMessage* request)
 {

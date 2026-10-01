@@ -67,6 +67,7 @@ private:
 	void _HandleLogindPrepareForShutdown(BMessage *message);
 	void _HandleLogindPrepareForSleep(BMessage *message);
 	void _HandleSleepTimer(BMessage *message);
+	void _NotifySleep(bigtime_t deadline);
 	void _ShowSleepWindow(bool hibernate);
 	void _ShowSleepFailure(bool hibernate, const char *reason);
 	void _CheckBattery();
@@ -87,6 +88,7 @@ private:
 	int32					fSleepCycle;
 	bool					fSleepHibernate;
 	bigtime_t				fSleepClockOffset;
+	bool					fSleepNotified;
 	bool					fSleepRequestHibernate;
 	bigtime_t				fSleepRequestTime;
 	bool					fBatteryActed;

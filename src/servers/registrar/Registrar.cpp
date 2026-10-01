@@ -16,6 +16,7 @@
 #include <time.h>
 
 #include <exception>
+#include <vector>
 
 #include <Application.h>
 #include <Catalog.h>
@@ -70,10 +71,11 @@ static const bigtime_t kSanityCheckInterval = 30000000LL;
 
 // Sleep timing: how long apps get after B_SYSTEM_SUSPENDING, when the window closes, and how
 // recent our own request must be to name the sleep kind and how much sleep proves a sleep.
-static const uint32 kMsgSleepCloseWindow = 'slCw';
+static const uint32 kMsgSleepNotified = 'slNt';
 static const uint32 kMsgSleepRelease = 'slRl';
 static const bigtime_t kSleepHandlerTime = 2000000LL;
 static const bigtime_t kSleepWindowCloseTime = 250000LL;
+static const bigtime_t kSleepNotifySlack = 100000LL;
 static const bigtime_t kSleepRequestValidity = 60000000LL;
 static const bigtime_t kSleptThreshold = 100000LL;
 
@@ -117,6 +119,7 @@ Registrar::Registrar(status_t* _error)
 	fSleepCycle(0),
 	fSleepHibernate(false),
 	fSleepClockOffset(0),
+	fSleepNotified(false),
 	fSleepRequestHibernate(false),
 	fSleepRequestTime(0),
 	fBatteryActed(false)
@@ -359,7 +362,7 @@ Registrar::_MessageReceived(BMessage *message)
 			_ShowSleepFailure(message->GetBool("hibernate", false),
 				message->GetString("reason", NULL));
 			break;
-		case kMsgSleepCloseWindow:
+		case kMsgSleepNotified:
 		case kMsgSleepRelease:
 			_HandleSleepTimer(message);
 			break;
@@ -700,22 +703,110 @@ Registrar::_HandleLogindPrepareForSleep(BMessage *request)
 			_ShowSleepFailure(fSleepHibernate, NULL);
 	}
 
-	BMessage payload(active ? B_SYSTEM_SUSPENDING : B_SYSTEM_RESUMED);
-	BMessage broadcast(B_REG_BROADCAST);
-	broadcast.AddInt32("team", -1);
-	broadcast.AddMessage("message", &payload);
-	broadcast.AddMessenger("reply_target", BMessenger(this));
-	fRoster->HandleBroadcast(&broadcast);
-
-	if (active && fLogindBridge != NULL) {
-		// Give handlers kSleepHandlerTime, then release the delay lock for the bridge to reacquire.
-		// A suspend closes the window first so the resumed screen never shows it.
-		BMessage timer(fSleepHibernate ? kMsgSleepRelease : kMsgSleepCloseWindow);
-		timer.AddInt32("cycle", fSleepCycle);
-		fEventQueue->AddEvent(new(std::nothrow) MessageEvent(
-			system_time() + (fSleepHibernate ? kSleepHandlerTime
-				: kSleepHandlerTime - kSleepWindowCloseTime), this, &timer));
+	if (!active) {
+		BMessage payload(B_SYSTEM_RESUMED);
+		BMessage broadcast(B_REG_BROADCAST);
+		broadcast.AddInt32("team", -1);
+		broadcast.AddMessage("message", &payload);
+		broadcast.AddMessenger("reply_target", BMessenger(this));
+		fRoster->HandleBroadcast(&broadcast);
+		return;
 	}
+
+	// Every app gets B_SYSTEM_SUSPENDING and the sleep goes on once all have handled it, or after
+	// kSleepHandlerTime. A suspend closes the window first; the bridge reacquires the lock on resume.
+	bigtime_t deadline = system_time() + (fSleepHibernate ? kSleepHandlerTime
+		: kSleepHandlerTime - kSleepWindowCloseTime);
+	fSleepNotified = false;
+	_NotifySleep(deadline);
+
+	// Backstop, in case the notifier could not run.
+	BMessage timer(kMsgSleepNotified);
+	timer.AddInt32("cycle", fSleepCycle);
+	fEventQueue->AddEvent(new(std::nothrow) MessageEvent(
+		deadline + kSleepNotifySlack, this, &timer));
+}
+
+
+struct SleepNotice {
+	BMessenger	target;
+	bigtime_t	deadline;
+};
+
+
+struct SleepNotifier {
+	std::vector<BMessenger>	apps;
+	BMessenger				registrar;
+	int32					cycle;
+	bigtime_t				deadline;
+};
+
+
+// A synchronous send ends when the app's handler is done with the message
+// (it replies, or B_NO_REPLY comes back when the message is deleted).
+static status_t
+notify_app(void* data)
+{
+	SleepNotice* notice = (SleepNotice*)data;
+	bigtime_t left = notice->deadline - system_time();
+	if (left > 0) {
+		BMessage message(B_SYSTEM_SUSPENDING);
+		BMessage reply;
+		notice->target.SendMessage(&message, &reply, left, left);
+	}
+	delete notice;
+	return B_OK;
+}
+
+
+static status_t
+notify_apps(void* data)
+{
+	SleepNotifier* notifier = (SleepNotifier*)data;
+
+	std::vector<thread_id> threads;
+	for (const BMessenger& app : notifier->apps) {
+		SleepNotice* notice = new(std::nothrow) SleepNotice;
+		if (notice == NULL)
+			continue;
+		notice->target = app;
+		notice->deadline = notifier->deadline;
+		thread_id thread = spawn_thread(notify_app, "sleep notice",
+			B_NORMAL_PRIORITY, notice);
+		if (thread < 0 || resume_thread(thread) != B_OK) {
+			delete notice;
+			continue;
+		}
+		threads.push_back(thread);
+	}
+	for (thread_id thread : threads) {
+		status_t result;
+		wait_for_thread(thread, &result);
+	}
+
+	BMessage done(kMsgSleepNotified);
+	done.AddInt32("cycle", notifier->cycle);
+	notifier->registrar.SendMessage(&done);
+	delete notifier;
+	return B_OK;
+}
+
+
+void
+Registrar::_NotifySleep(bigtime_t deadline)
+{
+	SleepNotifier* notifier = new(std::nothrow) SleepNotifier;
+	if (notifier == NULL)
+		return;
+	fRoster->GetAppMessengers(notifier->apps);
+	notifier->registrar = BMessenger(this);
+	notifier->cycle = fSleepCycle;
+	notifier->deadline = deadline;
+
+	thread_id thread = spawn_thread(notify_apps, "sleep notifier",
+		B_NORMAL_PRIORITY, notifier);
+	if (thread < 0 || resume_thread(thread) != B_OK)
+		delete notifier;
 }
 
 
@@ -725,7 +816,16 @@ Registrar::_HandleSleepTimer(BMessage *message)
 	if (message->GetInt32("cycle", -1) != fSleepCycle)
 		return;
 
-	if (message->what == kMsgSleepCloseWindow) {
+	if (message->what == kMsgSleepNotified) {
+		// The notifier and the backstop both report; act once.
+		if (fSleepNotified)
+			return;
+		fSleepNotified = true;
+		if (fSleepHibernate) {
+			if (fLogindBridge != NULL)
+				fLogindBridge->ReleaseSleepInhibit();
+			return;
+		}
 		// Let app_server redraw what the window covered before freezing.
 		fSleepWindow.SendMessage(B_QUIT_REQUESTED);
 		BMessage timer(kMsgSleepRelease);

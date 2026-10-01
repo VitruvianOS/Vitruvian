@@ -173,14 +173,14 @@ unregister_file_disk_device(const char* fileNameOrID)
 			status_t error = roster.UnregisterFileDevice(device.ID());
 			if (error != B_OK) {
 				fprintf(stderr, "Error: Failed to unregister file disk device"
-					"%s \"%s\" (ID: %" B_PRId32 "): %s\n",
+					"%s \"%s\" (ID: %" B_PRIdDEV "): %s\n",
 					isFilePath ? " for file" : "", fileNameOrID, device.ID(),
 					strerror(error));
 				return error;
 			}
 
 			printf("Unregistered file disk device%s \"%s\" "
-				"(ID: %" B_PRId32 ")\n", isFilePath ? " for file" : "",
+				"(ID: %" B_PRIdDEV ")\n", isFilePath ? " for file" : "",
 				fileNameOrID, device.ID());
 
 			return B_OK;

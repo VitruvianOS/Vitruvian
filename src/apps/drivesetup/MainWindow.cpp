@@ -185,8 +185,8 @@ private:
 				//
 				partition_id id = fSpaceIDMap.SpaceIDFor(parentID, offset);
 				if (getenv("VOS_DEBUG_MENUS") != NULL) {
-					fprintf(stderr, "[DriveSetup rows]   space id=%" B_PRId32
-						" parentID=%" B_PRId32 " offset=%" B_PRIdOFF
+					fprintf(stderr, "[DriveSetup rows]   space id=%" B_PRIdDEV
+						" parentID=%" B_PRIdDEV " offset=%" B_PRIdOFF
 						" size=%" B_PRIdOFF "\n", id, parentID, offset, size);
 				}
 				fPartitionList->AddSpace(parentID, id, offset, size);
@@ -1241,9 +1241,9 @@ MainWindow::_AdaptToSelectedPartition()
 	}
 
 	if (getenv("VOS_DEBUG_MENUS") != NULL) {
-		fprintf(stderr, "[DriveSetup select] row=%p disk=%" B_PRId32
-			" partition=%" B_PRId32 " parent=%" B_PRId32
-			" (fCurrentPartitionID was %" B_PRId32 ")\n",
+		fprintf(stderr, "[DriveSetup select] row=%p disk=%" B_PRIdDEV
+			" partition=%" B_PRIdDEV " parent=%" B_PRIdDEV
+			" (fCurrentPartitionID was %" B_PRIdDEV ")\n",
 			_selectedRow, diskID, partitionID, parentID, fCurrentPartitionID);
 	}
 
@@ -1495,8 +1495,8 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 
 		if (getenv("VOS_DEBUG_MENUS") != NULL) {
 			BPartition* p = disk->FindDescendant(selectedPartition);
-			fprintf(stderr, "[DriveSetup menus] selected=%" B_PRId32
-				" parent=%" B_PRId32 " found=%s prepared=%s\n",
+			fprintf(stderr, "[DriveSetup menus] selected=%" B_PRIdDEV
+				" parent=%" B_PRIdDEV " found=%s prepared=%s\n",
 				selectedPartition, parentID, p ? "yes" : "NO", 
 				prepared ? "yes" : "no");
 			if (p != NULL) {

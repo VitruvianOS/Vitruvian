@@ -116,7 +116,7 @@ public:
 	virtual void MouseDown(BPoint where)
 	{
 		BMessage message(MSG_SELECTED_PARTITION_ID);
-		message.AddInt32("partition_id", fID);
+		message.AddInt64("partition_id", fID);
 		Window()->PostMessage(&message);
 	}
 
@@ -563,7 +563,7 @@ DiskView::SetDiskCount(int32 count)
 	fDiskCount = count;
 	if (count == 1) {
 		BMessage message(MSG_SELECTED_PARTITION_ID);
-		message.AddInt32("partition_id", 0);
+		message.AddInt64("partition_id", 0);
 		Window()->PostMessage(&message);
 	}
 }

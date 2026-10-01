@@ -91,7 +91,7 @@ BDiskDeviceRoster::GetNextDevice(BDiskDevice* device)
 	size_t neededSize = 0;
 	partition_id id = _kern_get_next_disk_device_id(&fDeviceCookie,
 		&neededSize);
-	if (id < 0)
+	if ((int64)id < 0)
 		return id;
 
 	// deviceOnly=false so libroot2 populates the partition children;
@@ -446,7 +446,7 @@ BDiskDeviceRoster::GetDeviceForPath(const char* filename, BDiskDevice* device)
 	// get the device ID
 	size_t neededSize = 0;
 	partition_id id = _kern_find_disk_device(filename, &neededSize);
-	if (id < 0)
+	if ((int64)id < 0)
 		return id;
 
 	// retrieve the device data
@@ -464,7 +464,7 @@ BDiskDeviceRoster::GetPartitionForPath(const char* filename,
 	// get the partition ID
 	size_t neededSize = 0;
 	partition_id id = _kern_find_partition(filename, &neededSize);
-	if (id < 0)
+	if ((int64)id < 0)
 		return id;
 
 	// retrieve the device data
@@ -490,7 +490,7 @@ BDiskDeviceRoster::GetFileDeviceForPath(const char* filename,
 	// get the device ID
 	size_t neededSize = 0;
 	partition_id id = _kern_find_file_disk_device(filename, &neededSize);
-	if (id < 0)
+	if ((int64)id < 0)
 		return id;
 
 	// retrieve the device data

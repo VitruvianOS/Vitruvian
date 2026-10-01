@@ -596,9 +596,9 @@ MainWindow::MessageReceived(BMessage* message)
 		}
 		case MSG_SELECTED_PARTITION_ID: {
 			// selection of partitions via disk view
-			partition_id id;
-			if (message->FindInt32("partition_id", &id) == B_OK) {
-				if (BRow* row = fListView->FindRow(id)) {
+			int64 id;
+			if (message->FindInt64("partition_id", &id) == B_OK) {
+				if (BRow* row = fListView->FindRow((partition_id)id)) {
 					fListView->DeselectAll();
 					fListView->AddToSelection(row);
 					_AdaptToSelectedPartition();
@@ -894,7 +894,7 @@ MainWindow::RegisterFileDiskDevice(const char* fileName)
 	// register the file
 	BDiskDeviceRoster roster;
 	partition_id id = roster.RegisterFileDevice(fileName);
-	if (id < 0) {
+	if ((int64)id < 0) {
 		FileErrorAlert(B_TRANSLATE("Failed to register file disk device: %s"),
 			fileName, B_STOP_ALERT);
 		return id;
@@ -918,7 +918,7 @@ MainWindow::UnRegisterFileDiskDevice(const char* fileNameOrID)
 	char* numberEnd;
 	partition_id id = strtol(fileNameOrID, &numberEnd, 0);
 	BDiskDeviceRoster roster;
-	if (id >= 0 && numberEnd != fileNameOrID && *numberEnd == '\0') {
+	if ((int64)id >= 0 && numberEnd != fileNameOrID && *numberEnd == '\0') {
 		BDiskDevice device;
 		if (roster.GetDeviceWithID(id, &device) == B_OK && device.IsFile()) {
 			status_t error = roster.UnregisterFileDevice(id);
@@ -1312,7 +1312,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 
 		// Create menu and items
 		BPartition* parentPartition = NULL;
-		if (selectedPartition <= -2) {
+		if ((int64)selectedPartition <= -2) {
 			// a partitionable space item is selected
 			parentPartition = disk->FindDescendant(parentID);
 		}
@@ -1498,7 +1498,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 					p->IsReadOnly() ? "yes" : "no",
 					p->Device()->HasMedia() ? "yes" : "no");
 			} else {
-				BPartition* pp = parentID >= 0
+				BPartition* pp = (int64)parentID >= 0
 					? disk->FindDescendant(parentID) : NULL;
 				fprintf(stderr, "[DriveSetup menus]   (space row) parent=%s "
 					"parentIsContainer=%s\n",
@@ -1526,7 +1526,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 
 		fMountAllMenuItem->SetEnabled(true);
 	}
-	if (selectedPartition < 0) {
+	if ((int64)selectedPartition < 0) {
 		fDeleteMenuItem->SetEnabled(false);
 		fChangeMenuItem->SetEnabled(false);
 		fResizeMenuItem->SetEnabled(false);
@@ -1586,7 +1586,7 @@ MainWindow::_DisplayPartitionError(BString _message,
 void
 MainWindow::_Mount(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (!disk || selectedPartition < 0) {
+	if (!disk || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -1615,7 +1615,7 @@ MainWindow::_Mount(BDiskDevice* disk, partition_id selectedPartition)
 void
 MainWindow::_Unmount(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (!disk || selectedPartition < 0) {
+	if (!disk || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -1656,7 +1656,7 @@ void
 MainWindow::_Initialize(BDiskDevice* disk, partition_id selectedPartition,
 	const BString& diskSystemName)
 {
-	if (!disk || selectedPartition < 0) {
+	if (!disk || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -1860,7 +1860,7 @@ MainWindow::_Initialize(BDiskDevice* disk, partition_id selectedPartition,
 void
 MainWindow::_Create(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (!disk || selectedPartition > -2) {
+	if (!disk || (int64)selectedPartition > -2) {
 		_DisplayPartitionError(B_TRANSLATE("The currently selected partition "
 			"is not empty."));
 		return;
@@ -1987,7 +1987,7 @@ MainWindow::_Create(BDiskDevice* disk, partition_id selectedPartition)
 void
 MainWindow::_Delete(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (!disk || selectedPartition < 0) {
+	if (!disk || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -2065,7 +2065,7 @@ MainWindow::_Delete(BDiskDevice* disk, partition_id selectedPartition)
 void
 MainWindow::_ChangeParameters(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (disk == NULL || selectedPartition < 0) {
+	if (disk == NULL || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -2160,7 +2160,7 @@ MainWindow::_ChangeParameters(BDiskDevice* disk, partition_id selectedPartition)
 void
 MainWindow::_SetFlags(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (disk == NULL || selectedPartition < 0) {
+	if (disk == NULL || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -2227,7 +2227,7 @@ MainWindow::_SetFlags(BDiskDevice* disk, partition_id selectedPartition)
 void
 MainWindow::_ResizeMove(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (disk == NULL || selectedPartition < 0) {
+	if (disk == NULL || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -2398,7 +2398,7 @@ MainWindow::_ResizeMove(BDiskDevice* disk, partition_id selectedPartition)
 void
 MainWindow::_CheckFilesystem(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (disk == NULL || selectedPartition < 0) {
+	if (disk == NULL || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -2437,7 +2437,7 @@ MainWindow::_CheckFilesystem(BDiskDevice* disk, partition_id selectedPartition)
 void
 MainWindow::_Erase(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (disk == NULL || selectedPartition < 0) {
+	if (disk == NULL || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -2498,7 +2498,7 @@ MainWindow::_Erase(BDiskDevice* disk, partition_id selectedPartition)
 void
 MainWindow::_Rename(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (disk == NULL || selectedPartition < 0) {
+	if (disk == NULL || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;
@@ -2559,7 +2559,7 @@ MainWindow::_Rename(BDiskDevice* disk, partition_id selectedPartition)
 void
 MainWindow::_RenameGpt(BDiskDevice* disk, partition_id selectedPartition)
 {
-	if (disk == NULL || selectedPartition < 0) {
+	if (disk == NULL || (int64)selectedPartition < 0) {
 		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
 			"entry from the list."));
 		return;

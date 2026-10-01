@@ -656,6 +656,12 @@ ff02::2 ip6-allrouters
 HOSTSEOF
 chmod 0644 /etc/hosts
 
+# /proc/swaps is not namespaced: without this the initramfs resume hook
+# records the build host's swap and every boot waits 30 s for it.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
+update-initramfs -u -k all
+
 # Root locked; Installer's Advanced mode is the only way to set a root
 # password on a target.
 passwd -l root 2>/dev/null || true

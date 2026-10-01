@@ -26,8 +26,11 @@ SleepWindow::SleepWindow(bool hibernate)
 	SetText(hibernate ? B_TRANSLATE("System is hibernating" B_UTF8_ELLIPSIS)
 		: B_TRANSLATE("System is suspending" B_UTF8_ELLIPSIS));
 
+	// Shown only when the sleep failed; until then Enter must not close
+	// the window.
 	AddButton(B_TRANSLATE("OK"));
 	ButtonAt(0)->Hide();
+	SetDefaultButton(NULL);
 }
 
 
@@ -42,4 +45,5 @@ SleepWindow::MessageReceived(BMessage* message)
 	SetType(B_STOP_ALERT);
 	SetText(message->GetString("text", ""));
 	ButtonAt(0)->Show();
+	SetDefaultButton(ButtonAt(0));
 }

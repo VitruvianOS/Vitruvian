@@ -518,7 +518,7 @@ Registrar::_HandleShutDown(BMessage *request)
 }
 
 
-/*!	rief Creates and initializes fShutdownProcess for  request.
+/*!	\brief Creates and initializes fShutdownProcess for  request.
 
 	On success the process takes ownership of \a request once it runs.
 */
@@ -756,7 +756,7 @@ read_sysfs(const char* dir, const char* name, char* buffer, size_t size)
 }
 
 
-/*!	rief Run the user's critical-battery action once per discharge.
+/*!	\brief Run the user's critical-battery action once per discharge.
 
 	Nothing else does it: upower is not installed. The action comes from
 	the Power preferences ("power:battery_critical_action").

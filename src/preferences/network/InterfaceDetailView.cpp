@@ -835,25 +835,45 @@ InterfaceDetailView::_RebuildDeviceView()
 
 	addRow(B_TRANSLATE("Status:"), _StateString(state));
 
-	// Live: BNetworkInterface reads straight from the kernel's own
-	// interface table (not NetworkManager), so this works even when NM's
-	// GetDeviceInfo() is stale or the interface is unmanaged.
+	// Live addresses via BNetworkInterface, which reads NMBackend's device snapshot; the stubs it
+	// replaced always returned empty, leaving this row at "None" (#236).
 	BNetworkInterface iface(interfaceName.String());
 	if (iface.Exists()) {
 		BNetworkInterfaceAddress addr;
 		bool haveIPv4 = false;
+		bool haveIPv6 = false;
+		BString ipv4Line;
+		BString ipv6Line;
 		for (int32 i = 0; i < iface.CountAddresses(); i++) {
-			if (iface.GetAddressAt(i, addr) == B_OK
-				&& addr.Address().Family() == AF_INET) {
-				BString ip;
-				ip << addr.Address().ToString();
-				addRow(B_TRANSLATE("IP Address:"), ip);
+			if (iface.GetAddressAt(i, addr) != B_OK)
+				continue;
+
+			int family = addr.Address().Family();
+			if (family != AF_INET && family != AF_INET6)
+				continue;
+
+			BString ip;
+			ip << addr.Address().ToString();
+			ssize_t prefix = addr.Mask().PrefixLength();
+			if (prefix > 0)
+				ip << "/" << prefix;
+
+			if (family == AF_INET) {
+				if (haveIPv4)
+					ipv4Line << ", ";
+				ipv4Line << ip;
 				haveIPv4 = true;
-				break;
+			} else {
+				if (haveIPv6)
+					ipv6Line << ", ";
+				ipv6Line << ip;
+				haveIPv6 = true;
 			}
 		}
-		if (!haveIPv4)
-			addRow(B_TRANSLATE("IP Address:"), B_TRANSLATE("None"));
+		addRow(B_TRANSLATE("IP Address:"),
+			haveIPv4 ? ipv4Line : BString(B_TRANSLATE("None")));
+		addRow(B_TRANSLATE("IPv6 Address:"),
+			haveIPv6 ? ipv6Line : BString(B_TRANSLATE("None")));
 
 		ifreq_stats stats;
 		if (iface.GetStats(stats) == B_OK) {
@@ -862,8 +882,10 @@ InterfaceDetailView::_RebuildDeviceView()
 		}
 	} else {
 		addRow(B_TRANSLATE("IP Address:"), kNotYetAvailable);
+		addRow(B_TRANSLATE("IPv6 Address:"), kNotYetAvailable);
 	}
 
+	// Gateway/DNS come from the same live snapshot (IPv4 lease preferred, IPv6 fallback), not the profile.
 	BString gateway, dns;
 	fDeviceInfo.FindString(kNMFieldGateway, &gateway);
 	fDeviceInfo.FindString(kNMFieldDNS, &dns);

@@ -407,6 +407,7 @@ NetworkWindowNM::MessageReceived(BMessage* message)
 		case NMBackend::NOTIFICATION_DEVICE_ADDED:
 		case NMBackend::NOTIFICATION_DEVICE_REMOVED:
 		case NMBackend::NOTIFICATION_DEVICE_STATE_CHANGED:
+		case NMBackend::NOTIFICATION_DEVICE_IP_CHANGED:
 			_RequestDeviceScan();
 			break;
 

@@ -9,6 +9,7 @@
 #include <Message.h>
 #include <net/if_types.h>
 
+#include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <stdio.h>
 #include <string.h>
@@ -33,6 +34,64 @@ _ResolvedBackend(const char* name, BString& devicePath)
 }
 
 
+// Shared by GetAddressAt() and BNetworkInterfaceAddress::SetTo(): pull live address `index` of the
+// named interface from NMBackend's snapshot. Literals are parsed with inet_pton, never the resolver.
+static status_t
+_GetInterfaceAddress(const char* name, int32 index,
+	BNetworkInterfaceAddress& address)
+{
+	BString devicePath;
+	NMBackend* backend = _ResolvedBackend(name, devicePath);
+	if (backend == NULL)
+		return B_ERROR;
+
+	BMessage deviceInfo;
+	if (backend->GetDeviceInfo(devicePath.String(), &deviceInfo) != B_OK)
+		return B_ERROR;
+
+	int32 count = 0;
+	if (deviceInfo.FindInt32(kNMFieldAddressCount, &count) != B_OK
+		|| index < 0 || index >= count) {
+		return B_ENTRY_NOT_FOUND;
+	}
+
+	char key[32];
+	snprintf(key, sizeof(key), "address_%" B_PRId32, index);
+	BMessage entry;
+	if (deviceInfo.FindMessage(key, &entry) != B_OK)
+		return B_ENTRY_NOT_FOUND;
+
+	BString addressString;
+	int32 family = AF_INET;
+	int32 prefix = 0;
+	if (entry.FindString(kNMFieldAddressString, &addressString) != B_OK
+		|| entry.FindInt32(kNMFieldAddressFamily, &family) != B_OK) {
+		return B_ERROR;
+	}
+	entry.FindInt32(kNMFieldAddressPrefix, &prefix);
+
+	if (family == AF_INET) {
+		struct in_addr inetAddress;
+		if (inet_pton(AF_INET, addressString.String(), &inetAddress) != 1)
+			return B_BAD_VALUE;
+		address.Address().SetTo(inetAddress.s_addr, 0);
+	} else if (family == AF_INET6) {
+		struct in6_addr inetAddress;
+		if (inet_pton(AF_INET6, addressString.String(), &inetAddress) != 1)
+			return B_BAD_VALUE;
+		address.Address().SetTo(inetAddress, 0);
+	} else {
+		return B_NOT_SUPPORTED;
+	}
+
+	if (prefix > 0)
+		address.Mask().SetToMask(family, (uint32)prefix);
+
+	address.SetFlags(0);
+	return B_OK;
+}
+
+
 BNetworkInterfaceAddress::BNetworkInterfaceAddress()
 	:
 	fIndex(-1),
@@ -49,9 +108,11 @@ BNetworkInterfaceAddress::~BNetworkInterfaceAddress()
 status_t
 BNetworkInterfaceAddress::SetTo(const BNetworkInterface& interface, int32 index)
 {
-	fIndex = index;
-	// TODO: Query NetworkManager for address information
-	return B_OK;
+	// GetAddressAt() is non-const, but this method only needs the interface name, as the kit's public lookup does.
+	status_t status = _GetInterfaceAddress(interface.Name(), index, *this);
+	if (status == B_OK)
+		fIndex = index;
+	return status;
 }
 
 
@@ -362,24 +423,39 @@ BNetworkInterface::GetHardwareAddress(BNetworkAddress& address)
 int32
 BNetworkInterface::CountAddresses() const
 {
-	// TODO: Query NetworkManager for address count
-	return 0;
+	BString devicePath(fDevicePath);
+	NMBackend* backend = _ResolvedBackend(fName, devicePath);
+	if (backend == NULL)
+		return 0;
+
+	BMessage deviceInfo;
+	if (backend->GetDeviceInfo(devicePath.String(), &deviceInfo) != B_OK)
+		return 0;
+
+	int32 count = 0;
+	deviceInfo.FindInt32(kNMFieldAddressCount, &count);
+	return count;
 }
 
 
 status_t
 BNetworkInterface::GetAddressAt(int32 index, BNetworkInterfaceAddress& address)
 {
-	// TODO: Query NetworkManager for address at index
-	return B_ERROR;
+	return _GetInterfaceAddress(fName, index, address);
 }
 
 
 int32
 BNetworkInterface::FindFirstAddress(int family)
 {
-	// TODO: Query NetworkManager once CountAddresses()/GetAddressAt() are
-	// wired up; there's nothing to search yet.
+	int32 count = CountAddresses();
+	for (int32 i = 0; i < count; i++) {
+		BNetworkInterfaceAddress address;
+		if (GetAddressAt(i, address) == B_OK
+			&& address.Address().Family() == family) {
+			return i;
+		}
+	}
 	return -1;
 }
 

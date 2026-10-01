@@ -34,6 +34,13 @@ static const char* const kNMFieldManaged = "managed";
 static const char* const kNMFieldGateway = "gateway";
 static const char* const kNMFieldDNS = "dns";
 
+// Live runtime addresses from NMIPConfig (D-Bus AddressData), nested as
+// "address_%d" BMessages under each device-info snapshot.
+static const char* const kNMFieldAddressCount = "address_count";
+static const char* const kNMFieldAddressFamily = "family";
+static const char* const kNMFieldAddressString = "address";
+static const char* const kNMFieldAddressPrefix = "prefix";
+
 static const char* const kNMFieldIP4Method = "ip4_method";
 static const char* const kNMFieldIP4Address = "ip4_address";
 static const char* const kNMFieldIP4Netmask = "ip4_netmask";
@@ -249,6 +256,7 @@ public:
 		NOTIFICATION_DEVICE_ADDED = 'DVAD',
 		NOTIFICATION_DEVICE_REMOVED = 'DVRM',
 		NOTIFICATION_DEVICE_STATE_CHANGED = 'DVSC',
+		NOTIFICATION_DEVICE_IP_CHANGED = 'DIPC',
 		NOTIFICATION_WIFI_NETWORK_FOUND = 'WNFD',
 		NOTIFICATION_CONNECTION_STATUS_CHANGED = 'COSC',
 		NOTIFICATION_SIGNAL_STRENGTH_CHANGED = 'SSCH'
@@ -375,6 +383,8 @@ private:
 	static void _OnDeviceRemoved(void* client, void* device, void* userData);
 	static void _OnDeviceStateNotify(GObject* device, GParamSpec* pspec,
 		void* userData);
+	static void _OnDeviceIPConfigNotify(GObject* device, GParamSpec* pspec,
+		void* userData);
 	static void _OnActiveConnectionNotify(GObject* client, GParamSpec* pspec,
 		void* userData);
 	static void _OnActiveAPStrengthNotify(GObject* ap, GParamSpec* pspec,
@@ -383,6 +393,7 @@ private:
 	void _HandleDeviceAdded(void* device);
 	void _HandleDeviceRemoved(void* device);
 	void _HandleDeviceStateChanged(void* device);
+	void _HandleDeviceIPConfigChanged(void* device);
 	void _HandleActiveConnectionChanged();
 	void _HandleAPStrengthChanged(void* ap);
 
@@ -399,6 +410,9 @@ private:
 	// device D-Bus path -> notify::state handler id, so device-removed can
 	// disconnect exactly the handler device-added attached.
 	std::map<BString, gulong> fDeviceStateHandlers;
+	// Same for notify::ip4-config and notify::ip6-config: IP config can land without a state transition.
+	std::map<BString, gulong> fDeviceIP4Handlers;
+	std::map<BString, gulong> fDeviceIP6Handlers;
 
 	gulong fDeviceAddedHandlerId;
 	gulong fDeviceRemovedHandlerId;

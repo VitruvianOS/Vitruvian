@@ -317,6 +317,8 @@ NMBackend::_HandleNMVanished()
 		return;
 
 	fDeviceStateHandlers.clear();
+	fDeviceIP4Handlers.clear();
+	fDeviceIP6Handlers.clear();
 	fAPAddedHandlers.clear();
 	fAPRemovedHandlers.clear();
 	fActiveAP = NULL;
@@ -370,6 +372,8 @@ NMBackend::_CleanupLibNM()
 	// along with it, which drops their signal handlers too -- no explicit
 	// g_signal_handler_disconnect needed. Just drop our own bookkeeping.
 	fDeviceStateHandlers.clear();
+	fDeviceIP4Handlers.clear();
+	fDeviceIP6Handlers.clear();
 	fActiveAP = NULL;
 	fActiveAPStrengthHandlerId = 0;
 	if (fNMClient != NULL) {
@@ -530,17 +534,71 @@ _FillConnectionIP4Fields(NMConnection* connection, BMessage* outInfo)
 // connection's configured NMSettingIPConfig, not the live lease). A device
 // with no active connection gets method "unknown" and empty profile fields
 // -- StaticIPView falls back to its DHCP-mode default in that case.
+//
+// Also fills the live IPv4/IPv6 address list from nm_ip_config_get_addresses(), since the profile's
+// ip4_* fields stay empty under DHCP while the lease is what the UI must show (#236).
+static void
+_FillIPConfigAddresses(NMIPConfig* ip4Config, NMIPConfig* ip6Config,
+	BMessage* outInfo)
+{
+	int32 count = 0;
+	int32 index = 0;
+	NMIPConfig* configs[2] = { ip4Config, ip6Config };
+
+	for (int c = 0; c < 2; c++) {
+		NMIPConfig* config = configs[c];
+		if (config == NULL)
+			continue;
+
+		GPtrArray* addresses = nm_ip_config_get_addresses(config);
+		if (addresses == NULL)
+			continue;
+
+		for (guint i = 0; i < addresses->len; i++) {
+			NMIPAddress* address
+				= (NMIPAddress*)g_ptr_array_index(addresses, i);
+			if (address == NULL)
+				continue;
+
+			const char* addressStr = nm_ip_address_get_address(address);
+			if (addressStr == NULL || addressStr[0] == '\0')
+				continue;
+
+			char key[32];
+			snprintf(key, sizeof(key), "address_%" B_PRId32, index);
+
+			BMessage entry;
+			entry.AddInt32(kNMFieldAddressFamily,
+				nm_ip_config_get_family(config));
+			entry.AddString(kNMFieldAddressString, addressStr);
+			entry.AddInt32(kNMFieldAddressPrefix,
+				(int32)nm_ip_address_get_prefix(address));
+			outInfo->AddMessage(key, &entry);
+			index++;
+			count++;
+		}
+	}
+
+	outInfo->AddInt32(kNMFieldAddressCount, count);
+}
+
+
 static void
 _FillIP4ConfigFields(NMDevice* device, BMessage* outInfo)
 {
 	BString gateway, dns;
 	NMIPConfig* ip4Config = nm_device_get_ip4_config(device);
-	if (ip4Config != NULL) {
-		const char* gw = nm_ip_config_get_gateway(ip4Config);
+	NMIPConfig* ip6Config = nm_device_get_ip6_config(device);
+	// Prefer the IPv4 lease's gateway/DNS; fall back to IPv6 so a v6-only
+	// link still shows something real instead of "Not yet available".
+	NMIPConfig* routeConfig = ip4Config != NULL ? ip4Config : ip6Config;
+	if (routeConfig != NULL) {
+		const char* gw = nm_ip_config_get_gateway(routeConfig);
 		if (gw != NULL)
 			gateway = gw;
 
-		const char* const* nameservers = nm_ip_config_get_nameservers(ip4Config);
+		const char* const* nameservers
+			= nm_ip_config_get_nameservers(routeConfig);
 		if (nameservers != NULL) {
 			for (int i = 0; nameservers[i] != NULL; i++) {
 				if (!dns.IsEmpty())
@@ -551,6 +609,8 @@ _FillIP4ConfigFields(NMDevice* device, BMessage* outInfo)
 	}
 	outInfo->AddString(kNMFieldGateway, gateway);
 	outInfo->AddString(kNMFieldDNS, dns);
+
+	_FillIPConfigAddresses(ip4Config, ip6Config, outInfo);
 
 	NMActiveConnection* active = nm_device_get_active_connection(device);
 	NMConnection* connection = active != NULL
@@ -721,6 +781,14 @@ NMBackend::_HandleDeviceAdded(void* deviceRaw)
 			G_CALLBACK(_OnDeviceStateNotify), this);
 		fDeviceStateHandlers[path] = id;
 
+		// IP config is a separate property from state: DHCP can publish AddressData without a state transition.
+		gulong ip4Id = g_signal_connect(device, "notify::ip4-config",
+			G_CALLBACK(_OnDeviceIPConfigNotify), this);
+		gulong ip6Id = g_signal_connect(device, "notify::ip6-config",
+			G_CALLBACK(_OnDeviceIPConfigNotify), this);
+		fDeviceIP4Handlers[path] = ip4Id;
+		fDeviceIP6Handlers[path] = ip6Id;
+
 		if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
 			gulong addedId = g_signal_connect(device, "access-point-added",
 				G_CALLBACK(_OnAccessPointAdded), this);
@@ -752,6 +820,18 @@ NMBackend::_HandleDeviceRemoved(void* deviceRaw)
 		if (it != fDeviceStateHandlers.end()) {
 			g_signal_handler_disconnect(device, it->second);
 			fDeviceStateHandlers.erase(it);
+		}
+
+		std::map<BString, gulong>::iterator ip4It = fDeviceIP4Handlers.find(path);
+		if (ip4It != fDeviceIP4Handlers.end()) {
+			g_signal_handler_disconnect(device, ip4It->second);
+			fDeviceIP4Handlers.erase(ip4It);
+		}
+
+		std::map<BString, gulong>::iterator ip6It = fDeviceIP6Handlers.find(path);
+		if (ip6It != fDeviceIP6Handlers.end()) {
+			g_signal_handler_disconnect(device, ip6It->second);
+			fDeviceIP6Handlers.erase(ip6It);
 		}
 
 		std::map<BString, gulong>::iterator addedIt = fAPAddedHandlers.find(path);
@@ -786,6 +866,21 @@ NMBackend::_HandleDeviceStateChanged(void* deviceRaw)
 		message.AddString(kNMFieldPath, path);
 	message.AddUInt32(kNMFieldState, nm_device_get_state(device));
 	_RefreshSnapshotAndNotify(NOTIFICATION_DEVICE_STATE_CHANGED, message);
+}
+
+
+void
+NMBackend::_HandleDeviceIPConfigChanged(void* deviceRaw)
+{
+	NMDevice* device = (NMDevice*)deviceRaw;
+	const char* path = nm_device_get_path(device);
+
+	// IP config can land after the activating state notification or change on renew, so refresh the
+	// snapshot and let the preflet re-read.
+	BMessage message((uint32)NOTIFICATION_DEVICE_IP_CHANGED);
+	if (path != NULL)
+		message.AddString(kNMFieldPath, path);
+	_RefreshSnapshotAndNotify(NOTIFICATION_DEVICE_IP_CHANGED, message);
 }
 
 
@@ -878,6 +973,14 @@ NMBackend::_OnDeviceStateNotify(GObject* device, GParamSpec* pspec,
 
 
 void
+NMBackend::_OnDeviceIPConfigNotify(GObject* device, GParamSpec* pspec,
+	void* userData)
+{
+	((NMBackend*)userData)->_HandleDeviceIPConfigChanged(device);
+}
+
+
+void
 NMBackend::_OnActiveConnectionNotify(GObject* client, GParamSpec* pspec,
 	void* userData)
 {
@@ -933,6 +1036,13 @@ NMBackend::_ConnectClientSignals()
 			gulong id = g_signal_connect(device, "notify::state",
 				G_CALLBACK(_OnDeviceStateNotify), this);
 			fDeviceStateHandlers[path] = id;
+
+			gulong ip4Id = g_signal_connect(device, "notify::ip4-config",
+				G_CALLBACK(_OnDeviceIPConfigNotify), this);
+			gulong ip6Id = g_signal_connect(device, "notify::ip6-config",
+				G_CALLBACK(_OnDeviceIPConfigNotify), this);
+			fDeviceIP4Handlers[path] = ip4Id;
+			fDeviceIP6Handlers[path] = ip6Id;
 
 			if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
 				gulong addedId = g_signal_connect(device, "access-point-added",

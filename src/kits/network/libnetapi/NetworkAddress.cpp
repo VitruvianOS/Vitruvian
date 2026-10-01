@@ -869,10 +869,11 @@ BNetworkAddress::PrefixLength() const
 		{
 			sockaddr_in6& mask = (sockaddr_in6&)fAddress;
 
-			// TODO : see if we can use the optimized addr_bitcount for this
+			// Prefix masks are contiguous high-order bits, so count from the MSB down like the IPv4
+			// addr_bitcount() path; counting from the LSB gave the wrong prefix for most masks.
 			ssize_t result = 0;
 			for (uint8 i = 0; i < sizeof(in6_addr); i++) {
-				for (uint8 j = 0; j < 8; j++) {
+				for (int8 j = 7; j >= 0; j--) {
 					if (!(mask.sin6_addr.s6_addr[i] & (1 << j)))
 						return result;
 					result++;

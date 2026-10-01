@@ -78,9 +78,9 @@ public:
 			int32			FixType() const;
 			int32			SatellitesInView() const;
 			int32			SatellitesInUse() const;
-			const char*		DevicePath() const;
-			const char*		SourceName() const;
-			const char*		LastError() const;
+			BString			DevicePath() const;
+			BString			SourceName() const;
+			BString			LastError() const;
 
 			void			LastLocation(double* latitude, double* longitude,
 								double* altitude, double* accuracy,

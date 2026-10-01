@@ -476,31 +476,34 @@ LocationProvider::SatellitesInUse() const
 }
 
 
-const char*
+BString
 LocationProvider::DevicePath() const
 {
+	// By value: the looper may reassign the string once the lock drops.
 	fLock.Lock();
-	const char* path = fDevicePath.String();
+	BString path = fDevicePath;
 	fLock.Unlock();
 	return path;
 }
 
 
-const char*
+BString
 LocationProvider::SourceName() const
 {
+	// By value: the looper may reassign the string once the lock drops.
 	fLock.Lock();
-	const char* source = fSourceName.String();
+	BString source = fSourceName;
 	fLock.Unlock();
 	return source;
 }
 
 
-const char*
+BString
 LocationProvider::LastError() const
 {
+	// By value: the looper may reassign the string once the lock drops.
 	fLock.Lock();
-	const char* error = fLastError.String();
+	BString error = fLastError;
 	fLock.Unlock();
 	return error;
 }

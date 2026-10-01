@@ -1,0 +1,79 @@
+#!/bin/sh
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+#
+# vos-set-power-actions: what the power, suspend and hibernate keys, the
+# lid and inactivity do, system-wide. Writes a logind drop-in, gated by
+# pkexec (polkit action org.vitruvian.power.set-actions).
+#
+# Usage: vos-set-power-actions KEY=VALUE...
+#   HandlePowerKey, HandleSuspendKey, HandleHibernateKey, HandleLidSwitch:
+#       ignore | poweroff | suspend | hibernate
+#   IdleAction: ignore | suspend | hibernate
+#   IdleActionSec: seconds, 60..86400
+# Keys not given keep their current value in the drop-in.
+set -eu
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "must run as root" >&2
+    exit 1
+fi
+
+DIR=/etc/systemd/logind.conf.d
+CONF=$DIR/60-vos-power.conf
+KEYS="HandlePowerKey HandleSuspendKey HandleHibernateKey HandleLidSwitch IdleAction IdleActionSec"
+
+# Current values first, so a call changes only what it names.
+for k in $KEYS; do
+    v=""
+    if [ -f "$CONF" ]; then
+        v="$(sed -n "s/^$k=//p" "$CONF" | tail -n1)"
+    fi
+    eval "cur_$k=\$v"
+done
+
+[ $# -gt 0 ] || { echo "nothing to set" >&2; exit 2; }
+for arg in "$@"; do
+    k="${arg%%=*}"
+    v="${arg#*=}"
+    case "$k" in
+        HandlePowerKey|HandleSuspendKey|HandleHibernateKey|HandleLidSwitch)
+            case "$v" in
+                ignore|poweroff|suspend|hibernate) ;;
+                *) echo "invalid value for $k: $v" >&2; exit 2 ;;
+            esac ;;
+        IdleAction)
+            case "$v" in
+                ignore|suspend|hibernate) ;;
+                *) echo "invalid value for $k: $v" >&2; exit 2 ;;
+            esac ;;
+        IdleActionSec)
+            case "$v" in
+                ''|*[!0-9]*) echo "invalid value for $k: $v" >&2; exit 2 ;;
+            esac
+            if [ "$v" -lt 60 ] || [ "$v" -gt 86400 ]; then
+                echo "out of range for $k: $v" >&2; exit 2
+            fi ;;
+        *) echo "unknown key: $k" >&2; exit 2 ;;
+    esac
+    eval "cur_$k=\$v"
+done
+
+mkdir -p "$DIR"
+tmp="$(mktemp "$DIR/.60-vos-power.XXXXXX")"
+{
+    echo "# Written by the Power preferences (vos-set-power-actions)."
+    echo "[Login]"
+    for k in $KEYS; do
+        eval "v=\$cur_$k"
+        [ -n "$v" ] || continue
+        echo "$k=$v"
+        # The lid acts the same on external power.
+        [ "$k" = HandleLidSwitch ] && echo "HandleLidSwitchExternalPower=$v"
+    done
+} > "$tmp"
+chmod 0644 "$tmp"
+mv -f "$tmp" "$CONF"
+
+# logind rereads its configuration on reload, without ending sessions.
+systemctl reload systemd-logind.service

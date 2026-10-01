@@ -42,6 +42,10 @@ install(PROGRAMS data/libexec/vos-set-autologin
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.user.policy
   DESTINATION /usr/share/polkit-1/actions/)
+install(PROGRAMS data/libexec/vos-set-power-actions
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.power.policy
+  DESTINATION /usr/share/polkit-1/actions/)
 install(FILES data/polkit-1/actions/org.vitruvian.installer.policy
   DESTINATION /usr/share/polkit-1/actions/)
 install(FILES data/polkit-1/rules.d/49-vitruvian-installer.rules

@@ -16,65 +16,46 @@ class BMenuField;
 class BStringView;
 
 
+// Every control is backed by something that acts on it: logind (via vos-set-power-actions) for keys,
+// lid and inactivity, app_server for display off, the registrar for battery, PowerStatus for notices.
 class PowerView : public BView {
 public:
 								PowerView();
 	virtual						~PowerView();
 
-	static PowerView*			Create();
+	static	PowerView*			Create();
 
-	virtual void				AttachedToWindow();
-	virtual void				MessageReceived(BMessage* message);
+	virtual	void				AttachedToWindow();
+	virtual	void				MessageReceived(BMessage* message);
 
 private:
-	void						_UpdateBatteryDisplay();
-	void						_LoadSettings();
-	void						_SaveSettings();
+			void				_UpdateBatteryDisplay();
+			void				_LoadLogindActions();
+			void				_ApplyLogindAction(BMessage* message);
+	static	status_t			_HelperThread(void* data);
+			void				_SetLogindMenusEnabled(bool enabled);
+			void				_LoadSettings();
+			void				_SaveSettings();
+			void				_ToggleDeskbarItem();
 
-	PowerStatusDriverInterface*	fDriverInterface;
+			PowerStatusDriverInterface* fDriverInterface;
 
-	// Battery status
-	BStringView*				fBatteryStateLabel;
-	BStringView*				fBatteryPercentLabel;
-	BStringView*				fBatteryTimeLabel;
+			BStringView*		fBatteryStateLabel;
+			BStringView*		fBatteryPercentLabel;
+			BStringView*		fBatteryTimeLabel;
 
-	// General controls
-	BMenuField*					fPowerButtonMenu;
-	BMenuField*					fSleepButtonMenu;
-	BMenuField*					fHibernateButtonMenu;
-	BMenuField*					fBatteryButtonMenu;
-	BCheckBox*					fStatusNotificationsCheckBox;
-	BCheckBox*					fSystemTrayIconCheckBox;
+			BMenuField*			fPowerKeyMenu;
+			BMenuField*			fSuspendKeyMenu;
+			BMenuField*			fHibernateKeyMenu;
+			BMenuField*			fLidMenu;
+			BMenuField*			fIdleMenu;
 
-	// System controls
-	BMenuField*					fSystemSleepModeMenu;
-	BMenuField*					fIdleTimeoutMenu;
-	BCheckBox*					fLockScreenOnSleepCheckBox;
+			BMenuField*			fDisplayOffMenu;
+			BMenuField*			fBatteryCriticalMenu;
+			BCheckBox*			fNotificationsCheckBox;
+			BCheckBox*			fDeskbarCheckBox;
 
-	// Display controls
-	BCheckBox*					fDisplayPowerManagementCheckBox;
-	BMenuField*					fDisplaySleepAfterMenu;
-	BMenuField*					fDisplaySwitchOffMenu;
-
-	// Lid / auto-hibernate (Phase IV)
-	BMenuField*					fLidCloseActionMenu;
-	BCheckBox*					fAutoHibernateCheckBox;
-
-	static const uint32		kMsgPowerButtonChanged = 'pBch';
-	static const uint32		kMsgSleepButtonChanged = 'sBch';
-	static const uint32		kMsgHibernateButtonChanged = 'hBch';
-	static const uint32		kMsgBatteryButtonChanged = 'bBch';
-	static const uint32		kMsgStatusNotificationsToggled = 'sNtf';
-	static const uint32		kMsgSystemTrayIconToggled = 'sTrI';
-	static const uint32		kMsgSystemSleepModeChanged = 'sSlM';
-	static const uint32		kMsgIdleTimeoutChanged = 'iTmc';
-	static const uint32		kMsgLockScreenOnSleepToggled = 'lSsl';
-	static const uint32		kMsgDisplayPowerManagementToggled = 'dPwr';
-	static const uint32		kMsgDisplaySleepAfterChanged = 'dSlp';
-	static const uint32		kMsgDisplaySwitchOffChanged = 'dSwo';
-	static const uint32		kMsgLidCloseChanged = 'lCch';
-	static const uint32		kMsgAutoHibernateToggled = 'aHib';
-	static const uint32		kMsgUpdateBattery = 'uBat';
+			bool				fCanHibernate;
 };
 
 

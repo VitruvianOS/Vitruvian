@@ -7,7 +7,7 @@ Application(Power
 	${CMAKE_SOURCE_DIR}/src/apps/powerstatus/APMDriverInterface.cpp
 	${CMAKE_SOURCE_DIR}/src/apps/powerstatus/DriverInterface.cpp
 	${CMAKE_SOURCE_DIR}/src/apps/powerstatus/SysFSDriverInterface.cpp
-	LIBS be shared localestub
+	LIBS be shared localestub systemd
 	RDEF Power.rdef
 )
 

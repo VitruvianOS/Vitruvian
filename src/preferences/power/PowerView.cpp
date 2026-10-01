@@ -6,21 +6,29 @@
 
 #include "PowerView.h"
 
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <systemd/sd-bus.h>
 
 #include <Box.h>
 #include <Catalog.h>
 #include <CheckBox.h>
+#include <Deskbar.h>
 #include <File.h>
 #include <FindDirectory.h>
 #include <LayoutBuilder.h>
-#include <Locale.h>
 #include <Menu.h>
-#include <MenuItem.h>
 #include <MenuField.h>
+#include <MenuItem.h>
 #include <Path.h>
-#include <SeparatorView.h>
-#include <SpaceLayoutItem.h>
+#include <Roster.h>
+#include <String.h>
+#include <StringFormat.h>
 #include <StringView.h>
 
 #include "ACPIDriverInterface.h"
@@ -32,33 +40,184 @@
 #define B_TRANSLATION_CONTEXT "Power"
 
 
-// Settings keys — must match Registrar.cpp exactly.
-static const char* kSettingsPowerButtonAction = "power:power_button_action";
-static const char* kSettingsLidCloseAction = "power:lid_close_action";
-static const char* kSettingsAutoHibernateCritical = "power:auto_hibernate_critical";
+static const uint32 kMsgLogindActionChanged = 'lgAc';
+static const uint32 kMsgHelperDone = 'hlDn';
+static const uint32 kMsgUserSettingChanged = 'usCh';
+static const uint32 kMsgDeskbarToggled = 'dbTg';
 
-// Additional settings keys (preflet UI only — stored for future registrar
-// integration; the registrar does not read these yet).
-static const char* kSettingsSleepButtonAction = "power:sleep_button_action";
-static const char* kSettingsHibernateButtonAction = "power:hibernate_button_action";
-static const char* kSettingsBatteryButtonAction = "power:battery_button_action";
-static const char* kSettingsStatusNotifications = "power:status_notifications";
-static const char* kSettingsSystemTrayIcon = "power:system_tray_icon";
-static const char* kSettingsSystemSleepMode = "power:system_sleep_mode";
-static const char* kSettingsIdleTimeout = "power:idle_timeout";
-static const char* kSettingsLockScreenOnSleep = "power:lock_screen_on_sleep";
-static const char* kSettingsDisplayPowerManagement = "power:display_power_management";
-static const char* kSettingsDisplaySleepAfter = "power:display_sleep_after";
-static const char* kSettingsDisplaySwitchOff = "power:display_switch_off";
+// Read by app_server, the registrar and PowerStatus.
+static const char* kSettingsFile = "Power settings";
+static const char* kDisplayOffKey = "power:display_off_minutes";
+static const char* kBatteryCriticalKey = "power:battery_critical_action";
+static const char* kNotificationsKey = "power:status_notifications";
+static const int32 kDefaultDisplayOff = 10;
+static const char* kDefaultBatteryCritical = "hibernate";
+
+static const char* kHelper = "/usr/libexec/vos-set-power-actions";
+static const char* kPowerStatusSignature = "application/x-vnd.Haiku-PowerStatus";
+static const char* kPowerStatusItem = "PowerStatus";
+
+// app_server reports the session idle this long after the last input;
+// logind counts IdleActionSec from there.
+static const int32 kIdleHintDelay = 30;
+
+static const char* kLogin1 = "org.freedesktop.login1";
+static const char* kLogin1Path = "/org/freedesktop/login1";
+static const char* kLogin1Manager = "org.freedesktop.login1.Manager";
 
 
-//	#pragma mark - Helpers
+struct Choice {
+	const char*	label;
+	const char*	value;
+};
+
+static const Choice kKeyChoices[] = {
+	{ B_TRANSLATE_MARK("Power off"), "poweroff" },
+	{ B_TRANSLATE_MARK("Suspend"), "suspend" },
+	{ B_TRANSLATE_MARK("Hibernate"), "hibernate" },
+	{ B_TRANSLATE_MARK("Do nothing"), "ignore" },
+	{ NULL, NULL }
+};
+
+static const Choice kSleepKeyChoices[] = {
+	{ B_TRANSLATE_MARK("Suspend"), "suspend" },
+	{ B_TRANSLATE_MARK("Hibernate"), "hibernate" },
+	{ B_TRANSLATE_MARK("Do nothing"), "ignore" },
+	{ NULL, NULL }
+};
+
+static const Choice kBatteryChoices[] = {
+	{ B_TRANSLATE_MARK("Hibernate"), "hibernate" },
+	{ B_TRANSLATE_MARK("Suspend"), "suspend" },
+	{ B_TRANSLATE_MARK("Power off"), "poweroff" },
+	{ B_TRANSLATE_MARK("Do nothing"), "ignore" },
+	{ NULL, NULL }
+};
+
+static const int32 kIdleMinutes[] = { 0, 5, 10, 15, 30, 60, 120, -1 };
+static const int32 kDisplayMinutes[] = { 0, 1, 2, 5, 10, 15, 30, 60, -1 };
 
 
+struct HelperJob {
+	BMessenger	target;
+	BString		arguments[2];
+	int32		count;
+};
 
 
+static BString
+minutes_label(int32 minutes)
+{
+	if (minutes == 0)
+		return B_TRANSLATE("Never");
 
-//	#pragma mark - Construction
+	static BStringFormat sFormat(B_TRANSLATE(
+		"{0, plural, one{# minute} other{# minutes}}"));
+	static BStringFormat sHourFormat(B_TRANSLATE(
+		"{0, plural, one{# hour} other{# hours}}"));
+	BString label;
+	if (minutes % 60 == 0)
+		sHourFormat.Format(label, minutes / 60);
+	else
+		sFormat.Format(label, minutes);
+	return label;
+}
+
+
+static BMenuField*
+choice_menu(const char* name, const char* label, uint32 what,
+	const char* key, const Choice* choices, bool canHibernate)
+{
+	BMenu* menu = new BMenu(name);
+	menu->SetLabelFromMarked(true);
+	for (int32 i = 0; choices[i].label != NULL; i++) {
+		if (!canHibernate && strcmp(choices[i].value, "hibernate") == 0)
+			continue;
+		BMessage* message = new BMessage(what);
+		if (key != NULL)
+			message->AddString("key", key);
+		message->AddString("value", choices[i].value);
+		menu->AddItem(new BMenuItem(B_TRANSLATE_NOCOLLECT(choices[i].label),
+			message));
+	}
+	return new BMenuField(name, label, menu);
+}
+
+
+static BMenuField*
+minutes_menu(const char* name, const char* label, uint32 what,
+	const char* key, const int32* minutes)
+{
+	BMenu* menu = new BMenu(name);
+	menu->SetLabelFromMarked(true);
+	for (int32 i = 0; minutes[i] >= 0; i++) {
+		BMessage* message = new BMessage(what);
+		if (key != NULL)
+			message->AddString("key", key);
+		message->AddInt32("minutes", minutes[i]);
+		menu->AddItem(new BMenuItem(minutes_label(minutes[i]), message));
+	}
+	return new BMenuField(name, label, menu);
+}
+
+
+// Drops the item mark_value() adds for a value the menu does not offer.
+static void
+remove_other(BMenu* menu)
+{
+	for (int32 i = menu->CountItems() - 1; i >= 0; i--) {
+		if (menu->ItemAt(i)->Message() == NULL)
+			delete menu->RemoveItem(i);
+	}
+}
+
+
+// Marks the item carrying this value. A value the menu does not offer
+// (set outside V\OS, e.g. "lock") shows as a disabled item of its own.
+static void
+mark_value(BMenuField* field, const char* value)
+{
+	BMenu* menu = field->Menu();
+	remove_other(menu);
+	for (int32 i = 0; i < menu->CountItems(); i++) {
+		BMenuItem* item = menu->ItemAt(i);
+		if (strcmp(item->Message()->GetString("value", ""), value) == 0) {
+			item->SetMarked(true);
+			return;
+		}
+	}
+	BMenuItem* other = new BMenuItem(value, NULL);
+	other->SetEnabled(false);
+	menu->AddItem(other);
+	other->SetMarked(true);
+}
+
+
+static void
+mark_minutes(BMenuField* field, int32 minutes)
+{
+	BMenu* menu = field->Menu();
+	remove_other(menu);
+	for (int32 i = 0; i < menu->CountItems(); i++) {
+		BMenuItem* item = menu->ItemAt(i);
+		if (item->Message()->GetInt32("minutes", -1) == minutes) {
+			item->SetMarked(true);
+			return;
+		}
+	}
+}
+
+
+static BBox*
+titled_box(const char* name, const char* label)
+{
+	BBox* box = new BBox(name);
+	box->SetLabel(label);
+	return box;
+}
+
+
+//	#pragma mark - PowerView
 
 
 PowerView::PowerView()
@@ -68,20 +227,16 @@ PowerView::PowerView()
 	fBatteryStateLabel(NULL),
 	fBatteryPercentLabel(NULL),
 	fBatteryTimeLabel(NULL),
-	fPowerButtonMenu(NULL),
-	fSleepButtonMenu(NULL),
-	fHibernateButtonMenu(NULL),
-	fBatteryButtonMenu(NULL),
-	fStatusNotificationsCheckBox(NULL),
-	fSystemTrayIconCheckBox(NULL),
-	fSystemSleepModeMenu(NULL),
-	fIdleTimeoutMenu(NULL),
-	fLockScreenOnSleepCheckBox(NULL),
-	fDisplayPowerManagementCheckBox(NULL),
-	fDisplaySleepAfterMenu(NULL),
-	fDisplaySwitchOffMenu(NULL),
-	fLidCloseActionMenu(NULL),
-	fAutoHibernateCheckBox(NULL)
+	fPowerKeyMenu(NULL),
+	fSuspendKeyMenu(NULL),
+	fHibernateKeyMenu(NULL),
+	fLidMenu(NULL),
+	fIdleMenu(NULL),
+	fDisplayOffMenu(NULL),
+	fBatteryCriticalMenu(NULL),
+	fNotificationsCheckBox(NULL),
+	fDeskbarCheckBox(NULL),
+	fCanHibernate(false)
 {
 }
 
@@ -100,16 +255,27 @@ PowerView*
 PowerView::Create()
 {
 	PowerView* view = new PowerView();
-
 	view->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
-	// ---- Battery status box ----
-	BBox* batteryBox = new BBox("Battery status");
-	batteryBox->SetLabel(B_TRANSLATE("Battery"));
+	// Hibernate entries only where it can work (swap, resume device).
+	sd_bus* bus = NULL;
+	if (sd_bus_open_system(&bus) >= 0) {
+		sd_bus_message* reply = NULL;
+		const char* answer = NULL;
+		if (sd_bus_call_method(bus, kLogin1, kLogin1Path, kLogin1Manager,
+				"CanHibernate", NULL, &reply, "") >= 0
+			&& sd_bus_message_read(reply, "s", &answer) >= 0
+			&& answer != NULL)
+			view->fCanHibernate = strcmp(answer, "yes") == 0
+				|| strcmp(answer, "challenge") == 0;
+		sd_bus_message_unref(reply);
+		sd_bus_flush_close_unref(bus);
+	}
 
+	BBox* batteryBox = titled_box("battery", B_TRANSLATE("Battery"));
 	BLayoutBuilder::Group<>(batteryBox, B_VERTICAL, 0)
 		.Add(view->fBatteryStateLabel = new BStringView("state",
-			B_TRANSLATE("State: detecting...")))
+			B_TRANSLATE("State: detecting" B_UTF8_ELLIPSIS)))
 		.Add(view->fBatteryPercentLabel = new BStringView("percent",
 			B_TRANSLATE("Charge: --")))
 		.Add(view->fBatteryTimeLabel = new BStringView("time",
@@ -117,245 +283,68 @@ PowerView::Create()
 		.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,
 			B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING);
 
-	// ---- General tab controls ----
-	BBox* generalBox = new BBox("General");
-	generalBox->SetLabel(B_TRANSLATE("General"));
+	view->fPowerKeyMenu = choice_menu("power_key",
+		B_TRANSLATE("Power button:"), kMsgLogindActionChanged,
+		"HandlePowerKey", kKeyChoices, view->fCanHibernate);
+	view->fSuspendKeyMenu = choice_menu("suspend_key",
+		B_TRANSLATE("Sleep button:"), kMsgLogindActionChanged,
+		"HandleSuspendKey", kSleepKeyChoices, view->fCanHibernate);
+	view->fHibernateKeyMenu = choice_menu("hibernate_key",
+		B_TRANSLATE("Hibernate button:"), kMsgLogindActionChanged,
+		"HandleHibernateKey", kSleepKeyChoices, view->fCanHibernate);
+	view->fLidMenu = choice_menu("lid", B_TRANSLATE("Closing the lid:"),
+		kMsgLogindActionChanged, "HandleLidSwitch", kKeyChoices,
+		view->fCanHibernate);
+	view->fIdleMenu = minutes_menu("idle",
+		B_TRANSLATE("Suspend when inactive for:"), kMsgLogindActionChanged,
+		"IdleAction", kIdleMinutes);
 
-	// Power button action
-	BMenu* pwrMenu = new BMenu("power_button");
-	pwrMenu->AddItem(new BMenuItem("Show shutdown dialog",
-		new BMessage(PowerView::kMsgPowerButtonChanged)));
-	pwrMenu->AddItem(new BMenuItem("Suspend",
-		new BMessage(PowerView::kMsgPowerButtonChanged)));
-	pwrMenu->AddItem(new BMenuItem("Hibernate",
-		new BMessage(PowerView::kMsgPowerButtonChanged)));
-	pwrMenu->AddItem(new BMenuItem("Power off",
-		new BMessage(PowerView::kMsgPowerButtonChanged)));
-	pwrMenu->AddItem(new BMenuItem("Do nothing",
-		new BMessage(PowerView::kMsgPowerButtonChanged)));
-	pwrMenu->SetLabelFromMarked(true);
-	pwrMenu->ItemAt(0)->SetMarked(true);
-
-	view->fPowerButtonMenu = new BMenuField("power_button",
-		B_TRANSLATE("When pressing the power button:"), pwrMenu);
-
-	// Sleep button action
-	BMenu* sleepMenu = new BMenu("sleep_button");
-	sleepMenu->AddItem(new BMenuItem("Suspend",
-		new BMessage(PowerView::kMsgSleepButtonChanged)));
-	sleepMenu->AddItem(new BMenuItem("Hibernate",
-		new BMessage(PowerView::kMsgSleepButtonChanged)));
-	sleepMenu->AddItem(new BMenuItem("Do nothing",
-		new BMessage(PowerView::kMsgSleepButtonChanged)));
-	sleepMenu->SetLabelFromMarked(true);
-	sleepMenu->ItemAt(0)->SetMarked(true);
-
-	view->fSleepButtonMenu = new BMenuField("sleep_button",
-		B_TRANSLATE("When pressing the sleep button:"), sleepMenu);
-
-	// Hibernate button action
-	BMenu* hibMenu = new BMenu("hibernate_button");
-	hibMenu->AddItem(new BMenuItem("Hibernate",
-		new BMessage(PowerView::kMsgHibernateButtonChanged)));
-	hibMenu->AddItem(new BMenuItem("Suspend",
-		new BMessage(PowerView::kMsgHibernateButtonChanged)));
-	hibMenu->AddItem(new BMenuItem("Do nothing",
-		new BMessage(PowerView::kMsgHibernateButtonChanged)));
-	hibMenu->SetLabelFromMarked(true);
-	hibMenu->ItemAt(0)->SetMarked(true);
-
-	view->fHibernateButtonMenu = new BMenuField("hibernate_button",
-		B_TRANSLATE("When pressing the hibernate button:"), hibMenu);
-
-	// Battery button action
-	BMenu* batMenu = new BMenu("battery_button");
-	batMenu->AddItem(new BMenuItem("Hibernate",
-		new BMessage(PowerView::kMsgBatteryButtonChanged)));
-	batMenu->AddItem(new BMenuItem("Suspend",
-		new BMessage(PowerView::kMsgBatteryButtonChanged)));
-	batMenu->AddItem(new BMenuItem("Shutdown",
-		new BMessage(PowerView::kMsgBatteryButtonChanged)));
-	batMenu->AddItem(new BMenuItem("Do nothing",
-		new BMessage(PowerView::kMsgBatteryButtonChanged)));
-	batMenu->SetLabelFromMarked(true);
-	batMenu->ItemAt(0)->SetMarked(true);
-
-	view->fBatteryButtonMenu = new BMenuField("battery_button",
-		B_TRANSLATE("When battery critical:"), batMenu);
-
-	// Status notifications toggle
-	view->fStatusNotificationsCheckBox = new BCheckBox("status_notifications",
-		B_TRANSLATE("Show battery status notifications"),
-		new BMessage(PowerView::kMsgStatusNotificationsToggled));
-	view->fStatusNotificationsCheckBox->SetValue(1);  // ON by default
-
-	// System tray icon toggle
-	view->fSystemTrayIconCheckBox = new BCheckBox("system_tray_icon",
-		B_TRANSLATE("Show system tray icon"),
-		new BMessage(PowerView::kMsgSystemTrayIconToggled));
-	view->fSystemTrayIconCheckBox->SetValue(0);  // OFF by default
-
-	BLayoutBuilder::Group<>(generalBox, B_VERTICAL, 0)
-		.Add(view->fPowerButtonMenu)
-		.Add(view->fSleepButtonMenu)
-		.Add(view->fHibernateButtonMenu)
-		.Add(view->fBatteryButtonMenu)
-		.Add(view->fStatusNotificationsCheckBox)
-		.Add(view->fSystemTrayIconCheckBox)
+	BBox* systemBox = titled_box("system",
+		B_TRANSLATE("Buttons and lid (all users)"));
+	BLayoutBuilder::Grid<>(systemBox, B_USE_DEFAULT_SPACING,
+			B_USE_SMALL_SPACING)
+		.AddMenuField(view->fPowerKeyMenu, 0, 0)
+		.AddMenuField(view->fSuspendKeyMenu, 0, 1)
+		.AddMenuField(view->fHibernateKeyMenu, 0, 2)
+		.AddMenuField(view->fLidMenu, 0, 3)
+		.AddMenuField(view->fIdleMenu, 0, 4)
 		.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,
 			B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING);
 
-	// ---- System tab controls ----
-	BBox* systemBox = new BBox("System");
-	systemBox->SetLabel(B_TRANSLATE("System"));
+	view->fDisplayOffMenu = minutes_menu("display_off",
+		B_TRANSLATE("Turn off the display after:"), kMsgUserSettingChanged,
+		NULL, kDisplayMinutes);
+	view->fBatteryCriticalMenu = choice_menu("battery_critical",
+		B_TRANSLATE("When the battery is critical:"), kMsgUserSettingChanged,
+		NULL, kBatteryChoices, view->fCanHibernate);
+	view->fNotificationsCheckBox = new BCheckBox("notifications",
+		B_TRANSLATE("Notify when the battery is low"),
+		new BMessage(kMsgUserSettingChanged));
+	view->fDeskbarCheckBox = new BCheckBox("deskbar",
+		B_TRANSLATE("Show the battery in the Deskbar"),
+		new BMessage(kMsgDeskbarToggled));
 
-	// System sleep mode
-	BMenu* sleepModeMenu = new BMenu("sleep_mode");
-	sleepModeMenu->AddItem(new BMenuItem("Suspend",
-		new BMessage(PowerView::kMsgSystemSleepModeChanged)));
-	sleepModeMenu->AddItem(new BMenuItem("Hibernate",
-		new BMessage(PowerView::kMsgSystemSleepModeChanged)));
-	sleepModeMenu->SetLabelFromMarked(true);
-	sleepModeMenu->ItemAt(0)->SetMarked(true);
-
-	view->fSystemSleepModeMenu = new BMenuField("sleep_mode",
-		B_TRANSLATE("System sleep mode:"), sleepModeMenu);
-
-	// Idle timeout
-	BMenu* idleMenu = new BMenu("idle_timeout");
-	idleMenu->AddItem(new BMenuItem("Never",
-		new BMessage(PowerView::kMsgIdleTimeoutChanged)));
-	idleMenu->AddItem(new BMenuItem("5 minutes",
-		new BMessage(PowerView::kMsgIdleTimeoutChanged)));
-	idleMenu->AddItem(new BMenuItem("10 minutes",
-		new BMessage(PowerView::kMsgIdleTimeoutChanged)));
-	idleMenu->AddItem(new BMenuItem("15 minutes",
-		new BMessage(PowerView::kMsgIdleTimeoutChanged)));
-	idleMenu->AddItem(new BMenuItem("30 minutes",
-		new BMessage(PowerView::kMsgIdleTimeoutChanged)));
-	idleMenu->AddItem(new BMenuItem("1 hour",
-		new BMessage(PowerView::kMsgIdleTimeoutChanged)));
-	idleMenu->AddItem(new BMenuItem("2 hours",
-		new BMessage(PowerView::kMsgIdleTimeoutChanged)));
-	idleMenu->SetLabelFromMarked(true);
-	idleMenu->ItemAt(0)->SetMarked(true);
-
-	view->fIdleTimeoutMenu = new BMenuField("idle_timeout",
-		B_TRANSLATE("When inactive for:"), idleMenu);
-
-	// Lock screen on sleep
-	view->fLockScreenOnSleepCheckBox = new BCheckBox("lock_screen_on_sleep",
-		B_TRANSLATE("Lock screen on sleep"),
-		new BMessage(PowerView::kMsgLockScreenOnSleepToggled));
-	view->fLockScreenOnSleepCheckBox->SetValue(1);  // ON by default
-
-	BLayoutBuilder::Group<>(systemBox, B_VERTICAL, 0)
-		.Add(view->fSystemSleepModeMenu)
-		.Add(view->fIdleTimeoutMenu)
-		.Add(view->fLockScreenOnSleepCheckBox)
+	BBox* userBox = titled_box("user", B_TRANSLATE("Display and battery"));
+	BLayoutBuilder::Grid<>(userBox, B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING)
+		.AddMenuField(view->fDisplayOffMenu, 0, 0)
+		.AddMenuField(view->fBatteryCriticalMenu, 0, 1)
+		.Add(view->fNotificationsCheckBox, 0, 2, 2)
+		.Add(view->fDeskbarCheckBox, 0, 3, 2)
 		.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,
 			B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING);
 
-	// ---- Display tab controls ----
-	BBox* displayBox = new BBox("Display");
-	displayBox->SetLabel(B_TRANSLATE("Display"));
-
-	// Display power management toggle
-	view->fDisplayPowerManagementCheckBox = new BCheckBox(
-		"display_power_management",
-		B_TRANSLATE("Enable display power management"),
-		new BMessage(PowerView::kMsgDisplayPowerManagementToggled));
-	view->fDisplayPowerManagementCheckBox->SetValue(1);  // ON by default
-
-	// Display sleep after
-	BMenu* displaySleepMenu = new BMenu("display_sleep");
-	displaySleepMenu->AddItem(new BMenuItem("Never",
-		new BMessage(PowerView::kMsgDisplaySleepAfterChanged)));
-	displaySleepMenu->AddItem(new BMenuItem("5 minutes",
-		new BMessage(PowerView::kMsgDisplaySleepAfterChanged)));
-	displaySleepMenu->AddItem(new BMenuItem("10 minutes",
-		new BMessage(PowerView::kMsgDisplaySleepAfterChanged)));
-	displaySleepMenu->AddItem(new BMenuItem("15 minutes",
-		new BMessage(PowerView::kMsgDisplaySleepAfterChanged)));
-	displaySleepMenu->AddItem(new BMenuItem("30 minutes",
-		new BMessage(PowerView::kMsgDisplaySleepAfterChanged)));
-	displaySleepMenu->SetLabelFromMarked(true);
-	displaySleepMenu->ItemAt(2)->SetMarked(true);  // Default: 10 minutes
-
-	view->fDisplaySleepAfterMenu = new BMenuField("display_sleep_after",
-		B_TRANSLATE("Put display to sleep after:"), displaySleepMenu);
-
-	// Display switch off
-	BMenu* displaySwitchOffMenu = new BMenu("display_switch_off");
-	displaySwitchOffMenu->AddItem(new BMenuItem("Never",
-		new BMessage(PowerView::kMsgDisplaySwitchOffChanged)));
-	displaySwitchOffMenu->AddItem(new BMenuItem("5 minutes",
-		new BMessage(PowerView::kMsgDisplaySwitchOffChanged)));
-	displaySwitchOffMenu->AddItem(new BMenuItem("10 minutes",
-		new BMessage(PowerView::kMsgDisplaySwitchOffChanged)));
-	displaySwitchOffMenu->AddItem(new BMenuItem("15 minutes",
-		new BMessage(PowerView::kMsgDisplaySwitchOffChanged)));
-	displaySwitchOffMenu->AddItem(new BMenuItem("30 minutes",
-		new BMessage(PowerView::kMsgDisplaySwitchOffChanged)));
-	displaySwitchOffMenu->SetLabelFromMarked(true);
-	displaySwitchOffMenu->ItemAt(3)->SetMarked(true);  // Default: 15 minutes
-
-	view->fDisplaySwitchOffMenu = new BMenuField("display_switch_off",
-		B_TRANSLATE("Switch off display after:"), displaySwitchOffMenu);
-
-	BLayoutBuilder::Group<>(displayBox, B_VERTICAL, 0)
-		.Add(view->fDisplayPowerManagementCheckBox)
-		.Add(view->fDisplaySleepAfterMenu)
-		.Add(view->fDisplaySwitchOffMenu)
-		.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,
-			B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING);
-
-	// ---- Lid close / auto-hibernate (Phase IV) ----
-	BBox* lidBox = new BBox("Lid and battery");
-	lidBox->SetLabel(B_TRANSLATE("Lid and battery actions"));
-
-	BMenu* lidMenu = new BMenu("lid_close");
-	lidMenu->AddItem(new BMenuItem("Suspend",
-		new BMessage(PowerView::kMsgLidCloseChanged)));
-	lidMenu->AddItem(new BMenuItem("Hibernate",
-		new BMessage(PowerView::kMsgLidCloseChanged)));
-	lidMenu->AddItem(new BMenuItem("Do nothing",
-		new BMessage(PowerView::kMsgLidCloseChanged)));
-	lidMenu->SetLabelFromMarked(true);
-	lidMenu->ItemAt(0)->SetMarked(true);
-
-	view->fLidCloseActionMenu = new BMenuField("lid_close",
-		B_TRANSLATE("When lid is closed:"), lidMenu);
-
-	view->fAutoHibernateCheckBox = new BCheckBox("auto_hibernate",
-		B_TRANSLATE("Hibernate automatically at critical battery"),
-		new BMessage(PowerView::kMsgAutoHibernateToggled));
-
-	BLayoutBuilder::Group<>(lidBox, B_VERTICAL, 0)
-		.Add(view->fLidCloseActionMenu)
-		.Add(view->fAutoHibernateCheckBox)
-		.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,
-			B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING);
-
-	// ---- Assemble ----
-	BLayoutBuilder::Group<>(view, B_VERTICAL, 0)
+	BLayoutBuilder::Group<>(view, B_VERTICAL, B_USE_DEFAULT_SPACING)
 		.Add(batteryBox)
-		.Add(BSpaceLayoutItem::CreateVerticalStrut(8))
-		.Add(generalBox)
-		.Add(BSpaceLayoutItem::CreateVerticalStrut(8))
 		.Add(systemBox)
-		.Add(BSpaceLayoutItem::CreateVerticalStrut(8))
-		.Add(displayBox)
-		.Add(BSpaceLayoutItem::CreateVerticalStrut(8))
-		.Add(lidBox);
+		.Add(userBox);
 
+	view->_LoadLogindActions();
 	view->_LoadSettings();
+	view->fDeskbarCheckBox->SetValue(
+		BDeskbar().HasItem(kPowerStatusItem) ? B_CONTROL_ON : B_CONTROL_OFF);
 
 	return view;
 }
-
-
-//	#pragma mark - BView overrides
 
 
 void
@@ -363,7 +352,6 @@ PowerView::AttachedToWindow()
 {
 	BView::AttachedToWindow();
 
-	// Connect to battery status
 	fDriverInterface = new ACPIDriverInterface;
 	if (fDriverInterface->Connect() != B_OK) {
 		delete fDriverInterface;
@@ -372,41 +360,26 @@ PowerView::AttachedToWindow()
 			delete fDriverInterface;
 			fDriverInterface = new SysFSDriverInterface;
 			if (fDriverInterface->Connect() != B_OK) {
-				fprintf(stderr, "Power preferences: no battery interface.\n");
 				delete fDriverInterface;
 				fDriverInterface = NULL;
 			}
 		}
 	}
-
-	if (fDriverInterface != NULL) {
+	if (fDriverInterface != NULL)
 		fDriverInterface->StartWatching(this);
-		_UpdateBatteryDisplay();
-	}
+	_UpdateBatteryDisplay();
 
-	// Wire up control targets — target each menu item individually.
-	auto _wireMenuItems = [](BMenuField* field, BMessenger target) {
-		if (field == NULL)
-			return;
-		BMenu* menu = field->Menu();
-		for (int32 i = 0; i < menu->CountItems(); i++)
-			menu->ItemAt(i)->SetTarget(target);
-	};
+	bool hasBattery = fDriverInterface != NULL
+		&& fDriverInterface->GetBatteryCount() > 0;
+	fBatteryCriticalMenu->SetEnabled(hasBattery);
+	fNotificationsCheckBox->SetEnabled(hasBattery);
 
-	_wireMenuItems(fPowerButtonMenu, this);
-	_wireMenuItems(fSleepButtonMenu, this);
-	_wireMenuItems(fHibernateButtonMenu, this);
-	_wireMenuItems(fBatteryButtonMenu, this);
-	fStatusNotificationsCheckBox->SetTarget(this);
-	fSystemTrayIconCheckBox->SetTarget(this);
-	_wireMenuItems(fSystemSleepModeMenu, this);
-	_wireMenuItems(fIdleTimeoutMenu, this);
-	fLockScreenOnSleepCheckBox->SetTarget(this);
-	fDisplayPowerManagementCheckBox->SetTarget(this);
-	_wireMenuItems(fDisplaySleepAfterMenu, this);
-	_wireMenuItems(fDisplaySwitchOffMenu, this);
-	_wireMenuItems(fLidCloseActionMenu, this);
-	fAutoHibernateCheckBox->SetTarget(this);
+	BMenuField* menus[] = { fPowerKeyMenu, fSuspendKeyMenu, fHibernateKeyMenu,
+		fLidMenu, fIdleMenu, fDisplayOffMenu, fBatteryCriticalMenu };
+	for (BMenuField* field : menus)
+		field->Menu()->SetTargetForItems(this);
+	fNotificationsCheckBox->SetTarget(this);
+	fDeskbarCheckBox->SetTarget(this);
 }
 
 
@@ -418,21 +391,23 @@ PowerView::MessageReceived(BMessage* message)
 			_UpdateBatteryDisplay();
 			break;
 
-		case kMsgPowerButtonChanged:
-		case kMsgSleepButtonChanged:
-		case kMsgHibernateButtonChanged:
-		case kMsgBatteryButtonChanged:
-		case kMsgStatusNotificationsToggled:
-		case kMsgSystemTrayIconToggled:
-		case kMsgSystemSleepModeChanged:
-		case kMsgIdleTimeoutChanged:
-		case kMsgLockScreenOnSleepToggled:
-		case kMsgDisplayPowerManagementToggled:
-		case kMsgDisplaySleepAfterChanged:
-		case kMsgDisplaySwitchOffChanged:
-		case kMsgLidCloseChanged:
-		case kMsgAutoHibernateToggled:
+		case kMsgLogindActionChanged:
+			_ApplyLogindAction(message);
+			break;
+
+		case kMsgHelperDone:
+			// Show what logind does now: the new values, or the old ones
+			// after a refusal or a cancelled authentication.
+			_LoadLogindActions();
+			_SetLogindMenusEnabled(true);
+			break;
+
+		case kMsgUserSettingChanged:
 			_SaveSettings();
+			break;
+
+		case kMsgDeskbarToggled:
+			_ToggleDeskbarItem();
 			break;
 
 		default:
@@ -442,7 +417,200 @@ PowerView::MessageReceived(BMessage* message)
 }
 
 
-//	#pragma mark - Private
+//	#pragma mark - logind actions
+
+
+void
+PowerView::_LoadLogindActions()
+{
+	sd_bus* bus = NULL;
+	if (sd_bus_open_system(&bus) < 0)
+		return;
+
+	struct {
+		BMenuField*	field;
+		const char*	property;
+	} keys[] = {
+		{ fPowerKeyMenu, "HandlePowerKey" },
+		{ fSuspendKeyMenu, "HandleSuspendKey" },
+		{ fHibernateKeyMenu, "HandleHibernateKey" },
+		{ fLidMenu, "HandleLidSwitch" }
+	};
+	for (auto& key : keys) {
+		char* value = NULL;
+		if (sd_bus_get_property_string(bus, kLogin1, kLogin1Path,
+				kLogin1Manager, key.property, NULL, &value) >= 0) {
+			mark_value(key.field, value);
+			free(value);
+		}
+	}
+
+	char* idleAction = NULL;
+	uint64_t idleUSec = 0;
+	if (sd_bus_get_property_string(bus, kLogin1, kLogin1Path, kLogin1Manager,
+			"IdleAction", NULL, &idleAction) >= 0
+		&& sd_bus_get_property_trivial(bus, kLogin1, kLogin1Path,
+			kLogin1Manager, "IdleActionUSec", NULL, 't', &idleUSec) >= 0) {
+		if (strcmp(idleAction, "ignore") == 0)
+			mark_minutes(fIdleMenu, 0);
+		else if (strcmp(idleAction, "suspend") == 0) {
+			mark_minutes(fIdleMenu,
+				(int32)((idleUSec / 1000000 + kIdleHintDelay) / 60));
+		} else
+			mark_value(fIdleMenu, idleAction);
+	}
+	free(idleAction);
+
+	sd_bus_flush_close_unref(bus);
+}
+
+
+void
+PowerView::_ApplyLogindAction(BMessage* message)
+{
+	HelperJob* job = new HelperJob;
+	job->target = BMessenger(this);
+	job->count = 1;
+
+	const char* key = message->GetString("key", "");
+	if (strcmp(key, "IdleAction") == 0) {
+		int32 minutes = message->GetInt32("minutes", 0);
+		if (minutes == 0)
+			job->arguments[0] = "IdleAction=ignore";
+		else {
+			job->arguments[0] = "IdleAction=suspend";
+			job->arguments[1].SetToFormat("IdleActionSec=%" B_PRId32,
+				minutes * 60 - kIdleHintDelay);
+			job->count = 2;
+		}
+	} else {
+		job->arguments[0].SetToFormat("%s=%s", key,
+			message->GetString("value", ""));
+	}
+
+	// pkexec may wait on an authentication dialog: never in the looper.
+	_SetLogindMenusEnabled(false);
+	thread_id thread = spawn_thread(_HelperThread, "power helper",
+		B_NORMAL_PRIORITY, job);
+	if (thread < 0 || resume_thread(thread) != B_OK) {
+		delete job;
+		_LoadLogindActions();
+		_SetLogindMenusEnabled(true);
+	}
+}
+
+
+status_t
+PowerView::_HelperThread(void* data)
+{
+	HelperJob* job = (HelperJob*)data;
+
+	int status = -1;
+	pid_t pid = fork();
+	if (pid == 0) {
+		execlp("pkexec", "pkexec", kHelper, job->arguments[0].String(),
+			job->count > 1 ? job->arguments[1].String() : (char*)NULL,
+			(char*)NULL);
+		_exit(127);
+	}
+	if (pid > 0) {
+		while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+			;
+	}
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+		fprintf(stderr, "Power: %s failed\n", kHelper);
+
+	job->target.SendMessage(kMsgHelperDone);
+	delete job;
+	return B_OK;
+}
+
+
+void
+PowerView::_SetLogindMenusEnabled(bool enabled)
+{
+	fPowerKeyMenu->SetEnabled(enabled);
+	fSuspendKeyMenu->SetEnabled(enabled);
+	fHibernateKeyMenu->SetEnabled(enabled);
+	fLidMenu->SetEnabled(enabled);
+	fIdleMenu->SetEnabled(enabled);
+}
+
+
+//	#pragma mark - user settings
+
+
+void
+PowerView::_LoadSettings()
+{
+	BMessage settings;
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK
+		&& path.Append(kSettingsFile) == B_OK) {
+		BFile file(path.Path(), B_READ_ONLY);
+		if (file.InitCheck() == B_OK)
+			settings.Unflatten(&file);
+	}
+
+	mark_minutes(fDisplayOffMenu,
+		settings.GetInt32(kDisplayOffKey, kDefaultDisplayOff));
+	const char* critical = settings.GetString(kBatteryCriticalKey,
+		kDefaultBatteryCritical);
+	if (!fCanHibernate && strcmp(critical, "hibernate") == 0)
+		critical = "poweroff";	// what the registrar falls back to
+	mark_value(fBatteryCriticalMenu, critical);
+	fNotificationsCheckBox->SetValue(
+		settings.GetBool(kNotificationsKey, true)
+			? B_CONTROL_ON : B_CONTROL_OFF);
+}
+
+
+void
+PowerView::_SaveSettings()
+{
+	BMessage settings('pwrP');
+
+	BMenuItem* item = fDisplayOffMenu->Menu()->FindMarked();
+	settings.AddInt32(kDisplayOffKey, item != NULL
+		? item->Message()->GetInt32("minutes", kDefaultDisplayOff)
+		: kDefaultDisplayOff);
+
+	item = fBatteryCriticalMenu->Menu()->FindMarked();
+	settings.AddString(kBatteryCriticalKey,
+		item != NULL && item->Message() != NULL
+			? item->Message()->GetString("value", kDefaultBatteryCritical)
+			: kDefaultBatteryCritical);
+
+	settings.AddBool(kNotificationsKey,
+		fNotificationsCheckBox->Value() == B_CONTROL_ON);
+
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path, true) != B_OK
+		|| path.Append(kSettingsFile) != B_OK)
+		return;
+	BFile file(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+	if (file.InitCheck() == B_OK)
+		settings.Flatten(&file);
+}
+
+
+void
+PowerView::_ToggleDeskbarItem()
+{
+	BDeskbar deskbar;
+	if (fDeskbarCheckBox->Value() == B_CONTROL_OFF) {
+		deskbar.RemoveItem(kPowerStatusItem);
+		return;
+	}
+
+	entry_ref ref;
+	if (be_roster->FindApp(kPowerStatusSignature, &ref) != B_OK
+		|| deskbar.AddItem(&ref) != B_OK)
+		fDeskbarCheckBox->SetValue(B_CONTROL_OFF);
+}
+
+
+//	#pragma mark - battery
 
 
 void
@@ -456,318 +624,44 @@ PowerView::_UpdateBatteryDisplay()
 	}
 
 	battery_info info;
-	status_t status = fDriverInterface->GetBatteryInfo(0, &info);
-	if (status != B_OK) {
-		fBatteryStateLabel->SetText(B_TRANSLATE("State: error reading battery"));
+	if (fDriverInterface->GetBatteryInfo(0, &info) != B_OK) {
+		fBatteryStateLabel->SetText(
+			B_TRANSLATE("State: error reading battery"));
 		fBatteryPercentLabel->SetText(B_TRANSLATE("Charge: --"));
 		fBatteryTimeLabel->SetText(B_TRANSLATE("Time remaining: --"));
 		return;
 	}
 
-	// State
-	const char* stateStr = B_TRANSLATE("unknown");
+	const char* state;
 	if ((info.state & BATTERY_CHARGING) != 0)
-		stateStr = B_TRANSLATE("Charging");
+		state = B_TRANSLATE("Charging");
 	else if ((info.state & BATTERY_DISCHARGING) != 0)
-		stateStr = B_TRANSLATE("Discharging");
+		state = B_TRANSLATE("Discharging");
 	else if ((info.state & BATTERY_NOT_CHARGING) != 0)
-		stateStr = B_TRANSLATE("Not charging");
+		state = B_TRANSLATE("Not charging");
 	else if ((info.state & BATTERY_CRITICAL_STATE) != 0)
-		stateStr = B_TRANSLATE("Critical");
+		state = B_TRANSLATE("Critical");
 	else
-		stateStr = B_TRANSLATE("Full");
+		state = B_TRANSLATE("Full");
 
-	BString stateLabel(B_TRANSLATE("State: %state%"));
-	stateLabel.ReplaceFirst("%state%", stateStr);
-	fBatteryStateLabel->SetText(stateLabel.String());
+	BString label(B_TRANSLATE("State: %state%"));
+	label.ReplaceFirst("%state%", state);
+	fBatteryStateLabel->SetText(label);
 
-	// Percentage
 	if (info.full_capacity > 0) {
-		double percent = (double)info.capacity / info.full_capacity * 100.0;
-		BString percentLabel;
-		percentLabel.SetToFormat("Charge: %.0f%%", percent);
-		fBatteryPercentLabel->SetText(percentLabel.String());
-	} else {
+		label = B_TRANSLATE("Charge: %percent%%");
+		BString percent;
+		percent << (int32)((double)info.capacity / info.full_capacity * 100.0
+			+ 0.5);
+		label.ReplaceFirst("%percent%", percent);
+		fBatteryPercentLabel->SetText(label);
+	} else
 		fBatteryPercentLabel->SetText(B_TRANSLATE("Charge: --"));
-	}
 
-	// Time remaining
 	if (info.time_left >= 0) {
-		int32 hours = info.time_left / 3600;
-		int32 minutes = (info.time_left / 60) % 60;
-		BString timeLabel;
-		timeLabel.SetToFormat(B_TRANSLATE("Time remaining: %d:%02d"),
-			hours, minutes);
-		fBatteryTimeLabel->SetText(timeLabel.String());
-	} else {
+		label.SetToFormat(B_TRANSLATE("Time remaining: %d:%02d"),
+			(int)(info.time_left / 3600), (int)((info.time_left / 60) % 60));
+		fBatteryTimeLabel->SetText(label);
+	} else
 		fBatteryTimeLabel->SetText(B_TRANSLATE("Time remaining: --"));
-	}
-}
-
-
-void
-PowerView::_LoadSettings()
-{
-	BFile file;
-	BPath path;
-
-	// Try to find settings in user settings directory
-	status_t status = find_directory(B_USER_SETTINGS_DIRECTORY, &path, true);
-	if (status != B_OK)
-		return;
-
-	path.Append("Power settings");
-
-	if (file.SetTo(path.Path(), B_READ_ONLY) != B_OK)
-		return;
-
-	BMessage settings;
-	if (settings.Unflatten(&file) != B_OK)
-		return;
-
-	// Power button action
-	int32 pwrAction = 0;
-	if (settings.FindInt32(kSettingsPowerButtonAction, &pwrAction) == B_OK) {
-		BMenu* menu = fPowerButtonMenu->Menu();
-		if (pwrAction >= 0 && pwrAction < menu->CountItems())
-			menu->ItemAt(pwrAction)->SetMarked(true);
-	}
-
-	// Sleep button action
-	int32 sleepAction = 0;
-	if (settings.FindInt32(kSettingsSleepButtonAction, &sleepAction) == B_OK) {
-		BMenu* menu = fSleepButtonMenu->Menu();
-		if (sleepAction >= 0 && sleepAction < menu->CountItems())
-			menu->ItemAt(sleepAction)->SetMarked(true);
-	}
-
-	// Hibernate button action
-	int32 hibAction = 0;
-	if (settings.FindInt32(kSettingsHibernateButtonAction, &hibAction) == B_OK) {
-		BMenu* menu = fHibernateButtonMenu->Menu();
-		if (hibAction >= 0 && hibAction < menu->CountItems())
-			menu->ItemAt(hibAction)->SetMarked(true);
-	}
-
-	// Battery button action
-	int32 batAction = 0;
-	if (settings.FindInt32(kSettingsBatteryButtonAction, &batAction) == B_OK) {
-		BMenu* menu = fBatteryButtonMenu->Menu();
-		if (batAction >= 0 && batAction < menu->CountItems())
-			menu->ItemAt(batAction)->SetMarked(true);
-	}
-
-	// Status notifications
-	bool statusNotif = true;
-	if (settings.FindBool(kSettingsStatusNotifications, &statusNotif) == B_OK)
-		fStatusNotificationsCheckBox->SetValue(statusNotif ? 1 : 0);
-
-	// System tray icon
-	bool trayIcon = false;
-	if (settings.FindBool(kSettingsSystemTrayIcon, &trayIcon) == B_OK)
-		fSystemTrayIconCheckBox->SetValue(trayIcon ? 1 : 0);
-
-	// System sleep mode
-	int32 sleepMode = 0;
-	if (settings.FindInt32(kSettingsSystemSleepMode, &sleepMode) == B_OK) {
-		BMenu* menu = fSystemSleepModeMenu->Menu();
-		if (sleepMode >= 0 && sleepMode < menu->CountItems())
-			menu->ItemAt(sleepMode)->SetMarked(true);
-	}
-
-	// Idle timeout (stored as minutes; -1 = Never)
-	int32 idleTimeout = -1;
-	if (settings.FindInt32(kSettingsIdleTimeout, &idleTimeout) == B_OK) {
-		BMenu* menu = fIdleTimeoutMenu->Menu();
-		int32 index = -1;
-		switch (idleTimeout) {
-			case -1: index = 0; break;  // Never
-			case 5: index = 1; break;
-			case 10: index = 2; break;
-			case 15: index = 3; break;
-			case 30: index = 4; break;
-			case 60: index = 5; break;
-			case 120: index = 6; break;
-		}
-		if (index >= 0 && index < menu->CountItems())
-			menu->ItemAt(index)->SetMarked(true);
-	}
-
-	// Lock screen on sleep
-	bool lockOnSleep = true;
-	if (settings.FindBool(kSettingsLockScreenOnSleep, &lockOnSleep) == B_OK)
-		fLockScreenOnSleepCheckBox->SetValue(lockOnSleep ? 1 : 0);
-
-	// Display power management
-	bool displayPwr = true;
-	if (settings.FindBool(kSettingsDisplayPowerManagement, &displayPwr) == B_OK)
-		fDisplayPowerManagementCheckBox->SetValue(displayPwr ? 1 : 0);
-
-	// Display sleep after (stored as minutes; -1 = Never)
-	int32 displaySleep = 10;
-	if (settings.FindInt32(kSettingsDisplaySleepAfter, &displaySleep) == B_OK) {
-		BMenu* menu = fDisplaySleepAfterMenu->Menu();
-		int32 index = -1;
-		switch (displaySleep) {
-			case -1: index = 0; break;  // Never
-			case 5: index = 1; break;
-			case 10: index = 2; break;
-			case 15: index = 3; break;
-			case 30: index = 4; break;
-		}
-		if (index >= 0 && index < menu->CountItems())
-			menu->ItemAt(index)->SetMarked(true);
-	}
-
-	// Display switch off (stored as minutes; -1 = Never)
-	int32 displayOff = 15;
-	if (settings.FindInt32(kSettingsDisplaySwitchOff, &displayOff) == B_OK) {
-		BMenu* menu = fDisplaySwitchOffMenu->Menu();
-		int32 index = -1;
-		switch (displayOff) {
-			case -1: index = 0; break;  // Never
-			case 5: index = 1; break;
-			case 10: index = 2; break;
-			case 15: index = 3; break;
-			case 30: index = 4; break;
-		}
-		if (index >= 0 && index < menu->CountItems())
-			menu->ItemAt(index)->SetMarked(true);
-	}
-
-	// Lid close action
-	int32 lidAction = 0;
-	if (settings.FindInt32(kSettingsLidCloseAction, &lidAction) == B_OK) {
-		BMenu* menu = fLidCloseActionMenu->Menu();
-		if (lidAction >= 0 && lidAction < menu->CountItems())
-			menu->ItemAt(lidAction)->SetMarked(true);
-	}
-
-	// Auto-hibernate at critical battery
-	bool autoHibernate = false;
-	if (settings.FindBool(kSettingsAutoHibernateCritical, &autoHibernate) == B_OK)
-		fAutoHibernateCheckBox->SetValue(autoHibernate ? 1 : 0);
-}
-
-
-void
-PowerView::_SaveSettings()
-{
-	BFile file;
-	BPath path;
-
-	status_t status = find_directory(B_USER_SETTINGS_DIRECTORY, &path, true);
-	if (status != B_OK)
-		return;
-
-	path.Append("Power settings");
-
-	if (file.SetTo(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE)
-			!= B_OK)
-		return;
-
-	BMessage settings('pwrP');
-
-	// Power button action (index)
-	BMenuItem* pwrMarked = fPowerButtonMenu->Menu()->FindMarked();
-	int32 pwrAction = 0;
-	if (pwrMarked != NULL)
-		pwrAction = fPowerButtonMenu->Menu()->IndexOf(pwrMarked);
-	settings.AddInt32(kSettingsPowerButtonAction, pwrAction);
-
-	// Sleep button action (index)
-	BMenuItem* sleepMarked = fSleepButtonMenu->Menu()->FindMarked();
-	int32 sleepAction = 0;
-	if (sleepMarked != NULL)
-		sleepAction = fSleepButtonMenu->Menu()->IndexOf(sleepMarked);
-	settings.AddInt32(kSettingsSleepButtonAction, sleepAction);
-
-	// Hibernate button action (index)
-	BMenuItem* hibMarked = fHibernateButtonMenu->Menu()->FindMarked();
-	int32 hibAction = 0;
-	if (hibMarked != NULL)
-		hibAction = fHibernateButtonMenu->Menu()->IndexOf(hibMarked);
-	settings.AddInt32(kSettingsHibernateButtonAction, hibAction);
-
-	// Battery button action (index)
-	BMenuItem* batMarked = fBatteryButtonMenu->Menu()->FindMarked();
-	int32 batAction = 0;
-	if (batMarked != NULL)
-		batAction = fBatteryButtonMenu->Menu()->IndexOf(batMarked);
-	settings.AddInt32(kSettingsBatteryButtonAction, batAction);
-
-	// Status notifications
-	settings.AddBool(kSettingsStatusNotifications,
-		fStatusNotificationsCheckBox->Value() != 0);
-
-	// System tray icon
-	settings.AddBool(kSettingsSystemTrayIcon,
-		fSystemTrayIconCheckBox->Value() != 0);
-
-	// System sleep mode (index)
-	BMenuItem* sleepModeMarked = fSystemSleepModeMenu->Menu()->FindMarked();
-	int32 sleepMode = 0;
-	if (sleepModeMarked != NULL)
-		sleepMode = fSystemSleepModeMenu->Menu()->IndexOf(sleepModeMarked);
-	settings.AddInt32(kSettingsSystemSleepMode, sleepMode);
-
-	// Idle timeout (index to minutes; 0 = Never = -1)
-	BMenuItem* idleMarked = fIdleTimeoutMenu->Menu()->FindMarked();
-	int32 idleMinutes = -1;
-	if (idleMarked != NULL) {
-		if (strcmp(idleMarked->Label(), "Never") == 0) idleMinutes = -1;
-		else if (strcmp(idleMarked->Label(), "5 minutes") == 0) idleMinutes = 5;
-		else if (strcmp(idleMarked->Label(), "10 minutes") == 0) idleMinutes = 10;
-		else if (strcmp(idleMarked->Label(), "15 minutes") == 0) idleMinutes = 15;
-		else if (strcmp(idleMarked->Label(), "30 minutes") == 0) idleMinutes = 30;
-		else if (strcmp(idleMarked->Label(), "1 hour") == 0) idleMinutes = 60;
-		else if (strcmp(idleMarked->Label(), "2 hours") == 0) idleMinutes = 120;
-	}
-	settings.AddInt32(kSettingsIdleTimeout, idleMinutes);
-
-	// Lock screen on sleep
-	settings.AddBool(kSettingsLockScreenOnSleep,
-		fLockScreenOnSleepCheckBox->Value() != 0);
-
-	// Display power management
-	settings.AddBool(kSettingsDisplayPowerManagement,
-		fDisplayPowerManagementCheckBox->Value() != 0);
-
-	// Display sleep after (index to minutes; 0 = Never = -1)
-	BMenuItem* dSleepMarked = fDisplaySleepAfterMenu->Menu()->FindMarked();
-	int32 displaySleep = 10;
-	if (dSleepMarked != NULL) {
-		if (strcmp(dSleepMarked->Label(), "Never") == 0) displaySleep = -1;
-		else if (strcmp(dSleepMarked->Label(), "5 minutes") == 0) displaySleep = 5;
-		else if (strcmp(dSleepMarked->Label(), "10 minutes") == 0) displaySleep = 10;
-		else if (strcmp(dSleepMarked->Label(), "15 minutes") == 0) displaySleep = 15;
-		else if (strcmp(dSleepMarked->Label(), "30 minutes") == 0) displaySleep = 30;
-	}
-	settings.AddInt32(kSettingsDisplaySleepAfter, displaySleep);
-
-	// Display switch off (index to minutes; 0 = Never = -1)
-	BMenuItem* dOffMarked = fDisplaySwitchOffMenu->Menu()->FindMarked();
-	int32 displayOff = 15;
-	if (dOffMarked != NULL) {
-		if (strcmp(dOffMarked->Label(), "Never") == 0) displayOff = -1;
-		else if (strcmp(dOffMarked->Label(), "5 minutes") == 0) displayOff = 5;
-		else if (strcmp(dOffMarked->Label(), "10 minutes") == 0) displayOff = 10;
-		else if (strcmp(dOffMarked->Label(), "15 minutes") == 0) displayOff = 15;
-		else if (strcmp(dOffMarked->Label(), "30 minutes") == 0) displayOff = 30;
-	}
-	settings.AddInt32(kSettingsDisplaySwitchOff, displayOff);
-
-	// Lid close action (index)
-	BMenuItem* lidMarked = fLidCloseActionMenu->Menu()->FindMarked();
-	int32 lidAction = 0;
-	if (lidMarked != NULL)
-		lidAction = fLidCloseActionMenu->Menu()->IndexOf(lidMarked);
-	settings.AddInt32(kSettingsLidCloseAction, lidAction);
-
-	// Auto-hibernate at critical battery
-	settings.AddBool(kSettingsAutoHibernateCritical,
-		fAutoHibernateCheckBox->Value() != 0);
-
-	ssize_t size = 0;
-	settings.Flatten(&file, &size);
 }

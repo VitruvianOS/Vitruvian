@@ -61,6 +61,19 @@ ProgressWindow::ProgressWindow(BWindow* window, const BMessage& result)
 	BString overall;
 	result.FindString("status", &overall);
 
+	BString moveRecovery;
+	result.FindString("move_recovery", &moveRecovery);
+	if (!moveRecovery.IsEmpty() && moveRecovery != "none") {
+		BString recoveryLine;
+		recoveryLine << B_TRANSLATE("Move recovery:") << " " << moveRecovery;
+		BString recoveryDetail;
+		if (result.FindString("move_recovery_detail", &recoveryDetail)
+				== B_OK && !recoveryDetail.IsEmpty()) {
+			recoveryLine << " (" << recoveryDetail << ")";
+		}
+		fOpsList->AddItem(new BStringItem(recoveryLine.String()));
+	}
+
 	fStatusBar = new BStatusBar("summary", B_TRANSLATE("Operations:"));
 	fStatusBar->SetMaxValue(total > 0 ? total : 1);
 	fStatusBar->Update(okCount);

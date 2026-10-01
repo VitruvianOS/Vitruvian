@@ -23,6 +23,89 @@
 static const char* kInstallHelper = "/usr/libexec/vos-drivesetup-helper";
 
 
+// Runs the helper, capturing stdout. argv[0] is the exec path; the
+// remaining args follow. Returns B_OK and fills outText on exit 0.
+static status_t
+run_helper_capture(const char* execPath, const char* const argv[],
+	BString& outText)
+{
+	int outPipe[2];
+	if (pipe(outPipe) < 0)
+		return B_ERROR;
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		close(outPipe[0]);
+		close(outPipe[1]);
+		return B_ERROR;
+	}
+
+	if (pid == 0) {
+		close(outPipe[0]);
+		dup2(outPipe[1], STDOUT_FILENO);
+		close(outPipe[1]);
+		execv(execPath, (char* const*)argv);
+		_exit(127);
+	}
+
+	close(outPipe[1]);
+
+	outText.Truncate(0);
+	char buffer[512];
+	ssize_t bytesRead;
+	while ((bytesRead = read(outPipe[0], buffer, sizeof(buffer) - 1)) > 0) {
+		buffer[bytesRead] = '\0';
+		outText << buffer;
+	}
+	close(outPipe[0]);
+
+	int status = 0;
+	while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+		;
+
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+		return B_ERROR;
+
+	return B_OK;
+}
+
+
+// Must mirror _partlib_kv_split() in vos-partition-lib.sh; same encoding.
+static bool
+split_kv(const BString& line, BString& key, BString& value);
+
+
+// Top-level key=value lines before any [section] record.
+static void
+parse_kv_text(const BString& text, BMessage& out)
+{
+	int32 start = 0;
+	int32 length = text.Length();
+	while (start <= length) {
+		int32 nl = text.FindFirst('\n', start);
+		BString line;
+		if (nl < 0) {
+			if (start == length)
+				break;
+			text.CopyInto(line, start, length - start);
+			start = length + 1;
+		} else {
+			text.CopyInto(line, start, nl - start);
+			start = nl + 1;
+		}
+
+		if (line.IsEmpty() || line[0] == '#')
+			break;
+		if (line[0] == '[')
+			break;
+
+		BString key, value;
+		if (split_kv(line, key, value))
+			out.AddString(key.String(), value);
+	}
+}
+
+
 struct PartitionOpIdMap::Entry {
 	PartitionReference*	ref;
 	BString				opID;
@@ -400,6 +483,10 @@ parse_result(const BString& text, BMessage& result)
 				status = value;
 			else if (key == "failed_op")
 				failedOp = value;
+			else if (key == "move_recovery")
+				result.AddString("move_recovery", value);
+			else if (key == "move_recovery_detail")
+				result.AddString("move_recovery_detail", value);
 			continue;
 		}
 
@@ -583,6 +670,53 @@ PartitionPlanBuilder::RunPlan(const BString& plan, BMessage& result,
 			result.RemoveName("detail");
 			result.AddString("detail", detail);
 		}
+	}
+
+	return B_OK;
+}
+
+
+// QueryMoveRecovery is read-only: it lists leftover move journals, so a killed Move is visible.
+status_t
+PartitionPlanBuilder::QueryMoveRecovery(BMessage& result)
+{
+	const char* argv[] = { "pkexec", kInstallHelper, "partition",
+		"move-recovery", "status", NULL };
+	BString text;
+	if (run_helper_capture("/usr/bin/pkexec", argv, text) != B_OK)
+		return B_ERROR;
+
+	parse_kv_text(text, result);
+	return B_OK;
+}
+
+
+// RunMoveRecovery takes action "resume" or "rollback"; without a disk path it applies to every pending journal.
+status_t
+PartitionPlanBuilder::RunMoveRecovery(const char* action, BMessage& result)
+{
+	if (action == NULL || (strcmp(action, "resume") != 0
+			&& strcmp(action, "rollback") != 0)) {
+		return B_BAD_VALUE;
+	}
+
+	const char* argv[] = { "pkexec", kInstallHelper, "partition",
+		"move-recovery", action, NULL };
+	BString text;
+	if (run_helper_capture("/usr/bin/pkexec", argv, text) != B_OK)
+		return B_ERROR;
+
+	parse_kv_text(text, result);
+
+	// Surface a failed recovery in the fields DriveSetup already reads.
+	BString status;
+	if (result.FindString("move_recovery", &status) == B_OK
+			&& status == "failed") {
+		BString detail;
+		result.FindString("move_recovery_detail", &detail);
+		if (!detail.IsEmpty())
+			result.AddString("detail", detail);
+		return B_ERROR;
 	}
 
 	return B_OK;

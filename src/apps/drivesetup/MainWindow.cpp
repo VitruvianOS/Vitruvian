@@ -67,6 +67,7 @@
 #include "DiskDeviceJobQueue.h"
 #include "MoveJob.h"
 #include "PartitionCapabilities.h"
+#include "PartitionPlanBuilder.h"
 #include "PartitionReference.h"
 #include "RepairJob.h"
 #include "ResizeJob.h"
@@ -104,6 +105,7 @@ enum {
 	MSG_WRITE					= 'writ',
 	MSG_COMPLETE				= 'comp',
 	MSG_SHOW_FEATURES			= 'sftr',
+	MSG_MOVE_RECOVERY			= 'mvrc',
 
 	MSG_PARTITION_ROW_SELECTED	= 'prsl',
 };
@@ -308,6 +310,9 @@ MainWindow::MainWindow()
 	fFeaturesMenuItem = new BMenuItem(
 		B_TRANSLATE("Filesystem features" B_UTF8_ELLIPSIS),
 		new BMessage(MSG_SHOW_FEATURES));
+	fMoveRecoveryMenuItem = new BMenuItem(
+		B_TRANSLATE("Partition move recovery" B_UTF8_ELLIPSIS),
+		new BMessage(MSG_MOVE_RECOVERY));
 
 	// Disk menu
 	fDiskMenu = new BMenu(B_TRANSLATE("Disk"));
@@ -351,6 +356,7 @@ MainWindow::MainWindow()
 
 	fPartitionMenu->AddItem(fOpenDiskProbeMenuItem);
 	fPartitionMenu->AddItem(fFlagsMenuItem);
+	fPartitionMenu->AddItem(fMoveRecoveryMenuItem);
 	fMenuBar->AddItem(fPartitionMenu);
 
 	// Disk image menu
@@ -447,6 +453,9 @@ MainWindow::MainWindow()
 	// visit all disks in the system and show their contents
 	_ScanDrives();
 
+	// A killed partition Move leaves a journal; show recovery on startup.
+	PostMessage(MSG_MOVE_RECOVERY);
+
 	// If DeskBar isn't running, DriveSetup was probably started from Installer.
 	// Make sure to show on all workspaces, so the window doesn't disappear when using the
 	// workspace switch shortcut.
@@ -497,6 +506,10 @@ MainWindow::MessageReceived(BMessage* message)
 
 		case MSG_SHOW_FEATURES:
 			_ShowFeatures();
+			break;
+
+		case MSG_MOVE_RECOVERY:
+			_CheckMoveRecovery();
 			break;
 
 		case MSG_INITIALIZE: {
@@ -2391,6 +2404,8 @@ MainWindow::_ResizeMove(BDiskDevice* disk, partition_id selectedPartition)
 		return;
 	}
 
+	// Move journals are cleared on success; if one is left, show it.
+	PostMessage(MSG_MOVE_RECOVERY);
 	_ScanDrives();
 }
 
@@ -2622,6 +2637,70 @@ MainWindow::_ShowFeatures()
 {
 	FeaturesWindow* window = new FeaturesWindow(this);
 	window->Show();
+}
+
+
+void
+MainWindow::_CheckMoveRecovery()
+{
+	BMessage result;
+	if (PartitionPlanBuilder::QueryMoveRecovery(result) != B_OK)
+		return;
+
+	BString status;
+	result.FindString("move_recovery", &status);
+	if (status != "pending")
+		return;
+
+	BString detail;
+	result.FindString("move_recovery_detail", &detail);
+
+	BString message = B_TRANSLATE("A partition move did not finish. "
+		"V\\OS left a move journal; the copy must be resumed or rolled "
+		"back before further changes on that disk.");
+	if (!detail.IsEmpty())
+		message << "\n\n" << detail;
+
+	BAlert* alert = new BAlert("move-recovery", message.String(),
+		B_TRANSLATE("Resume"), B_TRANSLATE("Roll back"),
+		B_TRANSLATE("Later"), B_WIDTH_FROM_WIDEST, B_WARNING_ALERT);
+	alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+	int32 choice = alert->Go();
+	if (choice == 0)
+		_MoveRecoveryAction("resume");
+	else if (choice == 1)
+		_MoveRecoveryAction("rollback");
+}
+
+
+void
+MainWindow::_MoveRecoveryAction(const char* action)
+{
+	BMessage result;
+	status_t status = PartitionPlanBuilder::RunMoveRecovery(action, result);
+	if (status != B_OK) {
+		_DisplayPartitionError(B_TRANSLATE("Partition move recovery "
+			"failed."), NULL, status, &result);
+		return;
+	}
+
+	BString recovered;
+	result.FindString("move_recovery", &recovered);
+	BString detail;
+	result.FindString("move_recovery_detail", &detail);
+
+	BString message;
+	message.SetToFormat(B_TRANSLATE("Partition move recovery: %s"),
+		recovered.String());
+	if (!detail.IsEmpty())
+		message << "\n\n" << detail;
+
+	BAlert* alert = new BAlert("move-recovery-done", message.String(),
+		B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_FROM_WIDEST,
+		recovered == "failed" ? B_STOP_ALERT : B_INFO_ALERT);
+	alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+	alert->Go(NULL);
+	_ScanDrives();
 }
 
 

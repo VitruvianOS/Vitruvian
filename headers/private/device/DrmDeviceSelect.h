@@ -17,6 +17,20 @@
 #include <xf86drmMode.h>
 
 
+// True if this DRM fd has any connector, i.e. can drive a display at all;
+// render-only GPUs (e.g. the Raspberry Pi's v3d next to vc4) have none.
+static inline bool
+drm_card_has_connectors(int fd)
+{
+	drmModeRes* res = drmModeGetResources(fd);
+	if (res == NULL)
+		return false;
+	bool has = res->count_connectors > 0;
+	drmModeFreeResources(res);
+	return has;
+}
+
+
 // True if any connector on this DRM fd is currently connected.
 static inline bool
 drm_card_has_connected_connector(int fd)
@@ -73,12 +87,14 @@ static inline bool
 drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 	int& cardIndex, const char*& why)
 {
-	// Optimus laptops expose the NVIDIA card first with no panel, so prefer a card that drives a display.
+	// Optimus laptops expose the NVIDIA card first with no panel, and a Raspberry Pi exposes render-only v3d
+	// next to vc4. Prefer a card with a connected display, then one that can drive a display, then the first.
 	char path[64];
 	int ids[10];
 	int fds[10];
 	int indexes[10];
 	bool connected[10];
+	bool hasConnectors[10];
 	bool bootVga[10];
 	int n = 0;
 
@@ -93,6 +109,7 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 		fds[n] = cardFd;
 		indexes[n] = i;
 		connected[n] = drm_card_has_connected_connector(cardFd);
+		hasConnectors[n] = drm_card_has_connectors(cardFd);
 		bootVga[n] = drm_card_is_boot_vga(i);
 		n++;
 	}
@@ -107,10 +124,13 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 
 	int pick = 0;
 	for (int j = 1; j < n; j++) {
-		if (connected[j] && !connected[pick])
-			pick = j;
-		else if (connected[j] && connected[pick]
-			&& bootVga[j] && !bootVga[pick])
+		if (connected[j] != connected[pick]) {
+			if (connected[j])
+				pick = j;
+		} else if (hasConnectors[j] != hasConnectors[pick]) {
+			if (hasConnectors[j])
+				pick = j;
+		} else if (bootVga[j] && !bootVga[pick])
 			pick = j;
 	}
 
@@ -125,7 +145,9 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 	if (connected[pick]) {
 		why = bootVga[pick] ? "connected connector, boot_vga"
 			: "connected connector";
-	} else
+	} else if (hasConnectors[pick])
+		why = "can drive a display, none connected";
+	else
 		why = "first device that opens";
 	return true;
 }

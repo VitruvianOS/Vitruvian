@@ -152,6 +152,9 @@ private:
 			void				_RestoreDisplay();
 			void				_RepaintAfterDPMS();
 			void				_HandleHotplug();
+			bool				_RescanConnectors();
+			bool				_CheckResume();
+			void				_OnResume();
 			void				_DrainPendingFlip();
 			void				_ScheduleResize();
 	static	int32				_ResizeThreadEntry(void* data);
@@ -233,6 +236,7 @@ private:
 			struct udev*		fUdev;
 			struct udev_monitor* fUdevMonitor;
 			int					fUdevFd;
+			bigtime_t			fLastSuspendCheck;
 
 #ifdef HAVE_GBM
 			struct gbm_device*  fGbmDevice;

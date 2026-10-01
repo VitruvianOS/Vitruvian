@@ -73,6 +73,7 @@ DrmHWInterface::DrmHWInterface()
 	fUdev(NULL),
 	fUdevMonitor(NULL),
 	fUdevFd(-1),
+	fLastSuspendCheck(0),
 #ifdef HAVE_GBM
 	fGbmDevice(NULL),
 	fUseGbm(false),
@@ -561,6 +562,9 @@ DrmHWInterface::_EventThreadMain()
 				_HandleHotplug();
 			}
 		}
+
+		if (active && _CheckResume())
+			_OnResume();
 
 		if (active && fPageFlipEnabled && !fPageFlipPending
 				&& fBackBuffer != NULL
@@ -2111,6 +2115,40 @@ DrmHWInterface::_PushCursorTrackDirty(int32 oldX, int32 oldY,
 }
 
 
+// Rescans every connector and adds/removes modeset_dev entries to match; returns true if the primary
+// connector's mode changed. Shared by hotplug and resume, as a monitor can change while asleep.
+bool
+DrmHWInterface::_RescanConnectors()
+{
+	if (fFd < 0)
+		return false;
+
+	struct modeset_dev* primary = get_dev();
+	uint32_t primaryConn = primary != NULL ? primary->conn : 0;
+	bool resizePrimary = false;
+
+	drmModeRes* res = drmModeGetResources(fFd);
+	if (res) {
+		for (int i = 0; i < res->count_connectors; i++) {
+			drmModeConnector* conn = drmModeGetConnector(fFd,
+				res->connectors[i]);
+			if (conn) {
+				if (conn->connection == DRM_MODE_CONNECTED) {
+					int r = modeset_add_connector(fFd, conn->connector_id);
+					if (r == 1 && conn->connector_id == primaryConn)
+						resizePrimary = true;
+				} else
+					modeset_remove_connector(fFd, conn->connector_id);
+				drmModeFreeConnector(conn);
+			}
+		}
+		drmModeFreeResources(res);
+	}
+
+	return resizePrimary;
+}
+
+
 void
 DrmHWInterface::_HandleHotplug()
 {
@@ -2124,27 +2162,7 @@ DrmHWInterface::_HandleHotplug()
 
 		// The uevent carries no CONNECTOR=, so every connector is
 		// rescanned; scope the resize reaction to the one we render to.
-		struct modeset_dev* primary = get_dev();
-		uint32_t primaryConn = primary != NULL ? primary->conn : 0;
-		bool resizePrimary = false;
-
-		drmModeRes* res = drmModeGetResources(fFd);
-		if (res) {
-			for (int i = 0; i < res->count_connectors; i++) {
-				drmModeConnector* conn = drmModeGetConnector(fFd,
-					res->connectors[i]);
-				if (conn) {
-					if (conn->connection == DRM_MODE_CONNECTED) {
-						int r = modeset_add_connector(fFd, conn->connector_id);
-						if (r == 1 && conn->connector_id == primaryConn)
-							resizePrimary = true;
-					} else
-						modeset_remove_connector(fFd, conn->connector_id);
-					drmModeFreeConnector(conn);
-				}
-			}
-			drmModeFreeResources(res);
-		}
+		bool resizePrimary = _RescanConnectors();
 
 		// Not master while inactive (VT-switched away); applying a mode
 		// here would fail or steal master from whoever now owns it.
@@ -2153,6 +2171,80 @@ DrmHWInterface::_HandleHotplug()
 	}
 
 	udev_device_unref(dev);
+}
+
+
+// CLOCK_MONOTONIC stalls across a sleep and CLOCK_BOOTTIME does not, so a widening gap proves
+// a suspend even without a DRM "change" uevent. Cheap enough to check on every event thread wakeup.
+bool
+DrmHWInterface::_CheckResume()
+{
+	struct timespec mono, boot;
+	if (clock_gettime(CLOCK_MONOTONIC, &mono) != 0
+			|| clock_gettime(CLOCK_BOOTTIME, &boot) != 0)
+		return false;
+
+	bigtime_t monoUs = (bigtime_t)mono.tv_sec * 1000000LL
+		+ mono.tv_nsec / 1000;
+	bigtime_t bootUs = (bigtime_t)boot.tv_sec * 1000000LL
+		+ boot.tv_nsec / 1000;
+	bigtime_t gap = bootUs - monoUs;
+
+	bool resumed = fLastSuspendCheck != 0
+		&& (gap - fLastSuspendCheck) > 2000000LL;
+	fLastSuspendCheck = gap;
+	return resumed;
+}
+
+
+// Runs on the DRM event thread after a detected resume or a post-resume hotplug uevent.
+// Conservative: each step only acts if its piece of state looks stale.
+void
+DrmHWInterface::_OnResume()
+{
+	if (fFd < 0 || !fInitialized || !fSessionActive.load())
+		return;
+
+	fprintf(stderr, "[drm] resume detected, reconciling display state\n");
+
+	// Monitors may change while asleep with no guaranteed HOTPLUG uevent, so rescan unconditionally.
+	// A changed mode on a known connector is not picked up (see modeset_add_connector()).
+	bool resizePrimary = _RescanConnectors();
+	if (resizePrimary) {
+		_ScheduleResize();
+		return;
+	}
+
+	// Re-apply the mode only if the CRTC lost it: no mode or no fb means nothing is displayed.
+	struct modeset_dev* dev = get_dev();
+	if (dev != NULL) {
+		drmModeCrtc* crtc = drmModeGetCrtc(fFd, dev->crtc);
+		bool crtcActive = crtc != NULL && crtc->mode_valid
+			&& crtc->buffer_id != 0;
+		if (crtc)
+			drmModeFreeCrtc(crtc);
+		if (!crtcActive)
+			_RestoreDisplay();
+	}
+
+	// The driver resets gamma LUTs on some paths, so re-apply night light if one was active.
+	SetTemperature(fTemperature);
+
+	// Force a full repaint, unless DPMS had the display deliberately off before sleeping.
+	if (fDpmsState == B_DPMS_ON) {
+		LockExclusiveAccess();
+		Invalidate(BRect(0, 0, fDisplayMode.virtual_width - 1,
+				fDisplayMode.virtual_height - 1));
+		UnlockExclusiveAccess();
+
+		pthread_mutex_lock(&fDirtyMutex);
+		fNeedsFlip = true;
+		pthread_mutex_unlock(&fDirtyMutex);
+		if (fWakeFd >= 0) {
+			uint64_t v = 1;
+			write(fWakeFd, &v, sizeof(v));
+		}
+	}
 }
 
 

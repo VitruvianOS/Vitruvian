@@ -24,11 +24,18 @@ if(WEB_COMPILE_ONLY)
 		${CMAKE_CURRENT_SOURCE_DIR}/private
 		${GLIB2_INCLUDE_DIRS}
 	)
-	target_compile_options(web_process_manager PRIVATE -std=c++17 -fsyntax-only)
+	target_compile_options(web_process_manager PRIVATE -std=c++17)
 
 	# WebDefs constants — needed by apps that include <web/WebDefs.h>
 	add_library(web_defs STATIC WebDefs.cpp)
-	target_compile_options(web_defs PRIVATE -std=c++17 -fsyntax-only -include LinuxBuildCompatibility.h)
+	target_compile_options(web_defs PRIVATE -std=c++17 -include LinuxBuildCompatibility.h)
+
+	# Umbrella target: apps link against "web" in both modes.
+	add_library(web_bview_stubs STATIC BWebViewStub.cpp)
+	target_compile_options(web_bview_stubs PRIVATE -std=c++17 -include LinuxBuildCompatibility.h)
+
+	add_library(web INTERFACE)
+	target_link_libraries(web INTERFACE web_defs web_process_manager web_bview_stubs)
 else()
 	AddOn(
 		web

@@ -72,8 +72,8 @@
 #endif
 
 /* ---- struct input_event (x86-64 kernel ABI) ---- */
-#ifndef _VITRUVIAN_INPUT_EVENT_DEFINED
-#define _VITRUVIAN_INPUT_EVENT_DEFINED
+#ifndef _VOS_INPUT_EVENT_DEFINED
+#define _VOS_INPUT_EVENT_DEFINED
 struct input_event {
 	struct {
 		long tv_sec;

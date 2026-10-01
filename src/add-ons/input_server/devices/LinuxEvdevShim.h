@@ -71,8 +71,8 @@
 #endif
 
 /* ---- struct input_event (x86-64 kernel ABI) ---- */
-#ifndef _VITRUVIAN_INPUT_EVENT_DEFINED
-#define _VITRUVIAN_INPUT_EVENT_DEFINED
+#ifndef _VOS_INPUT_EVENT_DEFINED
+#define _VOS_INPUT_EVENT_DEFINED
 struct input_event {
 	struct {
 		long tv_sec;
@@ -103,13 +103,26 @@ struct input_event {
 #endif
 
 /* ---- input_id struct (used by EVIOCGID) ---- */
-#ifndef _VITRUVIAN_INPUT_ID_DEFINED
-#define _VITRUVIAN_INPUT_ID_DEFINED
+#ifndef _VOS_INPUT_ID_DEFINED
+#define _VOS_INPUT_ID_DEFINED
 struct input_id {
 	unsigned short bustype;
 	unsigned short vendor;
 	unsigned short product;
 	unsigned short version;
+};
+#endif
+
+/* ---- input_absinfo struct (used by EVIOCGABS) ---- */
+#ifndef _VOS_INPUT_ABSINFO_DEFINED
+#define _VOS_INPUT_ABSINFO_DEFINED
+struct input_absinfo {
+	int value;
+	int minimum;
+	int maximum;
+	int fuzz;
+	int flat;
+	int resolution;
 };
 #endif
 
@@ -128,6 +141,16 @@ struct input_id {
 #endif
 #ifndef EVIOCGLED
 #define EVIOCGLED(len)		_IOC(_IOC_READ,  'E', 0x19, len)
+#endif
+/* ---- device introspection (added for the BJoystick evdev backend) ---- */
+#ifndef EVIOCGNAME
+#define EVIOCGNAME(len)		_IOC(_IOC_READ,  'E', 0x06, (len))
+#endif
+#ifndef EVIOCGBIT
+#define EVIOCGBIT(ev,len)	_IOC(_IOC_READ,  'E', 0x20 + (ev), (len))
+#endif
+#ifndef EVIOCGABS
+#define EVIOCGABS(abs)		_IOR('E', 0x40 + (abs), struct input_absinfo)
 #endif
 
 #include <libevdev/libevdev.h>

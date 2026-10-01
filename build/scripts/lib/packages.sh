@@ -34,6 +34,7 @@ get_base_packages() {
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager bluez net-tools wireless-tools curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults" \
+                " fdisk e2fsprogs" \
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
@@ -158,18 +159,32 @@ get_raw_image_packages() {
     esac
 }
 
+# Board images get the same system as raw/ISO images minus GRUB, plus the board's own boot
+# and firmware packages from _board_extra_packages.
 get_board_packages() {
+    _board="$1"
+    case "$_board" in
+        raspberry|rockchip|allwinner|beagle|nxp|amlogic) _bp_arch=arm64 ;;
+        rpi-arm32|allwinner-h3|beaglebone) _bp_arch=arm32 ;;
+        visionfive2|licheerv) _bp_arch=riscv64 ;;
+        *) die "No board package list for: $_board" ;;
+    esac
+    get_base_packages "$_bp_arch" | tr ' ' '\n' | grep -v '^grub' | tr '\n' ' '
+    _board_extra_packages "$_board"
+}
+
+_board_extra_packages() {
     _board="$1"
     case "$_board" in
         raspberry)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 raspi-firmware dosfstools rsync"
+                " linux-image-arm64 raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
             ;;
         rpi-arm32)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-armmp raspi-firmware dosfstools rsync"
+                " linux-image-armmp raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
             ;;
         rockchip)
             printf '%s' \

@@ -54,6 +54,44 @@ _iso_cleanup() {
 # mtools, the disk image as an sfdisk table plus dd writes at the partition
 # offsets. UUIDs/volume IDs are generated up front so fstab and the embedded
 # grub.cfg are written before any filesystem exists.
+# First boot grows the root partition to the end of the disk and resizes the ext4 online.
+# sfdisk cannot make the kernel re-read a mounted disk's table, so partx resizes it instead.
+_install_resize_root() {
+    _rr_root="$1"
+    sudo tee "$_rr_root/usr/local/sbin/vos-resize-root" >/dev/null <<'RSZEOF'
+#!/bin/sh
+set -e
+_root=$(findmnt -no SOURCE /)
+_disk=$(lsblk -no PKNAME "$_root")
+[ -n "$_disk" ] || exit 0
+_partnum=$(echo "$_root" | sed 's|.*[^0-9]||')
+echo ", +" | sfdisk --no-reread -N "$_partnum" "/dev/$_disk" || true
+partx -u -n "$_partnum" "/dev/$_disk" || true
+resize2fs "$_root" || true
+systemctl disable vos-resize-root.service || true
+RSZEOF
+    sudo chmod +x "$_rr_root/usr/local/sbin/vos-resize-root"
+    sudo tee "$_rr_root/etc/systemd/system/vos-resize-root.service" >/dev/null <<'UNITEOF'
+[Unit]
+Description=Grow root filesystem to fill disk (first boot)
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=local-fs-pre.target
+Wants=local-fs-pre.target
+ConditionPathExists=/usr/local/sbin/vos-resize-root
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vos-resize-root
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+    chroot_isolated "$_rr_root" systemctl enable vos-resize-root.service 2>/dev/null || true
+}
+
+
 create_raw() {
     _basedir="$1"
     _arch="$2"
@@ -316,40 +354,7 @@ EOF
         sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI"
     fi
 
-    sudo tee "$_root_dir/usr/local/sbin/vos-resize-root" >/dev/null <<'RSZEOF'
-#!/bin/sh
-# First-boot only: grow the root partition to fill the target disk and
-# resize the ext4 FS. Uses sfdisk (util-linux) and resize2fs (e2fsprogs),
-# both guaranteed on any Debian install.
-set -e
-_root=$(findmnt -no SOURCE /)
-_disk=$(lsblk -no PKNAME "$_root")
-[ -n "$_disk" ] || exit 0
-_partnum=$(echo "$_root" | sed 's|.*[^0-9]||')
-echo ", +" | sfdisk -N "$_partnum" "/dev/$_disk" || true
-partprobe "/dev/$_disk" 2>/dev/null || true
-resize2fs "$_root" || true
-systemctl disable vos-resize-root.service || true
-RSZEOF
-    sudo chmod +x "$_root_dir/usr/local/sbin/vos-resize-root"
-    sudo tee "$_root_dir/etc/systemd/system/vos-resize-root.service" >/dev/null <<'UNITEOF'
-[Unit]
-Description=Grow root filesystem to fill disk (first boot)
-DefaultDependencies=no
-After=systemd-remount-fs.service
-Before=local-fs-pre.target
-Wants=local-fs-pre.target
-ConditionPathExists=/usr/local/sbin/vos-resize-root
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/vos-resize-root
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-UNITEOF
-    chroot_isolated "$_root_dir" systemctl enable vos-resize-root.service 2>/dev/null || true
+    _install_resize_root "$_root_dir"
 
     qemu_eject "$_root_dir" "$_arch"
 
@@ -850,7 +855,7 @@ create_raspberry() {
     mkdir -p "$_basedir/output"
 
     log_step "Creating $(board_config "$_board" label) RAW image..."
-    qemu-img create "$_raw" 4G
+    qemu-img create "$_raw" 6G
 
     _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"
@@ -971,7 +976,9 @@ apt install -y --download-only $_board_pkgs \$(ls /localdeb/*.deb 2>/dev/null)" 
 apt install -y $_board_pkgs
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
-fi" || die "raspberry chroot bash-c failed"
+fi
+# The downloaded .debs would otherwise ship in the image.
+apt-get clean" || die "raspberry chroot bash-c failed"
 
     # Prove the firmware landed; the board cannot boot without it.
     for _fw in start4.elf fixup4.dat; do
@@ -981,6 +988,7 @@ fi" || die "raspberry chroot bash-c failed"
 
     _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
+    _install_resize_root "$_mnt"
 
     # Boards have no boot menu for a Debug entry, so a VOS_SSHDEBUG build puts vitruvian.sshdebug
     # on the fixed cmdline, making a headless board reachable over SSH and verbose at boot.
@@ -1094,7 +1102,7 @@ create_uboot_board() {
     mkdir -p "$_basedir/output"
 
     log_step "Creating $_label RAW image..."
-    qemu-img create "$_raw" 4G
+    qemu-img create "$_raw" 6G
 
     _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"
@@ -1216,10 +1224,13 @@ apt install -y --download-only $_board_pkgs u-boot-menu \$(ls /localdeb/*.deb 2>
 apt install -y $_board_pkgs u-boot-menu
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
-fi" || die "uboot chroot bash-c failed"
+fi
+# The downloaded .debs would otherwise ship in the image.
+apt-get clean" || die "uboot chroot bash-c failed"
 
     _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
+    _install_resize_root "$_mnt"
 
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
     log_info "Kernel version: $_kver"

@@ -513,8 +513,9 @@ PackageWorker::_RunSimulate(const BObjectList<BString, true>* installOwned,
 	_ReportProgress(-1, "Resolving changes...", "");
 
 	BString summary;
-	if (fBackend->SimulateTransaction(install, remove, purge, &summary)
-			!= B_OK) {
+	BMessage details;
+	if (fBackend->SimulateTransaction(install, remove, purge, &summary,
+			&details) != B_OK) {
 		_ReportError(fBackend->LastError(),
 			fBackend->LastErrorDetail().String());
 	} else {
@@ -522,6 +523,7 @@ PackageWorker::_RunSimulate(const BObjectList<BString, true>* installOwned,
 		// now, so rebuild from the owned lists.
 		BMessage reply(kMsgSimulateReady);
 		reply.AddString("summary", summary);
+		reply.AddMessage("details", &details);
 		for (int32 i = 0; i < installOwned->CountItems(); i++)
 			reply.AddString("install", *installOwned->ItemAt(i));
 		for (int32 i = 0; i < removeOwned->CountItems(); i++)

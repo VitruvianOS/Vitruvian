@@ -86,6 +86,8 @@ install(FILES data/etc/systemd/journald.conf.d/vitruvian.conf DESTINATION /etc/s
 
 install(FILES data/etc/ssh/sshd_config.d/10-vitruvian-paths.conf DESTINATION /etc/ssh/sshd_config.d/)
 
+install(FILES data/etc/udev/rules.d/90-vitruvian-backlight.rules DESTINATION /etc/udev/rules.d/)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   install(FILES data/systemd/vos-sshdebug.service DESTINATION /etc/systemd/system/)
 endif()

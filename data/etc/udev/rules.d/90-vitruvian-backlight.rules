@@ -1,0 +1,4 @@
+# app_server drives the panel backlight through libbacklight, which writes
+# /sys/class/backlight/*/brightness. That file is root-only by default, so
+# hand it to the video group the desktop user already belongs to.
+ACTION=="add", SUBSYSTEM=="backlight", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"

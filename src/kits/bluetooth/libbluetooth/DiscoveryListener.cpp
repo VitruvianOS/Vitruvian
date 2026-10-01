@@ -51,6 +51,54 @@ DiscoveryListener::DiscoveryListener()
 }
 
 
+// BlueZ only announces a device with InterfacesAdded the first time it sees
+// it. One it already knows (from an earlier scan, by us or bluetoothctl)
+// never reaches the watcher again, so report the unpaired ones from the
+// backend's cache too, skipping any already reported.
+void
+DiscoveryListener::_ReportKnownDevices()
+{
+	BlueZBackend* backend = BlueZBackend::Instance();
+	if (backend == NULL)
+		return;
+
+	BMessage devices;
+	if (backend->GetDevices(&devices) != B_OK)
+		return;
+
+	int32 count = 0;
+	devices.FindInt32("device_count", &count);
+	for (int32 i = 0; i < count; i++) {
+		BString itemName;
+		itemName << "device_" << i;
+		BMessage info;
+		if (devices.FindMessage(itemName.String(), &info) != B_OK)
+			continue;
+
+		bool paired = false;
+		info.FindBool("paired", &paired);
+		if (paired)
+			continue;
+
+		BString path;
+		info.FindString("path", &path);
+		bool alreadyReported = false;
+		for (int32 j = 0; j < fRemoteDevicesList.CountItems(); j++) {
+			if (path == fRemoteDevicesList.ItemAt(j)->Path()) {
+				alreadyReported = true;
+				break;
+			}
+		}
+		if (alreadyReported)
+			continue;
+
+		RemoteDevice* device = new RemoteDevice(info);
+		fRemoteDevicesList.AddItem(device);
+		DeviceDiscovered(device, device->GetDeviceClass());
+	}
+}
+
+
 void
 DiscoveryListener::MessageReceived(BMessage* message)
 {
@@ -69,6 +117,8 @@ DiscoveryListener::MessageReceived(BMessage* message)
 			message->FindInt32("status", &status);
 			fRemoteDevicesList.MakeEmpty();
 			InquiryStarted(status);
+			if (status == B_OK)
+				_ReportKnownDevices();
 			break;
 		}
 
@@ -86,6 +136,7 @@ DiscoveryListener::MessageReceived(BMessage* message)
 					backend->StopWatching(BMessenger(this));
 				}
 			}
+			_ReportKnownDevices();
 			InquiryCompleted(INQUIRY_COMPLETED);
 			break;
 		}

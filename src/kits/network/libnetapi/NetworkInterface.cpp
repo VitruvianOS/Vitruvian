@@ -362,25 +362,82 @@ BNetworkInterface::GetHardwareAddress(BNetworkAddress& address)
 int32
 BNetworkInterface::CountAddresses() const
 {
-	// TODO: Query NetworkManager for address count
-	return 0;
+	// Live: enumerate straight from the kernel via getifaddrs(), the same
+	// way Flags() does above -- NetworkManager has no per-address API here.
+	int32 count = 0;
+	struct ifaddrs* addrs;
+	if (getifaddrs(&addrs) != 0)
+		return 0;
+
+	for (struct ifaddrs* addr = addrs; addr != NULL; addr = addr->ifa_next) {
+		if (addr->ifa_addr == NULL || strcmp(addr->ifa_name, fName) != 0)
+			continue;
+		count++;
+	}
+
+	freeifaddrs(addrs);
+	return count;
 }
 
 
 status_t
 BNetworkInterface::GetAddressAt(int32 index, BNetworkInterfaceAddress& address)
 {
-	// TODO: Query NetworkManager for address at index
-	return B_ERROR;
+	if (index < 0)
+		return B_BAD_VALUE;
+
+	struct ifaddrs* addrs;
+	if (getifaddrs(&addrs) != 0)
+		return B_ERROR;
+
+	status_t status = B_ENTRY_NOT_FOUND;
+	int32 current = 0;
+	for (struct ifaddrs* addr = addrs; addr != NULL; addr = addr->ifa_next) {
+		if (addr->ifa_addr == NULL || strcmp(addr->ifa_name, fName) != 0)
+			continue;
+		if (current++ != index)
+			continue;
+
+		address.SetAddress(BNetworkAddress(*addr->ifa_addr));
+		if (addr->ifa_netmask != NULL)
+			address.SetMask(BNetworkAddress(*addr->ifa_netmask));
+		if ((addr->ifa_flags & IFF_BROADCAST) != 0
+				&& addr->ifa_ifu.ifu_broadaddr != NULL) 
+			address.SetBroadcast(BNetworkAddress(*addr->ifa_ifu.ifu_broadaddr));
+		 else if ((addr->ifa_flags & IFF_POINTOPOINT) != 0
+				&& addr->ifa_ifu.ifu_dstaddr != NULL) 
+			address.SetDestination(BNetworkAddress(*addr->ifa_ifu.ifu_dstaddr));
+		address.SetFlags(addr->ifa_flags);
+		status = B_OK;
+		break;
+	}
+
+	freeifaddrs(addrs);
+	return status;
 }
 
 
 int32
 BNetworkInterface::FindFirstAddress(int family)
 {
-	// TODO: Query NetworkManager once CountAddresses()/GetAddressAt() are
-	// wired up; there's nothing to search yet.
-	return -1;
+	struct ifaddrs* addrs;
+	if (getifaddrs(&addrs) != 0)
+		return -1;
+
+	int32 result = -1;
+	int32 index = 0;
+	for (struct ifaddrs* addr = addrs; addr != NULL; addr = addr->ifa_next) {
+		if (addr->ifa_addr == NULL || strcmp(addr->ifa_name, fName) != 0)
+			continue;
+		if (family == AF_UNSPEC || addr->ifa_addr->sa_family == family) {
+			result = index;
+			break;
+		}
+		index++;
+	}
+
+	freeifaddrs(addrs);
+	return result;
 }
 
 

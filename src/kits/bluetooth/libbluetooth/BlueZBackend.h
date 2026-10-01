@@ -187,6 +187,7 @@ private:
 	// itself only fails when the system bus is unreachable, which is a
 	// separate, rarer condition this doesn't change.
 	static gboolean _SetupBluezWatchSource(gpointer cookie);
+	static gboolean _SubscribeSignalsSource(gpointer cookie);
 	void _SetupBluezWatch();
 	static void _OnBluezNameAppeared(GDBusConnection* connection,
 		const char* name, const char* nameOwner, void* userData);

@@ -1,8 +1,0 @@
-Jamfile
-Makefile
-Makefile.in
-.*.sw*
-*.out
-generated*
-compile_commands.json
-.cache/

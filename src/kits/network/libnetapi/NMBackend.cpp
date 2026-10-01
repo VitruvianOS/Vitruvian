@@ -2435,9 +2435,58 @@ _RunConnectToWiFi(gpointer data)
 	g_bytes_unref(ssidBytes);
 	nm_connection_add_setting(connection, NM_SETTING(wirelessSetting));
 
-	// No password: an intentionally incomplete profile for a secured
-	// network, the case that forces NM to call our agent's GetSecrets on
-	// activation -- see 1.1's "control case vs agent-covered case" split.
+	// Match the SSID against the device's cached APs: the AP path goes to
+	// AddAndActivate so NM knows what it is joining, and its capabilities
+	// decide the key-mgmt of a profile that has no password yet.
+	NMAccessPoint* targetAP = NULL;
+	if (NM_IS_DEVICE_WIFI(device)) {
+		const GPtrArray* aps = nm_device_wifi_get_access_points(
+			(NMDeviceWifi*)device);
+		int32 bestStrength = -1;
+		for (guint i = 0; aps != NULL && i < aps->len; i++) {
+			NMAccessPoint* ap = (NMAccessPoint*)g_ptr_array_index(aps, i);
+			GBytes* ssidBytes = nm_access_point_get_ssid(ap);
+			if (ssidBytes == NULL)
+				continue;
+
+			gsize len = 0;
+			gconstpointer data = g_bytes_get_data(ssidBytes, &len);
+			if (data == NULL || BString((const char*)data, len) != job->ssid)
+				continue;
+
+			int32 strength = nm_access_point_get_strength(ap);
+			if (strength > bestStrength) {
+				bestStrength = strength;
+				targetAP = ap;
+			}
+		}
+	}
+
+	// No password on a secured network: the profile must still declare its
+	// key-mgmt without a secret. That is what makes NM call our agent's
+	// GetSecrets on activation; with no security setting at all NM treats
+	// it as an open network and just fails to associate.
+	if (job->password.IsEmpty() && targetAP != NULL
+			&& _APIsSecured(targetAP)) {
+		uint32 apSec = (uint32)nm_access_point_get_wpa_flags(targetAP)
+			| (uint32)nm_access_point_get_rsn_flags(targetAP);
+		const char* keyMgmt = NULL;
+		if ((apSec & NM_802_11_AP_SEC_KEY_MGMT_PSK) != 0)
+			keyMgmt = "wpa-psk";
+		else if ((apSec & NM_802_11_AP_SEC_KEY_MGMT_SAE) != 0)
+			keyMgmt = "sae";
+		else if (apSec == NM_802_11_AP_SEC_NONE)
+			keyMgmt = "none";
+
+		if (keyMgmt != NULL) {
+			NMSettingWirelessSecurity* secSetting =
+				(NMSettingWirelessSecurity*)nm_setting_wireless_security_new();
+			g_object_set(secSetting, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT,
+				keyMgmt, NULL);
+			nm_connection_add_setting(connection, NM_SETTING(secSetting));
+		}
+	}
+
 	if (!job->password.IsEmpty()) {
 		NMSettingWirelessSecurity* secSetting =
 			(NMSettingWirelessSecurity*)nm_setting_wireless_security_new();
@@ -2459,7 +2508,9 @@ _RunConnectToWiFi(gpointer data)
 	}
 
 	nm_client_add_and_activate_connection_async(job->nmClient, connection,
-		device, NULL, NULL, _OnAddAndActivateDone, job);
+		device, targetAP != NULL
+			? nm_object_get_path(NM_OBJECT(targetAP)) : NULL,
+		NULL, _OnAddAndActivateDone, job);
 
 	g_object_unref(connection);
 	return G_SOURCE_REMOVE;

@@ -1660,7 +1660,7 @@ AboutView::_CreateCreditsView()
 	fCreditsView->Insert(" | ");
 	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fLinkColor);
 	fCreditsView->InsertHyperText(B_TRANSLATE("Donate"),
-		new URLAction("https://wiki.v-os.dev/docs/reference/donate/"));
+		new URLAction("https://v-os.dev/donate/"));
 	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
 	fCreditsView->Insert("\n\n");
 

@@ -44,6 +44,7 @@ public:
 
 private:
 	virtual void MessageReceived(BMessage* message);
+	void _ReportKnownDevices();
 
 	// Private protocol between DiscoveryAgent and its listener; BlueZBackend's
 	// own NOTIFICATION_DEVICE_FOUND is handled directly (the agent points

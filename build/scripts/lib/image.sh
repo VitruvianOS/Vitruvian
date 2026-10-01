@@ -100,6 +100,10 @@ create_raw() {
     _root_img="$_basedir/image_tree/scratch/root.img"
     _esp_img="$_basedir/image_tree/scratch/esp.img"
 
+
+    log_step "Creating RAW image..."
+    qemu-img create "$_raw" 8G
+
     sudo rm -rf "$_root_dir" "$_esp_dir"
     mkdir -p "$_basedir/output" "$_host_shared" "$_basedir/image_tree/scratch"
     sudo mkdir -p "$_root_dir" "$_esp_dir"
@@ -110,6 +114,43 @@ create_raw() {
     _root_uuid="$(cat /proc/sys/kernel/random/uuid)"
     _esp_volid="$(od -An -tx4 -N4 /dev/urandom | tr -d ' \n' | tr 'a-f' 'A-F')"
     _esp_uuid="${_esp_volid%????}-${_esp_volid#????}"
+
+    sudo parted --script "$_loop" mklabel gpt
+    sudo parted --script "$_loop" mkpart ESP fat32 1MiB 513MiB
+    sudo parted --script "$_loop" set 1 esp on
+    sudo parted --script "$_loop" mkpart primary ext4 513MiB 100%
+    sudo partprobe "$_loop"
+    sudo udevadm settle
+
+    _efi_part="${_loop}p1"
+    _root_part="${_loop}p2"
+
+    sudo mkfs.vfat -F32 "$_efi_part"
+    sudo mkfs.ext4 -F -I 512 \
+        -O ^ea_inode,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
+        -L vitruvian-root "$_root_part"
+
+    _esp_uuid=$(sudo blkid -s UUID -o value "$_efi_part")
+    _root_uuid=$(sudo blkid -s UUID -o value "$_root_part")
+    [ -n "$_esp_uuid" ]  || die "Could not read ESP UUID from $_efi_part"
+    [ -n "$_root_uuid" ] || die "Could not read root UUID from $_root_part"
+
+    sudo mkdir -p "$_mnt"
+    sudo mount "$_root_part" "$_mnt"
+    sudo mkdir -p "$_mnt/boot/efi"
+    sudo mount "$_efi_part" "$_mnt/boot/efi"
+
+    log_step "Copying chroot into RAW image (rsync)..."
+    # apt's downloaded index files serve no purpose on the target (they go
+    # stale within days and a fresh `apt-get update` is needed before any
+    # install anyway) but do take real space -- with contrib/non-free/
+    # non-free-firmware enabled and the growing firmware/microcode package
+    # set, they were enough to overflow the fixed-size root partition below.
+    sudo rsync -aHAXx --numeric-ids \
+        --exclude='/proc/*' --exclude='/sys/*' --exclude='/dev/*' \
+        --exclude='/tmp/*'  --exclude='/run/*'  --exclude='/localdeb' \
+        --exclude='/scratch' --exclude='/var/lib/apt/lists/*' \
+        "$_chroot_dir/" "$_mnt/"
 
     log_step "Assembling root filesystem tree (no loop device)..."
     sudo rsync -aHAXx --numeric-ids \
@@ -145,6 +186,11 @@ create_raw() {
     sudo chroot "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 
 umount /sys/firmware/efi/efivars 2>/dev/null || true
+
+# The rsync above excluded /var/lib/apt/lists (see its comment) to fit the
+# root partition, which leaves apt with an empty package index -- nothing
+# below can resolve or install until it is rebuilt.
+apt-get update
 
 apt-get remove -y vos nexus-dkms 2>/dev/null || true
 
@@ -188,7 +234,13 @@ host_shared      $_guest_mnt  9p     trans=virtio,version=9p2000.L,rw,nofail,x-s
 FSTABEOF
 
 mkdir -p $_guest_mnt
-rm -rf /localdeb" || die "raw chroot bash-c failed"
+rm -rf /localdeb
+
+# Undo the apt-get update above: the index is stale the moment this image
+# is written anyway, and shipping it would put the excluded rsync space
+# straight back.
+apt-get clean
+rm -rf /var/lib/apt/lists/*" || die "raw chroot bash-c failed"
 
     _common_chroot_setup "$_root_dir" "$_hostname" "$_user" "$_pass" \
         || die "_common_chroot_setup failed"

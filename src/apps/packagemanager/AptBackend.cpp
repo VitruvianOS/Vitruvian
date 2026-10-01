@@ -81,10 +81,65 @@ AptBackend::_RunVerb(const char* verb, const BObjectList<BString>& names)
 }
 
 
+// Turns one machine-readable "Inst"/"Remv" line from `apt-get -s` into a
+// "name\tversion" entry filed under "new", "upgrade" or "remove". The line
+// shape is:
+//   Inst NAME [OLD-VER] (NEW-VER origin [arch]) []   -> upgrade (has [OLD])
+//   Inst NAME (NEW-VER origin [arch])                -> new install
+//   Remv NAME [VER] (...)                            -> removal
+static void
+parse_sim_line(BMessage* details, const BString& line)
+{
+	const bool isRemove = line.StartsWith("Remv ");
+
+	int32 pos = 5;
+	while (pos < line.Length() && line.ByteAt(pos) == ' ')
+		pos++;
+	int32 nameEnd = line.FindFirst(' ', pos);
+	if (nameEnd < 0)
+		nameEnd = line.Length();
+
+	BString name;
+	line.CopyInto(name, pos, nameEnd - pos);
+	if (name.IsEmpty())
+		return;
+
+	BString rest;
+	line.CopyInto(rest, nameEnd, line.Length() - nameEnd);
+	rest.Trim();
+
+	const bool hasOldVersion = rest.StartsWith("[");
+
+	BString version;
+	int32 paren = rest.FindFirst('(');
+	if (paren >= 0) {
+		int32 start = paren + 1;
+		int32 end = start;
+		while (end < rest.Length() && rest.ByteAt(end) != ' '
+			&& rest.ByteAt(end) != ')') {
+			end++;
+		}
+		rest.CopyInto(version, start, end - start);
+	} else if (hasOldVersion) {
+		int32 close = rest.FindFirst(']');
+		if (close > 1)
+			rest.CopyInto(version, 1, close - 1);
+	}
+
+	BString entry(name);
+	if (!version.IsEmpty())
+		entry << '\t' << version;
+
+	const char* field = isRemove ? "remove"
+		: (hasOldVersion ? "upgrade" : "new");
+	details->AddString(field, entry);
+}
+
+
 status_t
 AptBackend::SimulateTransaction(const BObjectList<BString>& install,
 	const BObjectList<BString>& remove, const BObjectList<BString>& purge,
-	BString* summary)
+	BString* summary, BMessage* details)
 {
 	if (summary == NULL)
 		return B_BAD_VALUE;
@@ -138,7 +193,12 @@ AptBackend::SimulateTransaction(const BObjectList<BString>& install,
 			const BString& line = *lines.ItemAt(i);
 			if (line.Length() == 0)
 				continue;
-			if (line.StartsWith("Inst ") || line.StartsWith("Conf ")
+			if (line.StartsWith("Inst ") || line.StartsWith("Remv ")) {
+				if (details != NULL)
+					parse_sim_line(details, line);
+				continue;
+			}
+			if (line.StartsWith("Conf ")
 				|| line.StartsWith("NOTE:") || line.StartsWith("      ")
 				|| line.StartsWith("Reading ")
 				|| line.StartsWith("Building ")) {

@@ -6,6 +6,7 @@
 #define APT_BACKEND_H
 
 #include <Locker.h>
+#include <Message.h>
 #include <ObjectList.h>
 #include <String.h>
 
@@ -19,11 +20,16 @@ public:
 								AptBackend();
 								~AptBackend();
 
+			// summary keeps apt's own prose for fallback/logging; when
+			// details is non-NULL it is filled with the resolved set as
+			// "name\tversion" strings under the "new", "upgrade" and
+			// "remove" fields, ready for a structured review dialog.
 			status_t			SimulateTransaction(
 									const BObjectList<BString>& install,
 									const BObjectList<BString>& remove,
 									const BObjectList<BString>& purge,
-									BString* summary);
+									BString* summary,
+									BMessage* details = NULL);
 			status_t			ApplyTransaction(
 									const BObjectList<BString>& install,
 									const BObjectList<BString>& remove,

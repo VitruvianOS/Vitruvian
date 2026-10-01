@@ -6,12 +6,15 @@
 
 #include "ConnectionInfoWindow.h"
 
+#include <stdio.h>
+
 #include <Button.h>
 #include <Catalog.h>
 #include <GroupLayout.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <Message.h>
+#include <NetworkInterface.h>
 #include <StringView.h>
 
 #include "NMBackend.h"
@@ -101,7 +104,7 @@ ConnectionInfoWindow::MessageReceived(BMessage* message)
 void
 ConnectionInfoWindow::_PopulateFrom(const BMessage& deviceInfo)
 {
-	BString interfaceName, hwAddress, type, driver;
+	BString interfaceName, hwAddress, type, driver, devicePath;
 	uint32 state = 0;
 	uint32 mtu = 0;
 
@@ -109,6 +112,7 @@ ConnectionInfoWindow::_PopulateFrom(const BMessage& deviceInfo)
 	deviceInfo.FindString(kNMFieldHWAddress, &hwAddress);
 	deviceInfo.FindString(kNMFieldType, &type);
 	deviceInfo.FindString(kNMFieldDriver, &driver);
+	deviceInfo.FindString(kNMFieldPath, &devicePath);
 	deviceInfo.FindUInt32(kNMFieldState, &state);
 	deviceInfo.FindUInt32(kNMFieldMTU, &mtu);
 
@@ -139,15 +143,78 @@ ConnectionInfoWindow::_PopulateFrom(const BMessage& deviceInfo)
 		addRow(B_TRANSLATE("State:"), _StateString(state));
 
 		if (type == "wifi") {
-			addRow(B_TRANSLATE("SSID:"), kNotYetAvailable);
-			addRow(B_TRANSLATE("Signal:"), kNotYetAvailable);
-			addRow(B_TRANSLATE("Security:"), kNotYetAvailable);
+			// Same connected-AP lookup as InterfaceDetailView's device pane.
+			BString ssid;
+			int32 strength = 0;
+			bool secured = false;
+			bool haveConnected = false;
+			if (devicePath.Length() > 0) {
+				NMBackend* backend = NMBackend::Instance();
+				if (backend != NULL) {
+					BMessage networks;
+					backend->ScanWiFiNetworks(devicePath.String(), &networks);
+					int32 apCount = 0;
+					networks.FindInt32(kNMFieldAPCount, &apCount);
+					for (int32 i = 0; i < apCount; i++) {
+						char apName[32];
+						snprintf(apName, sizeof(apName), "ap_%d", (int)i);
+						BMessage apInfo;
+						if (networks.FindMessage(apName, &apInfo) != B_OK)
+							continue;
+						bool connected = false;
+						apInfo.FindBool(kNMFieldAPConnected, &connected);
+						if (!connected)
+							continue;
+						apInfo.FindString(kNMFieldAPSSID, &ssid);
+						apInfo.FindInt32(kNMFieldAPStrength, &strength);
+						apInfo.FindBool(kNMFieldAPSecured, &secured);
+						haveConnected = true;
+						break;
+					}
+				}
+			}
+
+			addRow(B_TRANSLATE("SSID:"), haveConnected && ssid.Length() > 0
+				? ssid : BString(kNotYetAvailable));
+			if (haveConnected) {
+				BString strengthStr;
+				strengthStr << strength << "%";
+				addRow(B_TRANSLATE("Signal:"), strengthStr);
+				addRow(B_TRANSLATE("Security:"), secured
+					? B_TRANSLATE("Secured") : B_TRANSLATE("Open"));
+			} else {
+				addRow(B_TRANSLATE("Signal:"), kNotYetAvailable);
+				addRow(B_TRANSLATE("Security:"), kNotYetAvailable);
+			}
+			// NMBackend's AP scan has no frequency field yet (see
+			// kNMFieldAP* in NMBackend.h) -- left as a stub until it does.
 			addRow(B_TRANSLATE("Frequency:"), kNotYetAvailable);
 		}
 
-		addRow(B_TRANSLATE("IPv4 Address:"), kNotYetAvailable);
-		addRow(B_TRANSLATE("IPv4 Gateway:"), kNotYetAvailable);
-		addRow(B_TRANSLATE("IPv4 DNS:"), kNotYetAvailable);
+		// Live: BNetworkInterface reads straight from the kernel's own
+		// interface table, same as InterfaceDetailView's device pane.
+		BString ipAddress;
+		BNetworkInterface iface(interfaceName.String());
+		if (iface.Exists()) {
+			BNetworkInterfaceAddress addr;
+			for (int32 i = 0; i < iface.CountAddresses(); i++) {
+				if (iface.GetAddressAt(i, addr) == B_OK
+						&& addr.Address().Family() == AF_INET) {
+					ipAddress = addr.Address().ToString();
+					break;
+				}
+			}
+		}
+		addRow(B_TRANSLATE("IPv4 Address:"),
+			ipAddress.Length() > 0 ? ipAddress : BString(kNotYetAvailable));
+
+		BString gateway, dns;
+		deviceInfo.FindString(kNMFieldGateway, &gateway);
+		deviceInfo.FindString(kNMFieldDNS, &dns);
+		addRow(B_TRANSLATE("IPv4 Gateway:"),
+			gateway.Length() > 0 ? gateway : BString(kNotYetAvailable));
+		addRow(B_TRANSLATE("IPv4 DNS:"),
+			dns.Length() > 0 ? dns : BString(kNotYetAvailable));
 
 		addRow(B_TRANSLATE("Driver:"),
 			driver.Length() > 0 ? driver : BString(kNotYetAvailable));

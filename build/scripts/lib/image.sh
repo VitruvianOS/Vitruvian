@@ -974,6 +974,19 @@ fi" || die "raspberry chroot bash-c failed"
     _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
 
+    # Boards have no boot menu for a Debug entry, so a VOS_SSHDEBUG build puts vitruvian.sshdebug
+    # on the fixed cmdline, making a headless board reachable over SSH and verbose at boot.
+    _sshdebug=0
+    if [ -f "$_basedir/buildconfig.conf" ]; then
+        . "$_basedir/buildconfig.conf"
+        [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
+    fi
+    _rpi_cmdline_tail="quiet splash loglevel=3"
+    if [ "$_sshdebug" = 1 ]; then
+        _debug_ssh_setup "$_mnt" || die "_debug_ssh_setup failed"
+        _rpi_cmdline_tail="systemd.show_status=true vitruvian.sshdebug"
+    fi
+
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
     log_info "Kernel version: $_kver"
 
@@ -998,14 +1011,7 @@ initramfs initrd.img followkernel
 disable_overscan=1
 hdmi_drive=2
 dtoverlay=vc4-kms-v3d
-
-[pi4]
-kernel=kernel7l.img
-initramfs initrd.img followkernel
-
-[pi5]
-kernel=kernel_2712.img
-initramfs initrd.img followkernel
+enable_uart=1
 RPICFG
     else
         sudo sh -c "cat > '$_mnt/boot/firmware/config.txt'" <<'RPICFG32'
@@ -1015,6 +1021,7 @@ initramfs initrd.img followkernel
 disable_overscan=1
 hdmi_drive=2
 dtoverlay=vc4-kms-v3d
+enable_uart=1
 
 [pi1]
 kernel=kernel.img
@@ -1035,7 +1042,7 @@ RPICFG32
     fi
 
     sudo sh -c "cat > '$_mnt/boot/firmware/cmdline.txt'" <<CMDLINE
-root=/dev/mmcblk0p2 rootfstype=ext4 rw rootwait console=serial0,115200 console=tty1 quiet splash loglevel=3
+root=/dev/mmcblk0p2 rootfstype=ext4 rw rootwait console=serial0,115200 console=tty1 $_rpi_cmdline_tail
 CMDLINE
 
     log_step "Copying kernel and initrd to boot firmware..."

@@ -1,0 +1,53 @@
+#!/bin/sh
+# Self-service account changes for the User preflet, run via pkexec. This
+# helper is the security boundary: the caller's own account only, never $HOME.
+set -eu
+
+die() {
+	echo "vos-user-helper: $*" >&2
+	exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || die "must run as root (invoke via pkexec)"
+
+cmd="${1:-}"
+case "$cmd" in
+	set-face)
+		_user="${2:-}"
+		_img="${3:-}"
+		[ -n "$_user" ] && [ -n "$_img" ] \
+			|| die "usage: set-face <user> <image>"
+		_caller_uid="${PKEXEC_UID:-}"
+		[ -n "$_caller_uid" ] || die "PKEXEC_UID not set"
+		_target_uid=$(id -u "$_user" 2>/dev/null) \
+			|| die "unknown user: $_user"
+		[ "$_caller_uid" = "$_target_uid" ] \
+			|| die "can only set your own picture"
+		mkdir -p /var/lib/AccountsService/icons
+		_tmp=$(mktemp /var/lib/AccountsService/icons/.face.XXXXXX) \
+			|| die "temp file failed"
+		trap 'rm -f "$_tmp"' EXIT
+		# Bytes come from the caller; root never opens the path.
+		if ! runuser -u "$_user" -- head -c 1048577 -- "$_img" \
+				> "$_tmp" 2>/dev/null; then
+			die "image not readable: $_img"
+		fi
+		_size=$(wc -c < "$_tmp")
+		[ "$_size" -ge 1 ] || die "empty image"
+		[ "$_size" -le 1048576 ] || die "image larger than 1 MiB"
+		_magic=$(od -An -tx1 -N8 "$_tmp" | tr -d ' \n')
+		case "$_magic" in
+			89504e470d0a1a0a*) ;; # PNG
+			ffd8ff*) ;;           # JPEG
+			*) die "image must be PNG or JPEG" ;;
+		esac
+		chown root:root "$_tmp"
+		chmod 0644 "$_tmp"
+		mv -f "$_tmp" "/var/lib/AccountsService/icons/$_user"
+		trap - EXIT
+		echo "face set for $_user"
+		;;
+	*)
+		die "usage: vos-user-helper set-face <user> <image>"
+		;;
+esac

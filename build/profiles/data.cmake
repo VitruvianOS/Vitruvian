@@ -40,11 +40,19 @@ install(FILES data/etc/default/grub
 
 install(PROGRAMS data/libexec/vos-set-autologin
   DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-admin-helper
+  DESTINATION /usr/libexec/)
+install(PROGRAMS data/libexec/vos-user-helper
+  DESTINATION /usr/libexec/)
+install(FILES data/share/vos/user-default-groups
+  DESTINATION /usr/share/vos/)
 install(FILES data/polkit-1/actions/org.vitruvian.user.policy
   DESTINATION /usr/share/polkit-1/actions/)
 install(PROGRAMS data/libexec/vos-set-power-actions
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.power.policy
+  DESTINATION /usr/share/polkit-1/actions/)
+install(FILES data/polkit-1/actions/org.vitruvian.admin.policy
   DESTINATION /usr/share/polkit-1/actions/)
 install(FILES data/polkit-1/actions/org.vitruvian.installer.policy
   DESTINATION /usr/share/polkit-1/actions/)

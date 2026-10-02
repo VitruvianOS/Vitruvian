@@ -131,7 +131,7 @@ board_config() {
         beagle)
             case "$_field" in
                 arch)           printf 'arm64' ;;
-                label)          printf 'BeagleBoard (AI/X15/Play)' ;;
+                label)          printf 'BeaglePlay (AM62x)' ;;
                 partition_fmt)  printf 'gpt' ;;
                 boot_style)     printf 'spl-uboot' ;;
                 boot_size_mb)   printf '256' ;;

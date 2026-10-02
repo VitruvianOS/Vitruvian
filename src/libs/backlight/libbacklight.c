@@ -237,10 +237,11 @@ struct backlight *backlight_init(struct udev_device *drm_device,
 		else
 			goto out;
 
+		/* Internal panels (LVDS/eDP/DSI) may use platform or firmware
+		   nodes; external connectors need raw GPU control. */
 		if (connector_type != DRM_MODE_CONNECTOR_LVDS &&
-		    connector_type != DRM_MODE_CONNECTOR_eDP) {
-			/* External displays are assumed to require
-			   gpu control at the moment */
+		    connector_type != DRM_MODE_CONNECTOR_eDP &&
+		    connector_type != DRM_MODE_CONNECTOR_DSI) {
 			if (entry_type != BACKLIGHT_RAW)
 				goto out;
 		}

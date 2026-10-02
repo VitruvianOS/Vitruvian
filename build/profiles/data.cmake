@@ -79,6 +79,12 @@ install(PROGRAMS data/libexec/vos-apt-helper
 install(FILES data/polkit-1/actions/org.vitruvian.packagemanager.policy
   DESTINATION /usr/share/polkit-1/actions/)
 
+# Apt proxy drop-in helper; session vars come from config/settings.
+install(PROGRAMS data/libexec/vos-set-proxy
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.network.proxy.policy
+  DESTINATION /usr/share/polkit-1/actions/)
+
 # Consulted only when /etc/vos/live exists; Installer strips it on commit.
 install(FILES data/sudoers.d/vos-live
   DESTINATION /etc/sudoers.d/

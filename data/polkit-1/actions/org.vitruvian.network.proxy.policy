@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Vitruvian</vendor>
+  <vendor_url>https://vitruvian.dev/</vendor_url>
+
+  <action id="org.vitruvian.network.proxy">
+    <description>Change the system-wide HTTP proxy used by apt</description>
+    <message>Authentication is required to change the proxy settings.</message>
+    <!--
+      auth_admin in all three slots. The helper takes proxy URLs as
+      arguments that reach a root process writing /etc/apt/apt.conf.d/,
+      so this must never be weakened to "yes".
+    -->
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/vos-set-proxy</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

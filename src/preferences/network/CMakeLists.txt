@@ -6,6 +6,8 @@ Application(Network
 	StaticIPView.cpp
 	IPAddressControl.cpp
 	NetworkHotspotSettings.cpp
+	ProxyView.cpp
+	ProxySettings.cpp
 	LIBS be shared localestub
 	RDEF Network.rdef
 )

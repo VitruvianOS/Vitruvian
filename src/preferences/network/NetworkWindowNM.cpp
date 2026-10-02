@@ -8,6 +8,7 @@
 
 #include "InterfaceDetailView.h"
 #include "NMBackend.h"
+#include "ProxyView.h"
 #include "StaticIPView.h"
 
 #include <algorithm>
@@ -231,7 +232,9 @@ NetworkWindowNM::NetworkWindowNM()
 			| B_AUTO_UPDATE_SIZE_LIMITS),
 	fListView(NULL),
 	fDetailView(NULL),
+	fProxyView(NULL),
 	fRevertButton(NULL),
+	fProxyItem(NULL),
 	fServicesItem(NULL),
 	fDialUpItem(NULL),
 	fVPNItem(NULL),
@@ -259,14 +262,20 @@ NetworkWindowNM::NetworkWindowNM()
 	scrollView->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNLIMITED));
 
 	fDetailView = new InterfaceDetailView();
+	fProxyView = new ProxyView();
+	fProxyView->Hide();
 
 	// Build the layout: list on the left, swappable detail pane on the
-	// right, Deskbar checkbox along the bottom.
+	// right (device detail or the system-wide Proxy pane), Deskbar
+	// checkbox along the bottom.
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.SetInsets(B_USE_WINDOW_SPACING)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 			.Add(scrollView)
-			.Add(fDetailView)
+			.AddGroup(B_VERTICAL)
+				.Add(fDetailView)
+				.Add(fProxyView)
+			.End()
 		.End()
 		.Add(showReplicantCheckBox)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
@@ -348,6 +357,7 @@ NetworkWindowNM::MessageReceived(BMessage* message)
 			break;
 
 		case StaticIPView::kMsgDirtyChanged:
+		case ProxyView::kMsgDirtyChanged:
 			_UpdateRevertButton();
 			break;
 
@@ -464,6 +474,12 @@ NetworkWindowNM::_PopulateDeviceList(BMessage* devices)
 
 	bool nmAvailable = true;
 	devices->FindBool(kNMFieldNMAvailable, &nmAvailable);
+
+	// Proxy is session-wide and does not need NetworkManager; always show
+	// it so the pane stays reachable when NM is down.
+	fProxyItem = new TitleItem(B_TRANSLATE("Proxy"));
+	fListView->AddItem(fProxyItem);
+
 	if (!nmAvailable) {
 		// Unavailable, not empty: NetworkManager itself is not reachable,
 		// so an empty Wired/WiFi/VPN list here would be a lie about why.
@@ -619,6 +635,17 @@ NetworkWindowNM::_SelectItem(BListItem* item)
 {
 	DeviceListItem* deviceItem = dynamic_cast<DeviceListItem*>(item);
 	VPNListItem* vpnItem = dynamic_cast<VPNListItem*>(item);
+
+	if (item != NULL && item == fProxyItem) {
+		// Session-wide proxy, not tied to a device or profile.
+		_ShowProxyPane(true);
+		fProxyView->Reload();
+		_UpdateRevertButton();
+		return;
+	}
+
+	_ShowProxyPane(false);
+
 	if (deviceItem != NULL) {
 		fDetailView->ShowEmpty(B_TRANSLATE("Loading" B_UTF8_ELLIPSIS));
 
@@ -644,17 +671,35 @@ NetworkWindowNM::_SelectItem(BListItem* item)
 }
 
 
-// Revert is scoped to the detail pane's editable fields (currently just
-// StaticIPView) and enabled only when that pane is dirty against the
-// snapshot taken when it was populated -- not the permanent SetEnabled(false)
-// stub this used to be.
+void
+NetworkWindowNM::_ShowProxyPane(bool show)
+{
+	if (fProxyView == NULL || fDetailView == NULL)
+		return;
+
+	if (show) {
+		fProxyView->Show();
+		fDetailView->Hide();
+	} else {
+		fProxyView->Hide();
+		fDetailView->Show();
+	}
+}
+
+
+// Revert acts on the visible detail pane, and only when it is dirty.
 void
 NetworkWindowNM::_UpdateRevertButton()
 {
-	bool dirty = fDetailView != NULL && fDetailView->IsRevertable();
+	bool dirty = false;
+	if (fProxyView != NULL && !fProxyView->IsHidden())
+		dirty = fProxyView->IsDirty();
+	else if (fDetailView != NULL)
+		dirty = fDetailView->IsRevertable();
+
 	fRevertButton->SetEnabled(dirty);
 	fRevertButton->SetToolTip(dirty
-		? B_TRANSLATE("Discard unapplied IPv4 changes")
+		? B_TRANSLATE("Discard unapplied changes")
 		: B_TRANSLATE("No unapplied changes"));
 }
 
@@ -662,7 +707,9 @@ NetworkWindowNM::_UpdateRevertButton()
 void
 NetworkWindowNM::_RevertSettings()
 {
-	if (fDetailView != NULL)
+	if (fProxyView != NULL && !fProxyView->IsHidden())
+		fProxyView->Revert();
+	else if (fDetailView != NULL)
 		fDetailView->Revert();
 	_UpdateRevertButton();
 }

@@ -31,6 +31,7 @@ extern "C" {
 }
 
 #include <AppDefs.h>
+#include <File.h>
 #include <Message.h>
 #include <Messenger.h>
 #include <OS.h>
@@ -1396,6 +1397,91 @@ daemon_loop()
 }
 
 
+// Matches ProxySettings::Mode written by the Network preflet.
+enum {
+	kProxyModeNone = 0,
+	kProxyModeManual = 1,
+	kProxyModeAutomatic = 2
+};
+
+
+// Export the Network preflet's proxy into this process so the fan-out
+// children and everything they launch inherit http_proxy and friends.
+static void
+apply_session_proxy_env()
+{
+	if (sGreeterMode || sUserHome[0] == '\0')
+		return;
+
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/config/settings/network_proxy",
+		sUserHome);
+
+	BFile file(path, B_READ_ONLY);
+	if (file.InitCheck() != B_OK)
+		return;
+
+	BMessage settings;
+	if (settings.Unflatten(&file) != B_OK)
+		return;
+
+	uint32 mode = kProxyModeNone;
+	settings.FindUInt32("Mode", &mode);
+
+	static const char* kClear[] = {
+		"http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY",
+		"ftp_proxy", "FTP_PROXY", "all_proxy", "ALL_PROXY",
+		"no_proxy", "NO_PROXY", NULL
+	};
+
+	if (mode == kProxyModeNone) {
+		for (int i = 0; kClear[i] != NULL; i++)
+			unsetenv(kClear[i]);
+		return;
+	}
+
+	// PAC is stored for future consumers; nothing here can honour it.
+	if (mode == kProxyModeAutomatic)
+		return;
+
+	static const struct {
+		const char*	hostKey;
+		const char*	portKey;
+		const char*	scheme;
+		const char*	lower;
+		const char*	upper;
+	} kMap[] = {
+		{ "HTTPHost",  "HTTPPort",  "http",   "http_proxy",  "HTTP_PROXY" },
+		{ "HTTPSHost", "HTTPSPort", "https",  "https_proxy", "HTTPS_PROXY" },
+		{ "FTPHost",   "FTPPort",   "ftp",    "ftp_proxy",   "FTP_PROXY" },
+		{ "SOCKSHost", "SOCKSPort", "socks5", "all_proxy",   "ALL_PROXY" },
+	};
+
+	for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); i++) {
+		const char* host = NULL;
+		if (settings.FindString(kMap[i].hostKey, &host) != B_OK
+				|| host == NULL || host[0] == '\0')
+			continue;
+		uint16 port = 0;
+		if (settings.FindUInt16(kMap[i].portKey, &port) != B_OK
+				|| port == 0)
+			continue;
+		char url[600];
+		snprintf(url, sizeof(url), "%s://%s:%u",
+			kMap[i].scheme, host, (unsigned)port);
+		setenv(kMap[i].lower, url, 1);
+		setenv(kMap[i].upper, url, 1);
+	}
+
+	const char* ignore = NULL;
+	if (settings.FindString("IgnoreHosts", &ignore) == B_OK
+			&& ignore != NULL && ignore[0] != '\0') {
+		setenv("no_proxy", ignore, 1);
+		setenv("NO_PROXY", ignore, 1);
+	}
+}
+
+
 int
 main(int argc, char** argv)
 {
@@ -1420,6 +1506,8 @@ main(int argc, char** argv)
 		fprintf(stderr, "janus_session: PAM open failed for %s; exiting\n", sUserName);
 		return 1;
 	}
+
+	apply_session_proxy_env();
 
 	sSeatWakeFd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 	if (sSeatWakeFd < 0)

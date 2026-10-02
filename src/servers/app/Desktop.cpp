@@ -34,8 +34,11 @@
 #include <DirectWindow.h>
 #include <Entry.h>
 #include <FindDirectory.h>
+#include <LinkSender.h>
 #include <Message.h>
 #include <MessageFilter.h>
+#include <Messenger.h>
+#include <MessengerPrivate.h>
 #include <Path.h>
 #include <Region.h>
 #include <Roster.h>
@@ -66,6 +69,9 @@
 #include "Window.h"
 #include "Workspace.h"
 #include "WorkspacesView.h"
+
+#include <LaunchDaemonDefs.h>
+#include <kernel/util/KMessage.h>
 
 #if TEST_MODE
 #	include "EventStream.h"
@@ -188,6 +194,10 @@ KeyboardFilter::_UpdateFocus(int32 key, uint32 modifiers, EventTarget** _target)
 static const int32 kEscapeKey = 0x01;
 static const int32 kBacktickKey = 0x11;
 
+// Lock/unlock requests posted from AppServer onto this Desktop's looper.
+static const int32 kMsgLockScreen = 'lksS';
+static const int32 kMsgUnlockScreen = 'ulks';
+
 
 filter_result
 KeyboardFilter::Filter(BMessage* message, EventTarget** _target,
@@ -198,6 +208,27 @@ KeyboardFilter::Filter(BMessage* message, EventTarget** _target,
 
 	message->FindInt32("key", &key);
 	message->FindInt32("modifiers", &modifiers);
+
+	// Locked: only the unlock window takes keys; global chords stay dead.
+	if (fDesktop->IsScreenLocked()) {
+		Window* window = fDesktop->MouseEventWindow();
+		if (window == NULL) {
+			BPoint where;
+			int32 buttons;
+			fDesktop->GetLastMouseState(&where, &buttons);
+			window = fDesktop->WindowAt(where);
+		}
+		if (window == NULL || !fDesktop->IsUnlockWindow(window))
+			return B_SKIP_MESSAGE;
+
+		if (message->what == B_KEY_DOWN
+			|| message->what == B_MODIFIERS_CHANGED
+			|| message->what == B_UNMAPPED_KEY_DOWN
+			|| message->what == B_INPUT_METHOD_EVENT)
+			_UpdateFocus(key, modifiers, _target);
+
+		return fDesktop->KeyEvent(message->what, key, modifiers);
+	}
 
 	if ((message->what == B_KEY_DOWN || message->what == B_UNMAPPED_KEY_DOWN)) {
 		// Check for safe video mode (shift + cmd + ctrl + escape)
@@ -292,6 +323,14 @@ MouseFilter::Filter(BMessage* message, EventTarget** _target, int32* _viewToken,
 	Window* window = fDesktop->MouseEventWindow();
 	if (window == NULL)
 		window = fDesktop->WindowAt(where);
+
+	// Locked: drop anything that is not the unlock window.
+	if (fDesktop->IsScreenLocked()
+		&& (window == NULL || !fDesktop->IsUnlockWindow(window))) {
+		fDesktop->SetMouseEventWindow(NULL);
+		fDesktop->UnlockAllWindows();
+		return B_SKIP_MESSAGE;
+	}
 
 	if (window != NULL) {
 		// dispatch event to the window
@@ -446,6 +485,8 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 	fAllWindows(kAllWindowList),
 	fSubsetWindows(kSubsetList),
 	fFocusList(kFocusList),
+	fScreenLocked(false),
+	fUnlockTeam(-1),
 	fWorkspacesViews(false),
 
 	fWorkspacesLock("workspaces list"),
@@ -1490,6 +1531,13 @@ Desktop::SendWindowBehind(Window* window, Window* behindOf, bool sendStack)
 void
 Desktop::ShowWindow(Window* window)
 {
+	if (window == NULL)
+		return;
+
+	// Locked: only unlock (password-feel) windows may appear.
+	if (fScreenLocked && !IsUnlockWindow(window))
+		return;
+
 	if (!window->IsHidden())
 		return;
 
@@ -1873,7 +1921,12 @@ Desktop::AddWindow(Window *window)
 void
 Desktop::RemoveWindow(Window *window)
 {
+	bool wasUnlock = fScreenLocked && IsUnlockWindow(window);
+
 	LockAllWindows();
+
+	// Drop our hold now: UnlockScreen() must not show a reused address.
+	fLockHiddenWindows.RemoveItem(window);
 
 	if (!window->IsHidden())
 		HideWindow(window);
@@ -1885,6 +1938,25 @@ Desktop::RemoveWindow(Window *window)
 	_ChangeWindowWorkspaces(window, window->Workspaces(), 0);
 
 	NotifyWindowRemoved(window);
+
+	// Locked and the unlock window is gone: ask janus for a new locker.
+	if (wasUnlock) {
+		bool anyUnlockLeft = false;
+		for (Window* w = fAllWindows.FirstWindow(); w != NULL;
+				w = w->NextWindow(kAllWindowList)) {
+			if (IsUnlockWindow(w) && !w->IsHidden()) {
+				anyUnlockLeft = true;
+				break;
+			}
+		}
+		if (!anyUnlockLeft) {
+			port_id janus = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+			if (janus >= 0) {
+				BPrivate::KMessage req(BPrivate::B_JANUS_LOCKER_DIED);
+				req.SendTo(janus, -1);
+			}
+		}
+	}
 
 	UnlockAllWindows();
 
@@ -2113,11 +2185,125 @@ Desktop::WindowAt(BPoint where)
 {
 	for (Window* window = CurrentWindows().LastWindow(); window;
 			window = window->PreviousWindow(fCurrentWorkspace)) {
-		if (window->IsVisible() && window->VisibleRegion().Contains(where))
-			return window->StackedWindowAt(where);
+		if (!window->IsVisible()
+			|| !window->VisibleRegion().Contains(where))
+			continue;
+		// Locked: only unlock windows are clickable.
+		if (fScreenLocked && !IsUnlockWindow(window))
+			continue;
+		return window->StackedWindowAt(where);
 	}
 
 	return NULL;
+}
+
+
+bool
+Desktop::IsUnlockWindow(const Window* window) const
+{
+	if (window == NULL || fUnlockTeam < 0)
+		return false;
+	::ServerWindow* serverWindow = window->ServerWindow();
+	return serverWindow != NULL && serverWindow->ClientTeam() == fUnlockTeam;
+}
+
+
+status_t
+Desktop::RequestLockScreen(team_id unlockTeam, BMessenger completion)
+{
+	BPrivate::LinkSender link(MessagePort());
+	link.StartMessage(kMsgLockScreen);
+	link.Attach<int32>(unlockTeam);
+	link.Attach<team_id>(completion.Team());
+	// Port() is private on BMessenger; Private is the sanctioned way.
+	link.Attach<port_id>(BMessenger::Private(completion).Port());
+	return link.Flush(2000000LL);
+}
+
+
+status_t
+Desktop::RequestUnlockScreen(BMessenger completion)
+{
+	BPrivate::LinkSender link(MessagePort());
+	link.StartMessage(kMsgUnlockScreen);
+	link.Attach<team_id>(completion.Team());
+	link.Attach<port_id>(BMessenger::Private(completion).Port());
+	return link.Flush(2000000LL);
+}
+
+
+/*!	Hides every window that is not the unlock team's and enters the
+	locked state. The window lock must not be held. Windows hidden by
+	this call are remembered so UnlockScreen() can restore them.
+*/
+status_t
+Desktop::LockScreen()
+{
+	if (fScreenLocked)
+		return B_OK;
+
+	if (!LockAllWindows())
+		return B_ERROR;
+
+	// Collect first: HideWindow() nests the write lock, which MultiLocker
+	// allows, but iterating while mutating is clearer this way.
+	BList toHide;
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		if (IsUnlockWindow(window) || window->IsHidden()
+			|| window->IsOffscreenWindow())
+			continue;
+		toHide.AddItem(window);
+	}
+
+	fLockHiddenWindows.MakeEmpty();
+	fScreenLocked = true;
+
+	for (int32 i = 0; i < toHide.CountItems(); i++) {
+		Window* window = (Window*)toHide.ItemAt(i);
+		fLockHiddenWindows.AddItem(window);
+		HideWindow(window);
+	}
+
+	// Focus an unlock window if one is already up.
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		if (IsUnlockWindow(window) && !window->IsHidden()) {
+			ActivateWindow(window);
+			break;
+		}
+	}
+
+	UnlockAllWindows();
+	return B_OK;
+}
+
+
+/*!	Leaves the locked state and restores windows hidden by LockScreen().
+	Entries are dropped in RemoveWindow(), so every pointer here is live.
+*/
+status_t
+Desktop::UnlockScreen()
+{
+	if (!fScreenLocked)
+		return B_OK;
+
+	if (!LockAllWindows())
+		return B_ERROR;
+
+	fScreenLocked = false;
+	fUnlockTeam = -1;
+
+	// Restore in reverse hide order so stacking roughly survives.
+	for (int32 i = fLockHiddenWindows.CountItems() - 1; i >= 0; i--) {
+		Window* window = (Window*)fLockHiddenWindows.ItemAt(i);
+		if (window != NULL)
+			ShowWindow(window);
+	}
+	fLockHiddenWindows.MakeEmpty();
+
+	UnlockAllWindows();
+	return B_OK;
 }
 
 
@@ -2160,10 +2346,20 @@ Desktop::KeyboardEventTarget()
 		window = window->PreviousWindow(fCurrentWorkspace);
 	}
 
+	// Locked: only unlock windows may take the keyboard.
+	if (fScreenLocked) {
+		while (window != NULL && !IsUnlockWindow(window)) {
+			window = window->PreviousWindow(fCurrentWorkspace);
+			while (window != NULL && window->IsHidden())
+				window = window->PreviousWindow(fCurrentWorkspace);
+		}
+	}
+
 	if (window != NULL && (window->Flags() & kAcceptKeyboardFocusFlag) != 0)
 		return &window->EventTarget();
 
-	if (FocusWindow() != NULL)
+	if (FocusWindow() != NULL && (!fScreenLocked
+			|| IsUnlockWindow(FocusWindow())))
 		return &FocusWindow()->EventTarget();
 
 	return NULL;
@@ -2765,6 +2961,37 @@ void
 Desktop::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 {
 	switch (code) {
+		case kMsgLockScreen:
+		case kMsgUnlockScreen:
+		{
+			// Apply on the Desktop thread and report to the completion target.
+			team_id unlockTeam = -1;
+			team_id completionTeam = -1;
+			port_id completionPort = -1;
+			if (code == kMsgLockScreen)
+				link.Read<int32>(&unlockTeam);
+			link.Read<team_id>(&completionTeam);
+			link.Read<port_id>(&completionPort);
+
+			status_t result;
+			if (code == kMsgLockScreen) {
+				fUnlockTeam = unlockTeam;
+				result = LockScreen();
+			} else {
+				result = UnlockScreen();
+			}
+
+			if (completionTeam >= 0 && completionPort >= 0) {
+				BMessenger completion;
+				BMessenger::Private(completion).SetTo(completionTeam,
+					completionPort, B_PREFERRED_TOKEN);
+				BMessage done(kMsgDesktopLockDone);
+				done.AddInt32("result", result);
+				completion.SendMessage(&done);
+			}
+			break;
+		}
+
 		case AS_CREATE_APP:
 		{
 			// Create the ServerApp to node monitor a new BApplication

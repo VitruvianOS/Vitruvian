@@ -56,7 +56,10 @@ AppServer::AppServer(status_t* status)
 	:
 	SERVER_BASE("application/x-vnd.Haiku-app_server", "picasso", -1, false,
 		status),
-	fDesktopLock("AppServerDesktopLock")
+	fDesktopLock("AppServerDesktopLock"),
+	fLockRequest(NULL),
+	fLockResult(B_OK),
+	fLockPending(0)
 {
 	openlog("app_server", 0, LOG_DAEMON);
 
@@ -97,6 +100,7 @@ AppServer::AppServer(status_t* status)
 */
 AppServer::~AppServer()
 {
+	delete fLockRequest;
 	delete gBitmapManager;
 
 	gScreenManager->Lock();
@@ -182,6 +186,78 @@ AppServer::MessageReceived(BMessage* message)
 
 			BMessage reply(B_REPLY);
 			message->SendReply(&reply);
+			break;
+		}
+
+		case B_SESSION_LOCK:
+		case B_SESSION_UNLOCK:
+		{
+			// Only root (janus, registrar) may change lock state; a
+			// session app must go through the janus broker.
+			uid_t senderUid = message->SenderUid();
+			if (senderUid != 0) {
+				syslog(LOG_ERR, "B_SESSION_* rejected from uid %u\n",
+					(unsigned)senderUid);
+				break;
+			}
+
+			// Each Desktop applies it on its own thread and answers; reply
+			// once all have. Never wait here: a wedged Desktop must not hang us.
+			int32 unlockTeam = message->GetInt32("team", -1);
+			bool lock = (message->what == B_SESSION_LOCK);
+			// Keep the request (and its reply target) past this handler.
+			BMessage* request = DetachCurrentMessage();
+			if (request == NULL)
+				break;
+
+			{
+				BAutolock locker(fDesktopLock);
+				delete fLockRequest;
+				fLockRequest = request;
+				fLockResult = B_OK;
+				fLockPending = 0;
+				for (int32 i = 0; i < fDesktops.CountItems(); i++) {
+					Desktop* desktop = fDesktops.ItemAt(i);
+					if (desktop == NULL)
+						continue;
+					status_t s = lock
+						? desktop->RequestLockScreen(unlockTeam,
+							BMessenger(this))
+						: desktop->RequestUnlockScreen(BMessenger(this));
+					if (s == B_OK)
+						fLockPending++;
+				}
+			}
+
+			if (fLockPending == 0) {
+				// No desktop to apply it; answer now.
+				BAutolock locker(fDesktopLock);
+				if (fLockRequest != NULL) {
+					BMessage reply(B_ERROR);
+					fLockRequest->SendReply(&reply);
+					delete fLockRequest;
+					fLockRequest = NULL;
+				}
+			}
+			break;
+		}
+
+		case Desktop::kMsgDesktopLockDone:
+		{
+			// A Desktop finished applying the lock state. Reply to
+			// the original requester once all of them have.
+			status_t result = message->GetInt32("result", B_ERROR);
+			BAutolock locker(fDesktopLock);
+			if (result != B_OK)
+				fLockResult = result;
+			if (fLockPending > 0)
+				fLockPending--;
+			if (fLockPending == 0 && fLockRequest != NULL) {
+				BMessage reply(fLockResult == B_OK ? B_REPLY : B_ERROR);
+				fLockRequest->SendReply(&reply);
+				delete fLockRequest;
+				fLockRequest = NULL;
+			}
 			break;
 		}
 

@@ -136,9 +136,14 @@ enum command_code {
 	B_SEAT_ENABLED				= 'STEN',
 	B_SEAT_DISABLED				= 'STDS',
 
+	// Screen lock, root only. LOCK takes "team" (int32): the unlock app,
+	// whose windows alone stay visible. Replied once applied.
+	B_SESSION_LOCK				= 'SLCK',
+	B_SESSION_UNLOCK			= 'SUNL',
+
 	// Vitruvian system power events (broadcast by registrar on logind
 	// PrepareForSleep). Fields: none in v1. Fire-and-forget; the
-	// registrar waits ~2s before releasing the sleep inhibit.
+	// registrar locks the screen, then releases the sleep inhibit.
 	B_SYSTEM_SUSPENDING			= '_sSU',
 	B_SYSTEM_RESUMED			= '_sRE'
 

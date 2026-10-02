@@ -48,6 +48,7 @@
 
 
 class BMessage;
+class BMessenger;
 
 class DecorAddOn;
 class DrawingEngine;
@@ -193,6 +194,15 @@ public:
 									bool fromMinimize = false);
 			void				MinimizeWindow(Window* window, bool minimize);
 
+	// Screen lock: only the unlock team's windows stay visible. Request*
+	// return at once; kMsgDesktopLockDone ("result") reports completion.
+	static const int32	kMsgDesktopLockDone = 'ldDn';
+			status_t			RequestLockScreen(team_id unlockTeam,
+									BMessenger completion);
+			status_t			RequestUnlockScreen(BMessenger completion);
+			bool				IsScreenLocked() const { return fScreenLocked; }
+			bool				IsUnlockWindow(const Window* window) const;
+
 			void				MoveWindowBy(Window* window, float x, float y,
 									int32 workspace = -1);
 			void				ResizeWindowBy(Window* window, float x,
@@ -290,6 +300,9 @@ private:
 			void				_DispatchMessage(int32 code,
 									BPrivate::LinkReceiver &link);
 
+			status_t			LockScreen();
+			status_t			UnlockScreen();
+
 			void				_UpdateFloating(int32 previousWorkspace = -1,
 									int32 nextWorkspace = -1,
 									Window* mouseEventWindow = NULL);
@@ -370,6 +383,12 @@ private:
 			WindowList			fSubsetWindows;
 			WindowList			fFocusList;
 			Window*				fLastWorkspaceFocus[kMaxWorkspaces];
+
+			bool				fScreenLocked;
+			team_id				fUnlockTeam;
+									// janus names the locker; only that team's windows are exempt
+			BList				fLockHiddenWindows;
+									// windows hidden by LockScreen(); dropped in RemoveWindow
 
 			BObjectList<WorkspacesView> fWorkspacesViews;
 			BLocker				fWorkspacesLock;

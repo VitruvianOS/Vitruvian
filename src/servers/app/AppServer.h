@@ -55,6 +55,11 @@ private:
 private:
 			BObjectList<Desktop> fDesktops;
 			BLocker				fDesktopLock;
+			// In-flight B_SESSION_* lock request: the detached message
+			// waiting for every Desktop to answer kMsgDesktopLockDone.
+			BMessage*			fLockRequest;
+			status_t			fLockResult;
+			int32				fLockPending;
 };
 
 

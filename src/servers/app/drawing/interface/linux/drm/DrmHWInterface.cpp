@@ -281,17 +281,25 @@ DrmHWInterface::_OnSessionEnable()
 
 	// Configure crtc
 	for (iter = get_dev(); iter; iter = iter->next) {
+		bool modesetOk = false;
 		if (fAtomicSupported && fPrimaryPlaneId) {
 			status_t r = _AtomicModeset(iter->fb, &iter->mode);
-			if (r != B_OK)
+			modesetOk = (r == B_OK);
+			if (!modesetOk)
 				fprintf(stderr, "atomic modeset failed for connector %u: %m\n",
 					iter->conn);
-		} else {
+		}
+		// Atomic commit failure at boot must not leave the CRTC dark
+		// while app_server keeps drawing into an unsampled buffer.
+		if (!modesetOk) {
 			ret = drmModeSetCrtc(fFd, iter->crtc, iter->fb, 0, 0,
 			                     &iter->conn, 1, &iter->mode);
 			if (ret)
 				fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
 					iter->conn, errno);
+			else if (fAtomicSupported && fPrimaryPlaneId)
+				fprintf(stderr, "fell back to legacy CRTC for connector %u\n",
+					iter->conn);
 		}
 	}
 

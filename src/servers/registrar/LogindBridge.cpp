@@ -6,6 +6,8 @@
 
 #include "LogindBridge.h"
 
+#include "DisplayResumeGuard.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -51,6 +53,8 @@ LogindBridge::LogindBridge(const BMessenger& target)
 	fBus(NULL),
 	fShutdownFd(-1),
 	fSleepFd(-1),
+	fBlockSleepFd(-1),
+	fDisplayGuard(NULL),
 	fThread(-1),
 	fRunning(false),
 	fPendingSleep(kSleepRequestNone),
@@ -68,6 +72,7 @@ LogindBridge::~LogindBridge()
 		close(fShutdownFd);
 	if (fSleepFd >= 0)
 		close(fSleepFd);
+	_ReleaseBlockSleepInhibit();
 	if (fBus != NULL)
 		sd_bus_unref((sd_bus*)fBus);
 }
@@ -88,6 +93,16 @@ LogindBridge::Start()
 			|| _AcquireSleepInhibit() != B_OK) {
 		fprintf(stderr, "LogindBridge: failed to acquire inhibit locks\n");
 		// Non-fatal — carry on watching signals without inhibitors.
+	}
+
+	// While the display driver cannot resume, refuse sleep from every
+	// source: Deskbar, lid, keys, idle timer, systemctl.
+	if (fDisplayGuard != NULL
+			&& (fDisplayGuard->GuardsSuspend()
+				|| fDisplayGuard->GuardsHibernate())) {
+		if (_AcquireBlockSleepInhibit() != B_OK)
+			fprintf(stderr, "LogindBridge: failed to acquire sleep block "
+				"inhibit\n");
 	}
 
 	r = sd_bus_match_signal(bus, NULL, kLogin1Bus, kLogin1Path, kLogin1Manager,
@@ -189,6 +204,47 @@ LogindBridge::_AcquireSleepInhibit()
 }
 
 
+status_t
+LogindBridge::_AcquireBlockSleepInhibit()
+{
+	if (fBlockSleepFd >= 0)
+		return B_OK;
+
+	sd_bus_error err = SD_BUS_ERROR_NULL;
+	sd_bus_message* reply = NULL;
+	int fd = -1;
+	// mode=block: logind refuses sleep while this fd is held, from any
+	// source, including a saved HandleLidSwitch/IdleAction of "suspend".
+	int r = sd_bus_call_method((sd_bus*)fBus, kLogin1Bus, kLogin1Path,
+		kLogin1Manager, "Inhibit", &err, &reply, "ssss",
+		"sleep", "V\\OS", "the display driver cannot resume", "block");
+	if (r >= 0)
+		r = sd_bus_message_read(reply, "h", &fd);
+	if (r >= 0)
+		fBlockSleepFd = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+	sd_bus_message_unref(reply);
+	sd_bus_error_free(&err);
+	return fBlockSleepFd >= 0 ? B_OK : B_ERROR;
+}
+
+
+void
+LogindBridge::_ReleaseBlockSleepInhibit()
+{
+	if (fBlockSleepFd >= 0) {
+		close(fBlockSleepFd);
+		fBlockSleepFd = -1;
+	}
+}
+
+
+void
+LogindBridge::SetDisplayGuard(DisplayResumeGuard* guard)
+{
+	fDisplayGuard = guard;
+}
+
+
 void
 LogindBridge::ReleaseShutdownInhibit()
 {
@@ -273,6 +329,13 @@ LogindBridge::_UpdateSleepAvailability()
 	fCanSuspend = _CanSleep(bus, "CanSuspend");
 	fCanHibernate = _CanSleep(bus, "CanHibernate") && resume_configured();
 	sd_bus_unref(bus);
+
+	if (fDisplayGuard != NULL) {
+		if (fDisplayGuard->GuardsSuspend())
+			fCanSuspend = false;
+		if (fDisplayGuard->GuardsHibernate())
+			fCanHibernate = false;
+	}
 }
 
 

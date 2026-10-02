@@ -56,6 +56,7 @@ private:
 			BCheckBox*			fNotificationsCheckBox;
 			BCheckBox*			fDeskbarCheckBox;
 
+			bool				fCanSuspend;
 			bool				fCanHibernate;
 };
 

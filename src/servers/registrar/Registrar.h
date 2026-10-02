@@ -32,6 +32,7 @@
 
 class AuthenticationManager;
 class ClipboardHandler;
+class DisplayResumeGuard;
 class DiskDeviceManager;
 class EventQueue;
 class LogindBridge;
@@ -86,6 +87,7 @@ private:
 	AuthenticationManager	*fAuthenticationManager;
 	PackageWatchingManager	*fPackageWatchingManager;
 	LogindBridge			*fLogindBridge;
+	DisplayResumeGuard		*fDisplayGuard;
 
 	BMessenger				fSleepWindow;
 	int32					fSleepCycle;

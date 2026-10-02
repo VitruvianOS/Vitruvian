@@ -28,6 +28,7 @@
 #include <MenuItem.h>
 #include <Path.h>
 #include <Roster.h>
+#include <RosterPrivate.h>
 #include <String.h>
 #include <StringFormat.h>
 #include <StringView.h>
@@ -135,12 +136,15 @@ minutes_label(int32 minutes)
 
 static BMenuField*
 choice_menu(const char* name, const char* label, uint32 what,
-	const char* key, const Choice* choices, bool canHibernate)
+	const char* key, const Choice* choices, bool canHibernate,
+	bool canSuspend = true)
 {
 	BMenu* menu = new BMenu(name);
 	menu->SetLabelFromMarked(true);
 	for (int32 i = 0; choices[i].label != NULL; i++) {
 		if (!canHibernate && strcmp(choices[i].value, "hibernate") == 0)
+			continue;
+		if (!canSuspend && strcmp(choices[i].value, "suspend") == 0)
 			continue;
 		BMessage* message = new BMessage(what);
 		if (key != NULL)
@@ -246,6 +250,7 @@ PowerView::PowerView()
 	fBatteryCriticalMenu(NULL),
 	fNotificationsCheckBox(NULL),
 	fDeskbarCheckBox(NULL),
+	fCanSuspend(false),
 	fCanHibernate(false)
 {
 }
@@ -267,30 +272,12 @@ PowerView::Create()
 	PowerView* view = new PowerView();
 	view->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
-	// Hibernate entries only where it can work: logind checks for swap, the
-	// kernel must also know the resume device or the image is never read.
-	sd_bus* bus = NULL;
-	if (sd_bus_open_system(&bus) >= 0) {
-		sd_bus_message* reply = NULL;
-		const char* answer = NULL;
-		if (sd_bus_call_method(bus, kLogin1, kLogin1Path, kLogin1Manager,
-				"CanHibernate", NULL, &reply, "") >= 0
-			&& sd_bus_message_read(reply, "s", &answer) >= 0
-			&& answer != NULL)
-			view->fCanHibernate = strcmp(answer, "yes") == 0
-				|| strcmp(answer, "challenge") == 0;
-		sd_bus_message_unref(reply);
-		sd_bus_flush_close_unref(bus);
-	}
-	if (view->fCanHibernate) {
-		FILE* resume = fopen("/sys/power/resume", "r");
-		char device[32] = "";
-		view->fCanHibernate = resume != NULL
-			&& fgets(device, sizeof(device), resume) != NULL
-			&& strncmp(device, "0:0", 3) != 0;
-		if (resume != NULL)
-			fclose(resume);
-	}
+	// Ask the registrar, not logind: it already folds in the resume
+	// device check and the display-driver guard.
+	BRoster roster;
+	BRoster::Private rosterPrivate(roster);
+	rosterPrivate.CanSuspend(&view->fCanSuspend);
+	rosterPrivate.CanHibernate(&view->fCanHibernate);
 
 	BBox* batteryBox = titled_box("battery", B_TRANSLATE("Battery"));
 	BLayoutBuilder::Group<>(batteryBox, B_VERTICAL, 0)
@@ -305,22 +292,29 @@ PowerView::Create()
 
 	view->fPowerKeyMenu = choice_menu("power_key",
 		B_TRANSLATE("Power button:"), kMsgLogindActionChanged,
-		"HandlePowerKey", kKeyChoices, view->fCanHibernate);
+		"HandlePowerKey", kKeyChoices, view->fCanHibernate,
+		view->fCanSuspend);
 	view->fRebootKeyMenu = choice_menu("reboot_key",
 		B_TRANSLATE("Restart button:"), kMsgLogindActionChanged,
-		"HandleRebootKey", kRebootKeyChoices, view->fCanHibernate);
+		"HandleRebootKey", kRebootKeyChoices, view->fCanHibernate,
+		view->fCanSuspend);
 	view->fSuspendKeyMenu = choice_menu("suspend_key",
 		B_TRANSLATE("Sleep button:"), kMsgLogindActionChanged,
-		"HandleSuspendKey", kSleepKeyChoices, view->fCanHibernate);
+		"HandleSuspendKey", kSleepKeyChoices, view->fCanHibernate,
+		view->fCanSuspend);
 	view->fHibernateKeyMenu = choice_menu("hibernate_key",
 		B_TRANSLATE("Hibernate button:"), kMsgLogindActionChanged,
-		"HandleHibernateKey", kSleepKeyChoices, view->fCanHibernate);
+		"HandleHibernateKey", kSleepKeyChoices, view->fCanHibernate,
+		view->fCanSuspend);
 	view->fLidMenu = choice_menu("lid", B_TRANSLATE("Closing the lid:"),
 		kMsgLogindActionChanged, "HandleLidSwitch", kKeyChoices,
-		view->fCanHibernate);
+		view->fCanHibernate, view->fCanSuspend);
 	view->fIdleMenu = minutes_menu("idle",
 		B_TRANSLATE("Suspend when inactive for:"), kMsgLogindActionChanged,
 		"IdleAction", kIdleMinutes);
+	// The idle action is always suspend; no point offering times for it.
+	if (!view->fCanSuspend)
+		view->fIdleMenu->SetEnabled(false);
 
 	BBox* systemBox = titled_box("system",
 		B_TRANSLATE("Buttons and lid (all users)"));
@@ -340,7 +334,7 @@ PowerView::Create()
 		NULL, kDisplayMinutes);
 	view->fBatteryCriticalMenu = choice_menu("battery_critical",
 		B_TRANSLATE("When the battery is critical:"), kMsgUserSettingChanged,
-		NULL, kBatteryChoices, view->fCanHibernate);
+		NULL, kBatteryChoices, view->fCanHibernate, view->fCanSuspend);
 	view->fNotificationsCheckBox = new BCheckBox("notifications",
 		B_TRANSLATE("Notify when the battery is low"),
 		new BMessage(kMsgUserSettingChanged));
@@ -559,7 +553,8 @@ PowerView::_SetLogindMenusEnabled(bool enabled)
 	fSuspendKeyMenu->SetEnabled(enabled);
 	fHibernateKeyMenu->SetEnabled(enabled);
 	fLidMenu->SetEnabled(enabled);
-	fIdleMenu->SetEnabled(enabled);
+	// IdleAction is always suspend; keep it off when that cannot work.
+	fIdleMenu->SetEnabled(enabled && fCanSuspend);
 }
 
 
@@ -584,6 +579,8 @@ PowerView::_LoadSettings()
 		kDefaultBatteryCritical);
 	if (!fCanHibernate && strcmp(critical, "hibernate") == 0)
 		critical = "poweroff";	// what the registrar falls back to
+	if (!fCanSuspend && strcmp(critical, "suspend") == 0)
+		critical = "poweroff";
 	mark_value(fBatteryCriticalMenu, critical);
 	fNotificationsCheckBox->SetValue(
 		settings.GetBool(kNotificationsKey, true)

@@ -9,6 +9,7 @@ Server(
 	#AuthenticationManager.cpp
 	Clipboard.cpp
 	ClipboardHandler.cpp
+	DisplayResumeGuard.cpp
 	Event.cpp
 	EventMaskWatcher.cpp
 	EventQueue.cpp

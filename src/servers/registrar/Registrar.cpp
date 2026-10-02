@@ -38,6 +38,7 @@
 
 #include "AuthenticationManager.h"
 #include "ClipboardHandler.h"
+#include "DisplayResumeGuard.h"
 #include "Debug.h"
 #include "EventQueue.h"
 #include "LogindBridge.h"
@@ -121,6 +122,7 @@ Registrar::Registrar(status_t* _error)
 	fAuthenticationManager(NULL),
 	fPackageWatchingManager(NULL),
 	fLogindBridge(NULL),
+	fDisplayGuard(NULL),
 	fSleepCycle(0),
 	fSleepHibernate(false),
 	fSleepClockOffset(0),
@@ -148,6 +150,10 @@ Registrar::~Registrar()
 		fLogindBridge->Stop();
 		delete fLogindBridge;
 		fLogindBridge = NULL;
+	}
+	if (fDisplayGuard != NULL) {
+		delete fDisplayGuard;
+		fDisplayGuard = NULL;
 	}
 	fEventQueue->Die();
 	delete fSanityCheckEvent;
@@ -250,7 +256,20 @@ Registrar::ReadyToRun()
 
 	// Bring up logind bridge: delay inhibit locks + PrepareForShutdown /
 	// PrepareForSleep signal subscription. See LogindBridge.h.
+	// Detect the display driver first so CanSuspend and the block
+	// inhibit see the guard from the first query.
+	fDisplayGuard = new(nothrow) DisplayResumeGuard();
+	if (fDisplayGuard != NULL && fDisplayGuard->Detect()
+			&& (fDisplayGuard->GuardsSuspend()
+				|| fDisplayGuard->GuardsHibernate())) {
+		fprintf(stderr, "Registrar: display driver %s cannot resume; "
+			"suspend/hibernate unavailable\n",
+			fDisplayGuard->DriverName().String());
+	}
+
 	fLogindBridge = new(nothrow) LogindBridge(BMessenger(this));
+	if (fLogindBridge != NULL)
+		fLogindBridge->SetDisplayGuard(fDisplayGuard);
 	if (fLogindBridge == NULL || fLogindBridge->Start() != B_OK) {
 		fprintf(stderr, "Registrar: LogindBridge init failed; bottom-up "
 			"shutdown/sleep will bypass the quit dance.\n");

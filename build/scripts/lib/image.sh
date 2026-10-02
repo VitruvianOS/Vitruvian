@@ -1129,6 +1129,8 @@ create_uboot_board() {
 
     _boot_part="${_loop}p1"
     _root_part="${_loop}p2"
+    _boot_partnum=1
+    _root_partnum=2
 
     sudo mkfs.vfat -F32 "$_boot_part"
     case "$_root_fs" in
@@ -1250,8 +1252,23 @@ apt-get clean" || die "uboot chroot bash-c failed"
     done
 
     log_step "Writing U-Boot extlinux config..."
+    # Console, root device and DTB come from board_config; the defaults are
+    # the old Rockchip template (ttyS2 at 1.5 Mbaud, mmcblk0p2).
+    _ext_console="$(board_config "$_board" console 2>/dev/null)"
+    [ -n "$_ext_console" ] || _ext_console="ttyS2,1500000"
+    _ext_rootdev="$(board_config "$_board" rootdev 2>/dev/null)"
+    if [ -n "$_ext_rootdev" ]; then
+        # Board names the SD/eMMC device itself (e.g. BeaglePlay mmc1).
+        _ext_bootdev="$(printf '%s' "$_ext_rootdev" | sed 's/p[0-9][0-9]*$/p1/')"
+    else
+        _ext_bootdev="/dev/mmcblk0p${_boot_partnum}"
+        _ext_rootdev="/dev/mmcblk0p${_root_partnum}"
+    fi
+    _boot_dtb="$(board_config "$_board" boot_dtb 2>/dev/null)"
+    _fdt_line=""
+    [ -n "$_boot_dtb" ] && _fdt_line="    fdt /dtbs/$_boot_dtb"
     sudo mkdir -p "$_mnt/boot/extlinux"
-    sudo sh -c "cat > '$_mnt/boot/extlinux/extlinux.conf'" <<'EXTLINUX'
+    sudo sh -c "cat > '$_mnt/boot/extlinux/extlinux.conf'" <<EXTLINUX
 menu title Vitruvian Boot
 timeout 3
 default vitruvian
@@ -1261,7 +1278,8 @@ label vitruvian
     linux /vmlinuz
     initrd /initrd.img
     fdtdir /dtbs/
-    append root=/dev/mmcblk0p2 rootfstype=EXTROOTFS rw rootwait console=ttyS2,1500000 quiet splash
+$_fdt_line
+    append root=$_ext_rootdev rootfstype=EXTROOTFS rw rootwait console=$_ext_console quiet splash
 EXTLINUX
     sudo sed -i "s/EXTROOTFS/$_root_fs/" "$_mnt/boot/extlinux/extlinux.conf"
 
@@ -1279,8 +1297,8 @@ EXTLINUX
         ext4) _root_mkfs="ext4" ;;
     esac
     sudo sh -c "cat > '$_mnt/etc/fstab'" <<FSTAB
-/dev/mmcblk0p2  /        $_root_mkfs  defaults,noatime  0 1
-/dev/mmcblk0p1  /boot    vfat         defaults          0 2
+$_ext_rootdev  /        $_root_mkfs  defaults,noatime  0 1
+$_ext_bootdev  /boot    vfat         defaults          0 2
 FSTAB
 
     # Stage U-Boot out of the rootfs before unmounting: Debian's packages

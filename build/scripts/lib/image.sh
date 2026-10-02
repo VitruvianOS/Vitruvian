@@ -1101,6 +1101,20 @@ create_uboot_board() {
 
     mkdir -p "$_basedir/output"
 
+    # Need a blob source (package, fip_assemble or firmware/<board>/); fail
+    # now rather than after hours of image build.
+    if [ "$(board_config "$_board" bootloader)" = "u-boot" ]; then
+        _spl_blob_chk="$(board_config "$_board" spl_blob 2>/dev/null)"
+        _uboot_blob_chk="$(board_config "$_board" uboot_blob 2>/dev/null)"
+        _variants_chk="${VOS_UBOOT_VARIANT:-$(board_config "$_board" uboot_variant 2>/dev/null)}"
+        _extra_chk="$(board_config "$_board" extra_pkgs 2>/dev/null)"
+        _fip_chk="$(board_config "$_board" fip_assemble 2>/dev/null)"
+        if [ -z "$_variants_chk" ] && [ -z "$_extra_chk" ] \
+            && [ "$_fip_chk" != "1" ] && [ ! -d "$_basedir/firmware/$_board" ]; then
+            die "no U-Boot source for $_board: set uboot_variant/extra_pkgs, fip_assemble, or place blobs in $_basedir/firmware/$_board/ (boards.sh: spl_blob='$_spl_blob_chk' uboot_blob='$_uboot_blob_chk')"
+        fi
+    fi
+
     log_step "Creating $_label RAW image..."
     qemu-img create "$_raw" 6G
 

@@ -176,7 +176,9 @@ board_config() {
         nxp)
             case "$_field" in
                 arch)           printf 'arm64' ;;
-                label)          printf 'NXP i.MX (6/7/8/9)' ;;
+                # Only i.MX8M parts are arm64; i.MX6/7 are 32-bit and the
+                # Debian DTB set for this image is imx8mq/imx8mp only.
+                label)          printf 'NXP i.MX8M (8MQ/8MP)' ;;
                 partition_fmt)  printf 'gpt' ;;
                 boot_style)     printf 'spl-uboot' ;;
                 boot_size_mb)   printf '256' ;;
@@ -188,7 +190,8 @@ board_config() {
                 uboot_offset_sectors) printf '16384' ;;
                 # Booting this board needs vendor blobs in firmware/nxp/.
                 extra_pkgs)     printf '' ;;
-                dtb_files)      printf 'nxp/imx/imx8mq-librem5-devkit.dtb nxp/imx/imx8mp-venice-gw74xx.dtb' ;;
+                # Debian ships these under freescale/, not nxp/imx/.
+                dtb_files)      printf 'freescale/imx8mq-librem5-devkit.dtb freescale/imx8mp-venice-gw74xx.dtb' ;;
             esac
             ;;
         amlogic)

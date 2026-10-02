@@ -147,6 +147,11 @@ board_config() {
                 spl_blob)       printf 'tiboot3.bin' ;;
                 uboot_blob)     printf 'u-boot.img' ;;
                 extra_pkgs)     printf 'u-boot-sitara-binaries' ;;
+                # DTB console is serial2; eMMC is mmc0, so the SD image's root
+                # is mmcblk1p2.
+                console)        printf 'ttyS2,115200' ;;
+                rootdev)        printf '/dev/mmcblk1p2' ;;
+                boot_dtb)       printf 'ti/k3/am625-beagleplay.dtb' ;;
                 dtb_files)      printf 'ti/k3/am625-beagleplay.dtb' ;;
             esac
             ;;

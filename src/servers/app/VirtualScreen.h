@@ -51,6 +51,7 @@ public:
 
 			Screen*				ScreenAt(int32 index) const;
 			Screen*				ScreenByID(int32 id) const;
+			int32				ScreenIndex(const Screen* screen) const;
 			BRect				ScreenFrameAt(int32 index) const;
 			int32				CountScreens() const;
 

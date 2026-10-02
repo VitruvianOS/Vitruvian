@@ -24,6 +24,7 @@
 #include "Desktop.h"
 #include "PowerManager.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
@@ -55,6 +56,7 @@
 #include "InputManager.h"
 #include "Screen.h"
 #include "ScreenManager.h"
+#include "ScreenRelayout.h"
 #include "ServerApp.h"
 #include "ServerConfig.h"
 #include "ServerCursor.h"
@@ -3751,17 +3753,82 @@ Desktop::ScreenChanged(Screen* screen)
 
 
 void
+Desktop::_RelayoutWindowsForScreen(Screen* screen, const BRect& oldFrame,
+	const BRect& newFrame)
+{
+	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
+
+	if (oldFrame == newFrame)
+		return;
+
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		if (window->Screen() != screen)
+			continue;
+
+		const char* signature = NULL;
+		if (window->ServerWindow() != NULL
+				&& window->ServerWindow()->App() != NULL)
+			signature = window->ServerWindow()->App()->Signature();
+
+		if (!RelayoutShouldMove(window->IsNormal(),
+				(int32)window->Feel(), window->Flags(), signature))
+			continue;
+
+		const BRect frame = window->Frame();
+		if (RelayoutFillsScreen(frame, oldFrame))
+			continue;
+
+		// Live frame on the current workspace. Move through the stack's top
+		// window so the decorator and stacked siblings move once, with it.
+		const BPoint origin = RelayoutOrigin(frame, oldFrame, newFrame);
+		const BPoint delta = origin - frame.LeftTop();
+		Window* topWindow = window->TopLayerStackWindow();
+		if (delta != BPoint(0, 0) && (topWindow == NULL || topWindow == window))
+			window->MoveBy((int32)delta.x, (int32)delta.y);
+
+		// Other workspaces keep anchors; rewrite them so a shrink can't strand
+		// windows. The current workspace already moved its live frame.
+		for (int32 i = 0; i < kListCount; i++) {
+			if (i == window->CurrentWorkspace())
+				continue;
+
+			window_anchor& anchor = window->Anchor(i);
+			if (anchor.position == kInvalidWindowPosition)
+				continue;
+
+			BRect anchorFrame(anchor.position.x, anchor.position.y,
+				anchor.position.x + frame.Width() - 1,
+				anchor.position.y + frame.Height() - 1);
+			anchor.position = RelayoutOrigin(anchorFrame, oldFrame,
+				newFrame);
+		}
+	}
+}
+
+
+void
 Desktop::_ScreenChanged(Screen* screen)
 {
 	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
 
+	// item->frame is still the old size; Screen::Frame() is already the new.
+	const int32 screenIndex = fVirtualScreen.ScreenIndex(screen);
+	const BRect newFrame = screen->Frame();
+
+	if (screenIndex >= 0) {
+		const BRect oldFrame = fVirtualScreen.ScreenFrameAt(screenIndex);
+		_RelayoutWindowsForScreen(screen, oldFrame, newFrame);
+		fVirtualScreen.SetScreenFrame(screenIndex, newFrame);
+	}
+
 	// the entire screen is dirty, because we're actually
 	// operating on an all new buffer in memory
-	BRegion dirty(screen->Frame());
+	BRegion dirty(newFrame);
 
 	// update our cached screen region
-	fScreenRegion.Set(screen->Frame());
-	gInputManager->UpdateScreenBounds(screen->Frame(),
+	fScreenRegion.Set(newFrame);
+	gInputManager->UpdateScreenBounds(newFrame,
 		screen->HWInterface()->PanelOrientation(),
 		screen->HWInterface()->PanelReflection());
 
@@ -3779,7 +3846,7 @@ Desktop::_ScreenChanged(Screen* screen)
 	// send B_SCREEN_CHANGED to windows on that screen
 	BMessage update(B_SCREEN_CHANGED);
 	update.AddInt64("when", real_time_clock_usecs());
-	update.AddRect("frame", screen->Frame());
+	update.AddRect("frame", newFrame);
 	update.AddInt32("mode", screen->ColorSpace());
 
 	fVirtualScreen.UpdateFrame();

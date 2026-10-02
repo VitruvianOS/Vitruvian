@@ -51,6 +51,7 @@ Server(
 		Screen.cpp
 		ScreenConfigurations.cpp
 		ScreenManager.cpp
+		ScreenRelayout.cpp
 		ServerApp.cpp
 		ServerBitmap.cpp
 		ServerCursor.cpp

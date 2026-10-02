@@ -1148,11 +1148,22 @@ ScreenWindow::_UpdateWorkspaceButtons()
 void
 ScreenWindow::ScreenChanged(BRect frame, color_space mode)
 {
-	// move window on screen, if necessary
-	if (frame.right <= Frame().right
-		&& frame.bottom <= Frame().bottom) {
-		MoveTo((frame.Width() - Frame().Width()) / 2,
-			(frame.Height() - Frame().Height()) / 2);
+	// External size/colour change: re-read the live mode. Do not treat it
+	// as a user edit, so Apply/Revert stay quiet.
+	fModified = false;
+	fBootWorkspaceApplied = false;
+
+	// Adopt the new external state as the revert baseline.
+	_UpdateOriginal();
+	_UpdateActiveMode();
+
+	// Keep the preflet fully on the new screen.
+	const BRect windowFrame = Frame();
+	if (windowFrame.left < frame.left || windowFrame.top < frame.top
+		|| windowFrame.right > frame.right
+		|| windowFrame.bottom > frame.bottom) {
+		MoveTo(frame.left + (frame.Width() - windowFrame.Width()) / 2.0f,
+			frame.top + (frame.Height() - windowFrame.Height()) / 2.0f);
 	}
 }
 

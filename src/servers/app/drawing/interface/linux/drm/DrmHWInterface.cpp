@@ -69,6 +69,10 @@ DrmHWInterface::DrmHWInterface()
 	fResizeThread(-1),
 	fResizeBusy(false),
 	fResizePending(false),
+	fLastModeCheck(0),
+	fLastPreferredWidth(0),
+	fLastPreferredHeight(0),
+	fUserSetMode(false),
 	fSessionSem(create_sem(0, "drm session sem")),
 	fUdev(NULL),
 	fUdevMonitor(NULL),
@@ -328,6 +332,9 @@ DrmHWInterface::_OnSessionEnable()
 	_ApplyOrientationSwap(initDev->width, initDev->height, initLogW, initLogH);
 	fDisplayMode.virtual_width = initLogW;
 	fDisplayMode.virtual_height = initLogH;
+	fLastPreferredWidth = initLogW;
+	fLastPreferredHeight = initLogH;
+	fUserSetMode = false;
 
 	fInitialized = true;
 	fSessionActive = true;
@@ -603,6 +610,26 @@ DrmHWInterface::_EventThreadMain()
 						sReported = true;
 					}
 				}
+			}
+		}
+
+		// QEMU resize may not emit HOTPLUG=1, so poll the preferred geometry;
+		// not while a user-set mode is active, or the poll would undo it.
+		if (active && !fUserSetMode
+				&& system_time() - fLastModeCheck > 2000000LL) {
+			fLastModeCheck = system_time();
+
+			display_mode preferred;
+			if (GetPreferredMode(&preferred) == B_OK
+				&& (preferred.virtual_width != fLastPreferredWidth
+					|| preferred.virtual_height != fLastPreferredHeight)) {
+				fprintf(stderr, "[drm] preferred mode %ux%u -> %ux%u; "
+					"scheduling resize\n", fLastPreferredWidth,
+					fLastPreferredHeight, preferred.virtual_width,
+					preferred.virtual_height);
+				fLastPreferredWidth = preferred.virtual_width;
+				fLastPreferredHeight = preferred.virtual_height;
+				_ScheduleResize();
 			}
 		}
 	}
@@ -884,6 +911,20 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	_FillModeInfo(fDisplayMode, dev->mode);
 	fDisplayMode.virtual_width  = logW;
 	fDisplayMode.virtual_height = logH;
+
+	// A mode other than the preferred one is a user choice and disarms the
+	// poll; matching the preference (hotplug, QEMU resize) leaves it armed.
+	{
+		display_mode preferredMode;
+		if (GetPreferredMode(&preferredMode) == B_OK
+			&& preferredMode.virtual_width == logW
+			&& preferredMode.virtual_height == logH)
+			fUserSetMode = false;
+		else
+			fUserSetMode = true;
+		fLastPreferredWidth = logW;
+		fLastPreferredHeight = logH;
+	}
 
 	// A shrink can leave the last cursor position outside the new CRTC;
 	// clamp before re-arming the hardware plane at the old coordinates.
@@ -2157,7 +2198,12 @@ DrmHWInterface::_HandleHotplug()
 		return;
 
 	const char* hotplug = udev_device_get_property_value(dev, "HOTPLUG");
-	if (hotplug != NULL && strcmp(hotplug, "1") == 0 && fFd >= 0) {
+	const char* action = udev_device_get_property_value(dev, "ACTION");
+	// QEMU resize and some docks send ACTION=change without HOTPLUG=1;
+	// modeset_add_connector() decides whether anything moved.
+	bool isHotplug = (hotplug != NULL && strcmp(hotplug, "1") == 0)
+		|| (action != NULL && strcmp(action, "change") == 0);
+	if (isHotplug && fFd >= 0) {
 		fprintf(stderr, "DRM hotplug event\n");
 
 		// The uevent carries no CONNECTOR=, so every connector is
@@ -2284,8 +2330,11 @@ DrmHWInterface::_ApplyResize()
 
 		// SetMode() itself must stay silent; app-initiated callers already
 		// trigger Desktop's own _ScreenChanged().
-		if (SetMode(mode) == B_OK)
+		if (SetMode(mode) == B_OK) {
+			// External resize is the new baseline; re-arm the poll.
+			fUserSetMode = false;
 			_NotifyScreenChanged();
+		}
 	}
 
 	fResizeBusy.store(false);

@@ -231,6 +231,10 @@ private:
 			thread_id			fResizeThread;
 			std::atomic<bool>	fResizeBusy;
 			std::atomic<bool>	fResizePending;
+			bigtime_t			fLastModeCheck;
+			uint32_t			fLastPreferredWidth;
+			uint32_t			fLastPreferredHeight;
+			bool				fUserSetMode;
 			sem_id				fSessionSem;
 
 			struct udev*		fUdev;

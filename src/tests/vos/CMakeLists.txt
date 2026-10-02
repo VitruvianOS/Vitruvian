@@ -11,6 +11,13 @@ Application(testsuspend SOURCES testsuspend.cpp)
 
 add_executable(testinject testinject.cpp)
 
+# Screen-change relayout policy (pure helpers, no window server).
+Application(test_screen_relayout
+	SOURCES test_screen_relayout.cpp
+		${CMAKE_SOURCE_DIR}/src/servers/app/ScreenRelayout.cpp
+	INCLUDES ${CMAKE_SOURCE_DIR}/src/servers/app)
+UsePrivateHeaders(test_screen_relayout interface)
+
 # CUPS end-to-end test (V\OS printing, no print server).
 Application(test_printcups
 	SOURCES printcups/test_printcups.cpp

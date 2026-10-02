@@ -224,6 +224,27 @@ VirtualScreen::ScreenByID(int32 id) const
 }
 
 
+int32
+VirtualScreen::ScreenIndex(const Screen* screen) const
+{
+	for (int32 i = fScreenList.CountItems(); i-- > 0;) {
+		if (fScreenList.ItemAt(i)->screen == screen)
+			return i;
+	}
+
+	return -1;
+}
+
+
+void
+VirtualScreen::SetScreenFrame(int32 index, BRect frame)
+{
+	screen_item* item = fScreenList.ItemAt(index);
+	if (item != NULL)
+		item->frame = frame;
+}
+
+
 BRect
 VirtualScreen::ScreenFrameAt(int32 index) const
 {

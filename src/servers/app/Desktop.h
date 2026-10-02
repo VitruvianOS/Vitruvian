@@ -331,6 +331,9 @@ private:
 			void				_ResumeDirectFrameBufferAccess();
 
 			void				_ScreenChanged(Screen* screen);
+			void				_RelayoutWindowsForScreen(Screen* screen,
+									const BRect& oldFrame,
+									const BRect& newFrame);
 			void				_SetCurrentWorkspaceConfiguration();
 			void				_SetWorkspace(int32 index,
 									bool moveFocusWindow = false);

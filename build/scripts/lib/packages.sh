@@ -204,7 +204,7 @@ _board_extra_packages() {
         beagle)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 dosfstools rsync"  # u-boot-beagle does not exist
+                " linux-image-arm64 u-boot-sitara-binaries dosfstools rsync"
             ;;
         beaglebone)
             printf '%s' \

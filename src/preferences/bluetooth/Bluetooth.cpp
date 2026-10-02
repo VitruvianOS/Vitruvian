@@ -4,15 +4,17 @@
  */
 
 
-#include <Alert.h>
 #include <Application.h>
-#include <Catalog.h>
-#include <Locale.h>
 #include <Window.h>
 
 #include "BluetoothWindow.h"
 
 
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Bluetooth"
+
+
+// Existing signature; do not change.
 static const char* kSignature = "application/x-vnd.Haiku-Bluetooth";
 
 
@@ -40,11 +42,8 @@ Application::ReadyToRun()
 }
 
 
-// #pragma mark -
-
-
 int
-main()
+main(int /*argc*/, char** /*argv*/)
 {
 	Application* app = new Application();
 	app->Run();

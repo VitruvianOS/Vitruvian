@@ -1,0 +1,19 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
+
+// Tracker add-on; no standalone app signature required.
+//resource app_signature "application/x-vnd.vos-BluetoothSend";
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	variety = 0,
+	internal = 1,
+
+	short_info = "Send to Bluetooth device",
+	long_info = "Send selected files to a paired Bluetooth device."
+};

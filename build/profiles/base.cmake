@@ -84,6 +84,7 @@ set(TRACKER_ADDONS
 	IconVader
 	OpenTargetFolder
 	OpenTerminal
+	SendToBluetooth
 	ZipOMatic
 #	mark_as: needs libmail (not ported); skipped
 )

@@ -2,6 +2,7 @@ target_sources(be PRIVATE
 	libbluetooth/BlueZBackend.cpp
 	libbluetooth/DeviceClass.cpp
 	libbluetooth/LocalDevice.cpp
+	libbluetooth/ObexClient.cpp
 	libbluetooth/RemoteDevice.cpp
 	libbluetooth/DiscoveryAgent.cpp
 	libbluetooth/DiscoveryListener.cpp
@@ -9,6 +10,7 @@ target_sources(be PRIVATE
 
 target_include_directories(be PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/libbluetooth
+	${CMAKE_SOURCE_DIR}/headers/private/bluetooth
 )
 
 # Find BlueZ libraries

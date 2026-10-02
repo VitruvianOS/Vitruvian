@@ -634,6 +634,16 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 				*eq = '=';
 			}
 		}
+
+		// Session apps are forked here, not by the user manager: export the
+		// session bus address unless pam_systemd already set it.
+		if (runtimeDir[0] != '\0') {
+			char busAddr[128];
+			snprintf(busAddr, sizeof(busAddr), "unix:path=%s/bus",
+				runtimeDir);
+			setenv("DBUS_SESSION_BUS_ADDRESS", busAddr, 0);
+		}
+
 		setenv("HOME",    sUserHome, 1);
 		setenv("USER",    sUserName, 1);
 		setenv("LOGNAME", sUserName, 1);

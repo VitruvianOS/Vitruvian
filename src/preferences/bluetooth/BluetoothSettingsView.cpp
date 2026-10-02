@@ -48,6 +48,7 @@ static const uint32 kMsgSetInquiryTime = 'bsit';
 static const uint32 kMsgSetPairable = 'bspr';
 static const uint32 kMsgStatusReady = 'bsst';
 static const uint32 kMsgAdapterOpDone = 'bsad';
+static const uint32 kMsgSetReceiveFiles = 'bsrf';
 
 
 using namespace Bluetooth;
@@ -80,6 +81,12 @@ BluetoothSettingsView::BluetoothSettingsView(const char* name,
 		new BMessage(kMsgSetPairable));
 	fPairableCheckBox->SetEnabled(false);
 
+	fReceiveCheckBox = new BCheckBox("receive",
+		B_TRANSLATE("Receive files"),
+		new BMessage(kMsgSetReceiveFiles));
+	fReceiveCheckBox->SetValue(fSettings.ReceiveFiles()
+		? B_CONTROL_ON : B_CONTROL_OFF);
+
 	fDeviceClassView = new BStringView("deviceClass", "");
 
 	BLayoutBuilder::Grid<>(this, B_USE_DEFAULT_SPACING)
@@ -91,9 +98,11 @@ BluetoothSettingsView::BluetoothSettingsView(const char* name,
 
 		.Add(fPairableCheckBox, 0, 2, 2)
 
+		.Add(fReceiveCheckBox, 0, 3, 2)
+
 		.Add(new BStringView("classLabel", B_TRANSLATE("Identify host as:")),
-			0, 3)
-		.Add(fDeviceClassView, 1, 3)
+			0, 4)
+		.Add(fDeviceClassView, 1, 4)
 	.End();
 }
 
@@ -119,6 +128,7 @@ BluetoothSettingsView::AttachedToWindow()
 	fLocalDevicesMenu->SetTargetForItems(this);
 	fInquiryTimeControl->SetTarget(this);
 	fPairableCheckBox->SetTarget(this);
+	fReceiveCheckBox->SetTarget(this);
 
 	LocalDevice::StartWatching(BMessenger(this),
 		LocalDevice::NOTIFICATION_ADAPTER_ADDED
@@ -180,6 +190,16 @@ BluetoothSettingsView::MessageReceived(BMessage* message)
 			bool pairable = fPairableCheckBox->Value() == B_CONTROL_ON;
 			adapter->SetPairable(pairable, BMessenger(this),
 				kMsgAdapterOpDone);
+			break;
+		}
+
+		case kMsgSetReceiveFiles:
+		{
+			// The Deskbar BluetoothStatus replicant hosts the receive
+			// agent and reloads these settings on every push.
+			bool enable = fReceiveCheckBox->Value() == B_CONTROL_ON;
+			fSettings.SetReceiveFiles(enable);
+			fSettings.SaveSettings();
 			break;
 		}
 

@@ -63,6 +63,9 @@ private:
 	void _DoDisconnect();
 	void _DoToggleTrust();
 	void _DoToggleBlock();
+	void _DoSendFiles();
+	void _DoToggleAlwaysAccept();
+	void _ApplyFilesChosen(BMessage* message);
 
 	void _UpdateButtons();
 
@@ -85,6 +88,12 @@ private:
 	BButton* fTrustButton;
 	BButton* fBlockButton;
 	BButton* fRefreshButton;
+	BButton* fSendFilesButton;
+	BCheckBox* fAlwaysAcceptCheckBox;
+
+	// Device the open file panel is gathering refs for (Send Files).
+	BString fPendingSendAddress;
+	BString fPendingSendName;
 
 	BCheckBox* fShowReplicantCheckBox;
 

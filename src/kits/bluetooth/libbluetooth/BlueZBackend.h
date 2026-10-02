@@ -37,6 +37,10 @@ typedef struct _GAsyncResult GAsyncResult;
 
 class BlueZBackend {
 public:
+	// Public only so the free _RunOnDispatchThread job in the .cpp can
+	// name the type; not part of the external surface.
+	struct ObexSendCookie;
+
 	static BlueZBackend* Instance();
 
 	// Adapter enumeration
@@ -131,6 +135,23 @@ public:
 	void CompleteAgentRequest(uint32 requestId, bool accepted,
 		const BString& value);
 
+	// OBEX file transfer talks to obexd on the session bus, not the system
+	// bus; BlueZBackend creates one session per peer send queue.
+	status_t RegisterObexAgentAsync(const BMessenger& uiHandler,
+		const BMessenger& replyTo, uint32 replyWhat);
+	status_t UnregisterObexAgentAsync(const BMessenger& replyTo,
+		uint32 replyWhat);
+	void CompleteObexRequest(uint32 requestId, bool accepted);
+
+	// One CreateSession then a SendFile per ref; fails with B_BUSY if a
+	// queue is already running.
+	status_t ObexSendFilesAsync(const char* targetAddress,
+		const BMessage& files, const BMessenger& uiHandler,
+		const BMessenger& replyTo, uint32 replyWhat);
+	// Cancels the in-flight send queue (and any single Transfer1.Cancel).
+	// Idempotent; a queue that already finished is a no-op.
+	void ObexCancelSend();
+
 	// Public only so the free dispatch-job functions in BlueZBackend.cpp
 	// (the _RunOnDispatchThread jobs for RegisterAgentAsync/
 	// UnregisterAgentAsync/CompleteAgentRequest) can call them, mirroring
@@ -141,6 +162,14 @@ public:
 	status_t _UnregisterAgent();
 	void _CompleteAgentRequest(uint32 requestId, bool accepted,
 		const BString& value);
+
+	// Same public-for-dispatch-jobs reason as the Agent1 trio above; the
+	// OBEX agent runs on the session bus.
+	status_t _RegisterObexAgent(const BMessenger& uiHandler);
+	status_t _UnregisterObexAgent();
+	void _CompleteObexRequest(uint32 requestId, bool accepted);
+	void _ObexSendFilesJob(ObexSendCookie* job, BMessage* reply);
+	void _ObexCancelSendOnDispatch();
 
 	// Queues func(cookie, &reply) onto this backend's GMainContext dispatch
 	// thread and returns immediately; never blocks the caller. Mirrors
@@ -171,6 +200,23 @@ public:
 	enum AgentMessageType {
 		AGENT_REQUEST = 'BTAR',
 		AGENT_CANCEL = 'BTAC'
+	};
+
+	// OBEX BMessage protocol, same shape as the Agent1 messages above.
+	enum ObexMessageType {
+		// Agent1 (incoming push) UI handler
+		OBEX_AGENT_REQUEST = 'BTOR',
+		OBEX_AGENT_CANCEL = 'BTON',
+		// Outgoing send queue uiHandler
+		OBEX_TRANSFER_STARTED = 'BTOS',
+		OBEX_TRANSFER_PROGRESS = 'BTOP',
+		OBEX_TRANSFER_COMPLETE = 'BTOK',
+		OBEX_TRANSFER_FAILED = 'BTXF',
+		OBEX_QUEUE_COMPLETE = 'BTQC',
+		// Incoming receive finished (Transfer1.Status == complete)
+		OBEX_RECEIVE_COMPLETE = 'BTRC',
+		// Async call replyTo messages carry "status"
+		OBEX_REPLY = 'BTOY'
 	};
 
 private:
@@ -345,6 +391,40 @@ private:
 	guint fAgentRegistrationId;
 	BPrivate::AuthPromptRouter fAgentRouter;
 
+	// OBEX session-bus connection and agent; separate from the system-bus
+	// BlueZ connection above.
+	void* fObexConnection;
+	guint fObexAgentRegistrationId;
+	BPrivate::AuthPromptRouter fObexAgentRouter;
+
+	// At most one outgoing queue; a second ObexSendFilesAsync gets B_BUSY.
+	ObexSendCookie* fObexSend;
+	bool fObexCancelRequested;
+
+	// Receive sessions the user accepted; Transfer1 completions for other
+	// paths are ignored.
+	std::map<BString, bool> fObexReceiveSessions;
+
+	status_t _EnsureObexConnection();
+	void _ObexWaitTransfer(ObexSendCookie* job);
+	static void _ObexAgentMethodCall(GDBusConnection* connection,
+		const char* sender, const char* objectPath,
+		const char* interfaceName, const char* methodName,
+		GVariant* parameters, GDBusMethodInvocation* invocation,
+		void* userData);
+	void _HandleObexAgentMethodCall(const char* methodName,
+		GVariant* parameters, GDBusMethodInvocation* invocation);
+	void _CancelPendingObexRequests();
+
+	void _ObexTransferPropertiesChanged(const char* objectPath,
+		GVariant* parameters);
+	void _ObexFinishReceive(const char* transferPath, const char* fileName,
+		const char* filePath);
+	static void _ObexTransferPropertiesChangedCallback(
+		GDBusConnection* connection, const char* senderName,
+		const char* objectPath, const char* interfaceName,
+		const char* signalName, GVariant* parameters, void* userData);
+
 	// Multiple independent watchers (e.g. a preflet's PropertiesChanged
 	// subscription and a concurrent DiscoveryAgent scan) each get their own
 	// mask; a notification fans out to every entry whose mask matches. Dead
@@ -361,6 +441,9 @@ private:
 	guint fPropertiesChangedSubscriptionId;
 	guint fInterfacesAddedSubscriptionId;
 	guint fInterfacesRemovedSubscriptionId;
+
+	// Transfer1 PropertiesChanged for receive-side completion watching.
+	guint fObexTransferSubscriptionId;
 
 	BLocker fLock;
 };

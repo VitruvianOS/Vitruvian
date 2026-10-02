@@ -25,6 +25,8 @@ public:
 	virtual void Update(BView* owner, const BFont* font);
 
 	const BString& Path() const { return fPath; }
+	const BString& Address() const { return fAddress; }
+	const BString& Name() const { return fName; }
 	bool IsPaired() const { return fPaired; }
 	bool IsConnected() const { return fConnected; }
 	bool IsTrusted() const { return fTrusted; }

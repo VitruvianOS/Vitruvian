@@ -20,6 +20,8 @@
 class BBitmap;
 class BMenu;
 class BMessageRunner;
+class BluetoothSettings;
+class ObexReceiveAgent;
 
 
 enum {
@@ -122,6 +124,11 @@ private:
 	// name), so an incoming Agent1 request can resolve a friendly name
 	// without a synchronous D-Bus round trip from the dispatch thread.
 	std::map<BString, BString> fDeviceNames;
+
+	// Receive agent hosted here so it survives a login. Settings are
+	// reloaded on every push; the preflet switch only writes them.
+	BluetoothSettings*		fSettings;
+	ObexReceiveAgent*		fReceiveAgent;
 };
 
 

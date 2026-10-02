@@ -1394,6 +1394,33 @@ $_fdt_line
 EXTLINUX
     sudo sed -i "s/EXTROOTFS/$_root_fs/" "$_mnt/boot/extlinux/extlinux.conf"
 
+    # Hardkernel's U-Boot has no extlinux support and loads boot.ini; write
+    # one with the same cmdline. The other boards' U-Boots read extlinux.
+    if [ "$_board" = "amlogic" ]; then
+        _dtb_bootini="${_boot_dtb}"
+        [ -n "$_dtb_bootini" ] || {
+            for _dtb in $_dtb_files; do
+                _dtb_bootini="$_dtb"
+                break
+            done
+        }
+        _dtb_bootini="${_dtb_bootini:-amlogic/meson-g12b-odroid-n2.dtb}"
+        sudo sh -c "cat > '$_mnt/boot/boot.ini'" <<BBOOTINI
+echo 'V\OS U-Boot boot.ini ($_board)'
+setenv bootargs root=$_ext_rootdev rootfstype=$_root_fs rw rootwait console=$_ext_console $_append_tail
+for dev in 0 1; do
+  if load mmc \${dev}:1 \${kernel_addr_r} /vmlinuz; then
+    if load mmc \${dev}:1 \${ramdisk_addr_r} /initrd.img; then
+      if load mmc \${dev}:1 \${fdt_addr_r} /dtbs/$_dtb_bootini; then
+        booti \${kernel_addr_r} \${ramdisk_addr_r} \${fdt_addr_r}
+      fi
+    fi
+  fi
+done
+BBOOTINI
+        log_info "  wrote /boot/boot.ini (Hardkernel boot_scripts path) dtb=$_dtb_bootini console=$_ext_console"
+    fi
+
     # riscv64's linux-image ships an uncompressed vmlinux-<ver> (no vmlinuz-);
     # see the same fallback in create_iso() above.
     if [ ! -f "$_mnt/boot/vmlinuz-$_kver" ] && [ -f "$_mnt/boot/vmlinux-$_kver" ]; then

@@ -71,6 +71,9 @@ private:
 	void _ShowSleepWindow(bool hibernate);
 	void _ShowSleepFailure(bool hibernate, const char *reason);
 	void _CheckBattery();
+	void _HandleLogindSessionLock(BMessage *message);
+	bool _RequestScreenLockAsync(bool automatic, int32 cycle);
+	void _RequestScreenLockForSleep();
 
 	TRoster					*fRoster;
 	ClipboardHandler		*fClipboardHandler;

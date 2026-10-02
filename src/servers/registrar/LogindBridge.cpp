@@ -9,10 +9,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include <systemd/sd-bus.h>
+#include <systemd/sd-login.h>
 
 #include <Message.h>
 
@@ -20,6 +22,21 @@
 static const char* kLogin1Bus       = "org.freedesktop.login1";
 static const char* kLogin1Path      = "/org/freedesktop/login1";
 static const char* kLogin1Manager   = "org.freedesktop.login1.Manager";
+static const char* kLogin1Session   = "org.freedesktop.login1.Session";
+
+
+static void
+session_path_for_pid(char* out, size_t outSize)
+{
+	out[0] = '\0';
+	char* sid = NULL;
+	int r = sd_pid_get_session(0, &sid);
+	if (r < 0 || sid == NULL)
+		return;
+	// sid is "c2" style; logind path is /org/freedesktop/login1/session/c2
+	snprintf(out, outSize, "/org/freedesktop/login1/session/%s", sid);
+	free(sid);
+}
 
 enum sleep_request {
 	kSleepRequestNone = 0,
@@ -88,6 +105,26 @@ LogindBridge::Start()
 		"PrepareForSleep", NULL, this);
 	if (r < 0)
 		fprintf(stderr, "LogindBridge: match PrepareForSleep: %s\n", strerror(-r));
+
+	// Session Lock/Unlock (loginctl lock-session). Session path may be
+	// unknown early; match failure is non-fatal.
+	char sessionPath[256];
+	session_path_for_pid(sessionPath, sizeof(sessionPath));
+	if (sessionPath[0] != '\0') {
+		r = sd_bus_match_signal(bus, NULL, kLogin1Bus, sessionPath,
+			kLogin1Session, "Lock", NULL, this);
+		if (r < 0)
+			fprintf(stderr, "LogindBridge: match session Lock: %s\n",
+				strerror(-r));
+		r = sd_bus_match_signal(bus, NULL, kLogin1Bus, sessionPath,
+			kLogin1Session, "Unlock", NULL, this);
+		if (r < 0)
+			fprintf(stderr, "LogindBridge: match session Unlock: %s\n",
+				strerror(-r));
+	} else {
+		fprintf(stderr, "LogindBridge: no logind session id yet; "
+			"session Lock/Unlock not subscribed\n");
+	}
 
 	fRunning = true;
 	fThread = spawn_thread(_ThreadEntry, "logind_bridge", B_NORMAL_PRIORITY, this);
@@ -329,7 +366,15 @@ LogindBridge::_ThreadLoop()
 			const char* member = sd_bus_message_get_member(m);
 			if (member != NULL) {
 				int active = 0;
-				if (sd_bus_message_read(m, "b", &active) >= 0) {
+				if (strcmp(member, "Lock") == 0
+						|| strcmp(member, "Unlock") == 0) {
+					// Session signals carry no payload we need.
+					BMessage post;
+					post.what = (strcmp(member, "Lock") == 0)
+						? kMsgLogindSessionLock
+						: kMsgLogindSessionUnlock;
+					fTarget.SendMessage(&post);
+				} else if (sd_bus_message_read(m, "b", &active) >= 0) {
 					BMessage post;
 					if (strcmp(member, "PrepareForShutdown") == 0
 						|| strcmp(member,

@@ -23,6 +23,7 @@
 #include <Clipboard.h>
 #include <File.h>
 #include <FindDirectory.h>
+#include <LaunchDaemonDefs.h>
 #include <Message.h>
 #include <MessengerPrivate.h>
 #include <OS.h>
@@ -31,6 +32,8 @@
 #include <RosterPrivate.h>
 #include <String.h>
 #include <system_info.h>
+
+#include <kernel/util/KMessage.h>
 
 
 #include "AuthenticationManager.h"
@@ -71,8 +74,10 @@ static const bigtime_t kSanityCheckInterval = 30000000LL;
 
 // Sleep timing: how long apps get after B_SYSTEM_SUSPENDING, when the window closes, and how
 // recent our own request must be to name the sleep kind and how much sleep proves a sleep.
+// kMsgSleepLockDone: a janus lock round-trip ended for this sleep cycle, with the result.
 static const uint32 kMsgSleepNotified = 'slNt';
 static const uint32 kMsgSleepRelease = 'slRl';
+static const uint32 kMsgSleepLockDone = 'slLd';
 static const bigtime_t kSleepHandlerTime = 2000000LL;
 static const bigtime_t kSleepWindowCloseTime = 250000LL;
 static const bigtime_t kSleepNotifySlack = 100000LL;
@@ -364,7 +369,11 @@ Registrar::_MessageReceived(BMessage *message)
 			break;
 		case kMsgSleepNotified:
 		case kMsgSleepRelease:
+		case kMsgSleepLockDone:
 			_HandleSleepTimer(message);
+			break;
+		case kMsgLogindSessionLock:
+			_HandleLogindSessionLock(message);
 			break;
 		case kMsgBatteryCheck:
 			_CheckBattery();
@@ -674,8 +683,14 @@ Registrar::_HandleLogindPrepareForShutdown(BMessage *request)
 
 	Broadcast B_SYSTEM_SUSPENDING/B_SYSTEM_RESUMED to registered apps
 	via TRoster's existing broadcast primitive, then (on suspend)
-	release the sleep inhibit so systemd proceeds. Fire-and-forget:
-	no ack protocol in v1; caller-side handlers must be quick.
+	release the sleep inhibit so systemd proceeds.
+
+	Screen lock sits in _HandleSleepTimer, at the moment the sleep would
+	release the delay inhibitor: hibernate at kMsgSleepNotified, suspend
+	at kMsgSleepRelease. The janus lock round-trip runs on a short
+	thread; kMsgSleepLockDone releases the inhibit once it ends. The
+	registrar looper never waits, and there is no fixed snooze — the
+	inhibitor fd is the delay.
 */
 void
 Registrar::_HandleLogindPrepareForSleep(BMessage *request)
@@ -822,8 +837,9 @@ Registrar::_HandleSleepTimer(BMessage *message)
 			return;
 		fSleepNotified = true;
 		if (fSleepHibernate) {
-			if (fLogindBridge != NULL)
-				fLogindBridge->ReleaseSleepInhibit();
+			// Hibernate: lock before the image is written;
+			// kMsgSleepLockDone releases the inhibitor.
+			_RequestScreenLockForSleep();
 			return;
 		}
 		// Let app_server redraw what the window covered before freezing.
@@ -835,8 +851,18 @@ Registrar::_HandleSleepTimer(BMessage *message)
 		return;
 	}
 
-	if (fLogindBridge != NULL)
-		fLogindBridge->ReleaseSleepInhibit();
+	if (message->what == kMsgSleepRelease) {
+		// Suspend: the window is gone; lock, then release.
+		_RequestScreenLockForSleep();
+		return;
+	}
+
+	if (message->what == kMsgSleepLockDone) {
+		// Applied, skipped or failed: release either way, since sleep
+		// must not hang on a dead janus.
+		if (fLogindBridge != NULL)
+			fLogindBridge->ReleaseSleepInhibit();
+	}
 }
 
 
@@ -983,6 +1009,97 @@ Registrar::_ShowSleepFailure(bool hibernate, const char *reason)
 	BMessage failed(kMsgSleepFailed);
 	failed.AddString("text", text);
 	fSleepWindow.SendMessage(&failed);
+}
+
+
+// A janus lock round-trip on its own short thread, like the sleep
+// notices. The registrar looper never sits through the janus reply.
+struct SleepLockRequest {
+	BMessenger	registrar;
+	int32		cycle;		// -1 = not part of a sleep cycle
+	bool		automatic;	// sleep lock: skip autologin users
+};
+
+
+static status_t
+sleep_lock_thread(void* data)
+{
+	SleepLockRequest* request = (SleepLockRequest*)data;
+	port_id janus = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+	status_t result = B_ERROR;
+	if (janus >= 0) {
+		BPrivate::KMessage req(BPrivate::B_JANUS_LOCK_SESSION);
+		// Sleep lock: skip autologin users. A manual lock omits this.
+		if (request->automatic)
+			req.AddBool("automatic", true);
+		BPrivate::KMessage reply;
+		status_t s = req.SendTo(janus, -1, &reply, 2000000LL, 2000000LL,
+			getpid());
+		if (s == B_OK)
+			// B_NOT_ALLOWED: passwordless or autologin, nothing to lock.
+			result = reply.What() == B_OK ? B_OK : B_NOT_ALLOWED;
+		else
+			result = s;
+	}
+
+	if (request->cycle >= 0) {
+		BMessage done(kMsgSleepLockDone);
+		done.AddInt32("cycle", request->cycle);
+		done.AddInt32("result", result);
+		request->registrar.SendMessage(&done);
+	}
+	delete request;
+	return B_OK;
+}
+
+
+/*!	Asks janus to lock the screen on a short thread. The caller is
+	never blocked on the round-trip.
+
+	\return false if the request could not be scheduled. The sleep
+	path must then release the inhibitor itself, or sleep would wait
+	forever on a reply that cannot come.
+*/
+bool
+Registrar::_RequestScreenLockAsync(bool automatic, int32 cycle)
+{
+	SleepLockRequest* request = new(std::nothrow) SleepLockRequest;
+	if (request == NULL)
+		return false;
+	request->registrar = BMessenger(this);
+	request->cycle = cycle;
+	request->automatic = automatic;
+
+	thread_id thread = spawn_thread(sleep_lock_thread, "sleep lock",
+		B_NORMAL_PRIORITY, request);
+	if (thread < B_OK || resume_thread(thread) != B_OK) {
+		delete request;
+		return false;
+	}
+	return true;
+}
+
+
+/*!	Requests the sleep-path screen lock. The lock must be in place
+	before the delay inhibitor is released, so the resumed screen is
+	already locked.
+*/
+void
+Registrar::_RequestScreenLockForSleep()
+{
+	if (!_RequestScreenLockAsync(true, fSleepCycle)
+		&& fLogindBridge != NULL) {
+		// Could not schedule the request; do not hold the inhibitor.
+		fLogindBridge->ReleaseSleepInhibit();
+	}
+}
+
+
+void
+Registrar::_HandleLogindSessionLock(BMessage* /*message*/)
+{
+	// loginctl lock-session: not automatic, so autologin users lock too.
+	_RequestScreenLockAsync(false, -1);
 }
 
 

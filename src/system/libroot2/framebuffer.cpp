@@ -112,6 +112,8 @@ _kern_get_safemode_option(const char *parameter,
 		active = cmdline_has("vitruvian.disable_user_addons");
 	else if (strcmp(parameter, B_SAFEMODE_SAFE_MODE) == 0)
 		active = cmdline_has("vitruvian.safemode");
+	else if (strcmp(parameter, B_SAFEMODE_RECOVERY) == 0)
+		active = cmdline_has("vitruvian.recovery");
 	else
 		return B_NAME_NOT_FOUND;
 

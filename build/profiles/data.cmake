@@ -105,6 +105,9 @@ install(FILES data/pam.d/vitruvian-auth DESTINATION /usr/share/vos/pam.d/)
 
 install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)
 
+# Inert unless vitruvian.safemode is on the kernel cmdline.
+install(FILES data/systemd/vos-safemode-logging.service DESTINATION /etc/systemd/system/)
+
 # TTY-intermediate scaffolding — dormant unless enabled at runtime.
 install(FILES data/systemd/vos-session.service       DESTINATION /usr/share/vos/systemd/)
 install(FILES data/systemd/vos-polkit-agent.service  DESTINATION /usr/share/vos/systemd/)

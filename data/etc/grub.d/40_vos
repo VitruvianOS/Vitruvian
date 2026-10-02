@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
-# V\OS: Safe Mode and Debug entries, kept here because update-grub replaces grub.cfg.
+# V\OS: Safe Mode, Recovery and Debug entries, kept here because update-grub replaces grub.cfg.
 # Args match the raw-image entries in build/scripts/lib/image.sh.
+# Debug is gated on vos-sshdebug.service, same as the Installer shim.
 
 . "${pkgdatadir:-/usr/share/grub}/grub-mkconfig_lib"
 
@@ -39,6 +40,11 @@ cat <<EOF
 menuentry "Vitruvian (Safe Mode)" {
     prepare_grub_to_access_device "${GRUB_DEVICE_BOOT}"
     linux $_rel_vmlinuz root=UUID=$_root rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
+    initrd $_rel_initrd
+}
+menuentry "Vitruvian (Recovery)" {
+    prepare_grub_to_access_device "${GRUB_DEVICE_BOOT}"
+    linux $_rel_vmlinuz root=UUID=$_root rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.recovery systemd.unit=rescue.target
     initrd $_rel_initrd
 }
 $_debug

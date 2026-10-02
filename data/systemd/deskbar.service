@@ -1,5 +1,7 @@
 [Unit]
 ConditionPathExists=!/var/lib/vos/greeter-enabled
+# Skipped in safe mode; minimal boot has no taskbar.
+ConditionKernelCommandLine=!vitruvian.safemode
 Description=Vitruvian Deskbar
 After=janus.service input_server.service notification_server.service
 Requires=janus.service

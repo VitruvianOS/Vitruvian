@@ -1,0 +1,17 @@
+[Unit]
+Description=V\OS safe-mode verbose logging (opt-in via vitruvian.safemode on the kernel cmdline)
+# Inert unless the Safe Mode GRUB entry was chosen; normal boot is unaffected.
+ConditionKernelCommandLine=vitruvian.safemode
+After=systemd-journald.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# /run so the drop-in dies at reboot; a /etc drop-in would stay for every later normal boot.
+ExecStart=/bin/sh -c 'mkdir -p /run/systemd/journald.conf.d && \
+  printf "[Journal]\nStorage=persistent\nRateLimitBurst=10000\nRateLimitIntervalSec=1s\nCompress=no\n" \
+  > /run/systemd/journald.conf.d/90-safemode.conf && \
+  systemctl restart systemd-journald'
+
+[Install]
+WantedBy=multi-user.target

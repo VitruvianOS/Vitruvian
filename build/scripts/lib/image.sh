@@ -348,6 +348,10 @@ menuentry "Vitruvian (Safe Mode)" {
     linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
     initrd (\$root)/initrd.img
 }
+menuentry "Vitruvian (Recovery)" {
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.recovery systemd.unit=rescue.target
+    initrd (\$root)/initrd.img
+}
 $_debug_menuentry
 if [ "\$grub_platform" = "efi" ]; then
     menuentry "UEFI Firmware Settings" {
@@ -568,6 +572,10 @@ menuentry "Vitruvian Live" {
 }
 menuentry "Vitruvian Live (Safe Mode)" {
     linux /vmlinuz boot=live noeject quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons console=tty0 console=ttyS0,115200
+    initrd /initrd
+}
+menuentry "Vitruvian Live (Recovery)" {
+    linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.recovery systemd.unit=rescue.target
     initrd /initrd
 }
 EOF

@@ -84,7 +84,9 @@ board_config() {
             case "$_field" in
                 arch)           printf 'arm64' ;;
                 label)          printf 'Allwinner (H6/H616/A64)' ;;
-                partition_fmt)  printf 'gpt' ;;
+                # The SPL goes at sector 16, inside a GPT entry array; MBR
+                # has nothing there (as on allwinner-h3).
+                partition_fmt)  printf 'dos' ;;
                 boot_style)     printf 'spl-uboot' ;;
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;

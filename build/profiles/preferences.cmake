@@ -1,6 +1,7 @@
 # Target names (cmake-unique): used for ImageInclude and DEPENDS
 set(SYSTEM_PREFERENCES_TARGETS
 	Accounts
+	Administrator
 	Appearance
 	Backgrounds
 	Bluetooth
@@ -29,6 +30,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 # Installed binary names (OUTPUT_NAME where it differs): used for symlinks and staging
 set(SYSTEM_PREFERENCES
 	Accounts
+	Administrator
 	Appearance
 	Backgrounds
 	Bluetooth

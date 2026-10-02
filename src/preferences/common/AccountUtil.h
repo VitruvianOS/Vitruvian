@@ -18,7 +18,8 @@ namespace BPrivate {
 namespace Accounts {
 
 
-// One interactive account (uid >= 1000, interactive shell).
+// One interactive account (uid >= 1000, interactive shell), or the current
+// user when that is a system account (isProtected).
 struct Account {
 	BString	name;
 	BString	realName;
@@ -26,6 +27,7 @@ struct Account {
 	bool	isAdmin;
 	bool	isSelf;
 	bool	hasSession;
+	bool	isProtected;
 };
 
 

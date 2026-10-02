@@ -138,18 +138,20 @@ listAccounts(AccountList* outAccounts)
 	uid_t selfUid = getuid();
 	setpwent();
 	while (struct passwd* pw = getpwent()) {
-		if (pw->pw_uid < 1000)
-			continue;
-		if (!_isInteractiveShell(pw->pw_shell))
-			continue;
-		if (isReservedName(pw->pw_name))
+		bool isSelf = (pw->pw_uid == selfUid);
+		bool isProtected = pw->pw_uid < 1000
+			|| !_isInteractiveShell(pw->pw_shell)
+			|| isReservedName(pw->pw_name);
+		// The current user is always listed, e.g. the live session account.
+		if (isProtected && !isSelf)
 			continue;
 
 		Account* account = new Account;
 		account->name = pw->pw_name;
 		account->uid = pw->pw_uid;
 		account->isAdmin = isAdministrator(pw->pw_name);
-		account->isSelf = (pw->pw_uid == selfUid);
+		account->isSelf = isSelf;
+		account->isProtected = isProtected;
 		account->hasSession = _hasRunningSession(pw->pw_uid);
 
 		BString gecos(pw->pw_gecos != NULL ? pw->pw_gecos : "");

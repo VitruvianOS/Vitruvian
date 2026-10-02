@@ -1,0 +1,15 @@
+resource app_signature "application/x-vnd.vos-Administrator";
+
+resource app_name_catalog_entry "x-vnd.vos-Administrator:System name:Administrator";
+
+resource app_version {
+	major     = 1,
+	middle    = 0,
+	minor     = 0,
+	variety   = B_APPV_FINAL,
+	internal  = 0,
+	short_info = "Administrator",
+	long_info  = "Manage accounts and administrator rights on V\\OS"
+};
+
+resource app_flags B_SINGLE_LAUNCH;

@@ -65,6 +65,7 @@ count_admins() {
 	_count=0
 	for _u in $(getent group sudo | cut -d: -f4 | tr ',' ' '); do
 		[ -n "$_u" ] || continue
+		is_reserved "$_u" && continue
 		is_interactive_user "$_u" || continue
 		is_admin "$_u" || continue
 		_count=$((_count + 1))

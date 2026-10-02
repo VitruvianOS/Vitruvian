@@ -56,6 +56,7 @@ target_sources(root PRIVATE
 
 	posix/strdup.c
 	posix/strndup.c
+	posix/errors.cpp
 )
 
 # Debug-only vref tracing, off by default: set VREF_TRACE=/dir and re-add this.

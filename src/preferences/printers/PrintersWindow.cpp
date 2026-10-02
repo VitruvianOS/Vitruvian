@@ -2,8 +2,8 @@
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
- * Printers preflet: list CUPS queues, set default, show/cancel jobs,
- * add driverless IPP printers. No PPD handling.
+ * Printers preflet: discover, add and manage CUPS queues and jobs.
+ * cupsd errors are shown in the window.
  */
 
 #include "PrintersWindow.h"
@@ -12,15 +12,17 @@
 #include <Box.h>
 #include <Button.h>
 #include <Catalog.h>
+#include <ColumnListView.h>
+#include <ColumnTypes.h>
 #include <LayoutBuilder.h>
-#include <ListView.h>
 #include <Locale.h>
-#include <ScrollView.h>
 #include <String.h>
-#include <StringItem.h>
-#include <TextControl.h>
+#include <StringView.h>
 
+#include "AddPrinterDialog.h"
 #include "Messages.h"
+#include "PrinterOptionsDialog.h"
+#include "PrinterWorker.h"
 #include "printcups.h"
 #include "pr_server.h"
 
@@ -29,105 +31,155 @@
 #define B_TRANSLATION_CONTEXT "Printers"
 
 
-static const int32 kMaxQueues = 64;
-static const int32 kMaxJobs = 128;
+enum {
+	kPrinterColumn = 0,
+	kLocationColumn,
+	kStatusColumn,
+};
 
-
-class QueueItem : public BStringItem {
-public:
-	QueueItem(const printcups_queue_info& info)
-		:
-		BStringItem(""),
-		fName(info.name)
-	{
-		BString label(info.name);
-		if (info.make_model[0] != '\0')
-			label << " (" << info.make_model << ")";
-		if (info.is_default)
-			label << " " << B_TRANSLATE("[default]");
-		SetText(label.String());
-	}
-
-	const BString& Name() const { return fName; }
-
-private:
-	BString fName;
+enum {
+	kJobIdColumn = 0,
+	kJobNameColumn,
+	kJobStateColumn,
+	kJobQueueColumn,
 };
 
 
-class JobItem : public BStringItem {
-public:
-	JobItem(const printcups_job& job)
-		:
-		BStringItem(""),
-		fId(job.id),
-		fQueue(job.queue)
-	{
-		const char* state;
-		switch (job.state) {
-			case 0: state = B_TRANSLATE("pending"); break;
-			case 1: state = B_TRANSLATE("held"); break;
-			case 2: state = B_TRANSLATE("processing"); break;
-			case 3: state = B_TRANSLATE("stopped"); break;
-			case 4: state = B_TRANSLATE("canceled"); break;
-			case 5: state = B_TRANSLATE("aborted"); break;
-			case 6: state = B_TRANSLATE("completed"); break;
-			default: state = B_TRANSLATE("unknown"); break;
-		}
-		BString label;
-		label << job.id << "  " << job.name << "  (" << state << ")";
-		SetText(label.String());
+// Snapshot filled from worker results so refreshes rebuild lists in place.
+static printcups_queue_info gQueues[64];
+static int32 gQueueCount = 0;
+static printcups_job gJobs[128];
+static int32 gJobCount = 0;
+
+
+static void
+ClearList(BColumnListView* list)
+{
+	while (list->CountRows() > 0)
+		list->RemoveRow(list->RowAt(0));
+}
+
+
+PrinterRow::PrinterRow(const printcups_queue_info& info)
+	:
+	BRow(),
+	fName(info.name),
+	fDefault(info.is_default)
+{
+	BString name(info.name);
+	if (info.make_model[0] != '\0')
+		name << " (" << info.make_model << ")";
+	if (info.is_default)
+		name << " " << B_TRANSLATE("[default]");
+	SetField(new BStringField(name.String()), kPrinterColumn);
+	SetField(new BStringField(info.location), kLocationColumn);
+	SetField(new BStringField(StatusText(info)), kStatusColumn);
+}
+
+
+const char*
+PrinterRow::StatusText(const printcups_queue_info& info)
+{
+	if (!info.accepting)
+		return B_TRANSLATE("disabled");
+	if (info.state == 4)
+		return B_TRANSLATE("printing");
+	if (info.state == 5)
+		return B_TRANSLATE("stopped");
+	return B_TRANSLATE("idle");
+}
+
+
+JobRow::JobRow(const printcups_job& job)
+	:
+	BRow(),
+	fId(job.id),
+	fQueue(job.queue)
+{
+	BString id;
+	id << job.id;
+	SetField(new BStringField(id.String()), kJobIdColumn);
+	SetField(new BStringField(job.name), kJobNameColumn);
+	SetField(new BStringField(StateText(job.state)), kJobStateColumn);
+	SetField(new BStringField(job.queue), kJobQueueColumn);
+}
+
+
+const char*
+JobRow::StateText(int32 state)
+{
+	switch (state) {
+		case 0: return B_TRANSLATE("pending");
+		case 1: return B_TRANSLATE("held");
+		case 2: return B_TRANSLATE("processing");
+		case 3: return B_TRANSLATE("stopped");
+		case 4: return B_TRANSLATE("canceled");
+		case 5: return B_TRANSLATE("aborted");
+		case 6: return B_TRANSLATE("completed");
+		default: return B_TRANSLATE("unknown");
 	}
-
-	int32 Id() const { return fId; }
-	const BString& Queue() const { return fQueue; }
-
-private:
-	int32	fId;
-	BString	fQueue;
-};
+}
 
 
 PrintersWindow::PrintersWindow()
 	:
-	BWindow(BRect(80, 80, 560, 520), B_TRANSLATE_SYSTEM_NAME("Printers"),
+	BWindow(BRect(60, 60, 720, 560), B_TRANSLATE_SYSTEM_NAME("Printers"),
 		B_TITLED_WINDOW, B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS
-			| B_QUIT_ON_WINDOW_CLOSE)
+			| B_QUIT_ON_WINDOW_CLOSE),
+	fBusy(false)
 {
-	fQueueList = new BListView("queues");
-	fQueueList->SetSelectionMessage(new BMessage(kMsgPrinterSelected));
-	BScrollView* queueScroll = new BScrollView("queueScroll", fQueueList,
-		0, false, true);
+	_SetupLists();
 
-	fJobList = new BListView("jobs");
-	fJobList->SetSelectionMessage(new BMessage(kMsgJobSelected));
-	BScrollView* jobScroll = new BScrollView("jobScroll", fJobList,
-		0, false, true);
-
-	fDefaultButton = new BButton("default", B_TRANSLATE("Set default"),
-		new BMessage(kMsgMakeDefaultPrinter));
+	fAddButton = new BButton("add", B_TRANSLATE("Add Printer..."),
+		new BMessage(kMsgAddPrinter));
 	fRemoveButton = new BButton("remove", B_TRANSLATE("Remove"),
 		new BMessage(kMsgRemovePrinter));
-	fCancelButton = new BButton("cancel", B_TRANSLATE("Cancel job"),
+	fDefaultButton = new BButton("default", B_TRANSLATE("Set Default"),
+		new BMessage(kMsgMakeDefaultPrinter));
+	fRenameButton = new BButton("rename", B_TRANSLATE("Rename..."),
+		new BMessage(kMsgRenamePrinter));
+	fEnableButton = new BButton("enable", B_TRANSLATE("Enable"),
+		new BMessage(kMsgEnablePrinter));
+	fDisableButton = new BButton("disable", B_TRANSLATE("Disable"),
+		new BMessage(kMsgDisablePrinter));
+	fTestPageButton = new BButton("test", B_TRANSLATE("Test Page"),
+		new BMessage(kMsgPrintTestPage));
+	fOptionsButton = new BButton("options", B_TRANSLATE("Options..."),
+		new BMessage(kMsgPrinterOptions));
+	fRefreshButton = new BButton("refresh", B_TRANSLATE("Refresh"),
+		new BMessage(kMsgRefresh));
+
+	fCancelButton = new BButton("canceljob", B_TRANSLATE("Cancel Job"),
 		new BMessage(kMsgCancelJob));
+	fHoldButton = new BButton("holdjob", B_TRANSLATE("Hold"),
+		new BMessage(kMsgHoldJob));
+	fReleaseButton = new BButton("releasejob", B_TRANSLATE("Release"),
+		new BMessage(kMsgReleaseJob));
+	fPurgeButton = new BButton("purgejobs", B_TRANSLATE("Purge All Jobs"),
+		new BMessage(kMsgPurgeJobs));
 
-	fAddNameField = new BTextControl("addName", B_TRANSLATE("Name:"), NULL,
-		NULL);
-	fAddUriField = new BTextControl("addUri", B_TRANSLATE("URI:"),
-		"ipp://printer.local/ipp/print", NULL);
-	fAddButton = new BButton("add", B_TRANSLATE("Add"),
-		new BMessage(kMsgAddPrinter));
+	fStatusView = new BStringView("status", "");
 
-	BBox* queueBox = new BBox("queueBox");
-	queueBox->SetLabel(B_TRANSLATE("Printers"));
-	BLayoutBuilder::Group<>(queueBox, B_VERTICAL)
+	BBox* printerBox = new BBox("printerBox");
+	printerBox->SetLabel(B_TRANSLATE("Printers"));
+	BLayoutBuilder::Group<>(printerBox, B_VERTICAL)
 		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
 			B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
-		.Add(queueScroll)
+		.Add(fPrinterList, 2)
 		.AddGroup(B_HORIZONTAL)
-			.AddGlue()
+			.Add(fAddButton)
 			.Add(fRemoveButton)
 			.Add(fDefaultButton)
+			.Add(fRenameButton)
+			.AddGlue()
+		.End()
+		.AddGroup(B_HORIZONTAL)
+			.Add(fEnableButton)
+			.Add(fDisableButton)
+			.Add(fTestPageButton)
+			.Add(fOptionsButton)
+			.AddGlue()
+			.Add(fRefreshButton)
 		.End();
 
 	BBox* jobBox = new BBox("jobBox");
@@ -135,30 +187,55 @@ PrintersWindow::PrintersWindow()
 	BLayoutBuilder::Group<>(jobBox, B_VERTICAL)
 		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
 			B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
-		.Add(jobScroll)
+		.Add(fJobList, 2)
 		.AddGroup(B_HORIZONTAL)
-			.AddGlue()
 			.Add(fCancelButton)
+			.Add(fHoldButton)
+			.Add(fReleaseButton)
+			.AddGlue()
+			.Add(fPurgeButton)
 		.End();
-
-	BBox* addBox = new BBox("addBox");
-	addBox->SetLabel(B_TRANSLATE("Add a driverless (IPP Everywhere) printer"));
-	BLayoutBuilder::Grid<>(addBox)
-		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
-			B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
-		.AddTextControl(fAddNameField, 0, 0)
-		.AddTextControl(fAddUriField, 0, 1)
-		.Add(fAddButton, 1, 2);
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.SetInsets(B_USE_WINDOW_SPACING)
-		.Add(queueBox, 2)
+		.Add(printerBox, 2)
 		.Add(jobBox, 2)
-		.Add(addBox, 0);
+		.Add(fStatusView);
 
-	_UpdateQueues();
-	_UpdateJobs();
+	_UpdateButtons();
 	CenterOnScreen();
+
+	// cupsd may be slow; load queues off the window thread.
+	_LoadQueues();
+}
+
+
+void
+PrintersWindow::_SetupLists()
+{
+	fPrinterList = new BColumnListView("printers",
+		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
+	fPrinterList->SetSelectionMessage(new BMessage(kMsgPrinterSelected));
+	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Printer"),
+		200, 120, 400, B_TRUNCATE_END), kPrinterColumn);
+	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Location"),
+		140, 80, 260, B_TRUNCATE_END), kLocationColumn);
+	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Status"),
+		100, 60, 160, B_TRUNCATE_END), kStatusColumn);
+	fPrinterList->SetSortingEnabled(true);
+
+	fJobList = new BColumnListView("jobs",
+		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
+	fJobList->SetSelectionMessage(new BMessage(kMsgJobSelected));
+	fJobList->AddColumn(new BIntegerColumn(B_TRANSLATE("ID"), 50, 40, 80,
+		B_ALIGN_LEFT), kJobIdColumn);
+	fJobList->AddColumn(new BStringColumn(B_TRANSLATE("Job"),
+		180, 100, 320, B_TRUNCATE_END), kJobNameColumn);
+	fJobList->AddColumn(new BStringColumn(B_TRANSLATE("State"),
+		90, 60, 140, B_TRUNCATE_END), kJobStateColumn);
+	fJobList->AddColumn(new BStringColumn(B_TRANSLATE("Queue"),
+		140, 80, 240, B_TRUNCATE_END), kJobQueueColumn);
+	fJobList->SetSortingEnabled(true);
 }
 
 
@@ -166,8 +243,106 @@ void
 PrintersWindow::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
+		case kMsgWorkerResult:
+		{
+			int32 op = 0;
+			int32 status = B_OK;
+			BString error;
+			message->FindInt32("op", &op);
+			message->FindInt32("status", &status);
+			message->FindString("error", &error);
+
+			switch (op) {
+				case kWorkerOpListQueues:
+				{
+					fBusy = false;
+					const void* data = NULL;
+					ssize_t size = 0;
+					int32 count = 0;
+					message->FindInt32("count", &count);
+					gQueueCount = 0;
+					if (status == B_OK
+						&& message->FindData("queues", B_RAW_TYPE, &data,
+							&size) == B_OK) {
+						int32 n = size / (int32)sizeof(printcups_queue_info);
+						if (n > 64)
+							n = 64;
+						if (n > count)
+							n = count;
+						memcpy(gQueues, data,
+							n * sizeof(printcups_queue_info));
+						gQueueCount = n;
+					}
+					if (status == B_OK) {
+						_UpdateQueues();
+						_SetStatus(B_TRANSLATE("Ready"));
+					} else
+						_SetError(error, status);
+					_UpdateButtons();
+					break;
+				}
+
+				case kWorkerOpListJobs:
+				{
+					fBusy = false;
+					const void* data = NULL;
+					ssize_t size = 0;
+					int32 count = 0;
+					message->FindInt32("count", &count);
+					gJobCount = 0;
+					if (status == B_OK
+						&& message->FindData("jobs", B_RAW_TYPE, &data,
+							&size) == B_OK) {
+						int32 n = size / (int32)sizeof(printcups_job);
+						if (n > 128)
+							n = 128;
+						if (n > count)
+							n = count;
+						memcpy(gJobs, data, n * sizeof(printcups_job));
+						gJobCount = n;
+					}
+					if (status == B_OK)
+						_UpdateJobs();
+					else if (!error.IsEmpty())
+						_SetStatus(error.String());
+					_UpdateButtons();
+					break;
+				}
+
+				case kWorkerOpSetDefault:
+				case kWorkerOpRemovePrinter:
+				case kWorkerOpRenamePrinter:
+				case kWorkerOpSetAccepting:
+				case kWorkerOpSetOptions:
+				case kWorkerOpTestPage:
+				case kWorkerOpCancelJob:
+				case kWorkerOpHoldJob:
+				case kWorkerOpReleaseJob:
+				case kWorkerOpPurgeJobs:
+				case kWorkerOpAddPrinter:
+				{
+					fBusy = false;
+					if (status == B_OK) {
+						_SetStatus(B_TRANSLATE("Done"));
+						_LoadQueues();
+						_LoadJobs();
+					} else
+						_SetError(error, status);
+					_UpdateButtons();
+					break;
+				}
+
+				default:
+					fBusy = false;
+					_UpdateButtons();
+					break;
+			}
+			break;
+		}
+
 		case kMsgPrinterSelected:
 			_UpdateJobs();
+			_UpdateButtons();
 			break;
 
 		case kMsgJobSelected:
@@ -175,25 +350,61 @@ PrintersWindow::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgMakeDefaultPrinter:
-			_SetDefault();
+			_DoDefault();
 			break;
 
 		case kMsgCancelJob:
-			_CancelJob();
+			_DoCancelJob();
+			break;
+
+		case kMsgHoldJob:
+			_DoHoldJob();
+			break;
+
+		case kMsgReleaseJob:
+			_DoReleaseJob();
+			break;
+
+		case kMsgPurgeJobs:
+			_DoPurgeJobs();
 			break;
 
 		case kMsgAddPrinter:
-			_AddPrinter();
+			_DoAddPrinter();
 			break;
 
 		case kMsgRemovePrinter:
-			_RemovePrinter();
+			_DoRemove();
+			break;
+
+		case kMsgRenamePrinter:
+			_DoRename();
+			break;
+
+		case kMsgEnablePrinter:
+			_DoSetAccepting(true);
+			break;
+
+		case kMsgDisablePrinter:
+			_DoSetAccepting(false);
+			break;
+
+		case kMsgPrintTestPage:
+			_DoTestPage();
+			break;
+
+		case kMsgPrinterOptions:
+			_DoOptions();
+			break;
+
+		case kMsgRefresh:
+			_LoadQueues();
 			break;
 
 		case PRINTERS_ADD_PRINTER:
 		case B_PRINTER_CHANGED:
-			_UpdateQueues();
-			_UpdateJobs();
+			_LoadQueues();
+			_LoadJobs();
 			break;
 
 		default:
@@ -203,12 +414,18 @@ PrintersWindow::MessageReceived(BMessage* message)
 }
 
 
+PrinterRow*
+PrintersWindow::_SelectedPrinter() const
+{
+	return dynamic_cast<PrinterRow*>(fPrinterList->CurrentSelection());
+}
+
+
 BString
 PrintersWindow::_SelectedQueue() const
 {
-	QueueItem* item = dynamic_cast<QueueItem*>(
-		fQueueList->ItemAt(fQueueList->CurrentSelection()));
-	return item != NULL ? item->Name() : BString();
+	PrinterRow* row = _SelectedPrinter();
+	return row != NULL ? row->Name() : BString();
 }
 
 
@@ -216,21 +433,21 @@ void
 PrintersWindow::_UpdateQueues()
 {
 	BString selected = _SelectedQueue();
-	fQueueList->MakeEmpty();
+	ClearList(fPrinterList);
 
-	printcups_queue_info queues[kMaxQueues];
-	int count = printcups_list_queues(queues, kMaxQueues);
-	for (int32 i = 0; i < count; i++) {
-		fQueueList->AddItem(new QueueItem(queues[i]));
-		if (selected == queues[i].name)
-			fQueueList->Select(i);
+	for (int32 i = 0; i < gQueueCount; i++) {
+		fPrinterList->AddRow(new PrinterRow(gQueues[i]));
+		if (selected == gQueues[i].name)
+			fPrinterList->SetFocusRow(i, true);
 	}
 
-	if (count <= 0) {
-		BStringItem* item = new BStringItem(
-			B_TRANSLATE("No printers configured"));
-		item->SetEnabled(false);
-		fQueueList->AddItem(item);
+	if (gQueueCount <= 0) {
+		BRow* row = new BRow();
+		row->SetField(new BStringField(
+			B_TRANSLATE("No printers configured")), kPrinterColumn);
+		row->SetField(new BStringField(""), kLocationColumn);
+		row->SetField(new BStringField(""), kStatusColumn);
+		fPrinterList->AddRow(row);
 	}
 	_UpdateButtons();
 }
@@ -239,22 +456,19 @@ PrintersWindow::_UpdateQueues()
 void
 PrintersWindow::_UpdateJobs()
 {
-	fJobList->MakeEmpty();
+	ClearList(fJobList);
 
-	// No selection lists the jobs of every queue.
-	BString queue = _SelectedQueue();
-	printcups_job jobs[kMaxJobs];
-	int count = printcups_list_jobs(queue.IsEmpty() ? NULL : queue.String(),
-		jobs, kMaxJobs);
-	for (int32 i = 0; i < count; i++)
-		fJobList->AddItem(new JobItem(jobs[i]));
+	for (int32 i = 0; i < gJobCount; i++)
+		fJobList->AddRow(new JobRow(gJobs[i]));
 
-	if (count <= 0) {
-		BStringItem* item = new BStringItem(B_TRANSLATE("No jobs"));
-		item->SetEnabled(false);
-		fJobList->AddItem(item);
+	if (gJobCount <= 0) {
+		BRow* row = new BRow();
+		row->SetField(new BStringField(B_TRANSLATE("No jobs")), kJobIdColumn);
+		row->SetField(new BStringField(""), kJobNameColumn);
+		row->SetField(new BStringField(""), kJobStateColumn);
+		row->SetField(new BStringField(""), kJobQueueColumn);
+		fJobList->AddRow(row);
 	}
-	_UpdateButtons();
 }
 
 
@@ -262,21 +476,47 @@ void
 PrintersWindow::_UpdateButtons()
 {
 	bool hasQueue = !_SelectedQueue().IsEmpty();
-	fDefaultButton->SetEnabled(hasQueue);
-	fRemoveButton->SetEnabled(hasQueue);
-	fCancelButton->SetEnabled(dynamic_cast<JobItem*>(
-		fJobList->ItemAt(fJobList->CurrentSelection())) != NULL);
+	PrinterRow* row = _SelectedPrinter();
+	bool isDefault = row != NULL && row->IsDefault();
+
+	fAddButton->SetEnabled(!fBusy);
+	fRemoveButton->SetEnabled(hasQueue && !fBusy);
+	fDefaultButton->SetEnabled(hasQueue && !isDefault && !fBusy);
+	fRenameButton->SetEnabled(hasQueue && !fBusy);
+	fEnableButton->SetEnabled(hasQueue && !fBusy);
+	fDisableButton->SetEnabled(hasQueue && !fBusy);
+	fTestPageButton->SetEnabled(hasQueue && !fBusy);
+	fOptionsButton->SetEnabled(hasQueue && !fBusy);
+	fRefreshButton->SetEnabled(!fBusy);
+
+	JobRow* job = dynamic_cast<JobRow*>(fJobList->CurrentSelection());
+	bool hasJob = job != NULL;
+	fCancelButton->SetEnabled(hasJob && !fBusy);
+	fHoldButton->SetEnabled(hasJob && !fBusy);
+	fReleaseButton->SetEnabled(hasJob && !fBusy);
+	fPurgeButton->SetEnabled(hasQueue && !fBusy);
 }
 
 
 void
-PrintersWindow::_ShowError(const char* text, status_t status)
+PrintersWindow::_SetStatus(const char* text)
+{
+	fStatusView->SetText(text != NULL ? text : "");
+}
+
+
+void
+PrintersWindow::_SetError(const BString& text, status_t status)
 {
 	BString message(text);
+	if (message.IsEmpty())
+		message = B_TRANSLATE("The request failed.");
 	if (status == B_PERMISSION_DENIED) {
-		message << "\n\n" << B_TRANSLATE("Managing printers requires "
-			"membership in the lpadmin group.");
+		message << "\n\n" << B_TRANSLATE("Administrative printer changes "
+			"need membership in the lpadmin group.");
 	}
+	_SetStatus(message.String());
+
 	BAlert* alert = new BAlert(B_TRANSLATE("Printers"), message.String(),
 		B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
 	alert->Go(NULL);
@@ -284,66 +524,37 @@ PrintersWindow::_ShowError(const char* text, status_t status)
 
 
 void
-PrintersWindow::_SetDefault()
+PrintersWindow::_LoadQueues()
+{
+	fBusy = true;
+	_UpdateButtons();
+	_SetStatus(B_TRANSLATE("Loading printers..."));
+	PrinterWorker::Post(kWorkerOpListQueues, BMessenger(this));
+}
+
+
+void
+PrintersWindow::_LoadJobs()
+{
+	fBusy = true;
+	PrinterWorker::Post(kWorkerOpListJobs, BMessenger(this), _SelectedQueue());
+}
+
+
+void
+PrintersWindow::_DoDefault()
 {
 	BString queue = _SelectedQueue();
 	if (queue.IsEmpty())
 		return;
-
-	status_t status = printcups_set_default(queue.String());
-	if (status != B_OK) {
-		_ShowError(B_TRANSLATE("Could not set the default printer."), status);
-		return;
-	}
-	_UpdateQueues();
+	fBusy = true;
+	_UpdateButtons();
+	PrinterWorker::Post(kWorkerOpSetDefault, BMessenger(this), queue);
 }
 
 
 void
-PrintersWindow::_CancelJob()
-{
-	JobItem* item = dynamic_cast<JobItem*>(
-		fJobList->ItemAt(fJobList->CurrentSelection()));
-	if (item == NULL)
-		return;
-
-	status_t status = printcups_cancel_job(item->Queue().String(),
-		item->Id());
-	if (status != B_OK) {
-		_ShowError(B_TRANSLATE("Could not cancel the job."), status);
-		return;
-	}
-	_UpdateJobs();
-}
-
-
-void
-PrintersWindow::_AddPrinter()
-{
-	BString name(fAddNameField->Text());
-	BString uri(fAddUriField->Text());
-	name.Trim();
-	uri.Trim();
-	if (name.IsEmpty() || uri.IsEmpty()) {
-		_ShowError(B_TRANSLATE("Enter a printer name and URI."), B_OK);
-		return;
-	}
-
-	status_t status = printcups_add_printer_everywhere(name.String(),
-		uri.String());
-	if (status != B_OK) {
-		_ShowError(B_TRANSLATE("Could not add the printer. Driverless IPP "
-			"needs a reachable IPP Everywhere device."), status);
-		return;
-	}
-
-	fAddNameField->SetText("");
-	_UpdateQueues();
-}
-
-
-void
-PrintersWindow::_RemovePrinter()
+PrintersWindow::_DoRemove()
 {
 	BString queue = _SelectedQueue();
 	if (queue.IsEmpty())
@@ -358,11 +569,145 @@ PrintersWindow::_RemovePrinter()
 	if (alert->Go() != 1)
 		return;
 
-	status_t status = printcups_remove_printer(queue.String());
-	if (status != B_OK) {
-		_ShowError(B_TRANSLATE("Could not remove the printer."), status);
+	fBusy = true;
+	_UpdateButtons();
+	PrinterWorker::Post(kWorkerOpRemovePrinter, BMessenger(this), queue);
+}
+
+
+void
+PrintersWindow::_DoRename()
+{
+	BString queue = _SelectedQueue();
+	if (queue.IsEmpty())
 		return;
+
+	printcups_queue_info info;
+	memset(&info, 0, sizeof(info));
+	for (int32 i = 0; i < gQueueCount; i++) {
+		if (queue == gQueues[i].name) {
+			info = gQueues[i];
+			break;
+		}
 	}
-	_UpdateQueues();
-	_UpdateJobs();
+
+	PrinterOptionsDialog* dialog = new PrinterOptionsDialog(BMessenger(this),
+		queue, info, true);
+	dialog->Show();
+}
+
+
+void
+PrintersWindow::_DoSetAccepting(bool accepting)
+{
+	BString queue = _SelectedQueue();
+	if (queue.IsEmpty())
+		return;
+	fBusy = true;
+	_UpdateButtons();
+	PrinterWorker::Post(kWorkerOpSetAccepting, BMessenger(this), queue,
+		BString(), BString(), 0, accepting);
+}
+
+
+void
+PrintersWindow::_DoTestPage()
+{
+	BString queue = _SelectedQueue();
+	if (queue.IsEmpty())
+		return;
+	fBusy = true;
+	_UpdateButtons();
+	_SetStatus(B_TRANSLATE("Sending a test page..."));
+	PrinterWorker::Post(kWorkerOpTestPage, BMessenger(this), queue);
+}
+
+
+void
+PrintersWindow::_DoOptions()
+{
+	BString queue = _SelectedQueue();
+	if (queue.IsEmpty())
+		return;
+
+	printcups_queue_info info;
+	memset(&info, 0, sizeof(info));
+	for (int32 i = 0; i < gQueueCount; i++) {
+		if (queue == gQueues[i].name) {
+			info = gQueues[i];
+			break;
+		}
+	}
+
+	PrinterOptionsDialog* dialog = new PrinterOptionsDialog(BMessenger(this),
+		queue, info, false);
+	dialog->Show();
+}
+
+
+void
+PrintersWindow::_DoAddPrinter()
+{
+	AddPrinterDialog* dialog = new AddPrinterDialog(BMessenger(this));
+	dialog->Show();
+}
+
+
+void
+PrintersWindow::_DoCancelJob()
+{
+	JobRow* row = dynamic_cast<JobRow*>(fJobList->CurrentSelection());
+	if (row == NULL)
+		return;
+	fBusy = true;
+	_UpdateButtons();
+	PrinterWorker::Post(kWorkerOpCancelJob, BMessenger(this), row->Queue(),
+		BString(), BString(), row->Id());
+}
+
+
+void
+PrintersWindow::_DoHoldJob()
+{
+	JobRow* row = dynamic_cast<JobRow*>(fJobList->CurrentSelection());
+	if (row == NULL)
+		return;
+	fBusy = true;
+	_UpdateButtons();
+	PrinterWorker::Post(kWorkerOpHoldJob, BMessenger(this), row->Queue(),
+		BString(), BString(), row->Id());
+}
+
+
+void
+PrintersWindow::_DoReleaseJob()
+{
+	JobRow* row = dynamic_cast<JobRow*>(fJobList->CurrentSelection());
+	if (row == NULL)
+		return;
+	fBusy = true;
+	_UpdateButtons();
+	PrinterWorker::Post(kWorkerOpReleaseJob, BMessenger(this), row->Queue(),
+		BString(), BString(), row->Id());
+}
+
+
+void
+PrintersWindow::_DoPurgeJobs()
+{
+	BString queue = _SelectedQueue();
+	if (queue.IsEmpty())
+		return;
+
+	BString text(B_TRANSLATE("Remove all jobs from \"%name%\"?"));
+	text.ReplaceFirst("%name%", queue);
+	BAlert* alert = new BAlert(B_TRANSLATE("Printers"), text.String(),
+		B_TRANSLATE("Cancel"), B_TRANSLATE("Purge"), NULL,
+		B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+	if (alert->Go() != 1)
+		return;
+
+	fBusy = true;
+	_UpdateButtons();
+	PrinterWorker::Post(kWorkerOpPurgeJobs, BMessenger(this), queue);
 }

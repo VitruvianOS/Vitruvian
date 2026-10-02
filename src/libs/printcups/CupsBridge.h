@@ -11,7 +11,6 @@
 #include "printcups.h"
 
 
-// CupsBridge: thin libcups wrapper used by libprintcups. No Haiku print
 // CupsBridge: thin libcups wrapper used by libprintcups; jobs go straight to cupsd.
 class CupsBridge {
 public:

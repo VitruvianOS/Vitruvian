@@ -260,7 +260,7 @@ DeclareDependency(
 DeclareDependency(
 	BLUETOOTH
 	PACKAGES   "libbluetooth-dev"
-	RUNTIMES   "bluez"
+	RUNTIMES   "bluez;bluez-obexd"
 )
 
 DeclareDependency(

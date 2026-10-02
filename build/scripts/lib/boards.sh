@@ -137,13 +137,13 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
-                uboot_variant)  printf '' ;;
+                # POSIX case executes the FIRST matching arm only; a second
+                # uboot_variant assignment is dead code. Keep one value.
+                # u-boot-sitara-binaries splits the k3 chain across two
+                # variants: am62x_evm_r5 and am62x_evm_a53.
+                uboot_variant)  printf 'am62x_evm_r5 am62x_evm_a53' ;;
                 spl_offset_sectors) printf '1' ;;
                 uboot_offset_sectors) printf '65536' ;;
-                # u-boot-sitara-binaries splits the k3 chain across two
-                # variants: am62x_evm_r5 has tiboot3.bin, am62x_evm_a53 has
-                # tispl.bin and u-boot.img.
-                uboot_variant)  printf 'am62x_evm_r5 am62x_evm_a53' ;;
                 spl_blob)       printf 'tiboot3.bin' ;;
                 uboot_blob)     printf 'u-boot.img' ;;
                 extra_pkgs)     printf 'u-boot-sitara-binaries' ;;

@@ -1661,9 +1661,80 @@ MainWindow::_Unmount(BDiskDevice* disk, partition_id selectedPartition)
 		return;
 	}
 
+	// mount_server unmounts; a busy volume comes back here to ask the user.
 	BMessage message(kUnmountVolume);
 	message.AddInt64("id", partition->ID());
-	BMessenger(kMountServerSignature).SendMessage(&message);
+	BMessage reply;
+	status_t status = BMessenger(kMountServerSignature).SendMessage(&message,
+		&reply);
+	if (status != B_OK) {
+		_DisplayPartitionError(B_TRANSLATE("The mount server did not "
+			"answer."), partition, status);
+		return;
+	}
+
+	int32 error = B_OK;
+	reply.FindInt32("error", &error);
+	if (error == B_OK)
+		return;
+
+	const char* name = reply.FindString("name");
+	if (name == NULL)
+		name = B_TRANSLATE("volume");
+
+	if (error != B_BUSY) {
+		BString text;
+		text.SetToFormat(B_TRANSLATE("Could not unmount \"%s\": %s"),
+			name, strerror(error));
+		_DisplayPartitionError(text, partition, error);
+		return;
+	}
+
+	BString text;
+	text.SetToFormat(B_TRANSLATE("\"%s\" is busy."), name);
+	text << "\n\n";
+	text << B_TRANSLATE("Processes holding it:") << "\n";
+	const char* process;
+	int32 index = 0;
+	while (reply.FindString("busyProcesses", index, &process) == B_OK) {
+		text << "  " << process << "\n";
+		index++;
+	}
+	text << "\n";
+	text << B_TRANSLATE("Force unmount anyway? Open files on the volume "
+		"may lose data.");
+
+	BAlert* alert = new BAlert("", text.String(),
+		B_TRANSLATE("Force unmount"), B_TRANSLATE("Cancel"), NULL,
+		B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+	alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+	if (alert->Go() != 0)
+		return;
+
+	BMessage forceMessage(kUnmountVolume);
+	forceMessage.AddInt64("id", partition->ID());
+	forceMessage.AddBool("force", true);
+	BMessage forceReply;
+	status = BMessenger(kMountServerSignature).SendMessage(&forceMessage,
+		&forceReply);
+	if (status != B_OK) {
+		_DisplayPartitionError(B_TRANSLATE("The mount server did not "
+			"answer."), partition, status);
+		return;
+	}
+
+	int32 forceError = B_OK;
+	forceReply.FindInt32("error", &forceError);
+	if (forceError == B_OK)
+		return;
+
+	const char* forceName = forceReply.FindString("name");
+	if (forceName == NULL)
+		forceName = name;
+	BString forceText;
+	forceText.SetToFormat(B_TRANSLATE("Could not unmount \"%s\": %s"),
+		forceName, strerror(forceError));
+	_DisplayPartitionError(forceText, partition, forceError);
 }
 
 

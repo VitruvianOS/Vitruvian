@@ -13,6 +13,9 @@
 #include <new>
 
 #include <ctype.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -710,100 +713,162 @@ AutoMounter::_NotifyMountError(const char* volumeName, status_t status)
 }
 
 
-bool
-AutoMounter::_SuggestForceUnmount(const char* name, status_t error)
+void
+AutoMounter::_SendUnmountReply(BMessage* request, status_t error,
+	const char* name, const char* mountPoint)
 {
-	// mount_server can't show the Cancel/Force-unmount BAlert (headless), so
-	// notify instead; getting an actual user decision needs a dialog agent
-	// (not yet implemented).
-	BNotification notification(B_ERROR_NOTIFICATION);
-	notification.SetGroup(B_TRANSLATE("Disk & Volumes"));
-	notification.SetTitle(B_TRANSLATE("Could not unmount"));
+	// mount_server has no app_server connection, so the requester
+	// (Tracker, DriveSetup) asks the user about a busy volume.
+	BMessage reply(kUnmountVolumeReply);
+	reply.AddInt32("error", error);
+	if (name != NULL && name[0] != '\0')
+		reply.AddString("name", name);
+	if (mountPoint != NULL && mountPoint[0] != '\0')
+		reply.AddString("mountPoint", mountPoint);
 
-	char text[1024];
-	snprintf(text, sizeof(text),
-		B_TRANSLATE("Could not unmount disk \"%s\": %s\n\n"
-			"Not forced: unmounting was not confirmed (no interactive "
-			"session available to ask). Use the Force option from a "
-			"desktop session, or a filesystem tool, if the volume is safe "
-			"to force-detach."),
-		name, strerror(error));
-	notification.SetContent(text);
-	notification.Send();
+	// echo the correlation fields so the requester can retry with force
+	int64 rawId;
+	if (request->FindInt64("id", &rawId) == B_OK)
+		reply.AddInt64("id", rawId);
+	int64 rawDevice;
+	if (request->FindInt64("device_id", &rawDevice) == B_OK)
+		reply.AddInt64("device_id", rawDevice);
 
-	return false;
+	if (error == B_BUSY)
+		_AppendBusyProcesses(mountPoint, &reply);
+
+	request->SendReply(&reply);
+}
+
+
+static bool
+_PathUnderMount(const char* path, const char* mountPoint)
+{
+	if (path == NULL || mountPoint == NULL || mountPoint[0] == '\0')
+		return false;
+
+	size_t length = strlen(mountPoint);
+	while (length > 1 && mountPoint[length - 1] == '/')
+		length--;
+
+	if (strncmp(path, mountPoint, length) != 0)
+		return false;
+
+	return path[length] == '\0' || path[length] == '/';
 }
 
 
 void
-AutoMounter::_ReportUnmountError(const char* name, status_t error)
+AutoMounter::_AppendBusyProcesses(const char* mountPoint, BMessage* reply)
 {
-	// Same as _SuggestForceUnmount() above: notify instead of a BAlert.
-	BNotification notification(B_ERROR_NOTIFICATION);
-	notification.SetGroup(B_TRANSLATE("Disk & Volumes"));
-	notification.SetTitle(B_TRANSLATE("Unmount failed"));
+	// cheap scan: cwd, root and open fds. Runs as root, so every
+	// process is readable; maps are skipped to keep this bounded.
+	if (mountPoint == NULL || mountPoint[0] == '\0')
+		return;
 
-	char text[512];
-	snprintf(text, sizeof(text), B_TRANSLATE("Could not unmount disk "
-		"\"%s\": %s"), name, strerror(error));
-	notification.SetContent(text);
-	notification.Send();
-}
+	DIR* dir = opendir("/proc");
+	if (dir == NULL)
+		return;
 
+	char path[PATH_MAX];
+	char target[PATH_MAX];
 
-void
-AutoMounter::_UnmountAndEjectVolume(BPartition* partition, BPath& mountPoint,
-	const char* name)
-{
-	BDiskDevice deviceStorage;
-	BDiskDevice* device;
-	if (partition == NULL) {
-		// Try to retrieve partition
-		BDiskDeviceRoster().FindPartitionByMountPoint(mountPoint.Path(),
-			&deviceStorage, &partition);
-			device = &deviceStorage;
-	} else {
-		device = partition->Device();
+	struct dirent* entry;
+	while ((entry = readdir(dir)) != NULL) {
+		if (entry->d_name[0] < '1' || entry->d_name[0] > '9')
+			continue;
+
+		pid_t pid = (pid_t)atoi(entry->d_name);
+		bool busy = false;
+
+		snprintf(path, sizeof(path), "/proc/%d/cwd", pid);
+		ssize_t length = readlink(path, target, sizeof(target) - 1);
+		if (length > 0) {
+			target[length] = '\0';
+			if (_PathUnderMount(target, mountPoint))
+				busy = true;
+		}
+
+		if (!busy) {
+			snprintf(path, sizeof(path), "/proc/%d/root", pid);
+			length = readlink(path, target, sizeof(target) - 1);
+			if (length > 0) {
+				target[length] = '\0';
+				if (_PathUnderMount(target, mountPoint))
+					busy = true;
+			}
+		}
+
+		if (!busy) {
+			snprintf(path, sizeof(path), "/proc/%d/fd", pid);
+			DIR* fdDir = opendir(path);
+			if (fdDir != NULL) {
+				struct dirent* fdEntry;
+				while (!busy
+					&& (fdEntry = readdir(fdDir)) != NULL) {
+					if (fdEntry->d_name[0] < '0'
+						|| fdEntry->d_name[0] > '9')
+						continue;
+
+					snprintf(path, sizeof(path),
+						"/proc/%d/fd/%s", pid, fdEntry->d_name);
+					length = readlink(path, target,
+						sizeof(target) - 1);
+					if (length > 0) {
+						target[length] = '\0';
+						if (_PathUnderMount(target,
+								mountPoint))
+							busy = true;
+					}
+				}
+				closedir(fdDir);
+			}
+		}
+
+		if (!busy)
+			continue;
+
+		char name[64];
+		name[0] = '\0';
+		snprintf(path, sizeof(path), "/proc/%d/comm", pid);
+		int fd = open(path, O_RDONLY);
+		if (fd >= 0) {
+			ssize_t readLength = read(fd, name, sizeof(name) - 1);
+			close(fd);
+			if (readLength > 0) {
+				name[readLength] = '\0';
+				char* newline = strchr(name, '\n');
+				if (newline != NULL)
+					*newline = '\0';
+			}
+		}
+		if (name[0] == '\0')
+			snprintf(name, sizeof(name), "pid %d", pid);
+
+		BString line;
+		line.SetToFormat("%d: %s", pid, name);
+		reply->AddString("busyProcesses", line.String());
 	}
 
+	closedir(dir);
+}
+
+
+status_t
+AutoMounter::_UnmountAndEjectVolume(BPartition* partition, BPath& mountPoint,
+	uint32 unmountFlags)
+{
 	status_t status;
 	if (partition != NULL)
-		status = partition->Unmount();
+		status = partition->Unmount(unmountFlags);
 	else
-		status = fs_unmount_volume(mountPoint.Path(), 0);
+		status = fs_unmount_volume(mountPoint.Path(), unmountFlags);
 
-	if (status == B_BUSY) {
-		// mount_server can't pop the force-unmount alert, so fall straight
-		// to a forced (lazy-detach) unmount and just notify that it happened.
-		BNotification notification(B_INFORMATION_NOTIFICATION);
-		notification.SetGroup(B_TRANSLATE("Disk & Volumes"));
-		notification.SetTitle(B_TRANSLATE("Volume was busy"));
-		char text[512];
-		snprintf(text, sizeof(text), B_TRANSLATE("\"%s\" was busy; "
-			"forcing unmount."), name);
-		notification.SetContent(text);
-		notification.Send();
+	if (status != B_OK)
+		return status;
 
-		if (partition != NULL)
-			status = partition->Unmount(B_FORCE_UNMOUNT);
-		else
-			status = fs_unmount_volume(mountPoint.Path(), B_FORCE_UNMOUNT);
-	} else if (status != B_OK) {
-		if (!_SuggestForceUnmount(name, status))
-			return;
-
-		if (partition != NULL)
-			status = partition->Unmount(B_FORCE_UNMOUNT);
-		else
-			status = fs_unmount_volume(mountPoint.Path(), B_FORCE_UNMOUNT);
-	}
-
-	if (status != B_OK) {
-		_ReportUnmountError(name, status);
-		return;
-	}
-
-	if (fEjectWhenUnmounting && partition != NULL) {
+	BDiskDevice* device = partition != NULL ? partition->Device() : NULL;
+	if (fEjectWhenUnmounting && device != NULL) {
 		// eject device if it doesn't have any mounted partitions left
 		class IsMountedVisitor : public BDiskDeviceVisitor {
 		public:
@@ -846,55 +911,74 @@ AutoMounter::_UnmountAndEjectVolume(BPartition* partition, BPath& mountPoint,
 	// remove the directory if it's a directory in rootfs
 	if (dev_for_path(mountPoint.Path()) == dev_for_path("/"))
 		rmdir(mountPoint.Path());
+
+	return B_OK;
 }
 
 
 void
 AutoMounter::_UnmountAndEjectVolume(BMessage* message)
 {
-	// See _MountVolume(): MountMenu posts "id" as an Int64 partition_id;
-	// FindInt64() needs an exact int64*, so read into a local then narrow.
-	int64 rawId;
-	partition_id id;
-	if (message->FindInt64("id", &rawId) == B_OK) {
-		id = (partition_id)rawId;
-		BDiskDeviceRoster roster;
-		BPartition *partition;
-		BDiskDevice device;
-		status_t lookup = roster.GetPartitionWithID(id, &device, &partition);
-		if (lookup != B_OK)
-			return;
+	// See _MountVolume(): "id" is an Int64 partition_id; FindInt64()
+	// needs an exact int64*, so read into a local then narrow.
+	BDiskDevice deviceStorage;
+	BPartition* partition = NULL;
+	BPath path;
+	BString name;
+	status_t status = B_BAD_VALUE;
 
-		BPath path;
-		if (partition->GetMountPoint(&path) == B_OK)
-			_UnmountAndEjectVolume(partition, path, partition->ContentName().String());
+	int64 rawId;
+	if (message->FindInt64("id", &rawId) == B_OK) {
+		partition_id id = (partition_id)rawId;
+		BDiskDeviceRoster roster;
+		status = roster.GetPartitionWithID(id, &deviceStorage, &partition);
+		if (status == B_OK)
+			status = partition->GetMountPoint(&path);
+		if (status == B_OK) {
+			name = partition->ContentName();
+			if (name.IsEmpty())
+				name = partition->Name();
+		}
 	} else {
 		// see if we got a dev_t; Tracker posts device_id as Int64
 		int64 rawDevice;
-		if (message->FindInt64("device_id", &rawDevice) != B_OK)
-			return;
-		dev_t device = (dev_t)rawDevice;
+		if (message->FindInt64("device_id", &rawDevice) == B_OK) {
+			dev_t device = (dev_t)rawDevice;
+			BVolume volume(device);
+			status = volume.InitCheck();
 
-		BVolume volume(device);
-		status_t status = volume.InitCheck();
-
-		char name[B_FILE_NAME_LENGTH];
-		if (status == B_OK)
-			status = volume.GetName(name);
-		if (status < B_OK)
-			snprintf(name, sizeof(name), "device:%" B_PRIdDEV, device);
-
-		BPath path;
-		if (status == B_OK) {
-			BDirectory mountPoint;
-			status = volume.GetRootDirectory(&mountPoint);
+			char volumeName[B_FILE_NAME_LENGTH];
 			if (status == B_OK)
-				status = path.SetTo(&mountPoint, ".");
-		}
+				status = volume.GetName(volumeName);
+			if (status == B_OK)
+				name = volumeName;
+			else
+				name.SetToFormat("device:%lld", (long long)device);
 
-		if (status == B_OK)
-			_UnmountAndEjectVolume(NULL, path, name);
+			if (status == B_OK) {
+				BDirectory mountPoint;
+				status = volume.GetRootDirectory(&mountPoint);
+				if (status == B_OK)
+					status = path.SetTo(&mountPoint, ".");
+			}
+		}
 	}
+
+	if (status != B_OK) {
+		_SendUnmountReply(message, status, name.String(), "");
+		return;
+	}
+
+	if (name.IsEmpty())
+		name = B_TRANSLATE("volume");
+
+	// Force only on requester's say-so: mount_server cannot ask.
+	bool force = false;
+	message->FindBool("force", &force);
+
+	status = _UnmountAndEjectVolume(partition, path,
+		force ? B_FORCE_UNMOUNT : 0);
+	_SendUnmountReply(message, status, name.String(), path.Path());
 }
 
 

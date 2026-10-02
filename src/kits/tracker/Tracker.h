@@ -213,6 +213,9 @@ private:
 	void SetDefaultPrinter(const BMessage*);
 	void EditQueries(const BMessage*);
 
+	void _UnmountVolume(BMessage* message);
+	void _HandleUnmountVolumeReply(const BMessage* message);
+
 	BInfoWindow* FindInfoWindow(const node_ref*) const;
 
 	BDeskWindow* GetDeskWindow() const;

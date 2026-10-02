@@ -59,6 +59,7 @@ All rights reserved.
 
 #include <DiskDevice.h>
 #include <DiskDeviceList.h>
+#include <tracker_private.h>
 
 #define SHOW_NETWORK_VOLUMES
 
@@ -238,7 +239,19 @@ MountMenu::AddDynamicItem(add_state)
 
 	// These messages are handled by mount_server's AutoMounter, a separate
 	// process, so route by signature rather than to the local be_app.
+	// Unmount goes through Tracker instead: mount_server is headless and
+	// replies busy, and Tracker owns the force-unmount dialog.
 	SetTargetForItems(BMessenger(kMountServerSignature));
+
+	BMessenger tracker(kTrackerSignature);
+	for (int32 index = 0; index < CountItems(); index++) {
+		BMenuItem* item = ItemAt(index);
+		if (item == NULL || item->Message() == NULL)
+			continue;
+
+		if (item->Message()->what == kUnmountVolume)
+			item->SetTarget(tracker);
+	}
 
 	return false;
 }

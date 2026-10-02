@@ -5,10 +5,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <limits.h>
 #include <poll.h>
 #include <pthread.h>
 #include <pwd.h>
+#include <shadow.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -27,7 +29,10 @@ extern "C" {
 
 #include <AppDefs.h>
 #include <Message.h>
+#include <Messenger.h>
+#include <MessengerPrivate.h>
 #include <OS.h>
+#include <TokenSpace.h>
 
 #include <kernel/util/KMessage.h>
 
@@ -592,6 +597,396 @@ verify_password(const char* username, const char* password)
 
 	pam_end(h, r);
 	return ok;
+}
+
+
+// Screen lock: janus is the auth broker; app_server shows only the unlock
+// app. The automatic sleep lock skips autologin users; a manual one doesn't.
+
+static bool		sScreenLocked = false;
+static pid_t	sUnlockAppPid = -1;
+static int32	sUnlockFailures = 0;
+static bigtime_t	sUnlockLockedUntil = 0;
+static const int32	kMaxUnlockFailures = 5;
+static const bigtime_t	kUnlockLockoutUsec = 30 * 1000000LL;
+
+
+static bool
+user_is_autologin(const char* username)
+{
+	if (username == NULL || *username == '\0')
+		return false;
+
+	char autoName[64] = "";
+	FILE* alf = fopen("/etc/vos/autologin", "r");
+	if (alf != NULL) {
+		if (fgets(autoName, sizeof(autoName), alf) != NULL) {
+			size_t len = strlen(autoName);
+			while (len > 0 && (autoName[len - 1] == '\n'
+					|| autoName[len - 1] == '\r'
+					|| autoName[len - 1] == ' '
+					|| autoName[len - 1] == '\t'))
+				autoName[--len] = '\0';
+		}
+		fclose(alf);
+	}
+	return autoName[0] != '\0' && strcmp(autoName, username) == 0;
+}
+
+
+static bool
+user_has_usable_password(const char* username)
+{
+	if (username == NULL || *username == '\0')
+		return false;
+
+	// Live ISO persona has no password.
+	if (strcmp(username, "vos-live") == 0)
+		return false;
+
+	struct spwd* sp = getspnam(username);
+	const char* hash = NULL;
+	if (sp != NULL && sp->sp_pwdp != NULL)
+		hash = sp->sp_pwdp;
+	else {
+		struct passwd* pw = getpwnam(username);
+		if (pw != NULL && pw->pw_passwd != NULL)
+			hash = pw->pw_passwd;
+	}
+
+	if (hash == NULL || hash[0] == '\0')
+		return false;
+	// Locked, never-usable, or unset markers.
+	if (hash[0] == '!' || hash[0] == '*')
+		return false;
+	if (strcmp(hash, "x") == 0)
+		return false;
+	return true;
+}
+
+
+static bool
+send_to_app_server(int32 what, bigtime_t timeout, int32 unlockTeam = -1)
+{
+	pthread_mutex_lock(&sAppsLock);
+	port_id port = -1;
+	pid_t pid = -1;
+	for (int i = 0; i < sAppCount; i++) {
+		if (strcmp(sApps[i].signature,
+				"application/x-vnd.Haiku-app_server") == 0
+				&& sApps[i].port >= 0) {
+			port_info info;
+			if (get_port_info(sApps[i].port, &info) == B_OK) {
+				port = sApps[i].port;
+				pid = sApps[i].pid;
+			} else {
+				sApps[i].port = -1;
+				sApps[i].pid = -1;
+			}
+			break;
+		}
+	}
+	pthread_mutex_unlock(&sAppsLock);
+
+	if (port < 0)
+		port = find_port("picasso");
+	if (port < 0)
+		return false;
+
+	BMessenger app;
+	if (pid > 0)
+		BMessenger::Private(app).SetTo(pid, port, B_PREFERRED_TOKEN);
+	else {
+		port_info info;
+		if (get_port_info(port, &info) == B_OK)
+			BMessenger::Private(app).SetTo(info.team, port, B_PREFERRED_TOKEN);
+		else
+			return false;
+	}
+
+	BMessage msg(what);
+	if (unlockTeam >= 0)
+		msg.AddInt32("team", unlockTeam);
+	BMessage reply;
+	if (app.SendMessage(&msg, &reply, timeout, timeout) != B_OK)
+		return false;
+	return reply.what == B_REPLY || reply.what == B_OK;
+}
+
+
+static bool
+launch_unlock_app()
+{
+	pthread_mutex_lock(&sSessionLock);
+	char user[64];
+	char home[PATH_MAX];
+	uid_t uid = sSession.uid;
+	gid_t gid = sSession.gid;
+	bool greeter = sSession.greeter;
+	strlcpy(user, sSession.user, sizeof(user));
+	strlcpy(home, sSession.home, sizeof(home));
+	pthread_mutex_unlock(&sSessionLock);
+
+	if (greeter || uid == (uid_t)-1 || user[0] == '\0')
+		return false;
+
+	if (sUnlockAppPid > 0) {
+		int status = 0;
+		pid_t r = waitpid(sUnlockAppPid, &status, WNOHANG);
+		if (r == 0)
+			return true;
+		sUnlockAppPid = -1;
+	}
+
+	// Resolve groups in the parent: NSS may block in a forked child of a
+	// multithreaded process.
+	int count = 32;
+	gid_t* groups = (gid_t*)malloc(count * sizeof(gid_t));
+	if (groups == NULL)
+		return false;
+	if (getgrouplist(user, gid, groups, &count) < 0) {
+		gid_t* resized = (gid_t*)realloc(groups, count * sizeof(gid_t));
+		if (resized != NULL) {
+			groups = resized;
+			if (getgrouplist(user, gid, groups, &count) < 0) {
+				groups[0] = gid;
+				count = 1;
+			}
+		} else {
+			groups[0] = gid;
+			count = 1;
+		}
+	}
+
+	const char* path = "/system/servers/vitruvian-login";
+	if (access(path, X_OK) != 0) {
+		path = "/system/apps/vitruvian-login";
+		if (access(path, X_OK) != 0) {
+			free(groups);
+			return false;
+		}
+	}
+
+	pid_t pid = fork();
+	if (pid < 0) {
+		free(groups);
+		return false;
+	}
+	if (pid == 0) {
+		setenv("HOME", home[0] != '\0' ? home : "/", 1);
+		setenv("USER", user, 1);
+		setenv("LOGNAME", user, 1);
+		if (setgroups(count, groups) != 0 || setgid(gid) != 0
+				|| setuid(uid) != 0)
+			_exit(127);
+		execl(path, "vitruvian-login", "--unlock", NULL);
+		_exit(127);
+	}
+	free(groups);
+	sUnlockAppPid = pid;
+	printf("janus: unlock app pid=%d for %s\n", (int)pid, user);
+	return true;
+}
+
+
+// Stop the locker when the lock didn't take: SIGTERM, short grace, SIGKILL,
+// so a wedged process can't block janus.
+static void
+stop_unlock_app()
+{
+	pthread_mutex_lock(&sSessionLock);
+	pid_t pid = sUnlockAppPid;
+	sUnlockAppPid = -1;
+	pthread_mutex_unlock(&sSessionLock);
+
+	if (pid <= 0)
+		return;
+
+	kill(pid, SIGTERM);
+	for (int i = 0; i < 10; i++) {
+		int status = 0;
+		if (waitpid(pid, &status, WNOHANG) == pid)
+			return;
+		usleep(10000);
+	}
+	kill(pid, SIGKILL);
+	waitpid(pid, NULL, WNOHANG);
+}
+
+
+static void
+handle_lock_session(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	pthread_mutex_lock(&sSessionLock);
+	uid_t sessionUid = sSession.uid;
+	bool greeter = sSession.greeter;
+	char user[64];
+	strlcpy(user, sSession.user, sizeof(user));
+	pthread_mutex_unlock(&sSessionLock);
+
+	bool allowed = sender_uid == 0 || sender_uid == sessionUid;
+	if (!allowed || greeter || sessionUid == (uid_t)-1) {
+		fprintf(stderr, "janus: B_JANUS_LOCK_SESSION rejected from uid=%u "
+			"(session uid=%u greeter=%d)\n",
+			(unsigned)sender_uid, (unsigned)sessionUid, (int)greeter);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	// Sleep path sets "automatic"; Deskbar's manual lock does not.
+	bool automatic = false;
+	kmsg.FindBool("automatic", &automatic);
+
+	if (!user_has_usable_password(user)) {
+		fprintf(stderr, "janus: lock skipped — %s has no password\n", user);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	// Autologin users may lock by hand; only the automatic sleep lock
+	// backs off so a suspend does not strand them at a password prompt.
+	if (automatic && user_is_autologin(user)) {
+		fprintf(stderr, "janus: auto-lock skipped — %s is autologin\n",
+			user);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	// Launch the locker first so app_server can be told its team; any
+	// app can claim kPasswordWindowFeel, so feel alone is not identity.
+	if (!launch_unlock_app()) {
+		fprintf(stderr, "janus: unlock app failed to launch\n");
+		BPrivate::KMessage reply(B_ERROR);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	if (!send_to_app_server(B_SESSION_LOCK, 2000000LL,
+			(int32)sUnlockAppPid)) {
+		fprintf(stderr, "janus: app_server lock failed\n");
+		// The locker is already up; stop it or it sits over an
+		// unlocked desktop.
+		stop_unlock_app();
+		BPrivate::KMessage reply(B_ERROR);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	sScreenLocked = true;
+	sUnlockFailures = 0;
+	sUnlockLockedUntil = 0;
+
+	BPrivate::KMessage reply(B_OK);
+	kmsg.SendReply(&reply);
+}
+
+
+static void
+handle_unlock_auth(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	pthread_mutex_lock(&sSessionLock);
+	uid_t sessionUid = sSession.uid;
+	bool greeter = sSession.greeter;
+	pthread_mutex_unlock(&sSessionLock);
+
+	if (sender_uid != sessionUid || greeter || sessionUid == (uid_t)-1) {
+		fprintf(stderr, "janus: B_JANUS_UNLOCK_AUTH rejected from uid=%u\n",
+			(unsigned)sender_uid);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	if (!sScreenLocked) {
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	bigtime_t now = system_time();
+	if (sUnlockLockedUntil > now) {
+		fprintf(stderr, "janus: unlock rate-limited\n");
+		BPrivate::KMessage reply(B_PERMISSION_DENIED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	const char* user = NULL;
+	const char* pass = NULL;
+	if (kmsg.FindString("user", &user) != B_OK
+			|| kmsg.FindString("password", &pass) != B_OK
+			|| user == NULL || pass == NULL) {
+		BPrivate::KMessage reply(B_BAD_VALUE);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	// Unlock only accepts the session's own user.
+	pthread_mutex_lock(&sSessionLock);
+	char sessionUser[64];
+	strlcpy(sessionUser, sSession.user, sizeof(sessionUser));
+	pthread_mutex_unlock(&sSessionLock);
+	if (strcmp(user, sessionUser) != 0) {
+		explicit_bzero(const_cast<char*>(pass), strlen(pass));
+		BPrivate::KMessage reply(B_PERMISSION_DENIED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	bool ok = verify_password(user, pass);
+	explicit_bzero(const_cast<char*>(pass), strlen(pass));
+
+	if (!ok) {
+		sUnlockFailures++;
+		if (sUnlockFailures >= kMaxUnlockFailures)
+			sUnlockLockedUntil = system_time()
+				+ kUnlockLockoutUsec * (sUnlockFailures - kMaxUnlockFailures + 1);
+		fprintf(stderr, "janus: unlock auth failed for %s (failures=%d)\n",
+			user, sUnlockFailures);
+		BPrivate::KMessage reply(B_PERMISSION_DENIED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	sUnlockFailures = 0;
+	sUnlockLockedUntil = 0;
+
+	if (!send_to_app_server(B_SESSION_UNLOCK, 2000000LL)) {
+		BPrivate::KMessage reply(B_ERROR);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	sScreenLocked = false;
+	printf("janus: session unlocked for %s\n", user);
+
+	BPrivate::KMessage reply(B_OK);
+	kmsg.SendReply(&reply);
+}
+
+
+static void
+handle_locker_died(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	pthread_mutex_lock(&sSessionLock);
+	uid_t sessionUid = sSession.uid;
+	pthread_mutex_unlock(&sSessionLock);
+
+	// app_server (runs as the session user) or root may report this.
+	if (sender_uid != sessionUid && sender_uid != 0)
+		return;
+
+	if (!sScreenLocked)
+		return;
+
+	fprintf(stderr, "janus: locker died while locked; relaunching\n");
+	if (!launch_unlock_app())
+		return;
+	// New locker, new team: app_server must exempt only this one.
+	send_to_app_server(B_SESSION_LOCK, 2000000LL, (int32)sUnlockAppPid);
 }
 
 
@@ -1244,6 +1639,14 @@ launch_daemon_thread(void* /*data*/)
 					(int)sShuttingDown);
 				if (!sShuttingDown)
 					handle_logout(kmsg, mi.sender);
+			} else if (kmsg.What() == BPrivate::B_JANUS_LOCK_SESSION) {
+				if (!sShuttingDown)
+					handle_lock_session(kmsg, mi.sender);
+			} else if (kmsg.What() == BPrivate::B_JANUS_UNLOCK_AUTH) {
+				if (!sShuttingDown)
+					handle_unlock_auth(kmsg, mi.sender);
+			} else if (kmsg.What() == BPrivate::B_JANUS_LOCKER_DIED) {
+				handle_locker_died(kmsg, mi.sender);
 			} else if (kmsg.What() == BPrivate::B_JANUS_SESSION_HELLO) {
 				handle_session_hello(kmsg, mi.sender_team);
 			} else if (kmsg.What() == BPrivate::B_JANUS_REGISTER_APP) {

@@ -101,7 +101,9 @@ board_config() {
                 spl_offset_sectors) printf '16' ;;
                 uboot_offset_sectors) printf '0' ;;
                 extra_pkgs)     printf 'u-boot-sunxi' ;;
-                dtb_files)      printf 'allwinner/sun50i-h6-orangepi-3.dtb allwinner/sun50i-h616-orangepi-zero2.dtb allwinner/sun50i-a64-pine64.dtb' ;;
+                # pine64_plus U-Boot sets fdtfile=allwinner/sun50i-a64-pine64-plus.dtb;
+                # ship that DTB too or extlinux cannot load an FDT by that name.
+                dtb_files)      printf 'allwinner/sun50i-h6-orangepi-3.dtb allwinner/sun50i-h616-orangepi-zero2.dtb allwinner/sun50i-a64-pine64.dtb allwinner/sun50i-a64-pine64-plus.dtb' ;;
             esac
             ;;
         allwinner-h3)

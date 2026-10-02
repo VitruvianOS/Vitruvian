@@ -313,6 +313,13 @@ modeset_pick_mode(int fd, drmModeConnector *conn)
 	if (conn->count_modes == 0)
 		return NULL;
 
+	/* A video= mode from the kernel command line is the user's choice; without
+	 * an EDID the probe helper marks 1024x768 PREFERRED next to it. */
+	for (int i = 0; i < conn->count_modes; i++) {
+		if (conn->modes[i].type & DRM_MODE_TYPE_USERDEF)
+			return &conn->modes[i];
+	}
+
 	drmModeModeInfo* preferred = NULL;
 	for (int i = 0; i < conn->count_modes; i++) {
 		if (conn->modes[i].type & DRM_MODE_TYPE_PREFERRED) {
@@ -410,10 +417,12 @@ int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
 	}
 
 	for (int i = 0; i < conn->count_modes; i++) {
-		fprintf(stderr, "mode %ux%u%s\n",
+		fprintf(stderr, "mode %ux%u%s%s\n",
 			conn->modes[i].hdisplay, conn->modes[i].vdisplay,
 			(conn->modes[i].type & DRM_MODE_TYPE_PREFERRED)
-				? " [preferred]" : "");
+				? " [preferred]" : "",
+			(conn->modes[i].type & DRM_MODE_TYPE_USERDEF)
+				? " [cmdline]" : "");
 	}
 
 	const drmModeModeInfo* picked = modeset_pick_mode(fd, conn);

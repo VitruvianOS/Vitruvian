@@ -219,7 +219,8 @@ _board_extra_packages() {
         amlogic)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 u-boot-amlogic-binaries dosfstools rsync"
+                " linux-image-arm64 dosfstools rsync"
+            # No Debian Amlogic U-Boot since bookworm; fip.sh builds the blob.
             ;;
         visionfive2)
             printf '%s' \

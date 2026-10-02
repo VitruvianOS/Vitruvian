@@ -74,18 +74,18 @@ fip_amlogic_assemble() {
     _dest="${1:?fip_amlogic_assemble: dest_dir required}"
     _cache="${2:?fip_amlogic_assemble: cache_dir required}"
 
-    if [ -f "$_dest/u-boot.bin.sd.bin" ]; then
-        _fip_log "u-boot.bin.sd.bin already present at $_dest"
-        echo "$_dest/u-boot.bin.sd.bin"
+    if [ -f "$_dest/u-boot.bin" ]; then
+        _fip_log "u-boot.bin already present at $_dest"
+        echo "$_dest/u-boot.bin"
         return 0
     fi
 
-    _cached="$_cache/$FIP_UBOOT_SHA/sd_fuse/u-boot.bin.sd.bin"
+    _cached="$_cache/$FIP_UBOOT_SHA/sd_fuse/u-boot.bin"
     if [ -f "$_cached" ]; then
         _fip_log "Cache hit at $_cached"
         mkdir -p "$_dest"
-        cp "$_cached" "$_dest/u-boot.bin.sd.bin"
-        echo "$_dest/u-boot.bin.sd.bin"
+        cp "$_cached" "$_dest/u-boot.bin"
+        echo "$_dest/u-boot.bin"
         return 0
     fi
 
@@ -136,12 +136,11 @@ fip_amlogic_assemble() {
         return 1
     fi
 
-    # sd_fuse/u-boot.bin.sd.bin is the complete SD image, flashed whole at
-    # sector 1 (Hardkernel sd_fusing convention). u-boot.bin is the payload
-    # without the MBR header and does not match that convention: no fallback.
-    _output="$_workdir/sd_fuse/u-boot.bin.sd.bin"
+    # The whole SD blob sd_fusing.sh writes at sector 1; this tree does not
+    # produce u-boot.bin.sd.bin, so there is no fallback.
+    _output="$_workdir/sd_fuse/u-boot.bin"
     if [ ! -f "$_output" ]; then
-        _fip_die "sd_fuse/u-boot.bin.sd.bin not produced by the build."
+        _fip_die "sd_fuse/u-boot.bin not produced by the build."
         return 1
     fi
 
@@ -160,10 +159,10 @@ fip_amlogic_assemble() {
 
     mkdir -p "$(dirname "$_cached")" "$_dest"
     cp "$_output" "$_cached"
-    cp "$_output" "$_dest/u-boot.bin.sd.bin"
+    cp "$_output" "$_dest/u-boot.bin"
 
-    _fip_log "Installed u-boot.bin.sd.bin in $_dest"
-    echo "$_dest/u-boot.bin.sd.bin"
+    _fip_log "Installed u-boot.bin in $_dest"
+    echo "$_dest/u-boot.bin"
     return 0
 }
 

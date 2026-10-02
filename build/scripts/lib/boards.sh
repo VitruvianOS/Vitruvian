@@ -195,8 +195,12 @@ board_config() {
             case "$_field" in
                 arch)           printf 'arm64' ;;
                 label)          printf 'Amlogic (G12B/SM1/A311D)' ;;
-                partition_fmt)  printf 'gpt' ;;
+                # The FIP is written from sector 1, over where GPT lives;
+                # Amlogic SD images keep an MBR.
+                partition_fmt)  printf 'msdos' ;;
                 boot_style)     printf 'spl-uboot' ;;
+                # uart_AO_A at 115200, per the DTB and Hardkernel U-Boot.
+                console)        printf 'ttyS0,115200' ;;
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
@@ -204,15 +208,19 @@ board_config() {
                 # FIP-signed blob, assembled at build time by fip.sh from
                 # hardkernel/u-boot (travis/odroidn2-189, 430749ab).
                 uboot_variant)  printf 'odroid-n2' ;;
-                spl_blob)       printf 'u-boot.bin.sd.bin' ;;
+                # What Hardkernel's fip/Makefile produces and sd_fusing.sh
+                # writes at sector 1.
+                spl_blob)       printf 'u-boot.bin' ;;
                 uboot_blob)     printf '' ;;
                 spl_offset_sectors) printf '1' ;;
                 uboot_offset_sectors) printf '0' ;;
-                # u-boot-meson does not exist in Debian; the package is
-                # u-boot-amlogic-binaries.
-                extra_pkgs)     printf 'u-boot-amlogic-binaries' ;;
+                # No u-boot-amlogic(-binaries) in Debian trixie/testing;
+                # fip_assemble supplies the blob.
+                extra_pkgs)     printf '' ;;
                 fip_assemble)   printf '1' ;;
-                dtb_files)      printf 'amlogic/meson-g12b-odroid-n2.dtb amlogic/meson-sm1-khadas-vim3l.dtb amlogic/meson-a1-ad401.dtb' ;;
+                # G12B/SM1 only; the A1 (ad401) DTB can't boot from this FIP.
+                boot_dtb)       printf 'amlogic/meson-g12b-odroid-n2.dtb' ;;
+                dtb_files)      printf 'amlogic/meson-g12b-odroid-n2.dtb amlogic/meson-sm1-khadas-vim3l.dtb' ;;
             esac
             ;;
         visionfive2)

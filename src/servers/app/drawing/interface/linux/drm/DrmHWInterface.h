@@ -180,6 +180,10 @@ private:
 								RenderingBuffer* dst,
 								IntRect area) const;
 
+		virtual	void				_CopyToFront(uint8* src, uint32 srcBPR,
+									int32 x, int32 y,
+									int32 right, int32 bottom) const;
+
 		void				_PushCursorTrackDirty(int32 oldX, int32 oldY,
 								int32 newX, int32 newY);
 

@@ -2340,8 +2340,52 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 void
 DrmHWInterface::_DrawCursor(IntRect area) const
 {
-	if (!fHardwareCursorEnabled)
-		HWInterface::_DrawCursor(area);
+	if (fHardwareCursorEnabled)
+		return;
+
+	// Render-buffer scanout presents via _BlendCursor, which rotates.
+	// The base path writes logical coords into the physical front buffer.
+	if (fRenderBuffer != NULL)
+		return;
+
+	HWInterface::_DrawCursor(area);
+}
+
+
+// x..bottom are logical; the front buffer is physical. When the panel is
+// transformed, writing them straight leaves unrotated patches on screen.
+void
+DrmHWInterface::_CopyToFront(uint8* src, uint32 srcBPR, int32 x, int32 y,
+	int32 right, int32 bottom) const
+{
+	if (fPanelOrientation == PANEL_ORIENTATION_NORMAL
+			&& fPanelReflection == B_PANEL_REFLECTION_NONE) {
+		HWInterface::_CopyToFront(src, srcBPR, x, y, right, bottom);
+		return;
+	}
+
+	RenderingBuffer* frontBuffer = FrontBuffer();
+	if (frontBuffer == NULL || src == NULL)
+		return;
+
+	const int32 logicalW = fDisplayMode.virtual_width;
+	const int32 logicalH = fDisplayMode.virtual_height;
+	const int32 physW = (int32)frontBuffer->Width();
+	const int32 physH = (int32)frontBuffer->Height();
+	uint8* dstBase = (uint8*)frontBuffer->Bits();
+	uint32 dstBPR = frontBuffer->BytesPerRow();
+
+	for (int32 ly = y; ly <= bottom; ly++) {
+		const uint8* s = src + (uint32)(ly - y) * srcBPR;
+		for (int32 lx = x; lx <= right; lx++, s += 4) {
+			int32 px, py;
+			rotate_point(fPanelOrientation, lx, ly, logicalW, logicalH,
+				px, py, fPanelReflection);
+			if (px < 0 || py < 0 || px >= physW || py >= physH)
+				continue;
+			memcpy(dstBase + (uint32)py * dstBPR + (uint32)px * 4, s, 4);
+		}
+	}
 }
 
 

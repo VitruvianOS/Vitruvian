@@ -208,7 +208,8 @@ protected:
 	virtual	void				_DrawCursor(IntRect area) const;
 
 	// does the actual transfer and handles color space conversion
-			void				_CopyToFront(uint8* src, uint32 srcBPR, int32 x,
+	// virtual: rotated scanouts must write physical coordinates
+	virtual	void				_CopyToFront(uint8* src, uint32 srcBPR, int32 x,
 									int32 y, int32 right, int32 bottom) const;
 
 			IntRect				_CursorFrame() const;

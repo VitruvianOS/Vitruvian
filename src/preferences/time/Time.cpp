@@ -15,21 +15,26 @@
 
 #include <locale.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <AboutWindow.h>
 #include <Alert.h>
+#include <BusHelpers.h>
 #include <Catalog.h>
 #include <Locale.h>
 #include <LocaleRoster.h>
+#include <String.h>
 
-#include "NetworkTimeView.h"
 #include "TimeMessages.h"
 #include "TimeWindow.h"
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Time"
+
+
+using BPrivate::bus_timedate1_set_ntp;
 
 
 const char* kAppSignature = "application/x-vnd.Haiku-Time";
@@ -102,22 +107,20 @@ main(int argc, char** argv)
 	if (argc > 1) {
 		if (strcmp(argv[1], "--update") != 0) {
 			fprintf(stderr, "Usage: %s [--update]\n", argv[0]);
-			fprintf(stderr, "    --update    Optionally force an NTP clock sync and exit\n\n");
+			fprintf(stderr, "    --update    Enable network time via "
+				"systemd-timedated and exit\n\n");
 			return 0;
 		}
 
-		Settings settings;
-		const char* errorString = NULL;
-		int32 errorCode = 0;
-		if (update_time(settings, &errorString, &errorCode) == B_OK) {
-			printf("Synchronization successful\n");
-		} else if (errorCode != 0) {
-			printf("The following error occured "
-					"while synchronizing:\n%s: %s\n",
-				errorString, strerror(errorCode));
+		// Network time is systemd-timesyncd's job; ask timedated to turn
+		// it on rather than speaking NTP from this preflet.
+		BString error;
+		if (bus_timedate1_set_ntp(true, &error) == B_OK) {
+			printf("Network time enabled\n");
 		} else {
-			printf("The following error occured while synchronizing:\n%s\n",
-				errorString);
+			printf("Could not enable network time:\n%s\n",
+				error.Length() > 0 ? error.String() : "unknown error");
+			return 1;
 		}
 	} else {
 		setlocale(LC_ALL, "");
@@ -128,4 +131,3 @@ main(int argc, char** argv)
 
 	return 0;
 }
-

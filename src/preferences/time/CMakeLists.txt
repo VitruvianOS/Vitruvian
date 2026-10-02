@@ -5,15 +5,16 @@ Application(Time
 	ClockView.cpp
 	DateTimeView.cpp
 	NetworkTimeView.cpp
-	ntp.cpp
 	Time.cpp
 	TimeSettings.cpp
 	TimeWindow.cpp
 	TimeZoneListItem.cpp
 	TimeZoneListView.cpp
 	TZDisplay.cpp
+	TimedatedAsync.cpp
 	ZoneView.cpp
-	LIBS bnetapi shared localestub
+	LIBS shared localestub
 	RDEF Time.rdef
 )
+UsePrivateHeaders(Time locale)
 DoCatalogs("x-vnd.Haiku-Time" preferences/time)

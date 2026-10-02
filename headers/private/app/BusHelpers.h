@@ -6,6 +6,7 @@
 #define _BUS_HELPERS_H
 
 
+#include <String.h>
 #include <SupportDefs.h>
 
 
@@ -17,14 +18,22 @@ namespace BPrivate {
 
 // Thin sd-bus wrappers used by preferences apps and the User pref.
 // All calls are synchronous. Return B_OK on success, a translated
-// status_t on failure. Non-zero D-Bus errors are logged via fprintf
-// to stderr at call site; callers don't need to unwrap sd_bus_error.
+// status_t on failure. On failure the optional error string receives
+// the D-Bus error message (polkit denial text included) for the UI.
 
 
 // systemd-timedated (org.freedesktop.timedate1).
-status_t bus_timedate1_set_time(int64 usec_since_epoch, bool relative);
-status_t bus_timedate1_set_timezone(const char* tz);
-status_t bus_timedate1_set_ntp(bool enabled);
+status_t bus_timedate1_set_time(int64 usec_since_epoch, bool relative,
+	BString* error = NULL);
+status_t bus_timedate1_set_timezone(const char* tz, BString* error = NULL);
+status_t bus_timedate1_set_ntp(bool enabled, BString* error = NULL);
+status_t bus_timedate1_set_local_rtc(bool local, bool fix_system,
+	bool interactive, BString* error = NULL);
+status_t bus_timedate1_get_timezone(BString& outZone, BString* error = NULL);
+status_t bus_timedate1_get_ntp(bool& outEnabled, BString* error = NULL);
+status_t bus_timedate1_get_ntp_synchronized(bool& outSynced,
+	BString* error = NULL);
+status_t bus_timedate1_get_local_rtc(bool& outLocal, BString* error = NULL);
 
 
 // AccountsService (org.freedesktop.Accounts).

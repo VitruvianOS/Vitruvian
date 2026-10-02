@@ -10,14 +10,17 @@
 
 #include "TimeWindow.h"
 
+#include <Alert.h>
 #include <Application.h>
 #include <Button.h>
 #include <Catalog.h>
 #include <LayoutBuilder.h>
 #include <LocaleRoster.h>
+#include <Messenger.h>
 #include <Message.h>
 #include <Screen.h>
 #include <SeparatorView.h>
+#include <String.h>
 #include <TabView.h>
 
 #include "BaseView.h"
@@ -26,11 +29,37 @@
 #include "NetworkTimeView.h"
 #include "TimeMessages.h"
 #include "TimeSettings.h"
+#include "TimedatedAsync.h"
 #include "ZoneView.h"
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Time"
+
+
+using BPrivate::kTimedatedOpGetNTP;
+using BPrivate::TimedatedAsyncRun;
+
+
+void
+ShowTimeError(const char* what, status_t status, const char* dbError)
+{
+	BString message;
+	if (status == B_PERMISSION_DENIED || status == B_NOT_ALLOWED)
+		message = B_TRANSLATE("Authentication was required and was not "
+			"granted.");
+	else
+		message = B_TRANSLATE("Could not change system time settings.");
+	message << "\n\n" << what;
+	if (dbError != NULL && *dbError != '\0')
+		message << "\n\n" << dbError;
+
+	BAlert* alert = new BAlert(B_TRANSLATE("Time"), message.String(),
+		B_TRANSLATE("OK"));
+	alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+	alert->Go();
+}
+
 
 TTimeWindow::TTimeWindow()
 	:
@@ -103,6 +132,35 @@ TTimeWindow::MessageReceived(BMessage* message)
 			_SetRevertStatus();
 			break;
 
+		case kMsgNTPStateChanged:
+		{
+			// NetworkTimeView posts this; NTP on disables manual date and time.
+			bool ntpOn = false;
+			message->FindBool("ntp", &ntpOn);
+			fDateTimeView->SetManualTimeAllowed(!ntpOn);
+			fNetworkTimeView->MessageReceived(message);
+			_SetRevertStatus();
+			break;
+		}
+
+		case kTimedatedResult:
+		{
+			int32 op;
+			if (message->FindInt32("op", &op) != B_OK
+					|| op != kTimedatedOpGetNTP)
+				break;
+
+			status_t status;
+			if (message->FindInt32("status", &status) != B_OK
+					|| status != B_OK)
+				break;
+
+			bool ntpOn = false;
+			if (message->FindBool("ntp", &ntpOn) == B_OK)
+				fDateTimeView->SetManualTimeAllowed(!ntpOn);
+			break;
+		}
+
 		case kSelectClockTab:
 			// focus the clock tab (last one)
 			fTabView->Select(fTabView->CountTabs() - 1);
@@ -157,6 +215,8 @@ TTimeWindow::_InitWindow()
 			.Add(fRevertButton)
 			.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,
 				B_USE_DEFAULT_SPACING, B_USE_WINDOW_SPACING);
+
+	_SyncNTPState();
 }
 
 
@@ -184,4 +244,13 @@ TTimeWindow::_SetRevertStatus()
 		|| fTimeZoneView->CheckCanRevert()
 		|| fNetworkTimeView->CheckCanRevert()
 		|| fClockView->CheckCanRevert());
+}
+
+
+void
+TTimeWindow::_SyncNTPState()
+{
+	// Polkit can block a timedated Get; keep it off the window thread.
+	BMessage args;
+	TimedatedAsyncRun(kTimedatedOpGetNTP, args, BMessenger(this));
 }

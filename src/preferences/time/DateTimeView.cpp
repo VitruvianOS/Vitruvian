@@ -13,7 +13,6 @@
 #include "DateTimeView.h"
 
 #include <time.h>
-#include <syscalls.h>
 
 #include <Box.h>
 #include <CalendarView.h>
@@ -26,6 +25,7 @@
 #include <File.h>
 #include <FindDirectory.h>
 #include <LocaleRoster.h>
+#include <Messenger.h>
 #include <Message.h>
 #include <Path.h>
 #include <StringView.h>
@@ -34,6 +34,7 @@
 #include "AnalogClock.h"
 #include "TimeMessages.h"
 #include "TimeWindow.h"
+#include "TimedatedAsync.h"
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -45,12 +46,15 @@ using BPrivate::BDateTime;
 using BPrivate::B_LOCAL_TIME;
 using BPrivate::DateEdit;
 using BPrivate::TimeEdit;
+using BPrivate::kTimedatedOpSetTime;
+using BPrivate::TimedatedAsyncRun;
 
 
 DateTimeView::DateTimeView(const char* name)
 	:
 	BGroupView(name, B_HORIZONTAL, 5),
 	fInitialized(false),
+	fManualTimeAllowed(true),
 	fSystemTimeAtStart(system_time())
 {
 	_InitView();
@@ -102,6 +106,9 @@ DateTimeView::MessageReceived(BMessage* message)
 
 		case kDayChanged:
 		{
+			if (!fManualTimeAllowed)
+				break;
+
 			BMessage msg(*message);
 			msg.what = H_USER_CHANGE;
 			msg.AddBool("time", false);
@@ -122,6 +129,24 @@ DateTimeView::MessageReceived(BMessage* message)
 		case kRTCUpdate:
 			break;
 
+		case kTimedatedResult:
+		{
+			int32 op;
+			if (message->FindInt32("op", &op) != B_OK
+					|| op != kTimedatedOpSetTime)
+				break;
+
+			status_t status;
+			message->FindInt32("status", &status);
+			if (status != B_OK) {
+				const char* error = NULL;
+				message->FindString("error", &error);
+				ShowTimeError(B_TRANSLATE("Could not set the date and "
+					"time."), status, error);
+			}
+			break;
+		}
+
 		default:
 			BView::MessageReceived(message);
 			break;
@@ -132,6 +157,9 @@ DateTimeView::MessageReceived(BMessage* message)
 bool
 DateTimeView::CheckCanRevert()
 {
+	if (!fManualTimeAllowed)
+		return false;
+
 	// check for changed time
 	time_t unchangedNow = fTimeAtStart + _PrefletUptime();
 	time_t changedNow;
@@ -142,8 +170,23 @@ DateTimeView::CheckCanRevert()
 
 
 void
+DateTimeView::SetManualTimeAllowed(bool allowed)
+{
+	fManualTimeAllowed = allowed;
+	fDateEdit->SetEnabled(allowed);
+	fTimeEdit->SetEnabled(allowed);
+	// BCalendarView has no enable flag; kDayChanged is gated above.
+	// TAnalogClock posts H_USER_CHANGE itself; gate drag like the edits.
+	fClock->SetInteractive(allowed);
+}
+
+
+void
 DateTimeView::_Revert()
 {
+	if (!fManualTimeAllowed)
+		return;
+
 	// Set the clock and calendar as they were at launch time +
 	// time elapsed since application launch.
 
@@ -161,7 +204,11 @@ DateTimeView::_Revert()
 	dateTime.SetTime(time);
 	dateTime.SetDate(date);
 
-	set_real_time_clock(dateTime.Time_t());
+	// timedated owns the clock; run the call off the window thread.
+	BMessage args;
+	args.AddInt64("usec", (int64)dateTime.Time_t() * 1000000);
+	args.AddBool("relative", false);
+	TimedatedAsyncRun(kTimedatedOpSetTime, args, BMessenger(this));
 }
 
 
@@ -182,7 +229,7 @@ DateTimeView::_InitView()
 
 	fDateEdit = new DateEdit("dateEdit", 3, new BMessage(H_USER_CHANGE));
 	fTimeEdit = new TimeEdit("timeEdit", 5, new BMessage(H_USER_CHANGE));
-	fClock = new TAnalogClock("analogClock");
+	fClock = new TAnalogClock("analogClock", true, fManualTimeAllowed);
 
 	BTime time(BTime::CurrentTime(B_LOCAL_TIME));
 	fClock->SetTime(time.Hour(), time.Minute(), time.Second());
@@ -238,4 +285,3 @@ DateTimeView::_UpdateDateTime(BMessage* message)
 		fTimeEdit->SetTime(hour, minute, second);
 	}
 }
-

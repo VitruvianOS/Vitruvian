@@ -11,299 +11,44 @@
 
 #include "NetworkTimeView.h"
 
-#include <ctype.h>
-#include <stdio.h>
-#include <string.h>
-
-#include <Alert.h>
-#include <Button.h>
 #include <Catalog.h>
 #include <CheckBox.h>
-#include <File.h>
-#include <FindDirectory.h>
-#include <Invoker.h>
-#include <ListItem.h>
-#include <ListView.h>
-#include <Path.h>
-#include <ScrollView.h>
-#include <Size.h>
-#include <TextControl.h>
+#include <LayoutBuilder.h>
+#include <Messenger.h>
+#include <Message.h>
+#include <StringView.h>
+#include <Window.h>
 
-#include "ntp.h"
 #include "TimeMessages.h"
+#include "TimeWindow.h"
+#include "TimedatedAsync.h"
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Time"
 
 
-//	#pragma mark - Settings
-
-
-Settings::Settings()
-	:
-	fMessage(kMsgNetworkTimeSettings)
-{
-	ResetToDefaults();
-	Load();
-}
-
-
-Settings::~Settings()
-{
-	Save();
-}
-
-
-void
-Settings::AddServer(const char* server)
-{
-	if (_GetStringByValue("server", server) == B_ERROR)
-		fMessage.AddString("server", server);
-}
-
-
-const char*
-Settings::GetServer(int32 index) const
-{
-	const char* server;
-	fMessage.FindString("server", index, &server);
-	return server;
-}
-
-
-void
-Settings::RemoveServer(const char* server)
-{
-	int32 index = _GetStringByValue("server", server);
-	if (index != B_ERROR) {
-		fMessage.RemoveData("server", index);
-
-		int32 count;
-		fMessage.GetInfo("server", NULL, &count);
-		if (GetDefaultServer() >= count)
-			SetDefaultServer(count - 1);
-	}
-}
-
-
-void
-Settings::SetDefaultServer(int32 index)
-{
-	if (fMessage.ReplaceInt32("default server", index) != B_OK)
-		fMessage.AddInt32("default server", index);
-}
-
-
-int32
-Settings::GetDefaultServer() const
-{
-	int32 index;
-	fMessage.FindInt32("default server", &index);
-	return index;
-}
-
-
-void
-Settings::SetTryAllServers(bool boolean)
-{
-	fMessage.ReplaceBool("try all servers", boolean);
-}
-
-
-bool
-Settings::GetTryAllServers() const
-{
-	bool boolean;
-	fMessage.FindBool("try all servers", &boolean);
-	return boolean;
-}
-
-
-void
-Settings::SetSynchronizeAtBoot(bool boolean)
-{
-	fMessage.ReplaceBool("synchronize at boot", boolean);
-}
-
-
-bool
-Settings::GetSynchronizeAtBoot() const
-{
-	bool boolean;
-	fMessage.FindBool("synchronize at boot", &boolean);
-	return boolean;
-}
-
-
-void
-Settings::ResetServersToDefaults()
-{
-	fMessage.RemoveName("server");
-
-	fMessage.AddString("server", "pool.ntp.org");
-	fMessage.AddString("server", "de.pool.ntp.org");
-	fMessage.AddString("server", "time.nist.gov");
-
-	if (fMessage.ReplaceInt32("default server", 0) != B_OK)
-		fMessage.AddInt32("default server", 0);
-}
-
-
-void
-Settings::ResetToDefaults()
-{
-	fMessage.MakeEmpty();
-	ResetServersToDefaults();
-
-	fMessage.AddBool("synchronize at boot", true);
-	fMessage.AddBool("try all servers", true);
-}
-
-
-void
-Settings::Revert()
-{
-	fMessage = fOldMessage;
-}
-
-
-bool
-Settings::SettingsChanged()
-{
-	ssize_t oldSize = fOldMessage.FlattenedSize();
-	ssize_t newSize = fMessage.FlattenedSize();
-
-	if (oldSize != newSize || oldSize < 0 || newSize < 0)
-		return true;
-
-	char* oldBytes = new (std::nothrow) char[oldSize];
-	if (oldBytes == NULL)
-		return true;
-
-	fOldMessage.Flatten(oldBytes, oldSize);
-	char* newBytes = new (std::nothrow) char[newSize];
-	if (newBytes == NULL) {
-		delete[] oldBytes;
-		return true;
-	}
-	fMessage.Flatten(newBytes, newSize);
-
-	int result = memcmp(oldBytes, newBytes, oldSize);
-
-	delete[] oldBytes;
-	delete[] newBytes;
-
-	return result != 0;
-}
-
-
-status_t
-Settings::Load()
-{
-	status_t status;
-
-	BPath path;
-	if ((status = _GetPath(path)) != B_OK)
-		return status;
-
-	BFile file(path.Path(), B_READ_ONLY);
-	if ((status = file.InitCheck()) != B_OK)
-		return status;
-
-	BMessage load;
-	if ((status = load.Unflatten(&file)) != B_OK)
-		return status;
-
-	if (load.what != kMsgNetworkTimeSettings)
-		return B_BAD_TYPE;
-
-	fMessage = load;
-	fOldMessage = fMessage;
-	return B_OK;
-}
-
-
-status_t
-Settings::Save()
-{
-	status_t status;
-
-	BPath path;
-	if ((status = _GetPath(path)) != B_OK)
-		return status;
-
-	BFile file(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
-	if ((status = file.InitCheck()) != B_OK)
-		return status;
-
-	file.SetSize(0);
-
-	return fMessage.Flatten(&file);
-}
-
-
-int32
-Settings::_GetStringByValue(const char* name, const char* value)
-{
-	const char* string;
-	for (int32 index = 0; fMessage.FindString(name, index, &string) == B_OK;
-			index++) {
-		if (strcmp(string, value) == 0)
-			return index;
-	}
-
-	return B_ERROR;
-}
-
-
-status_t
-Settings::_GetPath(BPath& path)
-{
-	status_t status = find_directory(B_USER_SETTINGS_DIRECTORY, &path);
-	if (status != B_OK)
-		return status;
-
-	path.Append("networktime settings");
-
-	return B_OK;
-}
-
-
-//	#pragma mark - NetworkTimeView
+using BPrivate::kTimedatedOpGetNTP;
+using BPrivate::kTimedatedOpGetNTPSynced;
+using BPrivate::kTimedatedOpSetNTP;
+using BPrivate::TimedatedAsyncRun;
 
 
 NetworkTimeView::NetworkTimeView(const char* name)
 	:
 	BGroupView(name, B_VERTICAL, B_USE_DEFAULT_SPACING),
-	fSettings(),
-	fServerTextControl(NULL),
-	fAddButton(NULL),
-	fRemoveButton(NULL),
-	fResetButton(NULL),
-	fServerListView(NULL),
-	fTryAllServersCheckBox(NULL),
-	fSynchronizeAtBootCheckBox(NULL),
-	fSynchronizeButton(NULL),
-	fTextColor(ui_color(B_CONTROL_TEXT_COLOR)),
-	fInvalidColor(ui_color(B_FAILURE_COLOR)),
-	fUpdateThread(-1)
+	fNTPCheckBox(NULL),
+	fStatusView(NULL),
+	fNTPEnabled(false),
+	fNTPSynced(false),
+	fNTPOpPending(false)
 {
-	fSettings.Load();
 	_InitView();
 }
 
 
 NetworkTimeView::~NetworkTimeView()
 {
-	delete fServerTextControl;
-	delete fAddButton;
-	delete fRemoveButton;
-	delete fResetButton;
-	delete fServerListView;
-	delete fTryAllServersCheckBox;
-	delete fSynchronizeAtBootCheckBox;
-	delete fSynchronizeButton;
 }
 
 
@@ -311,128 +56,102 @@ void
 NetworkTimeView::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
-		case kMsgSetDefaultServer:
+		case kMsgToggleNTP:
+			_ApplyNTP(fNTPCheckBox->Value() == B_CONTROL_ON);
+			break;
+
+		case kMsgNTPStateChanged:
 		{
-			int32 currentSelection = fServerListView->CurrentSelection();
-			if (currentSelection < 0)
-				fServerListView->Select(fSettings.GetDefaultServer());
-			else {
-				fSettings.SetDefaultServer(currentSelection);
-				Looper()->PostMessage(new BMessage(kMsgChange));
-			}
-			break;
-		}
-
-		case kMsgServerEdited:
-		{
-			bool isValid = _IsValidServerName(fServerTextControl->Text());
-			fServerTextControl->TextView()->SetFontAndColor(0,
-				fServerTextControl->TextView()->TextLength(), NULL, 0,
-				isValid ? &fTextColor : &fInvalidColor);
-			fAddButton->SetEnabled(isValid);
-			break;
-		}
-
-		case kMsgAddServer:
-			if (!_IsValidServerName(fServerTextControl->Text()))
-				break;
-
-			fSettings.AddServer(fServerTextControl->Text());
-			_UpdateServerList();
-			fServerTextControl->SetText("");
-			Looper()->PostMessage(new BMessage(kMsgChange));
-			break;
-
-		case kMsgRemoveServer:
-		{
-			int32 currentSelection = fServerListView->CurrentSelection();
-			if (currentSelection < 0)
-				break;
-
-			fSettings.RemoveServer(((BStringItem*)
-				fServerListView->ItemAt(currentSelection))->Text());
-			_UpdateServerList();
-			Looper()->PostMessage(new BMessage(kMsgChange));
-			break;
-		}
-
-		case kMsgResetServerList:
-			fSettings.ResetServersToDefaults();
-			_UpdateServerList();
-			Looper()->PostMessage(new BMessage(kMsgChange));
-			break;
-
-		case kMsgTryAllServers:
-			fSettings.SetTryAllServers(
-				fTryAllServersCheckBox->Value());
-			Looper()->PostMessage(new BMessage(kMsgChange));
-			break;
-
-		case kMsgSynchronizeAtBoot:
-			fSettings.SetSynchronizeAtBoot(fSynchronizeAtBootCheckBox->Value());
-			Looper()->PostMessage(new BMessage(kMsgChange));
-			break;
-
-		case kMsgStopSynchronization:
-			if (fUpdateThread >= B_OK)
-				kill_thread(fUpdateThread);
-
-			_DoneSynchronizing();
-			break;
-
-		case kMsgSynchronize:
-		{
-			if (fUpdateThread >= B_OK)
-				break;
-
-			BMessenger* messenger = new BMessenger(this);
-			update_time(fSettings, messenger, &fUpdateThread);
-			fSynchronizeButton->SetLabel(B_TRANSLATE("Stop"));
-			fSynchronizeButton->Message()->what = kMsgStopSynchronization;
-			break;
-		}
-
-		case kMsgSynchronizationResult:
-		{
-			_DoneSynchronizing();
-
-			status_t status;
-			if (message->FindInt32("status", (int32 *)&status) == B_OK) {
-				if (status == B_OK)
-					return;
-
-				const char* errorString;
-				message->FindString("error string", &errorString);
-				char buffer[256];
-
-				int32 errorCode;
-				if (message->FindInt32("error code", &errorCode) == B_OK) {
-					snprintf(buffer, sizeof(buffer),
-						B_TRANSLATE("The following error occured "
-							"while synchronizing:\n%s: %s"),
-						errorString, strerror(errorCode));
-				} else {
-					snprintf(buffer, sizeof(buffer),
-						B_TRANSLATE("The following error occured "
-							"while synchronizing:\n%s"),
-						errorString);
-				}
-
-				BAlert* alert = new BAlert(B_TRANSLATE("Time"), buffer,
-					B_TRANSLATE("OK"));
-				alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-				alert->Go();
+			// notification from the window; do not re-apply
+			bool enable;
+			if (message->FindBool("ntp", &enable) == B_OK) {
+				fNTPEnabled = enable;
+				fNTPCheckBox->SetValue(enable ? B_CONTROL_ON
+					: B_CONTROL_OFF);
+				BMessage args;
+				TimedatedAsyncRun(kTimedatedOpGetNTPSynced, args,
+					BMessenger(this));
+				_UpdateStatus();
 			}
 			break;
 		}
 
 		case kMsgRevert:
-			fSettings.Revert();
-			fTryAllServersCheckBox->SetValue(fSettings.GetTryAllServers());
-			fSynchronizeAtBootCheckBox->SetValue(
-				fSettings.GetSynchronizeAtBoot());
-			_UpdateServerList();
+			_ApplyNTP(fNTPEnabled);
 			break;
+
+		case kTimedatedResult:
+		{
+			int32 op;
+			if (message->FindInt32("op", &op) != B_OK)
+				break;
+
+			status_t status;
+			message->FindInt32("status", &status);
+			const char* error = NULL;
+			message->FindString("error", &error);
+
+			switch (op) {
+				case kTimedatedOpGetNTP:
+				{
+					bool enabled = false;
+					message->FindBool("ntp", &enabled);
+					if (status == B_OK) {
+						bool changed = fNTPEnabled != enabled;
+						fNTPEnabled = enabled;
+						fNTPCheckBox->SetValue(enabled ? B_CONTROL_ON
+							: B_CONTROL_OFF);
+						if (changed)
+							_NotifyNTPChanged();
+					} else
+						fNTPCheckBox->SetEnabled(false);
+					_UpdateStatus();
+					break;
+				}
+
+				case kTimedatedOpGetNTPSynced:
+				{
+					if (status == B_OK)
+						message->FindBool("synced", &fNTPSynced);
+					_UpdateStatus();
+					break;
+				}
+
+				case kTimedatedOpSetNTP:
+				{
+					fNTPOpPending = false;
+					fNTPCheckBox->SetEnabled(true);
+
+					bool enable = false;
+					message->FindBool("enable", &enable);
+					if (status != B_OK) {
+						ShowTimeError(
+							B_TRANSLATE("Could not change network time."),
+							status, error);
+						// leave the checkbox at the system state
+						BMessage args;
+						TimedatedAsyncRun(kTimedatedOpGetNTP, args,
+							BMessenger(this));
+						TimedatedAsyncRun(kTimedatedOpGetNTPSynced, args,
+							BMessenger(this));
+						break;
+					}
+
+					fNTPEnabled = enable;
+					fNTPSynced = false;
+					BMessage args;
+					TimedatedAsyncRun(kTimedatedOpGetNTPSynced, args,
+						BMessenger(this));
+					_UpdateStatus();
+					_NotifyNTPChanged();
+					break;
+				}
+
+				default:
+					break;
+			}
+			break;
+		}
 
 		default:
 			BGroupView::MessageReceived(message);
@@ -444,206 +163,83 @@ NetworkTimeView::MessageReceived(BMessage* message)
 void
 NetworkTimeView::AttachedToWindow()
 {
-	fServerTextControl->SetTarget(this);
-	fServerListView->SetTarget(this);
-	fAddButton->SetTarget(this);
-	fAddButton->SetEnabled(false);
-	fRemoveButton->SetTarget(this);
-	fResetButton->SetTarget(this);
-	fTryAllServersCheckBox->SetTarget(this);
-	fSynchronizeAtBootCheckBox->SetTarget(this);
-	fSynchronizeButton->SetTarget(this);
+	fNTPCheckBox->SetTarget(this);
+	_StartLoadState();
 }
 
 
 bool
 NetworkTimeView::CheckCanRevert()
 {
-	return fSettings.SettingsChanged();
+	return (fNTPCheckBox->Value() == B_CONTROL_ON) != fNTPEnabled;
 }
 
 
 void
 NetworkTimeView::_InitView()
 {
-	fServerTextControl = new BTextControl(NULL, NULL,
-		new BMessage(kMsgAddServer));
-	fServerTextControl->SetModificationMessage(new BMessage(kMsgServerEdited));
+	fNTPCheckBox = new BCheckBox("ntp",
+		B_TRANSLATE("Set time and date automatically (network time)"),
+		new BMessage(kMsgToggleNTP));
 
-	const float kButtonWidth = fServerTextControl->Frame().Height();
+	fStatusView = new BStringView("ntpStatus", "");
 
-	fAddButton = new BButton("add", "+", new BMessage(kMsgAddServer));
-	fAddButton->SetToolTip(B_TRANSLATE("Add"));
-	fAddButton->SetExplicitSize(BSize(kButtonWidth, kButtonWidth));
-
-	fRemoveButton = new BButton("remove", "−", new BMessage(kMsgRemoveServer));
-	fRemoveButton->SetToolTip(B_TRANSLATE("Remove"));
-	fRemoveButton->SetExplicitSize(BSize(kButtonWidth, kButtonWidth));
-
-	fServerListView = new BListView("serverList");
-	fServerListView->SetExplicitMinSize(BSize(B_SIZE_UNSET, kButtonWidth * 4));
-	fServerListView->SetSelectionMessage(new BMessage(kMsgSetDefaultServer));
-	BScrollView* scrollView = new BScrollView("serverScrollView",
-		fServerListView, B_FRAME_EVENTS | B_WILL_DRAW, false, true);
-	_UpdateServerList();
-
-	fTryAllServersCheckBox = new BCheckBox("tryAllServers",
-		B_TRANSLATE("Try all servers"), new BMessage(kMsgTryAllServers));
-	fTryAllServersCheckBox->SetValue(fSettings.GetTryAllServers());
-
-	fSynchronizeAtBootCheckBox = new BCheckBox("autoUpdate",
-		B_TRANSLATE("Synchronize at boot"),
-		new BMessage(kMsgSynchronizeAtBoot));
-	fSynchronizeAtBootCheckBox->SetValue(fSettings.GetSynchronizeAtBoot());
-
-	fResetButton = new BButton("reset",
-		B_TRANSLATE("Reset to default server list"),
-		new BMessage(kMsgResetServerList));
-
-	fSynchronizeButton = new BButton("update", B_TRANSLATE("Synchronize"),
-		new BMessage(kMsgSynchronize));
-
-	BLayoutBuilder::Group<>(this, B_VERTICAL)
-		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
-			.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
-				.Add(fServerTextControl)
-				.Add(fAddButton)
-			.End()
-			.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
-				.Add(scrollView)
-				.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
-					.Add(fRemoveButton)
-					.AddGlue()
-				.End()
-			.End()
-		.End()
-		.AddGroup(B_HORIZONTAL)
-			.AddGroup(B_VERTICAL, 0)
-				.Add(fTryAllServersCheckBox)
-				.Add(fSynchronizeAtBootCheckBox)
-			.End()
-		.End()
-		.AddGroup(B_HORIZONTAL)
-			.Add(fResetButton)
-			.AddGlue()
-			.Add(fSynchronizeButton)
-		.End()
+	BLayoutBuilder::Group<>(this)
+		.Add(fNTPCheckBox)
+		.Add(fStatusView)
+		.AddGlue()
 		.SetInsets(B_USE_WINDOW_SPACING, B_USE_WINDOW_SPACING,
 			B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING);
 }
 
 
 void
-NetworkTimeView::_UpdateServerList()
+NetworkTimeView::_StartLoadState()
 {
-	BListItem* item;
-	while ((item = fServerListView->RemoveItem((int32)0)) != NULL)
-		delete item;
-
-	const char* server;
-	int32 index = 0;
-	while ((server = fSettings.GetServer(index++)) != NULL)
-		fServerListView->AddItem(new BStringItem(server));
-
-	fServerListView->Select(fSettings.GetDefaultServer());
-	fServerListView->ScrollToSelection();
-
-	fRemoveButton->SetEnabled(fServerListView->CountItems() > 0);
+	BMessage args;
+	TimedatedAsyncRun(kTimedatedOpGetNTP, args, BMessenger(this));
+	TimedatedAsyncRun(kTimedatedOpGetNTPSynced, args, BMessenger(this));
 }
 
 
 void
-NetworkTimeView::_DoneSynchronizing()
+NetworkTimeView::_UpdateStatus()
 {
-	fUpdateThread = -1;
-	fSynchronizeButton->SetLabel(B_TRANSLATE("Synchronize again"));
-	fSynchronizeButton->Message()->what = kMsgSynchronize;
-}
-
-
-bool
-NetworkTimeView::_IsValidServerName(const char* serverName)
-{
-	if (serverName == NULL || *serverName == '\0')
-		return false;
-
-	for (int32 i = 0; serverName[i] != '\0'; i++) {
-		char c = serverName[i];
-		// Simple URL validation, no scheme should be present
-		if (!(isalnum(c) || c == '.' || c == '-' || c == '_'))
-			return false;
+	BString status;
+	if (fNTPCheckBox->Value() == B_CONTROL_ON) {
+		status = B_TRANSLATE("Network time is on. The clock is kept by "
+			"systemd-timesyncd; manual date and time controls are disabled.");
+		if (fNTPSynced)
+			status << "\n" << B_TRANSLATE("The clock is synchronized.");
+		else
+			status << "\n" << B_TRANSLATE("The clock is not synchronized yet.");
+	} else {
+		status = B_TRANSLATE("Network time is off. Set the date and time "
+			"manually on the Date and time tab.");
 	}
-
-	return true;
+	fStatusView->SetText(status.String());
 }
 
 
-//	#pragma mark - update functions
-
-
-int32
-update_thread(void* params)
+void
+NetworkTimeView::_NotifyNTPChanged()
 {
-	BList* list = (BList*)params;
-	BMessenger* messenger = (BMessenger*)list->ItemAt(1);
-
-	const char* errorString = NULL;
-	int32 errorCode = 0;
-	status_t status = update_time(*(Settings*)list->ItemAt(0),
-		&errorString, &errorCode);
-
-	BMessage result(kMsgSynchronizationResult);
-	result.AddInt32("status", status);
-	result.AddString("error string", errorString);
-	if (errorCode != 0)
-		result.AddInt32("error code", errorCode);
-
-	messenger->SendMessage(&result);
-	delete messenger;
-
-	return B_OK;
+	BMessage message(kMsgNTPStateChanged);
+	message.AddBool("ntp", fNTPEnabled);
+	Window()->PostMessage(&message);
 }
 
 
-status_t
-update_time(const Settings& settings, BMessenger* messenger,
-	thread_id* thread)
+void
+NetworkTimeView::_ApplyNTP(bool enable)
 {
-	BList* params = new BList(2);
-	params->AddItem((void*)&settings);
-	params->AddItem((void*)messenger);
-	*thread = spawn_thread(update_thread, "ntpUpdate", 64, params);
+	if (fNTPOpPending)
+		return;
 
-	return resume_thread(*thread);
-}
+	fNTPOpPending = true;
+	fNTPCheckBox->SetEnabled(false);
 
-
-status_t
-update_time(const Settings& settings, const char** errorString,
-	int32* errorCode)
-{
-	int32 defaultServer = settings.GetDefaultServer();
-
-	status_t status = B_ENTRY_NOT_FOUND;
-	const char* server = settings.GetServer(defaultServer);
-
-	if (server != NULL)
-		status = ntp_update_time(server, errorString, errorCode);
-
-	if (status != B_OK && settings.GetTryAllServers()) {
-		for (int32 index = 0; ; index++) {
-			if (index == defaultServer)
-				index++;
-
-			server = settings.GetServer(index);
-			if (server == NULL)
-				break;
-
-			status = ntp_update_time(server, errorString, errorCode);
-			if (status == B_OK)
-				break;
-		}
-	}
-
-	return status;
+	BMessage args;
+	args.AddBool("enable", enable);
+	TimedatedAsyncRun(kTimedatedOpSetNTP, args, BMessenger(this));
 }

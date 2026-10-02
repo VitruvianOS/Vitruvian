@@ -67,5 +67,13 @@ const uint32 kGetClockSettings = 'GCkS';
 // bring the clock tab to front
 const uint32 kSelectClockTab = 'SlCk';
 
-#endif	// _TIME_MESSAGES_H
+// network time checkbox toggled
+const uint32 kMsgToggleNTP = 'nttg';
 
+// network time (timedated SetNTP) changed
+const uint32 kMsgNTPStateChanged = 'ntps';
+
+// timedated worker posted a result back to the window thread
+const uint32 kTimedatedResult = 'tDdR';
+
+#endif	// _TIME_MESSAGES_H

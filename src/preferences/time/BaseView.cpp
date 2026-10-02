@@ -10,10 +10,24 @@
 
 #include "BaseView.h"
 
+#include <Catalog.h>
 #include <DateTime.h>
+#include <Messenger.h>
 #include <OS.h>
 
 #include "TimeMessages.h"
+#include "TimeWindow.h"
+#include "TimedatedAsync.h"
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Time"
+
+
+using BPrivate::BDateTime;
+using BPrivate::B_LOCAL_TIME;
+using BPrivate::kTimedatedOpSetTime;
+using BPrivate::TimedatedAsyncRun;
 
 
 TTimeBaseView::TTimeBaseView(const char* name)
@@ -43,6 +57,35 @@ TTimeBaseView::AttachedToWindow()
 {
 	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 	SetLowUIColor(ViewUIColor());
+}
+
+
+void
+TTimeBaseView::MessageReceived(BMessage* message)
+{
+	switch (message->what) {
+		case kTimedatedResult:
+		{
+			int32 op;
+			if (message->FindInt32("op", &op) != B_OK
+					|| op != kTimedatedOpSetTime)
+				break;
+
+			status_t status;
+			message->FindInt32("status", &status);
+			if (status != B_OK) {
+				const char* error = NULL;
+				message->FindString("error", &error);
+				ShowTimeError(B_TRANSLATE("Could not set the date and "
+					"time."), status, error);
+			}
+			break;
+		}
+
+		default:
+			BGroupView::MessageReceived(message);
+			break;
+	}
 }
 
 
@@ -89,7 +132,12 @@ TTimeBaseView::ChangeTime(BMessage* message)
 		dateTime.SetDate(date);
 	}
 
-	set_real_time_clock(dateTime.Time_t());
+	// timedated owns the system clock; the worker keeps polkit off the
+	// window thread.
+	BMessage args;
+	args.AddInt64("usec", (int64)dateTime.Time_t() * 1000000);
+	args.AddBool("relative", false);
+	TimedatedAsyncRun(kTimedatedOpSetTime, args, BMessenger(this));
 }
 
 
@@ -110,4 +158,3 @@ TTimeBaseView::_SendNotices()
 
 	SendNotices(H_TM_CHANGED, &fMessage);
 }
-

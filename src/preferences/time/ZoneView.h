@@ -19,7 +19,6 @@
 class BButton;
 class BMessage;
 class BOutlineListView;
-class BPopUpMenu;
 class BRadioButton;
 class BTimeZone;
 class TimeZoneListItem;
@@ -42,19 +41,20 @@ protected:
 private:
 			void				_UpdateDateTime(BMessage* message);
 
+			void				_StartLoadSystemZone();
+			void				_StartLoadLocalRTC();
+			void				_StartSetLocalRTC();
+			void				_ApplySystemZone(const char* systemZoneId);
 			void				_SetSystemTimeZone();
 
 			void				_UpdatePreview();
 			void				_UpdateCurrent();
 			BString				_FormatTime(const BTimeZone& timeZone);
 
-			void 				_ReadRTCSettings();
-			void				_WriteRTCSettings();
-			void				_UpdateGmtSettings();
 			void				_ShowOrHidePreview();
 
 			void				_InitView();
-			void				_BuildZoneMenu();
+			void				_BuildZoneMenu(const char* systemZoneId);
 
 			void				_Revert();
 
@@ -71,7 +71,9 @@ private:
 
 			TimeZoneListItem*	fCurrentZoneItem;
 			TimeZoneListItem*	fOldZoneItem;
+			TimeZoneListItem*	fPendingZoneItem;
 			bool				fInitialized;
+			bool				fLocalRTCPending;
 
 			BTimeFormat			fTimeFormat;
 };

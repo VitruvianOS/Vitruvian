@@ -236,6 +236,18 @@ TAnalogClock::ChangeTimeFinished()
 
 
 void
+TAnalogClock::SetInteractive(bool interactive)
+{
+	fInteractive = interactive;
+	if (!interactive) {
+		fHourDragging = false;
+		fMinuteDragging = false;
+		fDirty = true;
+	}
+}
+
+
+void
 TAnalogClock::GetTime(int32* hour, int32* minute, int32* second)
 {
 	*hour = fHours;

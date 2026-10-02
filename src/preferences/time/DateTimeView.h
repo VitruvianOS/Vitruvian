@@ -38,6 +38,7 @@ public:
 	virtual	void 				MessageReceived(BMessage* message);
 
 			bool				CheckCanRevert();
+			void				SetManualTimeAllowed(bool allowed);
 
 private:
 			void 				_InitView();
@@ -51,6 +52,7 @@ private:
 			TAnalogClock*		fClock;
 
 			bool				fInitialized;
+			bool				fManualTimeAllowed;
 
 			time_t				fTimeAtStart;
 			bigtime_t			fSystemTimeAtStart;

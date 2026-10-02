@@ -17,6 +17,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	#ScreenSaver
 	Shortcuts
 	Sounds
+	Time
 	Tracker_prefs
 	User
 )
@@ -40,6 +41,7 @@ set(SYSTEM_PREFERENCES
 	#ScreenSaver
 	Shortcuts
 	Sounds
+	Time
 	Tracker
 	User
 )

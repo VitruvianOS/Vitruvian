@@ -152,6 +152,9 @@ board_config() {
                 console)        printf 'ttyS2,115200' ;;
                 rootdev)        printf '/dev/mmcblk1p2' ;;
                 boot_dtb)       printf 'ti/k3/am625-beagleplay.dtb' ;;
+                # AM62x SD BootROM FS mode loads tiboot3/tispl/u-boot.img
+                # as FAT files on the boot partition, not raw sectors.
+                uboot_fat_files) printf '1' ;;
                 dtb_files)      printf 'ti/k3/am625-beagleplay.dtb' ;;
             esac
             ;;

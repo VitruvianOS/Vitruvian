@@ -48,6 +48,53 @@ _iso_cleanup() {
     sudo umount -l "$_chroot_dir/tmp/"  2>/dev/null || true
 }
 
+# Set a GPT partition's type GUID (parted can't). GUIDs are mixed-endian;
+# both headers' CRCs are rewritten so the table stays valid.
+_gpt_set_type_guid() {
+    _gpt_disk="$1"
+    _gpt_num="$2"
+    _gpt_guid="$3"
+    require_cmd python3 "python3"
+    python3 - "$_gpt_disk" "$_gpt_num" "$_gpt_guid" <<'PYEOF'
+import struct, sys, uuid, zlib
+disk, num, guid = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+SECTOR = 512
+with open(disk, "rb") as f:
+    f.seek(SECTOR)  # primary header
+    hdr = bytearray(f.read(SECTOR))
+    if hdr[:8] != b"EFI PART":
+        sys.exit("no GPT header at LBA 1")
+    entries_lba = struct.unpack_from("<Q", hdr, 72)[0]
+    count = struct.unpack_from("<I", hdr, 80)[0]
+    entry_size = struct.unpack_from("<I", hdr, 84)[0]
+    if num < 1 or num > count:
+        sys.exit("partition number out of range")
+    f.seek(entries_lba * SECTOR)
+    entries = bytearray(f.read(count * entry_size))
+off = (num - 1) * entry_size
+entries[off:off + 16] = uuid.UUID(guid).bytes_le
+crc = zlib.crc32(bytes(entries)) & 0xffffffff
+with open(disk, "r+b") as f:
+    f.seek(entries_lba * SECTOR)
+    f.write(entries)
+    # primary header at LBA 1; backup header is last LBA
+    f.seek(0, 2)
+    last_lba = f.tell() // SECTOR - 1
+    for hdr_lba in (1, last_lba):
+        f.seek(hdr_lba * SECTOR)
+        h = bytearray(f.read(SECTOR))
+        if h[:8] != b"EFI PART":
+            continue
+        struct.pack_into("<I", h, 88, crc)
+        h[16:20] = b"\x00\x00\x00\x00"
+        hcrc = zlib.crc32(bytes(h[:92])) & 0xffffffff
+        struct.pack_into("<I", h, 16, hcrc)
+        f.seek(hdr_lba * SECTOR)
+        f.write(h)
+print(f"set part {num} type {guid} (entries CRC {crc:#x})")
+PYEOF
+}
+
 # EFI raw image assembled without loop devices or partition mounts, so the
 # build runs in sandboxed/container environments: the root tree is staged as
 # a plain directory and written in one shot with mke2fs -d, the ESP with
@@ -1131,20 +1178,45 @@ create_uboot_board() {
     # partition start overlapped the bootloader area with the FAT filesystem.
     _part_start_mib=4
     [ "$(board_config "$_board" bootloader)" = "u-boot" ] && _part_start_mib=16
-    sudo parted --script "$_loop" mkpart primary fat32 "${_part_start_mib}MiB" "$_boot_size"MiB
-    if [ "$_part_fmt" = "gpt" ]; then
-        sudo parted --script "$_loop" set 1 esp on
+    # Typed bootloader partitions (JH7110 finds SPL by type GUID) take p1/p2;
+    # boot and root shift to p3/p4.
+    _spl_type_guid="$(board_config "$_board" spl_type_guid 2>/dev/null)"
+    _uboot_type_guid="$(board_config "$_board" uboot_type_guid 2>/dev/null)"
+    _boot_partnum=1
+    _root_partnum=2
+    if [ -n "$_spl_type_guid" ] && [ -n "$_uboot_type_guid" ] && [ "$_part_fmt" = "gpt" ]; then
+        _spl_start_mib=$(( _spl_off / 2048 ))
+        _uboot_start_mib=$(( _uboot_off / 2048 ))
+        [ "$_uboot_start_mib" -gt "$_spl_start_mib" ] || die "uboot_offset_sectors must follow spl_offset_sectors"
+        [ "$_uboot_start_mib" -lt "$_part_start_mib" ] || die "uboot partition would start at/after the boot partition"
+        sudo parted --script "$_loop" mkpart primary "${_spl_start_mib}MiB" "${_uboot_start_mib}MiB"
+        sudo parted --script "$_loop" mkpart primary "${_uboot_start_mib}MiB" "${_part_start_mib}MiB"
+        _boot_partnum=3
+        _root_partnum=4
+        sudo parted --script "$_loop" mkpart primary fat32 "${_part_start_mib}MiB" "${_boot_size}MiB"
+        sudo parted --script "$_loop" set 3 esp on
+        sudo parted --script "$_loop" mkpart primary "$_root_fs" "${_boot_size}MiB" 100%
     else
-        sudo parted --script "$_loop" set 1 boot on
+        sudo parted --script "$_loop" mkpart primary fat32 "${_part_start_mib}MiB" "${_boot_size}MiB"
+        if [ "$_part_fmt" = "gpt" ]; then
+            sudo parted --script "$_loop" set 1 esp on
+        else
+            sudo parted --script "$_loop" set 1 boot on
+        fi
+        sudo parted --script "$_loop" mkpart primary "$_root_fs" "${_boot_size}MiB" 100%
     fi
-    sudo parted --script "$_loop" mkpart primary "$_root_fs" "$_boot_size"MiB 100%
     sudo partprobe "$_loop"
     sudo udevadm settle
 
-    _boot_part="${_loop}p1"
-    _root_part="${_loop}p2"
-    _boot_partnum=1
-    _root_partnum=2
+    if [ -n "$_spl_type_guid" ] && [ -n "$_uboot_type_guid" ] && [ "$_part_fmt" = "gpt" ]; then
+        _gpt_set_type_guid "$_loop" 1 "$_spl_type_guid" || die "failed to set SPL partition type GUID"
+        _gpt_set_type_guid "$_loop" 2 "$_uboot_type_guid" || die "failed to set U-Boot partition type GUID"
+        log_info "GPT: partition 1 type $_spl_type_guid (SPL), partition 2 type $_uboot_type_guid (U-Boot)"
+    fi
+
+    _boot_part="${_loop}p${_boot_partnum}"
+    _root_part="${_loop}p${_root_partnum}"
+    log_info "boot partition: $_boot_part (p${_boot_partnum}), root: $_root_part (p${_root_partnum})"
 
     sudo mkfs.vfat -F32 "$_boot_part"
     case "$_root_fs" in

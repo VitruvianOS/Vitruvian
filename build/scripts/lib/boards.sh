@@ -194,7 +194,8 @@ board_config() {
         amlogic)
             case "$_field" in
                 arch)           printf 'arm64' ;;
-                label)          printf 'Amlogic (G12B/SM1/A311D)' ;;
+                # The FIP is built for ODROID-N2 only.
+                label)          printf 'Amlogic (ODROID-N2)' ;;
                 # The FIP is written from sector 1, over where GPT lives;
                 # Amlogic SD images keep an MBR.
                 partition_fmt)  printf 'msdos' ;;
@@ -218,9 +219,9 @@ board_config() {
                 # fip_assemble supplies the blob.
                 extra_pkgs)     printf '' ;;
                 fip_assemble)   printf '1' ;;
-                # G12B/SM1 only; the A1 (ad401) DTB can't boot from this FIP.
                 boot_dtb)       printf 'amlogic/meson-g12b-odroid-n2.dtb' ;;
-                dtb_files)      printf 'amlogic/meson-g12b-odroid-n2.dtb amlogic/meson-sm1-khadas-vim3l.dtb' ;;
+                # Only the N2 DTB: VIM3L (SM1) and A1 need other FIPs.
+                dtb_files)      printf 'amlogic/meson-g12b-odroid-n2.dtb' ;;
             esac
             ;;
         visionfive2)

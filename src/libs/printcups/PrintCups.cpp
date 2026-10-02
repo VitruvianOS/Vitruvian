@@ -508,10 +508,10 @@ printcups_list_jobs(const char* queue, printcups_job* jobs, int maxJobs)
 
 
 status_t
-printcups_add_printer_everywhere(const char* name, const char* uri)
+printcups_add_printer(const char* name, const char* uri, const char* model)
 {
 	CupsBridge bridge;
-	return bridge.AddPrinterEverywhere(name, uri);
+	return bridge.AddPrinter(name, uri, model);
 }
 
 
@@ -520,6 +520,95 @@ printcups_remove_printer(const char* name)
 {
 	CupsBridge bridge;
 	return bridge.RemovePrinter(name);
+}
+
+
+status_t
+printcups_rename_printer(const char* name, const char* description,
+	const char* location)
+{
+	CupsBridge bridge;
+	return bridge.RenamePrinter(name, description, location);
+}
+
+
+status_t
+printcups_set_accepting(const char* name, bool accepting)
+{
+	CupsBridge bridge;
+	return bridge.SetAccepting(name, accepting);
+}
+
+
+status_t
+printcups_set_options(const char* name, const printcups_options* options)
+{
+	CupsBridge bridge;
+	return bridge.SetOptions(name, options);
+}
+
+
+status_t
+printcups_print_test_page(const char* name)
+{
+	CupsBridge bridge;
+	return bridge.PrintTestPage(name);
+}
+
+
+status_t
+printcups_hold_job(const char* queue, int32 jobId)
+{
+	CupsBridge bridge;
+	return bridge.HoldJob(queue, jobId);
+}
+
+
+status_t
+printcups_release_job(const char* queue, int32 jobId)
+{
+	CupsBridge bridge;
+	return bridge.ReleaseJob(queue, jobId);
+}
+
+
+status_t
+printcups_purge_jobs(const char* queue)
+{
+	CupsBridge bridge;
+	return bridge.PurgeJobs(queue);
+}
+
+
+int
+printcups_discover_devices(printcups_device* devices, int maxDevices)
+{
+	CupsBridge bridge;
+	return bridge.ListDevices(devices, maxDevices);
+}
+
+
+int
+printcups_list_ppds(const char* uri, printcups_ppd* ppds, int maxPpds)
+{
+	CupsBridge bridge;
+	return bridge.ListPPDs(uri, ppds, maxPpds);
+}
+
+
+int
+printcups_list_choices(const char* queue, const char* option,
+	printcups_option_choice* choices, int maxChoices)
+{
+	CupsBridge bridge;
+	return bridge.ListChoices(queue, option, choices, maxChoices);
+}
+
+
+const char*
+printcups_last_error()
+{
+	return printcups_cups_last_error();
 }
 
 

@@ -16,9 +16,12 @@ struct printcups_queue_info {
 	char	name[256];
 	char	uri[512];
 	char	make_model[256];
+	char	location[256];
 	bool	is_default;
 	bool	is_color;
 	bool	is_everywhere;
+	bool	accepting;
+	int32	state;				// IPP printer-state (idle/processing/stopped)
 	int32	xres;
 	int32	yres;
 	char	media[64];			// e.g. "iso_a4_210x297mm"
@@ -40,6 +43,36 @@ struct printcups_job {
 								// 4 canceled, 5 aborted, 6 completed
 	int32	size;
 	int32	impressions;			// pages
+};
+
+
+struct printcups_device {
+	char	uri[512];
+	char	make_model[256];
+	char	info[256];
+	char	location[256];
+	char	device_class[32];	// "local", "network", "usb"
+	bool	everywhere;			// probed IPP Everywhere support
+};
+
+
+struct printcups_ppd {
+	char	name[256];			// ppd-name used by cupsd
+	char	make_model[256];
+};
+
+
+struct printcups_option_choice {
+	char	value[64];
+	char	text[128];
+};
+
+
+struct printcups_options {
+	char	media[64];			// IPP media name; empty leaves as-is
+	char	sides[32];			// one-sided / two-sided-long-edge / ...
+	char	color_mode[32];		// color / monochrome; empty leaves as-is
+	int32	quality;			// 0 leaves as-is; 1 draft, 2 normal, 3 best
 };
 
 
@@ -78,16 +111,53 @@ status_t
 // BPrintJob::PrinterType() helper.
 int32	printcups_printer_type(const char* queue);
 
-// Preflet helpers.
+// Preflet helpers. All of these can block on cupsd; call off the window
+// thread. On failure printcups_last_error() holds cupsd's text.
 status_t	printcups_set_default(const char* queue);
 status_t	printcups_cancel_job(const char* queue, int32 jobId);
 int			printcups_list_jobs(const char* queue, printcups_job* jobs,
 					int maxJobs);
-// Driverless IPP Everywhere queue creation (lpadmin -m everywhere) and
-// removal. Both need lpadmin group membership: B_PERMISSION_DENIED.
-status_t	printcups_add_printer_everywhere(const char* name,
-					const char* uri);
+
+// model: "everywhere" for driverless IPP Everywhere, otherwise a PPD name
+// from printcups_list_ppds. Needs lpadmin group: B_PERMISSION_DENIED.
+status_t	printcups_add_printer(const char* name, const char* uri,
+					const char* model);
 status_t	printcups_remove_printer(const char* name);
+
+// description is printer-info; location is printer-location. Empty keeps
+// the current value.
+status_t	printcups_rename_printer(const char* name, const char* description,
+					const char* location);
+
+// Accept/reject jobs (printer-is-accepting-jobs).
+status_t	printcups_set_accepting(const char* name, bool accepting);
+
+// Save media/sides/colour/quality as the queue defaults via cupsSetDests.
+status_t	printcups_set_options(const char* name,
+					const printcups_options* options);
+
+status_t	printcups_print_test_page(const char* name);
+
+status_t	printcups_hold_job(const char* queue, int32 jobId);
+status_t	printcups_release_job(const char* queue, int32 jobId);
+status_t	printcups_purge_jobs(const char* queue);
+
+// Network (DNS-SD) and USB printers found by cupsd's backends.
+// Returns count written, or -1 on error.
+int			printcups_discover_devices(printcups_device* devices,
+					int maxDevices);
+
+// Drivers cupsd knows (lpinfo -m equivalent). uri may be NULL to list all.
+int			printcups_list_ppds(const char* uri, printcups_ppd* ppds,
+					int maxPpds);
+
+// Supported values for one option on a queue ("media", "sides",
+// "print-color-mode"). Returns count written, or -1 on error.
+int			printcups_list_choices(const char* queue, const char* option,
+					printcups_option_choice* choices, int maxChoices);
+
+// cupsd's last error text for a failed call; empty string if none.
+const char*	printcups_last_error();
 
 }	// extern "C"
 

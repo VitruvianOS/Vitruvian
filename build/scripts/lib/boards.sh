@@ -239,6 +239,13 @@ board_config() {
                 uboot_blob)     printf 'u-boot.itb' ;;
                 spl_offset_sectors) printf '4096' ;;
                 uboot_offset_sectors) printf '16384' ;;
+                # SD boot finds SPL by partition type and u-boot.itb in p2
+                # (u-boot-starfive README); QSPI boot ignores them.
+                spl_type_guid)  printf '2E54B353-1271-4842-806F-E436D6AF6985' ;;
+                uboot_type_guid) printf 'BC13C2FF-59E6-4262-A352-B275FD6F7172' ;;
+                # UART0 at 115200, per the DTB and Debian U-Boot.
+                console)        printf 'ttyS0,115200' ;;
+                boot_dtb)       printf 'starfive/jh7110-starfive-visionfive-2-v1.3b.dtb' ;;
                 extra_pkgs)     printf 'u-boot-starfive' ;;
                 dtb_files)      printf 'starfive/jh7110-starfive-visionfive-2-v1.3b.dtb' ;;
             esac

@@ -23,9 +23,17 @@
 #include <ScrollView.h>
 #include <StringItem.h>
 #include <StringView.h>
+#include <TextControl.h>
+#include <TextView.h>
+#include <Window.h>
 
 #include <algorithm>
+#include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 #include <vector>
 
 
@@ -52,6 +60,140 @@ static const uint32 kMsgSavedActionResult = 'iSar';
 static const uint32 kMsgProfilesLoaded = 'iPrl';
 static const uint32 kMsgSavedReordered = 'iSro';
 static const uint32 kMsgSavedItemDragged = 'iSid';
+
+static const uint32 kMsgStartHotspot = 'iHst';
+static const uint32 kMsgStopHotspot = 'iHsp';
+static const uint32 kMsgHotspotStateReply = 'iHsr';
+static const uint32 kMsgHotspotActionResult = 'iHar';
+static const uint32 kMsgHotspotSetupCommit = 'iHsc';
+static const uint32 kMsgHotspotFieldModified = 'iHfm';
+
+
+// Modal collector for hotspot name and password. Start stays disabled
+// until the name is non-empty and the password reaches the WPA2 minimum.
+class HotspotSetupWindow : public BWindow {
+public:
+	HotspotSetupWindow(const BMessenger& target, const char* defaultName,
+		const char* defaultPassword, bool willDisconnect)
+		:
+		BWindow(BRect(0, 0, 360, willDisconnect ? 280 : 220),
+			B_TRANSLATE("Turn On Wi-Fi Hotspot"), B_MODAL_WINDOW_LOOK,
+			B_MODAL_APP_WINDOW_FEEL,
+			B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_AUTO_UPDATE_SIZE_LIMITS),
+		fTarget(target)
+	{
+		fNameControl = new BTextControl(B_TRANSLATE("Network name:"),
+			defaultName, new BMessage(kMsgHotspotFieldModified));
+		fNameControl->TextView()->SetExplicitMinSize(BSize(200,
+			B_SIZE_UNSET));
+
+		fPasswordControl = new BTextControl(B_TRANSLATE("Password:"),
+			defaultPassword, new BMessage(kMsgHotspotFieldModified));
+		fPasswordControl->TextView()->SetExplicitMinSize(BSize(200,
+			B_SIZE_UNSET));
+
+		BStringView* hint = new BStringView(NULL,
+			B_TRANSLATE("At least 8 characters."));
+		hint->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+			B_DARKEN_3_TINT));
+
+		BButton* cancelButton = new BButton(B_TRANSLATE("Cancel"),
+			new BMessage(B_QUIT_REQUESTED));
+		fStartButton = new BButton(B_TRANSLATE("Start"),
+			new BMessage(kMsgHotspotSetupCommit));
+		fStartButton->MakeDefault(true);
+
+		BLayoutBuilder::Group<> builder(this, B_VERTICAL,
+			B_USE_DEFAULT_SPACING);
+		builder.SetInsets(B_USE_WINDOW_INSETS)
+			.Add(fNameControl)
+			.Add(fPasswordControl)
+			.Add(hint);
+
+		if (willDisconnect) {
+			BString warn(B_TRANSLATE("Starting the hotspot disconnects "
+				"this Wi-Fi adapter from its current network."));
+			builder.Add(new BStringView(NULL, warn.String()));
+		}
+
+		builder
+			.AddGroup(B_HORIZONTAL)
+				.AddGlue()
+				.Add(cancelButton)
+				.Add(fStartButton)
+			.End();
+
+		_UpdateStartButton();
+		CenterOnScreen();
+	}
+
+	virtual void MessageReceived(BMessage* message)
+	{
+		if (message->what == kMsgHotspotFieldModified) {
+			_UpdateStartButton();
+			return;
+		}
+		if (message->what == kMsgHotspotSetupCommit) {
+			BString name(fNameControl->Text());
+			BString password(fPasswordControl->Text());
+			name.Trim();
+			password.Trim();
+			if (name.IsEmpty() || password.Length() < 8)
+				return;
+			BMessage commit(kMsgHotspotSetupCommit);
+			commit.AddString("ssid", name);
+			commit.AddString("password", password);
+			fTarget.SendMessage(&commit);
+			Quit();
+			return;
+		}
+		BWindow::MessageReceived(message);
+	}
+
+private:
+	void _UpdateStartButton()
+	{
+		BString name(fNameControl->Text());
+		BString password(fPasswordControl->Text());
+		name.Trim();
+		password.Trim();
+		fStartButton->SetEnabled(!name.IsEmpty() && password.Length() >= 8);
+	}
+
+	BMessenger		fTarget;
+	BTextControl*	fNameControl;
+	BTextControl*	fPasswordControl;
+	BButton*		fStartButton;
+};
+
+
+// WPA2-PSK keys must be 8..63 characters; this default is well above the
+// minimum and readable enough to retype onto another device.
+static BString
+_GenerateHotspotPassword()
+{
+	static const char kAlphabet[]
+		= "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+	BString password;
+	unsigned char bytes[12];
+	int fd = open("/dev/urandom", O_RDONLY);
+	if (fd >= 0) {
+		ssize_t n = read(fd, bytes, sizeof(bytes));
+		close(fd);
+		if (n != (ssize_t)sizeof(bytes)) {
+			srand((unsigned)time(NULL) ^ (unsigned)getpid());
+			for (size_t i = 0; i < sizeof(bytes); i++)
+				bytes[i] = (unsigned char)(rand() & 0xff);
+		}
+	} else {
+		srand((unsigned)time(NULL) ^ (unsigned)getpid());
+		for (size_t i = 0; i < sizeof(bytes); i++)
+			bytes[i] = (unsigned char)(rand() & 0xff);
+	}
+	for (size_t i = 0; i < sizeof(bytes); i++)
+		password << kAlphabet[bytes[i] % (sizeof(kAlphabet) - 1)];
+	return password;
+}
 
 
 static BString
@@ -419,7 +561,9 @@ InterfaceDetailView::InterfaceDetailView()
 	fSavedMoveUpButton(NULL),
 	fSavedMoveDownButton(NULL),
 	fVPNConnectButton(NULL),
-	fVPNDisconnectButton(NULL)
+	fVPNDisconnectButton(NULL),
+	fHotspotStartButton(NULL),
+	fHotspotStopButton(NULL)
 {
 	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 	fEmptyMessage = B_TRANSLATE("Select a device");
@@ -671,6 +815,66 @@ InterfaceDetailView::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgStartHotspot:
+		{
+			bool willDisconnect = false;
+			fHotspotState.FindBool(kNMFieldHotspotWillDisconnect,
+				&willDisconnect);
+			BString defaultName("V Hotspot");
+			// Reuse the saved profile password so devices that already
+			// joined keep working; mint one only when no profile exists.
+			BString defaultPassword;
+			if (fHotspotSettings.ProfileUUID().IsEmpty())
+				defaultPassword = _GenerateHotspotPassword();
+			else
+				fHotspotState.FindString(kNMFieldHotspotPassword,
+					&defaultPassword);
+			HotspotSetupWindow* window = new HotspotSetupWindow(
+				BMessenger(this), defaultName.String(),
+				defaultPassword.String(), willDisconnect);
+			window->Show();
+			break;
+		}
+
+		case kMsgHotspotSetupCommit:
+		{
+			BString ssid, password;
+			message->FindString("ssid", &ssid);
+			message->FindString("password", &password);
+			_StartHotspot(ssid, password);
+			break;
+		}
+
+		case kMsgStopHotspot:
+			_StopHotspot();
+			break;
+
+		case kMsgHotspotStateReply:
+		{
+			fHotspotState = *message;
+			// Avoid tearing down an unsaved StaticIPView; the next device
+			// view rebuild will pick the state up.
+			if (fMode == MODE_DEVICE && !IsRevertable())
+				_Rebuild();
+			break;
+		}
+
+		case kMsgHotspotActionResult:
+		{
+			int32 status = B_ERROR;
+			message->FindInt32("status", &status);
+			if (status != B_OK)
+				_ShowHotspotError(message);
+			// Save a newly minted profile UUID so the next start reuses it.
+			BString uuid;
+			if (message->FindString(kNMFieldHotspotUUID, &uuid) == B_OK
+				&& !uuid.IsEmpty()) {
+				fHotspotSettings.SetProfileUUID(uuid);
+			}
+			_RequestHotspotState();
+			break;
+		}
+
 		default:
 			BView::MessageReceived(message);
 			break;
@@ -740,6 +944,8 @@ InterfaceDetailView::_Rebuild()
 	fSavedMoveDownButton = NULL;
 	fVPNConnectButton = NULL;
 	fVPNDisconnectButton = NULL;
+	fHotspotStartButton = NULL;
+	fHotspotStopButton = NULL;
 
 	// Replace the layout wholesale rather than reusing it: deleting the child
 	// views leaves the old layout holding items that are not views (glue,
@@ -952,6 +1158,8 @@ InterfaceDetailView::_RebuildDeviceView()
 	}
 
 	if (isWiFi) {
+		_AddHotspotSection();
+
 		builder.Add(new BStringView(NULL,
 			B_TRANSLATE("Available networks:")));
 
@@ -1038,6 +1246,7 @@ InterfaceDetailView::_RebuildDeviceView()
 
 		_UpdateSavedButtons();
 		_RequestSavedNetworks();
+		_RequestHotspotState();
 	}
 
 	builder.AddGlue();
@@ -1235,6 +1444,142 @@ InterfaceDetailView::_RebuildVPNView()
 			.AddGlue()
 		.End()
 		.AddGlue();
+}
+
+
+void
+InterfaceDetailView::_AddHotspotSection()
+{
+	BLayoutBuilder::Group<> builder((BGroupLayout*)GetLayout());
+	builder.Add(new BStringView(NULL, B_TRANSLATE("Wi-Fi hotspot:")));
+
+	bool active = false;
+	bool canStart = true;
+	fHotspotState.FindBool(kNMFieldHotspotActive, &active);
+	fHotspotState.FindBool(kNMFieldHotspotCanStart, &canStart);
+
+	if (active) {
+		BString ssid, password;
+		fHotspotState.FindString(kNMFieldHotspotSSID, &ssid);
+		fHotspotState.FindString(kNMFieldHotspotPassword, &password);
+
+		BGridView* grid = new BGridView(B_USE_HALF_ITEM_SPACING,
+			B_USE_HALF_ITEM_SPACING);
+		BGridLayout* layout = grid->GridLayout();
+		layout->AddView(new BStringView(NULL, B_TRANSLATE("Status:")), 0, 0);
+		BStringView* statusValue = new BStringView(NULL,
+			B_TRANSLATE("Active"));
+		statusValue->SetFont(be_bold_font);
+		layout->AddView(statusValue, 1, 0);
+		layout->AddView(new BStringView(NULL, B_TRANSLATE("Name:")), 0, 1);
+		BStringView* ssidValue = new BStringView(NULL, ssid.String());
+		ssidValue->SetFont(be_bold_font);
+		layout->AddView(ssidValue, 1, 1);
+		layout->AddView(new BStringView(NULL, B_TRANSLATE("Password:")),
+			0, 2);
+		BStringView* passwordValue = new BStringView(NULL,
+			password.String());
+		passwordValue->SetFont(be_bold_font);
+		layout->AddView(passwordValue, 1, 2);
+
+		fHotspotStopButton = new BButton("stopHotspot",
+			B_TRANSLATE("Stop"), new BMessage(kMsgStopHotspot));
+		fHotspotStopButton->SetTarget(this);
+
+		builder.Add(grid)
+			.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+				.Add(fHotspotStopButton)
+				.AddGlue()
+			.End();
+	} else {
+		fHotspotStartButton = new BButton("startHotspot",
+			B_TRANSLATE("Turn On Wi-Fi Hotspot"),
+			new BMessage(kMsgStartHotspot));
+		fHotspotStartButton->SetTarget(this);
+		fHotspotStartButton->SetEnabled(canStart);
+		builder.Add(fHotspotStartButton);
+	}
+}
+
+
+void
+InterfaceDetailView::_RequestHotspotState()
+{
+	BString devicePath;
+	fDeviceInfo.FindString(kNMFieldPath, &devicePath);
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL || devicePath.IsEmpty())
+		return;
+	backend->GetHotspotStateAsync(devicePath.String(),
+		fHotspotSettings.ProfileUUID().String(), BMessenger(this),
+		kMsgHotspotStateReply);
+}
+
+
+void
+InterfaceDetailView::_ShowHotspotError(BMessage* message)
+{
+	int32 status = B_ERROR;
+	message->FindInt32("status", &status);
+	BString reason;
+	message->FindString("reason", &reason);
+	BString text(B_TRANSLATE("Could not update the hotspot."));
+	if (status == B_NOT_SUPPORTED)
+		text = B_TRANSLATE("This Wi-Fi adapter cannot start a hotspot.");
+	else if (status == B_BAD_VALUE)
+		text = B_TRANSLATE("Hotspot name and password are required; "
+			"password must be at least 8 characters.");
+	else if (!reason.IsEmpty())
+		text << "\n" << reason;
+	BAlert* alert = new BAlert(B_TRANSLATE("Hotspot"), text.String(),
+		B_TRANSLATE("OK"));
+	alert->Go(NULL);
+}
+
+
+void
+InterfaceDetailView::_StartHotspot(const BString& ssid, const BString& password)
+{
+	BString devicePath;
+	fDeviceInfo.FindString(kNMFieldPath, &devicePath);
+	if (devicePath.IsEmpty() || ssid.IsEmpty() || password.Length() < 8)
+		return;
+
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return;
+
+	status_t status = backend->StartHotspotAsync(devicePath.String(),
+		fHotspotSettings.ProfileUUID().String(), ssid.String(),
+		password.String(), BMessenger(this), kMsgHotspotActionResult);
+	if (status != B_OK) {
+		BMessage failure(kMsgHotspotActionResult);
+		failure.AddInt32("status", (int32)status);
+		failure.AddString("reason", strerror(status));
+		BMessenger(this).SendMessage(&failure);
+	}
+}
+
+
+void
+InterfaceDetailView::_StopHotspot()
+{
+	if (fHotspotSettings.ProfileUUID().IsEmpty())
+		return;
+
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return;
+
+	status_t status = backend->StopHotspotAsync(
+		fHotspotSettings.ProfileUUID().String(), BMessenger(this),
+		kMsgHotspotActionResult);
+	if (status != B_OK) {
+		BMessage failure(kMsgHotspotActionResult);
+		failure.AddInt32("status", (int32)status);
+		failure.AddString("reason", strerror(status));
+		BMessenger(this).SendMessage(&failure);
+	}
 }
 
 

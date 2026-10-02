@@ -72,6 +72,20 @@ static const char* const kNMFieldProfileID = "id";
 static const char* const kNMFieldProfilePath = "path";
 static const char* const kNMFieldProfileActive = "active";
 
+// NMDeviceWifiCapabilities: whether AP mode is possible.
+static const char* const kNMFieldWiFiCaps = "wifi_caps";
+
+// Hotspot (WiFi AP mode) reply fields.
+static const char* const kNMFieldHotspotActive = "hotspot_active";
+static const char* const kNMFieldHotspotUUID = "hotspot_uuid";
+static const char* const kNMFieldHotspotSSID = "hotspot_ssid";
+static const char* const kNMFieldHotspotPassword = "hotspot_password";
+static const char* const kNMFieldHotspotConnectionPath
+	= "hotspot_connection_path";
+static const char* const kNMFieldHotspotWillDisconnect
+	= "hotspot_will_disconnect";
+static const char* const kNMFieldHotspotCanStart = "hotspot_can_start";
+
 typedef unsigned int guint;
 typedef unsigned long gulong;
 typedef int gboolean;
@@ -242,6 +256,22 @@ public:
 	// immediately; on failure, "reason".
 	status_t CreateWiredConnectionProfileAsync(const char* devicePath,
 		const char* name, const BMessenger& replyTo, uint32 replyWhat);
+
+	// Wi-Fi hotspot: one saved WPA2 profile keyed by profileUUID, reused
+	// on every start. Reply carries the kNMFieldHotspot* fields or "reason".
+	status_t StartHotspotAsync(const char* devicePath, const char* profileUUID,
+		const char* ssid, const char* password, const BMessenger& replyTo,
+		uint32 replyWhat);
+
+	// Deactivates the hotspot profile without deleting it. Async; reply
+	// carries "status" and, on failure, "reason".
+	status_t StopHotspotAsync(const char* profileUUID,
+		const BMessenger& replyTo, uint32 replyWhat);
+
+	// Hotspot state for the preflet; the password is filled whenever the
+	// saved profile exists, so the setup dialog can default to it.
+	status_t GetHotspotStateAsync(const char* devicePath,
+		const char* profileUUID, const BMessenger& replyTo, uint32 replyWhat);
 
 	// VPN operations
 	status_t GetVPNConnections(BMessage* outVPNs);

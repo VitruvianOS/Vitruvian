@@ -10,6 +10,8 @@
 #include <String.h>
 #include <View.h>
 
+#include "NetworkHotspotSettings.h"
+
 
 class BGridLayout;
 class BListView;
@@ -46,6 +48,12 @@ private:
 			void			_Rebuild();
 			void			_RebuildDeviceView();
 			void			_RebuildVPNView();
+			void			_AddHotspotSection();
+			void			_RequestHotspotState();
+			void			_ShowHotspotError(BMessage* message);
+			void			_StartHotspot(const BString& ssid,
+							const BString& password);
+			void			_StopHotspot();
 			void			_UpdateWiFiButtons();
 			void			_RequestSavedNetworks();
 			void			_RebuildSavedList();
@@ -82,6 +90,12 @@ private:
 
 			BButton*		fVPNConnectButton;
 			BButton*		fVPNDisconnectButton;
+
+			// Hotspot (WiFi AP mode) controls and last known backend state.
+			NetworkHotspotSettings	fHotspotSettings;
+			BMessage		fHotspotState;
+			BButton*		fHotspotStartButton;
+			BButton*		fHotspotStopButton;
 };
 
 

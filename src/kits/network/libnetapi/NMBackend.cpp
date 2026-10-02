@@ -28,6 +28,7 @@
 #include <nm-remote-connection.h>
 #include <nm-setting-connection.h>
 #include <nm-setting-wireless.h>
+#include <nm-setting-wireless-security.h>
 #include <nm-setting-wired.h>
 #include <nm-setting-vpn.h>
 #include <nm-utils.h>
@@ -646,6 +647,11 @@ _FillDeviceInfoMessage(NMDevice* device, BMessage* outInfo)
 	outInfo->AddString(kNMFieldDriver, driver != NULL ? driver : "");
 
 	outInfo->AddBool(kNMFieldManaged, nm_device_get_managed(device) != FALSE);
+
+	if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
+		guint32 caps = nm_device_wifi_get_capabilities(NM_DEVICE_WIFI(device));
+		outInfo->AddUInt32(kNMFieldWiFiCaps, (uint32)caps);
+	}
 
 	_FillIP4ConfigFields(device, outInfo);
 }
@@ -2871,7 +2877,7 @@ _RunCreateWiredConnectionProfile(gpointer data)
 		reply.AddInt32("status", (int32)B_NOT_SUPPORTED);
 		reply.AddString("reason",
 			"profile creation is only supported for Ethernet devices; "
-			"join a WiFi network to create a wireless profile");
+			"join a Wi-Fi network to create a wireless profile");
 		job->replyTo.SendMessage(&reply);
 		delete job;
 		return G_SOURCE_REMOVE;
@@ -2952,6 +2958,547 @@ NMBackend::CreateWiredConnectionProfileAsync(const char* devicePath,
 
 	g_main_context_invoke((GMainContext*)fMainContext,
 		_RunCreateWiredConnectionProfile, job);
+	return B_OK;
+}
+
+
+// #pragma mark - Hotspot (AP mode)
+
+
+// Shared IPv6 method needs NetworkManager 1.42+; older daemons reject it.
+static bool
+_NMIPv6SharedSupported(NMClient* client)
+{
+	const char* version = client != NULL ? nm_client_get_version(client) : NULL;
+	if (version == NULL)
+		return false;
+	int major = 0;
+	int minor = 0;
+	if (sscanf(version, "%d.%d", &major, &minor) != 2)
+		return false;
+	return major > 1 || (major == 1 && minor >= 42);
+}
+
+
+// Writes the fixed hotspot profile shape onto connection. Always WPA2-PSK
+// with rsn/ccmp; never open. profileUUID is the stable settings key.
+static void
+_ApplyHotspotSettings(NMConnection* connection, NMClient* client,
+	const char* profileUUID, const char* ssid, const char* password)
+{
+	NMSettingConnection* connSetting
+		= (NMSettingConnection*)nm_connection_get_setting_connection(
+			connection);
+	if (connSetting == NULL) {
+		connSetting = (NMSettingConnection*)nm_setting_connection_new();
+		nm_connection_add_setting(connection, NM_SETTING(connSetting));
+	}
+	g_object_set(connSetting,
+		NM_SETTING_CONNECTION_ID, "Hotspot",
+		NM_SETTING_CONNECTION_UUID, profileUUID,
+		NM_SETTING_CONNECTION_TYPE, NM_SETTING_WIRELESS_SETTING_NAME,
+		NM_SETTING_CONNECTION_AUTOCONNECT, (gboolean)FALSE,
+		NULL);
+
+	NMSettingWireless* wirelessSetting
+		= (NMSettingWireless*)nm_connection_get_setting_wireless(connection);
+	if (wirelessSetting == NULL) {
+		wirelessSetting = (NMSettingWireless*)nm_setting_wireless_new();
+		nm_connection_add_setting(connection, NM_SETTING(wirelessSetting));
+	}
+	GBytes* ssidBytes = g_bytes_new(ssid, strlen(ssid));
+	g_object_set(wirelessSetting,
+		NM_SETTING_WIRELESS_SSID, ssidBytes,
+		NM_SETTING_WIRELESS_MODE, NM_SETTING_WIRELESS_MODE_AP,
+		NULL);
+	g_bytes_unref(ssidBytes);
+
+	NMSettingWirelessSecurity* secSetting
+		= (NMSettingWirelessSecurity*)
+			nm_connection_get_setting_wireless_security(connection);
+	if (secSetting == NULL) {
+		secSetting = (NMSettingWirelessSecurity*)
+			nm_setting_wireless_security_new();
+		nm_connection_add_setting(connection, NM_SETTING(secSetting));
+	}
+	g_object_set(secSetting,
+		NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-psk",
+		NM_SETTING_WIRELESS_SECURITY_PSK, password,
+		NULL);
+	nm_setting_wireless_security_clear_protos(secSetting);
+	nm_setting_wireless_security_add_proto(secSetting, "rsn");
+	nm_setting_wireless_security_clear_pairwise(secSetting);
+	nm_setting_wireless_security_add_pairwise(secSetting, "ccmp");
+	nm_setting_wireless_security_clear_groups(secSetting);
+	nm_setting_wireless_security_add_group(secSetting, "ccmp");
+
+	NMSettingIPConfig* ip4Setting
+		= (NMSettingIPConfig*)nm_connection_get_setting_ip4_config(
+			connection);
+	if (ip4Setting == NULL) {
+		ip4Setting = (NMSettingIPConfig*)nm_setting_ip4_config_new();
+		nm_connection_add_setting(connection, NM_SETTING(ip4Setting));
+	}
+	g_object_set(ip4Setting, NM_SETTING_IP_CONFIG_METHOD,
+		NM_SETTING_IP4_CONFIG_METHOD_SHARED, NULL);
+
+	NMSettingIPConfig* ip6Setting
+		= (NMSettingIPConfig*)nm_connection_get_setting_ip6_config(
+			connection);
+	if (ip6Setting == NULL) {
+		ip6Setting = (NMSettingIPConfig*)nm_setting_ip6_config_new();
+		nm_connection_add_setting(connection, NM_SETTING(ip6Setting));
+	}
+	const char* ip6Method = _NMIPv6SharedSupported(client)
+		? NM_SETTING_IP6_CONFIG_METHOD_SHARED : "ignore";
+	g_object_set(ip6Setting, NM_SETTING_IP_CONFIG_METHOD, ip6Method, NULL);
+}
+
+
+// True when the adapter is on another network; libnm has no AP+STA bit,
+// so the UI warns that starting the hotspot drops it.
+static bool
+_WifiWillDropForHotspot(NMClient* client, NMDevice* device)
+{
+	if (device == NULL)
+		return false;
+	NMActiveConnection* active = nm_device_get_active_connection(device);
+	if (active == NULL)
+		return false;
+	NMConnection* connection = NM_CONNECTION(
+		nm_active_connection_get_connection(active));
+	if (connection == NULL)
+		return false;
+	NMSettingWireless* wireless = nm_connection_get_setting_wireless(
+		connection);
+	if (wireless == NULL)
+		return false;
+	const char* mode = nm_setting_wireless_get_mode(wireless);
+	return mode == NULL || strcmp(mode, "ap") != 0;
+}
+
+
+static bool
+_WifiCanStartHotspot(NMDevice* device)
+{
+	if (device == NULL
+		|| nm_device_get_device_type(device) != NM_DEVICE_TYPE_WIFI) {
+		return false;
+	}
+	guint32 caps = nm_device_wifi_get_capabilities(NM_DEVICE_WIFI(device));
+	return (caps & NM_WIFI_DEVICE_CAP_AP) != 0;
+}
+
+
+struct _StartHotspotJob {
+	NMClient* nmClient;
+	BString devicePath;
+	BString profileUUID;
+	BString ssid;
+	BString password;
+	bool willDisconnect;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_FinishStartHotspot(_StartHotspotJob* job, const char* connectionPath)
+{
+	BMessage reply(job->replyWhat);
+	reply.AddInt32("status", (int32)B_OK);
+	reply.AddString(kNMFieldHotspotUUID, job->profileUUID.String());
+	reply.AddString(kNMFieldHotspotSSID, job->ssid.String());
+	reply.AddString(kNMFieldHotspotPassword, job->password.String());
+	reply.AddString(kNMFieldHotspotConnectionPath,
+		connectionPath != NULL ? connectionPath : "");
+	reply.AddBool(kNMFieldHotspotWillDisconnect, job->willDisconnect);
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+static void
+_OnHotspotActivated(GObject* client, GAsyncResult* result, gpointer data)
+{
+	_StartHotspotJob* job = (_StartHotspotJob*)data;
+	GError* error = NULL;
+	NMActiveConnection* active = nm_client_activate_connection_finish(
+		job->nmClient, result, &error);
+	if (active == NULL) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return;
+	}
+	// The path string is owned by the active object; copy it out before
+	// the unref below frees it.
+	BString path(nm_object_get_path(NM_OBJECT(active)));
+	g_object_unref(active);
+	_FinishStartHotspot(job, path.String());
+}
+
+
+static void
+_OnHotspotProfileSaved(GObject* client, GAsyncResult* result, gpointer data)
+{
+	_StartHotspotJob* job = (_StartHotspotJob*)data;
+	GError* error = NULL;
+	NMRemoteConnection* remote = nm_client_add_connection_finish(
+		NM_CLIENT(client), result, &error);
+	if (remote == NULL) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return;
+	}
+	NMDevice* device = _FindDeviceByPath(job->nmClient,
+		job->devicePath.String());
+	nm_client_activate_connection_async(job->nmClient,
+		NM_CONNECTION(remote), device, NULL, NULL, _OnHotspotActivated, job);
+	g_object_unref(remote);
+}
+
+
+static void
+_OnHotspotProfileCommitted(GObject* client, GAsyncResult* result, gpointer data)
+{
+	_StartHotspotJob* job = (_StartHotspotJob*)data;
+	GError* error = NULL;
+	gboolean ok = nm_remote_connection_commit_changes_finish(
+		NM_REMOTE_CONNECTION(client), result, &error);
+	if (!ok) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return;
+	}
+	NMDevice* device = _FindDeviceByPath(job->nmClient,
+		job->devicePath.String());
+	nm_client_activate_connection_async(job->nmClient,
+		NM_CONNECTION(client), device, NULL, NULL, _OnHotspotActivated, job);
+}
+
+
+static gboolean
+_RunStartHotspot(gpointer data)
+{
+	_StartHotspotJob* job = (_StartHotspotJob*)data;
+	NMClient* client = job->nmClient;
+
+	if (job->profileUUID.IsEmpty()) {
+		char* uuid = nm_utils_uuid_generate();
+		job->profileUUID = uuid;
+		g_free(uuid);
+	}
+
+	NMDevice* device = _FindDeviceByPath(client, job->devicePath.String());
+	if (!_WifiCanStartHotspot(device)) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)(device == NULL
+			? B_ENTRY_NOT_FOUND : B_NOT_SUPPORTED));
+		reply.AddString("reason", device == NULL
+			? "no such device"
+			: "this Wi-Fi adapter cannot start an access point");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	job->willDisconnect = _WifiWillDropForHotspot(client, device);
+
+	NMRemoteConnection* remote = nm_client_get_connection_by_uuid(client,
+		job->profileUUID.String());
+	if (remote != NULL) {
+		// Reuse the fixed profile: rewrite settings in place, then activate.
+		_ApplyHotspotSettings(NM_CONNECTION(remote), client,
+			job->profileUUID.String(), job->ssid.String(),
+			job->password.String());
+		nm_remote_connection_commit_changes_async(remote, TRUE, NULL,
+			_OnHotspotProfileCommitted, job);
+		return G_SOURCE_REMOVE;
+	}
+
+	NMConnection* connection = nm_simple_connection_new();
+	_ApplyHotspotSettings(connection, client, job->profileUUID.String(),
+		job->ssid.String(), job->password.String());
+	nm_client_add_connection_async(client, connection, TRUE, NULL,
+		_OnHotspotProfileSaved, job);
+	g_object_unref(connection);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::StartHotspotAsync(const char* devicePath, const char* profileUUID,
+	const char* ssid, const char* password, const BMessenger& replyTo,
+	uint32 replyWhat)
+{
+	if (devicePath == NULL || ssid == NULL || ssid[0] == '\0'
+		|| password == NULL || strlen(password) < 8) {
+		return B_BAD_VALUE;
+	}
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_StartHotspotJob* job = new _StartHotspotJob;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath;
+	job->profileUUID = profileUUID != NULL ? profileUUID : "";
+	job->ssid = ssid;
+	job->password = password;
+	job->willDisconnect = false;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunStartHotspot, job);
+	return B_OK;
+}
+
+
+struct _StopHotspotJob {
+	NMClient* nmClient;
+	BString profileUUID;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_OnHotspotDeactivated(GObject* client, GAsyncResult* result, gpointer data)
+{
+	_StopHotspotJob* job = (_StopHotspotJob*)data;
+	GError* error = NULL;
+	gboolean ok = nm_client_deactivate_connection_finish(job->nmClient,
+		result, &error);
+	BMessage reply(job->replyWhat);
+	reply.AddInt32("status", ok ? (int32)B_OK : (int32)B_ERROR);
+	if (!ok) {
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+	}
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+static gboolean
+_RunStopHotspot(gpointer data)
+{
+	_StopHotspotJob* job = (_StopHotspotJob*)data;
+	NMClient* client = job->nmClient;
+
+	NMActiveConnection* target = NULL;
+	const GPtrArray* activeConns = nm_client_get_active_connections(client);
+	if (activeConns != NULL) {
+		for (guint i = 0; i < activeConns->len; i++) {
+			NMActiveConnection* ac = (NMActiveConnection*)
+				g_ptr_array_index(activeConns, i);
+			const char* uuid = nm_active_connection_get_uuid(ac);
+			if (uuid == NULL || job->profileUUID != uuid)
+				continue;
+			target = ac;
+			break;
+		}
+	}
+
+	if (target == NULL) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
+		reply.AddString("reason", "hotspot is not active");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	// Deactivate only. The saved profile stays for the next start.
+	nm_client_deactivate_connection_async(client, target, NULL,
+		_OnHotspotDeactivated, job);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::StopHotspotAsync(const char* profileUUID,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (profileUUID == NULL || profileUUID[0] == '\0')
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_StopHotspotJob* job = new _StopHotspotJob;
+	job->nmClient = (NMClient*)fNMClient;
+	job->profileUUID = profileUUID;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunStopHotspot, job);
+	return B_OK;
+}
+
+
+struct _HotspotStateJob {
+	NMClient* nmClient;
+	BString devicePath;
+	BString profileUUID;
+	BMessenger replyTo;
+	uint32 replyWhat;
+	bool active;
+	bool canStart;
+	bool willDisconnect;
+	BString ssid;
+	BString connectionPath;
+	BString password;
+};
+
+
+static void
+_FinishHotspotState(_HotspotStateJob* job)
+{
+	BMessage reply(job->replyWhat);
+	reply.AddBool(kNMFieldHotspotCanStart, job->canStart);
+	reply.AddBool(kNMFieldHotspotWillDisconnect, job->willDisconnect);
+	if (!job->profileUUID.IsEmpty())
+		reply.AddString(kNMFieldHotspotUUID, job->profileUUID.String());
+	if (!job->ssid.IsEmpty())
+		reply.AddString(kNMFieldHotspotSSID, job->ssid.String());
+	if (!job->connectionPath.IsEmpty())
+		reply.AddString(kNMFieldHotspotConnectionPath,
+			job->connectionPath.String());
+	if (!job->password.IsEmpty())
+		reply.AddString(kNMFieldHotspotPassword, job->password.String());
+	reply.AddBool(kNMFieldHotspotActive, job->active);
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+// Cached connections carry no secrets; the PSK only comes back through
+// GetSecrets, whether the hotspot is up or merely saved.
+static void
+_OnHotspotSecrets(GObject* object, GAsyncResult* result, gpointer data)
+{
+	_HotspotStateJob* job = (_HotspotStateJob*)data;
+	GError* error = NULL;
+	GVariant* secrets = nm_remote_connection_get_secrets_finish(
+		NM_REMOTE_CONNECTION(object), result, &error);
+	if (error != NULL)
+		g_error_free(error);
+	if (secrets != NULL) {
+		GVariant* security = NULL;
+		if (g_variant_lookup(secrets, NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+			"@a{sv}", &security) && security != NULL) {
+			const char* psk = NULL;
+			if (g_variant_lookup(security, "psk", "&s", &psk)
+				&& psk != NULL) {
+				job->password = psk;
+			}
+			g_variant_unref(security);
+		}
+		g_variant_unref(secrets);
+	}
+	_FinishHotspotState(job);
+}
+
+
+static gboolean
+_RunGetHotspotState(gpointer data)
+{
+	_HotspotStateJob* job = (_HotspotStateJob*)data;
+	NMClient* client = job->nmClient;
+
+	NMDevice* device = _FindDeviceByPath(client, job->devicePath.String());
+	job->canStart = _WifiCanStartHotspot(device);
+	job->willDisconnect = _WifiWillDropForHotspot(client, device);
+	job->active = false;
+
+	if (!job->profileUUID.IsEmpty()) {
+		const GPtrArray* activeConns = nm_client_get_active_connections(
+			client);
+		if (activeConns != NULL) {
+			for (guint i = 0; i < activeConns->len; i++) {
+				NMActiveConnection* ac = (NMActiveConnection*)
+					g_ptr_array_index(activeConns, i);
+				const char* uuid = nm_active_connection_get_uuid(ac);
+				if (uuid == NULL || job->profileUUID != uuid)
+					continue;
+				job->active = true;
+				const char* path = nm_object_get_path(NM_OBJECT(ac));
+				job->connectionPath = path != NULL ? path : "";
+
+				NMConnection* connection = NM_CONNECTION(
+					nm_active_connection_get_connection(ac));
+				NMSettingWireless* wireless = connection != NULL
+					? nm_connection_get_setting_wireless(connection)
+					: NULL;
+				if (wireless != NULL) {
+					GBytes* ssid = nm_setting_wireless_get_ssid(wireless);
+					if (ssid != NULL) {
+						gsize len = 0;
+						const char* bytes = (const char*)
+							g_bytes_get_data(ssid, &len);
+						if (bytes != NULL && len > 0)
+							job->ssid = BString(bytes, len);
+					}
+				}
+				break;
+			}
+		}
+
+		NMRemoteConnection* remote = nm_client_get_connection_by_uuid(
+			client, job->profileUUID.String());
+		if (remote != NULL) {
+			nm_remote_connection_get_secrets_async(remote,
+				NM_SETTING_WIRELESS_SECURITY_SETTING_NAME, NULL,
+				_OnHotspotSecrets, job);
+			return G_SOURCE_REMOVE;
+		}
+	}
+
+	_FinishHotspotState(job);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::GetHotspotStateAsync(const char* devicePath,
+	const char* profileUUID, const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_HotspotStateJob* job = new _HotspotStateJob;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath != NULL ? devicePath : "";
+	job->profileUUID = profileUUID != NULL ? profileUUID : "";
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+	job->active = false;
+	job->canStart = false;
+	job->willDisconnect = false;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunGetHotspotState,
+		job);
 	return B_OK;
 }
 
@@ -3239,7 +3786,7 @@ NMBackend::_HandleGetSecrets(GVariant* parameters,
 		// standing between this and looking like broken WiFi.
 		g_dbus_method_invocation_return_dbus_error(invocation,
 			"org.freedesktop.NetworkManager.SecretAgent.Error.InternalError",
-			"No WiFi credential UI is registered");
+			"No Wi-Fi credential UI is registered");
 		delete ctx;
 		return;
 	}

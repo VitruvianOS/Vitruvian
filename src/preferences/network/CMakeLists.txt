@@ -5,6 +5,7 @@ Application(Network
 	InterfaceDetailView.cpp
 	StaticIPView.cpp
 	IPAddressControl.cpp
+	NetworkHotspotSettings.cpp
 	LIBS be shared localestub
 	RDEF Network.rdef
 )

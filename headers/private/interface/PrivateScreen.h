@@ -20,6 +20,7 @@
 struct color_map;
 class BBitmap;
 class BApplication;
+class BString;
 class BWindow;
 
 
@@ -95,8 +96,12 @@ public:
 			status_t			SetReflection(int32);
 
 			// Color temperature in Kelvin; 6500 is neutral, lower is warmer.
+			// B_NOT_SUPPORTED when the output cannot do it.
 			status_t			GetTemperature(float*);
 			status_t			SetTemperature(float);
+
+			// Kernel connector name, e.g. "HDMI-A-1" or "eDP-1".
+			status_t			GetConnectorName(BString& name);
 
 			void*				BaseAddress();
 			uint32				BytesPerRow();

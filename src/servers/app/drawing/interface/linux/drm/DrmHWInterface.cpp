@@ -21,6 +21,9 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <vector>
+
+#include <String.h>
 
 #include <device/DrmDeviceSelect.h>
 
@@ -90,6 +93,7 @@ DrmHWInterface::DrmHWInterface()
 	fDpmsState(B_DPMS_ON),
 	fBacklight(NULL),
 	fTemperature(6500.0f),
+	fTemperatureSupported(true),
 	fAtomicSupported(false),
 	fPrimaryPlaneId(0),
 	fCursorPlaneId(0),
@@ -1439,7 +1443,8 @@ _kelvin_to_rgb(float kelvin, float& r, float& g, float& b)
 {
 	// Standard color-temperature-to-RGB approximation (Tanner Helland /
 	// redshift).  Maps a Planckian-locus correlated color temperature in
-	// Kelvin to linear [0..1] scale factors for R, G, B.
+	// Kelvin to R, G, B scale in [0..1], valid for 1000..9000 K. Above
+	// ~6500 K blue pins at 1.0 and red/green fall, so the tint is cool.
 	float temp = kelvin / 100.0f;
 
 	// Red
@@ -1476,36 +1481,60 @@ _kelvin_to_rgb(float kelvin, float& r, float& g, float& b)
 }
 
 
+// Drivers reject a ramp whose length differs from crtc->gamma_size;
+// virtio-gpu and simpledrm report 0 and have no LUT at all.
+static int
+_drm_gamma_size(int fd, uint32_t crtc_id)
+{
+	drmModeCrtc* crtc = drmModeGetCrtc(fd, crtc_id);
+	if (crtc == NULL)
+		return 0;
+	int size = crtc->gamma_size;
+	drmModeFreeCrtc(crtc);
+	return size;
+}
+
+
 status_t
 DrmHWInterface::SetTemperature(float kelvin)
 {
 	if (fFd < 0)
 		return B_ERROR;
 
-	if (kelvin < 1000.0f)
-		kelvin = 1000.0f;
-	else if (kelvin > 6500.0f)
-		kelvin = 6500.0f;
-
 	struct modeset_dev* dev = get_dev();
 	if (!dev)
 		return B_ERROR;
 
+	int size = _drm_gamma_size(fFd, dev->crtc);
+	if (size <= 0) {
+		fTemperatureSupported = false;
+		return B_NOT_SUPPORTED;
+	}
+
+	if (kelvin < 1000.0f)
+		kelvin = 1000.0f;
+	else if (kelvin > 9000.0f)
+		kelvin = 9000.0f;
+
 	float rScale, gScale, bScale;
 	_kelvin_to_rgb(kelvin, rScale, gScale, bScale);
 
-	uint16_t rampR[256], rampG[256], rampB[256];
-	for (int i = 0; i < 256; i++) {
-		rampR[i] = (uint16_t)(i * 257.0f * rScale);
-		rampG[i] = (uint16_t)(i * 257.0f * gScale);
-		rampB[i] = (uint16_t)(i * 257.0f * bScale);
+	std::vector<uint16_t> rampR(size), rampG(size), rampB(size);
+	for (int i = 0; i < size; i++) {
+		float t = (size > 1) ? (float)i / (float)(size - 1) : 0.0f;
+		rampR[i] = (uint16_t)(t * 65535.0f * rScale);
+		rampG[i] = (uint16_t)(t * 65535.0f * gScale);
+		rampB[i] = (uint16_t)(t * 65535.0f * bScale);
 	}
 
-	int ret = drmModeCrtcSetGamma(fFd, dev->crtc, 256, rampR, rampG, rampB);
+	int ret = drmModeCrtcSetGamma(fFd, dev->crtc, size,
+		rampR.data(), rampG.data(), rampB.data());
 	if (ret == 0) {
 		fTemperature = kelvin;
+		fTemperatureSupported = true;
 		return B_OK;
 	}
+	fTemperatureSupported = false;
 	return B_ERROR;
 }
 
@@ -1515,8 +1544,134 @@ DrmHWInterface::GetTemperature(float* kelvin)
 {
 	if (!kelvin)
 		return B_BAD_VALUE;
+
+	struct modeset_dev* dev = get_dev();
+	if (dev == NULL || fFd < 0)
+		return B_NOT_SUPPORTED;
+
+	if (!fTemperatureSupported || _drm_gamma_size(fFd, dev->crtc) <= 0)
+		return B_NOT_SUPPORTED;
+
 	*kelvin = fTemperature;
 	return B_OK;
+}
+
+
+status_t
+DrmHWInterface::GetConnectorName(BString& name)
+{
+	struct modeset_dev* dev = get_dev();
+	if (dev == NULL || fFd < 0)
+		return B_NO_INIT;
+
+	// Current: kernel already holds EDID/type; GetConnector would reprobe.
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, dev->conn);
+	if (conn == NULL)
+		return B_ERROR;
+
+	const char* typeName = drmModeGetConnectorTypeName(conn->connector_type);
+	if (typeName == NULL || typeName[0] == '\0') {
+		drmModeFreeConnector(conn);
+		return B_UNSUPPORTED;
+	}
+
+	name.SetToFormat("%s-%u", typeName, conn->connector_type_id);
+	drmModeFreeConnector(conn);
+	return B_OK;
+}
+
+
+// EDID vendor bytes 8-9 encode three 5-bit letters; detailed descriptors
+// start at offset 54.  Only the identity fields matter for the caption.
+static bool
+_drm_edid_identity(const uint8_t* raw, size_t length, monitor_info& info)
+{
+	if (raw == NULL || length < 128)
+		return false;
+	if (raw[0] != 0x00 || raw[7] != 0xff)
+		return false;
+
+	uint16_t mfg = (uint16_t)((raw[8] << 8) | raw[9]);
+	info.vendor[0] = (char)(((mfg >> 10) & 0x1f) + 'A' - 1);
+	info.vendor[1] = (char)(((mfg >> 5) & 0x1f) + 'A' - 1);
+	info.vendor[2] = (char)((mfg & 0x1f) + 'A' - 1);
+	info.vendor[3] = '\0';
+
+	size_t offset = 54;
+	for (int i = 0; i < 4 && offset + 18 <= length; i++, offset += 18) {
+		if (raw[offset] != 0 || raw[offset + 1] != 0
+				|| raw[offset + 2] != 0xfc)
+			continue;
+		char name[14];
+		memcpy(name, raw + offset + 5, 13);
+		name[13] = '\0';
+		for (int c = 0; c < 13; c++) {
+			if (name[c] == '\n' || name[c] == '\r' || name[c] == ' ') {
+				name[c] = '\0';
+				break;
+			}
+		}
+		strlcpy(info.name, name, sizeof(info.name));
+		break;
+	}
+
+	return info.vendor[0] != '\0' || info.name[0] != '\0';
+}
+
+
+status_t
+DrmHWInterface::GetMonitorInfo(monitor_info* info)
+{
+	if (info == NULL)
+		return B_BAD_VALUE;
+
+	struct modeset_dev* dev = get_dev();
+	if (dev == NULL || fFd < 0)
+		return B_NO_INIT;
+
+	// Current: kernel already holds EDID/type; GetConnector would reprobe.
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, dev->conn);
+	if (conn == NULL)
+		return B_ERROR;
+
+	drmModeObjectProperties* props = drmModeObjectGetProperties(fFd,
+		dev->conn, DRM_MODE_OBJECT_CONNECTOR);
+	if (props == NULL) {
+		drmModeFreeConnector(conn);
+		return B_NOT_SUPPORTED;
+	}
+
+	status_t status = B_NOT_SUPPORTED;
+	memset(info, 0, sizeof(*info));
+	info->version = B_ACCELERANT_VERSION;
+
+	for (uint32_t i = 0; i < props->count_props; i++) {
+		drmModePropertyRes* prop = drmModeGetProperty(fFd, props->props[i]);
+		if (prop == NULL)
+			continue;
+
+		if (strcmp(prop->name, "EDID") == 0
+				&& (prop->flags & DRM_MODE_PROP_BLOB)) {
+			drmModePropertyBlobRes* blob
+				= drmModeGetPropertyBlob(fFd, props->prop_values[i]);
+			if (blob != NULL) {
+				if (_drm_edid_identity((const uint8_t*)blob->data,
+						blob->length, *info))
+					status = B_OK;
+				drmModeFreePropertyBlob(blob);
+			}
+		}
+		drmModeFreeProperty(prop);
+	}
+
+	if (conn->mmWidth != 0 || conn->mmHeight != 0) {
+		info->width = (float)conn->mmWidth;
+		info->height = (float)conn->mmHeight;
+	}
+
+	drmModeFreeObjectProperties(props);
+	drmModeFreeConnector(conn);
+	return status;
 }
 
 

@@ -379,6 +379,9 @@ enum {
 	AS_SCREEN_SET_TEMPERATURE,
 	AS_SCREEN_GET_TEMPERATURE,
 
+	// Appended at the end: inserting mid-enum renumbers later codes.
+	AS_SCREEN_GET_CONNECTOR_NAME,
+
 	AS_LAST_CODE
 };
 

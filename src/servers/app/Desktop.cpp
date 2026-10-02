@@ -646,7 +646,8 @@ Desktop::Init()
 		HWInterface()->SetBrightness(brightness);
 
 	float temperature = fWorkspaces[0].StoredScreenConfiguration().Temperature(0);
-	if (temperature > 0 && temperature < 6500.0f)
+	// Any stored non-neutral value is re-applied; the backend clamps.
+	if (temperature > 0 && temperature != 6500.0f)
 		HWInterface()->SetTemperature(temperature);
 
 	fVirtualScreen.HWInterface()->MoveCursorTo(

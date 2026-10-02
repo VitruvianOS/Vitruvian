@@ -93,6 +93,7 @@ public:
 	virtual	status_t			SetPanelReflection(int32 reflection);
 
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info);
+	virtual status_t			GetMonitorInfo(monitor_info* info);
 	virtual status_t			GetFrameBufferConfig(
 									frame_buffer_config& config);
 
@@ -119,6 +120,7 @@ public:
 
 	virtual status_t			SetTemperature(float kelvin);
 	virtual status_t			GetTemperature(float* kelvin);
+	virtual status_t			GetConnectorName(BString& name);
 
 	virtual	RenderingBuffer*	FrontBuffer() const;
 	virtual	RenderingBuffer*	BackBuffer() const;
@@ -275,6 +277,8 @@ private:
 			struct backlight*	fBacklight;
 
 			float				fTemperature;
+			// Cleared when gamma_size is 0 or drmModeCrtcSetGamma fails.
+			bool				fTemperatureSupported;
 
 			bool				fAtomicSupported;
 			uint32_t			fPrimaryPlaneId;

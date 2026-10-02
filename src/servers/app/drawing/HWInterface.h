@@ -119,12 +119,16 @@ public:
 	virtual status_t			SetBrightness(float) = 0;
 	virtual status_t			GetBrightness(float*) = 0;
 
-	// Color temperature (Kelvin).  6500 = neutral; lower = warmer.
-	// Default returns B_UNSUPPORTED; only DRM backend implements it.
+	// Color temperature (Kelvin).  6500 = neutral; lower = warmer,
+	// higher = cooler.  B_NOT_SUPPORTED when the output cannot do it.
 	virtual status_t			SetTemperature(float kelvin)
-									{ return B_UNSUPPORTED; }
+									{ return B_NOT_SUPPORTED; }
 	virtual status_t			GetTemperature(float* kelvin)
-									{ return B_UNSUPPORTED; }
+									{ return B_NOT_SUPPORTED; }
+
+	// Connector name as the kernel names it (HDMI-A-1, eDP-1, ...).
+	virtual status_t			GetConnectorName(BString& name)
+									{ return B_NOT_SUPPORTED; }
 
 	virtual status_t			GetAccelerantPath(BString& path);
 	virtual status_t			GetDriverPath(BString& path);

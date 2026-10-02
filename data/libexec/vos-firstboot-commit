@@ -236,7 +236,7 @@ if [ "$sudo_enabled" = "1" ]; then
     fi
 fi
 
-# Same file the Administrator preflet helper reads. Without input the
+# Same file the Users preflet helper reads. Without input the
 # mouse does not work after login; do not copy the list here.
 _default_groups_file="$ROOT/usr/share/vos/user-default-groups"
 if [ ! -r "$_default_groups_file" ]; then

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Account operations for the Administrator preflet, run via pkexec only.
+# Account operations for the Users preflet, run via pkexec only.
 # Passwords arrive on stdin as one line, plaintext or "sha512:<hash>".
 set -eu
 
@@ -245,9 +245,9 @@ cmd_set_gecos() {
 }
 
 
-cmd_unlock() {
-	# Prove admin credentials; the preflet enables write controls on exit 0.
-	echo "unlocked"
+cmd_auth() {
+	# Prove admin credentials; the preflet reveals the account list on exit 0.
+	echo "ok"
 }
 
 
@@ -260,8 +260,8 @@ case "$cmd" in
 	revoke-admin)  cmd_revoke_admin "$@" ;;
 	set-password)  cmd_set_password "$@" ;;
 	set-gecos)     cmd_set_gecos "$@" ;;
-	unlock)        cmd_unlock ;;
+	auth)          cmd_auth ;;
 	*)
-		die "usage: vos-admin-helper create|delete|grant-admin|revoke-admin|set-password|set-gecos|unlock [args]"
+		die "usage: vos-admin-helper create|delete|grant-admin|revoke-admin|set-password|set-gecos|auth [args]"
 		;;
 esac

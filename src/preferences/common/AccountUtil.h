@@ -41,7 +41,8 @@ bool isAdministrator(const char* userName);
 bool isReservedName(const char* userName);
 
 // Run a helper through pkexec. args are passed after the helper path;
-// password, if non-NULL, is written to the helper's stdin.
+// password, if non-NULL, is written to the helper's stdin. A dismissed
+// password prompt returns B_CANCELED.
 status_t runHelper(const char* helper, const StringList* args,
 	const char* password, BString& error);
 

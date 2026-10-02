@@ -13,10 +13,15 @@
 
 #include <Box.h>
 #include <Button.h>
+#include <Catalog.h>
 #include <LayoutBuilder.h>
 #include <StringView.h>
 #include <TextControl.h>
 #include <TextView.h>
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Users"
 
 
 static const uint32 kMsgOk = 'okok';
@@ -67,26 +72,26 @@ password_conv(int num, const struct pam_message** msg,
 
 PasswordDialog::PasswordDialog(const char* user)
 	:
-	BWindow(BRect(0, 0, 380, 200), "Change password",
+	BWindow(BRect(0, 0, 380, 200), B_TRANSLATE("Change password"),
 		B_MODAL_WINDOW_LOOK, B_MODAL_APP_WINDOW_FEEL,
 		B_NOT_RESIZABLE | B_AUTO_UPDATE_SIZE_LIMITS | B_NOT_ZOOMABLE),
 	fUser(user)
 {
-	fOldPassword = new BTextControl("old", "Current password:", "", NULL);
+	fOldPassword = new BTextControl("old", B_TRANSLATE("Current password:"), "", NULL);
 	fOldPassword->TextView()->HideTyping(true);
 
-	fNewPassword = new BTextControl("new", "New password:", "", NULL);
+	fNewPassword = new BTextControl("new", B_TRANSLATE("New password:"), "", NULL);
 	fNewPassword->TextView()->HideTyping(true);
 
-	fNewPasswordConfirm = new BTextControl("confirm", "Confirm:", "", NULL);
+	fNewPasswordConfirm = new BTextControl("confirm", B_TRANSLATE("Confirm:"), "", NULL);
 	fNewPasswordConfirm->TextView()->HideTyping(true);
 
 	fStatus = new BStringView("status", "");
 	fStatus->SetHighUIColor(B_FAILURE_COLOR);
 
-	fOkButton = new BButton("ok", "Change", new BMessage(kMsgOk));
+	fOkButton = new BButton("ok", B_TRANSLATE("Change"), new BMessage(kMsgOk));
 	fOkButton->MakeDefault(true);
-	BButton* cancel = new BButton("cancel", "Cancel",
+	BButton* cancel = new BButton("cancel", B_TRANSLATE("Cancel"),
 		new BMessage(kMsgCancel));
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_ITEM_SPACING)
@@ -136,11 +141,11 @@ PasswordDialog::_Submit()
 	BString confirm(fNewPasswordConfirm->Text());
 
 	if (newPass.Length() == 0) {
-		fStatus->SetText("New password must not be empty.");
+		fStatus->SetText(B_TRANSLATE("New password must not be empty."));
 		return;
 	}
 	if (newPass != confirm) {
-		fStatus->SetText("New passwords do not match.");
+		fStatus->SetText(B_TRANSLATE("New passwords do not match."));
 		fNewPassword->SetText("");
 		fNewPasswordConfirm->SetText("");
 		fNewPassword->MakeFocus(true);
@@ -166,7 +171,7 @@ PasswordDialog::_Submit()
 		return;
 	}
 	fStatus->SetText(error.Length() > 0 ? error.String()
-		: "Password change failed.");
+		: B_TRANSLATE("Password change failed."));
 	fOldPassword->MakeFocus(true);
 }
 
@@ -180,7 +185,7 @@ PasswordDialog::_ChangePassword(const char* oldPass, const char* newPass,
 	pam_handle_t* h = NULL;
 	int r = pam_start("passwd", fUser.String(), &conv, &h);
 	if (r != PAM_SUCCESS) {
-		error = "PAM start failed";
+		error = B_TRANSLATE("PAM start failed");
 		return false;
 	}
 	r = pam_chauthtok(h, 0);

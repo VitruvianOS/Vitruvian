@@ -5,20 +5,20 @@
 
 #include <Application.h>
 
-#include "AdministratorWindow.h"
+#include "UsersWindow.h"
 
 
-class AdministratorApp : public BApplication {
+class UsersApp : public BApplication {
 public:
-	AdministratorApp()
+	UsersApp()
 		:
-		BApplication("application/x-vnd.vos-Administrator")
+		BApplication("application/x-vnd.vos-Users")
 	{
 	}
 
 	virtual void ReadyToRun()
 	{
-		new AdministratorWindow();
+		new UsersWindow();
 	}
 };
 
@@ -26,7 +26,7 @@ public:
 int
 main()
 {
-	AdministratorApp app;
+	UsersApp app;
 	app.Run();
 	return 0;
 }

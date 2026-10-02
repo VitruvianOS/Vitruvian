@@ -1,5 +1,5 @@
 #!/bin/sh
-# Self-service account changes for the User preflet, run via pkexec. This
+# Self-service account changes for the Users preflet, run via pkexec. This
 # helper is the security boundary: the caller's own account only, never $HOME.
 set -eu
 
@@ -47,7 +47,23 @@ case "$cmd" in
 		trap - EXIT
 		echo "face set for $_user"
 		;;
+	set-gecos)
+		_user="${2:-}"
+		_full="${3:-}"
+		[ -n "$_user" ] || die "usage: set-gecos <user> <full name>"
+		_caller_uid="${PKEXEC_UID:-}"
+		[ -n "$_caller_uid" ] || die "PKEXEC_UID not set"
+		_target_uid=$(id -u "$_user" 2>/dev/null) \
+			|| die "unknown user: $_user"
+		[ "$_caller_uid" = "$_target_uid" ] \
+			|| die "can only change your own full name"
+		case "$_full" in
+			*','*|*':'*) die "invalid characters in full name" ;;
+		esac
+		chfn -f "$_full" "$_user" || die "chfn failed for $_user"
+		echo "full name set for $_user"
+		;;
 	*)
-		die "usage: vos-user-helper set-face <user> <image>"
+		die "usage: vos-user-helper set-face|set-gecos <user> <arg>"
 		;;
 esac

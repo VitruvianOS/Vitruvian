@@ -16,7 +16,7 @@ class BMessage;
 namespace BPrivate {
 
 
-// Thin sd-bus wrappers used by preferences apps and the User pref.
+// Thin sd-bus wrappers used by preferences apps and the Users pref.
 // All calls are synchronous. Return B_OK on success, a translated
 // status_t on failure. On failure the optional error string receives
 // the D-Bus error message (polkit denial text included) for the UI.

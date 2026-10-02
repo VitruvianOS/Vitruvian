@@ -14,9 +14,14 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <Catalog.h>
 #include <Directory.h>
 #include <Entry.h>
 #include <Path.h>
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Users"
 
 
 namespace BPrivate {
@@ -176,7 +181,7 @@ _captureRun(const char* helper, const StringList* args,
 	int outPipe[2];
 	int inPipe[2];
 	if (pipe(outPipe) < 0 || pipe(inPipe) < 0) {
-		error = "pipe failed";
+		error = B_TRANSLATE("pipe failed");
 		return B_ERROR;
 	}
 
@@ -186,7 +191,7 @@ _captureRun(const char* helper, const StringList* args,
 		close(outPipe[1]);
 		close(inPipe[0]);
 		close(inPipe[1]);
-		error = "fork failed";
+		error = B_TRANSLATE("fork failed");
 		return B_ERROR;
 	}
 
@@ -257,12 +262,12 @@ _captureRun(const char* helper, const StringList* args,
 		int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 		if (error.Length() == 0) {
 			if (code == 126 || code == 127)
-				error = "Authentication was cancelled or failed.";
+				error = B_TRANSLATE("Authentication was cancelled or failed.");
 			else
 				error = BString().SetToFormat(
-					"Helper failed (exit %d).", code);
+					B_TRANSLATE("Helper failed (exit %d)."), code);
 		}
-		return B_ERROR;
+		return code == 126 ? B_CANCELED : B_ERROR;
 	}
 	return B_OK;
 }

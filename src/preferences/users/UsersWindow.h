@@ -1,8 +1,8 @@
 /*
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
  */
-#ifndef ADMINISTRATOR_WINDOW_H
-#define ADMINISTRATOR_WINDOW_H
+#ifndef USERS_WINDOW_H
+#define USERS_WINDOW_H
 
 
 #include <String.h>
@@ -12,26 +12,29 @@
 
 
 class BButton;
+class BCardLayout;
+class BCheckBox;
 class BColumnListView;
 class BStringView;
+class BTextControl;
+class UserPictureView;
 
 
-class AdministratorWindow : public BWindow {
+class UsersWindow : public BWindow {
 public:
-								AdministratorWindow();
-	virtual						~AdministratorWindow();
+								UsersWindow();
+	virtual						~UsersWindow();
 
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	bool				QuitRequested();
 
 private:
 			void				_Reload();
-			void				_SetUnlocked(bool unlocked);
 			void				_ShowError(const char* text);
 			void				_Confirm(const char* text, uint32 what);
 			void				_UpdateStatus();
 
-			void				_Unlock();
+			bool				_Authenticate();
 			void				_AddUser();
 			void				_DeleteUser();
 			void				_GrantAdmin();
@@ -41,17 +44,37 @@ private:
 
 			BPrivate::Accounts::Account* _SelectedAccount();
 
-			bool				fUnlocked;
+			void				_ShowEditor(bool self);
+			void				_LoadSelf();
+			void				_ApplyRealName();
+			void				_ChangePassword();
+			void				_ToggleAutologin();
+			void				_LoadAutologin();
+			void				_ChoosePicture();
+			void				_ApplyPicture(const entry_ref* ref);
+			void				_LoadPicture();
+
+			bool				fAuthenticated;
 			BPrivate::Accounts::AccountList fAccounts;
 			BStringView*		fStatus;
 			BColumnListView*	fList;
-			BButton*			fUnlockButton;
 			BButton*			fAddButton;
 			BButton*			fDeleteButton;
 			BButton*			fGrantButton;
 			BButton*			fRevokeButton;
 			BButton*			fResetPasswordButton;
+
+			BCardLayout*		fCards;
+			BString				fSelfName;
+			BStringView*		fSelfHeader;
+			BTextControl*		fRealName;
+			BButton*			fApplyButton;
+			BButton*			fChangePasswordButton;
+			BCheckBox*			fAutologinBox;
+			UserPictureView*	fPictureView;
+			BButton*			fChoosePictureButton;
+			BButton*			fClearPictureButton;
 };
 
 
-#endif // ADMINISTRATOR_WINDOW_H
+#endif // USERS_WINDOW_H

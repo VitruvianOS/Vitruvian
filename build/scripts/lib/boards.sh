@@ -58,7 +58,9 @@ board_config() {
         rockchip)
             case "$_field" in
                 arch)           printf 'arm64' ;;
-                label)          printf 'Rockchip (RK3399/RK356x/RK3588)' ;;
+                # Debian u-boot-rockchip has no RK356x/RK3588 variant; claim
+                # only the board the default (rock-pi-4-rk3399) boots.
+                label)          printf 'Rockchip (RK3399 Rock Pi 4)' ;;
                 partition_fmt)  printf 'gpt' ;;
                 boot_style)     printf 'spl-uboot' ;;
                 boot_size_mb)   printf '256' ;;
@@ -71,7 +73,11 @@ board_config() {
                 spl_offset_sectors) printf '64' ;;
                 uboot_offset_sectors) printf '16384' ;;
                 extra_pkgs)     printf 'u-boot-rockchip' ;;
-                dtb_files)      printf 'rockchip/rk3399-rock-pi-4b.dtb rockchip/rk3588-rock-5b.dtb rockchip/rk3566-orangepi-3b.dtb' ;;
+                # U-Boot's fdtfile defaults to the 4A DTB; name the 4B one.
+                boot_dtb)       printf 'rockchip/rk3399-rock-pi-4b.dtb' ;;
+                # Orange Pi 3B and Rock 5B have no Debian U-Boot; add them
+                # back when u-boot-rockchip gains a variant.
+                dtb_files)      printf 'rockchip/rk3399-rock-pi-4b.dtb' ;;
             esac
             ;;
         allwinner)

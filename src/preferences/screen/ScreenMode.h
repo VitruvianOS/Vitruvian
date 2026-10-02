@@ -11,6 +11,7 @@
 
 
 #include <Screen.h>
+#include <String.h>
 
 
 typedef enum {
@@ -66,6 +67,7 @@ public:
 									float* _diagonalInches = NULL);
 
 			status_t			GetDeviceInfo(accelerant_device_info& info);
+			status_t			GetConnectorName(BString& name);
 
 			// A screen property, not part of a mode: no mode carries rotation.
 			status_t			SetRotation(int32 rotation);

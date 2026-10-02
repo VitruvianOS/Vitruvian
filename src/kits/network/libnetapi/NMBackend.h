@@ -103,7 +103,7 @@ public:
 	bool IsWirelessEnabled();
 
 	// Queues func(cookie, &reply) onto this backend's GMainContext dispatch
-	// thread and returns IMMEDIATELY -- never blocks the caller. func must
+	// thread and returns immediately; never blocks the caller. func must
 	// free `cookie` itself before returning (own it start to finish). Once
 	// func returns, a BMessage with `what` = replyWhat carrying whatever func
 	// wrote into it is posted to replyTo. There is no completion primitive

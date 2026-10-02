@@ -50,9 +50,8 @@ static const uint32 kMsgWorkspaceRowsChanged = 'wsrc';
 // Output enable/disable per monitor
 static const uint32 POP_OUTPUT_TOGGLE_MSG = 'potg';
 
-// Color temperature
-static const uint32 SLIDER_TEMPERATURE_MSG = 'stmp';
-static const uint32 TOGGLE_TEMPERATURE_MSG = 'ttmp';
+// Color temperature presets
+static const uint32 POP_TEMPERATURE_MSG = 'ptmp';
 
 
 // Profile save/delete

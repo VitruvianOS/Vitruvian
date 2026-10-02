@@ -143,7 +143,7 @@ public:
 		const BString& value);
 
 	// Queues func(cookie, &reply) onto this backend's GMainContext dispatch
-	// thread and returns IMMEDIATELY -- never blocks the caller. Mirrors
+	// thread and returns immediately; never blocks the caller. Mirrors
 	// NMBackend::_RunOnDispatchThread (see its header comment for the full
 	// rationale: no completion primitive, no worker thread, the looper's
 	// message queue on the receiving side is the synchronisation). Public

@@ -18,6 +18,7 @@
 
 #include "ScreenWindow.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
@@ -251,36 +252,50 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 		fOriginalBrightness = -1;
 	}
 
-	// color temperature controls
+	// colour temperature presets; hidden when the output has no gamma LUT
 
-	fTemperatureOn = false;
-	fOriginalTemperatureOn = false;
 	fTemperature = 6500.0f;
 	fOriginalTemperature = 6500.0f;
+	fTemperatureSupported = false;
 
-	float currentTemp;
-	if (screen.GetTemperature(&currentTemp) == B_OK) {
+	float currentTemp = 6500.0f;
+	BScreen tempScreen(this);
+	fTemperatureSupported
+		= tempScreen.GetTemperature(&currentTemp) == B_OK;
+	if (fTemperatureSupported) {
 		fTemperature = currentTemp;
 		fOriginalTemperature = currentTemp;
-		fTemperatureOn = (currentTemp < 6500.0f);
-		fOriginalTemperatureOn = fTemperatureOn;
 	}
 
-	fTemperatureEnabled = new BCheckBox("temperature_enabled",
-		B_TRANSLATE("Color temperature"),
-		new BMessage(TOGGLE_TEMPERATURE_MSG));
-	fTemperatureEnabled->SetValue(fTemperatureOn ? B_CONTROL_ON : B_CONTROL_OFF);
+	struct {
+		const char*	label;
+		float		kelvin;
+	} kTemperaturePresets[] = {
+		{ B_TRANSLATE_MARK("Very cold (9000 K)"), 9000.0f },
+		{ B_TRANSLATE_MARK("Cold (7500 K)"), 7500.0f },
+		{ B_TRANSLATE_MARK("Mild (6500 K)"), 6500.0f },
+		{ B_TRANSLATE_MARK("Warm (4500 K)"), 4500.0f },
+		{ B_TRANSLATE_MARK("Very warm (3400 K)"), 3400.0f },
+	};
 
-	// Temperature slider: 1000K (warm) to 6500K (neutral), horizontal
-	fTemperatureSlider = new BSlider("temperature",
-		B_TRANSLATE("Temperature:"), NULL, 1000, 6500, B_HORIZONTAL);
+	fTemperatureMenu = new BPopUpMenu("temperature", true, true);
+	for (uint32 i = 0; i < B_COUNT_OF(kTemperaturePresets); i++) {
+		BMessage* message = new BMessage(POP_TEMPERATURE_MSG);
+		message->AddFloat("kelvin", kTemperaturePresets[i].kelvin);
+		fTemperatureMenu->AddItem(new BMenuItem(
+			B_TRANSLATE_NOCOLLECT(kTemperaturePresets[i].label), message));
+	}
 
-	fTemperatureSlider->SetModificationMessage(
-		new BMessage(SLIDER_TEMPERATURE_MSG));
-	fTemperatureSlider->SetValue((int32)fTemperature);
+	fTemperatureField = new BMenuField("TemperatureMenu",
+		B_TRANSLATE("Colour temperature:"), fTemperatureMenu);
+	fTemperatureField->SetAlignment(B_ALIGN_RIGHT);
+	_MarkTemperaturePreset(fTemperature);
 
-	if (!fTemperatureOn)
-		fTemperatureSlider->Hide();
+	if (!fTemperatureSupported) {
+		fTemperatureField->Hide();
+		fTemperatureField->SetToolTip(B_TRANSLATE(
+			"This display does not support colour temperature."));
+	}
 
 	// box on the left below the screen box with workspaces
 
@@ -674,8 +689,7 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 			.Add(fReflectionField->CreateLabelLayoutItem(), 0, 8)
 			.Add(fReflectionField->CreateMenuBarLayoutItem(), 1, 8)
 		.End()
-		.Add(fTemperatureEnabled)
-		.Add(fTemperatureSlider);
+		.Add(fTemperatureField);
 
 	// Output enable/disable per monitor
 
@@ -975,9 +989,63 @@ ScreenWindow::_UpdateMonitorView()
 
 
 void
+ScreenWindow::_MarkTemperaturePreset(float kelvin)
+{
+	if (fTemperatureMenu == NULL)
+		return;
+
+	BMenuItem* best = NULL;
+	float bestDelta = 0.0f;
+	for (int32 i = 0; i < fTemperatureMenu->CountItems(); i++) {
+		BMenuItem* item = fTemperatureMenu->ItemAt(i);
+		float preset;
+		if (item->Message()->FindFloat("kelvin", &preset) != B_OK)
+			continue;
+		float delta = fabsf(preset - kelvin);
+		if (best == NULL || delta < bestDelta) {
+			best = item;
+			bestDelta = delta;
+		}
+	}
+	// One mark only: nearest preset, even for a stored non-preset value.
+	for (int32 i = 0; i < fTemperatureMenu->CountItems(); i++)
+		fTemperatureMenu->ItemAt(i)->SetMarked(
+			fTemperatureMenu->ItemAt(i) == best);
+}
+
+
+void
+ScreenWindow::_UpdateTemperatureControls()
+{
+	BScreen screen(this);
+	float current = 6500.0f;
+	bool supported = screen.GetTemperature(&current) == B_OK;
+
+	// Hide()/Show() nest (fShowLevel); only toggle on a real change.
+	if (supported != fTemperatureSupported) {
+		if (supported)
+			fTemperatureField->Show();
+		else
+			fTemperatureField->Hide();
+
+		fTemperatureSupported = supported;
+	}
+
+	if (supported) {
+		fTemperatureField->SetToolTip("");
+		// Keep the applied value; only re-mark the menu.
+		_MarkTemperaturePreset(fTemperature);
+	} else
+		fTemperatureField->SetToolTip(B_TRANSLATE(
+			"This display does not support colour temperature."));
+}
+
+
+void
 ScreenWindow::_UpdateControls()
 {
 	_UpdateWorkspaceButtons();
+	_UpdateTemperatureControls();
 
 	BMenuItem* item = fSwapDisplaysMenu->ItemAt((int32)fSelected.swap_displays);
 	if (item != NULL && !item->IsMarked())
@@ -1420,16 +1488,11 @@ ScreenWindow::MessageReceived(BMessage* message)
 			screen.SetBrightness(fOriginalBrightness);
 			fBrightnessSlider->SetValue(fOriginalBrightness * 255);
 
-			screen.SetTemperature(fOriginalTemperature);
-			fTemperature = fOriginalTemperature;
-			fTemperatureOn = fOriginalTemperatureOn;
-			fTemperatureEnabled->SetValue(fTemperatureOn
-				? B_CONTROL_ON : B_CONTROL_OFF);
-			fTemperatureSlider->SetValue((int32)fTemperature);
-			if (fTemperatureOn)
-				fTemperatureSlider->Show();
-			else
-				fTemperatureSlider->Hide();
+			if (fTemperatureSupported) {
+				screen.SetTemperature(fOriginalTemperature);
+				fTemperature = fOriginalTemperature;
+				_MarkTemperaturePreset(fTemperature);
+			}
 
 			fScreenMode.SetRotation(fOriginalRotation);
 			BMenuItem* rotationItem
@@ -1466,28 +1529,19 @@ ScreenWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
-		case TOGGLE_TEMPERATURE_MSG:
+		case POP_TEMPERATURE_MSG:
 		{
-			fTemperatureOn = (fTemperatureEnabled->Value() == B_CONTROL_ON);
-			if (fTemperatureOn) {
-				fTemperatureSlider->Show();
-				BScreen screen(this);
-				screen.SetTemperature(fTemperature);
-			} else {
-				fTemperatureSlider->Hide();
-				BScreen screen(this);
-				screen.SetTemperature(6500.0f);
-			}
-			break;
-		}
+			if (!fTemperatureSupported)
+				break;
 
-		case SLIDER_TEMPERATURE_MSG:
-		{
-			fTemperature = (float)message->FindInt32("be:value");
-			if (fTemperatureOn) {
-				BScreen screen(this);
-				screen.SetTemperature(fTemperature);
-			}
+			float kelvin;
+			if (message->FindFloat("kelvin", &kelvin) != B_OK)
+				break;
+
+			fTemperature = kelvin;
+			BScreen screen(this);
+			screen.SetTemperature(fTemperature);
+			_MarkTemperaturePreset(fTemperature);
 			break;
 		}
 
@@ -1658,47 +1712,66 @@ ScreenWindow::_UpdateOriginal()
 void
 ScreenWindow::_UpdateMonitor()
 {
+	// Mode size on the box; connector + EDID identity under the picture
+	// so the two captions do not repeat each other.
+	char text[128];
+	snprintf(text, sizeof(text), "%dx%d", fSelected.width, fSelected.height);
+	fScreenBox->SetLabel(text);
+
 	monitor_info info;
-	float diagonalInches;
-	status_t status = fScreenMode.GetMonitorInfo(info, &diagonalInches);
-	if (status == B_OK) {
-		char text[512];
-		snprintf(text, sizeof(text), "%s%s%s %g\"", info.vendor,
-			info.name[0] ? " " : "", info.name, diagonalInches);
+	status_t status = fScreenMode.GetMonitorInfo(info);
 
-		fScreenBox->SetLabel(text);
+	BString caption;
+	BString connector;
+	if (fScreenMode.GetConnectorName(connector) == B_OK
+			&& connector.Length() > 0)
+		caption = connector;
+
+	if (status == B_OK && (info.vendor[0] || info.name[0])) {
+		BString display;
+		if (info.vendor[0] && info.name[0])
+			display.SetToFormat("%s %s", info.vendor, info.name);
+		else
+			display = info.vendor[0] ? info.vendor : info.name;
+		if (caption.Length() > 0)
+			caption << " " << display;
+		else
+			caption = display;
+	}
+
+	if (caption.Length() > 0) {
+		fDeviceInfo->SetText(caption);
 	} else {
-		fScreenBox->SetLabel(B_TRANSLATE("Display info"));
+		// No connector/EDID path (accelerant backends): keep the GPU name.
+		accelerant_device_info deviceInfo;
+
+		if (fScreenMode.GetDeviceInfo(deviceInfo) == B_OK) {
+			BString deviceString;
+
+			if (deviceInfo.name[0] && deviceInfo.chipset[0]) {
+				deviceString.SetToFormat("%s (%s)", deviceInfo.name,
+					deviceInfo.chipset);
+			} else if (deviceInfo.name[0] || deviceInfo.chipset[0]) {
+				deviceString
+					= deviceInfo.name[0] ? deviceInfo.name : deviceInfo.chipset;
+			}
+
+			fDeviceInfo->SetText(deviceString);
+		} else
+			fDeviceInfo->SetText("");
 	}
 
-	// Add info about the graphics device
+	// EDID ranges still go to the monitor tooltip.
 
-	accelerant_device_info deviceInfo;
-
-	if (fScreenMode.GetDeviceInfo(deviceInfo) == B_OK) {
-		BString deviceString;
-
-		if (deviceInfo.name[0] && deviceInfo.chipset[0]) {
-			deviceString.SetToFormat("%s (%s)", deviceInfo.name,
-				deviceInfo.chipset);
-		} else if (deviceInfo.name[0] || deviceInfo.chipset[0]) {
-			deviceString
-				= deviceInfo.name[0] ? deviceInfo.name : deviceInfo.chipset;
-		}
-
-		fDeviceInfo->SetText(deviceString);
-	}
-
-
-	char text[512];
+	char tooltip[512];
 	size_t length = 0;
-	text[0] = 0;
+	tooltip[0] = 0;
 
 	if (status == B_OK) {
 		if (info.min_horizontal_frequency != 0
 			&& info.min_vertical_frequency != 0
 			&& info.max_pixel_clock != 0) {
-			length = snprintf(text, sizeof(text),
+			length = snprintf(tooltip, sizeof(tooltip),
 				B_TRANSLATE("Horizonal frequency:\t%lu - %lu kHz\n"
 					"Vertical frequency:\t%lu - %lu Hz\n\n"
 					"Maximum pixel clock:\t%g MHz"),
@@ -1708,24 +1781,24 @@ ScreenWindow::_UpdateMonitor()
 				(long unsigned)info.max_vertical_frequency,
 				info.max_pixel_clock / 1000.0);
 		}
-		if (info.serial_number[0] && length < sizeof(text)) {
+		if (info.serial_number[0] && length < sizeof(tooltip)) {
 			if (length > 0) {
-				text[length++] = '\n';
-				text[length++] = '\n';
-				text[length] = '\0';
+				tooltip[length++] = '\n';
+				tooltip[length++] = '\n';
+				tooltip[length] = '\0';
 			}
-			length += snprintf(text + length, sizeof(text) - length,
+			length += snprintf(tooltip + length, sizeof(tooltip) - length,
 				B_TRANSLATE("Serial no.: %s"), info.serial_number);
 			if (info.produced.week != 0 && info.produced.year != 0
-				&& length < sizeof(text)) {
-				length += snprintf(text + length, sizeof(text) - length,
+				&& length < sizeof(tooltip)) {
+				length += snprintf(tooltip + length, sizeof(tooltip) - length,
 					" (%u/%u)", info.produced.week, info.produced.year);
 			}
 		}
 	}
 
-	if (text[0])
-		fMonitorView->SetToolTip(text);
+	if (tooltip[0])
+		fMonitorView->SetToolTip(tooltip);
 }
 
 

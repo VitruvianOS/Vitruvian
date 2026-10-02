@@ -18,15 +18,29 @@
 
 #include <Application.h>
 #include <Autolock.h>
-#include <Box.h>
 #include <Button.h>
+#include <Catalog.h>
+#include <Font.h>
+#include <LayoutBuilder.h>
 #include <Locker.h>
+#include <Menu.h>
+#include <MenuField.h>
 #include <Messenger.h>
-#include <Screen.h>
+#include <PopUpMenu.h>
+#include <Resources.h>
+#include <String.h>
+#include <StringList.h>
 #include <StringView.h>
+#include <TextView.h>
 #include <TextControl.h>
 #include <View.h>
 #include <Window.h>
+
+#include <IconView.h>
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "PolkitAuthDialog"
 
 
 static const char* kAppSignature = "application/x-vnd.Vitruvian-polkit-agent";
@@ -42,93 +56,226 @@ static const char* kHelperPath = "/usr/lib/polkit-1/polkit-agent-helper-1";
 static const uint32 kMsgLogin  = 'lgin';
 static const uint32 kMsgCancel = 'cncl';
 static const uint32 kMsgClosed = 'clsd';
+static const uint32 kMsgAttempt = 'attm';
+static const uint32 kMsgAuthResult = 'ares';
+static const uint32 kMsgIdentity = 'idnt';
+
+static const char* kIconResource = "PolkitLock";
 
 
 struct AuthRequest {
-	BString	actionId;
-	BString	message;
-	BString	iconName;
-	BString	cookie;
-	BString	identityUser;
+	BString		actionId;
+	BString		message;
+	BString		iconName;
+	BString		cookie;
+	BString		identityUser;
+	BStringList	users;
 };
 
 
 class AuthDialog : public BWindow {
 public:
-			AuthDialog(const AuthRequest& req, BMessenger reply);
+			AuthDialog(const AuthRequest& req, BMessenger reply,
+				BMessenger agent);
 
 	virtual	void	MessageReceived(BMessage* msg);
 	virtual	bool	QuitRequested();
 
 private:
 			void	_Send(bool ok);
+			void	_UpdateDetails();
+			void	_Attempt();
+			void	_SetBusy(bool busy);
 
+			BMessenger		fAgent;
+			BMessenger		fReply;
+			BString			fCookie;
+			BString			fActionId;
+			BStringList		fUsers;
+			BString			fCurrentUser;
+			BTextView*		fMessageView;
+			BTextView*		fDetailsView;
+			BMenuField*		fIdentityField;
 			BTextControl*	fPassword;
 			BStringView*	fStatus;
 			BButton*		fLogin;
-			BMessenger		fReply;
 			bool			fSent;
+			bool			fBusy;
 };
 
 
-AuthDialog::AuthDialog(const AuthRequest& req, BMessenger reply)
+static BTextView*
+make_read_only_text_view(const char* name, const BFont* font,
+	const rgb_color& color)
+{
+	BTextView* view = new BTextView(name);
+	view->MakeEditable(false);
+	view->MakeSelectable(false);
+	view->SetWordWrap(true);
+	view->SetFontAndColor(font, B_FONT_ALL, &color);
+	view->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	view->SetInsets(0, 0, 0, 0);
+	return view;
+}
+
+
+AuthDialog::AuthDialog(const AuthRequest& req, BMessenger reply,
+	BMessenger agent)
 	:
-	BWindow(BRect(0, 0, 460, 220), "Authenticate",
+	BWindow(BRect(0, 0, 400, 10), B_TRANSLATE("Authenticate"),
 		B_MODAL_WINDOW_LOOK, B_MODAL_APP_WINDOW_FEEL,
 		B_NOT_MOVABLE | B_NOT_ZOOMABLE | B_NOT_MINIMIZABLE
-		| B_NOT_RESIZABLE | B_ASYNCHRONOUS_CONTROLS, B_ALL_WORKSPACES),
+		| B_NOT_RESIZABLE | B_AUTO_UPDATE_SIZE_LIMITS
+		| B_CLOSE_ON_ESCAPE | B_ASYNCHRONOUS_CONTROLS,
+		B_ALL_WORKSPACES),
+	fAgent(agent),
 	fReply(reply),
-	fSent(false)
+	fCookie(req.cookie),
+	fActionId(req.actionId),
+	fUsers(req.users),
+	fCurrentUser(req.identityUser),
+	fMessageView(NULL),
+	fDetailsView(NULL),
+	fIdentityField(NULL),
+	fPassword(NULL),
+	fStatus(NULL),
+	fLogin(NULL),
+	fSent(false),
+	fBusy(false)
 {
-	BView* top = new BView(Bounds(), "top", B_FOLLOW_ALL, B_WILL_DRAW);
-	top->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-	top->SetHighUIColor(B_PANEL_TEXT_COLOR);
-	AddChild(top);
+	rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
 
-	BRect frame = Bounds();
-	frame.InsetBy(10, 10);
-	BBox* box = new BBox(frame, "box", B_FOLLOW_NONE);
-	box->SetLabel("Authorization required");
-	top->AddChild(box);
+	const char* message = req.message.String();
+	if (message == NULL || *message == '\0')
+		message = B_TRANSLATE("Authenticate to continue");
 
-	BRect r(20, 30, 420, 55);
-	BStringView* prompt = new BStringView(r, "prompt", req.message.String());
-	box->AddChild(prompt);
+	// Cap wrap width so a long action message grows the height, not the window.
+	const float maxWidth = 420.0f * be_plain_font->Size() / 12.0f;
 
-	r.OffsetBy(0, 26);
-	BString sub;
-	sub.SetToFormat("Action: %s   User: %s",
-		req.actionId.String(), req.identityUser.String());
-	BStringView* details = new BStringView(r, "details", sub.String());
-	box->AddChild(details);
+	fMessageView = make_read_only_text_view("message", be_bold_font, textColor);
+	fMessageView->SetText(message);
+	fMessageView->SetExplicitMaxSize(BSize(maxWidth, B_SIZE_UNSET));
 
-	r.OffsetBy(0, 32);
-	fPassword = new BTextControl(r, "password", "Password:", "",
-		new BMessage(kMsgLogin), B_FOLLOW_NONE);
+	// Details sit under a bold headline; slightly smaller than plain is enough.
+	BFont smallFont(*be_plain_font);
+	smallFont.SetSize(be_plain_font->Size() * 0.85f);
+	fDetailsView = make_read_only_text_view("details", &smallFont, textColor);
+	fDetailsView->SetExplicitMaxSize(BSize(maxWidth, B_SIZE_UNSET));
+
+	IconView* iconView = new IconView(B_LARGE_ICON);
+	BResources* res = BApplication::AppResources();
+	size_t iconSize = 0;
+	const uint8_t* iconData = static_cast<const uint8_t*>(
+		res->LoadResource(B_VECTOR_ICON_TYPE, kIconResource, &iconSize));
+	if (iconData != NULL)
+		iconView->SetIcon(iconData, iconSize, B_LARGE_ICON);
+
+	if (fUsers.CountStrings() > 1) {
+		BPopUpMenu* menu = new BPopUpMenu("identity");
+		for (int32 i = 0; i < fUsers.CountStrings(); i++) {
+			BString name = fUsers.StringAt(i);
+			BMenuItem* item = new BMenuItem(name.String(),
+				new BMessage(kMsgIdentity));
+			item->SetMarked(name == fCurrentUser);
+			menu->AddItem(item);
+		}
+		menu->SetTargetForItems(this);
+		fIdentityField = new BMenuField(B_TRANSLATE("Authenticate as:"),
+			menu);
+	}
+
+	fPassword = new BTextControl("password", B_TRANSLATE("Password:"),
+		"", new BMessage(kMsgLogin));
 	fPassword->TextView()->HideTyping(true);
-	fPassword->SetDivider(be_plain_font->StringWidth("Password:") + 12);
-	box->AddChild(fPassword);
 
-	r.OffsetBy(0, 32);
-	fStatus = new BStringView(r, "status", "");
+	fStatus = new BStringView("status", B_TRANSLATE("Wrong password, try again"));
 	fStatus->SetHighUIColor(B_FAILURE_COLOR);
-	box->AddChild(fStatus);
+	fStatus->Hide();
 
-	fLogin = new BButton(BRect(320, 150, 420, 175), "login",
-		"Authenticate", new BMessage(kMsgLogin), B_FOLLOW_NONE);
+	BButton* cancel = new BButton(B_TRANSLATE("Cancel"),
+		new BMessage(kMsgCancel));
+	fLogin = new BButton(B_TRANSLATE("Authenticate"),
+		new BMessage(kMsgLogin));
 	fLogin->MakeDefault(true);
-	box->AddChild(fLogin);
 
-	BButton* cancel = new BButton(BRect(220, 150, 315, 175), "cancel",
-		"Cancel", new BMessage(kMsgCancel), B_FOLLOW_NONE);
-	box->AddChild(cancel);
+	BLayoutBuilder::Group<> builder(this, B_VERTICAL, B_USE_DEFAULT_SPACING);
+	builder.SetInsets(B_USE_WINDOW_SPACING)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+			.Add(iconView)
+			.AddGroup(B_VERTICAL, 0)
+				.Add(fMessageView)
+				.Add(fDetailsView)
+			.End()
+		.End();
+	if (fIdentityField != NULL)
+		builder.Add(fIdentityField);
+	builder.Add(fPassword)
+		.Add(fStatus)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+			.AddGlue()
+			.Add(cancel)
+			.Add(fLogin)
+		.End();
 
+	SetDefaultButton(fLogin);
+	_UpdateDetails();
 	fPassword->MakeFocus(true);
+	CenterOnScreen();
+}
 
-	BScreen s(this);
-	BRect scr = s.Frame();
-	MoveTo(scr.left + (scr.Width()  - Bounds().Width())  / 2,
-	       scr.top  + (scr.Height() - Bounds().Height()) / 2);
+
+void
+AuthDialog::_UpdateDetails()
+{
+	if (fDetailsView == NULL)
+		return;
+
+	if (fCurrentUser.IsEmpty() && fUsers.CountStrings() > 0)
+		fCurrentUser = fUsers.First();
+
+	BString action = fActionId.Length() > 0
+		? fActionId : BString(B_TRANSLATE("(unknown)"));
+	BString user = fCurrentUser.Length() > 0
+		? fCurrentUser : BString(B_TRANSLATE("(unknown)"));
+	BString details;
+	details << B_TRANSLATE("Action:") << " " << action << "\n"
+		<< B_TRANSLATE("Authenticating as:") << " " << user;
+	fDetailsView->SetText(details.String());
+	fDetailsView->InvalidateLayout(true);
+}
+
+
+void
+AuthDialog::_SetBusy(bool busy)
+{
+	fBusy = busy;
+	if (fLogin != NULL)
+		fLogin->SetEnabled(!busy);
+	if (fPassword != NULL)
+		fPassword->SetEnabled(!busy);
+	if (fIdentityField != NULL)
+		fIdentityField->SetEnabled(!busy);
+}
+
+
+void
+AuthDialog::_Attempt()
+{
+	if (fBusy || fSent)
+		return;
+
+	if (fStatus != NULL) {
+		fStatus->SetText("");
+		fStatus->Hide();
+	}
+
+	BMessage attempt(kMsgAttempt);
+	attempt.AddString("password", fPassword != NULL ? fPassword->Text() : "");
+	attempt.AddString("user", fCurrentUser.String());
+	attempt.AddString("cookie", fCookie.String());
+	attempt.AddMessenger("dialog", BMessenger(this));
+	fAgent.SendMessage(&attempt);
+	_SetBusy(true);
 }
 
 
@@ -137,13 +284,42 @@ AuthDialog::MessageReceived(BMessage* msg)
 {
 	switch (msg->what) {
 		case kMsgLogin:
-			_Send(true);
-			PostMessage(B_QUIT_REQUESTED);
+			_Attempt();
 			break;
+
+		case kMsgIdentity:
+		{
+			BMenuItem* item = NULL;
+			if (msg->FindPointer("source", (void**)&item) == B_OK
+				&& item != NULL) {
+				fCurrentUser = item->Label();
+				_UpdateDetails();
+			}
+			break;
+		}
+
+		case kMsgAuthResult:
+			_SetBusy(false);
+			if (msg->GetBool("ok", false)) {
+				_Send(true);
+				PostMessage(B_QUIT_REQUESTED);
+				break;
+			}
+			if (fStatus != NULL) {
+				fStatus->SetText(B_TRANSLATE("Wrong password, try again"));
+				fStatus->Show();
+			}
+			if (fPassword != NULL) {
+				fPassword->SetText("");
+				fPassword->MakeFocus(true);
+			}
+			break;
+
 		case kMsgCancel:
 			_Send(false);
 			PostMessage(B_QUIT_REQUESTED);
 			break;
+
 		default:
 			BWindow::MessageReceived(msg);
 	}
@@ -167,10 +343,9 @@ AuthDialog::_Send(bool ok)
 	fSent = true;
 	BMessage reply(kMsgClosed);
 	reply.AddBool("ok", ok);
-	if (ok)
-		reply.AddString("password", fPassword->Text());
 	fReply.SendMessage(&reply);
-	fPassword->SetText("");
+	if (fPassword != NULL)
+		fPassword->SetText("");
 }
 
 
@@ -247,6 +422,28 @@ run_helper(const char* user, const char* cookie, const char* password)
 	int status;
 	waitpid(pid, &status, 0);
 	return success && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+
+struct HelperJob {
+	BString		user;
+	BString		cookie;
+	BString		password;
+	BMessenger	dialog;
+};
+
+
+static int32
+helper_thread(void* data)
+{
+	HelperJob* job = (HelperJob*)data;
+	bool ok = run_helper(job->user.String(), job->cookie.String(),
+		job->password.String());
+	BMessage result(kMsgAuthResult);
+	result.AddBool("ok", ok);
+	job->dialog.SendMessage(&result);
+	delete job;
+	return 0;
 }
 
 
@@ -457,6 +654,27 @@ AgentApp::MessageReceived(BMessage* msg)
 		show_dialog(msg);
 		return;
 	}
+	if (msg->what == kMsgAttempt) {
+		HelperJob* job = new(std::nothrow) HelperJob;
+		if (job == NULL)
+			return;
+		job->user = msg->GetString("user", "");
+		job->cookie = msg->GetString("cookie", "");
+		job->password = msg->GetString("password", "");
+		if (msg->FindMessenger("dialog", &job->dialog) != B_OK
+			|| !job->dialog.IsValid()) {
+			delete job;
+			return;
+		}
+		thread_id worker = spawn_thread(helper_thread, "polkit-agent-helper",
+			B_NORMAL_PRIORITY, job);
+		if (worker < 0 || resume_thread(worker) != B_OK) {
+			if (worker >= 0)
+				kill_thread(worker);
+			delete job;
+		}
+		return;
+	}
 	BApplication::MessageReceived(msg);
 }
 
@@ -480,6 +698,8 @@ AgentApp::Authenticate(const AuthRequest& req)
 	show.AddString("icon",      req.iconName);
 	show.AddString("cookie",    req.cookie);
 	show.AddString("user",      req.identityUser);
+	for (int32 i = 0; i < req.users.CountStrings(); i++)
+		show.AddString("users", req.users.StringAt(i));
 	show.AddInt32("reply_port", replyPort);
 	self.SendMessage(&show, (BHandler*)NULL);
 
@@ -500,11 +720,8 @@ AgentApp::Authenticate(const AuthRequest& req)
 		return false;
 	}
 
-	if (!reply.GetBool("ok", false))
-		return false;
-
-	const char* password = reply.GetString("password", "");
-	return run_helper(req.identityUser.String(), req.cookie.String(), password);
+	// Helper verdict arrives on the dialog path; this port carries cancel vs done.
+	return reply.GetBool("ok", false);
 }
 
 
@@ -515,8 +732,8 @@ struct AuthJob {
 };
 
 
-// Runs the dialog + PAM helper off the bus loop. Never touches the bus
-// connection: the verdict goes through queue_auth_reply().
+// Runs the dialog off the bus loop. Never touches the bus connection: the
+// verdict goes through queue_auth_reply().
 static int32
 auth_job_thread(void* data)
 {
@@ -559,26 +776,36 @@ begin_auth_method(sd_bus_message* m, void* userdata, sd_bus_error* /*err*/)
 	while ((r = sd_bus_message_enter_container(m, 'r', "sa{sv}")) > 0) {
 		const char* kind = NULL;
 		sd_bus_message_read(m, "s", &kind);
-		if (kind != NULL && strcmp(kind, "unix-user") == 0
-				&& req.identityUser.Length() == 0) {
+		if (kind != NULL && strcmp(kind, "unix-user") == 0) {
+			BString userName;
 			sd_bus_message_enter_container(m, 'a', "{sv}");
 			while (sd_bus_message_enter_container(m, 'e', "sv") > 0) {
 				const char* key = NULL;
 				sd_bus_message_read(m, "s", &key);
-				if (key != NULL && strcmp(key, "uid") == 0) {
+				if (key != NULL && strcmp(key, "name") == 0) {
+					const char* name = NULL;
+					sd_bus_message_read(m, "v", "s", &name);
+					if (name != NULL && *name != '\0')
+						userName = name;
+					sd_bus_message_exit_container(m);
+				} else if (key != NULL && strcmp(key, "uid") == 0) {
 					uint32_t uid = 0;
 					sd_bus_message_enter_container(m, 'v', "u");
 					sd_bus_message_read(m, "u", &uid);
 					sd_bus_message_exit_container(m);
-					struct passwd* pw = getpwuid((uid_t)uid);
-					if (pw != NULL)
-						req.identityUser = pw->pw_name;
+					if (userName.IsEmpty()) {
+						struct passwd* pw = getpwuid((uid_t)uid);
+						if (pw != NULL)
+							userName = pw->pw_name;
+					}
 				} else {
 					sd_bus_message_skip(m, "v");
 				}
 				sd_bus_message_exit_container(m);
 			}
 			sd_bus_message_exit_container(m);
+			if (!userName.IsEmpty() && !req.users.HasString(userName))
+				req.users.Add(userName);
 		} else {
 			sd_bus_message_skip(m, "a{sv}");
 		}
@@ -590,10 +817,14 @@ begin_auth_method(sd_bus_message* m, void* userdata, sd_bus_error* /*err*/)
 	req.message  = message;
 	req.iconName = icon_name;
 	req.cookie   = cookie;
+	if (req.users.CountStrings() > 0)
+		req.identityUser = req.users.First();
 	if (req.identityUser.Length() == 0) {
 		struct passwd* pw = getpwuid(getuid());
-		if (pw != NULL)
+		if (pw != NULL) {
 			req.identityUser = pw->pw_name;
+			req.users.Add(req.identityUser);
+		}
 	}
 
 	AuthJob* job = new(std::nothrow) AuthJob;
@@ -728,6 +959,14 @@ show_dialog(BMessage* req)
 	r.iconName     = req->GetString("icon",      "");
 	r.cookie       = req->GetString("cookie",    "");
 	r.identityUser = req->GetString("user",      "");
+	const char* user = NULL;
+	int32 index = 0;
+	while (req->FindString("users", index++, &user) == B_OK) {
+		if (user != NULL && *user != '\0' && !r.users.HasString(user))
+			r.users.Add(BString(user));
+	}
+	if (r.users.CountStrings() == 0 && !r.identityUser.IsEmpty())
+		r.users.Add(r.identityUser);
 
 	BLooper* replyLooper = new BLooper("polkit-reply");
 	class Forwarder : public BHandler {
@@ -750,7 +989,8 @@ show_dialog(BMessage* req)
 	replyLooper->AddHandler(fwd);
 	replyLooper->Run();
 
-	AuthDialog* dlg = new AuthDialog(r, BMessenger(fwd, replyLooper));
+	AuthDialog* dlg = new AuthDialog(r, BMessenger(fwd, replyLooper),
+		BMessenger(be_app));
 	dlg->Show();
 
 	if (attach_pending_dialog(r.cookie.String(), BMessenger(dlg)))

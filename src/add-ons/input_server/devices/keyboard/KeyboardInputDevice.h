@@ -53,7 +53,7 @@ public:
 			void				SetDescription(const char* name)
 									{ fDescription = name; }
 
-private:
+	private:
 	static	int32				_ControlThreadEntry(void* arg);
 			int32				_ControlThread();
 			void				_ControlThreadCleanup();
@@ -66,6 +66,10 @@ private:
 										bool& menuKeyDown,
 										bool& ctrlAltDelPressed);
 			void				_UpdateLEDs();
+			uint32				_ComputeModifiers(const uint8* states,
+									bool menuKeyDown);
+			uint32				_PublishModifiers(uint32 newModifiers);
+			void				_WithdrawSeatModifiers();
 			status_t			_EnqueueInlineInputMethod(int32 opcode,
 									const char* string = NULL,
 									bool confirmed = false,
@@ -146,6 +150,15 @@ private:
 			BObjectList<KeyboardDevice, true> fDevices;
 			BLocker				fDeviceListLock;
 			TeamMonitorWindow*	fTeamMonitorWindow;
+
+	// Seat-wide modifier union: one keyboard can span several evdev nodes
+	// (VirtualBox), like MouseInputDevice::fButtons.
+			uint32				fSeatModifiers;
+			BLocker				fSeatModifierLock;
+
+	// False after B_SEAT_DISABLED; gates idle seeding so a VT-switch release
+	// is not undone.
+	volatile bool			fSeatEnabled;
 };
 
 extern "C" BInputServerDevice* instantiate_input_device();

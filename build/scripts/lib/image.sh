@@ -1234,6 +1234,19 @@ apt-get clean" || die "uboot chroot bash-c failed"
         || die "_common_chroot_setup failed"
     _install_resize_root "$_mnt"
 
+    # No boot menu on boards: a VOS_SSHDEBUG build bakes sshdebug into the
+    # cmdline, as create_raspberry does. Normal images get no debug sshd.
+    _sshdebug=0
+    _append_tail="quiet splash"
+    if [ -f "$_basedir/buildconfig.conf" ]; then
+        . "$_basedir/buildconfig.conf"
+        [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
+    fi
+    if [ "$_sshdebug" = 1 ]; then
+        _debug_ssh_setup "$_mnt" || die "_debug_ssh_setup failed"
+        _append_tail="ignore_loglevel systemd.show_status=true vitruvian.sshdebug"
+    fi
+
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
     log_info "Kernel version: $_kver"
 
@@ -1289,7 +1302,7 @@ label vitruvian
     initrd /initrd.img
     fdtdir /dtbs/
 $_fdt_line
-    append root=$_ext_rootdev rootfstype=EXTROOTFS rw rootwait console=$_ext_console quiet splash
+    append root=$_ext_rootdev rootfstype=EXTROOTFS rw rootwait console=$_ext_console $_append_tail
 EXTLINUX
     sudo sed -i "s/EXTROOTFS/$_root_fs/" "$_mnt/boot/extlinux/extlinux.conf"
 

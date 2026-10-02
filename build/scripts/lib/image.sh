@@ -1240,14 +1240,24 @@ apt-get clean" || die "uboot chroot bash-c failed"
     log_step "Copying device trees..."
     sudo mkdir -p "$_mnt/boot/dtbs"
     for _dtb in $_dtb_files; do
-        _dtb_path="$_mnt/usr/lib/linux-image-$_kver/$_dtb"
-        if [ -f "$_dtb_path" ]; then
+        # trixie: /usr/lib/linux-image-<ver>/... (signed image pkg).
+        # testing (Debian 14 packaging): /usr/lib/modules/<ver>/dtb/...
+        _dtb_path=""
+        for _cand in \
+            "$_mnt/usr/lib/linux-image-$_kver/$_dtb" \
+            "$_mnt/usr/lib/modules/$_kver/dtb/$_dtb"; do
+            if [ -f "$_cand" ]; then
+                _dtb_path="$_cand"
+                break
+            fi
+        done
+        if [ -n "$_dtb_path" ]; then
             _dtb_dir=$(dirname "$_dtb")
             sudo mkdir -p "$_mnt/boot/dtbs/$_dtb_dir"
             sudo cp "$_dtb_path" "$_mnt/boot/dtbs/$_dtb"
             log_info "  copied $_dtb"
         else
-            log_warn "  dtb not found: $_dtb_path"
+            log_warn "  dtb not found: $_dtb (tried linux-image-$_kver and modules/$_kver/dtb)"
         fi
     done
 

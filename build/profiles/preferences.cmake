@@ -23,6 +23,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Screen
 	ScreenSaver
 	Security
+	Services
 	Shortcuts
 	Time
 	Tracker_prefs
@@ -54,6 +55,7 @@ set(SYSTEM_PREFERENCES
 	Screen
 	ScreenSaver
 	Security
+	Services
 	Shortcuts
 	Time
 	Tracker

@@ -1,0 +1,21 @@
+resource app_signature "application/x-vnd.vos-Services";
+
+resource app_name_catalog_entry
+	"x-vnd.vos-Services:System name:Services";
+
+resource app_version {
+	major  = 0,
+	middle = 1,
+	minor  = 0,
+
+	/* 0 = development	1 = alpha			2 = beta
+	   3 = gamma		4 = golden master	5 = final */
+	variety = 0,
+
+	internal = 0,
+
+	short_info = "Services",
+	long_info  = "Services for V\\OS"
+};
+
+resource app_flags B_SINGLE_LAUNCH;

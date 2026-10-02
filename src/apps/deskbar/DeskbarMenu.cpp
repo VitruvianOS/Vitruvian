@@ -294,6 +294,14 @@ B_TRANSLATE_MARK_VOID("About this system")
 
 	AddSeparatorItem();
 
+	B_TRANSLATE_MARK_VOID("Lock screen");
+
+	item = new BMenuItem(B_TRANSLATE_NOCOLLECT("Lock screen"),
+		new BMessage(kLockScreen));
+	item->SetEnabled(!dragging);
+	item->SetTarget(be_app);
+	AddItem(item);
+
 	BMenu* shutdownMenu = new BMenu(B_TRANSLATE("Shutdown" B_UTF8_ELLIPSIS));
 
 	item = new BMenuItem(B_TRANSLATE("Power off"),
@@ -398,6 +406,7 @@ TDeskbarMenu::ResetTargets()
 				case kResizeTeamIcons:
 				case kSortRunningApps:
 				case kTrackerFirst:
+				case kLockScreen:
 				case kRebootSystem:
 				case kSuspendSystem:
 				case kHibernateSystem:

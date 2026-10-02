@@ -259,13 +259,11 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
-                # D1 BROM reads boot0 from sector 16 (8 KiB offset). Source:
-                # RT-Thread D1 docs, linux-sunxi.org SDK build howto.
-                # Debian ships no u-boot-sunxi for riscv64; fip_licheerv_assemble()
-                # in fip.sh builds this blob at build time.
+                # The D1 BROM also reads sector 256, clear of the GPT that
+                # sector 16 overlaps. fip.sh builds the blob (no Debian one).
                 spl_blob)       printf 'u-boot-sunxi-with-spl.bin' ;;
                 uboot_blob)     printf '' ;;
-                spl_offset_sectors) printf '16' ;;
+                spl_offset_sectors) printf '256' ;;
                 uboot_offset_sectors) printf '0' ;;
                 extra_pkgs)     printf '' ;;
                 fip_assemble)   printf '1' ;;

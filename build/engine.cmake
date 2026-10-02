@@ -204,6 +204,8 @@ macro( Application name )
 	list (INSERT _APPLICATION_LIBS 0 be)
 	list (INSERT _APPLICATION_LIBS 0 root)
 	target_link_libraries(${name} PUBLIC ${_APPLICATION_LIBS})
+	# Keep libroot in DT_NEEDED, ahead of libc, for its strerror.
+	target_link_options(${name} PRIVATE -Wl,--no-as-needed)
 
 	# Add current dir headers
 	list (APPEND _APPLICATION_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
@@ -230,6 +232,8 @@ macro( Server name )
 	list (INSERT _SERVER_LIBS 0 be)
 	list (INSERT _SERVER_LIBS 0 root)
 	target_link_libraries(${name} PUBLIC ${_SERVER_LIBS})
+	# Same DT_NEEDED rule as Application.
+	target_link_options(${name} PRIVATE -Wl,--no-as-needed)
 
 	list (APPEND _SERVER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
 	target_include_directories(${name} PRIVATE ${_SERVER_INCLUDES})

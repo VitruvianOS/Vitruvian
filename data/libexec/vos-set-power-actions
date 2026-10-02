@@ -9,6 +9,7 @@
 # Usage: vos-set-power-actions KEY=VALUE...
 #   HandlePowerKey, HandleSuspendKey, HandleHibernateKey, HandleLidSwitch:
 #       ignore | poweroff | suspend | hibernate
+#   HandleRebootKey: ignore | reboot | poweroff | halt
 #   IdleAction: ignore | suspend | hibernate
 #   IdleActionSec: seconds, 60..86400
 # Keys not given keep their current value in the drop-in.
@@ -21,7 +22,7 @@ fi
 
 DIR=/etc/systemd/logind.conf.d
 CONF=$DIR/60-vos-power.conf
-KEYS="HandlePowerKey HandleSuspendKey HandleHibernateKey HandleLidSwitch IdleAction IdleActionSec"
+KEYS="HandlePowerKey HandleRebootKey HandleSuspendKey HandleHibernateKey HandleLidSwitch IdleAction IdleActionSec"
 
 # Current values first, so a call changes only what it names.
 for k in $KEYS; do
@@ -40,6 +41,11 @@ for arg in "$@"; do
         HandlePowerKey|HandleSuspendKey|HandleHibernateKey|HandleLidSwitch)
             case "$v" in
                 ignore|poweroff|suspend|hibernate) ;;
+                *) echo "invalid value for $k: $v" >&2; exit 2 ;;
+            esac ;;
+        HandleRebootKey)
+            case "$v" in
+                ignore|reboot|poweroff|halt) ;;
                 *) echo "invalid value for $k: $v" >&2; exit 2 ;;
             esac ;;
         IdleAction)

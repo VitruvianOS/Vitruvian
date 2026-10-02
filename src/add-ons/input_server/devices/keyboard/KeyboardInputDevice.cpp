@@ -41,7 +41,6 @@
 #include <xkbcommon/xkbcommon-compose.h>
 #include <AppDefs.h>
 #include <private/app/LaunchDaemonDefs.h>
-#include <private/app/RegistrarDefs.h>
 #include <private/kernel/util/KMessage.h>
 
 
@@ -352,6 +351,10 @@ KeyboardDevice::GetDescription(BMessage* message) const
 
 // #pragma mark - control thread
 
+
+// KEY_POWER is below 0x80, where key codes are legacy ones; report it
+// above that range so it cannot collide.
+static const uint32 kPowerKeyCode = KEY_POWER + 0x100;
 
 // evdev -> Haiku key mapping for non-UTF8 keys (xkbcommon provides no UTF8 for nav/function keys)
 // For F-keys and system keys: byte0 = B_FUNCTION_KEY, byte1 = B_FN_KEY constant
@@ -713,25 +716,10 @@ KeyboardDevice::_ControlThread()
 			}
 		}
 
-		// Power management: send shutdown/reboot to registrar on release
-		if (!isKeyDown) {
-			bool isShutdown = (ev.code == KEY_POWER);
-			bool isReboot   = (ev.code == KEY_RESTART);
-			if (isShutdown || isReboot) {
-				port_id regPort = find_port(B_REGISTRAR_PORT_NAME);
-				if (regPort >= 0) {
-					BMessage msg(BPrivate::B_REG_SHUT_DOWN);
-					msg.AddBool("reboot", isReboot);
-					msg.AddBool("confirm", false);
-					ssize_t size = msg.FlattenedSize();
-					char* buf = new char[size];
-					if (msg.Flatten(buf, size) == B_OK)
-						write_port(regPort, 0, buf, size);
-					delete[] buf;
-				}
-				continue;
-			}
-		}
+		// Power keys are reported as unmapped keys, never acted on: logind
+		// owns them, which holds only while this device is not grabbed.
+		if ((ev.code == KEY_POWER || ev.code == KEY_RESTART) && ev.value == 2)
+			continue;
 
 		LOG_EVENT("KB_READ: %" B_PRIdBIGTIME ", %02x, %02" B_PRIx32 "\n",
 			keyInfo.timestamp, isKeyDown, keycode);
@@ -954,6 +942,8 @@ KeyboardDevice::_ControlThread()
 
 		uint32 msgKey = (haikuKey != 0) ? haikuKey
 			: (keycode >= 0x80 ? keycode : 0);
+		if (keycode == KEY_POWER)
+			msgKey = kPowerKeyCode;
 
 		msg->AddInt64("when", keyInfo.timestamp);
 		msg->AddInt32("key", msgKey);

@@ -80,6 +80,14 @@ static const Choice kKeyChoices[] = {
 	{ NULL, NULL }
 };
 
+static const Choice kRebootKeyChoices[] = {
+	{ B_TRANSLATE_MARK("Reboot"), "reboot" },
+	{ B_TRANSLATE_MARK("Power off"), "poweroff" },
+	{ B_TRANSLATE_MARK("Halt"), "halt" },
+	{ B_TRANSLATE_MARK("Do nothing"), "ignore" },
+	{ NULL, NULL }
+};
+
 static const Choice kSleepKeyChoices[] = {
 	{ B_TRANSLATE_MARK("Suspend"), "suspend" },
 	{ B_TRANSLATE_MARK("Hibernate"), "hibernate" },
@@ -229,6 +237,7 @@ PowerView::PowerView()
 	fBatteryPercentLabel(NULL),
 	fBatteryTimeLabel(NULL),
 	fPowerKeyMenu(NULL),
+	fRebootKeyMenu(NULL),
 	fSuspendKeyMenu(NULL),
 	fHibernateKeyMenu(NULL),
 	fLidMenu(NULL),
@@ -297,6 +306,9 @@ PowerView::Create()
 	view->fPowerKeyMenu = choice_menu("power_key",
 		B_TRANSLATE("Power button:"), kMsgLogindActionChanged,
 		"HandlePowerKey", kKeyChoices, view->fCanHibernate);
+	view->fRebootKeyMenu = choice_menu("reboot_key",
+		B_TRANSLATE("Restart button:"), kMsgLogindActionChanged,
+		"HandleRebootKey", kRebootKeyChoices, view->fCanHibernate);
 	view->fSuspendKeyMenu = choice_menu("suspend_key",
 		B_TRANSLATE("Sleep button:"), kMsgLogindActionChanged,
 		"HandleSuspendKey", kSleepKeyChoices, view->fCanHibernate);
@@ -315,10 +327,11 @@ PowerView::Create()
 	BLayoutBuilder::Grid<>(systemBox, B_USE_DEFAULT_SPACING,
 			B_USE_SMALL_SPACING)
 		.AddMenuField(view->fPowerKeyMenu, 0, 0)
-		.AddMenuField(view->fSuspendKeyMenu, 0, 1)
-		.AddMenuField(view->fHibernateKeyMenu, 0, 2)
-		.AddMenuField(view->fLidMenu, 0, 3)
-		.AddMenuField(view->fIdleMenu, 0, 4)
+		.AddMenuField(view->fRebootKeyMenu, 0, 1)
+		.AddMenuField(view->fSuspendKeyMenu, 0, 2)
+		.AddMenuField(view->fHibernateKeyMenu, 0, 3)
+		.AddMenuField(view->fLidMenu, 0, 4)
+		.AddMenuField(view->fIdleMenu, 0, 5)
 		.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,
 			B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING);
 
@@ -385,8 +398,9 @@ PowerView::AttachedToWindow()
 	fBatteryCriticalMenu->SetEnabled(hasBattery);
 	fNotificationsCheckBox->SetEnabled(hasBattery);
 
-	BMenuField* menus[] = { fPowerKeyMenu, fSuspendKeyMenu, fHibernateKeyMenu,
-		fLidMenu, fIdleMenu, fDisplayOffMenu, fBatteryCriticalMenu };
+	BMenuField* menus[] = { fPowerKeyMenu, fRebootKeyMenu, fSuspendKeyMenu,
+		fHibernateKeyMenu, fLidMenu, fIdleMenu, fDisplayOffMenu,
+		fBatteryCriticalMenu };
 	for (BMenuField* field : menus)
 		field->Menu()->SetTargetForItems(this);
 	fNotificationsCheckBox->SetTarget(this);
@@ -443,6 +457,7 @@ PowerView::_LoadLogindActions()
 		const char*	property;
 	} keys[] = {
 		{ fPowerKeyMenu, "HandlePowerKey" },
+		{ fRebootKeyMenu, "HandleRebootKey" },
 		{ fSuspendKeyMenu, "HandleSuspendKey" },
 		{ fHibernateKeyMenu, "HandleHibernateKey" },
 		{ fLidMenu, "HandleLidSwitch" }
@@ -540,6 +555,7 @@ void
 PowerView::_SetLogindMenusEnabled(bool enabled)
 {
 	fPowerKeyMenu->SetEnabled(enabled);
+	fRebootKeyMenu->SetEnabled(enabled);
 	fSuspendKeyMenu->SetEnabled(enabled);
 	fHibernateKeyMenu->SetEnabled(enabled);
 	fLidMenu->SetEnabled(enabled);

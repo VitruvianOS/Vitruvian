@@ -45,6 +45,7 @@ private:
 			BStringView*		fBatteryTimeLabel;
 
 			BMenuField*			fPowerKeyMenu;
+			BMenuField*			fRebootKeyMenu;
 			BMenuField*			fSuspendKeyMenu;
 			BMenuField*			fHibernateKeyMenu;
 			BMenuField*			fLidMenu;

@@ -613,19 +613,20 @@ DrmHWInterface::_EventThreadMain()
 			}
 		}
 
-		// QEMU resize may not emit HOTPLUG=1, so poll the preferred geometry;
-		// not while a user-set mode is active, or the poll would undo it.
+		// QEMU resize may not emit HOTPLUG=1: poll the preferred geometry (no
+		// reprobe), but not while a user-set mode is active or it would undo it.
 		if (active && !fUserSetMode
 				&& system_time() - fLastModeCheck > 2000000LL) {
 			fLastModeCheck = system_time();
 
 			display_mode preferred;
-			if (GetPreferredMode(&preferred) == B_OK
-				&& (preferred.virtual_width != fLastPreferredWidth
-					|| preferred.virtual_height != fLastPreferredHeight)) {
+			if (GetPreferredModeCurrent(&preferred) == B_OK
+				&& (preferred.virtual_width != fLastPreferredWidth.load()
+					|| preferred.virtual_height
+						!= fLastPreferredHeight.load())) {
 				fprintf(stderr, "[drm] preferred mode %ux%u -> %ux%u; "
-					"scheduling resize\n", fLastPreferredWidth,
-					fLastPreferredHeight, preferred.virtual_width,
+					"scheduling resize\n", fLastPreferredWidth.load(),
+					fLastPreferredHeight.load(), preferred.virtual_width,
 					preferred.virtual_height);
 				fLastPreferredWidth = preferred.virtual_width;
 				fLastPreferredHeight = preferred.virtual_height;
@@ -988,11 +989,31 @@ DrmHWInterface::GetMode(display_mode* mode)
 status_t
 DrmHWInterface::GetPreferredMode(display_mode* mode)
 {
+	return _GetPreferredMode(mode, true);
+}
+
+
+status_t
+DrmHWInterface::GetPreferredModeCurrent(display_mode* mode)
+{
+	return _GetPreferredMode(mode, false);
+}
+
+
+status_t
+DrmHWInterface::_GetPreferredMode(display_mode* mode, bool probe)
+{
 	CALLED();
 
 	struct modeset_dev* dev = get_dev();
-	drmModeConnector* conn = (dev != NULL && fFd >= 0)
-		? drmModeGetConnector(fFd, dev->conn) : NULL;
+	drmModeConnector* conn = NULL;
+	if (dev != NULL && fFd >= 0) {
+		// drmModeGetConnector() forces a reprobe (DDC/EDID, load
+		// detection). The poll must not do that every two seconds.
+		conn = probe
+			? drmModeGetConnector(fFd, dev->conn)
+			: drmModeGetConnectorCurrent(fFd, dev->conn);
+	}
 	const drmModeModeInfo* picked
 		= conn != NULL ? modeset_pick_mode(fFd, conn) : NULL;
 

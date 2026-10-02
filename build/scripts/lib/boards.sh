@@ -267,6 +267,9 @@ board_config() {
                 uboot_offset_sectors) printf '0' ;;
                 extra_pkgs)     printf '' ;;
                 fip_assemble)   printf '1' ;;
+                # DTB stdout-path serial0:115200n8 (UART0 @ 115200).
+                console)        printf 'ttyS0,115200' ;;
+                boot_dtb)       printf 'allwinner/sun20i-d1-lichee-rv.dtb' ;;
                 dtb_files)      printf 'allwinner/sun20i-d1-lichee-rv.dtb' ;;
             esac
             ;;

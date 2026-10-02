@@ -1055,7 +1055,9 @@ apt-get clean" || die "raspberry chroot bash-c failed"
 
     log_step "Copying device trees..."
     for _dtb in $_dtb_files; do
+        # trixie: /usr/lib/linux-image-<kver>/; testing: modules/<kver>/dtb/.
         _dtb_path="$_mnt/usr/lib/linux-image-$_kver/$_dtb"
+        [ -f "$_dtb_path" ] || _dtb_path="$_mnt/usr/lib/modules/$_kver/dtb/$_dtb"
         if [ -f "$_dtb_path" ]; then
             sudo cp "$_dtb_path" "$_mnt/boot/firmware/"
             log_info "  copied $_dtb"

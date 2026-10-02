@@ -115,6 +115,11 @@ AppServer::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case AS_GET_DESKTOP:
 		{
+			// AS_GET_DESKTOP is 0, the code of a bare reply to an
+			// asynchronous send from this team.
+			if (message->IsReply())
+				break;
+
 			Desktop* desktop = NULL;
 
 			int32 userID = message->GetInt32("user", 0);

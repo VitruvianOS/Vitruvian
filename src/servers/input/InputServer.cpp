@@ -557,7 +557,8 @@ InputServer::MessageReceived(BMessage* message)
 		case IS_SCREEN_BOUNDS_UPDATED:
 		{
 			// This is what the R5 app_server sends us when the screen
-			// configuration changes
+			// configuration changes. Never reply: app_server would take the
+			// reply for AS_GET_DESKTOP, which is code 0.
 			BRect frame;
 			if (message->FindRect("screen_bounds", &frame) != B_OK)
 				frame = fScreen.Frame();
@@ -572,7 +573,7 @@ InputServer::MessageReceived(BMessage* message)
 
 			if (frame == fFrame && orientation == fScreenOrientation
 				&& reflection == fScreenReflection)
-				break;
+				return;
 
 			BPoint pos(fMousePos.x * frame.Width() / fFrame.Width(),
 				fMousePos.y * frame.Height() / fFrame.Height());
@@ -591,7 +592,7 @@ InputServer::MessageReceived(BMessage* message)
 			BMessage set;
 			set.AddPoint("where", pos);
 			HandleSetMousePosition(&set, NULL);
-			break;
+			return;
 		}
 
 		case B_SEAT_DISABLED:

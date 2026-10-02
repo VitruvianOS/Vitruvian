@@ -94,20 +94,16 @@ long backlight_set_brightness(struct backlight *backlight, long brightness)
 {
 	char *path;
 	char *buffer = NULL;
-	int fd;
+	int fd = -1;
 	long ret;
 
 	if (asprintf(&path, "%s/%s", backlight->path, "brightness") < 0)
 		return -ENOMEM;
 
-	fd = open(path, O_RDWR);
+	// sysfs brightness may be write-only; a read-first would skip the write
+	// and leave the panel dark. Return 0 on success, matching callers.
+	fd = open(path, O_WRONLY);
 	if (fd < 0) {
-		ret = -1;
-		goto out;
-	}
-
-	ret = read(fd, &buffer, sizeof(buffer));
-	if (ret < 1) {
 		ret = -1;
 		goto out;
 	}
@@ -123,8 +119,8 @@ long backlight_set_brightness(struct backlight *backlight, long brightness)
 		goto out;
 	}
 
-	ret = backlight_get_brightness(backlight);
-	backlight->brightness = ret;
+	backlight->brightness = brightness;
+	ret = 0;
 out:
 	free(buffer);
 	free(path);

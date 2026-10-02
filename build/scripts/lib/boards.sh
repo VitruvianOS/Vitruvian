@@ -184,14 +184,18 @@ board_config() {
                 boot_size_mb)   printf '256' ;;
                 root_fs)        printf 'ext4' ;;
                 bootloader)     printf 'u-boot' ;;
-                # u-boot-imx is armhf-only; no arm64 U-Boot package exists.
+                # No arm64 Debian U-Boot here; flash.bin comes from firmware/nxp/.
+                # The BootROM reads it at 0x8400 (sector 66).
                 uboot_variant)  printf '' ;;
-                spl_offset_sectors) printf '64' ;;
-                uboot_offset_sectors) printf '16384' ;;
-                # Booting this board needs vendor blobs in firmware/nxp/.
+                spl_blob)       printf 'flash.bin' ;;
+                uboot_blob)     printf '' ;;
+                spl_offset_sectors) printf '66' ;;
+                uboot_offset_sectors) printf '0' ;;
                 extra_pkgs)     printf '' ;;
                 # Debian ships these under freescale/, not nxp/imx/.
                 dtb_files)      printf 'freescale/imx8mq-librem5-devkit.dtb freescale/imx8mp-venice-gw74xx.dtb' ;;
+                # Librem 5 / Venice debug UART is UART1 (serial0/ttymxc0).
+                console)        printf 'ttyS0,115200' ;;
             esac
             ;;
         amlogic)

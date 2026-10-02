@@ -1309,10 +1309,9 @@ FSTAB
     # one. VOS_UBOOT_VARIANT overrides the board table's default for a build
     # targeting a specific machine.
     _uboot_stage=""
-    # Multiple variants may be needed by one board (k3/BeaglePlay: the R5
-    # SPL dir carries tiboot3.bin, the A53 dir carries tispl.bin/u-boot.img),
-    # so uboot_variant is a space-separated list, staged in order.
+    # uboot_variant may list several dirs, staged in order (k3: R5 and A53).
     _variants="${VOS_UBOOT_VARIANT:-$(board_config "$_board" uboot_variant)}"
+    _uboot_fat="$(board_config "$_board" uboot_fat_files 2>/dev/null)"
     if [ -n "$_variants" ]; then
         _found_any=0
         for _variant in $_variants; do
@@ -1327,6 +1326,34 @@ FSTAB
             log_warn "U-Boot variants '${_variants}' not found in the rootfs."
             log_warn "Available: $(ls "$_mnt/usr/lib/u-boot" 2>/dev/null | tr '\n' ' ')"
             log_warn "Set VOS_UBOOT_VARIANT to one of these, or fix uboot_variant in boards.sh."
+        fi
+    fi
+
+    # FS-mode boot ROMs (AM62x) load the chain as files from the FAT boot
+    # partition; a raw dd there would land in the GPT.
+    _fat_chain_ok=0
+    if [ "$_uboot_fat" = 1 ]; then
+        _fat_src="$_uboot_stage"
+        # Hand-placed firmware/<board>/ wins, same as the raw-flash path.
+        if [ -d "$_basedir/firmware/$_board" ]; then
+            _fat_src="$_basedir/firmware/$_board"
+        fi
+        if [ -n "$_fat_src" ] && [ -d "$_fat_src" ]; then
+            for _bf in tiboot3.bin tispl.bin u-boot.img; do
+                if [ -f "$_fat_src/$_bf" ]; then
+                    sudo cp "$_fat_src/$_bf" "$_mnt/boot/$_bf"
+                    log_info "  FAT boot file $_bf copied to boot partition"
+                else
+                    log_warn "  FAT boot file $_bf not in $_fat_src"
+                fi
+            done
+        fi
+        # Debian does not ship tiboot3.bin/tispl.bin; refuse to publish a
+        # boot partition the BootROM cannot use.
+        if [ -f "$_mnt/boot/tiboot3.bin" ]; then
+            _fat_chain_ok=1
+        else
+            die "$_board uboot_fat_files: no tiboot3.bin on the boot partition (Debian u-boot-sitara-binaries ships u-boot-spl.bin/u-boot.img only; place a real k3 chain in firmware/$_board/ or build it with TI k3-image-gen)"
         fi
     fi
 
@@ -1409,12 +1436,18 @@ FSTAB
     _part_start_sectors=$(( ${_part_start_mib:-4} * 2048 ))
     _flashed=0
 
-    # Refuse to write a blob that would reach into the first partition.
+    # Refuse blobs reaching the first partition or, on GPT, LBA 0-33: a
+    # sector-1 write passes the partition check and still kills the table.
     _flash_blob() {
         _bf="$1"; _boff="$2"; _what="$3"
         [ -n "$_bf" ] || return 0
         if [ ! -f "$_uboot_dir/$_bf" ]; then
             log_warn "  $_what blob '$_bf' not present in $_uboot_dir"
+            return 1
+        fi
+        if [ "$_part_fmt" = "gpt" ] && [ "$_boff" -lt 34 ]; then
+            log_error "  $_what '$_bf' at sector $_boff lands in the GPT"
+            log_error "  metadata area (LBA 0-33); refusing."
             return 1
         fi
         _bsz=$(stat -c %s "$_uboot_dir/$_bf")
@@ -1431,10 +1464,20 @@ FSTAB
     }
 
     if [ -n "$_uboot_dir" ] && [ -d "$_uboot_dir" ]; then
-        _flash_blob "$_spl_blob"   "$_spl_off"   "SPL"    || true
-        _flash_blob "$_uboot_blob" "$_uboot_off" "U-Boot" || true
-        if [ -f "$_uboot_dir/trust.bin" ]; then
-            _flash_blob "trust.bin" $(( _uboot_off + 2048 )) "trust.bin" || true
+        if [ "$_uboot_fat" = 1 ]; then
+            # FS-mode boards: the chain was copied to the FAT partition.
+            if [ "$_fat_chain_ok" = 1 ]; then
+                log_info "  U-Boot chain placed as FAT boot files (AM62x FS mode)"
+                _flashed=$(( _flashed + 1 ))
+            else
+                log_warn "  no tiboot3.bin available for FAT boot placement"
+            fi
+        else
+            _flash_blob "$_spl_blob"   "$_spl_off"   "SPL"    || true
+            _flash_blob "$_uboot_blob" "$_uboot_off" "U-Boot" || true
+            if [ -f "$_uboot_dir/trust.bin" ]; then
+                _flash_blob "trust.bin" $(( _uboot_off + 2048 )) "trust.bin" || true
+            fi
         fi
     else
         log_warn "No U-Boot blobs available for $_board."

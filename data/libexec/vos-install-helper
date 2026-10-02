@@ -1214,6 +1214,46 @@ _validate_one_op() {
             esac
             log "  [$_id] erase target_ref=$_tref"
             ;;
+        wipe)
+            _tref="$(_partlib_rec_get target_ref)"
+            _mode="$(_partlib_rec_get mode)"
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            case "$_mode" in
+                quick|full) ;;
+                *) log "[$_id]: wipe mode must be quick or full: $_mode"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            case " $_validate_seen_ids " in
+                *" $_tref "*) ;;
+                *) _partition_check_devnode "$_tref" || {
+                       log "[$_id]: target_ref resolves to neither a plan id nor a devnode: $_tref"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;} ;;
+            esac
+            if _partition_check_devnode "$_tref" && [ ! -b "$_tref" ]; then
+                log "[$_id]: not a block device: $_tref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if _partition_check_devnode "$_tref" && [ "$_tref" = "$_plan_disk" ]; then
+                log "[$_id]: wipe refuses whole-disk target: $_tref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if _partition_check_devnode "$_tref"; then
+                _wt="$(lsblk -dno TYPE "$_tref" 2>/dev/null)"
+                if [ "$_wt" = "disk" ]; then
+                    log "[$_id]: wipe refuses whole-disk target: $_tref"
+                    _validate_rc=2; _PARTLIB_ABORT=1; return
+                fi
+                if _mnt="$(findmnt -n -o TARGET --source "$_tref" 2>/dev/null)" \
+                        && [ -n "$_mnt" ]; then
+                    log "[$_id]: $_tref is mounted at $_mnt; unmount it first"
+                    _validate_rc=2; _PARTLIB_ABORT=1; return
+                fi
+            fi
+            log "  [$_id] wipe target_ref=$_tref mode=$_mode"
+            ;;
         repair)
             _tref="$(_partlib_rec_get target_ref)"
             _fs="$(_partlib_rec_get filesystem)"
@@ -1473,6 +1513,16 @@ _apply_one_op() {
                 _detail="$_devnode"
             else
                 _status="failed"; _detail="erase failed for $_devnode"
+            fi
+            ;;
+        wipe)
+            _tref="$(_partlib_rec_get target_ref)"
+            _mode="$(_partlib_rec_get mode)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            if _partlib_wipe "$_plan_disk" "$_devnode" "$_mode"; then
+                _detail="$_devnode"
+            else
+                _status="failed"; _detail="wipe failed for $_devnode"
             fi
             ;;
         repair)

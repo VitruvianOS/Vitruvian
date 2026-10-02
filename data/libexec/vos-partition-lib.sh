@@ -282,6 +282,113 @@ _partlib_erase() {
     return 0
 }
 
+# Wipe one partition, never the whole disk. Quick: signatures and the
+# first/last MiB. Full: discard if supported, else zero the partition.
+_partlib_wipe() {
+    _disk="$1"
+    _target="$2"
+    _mode="$3"
+
+    if [ -z "$_target" ] || [ ! -b "$_target" ]; then
+        log "wipe: not a block device: $_target"
+        return 1
+    fi
+    if [ "$_target" = "$_disk" ]; then
+        log "wipe: refusing whole-disk target: $_target"
+        return 1
+    fi
+    _wt="$(lsblk -dno TYPE "$_target" 2>/dev/null)"
+    if [ "$_wt" = "disk" ]; then
+        log "wipe: refusing whole-disk target: $_target"
+        return 1
+    fi
+    _partno="$(_partlib_partno "$_disk" "$_target")"
+    if [ -z "$_partno" ]; then
+        log "wipe: $_target is not a partition of $_disk"
+        return 1
+    fi
+    if _mnt="$(findmnt -n -o TARGET --source "$_target" 2>/dev/null)" \
+            && [ -n "$_mnt" ]; then
+        log "wipe: $_target is mounted at $_mnt; unmount it first"
+        return 1
+    fi
+
+    _sys="/sys/class/block/$(basename "$_target")"
+    _start="$(cat "$_sys/start" 2>/dev/null)"
+    _size="$(cat "$_sys/size" 2>/dev/null)"
+    if [ -z "$_start" ] || [ -z "$_size" ] || [ "$_size" -le 0 ]; then
+        log "wipe: could not read extent of $_target"
+        return 1
+    fi
+
+    case "$_mode" in
+        quick)
+            _err="$(wipefs -a "$_target" 2>&1 >/dev/null)"
+            if [ $? -ne 0 ]; then
+                log "wipe: wipefs failed for $_target: $_err"
+                return 1
+            fi
+            if ! dd if=/dev/zero of="$_target" bs=1M count=1 conv=fsync \
+                    status=none 2>/dev/null; then
+                log "wipe: zeroing first MiB of $_target failed"
+                return 1
+            fi
+            # 2048 sectors/MiB at the usual 512-byte logical block size
+            if [ "$_size" -gt 2048 ]; then
+                if ! dd if=/dev/zero of="$_target" bs=1M \
+                        seek=$(( (_size / 2048) - 1 )) count=1 conv=fsync \
+                        status=none 2>/dev/null; then
+                    log "wipe: zeroing last MiB of $_target failed"
+                    return 1
+                fi
+            fi
+            ;;
+        full)
+            # Discard caps live on the parent disk queue; partitions
+            # usually expose none. lsblk needs -b so DISC-MAX is bytes.
+            _parent="$(lsblk -no PKNAME "$_target" 2>/dev/null | head -n1)"
+            if [ -z "$_parent" ]; then
+                log "wipe: could not determine parent disk of $_target"
+                return 1
+            fi
+            _disc="$(cat "/sys/class/block/$_parent/queue/discard_max_bytes" \
+                2>/dev/null)"
+            if [ -z "$_disc" ]; then
+                _disc="$(cat \
+                    "/sys/class/block/$_parent/queue/discard_max_hw_bytes" \
+                    2>/dev/null)"
+            fi
+            if [ -z "$_disc" ]; then
+                _disc="$(lsblk -bdno DISC-MAX "/dev/$_parent" 2>/dev/null \
+                    | head -n1)"
+            fi
+            if [ -n "$_disc" ] && [ "$_disc" -gt 0 ] 2>/dev/null; then
+                _err="$(blkdiscard -f "$_target" 2>&1 >/dev/null)"
+                if [ $? -ne 0 ]; then
+                    log "wipe: blkdiscard failed for $_target: $_err"
+                    return 1
+                fi
+            else
+                # Write the partition itself: seek, not skip, positions the
+                # output, and the partition node keeps it inside its extent.
+                _err="$(dd if=/dev/zero of="$_target" bs=1M conv=fsync \
+                    status=none 2>&1 >/dev/null)"
+                # A full device ends dd with ENOSPC once the extent is written.
+                case "$_err" in *"No space left"*) _err="" ;; esac
+                if [ -n "$_err" ]; then
+                    log "wipe: dd zero failed on $_target: $_err"
+                    return 1
+                fi
+            fi
+            ;;
+        *)
+            log "wipe: invalid mode: $_mode"
+            return 1
+            ;;
+    esac
+    return 0
+}
+
 _partlib_repair() {
     _devnode="$1"
     _fs="$2"

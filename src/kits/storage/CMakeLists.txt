@@ -102,4 +102,5 @@ target_sources(be PRIVATE
 	disk_device/jobs/InitializeJob.cpp
 	disk_device/jobs/UninitializeJob.cpp
 	disk_device/jobs/MoveJob.cpp
+	disk_device/jobs/WipeJob.cpp
 )

@@ -342,6 +342,21 @@ PartitionPlanBuilder::AddErase(const char* id, const char* targetRef)
 
 
 void
+PartitionPlanBuilder::AddWipe(const char* id, const char* targetRef, bool full)
+{
+	if (!_CheckField(id) || !_CheckField(targetRef))
+		return;
+
+	fOpCount++;
+	fOps << "\n[op]\n";
+	fOps << "kind=wipe\n";
+	fOps << "id=" << id << "\n";
+	fOps << "target_ref=" << targetRef << "\n";
+	fOps << "mode=" << (full ? "full" : "quick") << "\n";
+}
+
+
+void
 PartitionPlanBuilder::AddRepair(const char* id, const char* targetRef,
 	const char* filesystem, bool checkOnly)
 {

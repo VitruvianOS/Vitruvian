@@ -100,6 +100,8 @@ private:
 									partition_id selectedPartition);
 			void				_Erase(BDiskDevice* disk,
 									partition_id selectedPartition);
+			void				_Wipe(BDiskDevice* disk,
+									partition_id selectedPartition);
 			void				_Rename(BDiskDevice* disk,
 									partition_id selectedPartition);
 			void				_RenameGpt(BDiskDevice* disk,

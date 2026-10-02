@@ -59,6 +59,8 @@ public:
 									off_t newStartMiB);
 			void				AddErase(const char* id,
 									const char* targetRef);
+			void				AddWipe(const char* id,
+									const char* targetRef, bool full);
 			void				AddRepair(const char* id,
 									const char* targetRef,
 									const char* filesystem, bool checkOnly);

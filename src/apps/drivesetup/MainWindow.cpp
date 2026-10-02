@@ -74,6 +74,7 @@
 #include "SetFlagsJob.h"
 #include "SetStringJob.h"
 #include "UninitializeJob.h"
+#include "WipeJob.h"
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -91,6 +92,7 @@ enum {
 	MSG_SET_FLAGS				= 'sflg',
 	MSG_CHECK					= 'chck',
 	MSG_ERASE					= 'eras',
+	MSG_WIPE					= 'wipe',
 	MSG_RENAME					= 'renm',
 	MSG_RENAME_GPT				= 'rngp',
 	MSG_INITIALIZE				= 'init',
@@ -248,8 +250,8 @@ MainWindow::MainWindow()
 	fMenuBar = new BMenuBar("root menu");
 
 	// create all the menu items
-	fWipeMenuItem = new BMenuItem(B_TRANSLATE("Wipe (not implemented)"),
-		new BMessage(MSG_FORMAT));
+	fWipeMenuItem = new BMenuItem(B_TRANSLATE("Wipe" B_UTF8_ELLIPSIS),
+		new BMessage(MSG_WIPE));
 	fEjectMenuItem = new BMenuItem(B_TRANSLATE("Eject"),
 		new BMessage(MSG_EJECT), 'E');
 	fOpenDiskProbeMenuItem = new BMenuItem(B_TRANSLATE("Open with DiskProbe"),
@@ -317,7 +319,6 @@ MainWindow::MainWindow()
 	// Disk menu
 	fDiskMenu = new BMenu(B_TRANSLATE("Disk"));
 
-	// fDiskMenu->AddItem(fWipeMenuItem);
 	fDiskInitMenu = new BMenu(B_TRANSLATE("Initialize"));
 	fDiskMenu->AddItem(fDiskInitMenu);
 
@@ -341,6 +342,7 @@ MainWindow::MainWindow()
 	fPartitionMenu->AddItem(fRenameMenuItem);
 	fPartitionMenu->AddItem(fCheckMenuItem);
 	fPartitionMenu->AddItem(fEraseMenuItem);
+	fPartitionMenu->AddItem(fWipeMenuItem);
 	fPartitionMenu->AddItem(fDeleteMenuItem);
 
 	fPartitionMenu->AddSeparatorItem();
@@ -538,6 +540,10 @@ MainWindow::MessageReceived(BMessage* message)
 
 		case MSG_ERASE:
 			_Erase(fCurrentDisk, fCurrentPartitionID);
+			break;
+
+		case MSG_WIPE:
+			_Wipe(fCurrentDisk, fCurrentPartitionID);
 			break;
 
 		case MSG_RENAME:
@@ -1430,6 +1436,8 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 			}
 			fCheckMenuItem->SetEnabled(canCheck);
 			fEraseMenuItem->SetEnabled(contentOpsPossible);
+			fWipeMenuItem->SetEnabled(notMountedAndWritable
+				&& !partition->IsDevice());
 			fResizeMenuItem->SetEnabled(canResizeMove);
 			fRenameMenuItem->SetEnabled(canRenameLabel);
 
@@ -1480,6 +1488,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 			fFlagsMenuItem->SetEnabled(false);
 			fCheckMenuItem->SetEnabled(false);
 			fEraseMenuItem->SetEnabled(false);
+			fWipeMenuItem->SetEnabled(false);
 			fRenameMenuItem->SetEnabled(false);
 			if (fPartitionMenu->IndexOf(fRenameGptMenuItem) >= 0)
 				fPartitionMenu->RemoveItem(fRenameGptMenuItem);
@@ -1522,14 +1531,15 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 			}
 			fprintf(stderr, "[DriveSetup menus]   enabled: create=%d "
 				"format=%d delete=%d change=%d mount=%d unmount=%d "
-				"erase=%d check=%d rename=%d resize=%d\n",
+				"erase=%d wipe=%d check=%d rename=%d resize=%d\n",
 				fCreateContextMenuItem->IsEnabled(),
 				fFormatContextMenuItem->IsEnabled(),
 				fDeleteContextMenuItem->IsEnabled(),
 				fChangeContextMenuItem->IsEnabled(),
 				fMountContextMenuItem->IsEnabled(),
 				fUnmountContextMenuItem->IsEnabled(),
-				fEraseMenuItem->IsEnabled(), fCheckMenuItem->IsEnabled(),
+				fEraseMenuItem->IsEnabled(), fWipeMenuItem->IsEnabled(),
+				fCheckMenuItem->IsEnabled(),
 				fRenameMenuItem->IsEnabled(), fResizeMenuItem->IsEnabled());
 		}
 
@@ -1548,6 +1558,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 		fFlagsMenuItem->SetEnabled(false);
 		fCheckMenuItem->SetEnabled(false);
 		fEraseMenuItem->SetEnabled(false);
+		fWipeMenuItem->SetEnabled(false);
 		fRenameMenuItem->SetEnabled(false);
 		if (fPartitionMenu->IndexOf(fRenameGptMenuItem) >= 0)
 			fPartitionMenu->RemoveItem(fRenameGptMenuItem);
@@ -2505,6 +2516,77 @@ MainWindow::_Erase(BDiskDevice* disk, partition_id selectedPartition)
 	if (status != B_OK) {
 		_DisplayPartitionError(B_TRANSLATE("Could not erase the filesystem "
 			"on the selected partition."), NULL, status, &result);
+		return;
+	}
+
+	_ScanDrives();
+}
+
+
+void
+MainWindow::_Wipe(BDiskDevice* disk, partition_id selectedPartition)
+{
+	if (disk == NULL || (int64)selectedPartition < 0) {
+		_DisplayPartitionError(B_TRANSLATE("You need to select a partition "
+			"entry from the list."));
+		return;
+	}
+
+	if (disk->IsReadOnly()) {
+		_DisplayPartitionError(B_TRANSLATE("The selected disk is read-only."));
+		return;
+	}
+
+	BPartition* partition = disk->FindDescendant(selectedPartition);
+	if (partition == NULL) {
+		_DisplayPartitionError(B_TRANSLATE("Unable to find the selected "
+			"partition by ID."));
+		return;
+	}
+
+	if (partition->IsDevice()) {
+		_DisplayPartitionError(B_TRANSLATE("Wipe targets a single "
+			"partition, not the whole disk."));
+		return;
+	}
+
+	if (partition->IsMounted()) {
+		_DisplayPartitionError(B_TRANSLATE("The selected partition is "
+			"mounted. Unmount it first."));
+		return;
+	}
+
+	BAlert* alert = new BAlert("final notice", B_TRANSLATE("Are you sure you "
+		"want to wipe the selected partition?\n\n"
+		"All data on the partition will be irretrievably lost if you "
+		"do so! The partition table entry is kept."),
+		B_TRANSLATE("Quick wipe"), B_TRANSLATE("Full wipe"),
+		B_TRANSLATE("Cancel"),
+		B_WIDTH_FROM_WIDEST, B_WARNING_ALERT);
+	alert->SetShortcut(2, B_ESCAPE);
+	int32 choice = alert->Go();
+	if (choice == 2)
+		return;
+	bool full = (choice == 1);
+
+	PartitionReference* partitionRef
+		= new PartitionReference(partition->ID());
+
+	WipeJob* job = new WipeJob(partitionRef, full);
+
+	partitionRef->ReleaseReference();
+
+	BMessage result;
+	DiskDeviceJobQueue jobQueue;
+	jobQueue.AddJob(job);
+	status_t status = jobQueue.ExecuteViaHelper(disk, &result);
+
+	ProgressWindow* progress = new ProgressWindow(this, result);
+	progress->Go();
+
+	if (status != B_OK) {
+		_DisplayPartitionError(B_TRANSLATE("Could not wipe the selected "
+			"partition."), NULL, status, &result);
 		return;
 	}
 

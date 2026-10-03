@@ -1,0 +1,10 @@
+[Unit]
+Description=V\OS filesystem check failure notice
+# Started by OnFailure= from systemd-fsck-root / systemd-fsck@.
+# Prints what to run; emergency.target still brings up a shell.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/vos-fsck-failed
+StandardOutput=journal+console
+StandardError=journal+console

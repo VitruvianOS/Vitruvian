@@ -12,6 +12,7 @@ set(SYSTEMD_SERVICES
   data/systemd/userbootscript@.service
   data/systemd/vos-login.target
   data/systemd/vos-pdf-printer.service
+  data/systemd/vos-fsck-failed.service
 )
 
 install(FILES data/tmpfiles.d/vos.conf
@@ -28,9 +29,15 @@ install(PROGRAMS data/libexec/vos-install-helper
 install(PROGRAMS data/libexec/vos-partition-lib.sh
   DESTINATION /usr/libexec/)
 
-# Boot-time fsck: ship the root checker into the initramfs.
+# Boot-time fsck: initramfs root checker + failure console notice.
+install(PROGRAMS data/libexec/vos-fsck-failed
+  DESTINATION /usr/libexec/)
 install(PROGRAMS data/initramfs-tools/hooks/vos-fsck
   DESTINATION /usr/share/initramfs-tools/hooks/)
+install(DIRECTORY data/systemd/systemd-fsck-root.service.d
+  DESTINATION /etc/systemd/system/)
+install(DIRECTORY data/systemd/systemd-fsck@.service.d
+  DESTINATION /etc/systemd/system/)
 
 install(FILES data/etc/installer/excludes.list
   DESTINATION /usr/share/vos/installer/)

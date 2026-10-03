@@ -1,0 +1,17 @@
+#!/bin/sh
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+# V\OS: console notice when a boot-time fsck cannot repair errors.
+
+msg='V\OS: a filesystem check failed and could not fix the errors.
+Boot from recovery media and run the checker for that filesystem
+on the affected device, for example:
+  e2fsck -f /dev/sdXN   (ext4 root)
+  fsck.vfat -a /dev/sdXN   (ESP)
+Then reboot.'
+
+if [ -w /dev/console ]; then
+	printf '%s\n' "$msg" > /dev/console
+else
+	printf '%s\n' "$msg" >&2
+fi

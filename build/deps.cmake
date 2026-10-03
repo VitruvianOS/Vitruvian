@@ -80,7 +80,7 @@ DeclareDependency(
 
 DeclareDependency(
 	NOTO
-	RUNTIMES	"fonts-noto-core;fonts-noto-extra;fonts-noto-mono"
+	RUNTIMES	"fonts-noto-core;fonts-noto-mono"
 )
 
 DeclareDependency(
@@ -297,7 +297,7 @@ DeclareDependency(
 	BACKTRACE
 	LIBRARIES  "backtrace"
 	PACKAGES  "libbacktrace-dev"
-	RUNTIMES  "libbacktrace-dev (>= 0.1-4)"
+	RUNTIMES  "libbacktrace0 (>= 0.1-4)"
 )
 
 DeclareDependency(

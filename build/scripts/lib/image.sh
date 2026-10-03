@@ -223,10 +223,12 @@ create_raw() {
 
     sudo mkdir -p "$_root_dir/localdeb"
     sudo cp "$_basedir"/*.deb "$_root_dir/localdeb/"
+    sudo rm -f "$_root_dir"/localdeb/*-dev.deb
 
     log_step "Configuring system, installing Vitruvian, and setting up bootloader..."
 
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
+    _raw_dev_pkgs="$(get_dev_packages "$_arch")"
     _raw_kver="$(ls -1 "$_root_dir/lib/modules" | sort -V | tail -1)"
     sudo chroot "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 apt-get install -y --download-only --no-install-recommends $_raw_pkgs \
@@ -252,6 +254,10 @@ apt-get install -y --no-install-recommends dkms build-essential \"linux-headers-
 
 dpkg -i /localdeb/*.deb || true
 apt-get install -f -y --no-install-recommends
+
+# The root is a copy of the build chroot; drop its -dev packages, autoremove keeps what dkms needs.
+for _p in $_raw_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
+apt-get autoremove -y --purge
 
 depmod -v \"\$_kver\"
 
@@ -412,6 +418,12 @@ EOF
     _assembly_cleanup
     trap - EXIT INT TERM
 
+    # Package lists and downloaded debs only serve the build; apt update refetches the lists.
+    mountpoint -q "$_root_dir/var/cache/apt/archives" \
+        || sudo rm -f "$_root_dir"/var/cache/apt/archives/*.deb
+    sudo rm -f "$_root_dir"/var/cache/apt/*.bin
+    sudo find "$_root_dir/var/lib/apt/lists" -maxdepth 1 -type f -delete
+
     log_step "Building populated filesystem images (no mount)..."
     rm -f "$_esp_img" "$_root_img"
 
@@ -499,14 +511,17 @@ create_iso() {
     fi
 
     _iso_pkgs="$(get_iso_image_packages "$_arch")"
+    _iso_debs="$(cd "$_basedir" && ls *.deb | grep -v -- '-dev\.deb$' | sed 's|^|/tmp/|' | tr '\n' ' ')"
     log_step "Installing debs into chroot..."
     sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
-apt-get install -y --download-only dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs /tmp/*.deb" \
+apt-get install -y --download-only dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs $_iso_debs" \
         || die "iso package download failed"
     chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 apt remove -y vos nexus-dkms || true
 apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
-apt install -y -f --reinstall /tmp/*.deb
+apt install -y -f --reinstall $_iso_debs
+# Drop what earlier vos versions pulled in and this one no longer needs (e.g. fonts-noto-extra).
+apt-get autoremove -y --purge
 depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel stage)"
 
     _common_chroot_setup "$_chroot_dir" "vitruvian" "" "" 1 \
@@ -545,7 +560,8 @@ depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel st
     sudo mksquashfs \
         "$_chroot_dir" \
         "$_basedir/image_tree/image/live/filesystem.squashfs" \
-        -b 1048576 $_sq_comp_args -xattrs
+        -b 1048576 $_sq_comp_args -xattrs \
+        -wildcards -e 'var/lib/apt/lists/*' 'var/cache/apt/*.bin' 'var/cache/apt/archives/*.deb'
 
     log_step "Copying kernel and initramfs..."
     # riscv64's linux-image ships an uncompressed vmlinux-<ver> (no vmlinuz-);
@@ -744,6 +760,13 @@ chmod 0644 /etc/hosts
 # and stall every boot 30 s. The setting is dropped again so installed systems use their own swap.
 mkdir -p /etc/initramfs-tools/conf.d
 echo RESUME=none > /etc/initramfs-tools/conf.d/resume
+# Embed microcode for both CPU vendors, not only the build host's.
+if [ -f /etc/default/intel-microcode ]; then
+    sed -i 's/^#\?IUCODE_TOOL_INITRAMFS=.*/IUCODE_TOOL_INITRAMFS=early/' /etc/default/intel-microcode
+fi
+if [ -f /etc/default/amd64-microcode ]; then
+    sed -i 's/^#\?AMD64UCODE_INITRAMFS=.*/AMD64UCODE_INITRAMFS=early/' /etc/default/amd64-microcode
+fi
 update-initramfs -u -k all
 rm -f /etc/initramfs-tools/conf.d/resume
 

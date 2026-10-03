@@ -45,6 +45,7 @@ set(SYSTEM_LIBS
 	media2
 	opengl
 	printcups
+	screensaver
 	textencoding
 	tracker
 	translation

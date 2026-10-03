@@ -1,4 +1,4 @@
-# Target names (cmake-unique) — used for ImageInclude and DEPENDS
+# Target names (cmake-unique): used for ImageInclude and DEPENDS
 set(SYSTEM_PREFERENCES_TARGETS
 	Appearance
 	Backgrounds
@@ -14,7 +14,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Power
 	Printers
 	Screen
-	#ScreenSaver
+	ScreenSaver
 	Shortcuts
 	Sounds
 	Time
@@ -22,7 +22,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	User
 )
 
-# Installed binary names (OUTPUT_NAME where it differs) — used for symlinks and staging
+# Installed binary names (OUTPUT_NAME where it differs): used for symlinks and staging
 set(SYSTEM_PREFERENCES
 	Appearance
 	Backgrounds
@@ -38,7 +38,7 @@ set(SYSTEM_PREFERENCES
 	Power
 	Printers
 	Screen
-	#ScreenSaver
+	ScreenSaver
 	Shortcuts
 	Sounds
 	Time

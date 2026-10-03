@@ -66,6 +66,7 @@
 	notify
 	translate
 	filepanel
+	screen_blanker
 	screenshot_cli
 )
 ImageInclude("/bin" ${BIN_DIRECTORY})

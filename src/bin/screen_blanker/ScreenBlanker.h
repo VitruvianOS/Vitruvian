@@ -7,12 +7,12 @@
  * 		Michael Phipps
  *		John Scipione, jscipione@gmail.com
  *		Puck Meerburg, puck@puckipedia.nl
+ *		Dario Casalinuovo
  */
 #ifndef SCREEN_SAVER_APP_H
 #define SCREEN_SAVER_APP_H
 
 
-#include "PasswordWindow.h"
 #include "ScreenSaverSettings.h"
 #include "ScreenSaverRunner.h"
 #include "ScreenSaverWindow.h"
@@ -35,11 +35,8 @@ public:
 	virtual	void				ArgvReceived(int argc, char** argv);
 	virtual	void				MessageReceived(BMessage* message);
 
-			bool				IsPasswordWindowShown() const;
-
 private:
-			bool				_LoadAddOn();
-			void				_ShowPasswordWindow();
+			void				_RequestLock();
 			void				_QueueResumeScreenSaver();
 			void				_TurnOnScreen();
 			void				_SetDPMSMode(uint32 mode);
@@ -49,7 +46,6 @@ private:
 			ScreenSaverSettings	fSettings;
 			ScreenSaverWindow*	fWindow;
 			ScreenSaverRunner*	fSaverRunner;
-			PasswordWindow*		fPasswordWindow;
 
 			bigtime_t			fBlankTime;
 			bool				fImmediateLock;

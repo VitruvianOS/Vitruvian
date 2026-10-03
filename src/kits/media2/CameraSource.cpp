@@ -17,7 +17,9 @@
 #include <ParameterWeb.h>
 
 #include <pipewire/pipewire.h>
+#include <spa/param/video/format-utils.h>
 
+#include "FormatConversion.h"
 #include "PipeWireBackend.h"
 
 
@@ -54,6 +56,7 @@ protected:
 
 static const pw_stream_events kCameraStreamEvents = {
 	PW_VERSION_STREAM_EVENTS,
+	.param_changed = NULL,	// filled below via BCameraSource::_OnParamChanged
 	.process = NULL,	// filled below via BCameraSource::_OnProcess
 };
 
@@ -404,6 +407,7 @@ BCameraSource::_StartConnections(void* backendPtr)
 
 	pw_stream_events events = kCameraStreamEvents;
 	events.process = &BCameraSource::_OnProcess;
+	events.param_changed = &BCameraSource::_OnParamChanged;
 
 	pw_stream* stream = backend->CreateAndConnectStream(
 		streamName.String(), PW_DIRECTION_INPUT, format,
@@ -457,6 +461,33 @@ BCameraSource::_OnProcess(void* userdata)
 	pw_stream_queue_buffer(stream, pb);
 }
 
+
+
+
+void
+BCameraSource::_OnParamChanged(void* data, uint32 id, const struct spa_pod* param)
+{
+	BCameraSource* self = (BCameraSource*)data;
+	if (self == NULL || id != SPA_PARAM_Format || param == NULL)
+		return;
+
+	spa_video_info_raw info;
+	memset(&info, 0, sizeof(info));
+	if (spa_format_video_raw_parse(param, &info) < 0)
+		return;
+
+	BMediaFormat format;
+	ExtractFromSPAVideo(info, &format);
+	const media_raw_video_format& rv = format.format.u.raw_video;
+	if (rv.width == 0 || rv.height == 0)
+		return;
+
+	{
+		BAutolock _(self->fFrameLock);
+		self->fLastFormat = rv;
+	}
+	self->SetFormat(format);
+}
 
 void
 BCameraSource::_OnCaptureFrame(void* data, size_t size,

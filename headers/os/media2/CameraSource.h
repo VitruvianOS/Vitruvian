@@ -95,6 +95,8 @@ private:
 									const media_raw_video_format& format);
 
 	static	void				_OnProcess(void* userdata);
+	static	void				_OnParamChanged(void* data, uint32 id,
+									const struct spa_pod* param);
 
 			BLocker				fFrameLock;
 			std::vector<uint8>	fLastFrame;

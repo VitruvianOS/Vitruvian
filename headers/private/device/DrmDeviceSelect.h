@@ -31,6 +31,15 @@ drm_card_has_connectors(int fd)
 }
 
 
+static inline bool
+drm_connector_is_internal(uint32_t type)
+{
+	return type == DRM_MODE_CONNECTOR_LVDS
+		|| type == DRM_MODE_CONNECTOR_eDP
+		|| type == DRM_MODE_CONNECTOR_DSI;
+}
+
+
 // True if any connector on this DRM fd is currently connected.
 static inline bool
 drm_card_has_connected_connector(int fd)
@@ -58,6 +67,33 @@ drm_card_has_connected_connector(int fd)
 }
 
 
+// True if this card exposes an internal panel connector (eDP/LVDS/DSI).
+static inline bool
+drm_card_has_internal_connector(int fd)
+{
+	drmModeRes* res = drmModeGetResources(fd);
+	if (res == NULL)
+		return false;
+
+	bool internal = false;
+	for (int i = 0; i < res->count_connectors; i++) {
+		drmModeConnector* conn = drmModeGetConnector(fd,
+			res->connectors[i]);
+		if (conn == NULL)
+			continue;
+		if (drm_connector_is_internal(conn->connector_type)) {
+			internal = true;
+			drmModeFreeConnector(conn);
+			break;
+		}
+		drmModeFreeConnector(conn);
+	}
+
+	drmModeFreeResources(res);
+	return internal;
+}
+
+
 // True if the firmware marked this card as the boot display.
 static inline bool
 drm_card_is_boot_vga(int index)
@@ -81,6 +117,27 @@ drm_card_is_boot_vga(int index)
 }
 
 
+// Rank a card for driving the session. Chromebooks expose the firmware
+// framebuffer (simpledrm) as connected next to the real GPU; binding the
+// session to that card loses amdgpu_bl0 and leaves the panel dark.
+static inline int
+drm_card_display_rank(bool connected, bool hasConnectors, bool hasInternal,
+	bool bootVga)
+{
+	if (bootVga && hasInternal)
+		return 4;
+	if (connected && hasInternal)
+		return 3;
+	if (connected && hasConnectors)
+		return 2;
+	if (bootVga && hasConnectors)
+		return 1;
+	if (hasConnectors)
+		return 0;
+	return -1;
+}
+
+
 // Open every /dev/dri/cardN on seat, keep the one that drives a display and close the rest.
 // Returns false if nothing opened, leaving the out-params as -1/NULL.
 static inline bool
@@ -88,13 +145,15 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 	int& cardIndex, const char*& why)
 {
 	// Optimus laptops expose the NVIDIA card first with no panel, and a Raspberry Pi exposes render-only v3d
-	// next to vc4. Prefer a card with a connected display, then one that can drive a display, then the first.
+	// next to vc4. Prefer a card that owns an internal panel, then one with a
+	// connected display, then boot_vga, then the first.
 	char path[64];
 	int ids[10];
 	int fds[10];
 	int indexes[10];
 	bool connected[10];
 	bool hasConnectors[10];
+	bool hasInternal[10];
 	bool bootVga[10];
 	int n = 0;
 
@@ -110,6 +169,7 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 		indexes[n] = i;
 		connected[n] = drm_card_has_connected_connector(cardFd);
 		hasConnectors[n] = drm_card_has_connectors(cardFd);
+		hasInternal[n] = drm_card_has_internal_connector(cardFd);
 		bootVga[n] = drm_card_is_boot_vga(i);
 		n++;
 	}
@@ -124,13 +184,13 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 
 	int pick = 0;
 	for (int j = 1; j < n; j++) {
-		if (connected[j] != connected[pick]) {
-			if (connected[j])
-				pick = j;
-		} else if (hasConnectors[j] != hasConnectors[pick]) {
-			if (hasConnectors[j])
-				pick = j;
-		} else if (bootVga[j] && !bootVga[pick])
+		int rankJ = drm_card_display_rank(connected[j], hasConnectors[j],
+			hasInternal[j], bootVga[j]);
+		int rankPick = drm_card_display_rank(connected[pick],
+			hasConnectors[pick], hasInternal[pick], bootVga[pick]);
+		if (rankJ > rankPick
+				|| (rankJ == rankPick && bootVga[j]
+					&& !bootVga[pick]))
 			pick = j;
 	}
 
@@ -142,10 +202,19 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 	deviceId = ids[pick];
 	fd = fds[pick];
 	cardIndex = indexes[pick];
-	if (connected[pick]) {
+	if (bootVga[pick] && hasInternal[pick]) {
+		why = "boot_vga internal panel";
+	} else if (connected[pick] && hasInternal[pick]) {
+		why = bootVga[pick] ? "connected internal panel, boot_vga"
+			: "connected internal panel";
+	} else if (connected[pick]) {
 		why = bootVga[pick] ? "connected connector, boot_vga"
 			: "connected connector";
-	} else if (hasConnectors[pick])
+	} else if (hasInternal[pick])
+		why = "internal panel connector, none connected";
+	else if (bootVga[pick] && hasConnectors[pick])
+		why = "boot_vga can drive a display";
+	else if (hasConnectors[pick])
 		why = "can drive a display, none connected";
 	else
 		why = "first device that opens";

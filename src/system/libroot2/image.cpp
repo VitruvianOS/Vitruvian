@@ -46,14 +46,22 @@ public:
 			return B_ERROR;
 		}
 
-		image_id id = _FindIndexByBase(lm->l_addr);
-		if (id < B_OK) {
-			dlclose(handle);
-			return B_ERROR;
-		}
+		image_id id = IdForBase(lm->l_addr);
 
 		MutexLocker _(&fLock);
-		fLoadedAddOns[id] = handle;
+		_LoadedAddOns()[id] = LoadedAddOn{handle, lm->l_addr};
+		return id;
+	}
+
+	// Ids follow the object, not its position in the link map: positions
+	// shift when another object is unloaded, ids must not.
+	static image_id IdForBase(ElfW(Addr) base) {
+		MutexLocker _(&fIdLock);
+		auto it = _IdsByBase().find(base);
+		if (it != _IdsByBase().end())
+			return it->second;
+		image_id id = fNextId++;
+		_IdsByBase()[base] = id;
 		return id;
 	}
 
@@ -63,14 +71,22 @@ public:
 
 		MutexLocker _(&fLock);
 
-		auto it = fLoadedAddOns.find(id);
-		if (it == fLoadedAddOns.end())
+		auto it = _LoadedAddOns().find(id);
+		if (it == _LoadedAddOns().end())
 			return B_ERROR;
 
-		if (dlclose(it->second) != 0)
+		ElfW(Addr) base = it->second.base;
+		if (dlclose(it->second.handle) != 0)
 			return B_ERROR;
 
-		fLoadedAddOns.erase(it);
+		_LoadedAddOns().erase(it);
+
+		// Retire the id once the object is gone, so an object loaded at
+		// the same address later gets a new one.
+		if (!_IsMapped(base)) {
+			MutexLocker _(&fIdLock);
+			_IdsByBase().erase(base);
+		}
 		return B_OK;
 	}
 
@@ -98,15 +114,15 @@ public:
 
 private:
 	static void* _Find(image_id id) {
-		auto it = fLoadedAddOns.find(id);
-		if (it == fLoadedAddOns.end())
+		auto it = _LoadedAddOns().find(id);
+		if (it == _LoadedAddOns().end())
 			return NULL;
-		return it->second;
+		return it->second.handle;
 	}
 
 	static void* _BorrowHandle(image_id id) {
-		auto it = fBorrowed.find(id);
-		if (it != fBorrowed.end())
+		auto it = _Borrowed().find(id);
+		if (it != _Borrowed().end())
 			return it->second;
 
 		image_info info;
@@ -126,11 +142,11 @@ private:
 		if (handle == NULL)
 			return NULL;
 
-		fBorrowed[id] = handle;
+		_Borrowed()[id] = handle;
 		return handle;
 	}
 
-	static image_id _FindIndexByBase(ElfW(Addr) base) {
+	static bool _IsMapped(ElfW(Addr) base) {
 		FindByBaseState state = {base, -1, 0};
 		dl_iterate_phdr([](struct dl_phdr_info* phdr, size_t size,
 				void* data) -> int {
@@ -142,22 +158,46 @@ private:
 			s->current++;
 			return 0;
 		}, &state);
-		if (state.index < 0)
-			return B_ERROR;
-		return (image_id)(state.index + 1);
+		return state.index >= 0;
 	}
 
-	static std::map<image_id, void*> fLoadedAddOns;
+	struct LoadedAddOn {
+		void*		handle;
+		ElfW(Addr)	base;
+	};
+
+	// Built on first use and never destroyed: image calls arrive during other
+	// libraries' static initialisation and from destructors at exit.
+	static std::map<image_id, LoadedAddOn>& _LoadedAddOns() {
+		static std::map<image_id, LoadedAddOn>* sMap
+			= new std::map<image_id, LoadedAddOn>;
+		return *sMap;
+	}
 
 	// Handles for already-loaded, non-add-on images
-	static std::map<image_id, void*> fBorrowed;
+	static std::map<image_id, void*>& _Borrowed() {
+		static std::map<image_id, void*>* sMap
+			= new std::map<image_id, void*>;
+		return *sMap;
+	}
+
 	static pthread_mutex_t fLock;
+
+	// Taken after fLock when both are needed, never inside dl_iterate_phdr.
+	static std::map<ElfW(Addr), image_id>& _IdsByBase() {
+		static std::map<ElfW(Addr), image_id>* sMap
+			= new std::map<ElfW(Addr), image_id>;
+		return *sMap;
+	}
+
+	static image_id fNextId;
+	static pthread_mutex_t fIdLock;
 };
 
 
-std::map<image_id, void*> ImagePool::fLoadedAddOns;
-std::map<image_id, void*> ImagePool::fBorrowed;
 pthread_mutex_t ImagePool::fLock = PTHREAD_MUTEX_INITIALIZER;
+image_id ImagePool::fNextId = 1;
+pthread_mutex_t ImagePool::fIdLock = PTHREAD_MUTEX_INITIALIZER;
 
 
 }
@@ -197,6 +237,7 @@ struct ImageIterState {
 	int32		current;
 	image_info*	info;
 	bool		found;
+	ElfW(Addr)	base;
 };
 
 
@@ -206,8 +247,13 @@ _get_image_info(image_id id, image_info* info, size_t infoSize)
 	if (id < 0 || info == NULL || infoSize != sizeof(*info))
 		return B_BAD_VALUE;
 
-	int32 cookie = id - 1;
-	return _get_next_image_info(B_CURRENT_TEAM, &cookie, info, infoSize);
+	int32 cookie = 0;
+	while (_get_next_image_info(B_CURRENT_TEAM, &cookie, info, infoSize)
+			== B_OK) {
+		if (info->id == id)
+			return B_OK;
+	}
+	return B_BAD_IMAGE_ID;
 }
 
 
@@ -225,7 +271,7 @@ _get_next_image_info(team_id team, int32* cookie,
 	if (team != getpid())
 		return B_NOT_SUPPORTED;
 
-	ImageIterState state = {*cookie, 0, info, false};
+	ImageIterState state = {*cookie, 0, info, false, 0};
 
 	dl_iterate_phdr([](struct dl_phdr_info* phdr, size_t size,
 			void* data) -> int {
@@ -249,7 +295,7 @@ _get_next_image_info(team_id team, int32* cookie,
 			state->info->type = B_LIBRARY_IMAGE;
 		}
 
-		state->info->id = state->current + 1;
+		state->base = phdr->dlpi_addr;
 		state->info->sequence = 0;
 		state->info->init_order = 0;
 		state->info->text = NULL;
@@ -280,6 +326,7 @@ _get_next_image_info(team_id team, int32* cookie,
 	if (!state.found)
 		return B_ENTRY_NOT_FOUND;
 
+	info->id = BKernelPrivate::ImagePool::IdForBase(state.base);
 	(*cookie)++;
 	return B_OK;
 }

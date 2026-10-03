@@ -28,6 +28,10 @@ install(PROGRAMS data/libexec/vos-install-helper
 install(PROGRAMS data/libexec/vos-partition-lib.sh
   DESTINATION /usr/libexec/)
 
+# Boot-time fsck: ship the root checker into the initramfs.
+install(PROGRAMS data/initramfs-tools/hooks/vos-fsck
+  DESTINATION /usr/share/initramfs-tools/hooks/)
+
 install(FILES data/etc/installer/excludes.list
   DESTINATION /usr/share/vos/installer/)
 

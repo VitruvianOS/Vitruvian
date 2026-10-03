@@ -160,7 +160,8 @@ set(CPACK_DEBIAN_RUNTIME_PACKAGE_DEPENDS "${CORE_DEPS}")
 set(CPACK_DEBIAN_RUNTIME_PACKAGE_CONTROL_EXTRA
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postinst"
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/prerm"
-	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postrm")
+	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postrm"
+	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/triggers")
 
 # CPACK_PACKAGE_VERSION is only defined once CPack itself is included, so
 # the strict dependency has to name the version computed above.

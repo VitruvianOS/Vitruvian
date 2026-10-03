@@ -355,7 +355,7 @@ if [ -n "\$esp" -a -s "(\$esp)/boot/grub/grubenv" ]; then
     fi
 fi
 menuentry "Vitruvian" {
-    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 fsck.mode=auto fsck.repair=preen console=ttyS0,115200 earlyprintk=ttyS0,115200
     initrd (\$root)/initrd.img
 }
 menuentry "Vitruvian (Safe Mode)" {
@@ -1090,10 +1090,10 @@ apt-get clean" || die "raspberry chroot bash-c failed"
         . "$_basedir/buildconfig.conf"
         [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
     fi
-    _rpi_cmdline_tail="quiet splash loglevel=3"
+    _rpi_cmdline_tail="quiet splash loglevel=3 fsck.mode=auto fsck.repair=preen"
     if [ "$_sshdebug" = 1 ]; then
         _debug_ssh_setup "$_mnt" || die "_debug_ssh_setup failed"
-        _rpi_cmdline_tail="systemd.show_status=true vitruvian.sshdebug"
+        _rpi_cmdline_tail="systemd.show_status=true vitruvian.sshdebug fsck.mode=auto fsck.repair=preen"
     fi
 
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
@@ -1371,14 +1371,14 @@ apt-get clean" || die "uboot chroot bash-c failed"
     # No boot menu on boards: a VOS_SSHDEBUG build bakes sshdebug into the
     # cmdline, as create_raspberry does. Normal images get no debug sshd.
     _sshdebug=0
-    _append_tail="quiet splash"
+    _append_tail="quiet splash fsck.mode=auto fsck.repair=preen"
     if [ -f "$_basedir/buildconfig.conf" ]; then
         . "$_basedir/buildconfig.conf"
         [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
     fi
     if [ "$_sshdebug" = 1 ]; then
         _debug_ssh_setup "$_mnt" || die "_debug_ssh_setup failed"
-        _append_tail="ignore_loglevel systemd.show_status=true vitruvian.sshdebug"
+        _append_tail="ignore_loglevel systemd.show_status=true vitruvian.sshdebug fsck.mode=auto fsck.repair=preen"
     fi
 
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
@@ -1477,11 +1477,12 @@ BBOOTINI
     sudo cp "$_mnt/boot/initrd.img-$_kver" "$_mnt/boot/initrd.img"
 
     case "$_root_fs" in
-        xfs)  _root_mkfs="xfs" ;;
-        ext4) _root_mkfs="ext4" ;;
+        # passno 0: fsck.xfs is a no-op; do not schedule a fake check.
+        xfs)  _root_mkfs="xfs";   _root_pass=0 ;;
+        ext4) _root_mkfs="ext4";  _root_pass=1 ;;
     esac
     sudo sh -c "cat > '$_mnt/etc/fstab'" <<FSTAB
-$_ext_rootdev  /        $_root_mkfs  defaults,noatime  0 1
+$_ext_rootdev  /        $_root_mkfs  defaults,noatime  0 $_root_pass
 $_ext_bootdev  /boot    vfat         defaults          0 2
 FSTAB
 

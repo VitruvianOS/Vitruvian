@@ -1,6 +1,7 @@
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=0
 GRUB_DISTRIBUTOR="Vitruvian"
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 systemd.show_status=0 rd.udev.log_priority=3"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 systemd.show_status=0 rd.udev.log_priority=3 fsck.mode=auto fsck.repair=preen"
+# rw: initramfs checkfs still e2fsck-preens root before mount; ro would only move that check.
 GRUB_CMDLINE_LINUX="rw"
 GRUB_DISABLE_OS_PROBER=true

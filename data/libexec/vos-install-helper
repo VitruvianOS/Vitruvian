@@ -631,9 +631,12 @@ _do_config() {
         return 2
     fi
 
+    # passno 0: no boot check (btrfs scrub is separate; fsck.xfs is a no-op).
+    # passno 1: e2fsck preen in the initramfs via initramfs-tools checkfs.
     _fsck_pass=1
     case "$_target_fstype" in
         btrfs) _root_opts="defaults" ; _fsck_pass=0 ;;
+        xfs)   _root_opts="defaults" ; _fsck_pass=0 ;;
         *)     _root_opts="errors=remount-ro" ;;
     esac
 
@@ -764,7 +767,7 @@ insmod gfxterm
 search --no-floppy --fs-uuid --set=root $_su
 set timeout=5
 menuentry "Vitruvian" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash $_resume_cmdline
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash fsck.mode=auto fsck.repair=preen $_resume_cmdline
     initrd (\$root)/boot/initrd.img-$_kv
 }
 menuentry "Vitruvian (Safe Mode)" {

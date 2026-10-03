@@ -30,6 +30,8 @@
 #include <Catalog.h>
 #include <ControlLook.h>
 #include <Directory.h>
+#include <Entry.h>
+#include <Invoker.h>
 #include <File.h>
 #include <FindDirectory.h>
 #include <InterfaceDefs.h>
@@ -56,6 +58,7 @@
 #include "Constants.h"
 #include "RefreshWindow.h"
 #include "MonitorView.h"
+#include "ProfileNameWindow.h"
 #include "ScreenSettings.h"
 #include "Utility.h"
 
@@ -74,6 +77,9 @@
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Screen"
+
+
+static BPath _profileDirectory();
 
 
 const char* kBackgroundsSignature = "application/x-vnd.Haiku-Backgrounds";
@@ -1574,20 +1580,55 @@ ScreenWindow::MessageReceived(BMessage* message)
 
 		case BUTTON_PROFILE_SAVE_MSG:
 		{
-			// Show a simple alert asking for a profile name
-			BAlert* alert = new BAlert(B_TRANSLATE("Save Profile"),
-				B_TRANSLATE("Enter the profile name in the window title "
-					"and press OK to save."),
-				B_TRANSLATE("OK"), B_TRANSLATE("Cancel"), NULL,
-				B_WIDTH_AS_USUAL, B_INFO_ALERT);
-			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-			int32 result = alert->Go();
-			if (result == 0) {
-				// Save with a default name based on resolution
-				BString profileName;
-				profileName.SetToFormat("%" B_PRId32 "x%" B_PRId32,
-					fSelected.width, fSelected.height);
-				_SaveProfile(profileName.String());
+			BString suggestion;
+			suggestion.SetToFormat("%" B_PRId32 "x%" B_PRId32,
+				fSelected.width, fSelected.height);
+			ProfileNameWindow* prompt = new ProfileNameWindow(this,
+				suggestion.String(), BMessenger(this),
+				BUTTON_PROFILE_NAME_MSG);
+			prompt->Show();
+			break;
+		}
+
+		case BUTTON_PROFILE_NAME_MSG:
+		{
+			BString name;
+			if (message->FindString("profile_name", &name) != B_OK)
+				break;
+			// Path separators would escape the profile directory
+			name.ReplaceAll("/", "-");
+
+			BPath path = _profileDirectory();
+			if (path.InitCheck() == B_OK) {
+				BString fileName(name);
+				fileName << ".screenprofile";
+				path.Append(fileName.String());
+			}
+			if (path.InitCheck() == B_OK && BEntry(path.Path()).Exists()) {
+				// Asynchronous, so this window keeps running
+				BMessage* replace = new BMessage(MSG_PROFILE_REPLACE);
+				replace->AddString("profile_name", name.String());
+				BAlert* alert = new BAlert(B_TRANSLATE("Save profile"),
+					B_TRANSLATE("A profile with this name already exists. "
+						"Do you want to replace it?"),
+					B_TRANSLATE("Cancel"), B_TRANSLATE("Replace"), NULL,
+					B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+				alert->SetShortcut(0, B_ESCAPE);
+				alert->Go(new BInvoker(replace, this));
+			} else {
+				_SaveProfile(name.String());
+				_UpdateProfileMenu();
+			}
+			break;
+		}
+
+		case MSG_PROFILE_REPLACE:
+		{
+			int32 button;
+			BString name;
+			if (message->FindInt32("which", &button) == B_OK && button == 1
+				&& message->FindString("profile_name", &name) == B_OK) {
+				_SaveProfile(name.String());
 				_UpdateProfileMenu();
 			}
 			break;

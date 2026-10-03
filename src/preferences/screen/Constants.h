@@ -59,6 +59,7 @@ static const uint32 BUTTON_PROFILE_SAVE_MSG = 'bpsv';
 static const uint32 BUTTON_PROFILE_DELETE_MSG = 'bpdl';
 static const uint32 POP_PROFILE_SELECT_MSG = 'pps';
 static const uint32 BUTTON_PROFILE_NAME_MSG = 'bpnm';
+static const uint32 MSG_PROFILE_REPLACE = 'pprp';
 
 // Constants
 extern const char* kBackgroundsSignature;

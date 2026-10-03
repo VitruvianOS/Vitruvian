@@ -7,7 +7,7 @@
 
 #include <Window.h>
 
-#include "LocationProvider.h"
+#include <LocationProvider.h>
 #include "LocationSettings.h"
 #include "LocationSettingsView.h"
 

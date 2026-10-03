@@ -24,6 +24,7 @@ set(
 	"headers/os/interface"
 	"headers/os/kernel"
 	"headers/os/locale/"
+	"headers/os/location"
 	"headers/os/locale/tools"
 	"headers/os/mail"
 	"headers/os/net"

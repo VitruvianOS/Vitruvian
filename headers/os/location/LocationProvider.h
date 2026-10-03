@@ -2,13 +2,7 @@
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
- * Client-side location provider for V\OS. Speaks the gpsd JSON/NMEA
- * protocol on localhost (or a configured host) and delivers updates to
- * registered BMessenger/BHandler watchers as B_LOCATION_CHANGED.
- *
- * Prototype: the gpsd backend is the only source wired up. ModemManager
- * and geoclue2 are planned layers on top; this class is the BeAPI
- * surface those layers will feed.
+ * BeAPI location provider for V\OS; apps and preflets watch it for fixes.
  */
 #ifndef LOCATION_PROVIDER_H
 #define LOCATION_PROVIDER_H
@@ -16,7 +10,6 @@
 #include <Locker.h>
 #include <List.h>
 #include <Looper.h>
-#include <Socket.h>
 #include <String.h>
 
 
@@ -31,7 +24,7 @@
 #define B_LOCATION_CHANGED 'BLOC'
 
 // Source connection state. Fields:
-//   "status" int32  (see LocationStatus)
+//   "status" int32  (see location_status)
 //   "error" string  "device" string  "source" string
 //   "satellites" int32  "satellites_view" int32  "fix" int32
 #define B_LOCATION_STATUS  'BLST'
@@ -54,6 +47,9 @@ enum location_accuracy {
 	B_LOCATION_ACCURACY_APPROXIMATE = 1,
 	B_LOCATION_ACCURACY_ROUGH = 2,
 };
+
+
+class LocationSource;
 
 
 class LocationProvider : public BLooper {
@@ -100,41 +96,15 @@ private:
 								double* longitude, double* accuracy,
 								int32 level) const;
 
-			status_t		_Connect();
-			void			_ReadLoop();
-			void			_HandleLine(const BString& line, BString* device,
-								BString* source);
-			void			_HandleJson(const BString& json, BString* device,
-								BString* source);
-			void			_HandleNmea(const BString& sentence,
-								BString* device, BString* source);
-			void			_SplitNmea(const BString& sentence,
-								BString* type, BStringList* fields) const;
-
-			void			_PostPosition(double latitude, double longitude,
-								double altitude, double accuracy, double speed,
-								double heading, int32 fix, int32 satellites,
-								int32 satellitesView, const char* source,
-								const char* device);
-			void			_PostStatus(bool connected, const char* error,
-								int32 fix, int32 satellites,
-								int32 satellitesView, const char* source,
-								const char* device,
-								double accuracy = 0.0);
-
-	static	int32			_ThreadEntry(void* data);
-
 private:
 			mutable BLocker	fLock;
 			BList			fWatchers;
 
 			BString			fHost;
 			uint16			fPort;
-			BSocket			fSocket;
-			thread_id		fThread;
+
 			bool			fEnabled;
 			bool			fConnected;
-			volatile bool	fQuitRequested;
 
 			BString			fSourceName;
 			BString			fDevicePath;
@@ -153,6 +123,8 @@ private:
 			int64			fTimestamp;
 
 			bool			fHavePosition;
+
+			LocationSource*	fSource;
 };
 
 

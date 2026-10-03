@@ -10,7 +10,7 @@
 #include <StringView.h>
 #include <View.h>
 
-#include "LocationProvider.h"
+#include <LocationProvider.h>
 #include "LocationSettings.h"
 
 

@@ -1,7 +1,6 @@
 Application(Location
 	SOURCES
 	Location.cpp
-	LocationProvider.cpp
 	LocationSettings.cpp
 	LocationSettingsView.cpp
 	LocationWindow.cpp

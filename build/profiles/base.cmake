@@ -105,6 +105,25 @@ set(CONTROL_LOOKS
 )
 ImageInclude("/system/add-ons/control_look" ${CONTROL_LOOKS})
 
+# Menu label is the file name; the kit loads from .../Screen Savers/<name>.
+set(SCREEN_SAVERS
+	butterfly
+	debugnow
+	flurry
+	glife
+	gravity
+	icons
+	ifs
+	leaves
+	MessageSaver
+	nebula
+	shelf
+	simpleclock
+	slideshowsaver
+	spider
+)
+ImageInclude("/system/add-ons/Screen Savers" ${SCREEN_SAVERS})
+
 
 include(${CMAKE_CURRENT_LIST_DIR}/preferences.cmake)
 

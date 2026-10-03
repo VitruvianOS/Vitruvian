@@ -73,6 +73,11 @@ const char* B_SPECIFIER_ENTRY = "specifiers";
 const char* B_PROPERTY_ENTRY = "property";
 const char* B_PROPERTY_NAME_ENTRY = "name";
 
+// Unflatten trusts the caller's buffer; these caps stop corrupted headers
+// from driving huge allocations or OOB reads through BMemoryIO.
+static const uint32 kMaxUnflattenFields = 1024 * 1024;
+static const uint32 kMaxUnflattenData = 64 * 1024 * 1024;
+
 
 static status_t handle_reply(port_id replyPort, int32* pCode,
 	bigtime_t timeout, BMessage* reply);
@@ -1660,6 +1665,19 @@ BMessage::_ValidateMessage()
 	if (fHeader == NULL)
 		return B_NO_INIT;
 
+	// hash_table_size is used as a modulo divisor and indexes hash_table.
+	if (fHeader->hash_table_size == 0
+			|| fHeader->hash_table_size > MESSAGE_BODY_HASH_TABLE_SIZE)
+		return B_BAD_VALUE;
+
+	for (uint32 i = 0; i < MESSAGE_BODY_HASH_TABLE_SIZE; i++) {
+		if (fHeader->hash_table[i] < -1
+				|| (fHeader->hash_table[i] >= 0
+					&& (uint32)fHeader->hash_table[i]
+						>= fHeader->field_count))
+			return B_BAD_VALUE;
+	}
+
 	if (fHeader->field_count == 0)
 		return B_OK;
 
@@ -1668,17 +1686,27 @@ BMessage::_ValidateMessage()
 
 	for (uint32 i = 0; i < fHeader->field_count; i++) {
 		field_header* field = &fFields[i];
-		if ((field->next_field >= 0
-				&& (uint32)field->next_field > fHeader->field_count)
-			|| (field->offset + field->name_length + field->data_size
-				> fHeader->data_size)) {
-			// the message is corrupt
-			MakeEmpty();
-			return B_BAD_VALUE;
-		}
+		if (field->next_field < -1
+				|| (field->next_field >= 0
+					&& (uint32)field->next_field >= fHeader->field_count))
+			goto corrupt;
+
+		// Overflow-safe: name and data must live inside fData.
+		uint32 nameLen = field->name_length;
+		uint32 dataSize = field->data_size;
+		uint32 offset = field->offset;
+		if (nameLen == 0 || nameLen > fHeader->data_size
+				|| offset > fHeader->data_size
+				|| nameLen > fHeader->data_size - offset
+				|| dataSize > fHeader->data_size - offset - nameLen)
+			goto corrupt;
 	}
 
 	return B_OK;
+
+corrupt:
+	// No MakeEmpty(): _Clear would walk nested messages in corrupt data.
+	return B_BAD_VALUE;
 }
 
 
@@ -1693,7 +1721,22 @@ BMessage::Unflatten(const char* flatBuffer)
 	if (format != MESSAGE_FORMAT_HAIKU)
 		return BPrivate::MessageAdapter::Unflatten(format, this, flatBuffer);
 
-	BMemoryIO io(flatBuffer, SSIZE_MAX);
+	// Bound the reads to the size the header claims, not SSIZE_MAX.
+	message_header header;
+	memcpy(&header, flatBuffer, sizeof(header));
+	if ((header.flags & MESSAGE_FLAG_VALID) == 0)
+		return B_BAD_VALUE;
+	if (header.field_count > kMaxUnflattenFields
+			|| header.data_size > kMaxUnflattenData)
+		return B_BAD_VALUE;
+
+	uint64 fieldsSize = (uint64)header.field_count * sizeof(field_header);
+	uint64 total = (uint64)sizeof(message_header) + fieldsSize
+		+ (uint64)header.data_size;
+	if (total > (uint64)SSIZE_MAX)
+		return B_BAD_VALUE;
+
+	BMemoryIO io(flatBuffer, (size_t)total);
 	return Unflatten(&io);
 }
 
@@ -1723,7 +1766,9 @@ BMessage::Unflatten(BDataIO* stream)
 	ssize_t result = stream->Read(header + sizeof(uint32),
 		sizeof(message_header) - sizeof(uint32));
 	if (result != sizeof(message_header) - sizeof(uint32)
-		|| (fHeader->flags & MESSAGE_FLAG_VALID) == 0) {
+		|| (fHeader->flags & MESSAGE_FLAG_VALID) == 0
+		|| fHeader->field_count > kMaxUnflattenFields
+		|| fHeader->data_size > kMaxUnflattenData) {
 		_InitHeader();
 		return result < 0 ? result : B_BAD_VALUE;
 	}
@@ -1741,15 +1786,21 @@ BMessage::Unflatten(BDataIO* stream)
 		fHeader->message_area = -1;
 
 		if (fHeader->field_count > 0) {
-			ssize_t fieldsSize = fHeader->field_count * sizeof(field_header);
-			fFields = (field_header*)malloc(fieldsSize);
+			// Reject overflow before malloc.
+			uint64 fieldsSize = (uint64)fHeader->field_count
+				* sizeof(field_header);
+			if (fieldsSize > (uint64)SSIZE_MAX) {
+				_InitHeader();
+				return B_BAD_VALUE;
+			}
+			fFields = (field_header*)malloc((size_t)fieldsSize);
 			if (fFields == NULL) {
 				_InitHeader();
 				return B_NO_MEMORY;
 			}
 
-			result = stream->Read(fFields, fieldsSize);
-			if (result != fieldsSize)
+			result = stream->Read(fFields, (size_t)fieldsSize);
+			if (result != (ssize_t)fieldsSize)
 				return result < 0 ? result : B_BAD_VALUE;
 		}
 
@@ -1775,8 +1826,17 @@ BMessage::Unflatten(BDataIO* stream)
 	}
 
 	status_t valid = _ValidateMessage();
-	if (valid != B_OK)
+	if (valid != B_OK) {
+		// Raw free only, see _ValidateMessage().
+		free(fFields);
+		fFields = NULL;
+		free(fData);
+		fData = NULL;
+		free(fHeader);
+		fHeader = NULL;
+		_InitHeader();
 		return valid;
+	}
 
 	if ((fHeader->flags & MESSAGE_FLAG_OWNS_VREFS) != 0
 			&& (fHeader->flags & MESSAGE_FLAG_CAPS_ADOPTED) == 0)
@@ -2067,13 +2127,28 @@ BMessage::_FindField(const char* name, type_code type, field_header** result)
 	if (fHeader->field_count == 0 || fFields == NULL || fData == NULL)
 		return B_NAME_NOT_FOUND;
 
+	if (fHeader->hash_table_size == 0
+			|| fHeader->hash_table_size > MESSAGE_BODY_HASH_TABLE_SIZE)
+		return B_BAD_VALUE;
+
 	uint32 hash = _HashName(name) % fHeader->hash_table_size;
 	int32 nextField = fHeader->hash_table[hash];
+	uint32 steps = 0;
 
 	while (nextField >= 0) {
+		// A corrupt next_field chain can loop.
+		if ((uint32)nextField >= fHeader->field_count
+				|| steps++ >= fHeader->field_count)
+			return B_BAD_VALUE;
+
 		field_header* field = &fFields[nextField];
 		if ((field->flags & FIELD_FLAG_VALID) == 0)
 			break;
+
+		// Cheap recheck so a half-built message cannot walk off fData.
+		if (field->offset > fHeader->data_size
+				|| field->name_length > fHeader->data_size - field->offset)
+			return B_BAD_VALUE;
 
 		if (strncmp((const char*)(fData + field->offset), name,
 			field->name_length) == 0) {

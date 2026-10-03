@@ -864,11 +864,13 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 		return NULL;
 
 	spa_audio_info_raw info;
-	spa_video_info_raw videoInfo;
-	memset(&videoInfo, 0, sizeof(videoInfo));
+	media_raw_video_format preferred;
+	memset(&preferred, 0, sizeof(preferred));
+	memset(&info, 0, sizeof(info));
 	if (isVideo) {
-		if (!BuildSPAVideoInfo(format, &videoInfo))
+		if (!format.IsRawVideo())
 			return NULL;
+		preferred = format.format.u.raw_video;
 	} else {
 		if (!BuildSPAAudioInfo(format, &info))
 			return NULL;
@@ -900,11 +902,18 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 	uint8_t buf[1024];
 	spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
 	const spa_pod* params[1];
+	// Video offers YUY2/BGRx/I420 with size and rate ranges; most UVC
+	// webcams do not do BGRx only, so a single fixed format never links.
 	if (isVideo)
-		params[0] = spa_format_video_raw_build(&b, SPA_PARAM_EnumFormat,
-			&videoInfo);
+		params[0] = BuildVideoEnumFormat(&b, preferred);
 	else
 		params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
+	if (params[0] == NULL) {
+		Lock();
+		pw_stream_destroy(stream);
+		Unlock();
+		return NULL;
+	}
 
 	Lock();
 	const int r = pw_stream_connect(stream,

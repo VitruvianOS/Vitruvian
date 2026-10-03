@@ -237,5 +237,73 @@ ExtractFromSPAVideo(const spa_video_info_raw& spa, BMediaFormat* out)
 	rv.orientation = B_VIDEO_TOP_LEFT_RIGHT;
 }
 
+const spa_pod*
+BuildVideoEnumFormat(spa_pod_builder* builder,
+	const media_raw_video_format& preferred)
+{
+	if (builder == NULL)
+		return NULL;
+
+	spa_video_format preferredSpa
+		= NativeVideoFormatToSPA(preferred.color_space);
+	if (preferredSpa == SPA_VIDEO_FORMAT_UNKNOWN)
+		preferredSpa = SPA_VIDEO_FORMAT_BGRx;
+
+	// Preferred first so PipeWire picks it when the device offers it.
+	spa_video_format list[3];
+	list[0] = preferredSpa;
+	uint32 count = 1;
+	const spa_video_format extras[] = {
+		SPA_VIDEO_FORMAT_YUY2,
+		SPA_VIDEO_FORMAT_BGRx,
+		SPA_VIDEO_FORMAT_I420
+	};
+	for (uint32 i = 0; i < 3 && count < 3; i++) {
+		if (extras[i] != preferredSpa)
+			list[count++] = extras[i];
+	}
+
+	uint32 width = preferred.width != 0 ? preferred.width : 640;
+	uint32 height = preferred.height != 0 ? preferred.height : 480;
+	uint32 rateNum = 30;
+	if (preferred.field_rate > 0.0f) {
+		rateNum = (uint32)(preferred.field_rate + 0.5f);
+		if (rateNum == 0)
+			rateNum = 1;
+	}
+
+	spa_pod_frame frame;
+	spa_pod_builder_push_object(builder, &frame,
+		SPA_TYPE_OBJECT_Format, SPA_PARAM_EnumFormat);
+	spa_pod_builder_add(builder,
+		SPA_FORMAT_mediaType,    SPA_POD_Id(SPA_MEDIA_TYPE_video),
+		SPA_FORMAT_mediaSubtype, SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
+		0);
+	// Choice macros for rectangle/fraction take pointers, not values.
+	spa_pod_builder_add(builder,
+		SPA_FORMAT_VIDEO_format,
+		SPA_POD_CHOICE_ENUM_Id(3, list[0], list[1], list[2]),
+		0);
+	const spa_rectangle sizes[3] = {
+		SPA_RECTANGLE(width, height),
+		SPA_RECTANGLE(160, 120),
+		SPA_RECTANGLE(4096, 2160)
+	};
+	spa_pod_builder_add(builder,
+		SPA_FORMAT_VIDEO_size,
+		SPA_POD_CHOICE_RANGE_Rectangle(&sizes[0], &sizes[1], &sizes[2]),
+		0);
+	const spa_fraction rates[3] = {
+		SPA_FRACTION(rateNum, 1),
+		SPA_FRACTION(1, 120),
+		SPA_FRACTION(120, 1)
+	};
+	spa_pod_builder_add(builder,
+		SPA_FORMAT_VIDEO_framerate,
+		SPA_POD_CHOICE_RANGE_Fraction(&rates[0], &rates[1], &rates[2]),
+		0);
+	return (const spa_pod*)spa_pod_builder_pop(builder, &frame);
+}
+
 
 } }

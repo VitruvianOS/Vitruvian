@@ -9,6 +9,7 @@
 
 #include <spa/param/audio/raw.h>
 #include <spa/param/video/raw.h>
+#include <spa/pod/builder.h>
 
 #include <media2/MediaFormat.h>
 
@@ -36,6 +37,11 @@ bool					BuildSPAVideoInfo(const BMediaFormat& fmt,
 							spa_video_info_raw* out);
 void					ExtractFromSPAVideo(const spa_video_info_raw& spa,
 							BMediaFormat* out);
+
+// EnumFormat pod for camera-style capture: YUY2, BGRx and I420 with size
+// and framerate ranges. preferred becomes the default choice value.
+const spa_pod*			BuildVideoEnumFormat(spa_pod_builder* builder,
+							const media_raw_video_format& preferred);
 
 
 } }

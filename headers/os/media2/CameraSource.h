@@ -11,6 +11,7 @@
 #include <Messenger.h>
 #include <String.h>
 
+#include <map>
 #include <vector>
 
 #include <media2/MediaClientDefs.h>
@@ -81,6 +82,10 @@ public:
 			status_t			SetControl(int32 id, float value);
 			status_t			ResetControls();
 
+			// B_OK when the device exposes this control, B_UNSUPPORTED when
+			// it does not. Mirror is software and always supported.
+			status_t			ControlSupported(int32 id) const;
+
 			// Built with MakeContinuousParameter; preflet reads values via
 			// GetControl and writes via SetControl.
 			void*				ParameterWebHandle() const { return fParameterWeb; }
@@ -97,6 +102,23 @@ private:
 	static	void				_OnProcess(void* userdata);
 	static	void				_OnParamChanged(void* data, uint32 id,
 									const struct spa_pod* param);
+
+			// SPA_PROP id for a control; 0 when the device does not expose it.
+			uint32				_SpaPropId(int32 id) const;
+			void				_QueryDeviceControls();
+			void				_ApplyControlsToDevice();
+			void				_AdoptDeviceValues();
+
+			struct device_control {
+				uint32			propId;
+				bool			present;
+				bool			isBool;
+				int32			min;
+				int32			max;
+				int32			step;
+				int32			value;
+				uint32			menuMask;
+			};
 
 			BLocker				fFrameLock;
 			std::vector<uint8>	fLastFrame;
@@ -115,6 +137,10 @@ private:
 			float				fFocus;
 			float				fPowerLineFreq;
 			bool				fMirror;
+
+			BLocker				fDeviceControlsLock;
+			std::map<int32, device_control>	fDeviceControls;
+			bool				fHaveStored[12];
 
 			media_client_id		fDeviceId;
 			BString				fStableId;

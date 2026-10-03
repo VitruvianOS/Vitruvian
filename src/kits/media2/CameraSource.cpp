@@ -16,7 +16,9 @@
 #include <ObjectList.h>
 #include <ParameterWeb.h>
 
+#include <linux/v4l2-controls.h>
 #include <pipewire/pipewire.h>
+#include <spa/param/props.h>
 #include <spa/param/video/format-utils.h>
 
 #include "FormatConversion.h"
@@ -61,6 +63,98 @@ static const pw_stream_events kCameraStreamEvents = {
 };
 
 
+// v4l2 SPA plugin maps these to SPA_PROP_* or SPA_PROP_START_CUSTOM+CID.
+static uint32
+_CameraSpaProp(int32 id)
+{
+	switch (id) {
+		case B_CAMERA_PARAM_BRIGHTNESS:         return SPA_PROP_brightness;
+		case B_CAMERA_PARAM_CONTRAST:           return SPA_PROP_contrast;
+		case B_CAMERA_PARAM_EXPOSURE:           return SPA_PROP_exposure;
+		case B_CAMERA_PARAM_EXPOSURE_AUTO:
+			return SPA_PROP_START_CUSTOM + V4L2_CID_EXPOSURE_AUTO;
+		case B_CAMERA_PARAM_WHITE_BALANCE:
+			return SPA_PROP_START_CUSTOM + V4L2_CID_WHITE_BALANCE_TEMPERATURE;
+		case B_CAMERA_PARAM_WHITE_BALANCE_AUTO:
+			return SPA_PROP_START_CUSTOM + V4L2_CID_AUTO_WHITE_BALANCE;
+		case B_CAMERA_PARAM_FOCUS:
+			return SPA_PROP_START_CUSTOM + V4L2_CID_FOCUS_ABSOLUTE;
+		case B_CAMERA_PARAM_FOCUS_AUTO:
+			return SPA_PROP_START_CUSTOM + V4L2_CID_FOCUS_AUTO;
+		case B_CAMERA_PARAM_POWER_LINE_FREQ:
+			return SPA_PROP_START_CUSTOM + V4L2_CID_POWER_LINE_FREQUENCY;
+		default:
+			return 0;
+	}
+}
+
+
+// Many webcams only expose absolute exposure, not the legacy CID.
+static uint32
+_CameraSpaPropAlt(int32 id)
+{
+	if (id == B_CAMERA_PARAM_EXPOSURE)
+		return SPA_PROP_START_CUSTOM + V4L2_CID_EXPOSURE_ABSOLUTE;
+	return 0;
+}
+
+
+// Exposure is a menu, not a bool: 1 is manual, auto is 3 on most UVC
+// cameras and 0 on the rest.
+static int32
+_ExposureAutoToV4L2(bool autoExposure, uint32 menuMask)
+{
+	if (!autoExposure)
+		return V4L2_EXPOSURE_MANUAL;
+	if ((menuMask & (1u << V4L2_EXPOSURE_APERTURE_PRIORITY)) != 0
+		|| (menuMask & (1u << V4L2_EXPOSURE_AUTO)) == 0)
+		return V4L2_EXPOSURE_APERTURE_PRIORITY;
+	return V4L2_EXPOSURE_AUTO;
+}
+
+
+// V4L2 power-line ids: 0 disabled, 1 = 50Hz, 2 = 60Hz.
+static int32
+_PowerLineToV4L2(float hz)
+{
+	if (hz >= 55.0f)
+		return 2;
+	if (hz >= 45.0f)
+		return 1;
+	return 0;
+}
+
+
+static int32
+_ToDeviceUnits(bool isBool, int32 min, int32 max, float ui, float uiMin,
+	float uiMax)
+{
+	if (isBool)
+		return ui != 0.0f ? 1 : 0;
+	if (uiMax <= uiMin || max <= min)
+		return min;
+	float t = (ui - uiMin) / (uiMax - uiMin);
+	if (t < 0.0f)
+		t = 0.0f;
+	if (t > 1.0f)
+		t = 1.0f;
+	return min + (int32)(t * (float)(max - min) + 0.5f);
+}
+
+
+static float
+_FromDeviceUnits(bool isBool, int32 min, int32 max, int32 value, float uiMin,
+	float uiMax)
+{
+	if (isBool)
+		return value != 0 ? 1.0f : 0.0f;
+	if (max <= min)
+		return uiMin;
+	float t = (float)(value - min) / (float)(max - min);
+	return uiMin + t * (uiMax - uiMin);
+}
+
+
 } // anonymous namespace
 
 
@@ -96,6 +190,9 @@ BCameraSource::BCameraSource(const char* name)
 	fLastFormat.field_rate = 30.0f;
 	fLastFormat.width = 640;
 	fLastFormat.height = 480;
+
+	for (int32 i = 0; i < 12; i++)
+		fHaveStored[i] = false;
 
 	_CameraOutput* output = new(std::nothrow) _CameraOutput("camera-out");
 	if (output != NULL) {
@@ -231,26 +328,46 @@ BCameraSource::SetToDevice(const camera_device_info& info)
 
 		float value = 0;
 		bool flag = false;
-		if (controls.FindFloat("brightness", &value) == B_OK)
+		if (controls.FindFloat("brightness", &value) == B_OK) {
 			fBrightness = value;
-		if (controls.FindFloat("contrast", &value) == B_OK)
+			fHaveStored[B_CAMERA_PARAM_BRIGHTNESS] = true;
+		}
+		if (controls.FindFloat("contrast", &value) == B_OK) {
 			fContrast = value;
-		if (controls.FindBool("exposure_auto", &flag) == B_OK)
+			fHaveStored[B_CAMERA_PARAM_CONTRAST] = true;
+		}
+		if (controls.FindBool("exposure_auto", &flag) == B_OK) {
 			fExposureAuto = flag;
-		if (controls.FindFloat("exposure", &value) == B_OK)
+			fHaveStored[B_CAMERA_PARAM_EXPOSURE_AUTO] = true;
+		}
+		if (controls.FindFloat("exposure", &value) == B_OK) {
 			fExposure = value;
-		if (controls.FindBool("white_balance_auto", &flag) == B_OK)
+			fHaveStored[B_CAMERA_PARAM_EXPOSURE] = true;
+		}
+		if (controls.FindBool("white_balance_auto", &flag) == B_OK) {
 			fWhiteBalanceAuto = flag;
-		if (controls.FindFloat("white_balance", &value) == B_OK)
+			fHaveStored[B_CAMERA_PARAM_WHITE_BALANCE_AUTO] = true;
+		}
+		if (controls.FindFloat("white_balance", &value) == B_OK) {
 			fWhiteBalance = value;
-		if (controls.FindBool("focus_auto", &flag) == B_OK)
+			fHaveStored[B_CAMERA_PARAM_WHITE_BALANCE] = true;
+		}
+		if (controls.FindBool("focus_auto", &flag) == B_OK) {
 			fFocusAuto = flag;
-		if (controls.FindFloat("focus", &value) == B_OK)
+			fHaveStored[B_CAMERA_PARAM_FOCUS_AUTO] = true;
+		}
+		if (controls.FindFloat("focus", &value) == B_OK) {
 			fFocus = value;
-		if (controls.FindFloat("power_line_freq", &value) == B_OK)
+			fHaveStored[B_CAMERA_PARAM_FOCUS] = true;
+		}
+		if (controls.FindFloat("power_line_freq", &value) == B_OK) {
 			fPowerLineFreq = value;
-		if (controls.FindBool("mirror", &flag) == B_OK)
+			fHaveStored[B_CAMERA_PARAM_POWER_LINE_FREQ] = true;
+		}
+		if (controls.FindBool("mirror", &flag) == B_OK) {
 			fMirror = flag;
+			fHaveStored[B_CAMERA_PARAM_MIRROR] = true;
+		}
 
 		int32 width = 0;
 		int32 height = 0;
@@ -275,6 +392,13 @@ BCameraSource::SetToDevice(const camera_device_info& info)
 		fLastFormat.color_space = B_RGB32;
 
 	SetFormat(BMediaFormat(fLastFormat));
+
+	// See which controls the device exposes; stored values still win.
+	_QueryDeviceControls();
+	_AdoptDeviceValues();
+	delete (BParameterWeb*)fParameterWeb;
+	fParameterWeb = NULL;
+	_BuildParameterWeb();
 	return B_OK;
 }
 
@@ -336,6 +460,24 @@ BCameraSource::GetControl(int32 id, float* outValue) const
 
 
 status_t
+BCameraSource::ControlSupported(int32 id) const
+{
+	// Preview mirror is applied in software, not by the device.
+	if (id == B_CAMERA_PARAM_MIRROR)
+		return B_OK;
+	if (_CameraSpaProp(id) == 0 && _CameraSpaPropAlt(id) == 0)
+		return B_UNSUPPORTED;
+
+	BAutolock _(const_cast<BLocker&>(fDeviceControlsLock));
+	std::map<int32, device_control>::const_iterator it
+		= fDeviceControls.find(id);
+	if (it == fDeviceControls.end() || !it->second.present)
+		return B_UNSUPPORTED;
+	return B_OK;
+}
+
+
+status_t
 BCameraSource::SetControl(int32 id, float value)
 {
 	{
@@ -355,6 +497,8 @@ BCameraSource::SetControl(int32 id, float value)
 		}
 	}
 	_SaveControls();
+	// Push to the device; controls it does not expose are skipped.
+	_ApplyControlsToDevice();
 	return B_OK;
 }
 
@@ -416,6 +560,11 @@ BCameraSource::_StartConnections(void* backendPtr)
 		return B_ERROR;
 
 	fCaptureStream = stream;
+
+	// Device may only now be enumerable; apply stored controls on start.
+	_QueryDeviceControls();
+	_AdoptDeviceValues();
+	_ApplyControlsToDevice();
 	return B_OK;
 }
 
@@ -462,8 +611,6 @@ BCameraSource::_OnProcess(void* userdata)
 }
 
 
-
-
 void
 BCameraSource::_OnParamChanged(void* data, uint32 id, const struct spa_pod* param)
 {
@@ -488,6 +635,7 @@ BCameraSource::_OnParamChanged(void* data, uint32 id, const struct spa_pod* para
 	}
 	self->SetFormat(format);
 }
+
 
 void
 BCameraSource::_OnCaptureFrame(void* data, size_t size,
@@ -541,24 +689,40 @@ BCameraSource::_BuildParameterWeb()
 	if (group == NULL)
 		return;
 
-	group->MakeContinuousParameter(B_CAMERA_PARAM_BRIGHTNESS, B_MEDIA_RAW_VIDEO,
-		"Brightness", B_GENERIC, "", -1.0f, 1.0f, 0.01f);
-	group->MakeContinuousParameter(B_CAMERA_PARAM_CONTRAST, B_MEDIA_RAW_VIDEO,
-		"Contrast", B_GENERIC, "", -1.0f, 1.0f, 0.01f);
-	group->MakeContinuousParameter(B_CAMERA_PARAM_EXPOSURE_AUTO, B_MEDIA_RAW_VIDEO,
-		"Exposure auto", B_ENABLE, "", 0.0f, 1.0f, 1.0f);
-	group->MakeContinuousParameter(B_CAMERA_PARAM_EXPOSURE, B_MEDIA_RAW_VIDEO,
-		"Exposure", B_GENERIC, "ms", 0.0f, 1000.0f, 1.0f);
-	group->MakeContinuousParameter(B_CAMERA_PARAM_WHITE_BALANCE_AUTO,
-		B_MEDIA_RAW_VIDEO, "White balance auto", B_ENABLE, "", 0.0f, 1.0f, 1.0f);
-	group->MakeContinuousParameter(B_CAMERA_PARAM_WHITE_BALANCE, B_MEDIA_RAW_VIDEO,
-		"White balance", B_GENERIC, "K", 2500.0f, 8000.0f, 50.0f);
-	group->MakeContinuousParameter(B_CAMERA_PARAM_FOCUS_AUTO, B_MEDIA_RAW_VIDEO,
-		"Focus auto", B_ENABLE, "", 0.0f, 1.0f, 1.0f);
-	group->MakeContinuousParameter(B_CAMERA_PARAM_FOCUS, B_MEDIA_RAW_VIDEO,
-		"Focus", B_GENERIC, "", 0.0f, 1.0f, 0.01f);
-	group->MakeContinuousParameter(B_CAMERA_PARAM_POWER_LINE_FREQ, B_MEDIA_RAW_VIDEO,
-		"Power line frequency", B_GENERIC, "Hz", 0.0f, 60.0f, 50.0f);
+	// Skip device controls the hardware does not expose.
+	auto supported = [this](int32 id) {
+		return ControlSupported(id) == B_OK;
+	};
+
+	if (supported(B_CAMERA_PARAM_BRIGHTNESS))
+		group->MakeContinuousParameter(B_CAMERA_PARAM_BRIGHTNESS,
+			B_MEDIA_RAW_VIDEO, "Brightness", B_GENERIC, "", 0.0f, 1.0f, 0.01f);
+	if (supported(B_CAMERA_PARAM_CONTRAST))
+		group->MakeContinuousParameter(B_CAMERA_PARAM_CONTRAST,
+			B_MEDIA_RAW_VIDEO, "Contrast", B_GENERIC, "", 0.0f, 1.0f, 0.01f);
+	if (supported(B_CAMERA_PARAM_EXPOSURE_AUTO))
+		group->MakeContinuousParameter(B_CAMERA_PARAM_EXPOSURE_AUTO,
+			B_MEDIA_RAW_VIDEO, "Exposure auto", B_ENABLE, "", 0.0f, 1.0f, 1.0f);
+	if (supported(B_CAMERA_PARAM_EXPOSURE))
+		group->MakeContinuousParameter(B_CAMERA_PARAM_EXPOSURE,
+			B_MEDIA_RAW_VIDEO, "Exposure", B_GENERIC, "", 0.0f, 100.0f, 1.0f);
+	if (supported(B_CAMERA_PARAM_WHITE_BALANCE_AUTO))
+		group->MakeContinuousParameter(B_CAMERA_PARAM_WHITE_BALANCE_AUTO,
+			B_MEDIA_RAW_VIDEO, "White balance auto", B_ENABLE, "", 0.0f, 1.0f, 1.0f);
+	if (supported(B_CAMERA_PARAM_WHITE_BALANCE))
+		group->MakeContinuousParameter(B_CAMERA_PARAM_WHITE_BALANCE,
+			B_MEDIA_RAW_VIDEO, "White balance", B_GENERIC, "K", 2500.0f,
+			8000.0f, 50.0f);
+	if (supported(B_CAMERA_PARAM_FOCUS_AUTO))
+		group->MakeContinuousParameter(B_CAMERA_PARAM_FOCUS_AUTO,
+			B_MEDIA_RAW_VIDEO, "Focus auto", B_ENABLE, "", 0.0f, 1.0f, 1.0f);
+	if (supported(B_CAMERA_PARAM_FOCUS))
+		group->MakeContinuousParameter(B_CAMERA_PARAM_FOCUS,
+			B_MEDIA_RAW_VIDEO, "Focus", B_GENERIC, "", 0.0f, 1.0f, 0.01f);
+	if (supported(B_CAMERA_PARAM_POWER_LINE_FREQ))
+		group->MakeContinuousParameter(B_CAMERA_PARAM_POWER_LINE_FREQ,
+			B_MEDIA_RAW_VIDEO, "Power line frequency", B_GENERIC, "Hz",
+			0.0f, 60.0f, 50.0f);
 	group->MakeContinuousParameter(B_CAMERA_PARAM_MIRROR, B_MEDIA_RAW_VIDEO,
 		"Mirror", B_ENABLE, "", 0.0f, 1.0f, 1.0f);
 }
@@ -602,4 +766,222 @@ BCameraSource::_SaveControls()
 	}
 	settings.SetDevice(info, &controls);
 	settings.Save();
+}
+
+
+uint32
+BCameraSource::_SpaPropId(int32 id) const
+{
+	uint32 prop = _CameraSpaProp(id);
+	if (prop == 0)
+		prop = _CameraSpaPropAlt(id);
+	return prop;
+}
+
+
+void
+BCameraSource::_QueryDeviceControls()
+{
+	{
+		BAutolock _(fDeviceControlsLock);
+		fDeviceControls.clear();
+	}
+	if (fNodeName.IsEmpty())
+		return;
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return;
+
+	std::vector<PipeWireBackend::NodeControlInfo> info;
+	if (backend->QueryNodeControls(fNodeName.String(), info) != B_OK)
+		return;
+
+	static const int32 kParams[] = {
+		B_CAMERA_PARAM_BRIGHTNESS,
+		B_CAMERA_PARAM_CONTRAST,
+		B_CAMERA_PARAM_EXPOSURE_AUTO,
+		B_CAMERA_PARAM_EXPOSURE,
+		B_CAMERA_PARAM_WHITE_BALANCE_AUTO,
+		B_CAMERA_PARAM_WHITE_BALANCE,
+		B_CAMERA_PARAM_FOCUS_AUTO,
+		B_CAMERA_PARAM_FOCUS,
+		B_CAMERA_PARAM_POWER_LINE_FREQ
+	};
+
+	BAutolock _(fDeviceControlsLock);
+	for (uint32 i = 0; i < sizeof(kParams) / sizeof(kParams[0]); i++) {
+		const int32 id = kParams[i];
+		const uint32 want[] = {
+			_CameraSpaProp(id), _CameraSpaPropAlt(id)
+		};
+
+		device_control dc;
+		dc.propId = 0;
+		dc.present = false;
+		dc.isBool = false;
+		dc.min = 0;
+		dc.max = 0;
+		dc.step = 1;
+		dc.value = 0;
+		dc.menuMask = 0;
+
+		for (uint32 w = 0; w < 2 && !dc.present; w++) {
+			if (want[w] == 0)
+				continue;
+			for (size_t n = 0; n < info.size(); n++) {
+				if (info[n].propId != want[w] || !info[n].present)
+					continue;
+				dc.propId = want[w];
+				dc.present = true;
+				dc.isBool = info[n].isBool;
+				dc.min = info[n].min;
+				dc.max = info[n].max;
+				dc.step = info[n].step != 0 ? info[n].step : 1;
+				dc.value = info[n].value;
+				dc.menuMask = info[n].menuMask;
+				break;
+			}
+		}
+		fDeviceControls[id] = dc;
+	}
+}
+
+
+void
+BCameraSource::_AdoptDeviceValues()
+{
+	// Stored settings win; otherwise take what the device reports.
+	BAutolock _(fDeviceControlsLock);
+	BAutolock __(fControlLock);
+
+	auto adopt = [this](int32 id, float uiMin, float uiMax, float* out) {
+		if (fHaveStored[id])
+			return;
+		std::map<int32, device_control>::const_iterator it
+			= fDeviceControls.find(id);
+		if (it == fDeviceControls.end() || !it->second.present)
+			return;
+		*out = _FromDeviceUnits(it->second.isBool, it->second.min,
+			it->second.max, it->second.value, uiMin, uiMax);
+	};
+
+	adopt(B_CAMERA_PARAM_BRIGHTNESS, 0.0f, 1.0f, &fBrightness);
+	adopt(B_CAMERA_PARAM_CONTRAST, 0.0f, 1.0f, &fContrast);
+	if (!fHaveStored[B_CAMERA_PARAM_EXPOSURE_AUTO]) {
+		std::map<int32, device_control>::const_iterator it
+			= fDeviceControls.find(B_CAMERA_PARAM_EXPOSURE_AUTO);
+		if (it != fDeviceControls.end() && it->second.present)
+			fExposureAuto = it->second.value != V4L2_EXPOSURE_MANUAL;
+	}
+	adopt(B_CAMERA_PARAM_EXPOSURE, 50.0f, 100.0f, &fExposure);
+	if (!fHaveStored[B_CAMERA_PARAM_WHITE_BALANCE_AUTO]) {
+		std::map<int32, device_control>::const_iterator it
+			= fDeviceControls.find(B_CAMERA_PARAM_WHITE_BALANCE_AUTO);
+		if (it != fDeviceControls.end() && it->second.present)
+			fWhiteBalanceAuto = it->second.value != 0;
+	}
+	adopt(B_CAMERA_PARAM_WHITE_BALANCE, 2500.0f, 8000.0f, &fWhiteBalance);
+	if (!fHaveStored[B_CAMERA_PARAM_FOCUS_AUTO]) {
+		std::map<int32, device_control>::const_iterator it
+			= fDeviceControls.find(B_CAMERA_PARAM_FOCUS_AUTO);
+		if (it != fDeviceControls.end() && it->second.present)
+			fFocusAuto = it->second.value != 0;
+	}
+	adopt(B_CAMERA_PARAM_FOCUS, 0.0f, 1.0f, &fFocus);
+	if (!fHaveStored[B_CAMERA_PARAM_POWER_LINE_FREQ]) {
+		std::map<int32, device_control>::const_iterator it
+			= fDeviceControls.find(B_CAMERA_PARAM_POWER_LINE_FREQ);
+		if (it != fDeviceControls.end() && it->second.present) {
+			// Reverse of _PowerLineToV4L2.
+			if (it->second.value >= 2)
+				fPowerLineFreq = 60.0f;
+			else if (it->second.value >= 1)
+				fPowerLineFreq = 50.0f;
+			else
+				fPowerLineFreq = 0.0f;
+		}
+	}
+}
+
+
+void
+BCameraSource::_ApplyControlsToDevice()
+{
+	if (fNodeName.IsEmpty())
+		return;
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return;
+
+	std::vector<PipeWireBackend::NodeControlInfo> props;
+	{
+		BAutolock _(fDeviceControlsLock);
+		BAutolock __(fControlLock);
+
+		for (std::map<int32, device_control>::const_iterator it
+				= fDeviceControls.begin();
+				it != fDeviceControls.end(); ++it) {
+			if (!it->second.present || it->second.propId == 0)
+				continue;
+			const int32 id = it->first;
+			const device_control& dc = it->second;
+
+			PipeWireBackend::NodeControlInfo p;
+			p.propId = dc.propId;
+			p.isBool = dc.isBool;
+			p.min = dc.min;
+			p.max = dc.max;
+			p.step = dc.step;
+			p.menuMask = 0;
+			p.present = true;
+
+			switch (id) {
+				case B_CAMERA_PARAM_BRIGHTNESS:
+					p.value = _ToDeviceUnits(dc.isBool, dc.min, dc.max,
+						fBrightness, 0.0f, 1.0f);
+					break;
+				case B_CAMERA_PARAM_CONTRAST:
+					p.value = _ToDeviceUnits(dc.isBool, dc.min, dc.max,
+						fContrast, 0.0f, 1.0f);
+					break;
+				case B_CAMERA_PARAM_EXPOSURE_AUTO:
+					p.value = _ExposureAutoToV4L2(fExposureAuto, dc.menuMask);
+					break;
+				case B_CAMERA_PARAM_EXPOSURE:
+					if (fExposureAuto)
+						continue;
+					p.value = _ToDeviceUnits(dc.isBool, dc.min, dc.max,
+						fExposure, 50.0f, 100.0f);
+					break;
+				case B_CAMERA_PARAM_WHITE_BALANCE_AUTO:
+					p.value = fWhiteBalanceAuto ? 1 : 0;
+					break;
+				case B_CAMERA_PARAM_WHITE_BALANCE:
+					if (fWhiteBalanceAuto)
+						continue;
+					p.value = _ToDeviceUnits(dc.isBool, dc.min, dc.max,
+						fWhiteBalance, 2500.0f, 8000.0f);
+					break;
+				case B_CAMERA_PARAM_FOCUS_AUTO:
+					p.value = fFocusAuto ? 1 : 0;
+					break;
+				case B_CAMERA_PARAM_FOCUS:
+					if (fFocusAuto)
+						continue;
+					p.value = _ToDeviceUnits(dc.isBool, dc.min, dc.max,
+						fFocus, 0.0f, 1.0f);
+					break;
+				case B_CAMERA_PARAM_POWER_LINE_FREQ:
+					p.value = _PowerLineToV4L2(fPowerLineFreq);
+					break;
+				default:
+					continue;
+			}
+			props.push_back(p);
+		}
+	}
+
+	if (!props.empty())
+		backend->SetNodeControls(fNodeName.String(), props);
 }

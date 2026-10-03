@@ -1351,6 +1351,212 @@ PipeWireBackend::_NodeParamThunk(void* data, int, uint32 id,
 
 
 void
+PipeWireBackend::_NodeControlParamThunk(void* data, int, uint32 id,
+	uint32, uint32, const struct spa_pod* param)
+{
+	NodeControlQuery* q = (NodeControlQuery*)data;
+	if (q == NULL || param == NULL)
+		return;
+
+	if (id == SPA_PARAM_PropInfo) {
+		const spa_pod_prop* idProp = spa_pod_find_prop(param, NULL,
+			SPA_PROP_INFO_id);
+		if (idProp == NULL)
+			return;
+		uint32 propId = 0;
+		if (spa_pod_get_id(&idProp->value, &propId) < 0)
+			return;
+
+		NodeControlInfo info;
+		info.propId = propId;
+		info.value = 0;
+		info.min = 0;
+		info.max = 0;
+		info.step = 1;
+		info.menuMask = 0;
+		info.isBool = false;
+		info.present = true;
+
+		const spa_pod_prop* typeProp = spa_pod_find_prop(param, NULL,
+			SPA_PROP_INFO_type);
+		if (typeProp != NULL) {
+			uint32 nVals = 0;
+			uint32 choice = 0;
+			const spa_pod* values = spa_pod_get_values(&typeProp->value,
+				&nVals, &choice);
+			if (values != NULL && nVals > 0) {
+				const uint32 valType = SPA_POD_TYPE(values);
+				if (valType == SPA_TYPE_Bool) {
+					bool v = false;
+					spa_pod_get_bool(values, &v);
+					info.isBool = true;
+					info.value = v ? 1 : 0;
+					info.max = 1;
+				} else if (choice == SPA_CHOICE_Step && nVals >= 4) {
+					const int32* v = (const int32*)SPA_POD_BODY(values);
+					info.value = v[0];
+					info.min = v[1];
+					info.max = v[2];
+					info.step = v[3] != 0 ? v[3] : 1;
+				} else if (choice == SPA_CHOICE_Range && nVals >= 3) {
+					const int32* v = (const int32*)SPA_POD_BODY(values);
+					info.value = v[0];
+					info.min = v[1];
+					info.max = v[2];
+				} else if (choice == SPA_CHOICE_Enum && valType == SPA_TYPE_Int
+					&& nVals >= 2) {
+					// Menus: default first, then the items the device offers.
+					const int32* v = (const int32*)SPA_POD_BODY(values);
+					info.value = v[0];
+					info.min = v[1];
+					info.max = v[1];
+					for (uint32 n = 1; n < nVals; n++) {
+						if (v[n] >= 0 && v[n] < 32)
+							info.menuMask |= 1u << v[n];
+						info.min = v[n] < info.min ? v[n] : info.min;
+						info.max = v[n] > info.max ? v[n] : info.max;
+					}
+				} else if (valType == SPA_TYPE_Int) {
+					const int32* v = (const int32*)SPA_POD_BODY(values);
+					info.value = v[0];
+				}
+			}
+		}
+		q->info.push_back(info);
+		return;
+	}
+
+	if (id != SPA_PARAM_Props)
+		return;
+
+	// Fold current device values into the PropInfo list built above.
+	for (size_t i = 0; i < q->info.size(); i++) {
+		NodeControlInfo& c = q->info[i];
+		const spa_pod_prop* p = spa_pod_find_prop(param, NULL, c.propId);
+		if (p == NULL)
+			continue;
+		if (c.isBool) {
+			bool v = false;
+			if (spa_pod_get_bool(&p->value, &v) >= 0)
+				c.value = v ? 1 : 0;
+		} else {
+			int32 v = 0;
+			if (spa_pod_get_int(&p->value, &v) >= 0)
+				c.value = v;
+			else {
+				float f = 0;
+				if (spa_pod_get_float(&p->value, &f) >= 0)
+					c.value = (int32)f;
+			}
+		}
+	}
+	q->done = true;
+}
+
+
+status_t
+PipeWireBackend::QueryNodeControls(const char* nodeName,
+	std::vector<NodeControlInfo>& out)
+{
+	if (nodeName == NULL || nodeName[0] == '\0')
+		return B_BAD_VALUE;
+	if (fRegistry == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	uint32 nodeId = 0;
+	{
+		std::lock_guard<std::mutex> _(fDevicesLock);
+		for (auto& d : fDevices) {
+			if (d.isVideo && d.nodeName == nodeName) {
+				nodeId = d.id;
+				break;
+			}
+		}
+	}
+	if (nodeId == 0)
+		return B_ENTRY_NOT_FOUND;
+
+	NodeControlQuery query = { {}, false };
+	Lock();
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+
+	spa_hook listener;
+	memset(&listener, 0, sizeof(listener));
+	static const pw_node_events kControlEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_NodeControlParamThunk
+	};
+	pw_node_add_listener(node, &listener, &kControlEvents, &query);
+	pw_node_enum_params(node, 0, SPA_PARAM_PropInfo, 0, UINT32_MAX, NULL);
+	pw_node_enum_params(node, 0, SPA_PARAM_Props, 0, UINT32_MAX, NULL);
+	RoundtripLocked();
+	spa_hook_remove(&listener);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+
+	out = query.info;
+	return B_OK;
+}
+
+
+status_t
+PipeWireBackend::SetNodeControls(const char* nodeName,
+	const std::vector<NodeControlInfo>& props)
+{
+	if (nodeName == NULL || nodeName[0] == '\0' || props.empty())
+		return B_BAD_VALUE;
+	if (fRegistry == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	uint32 nodeId = 0;
+	{
+		std::lock_guard<std::mutex> _(fDevicesLock);
+		for (auto& d : fDevices) {
+			if (d.isVideo && d.nodeName == nodeName) {
+				nodeId = d.id;
+				break;
+			}
+		}
+	}
+	if (nodeId == 0)
+		return B_ENTRY_NOT_FOUND;
+
+	uint8_t buffer[1024];
+	spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+	spa_pod_frame frame;
+	spa_pod_builder_push_object(&b, &frame,
+		SPA_TYPE_OBJECT_Props, SPA_PARAM_Props);
+	for (size_t i = 0; i < props.size(); i++) {
+		if (props[i].isBool)
+			spa_pod_builder_add(&b, props[i].propId,
+				SPA_POD_Bool(props[i].value != 0), 0);
+		else
+			spa_pod_builder_add(&b, props[i].propId,
+				SPA_POD_Int(props[i].value), 0);
+	}
+	const spa_pod* param = (const spa_pod*)spa_pod_builder_pop(&b, &frame);
+	if (param == NULL)
+		return B_NO_MEMORY;
+
+	Lock();
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+	pw_node_set_param(node, SPA_PARAM_Props, 0, param);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+	return B_OK;
+}
+
+
+void
 PipeWireBackend::_RouteVolumeParamThunk(void* data, int, uint32 id,
 	uint32, uint32, const struct spa_pod* param)
 {

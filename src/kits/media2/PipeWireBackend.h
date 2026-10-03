@@ -83,6 +83,24 @@ public:
 			status_t				SetDefaultSource(uint32 deviceId);
 			status_t				SetDefaultVideoSource(uint32 deviceId);
 
+		// Camera controls: SPA_PARAM_Props on the Video/Source node.
+		// The v4l2 SPA plugin maps those props to V4L2 controls.
+		struct NodeControlInfo {
+			uint32			propId;
+			int32			value;
+			int32			min;
+			int32			max;
+			int32			step;
+			uint32			menuMask;	// menu controls: bit n = item n
+			bool			isBool;
+			bool			present;
+		};
+
+		status_t				QueryNodeControls(const char* nodeName,
+										std::vector<NodeControlInfo>& out);
+		status_t				SetNodeControls(const char* nodeName,
+										const std::vector<NodeControlInfo>& props);
+
 		struct DevicePort {
 			std::string		name;
 			std::string		description;
@@ -300,6 +318,14 @@ private:
 				bool				done;
 			};
 			static void				_NodeParamThunk(void* data, int seq,
+										uint32 id, uint32 index, uint32 next,
+										const struct spa_pod* param);
+
+			struct NodeControlQuery {
+				std::vector<NodeControlInfo>	info;
+				bool					done;
+			};
+			static void				_NodeControlParamThunk(void* data, int seq,
 										uint32 id, uint32 index, uint32 next,
 										const struct spa_pod* param);
 

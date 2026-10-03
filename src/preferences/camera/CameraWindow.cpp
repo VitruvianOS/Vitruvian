@@ -311,6 +311,18 @@ CameraWindow::_UpdateControls()
 	if (fCamera->GetControl(B_CAMERA_PARAM_MIRROR, &value) == B_OK)
 		fMirrorCheck->SetValue(value != 0.0f);
 	fPreview->SetMirror(fMirrorCheck->Value() == B_CONTROL_ON);
+
+	// Controls the device does not expose are disabled, not faked.
+	fBrightnessSlider->SetEnabled(
+		fCamera->ControlSupported(B_CAMERA_PARAM_BRIGHTNESS) == B_OK);
+	fContrastSlider->SetEnabled(
+		fCamera->ControlSupported(B_CAMERA_PARAM_CONTRAST) == B_OK);
+	fExposureSlider->SetEnabled(
+		fCamera->ControlSupported(B_CAMERA_PARAM_EXPOSURE) == B_OK
+		|| fCamera->ControlSupported(B_CAMERA_PARAM_EXPOSURE_AUTO) == B_OK);
+	fWhiteBalanceSlider->SetEnabled(
+		fCamera->ControlSupported(B_CAMERA_PARAM_WHITE_BALANCE) == B_OK
+		|| fCamera->ControlSupported(B_CAMERA_PARAM_WHITE_BALANCE_AUTO) == B_OK);
 }
 
 

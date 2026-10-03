@@ -167,6 +167,9 @@ Server(
 
 UsePrivateHeaders(app_server app interface graphics graphics/common kernel support)
 
+# Decorator add-ons subclass app_server classes and resolve them here.
+set_target_properties(app_server PROPERTIES ENABLE_EXPORTS ON)
+
 #TODO: we want a custom target_include_directories that does that:
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/servers/app/")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/servers/app/ \

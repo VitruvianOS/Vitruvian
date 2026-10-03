@@ -293,7 +293,9 @@ LookAndFeelSettingsView::_SetDecor(DecorInfo* decorInfo)
 	if (fDecorUtility.SetDecorator(decorInfo) == B_OK) {
 		fCurrentDecor = fDecorUtility.CurrentDecorator()->ShortcutName();
 		BString decorName = fDecorUtility.CurrentDecorator()->Name();
-		fDecorMenu->FindItem(_DecorLabel(decorName))->SetMarked(true);
+		BMenuItem* item = fDecorMenu->FindItem(_DecorLabel(decorName));
+		if (item != NULL)
+			item->SetMarked(true);
 		Window()->PostMessage(kMsgUpdate);
 	}
 }
@@ -317,7 +319,8 @@ LookAndFeelSettingsView::_BuildDecorMenu()
 		BMessage* message = new BMessage(kMsgSetDecor);
 		message->AddString("decor", decor->ShortcutName());
 
-		BMenuItem* item = new BMenuItem(_DecorLabel(decor->Name()), message);
+		BMenuItem* item = new BMenuItem(_DecorLabel(decor->Name()).String(),
+			message);
 		fDecorMenu->AddItem(item);
 		if (decor->ShortcutName() == fCurrentDecor)
 			item->SetMarked(true);
@@ -325,11 +328,11 @@ LookAndFeelSettingsView::_BuildDecorMenu()
 }
 
 
-const char*
+BString
 LookAndFeelSettingsView::_DecorLabel(const BString& name)
 {
 	BString label(name);
-	return label.RemoveLast("Decorator").Trim().String();
+	return label.RemoveLast("Decorator").Trim();
 }
 
 
@@ -341,10 +344,15 @@ LookAndFeelSettingsView::_SetControlLook(const BString& path)
 
 	if (path.Length() > 0) {
 		BEntry entry(path.String());
-		const char* label = _ControlLookLabel(entry.Name());
-		fControlLookMenu->FindItem(label)->SetMarked(true);
-	} else
-		fControlLookMenu->FindItem(B_TRANSLATE("Default"))->SetMarked(true);
+		BMenuItem* item = fControlLookMenu->FindItem(
+			_ControlLookLabel(entry.Name()).String());
+		if (item != NULL)
+			item->SetMarked(true);
+	} else {
+		BMenuItem* item = fControlLookMenu->FindItem(B_TRANSLATE("Default"));
+		if (item != NULL)
+			item->SetMarked(true);
+	}
 
 	Window()->PostMessage(kMsgUpdate);
 }
@@ -381,7 +389,8 @@ LookAndFeelSettingsView::_BuildControlLookMenu()
 			message = new BMessage(kMsgSetControlLook);
 			message->AddString("control_look", path.Path());
 
-			item = new BMenuItem(_ControlLookLabel(entry.Name()), message);
+			item = new BMenuItem(_ControlLookLabel(entry.Name()).String(),
+				message);
 			fControlLookMenu->AddItem(item);
 			if (BString(path.Path()) == fCurrentControlLook)
 				item->SetMarked(true);
@@ -390,11 +399,11 @@ LookAndFeelSettingsView::_BuildControlLookMenu()
 }
 
 
-const char*
+BString
 LookAndFeelSettingsView::_ControlLookLabel(const char* name)
 {
 	BString label(name);
-	return label.RemoveLast("ControlLook").Trim().String();
+	return label.RemoveLast("ControlLook").Trim();
 }
 
 

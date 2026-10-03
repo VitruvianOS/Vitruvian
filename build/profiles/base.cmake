@@ -89,6 +89,20 @@ set(TRACKER_ADDONS
 )
 ImageInclude("/system/add-ons/Tracker" ${TRACKER_ADDONS})
 
+set(DECORATORS
+	BeDecorator
+	FlatDecorator
+	MacDecorator
+	WinDecorator
+)
+ImageInclude("/system/add-ons/decorators" ${DECORATORS})
+
+set(CONTROL_LOOKS
+	BeControlLook
+	FlatControlLook
+)
+ImageInclude("/system/add-ons/control_look" ${CONTROL_LOOKS})
+
 
 include(${CMAKE_CURRENT_LIST_DIR}/preferences.cmake)
 

@@ -1467,8 +1467,17 @@ DrmHWInterface::SetBrightness(float brightness)
 {
 	if (!fBacklight)
 		return B_UNSUPPORTED;
-	int max = (int)backlight_get_max_brightness(fBacklight);
+	// Prefer the value cached at init; a re-read can fail on write-only nodes.
+	int max = fBacklight->max_brightness;
+	if (max <= 0)
+		max = (int)backlight_get_max_brightness(fBacklight);
+	if (max <= 0)
+		return B_ERROR;
 	int val = (int)(brightness * max + 0.5f);
+	if (val < 0)
+		val = 0;
+	if (val > max)
+		val = max;
 	if (_SetBrightnessViaLogind(fBacklight, val) == B_OK)
 		return B_OK;
 	return backlight_set_brightness(fBacklight, val) == 0 ? B_OK : B_ERROR;
@@ -1480,9 +1489,22 @@ DrmHWInterface::GetBrightness(float* brightness)
 {
 	if (!fBacklight || !brightness)
 		return B_UNSUPPORTED;
-	int max = (int)backlight_get_max_brightness(fBacklight);
-	int cur = (int)backlight_get_brightness(fBacklight);
-	*brightness = (max > 0) ? (float)cur / max : 0.0f;
+	int max = fBacklight->max_brightness;
+	if (max <= 0)
+		max = (int)backlight_get_max_brightness(fBacklight);
+	if (max <= 0) {
+		*brightness = 0.0f;
+		return B_ERROR;
+	}
+	// actual_brightness tracks the panel; brightness can read 0 while lit.
+	int cur = (int)backlight_get_actual_brightness(fBacklight);
+	if (cur < 0)
+		cur = (int)backlight_get_brightness(fBacklight);
+	if (cur < 0) {
+		*brightness = 0.0f;
+		return B_OK;
+	}
+	*brightness = (float)cur / max;
 	return B_OK;
 }
 

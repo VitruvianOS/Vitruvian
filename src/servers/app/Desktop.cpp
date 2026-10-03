@@ -646,9 +646,11 @@ Desktop::Init()
 		HWInterface()->SetBrightness(brightness);
 	else {
 		// Firmware can leave the panel dark with no stored preference;
-		// light it rather than boot into a black screen.
+		// light it rather than boot into a black screen. An unread
+		// brightness counts as dark so a failed read still recovers.
 		float current = 0.0f;
-		if (HWInterface()->GetBrightness(&current) == B_OK && current <= 0.0f)
+		if (HWInterface()->GetBrightness(&current) != B_OK
+				|| current <= 0.0f)
 			HWInterface()->SetBrightness(1.0f);
 	}
 

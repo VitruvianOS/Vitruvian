@@ -199,17 +199,17 @@ BlueZBackend::_InitBlueZ()
 		this);
 
 	// Subscribes signals (also replays any StartWatching() that queued a
-	// watcher into fWatchers before fBlueZConnection existed -- without this
+	// watcher into fWatchers before fBlueZConnection existed: without this
 	// a replicant that called StartWatching() from AttachedToWindow() got no
 	// subscription, ever) strictly before kicking the initial snapshot fill.
 	// The fill itself is async now (_StartSnapshotQuery) and returns
 	// immediately; any PropertiesChanged/InterfacesAdded/InterfacesRemoved
 	// that arrives while it's in flight is caught by the generation counter
 	// in _HandleSnapshotQueryReply rather than by blocking on fLock.
-	{
-		BAutolock lock(fLock);
-		_SubscribeSignalsLocked();
-	}
+	// Subscribe on the dispatch context: GDBus runs signal callbacks in
+	// the subscriber's thread-default context, which nothing iterates here.
+	g_main_context_invoke((GMainContext*)fMainContext, _SubscribeSignalsSource,
+		this);
 	_StartSnapshotQuery();
 
 	return true;
@@ -220,6 +220,16 @@ gboolean
 BlueZBackend::_SetupBluezWatchSource(gpointer cookie)
 {
 	((BlueZBackend*)cookie)->_SetupBluezWatch();
+	return G_SOURCE_REMOVE;
+}
+
+
+gboolean
+BlueZBackend::_SubscribeSignalsSource(gpointer cookie)
+{
+	BlueZBackend* backend = (BlueZBackend*)cookie;
+	BAutolock lock(backend->fLock);
+	backend->_SubscribeSignalsLocked();
 	return G_SOURCE_REMOVE;
 }
 
@@ -764,10 +774,12 @@ BlueZBackend::_HandleSnapshotQueryReply(GVariant* reply, GError* error,
 
 	// Generation matched (nothing raced this query), or the retry budget
 	// above is spent and the tree is churning too fast to ever see a quiet
-	// window -- accept this snapshot either way. In the retry-exhausted
+	// window: accept this snapshot either way. In the retry-exhausted
 	// case any single object this reply missed or resurrected relative to
 	// the racing signal is corrected by the very next signal that touches
 	// it, same as any other snapshot entry.
+	bool firstFill = !fSnapshotPopulated || !fDaemonHealthy;
+
 	fAdapterSnapshot.swap(adapters);
 	fDeviceSnapshot.swap(devices);
 	fSnapshotPopulated = true;
@@ -775,6 +787,18 @@ BlueZBackend::_HandleSnapshotQueryReply(GVariant* reply, GError* error,
 	fCurrentBackoffUs = 0;
 	fBackoffUntil = 0;
 	delete cookie;
+
+	// Adapters present before startup never emit InterfacesAdded; announce
+	// what the first fill found so watchers re-fetch.
+	if (firstFill && !fWatchers.empty()) {
+		for (std::map<BString, BMessage>::const_iterator it
+				= fAdapterSnapshot.begin(); it != fAdapterSnapshot.end();
+				++it) {
+			BMessage message(it->second);
+			message.what = NOTIFICATION_ADAPTER_ADDED;
+			_NotifyWatchers(NOTIFICATION_ADAPTER_ADDED, message);
+		}
+	}
 }
 
 
@@ -1913,12 +1937,8 @@ BlueZBackend::GetStatusAsync(const BMessenger& replyTo, uint32 replyWhat)
 }
 
 
-// Caller must hold fLock. Subscribes the three org.bluez signals
-// unconditionally once the connection exists (not gated on fWatchers --
-// the snapshot cache needs them live regardless of whether any UI is
-// watching) and each isn't already subscribed. Called from _InitBlueZ()
-// once the connection comes up, and again from StartWatching() as a
-// harmless no-op safety net for callers that could theoretically race it.
+// Caller holds fLock on the dispatch thread. Subscribes the org.bluez
+// signals once, whether or not anyone watches: the cache needs them.
 void
 BlueZBackend::_SubscribeSignalsLocked()
 {
@@ -1956,11 +1976,11 @@ BlueZBackend::StartWatching(const BMessenger& target, uint32 notificationMask)
 {
 	BAutolock lock(fLock);
 
-	// Recorded regardless of whether fBlueZConnection exists yet -- a
+	// Recorded regardless of whether fBlueZConnection exists yet: a
 	// caller racing bluez_init (typically AttachedToWindow()) used to get
 	// an immediate, permanent B_ERROR here and never subscribe at all.
-	// _SubscribeSignalsLocked() below is a no-op until the connection is
-	// up; _InitBlueZ()'s replay call picks this watcher up once it is.
+	// The subscription below is skipped until the connection is up;
+	// _InitBlueZ()'s own subscription picks this watcher up once it is.
 	bool found = false;
 	for (size_t i = 0; i < fWatchers.size(); i++) {
 		if (fWatchers[i].messenger == target) {
@@ -1976,7 +1996,12 @@ BlueZBackend::StartWatching(const BMessenger& target, uint32 notificationMask)
 		fWatchers.push_back(watcher);
 	}
 
-	_SubscribeSignalsLocked();
+	// Never subscribe from this (window) thread: see _InitBlueZ().
+	if (fBlueZConnection != NULL && fMainContext != NULL
+			&& fPropertiesChangedSubscriptionId == 0) {
+		g_main_context_invoke((GMainContext*)fMainContext,
+			_SubscribeSignalsSource, this);
+	}
 
 	return B_OK;
 }

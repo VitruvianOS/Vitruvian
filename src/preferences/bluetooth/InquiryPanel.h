@@ -42,7 +42,7 @@ public:
 	// listener's own BLooper thread -- forwarded here as a BMessage so all
 	// BListView access still happens on this window's thread.
 	void DeviceFound(BMessage* deviceInfo);
-	void InquiryStarted();
+	void InquiryStarted(status_t status);
 	void InquiryFinished();
 
 private:
@@ -62,6 +62,7 @@ private:
 	Bluetooth::DiscoveryListener* fDiscoveryListener;
 	bigtime_t fInquirySeconds;
 	bool fScanning;
+	bool fStartFailed;
 };
 
 

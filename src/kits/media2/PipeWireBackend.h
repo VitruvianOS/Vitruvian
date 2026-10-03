@@ -67,15 +67,21 @@ public:
 			std::string		mediaClass;
 			bool			isSink;
 			bool			isSource;
+			// Camera devices (media.class Video/Source).
+			bool			isVideo;
+			std::string		stableId;
+			std::string		location;
 		};
 
 		std::vector<DeviceInfo>	Devices();
 
 			uint32					GetDefaultSinkId();
 			uint32					GetDefaultSourceId();
+			uint32					GetDefaultVideoSourceId();
 
 			status_t				SetDefaultSink(uint32 deviceId);
 			status_t				SetDefaultSource(uint32 deviceId);
+			status_t				SetDefaultVideoSource(uint32 deviceId);
 
 		struct DevicePort {
 			std::string		name;
@@ -384,6 +390,7 @@ private:
 			std::mutex				fMetadataLock;
 			std::string				fDefaultSinkName;
 			std::string				fDefaultSourceName;
+			std::string				fDefaultVideoSourceName;
 
 			struct Watcher {
 				BMessenger			messenger;

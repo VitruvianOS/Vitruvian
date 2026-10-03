@@ -109,6 +109,7 @@ protected:
 
 	friend class BMediaClient;
 	friend class BMediaUnit;
+	friend class BCameraSource;
 };
 
 

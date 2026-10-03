@@ -52,8 +52,10 @@ public:
 
 			status_t				GetDefaultAudioOutput(media_client_id* id);
 			status_t				GetDefaultAudioInput(media_client_id* id);
+			status_t				GetDefaultCamera(media_client_id* id);
 			status_t				SetDefaultAudioOutput(media_client_id id);
 			status_t				SetDefaultAudioInput(media_client_id id);
+			status_t				SetDefaultCamera(media_client_id id);
 
 
 	struct StreamInfo {

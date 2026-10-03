@@ -31,6 +31,7 @@
 #include <spa/utils/type.h>
 
 #include <media2/Controllable.h>
+#include <spa/param/video/format-utils.h>
 #include <spa/utils/dict.h>
 
 #include <OS.h>
@@ -245,10 +246,11 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 		return;
 	const bool isSink   = strcmp(mediaClass, "Audio/Sink") == 0;
 	const bool isSource = strcmp(mediaClass, "Audio/Source") == 0;
+	const bool isVideo  = strcmp(mediaClass, "Video/Source") == 0;
 	const bool isStreamOut = strncmp(mediaClass, "Stream/Output", 13) == 0;
 	const bool isStreamIn  = strncmp(mediaClass, "Stream/Input",  12) == 0;
 
-	if (isSink || isSource) {
+	if (isSink || isSource || isVideo) {
 		const char* desc = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
 		const char* name = spa_dict_lookup(props, PW_KEY_NODE_NAME);
 		const char* cardIdStr = props != NULL
@@ -264,7 +266,37 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 		info.nodeName   = name != NULL ? name : "";
 		info.mediaClass = mediaClass;
 		info.isSink     = isSink;
-		info.isSource   = isSource;
+		info.isSource   = isSource && !isVideo;
+		info.isVideo    = isVideo;
+		info.stableId   = "";
+		info.location   = "";
+
+		if (isVideo) {
+			// Prefer udev-backed serial; never persist /dev/videoN as the key.
+			const char* serial = spa_dict_lookup(props, "device.serial");
+			const char* busPath = spa_dict_lookup(props, "device.bus-path");
+			const char* objectPath = spa_dict_lookup(props, "object.path");
+			const char* v4l2Path = spa_dict_lookup(props, "api.v4l2.path");
+			if (serial != NULL && serial[0] != '\0')
+				info.stableId = std::string("serial:") + serial;
+			else if (busPath != NULL && busPath[0] != '\0')
+				info.stableId = std::string("bus:") + busPath;
+			else if (objectPath != NULL && objectPath[0] != '\0')
+				info.stableId = std::string("path:") + objectPath;
+			else if (v4l2Path != NULL && v4l2Path[0] != '\0')
+				info.stableId = std::string("v4l2:") + v4l2Path;
+			else if (!info.nodeName.empty())
+				info.stableId = std::string("node:") + info.nodeName;
+
+			const char* deviceApi = spa_dict_lookup(props, "device.api");
+			const char* loc = spa_dict_lookup(props, "api.libcamera.location");
+			if (loc != NULL && loc[0] != '\0')
+				info.location = loc;
+			else if (deviceApi != NULL && strcmp(deviceApi, "libcamera") == 0)
+				info.location = "libcamera";
+			else
+				info.location = "external";
+		}
 
 		{
 			std::lock_guard<std::mutex> _(fDevicesLock);
@@ -567,6 +599,11 @@ PipeWireBackend::_MetadataPropertyThunk(void* data, uint32 /*subject*/,
 			self->fDefaultSourceName = nodeName;
 			changed = true;
 		}
+	} else if (strcmp(key, "default.video.source") == 0) {
+		if (self->fDefaultVideoSourceName != nodeName) {
+			self->fDefaultVideoSourceName = nodeName;
+			changed = true;
+		}
 	}
 	if (changed)
 		self->_Broadcast(BMediaGraph::B_MEDIA_DEFAULTS_CHANGED);
@@ -606,6 +643,25 @@ PipeWireBackend::GetDefaultSourceId()
 	std::lock_guard<std::mutex> _(fDevicesLock);
 	for (auto& d : fDevices) {
 		if (d.isSource && d.nodeName == want)
+			return d.id;
+	}
+	return 0;
+}
+
+
+uint32
+PipeWireBackend::GetDefaultVideoSourceId()
+{
+	std::string want;
+	{
+		std::lock_guard<std::mutex> _(fMetadataLock);
+		want = fDefaultVideoSourceName;
+	}
+	if (want.empty())
+		return 0;
+	std::lock_guard<std::mutex> _(fDevicesLock);
+	for (auto& d : fDevices) {
+		if (d.isVideo && d.nodeName == want)
 			return d.id;
 	}
 	return 0;
@@ -667,6 +723,30 @@ PipeWireBackend::SetDefaultSource(uint32 deviceId)
 	Lock();
 	status_t status = SetDefaultMetadataNode(fMetadata,
 		"default.audio.source", nodeName);
+	Unlock();
+	return status;
+}
+
+
+status_t
+PipeWireBackend::SetDefaultVideoSource(uint32 deviceId)
+{
+	std::string nodeName;
+	{
+		std::lock_guard<std::mutex> _(fDevicesLock);
+		for (auto& d : fDevices) {
+			if (d.id == deviceId && d.isVideo) {
+				nodeName = d.nodeName;
+				break;
+			}
+		}
+	}
+	if (nodeName.empty())
+		return B_BAD_VALUE;
+
+	Lock();
+	status_t status = SetDefaultMetadataNode(fMetadata,
+		"default.video.source", nodeName);
 	Unlock();
 	return status;
 }
@@ -778,18 +858,30 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 	if (captureSinkMonitor && direction != PW_DIRECTION_INPUT)
 		return NULL;
 
-	spa_audio_info_raw info;
-	if (!BuildSPAAudioInfo(format, &info))
+	const bool isVideo = format.IsRawVideo();
+	const bool isAudio = format.IsRawAudio();
+	if (!isVideo && !isAudio)
 		return NULL;
+
+	spa_audio_info_raw info;
+	spa_video_info_raw videoInfo;
+	memset(&videoInfo, 0, sizeof(videoInfo));
+	if (isVideo) {
+		if (!BuildSPAVideoInfo(format, &videoInfo))
+			return NULL;
+	} else {
+		if (!BuildSPAAudioInfo(format, &info))
+			return NULL;
+	}
 
 	const char* category = (direction == PW_DIRECTION_OUTPUT)
 		? "Playback" : "Capture";
 
 	Lock();
 	pw_properties* props = pw_properties_new(
-		PW_KEY_MEDIA_TYPE,     "Audio",
+		PW_KEY_MEDIA_TYPE,     isVideo ? "Video" : "Audio",
 		PW_KEY_MEDIA_CATEGORY, category,
-		PW_KEY_MEDIA_ROLE,     "Music",
+		PW_KEY_MEDIA_ROLE,     isVideo ? "Camera" : "Music",
 		PW_KEY_NODE_NAME,      name != NULL ? name : "vitruvian-media",
 		NULL);
 	if (targetNodeName != NULL)
@@ -808,7 +900,11 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 	uint8_t buf[1024];
 	spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
 	const spa_pod* params[1];
-	params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
+	if (isVideo)
+		params[0] = spa_format_video_raw_build(&b, SPA_PARAM_EnumFormat,
+			&videoInfo);
+	else
+		params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
 
 	Lock();
 	const int r = pw_stream_connect(stream,

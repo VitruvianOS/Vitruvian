@@ -4,6 +4,9 @@
  */
 
 #include <media2/MediaGraph.h>
+
+#include <media2/CameraSettings.h>
+#include <media2/CameraSource.h>
 #include <media2/MediaConnection.h>
 
 #include <functional>
@@ -307,6 +310,9 @@ BMediaGraph::GetClientInfo(media_client_id id, BMessage* info)
 		info->AddString("media.class", d.mediaClass.c_str());
 		info->AddBool("is.sink",      d.isSink);
 		info->AddBool("is.source",    d.isSource);
+		info->AddBool("is.video",     d.isVideo);
+		info->AddString("stable_id",  d.stableId.c_str());
+		info->AddString("location",   d.location.c_str());
 		return B_OK;
 	}
 	return B_ENTRY_NOT_FOUND;
@@ -378,6 +384,101 @@ BMediaGraph::SetDefaultAudioInput(media_client_id id)
 	if (backend == NULL)
 		return B_DEVICE_NOT_FOUND;
 	return backend->SetDefaultSource((uint32)id);
+}
+
+
+static camera_location
+_CameraLocationFromString(const BString& location)
+{
+	if (location == "front")
+		return B_CAMERA_LOCATION_FRONT;
+	if (location == "back")
+		return B_CAMERA_LOCATION_BACK;
+	if (location == "external" || location == "libcamera")
+		return B_CAMERA_LOCATION_EXTERNAL;
+	return B_CAMERA_LOCATION_UNKNOWN;
+}
+
+
+// Settings file wins; PipeWire metadata is the mirror for other clients.
+status_t
+BMediaGraph::GetDefaultCamera(media_client_id* id)
+{
+	if (id == NULL)
+		return B_BAD_VALUE;
+
+	BCameraSettings settings;
+	BString stableId;
+	if (settings.Load() == B_OK)
+		stableId = settings.DefaultCameraId();
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	if (!stableId.IsEmpty()) {
+		for (auto& d : backend->Devices()) {
+			if (d.isVideo && d.stableId == stableId.String()) {
+				*id = (media_client_id)d.id;
+				return B_OK;
+			}
+		}
+	}
+
+	const uint32 viaMeta = backend->GetDefaultVideoSourceId();
+	if (viaMeta != 0) {
+		*id = (media_client_id)viaMeta;
+		return B_OK;
+	}
+
+	for (auto& d : backend->Devices()) {
+		if (d.isVideo) {
+			*id = (media_client_id)d.id;
+			return B_OK;
+		}
+	}
+	*id = 0;
+	return B_ENTRY_NOT_FOUND;
+}
+
+
+status_t
+BMediaGraph::SetDefaultCamera(media_client_id id)
+{
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	// Persist first so the settings file remains the source of truth.
+	BString stableId;
+	auto devs = backend->Devices();
+	for (auto& d : devs) {
+		if (d.isVideo && d.id == (uint32)id) {
+			stableId = d.stableId.c_str();
+			break;
+		}
+	}
+
+	if (!stableId.IsEmpty()) {
+		BCameraSettings settings;
+		settings.Load();
+		settings.SetDefaultCameraId(stableId);
+		camera_device_info info;
+		info.id = id;
+		info.stableId = stableId;
+		info.location = B_CAMERA_LOCATION_UNKNOWN;
+		for (auto& d : devs) {
+			if (d.isVideo && d.id == (uint32)id) {
+				info.name = d.name.c_str();
+				info.location = _CameraLocationFromString(d.location.c_str());
+				break;
+			}
+		}
+		settings.SetDevice(info);
+		settings.Save();
+	}
+
+	return backend->SetDefaultVideoSource((uint32)id);
 }
 
 

@@ -12,6 +12,7 @@ add_subdirectory(locale)
 add_subdirectory(network)
 add_subdirectory(power)
 add_subdirectory(bluetooth)
+add_subdirectory(camera)
 add_subdirectory(media)
 #add_subdirectory(notifications) # missing libnotification
 add_subdirectory(printers)

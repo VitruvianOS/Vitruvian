@@ -7,6 +7,8 @@ AddOn(media2
 	FormatConversion.cpp
 	MediaDefs.cpp
 	GStreamerBackend.cpp
+	CameraSettings.cpp
+	CameraSource.cpp
 	MediaClient.cpp
 	MediaConnection.cpp
 	MediaFile.cpp
@@ -36,10 +38,10 @@ AddOn(media2
 	SystemBeep.cpp
 	TimeCode.cpp
 
-	LIBS be root
+	LIBS be root shared
 )
 
-UsePrivateHeaders(media2 media2 app support storage shared)
+UsePrivateHeaders(media2 app support storage shared)
 
 # PipeWire / SPA / GStreamer / fluidsynth headers and libraries
 target_include_directories(media2 PRIVATE

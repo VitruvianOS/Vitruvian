@@ -3,6 +3,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	Appearance
 	Backgrounds
 	Bluetooth
+	Camera
 	DataTranslations
 	Deskbar_prefs
 	FileTypes
@@ -27,6 +28,7 @@ set(SYSTEM_PREFERENCES
 	Appearance
 	Backgrounds
 	Bluetooth
+	Camera
 	DataTranslations
 	Deskbar
 	FileTypes

@@ -124,7 +124,7 @@ BMediaNode::_StartConnections(void* backendPtr)
 		if (format.Type() == B_MEDIA_NO_TYPE)
 			format = fFormat;
 
-		if (!format.IsRawAudio())
+		if (!format.IsRawAudio() && !format.IsRawVideo())
 			return B_NOT_SUPPORTED;
 
 		pw_direction direction = PW_DIRECTION_OUTPUT;
@@ -146,7 +146,7 @@ BMediaNode::_StartConnections(void* backendPtr)
 		if (format.Type() == B_MEDIA_NO_TYPE)
 			format = fFormat;
 
-		if (!format.IsRawAudio())
+		if (!format.IsRawAudio() && !format.IsRawVideo())
 			return B_NOT_SUPPORTED;
 
 		pw_direction direction = PW_DIRECTION_INPUT;

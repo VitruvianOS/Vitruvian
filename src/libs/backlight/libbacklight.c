@@ -52,8 +52,7 @@ static long backlight_get(struct backlight *backlight, char *node)
 	long value, ret;
 
 	if (asprintf(&path, "%s/%s", backlight->path, node) < 0)
-		return -ENOMEM
-;
+		return -ENOMEM;
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
 		ret = -1;
@@ -140,71 +139,63 @@ void backlight_destroy(struct backlight *backlight)
 	free(backlight);
 }
 
-struct backlight *backlight_init(struct udev_device *drm_device,
-				 uint32_t connector_type)
+// Higher wins. A PCI-matching node is the GPU's own panel backlight
+// (amdgpu_bl0 on AMD Chromebooks); it must beat non-matching firmware
+// or platform nodes or the session writes the wrong device.
+static int
+backlight_entry_score(enum backlight_type type, int pciMatch,
+	int internalConnector)
 {
-	const char *syspath = NULL;
-	char *pci_name = NULL;
+	if (pciMatch)
+		return 100 + (int)type;
+	if (!internalConnector)
+		return -1;
+	return (int)type;
+}
+
+struct backlight *
+backlight_init_from_class(const char* class_dir, const char* pci_name,
+	uint32_t connector_type)
+{
 	char *chosen_path = NULL;
 	char *path = NULL;
 	DIR *backlights = NULL;
 	struct dirent *entry;
 	enum backlight_type type = 0;
+	int bestScore = -1;
 	char buffer[100];
 	struct backlight *backlight = NULL;
 	int ret;
 
-	if (!drm_device)
+	if (class_dir == NULL || class_dir[0] == '\0')
 		return NULL;
-
-	syspath = udev_device_get_syspath(drm_device);
-	if (!syspath)
-		return NULL;
-
-	if (asprintf(&path, "%s/%s", syspath, "device") < 0)
-		return NULL;
-
-	ret = readlink(path, buffer, sizeof(buffer) - 1);
-	free(path);
-	if (ret < 0)
-		return NULL;
-
-	buffer[ret] = '\0';
-	pci_name = basename(buffer);
 
 	if (connector_type <= 0)
 		return NULL;
 
-	backlights = opendir("/sys/class/backlight");
+	int internalConnector = (connector_type == DRM_MODE_CONNECTOR_LVDS
+		|| connector_type == DRM_MODE_CONNECTOR_eDP
+		|| connector_type == DRM_MODE_CONNECTOR_DSI);
+
+	backlights = opendir(class_dir);
 	if (!backlights)
 		return NULL;
 
-	/* Find the "best" backlight for the device. Firmware
-	   interfaces are preferred over platform interfaces are
-	   preferred over raw interfaces. For raw interfaces we'll
-	   check if the device ID in the form of pci match, while
-	   for firmware interfaces we require the pci ID to
-	   match. It's assumed that platform interfaces always match,
-	   since we can't actually associate them with IDs.
-
-	   A further awkwardness is that, while it's theoretically
-	   possible for an ACPI interface to include support for
-	   changing the backlight of external devices, it's unlikely
-	   to ever be done. It's effectively impossible for a platform
-	   interface to do so. So if we get asked about anything that
-	   isn't LVDS or eDP, we pretty much have to require that the
-	   control be supplied via a raw interface */
+	/* Internal panels may use platform or firmware nodes; external
+	   connectors need raw GPU control. Preference is no longer type-only:
+	   a raw node that PCI-matches the display GPU wins on internal panels. */
 
 	while ((entry = readdir(backlights))) {
 		char *backlight_path;
-		char *parent;
+		char *parent = NULL;
 		enum backlight_type entry_type;
+		int score;
 		int fd;
 
 		if (entry->d_name[0] == '.')
 			continue;
 
-		if (asprintf(&backlight_path, "%s/%s", "/sys/class/backlight",
+		if (asprintf(&backlight_path, "%s/%s", class_dir,
 			     entry->d_name) < 0)
 			goto err;
 
@@ -233,41 +224,47 @@ struct backlight *backlight_init(struct udev_device *drm_device,
 		else
 			goto out;
 
-		/* Internal panels (LVDS/eDP/DSI) may use platform or firmware
-		   nodes; external connectors need raw GPU control. */
-		if (connector_type != DRM_MODE_CONNECTOR_LVDS &&
-		    connector_type != DRM_MODE_CONNECTOR_eDP &&
-		    connector_type != DRM_MODE_CONNECTOR_DSI) {
-			if (entry_type != BACKLIGHT_RAW)
-				goto out;
-		}
+		if (!internalConnector && entry_type != BACKLIGHT_RAW)
+			goto out;
 
 		free (path);
+		path = NULL;
 
 		if (asprintf(&path, "%s/%s", backlight_path, "device") < 0)
 			goto err;
 
 		ret = readlink(path, buffer, sizeof(buffer) - 1);
-
-		if (ret < 0)
-			goto out;
-
-		buffer[ret] = '\0';
-
-		parent = basename(buffer);
-
-		/* Perform matching for raw and firmware backlights - 
-		   platform backlights have to be assumed to match */
-		if (entry_type == BACKLIGHT_RAW ||
-		    entry_type == BACKLIGHT_FIRMWARE) {
-			if (!(pci_name && !strcmp(pci_name, parent)))
+		if (ret < 0) {
+			// Platform nodes may carry no device symlink.
+			if (entry_type != BACKLIGHT_PLATFORM)
 				goto out;
+			parent = NULL;
+		} else {
+			buffer[ret] = '\0';
+			parent = basename(buffer);
 		}
 
-		if (entry_type < type)
+		int pciMatch = 0;
+		if (entry_type == BACKLIGHT_RAW) {
+			// Raw nodes are GPU-owned; without a PCI match they
+			// cannot be this card's panel backlight.
+			if (!(pci_name && parent && !strcmp(pci_name, parent)))
+				goto out;
+			pciMatch = 1;
+		} else if (entry_type == BACKLIGHT_FIRMWARE) {
+			// Firmware may live outside the GPU (acpi_video0); still
+			// a candidate when nothing PCI-matched is present.
+			if (pci_name && parent && !strcmp(pci_name, parent))
+				pciMatch = 1;
+		}
+
+		score = backlight_entry_score(entry_type, pciMatch,
+			internalConnector);
+		if (score < bestScore)
 			goto out;
 
 		type = entry_type;
+		bestScore = score;
 
 		if (chosen_path)
 			free(chosen_path);
@@ -276,6 +273,7 @@ struct backlight *backlight_init(struct udev_device *drm_device,
 	out:
 		free(backlight_path);
 		free(path);
+		path = NULL;
 	}
 
 	if (!chosen_path)
@@ -293,15 +291,51 @@ struct backlight *backlight_init(struct udev_device *drm_device,
 	if (backlight->max_brightness < 0)
 		goto err;
 
+	// actual_brightness is optional; many platform nodes omit it.
 	backlight->brightness = backlight_get_actual_brightness(backlight);
 	if (backlight->brightness < 0)
-		goto err;
+		backlight->brightness = backlight_get_brightness(backlight);
 
 	closedir(backlights);
 	return backlight;
 err:
 	closedir(backlights);
+	free(path);
 	free (chosen_path);
 	free (backlight);
 	return NULL;
+}
+
+struct backlight *backlight_init(struct udev_device *drm_device,
+				 uint32_t connector_type)
+{
+	const char *syspath = NULL;
+	char *pci_name = NULL;
+	char *path = NULL;
+	char buffer[100];
+	int ret;
+
+	if (!drm_device)
+		return NULL;
+
+	syspath = udev_device_get_syspath(drm_device);
+	if (!syspath)
+		return NULL;
+
+	if (asprintf(&path, "%s/%s", syspath, "device") < 0)
+		return NULL;
+
+	ret = readlink(path, buffer, sizeof(buffer) - 1);
+	free(path);
+	if (ret < 0)
+		return NULL;
+
+	buffer[ret] = '\0';
+	pci_name = basename(buffer);
+
+	const char* class_dir = getenv("VOS_BACKLIGHT_CLASS");
+	if (class_dir == NULL || class_dir[0] == '\0')
+		class_dir = "/sys/class/backlight";
+
+	return backlight_init_from_class(class_dir, pci_name, connector_type);
 }

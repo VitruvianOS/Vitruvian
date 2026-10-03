@@ -171,13 +171,11 @@ create_raw() {
     _host_shared="$_basedir/shared"
     _guest_mnt="/mnt/host_shared"
 
-    # Same layout as the loop path: 4 GiB disk, 1MiB-513MiB ESP (512 MiB),
-    # 513MiB-100% root (3583 MiB). Kept identical on purpose so the
-    # differential harness compares like-for-like partition geometry.
+    # 4 GiB disk: 128 MiB ESP (it only holds the GRUB loaders), the rest root.
     _disk_mib=4096
     _esp_start_mib=1
-    _esp_size_mib=512
-    _root_start_mib=513
+    _esp_size_mib=128
+    _root_start_mib=129
     _root_size_mib=$((_disk_mib - _root_start_mib - 1))  # -1MiB for GPT backup
 
     _root_dir="$_basedir/image_tree/raw_root"

@@ -102,6 +102,7 @@ set(DESKBAR_APPLETS
 	#AutoRaise
 	BluetoothStatus
 	Clock
+	LocationStatus
 	NetworkStatus
 	OverlayImage
 	PhoneSignal

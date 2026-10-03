@@ -36,6 +36,7 @@ public:
 private:
 			void				_UpdateStatusViews();
 			void				_UpdatePositionViews();
+			void				_EnsureDeskbarIndicator();
 
 private:
 			LocationSettings&	fSettings;

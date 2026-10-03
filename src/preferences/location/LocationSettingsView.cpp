@@ -11,6 +11,8 @@
 
 #include <Button.h>
 #include <Catalog.h>
+#include <Deskbar.h>
+#include <Entry.h>
 #include <ControlLook.h>
 #include <LayoutBuilder.h>
 #include <Locale.h>
@@ -19,6 +21,7 @@
 #include <MenuItem.h>
 #include <Message.h>
 #include <Messenger.h>
+#include <Path.h>
 #include <PopUpMenu.h>
 #include <String.h>
 #include <StringView.h>
@@ -265,6 +268,8 @@ LocationSettingsView::MessageReceived(BMessage* message)
 			fSettings.SetShowDeskbarIndicator(
 				fDeskbarCheckBox->Value() == B_CONTROL_ON);
 			fSettings.SaveSettings();
+			if (fSettings.ShowDeskbarIndicator())
+				_EnsureDeskbarIndicator();
 			break;
 		}
 		case kMsgRefresh:
@@ -380,4 +385,20 @@ LocationSettingsView::_UpdatePositionViews()
 		text.SetToFormat("%s —", B_TRANSLATE("Updated:   "));
 	}
 	fUpdatedView->SetText(text.String());
+}
+
+
+void
+LocationSettingsView::_EnsureDeskbarIndicator()
+{
+	// Install LocationStatus into Deskbar when the preflet checkbox turns on.
+	BDeskbar deskbar;
+	if (!deskbar.IsRunning()
+		|| deskbar.HasItem("LocationStatus"))
+		return;
+
+	BPath path("/system/apps/LocationStatus");
+	entry_ref ref;
+	if (get_ref_for_path(path.Path(), &ref) == B_OK)
+		deskbar.AddItem(&ref);
 }

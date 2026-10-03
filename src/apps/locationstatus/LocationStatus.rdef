@@ -1,0 +1,25 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
+
+resource app_signature "application/x-vnd.vos-LocationStatus";
+
+resource app_name_catalog_entry "x-vnd.vos-LocationStatus:System name:LocationStatus";
+
+resource app_flags B_SINGLE_LAUNCH;
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+	variety = B_APPV_DEVELOPMENT,
+	internal = 0,
+	short_info = "LocationStatus",
+	long_info  = "Location indicator for V\\OS"
+};
+
+/* Placeholder HVIF; the tray glyph is drawn by LocationStatusView. */
+resource vector_icon {
+	$"6E63696F6E0205006601000001000000000000"
+};

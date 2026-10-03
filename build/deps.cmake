@@ -80,7 +80,7 @@ DeclareDependency(
 
 DeclareDependency(
 	NOTO
-	RUNTIMES	"fonts-noto-core;fonts-noto-mono"
+	RUNTIMES	"fonts-noto-core;fonts-noto-mono;fonts-noto-cjk"
 )
 
 DeclareDependency(

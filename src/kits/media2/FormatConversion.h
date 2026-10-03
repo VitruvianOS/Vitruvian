@@ -43,6 +43,12 @@ void					ExtractFromSPAVideo(const spa_video_info_raw& spa,
 const spa_pod*			BuildVideoEnumFormat(spa_pod_builder* builder,
 							const media_raw_video_format& preferred);
 
+// Convert packed/planar webcam frames to BGRx (B_RGB32) for display.
+bool					ConvertYUY2ToRGB32(const uint8* src, uint32 width,
+							uint32 height, uint8* dst, uint32 dstStride);
+bool					ConvertI420ToRGB32(const uint8* src, uint32 width,
+							uint32 height, uint8* dst, uint32 dstStride);
+
 
 } }
 

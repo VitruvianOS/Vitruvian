@@ -15,7 +15,12 @@
 #include <View.h>
 #include <Window.h>
 
+#include "FormatConversion.h"
 #include "CameraMessages.h"
+
+
+using BPrivate::media::ConvertI420ToRGB32;
+using BPrivate::media::ConvertYUY2ToRGB32;
 
 
 CameraPreviewView::CameraPreviewView(const char* name)
@@ -69,6 +74,49 @@ CameraPreviewView::SetMirror(bool mirror)
 }
 
 
+// Flip packed pixels left-to-right before colour conversion.
+static void
+_FlipYUY2(const uint8* src, uint8* dst, uint32 width, uint32 height)
+{
+	const uint32 bpr = width * 2;
+	for (uint32 y = 0; y < height; y++) {
+		const uint8* row = src + (size_t)y * bpr;
+		uint8* out = dst + (size_t)y * bpr;
+		for (uint32 x = 0; x < width; x += 2)
+			memcpy(out + (size_t)(width - 2 - x) * 2, row + (size_t)x * 2, 4);
+	}
+}
+
+
+static void
+_FlipI420(const uint8* src, uint8* dst, uint32 width, uint32 height)
+{
+	const size_t ySize = (size_t)width * height;
+	const uint32 cW = width / 2;
+	const uint32 cH = height / 2;
+	const size_t cSize = (size_t)cW * cH;
+	const uint8* uSrc = src + ySize;
+	const uint8* vSrc = uSrc + cSize;
+
+	for (uint32 y = 0; y < height; y++) {
+		const uint8* row = src + (size_t)y * width;
+		uint8* out = dst + (size_t)y * width;
+		for (uint32 x = 0; x < width; x++)
+			out[x] = row[width - 1 - x];
+	}
+	for (uint32 y = 0; y < cH; y++) {
+		const uint8* uRow = uSrc + (size_t)y * cW;
+		const uint8* vRow = vSrc + (size_t)y * cW;
+		uint8* uOut = dst + ySize + (size_t)y * cW;
+		uint8* vOut = dst + ySize + cSize + (size_t)y * cW;
+		for (uint32 x = 0; x < cW; x++) {
+			uOut[x] = uRow[cW - 1 - x];
+			vOut[x] = vRow[cW - 1 - x];
+		}
+	}
+}
+
+
 void
 CameraPreviewView::MessageReceived(BMessage* message)
 {
@@ -104,12 +152,14 @@ CameraPreviewView::MessageReceived(BMessage* message)
 				break;
 			}
 
-			// CPU-mapped frames are BGRx / YUY2 / I420 per FormatConversion.
-			// Preview v1 draws BGRx directly; other formats show placeholder.
+			// CPU-mapped frames are BGRx / YUY2 / I420 per the negotiated
+			// SPA format; convert to B_RGB32 for the BBitmap.
+			bool converted = false;
+			uint8* bits = (uint8*)fBitmap->Bits();
+			const uint32 dstStride = fBitmap->BytesPerRow();
 			if (format.color_space == B_RGB32) {
-				uint8* bits = (uint8*)fBitmap->Bits();
 				for (uint32 y = 0; y < height; y++) {
-					uint8* dst = bits + y * fBitmap->BytesPerRow();
+					uint8* dst = bits + y * dstStride;
 					const uint8* src = buffer.data() + (size_t)y * bpr;
 					if (fMirror) {
 						for (uint32 x = 0; x < width; x++) {
@@ -125,7 +175,30 @@ CameraPreviewView::MessageReceived(BMessage* message)
 							dst[x * 4 + 3] = 0xff;
 					}
 				}
-			} else {
+				converted = true;
+			} else if (format.color_space == B_YCbCr422
+				|| format.color_space == B_YUV420) {
+				const size_t srcSize = format.color_space == B_YCbCr422
+					? (size_t)width * height * 2
+					: (size_t)width * height * 3 / 2;
+				const uint8* src = buffer.data();
+				std::vector<uint8> flipped;
+				if (fMirror) {
+					flipped.resize(srcSize);
+					if (format.color_space == B_YCbCr422)
+						_FlipYUY2(src, flipped.data(), width, height);
+					else
+						_FlipI420(src, flipped.data(), width, height);
+					src = flipped.data();
+				}
+				if (format.color_space == B_YCbCr422)
+					converted = ConvertYUY2ToRGB32(src, width, height,
+						bits, dstStride);
+				else
+					converted = ConvertI420ToRGB32(src, width, height,
+						bits, dstStride);
+			}
+			if (!converted) {
 				delete fBitmap;
 				fBitmap = NULL;
 			}

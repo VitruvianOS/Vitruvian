@@ -9,6 +9,7 @@ Application(Camera
 
 target_include_directories(Camera PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_SOURCE_DIR}/src/kits/media2
 	${PIPEWIRE_INCLUDES}
 	${SPA_INCLUDES}
 )

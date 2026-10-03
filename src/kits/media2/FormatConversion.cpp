@@ -306,4 +306,77 @@ BuildVideoEnumFormat(spa_pod_builder* builder,
 }
 
 
+static inline int32
+_Clamp8(int32 v)
+{
+	return v < 0 ? 0 : (v > 255 ? 255 : v);
+}
+
+
+// BT.601 limited-range YUV to 8-bit BGRx.
+static inline void
+_YuvToBgrx(int32 y, int32 u, int32 v, uint8* out)
+{
+	const int32 c = y - 16;
+	const int32 d = u - 128;
+	const int32 e = v - 128;
+	out[0] = (uint8)_Clamp8((298 * c + 516 * d + 128) >> 8);
+	out[1] = (uint8)_Clamp8((298 * c - 100 * d - 208 * e + 128) >> 8);
+	out[2] = (uint8)_Clamp8((298 * c + 409 * e + 128) >> 8);
+	out[3] = 0xff;
+}
+
+
+bool
+ConvertYUY2ToRGB32(const uint8* src, uint32 width, uint32 height,
+	uint8* dst, uint32 dstStride)
+{
+	if (src == NULL || dst == NULL || width == 0 || height == 0
+		|| (width & 1) != 0)
+		return false;
+
+	for (uint32 y = 0; y < height; y++) {
+		const uint8* row = src + (size_t)y * width * 2;
+		uint8* out = dst + (size_t)y * dstStride;
+		for (uint32 x = 0; x < width; x += 2) {
+			const int32 y0 = row[0];
+			const int32 u  = row[1];
+			const int32 y1 = row[2];
+			const int32 v  = row[3];
+			_YuvToBgrx(y0, u, v, out + (size_t)x * 4);
+			_YuvToBgrx(y1, u, v, out + (size_t)(x + 1) * 4);
+			row += 4;
+		}
+	}
+	return true;
+}
+
+
+bool
+ConvertI420ToRGB32(const uint8* src, uint32 width, uint32 height,
+	uint8* dst, uint32 dstStride)
+{
+	if (src == NULL || dst == NULL || width == 0 || height == 0
+		|| (width & 1) != 0 || (height & 1) != 0)
+		return false;
+
+	const size_t ySize = (size_t)width * height;
+	const size_t cSize = (size_t)(width / 2) * (height / 2);
+	const uint8* uPlane = src + ySize;
+	const uint8* vPlane = uPlane + cSize;
+
+	for (uint32 y = 0; y < height; y++) {
+		const uint8* yRow = src + (size_t)y * width;
+		const uint8* uRow = uPlane + (size_t)(y / 2) * (width / 2);
+		const uint8* vRow = vPlane + (size_t)(y / 2) * (width / 2);
+		uint8* out = dst + (size_t)y * dstStride;
+		for (uint32 x = 0; x < width; x++) {
+			_YuvToBgrx(yRow[x], uRow[x / 2], vRow[x / 2],
+				out + (size_t)x * 4);
+		}
+	}
+	return true;
+}
+
+
 } }

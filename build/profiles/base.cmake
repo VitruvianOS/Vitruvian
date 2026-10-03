@@ -22,11 +22,11 @@ ImageInclude("/system/add-ons/input_server/devices" ${INPUT_SERVER_ADDONS})
 
 
 # Every filter runs on every input message, so this list is hot-path.
-# shortcut_catcher and screen_saver do per-message work (BMessage copy,
-# BAutolock) for features not wired up yet, so they stay out.
+# shortcut_catcher still stays out until its feature is wired up.
 set(INPUT_SERVER_FILTERS
 	switch_workspace
 	minimize_all
+	screen_saver
 #	shortcut_catcher
 )
 ImageInclude("/system/add-ons/input_server/filters" ${INPUT_SERVER_FILTERS})

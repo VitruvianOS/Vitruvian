@@ -2,6 +2,7 @@ Application(PackageManager
 	SOURCES
 	AptBackend.cpp
 	AptLogView.cpp
+	ChangeSummaryWindow.cpp
 	FilterView.cpp
 	MainWindow.cpp
 	PackageInfo.cpp

@@ -36,6 +36,13 @@ enum {
 	kMsgError				= 'pmER'
 };
 
+// Sent by ChangeSummaryWindow back to MainWindow once the user has
+// reviewed the resolved change set.
+enum {
+	kMsgSummaryApply		= 'pmSa',
+	kMsgSummaryCancel		= 'pmSc'
+};
+
 enum {
 	kMsgFilterChanged		= 'pmfc',
 	kMsgSectionSelected		= 'pmss',

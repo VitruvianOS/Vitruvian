@@ -6,6 +6,7 @@
 #define APT_BACKEND_H
 
 #include <Locker.h>
+#include <Message.h>
 #include <ObjectList.h>
 #include <String.h>
 
@@ -19,11 +20,14 @@ public:
 								AptBackend();
 								~AptBackend();
 
+			// details, if given, gets "name\tversion" strings under
+			// "new", "upgrade" and "remove".
 			status_t			SimulateTransaction(
 									const BObjectList<BString>& install,
 									const BObjectList<BString>& remove,
 									const BObjectList<BString>& purge,
-									BString* summary);
+									BString* summary,
+									BMessage* details = NULL);
 			status_t			ApplyTransaction(
 									const BObjectList<BString>& install,
 									const BObjectList<BString>& remove,

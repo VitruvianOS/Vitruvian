@@ -5,6 +5,7 @@
 #ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
 
+#include <Message.h>
 #include <ObjectList.h>
 #include <String.h>
 #include <Window.h>
@@ -44,6 +45,8 @@ private:
 			int32				_CountMarked() const;
 			void				_UpdatePendingUI();
 			void				_HandleSimulateReady(BMessage* message);
+			void				_ConfirmApply();
+			void				_CancelApply();
 			void				_MarkSelected(package_mark mark);
 			void				_ClearMarks(BMessage* message);
 			void				_ApplyChanges();
@@ -73,6 +76,10 @@ private:
 
 			BObjectList<PackageInfo, true>	fPackages;
 			bool				fTransactionActive;
+
+			// The apply request rebuilt from the last simulate reply, held
+			// while ChangeSummaryWindow is up for the user to confirm.
+			BMessage			fPendingApply;
 };
 
 

@@ -23,6 +23,9 @@
 #include <unistd.h>
 #include <vector>
 
+#include <systemd/sd-bus.h>
+#include <systemd/sd-login.h>
+
 #include <String.h>
 
 #include <device/DrmDeviceSelect.h>
@@ -1415,6 +1418,42 @@ DrmHWInterface::DPMSCapabilities()
 }
 
 
+// The backlight node is root-only; logind writes it for our session.
+// B_ERROR without a session, so the caller falls back to sysfs.
+static status_t
+_SetBrightnessViaLogind(const struct backlight* backlight, int value)
+{
+	sd_bus* bus = NULL;
+	int r = sd_bus_open_system(&bus);
+	if (r < 0)
+		return B_ERROR;
+
+	char* sid = NULL;
+	r = sd_pid_get_session(0, &sid);
+	if (r < 0 || sid == NULL) {
+		sd_bus_unref(bus);
+		return B_ERROR;
+	}
+
+	char sessionPath[256];
+	snprintf(sessionPath, sizeof(sessionPath),
+		"/org/freedesktop/login1/session/%s", sid);
+	free(sid);
+
+	// sysfs path is /sys/class/backlight/<name>; logind wants just <name>.
+	const char* name = strrchr(backlight->path, '/');
+	name = name != NULL ? name + 1 : backlight->path;
+
+	sd_bus_error err = SD_BUS_ERROR_NULL;
+	r = sd_bus_call_method(bus, "org.freedesktop.login1", sessionPath,
+		"org.freedesktop.login1.Session", "SetBrightness", &err, NULL,
+		"ssu", "backlight", name, (uint32_t)value);
+	sd_bus_error_free(&err);
+	sd_bus_unref(bus);
+	return r >= 0 ? B_OK : B_ERROR;
+}
+
+
 status_t
 DrmHWInterface::SetBrightness(float brightness)
 {
@@ -1422,6 +1461,8 @@ DrmHWInterface::SetBrightness(float brightness)
 		return B_UNSUPPORTED;
 	int max = (int)backlight_get_max_brightness(fBacklight);
 	int val = (int)(brightness * max + 0.5f);
+	if (_SetBrightnessViaLogind(fBacklight, val) == B_OK)
+		return B_OK;
 	return backlight_set_brightness(fBacklight, val) == 0 ? B_OK : B_ERROR;
 }
 

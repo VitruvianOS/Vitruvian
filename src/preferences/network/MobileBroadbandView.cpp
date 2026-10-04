@@ -464,9 +464,33 @@ MobileBroadbandView::_OnMMStatusReady(BMessage& message)
 	}
 
 	bool locked = false;
+	bool pinRequired = false;
+	bool pukRequired = false;
+	uint32 retries = 0;
 	message.FindBool(kMMFieldSimLocked, &locked);
-	_SetPINVisible(locked);
-	fUnlockButton->SetEnabled(locked && !fMMModemPath.IsEmpty());
+	message.FindBool(kMMFieldSimPinRequired, &pinRequired);
+	message.FindBool(kMMFieldSimPukRequired, &pukRequired);
+	message.FindUInt32(kMMFieldSimUnlockRetries, &retries);
+
+	if (pukRequired) {
+		_SetOperatorText(B_TRANSLATE("SIM PUK required"));
+		_SetPINVisible(false);
+		fUnlockButton->SetEnabled(false);
+	} else if (locked && pinRequired) {
+		BString text(B_TRANSLATE("SIM PIN required"));
+		if (retries > 0)
+			text << B_TRANSLATE(", tries left: ") << retries;
+		_SetOperatorText(text);
+		_SetPINVisible(true);
+		fUnlockButton->SetEnabled(!fMMModemPath.IsEmpty());
+	} else if (locked) {
+		_SetOperatorText(B_TRANSLATE("SIM locked"));
+		_SetPINVisible(false);
+		fUnlockButton->SetEnabled(false);
+	} else {
+		_SetPINVisible(false);
+		fUnlockButton->SetEnabled(false);
+	}
 }
 
 

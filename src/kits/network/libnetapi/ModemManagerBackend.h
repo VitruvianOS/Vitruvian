@@ -31,8 +31,11 @@ static const char* const kMMFieldModemEnabled = "enabled";
 static const char* const kMMFieldModemCount = "modem_count";
 static const char* const kMMFieldMMAvailable = "mm_available";
 
-// SIM state from org.freedesktop.ModemManager1.Sim.
+// SIM lock state from the Modem UnlockRequired property (MMModemLock).
 static const char* const kMMFieldSimPinRequired = "sim_pin_required";
+static const char* const kMMFieldSimPukRequired = "sim_puk_required";
+static const char* const kMMFieldSimUnlockRequired = "sim_unlock_required";
+static const char* const kMMFieldSimUnlockRetries = "sim_unlock_retries";
 static const char* const kMMFieldSimStatus = "sim_status";
 static const char* const kMMFieldSimLocked = "sim_locked";
 
@@ -74,14 +77,15 @@ public:
 	status_t GetSignalQualityAsync(const char* modemPath,
 		const BMessenger& replyTo, uint32 replyWhat);
 
-	// SIM status (PinRequired/Status) from the modem's Sim object.
+	// SIM lock state from the Modem UnlockRequired/UnlockRetries properties.
 	// Reply carries kMMFieldSim* plus "status".
 	status_t GetSimStatus(const char* modemPath, BMessage* outSim);
 	status_t GetSimStatusAsync(const char* modemPath,
 		const BMessenger& replyTo, uint32 replyWhat);
 
-	// Sends the PIN via org.freedesktop.ModemManager1.Modem3gpp.SendPin.
-	// Reply carries "status" and, on failure, "reason".
+	// Sends the PIN via org.freedesktop.ModemManager1.Sim.SendPin on the
+	// SIM object (Modem.Sim path). Reply carries "status" and, on failure,
+	// "reason".
 	status_t UnlockSim(const char* modemPath, const char* pin);
 	status_t UnlockSimAsync(const char* modemPath, const char* pin,
 		const BMessenger& replyTo, uint32 replyWhat);

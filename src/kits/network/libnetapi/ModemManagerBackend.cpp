@@ -75,6 +75,64 @@ static const uint32 kMMStateDisconnecting = 40;
 static const uint32 kMMStateConnecting = 41;
 static const uint32 kMMStateConnected = 50;
 
+// MMModemLock values used for SIM unlock state.
+static const uint32 kMMLockUnknown = 0;
+static const uint32 kMMLockNone = 1;
+static const uint32 kMMLockSimPin = 2;
+static const uint32 kMMLockSimPin2 = 3;
+static const uint32 kMMLockSimPuk = 4;
+static const uint32 kMMLockSimPuk2 = 5;
+
+
+// Fills SIM lock fields from the Modem UnlockRequired/UnlockRetries pair.
+static void
+_FillSimLockFromModemProps(GVariant* modemProps, BMessage* outInfo)
+{
+	uint32 lock = kMMLockUnknown;
+	bool pinRequired = false;
+	bool pukRequired = false;
+	uint32 retries = 0;
+
+	GVariant* val = g_variant_lookup_value(modemProps, "UnlockRequired",
+		G_VARIANT_TYPE_UINT32);
+	if (val != NULL) {
+		lock = g_variant_get_uint32(val);
+		g_variant_unref(val);
+	}
+
+	pinRequired = lock == kMMLockSimPin || lock == kMMLockSimPin2;
+	pukRequired = lock == kMMLockSimPuk || lock == kMMLockSimPuk2;
+
+	val = g_variant_lookup_value(modemProps, "UnlockRetries",
+		G_VARIANT_TYPE("a{uu}"));
+	if (val != NULL) {
+		guint32 retriesKey = pinRequired ? kMMLockSimPin : kMMLockSimPuk;
+		if (lock == kMMLockSimPin2)
+			retriesKey = kMMLockSimPin2;
+		else if (lock == kMMLockSimPuk2)
+			retriesKey = kMMLockSimPuk2;
+
+		GVariantIter* iter = g_variant_iter_new(val);
+		guint32 entryKey = 0;
+		guint32 entryValue = 0;
+		while (g_variant_iter_next(iter, "{uu}", &entryKey, &entryValue)) {
+			if (entryKey == retriesKey) {
+				retries = entryValue;
+				break;
+			}
+		}
+		g_variant_iter_free(iter);
+		g_variant_unref(val);
+	}
+
+	outInfo->AddUInt32(kMMFieldSimUnlockRequired, lock);
+	outInfo->AddBool(kMMFieldSimLocked, pinRequired || pukRequired);
+	outInfo->AddBool(kMMFieldSimPinRequired, pinRequired);
+	outInfo->AddBool(kMMFieldSimPukRequired, pukRequired);
+	outInfo->AddUInt32(kMMFieldSimUnlockRetries, retries);
+	outInfo->AddUInt32(kMMFieldSimStatus, lock);
+}
+
 
 // #pragma mark - Singleton
 
@@ -444,11 +502,19 @@ _FillModemInfoFromInterfaces(GVariant* interfaces, const char* objectPath,
 			g_variant_unref(val);
 		}
 
+		_FillSimLockFromModemProps(modemProps, outInfo);
+
 		g_variant_unref(modemProps);
 	} else {
 		outInfo->AddUInt32(kMMFieldModemState, kMMStateUnknown);
 		outInfo->AddString(kMMFieldModemState, "unknown");
 		outInfo->AddBool(kMMFieldModemEnabled, false);
+		outInfo->AddUInt32(kMMFieldSimUnlockRequired, kMMLockUnknown);
+		outInfo->AddBool(kMMFieldSimLocked, false);
+		outInfo->AddBool(kMMFieldSimPinRequired, false);
+		outInfo->AddBool(kMMFieldSimPukRequired, false);
+		outInfo->AddUInt32(kMMFieldSimUnlockRetries, 0);
+		outInfo->AddUInt32(kMMFieldSimStatus, kMMLockUnknown);
 	}
 
 	GVariant* gppProps = g_variant_lookup_value(interfaces,
@@ -462,32 +528,6 @@ _FillModemInfoFromInterfaces(GVariant* interfaces, const char* objectPath,
 			g_variant_unref(val);
 		}
 		g_variant_unref(gppProps);
-	}
-
-	GVariant* simProps = g_variant_lookup_value(interfaces,
-		kMMSimInterface, G_VARIANT_TYPE("a{sv}"));
-	if (simProps != NULL) {
-		val = g_variant_lookup_value(simProps, "PinRequired",
-			G_VARIANT_TYPE_STRING);
-		if (val != NULL) {
-			outInfo->AddString(kMMFieldSimPinRequired,
-				g_variant_get_string(val, NULL));
-			outInfo->AddBool(kMMFieldSimLocked,
-				g_variant_get_string(val, NULL)[0] != '\0');
-			g_variant_unref(val);
-		} else {
-			outInfo->AddString(kMMFieldSimPinRequired, "");
-			outInfo->AddBool(kMMFieldSimLocked, false);
-		}
-
-		val = g_variant_lookup_value(simProps, "Status",
-			G_VARIANT_TYPE_UINT32);
-		if (val != NULL) {
-			outInfo->AddUInt32(kMMFieldSimStatus,
-				g_variant_get_uint32(val));
-			g_variant_unref(val);
-		}
-		g_variant_unref(simProps);
 	}
 }
 
@@ -1079,57 +1119,63 @@ ModemManagerBackend::GetSimStatus(const char* modemPath, BMessage* outSim)
 	outSim->AddString(kMMFieldModemPath, modemPath);
 	outSim->AddString(kMMFieldModemSimPath, simPath);
 
-	if (simPath.IsEmpty()) {
-		outSim->AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
-		return B_ENTRY_NOT_FOUND;
-	}
-
+	// Lock state lives on the Modem object (UnlockRequired/UnlockRetries),
+	// not on the Sim interface.
 	GError* error = NULL;
-	GVariant* props = g_dbus_connection_call_sync(
-		(GDBusConnection*)fDBusConnection,
-		kMMBusName, simPath.String(),
-		kMMPropertiesInterface, "GetAll",
-		g_variant_new("(s)", kMMSimInterface),
-		G_VARIANT_TYPE("(a{sv})"),
-		G_DBUS_CALL_FLAGS_NONE,
-		kMMCallTimeoutMs, NULL, &error);
-
-	if (props == NULL) {
-		outSim->AddInt32("status", (int32)B_ERROR);
-		outSim->AddString("reason",
-			error != NULL ? error->message : "unknown error");
+	GVariant* lockVal = _MMGetProperty(
+		(GDBusConnection*)fDBusConnection, modemPath,
+		kMMModemInterface, "UnlockRequired", &error);
+	if (lockVal == NULL) {
 		if (error != NULL)
 			g_error_free(error);
+		error = NULL;
+
+		if (simPath.IsEmpty()) {
+			outSim->AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
+			return B_ENTRY_NOT_FOUND;
+		}
+		outSim->AddInt32("status", (int32)B_ERROR);
+		outSim->AddString("reason", "UnlockRequired unavailable");
 		return B_ERROR;
 	}
 
-	GVariant* table = g_variant_get_child_value(props, 0);
-	const gchar* pinRequired = NULL;
-	guint32 simStatus = 0;
+	uint32 lock = g_variant_get_uint32(lockVal);
+	g_variant_unref(lockVal);
 
-	GVariant* val = g_variant_lookup_value(table, "PinRequired",
-		G_VARIANT_TYPE_STRING);
-	if (val != NULL) {
-		pinRequired = g_variant_get_string(val, NULL);
-		outSim->AddString(kMMFieldSimPinRequired,
-			pinRequired != NULL ? pinRequired : "");
-		outSim->AddBool(kMMFieldSimLocked,
-			pinRequired != NULL && pinRequired[0] != '\0');
-		g_variant_unref(val);
-	} else {
-		outSim->AddString(kMMFieldSimPinRequired, "");
-		outSim->AddBool(kMMFieldSimLocked, false);
+	bool pinRequired = lock == kMMLockSimPin || lock == kMMLockSimPin2;
+	bool pukRequired = lock == kMMLockSimPuk || lock == kMMLockSimPuk2;
+	uint32 retries = 0;
+
+	GVariant* retriesVal = _MMGetProperty(
+		(GDBusConnection*)fDBusConnection, modemPath,
+		kMMModemInterface, "UnlockRetries", &error);
+	if (retriesVal != NULL
+			&& g_variant_is_of_type(retriesVal, G_VARIANT_TYPE("a{uu}"))) {
+		guint32 retriesKey = pinRequired
+			? (lock == kMMLockSimPin2 ? kMMLockSimPin2 : kMMLockSimPin)
+			: (lock == kMMLockSimPuk2 ? kMMLockSimPuk2 : kMMLockSimPuk);
+		GVariantIter* iter = g_variant_iter_new(retriesVal);
+		guint32 entryKey = 0;
+		guint32 entryValue = 0;
+		while (g_variant_iter_next(iter, "{uu}", &entryKey, &entryValue)) {
+			if (entryKey == retriesKey) {
+				retries = entryValue;
+				break;
+			}
+		}
+		g_variant_iter_free(iter);
 	}
+	if (retriesVal != NULL)
+		g_variant_unref(retriesVal);
+	if (error != NULL)
+		g_error_free(error);
 
-	val = g_variant_lookup_value(table, "Status", G_VARIANT_TYPE_UINT32);
-	if (val != NULL) {
-		simStatus = g_variant_get_uint32(val);
-		outSim->AddUInt32(kMMFieldSimStatus, simStatus);
-		g_variant_unref(val);
-	}
-
-	g_variant_unref(table);
-	g_variant_unref(props);
+	outSim->AddUInt32(kMMFieldSimUnlockRequired, lock);
+	outSim->AddBool(kMMFieldSimLocked, pinRequired || pukRequired);
+	outSim->AddBool(kMMFieldSimPinRequired, pinRequired);
+	outSim->AddBool(kMMFieldSimPukRequired, pukRequired);
+	outSim->AddUInt32(kMMFieldSimUnlockRetries, retries);
+	outSim->AddUInt32(kMMFieldSimStatus, lock);
 	outSim->AddInt32("status", (int32)B_OK);
 	return B_OK;
 }

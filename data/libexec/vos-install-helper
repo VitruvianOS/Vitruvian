@@ -748,7 +748,7 @@ _write_shim_grubcfg() {
     # Debug builds ship vos-sshdebug.service; only then offer the Debug entry.
     _debug_menuentry=""
     if [ -f "$_troot/etc/systemd/system/vos-sshdebug.service" ]; then
-        _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
+        _debug_menuentry="menuentry \"Vitruvian (SSH Debug)\" {
     linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug $_resume_cmdline
     initrd (\$root)/boot/initrd.img-$_kv
 }"

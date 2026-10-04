@@ -6,7 +6,7 @@
 #                                 (default: autodetected from `uname -m` for native builds)
 #   --override-toolchain=NAME   Use a specific cross-compilation toolchain
 #                                 (e.g. arm64_raspberry)
-#   --sshdebug                  Stage the Vitruvian (Debug) boot entry and its
+#   --sshdebug                  Stage the Vitruvian (SSH Debug) boot entry and its
 #                                 SSH server in built images (off by default)
 
 set -e
@@ -257,7 +257,7 @@ fi
 cmake $CMAKE_OPTS .. -GNinja
 
 if [ $SSHDEBUG -eq 1 ]; then
-    echo "NOTE: images will stage the Vitruvian (Debug) entry: root or vos-live over SSH (password: live), only when booted from that entry."
+    echo "NOTE: images will stage the Vitruvian (SSH Debug) entry: root or vos-live over SSH (password: live), only when booted from that entry."
 fi
 
 echo "Configured correctly!"

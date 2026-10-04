@@ -327,7 +327,7 @@ SLEEPEOF
     fi
     # The Debug GRUB entry boots with sshdebug; stage the SSH side to match.
     _debug_ssh_setup "$_root_dir" || die "_debug_ssh_setup failed"
-    _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
+    _debug_menuentry="menuentry \"Vitruvian (SSH Debug)\" {
     linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd (\$root)/initrd.img
 }"
@@ -616,7 +616,7 @@ menuentry "Vitruvian Live (Recovery)" {
 EOF
 
     cat <<EOF >>"$_basedir/image_tree/scratch/grub.cfg"
-menuentry "Vitruvian Live (Debug)" {
+menuentry "Vitruvian Live (SSH Debug)" {
     linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd /initrd
 }

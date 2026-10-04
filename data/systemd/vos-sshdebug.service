@@ -1,7 +1,7 @@
 [Unit]
 Description=Vitruvian debug SSH (opt-in via vitruvian.sshdebug on the kernel cmdline)
 # Enabled at image-build time by _debug_ssh_setup (configure --sshdebug), but
-# the Condition keeps it inert unless the "Vitruvian (Debug)" entry was chosen,
+# the Condition keeps it inert unless the "Vitruvian (SSH Debug)" entry was chosen,
 # so a normal boot never starts sshd.
 ConditionKernelCommandLine=vitruvian.sshdebug
 After=network.target

@@ -29,7 +29,7 @@ _rel_initrd="$(make_system_path_relative_to_its_root "$_initrd")"
 
 _debug=""
 if [ -f /etc/systemd/system/vos-sshdebug.service ]; then
-    _debug="menuentry \"Vitruvian (Debug)\" {
+    _debug="menuentry \"Vitruvian (SSH Debug)\" {
     prepare_grub_to_access_device \"${GRUB_DEVICE_BOOT}\"
     linux $_rel_vmlinuz root=UUID=$_root rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd $_rel_initrd

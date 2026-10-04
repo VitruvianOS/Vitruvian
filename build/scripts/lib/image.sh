@@ -344,6 +344,16 @@ insmod all_video
 insmod gfxterm
 search --no-floppy --fs-uuid --set=root $_root_uuid
 set timeout=1
+# One-shot next_entry from the ESP grubenv (vm-boot-recovery.sh sets it).
+search --no-floppy --fs-uuid --set=esp $_esp_uuid
+if [ -n "\$esp" -a -s "(\$esp)/boot/grub/grubenv" ]; then
+    load_env -f "(\$esp)/boot/grub/grubenv"
+    if [ -n "\$next_entry" ]; then
+        set default="\$next_entry"
+        set next_entry=
+        save_env -f "(\$esp)/boot/grub/grubenv" next_entry
+    fi
+fi
 menuentry "Vitruvian" {
     linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200
     initrd (\$root)/initrd.img
@@ -411,12 +421,9 @@ EOF
 
     # Staged next to the EFI binaries; ESP assembly mcopy's it into the image.
     sudo mkdir -p "$_esp_dir/boot/grub"
-    sudo chroot "$_root_dir" grub-editenv /.vos-grubenv create 2>/dev/null \
-        && sudo cp "$_root_dir/.vos-grubenv" "$_esp_dir/boot/grub/grubenv" \
-        || sudo tee "$_esp_dir/boot/grub/grubenv" >/dev/null <<'GRUBENVEOF'
-# GRUB Environment Block
-GRUBENVEOF
-    sudo rm -f "$_root_dir/.vos-grubenv"
+    # GRUB only accepts a block of exactly 1024 bytes, padded with '#'.
+    { printf '# GRUB Environment Block\n'; head -c 999 /dev/zero | tr '\0' '#'; } \
+        | sudo tee "$_esp_dir/boot/grub/grubenv" >/dev/null
 
     _install_resize_root "$_root_dir"
 

@@ -49,8 +49,9 @@ GRUBENV="$ESP_MOUNTPOINT/boot/grub/grubenv"
 if [ ! -f "$GRUBENV" ]; then
     # Older images shipped without one; create a block so set can run.
     sudo mkdir -p "$(dirname "$GRUBENV")"
-    sudo grub-editenv "$GRUBENV" create 2>/dev/null \
-        || printf '# GRUB Environment Block\n' | sudo tee "$GRUBENV" >/dev/null
+    # GRUB only accepts a block of exactly 1024 bytes, padded with '#'.
+    { printf '# GRUB Environment Block\n'; head -c 999 /dev/zero | tr '\0' '#'; } \
+        | sudo tee "$GRUBENV" >/dev/null
 fi
 
 sudo grub-editenv "$GRUBENV" set "next_entry=$RECOVERY_ENTRY"

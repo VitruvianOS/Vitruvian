@@ -11,6 +11,13 @@
 #include <Messenger.h>
 #include <Roster.h>
 
+#include <fcntl.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 
 using namespace BPrivate;
 
@@ -392,17 +399,95 @@ BKeyStore::RemoveApplication(const char* keyring, const char* signature)
 // #pragma mark - Service functions
 
 
+static const char kPasswordUpper[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+static const char kPasswordLower[] = "abcdefghijklmnopqrstuvwxyz";
+static const char kPasswordDigits[] = "0123456789";
+static const char kPasswordSymbols[] = "!@#$%^&*()-_=+[]{};:,.?/";
+
+
 status_t
 BKeyStore::GeneratePassword(BPasswordKey& password, size_t length, uint32 flags)
 {
-	return B_ERROR;
+	if (length == 0 || length > 256)
+		return B_BAD_VALUE;
+
+	// Flags: 0x01 lower, 0x02 upper, 0x04 digits, 0x08 symbols. Default to
+	// all four when none is given.
+	if ((flags & 0x0f) == 0)
+		flags = 0x0f;
+
+	char pool[128];
+	size_t poolLength = 0;
+	if ((flags & 0x02) != 0) {
+		memcpy(pool + poolLength, kPasswordUpper, sizeof(kPasswordUpper) - 1);
+		poolLength += sizeof(kPasswordUpper) - 1;
+	}
+	if ((flags & 0x01) != 0) {
+		memcpy(pool + poolLength, kPasswordLower, sizeof(kPasswordLower) - 1);
+		poolLength += sizeof(kPasswordLower) - 1;
+	}
+	if ((flags & 0x04) != 0) {
+		memcpy(pool + poolLength, kPasswordDigits, sizeof(kPasswordDigits) - 1);
+		poolLength += sizeof(kPasswordDigits) - 1;
+	}
+	if ((flags & 0x08) != 0) {
+		memcpy(pool + poolLength, kPasswordSymbols, sizeof(kPasswordSymbols) - 1);
+		poolLength += sizeof(kPasswordSymbols) - 1;
+	}
+	if (poolLength == 0)
+		return B_BAD_VALUE;
+
+	char buffer[257];
+	unsigned char randomBytes[256];
+	int fd = open("/dev/urandom", O_RDONLY);
+	if (fd < 0)
+		return B_ERROR;
+	ssize_t got = read(fd, randomBytes, length);
+	close(fd);
+	if (got != (ssize_t)length)
+		return B_ERROR;
+	for (size_t i = 0; i < length; i++)
+		buffer[i] = pool[randomBytes[i] % poolLength];
+	buffer[length] = '\0';
+
+	return password.SetPassword(buffer);
 }
 
 
 float
 BKeyStore::PasswordStrength(const char* password)
 {
-	return 0;
+	if (password == NULL || password[0] == '\0')
+		return 0.0f;
+
+	size_t length = strlen(password);
+	bool hasUpper = false;
+	bool hasDigit = false;
+	bool hasSymbol = false;
+	for (size_t i = 0; i < length; i++) {
+		unsigned char c = (unsigned char)password[i];
+		if (c >= 'A' && c <= 'Z') {
+			hasUpper = true;
+		} else if (c >= '0' && c <= '9') {
+			hasDigit = true;
+		} else {
+			hasSymbol = true;
+		}
+	}
+
+	// Rough Shannon-style estimate scaled to 0..1.
+	double poolSize = 26.0;
+	if (hasUpper)
+		poolSize += 26.0;
+	if (hasDigit)
+		poolSize += 10.0;
+	if (hasSymbol)
+		poolSize += 32.0;
+	double bits = (double)length * log(poolSize);
+	double score = bits / 100.0;
+	if (score > 1.0)
+		score = 1.0;
+	return (float)score;
 }
 
 

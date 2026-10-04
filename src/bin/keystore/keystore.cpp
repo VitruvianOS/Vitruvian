@@ -10,7 +10,40 @@
 #include <Application.h>
 #include <KeyStore.h>
 
+#include "KdbxFile.h"
+
 #include <stdio.h>
+#include <string.h>
+
+
+int
+export_database(const char* keyring, const char* path, const char* password)
+{
+	KdbxFile file;
+	status_t result = file.ExportToPath(path, password, keyring);
+	if (result != B_OK) {
+		printf("failed to export keyring: %s\n", strerror(result));
+		return 2;
+	}
+
+	printf("exported keyring \"%s\" to %s\n", keyring, path);
+	return 0;
+}
+
+
+int
+import_database(const char* keyring, const char* path, const char* password)
+{
+	KdbxFile file;
+	status_t result = file.ImportFromPath(path, password, keyring, false);
+	if (result != B_OK) {
+		printf("failed to import database: %s\n", strerror(result));
+		return 2;
+	}
+
+	printf("imported %s into keyring \"%s\"\n", path, keyring);
+	return 0;
+}
 
 
 int
@@ -319,7 +352,13 @@ print_usage(const char* name)
 	printf("\t\tSet the unlock key of the specified keyring to the given"
 		" password.\n");
 	printf("\t%s key remove <keyring>\n", name);
-	printf("\t\tRemove the unlock key of the specified keyring.\n");
+	printf("\t\tRemove the unlock key of the specified keyring.\n\n");
+
+	printf("\t%s export <keyring> <file> <password>\n", name);
+	printf("\t\tWrite the keyring to a KDBX 4 file compatible with"
+		" KeePassXC.\n");
+	printf("\t%s import <keyring> <file> <password>\n", name);
+	printf("\t\tRead a KDBX 4 file into the specified keyring.\n");
 	return 1;
 }
 
@@ -453,6 +492,16 @@ main(int argc, char* argv[])
 			if (argc == 4)
 				return remove_unlock_key(argv[3]);
 		}
+	} else if (strcmp(argv[1], "export") == 0) {
+		if (argc != 5)
+			return print_usage(argv[0]);
+
+		return export_database(argv[2], argv[3], argv[4]);
+	} else if (strcmp(argv[1], "import") == 0) {
+		if (argc != 5)
+			return print_usage(argv[0]);
+
+		return import_database(argv[2], argv[3], argv[4]);
 	}
 
 	return print_usage(argv[0]);

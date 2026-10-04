@@ -165,6 +165,13 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	ARGON2
+	LIBRARIES  "argon2"
+	PACKAGES   "libargon2-dev"
+	RUNTIMES   "libargon2-1"
+)
+
+DeclareDependency(
 	LIBDRM
 	LIBRARIES  "drm"
 	PACKAGES  "libdrm-dev"

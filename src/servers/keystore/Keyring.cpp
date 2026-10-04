@@ -6,6 +6,14 @@
 
 #include "Keyring.h"
 
+#include "VosCrypto.h"
+
+#include <Key.h>
+
+#include <new>
+#include <stdlib.h>
+#include <string.h>
+
 
 Keyring::Keyring()
 	:
@@ -485,15 +493,37 @@ Keyring::_EncryptToFlatBuffer()
 	if (result != B_OK)
 		return result;
 
-	fFlatBuffer.SetSize(0);
-	fFlatBuffer.Seek(0, SEEK_SET);
-
-	result = container.Flatten(&fFlatBuffer);
+	BMallocIO plainBuffer;
+	result = container.Flatten(&plainBuffer);
 	if (result != B_OK)
 		return result;
 
+	fFlatBuffer.SetSize(0);
+	fFlatBuffer.Seek(0, SEEK_SET);
+
 	if (fHasUnlockKey) {
-		// TODO: Actually encrypt the flat buffer...
+		BKey unlockKey;
+		if (unlockKey.Unflatten(fUnlockKey) != B_OK
+			|| unlockKey.DataLength() == 0)
+			return B_BAD_VALUE;
+
+		uint8_t* sealed = NULL;
+		size_t sealedLength = 0;
+		if (vos_KeyringEncrypt(unlockKey.Data(), unlockKey.DataLength(),
+				(const uint8_t*)plainBuffer.Buffer(),
+				plainBuffer.BufferLength(), &sealed, &sealedLength) != 0)
+			return B_ERROR;
+
+		ssize_t written = fFlatBuffer.WriteAt(0, sealed, sealedLength);
+		memset(sealed, 0, sealedLength);
+		free(sealed);
+		if (written != (ssize_t)sealedLength)
+			return written < 0 ? written : B_ERROR;
+	} else {
+		ssize_t written = fFlatBuffer.WriteAt(0, plainBuffer.Buffer(),
+			plainBuffer.BufferLength());
+		if (written != (ssize_t)plainBuffer.BufferLength())
+			return written < 0 ? written : B_ERROR;
 	}
 
 	fModified = false;
@@ -507,13 +537,58 @@ Keyring::_DecryptFromFlatBuffer()
 	if (fFlatBuffer.BufferLength() == 0)
 		return B_OK;
 
+	const void* buffer = fFlatBuffer.Buffer();
+	size_t bufferLength = fFlatBuffer.BufferLength();
+
 	if (fHasUnlockKey) {
-		// TODO: Actually decrypt the flat buffer...
+		BKey unlockKey;
+		if (unlockKey.Unflatten(fUnlockKey) != B_OK
+			|| unlockKey.DataLength() == 0)
+			return B_BAD_VALUE;
+
+		uint8_t* plain = NULL;
+		size_t plainLength = 0;
+		if (vos_KeyringDecrypt(unlockKey.Data(), unlockKey.DataLength(),
+				(const uint8_t*)buffer, bufferLength, &plain,
+				&plainLength) != 0)
+			return B_BAD_VALUE;
+
+		BMallocIO plainBuffer;
+		if (plainBuffer.WriteAt(0, plain, plainLength) != (ssize_t)plainLength) {
+			memset(plain, 0, plainLength);
+			free(plain);
+			return B_ERROR;
+		}
+		memset(plain, 0, plainLength);
+		free(plain);
+		plainBuffer.Seek(0, SEEK_SET);
+
+		BMessage container;
+		status_t result = container.Unflatten(&plainBuffer);
+		if (result != B_OK)
+			return result;
+
+		result = container.FindMessage("data", &fData);
+		if (result != B_OK)
+			return result;
+
+		result = container.FindMessage("applications", &fApplications);
+		if (result != B_OK) {
+			fData.MakeEmpty();
+			return result;
+		}
+
+		return B_OK;
 	}
 
+	BMallocIO plainBuffer;
+	if (plainBuffer.WriteAt(0, buffer, bufferLength)
+			!= (ssize_t)bufferLength)
+		return B_ERROR;
+	plainBuffer.Seek(0, SEEK_SET);
+
 	BMessage container;
-	fFlatBuffer.Seek(0, SEEK_SET);
-	status_t result = container.Unflatten(&fFlatBuffer);
+	status_t result = container.Unflatten(&plainBuffer);
 	if (result != B_OK)
 		return result;
 

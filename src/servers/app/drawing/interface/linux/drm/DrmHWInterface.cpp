@@ -113,6 +113,14 @@ DrmHWInterface::DrmHWInterface()
 {
 	pthread_mutex_init(&fDirtyMutex, NULL);
 
+	// Safe Mode and other nomodeset boots have no DRM device; janus_session
+	// sets JANUS_FBDEV so we fail at once and app_server falls back to fbdev.
+	if (getenv("JANUS_FBDEV") != NULL) {
+		fprintf(stderr,
+			"DrmHWInterface: JANUS_FBDEV set; skipping DRM for fbdev fallback\n");
+		return;
+	}
+
 	// TODO move away from env vars
 	const char* janusDrmFdStr = getenv("JANUS_DRM_FD");
 	bool janusManaged = (janusDrmFdStr != NULL && janusDrmFdStr[0] != '\0');
@@ -127,6 +135,23 @@ DrmHWInterface::DrmHWInterface()
 			return;
 		}
 	} else {
+		// Without janus we must not block forever: janus already owns the
+		// seat in a session, so our own libseat session never activates.
+		bool haveCard = false;
+		for (int i = 0; i <= 9; i++) {
+			char path[64];
+			snprintf(path, sizeof(path), "/dev/dri/card%d", i);
+			if (access(path, F_OK) == 0) {
+				haveCard = true;
+				break;
+			}
+		}
+		if (!haveCard) {
+			fprintf(stderr,
+				"DrmHWInterface: no /dev/dri/card* present; failing for fbdev\n");
+			return;
+		}
+
 		fSeat = libseat_open_seat(&seat_listener, this);
 		if (!fSeat) {
 			fprintf(stderr, "Failed to open libseat session\n");
@@ -134,12 +159,15 @@ DrmHWInterface::DrmHWInterface()
 		}
 		printf("libseat opened (standalone), fSeat=%p, seat_fd=%d\n",
 			(void*)fSeat, libseat_get_fd(fSeat));
-		while (!fSessionActive) {
-			int ret = libseat_dispatch(fSeat, -1);
+		// Bound the wait; a seat that never activates must not hang app_server.
+		for (int waited = 0; !fSessionActive && waited < 3000; waited += 100) {
+			int ret = libseat_dispatch(fSeat, 100);
 			if (ret < 0)
 				break;
 		}
 		if (!fSessionActive) {
+			fprintf(stderr,
+				"DrmHWInterface: libseat session did not activate in time\n");
 			libseat_close_seat(fSeat);
 			fSeat = NULL;
 			return;

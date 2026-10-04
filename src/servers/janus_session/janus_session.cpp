@@ -591,6 +591,13 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 				snprintf(buf, sizeof(buf), "%d", ifd);
 				setenv("JANUS_DRM_FD", buf, 1);
 			}
+		} else if (ks->needs_drm) {
+			// Safe Mode / nomodeset: no DRM device. Tell app_server to skip
+			// DRM entirely and fall back to fbdev instead of hanging in
+			// DrmHWInterface's standalone libseat wait.
+			setenv("JANUS_FBDEV", "1", 1);
+			fprintf(stderr, "janus_session: no DRM device; setting "
+				"JANUS_FBDEV=1 for %s\n", name);
 		}
 
 		snprintf(buf, sizeof(buf), "%u", (unsigned)sUserUid);

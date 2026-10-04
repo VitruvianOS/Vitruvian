@@ -354,9 +354,9 @@ _ModemStateString(uint32 state)
 }
 
 
-// Reads properties from the Modem, Modem.Signal, Modem3gpp and Sim
-// interface dicts of one ObjectManager entry. Operator name lives on
-// Modem3gpp and SignalQuality on Modem.Signal, not on Modem itself.
+// Reads properties from the Modem, Modem3gpp and Sim interface dicts of
+// one ObjectManager entry. SignalQuality is a Modem property; OperatorName
+// lives on Modem3gpp.
 static void
 _FillModemInfoFromInterfaces(GVariant* interfaces, const char* objectPath,
 	BMessage* outInfo)
@@ -371,9 +371,9 @@ _FillModemInfoFromInterfaces(GVariant* interfaces, const char* objectPath,
 
 	if (modemProps != NULL) {
 		val = g_variant_lookup_value(modemProps, "State",
-			G_VARIANT_TYPE_UINT32);
+			G_VARIANT_TYPE_INT32);
 		if (val != NULL) {
-			uint32 state = g_variant_get_uint32(val);
+			uint32 state = (uint32)g_variant_get_int32(val);
 			outInfo->AddUInt32(kMMFieldModemState, state);
 			outInfo->AddString(kMMFieldModemState,
 				_ModemStateString(state));
@@ -402,17 +402,7 @@ _FillModemInfoFromInterfaces(GVariant* interfaces, const char* objectPath,
 			g_variant_unref(val);
 		}
 
-		g_variant_unref(modemProps);
-	} else {
-		outInfo->AddUInt32(kMMFieldModemState, kMMStateUnknown);
-		outInfo->AddString(kMMFieldModemState, "unknown");
-		outInfo->AddBool(kMMFieldModemEnabled, false);
-	}
-
-	GVariant* signalProps = g_variant_lookup_value(interfaces,
-		kMMModemSignalInterface, G_VARIANT_TYPE("a{sv}"));
-	if (signalProps != NULL) {
-		val = g_variant_lookup_value(signalProps, "SignalQuality",
+		val = g_variant_lookup_value(modemProps, "SignalQuality",
 			G_VARIANT_TYPE("(ub)"));
 		if (val != NULL) {
 			guint32 quality = 0;
@@ -427,7 +417,12 @@ _FillModemInfoFromInterfaces(GVariant* interfaces, const char* objectPath,
 			outInfo->AddUInt32(kMMFieldModemSignalBars, bars);
 			g_variant_unref(val);
 		}
-		g_variant_unref(signalProps);
+
+		g_variant_unref(modemProps);
+	} else {
+		outInfo->AddUInt32(kMMFieldModemState, kMMStateUnknown);
+		outInfo->AddString(kMMFieldModemState, "unknown");
+		outInfo->AddBool(kMMFieldModemEnabled, false);
 	}
 
 	GVariant* gppProps = g_variant_lookup_value(interfaces,
@@ -948,49 +943,17 @@ ModemManagerBackend::GetSignalQuality(const char* modemPath,
 	if (fDBusConnection == NULL)
 		return B_ERROR;
 
-	// Try the Modem.Signal interface first; fall back to Modem3gpp which
-	// also exports SignalQuality on some ModemManager versions.
+	// SignalQuality is a property of org.freedesktop.ModemManager1.Modem.
 	GError* error = NULL;
-	GVariant* result = g_dbus_connection_call_sync(
-		(GDBusConnection*)fDBusConnection,
-		kMMBusName, modemPath,
-		kMMModemSignalInterface, "Setup",
-		g_variant_new("(u)", 5),	// timeout_hint = 5 seconds
-		NULL, G_DBUS_CALL_FLAGS_NONE,
-		kMMCallTimeoutMs, NULL, &error);
-
-	if (result != NULL) {
-		g_variant_unref(result);
-	}
-
-	if (error != NULL) {
-		g_error_free(error);
-		error = NULL;
-	}
-
 	GVariant* propResult = g_dbus_connection_call_sync(
 		(GDBusConnection*)fDBusConnection,
-		"org.freedesktop.DBus.Properties",
+		kMMBusName,
 		modemPath,
 		"org.freedesktop.DBus.Properties", "Get",
-		g_variant_new("(ss)", kMMModemSignalInterface, "SignalQuality"),
+		g_variant_new("(ss)", kMMModemInterface, "SignalQuality"),
 		G_VARIANT_TYPE("(v)"),
 		G_DBUS_CALL_FLAGS_NONE,
 		kMMCallTimeoutMs, NULL, &error);
-
-	if (propResult == NULL && error != NULL) {
-		g_error_free(error);
-		error = NULL;
-		propResult = g_dbus_connection_call_sync(
-			(GDBusConnection*)fDBusConnection,
-			"org.freedesktop.DBus.Properties",
-			modemPath,
-			"org.freedesktop.DBus.Properties", "Get",
-			g_variant_new("(ss)", kMMModem3gppInterface, "SignalQuality"),
-			G_VARIANT_TYPE("(v)"),
-			G_DBUS_CALL_FLAGS_NONE,
-			kMMCallTimeoutMs, NULL, &error);
-	}
 
 	outSignal->MakeEmpty();
 	outSignal->AddString(kMMFieldModemPath, modemPath);

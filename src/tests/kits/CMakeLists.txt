@@ -1,7 +1,7 @@
 add_subdirectory(app)
 add_subdirectory(device)
 add_subdirectory(interface)
-#add_subdirectory(net)
+add_subdirectory(net)
 add_subdirectory(shared)
 add_subdirectory(storage)
 add_subdirectory(support)

@@ -25,7 +25,6 @@
 
 static const char* kMMBusName = "org.freedesktop.ModemManager1";
 static const char* kMMObjectPath = "/org/freedesktop/ModemManager1";
-static const char* kMMManagerInterface = "org.freedesktop.ModemManager1";
 static const char* kMMModemInterface = "org.freedesktop.ModemManager1.Modem";
 static const char* kMMModemSignalInterface
 	= "org.freedesktop.ModemManager1.Modem.Signal";

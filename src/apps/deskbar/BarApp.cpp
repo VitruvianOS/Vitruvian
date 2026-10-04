@@ -729,9 +729,9 @@ TBarApp::MessageReceived(BMessage* message)
 				bool cannotLock
 					= reply.What() == (uint32)B_NOT_ALLOWED;
 				const char* text = cannotLock
-					? B_TRANSLATE("This account cannot lock the "
-						"screen — it has no password, or this is "
-						"the live session.")
+					? B_TRANSLATE("The screen can only be locked by an "
+						"account with a password. This account has none, "
+						"or this is the live session.")
 					: B_TRANSLATE("Could not lock the screen.");
 				BAlert* alert = new BAlert(B_TRANSLATE("Lock screen"),
 					text, B_TRANSLATE("OK"));

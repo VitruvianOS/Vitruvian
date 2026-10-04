@@ -25,14 +25,26 @@ _sanitize(char* text)
 
 
 int
+ss_SanitizeName(const char* keyring, char* _out, size_t capacity)
+{
+	if (keyring == NULL || _out == NULL || capacity < SS_MAX_NAME)
+		return -1;
+
+	snprintf(_out, capacity, "%s", keyring);
+	_sanitize(_out);
+	return 0;
+}
+
+
+int
 ss_CollectionPath(const char* keyring, char* _path, size_t pathCapacity)
 {
 	if (keyring == NULL || _path == NULL || pathCapacity < 32)
 		return -1;
 
 	char name[SS_MAX_NAME];
-	snprintf(name, sizeof(name), "%s", keyring);
-	_sanitize(name);
+	if (ss_SanitizeName(keyring, name, sizeof(name)) != 0)
+		return -1;
 	snprintf(_path, pathCapacity,
 		"/org/freedesktop/secrets/collection/%s", name);
 	return 0;
@@ -86,6 +98,12 @@ ss_AttributesMatch(const SsAttributeSet* query, const SsAttributeSet* stored)
 		return 0;
 	if (query->count == 0)
 		return 0;
+
+	/* The "any" attribute is a wildcard used to list every item. */
+	for (int i = 0; i < query->count; i++) {
+		if (strcmp(query->items[i].key, "any") == 0)
+			return 1;
+	}
 
 	for (int i = 0; i < query->count; i++) {
 		int found = 0;

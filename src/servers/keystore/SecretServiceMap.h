@@ -35,13 +35,19 @@ int
 ss_CollectionPath(const char* keyring, char* _path, size_t pathCapacity);
 
 
+/* Copies the sanitised form of a keyring name, as used in collection paths. */
+int
+ss_SanitizeName(const char* keyring, char* _out, size_t capacity);
+
+
 /* Builds an item path under a collection. */
 int
 ss_ItemPath(const char* keyring, const char* identifier,
 	const char* username, char* _path, size_t pathCapacity);
 
 
-/* True when every query attribute is present with the same value. */
+/* True when every query attribute is present with the same value.
+   A query containing the attribute "any" matches every item. */
 int
 ss_AttributesMatch(const SsAttributeSet* query, const SsAttributeSet* stored);
 

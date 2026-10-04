@@ -695,10 +695,20 @@ NetworkWindowNM::_SelectItem(BListItem* item)
 		vpnInfo.AddString(kNMFieldVPNPath, vpnItem->ConnectionPath());
 		vpnInfo.AddBool(kNMFieldVPNConnected, vpnItem->Connected());
 		fDetailView->SetToVPN(vpnInfo);
+	} else if (item != NULL && fListView->CountItemsUnder(item, true) == 0) {
+		// An empty section header: say what is missing.
+		if (item == fWirelessItem)
+			fDetailView->ShowEmpty(B_TRANSLATE("No Wi-Fi adapter found"));
+		else if (item == fWiredItem)
+			fDetailView->ShowEmpty(B_TRANSLATE("No wired adapter found"));
+		else if (item == fVPNItem)
+			fDetailView->ShowEmpty(B_TRANSLATE("No VPN connections"));
+		else
+			fDetailView->ShowEmpty(B_TRANSLATE("Select a device"));
+	} else if (item == fVPNItem) {
+		fDetailView->ShowEmpty(B_TRANSLATE("Select a connection"));
 	} else {
-		fDetailView->ShowEmpty(item != NULL
-			? B_TRANSLATE("Not yet implemented")
-			: B_TRANSLATE("Select a device"));
+		fDetailView->ShowEmpty(B_TRANSLATE("Select a device"));
 	}
 
 	_UpdateRevertButton();

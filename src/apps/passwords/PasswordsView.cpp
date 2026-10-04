@@ -12,6 +12,7 @@
 
 #include <Alert.h>
 #include <Button.h>
+#include <Catalog.h>
 #include <Clipboard.h>
 #include <ColumnListView.h>
 #include <ColumnTypes.h>
@@ -28,6 +29,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "PasswordsView"
 
 
 static const uint32 kMsgGroupSelected		= 'GrpS';
@@ -85,7 +90,7 @@ PasswordsView::PasswordsView()
 	fClipboardRunner(NULL),
 	fClipboardMessageWhat(0)
 {
-	SetName("Passwords");
+	SetName(B_TRANSLATE("Passwords"));
 
 	fGroupList = new BColumnListView("Groups", 0, B_FANCY_BORDER);
 	fGroupList->SetSelectionMode(B_SINGLE_SELECTION_LIST);
@@ -94,39 +99,40 @@ PasswordsView::PasswordsView()
 	fEntryList->SetSelectionMode(B_SINGLE_SELECTION_LIST);
 	fEntryList->SetSelectionMessage(new BMessage(kMsgEntrySelected));
 
-	fSearchControl = new BTextControl("Search", "",
+	fSearchControl = new BTextControl(B_TRANSLATE("Search"), "",
 		new BMessage(kMsgSearchChanged));
-	fTitleControl = new BTextControl("Title", "", NULL);
-	fUserControl = new BTextControl("User", "", NULL);
-	fPasswordControl = new BTextControl("Password", "", NULL);
-	fUrlControl = new BTextControl("URL", "", NULL);
+	fTitleControl = new BTextControl(B_TRANSLATE("Title"), "", NULL);
+	fUserControl = new BTextControl(B_TRANSLATE("User"), "", NULL);
+	fPasswordControl = new BTextControl(B_TRANSLATE("Password"), "", NULL);
+	fUrlControl = new BTextControl(B_TRANSLATE("URL"), "", NULL);
 	fNotesControl = new BTextView(BRect(0, 0, 300, 70), "Notes",
 		BRect(4, 4, 296, 66), B_WILL_DRAW | B_FRAME_EVENTS);
-	fTotpControl = new BTextControl("TOTP secret", "", NULL);
-	fTotpCodeView = new BStringView("TOTP code", "------");
-	fStatusLabel = new BStringView("Status", "Select a keyring");
+	fTotpControl = new BTextControl(B_TRANSLATE("TOTP secret"), "", NULL);
+	fTotpCodeView = new BStringView("TOTP code", B_TRANSLATE("------"));
+	fStatusLabel = new BStringView("Status",
+		B_TRANSLATE("Select a keyring"));
 
-	fGroupList->AddColumn(new BStringColumn("Keyring", 140, 80, 200,
+	fGroupList->AddColumn(new BStringColumn(B_TRANSLATE("Keyring"), 140, 80, 200,
 		B_TRUNCATE_END, B_ALIGN_LEFT), 0);
-	fEntryList->AddColumn(new BStringColumn("Title", 160, 80, 240,
+	fEntryList->AddColumn(new BStringColumn(B_TRANSLATE("Title"), 160, 80, 240,
 		B_TRUNCATE_END, B_ALIGN_LEFT), 0);
-	fEntryList->AddColumn(new BStringColumn("User", 120, 60, 180,
+	fEntryList->AddColumn(new BStringColumn(B_TRANSLATE("User"), 120, 60, 180,
 		B_TRUNCATE_END, B_ALIGN_LEFT), 1);
 
-	BButton* saveButton = new BButton("Save", new BMessage(kMsgSaveEntry));
-	BButton* newButton = new BButton("New", new BMessage(kMsgNewEntry));
-	BButton* deleteButton = new BButton("Delete",
+	BButton* saveButton = new BButton(B_TRANSLATE("Save"), new BMessage(kMsgSaveEntry));
+	BButton* newButton = new BButton(B_TRANSLATE("New"), new BMessage(kMsgNewEntry));
+	BButton* deleteButton = new BButton(B_TRANSLATE("Delete"),
 		new BMessage(kMsgDeleteEntry));
-	BButton* copyPasswordButton = new BButton("Copy password",
+	BButton* copyPasswordButton = new BButton(B_TRANSLATE("Copy password"),
 		new BMessage(kMsgCopyPassword));
-	BButton* copyUserButton = new BButton("Copy user",
+	BButton* copyUserButton = new BButton(B_TRANSLATE("Copy user"),
 		new BMessage(kMsgCopyUser));
-	BButton* generateButton = new BButton("Generate",
+	BButton* generateButton = new BButton(B_TRANSLATE("Generate"),
 		new BMessage(kMsgGenerate));
-	BButton* lockButton = new BButton("Lock", new BMessage(kMsgLockKeyring));
-	BButton* exportButton = new BButton("Export KDBX",
+	BButton* lockButton = new BButton(B_TRANSLATE("Lock"), new BMessage(kMsgLockKeyring));
+	BButton* exportButton = new BButton(B_TRANSLATE("Export KDBX"),
 		new BMessage(kMsgExport));
-	BButton* importButton = new BButton("Import KDBX",
+	BButton* importButton = new BButton(B_TRANSLATE("Import KDBX"),
 		new BMessage(kMsgImport));
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0.0f)
@@ -169,10 +175,6 @@ PasswordsView::~PasswordsView()
 {
 	delete fTotpRunner;
 	delete fClipboardRunner;
-	for (int32 i = 0; i < fGroupRows.CountItems(); i++)
-		delete (BRow*)fGroupRows.ItemAt(i);
-	for (int32 i = 0; i < fEntryRows.CountItems(); i++)
-		delete (BRow*)fEntryRows.ItemAt(i);
 }
 
 
@@ -204,8 +206,10 @@ PasswordsView::_LoadKeyrings()
 	fEntries.MakeEmpty();
 	fGroupList->Clear();
 	fGroupRows.MakeEmpty();
-	fGroupList->AddRow(_CreateRow("All"));
-	fGroupRows.AddItem(fGroupList->CurrentSelection());
+	fKeyrings.MakeEmpty();
+	BRow* allRow = _CreateRow(B_TRANSLATE("All"));
+	fGroupList->AddRow(allRow);
+	fGroupRows.AddItem(allRow);
 
 	uint32 cookie = 0;
 	BString keyring;
@@ -221,7 +225,10 @@ PasswordsView::_LoadKeyrings()
 		fGroupRows.AddItem(row);
 	}
 
-	fStatusLabel->SetText("Select a keyring");
+	if (fKeyrings.CountItems() == 0)
+		fStatusLabel->SetText(B_TRANSLATE("No keyrings found"));
+	else
+		fStatusLabel->SetText(B_TRANSLATE("Select a keyring"));
 }
 
 
@@ -229,6 +236,8 @@ void
 PasswordsView::_ClearRows(BList& rows, BColumnListView* list)
 {
 	list->RemoveRows(&rows);
+	for (int32 i = 0; i < rows.CountItems(); i++)
+		delete (BRow*)rows.ItemAt(i);
 	rows.MakeEmpty();
 }
 
@@ -288,7 +297,10 @@ PasswordsView::_LoadEntries(const char* keyring)
 	}
 
 	fHaveCurrent = false;
-	fStatusLabel->SetText("No entry selected");
+	if (fEntries.CountItems() == 0)
+		fStatusLabel->SetText(B_TRANSLATE("No entries in this keyring"));
+	else
+		fStatusLabel->SetText(B_TRANSLATE("No entry selected"));
 }
 
 
@@ -332,13 +344,13 @@ PasswordsView::_SaveCurrentEntry()
 	}
 
 	if (fCurrentKeyring.Length() == 0) {
-		fStatusLabel->SetText("Select a keyring first");
+		fStatusLabel->SetText(B_TRANSLATE("Select a keyring first"));
 		return;
 	}
 
 	BString title = fTitleControl->Text();
 	if (title.Length() == 0) {
-		fStatusLabel->SetText("Title is required");
+		fStatusLabel->SetText(B_TRANSLATE("Title is required"));
 		return;
 	}
 
@@ -365,7 +377,7 @@ PasswordsView::_SaveCurrentEntry()
 	}
 
 	_LoadEntries(keyringName);
-	fStatusLabel->SetText("Entry saved");
+	fStatusLabel->SetText(B_TRANSLATE("Entry saved"));
 }
 
 
@@ -383,7 +395,7 @@ PasswordsView::_CopyToClipboard(const BString& text, int32 clearAfterSeconds)
 	delete fClipboardRunner;
 	fClipboardRunner = new BMessageRunner(BMessenger(this),
 		new BMessage(kMsgClearClipboard), 1000000LL * clearAfterSeconds, 1);
-	fStatusLabel->SetText("Copied; clipboard clears shortly");
+	fStatusLabel->SetText(B_TRANSLATE("Copied; clipboard clears shortly"));
 }
 
 
@@ -396,7 +408,7 @@ PasswordsView::_ClearClipboard()
 	}
 	delete fClipboardRunner;
 	fClipboardRunner = NULL;
-	fStatusLabel->SetText("Clipboard cleared");
+	fStatusLabel->SetText(B_TRANSLATE("Clipboard cleared"));
 }
 
 
@@ -405,7 +417,7 @@ PasswordsView::_UpdateTotp()
 {
 	const char* secret = fTotpControl->Text();
 	if (secret == NULL || secret[0] == '\0') {
-		fTotpCodeView->SetText("------");
+		fTotpCodeView->SetText(B_TRANSLATE("------"));
 		return;
 	}
 
@@ -414,7 +426,7 @@ PasswordsView::_UpdateTotp()
 	if (vos_TotpCode(secret, (uint64_t)(now / 30), 6, code) == 0)
 		fTotpCodeView->SetText(code);
 	else
-		fTotpCodeView->SetText("bad secret");
+		fTotpCodeView->SetText(B_TRANSLATE("bad secret"));
 }
 
 
@@ -423,11 +435,12 @@ PasswordsView::_GeneratePassword()
 {
 	BPasswordKey password;
 	if (fKeyStore.GeneratePassword(password, 20, 0x0f) != B_OK) {
-		fStatusLabel->SetText("Password generation failed");
+		fStatusLabel->SetText(B_TRANSLATE("Password generation failed"));
 		return;
 	}
 	fPasswordControl->SetText(password.Password());
-	fStatusLabel->SetText("Generated password; save to store it");
+	fStatusLabel->SetText(
+		B_TRANSLATE("Generated password; save to store it"));
 }
 
 
@@ -435,7 +448,7 @@ void
 PasswordsView::_ExportDatabase()
 {
 	if (fCurrentKeyring.Length() == 0) {
-		fStatusLabel->SetText("Select a keyring to export");
+		fStatusLabel->SetText(B_TRANSLATE("Select a keyring to export"));
 		return;
 	}
 
@@ -535,7 +548,7 @@ PasswordsView::MessageReceived(BMessage* message)
 		case kMsgLockKeyring:
 			if (fCurrentKeyring.Length() > 0) {
 				fKeyStore.LockKeyring(fCurrentKeyring.String());
-				fStatusLabel->SetText("Keyring locked");
+				fStatusLabel->SetText(B_TRANSLATE("Keyring locked"));
 			}
 			break;
 
@@ -565,11 +578,11 @@ PasswordsView::MessageReceived(BMessage* message)
 			BPath path(&ref);
 
 			BString password;
-			PasswordDialog dialog("Export keyring",
-				"Enter the password that will protect the exported KDBX "
-				"file.", true);
+			PasswordDialog dialog(B_TRANSLATE("Export keyring"),
+				B_TRANSLATE("Enter the password that will protect the "
+					"exported KDBX file."), true);
 			if (dialog.GetPassword(password) != B_OK) {
-				fStatusLabel->SetText("Export canceled");
+				fStatusLabel->SetText(B_TRANSLATE("Export canceled"));
 				return;
 			}
 
@@ -577,7 +590,7 @@ PasswordsView::MessageReceived(BMessage* message)
 			status_t result = file.ExportToPath(path.Path(),
 				password.String(), fCurrentKeyring.String());
 			fStatusLabel->SetText(result == B_OK
-				? "Exported keyring to KDBX file"
+				? B_TRANSLATE("Exported keyring to KDBX file")
 				: strerror(result));
 			break;
 		}
@@ -591,15 +604,17 @@ PasswordsView::MessageReceived(BMessage* message)
 				return;
 			BPath path(&ref);
 			if (fCurrentKeyring.Length() == 0) {
-				fStatusLabel->SetText("Select a keyring before importing");
+				fStatusLabel->SetText(
+		B_TRANSLATE("Select a keyring before importing"));
 				return;
 			}
 
 			BString password;
-			PasswordDialog dialog("Import KDBX file",
-				"Enter the password of the KDBX file to import.", false);
+			PasswordDialog dialog(B_TRANSLATE("Import KDBX file"),
+				B_TRANSLATE("Enter the password of the KDBX file to "
+					"import."), false);
 			if (dialog.GetPassword(password) != B_OK) {
-				fStatusLabel->SetText("Import canceled");
+				fStatusLabel->SetText(B_TRANSLATE("Import canceled"));
 				return;
 			}
 
@@ -609,7 +624,7 @@ PasswordsView::MessageReceived(BMessage* message)
 			if (result == B_OK)
 				_LoadEntries(fCurrentKeyring.String());
 			fStatusLabel->SetText(result == B_OK
-				? "Imported KDBX file"
+				? B_TRANSLATE("Imported KDBX file")
 				: strerror(result));
 			break;
 		}

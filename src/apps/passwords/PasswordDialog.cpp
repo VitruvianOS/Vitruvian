@@ -8,6 +8,7 @@
 
 #include <Alert.h>
 #include <Button.h>
+#include <Catalog.h>
 #include <GroupLayout.h>
 #include <LayoutBuilder.h>
 #include <Message.h>
@@ -16,6 +17,10 @@
 #include <TextView.h>
 
 #include <new>
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "PasswordDialog"
 
 
 static const uint32 kMessageCancel = 'PwCn';
@@ -39,14 +44,15 @@ public:
 		fMessage->MakeSelectable(false);
 		fMessage->SetWordWrap(true);
 
-		fPassword = new BTextControl("Password:", "", NULL);
+		fPassword = new BTextControl(B_TRANSLATE("Password:"), "", NULL);
 
 		fConfirmControl = NULL;
 		if (fConfirm)
-			fConfirmControl = new BTextControl("Confirm:", "", NULL);
+			fConfirmControl = new BTextControl(B_TRANSLATE("Confirm:"), "", NULL);
 
-		fCancelButton = new BButton("Cancel", new BMessage(kMessageCancel));
-		fOKButton = new BButton("OK", new BMessage(kMessageOK));
+		fCancelButton = new BButton(B_TRANSLATE("Cancel"),
+			new BMessage(kMessageCancel));
+		fOKButton = new BButton(B_TRANSLATE("OK"), new BMessage(kMessageOK));
 
 		BLayoutBuilder::Group<>(this, B_VERTICAL, 0.0f)
 			.AddStrut(8.0f)
@@ -77,7 +83,8 @@ public:
 					&& strcmp(fPassword->Text(), fConfirmControl->Text())
 						!= 0) {
 					BAlert* alert = new BAlert("passwords",
-						"The passwords do not match.", "OK");
+						B_TRANSLATE("The passwords do not match."),
+						B_TRANSLATE("OK"));
 					alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 					alert->Go();
 					fConfirmControl->SetText("");

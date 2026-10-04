@@ -1,0 +1,47 @@
+1	german	x-vnd.vos-Passwords	0
+Passwords	PasswordsView		
+Search	PasswordsView		
+Title	PasswordsView		
+User	PasswordsView		
+Password	PasswordsView		
+URL	PasswordsView		
+TOTP secret	PasswordsView		
+------	PasswordsView		
+Select a keyring	PasswordsView		
+Keyring	PasswordsView		
+Save	PasswordsView		
+New	PasswordsView		
+Delete	PasswordsView		
+Copy password	PasswordsView		
+Copy user	PasswordsView		
+Generate	PasswordsView		
+Lock	PasswordsView		
+Export KDBX	PasswordsView		
+Import KDBX	PasswordsView		
+All	PasswordsView		
+No entry selected	PasswordsView		
+Select a keyring first	PasswordsView		
+Title is required	PasswordsView		
+Entry saved	PasswordsView		
+Copied; clipboard clears shortly	PasswordsView		
+Clipboard cleared	PasswordsView		
+bad secret	PasswordsView		
+Password generation failed	PasswordsView		
+Generated password; save to store it	PasswordsView		
+Select a keyring to export	PasswordsView		
+Keyring locked	PasswordsView		
+Export keyring	PasswordsView		
+Enter the password that will protect the exported KDBX file.	PasswordsView		
+Export canceled	PasswordsView		
+Exported keyring to KDBX file	PasswordsView		
+Select a keyring before importing	PasswordsView		
+Import KDBX file	PasswordsView		
+Enter the password of the KDBX file to import.	PasswordsView		
+Import canceled	PasswordsView		
+Imported KDBX file	PasswordsView		
+Password:	PasswordDialog		
+Confirm:	PasswordDialog		
+Cancel	PasswordDialog		
+OK	PasswordDialog		
+The passwords do not match.	PasswordDialog		
+Passwords	Passwords		

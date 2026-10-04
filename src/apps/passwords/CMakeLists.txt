@@ -15,4 +15,4 @@ Application(Passwords
 )
 
 UsePrivateHeaders(Passwords interface shared locale app)
-DoCatalogs("x-vnd.Vitruvian-Passwords" apps/passwords)
+DoCatalogs("x-vnd.vos-Passwords" apps/passwords)

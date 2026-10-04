@@ -771,6 +771,8 @@ menuentry "Vitruvian" {
     initrd (\$root)/boot/initrd.img-$_kv
 }
 menuentry "Vitruvian (Safe Mode)" {
+    set gfxmode=1024x768,800x600,auto
+    set gfxpayload=keep
     linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons noresume
     initrd (\$root)/boot/initrd.img-$_kv
 }

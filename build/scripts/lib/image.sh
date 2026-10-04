@@ -359,6 +359,8 @@ menuentry "Vitruvian" {
     initrd (\$root)/initrd.img
 }
 menuentry "Vitruvian (Safe Mode)" {
+    set gfxmode=1024x768,800x600,auto
+    set gfxpayload=keep
     linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
     initrd (\$root)/initrd.img
 }
@@ -602,6 +604,8 @@ menuentry "Vitruvian Live" {
     initrd /initrd
 }
 menuentry "Vitruvian Live (Safe Mode)" {
+    set gfxmode=1024x768,800x600,auto
+    set gfxpayload=keep
     linux /vmlinuz boot=live noeject quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons console=tty0 console=ttyS0,115200
     initrd /initrd
 }

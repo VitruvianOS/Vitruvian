@@ -10,6 +10,7 @@ set(SYSTEM_SERVERS
 	notification_server
 	mount_server
 	registrar
+	keystore_server
 )
 ImageInclude("/system/servers" ${SYSTEM_SERVERS})
 

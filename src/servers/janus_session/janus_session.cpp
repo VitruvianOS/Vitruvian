@@ -66,6 +66,7 @@ static const KnownServer kFanOutServers[] = {
 	// re-attach the cursor channel it inherited from app_server at login.
 	{ "input_server",        "application/x-vnd.Be-input_server",       false, false },
 	{ "notification_server", "application/x-vnd.vos-notification_server", false, true },
+	{ "keystore_server",     "application/x-vnd.vos-keystore_server", false, false },
 	{ "vos-polkit-agent",    "application/x-vnd.vos-polkit-agent", false, false },
 	{ "Deskbar",             "application/x-vnd.Be-TSKB",               false, true  },
 	{ "Tracker",             "application/x-vnd.Be-TRAK",               false, false },
@@ -1140,12 +1141,21 @@ kernel_cmdline_has(const char* option)
 
 
 static void
+ownToUser(const char* path)
+{
+	int result = chown(path, sUserUid, sUserGid);
+	(void)result;
+}
+
+
+static void
 console_message(const char* text)
 {
 	int fd = open("/dev/console", O_WRONLY | O_NOCTTY | O_CLOEXEC);
 	if (fd < 0)
 		return;
-	(void)write(fd, text, strlen(text));
+	ssize_t written = write(fd, text, strlen(text));
+	(void)written;
 	close(fd);
 }
 
@@ -1424,8 +1434,8 @@ fanout_thread(void*)
 		// authentication agent for this logind session, and there is no
 		// authenticated subject before login.
 		static const char* const kFanOut[] = {
-			"input_server", "notification_server", "vos-polkit-agent",
-			"Deskbar", "Tracker", NULL
+			"input_server", "notification_server", "keystore_server",
+			"vos-polkit-agent", "Deskbar", "Tracker", NULL
 		};
 		for (int i = 0; kFanOut[i] != NULL; i++)
 			fire_launch(kFanOut[i]);
@@ -1521,15 +1531,15 @@ run_first_login_for_user()
 	char m[PATH_MAX + 32];
 	snprintf(m, sizeof(m), "%s/config", sUserHome);
 	mkdir(m, 0755);
-	chown(m, sUserUid, sUserGid);
+	ownToUser(m);
 	snprintf(m, sizeof(m), "%s/config/settings", sUserHome);
 	mkdir(m, 0755);
-	chown(m, sUserUid, sUserGid);
+	ownToUser(m);
 	snprintf(m, sizeof(m), "%s/config/settings/first_login", sUserHome);
 	int fd = open(m, O_WRONLY | O_CREAT | O_CLOEXEC, 0644);
 	if (fd >= 0) {
 		close(fd);
-		chown(m, sUserUid, sUserGid);
+		ownToUser(m);
 	}
 }
 
@@ -1845,7 +1855,7 @@ process_running(const char* name)
 				|| strlen(de->d_name) > 10)
 			continue;
 		char path[64];
-		snprintf(path, sizeof(path), "/proc/%s/comm", de->d_name);
+		snprintf(path, sizeof(path), "/proc/%.10s/comm", de->d_name);
 		int fd = open(path, O_RDONLY | O_CLOEXEC);
 		if (fd < 0)
 			continue;
@@ -1969,7 +1979,9 @@ daemon_loop()
 						libseat_dispatch(sSeat, 0);
 				} else {
 					uint64_t value;
-					(void)read(sSeatWakeFd, &value, sizeof(value));
+					ssize_t drained = read(sSeatWakeFd, &value,
+						sizeof(value));
+					(void)drained;
 				}
 			}
 		}

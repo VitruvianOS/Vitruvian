@@ -15,6 +15,7 @@ class BButton;
 class BListItem;
 class BOutlineListView;
 class InterfaceDetailView;
+class MobileBroadbandView;
 class ProxyView;
 
 
@@ -32,6 +33,7 @@ private:
 	BListItem* _PopulateVPNList(const BString& previousSelectionPath);
 	void _SelectItem(BListItem* item);
 	void _ShowProxyPane(bool show);
+	void _ShowMobilePane(bool show);
 	void _UpdateRevertButton();
 	void _RevertSettings();
 	void _ToggleReplicant();
@@ -39,10 +41,12 @@ private:
 
 	BOutlineListView* fListView;
 	InterfaceDetailView* fDetailView;
+	MobileBroadbandView* fMobileView;
 	ProxyView* fProxyView;
 	BButton* fRevertButton;
 
 	BListItem* fProxyItem;
+	BListItem* fMobileItem;
 	BListItem* fServicesItem;
 	BListItem* fDialUpItem;
 	BListItem* fVPNItem;

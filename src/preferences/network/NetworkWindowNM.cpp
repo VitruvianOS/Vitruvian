@@ -7,6 +7,7 @@
 #include "NetworkWindowNM.h"
 
 #include "InterfaceDetailView.h"
+#include "MobileBroadbandView.h"
 #include "NMBackend.h"
 #include "ProxyView.h"
 #include "StaticIPView.h"
@@ -232,9 +233,11 @@ NetworkWindowNM::NetworkWindowNM()
 			| B_AUTO_UPDATE_SIZE_LIMITS),
 	fListView(NULL),
 	fDetailView(NULL),
+	fMobileView(NULL),
 	fProxyView(NULL),
 	fRevertButton(NULL),
 	fProxyItem(NULL),
+	fMobileItem(NULL),
 	fServicesItem(NULL),
 	fDialUpItem(NULL),
 	fVPNItem(NULL),
@@ -262,18 +265,21 @@ NetworkWindowNM::NetworkWindowNM()
 	scrollView->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNLIMITED));
 
 	fDetailView = new InterfaceDetailView();
+	fMobileView = new MobileBroadbandView();
+	fMobileView->Hide();
 	fProxyView = new ProxyView();
 	fProxyView->Hide();
 
 	// Build the layout: list on the left, swappable detail pane on the
-	// right (device detail or the system-wide Proxy pane), Deskbar
-	// checkbox along the bottom.
+	// right (device detail, mobile broadband, or the system-wide Proxy
+	// pane), Deskbar checkbox along the bottom.
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.SetInsets(B_USE_WINDOW_SPACING)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 			.Add(scrollView)
 			.AddGroup(B_VERTICAL)
 				.Add(fDetailView)
+				.Add(fMobileView)
 				.Add(fProxyView)
 			.End()
 		.End()
@@ -358,6 +364,7 @@ NetworkWindowNM::MessageReceived(BMessage* message)
 
 		case StaticIPView::kMsgDirtyChanged:
 		case ProxyView::kMsgDirtyChanged:
+		case MobileBroadbandView::kMsgDirtyChanged:
 			_UpdateRevertButton();
 			break;
 
@@ -502,6 +509,12 @@ NetworkWindowNM::_PopulateDeviceList(BMessage* devices)
 	fListView->AddItem(fWirelessItem);
 	fListView->AddItem(fVPNItem);
 
+	// Mobile broadband section appears only when NM reports a modem
+	// device; hidden otherwise.
+	fMobileItem = NULL;
+	bool hasModem = false;
+	BMessage modemSnapshot;
+
 	BListItem* restoredSelection = NULL;
 
 	int32 deviceCount = 0;
@@ -527,6 +540,13 @@ NetworkWindowNM::_PopulateDeviceList(BMessage* devices)
 			deviceInfo.FindUInt32(kNMFieldState, &deviceState) != B_OK)
 			continue;
 
+		if (strcmp(deviceType, "modem") == 0) {
+			hasModem = true;
+			if (modemSnapshot.IsEmpty())
+				modemSnapshot = deviceInfo;
+			continue;
+		}
+
 		// Determine which section to add to
 		BListItem* parentItem = NULL;
 		if (strcmp(deviceType, "ethernet") == 0) {
@@ -551,6 +571,14 @@ NetworkWindowNM::_PopulateDeviceList(BMessage* devices)
 
 		if (hadSelection && previousPath == devicePath)
 			restoredSelection = item;
+	}
+
+	if (hasModem) {
+		fMobileItem = new TitleItem(B_TRANSLATE("Mobile broadband"));
+		fListView->AddItem(fMobileItem);
+		fMobileView->SetModemDevice(modemSnapshot);
+	} else {
+		fMobileView->ClearModem();
 	}
 
 	if (restoredSelection == NULL && hadSelection)
@@ -639,12 +667,21 @@ NetworkWindowNM::_SelectItem(BListItem* item)
 	if (item != NULL && item == fProxyItem) {
 		// Session-wide proxy, not tied to a device or profile.
 		_ShowProxyPane(true);
+		_ShowMobilePane(false);
 		fProxyView->Reload();
 		_UpdateRevertButton();
 		return;
 	}
 
+	if (item != NULL && item == fMobileItem) {
+		_ShowProxyPane(false);
+		_ShowMobilePane(true);
+		_UpdateRevertButton();
+		return;
+	}
+
 	_ShowProxyPane(false);
+	_ShowMobilePane(false);
 
 	if (deviceItem != NULL) {
 		fDetailView->ShowEmpty(B_TRANSLATE("Loading" B_UTF8_ELLIPSIS));
@@ -680,9 +717,27 @@ NetworkWindowNM::_ShowProxyPane(bool show)
 	if (show) {
 		fProxyView->Show();
 		fDetailView->Hide();
+		if (fMobileView != NULL)
+			fMobileView->Hide();
 	} else {
 		fProxyView->Hide();
-		fDetailView->Show();
+	}
+}
+
+
+void
+NetworkWindowNM::_ShowMobilePane(bool show)
+{
+	if (fMobileView == NULL || fDetailView == NULL)
+		return;
+
+	if (show) {
+		fMobileView->Show();
+		fDetailView->Hide();
+		if (fProxyView != NULL)
+			fProxyView->Hide();
+	} else {
+		fMobileView->Hide();
 	}
 }
 
@@ -694,6 +749,8 @@ NetworkWindowNM::_UpdateRevertButton()
 	bool dirty = false;
 	if (fProxyView != NULL && !fProxyView->IsHidden())
 		dirty = fProxyView->IsDirty();
+	else if (fMobileView != NULL && !fMobileView->IsHidden())
+		dirty = fMobileView->IsDirty();
 	else if (fDetailView != NULL)
 		dirty = fDetailView->IsRevertable();
 
@@ -709,6 +766,8 @@ NetworkWindowNM::_RevertSettings()
 {
 	if (fProxyView != NULL && !fProxyView->IsHidden())
 		fProxyView->Revert();
+	else if (fMobileView != NULL && !fMobileView->IsHidden())
+		fMobileView->Revert();
 	else if (fDetailView != NULL)
 		fDetailView->Revert();
 	_UpdateRevertButton();

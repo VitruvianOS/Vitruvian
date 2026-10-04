@@ -3,6 +3,7 @@ Application(Network
 	Network.cpp
 	NetworkWindowNM.cpp
 	InterfaceDetailView.cpp
+	MobileBroadbandView.cpp
 	StaticIPView.cpp
 	IPAddressControl.cpp
 	NetworkHotspotSettings.cpp

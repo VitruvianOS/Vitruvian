@@ -30,7 +30,7 @@ static const char* kMMModemInterface = "org.freedesktop.ModemManager1.Modem";
 static const char* kMMModemSignalInterface
 	= "org.freedesktop.ModemManager1.Modem.Signal";
 static const char* kMMModem3gppInterface
-	= "org.freedesktop.ModemManager1.Modem3gpp";
+	= "org.freedesktop.ModemManager1.Modem.Modem3gpp";
 static const char* kMMSimInterface = "org.freedesktop.ModemManager1.Sim";
 static const char* kMMObjectManagerInterface
 	= "org.freedesktop.DBus.ObjectManager";

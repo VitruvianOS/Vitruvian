@@ -20,6 +20,6 @@ AddOn(
 		localestub
 )
 
-UsePrivateHeaders(libscan interface support)
+UsePrivateHeaders(libscan scan interface support)
 
 target_link_options(libscan PRIVATE -Wl,--no-undefined)

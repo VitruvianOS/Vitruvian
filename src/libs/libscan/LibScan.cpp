@@ -11,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <Autolock.h>
 #include <Bitmap.h>
 #include <Locker.h>
 #include <Message.h>
@@ -254,9 +255,9 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 		return B_ERROR;
 
 	color_space space = B_RGB32;
-	if (params.format == SANE_FRAME_GRAY)
+	if (params.format == SANE_FRAME_GRAY && params.depth == 8)
 		space = B_GRAY8;
-	else if (params.format == SANE_FRAME_BIT)
+	else if (params.format == SANE_FRAME_GRAY && params.depth == 1)
 		space = B_RGB32;
 
 	BRect bounds(0, 0, params.pixels_per_line - 1, params.lines - 1);
@@ -270,9 +271,6 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 	uint8* bits = static_cast<uint8*>(bitmap->Bits());
 	int32 rowBytes = bitmap->BytesPerRow();
 	uint8* line = new uint8[params.bytes_per_line + 16];
-	int32 bytesPerPixel = 1;
-	if (space == B_RGB32)
-		bytesPerPixel = 4;
 
 	gCancel = false;
 	int32 rowsDone = 0;
@@ -308,13 +306,8 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 				dst[x * 4 + 2] = line[src + 0];
 				dst[x * 4 + 3] = 0xff;
 			}
-		} else if (params.format == SANE_FRAME_GRAY) {
-			int32 count = params.pixels_per_line;
-			if (count > params.bytes_per_line)
-				count = params.bytes_per_line;
-			memcpy(dst, line, count);
-		} else {
-			// Bit frames: expand each bit to a black/white RGB pixel.
+		} else if (params.format == SANE_FRAME_GRAY && params.depth == 1) {
+			// Bit packing: expand each bit to a black/white RGB pixel.
 			for (int32 x = 0; x < params.pixels_per_line; x++) {
 				int32 byte = x / 8;
 				int32 bit = 7 - (x % 8);
@@ -327,6 +320,11 @@ ReadIntoBitmap(SANE_Handle handle, const SANE_Parameters& params,
 				dst[x * 4 + 2] = v;
 				dst[x * 4 + 3] = 0xff;
 			}
+		} else {
+			int32 count = params.pixels_per_line;
+			if (count > params.bytes_per_line)
+				count = params.bytes_per_line;
+			memcpy(dst, line, count);
 		}
 
 		rowsDone++;
@@ -447,7 +445,7 @@ libscan_get_options(const char* name, BMessage* options)
 					SANE_ACTION_GET_VALUE, &value, NULL)
 					== SANE_STATUS_GOOD) {
 				if (desc->type == SANE_TYPE_FIXED)
-					value = SANE_INT(value >> 16);
+					value = (SANE_Int)(value >> 16);
 				opts.resolution_dpi = value;
 			}
 		} else if (TitleMatches(desc->title, "Mode")
@@ -554,8 +552,8 @@ static int32
 ScanEntry(void* data)
 {
 	char* name = static_cast<char*>(data);
-	libscan_options* opts = static_cast<libscan_options*>(
-		((char*)data) + 256);
+	libscan_options* opts = reinterpret_cast<libscan_options*>(
+		reinterpret_cast<char*>(data) + 256);
 
 	ScanSession session;
 	if (OpenDevice(name, &session) != B_OK) {

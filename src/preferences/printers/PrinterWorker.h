@@ -12,9 +12,10 @@
 #include <String.h>
 
 #include "printcups.h"
+#include "libscan.h"
 
 
-// Ops that block on cupsd; each runs on its own thread and posts
+// Ops that block on cupsd or SANE; each runs on its own thread and posts
 // kMsgWorkerResult back to the reply messenger.
 enum {
 	kWorkerOpListQueues		= 1,
@@ -33,6 +34,7 @@ enum {
 	kWorkerOpDiscover,
 	kWorkerOpListPPDs,
 	kWorkerOpListChoices,
+	kWorkerOpListScanners,
 };
 
 

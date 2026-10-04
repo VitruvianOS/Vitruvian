@@ -5,8 +5,8 @@ Application(Printers
 		PrintersWindow.cpp
 		PrinterOptionsDialog.cpp
 		PrinterWorker.cpp
-	LIBS printcups ${CUPS_LIBRARIES} ${CAIRO_LIBRARIES} localestub
+	LIBS printcups libscan ${CUPS_LIBRARIES} ${CAIRO_LIBRARIES} ${SANE_LIBRARIES} localestub
 	RDEF Printers.rdef
 )
-UsePrivateHeaders(Printers print interface support)
+UsePrivateHeaders(Printers print scan interface support)
 DoCatalogs("x-vnd.Be-PRNT" preferences/printers)

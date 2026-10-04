@@ -26,6 +26,8 @@ const uint32 kMsgHoldJob            = 'HldJ';
 const uint32 kMsgReleaseJob         = 'RlsJ';
 const uint32 kMsgPurgeJobs          = 'PrgJ';
 const uint32 kMsgRefresh            = 'RfsH';
+const uint32 kMsgScannerSelected    = 'ScSl';
+const uint32 kMsgDefaultScanner     = 'DfSc';
 
 // AddPrinterDialog
 const uint32 kMsgDiscover           = 'Disc';

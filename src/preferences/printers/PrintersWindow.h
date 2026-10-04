@@ -10,17 +10,22 @@
 #include <String.h>
 #include <Window.h>
 
+#include "libscan.h"
 #include "printcups.h"
 
 
 class BButton;
 class BColumnListView;
+class BListView;
+class BMenuField;
+class BPopUpMenu;
 class BStringView;
 
 
 class PrinterRow : public BRow {
 public:
-						PrinterRow(const printcups_queue_info& info);
+					PrinterRow(const printcups_queue_info& info,
+						const char* functions);
 
 	const BString&		Name() const { return fName; }
 	bool				IsDefault() const { return fDefault; }
@@ -35,7 +40,7 @@ private:
 
 class JobRow : public BRow {
 public:
-						JobRow(const printcups_job& job);
+					JobRow(const printcups_job& job);
 
 	int32				Id() const { return fId; }
 	const BString&		Queue() const { return fQueue; }
@@ -50,7 +55,7 @@ private:
 
 class PrintersWindow : public BWindow {
 public:
-						PrintersWindow();
+					PrintersWindow();
 
 	virtual void		MessageReceived(BMessage* message);
 
@@ -58,15 +63,21 @@ private:
 	void				_SetupLists();
 	void				_UpdateQueues();
 	void				_UpdateJobs();
+	void				_UpdateScanners();
 	void				_UpdateButtons();
 	void				_SetStatus(const char* text);
 	void				_SetError(const BString& text, status_t status);
 
 	PrinterRow*			_SelectedPrinter() const;
 	BString				_SelectedQueue() const;
+	const char*			_FunctionsForQueue(const char* queue,
+							const char* makeModel) const;
+	void				_SaveDefaultScanner(const char* name);
+	void				_LoadDefaultScanner();
 
 	void				_LoadQueues();
 	void				_LoadJobs();
+	void				_LoadScanners();
 	void				_DoDefault();
 	void				_DoRemove();
 	void				_DoRename();
@@ -81,6 +92,9 @@ private:
 
 	BColumnListView*	fPrinterList;
 	BColumnListView*	fJobList;
+	BListView*			fScannerList;
+	BMenuField*			fScannerDefaultField;
+	BPopUpMenu*			fScannerDefaultMenu;
 	BStringView*		fStatusView;
 	BButton*			fAddButton;
 	BButton*			fRemoveButton;

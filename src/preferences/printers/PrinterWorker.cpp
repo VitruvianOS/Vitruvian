@@ -11,6 +11,8 @@
 #include <OS.h>
 #include <String.h>
 
+#include "libscan.h"
+
 
 struct WorkerRequest {
 	uint32		op;
@@ -186,6 +188,23 @@ WorkerEntry(void* data)
 				result.AddInt32("count", count);
 			}
 			delete[] choices;
+			break;
+		}
+
+		case kWorkerOpListScanners:
+		{
+			static const int32 kMax = 32;
+			libscan_device* devices = new libscan_device[kMax];
+			int count = libscan_list_devices(devices, kMax);
+			if (count < 0) {
+				status = B_ERROR;
+				error = libscan_last_error();
+			} else {
+				result.AddData("scanners", B_RAW_TYPE, devices,
+					count * (int32)sizeof(libscan_device));
+				result.AddInt32("count", count);
+			}
+			delete[] devices;
 			break;
 		}
 

@@ -2,11 +2,14 @@
  * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
- * Printers preflet: discover, add and manage CUPS queues and jobs.
- * cupsd errors are shown in the window.
+ * Printers and scanners preflet: CUPS queues and SANE devices in one list.
+ * cupsd and SANE errors are shown in the window.
  */
 
 #include "PrintersWindow.h"
+
+#include <ctype.h>
+#include <string.h>
 
 #include <Alert.h>
 #include <Box.h>
@@ -14,8 +17,15 @@
 #include <Catalog.h>
 #include <ColumnListView.h>
 #include <ColumnTypes.h>
+#include <File.h>
+#include <FindDirectory.h>
 #include <LayoutBuilder.h>
+#include <ListView.h>
 #include <Locale.h>
+#include <MenuField.h>
+#include <MenuItem.h>
+#include <Path.h>
+#include <PopUpMenu.h>
 #include <String.h>
 #include <StringView.h>
 
@@ -23,6 +33,7 @@
 #include "Messages.h"
 #include "PrinterOptionsDialog.h"
 #include "PrinterWorker.h"
+#include "libscan.h"
 #include "printcups.h"
 // See PrintersApp.cpp: the tracker kit's pr_server.h shadows the print one.
 #include <print/pr_server.h>
@@ -36,6 +47,7 @@ enum {
 	kPrinterColumn = 0,
 	kLocationColumn,
 	kStatusColumn,
+	kFunctionsColumn,
 };
 
 enum {
@@ -45,12 +57,23 @@ enum {
 	kJobQueueColumn,
 };
 
+enum {
+	kScannerNameColumn = 0,
+	kScannerModelColumn,
+	kScannerTypeColumn,
+};
+
 
 // Snapshot filled from worker results so refreshes rebuild lists in place.
 static printcups_queue_info gQueues[64];
 static int32 gQueueCount = 0;
 static printcups_job gJobs[128];
 static int32 gJobCount = 0;
+static libscan_device gScanners[32];
+static int32 gScannerCount = 0;
+
+static const char* kSettingsFile = "Printers settings";
+static const char* kDefaultScannerKey = "default_scanner";
 
 
 static void
@@ -61,7 +84,27 @@ ClearList(BColumnListView* list)
 }
 
 
-PrinterRow::PrinterRow(const printcups_queue_info& info)
+static bool
+ContainsIgnoreCase(const char* haystack, const char* needle)
+{
+	if (haystack == NULL || needle == NULL || needle[0] == '\0')
+		return false;
+	size_t nlen = strlen(needle);
+	for (const char* p = haystack; *p != '\0'; p++) {
+		size_t i = 0;
+		while (i < nlen && p[i] != '\0'
+			&& tolower((unsigned char)p[i])
+				== tolower((unsigned char)needle[i]))
+			i++;
+		if (i == nlen)
+			return true;
+	}
+	return false;
+}
+
+
+PrinterRow::PrinterRow(const printcups_queue_info& info,
+		const char* functions)
 	:
 	BRow(),
 	fName(info.name),
@@ -75,6 +118,8 @@ PrinterRow::PrinterRow(const printcups_queue_info& info)
 	SetField(new BStringField(name.String()), kPrinterColumn);
 	SetField(new BStringField(info.location), kLocationColumn);
 	SetField(new BStringField(StatusText(info)), kStatusColumn);
+	SetField(new BStringField(functions != NULL ? functions : ""),
+		kFunctionsColumn);
 }
 
 
@@ -112,7 +157,7 @@ JobRow::StateText(int32 state)
 	switch (state) {
 		case 0: return B_TRANSLATE("pending");
 		case 1: return B_TRANSLATE("held");
-		case 2: return B_TRANSLATE("processing");
+		case 2: return B_TRANSLATE("printing");
 		case 3: return B_TRANSLATE("stopped");
 		case 4: return B_TRANSLATE("canceled");
 		case 5: return B_TRANSLATE("aborted");
@@ -124,12 +169,17 @@ JobRow::StateText(int32 state)
 
 PrintersWindow::PrintersWindow()
 	:
-	BWindow(BRect(60, 60, 720, 560), B_TRANSLATE_SYSTEM_NAME("Printers"),
+	BWindow(BRect(60, 60, 760, 640),
+		B_TRANSLATE("Printers and scanners"),
 		B_TITLED_WINDOW, B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS
 			| B_QUIT_ON_WINDOW_CLOSE),
 	fBusy(false)
 {
 	_SetupLists();
+
+	fScannerDefaultMenu = new BPopUpMenu("defaultScanner");
+	fScannerDefaultField = new BMenuField("defaultScannerField",
+		B_TRANSLATE("Default scanner:"), fScannerDefaultMenu);
 
 	fAddButton = new BButton("add", B_TRANSLATE("Add Printer..."),
 		new BMessage(kMsgAddPrinter));
@@ -183,6 +233,14 @@ PrintersWindow::PrintersWindow()
 			.Add(fRefreshButton)
 		.End();
 
+	BBox* scannerBox = new BBox("scannerBox");
+	scannerBox->SetLabel(B_TRANSLATE("Scanners"));
+	BLayoutBuilder::Group<>(scannerBox, B_VERTICAL)
+		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
+			B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
+		.Add(fScannerList, 1)
+		.Add(fScannerDefaultField);
+
 	BBox* jobBox = new BBox("jobBox");
 	jobBox->SetLabel(B_TRANSLATE("Jobs"));
 	BLayoutBuilder::Group<>(jobBox, B_VERTICAL)
@@ -200,14 +258,17 @@ PrintersWindow::PrintersWindow()
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.SetInsets(B_USE_WINDOW_SPACING)
 		.Add(printerBox, 2)
+		.Add(scannerBox, 1)
 		.Add(jobBox, 2)
 		.Add(fStatusView);
 
 	_UpdateButtons();
 	CenterOnScreen();
 
-	// cupsd may be slow; load queues off the window thread.
+	_LoadDefaultScanner();
+	// cupsd and SANE can be slow; load off the window thread.
 	_LoadQueues();
+	_LoadScanners();
 }
 
 
@@ -220,12 +281,18 @@ PrintersWindow::_SetupLists()
 		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
 	fPrinterList->SetSelectionMessage(new BMessage(kMsgPrinterSelected));
 	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Printer"),
+	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Printer"),
 		200 * scale, 120 * scale, 400 * scale, B_TRUNCATE_END), kPrinterColumn);
 	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Location"),
 		140 * scale, 80 * scale, 260 * scale, B_TRUNCATE_END), kLocationColumn);
 	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Status"),
 		100 * scale, 60 * scale, 160 * scale, B_TRUNCATE_END), kStatusColumn);
+	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Functions"),
+		130 * scale, 80 * scale, 220 * scale, B_TRUNCATE_END), kFunctionsColumn);
 	fPrinterList->SetSortingEnabled(true);
+
+	fScannerList = new BListView("scanners");
+	fScannerList->SetSelectionMessage(new BMessage(kMsgScannerSelected));
 
 	fJobList = new BColumnListView("jobs",
 		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
@@ -285,6 +352,33 @@ PrintersWindow::MessageReceived(BMessage* message)
 					break;
 				}
 
+				case kWorkerOpListScanners:
+				{
+					fBusy = false;
+					const void* data = NULL;
+					ssize_t size = 0;
+					int32 count = 0;
+					message->FindInt32("count", &count);
+					gScannerCount = 0;
+					if (status == B_OK
+						&& message->FindData("scanners", B_RAW_TYPE, &data,
+							&size) == B_OK) {
+						int32 n = size / (int32)sizeof(libscan_device);
+						if (n > 32)
+							n = 32;
+						if (n > count)
+							n = count;
+						memcpy(gScanners, data,
+							n * sizeof(libscan_device));
+						gScannerCount = n;
+					}
+					_UpdateScanners();
+					if (status != B_OK && !error.IsEmpty())
+						_SetStatus(error.String());
+					_UpdateButtons();
+					break;
+				}
+
 				case kWorkerOpListJobs:
 				{
 					fBusy = false;
@@ -301,7 +395,8 @@ PrintersWindow::MessageReceived(BMessage* message)
 							n = 128;
 						if (n > count)
 							n = count;
-						memcpy(gJobs, data, n * sizeof(printcups_job));
+						memcpy(gJobs, data,
+							n * sizeof(printcups_job));
 						gJobCount = n;
 					}
 					if (status == B_OK)
@@ -351,6 +446,18 @@ PrintersWindow::MessageReceived(BMessage* message)
 		case kMsgJobSelected:
 			_UpdateButtons();
 			break;
+
+		case kMsgScannerSelected:
+			_UpdateButtons();
+			break;
+
+		case kMsgDefaultScanner:
+		{
+			const char* name = NULL;
+			if (message->FindString("name", &name) == B_OK && name != NULL)
+				_SaveDefaultScanner(name);
+			break;
+		}
 
 		case kMsgMakeDefaultPrinter:
 			_DoDefault();
@@ -402,6 +509,7 @@ PrintersWindow::MessageReceived(BMessage* message)
 
 		case kMsgRefresh:
 			_LoadQueues();
+			_LoadScanners();
 			break;
 
 		case PRINTERS_ADD_PRINTER:
@@ -432,6 +540,21 @@ PrintersWindow::_SelectedQueue() const
 }
 
 
+const char*
+PrintersWindow::_FunctionsForQueue(const char* /*queue*/,
+	const char* makeModel) const
+{
+	for (int32 i = 0; i < gScannerCount; i++) {
+		if (makeModel != NULL && makeModel[0] != '\0'
+			&& ContainsIgnoreCase(gScanners[i].model, makeModel))
+			return B_TRANSLATE("printer + scanner");
+		if (ContainsIgnoreCase(makeModel, gScanners[i].model))
+			return B_TRANSLATE("printer + scanner");
+	}
+	return B_TRANSLATE("printer");
+}
+
+
 void
 PrintersWindow::_UpdateQueues()
 {
@@ -439,7 +562,8 @@ PrintersWindow::_UpdateQueues()
 	ClearList(fPrinterList);
 
 	for (int32 i = 0; i < gQueueCount; i++) {
-		fPrinterList->AddRow(new PrinterRow(gQueues[i]));
+		fPrinterList->AddRow(new PrinterRow(gQueues[i],
+			_FunctionsForQueue(gQueues[i].name, gQueues[i].make_model)));
 		if (selected == gQueues[i].name)
 			fPrinterList->SetFocusRow(i, true);
 	}
@@ -450,9 +574,46 @@ PrintersWindow::_UpdateQueues()
 			B_TRANSLATE("No printers configured")), kPrinterColumn);
 		row->SetField(new BStringField(""), kLocationColumn);
 		row->SetField(new BStringField(""), kStatusColumn);
+		row->SetField(new BStringField(""), kFunctionsColumn);
 		fPrinterList->AddRow(row);
 	}
 	_UpdateButtons();
+}
+
+
+void
+PrintersWindow::_UpdateScanners()
+{
+	fScannerDefaultMenu->RemoveItems(0, fScannerDefaultMenu->CountItems(),
+		true);
+
+	if (gScannerCount <= 0) {
+		fScannerList->MakeEmpty();
+		fScannerList->AddItem(new BStringItem(
+			B_TRANSLATE("(none found)")));
+		fScannerDefaultField->SetEnabled(false);
+		return;
+	}
+
+	fScannerList->MakeEmpty();
+	for (int32 i = 0; i < gScannerCount; i++) {
+		BString line(gScanners[i].model);
+		if (gScanners[i].type[0] != '\0')
+			line << " (" << gScanners[i].type << ")";
+		if (gScanners[i].is_network)
+			line << " " << B_TRANSLATE("[network]");
+		fScannerList->AddItem(new BStringItem(line.String()));
+
+		BMessage* select = new BMessage(kMsgDefaultScanner);
+		select->AddString("name", gScanners[i].name);
+		BString label(gScanners[i].model);
+		if (label.IsEmpty())
+			label = gScanners[i].name;
+		fScannerDefaultMenu->AddItem(new BMenuItem(label.String(), select));
+	}
+
+	fScannerDefaultField->SetEnabled(true);
+	_LoadDefaultScanner();
 }
 
 
@@ -491,6 +652,7 @@ PrintersWindow::_UpdateButtons()
 	fTestPageButton->SetEnabled(hasQueue && !fBusy);
 	fOptionsButton->SetEnabled(hasQueue && !fBusy);
 	fRefreshButton->SetEnabled(!fBusy);
+	fScannerDefaultField->SetEnabled(gScannerCount > 0 && !fBusy);
 
 	JobRow* job = dynamic_cast<JobRow*>(fJobList->CurrentSelection());
 	bool hasJob = job != NULL;
@@ -527,12 +689,69 @@ PrintersWindow::_SetError(const BString& text, status_t status)
 
 
 void
+PrintersWindow::_LoadDefaultScanner()
+{
+	BMessage settings;
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK
+		&& path.Append(kSettingsFile) == B_OK) {
+		BFile file(path.Path(), B_READ_ONLY);
+		if (file.InitCheck() == B_OK)
+			settings.Unflatten(&file);
+	}
+
+	const char* saved = settings.GetString(kDefaultScannerKey, "");
+	for (int32 i = 0; i < fScannerDefaultMenu->CountItems(); i++) {
+		BMenuItem* item = fScannerDefaultMenu->ItemAt(i);
+		const char* name = NULL;
+		if (item->Message() != NULL
+			&& item->Message()->FindString("name", &name) == B_OK
+			&& name != NULL && saved[0] != '\0'
+			&& strcmp(name, saved) == 0) {
+			item->SetMarked(true);
+			break;
+		}
+	}
+}
+
+
+void
+PrintersWindow::_SaveDefaultScanner(const char* name)
+{
+	if (name == NULL)
+		return;
+
+	BMessage settings('Prnt');
+	settings.AddString(kDefaultScannerKey, name);
+
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path, true) != B_OK
+		|| path.Append(kSettingsFile) != B_OK)
+		return;
+	BFile file(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+	if (file.InitCheck() == B_OK)
+		settings.Flatten(&file);
+
+	_SetStatus(B_TRANSLATE("Default scanner saved"));
+}
+
+
+void
 PrintersWindow::_LoadQueues()
 {
 	fBusy = true;
 	_UpdateButtons();
 	_SetStatus(B_TRANSLATE("Loading printers..."));
 	PrinterWorker::Post(kWorkerOpListQueues, BMessenger(this));
+}
+
+
+void
+PrintersWindow::_LoadScanners()
+{
+	fBusy = true;
+	_UpdateButtons();
+	PrinterWorker::Post(kWorkerOpListScanners, BMessenger(this));
 }
 
 

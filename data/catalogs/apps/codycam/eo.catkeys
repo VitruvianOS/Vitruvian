@@ -1,4 +1,4 @@
-1	esperanto	x-vnd.Haiku-CodyCam	2786669505
+1	esperanto	x-vnd.vos-CodyCam	2786669505
 destination directory expected	CodyCam		atendita celdosierujo
 reply: '%s'\n	SftpClient		respondo: '%s'\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <kaŝita>  (vera pasvorto estas sendita)

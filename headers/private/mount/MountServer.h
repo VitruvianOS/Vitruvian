@@ -18,7 +18,7 @@ const uint32 kUnmountVolume			= 'umnt';
 // ("pid: name", when busy), and the request's "id"/"device_id" echoed.
 const uint32 kUnmountVolumeReply		= 'umnr';
 
-#define kMountServerSignature "application/x-vnd.Haiku-mount_server"
+#define kMountServerSignature "application/x-vnd.vos-mount_server"
 
 
 #endif // _MOUNT_SERVER_H

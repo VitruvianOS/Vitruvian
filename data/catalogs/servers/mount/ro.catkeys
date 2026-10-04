@@ -1,4 +1,4 @@
-1	romanian	x-vnd.Haiku-mount_server	599204450
+1	romanian	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Montează doar pentru citire
 Error mounting volume:\n\n%s	AutoMounter		Eroare la montarea volumului:\n\n%s
 Cancel	AutoMounter		Anulează

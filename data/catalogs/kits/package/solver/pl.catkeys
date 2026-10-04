@@ -1,4 +1,4 @@
-1	polish	x-vnd.Haiku-libsolvsolver	3404387783
+1	polish	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		zezwól na zmianę architektury %source% na %target%
 install %source% from excluded repository	SolverProblemSolution		zainstaluj %source% z wykluczonego repozytorium
 unspecified problem	SolverProblem		nieokreślony problem

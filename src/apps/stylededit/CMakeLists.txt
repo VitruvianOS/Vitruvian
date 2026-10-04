@@ -15,4 +15,4 @@ Application(
 )
 
 UsePrivateHeaders(StyledEdit textencoding tracker)
-DoCatalogs("x-vnd.Haiku-StyledEdit" apps/stylededit)
+DoCatalogs("x-vnd.vos-StyledEdit" apps/stylededit)

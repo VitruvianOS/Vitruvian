@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-CodyCam	384853512
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-CodyCam	384853512
 destination directory expected	CodyCam		mappe på vert forventes
 reply: '%s'\n	SftpClient		svar: '%s'\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <skjult>     (ekte passord sendt)

@@ -12,4 +12,4 @@ RunnableAddOn(desklink
 )
 
 UsePrivateHeaders(desklink app interface shared)
-DoCatalogs("x-vnd.Haiku-desklink" bin/desklink)
+DoCatalogs("x-vnd.vos-desklink" bin/desklink)

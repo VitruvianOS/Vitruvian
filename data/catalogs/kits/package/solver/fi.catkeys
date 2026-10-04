@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-libsolvsolver	3404387783
+1	finnish	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		salli lähteen %source% arkkitehtuurimuutos kohteelle %target%
 install %source% from excluded repository	SolverProblemSolution		asenna %source% poistetusta tietovarastosta
 unspecified problem	SolverProblem		määrittelemätön pulma

@@ -1151,7 +1151,7 @@ int
 main(int argc, char** argv)
 {
 	// AppServer link is required to work with bitmaps
-	BApplication app("application/x-vnd.haiku.setmime");
+	BApplication app("application/x-vnd.vos.setmime");
 
 	try {
 

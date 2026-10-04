@@ -9,4 +9,4 @@
 #	LIBS device tracker localestub
 #	RDEF SerialConnect.rdef
 #)
-DoCatalogs("x-vnd.haiku.SerialConnect" apps/serialconnect)
+DoCatalogs("x-vnd.vos.SerialConnect" apps/serialconnect)

@@ -2,7 +2,7 @@
  * WonderBrushTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-WonderBrushTranslator";
+resource app_signature "application/x-vnd.vos-WonderBrushTranslator";
 
 resource app_version {
 	major  = 1,

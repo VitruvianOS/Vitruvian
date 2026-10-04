@@ -25,7 +25,7 @@ private:
 
 PrefletApp::PrefletApp()
 	:
-	BApplication("application/x-vnd.Haiku-Notifications")
+	BApplication("application/x-vnd.vos-Notifications")
 {
 }
 

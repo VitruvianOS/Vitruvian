@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.Haiku-DiskUsage	2951688400
+1	catalan; valencian	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		%size% a {0, plural, one{# fitxer} other{# fitxers}}
 Scanning %refName%	Scanner		S'escaneja %refName%
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d fitxers

@@ -1,4 +1,4 @@
-1	czech	x-vnd.Haiku-SoundRecorder	24440888
+1	czech	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Smyčka
 Cannot find default audio hardware	RecorderWindow		Nemohu najít výchozí audio hardware
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Nemohu najít dočasný soubor vytvořený pro novou nahrávku

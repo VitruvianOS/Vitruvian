@@ -29,7 +29,7 @@ const rgb_color kOutlineColor = RGB_PIE_OL;
 const rgb_color kPieBGColor = RGB_PIE_BG;
 const rgb_color kEmptySpcColor = RGB_PIE_MT;
 
-const char*	const kAppSignature		= "application/x-vnd.Haiku-DiskUsage";
+const char*	const kAppSignature		= "application/x-vnd.vos-DiskUsage";
 const char*	const kHelpFileName		= "userguide/en/applications/diskusage.html";
 
 const char*	const kEmptyStr			= "";

@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.Haiku-SoundRecorder	24440888
+1	greek, modern (1453-)	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Βρόχος
 Cannot find default audio hardware	RecorderWindow		Αδυναμία εύρεσης προεπιλεγμένου υλικού ήχου
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Αδυναμία εύρεσης του προσωρινού αρχείου που δημιουργήθηκε για να κρατήσει τη νέα ηχογράφηση

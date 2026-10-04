@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-BootManager	1012731949
+1	english	x-vnd.vos-BootManager	1012731949
 Old Master Boot Record backup failure	BootManagerController	Title	旧的主引导记录保存失败
 At least one partition must be selected!	BootManagerController		至少选中一个分区！
 No space available!	DrivesPage	Cannot install	无可用空间！

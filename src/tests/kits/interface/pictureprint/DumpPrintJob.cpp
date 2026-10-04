@@ -20,7 +20,7 @@ void printArguments(const char* application) {
 }
 
 int main(int argc, char* argv[]) {
-	BApplication app("application/x-vnd.Haiku.dump-print-job");
+	BApplication app("application/x-vnd.vos.dump-print-job");
 	
 	bool printPicture = false;
 	bool hasFiles = false;

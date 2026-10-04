@@ -1,4 +1,4 @@
-1	slovak	x-vnd.Haiku-Repositories	2441500256
+1	slovak	x-vnd.vos-Repositories	2441500256
 This is not a valid URL.	AddRepoWindow	Add URL error message	Toto nie je platná adresa URL.
 Repository URL:	AddRepoWindow	Text box label	URL zdroja softvéru:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Vyskytla sa chyba pri obnovovaní vyrovnávacej pamäte zdrojov softvéru pre %name%

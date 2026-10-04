@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.haiku-package_daemon	1440586681
+1	catalan; valencian	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Canvis de paquets
 uninstall package %s\n	PackageResult	Don't change '%s' variable	desinstal·la el paquet %s\n
 ignore problem for now	PackageProblem		ignora el problema de moment

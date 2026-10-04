@@ -19,4 +19,4 @@ RunnableAddOn(
 
 UsePrivateHeaders( DeskCalc interface shared )
 target_include_directories(DeskCalc PRIVATE ${PROJECT_SOURCE_DIR}/src/libs/mapm)
-DoCatalogs("x-vnd.Haiku-DeskCalc" apps/deskcalc)
+DoCatalogs("x-vnd.vos-DeskCalc" apps/deskcalc)

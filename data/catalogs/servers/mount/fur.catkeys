@@ -1,4 +1,4 @@
-1	friulian	x-vnd.Haiku-mount_server	599204450
+1	friulian	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Montâ in dome-leture
 Error mounting volume:\n\n%s	AutoMounter		Erôr tal montâ il volum:\n\n%s
 Cancel	AutoMounter		Anule

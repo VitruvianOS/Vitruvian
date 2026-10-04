@@ -1,4 +1,4 @@
-1	czech	x-vnd.Haiku-libpackage	134767648
+1	czech	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Načítání mezipaměti repozitáře z %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Ověřuji kontrolní součet pro %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Chyba při odstraňování transakčního adresáře

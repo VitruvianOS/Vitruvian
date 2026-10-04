@@ -1,4 +1,4 @@
-1	thai	x-vnd.Haiku-SoundRecorder	24440888
+1	thai	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		วน
 Cannot find default audio hardware	RecorderWindow		ไม่พบฮาร์ดแวร์เสียงเริ่มต้น
 Cannot find the temporary file created to hold the new recording	RecorderWindow		ไม่พบไฟล์ชั่วคราวที่สร้างขึ้นเพื่อเก็บการบันทึกใหม่

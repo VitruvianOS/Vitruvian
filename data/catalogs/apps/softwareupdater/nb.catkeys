@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.haiku-softwareupdater	1377379822
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	Oppdaterer versjon
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Klikk her for å installere {0, plural, one{# oppdatert pakke} other{# oppdaterte pakker}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Pakker som skal avinstalleres

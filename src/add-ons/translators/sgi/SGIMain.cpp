@@ -58,7 +58,7 @@
 int
 main()
 {
-	BApplication app("application/x-vnd.Haiku-SGITranslator");
+	BApplication app("application/x-vnd.vos-SGITranslator");
 	status_t result;
 	result = LaunchTranslatorWindow(new SGITranslator,
 		B_TRANSLATE("SGI Settings"), BRect(0, 0, 225, 175));

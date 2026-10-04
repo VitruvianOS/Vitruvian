@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-FileTypes";
+resource app_signature "application/x-vnd.vos-FileTypes";
 
-resource app_name_catalog_entry "x-vnd.Haiku-FileTypes:System name:FileTypes";
+resource app_name_catalog_entry "x-vnd.vos-FileTypes:System name:FileTypes";
 
 resource app_flags B_SINGLE_LAUNCH;
 

@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-CodyCam	384853512
+1	swedish	x-vnd.vos-CodyCam	384853512
 destination directory expected	CodyCam		Målkatalog förväntas
 reply: '%s'\n	SftpClient		svar: '%s'\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <suppressed> (riktigt lösenord skickat)

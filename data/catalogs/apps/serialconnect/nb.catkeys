@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.haiku.SerialConnect	4294067463
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Utstyr
 Connection	SerialWindow		Tilkobling
 Raw send…	SerialWindow		Send rå data…

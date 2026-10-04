@@ -1,4 +1,4 @@
-1	friulian	x-vnd.Haiku-DiskUsage	2951688400
+1	friulian	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		%size% in {0, plural, one{# file} other{# files}}
 Scanning %refName%	Scanner		Scansion di %refName%
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d files

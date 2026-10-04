@@ -89,7 +89,7 @@ int
 main()
 {
 	// BScreen usage requires BApplication for AppServerLink
-	BApplication app("application/x-vnd.Haiku-screen_info");
+	BApplication app("application/x-vnd.vos-screen_info");
 
 	BScreen screen(B_MAIN_SCREEN_ID);
 

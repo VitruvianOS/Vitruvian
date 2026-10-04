@@ -1,4 +1,4 @@
-1	french	x-vnd.haiku-package_daemon	1440586681
+1	french	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Modifications de paquets
 uninstall package %s\n	PackageResult	Don't change '%s' variable	désinstaller le paquet %s\n
 ignore problem for now	PackageProblem		ignorer le problème pour l’instant

@@ -1,4 +1,4 @@
-1	polish	x-vnd.Haiku-BootManager	1012731949
+1	polish	x-vnd.vos-BootManager	1012731949
 Old Master Boot Record backup failure	BootManagerController	Title	Wystąpił problem z zapisem kopii zapasowej obecnego Głównego Sektora Rozruchowego
 At least one partition must be selected!	BootManagerController		Co najmniej jedna partycja musi zostać wybrana!
 No space available!	DrivesPage	Cannot install	Brak miejsca!

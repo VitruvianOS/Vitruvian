@@ -13,4 +13,4 @@ RunnableAddOn(
 UsePrivateHeaders(AboutSystem interface app shared libroot)
 
 target_compile_definitions(AboutSystem PRIVATE VOS_VERSION="${PROJECT_VERSION}")
-DoCatalogs("x-vnd.Haiku-About" apps/aboutsystem)
+DoCatalogs("x-vnd.vos-About" apps/aboutsystem)

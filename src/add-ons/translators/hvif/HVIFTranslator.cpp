@@ -32,7 +32,7 @@ static const translation_format sInputFormats[] = {
 		B_TRANSLATOR_BITMAP,
 		HVIF_TRANSLATION_QUALITY,
 		HVIF_TRANSLATION_CAPABILITY,
-		"application/x-vnd.Haiku-icon",
+		"application/x-vnd.vos-icon",
 		"Native Haiku vector icon"
 	}
 };

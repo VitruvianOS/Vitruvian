@@ -507,7 +507,7 @@ BootPromptWindow::_PopulateLanguages()
 
 	BMessage installedCatalogs;
 	BLocaleRoster::Default()->GetAvailableCatalogs(&installedCatalogs,
-		"x-vnd.Haiku-FirstBootPrompt");
+		"x-vnd.vos-FirstBootPrompt");
 
 	// English is the source language, so it ships no catalog of its own and
 	// the scan above never finds it. Offer it anyway; it is always built in.

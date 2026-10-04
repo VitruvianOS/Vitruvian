@@ -29,7 +29,7 @@
 #define B_TRANSLATION_CONTEXT "Pairs"
 
 
-const char* kSignature = "application/x-vnd.Haiku-Pairs";
+const char* kSignature = "application/x-vnd.vos-Pairs";
 
 static const size_t kMinIconCount = 64;
 static const size_t kMaxIconCount = 384;

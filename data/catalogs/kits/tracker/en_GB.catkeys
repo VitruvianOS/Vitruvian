@@ -1,4 +1,4 @@
-1	english (united kingdom)	x-vnd.Haiku-libtracker	176556192
+1	english (united kingdom)	x-vnd.vos-libtracker	176556192
 Error moving \"%name\" to Trash. (%error)	FSUtils		Error moving \"%name\" to the Rubbish Bin. (%error)
 Error emptying Trash	FSUtils		Error emptying the Rubbish Bin
 OK	OpenWithWindow		Alright

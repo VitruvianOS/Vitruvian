@@ -1,4 +1,4 @@
-1	esperanto	x-vnd.Haiku-keystore_server	2429996361
+1	esperanto	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		por fari la sekvan:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Ĉi programo mankas la sufiĉaj rajtoj.
 Keyring:	KeyRequestWindow		Ŝlosilaro:

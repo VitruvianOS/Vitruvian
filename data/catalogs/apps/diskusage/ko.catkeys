@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-DiskUsage	2951688400
+1	korean	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		{0, plural, one{#개 파일} other{#개 파일}}의 크기 %size%
 Scanning %refName%	Scanner		%refName% 탐색 중
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d개 파일

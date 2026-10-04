@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-DeskbarPreferences";
+resource app_signature "application/x-vnd.vos-DeskbarPreferences";
 
-resource app_name_catalog_entry "x-vnd.Haiku-DeskbarPreferences:System name:Deskbar";
+resource app_name_catalog_entry "x-vnd.vos-DeskbarPreferences:System name:Deskbar";
 
 resource app_version {
 	major  = 1,

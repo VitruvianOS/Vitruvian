@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Shortcuts";
+resource app_signature "application/x-vnd.vos-Shortcuts";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Shortcuts:System name:Shortcuts";
+resource app_name_catalog_entry "x-vnd.vos-Shortcuts:System name:Shortcuts";
 
 resource app_flags B_SINGLE_LAUNCH;
 

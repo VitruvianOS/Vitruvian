@@ -1,4 +1,4 @@
-1	indonesian	x-vnd.haiku.SerialConnect	540213078
+1	indonesian	x-vnd.vos.SerialConnect	540213078
 Hardware	SerialWindow	Flowcontrol	Perangkat kasar
 Connection	SerialWindow		Koneksi
 Raw send…	SerialWindow		Kirim mentah…

@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.haiku.SerialConnect	4294067463
+1	greek, modern (1453-)	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Υλικό
 Connection	SerialWindow		Σύνδεση
 Raw send…	SerialWindow		Αποστολή ακατέργαστων πακέτων...

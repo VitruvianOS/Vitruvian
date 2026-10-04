@@ -1259,7 +1259,7 @@ IconView::_AddOrEditIcon()
 			delete icon;
 	}
 
-	be_roster->Launch("application/x-vnd.haiku-icon_o_matic", &message);
+	be_roster->Launch("application/x-vnd.vos-icon_o_matic", &message);
 }
 
 

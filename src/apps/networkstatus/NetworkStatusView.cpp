@@ -295,7 +295,7 @@ NetworkStatusView::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgOpenNetworkPreferences:
-			be_roster->Launch("application/x-vnd.Haiku-Network");
+			be_roster->Launch("application/x-vnd.vos-Network");
 			break;
 
 		case kMsgToggleNetworking:

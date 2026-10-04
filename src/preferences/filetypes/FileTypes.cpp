@@ -32,7 +32,7 @@
 #define B_TRANSLATION_CONTEXT "FileTypes"
 
 
-const char* kSignature = "application/x-vnd.Haiku-FileTypes";
+const char* kSignature = "application/x-vnd.vos-FileTypes";
 
 static const uint32 kMsgFileTypesSettings = 'FTst';
 static const uint32 kCascadeOffset = 20;

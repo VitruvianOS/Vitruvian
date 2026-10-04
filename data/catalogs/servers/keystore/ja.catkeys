@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-keystore_server	2429996361
+1	japanese	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		次のアクションを実行:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		このアプリケーションはまだ必要な特権がありません。
 Keyring:	KeyRequestWindow		キーリング:

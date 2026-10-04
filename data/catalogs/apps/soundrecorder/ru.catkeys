@@ -1,4 +1,4 @@
-1	russian	x-vnd.Haiku-SoundRecorder	24440888
+1	russian	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Закольцевать
 Cannot find default audio hardware	RecorderWindow		Не найдено аудио оборудование
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Не найден временный файл, созданный для хранения новой записи

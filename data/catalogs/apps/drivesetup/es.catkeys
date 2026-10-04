@@ -1,4 +1,4 @@
-1	spanish; castilian	x-vnd.Haiku-DriveSetup	2345310783
+1	spanish; castilian	x-vnd.vos-DriveSetup	2345310783
 Could not unmount partition %s.	MainWindow		No se pudo desmontar la partición %s.
 Mount all	MainWindow		Montar todo
 Disk	MainWindow		Disco

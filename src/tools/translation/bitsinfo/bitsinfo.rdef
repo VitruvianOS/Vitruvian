@@ -2,7 +2,7 @@
  * bitsinfo.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-bitsinfo";
+resource app_signature "application/x-vnd.vos-bitsinfo";
 
 resource app_version {
 	major  = 1,

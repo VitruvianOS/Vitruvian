@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-libsolvsolver	3404387783
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		tillat arkitekturendring av %source% til %target%
 install %source% from excluded repository	SolverProblemSolution		installer %source% fra ekskludert programarkiv
 unspecified problem	SolverProblem		uspesifisert problem

@@ -1,4 +1,4 @@
-1	esperanto	x-vnd.Haiku-BootManager	1012731949
+1	esperanto	x-vnd.vos-BootManager	1012731949
 Old Master Boot Record backup failure	BootManagerController	Title	Eraro okazis dum enarkivigado de antaŭa Ĉefa Ŝargodosiero (MBR)
 At least one partition must be selected!	BootManagerController		Almenaŭ unu subdisko devas esti elektita!
 No space available!	DrivesPage	Cannot install	Ne estas libera spaco!

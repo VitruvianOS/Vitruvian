@@ -24,4 +24,4 @@ AddOn(
 )
 
 UsePrivateHeaders(notification notification)
-DoCatalogs("x-vnd.Haiku-notification_server" servers/notification)
+DoCatalogs("x-vnd.vos-notification_server" servers/notification)

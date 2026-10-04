@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-Magnify	3309471563
+1	korean	x-vnd.vos-Magnify	3309471563
   size must be > 4 and a multiple of 4	Console		  크기는 4보다 큰 4의 배수이어야 합니다
 Decrease pixel size	Magnify-Main		픽셀 크기 줄이기
 no clip msg	In console, when clipboard is empty after clicking Copy image		클립보드 내용 없음

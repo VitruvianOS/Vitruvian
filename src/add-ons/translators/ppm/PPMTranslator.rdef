@@ -2,7 +2,7 @@
  * PPMTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-PPMTranslator";
+resource app_signature "application/x-vnd.vos-PPMTranslator";
 
 resource app_version {
 	major  = 1,

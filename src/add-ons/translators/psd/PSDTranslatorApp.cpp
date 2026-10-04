@@ -11,7 +11,7 @@
 int
 main(int argc, char *argv[])
 {
-	BApplication application("application/x-vnd.Haiku-PSDTranslator");
+	BApplication application("application/x-vnd.vos-PSDTranslator");
 
 	status_t result;
 	result = LaunchTranslatorWindow(new PSDTranslator, "PSD Settings",

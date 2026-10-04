@@ -3,9 +3,9 @@
  * Distributed under the terms of the MIT License.
  */
 
-resource app_signature "application/x-vnd.Haiku-Media";
+resource app_signature "application/x-vnd.vos-Media";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Media:System name:Media";
+resource app_name_catalog_entry "x-vnd.vos-Media:System name:Media";
 
 resource app_flags B_SINGLE_LAUNCH;
 

@@ -1,4 +1,4 @@
-1	indonesian	x-vnd.Haiku-SoundRecorder	24440888
+1	indonesian	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Loop
 Cannot find default audio hardware	RecorderWindow		Tidak dapat menemukan perangkat lunak audio default
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Tidak dapat menemukan berkas sementara yang dibuat untuk mempertahankan rekaman terbaru

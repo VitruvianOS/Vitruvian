@@ -1,4 +1,4 @@
-1	danish	x-vnd.Haiku-SoundRecorder	24440888
+1	danish	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Løkke
 Cannot find default audio hardware	RecorderWindow		Kan ikke finde lydudstyr
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Kan ikke finde den midlertidige fil lavet til at holde den nye optagelse

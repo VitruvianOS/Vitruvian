@@ -1,4 +1,4 @@
-1	czech	x-vnd.haiku.SerialConnect	4294067463
+1	czech	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Hardwarový
 Connection	SerialWindow		Připojení
 Raw send…	SerialWindow		Odeslat syrová data…

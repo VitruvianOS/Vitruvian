@@ -13,5 +13,5 @@
 extern "C" void
 process_refs(entry_ref dir, BMessage* refs, void* /*reserved*/)
 {
-	be_roster->Launch("application/x-vnd.haiku-filetypes", refs);
+	be_roster->Launch("application/x-vnd.vos-filetypes", refs);
 }

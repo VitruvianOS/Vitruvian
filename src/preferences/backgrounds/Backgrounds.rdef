@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Backgrounds";
+resource app_signature "application/x-vnd.vos-Backgrounds";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Backgrounds:System name:Backgrounds";
+resource app_name_catalog_entry "x-vnd.vos-Backgrounds:System name:Backgrounds";
 
 resource app_version {
 	major  = 1,

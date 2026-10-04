@@ -185,7 +185,7 @@ Window::QuitRequested()
 
 
 Application::Application()
-	: BApplication("application/x-vnd.haiku-lock_focus")
+	: BApplication("application/x-vnd.vos-lock_focus")
 {
 }
 

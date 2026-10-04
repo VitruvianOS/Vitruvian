@@ -1,4 +1,4 @@
-1	indonesian	x-vnd.Haiku-CodyCam	2786669505
+1	indonesian	x-vnd.vos-CodyCam	2786669505
 destination directory expected	CodyCam		direktori tujuan diharapkan
 reply: '%s'\n	SftpClient		balas: '%s'\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <suppressed> (sandi asli terkirim)

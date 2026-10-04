@@ -145,7 +145,7 @@ class Application : public BApplication {
 
 
 Application::Application()
-	: BApplication("application/x-vnd.haiku-test")
+	: BApplication("application/x-vnd.vos-test")
 {
 }
 

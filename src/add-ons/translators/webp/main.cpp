@@ -21,7 +21,7 @@
 int
 main()
 {
-	BApplication app("application/x-vnd.Haiku-WebPTranslator");
+	BApplication app("application/x-vnd.vos-WebPTranslator");
 	if (LaunchTranslatorWindow(new WebPTranslator,
 		B_TRANSLATE("WebP Settings")) != B_OK)
 		return 1;

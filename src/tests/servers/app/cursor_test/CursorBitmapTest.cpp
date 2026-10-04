@@ -99,7 +99,7 @@ class Application : public BApplication {
 
 
 Application::Application()
-	: BApplication("application/x-vnd.haiku-cursor_test")
+	: BApplication("application/x-vnd.vos-cursor_test")
 {
 }
 

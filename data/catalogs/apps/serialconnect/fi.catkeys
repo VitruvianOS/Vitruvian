@@ -1,4 +1,4 @@
-1	finnish	x-vnd.haiku.SerialConnect	4294067463
+1	finnish	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Laitteisto
 Connection	SerialWindow		Yhteys
 Raw send…	SerialWindow		Raakalähetys…

@@ -1,4 +1,4 @@
-1	friulian	x-vnd.Haiku-libpackage	134767648
+1	friulian	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Daûr a recuperâ di %url la cache dal dipuesit
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Convalide de sume di control par %repositoryName
 Failed to remove transaction directory	PackageManagerKit		No si è rivâts a gjavâ la cartele des transazions

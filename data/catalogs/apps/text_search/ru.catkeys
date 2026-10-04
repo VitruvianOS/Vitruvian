@@ -1,4 +1,4 @@
-1	russian	x-vnd.Haiku.TextSearch	1461663588
+1	russian	x-vnd.vos.TextSearch	1461663588
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Выберите файлы, которые Вы хотите увидеть выделенными в Tracker.
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		Не удалось запустить программу xargs!

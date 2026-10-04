@@ -570,7 +570,7 @@ BDeskWindow::MessageReceived(BMessage* message)
 
 			// Notify the backgrounds app that the background changed
 			status_t initStatus;
-			BMessenger messenger("application/x-vnd.Haiku-Backgrounds", -1,
+			BMessenger messenger("application/x-vnd.vos-Backgrounds", -1,
 				&initStatus);
 			if (initStatus == B_OK)
 				messenger.SendMessage(message);

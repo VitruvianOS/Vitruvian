@@ -95,7 +95,7 @@ class Application : public BApplication {
 
 
 Application::Application()
-	: BApplication("application/x-vnd.haiku.resizelimits-test")
+	: BApplication("application/x-vnd.vos.resizelimits-test")
 {
 	Window *window = new Window();
 	window->Show();

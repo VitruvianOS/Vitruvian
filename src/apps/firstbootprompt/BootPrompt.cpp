@@ -35,7 +35,7 @@ main(int, char **)
 // #pragma mark -
 
 
-const char* kAppSignature = "application/x-vnd.Haiku-FirstBootPrompt";
+const char* kAppSignature = "application/x-vnd.vos-FirstBootPrompt";
 const char* kDeskbarSignature = "application/x-vnd.Be-TSKB";
 
 
@@ -71,7 +71,7 @@ BootPromptApp::MessageReceived(BMessage* message)
 		}
 		case MSG_RUN_INSTALLER:
 		{
-			be_roster->Launch("application/x-vnd.Haiku-Installer");
+			be_roster->Launch("application/x-vnd.vos-Installer");
 			sExitValue = 0;
 			PostMessage(B_QUIT_REQUESTED);
 			break;

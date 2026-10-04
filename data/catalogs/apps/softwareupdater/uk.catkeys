@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.haiku-softwareupdater	2012285635
+1	ukrainian	x-vnd.vos-softwareupdater	2012285635
 Updating version	SoftwareUpdaterWindow	List item text	Оновлення версії
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Натисніть щоб встановити {0, plural, one{# оновлений пакет} few{# оновлених пакета} other{# оновлених пакетів}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Пакети будуть деінстальовані

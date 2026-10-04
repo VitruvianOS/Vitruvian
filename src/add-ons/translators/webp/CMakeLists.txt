@@ -14,4 +14,4 @@ TranslatorAddOn(
 
 	RDEF WebPTranslator.rdef
 )
-DoCatalogs("x-vnd.Haiku-WebPTranslator" add-ons/translators/webp)
+DoCatalogs("x-vnd.vos-WebPTranslator" add-ons/translators/webp)

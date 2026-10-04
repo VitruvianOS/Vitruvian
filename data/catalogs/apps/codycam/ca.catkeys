@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.Haiku-CodyCam	384853512
+1	catalan; valencian	x-vnd.vos-CodyCam	384853512
 destination directory expected	CodyCam		s'espera un directori de destinació
 reply: '%s'\n	SftpClient		resposta: %s\n
 PASS <suppressed>  (real password sent)	FtpClient		Contrasenya <suppressed>  (contrasenya real enviada)

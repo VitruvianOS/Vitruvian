@@ -1,4 +1,4 @@
-1	lithuanian	x-vnd.Haiku-SoundRecorder	24440888
+1	lithuanian	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Kartoti
 Cannot find default audio hardware	RecorderWindow		Nepavyko rasti numatytosios garso techninės įrangos
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Nepavyko rasti laikinojo failo, sukurto naujam įrašui talpinti

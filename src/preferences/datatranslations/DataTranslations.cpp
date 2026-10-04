@@ -28,7 +28,7 @@
 #define B_TRANSLATION_CONTEXT "DataTranslations"
 
 
-const char* kApplicationSignature = "application/x-vnd.Haiku-DataTranslations";
+const char* kApplicationSignature = "application/x-vnd.vos-DataTranslations";
 
 
 DataTranslationsApplication::DataTranslationsApplication()

@@ -1,4 +1,4 @@
-1	portuguese (brazil)	x-vnd.Haiku-DiskUsage	2951688400
+1	portuguese (brazil)	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		%size% em {0, plural, one{# arquivo} other{# arquivos}}
 Scanning %refName%	Scanner		Analisando %refName%
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d arquivos

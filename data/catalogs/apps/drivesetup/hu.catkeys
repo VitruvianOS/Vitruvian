@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.Haiku-DriveSetup	2351839435
+1	hungarian	x-vnd.vos-DriveSetup	2351839435
 Could not unmount partition %s.	MainWindow		Nem lehet leválasztani a partíciót (%s).
 Register disk image…	MainWindow		Lemezkép regisztrálása…
 Mount all	MainWindow		Összes csatolása

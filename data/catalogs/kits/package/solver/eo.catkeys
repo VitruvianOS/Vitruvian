@@ -1,4 +1,4 @@
-1	esperanto	x-vnd.Haiku-libsolvsolver	3404387783
+1	esperanto	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		permesi ŝanĝi arkitekturon de %source% al %target%
 install %source% from excluded repository	SolverProblemSolution		instali %source%-on el eliminita deponejo
 unspecified problem	SolverProblem		nekonata problemo

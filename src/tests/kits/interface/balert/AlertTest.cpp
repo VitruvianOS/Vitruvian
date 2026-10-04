@@ -139,7 +139,7 @@ AlertTestInfo::GuiInfoTest()
 {
 	fTest->NextSubTest();
 	// Dummy application object required to create Window objects.
-	BApplication app("application/x-vnd.Haiku-interfacekit_alerttest");
+	BApplication app("application/x-vnd.vos-interfacekit_alerttest");
 	BAlert *pAlert = new BAlert(
 		fWinInfo.label,
 		fTextInfo.label,

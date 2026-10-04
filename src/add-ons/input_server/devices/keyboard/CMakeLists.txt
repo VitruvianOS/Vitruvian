@@ -19,4 +19,4 @@ AddOn(
 )
 
 UsePrivateHeaders(keyboard app input interface shared tracker system)
-DoCatalogs("x-vnd.Haiku-KeyboardInputServerDevice" add-ons/input_server/devices/keyboard)
+DoCatalogs("x-vnd.vos-KeyboardInputServerDevice" add-ons/input_server/devices/keyboard)

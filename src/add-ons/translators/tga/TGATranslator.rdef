@@ -2,7 +2,7 @@
  * TGATranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-TGATranslator";
+resource app_signature "application/x-vnd.vos-TGATranslator";
 
 resource app_version {
 	major  = 1,

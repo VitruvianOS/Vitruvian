@@ -1,4 +1,4 @@
-1	danish	x-vnd.Haiku-Shortcuts	171515608
+1	danish	x-vnd.vos-Shortcuts	171515608
 *MouseUp	ShortcutsWindow		*MouseUp
 Application	ShortcutsWindow		Program
 Option	ShortcutsSpec	Name for modifier on keyboard	Valgmulighed

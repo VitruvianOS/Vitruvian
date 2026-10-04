@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.haiku-package_daemon	1440586681
+1	hungarian	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Változások
 uninstall package %s\n	PackageResult	Don't change '%s' variable	%s csomag eltávolítása\n
 ignore problem for now	PackageProblem		figyelmen kívül hagy

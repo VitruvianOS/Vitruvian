@@ -15,4 +15,4 @@ TranslatorAddOn(
 
 	RDEF ICOTranslator.rdef
 )
-DoCatalogs("x-vnd.Haiku-ICOTranslator" add-ons/translators/ico)
+DoCatalogs("x-vnd.vos-ICOTranslator" add-ons/translators/ico)

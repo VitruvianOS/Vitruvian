@@ -170,7 +170,7 @@ ChangingWindow::MessageReceived(BMessage* message)
 
 Application::Application()
 	:
-	BApplication("application/x-vnd.haiku-view_state")
+	BApplication("application/x-vnd.vos-view_state")
 {
 }
 

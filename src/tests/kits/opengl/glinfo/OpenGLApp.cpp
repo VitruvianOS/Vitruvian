@@ -16,7 +16,7 @@
 
 OpenGLApp::OpenGLApp()
 	:
-	BApplication("application/x-vnd.Haiku-GLInfo")
+	BApplication("application/x-vnd.vos-GLInfo")
 {
 }
 

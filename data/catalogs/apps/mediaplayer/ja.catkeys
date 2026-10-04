@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-MediaPlayer	3337408711
+1	japanese	x-vnd.vos-MediaPlayer	3337408711
 Remove Entry into Trash	MediaPlayer-RemovePLItemsCmd		項目をごみ箱に移動する
 Close	MediaPlayer-PlaylistWindow		閉じる
 Volume of background clips	MediaPlayer-SettingsWindow		バックグラウンド再生時のボリューム

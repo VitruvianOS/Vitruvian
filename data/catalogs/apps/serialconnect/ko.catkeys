@@ -1,4 +1,4 @@
-1	korean	x-vnd.haiku.SerialConnect	4294067463
+1	korean	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	하드웨어
 Connection	SerialWindow		연결
 Raw send…	SerialWindow		직접 전송…

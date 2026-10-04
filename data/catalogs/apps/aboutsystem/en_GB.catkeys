@@ -1,4 +1,4 @@
-1	english (united kingdom)	x-vnd.Haiku-About	664467420
+1	english (united kingdom)	x-vnd.vos-About	664467420
 The Haikuware team and their bounty program\n	AboutView		The Haikuware team and their bounty programme\n
 Google and their Google Summer of Code and Google Code In programs\n	AboutView		Google and their Google Summer of Code and Google Code In programmes\n
 The code that is unique to Haiku, especially the kernel and all code that applications may link against, is distributed under the terms of the <MIT license>. Some system libraries contain third party code distributed under the <LGPL license>. You can find the copyrights to third party code below.\n\n	AboutView	<MIT license> and <LGPL license> aren't variables and can be translated. However, please, don't remove < and > as they're needed as placeholders for proper hypertext functionality.	The code that is unique to Haiku, especially the kernel and all code that applications may link against, is distributed under the terms of the <MIT licence>. Some system libraries contain third party code distributed under the <LGPL licence>. You can find the copyrights to third party code below.\n\n

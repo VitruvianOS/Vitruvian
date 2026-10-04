@@ -1,4 +1,4 @@
-1	thai	x-vnd.Haiku-libsolvsolver	3404387783
+1	thai	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		อนุญาตให้เปลี่ยนสถาปัตยกรรม of %source% ไปที่ %target%
 install %source% from excluded repository	SolverProblemSolution		ติดตั้ง %source% จากที่เก็บที่ภายนอก
 unspecified problem	SolverProblem		ปัญหาที่ไม่ได้ระบุ

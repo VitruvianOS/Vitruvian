@@ -1,4 +1,4 @@
-1	romanian	x-vnd.haiku-softwareupdater	1377379822
+1	romanian	x-vnd.vos-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	Se actualizează versiunea
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Clic aici pentru a instala {0, plural, one{# updated package} other{# updated packages}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Pachetele de dezinstalat

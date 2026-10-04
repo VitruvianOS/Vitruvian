@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.Haiku.TextSearch	1461663588
+1	hungarian	x-vnd.vos.TextSearch	1461663588
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Válassza ki azokat a fájlokat a Nyomkövetőben, melyek kijelölésre kerüljenek.
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		Az xargs indítása sikertelen!

@@ -18,4 +18,4 @@ target_include_directories(Network PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CMAKE_SOURCE_DIR}/src/kits/network/libnetapi
 )
-DoCatalogs("x-vnd.Haiku-Network" preferences/network)
+DoCatalogs("x-vnd.vos-Network" preferences/network)

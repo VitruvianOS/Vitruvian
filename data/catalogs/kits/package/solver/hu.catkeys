@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.Haiku-libsolvsolver	3404387783
+1	hungarian	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		Architektúra váltás %source% -> %target% engedélyezése.
 install %source% from excluded repository	SolverProblemSolution		%source% telepítése a letiltott tárolóból
 unspecified problem	SolverProblem		meghatározatlan hiba

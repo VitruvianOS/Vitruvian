@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.Haiku-keystore_server	2429996361
+1	catalan; valencian	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		per fer l'acció següent:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Aquesta aplicació encara no té els privilegis requerits.
 Keyring:	KeyRequestWindow		Clauer:

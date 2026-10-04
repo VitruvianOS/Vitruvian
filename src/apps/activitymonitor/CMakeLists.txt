@@ -11,4 +11,4 @@ RunnableAddOn(ActivityMonitor
 	RDEF ActivityMonitor.rdef
 )
 UsePrivateHeaders(ActivityMonitor interface shared system)
-DoCatalogs("x-vnd.Haiku-ActivityMonitor" apps/activitymonitor)
+DoCatalogs("x-vnd.vos-ActivityMonitor" apps/activitymonitor)

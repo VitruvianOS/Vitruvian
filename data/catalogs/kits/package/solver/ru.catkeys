@@ -1,4 +1,4 @@
-1	russian	x-vnd.Haiku-libsolvsolver	3404387783
+1	russian	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		разрешить изменение архитектуры пакета с %source% на %target%
 install %source% from excluded repository	SolverProblemSolution		установить пакет %source% из исключённого репозитария
 unspecified problem	SolverProblem		неопределенная проблема

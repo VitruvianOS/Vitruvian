@@ -1,4 +1,4 @@
-1	friulian	x-vnd.Haiku-libsolvsolver	3404387783
+1	friulian	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		permet il cambi di architeture di %source% a %target%
 install %source% from excluded repository	SolverProblemSolution		instale %source% dal dipuesit escludût
 unspecified problem	SolverProblem		probleme no specificât

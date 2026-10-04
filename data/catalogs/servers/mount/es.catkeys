@@ -1,4 +1,4 @@
-1	spanish; castilian	x-vnd.Haiku-mount_server	599204450
+1	spanish; castilian	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Montar como sólo lectura
 Error mounting volume:\n\n%s	AutoMounter		Error al montar el volumen:\n\n%s
 Cancel	AutoMounter		Cancelar

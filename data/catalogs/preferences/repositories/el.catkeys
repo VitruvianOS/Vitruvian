@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.Haiku-Repositories	1003035766
+1	greek, modern (1453-)	x-vnd.vos-Repositories	1003035766
 This is not a valid URL.	AddRepoWindow	Add URL error message	Αυτός δεν είναι ένας έγκυρος υπερσύνδεσμος.
 Repository URL:	AddRepoWindow	Text box label	Υπερσύνδεσμος αποθετηρίου:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Προέκυψε ένα σφάλμα κατά την ανανέωση προσωρινών δεδομένων για το %name%

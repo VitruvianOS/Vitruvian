@@ -1,4 +1,4 @@
-1	japanese	x-vnd.haiku-package_daemon	1440586681
+1	japanese	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	パッケージの変更
 uninstall package %s\n	PackageResult	Don't change '%s' variable	パッケージ %s のアンインストール\n
 ignore problem for now	PackageProblem		現在のところ問題を無視する

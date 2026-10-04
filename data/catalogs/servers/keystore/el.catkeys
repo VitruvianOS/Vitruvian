@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.Haiku-keystore_server	2429996361
+1	greek, modern (1453-)	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		για να εκτελέσετε την ακόλουθη ενέργεια:\n%access String%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Αυτή η εφαρμογή δεν έχει ακόμη τα απαιτούμενα δικαιώματα.
 Keyring:	KeyRequestWindow		Κλειδοθήκη:

@@ -1,4 +1,4 @@
-1	romanian	x-vnd.Haiku-libpackage	134767648
+1	romanian	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Se aduce cache-ul depozitului de la %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Se validează suma de control pentru %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Nu s-a putut elimina dosarul de tranzacție

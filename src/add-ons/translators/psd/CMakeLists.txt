@@ -17,4 +17,4 @@ TranslatorAddOn(
 
 	RDEF PSDTranslator.rdef
 )
-DoCatalogs("x-vnd.Haiku-PSDTranslator" add-ons/translators/psd)
+DoCatalogs("x-vnd.vos-PSDTranslator" add-ons/translators/psd)

@@ -56,7 +56,7 @@
 int
 main()
 {
-	BApplication app("application/x-vnd.Haiku-TIFFTranslator");
+	BApplication app("application/x-vnd.vos-TIFFTranslator");
 	status_t result;
 	result = LaunchTranslatorWindow(new TIFFTranslator, 
 		B_TRANSLATE("TIFF Settings"));

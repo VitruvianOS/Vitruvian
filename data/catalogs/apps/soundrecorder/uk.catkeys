@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-SoundRecorder	24440888
+1	ukrainian	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Петля
 Cannot find default audio hardware	RecorderWindow		Не вдається знайти звукове обладнання
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Не вдається знайти тимчасовий файл, створений для зберігання нового запису

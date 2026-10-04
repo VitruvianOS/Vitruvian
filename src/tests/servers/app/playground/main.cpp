@@ -15,7 +15,7 @@
 int
 main(int argc, char** argv)
 {
-	BApplication* app = new BApplication("application/x-vnd.Haiku-Playground");
+	BApplication* app = new BApplication("application/x-vnd.vos-Playground");
 
 	BRect frame(50.0, 50.0, 600.0, 400.0);
 	BWindow* window = new ObjectWindow(frame, B_TRANSLATE_SYSTEM_NAME("Playground"));

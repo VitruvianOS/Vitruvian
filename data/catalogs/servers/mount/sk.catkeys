@@ -1,4 +1,4 @@
-1	slovak	x-vnd.Haiku-mount_server	2894720660
+1	slovak	x-vnd.vos-mount_server	2894720660
 Mount read-only	AutoMounter		Pripojiť len na čítanie
 Error mounting volume:\n\n%s	AutoMounter		Chyba pri pripájaní zväzku:\n\n%s
 Cancel	AutoMounter		Zrušiť

@@ -1,4 +1,4 @@
-1	danish	x-vnd.Haiku-mount_server	599204450
+1	danish	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Montér som skrivebeskyttet
 Error mounting volume:\n\n%s	AutoMounter		Fejl ved montering af diskområde:\n\n%s
 Cancel	AutoMounter		Afbryd

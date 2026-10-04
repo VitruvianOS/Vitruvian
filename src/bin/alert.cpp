@@ -15,7 +15,7 @@
 #include <string.h>
 
 
-const char* kSignature = "application/x-vnd.Haiku.cmd-alert";
+const char* kSignature = "application/x-vnd.vos.cmd-alert";
 
 const char* kButtonDefault = "OK";
 

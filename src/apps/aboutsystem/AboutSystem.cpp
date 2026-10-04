@@ -89,7 +89,7 @@
 #define B_TRANSLATION_CONTEXT "AboutWindow"
 
 
-static const char* kSignature = "application/x-vnd.Haiku-About";
+static const char* kSignature = "application/x-vnd.vos-About";
 
 static const float kWindowWidth = 500.0f;
 static const float kWindowHeight = 300.0f;

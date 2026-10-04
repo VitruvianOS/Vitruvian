@@ -1,13 +1,13 @@
 
 resource(0, "BEOS:TYPE") #'MIMS' "application/x-vnd.Be-meta-mime";
 
-resource(1, "META:TYPE") "application/x-vnd.haiku-playlist";
+resource(1, "META:TYPE") "application/x-vnd.vos-playlist";
 
 resource(2, "META:S:DESC") #'MSDC' "MediaPlayer playlist";
 
 resource(3, "META:L:DESC") #'MLDC' "MediaPlayer playlist file";
 
-resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-MediaPlayer";
+resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.vos-MediaPlayer";
 
 resource(5, "META:ICON") #'VICN' array {
 	$"6E6369660805010401920200060338D2F73CD163BF82B23B84A94B885046E193"

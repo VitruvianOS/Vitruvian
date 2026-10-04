@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-BFSAddOn	1570987954
+1	japanese	x-vnd.vos-BFSAddOn	1570987954
 Enable query support	BFS_Initialize_Parameter		クエリを有効にする
 Disabling query support may speed up certain file system operations, but should\nonly be used if one is absolutely certain that one will not need queries.\nAny volume that is intended for booting Haiku must have query support enabled.	BFS_Initialize_Parameter		クエリを無効にすると、ファイルシステム動作の一部が早くなりますが、\n絶対にそれを必要としないと確信している場合のみに使用するべきです。\nHaiku の起動ボリュームは、クエリを有効にする必要があります。
 Name:	BFS_Initialize_Parameter		ボリューム名:

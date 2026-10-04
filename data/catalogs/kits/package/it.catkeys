@@ -1,4 +1,4 @@
-1	italian	x-vnd.Haiku-libpackage	134767648
+1	italian	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Recupero la cache del repository dall'indirizzo %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Validazione checksum di %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Errore nella rimozione della cartella delle transazioni

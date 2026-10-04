@@ -1,4 +1,4 @@
-1	belarusian	x-vnd.Haiku-BFSAddOn	1570987954
+1	belarusian	x-vnd.vos-BFSAddOn	1570987954
 Enable query support	BFS_Initialize_Parameter		Уключыць падтрымку запытаў
 Disabling query support may speed up certain file system operations, but should\nonly be used if one is absolutely certain that one will not need queries.\nAny volume that is intended for booting Haiku must have query support enabled.	BFS_Initialize_Parameter		Адключэнне падтрымкі запытаў можа паскорыць некаторыя аперацыі файлавай\nсістэмы, але абмяжоўвае магчымасці пошуку на гэтым раздзеле ў будучыні.\nНа раздзелах, з якіх плануецца загрузка Haiku, неабходна мець падтрымку запытаў уключанай.
 Name:	BFS_Initialize_Parameter		Імя:

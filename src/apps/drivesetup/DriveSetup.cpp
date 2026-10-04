@@ -21,7 +21,7 @@
 
 
 DriveSetup::DriveSetup()
-	: BApplication("application/x-vnd.Haiku-DriveSetup"),
+	: BApplication("application/x-vnd.vos-DriveSetup"),
 	fWindow(NULL),
 	fSettings((uint32)0)
 {

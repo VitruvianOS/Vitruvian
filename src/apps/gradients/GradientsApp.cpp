@@ -14,7 +14,7 @@
 
 
 GradientsApp::GradientsApp(void)
-	: BApplication("application/x-vnd.Haiku-Gradients")
+	: BApplication("application/x-vnd.vos-Gradients")
 {
 	GradientsWindow* window = new GradientsWindow();
 	window->Show();

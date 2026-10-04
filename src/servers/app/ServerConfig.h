@@ -20,7 +20,7 @@
 
 // This is the application signature of our app_server when running as a
 // regular application. When running as the app_server, this is not used.
-#define SERVER_SIGNATURE "application/x-vnd.haiku-app-server"
+#define SERVER_SIGNATURE "application/x-vnd.vos-app-server"
 
 // Folder for additional window decorators
 #define DECORATORS_DIR "/home/config/add-ons/decorators/"

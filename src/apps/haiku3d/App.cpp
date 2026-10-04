@@ -14,7 +14,7 @@
 
 App::App()
 	:
-	BApplication("application/x-vnd.Haiku-Haiku3d"),
+	BApplication("application/x-vnd.vos-Haiku3d"),
 	fMainWindow(NULL)
 {
 }

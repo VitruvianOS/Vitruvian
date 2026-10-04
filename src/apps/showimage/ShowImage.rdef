@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-ShowImage";
+resource app_signature "application/x-vnd.vos-ShowImage";
 
-resource app_name_catalog_entry "x-vnd.Haiku-ShowImage:System name:ShowImage";
+resource app_name_catalog_entry "x-vnd.vos-ShowImage:System name:ShowImage";
 
 resource app_version {
 	major  = 0, 
@@ -19,7 +19,7 @@ resource app_flags B_SINGLE_LAUNCH;
 
 resource file_types message {
 	"types" = "image",
-	"types" = "application/x-vnd.haiku-icon"
+	"types" = "application/x-vnd.vos-icon"
 };
 
 resource vector_icon {

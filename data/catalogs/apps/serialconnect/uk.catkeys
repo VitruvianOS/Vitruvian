@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.haiku.SerialConnect	4294067463
+1	ukrainian	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Апаратно
 Connection	SerialWindow		З'єднання
 Raw send…	SerialWindow		Передати як RAW…

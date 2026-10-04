@@ -51,7 +51,7 @@ public:
 class Application : public BApplication {
 public:
 	Application()
-		:BApplication("application/x-vnd.haiku.text-rendering-test")
+		:BApplication("application/x-vnd.vos.text-rendering-test")
 	{
 	}
 

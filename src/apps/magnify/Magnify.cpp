@@ -285,7 +285,7 @@ UpdateInfoMenu(BMenu *menu, TWindow *window)
 // pass in pixelCount to maintain backward compatibility of setting
 // the pixelcount from the command line
 TApp::TApp(int32 pixelCount)
-	: BApplication("application/x-vnd.Haiku-Magnify")
+	: BApplication("application/x-vnd.vos-Magnify")
 {
 	TWindow* magWindow = new TWindow(pixelCount);
 	magWindow->Show();
@@ -351,7 +351,7 @@ TWindow::~TWindow()
 status_t
 TWindow::GetSupportedSuites(BMessage* msg)
 {
-	msg->AddString("suites", "suite/x-vnd.Haiku-Magnify");
+	msg->AddString("suites", "suite/x-vnd.vos-Magnify");
 
 	BPropertyInfo propertyInfo(sProperties);
 	msg->AddFlat("messages", &propertyInfo);

@@ -25,7 +25,7 @@ main(int argc, char** argv)
 
 	BString path(argv[1]);
 
-	BApplication app("application/x-vnd.Haiku-setcontrollook");
+	BApplication app("application/x-vnd.vos-setcontrollook");
 
 	status_t err = set_control_look(path);
 	if (err < B_OK) {

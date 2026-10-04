@@ -22,4 +22,4 @@ TranslatorAddOn(
 	RDEF WonderBrushTranslator.rdef
 )
 
-DoCatalogs("x-vnd.Haiku-WonderBrushTranslator" add-ons/translators/wonderbrush)
+DoCatalogs("x-vnd.vos-WonderBrushTranslator" add-ons/translators/wonderbrush)

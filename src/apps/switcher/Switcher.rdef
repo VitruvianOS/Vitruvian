@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Switcher";
+resource app_signature "application/x-vnd.vos-Switcher";
 
-//resource app_name_catalog_entry "x-vnd.Haiku-Switcher:System name:Switcher";
+//resource app_name_catalog_entry "x-vnd.vos-Switcher:System name:Switcher";
 
 resource app_version {
 	major  = 1,

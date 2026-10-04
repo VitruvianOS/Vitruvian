@@ -1,4 +1,4 @@
-1	indonesian	x-vnd.Haiku-mount_server	599204450
+1	indonesian	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Pasang hanya-baca
 Error mounting volume:\n\n%s	AutoMounter		Ada kesalahan saat memasang Volume:\n\n%s
 Cancel	AutoMounter		Batal

@@ -81,7 +81,7 @@ NotificationServer::MessageReceived(BMessage* message)
 status_t
 NotificationServer::GetSupportedSuites(BMessage* msg)
 {
-	msg->AddString("suites", "suite/x-vnd.Haiku-notification_server");
+	msg->AddString("suites", "suite/x-vnd.vos-notification_server");
 
 	BPropertyInfo info(main_prop_list);
 	msg->AddFlat("messages", &info);

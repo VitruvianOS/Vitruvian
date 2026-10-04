@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-libpackage	134767648
+1	japanese	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		リポジトリのキャッシュを %url から取得中
 Validating checksum for %repositoryName	RefreshRepositoryRequest		%repositoryName のチェックサムを確認中
 Failed to remove transaction directory	PackageManagerKit		トランザクションディレクトリの削除に失敗しました

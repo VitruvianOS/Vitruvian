@@ -1,4 +1,4 @@
-1	croatian	x-vnd.Haiku-SoundRecorder	2187836465
+1	croatian	x-vnd.vos-SoundRecorder	2187836465
 Loop	RecorderWindow		Petlja
 Cannot find default audio hardware	RecorderWindow		Progam ne može naći zadani audio hardware
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Program nemože naći privremenu datoteku koja je kreirana da čuva novi snimak

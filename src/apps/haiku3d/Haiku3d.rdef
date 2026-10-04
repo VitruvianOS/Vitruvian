@@ -6,9 +6,9 @@
  * 		Alexandre Deckner alex@zappotek.com
  */
 
-resource app_signature "application/x-vnd.Haiku-Haiku3d";
+resource app_signature "application/x-vnd.vos-Haiku3d";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Haiku3d:System name:Haiku3d";
+resource app_name_catalog_entry "x-vnd.vos-Haiku3d:System name:Haiku3d";
 
 resource app_version {
 	major  = 1,

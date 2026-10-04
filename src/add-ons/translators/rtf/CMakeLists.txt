@@ -16,4 +16,4 @@ TranslatorAddOn(
 
 	RDEF RTFTranslator.rdef
 )
-DoCatalogs("x-vnd.Haiku-RTFTranslator" add-ons/translators/rtf)
+DoCatalogs("x-vnd.vos-RTFTranslator" add-ons/translators/rtf)

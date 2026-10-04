@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.Haiku-libmedia	1819860668
+1	greek, modern (1453-)	x-vnd.vos-libmedia	1819860668
 Cleaning up.	MediaDefs		Γίνεται ξεκαθάρισμα.
 Starting media_services.	MediaDefs		Γίνεται εκκίνηση του media_services.
 Stopping media_addon_server.	MediaDefs		Γίνεται διακοπή του media_services.

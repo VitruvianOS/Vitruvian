@@ -20,7 +20,7 @@
 int
 main()
 {
-	BApplication app("application/x-vnd.Haiku-WonderBrushTranslator");
+	BApplication app("application/x-vnd.vos-WonderBrushTranslator");
 	status_t result;
 	result = LaunchTranslatorWindow(new WonderBrushTranslator,
 		B_TRANSLATE("WBI Settings"), BRect(0, 0, 225, 175));

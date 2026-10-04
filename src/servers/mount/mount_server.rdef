@@ -2,7 +2,7 @@
  * mount_server.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-mount_server";
+resource app_signature "application/x-vnd.vos-mount_server";
 
 resource app_flags B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP;
 

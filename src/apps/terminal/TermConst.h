@@ -14,7 +14,7 @@
 #define TERMCONST_H_INCLUDED
 
 // Application signature (Must same in Terminal.rdef)
-#define TERM_SIGNATURE "application/x-vnd.Haiku-Terminal"
+#define TERM_SIGNATURE "application/x-vnd.vos-Terminal"
 #define PREFFILE_MIMETYPE "text/x-terminal-pref"
 #define THEMEFILE_MIMETYPE "text/x-terminal-theme"
 

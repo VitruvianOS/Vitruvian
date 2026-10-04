@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-MediaConverter	1249914255
+1	swedish	x-vnd.vos-MediaConverter	1249914255
 Input file not recognized as Audio or Video	MediaConverter		Indatafilen är inte igenkänd som ljud eller video
 Source files	MediaConverter		Källfiler
 Error writing video frame %lld	MediaConverter		Fel vid skrivning av videoframe %lld

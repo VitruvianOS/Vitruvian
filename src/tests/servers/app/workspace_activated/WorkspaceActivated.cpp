@@ -107,7 +107,7 @@ Window::QuitRequested()
 
 
 Application::Application()
-	: BApplication("application/x-vnd.haiku-workspace_activated")
+	: BApplication("application/x-vnd.vos-workspace_activated")
 {
 }
 

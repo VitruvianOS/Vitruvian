@@ -2,7 +2,7 @@
  * RTFTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-RTFTranslator";
+resource app_signature "application/x-vnd.vos-RTFTranslator";
 
 resource app_version {
 	major  = 0,

@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-mount_server	599204450
+1	ukrainian	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Підключити тільки для читання
 Error mounting volume:\n\n%s	AutoMounter		Помилка підключення тому:\n\n%s
 Cancel	AutoMounter		Скасувати

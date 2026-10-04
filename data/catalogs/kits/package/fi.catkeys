@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-libpackage	134767648
+1	finnish	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Noudetaan tietovarastovälimuisti osoitteesta %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Vahvistetaan tarkistussumma kohteelle %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Tapahtumahakemiston poistaminen epäonnistui

@@ -1,4 +1,4 @@
-1	indonesian	x-vnd.haiku-package_daemon	1440586681
+1	indonesian	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Perubahan paket
 uninstall package %s\n	PackageResult	Don't change '%s' variable	melepas paket %s\n
 ignore problem for now	PackageProblem		abaikan masalah untuk saat ini

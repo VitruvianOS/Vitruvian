@@ -1,4 +1,4 @@
-1	czech	x-vnd.Haiku-BFSAddOn	1570987954
+1	czech	x-vnd.vos-BFSAddOn	1570987954
 Enable query support	BFS_Initialize_Parameter		Zapnout podporu dotazování
 Disabling query support may speed up certain file system operations, but should\nonly be used if one is absolutely certain that one will not need queries.\nAny volume that is intended for booting Haiku must have query support enabled.	BFS_Initialize_Parameter		Zakázání podpory dotazů může urychlit určité operace se souborovým systémem, ale mělo by\nbýt použito pouze v případě, že je zcela jistě nepotřebujete.\nKaždý svazek, který je určen ke spouštění Haiku, musí mít podporu dotazů povolenu.
 Name:	BFS_Initialize_Parameter		Jméno svazku:

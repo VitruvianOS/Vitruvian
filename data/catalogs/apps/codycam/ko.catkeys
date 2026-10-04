@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-CodyCam	2786669505
+1	korean	x-vnd.vos-CodyCam	2786669505
 destination directory expected	CodyCam		대상 디렉토리 지정이 필요합니다
 reply: '%s'\n	SftpClient		응답: '%s'\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <감춰짐> (실제 비밀번호 송신)

@@ -12,4 +12,4 @@ Application(LaunchBox
 	RDEF LaunchBox.rdef
 )
 UsePrivateHeaders(LaunchBox shared)
-DoCatalogs("x-vnd.Haiku-LaunchBox" apps/launchbox)
+DoCatalogs("x-vnd.vos-LaunchBox" apps/launchbox)

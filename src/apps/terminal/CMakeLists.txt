@@ -42,4 +42,4 @@ RunnableAddOn(
 )
 
 UsePrivateHeaders(Terminal textencoding kernel libroot system)
-DoCatalogs("x-vnd.Haiku-Terminal" apps/terminal)
+DoCatalogs("x-vnd.vos-Terminal" apps/terminal)

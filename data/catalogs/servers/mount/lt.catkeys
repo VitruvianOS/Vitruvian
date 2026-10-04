@@ -1,4 +1,4 @@
-1	lithuanian	x-vnd.Haiku-mount_server	599204450
+1	lithuanian	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Prijungti tik skaitymui
 Error mounting volume:\n\n%s	AutoMounter		Klaida prijungiant tomą:\n\n%s
 Cancel	AutoMounter		Atsisakyti

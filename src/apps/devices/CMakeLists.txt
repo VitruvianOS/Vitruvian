@@ -13,4 +13,4 @@
 #	RDEF Devices.rdef
 #)
 #UsePrivateHeaders(Devices shared interface system)
-DoCatalogs("x-vnd.Haiku-Devices" apps/devices)
+DoCatalogs("x-vnd.vos-Devices" apps/devices)

@@ -16,7 +16,7 @@ resource(5, "META:EXTENS") message(234) {
 	"type" = "application/x-intel-image"
 };
 
-resource(6, "META:PREF_APP") #'MSIG' "application/x-vnd.haiku-mountvolume";
+resource(6, "META:PREF_APP") #'MSIG' "application/x-vnd.vos-mountvolume";
 
 resource(7, "META:ICON") #'VICN' array {
 	$"6E636966080500040054020006023B019B3AA235BC243E3C71D248D17C498491"

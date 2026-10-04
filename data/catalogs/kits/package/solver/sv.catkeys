@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-libsolvsolver	3404387783
+1	swedish	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		tillåt ändring av arkitektur av %source% till %target%
 install %source% from excluded repository	SolverProblemSolution		installera %source% från exkluderat repositorium
 unspecified problem	SolverProblem		ospecificerat problem

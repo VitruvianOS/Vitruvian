@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.Haiku-SoundRecorder	24440888
+1	hungarian	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Ismétlés
 Cannot find default audio hardware	RecorderWindow		Nem található az alapértelmezett hangeszköz
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Nem található az új felvételt tároló ideiglenes fájl

@@ -54,7 +54,7 @@ uint32 gAppServerSIMDFlags = 0;
 */
 AppServer::AppServer(status_t* status)
 	:
-	SERVER_BASE("application/x-vnd.Haiku-app_server", "picasso", -1, false,
+	SERVER_BASE("application/x-vnd.vos-app_server", "picasso", -1, false,
 		status),
 	fDesktopLock("AppServerDesktopLock"),
 	fLockRequest(NULL),

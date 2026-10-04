@@ -36,7 +36,7 @@
 #define B_TRANSLATION_CONTEXT "DiskProbe"
 
 
-const char* kSignature = "application/x-vnd.Haiku-DiskProbe";
+const char* kSignature = "application/x-vnd.vos-DiskProbe";
 
 static const uint32 kMsgDiskProbeSettings = 'DPst';
 static const uint32 kCascadeOffset = 20;

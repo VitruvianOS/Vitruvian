@@ -3,7 +3,7 @@
  */
 
 // The FileType add-on has no app signature as it is no standalone application
-//resource app_signature "application/x-vnd.Haiku-FileType";
+//resource app_signature "application/x-vnd.vos-FileType";
 //resource app_flags B_MULTIPLE_LAUNCH;
 
 resource file_types message {

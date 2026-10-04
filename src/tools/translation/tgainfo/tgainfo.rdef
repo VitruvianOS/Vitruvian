@@ -2,7 +2,7 @@
  * tgainfo.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-tgainfo";
+resource app_signature "application/x-vnd.vos-tgainfo";
 
 resource app_version {
 	major  = 1,

@@ -61,16 +61,16 @@ static const KnownServer kFanOutServers[] = {
 	// A relaunched registrar keeps no roster: live apps never re-register
 	// with it, so only future launches show up until they restart.
 	{ "registrar",           B_REGISTRAR_SIGNATURE,                     false, true  },
-	{ "app_server",          "application/x-vnd.Haiku-app_server",      true,  true  },
+	{ "app_server",          "application/x-vnd.vos-app_server",      true,  true  },
 	// Relaunching input_server mid-session strands the pointer: it cannot
 	// re-attach the cursor channel it inherited from app_server at login.
 	{ "input_server",        "application/x-vnd.Be-input_server",       false, false },
-	{ "notification_server", "application/x-vnd.Haiku-notification_server", false, true },
+	{ "notification_server", "application/x-vnd.vos-notification_server", false, true },
 	{ "vos-polkit-agent",    "application/x-vnd.vos-polkit-agent", false, false },
 	{ "Deskbar",             "application/x-vnd.Be-TSKB",               false, true  },
 	{ "Tracker",             "application/x-vnd.Be-TRAK",               false, false },
 	{ "vitruvian-login",     "application/x-vnd.vos-login",       false, false },
-	{ "FirstBootPrompt",     "application/x-vnd.Haiku-FirstBootPrompt", false, false },
+	{ "FirstBootPrompt",     "application/x-vnd.vos-FirstBootPrompt", false, false },
 	{ NULL, NULL, false, false }
 };
 
@@ -1004,7 +1004,7 @@ static void
 janus_teardown_seat()
 {
 	send_seat_message("application/x-vnd.Be-input_server", B_SEAT_DISABLED, 2000000LL);
-	send_seat_message("application/x-vnd.Haiku-app_server", B_SEAT_DISABLED, 2000000LL);
+	send_seat_message("application/x-vnd.vos-app_server", B_SEAT_DISABLED, 2000000LL);
 
 	pthread_mutex_lock(&sAppsLock);
 	int count = sAppCount;
@@ -1020,7 +1020,7 @@ janus_teardown_seat()
 		if (port < 0)
 			continue;
 		if (strcmp(sig, "application/x-vnd.Be-input_server") == 0
-				|| strcmp(sig, "application/x-vnd.Haiku-app_server") == 0)
+				|| strcmp(sig, "application/x-vnd.vos-app_server") == 0)
 			continue;
 
 		BMessenger app;

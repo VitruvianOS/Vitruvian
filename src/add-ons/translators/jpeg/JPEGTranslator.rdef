@@ -2,7 +2,7 @@
  * JPEGTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-JPEGTranslator";
+resource app_signature "application/x-vnd.vos-JPEGTranslator";
 
 resource app_version {
 	major  = 1,

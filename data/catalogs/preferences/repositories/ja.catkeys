@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-Repositories	2642736029
+1	japanese	x-vnd.vos-Repositories	2642736029
 This is not a valid URL.	AddRepoWindow	Add URL error message	これは有効な URL ではありません。
 Repository URL:	AddRepoWindow	Text box label	リポジトリの URL:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	%name% のリポジトリキャッシュの更新時にエラーが発生しました。

@@ -1,4 +1,4 @@
-1	korean	x-vnd.haiku-softwareupdater	1377379822
+1	korean	x-vnd.vos-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	업데이트 될 버전
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		{0, plural, one{#개의 패키지} other{#개의 패키지}} 업데이트를 설치하려면 여기를 클릭하세요.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	제거 될 패키지

@@ -1,4 +1,4 @@
-1	lithuanian	x-vnd.Haiku-BootManager	3319482851
+1	lithuanian	x-vnd.vos-BootManager	3319482851
 At least one partition must be selected!	BootManagerController		Privalote pasirinkti bent vieną skaidinį!
 No space available!	DrivesPage	Cannot install	Nepakanka laisvos vietos!
 Immediately	DefaultPartitionPage		Nelaukti

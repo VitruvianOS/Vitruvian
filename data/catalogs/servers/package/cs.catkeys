@@ -1,4 +1,4 @@
-1	czech	x-vnd.haiku-package_daemon	1440586681
+1	czech	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Změny balíčků
 uninstall package %s\n	PackageResult	Don't change '%s' variable	odinstalovat balíček %s\n
 ignore problem for now	PackageProblem		prozatím problém ignorovat

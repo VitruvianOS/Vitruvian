@@ -1,4 +1,4 @@
-1	romanian	x-vnd.Haiku-SoundRecorder	24440888
+1	romanian	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Buclă
 Cannot find default audio hardware	RecorderWindow		Nu se poate găsi hardware-ul audio implicit
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Nu se poate găsi fișierul temporar creat pentru a păstra noua înregistrare

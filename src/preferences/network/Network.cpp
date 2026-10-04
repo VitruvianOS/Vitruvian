@@ -14,7 +14,7 @@
 #include "NetworkWindow.h"
 
 
-static const char* kSignature = "application/x-vnd.Haiku-Network";
+static const char* kSignature = "application/x-vnd.vos-Network";
 
 
 class Application : public BApplication {

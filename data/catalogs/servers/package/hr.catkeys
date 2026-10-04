@@ -1,4 +1,4 @@
-1	croatian	x-vnd.haiku-package_daemon	2091748299
+1	croatian	x-vnd.vos-package_daemon	2091748299
 Package changes	PackageResult	Window title	Izmjene paketa
 uninstall package %s\n	PackageResult	Don't change '%s' variable	deinstaliraj paket %s\n
 ignore problem for now	PackageProblem		Ignoriraj problem za sada

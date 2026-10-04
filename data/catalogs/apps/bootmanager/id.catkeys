@@ -1,4 +1,4 @@
-1	indonesian	x-vnd.Haiku-BootManager	1012731949
+1	indonesian	x-vnd.vos-BootManager	1012731949
 Old Master Boot Record backup failure	BootManagerController	Title	Master Boot Record lama gagal dicadangkan
 At least one partition must be selected!	BootManagerController		Setidaknya satu partisi harus dipilih!
 No space available!	DrivesPage	Cannot install	Tidak ada tempat yang tersedia!

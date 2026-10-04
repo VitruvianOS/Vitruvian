@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-SoundRecorder	24440888
+1	finnish	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Silmukka
 Cannot find default audio hardware	RecorderWindow		Oletusäänilaitteen löytäminen epäonnistui
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Ei kyetä löytämään tilapäistä tiedostoa, joka luotiin säilyttämään uusi äänitys.

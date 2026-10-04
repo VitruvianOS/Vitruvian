@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-LaunchBox";
+resource app_signature "application/x-vnd.vos-LaunchBox";
 
-resource app_name_catalog_entry "x-vnd.Haiku-LaunchBox:System name:LaunchBox";
+resource app_name_catalog_entry "x-vnd.vos-LaunchBox:System name:LaunchBox";
 
 resource app_flags B_SINGLE_LAUNCH;
 

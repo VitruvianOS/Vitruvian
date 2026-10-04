@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.haiku-registrar	2599857937
+1	hungarian	x-vnd.vos-registrar	2599857937
 Cancel	ShutdownProcess		Mégse
 OK	ShutdownProcess		Rendben
 Do you really want to shut down the system?	ShutdownProcess		Biztos, hogy le kívánod állítani a rendszert?

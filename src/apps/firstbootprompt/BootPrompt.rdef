@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-FirstBootPrompt";
+resource app_signature "application/x-vnd.vos-FirstBootPrompt";
 
-resource app_name_catalog_entry "x-vnd.Haiku-FirstBootPrompt:System name:FirstBootPrompt";
+resource app_name_catalog_entry "x-vnd.vos-FirstBootPrompt:System name:FirstBootPrompt";
 
 resource app_version {
 	major  = 1,

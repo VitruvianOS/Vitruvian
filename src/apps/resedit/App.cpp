@@ -20,7 +20,7 @@ main(void)
 
 
 App::App(void)
-  :	BApplication("application/x-vnd.Haiku-ResEdit")
+  :	BApplication("application/x-vnd.vos-ResEdit")
 {
 	fOpenPanel = new BFilePanel();
 }

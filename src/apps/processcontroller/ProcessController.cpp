@@ -58,7 +58,7 @@ const char* kIdleColorPref = "deskbar_idle_color";
 const char* kActiveColorPref = "deskbar_active_color";
 
 static const char* const kDebuggerSignature
-	= "application/x-vnd.Haiku-Debugger";
+	= "application/x-vnd.vos-Debugger";
 
 const rgb_color kKernelBlue = {20, 20, 231,	255};
 const rgb_color kIdleGreen = {110, 190,110,	255};

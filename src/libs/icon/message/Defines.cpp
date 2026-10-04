@@ -14,7 +14,7 @@ _BEGIN_ICON_NAMESPACE
 
 
 const uint32 kNativeIconMagicNumber = 'IMSG';
-const char*	kNativeIconMimeType	= "application/x-vnd.Haiku-icon";
+const char*	kNativeIconMimeType	= "application/x-vnd.vos-icon";
 
 
 _END_ICON_NAMESPACE

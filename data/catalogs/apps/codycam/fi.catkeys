@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-CodyCam	384853512
+1	finnish	x-vnd.vos-CodyCam	384853512
 destination directory expected	CodyCam		odotettiin kohdehakemistoa
 reply: '%s'\n	SftpClient		vastaus: ’%s’\n
 PASS <suppressed>  (real password sent)	FtpClient		SALASANA <salattu>  (oikea salasana lähetetty)

@@ -12,4 +12,4 @@ AddOn(
 )
 
 UsePrivateHeaders( textencoding textencoding )
-DoCatalogs("x-vnd.Haiku-libtextencoding" kits/textencoding)
+DoCatalogs("x-vnd.vos-libtextencoding" kits/textencoding)

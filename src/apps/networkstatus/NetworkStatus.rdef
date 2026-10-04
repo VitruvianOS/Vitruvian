@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-NetworkStatus";
+resource app_signature "application/x-vnd.vos-NetworkStatus";
 
-resource app_name_catalog_entry "x-vnd.Haiku-NetworkStatus:System name:NetworkStatus";
+resource app_name_catalog_entry "x-vnd.vos-NetworkStatus:System name:NetworkStatus";
 
 resource app_flags B_SINGLE_LAUNCH;
 

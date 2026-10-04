@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-FlurryScreensaver";
+resource app_signature "application/x-vnd.vos-FlurryScreensaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-FlurryScreensaver:System name:Flurry";
+resource app_name_catalog_entry "x-vnd.vos-FlurryScreensaver:System name:Flurry";
 
 resource app_version {
 	major  = 1,

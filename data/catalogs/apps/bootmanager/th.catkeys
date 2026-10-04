@@ -1,4 +1,4 @@
-1	thai	x-vnd.Haiku-BootManager	1012731949
+1	thai	x-vnd.vos-BootManager	1012731949
 Old Master Boot Record backup failure	BootManagerController	Title	การสำรองข้อมูล Old Master Boot Record ล้มเหลว
 At least one partition must be selected!	BootManagerController		ต้องเลือกอย่างน้อยหนึ่งพาร์ติชัน!
 No space available!	DrivesPage	Cannot install	ไม่มีที่ว่าง!

@@ -16,4 +16,4 @@
 #	RDEF PoorMan.rdef
 #)
 #UsePrivateHeaders(PoorMan shared)
-DoCatalogs("x-vnd.Haiku-PoorMan" apps/poorman)
+DoCatalogs("x-vnd.vos-PoorMan" apps/poorman)

@@ -1,4 +1,4 @@
-1	german	x-vnd.haiku-softwareupdater	2012285635
+1	german	x-vnd.vos-softwareupdater	2012285635
 Updating version	SoftwareUpdaterWindow	List item text	Aktualisieren der Version
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Hier klicken, um {0, plural, one{# aktualisiertes Paket} other{# aktualisierte Pakete}} zu installieren.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Zu deinstallierende Pakete

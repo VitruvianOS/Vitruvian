@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku.TextSearch	1461663588
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos.TextSearch	1461663588
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Vennligst velg filene du ønsker å ha valg for deg i Tracker.
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		Kunne ikke starte xargs-programmet!

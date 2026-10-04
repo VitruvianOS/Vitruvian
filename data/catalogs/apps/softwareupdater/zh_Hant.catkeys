@@ -1,4 +1,4 @@
-1	english	x-vnd.haiku-softwareupdater	1377379822
+1	english	x-vnd.vos-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	即將更新版本
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		點此安裝 {0, plural, one{# 已更新套件} other{# updated 已更新套件}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	需要卸載的套件

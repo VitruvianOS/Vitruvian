@@ -1,4 +1,4 @@
-resource app_signature "application/x-vnd.Haiku-OpenTerminal";
+resource app_signature "application/x-vnd.vos-OpenTerminal";
 
 resource app_version {
 	major  = 1,

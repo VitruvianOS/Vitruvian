@@ -2,7 +2,7 @@
  * TIFFTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-TIFFTranslator";
+resource app_signature "application/x-vnd.vos-TIFFTranslator";
 
 resource app_version {
 	major  = 1,

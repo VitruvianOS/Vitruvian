@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-CodyCam	384853512
+1	ukrainian	x-vnd.vos-CodyCam	384853512
 destination directory expected	CodyCam		вкажіть каталог призначення
 reply: '%s'\n	SftpClient		відповідь: «%s»\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <suppressed>  (відіслано справжній пароль)

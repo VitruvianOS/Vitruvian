@@ -20,7 +20,7 @@
 
 #include "harness.h"
 
-static const char* kAppSignature = "application/x-vnd.Haiku-Transformation";
+static const char* kAppSignature = "application/x-vnd.vos-Transformation";
 
 
 class BitmapTest : public Test {

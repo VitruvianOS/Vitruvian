@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Devices";
+resource app_signature "application/x-vnd.vos-Devices";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Devices:System name:Devices";
+resource app_name_catalog_entry "x-vnd.vos-Devices:System name:Devices";
 
 resource app_version
 {

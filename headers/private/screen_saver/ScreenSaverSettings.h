@@ -31,7 +31,7 @@ enum {
 		= ENABLE_DPMS_STAND_BY | ENABLE_DPMS_SUSPEND | ENABLE_DPMS_OFF
 };
 
-#define SCREEN_BLANKER_SIG "application/x-vnd.Haiku.screenblanker"
+#define SCREEN_BLANKER_SIG "application/x-vnd.vos.screenblanker"
 
 
 class ScreenSaverSettings {

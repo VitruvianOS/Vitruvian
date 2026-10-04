@@ -15,4 +15,4 @@ RunnableAddOn(Pulse
 	RDEF Pulse.rdef
 )
 UsePrivateHeaders(Pulse shared interface app system)
-DoCatalogs("x-vnd.Haiku-Pulse" apps/pulse)
+DoCatalogs("x-vnd.vos-Pulse" apps/pulse)

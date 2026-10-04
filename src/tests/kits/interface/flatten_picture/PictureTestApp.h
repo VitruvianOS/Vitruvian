@@ -13,7 +13,7 @@
 #include <Message.h>
 #include <Rect.h>
 
-#define APPLICATION_SIGNATURE	"application/x-vnd.haiku-picturetest"
+#define APPLICATION_SIGNATURE	"application/x-vnd.vos-picturetest"
 
 class PictureTestApp : public BApplication
 {

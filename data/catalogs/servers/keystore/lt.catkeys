@@ -1,4 +1,4 @@
-1	lithuanian	x-vnd.Haiku-keystore_server	4207486455
+1	lithuanian	x-vnd.vos-keystore_server	4207486455
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		atlikti šiam veiksmui:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Šiai programai dar nesuteiktos reikiamos teisės.
 Keyring:	KeyRequestWindow		Raktinė:

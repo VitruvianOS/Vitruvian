@@ -703,7 +703,7 @@ MandelbrotWindow::MessageReceived(BMessage* msg)
 
 	case B_ABOUT_REQUESTED: {
 		BAboutWindow* wind = new BAboutWindow(B_TRANSLATE_SYSTEM_NAME("Mandelbrot"),
-			"application/x-vnd.Haiku-Mandelbrot");
+			"application/x-vnd.vos-Mandelbrot");
 
 		const char* authors[] = {
 			"Augustin Cavalier <waddlesplash>",
@@ -753,7 +753,7 @@ class MandelbrotApp : public BApplication
 {
 public:
 				MandelbrotApp()
-					: BApplication("application/x-vnd.Haiku-Mandelbrot") {}
+					: BApplication("application/x-vnd.vos-Mandelbrot") {}
 
 		void	ReadyToRun();
 		bool	QuitRequested() { return true; }

@@ -57,7 +57,7 @@
 int
 main()
 {
-	BApplication app("application/x-vnd.Haiku-BMPTranslator");
+	BApplication app("application/x-vnd.vos-BMPTranslator");
 	status_t result;
 
 	result = LaunchTranslatorWindow(new BMPTranslator,

@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Pulse";
+resource app_signature "application/x-vnd.vos-Pulse";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Pulse:System name:Pulse";
+resource app_name_catalog_entry "x-vnd.vos-Pulse:System name:Pulse";
 
 resource app_version {
 	major  = 1,

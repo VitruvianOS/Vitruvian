@@ -1,4 +1,4 @@
-1	lithuanian	x-vnd.Haiku-NetworkStatus	972982814
+1	lithuanian	x-vnd.vos-NetworkStatus	972982814
 Quit	NetworkStatusView		Baigti darbą
 Unknown	NetworkStatusView		Nežinomas
 Launching the network preflet failed.\n\nError: 	NetworkStatusView		Tinklo nuostatų atverti nepavyko.\n\nKlaida:

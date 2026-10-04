@@ -33,7 +33,7 @@
 
 static const char* kSettingsFileName = "DeskCalc_settings";
 const char* kAppName = B_TRANSLATE_SYSTEM_NAME("DeskCalc");
-const char* kSignature = "application/x-vnd.Haiku-DeskCalc";
+const char* kSignature = "application/x-vnd.vos-DeskCalc";
 
 
 CalcApplication::CalcApplication()

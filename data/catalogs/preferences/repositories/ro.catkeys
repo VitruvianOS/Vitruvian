@@ -1,4 +1,4 @@
-1	romanian	x-vnd.Haiku-Repositories	1003035766
+1	romanian	x-vnd.vos-Repositories	1003035766
 This is not a valid URL.	AddRepoWindow	Add URL error message	Acesta nu este un URL valid.
 Repository URL:	AddRepoWindow	Text box label	URL de depozit:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	A apărut o eroare la reîmprospătarea cache-ului de depozit pentru %name%

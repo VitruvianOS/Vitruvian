@@ -25,7 +25,7 @@ int usage(int ret)
 int main(int argc, char **argv)
 {
 	int i;
-	BApplication app("application/x-vnd.Haiku-draggers");
+	BApplication app("application/x-vnd.vos-draggers");
 	if (argc < 2) {
 		printf("%s\n", BDragger::AreDraggersDrawn()?"shown":"hidden");
 		return EXIT_SUCCESS;

@@ -15,4 +15,4 @@ TranslatorAddOn(
 
 	RDEF SGITranslator.rdef
 )
-DoCatalogs("x-vnd.Haiku-SGITranslator" add-ons/translators/sgi)
+DoCatalogs("x-vnd.vos-SGITranslator" add-ons/translators/sgi)

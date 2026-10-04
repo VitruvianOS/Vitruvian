@@ -1,4 +1,4 @@
-1	lithuanian	x-vnd.haiku-package_daemon	1440586681
+1	lithuanian	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Paketų pakeitimai
 uninstall package %s\n	PackageResult	Don't change '%s' variable	pašalinti paketą „%s“\n
 ignore problem for now	PackageProblem		kol kas problemos nepaisyti

@@ -1053,7 +1053,7 @@ ShowImageWindow::MessageReceived(BMessage* message)
 			backgroundsMessage.AddRef("refs", fImageView->Image());
 			// This is used in the Backgrounds code for scaled placement
 			backgroundsMessage.AddInt32("placement", 'scpl');
-			be_roster->Launch("application/x-vnd.haiku-backgrounds",
+			be_roster->Launch("application/x-vnd.vos-backgrounds",
 				&backgroundsMessage);
 			break;
 		}

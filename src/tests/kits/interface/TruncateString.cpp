@@ -49,7 +49,7 @@ public:
 int
 main(int argc, char *argv[])
 {
-	BApplication app("application/x-vnd.Haiku-TruncateString");
+	BApplication app("application/x-vnd.vos-TruncateString");
 
 	BRect frame(100, 200, 1200, 300);
 	BWindow *window = new BWindow(frame, "TruncateString", B_TITLED_WINDOW,

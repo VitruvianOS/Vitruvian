@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-BootManager	3553759389
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-BootManager	3553759389
 Old Master Boot Record backup failure	BootManagerController	Title	Sikkerhetskopiering av den gamle hovedpartisjonssektor feilet
 At least one partition must be selected!	BootManagerController		Minst én partisjon må være valgt!
 No space available!	DrivesPage	Cannot install	Ingen ledig plass!

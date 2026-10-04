@@ -1,4 +1,4 @@
-1	danish	x-vnd.Haiku-libsolvsolver	3404387783
+1	danish	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		tillad skift af arkitektur af %source% til %target%
 install %source% from excluded repository	SolverProblemSolution		installér %source% fra udelukket programarkiv
 unspecified problem	SolverProblem		ikke nærmere angivet problem

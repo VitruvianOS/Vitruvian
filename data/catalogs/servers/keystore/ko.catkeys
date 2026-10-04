@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-keystore_server	2429996361
+1	korean	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		다음 작업을 수행합니다:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		이 응용 프로그램은 아직 필요한 권한이 없습니다.
 Keyring:	KeyRequestWindow		키링:

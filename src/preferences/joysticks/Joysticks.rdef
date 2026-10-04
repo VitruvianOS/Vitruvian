@@ -6,9 +6,9 @@
  * is the legacy Joysticks preflet icon.
  */
 
-resource app_signature "application/x-vnd.Haiku-Joysticks";
+resource app_signature "application/x-vnd.vos-Joysticks";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Joysticks:System name:Joysticks";
+resource app_name_catalog_entry "x-vnd.vos-Joysticks:System name:Joysticks";
 
 resource app_version {
 	major  = 1,

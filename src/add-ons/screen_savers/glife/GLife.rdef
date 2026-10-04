@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-GLifeScreensaver";
+resource app_signature "application/x-vnd.vos-GLifeScreensaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-GLifeScreensaver:System name:GLife";
+resource app_name_catalog_entry "x-vnd.vos-GLifeScreensaver:System name:GLife";
 
 resource app_version {
     major  = 1,

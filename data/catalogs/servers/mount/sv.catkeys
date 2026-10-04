@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-mount_server	599204450
+1	swedish	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Montera endast läsbar
 Error mounting volume:\n\n%s	AutoMounter		Fel vid montering av volym:\n\n%s
 Cancel	AutoMounter		Avbryt

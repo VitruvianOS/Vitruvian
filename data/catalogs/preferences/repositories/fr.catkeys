@@ -1,4 +1,4 @@
-1	french	x-vnd.Haiku-Repositories	2642736029
+1	french	x-vnd.vos-Repositories	2642736029
 This is not a valid URL.	AddRepoWindow	Add URL error message	Cette URL n’est pas valide.
 Repository URL:	AddRepoWindow	Text box label	URL du dépôt :
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Une erreur est survenue lors de l’actualisation du cache du dépôt %name%

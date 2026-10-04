@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-ShelfScreensaver";
+resource app_signature "application/x-vnd.vos-ShelfScreensaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-ShelfScreensaver:System name:Shelf";
+resource app_name_catalog_entry "x-vnd.vos-ShelfScreensaver:System name:Shelf";
 
 resource app_version {
 	major  = 1,

@@ -1,4 +1,4 @@
-1	french	x-vnd.Haiku-SoundRecorder	24440888
+1	french	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Boucler
 Cannot find default audio hardware	RecorderWindow		Impossible de trouver le périphérique audio par défaut
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Impossible de trouver le fichier temporaire créé pour contenir le nouvel enregistrement.

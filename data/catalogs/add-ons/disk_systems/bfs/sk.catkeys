@@ -1,4 +1,4 @@
-1	slovak	x-vnd.Haiku-BFSAddOn	3514982252
+1	slovak	x-vnd.vos-BFSAddOn	3514982252
 Enable query support	BFS_Initialize_Parameter		Zapnúť podporu požiadaviek
 Name:	BFS_Initialize_Parameter		Názov:
 8192 (Mostly large files)	BFS_Initialize_Parameter		8192 (prevažne veľké súbory)

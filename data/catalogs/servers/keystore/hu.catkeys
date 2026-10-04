@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.Haiku-keystore_server	2429996361
+1	hungarian	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		az alábbi művelet végrehajtásához:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Az alkalmazás még nem rendelkezik a szükséges jogosultságokkal
 Keyring:	KeyRequestWindow		Kulcstartó:

@@ -1,4 +1,4 @@
-1	russian	x-vnd.Haiku-libpackage	134767648
+1	russian	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Загрузка кеша репозитария из %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Проверка контрольной суммы репозитария %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Не удалось удалить папку с транзакциями

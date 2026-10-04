@@ -1,2 +1,2 @@
 
-resource app_signature "application/x-vnd.Haiku-KeyboardInputServerDevice" ;
+resource app_signature "application/x-vnd.vos-KeyboardInputServerDevice" ;

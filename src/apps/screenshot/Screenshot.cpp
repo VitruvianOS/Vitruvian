@@ -37,7 +37,7 @@
 
 Screenshot::Screenshot()
 	:
-	BApplication("application/x-vnd.haiku-screenshot-cli"),
+	BApplication("application/x-vnd.vos-screenshot-cli"),
 	fUtility(new Utility()),
 	fLaunchGui(true)
 {
@@ -158,7 +158,7 @@ Screenshot::ReadyToRun()
 
 		message.AddBool("selectArea", fSelectArea);
 
-		be_roster->Launch("application/x-vnd.haiku-screenshot",	&message);
+		be_roster->Launch("application/x-vnd.vos-screenshot",	&message);
 	}
 
 	be_app->PostMessage(B_QUIT_REQUESTED);

@@ -2,7 +2,7 @@
  * bmpinfo.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-bmpinfo";
+resource app_signature "application/x-vnd.vos-bmpinfo";
 
 resource app_version {
 	major  = 1,

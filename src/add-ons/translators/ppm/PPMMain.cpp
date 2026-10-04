@@ -43,7 +43,7 @@ public:
 int
 main()
 {
-	BApplication app("application/x-vnd.Haiku-PPMTranslator");
+	BApplication app("application/x-vnd.vos-PPMTranslator");
 	BView* v = NULL;
 	BRect r(0, 0, 1, 1);
 	if (MakeConfig(NULL, &v, &r)) {

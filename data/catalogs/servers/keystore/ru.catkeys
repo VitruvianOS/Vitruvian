@@ -1,4 +1,4 @@
-1	russian	x-vnd.Haiku-keystore_server	2429996361
+1	russian	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		чтобы выполнить следующее действие:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Приложение не имеет требуемых привилегий.
 Keyring:	KeyRequestWindow		Брелок:

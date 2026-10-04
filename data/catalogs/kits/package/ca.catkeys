@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.Haiku-libpackage	134767648
+1	catalan; valencian	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		S'obté la cau del repositori de %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Es valida la suma de verificació de %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Ha fallat suprimir el directori de transacció.

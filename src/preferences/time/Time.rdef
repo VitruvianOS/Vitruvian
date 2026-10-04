@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Time";
+resource app_signature "application/x-vnd.vos-Time";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Time:System name:Time";
+resource app_name_catalog_entry "x-vnd.vos-Time:System name:Time";
 
 resource app_flags B_SINGLE_LAUNCH;
 

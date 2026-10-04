@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-keystore_server	2429996361
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		for å utføre følgende handling:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Denne applikasjonen har ennå ikke de nødvendige rettighetene.
 Keyring:	KeyRequestWindow		Nøkkelring:

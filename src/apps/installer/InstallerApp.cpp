@@ -40,7 +40,7 @@ int main(int, char **)
 
 InstallerApp::InstallerApp()
 	:
-	BApplication("application/x-vnd.Haiku-Installer"),
+	BApplication("application/x-vnd.vos-Installer"),
 	fSetupMode(false),
 	fSetupDone(false)
 {
@@ -117,7 +117,7 @@ InstallerApp::Quit()
 		} else {
 			// Return to FirstBootPrompt if the user hasn't
 			// installed Haiku yet
-			be_roster->Launch("application/x-vnd.Haiku-FirstBootPrompt");
+			be_roster->Launch("application/x-vnd.vos-FirstBootPrompt");
 		}
 	}
 }

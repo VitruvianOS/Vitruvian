@@ -34,7 +34,7 @@ private:
 
 DevicesApplication::DevicesApplication()
 	:
-	BApplication("application/x-vnd.Haiku-Devices")
+	BApplication("application/x-vnd.vos-Devices")
 {
 	DevicesWindow* window = new DevicesWindow();
 	window->CenterOnScreen();

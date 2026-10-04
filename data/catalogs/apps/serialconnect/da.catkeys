@@ -1,4 +1,4 @@
-1	danish	x-vnd.haiku.SerialConnect	354154115
+1	danish	x-vnd.vos.SerialConnect	354154115
 Hardware	SerialWindow	Flowcontrol	Udstyr
 Connection	SerialWindow		Forbindelse
 Raw send…	SerialWindow		Send rå data…

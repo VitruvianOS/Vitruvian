@@ -1,4 +1,4 @@
-1	swedish	x-vnd.haiku.SerialConnect	4294067463
+1	swedish	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Hårdvara
 Connection	SerialWindow		Förbindelse
 Raw send…	SerialWindow		Skicka rådata...

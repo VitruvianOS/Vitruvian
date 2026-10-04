@@ -5,5 +5,5 @@ resource(1, "META:TYPE") "application/x-vnd.Be.URL.finger";
 
 resource(2, "META:S:DESC") #'MSDC' "Finger URL";
 
-resource(3, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-urlwrapper";
+resource(3, "META:PREF_APP") #'MSIG' "application/x-vnd.vos-urlwrapper";
 

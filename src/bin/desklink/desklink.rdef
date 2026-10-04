@@ -1,5 +1,5 @@
 
-resource app_signature "application/x-vnd.Haiku-desklink";
+resource app_signature "application/x-vnd.vos-desklink";
 
 resource file_types message;
 

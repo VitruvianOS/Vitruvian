@@ -43,7 +43,7 @@ class PowerStatus : public BApplication {
 };
 
 
-const char* kSignature = "application/x-vnd.Haiku-PowerStatus";
+const char* kSignature = "application/x-vnd.vos-PowerStatus";
 const char* kDeskbarSignature = "application/x-vnd.Be-TSKB";
 const char* kDeskbarItemName = "PowerStatus";
 

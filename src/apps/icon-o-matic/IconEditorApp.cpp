@@ -39,7 +39,7 @@
 
 using std::nothrow;
 
-static const char* kAppSig = "application/x-vnd.haiku-icon_o_matic";
+static const char* kAppSig = "application/x-vnd.vos-icon_o_matic";
 
 static const float kWindowOffset = 20;
 

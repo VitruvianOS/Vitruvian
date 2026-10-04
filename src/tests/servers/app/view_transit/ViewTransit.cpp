@@ -113,7 +113,7 @@ View::_SetTransit(uint32 transit)
 int 
 main(int argc, char **argv)
 {
-	BApplication app("application/x-vnd.haiku-view_transit");
+	BApplication app("application/x-vnd.vos-view_transit");
 
 	BWindow* window = new BWindow(BRect(100, 100, 400, 400),
 		"ViewTransit-Test", B_TITLED_WINDOW,

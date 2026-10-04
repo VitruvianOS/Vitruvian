@@ -183,7 +183,7 @@ class Application : public BApplication {
 
 
 Application::Application()
-	: BApplication("application/x-vnd.haiku-avoid_focus")
+	: BApplication("application/x-vnd.vos-avoid_focus")
 {
 }
 

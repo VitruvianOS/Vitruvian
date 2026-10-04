@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-libsolvsolver	3404387783
+1	japanese	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		%source% から %target%へのアーキテクチャ変更を許可する
 install %source% from excluded repository	SolverProblemSolution		除外されたリポジトリから %source% をインストールする
 unspecified problem	SolverProblem		詳細不明の問題

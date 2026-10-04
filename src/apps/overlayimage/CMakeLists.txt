@@ -7,4 +7,4 @@ RunnableAddOn(OverlayImage
 	RDEF OverlayImage.rdef
 )
 UsePrivateHeaders(OverlayImage interface shared)
-DoCatalogs("x-vnd.Haiku-OverlayImage" apps/overlayimage)
+DoCatalogs("x-vnd.vos-OverlayImage" apps/overlayimage)

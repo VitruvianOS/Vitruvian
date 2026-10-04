@@ -468,7 +468,7 @@ TReplicantTray::ShowHideTime()
 	static_cast<TBarApp*>(be_app)->Settings()->showClock = showClock;
 
 	// Send a message to Time preferences telling it to update
-	BMessenger messenger("application/x-vnd.Haiku-Time");
+	BMessenger messenger("application/x-vnd.vos-Time");
 	BMessage message(kShowHideTime);
 	message.AddBool("showClock", showClock);
 	messenger.SendMessage(&message);

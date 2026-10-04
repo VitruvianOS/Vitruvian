@@ -1,4 +1,4 @@
-1	portuguese	x-vnd.Haiku-libpackage	134767648
+1	portuguese	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		A obter a cache de repositório a partir de %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		A validar a soma de verificação para %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Ocorreu uma falha ao remover a pasta da transação

@@ -23,7 +23,7 @@
 #define B_TRANSLATION_CONTEXT "Screen"
 
 
-static const char* kAppSignature = "application/x-vnd.Haiku-Screen";
+static const char* kAppSignature = "application/x-vnd.vos-Screen";
 
 
 ScreenApplication::ScreenApplication()

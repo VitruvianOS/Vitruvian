@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Appearance";
+resource app_signature "application/x-vnd.vos-Appearance";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Appearance:System name:Appearance";
+resource app_name_catalog_entry "x-vnd.vos-Appearance:System name:Appearance";
 
 resource app_version {
 	major  = 1,

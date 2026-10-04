@@ -21,7 +21,7 @@
 int
 main()
 {
-	BApplication app("application/x-vnd.Haiku-AVIFTranslator");
+	BApplication app("application/x-vnd.vos-AVIFTranslator");
 	if (LaunchTranslatorWindow(new AVIFTranslator,
 		B_TRANSLATE("AVIF Settings")) != B_OK)
 		return 1;

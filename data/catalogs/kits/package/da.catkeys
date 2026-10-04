@@ -1,4 +1,4 @@
-1	danish	x-vnd.Haiku-libpackage	134767648
+1	danish	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Henter programarkiv-mellemlager fra %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Validerer tjeksum for %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Kunne ikke fjerne transaktionsmappe

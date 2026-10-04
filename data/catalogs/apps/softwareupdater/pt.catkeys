@@ -1,4 +1,4 @@
-1	portuguese	x-vnd.haiku-softwareupdater	1377379822
+1	portuguese	x-vnd.vos-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	A atualizar versão
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Clique aqui para instalar {0, plural, one{# pacote atualizado} other{# pacotes atualizados}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Pacotes a desinstalar

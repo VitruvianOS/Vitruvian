@@ -2,7 +2,7 @@
  * GIFTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-GIFTranslator";
+resource app_signature "application/x-vnd.vos-GIFTranslator";
 
 resource app_version {
 	major  = 1,

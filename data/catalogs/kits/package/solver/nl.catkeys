@@ -1,4 +1,4 @@
-1	dutch; flemish	x-vnd.Haiku-libsolvsolver	3404387783
+1	dutch; flemish	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		sta wijziging van architectuur van %source% naar %target% toe
 install %source% from excluded repository	SolverProblemSolution		installeer %source% uit uitgesloten depot
 unspecified problem	SolverProblem		ongespecificeerd probleem

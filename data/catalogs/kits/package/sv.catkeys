@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-libpackage	134767648
+1	swedish	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Hämtar repository-cache från %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Validerar checksum för %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Misslyckades med att ta bort transaktionsmappen

@@ -20,7 +20,7 @@
 #define B_TRANSLATION_CONTEXT "Sudoku"
 
 
-const char* kSignature = "application/x-vnd.Haiku-Sudoku";
+const char* kSignature = "application/x-vnd.vos-Sudoku";
 
 
 Sudoku::Sudoku()

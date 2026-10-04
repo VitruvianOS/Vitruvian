@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku.TextSearch	1461663588
+1	english	x-vnd.vos.TextSearch	1461663588
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		請選擇您希望在Tracker中為您選擇的檔案。
 %appname% : %path%	GrepWindow		%appname%：%path%
 Failed to start xargs program!	Grepper		無法啟動 xargs 程式！

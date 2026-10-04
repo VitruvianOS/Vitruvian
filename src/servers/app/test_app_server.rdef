@@ -2,7 +2,7 @@
  * app_server.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-test-app_server";
+resource app_signature "application/x-vnd.vos-test-app_server";
 
 resource app_flags B_EXCLUSIVE_LAUNCH ;
 

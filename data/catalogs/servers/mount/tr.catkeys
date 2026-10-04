@@ -1,4 +1,4 @@
-1	turkish	x-vnd.Haiku-mount_server	599204450
+1	turkish	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Saltokunur bağla
 Error mounting volume:\n\n%s	AutoMounter		Bölümü bağlarken hata:\n\n%s
 Cancel	AutoMounter		Vazgeç

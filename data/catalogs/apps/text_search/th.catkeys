@@ -1,4 +1,4 @@
-1	thai	x-vnd.Haiku.TextSearch	2224690775
+1	thai	x-vnd.vos.TextSearch	2224690775
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		โปรดเลือกไฟล์ที่คุณต้องการให้คุณเลือกในตัวติดตาม
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		ไม่สามารถเริ่มโปรแกรม xargs ได้!

@@ -45,7 +45,7 @@
 static const char* kDeskbarItemName = "workspaces";
 static const char* kSignature = "application/x-vnd.Be-WORK";
 static const char* kDeskbarSignature = "application/x-vnd.Be-TSKB";
-static const char* kScreenPrefletSignature = "application/x-vnd.Haiku-Screen";
+static const char* kScreenPrefletSignature = "application/x-vnd.vos-Screen";
 static const char* kOldSettingFile = "Workspace_data";
 static const char* kSettingsFile = "Workspaces_settings";
 

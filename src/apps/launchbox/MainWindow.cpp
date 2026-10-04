@@ -609,27 +609,27 @@ MainWindow::_AddDefaultButtons()
 	// StyledEdit
 	button = new LaunchButton("launch button", NULL, new BMessage(MSG_LAUNCH));
 	fPadView->AddButton(button);
-	button->SetTo("application/x-vnd.Haiku-StyledEdit", true);
+	button->SetTo("application/x-vnd.vos-StyledEdit", true);
 
 	// ShowImage
 	button = new LaunchButton("launch button", NULL, new BMessage(MSG_LAUNCH));
 	fPadView->AddButton(button);
-	button->SetTo("application/x-vnd.Haiku-ShowImage", true);
+	button->SetTo("application/x-vnd.vos-ShowImage", true);
 
 	// MediaPlayer
 	button = new LaunchButton("launch button", NULL, new BMessage(MSG_LAUNCH));
 	fPadView->AddButton(button);
-	button->SetTo("application/x-vnd.Haiku-MediaPlayer", true);
+	button->SetTo("application/x-vnd.vos-MediaPlayer", true);
 
 	// DeskCalc
 	button = new LaunchButton("launch button", NULL, new BMessage(MSG_LAUNCH));
 	fPadView->AddButton(button);
-	button->SetTo("application/x-vnd.Haiku-DeskCalc", true);
+	button->SetTo("application/x-vnd.vos-DeskCalc", true);
 
 	// Terminal
 	button = new LaunchButton("launch button", NULL, new BMessage(MSG_LAUNCH));
 	fPadView->AddButton(button);
-	button->SetTo("application/x-vnd.Haiku-Terminal", true);
+	button->SetTo("application/x-vnd.vos-Terminal", true);
 }
 
 

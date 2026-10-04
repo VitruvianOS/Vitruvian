@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-libpackage	134767648
+1	english	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		从 %url 获取仓库缓存
 Validating checksum for %repositoryName	RefreshRepositoryRequest		验证 %repositoryName 校验码
 Failed to remove transaction directory	PackageManagerKit		移除事务目录失败

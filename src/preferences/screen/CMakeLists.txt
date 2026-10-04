@@ -16,4 +16,4 @@ Application(Screen
 )
 
 UsePrivateHeaders(Screen graphics/common preferences)
-DoCatalogs("x-vnd.Haiku-Screen" preferences/screen)
+DoCatalogs("x-vnd.vos-Screen" preferences/screen)

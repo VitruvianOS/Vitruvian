@@ -1,4 +1,4 @@
-1	croatian	x-vnd.Haiku-libsolvsolver	794881004
+1	croatian	x-vnd.vos-libsolvsolver	794881004
 unspecified problem	SolverProblem		neodređeni problem
 do not keep %source% installed	SolverProblemSolution		ne drži %source% instaliranim
 do not deinstall \"%selection%\"	SolverProblemSolution		nemoj deinstaliratil \"%selection%\"

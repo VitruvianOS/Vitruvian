@@ -2,7 +2,7 @@
  * STXTTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-STXTTranslator";
+resource app_signature "application/x-vnd.vos-STXTTranslator";
 
 resource app_version {
 	major  = 1,

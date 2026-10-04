@@ -8,4 +8,4 @@ RunnableAddOn(
 	LIBS textencoding localestub
 	RDEF Clock.rdef
 )
-DoCatalogs("x-vnd.Haiku-Clock" apps/clock)
+DoCatalogs("x-vnd.vos-Clock" apps/clock)

@@ -1,4 +1,4 @@
-1	italian	x-vnd.Haiku-SystemLogger	2600925901
+1	italian	x-vnd.vos-SystemLogger	2600925901
 Syslog Daemon	SyslogDaemon		Syslog Daemon
 OK	SyslogDaemon		OK
 %s\n\nThis daemon collects all system messages and writes them to the system-wide log at \"%s\".\n\n	SyslogDaemon		%s\n\nQuesto server software colleziona tutti i messaggi di sistema e li scrive sul registro di sistema a  \"%s\".\n\n

@@ -1,4 +1,4 @@
-1	russian	x-vnd.haiku.SerialConnect	4294067463
+1	russian	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Аппаратное
 Connection	SerialWindow		Соединение
 Raw send…	SerialWindow		Отправить как RAW…

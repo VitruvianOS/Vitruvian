@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-KeyboardInputServerDevice	131044710
+1	finnish	x-vnd.vos-KeyboardInputServerDevice	131044710
 If the application will not quit you may have to kill it.	Team monitor		Jos sovellus ei sulkeudu, se on lopetettava Pääteikkunassa kill-komennolla.
 Quit application	Team monitor		Sulje sovellus
 Open Terminal	Team monitor		Avaa Pääteikkuna

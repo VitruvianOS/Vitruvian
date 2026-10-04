@@ -1,4 +1,4 @@
-1	english	x-vnd.haiku.SerialConnect	4294067463
+1	english	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	硬體
 Connection	SerialWindow		連線
 Raw send…	SerialWindow		原始發送…

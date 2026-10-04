@@ -1,4 +1,4 @@
-1	german	x-vnd.Haiku-libpackage	134767648
+1	german	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Abrufen des Repository-Cache von %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Überprüfen der Checksumme für %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Der 'transaction' Ordner konnte nicht entfernt werden

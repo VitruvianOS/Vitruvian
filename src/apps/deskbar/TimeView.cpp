@@ -216,11 +216,11 @@ TTimeView::MessageReceived(BMessage* message)
 		{
 			// launch the time prefs app
 			status_t error
-				= be_roster->Launch("application/x-vnd.Haiku-Time");
+				= be_roster->Launch("application/x-vnd.vos-Time");
 			ShowLaunchAlert("Time preferences", error);
 			if (error == B_OK || error == B_ALREADY_RUNNING) {
 				// tell Time preflet to switch to the clock tab
-				BMessenger messenger("application/x-vnd.Haiku-Time");
+				BMessenger messenger("application/x-vnd.vos-Time");
 				BMessage switchToClock('SlCk');
 				messenger.SendMessage(&switchToClock);
 			}

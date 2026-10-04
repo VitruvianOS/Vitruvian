@@ -1,4 +1,4 @@
-1	thai	x-vnd.haiku-softwareupdater	1377379822
+1	thai	x-vnd.vos-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	กำลังอัปเดตเวอร์ชัน
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		คลิกที่นี่เพื่อติดตั้ง {0, plural, one{# updated package} อื่นๆ{# updated packages}}
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	แพ็คเกจที่จะถอนการติดตั้ง

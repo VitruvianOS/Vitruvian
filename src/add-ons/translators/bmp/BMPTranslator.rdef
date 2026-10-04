@@ -2,7 +2,7 @@
  * BMPTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-BMPTranslator";
+resource app_signature "application/x-vnd.vos-BMPTranslator";
 
 resource app_version {
 	major  = 1,

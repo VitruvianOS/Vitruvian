@@ -227,7 +227,7 @@ create_desktop_connection(ServerLink* link, const char* name, int32 capacity)
 	request.AddInt32("version", AS_PROTOCOL_VERSION);
 	request.AddString("target", getenv("TARGET_SCREEN"));
 
-	BMessenger server("application/x-vnd.Haiku-app_server");
+	BMessenger server("application/x-vnd.vos-app_server");
 	BMessage reply;
 	status_t status = server.SendMessage(&request, &reply);
 	if (status != B_OK)

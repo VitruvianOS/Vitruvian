@@ -9,7 +9,7 @@ resource(3, "META:SNIFF_RULE") #'CSTR' array {
 	"0.60 (\"<?xml\" | \"<svg\") [0:511] ( -i \"<SVG\" | \"<!DOCTYPE SVG\" )"
 };
 
-resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-WebPositive";
+resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.vos-WebPositive";
 
 resource(5, "META:EXTENS") message(234) {
 	"extensions" = "svg",

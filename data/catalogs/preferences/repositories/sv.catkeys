@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-Repositories	2642736029
+1	swedish	x-vnd.vos-Repositories	2642736029
 This is not a valid URL.	AddRepoWindow	Add URL error message	Detta är inte en giltig URL.
 Repository URL:	AddRepoWindow	Text box label	Repositoriets URL:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Ett fel inträffade vid uppdatering av cache för repositoriet %name%

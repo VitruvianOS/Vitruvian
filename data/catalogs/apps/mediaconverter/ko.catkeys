@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-MediaConverter	1249914255
+1	korean	x-vnd.vos-MediaConverter	1249914255
 Input file not recognized as Audio or Video	MediaConverter		입력 파일을 오디오나 비디오 파일로 인식할 수 없습니다
 Source files	MediaConverter		소스 파일
 Error writing video frame %lld	MediaConverter		%lld 비디오 프레임 기록 오류가 발생했습니다

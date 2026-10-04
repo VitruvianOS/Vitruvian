@@ -434,7 +434,7 @@ MainWindow::MainWindow()
 	fNotification->SetGroup(BString(B_TRANSLATE_SYSTEM_NAME("DriveSetup")));
 
 	app_info info;
-	be_roster->GetAppInfo("application/x-vnd.Haiku-DriveSetup", &info);
+	be_roster->GetAppInfo("application/x-vnd.vos-DriveSetup", &info);
 	BBitmap icon(BRect(0, 0, 32, 32), B_RGBA32);
 	BNode node(&info.ref);
 	if (BIconUtils::GetVectorIcon(&node, "BEOS:ICON", &icon) == B_OK)
@@ -574,7 +574,7 @@ MainWindow::MessageReceived(BMessage* message)
 				fListView->CurrentSelection());
 			const char* args[] = { row->DevicePath(), NULL };
 
-			be_roster->Launch("application/x-vnd.Haiku-DiskProbe", 1,
+			be_roster->Launch("application/x-vnd.vos-DiskProbe", 1,
 				(char**)args);
 
 			break;

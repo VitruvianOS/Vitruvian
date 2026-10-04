@@ -1,4 +1,4 @@
-1	spanish; castilian	x-vnd.haiku-package_daemon	1440586681
+1	spanish; castilian	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Cambios del paquete
 uninstall package %s\n	PackageResult	Don't change '%s' variable	desinstalar paquete %s\n
 ignore problem for now	PackageProblem		ignorar los problemas por el momento

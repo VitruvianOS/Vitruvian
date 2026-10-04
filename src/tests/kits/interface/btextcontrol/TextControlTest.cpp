@@ -15,7 +15,7 @@ public:
 	void
 	GetTextTest()
 	{
-		BApplication app("application/x-vnd.Haiku-interfacekit-textcontroltest");
+		BApplication app("application/x-vnd.vos-interfacekit-textcontroltest");
 		BRect textRect(0, 0, 100, 100);
 		BTextControl* v = new BTextControl(textRect, "test", 0, 0, 0);
 		v->SetText("Initial text");

@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-DriveSetup	2351839435
+1	japanese	x-vnd.vos-DriveSetup	2351839435
 Could not unmount partition %s.	MainWindow		パーティション %s をマウント解除できません。
 Register disk image…	MainWindow		ディスクイメージを登録…
 Mount all	MainWindow		すべてマウント

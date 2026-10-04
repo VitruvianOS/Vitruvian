@@ -1,4 +1,4 @@
-resource app_signature "application/x-vnd.Haiku-libtextencoding";
+resource app_signature "application/x-vnd.vos-libtextencoding";
 
 resource app_version {
 	major = 1,

@@ -187,7 +187,7 @@ main(int argc, char *argv[])
 		}
 	}
 
-	BApplication app("application/x-vnd.Haiku-RemoteDesktop");
+	BApplication app("application/x-vnd.vos-RemoteDesktop");
 	BRect windowFrame = BRect(0, 0, width - 1, height - 1);
 	if (!windowFrame.IsValid()) {
 		BScreen screen;

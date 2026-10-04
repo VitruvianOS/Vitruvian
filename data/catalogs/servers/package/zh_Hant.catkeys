@@ -1,4 +1,4 @@
-1	english	x-vnd.haiku-package_daemon	1440586681
+1	english	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	套件變更
 uninstall package %s\n	PackageResult	Don't change '%s' variable	解除安裝套件 %s\n
 ignore problem for now	PackageProblem		暫時忽略問題

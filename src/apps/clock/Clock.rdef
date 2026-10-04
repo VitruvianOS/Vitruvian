@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Clock";
+resource app_signature "application/x-vnd.vos-Clock";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Clock:System name:Clock";
+resource app_name_catalog_entry "x-vnd.vos-Clock:System name:Clock";
 
 resource app_version {
 	major  = 1,

@@ -48,7 +48,7 @@ class ClipboardApp : public BApplication {
 
 
 ClipboardApp::ClipboardApp(void)
-	: BApplication("application/x-vnd.haiku-clipboard"),
+	: BApplication("application/x-vnd.vos-clipboard"),
 	fGotArguments(false)
 {
 }

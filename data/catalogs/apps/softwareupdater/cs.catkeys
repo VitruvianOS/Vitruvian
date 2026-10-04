@@ -1,4 +1,4 @@
-1	czech	x-vnd.haiku-softwareupdater	2012285635
+1	czech	x-vnd.vos-softwareupdater	2012285635
 Updating version	SoftwareUpdaterWindow	List item text	Aktualizuji verzi
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Klikněte zde pro instalaci {0, plural, one{# aktualizovaného balíčku} other{# aktualizovaných balíčků}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Balíčky k odinstalování

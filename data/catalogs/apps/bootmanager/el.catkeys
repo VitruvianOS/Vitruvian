@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.Haiku-BootManager	3553759389
+1	greek, modern (1453-)	x-vnd.vos-BootManager	3553759389
 Old Master Boot Record backup failure	BootManagerController	Title	Αποτυχία αντιγράφου ασφαλείας παλιάς Κύριας Εγγραφής Εκκίνησης (MBR)
 At least one partition must be selected!	BootManagerController		Πρέπει να επιλέξετε τουλάχιστον μια κατάτμηση!
 No space available!	DrivesPage	Cannot install	Δεν υπάρχει διαθέσιμος χώρος!

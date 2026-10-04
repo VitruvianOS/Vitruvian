@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-mixer.media_addon	275473112
+1	korean	x-vnd.vos-mixer.media_addon	275473112
 Input mapping	AudioMixer		입력 배치
 High quality (linear interpolation)	AudioMixer		고품질 (선형 인터폴레이션)
 To output	AudioMixer		출력으로

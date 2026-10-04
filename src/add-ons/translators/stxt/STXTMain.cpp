@@ -56,7 +56,7 @@
 int
 main()
 {
-	BApplication app("application/x-vnd.Haiku-STXTTranslator");
+	BApplication app("application/x-vnd.vos-STXTTranslator");
 	status_t result;
 	result = LaunchTranslatorWindow(new STXTTranslator,
 		B_TRANSLATE("STXT Settings"), BRect(0, 0, 225, 175));

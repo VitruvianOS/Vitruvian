@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-BFSAddOn	1570987954
+1	swedish	x-vnd.vos-BFSAddOn	1570987954
 Enable query support	BFS_Initialize_Parameter		Aktivera sökstöd
 Disabling query support may speed up certain file system operations, but should\nonly be used if one is absolutely certain that one will not need queries.\nAny volume that is intended for booting Haiku must have query support enabled.	BFS_Initialize_Parameter		Att inaktivera frågestöd kan snabba upp vissa filsystemoperationer, men bör\nbara användas om man är helt säker på att man inte behöver frågestöd.\nAlla volymer som är avsedda för start av Haiku måste ha frågestöd aktiverat.
 Name:	BFS_Initialize_Parameter		Namn:

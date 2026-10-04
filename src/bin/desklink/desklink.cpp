@@ -28,7 +28,7 @@
 #include "VolumeWindow.h"
 
 
-const char *kAppSignature = "application/x-vnd.Haiku-desklink";
+const char *kAppSignature = "application/x-vnd.vos-desklink";
 	// the application signature used by the replicant to find the
 	// supporting code
 

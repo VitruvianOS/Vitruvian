@@ -2,7 +2,7 @@
  * WebPTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-WebPTranslator";
+resource app_signature "application/x-vnd.vos-WebPTranslator";
 
 resource app_version {
 	major  = 0,

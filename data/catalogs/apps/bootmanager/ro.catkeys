@@ -1,4 +1,4 @@
-1	romanian	x-vnd.Haiku-BootManager	1012731949
+1	romanian	x-vnd.vos-BootManager	1012731949
 Old Master Boot Record backup failure	BootManagerController	Title	Eșec la copierea de rezervă a vechii înregistrări de boot principală
 At least one partition must be selected!	BootManagerController		Trebuie selectată cel puțin o partiție!
 No space available!	DrivesPage	Cannot install	Nu există spațiu disponibil!

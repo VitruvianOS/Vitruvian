@@ -9,7 +9,7 @@
 class TestApp : public BApplication {
 public:
 	TestApp()
-		: BApplication("application/x-vnd.haiku.user-shutdown-reply")
+		: BApplication("application/x-vnd.vos.user-shutdown-reply")
 	{
 	}
 

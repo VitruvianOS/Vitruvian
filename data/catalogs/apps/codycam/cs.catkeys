@@ -1,4 +1,4 @@
-1	czech	x-vnd.Haiku-CodyCam	384853512
+1	czech	x-vnd.vos-CodyCam	384853512
 destination directory expected	CodyCam		očekáván cílový adresář
 reply: '%s'\n	SftpClient		odpověď: '%s'\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <utajeno>  (reálné heslo odesláno)

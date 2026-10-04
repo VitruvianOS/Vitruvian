@@ -13,4 +13,4 @@ Server(
 )
 
 UsePrivateHeaders(keystore_server app shared)
-DoCatalogs("x-vnd.Haiku-keystore_server" servers/keystore)
+DoCatalogs("x-vnd.vos-keystore_server" servers/keystore)

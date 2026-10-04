@@ -1,6 +1,6 @@
-resource app_signature "application/x-vnd.Haiku.TextSearch";
+resource app_signature "application/x-vnd.vos.TextSearch";
 
-resource app_name_catalog_entry "x-vnd.Haiku.TextSearch:System name:TextSearch";
+resource app_name_catalog_entry "x-vnd.vos.TextSearch:System name:TextSearch";
 
 resource app_flags B_SINGLE_LAUNCH;
 

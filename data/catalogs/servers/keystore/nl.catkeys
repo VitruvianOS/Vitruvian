@@ -1,4 +1,4 @@
-1	dutch; flemish	x-vnd.Haiku-keystore_server	2429996361
+1	dutch; flemish	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		om de volgende actie uit te voeren:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Deze toepassing heeft nog niet de vereiste rechten.
 Keyring:	KeyRequestWindow		Sleutelhanger:

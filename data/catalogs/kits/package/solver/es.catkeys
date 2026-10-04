@@ -1,4 +1,4 @@
-1	spanish; castilian	x-vnd.Haiku-libsolvsolver	3404387783
+1	spanish; castilian	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		permitir el cambio de arquitectura de %source% a %target%
 install %source% from excluded repository	SolverProblemSolution		instalar %source% desde el repositorio excluido
 unspecified problem	SolverProblem		problema desconocido

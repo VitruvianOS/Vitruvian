@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-libsolvsolver	3404387783
+1	english	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		允许 %source% 架构变更到 %target%
 install %source% from excluded repository	SolverProblemSolution		从外部仓库安装 %source% 
 unspecified problem	SolverProblem		未知问题

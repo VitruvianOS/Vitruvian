@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.haiku.SerialConnect	4294067463
+1	catalan; valencian	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Maquinari
 Connection	SerialWindow		Connexió
 Raw send…	SerialWindow		Enviament en cru...

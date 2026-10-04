@@ -17,7 +17,7 @@ WriteCatalogEntryAttribute()
 
 WriteTrackerCatalogEntryAttribute()
 {
-	WriteCatalogEntryAttribute "x-vnd.Haiku-libtracker" "$1" "$2"
+	WriteCatalogEntryAttribute "x-vnd.vos-libtracker" "$1" "$2"
 }
 
 

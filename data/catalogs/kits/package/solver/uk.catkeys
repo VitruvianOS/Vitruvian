@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-libsolvsolver	3404387783
+1	ukrainian	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		дозволити зміну архітектури %source% на %target%
 install %source% from excluded repository	SolverProblemSolution		встановити %source% з виключеного репозитарія
 unspecified problem	SolverProblem		невизначена проблема

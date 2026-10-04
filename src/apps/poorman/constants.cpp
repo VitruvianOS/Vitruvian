@@ -12,7 +12,7 @@
 // ------------------------------------------------------
 // PoorMan Window
 const char* STR_APP_SIG
-	= "application/x-vnd.Haiku-PoorMan";
+	= "application/x-vnd.vos-PoorMan";
 const char* STR_APP_NAME
 	= B_TRANSLATE_SYSTEM_NAME("PoorMan");
 const char* STR_ERR_CANT_START

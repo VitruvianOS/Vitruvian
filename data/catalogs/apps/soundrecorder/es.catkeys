@@ -1,4 +1,4 @@
-1	spanish; castilian	x-vnd.Haiku-SoundRecorder	24440888
+1	spanish; castilian	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Bucle
 Cannot find default audio hardware	RecorderWindow		No se encuentra el hardware predeterminado de audio
 Cannot find the temporary file created to hold the new recording	RecorderWindow		No se encuentra el archivo temporal creado para guardar la nueva grabación

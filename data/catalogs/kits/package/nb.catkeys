@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-libpackage	134767648
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Henter programarkiv-cache fra %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Validerer sjekksum for %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Kunne ikke fjerne transaksjonsmappen

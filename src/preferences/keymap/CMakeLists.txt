@@ -12,4 +12,4 @@ Application(Keymap
 	RDEF Keymap.rdef
 )
 UsePrivateHeaders(Keymap shared interface)
-DoCatalogs("x-vnd.Haiku-Keymap" preferences/keymap)
+DoCatalogs("x-vnd.vos-Keymap" preferences/keymap)

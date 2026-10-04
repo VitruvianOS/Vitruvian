@@ -1,4 +1,4 @@
-1	friulian	x-vnd.Haiku-CodyCam	384853512
+1	friulian	x-vnd.vos-CodyCam	384853512
 destination directory expected	CodyCam		si spietave la cartele di destinazion
 reply: '%s'\n	SftpClient		rispuint: '%s'\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <suppressed>  (inviade peraule di ordin reâl)

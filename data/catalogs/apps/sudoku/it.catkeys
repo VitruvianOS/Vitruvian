@@ -1,4 +1,4 @@
-1	italian	x-vnd.Haiku-Sudoku	3382377306
+1	italian	x-vnd.vos-Sudoku	3382377306
 Restore snapshot	SudokuWindow		Ripristina snapshot
 File	SudokuWindow		File
 Mark invalid values	SudokuWindow		Segna numeri inseriti non validi

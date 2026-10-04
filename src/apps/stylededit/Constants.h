@@ -15,7 +15,7 @@
 #include <SupportDefs.h>
 
 
-#define APP_SIGNATURE  "application/x-vnd.Haiku-StyledEdit"
+#define APP_SIGNATURE  "application/x-vnd.vos-StyledEdit"
 
 const float TEXT_INSET = 3.0;
 

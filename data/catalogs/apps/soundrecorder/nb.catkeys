@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-SoundRecorder	3982150268
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-SoundRecorder	3982150268
 Loop	RecorderWindow		Loop
 Cannot find default audio hardware	RecorderWindow		Kan ikke finne forhåndsvalgt maskinvare for lyd
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Kan ikke finne den midlertidige filen som ble opprettet for å inneholde den nye innspillingen

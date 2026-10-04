@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-mixer.media_addon	275473112
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-mixer.media_addon	275473112
 Input mapping	AudioMixer		Tilordning av input
 High quality (linear interpolation)	AudioMixer		Høy kvalitet (lineær interpolasjon)
 To output	AudioMixer		Til utgang

@@ -2,7 +2,7 @@
  * SGITranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-SGITranslator";
+resource app_signature "application/x-vnd.vos-SGITranslator";
 
 resource app_version {
 	major  = 1,

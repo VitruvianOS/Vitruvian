@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-SoundRecorder	24440888
+1	english	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		循環
 Cannot find default audio hardware	RecorderWindow		找不到默認音訊硬體
 Cannot find the temporary file created to hold the new recording	RecorderWindow		找不到為儲存新錄音而建立的臨時檔案

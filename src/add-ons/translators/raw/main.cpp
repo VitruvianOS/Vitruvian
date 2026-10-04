@@ -31,7 +31,7 @@
 int
 main(int argc, char **argv)
 {
-	BApplication app("application/x-vnd.Haiku-RAWTranslator");
+	BApplication app("application/x-vnd.vos-RAWTranslator");
 
 #if TEST_MODE
 	if (argc > 1) {

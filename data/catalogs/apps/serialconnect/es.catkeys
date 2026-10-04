@@ -1,4 +1,4 @@
-1	spanish; castilian	x-vnd.haiku.SerialConnect	4294067463
+1	spanish; castilian	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Hardware
 Connection	SerialWindow		Conexión
 Raw send…	SerialWindow		Envío sin procesar…

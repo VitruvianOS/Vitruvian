@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-DiskUsage	2951688400
+1	english	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		%size% 於 {0, plural, one{# 檔案} other{# 檔案}}
 Scanning %refName%	Scanner		掃描 %refName%
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d 檔案

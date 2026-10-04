@@ -1,4 +1,4 @@
-1	thai	x-vnd.Haiku-NetworkStatus	844078452
+1	thai	x-vnd.vos-NetworkStatus	844078452
 Quit	NetworkStatusView		ออก
 Unknown	NetworkStatusView		ไม่รู้จัก
 Launching the network preflet failed.\n\nError: 	NetworkStatusView		การเรียกใช้ preflet เครือข่ายล้มเหลว\n\nข้อผิดพลาด:

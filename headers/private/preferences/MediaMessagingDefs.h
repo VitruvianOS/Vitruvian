@@ -9,7 +9,7 @@
 
 // Media preferences' app signature, shared with anyone that launches or
 // messages it (the AudioMixer replicant, Deskbar menu entries, ...).
-const char* const kMediaAppSignature = "application/x-vnd.Haiku-Media";
+const char* const kMediaAppSignature = "application/x-vnd.vos-Media";
 
 // Sent by the AudioMixer replicant (or anyone else) to jump straight to a
 // sidebar section — int32 "section", one of the kMediaSection* values below.

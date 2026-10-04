@@ -55,7 +55,7 @@ static const uint32 kMsgVolumeWhich = 'svwh';
 static const char* kReplicantName = "MediaReplicant";
 	// R5 name needed, Media prefs manel removes by name
 
-static const char* kSettingsFile = "x-vnd.Haiku-desklink";
+static const char* kSettingsFile = "x-vnd.vos-desklink";
 
 
 class VolumeToolTip : public BTextToolTip {
@@ -320,17 +320,17 @@ MediaReplicant::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case kMsgOpenMediaPlayer:
-			_Launch("MediaPlayer", "application/x-vnd.Haiku-MediaPlayer",
+			_Launch("MediaPlayer", "application/x-vnd.vos-MediaPlayer",
 				B_SYSTEM_APPS_DIRECTORY, "MediaPlayer");
 			break;
 
 		case kMsgOpenMediaSettings:
-			_Launch("Media Preferences", "application/x-vnd.Haiku-Media",
+			_Launch("Media Preferences", "application/x-vnd.vos-Media",
 				B_SYSTEM_PREFERENCES_DIRECTORY, "Media");
 			break;
 
 		case kMsgOpenSoundSettings:
-			_Launch("Sounds Preferences", "application/x-vnd.Haiku-Sounds",
+			_Launch("Sounds Preferences", "application/x-vnd.vos-Sounds",
 				B_SYSTEM_PREFERENCES_DIRECTORY, "Sounds");
 			break;
 

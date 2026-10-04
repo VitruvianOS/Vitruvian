@@ -19,7 +19,7 @@
 namespace BPrivate {
 
 
-#define kLaunchDaemonSignature "application/x-vnd.Haiku-launch_daemon"
+#define kLaunchDaemonSignature "application/x-vnd.vos-launch_daemon"
 #ifdef TEST_MODE
 #	define B_LAUNCH_DAEMON_PORT_NAME "test:launch_daemon"
 #else

@@ -485,7 +485,7 @@ Translator::GetMimeTypeFromCode(uint32 type, char *mimeType)
 
 
 TranslateApp::TranslateApp(void)
-	: BApplication("application/x-vnd.haiku-translate"),
+	: BApplication("application/x-vnd.vos-translate"),
 	fGotArguments(false),
 	fTranslatorRoster(BTranslatorRoster::Default()),
 	fTranslatorCount(0),

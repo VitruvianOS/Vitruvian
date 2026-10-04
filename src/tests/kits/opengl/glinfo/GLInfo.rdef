@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-GLInfo";
+resource app_signature "application/x-vnd.vos-GLInfo";
 
-resource app_name_catalog_entry "x-vnd.Haiku-GLInfo:System name:GL Info";
+resource app_name_catalog_entry "x-vnd.vos-GLInfo:System name:GL Info";
 
 resource(1, "gears_64.png") #'PNG ' import "gears_64.png";
 

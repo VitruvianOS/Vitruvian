@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-Magnify	3309471563
+1	english	x-vnd.vos-Magnify	3309471563
   size must be > 4 and a multiple of 4	Console		大小必須 > 4 且是 4 的倍數
 Decrease pixel size	Magnify-Main		減小像素大小
 no clip msg	In console, when clipboard is empty after clicking Copy image		無剪輯訊息

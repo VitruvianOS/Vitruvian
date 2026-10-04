@@ -2,7 +2,7 @@
  * PCXTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-PCXTranslator";
+resource app_signature "application/x-vnd.vos-PCXTranslator";
 
 resource app_version {
 	major  = 0,

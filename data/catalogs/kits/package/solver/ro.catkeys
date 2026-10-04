@@ -1,4 +1,4 @@
-1	romanian	x-vnd.Haiku-libsolvsolver	3404387783
+1	romanian	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		permite modificarea arhitecturii a %source% la %target%
 install %source% from excluded repository	SolverProblemSolution		instalează %source% din depozitul exclus
 unspecified problem	SolverProblem		problemă nespecificată

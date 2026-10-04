@@ -78,19 +78,19 @@ beos_hidden() {
 	setfattr -n "user.beos.SYS:HIDDEN" --value="0x54494e5501000000" "${target}" 2>/dev/null || true
 }
 
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_SYSTEM_DIRECTORY:system" /system
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_DIRECTORY:home" /home
+beos_string SYS:NAME "x-vnd.vos-libtracker:B_SYSTEM_DIRECTORY:system" /system
+beos_string SYS:NAME "x-vnd.vos-libtracker:B_USER_DIRECTORY:home" /home
 # B_DESKTOP_DIRECTORY xattr is stamped per-user at first login (there is
 # no shared /home/Desktop). B_USER_CONFIG_DIRECTORY rides skel via cp -a.
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_CONFIG_DIRECTORY:config" /etc/skel/config
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_APPS_DIRECTORY:apps" /system/apps
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_PREFERENCES_DIRECTORY:preferences" /system/preferences
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_SYSTEM_DEVELOP_DIRECTORY:develop" /system/develop
+beos_string SYS:NAME "x-vnd.vos-libtracker:B_USER_CONFIG_DIRECTORY:config" /etc/skel/config
+beos_string SYS:NAME "x-vnd.vos-libtracker:B_APPS_DIRECTORY:apps" /system/apps
+beos_string SYS:NAME "x-vnd.vos-libtracker:B_PREFERENCES_DIRECTORY:preferences" /system/preferences
+beos_string SYS:NAME "x-vnd.vos-libtracker:B_SYSTEM_DEVELOP_DIRECTORY:develop" /system/develop
 beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Applications:Applications" /system/data/deskbar/menu/Applications
 beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Demos:Demos" /system/data/deskbar/menu/Demos
 beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Preferences:Preferences" /system/data/deskbar/menu/Preferences
 beos_string SYS:NAME "x-vnd.Be-TSKB:B_USER_DESKBAR_DIRECTORY/Desktop applets:Desktop applets" "/system/data/deskbar/menu/Desktop applets"
-beos_string SYS:NAME "x-vnd.Haiku-libtracker:B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates:Tracker New Templates" "/etc/skel/config/settings/Tracker/Tracker New Templates"
+beos_string SYS:NAME "x-vnd.vos-libtracker:B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates:Tracker New Templates" "/etc/skel/config/settings/Tracker/Tracker New Templates"
 
 # Hide Linux-userland root dirs; /boot /system /home /dev /tmp stay visible.
 for _p in /bin /sbin /lib /lib32 /lib64 /libx32 /etc /proc /sys /run \
@@ -101,7 +101,7 @@ done
 
 # This MIME type makes Model::IsVirtualDirectory() return true, so Tracker
 # aggregates the three menu directories listed in the file.
-beos_mime BEOS:TYPE "application/x-vnd.haiku-virtual-directory" /system/data/deskbar/menu_entries
+beos_mime BEOS:TYPE "application/x-vnd.vos-virtual-directory" /system/data/deskbar/menu_entries
 
 beos_mime BEOS:TYPE "application/x-vnd.Be.printer" /etc/skel/config/settings/printers/Preview
 beos_string "Printer Name" "Preview" /etc/skel/config/settings/printers/Preview

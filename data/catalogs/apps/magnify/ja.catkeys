@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-Magnify	3309471563
+1	japanese	x-vnd.vos-Magnify	3309471563
   size must be > 4 and a multiple of 4	Console		  size must be > 4 and a multiple of 4
 Decrease pixel size	Magnify-Main		ピクセルの縮小
 no clip msg	In console, when clipboard is empty after clicking Copy image		no clip msg

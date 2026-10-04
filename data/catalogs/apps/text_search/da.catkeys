@@ -1,4 +1,4 @@
-1	danish	x-vnd.Haiku.TextSearch	1757850908
+1	danish	x-vnd.vos.TextSearch	1757850908
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Vælg de filer, du vil have valgt for dig i Tracker.
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		Kunne ikke starte xargs-program!

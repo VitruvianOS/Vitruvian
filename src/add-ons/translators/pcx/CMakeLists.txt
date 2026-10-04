@@ -14,4 +14,4 @@ TranslatorAddOn(
 
 	RDEF PCXTranslator.rdef
 )
-DoCatalogs("x-vnd.Haiku-PCXTranslator" add-ons/translators/pcx)
+DoCatalogs("x-vnd.vos-PCXTranslator" add-ons/translators/pcx)

@@ -14,7 +14,7 @@
 
 #include <add-ons/tracker/TrackerAddOn.h>
 
-const char* kTerminalSignature = "application/x-vnd.Haiku-Terminal";
+const char* kTerminalSignature = "application/x-vnd.vos-Terminal";
 
 static void
 launch_terminal(BEntry& targetEntry) {

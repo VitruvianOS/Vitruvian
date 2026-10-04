@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-mount_server	599204450
+1	finnish	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Liitä kirjoitussuojattuna
 Error mounting volume:\n\n%s	AutoMounter		Virhe liitettäessä taltiota:\n\n%s
 Cancel	AutoMounter		Peru

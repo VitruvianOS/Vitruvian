@@ -1,4 +1,4 @@
-1	dutch; flemish	x-vnd.haiku-package_daemon	1440586681
+1	dutch; flemish	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Pakketwijzigingen
 uninstall package %s\n	PackageResult	Don't change '%s' variable	pakket verwijderen %s\n
 ignore problem for now	PackageProblem		probleem voor nu negeren

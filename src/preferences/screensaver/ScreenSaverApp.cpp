@@ -33,7 +33,7 @@ private:
 
 ScreenSaverApp::ScreenSaverApp()
 	:
-	BApplication("application/x-vnd.Haiku-ScreenSaver")
+	BApplication("application/x-vnd.vos-ScreenSaver")
 {
 	fScreenSaverWindow = new ScreenSaverWindow();
 	fScreenSaverWindow->Show();

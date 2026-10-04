@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-BootManager	1012731949
+1	korean	x-vnd.vos-BootManager	1012731949
 Old Master Boot Record backup failure	BootManagerController	Title	이전 마스터 부트 레코드 백업 실패
 At least one partition must be selected!	BootManagerController		최소한 하나의 파티션을 선택해야 합니다!
 No space available!	DrivesPage	Cannot install	공간이 부족합니다!

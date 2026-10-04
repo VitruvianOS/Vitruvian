@@ -21,7 +21,7 @@
 
 static int sExitValue = EXIT_FAILURE;
 static const char* kProgramName = "waitfor";
-static const char* kProgramSig = "application/x-vnd.haiku-waitfor";
+static const char* kProgramSig = "application/x-vnd.vos-waitfor";
 
 
 #define INTERVAL 100000 // 0.1sec

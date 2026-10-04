@@ -1,4 +1,4 @@
-1	czech	x-vnd.Haiku.TextSearch	1461663588
+1	czech	x-vnd.vos.TextSearch	1461663588
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Prosím vyberte soubory, které si přejete mít vybrány v Trackeru.
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		Selhalo spuštění aplikace xargs!

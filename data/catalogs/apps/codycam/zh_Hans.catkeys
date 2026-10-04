@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-CodyCam	2786669505
+1	english	x-vnd.vos-CodyCam	2786669505
 destination directory expected	CodyCam		预期目标目录
 reply: '%s'\n	SftpClient		回复：‘%s’\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <suppressed> (发送真实密码)

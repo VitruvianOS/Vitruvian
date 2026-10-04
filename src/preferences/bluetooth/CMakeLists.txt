@@ -16,4 +16,4 @@ target_include_directories(Bluetooth PRIVATE
 	${CMAKE_SOURCE_DIR}/headers/private/bluetooth
 )
 UsePrivateHeaders(Bluetooth bluetooth shared)
-DoCatalogs("x-vnd.Haiku-Bluetooth" preferences/bluetooth)
+DoCatalogs("x-vnd.vos-Bluetooth" preferences/bluetooth)

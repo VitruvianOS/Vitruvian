@@ -1320,7 +1320,7 @@ make_nth_translator(int32 n, image_id you, uint32 flags, ...)
 int
 main(int, char**)
 {
-	BApplication app("application/x-vnd.Haiku-JPEGTranslator");
+	BApplication app("application/x-vnd.vos-JPEGTranslator");
 	JPEGTranslator* translator = new JPEGTranslator();
 	if (LaunchTranslatorWindow(translator, sTranslatorName) == B_OK)
 		app.Run();

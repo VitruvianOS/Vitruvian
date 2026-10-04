@@ -1,4 +1,4 @@
-1	english (united kingdom)	x-vnd.Haiku-MediaConverter	3694805094
+1	english (united kingdom)	x-vnd.vos-MediaConverter	3694805094
 Input file not recognized as Audio or Video	MediaConverter		Input file not recognised as Audio or Video
 {0, plural, one{The file was not recognized as a supported media file:} other{# files were not recognized as supported media files:}}	MediaConverter		{0, plural, one{The file was not recognised as a supported media file:} other{# files were not recognised as supported media files:}}
 OK	MediaConverter		Alright

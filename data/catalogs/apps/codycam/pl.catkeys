@@ -1,4 +1,4 @@
-1	polish	x-vnd.Haiku-CodyCam	2786669505
+1	polish	x-vnd.vos-CodyCam	2786669505
 destination directory expected	CodyCam		oczekiwano katalogu docelowego
 reply: '%s'\n	SftpClient		odpowiedź: „%s”\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <ukryte>  (przesłano prawdziwe hasło)

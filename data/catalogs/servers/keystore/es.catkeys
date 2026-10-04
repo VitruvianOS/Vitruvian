@@ -1,4 +1,4 @@
-1	spanish; castilian	x-vnd.Haiku-keystore_server	2429996361
+1	spanish; castilian	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		para realizar la siguiente acción:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Esta aplicación aún no tiene los privilegios necesarios.
 Keyring:	KeyRequestWindow		Depósito de claves:

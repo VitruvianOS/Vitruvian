@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.haiku-package_daemon	1440586681
+1	greek, modern (1453-)	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Αλλαγές πακέτου
 uninstall package %s\n	PackageResult	Don't change '%s' variable	απεγκατάσταση πακέτου %s\n
 ignore problem for now	PackageProblem		αγνόησε το πρόβλημα προς το παρόν

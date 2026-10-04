@@ -16,7 +16,7 @@ target_include_directories(NetworkStatus PRIVATE
 	${CMAKE_SOURCE_DIR}/src/kits/network/libnetapi
 )
 UsePrivateHeaders(NetworkStatus interface net)
-DoCatalogs("x-vnd.Haiku-NetworkStatus" apps/networkstatus)
+DoCatalogs("x-vnd.vos-NetworkStatus" apps/networkstatus)
 
 # Off by default and only settable from the cmake command line -- a debug
 # menu that opens the secret dialog shells with sample content must

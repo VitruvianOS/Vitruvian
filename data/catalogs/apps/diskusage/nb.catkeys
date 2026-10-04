@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-DiskUsage	2951688400
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		%size% i {0, plural, one{# fil} other{# filer}}
 Scanning %refName%	Scanner		Skanner %refName%
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d filer

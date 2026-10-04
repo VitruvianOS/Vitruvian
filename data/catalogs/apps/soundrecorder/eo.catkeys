@@ -1,4 +1,4 @@
-1	esperanto	x-vnd.Haiku-SoundRecorder	24440888
+1	esperanto	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Iteracii
 Cannot find default audio hardware	RecorderWindow		Ne povas trovi defaŭltan sonan aparaton
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Ne povas trovi provizoran dosieron kreitan por konservi novan sonregistradon

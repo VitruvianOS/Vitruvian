@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-keystore_server	2429996361
+1	ukrainian	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		виконати наступні дії:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Ця програма ще не має необхідних привілеїв.
 Keyring:	KeyRequestWindow		Набір ключів:

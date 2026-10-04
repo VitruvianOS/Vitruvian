@@ -1,4 +1,4 @@
-1	danish	x-vnd.Haiku-BootManager	1012731949
+1	danish	x-vnd.vos-BootManager	1012731949
 Old Master Boot Record backup failure	BootManagerController	Title	Sikkerhedskopiering af gammel MBR mislykkedes
 At least one partition must be selected!	BootManagerController		Mindst én af partitionerne skal være valgt!
 No space available!	DrivesPage	Cannot install	Ingen ledig plads!

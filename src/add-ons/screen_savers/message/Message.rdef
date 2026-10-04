@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-MessageScreensaver";
+resource app_signature "application/x-vnd.vos-MessageScreensaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-MessageScreensaver:System name:Message";
+resource app_name_catalog_entry "x-vnd.vos-MessageScreensaver:System name:Message";
 
 resource app_version {
 	major  = 1,

@@ -1,6 +1,6 @@
-resource app_signature "application/x-vnd.Haiku-Input";
+resource app_signature "application/x-vnd.vos-Input";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Input:System name:Input";
+resource app_name_catalog_entry "x-vnd.vos-Input:System name:Input";
 
 resource app_version {
 	major  = 1,

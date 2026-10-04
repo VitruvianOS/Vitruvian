@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-libsolvsolver	3404387783
+1	english	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		允許將 %source% 的架構更改為 %target%
 install %source% from excluded repository	SolverProblemSolution		從排除的儲存庫安裝 %source%
 unspecified problem	SolverProblem		未指定的問題

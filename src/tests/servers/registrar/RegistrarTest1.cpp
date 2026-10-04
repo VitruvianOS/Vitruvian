@@ -45,7 +45,7 @@ public:
 int
 main()
 {
-	TestApp* app = new TestApp("application/x-vnd.Haiku-TestApp1");
+	TestApp* app = new TestApp("application/x-vnd.vos-TestApp1");
 	app->Run();
 	delete app;
 

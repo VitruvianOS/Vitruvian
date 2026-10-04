@@ -1,4 +1,4 @@
-1	portuguese	x-vnd.Haiku-keystore_server	2429996361
+1	portuguese	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		para realizar a seguinte ação:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Esta aplicação ainda não dispõe dos privilégios necessários.
 Keyring:	KeyRequestWindow		Porta-chaves:

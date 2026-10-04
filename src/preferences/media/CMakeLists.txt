@@ -21,4 +21,4 @@ target_include_directories(Media PRIVATE
 	${CMAKE_SOURCE_DIR}/src/kits/media2
 )
 UsePrivateHeaders(Media media2 interface preferences)
-DoCatalogs("x-vnd.Haiku-Media" preferences/media)
+DoCatalogs("x-vnd.vos-Media" preferences/media)

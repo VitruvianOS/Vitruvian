@@ -1,4 +1,4 @@
-1	thai	x-vnd.Haiku-libpackage	134767648
+1	thai	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		กำลังดึงที่เก็บแคชจาก %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		กำลังตรวจสอบสำหรับ %repositoryName
 Failed to remove transaction directory	PackageManagerKit		ไม่สามารถลบไดเรกทอรีธุรกรรม

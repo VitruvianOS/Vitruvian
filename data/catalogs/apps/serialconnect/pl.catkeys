@@ -1,4 +1,4 @@
-1	polish	x-vnd.haiku.SerialConnect	4294067463
+1	polish	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Sprzętowa
 Connection	SerialWindow		Połączenie
 Raw send…	SerialWindow		Wyślij surowe dane…

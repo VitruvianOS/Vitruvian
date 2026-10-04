@@ -1,4 +1,4 @@
-1	dutch; flemish	x-vnd.Haiku-DiskUsage	2951688400
+1	dutch; flemish	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		%size% voor {0, plural, one{# bestand} other{# bestanden}}
 Scanning %refName%	Scanner		%refName% scannen
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d bestanden

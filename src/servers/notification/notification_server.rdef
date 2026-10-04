@@ -1,5 +1,5 @@
 
-resource app_signature "application/x-vnd.Haiku-notification_server";
+resource app_signature "application/x-vnd.vos-notification_server";
 
 resource app_flags B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP;
 

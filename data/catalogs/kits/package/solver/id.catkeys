@@ -1,4 +1,4 @@
-1	indonesian	x-vnd.Haiku-libsolvsolver	3404387783
+1	indonesian	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		ijinkan perubahan arsitektur dari %source% ke %target%
 install %source% from excluded repository	SolverProblemSolution		pasang %source% dari repositori yang dikecualikan
 unspecified problem	SolverProblem		masalah tidak spesifik

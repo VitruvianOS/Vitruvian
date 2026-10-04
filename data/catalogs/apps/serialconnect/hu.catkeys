@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.haiku.SerialConnect	4294067463
+1	hungarian	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Eszköz
 Connection	SerialWindow		Kapcsolat
 Raw send…	SerialWindow		Nyers küldés…

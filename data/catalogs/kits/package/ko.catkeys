@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-libpackage	134767648
+1	korean	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		%url에서 저장소 캐시 가져오는 중
 Validating checksum for %repositoryName	RefreshRepositoryRequest		%repositoryName의 체크섬 검증 중
 Failed to remove transaction directory	PackageManagerKit		트랜젝션 디렉터리를 제거할 수 없습니다

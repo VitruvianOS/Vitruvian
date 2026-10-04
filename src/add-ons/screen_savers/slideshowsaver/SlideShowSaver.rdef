@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-SlideShowSaver";
+resource app_signature "application/x-vnd.vos-SlideShowSaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-SlideShowSaver:System name:SlideShowSaver";
+resource app_name_catalog_entry "x-vnd.vos-SlideShowSaver:System name:SlideShowSaver";
 
 resource app_version {
 	major  = 1,

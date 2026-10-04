@@ -1,4 +1,4 @@
-1	croatian	x-vnd.Haiku-mount_server	599204450
+1	croatian	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Montiraj samo za čitanje
 Error mounting volume:\n\n%s	AutoMounter		Greška pri montiranju particije:\n\n%s
 Cancel	AutoMounter		Otkaži

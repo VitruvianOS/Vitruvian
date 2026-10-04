@@ -1,4 +1,4 @@
-1	portuguese (brazil)	x-vnd.Haiku-libpackage	134767648
+1	portuguese (brazil)	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Buscando repositório-cache de %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Validando checksum para %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Falha ao remover diretório de transações

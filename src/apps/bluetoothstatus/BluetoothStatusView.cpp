@@ -615,7 +615,7 @@ BluetoothStatusView::_SetAdapterPowered(bool powered)
 void
 BluetoothStatusView::_OpenBluetoothPreferences()
 {
-	be_roster->Launch("application/x-vnd.Haiku-Bluetooth");
+	be_roster->Launch("application/x-vnd.vos-Bluetooth");
 }
 
 

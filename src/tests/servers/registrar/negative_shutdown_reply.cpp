@@ -8,7 +8,7 @@
 class TestApp : public BApplication {
 public:
 	TestApp()
-		: BApplication("application/x-vnd.haiku.negative-shutdown-reply")
+		: BApplication("application/x-vnd.vos.negative-shutdown-reply")
 	{
 	}
 

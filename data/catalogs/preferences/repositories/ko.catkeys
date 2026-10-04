@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-Repositories	1003035766
+1	korean	x-vnd.vos-Repositories	1003035766
 This is not a valid URL.	AddRepoWindow	Add URL error message	올바르지 않은 URL입니다.
 Repository URL:	AddRepoWindow	Text box label	저장소 URL:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	%name%의 저장소 캐시를 새로고침 하는 데 오류가 발생했습니다

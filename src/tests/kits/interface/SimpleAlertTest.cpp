@@ -184,7 +184,7 @@ public:
 
 Application::Application()
 	:
-	BApplication("application/x-vnd.haiku-AlertTest")
+	BApplication("application/x-vnd.vos-AlertTest")
 {
 }
 

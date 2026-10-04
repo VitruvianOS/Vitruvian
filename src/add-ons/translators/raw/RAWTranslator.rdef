@@ -2,7 +2,7 @@
  * RAWTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-RAWTranslator";
+resource app_signature "application/x-vnd.vos-RAWTranslator";
 
 resource app_version {
 	major  = 0,

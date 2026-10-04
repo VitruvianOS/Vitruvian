@@ -8,7 +8,7 @@
 int
 main()
 {
-	BApplication app("application/x-vnd.haiku.no-shutdown-reply");
+	BApplication app("application/x-vnd.vos.no-shutdown-reply");
 
 	while (true)
 		snooze(1000000);

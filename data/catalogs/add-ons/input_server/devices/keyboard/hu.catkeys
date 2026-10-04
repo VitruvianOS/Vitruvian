@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.Haiku-KeyboardInputServerDevice	131044710
+1	hungarian	x-vnd.vos-KeyboardInputServerDevice	131044710
 If the application will not quit you may have to kill it.	Team monitor		Ha a program nem lép ki magától, lehet, hogy meg kell szakítani a futását.
 Quit application	Team monitor		Program leállítása
 Open Terminal	Team monitor		Terminál megnyitása

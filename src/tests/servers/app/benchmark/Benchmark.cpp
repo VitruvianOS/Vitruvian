@@ -38,7 +38,7 @@ const test_info kTestInfos[] = {
 class Benchmark : public BApplication {
 public:
 	Benchmark(Test* test, drawing_mode mode, bool clipping)
-		: BApplication("application/x-vnd.haiku-benchmark"),
+		: BApplication("application/x-vnd.vos-benchmark"),
 		  fTest(test),
 		  fTestWindow(NULL),
 		  fDrawingMode(mode),

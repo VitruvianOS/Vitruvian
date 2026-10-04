@@ -51,7 +51,7 @@ struct KnownServer {
 
 static const KnownServer kKnownServers[] = {
 	{ "mount_server",  // root: mount(2) needs CAP_SYS_ADMIN
-	  "application/x-vnd.Haiku-mount_server",
+	  "application/x-vnd.vos-mount_server",
 	  NULL },
 	{ NULL, NULL, NULL }
 };

@@ -65,7 +65,7 @@ View::MessageReceived(BMessage* msg)
 int
 main(int argc, char **argv)
 {
-	BApplication app("application/x-vnd.haiku-ShakeFilterTest");
+	BApplication app("application/x-vnd.vos-ShakeFilterTest");
 
 	BWindow* window = new BWindow(BRect(100, 100, 400, 400),
 		"ShakeFilter-Test", B_TITLED_WINDOW,

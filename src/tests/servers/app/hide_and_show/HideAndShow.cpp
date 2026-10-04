@@ -112,7 +112,7 @@ public:
 
 
 Application::Application()
-	: BApplication("application/x-vnd.haiku-hide_and_show")
+	: BApplication("application/x-vnd.vos-hide_and_show")
 {
 }
 

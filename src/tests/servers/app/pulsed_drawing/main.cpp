@@ -26,7 +26,7 @@ class PulsedApplication : public BApplication {
 public:
 	PulsedApplication()
 		:
-		BApplication("application/x-vnd.haiku.pulsed_drawing")
+		BApplication("application/x-vnd.vos.pulsed_drawing")
 	{
 		BRect frame(100, 100, 400, 300);
 		BWindow* window = new BWindow(frame, "Pulsed Drawing",

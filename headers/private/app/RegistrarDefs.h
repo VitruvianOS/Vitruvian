@@ -24,7 +24,7 @@ extern const char* kRAppLooperPortName;
 
 
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
-#	define B_REGISTRAR_SIGNATURE "application/x-vnd.haiku-registrar"
+#	define B_REGISTRAR_SIGNATURE "application/x-vnd.vos-registrar"
 #	define B_REGISTRAR_PORT_NAME "system:roster"
 #else
 #	define B_REGISTRAR_SIGNATURE "application/x-vnd.test-registrar"

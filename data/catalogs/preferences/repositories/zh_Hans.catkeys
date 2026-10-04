@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-Repositories	1003035766
+1	english	x-vnd.vos-Repositories	1003035766
 This is not a valid URL.	AddRepoWindow	Add URL error message	这是一个无效的 URL。
 Repository URL:	AddRepoWindow	Text box label	仓库 URL 地址：
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	为 %name% 刷新仓库缓存时发生错误

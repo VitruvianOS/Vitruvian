@@ -146,7 +146,7 @@ ChildView::Draw(BRect updateRect)
 int
 main(int argc, char** argv)
 {
-	BApplication app("application/x-vnd.Haiku-DrawAfterChildren");
+	BApplication app("application/x-vnd.vos-DrawAfterChildren");
 
 	BRect frame(100, 100, 700, 400);
 	BWindow* window = new BWindow(frame, "Window",

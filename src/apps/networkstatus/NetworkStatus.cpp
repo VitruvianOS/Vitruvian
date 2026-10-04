@@ -47,7 +47,7 @@ class NetworkStatus : public BApplication {
 };
 
 
-const char* kSignature = "application/x-vnd.Haiku-NetworkStatus";
+const char* kSignature = "application/x-vnd.vos-NetworkStatus";
 const char* kDeskbarSignature = "application/x-vnd.Be-TSKB";
 const char* kDeskbarItemName = "NetworkStatus";
 

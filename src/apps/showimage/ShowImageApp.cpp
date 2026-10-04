@@ -27,7 +27,7 @@
 #include "ToolBarIcons.h"
 
 
-const char* kApplicationSignature = "application/x-vnd.Haiku-ShowImage";
+const char* kApplicationSignature = "application/x-vnd.vos-ShowImage";
 const int32 kWindowsToIgnore = 1;
 	// ignore the always open file panel
 

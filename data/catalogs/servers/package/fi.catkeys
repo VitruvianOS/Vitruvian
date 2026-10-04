@@ -1,4 +1,4 @@
-1	finnish	x-vnd.haiku-package_daemon	1440586681
+1	finnish	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Pakkausmuutokset
 uninstall package %s\n	PackageResult	Don't change '%s' variable	poista pakkauksen %s asennus\n
 ignore problem for now	PackageProblem		ohita pulma toistaiseksi

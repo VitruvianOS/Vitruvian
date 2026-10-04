@@ -4,4 +4,4 @@ Application(Magnify
 	RDEF Magnify.rdef
 )
 UsePrivateHeaders(Magnify shared)
-DoCatalogs("x-vnd.Haiku-Magnify" apps/magnify)
+DoCatalogs("x-vnd.vos-Magnify" apps/magnify)

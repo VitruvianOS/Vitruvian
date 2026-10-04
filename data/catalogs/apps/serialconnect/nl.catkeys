@@ -1,4 +1,4 @@
-1	dutch; flemish	x-vnd.haiku.SerialConnect	354154115
+1	dutch; flemish	x-vnd.vos.SerialConnect	354154115
 Hardware	SerialWindow	Flowcontrol	Hardware
 Connection	SerialWindow		Verbinding
 Raw send…	SerialWindow		Onbewerkt verzenden…

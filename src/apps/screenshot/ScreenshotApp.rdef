@@ -1,6 +1,6 @@
-resource app_signature "application/x-vnd.haiku-screenshot";
+resource app_signature "application/x-vnd.vos-screenshot";
 
-resource app_name_catalog_entry "x-vnd.haiku-screenshot:System name:Screenshot";
+resource app_name_catalog_entry "x-vnd.vos-screenshot:System name:Screenshot";
 
 resource app_flags B_MULTIPLE_LAUNCH;
 

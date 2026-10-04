@@ -330,7 +330,7 @@ public:
 
 MountVolume::MountVolume()
 	:
-	BApplication("application/x-vnd.haiku-mountvolume")
+	BApplication("application/x-vnd.vos-mountvolume")
 {
 }
 

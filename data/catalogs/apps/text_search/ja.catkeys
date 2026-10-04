@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku.TextSearch	1461663588
+1	japanese	x-vnd.vos.TextSearch	1461663588
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Tracker で選択するファイルを選んでください。
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		xargs プログラムを開けません!

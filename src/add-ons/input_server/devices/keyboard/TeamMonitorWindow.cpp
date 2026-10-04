@@ -317,7 +317,7 @@ TeamMonitorWindow::MessageReceived(BMessage* msg)
 			break;
 
 		case kMsgLaunchTerminal:
-			be_roster->Launch("application/x-vnd.Haiku-Terminal");
+			be_roster->Launch("application/x-vnd.vos-Terminal");
 			PostMessage(B_QUIT_REQUESTED);
 			break;
 

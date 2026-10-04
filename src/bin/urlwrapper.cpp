@@ -29,9 +29,9 @@
 #include "urlwrapper.h"
 
 
-const char* kAppSig = "application/x-vnd.Haiku-urlwrapper";
+const char* kAppSig = "application/x-vnd.vos-urlwrapper";
 const char* kTrackerSig = "application/x-vnd.Be-TRAK";
-const char* kTerminalSig = "application/x-vnd.Haiku-Terminal";
+const char* kTerminalSig = "application/x-vnd.vos-Terminal";
 const char* kBeShareSig = "application/x-vnd.Sugoi-BeShare";
 const char* kIMSig = "application/x-vnd.m_eiman.sample_im_client";
 const char* kVLCSig = "application/x-vnd.videolan-vlc";
@@ -271,7 +271,7 @@ UrlWrapper::ArgvReceived(int32 argc, char** argv)
 		}
 		if (be_roster->Launch(sig.String(), &msg) == B_OK)
 			return;
-		be_roster->Launch("application/x-vnd.Haiku-About");
+		be_roster->Launch("application/x-vnd.vos-About");
 		return;
 	}
 

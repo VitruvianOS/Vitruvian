@@ -9,7 +9,7 @@
 #define _NET_SERVER_H
 
 
-#define kNetServerSignature		"application/x-vnd.haiku-net_server"
+#define kNetServerSignature		"application/x-vnd.vos-net_server"
 
 #define kMsgConfigureInterface		'COif'
 #define kMsgAutoConfigureFailed		'COaf'

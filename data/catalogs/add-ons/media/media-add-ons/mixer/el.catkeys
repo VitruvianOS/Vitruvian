@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.Haiku-mixer.media_addon	275473112
+1	greek, modern (1453-)	x-vnd.vos-mixer.media_addon	275473112
 Input mapping	AudioMixer		Χαρτογράφηση εισόδου
 High quality (linear interpolation)	AudioMixer		Υψηλή ποιότητα (γραμμική παρεμβολή)
 To output	AudioMixer		Προς έξοδο

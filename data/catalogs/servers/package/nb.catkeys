@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.haiku-package_daemon	1440586681
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Pakke-endringer
 uninstall package %s\n	PackageResult	Don't change '%s' variable	avinstaller pakke %s\n
 ignore problem for now	PackageProblem		ignorer problemet foreløpig

@@ -1,4 +1,4 @@
-1	turkish	x-vnd.Haiku-CodyCam	384853512
+1	turkish	x-vnd.vos-CodyCam	384853512
 destination directory expected	CodyCam		hedef dizin bekleniyordu
 reply: '%s'\n	SftpClient		yanıtla: “%s”\n
 PASS <suppressed>  (real password sent)	FtpClient		PAROLA <gizlenmiş>  (gönderilen gerçek parola)

@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-CodyCam	384853512
+1	japanese	x-vnd.vos-CodyCam	384853512
 destination directory expected	CodyCam		出力先ディレクトリを入力してください
 reply: '%s'\n	SftpClient		返信: '%s'\n
 PASS <suppressed>  (real password sent)	FtpClient		PASS <非表示> (本物のパスワードが送られます)

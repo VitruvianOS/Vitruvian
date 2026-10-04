@@ -1,4 +1,4 @@
-1	romanian	x-vnd.Haiku.TextSearch	1461663588
+1	romanian	x-vnd.vos.TextSearch	1461663588
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Selectați fișierele pe care doriți să le aveți selectate în Tracker.
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		Nu s-a putut porni programul xargs!

@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-DebugNowScreensaver";
+resource app_signature "application/x-vnd.vos-DebugNowScreensaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-DebugNowScreensaver:System name:DebugNow";
+resource app_name_catalog_entry "x-vnd.vos-DebugNowScreensaver:System name:DebugNow";
 
 resource app_version {
 	major  = 1,

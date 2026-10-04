@@ -2,7 +2,7 @@
  * ICOTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-ICOTranslator";
+resource app_signature "application/x-vnd.vos-ICOTranslator";
 
 resource app_version {
 	major  = 1,

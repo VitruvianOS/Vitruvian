@@ -17,7 +17,7 @@
 
 KeymapApplication::KeymapApplication()
 	:
-	BApplication("application/x-vnd.Haiku-Keymap"),
+	BApplication("application/x-vnd.vos-Keymap"),
 	fModifierKeysWindow(NULL)
 {
 	// create the window

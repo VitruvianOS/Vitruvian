@@ -753,7 +753,7 @@ BackgroundsView::_NotifyServer()
 void
 BackgroundsView::_NotifyScreenPreflet()
 {
-	BMessenger messenger("application/x-vnd.Haiku-Screen");
+	BMessenger messenger("application/x-vnd.vos-Screen");
 	if (messenger.IsValid())
 		messenger.SendMessage(UPDATE_DESKTOP_COLOR_MSG);
 }

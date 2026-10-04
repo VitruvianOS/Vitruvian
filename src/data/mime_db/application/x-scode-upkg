@@ -9,7 +9,7 @@ resource(3, "META:S:DESC") #'MSDC' "Software package";
 
 resource(4, "META:L:DESC") #'MLDC' "Old-format package for the LegacyPackageInstaller";
 
-resource(5, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-PackageInstaller";
+resource(5, "META:PREF_APP") #'MSIG' "application/x-vnd.vos-PackageInstaller";
 
 resource(6, "META:EXTENS") message(234) {
 	"extensions" = "pkg",

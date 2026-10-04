@@ -401,7 +401,7 @@ NotificationView::ResolveSpecifier(BMessage* msg, int32 index, BMessage* spec,
 status_t
 NotificationView::GetSupportedSuites(BMessage* msg)
 {
-	msg->AddString("suites", "suite/x-vnd.Haiku-notification_server");
+	msg->AddString("suites", "suite/x-vnd.vos-notification_server");
 	BPropertyInfo prop_info(message_prop_list);
 	msg->AddFlat("messages", &prop_info);
 	return BView::GetSupportedSuites(msg);

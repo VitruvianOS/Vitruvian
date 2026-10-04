@@ -1,4 +1,4 @@
-1	croatian	x-vnd.Haiku-BootManager	837995799
+1	croatian	x-vnd.vos-BootManager	837995799
 At least one partition must be selected!	BootManagerController		Barem jedna particija mora biti odabrana!
 No space available!	DrivesPage	Cannot install	Nema dostupnog prostora!
 Immediately	DefaultPartitionPage		Odmah

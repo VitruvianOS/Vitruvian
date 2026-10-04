@@ -1,4 +1,4 @@
-1	czech	x-vnd.Haiku-Repositories	2642736029
+1	czech	x-vnd.vos-Repositories	2642736029
 This is not a valid URL.	AddRepoWindow	Add URL error message	Toto není platné URL.
 Repository URL:	AddRepoWindow	Text box label	URL repozitáře:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Při aktualizaci vyrovnávací paměti pro repozitář %name% došlo k chybě

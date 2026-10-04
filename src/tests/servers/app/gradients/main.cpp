@@ -29,7 +29,7 @@
 #include "harness.h"
 
 
-static const char* kAppSignature = "application/x-vnd.Haiku-Gradients";
+static const char* kAppSignature = "application/x-vnd.vos-Gradients";
 
 
 // #pragma mark - Test1

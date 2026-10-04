@@ -1,4 +1,4 @@
-1	thai	x-vnd.Haiku-mount_server	599204450
+1	thai	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		เมานต์อ่านอย่างเดียว
 Error mounting volume:\n\n%s	AutoMounter		ข้อผิดพลาดในการติดตั้งกลุ่ม:\n\n%s
 Cancel	AutoMounter		ยกเลิก

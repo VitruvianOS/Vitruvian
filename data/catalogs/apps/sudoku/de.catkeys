@@ -1,4 +1,4 @@
-1	german	x-vnd.Haiku-Sudoku	3382377306
+1	german	x-vnd.vos-Sudoku	3382377306
 Restore snapshot	SudokuWindow		Spielstand wiederherstellen
 File	SudokuWindow		Datei
 Mark invalid values	SudokuWindow		Falsche Zahlen markieren

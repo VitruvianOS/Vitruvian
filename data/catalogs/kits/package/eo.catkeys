@@ -1,4 +1,4 @@
-1	esperanto	x-vnd.Haiku-libpackage	134767648
+1	esperanto	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Ŝargado de deponeja kaŝmemoro el %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Validigado de kontrolsumo por %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Malsukcesis forigigo de transakcia dosierujo

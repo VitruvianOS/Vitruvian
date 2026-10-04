@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-SoundRecorder	24440888
+1	japanese	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		繰り返し
 Cannot find default audio hardware	RecorderWindow		デフォルトのオーディオハードウェアが見つかりません
 Cannot find the temporary file created to hold the new recording	RecorderWindow		新しいレコーディングを保存する一時ファイルが見つかりません

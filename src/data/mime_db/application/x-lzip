@@ -7,7 +7,7 @@ resource(2, "META:S:DESC") #'MSDC' "LZip archive";
 
 resource(2, "META:SNIFF_RULE") "0.50 (\"LZIP\")";
 
-resource(3, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-Expander";
+resource(3, "META:PREF_APP") #'MSIG' "application/x-vnd.vos-Expander";
 
 resource(4, "META:EXTENS") message(234) {
 	"extensions" = "lz",

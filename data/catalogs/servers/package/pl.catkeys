@@ -1,4 +1,4 @@
-1	polish	x-vnd.haiku-package_daemon	1440586681
+1	polish	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Zmiany w pakietach
 uninstall package %s\n	PackageResult	Don't change '%s' variable	usuń pakiet %s\n
 ignore problem for now	PackageProblem		ignoruj w tej chwili

@@ -23,4 +23,4 @@ RunnableAddOn(ProcessController
 	RDEF ProcessController.rdef
 )
 UsePrivateHeaders(ProcessController app interface shared system)
-DoCatalogs("x-vnd.Haiku-ProcessController" apps/processcontroller)
+DoCatalogs("x-vnd.vos-ProcessController" apps/processcontroller)

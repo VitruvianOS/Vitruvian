@@ -180,7 +180,7 @@ class Application : public BApplication {
 
 
 Application::Application()
-	: BApplication("application/x-vnd.haiku-test-controllook")
+	: BApplication("application/x-vnd.vos-test-controllook")
 {
 }
 

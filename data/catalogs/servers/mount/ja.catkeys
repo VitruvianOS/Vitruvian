@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-mount_server	599204450
+1	japanese	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		読み取り専用
 Error mounting volume:\n\n%s	AutoMounter		パーティションをマウント中にエラー発生:\n\n%s
 Cancel	AutoMounter		中止

@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.Haiku-libsolvsolver	3404387783
+1	greek, modern (1453-)	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		να επιτραπεί η αλλαγή αρχιτεκτονικής από %source% σε %target%
 install %source% from excluded repository	SolverProblemSolution		να γίνει εγκατάσταση του %source% από απενεργοποιημένο αποθετήριο
 unspecified problem	SolverProblem		απροσδιόριστο πρόβλημα

@@ -35,7 +35,7 @@ handleMute(BParameter *muteParameter, int mute = 2, bool toggle = false) {
 int
 main(int argc, char **argv)
 {
-	BApplication app("application/x-vnd.haiku.setvolume");
+	BApplication app("application/x-vnd.vos.setvolume");
 
 	BMediaRoster *roster = BMediaRoster::Roster();
 	if (roster == NULL) {

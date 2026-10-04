@@ -12,7 +12,7 @@
 #include "cl_wind.h"
 
 
-const char* kAppSignature = "application/x-vnd.Haiku-Clock";
+const char* kAppSignature = "application/x-vnd.vos-Clock";
 
 
 int

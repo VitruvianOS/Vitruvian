@@ -2,7 +2,7 @@
  * PSDTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-PSDTranslator";
+resource app_signature "application/x-vnd.vos-PSDTranslator";
 
 resource app_version {
 	major  = 1,

@@ -13,7 +13,7 @@ namespace BPrivate {
 
 
 const char* kKeyStoreServerSignature
-	= "application/x-vnd.Haiku-keystore_server";
+	= "application/x-vnd.vos-keystore_server";
 
 
 enum {

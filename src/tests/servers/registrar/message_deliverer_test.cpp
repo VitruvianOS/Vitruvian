@@ -61,7 +61,7 @@ check_expected_message(uint32 what)
 class TestApp : public BApplication {
 public:
 	TestApp()
-		: BApplication("application/x-vnd.haiku.message-deliverer-test")
+		: BApplication("application/x-vnd.vos.message-deliverer-test")
 	{
 	}
 

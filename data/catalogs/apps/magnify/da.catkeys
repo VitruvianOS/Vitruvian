@@ -1,4 +1,4 @@
-1	danish	x-vnd.Haiku-Magnify	3730034159
+1	danish	x-vnd.vos-Magnify	3730034159
   size must be > 4 and a multiple of 4	Console		  størrelse skal være > 4 og deleligt med 4
 Decrease pixel size	Magnify-Main		Formindsk billedpunktsstørrelse
 no clip msg	In console, when clipboard is empty after clicking Copy image		ingen klipmeddelelse

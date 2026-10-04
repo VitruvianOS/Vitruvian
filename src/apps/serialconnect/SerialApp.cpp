@@ -433,7 +433,7 @@ status_t SerialApp::PollSerial(void*)
 
 
 const char* SerialApp::kApplicationSignature
-	= "application/x-vnd.haiku.SerialConnect";
+	= "application/x-vnd.vos.SerialConnect";
 
 
 int main(int argc, char** argv)

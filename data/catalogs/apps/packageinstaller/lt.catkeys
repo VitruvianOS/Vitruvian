@@ -1,4 +1,4 @@
-1	lithuanian	x-vnd.Haiku-PackageInstaller	991363443
+1	lithuanian	x-vnd.vos-PackageInstaller	991363443
 none	PackageView		nieko
 Continue	PackageInstall		Tęsti
 Running post-installation scripts	PackageInstall		Vykdomi podiegiminiai scenarijai.

@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Magnify";
+resource app_signature "application/x-vnd.vos-Magnify";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Magnify:System name:Magnify";
+resource app_name_catalog_entry "x-vnd.vos-Magnify:System name:Magnify";
 
 resource app_version {
 	major  = 1,

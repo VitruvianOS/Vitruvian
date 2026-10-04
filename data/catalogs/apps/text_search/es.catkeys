@@ -1,4 +1,4 @@
-1	spanish; castilian	x-vnd.Haiku.TextSearch	4043418158
+1	spanish; castilian	x-vnd.vos.TextSearch	4043418158
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Por favor selecciona los archivos que quieras 
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		¡Falló al iniciar el programa xargs!

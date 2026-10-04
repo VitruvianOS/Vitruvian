@@ -1,4 +1,4 @@
-1	dutch; flemish	x-vnd.haiku-softwareupdater	1377379822
+1	dutch; flemish	x-vnd.vos-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	Versie bijwerken
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Klik hier om {0, plural, one{# bijgewerkt pakket} other{# bijgewerkte pakketten}} te installeren.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Pakketten om te verwijderen

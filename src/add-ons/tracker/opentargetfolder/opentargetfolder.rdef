@@ -1,4 +1,4 @@
-resource app_signature "application/x-vnd.haiku.opentargetfolder";
+resource app_signature "application/x-vnd.vos.opentargetfolder";
 
 resource app_flags B_SINGLE_LAUNCH;
 

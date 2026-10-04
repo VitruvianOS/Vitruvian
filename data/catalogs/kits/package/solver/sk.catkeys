@@ -1,4 +1,4 @@
-1	slovak	x-vnd.Haiku-libsolvsolver	3404387783
+1	slovak	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		umožniť zmenu architektúry %source% na %target%
 install %source% from excluded repository	SolverProblemSolution		nainštalovať %source% z vynechaného zdroja softvéru
 unspecified problem	SolverProblem		neurčený problém

@@ -37,7 +37,7 @@
 using BPrivate::bus_timedate1_set_ntp;
 
 
-const char* kAppSignature = "application/x-vnd.Haiku-Time";
+const char* kAppSignature = "application/x-vnd.vos-Time";
 
 
 TimeApplication::TimeApplication()

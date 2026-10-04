@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-SoundRecorder	24440888
+1	korean	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		구간반복
 Cannot find default audio hardware	RecorderWindow		기본 오디오 하드웨어를 찾을 수 없음
 Cannot find the temporary file created to hold the new recording	RecorderWindow		새 녹음을 저장하기 위해 생성된 임시 파일을 찾을 수 없습니다

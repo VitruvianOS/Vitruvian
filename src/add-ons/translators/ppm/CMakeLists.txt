@@ -14,4 +14,4 @@ TranslatorAddOn(
 
 	RDEF PPMTranslator.rdef
 )
-DoCatalogs("x-vnd.Haiku-PPMTranslator" add-ons/translators/ppm)
+DoCatalogs("x-vnd.vos-PPMTranslator" add-ons/translators/ppm)

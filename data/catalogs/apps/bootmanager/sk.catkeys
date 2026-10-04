@@ -1,4 +1,4 @@
-1	slovak	x-vnd.Haiku-BootManager	4031857803
+1	slovak	x-vnd.vos-BootManager	4031857803
 Old Master Boot Record backup failure	BootManagerController	Title	Zlyhalo zálohovanie starého MBR
 At least one partition must be selected!	BootManagerController		Musí byť vybraná aspoň jedna disková oblasť!
 No space available!	DrivesPage	Cannot install	Nie je voľné miesto!

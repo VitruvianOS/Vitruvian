@@ -1,4 +1,4 @@
-1	slovak	x-vnd.Haiku-NetworkStatus	972982814
+1	slovak	x-vnd.vos-NetworkStatus	972982814
 Quit	NetworkStatusView		Ukončiť
 Unknown	NetworkStatusView		Neznáme
 Launching the network preflet failed.\n\nError: 	NetworkStatusView		Spustenie nastavenia siete zlyhalo.\n\nChyba: 

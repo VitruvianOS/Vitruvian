@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku.TextSearch	1757850908
+1	korean	x-vnd.vos.TextSearch	1757850908
 Please select the files you wish to have selected for you in Tracker.	GrepWindow		Tracker에서 선택하였으면 하는 파일들을 선택하십시오.
 %appname% : %path%	GrepWindow		%appname% : %path%
 Failed to start xargs program!	Grepper		xargs 프로그램 실행에 실패했습니다!

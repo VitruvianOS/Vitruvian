@@ -1,4 +1,4 @@
-1	french	x-vnd.Haiku-BootManager	3831721565
+1	french	x-vnd.vos-BootManager	3831721565
 Old Master Boot Record backup failure	BootManagerController	Title	Échec lors de la sauvegarde du Master Boot Record d’origine
 At least one partition must be selected!	BootManagerController		Au moins une partition doit être sélectionnée !
 No space available!	DrivesPage	Cannot install	Espace insuffisant !

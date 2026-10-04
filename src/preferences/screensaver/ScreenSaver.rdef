@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-ScreenSaver";
+resource app_signature "application/x-vnd.vos-ScreenSaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-ScreenSaver:System name:ScreenSaver";
+resource app_name_catalog_entry "x-vnd.vos-ScreenSaver:System name:ScreenSaver";
 
 resource app_flags B_SINGLE_LAUNCH;
 

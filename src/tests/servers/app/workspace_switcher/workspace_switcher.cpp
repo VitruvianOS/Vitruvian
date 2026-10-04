@@ -15,7 +15,7 @@
 int
 main(int argc, char** argv)
 {
-	BApplication app("application/x-vnd.Haiku-test-wss");
+	BApplication app("application/x-vnd.vos-test-wss");
 
 	if (argc == 1) {
 		// switch forever

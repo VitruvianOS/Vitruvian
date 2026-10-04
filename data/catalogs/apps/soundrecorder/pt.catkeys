@@ -1,4 +1,4 @@
-1	portuguese	x-vnd.Haiku-SoundRecorder	24440888
+1	portuguese	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Repetir
 Cannot find default audio hardware	RecorderWindow		Não foi encontrado hardware de áudio predefinido
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Não foi possível encontrar o ficheiro temporário criado para a nova gravação

@@ -2,7 +2,7 @@
  * PNGTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-PNGTranslator";
+resource app_signature "application/x-vnd.vos-PNGTranslator";
 
 resource app_version {
 	major  = 1,

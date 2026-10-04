@@ -314,7 +314,7 @@ main(int argc, const char* const* argv)
 	testName = argv[1];
 
 	// create app
-	BApplication app("application/x-vnd.haiku.widget-layout-test");
+	BApplication app("application/x-vnd.vos.widget-layout-test");
 
 	// find and create the test
 	Test* test = NULL;

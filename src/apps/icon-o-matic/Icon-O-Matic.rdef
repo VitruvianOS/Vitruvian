@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.haiku-icon_o_matic";
+resource app_signature "application/x-vnd.vos-icon_o_matic";
 
-resource app_name_catalog_entry "x-vnd.haiku-icon_o_matic:System name:Icon-O-Matic";
+resource app_name_catalog_entry "x-vnd.vos-icon_o_matic:System name:Icon-O-Matic";
 
 resource app_version {
 	major  = 1,
@@ -21,7 +21,7 @@ resource app_version {
 resource app_flags B_SINGLE_LAUNCH;
 
 resource file_types message {
-	"types" = "application/x-vnd.Haiku-icon",
+	"types" = "application/x-vnd.vos-icon",
 	"types" = "image/svg+xml",
 	"types" = "image/x-hvif"
 };

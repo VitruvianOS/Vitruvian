@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Pairs";
+resource app_signature "application/x-vnd.vos-Pairs";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Pairs:System name:Pairs";
+resource app_name_catalog_entry "x-vnd.vos-Pairs:System name:Pairs";
 
 resource app_flags B_SINGLE_LAUNCH;
 

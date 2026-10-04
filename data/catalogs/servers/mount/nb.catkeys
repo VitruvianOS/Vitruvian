@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-mount_server	599204450
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Monter som skrivebeskyttet
 Error mounting volume:\n\n%s	AutoMounter		Feil ved montering av volum:\n\n%s
 Cancel	AutoMounter		Avbryt

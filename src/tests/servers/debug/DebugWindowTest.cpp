@@ -10,7 +10,7 @@
 
 int main(void)
 {
-	BApplication app("application/x-vnd.haiku-debugwindowtest");
+	BApplication app("application/x-vnd.vos-debugwindowtest");
 	DebugWindow* window = new DebugWindow("test");
 	return window->Go();
 }

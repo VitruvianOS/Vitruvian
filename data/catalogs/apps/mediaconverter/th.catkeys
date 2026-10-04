@@ -1,4 +1,4 @@
-1	thai	x-vnd.Haiku-MediaConverter	801112998
+1	thai	x-vnd.vos-MediaConverter	801112998
 Input file not recognized as Audio or Video	MediaConverter		ไฟล์อินพุตไม่รู้จักว่าเป็นเสียงหรือวิดีโอ
 Source files	MediaConverter		ไฟล์ต้นฉบับ
 Error converting '%filename'	MediaConverter		ข้อผิดพลาดในการแปลง '%filename'

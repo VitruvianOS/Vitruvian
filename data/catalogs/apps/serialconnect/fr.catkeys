@@ -1,4 +1,4 @@
-1	french	x-vnd.haiku.SerialConnect	4294067463
+1	french	x-vnd.vos.SerialConnect	4294067463
 Hardware	SerialWindow	Flowcontrol	Matériel
 Connection	SerialWindow		Connexion
 Raw send…	SerialWindow		Envoi brut…

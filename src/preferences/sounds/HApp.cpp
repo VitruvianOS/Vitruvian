@@ -24,7 +24,7 @@
 
 HApp::HApp()
 	:
-	BApplication("application/x-vnd.Haiku-Sounds")
+	BApplication("application/x-vnd.vos-Sounds")
 {
 	HWindow* window = new HWindow(BRect(-1, -1, 390, 420),
 		B_TRANSLATE_SYSTEM_NAME("Sounds"));
@@ -41,7 +41,7 @@ void
 HApp::AboutRequested()
 {
 	BAboutWindow* window = new BAboutWindow(B_TRANSLATE_SYSTEM_NAME("Sounds"),
-		"application/x-vnd.Haiku-Sounds");
+		"application/x-vnd.vos-Sounds");
 
 	const char* authors[] = {
 		"Atsushi Takamatsu",

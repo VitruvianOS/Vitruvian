@@ -24,7 +24,7 @@
 
 App::App()
 	:
-	BApplication("application/x-vnd.Haiku-LaunchBox"),
+	BApplication("application/x-vnd.vos-LaunchBox"),
 	fNamePanelSize(200, 50),
 	fAutoStart(false)
 {

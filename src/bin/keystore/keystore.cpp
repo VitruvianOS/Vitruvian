@@ -327,7 +327,7 @@ print_usage(const char* name)
 int
 main(int argc, char* argv[])
 {
-	BApplication app("application/x-vnd.Haiku-keystore-cli");
+	BApplication app("application/x-vnd.vos-keystore-cli");
 
 	if (argc < 2)
 		return print_usage(argv[0]);

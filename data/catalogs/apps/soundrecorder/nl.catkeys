@@ -1,4 +1,4 @@
-1	dutch; flemish	x-vnd.Haiku-SoundRecorder	24440888
+1	dutch; flemish	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Herhalen
 Cannot find default audio hardware	RecorderWindow		Kan de standaard-hardware voor geluid niet vinden
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Kan het tijdelijke bestand van de nieuwe opname niet vinden.

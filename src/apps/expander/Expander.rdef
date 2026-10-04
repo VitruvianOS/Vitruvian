@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Expander";
+resource app_signature "application/x-vnd.vos-Expander";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Expander:System name:Expander";
+resource app_name_catalog_entry "x-vnd.vos-Expander:System name:Expander";
 
 resource app_version {
 	major  = 1,
@@ -25,7 +25,7 @@ resource(1, "BEOS:FILE_TYPES") message {
 	"types" = "application/x-gunzip",
 	"types" = "application/x-bzip2",
 	"types" = "application/x-rar",
-	"types" = "application/x-vnd.haiku-package"
+	"types" = "application/x-vnd.vos-package"
 };
 
 resource vector_icon {

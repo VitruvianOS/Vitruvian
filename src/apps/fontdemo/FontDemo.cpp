@@ -21,7 +21,7 @@
 const BString APP_NAME = B_TRANSLATE_SYSTEM_NAME("FontDemo");
 
 FontDemo::FontDemo()
-	: BApplication("application/x-vnd.Haiku-FontDemo")
+	: BApplication("application/x-vnd.vos-FontDemo")
 {
 	// Create the demo window where we draw the string
 	BWindow* demoWindow = new BWindow(BRect(80, 30, 490, 300), APP_NAME,

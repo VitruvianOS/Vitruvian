@@ -256,7 +256,7 @@ private:
 int
 main(int argc, char** argv)
 {
-	BApplication app("application/x-vnd.haiku-look");
+	BApplication app("application/x-vnd.vos-look");
 
 	BWindow* window = new Window(BRect(50, 50, 100, 100),
 		"Look at these pretty controls!", B_TITLED_WINDOW,

@@ -25,7 +25,7 @@
 
 ScreenshotApp::ScreenshotApp()
 	:
-	BApplication("application/x-vnd.haiku-screenshot"),
+	BApplication("application/x-vnd.vos-screenshot"),
 	fScreenshotWindow(NULL),
 	fUtility(new Utility),
 	fSilent(false),

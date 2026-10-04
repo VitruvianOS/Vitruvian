@@ -306,7 +306,7 @@ Window::QuitRequested()
 
 Application::Application()
 	:
-	BApplication("application/x-vnd.haiku-tooltiptest")
+	BApplication("application/x-vnd.vos-tooltiptest")
 {
 }
 

@@ -1,4 +1,4 @@
-1	russian	x-vnd.Haiku-Repositories	2642736029
+1	russian	x-vnd.vos-Repositories	2642736029
 This is not a valid URL.	AddRepoWindow	Add URL error message	Это неправильный URL-адрес.
 Repository URL:	AddRepoWindow	Text box label	URL репозитария:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Произошла ошибка обновления кеша репозитария для %name%

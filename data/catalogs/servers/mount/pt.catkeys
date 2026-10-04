@@ -1,4 +1,4 @@
-1	portuguese	x-vnd.Haiku-mount_server	599204450
+1	portuguese	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		Montar em modo só de leitura
 Error mounting volume:\n\n%s	AutoMounter		Erro ao montar volume:\n\n%s
 Cancel	AutoMounter		Cancelar

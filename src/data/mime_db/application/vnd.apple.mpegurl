@@ -13,7 +13,7 @@ resource(4, "META:EXTENS") message(234) {
 	"type" = "application/vnd.apple.mpegurl"
 };
 
-resource(5, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-MediaPlayer";
+resource(5, "META:PREF_APP") #'MSIG' "application/x-vnd.vos-MediaPlayer";
 
 resource(6, "META:ICON") #'VICN' array {
 	$"6E6369660805010401920200060338D2F73CD163BF82B23B84A94B885046E193"

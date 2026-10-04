@@ -2,7 +2,7 @@
  * ICNSTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-ICNSTranslator";
+resource app_signature "application/x-vnd.vos-ICNSTranslator";
 
 resource app_version {
 	major  = 1,

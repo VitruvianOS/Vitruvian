@@ -1,4 +1,4 @@
-1	indonesian	x-vnd.Haiku-libpackage	134767648
+1	indonesian	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Mengambil cache repositori dari %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Memvalidasi checksum untuk %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Gagal menghapus direktori transaksi

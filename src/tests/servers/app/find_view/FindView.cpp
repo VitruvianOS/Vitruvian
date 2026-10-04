@@ -49,7 +49,7 @@ public:
 int 
 main(int argc, char **argv)
 {
-	BApplication app("application/x-vnd.haiku-find_view");
+	BApplication app("application/x-vnd.vos-find_view");
 
 	BWindow* window = new BWindow(BRect(100, 100, 400, 400),
 		"ViewTransit-Test", B_TITLED_WINDOW,

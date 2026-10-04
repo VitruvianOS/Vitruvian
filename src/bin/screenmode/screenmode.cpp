@@ -245,7 +245,7 @@ main(int argc, char** argv)
 		setMode = true;
 	}
 
-	BApplication application("application/x-vnd.Haiku-screenmode");
+	BApplication application("application/x-vnd.vos-screenmode");
 
 	ScreenMode screenMode(NULL);
 	screen_mode currentMode;

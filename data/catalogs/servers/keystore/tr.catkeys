@@ -1,4 +1,4 @@
-1	turkish	x-vnd.Haiku-keystore_server	2429996361
+1	turkish	x-vnd.vos-keystore_server	2429996361
 to perform the following action:\n%accessString%\n\n	AppAccessRequestWindow		aşağıdaki eylemi gerçekleştirmek için:\n%accessString%\n\n
 This application doesn't yet have the required privileges.	AppAccessRequestWindow		Bu uygulama gereken izinlere henüz sahip değil.
 Keyring:	KeyRequestWindow		Anahtarlık:

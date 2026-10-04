@@ -494,7 +494,7 @@ ScreenshotWindow::_NewScreenshot(bool silent, bool clipboard, bool ignoreDelay, 
 	}
 	message.AddInt32("argc", argc);
 
-	be_roster->Launch("application/x-vnd.haiku-screenshot-cli", &message);
+	be_roster->Launch("application/x-vnd.vos-screenshot-cli", &message);
 	be_app->PostMessage(B_QUIT_REQUESTED);
 }
 

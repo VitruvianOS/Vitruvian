@@ -393,7 +393,7 @@ AudioMixerView::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgOpenSoundPrefs:
-			_LaunchBySig("application/x-vnd.Haiku-Sounds",
+			_LaunchBySig("application/x-vnd.vos-Sounds",
 				"/system/preferences/Sounds");
 			break;
 

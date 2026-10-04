@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.Haiku-libsolvsolver	3404387783
+1	catalan; valencian	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		permet el canvi d'arquitectura de %source% a %target%
 install %source% from excluded repository	SolverProblemSolution		instal·la %source% des del repositori exclòs
 unspecified problem	SolverProblem		problema sense especificar

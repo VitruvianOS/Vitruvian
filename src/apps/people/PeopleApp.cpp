@@ -237,7 +237,7 @@ TPeopleApp::MessageReceived(BMessage* message)
 		{
 			const char* arguments[] = { "-type", B_PERSON_MIMETYPE, 0 };
 			status_t ret = be_roster->Launch(
-				"application/x-vnd.Haiku-FileTypes",
+				"application/x-vnd.vos-FileTypes",
 				sizeof(arguments) / sizeof(const char*) - 1,
 				const_cast<char**>(arguments));
 			if (ret != B_OK && ret != B_ALREADY_RUNNING) {

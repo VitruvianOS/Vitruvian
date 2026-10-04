@@ -343,7 +343,7 @@ GIFTranslator::NewConfigView(TranslatorSettings* settings)
 int
 main()
 {
-	BApplication app("application/x-vnd.Haiku-GIFTranslator");
+	BApplication app("application/x-vnd.vos-GIFTranslator");
 	status_t result = LaunchTranslatorWindow(new(std::nothrow) GIFTranslator,
 		B_TRANSLATE("GIF Settings"), kRectView);
 	if (result == B_OK) {

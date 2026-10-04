@@ -1,6 +1,6 @@
-resource app_signature "application/x-vnd.Haiku-GravityScreenSaver";
+resource app_signature "application/x-vnd.vos-GravityScreenSaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-GravityScreenSaver:System name:Gravity";
+resource app_name_catalog_entry "x-vnd.vos-GravityScreenSaver:System name:Gravity";
 
 resource app_version 
 {

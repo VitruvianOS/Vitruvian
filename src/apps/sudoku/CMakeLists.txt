@@ -13,4 +13,4 @@ RunnableAddOn(
 
 	LIBS tracker shared localestub
 )
-DoCatalogs("x-vnd.Haiku-Sudoku" apps/sudoku)
+DoCatalogs("x-vnd.vos-Sudoku" apps/sudoku)

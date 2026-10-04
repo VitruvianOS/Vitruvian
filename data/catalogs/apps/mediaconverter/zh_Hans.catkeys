@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-MediaConverter	1249914255
+1	english	x-vnd.vos-MediaConverter	1249914255
 Input file not recognized as Audio or Video	MediaConverter		输入文件未被识别为音频或视频
 Source files	MediaConverter		源文件
 Error writing video frame %lld	MediaConverter		写入视频帧 %lld 错误

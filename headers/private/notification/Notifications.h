@@ -9,7 +9,7 @@
 #include <View.h>
 #include <String.h>
 
-#define kNotificationServerSignature "application/x-vnd.Haiku-notification_server"
+#define kNotificationServerSignature "application/x-vnd.vos-notification_server"
 
 #define B_FOLLOW_DESKBAR B_FOLLOW_NONE
 

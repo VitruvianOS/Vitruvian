@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-ButterflyScreensaver";
+resource app_signature "application/x-vnd.vos-ButterflyScreensaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-ButterflyScreensaver:System name:Butterfly";
+resource app_name_catalog_entry "x-vnd.vos-ButterflyScreensaver:System name:Butterfly";
 
 resource app_version {
 	major  = 1,

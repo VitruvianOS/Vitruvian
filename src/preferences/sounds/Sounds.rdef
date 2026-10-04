@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-Sounds";
+resource app_signature "application/x-vnd.vos-Sounds";
 
-resource app_name_catalog_entry "x-vnd.Haiku-Sounds:System name:Sounds";
+resource app_name_catalog_entry "x-vnd.vos-Sounds:System name:Sounds";
 
 resource app_flags B_SINGLE_LAUNCH;
 

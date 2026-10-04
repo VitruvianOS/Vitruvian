@@ -1,4 +1,4 @@
-1	esperanto	x-vnd.haiku-softwareupdater	1377379822
+1	esperanto	x-vnd.vos-softwareupdater	1377379822
 Updating version	SoftwareUpdaterWindow	List item text	Ĝisdatigi version
 Click here to install {0, plural, one{# updated package} other{# updated packages}}.	CheckManager		Alklaki tie por instali {0, plural, one{# ĝisdatigitan pakaĵon} other{# ĝisdatigitajn pakaĵoin}}.
 Packages to be uninstalled	SoftwareUpdaterWindow	List super item label	Instalotaj pakaĵoj

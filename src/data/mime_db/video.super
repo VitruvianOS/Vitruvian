@@ -7,7 +7,7 @@ resource(2, "META:L:DESC") #'MLDC' "Generic video file";
 
 resource(3, "META:S:DESC") #'MSDC' "Video file";
 
-resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-MediaPlayer";
+resource(4, "META:PREF_APP") #'MSIG' "application/x-vnd.vos-MediaPlayer";
 
 resource(5, "META:EXTENS") message(234) {
 	"type" = "video"

@@ -1,4 +1,4 @@
-1	turkish	x-vnd.Haiku-DiskUsage	2951688400
+1	turkish	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		%size%/{0, plural, other{# dosya}}
 Scanning %refName%	Scanner		%refName% taranıyor
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d dosya

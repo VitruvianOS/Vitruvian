@@ -1,4 +1,4 @@
-1	polish	x-vnd.Haiku-SoundRecorder	24440888
+1	polish	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Zapętl
 Cannot find default audio hardware	RecorderWindow		Nie można odnaleźć domyślnego urządzenia audio
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Nie można zlokalizować pliku tymczasowego przechowującego nowe nagrania

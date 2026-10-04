@@ -1,4 +1,4 @@
-1	turkish	x-vnd.Haiku-Repositories	2642736029
+1	turkish	x-vnd.vos-Repositories	2642736029
 This is not a valid URL.	AddRepoWindow	Add URL error message	Bu geçerli bir URL değil.
 Repository URL:	AddRepoWindow	Text box label	Depo URL’si:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	%name% depo önbelleği yenilenirken bir hata oluştu

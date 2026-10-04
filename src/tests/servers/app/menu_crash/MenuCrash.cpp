@@ -103,7 +103,7 @@ class Application : public BApplication {
 
 
 Application::Application()
-	: BApplication("application/x-vnd.haiku-menu_crash")
+	: BApplication("application/x-vnd.vos-menu_crash")
 {
 }
 

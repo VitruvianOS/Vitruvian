@@ -1,4 +1,4 @@
-1	polish	x-vnd.Haiku-libpackage	134767648
+1	polish	x-vnd.vos-libpackage	134767648
 Fetching repository-cache from %url	RefreshRepositoryRequest		Pobieranie pamięci podręcznej repozytorium z %url
 Validating checksum for %repositoryName	RefreshRepositoryRequest		Sprawdzanie sumy kontrolnej %repositoryName
 Failed to remove transaction directory	PackageManagerKit		Nie udało się usunąć katalogu transakcji

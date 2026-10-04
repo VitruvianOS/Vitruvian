@@ -12,4 +12,4 @@ TranslatorAddOn(
 
 	RDEF JPEG2000Translator.rdef
 )
-DoCatalogs("x-vnd.Haiku-JPEG2000Translator" add-ons/translators/jpeg2000)
+DoCatalogs("x-vnd.vos-JPEG2000Translator" add-ons/translators/jpeg2000)

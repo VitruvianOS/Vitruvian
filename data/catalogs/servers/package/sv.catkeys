@@ -1,4 +1,4 @@
-1	swedish	x-vnd.haiku-package_daemon	1440586681
+1	swedish	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	Paketförändringar
 uninstall package %s\n	PackageResult	Don't change '%s' variable	avinstallera paket %s\n
 ignore problem for now	PackageProblem		ignorera problemet för tillfället

@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-DiskUsage	2951688400
+1	ukrainian	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		%size% у {0, plural, one{# файлі} few{# файлах} other{# файлах}}
 Scanning %refName%	Scanner		Сканування %refName%
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d файлів

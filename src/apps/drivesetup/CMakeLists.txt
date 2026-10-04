@@ -19,7 +19,7 @@ Application(DriveSetup
 	RDEF DriveSetup.rdef
 )
 UsePrivateHeaders(DriveSetup interface shared storage tracker mount)
-DoCatalogs("x-vnd.Haiku-DriveSetup" apps/drivesetup)
+DoCatalogs("x-vnd.vos-DriveSetup" apps/drivesetup)
 
 # SetFlagsJob/PartitionPlanBuilder/DiskDeviceJobQueue live under the storage
 # kit's disk_device/ tree, not headers/private/storage; the kit target adds

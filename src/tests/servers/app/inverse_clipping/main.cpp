@@ -235,7 +235,7 @@ public:
 
 App::App()
 	:
-	BApplication("application/x-vnd.Haiku-Test_inverse_clip")
+	BApplication("application/x-vnd.vos-Test_inverse_clip")
 {
 	BWindow* window = new BWindow(BRect(100,100, 800,400), "clip test",
 		B_TITLED_WINDOW, B_QUIT_ON_WINDOW_CLOSE);

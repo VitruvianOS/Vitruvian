@@ -149,7 +149,7 @@ main(int argc, const char *const *argv)
 	// create a BApplication on BeOS
 	struct utsname unameInfo;
 	if (uname(&unameInfo) < 0 || strcmp(unameInfo.sysname, "Haiku") != 0)
-		new BApplication("application/x-vnd.haiku.clipboard");
+		new BApplication("application/x-vnd.vos.clipboard");
 
 	// init clipboard
 	BClipboard clipboard(clipboardName ? clipboardName : "system");

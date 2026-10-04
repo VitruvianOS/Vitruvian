@@ -1,4 +1,4 @@
-1	greek, modern (1453-)	x-vnd.Haiku-DiskUsage	2951688400
+1	greek, modern (1453-)	x-vnd.vos-DiskUsage	2951688400
 %size% in {0, plural, one{# file} other{# files}}	Info Window		%size% σε {0, plural, one{# αρχείο} other{# αρχεία}}
 Scanning %refName%	Scanner		Σάρωση %refName%
 %d files	Status View	For UI layouting only, use the longest plural form for your language	%d αρχεία

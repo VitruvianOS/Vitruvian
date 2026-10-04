@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-mount_server	599204450
+1	english	x-vnd.vos-mount_server	599204450
 Mount read-only	AutoMounter		挂載為唯讀
 Error mounting volume:\n\n%s	AutoMounter		錯誤挂載卷:\n\n%s
 Cancel	AutoMounter		取消

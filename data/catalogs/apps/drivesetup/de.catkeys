@@ -1,4 +1,4 @@
-1	german	x-vnd.Haiku-DriveSetup	2351839435
+1	german	x-vnd.vos-DriveSetup	2351839435
 Could not unmount partition %s.	MainWindow		Partition \"%s\" konnte nicht ausgehangen werden.
 Register disk image…	MainWindow		Datenträgerabbild anmelden …
 Mount all	MainWindow		Alle einhängen

@@ -13,7 +13,7 @@
 #include <Locale.h>
 
 AppearanceApplication::AppearanceApplication(void)
- :	BApplication("application/x-vnd.Haiku-Appearance")
+ :	BApplication("application/x-vnd.vos-Appearance")
 {
 	fWindow = new AppearanceWindow(BRect(100, 100, 550, 420));
 	fWindow->Show();

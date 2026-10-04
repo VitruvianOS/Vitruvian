@@ -1,4 +1,4 @@
-1	swedish	x-vnd.Haiku-SoundRecorder	24440888
+1	swedish	x-vnd.vos-SoundRecorder	24440888
 Loop	RecorderWindow		Loop
 Cannot find default audio hardware	RecorderWindow		Kan inte hitta den förvalda ljudhårdvaran
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Kan inte hitta den temporära filen skapad för att lagra den nya inspelningen

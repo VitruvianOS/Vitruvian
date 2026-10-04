@@ -1,4 +1,4 @@
-1	korean	x-vnd.haiku-package_daemon	1440586681
+1	korean	x-vnd.vos-package_daemon	1440586681
 Package changes	PackageResult	Window title	패키지 변경
 uninstall package %s\n	PackageResult	Don't change '%s' variable	%s 패키지 삭제\n
 ignore problem for now	PackageProblem		이번만 문제 무시

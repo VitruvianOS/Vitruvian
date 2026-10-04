@@ -1,4 +1,4 @@
-1	esperanto	x-vnd.Haiku-Repositories	1003035766
+1	esperanto	x-vnd.vos-Repositories	1003035766
 This is not a valid URL.	AddRepoWindow	Add URL error message	Ĉi tiu URL-o estas nevalida.
 Repository URL:	AddRepoWindow	Text box label	URL de deponejo:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Iu eraro okazis dum renovigo de kaŝmemoro de deponejo %name%

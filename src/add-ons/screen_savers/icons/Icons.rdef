@@ -1,7 +1,7 @@
 
-resource app_signature "application/x-vnd.Haiku-IconsScreensaver";
+resource app_signature "application/x-vnd.vos-IconsScreensaver";
 
-resource app_name_catalog_entry "x-vnd.Haiku-IconsScreensaver:System name:Icons";
+resource app_name_catalog_entry "x-vnd.vos-IconsScreensaver:System name:Icons";
 
 resource app_version {
 	major  = 1,

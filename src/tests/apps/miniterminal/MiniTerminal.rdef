@@ -3,7 +3,7 @@
 **
 */
 
-resource app_signature "application/x-vnd.Haiku.MiniTerminal";
+resource app_signature "application/x-vnd.vos.MiniTerminal";
 
 resource app_flags B_MULTIPLE_LAUNCH;
 

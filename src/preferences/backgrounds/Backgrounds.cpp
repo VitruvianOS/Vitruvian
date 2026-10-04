@@ -22,7 +22,7 @@
 #define B_TRANSLATION_CONTEXT "Main Window"
 
 
-static const char* kSignature = "application/x-vnd.Haiku-Backgrounds";
+static const char* kSignature = "application/x-vnd.vos-Backgrounds";
 
 
 class BackgroundsWindow : public BWindow {

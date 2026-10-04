@@ -1,6 +1,6 @@
 resource(0, "BEOS:TYPE") #'MIMS' "application/x-vnd.Be-meta-mime";
 
-resource(1, "META:TYPE") "application/x-vnd.haiku-core-file";
+resource(1, "META:TYPE") "application/x-vnd.vos-core-file";
 
 resource(2, "META:S:DESC") #'MSDC' "ELF core file";
 
@@ -8,7 +8,7 @@ resource(3, "META:L:DESC") #'MLDC' "ELF core file";
 
 resource(4, "META:SNIFF_RULE") "0.91 (0x7f454c46) [5](0x01000000000000000000000400 & 0xff00000000000000000000ffff | 0x02000000000000000000000004 & 0xff00000000000000000000ffff)";
 
-resource(5, "META:PREF_APP") #'MSIG' "application/x-vnd.Haiku-Debugger";
+resource(5, "META:PREF_APP") #'MSIG' "application/x-vnd.vos-Debugger";
 
 resource(6, "META:ICON") #'VICN' array {
 	$"6E6369660E0500020006023C43C6B9E5E23A85A83CEE414268F44A445900C6D7"

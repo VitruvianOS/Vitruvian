@@ -17,4 +17,4 @@ Application(Time
 	RDEF Time.rdef
 )
 UsePrivateHeaders(Time locale)
-DoCatalogs("x-vnd.Haiku-Time" preferences/time)
+DoCatalogs("x-vnd.vos-Time" preferences/time)

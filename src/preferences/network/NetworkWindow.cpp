@@ -45,7 +45,7 @@
 #include <SymLink.h>
 
 
-const char* kNetworkStatusSignature = "application/x-vnd.Haiku-NetworkStatus";
+const char* kNetworkStatusSignature = "application/x-vnd.vos-NetworkStatus";
 
 static const uint32 kMsgRevert = 'rvrt';
 static const uint32 kMsgToggleReplicant = 'trep';

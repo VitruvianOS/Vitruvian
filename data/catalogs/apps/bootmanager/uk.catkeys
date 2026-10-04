@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-BootManager	3553759389
+1	ukrainian	x-vnd.vos-BootManager	3553759389
 Old Master Boot Record backup failure	BootManagerController	Title	Збій резервного копіювання старого MBR
 At least one partition must be selected!	BootManagerController		Принаймні один розділ треба вибрати!
 No space available!	DrivesPage	Cannot install	Немає доступного простору!

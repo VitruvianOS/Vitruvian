@@ -131,7 +131,7 @@ UpdateUIColor(color_which which, const char *str)
 int
 main(int argc, char **argv)
 {
-	BApplication app("application/x-vnd.Haiku-WindowShade");
+	BApplication app("application/x-vnd.vos-WindowShade");
 	int c;
 
 	// parse command line parameters

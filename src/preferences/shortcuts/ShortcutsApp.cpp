@@ -22,7 +22,7 @@
 
 ShortcutsApp::ShortcutsApp()
 	:
-	BApplication("application/x-vnd.Haiku-Shortcuts")
+	BApplication("application/x-vnd.vos-Shortcuts")
 {
 }
 

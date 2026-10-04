@@ -12,4 +12,4 @@ Application(Appearance
 	LIBS shared localestub
 	RDEF Appearance.rdef
 )
-DoCatalogs("x-vnd.Haiku-Appearance" preferences/appearance)
+DoCatalogs("x-vnd.vos-Appearance" preferences/appearance)

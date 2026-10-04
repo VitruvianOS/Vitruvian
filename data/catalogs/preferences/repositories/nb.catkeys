@@ -1,4 +1,4 @@
-1	bokmål, norwegian; norwegian bokmål	x-vnd.Haiku-Repositories	2642736029
+1	bokmål, norwegian; norwegian bokmål	x-vnd.vos-Repositories	2642736029
 This is not a valid URL.	AddRepoWindow	Add URL error message	Dette er ikke en gyldig URL.
 Repository URL:	AddRepoWindow	Text box label	Programarkiv-URL:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Det oppsto en feil under oppdatering av programarkivbufferen for %name%

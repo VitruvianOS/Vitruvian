@@ -79,7 +79,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	BApplication app("application/x-vnd.Haiku-listfont");
+	BApplication app("application/x-vnd.vos-listfont");
 
 #ifndef __VOS__
 	if (updateFamilies) {

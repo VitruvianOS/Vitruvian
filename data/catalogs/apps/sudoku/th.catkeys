@@ -1,4 +1,4 @@
-1	thai	x-vnd.Haiku-Sudoku	3382377306
+1	thai	x-vnd.vos-Sudoku	3382377306
 Restore snapshot	SudokuWindow		คืนค่าภาพ
 File	SudokuWindow		ไฟล์
 Mark invalid values	SudokuWindow		ทำเครื่องหมายค่าที่ไม่ถูกต้อง

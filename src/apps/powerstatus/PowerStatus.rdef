@@ -1,7 +1,7 @@
 
-resource(1, "BEOS:APP_SIG") #'MIMS' "application/x-vnd.Haiku-PowerStatus";
+resource(1, "BEOS:APP_SIG") #'MIMS' "application/x-vnd.vos-PowerStatus";
 
-resource app_name_catalog_entry "x-vnd.Haiku-PowerStatus:System name:PowerStatus";
+resource app_name_catalog_entry "x-vnd.vos-PowerStatus:System name:PowerStatus";
 
 resource app_flags B_SINGLE_LAUNCH;
 

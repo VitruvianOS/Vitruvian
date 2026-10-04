@@ -21,7 +21,7 @@
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "InputApplication"
 
-const char* kSignature = "application/x-vnd.Haiku-Input";
+const char* kSignature = "application/x-vnd.vos-Input";
 
 
 InputApplication::InputApplication()

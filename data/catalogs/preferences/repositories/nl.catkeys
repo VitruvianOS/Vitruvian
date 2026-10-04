@@ -1,4 +1,4 @@
-1	dutch; flemish	x-vnd.Haiku-Repositories	1003035766
+1	dutch; flemish	x-vnd.vos-Repositories	1003035766
 This is not a valid URL.	AddRepoWindow	Add URL error message	Dit is geen geldige URL.
 Repository URL:	AddRepoWindow	Text box label	Archief-URL:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Er was een fout bij het verversen van de cache van het archief voor %name%

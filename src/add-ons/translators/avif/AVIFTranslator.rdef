@@ -2,7 +2,7 @@
  * AVIFTranslator.rdef
  */
 
-resource app_signature "application/x-vnd.Haiku-AVIFTranslator";
+resource app_signature "application/x-vnd.vos-AVIFTranslator";
 
 resource app_version {
 	major  = 0,

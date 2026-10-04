@@ -82,7 +82,7 @@
 static BPath _profileDirectory();
 
 
-const char* kBackgroundsSignature = "application/x-vnd.Haiku-Backgrounds";
+const char* kBackgroundsSignature = "application/x-vnd.vos-Backgrounds";
 
 // list of officially supported colour spaces
 static const struct {

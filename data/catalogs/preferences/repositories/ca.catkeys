@@ -1,4 +1,4 @@
-1	catalan; valencian	x-vnd.Haiku-Repositories	2642736029
+1	catalan; valencian	x-vnd.vos-Repositories	2642736029
 This is not a valid URL.	AddRepoWindow	Add URL error message	Aquest no és un URL vàlid.
 Repository URL:	AddRepoWindow	Text box label	URL del repositori:
 There was an error refreshing the repository cache for %name%	TaskLooper	Error message, do not translate %name%	Hi ha hagut un error en actualitzar la cau del repositori per a %name%.

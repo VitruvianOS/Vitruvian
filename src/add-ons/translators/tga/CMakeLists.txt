@@ -14,4 +14,4 @@ TranslatorAddOn(
 
 	RDEF TGATranslator.rdef
 )
-DoCatalogs("x-vnd.Haiku-TGATranslator" add-ons/translators/tga)
+DoCatalogs("x-vnd.vos-TGATranslator" add-ons/translators/tga)

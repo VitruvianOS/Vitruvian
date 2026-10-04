@@ -12,7 +12,7 @@ Application(Installer
 	RDEF Installer.rdef
 )
 UsePrivateHeaders(Installer app interface shared storage tracker system)
-DoCatalogs("x-vnd.Haiku-Installer" apps/installer)
+DoCatalogs("x-vnd.vos-Installer" apps/installer)
 
 # PartitionPlanBuilder lives under the storage kit's disk_device/ tree;
 # the kit target adds that include dir only for itself.

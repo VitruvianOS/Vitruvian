@@ -1,4 +1,4 @@
-1	korean	x-vnd.Haiku-libsolvsolver	3404387783
+1	korean	x-vnd.vos-libsolvsolver	3404387783
 allow architecture change of %source% to %target%	SolverProblemSolution		%source%에서 %target%으로 아키텍처 변경 허용
 install %source% from excluded repository	SolverProblemSolution		제외된 저장소의 %source% 설치
 unspecified problem	SolverProblem		정의되지 않은 문제

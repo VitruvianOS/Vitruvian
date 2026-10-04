@@ -20,7 +20,7 @@
 #include <Path.h>
 #include <TranslationUtils.h>
 
-const char* kSignature			= "application/x-vnd.Haiku-notify";
+const char* kSignature			= "application/x-vnd.vos-notify";
 const char* kSmallIconAttribute = "BEOS:M:STD_ICON";
 const char* kLargeIconAttribute = "BEOS:L:STD_ICON";
 const char* kIconAttribute		= "BEOS:ICON";

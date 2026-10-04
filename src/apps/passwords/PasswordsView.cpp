@@ -7,8 +7,10 @@
 #include "PasswordsView.h"
 
 #include "KdbxFile.h"
+#include "PasswordDialog.h"
 #include "VosCrypto.h"
 
+#include <Alert.h>
 #include <Button.h>
 #include <Clipboard.h>
 #include <ColumnListView.h>
@@ -561,9 +563,19 @@ PasswordsView::MessageReceived(BMessage* message)
 			if (message->GetBool("cancel", false))
 				return;
 			BPath path(&ref);
+
+			BString password;
+			PasswordDialog dialog("Export keyring",
+				"Enter the password that will protect the exported KDBX "
+				"file.", true);
+			if (dialog.GetPassword(password) != B_OK) {
+				fStatusLabel->SetText("Export canceled");
+				return;
+			}
+
 			KdbxFile file;
-			status_t result = file.ExportToPath(path.Path(), "vos-export",
-				fCurrentKeyring.String());
+			status_t result = file.ExportToPath(path.Path(),
+				password.String(), fCurrentKeyring.String());
 			fStatusLabel->SetText(result == B_OK
 				? "Exported keyring to KDBX file"
 				: strerror(result));
@@ -582,9 +594,18 @@ PasswordsView::MessageReceived(BMessage* message)
 				fStatusLabel->SetText("Select a keyring before importing");
 				return;
 			}
+
+			BString password;
+			PasswordDialog dialog("Import KDBX file",
+				"Enter the password of the KDBX file to import.", false);
+			if (dialog.GetPassword(password) != B_OK) {
+				fStatusLabel->SetText("Import canceled");
+				return;
+			}
+
 			KdbxFile file;
-			status_t result = file.ImportFromPath(path.Path(), "vos-export",
-				fCurrentKeyring.String(), false);
+			status_t result = file.ImportFromPath(path.Path(),
+				password.String(), fCurrentKeyring.String(), false);
 			if (result == B_OK)
 				_LoadEntries(fCurrentKeyring.String());
 			fStatusLabel->SetText(result == B_OK

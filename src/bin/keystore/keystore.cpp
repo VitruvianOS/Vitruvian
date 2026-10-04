@@ -9,18 +9,79 @@
 
 #include <Application.h>
 #include <KeyStore.h>
+#include <String.h>
 
 #include "KdbxFile.h"
 
 #include <stdio.h>
 #include <string.h>
+#include <termios.h>
+#include <unistd.h>
+
+
+static status_t
+_prompt_password(const char* prompt, BString& password)
+{
+	struct termios original;
+	if (tcgetattr(STDIN_FILENO, &original) != 0)
+		return B_ERROR;
+
+	struct termios hidden = original;
+	hidden.c_lflag &= ~ECHO;
+	if (tcsetattr(STDIN_FILENO, TCSANOW, &hidden) != 0)
+		return B_ERROR;
+
+	fprintf(stderr, "%s", prompt);
+	fflush(stderr);
+
+	char buffer[512];
+	if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+		tcsetattr(STDIN_FILENO, TCSANOW, &original);
+		fprintf(stderr, "\n");
+		return B_ERROR;
+	}
+
+	tcsetattr(STDIN_FILENO, TCSANOW, &original);
+	fprintf(stderr, "\n");
+
+	size_t length = strlen(buffer);
+	while (length > 0 && (buffer[length - 1] == '\n'
+			|| buffer[length - 1] == '\r'))
+		buffer[--length] = '\0';
+
+	password.SetTo(buffer, length);
+	memset(buffer, 0, sizeof(buffer));
+	return B_OK;
+}
+
+
+static status_t
+_prompt_export_password(BString& password)
+{
+	BString first;
+	BString second;
+	if (_prompt_password("Password: ", first) != B_OK)
+		return B_ERROR;
+	if (_prompt_password("Confirm password: ", second) != B_OK)
+		return B_ERROR;
+	if (first != second) {
+		fprintf(stderr, "passwords do not match\n");
+		return B_MISMATCHED_VALUES;
+	}
+	password = first;
+	return B_OK;
+}
 
 
 int
-export_database(const char* keyring, const char* path, const char* password)
+export_database(const char* keyring, const char* path)
 {
+	BString password;
+	if (_prompt_export_password(password) != B_OK)
+		return 2;
+
 	KdbxFile file;
-	status_t result = file.ExportToPath(path, password, keyring);
+	status_t result = file.ExportToPath(path, password.String(), keyring);
 	if (result != B_OK) {
 		printf("failed to export keyring: %s\n", strerror(result));
 		return 2;
@@ -32,10 +93,15 @@ export_database(const char* keyring, const char* path, const char* password)
 
 
 int
-import_database(const char* keyring, const char* path, const char* password)
+import_database(const char* keyring, const char* path)
 {
+	BString password;
+	if (_prompt_password("Password: ", password) != B_OK)
+		return 2;
+
 	KdbxFile file;
-	status_t result = file.ImportFromPath(path, password, keyring, false);
+	status_t result = file.ImportFromPath(path, password.String(), keyring,
+		false);
 	if (result != B_OK) {
 		printf("failed to import database: %s\n", strerror(result));
 		return 2;
@@ -354,11 +420,13 @@ print_usage(const char* name)
 	printf("\t%s key remove <keyring>\n", name);
 	printf("\t\tRemove the unlock key of the specified keyring.\n\n");
 
-	printf("\t%s export <keyring> <file> <password>\n", name);
+	printf("\t%s export <keyring> <file>\n", name);
 	printf("\t\tWrite the keyring to a KDBX 4 file compatible with"
-		" KeePassXC.\n");
-	printf("\t%s import <keyring> <file> <password>\n", name);
-	printf("\t\tRead a KDBX 4 file into the specified keyring.\n");
+		" KeePassXC. The password is prompted for, never read from the"
+		" command line.\n");
+	printf("\t%s import <keyring> <file>\n", name);
+	printf("\t\tRead a KDBX 4 file into the specified keyring. The password"
+		" is prompted for, never read from the command line.\n");
 	return 1;
 }
 
@@ -493,15 +561,15 @@ main(int argc, char* argv[])
 				return remove_unlock_key(argv[3]);
 		}
 	} else if (strcmp(argv[1], "export") == 0) {
-		if (argc != 5)
+		if (argc != 4)
 			return print_usage(argv[0]);
 
-		return export_database(argv[2], argv[3], argv[4]);
+		return export_database(argv[2], argv[3]);
 	} else if (strcmp(argv[1], "import") == 0) {
-		if (argc != 5)
+		if (argc != 4)
 			return print_usage(argv[0]);
 
-		return import_database(argv[2], argv[3], argv[4]);
+		return import_database(argv[2], argv[3]);
 	}
 
 	return print_usage(argv[0]);

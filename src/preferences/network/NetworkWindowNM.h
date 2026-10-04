@@ -32,8 +32,7 @@ private:
 	void _PopulateDeviceList(BMessage* devices);
 	BListItem* _PopulateVPNList(const BString& previousSelectionPath);
 	void _SelectItem(BListItem* item);
-	void _ShowProxyPane(bool show);
-	void _ShowMobilePane(bool show);
+	void _ShowPane(BView* pane);
 	void _UpdateRevertButton();
 	void _RevertSettings();
 	void _ToggleReplicant();

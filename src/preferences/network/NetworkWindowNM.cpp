@@ -666,22 +666,19 @@ NetworkWindowNM::_SelectItem(BListItem* item)
 
 	if (item != NULL && item == fProxyItem) {
 		// Session-wide proxy, not tied to a device or profile.
-		_ShowProxyPane(true);
-		_ShowMobilePane(false);
+		_ShowPane(fProxyView);
 		fProxyView->Reload();
 		_UpdateRevertButton();
 		return;
 	}
 
 	if (item != NULL && item == fMobileItem) {
-		_ShowProxyPane(false);
-		_ShowMobilePane(true);
+		_ShowPane(fMobileView);
 		_UpdateRevertButton();
 		return;
 	}
 
-	_ShowProxyPane(false);
-	_ShowMobilePane(false);
+	_ShowPane(fDetailView);
 
 	if (deviceItem != NULL) {
 		fDetailView->ShowEmpty(B_TRANSLATE("Loading" B_UTF8_ELLIPSIS));
@@ -708,36 +705,19 @@ NetworkWindowNM::_SelectItem(BListItem* item)
 }
 
 
+// Show() and Hide() nest, so set each pane's state rather than toggling it.
 void
-NetworkWindowNM::_ShowProxyPane(bool show)
+NetworkWindowNM::_ShowPane(BView* pane)
 {
-	if (fProxyView == NULL || fDetailView == NULL)
-		return;
-
-	if (show) {
-		fProxyView->Show();
-		fDetailView->Hide();
-		if (fMobileView != NULL)
-			fMobileView->Hide();
-	} else {
-		fProxyView->Hide();
-	}
-}
-
-
-void
-NetworkWindowNM::_ShowMobilePane(bool show)
-{
-	if (fMobileView == NULL || fDetailView == NULL)
-		return;
-
-	if (show) {
-		fMobileView->Show();
-		fDetailView->Hide();
-		if (fProxyView != NULL)
-			fProxyView->Hide();
-	} else {
-		fMobileView->Hide();
+	BView* panes[] = { fDetailView, fMobileView, fProxyView };
+	for (BView* view : panes) {
+		if (view == NULL)
+			continue;
+		if (view == pane) {
+			while (view->IsHidden(view))
+				view->Show();
+		} else if (!view->IsHidden(view))
+			view->Hide();
 	}
 }
 

@@ -7,7 +7,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-rt-amd64 systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
-                " network-manager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
@@ -23,7 +23,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-arm64 systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
-                " network-manager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
@@ -35,7 +35,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-armmp systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
-                " network-manager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults" \
                 " fdisk e2fsprogs" \
                 " fortune-mod ncurses-bin rsync" \
@@ -47,7 +47,7 @@ get_base_packages() {
             printf '%s' \
                 "apt-utils dialog linux-image-riscv64 systemd-sysv" \
                 " polkitd pkexec sudo dbus-user-session" \
-                " network-manager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \

@@ -266,7 +266,7 @@ DeclareDependency(
 DeclareDependency(
 	NETWORKMANAGER
 	PACKAGES   "libnm-dev"
-	RUNTIMES   "network-manager"
+	RUNTIMES   "network-manager;modemmanager"
 )
 
 DeclareDependency(

@@ -36,6 +36,9 @@
 #include <nm-setting-ip-config.h>
 #include <nm-setting-ip4-config.h>
 #include <nm-setting-ip6-config.h>
+#include <nm-setting-gsm.h>
+#include <nm-setting-cdma.h>
+#include <nm-device-modem.h>
 #include <nm-ip-config.h>
 #include <nm-active-connection.h>
 #include <nm-vpn-connection.h>
@@ -651,6 +654,21 @@ _FillDeviceInfoMessage(NMDevice* device, BMessage* outInfo)
 	if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
 		guint32 caps = nm_device_wifi_get_capabilities(NM_DEVICE_WIFI(device));
 		outInfo->AddUInt32(kNMFieldWiFiCaps, (uint32)caps);
+	}
+
+	// Modems are NM_DEVICE_TYPE_MODEM; GSM vs CDMA comes from the radio
+	// capability bits the preflet needs to pick the NMSettingGsm/Cdma type.
+	if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_MODEM
+			&& NM_IS_DEVICE_MODEM(device)) {
+		guint32 caps = nm_device_modem_get_modem_capabilities(
+			NM_DEVICE_MODEM(device));
+		outInfo->AddUInt32(kNMFieldModemCaps, caps);
+		outInfo->AddBool(kNMFieldModemIsGSM,
+			(caps & NM_DEVICE_MODEM_CAPABILITY_GSM_UMTS) != 0
+				|| (caps & NM_DEVICE_MODEM_CAPABILITY_LTE) != 0
+				|| (caps & NM_DEVICE_MODEM_CAPABILITY_5GNR) != 0);
+		outInfo->AddBool(kNMFieldModemIsCDMA,
+			(caps & NM_DEVICE_MODEM_CAPABILITY_CDMA_EVDO) != 0);
 	}
 
 	_FillIP4ConfigFields(device, outInfo);
@@ -2958,6 +2976,374 @@ NMBackend::CreateWiredConnectionProfileAsync(const char* devicePath,
 
 	g_main_context_invoke((GMainContext*)fMainContext,
 		_RunCreateWiredConnectionProfile, job);
+	return B_OK;
+}
+
+
+// #pragma mark - Mobile broadband (GSM/CDMA)
+
+
+struct _MobileJob {
+	NMBackend* backend;
+	NMClient* nmClient;
+	BString devicePath;
+	BString name;
+	BString apn;
+	BString user;
+	BString password;
+	BString number;
+	bool remember;
+	bool disconnect;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_FillMobileFromConnection(NMConnection* connection, bool connected,
+	BMessage* reply)
+{
+	reply->AddBool(kNMFieldMobileConnected, connected);
+	reply->AddBool(kNMFieldMobileHasProfile, connection != NULL);
+	if (connection == NULL)
+		return;
+
+	const char* id = nm_connection_get_id(connection);
+	reply->AddString(kNMFieldMobileName, id != NULL ? id : "");
+
+	NMSettingGsm* gsm = nm_connection_get_setting_gsm(connection);
+	NMSettingCdma* cdma = nm_connection_get_setting_cdma(connection);
+	if (gsm != NULL) {
+		const char* apn = nm_setting_gsm_get_apn(gsm);
+		const char* user = nm_setting_gsm_get_username(gsm);
+		const char* password = nm_setting_gsm_get_password(gsm);
+		const char* number = nm_setting_gsm_get_number(gsm);
+		reply->AddString(kNMFieldMobileAPN, apn != NULL ? apn : "");
+		reply->AddString(kNMFieldMobileUser, user != NULL ? user : "");
+		reply->AddString(kNMFieldMobilePassword,
+			password != NULL ? password : "");
+		reply->AddString(kNMFieldMobileNumber,
+			number != NULL ? number : "");
+	} else if (cdma != NULL) {
+		const char* user = nm_setting_cdma_get_username(cdma);
+		const char* password = nm_setting_cdma_get_password(cdma);
+		const char* number = nm_setting_cdma_get_number(cdma);
+		reply->AddString(kNMFieldMobileAPN, "");
+		reply->AddString(kNMFieldMobileUser, user != NULL ? user : "");
+		reply->AddString(kNMFieldMobilePassword,
+			password != NULL ? password : "");
+		reply->AddString(kNMFieldMobileNumber,
+			number != NULL ? number : "");
+	}
+}
+
+
+// First GSM/CDMA profile bound to the device via interface name, or the
+// device's active connection if it already is a mobile profile.
+static NMConnection*
+_MobileConnectionForDevice(NMClient* client, NMDevice* device)
+{
+	const char* iface = nm_device_get_iface(device);
+	NMActiveConnection* active = nm_device_get_active_connection(device);
+	if (active != NULL) {
+		NMConnection* connection = NM_CONNECTION(
+			nm_active_connection_get_connection(active));
+		if (connection != NULL
+				&& (nm_connection_get_setting_gsm(connection) != NULL
+					|| nm_connection_get_setting_cdma(connection) != NULL))
+			return connection;
+	}
+
+	const GPtrArray* connections = nm_client_get_connections(client);
+	if (connections == NULL)
+		return NULL;
+
+	for (guint i = 0; i < connections->len; i++) {
+		NMRemoteConnection* remote = (NMRemoteConnection*)
+			g_ptr_array_index(connections, i);
+		NMConnection* connection = NM_CONNECTION(remote);
+		if (connection == NULL)
+			continue;
+		if (nm_connection_get_setting_gsm(connection) == NULL
+				&& nm_connection_get_setting_cdma(connection) == NULL)
+			continue;
+
+		NMSettingConnection* setting
+			= nm_connection_get_setting_connection(connection);
+		const char* profileIface = setting != NULL
+			? nm_setting_connection_get_interface_name(setting) : NULL;
+		if (profileIface != NULL && iface != NULL
+				&& strcmp(profileIface, iface) == 0)
+			return connection;
+	}
+
+	return NULL;
+}
+
+
+static void
+_OnMobileAddAndActivateDone(GObject* source, GAsyncResult* result,
+	gpointer userData)
+{
+	_MobileJob* job = (_MobileJob*)userData;
+
+	GError* error = NULL;
+	NMActiveConnection* active = nm_client_add_and_activate_connection_finish(
+		job->nmClient, result, &error);
+
+	BMessage reply(job->replyWhat);
+	if (active != NULL) {
+		reply.AddInt32("status", (int32)B_OK);
+		g_object_unref(active);
+	} else {
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+	}
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+static gboolean
+_RunMobileJob(gpointer data)
+{
+	_MobileJob* job = (_MobileJob*)data;
+
+	NMDevice* device = _FindDeviceByPath(job->nmClient, job->devicePath.String());
+	if (device == NULL) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
+		reply.AddString("reason", "no such device");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	if (nm_device_get_device_type(device) != NM_DEVICE_TYPE_MODEM) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_NOT_SUPPORTED);
+		reply.AddString("reason", "device is not a modem");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	if (job->disconnect) {
+		NMActiveConnection* active = nm_device_get_active_connection(device);
+		BMessage reply(job->replyWhat);
+		if (active == NULL) {
+			reply.AddInt32("status", (int32)B_OK);
+			job->replyTo.SendMessage(&reply);
+			delete job;
+			return G_SOURCE_REMOVE;
+		}
+
+		nm_device_disconnect_async(device, NULL, NULL, NULL);
+		reply.AddInt32("status", (int32)B_OK);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	bool isGSM = true;
+	if (NM_IS_DEVICE_MODEM(device)) {
+		guint32 caps = nm_device_modem_get_modem_capabilities(
+			NM_DEVICE_MODEM(device));
+		bool hasGSM = (caps & NM_DEVICE_MODEM_CAPABILITY_GSM_UMTS) != 0
+			|| (caps & NM_DEVICE_MODEM_CAPABILITY_LTE) != 0
+			|| (caps & NM_DEVICE_MODEM_CAPABILITY_5GNR) != 0;
+		bool hasCDMA = (caps & NM_DEVICE_MODEM_CAPABILITY_CDMA_EVDO) != 0;
+		isGSM = hasGSM || !hasCDMA;
+	}
+
+	const char* iface = nm_device_get_iface(device);
+	if (iface == NULL || iface[0] == '\0') {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason", "device has no interface name to bind to");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	NMConnection* connection = nm_simple_connection_new();
+
+	char* uuid = nm_utils_uuid_generate();
+	NMSettingConnection* connSetting
+		= (NMSettingConnection*)nm_setting_connection_new();
+	g_object_set(connSetting,
+		NM_SETTING_CONNECTION_ID,
+		!job->name.IsEmpty() ? job->name.String() : iface,
+		NM_SETTING_CONNECTION_UUID, uuid,
+		NM_SETTING_CONNECTION_TYPE,
+		isGSM ? NM_SETTING_GSM_SETTING_NAME : NM_SETTING_CDMA_SETTING_NAME,
+		NM_SETTING_CONNECTION_INTERFACE_NAME, iface,
+		NM_SETTING_CONNECTION_AUTOCONNECT, (gboolean)job->remember,
+		NULL);
+	g_free(uuid);
+	nm_connection_add_setting(connection, NM_SETTING(connSetting));
+
+	if (isGSM) {
+		NMSettingGsm* gsm = (NMSettingGsm*)nm_setting_gsm_new();
+		if (!job->apn.IsEmpty())
+			g_object_set(gsm, NM_SETTING_GSM_APN, job->apn.String(), NULL);
+		if (!job->user.IsEmpty())
+			g_object_set(gsm, NM_SETTING_GSM_USERNAME, job->user.String(),
+				NULL);
+		if (!job->password.IsEmpty())
+			g_object_set(gsm, NM_SETTING_GSM_PASSWORD,
+				job->password.String(), NULL);
+		if (!job->number.IsEmpty())
+			g_object_set(gsm, NM_SETTING_GSM_NUMBER, job->number.String(),
+				NULL);
+		nm_connection_add_setting(connection, NM_SETTING(gsm));
+	} else {
+		NMSettingCdma* cdma = (NMSettingCdma*)nm_setting_cdma_new();
+		if (!job->user.IsEmpty())
+			g_object_set(cdma, NM_SETTING_CDMA_USERNAME, job->user.String(),
+				NULL);
+		if (!job->password.IsEmpty())
+			g_object_set(cdma, NM_SETTING_CDMA_PASSWORD,
+				job->password.String(), NULL);
+		if (!job->number.IsEmpty())
+			g_object_set(cdma, NM_SETTING_CDMA_NUMBER, job->number.String(),
+				NULL);
+		nm_connection_add_setting(connection, NM_SETTING(cdma));
+	}
+
+	NMSettingIPConfig* ip4Setting
+		= (NMSettingIPConfig*)nm_setting_ip4_config_new();
+	g_object_set(ip4Setting, NM_SETTING_IP_CONFIG_METHOD,
+		NM_SETTING_IP4_CONFIG_METHOD_AUTO, NULL);
+	nm_connection_add_setting(connection, NM_SETTING(ip4Setting));
+
+	NMSettingIPConfig* ip6Setting
+		= (NMSettingIPConfig*)nm_setting_ip6_config_new();
+	g_object_set(ip6Setting, NM_SETTING_IP_CONFIG_METHOD,
+		NM_SETTING_IP6_CONFIG_METHOD_AUTO, NULL);
+	nm_connection_add_setting(connection, NM_SETTING(ip6Setting));
+
+	nm_client_add_and_activate_connection_async(job->nmClient, connection,
+		device, NULL, NULL, _OnMobileAddAndActivateDone, job);
+
+	g_object_unref(connection);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::ConnectMobileAsync(const char* devicePath, const char* name,
+	const char* apn, const char* user, const char* password,
+	const char* number, bool remember, const BMessenger& replyTo,
+	uint32 replyWhat)
+{
+	if (devicePath == NULL)
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_MobileJob* job = new _MobileJob;
+	job->backend = this;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath;
+	job->name = name != NULL ? name : "";
+	job->apn = apn != NULL ? apn : "";
+	job->user = user != NULL ? user : "";
+	job->password = password != NULL ? password : "";
+	job->number = number != NULL ? number : "";
+	job->remember = remember;
+	job->disconnect = false;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunMobileJob, job);
+	return B_OK;
+}
+
+
+status_t
+NMBackend::DisconnectMobileAsync(const char* devicePath,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (devicePath == NULL)
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_MobileJob* job = new _MobileJob;
+	job->backend = this;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath;
+	job->remember = false;
+	job->disconnect = true;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunMobileJob, job);
+	return B_OK;
+}
+
+
+struct _GetMobileCookie {
+	NMBackend* backend;
+	NMClient* nmClient;
+	BString devicePath;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static gboolean
+_RunGetMobileConnection(gpointer data)
+{
+	_GetMobileCookie* job = (_GetMobileCookie*)data;
+
+	BMessage reply(job->replyWhat);
+	NMDevice* device = _FindDeviceByPath(job->nmClient,
+		job->devicePath.String());
+	if (device == NULL) {
+		reply.AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
+		reply.AddString("reason", "no such device");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	bool connected = nm_device_get_state(device) == NM_DEVICE_STATE_ACTIVATED;
+	NMConnection* connection = _MobileConnectionForDevice(job->nmClient,
+		device);
+	reply.AddInt32("status", (int32)B_OK);
+	_FillMobileFromConnection(connection, connected, &reply);
+	job->replyTo.SendMessage(&reply);
+	delete job;
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::GetMobileConnectionAsync(const char* devicePath,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (devicePath == NULL)
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_GetMobileCookie* job = new _GetMobileCookie;
+	job->backend = this;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext,
+		_RunGetMobileConnection, job);
 	return B_OK;
 }
 

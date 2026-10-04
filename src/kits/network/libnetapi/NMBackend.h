@@ -86,6 +86,21 @@ static const char* const kNMFieldHotspotWillDisconnect
 	= "hotspot_will_disconnect";
 static const char* const kNMFieldHotspotCanStart = "hotspot_can_start";
 
+// Modem device snapshot extras: NM reports GSM/CDMA support as capability
+// bits; the preflet needs a boolean, not the raw mask.
+static const char* const kNMFieldModemCaps = "modem_caps";
+static const char* const kNMFieldModemIsGSM = "modem_is_gsm";
+static const char* const kNMFieldModemIsCDMA = "modem_is_cdma";
+
+// Mobile broadband connection profile fields (NMSettingGsm / NMSettingCdma).
+static const char* const kNMFieldMobileName = "mobile_name";
+static const char* const kNMFieldMobileAPN = "mobile_apn";
+static const char* const kNMFieldMobileUser = "mobile_user";
+static const char* const kNMFieldMobilePassword = "mobile_password";
+static const char* const kNMFieldMobileNumber = "mobile_number";
+static const char* const kNMFieldMobileConnected = "mobile_connected";
+static const char* const kNMFieldMobileHasProfile = "mobile_has_profile";
+
 typedef unsigned int guint;
 typedef unsigned long gulong;
 typedef int gboolean;
@@ -256,6 +271,26 @@ public:
 	// immediately; on failure, "reason".
 	status_t CreateWiredConnectionProfileAsync(const char* devicePath,
 		const char* name, const BMessenger& replyTo, uint32 replyWhat);
+
+	// Mobile broadband (GSM/CDMA) connections; signal, operator and SIM PIN
+	// live in ModemManagerBackend. remember=true saves the profile.
+	// Reply carries "status" and, on failure, "reason".
+	status_t ConnectMobileAsync(const char* devicePath, const char* name,
+		const char* apn, const char* user, const char* password,
+		const char* number, bool remember,
+		const BMessenger& replyTo, uint32 replyWhat);
+
+	// Same device disconnect path as DisconnectDevice(); separate name so
+	// the preflet's mobile pane cannot be confused with a wired/WiFi call.
+	// Reply carries "status" and, on failure, "reason".
+	status_t DisconnectMobileAsync(const char* devicePath,
+		const BMessenger& replyTo, uint32 replyWhat);
+
+	// Reads the device's active or saved GSM/CDMA profile into the
+	// kNMFieldMobile* fields for the preflet form. No profile yields
+	// kNMFieldMobileHasProfile=false. Async; reply carries "status".
+	status_t GetMobileConnectionAsync(const char* devicePath,
+		const BMessenger& replyTo, uint32 replyWhat);
 
 	// Wi-Fi hotspot: one saved WPA2 profile keyed by profileUUID, reused
 	// on every start. Reply carries the kNMFieldHotspot* fields or "reason".

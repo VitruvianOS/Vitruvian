@@ -49,6 +49,7 @@ set(SYSTEM_LIBS
 	media2
 	opengl
 	printcups
+	libscan
 	screensaver
 	textencoding
 	tracker

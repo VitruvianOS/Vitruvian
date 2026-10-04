@@ -295,9 +295,16 @@ DeclareDependency(
 
 DeclareDependency(
 	CAIRO
-	LIBRARIES  "cairo"
-	PACKAGES   "libcairo2-dev"
-	RUNTIMES   "libcairo2"
+	LIBRARIES	"cairo"
+	PACKAGES	"libcairo2-dev"
+	RUNTIMES	"libcairo2"
+)
+
+DeclareDependency(
+	SANE
+	LIBRARIES	"sane"
+	PACKAGES	"libsane-dev"
+	RUNTIMES	"libsane1"
 )
 
 DeclareDependency(

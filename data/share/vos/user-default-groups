@@ -1,3 +1,4 @@
 # Groups for every interactive account; read by vos-firstboot-commit and
-# vos-admin-helper. input: mouse, video/render: GPU, lpadmin: Printers.
-input video render lpadmin
+# vos-admin-helper. input: mouse, video/render: GPU, scanner: USB scanners,
+# lpadmin: Printers.
+input video render scanner plugdev lpadmin

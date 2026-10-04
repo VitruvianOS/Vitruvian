@@ -424,6 +424,7 @@ function( UsePrivateHeaders target )
 		notification
 		print
 		runtime_loader
+		scan
 		shared
 		storage
 		storage/mime

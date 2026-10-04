@@ -27,6 +27,7 @@ get_base_packages() {
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " firmware-iwlwifi firmware-atheros firmware-realtek firmware-libertas firmware-brcm80211 firmware-misc-nonfree" \
                 " firmware-intel-graphics firmware-amd-graphics firmware-nvidia-graphics firmware-mediatek bluez-firmware" \
                 " firmware-sof-signed firmware-intel-sound firmware-cirrus intel-microcode amd64-microcode" \
@@ -47,6 +48,7 @@ get_base_packages() {
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1" \
                 " grub-common grub2-common grub-efi-arm64-bin"
             ;;
@@ -62,6 +64,7 @@ get_base_packages() {
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1" \
                 " grub-common"
             ;;
@@ -77,6 +80,7 @@ get_base_packages() {
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
                 " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1" \
                 " grub-common grub2-common grub-efi-riscv64-bin"
             ;;
@@ -99,6 +103,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
                 " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
@@ -113,6 +118,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev" \
                 " libglu1-mesa-dev libnm-dev libbluetooth-dev" \
                 " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
@@ -127,6 +133,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
                 " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
             ;;
@@ -140,6 +147,7 @@ get_dev_packages() {
                 " libxkbcommon-dev libsystemd-dev libpam0g-dev libpwquality-dev" \
                 " libgcrypt20-dev libapt-pkg-dev" \
                 " libjpeg-dev libpng-dev libtiff-dev libwebp-dev libicns-dev" \
+                " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libpipewire-0.3-dev libspa-0.2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libfluidsynth-dev libglu1-mesa-dev libnm-dev libbluetooth-dev" \
                 " libwpewebkit-2.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev"
             ;;

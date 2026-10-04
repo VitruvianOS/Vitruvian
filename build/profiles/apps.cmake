@@ -32,6 +32,7 @@ set(SYSTEM_APPS
 	NetPlus
 	PackageManager
 	People
+	Passwords
 	Phone
 	PrintOMatic
 	ResEdit

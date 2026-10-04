@@ -3,14 +3,13 @@ Application(Passwords
 	Passwords.cpp
 	PasswordsView.cpp
 	PasswordDialog.cpp
-	${CMAKE_SOURCE_DIR}/src/servers/keystore/KdbxFile.cpp
 	${CMAKE_SOURCE_DIR}/src/servers/keystore/VosCrypto.c
-	${CMAKE_SOURCE_DIR}/src/servers/keystore/KdbxCrypto.c
 
 	INCLUDES
 	${CMAKE_SOURCE_DIR}/src/servers/keystore
+	${CMAKE_SOURCE_DIR}/src/libs/kdbx
 
-	LIBS localestub tracker z crypto argon2
+	LIBS localestub tracker kdbx crypto
 
 	RDEF Passwords.rdef
 )

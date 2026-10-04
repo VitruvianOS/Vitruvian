@@ -6,14 +6,12 @@ Server(
 	KeyRequestWindow.cpp
 	Keyring.cpp
 	KeyStoreServer.cpp
-	KdbxFile.cpp
 	SecretServiceBridge.cpp
 	SecretServiceMap.c
 	VosCrypto.c
-	KdbxCrypto.c
 
 	INCLUDES
-	LIBS localestub shared z crypto argon2
+	LIBS localestub shared crypto
 	RDEF keystore_server.rdef
 )
 

@@ -26,6 +26,15 @@
 #define KDBX_ARGON2_ITERATIONS	3u
 #define KDBX_ARGON2_PARALLELISM	1u
 
+/* Caps for attacker-controlled header and payload values. */
+#define KDBX_MAX_FILE_SIZE		(64u * 1024u * 1024u)
+#define KDBX_MAX_FIELD_SIZE		(16u * 1024u * 1024u)
+#define KDBX_MAX_INFLATE_OUTPUT	(64u * 1024u * 1024u)
+#define KDBX_MAX_ARGON2_MEMORY	(256u * 1024u * 1024u)
+#define KDBX_MAX_ARGON2_ITERATIONS	16u
+#define KDBX_MAX_ARGON2_PARALLELISM	4u
+#define KDBX_MAX_ENTRIES		4096
+
 
 static const uint8_t kAesCbcUuid[16] = {
 	0x31, 0xc1, 0xf2, 0xe6, 0xbf, 0x71, 0x43, 0x50,
@@ -372,7 +381,9 @@ _gunzip(const uint8_t* input, size_t inputLength, uint8_t** _output,
 		return -1;
 
 	size_t capacity = inputLength * 4 + 4096;
-	uint8_t* output = (uint8_t*)malloc(capacity);
+	if (capacity > KDBX_MAX_INFLATE_OUTPUT)
+		capacity = KDBX_MAX_INFLATE_OUTPUT;
+	uint8_t* output = (uint8_t*)malloc(capacity + 1);
 	if (output == NULL) {
 		inflateEnd(&stream);
 		return -1;
@@ -390,8 +401,15 @@ _gunzip(const uint8_t* input, size_t inputLength, uint8_t** _output,
 			break;
 		}
 		if (stream.avail_out == 0) {
+			if (capacity >= KDBX_MAX_INFLATE_OUTPUT) {
+				free(output);
+				inflateEnd(&stream);
+				return -1;
+			}
 			size_t next = capacity * 2;
-			uint8_t* grown = (uint8_t*)realloc(output, next);
+			if (next > KDBX_MAX_INFLATE_OUTPUT)
+				next = KDBX_MAX_INFLATE_OUTPUT;
+			uint8_t* grown = (uint8_t*)realloc(output, next + 1);
 			if (grown == NULL) {
 				free(output);
 				inflateEnd(&stream);
@@ -760,6 +778,8 @@ _xmlExtractValue(const char* xml, const char* key, const char** _after)
 	if (end == NULL)
 		return NULL;
 	size_t length = (size_t)(end - start);
+	if (length > KDBX_MAX_FIELD_SIZE)
+		return NULL;
 	char* value = (char*)malloc(length + 1);
 	if (value == NULL)
 		return NULL;
@@ -774,11 +794,16 @@ static int
 _parseEntries(const char* xml, KdbxDatabase* database)
 {
 	const char* cursor = xml;
+	int count = 0;
 	while ((cursor = strstr(cursor, "<Entry>")) != NULL) {
+		if (++count > KDBX_MAX_ENTRIES)
+			return -1;
 		const char* entryEnd = strstr(cursor, "</Entry>");
 		if (entryEnd == NULL)
 			break;
 		size_t entryLength = (size_t)(entryEnd - cursor);
+		if (entryLength > KDBX_MAX_FIELD_SIZE)
+			return -1;
 		char* entryXml = (char*)malloc(entryLength + 1);
 		if (entryXml == NULL)
 			return -1;
@@ -822,7 +847,8 @@ _parseEntries(const char* xml, KdbxDatabase* database)
 KdbxDatabase*
 kdbx_Read(const uint8_t* file, size_t fileLength, const char* password)
 {
-	if (file == NULL || password == NULL || fileLength < 12 + 64)
+	if (file == NULL || password == NULL || fileLength < 12 + 64
+		|| fileLength > KDBX_MAX_FILE_SIZE)
 		return NULL;
 	if (_readU32(file) != 0x9AA2D903
 		|| _readU32(file + 4) != 0xB54BFB67)
@@ -835,12 +861,16 @@ kdbx_Read(const uint8_t* file, size_t fileLength, const char* password)
 	size_t kdfLength = 0;
 	int sawAes = 0;
 	int sawChaCha = 0;
+	int sawMasterSeed = 0;
+	int sawIv = 0;
 
 	while (offset + 5 <= fileLength) {
 		uint8_t type = file[offset];
 		uint32_t size = _readU32(file + offset + 1);
 		const uint8_t* value = file + offset + 5;
-		if (offset + 5 + size > fileLength)
+		if (size > KDBX_MAX_FIELD_SIZE)
+			return NULL;
+		if (offset + 5 + (size_t)size > fileLength)
 			return NULL;
 		if (type == 0)
 			break;
@@ -851,18 +881,21 @@ kdbx_Read(const uint8_t* file, size_t fileLength, const char* password)
 				sawChaCha = 1;
 		} else if (type == 4 && size == 32) {
 			memcpy(masterSeed, value, 32);
+			sawMasterSeed = 1;
 		} else if (type == 7) {
-			if (size == 16)
+			if (size == 16) {
 				memcpy(iv, value, 16);
-			else if (size == 12)
+				sawIv = 1;
+			} else if (size == 12) {
 				memcpy(iv, value, 12);
-			else
+				sawIv = 1;
+			} else
 				return NULL;
 		} else if (type == 11 && size <= sizeof(kdfParams)) {
 			memcpy(kdfParams, value, size);
 			kdfLength = size;
 		}
-		offset += 5 + size;
+		offset += 5 + (size_t)size;
 	}
 
 	if (offset + 5 > fileLength || file[offset] != 0
@@ -881,7 +914,7 @@ kdbx_Read(const uint8_t* file, size_t fileLength, const char* password)
 		return NULL;
 	offset += 32;
 
-	if (!sawAes || kdfLength == 0)
+	if (!sawAes || !sawMasterSeed || !sawIv || kdfLength == 0)
 		return NULL;
 
 	uint8_t argonSalt[32];
@@ -889,7 +922,6 @@ kdbx_Read(const uint8_t* file, size_t fileLength, const char* password)
 	uint32_t argonMemory = 64u * 1024u * 1024u;
 	uint32_t argonParallel = 1;
 	uint64_t argonIterations = 2;
-	uint32_t argonVersion = 0x13;
 	int sawArgon2id = 0;
 
 	{
@@ -903,12 +935,13 @@ kdbx_Read(const uint8_t* file, size_t fileLength, const char* password)
 			if (pos + 5 > kdfLength)
 				return NULL;
 			uint32_t keyLength = _readU32(kdfParams + pos + 1);
-			if (pos + 5 + keyLength + 4 > kdfLength)
+			if (pos + 5 + (size_t)keyLength + 4 > kdfLength)
 				return NULL;
 			const char* keyName = (const char*)(kdfParams + pos + 5);
 			uint32_t valueLength = _readU32(kdfParams + pos + 5 + keyLength);
 			const uint8_t* value = kdfParams + pos + 5 + keyLength + 4;
-			if (pos + 5 + keyLength + 4 + valueLength > kdfLength)
+			if (pos + 5 + (size_t)keyLength + 4 + (size_t)valueLength
+					> kdfLength)
 				return NULL;
 			if (keyLength == 5 && memcmp(keyName, "$UUID", 5) == 0
 				&& valueLength == 16
@@ -927,14 +960,16 @@ kdbx_Read(const uint8_t* file, size_t fileLength, const char* password)
 			else if (keyLength == 1 && keyName[0] == 'I'
 				&& vtype == 0x05 && valueLength == 8)
 				argonIterations = _readU64(value);
-			else if (keyLength == 1 && keyName[0] == 'V'
-				&& vtype == 0x04 && valueLength == 4)
-				argonVersion = _readU32(value);
-			pos += 5 + keyLength + 4 + valueLength;
+			pos += 5 + (size_t)keyLength + 4 + (size_t)valueLength;
 		}
 	}
 
 	if (!sawArgon2id || argonSaltLength == 0)
+		return NULL;
+	if (argonMemory == 0 || argonMemory > KDBX_MAX_ARGON2_MEMORY
+		|| argonIterations == 0
+		|| argonIterations > KDBX_MAX_ARGON2_ITERATIONS
+		|| argonParallel == 0 || argonParallel > KDBX_MAX_ARGON2_PARALLELISM)
 		return NULL;
 
 	uint8_t passwordHash[32];

@@ -89,6 +89,8 @@ class IconRenderer {
 #endif // ICON_O_MATIC
 			void				_CommitRenderPass(StyleHandler& styleHandler,
 									bool reset = true);
+			void				_AttachBitmap(BBitmap* bitmap);
+									// rebind AGG buffer to a new target
 
 			BBitmap*			fBitmap;
 			const BBitmap*		fBackground;
@@ -110,6 +112,7 @@ class IconRenderer {
 			CompoundRasterizer	fRasterizer;
 
 			Transformable		fGlobalTransform;
+			int32				fSupersample;
 };
 
 

@@ -50,8 +50,11 @@ class FlatIconImporter {
 									   uint8* buffer, size_t size);
 
  private:
+			status_t			_Parse(LittleEndianBuffer& buffer,
+									Icon* icon, size_t size);
 			status_t			_ParseSections(LittleEndianBuffer& buffer,
-											   Icon* icon);
+											   Icon* icon,
+											   uint8 strokeParams);
 
 			status_t			_ParseStyles(LittleEndianBuffer& buffer,
 											 Container<Style>* styles);
@@ -60,11 +63,13 @@ class FlatIconImporter {
 			Shape*				_ReadPathSourceShape(
 									LittleEndianBuffer& buffer,
 									Container<Style>* styles,
-									Container<VectorPath>* paths);
+									Container<VectorPath>* paths,
+									uint8 strokeParams);
 			status_t			_ParseShapes(LittleEndianBuffer& buffer,
 											 Container<Style>* styles,
 											 Container<VectorPath>* paths,
-											 Container<Shape>* shapes);
+											 Container<Shape>* shapes,
+											 uint8 strokeParams);
 };
 
 

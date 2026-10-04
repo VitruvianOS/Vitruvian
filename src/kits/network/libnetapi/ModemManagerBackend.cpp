@@ -1224,30 +1224,74 @@ struct _UnlockSimJob {
 };
 
 
+// Resolves the SIM object path from the Modem.Sim property.
+static bool
+_ResolveSimPath(GDBusConnection* connection, const char* modemPath,
+	BString& outSimPath)
+{
+	GError* error = NULL;
+	GVariant* unwrapped = _MMGetProperty(connection, modemPath,
+		kMMModemInterface, "Sim", &error);
+	if (error != NULL)
+		g_error_free(error);
+	if (unwrapped == NULL)
+		return false;
+
+	bool ok = g_variant_is_of_type(unwrapped, G_VARIANT_TYPE_OBJECT_PATH);
+	if (ok)
+		outSimPath = g_variant_get_string(unwrapped, NULL);
+	g_variant_unref(unwrapped);
+	return ok && !outSimPath.IsEmpty();
+}
+
+
+// SendPin is a method of org.freedesktop.ModemManager1.Sim on the SIM
+// object, not of Modem3gpp on the modem.
+static status_t
+_SendPinToSim(GDBusConnection* connection, const char* modemPath,
+	const char* pin)
+{
+	BString simPath;
+	if (!_ResolveSimPath(connection, modemPath, simPath))
+		return B_ENTRY_NOT_FOUND;
+
+	GError* error = NULL;
+	GVariant* result = g_dbus_connection_call_sync(connection,
+		kMMBusName, simPath.String(),
+		kMMSimInterface, "SendPin",
+		g_variant_new("(s)", pin),
+		NULL, G_DBUS_CALL_FLAGS_NONE,
+		kMMCallTimeoutMs, NULL, &error);
+
+	status_t status = B_OK;
+	if (result == NULL) {
+		fprintf(stderr, "ModemManagerBackend: SendPin failed: %s\n",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+		status = B_ERROR;
+	} else {
+		g_variant_unref(result);
+	}
+	return status;
+}
+
+
 static gboolean
 _RunUnlockSim(gpointer data)
 {
 	_UnlockSimJob* job = (_UnlockSimJob*)data;
 
-	// SendPin lives on Modem3gpp; CDMA modems have no SIM PIN path.
-	GError* error = NULL;
-	GVariant* result = g_dbus_connection_call_sync(job->connection,
-		kMMBusName, job->modemPath.String(),
-		kMMModem3gppInterface, "SendPin",
-		g_variant_new("(s)", job->pin.String()),
-		NULL, G_DBUS_CALL_FLAGS_NONE,
-		kMMCallTimeoutMs, NULL, &error);
+	status_t sendStatus = _SendPinToSim(job->connection,
+		job->modemPath.String(), job->pin.String());
 
 	BMessage reply(job->replyWhat);
-	if (result != NULL) {
+	if (sendStatus == B_OK) {
 		reply.AddInt32("status", (int32)B_OK);
-		g_variant_unref(result);
 	} else {
-		reply.AddInt32("status", (int32)B_ERROR);
-		reply.AddString("reason",
-			error != NULL ? error->message : "unknown error");
-		if (error != NULL)
-			g_error_free(error);
+		reply.AddInt32("status", (int32)sendStatus);
+		reply.AddString("reason", sendStatus == B_ENTRY_NOT_FOUND
+			? "no SIM object on modem" : "SendPin failed");
 	}
 
 	job->replyTo.SendMessage(&reply);
@@ -1269,31 +1313,14 @@ ModemManagerBackend::UnlockSim(const char* modemPath, const char* pin)
 	if (fDBusConnection == NULL)
 		return B_ERROR;
 
-	GError* error = NULL;
-	GVariant* result = g_dbus_connection_call_sync(
-		(GDBusConnection*)fDBusConnection,
-		kMMBusName, modemPath,
-		kMMModem3gppInterface, "SendPin",
-		g_variant_new("(s)", pin),
-		NULL, G_DBUS_CALL_FLAGS_NONE,
-		kMMCallTimeoutMs, NULL, &error);
-
-	status_t status = B_OK;
-	if (result == NULL) {
-		fprintf(stderr, "ModemManagerBackend: SendPin failed: %s\n",
-			error ? error->message : "unknown error");
-		if (error != NULL)
-			g_error_free(error);
-		status = B_ERROR;
-	} else {
-		g_variant_unref(result);
-		if (fMainContext != NULL) {
-			g_main_context_invoke((GMainContext*)fMainContext,
-				[](gpointer data) -> gboolean {
-					((ModemManagerBackend*)data)->_RefreshSnapshot();
-					return G_SOURCE_REMOVE;
-				}, this);
-		}
+	status_t status = _SendPinToSim((GDBusConnection*)fDBusConnection,
+		modemPath, pin);
+	if (status == B_OK && fMainContext != NULL) {
+		g_main_context_invoke((GMainContext*)fMainContext,
+			[](gpointer data) -> gboolean {
+				((ModemManagerBackend*)data)->_RefreshSnapshot();
+				return G_SOURCE_REMOVE;
+			}, this);
 	}
 
 	return status;

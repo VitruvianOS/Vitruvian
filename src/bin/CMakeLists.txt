@@ -10,6 +10,7 @@ add_subdirectory(query)
 add_subdirectory(rc)
 add_subdirectory(jam)
 add_subdirectory(screen_blanker)
+add_subdirectory(vos-signature-migrate)
 # add_subdirectory(screenmode)      # missing private graphics headers
 
 UsePrivateHeaders(GLOBAL app interface libroot kernel shared storage support system tracker)

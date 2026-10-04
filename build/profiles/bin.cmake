@@ -66,6 +66,7 @@
 	notify
 	translate
 	filepanel
+	vos-signature-migrate
 	screen_blanker
 	screenshot_cli
 )

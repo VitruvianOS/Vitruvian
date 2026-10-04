@@ -1551,6 +1551,58 @@ run_first_login_for_user_detached()
 }
 
 
+// Signature migration has its own marker so upgraded users, who already
+// carry the first_login marker, still get the one-shot rewrite.
+static void
+run_signature_migration_for_user()
+{
+	if (sUserUid == (uid_t)-1 || sUserHome[0] == '\0')
+		return;
+
+	char marker[PATH_MAX + 48];
+	snprintf(marker, sizeof(marker),
+		"%s/config/settings/vos-signature-migrated", sUserHome);
+	if (access(marker, F_OK) == 0)
+		return;
+
+	gid_t* groups = NULL;
+	int ngroups = 0;
+	if (!resolve_user_groups(&groups, &ngroups)) {
+		fprintf(stderr, "janus_session: signature-migrate: groups for %s\n",
+			sUserName);
+		return;
+	}
+
+	pid_t child = fork();
+	if (child < 0) {
+		free(groups);
+		return;
+	}
+	if (child == 0) {
+		setenv("HOME", sUserHome, 1);
+		setenv("USER", sUserName, 1);
+		setenv("LOGNAME", sUserName, 1);
+		if (!drop_to_user(groups, ngroups)) {
+			fprintf(stderr, "janus_session: signature-migrate setuid: %s\n",
+				strerror(errno));
+			_exit(1);
+		}
+		char* const argv[] = { (char*)"/bin/vos-signature-migrate", NULL };
+		execv(argv[0], argv);
+		fprintf(stderr, "janus_session: signature-migrate exec: %s\n",
+			strerror(errno));
+		_exit(127);
+	}
+	int status;
+	waitpid(child, &status, 0);
+	free(groups);
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+		fprintf(stderr, "janus_session: signature-migrate exited %d\n",
+			status);
+	}
+}
+
+
 // --- Teardown / main -----------------------------------------------------
 
 static void
@@ -2086,6 +2138,10 @@ main(int argc, char** argv)
 			fprintf(stderr, "janus_session: supervisor port not found at startup\n");
 		}
 	}
+
+	// Rewrite settings before registrar, Tracker and Deskbar read them.
+	if (!sGreeterMode)
+		run_signature_migration_for_user();
 
 	// The registrar needs no display, so it starts during the wait. The wait
 	// precedes the seat, which switches the console to graphics.

@@ -237,6 +237,40 @@ AppInfoList::IndexOf(RosterAppInfo *info) const
 	return fInfos.IndexOf(info);
 }
 
+// Old vendor signatures resolve to the renamed app so third-party callers
+// keep working after the x-vnd.vos-* move.
+static bool
+alias_legacy_signature(const char* signature, char* buffer, size_t size)
+{
+	if (signature == NULL || buffer == NULL || size == 0)
+		return false;
+
+	static const char* kOldUpper = "x-vnd.Haiku-";
+	static const char* kOldLower = "x-vnd.haiku-";
+	static const char* kNew = "x-vnd.vos-";
+
+	const char* hit = strstr(signature, kOldUpper);
+	size_t oldLen = strlen(kOldUpper);
+	if (hit == NULL) {
+		hit = strstr(signature, kOldLower);
+		oldLen = strlen(kOldLower);
+	}
+	if (hit == NULL)
+		return false;
+
+	size_t prefix = (size_t)(hit - signature);
+	size_t newLen = strlen(kNew);
+	size_t suffix = strlen(hit + oldLen);
+	if (prefix + newLen + suffix + 1 > size)
+		return false;
+
+	memcpy(buffer, signature, prefix);
+	memcpy(buffer + prefix, kNew, newLen);
+	memcpy(buffer + prefix + newLen, hit + oldLen, suffix + 1);
+	return strcmp(buffer, signature) != 0;
+}
+
+
 // IndexOf
 /*!	\brief Returns the list index of a RosterAppInfo with the supplied
 		   signature.
@@ -255,6 +289,14 @@ AppInfoList::IndexOf(const char *signature) const
 		for (int32 i = 0; RosterAppInfo *info = InfoAt(i); i++) {
 			if (!strcasecmp(info->signature, signature))
 				return i;
+		}
+
+		char aliased[B_MIME_TYPE_LENGTH];
+		if (alias_legacy_signature(signature, aliased, sizeof(aliased))) {
+			for (int32 i = 0; RosterAppInfo *info = InfoAt(i); i++) {
+				if (!strcasecmp(info->signature, aliased))
+					return i;
+			}
 		}
 	}
 	return -1;

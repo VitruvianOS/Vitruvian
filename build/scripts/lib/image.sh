@@ -359,9 +359,9 @@ menuentry "Vitruvian" {
     initrd (\$root)/initrd.img
 }
 menuentry "Vitruvian (Safe Mode)" {
-    set gfxmode=1024x768,800x600,auto
-    set gfxpayload=keep
-    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
+    insmod all_video
+    set gfxpayload=1024x768x32,1024x768,800x600,auto
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons
     initrd (\$root)/initrd.img
 }
 menuentry "Vitruvian (Recovery)" {
@@ -604,9 +604,9 @@ menuentry "Vitruvian Live" {
     initrd /initrd
 }
 menuentry "Vitruvian Live (Safe Mode)" {
-    set gfxmode=1024x768,800x600,auto
-    set gfxpayload=keep
-    linux /vmlinuz boot=live noeject quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons console=tty0 console=ttyS0,115200
+    insmod all_video
+    set gfxpayload=1024x768x32,1024x768,800x600,auto
+    linux /vmlinuz boot=live noeject nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons
     initrd /initrd
 }
 menuentry "Vitruvian Live (Recovery)" {
@@ -688,8 +688,8 @@ EOF
         grub-mkstandalone \
             --format=i386-pc \
             --output="$_basedir/image_tree/scratch/core.img" \
-            --install-modules="linux normal iso9660 biosdisk memdisk search tar ls" \
-            --modules="linux normal iso9660 biosdisk search" \
+            --install-modules="linux normal iso9660 biosdisk memdisk search tar ls all_video" \
+            --modules="linux normal iso9660 biosdisk search all_video" \
             --locales="" \
             --fonts="" \
             "boot/grub/grub.cfg=$_basedir/image_tree/scratch/grub.cfg"

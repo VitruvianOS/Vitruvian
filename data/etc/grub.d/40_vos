@@ -39,9 +39,9 @@ fi
 cat <<EOF
 menuentry "Vitruvian (Safe Mode)" {
     prepare_grub_to_access_device "${GRUB_DEVICE_BOOT}"
-    set gfxmode=1024x768,800x600,auto
-    set gfxpayload=keep
-    linux $_rel_vmlinuz root=UUID=$_root rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
+    insmod all_video
+    set gfxpayload=1024x768x32,1024x768,800x600,auto
+    linux $_rel_vmlinuz root=UUID=$_root rw nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons
     initrd $_rel_initrd
 }
 menuentry "Vitruvian (Recovery)" {

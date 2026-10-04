@@ -15,4 +15,4 @@ target_include_directories(Joysticks PRIVATE
 	${EVDEV_INCLUDES}
 )
 
-DoCatalogs("x-vnd.Haiku-Joysticks" preferences/joysticks)
+DoCatalogs("x-vnd.vos-Joysticks" preferences/joysticks)

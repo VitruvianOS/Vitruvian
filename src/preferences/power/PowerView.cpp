@@ -56,7 +56,7 @@ static const int32 kDefaultDisplayOff = 10;
 static const char* kDefaultBatteryCritical = "hibernate";
 
 static const char* kHelper = "/usr/libexec/vos-set-power-actions";
-static const char* kPowerStatusSignature = "application/x-vnd.Haiku-PowerStatus";
+static const char* kPowerStatusSignature = "application/x-vnd.vos-PowerStatus";
 static const char* kPowerStatusItem = "PowerStatus";
 
 // app_server reports the session idle this long after the last input;

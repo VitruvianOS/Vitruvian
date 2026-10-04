@@ -673,7 +673,7 @@ send_to_app_server(int32 what, bigtime_t timeout, int32 unlockTeam = -1)
 	pid_t pid = -1;
 	for (int i = 0; i < sAppCount; i++) {
 		if (strcmp(sApps[i].signature,
-				"application/x-vnd.Haiku-app_server") == 0
+				"application/x-vnd.vos-app_server") == 0
 				&& sApps[i].port >= 0) {
 			port_info info;
 			if (get_port_info(sApps[i].port, &info) == B_OK) {

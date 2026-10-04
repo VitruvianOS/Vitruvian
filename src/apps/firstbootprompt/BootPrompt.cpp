@@ -81,7 +81,7 @@ BootPromptApp::MessageReceived(BMessage* message)
 			// The installer in account-only mode, converting this root.
 			char* args[] = { (char*)"Installer", (char*)"--setup-account",
 				NULL };
-			be_roster->Launch("application/x-vnd.Haiku-Installer", 2, args);
+			be_roster->Launch("application/x-vnd.vos-Installer", 2, args);
 			sExitValue = 0;
 			PostMessage(B_QUIT_REQUESTED);
 			break;

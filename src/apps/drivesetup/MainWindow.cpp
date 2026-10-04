@@ -1362,7 +1362,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 				continue;
 
 			BMessage* message = new BMessage(MSG_INITIALIZE);
-			message->AddInt32("parent id", parentID);
+			message->AddInt64("parent id", (int64)parentID);
 			message->AddString("disk system", diskSystem.PrettyName());
 
 			BString label = diskSystem.PrettyName();
@@ -1383,7 +1383,7 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 
 				// Context menu
 				BMessage* message = new BMessage(MSG_INITIALIZE);
-				message->AddInt32("parent id", parentID);
+				message->AddInt64("parent id", (int64)parentID);
 				message->AddString("disk system", diskSystem.PrettyName());
 				BMenuItem* popUpItem = new BMenuItem(label.String(), message);
 				popUpItem->SetEnabled(partition != NULL

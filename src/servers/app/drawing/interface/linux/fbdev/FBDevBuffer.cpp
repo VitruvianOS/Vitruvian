@@ -10,17 +10,33 @@
 
 FBDevBuffer::FBDevBuffer(int fd, struct fb_var_screeninfo vInfo,
 	struct fb_fix_screeninfo finfo)
+	:
+	fBuffer((uint8_t*)MAP_FAILED),
+	fSpace(B_RGB32)
 {
 	fVInfo = vInfo;
 	fInfo = finfo;
-	fBuffer = mmap(0, fInfo.line_length * fVInfo.yres_virtual,
+
+	if (!fbdev_color_space(fVInfo.bits_per_pixel, &fSpace))
+		fSpace = B_RGB32;
+
+	uint32 bytes = fbdev_bytes_per_row(fVInfo.bits_per_pixel, fVInfo.xres,
+		fInfo.line_length);
+	if (bytes == 0 || fVInfo.yres_virtual == 0)
+		return;
+
+	fBuffer = (uint8_t*)mmap(0, bytes * fVInfo.yres_virtual,
 		PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)0);
+	if (fBuffer == MAP_FAILED)
+		fBuffer = NULL;
 }
 
 
 FBDevBuffer::~FBDevBuffer()
 {
 	CALLED();
+	if (fBuffer != NULL && fBuffer != (uint8_t*)MAP_FAILED)
+		munmap(fBuffer, BytesPerRow() * fVInfo.yres_virtual);
 }
 
 
@@ -28,7 +44,7 @@ status_t
 FBDevBuffer::InitCheck() const
 {
 	CALLED();
-	if (fBuffer != MAP_FAILED)
+	if (fBuffer != NULL)
 		return B_OK;
 
 	return B_ERROR;
@@ -39,7 +55,7 @@ color_space
 FBDevBuffer::ColorSpace() const
 {
 	CALLED();
-	return B_RGB32;
+	return fSpace;
 }
 
 
@@ -55,7 +71,8 @@ uint32
 FBDevBuffer::BytesPerRow() const
 {
 	CALLED();
-	return fInfo.line_length;
+	return fbdev_bytes_per_row(fVInfo.bits_per_pixel, fVInfo.xres,
+		fInfo.line_length);
 }
 
 

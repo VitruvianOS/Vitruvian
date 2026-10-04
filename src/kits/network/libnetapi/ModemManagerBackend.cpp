@@ -37,6 +37,32 @@ static const char* kMMObjectManagerInterface
 
 static const gint kMMCallTimeoutMs = 5000;
 
+static const char* kMMPropertiesInterface = "org.freedesktop.DBus.Properties";
+
+
+// Properties.Get for one property on one interface of one object. The
+// destination must be the ModemManager bus name, not the Properties interface.
+static GVariant*
+_MMGetProperty(GDBusConnection* connection, const char* objectPath,
+	const char* interfaceName, const char* propertyName, GError** error)
+{
+	GVariant* result = g_dbus_connection_call_sync(connection,
+		kMMBusName, objectPath,
+		kMMPropertiesInterface, "Get",
+		g_variant_new("(ss)", interfaceName, propertyName),
+		G_VARIANT_TYPE("(v)"),
+		G_DBUS_CALL_FLAGS_NONE,
+		kMMCallTimeoutMs, NULL, error);
+	if (result == NULL)
+		return NULL;
+
+	GVariant* inner = g_variant_get_child_value(result, 0);
+	GVariant* unwrapped = g_variant_get_variant(inner);
+	g_variant_unref(inner);
+	g_variant_unref(result);
+	return unwrapped;
+}
+
 // ModemManager state values from the specification (MMModemState)
 static const uint32 kMMStateUnknown = 0;
 static const uint32 kMMStateDisabled = 10;
@@ -945,23 +971,14 @@ ModemManagerBackend::GetSignalQuality(const char* modemPath,
 
 	// SignalQuality is a property of org.freedesktop.ModemManager1.Modem.
 	GError* error = NULL;
-	GVariant* propResult = g_dbus_connection_call_sync(
-		(GDBusConnection*)fDBusConnection,
-		kMMBusName,
-		modemPath,
-		"org.freedesktop.DBus.Properties", "Get",
-		g_variant_new("(ss)", kMMModemInterface, "SignalQuality"),
-		G_VARIANT_TYPE("(v)"),
-		G_DBUS_CALL_FLAGS_NONE,
-		kMMCallTimeoutMs, NULL, &error);
+	GVariant* unwrapped = _MMGetProperty(
+		(GDBusConnection*)fDBusConnection, modemPath,
+		kMMModemInterface, "SignalQuality", &error);
 
 	outSignal->MakeEmpty();
 	outSignal->AddString(kMMFieldModemPath, modemPath);
 
-	if (propResult != NULL) {
-		GVariant* inner = g_variant_get_child_value(propResult, 0);
-		GVariant* unwrapped = g_variant_get_variant(inner);
-
+	if (unwrapped != NULL) {
 		guint32 quality = 0;
 		gboolean recent = FALSE;
 
@@ -978,8 +995,6 @@ ModemManagerBackend::GetSignalQuality(const char* modemPath,
 		outSignal->AddUInt32(kMMFieldModemSignalBars, bars);
 
 		g_variant_unref(unwrapped);
-		g_variant_unref(inner);
-		g_variant_unref(propResult);
 		return B_OK;
 	} else {
 		if (error != NULL)
@@ -1047,27 +1062,15 @@ ModemManagerBackend::GetSimStatus(const char* modemPath, BMessage* outSim)
 
 	if (simPath.IsEmpty()) {
 		GError* error = NULL;
-		GVariant* result = g_dbus_connection_call_sync(
-			(GDBusConnection*)fDBusConnection,
-			"org.freedesktop.DBus.Properties",
-			modemPath,
-			"org.freedesktop.DBus.Properties", "Get",
-			g_variant_new("(ss)", kMMModemInterface, "Sim"),
-			G_VARIANT_TYPE("(v)"),
-			G_DBUS_CALL_FLAGS_NONE,
-			kMMCallTimeoutMs, NULL, &error);
-		if (result != NULL) {
-			GVariant* inner = g_variant_get_child_value(result, 0);
-			GVariant* unwrapped = g_variant_get_variant(inner);
-			if (unwrapped != NULL
-					&& g_variant_is_of_type(unwrapped,
-						G_VARIANT_TYPE_OBJECT_PATH))
-				simPath = g_variant_get_string(unwrapped, NULL);
-			if (unwrapped != NULL)
-				g_variant_unref(unwrapped);
-			g_variant_unref(inner);
-			g_variant_unref(result);
-		}
+		GVariant* unwrapped = _MMGetProperty(
+			(GDBusConnection*)fDBusConnection, modemPath,
+			kMMModemInterface, "Sim", &error);
+		if (unwrapped != NULL
+				&& g_variant_is_of_type(unwrapped,
+					G_VARIANT_TYPE_OBJECT_PATH))
+			simPath = g_variant_get_string(unwrapped, NULL);
+		if (unwrapped != NULL)
+			g_variant_unref(unwrapped);
 		if (error != NULL)
 			g_error_free(error);
 	}
@@ -1085,7 +1088,7 @@ ModemManagerBackend::GetSimStatus(const char* modemPath, BMessage* outSim)
 	GVariant* props = g_dbus_connection_call_sync(
 		(GDBusConnection*)fDBusConnection,
 		kMMBusName, simPath.String(),
-		"org.freedesktop.DBus.Properties", "GetAll",
+		kMMPropertiesInterface, "GetAll",
 		g_variant_new("(s)", kMMSimInterface),
 		G_VARIANT_TYPE("(a{sv})"),
 		G_DBUS_CALL_FLAGS_NONE,

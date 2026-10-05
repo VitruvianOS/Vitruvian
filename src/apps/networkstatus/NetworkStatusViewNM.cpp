@@ -377,6 +377,17 @@ NetworkStatusView::Draw(BRect updateRect)
 {
 	BRect bounds = Bounds();
 
+	// RadioView tints arcs from LowColor and tint_color keeps alpha; ours is
+	// B_TRANSPARENT_COLOR, so arcs would paint fully transparent over the tray.
+	rgb_color lowColor = ViewColor();
+	if (lowColor.alpha == 0) {
+		BView* parent = Parent();
+		lowColor = parent != NULL
+			? parent->ViewColor()
+			: ui_color(B_PANEL_BACKGROUND_COLOR);
+	}
+	SetLowColor(lowColor);
+
 	drawing_mode oldMode = DrawingMode();
 	SetDrawingMode(B_OP_ALPHA);
 

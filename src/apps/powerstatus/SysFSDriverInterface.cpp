@@ -15,10 +15,10 @@
 
 #include <new>
 
+#include <dirent.h>
+
 #include <Autolock.h>
-#include <Directory.h>
-#include <Entry.h>
-#include <Path.h>
+#include <String.h>
 
 
 static const char* kSysfsPowerSupply = "/sys/class/power_supply";
@@ -205,8 +205,11 @@ SysFSDriverInterface::_ReadCapacityFamily(const char* path,
 status_t
 SysFSDriverInterface::_DetectBatteries()
 {
-	BDirectory dir(fRoot.String());
-	BEntry entry;
+	// POSIX readdir: BDirectory entry_ref iteration needs kernel node
+	// refs that are unavailable when this runs on a host build.
+	DIR* dir = opendir(fRoot.String());
+	if (dir == NULL)
+		return B_FILE_ERROR;
 
 	// Clean up any previous battery list
 	for (int i = 0; i < fBatteries.CountItems(); i++)
@@ -214,23 +217,26 @@ SysFSDriverInterface::_DetectBatteries()
 	fBatteries.MakeEmpty();
 
 	status_t overallStatus = B_ERROR;
+	struct dirent* ent;
 
-	while (dir.GetNextEntry(&entry) == B_OK) {
-		BPath path;
-		if (entry.GetPath(&path) != B_OK)
+	while ((ent = readdir(dir)) != NULL) {
+		if (ent->d_name[0] == '.')
 			continue;
+
+		BString path(fRoot);
+		path << "/" << ent->d_name;
 
 		// Check if this is a battery or AC adapter
 		BString typeStr;
-		if (_ReadStringAttr(path.Path(), "type", &typeStr) != B_OK)
+		if (_ReadStringAttr(path.String(), "type", &typeStr) != B_OK)
 			continue;
 
 		sysfs_battery* battery = new(std::nothrow) sysfs_battery;
 		if (battery == NULL)
 			continue;
 
-		battery->path = path.Path();
-		battery->name = entry.Name();
+		battery->path = path;
+		battery->name = ent->d_name;
 		battery->is_battery = (typeStr.ICompare("Battery") == 0);
 		battery->is_ac = (typeStr.ICompare("Mains") == 0);
 
@@ -247,7 +253,7 @@ SysFSDriverInterface::_DetectBatteries()
 		battery->capacity_kind = SYSFS_CAPACITY_NONE;
 		battery->init_status = B_OK;
 
-		_ReadCapacityFamily(path.Path(), battery);
+		_ReadCapacityFamily(path.String(), battery);
 
 		if (fBatteries.AddItem(battery))
 			overallStatus = B_OK;
@@ -255,6 +261,7 @@ SysFSDriverInterface::_DetectBatteries()
 			delete battery;
 	}
 
+	closedir(dir);
 	return overallStatus;
 }
 

@@ -5,6 +5,7 @@
  * Host-side SysFSDriverInterface tests against fake power_supply trees.
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +42,18 @@ write_file(const char* path, const char* contents)
 static int
 make_dir(const char* path)
 {
-	return mkdir(path, 0755);
+	// Create parents first so nested fake sysfs trees work.
+	char tmp[512];
+	snprintf(tmp, sizeof(tmp), "%s", path);
+	for (char* p = tmp + 1; *p != '\0'; p++) {
+		if (*p == '/') {
+			*p = '\0';
+			if (mkdir(tmp, 0755) < 0 && errno != EEXIST)
+				return -1;
+			*p = '/';
+		}
+	}
+	return mkdir(path, 0755) == 0 || errno == EEXIST ? 0 : -1;
 }
 
 static void
@@ -91,7 +103,9 @@ test_capacity_only(void)
 	make_battery(root, "BAT0", attrs, values);
 
 	SysFSDriverInterface driver(root);
-	expect(driver.Connect() == B_OK, "capacity-only Connect");
+	status_t connectStatus = driver.Connect();
+	printf("     connect(%s) = %d\n", root, connectStatus);
+	expect(connectStatus == B_OK, "capacity-only Connect");
 	battery_info info;
 	memset(&info, 0, sizeof(info));
 	expect(driver.GetBatteryInfo(0, &info) == B_OK, "capacity-only read");

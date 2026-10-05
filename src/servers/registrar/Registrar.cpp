@@ -901,6 +901,45 @@ read_sysfs(const char* dir, const char* name, char* buffer, size_t size)
 }
 
 
+static bool
+read_sysfs_long(const char* dir, const char* name, long* value)
+{
+	char buffer[64];
+	if (!read_sysfs(dir, name, buffer, sizeof(buffer)))
+		return false;
+	*value = strtol(buffer, NULL, 10);
+	return true;
+}
+
+
+// Some ECs expose capacity=0 or omit it while energy_*/charge_* still work.
+static bool
+battery_percent(const char* dir, int* percent)
+{
+	char value[64];
+	long energyNow, energyFull, chargeNow, chargeFull;
+
+	if (read_sysfs(dir, "energy_now", value, sizeof(value))
+		&& read_sysfs_long(dir, "energy_full", &energyFull)
+		&& energyFull > 0) {
+		energyNow = strtol(value, NULL, 10);
+		*percent = (int)(energyNow * 100 / energyFull);
+		return true;
+	}
+	if (read_sysfs_long(dir, "charge_now", &chargeNow)
+		&& read_sysfs_long(dir, "charge_full", &chargeFull)
+		&& chargeFull > 0) {
+		*percent = (int)(chargeNow * 100 / chargeFull);
+		return true;
+	}
+	if (read_sysfs(dir, "capacity", value, sizeof(value))) {
+		*percent = atoi(value);
+		return true;
+	}
+	return false;
+}
+
+
 /*!	\brief Run the user's critical-battery action once per discharge.
 
 	Nothing else does it: upower is not installed. The action comes from
@@ -928,10 +967,11 @@ Registrar::_CheckBattery()
 		if (read_sysfs(entry->d_name, "scope", value, sizeof(value))
 			&& strcmp(value, "Device") == 0)
 			continue;
-		if (!read_sysfs(entry->d_name, "capacity", value, sizeof(value)))
+		int percent = 0;
+		if (!battery_percent(entry->d_name, &percent))
 			continue;
 		count++;
-		capacitySum += atoi(value);
+		capacitySum += percent;
 		if (read_sysfs(entry->d_name, "status", value, sizeof(value))
 			&& strcmp(value, "Discharging") == 0)
 			discharging = true;

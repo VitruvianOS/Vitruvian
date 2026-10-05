@@ -171,6 +171,7 @@ private:
 
 			status_t			_GetTouchpadSettingsPath(BPath& path);
 			status_t			_UpdateTouchpadSettings(BMessage* message);
+			void				_UpdateTouchpadScale();
 
 			BMessage*			_BuildMouseMessage(uint32 what,
 									uint64 when, uint32 buttons) const;
@@ -239,8 +240,16 @@ private:
 			// A clickpad reports finger position on the pad, so it
 			// needs delta tracking, not a position jump.
 			bool				fIsAbsoluteTouchpad;
+			// Screen pixels per pad unit; 0 until screen bounds are known.
+			float				fTouchpadScaleX;
+			float				fTouchpadScaleY;
+			// Sub-pixel remainder so small pad moves are not dropped.
+			float				fTouchpadResidualX;
+			float				fTouchpadResidualY;
 			uint32				fSharedButtons;
 			int32				fAbsMinX, fAbsMinY;
+			// Pad units per mm; 0 when the driver does not say.
+			int32				fAbsResX, fAbsResY;
 			int32				fAbsMaxX, fAbsMaxY;
 			int32				fLastAbsX, fLastAbsY;
 			BPoint				fCursorPosition;
@@ -316,9 +325,15 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fLastClickButtons(0),
 	fIsAbsolute(false),
 	fIsAbsoluteTouchpad(false),
+	fTouchpadScaleX(0.0f),
+	fTouchpadScaleY(0.0f),
+	fTouchpadResidualX(0.0f),
+	fTouchpadResidualY(0.0f),
 	fSharedButtons(0),
 	fAbsMinX(0),
 	fAbsMinY(0),
+	fAbsResX(0),
+	fAbsResY(0),
 	fAbsMaxX(65535),
 	fAbsMaxY(65535),
 	fLastAbsX(-1),
@@ -455,6 +470,8 @@ MouseDevice::_Classify()
 		// the report scales against, not the maximum on its own.
 		fAbsMinX = libevdev_get_abs_minimum(evdev, ABS_X);
 		fAbsMinY = libevdev_get_abs_minimum(evdev, ABS_Y);
+		fAbsResX = libevdev_get_abs_resolution(evdev, ABS_X);
+		fAbsResY = libevdev_get_abs_resolution(evdev, ABS_Y);
 
 		// INPUT_PROP_BUTTONPAD/BTN_TOOL_FINGER separates a clickpad
 		// from a real tablet.
@@ -620,6 +637,8 @@ MouseDevice::UpdateScreenBounds(BRect frame, int32 orientation,
 	fOrientation = orientation;
 	fReflection = reflection;
 
+	_UpdateTouchpadScale();
+
 	fCursorPosition.x = std::min(fCursorPosition.x, (float)(fScreenW - 1));
 	fCursorPosition.y = std::min(fCursorPosition.y, (float)(fScreenH - 1));
 	fLibinputLastPos.x = std::min(fLibinputLastPos.x, (float)(fScreenW - 1));
@@ -729,6 +748,7 @@ MouseDevice::_ControlThread()
 		fScreenW = (int32)(frame.Width() + 1);
 		fScreenH = (int32)(frame.Height() + 1);
 	}
+	_UpdateTouchpadScale();
 	if (fTarget.fCursorLock.Lock()) {
 		if (fTarget.fCursorPosition.x < 0)
 			fTarget.fCursorPosition.Set(fScreenW / 2.0f, fScreenH / 2.0f);
@@ -995,14 +1015,26 @@ MouseDevice::_ControlThread()
 							touchCode) == 0) {
 						fLastAbsX = -1;
 						fLastAbsY = -1;
+						fTouchpadResidualX = 0.0f;
+						fTouchpadResidualY = 0.0f;
 					} else {
 						int32 x = libevdev_get_event_value(fEvdevHandle,
 							EV_ABS, ABS_X);
 						int32 y = libevdev_get_event_value(fEvdevHandle,
 							EV_ABS, ABS_Y);
 						if (fLastAbsX >= 0 && !touchChanged) {
-							xdelta += x - fLastAbsX;
-							ydelta += y - fLastAbsY;
+							// Pad units are not screen pixels; scale first so
+							// speed and acceleration act on pointer motion.
+							float sx = fTouchpadResidualX
+								+ (float)(x - fLastAbsX) * fTouchpadScaleX;
+							float sy = fTouchpadResidualY
+								+ (float)(y - fLastAbsY) * fTouchpadScaleY;
+							int32 dx = (int32)(sx < 0 ? sx - 0.5f : sx + 0.5f);
+							int32 dy = (int32)(sy < 0 ? sy - 0.5f : sy + 0.5f);
+							fTouchpadResidualX = sx - (float)dx;
+							fTouchpadResidualY = sy - (float)dy;
+							xdelta += dx;
+							ydelta += dy;
 						}
 						fLastAbsX = x;
 						fLastAbsY = y;
@@ -1217,6 +1249,30 @@ MouseDevice::_UpdateTouchpadSettings(BMessage* message)
 		fTouchpadMovementMaker.SetSettings(settings);
 
 	return B_OK;
+}
+
+
+// A full pad width covers the screen width at speed 1.0; the slider
+// then multiplies those screen-pixel deltas like any other pointer.
+void
+MouseDevice::_UpdateTouchpadScale()
+{
+	fTouchpadScaleX = 0.0f;
+	fTouchpadScaleY = 0.0f;
+	if (!fIsAbsoluteTouchpad)
+		return;
+
+	int32 spanX = fAbsMaxX - fAbsMinX;
+	int32 spanY = fAbsMaxY - fAbsMinY;
+	if (spanX <= 0 || spanY <= 0 || fScreenW <= 1 || fScreenH <= 1)
+		return;
+
+	// One scale for both axes, so a diagonal stroke stays diagonal; Y
+	// follows X through the pad's own units per mm when it reports them.
+	fTouchpadScaleX = (float)(fScreenW - 1) / (float)spanX;
+	fTouchpadScaleY = fTouchpadScaleX;
+	if (fAbsResX > 0 && fAbsResY > 0)
+		fTouchpadScaleY = fTouchpadScaleX * fAbsResX / fAbsResY;
 }
 
 

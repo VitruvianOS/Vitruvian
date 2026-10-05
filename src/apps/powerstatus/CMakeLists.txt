@@ -7,6 +7,7 @@ RunnableAddOn(PowerStatus
 	PowerStatus.cpp
 	PowerStatusView.cpp
 	PowerStatusWindow.cpp
+	SysFSDriverInterface.cpp
 	LIBS shared translation localestub
 	RDEF PowerStatus.rdef
 )

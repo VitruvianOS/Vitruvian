@@ -43,6 +43,7 @@
 
 #include "ACPIDriverInterface.h"
 #include "APMDriverInterface.h"
+#include "SysFSDriverInterface.h"
 #include "ExtendedInfoWindow.h"
 #include "PowerStatus.h"
 
@@ -881,9 +882,18 @@ PowerStatusReplicant::_Init()
 		delete fDriverInterface;
 		fDriverInterface = new APMDriverInterface;
 		if (fDriverInterface->Connect() != B_OK) {
-			fprintf(stderr, "No power interface found.\n");
-			_Quit();
+			delete fDriverInterface;
+			fDriverInterface = new SysFSDriverInterface;
+			if (fDriverInterface->Connect() != B_OK) {
+				delete fDriverInterface;
+				fDriverInterface = NULL;
+			}
 		}
+	}
+	if (fDriverInterface == NULL) {
+		fprintf(stderr, "No power interface found.\n");
+		_Quit();
+		return;
 	}
 
 	fExtendedWindow = NULL;

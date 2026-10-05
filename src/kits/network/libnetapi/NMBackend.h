@@ -467,6 +467,10 @@ private:
 	// subscription there. Dispatch thread only.
 	void _UpdateActiveAPWatch();
 
+	// Rebuild fWiFiSnapshot from libnm; state and active-connection changes
+	// move the connected flag without an access-point-added signal.
+	void _RefreshWiFiSnapshots();
+
 	// Fans a notification out to every watcher whose mask includes `type`,
 	// pruning dead messengers. Caller must hold fLock -- mirrors
 	// BlueZBackend::_NotifyWatchers.

@@ -885,6 +885,13 @@ NMBackend::_HandleDeviceStateChanged(void* deviceRaw)
 	NMDevice* device = (NMDevice*)deviceRaw;
 	const char* path = nm_device_get_path(device);
 
+	// Connect/disconnect moves the active AP without an access-point-added
+	// signal; refresh this device's snapshot so ScanWiFiNetworks sees it.
+	if (path != NULL
+			&& nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
+		_RefreshWiFiSnapshot(device, path);
+	}
+
 	BMessage message((uint32)NOTIFICATION_DEVICE_STATE_CHANGED);
 	if (path != NULL)
 		message.AddString(kNMFieldPath, path);
@@ -912,9 +919,30 @@ void
 NMBackend::_HandleActiveConnectionChanged()
 {
 	_UpdateActiveAPWatch();
+	_RefreshWiFiSnapshots();
 
 	BMessage message((uint32)NOTIFICATION_CONNECTION_STATUS_CHANGED);
 	_RefreshSnapshotAndNotify(NOTIFICATION_CONNECTION_STATUS_CHANGED, message);
+}
+
+
+void
+NMBackend::_RefreshWiFiSnapshots()
+{
+	const GPtrArray* devices = nm_client_get_devices((NMClient*)fNMClient);
+	if (devices == NULL)
+		return;
+
+	for (guint i = 0; i < devices->len; i++) {
+		NMDevice* device = (NMDevice*)g_ptr_array_index(devices, i);
+		if (device == NULL
+				|| nm_device_get_device_type(device) != NM_DEVICE_TYPE_WIFI) {
+			continue;
+		}
+		const char* path = nm_device_get_path(device);
+		if (path != NULL)
+			_RefreshWiFiSnapshot(device, path);
+	}
 }
 
 

@@ -1908,6 +1908,13 @@ MouseInputDevice::Control(const char* name, void* cookie,
 
 	if (command == B_SEAT_DISABLED || command == B_SEAT_ENABLED
 		|| command == B_SYSTEM_RESUMED) {
+		// Add-on level: resume can recreate evdev nodes that the node
+		// monitor missed; reconcile against what is on disk now.
+		if (cookie == NULL) {
+			if (command == B_SYSTEM_RESUMED)
+				_RescanDevices();
+			return B_OK;
+		}
 		device->HandleSeatMessage(command);
 		return B_OK;
 	}
@@ -1998,6 +2005,61 @@ MouseInputDevice::_RecursiveScan(const char* directory)
 }
 
 
+void
+MouseInputDevice::_RescanDevices()
+{
+	CALLED();
+
+	BEntry entry;
+	BDirectory dir(kMouseDevicesDirectory);
+	while (dir.GetNextEntry(&entry) == B_OK) {
+		BPath path;
+		entry.GetPath(&path);
+		if (entry.IsDirectory()
+			|| strncmp(path.Leaf(), "event", 5) != 0)
+			continue;
+
+		struct stat st;
+		if (stat(path.Path(), &st) != 0 || !S_ISCHR(st.st_mode))
+			continue;
+
+		bool present = false;
+		bool stale = false;
+		{
+			BAutolock _(fDeviceListLock);
+			for (int32 i = 0; i < fDevices.CountItems(); i++) {
+				MouseDevice* device = fDevices.ItemAt(i);
+				if (strcmp(device->Path(), path.Path()) != 0)
+					continue;
+				present = true;
+				stale = device->Inode() != st.st_ino;
+				break;
+			}
+		}
+
+		if (present && !stale)
+			continue;
+		if (stale)
+			_RemoveDevice(path.Path());
+		_AddDevice(path.Path());
+	}
+
+	// Drop devices whose node vanished; their fds are stale.
+	BObjectList<BString, true> paths;
+	{
+		BAutolock _(fDeviceListLock);
+		for (int32 i = 0; i < fDevices.CountItems(); i++)
+			paths.AddItem(new BString(fDevices.ItemAt(i)->Path()));
+	}
+	for (int32 i = 0; i < paths.CountItems(); i++) {
+		BString* devicePath = paths.ItemAt(i);
+		struct stat st;
+		if (stat(devicePath->String(), &st) != 0)
+			_RemoveDevice(devicePath->String());
+	}
+}
+
+
 MouseDevice*
 MouseInputDevice::_FindDevice(const char* path) const
 {
@@ -2036,6 +2098,10 @@ MouseInputDevice::_AddDevice(const char* path)
 	_RemoveDevice(path);
 
 	BAutolock _(fDeviceListLock);
+
+	// Rescan and node monitor race; a duplicate would never be started.
+	if (_FindDevice(path) != NULL)
+		return B_OK;
 
 	MouseDevice* device = new(std::nothrow) MouseDevice(*this, path);
 	if (device == NULL) {

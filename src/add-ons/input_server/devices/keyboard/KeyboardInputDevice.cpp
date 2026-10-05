@@ -1605,7 +1605,10 @@ KeyboardInputDevice::Control(const char* name, void* cookie,
 		return device->GetDescription(message);
 	} else if (command == B_SEAT_DISABLED || command == B_SEAT_ENABLED
 		|| command == B_SYSTEM_RESUMED) {
+		// Add-on level calls arrive with a NULL cookie; nothing to resync.
 		KeyboardDevice* device = (KeyboardDevice*)cookie;
+		if (device == NULL)
+			return B_OK;
 		device->HandleSeatMessage(command);
 	}
 	return B_OK;

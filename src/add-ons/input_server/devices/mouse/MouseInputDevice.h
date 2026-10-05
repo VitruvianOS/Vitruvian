@@ -45,6 +45,9 @@ private:
 			status_t		_UpdateScreenBounds(MouseDevice* device,
 								BMessage* message);
 			void			_RecursiveScan(const char* directory);
+			// Reconcile fDevices with /dev/input after resume; replaces
+			// same-path nodes whose inode changed and drops stale ones.
+			void			_RescanDevices();
 
 			MouseDevice*	_FindDevice(const char* path) const;
 			status_t		_AddDevice(const char* path);

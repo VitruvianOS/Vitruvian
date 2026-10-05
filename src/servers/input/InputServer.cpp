@@ -603,6 +603,13 @@ InputServer::MessageReceived(BMessage* message)
 			// so keyboards drop held keys and pointing devices resync their buttons.
 			ControlDevices(NULL, B_KEYBOARD_DEVICE, message->what, NULL);
 			ControlDevices(NULL, B_POINTING_DEVICE, message->what, NULL);
+			// Also deliver at add-on level with a NULL cookie: a pointing
+			// add-on whose devices all died still needs a resume rescan.
+			{
+				BMessage control(IS_DEVICE_ADDON_CONTROL);
+				control.AddInt32("code", message->what);
+				fAddOnManager->PostMessage(&control);
+			}
 			break;
 		}
 

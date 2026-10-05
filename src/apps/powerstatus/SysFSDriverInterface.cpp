@@ -139,9 +139,73 @@ SysFSDriverInterface::_ReadBatteryState(sysfs_battery* battery)
 
 
 status_t
+SysFSDriverInterface::_ReadCapacityFamily(const char* path,
+	sysfs_battery* battery)
+{
+	int32 energyNow = -1;
+	int32 energyFull = -1;
+	int32 chargeNow = -1;
+	int32 chargeFull = -1;
+	int32 percent = -1;
+	int32 design = -1;
+
+	_ReadIntAttr(path, "energy_now", &energyNow);
+	_ReadIntAttr(path, "energy_full", &energyFull);
+	_ReadIntAttr(path, "charge_now", &chargeNow);
+	_ReadIntAttr(path, "charge_full", &chargeFull);
+	_ReadIntAttr(path, "capacity", &percent);
+
+	// Prefer a same-unit energy pair; some ECs report capacity=0 while
+	// energy_* is still valid.
+	if (energyNow >= 0 && energyFull > 0) {
+		battery->capacity_kind = SYSFS_CAPACITY_ENERGY;
+		battery->capacity = energyNow / 1000;
+		battery->full_capacity = energyFull / 1000;
+		return B_OK;
+	}
+
+	if (chargeNow >= 0 && chargeFull > 0) {
+		battery->capacity_kind = SYSFS_CAPACITY_CHARGE;
+		battery->capacity = chargeNow / 1000;
+		battery->full_capacity = chargeFull / 1000;
+		return B_OK;
+	}
+
+	// Percent-only batteries: keep the 0-100 scale the UI already expects.
+	if (percent >= 0 && percent <= 100) {
+		battery->capacity_kind = SYSFS_CAPACITY_PERCENT;
+		battery->capacity = percent;
+		battery->full_capacity = 100;
+		return B_OK;
+	}
+
+	// Last resort: design capacity alone, still not mixed with percent.
+	if (_ReadIntAttr(path, "energy_full_design", &design) == B_OK
+			&& design > 0) {
+		battery->capacity_kind = SYSFS_CAPACITY_ENERGY;
+		battery->capacity = 0;
+		battery->full_capacity = design / 1000;
+		return B_OK;
+	}
+	if (_ReadIntAttr(path, "charge_full_design", &design) == B_OK
+			&& design > 0) {
+		battery->capacity_kind = SYSFS_CAPACITY_CHARGE;
+		battery->capacity = 0;
+		battery->full_capacity = design / 1000;
+		return B_OK;
+	}
+
+	battery->capacity_kind = SYSFS_CAPACITY_NONE;
+	battery->capacity = 0;
+	battery->full_capacity = 0;
+	return B_ERROR;
+}
+
+
+status_t
 SysFSDriverInterface::_DetectBatteries()
 {
-	BDirectory dir(kSysfsPowerSupply);
+	BDirectory dir(fRoot.String());
 	BEntry entry;
 
 	// Clean up any previous battery list
@@ -180,29 +244,10 @@ SysFSDriverInterface::_DetectBatteries()
 		battery->current_rate = 0;
 		battery->voltage = 0;
 		battery->state = BATTERY_CRITICAL_STATE;
+		battery->capacity_kind = SYSFS_CAPACITY_NONE;
 		battery->init_status = B_OK;
 
-		// Read the full capacity (prefer energy_full, fall back to charge_full)
-		int32 fullVal = 0;
-		if (_ReadIntAttr(path.Path(), "energy_full", &fullVal) == B_OK) {
-			// energy_full is in microwatt-hours
-			battery->full_capacity = fullVal / 1000;
-		} else if (_ReadIntAttr(path.Path(), "charge_full", &fullVal) == B_OK) {
-			// charge_full is in microamp-hours
-			battery->full_capacity = fullVal / 1000;
-		} else {
-			battery->init_status = B_ERROR;
-		}
-
-		// Read design capacity for extended info
-		int32 designVal = 0;
-		if (_ReadIntAttr(path.Path(), "energy_full_design", &designVal) == B_OK)
-			battery->full_capacity = max_c(battery->full_capacity,
-				designVal / 1000);
-		else if (_ReadIntAttr(path.Path(), "charge_full_design", &designVal)
-				== B_OK)
-			battery->full_capacity = max_c(battery->full_capacity,
-				designVal / 1000);
+		_ReadCapacityFamily(path.Path(), battery);
 
 		if (fBatteries.AddItem(battery))
 			overallStatus = B_OK;
@@ -217,10 +262,11 @@ SysFSDriverInterface::_DetectBatteries()
 //	#pragma mark - Public interface
 
 
-SysFSDriverInterface::SysFSDriverInterface()
+SysFSDriverInterface::SysFSDriverInterface(const char* powerSupplyRoot)
 	:
 	fInterfaceLocker("sysfs power interface")
 {
+	fRoot.SetTo(powerSupplyRoot != NULL ? powerSupplyRoot : kSysfsPowerSupply);
 }
 
 
@@ -247,10 +293,8 @@ SysFSDriverInterface::GetBatteryInfo(int32 index, battery_info* info)
 
 	sysfs_battery* battery = fBatteries.ItemAt(index);
 
-	// Read current values
-	int32 capacityVal = 0;
-	if (_ReadIntAttr(battery->path.String(), "capacity", &capacityVal) == B_OK)
-		battery->capacity = capacityVal;
+	// Re-read the capacity family; EC values change while discharging.
+	_ReadCapacityFamily(battery->path.String(), battery);
 
 	// Read current rate
 	int32 rateVal = 0;
@@ -264,7 +308,7 @@ SysFSDriverInterface::GetBatteryInfo(int32 index, battery_info* info)
 	int32 voltageVal = 0;
 	if (_ReadIntAttr(battery->path.String(), "voltage_now", &voltageVal)
 			== B_OK)
-		battery->voltage = voltageVal / 1000; // microwatts to milliwatts
+		battery->voltage = voltageVal / 1000; // microvolts to millivolts
 
 	// Determine state from sysfs "status" file
 	_ReadBatteryState(battery);
@@ -302,22 +346,31 @@ SysFSDriverInterface::GetExtendedBatteryInfo(int32 index,
 	sysfs_battery* battery = fBatteries.ItemAt(index);
 	memset(info, 0, sizeof(acpi_extended_battery_info));
 
-	// Populate what we can from sysfs
-	info->power_unit = ACPI_BATTERY_UNIT_MW;
+	// Keep design/last-full in the same unit family as capacity.
+	int32 raw = 0;
+	if (battery->capacity_kind == SYSFS_CAPACITY_CHARGE) {
+		info->power_unit = ACPI_BATTERY_UNIT_MA;
+		if (_ReadIntAttr(battery->path.String(), "charge_full_design",
+				&raw) == B_OK && raw > 0)
+			info->design_capacity = (uint32)raw / 1000;
+		if (_ReadIntAttr(battery->path.String(), "charge_full", &raw)
+				== B_OK && raw > 0)
+			info->last_full_charge = (uint32)raw / 1000;
+	} else if (battery->capacity_kind == SYSFS_CAPACITY_ENERGY) {
+		info->power_unit = ACPI_BATTERY_UNIT_MW;
+		if (_ReadIntAttr(battery->path.String(), "energy_full_design",
+				&raw) == B_OK && raw > 0)
+			info->design_capacity = (uint32)raw / 1000;
+		if (_ReadIntAttr(battery->path.String(), "energy_full", &raw)
+				== B_OK && raw > 0)
+			info->last_full_charge = (uint32)raw / 1000;
+	} else if (battery->capacity_kind == SYSFS_CAPACITY_PERCENT) {
+		// Percent scale has no mWh/mAh counterpart; keep the UI scale.
+		info->power_unit = ACPI_BATTERY_UNIT_MW;
+		info->last_full_charge = 100;
+	}
 
 	int32 val = 0;
-	if (_ReadIntAttr(battery->path.String(), "energy_full_design", &val)
-			== B_OK)
-		info->design_capacity = val / 1000;
-	else if (_ReadIntAttr(battery->path.String(), "charge_full_design", &val)
-			== B_OK)
-		info->design_capacity = val / 1000;
-
-	if (_ReadIntAttr(battery->path.String(), "energy_full", &val) == B_OK)
-		info->last_full_charge = val / 1000;
-	else if (_ReadIntAttr(battery->path.String(), "charge_full", &val) == B_OK)
-		info->last_full_charge = val / 1000;
-
 	if (_ReadIntAttr(battery->path.String(), "voltage_min_design", &val)
 			== B_OK)
 		info->design_voltage = val / 1000;

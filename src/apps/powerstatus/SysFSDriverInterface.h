@@ -13,6 +13,16 @@
 #include <String.h>
 
 
+// Which sysfs family backs the capacity/full pair. energy is uWh, charge
+// is uAh; mixing them makes the percent ratio meaningless.
+enum {
+	SYSFS_CAPACITY_NONE = 0,
+	SYSFS_CAPACITY_ENERGY,
+	SYSFS_CAPACITY_CHARGE,
+	SYSFS_CAPACITY_PERCENT
+};
+
+
 // Battery backed by a /sys/class/power_supply entry.
 struct sysfs_battery {
 	BString		path;
@@ -24,13 +34,15 @@ struct sysfs_battery {
 	int32		full_capacity;
 	int32		current_rate;
 	int32		voltage;
+	int32		capacity_kind;
 	status_t	init_status;
 };
 
 
 class SysFSDriverInterface : public PowerStatusDriverInterface {
 public:
-								SysFSDriverInterface();
+								SysFSDriverInterface(
+									const char* powerSupplyRoot = NULL);
 	virtual						~SysFSDriverInterface();
 
 	virtual status_t			Connect();
@@ -47,12 +59,15 @@ protected:
 private:
 	status_t					_DetectBatteries();
 	status_t					_ReadBatteryState(sysfs_battery* battery);
+	status_t					_ReadCapacityFamily(const char* path,
+									sysfs_battery* battery);
 
 	static status_t				_ReadIntAttr(const char* path,
 									const char* attr, int32* value);
 	static status_t				_ReadStringAttr(const char* path,
 									const char* attr, BString* value);
 
+	BString						fRoot;
 	BLocker						fInterfaceLocker;
 	BObjectList<sysfs_battery>	fBatteries;
 };

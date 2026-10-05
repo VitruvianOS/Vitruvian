@@ -20,6 +20,8 @@
 #include <Path.h>
 #include <View.h>
 
+#include <touchpad_settings.h>
+
 
 MouseSettings::MouseSettings()
 {
@@ -385,6 +387,14 @@ MultipleMouseSettings::AddMouseSettings(BString mouse_name)
 	settings = new(std::nothrow) MouseSettings();
 
 	if(settings != NULL) {
+		// Pad deltas are scaled to screen pixels before speed applies,
+		// so a fresh touchpad must not inherit the mouse defaults.
+		if (mouse_name.IFindFirst("touchpad") >= 0
+			|| mouse_name.IFindFirst("trackpad") >= 0) {
+			settings->SetMouseSpeed(kDefaultTouchpadSettings.trackpad_speed);
+			settings->SetAccelerationFactor(
+				kDefaultTouchpadSettings.trackpad_acceleration);
+		}
 		fMouseSettingsObject.insert(std::pair<BString, MouseSettings*>
 			(mouse_name, settings));
 		return settings;

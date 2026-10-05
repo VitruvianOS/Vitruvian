@@ -488,12 +488,14 @@ NetworkStatusView::_ApplyStatusUpdate(BMessage* devices)
 			else
 				fDeviceType = "";
 
+			fSignalStrength = -1;
 			if (fDeviceType == "wifi") {
 				uint32 signalStrength = 0;
-				deviceInfo.FindUInt32("signal_strength", &signalStrength);
-				fSignalStrength = (int)signalStrength;
-			} else {
-				fSignalStrength = -1;
+				// Missing field means unknown; -1 keeps the Ready bitmap
+				// instead of taking the arc path with a bogus level.
+				if (deviceInfo.FindUInt32(kNMFieldDeviceSignalStrength,
+						&signalStrength) == B_OK)
+					fSignalStrength = (int)signalStrength;
 			}
 
 			Invalidate();

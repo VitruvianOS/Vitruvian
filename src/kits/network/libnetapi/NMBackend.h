@@ -75,6 +75,9 @@ static const char* const kNMFieldProfileActive = "active";
 // NMDeviceWifiCapabilities: whether AP mode is possible.
 static const char* const kNMFieldWiFiCaps = "wifi_caps";
 
+// Per-device snapshot: active AP strength in percent; the Deskbar tray reads it.
+static const char* const kNMFieldDeviceSignalStrength = "signal_strength";
+
 // Hotspot (WiFi AP mode) reply fields.
 static const char* const kNMFieldHotspotActive = "hotspot_active";
 static const char* const kNMFieldHotspotUUID = "hotspot_uuid";

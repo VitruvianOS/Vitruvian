@@ -654,6 +654,15 @@ _FillDeviceInfoMessage(NMDevice* device, BMessage* outInfo)
 	if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
 		guint32 caps = nm_device_wifi_get_capabilities(NM_DEVICE_WIFI(device));
 		outInfo->AddUInt32(kNMFieldWiFiCaps, (uint32)caps);
+
+		// Strength is an AP property; publish the active AP's on the device
+		// row the Deskbar tray reads, same source ConnectionInfoWindow uses.
+		NMAccessPoint* activeAP = nm_device_wifi_get_active_access_point(
+			NM_DEVICE_WIFI(device));
+		if (activeAP != NULL) {
+			outInfo->AddUInt32(kNMFieldDeviceSignalStrength,
+				nm_access_point_get_strength(activeAP));
+		}
 	}
 
 	// Modems are NM_DEVICE_TYPE_MODEM; GSM vs CDMA comes from the radio

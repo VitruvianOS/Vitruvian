@@ -481,6 +481,20 @@ MouseDevice::_Classify()
 				BTN_TOOL_FINGER);
 	}
 
+	// Clickpads, synaptics absolute pads and udev-classified touchpads
+	// all need the touchpad settings path and the touchpad subtype.
+	{
+		int32 role = UDEV_ROLE_UNKNOWN;
+		BString model;
+		udev_device_name(fPath.String(), model, role);
+		fIsTouchpad = fIsAbsoluteTouchpad
+			|| role == UDEV_ROLE_TOUCHPAD
+			|| model.IFindFirst("touchpad") >= 0
+			|| model.IFindFirst("trackpad") >= 0
+			|| fPath.IFindFirst("touchpad") >= 0
+			|| fPath.IFindFirst("trackpad") >= 0;
+	}
+
 	fEvdevHandle = evdev;
 	fDevice = fd;
 
@@ -1206,6 +1220,17 @@ MouseDevice::_UpdateSettings()
 		LOG_ERROR("error when get_mouse_type\n");
 	else
 		ioctl(fDevice, MS_SET_TYPE, &fSettings.type);
+
+	// Gesture settings arrive as a pending message; apply them here so
+	// they land on the same settings refresh as speed and click rate.
+	if (fIsTouchpad) {
+		BAutolock locker(fTouchpadSettingsLock);
+		if (fTouchpadSettingsMessage != NULL) {
+			_UpdateTouchpadSettings(fTouchpadSettingsMessage);
+			delete fTouchpadSettingsMessage;
+			fTouchpadSettingsMessage = NULL;
+		}
+	}
 }
 
 

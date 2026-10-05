@@ -1583,7 +1583,7 @@ NMBackend::_OnAccessPointRemoved(void* wifiDevice, void* ap, void* userData)
 
 
 status_t
-NMBackend::ScanWiFiNetworks(const char* devicePath, BMessage* outNetworks)
+NMBackend::GetWiFiNetworks(const char* devicePath, BMessage* outNetworks)
 {
 	if (devicePath == NULL || outNetworks == NULL)
 		return B_BAD_VALUE;
@@ -1591,17 +1591,24 @@ NMBackend::ScanWiFiNetworks(const char* devicePath, BMessage* outNetworks)
 	if (fNMClient == NULL)
 		return B_ERROR;
 
-	{
-		BAutolock lock(fLock);
-		std::map<BString, BMessage>::iterator it
-			= fWiFiSnapshot.find(devicePath);
-		if (it != fWiFiSnapshot.end()) {
-			*outNetworks = it->second;
-		} else {
-			outNetworks->MakeEmpty();
-			outNetworks->AddInt32(kNMFieldAPCount, 0);
-		}
+	BAutolock lock(fLock);
+	std::map<BString, BMessage>::iterator it = fWiFiSnapshot.find(devicePath);
+	if (it != fWiFiSnapshot.end()) {
+		*outNetworks = it->second;
+	} else {
+		outNetworks->MakeEmpty();
+		outNetworks->AddInt32(kNMFieldAPCount, 0);
 	}
+	return B_OK;
+}
+
+
+status_t
+NMBackend::ScanWiFiNetworks(const char* devicePath, BMessage* outNetworks)
+{
+	status_t status = GetWiFiNetworks(devicePath, outNetworks);
+	if (status != B_OK)
+		return status;
 
 	// Kick a fresh scan in the background so a repeated menu-open sees
 	// current results; never wait for it here.

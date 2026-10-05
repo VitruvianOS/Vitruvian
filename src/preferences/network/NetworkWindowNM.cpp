@@ -24,6 +24,7 @@
 #include <ControlLook.h>
 #include <Deskbar.h>
 #include <Locale.h>
+#include <MessageRunner.h>
 #include <Directory.h>
 #include <Entry.h>
 #include <LayoutBuilder.h>
@@ -51,6 +52,7 @@ static const uint32 kMsgRefreshDevices = 'rfrd';
 static const uint32 kMsgInitialDeviceScan = 'inds';
 static const uint32 kMsgDevicesReady = 'dvrd';
 static const uint32 kMsgDeviceInfoReady = 'dird';
+static const uint32 kMsgWiFiRefresh = 'wfrf';
 
 BMessenger gNetworkWindow;
 
@@ -236,6 +238,7 @@ NetworkWindowNM::NetworkWindowNM()
 	fMobileView(NULL),
 	fProxyView(NULL),
 	fRevertButton(NULL),
+	fWiFiRefreshRunner(NULL),
 	fProxyItem(NULL),
 	fMobileItem(NULL),
 	fServicesItem(NULL),
@@ -305,10 +308,8 @@ NetworkWindowNM::NetworkWindowNM()
 
 	CenterOnScreen();
 
-	// Start watching NetworkManager for device changes. WIFI_NETWORK_FOUND
-	// is required too: ScanWiFiNetworks kicks a background scan whose AP
-	// list only arrives through that notification, and without it the
-	// Wi-Fi detail pane never leaves its empty state.
+	// WIFI_NETWORK_FOUND carries the AP list of the scan that
+	// ScanWiFiNetworks kicks; without it the Wi-Fi pane stays empty.
 	NMBackend* backend = NMBackend::Instance();
 	if (backend != NULL) {
 		backend->StartWatching(BMessenger(this),
@@ -334,6 +335,7 @@ NetworkWindowNM::~NetworkWindowNM()
 	if (backend != NULL) {
 		backend->StopWatching(BMessenger(this));
 	}
+	delete fWiFiRefreshRunner;
 }
 
 
@@ -433,28 +435,25 @@ NetworkWindowNM::MessageReceived(BMessage* message)
 			break;
 
 		case NMBackend::NOTIFICATION_WIFI_NETWORK_FOUND:
+			// One per AP added or removed; refresh once the burst settles.
+			if (fWiFiRefreshRunner == NULL) {
+				BMessage refresh(kMsgWiFiRefresh);
+				fWiFiRefreshRunner = new BMessageRunner(BMessenger(this),
+					&refresh, 500000, 1);
+			}
+			break;
+
+		case kMsgWiFiRefresh:
 		{
-			// Scan results landed for some Wi-Fi adapter. Rebuild the
-			// selected device's pane when it is that adapter so
-			// SetToDevice() re-runs ScanWiFiNetworks against the fresh
-			// snapshot. Skip while StaticIPView is dirty: the rebuild
-			// would throw away unapplied IPv4 edits.
-			if (fDetailView != NULL && fDetailView->IsRevertable())
-				break;
+			delete fWiFiRefreshRunner;
+			fWiFiRefreshRunner = NULL;
+			// List only: a full rebuild would rescan, drop the selection
+			// and lose unapplied IPv4 edits.
 			DeviceListItem* selected = dynamic_cast<DeviceListItem*>(
 				fListView->ItemAt(fListView->CurrentSelection()));
-			if (selected == NULL)
-				break;
-			const char* foundPath;
-			if (message->FindString(kNMFieldPath, &foundPath) == B_OK
-					&& selected->DevicePath() != foundPath) {
-				break;
-			}
-			NMBackend* backend = NMBackend::Instance();
-			if (backend != NULL) {
-				backend->GetDeviceInfoAsync(selected->DevicePath().String(),
-					BMessenger(this), kMsgDeviceInfoReady);
-			}
+			if (selected != NULL && fDetailView != NULL)
+				fDetailView->RefreshWiFiNetworks(
+					selected->DevicePath().String());
 			break;
 		}
 

@@ -164,6 +164,8 @@ public:
 	// pattern as fDeviceSnapshot) and, as a side effect, fires an
 	// asynchronous rescan request so the next call sees fresher results.
 	status_t ScanWiFiNetworks(const char* devicePath, BMessage* outNetworks);
+	// Same snapshot read, without the rescan side effect.
+	status_t GetWiFiNetworks(const char* devicePath, BMessage* outNetworks);
 	// Fire-and-forget: dispatches the same add-and-activate path as
 	// ConnectToWiFiAsync() but with no reply target, for BNetworkDevice's
 	// synchronous JoinNetwork() contract. Real completion is not observable

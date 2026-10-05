@@ -40,6 +40,9 @@ public:
 			void			SetToDevice(const BMessage& deviceInfo);
 			void			SetToVPN(const BMessage& vpnInfo);
 			void			ShowEmpty(const char* message);
+			// Refill only the AP list from the cached scan, keeping the
+			// selection; no-op unless showing that Wi-Fi device.
+			void			RefreshWiFiNetworks(const char* devicePath);
 
 			bool			IsRevertable() const;
 			void			Revert();
@@ -49,6 +52,7 @@ private:
 			void			_RebuildDeviceView();
 			void			_RebuildVPNView();
 			void			_AddHotspotSection();
+			void			_FillWiFiList(const BMessage& networks);
 			void			_RequestHotspotState();
 			void			_ShowHotspotError(BMessage* message);
 			void			_StartHotspot(const BString& ssid,

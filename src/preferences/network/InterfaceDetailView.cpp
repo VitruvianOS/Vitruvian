@@ -1171,27 +1171,7 @@ InterfaceDetailView::_RebuildDeviceView()
 		// layout from giving this list every AP row in range.
 		fWiFiListView->SetExplicitMinSize(BSize(B_SIZE_UNSET, 120));
 		fWiFiListView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 200));
-
-		for (int32 i = 0; i < apCount; i++) {
-			char apName[32];
-			snprintf(apName, sizeof(apName), "ap_%d", (int)i);
-			BMessage apInfo;
-			if (networks.FindMessage(apName, &apInfo) != B_OK)
-				continue;
-
-			BString ssid;
-			if (apInfo.FindString(kNMFieldAPSSID, &ssid) != B_OK)
-				continue;
-			int32 strength = 0;
-			bool secured = false;
-			bool connected = false;
-			apInfo.FindInt32(kNMFieldAPStrength, &strength);
-			apInfo.FindBool(kNMFieldAPSecured, &secured);
-			apInfo.FindBool(kNMFieldAPConnected, &connected);
-
-			fWiFiListView->AddItem(new WiFiNetworkItem(ssid.String(),
-				strength, secured, connected, _HasSavedProfile(ssid)));
-		}
+		_FillWiFiList(networks);
 
 		BScrollView* scrollView = new BScrollView("wifiScroll",
 			fWiFiListView, 0, false, true);
@@ -1285,6 +1265,75 @@ InterfaceDetailView::_HasSavedProfile(const BString& ssid) const
 			return true;
 	}
 	return false;
+}
+
+
+void
+InterfaceDetailView::RefreshWiFiNetworks(const char* devicePath)
+{
+	BString shownPath;
+	if (fMode != MODE_DEVICE || fWiFiListView == NULL
+		|| fDeviceInfo.FindString(kNMFieldPath, &shownPath) != B_OK
+		|| shownPath != devicePath) {
+		return;
+	}
+
+	NMBackend* backend = NMBackend::Instance();
+	BMessage networks;
+	if (backend == NULL
+		|| backend->GetWiFiNetworks(devicePath, &networks) != B_OK) {
+		return;
+	}
+
+	BString selectedSSID;
+	WiFiNetworkItem* selected = dynamic_cast<WiFiNetworkItem*>(
+		fWiFiListView->ItemAt(fWiFiListView->CurrentSelection()));
+	if (selected != NULL)
+		selectedSSID = selected->SSID();
+
+	BListItem* stale;
+	while ((stale = fWiFiListView->RemoveItem((int32)0)) != NULL)
+		delete stale;
+	_FillWiFiList(networks);
+
+	for (int32 i = 0; i < fWiFiListView->CountItems(); i++) {
+		WiFiNetworkItem* item = dynamic_cast<WiFiNetworkItem*>(
+			fWiFiListView->ItemAt(i));
+		if (item != NULL && selectedSSID.Length() > 0
+			&& item->SSID() == selectedSSID) {
+			fWiFiListView->Select(i);
+			break;
+		}
+	}
+	_UpdateWiFiButtons();
+}
+
+
+void
+InterfaceDetailView::_FillWiFiList(const BMessage& networks)
+{
+	int32 apCount = 0;
+	networks.FindInt32(kNMFieldAPCount, &apCount);
+	for (int32 i = 0; i < apCount; i++) {
+		char apName[32];
+		snprintf(apName, sizeof(apName), "ap_%d", (int)i);
+		BMessage apInfo;
+		if (networks.FindMessage(apName, &apInfo) != B_OK)
+			continue;
+
+		BString ssid;
+		if (apInfo.FindString(kNMFieldAPSSID, &ssid) != B_OK)
+			continue;
+		int32 strength = 0;
+		bool secured = false;
+		bool connected = false;
+		apInfo.FindInt32(kNMFieldAPStrength, &strength);
+		apInfo.FindBool(kNMFieldAPSecured, &secured);
+		apInfo.FindBool(kNMFieldAPConnected, &connected);
+
+		fWiFiListView->AddItem(new WiFiNetworkItem(ssid.String(),
+			strength, secured, connected, _HasSavedProfile(ssid)));
+	}
 }
 
 

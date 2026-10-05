@@ -1167,7 +1167,10 @@ InterfaceDetailView::_RebuildDeviceView()
 		fWiFiListView->SetSelectionMessage(new BMessage(
 			kMsgWiFiSelectionChanged));
 		fWiFiListView->SetTarget(this);
+		// Min keeps a usable strip when the scan is empty; max stops the
+		// layout from giving this list every AP row in range.
 		fWiFiListView->SetExplicitMinSize(BSize(B_SIZE_UNSET, 120));
+		fWiFiListView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 200));
 
 		for (int32 i = 0; i < apCount; i++) {
 			char apName[32];
@@ -1217,6 +1220,7 @@ InterfaceDetailView::_RebuildDeviceView()
 			new BMessage(kMsgSavedSelectionChanged));
 		fSavedListView->SetTarget(this);
 		fSavedListView->SetExplicitMinSize(BSize(B_SIZE_UNSET, 100));
+		fSavedListView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 160));
 
 		BScrollView* savedScroll = new BScrollView("savedScroll",
 			fSavedListView, 0, false, true);

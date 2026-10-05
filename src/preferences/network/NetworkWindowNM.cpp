@@ -305,14 +305,18 @@ NetworkWindowNM::NetworkWindowNM()
 
 	CenterOnScreen();
 
-	// Start watching NetworkManager for device changes
+	// Start watching NetworkManager for device changes. WIFI_NETWORK_FOUND
+	// is required too: ScanWiFiNetworks kicks a background scan whose AP
+	// list only arrives through that notification, and without it the
+	// Wi-Fi detail pane never leaves its empty state.
 	NMBackend* backend = NMBackend::Instance();
 	if (backend != NULL) {
 		backend->StartWatching(BMessenger(this),
 			NMBackend::NOTIFICATION_DEVICE_ADDED |
 			NMBackend::NOTIFICATION_DEVICE_REMOVED |
 			NMBackend::NOTIFICATION_DEVICE_STATE_CHANGED |
-			NMBackend::NOTIFICATION_CONNECTION_STATUS_CHANGED);
+			NMBackend::NOTIFICATION_CONNECTION_STATUS_CHANGED |
+			NMBackend::NOTIFICATION_WIFI_NETWORK_FOUND);
 	}
 
 	// Deferred, not called here: GetDevicesAsync() posts its reply back
@@ -427,6 +431,32 @@ NetworkWindowNM::MessageReceived(BMessage* message)
 		case NMBackend::NOTIFICATION_DEVICE_IP_CHANGED:
 			_RequestDeviceScan();
 			break;
+
+		case NMBackend::NOTIFICATION_WIFI_NETWORK_FOUND:
+		{
+			// Scan results landed for some Wi-Fi adapter. Rebuild the
+			// selected device's pane when it is that adapter so
+			// SetToDevice() re-runs ScanWiFiNetworks against the fresh
+			// snapshot. Skip while StaticIPView is dirty: the rebuild
+			// would throw away unapplied IPv4 edits.
+			if (fDetailView != NULL && fDetailView->IsRevertable())
+				break;
+			DeviceListItem* selected = dynamic_cast<DeviceListItem*>(
+				fListView->ItemAt(fListView->CurrentSelection()));
+			if (selected == NULL)
+				break;
+			const char* foundPath;
+			if (message->FindString(kNMFieldPath, &foundPath) == B_OK
+					&& selected->DevicePath() != foundPath) {
+				break;
+			}
+			NMBackend* backend = NMBackend::Instance();
+			if (backend != NULL) {
+				backend->GetDeviceInfoAsync(selected->DevicePath().String(),
+					BMessenger(this), kMsgDeviceInfoReady);
+			}
+			break;
+		}
 
 		default:
 			BWindow::MessageReceived(message);

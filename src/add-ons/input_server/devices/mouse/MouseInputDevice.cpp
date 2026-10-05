@@ -160,6 +160,7 @@ public:
 
 			// Identity for removal; immune to ABA (see fSerial).
 			int32				Serial() const { return fSerial; }
+			ino_t				Inode() const { return fDeviceInode; }
 
 private:
 			char*				_BuildShortName() const;
@@ -264,6 +265,9 @@ private:
 			bool				fDeviceRemapsButtons;
 
 			int32				fSerial;
+			// st_ino of fDevice at classify time; resume re-probe can
+			// recreate the node at the same path with a new inode.
+			ino_t				fDeviceInode;
 
 			thread_id			fThread;
 	volatile bool				fActive;
@@ -345,6 +349,7 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fReflection(B_PANEL_REFLECTION_NONE),
 	fDeviceRemapsButtons(false),
 	fSerial(atomic_add(&sNextMouseDeviceSerial, 1)),
+	fDeviceInode(0),
 	fThread(-1),
 	fActive(false),
 	fUpdateSettings(0),
@@ -397,6 +402,9 @@ MouseDevice::_Classify()
 	}
 
 	if (_IsGestureDevice(fd)) {
+		struct stat st;
+		if (fstat(fd, &st) == 0)
+			fDeviceInode = st.st_ino;
 		close(fd);
 
 		fUseLibinput = true;
@@ -446,9 +454,14 @@ MouseDevice::_Classify()
 		return B_BAD_TYPE;
 	}
 
+	struct stat st;
+	if (fstat(fd, &st) == 0)
+		fDeviceInode = st.st_ino;
+
+	// REL_X alone is a pointer: a trackpoint pass-through can lack
+	// BTN_LEFT on resume re-probe, and that must not drop the device.
 	bool isRelMouse = libevdev_has_event_type(evdev, EV_REL)
-		&& libevdev_has_event_code(evdev, EV_REL, REL_X)
-		&& libevdev_has_event_code(evdev, EV_KEY, BTN_LEFT);
+		&& libevdev_has_event_code(evdev, EV_REL, REL_X);
 	bool isAbsMouse = !isRelMouse
 		&& libevdev_has_event_type(evdev, EV_ABS)
 		&& libevdev_has_event_code(evdev, EV_ABS, ABS_X)

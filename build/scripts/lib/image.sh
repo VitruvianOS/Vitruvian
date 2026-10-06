@@ -101,44 +101,6 @@ PYEOF
 # mtools, the disk image as an sfdisk table plus dd writes at the partition
 # offsets. UUIDs/volume IDs are generated up front so fstab and the embedded
 # grub.cfg are written before any filesystem exists.
-# First boot grows the root partition to the end of the disk and resizes the ext4 online.
-# sfdisk cannot make the kernel re-read a mounted disk's table, so partx resizes it instead.
-_install_resize_root() {
-    _rr_root="$1"
-    sudo tee "$_rr_root/usr/local/sbin/vos-resize-root" >/dev/null <<'RSZEOF'
-#!/bin/sh
-set -e
-_root=$(findmnt -no SOURCE /)
-_disk=$(lsblk -no PKNAME "$_root")
-[ -n "$_disk" ] || exit 0
-_partnum=$(echo "$_root" | sed 's|.*[^0-9]||')
-echo ", +" | sfdisk --no-reread -N "$_partnum" "/dev/$_disk" || true
-partx -u -n "$_partnum" "/dev/$_disk" || true
-resize2fs "$_root" || true
-systemctl disable vos-resize-root.service || true
-RSZEOF
-    sudo chmod +x "$_rr_root/usr/local/sbin/vos-resize-root"
-    sudo tee "$_rr_root/etc/systemd/system/vos-resize-root.service" >/dev/null <<'UNITEOF'
-[Unit]
-Description=Grow root filesystem to fill disk (first boot)
-DefaultDependencies=no
-After=systemd-remount-fs.service
-Before=local-fs-pre.target
-Wants=local-fs-pre.target
-ConditionPathExists=/usr/local/sbin/vos-resize-root
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/vos-resize-root
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-UNITEOF
-    chroot_isolated "$_rr_root" systemctl enable vos-resize-root.service 2>/dev/null || true
-}
-
-
 create_raw() {
     _basedir="$1"
     _arch="$2"
@@ -171,8 +133,9 @@ create_raw() {
     _host_shared="$_basedir/shared"
     _guest_mnt="/mnt/host_shared"
 
-    # 4 GiB disk: 128 MiB ESP (it only holds the GRUB loaders), the rest root.
-    _disk_mib=4096
+    # 7 GiB fits any 8 GB medium (~7.45 GiB); nothing grows it on boot.
+    # 128 MiB ESP (GRUB loaders), the rest root.
+    _disk_mib=7168
     _esp_start_mib=1
     _esp_size_mib=128
     _root_start_mib=129
@@ -426,8 +389,6 @@ EOF
     # GRUB only accepts a block of exactly 1024 bytes, padded with '#'.
     { printf '# GRUB Environment Block\n'; head -c 999 /dev/zero | tr '\0' '#'; } \
         | sudo tee "$_esp_dir/boot/grub/grubenv" >/dev/null
-
-    _install_resize_root "$_root_dir"
 
     qemu_eject "$_root_dir" "$_arch"
 
@@ -952,7 +913,8 @@ create_raspberry() {
     mkdir -p "$_basedir/output"
 
     log_step "Creating $(board_config "$_board" label) RAW image..."
-    qemu-img create "$_raw" 6G
+    # Fixed size, no first-boot grow: fits any 8 GB card (~7.45 GiB).
+    qemu-img create "$_raw" 7G
 
     _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"
@@ -1085,7 +1047,6 @@ apt-get clean" || die "raspberry chroot bash-c failed"
 
     _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
-    _install_resize_root "$_mnt"
 
     # Boards have no boot menu for a Debug entry, so a VOS_SSHDEBUG build puts vitruvian.sshdebug
     # on the fixed cmdline, making a headless board reachable over SSH and verbose at boot.
@@ -1215,7 +1176,8 @@ create_uboot_board() {
     fi
 
     log_step "Creating $_label RAW image..."
-    qemu-img create "$_raw" 6G
+    # Fixed size, no first-boot grow: fits any 8 GB card (~7.45 GiB).
+    qemu-img create "$_raw" 7G
 
     _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"
@@ -1370,7 +1332,6 @@ apt-get clean" || die "uboot chroot bash-c failed"
 
     _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
-    _install_resize_root "$_mnt"
 
     # No boot menu on boards: a VOS_SSHDEBUG build bakes sshdebug into the
     # cmdline, as create_raspberry does. Normal images get no debug sshd.

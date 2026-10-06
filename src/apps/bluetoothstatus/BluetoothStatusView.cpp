@@ -269,6 +269,14 @@ BluetoothStatusView::MessageReceived(BMessage* message)
 			_RequestStatusUpdate();
 			break;
 
+		case LocalDevice::NOTIFICATION_ADAPTER_ADDED:
+		case LocalDevice::NOTIFICATION_ADAPTER_REMOVED:
+		case LocalDevice::NOTIFICATION_DEVICE_CONNECTED:
+		case LocalDevice::NOTIFICATION_DEVICE_DISCONNECTED:
+			// The first status can predate BlueZ enumeration.
+			_RequestStatusUpdate();
+			break;
+
 		case kMsgEnableAdapter:
 			_SetAdapterPowered(true);
 			break;

@@ -174,7 +174,7 @@ endif()
 set(CPACK_DEBIAN_DEV_PACKAGE_NAME "vos-dev")
 set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "vos (= ${_vos_runtime_version})")
 set(CPACK_DEBIAN_DEV_PACKAGE_DESCRIPTION
-	"V\\\\OS development files: public headers, libraries, and pkg-config")
+	"V\\\\OS development files: public headers and pkg-config")
 
 # Make `ninja clean` (and `make clean`) wipe CPack outputs too. CPack writes
 # its artifacts into the build root, so they normally survive `clean` and
@@ -187,7 +187,8 @@ set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-dev.deb"
 )
 
-# vos-dev component: public headers + link libraries + pkg-config
+# vos-dev component: public headers + pkg-config. The libraries are vos's,
+# in /usr/lib, where the linker already looks.
 
 # Install public headers under /usr/include/vos/ so external builds
 # use the same include patterns as in-tree builds.
@@ -203,17 +204,7 @@ install(DIRECTORY headers/
 	PATTERN "tools" EXCLUDE
 )
 
-set(_vos_dev_libdir "lib/${VITRUVIAN_MULTIARCH_TRIPLE}")
-
-# NAMELINK_SKIP: install the real .so, not the SONAME symlinks.
-set(_vos_dev_libs be root game media2 opengl textencoding tracker translation)
-foreach(_lib IN LISTS _vos_dev_libs)
-	install(TARGETS ${_lib}
-		LIBRARY DESTINATION ${_vos_dev_libdir}
-		COMPONENT dev
-		NAMELINK_SKIP
-	)
-endforeach()
+set(_vos_dev_pcdir "lib/${VITRUVIAN_MULTIARCH_TRIPLE}/pkgconfig")
 
 # Compute VOS_CFLAGS from PUBLIC_HEADERS in build/headers.cmake.
 set(_vos_cflags "")
@@ -245,7 +236,7 @@ configure_file(
 )
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/vos.pc"
-	DESTINATION "${_vos_dev_libdir}/pkgconfig"
+	DESTINATION "${_vos_dev_pcdir}"
 	COMPONENT dev
 )
 

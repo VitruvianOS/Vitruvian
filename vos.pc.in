@@ -1,6 +1,6 @@
 prefix=/usr
 includedir=${prefix}/include/vos
-libdir=${prefix}/lib/@VITRUVIAN_MULTIARCH_TRIPLE@
+libdir=${prefix}/lib
 
 Name: vos
 Description: V\:OS: BeOS-compatible application framework for Linux

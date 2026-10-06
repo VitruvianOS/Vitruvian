@@ -16,6 +16,7 @@
 #include <ControlLook.h>
 #include <GridLayout.h>
 #include <GridView.h>
+#include <GroupView.h>
 #include <GroupLayout.h>
 #include <LayoutBuilder.h>
 #include <ListView.h>
@@ -23,6 +24,7 @@
 #include <ScrollView.h>
 #include <StringItem.h>
 #include <StringView.h>
+#include <TabView.h>
 #include <TextControl.h>
 #include <TextView.h>
 #include <Window.h>
@@ -550,6 +552,8 @@ InterfaceDetailView::InterfaceDetailView()
 	:
 	BView("interfaceDetail", B_WILL_DRAW),
 	fGridLayout(NULL),
+	fTabView(NULL),
+	fSelectedTab(0),
 	fMode(MODE_EMPTY),
 	fStaticIPView(NULL),
 	fWiFiListView(NULL),
@@ -563,7 +567,8 @@ InterfaceDetailView::InterfaceDetailView()
 	fVPNConnectButton(NULL),
 	fVPNDisconnectButton(NULL),
 	fHotspotStartButton(NULL),
-	fHotspotStopButton(NULL)
+	fHotspotStopButton(NULL),
+	fHotspotPage(NULL)
 {
 	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 	fEmptyMessage = B_TRANSLATE("Select a device");
@@ -851,11 +856,31 @@ InterfaceDetailView::MessageReceived(BMessage* message)
 
 		case kMsgHotspotStateReply:
 		{
+			// Rebuilding the whole pane here re-requested this reply, so the
+			// pane rebuilt forever; only the Hotspot tab depends on it.
+			bool changed = false;
+			const char* boolFields[] = { kNMFieldHotspotActive,
+				kNMFieldHotspotCanStart };
+			for (const char* field : boolFields) {
+				bool oldValue = false;
+				bool newValue = false;
+				fHotspotState.FindBool(field, &oldValue);
+				message->FindBool(field, &newValue);
+				changed |= oldValue != newValue;
+			}
+			const char* stringFields[] = { kNMFieldHotspotSSID,
+				kNMFieldHotspotPassword };
+			for (const char* field : stringFields) {
+				BString oldValue;
+				BString newValue;
+				fHotspotState.FindString(field, &oldValue);
+				message->FindString(field, &newValue);
+				changed |= oldValue != newValue;
+			}
+
 			fHotspotState = *message;
-			// Avoid tearing down an unsaved StaticIPView; the next device
-			// view rebuild will pick the state up.
-			if (fMode == MODE_DEVICE && !IsRevertable())
-				_Rebuild();
+			if (changed)
+				_RebuildHotspotTab();
 			break;
 		}
 
@@ -885,6 +910,13 @@ InterfaceDetailView::MessageReceived(BMessage* message)
 void
 InterfaceDetailView::SetToDevice(const BMessage& deviceInfo)
 {
+	// Same device again (refresh): keep the tab; another one starts over.
+	BString oldPath, newPath;
+	fDeviceInfo.FindString(kNMFieldPath, &oldPath);
+	deviceInfo.FindString(kNMFieldPath, &newPath);
+	if (fMode != MODE_DEVICE || oldPath != newPath)
+		fSelectedTab = 0;
+
 	fDeviceInfo = deviceInfo;
 	fMode = MODE_DEVICE;
 	_Rebuild();
@@ -928,6 +960,11 @@ InterfaceDetailView::_Rebuild()
 			delete stale;
 	}
 
+	// Hotspot and saved-network replies rebuild the pane; keep the tab.
+	if (fTabView != NULL)
+		fSelectedTab = fTabView->Selection();
+	fTabView = NULL;
+
 	for (int32 i = ChildAt(0) ? CountChildren() : 0; i-- > 0;) {
 		BView* child = ChildAt(i);
 		RemoveChild(child);
@@ -946,6 +983,7 @@ InterfaceDetailView::_Rebuild()
 	fVPNDisconnectButton = NULL;
 	fHotspotStartButton = NULL;
 	fHotspotStopButton = NULL;
+	fHotspotPage = NULL;
 
 	// Replace the layout wholesale rather than reusing it: deleting the child
 	// views leaves the old layout holding items that are not views (glue,
@@ -1146,20 +1184,17 @@ InterfaceDetailView::_RebuildDeviceView()
 		}
 	}
 
-	BLayoutBuilder::Group<> builder((BGroupLayout*)GetLayout());
-	builder.SetInsets(B_USE_WINDOW_SPACING)
-		.Add(titleView)
-		.Add(grid);
+	// One section per tab: stacked, a Wi-Fi device's sections are taller
+	// than the screen and the window grows past its bottom edge.
+	fTabView = new BTabView("tabs", B_WIDTH_FROM_LABEL);
 
-	if (showStaticIP) {
-		builder.Add(new BStringView(NULL,
-			B_TRANSLATE("IPv4 configuration:")));
-		builder.Add(fStaticIPView);
-	}
+	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.Add(titleView)
+		.Add(fTabView);
 
 	if (isWiFi) {
-		_AddHotspotSection();
-
+		BLayoutBuilder::Group<> builder(_AddTab(B_TRANSLATE("Networks")));
 		builder.Add(new BStringView(NULL,
 			B_TRANSLATE("Available networks:")));
 
@@ -1229,11 +1264,62 @@ InterfaceDetailView::_RebuildDeviceView()
 			.End();
 
 		_UpdateSavedButtons();
+	}
+
+	BLayoutBuilder::Group<>(_AddTab(B_TRANSLATE("Status")))
+		.Add(grid)
+		.AddGlue();
+
+	if (showStaticIP) {
+		BLayoutBuilder::Group<>(_AddTab(B_TRANSLATE("IPv4")))
+			.Add(fStaticIPView)
+			.AddGlue();
+	}
+
+	if (isWiFi) {
+		fHotspotPage = new BGroupView(B_TRANSLATE("Hotspot"), B_VERTICAL);
+		fTabView->AddTab(fHotspotPage);
+		_RebuildHotspotTab();
+
 		_RequestSavedNetworks();
 		_RequestHotspotState();
 	}
 
-	builder.AddGlue();
+	if (fSelectedTab > 0 && fSelectedTab < fTabView->CountTabs())
+		fTabView->Select(fSelectedTab);
+}
+
+
+void
+InterfaceDetailView::_RebuildHotspotTab()
+{
+	if (fHotspotPage == NULL)
+		return;
+
+	for (int32 i = fHotspotPage->CountChildren(); i-- > 0;) {
+		BView* child = fHotspotPage->ChildAt(i);
+		fHotspotPage->RemoveChild(child);
+		delete child;
+	}
+	fHotspotStartButton = NULL;
+	fHotspotStopButton = NULL;
+
+	// Fresh layout, as in _Rebuild(): the old one still holds the glue.
+	BGroupLayout* layout = new BGroupLayout(B_VERTICAL);
+	fHotspotPage->SetLayout(layout);
+	layout->SetInsets(B_USE_DEFAULT_SPACING);
+	_AddHotspotSection(layout);
+	BLayoutBuilder::Group<>(layout).AddGlue();
+}
+
+
+BGroupLayout*
+InterfaceDetailView::_AddTab(const char* label)
+{
+	BGroupView* page = new BGroupView(label, B_VERTICAL);
+	page->GroupLayout()->SetInsets(B_USE_DEFAULT_SPACING);
+	fTabView->AddTab(page);
+	return page->GroupLayout();
 }
 
 
@@ -1501,10 +1587,9 @@ InterfaceDetailView::_RebuildVPNView()
 
 
 void
-InterfaceDetailView::_AddHotspotSection()
+InterfaceDetailView::_AddHotspotSection(BGroupLayout* layout)
 {
-	BLayoutBuilder::Group<> builder((BGroupLayout*)GetLayout());
-	builder.Add(new BStringView(NULL, B_TRANSLATE("Wi-Fi hotspot:")));
+	BLayoutBuilder::Group<> builder(layout);
 
 	bool active = false;
 	bool canStart = true;

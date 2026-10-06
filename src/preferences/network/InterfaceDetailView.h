@@ -14,6 +14,9 @@
 
 
 class BGridLayout;
+class BGroupLayout;
+class BGroupView;
+class BTabView;
 class BListView;
 class BButton;
 class StaticIPView;
@@ -51,7 +54,7 @@ private:
 			void			_Rebuild();
 			void			_RebuildDeviceView();
 			void			_RebuildVPNView();
-			void			_AddHotspotSection();
+			void			_AddHotspotSection(BGroupLayout* layout);
 			void			_FillWiFiList(const BMessage& networks);
 			void			_RequestHotspotState();
 			void			_ShowHotspotError(BMessage* message);
@@ -65,6 +68,8 @@ private:
 			void			_UpdateWiFiSavedMarkers();
 			bool			_HasSavedProfile(const BString& ssid) const;
 			void			_RenumberSavedList();
+			BGroupLayout*	_AddTab(const char* label);
+			void			_RebuildHotspotTab();
 
 			enum Mode {
 				MODE_EMPTY,
@@ -73,6 +78,8 @@ private:
 			};
 
 			BGridLayout*	fGridLayout;
+			BTabView*		fTabView;
+			int32			fSelectedTab;
 			BMessage		fDeviceInfo;
 			Mode			fMode;
 			BString			fEmptyMessage;
@@ -100,6 +107,7 @@ private:
 			BMessage		fHotspotState;
 			BButton*		fHotspotStartButton;
 			BButton*		fHotspotStopButton;
+			BGroupView*		fHotspotPage;
 };
 
 

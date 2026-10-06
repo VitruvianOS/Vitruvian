@@ -71,115 +71,61 @@ jobs:
           echo "rev=$((base + 1))" >> "$GITHUB_OUTPUT"
           echo "latest in Factory: $latest, floor: $REV_FLOOR, allocating $((base + 1))"
 
-  build:
+  amd64:
     needs: allocate
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-            build_dir: generated.x86
-            extra_pkgs: grub-efi-amd64-bin grub-pc-bin ovmf
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            build_dir: generated.arm64
-            extra_pkgs: grub-efi-arm64-bin qemu-efi-aarch64
-    env:
-      VOS_PKG_REV: ${{ needs.allocate.outputs.rev }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    uses: ./.github/workflows/factory-build.yml
+    with:
+      name: amd64
+      arch: amd64
+      runner: ubuntu-latest
+      build_dir: generated.x86
+      image_types: iso,raw
+      extra_pkgs: grub-efi-amd64-bin grub-pc-bin ovmf
+      rev: ${{ needs.allocate.outputs.rev }}
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            bison build-essential cmake debootstrap debhelper \
-            dh-dkms dkms elfutils flex git \
-            libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
-            libgif-dev libicns-dev libicu-dev libinput-dev \
-            libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
-            libtiff-dev libudev-dev libwebp-dev libseat-dev \
-            libpam0g-dev libsystemd-dev libevdev-dev \
-            libblkid-dev libxkbcommon-dev \
-            libpipewire-0.3-dev libspa-0.2-dev \
-            libbluetooth-dev libnm-dev libglib2.0-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            linux-headers-$(uname -r) \
-            mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
-            libapt-pkg-dev fakeroot devscripts lintian wget qemu-utils \
-            rsync parted zstd dosfstools attr \
-            ${{ matrix.extra_pkgs }}
+  arm64:
+    needs: allocate
+    uses: ./.github/workflows/factory-build.yml
+    with:
+      name: arm64
+      arch: arm64
+      runner: ubuntu-24.04-arm
+      build_dir: generated.arm64
+      image_types: iso,raw
+      extra_pkgs: grub-efi-arm64-bin qemu-efi-aarch64
+      rev: ${{ needs.allocate.outputs.rev }}
 
-      - name: Configure git safe.directory
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+  raspberry:
+    needs: allocate
+    uses: ./.github/workflows/factory-build.yml
+    with:
+      name: raspberry
+      arch: arm64
+      runner: ubuntu-24.04-arm
+      build_dir: generated.rasp
+      image_types: raspberry
+      rev: ${{ needs.allocate.outputs.rev }}
 
-      - name: Init submodules
-        run: git submodule update --init --recursive
+  riscv64:
+    needs: allocate
+    uses: ./.github/workflows/factory-build.yml
+    with:
+      name: riscv64
+      arch: riscv64
+      runner: ubuntu-latest
+      build_dir: generated.riscv64
+      image_types: iso,raw
+      extra_pkgs: gcc-riscv64-linux-gnu g++-riscv64-linux-gnu qemu-user-static binfmt-support
+      rev: ${{ needs.allocate.outputs.rev }}
 
-      - name: Build buildtools
-        run: |
-          mkdir -p buildtools
-          cd buildtools
-          cmake -DBUILDTOOLS_MODE=1 .. -GNinja
-          ninja
-
-      - name: Configure (also creates chroot)
-        run: |
-          mkdir -p ${{ matrix.build_dir }}
-          cd ${{ matrix.build_dir }}
-          ../configure --arch=${{ matrix.arch }} --build-type=Debug \
-                       --chroot-build --buildtools=../buildtools
-
-      - name: Build ISO + RAW images
-        run: cd ${{ matrix.build_dir }} && ../bake build --image-type=iso,raw
-
-      - name: Compress RAW images
-        run: |
-          shopt -s nullglob
-          cd ${{ matrix.build_dir }}/output
-          for f in *.raw; do
-            zstd -T0 --long=27 -19 --rm "$f"
-          done
-
-      # Published names carry everything a downloader needs to tell two
-      # artifacts apart. The build tree only knows the board, so the arch,
-      # the rev and the sha are added here.
-      - name: Name the artifacts for publication
-        id: stage
-        run: |
-          set -euo pipefail
-          sha=$(git rev-parse --short=9 HEAD)
-          ver=$(sed -n 's/^project(VOS VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
-          mkdir -p staging
-          shopt -s nullglob
-          for f in ${{ matrix.build_dir }}/output/*.iso ${{ matrix.build_dir }}/output/*.raw.zst; do
-            base=$(basename "$f")
-            board=${base#vos-}
-            board=${board%%.*}
-            ext=${base#*.}
-            out="vos-${ver}-${{ matrix.arch }}-${board}-rev${VOS_PKG_REV}-${sha}.${ext}"
-            cp "$f" "staging/$out"
-            ( cd staging && sha256sum "$out" > "$out.sha256" )
-            echo "staged $out"
-          done
-
-      - name: Upload for the publish job
-        uses: actions/upload-artifact@v4
-        with:
-          name: factory-${{ matrix.arch }}
-          path: staging/*
-          if-no-files-found: error
-          # Only a handoff to the publish job. Factory keeps the real copy.
-          retention-days: 1
-
+  # amd64 and arm64 gate the rev; a failed raspberry or riscv64 build is
+  # left out and named in the release notes.
   publish:
-    needs: [allocate, build]
+    needs: [allocate, amd64, arm64, raspberry, riscv64]
+    if: ${{ !cancelled() && needs.amd64.result == 'success' && needs.arm64.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Collect both architectures
+      - name: Collect the built images
         uses: actions/download-artifact@v4
         with:
           pattern: factory-*
@@ -203,12 +149,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
           REV: ${{ needs.allocate.outputs.rev }}
+          RASPBERRY: ${{ needs.raspberry.result }}
+          RISCV64: ${{ needs.riscv64.result }}
         run: |
           set -euo pipefail
+          MISSING=""
+          [ "$RASPBERRY" = success ] || MISSING="$MISSING"$'\n'"raspberry: $RASPBERRY, not included"
+          [ "$RISCV64" = success ] || MISSING="$MISSING"$'\n'"riscv64: $RISCV64, not included"
           gh release create "rev-$REV" \
             --repo "$FACTORY_REPO" \
             --title "rev-$REV" \
-            --notes "Built from ${{ github.repository }}@${{ github.sha }}" \
+            --notes "Built from ${{ github.repository }}@${{ github.sha }}${MISSING}" \
             assets/*
 
       # Off for now. Set the repository variable TELEGRAM_ENABLED to 'true'

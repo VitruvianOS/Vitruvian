@@ -1,0 +1,110 @@
+# One Factory build: compile, bake, name and hand the images to the
+# publish job in factory-release.yml.
+
+name: Factory build
+
+on:
+  workflow_call:
+    inputs:
+      name:        { type: string, required: true }
+      arch:        { type: string, required: true }
+      runner:      { type: string, required: true }
+      build_dir:   { type: string, required: true }
+      image_types: { type: string, required: true }
+      extra_pkgs:  { type: string, default: "" }
+      rev:         { type: string, required: true }
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    # riscv64 runs its chroot under qemu-user.
+    timeout-minutes: 360
+    env:
+      VOS_PKG_REV: ${{ inputs.rev }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison build-essential cmake debootstrap debhelper \
+            dh-dkms dkms elfutils flex git \
+            libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
+            libgif-dev libicns-dev libicu-dev libinput-dev \
+            libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
+            libtiff-dev libudev-dev libwebp-dev libseat-dev \
+            libpam0g-dev libsystemd-dev libevdev-dev \
+            libblkid-dev libxkbcommon-dev \
+            libpipewire-0.3-dev libspa-0.2-dev \
+            libbluetooth-dev libnm-dev libglib2.0-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            linux-headers-$(uname -r) \
+            mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
+            libapt-pkg-dev fakeroot devscripts lintian wget qemu-utils \
+            rsync parted zstd dosfstools attr \
+            ${{ inputs.extra_pkgs }}
+
+      - name: Configure git safe.directory
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+
+      - name: Init submodules
+        run: git submodule update --init --recursive
+
+      - name: Build buildtools
+        run: |
+          mkdir -p buildtools
+          cd buildtools
+          cmake -DBUILDTOOLS_MODE=1 .. -GNinja
+          ninja
+
+      - name: Configure (also creates chroot)
+        run: |
+          mkdir -p ${{ inputs.build_dir }}
+          cd ${{ inputs.build_dir }}
+          ../configure --arch=${{ inputs.arch }} --build-type=Debug \
+                       --chroot-build --buildtools=../buildtools
+
+      - name: Build images
+        run: cd ${{ inputs.build_dir }} && ../bake build --image-type=${{ inputs.image_types }}
+
+      - name: Compress RAW images
+        run: |
+          shopt -s nullglob
+          cd ${{ inputs.build_dir }}/output
+          for f in *.raw; do
+            zstd -T0 --long=27 -19 --rm "$f"
+          done
+
+      # Published names carry everything a downloader needs to tell two
+      # artifacts apart. The build tree only knows the board, so the arch,
+      # the rev and the sha are added here.
+      - name: Name the artifacts for publication
+        id: stage
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse --short=9 HEAD)
+          ver=$(sed -n 's/^project(VOS VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          mkdir -p staging
+          shopt -s nullglob
+          for f in ${{ inputs.build_dir }}/output/*.iso ${{ inputs.build_dir }}/output/*.raw.zst; do
+            base=$(basename "$f")
+            board=${base#vos-}
+            board=${board%%.*}
+            ext=${base#*.}
+            out="vos-${ver}-${{ inputs.arch }}-${board}-rev${VOS_PKG_REV}-${sha}.${ext}"
+            cp "$f" "staging/$out"
+            ( cd staging && sha256sum "$out" > "$out.sha256" )
+            echo "staged $out"
+          done
+
+      - name: Upload for the publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-${{ inputs.name }}
+          path: staging/*
+          if-no-files-found: error
+          # Only a handoff to the publish job. Factory keeps the real copy.
+          retention-days: 1
+

@@ -490,6 +490,7 @@ create_iso() {
 
     _iso_pkgs="$(get_iso_image_packages "$_arch")"
     _iso_debs="$(cd "$_basedir" && ls *.deb | grep -v -- '-dev\.deb$' | sed 's|^|/tmp/|' | tr '\n' ' ')"
+    _iso_dev_pkgs="$(get_dev_packages "$_arch")"
     log_step "Installing debs into chroot..."
     sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
 apt-get install -y --download-only dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs $_iso_debs" \
@@ -498,7 +499,9 @@ apt-get install -y --download-only dkms build-essential linux-headers-$_imageker
 apt remove -y vos nexus-dkms || true
 apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
 apt install -y -f --reinstall $_iso_debs
-# Drop what earlier vos versions pulled in and this one no longer needs (e.g. fonts-noto-extra).
+# Purge the build-only -dev packages, and what earlier vos versions pulled in
+# (e.g. fonts-noto-extra); dkms keeps what it needs. bake build reinstalls them.
+for _p in $_iso_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
 apt-get autoremove -y --purge
 depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel stage)"
 

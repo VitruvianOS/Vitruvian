@@ -195,6 +195,7 @@ cmd_build() {
         if [ "$_regenerate" -eq 1 ]; then
             chroot_regenerate "$BASEDIR" "$ARCH"
         fi
+        [ "$_has_chroot" -eq 1 ] && chroot_restore_dev_packages "$BASEDIR" "$ARCH"
         log_step "Running ninja build..."
         ninja
 
@@ -263,6 +264,7 @@ cmd_build() {
     _sudo_keepalive_pid=$!
     trap 'kill "$_sudo_keepalive_pid" 2>/dev/null || true' EXIT INT TERM
 
+    chroot_restore_dev_packages "$BASEDIR" "$ARCH"
     log_step "Running ninja build..."
     ninja
 

@@ -94,6 +94,38 @@ chroot_umount() {
     sudo umount -l "$_chroot_dir/dev" 2>/dev/null || true
 }
 
+# create_iso purges the -dev packages from the chroot it squashes; put
+# back whatever is missing before compiling. The .deb cache makes it an unpack.
+chroot_restore_dev_packages() {
+    _crd_basedir="$1"
+    _crd_arch="$2"
+    _crd_dir="$_crd_basedir/image_tree/chroot"
+    [ -d "$_crd_dir" ] || return 0
+    # Installed names plus what they provide (libfreetype6-dev is only provided).
+    _crd_have="$(dpkg-query --admindir="$_crd_dir/var/lib/dpkg" -W \
+        -f='${db:Status-Abbrev} ${Package},${Provides}\n' 2>/dev/null \
+        | awk '$1 == "ii" { sub(/^ii +/, ""); n = split($0, a, ","); \
+            for (i = 1; i <= n; i++) { sub(/^ +/, "", a[i]); sub(/ .*/, "", a[i]); \
+            if (a[i] != "") print a[i] } }')"
+    _crd_missing=""
+    for _p in $(get_dev_packages "$_crd_arch"); do
+        printf '%s\n' "$_crd_have" | grep -qx "$_p" || _crd_missing="$_crd_missing $_p"
+    done
+    [ -n "$_crd_missing" ] || return 0
+    log_step "Reinstalling build packages:$_crd_missing"
+    qemu_inject "$_crd_dir" "$_crd_arch"
+    chroot_mount "$_crd_dir"
+    chroot_mount_deb_cache "$_crd_dir" "$(chroot_cache_dir "$_crd_basedir")"
+    sudo chroot "$_crd_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive \
+        apt-get install -y --download-only --no-install-recommends $_crd_missing \
+        || die "build package download failed"
+    chroot_isolated "$_crd_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive \
+        apt-get install -y --no-install-recommends $_crd_missing \
+        || die "build package reinstall failed"
+    chroot_umount "$_crd_dir"
+    qemu_eject "$_crd_dir" "$_crd_arch"
+}
+
 # Bind the persistent .deb cache into the chroot. Idempotent.
 chroot_mount_deb_cache() {
     _chroot_dir="$1"

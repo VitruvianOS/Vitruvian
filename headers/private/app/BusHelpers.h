@@ -20,6 +20,8 @@ namespace BPrivate {
 // All calls are synchronous. Return B_OK on success, a translated
 // status_t on failure. On failure the optional error string receives
 // the D-Bus error message (polkit denial text included) for the UI.
+// The timedate1 setters return B_NOT_SUPPORTED when no NTP service is
+// installed (NoNTPSupport).
 
 
 // systemd-timedated (org.freedesktop.timedate1).

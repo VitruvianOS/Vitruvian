@@ -35,6 +35,7 @@ private:
 			void			_UpdateStatus();
 			void			_NotifyNTPChanged();
 			void			_ApplyNTP(bool enable);
+			void			_SetNTPUnavailable();
 
 			BCheckBox*		fNTPCheckBox;
 			BStringView*	fStatusView;
@@ -42,6 +43,7 @@ private:
 			bool			fNTPEnabled;
 			bool			fNTPSynced;
 			bool			fNTPOpPending;
+			bool			fNTPAvailable;
 };
 
 

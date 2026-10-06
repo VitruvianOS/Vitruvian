@@ -91,11 +91,16 @@ _call_timedate1(const char* method, const char* signature, BString* error,
 		_log(method, &err, r);
 	_fill_error(error, &err, r);
 
+	// No NTP unit installed: callers word this one for the user.
+	status_t status = _translate_sd(r);
+	if (sd_bus_error_has_name(&err, "org.freedesktop.timedate1.NoNTPSupport"))
+		status = B_NOT_SUPPORTED;
+
 	sd_bus_message_unref(msg);
 	sd_bus_message_unref(reply);
 	sd_bus_error_free(&err);
 	sd_bus_unref(bus);
-	return _translate_sd(r);
+	return status;
 }
 
 

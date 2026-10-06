@@ -115,8 +115,13 @@ main(int argc, char** argv)
 		// Network time is systemd-timesyncd's job; ask timedated to turn
 		// it on rather than speaking NTP from this preflet.
 		BString error;
-		if (bus_timedate1_set_ntp(true, &error) == B_OK) {
+		status_t status = bus_timedate1_set_ntp(true, &error);
+		if (status == B_OK) {
 			printf("Network time enabled\n");
+		} else if (status == B_NOT_SUPPORTED) {
+			printf("Network time is not available on this system. "
+				"No NTP service is installed.\n");
+			return 1;
 		} else {
 			printf("Could not enable network time:\n%s\n",
 				error.Length() > 0 ? error.String() : "unknown error");

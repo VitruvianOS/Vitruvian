@@ -41,7 +41,8 @@ NetworkTimeView::NetworkTimeView(const char* name)
 	fStatusView(NULL),
 	fNTPEnabled(false),
 	fNTPSynced(false),
-	fNTPOpPending(false)
+	fNTPOpPending(false),
+	fNTPAvailable(true)
 {
 	_InitView();
 }
@@ -99,12 +100,14 @@ NetworkTimeView::MessageReceived(BMessage* message)
 					if (status == B_OK) {
 						bool changed = fNTPEnabled != enabled;
 						fNTPEnabled = enabled;
+						fNTPAvailable = true;
 						fNTPCheckBox->SetValue(enabled ? B_CONTROL_ON
 							: B_CONTROL_OFF);
 						if (changed)
 							_NotifyNTPChanged();
-					} else
-						fNTPCheckBox->SetEnabled(false);
+					} else {
+						_SetNTPUnavailable();
+					}
 					_UpdateStatus();
 					break;
 				}
@@ -125,6 +128,15 @@ NetworkTimeView::MessageReceived(BMessage* message)
 					bool enable = false;
 					message->FindBool("enable", &enable);
 					if (status != B_OK) {
+						if (status == B_NOT_SUPPORTED) {
+							// GetNTP would only report "off", not missing.
+							_SetNTPUnavailable();
+							ShowTimeError(B_TRANSLATE("Network time is not "
+								"available on this system. No NTP service is "
+								"installed; set the date and time manually "
+								"on the Date and time tab."), status, NULL);
+							break;
+						}
 						ShowTimeError(
 							B_TRANSLATE("Could not change network time."),
 							status, error);
@@ -137,6 +149,7 @@ NetworkTimeView::MessageReceived(BMessage* message)
 						break;
 					}
 
+					fNTPAvailable = true;
 					fNTPEnabled = enable;
 					fNTPSynced = false;
 					BMessage args;
@@ -206,7 +219,11 @@ void
 NetworkTimeView::_UpdateStatus()
 {
 	BString status;
-	if (fNTPCheckBox->Value() == B_CONTROL_ON) {
+	if (!fNTPAvailable) {
+		status = B_TRANSLATE("Network time is not available on this "
+			"system. Set the date and time manually on the Date and time "
+			"tab.");
+	} else if (fNTPCheckBox->Value() == B_CONTROL_ON) {
 		status = B_TRANSLATE("Network time is on. The clock is kept by "
 			"systemd-timesyncd; manual date and time controls are disabled.");
 		if (fNTPSynced)
@@ -222,6 +239,17 @@ NetworkTimeView::_UpdateStatus()
 
 
 void
+NetworkTimeView::_SetNTPUnavailable()
+{
+	fNTPAvailable = false;
+	fNTPEnabled = false;
+	fNTPSynced = false;
+	fNTPCheckBox->SetValue(B_CONTROL_OFF);
+	fNTPCheckBox->SetEnabled(false);
+}
+
+
+void
 NetworkTimeView::_NotifyNTPChanged()
 {
 	BMessage message(kMsgNTPStateChanged);
@@ -233,7 +261,7 @@ NetworkTimeView::_NotifyNTPChanged()
 void
 NetworkTimeView::_ApplyNTP(bool enable)
 {
-	if (fNTPOpPending)
+	if (!fNTPAvailable || fNTPOpPending)
 		return;
 
 	fNTPOpPending = true;

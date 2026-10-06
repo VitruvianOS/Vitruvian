@@ -967,6 +967,10 @@ create_raspberry() {
     for _m in dev proc sys; do
         mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
     done
+    # Downloads stay on the build host: the debs and the installed system
+    # together do not fit the image.
+    sudo mkdir -p "$_mnt/var/cache/apt/archives"
+    sudo mount --bind "$_dbcache" "$_mnt/var/cache/apt/archives"
 
     # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
     # ca-certificates); a copied bundle without that symlink does not verify.
@@ -976,6 +980,7 @@ create_raspberry() {
     if ls "$_basedir"/*.deb >/dev/null 2>&1; then
         sudo mkdir -p "$_mnt/localdeb"
         sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
+        sudo rm -f "$_mnt"/localdeb/*-dev.deb
     fi
 
     # debootstrap writes a main-only sources.list, but raspi-firmware and
@@ -1035,7 +1040,8 @@ apt install -y $_board_pkgs
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
 fi
-# The downloaded .debs would otherwise ship in the image.
+rm -rf /localdeb
+# apt's package caches would otherwise ship in the image.
 apt-get clean" || die "raspberry chroot bash-c failed"
 
     # Prove the firmware landed; the board cannot boot without it.
@@ -1263,6 +1269,10 @@ create_uboot_board() {
     for _m in dev proc sys; do
         mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
     done
+    # Downloads stay on the build host: the debs and the installed system
+    # together do not fit the image.
+    sudo mkdir -p "$_mnt/var/cache/apt/archives"
+    sudo mount --bind "$_dbcache" "$_mnt/var/cache/apt/archives"
 
     # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
     # ca-certificates); a copied bundle without that symlink does not verify.
@@ -1272,6 +1282,7 @@ create_uboot_board() {
     if ls "$_basedir"/*.deb >/dev/null 2>&1; then
         sudo mkdir -p "$_mnt/localdeb"
         sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
+        sudo rm -f "$_mnt"/localdeb/*-dev.deb
     fi
 
     # Same sources.list fix as create_raspberry.
@@ -1325,7 +1336,8 @@ apt install -y $_board_pkgs u-boot-menu
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     dpkg -i /localdeb/*.deb || apt-get -f install -y
 fi
-# The downloaded .debs would otherwise ship in the image.
+rm -rf /localdeb
+# apt's package caches would otherwise ship in the image.
 apt-get clean" || die "uboot chroot bash-c failed"
 
     _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \

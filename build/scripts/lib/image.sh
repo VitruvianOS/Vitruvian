@@ -133,9 +133,9 @@ create_raw() {
     _host_shared="$_basedir/shared"
     _guest_mnt="/mnt/host_shared"
 
-    # 7 GiB fits any 8 GB medium (~7.45 GiB); nothing grows it on boot.
-    # 128 MiB ESP (GRUB loaders), the rest root.
-    _disk_mib=7168
+    # 4 GiB disk, nothing grows it on boot: 128 MiB ESP (GRUB loaders),
+    # the rest root.
+    _disk_mib=4096
     _esp_start_mib=1
     _esp_size_mib=128
     _root_start_mib=129
@@ -913,8 +913,7 @@ create_raspberry() {
     mkdir -p "$_basedir/output"
 
     log_step "Creating $(board_config "$_board" label) RAW image..."
-    # Fixed size, no first-boot grow: fits any 8 GB card (~7.45 GiB).
-    qemu-img create "$_raw" 7G
+    qemu-img create "$_raw" 4G
 
     _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"
@@ -1176,8 +1175,7 @@ create_uboot_board() {
     fi
 
     log_step "Creating $_label RAW image..."
-    # Fixed size, no first-boot grow: fits any 8 GB card (~7.45 GiB).
-    qemu-img create "$_raw" 7G
+    qemu-img create "$_raw" 4G
 
     _loop=$(sudo losetup --show -f -P "$_raw")
     log_info "Loop device: $_loop"

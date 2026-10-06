@@ -184,7 +184,6 @@ create_raw() {
 
     sudo mkdir -p "$_root_dir/localdeb"
     sudo cp "$_basedir"/*.deb "$_root_dir/localdeb/"
-    sudo rm -f "$_root_dir"/localdeb/*-dev.deb
 
     log_step "Configuring system, installing Vitruvian, and setting up bootloader..."
 
@@ -489,7 +488,7 @@ create_iso() {
     fi
 
     _iso_pkgs="$(get_iso_image_packages "$_arch")"
-    _iso_debs="$(cd "$_basedir" && ls *.deb | grep -v -- '-dev\.deb$' | sed 's|^|/tmp/|' | tr '\n' ' ')"
+    _iso_debs="$(cd "$_basedir" && ls *.deb | sed 's|^|/tmp/|' | tr '\n' ' ')"
     _iso_dev_pkgs="$(get_dev_packages "$_arch")"
     log_step "Installing debs into chroot..."
     sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
@@ -983,7 +982,6 @@ create_raspberry() {
     if ls "$_basedir"/*.deb >/dev/null 2>&1; then
         sudo mkdir -p "$_mnt/localdeb"
         sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
-        sudo rm -f "$_mnt"/localdeb/*-dev.deb
     fi
 
     # debootstrap writes a main-only sources.list, but raspi-firmware and
@@ -1285,7 +1283,6 @@ create_uboot_board() {
     if ls "$_basedir"/*.deb >/dev/null 2>&1; then
         sudo mkdir -p "$_mnt/localdeb"
         sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
-        sudo rm -f "$_mnt"/localdeb/*-dev.deb
     fi
 
     # Same sources.list fix as create_raspberry.

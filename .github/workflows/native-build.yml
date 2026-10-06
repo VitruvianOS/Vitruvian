@@ -1,9 +1,9 @@
 name: Native amd64 build test
 
+# master runs this as the first step of the Factory amd64 build.
 on:
   push:
-    branches:
-      - '**'
+    branches-ignore: [master]
 
 # A newer push supersedes this run; there is no value in finishing a
 # build of code that is no longer the head. Keyed per ref so branches

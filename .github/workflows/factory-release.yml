@@ -81,6 +81,7 @@ jobs:
       build_dir: generated.x86
       image_types: iso,raw
       extra_pkgs: grub-efi-amd64-bin grub-pc-bin ovmf
+      native: true
       rev: ${{ needs.allocate.outputs.rev }}
 
   arm64:
@@ -141,10 +142,12 @@ jobs:
           GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
           REV: ${{ needs.allocate.outputs.rev }}
           RISCV64: ${{ needs.riscv64.result }}
+          RISCV64_AT: ${{ needs.riscv64.outputs.failed_step }}
         run: |
           set -euo pipefail
           MISSING=""
-          [ "$RISCV64" = success ] || MISSING="$MISSING"$'\n'"riscv64: $RISCV64, not included"
+          [ "$RISCV64" = success ] \
+            || MISSING="$MISSING"$'\n'"riscv64: $RISCV64${RISCV64_AT:+ at \"$RISCV64_AT\"}, not included"
           for board in arm64-raspberry riscv64-visionfive2; do
             ls assets/*-"$board"-* >/dev/null 2>&1 \
               || MISSING="$MISSING"$'\n'"$board: not built, not included"
@@ -176,3 +179,40 @@ jobs:
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
             -d "parse_mode=HTML" \
             --data-urlencode "text=${msg}"
+
+  # One table for the whole run, whatever failed: each arch, the step it
+  # stopped at, its board images, and whether the rev went out.
+  summary:
+    needs: [allocate, amd64, arm64, riscv64, publish]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize the run
+        env:
+          ROWS: |
+            amd64|${{ needs.amd64.result }}|${{ needs.amd64.outputs.failed_step }}|${{ needs.amd64.outputs.boards }}
+            arm64|${{ needs.arm64.result }}|${{ needs.arm64.outputs.failed_step }}|${{ needs.arm64.outputs.boards }}
+            riscv64|${{ needs.riscv64.result }}|${{ needs.riscv64.outputs.failed_step }}|${{ needs.riscv64.outputs.boards }}
+          ALLOCATE: ${{ needs.allocate.result }}
+          PUBLISH: ${{ needs.publish.result }}
+          REV: ${{ needs.allocate.outputs.rev }}
+        run: |
+          {
+            echo "## rev-${REV:-?}"
+            echo
+            echo "| Build | Result | Stopped at | Board images |"
+            echo "|---|---|---|---|"
+            while IFS='|' read -r arch result at boards; do
+              [ -n "$arch" ] || continue
+              echo "| $arch | $result | ${at:--} | ${boards:--} |"
+            done <<< "$ROWS"
+            echo
+            echo "Rev allocation: $ALLOCATE. Publish: $PUBLISH."
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS='|' read -r arch result at boards; do
+            [ -n "$arch" ] || continue
+            [ -n "$at" ] && echo "::error title=$arch failed::stopped at: $at"
+            [ "$boards" = failure ] && echo "::warning title=$arch board images failed::see the $arch job"
+          done <<< "$ROWS"
+          [ "$PUBLISH" = success ] || echo "::error title=rev not published::publish: $PUBLISH"
+          true

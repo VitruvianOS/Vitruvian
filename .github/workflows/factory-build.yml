@@ -14,20 +14,34 @@ on:
       extra_pkgs:  { type: string, default: "" }
       # Board images baked from the same tree; a failure leaves them out.
       board_types: { type: string, default: "" }
+      # Compile against the runner's own libraries first, in its own tree.
+      native:      { type: boolean, default: false }
       rev:         { type: string, required: true }
+    outputs:
+      failed_step:
+        description: First step that failed, empty when the build passed
+        value: ${{ jobs.build.outputs.failed_step }}
+      boards:
+        description: Outcome of the board image step
+        value: ${{ jobs.build.outputs.boards }}
 
 jobs:
   build:
     runs-on: ${{ inputs.runner }}
     # riscv64 runs its chroot under qemu-user.
     timeout-minutes: 360
+    outputs:
+      failed_step: ${{ steps.report.outputs.failed_step }}
+      boards: ${{ steps.report.outputs.boards }}
     env:
       VOS_PKG_REV: ${{ inputs.rev }}
     steps:
       - name: Checkout repository
+        id: checkout
         uses: actions/checkout@v4
 
       - name: Install build dependencies
+        id: deps
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -46,22 +60,49 @@ jobs:
             mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
             libapt-pkg-dev fakeroot devscripts lintian wget qemu-utils \
             rsync parted zstd dosfstools attr \
+            ${{ inputs.native && 'libcairo2-dev libcups2-dev libgl1-mesa-dev libgbm-dev libglu1-mesa-dev libegl-dev libgl-dev' || '' }} \
             ${{ inputs.extra_pkgs }}
 
       - name: Configure git safe.directory
+        id: safedir
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
 
       - name: Init submodules
+        id: submodules
         run: git submodule update --init --recursive
 
       - name: Build buildtools
+        id: buildtools
         run: |
           mkdir -p buildtools
           cd buildtools
           cmake -DBUILDTOOLS_MODE=1 .. -GNinja
           ninja
 
+      # Host libraries, no chroot, its own tree: catches what only breaks
+      # outside the chroot before the image build starts.
+      - name: Native build - configure
+        id: native_configure
+        if: inputs.native
+        run: |
+          mkdir -p generated.native
+          cd generated.native
+          ../build/scripts/setupenv.sh --arch=${{ inputs.arch }}
+          ../configure --arch=${{ inputs.arch }} --build-type=Release --buildtools=../buildtools
+
+      - name: Native build - compile
+        id: native_build
+        if: inputs.native
+        run: cd generated.native && ninja
+
+      # The image build needs the disk space more than the tree.
+      - name: Native build - clean up
+        id: native_cleanup
+        if: inputs.native
+        run: rm -rf generated.native
+
       - name: Configure (also creates chroot)
+        id: configure
         run: |
           mkdir -p ${{ inputs.build_dir }}
           cd ${{ inputs.build_dir }}
@@ -69,15 +110,18 @@ jobs:
                        --chroot-build --buildtools=../buildtools
 
       - name: Build images
+        id: images
         run: cd ${{ inputs.build_dir }} && ../bake build --image-type=${{ inputs.image_types }}
 
       # Same compiled tree, so ninja has nothing left to do.
       - name: Build board images
+        id: boards
         if: inputs.board_types != ''
         continue-on-error: true
         run: cd ${{ inputs.build_dir }} && ../bake build --image-type=${{ inputs.board_types }}
 
       - name: Compress RAW images
+        id: compress
         run: |
           shopt -s nullglob
           cd ${{ inputs.build_dir }}/output
@@ -108,6 +152,7 @@ jobs:
           done
 
       - name: Upload for the publish job
+        id: upload
         uses: actions/upload-artifact@v4
         with:
           name: factory-${{ inputs.name }}
@@ -116,3 +161,63 @@ jobs:
           # Only a handoff to the publish job. Factory keeps the real copy.
           retention-days: 1
 
+      - name: Upload logs of a failed build
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-logs-${{ inputs.name }}
+          path: |
+            generated.native/CMakeFiles/*.log
+            generated.native/.ninja_log
+            ${{ inputs.build_dir }}/CMakeFiles/*.log
+            ${{ inputs.build_dir }}/.ninja_log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Steps in run order; the first failure is where this build stopped.
+      - name: Report
+        id: report
+        if: always()
+        env:
+          OUTCOMES: |
+            checkout|Checkout repository|${{ steps.checkout.outcome }}
+            deps|Install build dependencies|${{ steps.deps.outcome }}
+            safedir|Configure git safe.directory|${{ steps.safedir.outcome }}
+            submodules|Init submodules|${{ steps.submodules.outcome }}
+            buildtools|Build buildtools|${{ steps.buildtools.outcome }}
+            native_configure|Native build - configure|${{ steps.native_configure.outcome }}
+            native_build|Native build - compile|${{ steps.native_build.outcome }}
+            native_cleanup|Native build - clean up|${{ steps.native_cleanup.outcome }}
+            configure|Configure (also creates chroot)|${{ steps.configure.outcome }}
+            images|Build images (${{ inputs.image_types }})|${{ steps.images.outcome }}
+            boards|Build board images (${{ inputs.board_types }})|${{ steps.boards.outcome }}
+            compress|Compress RAW images|${{ steps.compress.outcome }}
+            stage|Name the artifacts for publication|${{ steps.stage.outcome }}
+            upload|Upload for the publish job|${{ steps.upload.outcome }}
+        run: |
+          failed=""
+          boards="${{ inputs.board_types != '' && steps.boards.outcome || 'none' }}"
+          {
+            echo "### ${{ inputs.name }}"
+            echo
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS='|' read -r id label outcome; do
+            [ -n "$id" ] || continue
+            case "$id" in native_*) [ "${{ inputs.native }}" = true ] || continue ;; esac
+            [ "$id" = boards ] && [ "$boards" = none ] && continue
+            shown="$outcome"
+            { [ -z "$shown" ] || { [ -n "$failed" ] && [ "$shown" = skipped ]; }; } && shown="not reached"
+            echo "| $label | $shown |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$outcome" = failure ] && [ "$id" != boards ] && [ -z "$failed" ]; then
+              failed="$label"
+            fi
+          done <<< "$OUTCOMES"
+          if [ -n "$failed" ]; then
+            echo "::error title=${{ inputs.name }} failed::stopped at: $failed"
+          elif [ "$boards" = failure ]; then
+            echo "::warning title=${{ inputs.name }} board images failed::${{ inputs.board_types }} not built; the EFI images are fine"
+          fi
+          echo "failed_step=$failed" >> "$GITHUB_OUTPUT"
+          echo "boards=$boards" >> "$GITHUB_OUTPUT"

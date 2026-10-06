@@ -1,7 +1,7 @@
 RunnableAddOn(NetworkStatus
 	SOURCES
 	NetworkStatus.cpp
-	NetworkStatusViewNM.cpp
+	NetworkStatusView.cpp
 	NetworkStatusWindow.cpp
 	RadioView.cpp
 	WirelessNetworkMenuItem.cpp

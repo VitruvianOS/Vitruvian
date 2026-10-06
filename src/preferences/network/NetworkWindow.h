@@ -3,8 +3,8 @@
  * Distributed under the terms of the MIT License.
  */
 
-#ifndef NETWORK_WINDOW_NM_H
-#define NETWORK_WINDOW_NM_H
+#ifndef NETWORK_WINDOW_H
+#define NETWORK_WINDOW_H
 
 
 #include <String.h>
@@ -20,10 +20,10 @@ class MobileBroadbandView;
 class ProxyView;
 
 
-class NetworkWindowNM : public BWindow {
+class NetworkWindow : public BWindow {
 public:
-	NetworkWindowNM();
-	virtual ~NetworkWindowNM();
+	NetworkWindow();
+	virtual ~NetworkWindow();
 
 	virtual void MessageReceived(BMessage* message);
 	virtual bool QuitRequested();
@@ -58,4 +58,4 @@ private:
 };
 
 
-#endif // NETWORK_WINDOW_NM_H
+#endif // NETWORK_WINDOW_H

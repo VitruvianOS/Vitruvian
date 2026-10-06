@@ -233,7 +233,7 @@ _StateString(uint32 state)
 
 // Single row in the "Available networks" list. Text-only status line rather
 // than a signal-bar glyph -- no such art exists in this tree yet (see
-// DeviceListItem in NetworkWindowNM.cpp for the same programmatic-over-
+// DeviceListItem in NetworkWindow.cpp for the same programmatic-over-
 // authored-art approach).
 class WiFiNetworkItem : public BStringItem {
 public:

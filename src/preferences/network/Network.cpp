@@ -11,7 +11,7 @@
 #include <Locale.h>
 #include <Window.h>
 
-#include "NetworkWindowNM.h"
+#include "NetworkWindow.h"
 
 
 static const char* kSignature = "application/x-vnd.Haiku-Network";
@@ -36,7 +36,7 @@ Application::Application()
 void
 Application::ReadyToRun()
 {
-	NetworkWindowNM* window = new NetworkWindowNM();
+	NetworkWindow* window = new NetworkWindow();
 	window->Show();
 }
 

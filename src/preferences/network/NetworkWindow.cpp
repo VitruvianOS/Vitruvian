@@ -4,7 +4,7 @@
  * Distributed under the terms of the MIT License.
  */
 
-#include "NetworkWindowNM.h"
+#include "NetworkWindow.h"
 
 #include "InterfaceDetailView.h"
 #include "MobileBroadbandView.h"
@@ -228,7 +228,7 @@ private:
 // #pragma mark -
 
 
-NetworkWindowNM::NetworkWindowNM()
+NetworkWindow::NetworkWindow()
 	:
 	BWindow(BRect(100, 100, 750, 400), B_TRANSLATE_SYSTEM_NAME("Network"),
 		B_TITLED_WINDOW, B_ASYNCHRONOUS_CONTROLS | B_NOT_ZOOMABLE
@@ -328,7 +328,7 @@ NetworkWindowNM::NetworkWindowNM()
 }
 
 
-NetworkWindowNM::~NetworkWindowNM()
+NetworkWindow::~NetworkWindow()
 {
 	// Stop watching NetworkManager
 	NMBackend* backend = NMBackend::Instance();
@@ -340,7 +340,7 @@ NetworkWindowNM::~NetworkWindowNM()
 
 
 bool
-NetworkWindowNM::QuitRequested()
+NetworkWindow::QuitRequested()
 {
 	be_app->PostMessage(B_QUIT_REQUESTED);
 	return true;
@@ -348,7 +348,7 @@ NetworkWindowNM::QuitRequested()
 
 
 void
-NetworkWindowNM::MessageReceived(BMessage* message)
+NetworkWindow::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case kMsgInitialDeviceScan:
@@ -465,7 +465,7 @@ NetworkWindowNM::MessageReceived(BMessage* message)
 
 
 void
-NetworkWindowNM::_RequestDeviceScan()
+NetworkWindow::_RequestDeviceScan()
 {
 	NMBackend* backend = NMBackend::Instance();
 	if (backend == NULL)
@@ -481,7 +481,7 @@ NetworkWindowNM::_RequestDeviceScan()
 
 
 void
-NetworkWindowNM::_PopulateDeviceList(BMessage* devices)
+NetworkWindow::_PopulateDeviceList(BMessage* devices)
 {
 	// Capture the current selection's stable identifier (D-Bus object path)
 	// before tearing the list down -- NM notifications repopulate this list
@@ -642,7 +642,7 @@ NetworkWindowNM::_PopulateDeviceList(BMessage* devices)
 // caller restore the previously-selected VPN row across a repopulate the
 // same way it does for devices.
 BListItem*
-NetworkWindowNM::_PopulateVPNList(const BString& previousSelectionPath)
+NetworkWindow::_PopulateVPNList(const BString& previousSelectionPath)
 {
 	if (fVPNItem == NULL)
 		return NULL;
@@ -688,7 +688,7 @@ NetworkWindowNM::_PopulateVPNList(const BString& previousSelectionPath)
 
 
 void
-NetworkWindowNM::_SelectItem(BListItem* item)
+NetworkWindow::_SelectItem(BListItem* item)
 {
 	DeviceListItem* deviceItem = dynamic_cast<DeviceListItem*>(item);
 	VPNListItem* vpnItem = dynamic_cast<VPNListItem*>(item);
@@ -746,7 +746,7 @@ NetworkWindowNM::_SelectItem(BListItem* item)
 
 // Show() and Hide() nest, so set each pane's state rather than toggling it.
 void
-NetworkWindowNM::_ShowPane(BView* pane)
+NetworkWindow::_ShowPane(BView* pane)
 {
 	BView* panes[] = { fDetailView, fMobileView, fProxyView };
 	for (BView* view : panes) {
@@ -763,7 +763,7 @@ NetworkWindowNM::_ShowPane(BView* pane)
 
 // Revert acts on the visible detail pane, and only when it is dirty.
 void
-NetworkWindowNM::_UpdateRevertButton()
+NetworkWindow::_UpdateRevertButton()
 {
 	bool dirty = false;
 	if (fProxyView != NULL && !fProxyView->IsHidden())
@@ -781,7 +781,7 @@ NetworkWindowNM::_UpdateRevertButton()
 
 
 void
-NetworkWindowNM::_RevertSettings()
+NetworkWindow::_RevertSettings()
 {
 	if (fProxyView != NULL && !fProxyView->IsHidden())
 		fProxyView->Revert();
@@ -794,13 +794,13 @@ NetworkWindowNM::_RevertSettings()
 
 
 // Name the NetworkStatusView archives itself under (see
-// NetworkStatusViewNM.cpp's BView constructor) -- BDeskbar's item-lookup
+// NetworkStatusView.cpp's BView constructor) -- BDeskbar's item-lookup
 // API here works by that name rather than by entry_ref/signature.
 static const char* kNetworkStatusDeskbarItemName = "NetworkStatus";
 
 
 void
-NetworkWindowNM::_ToggleReplicant()
+NetworkWindow::_ToggleReplicant()
 {
 	BDeskbar deskbar;
 	status_t status = B_OK;
@@ -843,7 +843,7 @@ NetworkWindowNM::_ToggleReplicant()
 
 
 bool
-NetworkWindowNM::_IsReplicantInstalled()
+NetworkWindow::_IsReplicantInstalled()
 {
 	BDeskbar deskbar;
 	return deskbar.HasItem(kNetworkStatusDeskbarItemName);

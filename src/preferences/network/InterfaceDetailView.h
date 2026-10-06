@@ -29,7 +29,7 @@ class StaticIPView;
 // snapshot handed in by SetToVPN().
 //
 // Owns the embedded StaticIPView so its Apply/Revert dirty state
-// can be surfaced to NetworkWindowNM's single Revert button -- a
+// can be surfaced to NetworkWindow's single Revert button -- a
 // separate modal dialog would put that state a window away from the button
 // that needs it.
 class InterfaceDetailView : public BView {

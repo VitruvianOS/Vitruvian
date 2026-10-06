@@ -1,7 +1,7 @@
 Application(Network
 	SOURCES
 	Network.cpp
-	NetworkWindowNM.cpp
+	NetworkWindow.cpp
 	InterfaceDetailView.cpp
 	MobileBroadbandView.cpp
 	StaticIPView.cpp

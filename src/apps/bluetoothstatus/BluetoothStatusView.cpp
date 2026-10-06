@@ -40,6 +40,7 @@
 #include "BluetoothStatus.h"
 #include "PairingDialogWindow.h"
 
+#include <BluetoothPreflet.h>
 #include <BluetoothSettings.h>
 #include <ObexReceiveAgent.h>
 
@@ -260,10 +261,6 @@ BluetoothStatusView::MessageReceived(BMessage* message)
 			{
 				_ScanDevices();
 			}
-			break;
-
-		case kMsgScanReady:
-			// TODO: Show discovered devices in popup menu (see _ScanDevices).
 			break;
 
 		case kMsgOperationDone:
@@ -698,7 +695,9 @@ BluetoothStatusView::_BuildDebugDialogMenu(BMenu* parent)
 void
 BluetoothStatusView::_ScanDevices()
 {
-	RemoteDevice::FetchAllAsync(BMessenger(this), kMsgScanReady);
+	// Scanning lives in the preflet's inquiry panel.
+	BMessage openInquiry(kMsgOpenInquiry);
+	be_roster->Launch("application/x-vnd.Haiku-Bluetooth", &openInquiry);
 }
 
 

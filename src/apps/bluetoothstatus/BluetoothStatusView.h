@@ -33,7 +33,6 @@ enum {
 	kMsgDisableAdapter = 'DISB',
 	kMsgOpenBluetoothPreferences = 'obtp',
 	kMsgStatusReady = 'btsr',
-	kMsgScanReady = 'btcr',
 	kMsgOperationDone = 'btod',
 
 	// Single well-defined entry point for pairing dialog results. The real

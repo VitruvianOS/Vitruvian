@@ -5,7 +5,7 @@ get_base_packages() {
     case "$_arch" in
         amd64)
             printf '%s' \
-                "apt-utils dialog linux-image-rt-amd64 systemd-sysv" \
+                "apt-utils dialog linux-image-rt-amd64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
@@ -21,7 +21,7 @@ get_base_packages() {
             ;;
         arm64)
             printf '%s' \
-                "apt-utils dialog linux-image-arm64 systemd-sysv" \
+                "apt-utils dialog linux-image-arm64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
@@ -33,7 +33,7 @@ get_base_packages() {
             ;;
         arm32)
             printf '%s' \
-                "apt-utils dialog linux-image-armmp systemd-sysv" \
+                "apt-utils dialog linux-image-armmp systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults" \
@@ -45,7 +45,7 @@ get_base_packages() {
             ;;
         riscv64)
             printf '%s' \
-                "apt-utils dialog linux-image-riscv64 systemd-sysv" \
+                "apt-utils dialog linux-image-riscv64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \

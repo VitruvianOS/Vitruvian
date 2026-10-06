@@ -10,7 +10,8 @@
 #include <String.h>
 #include <Window.h>
 
-#include "BluetoothSettings.h"
+#include <BluetoothPreflet.h>
+#include <BluetoothSettings.h>
 
 
 class BButton;
@@ -38,6 +39,7 @@ private:
 	void _ApplyPropertyChanged(BMessage* message);
 	void _ShowNoAdapterState();
 	void _ShowLoadingState();
+	void _OpenInquiryIfPending();
 
 	void _RebuildDeviceList(BMessage* devicesReply);
 	class DeviceListItem* _SelectedDevice();
@@ -100,6 +102,8 @@ private:
 	BString fAdapterPath;
 	bool fHasAdapter;
 	bool fAdapterPowered;
+	// Pending kMsgOpenInquiry, 0 if none.
+	bigtime_t fOpenInquiryDeadline;
 
 	// Shared with fSettingsView -- see BluetoothSettingsView.h's constructor
 	// comment for why it isn't a private copy on each side.

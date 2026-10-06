@@ -46,6 +46,7 @@
 static const uint32 kMsgToggleReplicant = 'trep';
 static const uint32 kMsgReplicantToggled = 'trpd';
 static const uint32 kMsgInitialScan = 'inis';
+static const bigtime_t kOpenInquiryTimeout = 10000000;
 static const uint32 kMsgStatusReady = 'btst';
 static const uint32 kMsgAdapterOpDone = 'btao';
 static const uint32 kMsgOperationDone = 'btod';
@@ -86,7 +87,8 @@ BluetoothWindow::BluetoothWindow()
 			| B_AUTO_UPDATE_SIZE_LIMITS),
 	fReplicantOpPending(false),
 	fHasAdapter(false),
-	fAdapterPowered(false)
+	fAdapterPowered(false),
+	fOpenInquiryDeadline(0)
 {
 	fPoweredCheckBox = new BCheckBox("powered", B_TRANSLATE("Powered"),
 		new BMessage(kMsgTogglePowered));
@@ -319,6 +321,11 @@ BluetoothWindow::MessageReceived(BMessage* message)
 			_DoAdd();
 			break;
 
+		case kMsgOpenInquiry:
+			fOpenInquiryDeadline = system_time() + kOpenInquiryTimeout;
+			_OpenInquiryIfPending();
+			break;
+
 		case kMsgRemove:
 			_DoRemove();
 			break;
@@ -438,6 +445,28 @@ BluetoothWindow::_ApplyStatusUpdate(BMessage* message)
 	_RebuildDeviceList(&devicesReply);
 
 	_UpdateButtons();
+	_OpenInquiryIfPending();
+}
+
+
+void
+BluetoothWindow::_OpenInquiryIfPending()
+{
+	// The first status can predate BlueZ enumeration: keep the request
+	// until an adapter shows up or it expires.
+	if (fOpenInquiryDeadline == 0)
+		return;
+
+	if (system_time() > fOpenInquiryDeadline) {
+		fOpenInquiryDeadline = 0;
+		return;
+	}
+
+	if (!fHasAdapter)
+		return;
+
+	fOpenInquiryDeadline = 0;
+	_DoAdd();
 }
 
 

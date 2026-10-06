@@ -5,6 +5,7 @@
 
 
 #include <Application.h>
+#include <Message.h>
 #include <Window.h>
 
 #include "BluetoothWindow.h"
@@ -24,12 +25,21 @@ public:
 
 public:
 	virtual	void				ReadyToRun();
+	virtual	void				MessageReceived(BMessage* message);
+
+private:
+			void				_OpenInquiry();
+
+			BluetoothWindow*	fWindow;
+			bool				fPendingOpenInquiry;
 };
 
 
 Application::Application()
 	:
-	BApplication(kSignature)
+	BApplication(kSignature),
+	fWindow(NULL),
+	fPendingOpenInquiry(false)
 {
 }
 
@@ -37,8 +47,38 @@ Application::Application()
 void
 Application::ReadyToRun()
 {
-	BluetoothWindow* window = new BluetoothWindow();
-	window->Show();
+	fWindow = new BluetoothWindow();
+	fWindow->Show();
+
+	if (fPendingOpenInquiry) {
+		fPendingOpenInquiry = false;
+		fWindow->PostMessage(kMsgOpenInquiry);
+	}
+}
+
+
+void
+Application::MessageReceived(BMessage* message)
+{
+	if (message->what == kMsgOpenInquiry) {
+		_OpenInquiry();
+		return;
+	}
+
+	BApplication::MessageReceived(message);
+}
+
+
+void
+Application::_OpenInquiry()
+{
+	// On a cold start this arrives before ReadyToRun creates the window.
+	if (fWindow == NULL) {
+		fPendingOpenInquiry = true;
+		return;
+	}
+
+	fWindow->PostMessage(kMsgOpenInquiry);
 }
 
 

@@ -1,13 +1,29 @@
  #  Copyright 2019-2026, Dario Casalinuovo. All rights reserved.
  #  Distributed under the terms of the LGPL License.
 
-# install() helpers: all targets use the "runtime" component so
-# CPACK_DEB_COMPONENT_INSTALL can split them cleanly from "dev".
+# install() helpers. The destination picks the package: vos-dev for the
+# development tree, vos-data for data and configuration, vos for the rest.
+function( VosComponentFor dest outvar )
+	if(dest MATCHES "^/system/develop(/|$)")
+		set(${outvar} dev PARENT_SCOPE)
+	elseif(dest MATCHES "^/(etc|usr/share|usr/lib/tmpfiles\\.d|system/data|system/settings)(/|$)")
+		set(${outvar} data PARENT_SCOPE)
+	else()
+		set(${outvar} runtime PARENT_SCOPE)
+	endif()
+endfunction()
 
 function( ImageInclude path )
 	foreach(arg IN LISTS ARGN)
+		# Static libraries are only for linking.
+		get_target_property(_type ${arg} TYPE)
+		if(_type STREQUAL "STATIC_LIBRARY")
+			set(_component dev)
+		else()
+			set(_component runtime)
+		endif()
 		install(TARGETS ${arg}
-			COMPONENT runtime
+			COMPONENT ${_component}
 			ARCHIVE DESTINATION ${path}
 			RUNTIME DESTINATION ${path}
 			LIBRARY DESTINATION ${path}
@@ -24,17 +40,20 @@ function( ImageInclude path )
 endfunction()
 
 function( ImageIncludeFile source dest )
-	install(FILES ${source} DESTINATION ${dest} COMPONENT runtime)
+	VosComponentFor("${dest}" _component)
+	install(FILES ${source} DESTINATION ${dest} COMPONENT ${_component})
 endfunction()
 
 function( ImageIncludeDir source dest )
 	# Preserve +x on shipped scripts (e.g. /system/boot/first_login/*).
+	VosComponentFor("${dest}" _component)
 	install(DIRECTORY ${source} DESTINATION ${dest} USE_SOURCE_PERMISSIONS
-		COMPONENT runtime)
+		COMPONENT ${_component})
 endfunction()
 
 function( ImageCreateDir dest )
-	install(DIRECTORY DESTINATION ${dest} COMPONENT runtime)
+	VosComponentFor("${dest}" _component)
+	install(DIRECTORY DESTINATION ${dest} COMPONENT ${_component})
 endfunction()
 
 include(build/baseimage.cmake)
@@ -156,7 +175,6 @@ SET(CPACK_DEB_COMPONENT_INSTALL ON)
 # lower case they are silently ignored and the debs come out named
 # vos-runtime / vos-dev-dev.
 set(CPACK_DEBIAN_RUNTIME_PACKAGE_NAME "vos")
-set(CPACK_DEBIAN_RUNTIME_PACKAGE_DEPENDS "${CORE_DEPS}")
 set(CPACK_DEBIAN_RUNTIME_PACKAGE_CONTROL_EXTRA
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/postinst"
 	"${CMAKE_CURRENT_SOURCE_DIR}/data/debian/prerm"
@@ -171,10 +189,25 @@ else()
 	set(_vos_runtime_version "${PROJECT_VERSION}")
 endif()
 
+set(CPACK_DEBIAN_RUNTIME_PACKAGE_DEPENDS
+	"${CORE_DEPS}, vos-data (= ${_vos_runtime_version})")
+
 set(CPACK_DEBIAN_DEV_PACKAGE_NAME "vos-dev")
 set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "vos (= ${_vos_runtime_version})")
 set(CPACK_DEBIAN_DEV_PACKAGE_DESCRIPTION
-	"V\\\\OS development files: public headers and pkg-config")
+	"V\\\\OS development files: public headers, static libraries and pkg-config")
+
+# Data and configuration: the same bytes on every architecture.
+set(CPACK_DEBIAN_DATA_PACKAGE_NAME "vos-data")
+set(CPACK_DEBIAN_DATA_PACKAGE_ARCHITECTURE "all")
+set(CPACK_DEBIAN_DATA_PACKAGE_DESCRIPTION
+	"V\\\\OS data and configuration: catalogs, fonts, MIME database and system settings")
+
+# These files used to ship in vos itself.
+set(CPACK_DEBIAN_DATA_PACKAGE_REPLACES "vos (<< ${_vos_runtime_version})")
+set(CPACK_DEBIAN_DATA_PACKAGE_BREAKS "vos (<< ${_vos_runtime_version})")
+set(CPACK_DEBIAN_DEV_PACKAGE_REPLACES "vos (<< ${_vos_runtime_version})")
+set(CPACK_DEBIAN_DEV_PACKAGE_BREAKS "vos (<< ${_vos_runtime_version})")
 
 # Make `ninja clean` (and `make clean`) wipe CPack outputs too. CPack writes
 # its artifacts into the build root, so they normally survive `clean` and
@@ -185,10 +218,11 @@ set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}.deb"
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-runtime.deb"
 		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-dev.deb"
+		"${CMAKE_BINARY_DIR}/${CPACK_PACKAGE_FILE_NAME}-data.deb"
 )
 
-# vos-dev component: public headers + pkg-config. The libraries are vos's,
-# in /usr/lib, where the linker already looks.
+# vos-dev component: public headers + pkg-config. The shared libraries are
+# vos's, in /usr/lib, where the linker already looks.
 
 # Install public headers under /usr/include/vos/ so external builds
 # use the same include patterns as in-tree builds.

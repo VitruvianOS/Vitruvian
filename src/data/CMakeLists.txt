@@ -98,4 +98,5 @@ add_custom_command(
 add_custom_target(mime_db_tar ALL DEPENDS ${MIME_TAR})
 
 install(FILES ${MIME_TAR}
-	DESTINATION /usr/share/vos)
+	DESTINATION /usr/share/vos
+	COMPONENT data)

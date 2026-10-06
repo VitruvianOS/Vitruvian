@@ -90,6 +90,7 @@ macro( DoCatalogs signature subdir )
 
 	install( DIRECTORY "${_catalog_dir}/"
 		DESTINATION "/system/data/locale/catalogs/${signature}"
+		COMPONENT data
 		FILES_MATCHING PATTERN "*.catalog"
 	)
 endmacro()

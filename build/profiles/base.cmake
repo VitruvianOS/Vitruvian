@@ -215,7 +215,7 @@ add_custom_target(apps_attrs ALL
     COMMENT "Packaging app attrs"
 )
 
-install(FILES "${_TAR}" DESTINATION /usr/share/vos)
+install(FILES "${_TAR}" DESTINATION /usr/share/vos COMPONENT data)
 
 
 # Tracker "New" templates need BEOS:TYPE xattrs so Tracker's New submenu
@@ -257,4 +257,4 @@ add_custom_target(templates_attrs ALL
     COMMENT "Packaging Tracker template attrs"
 )
 
-install(FILES "${_TPL_TAR}" DESTINATION /usr/share/vos)
+install(FILES "${_TPL_TAR}" DESTINATION /usr/share/vos COMPONENT data)

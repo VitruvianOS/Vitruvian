@@ -16,7 +16,7 @@ set(SYSTEMD_SERVICES
 )
 
 install(FILES data/tmpfiles.d/vos.conf
-  DESTINATION /usr/lib/tmpfiles.d/)
+  DESTINATION /usr/lib/tmpfiles.d/ COMPONENT data)
 
 install(PROGRAMS data/libexec/vos-firstboot-commit
   DESTINATION /usr/libexec/)
@@ -35,19 +35,19 @@ install(PROGRAMS data/libexec/vos-fsck-failed
 install(PROGRAMS data/initramfs-tools/hooks/vos-fsck
   DESTINATION /usr/share/initramfs-tools/hooks/)
 install(DIRECTORY data/systemd/systemd-fsck-root.service.d
-  DESTINATION /etc/systemd/system/)
+  DESTINATION /etc/systemd/system/ COMPONENT data)
 install(DIRECTORY data/systemd/systemd-fsck@.service.d
-  DESTINATION /etc/systemd/system/)
+  DESTINATION /etc/systemd/system/ COMPONENT data)
 
 install(FILES data/etc/installer/excludes.list
-  DESTINATION /usr/share/vos/installer/)
+  DESTINATION /usr/share/vos/installer/ COMPONENT data)
 
 # update-grub must yield rw root and keep the Safe Mode/Debug entries.
 # 40_vos goes to /etc/grub.d, and /etc/default/grub is left to the image and installer writers.
 install(PROGRAMS data/etc/grub.d/40_vos
   DESTINATION /etc/grub.d/)
 install(FILES data/etc/default/grub
-  DESTINATION /usr/share/vos/grub/)
+  DESTINATION /usr/share/vos/grub/ COMPONENT data)
 
 install(PROGRAMS data/libexec/vos-set-autologin
   DESTINATION /usr/libexec/)
@@ -56,85 +56,85 @@ install(PROGRAMS data/libexec/vos-admin-helper
 install(PROGRAMS data/libexec/vos-user-helper
   DESTINATION /usr/libexec/)
 install(FILES data/share/vos/user-default-groups
-  DESTINATION /usr/share/vos/)
+  DESTINATION /usr/share/vos/ COMPONENT data)
 install(FILES data/polkit-1/actions/org.vitruvian.user.policy
-  DESTINATION /usr/share/polkit-1/actions/)
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 install(PROGRAMS data/libexec/vos-set-power-actions
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.power.policy
-  DESTINATION /usr/share/polkit-1/actions/)
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 install(FILES data/polkit-1/actions/org.vitruvian.admin.policy
-  DESTINATION /usr/share/polkit-1/actions/)
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 install(FILES data/polkit-1/actions/org.vitruvian.installer.policy
-  DESTINATION /usr/share/polkit-1/actions/)
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 install(FILES data/polkit-1/rules.d/49-vitruvian-installer.rules
-  DESTINATION /usr/share/polkit-1/rules.d/)
+  DESTINATION /usr/share/polkit-1/rules.d/ COMPONENT data)
 
 install(PROGRAMS data/libexec/vos-drivesetup-helper
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.drivesetup.policy
-  DESTINATION /usr/share/polkit-1/actions/)
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
 install(PROGRAMS data/libexec/vos-drivesetup-query
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.drivesetup-query.policy
-  DESTINATION /usr/share/polkit-1/actions/)
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
 install(PROGRAMS data/libexec/privilegedguy-helper
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.privilegedguy.policy
-  DESTINATION /usr/share/polkit-1/actions/)
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
 install(PROGRAMS data/libexec/vos-apt-helper
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.packagemanager.policy
-  DESTINATION /usr/share/polkit-1/actions/)
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
 # Apt proxy drop-in helper; session vars come from config/settings.
 install(PROGRAMS data/libexec/vos-set-proxy
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.network.proxy.policy
-  DESTINATION /usr/share/polkit-1/actions/)
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
 # Consulted only when /etc/vos/live exists; Installer strips it on commit.
 install(FILES data/sudoers.d/vos-live
   DESTINATION /etc/sudoers.d/
-  PERMISSIONS OWNER_READ GROUP_READ)
+  PERMISSIONS OWNER_READ GROUP_READ COMPONENT data)
 
 install(FILES data/systemd/sleep.conf.d/50-vos.conf
-  DESTINATION /etc/systemd/sleep.conf.d/)
+  DESTINATION /etc/systemd/sleep.conf.d/ COMPONENT data)
 
 install(FILES data/systemd/logind.conf.d/50-vos.conf
-  DESTINATION /etc/systemd/logind.conf.d/)
+  DESTINATION /etc/systemd/logind.conf.d/ COMPONENT data)
 
 install(FILES data/etc/security/pwquality.conf.d/50-vos.conf
-  DESTINATION /etc/security/pwquality.conf.d/)
+  DESTINATION /etc/security/pwquality.conf.d/ COMPONENT data)
 
 ImageIncludeFile("data/pam.d/vitruvian-session" "/etc/pam.d")
 ImageIncludeFile("data/pam.d/vitruvian-greeter" "/etc/pam.d")
-install(FILES data/pam.d/vitruvian-auth DESTINATION /usr/share/vos/pam.d/)
+install(FILES data/pam.d/vitruvian-auth DESTINATION /usr/share/vos/pam.d/ COMPONENT data)
 
-install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/)
+install(FILES ${SYSTEMD_SERVICES} DESTINATION /etc/systemd/system/ COMPONENT data)
 
 # Inert unless vitruvian.safemode is on the kernel cmdline.
-install(FILES data/systemd/vos-safemode-logging.service DESTINATION /etc/systemd/system/)
+install(FILES data/systemd/vos-safemode-logging.service DESTINATION /etc/systemd/system/ COMPONENT data)
 
 # TTY-intermediate scaffolding — dormant unless enabled at runtime.
-install(FILES data/systemd/vos-session.service       DESTINATION /usr/share/vos/systemd/)
-install(FILES data/systemd/vos-polkit-agent.service  DESTINATION /usr/share/vos/systemd/)
-install(FILES data/profile.d/vos-session.sh          DESTINATION /usr/share/vos/profile.d/)
+install(FILES data/systemd/vos-session.service       DESTINATION /usr/share/vos/systemd/ COMPONENT data)
+install(FILES data/systemd/vos-polkit-agent.service  DESTINATION /usr/share/vos/systemd/ COMPONENT data)
+install(FILES data/profile.d/vos-session.sh          DESTINATION /usr/share/vos/profile.d/ COMPONENT data)
 install(PROGRAMS data/system/boot/vos-session-boot DESTINATION /system/servers/)
 
-install(FILES data/etc/systemd/journald.conf.d/vitruvian.conf DESTINATION /etc/systemd/journald.conf.d/)
+install(FILES data/etc/systemd/journald.conf.d/vitruvian.conf DESTINATION /etc/systemd/journald.conf.d/ COMPONENT data)
 
-install(FILES data/etc/ssh/sshd_config.d/10-vitruvian-paths.conf DESTINATION /etc/ssh/sshd_config.d/)
+install(FILES data/etc/ssh/sshd_config.d/10-vitruvian-paths.conf DESTINATION /etc/ssh/sshd_config.d/ COMPONENT data)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  install(FILES data/systemd/vos-sshdebug.service DESTINATION /etc/systemd/system/)
+  install(FILES data/systemd/vos-sshdebug.service DESTINATION /etc/systemd/system/ COMPONENT data)
 endif()
 
 # Read-only Linux befs driver; harmless if the kernel lacks the module.
-install(FILES data/etc/modules-load.d/befs.conf DESTINATION /etc/modules-load.d/)
+install(FILES data/etc/modules-load.d/befs.conf DESTINATION /etc/modules-load.d/ COMPONENT data)
 
 
 # Boot scripts
@@ -148,14 +148,14 @@ ImageIncludeFile("data/system/settings/fresh_install" "/system/settings")
 
 # Data files
 ImageIncludeDir("data/system/data/fortunes" "/system/data/")
-install(DIRECTORY "data/system/data/terminal_themes/" DESTINATION "/system/data/Terminal/Themes")
+install(DIRECTORY "data/system/data/terminal_themes/" DESTINATION "/system/data/Terminal/Themes" COMPONENT data)
 ImageIncludeDir("data/system/data/joysticks" "/system/data/")
 ImageIncludeDir("data/system/data/network" "/system/data/")
 ImageIncludeDir("data/system/data/licenses" "/system/data/")
 ImageIncludeDir("data/system/data/fonts" "/system/data/")
 ImageIncludeDir("data/system/data/KeyboardLayouts" "/system/data/")
 
-install(FILES "data/artwork/V_OS logo.png" DESTINATION "/system/data/artwork")
+install(FILES "data/artwork/V_OS logo.png" DESTINATION "/system/data/artwork" COMPONENT data)
 
 # Profile, inputrc, and profile.d scripts for Terminal
 ImageIncludeFile("data/etc/profile" "/system/settings/etc")
@@ -167,7 +167,7 @@ ImageIncludeFile("data/config/boot/UserBootscript" "/etc/skel/config/settings/bo
 ImageIncludeFile("data/config/boot/UserSetupEnvironment.sample" "/etc/skel/config/settings/boot")
 
 install(DIRECTORY DESTINATION /etc/skel/config/settings/ssh
-	DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+	DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE COMPONENT data)
 
 # The first_login marker is written by /system/boot/first_login/* on first
 # successful run. Do NOT ship it — that would signal "already provisioned".
@@ -184,5 +184,5 @@ ImageIncludeFile("data/bin/userguide" "/bin")
 ImageIncludeFile("data/bin/welcome" "/bin")
 
 # Build files
-ImageIncludeFile("data/develop/makefile-engine" "/etc")
-ImageIncludeFile("data/develop/vos.specs" "/etc")
+install(FILES data/develop/makefile-engine DESTINATION /etc COMPONENT dev)
+install(FILES data/develop/vos.specs DESTINATION /etc COMPONENT dev)

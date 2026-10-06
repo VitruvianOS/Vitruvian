@@ -16,6 +16,10 @@ on:
       board_types: { type: string, default: "" }
       # Compile against the runner's own libraries first, in its own tree.
       native:      { type: boolean, default: false }
+      base_suite:  { type: string, default: testing }
+      # Apt suite the images follow for V\OS updates; empty for an arch
+      # the repo does not carry (board builds refuse an empty repo).
+      repo_suite:  { type: string, default: testing-nightly }
       rev:         { type: string, required: true }
     outputs:
       failed_step:
@@ -35,6 +39,9 @@ jobs:
       boards: ${{ steps.report.outputs.boards }}
     env:
       VOS_PKG_REV: ${{ inputs.rev }}
+      VOS_BASE_SUITE: ${{ inputs.base_suite }}
+      REPO_KEY_URL: https://repo.v-os.dev/repo-key.asc
+      REPO_KEY_FPR: 8276B9B78A0853D17CB0CB0E9B50324D1D38BE53
     steps:
       - name: Checkout repository
         id: checkout
@@ -62,6 +69,21 @@ jobs:
             rsync parted zstd dosfstools attr \
             ${{ inputs.native && 'libcairo2-dev libcups2-dev libgl1-mesa-dev libgbm-dev libglu1-mesa-dev libegl-dev libgl-dev' || '' }} \
             ${{ inputs.extra_pkgs }}
+
+      - name: Fetch the V\OS repo key
+        id: repokey
+        if: inputs.repo_suite != ''
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/vos-repo-key.asc"
+          curl -fsSL -o "$key" "$REPO_KEY_URL"
+          fpr=$(gpg --show-keys --with-colons "$key" | awk -F: '/^fpr/{print $10; exit}')
+          [ "$fpr" = "$REPO_KEY_FPR" ] || {
+            echo "repo key fingerprint $fpr, expected $REPO_KEY_FPR" >&2
+            exit 1
+          }
+          echo "VOS_REPO_KEY=$key" >> "$GITHUB_ENV"
+          echo "VOS_REPO_SUITE=${{ inputs.repo_suite }}" >> "$GITHUB_ENV"
 
       - name: Configure git safe.directory
         id: safedir
@@ -182,6 +204,7 @@ jobs:
           OUTCOMES: |
             checkout|Checkout repository|${{ steps.checkout.outcome }}
             deps|Install build dependencies|${{ steps.deps.outcome }}
+            repokey|Fetch the V\OS repo key|${{ steps.repokey.outcome }}
             safedir|Configure git safe.directory|${{ steps.safedir.outcome }}
             submodules|Init submodules|${{ steps.submodules.outcome }}
             buildtools|Build buildtools|${{ steps.buildtools.outcome }}
@@ -206,6 +229,7 @@ jobs:
           while IFS='|' read -r id label outcome; do
             [ -n "$id" ] || continue
             case "$id" in native_*) [ "${{ inputs.native }}" = true ] || continue ;; esac
+            [ "$id" = repokey ] && [ -z "${{ inputs.repo_suite }}" ] && continue
             [ "$id" = boards ] && [ "$boards" = none ] && continue
             shown="$outcome"
             { [ -z "$shown" ] || { [ -n "$failed" ] && [ "$shown" = skipped ]; }; } && shown="not reached"

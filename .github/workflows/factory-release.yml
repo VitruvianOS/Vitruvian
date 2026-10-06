@@ -105,6 +105,8 @@ jobs:
       arch: riscv64
       runner: ubuntu-latest
       build_dir: generated.riscv64
+      # testing-nightly carries no riscv64 packages.
+      repo_suite: ""
       image_types: iso,raw
       board_types: visionfive2
       extra_pkgs: gcc-riscv64-linux-gnu g++-riscv64-linux-gnu qemu-user-static binfmt-support
@@ -155,7 +157,7 @@ jobs:
           gh release create "rev-$REV" \
             --repo "$FACTORY_REPO" \
             --title "rev-$REV" \
-            --notes "Built from ${{ github.repository }}@${{ github.sha }}${MISSING}" \
+            --notes "Built from ${{ github.repository }}@${{ github.sha }} on Debian testing; amd64 and arm64 images follow the testing-nightly repo.${MISSING}" \
             assets/*
 
       # Off for now. Set the repository variable TELEGRAM_ENABLED to 'true'

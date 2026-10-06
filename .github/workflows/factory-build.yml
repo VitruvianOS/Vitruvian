@@ -12,6 +12,8 @@ on:
       build_dir:   { type: string, required: true }
       image_types: { type: string, required: true }
       extra_pkgs:  { type: string, default: "" }
+      # Board images baked from the same tree; a failure leaves them out.
+      board_types: { type: string, default: "" }
       rev:         { type: string, required: true }
 
 jobs:
@@ -68,6 +70,12 @@ jobs:
 
       - name: Build images
         run: cd ${{ inputs.build_dir }} && ../bake build --image-type=${{ inputs.image_types }}
+
+      # Same compiled tree, so ninja has nothing left to do.
+      - name: Build board images
+        if: inputs.board_types != ''
+        continue-on-error: true
+        run: cd ${{ inputs.build_dir }} && ../bake build --image-type=${{ inputs.board_types }}
 
       - name: Compress RAW images
         run: |

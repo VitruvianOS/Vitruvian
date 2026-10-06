@@ -92,18 +92,8 @@ jobs:
       runner: ubuntu-24.04-arm
       build_dir: generated.arm64
       image_types: iso,raw
+      board_types: raspberry
       extra_pkgs: grub-efi-arm64-bin qemu-efi-aarch64
-      rev: ${{ needs.allocate.outputs.rev }}
-
-  raspberry:
-    needs: allocate
-    uses: ./.github/workflows/factory-build.yml
-    with:
-      name: raspberry
-      arch: arm64
-      runner: ubuntu-24.04-arm
-      build_dir: generated.rasp
-      image_types: raspberry
       rev: ${{ needs.allocate.outputs.rev }}
 
   riscv64:
@@ -115,13 +105,14 @@ jobs:
       runner: ubuntu-latest
       build_dir: generated.riscv64
       image_types: iso,raw
+      board_types: visionfive2
       extra_pkgs: gcc-riscv64-linux-gnu g++-riscv64-linux-gnu qemu-user-static binfmt-support
       rev: ${{ needs.allocate.outputs.rev }}
 
-  # amd64 and arm64 gate the rev; a failed raspberry or riscv64 build is
-  # left out and named in the release notes.
+  # amd64 and arm64 gate the rev; riscv64 and the board images are left
+  # out when they fail and named in the release notes.
   publish:
-    needs: [allocate, amd64, arm64, raspberry, riscv64]
+    needs: [allocate, amd64, arm64, riscv64]
     if: ${{ !cancelled() && needs.amd64.result == 'success' && needs.arm64.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -149,13 +140,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
           REV: ${{ needs.allocate.outputs.rev }}
-          RASPBERRY: ${{ needs.raspberry.result }}
           RISCV64: ${{ needs.riscv64.result }}
         run: |
           set -euo pipefail
           MISSING=""
-          [ "$RASPBERRY" = success ] || MISSING="$MISSING"$'\n'"raspberry: $RASPBERRY, not included"
           [ "$RISCV64" = success ] || MISSING="$MISSING"$'\n'"riscv64: $RISCV64, not included"
+          for board in arm64-raspberry riscv64-visionfive2; do
+            ls assets/*-"$board"-* >/dev/null 2>&1 \
+              || MISSING="$MISSING"$'\n'"$board: not built, not included"
+          done
           gh release create "rev-$REV" \
             --repo "$FACTORY_REPO" \
             --title "rev-$REV" \

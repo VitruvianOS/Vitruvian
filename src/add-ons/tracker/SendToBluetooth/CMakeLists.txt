@@ -6,16 +6,13 @@ TrackerAddOn(
 
 	SOURCES
 	SendToBluetooth.cpp
-	${CMAKE_SOURCE_DIR}/src/kits/bluetooth/private/ObexSendChooser.cpp
-	${CMAKE_SOURCE_DIR}/src/kits/bluetooth/private/ObexTransferWindow.cpp
 
-	LIBS be tracker
+	LIBS be bluetoothui tracker
 
 	RDEF SendToBluetooth.rdef
 )
 
 target_include_directories(SendToBluetooth PRIVATE
 	${CMAKE_SOURCE_DIR}/headers/private/bluetooth
-	${CMAKE_SOURCE_DIR}/src/kits/bluetooth/libbluetooth
 )
 UsePrivateHeaders(SendToBluetooth tracker shared interface storage support)

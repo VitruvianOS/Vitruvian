@@ -3,7 +3,7 @@
  * Distributed under the terms of the MIT License.
  */
 
-#include "BluetoothSettings.h"
+#include <BluetoothSettings.h>
 
 
 // Matches the slider's lower bound (BluetoothSettingsView), not

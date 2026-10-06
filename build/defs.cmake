@@ -23,8 +23,10 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 # Build flags
-set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -ggdb")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g0")
+# Debug carries the runtime checks; fortify needs optimization, hence -Og.
+# Release is unchecked whatever the host compiler defaults to.
+set(CMAKE_CXX_FLAGS_DEBUG   "-Og -ggdb -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g0 -U_FORTIFY_SOURCE")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 

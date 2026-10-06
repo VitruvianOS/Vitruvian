@@ -130,7 +130,7 @@ jobs:
         run: |
           mkdir -p ${{ matrix.build_dir }}
           cd ${{ matrix.build_dir }}
-          ../configure --arch=${{ matrix.arch }} --build-type=Release \
+          ../configure --arch=${{ matrix.arch }} --build-type=Debug \
                        --chroot-build --buildtools=../buildtools
 
       - name: Build ISO + RAW images

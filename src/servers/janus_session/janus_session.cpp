@@ -27,6 +27,7 @@
 
 extern "C" {
 #include <libseat.h>
+#include <libudev.h>
 #include <security/pam_appl.h>
 }
 
@@ -992,6 +993,202 @@ init_seat()
 }
 
 
+static const bigtime_t kUdevSettleUsec = 30 * 1000000LL;
+static const bigtime_t kDrmCardWaitUsec = 5 * 1000000LL;
+
+
+static bool
+drm_card_present()
+{
+	for (int i = 0; i <= 9; i++) {
+		char path[64];
+		snprintf(path, sizeof(path), "/dev/dri/card%d", i);
+		if (access(path, F_OK) == 0)
+			return true;
+	}
+	return false;
+}
+
+
+static bool
+kernel_cmdline_has(const char* option)
+{
+	char cmdline[4096];
+	int fd = open("/proc/cmdline", O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+		return false;
+	ssize_t n = read(fd, cmdline, sizeof(cmdline) - 1);
+	close(fd);
+	if (n <= 0)
+		return false;
+	cmdline[n] = '\0';
+
+	char* save = NULL;
+	for (char* token = strtok_r(cmdline, " \n", &save); token != NULL;
+			token = strtok_r(NULL, " \n", &save)) {
+		if (strcmp(token, option) == 0)
+			return true;
+	}
+	return false;
+}
+
+
+static void
+console_message(const char* text)
+{
+	int fd = open("/dev/console", O_WRONLY | O_NOCTTY | O_CLOEXEC);
+	if (fd < 0)
+		return;
+	(void)write(fd, text, strlen(text));
+	close(fd);
+}
+
+
+static bool
+is_drm_card(struct udev_device* device)
+{
+	// Connectors are drm devices too ("card0-eDP-1").
+	const char* name = udev_device_get_sysname(device);
+	return name != NULL && strncmp(name, "card", 4) == 0
+		&& strchr(name, '-') == NULL;
+}
+
+
+// Coldplug loads the GPU driver; wait until udev has worked through it.
+static void
+wait_for_udev_settle(struct udev* udev)
+{
+	struct udev_queue* queue = udev_queue_new(udev);
+	if (queue == NULL)
+		return;
+
+	bigtime_t start = system_time();
+	bool settled = false;
+	while (!drm_card_present()
+		&& system_time() - start < kUdevSettleUsec) {
+		if (udev_queue_get_udev_is_active(queue)
+			&& udev_queue_get_queue_is_empty(queue)) {
+			settled = true;
+			break;
+		}
+		usleep(100 * 1000);
+	}
+	if (!settled && !drm_card_present()) {
+		fprintf(stderr, "janus_session: udev not settled after %" B_PRId64
+			" s\n", kUdevSettleUsec / 1000000);
+	}
+	udev_queue_unref(queue);
+}
+
+
+// Says why no card came: a display device without a driver, or none at all.
+static void
+report_missing_gpu(struct udev* udev)
+{
+	bool unbound = false;
+	struct udev_enumerate* e = udev_enumerate_new(udev);
+	if (e != NULL) {
+		udev_enumerate_add_match_subsystem(e, "pci");
+		udev_enumerate_scan_devices(e);
+		struct udev_list_entry* entry;
+		udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(e)) {
+			struct udev_device* device = udev_device_new_from_syspath(udev,
+				udev_list_entry_get_name(entry));
+			if (device == NULL)
+				continue;
+			const char* cls = udev_device_get_sysattr_value(device, "class");
+			if (cls != NULL && strncmp(cls, "0x03", 4) == 0
+				&& udev_device_get_driver(device) == NULL) {
+				const char* model = udev_device_get_property_value(device,
+					"ID_MODEL_FROM_DATABASE");
+				char line[256];
+				snprintf(line, sizeof(line), "Graphics device %s (%s) has no "
+					"driver; using the firmware framebuffer.\n",
+					udev_device_get_sysname(device),
+					model != NULL ? model : "unknown");
+				fprintf(stderr, "janus_session: %s", line);
+				console_message(line);
+				unbound = true;
+			}
+			udev_device_unref(device);
+		}
+		udev_enumerate_unref(e);
+	}
+	if (!unbound) {
+		static const char* kLine
+			= "No graphics driver found; using the firmware framebuffer.\n";
+		fprintf(stderr, "janus_session: %s", kLine);
+		console_message(kLine);
+	}
+}
+
+
+// The GPU driver can bind after we start; fbdev would leave app_server on
+// a framebuffer the driver then removes.
+static void
+wait_for_drm_card()
+{
+	if (kernel_cmdline_has("nomodeset")) {
+		console_message("Safe Mode: using the firmware framebuffer.\n");
+		return;
+	}
+	if (drm_card_present()) {
+		printf("janus_session: DRM device present at start\n");
+		return;
+	}
+
+	struct udev* udev = udev_new();
+	if (udev == NULL) {
+		fprintf(stderr, "janus_session: no DRM device and no udev; "
+			"using fbdev\n");
+		return;
+	}
+
+	printf("janus_session: no DRM device yet; waiting for the GPU driver\n");
+	console_message("Waiting for the graphics driver...\n");
+	bigtime_t start = system_time();
+
+	// Listen before looking, or a card added in between is missed.
+	struct udev_monitor* monitor = udev_monitor_new_from_netlink(udev, "udev");
+	if (monitor != NULL) {
+		udev_monitor_filter_add_match_subsystem_devtype(monitor, "drm", NULL);
+		udev_monitor_enable_receiving(monitor);
+	}
+
+	wait_for_udev_settle(udev);
+
+	// Some drivers finish probing after udev is done with them.
+	bigtime_t graceStart = system_time();
+	bool found = drm_card_present();
+	while (!found && monitor != NULL) {
+		bigtime_t left = kDrmCardWaitUsec - (system_time() - graceStart);
+		if (left <= 0)
+			break;
+		struct pollfd pfd = { udev_monitor_get_fd(monitor), POLLIN, 0 };
+		if (poll(&pfd, 1, (int)(left / 1000) + 1) <= 0)
+			continue;
+		struct udev_device* device = udev_monitor_receive_device(monitor);
+		if (device == NULL)
+			continue;
+		const char* action = udev_device_get_action(device);
+		found = action != NULL && strcmp(action, "add") == 0
+			&& is_drm_card(device);
+		udev_device_unref(device);
+	}
+	found = found || drm_card_present();
+
+	if (found) {
+		printf("janus_session: DRM device appeared after %" B_PRId64 " ms\n",
+			(system_time() - start) / 1000);
+	} else
+		report_missing_gpu(udev);
+
+	if (monitor != NULL)
+		udev_monitor_unref(monitor);
+	udev_unref(udev);
+}
+
+
 static bool
 open_drm_device()
 {
@@ -1076,6 +1273,15 @@ fire_and_wait(const char* name)
 }
 
 
+// Fired by main, before the GPU wait.
+static void
+wait_for_registrar()
+{
+	if (!wait_for_server_ready("registrar", 5000))
+		fprintf(stderr, "janus_session: registrar not ready in 5s\n");
+}
+
+
 static void*
 fanout_thread(void*)
 {
@@ -1084,14 +1290,14 @@ fanout_thread(void*)
 			access("/var/lib/vos/first-boot-done", F_OK) == 0
 				? "vitruvian-login" : "FirstBootPrompt";
 
-		fire_and_wait("registrar");
+		wait_for_registrar();
 		fire_and_wait("app_server");
 		// Fired explicitly, or app_server self-launches it as an untracked
 		// orphan child that survives this session's teardown.
 		fire_and_wait("input_server");
 		fire_and_wait(frontend);
 	} else {
-		fire_and_wait("registrar");
+		wait_for_registrar();
 		fire_and_wait("app_server");
 
 		// vos-polkit-agent is non-greeter only: it registers itself as the
@@ -1530,11 +1736,6 @@ main(int argc, char** argv)
 	if (sSeatWakeFd < 0)
 		fprintf(stderr, "janus_session: eventfd: %s\n", strerror(errno));
 
-	if (!init_seat())
-		fprintf(stderr, "janus_session: running without seat session\n");
-	else
-		open_drm_device();
-
 	// A unique local port per instance, not the supervisor's well-known name.
 	snprintf(sLaunchPortName, sizeof(sLaunchPortName),
 		"vos:janus_session_launch.%d", (int)getpid());
@@ -1568,6 +1769,16 @@ main(int argc, char** argv)
 			fprintf(stderr, "janus_session: supervisor port not found at startup\n");
 		}
 	}
+
+	// The registrar needs no display, so it starts during the wait. The wait
+	// precedes the seat, which switches the console to graphics.
+	fire_launch("registrar");
+	wait_for_drm_card();
+
+	if (!init_seat())
+		fprintf(stderr, "janus_session: running without seat session\n");
+	else
+		open_drm_device();
 
 	spawn_fanout();
 	if (!sGreeterMode)

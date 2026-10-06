@@ -7,7 +7,7 @@ Server(janus_session
 	SOURCES
 	janus_session.cpp
 
-	LIBS be ${SEAT_LIBRARIES} ${PAM_LIBRARIES} ${DRM_LIBRARIES}
+	LIBS be ${SEAT_LIBRARIES} ${PAM_LIBRARIES} ${DRM_LIBRARIES} ${UDEV_LIBRARIES}
 
 	RDEF janus_session.rdef
 

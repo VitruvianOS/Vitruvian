@@ -13,12 +13,14 @@
 
 #include "MediaPlay.h"
 #include "MediaTest.h"
+#include "MidiPlay.h"
 
 
 void print_usage()
 {
 	printf("Usage:\n");
 	printf("  media_client play <uri>\n");
+	printf("  media_client playmidi <uri>\n");
 	printf("  media_client test\n");
 	printf("  media_client dump\n");
 }
@@ -59,6 +61,11 @@ int main(int argc, char *argv[])
 			print_usage();
 		} else
 			ret = media_play(argv[2]);
+	} else if (strcmp(argv[1], "playmidi") == 0) {
+		if (argc < 3) {
+			print_usage();
+		} else
+			ret = media_midi_play(argv[2]);
 	} else if (strcmp(argv[1], "test") == 0)
 		media_test();
 	else if (strcmp(argv[1], "dump") == 0)

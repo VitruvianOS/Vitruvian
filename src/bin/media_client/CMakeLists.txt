@@ -3,5 +3,6 @@ Application(media_client
 	media_client.cpp
 	MediaPlay.cpp
 	MediaTest.cpp
-	LIBS media2
+	MidiPlay.cpp
+	LIBS media2 midi midi2
 )

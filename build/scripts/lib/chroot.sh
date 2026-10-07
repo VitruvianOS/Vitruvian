@@ -151,17 +151,7 @@ chroot_create() {
     _chroot_dir="$_basedir/image_tree/chroot"
 
     if [ -d "$_chroot_dir" ]; then
-        _ts=$(date +%Y%m%d-%H%M%S)
-        _backup="$_chroot_dir.old-$_ts"
-        log_info "Found existing chroot, moving to $_backup"
-        chroot_umount "$_chroot_dir"
-        # Keep only the most recent backup — older ones balloon disk usage.
-        for _stale in "$_chroot_dir".old-*; do
-            [ -e "$_stale" ] || continue
-            log_info "Removing stale chroot backup: $_stale"
-            sudo rm -rf "$_stale"
-        done
-        sudo mv "$_chroot_dir" "$_backup"
+        die "A chroot already exists at $_chroot_dir. Run bake.sh --regenerate-chroot to recreate it."
     fi
 
     mkdir -p "$_basedir/image_tree"
@@ -300,24 +290,15 @@ chroot_regenerate() {
     _arch="$2"
     _chroot_dir="$_basedir/image_tree/chroot"
 
-    if [ ! -d "$_chroot_dir" ]; then
-        log_info "No existing chroot at $_chroot_dir, creating fresh."
-        chroot_create "$_basedir" "$_arch"
-        return
+    if [ -d "$_chroot_dir" ]; then
+        log_step "Regenerating chroot..."
+        chroot_umount "$_chroot_dir"
+        # A bind mount still attached would let rm reach the host.
+        if findmnt -rn -o TARGET | grep -qF "$_chroot_dir/"; then
+            die "Still mounted under $_chroot_dir; unmount it and retry."
+        fi
+        sudo rm -rf --one-file-system "$_chroot_dir"
     fi
-
-    log_step "Regenerating chroot..."
-    chroot_umount "$_chroot_dir"
-
-    _ts=$(date +%Y%m%d-%H%M%S)
-    _backup="$_chroot_dir.old-$_ts"
-    # Keep only the most recent backup.
-    for _stale in "$_chroot_dir".old-*; do
-        [ -e "$_stale" ] || continue
-        log_info "Removing stale chroot backup: $_stale"
-        sudo rm -rf "$_stale"
-    done
-    sudo mv "$_chroot_dir" "$_backup"
 
     chroot_create "$_basedir" "$_arch"
 }

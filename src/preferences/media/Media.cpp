@@ -13,6 +13,7 @@
 #include <Path.h>
 #include <Screen.h>
 
+#include <algorithm>
 #include <stdio.h>
 
 #include "MediaMessages.h"
@@ -62,12 +63,16 @@ Application::ReadyToRun()
 				if (sscanf(buffer, "rect = %d,%d,%d,%d\nsection = %d",
 						&l, &t, &r, &b, &s) == 5) {
 					BRect saved(l, t, r, b);
-
-
-
+					BRect screen = BScreen().Frame();
 					if (r > l && b > t && saved.Width() >= 200.0f
 						&& saved.Height() >= 150.0f
-						&& saved.Intersects(BScreen().Frame())) {
+						&& saved.Intersects(screen)) {
+						// Pull a partly off-screen frame back on screen.
+						saved.OffsetBy(
+							std::max(0.0f, screen.left - saved.left)
+								+ std::min(0.0f, screen.right - saved.right),
+							std::max(0.0f, screen.top - saved.top)
+								+ std::min(0.0f, screen.bottom - saved.bottom));
 						rect = saved;
 						section = s;
 					}

@@ -8,12 +8,14 @@
 #include "MediaMessages.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <OS.h>
 
 #include <Button.h>
 #include <Catalog.h>
 #include <CheckBox.h>
+#include <ControlLook.h>
 #include <LayoutBuilder.h>
 #include <MenuField.h>
 #include <MenuItem.h>
@@ -66,7 +68,9 @@ DeviceMixerView::DeviceMixerView(uint32 deviceId, bool isOutput)
 	fMasterSlider->SetHashMarks(B_HASH_MARKS_BOTTOM);
 	fMasterSlider->SetHashMarkCount(6);
 	fMasterSlider->SetValue(75);
-	fMasterSlider->SetExplicitMinSize(BSize(B_SIZE_UNSET, 30.0f));
+	const float line = ceilf(be_plain_font->Size() * 1.4f);
+	fMasterSlider->SetExplicitMinSize(BSize(B_SIZE_UNSET,
+		line + be_control_look->DefaultItemSpacing()));
 
 	fMuteBox = new BCheckBox("mute", B_TRANSLATE("Mute"),
 		new BMessage(kMsgMute));
@@ -87,8 +91,12 @@ DeviceMixerView::DeviceMixerView(uint32 deviceId, bool isOutput)
 	fFormatLabel = new BStringView("format", "");
 
 	fMeter = new LevelMeterView("meter", -60.0f, 0.0f, true);
-	fMeter->SetExplicitMinSize(BSize(B_SIZE_UNSET, 120.0f));
-	fMeter->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 120.0f));
+	const float meterLine = ceilf(be_plain_font->Size() * 1.2f);
+	const float meterMinH = meterLine * 8.0f;
+	const float meterMinW = meterLine * 1.5f;
+	const float meterMaxW = meterLine * 4.0f;
+	fMeter->SetExplicitMinSize(BSize(meterMinW, meterMinH));
+	fMeter->SetExplicitMaxSize(BSize(meterMaxW, meterMinH));
 
 	fDefaultButton = new BButton("default",
 		fIsOutput ? B_TRANSLATE("Set as Default Output")
@@ -97,9 +105,11 @@ DeviceMixerView::DeviceMixerView(uint32 deviceId, bool isOutput)
 
 	fMasterSlider->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
 		B_ALIGN_VERTICAL_CENTER));
-	fMeter->SetExplicitMinSize(BSize(20.0f, B_SIZE_UNSET));
-	fMeter->SetExplicitMaxSize(BSize(60.0f, B_SIZE_UNSET));
-	SetExplicitMinSize(BSize(300.0f, B_SIZE_UNSET));
+	const float mixerMin = be_plain_font->StringWidth(
+		fIsOutput ? B_TRANSLATE("Set as Default Output")
+		          : B_TRANSLATE("Set as Default Input"))
+		+ meterMaxW + 4 * be_control_look->DefaultItemSpacing();
+	SetExplicitMinSize(BSize(mixerMin, B_SIZE_UNSET));
 	SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH, B_ALIGN_USE_FULL_HEIGHT));
 
 	GroupLayout()->SetSpacing(B_USE_SMALL_SPACING);

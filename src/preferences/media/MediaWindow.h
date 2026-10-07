@@ -21,6 +21,7 @@ class BListView;
 class BView;
 class BStringView;
 class BPopUpMenu;
+class BCardLayout;
 class BListView;
 class DeviceListView;
 class StreamListView;
@@ -59,6 +60,7 @@ private:
 
 			BListView*		fSidebar;
 			BView*			fContentPane;
+			BCardLayout*	fCards;
 			BView*			fCurrentSection;
 
 			Section			fShownSection;

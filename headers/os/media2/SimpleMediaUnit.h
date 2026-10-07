@@ -39,6 +39,8 @@ public:
 
 			using BMediaUnit::BufferFor;
 
+	virtual	status_t				Start() override;
+
 protected:
 	virtual	void					HandleStart(bigtime_t performanceTime) override;
 	virtual	void					HandleStop(bigtime_t performanceTime) override;

@@ -118,6 +118,10 @@ PipeWireBackend::_Init()
 	if (fCore != NULL) {
 		fRegistry = pw_core_get_registry(fCore, PW_VERSION_REGISTRY, 0);
 		if (fRegistry != NULL) {
+			// SPA event structs are positional C arrays with no designated
+			// initializers in this codebase: a missing entry defaults to NULL
+			// and inserting one shifts every following field onto the wrong
+			// callback. Verify order against the header after any edit.
 			static const pw_registry_events kRegEvents = {
 				PW_VERSION_REGISTRY_EVENTS,
 				&PipeWireBackend::_GlobalThunk,
@@ -263,6 +267,8 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 		}
 
 		if (cardId != 0 && fCardWatches.find(cardId) == fCardWatches.end()) {
+			// Bind runs on the loop thread (registry callback); the hook
+			// lives inside the heap CardWatch, never a stack local (L2).
 			pw_device* device = (pw_device*)pw_registry_bind(fRegistry,
 				cardId, PW_TYPE_INTERFACE_Device, PW_VERSION_DEVICE, 0);
 			if (device != NULL) {
@@ -464,6 +470,8 @@ PipeWireBackend::_OnCardParam(CardWatch* watch, uint32 id,
 void
 PipeWireBackend::_DestroyCardWatch(uint32 cardId)
 {
+	// Caller holds the loop lock or runs after stop; never leave a listener
+	// registered against a destroyed proxy.
 	auto it = fCardWatches.find(cardId);
 	if (it == fCardWatches.end())
 		return;
@@ -629,6 +637,7 @@ PipeWireBackend::SetDefaultSource(uint32 deviceId)
 void
 PipeWireBackend::_Teardown()
 {
+	// Loop thread is stopped first: destroy below must not race callbacks.
 	if (fThreadLoop != NULL)
 		pw_thread_loop_stop(fThreadLoop);
 
@@ -684,9 +693,19 @@ PipeWireBackend::GetInstance()
 }
 
 
+bigtime_t
+PipeWireBackend::PerformanceTime()
+{
+	return system_time();
+}
+
+
 void
 PipeWireBackend::Lock()
 {
+	// Always outermost. Bookkeeping locks (sLinksLock, fDevicesLock) nest
+	// inside; never call RoundtripLocked from the loop thread while holding
+	// a lock the loop thread itself needs.
 	pw_thread_loop_lock(fThreadLoop);
 }
 
@@ -743,6 +762,8 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 	if (stream == NULL)
 		return NULL;
 
+	// Connect under the same lock as create/destroy (L3). The unlocked gap
+	// above is only for building the pod; the stream is not yet in the graph.
 	uint8_t buf[1024];
 	spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
 	const spa_pod* params[1];
@@ -2309,6 +2330,8 @@ PipeWireBackend::RoundtripLocked(bigtime_t timeoutUsecs)
 	if (fThreadLoop == NULL || fCore == NULL)
 		return B_DEVICE_NOT_FOUND;
 
+	// Self-deadlock guard: the loop thread is the one that would deliver
+	// `done`; waiting on it from there never returns (L6).
 	if (pw_thread_loop_in_thread(fThreadLoop))
 		return B_NOT_ALLOWED;
 
@@ -2351,6 +2374,7 @@ PipeWireBackend::ResolveNodePorts(uint32 nodeId, pw_direction direction,
 	if (fThreadLoop == NULL || fCore == NULL)
 		return B_DEVICE_NOT_FOUND;
 
+	// Blocks the caller; never from the loop thread or an RT callback (L6).
 	if (pw_thread_loop_in_thread(fThreadLoop))
 		return B_NOT_ALLOWED;
 

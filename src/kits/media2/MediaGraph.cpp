@@ -121,6 +121,16 @@ BMediaGraph::Connect(BMediaOutput* output, BMediaInput* input)
 	if (outNodeId == 0 || inNodeId == 0)
 		return B_ERROR;
 
+	// Links-only format gate: refuse when both sides already carry a
+	// concrete format and they cannot match. Real negotiation stays out.
+	const BMediaFormat& outFormat = output->Format();
+	const BMediaFormat& inFormat = input->Format();
+	if (outFormat.Type() != B_MEDIA_NO_TYPE
+			&& inFormat.Type() != B_MEDIA_NO_TYPE
+			&& !outFormat.Matches(inFormat)) {
+		return B_BAD_VALUE;
+	}
+
 	if (!_CheckAndReserveEdge(outNodeId, inNodeId))
 		return B_NOT_SUPPORTED;
 
@@ -1117,5 +1127,97 @@ BMediaGraph::Disconnect(const ForeignPort* foreignPort, BMediaInput* input)
 	backend->Unlock();
 
 	return result;
+}
+
+
+static const char*
+_link_state_name(enum pw_link_state state)
+{
+	switch (state) {
+		case PW_LINK_STATE_INIT:        return "init";
+		case PW_LINK_STATE_NEGOTIATING: return "negotiating";
+		case PW_LINK_STATE_ALLOCATING:  return "allocating";
+		case PW_LINK_STATE_PAUSED:      return "paused";
+		case PW_LINK_STATE_ACTIVE:      return "active";
+		case PW_LINK_STATE_ERROR:       return "error";
+		case PW_LINK_STATE_UNLINKED:    return "unlinked";
+		default:                        return "unknown";
+	}
+}
+
+
+status_t
+BMediaGraph::DumpGraph(BString& out) const
+{
+	out << "graph dump\n";
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL) {
+		out << "  backend unavailable\n";
+		return B_DEVICE_NOT_FOUND;
+	}
+
+	out << "nodes:\n";
+	for (const auto& d : backend->Devices()) {
+		out << "  id=" << d.id << " card=" << d.cardId
+			<< " name=\"" << d.name.c_str() << "\""
+			<< " node=\"" << d.nodeName.c_str() << "\""
+			<< " class=\"" << d.mediaClass.c_str() << "\""
+			<< (d.isSink ? " sink" : "")
+			<< (d.isSource ? " source" : "")
+			<< "\n";
+	}
+
+	out << "streams:\n";
+	for (const auto& s : backend->Streams()) {
+		out << "  id=" << s.id << " name=\"" << s.name.c_str() << "\""
+			<< " class=\"" << s.mediaClass.c_str() << "\""
+			<< " device=" << s.deviceId
+			<< (s.isOutput ? " out" : " in")
+			<< " vol=" << s.volume << (s.mute ? " mute" : "")
+			<< "\n";
+	}
+
+	out << "foreign nodes:\n";
+	for (const auto& n : backend->ForeignNodes()) {
+		out << "  id=" << n.id << " name=\"" << n.name.c_str() << "\""
+			<< " class=\"" << n.mediaClass.c_str() << "\""
+			<< " ports=" << n.portCount
+			<< " (out=" << n.outputPorts << " in=" << n.inputPorts << ")"
+			<< "\n";
+		for (const auto& p : backend->ForeignPorts(n.id)) {
+			out << "    port id=" << p.id << " node=" << p.nodeId
+				<< " name=\"" << p.name.c_str() << "\""
+				<< " dir=" << p.direction.c_str()
+				<< " fmt=\"" << p.format.c_str() << "\""
+				<< "\n";
+		}
+	}
+
+	out << "links:\n";
+	{
+		BAutolock _(sLinksLock);
+		for (const auto& entry : sLinks) {
+			out << "  id=" << entry.first
+				<< " outNode=" << entry.second.outputNodeId
+				<< " inNode=" << entry.second.inputNodeId
+				<< " state=" << _link_state_name(entry.second.state)
+				<< "\n";
+		}
+	}
+	{
+		BAutolock _(sForeignLinksLock);
+		for (const auto& entry : sForeignLinks) {
+			out << "  id=" << entry.first
+				<< " outNode=" << entry.second.outputNodeId
+				<< " inNode=" << (entry.second.outputIsForeign
+					? entry.second.foreignNodeId : entry.second.inputNodeId)
+				<< " foreignPort=" << entry.second.foreignPortId
+				<< " state=" << _link_state_name(entry.second.state)
+				<< "\n";
+		}
+	}
+
+	return B_OK;
 }
 

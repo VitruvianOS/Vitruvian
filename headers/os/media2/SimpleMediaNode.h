@@ -34,6 +34,8 @@ public:
 			void					SetProcessHook(process_hook hook, void* cookie);
 			void					SetFormatHook(format_hook hook, void* cookie);
 
+	virtual	status_t				Start() override;
+
 protected:
 	virtual	void					HandleStart(bigtime_t performanceTime) override;
 	virtual	void					HandleStop(bigtime_t performanceTime) override;

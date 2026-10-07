@@ -29,6 +29,11 @@ class PipeWireBackend {
 public:
 	static	PipeWireBackend*		GetInstance();
 
+			// Host performance clock for HandleStart/Stop/Seek. Unit RT
+			// callbacks still read the PipeWire graph clock via
+			// spa_io_position; this is the app-thread "now".
+			static	bigtime_t		PerformanceTime();
+
 			pw_loop*				GetMainLoop() const { return fLoop; }
 			pw_core*				GetCore()     const { return fCore; }
 			pw_registry*			GetRegistry() const { return fRegistry; }

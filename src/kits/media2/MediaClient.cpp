@@ -278,7 +278,7 @@ BMediaClient::Start()
 	}
 
 	fImpl->running = true;
-	HandleStart(0);
+	HandleStart(PipeWireBackend::PerformanceTime());
 	return B_OK;
 }
 
@@ -287,7 +287,7 @@ status_t
 BMediaClient::Stop()
 {
 	if (fImpl->running)
-		HandleStop(0);
+		HandleStop(PipeWireBackend::PerformanceTime());
 	// Clear before tearing streams down: destroying a pw_stream can reenter state_changed, which
 	// uses IsStarted() to tell an intentional stop from a graph-side drop.
 	fImpl->running = false;
@@ -312,6 +312,8 @@ BMediaClient::Stop()
 status_t
 BMediaClient::Seek(bigtime_t mediaTime, bigtime_t performanceTime)
 {
+	if (performanceTime == 0)
+		performanceTime = PipeWireBackend::PerformanceTime();
 	HandleSeek(mediaTime, performanceTime);
 	return B_OK;
 }

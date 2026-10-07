@@ -140,11 +140,14 @@ public:
 			status_t				Connect(const ForeignPort* foreignPort,
 										BMediaInput* input);
 
-
 			status_t				Disconnect(BMediaOutput* output,
 										const ForeignPort* foreignPort);
+
 			status_t				Disconnect(const ForeignPort* foreignPort,
 										BMediaInput* input);
+
+			// Dev tool: text dump of nodes, streams, foreign ports and links.
+			status_t				DumpGraph(BString& out) const;
 
 private:
 									BMediaGraph();

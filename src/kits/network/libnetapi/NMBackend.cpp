@@ -3114,6 +3114,7 @@ struct _ConnectWiFiJob {
 	BString password;
 	BString security;
 	bool remember;
+	bool hidden;
 	BMessenger replyTo;
 	uint32 replyWhat;
 };
@@ -3179,14 +3180,15 @@ _RunConnectToWiFi(gpointer data)
 	NMSettingWireless* wirelessSetting
 		= (NMSettingWireless*)nm_setting_wireless_new();
 	GBytes* ssidBytes = g_bytes_new(job->ssid.String(), job->ssid.Length());
-	g_object_set(wirelessSetting, NM_SETTING_WIRELESS_SSID, ssidBytes, NULL);
+	g_object_set(wirelessSetting, NM_SETTING_WIRELESS_SSID, ssidBytes,
+		NM_SETTING_WIRELESS_HIDDEN, (gboolean)job->hidden, NULL);
 	g_bytes_unref(ssidBytes);
 	nm_connection_add_setting(connection, NM_SETTING(wirelessSetting));
 
 	// The matching AP's path goes to AddAndActivate; its capabilities pick
 	// the key-mgmt when no password was typed.
 	NMAccessPoint* targetAP = NULL;
-	if (NM_IS_DEVICE_WIFI(device)) {
+	if (NM_IS_DEVICE_WIFI(device) && !job->hidden) {
 		const GPtrArray* aps = nm_device_wifi_get_access_points(
 			(NMDeviceWifi*)device);
 		int32 bestStrength = -1;
@@ -3246,7 +3248,8 @@ _RunConnectToWiFi(gpointer data)
 				NM_SETTING_WIRELESS_SECURITY_WEP_TX_KEYIDX, 0, NULL);
 		} else {
 			g_object_set(secSetting,
-				NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-psk",
+				NM_SETTING_WIRELESS_SECURITY_KEY_MGMT,
+				job->security == "sae" ? "sae" : "wpa-psk",
 				NM_SETTING_WIRELESS_SECURITY_PSK, job->password.String(),
 				NULL);
 		}
@@ -3266,7 +3269,7 @@ _RunConnectToWiFi(gpointer data)
 status_t
 NMBackend::ConnectToWiFiAsync(const char* devicePath, const char* ssid,
 	const char* password, const char* security, bool remember,
-	const BMessenger& replyTo, uint32 replyWhat)
+	const BMessenger& replyTo, uint32 replyWhat, bool hidden)
 {
 	if (devicePath == NULL || ssid == NULL)
 		return B_BAD_VALUE;
@@ -3282,6 +3285,7 @@ NMBackend::ConnectToWiFiAsync(const char* devicePath, const char* ssid,
 	job->password = password != NULL ? password : "";
 	job->security = security != NULL ? security : "";
 	job->remember = remember;
+	job->hidden = hidden;
 	job->replyTo = replyTo;
 	job->replyWhat = replyWhat;
 

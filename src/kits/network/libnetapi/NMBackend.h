@@ -239,9 +239,11 @@ public:
 	// Full saved-network management (editing/forgetting an existing
 	// profile, static IP, etc) is not implemented -- this only covers the
 	// create-and-join path an agent-driven reconnect or a fresh join need.
+	// security: "none", "wpa" (default), "sae" or "wep". hidden marks a
+	// network that does not broadcast its name.
 	status_t ConnectToWiFiAsync(const char* devicePath, const char* ssid,
 		const char* password, const char* security, bool remember,
-		const BMessenger& replyTo, uint32 replyWhat);
+		const BMessenger& replyTo, uint32 replyWhat, bool hidden = false);
 	
 	// IPv4 configuration write mode -- mirrors NM_SETTING_IP4_CONFIG_METHOD_*
 	// at the public-API boundary so UI code doesn't need libnm headers.

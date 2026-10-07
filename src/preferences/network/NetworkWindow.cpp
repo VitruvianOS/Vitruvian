@@ -7,6 +7,7 @@
 #include "NetworkWindow.h"
 
 #include "InterfaceDetailView.h"
+#include "JoinWiFiWindow.h"
 #include "MobileBroadbandView.h"
 #include "NMBackend.h"
 #include "ProxyView.h"
@@ -57,6 +58,7 @@ static const uint32 kMsgDeviceInfoReady = 'dird';
 static const uint32 kMsgWiFiRefresh = 'wfrf';
 static const uint32 kMsgImportVPNRefs = 'ivrf';
 static const uint32 kMsgImportVPNResult = 'ivrR';
+static const uint32 kMsgJoinHiddenResult = 'jhwr';
 
 BMessenger gNetworkWindow;
 
@@ -162,6 +164,7 @@ public:
 	}
 
 	bool Connected() const { return fConnected; }
+	const BString& StatusText() const { return fStatusText; }
 
 private:
 	BString fStatusText;
@@ -361,6 +364,26 @@ NetworkWindow::MessageReceived(BMessage* message)
 
 		case kMsgToggleReplicant:
 			_ToggleReplicant();
+			break;
+
+		case kMsgJoinOtherWiFi:
+			_JoinOtherWiFi(message);
+			break;
+
+		case kMsgJoinHiddenWiFi:
+			_JoinHiddenWiFi(message);
+			break;
+
+		case kMsgJoinHiddenResult:
+			if (message->GetInt32("status", B_ERROR) != B_OK) {
+				BString text(B_TRANSLATE("Could not join the network."));
+				const char* reason = message->GetString("reason", NULL);
+				if (reason != NULL)
+					text << "\n" << reason;
+				BAlert* alert = new BAlert(B_TRANSLATE("Join other network"),
+					text, B_TRANSLATE("OK"));
+				alert->Go(NULL);
+			}
 			break;
 
 		case kMsgImportVPN:
@@ -722,6 +745,10 @@ NetworkWindow::_SelectItem(BListItem* item)
 		}
 	} else if (vpnItem != NULL) {
 		fDetailView->SetToVPN(vpnItem->Info());
+	} else if (item == fWirelessItem) {
+		BMessage adapters;
+		_WiFiAdapters(adapters);
+		fDetailView->ShowWiFiSection(adapters);
 	} else if (item == fVPNItem) {
 		BMessage vpns;
 		NMBackend* backend = NMBackend::Instance();
@@ -921,3 +948,45 @@ NetworkWindow::_ImportVPNResult(BMessage* message)
 	alert->Go(NULL);
 }
 
+
+void
+NetworkWindow::_WiFiAdapters(BMessage& adapters)
+{
+	if (fWirelessItem == NULL)
+		return;
+	int32 count = fListView->CountItemsUnder(fWirelessItem, true);
+	for (int32 i = 0; i < count; i++) {
+		DeviceListItem* item = dynamic_cast<DeviceListItem*>(
+			fListView->ItemUnderAt(fWirelessItem, true, i));
+		if (item == NULL)
+			continue;
+		adapters.AddString("name", item->Text());
+		adapters.AddString("path", item->DevicePath());
+		adapters.AddString("status", item->StatusText());
+	}
+}
+
+
+void
+NetworkWindow::_JoinOtherWiFi(BMessage* message)
+{
+	BMessage adapters;
+	_WiFiAdapters(adapters);
+	JoinWiFiWindow* window = new JoinWiFiWindow(BMessenger(this), adapters,
+		message->GetString("device", NULL));
+	window->Show();
+}
+
+
+void
+NetworkWindow::_JoinHiddenWiFi(BMessage* message)
+{
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return;
+	backend->ConnectToWiFiAsync(message->GetString("device", ""),
+		message->GetString("ssid", ""), message->GetString("password", ""),
+		message->GetString("security", "wpa"),
+		message->GetBool("remember", true), BMessenger(this),
+		kMsgJoinHiddenResult, true);
+}

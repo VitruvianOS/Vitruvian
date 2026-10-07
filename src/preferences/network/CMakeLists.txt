@@ -3,6 +3,7 @@ Application(Network
 	Network.cpp
 	NetworkWindow.cpp
 	InterfaceDetailView.cpp
+	JoinWiFiWindow.cpp
 	MobileBroadbandView.cpp
 	StaticIPView.cpp
 	IPAddressControl.cpp

@@ -42,6 +42,9 @@ private:
 	void _ImportVPNRequested();
 	void _ImportVPNRefs(BMessage* message);
 	void _ImportVPNResult(BMessage* message);
+	void _WiFiAdapters(BMessage& adapters);
+	void _JoinOtherWiFi(BMessage* message);
+	void _JoinHiddenWiFi(BMessage* message);
 
 	BOutlineListView* fListView;
 	InterfaceDetailView* fDetailView;

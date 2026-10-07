@@ -23,6 +23,7 @@
 #include <NetworkInterface.h>
 #include <ScrollView.h>
 #include <StringItem.h>
+#include <SpaceLayoutItem.h>
 #include <StringView.h>
 #include <TabView.h>
 #include <TextControl.h>
@@ -1004,6 +1005,15 @@ InterfaceDetailView::ShowVPNSection(const BMessage& vpns)
 
 
 void
+InterfaceDetailView::ShowWiFiSection(const BMessage& adapters)
+{
+	fMode = MODE_WIFI_SECTION;
+	fDeviceInfo = adapters;
+	_Rebuild();
+}
+
+
+void
 InterfaceDetailView::_Rebuild()
 {
 	// Tear down and rebuild rather than mutate in place: the field set
@@ -1077,6 +1087,11 @@ InterfaceDetailView::_Rebuild()
 
 	if (fMode == MODE_VPN_SECTION) {
 		_RebuildVPNSectionView();
+		return;
+	}
+
+	if (fMode == MODE_WIFI_SECTION) {
+		_RebuildWiFiSectionView();
 		return;
 	}
 
@@ -1285,12 +1300,17 @@ InterfaceDetailView::_RebuildDeviceView()
 			new BMessage(kMsgForgetWiFi));
 		fJoinButton->SetTarget(this);
 		fForgetButton->SetTarget(this);
+		BMessage* joinOther = new BMessage(kMsgJoinOtherWiFi);
+		joinOther->AddString("device", devicePath);
 
 		builder.Add(scrollView)
 			.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 				.Add(fJoinButton)
 				.Add(fForgetButton)
 				.AddGlue()
+				.Add(new BButton("joinOther",
+					B_TRANSLATE("Join other network" B_UTF8_ELLIPSIS),
+					joinOther))
 			.End();
 
 		_UpdateWiFiButtons();
@@ -1690,6 +1710,55 @@ InterfaceDetailView::_RebuildVPNView()
 			.Add(fVPNConnectButton)
 			.Add(fVPNDisconnectButton)
 			.Add(fVPNRemoveButton)
+			.AddGlue()
+		.End()
+		.AddGlue();
+}
+
+
+void
+InterfaceDetailView::_RebuildWiFiSectionView()
+{
+	BStringView* titleView = new BStringView(NULL, B_TRANSLATE("Wi-Fi"));
+	titleView->SetFont(be_bold_font);
+
+	BGroupLayout* layout = (BGroupLayout*)GetLayout();
+	BLayoutBuilder::Group<>(layout)
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.Add(titleView);
+
+	BString path;
+	if (fDeviceInfo.FindString("path", 0, &path) != B_OK) {
+		layout->AddView(new BStringView(NULL,
+			B_TRANSLATE("No Wi-Fi adapter found")));
+		layout->AddItem(BSpaceLayoutItem::CreateGlue());
+		return;
+	}
+
+	BGridView* grid = new BGridView(B_USE_DEFAULT_SPACING,
+		B_USE_HALF_ITEM_SPACING);
+	BGridLayout* gridLayout = grid->GridLayout();
+	BString name, status;
+	for (int32 i = 0; fDeviceInfo.FindString("name", i, &name) == B_OK; i++) {
+		fDeviceInfo.FindString("status", i, &status);
+		BStringView* nameView = new BStringView(NULL, name);
+		nameView->SetFont(be_bold_font);
+		gridLayout->AddView(nameView, 0, i);
+		gridLayout->AddView(new BStringView(NULL, status), 1, i);
+	}
+	layout->AddView(grid);
+
+	BStringView* hint = new BStringView(NULL, B_TRANSLATE("Select an adapter "
+		"to see the networks in range."));
+	hint->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		B_DARKEN_2_TINT));
+	layout->AddView(hint);
+
+	BLayoutBuilder::Group<>(layout)
+		.AddGroup(B_HORIZONTAL)
+			.Add(new BButton("joinOther",
+				B_TRANSLATE("Join other network" B_UTF8_ELLIPSIS),
+				new BMessage(kMsgJoinOtherWiFi)))
 			.AddGlue()
 		.End()
 		.AddGlue();

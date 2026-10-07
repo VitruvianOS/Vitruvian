@@ -24,6 +24,8 @@ class StaticIPView;
 
 // Sent to the window by the VPN section's Import button.
 const uint32 kMsgImportVPN = 'imvp';
+// Sent to the window to join a network by name; optional "device".
+const uint32 kMsgJoinOtherWiFi = 'jowf';
 
 
 // Right-hand detail pane of the Network preflet, swapped in when a device or
@@ -49,6 +51,9 @@ public:
 			void			ShowEmpty(const char* message);
 			// Overview of every VPN profile, with an Import button.
 			void			ShowVPNSection(const BMessage& vpns);
+			// Wi-Fi adapters ("name", "path", "status" per adapter), with
+			// a way to join a network that is not in range or hidden.
+			void			ShowWiFiSection(const BMessage& adapters);
 			// Refill only the AP list from the cached scan, keeping the
 			// selection; no-op unless showing that Wi-Fi device.
 			void			RefreshWiFiNetworks(const char* devicePath);
@@ -61,6 +66,7 @@ private:
 			void			_RebuildDeviceView();
 			void			_RebuildVPNView();
 			void			_RebuildVPNSectionView();
+			void			_RebuildWiFiSectionView();
 			void			_AddHotspotSection(BGroupLayout* layout);
 			void			_FillWiFiList(const BMessage& networks);
 			void			_RequestHotspotState();
@@ -82,7 +88,8 @@ private:
 				MODE_EMPTY,
 				MODE_DEVICE,
 				MODE_VPN,
-				MODE_VPN_SECTION
+				MODE_VPN_SECTION,
+				MODE_WIFI_SECTION
 			};
 
 			BGridLayout*	fGridLayout;

@@ -50,6 +50,7 @@ NetworkStatusView::NetworkStatusView(BRect frame, int32 resizingMode, bool inDes
 	fDeviceIndex(-1),
 	fConnected(false),
 	fHasDevice(false),
+	fVPNActive(false),
 	fSignalStrength(-1),
 	fInDeskbar(inDeskbar)
 {
@@ -75,6 +76,7 @@ NetworkStatusView::NetworkStatusView(BMessage* archive)
 	fDeviceIndex(-1),
 	fConnected(false),
 	fHasDevice(false),
+	fVPNActive(false),
 	fSignalStrength(-1),
 	fInDeskbar(false)
 {
@@ -436,6 +438,7 @@ NetworkStatusView::_DrawNetworkIcon(BRect bounds)
 	if (fConnected && fDeviceType == "wifi" && fSignalStrength >= 0) {
 		RadioView::Draw(this, bounds, fSignalStrength,
 			RadioView::DefaultMax());
+		_DrawVPNLock(bounds);
 		return;
 	}
 
@@ -450,6 +453,38 @@ NetworkStatusView::_DrawNetworkIcon(BRect bounds)
 	BBitmap* icon = _GetIcon(iconID);
 	if (icon != NULL)
 		DrawBitmap(icon, bounds);
+	_DrawVPNLock(bounds);
+}
+
+
+// Drawn, since NetworkStatusIcons.rdef has no lock art yet.
+void
+NetworkStatusView::_DrawVPNLock(BRect bounds)
+{
+	if (!fVPNActive)
+		return;
+
+	const float lockSize = 7.0f;
+	BPoint origin(bounds.right - lockSize - 1.0f,
+		bounds.bottom - lockSize - 1.0f);
+
+	rgb_color fill = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color outline = ui_color(B_LIST_ITEM_TEXT_COLOR);
+
+	// Shackle first so the body covers its lower ends.
+	SetHighColor(outline);
+	StrokeEllipse(BRect(origin.x + 1.5f, origin.y,
+		origin.x + lockSize - 1.5f, origin.y + lockSize * 0.55f));
+
+	BRect body(origin.x, origin.y + lockSize * 0.4f,
+		origin.x + lockSize, origin.y + lockSize);
+	SetHighColor(fill);
+	FillRect(body);
+	SetHighColor(outline);
+	StrokeRect(body);
+
+	FillRect(BRect(origin.x + lockSize * 0.42f, origin.y + lockSize * 0.55f,
+		origin.x + lockSize * 0.58f, origin.y + lockSize * 0.8f));
 }
 
 
@@ -509,6 +544,7 @@ NetworkStatusView::_ApplyStatusUpdate(BMessage* devices)
 					fSignalStrength = (int)signalStrength;
 			}
 
+			fVPNActive = _HasActiveVPN();
 			Invalidate();
 			return;
 		}
@@ -518,7 +554,36 @@ NetworkStatusView::_ApplyStatusUpdate(BMessage* devices)
 	fDevicePath = "";
 	fDeviceType = "";
 	fSignalStrength = -1;
+	fVPNActive = _HasActiveVPN();
 	Invalidate();
+}
+
+
+bool
+NetworkStatusView::_HasActiveVPN()
+{
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return false;
+
+	BMessage vpns;
+	if (backend->GetVPNConnections(&vpns) != B_OK)
+		return false;
+
+	int32 count = 0;
+	vpns.FindInt32(kNMFieldVPNCount, &count);
+	for (int32 i = 0; i < count; i++) {
+		char vpnName[32];
+		snprintf(vpnName, sizeof(vpnName), "vpn_%" B_PRId32, i);
+		BMessage vpnInfo;
+		if (vpns.FindMessage(vpnName, &vpnInfo) != B_OK)
+			continue;
+		bool connected = false;
+		vpnInfo.FindBool(kNMFieldVPNConnected, &connected);
+		if (connected)
+			return true;
+	}
+	return false;
 }
 
 

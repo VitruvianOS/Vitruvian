@@ -53,6 +53,8 @@ public:
 	const BMediaFormat& Format() const { return fFormat; }
 	status_t SetFormat(const BMediaFormat& format);
 
+	BMediaInput* Input() const { return fInput; }
+
 	status_t Start();
 	void     Stop();
 	bool     IsRecording() const { return fNode != NULL && fNode->IsStarted(); }
@@ -324,6 +326,13 @@ BMediaRecorder::BMediaRecorder(const char* name, media_type type)
 void
 BMediaRecorder::BufferReceived(void*, size_t, const media_raw_audio_format&)
 {
+}
+
+
+BMediaInput*
+BMediaRecorder::Input() const
+{
+	return fImpl != NULL ? fImpl->Input() : NULL;
 }
 
 

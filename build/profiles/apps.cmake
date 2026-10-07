@@ -29,6 +29,7 @@ set(SYSTEM_APPS
 	ResEdit
 	#Screenshot
 	ShowImage
+	SoundRecorder
 	StyledEdit
 	Terminal
 	#TextSearch

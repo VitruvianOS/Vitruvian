@@ -12,6 +12,7 @@
 
 
 class BFile;
+class BMediaInput;
 
 
 class BMediaRecorder {
@@ -52,10 +53,14 @@ public:
 									void* cookie = NULL);
 
 protected:
-	virtual	void				BufferReceived(void* buffer, size_t size,
+		virtual	void				BufferReceived(void* buffer, size_t size,
 									const media_raw_audio_format& format);
 
 public:
+			// Capture endpoint for BMediaGraph::Connect(); Start() must have
+			// created the recorder's stream before the connection is made.
+			BMediaInput*			Input() const;
+
 			status_t			SetOutputFile(const char* path,
 									const BMediaFormat& encodedFormat);
 			status_t			SetOutputFile(BFile* file,

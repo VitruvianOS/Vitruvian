@@ -12,13 +12,21 @@ static const float kFrameWidth = 70.0f;
 static const float kFrameHeight = 90.0f;
 
 
+static float
+_Scale()
+{
+	return be_plain_font->Size() / 12.0f;
+}
+
+
 UserPictureView::UserPictureView()
 	:
 	BView("picture", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE | B_NAVIGABLE),
 	fPicture(NULL)
 {
-	SetExplicitMinSize(BSize(kFrameWidth, kFrameHeight));
-	SetExplicitMaxSize(BSize(kFrameWidth, kFrameHeight));
+	const BSize size(kFrameWidth * _Scale(), kFrameHeight * _Scale());
+	SetExplicitMinSize(size);
+	SetExplicitMaxSize(size);
 }
 
 
@@ -56,15 +64,13 @@ UserPictureView::Draw(BRect updateRect)
 	if (fPicture == NULL || !fPicture->IsValid()) {
 		SetHighUIColor(B_CONTROL_TEXT_COLOR);
 		// Person silhouette placeholder, same spirit as People's default.
-		BRect head(frame.left + frame.Width() / 2.0f - 8.0f,
-			frame.top + 14.0f,
-			frame.left + frame.Width() / 2.0f + 8.0f,
-			frame.top + 30.0f);
+		const float scale = _Scale();
+		const float center = frame.left + frame.Width() / 2.0f;
+		BRect head(center - 8.0f * scale, frame.top + 14.0f * scale,
+			center + 8.0f * scale, frame.top + 30.0f * scale);
 		FillEllipse(head);
-		BRect body(frame.left + frame.Width() / 2.0f - 14.0f,
-			frame.top + 34.0f,
-			frame.left + frame.Width() / 2.0f + 14.0f,
-			frame.bottom - 4.0f);
+		BRect body(center - 14.0f * scale, frame.top + 34.0f * scale,
+			center + 14.0f * scale, frame.bottom - 4.0f * scale);
 		FillRect(body);
 		return;
 	}

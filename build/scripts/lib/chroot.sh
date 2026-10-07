@@ -116,10 +116,10 @@ chroot_restore_dev_packages() {
     qemu_inject "$_crd_dir" "$_crd_arch"
     chroot_mount "$_crd_dir"
     chroot_mount_deb_cache "$_crd_dir" "$(chroot_cache_dir "$_crd_basedir")"
-    sudo chroot "$_crd_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive \
+    sudo chroot "$_crd_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 \
         apt-get install -y --download-only --no-install-recommends $_crd_missing \
         || die "build package download failed"
-    chroot_isolated "$_crd_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive \
+    chroot_isolated "$_crd_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 \
         apt-get install -y --no-install-recommends $_crd_missing \
         || die "build package reinstall failed"
     chroot_umount "$_crd_dir"
@@ -279,10 +279,10 @@ VOSEOF
           | sudo tee "$_chroot_dir/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io" >/dev/null
     fi
     # Download with the network, install isolated: cups-pdf's postinst ran lpadmin against the host's cupsd.
-    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "\
+    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "\
 echo 'vitruvian' > /etc/hostname && \
 apt update && apt install -y --download-only --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES"
-    chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "\
+    chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "\
 apt install -y --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES && \
 echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \
 exit"

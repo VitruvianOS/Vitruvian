@@ -190,15 +190,19 @@ create_raw() {
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
     _raw_dev_pkgs="$(get_dev_packages "$_arch")"
     _raw_kver="$(ls -1 "$_root_dir/lib/modules" | sort -V | tail -1)"
-    sudo chroot "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    sudo chroot "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt-get install -y --download-only --no-install-recommends $_raw_pkgs \
     dkms build-essential linux-headers-$_raw_kver /localdeb/*.deb" \
         || die "raw package download failed"
-    chroot_isolated "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    chroot_isolated "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 
 umount /sys/firmware/efi/efivars 2>/dev/null || true
 
 apt-get remove -y vos nexus-dkms 2>/dev/null || true
+
+# Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
 
 rm -f /usr/share/initramfs-tools/hooks/live*
 rm -f /usr/share/initramfs-tools/scripts/live*
@@ -212,8 +216,7 @@ apt-get install -y --no-install-recommends $_raw_pkgs
 _kver=\$(ls -1 /lib/modules | sort -V | tail -1)
 apt-get install -y --no-install-recommends dkms build-essential \"linux-headers-\$_kver\"
 
-dpkg -i /localdeb/*.deb || true
-apt-get install -f -y --no-install-recommends
+apt-get install -y --no-install-recommends --reinstall /localdeb/*.deb
 
 # The root is a copy of the build chroot; drop its -dev packages, autoremove keeps what dkms needs.
 for _p in $_raw_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
@@ -491,13 +494,16 @@ create_iso() {
     _iso_debs="$(cd "$_basedir" && ls *.deb | sed 's|^|/tmp/|' | tr '\n' ' ')"
     _iso_dev_pkgs="$(get_dev_packages "$_arch")"
     log_step "Installing debs into chroot..."
-    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt-get install -y --download-only dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs $_iso_debs" \
         || die "iso package download failed"
-    chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
-apt remove -y vos nexus-dkms || true
+    chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+apt-get remove -y vos nexus-dkms || true
+# Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
 apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
-apt install -y -f --reinstall $_iso_debs
+apt-get install -y --reinstall $_iso_debs
 # Purge the build-only -dev packages, and what earlier vos versions pulled in
 # (e.g. fonts-noto-extra); dkms keeps what it needs. bake build reinstalls them.
 for _p in $_iso_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
@@ -723,7 +729,7 @@ _common_chroot_setup() {
     _hostname="$2"
     # $5: 1 = live ISO (boots via boot=live), 0 = installed-like image.
     _live="${5:-0}"
-    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 echo '$_hostname' > /etc/hostname
 
 # Rewrite /etc/hosts so it has the correct hostname.
@@ -1023,7 +1029,7 @@ VOSSRC
     log_step "Configuring system..."
     # set -e: bash -c returns the status of its LAST command, so the old
     # one-line form returned the trailing if-block and hid apt failures.
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt update
 # apt downgrades an unreachable source to a warning, so prove the repo
 # resolved a candidate instead of shipping without VitruvianOS.
@@ -1034,12 +1040,15 @@ if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
         exit 1
     }
 fi
-apt install -y --download-only $_board_pkgs \$(ls /localdeb/*.deb 2>/dev/null)" \
+apt-get install -y --download-only $_board_pkgs \$(ls /localdeb/*.deb 2>/dev/null)" \
         || die "raspberry chroot bash-c failed"
-    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
-apt install -y $_board_pkgs
+    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+# Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
+apt-get install -y $_board_pkgs
 if ls /localdeb/*.deb >/dev/null 2>&1; then
-    dpkg -i /localdeb/*.deb || apt-get -f install -y
+    apt-get install -y --reinstall /localdeb/*.deb
 fi
 rm -rf /localdeb
 # apt's package caches would otherwise ship in the image.
@@ -1319,7 +1328,7 @@ VOSSRC
     fi
 
     log_step "Configuring $_label system..."
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt update
 # See create_raspberry: prove the VOS repo actually resolved a candidate.
 if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
@@ -1329,12 +1338,15 @@ if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
         exit 1
     }
 fi
-apt install -y --download-only $_board_pkgs u-boot-menu \$(ls /localdeb/*.deb 2>/dev/null)" \
+apt-get install -y --download-only $_board_pkgs u-boot-menu \$(ls /localdeb/*.deb 2>/dev/null)" \
         || die "uboot chroot bash-c failed"
-    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
-apt install -y $_board_pkgs u-boot-menu
+    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+# Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
+apt-get install -y $_board_pkgs u-boot-menu
 if ls /localdeb/*.deb >/dev/null 2>&1; then
-    dpkg -i /localdeb/*.deb || apt-get -f install -y
+    apt-get install -y --reinstall /localdeb/*.deb
 fi
 rm -rf /localdeb
 # apt's package caches would otherwise ship in the image.

@@ -57,7 +57,6 @@ MainWin::MainWin(BRect frame)
 {
 	fPlaylist = new Playlist();
 	fController = new Controller(BMessenger(this));
-	fController->PlaylistRef().AddListener(fController);
 
 	_CreateMenu();
 	_SetupWindow();

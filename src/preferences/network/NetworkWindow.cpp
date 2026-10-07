@@ -95,22 +95,18 @@ public:
 // takes the same "programmatic over authored art, for now" approach).
 // Replaces the legacy InterfaceListItem framework retired along
 // with the old BNetworkSettings UI.
-class DeviceListItem : public BStringItem {
+// Status dot, bold name, plain status line: devices and VPNs alike.
+class StatusListItem : public BStringItem {
 public:
-	DeviceListItem(const char* name, const char* devicePath,
-		const char* statusText, bool connected)
+	StatusListItem(const char* name, const char* statusText, bool connected)
 		:
 		BStringItem(name),
-		fDevicePath(devicePath),
-		fDeviceName(name),
 		fStatusText(statusText),
 		fConnected(connected),
 		fFirstLineOffset(0),
 		fLineOffset(0)
 	{
 	}
-
-	const BString& DevicePath() const { return fDevicePath; }
 
 	virtual void DrawItem(BView* owner, BRect bounds, bool complete)
 	{
@@ -144,7 +140,7 @@ public:
 			? ui_color(B_LIST_SELECTED_ITEM_TEXT_COLOR)
 			: ui_color(B_LIST_ITEM_TEXT_COLOR));
 		owner->SetFont(be_bold_font);
-		owner->DrawString(fDeviceName, namePoint);
+		owner->DrawString(Text(), namePoint);
 		owner->SetFont(be_plain_font);
 		owner->DrawString(fStatusText, statusPoint);
 
@@ -165,9 +161,9 @@ public:
 		SetHeight(std::max(2 * lineHeight + 4, 8.0f + 4));
 	}
 
+	bool Connected() const { return fConnected; }
+
 private:
-	BString fDevicePath;
-	BString fDeviceName;
 	BString fStatusText;
 	bool fConnected;
 	float fFirstLineOffset;
@@ -175,61 +171,40 @@ private:
 };
 
 
-// Row for a single NM VPN connection profile. Single-line, unlike
-// DeviceListItem, since a VPN entry has no interface/driver line to show.
-class VPNListItem : public BStringItem {
+class DeviceListItem : public StatusListItem {
+public:
+	DeviceListItem(const char* name, const char* devicePath,
+		const char* statusText, bool connected)
+		:
+		StatusListItem(name, statusText, connected),
+		fDevicePath(devicePath)
+	{
+	}
+
+	const BString& DevicePath() const { return fDevicePath; }
+
+private:
+	BString fDevicePath;
+};
+
+
+class VPNListItem : public StatusListItem {
 public:
 	VPNListItem(const char* name, const char* connectionPath,
-		const BMessage& info)
+		const char* statusText, const BMessage& info)
 		:
-		BStringItem(name),
+		StatusListItem(name, statusText, info.GetBool(kNMFieldVPNConnected)),
 		fConnectionPath(connectionPath),
-		fInfo(info),
-		fConnected(false)
+		fInfo(info)
 	{
-		info.FindBool(kNMFieldVPNConnected, &fConnected);
 	}
 
 	const BString&	ConnectionPath() const { return fConnectionPath; }
 	const BMessage&	Info() const { return fInfo; }
 
-	virtual void DrawItem(BView* owner, BRect bounds, bool complete)
-	{
-		owner->PushState();
-
-		if (IsSelected() || complete) {
-			owner->SetHighColor(IsSelected()
-				? ui_color(B_LIST_SELECTED_BACKGROUND_COLOR)
-				: owner->LowColor());
-			owner->FillRect(bounds);
-		}
-
-		const float dotSize = 8.0f;
-		BPoint dotOrigin = bounds.LeftTop()
-			+ BPoint(be_control_look->DefaultLabelSpacing(),
-				(bounds.Height() - dotSize) / 2.0f);
-		rgb_color dotColor = fConnected
-			? ui_color(B_SUCCESS_COLOR) : tint_color(owner->LowColor(),
-				B_DARKEN_2_TINT);
-		owner->SetHighColor(dotColor);
-		owner->FillEllipse(BRect(dotOrigin,
-			dotOrigin + BPoint(dotSize, dotSize)));
-
-		BPoint textPoint = bounds.LeftTop() + BPoint(dotSize
-			+ 2 * be_control_look->DefaultLabelSpacing(),
-			bounds.Height() / 2.0f + 4.0f);
-		owner->SetHighColor(IsSelected()
-			? ui_color(B_LIST_SELECTED_ITEM_TEXT_COLOR)
-			: ui_color(B_LIST_ITEM_TEXT_COLOR));
-		owner->DrawString(Text(), textPoint);
-
-		owner->PopState();
-	}
-
 private:
 	BString		fConnectionPath;
 	BMessage	fInfo;
-	bool		fConnected;
 };
 
 
@@ -698,7 +673,12 @@ NetworkWindow::_PopulateVPNList(const BString& previousSelectionPath)
 		if (vpnInfo.FindString(kNMFieldVPNName, &name) != B_OK
 			|| vpnInfo.FindString(kNMFieldVPNPath, &path) != B_OK)
 			continue;
-		VPNListItem* item = new VPNListItem(name, path, vpnInfo);
+		BString status = vpnInfo.GetString(kNMFieldVPNType, "VPN");
+		if (vpnInfo.GetBool(kNMFieldVPNConnected))
+			status << " \xC2\xB7 " << B_TRANSLATE("Connected");
+		else if (vpnInfo.GetBool(kNMFieldVPNActivating))
+			status << " \xC2\xB7 " << B_TRANSLATE("Connecting" B_UTF8_ELLIPSIS);
+		VPNListItem* item = new VPNListItem(name, path, status, vpnInfo);
 		fListView->AddUnder(item, fVPNItem);
 
 		if (!previousSelectionPath.IsEmpty() && previousSelectionPath == path)
@@ -940,3 +920,4 @@ NetworkWindow::_ImportVPNResult(BMessage* message)
 		B_TRANSLATE("OK"));
 	alert->Go(NULL);
 }
+

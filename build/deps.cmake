@@ -289,6 +289,26 @@ DeclareDependency(
 	RUNTIMES   "libcairo2"
 )
 
+DeclareDependency(
+	LILV
+	LIBRARIES  "lilv-0"
+	PACKAGES   "liblilv-dev"
+	RUNTIMES   "liblilv-0-0"
+	INCLUDES   "${HEADERS_PATH_BASE}/lilv-0/"
+)
+
+DeclareDependency(
+	LV2
+	PACKAGES   "lv2-dev"
+	INCLUDES   "${HEADERS_PATH_BASE}/lv2/"
+)
+
+DeclareDependency(
+	LADSPA
+	PACKAGES   "ladspa-sdk"
+	INCLUDES   "${HEADERS_PATH_BASE}/ladspa/"
+)
+
 # Dependencies for Debug builds
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

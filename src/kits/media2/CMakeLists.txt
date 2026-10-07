@@ -29,6 +29,7 @@ AddOn(media2
 	SimpleMediaUnit.cpp
 	Sound.cpp
 	SoundPlayer.cpp
+	SystemBeep.cpp
 	TimeCode.cpp
 
 	LIBS be root

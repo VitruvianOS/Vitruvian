@@ -22,6 +22,7 @@ set(SYSTEM_APPS
 	Installer
 	LaunchBox
 	Magnify
+	MediaConverter
 	PackageManager
 	People
 	ResEdit

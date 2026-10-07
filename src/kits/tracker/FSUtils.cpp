@@ -3187,13 +3187,16 @@ empty_trash(void*)
 
 	BVolumeRoster volumeRoster;
 	BVolume volume;
+	BObjectList<node_ref, true> counted(4);
 	while (volumeRoster.GetNextVolume(&volume) == B_OK) {
-		if (volume.IsReadOnly() || !volume.IsPersistent())
+		if (volume.IsReadOnly())
 			continue;
 
 		BDirectory trashDirectory;
-		if (FSGetTrashDir(&trashDirectory, volume.Device()) != B_OK)
+		if (FSGetTrashDir(&trashDirectory, volume.Device()) != B_OK
+			|| !FSRecordTrashDir(&counted, &trashDirectory)) {
 			continue;
+		}
 
 		entry_ref ref;
 		trashDirectory.GetRef(&ref);
@@ -3216,13 +3219,16 @@ empty_trash(void*)
 		loopControl.Init(totalCount, totalCount);
 
 		volumeRoster.Rewind();
+		BObjectList<node_ref, true> emptied(4);
 		while (volumeRoster.GetNextVolume(&volume) == B_OK) {
-			if (volume.IsReadOnly() || !volume.IsPersistent())
+			if (volume.IsReadOnly())
 				continue;
 
 			BDirectory trashDirectory;
-			if (FSGetTrashDir(&trashDirectory, volume.Device()) != B_OK)
+			if (FSGetTrashDir(&trashDirectory, volume.Device()) != B_OK
+				|| !FSRecordTrashDir(&emptied, &trashDirectory)) {
 				continue;
+			}
 
 			BEntry entry;
 			trashDirectory.GetEntry(&entry);

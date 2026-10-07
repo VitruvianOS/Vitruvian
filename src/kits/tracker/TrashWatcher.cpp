@@ -216,11 +216,11 @@ BTrashWatcher::WatchTrashDirs()
 			continue;
 
 		BDirectory trashDir;
-		if (FSGetTrashDir(&trashDir, volume.Device()) == B_OK) {
+		if (FSGetTrashDir(&trashDir, volume.Device()) == B_OK
+			&& FSRecordTrashDir(&fTrashNodeList, &trashDir)) {
 			node_ref trash_node;
 			trashDir.GetNodeRef(&trash_node);
 			watch_node(&trash_node, B_WATCH_DIRECTORY, this);
-			fTrashNodeList.AddItem(new node_ref(trash_node));
 
 			// Also watch the sibling info/ dir so out-of-band tools
 			// (e.g. `gio trash`, manual rm) trigger reconciliation.

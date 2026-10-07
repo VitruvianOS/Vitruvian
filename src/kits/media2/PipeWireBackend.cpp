@@ -2272,6 +2272,8 @@ void
 PipeWireBackend::ShowNotification(NotificationType type, const char* title,
 	const char* message, uint32 deviceId)
 {
+	// Volume is a state change, not an operation with a progress bar;
+	// watchers already receive 'PWVC'. Progress type would need SetProgress.
 	notification_type haikuType;
 	switch (type) {
 		case kNotificationDeviceAdded:
@@ -2279,10 +2281,8 @@ PipeWireBackend::ShowNotification(NotificationType type, const char* title,
 		case kNotificationDeviceConnected:
 		case kNotificationDeviceDisconnected:
 		case kNotificationDefaultChanged:
-			haikuType = B_INFORMATION_NOTIFICATION;
-			break;
 		case kNotificationVolumeChanged:
-			haikuType = B_PROGRESS_NOTIFICATION;
+			haikuType = B_INFORMATION_NOTIFICATION;
 			break;
 		default:
 			haikuType = B_INFORMATION_NOTIFICATION;

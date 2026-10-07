@@ -148,10 +148,8 @@ MediaWindow::_BuildSidebar()
 	fSidebarSections.push_back(kInputSection);
 	fSidebar->AddItem(new BStringItem(B_TRANSLATE("Application volumes")));
 	fSidebarSections.push_back(kStreamsSection);
-#if MEDIA_PREFS_ENABLE_HARDWARE
 	fSidebar->AddItem(new BStringItem(B_TRANSLATE("Hardware")));
 	fSidebarSections.push_back(kHardwareSection);
-#endif
 	fSidebar->AddItem(new BStringItem(B_TRANSLATE("Sounds")));
 	fSidebarSections.push_back(kSoundsSection);
 
@@ -482,15 +480,12 @@ MediaWindow::_OnPipeWireChanged(uint32 what, uint32 deviceId)
 		}
 	}
 
-#if MEDIA_PREFS_ENABLE_HARDWARE
-
 	if (what == kMsgPWDeviceProfileChanged || what == kMsgPWDevicePortChanged)
 		_PopulateHardwareProfiles();
 
 	if (what == kMsgPWDevicesChanged) {
 		_PopulateHardwareDeviceMenu();
 	}
-#endif
 }
 
 
@@ -607,6 +602,8 @@ MediaWindow::MessageReceived(BMessage* msg)
 		case kMsgPWStreamsChanged:
 		case kMsgPWDefaultChanged:
 		case kMsgPWDeviceVolumeChanged:
+		case kMsgPWDevicePortChanged:
+		case kMsgPWDeviceProfileChanged:
 			_OnPipeWireChanged(msg->what,
 				msg->GetUInt32("device_id", 0));
 			break;

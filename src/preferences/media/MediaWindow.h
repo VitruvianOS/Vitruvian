@@ -36,10 +36,6 @@ public:
 	virtual	void			MessageReceived(BMessage* message);
 	virtual	bool			QuitRequested();
 
-#ifndef MEDIA_PREFS_ENABLE_HARDWARE
-#	define MEDIA_PREFS_ENABLE_HARDWARE 0
-#endif
-
 private:
 			enum Section {
 				kOutputSection    = kMediaSectionOutput,

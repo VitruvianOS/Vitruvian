@@ -9,6 +9,7 @@
 
 #include <Alert.h>
 #include <Application.h>
+#include <Button.h>
 #include <Catalog.h>
 #include <Entry.h>
 #include <GroupLayout.h>
@@ -396,6 +397,17 @@ MainWindow::_BuildLayout()
 	fStaleHintView->SetExplicitMinSize(BSize(0, B_SIZE_UNSET));
 	fStaleHintView->Hide();
 
+	fEmptyListsHintView = new TruncatingStringView("empty lists hint",
+		B_TRANSLATE("No packages are available from the configured "
+			"repositories. The package lists on this V\\OS system may "
+			"be empty."));
+	fEmptyListsHintView->SetExplicitMaxSize(
+		BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	fEmptyListsHintView->SetExplicitMinSize(BSize(0, B_SIZE_UNSET));
+
+	fUpdateListsButton = new BButton("update lists",
+		B_TRANSLATE("Update package lists"), new BMessage(kMsgAptUpdate));
+
 	BSplitView* splitView = new BSplitView(B_VERTICAL, B_USE_SMALL_SPACING);
 	BLayoutBuilder::Split<>(splitView)
 		.Add(fListView, 3.0f)
@@ -413,9 +425,16 @@ MainWindow::_BuildLayout()
 			.SetInsets(B_USE_WINDOW_INSETS)
 			.Add(fFilterView)
 			.Add(fStaleHintView)
+			.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+				.Add(fEmptyListsHintView)
+				.AddGlue()
+				.Add(fUpdateListsButton)
+			.End()
 			.Add(fMainTabView)
 			.Add(fStatusView)
 		.End();
+
+	_ShowEmptyListsHint(false);
 }
 
 
@@ -649,6 +668,10 @@ MainWindow::_HandleListReady(BMessage* message)
 
 	fPackages.SortItems(compare_packages);
 
+	bool listsEmpty = false;
+	message->FindBool("lists_empty", &listsEmpty);
+	_ShowEmptyListsHint(listsEmpty);
+
 	BObjectList<BString, true> sections(32);
 	for (int32 i = 0; i < fPackages.CountItems(); i++) {
 		const BString& category = fPackages.ItemAt(i)->Category();
@@ -773,4 +796,17 @@ MainWindow::_ShowStaleHint(bool show)
 		fStaleHintView->Show();
 	else if (!show && !isHidden)
 		fStaleHintView->Hide();
+}
+
+
+void
+MainWindow::_ShowEmptyListsHint(bool show)
+{
+	if (show) {
+		fEmptyListsHintView->Show();
+		fUpdateListsButton->Show();
+	} else {
+		fEmptyListsHintView->Hide();
+		fUpdateListsButton->Hide();
+	}
 }

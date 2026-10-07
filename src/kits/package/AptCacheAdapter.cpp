@@ -5,11 +5,15 @@
 
 #include "AptCacheAdapter.h"
 
+#include <Directory.h>
+#include <Entry.h>
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -107,6 +111,33 @@ AptCacheAdapter::InvalidateCache()
 {
 	delete fCache;
 	fCache = NULL;
+}
+
+
+bool
+AptCacheAdapter::ListsLookEmpty()
+{
+	BDirectory dir("/var/lib/apt/lists");
+	if (dir.InitCheck() != B_OK)
+		return true;
+
+	BEntry entry;
+	while (dir.GetNextEntry(&entry) == B_OK) {
+		char name[B_FILE_NAME_LENGTH];
+		if (entry.GetName(name) != B_OK)
+			continue;
+		if (strcmp(name, "lock") == 0 || strcmp(name, "partial") == 0
+			|| strcmp(name, "auxfiles") == 0) {
+			continue;
+		}
+
+		struct stat st;
+		if (entry.GetStat(&st) == B_OK && S_ISREG(st.st_mode)
+			&& st.st_size > 0) {
+			return false;
+		}
+	}
+	return true;
 }
 
 

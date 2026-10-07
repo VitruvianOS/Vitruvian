@@ -18,6 +18,7 @@ class BMenuBar;
 class BMenuItem;
 class BMenu;
 class BTabView;
+class BButton;
 class AptLogView;
 class FilterView;
 class PackageInfo;
@@ -57,6 +58,7 @@ private:
 
 			void				_WatchDpkgStatus();
 			void				_ShowStaleHint(bool show);
+			void				_ShowEmptyListsHint(bool show);
 
 		BMenuBar*			fMenuBar;
 		BMenuItem*			fApplyItem;
@@ -66,6 +68,8 @@ private:
 		BMenu*				fClearMarksMenu;
 		BMenuItem*			fClearMarksItem;
 			TruncatingStringView* fStaleHintView;
+			TruncatingStringView* fEmptyListsHintView;
+			BButton*			fUpdateListsButton;
 			FilterView*			fFilterView;
 			BTabView*			fMainTabView;
 			PackageListView*	fListView;

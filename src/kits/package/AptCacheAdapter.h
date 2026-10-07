@@ -70,6 +70,8 @@ public:
 			// Caller's thread must be the one that makes the next call.
 			void				InvalidateCache();
 
+			bool				ListsLookEmpty();
+
 private:
 			class CacheHandle;
 

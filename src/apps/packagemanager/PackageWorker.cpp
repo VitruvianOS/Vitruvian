@@ -260,6 +260,9 @@ PackageWorker::_OnPackageListReply(BMessage* message)
 	BMessage reply(kMsgListReady);
 	reply.AddPointer("packages", packages);
 	reply.AddInt32("count", packages->CountItems());
+	bool listsEmpty = false;
+	message->FindBool("lists_empty", &listsEmpty);
+	reply.AddBool("lists_empty", listsEmpty);
 	fOwner.SendMessage(&reply);
 }
 

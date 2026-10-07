@@ -28,7 +28,7 @@ ln -sf /lib /system/lib
 ln -sf /tmp /system/cache
 ln -sf /var /system/var
 
-# Per-user Desktop/Home and Desktop/System symlinks are created on first
+# Per-user Desktop/home and Desktop/System symlinks are created on first
 # login by /system/boot/first_login/00-desktop-shortcuts, not here.
 
 mkdir -p /etc/skel/config/settings/deskbar/menu/

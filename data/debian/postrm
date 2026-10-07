@@ -84,7 +84,8 @@ if [ "$ACTION" = "purge" ]; then
         rm -f "$home/.vitruvian/provisioned" 2>/dev/null || true
         rmdir "$home/.vitruvian" 2>/dev/null || true
         # Desktop symlinks
-        for link in "$home/Desktop/Home" "$home/Desktop/System"; do
+        for link in "$home/Desktop/home" "$home/Desktop/Home" \
+            "$home/Desktop/System"; do
             [ -L "$link" ] && rm -f "$link" || true
         done
         rmdir "$home/Desktop" 2>/dev/null || true

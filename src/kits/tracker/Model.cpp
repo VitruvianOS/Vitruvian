@@ -405,6 +405,8 @@ Model::Name() const
 	static const char* kRootNodeName = B_TRANSLATE_MARK(B_DISKS_DIR_NAME);
 	static const char* kTrashNodeName = B_TRANSLATE_MARK(B_TRASH_DIR_NAME);
 	static const char* kDesktopNodeName = B_TRANSLATE_MARK(B_DESKTOP_DIR_NAME);
+	static const char* kHomeNodeName = B_TRANSLATE_MARK_ALL("home",
+		"B_USER_DIRECTORY", "");
 
 	switch (fBaseType) {
 		case kRootNode:
@@ -424,6 +426,9 @@ Model::Name() const
 		default:
 			break;
 	}
+
+	if (WellKnowEntryList::Match(NodeRef()) == B_USER_DIRECTORY)
+		return B_TRANSLATE_NOCOLLECT_ALL(kHomeNodeName, "B_USER_DIRECTORY", "");
 
 	if (fHasLocalizedName && gLocalizedNamePreferred)
 		return fLocalizedName.String();

@@ -1,0 +1,37 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
+
+resource app_signature "application/x-vnd.Haiku-MediaPlayer";
+
+resource app_name_catalog_entry "x-vnd.Haiku-MediaPlayer:System name:MediaPlayer";
+
+resource app_version {
+	major      = 1,
+	middle     = 0,
+	minor      = 0,
+	variety    = B_APPV_BETA,
+	internal   = 0,
+	short_info = "MediaPlayer",
+	long_info  = "MediaPlayer for V\\OS"
+};
+
+resource app_flags B_SINGLE_LAUNCH;
+
+resource file_types message {
+	"types" = "application/x-vnd.haiku-playlist",
+
+	"types" = "audio",
+	"types" = "video",
+	"types" = "audio/mpeg",
+	"types" = "audio/mp4",
+	"types" = "audio/x-flac",
+	"types" = "audio/ogg",
+	"types" = "audio/x-vorbis+ogg",
+	"types" = "video/mp4",
+	"types" = "video/x-matroska",
+	"types" = "video/mpeg",
+	"types" = "audio/x-midi",
+	"types" = "audio/midi"
+};

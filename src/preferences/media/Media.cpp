@@ -14,7 +14,6 @@
 #include <Screen.h>
 
 #include <algorithm>
-#include <stdio.h>
 
 #include "MediaMessages.h"
 #include "MediaWindow.h"
@@ -45,8 +44,6 @@ Application::Application()
 void
 Application::ReadyToRun()
 {
-
-
 	BRect rect(100, 100, 880, 580);
 	int32 section = 0;
 
@@ -55,16 +52,16 @@ Application::ReadyToRun()
 		path.Append(kMediaSettingsFile);
 		BFile file(path.Path(), B_READ_ONLY);
 		if (file.InitCheck() == B_OK) {
-			char buffer[256];
-			ssize_t size = file.Read(buffer, sizeof(buffer) - 1);
-			if (size > 0) {
-				buffer[size] = '\0';
-				int32 l, t, r, b, s;
-				if (sscanf(buffer, "rect = %d,%d,%d,%d\nsection = %d",
-						&l, &t, &r, &b, &s) == 5) {
-					BRect saved(l, t, r, b);
+			BMessage settings;
+			if (settings.Unflatten(&file) == B_OK) {
+				BRect saved;
+				int32 savedSection = 0;
+				if (settings.FindRect("frame", &saved) == B_OK
+					&& settings.FindInt32("section", &savedSection) == B_OK) {
 					BRect screen = BScreen().Frame();
-					if (r > l && b > t && saved.Width() >= 200.0f
+					if (saved.right > saved.left
+						&& saved.bottom > saved.top
+						&& saved.Width() >= 200.0f
 						&& saved.Height() >= 150.0f
 						&& saved.Intersects(screen)) {
 						// Pull a partly off-screen frame back on screen.
@@ -74,7 +71,7 @@ Application::ReadyToRun()
 							std::max(0.0f, screen.top - saved.top)
 								+ std::min(0.0f, screen.bottom - saved.bottom));
 						rect = saved;
-						section = s;
+						section = savedSection;
 					}
 				}
 			}

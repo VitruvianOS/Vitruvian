@@ -6,7 +6,6 @@
 #include "MediaWindow.h"
 
 #include <algorithm>
-#include <stdio.h>
 
 #include <Application.h>
 #include <Catalog.h>
@@ -121,13 +120,10 @@ MediaWindow::~MediaWindow()
 		path.Append(kMediaSettingsFile);
 		BFile file(path.Path(), B_READ_WRITE | B_CREATE_FILE | B_ERASE_FILE);
 		if (file.InitCheck() == B_OK) {
-			BRect rect = Frame();
-			char buffer[128];
-			int len = snprintf(buffer, sizeof(buffer),
-				"rect = %d,%d,%d,%d\nsection = %d\n",
-				(int)rect.left, (int)rect.top, (int)rect.right,
-				(int)rect.bottom, (int)fShownSection);
-			file.Write(buffer, len);
+			BMessage settings;
+			settings.AddRect("frame", Frame());
+			settings.AddInt32("section", fShownSection);
+			settings.Flatten(&file);
 		}
 	}
 

@@ -1712,13 +1712,15 @@ BPoseView::AddTrashPoses()
 	BVolumeRoster volRoster;
 	volRoster.Rewind();
 	BVolume volume;
+	BObjectList<node_ref, true> seen(4);
 	while (volRoster.GetNextVolume(&volume) == B_OK) {
-		if (!volume.IsPersistent())
+		if (volume.IsReadOnly())
 			continue;
 
 		BDirectory trashDir;
 		BEntry entry;
 		if (FSGetTrashDir(&trashDir, volume.Device()) == B_OK
+			&& FSRecordTrashDir(&seen, &trashDir)
 			&& trashDir.GetEntry(&entry) == B_OK) {
 			Model model(&entry);
 			if (model.InitCheck() == B_OK)
@@ -5635,6 +5637,7 @@ BPoseView::FSNotification(const BMessage* message)
 			// The Disks window can too
 			// So can the Desktop, as long as the integrate flag is on
 			if (targetModel != NULL && dirNode != *targetModel->NodeRef()
+				&& !targetModel->IsTrash()
 				&& !targetModel->IsQuery()
 				&& !targetModel->IsVirtualDirectory()
 				&& !targetModel->IsRoot()
@@ -5737,7 +5740,22 @@ BPoseView::FSNotification(const BMessage* message)
 					}
 				}
 
-			 	DeletePose(&itemNode);
+				entry_ref dirRef;
+				const char* name;
+				if (pose == NULL
+					&& message->FindString("name", &name) == B_OK
+					&& name != NULL && name[0] != '\0'
+					&& message->FindRef("virtual:directory", &dirRef)
+						== B_OK) {
+					entry_ref poseRef(dirRef.vdevice(), dirRef.vdirectory(),
+						name);
+					pose = fPoseList->FindPose(&poseRef, &index);
+				}
+
+				if (pose != NULL)
+					DeletePose(pose->TargetModel()->NodeRef(), pose, index);
+				else
+					DeletePose(&itemNode);
 				TryUpdatingBrokenLinks();
 			}
 			break;
@@ -5942,7 +5960,7 @@ BPoseView::EntryMoved(const BMessage* message)
 	node_ref thisDirNode;
 	if (TargetModel()->IsTrash()) {
 		BDirectory trashDir;
-		if (FSGetTrashDir(&trashDir, itemNode.vdevice()) != B_OK)
+		if (FSGetTrashDir(&trashDir, itemNode.device()) != B_OK)
 			return true;
 
 		trashDir.GetNodeRef(&thisDirNode);

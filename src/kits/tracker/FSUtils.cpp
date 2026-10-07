@@ -2838,6 +2838,23 @@ FSGetTrashDir(BDirectory* trashDir, dev_t dev)
 }
 
 
+bool
+FSRecordTrashDir(BObjectList<node_ref, true>* seen, const BDirectory* trashDir)
+{
+	node_ref nodeRef;
+	if (trashDir->GetNodeRef(&nodeRef) != B_OK)
+		return false;
+
+	for (int32 i = 0; i < seen->CountItems(); i++) {
+		if (*seen->ItemAt(i) == nodeRef)
+			return false;
+	}
+
+	seen->AddItem(new node_ref(nodeRef));
+	return true;
+}
+
+
 status_t
 FSGetDeskDir(BDirectory* deskDir)
 {

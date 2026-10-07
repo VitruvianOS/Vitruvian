@@ -877,7 +877,8 @@ BMediaFile::CreateTrack(const BMediaFormat& outputFormat)
 
 
 BMediaTrack*
-BMediaFile::CreateTrack(media_format* mf, const media_codec_info* codecInfo)
+BMediaFile::CreateTrack(media_format* mf, const media_codec_info* codecInfo,
+	uint32 /*flags*/)
 {
 	if (mf == NULL)
 		return NULL;
@@ -1060,8 +1061,8 @@ BMediaTrack::EncodedFormat(media_format* format) const
 	if (format == NULL || fImpl == NULL || fImpl->fInitErr != B_OK)
 		return B_BAD_VALUE;
 	if (fImpl->fKind == kTrackText) {
-		format->format.Clear();
-		format->format.type = B_MEDIA_TEXT;
+		format->Clear();
+		format->type = B_MEDIA_TEXT;
 		return B_OK;
 	}
 	if (!fImpl->fEncodedFormat.IsEncodedAudio()
@@ -1069,16 +1070,16 @@ BMediaTrack::EncodedFormat(media_format* format) const
 		// Write-mode tracks store the wrapped encoded format; read-mode
 		// discovery always sets an encoded type. Anything else is an error.
 		if (fImpl->fFormat.IsRawAudio()) {
-			*format = BMediaFormat();
-			format->format.type = B_MEDIA_ENCODED_AUDIO;
-			format->format.u.encoded_audio.output
+			format->Clear();
+			format->type = B_MEDIA_ENCODED_AUDIO;
+			format->u.encoded_audio.output
 				= fImpl->fFormat.format.u.raw_audio;
-			format->format.u.encoded_audio.encoding = B_CODEC_TYPE_UNKNOWN;
+			format->u.encoded_audio.encoding = B_CODEC_TYPE_UNKNOWN;
 			return B_OK;
 		}
 		return B_ERROR;
 	}
-	*format = fImpl->fEncodedFormat;
+	*format = fImpl->fEncodedFormat.format;
 	return B_OK;
 }
 
@@ -1342,8 +1343,7 @@ BMediaTrack::SeekToFrame(int64* inOutFrame, int32 flags)
 
 
 status_t
-BMediaTrack::WriteFrames(const void* buffer, int64 frameCount,
-	const media_header* /*mh*/)
+BMediaTrack::WriteFrames(const void* buffer, int64 frameCount, int32 /*flags*/)
 {
 	if (buffer == NULL || frameCount <= 0
 			|| fImpl == NULL || !fImpl->fWriteMode || fImpl->fAppSrc == NULL) {

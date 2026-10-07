@@ -31,12 +31,18 @@ public:
 
 			int32				CountTracks() const;
 			BMediaTrack*		TrackAt(int32 index);
+
+			// Tracks are owned by this BMediaFile. ReleaseTrack() checks
+			// that 'track' came from TrackAt()/CreateTrack() and returns
+			// B_OK; it does not free the object. The file destructor
+			// deletes every track it still holds.
 			status_t			ReleaseTrack(BMediaTrack* track);
 
 			BMediaTrack*		CreateTrack(const BMediaFormat& outputFormat);
 
 			BMediaTrack*		CreateTrack(media_format* mf,
-									const media_codec_info* codecInfo);
+									const media_codec_info* codecInfo,
+									uint32 flags = 0);
 
 			status_t			CommitHeader();
 			status_t			CloseFile();

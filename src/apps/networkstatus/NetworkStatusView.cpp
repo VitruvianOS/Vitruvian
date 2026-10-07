@@ -853,10 +853,22 @@ NetworkStatusView::_HandleSecretResult(BMessage* message)
 		message->FindString("password", &password);
 		message->FindString("identity", &identity);
 
+		// VPN dialogs answer with secret_key/secret_value pairs.
+		BMessage secrets;
+		BString key;
+		BString value;
+		for (int32 i = 0;
+				message->FindString("secret_key", i, &key) == B_OK; i++) {
+			if (message->FindString("secret_value", i, &value) == B_OK) {
+				secrets.AddString("secret_key", key);
+				secrets.AddString("secret_value", value);
+			}
+		}
+
 		NMBackend* backend = NMBackend::Instance();
 		if (backend != NULL) {
 			backend->CompleteSecretRequest(requestId, connect, password,
-				identity, remember);
+				identity, remember, secrets.IsEmpty() ? NULL : &secrets);
 		}
 	}
 

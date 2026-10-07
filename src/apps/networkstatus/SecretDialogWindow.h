@@ -7,6 +7,7 @@
 
 
 #include <Messenger.h>
+#include <ObjectList.h>
 #include <String.h>
 #include <Window.h>
 
@@ -22,7 +23,9 @@ enum secret_dialog_kind {
 	kSecretWEP,
 	kSecretEnterprise,
 	kSecretWired8021x,
-	kSecretMissingCertificate
+	kSecretMissingCertificate,
+	kSecretVPN,
+	kSecretWireGuard
 };
 
 
@@ -44,6 +47,7 @@ private:
 									const BString& method, bool wired);
 			void				_BuildMissingCertificate(
 									const BString& missingFile);
+			void				_BuildVPN(const BMessage& request);
 			void				_ToggleShowPassword();
 			void				_SendResult(bool connect);
 
@@ -56,6 +60,12 @@ private:
 			BTextControl*		fIdentityField;
 			BCheckBox*			fShowPassword;
 			BCheckBox*			fRemember;
+
+			struct SecretField {
+				BString			key;
+				BTextControl*	control;
+			};
+			BObjectList<SecretField, true>	fSecretFields;
 };
 
 

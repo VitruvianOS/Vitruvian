@@ -317,6 +317,8 @@ public:
 	status_t GetVPNConnections(BMessage* outVPNs);
 	status_t ConnectVPN(const char* connectionPath);
 	status_t DisconnectVPN(const char* connectionPath);
+
+
 	
 	// Notifications (BMessage protocol)
 	status_t StartWatching(const BMessenger& target, uint32 notificationMask);
@@ -333,13 +335,15 @@ public:
 	};
 
 	// org.freedesktop.NetworkManager.SecretAgent -- registered by the
-	// NetworkStatus replicant only: it owns the WPA/802.1x prompt UI.
+	// NetworkStatus replicant only: it owns the WPA/802.1x/VPN prompt UI.
 	// uiHandler receives SECRET_REQUEST ("request_id", "kind" a
 	// secret_dialog_kind mirrored below, "ssid", "request_new",
-	// "method"/"missing_file" as applicable -- shaped exactly like
-	// SecretDialogWindow's request bag) and SECRET_CANCEL. Both calls run
-	// the D-Bus work on the dispatch thread and return immediately -- safe
-	// from a window thread (AttachedToWindow/DetachedFromWindow).
+	// "method"/"missing_file" as applicable, "connection_name"/
+	// "secret_keys"/"secret_messages" for vpn and wireguard -- shaped
+	// exactly like SecretDialogWindow's request bag) and SECRET_CANCEL.
+	// Both calls run the D-Bus work on the dispatch thread and return
+	// immediately -- safe from a window thread
+	// (AttachedToWindow/DetachedFromWindow).
 	status_t RegisterSecretAgentAsync(const BMessenger& uiHandler,
 		const BMessenger& replyTo, uint32 replyWhat);
 	status_t UnregisterSecretAgentAsync(const BMessenger& replyTo,
@@ -348,12 +352,15 @@ public:
 	// Delivers the user's answer for a still-open GetSecrets request,
 	// completing the held GDBusMethodInvocation. Safe from any thread; a
 	// stale or already-answered/cancelled requestId is a silent no-op.
-	// remember maps to the connection's autoconnect flag.
+	// remember maps to the connection's autoconnect flag (not for VPNs).
+	// secrets, for vpn and wireguard, holds secret_key/secret_value pairs
+	// and replaces password.
 	void CompleteSecretRequest(uint32 requestId, bool accepted,
-		const BString& password, const BString& identity, bool remember);
+		const BString& password, const BString& identity, bool remember,
+		const BMessage* secrets = NULL);
 
 	// Mirrors secret_dialog_kind in
-	// src/apps/networkstatus/SecretDialogWindow.h exactly (0..4, same
+	// src/apps/networkstatus/SecretDialogWindow.h exactly (0..6, same
 	// order) -- kept as a plain int32 here rather than an #include because
 	// kit code must not depend on an app header; only the numeric
 	// convention is shared, carried across in the "kind" BMessage field.
@@ -362,7 +369,9 @@ public:
 		SECRET_KIND_WEP,
 		SECRET_KIND_ENTERPRISE,
 		SECRET_KIND_WIRED_8021X,
-		SECRET_KIND_MISSING_CERTIFICATE
+		SECRET_KIND_MISSING_CERTIFICATE,
+		SECRET_KIND_VPN,
+		SECRET_KIND_WIREGUARD
 	};
 
 	// Mirrors NetworkStatusView's {kMsgAgentRequest,kMsgAgentCancel}-style
@@ -380,7 +389,8 @@ public:
 	status_t _RegisterSecretAgent(const BMessenger& uiHandler);
 	status_t _UnregisterSecretAgent();
 	void _CompleteSecretRequest(uint32 requestId, bool accepted,
-		const BString& password, const BString& identity, bool remember);
+		const BString& password, const BString& identity, bool remember,
+		const BMessage* secrets);
 
 	// Public for the same reason as the SecretAgent helpers above: the
 	// dispatch-job completion callbacks for ConnectDevice/DisconnectDevice/

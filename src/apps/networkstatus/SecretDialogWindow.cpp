@@ -75,6 +75,10 @@ SecretDialogWindow::SecretDialogWindow(secret_dialog_kind kind,
 			_BuildMissingCertificate(missingFile);
 			break;
 		}
+		case kSecretVPN:
+		case kSecretWireGuard:
+			_BuildVPN(request);
+			break;
 	}
 
 	CenterOnScreen();
@@ -195,6 +199,85 @@ SecretDialogWindow::_BuildEnterprise(const BString& ssid,
 }
 
 
+static const char*
+_SecretLabel(const BString& key)
+{
+	if (key == "password")
+		return B_TRANSLATE("Password:");
+	if (key == "private-key")
+		return B_TRANSLATE("Private key:");
+	if (key == "preshared-key")
+		return B_TRANSLATE("Pre-shared key:");
+	if (key == "cert-pass")
+		return B_TRANSLATE("Certificate password:");
+	if (key == "Xauth password" || key == "xauth-password")
+		return B_TRANSLATE("XAuth password:");
+	if (key == "IPSec secret" || key == "group-password")
+		return B_TRANSLATE("Group password:");
+	if (key == "http-proxy-password")
+		return B_TRANSLATE("Proxy password:");
+	return NULL;
+}
+
+
+void
+SecretDialogWindow::_BuildVPN(const BMessage& request)
+{
+	BString name;
+	request.FindString("connection_name", &name);
+	BString heading;
+	if (name.IsEmpty())
+		heading = B_TRANSLATE("The VPN connection needs authentication.");
+	else {
+		heading.SetToFormat(B_TRANSLATE("\"%s\" needs authentication."),
+			name.String());
+	}
+
+	BLayoutBuilder::Group<> builder(this, B_VERTICAL, B_USE_DEFAULT_SPACING);
+	builder.SetInsets(B_USE_WINDOW_SPACING)
+		.Add(new BStringView(NULL, heading.String()));
+
+	BMessage messages;
+	request.FindMessage("secret_messages", &messages);
+	BString text;
+	for (int32 i = 0; messages.FindString("message", i, &text) == B_OK; i++)
+		builder.Add(new BStringView(NULL, text.String()));
+
+	BMessage keys;
+	request.FindMessage("secret_keys", &keys);
+	BString key;
+	for (int32 i = 0; keys.FindString("key", i, &key) == B_OK; i++) {
+		if (key.IsEmpty())
+			continue;
+		const char* label = _SecretLabel(key);
+		BString fallback;
+		if (label == NULL) {
+			fallback.SetToFormat("%s:", key.String());
+			label = fallback.String();
+		}
+		BTextControl* control = new BTextControl(NULL, label, NULL, NULL);
+		control->TextView()->HideTyping(true);
+		fSecretFields.AddItem(new SecretField{key, control});
+		builder.Add(control);
+	}
+
+	BButton* cancel = new BButton(B_TRANSLATE("Cancel"),
+		new BMessage(kMsgCancel));
+	BButton* connect = new BButton(B_TRANSLATE("Connect"),
+		new BMessage(kMsgConnect));
+
+	builder.AddGroup(B_HORIZONTAL)
+			.AddGlue()
+			.Add(cancel)
+			.Add(connect)
+		.End();
+
+	SetDefaultButton(connect);
+	if (!fSecretFields.IsEmpty())
+		fSecretFields.ItemAt(0)->control->MakeFocus(true);
+}
+
+
 void
 SecretDialogWindow::_BuildMissingCertificate(const BString& missingFile)
 {
@@ -278,10 +361,18 @@ SecretDialogWindow::_SendResult(bool connect)
 	result.AddUInt32("request_id", fRequestId);
 	result.AddBool("connect", connect);
 	if (connect) {
-		if (fPasswordField != NULL)
-			result.AddString("password", fPasswordField->Text());
-		if (fIdentityField != NULL)
-			result.AddString("identity", fIdentityField->Text());
+		if (!fSecretFields.IsEmpty()) {
+			for (int32 i = 0; i < fSecretFields.CountItems(); i++) {
+				SecretField* field = fSecretFields.ItemAt(i);
+				result.AddString("secret_key", field->key);
+				result.AddString("secret_value", field->control->Text());
+			}
+		} else {
+			if (fPasswordField != NULL)
+				result.AddString("password", fPasswordField->Text());
+			if (fIdentityField != NULL)
+				result.AddString("identity", fIdentityField->Text());
+		}
 		result.AddBool("remember",
 			fRemember != NULL && fRemember->Value() == B_CONTROL_ON);
 	}

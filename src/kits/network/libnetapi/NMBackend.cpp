@@ -4173,9 +4173,13 @@ NMBackend::_HandleGetSecrets(GVariant* parameters,
 			kind = SECRET_KIND_MISSING_CERTIFICATE;
 		else
 			kind = wired ? SECRET_KIND_WIRED_8021X : SECRET_KIND_ENTERPRISE;
+	} else if (strcmp(settingName, "vpn") == 0
+			|| strcmp(settingName, "wireguard") == 0) {
+		kind = strcmp(settingName, "vpn") == 0
+			? SECRET_KIND_VPN : SECRET_KIND_WIREGUARD;
+		keyName = "";
 	} else {
-		// Not one of the dialog cases (e.g. a VPN plugin's own secret) --
-		// this agent has no dialog for it; decline rather than guess.
+		// No dialog for this setting: decline rather than guess.
 		BString reason;
 		reason.SetToFormat("No dialog implemented for setting %s",
 			settingName);
@@ -4185,6 +4189,35 @@ NMBackend::_HandleGetSecrets(GVariant* parameters,
 		g_variant_unref(connection);
 		g_variant_unref(hints);
 		return;
+	}
+
+	BMessage secretKeys;
+	BMessage secretMessages;
+	BString connectionName;
+	if (kind == SECRET_KIND_VPN || kind == SECRET_KIND_WIREGUARD) {
+		connectionName = _ExtractStringProperty(connection, "connection",
+			"id");
+		if (hints != NULL) {
+			gsize nHints = 0;
+			const char** hintList = g_variant_get_strv(hints, &nHints);
+			for (gsize i = 0; i < nHints; i++) {
+				if (hintList[i] == NULL)
+					continue;
+				// Plugin prompt text, shown but not collected.
+				static const char* kVpnMessagePrefix = "x-vpn-message:";
+				if (strncmp(hintList[i], kVpnMessagePrefix,
+						strlen(kVpnMessagePrefix)) == 0) {
+					secretMessages.AddString("message",
+						hintList[i] + strlen(kVpnMessagePrefix));
+				} else {
+					secretKeys.AddString("key", hintList[i]);
+				}
+			}
+			g_free(hintList);
+		}
+		// Plugins that send no hints expect the standard password secret.
+		if (secretKeys.IsEmpty())
+			secretKeys.AddString("key", "password");
 	}
 
 	g_variant_unref(connection);
@@ -4202,6 +4235,12 @@ NMBackend::_HandleGetSecrets(GVariant* parameters,
 		request.AddString("method", method);
 	if (!missingFile.IsEmpty())
 		request.AddString("missing_file", missingFile);
+	if (kind == SECRET_KIND_VPN || kind == SECRET_KIND_WIREGUARD) {
+		if (!connectionName.IsEmpty())
+			request.AddString("connection_name", connectionName);
+		request.AddMessage("secret_keys", &secretKeys);
+		request.AddMessage("secret_messages", &secretMessages);
+	}
 
 	_SecretRequestContext* ctx = new _SecretRequestContext;
 	ctx->invocation = invocation;
@@ -4301,7 +4340,8 @@ NMBackend::_SecretAgentMethodCall(GDBusConnection* connection,
 
 void
 NMBackend::_CompleteSecretRequest(uint32 requestId, bool accepted,
-	const BString& password, const BString& identity, bool remember)
+	const BString& password, const BString& identity, bool remember,
+	const BMessage* secrets)
 {
 	void* cookieRaw = fSecretRouter.Take(requestId);
 	if (cookieRaw == NULL)
@@ -4329,7 +4369,10 @@ NMBackend::_CompleteSecretRequest(uint32 requestId, bool accepted,
 	// is the object path NM handed us in GetSecrets -- update-and-commit is
 	// fire-and-forget; a failure here does not block answering the secrets
 	// request, which must happen regardless.
-	if (fNMClient != NULL && !fPendingConnectionPath.IsEmpty()) {
+	// A tunnel's autoconnect is not the prompt's business.
+	bool tunnel = ctx->settingName == NM_SETTING_VPN_SETTING_NAME
+		|| ctx->settingName == NM_SETTING_WIREGUARD_SETTING_NAME;
+	if (fNMClient != NULL && !fPendingConnectionPath.IsEmpty() && !tunnel) {
 		NMConnection* connection = (NMConnection*)nm_client_get_connection_by_path(
 			(NMClient*)fNMClient, fPendingConnectionPath.String());
 		if (connection != NULL) {
@@ -4350,8 +4393,36 @@ NMBackend::_CompleteSecretRequest(uint32 requestId, bool accepted,
 
 	GVariantBuilder settingBuilder;
 	g_variant_builder_init(&settingBuilder, G_VARIANT_TYPE("a{sv}"));
-	g_variant_builder_add(&settingBuilder, "{sv}", ctx->keyName.String(),
-		g_variant_new_string(password.String()));
+	if (secrets != NULL) {
+		// VPN plugin secrets travel nested as vpn.secrets (a{ss}); other
+		// settings take each secret as a property of their own.
+		bool vpn = ctx->settingName == NM_SETTING_VPN_SETTING_NAME;
+		GVariantBuilder vpnSecrets;
+		g_variant_builder_init(&vpnSecrets, G_VARIANT_TYPE("a{ss}"));
+		BString key;
+		BString value;
+		for (int32 i = 0;
+				secrets->FindString("secret_key", i, &key) == B_OK; i++) {
+			if (secrets->FindString("secret_value", i, &value) != B_OK
+					|| key.IsEmpty())
+				continue;
+			if (vpn) {
+				g_variant_builder_add(&vpnSecrets, "{ss}", key.String(),
+					value.String());
+			} else {
+				g_variant_builder_add(&settingBuilder, "{sv}", key.String(),
+					g_variant_new_string(value.String()));
+			}
+		}
+		if (vpn) {
+			g_variant_builder_add(&settingBuilder, "{sv}",
+				NM_SETTING_VPN_SECRETS, g_variant_builder_end(&vpnSecrets));
+		} else
+			g_variant_builder_clear(&vpnSecrets);
+	} else {
+		g_variant_builder_add(&settingBuilder, "{sv}", ctx->keyName.String(),
+			g_variant_new_string(password.String()));
+	}
 
 	GVariantBuilder outerBuilder;
 	g_variant_builder_init(&outerBuilder, G_VARIANT_TYPE("a{sa{sv}}"));
@@ -4376,6 +4447,8 @@ struct _CompleteSecretCookie {
 	BString password;
 	BString identity;
 	bool remember;
+	BMessage secrets;
+	bool hasSecrets;
 };
 
 
@@ -4385,7 +4458,8 @@ _RunCompleteSecretRequest(gpointer data)
 	_CompleteSecretCookie* cookie = (_CompleteSecretCookie*)data;
 	cookie->backend->_CompleteSecretRequest(cookie->requestId,
 		cookie->accepted, cookie->password, cookie->identity,
-		cookie->remember);
+		cookie->remember,
+		cookie->hasSecrets ? &cookie->secrets : NULL);
 	delete cookie;
 	return G_SOURCE_REMOVE;
 }
@@ -4393,7 +4467,8 @@ _RunCompleteSecretRequest(gpointer data)
 
 void
 NMBackend::CompleteSecretRequest(uint32 requestId, bool accepted,
-	const BString& password, const BString& identity, bool remember)
+	const BString& password, const BString& identity, bool remember,
+	const BMessage* secrets)
 {
 	if (fMainContext == NULL || requestId == 0)
 		return;
@@ -4405,6 +4480,9 @@ NMBackend::CompleteSecretRequest(uint32 requestId, bool accepted,
 	cookie->password = password;
 	cookie->identity = identity;
 	cookie->remember = remember;
+	cookie->hasSecrets = secrets != NULL;
+	if (secrets != NULL)
+		cookie->secrets = *secrets;
 
 	// GDBusMethodInvocation completion is documented thread-safe from any
 	// thread, but routing through the dispatch thread keeps a single

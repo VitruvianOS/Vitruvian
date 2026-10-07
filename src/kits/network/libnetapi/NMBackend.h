@@ -325,6 +325,9 @@ public:
 	status_t ImportVPNAsync(const char* filePath, const BMessenger& replyTo,
 		uint32 replyWhat);
 
+	// Reply: "status", and "reason" on failure.
+	status_t RemoveVPNAsync(const char* connectionPath,
+		const BMessenger& replyTo, uint32 replyWhat);
 	
 	// Notifications (BMessage protocol)
 	status_t StartWatching(const BMessenger& target, uint32 notificationMask);

@@ -101,6 +101,7 @@ private:
 
 			BButton*		fVPNConnectButton;
 			BButton*		fVPNDisconnectButton;
+			BButton*		fVPNRemoveButton;
 
 			// Hotspot (WiFi AP mode) controls and last known backend state.
 			NetworkHotspotSettings	fHotspotSettings;

@@ -2794,6 +2794,87 @@ NMBackend::ImportVPNAsync(const char* filePath, const BMessenger& replyTo,
 }
 
 
+struct _RemoveVPNJob {
+	NMClient* backendClient;
+	NMBackend* backend;
+	BString connectionPath;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_OnRemoveVPNDone(GObject* source, GAsyncResult* result, gpointer userData)
+{
+	_RemoveVPNJob* job = (_RemoveVPNJob*)userData;
+
+	GError* error = NULL;
+	gboolean ok = nm_remote_connection_delete_finish(
+		NM_REMOTE_CONNECTION(source), result, &error);
+
+	BMessage reply(job->replyWhat);
+	reply.AddInt32("status", ok ? (int32)B_OK : (int32)B_ERROR);
+	if (!ok) {
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+	}
+	job->replyTo.SendMessage(&reply);
+
+	// Deleting a profile raises no status event; refresh so lists drop it.
+	BMessage notify((uint32)NMBackend::NOTIFICATION_CONNECTION_STATUS_CHANGED);
+	notify.AddString(kNMFieldVPNPath, job->connectionPath);
+	job->backend->_RefreshSnapshotAndNotify(
+		NMBackend::NOTIFICATION_CONNECTION_STATUS_CHANGED, notify);
+	delete job;
+}
+
+
+static gboolean
+_RunRemoveVPN(gpointer data)
+{
+	_RemoveVPNJob* job = (_RemoveVPNJob*)data;
+
+	NMConnection* connection = (NMConnection*)nm_client_get_connection_by_path(
+		job->backendClient, job->connectionPath.String());
+	if (connection == NULL || !NM_IS_REMOTE_CONNECTION(connection)) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
+		reply.AddString("reason", "no such VPN connection");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	nm_remote_connection_delete_async(NM_REMOTE_CONNECTION(connection), NULL,
+		_OnRemoveVPNDone, job);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::RemoveVPNAsync(const char* connectionPath,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (connectionPath == NULL)
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_RemoveVPNJob* job = new _RemoveVPNJob;
+	job->backendClient = (NMClient*)fNMClient;
+	job->backend = this;
+	job->connectionPath = connectionPath;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunRemoveVPN, job);
+	return B_OK;
+}
+
+
 // Live-write, no Apply -- single atomic NMClient property writes.
 // nm_client_networking_set_enabled/nm_client_wireless_set_enabled are
 // themselves synchronous D-Bus calls in libnm, so route through the

@@ -51,6 +51,8 @@ static const uint32 kMsgForgetWiFi = 'iFwf';
 static const uint32 kMsgWiFiActionResult = 'iWar';
 static const uint32 kMsgConnectVPN = 'iCvp';
 static const uint32 kMsgDisconnectVPN = 'iDvp';
+static const uint32 kMsgRemoveVPN = 'iRvp';
+static const uint32 kMsgRemoveVPNResult = 'iRvr';
 
 static const uint32 kMsgSavedSelectionChanged = 'iSsc';
 static const uint32 kMsgSavedNetworksLoaded = 'iSnl';
@@ -566,6 +568,7 @@ InterfaceDetailView::InterfaceDetailView()
 	fSavedMoveDownButton(NULL),
 	fVPNConnectButton(NULL),
 	fVPNDisconnectButton(NULL),
+	fVPNRemoveButton(NULL),
 	fHotspotStartButton(NULL),
 	fHotspotStopButton(NULL),
 	fHotspotPage(NULL)
@@ -820,6 +823,56 @@ InterfaceDetailView::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgRemoveVPN:
+		{
+			BString path;
+			BString name;
+			fDeviceInfo.FindString(kNMFieldVPNPath, &path);
+			fDeviceInfo.FindString(kNMFieldVPNName, &name);
+			if (path.IsEmpty())
+				break;
+
+			BString text;
+			if (name.IsEmpty())
+				text = B_TRANSLATE("Delete this VPN connection?");
+			else
+				text.SetToFormat(
+					B_TRANSLATE("Delete the VPN connection \"%s\"?"), name.String());
+			text << "\n" << B_TRANSLATE("This cannot be undone.");
+
+			BAlert* alert = new BAlert(B_TRANSLATE("Remove VPN"),
+				text.String(), B_TRANSLATE("Remove"),
+				B_TRANSLATE("Cancel"), NULL, B_WIDTH_AS_USUAL,
+				B_STOP_ALERT);
+			alert->SetShortcut(B_ESCAPE, 0);
+			if (alert->Go() == 0) {
+				NMBackend* backend = NMBackend::Instance();
+				if (backend != NULL) {
+					backend->RemoveVPNAsync(path.String(),
+						BMessenger(this), kMsgRemoveVPNResult);
+				}
+			}
+			break;
+		}
+
+		case kMsgRemoveVPNResult:
+		{
+			int32 status = B_ERROR;
+			message->FindInt32("status", &status);
+			if (status != B_OK) {
+				BString reason;
+				message->FindString("reason", &reason);
+				BString text(B_TRANSLATE("Could not remove the VPN "
+					"connection."));
+				if (!reason.IsEmpty())
+					text << "\n" << reason;
+				BAlert* alert = new BAlert(B_TRANSLATE("Not removed"),
+					text.String(), B_TRANSLATE("OK"));
+				alert->Go(NULL);
+			}
+			break;
+		}
+
 		case kMsgStartHotspot:
 		{
 			bool willDisconnect = false;
@@ -981,6 +1034,7 @@ InterfaceDetailView::_Rebuild()
 	fSavedMoveDownButton = NULL;
 	fVPNConnectButton = NULL;
 	fVPNDisconnectButton = NULL;
+	fVPNRemoveButton = NULL;
 	fHotspotStartButton = NULL;
 	fHotspotStopButton = NULL;
 	fHotspotPage = NULL;
@@ -1568,10 +1622,13 @@ InterfaceDetailView::_RebuildVPNView()
 		new BMessage(kMsgConnectVPN));
 	fVPNDisconnectButton = new BButton("vpnDisconnect",
 		B_TRANSLATE("Disconnect"), new BMessage(kMsgDisconnectVPN));
+	fVPNRemoveButton = new BButton("vpnRemove", B_TRANSLATE("Remove"),
+		new BMessage(kMsgRemoveVPN));
 	fVPNConnectButton->SetEnabled(!connected);
 	fVPNDisconnectButton->SetEnabled(connected);
 	fVPNConnectButton->SetTarget(this);
 	fVPNDisconnectButton->SetTarget(this);
+	fVPNRemoveButton->SetTarget(this);
 
 	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
 		.SetInsets(B_USE_WINDOW_SPACING)
@@ -1580,6 +1637,7 @@ InterfaceDetailView::_RebuildVPNView()
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 			.Add(fVPNConnectButton)
 			.Add(fVPNDisconnectButton)
+			.Add(fVPNRemoveButton)
 			.AddGlue()
 		.End()
 		.AddGlue();

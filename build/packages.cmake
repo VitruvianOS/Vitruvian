@@ -123,41 +123,30 @@ endif()
 # compares digit runs numerically and letter runs as text, so roughly half
 # of all consecutive commit pairs sort backwards and apt reports a
 # downgrade. VOS_PKG_REV comes from the CI run number and is strictly
-# increasing; 0 marks a build that no pipeline allocated, so any official
-# package outranks anything built by hand.
+# increasing.
 # The number is allocated outside this repo and handed in, so no build
 # counter is kept in the source history. Nothing derives it from local
 # tags: a checkout that happens to carry one must not mint versions.
 if(DEFINED ENV{VOS_PKG_REV} AND NOT "$ENV{VOS_PKG_REV}" STREQUAL "")
 	set(VOS_PKG_REV "$ENV{VOS_PKG_REV}")
+	if(NOT VOS_PKG_REV MATCHES "^[0-9]+$")
+		message(FATAL_ERROR "VOS_PKG_REV='${VOS_PKG_REV}' is not a build number ([0-9]+)")
+	endif()
+	set(_vos_build "git${VOS_PKG_REV}")
 else()
-	set(VOS_PKG_REV "0")
-endif()
-if(NOT VOS_PKG_REV MATCHES "^[0-9]+$")
-	message(FATAL_ERROR "VOS_PKG_REV='${VOS_PKG_REV}' is not a build number ([0-9]+)")
+	# Local builds always upgrade: "local" sorts above "git" and the stamp
+	# orders them; a version bump still wins. Stamped at cpack time.
+	set(_vos_build "localVOSLOCALSTAMP")
+	set(CPACK_PROJECT_CONFIG_FILE
+		"${CMAKE_CURRENT_SOURCE_DIR}/build/cpack-local-version.cmake")
 endif()
 
-# Untracked files do not reach the package, so only tracked modifications
-# count as dirty.
-execute_process(
-	COMMAND git diff-index --quiet HEAD --
-	WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-	RESULT_VARIABLE _vos_tree_dirty
-	ERROR_QUIET)
-if(_vos_tree_dirty EQUAL 0)
-	set(_vos_dirty "")
-else()
-	# '~' sorts below the empty string, so a dirty build never shadows the
-	# clean one it was derived from.
-	set(_vos_dirty "~dirty")
-endif()
-
-# The rev must sit before the sha, inside the upstream part: the revision
-# field after the final '-' is only a tiebreak, and upstream is compared
-# first.
+# The build must sit before the sha, inside the upstream part: the
+# revision field after the final '-' is only a tiebreak, and upstream is
+# compared first.
 if(VOS_GIT_SHA)
 	set(CPACK_DEBIAN_PACKAGE_VERSION
-		"${PROJECT_VERSION}+git${VOS_PKG_REV}.${VOS_GIT_SHA}${_vos_dirty}-${VOS_PKG_REVISION}")
+		"${PROJECT_VERSION}+${_vos_build}.${VOS_GIT_SHA}-${VOS_PKG_REVISION}")
 	message(STATUS "VOS package version: ${CPACK_DEBIAN_PACKAGE_VERSION}")
 else()
 	message(WARNING "no git sha available - package version stays ${PROJECT_VERSION}, which collides in the pool on the next rebuild")

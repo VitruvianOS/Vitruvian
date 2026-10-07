@@ -100,12 +100,16 @@ AddPrinterDialog::AddPrinterDialog(const BMessenger& replyTo)
 	fDeviceList = new BColumnListView("devices",
 		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
 	fDeviceList->SetSelectionMessage(new BMessage(kMsgDeviceSelected));
+	const float scale = be_plain_font->Size() / 12.0f;
 	fDeviceList->AddColumn(new BStringColumn(B_TRANSLATE("Printer"),
-		180, 100, 300, B_TRUNCATE_END), kDeviceModelColumn);
+		180 * scale, 100 * scale, 300 * scale, B_TRUNCATE_END),
+		kDeviceModelColumn);
 	fDeviceList->AddColumn(new BStringColumn(B_TRANSLATE("Type"),
-		80, 50, 120, B_TRUNCATE_END), kDeviceClassColumn);
+		80 * scale, 50 * scale, 120 * scale, B_TRUNCATE_END),
+		kDeviceClassColumn);
 	fDeviceList->AddColumn(new BStringColumn(B_TRANSLATE("URI"),
-		220, 120, 360, B_TRUNCATE_END), kDeviceUriColumn);
+		220 * scale, 120 * scale, 360 * scale, B_TRUNCATE_END),
+		kDeviceUriColumn);
 
 	fUriField = new BTextControl("uri", B_TRANSLATE("URI:"),
 		"ipp://printer.local/ipp/print", NULL);

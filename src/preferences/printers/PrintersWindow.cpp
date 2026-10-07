@@ -213,28 +213,30 @@ PrintersWindow::PrintersWindow()
 void
 PrintersWindow::_SetupLists()
 {
+	const float scale = be_plain_font->Size() / 12.0f;
+
 	fPrinterList = new BColumnListView("printers",
 		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
 	fPrinterList->SetSelectionMessage(new BMessage(kMsgPrinterSelected));
 	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Printer"),
-		200, 120, 400, B_TRUNCATE_END), kPrinterColumn);
+		200 * scale, 120 * scale, 400 * scale, B_TRUNCATE_END), kPrinterColumn);
 	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Location"),
-		140, 80, 260, B_TRUNCATE_END), kLocationColumn);
+		140 * scale, 80 * scale, 260 * scale, B_TRUNCATE_END), kLocationColumn);
 	fPrinterList->AddColumn(new BStringColumn(B_TRANSLATE("Status"),
-		100, 60, 160, B_TRUNCATE_END), kStatusColumn);
+		100 * scale, 60 * scale, 160 * scale, B_TRUNCATE_END), kStatusColumn);
 	fPrinterList->SetSortingEnabled(true);
 
 	fJobList = new BColumnListView("jobs",
 		B_WILL_DRAW | B_FRAME_EVENTS, B_FANCY_BORDER, false);
 	fJobList->SetSelectionMessage(new BMessage(kMsgJobSelected));
-	fJobList->AddColumn(new BIntegerColumn(B_TRANSLATE("ID"), 50, 40, 80,
-		B_ALIGN_LEFT), kJobIdColumn);
+	fJobList->AddColumn(new BIntegerColumn(B_TRANSLATE("ID"),
+		50 * scale, 40 * scale, 80 * scale, B_ALIGN_LEFT), kJobIdColumn);
 	fJobList->AddColumn(new BStringColumn(B_TRANSLATE("Job"),
-		180, 100, 320, B_TRUNCATE_END), kJobNameColumn);
+		180 * scale, 100 * scale, 320 * scale, B_TRUNCATE_END), kJobNameColumn);
 	fJobList->AddColumn(new BStringColumn(B_TRANSLATE("State"),
-		90, 60, 140, B_TRUNCATE_END), kJobStateColumn);
+		90 * scale, 60 * scale, 140 * scale, B_TRUNCATE_END), kJobStateColumn);
 	fJobList->AddColumn(new BStringColumn(B_TRANSLATE("Queue"),
-		140, 80, 240, B_TRUNCATE_END), kJobQueueColumn);
+		140 * scale, 80 * scale, 240 * scale, B_TRUNCATE_END), kJobQueueColumn);
 	fJobList->SetSortingEnabled(true);
 }
 

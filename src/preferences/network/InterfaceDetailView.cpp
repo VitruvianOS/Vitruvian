@@ -89,12 +89,13 @@ public:
 	{
 		fNameControl = new BTextControl(B_TRANSLATE("Network name:"),
 			defaultName, new BMessage(kMsgHotspotFieldModified));
-		fNameControl->TextView()->SetExplicitMinSize(BSize(200,
+		const float fieldWidth = 200 * be_plain_font->Size() / 12.0f;
+		fNameControl->TextView()->SetExplicitMinSize(BSize(fieldWidth,
 			B_SIZE_UNSET));
 
 		fPasswordControl = new BTextControl(B_TRANSLATE("Password:"),
 			defaultPassword, new BMessage(kMsgHotspotFieldModified));
-		fPasswordControl->TextView()->SetExplicitMinSize(BSize(200,
+		fPasswordControl->TextView()->SetExplicitMinSize(BSize(fieldWidth,
 			B_SIZE_UNSET));
 
 		BStringView* hint = new BStringView(NULL,
@@ -274,7 +275,7 @@ public:
 			owner->FillRect(bounds);
 		}
 
-		const float dotSize = 8.0f;
+		const float dotSize = ceilf(be_plain_font->Size() * 2 / 3);
 		BPoint dotOrigin = bounds.LeftTop()
 			+ BPoint(be_control_look->DefaultLabelSpacing(),
 				(bounds.Height() - dotSize) / 2.0f);
@@ -324,10 +325,12 @@ public:
 		font->GetHeight(&height);
 		float lineHeight = ceilf(height.ascent) + ceilf(height.descent)
 			+ ceilf(height.leading);
-		fFirstLineOffset = 2 + ceilf(height.ascent + height.leading / 2);
+		fFirstLineOffset = ceilf(height.ascent + height.leading / 2);
 		fLineOffset = lineHeight;
 
-		SetHeight(std::max(2 * lineHeight + 4, 8.0f + 4));
+		const float pad = 2 * be_control_look->DefaultLabelSpacing();
+		SetHeight(std::max(2 * lineHeight + pad,
+			std::max(6.0f, font->Size()) + pad));
 	}
 
 private:

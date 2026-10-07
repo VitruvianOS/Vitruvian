@@ -20,6 +20,7 @@
 #include <Alert.h>
 #include <Application.h>
 #include <Button.h>
+#include <CardLayout.h>
 #include <Catalog.h>
 #include <CheckBox.h>
 #include <ControlLook.h>
@@ -121,7 +122,7 @@ public:
 			owner->FillRect(bounds);
 		}
 
-		const float dotSize = 8.0f;
+		const float dotSize = ceilf(be_plain_font->Size() * 2 / 3);
 		BPoint dotOrigin = bounds.LeftTop()
 			+ BPoint(be_control_look->DefaultLabelSpacing(),
 				(bounds.Height() - dotSize) / 2.0f);
@@ -157,10 +158,12 @@ public:
 		font->GetHeight(&height);
 		float lineHeight = ceilf(height.ascent) + ceilf(height.descent)
 			+ ceilf(height.leading);
-		fFirstLineOffset = 2 + ceilf(height.ascent + height.leading / 2);
+		fFirstLineOffset = ceilf(height.ascent + height.leading / 2);
 		fLineOffset = lineHeight;
 
-		SetHeight(std::max(2 * lineHeight + 4, 8.0f + 4));
+		const float pad = 2 * be_control_look->DefaultLabelSpacing();
+		SetHeight(std::max(2 * lineHeight + pad,
+			std::max(6.0f, font->Size()) + pad));
 	}
 
 	bool Connected() const { return fConnected; }
@@ -223,6 +226,7 @@ NetworkWindow::NetworkWindow()
 	fDetailView(NULL),
 	fMobileView(NULL),
 	fProxyView(NULL),
+	fCards(NULL),
 	fRevertButton(NULL),
 	fWiFiRefreshRunner(NULL),
 	fImportVPNPanel(NULL),
@@ -252,25 +256,27 @@ NetworkWindow::NetworkWindow()
 
 	BScrollView* scrollView = new BScrollView("ScrollView", fListView,
 		0, false, true);
-	scrollView->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNLIMITED));
+	// Not sized from the items: that made the window jump. The detail pane
+	// takes the extra width.
+	const float scale = be_plain_font->Size() / 12.0f;
+	scrollView->SetExplicitMinSize(BSize(180 * scale, 300 * scale));
+	scrollView->SetExplicitMaxSize(BSize(260 * scale, B_SIZE_UNLIMITED));
 
 	fDetailView = new InterfaceDetailView();
 	fMobileView = new MobileBroadbandView();
-	fMobileView->Hide();
 	fProxyView = new ProxyView();
-	fProxyView->Hide();
 
-	// Build the layout: list on the left, swappable detail pane on the
-	// right (device detail, mobile broadband, or the system-wide Proxy
-	// pane), Deskbar checkbox along the bottom.
+	// The cards share the largest minimum, so switching panes keeps the
+	// window size.
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.SetInsets(B_USE_WINDOW_SPACING)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 			.Add(scrollView)
-			.AddGroup(B_VERTICAL)
+			.AddCards()
 				.Add(fDetailView)
 				.Add(fMobileView)
 				.Add(fProxyView)
+				.GetLayout(&fCards)
 			.End()
 		.End()
 		.Add(showReplicantCheckBox)
@@ -278,6 +284,8 @@ NetworkWindow::NetworkWindow()
 			.Add(fRevertButton)
 			.AddGlue()
 		.End();
+
+	_ShowPane(fDetailView);
 
 	gNetworkWindow = this;
 
@@ -649,14 +657,6 @@ NetworkWindow::_PopulateDeviceList(BMessage* devices)
 		fListView->Select(0);
 		_SelectItem(fListView->ItemAt(0));
 	}
-
-	// Set size of the list view from its contents
-	float width;
-	float height;
-	fListView->GetPreferredSize(&width, &height);
-	width += 2 * be_control_look->DefaultItemSpacing();
-	fListView->SetExplicitSize(BSize(width, B_SIZE_UNSET));
-	fListView->SetExplicitMinSize(BSize(width, std::min(height, 400.f)));
 }
 
 
@@ -771,20 +771,12 @@ NetworkWindow::_SelectItem(BListItem* item)
 }
 
 
-// Show() and Hide() nest, so set each pane's state rather than toggling it.
 void
 NetworkWindow::_ShowPane(BView* pane)
 {
-	BView* panes[] = { fDetailView, fMobileView, fProxyView };
-	for (BView* view : panes) {
-		if (view == NULL)
-			continue;
-		if (view == pane) {
-			while (view->IsHidden(view))
-				view->Show();
-		} else if (!view->IsHidden(view))
-			view->Hide();
-	}
+	int32 index = fCards->IndexOfView(pane);
+	if (index >= 0)
+		fCards->SetVisibleItem(index);
 }
 
 

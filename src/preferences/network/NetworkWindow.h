@@ -12,6 +12,7 @@
 
 
 class BButton;
+class BCardLayout;
 class BFilePanel;
 class BListItem;
 class BMessageRunner;
@@ -50,6 +51,7 @@ private:
 	InterfaceDetailView* fDetailView;
 	MobileBroadbandView* fMobileView;
 	ProxyView* fProxyView;
+	BCardLayout* fCards;
 	BButton* fRevertButton;
 	// Coalesces a scan's burst of AP add/remove notifications.
 	BMessageRunner* fWiFiRefreshRunner;

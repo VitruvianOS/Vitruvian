@@ -23,7 +23,6 @@ set(SYSTEM_APPS
 	LaunchBox
 	Magnify
 	MediaConverter
-	MediaPlayer
 	PackageManager
 	People
 	ResEdit

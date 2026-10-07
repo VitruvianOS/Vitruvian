@@ -110,6 +110,15 @@ BluetoothWindow::BluetoothWindow()
 	fScrollView = new BScrollView("device_scroll", fDeviceList, 0, false,
 		true);
 
+	// A few rows, so the minimum does not follow the device count.
+	font_height listFontHeight;
+	be_plain_font->GetHeight(&listFontHeight);
+	const float row = ceilf(listFontHeight.ascent + listFontHeight.descent
+		+ listFontHeight.leading) + 2 * be_control_look->DefaultItemSpacing();
+	fScrollView->SetExplicitMinSize(BSize(B_SIZE_UNSET, 5 * row));
+	fScrollView->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
+
 	fEmptyStateView = new BStringView("empty_state", "");
 	fEmptyStateView->SetAlignment(B_ALIGN_CENTER);
 	fEmptyStateView->SetHighUIColor(B_LIST_ITEM_TEXT_COLOR, B_DARKEN_2_TINT);

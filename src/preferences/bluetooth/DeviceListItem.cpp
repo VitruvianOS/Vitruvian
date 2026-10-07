@@ -19,7 +19,6 @@
 using namespace Bluetooth;
 
 
-static const float kInsets = 5.0f;
 static const int kTextRows = 2;
 
 
@@ -70,12 +69,14 @@ DeviceListItem::DrawItem(BView* owner, BRect itemRect, bool complete)
 
 	font_height finfo;
 	be_plain_font->GetHeight(&finfo);
+	const float inset = be_control_look->DefaultItemSpacing();
 
-	BPoint iconPoint(itemRect.left, itemRect.top);
+	BPoint iconPoint(itemRect.left, itemRect.top
+		+ std::max(0.0f, (itemRect.Height() - DeviceClass::PixelsForIcon) / 2));
 	fClass.Draw(owner, iconPoint);
 
-	BPoint textPoint(itemRect.left + DeviceClass::PixelsForIcon + 2 * kInsets,
-		itemRect.top + kInsets + finfo.ascent);
+	BPoint textPoint(itemRect.left + DeviceClass::PixelsForIcon + inset,
+		itemRect.top + inset + finfo.ascent);
 
 	owner->SetHighColor(textColor);
 	owner->SetFont(be_plain_font);
@@ -101,7 +102,7 @@ DeviceListItem::DrawItem(BView* owner, BRect itemRect, bool complete)
 		firstLine << "  (" << badges << ")";
 	owner->DrawString(firstLine.String());
 
-	textPoint.y += finfo.ascent + finfo.descent + finfo.leading + kInsets;
+	textPoint.y += finfo.ascent + finfo.descent + finfo.leading + inset;
 	owner->SetFont(be_fixed_font);
 	owner->MovePenTo(textPoint);
 	owner->DrawString(fAddress.String());
@@ -118,8 +119,9 @@ DeviceListItem::Update(BView* owner, const BFont* font)
 
 	font_height height;
 	font->GetHeight(&height);
+	const float inset = be_control_look->DefaultItemSpacing();
 	float textHeight = (height.ascent + height.descent + height.leading)
-		* kTextRows + (kTextRows + 1) * kInsets;
-	float iconHeight = DeviceClass::PixelsForIcon + 2 * kInsets;
+		* kTextRows + (kTextRows + 1) * inset;
+	float iconHeight = DeviceClass::PixelsForIcon + 2 * inset;
 	SetHeight(std::max(textHeight, iconHeight));
 }

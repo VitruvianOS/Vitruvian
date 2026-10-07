@@ -16,6 +16,8 @@ AddOn(media2
 	MediaGraph.cpp
 	MediaNode.cpp
 	MediaUnit.cpp
+	MidiFilterExt.cpp
+	MidiRosterExt.cpp
 	MidiUnit.cpp
 	MediaAutomation.cpp
 	MediaPlayer.cpp

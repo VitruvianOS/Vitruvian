@@ -8,6 +8,7 @@ get_base_packages() {
                 "apt-utils dialog linux-image-rt-amd64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager-openvpn network-manager-vpnc network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \
@@ -24,6 +25,7 @@ get_base_packages() {
                 "apt-utils dialog linux-image-arm64 systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
+                " network-manager-openvpn network-manager-vpnc network-manager-l2tp network-manager-openconnect" \
                 " procps vim-tiny libbinutils openssh-server locales libnss-myhostname xdg-user-dirs ca-certificates iputils-ping linux-sysctl-defaults xfsprogs" \
                 " fdisk e2fsprogs btrfs-progs cryptsetup dosfstools" \
                 " fortune-mod ncurses-bin rsync" \

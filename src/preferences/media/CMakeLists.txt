@@ -18,6 +18,7 @@ Application(Media
 
 target_include_directories(Media PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_SOURCE_DIR}/src/kits/media2
 )
 UsePrivateHeaders(Media media2 interface preferences)
 DoCatalogs("x-vnd.Haiku-Media" preferences/media)

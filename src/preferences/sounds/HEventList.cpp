@@ -43,9 +43,12 @@ void
 HEventRow::SetPath(const char* _path)
 {
 	fPath = _path;
+	if (_path == NULL || _path[0] == '\0') {
+		SetField(new BStringField(B_TRANSLATE("<none>")), kSoundColumn);
+		return;
+	}
 	BPath path(_path);
-	SetField(new BStringField(_path ? path.Leaf() : B_TRANSLATE("<none>")),
-		kSoundColumn);
+	SetField(new BStringField(path.Leaf()), kSoundColumn);
 }
 
 
@@ -121,18 +124,13 @@ HEventList::SelectionChanged()
 		BMediaFiles().GetRefFor(fType, row->Name(), &ref);
 
 		BPath path(&ref);
-		if (path.InitCheck() == B_OK || ref.name == NULL
-			|| strcmp(ref.name, "") == 0) {
+		if (path.InitCheck() == B_OK && ref.name != NULL
+			&& ref.name[0] != '\0') {
 			row->SetPath(path.Path());
 			UpdateRow(row);
 		} else {
-			printf("name %s\n", ref.name);
-			BMediaFiles().RemoveRefFor(fType, row->Name(), ref);
-			BAlert* alert = new BAlert("alert",
-				B_TRANSLATE("No such file or directory"), B_TRANSLATE("OK"));
-			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-			alert->Go();
-			return;
+			row->SetPath(NULL);
+			UpdateRow(row);
 		}
 		BMessage msg(M_EVENT_CHANGED);
 		msg.AddString("name", row->Name());
@@ -146,13 +144,24 @@ void
 HEventList::SetPath(const char* path)
 {
 	HEventRow* row = (HEventRow*)CurrentSelection();
-	if (row != NULL) {
-		entry_ref ref;
-		BEntry entry(path);
-		entry.GetRef(&ref);
-		BMediaFiles().SetRefFor(fType, row->Name(), ref);
+	if (row == NULL)
+		return;
 
-		row->SetPath(path);
+	if (path == NULL || path[0] == '\0') {
+		// Keep the event listed; an empty ref means "no sound".
+		entry_ref none;
+		BMediaFiles().SetRefFor(fType, row->Name(), none);
+		row->SetPath(NULL);
 		UpdateRow(row);
+		return;
 	}
+
+	entry_ref ref;
+	BEntry entry(path);
+	if (entry.GetRef(&ref) != B_OK)
+		return;
+	BMediaFiles().SetRefFor(fType, row->Name(), ref);
+
+	row->SetPath(path);
+	UpdateRow(row);
 }

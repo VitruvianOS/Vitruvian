@@ -12,6 +12,8 @@
 #include "HWindow.h"
 #include "HEventList.h"
 
+#include <SystemBeep.h>
+
 #include <stdio.h>
 
 #include <Alert.h>
@@ -309,6 +311,7 @@ void
 HWindow::_InitGUI()
 {
 	fEventList = new HEventList();
+	vos_system_beep_ensure_events();
 	fEventList->SetType(BMediaFiles::B_SOUNDS);
 	fEventList->SetSelectionMode(B_SINGLE_SELECTION_LIST);
 

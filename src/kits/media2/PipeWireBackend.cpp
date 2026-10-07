@@ -337,6 +337,24 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, id);
 		return;
 	}
+
+	if (strncmp(mediaClass, "Midi/", 5) == 0) {
+		const char* desc = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
+		const char* name = spa_dict_lookup(props, PW_KEY_NODE_NAME);
+
+		MidiNodeInfo info;
+		info.id         = id;
+		info.name       = name != NULL ? name : "";
+		info.description= desc != NULL ? desc : info.name;
+		info.mediaClass = mediaClass;
+
+		{
+			std::lock_guard<std::mutex> _(fMidiNodesLock);
+			fMidiNodes.push_back(info);
+		}
+		_Broadcast(kMsgMidiNodesChanged, id);
+		return;
+	}
 }
 
 
@@ -381,6 +399,18 @@ PipeWireBackend::_OnRegistryGlobalRemove(uint32 id)
 		}
 	}
 
+	bool midiChanged = false;
+	if (!deviceChanged && !streamChanged) {
+		std::lock_guard<std::mutex> _(fMidiNodesLock);
+		for (auto it = fMidiNodes.begin(); it != fMidiNodes.end(); ++it) {
+			if (it->id == id) {
+				fMidiNodes.erase(it);
+				midiChanged = true;
+				break;
+			}
+		}
+	}
+
 	if (deviceChanged) {
 		_Broadcast(BMediaGraph::B_MEDIA_CLIENT_REMOVED, id);
 
@@ -394,7 +424,7 @@ PipeWireBackend::_OnRegistryGlobalRemove(uint32 id)
 	}
 
 	if (streamChanged)
-		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, id);
+		_Broadcast(kMsgStreamsChanged, id);
 
 	if (midiChanged)
 		_Broadcast(kMsgMidiNodesChanged, id);
@@ -881,6 +911,14 @@ PipeWireBackend::Streams()
 {
 	std::lock_guard<std::mutex> _(fStreamsLock);
 	return fStreams;
+}
+
+
+std::vector<PipeWireBackend::MidiNodeInfo>
+PipeWireBackend::MidiNodes()
+{
+	std::lock_guard<std::mutex> _(fMidiNodesLock);
+	return fMidiNodes;
 }
 
 

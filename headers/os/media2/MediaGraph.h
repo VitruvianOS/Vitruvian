@@ -135,6 +135,20 @@ public:
 										BObjectList<ForeignPort, true>* outPorts);
 
 
+	// MIDI-class registry nodes (media.class "Midi/..."). Distinct from
+	// GetForeignNodes so the audio mixer view does not pick them up.
+	struct MidiNode {
+		uint32			id;
+		BString			name;
+		BString			description;
+		BString			mediaClass;
+	};
+			status_t				GetMidiNodes(
+										BObjectList<MidiNode, true>* outNodes);
+			status_t				GetMidiPorts(uint32 nodeId,
+										BObjectList<ForeignPort, true>* outPorts);
+
+
 			status_t				Connect(BMediaOutput* output,
 										const ForeignPort* foreignPort);
 

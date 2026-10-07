@@ -876,6 +876,45 @@ BMediaGraph::GetForeignPorts(uint32 nodeId,
 
 
 status_t
+BMediaGraph::GetMidiNodes(BObjectList<MidiNode, true>* outNodes)
+{
+	if (outNodes == NULL)
+		return B_BAD_VALUE;
+	outNodes->MakeEmpty();
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	auto nodes = backend->MidiNodes();
+	for (const auto& node : nodes) {
+		MidiNode* midiNode = new(std::nothrow) MidiNode();
+		if (midiNode == NULL)
+			continue;
+
+		midiNode->id = node.id;
+		midiNode->name.SetTo(node.name.c_str());
+		midiNode->description.SetTo(node.description.c_str());
+		midiNode->mediaClass.SetTo(node.mediaClass.c_str());
+
+		if (!outNodes->AddItem(midiNode))
+			delete midiNode;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+BMediaGraph::GetMidiPorts(uint32 nodeId,
+	BObjectList<ForeignPort, true>* outPorts)
+{
+	// Ports for MIDI nodes share the registry index with every other port.
+	return GetForeignPorts(nodeId, outPorts);
+}
+
+
+status_t
 BMediaGraph::Connect(BMediaOutput* output, const ForeignPort* foreignPort)
 {
 	if (output == NULL || foreignPort == NULL)

@@ -48,7 +48,6 @@ private:
 	MobileBroadbandView* fMobileView;
 	ProxyView* fProxyView;
 	BButton* fRevertButton;
-	BButton* fImportVPNButton;
 	// Coalesces a scan's burst of AP add/remove notifications.
 	BMessageRunner* fWiFiRefreshRunner;
 	BFilePanel* fImportVPNPanel;

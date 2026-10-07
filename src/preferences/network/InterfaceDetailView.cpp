@@ -995,6 +995,15 @@ InterfaceDetailView::ShowEmpty(const char* message)
 
 
 void
+InterfaceDetailView::ShowVPNSection(const BMessage& vpns)
+{
+	fMode = MODE_VPN_SECTION;
+	fDeviceInfo = vpns;
+	_Rebuild();
+}
+
+
+void
 InterfaceDetailView::_Rebuild()
 {
 	// Tear down and rebuild rather than mutate in place: the field set
@@ -1063,6 +1072,11 @@ InterfaceDetailView::_Rebuild()
 
 	if (fMode == MODE_VPN) {
 		_RebuildVPNView();
+		return;
+	}
+
+	if (fMode == MODE_VPN_SECTION) {
+		_RebuildVPNSectionView();
 		return;
 	}
 
@@ -1595,28 +1609,66 @@ InterfaceDetailView::_UpdateSavedButtons()
 }
 
 
+static const char*
+_VPNStateLabel(const BMessage& info)
+{
+	bool connected = false;
+	bool activating = false;
+	info.FindBool(kNMFieldVPNConnected, &connected);
+	info.FindBool(kNMFieldVPNActivating, &activating);
+	if (connected)
+		return B_TRANSLATE("Connected");
+	if (activating)
+		return B_TRANSLATE("Connecting" B_UTF8_ELLIPSIS);
+	return B_TRANSLATE("Disconnected");
+}
+
+
 void
 InterfaceDetailView::_RebuildVPNView()
 {
 	BString name, path;
 	bool connected = false;
+	bool activating = false;
 	fDeviceInfo.FindString(kNMFieldVPNName, &name);
 	fDeviceInfo.FindString(kNMFieldVPNPath, &path);
 	fDeviceInfo.FindBool(kNMFieldVPNConnected, &connected);
+	fDeviceInfo.FindBool(kNMFieldVPNActivating, &activating);
 
-	BString title(B_TRANSLATE("VPN: %name%"));
-	title.ReplaceFirst("%name%", name);
-	BStringView* titleView = new BStringView(NULL, title.String());
+	BStringView* titleView = new BStringView(NULL, name.String());
 	titleView->SetFont(be_bold_font);
 
 	BGridView* grid = new BGridView(B_USE_HALF_ITEM_SPACING,
 		B_USE_HALF_ITEM_SPACING);
 	fGridLayout = grid->GridLayout();
-	fGridLayout->AddView(new BStringView(NULL, B_TRANSLATE("Status:")), 0, 0);
-	BStringView* statusValue = new BStringView(NULL, connected
-		? B_TRANSLATE("Connected") : B_TRANSLATE("Disconnected"));
-	statusValue->SetFont(be_bold_font);
-	fGridLayout->AddView(statusValue, 1, 0);
+	int32 row = 0;
+	auto addRow = [&](const char* label, const char* value, bool bold) {
+		BStringView* valueView = new BStringView(NULL, value);
+		if (bold)
+			valueView->SetFont(be_bold_font);
+		fGridLayout->AddView(new BStringView(NULL, label), 0, row);
+		fGridLayout->AddView(valueView, 1, row);
+		row++;
+	};
+
+	addRow(B_TRANSLATE("Status:"), _VPNStateLabel(fDeviceInfo), true);
+	BString value;
+	if (fDeviceInfo.FindString(kNMFieldVPNType, &value) == B_OK)
+		addRow(B_TRANSLATE("Type:"), value, false);
+	if (fDeviceInfo.FindString(kNMFieldVPNServer, &value) == B_OK)
+		addRow(B_TRANSLATE("Server:"), value, false);
+	if (fDeviceInfo.FindString(kNMFieldVPNUser, &value) == B_OK)
+		addRow(B_TRANSLATE("User:"), value, false);
+	for (int32 i = 0;
+			fDeviceInfo.FindString(kNMFieldVPNAddress, i, &value) == B_OK; i++)
+		addRow(i == 0 ? B_TRANSLATE("Address:") : "", value, false);
+	for (int32 i = 0;
+			fDeviceInfo.FindString(kNMFieldVPNDNS, i, &value) == B_OK; i++)
+		addRow(i == 0 ? B_TRANSLATE("DNS:") : "", value, false);
+	bool autoconnect = false;
+	fDeviceInfo.FindBool(kNMFieldVPNAutoconnect, &autoconnect);
+	addRow(B_TRANSLATE("Connect automatically:"),
+		autoconnect ? B_TRANSLATE("Yes") : B_TRANSLATE("No"), false);
 
 	fVPNConnectButton = new BButton("vpnConnect", B_TRANSLATE("Connect"),
 		new BMessage(kMsgConnectVPN));
@@ -1624,8 +1676,8 @@ InterfaceDetailView::_RebuildVPNView()
 		B_TRANSLATE("Disconnect"), new BMessage(kMsgDisconnectVPN));
 	fVPNRemoveButton = new BButton("vpnRemove", B_TRANSLATE("Remove"),
 		new BMessage(kMsgRemoveVPN));
-	fVPNConnectButton->SetEnabled(!connected);
-	fVPNDisconnectButton->SetEnabled(connected);
+	fVPNConnectButton->SetEnabled(!connected && !activating);
+	fVPNDisconnectButton->SetEnabled(connected || activating);
 	fVPNConnectButton->SetTarget(this);
 	fVPNDisconnectButton->SetTarget(this);
 	fVPNRemoveButton->SetTarget(this);
@@ -1638,6 +1690,63 @@ InterfaceDetailView::_RebuildVPNView()
 			.Add(fVPNConnectButton)
 			.Add(fVPNDisconnectButton)
 			.Add(fVPNRemoveButton)
+			.AddGlue()
+		.End()
+		.AddGlue();
+}
+
+
+void
+InterfaceDetailView::_RebuildVPNSectionView()
+{
+	BStringView* titleView = new BStringView(NULL, B_TRANSLATE("VPN"));
+	titleView->SetFont(be_bold_font);
+
+	BGroupLayout* layout = (BGroupLayout*)GetLayout();
+	BLayoutBuilder::Group<>(layout)
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.Add(titleView);
+
+	int32 count = 0;
+	fDeviceInfo.FindInt32(kNMFieldVPNCount, &count);
+	if (count == 0) {
+		BStringView* empty = new BStringView(NULL,
+			B_TRANSLATE("No VPN connections. Import the configuration file "
+				"your VPN provider gave you."));
+		layout->AddView(empty);
+	} else {
+		BGridView* grid = new BGridView(B_USE_DEFAULT_SPACING,
+			B_USE_HALF_ITEM_SPACING);
+		BGridLayout* gridLayout = grid->GridLayout();
+		const char* headings[] = { B_TRANSLATE("Name"), B_TRANSLATE("Type"),
+			B_TRANSLATE("Status") };
+		for (int32 column = 0; column < 3; column++) {
+			BStringView* heading = new BStringView(NULL, headings[column]);
+			heading->SetFont(be_bold_font);
+			gridLayout->AddView(heading, column, 0);
+		}
+		for (int32 i = 0; i < count; i++) {
+			char field[32];
+			snprintf(field, sizeof(field), "vpn_%" B_PRId32, i);
+			BMessage info;
+			if (fDeviceInfo.FindMessage(field, &info) != B_OK)
+				continue;
+			BString name, type;
+			info.FindString(kNMFieldVPNName, &name);
+			info.FindString(kNMFieldVPNType, &type);
+			gridLayout->AddView(new BStringView(NULL, name), 0, i + 1);
+			gridLayout->AddView(new BStringView(NULL, type), 1, i + 1);
+			gridLayout->AddView(new BStringView(NULL, _VPNStateLabel(info)),
+				2, i + 1);
+		}
+		layout->AddView(grid);
+	}
+
+	BLayoutBuilder::Group<>(layout)
+		.AddGroup(B_HORIZONTAL)
+			.Add(new BButton("importVPN",
+				B_TRANSLATE("Import VPN" B_UTF8_ELLIPSIS),
+				new BMessage(kMsgImportVPN)))
 			.AddGlue()
 		.End()
 		.AddGlue();

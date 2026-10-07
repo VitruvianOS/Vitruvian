@@ -2174,6 +2174,106 @@ NMBackend::SetWiFiPriorityAsync(const char* connectionPath, int32 priority,
 // #pragma mark - VPN
 
 
+static const char*
+_VPNTypeLabel(const char* serviceType)
+{
+	static const struct { const char* suffix; const char* label; } kTypes[] = {
+		{ ".openvpn", "OpenVPN" },
+		{ ".vpnc", "Cisco IPsec" },
+		{ ".l2tp", "L2TP/IPsec" },
+		{ ".openconnect", "OpenConnect" },
+		{ ".pptp", "PPTP" },
+		{ ".strongswan", "IPsec" },
+		{ ".fortisslvpn", "Fortinet SSL" },
+	};
+	if (serviceType == NULL)
+		return "VPN";
+	for (size_t i = 0; i < B_COUNT_OF(kTypes); i++) {
+		if (BString(serviceType).EndsWith(kTypes[i].suffix))
+			return kTypes[i].label;
+	}
+	const char* dot = strrchr(serviceType, '.');
+	return dot != NULL ? dot + 1 : serviceType;
+}
+
+
+// Plugins name the same thing differently.
+static const char*
+_VPNDataItem(NMSettingVpn* vpn, const char* const* keys)
+{
+	for (; *keys != NULL; keys++) {
+		const char* value = nm_setting_vpn_get_data_item(vpn, *keys);
+		if (value != NULL && value[0] != '\0')
+			return value;
+	}
+	return NULL;
+}
+
+
+static void
+_AddVPNDetails(NMConnection* connection, NMActiveConnection* active,
+	BMessage& info)
+{
+	static const char* const kServerKeys[]
+		= { "remote", "gateway", "IPSec gateway", "address", NULL };
+	static const char* const kUserKeys[]
+		= { "username", "user", "Xauth username", NULL };
+
+	NMSettingVpn* vpn = nm_connection_get_setting_vpn(connection);
+	if (vpn != NULL) {
+		info.AddString(kNMFieldVPNType,
+			_VPNTypeLabel(nm_setting_vpn_get_service_type(vpn)));
+		const char* server = _VPNDataItem(vpn, kServerKeys);
+		if (server != NULL)
+			info.AddString(kNMFieldVPNServer, server);
+		const char* user = nm_setting_vpn_get_user_name(vpn);
+		if (user == NULL || user[0] == '\0')
+			user = _VPNDataItem(vpn, kUserKeys);
+		if (user != NULL)
+			info.AddString(kNMFieldVPNUser, user);
+	} else {
+		info.AddString(kNMFieldVPNType, "WireGuard");
+		NMSettingWireGuard* wg = NM_SETTING_WIREGUARD(
+			nm_connection_get_setting(connection, NM_TYPE_SETTING_WIREGUARD));
+		if (wg != NULL && nm_setting_wireguard_get_peers_len(wg) > 0) {
+			const char* endpoint = nm_wireguard_peer_get_endpoint(
+				nm_setting_wireguard_get_peer(wg, 0));
+			if (endpoint != NULL)
+				info.AddString(kNMFieldVPNServer, endpoint);
+		}
+	}
+
+	NMSettingConnection* connSetting
+		= nm_connection_get_setting_connection(connection);
+	info.AddBool(kNMFieldVPNAutoconnect, connSetting != NULL
+		&& nm_setting_connection_get_autoconnect(connSetting));
+
+	if (active == NULL
+		|| nm_active_connection_get_state(active)
+			!= NM_ACTIVE_CONNECTION_STATE_ACTIVATED)
+		return;
+	NMIPConfig* ip4 = nm_active_connection_get_ip4_config(active);
+	NMIPConfig* ip6 = nm_active_connection_get_ip6_config(active);
+	NMIPConfig* configs[] = { ip4, ip6 };
+	for (NMIPConfig* config : configs) {
+		if (config == NULL)
+			continue;
+		GPtrArray* addresses = nm_ip_config_get_addresses(config);
+		for (guint i = 0; addresses != NULL && i < addresses->len; i++) {
+			NMIPAddress* address
+				= (NMIPAddress*)g_ptr_array_index(addresses, i);
+			BString text;
+			text.SetToFormat("%s/%u", nm_ip_address_get_address(address),
+				nm_ip_address_get_prefix(address));
+			info.AddString(kNMFieldVPNAddress, text);
+		}
+		const char* const* servers = nm_ip_config_get_nameservers(config);
+		for (; servers != NULL && *servers != NULL; servers++)
+			info.AddString(kNMFieldVPNDNS, *servers);
+	}
+}
+
+
 // Dispatch thread only -- walks NMClient's connection and active-connection
 // lists, both GObject-owned and mutated from D-Bus signals delivered there.
 static void
@@ -2219,7 +2319,7 @@ _FillVPNMessage(NMClient* nmClient, BMessage* outMessage)
 			if (id == NULL || path == NULL)
 				continue;
 
-			bool connected = false;
+			NMActiveConnection* matched = NULL;
 			if (activeConnections != NULL) {
 				for (guint j = 0; j < activeConnections->len; j++) {
 					NMActiveConnection* active = (NMActiveConnection*)
@@ -2229,14 +2329,16 @@ _FillVPNMessage(NMClient* nmClient, BMessage* outMessage)
 					const char* activeUUID = nm_active_connection_get_uuid(active);
 					const char* connUUID = nm_connection_get_uuid(connection);
 					if (activeUUID != NULL && connUUID != NULL
-							&& strcmp(activeUUID, connUUID) == 0
-							&& nm_active_connection_get_state(active)
-								== NM_ACTIVE_CONNECTION_STATE_ACTIVATED) {
-						connected = true;
+							&& strcmp(activeUUID, connUUID) == 0) {
+						matched = active;
 						break;
 					}
 				}
 			}
+			NMActiveConnectionState state = matched != NULL
+				? nm_active_connection_get_state(matched)
+				: NM_ACTIVE_CONNECTION_STATE_UNKNOWN;
+			bool connected = state == NM_ACTIVE_CONNECTION_STATE_ACTIVATED;
 
 			char vpnName[32];
 			snprintf(vpnName, sizeof(vpnName), "vpn_%" B_PRId32, count);
@@ -2245,6 +2347,9 @@ _FillVPNMessage(NMClient* nmClient, BMessage* outMessage)
 			vpnInfo.AddString(kNMFieldVPNName, id);
 			vpnInfo.AddString(kNMFieldVPNPath, path);
 			vpnInfo.AddBool(kNMFieldVPNConnected, connected);
+			vpnInfo.AddBool(kNMFieldVPNActivating,
+				state == NM_ACTIVE_CONNECTION_STATE_ACTIVATING);
+			_AddVPNDetails(connection, matched, vpnInfo);
 			outMessage->AddMessage(vpnName, &vpnInfo);
 			count++;
 		}

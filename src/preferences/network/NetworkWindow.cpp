@@ -55,7 +55,6 @@ static const uint32 kMsgInitialDeviceScan = 'inds';
 static const uint32 kMsgDevicesReady = 'dvrd';
 static const uint32 kMsgDeviceInfoReady = 'dird';
 static const uint32 kMsgWiFiRefresh = 'wfrf';
-static const uint32 kMsgImportVPN = 'imvp';
 static const uint32 kMsgImportVPNRefs = 'ivrf';
 static const uint32 kMsgImportVPNResult = 'ivrR';
 
@@ -180,16 +179,19 @@ private:
 // DeviceListItem, since a VPN entry has no interface/driver line to show.
 class VPNListItem : public BStringItem {
 public:
-	VPNListItem(const char* name, const char* connectionPath, bool connected)
+	VPNListItem(const char* name, const char* connectionPath,
+		const BMessage& info)
 		:
 		BStringItem(name),
 		fConnectionPath(connectionPath),
-		fConnected(connected)
+		fInfo(info),
+		fConnected(false)
 	{
+		info.FindBool(kNMFieldVPNConnected, &fConnected);
 	}
 
 	const BString&	ConnectionPath() const { return fConnectionPath; }
-	bool			Connected() const { return fConnected; }
+	const BMessage&	Info() const { return fInfo; }
 
 	virtual void DrawItem(BView* owner, BRect bounds, bool complete)
 	{
@@ -225,8 +227,9 @@ public:
 	}
 
 private:
-	BString	fConnectionPath;
-	bool	fConnected;
+	BString		fConnectionPath;
+	BMessage	fInfo;
+	bool		fConnected;
 };
 
 
@@ -243,7 +246,6 @@ NetworkWindow::NetworkWindow()
 	fMobileView(NULL),
 	fProxyView(NULL),
 	fRevertButton(NULL),
-	fImportVPNButton(NULL),
 	fWiFiRefreshRunner(NULL),
 	fImportVPNPanel(NULL),
 	fProxyItem(NULL),
@@ -258,9 +260,6 @@ NetworkWindow::NetworkWindow()
 	// Settings section
 	fRevertButton = new BButton("revert", B_TRANSLATE("Revert"),
 		new BMessage(kMsgRevert));
-	fImportVPNButton = new BButton("importVPN", B_TRANSLATE("Import VPN" B_UTF8_ELLIPSIS),
-		new BMessage(kMsgImportVPN));
-	fImportVPNButton->SetTarget(this);
 
 	BMessage* message = new BMessage(kMsgToggleReplicant);
 	BCheckBox* showReplicantCheckBox = new BCheckBox("showReplicantCheckBox",
@@ -298,7 +297,6 @@ NetworkWindow::NetworkWindow()
 		.End()
 		.Add(showReplicantCheckBox)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
-			.Add(fImportVPNButton)
 			.Add(fRevertButton)
 			.AddGlue()
 		.End();
@@ -700,10 +698,7 @@ NetworkWindow::_PopulateVPNList(const BString& previousSelectionPath)
 		if (vpnInfo.FindString(kNMFieldVPNName, &name) != B_OK
 			|| vpnInfo.FindString(kNMFieldVPNPath, &path) != B_OK)
 			continue;
-		bool connected = false;
-		vpnInfo.FindBool(kNMFieldVPNConnected, &connected);
-
-		VPNListItem* item = new VPNListItem(name, path, connected);
+		VPNListItem* item = new VPNListItem(name, path, vpnInfo);
 		fListView->AddUnder(item, fVPNItem);
 
 		if (!previousSelectionPath.IsEmpty() && previousSelectionPath == path)
@@ -746,23 +741,21 @@ NetworkWindow::_SelectItem(BListItem* item)
 				BMessenger(this), kMsgDeviceInfoReady);
 		}
 	} else if (vpnItem != NULL) {
-		BMessage vpnInfo;
-		vpnInfo.AddString(kNMFieldVPNName, vpnItem->Text());
-		vpnInfo.AddString(kNMFieldVPNPath, vpnItem->ConnectionPath());
-		vpnInfo.AddBool(kNMFieldVPNConnected, vpnItem->Connected());
-		fDetailView->SetToVPN(vpnInfo);
+		fDetailView->SetToVPN(vpnItem->Info());
+	} else if (item == fVPNItem) {
+		BMessage vpns;
+		NMBackend* backend = NMBackend::Instance();
+		if (backend != NULL)
+			backend->GetVPNConnections(&vpns);
+		fDetailView->ShowVPNSection(vpns);
 	} else if (item != NULL && fListView->CountItemsUnder(item, true) == 0) {
 		// An empty section header: say what is missing.
 		if (item == fWirelessItem)
 			fDetailView->ShowEmpty(B_TRANSLATE("No Wi-Fi adapter found"));
 		else if (item == fWiredItem)
 			fDetailView->ShowEmpty(B_TRANSLATE("No wired adapter found"));
-		else if (item == fVPNItem)
-			fDetailView->ShowEmpty(B_TRANSLATE("No VPN connections"));
 		else
 			fDetailView->ShowEmpty(B_TRANSLATE("Select a device"));
-	} else if (item == fVPNItem) {
-		fDetailView->ShowEmpty(B_TRANSLATE("Select a connection"));
 	} else {
 		fDetailView->ShowEmpty(B_TRANSLATE("Select a device"));
 	}

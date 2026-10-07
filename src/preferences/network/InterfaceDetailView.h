@@ -22,6 +22,10 @@ class BButton;
 class StaticIPView;
 
 
+// Sent to the window by the VPN section's Import button.
+const uint32 kMsgImportVPN = 'imvp';
+
+
 // Right-hand detail pane of the Network preflet, swapped in when a device or
 // VPN row is selected in the outline list.
 // Wired/WiFi device fields are live (GetDeviceInfo() + sysfs statistics +
@@ -43,6 +47,8 @@ public:
 			void			SetToDevice(const BMessage& deviceInfo);
 			void			SetToVPN(const BMessage& vpnInfo);
 			void			ShowEmpty(const char* message);
+			// Overview of every VPN profile, with an Import button.
+			void			ShowVPNSection(const BMessage& vpns);
 			// Refill only the AP list from the cached scan, keeping the
 			// selection; no-op unless showing that Wi-Fi device.
 			void			RefreshWiFiNetworks(const char* devicePath);
@@ -54,6 +60,7 @@ private:
 			void			_Rebuild();
 			void			_RebuildDeviceView();
 			void			_RebuildVPNView();
+			void			_RebuildVPNSectionView();
 			void			_AddHotspotSection(BGroupLayout* layout);
 			void			_FillWiFiList(const BMessage& networks);
 			void			_RequestHotspotState();
@@ -74,7 +81,8 @@ private:
 			enum Mode {
 				MODE_EMPTY,
 				MODE_DEVICE,
-				MODE_VPN
+				MODE_VPN,
+				MODE_VPN_SECTION
 			};
 
 			BGridLayout*	fGridLayout;

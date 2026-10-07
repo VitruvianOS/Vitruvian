@@ -60,6 +60,14 @@ static const char* const kNMFieldVPNCount = "vpn_count";
 static const char* const kNMFieldVPNName = "name";
 static const char* const kNMFieldVPNPath = "path";
 static const char* const kNMFieldVPNConnected = "connected";
+static const char* const kNMFieldVPNActivating = "activating";
+static const char* const kNMFieldVPNType = "type";
+static const char* const kNMFieldVPNServer = "server";
+static const char* const kNMFieldVPNUser = "user";
+static const char* const kNMFieldVPNAutoconnect = "autoconnect";
+// While connected: one string per address ("10.8.0.2/24") and DNS server.
+static const char* const kNMFieldVPNAddress = "address";
+static const char* const kNMFieldVPNDNS = "dns";
 
 static const char* const kNMFieldSavedCount = "saved_count";
 static const char* const kNMFieldSavedSSID = "ssid";

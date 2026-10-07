@@ -94,18 +94,6 @@ chroot_umount() {
     sudo umount -l "$_chroot_dir/dev" 2>/dev/null || true
 }
 
-chroot_remove() {
-    _chroot_dir="$1"
-    [ -d "$_chroot_dir" ] || return 0
-    log_info "Removing existing chroot: $_chroot_dir"
-    chroot_umount "$_chroot_dir"
-    # A bind mount still attached would let rm reach the host.
-    if findmnt -rn -o TARGET | grep -qF "$_chroot_dir/"; then
-        die "still mounted under $_chroot_dir"
-    fi
-    sudo rm -rf --one-file-system "$_chroot_dir"
-}
-
 # create_iso purges the -dev packages from the chroot it squashes; put
 # back whatever is missing before compiling. The .deb cache makes it an unpack.
 chroot_restore_dev_packages() {
@@ -162,7 +150,19 @@ chroot_create() {
     _deb_arch="$(arch_to_deb "$_arch")"
     _chroot_dir="$_basedir/image_tree/chroot"
 
-    chroot_remove "$_chroot_dir"
+    if [ -d "$_chroot_dir" ]; then
+        _ts=$(date +%Y%m%d-%H%M%S)
+        _backup="$_chroot_dir.old-$_ts"
+        log_info "Found existing chroot, moving to $_backup"
+        chroot_umount "$_chroot_dir"
+        # Keep only the most recent backup — older ones balloon disk usage.
+        for _stale in "$_chroot_dir".old-*; do
+            [ -e "$_stale" ] || continue
+            log_info "Removing stale chroot backup: $_stale"
+            sudo rm -rf "$_stale"
+        done
+        sudo mv "$_chroot_dir" "$_backup"
+    fi
 
     mkdir -p "$_basedir/image_tree"
 
@@ -298,7 +298,26 @@ exit"
 chroot_regenerate() {
     _basedir="$1"
     _arch="$2"
+    _chroot_dir="$_basedir/image_tree/chroot"
+
+    if [ ! -d "$_chroot_dir" ]; then
+        log_info "No existing chroot at $_chroot_dir, creating fresh."
+        chroot_create "$_basedir" "$_arch"
+        return
+    fi
 
     log_step "Regenerating chroot..."
+    chroot_umount "$_chroot_dir"
+
+    _ts=$(date +%Y%m%d-%H%M%S)
+    _backup="$_chroot_dir.old-$_ts"
+    # Keep only the most recent backup.
+    for _stale in "$_chroot_dir".old-*; do
+        [ -e "$_stale" ] || continue
+        log_info "Removing stale chroot backup: $_stale"
+        sudo rm -rf "$_stale"
+    done
+    sudo mv "$_chroot_dir" "$_backup"
+
     chroot_create "$_basedir" "$_arch"
 }

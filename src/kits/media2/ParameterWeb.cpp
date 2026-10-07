@@ -12,6 +12,8 @@
 #include <Message.h>
 #include <TypeConstants.h>
 
+#include <media2/Controllable.h>
+
 
 BParameter::BParameter(int32 id, media_type mediaType, media_parameter_type type,
 	const char* name, const char* kind, const char* unit)
@@ -27,7 +29,8 @@ BParameter::BParameter(int32 id, media_type mediaType, media_parameter_type type
 	fChannelCount(1),
 	fFlags(0),
 	fInputs(),
-	fOutputs()
+	fOutputs(),
+	fControllable(NULL)
 {
 }
 
@@ -73,6 +76,19 @@ status_t    BParameter::AddOutput(BParameter* p) {
 	if (p == NULL) return B_BAD_VALUE;
 	fOutputs.AddItem(p);
 	return B_OK;
+}
+
+void
+BParameter::SetControllable(BControllable* controllable)
+{
+	fControllable = controllable;
+}
+
+
+BControllable*
+BParameter::Controllable() const
+{
+	return fControllable;
 }
 
 
@@ -130,6 +146,8 @@ BContinuousParameter::GetValue(void* buffer, size_t* ioSize, bigtime_t* lastChan
 {
 	if (ioSize == NULL)
 		return B_BAD_VALUE;
+	if (fControllable != NULL)
+		return fControllable->GetParameterValue(fId, lastChange, buffer, ioSize);
 	const int32 ch = CountChannels();
 	const size_t need = (size_t)ch * sizeof(float);
 	if (fValues == NULL) {
@@ -151,6 +169,8 @@ BContinuousParameter::SetValue(void* value, size_t size, bigtime_t when)
 {
 	if (value == NULL || size == 0)
 		return B_BAD_VALUE;
+	if (fControllable != NULL)
+		return fControllable->SetParameterValue(fId, when, value, size);
 	const int32 ch = CountChannels();
 	const size_t need = (size_t)ch * sizeof(float);
 	if (fValues == NULL) {
@@ -232,6 +252,8 @@ BDiscreteParameter::GetValue(void* buffer, size_t* ioSize, bigtime_t* lastChange
 {
 	if (ioSize == NULL)
 		return B_BAD_VALUE;
+	if (fControllable != NULL)
+		return fControllable->GetParameterValue(fId, lastChange, buffer, ioSize);
 	const size_t copy = *ioSize < sizeof(int32) ? *ioSize : sizeof(int32);
 	if (buffer != NULL && copy > 0)
 		memcpy(buffer, &fCurrent, copy);
@@ -246,6 +268,8 @@ BDiscreteParameter::SetValue(void* value, size_t size, bigtime_t when)
 {
 	if (value == NULL || size < sizeof(int32))
 		return B_BAD_VALUE;
+	if (fControllable != NULL)
+		return fControllable->SetParameterValue(fId, when, value, size);
 	fCurrent    = *(int32*)value;
 	fLastChange = when;
 	return B_OK;
@@ -284,6 +308,8 @@ BTextParameter::GetValue(void* buffer, size_t* ioSize, bigtime_t* lastChange)
 {
 	if (ioSize == NULL)
 		return B_BAD_VALUE;
+	if (fControllable != NULL)
+		return fControllable->GetParameterValue(fId, lastChange, buffer, ioSize);
 	const size_t have = fText != NULL ? strlen(fText) + 1 : 0;
 	const size_t copy = *ioSize < have ? *ioSize : have;
 	if (buffer != NULL && copy > 0)
@@ -299,6 +325,8 @@ BTextParameter::SetValue(void* value, size_t size, bigtime_t when)
 {
 	if (value == NULL)
 		return B_BAD_VALUE;
+	if (fControllable != NULL)
+		return fControllable->SetParameterValue(fId, when, value, size);
 	const size_t use = size <= fMaxBytes ? size : fMaxBytes;
 	char* nt = (char*)malloc(use + 1);
 	if (nt == NULL)
@@ -323,8 +351,24 @@ BParameterGroup::BParameterGroup(BParameterWeb* web, const char* name)
 }
 
 
-uint32 BParameterGroup::Flags() const  { return fFlags; }
+uint32 BParameterGroup::Flags() const    { return fFlags; }
 void   BParameterGroup::SetFlags(uint32 f) { fFlags = f; }
+
+
+void
+BParameterGroup::SetControllable(BControllable* controllable)
+{
+	for (int32 i = 0; i < fParameters.CountItems(); i++) {
+		BParameter* p = fParameters.ItemAt(i);
+		if (p != NULL)
+			p->SetControllable(controllable);
+	}
+	for (int32 i = 0; i < fGroups.CountItems(); i++) {
+		BParameterGroup* g = fGroups.ItemAt(i);
+		if (g != NULL)
+			g->SetControllable(controllable);
+	}
+}
 
 
 BParameterGroup::~BParameterGroup()

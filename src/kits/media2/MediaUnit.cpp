@@ -7,6 +7,7 @@
 
 #include <new>
 #include <string.h>
+#include <vector>
 
 #include <atomic>
 
@@ -605,4 +606,60 @@ void*
 BMediaUnit::_GetFilter() const
 {
 	return fImpl != NULL ? fImpl->filter : NULL;
+}
+
+
+uint32
+BMediaUnit::NodeId() const
+{
+	if (fImpl == NULL || fImpl->filter == NULL)
+		return 0;
+	return pw_filter_get_node_id(fImpl->filter);
+}
+
+
+status_t
+BMediaUnit::PublishNodeParams(const uint32* propIds,
+	const char* const* names, const uint32* valueTypes,
+	const float* minValues, const float* maxValues, const float* steps,
+	const void* const* values, const size_t* valueSizes, int32 count)
+{
+	if (fImpl == NULL || fImpl->filter == NULL)
+		return B_NO_INIT;
+	if (propIds == NULL || names == NULL || valueTypes == NULL
+			|| count <= 0)
+		return B_BAD_VALUE;
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_ERROR;
+
+	std::vector<PipeWireBackend::NodePropInfo> infos;
+	std::vector<PipeWireBackend::NodePropValue> vals;
+	infos.reserve((size_t)count);
+	vals.reserve((size_t)count);
+
+	for (int32 i = 0; i < count; i++) {
+		PipeWireBackend::NodePropInfo info;
+		info.id = propIds[i];
+		info.name = names[i] != NULL ? names[i] : "";
+		info.valueType = valueTypes[i];
+		info.minValue = minValues != NULL ? minValues[i] : 0.0f;
+		info.maxValue = maxValues != NULL ? maxValues[i] : 0.0f;
+		info.step = steps != NULL ? steps[i] : 0.0f;
+		info.hasRange = maxValues != NULL && maxValues[i] > minValues[i];
+		infos.push_back(info);
+
+		if (values != NULL && valueSizes != NULL && values[i] != NULL
+				&& valueSizes[i] > 0) {
+			PipeWireBackend::NodePropValue v;
+			v.id = propIds[i];
+			v.valueType = valueTypes[i];
+			v.bytes.assign((const uint8_t*)values[i],
+				(const uint8_t*)values[i] + valueSizes[i]);
+			vals.push_back(v);
+		}
+	}
+
+	return backend->PublishFilterParams(fImpl->filter, infos, vals);
 }

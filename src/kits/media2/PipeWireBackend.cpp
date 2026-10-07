@@ -28,6 +28,9 @@
 #include <pipewire/port.h>
 #include <pipewire/extensions/metadata.h>
 #include <spa/param/audio/format-utils.h>
+#include <spa/utils/type.h>
+
+#include <media2/Controllable.h>
 #include <spa/utils/dict.h>
 
 #include <OS.h>
@@ -645,6 +648,9 @@ PipeWireBackend::_Teardown()
 	// Loop thread is stopped first: destroy below must not race callbacks.
 	if (fThreadLoop != NULL)
 		pw_thread_loop_stop(fThreadLoop);
+
+	while (!fNodeParamWatches.empty())
+		_DestroyNodeParamWatch(fNodeParamWatches.begin()->first);
 
 	while (!fCardWatches.empty())
 		_DestroyCardWatch(fCardWatches.begin()->first);
@@ -2649,8 +2655,679 @@ PipeWireBackend::ForeignPorts(uint32 nodeId)
 		port.format = "";
 		ports.push_back(port);
 	}
-
 	return ports;
 }
+
+
+void
+PipeWireBackend::_DestroyNodeParamWatch(uint32 nodeId)
+{
+	NodeParamWatch* watch = NULL;
+	{
+		std::lock_guard<std::mutex> _(fNodeParamWatchesLock);
+		auto it = fNodeParamWatches.find(nodeId);
+		if (it == fNodeParamWatches.end())
+			return;
+		watch = it->second;
+		fNodeParamWatches.erase(it);
+	}
+	if (watch == NULL)
+		return;
+	Lock();
+	if (watch->proxy != NULL) {
+		spa_hook_remove(&watch->hook);
+		pw_proxy_destroy((struct pw_proxy*)watch->proxy);
+	}
+	Unlock();
+	delete watch;
+}
+
+
+void
+PipeWireBackend::_NodeParamWatchThunk(void* data, int seq, uint32 id,
+	uint32, uint32, const struct spa_pod* param)
+{
+	NodeParamWatch* watch = (NodeParamWatch*)data;
+	if (watch != NULL && watch->backend != NULL)
+		watch->backend->_OnNodeParamWatch(watch, id, param);
+}
+
+
+void
+PipeWireBackend::_OnNodeParamWatch(NodeParamWatch* watch, uint32 id,
+	const struct spa_pod* param)
+{
+	if (param == NULL || id != SPA_PARAM_Props)
+		return;
+
+	std::vector<BControllable*> targets;
+	{
+		std::lock_guard<std::mutex> _(fNodeParamWatchesLock);
+		targets = watch->targets;
+	}
+	for (size_t i = 0; i < targets.size(); i++) {
+		if (targets[i] != NULL)
+			targets[i]->_ApplyProps(param);
+	}
+}
+
+
+status_t
+PipeWireBackend::WatchNodeParams(uint32 nodeId, BControllable* target)
+{
+	if (nodeId == 0 || target == NULL)
+		return B_BAD_VALUE;
+	if (fRegistry == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	NodeParamWatch* watch = NULL;
+	bool created = false;
+	{
+		std::lock_guard<std::mutex> _(fNodeParamWatchesLock);
+		auto it = fNodeParamWatches.find(nodeId);
+		if (it != fNodeParamWatches.end()) {
+			watch = it->second;
+			for (size_t i = 0; i < watch->targets.size(); i++) {
+				if (watch->targets[i] == target)
+					return B_OK;
+			}
+		} else {
+			watch = new(std::nothrow) NodeParamWatch();
+			if (watch == NULL)
+				return B_NO_MEMORY;
+			watch->backend = this;
+			watch->nodeId = nodeId;
+			watch->proxy = NULL;
+			memset(&watch->hook, 0, sizeof(watch->hook));
+			fNodeParamWatches[nodeId] = watch;
+			created = true;
+		}
+		watch->targets.push_back(target);
+	}
+
+	if (!created)
+		return B_OK;
+
+	Lock();
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		Unlock();
+		UnwatchNodeParams(nodeId, target);
+		return B_DEVICE_NOT_FOUND;
+	}
+
+	static const pw_node_events kWatchEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_NodeParamWatchThunk
+	};
+	pw_node_add_listener(node, &watch->hook, &kWatchEvents, watch);
+	uint32_t ids[1] = { SPA_PARAM_Props };
+	pw_node_subscribe_params(node, ids, 1);
+	watch->proxy = node;
+	Unlock();
+
+	return B_OK;
+}
+
+
+status_t
+PipeWireBackend::UnwatchNodeParams(uint32 nodeId, BControllable* target)
+{
+	if (nodeId == 0)
+		return B_BAD_VALUE;
+
+	NodeParamWatch* dead = NULL;
+	{
+		std::lock_guard<std::mutex> _(fNodeParamWatchesLock);
+		auto it = fNodeParamWatches.find(nodeId);
+		if (it == fNodeParamWatches.end())
+			return B_OK;
+		NodeParamWatch* watch = it->second;
+		for (size_t i = 0; i < watch->targets.size(); i++) {
+			if (watch->targets[i] == target) {
+				watch->targets.erase(watch->targets.begin() + i);
+				break;
+			}
+		}
+		if (watch->targets.empty()) {
+			fNodeParamWatches.erase(it);
+			dead = watch;
+		}
+	}
+
+	if (dead != NULL) {
+		Lock();
+		if (dead->proxy != NULL) {
+			spa_hook_remove(&dead->hook);
+			pw_proxy_destroy((struct pw_proxy*)dead->proxy);
+		}
+		Unlock();
+		delete dead;
+	}
+	return B_OK;
+}
+
+
+void
+PipeWireBackend::_ParsePropInfoPod(const struct spa_pod* pod,
+	NodePropInfo& outInfo)
+{
+	outInfo = NodePropInfo();
+	if (pod == NULL || !spa_pod_is_object(pod))
+		return;
+
+	const spa_pod_object* object = (const spa_pod_object*)pod;
+	const spa_pod_prop* prop;
+	SPA_POD_OBJECT_FOREACH(object, prop) {
+		switch (prop->key) {
+			case SPA_PROP_INFO_id:
+			{
+				uint32_t id = 0;
+				if (spa_pod_get_id(&prop->value, &id) >= 0)
+					outInfo.id = id;
+				break;
+			}
+			case SPA_PROP_INFO_name:
+			{
+				const char* name = NULL;
+				if (spa_pod_get_string(&prop->value, &name) >= 0
+						&& name != NULL)
+					outInfo.name = name;
+				break;
+			}
+			case SPA_PROP_INFO_type:
+			{
+				const struct spa_pod* typePod = &prop->value;
+				// Choice pods wrap the default and alternatives.
+				if (spa_pod_is_object(typePod)
+						&& SPA_POD_OBJECT_TYPE(typePod)
+							== SPA_TYPE_Object) {
+					const spa_pod_object* typeObj
+						= (const spa_pod_object*)typePod;
+					const spa_pod_prop* tp;
+					SPA_POD_OBJECT_FOREACH(typeObj, tp) {
+						if (tp->key == SPA_CHOICE_None
+								|| tp->key == 0) {
+							typePod = &tp->value;
+							break;
+						}
+					}
+				}
+				outInfo.valueType = SPA_POD_TYPE(typePod);
+				if (spa_pod_is_object(typePod)
+						&& SPA_POD_OBJECT_TYPE(typePod) == SPA_TYPE_Object) {
+					const spa_pod_object* rangeObj
+						= (const spa_pod_object*)typePod;
+					const spa_pod_prop* rp;
+					SPA_POD_OBJECT_FOREACH(rangeObj, rp) {
+						if (rp->key == SPA_CHOICE_Range
+								|| rp->key == SPA_CHOICE_Step) {
+							const spa_pod_object* rangePods
+								= (const spa_pod_object*)&rp->value;
+							// Range is typically a Pod array or object of floats.
+							// Try to read min/max from a nested object.
+							if (spa_pod_is_object(&rp->value)) {
+								const spa_pod_object* inner
+									= (const spa_pod_object*)&rp->value;
+								const spa_pod_prop* ip;
+								float vals[3] = { 0, 0, 0 };
+								int n = 0;
+								SPA_POD_OBJECT_FOREACH(inner, ip) {
+									if (n < 3
+											&& spa_pod_get_float(&ip->value,
+												&vals[n]) >= 0)
+										n++;
+								}
+								if (n >= 2) {
+									outInfo.hasRange = true;
+									outInfo.minValue = vals[0];
+									outInfo.maxValue = vals[1];
+									if (n >= 3)
+										outInfo.step = vals[2];
+								}
+							} else if (spa_pod_is_array(&rp->value)) {
+								uint32_t n = 0;
+								const float* f
+									= (const float*)spa_pod_get_array(
+										&rp->value, &n);
+								if (f != NULL && n >= 2) {
+									outInfo.hasRange = true;
+									outInfo.minValue = f[0];
+									outInfo.maxValue = f[1];
+									if (n >= 3)
+										outInfo.step = f[2];
+								}
+							}
+							(void)rangePods;
+						}
+					}
+				}
+				break;
+			}
+			case SPA_PROP_INFO_labels:
+			{
+				// Labels are a Struct of (value, name) pairs.
+				if (!spa_pod_is_object(&prop->value))
+					break;
+				const spa_pod_object* labels
+					= (const spa_pod_object*)&prop->value;
+				const spa_pod_prop* lp;
+				uint32 pendingId = 0;
+				bool havePending = false;
+				SPA_POD_OBJECT_FOREACH(labels, lp) {
+					if (lp->key % 2 == 0 || !havePending) {
+						// First of pair is the value.
+						uint32_t id = 0;
+						int32_t i = 0;
+						if (spa_pod_get_id(&lp->value, &id) >= 0)
+							pendingId = id;
+						else if (spa_pod_get_int(&lp->value, &i) >= 0)
+							pendingId = (uint32)i;
+						else if (spa_pod_get_float(&lp->value,
+								(float*)&pendingId) >= 0)
+							; // keep raw bits
+						havePending = true;
+					} else {
+						const char* name = NULL;
+						if (spa_pod_get_string(&lp->value, &name) >= 0
+								&& name != NULL) {
+							outInfo.labels.push_back(
+								std::make_pair(pendingId,
+									std::string(name)));
+						}
+						havePending = false;
+					}
+				}
+				break;
+			}
+			default:
+				break;
+		}
+	}
+}
+
+
+bool
+PipeWireBackend::_ValueFromPod(const struct spa_pod* pod, uint32& outType,
+	std::vector<uint8_t>& outBytes)
+{
+	if (pod == NULL)
+		return false;
+	outType = SPA_POD_TYPE(pod);
+	const char* str = NULL;
+	float f = 0.0f;
+	int32_t i = 0;
+	bool b = false;
+	if (spa_pod_get_string(pod, &str) >= 0 && str != NULL) {
+		size_t len = strlen(str) + 1;
+		outBytes.resize(len);
+		memcpy(outBytes.data(), str, len);
+		return true;
+	}
+	if (spa_pod_get_float(pod, &f) >= 0) {
+		outBytes.resize(sizeof(float));
+		memcpy(outBytes.data(), &f, sizeof(float));
+		return true;
+	}
+	if (spa_pod_get_int(pod, &i) >= 0) {
+		outBytes.resize(sizeof(int32_t));
+		memcpy(outBytes.data(), &i, sizeof(int32_t));
+		return true;
+	}
+	if (spa_pod_get_bool(pod, &b) >= 0) {
+		outBytes.resize(sizeof(bool));
+		memcpy(outBytes.data(), &b, sizeof(bool));
+		return true;
+	}
+	return false;
+}
+
+
+void
+PipeWireBackend::_ParsePropsPod(const struct spa_pod* pod,
+	std::vector<NodePropValue>& outValues)
+{
+	outValues.clear();
+	if (pod == NULL || !spa_pod_is_object(pod))
+		return;
+	if (SPA_POD_OBJECT_TYPE(pod) != SPA_TYPE_OBJECT_Props
+			&& SPA_POD_OBJECT_TYPE(pod) != SPA_TYPE_Object)
+		return;
+
+	const spa_pod_object* object = (const spa_pod_object*)pod;
+	const spa_pod_prop* prop;
+	SPA_POD_OBJECT_FOREACH(object, prop) {
+		NodePropValue v;
+		v.id = prop->key;
+		if (_ValueFromPod(&prop->value, v.valueType, v.bytes))
+			outValues.push_back(v);
+	}
+}
+
+
+const struct spa_pod*
+PipeWireBackend::_PodFromValue(const NodePropValue& value,
+	void* buffer, size_t bufferSize)
+{
+	if (buffer == NULL || bufferSize < 64)
+		return NULL;
+	spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, bufferSize);
+	const struct spa_pod* pod = NULL;
+	switch (value.valueType) {
+		case SPA_TYPE_Float:
+		{
+			float f = 0.0f;
+			if (value.bytes.size() >= sizeof(float))
+				memcpy(&f, value.bytes.data(), sizeof(float));
+			pod = (const struct spa_pod*)spa_pod_builder_add_object(&b,
+				SPA_TYPE_OBJECT_Props, SPA_PARAM_Props,
+				value.id, SPA_POD_Float(f));
+			break;
+		}
+		case SPA_TYPE_Bool:
+		{
+			bool bv = false;
+			if (value.bytes.size() >= sizeof(bool))
+				memcpy(&bv, value.bytes.data(), sizeof(bool));
+			pod = (const struct spa_pod*)spa_pod_builder_add_object(&b,
+				SPA_TYPE_OBJECT_Props, SPA_PARAM_Props,
+				value.id, SPA_POD_Bool(bv));
+			break;
+		}
+		case SPA_TYPE_Int:
+		case SPA_TYPE_Id:
+		{
+			int32_t iv = 0;
+			if (value.bytes.size() >= sizeof(int32_t))
+				memcpy(&iv, value.bytes.data(), sizeof(int32_t));
+			pod = (const struct spa_pod*)spa_pod_builder_add_object(&b,
+				SPA_TYPE_OBJECT_Props, SPA_PARAM_Props,
+				value.id, SPA_POD_Int(iv));
+			break;
+		}
+		case SPA_TYPE_String:
+		{
+			const char* s = value.bytes.empty()
+				? "" : (const char*)value.bytes.data();
+			pod = (const struct spa_pod*)spa_pod_builder_add_object(&b,
+				SPA_TYPE_OBJECT_Props, SPA_PARAM_Props,
+				value.id, SPA_POD_String(s));
+			break;
+		}
+		default:
+			break;
+	}
+	return pod;
+}
+
+
+void
+PipeWireBackend::_PropInfoThunk(void* data, int, uint32 id,
+	uint32, uint32, const struct spa_pod* param)
+{
+	PropInfoQuery* q = (PropInfoQuery*)data;
+	if (q == NULL)
+		return;
+	if (id == SPA_PARAM_PropInfo && param != NULL) {
+		NodePropInfo info;
+		_ParsePropInfoPod(param, info);
+		if (info.id != 0 || !info.name.empty())
+			q->infos.push_back(info);
+	} else if (id == SPA_PARAM_Props && param != NULL) {
+		q->done = true;
+	}
+}
+
+
+void
+PipeWireBackend::_NodePropsThunk(void* data, int, uint32 id,
+	uint32, uint32, const struct spa_pod* param)
+{
+	NodePropsQuery* q = (NodePropsQuery*)data;
+	if (q == NULL)
+		return;
+	if (id != SPA_PARAM_Props || param == NULL)
+		return;
+	_ParsePropsPod(param, q->values);
+	q->done = true;
+}
+
+
+status_t
+PipeWireBackend::QueryNodePropInfo(uint32 nodeId,
+	std::vector<NodePropInfo>& outInfos, bigtime_t timeoutUsecs)
+{
+	outInfos.clear();
+	if (nodeId == 0)
+		return B_BAD_VALUE;
+	if (fRegistry == NULL || fCore == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	// Prefer locally published info for filters we created.
+	{
+		std::lock_guard<std::mutex> _(fPublishedParamsLock);
+		auto it = fPublishedInfos.find(nodeId);
+		if (it != fPublishedInfos.end() && !it->second.empty()) {
+			outInfos = it->second;
+			return B_OK;
+		}
+	}
+
+	PropInfoQuery query;
+	query.done = false;
+
+	Lock();
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+
+	spa_hook hook;
+	memset(&hook, 0, sizeof(hook));
+	static const pw_node_events kInfoEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_PropInfoThunk
+	};
+	pw_node_add_listener(node, &hook, &kInfoEvents, &query);
+	pw_node_enum_params(node, 0, SPA_PARAM_PropInfo, 0, UINT32_MAX, NULL);
+	status_t result = RoundtripLocked(timeoutUsecs);
+	spa_hook_remove(&hook);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+
+	if (result != B_OK)
+		return result;
+	outInfos = query.infos;
+	return outInfos.empty() ? B_ENTRY_NOT_FOUND : B_OK;
+}
+
+
+status_t
+PipeWireBackend::QueryNodeProps(uint32 nodeId,
+	std::vector<NodePropValue>& outValues, bigtime_t timeoutUsecs)
+{
+	outValues.clear();
+	if (nodeId == 0)
+		return B_BAD_VALUE;
+	if (fRegistry == NULL || fCore == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	{
+		std::lock_guard<std::mutex> _(fPublishedParamsLock);
+		auto it = fPublishedValues.find(nodeId);
+		if (it != fPublishedValues.end() && !it->second.empty()) {
+			outValues = it->second;
+			return B_OK;
+		}
+	}
+
+	NodePropsQuery query;
+	query.done = false;
+
+	Lock();
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+
+	spa_hook hook;
+	memset(&hook, 0, sizeof(hook));
+	static const pw_node_events kPropsEvents = {
+		PW_VERSION_NODE_EVENTS,
+		NULL,
+		&PipeWireBackend::_NodePropsThunk
+	};
+	pw_node_add_listener(node, &hook, &kPropsEvents, &query);
+	pw_node_enum_params(node, 0, SPA_PARAM_Props, 0, UINT32_MAX, NULL);
+	status_t result = RoundtripLocked(timeoutUsecs);
+	spa_hook_remove(&hook);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+
+	if (result != B_OK && result != B_ENTRY_NOT_FOUND)
+		return result;
+	outValues = query.values;
+	return outValues.empty() ? B_ENTRY_NOT_FOUND : B_OK;
+}
+
+
+status_t
+PipeWireBackend::SetNodeProp(uint32 nodeId, uint32 propId,
+	uint32 valueType, const void* value, size_t size)
+{
+	if (nodeId == 0 || value == NULL || size == 0)
+		return B_BAD_VALUE;
+	if (fRegistry == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	NodePropValue v;
+	v.id = propId;
+	v.valueType = valueType;
+	v.bytes.assign((const uint8_t*)value, (const uint8_t*)value + size);
+
+	uint8_t buffer[512];
+	const struct spa_pod* param = _PodFromValue(v, buffer, sizeof(buffer));
+	if (param == NULL)
+		return B_BAD_VALUE;
+
+	Lock();
+	struct pw_node* node = _BindNode(nodeId);
+	if (node == NULL) {
+		Unlock();
+		return B_DEVICE_NOT_FOUND;
+	}
+	pw_node_set_param(node, SPA_PARAM_Props, 0, param);
+
+	// Keep the published cache in sync so QueryNodeProps sees our write
+	// even when the server-side filter does not echo Props back.
+	{
+		std::lock_guard<std::mutex> _(fPublishedParamsLock);
+		std::vector<NodePropValue>& vals = fPublishedValues[nodeId];
+		bool found = false;
+		for (size_t i = 0; i < vals.size(); i++) {
+			if (vals[i].id == propId) {
+				vals[i] = v;
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+			vals.push_back(v);
+	}
+
+	// Verify with a bounded round-trip when the node might answer.
+	status_t rt = RoundtripLocked(1000000);
+	pw_proxy_destroy((struct pw_proxy*)node);
+	Unlock();
+
+	if (rt == B_TIMED_OUT)
+		return B_OK;
+	return rt;
+}
+
+
+status_t
+PipeWireBackend::PublishFilterParams(struct pw_filter* filter,
+	const std::vector<NodePropInfo>& infos,
+	const std::vector<NodePropValue>& values)
+{
+	if (filter == NULL)
+		return B_BAD_VALUE;
+
+	uint32 nodeId = pw_filter_get_node_id(filter);
+	if (nodeId == 0)
+		return B_ERROR;
+
+	{
+		std::lock_guard<std::mutex> _(fPublishedParamsLock);
+		fPublishedInfos[nodeId] = infos;
+		fPublishedValues[nodeId] = values;
+	}
+
+	Lock();
+
+	// Push current Props so foreign clients see values via enum_params.
+	std::vector<const struct spa_pod*> pods;
+	std::vector<uint8_t> storage;
+	storage.reserve(values.size() * 128);
+	for (size_t i = 0; i < values.size(); i++) {
+		size_t offset = storage.size();
+		storage.resize(offset + 256);
+		const struct spa_pod* pod = _PodFromValue(values[i],
+			storage.data() + offset, 256);
+		if (pod != NULL)
+			pods.push_back(pod);
+	}
+	if (!pods.empty())
+		pw_filter_update_params(filter, NULL, pods.data(),
+			(uint32_t)pods.size());
+
+	// Also publish PropInfo so pw-cli and our BindNode can discover them.
+	std::vector<uint8_t> infoStorage;
+	std::vector<const struct spa_pod*> infoPods;
+	infoStorage.reserve(infos.size() * 256);
+	for (size_t i = 0; i < infos.size(); i++) {
+		size_t offset = infoStorage.size();
+		infoStorage.resize(offset + 512);
+		spa_pod_builder b = SPA_POD_BUILDER_INIT(
+			infoStorage.data() + offset, 512);
+		spa_pod_frame frame;
+		const struct spa_pod* pod = NULL;
+		if (spa_pod_builder_push_object(&b, &frame,
+				SPA_TYPE_OBJECT_PropInfo, SPA_PARAM_PropInfo) >= 0) {
+			spa_pod_builder_add(&b,
+				SPA_PROP_INFO_id, SPA_POD_Id(infos[i].id),
+				SPA_PROP_INFO_name, SPA_POD_String(infos[i].name.c_str()),
+				0);
+			if (infos[i].hasRange && infos[i].valueType == SPA_TYPE_Float) {
+				spa_pod_builder_prop(&b, SPA_PROP_INFO_type, 0);
+				spa_pod_frame typeFrame;
+				if (spa_pod_builder_push_object(&b, &typeFrame,
+						SPA_TYPE_Object, SPA_CHOICE_Range) >= 0) {
+					spa_pod_builder_add(&b,
+						SPA_CHOICE_None,
+							SPA_POD_Float(infos[i].minValue),
+						0);
+					// Range alternatives as a simple float pair via Choice.
+					spa_pod_builder_pop(&b, &typeFrame);
+				}
+			}
+			pod = (const struct spa_pod*)spa_pod_builder_pop(&b, &frame);
+		}
+		if (pod != NULL)
+			infoPods.push_back(pod);
+	}
+	if (!infoPods.empty())
+		pw_filter_update_params(filter, NULL, infoPods.data(),
+			(uint32_t)infoPods.size());
+
+	Unlock();
+	return B_OK;
+}
+
 
 } }

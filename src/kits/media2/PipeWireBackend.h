@@ -11,6 +11,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <pipewire/pipewire.h>
@@ -20,6 +21,9 @@
 #include <SupportDefs.h>
 
 #include <media2/MediaFormat.h>
+
+
+class BControllable;
 
 
 namespace BPrivate { namespace media {
@@ -195,6 +199,44 @@ public:
 			status_t				RoundtripLocked(
 									bigtime_t timeoutUsecs = 2000000);
 
+		// SPA node params (W18): PropInfo descriptors and Props values.
+		// valueTypes use spa pod types (SPA_TYPE_Float, Bool, Int, Id, String).
+		struct NodePropInfo {
+			uint32			id;
+			std::string		name;
+			uint32			valueType;
+			float			minValue;
+			float			maxValue;
+			float			step;
+			bool			hasRange;
+			std::vector<std::pair<uint32, std::string> > labels;
+		};
+		struct NodePropValue {
+			uint32			id;
+			uint32			valueType;
+			std::vector<uint8_t> bytes;
+		};
+
+		status_t				QueryNodePropInfo(uint32 nodeId,
+									std::vector<NodePropInfo>& outInfos,
+									bigtime_t timeoutUsecs = 2000000);
+		status_t				QueryNodeProps(uint32 nodeId,
+									std::vector<NodePropValue>& outValues,
+									bigtime_t timeoutUsecs = 2000000);
+		status_t				SetNodeProp(uint32 nodeId, uint32 propId,
+									uint32 valueType, const void* value,
+									size_t size);
+		status_t				WatchNodeParams(uint32 nodeId,
+									BControllable* target);
+		status_t				UnwatchNodeParams(uint32 nodeId,
+									BControllable* target);
+
+		// Publish PropInfo/Props on a filter we created so foreign clients
+		// (and our own BControllable bind) can see and set them.
+		status_t				PublishFilterParams(struct pw_filter* filter,
+									const std::vector<NodePropInfo>& infos,
+									const std::vector<NodePropValue>& values);
+
 private:
 			void					_OnRegistryGlobal(uint32 id, uint32 perms,
 										const char* type, uint32 version,
@@ -262,9 +304,36 @@ private:
 										uint32 next,
 										const struct spa_pod* param);
 
+			struct PropInfoQuery {
+				std::vector<NodePropInfo>	infos;
+				bool						done;
+			};
+			static void				_PropInfoThunk(void* data, int seq,
+										uint32 id, uint32 index, uint32 next,
+										const struct spa_pod* param);
+
+			struct NodePropsQuery {
+				std::vector<NodePropValue>	values;
+				bool						done;
+			};
+			static void				_NodePropsThunk(void* data, int seq,
+										uint32 id, uint32 index, uint32 next,
+										const struct spa_pod* param);
+
 			status_t				_QueryActiveRoute(uint32 cardId,
 										int32 wantDirection,
 										RouteVolumeQuery& outQuery);
+
+			static void				_ParsePropInfoPod(const struct spa_pod* pod,
+										NodePropInfo& outInfo);
+			static void				_ParsePropsPod(const struct spa_pod* pod,
+										std::vector<NodePropValue>& outValues);
+			static bool				_ValueFromPod(const struct spa_pod* pod,
+										uint32& outType,
+										std::vector<uint8_t>& outBytes);
+			static const struct spa_pod* _PodFromValue(
+										const NodePropValue& value,
+										void* buffer, size_t bufferSize);
 
 private:
 			pw_thread_loop*			fThreadLoop;
@@ -341,6 +410,28 @@ private:
 			spa_hook				fNodeListener;
 			std::map<uint32, std::string> fNodeNames;
 			std::map<uint32, std::string> fNodeApps;
+
+			struct NodeParamWatch {
+				PipeWireBackend*	backend;
+				uint32				nodeId;
+				struct pw_node*		proxy;
+				spa_hook			hook;
+				std::vector<BControllable*>	targets;
+			};
+			std::mutex				fNodeParamWatchesLock;
+			std::map<uint32, NodeParamWatch*>	fNodeParamWatches;
+			static void				_NodeParamWatchThunk(void* data, int seq,
+										uint32 id, uint32 index, uint32 next,
+										const struct spa_pod* param);
+			void					_OnNodeParamWatch(NodeParamWatch* watch,
+										uint32 id, const struct spa_pod* param);
+			void					_DestroyNodeParamWatch(uint32 nodeId);
+
+			// PropInfo/Props published on filters we created, so QueryNode*
+			// can serve them even if the server-side filter does not yet.
+			std::mutex				fPublishedParamsLock;
+			std::map<uint32, std::vector<NodePropInfo> >	fPublishedInfos;
+			std::map<uint32, std::vector<NodePropValue> >	fPublishedValues;
 
 			static int				_MetadataPropertyThunk(void* data,
 										uint32 id, const char* key,

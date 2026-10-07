@@ -42,6 +42,23 @@ protected:
 public:
 			void*					_GetFilter() const;
 
+			// PipeWire node id of this unit's filter (0 if not started).
+			uint32					NodeId() const;
+
+			// Publish SPA PropInfo/Props on this unit's filter node so
+			// foreign clients and BControllable::BindNode can see them.
+			// Prop ids should use SPA_PROP_START_CUSTOM or higher.
+			status_t				PublishNodeParams(
+										const uint32* propIds,
+										const char* const* names,
+										const uint32* valueTypes,
+										const float* minValues,
+										const float* maxValues,
+										const float* steps,
+										const void* const* values,
+										const size_t* valueSizes,
+										int32 count);
+
 private:
 			status_t				_BuildFilter();
 			void					_TeardownFilter();

@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include <Message.h>
+#include <Url.h>
 
 #include <media2/MediaConnection.h>
 #include <media2/MediaFile.h>
@@ -45,6 +46,8 @@ public:
 	~Impl();
 
 	status_t SetTo(const entry_ref* ref);
+	status_t SetTo(const BUrl& url);
+	status_t _FinishSetTo();
 
 	const BMediaFormat& Format() const { return fFormat; }
 	status_t SetFormat(const BMediaFormat& fmt);
@@ -215,6 +218,37 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 	if (fFile->InitCheck() != B_OK)
 		return (fInitErr = fFile->InitCheck());
 
+	return _FinishSetTo();
+}
+
+
+status_t
+BMediaPlayer::Impl::SetTo(const BUrl& url)
+{
+	std::lock_guard<std::mutex> _(fLock);
+
+	if (fNode != NULL)
+		fNode->Stop();
+	delete fFile;
+	fFile  = NULL;
+	fTrack = NULL;
+	fEOS   = false;
+	fDuration = 0;
+	fFrameStride = 0;
+
+	fFile = new(std::nothrow) BMediaFile(url);
+	if (fFile == NULL)
+		return (fInitErr = B_NO_MEMORY);
+	if (fFile->InitCheck() != B_OK)
+		return (fInitErr = fFile->InitCheck());
+
+	return _FinishSetTo();
+}
+
+
+status_t
+BMediaPlayer::Impl::_FinishSetTo()
+{
 	fTrack = fFile->TrackAt(0);
 	if (fTrack == NULL)
 		return (fInitErr = B_ERROR);
@@ -360,7 +394,7 @@ BMediaPlayer::Impl::_PostNotification(uint32 what)
 
 void
 BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
-	const media_raw_audio_format&)
+	const media_raw_audio_format& format)
 {
 	if (fEOS.load() || fTrack == NULL
 			|| fState.load() != BMediaPlayer::B_PLAYER_PLAYING) {
@@ -391,6 +425,19 @@ BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
 	if (gotFrames < wantFrames) {
 		const size_t got = (size_t)gotFrames * fFrameStride;
 		memset((uint8_t*)buffer + got, 0, size - got);
+	}
+
+	// Apply the player volume on the decoded float samples. GStreamer
+	// negotiates F32LE interleaved into this path (MediaFile OpenUri caps).
+	if (fVolume != 1.0f) {
+		if ((format.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
+				== media_raw_audio_format::B_AUDIO_FLOAT) {
+			const size_t sampleCount = (size_t)gotFrames
+				* format.channel_count;
+			float* samples = (float*)buffer;
+			for (size_t i = 0; i < sampleCount; i++)
+				samples[i] *= fVolume;
+		}
 	}
 }
 
@@ -453,6 +500,7 @@ BMediaPlayer::~BMediaPlayer()
 
 status_t   BMediaPlayer::InitCheck() const  { return fImpl ? fImpl->InitCheck() : B_NO_MEMORY; }
 status_t   BMediaPlayer::SetTo(const entry_ref* r) { return fImpl ? fImpl->SetTo(r) : B_NO_MEMORY; }
+status_t   BMediaPlayer::SetTo(const BUrl& url) { return fImpl ? fImpl->SetTo(url) : B_NO_MEMORY; }
 status_t   BMediaPlayer::Play()             { return fImpl ? fImpl->Play()  : B_NO_INIT; }
 status_t   BMediaPlayer::Pause()            { return fImpl ? fImpl->Pause() : B_NO_INIT; }
 status_t   BMediaPlayer::Stop()             { return fImpl ? fImpl->Stop()  : B_NO_INIT; }

@@ -10,6 +10,7 @@
 
 #include <Entry.h>
 #include <Messenger.h>
+#include <Url.h>
 
 #include <media2/MediaFormat.h>
 
@@ -56,6 +57,7 @@ public:
 			status_t			InitCheck() const;
 
 			status_t			SetTo(const entry_ref* ref);
+			status_t			SetTo(const BUrl& url);
 
 			const BMediaFormat&	Format() const;
 			status_t			SetFormat(const BMediaFormat& format);

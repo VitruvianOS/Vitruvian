@@ -36,7 +36,8 @@ KeyboardView::KeyboardView()
 	fRepeatSlider->SetHashMarks(B_HASH_MARKS_BOTTOM);
 	fRepeatSlider->SetHashMarkCount(5);
 	fRepeatSlider->SetLimitLabels(B_TRANSLATE("Slow"), B_TRANSLATE("Fast"));
-	fRepeatSlider->SetExplicitMinSize(BSize(200, B_SIZE_UNSET));
+	fRepeatSlider->SetExplicitMinSize(BSize(200 * be_plain_font->Size() / 12.0f,
+		B_SIZE_UNSET));
 
 
 	// Create the "Delay until key repeat" slider...

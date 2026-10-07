@@ -289,7 +289,8 @@ SecretDialogWindow::_BuildMissingCertificate(const BString& missingFile)
 			? B_TRANSLATE("(unknown file)") : missingFile.String());
 
 	BStringView* prompt = new BStringView(NULL, text.String());
-	prompt->SetExplicitMaxSize(BSize(280, B_SIZE_UNSET));
+	prompt->SetExplicitMaxSize(BSize(280 * be_plain_font->Size() / 12.0f,
+		B_SIZE_UNSET));
 
 	BButton* cancel = new BButton(B_TRANSLATE("Cancel"), new BMessage(kMsgCancel));
 	cancel->MakeDefault(true);

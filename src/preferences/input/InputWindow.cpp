@@ -56,7 +56,7 @@ InputWindow::InputWindow(BRect rect)
 		"scrollView", fDeviceListView, 0, false, B_FANCY_BORDER);
 	fCardView = new BCardView();
 
-	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 10)
+	BLayoutBuilder::Group<>(this, B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 		.SetInsets(B_USE_WINDOW_SPACING)
 		.Add(scrollView, 1)
 		.Add(fCardView, 3);

@@ -181,7 +181,8 @@ KeymapWindow::KeymapWindow()
 
 	fKeyboardLayoutView = new KeyboardLayoutView("layout");
 	fKeyboardLayoutView->SetKeymap(&fCurrentMap);
-	fKeyboardLayoutView->SetExplicitMinSize(BSize(B_SIZE_UNSET, 192));
+	fKeyboardLayoutView->SetExplicitMinSize(BSize(B_SIZE_UNSET,
+		192 * be_plain_font->Size() / 12.0f));
 
 	fTextControl = new BTextControl(B_TRANSLATE("Sample and clipboard:"),
 		"", NULL);
@@ -1362,7 +1363,8 @@ KeymapWindow::_SetListViewSize(BListView* listView)
 			minWidth = width;
 	}
 
-	listView->SetExplicitMinSize(BSize(minWidth + 8, 32));
+	const float scale = be_plain_font->Size() / 12.0f;
+	listView->SetExplicitMinSize(BSize(minWidth + 8 * scale, 32 * scale));
 }
 
 

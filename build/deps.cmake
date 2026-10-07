@@ -257,6 +257,17 @@ DeclareDependency(
 	INCLUDES   "${HEADERS_PATH_BASE}/gstreamer-1.0/;${HEADERS_PATH_BASE}/glib-2.0/;${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}/glib-2.0/include/"
 )
 
+# W17 softsynth engine. Debian packages fluidsynth 2.x as libfluidsynth3;
+# the -dev package supplies fluidsynth.h. Runtime name verified against
+# Debian trixie packaging; a missing SF3 bank falls back to the SF2 GM bank.
+DeclareDependency(
+	FLUIDSYNTH
+	LIBRARIES  "fluidsynth"
+	PACKAGES   "libfluidsynth-dev"
+	RUNTIMES   "libfluidsynth3 (>= 2.3)"
+	INCLUDES   "${HEADERS_PATH_BASE}/fluidsynth/"
+)
+
 DeclareDependency(
 	BLUETOOTH
 	PACKAGES   "libbluetooth-dev"

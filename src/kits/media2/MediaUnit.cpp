@@ -243,6 +243,7 @@ BMediaUnit::_BuildFilter()
 	pw_properties* props = pw_properties_new(
 		PW_KEY_APP_NAME, Name(),
 		PW_KEY_NODE_NAME, Name(),
+		PW_KEY_NODE_DESCRIPTION, Name(),
 		PW_KEY_MEDIA_CLASS, "Audio/Filter",
 		PW_KEY_NODE_GROUP, Name(),
 		NULL);
@@ -528,30 +529,46 @@ BMediaUnit::Impl::_OnProcess(void* data, struct spa_io_position* position)
 		impl->cycleStartTime = position->clock.nsec / 1000;
 	}
 
-	impl->owner->ProcessCycle(impl->quantum);
-
+	// Deliver MIDI inputs first so ProcessCycle can walk this cycle's events,
+	// then fill MIDI outputs from their rings. Audio paths stay in ProcessCycle.
 	for (int32 i = 0; i < impl->owner->CountInputs(); i++) {
 		BMediaInput* input = impl->owner->InputAt(i);
-		if (input != NULL && input->_GetFilterPort() != NULL) {
-			port_data* pd = (port_data*)input->_GetFilterPort();
-			if (input->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) {
-				pw_buffer* pb = pw_filter_dequeue_buffer(pd);
-				if (pb != NULL)
-					pw_filter_queue_buffer(pd, pb);
-			}
+		if (input == NULL || (input->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) == 0)
+			continue;
+		if (input->_GetFilterPort() == NULL)
+			continue;
+
+		port_data* pd = (port_data*)input->_GetFilterPort();
+		pw_buffer* pb = pw_filter_dequeue_buffer(pd);
+		if (pb != NULL && pb->buffer != NULL && pb->buffer->datas != NULL
+			&& pb->buffer->datas[0].data != NULL && pb->buffer->datas[0].chunk != NULL) {
+			input->HandleBuffer(pb->buffer->datas[0].data,
+				pb->buffer->datas[0].chunk->size, input->Format());
 		}
+		if (pb != NULL)
+			pw_filter_queue_buffer(pd, pb);
 	}
+
+	impl->owner->ProcessCycle(impl->quantum);
 
 	for (int32 i = 0; i < impl->owner->CountOutputs(); i++) {
 		BMediaOutput* output = impl->owner->OutputAt(i);
-		if (output != NULL && output->_GetFilterPort() != NULL) {
-			port_data* pd = (port_data*)output->_GetFilterPort();
-			if (output->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) {
-				pw_buffer* pb = pw_filter_dequeue_buffer(pd);
-				if (pb != NULL)
-					pw_filter_queue_buffer(pd, pb);
-			}
+		if (output == NULL || (output->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) == 0)
+			continue;
+		if (output->_GetFilterPort() == NULL)
+			continue;
+
+		port_data* pd = (port_data*)output->_GetFilterPort();
+		pw_buffer* pb = pw_filter_dequeue_buffer(pd);
+		if (pb != NULL && pb->buffer != NULL && pb->buffer->datas != NULL
+			&& pb->buffer->datas[0].data != NULL && pb->buffer->datas[0].chunk != NULL) {
+			// MIDI POD sequences are small; chunk->size is the filled length.
+			output->FillBuffer(pb->buffer->datas[0].data,
+				pb->buffer->datas[0].chunk->size > 0
+					? pb->buffer->datas[0].chunk->size : 2048);
 		}
+		if (pb != NULL)
+			pw_filter_queue_buffer(pd, pb);
 	}
 }
 

@@ -37,6 +37,10 @@ set(
 
 	"headers/os/media2"
 
+	"headers/os/web"
+	"headers/os/midi"
+	"headers/os/midi2"
+
 	"headers/os/experimental"
 	"headers/os/experimental/package"
 

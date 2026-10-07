@@ -9,7 +9,7 @@ Application(Network
 	NetworkHotspotSettings.cpp
 	ProxyView.cpp
 	ProxySettings.cpp
-	LIBS be shared localestub
+	LIBS be shared localestub tracker
 	RDEF Network.rdef
 )
 

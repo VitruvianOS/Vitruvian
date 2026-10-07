@@ -23,6 +23,8 @@
 #include <CheckBox.h>
 #include <ControlLook.h>
 #include <Deskbar.h>
+#include <Entry.h>
+#include <FilePanel.h>
 #include <Locale.h>
 #include <MessageRunner.h>
 #include <Directory.h>
@@ -53,6 +55,9 @@ static const uint32 kMsgInitialDeviceScan = 'inds';
 static const uint32 kMsgDevicesReady = 'dvrd';
 static const uint32 kMsgDeviceInfoReady = 'dird';
 static const uint32 kMsgWiFiRefresh = 'wfrf';
+static const uint32 kMsgImportVPN = 'imvp';
+static const uint32 kMsgImportVPNRefs = 'ivrf';
+static const uint32 kMsgImportVPNResult = 'ivrR';
 
 BMessenger gNetworkWindow;
 
@@ -238,7 +243,9 @@ NetworkWindow::NetworkWindow()
 	fMobileView(NULL),
 	fProxyView(NULL),
 	fRevertButton(NULL),
+	fImportVPNButton(NULL),
 	fWiFiRefreshRunner(NULL),
+	fImportVPNPanel(NULL),
 	fProxyItem(NULL),
 	fMobileItem(NULL),
 	fServicesItem(NULL),
@@ -251,6 +258,9 @@ NetworkWindow::NetworkWindow()
 	// Settings section
 	fRevertButton = new BButton("revert", B_TRANSLATE("Revert"),
 		new BMessage(kMsgRevert));
+	fImportVPNButton = new BButton("importVPN", B_TRANSLATE("Import VPN" B_UTF8_ELLIPSIS),
+		new BMessage(kMsgImportVPN));
+	fImportVPNButton->SetTarget(this);
 
 	BMessage* message = new BMessage(kMsgToggleReplicant);
 	BCheckBox* showReplicantCheckBox = new BCheckBox("showReplicantCheckBox",
@@ -288,6 +298,7 @@ NetworkWindow::NetworkWindow()
 		.End()
 		.Add(showReplicantCheckBox)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+			.Add(fImportVPNButton)
 			.Add(fRevertButton)
 			.AddGlue()
 		.End();
@@ -336,6 +347,7 @@ NetworkWindow::~NetworkWindow()
 		backend->StopWatching(BMessenger(this));
 	}
 	delete fWiFiRefreshRunner;
+	delete fImportVPNPanel;
 }
 
 
@@ -376,6 +388,18 @@ NetworkWindow::MessageReceived(BMessage* message)
 
 		case kMsgToggleReplicant:
 			_ToggleReplicant();
+			break;
+
+		case kMsgImportVPN:
+			_ImportVPNRequested();
+			break;
+
+		case kMsgImportVPNRefs:
+			_ImportVPNRefs(message);
+			break;
+
+		case kMsgImportVPNResult:
+			_ImportVPNResult(message);
 			break;
 
 		case kMsgItemSelected:
@@ -610,10 +634,13 @@ NetworkWindow::_PopulateDeviceList(BMessage* devices)
 		fMobileView->ClearModem();
 	}
 
-	if (restoredSelection == NULL && hadSelection)
+	if (restoredSelection == NULL && !fPendingVPNImportPath.IsEmpty())
+		restoredSelection = _PopulateVPNList(fPendingVPNImportPath);
+	else if (restoredSelection == NULL && hadSelection)
 		restoredSelection = _PopulateVPNList(previousPath);
 	else
 		_PopulateVPNList(BString());
+	fPendingVPNImportPath = "";
 
 	// Note: BListItem visibility toggling is private/friend-only in this
 	// tree (BOutlineListView/BListView only); empty sections are simply
@@ -847,4 +874,76 @@ NetworkWindow::_IsReplicantInstalled()
 {
 	BDeskbar deskbar;
 	return deskbar.HasItem(kNetworkStatusDeskbarItemName);
+}
+
+
+void
+NetworkWindow::_ImportVPNRequested()
+{
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return;
+
+	if (fImportVPNPanel == NULL) {
+		BMessenger target(this);
+		BMessage message(kMsgImportVPNRefs);
+		fImportVPNPanel = new BFilePanel(B_OPEN_PANEL, &target, NULL,
+			B_FILE_NODE, false, &message);
+		fImportVPNPanel->Window()->SetTitle(B_TRANSLATE("Import VPN"));
+	}
+	fImportVPNPanel->Show();
+}
+
+
+void
+NetworkWindow::_ImportVPNRefs(BMessage* message)
+{
+	entry_ref ref;
+	if (message->FindRef("refs", &ref) != B_OK)
+		return;
+
+	BPath path(&ref);
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return;
+
+	if (backend->ImportVPNAsync(path.Path(), BMessenger(this),
+			kMsgImportVPNResult) != B_OK) {
+		BAlert* alert = new BAlert(B_TRANSLATE("Import VPN"),
+			B_TRANSLATE("Could not start the import."),
+			B_TRANSLATE("OK"));
+		alert->Go(NULL);
+	}
+}
+
+
+void
+NetworkWindow::_ImportVPNResult(BMessage* message)
+{
+	int32 status = B_ERROR;
+	message->FindInt32("status", &status);
+	if (status == B_OK) {
+		message->FindString(kNMFieldProfilePath, &fPendingVPNImportPath);
+		_RequestDeviceScan();
+		return;
+	}
+
+	BString reason;
+	message->FindString("reason", &reason);
+	BString text(B_TRANSLATE("Could not import the VPN connection."));
+	if (!reason.IsEmpty())
+		text << "\n" << reason;
+
+	BMessage formats;
+	if (message->FindMessage("supported_formats", &formats) == B_OK) {
+		text << "\n\n" << B_TRANSLATE("Supported formats:") << "\n";
+		for (int32 i = 0; formats.FindString("format", i, &reason) == B_OK;
+				i++) {
+			text << "  " << reason << "\n";
+		}
+	}
+
+	BAlert* alert = new BAlert(B_TRANSLATE("Import VPN"), text,
+		B_TRANSLATE("OK"));
+	alert->Go(NULL);
 }

@@ -12,6 +12,7 @@
 
 
 class BButton;
+class BFilePanel;
 class BListItem;
 class BMessageRunner;
 class BOutlineListView;
@@ -38,14 +39,21 @@ private:
 	void _RevertSettings();
 	void _ToggleReplicant();
 	bool _IsReplicantInstalled();
+	void _ImportVPNRequested();
+	void _ImportVPNRefs(BMessage* message);
+	void _ImportVPNResult(BMessage* message);
 
 	BOutlineListView* fListView;
 	InterfaceDetailView* fDetailView;
 	MobileBroadbandView* fMobileView;
 	ProxyView* fProxyView;
 	BButton* fRevertButton;
+	BButton* fImportVPNButton;
 	// Coalesces a scan's burst of AP add/remove notifications.
 	BMessageRunner* fWiFiRefreshRunner;
+	BFilePanel* fImportVPNPanel;
+	// Selected once the list refresh after an import lands.
+	BString fPendingVPNImportPath;
 
 	BListItem* fProxyItem;
 	BListItem* fMobileItem;

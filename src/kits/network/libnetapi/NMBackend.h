@@ -318,6 +318,12 @@ public:
 	status_t ConnectVPN(const char* connectionPath);
 	status_t DisconnectVPN(const char* connectionPath);
 
+	// Saves (does not activate) a profile imported by the VPN plugins or,
+	// failing that, from a WireGuard .conf. Reply: "status"; on success
+	// kNMFieldProfilePath/kNMFieldProfileID, else "reason" and
+	// "supported_formats" (a BMessage of "format" strings).
+	status_t ImportVPNAsync(const char* filePath, const BMessenger& replyTo,
+		uint32 replyWhat);
 
 	
 	// Notifications (BMessage protocol)

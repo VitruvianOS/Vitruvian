@@ -8,7 +8,10 @@
 #include <NetworkInterface.h>
 #include <NetworkRoute.h>
 #include <Messenger.h>
+#include <File.h>
+#include <Path.h>
 #include <String.h>
+#include <StringList.h>
 
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -31,6 +34,8 @@
 #include <nm-setting-wireless-security.h>
 #include <nm-setting-wired.h>
 #include <nm-setting-vpn.h>
+#include <nm-vpn-plugin-info.h>
+#include <nm-vpn-editor-plugin.h>
 #include <nm-utils.h>
 #include <nm-setting-wireguard.h>
 #include <nm-setting-ip-config.h>
@@ -2406,6 +2411,385 @@ NMBackend::DisconnectVPN(const char* connectionPath)
 	job->connect = false;
 
 	g_main_context_invoke((GMainContext*)fMainContext, _RunDisconnectVPN, job);
+	return B_OK;
+}
+
+
+struct _ImportVPNJob {
+	NMClient* nmClient;
+	BString filePath;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_ImportVPNFail(const BMessage& formats, BMessenger& replyTo, uint32 replyWhat,
+	const char* reason)
+{
+	BMessage reply(replyWhat);
+	reply.AddInt32("status", (int32)B_ERROR);
+	reply.AddString("reason", reason != NULL ? reason : "unknown error");
+	if (!formats.IsEmpty())
+		reply.AddMessage("supported_formats", &formats);
+	replyTo.SendMessage(&reply);
+}
+
+
+static BMessage
+_SupportedVPNImportFormats()
+{
+	BMessage formats;
+	formats.AddString("format", "wireguard");
+	GSList* plugins = nm_vpn_plugin_info_list_load();
+	for (GSList* p = plugins; p != NULL; p = p->next) {
+		NMVpnPluginInfo* info = (NMVpnPluginInfo*)p->data;
+		if (info == NULL)
+			continue;
+		// The info caches the plugin and keeps its reference.
+		GError* error = NULL;
+		NMVpnEditorPlugin* editor
+			= nm_vpn_plugin_info_load_editor_plugin(info, &error);
+		if (editor == NULL) {
+			if (error != NULL)
+				g_error_free(error);
+			continue;
+		}
+		if (nm_vpn_editor_plugin_get_capabilities(editor)
+				& NM_VPN_EDITOR_PLUGIN_CAPABILITY_IMPORT) {
+			const char* service = nm_vpn_plugin_info_get_service(info);
+			const char* name = nm_vpn_plugin_info_get_name(info);
+			if (service != NULL && service[0] != '\0')
+				formats.AddString("format", service);
+			else if (name != NULL)
+				formats.AddString("format", name);
+		}
+	}
+	if (plugins != NULL)
+		g_slist_free_full(plugins, g_object_unref);
+	return formats;
+}
+
+
+static void
+_SplitList(const BString& value, BStringList& list)
+{
+	BStringList items;
+	value.Split(",", true, items);
+	for (int32 i = 0; i < items.CountStrings(); i++) {
+		BString item = items.StringAt(i);
+		item.Trim();
+		if (!item.IsEmpty())
+			list.Add(item);
+	}
+}
+
+
+static NMWireGuardPeer*
+_NewWireGuardPeer(const BString& publicKey, const BString& presharedKey,
+	const BString& endpoint, const BString& keepalive,
+	const BStringList& allowedIPs)
+{
+	NMWireGuardPeer* peer = nm_wireguard_peer_new();
+	nm_wireguard_peer_set_public_key(peer, publicKey.String(), TRUE);
+	if (!presharedKey.IsEmpty())
+		nm_wireguard_peer_set_preshared_key(peer, presharedKey.String(), TRUE);
+	if (!endpoint.IsEmpty())
+		nm_wireguard_peer_set_endpoint(peer, endpoint.String(), TRUE);
+	if (!keepalive.IsEmpty())
+		nm_wireguard_peer_set_persistent_keepalive(peer,
+			(uint16)atoi(keepalive.String()));
+	for (int32 i = 0; i < allowedIPs.CountStrings(); i++) {
+		nm_wireguard_peer_append_allowed_ip(peer,
+			allowedIPs.StringAt(i).String(), FALSE);
+	}
+	return peer;
+}
+
+
+// WireGuard is a native NM connection type, not a VPN plugin, so its .conf
+// (the wg-quick format) is parsed here.
+static NMConnection*
+_ImportWireGuardConf(const char* path, GError** error)
+{
+	BFile file(path, B_READ_ONLY);
+	off_t size = 0;
+	if (file.InitCheck() != B_OK || file.GetSize(&size) != B_OK
+			|| size > 1024 * 1024) {
+		g_set_error(error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+			"cannot read %s", path);
+		return NULL;
+	}
+	BString text;
+	char* buffer = text.LockBuffer(size + 1);
+	ssize_t bytes = file.Read(buffer, size);
+	text.UnlockBuffer(bytes > 0 ? bytes : 0);
+
+	BString privateKey, listenPort, section;
+	BStringList addresses, dns;
+	BString peerKey, peerPsk, peerEndpoint, peerKeepalive;
+	BStringList peerAllowed;
+	std::vector<NMWireGuardPeer*> peers;
+
+	BStringList lines;
+	text.Split("\n", true, lines);
+	for (int32 i = 0; i <= lines.CountStrings(); i++) {
+		BString line = i < lines.CountStrings() ? lines.StringAt(i) : "[end]";
+		line.Trim();
+		if (line.IsEmpty() || line[0] == '#' || line[0] == ';')
+			continue;
+		if (line[0] == '[') {
+			if (!peerKey.IsEmpty()) {
+				peers.push_back(_NewWireGuardPeer(peerKey, peerPsk,
+					peerEndpoint, peerKeepalive, peerAllowed));
+			}
+			peerKey = peerPsk = peerEndpoint = peerKeepalive = "";
+			peerAllowed.MakeEmpty();
+			section = line;
+			section.RemoveAll("[").RemoveAll("]").Trim().ToLower();
+			continue;
+		}
+
+		int32 eq = line.FindFirst('=');
+		if (eq < 0)
+			continue;
+		BString key(line.String(), eq);
+		BString value(line.String() + eq + 1);
+		key.Trim().ToLower();
+		value.Trim();
+
+		if (section == "interface") {
+			if (key == "privatekey")
+				privateKey = value;
+			else if (key == "listenport")
+				listenPort = value;
+			else if (key == "address")
+				_SplitList(value, addresses);
+			else if (key == "dns")
+				_SplitList(value, dns);
+		} else if (section == "peer") {
+			if (key == "publickey")
+				peerKey = value;
+			else if (key == "presharedkey")
+				peerPsk = value;
+			else if (key == "endpoint")
+				peerEndpoint = value;
+			else if (key == "persistentkeepalive")
+				peerKeepalive = value;
+			else if (key == "allowedips")
+				_SplitList(value, peerAllowed);
+		}
+	}
+
+	if (privateKey.IsEmpty() && peers.empty()) {
+		g_set_error(error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+			"%s has neither a private key nor any peer", path);
+		return NULL;
+	}
+
+	BString id = BPath(path).Leaf();
+	if (id.EndsWith(".conf"))
+		id.Truncate(id.Length() - 5);
+	if (id.IsEmpty())
+		id = "WireGuard";
+
+	NMConnection* connection = nm_simple_connection_new();
+	char* uuid = nm_utils_uuid_generate();
+	NMSettingConnection* connSetting
+		= (NMSettingConnection*)nm_setting_connection_new();
+	g_object_set(connSetting,
+		NM_SETTING_CONNECTION_ID, id.String(),
+		NM_SETTING_CONNECTION_UUID, uuid,
+		NM_SETTING_CONNECTION_TYPE, NM_SETTING_WIREGUARD_SETTING_NAME,
+		NULL);
+	g_free(uuid);
+	nm_connection_add_setting(connection, NM_SETTING(connSetting));
+
+	NMSettingWireGuard* wg = (NMSettingWireGuard*)nm_setting_wireguard_new();
+	if (!privateKey.IsEmpty()) {
+		g_object_set(wg, NM_SETTING_WIREGUARD_PRIVATE_KEY,
+			privateKey.String(), NULL);
+	}
+	if (!listenPort.IsEmpty()) {
+		g_object_set(wg, NM_SETTING_WIREGUARD_LISTEN_PORT,
+			(guint)atoi(listenPort.String()), NULL);
+	}
+	for (size_t i = 0; i < peers.size(); i++) {
+		nm_setting_wireguard_append_peer(wg, peers[i]);
+		nm_wireguard_peer_unref(peers[i]);
+	}
+	nm_connection_add_setting(connection, NM_SETTING(wg));
+
+	NMSettingIPConfig* ip4 = (NMSettingIPConfig*)nm_setting_ip4_config_new();
+	NMSettingIPConfig* ip6 = (NMSettingIPConfig*)nm_setting_ip6_config_new();
+	bool haveIPv4 = false;
+	bool haveIPv6 = false;
+	for (int32 i = 0; i < addresses.CountStrings(); i++) {
+		BString host = addresses.StringAt(i);
+		int prefix = -1;
+		int32 slash = host.FindFirst('/');
+		if (slash >= 0) {
+			prefix = atoi(host.String() + slash + 1);
+			host.Truncate(slash);
+		}
+		bool v6 = host.FindFirst(':') >= 0;
+		if (prefix < 0)
+			prefix = v6 ? 128 : 32;
+		NMIPAddress* address = nm_ip_address_new(v6 ? AF_INET6 : AF_INET,
+			host.String(), (guint)prefix, NULL);
+		if (address == NULL)
+			continue;
+		nm_setting_ip_config_add_address(v6 ? ip6 : ip4, address);
+		nm_ip_address_unref(address);
+		if (v6)
+			haveIPv6 = true;
+		else
+			haveIPv4 = true;
+	}
+	for (int32 i = 0; i < dns.CountStrings(); i++) {
+		BString server = dns.StringAt(i);
+		nm_setting_ip_config_add_dns(server.FindFirst(':') >= 0 ? ip6 : ip4,
+			server.String());
+	}
+	g_object_set(ip4, NM_SETTING_IP_CONFIG_METHOD, haveIPv4
+		? NM_SETTING_IP4_CONFIG_METHOD_MANUAL
+		: NM_SETTING_IP4_CONFIG_METHOD_DISABLED, NULL);
+	g_object_set(ip6, NM_SETTING_IP_CONFIG_METHOD, haveIPv6
+		? NM_SETTING_IP6_CONFIG_METHOD_MANUAL
+		: NM_SETTING_IP6_CONFIG_METHOD_IGNORE, NULL);
+	nm_connection_add_setting(connection, NM_SETTING(ip4));
+	nm_connection_add_setting(connection, NM_SETTING(ip6));
+	return connection;
+}
+
+
+static NMConnection*
+_TryImportVPNPlugin(const char* path, BString& outFormat)
+{
+	GSList* plugins = nm_vpn_plugin_info_list_load();
+	NMConnection* connection = NULL;
+	for (GSList* p = plugins; p != NULL; p = p->next) {
+		NMVpnPluginInfo* info = (NMVpnPluginInfo*)p->data;
+		if (info == NULL)
+			continue;
+		GError* loadError = NULL;
+		NMVpnEditorPlugin* editor
+			= nm_vpn_plugin_info_load_editor_plugin(info, &loadError);
+		if (editor == NULL) {
+			if (loadError != NULL)
+				g_error_free(loadError);
+			continue;
+		}
+		if (!(nm_vpn_editor_plugin_get_capabilities(editor)
+				& NM_VPN_EDITOR_PLUGIN_CAPABILITY_IMPORT))
+			continue;
+		GError* importError = NULL;
+		connection = nm_vpn_editor_plugin_import(editor, path, &importError);
+		if (connection != NULL) {
+			const char* service = nm_vpn_plugin_info_get_service(info);
+			outFormat = service != NULL && service[0] != '\0'
+				? service : nm_vpn_plugin_info_get_name(info);
+			break;
+		}
+		if (importError != NULL)
+			g_error_free(importError);
+	}
+	if (plugins != NULL)
+		g_slist_free_full(plugins, g_object_unref);
+	return connection;
+}
+
+
+static void
+_OnImportVPNDone(GObject* source, GAsyncResult* result, gpointer userData)
+{
+	_ImportVPNJob* job = (_ImportVPNJob*)userData;
+
+	GError* error = NULL;
+	NMRemoteConnection* remote = nm_client_add_connection_finish(
+		NM_CLIENT(source), result, &error);
+
+	BMessage reply(job->replyWhat);
+	if (remote != NULL) {
+		const char* path = nm_connection_get_path(NM_CONNECTION(remote));
+		const char* id = nm_connection_get_id(NM_CONNECTION(remote));
+		reply.AddInt32("status", (int32)B_OK);
+		reply.AddString(kNMFieldProfilePath, path != NULL ? path : "");
+		reply.AddString(kNMFieldProfileID, id != NULL ? id : "");
+		g_object_unref(remote);
+	} else {
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+	}
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+static gboolean
+_RunImportVPN(gpointer data)
+{
+	_ImportVPNJob* job = (_ImportVPNJob*)data;
+
+	if (job->filePath.IsEmpty()) {
+		_ImportVPNFail(BMessage(), job->replyTo, job->replyWhat,
+			"no file given");
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	BString format;
+	NMConnection* connection = _TryImportVPNPlugin(
+		job->filePath.String(), format);
+	if (connection == NULL) {
+		GError* wgError = NULL;
+		connection = _ImportWireGuardConf(job->filePath.String(), &wgError);
+		if (connection == NULL) {
+			BMessage formats = _SupportedVPNImportFormats();
+			BString reason;
+			if (wgError != NULL) {
+				reason.SetToFormat("%s: %s", job->filePath.String(),
+					wgError->message);
+				g_error_free(wgError);
+			} else {
+				reason.SetToFormat(
+					"No VPN plugin can import %s", job->filePath.String());
+			}
+			_ImportVPNFail(formats, job->replyTo, job->replyWhat,
+				reason.String());
+			delete job;
+			return G_SOURCE_REMOVE;
+		}
+	}
+
+	// Saved, not activated: importing must not disturb a live tunnel.
+	nm_client_add_connection_async(job->nmClient, connection, TRUE, NULL,
+		_OnImportVPNDone, job);
+	g_object_unref(connection);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::ImportVPNAsync(const char* filePath, const BMessenger& replyTo,
+	uint32 replyWhat)
+{
+	if (filePath == NULL || filePath[0] == '\0')
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_ImportVPNJob* job = new _ImportVPNJob;
+	job->nmClient = (NMClient*)fNMClient;
+	job->filePath = filePath;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunImportVPN, job);
 	return B_OK;
 }
 

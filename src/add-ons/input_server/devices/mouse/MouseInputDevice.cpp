@@ -53,8 +53,6 @@
 #include <keyboard_mouse_driver.h>
 #include <touchpad_settings.h>
 
-#include "movement_maker.h"
-
 
 #undef TRACE
 //#define TRACE_MOUSE_DEVICE
@@ -381,7 +379,6 @@ private:
 			// physical click; only one of them may report buttons.
 			BString				fPhysicalGroup;
 			bool				fMayReportButtons;
-			TouchpadMovement	fTouchpadMovementMaker;
 			BMessage*			fTouchpadSettingsMessage;
 			BLocker				fTouchpadSettingsLock;
 };
@@ -1369,8 +1366,6 @@ MouseDevice::_UpdateSettings()
 			&& ioctl(fDevice, MS_SET_MAP, &fSettings.map) == B_OK;
 
 	if (get_click_speed(fDeviceRef.name, &fSettings.click_speed) == B_OK) {
-		if (fIsTouchpad)
-			fTouchpadMovementMaker.click_speed = fSettings.click_speed;
 		if (fDevice >= 0)
 			ioctl(fDevice, MS_SET_CLICKSPEED, &fSettings.click_speed);
 	} else
@@ -1470,9 +1465,6 @@ MouseDevice::_UpdateTouchpadSettings(BMessage* message)
 		BAutolock locker(fTouchpadSettingsLock);
 		fTouchpadSettings = settings;
 	}
-
-	if (fIsTouchpad)
-		fTouchpadMovementMaker.SetSettings(settings);
 
 	if (fUseLibinput && fIsTouchpad)
 		_ApplyLibinputConfig();

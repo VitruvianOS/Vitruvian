@@ -3259,6 +3259,93 @@ _OnAddAndActivateDone(GObject* source, GAsyncResult* result, gpointer userData)
 }
 
 
+static const char*
+_WiFiKeyMgmt(const BString& security)
+{
+	if (security == "none")
+		return NULL;
+	if (security == "sae")
+		return "sae";
+	if (security == "wep")
+		return "none";
+	return "wpa-psk";
+}
+
+
+// First saved 802-11-wireless profile whose SSID matches. Dispatch thread
+// only: walks NMClient's GObject-owned connection list.
+static NMConnection*
+_FindSavedWiFiConnection(NMClient* nmClient, const BString& ssid)
+{
+	const GPtrArray* connections = nm_client_get_connections(nmClient);
+	if (connections == NULL)
+		return NULL;
+
+	for (guint i = 0; i < connections->len; i++) {
+		NMConnection* connection
+			= (NMConnection*)g_ptr_array_index(connections, i);
+		if (connection == NULL)
+			continue;
+
+		NMSettingWireless* wireless
+			= nm_connection_get_setting_wireless(connection);
+		if (wireless == NULL)
+			continue;
+
+		GBytes* ssidBytes = nm_setting_wireless_get_ssid(wireless);
+		if (ssidBytes == NULL)
+			continue;
+
+		gsize len = 0;
+		gconstpointer bytes = g_bytes_get_data(ssidBytes, &len);
+		if (bytes == NULL || len == 0)
+			continue;
+
+		if (BString((const char*)bytes, len) == ssid)
+			return connection;
+	}
+
+	return NULL;
+}
+
+
+static void
+_ApplyWiFiJoinSettings(NMConnection* connection, _ConnectWiFiJob* job)
+{
+	NMSettingConnection* connSetting
+		= nm_connection_get_setting_connection(connection);
+	if (connSetting != NULL) {
+		g_object_set(connSetting, NM_SETTING_CONNECTION_AUTOCONNECT,
+			(gboolean)job->remember, NULL);
+	}
+
+	NMSettingWireless* wireless
+		= nm_connection_get_setting_wireless(connection);
+	if (wireless != NULL) {
+		g_object_set(wireless, NM_SETTING_WIRELESS_HIDDEN,
+			(gboolean)job->hidden, NULL);
+	}
+
+	const char* keyMgmt = _WiFiKeyMgmt(job->security);
+	if (keyMgmt == NULL)
+		return;
+
+	NMSettingWirelessSecurity* secSetting
+		= nm_connection_get_setting_wireless_security(connection);
+	if (secSetting == NULL) {
+		secSetting = (NMSettingWirelessSecurity*)
+			nm_setting_wireless_security_new();
+		nm_connection_add_setting(connection, NM_SETTING(secSetting));
+	}
+	g_object_set(secSetting, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT,
+		keyMgmt, NULL);
+	if (job->security == "wep") {
+		g_object_set(secSetting,
+			NM_SETTING_WIRELESS_SECURITY_WEP_TX_KEYIDX, 0, NULL);
+	}
+}
+
+
 static gboolean
 _RunConnectToWiFi(gpointer data)
 {
@@ -3320,6 +3407,26 @@ _RunConnectToWiFi(gpointer data)
 				targetAP = ap;
 			}
 		}
+	}
+
+	// A saved profile with this SSID is updated and activated instead of
+	// adding a twin; ForgetWiFiNetwork() already had to delete every match.
+	NMConnection* existing = _FindSavedWiFiConnection(job->nmClient,
+		job->ssid);
+	if (existing != NULL) {
+		_ApplyWiFiJoinSettings(existing, job);
+		if (NM_IS_REMOTE_CONNECTION(existing)) {
+			// Fire-and-forget: activation runs on the in-memory
+			// connection; a failed commit is corrected on the next join.
+			nm_remote_connection_commit_changes_async(
+				NM_REMOTE_CONNECTION(existing), TRUE, NULL, NULL, NULL);
+		}
+		nm_client_activate_connection_async(job->nmClient, existing, device,
+			targetAP != NULL
+				? nm_object_get_path(NM_OBJECT(targetAP)) : NULL,
+			NULL, _OnAddAndActivateDone, job);
+		g_object_unref(connection);
+		return G_SOURCE_REMOVE;
 	}
 
 	// No secret here, so NM asks our agent; the preflet must not collect

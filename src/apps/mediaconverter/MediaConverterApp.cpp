@@ -11,10 +11,13 @@
 
 #include <Alert.h>
 #include <Catalog.h>
+#include <File.h>
+#include <FindDirectory.h>
 #include <fs_attr.h>
 #include <Locale.h>
 #include <media2/MediaFile.h>
 #include <media2/MediaTrack.h>
+#include <Message.h>
 #include <NumberFormat.h>
 #include <Mime.h>
 #include <Path.h>
@@ -32,6 +35,7 @@
 
 
 const char APP_SIGNATURE[] = "application/x-vnd.Haiku-MediaConverter";
+static const char kSettingsFile[] = "MediaConverter_Settings";
 
 
 MediaConverterApp::MediaConverterApp()
@@ -42,8 +46,22 @@ MediaConverterApp::MediaConverterApp()
 	fConverting(false),
 	fCancel(false)
 {
-	// TODO: implement settings for window pos
-	fWin = new MediaConverterWindow(BRect(50, 50, 520, 555));
+	BRect frame(50, 50, 520, 555);
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK) {
+		path.Append(kSettingsFile);
+		BFile file(path.Path(), B_READ_ONLY);
+
+		BMessage settings;
+		if (file.InitCheck() == B_OK
+				&& settings.Unflatten(&file) == B_OK) {
+			BRect saved;
+			if (settings.FindRect("frame", &saved) == B_OK)
+				frame = saved;
+		}
+	}
+
+	fWin = new MediaConverterWindow(frame);
 }
 
 

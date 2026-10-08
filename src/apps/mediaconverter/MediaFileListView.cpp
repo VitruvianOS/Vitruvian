@@ -62,7 +62,10 @@ MediaFileListView::SetEnabled(bool enabled)
 		return;
 
 	fEnabled = enabled;
-	// TODO: visual indication of enabled status?
+	// BListView tints items whose BListItem is disabled.
+	for (int32 i = 0; i < CountItems(); i++)
+		ItemAt(i)->SetEnabled(enabled);
+	Invalidate();
 }
 
 

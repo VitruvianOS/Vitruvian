@@ -1,11 +1,22 @@
 #!/bin/sh
 
+# testing's RT kernel builds no i915; RT stays on trixie only.
+get_kernel_flavour() {
+    if [ -n "${VOS_KERNEL_FLAVOUR:-}" ]; then
+        printf '%s' "$VOS_KERNEL_FLAVOUR"
+    elif [ "${VOS_BASE_SUITE:-trixie}" = "trixie" ]; then
+        printf 'rt-amd64'
+    else
+        printf 'amd64'
+    fi
+}
+
 get_base_packages() {
     _arch="$1"
     case "$_arch" in
         amd64)
             printf '%s' \
-                "apt-utils dialog linux-image-rt-amd64 systemd-sysv systemd-timesyncd" \
+                "apt-utils dialog linux-image-$(get_kernel_flavour) systemd-sysv systemd-timesyncd" \
                 " polkitd pkexec sudo dbus-user-session" \
                 " network-manager modemmanager bluez bluez-obexd net-tools wireless-tools wireless-regdb wpasupplicant rfkill curl openssh-client" \
                 " network-manager-openvpn network-manager-vpnc network-manager-l2tp network-manager-openconnect" \
@@ -68,7 +79,7 @@ get_dev_packages() {
     case "$_arch" in
         amd64)
             printf '%s' \
-                "linux-headers-rt-amd64 pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
+                "linux-headers-$(get_kernel_flavour) pkg-config libc6-dev libcrypt-dev libstdc++-14-dev" \
                 " libfreetype-dev libicu-dev libcairo2-dev libcups2-dev libdrm-dev libinput-dev" \
                 " libevdev-dev libseat-dev libudev-dev zlib1g-dev libgif-dev" \
                 " libblkid-dev libbacktrace-dev libfl-dev libncurses-dev" \
@@ -140,7 +151,7 @@ get_raw_image_packages() {
         amd64)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-rt-amd64 grub-common grub2-common" \
+                " linux-image-$(get_kernel_flavour) grub-common grub2-common" \
                 " grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin xfsprogs"
             ;;
         arm64)

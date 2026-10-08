@@ -50,7 +50,7 @@ resource(43, "SpeakerMuted") #'VICN' array {
 	$"8422040A0D010700"
 };
 
-/* No-device variant: reuse muted glyph for now (C.3 will replace). */
+/* No-device variant reuses the muted glyph; distinct icon is C.3 icon work. */
 resource(44, "SpeakerNoDevice") #'VICN' array {
 	$"6E6369660E0401740500020016023BEC7C3D464BBDC2113C40664A53A4492170"
 	$"00DDFFC5020016023B9E032FED63B0F24F3CB6C14A533F3ABE8400FFFFC50200"

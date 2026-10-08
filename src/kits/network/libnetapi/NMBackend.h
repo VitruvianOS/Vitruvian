@@ -233,8 +233,9 @@ public:
 	// Minimum connect slice: builds an NMConnection
 	// (NMSettingWireless + NMSettingWirelessSecurity when a password/security
 	// is given) and calls nm_client_add_and_activate_connection_async().
-	// Fires immediately and returns; reply carries "status" (status_t) and,
-	// on failure, "reason" (BString, human-readable). remember=true sets the
+	// Fires immediately and returns; the reply arrives once the join is
+	// activated or has failed, carrying "status" (status_t) and, on
+	// failure, "reason" (BString, human-readable). remember=true sets the
 	// connection's autoconnect (the "Remember this network" checkbox).
 	// Full saved-network management (editing/forgetting an existing
 	// profile, static IP, etc) is not implemented -- this only covers the

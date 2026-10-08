@@ -3117,7 +3117,104 @@ struct _ConnectWiFiJob {
 	bool hidden;
 	BMessenger replyTo;
 	uint32 replyWhat;
+	NMActiveConnection* active;
+	gulong stateHandlerId;
 };
+
+
+// Plain text for a failed join. Device reasons are preferred: SSID_NOT_FOUND
+// and the supplicant codes are what the user can act on.
+static BString
+_JoinFailureReason(NMActiveConnection* active, NMDevice* device)
+{
+	NMActiveConnectionStateReason acReason = active != NULL
+		? nm_active_connection_get_state_reason(active)
+		: NM_ACTIVE_CONNECTION_STATE_REASON_UNKNOWN;
+	NMDeviceStateReason devReason = device != NULL
+		? nm_device_get_state_reason(device)
+		: NM_DEVICE_STATE_REASON_UNKNOWN;
+
+	if (devReason == NM_DEVICE_STATE_REASON_SSID_NOT_FOUND)
+		return "No network with this name was found";
+
+	switch (acReason) {
+		case NM_ACTIVE_CONNECTION_STATE_REASON_NO_SECRETS:
+		case NM_ACTIVE_CONNECTION_STATE_REASON_LOGIN_FAILED:
+		case NM_ACTIVE_CONNECTION_STATE_REASON_SERVICE_START_FAILED:
+			return "Wrong password";
+		case NM_ACTIVE_CONNECTION_STATE_REASON_USER_DISCONNECTED:
+			return "Disconnected before the join finished";
+		default:
+			break;
+	}
+
+	switch (devReason) {
+		case NM_DEVICE_STATE_REASON_NO_SECRETS:
+		case NM_DEVICE_STATE_REASON_SUPPLICANT_DISCONNECT:
+		case NM_DEVICE_STATE_REASON_SUPPLICANT_CONFIG_FAILED:
+		case NM_DEVICE_STATE_REASON_SUPPLICANT_FAILED:
+		case NM_DEVICE_STATE_REASON_SUPPLICANT_TIMEOUT:
+			return "Wrong password";
+		default:
+			break;
+	}
+
+	BString reason;
+	if (devReason != NM_DEVICE_STATE_REASON_NONE
+			&& devReason != NM_DEVICE_STATE_REASON_UNKNOWN) {
+		reason.SetToFormat("NetworkManager device reason %d",
+			(int32)devReason);
+		return reason;
+	}
+	if (acReason != NM_ACTIVE_CONNECTION_STATE_REASON_UNKNOWN
+			&& acReason != NM_ACTIVE_CONNECTION_STATE_REASON_NONE) {
+		reason.SetToFormat("NetworkManager connection reason %d",
+			(int32)acReason);
+		return reason;
+	}
+	return "The join did not complete";
+}
+
+
+static void
+_ConnectWiFiFinish(_ConnectWiFiJob* job, int32 status, const char* reason)
+{
+	BMessage reply(job->replyWhat);
+	reply.AddInt32("status", status);
+	if (status != B_OK && reason != NULL && reason[0] != '\0')
+		reply.AddString("reason", reason);
+	job->replyTo.SendMessage(&reply);
+
+	if (job->active != NULL) {
+		if (job->stateHandlerId != 0)
+			g_signal_handler_disconnect(job->active, job->stateHandlerId);
+		g_object_unref(job->active);
+		job->active = NULL;
+		job->stateHandlerId = 0;
+	}
+	delete job;
+}
+
+
+static void
+_OnWiFiActiveStateNotify(GObject* source, GParamSpec* pspec, gpointer userData)
+{
+	_ConnectWiFiJob* job = (_ConnectWiFiJob*)userData;
+	NMActiveConnection* active = NM_ACTIVE_CONNECTION(source);
+
+	NMActiveConnectionState state = nm_active_connection_get_state(active);
+	if (state == NM_ACTIVE_CONNECTION_STATE_ACTIVATED) {
+		_ConnectWiFiFinish(job, (int32)B_OK, NULL);
+		return;
+	}
+	if (state != NM_ACTIVE_CONNECTION_STATE_DEACTIVATED)
+		return;
+
+	NMDevice* device = _FindDeviceByPath(job->nmClient,
+		job->devicePath.String());
+	BString reason = _JoinFailureReason(active, device);
+	_ConnectWiFiFinish(job, (int32)B_ERROR, reason.String());
+}
 
 
 static void
@@ -3129,23 +3226,36 @@ _OnAddAndActivateDone(GObject* source, GAsyncResult* result, gpointer userData)
 	NMActiveConnection* active = nm_client_add_and_activate_connection_finish(
 		job->nmClient, result, &error);
 
-	BMessage reply(job->replyWhat);
-	if (active != NULL) {
-		// "Started activating" -- not "joined". If the profile has no
-		// inline secret, this is precisely the moment NM turns around and
-		// calls our SecretAgent.GetSecrets; the actual join completes
-		// asynchronously from there, not here.
-		reply.AddInt32("status", (int32)B_OK);
-		g_object_unref(active);
-	} else {
+	if (active == NULL) {
+		BMessage reply(job->replyWhat);
 		reply.AddInt32("status", (int32)B_ERROR);
 		reply.AddString("reason",
 			error != NULL ? error->message : "unknown error");
 		if (error != NULL)
 			g_error_free(error);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return;
 	}
-	job->replyTo.SendMessage(&reply);
-	delete job;
+
+	// "Started activating" is not "joined"; follow until activated or
+	// failed. Hidden-join failures only surface here.
+	job->active = active;
+	job->stateHandlerId = g_signal_connect(active, "notify::state",
+		G_CALLBACK(_OnWiFiActiveStateNotify), job);
+
+	NMActiveConnectionState state = nm_active_connection_get_state(active);
+	if (state == NM_ACTIVE_CONNECTION_STATE_ACTIVATED) {
+		_ConnectWiFiFinish(job, (int32)B_OK, NULL);
+		return;
+	}
+	if (state == NM_ACTIVE_CONNECTION_STATE_DEACTIVATED) {
+		NMDevice* device = _FindDeviceByPath(job->nmClient,
+			job->devicePath.String());
+		BString reason = _JoinFailureReason(active, device);
+		_ConnectWiFiFinish(job, (int32)B_ERROR, reason.String());
+		return;
+	}
 }
 
 
@@ -3212,11 +3322,8 @@ _RunConnectToWiFi(gpointer data)
 		}
 	}
 
-	// Declare key-mgmt without a secret so NM asks our agent for it;
-	// without a security setting NM treats the network as open. Hidden
-	// joins always take this path from the chosen security, even if a
-	// password parameter was supplied by an older caller: the preflet must
-	// not collect a secret itself.
+	// No secret here, so NM asks our agent; the preflet must not collect
+	// one for a hidden join even if an older caller passed a password.
 	const char* keyMgmt = NULL;
 	if (job->hidden) {
 		if (job->security != "none") {
@@ -3307,6 +3414,8 @@ NMBackend::ConnectToWiFiAsync(const char* devicePath, const char* ssid,
 	job->hidden = hidden;
 	job->replyTo = replyTo;
 	job->replyWhat = replyWhat;
+	job->active = NULL;
+	job->stateHandlerId = 0;
 
 	g_main_context_invoke((GMainContext*)fMainContext, _RunConnectToWiFi, job);
 	return B_OK;

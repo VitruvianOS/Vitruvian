@@ -384,10 +384,13 @@ NetworkWindow::MessageReceived(BMessage* message)
 
 		case kMsgJoinHiddenResult:
 			if (message->GetInt32("status", B_ERROR) != B_OK) {
-				BString text(B_TRANSLATE("Could not join the network."));
-				const char* reason = message->GetString("reason", NULL);
-				if (reason != NULL)
-					text << "\n" << reason;
+				// The backend already mapped NM's state/reason to plain
+				// text ("No network with this name was found", etc).
+				BString reason;
+				message->FindString("reason", &reason);
+				BString text = !reason.IsEmpty()
+					? reason
+					: B_TRANSLATE("Could not join the network.");
 				BAlert* alert = new BAlert(B_TRANSLATE("Join other network"),
 					text, B_TRANSLATE("OK"));
 				alert->Go(NULL);

@@ -153,72 +153,6 @@ backlight_entry_score(enum backlight_type type, int pciMatch,
 	return (int)type;
 }
 
-
-// True if name is a path component of path, not a substring of a longer name.
-static int
-path_has_component(const char* path, const char* name)
-{
-	const char* scan;
-	size_t length;
-
-	if (path == NULL || name == NULL || name[0] == '\0')
-		return 0;
-
-	length = strlen(name);
-	for (scan = path; (scan = strstr(scan, name)) != NULL; scan += length) {
-		char before = (scan == path) ? '/' : scan[-1];
-		char after = scan[length];
-		if ((before == '/' || before == '\0')
-				&& (after == '/' || after == '\0'))
-			return 1;
-	}
-	return 0;
-}
-
-
-// amdgpu parents amdgpu_blN on the connector (card0-eDP-1), not the PCI
-// device, so a single basename compare misses the node and the session
-// never binds a backlight. Walk device links and the class symlink until
-// the GPU's PCI name appears.
-static int
-raw_parent_matches(const char* backlight_path, const char* pci_name)
-{
-	char walk[512];
-	char linkPath[560];
-	char target[512];
-	int depth;
-
-	if (backlight_path == NULL || pci_name == NULL || pci_name[0] == '\0')
-		return 0;
-
-	snprintf(walk, sizeof(walk), "%s", backlight_path);
-	for (depth = 0; depth < 6; depth++) {
-		ssize_t ret;
-
-		snprintf(linkPath, sizeof(linkPath), "%s/device", walk);
-		ret = readlink(linkPath, target, sizeof(target) - 1);
-		if (ret < 0) {
-			ret = readlink(walk, target, sizeof(target) - 1);
-			if (ret < 0)
-				break;
-		}
-		target[ret] = '\0';
-
-		if (path_has_component(target, pci_name))
-			return 1;
-
-		if (target[0] == '/') {
-			snprintf(walk, sizeof(walk), "%s", target);
-		} else {
-			char resolved[512];
-			if (realpath(target, resolved) == NULL)
-				break;
-			snprintf(walk, sizeof(walk), "%s", resolved);
-		}
-	}
-	return 0;
-}
-
 struct backlight *
 backlight_init_from_class(const char* class_dir, const char* pci_name,
 	uint32_t connector_type)
@@ -314,9 +248,7 @@ backlight_init_from_class(const char* class_dir, const char* pci_name,
 		if (entry_type == BACKLIGHT_RAW) {
 			// Raw nodes are GPU-owned; without a PCI match they
 			// cannot be this card's panel backlight.
-			if (!(pci_name && ((parent && !strcmp(pci_name, parent))
-					|| raw_parent_matches(backlight_path,
-						pci_name))))
+			if (!(pci_name && parent && !strcmp(pci_name, parent)))
 				goto out;
 			pciMatch = 1;
 		} else if (entry_type == BACKLIGHT_FIRMWARE) {

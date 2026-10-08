@@ -122,34 +122,6 @@ test_amdgpu_raw_wins_over_firmware(void)
 	rm_rf(dir);
 }
 
-
-static void
-test_amdgpu_raw_connector_parent(void)
-{
-	const char* dir = "test-sysfs-connector-parent";
-	rm_rf(dir);
-	// Kernel parents amdgpu_blN on the connector device, not the PCI BDF.
-	make_node(dir, "amdgpu_bl0", "raw\n", "255\n", "255\n", "255\n",
-		"../../../devices/pci0000:00/0000:00:08.0/drm/card0/card0-eDP-1");
-
-	struct backlight* bl = backlight_init_from_class(dir, "0000:00:08.0",
-		DRM_MODE_CONNECTOR_eDP);
-	expect(bl != NULL, "connector-parented amdgpu_bl0 is found");
-	if (bl != NULL) {
-		expect(strstr(bl->path, "amdgpu_bl0") != NULL,
-			"connector-parented amdgpu_bl0 is selected");
-		expect(bl->max_brightness == 255, "connector-parented max is 255");
-		backlight_destroy(bl);
-	}
-
-	struct backlight* other = backlight_init_from_class(dir,
-		"0000:01:00.0", DRM_MODE_CONNECTOR_eDP);
-	expect(other == NULL, "other PCI name does not bind connector node");
-	if (other != NULL)
-		backlight_destroy(other);
-	rm_rf(dir);
-}
-
 static void
 test_firmware_used_when_no_gpu_node(void)
 {
@@ -230,7 +202,6 @@ int
 main(void)
 {
 	test_amdgpu_raw_wins_over_firmware();
-	test_amdgpu_raw_connector_parent();
 	test_firmware_used_when_no_gpu_node();
 	test_platform_without_device_symlink();
 	test_actual_brightness_optional();

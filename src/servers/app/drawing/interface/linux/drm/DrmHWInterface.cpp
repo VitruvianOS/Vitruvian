@@ -2199,11 +2199,9 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 		return;
 	}
 
-	// A cursor bigger than the BO (large-font UI scaling; the amdgpu
-	// cursor plane itself goes up to 256x256, but our allocation is
-	// fixed at 64x64, see modeset_create_cursor_fb()) cannot be cropped
-	// into the sprite without silently chopping it, so it is declined
-	// the same way an unusable plane is: fall back to software.
+	// A cursor bigger than the BO (large-font UI scaling) cannot be
+	// cropped into the sprite without silently chopping it, so it is
+	// declined the same way an unusable plane is: fall back to software.
 	const int32 cw = (int32)cursor->Bounds().IntegerWidth() + 1;
 	const int32 ch = (int32)cursor->Bounds().IntegerHeight() + 1;
 	const bool oversized = cw > (int32)dev->cursor_w
@@ -2256,7 +2254,7 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 	}
 	const uint8* src = (const uint8*)cursor->Bits();
 	uint8* dst = dev->cursor_map;
-	const uint32 dstStride = dev->cursor_w * 4;
+	const uint32 dstStride = dev->cursor_pitch;
 	for (int32 row = 0; row < ch; row++) {
 		memcpy(dst + row * dstStride, src + row * cursor->BytesPerRow(),
 			cw * 4);
@@ -2713,6 +2711,9 @@ DrmHWInterface::_ProbeCursor()
 		fHardwareCursorEnabled = false;
 		return;
 	}
+
+	fprintf(stderr, "DRM: cursor buffer %ux%u pitch %u\n",
+		dev->cursor_w, dev->cursor_h, dev->cursor_pitch);
 
 	// Legacy by default. An atomic cursor commit is a second non-blocking
 	// commit on a CRTC that already has a page flip in flight, which the

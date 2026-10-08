@@ -1266,9 +1266,18 @@ modeset_create_render_fb(int fd, struct gbm_device* gbm,
 int
 modeset_create_cursor_fb(int fd, struct modeset_dev *dev)
 {
+	uint64_t cursor_width = 64;
+	uint64_t cursor_height = 64;
+	if (drmGetCap(fd, DRM_CAP_CURSOR_WIDTH, &cursor_width) < 0
+			|| cursor_width == 0)
+		cursor_width = 64;
+	if (drmGetCap(fd, DRM_CAP_CURSOR_HEIGHT, &cursor_height) < 0
+			|| cursor_height == 0)
+		cursor_height = 64;
+
 	struct drm_mode_create_dumb creq = {};
-	creq.width  = 64;
-	creq.height = 64;
+	creq.width  = (uint32_t)cursor_width;
+	creq.height = (uint32_t)cursor_height;
 	creq.bpp    = 32;
 	if (drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq) < 0) {
 		fprintf(stderr, "cursor: cannot create dumb buffer: %m\n");
@@ -1290,10 +1299,11 @@ modeset_create_cursor_fb(int fd, struct modeset_dev *dev)
 
 	memset(map, 0, creq.size);
 	dev->cursor_handle = creq.handle;
-	dev->cursor_w      = 64;
-	dev->cursor_h      = 64;
+	dev->cursor_w      = (uint32_t)cursor_width;
+	dev->cursor_h      = (uint32_t)cursor_height;
 	dev->cursor_map    = (uint8_t*)map;
 	dev->cursor_size   = creq.size;
+	dev->cursor_pitch  = creq.pitch;
 	dev->cursor_ok     = true;
 
 	/*
@@ -1303,10 +1313,11 @@ modeset_create_cursor_fb(int fd, struct modeset_dev *dev)
 	 * handle (API contract).  See app-server-fixup.md §3a.
 	 */
 	uint32_t handles[4] = { creq.handle, 0, 0, 0 };
-	uint32_t pitches[4] = { 64 * 4,      0, 0, 0 };
+	uint32_t pitches[4] = { creq.pitch,  0, 0, 0 };
 	uint32_t offsets[4] = { 0, 0, 0, 0 };
 	dev->cursor_fb = 0;
-	if (drmModeAddFB2(fd, 64, 64, DRM_FORMAT_ARGB8888,
+	if (drmModeAddFB2(fd, dev->cursor_w, dev->cursor_h,
+			DRM_FORMAT_ARGB8888,
 			handles, pitches, offsets, &dev->cursor_fb, 0) != 0) {
 		fprintf(stderr,
 			"cursor: drmModeAddFB2 failed (%d): %m -- atomic cursor "

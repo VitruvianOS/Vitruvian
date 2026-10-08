@@ -170,7 +170,7 @@ TrackSlider::_DrawCounter(bigtime_t timestamp, float position, bool isTracking)
 	FillRect(BRect(counterX-halfwidth-3,SLIDER_BASE-8,counterX+halfwidth+3,
 		SLIDER_BASE));
 
-#ifdef __HAIKU__
+#ifdef __VOS__
 	SetDrawingMode(B_OP_OVER);
 #else
 	SetDrawingMode(B_OP_COPY);

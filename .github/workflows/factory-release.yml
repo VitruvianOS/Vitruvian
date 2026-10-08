@@ -71,20 +71,21 @@ jobs:
           echo "rev=$((base + 1))" >> "$GITHUB_OUTPUT"
           echo "latest in Factory: $latest, floor: $REV_FLOOR, allocating $((base + 1))"
 
-  # testing gets the generic kernel; its RT kernel builds no i915.
-  amd64:
-    needs: allocate
-    uses: ./.github/workflows/factory-build.yml
-    with:
-      name: amd64
-      arch: amd64
-      runner: ubuntu-latest
-      build_dir: generated.x86
-      image_types: iso,raw
-      extra_pkgs: grub-efi-amd64-bin grub-pc-bin ovmf
-      native: true
-      lane: nightly-testing
-      rev: ${{ needs.allocate.outputs.rev }}
+  # testing-lane builds are disabled (operator: the testing base has no i915
+  # on its RT kernel, so Intel machines fall back to fbdev; issues #304/#298).
+  # amd64:
+  #   needs: allocate
+  #   uses: ./.github/workflows/factory-build.yml
+  #   with:
+  #     name: amd64
+  #     arch: amd64
+  #     runner: ubuntu-latest
+  #     build_dir: generated.x86
+  #     image_types: iso,raw
+  #     extra_pkgs: grub-efi-amd64-bin grub-pc-bin ovmf
+  #     native: true
+  #     lane: nightly-testing
+  #     rev: ${{ needs.allocate.outputs.rev }}
 
   amd64-stable:
     needs: allocate
@@ -101,19 +102,20 @@ jobs:
       lane: nightly-stable-rt
       rev: ${{ needs.allocate.outputs.rev }}
 
-  arm64:
-    needs: allocate
-    uses: ./.github/workflows/factory-build.yml
-    with:
-      name: arm64
-      arch: arm64
-      runner: ubuntu-24.04-arm
-      build_dir: generated.arm64
-      image_types: iso,raw
-      board_types: raspberry
-      extra_pkgs: grub-efi-arm64-bin qemu-efi-aarch64
-      lane: nightly-testing
-      rev: ${{ needs.allocate.outputs.rev }}
+  # arm64 testing lane: disabled for the same reason as amd64 above.
+  # arm64:
+  #   needs: allocate
+  #   uses: ./.github/workflows/factory-build.yml
+  #   with:
+  #     name: arm64
+  #     arch: arm64
+  #     runner: ubuntu-24.04-arm
+  #     build_dir: generated.arm64
+  #     image_types: iso,raw
+  #     board_types: raspberry
+  #     extra_pkgs: grub-efi-arm64-bin qemu-efi-aarch64
+  #     lane: nightly-testing
+  #     rev: ${{ needs.allocate.outputs.rev }}
 
   arm64-stable:
     needs: allocate
@@ -131,11 +133,12 @@ jobs:
       lane: nightly-stable
       rev: ${{ needs.allocate.outputs.rev }}
 
-  # All four builds gate the rev; board images are left out when they fail
-  # and named in the release notes.
+  # The two stable-rt/stable builds gate the rev; board images are left out
+  # when they fail and named in the release notes. The testing lane is
+  # disabled and does not gate (see the comment on the amd64 job).
   publish:
-    needs: [allocate, amd64, amd64-stable, arm64, arm64-stable]
-    if: ${{ !cancelled() && needs.amd64.result == 'success' && needs.amd64-stable.result == 'success' && needs.arm64.result == 'success' && needs.arm64-stable.result == 'success' }}
+    needs: [allocate, amd64-stable, arm64-stable]
+    if: ${{ !cancelled() && needs.amd64-stable.result == 'success' && needs.arm64-stable.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Collect the built images
@@ -165,14 +168,14 @@ jobs:
         run: |
           set -euo pipefail
           MISSING=""
-          for board in arm64-raspberry-nightly-testing arm64-raspberry-nightly-stable; do
+          for board in arm64-raspberry-nightly-stable; do
             ls assets/*-"$board"-* >/dev/null 2>&1 \
               || MISSING="$MISSING"$'\n'"$board: not built, not included"
           done
           gh release create "rev-$REV" \
             --repo "$FACTORY_REPO" \
             --title "rev-$REV" \
-            --notes "Built from ${{ github.repository }}@${{ github.sha }}. amd64 \`nightly-testing\`: Debian testing, generic kernel, follows testing-nightly. amd64 \`nightly-stable-rt\`: Debian trixie, RT kernel, follows trixie-nightly. arm64 \`nightly-testing\` and \`nightly-stable\`: the same two bases with the generic kernel.${MISSING}" \
+            --notes "Built from ${{ github.repository }}@${{ github.sha }}. amd64 \`nightly-stable-rt\`: Debian trixie, RT kernel, follows trixie-nightly. arm64 \`nightly-stable\`: the same base with the generic kernel. The testing lane is disabled until its kernel carries i915 (issues #304/#298).${MISSING}" \
             assets/*
 
       # Off for now. Set the repository variable TELEGRAM_ENABLED to 'true'
@@ -200,16 +203,16 @@ jobs:
   # One table for the whole run, whatever failed: each arch, the step it
   # stopped at, its board images, and whether the rev went out.
   summary:
-    needs: [allocate, amd64, amd64-stable, arm64, arm64-stable, publish]
+    needs: [allocate, amd64-stable, arm64-stable, publish]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Summarize the run
         env:
           ROWS: |
-            amd64|${{ needs.amd64.result }}|${{ needs.amd64.outputs.failed_step }}|${{ needs.amd64.outputs.boards }}
+            amd64|skipped|disabled (testing lane off)|-
             amd64-stable|${{ needs.amd64-stable.result }}|${{ needs.amd64-stable.outputs.failed_step }}|${{ needs.amd64-stable.outputs.boards }}
-            arm64|${{ needs.arm64.result }}|${{ needs.arm64.outputs.failed_step }}|${{ needs.arm64.outputs.boards }}
+            arm64|skipped|disabled (testing lane off)|-
             arm64-stable|${{ needs.arm64-stable.result }}|${{ needs.arm64-stable.outputs.failed_step }}|${{ needs.arm64-stable.outputs.boards }}
           ALLOCATE: ${{ needs.allocate.result }}
           PUBLISH: ${{ needs.publish.result }}

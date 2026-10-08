@@ -48,6 +48,24 @@ main()
 	expect(drm_card_display_rank(false, false, false, false) < 0,
 		"no connectors ranks below zero");
 
+	// Firmware framebuffer drivers are not a GPU driver yet.
+	expect(drm_driver_is_firmware("simpledrm"),
+		"simpledrm is firmware");
+	expect(drm_driver_is_firmware("simple-framebuffer"),
+		"simple-framebuffer is firmware");
+	expect(drm_driver_is_firmware("efidrm"),
+		"efidrm is firmware");
+	expect(drm_driver_is_firmware("efi-framebuffer"),
+		"efi-framebuffer is firmware");
+	expect(!drm_driver_is_firmware("i915"),
+		"i915 is not firmware");
+	expect(!drm_driver_is_firmware("amdgpu"),
+		"amdgpu is not firmware");
+	expect(!drm_driver_is_firmware("vkms"),
+		"vkms is not firmware");
+	expect(!drm_driver_is_firmware(NULL),
+		"NULL driver is not firmware");
+
 	if (g_failures != 0) {
 		printf("%d failure(s)\n", g_failures);
 		return 1;

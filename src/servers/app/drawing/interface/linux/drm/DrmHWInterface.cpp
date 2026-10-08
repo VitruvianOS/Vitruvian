@@ -137,18 +137,20 @@ DrmHWInterface::DrmHWInterface()
 	} else {
 		// Without janus we must not block forever: janus already owns the
 		// seat in a session, so our own libseat session never activates.
+		// Firmware-only cards (simpledrm/efidrm) are not a GPU driver.
 		bool haveCard = false;
 		for (int i = 0; i <= 9; i++) {
 			char path[64];
 			snprintf(path, sizeof(path), "/dev/dri/card%d", i);
-			if (access(path, F_OK) == 0) {
+			if (access(path, F_OK) == 0 && !drm_card_is_firmware(i)) {
 				haveCard = true;
 				break;
 			}
 		}
 		if (!haveCard) {
 			fprintf(stderr,
-				"DrmHWInterface: no /dev/dri/card* present; failing for fbdev\n");
+				"DrmHWInterface: no KMS DRM device present; "
+				"failing for fbdev\n");
 			return;
 		}
 

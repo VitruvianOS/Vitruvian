@@ -1000,10 +1000,12 @@ static const bigtime_t kDrmCardWaitUsec = 5 * 1000000LL;
 static bool
 drm_card_present()
 {
+	// A firmware-only card (simpledrm/efidrm) is not a GPU driver yet:
+	// i915/amdgpu may still be coming and will remove that card.
 	for (int i = 0; i <= 9; i++) {
 		char path[64];
 		snprintf(path, sizeof(path), "/dev/dri/card%d", i);
-		if (access(path, F_OK) == 0)
+		if (access(path, F_OK) == 0 && !drm_card_is_firmware(i))
 			return true;
 	}
 	return false;
@@ -1049,8 +1051,10 @@ is_drm_card(struct udev_device* device)
 {
 	// Connectors are drm devices too ("card0-eDP-1").
 	const char* name = udev_device_get_sysname(device);
-	return name != NULL && strncmp(name, "card", 4) == 0
-		&& strchr(name, '-') == NULL;
+	if (name == NULL || strncmp(name, "card", 4) != 0
+			|| strchr(name, '-') != NULL)
+		return false;
+	return !drm_card_is_firmware(atoi(name + 4));
 }
 
 
@@ -1115,8 +1119,17 @@ report_missing_gpu(struct udev* udev)
 		udev_enumerate_unref(e);
 	}
 	if (!unbound) {
-		static const char* kLine
-			= "No graphics driver found; using the firmware framebuffer.\n";
+		bool firmwareOnly = false;
+		for (int i = 0; i <= 9; i++) {
+			char path[64];
+			snprintf(path, sizeof(path), "/dev/dri/card%d", i);
+			if (access(path, F_OK) == 0 && drm_card_is_firmware(i))
+				firmwareOnly = true;
+		}
+		const char* kLine = firmwareOnly
+			? "Only a firmware framebuffer DRM card; no GPU driver; "
+				"using the firmware framebuffer.\n"
+			: "No graphics driver found; using the firmware framebuffer.\n";
 		fprintf(stderr, "janus_session: %s", kLine);
 		console_message(kLine);
 	}
@@ -1133,7 +1146,7 @@ wait_for_drm_card()
 		return;
 	}
 	if (drm_card_present()) {
-		printf("janus_session: DRM device present at start\n");
+		printf("janus_session: KMS DRM device present at start\n");
 		return;
 	}
 
@@ -1144,7 +1157,7 @@ wait_for_drm_card()
 		return;
 	}
 
-	printf("janus_session: no DRM device yet; waiting for the GPU driver\n");
+	printf("janus_session: no KMS DRM device yet; waiting for the GPU driver\n");
 	console_message("Waiting for the graphics driver...\n");
 	bigtime_t start = system_time();
 
@@ -1178,8 +1191,8 @@ wait_for_drm_card()
 	found = found || drm_card_present();
 
 	if (found) {
-		printf("janus_session: DRM device appeared after %" B_PRId64 " ms\n",
-			(system_time() - start) / 1000);
+		printf("janus_session: KMS DRM device appeared after %" B_PRId64
+			" ms\n", (system_time() - start) / 1000);
 	} else
 		report_missing_gpu(udev);
 
@@ -1194,13 +1207,16 @@ open_drm_device()
 {
 	if (!sSeat)
 		return false;
+	// Safe Mode: wait_for_drm_card() already declined; never open a card.
+	if (kernel_cmdline_has("nomodeset"))
+		return false;
 
 	int deviceId = -1;
 	int fd = -1;
 	int cardIndex = -1;
 	const char* why = NULL;
 	if (!drm_select_seat_device(sSeat, deviceId, fd, cardIndex, why)) {
-		fprintf(stderr, "janus_session: could not open any DRM device\n");
+		fprintf(stderr, "janus_session: could not open any KMS DRM device\n");
 		return false;
 	}
 

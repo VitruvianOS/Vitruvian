@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <libseat.h>
@@ -94,6 +95,39 @@ drm_card_has_internal_connector(int fd)
 }
 
 
+// True for a DRM driver that only wraps the firmware framebuffer
+// (simpledrm/efidrm); a real KMS driver may still be probing.
+static inline bool
+drm_driver_is_firmware(const char* name)
+{
+	if (name == NULL)
+		return false;
+	return strcmp(name, "simple-framebuffer") == 0
+		|| strcmp(name, "simpledrm") == 0
+		|| strcmp(name, "efi-framebuffer") == 0
+		|| strcmp(name, "efidrm") == 0;
+}
+
+
+// True if cardN is only the firmware framebuffer, not a GPU driver.
+static inline bool
+drm_card_is_firmware(int index)
+{
+	char path[64];
+	snprintf(path, sizeof(path),
+		"/sys/class/drm/card%d/device/driver", index);
+
+	char target[256];
+	ssize_t n = readlink(path, target, sizeof(target) - 1);
+	if (n <= 0)
+		return false;
+	target[n] = '\0';
+
+	const char* name = strrchr(target, '/');
+	return drm_driver_is_firmware(name != NULL ? name + 1 : target);
+}
+
+
 // True if the firmware marked this card as the boot display.
 static inline bool
 drm_card_is_boot_vga(int index)
@@ -158,6 +192,11 @@ drm_select_seat_device(struct libseat* seat, int& deviceId, int& fd,
 	int n = 0;
 
 	for (int i = 0; i <= 9; i++) {
+		// Firmware cards (simpledrm/efidrm) vanish when the real driver
+		// takes over; opening one strands the session on fbdev.
+		if (drm_card_is_firmware(i))
+			continue;
+
 		snprintf(path, sizeof(path), "/dev/dri/card%d", i);
 		int cardFd = -1;
 		int id = libseat_open_device(seat, path, &cardFd);

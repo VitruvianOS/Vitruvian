@@ -236,6 +236,8 @@ private:
 
 			status_t			_GetTouchpadSettingsPath(BPath& path);
 			status_t			_UpdateTouchpadSettings(BMessage* message);
+			status_t			_LoadTouchpadSettingsFile();
+			void				_ApplyLibinputConfig();
 			void				_MarkTouchpadName();
 			void				_UpdateTouchpadScale();
 
@@ -345,6 +347,7 @@ private:
 			int32				fSeatCommand;
 
 			bool				fIsTouchpad;
+			touchpad_settings	fTouchpadSettings;
 			TouchpadMovement	fTouchpadMovementMaker;
 			BMessage*			fTouchpadSettingsMessage;
 			BLocker				fTouchpadSettingsLock;
@@ -430,6 +433,7 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fDeviceRef.cookie = this;
 
 	memset(&fSettings, 0, sizeof(fSettings));
+	fTouchpadSettings = kDefaultTouchpadSettings;
 
 	for (int i = 0; i < B_MAX_MOUSE_BUTTONS; i++)
 		fSettings.map.button[i] = B_MOUSE_BUTTON(i + 1);
@@ -506,18 +510,17 @@ MouseDevice::_Classify()
 
 		_MarkTouchpadName();
 
-		if (libinput_device_config_tap_get_finger_count(
-				fLibinputDev) > 0) {
-			libinput_device_config_tap_set_enabled(fLibinputDev,
-				LIBINPUT_CONFIG_TAP_ENABLED);
-		}
-
 		// Raw touchscreens never fire POINTER_BUTTON, so synthesize from TOUCH.
 		fLibinputIsDirectTouch =
 			libinput_device_has_capability(fLibinputDev,
 				LIBINPUT_DEVICE_CAP_TOUCH) &&
 			!libinput_device_has_capability(fLibinputDev,
 				LIBINPUT_DEVICE_CAP_POINTER);
+
+		if (fIsTouchpad) {
+			_LoadTouchpadSettingsFile();
+			_ApplyLibinputConfig();
+		}
 
 		return B_OK;
 	}
@@ -871,6 +874,8 @@ MouseDevice::_ControlThread()
 			_ControlThreadCleanup();
 			return;
 		}
+
+		_UpdateSettings();
 
 		int lifd = libinput_get_fd(fLibinput);
 		// Initial dispatch to consume DEVICE_ADDED events
@@ -1279,12 +1284,14 @@ MouseDevice::_UpdateSettings()
 	if (get_mouse_map(fDeviceRef.name, &fSettings.map) != B_OK)
 		LOG_ERROR("error when get_mouse_map\n");
 	else
-		fDeviceRemapsButtons = ioctl(fDevice, MS_SET_MAP, &fSettings.map) == B_OK;
+		fDeviceRemapsButtons = fDevice >= 0
+			&& ioctl(fDevice, MS_SET_MAP, &fSettings.map) == B_OK;
 
 	if (get_click_speed(fDeviceRef.name, &fSettings.click_speed) == B_OK) {
 		if (fIsTouchpad)
 			fTouchpadMovementMaker.click_speed = fSettings.click_speed;
-		ioctl(fDevice, MS_SET_CLICKSPEED, &fSettings.click_speed);
+		if (fDevice >= 0)
+			ioctl(fDevice, MS_SET_CLICKSPEED, &fSettings.click_speed);
 	} else
 		LOG_ERROR("error when get_click_speed\n");
 
@@ -1294,7 +1301,7 @@ MouseDevice::_UpdateSettings()
 		if (get_mouse_acceleration(fDeviceRef.name,
 				&fSettings.accel.accel_factor) != B_OK)
 			LOG_ERROR("error when get_mouse_acceleration\n");
-		else {
+		else if (fDevice >= 0) {
 			mouse_accel accel;
 			ioctl(fDevice, MS_GET_ACCEL, &accel);
 			accel.speed = fSettings.accel.speed;
@@ -1305,7 +1312,7 @@ MouseDevice::_UpdateSettings()
 
 	if (get_mouse_type(fDeviceRef.name, &fSettings.type) != B_OK)
 		LOG_ERROR("error when get_mouse_type\n");
-	else
+	else if (fDevice >= 0)
 		ioctl(fDevice, MS_SET_TYPE, &fSettings.type);
 
 	// Gesture settings arrive as a pending message; apply them here so
@@ -1316,7 +1323,8 @@ MouseDevice::_UpdateSettings()
 			_UpdateTouchpadSettings(fTouchpadSettingsMessage);
 			delete fTouchpadSettingsMessage;
 			fTouchpadSettingsMessage = NULL;
-		}
+		} else if (fUseLibinput)
+			_ApplyLibinputConfig();
 	}
 }
 
@@ -1328,6 +1336,26 @@ MouseDevice::_GetTouchpadSettingsPath(BPath& path)
 	if (status < B_OK)
 		return status;
 	return path.Append(TOUCHPAD_SETTINGS_FILE);
+}
+
+
+status_t
+MouseDevice::_LoadTouchpadSettingsFile()
+{
+	BPath path;
+	status_t status = _GetTouchpadSettingsPath(path);
+	if (status != B_OK)
+		return status;
+
+	BFile file(path.Path(), B_READ_ONLY);
+	if (file.InitCheck() != B_OK)
+		return B_ERROR;
+
+	BMessage message;
+	if (message.Unflatten(&file) != B_OK)
+		return B_ERROR;
+
+	return _UpdateTouchpadSettings(&message);
 }
 
 
@@ -1357,10 +1385,95 @@ MouseDevice::_UpdateTouchpadSettings(BMessage* message)
 	message->FindBool("finger_click", &settings.finger_click);
 	message->FindBool("software_button_areas", &settings.software_button_areas);
 
+	{
+		BAutolock locker(fTouchpadSettingsLock);
+		fTouchpadSettings = settings;
+	}
+
 	if (fIsTouchpad)
 		fTouchpadMovementMaker.SetSettings(settings);
 
+	if (fUseLibinput && fIsTouchpad)
+		_ApplyLibinputConfig();
+
 	return B_OK;
+}
+
+
+void
+MouseDevice::_ApplyLibinputConfig()
+{
+	if (!fUseLibinput || fLibinputDev == NULL || !fIsTouchpad)
+		return;
+
+	touchpad_settings settings;
+	{
+		BAutolock locker(fTouchpadSettingsLock);
+		settings = fTouchpadSettings;
+	}
+
+	if (libinput_device_config_tap_get_finger_count(fLibinputDev) > 0) {
+		libinput_device_config_tap_set_enabled(fLibinputDev,
+			settings.tapgesture_sensibility > 0
+				? LIBINPUT_CONFIG_TAP_ENABLED
+				: LIBINPUT_CONFIG_TAP_DISABLED);
+	}
+
+	if (libinput_device_config_scroll_has_natural_scroll(fLibinputDev)) {
+		// Edge scroll uses scroll_reverse; two-finger scroll uses the
+		// natural flag, matching the legacy movement engine.
+		bool natural = settings.scroll_twofinger
+			? settings.scroll_twofinger_natural_scrolling
+			: settings.scroll_reverse;
+		libinput_device_config_scroll_set_natural_scroll_enabled(
+			fLibinputDev, natural ? 1 : 0);
+	}
+
+	uint32 scrollMethods
+		= libinput_device_config_scroll_get_methods(fLibinputDev);
+	if (scrollMethods != 0) {
+		enum libinput_config_scroll_method method
+			= LIBINPUT_CONFIG_SCROLL_2FG;
+		if ((scrollMethods & LIBINPUT_CONFIG_SCROLL_2FG) == 0
+			|| (!settings.scroll_twofinger
+				&& (scrollMethods & LIBINPUT_CONFIG_SCROLL_EDGE) != 0))
+			method = LIBINPUT_CONFIG_SCROLL_EDGE;
+		libinput_device_config_scroll_set_method(fLibinputDev, method);
+	}
+
+	uint32 clickMethods
+		= libinput_device_config_click_get_methods(fLibinputDev);
+	if (clickMethods != 0 && settings.finger_click
+		&& (clickMethods & LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER) != 0)
+		libinput_device_config_click_set_method(fLibinputDev,
+			LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER);
+	else if (clickMethods != 0 && settings.software_button_areas
+		&& (clickMethods & LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS) != 0)
+		libinput_device_config_click_set_method(fLibinputDev,
+			LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS);
+
+	if (libinput_device_config_dwt_is_available(fLibinputDev))
+		libinput_device_config_dwt_set_enabled(fLibinputDev,
+			LIBINPUT_CONFIG_DWT_ENABLED);
+
+	if (libinput_device_config_accel_is_available(fLibinputDev)) {
+		// V\OS speed 65536 is neutral; libinput wants [-1, 1].
+		double speed = (double)fSettings.accel.speed / 65536.0 - 1.0;
+		if (speed < -1.0)
+			speed = -1.0;
+		else if (speed > 1.0)
+			speed = 1.0;
+		libinput_device_config_accel_set_speed(fLibinputDev, speed);
+
+		enum libinput_config_accel_profile profile
+			= fSettings.accel.accel_factor == 0
+				? LIBINPUT_CONFIG_ACCEL_PROFILE_FLAT
+				: LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+		if (libinput_device_config_accel_get_profiles(fLibinputDev)
+				& profile)
+			libinput_device_config_accel_set_profile(fLibinputDev,
+				profile);
+	}
 }
 
 

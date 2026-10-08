@@ -239,6 +239,8 @@ private:
 			status_t			_LoadTouchpadSettingsFile();
 			void				_ApplyLibinputConfig();
 			void				_MarkTouchpadName();
+			void				_UpdateSharedButtons(uint32 rawButtons);
+			void				_FlushSeatButtons(uint32 rawButtons);
 			void				_UpdateTouchpadScale();
 
 			BMessage*			_BuildMouseMessage(uint32 what,
@@ -887,6 +889,32 @@ MouseDevice::_ControlThread()
 			if (atomic_get_and_set(&fUpdateSettings, 0) != 0)
 				_UpdateSettings();
 
+			// Seat contract as in the evdev loop: disable lifts every
+			// button across the VT switch; enable and resume re-sync.
+			int32 seatCmd = atomic_get_and_set(&fSeatCommand, 0);
+			if (seatCmd == (int32)B_SEAT_DISABLED
+				|| seatCmd == (int32)B_SEAT_ENABLED
+				|| seatCmd == (int32)B_SYSTEM_RESUMED) {
+				if (fLibinputButtons != 0) {
+					BPoint where = fLibinputLastPos;
+					if (fTarget.fCursorLock.Lock()) {
+						where = fTarget.fCursorPosition;
+						fTarget.fCursorLock.Unlock();
+					}
+					_FlushSeatButtons(0);
+					BMessage* msg = new BMessage(B_MOUSE_UP);
+					msg->AddPoint("where", where);
+					msg->AddInt32("buttons", 0);
+					msg->AddInt32("modifiers", 0);
+					msg->AddInt64("when", system_time());
+					msg->AddInt32("be:device_subtype",
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
+					fTarget.EnqueueMessage(msg);
+				}
+			}
+
 			struct pollfd pfd;
 			pfd.fd = lifd;
 			pfd.events = POLLIN;
@@ -1214,6 +1242,14 @@ MouseDevice::_ControlThread()
 						fLastClickTime = timestamp;
 						fLastClickButtons = remappedButtons;
 						message->AddInt32("clicks", fClickCount);
+						uint32 rawBit = 0;
+						if (currentButtons & 0x1)
+							rawBit = 0x1;
+						else if (currentButtons & 0x2)
+							rawBit = 0x2;
+						else if (currentButtons & 0x4)
+							rawBit = 0x4;
+						message->AddInt32("be:button", (int32)rawBit);
 					}
 					fTarget.EnqueueMessage(message);
 					lastButtons = currentButtons;
@@ -1478,6 +1514,26 @@ MouseDevice::_ApplyLibinputConfig()
 
 
 void
+MouseDevice::_UpdateSharedButtons(uint32 rawButtons)
+{
+	uint32 remapped = _RemapButtons(rawButtons);
+	if (fTarget.fCursorLock.Lock()) {
+		fTarget.fButtons = (fTarget.fButtons & ~fSharedButtons) | remapped;
+		fSharedButtons = remapped;
+		fTarget.fCursorLock.Unlock();
+	}
+}
+
+
+void
+MouseDevice::_FlushSeatButtons(uint32 rawButtons)
+{
+	fLibinputButtons = rawButtons;
+	_UpdateSharedButtons(rawButtons);
+}
+
+
+void
 MouseDevice::_MarkTouchpadName()
 {
 	if (!fIsTouchpad)
@@ -1648,12 +1704,21 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				fTarget.fCursorLock.Unlock();
 			}
 
+			_UpdateSharedButtons(fLibinputButtons);
+
 			BMessage* msg = new BMessage(B_MOUSE_MOVED);
 			msg->AddPoint("where", fLibinputLastPos);
-			msg->AddInt32("buttons", (int32)_RemapButtons(fLibinputButtons));
+			if (fTarget.fCursorLock.Lock()) {
+				msg->AddInt32("buttons", (int32)fTarget.fButtons);
+				fTarget.fCursorLock.Unlock();
+			} else
+				msg->AddInt32("buttons",
+					(int32)_RemapButtons(fLibinputButtons));
 			msg->AddInt32("modifiers", 0);
 			msg->AddInt64("when", system_time());
-			msg->AddInt32("be:device_subtype", B_TOUCHPAD_POINTING_DEVICE);
+			msg->AddInt32("be:device_subtype",
+				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
+					: B_MOUSE_POINTING_DEVICE);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}
@@ -1681,12 +1746,21 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				fTarget.fCursorLock.Unlock();
 			}
 
+			_UpdateSharedButtons(fLibinputButtons);
+
 			BMessage* msg = new BMessage(B_MOUSE_MOVED);
 			msg->AddPoint("where", fLibinputLastPos);
-			msg->AddInt32("buttons", (int32)_RemapButtons(fLibinputButtons));
+			if (fTarget.fCursorLock.Lock()) {
+				msg->AddInt32("buttons", (int32)fTarget.fButtons);
+				fTarget.fCursorLock.Unlock();
+			} else
+				msg->AddInt32("buttons",
+					(int32)_RemapButtons(fLibinputButtons));
 			msg->AddInt32("modifiers", 0);
 			msg->AddInt64("when", system_time());
-			msg->AddInt32("be:device_subtype", B_MOUSE_POINTING_DEVICE);
+			msg->AddInt32("be:device_subtype",
+				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
+					: B_MOUSE_POINTING_DEVICE);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}
@@ -1719,21 +1793,31 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			uint32 what = (state == LIBINPUT_BUTTON_STATE_PRESSED)
 				? B_MOUSE_DOWN : B_MOUSE_UP;
 
+			_UpdateSharedButtons(fLibinputButtons);
+
+			uint32 reported = _RemapButtons(fLibinputButtons);
+			if (fTarget.fCursorLock.Lock()) {
+				reported = fTarget.fButtons;
+				fTarget.fCursorLock.Unlock();
+			}
+
 			BMessage* msg = new BMessage(what);
 			msg->AddPoint("where", where);
-			msg->AddInt32("buttons", (int32)_RemapButtons(fLibinputButtons));
+			msg->AddInt32("buttons", (int32)reported);
 			msg->AddInt32("modifiers", 0);
 			msg->AddInt64("when", system_time());
-			msg->AddInt32("be:device_subtype", B_TOUCHPAD_POINTING_DEVICE);
+			msg->AddInt32("be:device_subtype",
+				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
+					: B_MOUSE_POINTING_DEVICE);
 			if (state == LIBINPUT_BUTTON_STATE_PRESSED) {
 				bigtime_t now = system_time();
-				if (beButton == fLibinputLastClickButton
+				if (reported == fLibinputLastClickButton
 					&& (now - fLibinputLastClickTime) < fSettings.click_speed)
 					fLibinputClickCount++;
 				else
 					fLibinputClickCount = 1;
 				fLibinputLastClickTime = now;
-				fLibinputLastClickButton = beButton;
+				fLibinputLastClickButton = reported;
 				msg->AddInt32("clicks", fLibinputClickCount);
 				msg->AddInt32("be:button", (int32)beButton);
 			}
@@ -1934,7 +2018,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					move->AddInt32("modifiers", 0);
 					move->AddInt64("when", system_time());
 					move->AddInt32("be:device_subtype",
-						B_TOUCHPAD_POINTING_DEVICE);
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
 					fTarget.EnqueueMessage(move);
 
 					uint32 tapButton = _RemapButtons(0x1);
@@ -1946,7 +2032,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					msg->AddInt32("clicks", 1);
 					msg->AddInt32("be:button", (int32)tapButton);
 					msg->AddInt32("be:device_subtype",
-						B_TOUCHPAD_POINTING_DEVICE);
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
 					fTarget.EnqueueMessage(msg);
 				}
 			} else if (type == LIBINPUT_EVENT_TOUCH_UP) {
@@ -1958,7 +2046,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					msg->AddInt32("modifiers", 0);
 					msg->AddInt64("when", system_time());
 					msg->AddInt32("be:device_subtype",
-						B_TOUCHPAD_POINTING_DEVICE);
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
 					fTarget.EnqueueMessage(msg);
 				}
 			} else if (type == LIBINPUT_EVENT_TOUCH_MOTION) {
@@ -1993,7 +2083,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					msg->AddInt32("modifiers", 0);
 					msg->AddInt64("when", system_time());
 					msg->AddInt32("be:device_subtype",
-						B_TOUCHPAD_POINTING_DEVICE);
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
 					fTarget.EnqueueMessage(msg);
 				}
 			}

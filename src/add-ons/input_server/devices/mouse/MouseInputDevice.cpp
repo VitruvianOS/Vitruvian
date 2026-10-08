@@ -140,6 +140,22 @@ _NameSaysTouchpad(const BString& name)
 }
 
 
+// Strip the node suffix so Mouse and Touchpad of one pad share a group key.
+static BString
+_GroupFromHardwareName(const BString& name)
+{
+	BString group(name);
+	const char* suffixes[] = { " Mouse", " Touchpad", " Keyboard",
+		" Stylus", " UNKNOWN", NULL };
+	for (int32 i = 0; suffixes[i] != NULL; i++) {
+		int32 at = group.FindLast(suffixes[i]);
+		if (at >= 0 && at + (int32)strlen(suffixes[i]) == group.Length())
+			group.Truncate(at);
+	}
+	return group;
+}
+
+
 // Touch devices go to libinput so taps, two-finger scroll and right click
 // derive from finger state; evdev is better for mice, trackpoints, tablets
 // and QEMU/VirtualBox absolute pointers, which have neither BUTTONPAD nor
@@ -226,7 +242,17 @@ public:
 			int32				Serial() const { return fSerial; }
 			ino_t				Inode() const { return fDeviceInode; }
 
+			const BString&		PhysicalGroup() const { return fPhysicalGroup; }
+			bool				IsTouchpad() const { return fIsTouchpad; }
+			bool				UseLibinput() const { return fUseLibinput; }
+			void				SetMayReportButtons(bool may)
+								{ fMayReportButtons = may; }
+			bool				MayReportButtons() const
+								{ return fMayReportButtons; }
+
 private:
+			friend class MouseInputDevice;
+
 			char*				_BuildShortName() const;
 
 	static	status_t			_ControlThreadEntry(void* arg);
@@ -239,6 +265,7 @@ private:
 			status_t			_LoadTouchpadSettingsFile();
 			void				_ApplyLibinputConfig();
 			void				_MarkTouchpadName();
+			void				_ClaimPhysicalButtons();
 			void				_UpdateSharedButtons(uint32 rawButtons);
 			void				_FlushSeatButtons(uint32 rawButtons);
 			void				_UpdateTouchpadScale();
@@ -350,6 +377,10 @@ private:
 
 			bool				fIsTouchpad;
 			touchpad_settings	fTouchpadSettings;
+			// HID sibling nodes (Mouse vs Touchpad of one pad) share a
+			// physical click; only one of them may report buttons.
+			BString				fPhysicalGroup;
+			bool				fMayReportButtons;
 			TouchpadMovement	fTouchpadMovementMaker;
 			BMessage*			fTouchpadSettingsMessage;
 			BLocker				fTouchpadSettingsLock;
@@ -436,6 +467,7 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 
 	memset(&fSettings, 0, sizeof(fSettings));
 	fTouchpadSettings = kDefaultTouchpadSettings;
+	fMayReportButtons = true;
 
 	for (int i = 0; i < B_MAX_MOUSE_BUTTONS; i++)
 		fSettings.map.button[i] = B_MOUSE_BUTTON(i + 1);
@@ -512,6 +544,12 @@ MouseDevice::_Classify()
 
 		_MarkTouchpadName();
 
+		const char* hwName = libinput_device_get_name(fLibinputDev);
+		if (hwName != NULL && hwName[0] != '\0')
+			fPhysicalGroup = _GroupFromHardwareName(BString(hwName));
+		else
+			fPhysicalGroup = fPath;
+
 		// Raw touchscreens never fire POINTER_BUTTON, so synthesize from TOUCH.
 		fLibinputIsDirectTouch =
 			libinput_device_has_capability(fLibinputDev,
@@ -586,6 +624,12 @@ MouseDevice::_Classify()
 			|| fPath.IFindFirst("touchpad") >= 0
 			|| fPath.IFindFirst("trackpad") >= 0;
 	}
+
+	const char* hwName = libevdev_get_name(evdev);
+	if (hwName != NULL && hwName[0] != '\0')
+		fPhysicalGroup = _GroupFromHardwareName(BString(hwName));
+	else
+		fPhysicalGroup = fPath;
 
 	fEvdevHandle = evdev;
 	fDevice = fd;
@@ -1225,7 +1269,7 @@ MouseDevice::_ControlThread()
 			}
 
 			// Button events
-			if (changedButtons != 0) {
+			if (changedButtons != 0 && fMayReportButtons) {
 				bool pressed = (changedButtons & currentButtons) != 0;
 				BMessage* message = _BuildMouseMessage(
 					pressed ? B_MOUSE_DOWN : B_MOUSE_UP,
@@ -1254,7 +1298,8 @@ MouseDevice::_ControlThread()
 					fTarget.EnqueueMessage(message);
 					lastButtons = currentButtons;
 				}
-			}
+			} else if (changedButtons != 0)
+				lastButtons = currentButtons;
 
 			// Movement
 			if (hasMoved) {
@@ -1433,6 +1478,16 @@ MouseDevice::_UpdateTouchpadSettings(BMessage* message)
 		_ApplyLibinputConfig();
 
 	return B_OK;
+}
+
+
+void
+MouseDevice::_ClaimPhysicalButtons()
+{
+	if (fPhysicalGroup.IsEmpty())
+		return;
+
+	fTarget._ClaimButtonOwnership(fPhysicalGroup, this);
 }
 
 
@@ -1783,6 +1838,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			else
 				fLibinputButtons &= ~beButton;
 
+			if (fIsTouchpad && beButton != 0)
+				_ClaimPhysicalButtons();
+
 			// Read current cursor pos from shared state
 			BPoint where = fLibinputLastPos;
 			if (fTarget.fCursorLock.Lock()) {
@@ -2003,6 +2061,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					fTarget.fCursorPosition = fLibinputLastPos;
 					fTarget.fCursorLock.Unlock();
 				}
+
+				if (fIsTouchpad)
+					_ClaimPhysicalButtons();
 
 				// Touchscreen: synthesize B_MOUSE_DOWN.
 				// Touchpad: B_MOUSE_DOWN comes from POINTER_BUTTON (tap-to-click).
@@ -2475,6 +2536,9 @@ MouseInputDevice::_DetachDevice(const char* path, const int32* serial)
 	// so acquiring it under fDeviceListLock inverts the established
 	// order. The device is off the list but still alive here, so a
 	// callback arriving with the cookie in this window is safe.
+	if (device->IsTouchpad() && device->UseLibinput())
+		_ReleaseButtonOwnership(device->PhysicalGroup());
+
 	input_device_ref* devices[2];
 	devices[0] = device->DeviceRef();
 	devices[1] = NULL;
@@ -2484,6 +2548,39 @@ MouseInputDevice::_DetachDevice(const char* path, const int32* serial)
 	UnregisterDevices(devices);
 
 	return device;
+}
+
+
+void
+MouseInputDevice::_ClaimButtonOwnership(const BString& group, MouseDevice* owner)
+{
+	if (group.IsEmpty() || owner == NULL)
+		return;
+
+	BAutolock _(fDeviceListLock);
+	for (int32 i = 0; i < fDevices.CountItems(); i++) {
+		MouseDevice* device = fDevices.ItemAt(i);
+		if (device == owner)
+			continue;
+		if (device->PhysicalGroup() == group)
+			device->SetMayReportButtons(false);
+	}
+	owner->SetMayReportButtons(true);
+}
+
+
+void
+MouseInputDevice::_ReleaseButtonOwnership(const BString& group)
+{
+	if (group.IsEmpty())
+		return;
+
+	BAutolock _(fDeviceListLock);
+	for (int32 i = 0; i < fDevices.CountItems(); i++) {
+		MouseDevice* device = fDevices.ItemAt(i);
+		if (device->PhysicalGroup() == group)
+			device->SetMayReportButtons(true);
+	}
 }
 
 

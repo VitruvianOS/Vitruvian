@@ -62,6 +62,11 @@ private:
 			// pointer outside the lock, see _RemoveDevice() in the .cpp.
 			MouseDevice*	_DetachDevice(const char* path,
 								const int32* serial);
+			// A clickpad and its firmware mouse node report the same
+			// physical click; the touchpad owns buttons once it speaks.
+			void			_ClaimButtonOwnership(const BString& group,
+								MouseDevice* owner);
+			void			_ReleaseButtonOwnership(const BString& group);
 
 private:
 			BObjectList<MouseDevice, true> fDevices;

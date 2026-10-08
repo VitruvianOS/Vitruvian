@@ -388,9 +388,11 @@ NetworkWindow::MessageReceived(BMessage* message)
 				// text ("No network with this name was found", etc).
 				BString reason;
 				message->FindString("reason", &reason);
-				BString text = !reason.IsEmpty()
-					? reason
-					: B_TRANSLATE("Could not join the network.");
+				BString text;
+				if (!reason.IsEmpty())
+					text = reason;
+				else
+					text = B_TRANSLATE("Could not join the network.");
 				BAlert* alert = new BAlert(B_TRANSLATE("Join other network"),
 					text, B_TRANSLATE("OK"));
 				alert->Go(NULL);
@@ -514,12 +516,12 @@ NetworkWindow::_RequestDeviceScan()
 void
 NetworkWindow::_PopulateDeviceList(BMessage* devices)
 {
-	// Capture the current selection's stable identifier (D-Bus object path)
-	// before tearing the list down -- NM notifications repopulate this list
-	// often, and re-selecting index 0 every time would throw away whatever
-	// the user had selected on every unrelated state change elsewhere.
+	// Capture the current selection before tearing the list down: NM
+	// notifications repopulate this list often. A section header has no
+	// stable path, so remember it by kind instead.
 	BString previousPath;
 	bool hadSelection = false;
+	int previousHeader = -1;
 	{
 		BListItem* selected = fListView->ItemAt(fListView->CurrentSelection());
 		DeviceListItem* deviceItem = dynamic_cast<DeviceListItem*>(selected);
@@ -530,7 +532,16 @@ NetworkWindow::_PopulateDeviceList(BMessage* devices)
 		} else if (vpnItem != NULL) {
 			previousPath = vpnItem->ConnectionPath();
 			hadSelection = true;
-		}
+		} else if (selected == fProxyItem)
+			previousHeader = 0;
+		else if (selected == fWiredItem)
+			previousHeader = 1;
+		else if (selected == fWirelessItem)
+			previousHeader = 2;
+		else if (selected == fVPNItem)
+			previousHeader = 3;
+		else if (selected == fMobileItem)
+			previousHeader = 4;
 	}
 
 	// BListView does not own its items, so draining is the only way to avoid
@@ -562,7 +573,7 @@ NetworkWindow::_PopulateDeviceList(BMessage* devices)
 
 	// Create section headers
 	fWiredItem = new TitleItem(B_TRANSLATE("Wired"));
-	fWirelessItem = new TitleItem(B_TRANSLATE("WiFi"));
+	fWirelessItem = new TitleItem(B_TRANSLATE("Wi-Fi"));
 	fVPNItem = new TitleItem(B_TRANSLATE("VPN"));
 
 	fListView->AddItem(fWiredItem);
@@ -576,6 +587,19 @@ NetworkWindow::_PopulateDeviceList(BMessage* devices)
 	BMessage modemSnapshot;
 
 	BListItem* restoredSelection = NULL;
+
+	// Header first: a Wi-Fi or VPN overview stays selected across the
+	// rebuild so an adapter/VPN state change refreshes it in place.
+	if (previousHeader == 0)
+		restoredSelection = fProxyItem;
+	else if (previousHeader == 1)
+		restoredSelection = fWiredItem;
+	else if (previousHeader == 2)
+		restoredSelection = fWirelessItem;
+	else if (previousHeader == 3)
+		restoredSelection = fVPNItem;
+	else if (previousHeader == 4)
+		restoredSelection = fMobileItem;
 
 	int32 deviceCount = 0;
 	if (devices->FindInt32(kNMFieldDeviceCount, &deviceCount) != B_OK)

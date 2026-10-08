@@ -110,21 +110,85 @@ static const struct libinput_interface kLibinputInterface = {
 // ---------------------------------------------------------------------------
 
 static bool
-_IsGestureDevice(int fd)
+_PropSet(int fd, uint32 prop)
 {
-	// Only route direct-touch (touchscreen) devices to libinput.
-	// INPUT_PROP_DIRECT means the device maps finger position directly to
-	// screen coordinates (no pointer acceleration, no relative mode).
-	//
-	// Touchpads (INPUT_PROP_BUTTONPAD / INPUT_PROP_POINTER) and mice go
-	// through the evdev path, which reads kernel-synthesised REL_WHEEL and
-	// ABS coordinates directly — robust across QEMU lock state changes.
 	uint8_t props[INPUT_PROP_CNT / 8 + 1] = {};
-	if (ioctl(fd, EVIOCGPROP(sizeof(props)), props) >= 0) {
-		if (props[INPUT_PROP_DIRECT / 8] & (1 << (INPUT_PROP_DIRECT % 8)))
+	if (ioctl(fd, EVIOCGPROP(sizeof(props)), props) < 0)
+		return false;
+	return (props[prop / 8] & (1 << (prop % 8))) != 0;
+}
+
+
+static bool
+_UdevSaysTouchpad(const char* path)
+{
+	BString model;
+	int32 role = UDEV_ROLE_UNKNOWN;
+	udev_device_name(path, model, role);
+	if (role == UDEV_ROLE_TOUCHPAD)
+		return true;
+	return model.IFindFirst("touchpad") >= 0
+		|| model.IFindFirst("trackpad") >= 0;
+}
+
+
+static bool
+_NameSaysTouchpad(const BString& name)
+{
+	return name.IFindFirst("touchpad") >= 0
+		|| name.IFindFirst("trackpad") >= 0;
+}
+
+
+// Touch devices go to libinput so taps, two-finger scroll and right click
+// derive from finger state; evdev is better for mice, trackpoints, tablets
+// and QEMU/VirtualBox absolute pointers, which have neither BUTTONPAD nor
+// multitouch axes and keep working across QEMU lock state changes.
+static bool
+_UseLibinputDevice(int fd, const char* path)
+{
+	if (_PropSet(fd, INPUT_PROP_DIRECT) || _PropSet(fd, INPUT_PROP_BUTTONPAD))
+		return true;
+
+	struct libevdev* evdev = NULL;
+	if (libevdev_new_from_fd(fd, &evdev) >= 0) {
+		bool pointerMt = libevdev_has_property(evdev, INPUT_PROP_POINTER)
+			&& libevdev_has_event_code(evdev, EV_ABS,
+				ABS_MT_POSITION_X);
+		libevdev_free(evdev);
+		if (pointerMt)
 			return true;
 	}
-	return false;
+
+	return _UdevSaysTouchpad(path);
+}
+
+
+static bool
+_IsTouchpadDevice(int fd, const char* path)
+{
+	if (_PropSet(fd, INPUT_PROP_DIRECT))
+		return false;
+	if (_PropSet(fd, INPUT_PROP_BUTTONPAD))
+		return true;
+
+	struct libevdev* evdev = NULL;
+	if (libevdev_new_from_fd(fd, &evdev) >= 0) {
+		bool pointerMt = libevdev_has_property(evdev, INPUT_PROP_POINTER)
+			&& libevdev_has_event_code(evdev, EV_ABS,
+				ABS_MT_POSITION_X);
+		libevdev_free(evdev);
+		if (pointerMt)
+			return true;
+	}
+
+	if (_UdevSaysTouchpad(path))
+		return true;
+
+	BString model;
+	int32 role = UDEV_ROLE_UNKNOWN;
+	udev_device_name(path, model, role);
+	return _NameSaysTouchpad(model) || _NameSaysTouchpad(BString(path));
 }
 
 
@@ -172,6 +236,7 @@ private:
 
 			status_t			_GetTouchpadSettingsPath(BPath& path);
 			status_t			_UpdateTouchpadSettings(BMessage* message);
+			void				_MarkTouchpadName();
 			void				_UpdateTouchpadScale();
 
 			BMessage*			_BuildMouseMessage(uint32 what,
@@ -401,10 +466,14 @@ MouseDevice::_Classify()
 			? B_PERMISSION_DENIED : B_ERROR;
 	}
 
-	if (_IsGestureDevice(fd)) {
+	if (_UseLibinputDevice(fd, fPath.String())) {
 		struct stat st;
 		if (fstat(fd, &st) == 0)
 			fDeviceInode = st.st_ino;
+
+		bool directTouch = _PropSet(fd, INPUT_PROP_DIRECT);
+		fIsTouchpad = !directTouch && _IsTouchpadDevice(fd,
+			fPath.String());
 		close(fd);
 
 		fUseLibinput = true;
@@ -431,6 +500,11 @@ MouseDevice::_Classify()
 
 		// libinput needs one dispatch before device config is accessible.
 		libinput_dispatch(fLibinput);
+
+		if (_NameSaysTouchpad(BString(libinput_device_get_name(fLibinputDev))))
+			fIsTouchpad = true;
+
+		_MarkTouchpadName();
 
 		if (libinput_device_config_tap_get_finger_count(
 				fLibinputDev) > 0) {
@@ -1287,6 +1361,28 @@ MouseDevice::_UpdateTouchpadSettings(BMessage* message)
 		fTouchpadMovementMaker.SetSettings(settings);
 
 	return B_OK;
+}
+
+
+void
+MouseDevice::_MarkTouchpadName()
+{
+	if (!fIsTouchpad)
+		return;
+
+	BString name(fDeviceRef.name);
+	if (name.IFindFirst("Touchpad") >= 0)
+		return;
+
+	int32 at = name.FindFirst("Mouse");
+	if (at >= 0) {
+		name.Remove(at, 5);
+		name.Insert("Touchpad", at);
+	} else
+		name << " Touchpad";
+
+	free(fDeviceRef.name);
+	fDeviceRef.name = strdup(name.String());
 }
 
 

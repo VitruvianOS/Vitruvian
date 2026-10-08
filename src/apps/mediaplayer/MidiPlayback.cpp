@@ -11,9 +11,9 @@
 #include <media2/MediaDefs.h>
 
 
-// The planned chain is BMidiStore (SMF parse) → midi2 façade scheduler →
-// BMidiOutput → BSoundFontSynth (handoff §12.N). None of those headers
-// exist on this branch; every entry point fails with a stated reason.
+// The planned chain is BMidiStore (SMF parse) to the midi2 facade
+// scheduler to BMidiOutput to BSoundFontSynth. Every entry point fails
+// with a stated reason until that chain is wired in.
 
 
 MidiPlayback::MidiPlayback()
@@ -66,9 +66,8 @@ MidiPlayback::SetTo(const BUrl& url)
 status_t
 MidiPlayback::_Load(const BUrl& url)
 {
-	// W17 / M1 / M2 are another job's branch. Until BSoundFontSynth and
-	// BMidiSynthFile are in this tree there is no media2 MIDI path to call;
-	// fail loudly so the UI can say so instead of hanging or going silent.
+	// The synth stack is not linked into this app yet; fail loudly so
+	// the UI can say so instead of hanging or going silent.
 	(void)url;
 	fPlaying = false;
 	fPosition = 0;

@@ -12,9 +12,10 @@
 #include <Url.h>
 
 
-// Seam onto the media2 MIDI chain (handoff §9.5 / §8 W17: BMidiSynthFile
-// and BSoundFontSynth). Those classes land on another branch; until then
-// this fails loudly rather than pretending to play.
+// Seam onto the media2 MIDI chain: BMidiStore (SMF parse), the midi2
+// facade scheduler, BMidiOutput and BSoundFontSynth. Those pieces are
+// not wired into this app yet; SetTo fails rather than pretending to
+// play.
 class MidiPlayback {
 public:
 								MidiPlayback();

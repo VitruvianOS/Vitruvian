@@ -50,8 +50,7 @@ void
 ReplaceColor(BBitmap *bitmap, rgb_color from, rgb_color to)
 {
 	ASSERT(bitmap->ColorSpace() == B_CMAP8);
-	// other color spaces not implemented yet
-	
+
 	BScreen screen(B_MAIN_SCREEN_ID);
 	uint32 fromIndex = screen.IndexForColor(from);
 	uint32 toIndex = screen.IndexForColor(to); 
@@ -67,8 +66,7 @@ void
 ReplaceTransparentColor(BBitmap *bitmap, rgb_color with)
 {
 	ASSERT(bitmap->ColorSpace() == B_CMAP8);
-	// other color spaces not implemented yet
-	
+
 	BScreen screen(B_MAIN_SCREEN_ID);
 	uint8 withIndex = screen.IndexForColor(with); 
 	

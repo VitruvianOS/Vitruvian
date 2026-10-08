@@ -135,9 +135,8 @@ Controller::_ProbeTracks(const entry_ref* ref, const BUrl* url)
 	delete fProbeFile;
 	fProbeFile = NULL;
 
-	// Separate probe open: BMediaPlayer owns its own BMediaFile and only
-	// plays track 0 as raw audio. Enumeration is the W12 seam (CountTracks
-	// / TrackAt); until W12 lands this sees the single hardcoded track.
+	// Separate probe open: BMediaPlayer owns its own BMediaFile and plays
+	// the first audio track; enumeration here is what tells has_video.
 	if (ref != NULL)
 		fProbeFile = new BMediaFile(ref);
 	else if (url != NULL)

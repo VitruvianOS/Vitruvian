@@ -91,6 +91,8 @@ MainWin::_SetupWindow()
 		.Add(fVideoView, 1.0)
 		.Add(fControllerView);
 
+	fController->SetVideoView(fVideoView);
+
 	SetSizeLimits(kMinWidth, kMinHeight, 4000, 3000);
 	ResizeTo(kMinWidth + 40, kMinHeight + 140);
 	CenterOnScreen();
@@ -146,19 +148,8 @@ MainWin::_SizeForVideo(uint32 width, uint32 height)
 	if (width == 0 || height == 0 || fVideoView == NULL)
 		return;
 
-	float viewWidth = fVideoView->Bounds().Width();
-	float viewHeight = fVideoView->Bounds().Height();
-	if (viewWidth < 1 || viewHeight < 1)
-		return;
-
-	float scale = 1.0f;
-	if (width > (uint32)viewWidth || height > (uint32)viewHeight) {
-		float sx = viewWidth / (float)width;
-		float sy = viewHeight / (float)height;
-		scale = sx < sy ? sx : sy;
-	}
-	float targetW = width * scale;
-	float targetH = height * scale;
+	float targetW = width;
+	float targetH = height;
 	if (targetW < kMinWidth)
 		targetW = kMinWidth;
 	if (targetH < 40)

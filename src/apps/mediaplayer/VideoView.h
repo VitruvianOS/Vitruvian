@@ -7,12 +7,13 @@
 #define _VIDEO_VIEW_H
 
 
+#include <Bitmap.h>
+#include <Message.h>
 #include <View.h>
 
 
-// Draw path and window-sizing seam for video. Frames arrive through the
-// media2 track API once multi-track BMediaFile (W12) is in the tree; until
-// then this view holds the video area and paints a placeholder.
+// Receives B_PLAYER_VIDEO_FRAME from BMediaPlayer::SetVideoView and
+// letterboxes the decoded frame into the current bounds.
 class VideoView : public BView {
 public:
 								VideoView(BRect frame, const char* name,
@@ -21,6 +22,7 @@ public:
 
 	virtual	void				Draw(BRect updateRect);
 	virtual	void				FrameResized(float width, float height);
+	virtual	void				MessageReceived(BMessage* message);
 
 			void				SetVideoSize(uint32 width, uint32 height);
 			uint32				VideoWidth() const
@@ -34,8 +36,13 @@ public:
 			void				GetPreferredSize(float* width, float* height);
 
 private:
+			void				_PresentFrame(const void* data, uint32 width,
+									uint32 height, uint32 stride);
+			void				_ClearFrame();
+
 			uint32				fVideoWidth;
 			uint32				fVideoHeight;
+			BBitmap*			fBitmap;
 };
 
 

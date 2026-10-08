@@ -21,6 +21,8 @@ on:
       # the repo does not carry (board builds refuse an empty repo).
       repo_suite:  { type: string, default: testing-nightly }
       rev:         { type: string, required: true }
+      # Lane in the published names, so two builds of one arch can't collide.
+      lane:        { type: string, default: "" }
     outputs:
       failed_step:
         description: First step that failed, empty when the build passed
@@ -167,7 +169,8 @@ jobs:
             board=${base#vos-}
             board=${board%%.*}
             ext=${base#*.}
-            out="vos-${ver}-${{ inputs.arch }}-${board}-rev${VOS_PKG_REV}-${sha}.${ext}"
+            lane="${{ inputs.lane }}"
+            out="vos-${ver}-${{ inputs.arch }}-${board}${lane:+-$lane}-rev${VOS_PKG_REV}-${sha}.${ext}"
             cp "$f" "staging/$out"
             ( cd staging && sha256sum "$out" > "$out.sha256" )
             echo "staged $out"

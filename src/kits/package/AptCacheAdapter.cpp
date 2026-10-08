@@ -59,7 +59,20 @@ public:
 			_error->DumpErrors();
 			return;
 		}
-		if (!fFile.ReadOnlyOpen(NULL)) {
+		if (fFile.ReadOnlyOpen(NULL)) {
+			fRecords = new pkgRecords(*fFile.GetPkgCache());
+			fOk = true;
+			return;
+		}
+		// No cache binaries yet, the cold-start case: apt then either
+		// refused the read-only open or built an in-memory cache from the
+		// lists, rescan-for-rescan, without persisting anything. Iterate
+		// such a cache and only dpkg's installed entries carry state, so
+		// GetPackageList answers with the installed subset and the app
+		// looks broken until a second run. One normal Open builds and
+		// writes pkgcache.bin; after that every open stays read-only.
+		_error->DumpErrors();
+		if (!fFile.Open(NULL)) {
 			_error->DumpErrors();
 			return;
 		}

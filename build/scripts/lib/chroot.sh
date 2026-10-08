@@ -142,6 +142,10 @@ chroot_mount_deb_cache() {
     sudo mkdir -p "$_chroot_dir/etc/apt/apt.conf.d"
     echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
         | sudo tee "$_chroot_dir/etc/apt/apt.conf.d/99-keep-debs" >/dev/null
+    cat <<'EOF' | sudo tee "$_chroot_dir/etc/apt/apt.conf.d/90-vos-gzip-indexes" >/dev/null
+Acquire::GzipIndexes "true";
+Acquire::CompressionTypes::Order { "gz"; };
+EOF
 }
 
 chroot_create() {

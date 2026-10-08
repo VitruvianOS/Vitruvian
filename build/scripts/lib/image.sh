@@ -397,11 +397,11 @@ EOF
     _assembly_cleanup
     trap - EXIT INT TERM
 
-    # Package lists and downloaded debs only serve the build; apt update refetches the lists.
     mountpoint -q "$_root_dir/var/cache/apt/archives" \
         || sudo rm -f "$_root_dir"/var/cache/apt/archives/*.deb
     sudo rm -f "$_root_dir"/var/cache/apt/*.bin
-    sudo find "$_root_dir/var/lib/apt/lists" -maxdepth 1 -type f -delete
+    sudo rm -f "$_root_dir/var/lib/apt/lists/lock"
+    sudo rm -rf "$_root_dir/var/lib/apt/lists/partial"
 
     log_step "Building populated filesystem images (no mount)..."
     rm -f "$_esp_img" "$_root_img"
@@ -547,7 +547,9 @@ depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel st
         "$_chroot_dir" \
         "$_basedir/image_tree/image/live/filesystem.squashfs" \
         -b 1048576 $_sq_comp_args -xattrs \
-        -wildcards -e 'var/lib/apt/lists/*' 'var/cache/apt/*.bin' 'var/cache/apt/archives/*.deb'
+        -wildcards -e 'var/lib/apt/lists/lock' \
+        'var/lib/apt/lists/partial' 'var/cache/apt/*.bin' \
+        'var/cache/apt/archives/*.deb'
 
     log_step "Copying kernel and initramfs..."
     # riscv64's linux-image ships an uncompressed vmlinux-<ver> (no vmlinuz-);

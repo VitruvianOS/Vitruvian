@@ -10,8 +10,12 @@
 #include <mutex>
 #include <string.h>
 
+#include <Handler.h>
+#include <Looper.h>
 #include <Message.h>
+#include <MessageRunner.h>
 #include <Url.h>
+#include <View.h>
 
 #include <media2/MediaConnection.h>
 #include <media2/MediaFile.h>
@@ -20,6 +24,9 @@
 
 
 namespace {
+
+
+const uint32 kMsgVideoPump = 'vpmp';
 
 
 class _OutputConnection : public BMediaOutput {
@@ -67,7 +74,7 @@ public:
 	float    Volume() const { return fVolume; }
 
 	void     SetTarget(BMessenger target);
-	void     SetVideoView(BView* /*view*/) {}	// no-op for now
+	void     SetVideoView(BView* view);
 
 	status_t SetHooks(BMediaPlayer::BufferPlayerFunc fillFunc,
 		BMediaPlayer::EventNotifierFunc notifyFunc, void* cookie);
@@ -80,11 +87,30 @@ public:
 	status_t InitCheck() const { return fInitErr; }
 
 private:
+	// Pulls run on the view's looper thread so no backend thread ever
+	// touches frame buffers.
+	class _VideoPump : public BHandler {
+	public:
+							_VideoPump(Impl* impl)
+								:
+								fImpl(impl)
+							{}
+
+		virtual void		MessageReceived(BMessage* message);
+
+	private:
+		Impl*				fImpl;
+	};
+
 	static void _ProcessHook(void* cookie, void* buffer, size_t size,
 		uint32 frameCount, const BMediaFormat& format);
 
 	void _FillFromTrack(void* buffer, size_t size,
 		const media_raw_audio_format& format);
+
+	void _PumpVideoFrame();
+	void _StartVideoRunner();
+	void _StopVideoRunner();
 
 	void _SetState(BMediaPlayer::player_state s);
 	void _PostNotification(uint32 what);
@@ -103,6 +129,16 @@ private:
 
 	BMediaFile*			fFile;
 	BMediaTrack*		fTrack;
+	BMediaTrack*		fVideoTrack;
+	BView*				fVideoView;
+	BLooper*			fVideoLooper;
+	BMessenger			fVideoMessenger;
+	_VideoPump*			fVideoPump;
+	BMessageRunner*		fVideoRunner;
+	media_raw_video_format	fVideoFormat;
+	uint32				fVideoStride;
+	uint8*				fVideoBuffer;
+	size_t				fVideoBufferSize;
 	std::mutex			fLock;	// guards fTrack reads + fState transitions
 	std::atomic<BMediaPlayer::player_state>	fState;
 	std::atomic<bool>	fEOS;
@@ -127,6 +163,16 @@ BMediaPlayer::Impl::Impl(BMediaPlayer* owner)
 	fCookie(NULL),
 	fFile(NULL),
 	fTrack(NULL),
+	fVideoTrack(NULL),
+	fVideoView(NULL),
+	fVideoLooper(NULL),
+	fVideoMessenger(),
+	fVideoPump(NULL),
+	fVideoRunner(NULL),
+	fVideoFormat(),
+	fVideoStride(0),
+	fVideoBuffer(NULL),
+	fVideoBufferSize(0),
 	fState(BMediaPlayer::B_PLAYER_STOPPED),
 	fEOS(false),
 	fFrameStride(0),
@@ -163,6 +209,12 @@ BMediaPlayer::Impl::Impl(BMediaPlayer* owner)
 
 BMediaPlayer::Impl::~Impl()
 {
+	_StopVideoRunner();
+	if (fVideoPump != NULL) {
+		if (fVideoLooper != NULL)
+			fVideoLooper->RemoveHandler(fVideoPump);
+		delete fVideoPump;
+	}
 	if (fNode != NULL) {
 		fNode->Stop();
 		if (fOutput != NULL)
@@ -170,7 +222,8 @@ BMediaPlayer::Impl::~Impl()
 	}
 	delete fOutput;
 	delete fNode;
-	delete fFile;	// BMediaFile owns the track
+	delete[] fVideoBuffer;
+	delete fFile;	// BMediaFile owns the tracks
 }
 
 
@@ -208,9 +261,14 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 	delete fFile;
 	fFile  = NULL;
 	fTrack = NULL;
+	fVideoTrack = NULL;
 	fEOS   = false;
 	fDuration = 0;
 	fFrameStride = 0;
+	fVideoStride = 0;
+	fVideoBufferSize = 0;
+	delete[] fVideoBuffer;
+	fVideoBuffer = NULL;
 
 	fFile = new(std::nothrow) BMediaFile(ref);
 	if (fFile == NULL)
@@ -232,9 +290,14 @@ BMediaPlayer::Impl::SetTo(const BUrl& url)
 	delete fFile;
 	fFile  = NULL;
 	fTrack = NULL;
+	fVideoTrack = NULL;
 	fEOS   = false;
 	fDuration = 0;
 	fFrameStride = 0;
+	fVideoStride = 0;
+	fVideoBufferSize = 0;
+	delete[] fVideoBuffer;
+	fVideoBuffer = NULL;
 
 	fFile = new(std::nothrow) BMediaFile(url);
 	if (fFile == NULL)
@@ -249,23 +312,77 @@ BMediaPlayer::Impl::SetTo(const BUrl& url)
 status_t
 BMediaPlayer::Impl::_FinishSetTo()
 {
-	fTrack = fFile->TrackAt(0);
-	if (fTrack == NULL)
+	fTrack = NULL;
+	fVideoTrack = NULL;
+	fVideoStride = 0;
+	fVideoBufferSize = 0;
+	delete[] fVideoBuffer;
+	fVideoBuffer = NULL;
+
+	// Discovery stores tracks as encoded; the negotiated decoder output
+	// is what ReadFrames delivers through the union overlay.
+	BMediaFormat audioFmt;
+	BMediaFormat videoFmt;
+	const int32 count = fFile != NULL ? fFile->CountTracks() : 0;
+	for (int32 i = 0; i < count; i++) {
+		BMediaTrack* track = fFile->TrackAt(i);
+		if (track == NULL)
+			continue;
+		BMediaFormat fmt;
+		if (track->DecodedFormat(&fmt) != B_OK)
+			continue;
+		if (fmt.IsEncodedAudio()) {
+			fmt.format.type = B_MEDIA_RAW_AUDIO;
+			fmt.format.u.raw_audio = fmt.format.u.encoded_audio.output;
+		} else if (fmt.IsEncodedVideo()) {
+			fmt.format.type = B_MEDIA_RAW_VIDEO;
+			fmt.format.u.raw_video = fmt.format.u.encoded_video.output;
+		}
+		if (fmt.IsRawAudio() && fTrack == NULL) {
+			fTrack = track;
+			audioFmt = fmt;
+		} else if (fmt.IsRawVideo() && fVideoTrack == NULL) {
+			fVideoTrack = track;
+			videoFmt = fmt;
+		}
+		if (fTrack != NULL && fVideoTrack != NULL)
+			break;
+	}
+
+	if (fTrack == NULL && fVideoTrack == NULL)
 		return (fInitErr = B_ERROR);
 
-	BMediaFormat fmt;
-	status_t err = fTrack->DecodedFormat(&fmt);
-	if (err != B_OK || !fmt.IsRawAudio())
-		return (fInitErr = err != B_OK ? err : B_ERROR);
-
-	const media_raw_audio_format& raw = fmt.format.u.raw_audio;
-	fFrameStride = (raw.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
-		* raw.channel_count;
-	fDuration = fTrack->Duration();
-
-	err = SetFormat(fmt);
+	status_t err;
+	if (fTrack != NULL) {
+		const media_raw_audio_format& raw = audioFmt.format.u.raw_audio;
+		fFrameStride = (raw.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
+			* raw.channel_count;
+		fDuration = fTrack->Duration();
+		err = SetFormat(audioFmt);
+	} else {
+		// Video-only: run the node as a silence clock so the playhead
+		// advances while the view paces its own frame pulls.
+		BMediaFormat fmt;
+		fmt.SetToDefault();
+		err = SetFormat(fmt);
+	}
 	if (err != B_OK)
 		return (fInitErr = err);
+
+	if (fVideoTrack != NULL) {
+		const media_raw_video_format& rv = videoFmt.format.u.raw_video;
+		if (rv.width == 0 || rv.height == 0)
+			return (fInitErr = B_ERROR);
+		fVideoFormat = rv;
+		fVideoStride = rv.width * 4;	// BGRx, packed rows
+		fVideoBufferSize = (size_t)fVideoStride * rv.height;
+		fVideoBuffer = new(std::nothrow) uint8_t[fVideoBufferSize];
+		if (fVideoBuffer == NULL)
+			return (fInitErr = B_NO_MEMORY);
+		const bigtime_t videoDuration = fVideoTrack->Duration();
+		if (videoDuration > fDuration)
+			fDuration = videoDuration;
+	}
 
 	_PostNotification(BMediaPlayer::B_PLAYER_DURATION_CHANGED);
 	fInitErr = B_OK;
@@ -281,15 +398,20 @@ BMediaPlayer::Impl::Play()
 	const BMediaPlayer::player_state s = fState.load();
 	if (s == BMediaPlayer::B_PLAYER_PLAYING)
 		return B_OK;
-	if (s == BMediaPlayer::B_PLAYER_STOPPED && fEOS.load() && fTrack != NULL) {
+	if (s == BMediaPlayer::B_PLAYER_STOPPED && fEOS.load()) {
 		bigtime_t t = 0;
-		fTrack->SeekToTime(&t);
+		if (fTrack != NULL)
+			fTrack->SeekToTime(&t);
+		if (fVideoTrack != NULL)
+			fVideoTrack->SeekToTime(&t);
 		fEOS = false;
 	}
 	fHasData = true;
 	status_t err = fNode->IsStarted() ? B_OK : fNode->Start();
 	if (err != B_OK)
 		return err;
+	if (fVideoTrack != NULL)
+		_StartVideoRunner();
 	if (fNotifyFunc != NULL)
 		fNotifyFunc(fCookie, BMediaPlayer::B_STARTED);
 	_SetState(BMediaPlayer::B_PLAYER_PLAYING);
@@ -305,6 +427,7 @@ BMediaPlayer::Impl::Pause()
 	if (fState.load() != BMediaPlayer::B_PLAYER_PLAYING)
 		return B_OK;
 	fHasData = false;
+	_StopVideoRunner();
 	_SetState(BMediaPlayer::B_PLAYER_PAUSED);
 	return B_OK;
 }
@@ -315,6 +438,7 @@ BMediaPlayer::Impl::Stop()
 {
 	if (fNode == NULL)
 		return B_OK;
+	_StopVideoRunner();
 	if (fNode->IsStarted()) {
 		fNode->Stop();
 		if (fNotifyFunc != NULL)
@@ -323,6 +447,8 @@ BMediaPlayer::Impl::Stop()
 	bigtime_t t = 0;
 	if (fTrack != NULL)
 		fTrack->SeekToTime(&t);
+	if (fVideoTrack != NULL)
+		fVideoTrack->SeekToTime(&t);
 	fEOS = false;
 	_SetState(BMediaPlayer::B_PLAYER_STOPPED);
 	return B_OK;
@@ -333,10 +459,14 @@ status_t
 BMediaPlayer::Impl::SeekTo(bigtime_t position)
 {
 	std::lock_guard<std::mutex> _(fLock);
-	if (fTrack == NULL)
+	if (fTrack == NULL && fVideoTrack == NULL)
 		return B_NO_INIT;
 	bigtime_t t = position;
-	status_t err = fTrack->SeekToTime(&t);
+	status_t err = B_OK;
+	if (fTrack != NULL)
+		err = fTrack->SeekToTime(&t);
+	if (err == B_OK && fVideoTrack != NULL)
+		err = fVideoTrack->SeekToTime(&t);
 	if (err != B_OK)
 		return err;
 	fEOS = false;
@@ -348,7 +478,11 @@ BMediaPlayer::Impl::SeekTo(bigtime_t position)
 bigtime_t
 BMediaPlayer::Impl::Position() const
 {
-	return fTrack != NULL ? fTrack->CurrentTime() : 0;
+	if (fTrack != NULL)
+		return fTrack->CurrentTime();
+	if (fVideoTrack != NULL)
+		return fVideoTrack->CurrentTime();
+	return 0;
 }
 
 
@@ -368,6 +502,100 @@ BMediaPlayer::Impl::SetTarget(BMessenger target)
 	std::lock_guard<std::mutex> _(fLock);
 	fTarget    = target;
 	fHasTarget = target.IsValid();
+}
+
+
+void
+BMediaPlayer::Impl::SetVideoView(BView* view)
+{
+	_StopVideoRunner();
+	if (fVideoPump != NULL) {
+		if (fVideoLooper != NULL)
+			fVideoLooper->RemoveHandler(fVideoPump);
+		delete fVideoPump;
+		fVideoPump = NULL;
+	}
+	fVideoLooper = NULL;
+	fVideoMessenger = BMessenger();
+	fVideoView = view;
+	if (view == NULL)
+		return;
+
+	fVideoLooper = view->Looper();
+	if (fVideoLooper == NULL)
+		return;
+	fVideoPump = new _VideoPump(this);
+	if (fVideoPump == NULL)
+		return;
+	fVideoLooper->AddHandler(fVideoPump);
+	fVideoMessenger = BMessenger(view);
+	if (fState.load() == BMediaPlayer::B_PLAYER_PLAYING)
+		_StartVideoRunner();
+}
+
+
+void
+BMediaPlayer::Impl::_VideoPump::MessageReceived(BMessage* /*message*/)
+{
+	fImpl->_PumpVideoFrame();
+}
+
+
+void
+BMediaPlayer::Impl::_PumpVideoFrame()
+{
+	if (fState.load() != BMediaPlayer::B_PLAYER_PLAYING)
+		return;
+	if (fVideoTrack == NULL || fVideoView == NULL || fVideoBuffer == NULL)
+		return;
+
+	int64 frames = 1;
+	media_header mh;
+	memset(&mh, 0, sizeof(mh));
+	status_t err = fVideoTrack->ReadFrames(fVideoBuffer, &frames, &mh);
+	if (err == B_LAST_BUFFER_ERROR) {
+		_SetState(BMediaPlayer::B_PLAYER_STOPPED);
+		_PostNotification(BMediaPlayer::B_PLAYER_END_OF_STREAM);
+		return;
+	}
+	if (err != B_OK || frames < 1)
+		return;
+
+	bigtime_t audioTime = -1;
+	if (fTrack != NULL)
+		audioTime = fTrack->CurrentTime();
+
+	BMessage msg(BMediaPlayer::B_PLAYER_VIDEO_FRAME);
+	msg.AddInt32("width", (int32)fVideoFormat.width);
+	msg.AddInt32("height", (int32)fVideoFormat.height);
+	msg.AddInt32("stride", (int32)fVideoStride);
+	msg.AddInt64("start_time", (int64)mh.start_time);
+	msg.AddInt64("audio_time", (int64)audioTime);
+	msg.AddData("frame", B_RAW_TYPE, fVideoBuffer, (uint32)fVideoBufferSize);
+	fVideoMessenger.SendMessage(&msg);
+}
+
+
+void
+BMediaPlayer::Impl::_StartVideoRunner()
+{
+	if (fVideoPump == NULL || fVideoRunner != NULL)
+		return;
+	if (fVideoTrack == NULL || fVideoFormat.field_rate <= 0.0f)
+		return;
+	bigtime_t interval = (bigtime_t)(1000000.0f / fVideoFormat.field_rate);
+	if (interval <= 0)
+		interval = 33333;
+	BMessage msg(kMsgVideoPump);
+	fVideoRunner = new BMessageRunner(BMessenger(fVideoPump), msg, interval);
+}
+
+
+void
+BMediaPlayer::Impl::_StopVideoRunner()
+{
+	delete fVideoRunner;
+	fVideoRunner = NULL;
 }
 
 

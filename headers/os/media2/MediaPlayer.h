@@ -32,7 +32,8 @@ public:
 		B_PLAYER_POSITION_CHANGED  = 'plpc',
 		B_PLAYER_DURATION_CHANGED  = 'pldc',
 		B_PLAYER_ERROR             = 'pler',
-		B_PLAYER_END_OF_STREAM     = 'pleo'
+		B_PLAYER_END_OF_STREAM     = 'pleo',
+		B_PLAYER_VIDEO_FRAME       = 'plvf'
 	};
 
 	enum sound_player_notification {
@@ -78,6 +79,8 @@ public:
 
 			void				SetTarget(BMessenger target);
 
+			// B_PLAYER_VIDEO_FRAME to the view: width/height/stride (int32),
+			// start_time/audio_time (int64 us; -1 = no audio), frame (raw BGRx).
 			void				SetVideoView(BView* view);
 
 

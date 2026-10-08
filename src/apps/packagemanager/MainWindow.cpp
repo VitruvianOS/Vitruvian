@@ -13,6 +13,7 @@
 #include <Catalog.h>
 #include <Entry.h>
 #include <GroupLayout.h>
+#include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <Menu.h>
 #include <MenuBar.h>
@@ -408,6 +409,15 @@ MainWindow::_BuildLayout()
 	fUpdateListsButton = new BButton("update lists",
 		B_TRANSLATE("Update package lists"), new BMessage(kMsgAptUpdate));
 
+	fEmptyListsHintGroup = new BGroupView("empty lists row", B_HORIZONTAL,
+		B_USE_SMALL_SPACING);
+	BLayoutBuilder::Group<>(fEmptyListsHintGroup, B_HORIZONTAL,
+		B_USE_SMALL_SPACING)
+		.Add(fEmptyListsHintView)
+		.AddGlue()
+		.Add(fUpdateListsButton)
+		.End();
+
 	BSplitView* splitView = new BSplitView(B_VERTICAL, B_USE_SMALL_SPACING);
 	BLayoutBuilder::Split<>(splitView)
 		.Add(fListView, 3.0f)
@@ -425,11 +435,7 @@ MainWindow::_BuildLayout()
 			.SetInsets(B_USE_WINDOW_INSETS)
 			.Add(fFilterView)
 			.Add(fStaleHintView)
-			.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
-				.Add(fEmptyListsHintView)
-				.AddGlue()
-				.Add(fUpdateListsButton)
-			.End()
+			.Add(fEmptyListsHintGroup)
 			.Add(fMainTabView)
 			.Add(fStatusView)
 		.End();
@@ -803,10 +809,8 @@ void
 MainWindow::_ShowEmptyListsHint(bool show)
 {
 	if (show) {
-		fEmptyListsHintView->Show();
-		fUpdateListsButton->Show();
+		fEmptyListsHintGroup->Show();
 	} else {
-		fEmptyListsHintView->Hide();
-		fUpdateListsButton->Hide();
+		fEmptyListsHintGroup->Hide();
 	}
 }

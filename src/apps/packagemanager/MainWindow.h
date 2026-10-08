@@ -19,6 +19,7 @@ class BMenuItem;
 class BMenu;
 class BTabView;
 class BButton;
+class BGroupView;
 class AptLogView;
 class FilterView;
 class PackageInfo;
@@ -69,6 +70,7 @@ private:
 		BMenuItem*			fClearMarksItem;
 			TruncatingStringView* fStaleHintView;
 			TruncatingStringView* fEmptyListsHintView;
+			BGroupView*			fEmptyListsHintGroup;
 			BButton*			fUpdateListsButton;
 			FilterView*			fFilterView;
 			BTabView*			fMainTabView;

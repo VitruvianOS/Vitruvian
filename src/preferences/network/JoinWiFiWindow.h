@@ -18,7 +18,8 @@ class BPopUpMenu;
 class BTextControl;
 
 
-// Reply: "device", "ssid", "password", "security", "remember".
+// Reply: "device", "ssid", "security", "remember". No password: the
+// SecretAgent collects it, same as a scanned join.
 const uint32 kMsgJoinHiddenWiFi = 'jhwf';
 
 
@@ -39,7 +40,6 @@ private:
 			BMessenger			fTarget;
 			BTextControl*		fSSID;
 			BPopUpMenu*			fSecurityMenu;
-			BTextControl*		fPassword;
 			BPopUpMenu*			fAdapterMenu;
 			BString				fDevice;
 			BCheckBox*			fRemember;

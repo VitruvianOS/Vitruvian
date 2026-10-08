@@ -3213,29 +3213,48 @@ _RunConnectToWiFi(gpointer data)
 	}
 
 	// Declare key-mgmt without a secret so NM asks our agent for it;
-	// without a security setting NM treats the network as open.
-	if (job->password.IsEmpty() && targetAP != NULL
+	// without a security setting NM treats the network as open. Hidden
+	// joins always take this path from the chosen security, even if a
+	// password parameter was supplied by an older caller: the preflet must
+	// not collect a secret itself.
+	const char* keyMgmt = NULL;
+	if (job->hidden) {
+		if (job->security != "none") {
+			if (job->security == "sae")
+				keyMgmt = "sae";
+			else if (job->security == "wep")
+				keyMgmt = "none";
+			else
+				keyMgmt = "wpa-psk";
+		}
+	} else if (job->password.IsEmpty() && targetAP != NULL
 			&& _APIsSecured(targetAP)) {
 		uint32 apSec = (uint32)nm_access_point_get_wpa_flags(targetAP)
 			| (uint32)nm_access_point_get_rsn_flags(targetAP);
-		const char* keyMgmt = NULL;
 		if ((apSec & NM_802_11_AP_SEC_KEY_MGMT_PSK) != 0)
 			keyMgmt = "wpa-psk";
 		else if ((apSec & NM_802_11_AP_SEC_KEY_MGMT_SAE) != 0)
 			keyMgmt = "sae";
 		else if (apSec == NM_802_11_AP_SEC_NONE)
 			keyMgmt = "none";
-
-		if (keyMgmt != NULL) {
-			NMSettingWirelessSecurity* secSetting =
-				(NMSettingWirelessSecurity*)nm_setting_wireless_security_new();
-			g_object_set(secSetting, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT,
-				keyMgmt, NULL);
-			nm_connection_add_setting(connection, NM_SETTING(secSetting));
-		}
 	}
 
-	if (!job->password.IsEmpty()) {
+	if (keyMgmt != NULL) {
+		NMSettingWirelessSecurity* secSetting =
+			(NMSettingWirelessSecurity*)nm_setting_wireless_security_new();
+		g_object_set(secSetting, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT,
+			keyMgmt, NULL);
+		if (job->security == "wep") {
+			g_object_set(secSetting,
+				NM_SETTING_WIRELESS_SECURITY_WEP_TX_KEYIDX, 0, NULL);
+		}
+		nm_connection_add_setting(connection, NM_SETTING(secSetting));
+	}
+
+	// Inline secret only for non-hidden joins that still pass one
+	// (NetworkStatus, BNetworkDevice::JoinNetwork). Hidden joins rely on
+	// the agent above.
+	if (!job->hidden && !job->password.IsEmpty()) {
 		NMSettingWirelessSecurity* secSetting =
 			(NMSettingWirelessSecurity*)nm_setting_wireless_security_new();
 

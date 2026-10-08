@@ -976,8 +976,10 @@ NetworkWindow::_JoinHiddenWiFi(BMessage* message)
 	NMBackend* backend = NMBackend::Instance();
 	if (backend == NULL)
 		return;
+	// password is NULL: a hidden join declares key-mgmt only and the
+	// SecretAgent collects the secret, same as a scanned join.
 	backend->ConnectToWiFiAsync(message->GetString("device", ""),
-		message->GetString("ssid", ""), message->GetString("password", ""),
+		message->GetString("ssid", ""), NULL,
 		message->GetString("security", "wpa"),
 		message->GetBool("remember", true), BMessenger(this),
 		kMsgJoinHiddenResult, true);

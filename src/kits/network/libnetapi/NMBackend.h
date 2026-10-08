@@ -240,7 +240,10 @@ public:
 	// profile, static IP, etc) is not implemented -- this only covers the
 	// create-and-join path an agent-driven reconnect or a fresh join need.
 	// security: "none", "wpa" (default), "sae" or "wep". hidden marks a
-	// network that does not broadcast its name.
+	// network that does not broadcast its name; a hidden join never writes
+	// a secret into the profile (key-mgmt only), so NM calls the SecretAgent
+	// exactly as for a scanned network. password is still honored for the
+	// non-hidden callers (ConnectToWiFi(), NetworkStatus).
 	status_t ConnectToWiFiAsync(const char* devicePath, const char* ssid,
 		const char* password, const char* security, bool remember,
 		const BMessenger& replyTo, uint32 replyWhat, bool hidden = false);

@@ -56,15 +56,9 @@ JoinWiFiWindow::JoinWiFiWindow(const BMessenger& target,
 	BMenuField* securityField = new BMenuField(B_TRANSLATE("Security:"),
 		fSecurityMenu);
 
-	fPassword = new BTextControl(B_TRANSLATE("Password:"), NULL,
-		new BMessage(kMsgChanged));
-	fPassword->TextView()->HideTyping(true);
-	fPassword->SetModificationMessage(new BMessage(kMsgChanged));
-
 	BLayoutBuilder::Grid<> grid(B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING);
 	grid.AddTextControl(fSSID, 0, 0)
-		.AddMenuField(securityField, 0, 1)
-		.AddTextControl(fPassword, 0, 2);
+		.AddMenuField(securityField, 0, 1);
 
 	BString path;
 	if (adapters.FindString("path", 1, &path) == B_OK) {
@@ -79,12 +73,12 @@ JoinWiFiWindow::JoinWiFiWindow(const BMessenger& target,
 			if (selectedDevice != NULL && path == selectedDevice)
 				item->SetMarked(true);
 		}
-		if (fAdapterMenu->FindMarked() == NULL)
-			fAdapterMenu->ItemAt(0)->SetMarked(true);
-		grid.AddMenuField(new BMenuField(B_TRANSLATE("Adapter:"),
-			fAdapterMenu), 0, 3);
-	} else
-		adapters.FindString("path", 0, &fDevice);
+			if (fAdapterMenu->FindMarked() == NULL)
+				fAdapterMenu->ItemAt(0)->SetMarked(true);
+			grid.AddMenuField(new BMenuField(B_TRANSLATE("Adapter:"),
+				fAdapterMenu), 0, 2);
+		} else
+			adapters.FindString("path", 0, &fDevice);
 
 	fRemember = new BCheckBox(B_TRANSLATE("Connect automatically"));
 	fRemember->SetValue(B_CONTROL_ON);
@@ -120,11 +114,11 @@ JoinWiFiWindow::MessageReceived(BMessage* message)
 
 		case kMsgConnect:
 		{
+			// No password on purpose: NetworkManager's SecretAgent prompts,
+			// the same way it does for a scanned network.
 			BMessage request(kMsgJoinHiddenWiFi);
 			request.AddString("device", _Device());
 			request.AddString("ssid", fSSID->Text());
-			request.AddString("password", fPassword->IsEnabled()
-				? fPassword->Text() : "");
 			request.AddString("security", _Security());
 			request.AddBool("remember", fRemember->Value() == B_CONTROL_ON);
 			fTarget.SendMessage(&request);
@@ -141,10 +135,7 @@ JoinWiFiWindow::MessageReceived(BMessage* message)
 void
 JoinWiFiWindow::_UpdateControls()
 {
-	bool open = strcmp(_Security(), "none") == 0;
-	fPassword->SetEnabled(!open);
-	fConnect->SetEnabled(fSSID->Text()[0] != '\0' && _Device()[0] != '\0'
-		&& (open || fPassword->Text()[0] != '\0'));
+	fConnect->SetEnabled(fSSID->Text()[0] != '\0' && _Device()[0] != '\0');
 }
 
 

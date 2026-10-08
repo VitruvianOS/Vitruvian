@@ -240,6 +240,9 @@ class InputServer : public BApplication {
 		BRect			fFrame;
 		int32			fScreenOrientation;
 		int32			fScreenReflection;
+		// True once app_server has sent IS_SCREEN_BOUNDS_UPDATED;
+		// late-registered pointing devices need the same orientation.
+		bool			fScreenBoundsValid;
 
 		BLocker			fEventQueueLock;
 		EventList 		fEventQueue;

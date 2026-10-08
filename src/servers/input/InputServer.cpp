@@ -153,6 +153,7 @@ InputServer::InputServer()
 	fScreen(B_MAIN_SCREEN_ID),
 	fScreenOrientation(0),
 	fScreenReflection(0),
+	fScreenBoundsValid(false),
 	fEventQueueLock("input server event queue"),
 	fReplicantMessenger(NULL),
 	fInputMethodWindow(NULL),
@@ -580,6 +581,7 @@ InputServer::MessageReceived(BMessage* message)
 			fFrame = frame;
 			fScreenOrientation = orientation;
 			fScreenReflection = reflection;
+			fScreenBoundsValid = true;
 
 			// Devices place the cursor against their own copy of screen size.
 			BMessage bounds;
@@ -1428,6 +1430,15 @@ debug_printf("InputServer::RegisterDevices() device_ref already exists: %s\n", d
 			if (item != NULL && fInputDeviceList.AddItem(item)) {
 				item->Start();
 				_DeviceStarted(*item);
+				// A device registered after the last bounds notice
+				// would keep normal orientation while the picture rotates.
+				if (fScreenBoundsValid && item->Type() == B_POINTING_DEVICE) {
+					BMessage bounds;
+					bounds.AddRect("screen_bounds", fFrame);
+					bounds.AddInt32("screen_orientation", fScreenOrientation);
+					bounds.AddInt32("screen_reflection", fScreenReflection);
+					item->Control(B_SCREEN_BOUNDS_CHANGED, &bounds);
+				}
 				BMessage message(IS_NOTIFY_DEVICE);
 				message.AddBool("added", true);
 				message.AddString("name", item->Name());

@@ -149,7 +149,6 @@ ImageIncludeFile("data/system/settings/fresh_install" "/system/settings")
 # Data files
 ImageIncludeDir("data/system/data/fortunes" "/system/data/")
 install(DIRECTORY "data/system/data/terminal_themes/" DESTINATION "/system/data/Terminal/Themes" COMPONENT data)
-ImageIncludeDir("data/system/data/joysticks" "/system/data/")
 ImageIncludeDir("data/system/data/network" "/system/data/")
 ImageIncludeDir("data/system/data/licenses" "/system/data/")
 ImageIncludeDir("data/system/data/fonts" "/system/data/")

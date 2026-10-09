@@ -12,7 +12,7 @@ Hey, thanks for wanting to help out. Vitruvian (sometimes called V\OS) is a big 
 
 A few things we care about:
 
-- **Style matters.** We follow Haiku coding conventions (tabs, not spaces; Allman braces; `fMemberVar` naming; return type on its own line; `NULL` not `nullptr`). The [coding guidelines](https://docs.v-os.dev.dev/docs/development/coding-guidelines/) have the full rundown. Code that doesn't match the surrounding style stands out — and not in a good way.
+- **Style matters.** We follow Haiku coding conventions (tabs, not spaces; Allman braces; `fMemberVar` naming; return type on its own line; `NULL` not `nullptr`). The [coding guidelines](https://docs.v-os.dev/docs/development/coding-guidelines/) have the full rundown. Code that doesn't match the surrounding style stands out — and not in a good way.
 - **One thing per commit.** Don't bundle unrelated changes. It makes review harder and bisection painful down the road.
 - **Explain the *why*.** Commit messages should say why a change is needed, not just what was changed. "Fix crash" is weak; "Guard against null connector in SetMode when hot-unplugging" is better.
 - **Test before you PR.** Open a pull request against `master` and tell us what you changed, how you tested it, and anything you're unsure about.

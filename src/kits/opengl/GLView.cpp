@@ -373,11 +373,13 @@ BGLView::_LoadRenderer()
 		if (!entry.IsFile())
 			continue;
 
-		const char* name = entry.GetName();
+		char name[B_FILE_NAME_LENGTH];
+		if (entry.GetName(name) != B_OK)
+			continue;
+
 		bool preferred = false;
 		for (int32 i = 0; i < preferredCount; i++) {
-			if (name != NULL
-				&& strcmp(name, kPreferredRenderers[i]) == 0) {
+			if (strcmp(name, kPreferredRenderers[i]) == 0) {
 				preferred = true;
 				break;
 			}

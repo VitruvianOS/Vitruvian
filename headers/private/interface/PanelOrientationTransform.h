@@ -117,6 +117,11 @@ rotate_panel_point(int32 orientation, float u, float v, float& outU,
 }
 
 
+#ifndef VOS_DELTA_MAP_REVERSED
+#	define VOS_DELTA_MAP_REVERSED 0
+#endif
+
+
 // Rotates a relative motion or scroll delta the same way, without the
 // translation component (pure vector rotation) — keep this in the same
 // direction convention as rotate_panel_point() or the pointer moves
@@ -125,8 +130,25 @@ static inline void
 rotate_panel_delta(int32 orientation, float dx, float dy, float& outDx,
 	float& outDy, int32 reflection = B_PANEL_REFLECTION_NONE)
 {
-	float rdx, rdy;
+#if VOS_DELTA_MAP_REVERSED
+	// Only the 90-degree cases swap.
+	int32 mapOrientation;
 	switch (orientation) {
+		case B_PANEL_ORIENTATION_LEFT_UP:
+			mapOrientation = B_PANEL_ORIENTATION_RIGHT_UP;
+			break;
+		case B_PANEL_ORIENTATION_RIGHT_UP:
+			mapOrientation = B_PANEL_ORIENTATION_LEFT_UP;
+			break;
+		default:
+			mapOrientation = orientation;
+			break;
+	}
+#else
+	int32 mapOrientation = orientation;
+#endif
+	float rdx, rdy;
+	switch (mapOrientation) {
 		case B_PANEL_ORIENTATION_UPSIDE_DOWN:
 			rdx = -dx;
 			rdy = -dy;
@@ -146,6 +168,63 @@ rotate_panel_delta(int32 orientation, float dx, float dy, float& outDx,
 	}
 	outDx = (reflection & B_PANEL_REFLECTION_X) != 0 ? -rdx : rdx;
 	outDy = (reflection & B_PANEL_REFLECTION_Y) != 0 ? -rdy : rdy;
+}
+
+
+// Inverse of rotate_panel_point(), normalized logical to physical space.
+// Reflection self-inverts, so it applies first here.
+static inline void
+unrotate_panel_point(int32 orientation, int32 reflection, float u,
+	float v, float& outU, float& outV)
+{
+	float ru = (reflection & B_PANEL_REFLECTION_X) != 0 ? 1.0f - u : u;
+	float rv = (reflection & B_PANEL_REFLECTION_Y) != 0 ? 1.0f - v : v;
+	switch (orientation) {
+		case B_PANEL_ORIENTATION_UPSIDE_DOWN:
+			outU = 1.0f - ru;
+			outV = 1.0f - rv;
+			break;
+		case B_PANEL_ORIENTATION_LEFT_UP:
+			// rotate_panel_point(): ru = 1-v, rv = u
+			outU = rv;
+			outV = 1.0f - ru;
+			break;
+		case B_PANEL_ORIENTATION_RIGHT_UP:
+			// rotate_panel_point(): ru = v, rv = 1-u
+			outU = 1.0f - rv;
+			outV = ru;
+			break;
+		default:
+			outU = ru;
+			outV = rv;
+			break;
+	}
+}
+
+
+// Maps a logical point through an orientation change, old logical to
+// physical to new logical, so the pointer keeps its physical spot.
+static inline void
+remap_panel_point(int32 oldOrientation, int32 oldReflection,
+	int32 newOrientation, int32 newReflection, float u, float v,
+	float& outU, float& outV)
+{
+	float pu, pv;
+	unrotate_panel_point(oldOrientation, oldReflection, u, v, pu, pv);
+	rotate_panel_point(newOrientation, pu, pv, outU, outV, newReflection);
+}
+
+
+// Maps a raw 0..1 point in physical panel space onto the logical screen.
+// The mouse add-on rotates before delivery and must not come through here.
+static inline void
+map_device_absolute_point(int32 orientation, int32 reflection, float u,
+	float v, float width, float height, float& outX, float& outY)
+{
+	float lu, lv;
+	rotate_panel_point(orientation, u, v, lu, lv, reflection);
+	outX = lu * width;
+	outY = lv * height;
 }
 
 

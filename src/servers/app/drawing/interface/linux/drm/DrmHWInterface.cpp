@@ -3106,6 +3106,8 @@ struct PanelOrientationQuirk {
 // these vendors pad, and exact on the product name.
 const PanelOrientationQuirk kPanelOrientationQuirks[] = {
 	{ "CHUWI", "MiniBook X", 1200, 1920, PANEL_ORIENTATION_RIGHT_UP },
+	// No Kootigers N100 entry until its 90-degree direction is known;
+	// VOS_PANEL_ORIENTATION=left-up|right-up overrides it at runtime.
 };
 
 bool

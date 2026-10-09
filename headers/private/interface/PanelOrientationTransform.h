@@ -121,11 +121,42 @@ rotate_panel_point(int32 orientation, float u, float v, float& outU,
 #	define VOS_DELTA_MAP_REVERSED 0
 #endif
 
+// Logical to physical pixel index for present-time blits, the inverse of
+// rotate_panel_point(). Every per-pixel present blit must use it.
+// Reflection applies in logical space before the rotation.
+static inline void
+rotate_point(int32 orientation, int32 lx, int32 ly, int32 logicalW,
+	int32 logicalH, int32& px, int32& py,
+	int32 reflection = B_PANEL_REFLECTION_NONE)
+{
+	int32 rx = (reflection & B_PANEL_REFLECTION_X) != 0
+		? logicalW - 1 - lx : lx;
+	int32 ry = (reflection & B_PANEL_REFLECTION_Y) != 0
+		? logicalH - 1 - ly : ly;
 
-// Rotates a relative motion or scroll delta the same way, without the
-// translation component (pure vector rotation) — keep this in the same
-// direction convention as rotate_panel_point() or the pointer moves
-// correctly on one axis and inverted on the other.
+	switch (orientation) {
+		case B_PANEL_ORIENTATION_UPSIDE_DOWN:
+			px = logicalW - 1 - rx;
+			py = logicalH - 1 - ry;
+			break;
+		case B_PANEL_ORIENTATION_LEFT_UP:
+			px = ry;
+			py = logicalW - 1 - rx;
+			break;
+		case B_PANEL_ORIENTATION_RIGHT_UP:
+			px = logicalH - 1 - ry;
+			py = rx;
+			break;
+		default:
+			px = rx;
+			py = ry;
+			break;
+	}
+}
+
+
+// Rotates a relative delta without translation; it must keep the same
+// direction convention as rotate_panel_point().
 static inline void
 rotate_panel_delta(int32 orientation, float dx, float dy, float& outDx,
 	float& outDy, int32 reflection = B_PANEL_REFLECTION_NONE)

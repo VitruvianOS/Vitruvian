@@ -39,6 +39,18 @@
 
 int DrmHWInterface::fFd = -1;
 
+
+// New dumb and render buffers come back uninitialized, often holding the
+// previous rotation; fill opaque black (cursor blending assumes alpha 255).
+static void
+_ClearBufferToBlack(RenderingBuffer* buffer)
+{
+	if (buffer == NULL || buffer->Bits() == NULL)
+		return;
+	memset(buffer->Bits(), 0xFF,
+		(size_t)buffer->BytesPerRow() * buffer->Height());
+}
+
 extern "C" void seat_enable_cb(struct libseat* seat, void* data)
 {
 	DrmHWInterface* hw = static_cast<DrmHWInterface*>(data);
@@ -304,6 +316,12 @@ DrmHWInterface::_OnSessionEnable()
 	uint32_t logW, logH;
 	_ApplyOrientationSwap(get_dev()->width, get_dev()->height, logW, logH);
 	fRenderBuffer = new MallocBuffer(logW, logH);
+
+	// The modeset below scans out fFrontBuffer at once; a fresh dumb
+	// buffer is uninitialized memory, so hand the CRTC defined contents.
+	_ClearBufferToBlack(fFrontBuffer);
+	_ClearBufferToBlack(fBackBuffer);
+	_ClearBufferToBlack(fRenderBuffer);
 
 	_ProbeAtomic();
 	if (fAtomicSupported)
@@ -938,6 +956,12 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	_ApplyOrientationSwap(dev->width, dev->height, logW, logH);
 	fRenderBuffer = new MallocBuffer(logW, logH);
 
+	// The modeset below starts scanning out fFrontBuffer immediately;
+	// give it defined contents instead of recycled old-rotation pages.
+	_ClearBufferToBlack(fFrontBuffer);
+	_ClearBufferToBlack(fBackBuffer);
+	_ClearBufferToBlack(fRenderBuffer);
+
 	int ret;
 	if (fAtomicSupported && fPrimaryPlaneId) {
 		if (_AtomicModeset(dev->fb, &dev->mode) != B_OK) {
@@ -988,6 +1012,30 @@ DrmHWInterface::SetMode(const display_mode& mode)
 		if (fCursorLocation.y < 0)
 			fCursorLocation.y = 0;
 		SetCursor(fCursor);
+	}
+
+	// Both scanout buffers were just rebuilt: re-present the whole frame
+	// through rotate_point(), or recycled pages keep the old rotation.
+	{
+		const BRect fullFrame(0, 0,
+			fDisplayMode.virtual_width - 1, fDisplayMode.virtual_height - 1);
+
+		pthread_mutex_lock(&fDirtyMutex);
+		fAccumulatedDirty.MakeEmpty();
+		fPreviousDirty.MakeEmpty();
+		fAccumulatedDirty.Include(fullFrame);
+		fNeedsFlip = fPageFlipEnabled;
+		pthread_mutex_unlock(&fDirtyMutex);
+
+		// Single-buffered has no flip to ride in on: present now, or the
+		// cleared buffers stay on screen until the first damage blit.
+		if (!fPageFlipEnabled && fRenderBuffer != NULL)
+			_BlitRect(fRenderBuffer, fWriteTarget, fullFrame);
+
+		if (fWakeFd >= 0) {
+			uint64_t v = 1;
+			write(fWakeFd, &v, sizeof(v));
+		}
 	}
 
 	_NotifyFrameBufferChanged();
@@ -1801,49 +1849,7 @@ DrmHWInterface::IsDoubleBuffered() const
 }
 
 
-namespace {
-
-// The one place the rotation and reflection direction convention lives.
-// Logical (lx, ly) is a pixel index into a logicalW x logicalH buffer; the
-// result is the corresponding pixel index into the (swapped, for 90/270)
-// physical buffer. Cross-checked against libweston/backend-drm (modes.c's
-// get_panel_orientation() + shared/matrix.c's weston_matrix_init_transform()):
-// LEFT_UP is a 90 degree CCW content rotation, RIGHT_UP a 270 degree CCW
-// (= 90 CW) rotation. If this ships mirrored, flip the two cases below.
-// Reflection is a pre-step in logical space, applied before rotation, with
-// no dimension swap; composition order matches weston_matrix_init_transform's
-// Sc . T3 . R . T2 . S . T1 (flip S runs before rotate R).
-inline void
-rotate_point(PanelOrientation orientation, int32 lx, int32 ly,
-	int32 logicalW, int32 logicalH, int32& px, int32& py,
-	int32 reflection = B_PANEL_REFLECTION_NONE)
-{
-	int32 rx = (reflection & B_PANEL_REFLECTION_X) != 0
-		? logicalW - 1 - lx : lx;
-	int32 ry = (reflection & B_PANEL_REFLECTION_Y) != 0
-		? logicalH - 1 - ly : ly;
-
-	switch (orientation) {
-		case PANEL_ORIENTATION_UPSIDE_DOWN:
-			px = logicalW - 1 - rx;
-			py = logicalH - 1 - ry;
-			break;
-		case PANEL_ORIENTATION_LEFT_UP:
-			px = ry;
-			py = logicalW - 1 - rx;
-			break;
-		case PANEL_ORIENTATION_RIGHT_UP:
-			px = logicalH - 1 - ry;
-			py = rx;
-			break;
-		default:
-			px = rx;
-			py = ry;
-			break;
-	}
-}
-
-}	// namespace
+// The rotation convention lives in PanelOrientationTransform.h.
 
 
 void

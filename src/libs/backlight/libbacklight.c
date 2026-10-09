@@ -43,6 +43,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 
 static long backlight_get(struct backlight *backlight, char *node)
 {
@@ -181,16 +182,21 @@ path_has_component(const char* path, const char* name)
 static int
 raw_parent_matches(const char* backlight_path, const char* pci_name)
 {
-	char walk[512];
-	char linkPath[560];
-	char target[512];
+	char walk[PATH_MAX];
+	char linkPath[PATH_MAX + 16];
+	char target[PATH_MAX];
 	int depth;
 
 	if (backlight_path == NULL || pci_name == NULL || pci_name[0] == '\0')
 		return 0;
 
+	if (strlen(backlight_path) >= sizeof(walk))
+		return 0;
+
 	snprintf(walk, sizeof(walk), "%s", backlight_path);
 	for (depth = 0; depth < 6; depth++) {
+		char *source = NULL;
+		char *resolved;
 		ssize_t ret;
 
 		snprintf(linkPath, sizeof(linkPath), "%s/device", walk);
@@ -206,13 +212,31 @@ raw_parent_matches(const char* backlight_path, const char* pci_name)
 			return 1;
 
 		if (target[0] == '/') {
-			snprintf(walk, sizeof(walk), "%s", target);
-		} else {
-			char resolved[512];
-			if (realpath(target, resolved) == NULL)
+			// Absolute link target: walk it directly.
+			if (strlen(target) >= sizeof(walk))
 				break;
-			snprintf(walk, sizeof(walk), "%s", resolved);
+			snprintf(walk, sizeof(walk), "%s", target);
+			continue;
 		}
+
+		// Relative to the link's own directory. Use the allocating NULL form:
+		// fortified glibc realpath() aborts on buffers below PATH_MAX.
+		if (asprintf(&source, "%s/%s", walk, target) < 0)
+			break;
+		if (strlen(source) >= PATH_MAX) {
+			free(source);
+			break;
+		}
+		resolved = realpath(source, NULL);
+		free(source);
+		if (resolved == NULL)
+			break;
+		if (strlen(resolved) >= sizeof(walk)) {
+			free(resolved);
+			break;
+		}
+		snprintf(walk, sizeof(walk), "%s", resolved);
+		free(resolved);
 	}
 	return 0;
 }
@@ -254,7 +278,7 @@ backlight_init_from_class(const char* class_dir, const char* pci_name,
 		char *parent = NULL;
 		enum backlight_type entry_type;
 		int score;
-		int fd;
+		int fd = -1;
 
 		if (entry->d_name[0] == '.')
 			continue;
@@ -271,8 +295,9 @@ backlight_init_from_class(const char* class_dir, const char* pci_name,
 		if (fd < 0)
 			goto out;
 
-		ret = read (fd, &buffer, sizeof(buffer));
-		close (fd);
+		ret = read(fd, buffer, sizeof(buffer) - 1);
+		close(fd);
+		fd = -1;
 
 		if (ret < 1)
 			goto out;
@@ -337,6 +362,8 @@ backlight_init_from_class(const char* class_dir, const char* pci_name,
 		chosen_path = strdup(backlight_path);
 
 	out:
+		if (fd >= 0)
+			close(fd);
 		free(backlight_path);
 		free(path);
 		path = NULL;

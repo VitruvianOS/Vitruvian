@@ -13,19 +13,15 @@ ImageInclude("/system/servers" vos-polkit-agent)
 set(SYSTEM_APPS
 	AboutSystem
 	ActivityMonitor
-	AudioMixer
-	BluetoothStatus
 	DeskCalc
 	DiskProbe
 	DiskUsage
 	DriveSetup
 	Expander
-	FirstBootPrompt
 	GLTeapot
 	Installer
 	LaunchBox
 	Magnify
-	NetworkStatus
 	PackageManager
 	People
 	ResEdit
@@ -37,6 +33,12 @@ set(SYSTEM_APPS
 	Workspaces
 )
 ImageInclude("/system/apps" ${SYSTEM_APPS})
+
+# Installed but not in the Deskbar menu: started by the system, not users.
+set(SYSTEM_APPS_UNLISTED
+	FirstBootPrompt
+)
+ImageInclude("/system/apps" ${SYSTEM_APPS_UNLISTED})
 
 install(CODE "
 	file(MAKE_DIRECTORY \"\$ENV{DESTDIR}/system/data/deskbar/menu/Applications\")
@@ -80,8 +82,11 @@ foreach(app ${DESKBAR_DEMOS})
 endforeach()
 
 set(DESKBAR_APPLETS
+	AudioMixer
 	#AutoRaise
+	BluetoothStatus
 	Clock
+	NetworkStatus
 	OverlayImage
 	PowerStatus
 	ProcessController

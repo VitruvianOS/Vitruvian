@@ -36,6 +36,7 @@ public:
 			void			SetTime(int32 hour, int32 minute, int32 second);
 			bool			IsChangingTime();
 			void			ChangeTimeFinished();
+			void			SetInteractive(bool interactive);
 
 			void 			GetTime(int32* hour, int32* minute, int32* second);
 			void 			DrawClock();

@@ -47,6 +47,20 @@ static const uint32 kMsgWorkspaceLayoutChanged = 'wslc';
 static const uint32 kMsgWorkspaceColumnsChanged = 'wscc';
 static const uint32 kMsgWorkspaceRowsChanged = 'wsrc';
 
+// Output enable/disable per monitor
+static const uint32 POP_OUTPUT_TOGGLE_MSG = 'potg';
+
+// Color temperature presets
+static const uint32 POP_TEMPERATURE_MSG = 'ptmp';
+
+
+// Profile save/delete
+static const uint32 BUTTON_PROFILE_SAVE_MSG = 'bpsv';
+static const uint32 BUTTON_PROFILE_DELETE_MSG = 'bpdl';
+static const uint32 POP_PROFILE_SELECT_MSG = 'pps';
+static const uint32 BUTTON_PROFILE_NAME_MSG = 'bpnm';
+static const uint32 MSG_PROFILE_REPLACE = 'pprp';
+
 // Constants
 extern const char* kBackgroundsSignature;
 

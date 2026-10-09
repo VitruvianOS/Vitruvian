@@ -28,7 +28,7 @@ ln -sf /lib /system/lib
 ln -sf /tmp /system/cache
 ln -sf /var /system/var
 
-# Per-user Desktop/Home and Desktop/System symlinks are created on first
+# Per-user Desktop/home and Desktop/System symlinks are created on first
 # login by /system/boot/first_login/00-desktop-shortcuts, not here.
 
 mkdir -p /etc/skel/config/settings/deskbar/menu/
@@ -160,7 +160,14 @@ if [ -f /usr/share/vos/apps_attrs.tar ]; then
     rm -rf "$_tmp"
 fi
 
-systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service userbootscript@vos-live.service
+systemctl enable janus.service registrar.service app_server.service input_server.service mount_server.service notification_server.service deskbar.service tracker.service
+# live-boot exists only on the live ISO; enabling it on installed targets would undo the Installer's disable on every upgrade.
+if [ "$(dpkg-query -W -f='${Status}' live-boot 2>/dev/null || true)" = "install ok installed" ]; then
+    systemctl enable userbootscript@vos-live.service
+fi
+# Printing goes straight to cupsd, with no legacy print server on V\OS.
+systemctl enable cups.service 2>/dev/null || true
+systemctl enable vos-pdf-printer.service 2>/dev/null || true
 
 install -m 0644 -D /usr/share/vos/systemd/vos-session.service \
 	/etc/systemd/user/vos-session.service 2>/dev/null || true
@@ -218,7 +225,7 @@ if [ -e /etc/vos/live ]; then
             vos-live || true
         passwd -l vos-live 2>/dev/null || true
     fi
-    for _g in sudo audio video render input plugdev nexus; do
+    for _g in sudo audio video render input plugdev lpadmin nexus; do
         getent group "$_g" >/dev/null \
             && adduser vos-live "$_g" >/dev/null 2>&1 || true
     done

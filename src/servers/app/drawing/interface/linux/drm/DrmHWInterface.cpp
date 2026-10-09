@@ -12,12 +12,23 @@
 #include <algorithm>
 #include <new>
 #include <errno.h>
+#include <fcntl.h>
+#include <math.h>
 #include <libdrm/drm_mode.h>
 #include <poll.h>
+#include <stdlib.h>
 #include <sys/eventfd.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <vector>
+
+#include <systemd/sd-bus.h>
+#include <systemd/sd-login.h>
+
+#include <String.h>
+
+#include <device/DrmDeviceSelect.h>
 
 #if defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h>
@@ -64,10 +75,15 @@ DrmHWInterface::DrmHWInterface()
 	fResizeThread(-1),
 	fResizeBusy(false),
 	fResizePending(false),
+	fLastModeCheck(0),
+	fLastPreferredWidth(0),
+	fLastPreferredHeight(0),
+	fUserSetMode(false),
 	fSessionSem(create_sem(0, "drm session sem")),
 	fUdev(NULL),
 	fUdevMonitor(NULL),
 	fUdevFd(-1),
+	fLastSuspendCheck(0),
 #ifdef HAVE_GBM
 	fGbmDevice(NULL),
 	fUseGbm(false),
@@ -79,6 +95,8 @@ DrmHWInterface::DrmHWInterface()
 	fWakeFd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
 	fDpmsState(B_DPMS_ON),
 	fBacklight(NULL),
+	fTemperature(6500.0f),
+	fTemperatureSupported(true),
 	fAtomicSupported(false),
 	fPrimaryPlaneId(0),
 	fCursorPlaneId(0),
@@ -95,6 +113,14 @@ DrmHWInterface::DrmHWInterface()
 {
 	pthread_mutex_init(&fDirtyMutex, NULL);
 
+	// Safe Mode and other nomodeset boots have no DRM device; janus_session
+	// sets JANUS_FBDEV so we fail at once and app_server falls back to fbdev.
+	if (getenv("JANUS_FBDEV") != NULL) {
+		fprintf(stderr,
+			"DrmHWInterface: JANUS_FBDEV set; skipping DRM for fbdev fallback\n");
+		return;
+	}
+
 	// TODO move away from env vars
 	const char* janusDrmFdStr = getenv("JANUS_DRM_FD");
 	bool janusManaged = (janusDrmFdStr != NULL && janusDrmFdStr[0] != '\0');
@@ -109,6 +135,25 @@ DrmHWInterface::DrmHWInterface()
 			return;
 		}
 	} else {
+		// Without janus we must not block forever: janus already owns the
+		// seat in a session, so our own libseat session never activates.
+		// Firmware-only cards (simpledrm/efidrm) are not a GPU driver.
+		bool haveCard = false;
+		for (int i = 0; i <= 9; i++) {
+			char path[64];
+			snprintf(path, sizeof(path), "/dev/dri/card%d", i);
+			if (access(path, F_OK) == 0 && !drm_card_is_firmware(i)) {
+				haveCard = true;
+				break;
+			}
+		}
+		if (!haveCard) {
+			fprintf(stderr,
+				"DrmHWInterface: no KMS DRM device present; "
+				"failing for fbdev\n");
+			return;
+		}
+
 		fSeat = libseat_open_seat(&seat_listener, this);
 		if (!fSeat) {
 			fprintf(stderr, "Failed to open libseat session\n");
@@ -116,12 +161,15 @@ DrmHWInterface::DrmHWInterface()
 		}
 		printf("libseat opened (standalone), fSeat=%p, seat_fd=%d\n",
 			(void*)fSeat, libseat_get_fd(fSeat));
-		while (!fSessionActive) {
-			int ret = libseat_dispatch(fSeat, -1);
+		// Bound the wait; a seat that never activates must not hang app_server.
+		for (int waited = 0; !fSessionActive && waited < 3000; waited += 100) {
+			int ret = libseat_dispatch(fSeat, 100);
 			if (ret < 0)
 				break;
 		}
 		if (!fSessionActive) {
+			fprintf(stderr,
+				"DrmHWInterface: libseat session did not activate in time\n");
 			libseat_close_seat(fSeat);
 			fSeat = NULL;
 			return;
@@ -183,12 +231,21 @@ DrmHWInterface::_OnSessionEnable()
 		fFd = atoi(janusDrmFdStr);
 		fDeviceId = 0;
 	} else {
-		char path[B_PATH_NAME_LENGTH];
-		for (int i = 0; i <= 9; ++i) {
-			snprintf(path, sizeof(path), "/dev/dri/card%d", i);
-			fDeviceId = libseat_open_device(fSeat, path, &fFd);
-			if (fDeviceId >= 0)
-				break;
+		int deviceId = -1;
+		int fd = -1;
+		int cardIndex = -1;
+		const char* why = NULL;
+		if (!drm_select_seat_device(fSeat, deviceId, fd, cardIndex, why)) {
+			fDeviceId = -1;
+			fFd = -1;
+		} else {
+			char path[B_PATH_NAME_LENGTH];
+			snprintf(path, sizeof(path), "/dev/dri/card%d",
+				cardIndex);
+			fDeviceId = deviceId;
+			fFd = fd;
+			printf("DrmHWInterface: opened DRM device %s fd=%d (%s)\n",
+				path, fFd, why);
 		}
 	}
 
@@ -254,17 +311,25 @@ DrmHWInterface::_OnSessionEnable()
 
 	// Configure crtc
 	for (iter = get_dev(); iter; iter = iter->next) {
+		bool modesetOk = false;
 		if (fAtomicSupported && fPrimaryPlaneId) {
 			status_t r = _AtomicModeset(iter->fb, &iter->mode);
-			if (r != B_OK)
+			modesetOk = (r == B_OK);
+			if (!modesetOk)
 				fprintf(stderr, "atomic modeset failed for connector %u: %m\n",
 					iter->conn);
-		} else {
+		}
+		// Atomic commit failure at boot must not leave the CRTC dark
+		// while app_server keeps drawing into an unsampled buffer.
+		if (!modesetOk) {
 			ret = drmModeSetCrtc(fFd, iter->crtc, iter->fb, 0, 0,
 			                     &iter->conn, 1, &iter->mode);
 			if (ret)
 				fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
 					iter->conn, errno);
+			else if (fAtomicSupported && fPrimaryPlaneId)
+				fprintf(stderr, "fell back to legacy CRTC for connector %u\n",
+					iter->conn);
 		}
 	}
 
@@ -283,6 +348,14 @@ DrmHWInterface::_OnSessionEnable()
 				drmModeConnector* conn = drmModeGetConnector(fFd, dev->conn);
 				if (conn) {
 					fBacklight = backlight_init(udevDev, conn->connector_type);
+					if (fBacklight != NULL) {
+						fprintf(stderr, "DRM: backlight bound to %s "
+							"(type %d, max %d)\n", fBacklight->path,
+							fBacklight->type, fBacklight->max_brightness);
+					} else {
+						fprintf(stderr, "DRM: no backlight device found "
+							"(connector type %u)\n", conn->connector_type);
+					}
 					drmModeFreeConnector(conn);
 				}
 				udev_device_unref(udevDev);
@@ -304,6 +377,9 @@ DrmHWInterface::_OnSessionEnable()
 	_ApplyOrientationSwap(initDev->width, initDev->height, initLogW, initLogH);
 	fDisplayMode.virtual_width = initLogW;
 	fDisplayMode.virtual_height = initLogH;
+	fLastPreferredWidth = initLogW;
+	fLastPreferredHeight = initLogH;
+	fUserSetMode = false;
 
 	fInitialized = true;
 	fSessionActive = true;
@@ -539,6 +615,9 @@ DrmHWInterface::_EventThreadMain()
 			}
 		}
 
+		if (active && _CheckResume())
+			_OnResume();
+
 		if (active && fPageFlipEnabled && !fPageFlipPending
 				&& fBackBuffer != NULL
 				&& fDpmsState == B_DPMS_ON) {
@@ -576,6 +655,27 @@ DrmHWInterface::_EventThreadMain()
 						sReported = true;
 					}
 				}
+			}
+		}
+
+		// QEMU resize may not emit HOTPLUG=1: poll the preferred geometry (no
+		// reprobe), but not while a user-set mode is active or it would undo it.
+		if (active && !fUserSetMode
+				&& system_time() - fLastModeCheck > 2000000LL) {
+			fLastModeCheck = system_time();
+
+			display_mode preferred;
+			if (GetPreferredModeCurrent(&preferred) == B_OK
+				&& (preferred.virtual_width != fLastPreferredWidth.load()
+					|| preferred.virtual_height
+						!= fLastPreferredHeight.load())) {
+				fprintf(stderr, "[drm] preferred mode %ux%u -> %ux%u; "
+					"scheduling resize\n", fLastPreferredWidth.load(),
+					fLastPreferredHeight.load(), preferred.virtual_width,
+					preferred.virtual_height);
+				fLastPreferredWidth = preferred.virtual_width;
+				fLastPreferredHeight = preferred.virtual_height;
+				_ScheduleResize();
 			}
 		}
 	}
@@ -858,6 +958,20 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	fDisplayMode.virtual_width  = logW;
 	fDisplayMode.virtual_height = logH;
 
+	// A mode other than the preferred one is a user choice and disarms the
+	// poll; matching the preference (hotplug, QEMU resize) leaves it armed.
+	{
+		display_mode preferredMode;
+		if (GetPreferredMode(&preferredMode) == B_OK
+			&& preferredMode.virtual_width == logW
+			&& preferredMode.virtual_height == logH)
+			fUserSetMode = false;
+		else
+			fUserSetMode = true;
+		fLastPreferredWidth = logW;
+		fLastPreferredHeight = logH;
+	}
+
 	// A shrink can leave the last cursor position outside the new CRTC;
 	// clamp before re-arming the hardware plane at the old coordinates.
 	// fCursorLocation is logical, so clamp against the logical mode, not
@@ -920,11 +1034,31 @@ DrmHWInterface::GetMode(display_mode* mode)
 status_t
 DrmHWInterface::GetPreferredMode(display_mode* mode)
 {
+	return _GetPreferredMode(mode, true);
+}
+
+
+status_t
+DrmHWInterface::GetPreferredModeCurrent(display_mode* mode)
+{
+	return _GetPreferredMode(mode, false);
+}
+
+
+status_t
+DrmHWInterface::_GetPreferredMode(display_mode* mode, bool probe)
+{
 	CALLED();
 
 	struct modeset_dev* dev = get_dev();
-	drmModeConnector* conn = (dev != NULL && fFd >= 0)
-		? drmModeGetConnector(fFd, dev->conn) : NULL;
+	drmModeConnector* conn = NULL;
+	if (dev != NULL && fFd >= 0) {
+		// drmModeGetConnector() forces a reprobe (DDC/EDID, load
+		// detection). The poll must not do that every two seconds.
+		conn = probe
+			? drmModeGetConnector(fFd, dev->conn)
+			: drmModeGetConnectorCurrent(fFd, dev->conn);
+	}
 	const drmModeModeInfo* picked
 		= conn != NULL ? modeset_pick_mode(fFd, conn) : NULL;
 
@@ -1263,6 +1397,7 @@ DrmHWInterface::SetDPMSMode(uint32 state)
 			fConnProps.dpms, dpms);
 		if (ret == 0) {
 			fDpmsState = state;
+			_RepaintAfterDPMS();
 			return B_OK;
 		}
 		return B_ERROR;
@@ -1279,6 +1414,7 @@ DrmHWInterface::SetDPMSMode(uint32 state)
 			drmModeFreeProperty(prop);
 			drmModeFreeConnector(conn);
 			fDpmsState = state;
+			_RepaintAfterDPMS();
 			return B_OK;
 		}
 		if (prop) drmModeFreeProperty(prop);
@@ -1286,6 +1422,23 @@ DrmHWInterface::SetDPMSMode(uint32 state)
 
 	drmModeFreeConnector(conn);
 	return B_UNSUPPORTED;
+}
+
+
+// Flips stop while the display is off and damage piles up; flip it all
+// as soon as the display is back on.
+void
+DrmHWInterface::_RepaintAfterDPMS()
+{
+	if (fDpmsState != B_DPMS_ON)
+		return;
+	pthread_mutex_lock(&fDirtyMutex);
+	fNeedsFlip = true;
+	pthread_mutex_unlock(&fDirtyMutex);
+	if (fWakeFd >= 0) {
+		uint64_t v = 1;
+		write(fWakeFd, &v, sizeof(v));
+	}
 }
 
 
@@ -1303,13 +1456,60 @@ DrmHWInterface::DPMSCapabilities()
 }
 
 
+// The backlight node is root-only; logind writes it for our session.
+// B_ERROR without a session, so the caller falls back to sysfs.
+static status_t
+_SetBrightnessViaLogind(const struct backlight* backlight, int value)
+{
+	sd_bus* bus = NULL;
+	int r = sd_bus_open_system(&bus);
+	if (r < 0)
+		return B_ERROR;
+
+	char* sid = NULL;
+	r = sd_pid_get_session(0, &sid);
+	if (r < 0 || sid == NULL) {
+		sd_bus_unref(bus);
+		return B_ERROR;
+	}
+
+	char sessionPath[256];
+	snprintf(sessionPath, sizeof(sessionPath),
+		"/org/freedesktop/login1/session/%s", sid);
+	free(sid);
+
+	// sysfs path is /sys/class/backlight/<name>; logind wants just <name>.
+	const char* name = strrchr(backlight->path, '/');
+	name = name != NULL ? name + 1 : backlight->path;
+
+	sd_bus_error err = SD_BUS_ERROR_NULL;
+	r = sd_bus_call_method(bus, "org.freedesktop.login1", sessionPath,
+		"org.freedesktop.login1.Session", "SetBrightness", &err, NULL,
+		"ssu", "backlight", name, (uint32_t)value);
+	sd_bus_error_free(&err);
+	sd_bus_unref(bus);
+	return r >= 0 ? B_OK : B_ERROR;
+}
+
+
 status_t
 DrmHWInterface::SetBrightness(float brightness)
 {
 	if (!fBacklight)
 		return B_UNSUPPORTED;
-	int max = (int)backlight_get_max_brightness(fBacklight);
+	// Prefer the value cached at init; a re-read can fail on write-only nodes.
+	int max = fBacklight->max_brightness;
+	if (max <= 0)
+		max = (int)backlight_get_max_brightness(fBacklight);
+	if (max <= 0)
+		return B_ERROR;
 	int val = (int)(brightness * max + 0.5f);
+	if (val < 0)
+		val = 0;
+	if (val > max)
+		val = max;
+	if (_SetBrightnessViaLogind(fBacklight, val) == B_OK)
+		return B_OK;
 	return backlight_set_brightness(fBacklight, val) == 0 ? B_OK : B_ERROR;
 }
 
@@ -1319,10 +1519,260 @@ DrmHWInterface::GetBrightness(float* brightness)
 {
 	if (!fBacklight || !brightness)
 		return B_UNSUPPORTED;
-	int max = (int)backlight_get_max_brightness(fBacklight);
-	int cur = (int)backlight_get_brightness(fBacklight);
-	*brightness = (max > 0) ? (float)cur / max : 0.0f;
+	int max = fBacklight->max_brightness;
+	if (max <= 0)
+		max = (int)backlight_get_max_brightness(fBacklight);
+	if (max <= 0) {
+		*brightness = 0.0f;
+		return B_ERROR;
+	}
+	// actual_brightness tracks the panel; brightness can read 0 while lit.
+	int cur = (int)backlight_get_actual_brightness(fBacklight);
+	if (cur < 0)
+		cur = (int)backlight_get_brightness(fBacklight);
+	if (cur < 0) {
+		*brightness = 0.0f;
+		return B_OK;
+	}
+	*brightness = (float)cur / max;
 	return B_OK;
+}
+
+
+static void
+_kelvin_to_rgb(float kelvin, float& r, float& g, float& b)
+{
+	// Standard color-temperature-to-RGB approximation (Tanner Helland /
+	// redshift).  Maps a Planckian-locus correlated color temperature in
+	// Kelvin to R, G, B scale in [0..1], valid for 1000..9000 K. Above
+	// ~6500 K blue pins at 1.0 and red/green fall, so the tint is cool.
+	float temp = kelvin / 100.0f;
+
+	// Red
+	if (temp <= 66.0f) {
+		r = 1.0f;
+	} else {
+		r = temp - 60.0f;
+		r = 329.698727446f * powf(r, -0.1332047592f);
+		r /= 255.0f;
+	}
+	r = std::max(0.0f, std::min(1.0f, r));
+
+	// Green
+	if (temp <= 66.0f) {
+		g = temp;
+		g = 99.4708025861f * logf(g) - 161.1195681661f;
+	} else {
+		g = temp - 60.0f;
+		g = 288.1221695283f * powf(g, -0.0755148492f);
+	}
+	g = std::max(0.0f, std::min(1.0f, g / 255.0f));
+
+	// Blue
+	if (temp >= 66.0f) {
+		b = 1.0f;
+	} else if (temp <= 19.0f) {
+		b = 0.0f;
+	} else {
+		b = temp - 10.0f;
+		b = 138.5177312231f * logf(b) - 305.0447927307f;
+		b /= 255.0f;
+	}
+	b = std::max(0.0f, std::min(1.0f, b));
+}
+
+
+// Drivers reject a ramp whose length differs from crtc->gamma_size;
+// virtio-gpu and simpledrm report 0 and have no LUT at all.
+static int
+_drm_gamma_size(int fd, uint32_t crtc_id)
+{
+	drmModeCrtc* crtc = drmModeGetCrtc(fd, crtc_id);
+	if (crtc == NULL)
+		return 0;
+	int size = crtc->gamma_size;
+	drmModeFreeCrtc(crtc);
+	return size;
+}
+
+
+status_t
+DrmHWInterface::SetTemperature(float kelvin)
+{
+	if (fFd < 0)
+		return B_ERROR;
+
+	struct modeset_dev* dev = get_dev();
+	if (!dev)
+		return B_ERROR;
+
+	int size = _drm_gamma_size(fFd, dev->crtc);
+	if (size <= 0) {
+		fTemperatureSupported = false;
+		return B_NOT_SUPPORTED;
+	}
+
+	if (kelvin < 1000.0f)
+		kelvin = 1000.0f;
+	else if (kelvin > 9000.0f)
+		kelvin = 9000.0f;
+
+	float rScale, gScale, bScale;
+	_kelvin_to_rgb(kelvin, rScale, gScale, bScale);
+
+	std::vector<uint16_t> rampR(size), rampG(size), rampB(size);
+	for (int i = 0; i < size; i++) {
+		float t = (size > 1) ? (float)i / (float)(size - 1) : 0.0f;
+		rampR[i] = (uint16_t)(t * 65535.0f * rScale);
+		rampG[i] = (uint16_t)(t * 65535.0f * gScale);
+		rampB[i] = (uint16_t)(t * 65535.0f * bScale);
+	}
+
+	int ret = drmModeCrtcSetGamma(fFd, dev->crtc, size,
+		rampR.data(), rampG.data(), rampB.data());
+	if (ret == 0) {
+		fTemperature = kelvin;
+		fTemperatureSupported = true;
+		return B_OK;
+	}
+	fTemperatureSupported = false;
+	return B_ERROR;
+}
+
+
+status_t
+DrmHWInterface::GetTemperature(float* kelvin)
+{
+	if (!kelvin)
+		return B_BAD_VALUE;
+
+	struct modeset_dev* dev = get_dev();
+	if (dev == NULL || fFd < 0)
+		return B_NOT_SUPPORTED;
+
+	if (!fTemperatureSupported || _drm_gamma_size(fFd, dev->crtc) <= 0)
+		return B_NOT_SUPPORTED;
+
+	*kelvin = fTemperature;
+	return B_OK;
+}
+
+
+status_t
+DrmHWInterface::GetConnectorName(BString& name)
+{
+	struct modeset_dev* dev = get_dev();
+	if (dev == NULL || fFd < 0)
+		return B_NO_INIT;
+
+	// Current: kernel already holds EDID/type; GetConnector would reprobe.
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, dev->conn);
+	if (conn == NULL)
+		return B_ERROR;
+
+	const char* typeName = drmModeGetConnectorTypeName(conn->connector_type);
+	if (typeName == NULL || typeName[0] == '\0') {
+		drmModeFreeConnector(conn);
+		return B_UNSUPPORTED;
+	}
+
+	name.SetToFormat("%s-%u", typeName, conn->connector_type_id);
+	drmModeFreeConnector(conn);
+	return B_OK;
+}
+
+
+// EDID vendor bytes 8-9 encode three 5-bit letters; detailed descriptors
+// start at offset 54.  Only the identity fields matter for the caption.
+static bool
+_drm_edid_identity(const uint8_t* raw, size_t length, monitor_info& info)
+{
+	if (raw == NULL || length < 128)
+		return false;
+	if (raw[0] != 0x00 || raw[7] != 0xff)
+		return false;
+
+	uint16_t mfg = (uint16_t)((raw[8] << 8) | raw[9]);
+	info.vendor[0] = (char)(((mfg >> 10) & 0x1f) + 'A' - 1);
+	info.vendor[1] = (char)(((mfg >> 5) & 0x1f) + 'A' - 1);
+	info.vendor[2] = (char)((mfg & 0x1f) + 'A' - 1);
+	info.vendor[3] = '\0';
+
+	size_t offset = 54;
+	for (int i = 0; i < 4 && offset + 18 <= length; i++, offset += 18) {
+		if (raw[offset] != 0 || raw[offset + 1] != 0
+				|| raw[offset + 2] != 0xfc)
+			continue;
+		char name[14];
+		memcpy(name, raw + offset + 5, 13);
+		name[13] = '\0';
+		for (int c = 0; c < 13; c++) {
+			if (name[c] == '\n' || name[c] == '\r' || name[c] == ' ') {
+				name[c] = '\0';
+				break;
+			}
+		}
+		strlcpy(info.name, name, sizeof(info.name));
+		break;
+	}
+
+	return info.vendor[0] != '\0' || info.name[0] != '\0';
+}
+
+
+status_t
+DrmHWInterface::GetMonitorInfo(monitor_info* info)
+{
+	if (info == NULL)
+		return B_BAD_VALUE;
+
+	struct modeset_dev* dev = get_dev();
+	if (dev == NULL || fFd < 0)
+		return B_NO_INIT;
+
+	// Current: kernel already holds EDID/type; GetConnector would reprobe.
+	drmModeConnector* conn = drmModeGetConnectorCurrent(fFd, dev->conn);
+	if (conn == NULL)
+		return B_ERROR;
+
+	drmModeObjectProperties* props = drmModeObjectGetProperties(fFd,
+		dev->conn, DRM_MODE_OBJECT_CONNECTOR);
+	if (props == NULL) {
+		drmModeFreeConnector(conn);
+		return B_NOT_SUPPORTED;
+	}
+
+	status_t status = B_NOT_SUPPORTED;
+	memset(info, 0, sizeof(*info));
+	info->version = B_ACCELERANT_VERSION;
+
+	for (uint32_t i = 0; i < props->count_props; i++) {
+		drmModePropertyRes* prop = drmModeGetProperty(fFd, props->props[i]);
+		if (prop == NULL)
+			continue;
+
+		if (strcmp(prop->name, "EDID") == 0
+				&& (prop->flags & DRM_MODE_PROP_BLOB)) {
+			drmModePropertyBlobRes* blob
+				= drmModeGetPropertyBlob(fFd, props->prop_values[i]);
+			if (blob != NULL) {
+				if (_drm_edid_identity((const uint8_t*)blob->data,
+						blob->length, *info))
+					status = B_OK;
+				drmModeFreePropertyBlob(blob);
+			}
+		}
+		drmModeFreeProperty(prop);
+	}
+
+	if (conn->mmWidth != 0 || conn->mmHeight != 0) {
+		info->width = (float)conn->mmWidth;
+		info->height = (float)conn->mmHeight;
+	}
+
+	drmModeFreeObjectProperties(props);
+	drmModeFreeConnector(conn);
+	return status;
 }
 
 
@@ -1751,11 +2201,9 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 		return;
 	}
 
-	// A cursor bigger than the BO (large-font UI scaling; the amdgpu
-	// cursor plane itself goes up to 256x256, but our allocation is
-	// fixed at 64x64, see modeset_create_cursor_fb()) cannot be cropped
-	// into the sprite without silently chopping it, so it is declined
-	// the same way an unusable plane is: fall back to software.
+	// A cursor bigger than the BO (large-font UI scaling) cannot be
+	// cropped into the sprite without silently chopping it, so it is
+	// declined the same way an unusable plane is: fall back to software.
 	const int32 cw = (int32)cursor->Bounds().IntegerWidth() + 1;
 	const int32 ch = (int32)cursor->Bounds().IntegerHeight() + 1;
 	const bool oversized = cw > (int32)dev->cursor_w
@@ -1808,7 +2256,7 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 	}
 	const uint8* src = (const uint8*)cursor->Bits();
 	uint8* dst = dev->cursor_map;
-	const uint32 dstStride = dev->cursor_w * 4;
+	const uint32 dstStride = dev->cursor_pitch;
 	for (int32 row = 0; row < ch; row++) {
 		memcpy(dst + row * dstStride, src + row * cursor->BytesPerRow(),
 			cw * 4);
@@ -1950,8 +2398,52 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 void
 DrmHWInterface::_DrawCursor(IntRect area) const
 {
-	if (!fHardwareCursorEnabled)
-		HWInterface::_DrawCursor(area);
+	if (fHardwareCursorEnabled)
+		return;
+
+	// Render-buffer scanout presents via _BlendCursor, which rotates.
+	// The base path writes logical coords into the physical front buffer.
+	if (fRenderBuffer != NULL)
+		return;
+
+	HWInterface::_DrawCursor(area);
+}
+
+
+// x..bottom are logical; the front buffer is physical. When the panel is
+// transformed, writing them straight leaves unrotated patches on screen.
+void
+DrmHWInterface::_CopyToFront(uint8* src, uint32 srcBPR, int32 x, int32 y,
+	int32 right, int32 bottom) const
+{
+	if (fPanelOrientation == PANEL_ORIENTATION_NORMAL
+			&& fPanelReflection == B_PANEL_REFLECTION_NONE) {
+		HWInterface::_CopyToFront(src, srcBPR, x, y, right, bottom);
+		return;
+	}
+
+	RenderingBuffer* frontBuffer = FrontBuffer();
+	if (frontBuffer == NULL || src == NULL)
+		return;
+
+	const int32 logicalW = fDisplayMode.virtual_width;
+	const int32 logicalH = fDisplayMode.virtual_height;
+	const int32 physW = (int32)frontBuffer->Width();
+	const int32 physH = (int32)frontBuffer->Height();
+	uint8* dstBase = (uint8*)frontBuffer->Bits();
+	uint32 dstBPR = frontBuffer->BytesPerRow();
+
+	for (int32 ly = y; ly <= bottom; ly++) {
+		const uint8* s = src + (uint32)(ly - y) * srcBPR;
+		for (int32 lx = x; lx <= right; lx++, s += 4) {
+			int32 px, py;
+			rotate_point(fPanelOrientation, lx, ly, logicalW, logicalH,
+				px, py, fPanelReflection);
+			if (px < 0 || py < 0 || px >= physW || py >= physH)
+				continue;
+			memcpy(dstBase + (uint32)py * dstBPR + (uint32)px * 4, s, 4);
+		}
+	}
 }
 
 
@@ -1983,6 +2475,40 @@ DrmHWInterface::_PushCursorTrackDirty(int32 oldX, int32 oldY,
 }
 
 
+// Rescans every connector and adds/removes modeset_dev entries to match; returns true if the primary
+// connector's mode changed. Shared by hotplug and resume, as a monitor can change while asleep.
+bool
+DrmHWInterface::_RescanConnectors()
+{
+	if (fFd < 0)
+		return false;
+
+	struct modeset_dev* primary = get_dev();
+	uint32_t primaryConn = primary != NULL ? primary->conn : 0;
+	bool resizePrimary = false;
+
+	drmModeRes* res = drmModeGetResources(fFd);
+	if (res) {
+		for (int i = 0; i < res->count_connectors; i++) {
+			drmModeConnector* conn = drmModeGetConnector(fFd,
+				res->connectors[i]);
+			if (conn) {
+				if (conn->connection == DRM_MODE_CONNECTED) {
+					int r = modeset_add_connector(fFd, conn->connector_id);
+					if (r == 1 && conn->connector_id == primaryConn)
+						resizePrimary = true;
+				} else
+					modeset_remove_connector(fFd, conn->connector_id);
+				drmModeFreeConnector(conn);
+			}
+		}
+		drmModeFreeResources(res);
+	}
+
+	return resizePrimary;
+}
+
+
 void
 DrmHWInterface::_HandleHotplug()
 {
@@ -1991,32 +2517,17 @@ DrmHWInterface::_HandleHotplug()
 		return;
 
 	const char* hotplug = udev_device_get_property_value(dev, "HOTPLUG");
-	if (hotplug != NULL && strcmp(hotplug, "1") == 0 && fFd >= 0) {
+	const char* action = udev_device_get_property_value(dev, "ACTION");
+	// QEMU resize and some docks send ACTION=change without HOTPLUG=1;
+	// modeset_add_connector() decides whether anything moved.
+	bool isHotplug = (hotplug != NULL && strcmp(hotplug, "1") == 0)
+		|| (action != NULL && strcmp(action, "change") == 0);
+	if (isHotplug && fFd >= 0) {
 		fprintf(stderr, "DRM hotplug event\n");
 
 		// The uevent carries no CONNECTOR=, so every connector is
 		// rescanned; scope the resize reaction to the one we render to.
-		struct modeset_dev* primary = get_dev();
-		uint32_t primaryConn = primary != NULL ? primary->conn : 0;
-		bool resizePrimary = false;
-
-		drmModeRes* res = drmModeGetResources(fFd);
-		if (res) {
-			for (int i = 0; i < res->count_connectors; i++) {
-				drmModeConnector* conn = drmModeGetConnector(fFd,
-					res->connectors[i]);
-				if (conn) {
-					if (conn->connection == DRM_MODE_CONNECTED) {
-						int r = modeset_add_connector(fFd, conn->connector_id);
-						if (r == 1 && conn->connector_id == primaryConn)
-							resizePrimary = true;
-					} else
-						modeset_remove_connector(fFd, conn->connector_id);
-					drmModeFreeConnector(conn);
-				}
-			}
-			drmModeFreeResources(res);
-		}
+		bool resizePrimary = _RescanConnectors();
 
 		// Not master while inactive (VT-switched away); applying a mode
 		// here would fail or steal master from whoever now owns it.
@@ -2025,6 +2536,80 @@ DrmHWInterface::_HandleHotplug()
 	}
 
 	udev_device_unref(dev);
+}
+
+
+// CLOCK_MONOTONIC stalls across a sleep and CLOCK_BOOTTIME does not, so a widening gap proves
+// a suspend even without a DRM "change" uevent. Cheap enough to check on every event thread wakeup.
+bool
+DrmHWInterface::_CheckResume()
+{
+	struct timespec mono, boot;
+	if (clock_gettime(CLOCK_MONOTONIC, &mono) != 0
+			|| clock_gettime(CLOCK_BOOTTIME, &boot) != 0)
+		return false;
+
+	bigtime_t monoUs = (bigtime_t)mono.tv_sec * 1000000LL
+		+ mono.tv_nsec / 1000;
+	bigtime_t bootUs = (bigtime_t)boot.tv_sec * 1000000LL
+		+ boot.tv_nsec / 1000;
+	bigtime_t gap = bootUs - monoUs;
+
+	bool resumed = fLastSuspendCheck != 0
+		&& (gap - fLastSuspendCheck) > 2000000LL;
+	fLastSuspendCheck = gap;
+	return resumed;
+}
+
+
+// Runs on the DRM event thread after a detected resume or a post-resume hotplug uevent.
+// Conservative: each step only acts if its piece of state looks stale.
+void
+DrmHWInterface::_OnResume()
+{
+	if (fFd < 0 || !fInitialized || !fSessionActive.load())
+		return;
+
+	fprintf(stderr, "[drm] resume detected, reconciling display state\n");
+
+	// Monitors may change while asleep with no guaranteed HOTPLUG uevent, so rescan unconditionally.
+	// A changed mode on a known connector is not picked up (see modeset_add_connector()).
+	bool resizePrimary = _RescanConnectors();
+	if (resizePrimary) {
+		_ScheduleResize();
+		return;
+	}
+
+	// Re-apply the mode only if the CRTC lost it: no mode or no fb means nothing is displayed.
+	struct modeset_dev* dev = get_dev();
+	if (dev != NULL) {
+		drmModeCrtc* crtc = drmModeGetCrtc(fFd, dev->crtc);
+		bool crtcActive = crtc != NULL && crtc->mode_valid
+			&& crtc->buffer_id != 0;
+		if (crtc)
+			drmModeFreeCrtc(crtc);
+		if (!crtcActive)
+			_RestoreDisplay();
+	}
+
+	// The driver resets gamma LUTs on some paths, so re-apply night light if one was active.
+	SetTemperature(fTemperature);
+
+	// Force a full repaint, unless DPMS had the display deliberately off before sleeping.
+	if (fDpmsState == B_DPMS_ON) {
+		LockExclusiveAccess();
+		Invalidate(BRect(0, 0, fDisplayMode.virtual_width - 1,
+				fDisplayMode.virtual_height - 1));
+		UnlockExclusiveAccess();
+
+		pthread_mutex_lock(&fDirtyMutex);
+		fNeedsFlip = true;
+		pthread_mutex_unlock(&fDirtyMutex);
+		if (fWakeFd >= 0) {
+			uint64_t v = 1;
+			write(fWakeFd, &v, sizeof(v));
+		}
+	}
 }
 
 
@@ -2064,8 +2649,11 @@ DrmHWInterface::_ApplyResize()
 
 		// SetMode() itself must stay silent; app-initiated callers already
 		// trigger Desktop's own _ScreenChanged().
-		if (SetMode(mode) == B_OK)
+		if (SetMode(mode) == B_OK) {
+			// External resize is the new baseline; re-arm the poll.
+			fUserSetMode = false;
 			_NotifyScreenChanged();
+		}
 	}
 
 	fResizeBusy.store(false);
@@ -2125,6 +2713,9 @@ DrmHWInterface::_ProbeCursor()
 		fHardwareCursorEnabled = false;
 		return;
 	}
+
+	fprintf(stderr, "DRM: cursor buffer %ux%u pitch %u\n",
+		dev->cursor_w, dev->cursor_h, dev->cursor_pitch);
 
 	// Legacy by default. An atomic cursor commit is a second non-blocking
 	// commit on a CRTC that already has a page flip in flight, which the

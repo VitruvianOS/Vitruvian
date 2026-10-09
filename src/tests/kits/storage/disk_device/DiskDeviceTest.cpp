@@ -244,8 +244,10 @@ printf("TestApp::MessageReceived(%.4s)\n", (char*)&message->what);
 	{
 		printf("TestApp::MediaChanged()\n");
 		PrintDeviceInfo(message);
-		int32 id;
-		if (message->FindInt32("device_id", &id) == B_OK) {
+		uint64 rawID;
+		if (message->FindUInt64("id", &rawID) == B_OK
+				|| message->FindUInt64("partition_id", &rawID) == B_OK) {
+			partition_id id = (partition_id)rawID;
 			for (int32 i = 0; BDiskDevice *device = fDevices.ItemAt(i); i++) {
 				if (device->ID() == id) {
 					bool updated;
@@ -281,17 +283,16 @@ printf("TestApp::MessageReceived(%.4s)\n", (char*)&message->what);
 	// PrintPartitionInfo
 	void PrintPartitionInfo(BMessage *message)
 	{
-		int32 deviceID;
-		int32 sessionID;
-		int32 partitionID;
-		if (message->FindInt32("device_id", &deviceID) == B_OK
-			&& message->FindInt32("session_id", &sessionID) == B_OK
-			&& message->FindInt32("partition_id", &partitionID) == B_OK) {
+		uint64 deviceID;
+		uint64 sessionID;
+		uint64 partitionID;
+		if (message->FindUInt64("id", &deviceID) == B_OK
+			&& message->FindUInt64("partition_id", &partitionID) == B_OK) {
 			BDiskDeviceRoster roster;
 			BDiskDevice device;
 			BPartition *partition;
-			if (roster.GetPartitionWithID(partitionID, &device, &partition)
-				== B_OK) {
+			if (roster.GetPartitionWithID((partition_id)partitionID, &device,
+					&partition) == B_OK) {
 				DumpVisitor().Visit(partition);
 			}
 		}
@@ -300,14 +301,13 @@ printf("TestApp::MessageReceived(%.4s)\n", (char*)&message->what);
 	// PrintSessionInfo
 	void PrintSessionInfo(BMessage *message)
 	{
-		int32 deviceID;
-		int32 sessionID;
-		if (message->FindInt32("device_id", &deviceID) == B_OK
-			&& message->FindInt32("session_id", &sessionID) == B_OK) {
+		uint64 deviceID;
+		uint64 sessionID;
+		if (message->FindUInt64("id", &deviceID) == B_OK) {
 			BDiskDeviceRoster roster;
 			BDiskDevice device;
 			BSession *session;
-			if (roster.GetSessionWithID(sessionID, &device, &session)
+			if (roster.GetSessionWithID((int32)sessionID, &device, &session)
 				== B_OK) {
 				DumpVisitor().Visit(session);
 			}
@@ -317,13 +317,14 @@ printf("TestApp::MessageReceived(%.4s)\n", (char*)&message->what);
 	// PrintDeviceInfo
 	void PrintDeviceInfo(BMessage *message)
 	{
-		int32 deviceID;
-		if (message->FindInt32("device_id", &deviceID) == B_OK) {
-			BDiskDeviceRoster roster;
-			BDiskDevice device;
-			if (roster.GetDeviceWithID(deviceID, &device) == B_OK)
-				DumpVisitor().Visit(&device);
-		}
+		uint64 rawID;
+		if (message->FindUInt64("id", &rawID) != B_OK
+				&& message->FindUInt64("partition_id", &rawID) != B_OK)
+			return;
+		BDiskDeviceRoster roster;
+		BDiskDevice device;
+		if (roster.GetDeviceWithID((partition_id)rawID, &device) == B_OK)
+			DumpVisitor().Visit(&device);
 	}
 
 private:

@@ -26,11 +26,13 @@
 #ifndef REGISTRAR_H
 #define REGISTRAR_H
 
+#include <Messenger.h>
 #include <Server.h>
 
 
 class AuthenticationManager;
 class ClipboardHandler;
+class DisplayResumeGuard;
 class DiskDeviceManager;
 class EventQueue;
 class LogindBridge;
@@ -59,9 +61,20 @@ public:
 private:
 	void _MessageReceived(BMessage *message);
 	void _HandleShutDown(BMessage *message);
+	status_t _CreateShutdownProcess(BMessage *request);
 	void _HandleIsShutDownInProgress(BMessage *message);
+	void _HandleRequestSleep(BMessage *message);
+	void _HandleIsSleepAvailable(BMessage *message);
 	void _HandleLogindPrepareForShutdown(BMessage *message);
 	void _HandleLogindPrepareForSleep(BMessage *message);
+	void _HandleSleepTimer(BMessage *message);
+	void _NotifySleep(bigtime_t deadline);
+	void _ShowSleepWindow(bool hibernate);
+	void _ShowSleepFailure(bool hibernate, const char *reason);
+	void _CheckBattery();
+	void _HandleLogindSessionLock(BMessage *message);
+	bool _RequestScreenLockAsync(bool automatic, int32 cycle);
+	void _RequestScreenLockForSleep();
 
 	TRoster					*fRoster;
 	ClipboardHandler		*fClipboardHandler;
@@ -74,6 +87,16 @@ private:
 	AuthenticationManager	*fAuthenticationManager;
 	PackageWatchingManager	*fPackageWatchingManager;
 	LogindBridge			*fLogindBridge;
+	DisplayResumeGuard		*fDisplayGuard;
+
+	BMessenger				fSleepWindow;
+	int32					fSleepCycle;
+	bool					fSleepHibernate;
+	bigtime_t				fSleepClockOffset;
+	bool					fSleepNotified;
+	bool					fSleepRequestHibernate;
+	bigtime_t				fSleepRequestTime;
+	bool					fBatteryActed;
 };
 
 #endif	// REGISTRAR_H

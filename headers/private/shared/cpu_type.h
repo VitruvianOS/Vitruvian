@@ -242,6 +242,62 @@ get_cpuid_model_string(char *name)
 #endif	/* __i386__ || __x86_64__ */
 
 
+/*!	Names an ARM core from its MIDR value (see read_cpu_signature() in
+	libroot): implementer[31:24], part number[15:4].
+*/
+static const char*
+get_arm_model_string(uint32 midr)
+{
+	uint32 implementer = midr >> 24;
+	uint32 part = (midr >> 4) & 0xfff;
+
+	if (implementer == 0x41) {
+		switch (part) {
+			case 0xb76: return "ARM1176";
+			case 0xc05: return "ARM Cortex-A5";
+			case 0xc07: return "ARM Cortex-A7";
+			case 0xc08: return "ARM Cortex-A8";
+			case 0xc09: return "ARM Cortex-A9";
+			case 0xc0d: return "ARM Cortex-A12";
+			case 0xc0e: return "ARM Cortex-A17";
+			case 0xc0f: return "ARM Cortex-A15";
+			case 0xd03: return "ARM Cortex-A53";
+			case 0xd04: return "ARM Cortex-A35";
+			case 0xd05: return "ARM Cortex-A55";
+			case 0xd07: return "ARM Cortex-A57";
+			case 0xd08: return "ARM Cortex-A72";
+			case 0xd09: return "ARM Cortex-A73";
+			case 0xd0a: return "ARM Cortex-A75";
+			case 0xd0b: return "ARM Cortex-A76";
+			case 0xd0c: return "ARM Neoverse-N1";
+			case 0xd0d: return "ARM Cortex-A77";
+			case 0xd40: return "ARM Neoverse-V1";
+			case 0xd41: return "ARM Cortex-A78";
+			case 0xd44: return "ARM Cortex-X1";
+			case 0xd46: return "ARM Cortex-A510";
+			case 0xd47: return "ARM Cortex-A710";
+			case 0xd48: return "ARM Cortex-X2";
+			case 0xd49: return "ARM Neoverse-N2";
+			case 0xd4d: return "ARM Cortex-A715";
+			case 0xd4e: return "ARM Cortex-X3";
+			case 0xd80: return "ARM Cortex-A520";
+			case 0xd81: return "ARM Cortex-A720";
+			case 0xd82: return "ARM Cortex-X4";
+		}
+		return "ARM";
+	}
+	if (implementer == 0x51)
+		return "Qualcomm";
+	if (implementer == 0x61)
+		return "Apple";
+	if (implementer == 0x48)
+		return "HiSilicon";
+	if (implementer == 0x4e)
+		return "NVIDIA";
+	return NULL;
+}
+
+
 static const char*
 get_cpu_model_string(enum cpu_platform platform, enum cpu_vendor cpuVendor,
 	uint32 cpuModel)
@@ -469,6 +525,9 @@ get_cpu_model_string(enum cpu_platform platform, enum cpu_vendor cpuVendor,
 	}
 
 #endif
+
+	if (platform == B_CPU_ARM || platform == B_CPU_ARM_64)
+		return get_arm_model_string(cpuModel);
 
 	return NULL;
 }

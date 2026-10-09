@@ -21,5 +21,7 @@
 #define B_SAFEMODE_4_GB_MEMORY_LIMIT		"4gb_memory_limit"
 #define B_SAFEMODE_256_TB_MEMORY_LIMIT		"256tb_memory_limit"
 
+#define B_SAFEMODE_RECOVERY			"recovery"
+
 
 #endif	/* _SYSTEM_SAFEMODE_DEFS_H */

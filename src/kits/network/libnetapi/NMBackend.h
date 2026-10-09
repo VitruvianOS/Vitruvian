@@ -34,6 +34,13 @@ static const char* const kNMFieldManaged = "managed";
 static const char* const kNMFieldGateway = "gateway";
 static const char* const kNMFieldDNS = "dns";
 
+// Live runtime addresses from NMIPConfig (D-Bus AddressData), nested as
+// "address_%d" BMessages under each device-info snapshot.
+static const char* const kNMFieldAddressCount = "address_count";
+static const char* const kNMFieldAddressFamily = "family";
+static const char* const kNMFieldAddressString = "address";
+static const char* const kNMFieldAddressPrefix = "prefix";
+
 static const char* const kNMFieldIP4Method = "ip4_method";
 static const char* const kNMFieldIP4Address = "ip4_address";
 static const char* const kNMFieldIP4Netmask = "ip4_netmask";
@@ -53,6 +60,14 @@ static const char* const kNMFieldVPNCount = "vpn_count";
 static const char* const kNMFieldVPNName = "name";
 static const char* const kNMFieldVPNPath = "path";
 static const char* const kNMFieldVPNConnected = "connected";
+static const char* const kNMFieldVPNActivating = "activating";
+static const char* const kNMFieldVPNType = "type";
+static const char* const kNMFieldVPNServer = "server";
+static const char* const kNMFieldVPNUser = "user";
+static const char* const kNMFieldVPNAutoconnect = "autoconnect";
+// While connected: one string per address ("10.8.0.2/24") and DNS server.
+static const char* const kNMFieldVPNAddress = "address";
+static const char* const kNMFieldVPNDNS = "dns";
 
 static const char* const kNMFieldSavedCount = "saved_count";
 static const char* const kNMFieldSavedSSID = "ssid";
@@ -64,6 +79,38 @@ static const char* const kNMFieldProfileCount = "profile_count";
 static const char* const kNMFieldProfileID = "id";
 static const char* const kNMFieldProfilePath = "path";
 static const char* const kNMFieldProfileActive = "active";
+
+// NMDeviceWifiCapabilities: whether AP mode is possible.
+static const char* const kNMFieldWiFiCaps = "wifi_caps";
+
+// Per-device snapshot: active AP strength in percent; the Deskbar tray reads it.
+static const char* const kNMFieldDeviceSignalStrength = "signal_strength";
+
+// Hotspot (WiFi AP mode) reply fields.
+static const char* const kNMFieldHotspotActive = "hotspot_active";
+static const char* const kNMFieldHotspotUUID = "hotspot_uuid";
+static const char* const kNMFieldHotspotSSID = "hotspot_ssid";
+static const char* const kNMFieldHotspotPassword = "hotspot_password";
+static const char* const kNMFieldHotspotConnectionPath
+	= "hotspot_connection_path";
+static const char* const kNMFieldHotspotWillDisconnect
+	= "hotspot_will_disconnect";
+static const char* const kNMFieldHotspotCanStart = "hotspot_can_start";
+
+// Modem device snapshot extras: NM reports GSM/CDMA support as capability
+// bits; the preflet needs a boolean, not the raw mask.
+static const char* const kNMFieldModemCaps = "modem_caps";
+static const char* const kNMFieldModemIsGSM = "modem_is_gsm";
+static const char* const kNMFieldModemIsCDMA = "modem_is_cdma";
+
+// Mobile broadband connection profile fields (NMSettingGsm / NMSettingCdma).
+static const char* const kNMFieldMobileName = "mobile_name";
+static const char* const kNMFieldMobileAPN = "mobile_apn";
+static const char* const kNMFieldMobileUser = "mobile_user";
+static const char* const kNMFieldMobilePassword = "mobile_password";
+static const char* const kNMFieldMobileNumber = "mobile_number";
+static const char* const kNMFieldMobileConnected = "mobile_connected";
+static const char* const kNMFieldMobileHasProfile = "mobile_has_profile";
 
 typedef unsigned int guint;
 typedef unsigned long gulong;
@@ -96,7 +143,7 @@ public:
 	bool IsWirelessEnabled();
 
 	// Queues func(cookie, &reply) onto this backend's GMainContext dispatch
-	// thread and returns IMMEDIATELY -- never blocks the caller. func must
+	// thread and returns immediately; never blocks the caller. func must
 	// free `cookie` itself before returning (own it start to finish). Once
 	// func returns, a BMessage with `what` = replyWhat carrying whatever func
 	// wrote into it is posted to replyTo. There is no completion primitive
@@ -128,6 +175,8 @@ public:
 	// pattern as fDeviceSnapshot) and, as a side effect, fires an
 	// asynchronous rescan request so the next call sees fresher results.
 	status_t ScanWiFiNetworks(const char* devicePath, BMessage* outNetworks);
+	// Same snapshot read, without the rescan side effect.
+	status_t GetWiFiNetworks(const char* devicePath, BMessage* outNetworks);
 	// Fire-and-forget: dispatches the same add-and-activate path as
 	// ConnectToWiFiAsync() but with no reply target, for BNetworkDevice's
 	// synchronous JoinNetwork() contract. Real completion is not observable
@@ -184,15 +233,21 @@ public:
 	// Minimum connect slice: builds an NMConnection
 	// (NMSettingWireless + NMSettingWirelessSecurity when a password/security
 	// is given) and calls nm_client_add_and_activate_connection_async().
-	// Fires immediately and returns; reply carries "status" (status_t) and,
-	// on failure, "reason" (BString, human-readable). remember=true sets the
+	// Fires immediately and returns; the reply arrives once the join is
+	// activated or has failed, carrying "status" (status_t) and, on
+	// failure, "reason" (BString, human-readable). remember=true sets the
 	// connection's autoconnect (the "Remember this network" checkbox).
 	// Full saved-network management (editing/forgetting an existing
 	// profile, static IP, etc) is not implemented -- this only covers the
 	// create-and-join path an agent-driven reconnect or a fresh join need.
+	// security: "none", "wpa" (default), "sae" or "wep". hidden marks a
+	// network that does not broadcast its name; a hidden join never writes
+	// a secret into the profile (key-mgmt only), so NM calls the SecretAgent
+	// exactly as for a scanned network. password is still honored for the
+	// non-hidden callers (ConnectToWiFi(), NetworkStatus).
 	status_t ConnectToWiFiAsync(const char* devicePath, const char* ssid,
 		const char* password, const char* security, bool remember,
-		const BMessenger& replyTo, uint32 replyWhat);
+		const BMessenger& replyTo, uint32 replyWhat, bool hidden = false);
 	
 	// IPv4 configuration write mode -- mirrors NM_SETTING_IP4_CONFIG_METHOD_*
 	// at the public-API boundary so UI code doesn't need libnm headers.
@@ -236,10 +291,57 @@ public:
 	status_t CreateWiredConnectionProfileAsync(const char* devicePath,
 		const char* name, const BMessenger& replyTo, uint32 replyWhat);
 
+	// Mobile broadband (GSM/CDMA) connections; signal, operator and SIM PIN
+	// live in ModemManagerBackend. remember=true saves the profile.
+	// Reply carries "status" and, on failure, "reason".
+	status_t ConnectMobileAsync(const char* devicePath, const char* name,
+		const char* apn, const char* user, const char* password,
+		const char* number, bool remember,
+		const BMessenger& replyTo, uint32 replyWhat);
+
+	// Same device disconnect path as DisconnectDevice(); separate name so
+	// the preflet's mobile pane cannot be confused with a wired/WiFi call.
+	// Reply carries "status" and, on failure, "reason".
+	status_t DisconnectMobileAsync(const char* devicePath,
+		const BMessenger& replyTo, uint32 replyWhat);
+
+	// Reads the device's active or saved GSM/CDMA profile into the
+	// kNMFieldMobile* fields for the preflet form. No profile yields
+	// kNMFieldMobileHasProfile=false. Async; reply carries "status".
+	status_t GetMobileConnectionAsync(const char* devicePath,
+		const BMessenger& replyTo, uint32 replyWhat);
+
+	// Wi-Fi hotspot: one saved WPA2 profile keyed by profileUUID, reused
+	// on every start. Reply carries the kNMFieldHotspot* fields or "reason".
+	status_t StartHotspotAsync(const char* devicePath, const char* profileUUID,
+		const char* ssid, const char* password, const BMessenger& replyTo,
+		uint32 replyWhat);
+
+	// Deactivates the hotspot profile without deleting it. Async; reply
+	// carries "status" and, on failure, "reason".
+	status_t StopHotspotAsync(const char* profileUUID,
+		const BMessenger& replyTo, uint32 replyWhat);
+
+	// Hotspot state for the preflet; the password is filled whenever the
+	// saved profile exists, so the setup dialog can default to it.
+	status_t GetHotspotStateAsync(const char* devicePath,
+		const char* profileUUID, const BMessenger& replyTo, uint32 replyWhat);
+
 	// VPN operations
 	status_t GetVPNConnections(BMessage* outVPNs);
 	status_t ConnectVPN(const char* connectionPath);
 	status_t DisconnectVPN(const char* connectionPath);
+
+	// Saves (does not activate) a profile imported by the VPN plugins or,
+	// failing that, from a WireGuard .conf. Reply: "status"; on success
+	// kNMFieldProfilePath/kNMFieldProfileID, else "reason" and
+	// "supported_formats" (a BMessage of "format" strings).
+	status_t ImportVPNAsync(const char* filePath, const BMessenger& replyTo,
+		uint32 replyWhat);
+
+	// Reply: "status", and "reason" on failure.
+	status_t RemoveVPNAsync(const char* connectionPath,
+		const BMessenger& replyTo, uint32 replyWhat);
 	
 	// Notifications (BMessage protocol)
 	status_t StartWatching(const BMessenger& target, uint32 notificationMask);
@@ -249,19 +351,22 @@ public:
 		NOTIFICATION_DEVICE_ADDED = 'DVAD',
 		NOTIFICATION_DEVICE_REMOVED = 'DVRM',
 		NOTIFICATION_DEVICE_STATE_CHANGED = 'DVSC',
+		NOTIFICATION_DEVICE_IP_CHANGED = 'DIPC',
 		NOTIFICATION_WIFI_NETWORK_FOUND = 'WNFD',
 		NOTIFICATION_CONNECTION_STATUS_CHANGED = 'COSC',
 		NOTIFICATION_SIGNAL_STRENGTH_CHANGED = 'SSCH'
 	};
 
 	// org.freedesktop.NetworkManager.SecretAgent -- registered by the
-	// NetworkStatus replicant only: it owns the WPA/802.1x prompt UI.
+	// NetworkStatus replicant only: it owns the WPA/802.1x/VPN prompt UI.
 	// uiHandler receives SECRET_REQUEST ("request_id", "kind" a
 	// secret_dialog_kind mirrored below, "ssid", "request_new",
-	// "method"/"missing_file" as applicable -- shaped exactly like
-	// SecretDialogWindow's request bag) and SECRET_CANCEL. Both calls run
-	// the D-Bus work on the dispatch thread and return immediately -- safe
-	// from a window thread (AttachedToWindow/DetachedFromWindow).
+	// "method"/"missing_file" as applicable, "connection_name"/
+	// "secret_keys"/"secret_messages" for vpn and wireguard -- shaped
+	// exactly like SecretDialogWindow's request bag) and SECRET_CANCEL.
+	// Both calls run the D-Bus work on the dispatch thread and return
+	// immediately -- safe from a window thread
+	// (AttachedToWindow/DetachedFromWindow).
 	status_t RegisterSecretAgentAsync(const BMessenger& uiHandler,
 		const BMessenger& replyTo, uint32 replyWhat);
 	status_t UnregisterSecretAgentAsync(const BMessenger& replyTo,
@@ -270,12 +375,15 @@ public:
 	// Delivers the user's answer for a still-open GetSecrets request,
 	// completing the held GDBusMethodInvocation. Safe from any thread; a
 	// stale or already-answered/cancelled requestId is a silent no-op.
-	// remember maps to the connection's autoconnect flag.
+	// remember maps to the connection's autoconnect flag (not for VPNs).
+	// secrets, for vpn and wireguard, holds secret_key/secret_value pairs
+	// and replaces password.
 	void CompleteSecretRequest(uint32 requestId, bool accepted,
-		const BString& password, const BString& identity, bool remember);
+		const BString& password, const BString& identity, bool remember,
+		const BMessage* secrets = NULL);
 
 	// Mirrors secret_dialog_kind in
-	// src/apps/networkstatus/SecretDialogWindow.h exactly (0..4, same
+	// src/apps/networkstatus/SecretDialogWindow.h exactly (0..6, same
 	// order) -- kept as a plain int32 here rather than an #include because
 	// kit code must not depend on an app header; only the numeric
 	// convention is shared, carried across in the "kind" BMessage field.
@@ -284,7 +392,9 @@ public:
 		SECRET_KIND_WEP,
 		SECRET_KIND_ENTERPRISE,
 		SECRET_KIND_WIRED_8021X,
-		SECRET_KIND_MISSING_CERTIFICATE
+		SECRET_KIND_MISSING_CERTIFICATE,
+		SECRET_KIND_VPN,
+		SECRET_KIND_WIREGUARD
 	};
 
 	// Mirrors NetworkStatusView's {kMsgAgentRequest,kMsgAgentCancel}-style
@@ -302,7 +412,8 @@ public:
 	status_t _RegisterSecretAgent(const BMessenger& uiHandler);
 	status_t _UnregisterSecretAgent();
 	void _CompleteSecretRequest(uint32 requestId, bool accepted,
-		const BString& password, const BString& identity, bool remember);
+		const BString& password, const BString& identity, bool remember,
+		const BMessage* secrets);
 
 	// Public for the same reason as the SecretAgent helpers above: the
 	// dispatch-job completion callbacks for ConnectDevice/DisconnectDevice/
@@ -375,6 +486,8 @@ private:
 	static void _OnDeviceRemoved(void* client, void* device, void* userData);
 	static void _OnDeviceStateNotify(GObject* device, GParamSpec* pspec,
 		void* userData);
+	static void _OnDeviceIPConfigNotify(GObject* device, GParamSpec* pspec,
+		void* userData);
 	static void _OnActiveConnectionNotify(GObject* client, GParamSpec* pspec,
 		void* userData);
 	static void _OnActiveAPStrengthNotify(GObject* ap, GParamSpec* pspec,
@@ -383,6 +496,7 @@ private:
 	void _HandleDeviceAdded(void* device);
 	void _HandleDeviceRemoved(void* device);
 	void _HandleDeviceStateChanged(void* device);
+	void _HandleDeviceIPConfigChanged(void* device);
 	void _HandleActiveConnectionChanged();
 	void _HandleAPStrengthChanged(void* ap);
 
@@ -390,6 +504,10 @@ private:
 	// first Wi-Fi device's active AP -- and moves the notify::strength
 	// subscription there. Dispatch thread only.
 	void _UpdateActiveAPWatch();
+
+	// Rebuild fWiFiSnapshot from libnm; state and active-connection changes
+	// move the connected flag without an access-point-added signal.
+	void _RefreshWiFiSnapshots();
 
 	// Fans a notification out to every watcher whose mask includes `type`,
 	// pruning dead messengers. Caller must hold fLock -- mirrors
@@ -399,6 +517,9 @@ private:
 	// device D-Bus path -> notify::state handler id, so device-removed can
 	// disconnect exactly the handler device-added attached.
 	std::map<BString, gulong> fDeviceStateHandlers;
+	// Same for notify::ip4-config and notify::ip6-config: IP config can land without a state transition.
+	std::map<BString, gulong> fDeviceIP4Handlers;
+	std::map<BString, gulong> fDeviceIP6Handlers;
 
 	gulong fDeviceAddedHandlerId;
 	gulong fDeviceRemovedHandlerId;

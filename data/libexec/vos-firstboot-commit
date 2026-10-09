@@ -227,9 +227,18 @@ if [ "$sudo_enabled" = "1" ]; then
     fi
 fi
 
-for _g in input video render; do
+# Same file the Administrator preflet helper reads. Without input the
+# mouse does not work after login; do not copy the list here.
+_default_groups_file="$ROOT/usr/share/vos/user-default-groups"
+if [ ! -r "$_default_groups_file" ]; then
+    echo "missing $_default_groups_file" >&2
+    exit 1
+fi
+for _g in $(grep -v '^#' "$_default_groups_file"); do
     if $IN getent group "$_g" >/dev/null 2>&1; then
         $IN usermod -aG "$_g" "$username" || echo "usermod $_g failed" >&2
+    else
+        echo "group $_g missing; skipping" >&2
     fi
 done
 

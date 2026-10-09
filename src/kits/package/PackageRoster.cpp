@@ -124,6 +124,7 @@ VPackageRoster::Worker::_DoGetPackageList(const BMessenger& replyTo,
 
 	BMessage reply(kVMsgPackageListReply);
 	reply.AddInt32("status", B_OK);
+	reply.AddBool("lists_empty", fAdapter.ListsLookEmpty());
 	for (int32 i = 0; i < raw.CountItems() && !fCancelRequested; i++) {
 		const apt_raw_package* item = raw.ItemAt(i);
 		if (upgradableOnly && item->state != V_PACKAGE_STATE_UPGRADABLE)

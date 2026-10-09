@@ -20,6 +20,8 @@
 class BBitmap;
 class BMenu;
 class BMessageRunner;
+class BluetoothSettings;
+class ObexReceiveAgent;
 
 
 enum {
@@ -31,7 +33,6 @@ enum {
 	kMsgDisableAdapter = 'DISB',
 	kMsgOpenBluetoothPreferences = 'obtp',
 	kMsgStatusReady = 'btsr',
-	kMsgScanReady = 'btcr',
 	kMsgOperationDone = 'btod',
 
 	// Single well-defined entry point for pairing dialog results. The real
@@ -122,6 +123,11 @@ private:
 	// name), so an incoming Agent1 request can resolve a friendly name
 	// without a synchronous D-Bus round trip from the dispatch thread.
 	std::map<BString, BString> fDeviceNames;
+
+	// Receive agent hosted here so it survives a login. Settings are
+	// reloaded on every push; the preflet switch only writes them.
+	BluetoothSettings*		fSettings;
+	ObexReceiveAgent*		fReceiveAgent;
 };
 
 

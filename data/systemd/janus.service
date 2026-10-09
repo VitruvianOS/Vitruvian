@@ -3,7 +3,7 @@ Description=Vitruvian Janus - privileged server launcher and launch daemon
 DefaultDependencies=no
 Before=graphical.target shutdown.target
 Conflicts=shutdown.target
-After=systemd-modules-load.service local-fs.target dbus.socket systemd-logind.service
+After=systemd-modules-load.service local-fs.target dbus.socket systemd-logind.service systemd-udev-trigger.service
 Wants=systemd-modules-load.service dbus.socket systemd-logind.service
 
 [Service]

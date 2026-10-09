@@ -84,7 +84,10 @@ BMediaConnection::BMediaConnection(media_connection_kinds kinds, const char* nam
 	fBinding(NULL),
 	fAcceptedTypes(B_MEDIA_ANY_TYPE),
 	fBufferSize(0),
-	fConnected(false)
+	fConnected(false),
+	fStreamFault(false),
+	fStream(NULL),
+	fFilterPort(NULL)
 {
 }
 

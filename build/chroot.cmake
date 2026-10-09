@@ -72,6 +72,12 @@ if(VITRUVIAN_CHROOT_BUILD)
     set(_chroot_rpath_link "${VITRUVIAN_CHROOT_PATH}/usr/lib/${VITRUVIAN_MULTIARCH_TRIPLE}:${VITRUVIAN_CHROOT_PATH}/lib/${VITRUVIAN_MULTIARCH_TRIPLE}:${VITRUVIAN_CHROOT_PATH}/usr/lib")
     add_link_options("-Wl,-rpath-link=${_chroot_rpath_link}")
 
+    # Native builds have no sysroot, so ld resolves the absolute paths in
+    # the chroot's libc.so script to the host glibc. Give ld the chroot.
+    if(NOT CMAKE_CROSSCOMPILING)
+        add_link_options("-Wl,--sysroot=${VITRUVIAN_CHROOT_PATH}")
+    endif()
+
     set(CMAKE_SKIP_RPATH TRUE)
 
     if(NOT KERNEL_RELEASE)

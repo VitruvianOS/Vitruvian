@@ -6,12 +6,15 @@
 #include "BlueZBackend.h"
 
 #include <Autolock.h>
+#include <Entry.h>
 #include <Messenger.h>
+#include <Path.h>
 #include <String.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <gio/gio.h>
 
@@ -59,9 +62,14 @@ BlueZBackend::BlueZBackend()
 	fDispatchThread(-1),
 	fInitThread(-1),
 	fAgentRegistrationId(0),
+	fObexConnection(NULL),
+	fObexAgentRegistrationId(0),
+	fObexSend(NULL),
+	fObexCancelRequested(false),
 	fPropertiesChangedSubscriptionId(0),
 	fInterfacesAddedSubscriptionId(0),
-	fInterfacesRemovedSubscriptionId(0)
+	fInterfacesRemovedSubscriptionId(0),
+	fObexTransferSubscriptionId(0)
 {
 	// Instance() is typically first touched from a window thread (the
 	// replicant's AttachedToWindow(), the preflet's constructor). _InitBlueZ()
@@ -199,17 +207,17 @@ BlueZBackend::_InitBlueZ()
 		this);
 
 	// Subscribes signals (also replays any StartWatching() that queued a
-	// watcher into fWatchers before fBlueZConnection existed -- without this
+	// watcher into fWatchers before fBlueZConnection existed: without this
 	// a replicant that called StartWatching() from AttachedToWindow() got no
 	// subscription, ever) strictly before kicking the initial snapshot fill.
 	// The fill itself is async now (_StartSnapshotQuery) and returns
 	// immediately; any PropertiesChanged/InterfacesAdded/InterfacesRemoved
 	// that arrives while it's in flight is caught by the generation counter
 	// in _HandleSnapshotQueryReply rather than by blocking on fLock.
-	{
-		BAutolock lock(fLock);
-		_SubscribeSignalsLocked();
-	}
+	// Subscribe on the dispatch context: GDBus runs signal callbacks in
+	// the subscriber's thread-default context, which nothing iterates here.
+	g_main_context_invoke((GMainContext*)fMainContext, _SubscribeSignalsSource,
+		this);
 	_StartSnapshotQuery();
 
 	return true;
@@ -220,6 +228,16 @@ gboolean
 BlueZBackend::_SetupBluezWatchSource(gpointer cookie)
 {
 	((BlueZBackend*)cookie)->_SetupBluezWatch();
+	return G_SOURCE_REMOVE;
+}
+
+
+gboolean
+BlueZBackend::_SubscribeSignalsSource(gpointer cookie)
+{
+	BlueZBackend* backend = (BlueZBackend*)cookie;
+	BAutolock lock(backend->fLock);
+	backend->_SubscribeSignalsLocked();
 	return G_SOURCE_REMOVE;
 }
 
@@ -288,6 +306,8 @@ BlueZBackend::_CleanupBlueZ()
 	// Best-effort: leaving a stale Agent1 registration on the bus after this
 	// process exits would make BlueZ keep trying to call a dead endpoint.
 	_UnregisterAgent();
+	_UnregisterObexAgent();
+	ObexCancelSend();
 
 	// g_bus_unwatch_name() is safe from any thread and guarantees neither
 	// callback fires again once it returns.
@@ -328,6 +348,16 @@ BlueZBackend::_CleanupBlueZ()
 	if (fBlueZConnection != NULL) {
 		g_object_unref(fBlueZConnection);
 		fBlueZConnection = NULL;
+	}
+	if (fObexConnection != NULL) {
+		if (fObexTransferSubscriptionId != 0) {
+			g_dbus_connection_signal_unsubscribe(
+				(GDBusConnection*)fObexConnection,
+				fObexTransferSubscriptionId);
+			fObexTransferSubscriptionId = 0;
+		}
+		g_object_unref(fObexConnection);
+		fObexConnection = NULL;
 	}
 
 	// Cleanup main loop and context
@@ -764,10 +794,12 @@ BlueZBackend::_HandleSnapshotQueryReply(GVariant* reply, GError* error,
 
 	// Generation matched (nothing raced this query), or the retry budget
 	// above is spent and the tree is churning too fast to ever see a quiet
-	// window -- accept this snapshot either way. In the retry-exhausted
+	// window: accept this snapshot either way. In the retry-exhausted
 	// case any single object this reply missed or resurrected relative to
 	// the racing signal is corrected by the very next signal that touches
 	// it, same as any other snapshot entry.
+	bool firstFill = !fSnapshotPopulated || !fDaemonHealthy;
+
 	fAdapterSnapshot.swap(adapters);
 	fDeviceSnapshot.swap(devices);
 	fSnapshotPopulated = true;
@@ -775,6 +807,18 @@ BlueZBackend::_HandleSnapshotQueryReply(GVariant* reply, GError* error,
 	fCurrentBackoffUs = 0;
 	fBackoffUntil = 0;
 	delete cookie;
+
+	// Adapters present before startup never emit InterfacesAdded; announce
+	// what the first fill found so watchers re-fetch.
+	if (firstFill && !fWatchers.empty()) {
+		for (std::map<BString, BMessage>::const_iterator it
+				= fAdapterSnapshot.begin(); it != fAdapterSnapshot.end();
+				++it) {
+			BMessage message(it->second);
+			message.what = NOTIFICATION_ADAPTER_ADDED;
+			_NotifyWatchers(NOTIFICATION_ADAPTER_ADDED, message);
+		}
+	}
 }
 
 
@@ -1394,7 +1438,7 @@ BlueZBackend::_CallAdapterMethod(const char* adapterPath, const char* method)
 
 	BAutolock lock(fLock);
 	if (fSnapshotGeneration != generation)
-		return status;	// a signal raced in and is authoritative -- keep it
+		return status;	// a signal raced in and is authoritative; keep it
 
 	std::map<BString, BMessage>::iterator it =
 		fAdapterSnapshot.find(BString(adapterPath));
@@ -1573,7 +1617,7 @@ BlueZBackend::_CallDeviceMethod(const char* devicePath, const char* method)
 
 	BAutolock lock(fLock);
 	if (fSnapshotGeneration != generation)
-		return status;	// a signal raced in and is authoritative -- keep it
+		return status;	// a signal raced in and is authoritative; keep it
 
 	std::map<BString, BMessage>::iterator it =
 		fDeviceSnapshot.find(BString(devicePath));
@@ -1913,12 +1957,8 @@ BlueZBackend::GetStatusAsync(const BMessenger& replyTo, uint32 replyWhat)
 }
 
 
-// Caller must hold fLock. Subscribes the three org.bluez signals
-// unconditionally once the connection exists (not gated on fWatchers --
-// the snapshot cache needs them live regardless of whether any UI is
-// watching) and each isn't already subscribed. Called from _InitBlueZ()
-// once the connection comes up, and again from StartWatching() as a
-// harmless no-op safety net for callers that could theoretically race it.
+// Caller holds fLock on the dispatch thread. Subscribes the org.bluez
+// signals once, whether or not anyone watches: the cache needs them.
 void
 BlueZBackend::_SubscribeSignalsLocked()
 {
@@ -1956,11 +1996,11 @@ BlueZBackend::StartWatching(const BMessenger& target, uint32 notificationMask)
 {
 	BAutolock lock(fLock);
 
-	// Recorded regardless of whether fBlueZConnection exists yet -- a
+	// Recorded regardless of whether fBlueZConnection exists yet: a
 	// caller racing bluez_init (typically AttachedToWindow()) used to get
 	// an immediate, permanent B_ERROR here and never subscribe at all.
-	// _SubscribeSignalsLocked() below is a no-op until the connection is
-	// up; _InitBlueZ()'s replay call picks this watcher up once it is.
+	// The subscription below is skipped until the connection is up;
+	// _InitBlueZ()'s own subscription picks this watcher up once it is.
 	bool found = false;
 	for (size_t i = 0; i < fWatchers.size(); i++) {
 		if (fWatchers[i].messenger == target) {
@@ -1976,7 +2016,12 @@ BlueZBackend::StartWatching(const BMessenger& target, uint32 notificationMask)
 		fWatchers.push_back(watcher);
 	}
 
-	_SubscribeSignalsLocked();
+	// Never subscribe from this (window) thread: see _InitBlueZ().
+	if (fBlueZConnection != NULL && fMainContext != NULL
+			&& fPropertiesChangedSubscriptionId == 0) {
+		g_main_context_invoke((GMainContext*)fMainContext,
+			_SubscribeSignalsSource, this);
+	}
 
 	return B_OK;
 }
@@ -2211,7 +2256,7 @@ BlueZBackend::_CompleteAgentRequest(uint32 requestId, bool accepted,
 {
 	void* cookie = fAgentRouter.Take(requestId);
 	if (cookie == NULL)
-		return;	// already answered, cancelled, or stale -- idempotent
+		return;	// already answered, cancelled, or stale; idempotent
 
 	GDBusMethodInvocation* invocation = (GDBusMethodInvocation*)cookie;
 
@@ -2478,5 +2523,853 @@ BlueZBackend::UnregisterAgentAsync(const BMessenger& replyTo,
 	uint32 replyWhat)
 {
 	return _RunOnDispatchThread(_RunUnregisterAgentAsync, this, replyTo,
+		replyWhat);
+}
+
+
+
+
+// OBEX Object Push: file transfer over the session bus via obexd.
+
+
+static const char* kObexAgentPath = "/org/vitruvian/bluetooth/obex-agent";
+static const char* kObexClientPath = "/org/bluez/obex";
+static const char* kObexManagerInterface = "org.bluez.obex.AgentManager1";
+static const char* kObexClientInterface = "org.bluez.obex.Client1";
+static const char* kObexSessionInterface = "org.bluez.obex.Session1";
+static const char* kObexTransferInterface = "org.bluez.obex.Transfer1";
+
+static const char* kObexAgentIntrospectionXML =
+	"<node>"
+	"  <interface name='org.bluez.obex.Agent1'>"
+	"    <method name='Release'/>"
+	"    <method name='Cancel'/>"
+	"    <method name='Authorize'>"
+	"      <arg type='o' name='session' direction='in'/>"
+	"      <arg type='s' name='source' direction='in'/>"
+	"      <arg type='s' name='destination' direction='in'/>"
+	"      <arg type='s' name='type' direction='in'/>"
+	"    </method>"
+	"    <method name='AuthorizePush'>"
+	"      <arg type='o' name='session' direction='in'/>"
+	"      <arg type='s' name='source' direction='in'/>"
+	"      <arg type='s' name='destination' direction='in'/>"
+	"      <arg type='s' name='type' direction='in'/>"
+	"      <arg type='s' name='name' direction='in'/>"
+	"      <arg type='t' name='size' direction='in'/>"
+	"    </method>"
+	"  </interface>"
+	"</node>";
+
+
+// One outgoing queue: CreateSession once, then SendFile per ref.
+struct BlueZBackend::ObexSendCookie {
+	BlueZBackend* backend;
+	BMessenger uiHandler;
+	BString address;
+	BMessage files;
+	int32 index;
+	int32 count;
+	BString sessionPath;
+	BString transferPath;
+	BString outcome;	// "", "complete", "error", "canceled"
+	BString fileName;
+	bool cancelRequested;
+};
+
+
+void
+BlueZBackend::_ObexTransferPropertiesChangedCallback(
+	GDBusConnection* connection, const char* senderName,
+	const char* objectPath, const char* interfaceName,
+	const char* signalName, GVariant* parameters, void* userData)
+{
+	((BlueZBackend*)userData)->_ObexTransferPropertiesChanged(objectPath,
+		parameters);
+}
+
+
+status_t
+BlueZBackend::_EnsureObexConnection()
+{
+	// Called on the dispatch thread only.
+	if (fObexConnection != NULL)
+		return B_OK;
+
+	GError* error = NULL;
+	BPrivate::GLibSyncTimeout guard(kInitTimeout);
+	fObexConnection = g_bus_get_sync(G_BUS_TYPE_SESSION, guard.Cancellable(),
+		&error);
+	guard.Stop();
+
+	if (fObexConnection == NULL) {
+		// Session apps come from janus_session, not the user manager, so
+		// fall back to the /run/user bus socket.
+		char address[128];
+		const char* runtime = getenv("XDG_RUNTIME_DIR");
+		if (runtime != NULL && runtime[0] != '\0')
+			snprintf(address, sizeof(address), "unix:path=%s/bus", runtime);
+		else
+			snprintf(address, sizeof(address), "unix:path=/run/user/%u/bus",
+				(unsigned)getuid());
+		if (error != NULL) {
+			g_error_free(error);
+			error = NULL;
+		}
+		fObexConnection = g_dbus_connection_new_for_address_sync(address,
+			(GDBusConnectionFlags)(G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT
+				| G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION),
+			NULL, NULL, &error);
+	}
+
+	if (fObexConnection == NULL) {
+		fprintf(stderr, "BlueZBackend: failed to connect to session D-Bus "
+			"for obexd: %s\n", error ? error->message : "unknown error");
+		if (error)
+			g_error_free(error);
+		return B_ERROR;
+	}
+
+	GError* subError = NULL;
+	fObexTransferSubscriptionId = g_dbus_connection_signal_subscribe(
+		(GDBusConnection*)fObexConnection, NULL, kObexTransferInterface,
+		"PropertiesChanged", NULL, NULL, G_DBUS_SIGNAL_FLAGS_NONE,
+		_ObexTransferPropertiesChangedCallback, this, NULL);
+	if (fObexTransferSubscriptionId == 0) {
+		fprintf(stderr, "BlueZBackend: Transfer1 PropertiesChanged subscribe "
+			"failed: %s\n", subError ? subError->message : "unknown");
+		if (subError)
+			g_error_free(subError);
+	}
+
+	return B_OK;
+}
+
+
+void
+BlueZBackend::_CancelPendingObexRequests()
+{
+	std::vector<void*> cookies;
+	fObexAgentRouter.TakeAll(cookies);
+	for (size_t i = 0; i < cookies.size(); i++) {
+		g_dbus_method_invocation_return_dbus_error(
+			(GDBusMethodInvocation*)cookies[i],
+			"org.bluez.obex.Error.Rejected", "Rejected by user");
+	}
+}
+
+
+void
+BlueZBackend::_ObexAgentMethodCall(GDBusConnection* connection,
+	const char* sender, const char* objectPath, const char* interfaceName,
+	const char* methodName, GVariant* parameters,
+	GDBusMethodInvocation* invocation, void* userData)
+{
+	((BlueZBackend*)userData)->_HandleObexAgentMethodCall(methodName,
+		parameters, invocation);
+}
+
+
+void
+BlueZBackend::_HandleObexAgentMethodCall(const char* methodName,
+	GVariant* parameters, GDBusMethodInvocation* invocation)
+{
+	if (strcmp(methodName, "Release") == 0) {
+		_CancelPendingObexRequests();
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		return;
+	}
+
+	if (strcmp(methodName, "Cancel") == 0) {
+		_CancelPendingObexRequests();
+		BMessenger uiHandler = fObexAgentRouter.UIHandler();
+		if (uiHandler.IsValid()) {
+			BMessage cancel((uint32)OBEX_AGENT_CANCEL);
+			uiHandler.SendMessage(&cancel);
+		}
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		return;
+	}
+
+	if (strcmp(methodName, "Authorize") != 0
+			&& strcmp(methodName, "AuthorizePush") != 0) {
+		g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR,
+			G_DBUS_ERROR_UNKNOWN_METHOD, "Unknown obex Agent1 method %s",
+			methodName);
+		return;
+	}
+
+	const char* sessionPath = NULL;
+	const char* source = NULL;
+	const char* destination = NULL;
+	const char* type = NULL;
+	const char* name = NULL;
+	guint64 size = 0;
+
+	if (strcmp(methodName, "Authorize") == 0) {
+		g_variant_get(parameters, "(&o&s&s&s)", &sessionPath, &source,
+			&destination, &type);
+	} else {
+		g_variant_get(parameters, "(&o&s&s&s&st)", &sessionPath, &source,
+			&destination, &type, &name, &size);
+	}
+
+	BMessage request;
+	request.what = OBEX_AGENT_REQUEST;
+	request.AddString("session", sessionPath != NULL ? sessionPath : "");
+	request.AddString("sender", source != NULL ? source : "");
+	request.AddString("destination",
+		destination != NULL ? destination : "");
+	request.AddString("type", type != NULL ? type : "");
+	request.AddString("file_name", name != NULL ? name : "");
+	request.AddUInt64("file_size", (uint64)size);
+
+	// Hold the invocation open and route accept/reject through the registered UI handler.
+	uint32 requestId = 0;
+	status_t status = fObexAgentRouter.BeginRequest(request, invocation,
+		&requestId);
+	if (status != B_OK) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+			"org.bluez.obex.Error.Rejected",
+			"No Bluetooth receive UI is registered");
+	}
+}
+
+
+void
+BlueZBackend::_CompleteObexRequest(uint32 requestId, bool accepted)
+{
+	void* cookie = fObexAgentRouter.Take(requestId);
+	if (cookie == NULL)
+		return;
+
+	GDBusMethodInvocation* invocation = (GDBusMethodInvocation*)cookie;
+
+	if (!accepted) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+			"org.bluez.obex.Error.Rejected", "Rejected by user");
+		return;
+	}
+
+	g_dbus_method_invocation_return_value(invocation, NULL);
+}
+
+
+struct _CompleteObexCookie {
+	BlueZBackend* backend;
+	uint32 requestId;
+	bool accepted;
+};
+
+
+static gboolean
+_RunCompleteObexRequest(gpointer data)
+{
+	_CompleteObexCookie* cookie = (_CompleteObexCookie*)data;
+	cookie->backend->_CompleteObexRequest(cookie->requestId, cookie->accepted);
+	delete cookie;
+	return G_SOURCE_REMOVE;
+}
+
+
+void
+BlueZBackend::CompleteObexRequest(uint32 requestId, bool accepted)
+{
+	if (fMainContext == NULL || requestId == 0)
+		return;
+
+	_CompleteObexCookie* cookie = new _CompleteObexCookie;
+	cookie->backend = this;
+	cookie->requestId = requestId;
+	cookie->accepted = accepted;
+
+	g_main_context_invoke((GMainContext*)fMainContext,
+		_RunCompleteObexRequest, cookie);
+}
+
+
+status_t
+BlueZBackend::_RegisterObexAgent(const BMessenger& uiHandler)
+{
+	status_t status = _EnsureObexConnection();
+	if (status != B_OK)
+		return status;
+
+	{
+		BAutolock lock(fLock);
+		fObexAgentRouter.SetUIHandler(uiHandler);
+		if (fObexAgentRegistrationId != 0)
+			return B_OK;
+	}
+
+	GError* error = NULL;
+	GDBusNodeInfo* nodeInfo = g_dbus_node_info_new_for_xml(
+		kObexAgentIntrospectionXML, &error);
+	if (nodeInfo == NULL) {
+		fprintf(stderr, "BlueZBackend: bad obex Agent1 introspection: %s\n",
+			error ? error->message : "unknown");
+		if (error)
+			g_error_free(error);
+		return B_ERROR;
+	}
+
+	static const GDBusInterfaceVTable obexAgentVtable = {
+		_ObexAgentMethodCall, NULL, NULL
+	};
+
+	guint id = g_dbus_connection_register_object(
+		(GDBusConnection*)fObexConnection, kObexAgentPath,
+		nodeInfo->interfaces[0], &obexAgentVtable, this, NULL, &error);
+	g_dbus_node_info_unref(nodeInfo);
+	if (id == 0) {
+		fprintf(stderr, "BlueZBackend: failed to export obex Agent1: %s\n",
+			error ? error->message : "unknown");
+		if (error)
+			g_error_free(error);
+		return B_ERROR;
+	}
+
+	{
+		BAutolock lock(fLock);
+		if (fObexAgentRegistrationId != 0) {
+			g_dbus_connection_unregister_object(
+				(GDBusConnection*)fObexConnection, id);
+			return B_OK;
+		}
+		fObexAgentRegistrationId = id;
+	}
+
+	GVariant* result = g_dbus_connection_call_sync(
+		(GDBusConnection*)fObexConnection, "org.bluez.obex", kObexClientPath,
+		kObexManagerInterface, "RegisterAgent",
+		g_variant_new("(o)", kObexAgentPath), NULL, G_DBUS_CALL_FLAGS_NONE,
+		kBlueZCallTimeoutMs, NULL, &error);
+	if (result == NULL) {
+		fprintf(stderr, "BlueZBackend: obex AgentManager1.RegisterAgent "
+			"failed: %s\n", error ? error->message : "unknown");
+		if (error)
+			g_error_free(error);
+		BAutolock lock(fLock);
+		g_dbus_connection_unregister_object(
+			(GDBusConnection*)fObexConnection, fObexAgentRegistrationId);
+		fObexAgentRegistrationId = 0;
+		return B_ERROR;
+	}
+	g_variant_unref(result);
+	return B_OK;
+}
+
+
+status_t
+BlueZBackend::_UnregisterObexAgent()
+{
+	_CancelPendingObexRequests();
+
+	guint registrationId;
+	{
+		BAutolock lock(fLock);
+		fObexAgentRouter.SetUIHandler(BMessenger());
+		fObexReceiveSessions.clear();
+		registrationId = fObexAgentRegistrationId;
+		if (registrationId == 0)
+			return B_OK;
+		fObexAgentRegistrationId = 0;
+	}
+
+	if (fObexConnection != NULL) {
+		GError* error = NULL;
+		GVariant* result = g_dbus_connection_call_sync(
+			(GDBusConnection*)fObexConnection, "org.bluez.obex",
+			kObexClientPath, kObexManagerInterface, "UnregisterAgent",
+			g_variant_new("(o)", kObexAgentPath), NULL,
+			G_DBUS_CALL_FLAGS_NONE, kBlueZCallTimeoutMs, NULL, &error);
+		if (result != NULL)
+			g_variant_unref(result);
+		else if (error != NULL)
+			g_error_free(error);
+
+		g_dbus_connection_unregister_object(
+			(GDBusConnection*)fObexConnection, registrationId);
+	}
+
+	return B_OK;
+}
+
+
+struct _ObexAgentRegisterCookie {
+	BlueZBackend* backend;
+	BMessenger uiHandler;
+};
+
+
+static void
+_RunRegisterObexAgentAsync(void* cookie, BMessage* reply)
+{
+	_ObexAgentRegisterCookie* job = (_ObexAgentRegisterCookie*)cookie;
+	status_t status = job->backend->_RegisterObexAgent(job->uiHandler);
+	reply->AddInt32("status", status);
+	delete job;
+}
+
+
+status_t
+BlueZBackend::RegisterObexAgentAsync(const BMessenger& uiHandler,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	_ObexAgentRegisterCookie* job = new _ObexAgentRegisterCookie;
+	job->backend = this;
+	job->uiHandler = uiHandler;
+	return _RunOnDispatchThread(_RunRegisterObexAgentAsync, job, replyTo,
+		replyWhat);
+}
+
+
+static void
+_RunUnregisterObexAgentAsync(void* cookie, BMessage* reply)
+{
+	BlueZBackend* backend = (BlueZBackend*)cookie;
+	status_t status = backend->_UnregisterObexAgent();
+	reply->AddInt32("status", status);
+}
+
+
+status_t
+BlueZBackend::UnregisterObexAgentAsync(const BMessenger& replyTo,
+	uint32 replyWhat)
+{
+	return _RunOnDispatchThread(_RunUnregisterObexAgentAsync, this, replyTo,
+		replyWhat);
+}
+
+
+void
+BlueZBackend::_ObexCancelSendOnDispatch()
+{
+	BAutolock lock(fLock);
+	fObexCancelRequested = true;
+	if (fObexSend != NULL)
+		fObexSend->cancelRequested = true;
+}
+
+
+static gboolean
+_RunObexCancelSend(gpointer cookie)
+{
+	((BlueZBackend*)cookie)->_ObexCancelSendOnDispatch();
+	return G_SOURCE_REMOVE;
+}
+
+
+void
+BlueZBackend::ObexCancelSend()
+{
+	if (fMainContext == NULL)
+		return;
+	g_main_context_invoke((GMainContext*)fMainContext, _RunObexCancelSend,
+		this);
+}
+
+
+static bool
+_ObexTransferPropString(GVariant* props, const char* key, BString& out)
+{
+	GVariant* entry = g_variant_lookup_value(props, key, NULL);
+	if (entry == NULL)
+		return false;
+	const char* s = g_variant_get_string(entry, NULL);
+	if (s != NULL)
+		out = s;
+	g_variant_unref(entry);
+	return true;
+}
+
+
+static bool
+_ObexTransferPropUInt64(GVariant* props, const char* key, uint64& out)
+{
+	GVariant* entry = g_variant_lookup_value(props, key, NULL);
+	if (entry == NULL)
+		return false;
+	out = g_variant_get_uint64(entry);
+	g_variant_unref(entry);
+	return true;
+}
+
+
+void
+BlueZBackend::_ObexTransferPropertiesChanged(const char* objectPath,
+	GVariant* parameters)
+{
+	// parameters: (sa{sv}as)
+	GVariant* props = g_variant_get_child_value(parameters, 1);
+	if (props == NULL)
+		return;
+
+	BString status;
+	_ObexTransferPropString(props, "Status", status);
+
+	BString fileName;
+	_ObexTransferPropString(props, "Name", fileName);
+	if (fileName.IsEmpty())
+		_ObexTransferPropString(props, "Filename", fileName);
+
+	BString filePath;
+	_ObexTransferPropString(props, "Filename", filePath);
+
+	uint64 transferred = 0;
+	uint64 size = 0;
+	_ObexTransferPropUInt64(props, "Transferred", transferred);
+	_ObexTransferPropUInt64(props, "Size", size);
+
+	g_variant_unref(props);
+
+	// Outgoing send queue: match the Transfer1 path we are waiting on.
+	{
+		BAutolock lock(fLock);
+		if (fObexSend != NULL && fObexSend->transferPath == objectPath) {
+			if (status == "complete" || status == "error") {
+				fObexSend->outcome = status;
+				if (!fileName.IsEmpty())
+					fObexSend->fileName = fileName;
+			}
+			BMessenger handler = fObexSend->uiHandler;
+			int32 index = fObexSend->index;
+			int32 count = fObexSend->count;
+			if (handler.IsValid()
+					&& (status == "active" || status == "queued"
+						|| status == "complete" || status == "error")) {
+				BMessage progress((uint32)OBEX_TRANSFER_PROGRESS);
+				progress.AddString("file_name", fileName);
+				progress.AddUInt64("transferred", transferred);
+				progress.AddUInt64("size", size);
+				progress.AddString("status", status);
+				progress.AddInt32("index", index);
+				progress.AddInt32("count", count);
+				handler.SendMessage(&progress);
+			}
+			return;
+		}
+	}
+
+	// Incoming receive completion. Only report when this process holds an
+	// authorized receive session (i.e. the user accepted a push).
+	if (status == "complete") {
+		bool authorized = false;
+		{
+			BAutolock lock(fLock);
+			authorized = !fObexReceiveSessions.empty();
+		}
+		if (authorized) {
+			_ObexFinishReceive(objectPath, fileName.String(),
+				filePath.String());
+		}
+	}
+}
+
+
+void
+BlueZBackend::_ObexFinishReceive(const char* transferPath, const char* fileName,
+	const char* filePath)
+{
+	BMessenger handler = fObexAgentRouter.UIHandler();
+	if (!handler.IsValid())
+		return;
+
+	BMessage done((uint32)OBEX_RECEIVE_COMPLETE);
+	done.AddString("transfer", transferPath != NULL ? transferPath : "");
+	done.AddString("file_name", fileName != NULL ? fileName : "");
+	done.AddString("file_path", filePath != NULL ? filePath : "");
+	handler.SendMessage(&done);
+}
+
+
+// Poll Transfer1 until it leaves queued/active or the cookie is cancelled.
+void
+BlueZBackend::_ObexWaitTransfer(ObexSendCookie* job)
+{
+	for (int32 spin = 0; spin < 6000; spin++) {	// ~60s at 10ms
+		{
+			BAutolock lock(fLock);
+			if (job->cancelRequested)
+				job->outcome = "canceled";
+			if (!job->outcome.IsEmpty())
+				return;
+		}
+
+		snooze(10000);
+
+		BString path;
+		{
+			BAutolock lock(fLock);
+			path = job->transferPath;
+		}
+		if (path.IsEmpty())
+			return;
+
+		GVariant* props = g_dbus_connection_call_sync(
+			(GDBusConnection*)fObexConnection, "org.bluez.obex",
+			path.String(), "org.freedesktop.DBus.Properties", "Get",
+			g_variant_new("(ss)", kObexTransferInterface, "Status"),
+			G_VARIANT_TYPE("(v)"), G_DBUS_CALL_FLAGS_NONE,
+			kBlueZCallTimeoutMs, NULL, NULL);
+		if (props != NULL) {
+			GVariant* v = g_variant_get_child_value(props, 0);
+			const char* st = v != NULL
+				? g_variant_get_string(v, NULL) : NULL;
+			if (st != NULL && (strcmp(st, "complete") == 0
+					|| strcmp(st, "error") == 0)) {
+				BAutolock lock(fLock);
+				job->outcome = st;
+			}
+			if (v != NULL)
+				g_variant_unref(v);
+			g_variant_unref(props);
+		}
+	}
+}
+
+
+void
+BlueZBackend::_ObexSendFilesJob(ObexSendCookie* job, BMessage* reply)
+{
+	status_t status = _EnsureObexConnection();
+	if (status != B_OK) {
+		reply->AddInt32("status", status);
+		if (job->uiHandler.IsValid()) {
+			BMessage failed((uint32)OBEX_TRANSFER_FAILED);
+			failed.AddString("error", "No session D-Bus connection");
+			job->uiHandler.SendMessage(&failed);
+		}
+		delete job;
+		return;
+	}
+
+	{
+		BAutolock lock(fLock);
+		if (fObexSend != NULL) {
+			reply->AddInt32("status", B_BUSY);
+			delete job;
+			return;
+		}
+		fObexSend = job;
+		fObexCancelRequested = false;
+	}
+
+	// CreateSession; Target=opp is what Object Push profile requires.
+	// A dict without Target= makes obexd pick the wrong (or no) profile.
+	GError* error = NULL;
+	GVariantBuilder options;
+	g_variant_builder_init(&options, G_VARIANT_TYPE("a{sv}"));
+	g_variant_builder_add(&options, "{sv}", "Target",
+		g_variant_new_string("opp"));
+
+	GVariant* result = g_dbus_connection_call_sync(
+		(GDBusConnection*)fObexConnection, "org.bluez.obex",
+		kObexClientPath, kObexClientInterface, "CreateSession",
+		g_variant_new("(sa{sv})", job->address.String(), &options), NULL,
+		G_DBUS_CALL_FLAGS_NONE, kBlueZCallTimeoutMs, NULL, &error);
+	if (result == NULL) {
+		BString msg("CreateSession failed: ");
+		msg << (error != NULL ? error->message : "unknown");
+		if (error)
+			g_error_free(error);
+		{
+			BAutolock lock(fLock);
+			if (fObexSend == job)
+				fObexSend = NULL;
+		}
+		reply->AddInt32("status", B_ERROR);
+		if (job->uiHandler.IsValid()) {
+			BMessage failed((uint32)OBEX_TRANSFER_FAILED);
+			failed.AddString("error", msg);
+			job->uiHandler.SendMessage(&failed);
+		}
+		delete job;
+		return;
+	}
+
+	const char* sessionPath = NULL;
+	g_variant_get(result, "(&o)", &sessionPath);
+	job->sessionPath = sessionPath != NULL ? sessionPath : "";
+	g_variant_unref(result);
+
+	uint32 refType = 0;
+	int32 refCount = 0;
+	job->files.GetInfo("refs", &refType, &refCount);
+	job->count = refCount;
+	if (job->uiHandler.IsValid()) {
+		BMessage started((uint32)OBEX_TRANSFER_STARTED);
+		started.AddString("session", job->sessionPath);
+		started.AddInt32("count", job->count);
+		job->uiHandler.SendMessage(&started);
+	}
+
+	// Keep the session open until the queue drains; RemoveSession only then.
+	status_t queueStatus = B_OK;
+	for (job->index = 0; job->index < job->count; job->index++) {
+		if (job->cancelRequested) {
+			queueStatus = B_CANCELED;
+			break;
+		}
+
+		entry_ref ref;
+		if (job->files.FindRef("refs", job->index, &ref) != B_OK)
+			continue;
+
+		BEntry entry(&ref, true);
+		BPath path;
+		if (entry.GetPath(&path) != B_OK)
+			continue;
+
+		{
+			BAutolock lock(fLock);
+			job->transferPath = "";
+			job->outcome = "";
+			job->fileName = ref.name != NULL ? ref.name : path.Leaf();
+		}
+
+		if (job->uiHandler.IsValid()) {
+			BMessage fileStarted((uint32)OBEX_TRANSFER_STARTED);
+			fileStarted.AddString("file_name", job->fileName);
+			fileStarted.AddString("file_path", path.Path());
+			fileStarted.AddInt32("index", job->index);
+			fileStarted.AddInt32("count", job->count);
+			job->uiHandler.SendMessage(&fileStarted);
+		}
+
+		error = NULL;
+		result = g_dbus_connection_call_sync(
+			(GDBusConnection*)fObexConnection, "org.bluez.obex",
+			job->sessionPath.String(), kObexSessionInterface, "SendFile",
+			g_variant_new("(sa{sv})", path.Path(),
+				g_variant_new_array(G_VARIANT_TYPE("{sv}"), NULL, 0)),
+			NULL, G_DBUS_CALL_FLAGS_NONE, kBlueZCallTimeoutMs, NULL, &error);
+		if (result == NULL) {
+			BString msg("SendFile failed: ");
+			msg << (error != NULL ? error->message : "unknown");
+			if (error)
+				g_error_free(error);
+			{
+				BAutolock lock(fLock);
+				if (fObexSend == job)
+					fObexSend = NULL;
+			}
+			reply->AddInt32("status", B_ERROR);
+			if (job->uiHandler.IsValid()) {
+				BMessage failed((uint32)OBEX_TRANSFER_FAILED);
+				failed.AddString("error", msg);
+				failed.AddString("file_name", job->fileName);
+				job->uiHandler.SendMessage(&failed);
+			}
+			error = NULL;
+			g_dbus_connection_call_sync(
+				(GDBusConnection*)fObexConnection, "org.bluez.obex",
+				job->sessionPath.String(), kObexClientInterface,
+				"RemoveSession", g_variant_new("(o)",
+					job->sessionPath.String()), NULL, G_DBUS_CALL_FLAGS_NONE,
+				kBlueZCallTimeoutMs, NULL, &error);
+			if (error)
+				g_error_free(error);
+			delete job;
+			return;
+		}
+
+		const char* transferPath = NULL;
+		g_variant_get(result, "(&o)", &transferPath);
+		{
+			BAutolock lock(fLock);
+			job->transferPath = transferPath != NULL ? transferPath : "";
+		}
+		g_variant_unref(result);
+
+		_ObexWaitTransfer(job);
+
+		BString outcome;
+		{
+			BAutolock lock(fLock);
+			outcome = job->outcome;
+		}
+
+		if (outcome == "canceled" || job->cancelRequested) {
+			queueStatus = B_CANCELED;
+			break;
+		}
+		if (outcome != "complete") {
+			queueStatus = B_ERROR;
+			if (job->uiHandler.IsValid()) {
+				BMessage failed((uint32)OBEX_TRANSFER_FAILED);
+				failed.AddString("error",
+					"Transfer failed or did not complete");
+				failed.AddString("file_name", job->fileName);
+				job->uiHandler.SendMessage(&failed);
+			}
+			break;
+		}
+
+		if (job->uiHandler.IsValid()) {
+			BMessage complete((uint32)OBEX_TRANSFER_COMPLETE);
+			complete.AddString("file_name", job->fileName);
+			complete.AddString("file_path", path.Path());
+			complete.AddInt32("index", job->index);
+			complete.AddInt32("count", job->count);
+			job->uiHandler.SendMessage(&complete);
+		}
+	}
+
+	// RemoveSession only now; the queue is finished (or cancelled).
+	error = NULL;
+	g_dbus_connection_call_sync(
+		(GDBusConnection*)fObexConnection, "org.bluez.obex",
+		kObexClientPath, kObexClientInterface, "RemoveSession",
+		g_variant_new("(o)", job->sessionPath.String()), NULL,
+		G_DBUS_CALL_FLAGS_NONE, kBlueZCallTimeoutMs, NULL, &error);
+	if (error)
+		g_error_free(error);
+
+	{
+		BAutolock lock(fLock);
+		if (fObexSend == job)
+			fObexSend = NULL;
+		fObexCancelRequested = false;
+	}
+
+	if (job->uiHandler.IsValid()) {
+		BMessage done((uint32)OBEX_QUEUE_COMPLETE);
+		done.AddInt32("status", queueStatus);
+		done.AddInt32("count", job->count);
+		job->uiHandler.SendMessage(&done);
+	}
+	reply->AddInt32("status", queueStatus);
+	delete job;
+}
+
+
+static void
+_RunObexSendFilesAsync(void* cookie, BMessage* reply)
+{
+	BlueZBackend::ObexSendCookie* job =
+		(BlueZBackend::ObexSendCookie*)cookie;
+	job->backend->_ObexSendFilesJob(job, reply);
+}
+
+
+status_t
+BlueZBackend::ObexSendFilesAsync(const char* targetAddress,
+	const BMessage& files, const BMessenger& uiHandler,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (targetAddress == NULL || targetAddress[0] == '\0')
+		return B_BAD_VALUE;
+
+	ObexSendCookie* job = new ObexSendCookie;
+	job->backend = this;
+	job->uiHandler = uiHandler;
+	job->address = targetAddress;
+	job->files = files;
+	job->index = 0;
+	job->count = 0;
+	job->cancelRequested = false;
+
+	return _RunOnDispatchThread(_RunObexSendFilesAsync, job, replyTo,
 		replyWhat);
 }

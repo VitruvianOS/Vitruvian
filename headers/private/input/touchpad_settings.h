@@ -52,8 +52,10 @@ const static touchpad_settings kDefaultTouchpadSettings = {
 	10,
 	20,
 	30,
-	65536,
-	65536,
+	// Pad deltas are scaled to screen pixels first, so defaults sit
+	// below the mouse ones to keep everyday motion controllable.
+	32768,
+	16384,
 	false,
 	true,
 	0x02,

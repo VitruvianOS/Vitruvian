@@ -5,7 +5,7 @@ set -eu
 case "${1:-}" in
     partition)
         case "${2:-}" in
-            size-limits|capabilities) ;;
+            size-limits|capabilities|move-recovery) ;;
             *)
                 echo "vos-drivesetup-query: refused (not a read-only partition subcommand): ${2:-}" >&2
                 exit 1

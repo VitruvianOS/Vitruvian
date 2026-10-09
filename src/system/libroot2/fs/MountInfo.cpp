@@ -31,6 +31,7 @@ static MountSnapshot			sSnapshot;
 static std::atomic<uint64_t>	sGeneration{0};
 static std::atomic<bool>		sDirty{true};
 static std::atomic<bool>		sFallbackWarned{false};
+static uint64_t					sSnapshotGen = (uint64_t)-1;
 
 
 // /proc/self/mountinfo octal escapes: \040 \011 \012 \134
@@ -201,17 +202,16 @@ load_snapshot_locked()
 MountSnapshot
 MountInfo::Snapshot()
 {
-	if (sDirty.load(std::memory_order_acquire)) {
-		std::lock_guard<std::mutex> g(sLock);
-		if (sDirty.load(std::memory_order_relaxed)) {
-			sSnapshot = load_snapshot_locked();
-			sDirty.store(false, std::memory_order_release);
-		}
-		return sSnapshot;
-	}
+	// Invalidate() takes no lock: check the generation too, or a race with
+	// the sDirty store loses it.
 	std::lock_guard<std::mutex> g(sLock);
-	if (!sSnapshot)
+	const uint64_t gen = sGeneration.load(std::memory_order_relaxed);
+	if (sDirty.load(std::memory_order_relaxed) || !sSnapshot
+			|| sSnapshotGen != gen) {
 		sSnapshot = load_snapshot_locked();
+		sSnapshotGen = gen;
+		sDirty.store(false, std::memory_order_relaxed);
+	}
 	return sSnapshot;
 }
 

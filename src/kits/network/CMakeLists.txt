@@ -13,6 +13,7 @@ target_sources(be PRIVATE
 	libnetapi/NetworkInterface.cpp
 	libnetapi/NetworkRoster.cpp
 	libnetapi/NMBackend.cpp
+	libnetapi/ModemManagerBackend.cpp
 	libnetapi/NetworkSettings.cpp
 	libnetapi/notifications.cpp
 	libnetapi/ProxySecureSocket.cpp

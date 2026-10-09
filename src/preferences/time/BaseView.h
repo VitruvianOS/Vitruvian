@@ -21,6 +21,7 @@ public:
 
 	virtual	void			 	Pulse();
 	virtual	void				AttachedToWindow();
+	virtual	void				MessageReceived(BMessage* message);
 
 			void				ChangeTime(BMessage* message);
 

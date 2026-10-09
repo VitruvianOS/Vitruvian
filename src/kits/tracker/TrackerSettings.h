@@ -74,6 +74,8 @@ public:
 	void SetMountVolumesOntoDesktop(bool);
 	bool MountSharedVolumesOntoDesktop();
 	void SetMountSharedVolumesOntoDesktop(bool);
+	bool SnapToGrid();
+	void SetSnapToGrid(bool);
 	bool EjectWhenUnmounting();
 	void SetEjectWhenUnmounting(bool);
 

@@ -48,6 +48,7 @@
 
 
 class BMessage;
+class BMessenger;
 
 class DecorAddOn;
 class DrawingEngine;
@@ -62,6 +63,7 @@ namespace BPrivate {
 };
 
 
+class PowerManager;
 class Desktop : public DesktopObservable, public MessageLooper,
 	public ScreenOwner {
 public:
@@ -135,6 +137,8 @@ public:
 			int32				Rotation(int32 id) const;
 			status_t			SetReflection(int32 id, int32 reflection);
 			int32				Reflection(int32 id) const;
+			status_t			SetTemperature(int32 id, float kelvin);
+			float				Temperature(int32 id) const;
 
 			MultiLocker&		ScreenLocker() { return fScreenLock; }
 
@@ -189,6 +193,15 @@ public:
 			void				HideWindow(Window* window,
 									bool fromMinimize = false);
 			void				MinimizeWindow(Window* window, bool minimize);
+
+	// Screen lock: only the unlock team's windows stay visible. Request*
+	// return at once; kMsgDesktopLockDone ("result") reports completion.
+	static const int32	kMsgDesktopLockDone = 'ldDn';
+			status_t			RequestLockScreen(team_id unlockTeam,
+									BMessenger completion);
+			status_t			RequestUnlockScreen(BMessenger completion);
+			bool				IsScreenLocked() const { return fScreenLocked; }
+			bool				IsUnlockWindow(const Window* window) const;
 
 			void				MoveWindowBy(Window* window, float x, float y,
 									int32 workspace = -1);
@@ -287,6 +300,9 @@ private:
 			void				_DispatchMessage(int32 code,
 									BPrivate::LinkReceiver &link);
 
+			status_t			LockScreen();
+			status_t			UnlockScreen();
+
 			void				_UpdateFloating(int32 previousWorkspace = -1,
 									int32 nextWorkspace = -1,
 									Window* mouseEventWindow = NULL);
@@ -328,6 +344,9 @@ private:
 			void				_ResumeDirectFrameBufferAccess();
 
 			void				_ScreenChanged(Screen* screen);
+			void				_RelayoutWindowsForScreen(Screen* screen,
+									const BRect& oldFrame,
+									const BRect& newFrame);
 			void				_SetCurrentWorkspaceConfiguration();
 			void				_SetWorkspace(int32 index,
 									bool moveFocusWindow = false);
@@ -343,6 +362,7 @@ private:
 								fSettings;
 			port_id				fMessagePort;
 			::EventDispatcher	fEventDispatcher;
+			PowerManager*		fPowerManager;
 			area_id				fSharedReadOnlyArea;
 			server_read_only_memory* fServerReadOnlyMemory;
 
@@ -363,6 +383,12 @@ private:
 			WindowList			fSubsetWindows;
 			WindowList			fFocusList;
 			Window*				fLastWorkspaceFocus[kMaxWorkspaces];
+
+			bool				fScreenLocked;
+			team_id				fUnlockTeam;
+									// janus names the locker; only that team's windows are exempt
+			BList				fLockHiddenWindows;
+									// windows hidden by LockScreen(); dropped in RemoveWindow
 
 			BObjectList<WorkspacesView> fWorkspacesViews;
 			BLocker				fWorkspacesLock;

@@ -1,0 +1,53 @@
+#!/bin/sh
+set -e
+# V\OS: Safe Mode, Recovery and Debug entries, kept here because update-grub replaces grub.cfg.
+# Args match the raw-image entries in build/scripts/lib/image.sh.
+# Debug is gated on vos-sshdebug.service, same as the Installer shim.
+
+. "${pkgdatadir:-/usr/share/grub}/grub-mkconfig_lib"
+
+_root="${GRUB_DEVICE_UUID:-}"
+if [ -z "$_root" ]; then
+    _root="$(findmnt -no UUID / 2>/dev/null || true)"
+fi
+[ -n "$_root" ] || exit 0
+
+_kfile="$(ls -1 /boot/vmlinuz-* /boot/vmlinux-* 2>/dev/null | sort -V | tail -n1)"
+[ -n "$_kfile" ] || exit 0
+_kver="${_kfile##*/}"
+_kver="${_kver#vmlinuz-}"
+_kver="${_kver#vmlinux-}"
+
+_vmlinuz="/boot/vmlinuz-$_kver"
+[ -f "$_vmlinuz" ] || _vmlinuz="/boot/vmlinux-$_kver"
+[ -f "$_vmlinuz" ] || exit 0
+_initrd="/boot/initrd.img-$_kver"
+[ -f "$_initrd" ] || exit 0
+
+_rel_vmlinuz="$(make_system_path_relative_to_its_root "$_vmlinuz")"
+_rel_initrd="$(make_system_path_relative_to_its_root "$_initrd")"
+
+_debug=""
+if [ -f /etc/systemd/system/vos-sshdebug.service ]; then
+    _debug="menuentry \"Vitruvian (SSH Debug)\" {
+    prepare_grub_to_access_device \"${GRUB_DEVICE_BOOT}\"
+    linux $_rel_vmlinuz root=UUID=$_root rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
+    initrd $_rel_initrd
+}"
+fi
+
+cat <<EOF
+menuentry "Vitruvian (Safe Mode)" {
+    prepare_grub_to_access_device "${GRUB_DEVICE_BOOT}"
+    insmod all_video
+    set gfxpayload=1024x768x32,1024x768,800x600,auto
+    linux $_rel_vmlinuz root=UUID=$_root rw nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons
+    initrd $_rel_initrd
+}
+menuentry "Vitruvian (Recovery)" {
+    prepare_grub_to_access_device "${GRUB_DEVICE_BOOT}"
+    linux $_rel_vmlinuz root=UUID=$_root rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.recovery systemd.unit=rescue.target
+    initrd $_rel_initrd
+}
+$_debug
+EOF

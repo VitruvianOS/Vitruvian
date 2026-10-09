@@ -250,6 +250,7 @@ EventDispatcher::EventDispatcher()
 	fNextLatestMouseMoved(NULL),
 	fLastButtons(0),
 	fLastUpdate(system_time()),
+	fDisplayAsleep(0),
 	fDraggingMessage(false),
 	fCursorLock("cursor loop lock"),
 	fHWInterface(NULL),
@@ -797,6 +798,8 @@ EventDispatcher::_EventLoop()
 	while (fStream->GetNextEvent(&event)) {
 		BAutolock _(this);
 		fLastUpdate = system_time();
+		if (atomic_get_and_set(&fDisplayAsleep, 0) != 0 && fHWInterface != NULL)
+			fHWInterface->SetDPMSMode(B_DPMS_ON);
 
 		EventTarget* current = NULL;
 		EventTarget* previous = NULL;

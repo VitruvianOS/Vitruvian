@@ -10,7 +10,8 @@
 #include <String.h>
 #include <Window.h>
 
-#include "BluetoothSettings.h"
+#include <BluetoothPreflet.h>
+#include <BluetoothSettings.h>
 
 
 class BButton;
@@ -38,6 +39,7 @@ private:
 	void _ApplyPropertyChanged(BMessage* message);
 	void _ShowNoAdapterState();
 	void _ShowLoadingState();
+	void _OpenInquiryIfPending();
 
 	void _RebuildDeviceList(BMessage* devicesReply);
 	class DeviceListItem* _SelectedDevice();
@@ -63,6 +65,9 @@ private:
 	void _DoDisconnect();
 	void _DoToggleTrust();
 	void _DoToggleBlock();
+	void _DoSendFiles();
+	void _DoToggleAlwaysAccept();
+	void _ApplyFilesChosen(BMessage* message);
 
 	void _UpdateButtons();
 
@@ -85,12 +90,20 @@ private:
 	BButton* fTrustButton;
 	BButton* fBlockButton;
 	BButton* fRefreshButton;
+	BButton* fSendFilesButton;
+	BCheckBox* fAlwaysAcceptCheckBox;
+
+	// Device the open file panel is gathering refs for (Send Files).
+	BString fPendingSendAddress;
+	BString fPendingSendName;
 
 	BCheckBox* fShowReplicantCheckBox;
 
 	BString fAdapterPath;
 	bool fHasAdapter;
 	bool fAdapterPowered;
+	// Pending kMsgOpenInquiry, 0 if none.
+	bigtime_t fOpenInquiryDeadline;
 
 	// Shared with fSettingsView -- see BluetoothSettingsView.h's constructor
 	// comment for why it isn't a private copy on each side.

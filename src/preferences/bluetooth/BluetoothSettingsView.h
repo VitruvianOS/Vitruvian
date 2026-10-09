@@ -60,6 +60,7 @@ private:
 
 			BSlider*			fInquiryTimeControl;
 			BCheckBox*			fPairableCheckBox;
+			BCheckBox*			fReceiveCheckBox;
 			BStringView*		fDeviceClassView;
 
 			Bluetooth::LocalDevicesList* fAdapters;

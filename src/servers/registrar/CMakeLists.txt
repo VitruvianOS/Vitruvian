@@ -9,6 +9,7 @@ Server(
 	#AuthenticationManager.cpp
 	Clipboard.cpp
 	ClipboardHandler.cpp
+	DisplayResumeGuard.cpp
 	Event.cpp
 	EventMaskWatcher.cpp
 	EventQueue.cpp
@@ -27,6 +28,7 @@ Server(
 	RosterAppInfo.cpp
 	RosterSettingsCharStream.cpp
 	ShutdownProcess.cpp
+	SleepWindow.cpp
 	TRoster.cpp
 	Watcher.cpp
 	WatchingService.cpp

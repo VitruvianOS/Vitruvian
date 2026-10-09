@@ -41,7 +41,6 @@
 #include <xkbcommon/xkbcommon-compose.h>
 #include <AppDefs.h>
 #include <private/app/LaunchDaemonDefs.h>
-#include <private/app/RegistrarDefs.h>
 #include <private/kernel/util/KMessage.h>
 
 
@@ -147,6 +146,7 @@ KeyboardDevice::KeyboardDevice(KeyboardInputDevice* owner, const char* path)
 	fControlKey(0),
 	fKeyboardID(0),
 	fSettingsCommand(0),
+	fSeatCommand(0),
 	fKeymapLock("keymap lock")
 {
 	CALLED();
@@ -193,6 +193,8 @@ KeyboardDevice::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case B_SEAT_ENABLED:
 			_SyncLocksFromLEDs();
+			// Held keys and fSeatModifiers re-seed on the control
+			// thread's EVIOCGKEY idle pass, not here.
 			break;
 
 		case B_INPUT_METHOD_EVENT:
@@ -257,6 +259,10 @@ KeyboardDevice::Stop()
 
 	fActive = false;
 
+	// Release any modifiers this node was holding before tearing xkb down,
+	// so a re-open or unplug cannot leave Shift latched in apps.
+	_WithdrawSeatModifiers();
+
 	if (fEpollFd >= 0) {
 		close(fEpollFd);
 		fEpollFd = -1;
@@ -312,6 +318,13 @@ KeyboardDevice::UpdateSettings(uint32 opcode)
 }
 
 
+void
+KeyboardDevice::HandleSeatMessage(uint32 what)
+{
+	atomic_set(&fSeatCommand, (int32)what);
+}
+
+
 status_t
 KeyboardDevice::GetDescription(BMessage* message) const
 {
@@ -338,6 +351,10 @@ KeyboardDevice::GetDescription(BMessage* message) const
 
 // #pragma mark - control thread
 
+
+// KEY_POWER is below 0x80, where key codes are legacy ones; report it
+// above that range so it cannot collide.
+static const uint32 kPowerKeyCode = KEY_POWER + 0x100;
 
 // evdev -> Haiku key mapping for non-UTF8 keys (xkbcommon provides no UTF8 for nav/function keys)
 // For F-keys and system keys: byte0 = B_FUNCTION_KEY, byte1 = B_FN_KEY constant
@@ -493,19 +510,36 @@ KeyboardDevice::_ControlThread()
 
 	memset(states, 0, sizeof(states));
 
-	const uint32 kHaikuLeftShift  = linux_to_haiku_keycode(KEY_LEFTSHIFT);
-	const uint32 kHaikuRightShift = linux_to_haiku_keycode(KEY_RIGHTSHIFT);
 	// Roles come from keymap, not fixed keys; ctrl-mode swaps them
+
+	// A re-opened node learns held keys on the first idle pass; keep this
+	// the only EVIOCGKEY seeding path (seat enable uses it too).
+	bool forceResyncNow = true;
 
 	while (fActive) {
 		uint32 pending = (uint32)atomic_get_and_set(&fSettingsCommand, 0);
 		if (pending != 0)
 			_UpdateSettings(pending);
 
+		int32 seatCmd = atomic_get_and_set(&fSeatCommand, 0);
+		if (seatCmd == (int32)B_SEAT_DISABLED) {
+			fOwner->fSeatEnabled = false;
+			_ReleaseHeldKeys(states, vtLCtrl, vtRCtrl, vtAlt, vtRalt,
+				menuKeyDown, ctrlAltDelPressed);
+		} else if (seatCmd == (int32)B_SEAT_ENABLED
+			|| seatCmd == (int32)B_SYSTEM_RESUMED) {
+			// Locks resync now; held keys and the seat union re-seed on the
+			// forced idle pass below.
+			fOwner->fSeatEnabled = true;
+			_SyncLocksFromLEDs();
+			forceResyncNow = true;
+		}
+
 		// Drain libevdev queue before epoll wait (prevents lost key-up events)
 		struct epoll_event fired;
 		if (libevdev_has_event_pending(fInputHandle) <= 0
-			&& epoll_wait(fEpollFd, &fired, 1, 100) <= 0) {
+			&& epoll_wait(fEpollFd, &fired, 1, forceResyncNow ? 0 : 100) <= 0) {
+			forceResyncNow = false;
 			// Reconcile shadow state with kernel via EVIOCGKEY (recovers dropped UP events)
 #ifndef EVIOCGKEY
 #define EVIOCGKEY(len) _IOC(_IOC_READ, 'E', 0x18, len)
@@ -535,74 +569,60 @@ KeyboardDevice::_ControlThread()
 				}
 			}
 
-			// Reconcile: release keys shadow thinks are down but hardware reports up
+			// Release keys the hardware reports up, seed ones it reports down.
+			// Seed only while the seat is enabled, or a VT-switch release returns.
+			bool seedHeld = fOwner->fSeatEnabled;
 			bool anyRepaired = false;
 			for (uint32 k = 1; k < 128; k++) {
 				uint32 haiku = linux_to_haiku_keycode(k);
-				if (haiku == 0 || haiku >= 128)
+				bool hwDown = _HWBIT(k) != 0;
+				bool shDown = haiku != 0 && haiku < 128 && _SHBIT(haiku);
+				if (hwDown == shDown)
 					continue;
-				if (!_SHBIT(haiku) || _HWBIT(k))
-					continue;
-				if (!anyRepaired) {
-					fKeymapLock.Lock();
-					anyRepaired = true;
-				}
-				states[haiku >> 3] &= ~(1 << (7 - (haiku & 7)));
-				xkb_state_update_key(fXkbState, k + 8, XKB_KEY_UP);
+				if (shDown && !hwDown) {
+					if (!anyRepaired) {
+						fKeymapLock.Lock();
+						anyRepaired = true;
+					}
+					states[haiku >> 3] &= ~(1 << (7 - (haiku & 7)));
+					xkb_state_update_key(fXkbState, k + 8, XKB_KEY_UP);
 
-				if (k == KEY_LEFTCTRL)       vtLCtrl = false;
-				else if (k == KEY_RIGHTCTRL) vtRCtrl = false;
-				else if (k == KEY_LEFTALT)   vtAlt = false;
-				else if (k == KEY_RIGHTALT)  vtRalt = false;
-				else if (k == KEY_Menu)      menuKeyDown = false;
+					if (k == KEY_LEFTCTRL)       vtLCtrl = false;
+					else if (k == KEY_RIGHTCTRL) vtRCtrl = false;
+					else if (k == KEY_LEFTALT)   vtAlt = false;
+					else if (k == KEY_RIGHTALT)  vtRalt = false;
+					else if (k == KEY_Menu)      menuKeyDown = false;
 
-				BMessage* upMsg = new(std::nothrow) BMessage(B_UNMAPPED_KEY_UP);
-				if (upMsg != NULL) {
-					upMsg->AddInt64("when", system_time());
-					upMsg->AddInt32("key", haiku);
-					upMsg->AddInt32("modifiers", fModifiers);
-					upMsg->AddData("states", B_UINT8_TYPE, states, 16);
-					if (fOwner->EnqueueMessage(upMsg) != B_OK)
-						delete upMsg;
+					BMessage* upMsg = new(std::nothrow) BMessage(B_UNMAPPED_KEY_UP);
+					if (upMsg != NULL) {
+						upMsg->AddInt64("when", system_time());
+						upMsg->AddInt32("key", haiku);
+						upMsg->AddInt32("modifiers", fModifiers);
+						upMsg->AddData("states", B_UINT8_TYPE, states, 16);
+						if (fOwner->EnqueueMessage(upMsg) != B_OK)
+							delete upMsg;
+					}
+				} else if (hwDown && !shDown && haiku != 0 && haiku < 128
+					&& seedHeld) {
+					if (!anyRepaired) {
+						fKeymapLock.Lock();
+						anyRepaired = true;
+					}
+					states[haiku >> 3] |= (1 << (7 - (haiku & 7)));
+					xkb_state_update_key(fXkbState, k + 8, XKB_KEY_DOWN);
 				}
 			}
 
 			if (anyRepaired) {
 				uint32 oldModifiers = fModifiers;
-				uint32 newModifiers = 0;
-#define _KBIT(c) (states[(c) >> 3] & (1 << (7 - ((c) & 7))))
-				if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_SHIFT,
-						XKB_STATE_MODS_EFFECTIVE) > 0) newModifiers |= B_SHIFT_KEY;
-				if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_CAPS,
-						XKB_STATE_MODS_EFFECTIVE) > 0) newModifiers |= B_CAPS_LOCK;
-				if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_NUM,
-						XKB_STATE_MODS_EFFECTIVE) > 0) newModifiers |= B_NUM_LOCK;
-				if (xkb_state_led_name_is_active(fXkbState,
-						XKB_LED_NAME_SCROLL) > 0) newModifiers |= B_SCROLL_LOCK;
-				if (menuKeyDown) newModifiers |= B_MENU_KEY;
-				if (_KBIT(kHaikuLeftShift))  newModifiers |= B_LEFT_SHIFT_KEY;
-				if (_KBIT(kHaikuRightShift))  newModifiers |= B_RIGHT_SHIFT_KEY;
-				const key_map& map = fKeymap.Map();
-				if (_KBIT(map.left_control_key))  newModifiers |= B_LEFT_CONTROL_KEY;
-				if (_KBIT(map.right_control_key))  newModifiers |= B_RIGHT_CONTROL_KEY;
-				if (_KBIT(map.left_command_key))  newModifiers |= B_LEFT_COMMAND_KEY;
-				if (_KBIT(map.right_command_key))  newModifiers |= B_RIGHT_COMMAND_KEY;
-				if (_KBIT(map.left_option_key)) newModifiers |= B_LEFT_OPTION_KEY;
-				if (_KBIT(map.right_option_key)) newModifiers |= B_RIGHT_OPTION_KEY;
-				if (newModifiers & (B_LEFT_CONTROL_KEY | B_RIGHT_CONTROL_KEY))
-					newModifiers |= B_CONTROL_KEY;
-				if (newModifiers & (B_LEFT_COMMAND_KEY | B_RIGHT_COMMAND_KEY))
-					newModifiers |= B_COMMAND_KEY;
-				if (newModifiers & (B_LEFT_OPTION_KEY | B_RIGHT_OPTION_KEY))
-					newModifiers |= B_OPTION_KEY;
-#undef _KBIT
-				fModifiers = newModifiers;
-				if (fModifiers != oldModifiers) {
+				uint32 newModifiers = _ComputeModifiers(states, menuKeyDown);
+				uint32 report = _PublishModifiers(newModifiers);
+				if (report != oldModifiers) {
 					BMessage* m = new(std::nothrow) BMessage(B_MODIFIERS_CHANGED);
 					if (m != NULL) {
 						m->AddInt64("when", system_time());
 						m->AddInt32("be:old_modifiers", oldModifiers);
-						m->AddInt32("modifiers", fModifiers);
+						m->AddInt32("modifiers", report);
 						m->AddData("states", B_UINT8_TYPE, states, 16);
 						if (fOwner->EnqueueMessage(m) != B_OK)
 							delete m;
@@ -696,25 +716,10 @@ KeyboardDevice::_ControlThread()
 			}
 		}
 
-		// Power management: send shutdown/reboot to registrar on release
-		if (!isKeyDown) {
-			bool isShutdown = (ev.code == KEY_POWER);
-			bool isReboot   = (ev.code == KEY_RESTART);
-			if (isShutdown || isReboot) {
-				port_id regPort = find_port(B_REGISTRAR_PORT_NAME);
-				if (regPort >= 0) {
-					BMessage msg(BPrivate::B_REG_SHUT_DOWN);
-					msg.AddBool("reboot", isReboot);
-					msg.AddBool("confirm", false);
-					ssize_t size = msg.FlattenedSize();
-					char* buf = new char[size];
-					if (msg.Flatten(buf, size) == B_OK)
-						write_port(regPort, 0, buf, size);
-					delete[] buf;
-				}
-				continue;
-			}
-		}
+		// Power keys are reported as unmapped keys, never acted on: logind
+		// owns them, which holds only while this device is not grabbed.
+		if ((ev.code == KEY_POWER || ev.code == KEY_RESTART) && ev.value == 2)
+			continue;
 
 		LOG_EVENT("KB_READ: %" B_PRIdBIGTIME ", %02x, %02" B_PRIx32 "\n",
 			keyInfo.timestamp, isKeyDown, keycode);
@@ -794,91 +799,70 @@ KeyboardDevice::_ControlThread()
 		// B_MODIFIERS_CHANGED before processing the actual press below.
 		if (missedKeyUp) {
 			xkb_state_update_key(fXkbState, xkbCode, XKB_KEY_UP);
-			uint32 repairedMods = 0;
-#define _KBIT(c) (states[(c) >> 3] & (1 << (7 - ((c) & 7))))
-			if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_SHIFT,
-					XKB_STATE_MODS_EFFECTIVE) > 0) repairedMods |= B_SHIFT_KEY;
-			if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_CAPS,
-					XKB_STATE_MODS_EFFECTIVE) > 0) repairedMods |= B_CAPS_LOCK;
-			if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_NUM,
-					XKB_STATE_MODS_EFFECTIVE) > 0) repairedMods |= B_NUM_LOCK;
-			if (xkb_state_led_name_is_active(fXkbState,
-					XKB_LED_NAME_SCROLL) > 0) repairedMods |= B_SCROLL_LOCK;
-			if (menuKeyDown) repairedMods |= B_MENU_KEY;
-			if (_KBIT(kHaikuLeftShift))  repairedMods |= B_LEFT_SHIFT_KEY;
-			if (_KBIT(kHaikuRightShift))  repairedMods |= B_RIGHT_SHIFT_KEY;
-			const key_map& map = fKeymap.Map();
-			if (_KBIT(map.left_control_key))  repairedMods |= B_LEFT_CONTROL_KEY;
-			if (_KBIT(map.right_control_key))  repairedMods |= B_RIGHT_CONTROL_KEY;
-			if (_KBIT(map.left_command_key))  repairedMods |= B_LEFT_COMMAND_KEY;
-			if (_KBIT(map.right_command_key))  repairedMods |= B_RIGHT_COMMAND_KEY;
-			if (_KBIT(map.left_option_key)) repairedMods |= B_LEFT_OPTION_KEY;
-			if (_KBIT(map.right_option_key)) repairedMods |= B_RIGHT_OPTION_KEY;
-			if (repairedMods & (B_LEFT_CONTROL_KEY | B_RIGHT_CONTROL_KEY))
-				repairedMods |= B_CONTROL_KEY;
-			if (repairedMods & (B_LEFT_COMMAND_KEY | B_RIGHT_COMMAND_KEY))
-				repairedMods |= B_COMMAND_KEY;
-			if (repairedMods & (B_LEFT_OPTION_KEY | B_RIGHT_OPTION_KEY))
-				repairedMods |= B_OPTION_KEY;
-#undef _KBIT
-			if (repairedMods != fModifiers) {
+			uint32 before = fModifiers;
+			uint32 repairedMods = _ComputeModifiers(states, menuKeyDown);
+			uint32 report = _PublishModifiers(repairedMods);
+			if (report != before) {
 				BMessage* repairMsg = new BMessage(B_MODIFIERS_CHANGED);
 				if (repairMsg != NULL) {
 					repairMsg->AddInt64("when", keyInfo.timestamp);
-					repairMsg->AddInt32("be:old_modifiers", fModifiers);
-					repairMsg->AddInt32("modifiers", repairedMods);
+					repairMsg->AddInt32("be:old_modifiers", before);
+					repairMsg->AddInt32("modifiers", report);
 					repairMsg->AddData("states", B_UINT8_TYPE, states, 16);
 					if (fOwner->EnqueueMessage(repairMsg) != B_OK)
 						delete repairMsg;
 				}
-				fModifiers = repairedMods;
 			}
 		}
 
-		xkb_state_update_key(fXkbState, xkbCode,
-			isKeyDown ? XKB_KEY_DOWN : XKB_KEY_UP);
+		// xkb counts every DOWN; a repeat fed as a press needs its own
+		// release, so a held Shift would stay latched after the key-up.
+		if (ev.value != 2) {
+			xkb_state_update_key(fXkbState, xkbCode,
+				isKeyDown ? XKB_KEY_DOWN : XKB_KEY_UP);
+		}
 
 		uint32 oldModifiers = fModifiers;
-		uint32 newModifiers = 0;
+		uint32 newModifiers = _ComputeModifiers(states, menuKeyDown);
+		uint32 report = _PublishModifiers(newModifiers);
 
-#define _KBIT(c) (states[(c) >> 3] & (1 << (7 - ((c) & 7))))
-		if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_SHIFT,
-				XKB_STATE_MODS_EFFECTIVE) > 0) newModifiers |= B_SHIFT_KEY;
-		if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_CAPS,
-				XKB_STATE_MODS_EFFECTIVE) > 0) newModifiers |= B_CAPS_LOCK;
-		if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_NUM,
-				XKB_STATE_MODS_EFFECTIVE) > 0) newModifiers |= B_NUM_LOCK;
-		// Scroll Lock is LED indicator, not xkb modifier
-		if (xkb_state_led_name_is_active(fXkbState,
-				XKB_LED_NAME_SCROLL) > 0) newModifiers |= B_SCROLL_LOCK;
-		if (menuKeyDown) newModifiers |= B_MENU_KEY;
-		if (_KBIT(kHaikuLeftShift))  newModifiers |= B_LEFT_SHIFT_KEY;
-		if (_KBIT(kHaikuRightShift))  newModifiers |= B_RIGHT_SHIFT_KEY;
-		const key_map& map = fKeymap.Map();
-		if (_KBIT(map.left_control_key))  newModifiers |= B_LEFT_CONTROL_KEY;
-		if (_KBIT(map.right_control_key))  newModifiers |= B_RIGHT_CONTROL_KEY;
-		if (_KBIT(map.left_command_key))  newModifiers |= B_LEFT_COMMAND_KEY;
-		if (_KBIT(map.right_command_key))  newModifiers |= B_RIGHT_COMMAND_KEY;
-		if (_KBIT(map.left_option_key)) newModifiers |= B_LEFT_OPTION_KEY;
-		if (_KBIT(map.right_option_key)) newModifiers |= B_RIGHT_OPTION_KEY;
-		if (newModifiers & (B_LEFT_CONTROL_KEY | B_RIGHT_CONTROL_KEY))
-			newModifiers |= B_CONTROL_KEY;
-		if (newModifiers & (B_LEFT_COMMAND_KEY | B_RIGHT_COMMAND_KEY))
-			newModifiers |= B_COMMAND_KEY;
-		if (newModifiers & (B_LEFT_OPTION_KEY | B_RIGHT_OPTION_KEY))
-			newModifiers |= B_OPTION_KEY;
-#undef _KBIT
+		// A modifier key-up clears its seat bits even if this node never
+		// saw the matching down (VirtualBox can split one keyboard).
+		if (!isKeyDown) {
+			uint32 clearBits = 0;
+			const key_map& map = fKeymap.Map();
+			if (keycode == KEY_LEFTSHIFT)
+				clearBits |= B_SHIFT_KEY | B_LEFT_SHIFT_KEY;
+			else if (keycode == KEY_RIGHTSHIFT)
+				clearBits |= B_SHIFT_KEY | B_RIGHT_SHIFT_KEY;
+			if (haikuKey == map.left_control_key)
+				clearBits |= B_CONTROL_KEY | B_LEFT_CONTROL_KEY;
+			if (haikuKey == map.right_control_key)
+				clearBits |= B_CONTROL_KEY | B_RIGHT_CONTROL_KEY;
+			if (haikuKey == map.left_command_key)
+				clearBits |= B_COMMAND_KEY | B_LEFT_COMMAND_KEY;
+			if (haikuKey == map.right_command_key)
+				clearBits |= B_COMMAND_KEY | B_RIGHT_COMMAND_KEY;
+			if (haikuKey == map.left_option_key)
+				clearBits |= B_OPTION_KEY | B_LEFT_OPTION_KEY;
+			if (haikuKey == map.right_option_key)
+				clearBits |= B_OPTION_KEY | B_RIGHT_OPTION_KEY;
+			if (clearBits != 0) {
+				BAutolock seatLock(fOwner->fSeatModifierLock);
+				fOwner->fSeatModifiers &= ~clearBits;
+				fModifiers = fOwner->fSeatModifiers;
+				report = fModifiers;
+			}
+		}
 
-		fModifiers = newModifiers;
-
-		if (fModifiers != oldModifiers) {
+		if (report != oldModifiers) {
 			BMessage* message = new BMessage(B_MODIFIERS_CHANGED);
 			if (message == NULL)
 				continue;
 
 			message->AddInt64("when", keyInfo.timestamp);
 			message->AddInt32("be:old_modifiers", oldModifiers);
-			message->AddInt32("modifiers", fModifiers);
+			message->AddInt32("modifiers", report);
 			message->AddData("states", B_UINT8_TYPE, states, 16);
 
 			if (fOwner->EnqueueMessage(message) != B_OK)
@@ -958,6 +942,8 @@ KeyboardDevice::_ControlThread()
 
 		uint32 msgKey = (haikuKey != 0) ? haikuKey
 			: (keycode >= 0x80 ? keycode : 0);
+		if (keycode == KEY_POWER)
+			msgKey = kPowerKeyCode;
 
 		msg->AddInt64("when", keyInfo.timestamp);
 		msg->AddInt32("key", msgKey);
@@ -1015,6 +1001,10 @@ KeyboardDevice::_ControlThreadCleanup()
 	// the snapshot below no matter which thread wins the race, since a
 	// joining Stop() can only return once this thread has truly finished.
 
+	// Withdraw first: a node that dies mid-hold would otherwise leave
+	// Shift stuck for every other device on the seat.
+	_WithdrawSeatModifiers();
+
 	if (fActive) {
 		char path[B_PATH_NAME_LENGTH];
 		strlcpy(path, fPath, sizeof(path));
@@ -1024,6 +1014,105 @@ KeyboardDevice::_ControlThreadCleanup()
 	} else {
 		// Device already being removed by another thread.
 	}
+}
+
+
+uint32
+KeyboardDevice::_ComputeModifiers(const uint8* states, bool menuKeyDown)
+{
+	uint32 mods = 0;
+#define _KBIT(c) ((c) != 0 && (c) < 128 \
+	&& (states[(c) >> 3] & (1 << (7 - ((c) & 7)))))
+	if (fXkbState != NULL) {
+		if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_SHIFT,
+				XKB_STATE_MODS_EFFECTIVE) > 0)
+			mods |= B_SHIFT_KEY;
+		if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_CAPS,
+				XKB_STATE_MODS_EFFECTIVE) > 0)
+			mods |= B_CAPS_LOCK;
+		if (xkb_state_mod_name_is_active(fXkbState, XKB_MOD_NAME_NUM,
+				XKB_STATE_MODS_EFFECTIVE) > 0)
+			mods |= B_NUM_LOCK;
+		if (xkb_state_led_name_is_active(fXkbState,
+				XKB_LED_NAME_SCROLL) > 0)
+			mods |= B_SCROLL_LOCK;
+	}
+	if (menuKeyDown)
+		mods |= B_MENU_KEY;
+	if (_KBIT(linux_to_haiku_keycode(KEY_LEFTSHIFT)))
+		mods |= B_LEFT_SHIFT_KEY;
+	if (_KBIT(linux_to_haiku_keycode(KEY_RIGHTSHIFT)))
+		mods |= B_RIGHT_SHIFT_KEY;
+	const key_map& map = fKeymap.Map();
+	if (_KBIT(map.left_control_key))
+		mods |= B_LEFT_CONTROL_KEY;
+	if (_KBIT(map.right_control_key))
+		mods |= B_RIGHT_CONTROL_KEY;
+	if (_KBIT(map.left_command_key))
+		mods |= B_LEFT_COMMAND_KEY;
+	if (_KBIT(map.right_command_key))
+		mods |= B_RIGHT_COMMAND_KEY;
+	if (_KBIT(map.left_option_key))
+		mods |= B_LEFT_OPTION_KEY;
+	if (_KBIT(map.right_option_key))
+		mods |= B_RIGHT_OPTION_KEY;
+	if (mods & (B_LEFT_CONTROL_KEY | B_RIGHT_CONTROL_KEY))
+		mods |= B_CONTROL_KEY;
+	if (mods & (B_LEFT_COMMAND_KEY | B_RIGHT_COMMAND_KEY))
+		mods |= B_COMMAND_KEY;
+	if (mods & (B_LEFT_OPTION_KEY | B_RIGHT_OPTION_KEY))
+		mods |= B_OPTION_KEY;
+#undef _KBIT
+	return mods;
+}
+
+
+// Fold this device's transition into the seat and return what apps see.
+// A key-up clears seat-wide even if another evdev node never saw the down.
+uint32
+KeyboardDevice::_PublishModifiers(uint32 newModifiers)
+{
+	const uint32 kLocks = B_CAPS_LOCK | B_NUM_LOCK | B_SCROLL_LOCK;
+	uint32 oldModifiers = fModifiers;
+
+	BAutolock _(fOwner->fSeatModifierLock);
+	fOwner->fSeatModifiers |= (newModifiers & ~oldModifiers);
+	fOwner->fSeatModifiers &= ~(oldModifiers & ~newModifiers);
+	fOwner->fSeatModifiers &= ~kLocks;
+	fOwner->fSeatModifiers |= (newModifiers & kLocks);
+	fModifiers = fOwner->fSeatModifiers;
+	return fModifiers;
+}
+
+
+void
+KeyboardDevice::_WithdrawSeatModifiers()
+{
+	// Dying mid-hold: withdraw held modifiers so Shift doesn't latch for
+	// everyone. Locks stay; the kernel LED owns them.
+	if (fModifiers == 0 || fOwner == NULL)
+		return;
+
+	const uint32 kLocks = B_CAPS_LOCK | B_NUM_LOCK | B_SCROLL_LOCK;
+	uint32 oldModifiers = fModifiers;
+	uint32 seat;
+	{
+		BAutolock _(fOwner->fSeatModifierLock);
+		fOwner->fSeatModifiers &= ~(oldModifiers & ~kLocks);
+		seat = fOwner->fSeatModifiers;
+		fModifiers = 0;
+	}
+
+	BMessage* message = new(std::nothrow) BMessage(B_MODIFIERS_CHANGED);
+	if (message == NULL)
+		return;
+	message->AddInt64("when", system_time());
+	message->AddInt32("be:old_modifiers", oldModifiers);
+	message->AddInt32("modifiers", seat);
+	uint8_t zeroStates[16] = {};
+	message->AddData("states", B_UINT8_TYPE, zeroStates, 16);
+	if (fOwner->EnqueueMessage(message) != B_OK)
+		delete message;
 }
 
 
@@ -1063,6 +1152,63 @@ KeyboardDevice::_SyncLocksFromLEDs()
 
 		xkb_state_update_key(fXkbState, code, XKB_KEY_DOWN);
 		xkb_state_update_key(fXkbState, code, XKB_KEY_UP);
+	}
+}
+
+
+// B_SEAT_DISABLED: the seat is gone until B_SEAT_ENABLED, so release everything the shadow
+// state still has down and apps never see a key or modifier stuck across a VT switch.
+void
+KeyboardDevice::_ReleaseHeldKeys(uint8* states, bool& vtLCtrl, bool& vtRCtrl,
+	bool& vtAlt, bool& vtRalt, bool& menuKeyDown, bool& ctrlAltDelPressed)
+{
+	BAutolock lock(fKeymapLock);
+
+	for (uint32 haiku = 1; haiku < 128; haiku++) {
+		if (!(states[haiku >> 3] & (1 << (7 - (haiku & 7)))))
+			continue;
+
+		BMessage* upMsg = new(std::nothrow) BMessage(B_UNMAPPED_KEY_UP);
+		if (upMsg != NULL) {
+			upMsg->AddInt64("when", system_time());
+			upMsg->AddInt32("key", haiku);
+			upMsg->AddInt32("modifiers", fModifiers);
+			upMsg->AddData("states", B_UINT8_TYPE, states, 16);
+			if (fOwner->EnqueueMessage(upMsg) != B_OK)
+				delete upMsg;
+		}
+	}
+	memset(states, 0, 16);
+
+	// Rebuild xkb state fresh: cheaper and more certain than walking back
+	// every modifier/lock key it might have latched.
+	if (fXkbState != NULL && fXkbKeymap != NULL) {
+		xkb_state_unref(fXkbState);
+		fXkbState = xkb_state_new(fXkbKeymap);
+	}
+
+	vtLCtrl = vtRCtrl = vtAlt = vtRalt = menuKeyDown = false;
+	ctrlAltDelPressed = false;
+
+	const uint32 kLocks = B_CAPS_LOCK | B_NUM_LOCK | B_SCROLL_LOCK;
+	uint32 oldModifiers = fModifiers;
+	// Locks are toggle state; keep them. Drop held bits from the seat union
+	// too, or a modifier held across a VT switch stays latched seat-wide.
+	{
+		BAutolock _(fOwner->fSeatModifierLock);
+		fOwner->fSeatModifiers &= ~(oldModifiers & ~kLocks);
+		fModifiers = oldModifiers & kLocks;
+	}
+	if (fModifiers != oldModifiers) {
+		BMessage* m = new(std::nothrow) BMessage(B_MODIFIERS_CHANGED);
+		if (m != NULL) {
+			m->AddInt64("when", system_time());
+			m->AddInt32("be:old_modifiers", oldModifiers);
+			m->AddInt32("modifiers", fModifiers);
+			m->AddData("states", B_UINT8_TYPE, states, 16);
+			if (fOwner->EnqueueMessage(m) != B_OK)
+				delete m;
+		}
 	}
 }
 
@@ -1345,7 +1491,10 @@ KeyboardInputDevice::KeyboardInputDevice()
 	:
 	fDevices(2),
 	fDeviceListLock("KeyboardInputDevice list"),
-	fTeamMonitorWindow(NULL)
+	fTeamMonitorWindow(NULL),
+	fSeatModifiers(0),
+	fSeatModifierLock("keyboard seat modifiers"),
+	fSeatEnabled(true)
 {
 	CALLED();
 
@@ -1454,6 +1603,13 @@ KeyboardInputDevice::Control(const char* name, void* cookie,
 	} else if (command == B_GET_DEVICE_DESCRIPTION) {
 		KeyboardDevice* device = (KeyboardDevice*)cookie;
 		return device->GetDescription(message);
+	} else if (command == B_SEAT_DISABLED || command == B_SEAT_ENABLED
+		|| command == B_SYSTEM_RESUMED) {
+		// Add-on level calls arrive with a NULL cookie; nothing to resync.
+		KeyboardDevice* device = (KeyboardDevice*)cookie;
+		if (device == NULL)
+			return B_OK;
+		device->HandleSeatMessage(command);
 	}
 	return B_OK;
 }

@@ -208,7 +208,7 @@ TRoster::HandleAddApplication(BMessage* request)
 	// entry_ref
 	if (error == B_OK) {
 		PRINT("flags: %" B_PRIx32 "\n", flags);
-		PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.vdevice(),
+		PRINT("ref: %" B_PRIdDEV ", %" B_PRIdINO ", %s\n", ref.vdevice(),
 			ref.vdirectory(), ref.name);
 		// check single/exclusive launchers
 		RosterAppInfo* info = NULL;
@@ -395,7 +395,7 @@ TRoster::HandleIsAppRegistered(BMessage* request)
 		token = 0;
 
 	PRINT("team: %" B_PRId32 ", token: %" B_PRIu32 "\n", team, token);
-	PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.vdevice(), ref.vdirectory(),
+	PRINT("ref: %" B_PRIdDEV ", %" B_PRIdINO ", %s\n", ref.vdevice(), ref.vdirectory(),
 		ref.name);
 
 	// check the parameters
@@ -423,9 +423,10 @@ TRoster::HandleIsAppRegistered(BMessage* request)
 			&& (info = fEarlyPreRegisteredApps.InfoFor(&ref)) != NULL) {
 			PRINT("found ref in fEarlyRegisteredApps (by ref)\n");
 			// pre-registered and has no team ID assigned yet -- queue the
-			// request
+			// request under the info's token: every cleanup path
+			// drains fIARRequestsByToken, not fIARRequestsByID.
 			be_app->DetachCurrentMessage();
-			_AddIARRequest(fIARRequestsByID, team, request);
+			_AddIARRequest(fIARRequestsByToken, (int32)info->token, request);
 		} else {
 			PRINT("didn't find team or ref\n");
 			// team not registered, ref/token not early pre-registered
@@ -670,7 +671,7 @@ TRoster::HandleGetAppInfo(BMessage* request)
 	if (hasTeam)
 		PRINT("team: %" B_PRId32 "\n", team);
 	if (hasRef) {
-		PRINT("ref: %" B_PRId32 ", %" B_PRId64 ", %s\n", ref.vdevice(),
+		PRINT("ref: %" B_PRIdDEV ", %" B_PRIdINO ", %s\n", ref.vdevice(),
 			ref.vdirectory(), ref.name);
 	}
 	if (hasSignature)
@@ -794,6 +795,26 @@ TRoster::HandleUpdateActiveApp(BMessage* request)
 /*!	\brief Handles a Broadcast() request.
 	\param request The request message
 */
+/*!	\brief Messengers of all registered apps except the registrar, for a
+	broadcast that waits for each app (synchronous sends).
+*/
+void
+TRoster::GetAppMessengers(std::vector<BMessenger>& messengers)
+{
+	BAutolock _(fLock);
+
+	for (AppInfoList::Iterator it = fRegisteredApps.It(); it.IsValid(); ++it) {
+		RosterAppInfo* info = *it;
+		if (info->team == be_app->Team())
+			continue;
+		BMessenger messenger;
+		BMessenger::Private(messenger).SetTo(info->team, info->port,
+			B_PREFERRED_TOKEN);
+		messengers.push_back(messenger);
+	}
+}
+
+
 void
 TRoster::HandleBroadcast(BMessage* request)
 {

@@ -67,9 +67,8 @@ MakeNodeFromName(node_ref* node, char* name)
 {
 	char* nodeString = strchr(name, '_');
 	if (nodeString != NULL) {
-		//node->node = strtoll(nodeString + 1, (char**)NULL, 10);
-		//node->device = atoi(name + 1);
-		*node = node_ref(atoi(name + 1),
+		// dev_t/ino_t are 64-bit; atoi would truncate the device half.
+		*node = node_ref(strtoll(name + 1, (char**)NULL, 10),
 						 strtoll(nodeString + 1, (char**)NULL, 10));
 	}
 }

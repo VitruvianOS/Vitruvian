@@ -57,7 +57,7 @@ list_file_disk_devices()
 			continue;
 
 		// ID
-		printf("%6" B_PRId32 "  ", device.ID());
+		printf("%6" B_PRIdDEV "  ", device.ID());
 
 		// file path
 		BPath path;
@@ -104,10 +104,10 @@ register_file_disk_device(const char* fileName)
 	BPath path;
 	if (roster.GetDeviceWithID(id, &device) == B_OK
 		&& device.GetPath(&path) == B_OK) {
-		printf("Registered file as disk device \"%s\" with ID %" B_PRId32 ".\n",
+		printf("Registered file as disk device \"%s\" with ID %" B_PRIdDEV ".\n",
 			path.Path(), id);
 	} else {
-		printf("Registered file as disk device with ID %" B_PRId32 ", "
+		printf("Registered file as disk device with ID %" B_PRIdDEV ", "
 			"but failed to get the device path.\n", id);
 	}
 
@@ -128,15 +128,15 @@ unregister_file_disk_device(const char* fileNameOrID)
 			status_t error = roster.UnregisterFileDevice(id);
 			if (error != B_OK) {
 				fprintf(stderr, "Error: Failed to unregister file disk device "
-					"with ID %" B_PRId32 ": %s\n", id, strerror(error));
+					"with ID %" B_PRIdDEV ": %s\n", id, strerror(error));
 				return error;
 			}
 
-			printf("Unregistered file disk device with ID %" B_PRId32 ".\n",
+			printf("Unregistered file disk device with ID %" B_PRIdDEV ".\n",
 				id);
 			return B_OK;
 		} else {
-			fprintf(stderr, "No file disk device with ID %" B_PRId32 ","
+			fprintf(stderr, "No file disk device with ID %" B_PRIdDEV ","
 				"trying file \"%s\"\n", id, fileNameOrID);
 		}
 	}
@@ -173,14 +173,14 @@ unregister_file_disk_device(const char* fileNameOrID)
 			status_t error = roster.UnregisterFileDevice(device.ID());
 			if (error != B_OK) {
 				fprintf(stderr, "Error: Failed to unregister file disk device"
-					"%s \"%s\" (ID: %" B_PRId32 "): %s\n",
+					"%s \"%s\" (ID: %" B_PRIdDEV "): %s\n",
 					isFilePath ? " for file" : "", fileNameOrID, device.ID(),
 					strerror(error));
 				return error;
 			}
 
 			printf("Unregistered file disk device%s \"%s\" "
-				"(ID: %" B_PRId32 ")\n", isFilePath ? " for file" : "",
+				"(ID: %" B_PRIdDEV ")\n", isFilePath ? " for file" : "",
 				fileNameOrID, device.ID());
 
 			return B_OK;

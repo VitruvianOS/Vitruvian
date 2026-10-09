@@ -60,7 +60,8 @@ public:
 	{
 		fNameControl = new BTextControl(B_TRANSLATE("Name:"), defaultName,
 			NULL);
-		fNameControl->TextView()->SetExplicitMinSize(BSize(200, B_SIZE_UNSET));
+		fNameControl->TextView()->SetExplicitMinSize(BSize(
+			200 * be_plain_font->Size() / 12.0f, B_SIZE_UNSET));
 
 		BButton* cancelButton = new BButton(B_TRANSLATE("Cancel"),
 			new BMessage(B_QUIT_REQUESTED));

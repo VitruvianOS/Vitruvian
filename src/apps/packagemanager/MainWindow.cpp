@@ -9,9 +9,11 @@
 
 #include <Alert.h>
 #include <Application.h>
+#include <Button.h>
 #include <Catalog.h>
 #include <Entry.h>
 #include <GroupLayout.h>
+#include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <Menu.h>
 #include <MenuBar.h>
@@ -25,6 +27,7 @@
 #include <TabView.h>
 
 #include "AptLogView.h"
+#include "ChangeSummaryWindow.h"
 #include "FilterView.h"
 #include "PackageInfo.h"
 #include "PackageInfoView.h"
@@ -200,6 +203,14 @@ MainWindow::MessageReceived(BMessage* message)
 
 		case kMsgSimulateReady:
 			_HandleSimulateReady(message);
+			break;
+
+		case kMsgSummaryApply:
+			_ConfirmApply();
+			break;
+
+		case kMsgSummaryCancel:
+			_CancelApply();
 			break;
 
 		case kMsgListReady:
@@ -387,6 +398,26 @@ MainWindow::_BuildLayout()
 	fStaleHintView->SetExplicitMinSize(BSize(0, B_SIZE_UNSET));
 	fStaleHintView->Hide();
 
+	fEmptyListsHintView = new TruncatingStringView("empty lists hint",
+		B_TRANSLATE("No packages are available from the configured "
+			"repositories. The package lists on this V\\OS system may "
+			"be empty."));
+	fEmptyListsHintView->SetExplicitMaxSize(
+		BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	fEmptyListsHintView->SetExplicitMinSize(BSize(0, B_SIZE_UNSET));
+
+	fUpdateListsButton = new BButton("update lists",
+		B_TRANSLATE("Update package lists"), new BMessage(kMsgAptUpdate));
+
+	fEmptyListsHintGroup = new BGroupView("empty lists row", B_HORIZONTAL,
+		B_USE_SMALL_SPACING);
+	BLayoutBuilder::Group<>(fEmptyListsHintGroup, B_HORIZONTAL,
+		B_USE_SMALL_SPACING)
+		.Add(fEmptyListsHintView)
+		.AddGlue()
+		.Add(fUpdateListsButton)
+		.End();
+
 	BSplitView* splitView = new BSplitView(B_VERTICAL, B_USE_SMALL_SPACING);
 	BLayoutBuilder::Split<>(splitView)
 		.Add(fListView, 3.0f)
@@ -404,9 +435,12 @@ MainWindow::_BuildLayout()
 			.SetInsets(B_USE_WINDOW_INSETS)
 			.Add(fFilterView)
 			.Add(fStaleHintView)
+			.Add(fEmptyListsHintGroup)
 			.Add(fMainTabView)
 			.Add(fStatusView)
 		.End();
+
+	_ShowEmptyListsHint(false);
 }
 
 
@@ -549,9 +583,6 @@ MainWindow::_ApplyChanges()
 }
 
 
-static const int32 kMaxAlertSummaryLines = 40;
-
-
 // Case-insensitive on the name, architecture as tiebreaker so multiarch
 // pairs stay adjacent. Pre-sorting also keeps the list view's
 // binary-search inserts appending at the tail rather than memmoving
@@ -566,62 +597,45 @@ compare_packages(const PackageInfo* a, const PackageInfo* b)
 }
 
 
-static BString
-cap_summary(const BString& summary)
-{
-	int32 lineCount = 0;
-	int32 cutAt = -1;
-	int32 start = 0;
-	while (start <= summary.Length()) {
-		int32 newline = summary.FindFirst('\n', start);
-		bool isLast = newline < 0;
-		lineCount++;
-		if (lineCount == kMaxAlertSummaryLines)
-			cutAt = isLast ? summary.Length() : newline;
-		if (isLast)
-			break;
-		start = newline + 1;
-	}
-
-	if (lineCount <= kMaxAlertSummaryLines || cutAt < 0)
-		return summary;
-
-	BString capped;
-	summary.CopyInto(capped, 0, cutAt);
-	capped << "\n... " << (lineCount - kMaxAlertSummaryLines)
-		<< " more line(s) not shown.";
-	return capped;
-}
-
-
 void
 MainWindow::_HandleSimulateReady(BMessage* message)
 {
 	const char* summary = "";
 	message->FindString("summary", &summary);
 
-	BString text(B_TRANSLATE("Apply these changes?"));
-	text << "\n\n" << cap_summary(BString(summary));
+	BMessage details;
+	message->FindMessage("details", &details);
 
-	BAlert* alert = new BAlert(B_TRANSLATE("Package manager"), text.String(),
-		B_TRANSLATE("Cancel"), B_TRANSLATE("Apply"), NULL, B_WIDTH_AS_USUAL,
-		B_WARNING_ALERT);
-	alert->SetShortcut(0, B_ESCAPE);
-	if (alert->Go() != 1) {
-		_SetTransactionActive(false);
-		fStatusView->SetIdle(B_TRANSLATE("Ready"));
-		return;
-	}
-
-	BMessage apply(kMsgApplyChanges);
+	// Rebuild the exact apply request from the echoed set and hold it
+	// until the review dialog reports back.
+	fPendingApply = BMessage(kMsgApplyChanges);
 	const char* name = NULL;
 	for (int32 i = 0; message->FindString("install", i, &name) == B_OK; i++)
-		apply.AddString("install", name);
+		fPendingApply.AddString("install", name);
 	for (int32 i = 0; message->FindString("remove", i, &name) == B_OK; i++)
-		apply.AddString("remove", name);
+		fPendingApply.AddString("remove", name);
 	for (int32 i = 0; message->FindString("purge", i, &name) == B_OK; i++)
-		apply.AddString("purge", name);
-	fWorker->PostMessage(&apply);
+		fPendingApply.AddString("purge", name);
+
+	ChangeSummaryWindow* window = new ChangeSummaryWindow(this,
+		BMessenger(this), &details, summary);
+	window->Show();
+}
+
+
+void
+MainWindow::_ConfirmApply()
+{
+	fWorker->PostMessage(&fPendingApply);
+}
+
+
+void
+MainWindow::_CancelApply()
+{
+	fPendingApply.MakeEmpty();
+	_SetTransactionActive(false);
+	fStatusView->SetIdle(B_TRANSLATE("Ready"));
 }
 
 
@@ -659,6 +673,10 @@ MainWindow::_HandleListReady(BMessage* message)
 	delete incoming;
 
 	fPackages.SortItems(compare_packages);
+
+	bool listsEmpty = false;
+	message->FindBool("lists_empty", &listsEmpty);
+	_ShowEmptyListsHint(listsEmpty);
 
 	BObjectList<BString, true> sections(32);
 	for (int32 i = 0; i < fPackages.CountItems(); i++) {
@@ -784,4 +802,15 @@ MainWindow::_ShowStaleHint(bool show)
 		fStaleHintView->Show();
 	else if (!show && !isHidden)
 		fStaleHintView->Hide();
+}
+
+
+void
+MainWindow::_ShowEmptyListsHint(bool show)
+{
+	if (show) {
+		fEmptyListsHintGroup->Show();
+	} else {
+		fEmptyListsHintGroup->Hide();
+	}
 }

@@ -57,6 +57,7 @@ struct modeset_dev {
 	uint32_t cursor_h;
 	uint8_t*  cursor_map;
 	uint32_t cursor_size;
+	uint32_t cursor_pitch;
 	bool      cursor_ok;
 };
 

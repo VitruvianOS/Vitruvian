@@ -1,3 +1,7 @@
 resource app_signature "application/x-vnd.Vitruvian-polkit-agent";
 
 resource app_flags B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP;
+
+resource(1, "PolkitLock") #'VICN' array {
+	$"6E6369660203464650039696A0020A042C3E543E545A2C5A0A09363E3630402A4A304A3E443E44363C363C3E020A000100000A01010100"
+};

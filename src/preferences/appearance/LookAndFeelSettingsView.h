@@ -41,11 +41,11 @@ private:
 			void				_SetDecor(const BString& name);
 			void				_SetDecor(BPrivate::DecorInfo* decorInfo);
 			void				_BuildDecorMenu();
-			const char*			_DecorLabel(const BString& name);
+			BString				_DecorLabel(const BString& name);
 
 			void				_SetControlLook(const BString& path);
 			void				_BuildControlLookMenu();
-			const char*			_ControlLookLabel(const char* name);
+			BString				_ControlLookLabel(const char* name);
 
 			bool				_DoubleScrollBarArrows();
 			void				_SetDoubleScrollBarArrows(bool doubleArrows);

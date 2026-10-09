@@ -42,6 +42,7 @@ public:
 			void				Stop();
 
 			status_t			UpdateSettings(uint32 opcode = 0);
+			void				HandleSeatMessage(uint32 what);
 
 			const char*			Path() const { return fPath; }
 			input_device_ref*	DeviceRef() { return &fDeviceRef; }
@@ -52,14 +53,23 @@ public:
 			void				SetDescription(const char* name)
 									{ fDescription = name; }
 
-private:
+	private:
 	static	int32				_ControlThreadEntry(void* arg);
 			int32				_ControlThread();
 			void				_ControlThreadCleanup();
 			void				_UpdateSettings(uint32 pending);
 			void				_RebuildXkb();
 			void				_SyncLocksFromLEDs();
+			void				_ReleaseHeldKeys(uint8* states,
+										bool& vtLCtrl, bool& vtRCtrl,
+										bool& vtAlt, bool& vtRalt,
+										bool& menuKeyDown,
+										bool& ctrlAltDelPressed);
 			void				_UpdateLEDs();
+			uint32				_ComputeModifiers(const uint8* states,
+									bool menuKeyDown);
+			uint32				_PublishModifiers(uint32 newModifiers);
+			void				_WithdrawSeatModifiers();
 			status_t			_EnqueueInlineInputMethod(int32 opcode,
 									const char* string = NULL,
 									bool confirmed = false,
@@ -93,6 +103,10 @@ private:
 			// volatile-qualified uint32 only type-checks under
 			// -fpermissive.
 			int32				fSettingsCommand;
+
+			// Pending B_SEAT_DISABLED, B_SEAT_ENABLED or B_SYSTEM_RESUMED, 0 = none. A single command,
+			// not a bitmask like fSettingsCommand, since these are mutually exclusive.
+			int32				fSeatCommand;
 
 			Keymap				fKeymap;
 			BLocker				fKeymapLock;
@@ -136,6 +150,15 @@ private:
 			BObjectList<KeyboardDevice, true> fDevices;
 			BLocker				fDeviceListLock;
 			TeamMonitorWindow*	fTeamMonitorWindow;
+
+	// Seat-wide modifier union: one keyboard can span several evdev nodes
+	// (VirtualBox), like MouseInputDevice::fButtons.
+			uint32				fSeatModifiers;
+			BLocker				fSeatModifierLock;
+
+	// False after B_SEAT_DISABLED; gates idle seeding so a VT-switch release
+	// is not undone.
+	volatile bool			fSeatEnabled;
 };
 
 extern "C" BInputServerDevice* instantiate_input_device();

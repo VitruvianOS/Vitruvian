@@ -1,0 +1,12 @@
+[Unit]
+Description=V\OS PDF printer queue (first boot)
+ConditionPathExists=!/var/lib/vos/pdf-printer-created
+Wants=cups.service
+After=cups.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/vos-pdf-printer
+
+[Install]
+WantedBy=multi-user.target

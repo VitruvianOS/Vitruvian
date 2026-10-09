@@ -10,14 +10,15 @@ add_subdirectory(input)
 add_subdirectory(keymap)
 add_subdirectory(locale)
 add_subdirectory(network)
+add_subdirectory(power)
 add_subdirectory(bluetooth)
 add_subdirectory(media)
 #add_subdirectory(notifications) # missing libnotification
-#add_subdirectory(printers)     # needs print kit
+add_subdirectory(printers)
 add_subdirectory(screen)
 add_subdirectory(screensaver)
 add_subdirectory(shortcuts)
 add_subdirectory(sounds)
-#add_subdirectory(time)         # needs bnetapi
+add_subdirectory(time)
 add_subdirectory(tracker)
 add_subdirectory(user)

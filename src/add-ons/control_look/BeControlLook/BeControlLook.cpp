@@ -2748,9 +2748,7 @@ BeControlLook::_DrawPopUpMarker(BView* view, const BRect& rect,
 
 	BPoint position(rect.right - 8, rect.bottom - 8);
 	BPoint triangle[3];
-	triangle[0] = position + BPoint(-2.5, -0.5);
-	triangle[1] = position + BPoint(2.5, -0.5);
-	triangle[2] = position + BPoint(0.0, 2.0);
+	GetArrowShape(position, BSize(5, 2.5), B_DOWN_ARROW, triangle);
 
 	uint32 viewFlags = view->Flags();
 	view->SetFlags(viewFlags | B_SUBPIXEL_PRECISE);

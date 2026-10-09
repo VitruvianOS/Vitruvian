@@ -95,9 +95,11 @@ class NetworkStatusView : public BView {
 
 	private:
 		void			_DrawNetworkIcon(BRect bounds);
+		void			_DrawVPNLock(BRect bounds);
 		BBitmap*		_GetIcon(int32 iconID);
 		void			_RequestStatusUpdate();
 		void			_ApplyStatusUpdate(BMessage* devices);
+		bool			_HasActiveVPN();
 		void			_ScanWiFiNetworks(const char* devicePath);
 		void			_ShowMenu(BPoint where);
 		void			_ShowOperationFailedAlert(const char* message);
@@ -118,6 +120,7 @@ class NetworkStatusView : public BView {
 		int32			fDeviceIndex;
 		bool			fConnected;
 		bool			fHasDevice;
+		bool			fVPNActive;
 		int				fSignalStrength;
 		BString			fDevicePath;
 		BString			fDeviceType;

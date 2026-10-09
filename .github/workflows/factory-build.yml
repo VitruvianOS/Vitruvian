@@ -1,0 +1,250 @@
+# One Factory build: compile, bake, name and hand the images to the
+# publish job in factory-release.yml.
+
+name: Factory build
+
+on:
+  workflow_call:
+    inputs:
+      name:        { type: string, required: true }
+      arch:        { type: string, required: true }
+      runner:      { type: string, required: true }
+      build_dir:   { type: string, required: true }
+      image_types: { type: string, required: true }
+      extra_pkgs:  { type: string, default: "" }
+      # Board images baked from the same tree; a failure leaves them out.
+      board_types: { type: string, default: "" }
+      # Compile against the runner's own libraries first, in its own tree.
+      native:      { type: boolean, default: false }
+      base_suite:  { type: string, default: testing }
+      # Apt suite the images follow for V\OS updates; empty for an arch
+      # the repo does not carry (board builds refuse an empty repo).
+      repo_suite:  { type: string, default: testing-nightly }
+      rev:         { type: string, required: true }
+      # Lane in the published names, so two builds of one arch can't collide.
+      lane:        { type: string, default: "" }
+    outputs:
+      failed_step:
+        description: First step that failed, empty when the build passed
+        value: ${{ jobs.build.outputs.failed_step }}
+      boards:
+        description: Outcome of the board image step
+        value: ${{ jobs.build.outputs.boards }}
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    # riscv64 runs its chroot under qemu-user.
+    timeout-minutes: 360
+    outputs:
+      failed_step: ${{ steps.report.outputs.failed_step }}
+      boards: ${{ steps.report.outputs.boards }}
+    env:
+      VOS_PKG_REV: ${{ inputs.rev }}
+      VOS_BASE_SUITE: ${{ inputs.base_suite }}
+      REPO_KEY_URL: https://repo.v-os.dev/repo-key.asc
+      REPO_KEY_FPR: 8276B9B78A0853D17CB0CB0E9B50324D1D38BE53
+    steps:
+      - name: Checkout repository
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        id: deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison build-essential cmake debootstrap debhelper \
+            dh-dkms dkms elfutils flex git \
+            libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
+            libgif-dev libicns-dev libicu-dev libinput-dev \
+            libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
+            libtiff-dev libudev-dev libwebp-dev libseat-dev \
+            libpam0g-dev libsystemd-dev libevdev-dev \
+            libblkid-dev libxkbcommon-dev \
+            libpipewire-0.3-dev libspa-0.2-dev \
+            libbluetooth-dev libnm-dev libglib2.0-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            linux-headers-$(uname -r) \
+            mtools ninja-build squashfs-tools sudo xorriso zlib1g-dev \
+            libapt-pkg-dev fakeroot devscripts lintian wget qemu-utils \
+            rsync parted zstd dosfstools attr \
+            ${{ inputs.native && 'libcairo2-dev libcups2-dev libgl1-mesa-dev libgbm-dev libglu1-mesa-dev libegl-dev libgl-dev' || '' }} \
+            ${{ inputs.extra_pkgs }}
+
+      - name: Fetch the V\OS repo key
+        id: repokey
+        if: inputs.repo_suite != ''
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/vos-repo-key.asc"
+          curl -fsSL -o "$key" "$REPO_KEY_URL"
+          fpr=$(gpg --show-keys --with-colons "$key" | awk -F: '/^fpr/{print $10; exit}')
+          [ "$fpr" = "$REPO_KEY_FPR" ] || {
+            echo "repo key fingerprint $fpr, expected $REPO_KEY_FPR" >&2
+            exit 1
+          }
+          echo "VOS_REPO_KEY=$key" >> "$GITHUB_ENV"
+          echo "VOS_REPO_SUITE=${{ inputs.repo_suite }}" >> "$GITHUB_ENV"
+
+      - name: Configure git safe.directory
+        id: safedir
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+
+      - name: Init submodules
+        id: submodules
+        run: git submodule update --init --recursive
+
+      - name: Build buildtools
+        id: buildtools
+        run: |
+          mkdir -p buildtools
+          cd buildtools
+          cmake -DBUILDTOOLS_MODE=1 .. -GNinja
+          ninja
+
+      # Host libraries, no chroot, its own tree: catches what only breaks
+      # outside the chroot before the image build starts.
+      - name: Native build - configure
+        id: native_configure
+        if: inputs.native
+        run: |
+          mkdir -p generated.native
+          cd generated.native
+          ../build/scripts/setupenv.sh --arch=${{ inputs.arch }}
+          ../configure --arch=${{ inputs.arch }} --build-type=Release --buildtools=../buildtools
+
+      - name: Native build - compile
+        id: native_build
+        if: inputs.native
+        run: cd generated.native && ninja
+
+      # The image build needs the disk space more than the tree.
+      - name: Native build - clean up
+        id: native_cleanup
+        if: inputs.native
+        run: rm -rf generated.native
+
+      - name: Configure (also creates chroot)
+        id: configure
+        run: |
+          mkdir -p ${{ inputs.build_dir }}
+          cd ${{ inputs.build_dir }}
+          ../configure --arch=${{ inputs.arch }} --build-type=Debug \
+                       --chroot-build --buildtools=../buildtools
+
+      - name: Build images
+        id: images
+        run: cd ${{ inputs.build_dir }} && ../bake build --image-type=${{ inputs.image_types }}
+
+      # Same compiled tree, so ninja has nothing left to do.
+      - name: Build board images
+        id: boards
+        if: inputs.board_types != ''
+        continue-on-error: true
+        run: cd ${{ inputs.build_dir }} && ../bake build --image-type=${{ inputs.board_types }}
+
+      - name: Compress RAW images
+        id: compress
+        run: |
+          shopt -s nullglob
+          cd ${{ inputs.build_dir }}/output
+          for f in *.raw; do
+            zstd -T0 --long=27 -19 --rm "$f"
+          done
+
+      # Published names carry everything a downloader needs to tell two
+      # artifacts apart. The build tree only knows the board, so the arch,
+      # the rev and the sha are added here.
+      - name: Name the artifacts for publication
+        id: stage
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse --short=9 HEAD)
+          ver=$(sed -n 's/^project(VOS VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          mkdir -p staging
+          shopt -s nullglob
+          for f in ${{ inputs.build_dir }}/output/*.iso ${{ inputs.build_dir }}/output/*.raw.zst; do
+            base=$(basename "$f")
+            board=${base#vos-}
+            board=${board%%.*}
+            ext=${base#*.}
+            lane="${{ inputs.lane }}"
+            out="vos-${ver}-${{ inputs.arch }}-${board}${lane:+-$lane}-rev${VOS_PKG_REV}-${sha}.${ext}"
+            cp "$f" "staging/$out"
+            ( cd staging && sha256sum "$out" > "$out.sha256" )
+            echo "staged $out"
+          done
+
+      - name: Upload for the publish job
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-${{ inputs.name }}
+          path: staging/*
+          if-no-files-found: error
+          # Only a handoff to the publish job. Factory keeps the real copy.
+          retention-days: 1
+
+      - name: Upload logs of a failed build
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-logs-${{ inputs.name }}
+          path: |
+            generated.native/CMakeFiles/*.log
+            generated.native/.ninja_log
+            ${{ inputs.build_dir }}/CMakeFiles/*.log
+            ${{ inputs.build_dir }}/.ninja_log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Steps in run order; the first failure is where this build stopped.
+      - name: Report
+        id: report
+        if: always()
+        env:
+          OUTCOMES: |
+            checkout|Checkout repository|${{ steps.checkout.outcome }}
+            deps|Install build dependencies|${{ steps.deps.outcome }}
+            repokey|Fetch the V\OS repo key|${{ steps.repokey.outcome }}
+            safedir|Configure git safe.directory|${{ steps.safedir.outcome }}
+            submodules|Init submodules|${{ steps.submodules.outcome }}
+            buildtools|Build buildtools|${{ steps.buildtools.outcome }}
+            native_configure|Native build - configure|${{ steps.native_configure.outcome }}
+            native_build|Native build - compile|${{ steps.native_build.outcome }}
+            native_cleanup|Native build - clean up|${{ steps.native_cleanup.outcome }}
+            configure|Configure (also creates chroot)|${{ steps.configure.outcome }}
+            images|Build images (${{ inputs.image_types }})|${{ steps.images.outcome }}
+            boards|Build board images (${{ inputs.board_types }})|${{ steps.boards.outcome }}
+            compress|Compress RAW images|${{ steps.compress.outcome }}
+            stage|Name the artifacts for publication|${{ steps.stage.outcome }}
+            upload|Upload for the publish job|${{ steps.upload.outcome }}
+        run: |
+          failed=""
+          boards="${{ inputs.board_types != '' && steps.boards.outcome || 'none' }}"
+          {
+            echo "### ${{ inputs.name }}"
+            echo
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS='|' read -r id label outcome; do
+            [ -n "$id" ] || continue
+            case "$id" in native_*) [ "${{ inputs.native }}" = true ] || continue ;; esac
+            [ "$id" = repokey ] && [ -z "${{ inputs.repo_suite }}" ] && continue
+            [ "$id" = boards ] && [ "$boards" = none ] && continue
+            shown="$outcome"
+            { [ -z "$shown" ] || { [ -n "$failed" ] && [ "$shown" = skipped ]; }; } && shown="not reached"
+            echo "| $label | $shown |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$outcome" = failure ] && [ "$id" != boards ] && [ -z "$failed" ]; then
+              failed="$label"
+            fi
+          done <<< "$OUTCOMES"
+          if [ -n "$failed" ]; then
+            echo "::error title=${{ inputs.name }} failed::stopped at: $failed"
+          elif [ "$boards" = failure ]; then
+            echo "::warning title=${{ inputs.name }} board images failed::${{ inputs.board_types }} not built; the EFI images are fine"
+          fi
+          echo "failed_step=$failed" >> "$GITHUB_OUTPUT"
+          echo "boards=$boards" >> "$GITHUB_OUTPUT"

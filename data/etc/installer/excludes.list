@@ -11,7 +11,8 @@
 /target/*
 /var/tmp/*
 /var/cache/apt/archives/*.deb
-/var/lib/apt/lists/*
+/var/lib/apt/lists/lock
+/var/lib/apt/lists/partial
 /var/log/*.gz
 /var/log/*.[0-9]
 /var/log/*.[0-9].gz

@@ -1,11 +1,16 @@
 Application(Network
 	SOURCES
 	Network.cpp
-	NetworkWindowNM.cpp
+	NetworkWindow.cpp
 	InterfaceDetailView.cpp
+	JoinWiFiWindow.cpp
+	MobileBroadbandView.cpp
 	StaticIPView.cpp
 	IPAddressControl.cpp
-	LIBS be shared localestub
+	NetworkHotspotSettings.cpp
+	ProxyView.cpp
+	ProxySettings.cpp
+	LIBS be shared localestub tracker
 	RDEF Network.rdef
 )
 

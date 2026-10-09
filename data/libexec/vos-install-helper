@@ -275,6 +275,9 @@ _do_partition_size_limits() {
     printf 'minSizeMiB=%s\n' "$_sl_min_mib"
     printf 'maxSizeMiB=%s\n' "$_sl_max_mib"
     printf 'usedMiB=%s\n' "$_sl_used_mib"
+    _do_partition_move_recovery_report "$_sl_disk" status
+    printf 'move_recovery=%s\n' "$_move_recovery"
+    printf 'move_recovery_detail=%s\n' "$_move_recovery_detail"
     return 0
 }
 
@@ -490,6 +493,15 @@ _do_commit_setup() {
     $_in systemctl disable sshd.service 2>/dev/null || true
     $_in systemctl disable ssh.socket 2>/dev/null || true
 
+    # janus's VOS_DEFAULT_USER must name the account this install created;
+    # the unit ships vos-live for the live ISO.
+    mkdir -p "$TARGET/etc/systemd/system/janus.service.d"
+    cat > "$TARGET/etc/systemd/system/janus.service.d/50-install-user.conf" <<EOF
+[Service]
+Environment=VOS_DEFAULT_USER=$_username
+EOF
+    $_in systemctl daemon-reload 2>/dev/null || true
+
     log "commit-setup complete for user $_username"
     return 0
 }
@@ -498,6 +510,89 @@ _unmount_binds() {
     for _fs in run sys proc dev/pts dev; do
         umount -R "$1/$_fs" 2>/dev/null || true
     done
+}
+
+# Hibernate needs a resume device with a known offset. Sized to RAM (capped at 32GiB) and skipped on
+# an unsupported fs or tight headroom. Sets _SWAP_CREATED and _SWAP_RESUME_OFFSET (4096-unit blocks on ext4).
+_setup_swapfile() {
+    _sw_target="$1"; _sw_fstype="$2"
+
+    case "$_sw_fstype" in
+        ext4) : ;;
+        *)
+            log "hibernate: $_sw_fstype target, swapfile support not wired up for it; skipping"
+            return 0
+            ;;
+    esac
+
+    _mem_kb="$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null)"
+    case "$_mem_kb" in
+        ''|*[!0-9]*)
+            log "hibernate: cannot read MemTotal; skipping swapfile"
+            return 0
+            ;;
+    esac
+    _swap_mib=$((_mem_kb / 1024))
+    _cap_mib=$((32 * 1024))
+    [ "$_swap_mib" -gt "$_cap_mib" ] && _swap_mib=$_cap_mib
+    [ "$_swap_mib" -lt 1 ] && _swap_mib=1
+
+    _avail_kb="$(df -Pk "$_sw_target" 2>/dev/null | awk 'NR==2 {print $4}')"
+    case "$_avail_kb" in
+        ''|*[!0-9]*)
+            log "hibernate: cannot read free space on $_sw_target; skipping swapfile"
+            return 0
+            ;;
+    esac
+    _avail_mib=$((_avail_kb / 1024))
+    _need_mib=$((_swap_mib + 10 * 1024))
+    if [ "$_avail_mib" -lt "$_need_mib" ]; then
+        log "hibernate: only ${_avail_mib}MiB free on target (need ${_need_mib}MiB for a ${_swap_mib}MiB swapfile plus headroom); skipping swapfile"
+        return 0
+    fi
+
+    _swapfile="$_sw_target/swapfile"
+    rm -f "$_swapfile"
+    if ! fallocate -l "${_swap_mib}M" "$_swapfile" 2>/dev/null; then
+        log "hibernate: fallocate failed, falling back to dd (slow)"
+        if ! dd if=/dev/zero of="$_swapfile" bs=1M count="$_swap_mib" status=none 2>/dev/null; then
+            log "hibernate: could not create swapfile; skipping"
+            rm -f "$_swapfile"
+            return 0
+        fi
+    fi
+    if ! chmod 600 "$_swapfile"; then
+        log "hibernate: chmod 600 on swapfile failed; skipping"
+        rm -f "$_swapfile"
+        return 0
+    fi
+    if ! mkswap "$_swapfile" >/dev/null 2>&1; then
+        log "hibernate: mkswap failed; skipping swapfile"
+        rm -f "$_swapfile"
+        return 0
+    fi
+
+    _SWAP_CREATED=1
+    log "hibernate: swapfile created ($_swapfile, ${_swap_mib}MiB)"
+
+    if ! command -v filefrag >/dev/null 2>&1; then
+        log "hibernate: filefrag not available; swap is usable but resume_offset cannot be computed"
+        return 0
+    fi
+    _frag="$(filefrag -v "$_swapfile" 2>/dev/null)"
+    _extents="$(printf '%s\n' "$_frag" | grep -c '^ *[0-9][0-9]*: ')"
+    if [ "$_extents" -gt 1 ]; then
+        log "hibernate: swapfile has $_extents extents (fragmented); resume still works, the fs driver bmaps the rest"
+    fi
+    _offset="$(printf '%s\n' "$_frag" | awk '$1=="0:" {x=$4; sub(/\.\.$/, "", x); print x; exit}')"
+    case "$_offset" in
+        ''|*[!0-9]*)
+            log "hibernate: could not parse filefrag output; resume_offset unavailable"
+            return 0
+            ;;
+    esac
+    _SWAP_RESUME_OFFSET="$_offset"
+    return 0
 }
 
 _do_config() {
@@ -536,17 +631,36 @@ _do_config() {
         return 2
     fi
 
+    # passno 0: no boot check (btrfs scrub is separate; fsck.xfs is a no-op).
+    # passno 1: e2fsck preen in the initramfs via initramfs-tools checkfs.
     _fsck_pass=1
     case "$_target_fstype" in
         btrfs) _root_opts="defaults" ; _fsck_pass=0 ;;
+        xfs)   _root_opts="defaults" ; _fsck_pass=0 ;;
         *)     _root_opts="errors=remount-ro" ;;
     esac
+
+    _SWAP_CREATED=0
+    _SWAP_RESUME_OFFSET=""
+    _setup_swapfile "$TARGET" "$_target_fstype"
 
     cat > "$TARGET/etc/fstab" <<EOF
 # /etc/fstab — written by vos-install-helper
 UUID=$_target_uuid  /  $_target_fstype  $_root_opts  0  $_fsck_pass
 tmpfs               /tmp  tmpfs  defaults,nosuid,nodev  0  0
 EOF
+    if [ "$_SWAP_CREATED" -eq 1 ]; then
+        printf '/swapfile  none  swap  sw  0  0\n' >> "$TARGET/etc/fstab"
+    fi
+
+    # update-grub on the target must yield rw root, but the live rootfs often has no
+    # /etc/default/grub, so copy the packaged one from /usr/share/vos/grub/.
+    mkdir -p "$TARGET/etc/default"
+    if [ ! -f "$TARGET/usr/share/vos/grub/grub" ]; then
+        log "missing packaged /usr/share/vos/grub/grub on target; cannot write /etc/default/grub"
+        return 1
+    fi
+    cp "$TARGET/usr/share/vos/grub/grub" "$TARGET/etc/default/grub"
 
     _target_disk="$(lsblk -no PKNAME "$_target_source" | head -n1)"
     _esp_part=""
@@ -576,8 +690,32 @@ EOF
     chroot "$TARGET" dpkg --purge --force-all \
         live-boot live-boot-initramfs-tools live-config live-config-systemd \
         live-tools 2>/dev/null || log "warn: live-boot purge incomplete"
+    # Installed targets boot with rw from GRUB; remount-fs must stay enabled
+    # (the live ISO image build masks it). See #271.
+    chroot "$TARGET" systemctl unmask systemd-remount-fs.service 2>/dev/null \
+        || log "warn: could not unmask systemd-remount-fs on target"
+    mkdir -p "$TARGET/etc/initramfs-tools/conf.d"
+    if [ "$_SWAP_CREATED" -eq 1 ] && [ -n "$_SWAP_RESUME_OFFSET" ]; then
+        # Hibernate: the resume device is the root fs UUID and the offset is the swapfile's first block.
+        # initramfs-tools needs this before update-initramfs; _write_shim_grubcfg adds the kernel cmdline.
+        cat > "$TARGET/etc/initramfs-tools/conf.d/resume" <<EOF
+RESUME=UUID=$_target_uuid
+RESUME_OFFSET=$_SWAP_RESUME_OFFSET
+EOF
+        mkdir -p "$TARGET/etc/vos"
+        printf 'resume=UUID=%s resume_offset=%s\n' \
+            "$_target_uuid" "$_SWAP_RESUME_OFFSET" > "$TARGET/etc/vos/resume-cmdline"
+        log "hibernate: resume configured (UUID=$_target_uuid offset=$_SWAP_RESUME_OFFSET)"
+    else
+        # No swap in fstab; never record the live system's.
+        # Dropped afterwards so the target's own regenerations find its swap.
+        echo RESUME=none > "$TARGET/etc/initramfs-tools/conf.d/resume"
+    fi
     chroot "$TARGET" update-initramfs -u -k all \
         || log "warn: update-initramfs failed"
+    if [ "$_SWAP_CREATED" -ne 1 ]; then
+        rm -f "$TARGET/etc/initramfs-tools/conf.d/resume"
+    fi
 
     _kver="$(ls -1 "$TARGET"/boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1 | sed 's|.*/vmlinuz-||')"
     if [ -n "$_kver" ]; then
@@ -600,11 +738,18 @@ _BOOTROOT=/run/vos/bootroot
 _write_shim_grubcfg() {
     _su="$1"; _sc="$2"; _kv="$3"; _troot="$4"
 
+    # Hibernate: _do_config leaves the resume= kernel params here when it provisioned a swapfile.
+    # Read fresh each call, since bootloader runs separately. Safe Mode never resumes, as it is the way out of a bad image.
+    _resume_cmdline=""
+    if [ -f "$_troot/etc/vos/resume-cmdline" ]; then
+        _resume_cmdline="$(cat "$_troot/etc/vos/resume-cmdline")"
+    fi
+
     # Debug builds ship vos-sshdebug.service; only then offer the Debug entry.
     _debug_menuentry=""
     if [ -f "$_troot/etc/systemd/system/vos-sshdebug.service" ]; then
-        _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+        _debug_menuentry="menuentry \"Vitruvian (SSH Debug)\" {
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug $_resume_cmdline
     initrd (\$root)/boot/initrd.img-$_kv
 }"
     fi
@@ -622,11 +767,13 @@ insmod gfxterm
 search --no-floppy --fs-uuid --set=root $_su
 set timeout=5
 menuentry "Vitruvian" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash fsck.mode=auto fsck.repair=preen $_resume_cmdline
     initrd (\$root)/boot/initrd.img-$_kv
 }
 menuentry "Vitruvian (Safe Mode)" {
-    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
+    insmod all_video
+    set gfxpayload=1024x768x32,1024x768,800x600,auto
+    linux (\$root)/boot/vmlinuz-$_kv root=UUID=$_su rw nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons noresume
     initrd (\$root)/boot/initrd.img-$_kv
 }
 $_debug_menuentry
@@ -1072,6 +1219,46 @@ _validate_one_op() {
             esac
             log "  [$_id] erase target_ref=$_tref"
             ;;
+        wipe)
+            _tref="$(_partlib_rec_get target_ref)"
+            _mode="$(_partlib_rec_get mode)"
+            if [ -z "$_tref" ]; then
+                log "[$_id]: missing target_ref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            case "$_mode" in
+                quick|full) ;;
+                *) log "[$_id]: wipe mode must be quick or full: $_mode"
+                   _validate_rc=2; _PARTLIB_ABORT=1; return ;;
+            esac
+            case " $_validate_seen_ids " in
+                *" $_tref "*) ;;
+                *) _partition_check_devnode "$_tref" || {
+                       log "[$_id]: target_ref resolves to neither a plan id nor a devnode: $_tref"
+                       _validate_rc=2; _PARTLIB_ABORT=1; return ;} ;;
+            esac
+            if _partition_check_devnode "$_tref" && [ ! -b "$_tref" ]; then
+                log "[$_id]: not a block device: $_tref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if _partition_check_devnode "$_tref" && [ "$_tref" = "$_plan_disk" ]; then
+                log "[$_id]: wipe refuses whole-disk target: $_tref"
+                _validate_rc=2; _PARTLIB_ABORT=1; return
+            fi
+            if _partition_check_devnode "$_tref"; then
+                _wt="$(lsblk -dno TYPE "$_tref" 2>/dev/null)"
+                if [ "$_wt" = "disk" ]; then
+                    log "[$_id]: wipe refuses whole-disk target: $_tref"
+                    _validate_rc=2; _PARTLIB_ABORT=1; return
+                fi
+                if _mnt="$(findmnt -n -o TARGET --source "$_tref" 2>/dev/null)" \
+                        && [ -n "$_mnt" ]; then
+                    log "[$_id]: $_tref is mounted at $_mnt; unmount it first"
+                    _validate_rc=2; _PARTLIB_ABORT=1; return
+                fi
+            fi
+            log "  [$_id] wipe target_ref=$_tref mode=$_mode"
+            ;;
         repair)
             _tref="$(_partlib_rec_get target_ref)"
             _fs="$(_partlib_rec_get filesystem)"
@@ -1138,6 +1325,22 @@ _validate_one_op() {
     esac
 }
 
+# Captures move-recovery status for a disk into _move_recovery and
+# _move_recovery_detail. action=status|resume|rollback.
+_do_partition_move_recovery_report() {
+    _mr_disk="$1"
+    _mr_action="${2:-status}"
+    _move_recovery="none"
+    _move_recovery_detail=""
+    _mr_out="$(_partlib_move_recover_disk "$_mr_disk" "$_mr_action")" || true
+    _move_recovery="$(printf '%s\n' "$_mr_out" \
+        | sed -n 's/^move_recovery=//p' | tail -n1)"
+    _move_recovery_detail="$(printf '%s\n' "$_mr_out" \
+        | sed -n 's/^move_recovery_detail=//p' | tail -n1)"
+    [ -n "$_move_recovery" ] || _move_recovery="none"
+    return 0
+}
+
 _do_partition_validate() {
     _plan="${1:-}"
     _partition_front_door "$_plan" || return $?
@@ -1150,6 +1353,12 @@ _do_partition_validate() {
 
     log "plan: disk=$_plan_disk table_type=${_plan_table_type:-<unchanged>}"
 
+    # Leftover move journal: a previous Move was killed mid-copy.
+    _do_partition_move_recovery_report "$_plan_disk" status
+    if [ "$_move_recovery" != "none" ]; then
+        log "move-recovery pending on $_plan_disk: $_move_recovery_detail"
+    fi
+
     _validate_rc=0
     _validate_seen_ids=""
     _validate_esp_warned=0
@@ -1159,6 +1368,8 @@ _do_partition_validate() {
 
     [ "$_validate_rc" -eq 0 ] || return "$_validate_rc"
 
+    printf 'move_recovery=%s\n' "$_move_recovery"
+    printf 'move_recovery_detail=%s\n' "$_move_recovery_detail"
     log "plan valid: $_validate_op_count operation(s), disk=$_plan_disk"
     return 0
 }
@@ -1309,6 +1520,16 @@ _apply_one_op() {
                 _status="failed"; _detail="erase failed for $_devnode"
             fi
             ;;
+        wipe)
+            _tref="$(_partlib_rec_get target_ref)"
+            _mode="$(_partlib_rec_get mode)"
+            _devnode="$(_partition_resolve_target "$_tref")"
+            if _partlib_wipe "$_plan_disk" "$_devnode" "$_mode"; then
+                _detail="$_devnode"
+            else
+                _status="failed"; _detail="wipe failed for $_devnode"
+            fi
+            ;;
         repair)
             _tref="$(_partlib_rec_get target_ref)"
             _rfs="$(_partlib_rec_get filesystem)"
@@ -1387,6 +1608,12 @@ _do_partition_apply() {
 
     trap '_partition_apply_cleanup' EXIT INT TERM
 
+    # Finish or report any interrupted Move on this disk before new ops.
+    _do_partition_move_recovery_report "$_plan_disk" resume
+    if [ "$_move_recovery" != "none" ]; then
+        log "move-recovery on $_plan_disk: $_move_recovery=$_move_recovery_detail"
+    fi
+
     _ID_MAP=""
     _PARTLIB_SETTLE_MS=0
     _ops_out="$(mktemp)"
@@ -1410,6 +1637,8 @@ _do_partition_apply() {
         printf 'status=%s\n' "$_overall"
         printf 'settle_ms=%s\n' "$_PARTLIB_SETTLE_MS"
         printf 'failed_op=%s\n' "$_failed_op"
+        printf 'move_recovery=%s\n' "$_move_recovery"
+        printf 'move_recovery_detail=%s\n' "$_move_recovery_detail"
         printf '\n'
         cat "$_vols_out"
         printf '\n'
@@ -1427,16 +1656,67 @@ _do_partition_apply() {
 }
 
 # ============================== dispatch ===================================
-
 if [ "${1:-}" = "partition" ]; then
     shift
     case "${1:-}" in
         validate)    shift; _do_partition_validate "${1:-}"; exit $? ;;
         apply)       shift; _do_partition_apply "$@"; exit $? ;;
         size-limits) shift; _do_partition_size_limits "${1:-}" "${2:-}"; exit $? ;;
-        *) printf 'usage: vos-install-helper partition {validate|apply} <plan> [--allow-reformat-esp]\n' >&2
+        move-recovery)
+            shift
+            _mr_what="${1:-status}"
+            _mr_disk="${2:-}"
+            case "$_mr_what" in
+                status|resume|rollback) ;;
+                *)
+                    log "move-recovery: unknown action: $_mr_what"
+                    exit 1 ;;
+            esac
+            if [ -n "$_mr_disk" ]; then
+                _partlib_move_recover_disk "$_mr_disk" "$_mr_what"
+                exit 0
+            fi
+            # No disk: act on every disk that has a journal, and print a
+            # single summary for all of them.
+            _mr_dir="$_PARTLIB_MOVE_JOURNAL_DIR"
+            _mr_disks=""
+            if [ -d "$_mr_dir" ]; then
+                for _mr_path in "$_mr_dir"/*.journal; do
+                    [ -f "$_mr_path" ] || continue
+                    _partlib_move_journal_read "$_mr_path" || continue
+                    case " $_mr_disks " in
+                        *" $MJ_DISK "*) ;;
+                        *) _mr_disks="$_mr_disks $MJ_DISK" ;;
+                    esac
+                done
+            fi
+            if [ -z "$_mr_disks" ]; then
+                printf 'move_recovery=none\n'
+                printf 'move_recovery_detail=no pending move journals\n'
+                exit 0
+            fi
+            _mr_overall=""
+            _mr_detail=""
+            for _mr_d in $_mr_disks; do
+                _mr_out="$(_partlib_move_recover_disk "$_mr_d" "$_mr_what")"
+                printf '%s\n' "$_mr_out" | grep -v '^move_recovery'
+                _mr_r="$(printf '%s\n' "$_mr_out" \
+                    | sed -n 's/^move_recovery=//p' | tail -n1)"
+                _mr_t="$(printf '%s\n' "$_mr_out" \
+                    | sed -n 's/^move_recovery_detail=//p' | tail -n1)"
+                [ "$_mr_r" = failed ] && _mr_overall=failed
+                [ -z "$_mr_overall" ] && _mr_overall="$_mr_r"
+                _mr_detail="${_mr_detail:+$_mr_detail; }$_mr_t"
+            done
+            printf 'move_recovery=%s\n' "$_mr_overall"
+            printf 'move_recovery_detail=%s\n' "$_mr_detail"
+            exit 0
+            ;;
+        *)
+           printf 'usage: vos-install-helper partition {validate|apply} <plan> [--allow-reformat-esp]\n' >&2
            printf '       vos-install-helper partition capabilities [<filesystem>]\n' >&2
            printf '       vos-install-helper partition size-limits <target> [<filesystem>] (privileged)\n' >&2
+           printf '       vos-install-helper partition move-recovery {status|resume|rollback} [<disk>]\n' >&2
            exit 1 ;;
     esac
 fi

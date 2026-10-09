@@ -80,8 +80,9 @@ BVolume::SetTo(dev_t device)
 	}
 
 	fs_info info;
-	if (fs_stat_dev(device, &info) != 0)
-		return fCStatus = (errno != 0 ? -errno : B_BAD_VALUE);
+	status_t error = fs_stat_dev(device, &info);
+	if (error != B_OK)
+		return fCStatus = error;
 
 	fDevice = device;
 	fCStatus = B_OK;
@@ -111,8 +112,9 @@ BVolume::GetRootDirectory(BDirectory *directory) const
 		return B_BAD_VALUE;
 
 	fs_info info;
-	if (fs_stat_dev(fDevice, &info) != 0)
-		return -errno;
+	status_t error = fs_stat_dev(fDevice, &info);
+	if (error != B_OK)
+		return error;
 
 	int dirFd = _kern_open_entry_ref(info.dev, info.root, NULL,
 		O_RDONLY | O_CLOEXEC, 0);
@@ -151,8 +153,9 @@ BVolume::BlockSize() const
 	if (InitCheck() != B_OK)
 		return B_NO_INIT;
 	fs_info info;
-	if (fs_stat_dev(fDevice, &info) != 0)
-		return -errno;
+	status_t error = fs_stat_dev(fDevice, &info);
+	if (error != B_OK)
+		return error;
 	return info.block_size;
 }
 
@@ -163,8 +166,9 @@ BVolume::GetName(char *name) const
 	if (name == NULL || InitCheck() != B_OK)
 		return B_BAD_VALUE;
 	fs_info info;
-	if (fs_stat_dev(fDevice, &info) != 0)
-		return -errno;
+	status_t error = fs_stat_dev(fDevice, &info);
+	if (error != B_OK)
+		return error;
 	strncpy(name, info.volume_name, B_FILE_NAME_LENGTH);
 	return B_OK;
 }
@@ -179,14 +183,15 @@ BVolume::SetName(const char *name)
 		return B_NAME_TOO_LONG;
 
 	fs_info oldInfo;
-	if (fs_stat_dev(fDevice, &oldInfo) != 0)
-		return -errno;
+	status_t error = fs_stat_dev(fDevice, &oldInfo);
+	if (error != B_OK)
+		return error;
 	if (strcmp(name, oldInfo.volume_name) == 0)
 		return B_OK;
 
 	fs_info newInfo;
 	strlcpy(newInfo.volume_name, name, sizeof(newInfo.volume_name));
-	status_t error = _kern_write_fs_info(fDevice, &newInfo,
+	error = _kern_write_fs_info(fDevice, &newInfo,
 		FS_WRITE_FSINFO_NAME);
 	if (error != B_OK)
 		return error;
@@ -221,8 +226,9 @@ BVolume::GetIcon(BBitmap *icon, icon_size which) const
 	if (InitCheck() != B_OK)
 		return B_NO_INIT;
 	fs_info info;
-	if (fs_stat_dev(fDevice, &info) != 0)
-		return -errno;
+	status_t error = fs_stat_dev(fDevice, &info);
+	if (error != B_OK)
+		return error;
 	return get_device_icon(info.device_name, icon, which);
 }
 
@@ -233,8 +239,9 @@ BVolume::GetIcon(uint8** _data, size_t* _size, type_code* _type) const
 	if (InitCheck() != B_OK)
 		return B_NO_INIT;
 	fs_info info;
-	if (fs_stat_dev(fDevice, &info) != 0)
-		return -errno;
+	status_t error = fs_stat_dev(fDevice, &info);
+	if (error != B_OK)
+		return error;
 	return get_device_icon(info.device_name, _data, _size, _type);
 }
 
@@ -331,8 +338,9 @@ BVolume::DeviceNode(BString* out) const
 		*out = e.device_path;
 	} else {
 		fs_info info;
-		if (fs_stat_dev(fDevice, &info) != 0)
-			return -errno;
+		status_t error = fs_stat_dev(fDevice, &info);
+		if (error != B_OK)
+			return error;
 		*out = info.device_name;
 	}
 	return B_OK;

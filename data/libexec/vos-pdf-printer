@@ -1,0 +1,30 @@
+#!/bin/sh
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+#
+# Creates the "PDF" print queue (cups-pdf, writes to ~/Desktop) once. The
+# package's postinst skips this inside a chroot, which is where images
+# are built. Runs from vos-pdf-printer.service after cupsd is up.
+
+MARKER=/var/lib/vos/pdf-printer-created
+
+[ -x /usr/lib/cups/backend/cups-pdf ] || exit 0
+
+# The Desktop is always ~/Desktop on V\OS (find_directory), never localized.
+sed -i 's|^Out .*|Out ${HOME}/Desktop|' /etc/cups/cups-pdf.conf
+
+if ! LC_ALL=C lpstat -v 2>/dev/null | grep -q 'cups-pdf:/'; then
+    size="$(LC_ALL=C paperconf 2>/dev/null)" || size=a4
+    # Name files after the job title, since the PPD default garbles it in cups-pdf 3.0.2,
+    # and add the job number only to untitled jobs.
+    lpadmin -p PDF -v cups-pdf:/ -m lsb/usr/cups-pdf/CUPS-PDF_opt.ppd \
+        -o pdftops-renderer-default=pdftocairo -o printer-is-shared=no \
+        -o PageSize="$size" -o TitlePref=1 -o Label=0 -E || exit 1
+    if ! LC_ALL=C lpstat -d 2>/dev/null | grep -q 'system default destination:'; then
+        lpadmin -d PDF
+    fi
+fi
+
+# Only once: a user who removes the queue keeps it removed.
+mkdir -p "$(dirname "$MARKER")"
+: > "$MARKER"

@@ -6,6 +6,8 @@
 #define T_ROSTER_H
 
 
+#include <vector>
+
 #include "AppInfoList.h"
 #include "RecentApps.h"
 #include "RecentEntries.h"
@@ -46,6 +48,7 @@ public:
 			void			HandleGetAppList(BMessage* request);
 			void			HandleUpdateActiveApp(BMessage* request);
 			void			HandleBroadcast(BMessage* request);
+			void			GetAppMessengers(std::vector<BMessenger>& messengers);
 			void			HandleStartWatching(BMessage* request);
 			void			HandleStopWatching(BMessage* request);
 			void			HandleGetRecentDocuments(BMessage* request);

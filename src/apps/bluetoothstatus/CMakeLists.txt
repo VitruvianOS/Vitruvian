@@ -4,18 +4,18 @@ RunnableAddOn(BluetoothStatus
 	BluetoothStatusView.cpp
 	BluetoothStatusWindow.cpp
 	PairingDialogWindow.cpp
-	LIBS be localestub
+	LIBS be bluetoothui shared localestub
 	RDEF BluetoothStatus.rdef BluetoothStatusIcons.rdef
 )
 
 target_include_directories(BluetoothStatus PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
-	${CMAKE_SOURCE_DIR}/src/kits/bluetooth/libbluetooth
+	${CMAKE_SOURCE_DIR}/headers/private/bluetooth
 )
-UsePrivateHeaders(BluetoothStatus interface)
+UsePrivateHeaders(BluetoothStatus interface shared)
 DoCatalogs("x-vnd.Haiku-BluetoothStatus" apps/bluetoothstatus)
 
-# Off by default and only settable from the cmake command line -- a debug
+# Off by default and only settable from the cmake command line; a debug
 # menu that opens the pairing dialog shells with sample content must
 # never be reachable in a shipped build.
 option(VITRUVIAN_ENABLE_DIALOG_SHELL_DEBUG

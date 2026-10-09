@@ -67,7 +67,9 @@ public:
 
 	virtual void InquiryStarted(status_t status)
 	{
-		BMessenger(fPanel).SendMessage(kMsgInquiryStarted);
+		BMessage message(kMsgInquiryStarted);
+		message.AddInt32("status", (int32)status);
+		BMessenger(fPanel).SendMessage(&message);
 	}
 
 	virtual void InquiryCompleted(int discType)
@@ -92,7 +94,8 @@ InquiryPanel::InquiryPanel(const BString& adapterPath,
 	fDiscoveryAgent(NULL),
 	fDiscoveryListener(NULL),
 	fInquirySeconds(inquirySeconds),
-	fScanning(false)
+	fScanning(false),
+	fStartFailed(false)
 {
 	fMessageView = new BStringView("message",
 		B_TRANSLATE("Scanning for nearby devices..."));
@@ -147,6 +150,7 @@ void
 InquiryPanel::_StartInquiry()
 {
 	fScanning = true;
+	fStartFailed = false;
 	fMessageView->SetText(B_TRANSLATE("Scanning for nearby devices..."));
 	fProgressBar->Reset();
 	fDeviceList->MakeEmpty();
@@ -174,8 +178,12 @@ InquiryPanel::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case kMsgInquiryStarted:
-			InquiryStarted();
+		{
+			int32 status = B_ERROR;
+			message->FindInt32("status", &status);
+			InquiryStarted((status_t)status);
 			break;
+		}
 
 		case kMsgDeviceFound:
 			DeviceFound(message);
@@ -264,8 +272,17 @@ InquiryPanel::DeviceFound(BMessage* deviceInfo)
 
 
 void
-InquiryPanel::InquiryStarted()
+InquiryPanel::InquiryStarted(status_t status)
 {
+	if (status != B_OK) {
+		// InquiryFinished() still fires when the timer expires and must not
+		// turn a refused StartDiscovery into a misleading "no devices found".
+		fStartFailed = true;
+		fMessageView->SetText(B_TRANSLATE("Could not start scanning. Check "
+			"that Bluetooth is powered on and not blocked."));
+		return;
+	}
+
 	fMessageView->SetText(B_TRANSLATE("Scanning for nearby devices..."));
 }
 
@@ -274,9 +291,11 @@ void
 InquiryPanel::InquiryFinished()
 {
 	fScanning = false;
-	fMessageView->SetText(fDeviceList->CountItems() > 0
-		? B_TRANSLATE("Scan complete. Select a device to pair.")
-		: B_TRANSLATE("Scan complete. No devices found."));
+	if (!fStartFailed) {
+		fMessageView->SetText(fDeviceList->CountItems() > 0
+			? B_TRANSLATE("Scan complete. Select a device to pair.")
+			: B_TRANSLATE("Scan complete. No devices found."));
+	}
 	fRescanButton->SetEnabled(true);
 	_UpdateButtons();
 }

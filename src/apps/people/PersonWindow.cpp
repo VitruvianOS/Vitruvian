@@ -249,8 +249,10 @@ PersonWindow::MessageReceived(BMessage* msg)
 						int64 directory;
 						msg->FindInt64("to directory", &directory);
 
-						int32 device;
-						msg->FindInt32("device", &device);
+						// node monitor posts device as UInt64 (dev_t).
+						uint64 rawDevice;
+						msg->FindUInt64("device", &rawDevice);
+						dev_t device = (dev_t)rawDevice;
 
 						// Update our ref.
 						delete fRef;

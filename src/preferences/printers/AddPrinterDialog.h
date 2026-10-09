@@ -1,61 +1,74 @@
 /*
- * Copyright 2001-2007, Haiku.
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
  * Distributed under the terms of the MIT License.
- *
- * Authors:
- *		Philippe Houdoin
- *		Michael Pfeiffer
  */
 #ifndef _ADD_PRINTER_DIALOG_H
 #define _ADD_PRINTER_DIALOG_H
 
 
-#include <Button.h>
+#include <ColumnListView.h>
+#include <List.h>
+#include <Messenger.h>
 #include <String.h>
-#include <PopUpMenu.h>
-#include <TextControl.h>
 #include <Window.h>
+
+#include "printcups.h"
+
+
+class BButton;
+class BPopUpMenu;
+class BRadioButton;
+class BTextControl;
+
+
+class DeviceRow : public BRow {
+public:
+						DeviceRow(const printcups_device& device);
+
+	const BString&		Uri() const { return fUri; }
+	bool				Everywhere() const { return fEverywhere; }
+
+private:
+	BString				fUri;
+	bool				fEverywhere;
+};
+
+
+class PpdRow : public BRow {
+public:
+						PpdRow(const printcups_ppd& ppd);
+
+	const BString&		Name() const { return fName; }
+
+private:
+	BString				fName;
+};
 
 
 class AddPrinterDialog : public BWindow {
-		typedef BWindow Inherited;
 public:
-								AddPrinterDialog(BWindow *parent);
-		
-			void				MessageReceived(BMessage *msg);
-			bool				QuitRequested();
-	
+						AddPrinterDialog(const BMessenger& replyTo);
+
+	virtual void		MessageReceived(BMessage* message);
+
 private:
-			enum MessageKind {
-				kPrinterSelectedMsg = 'adlg',
-				kTransportSelectedMsg,
-				kNameChangedMsg,
-			};
-	
-	
-			void				_AddPrinter(BMessage *msg);
-			void				_StorePrinter(BMessage *msg);
-			void				_HandleChangedTransport(BMessage *msg);
+	void				_UpdateButtons();
+	void				_LoadPpds(const BString& uri);
+	BString				_SelectedModel();
 
-			void				_BuildGUI(int stage);
-			void				_FillTransportMenu(BMenu *menu);
-			void				_FillMenu(BMenu *menu, const char *path,
-									uint32 what);
-			void				_AddPortSubMenu(BMenu *menu,
-									const char *transport, const char *port);
-			void 				_Update();
-		
-			BMessenger			fPrintersPrefletMessenger;
-
-			BTextControl*		fName;
-			BPopUpMenu*			fPrinter;
-			BPopUpMenu*			fTransport;
-			BButton*			fOk;
-		
-			BString 			fNameText;
-			BString 			fPrinterText;
-			BString 			fTransportText;
-			BString 			fTransportPathText;
+	BMessenger			fReplyTo;
+	BRadioButton*		fDiscoverRadio;
+	BRadioButton*		fManualRadio;
+	BColumnListView*	fDeviceList;
+	BTextControl*		fUriField;
+	BTextControl*		fNameField;
+	BPopUpMenu*			fModelMenu;
+	BList				fPpdNames;			// BString* per menu item
+	BButton*			fRefreshButton;
+	BButton*			fAddButton;
+	BButton*			fCancelButton;
+	bool				fBusy;
 };
+
 
 #endif // _ADD_PRINTER_DIALOG_H

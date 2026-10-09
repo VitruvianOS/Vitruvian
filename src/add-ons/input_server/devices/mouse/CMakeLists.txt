@@ -7,7 +7,6 @@ AddOn(
 
 	SOURCES
 	MouseInputDevice.cpp
-	movement_maker.cpp
 
 	INCLUDES
 	"./"

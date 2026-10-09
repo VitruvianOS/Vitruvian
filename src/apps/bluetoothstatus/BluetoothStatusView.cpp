@@ -40,6 +40,14 @@
 #include "BluetoothStatus.h"
 #include "PairingDialogWindow.h"
 
+#include <BluetoothPreflet.h>
+#include <BluetoothSettings.h>
+#include <ObexReceiveAgent.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "BluetoothStatus"
@@ -65,7 +73,9 @@ BluetoothStatusView::BluetoothStatusView(BRect frame, int32 resizingMode, bool i
 	fDiscovering(false),
 	fPulsePhase(false),
 	fInDeskbar(inDeskbar),
-	fTrayIcon(NULL)
+	fTrayIcon(NULL),
+	fSettings(NULL),
+	fReceiveAgent(NULL)
 {
 	SetViewColor(B_TRANSPARENT_COLOR);
 	SetLowColor(ViewColor());
@@ -91,7 +101,9 @@ BluetoothStatusView::BluetoothStatusView(BMessage* archive)
 	fDiscovering(false),
 	fPulsePhase(false),
 	fInDeskbar(false),
-	fTrayIcon(NULL)
+	fTrayIcon(NULL),
+	fSettings(NULL),
+	fReceiveAgent(NULL)
 {
 	// Deskbar restores saved replicants through this archive constructor, not
 	// through instantiate_deskbar_item(), so the tray mode has to be recovered
@@ -109,6 +121,11 @@ BluetoothStatusView::BluetoothStatusView(BMessage* archive)
 BluetoothStatusView::~BluetoothStatusView()
 {
 	delete fTrayIcon;
+	delete fSettings;
+	// fReceiveAgent is owned by the looper once AddHandler succeeds;
+	// delete only if Start() never ran or AddHandler was never reached.
+	if (fReceiveAgent != NULL && Window() == NULL)
+		delete fReceiveAgent;
 }
 
 
@@ -154,6 +171,18 @@ BluetoothStatusView::AttachedToWindow()
 	LocalDevice::RegisterAgent(BMessenger(this), BMessenger(this),
 		kMsgOperationDone);
 
+	// Host the OBEX receive agent for the whole login. The preflet switch
+	// only writes BluetoothSettings; this agent reloads them per push.
+	if (fSettings == NULL)
+		fSettings = new BluetoothSettings();
+	fSettings->LoadSettings();
+	if (fReceiveAgent == NULL && Window() != NULL) {
+		fReceiveAgent = new ObexReceiveAgent(*fSettings);
+		Window()->Looper()->AddHandler(fReceiveAgent);
+	}
+	if (fReceiveAgent != NULL)
+		fReceiveAgent->Start();
+
 	// Initial update
 	_RequestStatusUpdate();
 }
@@ -170,6 +199,15 @@ BluetoothStatusView::DetachedFromWindow()
 	// window closes). Fire-and-forget: the view may already be on its way
 	// out, so there is nothing useful to reply to.
 	LocalDevice::UnregisterAgent(BMessenger(), 0);
+
+	if (fReceiveAgent != NULL) {
+		fReceiveAgent->Stop();
+		if (Window() != NULL && Window()->Looper() != NULL) {
+			Window()->Looper()->RemoveHandler(fReceiveAgent);
+			delete fReceiveAgent;
+		}
+		fReceiveAgent = NULL;
+	}
 
 	BView::DetachedFromWindow();
 }
@@ -225,13 +263,17 @@ BluetoothStatusView::MessageReceived(BMessage* message)
 			}
 			break;
 
-		case kMsgScanReady:
-			// TODO: Show discovered devices in popup menu (see _ScanDevices).
-			break;
-
 		case kMsgOperationDone:
 			// Connect/disconnect completed -- refresh status so the tray
 			// glyph and cached menu snapshot reflect the new state.
+			_RequestStatusUpdate();
+			break;
+
+		case LocalDevice::NOTIFICATION_ADAPTER_ADDED:
+		case LocalDevice::NOTIFICATION_ADAPTER_REMOVED:
+		case LocalDevice::NOTIFICATION_DEVICE_CONNECTED:
+		case LocalDevice::NOTIFICATION_DEVICE_DISCONNECTED:
+			// The first status can predate BlueZ enumeration.
 			_RequestStatusUpdate();
 			break;
 
@@ -661,7 +703,9 @@ BluetoothStatusView::_BuildDebugDialogMenu(BMenu* parent)
 void
 BluetoothStatusView::_ScanDevices()
 {
-	RemoteDevice::FetchAllAsync(BMessenger(this), kMsgScanReady);
+	// Scanning lives in the preflet's inquiry panel.
+	BMessage openInquiry(kMsgOpenInquiry);
+	be_roster->Launch("application/x-vnd.Haiku-Bluetooth", &openInquiry);
 }
 
 

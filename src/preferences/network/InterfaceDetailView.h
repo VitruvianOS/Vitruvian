@@ -10,11 +10,22 @@
 #include <String.h>
 #include <View.h>
 
+#include "NetworkHotspotSettings.h"
+
 
 class BGridLayout;
+class BGroupLayout;
+class BGroupView;
+class BTabView;
 class BListView;
 class BButton;
 class StaticIPView;
+
+
+// Sent to the window by the VPN section's Import button.
+const uint32 kMsgImportVPN = 'imvp';
+// Sent to the window to join a network by name; optional "device".
+const uint32 kMsgJoinOtherWiFi = 'jowf';
 
 
 // Right-hand detail pane of the Network preflet, swapped in when a device or
@@ -24,7 +35,7 @@ class StaticIPView;
 // snapshot handed in by SetToVPN().
 //
 // Owns the embedded StaticIPView so its Apply/Revert dirty state
-// can be surfaced to NetworkWindowNM's single Revert button -- a
+// can be surfaced to NetworkWindow's single Revert button -- a
 // separate modal dialog would put that state a window away from the button
 // that needs it.
 class InterfaceDetailView : public BView {
@@ -38,6 +49,14 @@ public:
 			void			SetToDevice(const BMessage& deviceInfo);
 			void			SetToVPN(const BMessage& vpnInfo);
 			void			ShowEmpty(const char* message);
+			// Overview of every VPN profile, with an Import button.
+			void			ShowVPNSection(const BMessage& vpns);
+			// Wi-Fi adapters ("name", "path", "status" per adapter), with
+			// a way to join a network that is not in range or hidden.
+			void			ShowWiFiSection(const BMessage& adapters);
+			// Refill only the AP list from the cached scan, keeping the
+			// selection; no-op unless showing that Wi-Fi device.
+			void			RefreshWiFiNetworks(const char* devicePath);
 
 			bool			IsRevertable() const;
 			void			Revert();
@@ -46,6 +65,15 @@ private:
 			void			_Rebuild();
 			void			_RebuildDeviceView();
 			void			_RebuildVPNView();
+			void			_RebuildVPNSectionView();
+			void			_RebuildWiFiSectionView();
+			void			_AddHotspotSection(BGroupLayout* layout);
+			void			_FillWiFiList(const BMessage& networks);
+			void			_RequestHotspotState();
+			void			_ShowHotspotError(BMessage* message);
+			void			_StartHotspot(const BString& ssid,
+							const BString& password);
+			void			_StopHotspot();
 			void			_UpdateWiFiButtons();
 			void			_RequestSavedNetworks();
 			void			_RebuildSavedList();
@@ -53,14 +81,20 @@ private:
 			void			_UpdateWiFiSavedMarkers();
 			bool			_HasSavedProfile(const BString& ssid) const;
 			void			_RenumberSavedList();
+			BGroupLayout*	_AddTab(const char* label);
+			void			_RebuildHotspotTab();
 
 			enum Mode {
 				MODE_EMPTY,
 				MODE_DEVICE,
-				MODE_VPN
+				MODE_VPN,
+				MODE_VPN_SECTION,
+				MODE_WIFI_SECTION
 			};
 
 			BGridLayout*	fGridLayout;
+			BTabView*		fTabView;
+			int32			fSelectedTab;
 			BMessage		fDeviceInfo;
 			Mode			fMode;
 			BString			fEmptyMessage;
@@ -82,6 +116,14 @@ private:
 
 			BButton*		fVPNConnectButton;
 			BButton*		fVPNDisconnectButton;
+			BButton*		fVPNRemoveButton;
+
+			// Hotspot (WiFi AP mode) controls and last known backend state.
+			NetworkHotspotSettings	fHotspotSettings;
+			BMessage		fHotspotState;
+			BButton*		fHotspotStartButton;
+			BButton*		fHotspotStopButton;
+			BGroupView*		fHotspotPage;
 };
 
 

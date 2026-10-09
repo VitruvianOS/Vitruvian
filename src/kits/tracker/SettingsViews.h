@@ -90,10 +90,12 @@ private:
 	BRadioButton*	fShowDisksIconRadioButton;
 	BRadioButton*	fMountVolumesOntoDesktopRadioButton;
 	BCheckBox*		fMountSharedVolumesOntoDesktopCheckBox;
+	BCheckBox*		fSnapToGridCheckBox;
 
 	bool fShowDisksIcon;
 	bool fMountVolumesOntoDesktop;
 	bool fMountSharedVolumesOntoDesktop;
+	bool fSnapToGrid;
 	bool fIntegrateNonBootBeOSDesktops;
 	bool fEjectWhenUnmounting;
 

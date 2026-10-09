@@ -77,6 +77,9 @@ private:
 									BMessage* reply);
 			status_t			_HandleControlDevices(BMessage* message,
 									BMessage* reply);
+			// Control code to every device add-on with a NULL cookie,
+			// for add-on level work such as the resume rescan.
+			void				_ControlDeviceAddOns(BMessage* message);
 			status_t			_HandleSystemShuttingDown(BMessage* message,
 									BMessage* reply);
 			status_t			_HandleMethodReplicant(BMessage* message,

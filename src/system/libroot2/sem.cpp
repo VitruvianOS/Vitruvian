@@ -70,20 +70,30 @@ acquire_sem_etc(sem_id id, int32 count, uint32 flags, bigtime_t timeout)
 	if (count < 1)
 		return B_BAD_VALUE;
 
-	struct nexus_sem_op ex = {
-		.id = id,
-		.count = count,
-		.flags = flags,
-		.timeout = timeout,
-		.ret = B_OK
-	};
-
 	int nexus = BKernelPrivate::Team::GetSemDescriptor();
 	if (nexus < 0)
 		return B_ERROR;
 
-	if (nexus_io(nexus, NEXUS_SEM_ACQUIRE, &ex) < 0)
-		return B_ERROR;
+	// nexus returns B_INTERRUPTED for any signal, including the suspend freezer's, so repeat the wait
+	// unless the caller asked for it; an absolute deadline keeps the time left exact.
+	if ((flags & B_RELATIVE_TIMEOUT) != 0 && timeout > 0
+		&& timeout != B_INFINITE_TIMEOUT) {
+		flags = (flags & ~B_RELATIVE_TIMEOUT) | B_ABSOLUTE_TIMEOUT;
+		timeout += system_time();
+	}
+
+	struct nexus_sem_op ex;
+	do {
+		ex = (struct nexus_sem_op){
+			.id = id,
+			.count = count,
+			.flags = flags,
+			.timeout = timeout,
+			.ret = B_OK
+		};
+		if (nexus_io(nexus, NEXUS_SEM_ACQUIRE, &ex) < 0)
+			return B_ERROR;
+	} while (ex.ret == B_INTERRUPTED && (flags & B_CAN_INTERRUPT) == 0);
 	return ex.ret;
 }
 

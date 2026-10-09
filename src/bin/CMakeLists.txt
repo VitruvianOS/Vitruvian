@@ -8,7 +8,8 @@ add_subdirectory(media_client)
 add_subdirectory(pc)
 add_subdirectory(query)
 add_subdirectory(rc)
-# add_subdirectory(screen_blanker)  # screensaver kit not yet implemented
+add_subdirectory(jam)
+add_subdirectory(screen_blanker)
 # add_subdirectory(screenmode)      # missing private graphics headers
 
 UsePrivateHeaders(GLOBAL app interface libroot kernel shared storage support system tracker)

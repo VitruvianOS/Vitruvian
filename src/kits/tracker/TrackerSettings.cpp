@@ -66,6 +66,7 @@ private:
 	BooleanValueSetting* fMountVolumesOntoDesktop;
 	BooleanValueSetting* fDesktopFilePanelRoot;
 	BooleanValueSetting* fMountSharedVolumesOntoDesktop;
+	BooleanValueSetting* fSnapToGrid;
 	BooleanValueSetting* fEjectWhenUnmounting;
 
 	BooleanValueSetting* fShowFullPathInTitleBar;
@@ -129,6 +130,7 @@ TTrackerState::TTrackerState()
 	fMountVolumesOntoDesktop(NULL),
 	fDesktopFilePanelRoot(NULL),
 	fMountSharedVolumesOntoDesktop(NULL),
+	fSnapToGrid(NULL),
 	fEjectWhenUnmounting(NULL),
 	fShowFullPathInTitleBar(NULL),
 	fSingleWindowBrowse(NULL),
@@ -159,6 +161,7 @@ TTrackerState::TTrackerState(const TTrackerState&)
 	fMountVolumesOntoDesktop(NULL),
 	fDesktopFilePanelRoot(NULL),
 	fMountSharedVolumesOntoDesktop(NULL),
+	fSnapToGrid(NULL),
 	fEjectWhenUnmounting(NULL),
 	fShowFullPathInTitleBar(NULL),
 	fSingleWindowBrowse(NULL),
@@ -212,6 +215,7 @@ TTrackerState::LoadSettingsIfNeeded()
 		= new BooleanValueSetting("MountVolumesOntoDesktop", kDefaultMountVolumesOntoDesktop));
 	Add(fMountSharedVolumesOntoDesktop = new BooleanValueSetting(
 		"MountSharedVolumesOntoDesktop", kDefaultMountSharedVolumesOntoDesktop));
+	Add(fSnapToGrid = new BooleanValueSetting("SnapToGrid", kDefaultSnapToGrid));
 	Add(fEjectWhenUnmounting
 		= new BooleanValueSetting("EjectWhenUnmounting", kDefaultEjectWhenUnmounting));
 
@@ -334,6 +338,20 @@ void
 TrackerSettings::SetMountSharedVolumesOntoDesktop(bool enabled)
 {
 	gTrackerState.fMountSharedVolumesOntoDesktop->SetValue(enabled);
+}
+
+
+bool
+TrackerSettings::SnapToGrid()
+{
+	return gTrackerState.fSnapToGrid->Value();
+}
+
+
+void
+TrackerSettings::SetSnapToGrid(bool enabled)
+{
+	gTrackerState.fSnapToGrid->SetValue(enabled);
 }
 
 

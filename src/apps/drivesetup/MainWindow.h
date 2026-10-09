@@ -100,11 +100,15 @@ private:
 									partition_id selectedPartition);
 			void				_Erase(BDiskDevice* disk,
 									partition_id selectedPartition);
+			void				_Wipe(BDiskDevice* disk,
+									partition_id selectedPartition);
 			void				_Rename(BDiskDevice* disk,
 									partition_id selectedPartition);
 			void				_RenameGpt(BDiskDevice* disk,
 									partition_id selectedPartition);
 			void				_ShowFeatures();
+			void				_CheckMoveRecovery();
+			void				_MoveRecoveryAction(const char* action);
 			float				_ColumnListViewHeight(BColumnListView* list,
 									BRow* currentRow);
 			void				_UpdateWindowZoomLimits();
@@ -148,6 +152,7 @@ private:
 			BMenuItem*			fMountAllMenuItem;
 			BMenuItem*			fOpenDiskProbeMenuItem;
 			BMenuItem*			fFeaturesMenuItem;
+			BMenuItem*			fMoveRecoveryMenuItem;
 
 			BMenu*				fFormatContextMenuItem;
 			BMenuItem*			fCreateContextMenuItem;

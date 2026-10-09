@@ -7,6 +7,15 @@ include(build/defs.cmake)
 include(build/deps.cmake)
 include(build/headers.cmake)
 
+# Normalize BUILDTOOLS_DIR to an absolute path once at the entry point so
+# every downstream macro/function can use ${BUILDTOOLS_DIR}/… directly
+# without per-callsite IS_ABSOLUTE() guards.  The configure script passes
+# paths relative to the build directory, so resolve against CMAKE_BINARY_DIR.
+if(BUILDTOOLS_DIR AND NOT IS_ABSOLUTE "${BUILDTOOLS_DIR}")
+	get_filename_component(BUILDTOOLS_DIR
+		"${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}" ABSOLUTE)
+endif()
+
 # Program interpreter path for RunnableAddOn (a .so that is also execve-able).
 if(NOT DEFINED VOS_DYNAMIC_LINKER)
 	execute_process(
@@ -56,7 +65,7 @@ macro( DoCatalogs signature subdir )
 
 	set( _catalog_dir "${CMAKE_BINARY_DIR}/catalogs/${signature}" )
 	if( BUILDTOOLS_DIR )
-		set( _linkcatkeys "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/tools/locale/linkcatkeys" )
+		set( _linkcatkeys "${BUILDTOOLS_DIR}/src/tools/locale/linkcatkeys" )
 	else()
 		# Self-hosting on Vitruvian: use the linkcatkeys installed system-wide.
 		set( _linkcatkeys "linkcatkeys" )
@@ -81,6 +90,7 @@ macro( DoCatalogs signature subdir )
 
 	install( DIRECTORY "${_catalog_dir}/"
 		DESTINATION "/system/data/locale/catalogs/${signature}"
+		COMPONENT data
 		FILES_MATCHING PATTERN "*.catalog"
 	)
 endmacro()
@@ -95,7 +105,7 @@ function( CompileRdef target rdef_file )
 	set(_pp     "${CMAKE_CURRENT_BINARY_DIR}/${rdef_file}.pp")
 	set(_rsrc   "${CMAKE_CURRENT_BINARY_DIR}/${rdef_file}.rsrc")
 	if(BUILDTOOLS_DIR)
-		set(_rc "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/rc/rc")
+		set(_rc "${BUILDTOOLS_DIR}/src/bin/rc/rc")
 	else()
 		set(_rc "rc")
 	endif()
@@ -128,8 +138,8 @@ endfunction()
 function( LinkRdefs target )
 	set(_bin    "$<TARGET_FILE:${target}>")
 	if(BUILDTOOLS_DIR)
-		set(_xres   "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/xres")
-		set(_rsattr "${CMAKE_BINARY_DIR}/${BUILDTOOLS_DIR}/src/bin/resattr")
+		set(_xres   "${BUILDTOOLS_DIR}/src/bin/xres")
+		set(_rsattr "${BUILDTOOLS_DIR}/src/bin/resattr")
 	else()
 		set(_xres   "xres")
 		set(_rsattr "resattr")
@@ -195,6 +205,8 @@ macro( Application name )
 	list (INSERT _APPLICATION_LIBS 0 be)
 	list (INSERT _APPLICATION_LIBS 0 root)
 	target_link_libraries(${name} PUBLIC ${_APPLICATION_LIBS})
+	# Keep libroot in DT_NEEDED, ahead of libc, for its strerror.
+	target_link_options(${name} PRIVATE -Wl,--no-as-needed)
 
 	# Add current dir headers
 	list (APPEND _APPLICATION_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
@@ -221,6 +233,8 @@ macro( Server name )
 	list (INSERT _SERVER_LIBS 0 be)
 	list (INSERT _SERVER_LIBS 0 root)
 	target_link_libraries(${name} PUBLIC ${_SERVER_LIBS})
+	# Same DT_NEEDED rule as Application.
+	target_link_options(${name} PRIVATE -Wl,--no-as-needed)
 
 	list (APPEND _SERVER_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR})
 	target_include_directories(${name} PRIVATE ${_SERVER_INCLUDES})

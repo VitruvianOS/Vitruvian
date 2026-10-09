@@ -53,7 +53,7 @@ get_extended_team_info(team_id teamID, uint32 flags, KMessage& info)
 	if (info.AddString("cwd path", cwdBuffer) != B_OK)
 		return B_ERROR;
 
-	if (info.AddInt32("cwd device", (int32)cwdStat.st_dev) != B_OK)
+	if (info.AddInt64("cwd device", (int64)cwdStat.st_dev) != B_OK)
 		return B_ERROR;
 
 	if (info.AddInt64("cwd directory", (int64)cwdStat.st_ino) != B_OK)

@@ -10,9 +10,11 @@
 #define _TIME_WINDOW_H
 
 
+#include <SupportDefs.h>
 #include <Window.h>
 
 
+class BButton;
 class BMessage;
 class BTabView;
 class ClockView;
@@ -20,6 +22,10 @@ class DateTimeView;
 class NetworkTimeView;
 class TimeZoneView;
 class TTimeBaseView;
+
+
+// Shared preflet error reporter. dbError is the D-Bus message when known.
+void ShowTimeError(const char* what, status_t status, const char* dbError = NULL);
 
 
 class TTimeWindow : public BWindow {
@@ -35,6 +41,7 @@ private:
 			void				_AlignWindow();
 			void				_SendTimeChangeFinished();
 			void				_SetRevertStatus();
+			void				_SyncNTPState();
 
 			TTimeBaseView*		fBaseView;
 
@@ -49,4 +56,3 @@ private:
 
 
 #endif	// _TIME_WINDOW_H
-

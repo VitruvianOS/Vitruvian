@@ -153,6 +153,7 @@ InputServer::InputServer()
 	fScreen(B_MAIN_SCREEN_ID),
 	fScreenOrientation(0),
 	fScreenReflection(0),
+	fScreenBoundsValid(false),
 	fEventQueueLock("input server event queue"),
 	fReplicantMessenger(NULL),
 	fInputMethodWindow(NULL),
@@ -557,7 +558,8 @@ InputServer::MessageReceived(BMessage* message)
 		case IS_SCREEN_BOUNDS_UPDATED:
 		{
 			// This is what the R5 app_server sends us when the screen
-			// configuration changes
+			// configuration changes. Never reply: app_server would take the
+			// reply for AS_GET_DESKTOP, which is code 0.
 			BRect frame;
 			if (message->FindRect("screen_bounds", &frame) != B_OK)
 				frame = fScreen.Frame();
@@ -572,13 +574,14 @@ InputServer::MessageReceived(BMessage* message)
 
 			if (frame == fFrame && orientation == fScreenOrientation
 				&& reflection == fScreenReflection)
-				break;
+				return;
 
 			BPoint pos(fMousePos.x * frame.Width() / fFrame.Width(),
 				fMousePos.y * frame.Height() / fFrame.Height());
 			fFrame = frame;
 			fScreenOrientation = orientation;
 			fScreenReflection = reflection;
+			fScreenBoundsValid = true;
 
 			// Devices place the cursor against their own copy of screen size.
 			BMessage bounds;
@@ -591,6 +594,24 @@ InputServer::MessageReceived(BMessage* message)
 			BMessage set;
 			set.AddPoint("where", pos);
 			HandleSetMousePosition(&set, NULL);
+			return;
+		}
+
+		case B_SEAT_DISABLED:
+		case B_SEAT_ENABLED:
+		case B_SYSTEM_RESUMED:
+		{
+			// janus_session sends these around a VT switch or resume; forward them to every device add-on
+			// so keyboards drop held keys and pointing devices resync their buttons.
+			ControlDevices(NULL, B_KEYBOARD_DEVICE, message->what, NULL);
+			ControlDevices(NULL, B_POINTING_DEVICE, message->what, NULL);
+			// Also deliver at add-on level with a NULL cookie: a pointing
+			// add-on whose devices all died still needs a resume rescan.
+			{
+				BMessage control(IS_DEVICE_ADDON_CONTROL);
+				control.AddInt32("code", message->what);
+				fAddOnManager->PostMessage(&control);
+			}
 			break;
 		}
 
@@ -1409,6 +1430,15 @@ debug_printf("InputServer::RegisterDevices() device_ref already exists: %s\n", d
 			if (item != NULL && fInputDeviceList.AddItem(item)) {
 				item->Start();
 				_DeviceStarted(*item);
+				// A device registered after the last bounds notice
+				// would keep normal orientation while the picture rotates.
+				if (fScreenBoundsValid && item->Type() == B_POINTING_DEVICE) {
+					BMessage bounds;
+					bounds.AddRect("screen_bounds", fFrame);
+					bounds.AddInt32("screen_orientation", fScreenOrientation);
+					bounds.AddInt32("screen_reflection", fScreenReflection);
+					item->Control(B_SCREEN_BOUNDS_CHANGED, &bounds);
+				}
 				BMessage message(IS_NOTIFY_DEVICE);
 				message.AddBool("added", true);
 				message.AddString("name", item->Name());

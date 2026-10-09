@@ -27,6 +27,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <AppDefs.h>
 #include <Autolock.h>
 #include <Debug.h>
 #include <Directory.h>
@@ -51,8 +52,6 @@
 #include <kb_mouse_settings.h>
 #include <keyboard_mouse_driver.h>
 #include <touchpad_settings.h>
-
-#include "movement_maker.h"
 
 
 #undef TRACE
@@ -109,21 +108,101 @@ static const struct libinput_interface kLibinputInterface = {
 // ---------------------------------------------------------------------------
 
 static bool
-_IsGestureDevice(int fd)
+_PropSet(int fd, uint32 prop)
 {
-	// Only route direct-touch (touchscreen) devices to libinput.
-	// INPUT_PROP_DIRECT means the device maps finger position directly to
-	// screen coordinates (no pointer acceleration, no relative mode).
-	//
-	// Touchpads (INPUT_PROP_BUTTONPAD / INPUT_PROP_POINTER) and mice go
-	// through the evdev path, which reads kernel-synthesised REL_WHEEL and
-	// ABS coordinates directly — robust across QEMU lock state changes.
 	uint8_t props[INPUT_PROP_CNT / 8 + 1] = {};
-	if (ioctl(fd, EVIOCGPROP(sizeof(props)), props) >= 0) {
-		if (props[INPUT_PROP_DIRECT / 8] & (1 << (INPUT_PROP_DIRECT % 8)))
+	if (ioctl(fd, EVIOCGPROP(sizeof(props)), props) < 0)
+		return false;
+	return (props[prop / 8] & (1 << (prop % 8))) != 0;
+}
+
+
+static bool
+_UdevSaysTouchpad(const char* path)
+{
+	BString model;
+	int32 role = UDEV_ROLE_UNKNOWN;
+	udev_device_name(path, model, role);
+	if (role == UDEV_ROLE_TOUCHPAD)
+		return true;
+	return model.IFindFirst("touchpad") >= 0
+		|| model.IFindFirst("trackpad") >= 0;
+}
+
+
+static bool
+_NameSaysTouchpad(const BString& name)
+{
+	return name.IFindFirst("touchpad") >= 0
+		|| name.IFindFirst("trackpad") >= 0;
+}
+
+
+// Strip the node suffix so Mouse and Touchpad of one pad share a group key.
+static BString
+_GroupFromHardwareName(const BString& name)
+{
+	BString group(name);
+	const char* suffixes[] = { " Mouse", " Touchpad", " Keyboard",
+		" Stylus", " UNKNOWN", NULL };
+	for (int32 i = 0; suffixes[i] != NULL; i++) {
+		int32 at = group.FindLast(suffixes[i]);
+		if (at >= 0 && at + (int32)strlen(suffixes[i]) == group.Length())
+			group.Truncate(at);
+	}
+	return group;
+}
+
+
+// Touch devices go to libinput so taps, two-finger scroll and right click
+// derive from finger state; evdev is better for mice, trackpoints, tablets
+// and QEMU/VirtualBox absolute pointers, which have neither BUTTONPAD nor
+// multitouch axes and keep working across QEMU lock state changes.
+static bool
+_UseLibinputDevice(int fd, const char* path)
+{
+	if (_PropSet(fd, INPUT_PROP_DIRECT) || _PropSet(fd, INPUT_PROP_BUTTONPAD))
+		return true;
+
+	struct libevdev* evdev = NULL;
+	if (libevdev_new_from_fd(fd, &evdev) >= 0) {
+		bool pointerMt = libevdev_has_property(evdev, INPUT_PROP_POINTER)
+			&& libevdev_has_event_code(evdev, EV_ABS,
+				ABS_MT_POSITION_X);
+		libevdev_free(evdev);
+		if (pointerMt)
 			return true;
 	}
-	return false;
+
+	return _UdevSaysTouchpad(path);
+}
+
+
+static bool
+_IsTouchpadDevice(int fd, const char* path)
+{
+	if (_PropSet(fd, INPUT_PROP_DIRECT))
+		return false;
+	if (_PropSet(fd, INPUT_PROP_BUTTONPAD))
+		return true;
+
+	struct libevdev* evdev = NULL;
+	if (libevdev_new_from_fd(fd, &evdev) >= 0) {
+		bool pointerMt = libevdev_has_property(evdev, INPUT_PROP_POINTER)
+			&& libevdev_has_event_code(evdev, EV_ABS,
+				ABS_MT_POSITION_X);
+		libevdev_free(evdev);
+		if (pointerMt)
+			return true;
+	}
+
+	if (_UdevSaysTouchpad(path))
+		return true;
+
+	BString model;
+	int32 role = UDEV_ROLE_UNKNOWN;
+	udev_device_name(path, model, role);
+	return _NameSaysTouchpad(model) || _NameSaysTouchpad(BString(path));
 }
 
 
@@ -145,6 +224,7 @@ public:
 
 			status_t			UpdateSettings();
 			status_t			UpdateTouchpadSettings(const BMessage* message);
+			void				HandleSeatMessage(uint32 what);
 
 			void				UpdateScreenBounds(BRect frame,
 									int32 orientation, int32 reflection);
@@ -158,8 +238,19 @@ public:
 
 			// Identity for removal; immune to ABA (see fSerial).
 			int32				Serial() const { return fSerial; }
+			ino_t				Inode() const { return fDeviceInode; }
+
+			const BString&		PhysicalGroup() const { return fPhysicalGroup; }
+			bool				IsTouchpad() const { return fIsTouchpad; }
+			bool				UseLibinput() const { return fUseLibinput; }
+			void				SetMayReportButtons(bool may)
+								{ fMayReportButtons = may; }
+			bool				MayReportButtons() const
+								{ return fMayReportButtons; }
 
 private:
+			friend class MouseInputDevice;
+
 			char*				_BuildShortName() const;
 
 	static	status_t			_ControlThreadEntry(void* arg);
@@ -169,6 +260,13 @@ private:
 
 			status_t			_GetTouchpadSettingsPath(BPath& path);
 			status_t			_UpdateTouchpadSettings(BMessage* message);
+			status_t			_LoadTouchpadSettingsFile();
+			void				_ApplyLibinputConfig();
+			void				_MarkTouchpadName();
+			void				_ClaimPhysicalButtons();
+			void				_UpdateSharedButtons(uint32 rawButtons);
+			void				_FlushSeatButtons(uint32 rawButtons);
+			void				_UpdateTouchpadScale();
 
 			BMessage*			_BuildMouseMessage(uint32 what,
 									uint64 when, uint32 buttons) const;
@@ -237,8 +335,16 @@ private:
 			// A clickpad reports finger position on the pad, so it
 			// needs delta tracking, not a position jump.
 			bool				fIsAbsoluteTouchpad;
+			// Screen pixels per pad unit; 0 until screen bounds are known.
+			float				fTouchpadScaleX;
+			float				fTouchpadScaleY;
+			// Sub-pixel remainder so small pad moves are not dropped.
+			float				fTouchpadResidualX;
+			float				fTouchpadResidualY;
 			uint32				fSharedButtons;
 			int32				fAbsMinX, fAbsMinY;
+			// Pad units per mm; 0 when the driver does not say.
+			int32				fAbsResX, fAbsResY;
 			int32				fAbsMaxX, fAbsMaxY;
 			int32				fLastAbsX, fLastAbsY;
 			BPoint				fCursorPosition;
@@ -253,6 +359,9 @@ private:
 			bool				fDeviceRemapsButtons;
 
 			int32				fSerial;
+			// st_ino of fDevice at classify time; resume re-probe can
+			// recreate the node at the same path with a new inode.
+			ino_t				fDeviceInode;
 
 			thread_id			fThread;
 	volatile bool				fActive;
@@ -260,8 +369,16 @@ private:
 			// volatile; matches the keyboard add-on.
 			int32				fUpdateSettings;
 
+			// Atomic pending B_SEAT_DISABLED / B_SEAT_ENABLED /
+			// B_SYSTEM_RESUMED, 0 = none.
+			int32				fSeatCommand;
+
 			bool				fIsTouchpad;
-			TouchpadMovement	fTouchpadMovementMaker;
+			touchpad_settings	fTouchpadSettings;
+			// HID sibling nodes (Mouse vs Touchpad of one pad) share a
+			// physical click; only one of them may report buttons.
+			BString				fPhysicalGroup;
+			bool				fMayReportButtons;
 			BMessage*			fTouchpadSettingsMessage;
 			BLocker				fTouchpadSettingsLock;
 };
@@ -310,9 +427,15 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fLastClickButtons(0),
 	fIsAbsolute(false),
 	fIsAbsoluteTouchpad(false),
+	fTouchpadScaleX(0.0f),
+	fTouchpadScaleY(0.0f),
+	fTouchpadResidualX(0.0f),
+	fTouchpadResidualY(0.0f),
 	fSharedButtons(0),
 	fAbsMinX(0),
 	fAbsMinY(0),
+	fAbsResX(0),
+	fAbsResY(0),
 	fAbsMaxX(65535),
 	fAbsMaxY(65535),
 	fLastAbsX(-1),
@@ -324,9 +447,11 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fReflection(B_PANEL_REFLECTION_NONE),
 	fDeviceRemapsButtons(false),
 	fSerial(atomic_add(&sNextMouseDeviceSerial, 1)),
+	fDeviceInode(0),
 	fThread(-1),
 	fActive(false),
 	fUpdateSettings(0),
+	fSeatCommand(0),
 	fIsTouchpad(false),
 	fTouchpadSettingsMessage(NULL),
 	fTouchpadSettingsLock("Touchpad settings lock")
@@ -338,6 +463,8 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fDeviceRef.cookie = this;
 
 	memset(&fSettings, 0, sizeof(fSettings));
+	fTouchpadSettings = kDefaultTouchpadSettings;
+	fMayReportButtons = true;
 
 	for (int i = 0; i < B_MAX_MOUSE_BUTTONS; i++)
 		fSettings.map.button[i] = B_MOUSE_BUTTON(i + 1);
@@ -374,7 +501,14 @@ MouseDevice::_Classify()
 			? B_PERMISSION_DENIED : B_ERROR;
 	}
 
-	if (_IsGestureDevice(fd)) {
+	if (_UseLibinputDevice(fd, fPath.String())) {
+		struct stat st;
+		if (fstat(fd, &st) == 0)
+			fDeviceInode = st.st_ino;
+
+		bool directTouch = _PropSet(fd, INPUT_PROP_DIRECT);
+		fIsTouchpad = !directTouch && _IsTouchpadDevice(fd,
+			fPath.String());
 		close(fd);
 
 		fUseLibinput = true;
@@ -402,11 +536,16 @@ MouseDevice::_Classify()
 		// libinput needs one dispatch before device config is accessible.
 		libinput_dispatch(fLibinput);
 
-		if (libinput_device_config_tap_get_finger_count(
-				fLibinputDev) > 0) {
-			libinput_device_config_tap_set_enabled(fLibinputDev,
-				LIBINPUT_CONFIG_TAP_ENABLED);
-		}
+		if (_NameSaysTouchpad(BString(libinput_device_get_name(fLibinputDev))))
+			fIsTouchpad = true;
+
+		_MarkTouchpadName();
+
+		const char* hwName = libinput_device_get_name(fLibinputDev);
+		if (hwName != NULL && hwName[0] != '\0')
+			fPhysicalGroup = _GroupFromHardwareName(BString(hwName));
+		else
+			fPhysicalGroup = fPath;
 
 		// Raw touchscreens never fire POINTER_BUTTON, so synthesize from TOUCH.
 		fLibinputIsDirectTouch =
@@ -414,6 +553,11 @@ MouseDevice::_Classify()
 				LIBINPUT_DEVICE_CAP_TOUCH) &&
 			!libinput_device_has_capability(fLibinputDev,
 				LIBINPUT_DEVICE_CAP_POINTER);
+
+		if (fIsTouchpad) {
+			_LoadTouchpadSettingsFile();
+			_ApplyLibinputConfig();
+		}
 
 		return B_OK;
 	}
@@ -424,9 +568,14 @@ MouseDevice::_Classify()
 		return B_BAD_TYPE;
 	}
 
+	struct stat st;
+	if (fstat(fd, &st) == 0)
+		fDeviceInode = st.st_ino;
+
+	// REL_X alone is a pointer: a trackpoint pass-through can lack
+	// BTN_LEFT on resume re-probe, and that must not drop the device.
 	bool isRelMouse = libevdev_has_event_type(evdev, EV_REL)
-		&& libevdev_has_event_code(evdev, EV_REL, REL_X)
-		&& libevdev_has_event_code(evdev, EV_KEY, BTN_LEFT);
+		&& libevdev_has_event_code(evdev, EV_REL, REL_X);
 	bool isAbsMouse = !isRelMouse
 		&& libevdev_has_event_type(evdev, EV_ABS)
 		&& libevdev_has_event_code(evdev, EV_ABS, ABS_X)
@@ -448,6 +597,8 @@ MouseDevice::_Classify()
 		// the report scales against, not the maximum on its own.
 		fAbsMinX = libevdev_get_abs_minimum(evdev, ABS_X);
 		fAbsMinY = libevdev_get_abs_minimum(evdev, ABS_Y);
+		fAbsResX = libevdev_get_abs_resolution(evdev, ABS_X);
+		fAbsResY = libevdev_get_abs_resolution(evdev, ABS_Y);
 
 		// INPUT_PROP_BUTTONPAD/BTN_TOOL_FINGER separates a clickpad
 		// from a real tablet.
@@ -456,6 +607,26 @@ MouseDevice::_Classify()
 			|| libevdev_has_event_code(evdev, EV_KEY,
 				BTN_TOOL_FINGER);
 	}
+
+	// Clickpads, synaptics absolute pads and udev-classified touchpads
+	// all need the touchpad settings path and the touchpad subtype.
+	{
+		int32 role = UDEV_ROLE_UNKNOWN;
+		BString model;
+		udev_device_name(fPath.String(), model, role);
+		fIsTouchpad = fIsAbsoluteTouchpad
+			|| role == UDEV_ROLE_TOUCHPAD
+			|| model.IFindFirst("touchpad") >= 0
+			|| model.IFindFirst("trackpad") >= 0
+			|| fPath.IFindFirst("touchpad") >= 0
+			|| fPath.IFindFirst("trackpad") >= 0;
+	}
+
+	const char* hwName = libevdev_get_name(evdev);
+	if (hwName != NULL && hwName[0] != '\0')
+		fPhysicalGroup = _GroupFromHardwareName(BString(hwName));
+	else
+		fPhysicalGroup = fPath;
 
 	fEvdevHandle = evdev;
 	fDevice = fd;
@@ -576,6 +747,13 @@ MouseDevice::UpdateSettings()
 }
 
 
+void
+MouseDevice::HandleSeatMessage(uint32 what)
+{
+	atomic_set(&fSeatCommand, (int32)what);
+}
+
+
 status_t
 MouseDevice::UpdateTouchpadSettings(const BMessage* message)
 {
@@ -605,6 +783,8 @@ MouseDevice::UpdateScreenBounds(BRect frame, int32 orientation,
 	fScreenH = (int32)(frame.Height() + 1);
 	fOrientation = orientation;
 	fReflection = reflection;
+
+	_UpdateTouchpadScale();
 
 	fCursorPosition.x = std::min(fCursorPosition.x, (float)(fScreenW - 1));
 	fCursorPosition.y = std::min(fCursorPosition.y, (float)(fScreenH - 1));
@@ -715,6 +895,7 @@ MouseDevice::_ControlThread()
 		fScreenW = (int32)(frame.Width() + 1);
 		fScreenH = (int32)(frame.Height() + 1);
 	}
+	_UpdateTouchpadScale();
 	if (fTarget.fCursorLock.Lock()) {
 		if (fTarget.fCursorPosition.x < 0)
 			fTarget.fCursorPosition.Set(fScreenW / 2.0f, fScreenH / 2.0f);
@@ -737,6 +918,8 @@ MouseDevice::_ControlThread()
 			return;
 		}
 
+		_UpdateSettings();
+
 		int lifd = libinput_get_fd(fLibinput);
 		// Initial dispatch to consume DEVICE_ADDED events
 		libinput_dispatch(fLibinput);
@@ -746,6 +929,32 @@ MouseDevice::_ControlThread()
 			// the test and the clear cannot be dropped.
 			if (atomic_get_and_set(&fUpdateSettings, 0) != 0)
 				_UpdateSettings();
+
+			// Seat contract as in the evdev loop: disable lifts every
+			// button across the VT switch; enable and resume re-sync.
+			int32 seatCmd = atomic_get_and_set(&fSeatCommand, 0);
+			if (seatCmd == (int32)B_SEAT_DISABLED
+				|| seatCmd == (int32)B_SEAT_ENABLED
+				|| seatCmd == (int32)B_SYSTEM_RESUMED) {
+				if (fLibinputButtons != 0) {
+					BPoint where = fLibinputLastPos;
+					if (fTarget.fCursorLock.Lock()) {
+						where = fTarget.fCursorPosition;
+						fTarget.fCursorLock.Unlock();
+					}
+					_FlushSeatButtons(0);
+					BMessage* msg = new BMessage(B_MOUSE_UP);
+					msg->AddPoint("where", where);
+					msg->AddInt32("buttons", 0);
+					msg->AddInt32("modifiers", 0);
+					msg->AddInt64("when", system_time());
+					msg->AddInt32("be:device_subtype",
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
+					fTarget.EnqueueMessage(msg);
+				}
+			}
 
 			struct pollfd pfd;
 			pfd.fd = lifd;
@@ -812,8 +1021,32 @@ MouseDevice::_ControlThread()
 			if (atomic_get_and_set(&fUpdateSettings, 0) != 0)
 				_UpdateSettings();
 
+			// B_SEAT_DISABLED forces every button up like a real release, so nothing stays down across a VT
+			// switch. B_SEAT_ENABLED/B_SYSTEM_RESUMED re-read the hardware state to catch a dropped release.
+			bool forceFlush = false;
+			int32 seatCmd = atomic_get_and_set(&fSeatCommand, 0);
+			if (seatCmd == (int32)B_SEAT_DISABLED) {
+				currentButtons = 0;
+				forceFlush = true;
+			} else if (seatCmd == (int32)B_SEAT_ENABLED
+				|| seatCmd == (int32)B_SYSTEM_RESUMED) {
+				static const struct { int code; uint32 bit; }
+					kButtonBits[] = {
+						{ BTN_LEFT, 0x01 }, { BTN_RIGHT, 0x02 },
+						{ BTN_MIDDLE, 0x04 }, { BTN_SIDE, 0x08 },
+						{ BTN_EXTRA, 0x10 }
+					};
+				currentButtons = 0;
+				for (const auto& button : kButtonBits) {
+					if (libevdev_get_event_value(fEvdevHandle, EV_KEY,
+							button.code) > 0)
+						currentButtons |= button.bit;
+				}
+				forceFlush = true;
+			}
+
 			struct epoll_event fired;
-			int n = epoll_wait(fEpollFd, &fired, 1, 100);
+			int n = forceFlush ? 1 : epoll_wait(fEpollFd, &fired, 1, 100);
 			if (n < 0) {
 				if (errno == EINTR)
 					continue;
@@ -828,6 +1061,7 @@ MouseDevice::_ControlThread()
 			int32 xdelta = 0, ydelta = 0;
 			int32 wheel_xdelta = 0, wheel_ydelta = 0;
 			int32 currentAbsX = fLastAbsX, currentAbsY = fLastAbsY;
+			bool touchChanged = false;
 			bigtime_t timestamp = system_time();
 
 			struct input_event iev;
@@ -842,6 +1076,26 @@ MouseDevice::_ControlThread()
 							LIBEVDEV_READ_FLAG_SYNC, &iev)
 							== LIBEVDEV_READ_STATUS_SYNC)
 						;
+					// The sync brought libevdev's state up to date, so take the buttons from it;
+					// otherwise a release dropped meanwhile (e.g. across suspend) leaves a button stuck down.
+					static const struct { int code; uint32 bit; }
+						kButtonBits[] = {
+							{ BTN_LEFT, 0x01 }, { BTN_RIGHT, 0x02 },
+							{ BTN_MIDDLE, 0x04 }, { BTN_SIDE, 0x08 },
+							{ BTN_EXTRA, 0x10 }
+						};
+					currentButtons = 0;
+					for (const auto& button : kButtonBits) {
+						if (libevdev_get_event_value(fEvdevHandle, EV_KEY,
+								button.code) > 0)
+							currentButtons |= button.bit;
+					}
+					if (fIsAbsolute) {
+						currentAbsX = libevdev_get_event_value(fEvdevHandle,
+							EV_ABS, ABS_X);
+						currentAbsY = libevdev_get_event_value(fEvdevHandle,
+							EV_ABS, ABS_Y);
+					}
 					continue;
 				}
 				if (rc < 0) {
@@ -871,13 +1125,8 @@ MouseDevice::_ControlThread()
 						case ABS_Y: currentAbsY = iev.value; break;
 					}
 				} else if (iev.type == EV_KEY) {
-					if (fIsAbsoluteTouchpad && iev.code == BTN_TOOL_FINGER
-						&& iev.value == 0) {
-						// Finger lifted: drop the reference or the
-						// next touch-down jumps the cursor.
-						fLastAbsX = -1;
-						fLastAbsY = -1;
-					}
+					if (iev.code == BTN_TOOL_FINGER || iev.code == BTN_TOUCH)
+						touchChanged = true;
 					uint32 bit = 0;
 					switch (iev.code) {
 						case BTN_LEFT:   bit = 0x01; break;
@@ -932,15 +1181,39 @@ MouseDevice::_ControlThread()
 					fTarget.fCursorLock.Unlock();
 				}
 
-				if (fIsAbsoluteTouchpad && currentAbsX >= 0) {
-					// Touchpad sample is finger position on the pad,
-					// not screen.
-					if (fLastAbsX >= 0) {
-						xdelta += currentAbsX - fLastAbsX;
-						ydelta += currentAbsY - fLastAbsY;
+				if (fIsAbsoluteTouchpad) {
+					// A touchpad reports finger position on the pad, not screen position.
+					// A touch-down only sets the reference, or the cursor jumps.
+					int touchCode = libevdev_has_event_code(fEvdevHandle,
+						EV_KEY, BTN_TOUCH) ? BTN_TOUCH : BTN_TOOL_FINGER;
+					if (libevdev_get_event_value(fEvdevHandle, EV_KEY,
+							touchCode) == 0) {
+						fLastAbsX = -1;
+						fLastAbsY = -1;
+						fTouchpadResidualX = 0.0f;
+						fTouchpadResidualY = 0.0f;
+					} else {
+						int32 x = libevdev_get_event_value(fEvdevHandle,
+							EV_ABS, ABS_X);
+						int32 y = libevdev_get_event_value(fEvdevHandle,
+							EV_ABS, ABS_Y);
+						if (fLastAbsX >= 0 && !touchChanged) {
+							// Pad units are not screen pixels; scale first so
+							// speed and acceleration act on pointer motion.
+							float sx = fTouchpadResidualX
+								+ (float)(x - fLastAbsX) * fTouchpadScaleX;
+							float sy = fTouchpadResidualY
+								+ (float)(y - fLastAbsY) * fTouchpadScaleY;
+							int32 dx = (int32)(sx < 0 ? sx - 0.5f : sx + 0.5f);
+							int32 dy = (int32)(sy < 0 ? sy - 0.5f : sy + 0.5f);
+							fTouchpadResidualX = sx - (float)dx;
+							fTouchpadResidualY = sy - (float)dy;
+							xdelta += dx;
+							ydelta += dy;
+						}
+						fLastAbsX = x;
+						fLastAbsY = y;
 					}
-					fLastAbsX = currentAbsX;
-					fLastAbsY = currentAbsY;
 				}
 
 				if (xdelta != 0 || ydelta != 0) {
@@ -993,7 +1266,7 @@ MouseDevice::_ControlThread()
 			}
 
 			// Button events
-			if (changedButtons != 0) {
+			if (changedButtons != 0 && fMayReportButtons) {
 				bool pressed = (changedButtons & currentButtons) != 0;
 				BMessage* message = _BuildMouseMessage(
 					pressed ? B_MOUSE_DOWN : B_MOUSE_UP,
@@ -1010,11 +1283,20 @@ MouseDevice::_ControlThread()
 						fLastClickTime = timestamp;
 						fLastClickButtons = remappedButtons;
 						message->AddInt32("clicks", fClickCount);
+						uint32 rawBit = 0;
+						if (currentButtons & 0x1)
+							rawBit = 0x1;
+						else if (currentButtons & 0x2)
+							rawBit = 0x2;
+						else if (currentButtons & 0x4)
+							rawBit = 0x4;
+						message->AddInt32("be:button", (int32)rawBit);
 					}
 					fTarget.EnqueueMessage(message);
 					lastButtons = currentButtons;
 				}
-			}
+			} else if (changedButtons != 0)
+				lastButtons = currentButtons;
 
 			// Movement
 			if (hasMoved) {
@@ -1080,12 +1362,12 @@ MouseDevice::_UpdateSettings()
 	if (get_mouse_map(fDeviceRef.name, &fSettings.map) != B_OK)
 		LOG_ERROR("error when get_mouse_map\n");
 	else
-		fDeviceRemapsButtons = ioctl(fDevice, MS_SET_MAP, &fSettings.map) == B_OK;
+		fDeviceRemapsButtons = fDevice >= 0
+			&& ioctl(fDevice, MS_SET_MAP, &fSettings.map) == B_OK;
 
 	if (get_click_speed(fDeviceRef.name, &fSettings.click_speed) == B_OK) {
-		if (fIsTouchpad)
-			fTouchpadMovementMaker.click_speed = fSettings.click_speed;
-		ioctl(fDevice, MS_SET_CLICKSPEED, &fSettings.click_speed);
+		if (fDevice >= 0)
+			ioctl(fDevice, MS_SET_CLICKSPEED, &fSettings.click_speed);
 	} else
 		LOG_ERROR("error when get_click_speed\n");
 
@@ -1095,7 +1377,7 @@ MouseDevice::_UpdateSettings()
 		if (get_mouse_acceleration(fDeviceRef.name,
 				&fSettings.accel.accel_factor) != B_OK)
 			LOG_ERROR("error when get_mouse_acceleration\n");
-		else {
+		else if (fDevice >= 0) {
 			mouse_accel accel;
 			ioctl(fDevice, MS_GET_ACCEL, &accel);
 			accel.speed = fSettings.accel.speed;
@@ -1106,8 +1388,20 @@ MouseDevice::_UpdateSettings()
 
 	if (get_mouse_type(fDeviceRef.name, &fSettings.type) != B_OK)
 		LOG_ERROR("error when get_mouse_type\n");
-	else
+	else if (fDevice >= 0)
 		ioctl(fDevice, MS_SET_TYPE, &fSettings.type);
+
+	// Gesture settings arrive as a pending message; apply them here so
+	// they land on the same settings refresh as speed and click rate.
+	if (fIsTouchpad) {
+		BAutolock locker(fTouchpadSettingsLock);
+		if (fTouchpadSettingsMessage != NULL) {
+			_UpdateTouchpadSettings(fTouchpadSettingsMessage);
+			delete fTouchpadSettingsMessage;
+			fTouchpadSettingsMessage = NULL;
+		} else if (fUseLibinput)
+			_ApplyLibinputConfig();
+	}
 }
 
 
@@ -1118,6 +1412,26 @@ MouseDevice::_GetTouchpadSettingsPath(BPath& path)
 	if (status < B_OK)
 		return status;
 	return path.Append(TOUCHPAD_SETTINGS_FILE);
+}
+
+
+status_t
+MouseDevice::_LoadTouchpadSettingsFile()
+{
+	BPath path;
+	status_t status = _GetTouchpadSettingsPath(path);
+	if (status != B_OK)
+		return status;
+
+	BFile file(path.Path(), B_READ_ONLY);
+	if (file.InitCheck() != B_OK)
+		return B_ERROR;
+
+	BMessage message;
+	if (message.Unflatten(&file) != B_OK)
+		return B_ERROR;
+
+	return _UpdateTouchpadSettings(&message);
 }
 
 
@@ -1147,10 +1461,168 @@ MouseDevice::_UpdateTouchpadSettings(BMessage* message)
 	message->FindBool("finger_click", &settings.finger_click);
 	message->FindBool("software_button_areas", &settings.software_button_areas);
 
-	if (fIsTouchpad)
-		fTouchpadMovementMaker.SetSettings(settings);
+	{
+		BAutolock locker(fTouchpadSettingsLock);
+		fTouchpadSettings = settings;
+	}
+
+	if (fUseLibinput && fIsTouchpad)
+		_ApplyLibinputConfig();
 
 	return B_OK;
+}
+
+
+void
+MouseDevice::_ClaimPhysicalButtons()
+{
+	if (fPhysicalGroup.IsEmpty())
+		return;
+
+	fTarget._ClaimButtonOwnership(fPhysicalGroup, this);
+}
+
+
+void
+MouseDevice::_ApplyLibinputConfig()
+{
+	if (!fUseLibinput || fLibinputDev == NULL || !fIsTouchpad)
+		return;
+
+	touchpad_settings settings;
+	{
+		BAutolock locker(fTouchpadSettingsLock);
+		settings = fTouchpadSettings;
+	}
+
+	if (libinput_device_config_tap_get_finger_count(fLibinputDev) > 0) {
+		libinput_device_config_tap_set_enabled(fLibinputDev,
+			settings.tapgesture_sensibility > 0
+				? LIBINPUT_CONFIG_TAP_ENABLED
+				: LIBINPUT_CONFIG_TAP_DISABLED);
+	}
+
+	if (libinput_device_config_scroll_has_natural_scroll(fLibinputDev)) {
+		// Edge scroll uses scroll_reverse; two-finger scroll uses the
+		// natural flag, matching the legacy movement engine.
+		bool natural = settings.scroll_twofinger
+			? settings.scroll_twofinger_natural_scrolling
+			: settings.scroll_reverse;
+		libinput_device_config_scroll_set_natural_scroll_enabled(
+			fLibinputDev, natural ? 1 : 0);
+	}
+
+	uint32 scrollMethods
+		= libinput_device_config_scroll_get_methods(fLibinputDev);
+	if (scrollMethods != 0) {
+		enum libinput_config_scroll_method method
+			= LIBINPUT_CONFIG_SCROLL_2FG;
+		if ((scrollMethods & LIBINPUT_CONFIG_SCROLL_2FG) == 0
+			|| (!settings.scroll_twofinger
+				&& (scrollMethods & LIBINPUT_CONFIG_SCROLL_EDGE) != 0))
+			method = LIBINPUT_CONFIG_SCROLL_EDGE;
+		libinput_device_config_scroll_set_method(fLibinputDev, method);
+	}
+
+	uint32 clickMethods
+		= libinput_device_config_click_get_methods(fLibinputDev);
+	if (clickMethods != 0 && settings.finger_click
+		&& (clickMethods & LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER) != 0)
+		libinput_device_config_click_set_method(fLibinputDev,
+			LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER);
+	else if (clickMethods != 0 && settings.software_button_areas
+		&& (clickMethods & LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS) != 0)
+		libinput_device_config_click_set_method(fLibinputDev,
+			LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS);
+
+	if (libinput_device_config_dwt_is_available(fLibinputDev))
+		libinput_device_config_dwt_set_enabled(fLibinputDev,
+			LIBINPUT_CONFIG_DWT_ENABLED);
+
+	if (libinput_device_config_accel_is_available(fLibinputDev)) {
+		// V\OS speed 65536 is neutral; libinput wants [-1, 1].
+		double speed = (double)fSettings.accel.speed / 65536.0 - 1.0;
+		if (speed < -1.0)
+			speed = -1.0;
+		else if (speed > 1.0)
+			speed = 1.0;
+		libinput_device_config_accel_set_speed(fLibinputDev, speed);
+
+		enum libinput_config_accel_profile profile
+			= fSettings.accel.accel_factor == 0
+				? LIBINPUT_CONFIG_ACCEL_PROFILE_FLAT
+				: LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+		if (libinput_device_config_accel_get_profiles(fLibinputDev)
+				& profile)
+			libinput_device_config_accel_set_profile(fLibinputDev,
+				profile);
+	}
+}
+
+
+void
+MouseDevice::_UpdateSharedButtons(uint32 rawButtons)
+{
+	uint32 remapped = _RemapButtons(rawButtons);
+	if (fTarget.fCursorLock.Lock()) {
+		fTarget.fButtons = (fTarget.fButtons & ~fSharedButtons) | remapped;
+		fSharedButtons = remapped;
+		fTarget.fCursorLock.Unlock();
+	}
+}
+
+
+void
+MouseDevice::_FlushSeatButtons(uint32 rawButtons)
+{
+	fLibinputButtons = rawButtons;
+	_UpdateSharedButtons(rawButtons);
+}
+
+
+void
+MouseDevice::_MarkTouchpadName()
+{
+	if (!fIsTouchpad)
+		return;
+
+	BString name(fDeviceRef.name);
+	if (name.IFindFirst("Touchpad") >= 0)
+		return;
+
+	int32 at = name.FindFirst("Mouse");
+	if (at >= 0) {
+		name.Remove(at, 5);
+		name.Insert("Touchpad", at);
+	} else
+		name << " Touchpad";
+
+	free(fDeviceRef.name);
+	fDeviceRef.name = strdup(name.String());
+}
+
+
+// A full pad width covers the screen width at speed 1.0; the slider
+// then multiplies those screen-pixel deltas like any other pointer.
+void
+MouseDevice::_UpdateTouchpadScale()
+{
+	fTouchpadScaleX = 0.0f;
+	fTouchpadScaleY = 0.0f;
+	if (!fIsAbsoluteTouchpad)
+		return;
+
+	int32 spanX = fAbsMaxX - fAbsMinX;
+	int32 spanY = fAbsMaxY - fAbsMinY;
+	if (spanX <= 0 || spanY <= 0 || fScreenW <= 1 || fScreenH <= 1)
+		return;
+
+	// One scale for both axes, so a diagonal stroke stays diagonal; Y
+	// follows X through the pad's own units per mm when it reports them.
+	fTouchpadScaleX = (float)(fScreenW - 1) / (float)spanX;
+	fTouchpadScaleY = fTouchpadScaleX;
+	if (fAbsResX > 0 && fAbsResY > 0)
+		fTouchpadScaleY = fTouchpadScaleX * fAbsResX / fAbsResY;
 }
 
 
@@ -1279,12 +1751,21 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				fTarget.fCursorLock.Unlock();
 			}
 
+			_UpdateSharedButtons(fLibinputButtons);
+
 			BMessage* msg = new BMessage(B_MOUSE_MOVED);
 			msg->AddPoint("where", fLibinputLastPos);
-			msg->AddInt32("buttons", (int32)_RemapButtons(fLibinputButtons));
+			if (fTarget.fCursorLock.Lock()) {
+				msg->AddInt32("buttons", (int32)fTarget.fButtons);
+				fTarget.fCursorLock.Unlock();
+			} else
+				msg->AddInt32("buttons",
+					(int32)_RemapButtons(fLibinputButtons));
 			msg->AddInt32("modifiers", 0);
 			msg->AddInt64("when", system_time());
-			msg->AddInt32("be:device_subtype", B_TOUCHPAD_POINTING_DEVICE);
+			msg->AddInt32("be:device_subtype",
+				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
+					: B_MOUSE_POINTING_DEVICE);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}
@@ -1312,12 +1793,21 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				fTarget.fCursorLock.Unlock();
 			}
 
+			_UpdateSharedButtons(fLibinputButtons);
+
 			BMessage* msg = new BMessage(B_MOUSE_MOVED);
 			msg->AddPoint("where", fLibinputLastPos);
-			msg->AddInt32("buttons", (int32)_RemapButtons(fLibinputButtons));
+			if (fTarget.fCursorLock.Lock()) {
+				msg->AddInt32("buttons", (int32)fTarget.fButtons);
+				fTarget.fCursorLock.Unlock();
+			} else
+				msg->AddInt32("buttons",
+					(int32)_RemapButtons(fLibinputButtons));
 			msg->AddInt32("modifiers", 0);
 			msg->AddInt64("when", system_time());
-			msg->AddInt32("be:device_subtype", B_MOUSE_POINTING_DEVICE);
+			msg->AddInt32("be:device_subtype",
+				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
+					: B_MOUSE_POINTING_DEVICE);
 			fTarget.EnqueueMessage(msg);
 			break;
 		}
@@ -1340,6 +1830,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			else
 				fLibinputButtons &= ~beButton;
 
+			if (fIsTouchpad && beButton != 0)
+				_ClaimPhysicalButtons();
+
 			// Read current cursor pos from shared state
 			BPoint where = fLibinputLastPos;
 			if (fTarget.fCursorLock.Lock()) {
@@ -1350,21 +1843,31 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 			uint32 what = (state == LIBINPUT_BUTTON_STATE_PRESSED)
 				? B_MOUSE_DOWN : B_MOUSE_UP;
 
+			_UpdateSharedButtons(fLibinputButtons);
+
+			uint32 reported = _RemapButtons(fLibinputButtons);
+			if (fTarget.fCursorLock.Lock()) {
+				reported = fTarget.fButtons;
+				fTarget.fCursorLock.Unlock();
+			}
+
 			BMessage* msg = new BMessage(what);
 			msg->AddPoint("where", where);
-			msg->AddInt32("buttons", (int32)_RemapButtons(fLibinputButtons));
+			msg->AddInt32("buttons", (int32)reported);
 			msg->AddInt32("modifiers", 0);
 			msg->AddInt64("when", system_time());
-			msg->AddInt32("be:device_subtype", B_TOUCHPAD_POINTING_DEVICE);
+			msg->AddInt32("be:device_subtype",
+				fIsTouchpad ? B_TOUCHPAD_POINTING_DEVICE
+					: B_MOUSE_POINTING_DEVICE);
 			if (state == LIBINPUT_BUTTON_STATE_PRESSED) {
 				bigtime_t now = system_time();
-				if (beButton == fLibinputLastClickButton
+				if (reported == fLibinputLastClickButton
 					&& (now - fLibinputLastClickTime) < fSettings.click_speed)
 					fLibinputClickCount++;
 				else
 					fLibinputClickCount = 1;
 				fLibinputLastClickTime = now;
-				fLibinputLastClickButton = beButton;
+				fLibinputLastClickButton = reported;
 				msg->AddInt32("clicks", fLibinputClickCount);
 				msg->AddInt32("be:button", (int32)beButton);
 			}
@@ -1551,6 +2054,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					fTarget.fCursorLock.Unlock();
 				}
 
+				if (fIsTouchpad)
+					_ClaimPhysicalButtons();
+
 				// Touchscreen: synthesize B_MOUSE_DOWN.
 				// Touchpad: B_MOUSE_DOWN comes from POINTER_BUTTON (tap-to-click).
 				if (fLibinputIsDirectTouch) {
@@ -1565,7 +2071,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					move->AddInt32("modifiers", 0);
 					move->AddInt64("when", system_time());
 					move->AddInt32("be:device_subtype",
-						B_TOUCHPAD_POINTING_DEVICE);
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
 					fTarget.EnqueueMessage(move);
 
 					uint32 tapButton = _RemapButtons(0x1);
@@ -1577,7 +2085,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					msg->AddInt32("clicks", 1);
 					msg->AddInt32("be:button", (int32)tapButton);
 					msg->AddInt32("be:device_subtype",
-						B_TOUCHPAD_POINTING_DEVICE);
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
 					fTarget.EnqueueMessage(msg);
 				}
 			} else if (type == LIBINPUT_EVENT_TOUCH_UP) {
@@ -1589,7 +2099,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					msg->AddInt32("modifiers", 0);
 					msg->AddInt64("when", system_time());
 					msg->AddInt32("be:device_subtype",
-						B_TOUCHPAD_POINTING_DEVICE);
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
 					fTarget.EnqueueMessage(msg);
 				}
 			} else if (type == LIBINPUT_EVENT_TOUCH_MOTION) {
@@ -1624,7 +2136,9 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 					msg->AddInt32("modifiers", 0);
 					msg->AddInt64("when", system_time());
 					msg->AddInt32("be:device_subtype",
-						B_TOUCHPAD_POINTING_DEVICE);
+						fIsTouchpad
+							? B_TOUCHPAD_POINTING_DEVICE
+							: B_MOUSE_POINTING_DEVICE);
 					fTarget.EnqueueMessage(msg);
 				}
 			}
@@ -1746,6 +2260,19 @@ MouseInputDevice::Control(const char* name, void* cookie,
 	if (command == B_SCREEN_BOUNDS_CHANGED)
 		return _UpdateScreenBounds(device, message);
 
+	if (command == B_SEAT_DISABLED || command == B_SEAT_ENABLED
+		|| command == B_SYSTEM_RESUMED) {
+		// Add-on level: resume can recreate evdev nodes that the node
+		// monitor missed; reconcile against what is on disk now.
+		if (cookie == NULL) {
+			if (command == B_SYSTEM_RESUMED)
+				_RescanDevices();
+			return B_OK;
+		}
+		device->HandleSeatMessage(command);
+		return B_OK;
+	}
+
 	if (command >= B_MOUSE_TYPE_CHANGED
 		&& command <= B_MOUSE_ACCELERATION_CHANGED)
 		return device->UpdateSettings();
@@ -1832,6 +2359,61 @@ MouseInputDevice::_RecursiveScan(const char* directory)
 }
 
 
+void
+MouseInputDevice::_RescanDevices()
+{
+	CALLED();
+
+	BEntry entry;
+	BDirectory dir(kMouseDevicesDirectory);
+	while (dir.GetNextEntry(&entry) == B_OK) {
+		BPath path;
+		entry.GetPath(&path);
+		if (entry.IsDirectory()
+			|| strncmp(path.Leaf(), "event", 5) != 0)
+			continue;
+
+		struct stat st;
+		if (stat(path.Path(), &st) != 0 || !S_ISCHR(st.st_mode))
+			continue;
+
+		bool present = false;
+		bool stale = false;
+		{
+			BAutolock _(fDeviceListLock);
+			for (int32 i = 0; i < fDevices.CountItems(); i++) {
+				MouseDevice* device = fDevices.ItemAt(i);
+				if (strcmp(device->Path(), path.Path()) != 0)
+					continue;
+				present = true;
+				stale = device->Inode() != st.st_ino;
+				break;
+			}
+		}
+
+		if (present && !stale)
+			continue;
+		if (stale)
+			_RemoveDevice(path.Path());
+		_AddDevice(path.Path());
+	}
+
+	// Drop devices whose node vanished; their fds are stale.
+	BObjectList<BString, true> paths;
+	{
+		BAutolock _(fDeviceListLock);
+		for (int32 i = 0; i < fDevices.CountItems(); i++)
+			paths.AddItem(new BString(fDevices.ItemAt(i)->Path()));
+	}
+	for (int32 i = 0; i < paths.CountItems(); i++) {
+		BString* devicePath = paths.ItemAt(i);
+		struct stat st;
+		if (stat(devicePath->String(), &st) != 0)
+			_RemoveDevice(devicePath->String());
+	}
+}
+
+
 MouseDevice*
 MouseInputDevice::_FindDevice(const char* path) const
 {
@@ -1870,6 +2452,10 @@ MouseInputDevice::_AddDevice(const char* path)
 	_RemoveDevice(path);
 
 	BAutolock _(fDeviceListLock);
+
+	// Rescan and node monitor race; a duplicate would never be started.
+	if (_FindDevice(path) != NULL)
+		return B_OK;
 
 	MouseDevice* device = new(std::nothrow) MouseDevice(*this, path);
 	if (device == NULL) {
@@ -1942,6 +2528,9 @@ MouseInputDevice::_DetachDevice(const char* path, const int32* serial)
 	// so acquiring it under fDeviceListLock inverts the established
 	// order. The device is off the list but still alive here, so a
 	// callback arriving with the cookie in this window is safe.
+	if (device->IsTouchpad() && device->UseLibinput())
+		_ReleaseButtonOwnership(device->PhysicalGroup());
+
 	input_device_ref* devices[2];
 	devices[0] = device->DeviceRef();
 	devices[1] = NULL;
@@ -1951,6 +2540,39 @@ MouseInputDevice::_DetachDevice(const char* path, const int32* serial)
 	UnregisterDevices(devices);
 
 	return device;
+}
+
+
+void
+MouseInputDevice::_ClaimButtonOwnership(const BString& group, MouseDevice* owner)
+{
+	if (group.IsEmpty() || owner == NULL)
+		return;
+
+	BAutolock _(fDeviceListLock);
+	for (int32 i = 0; i < fDevices.CountItems(); i++) {
+		MouseDevice* device = fDevices.ItemAt(i);
+		if (device == owner)
+			continue;
+		if (device->PhysicalGroup() == group)
+			device->SetMayReportButtons(false);
+	}
+	owner->SetMayReportButtons(true);
+}
+
+
+void
+MouseInputDevice::_ReleaseButtonOwnership(const BString& group)
+{
+	if (group.IsEmpty())
+		return;
+
+	BAutolock _(fDeviceListLock);
+	for (int32 i = 0; i < fDevices.CountItems(); i++) {
+		MouseDevice* device = fDevices.ItemAt(i);
+		if (device->PhysicalGroup() == group)
+			device->SetMayReportButtons(true);
+	}
 }
 
 

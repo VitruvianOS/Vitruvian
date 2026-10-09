@@ -444,6 +444,19 @@ ScreenMode::GetDeviceInfo(accelerant_device_info& info)
 
 
 status_t
+ScreenMode::GetConnectorName(BString& name)
+{
+	BPrivate::BPrivateScreen* screen = BPrivate::BPrivateScreen::Get(fWindow);
+	if (screen == NULL)
+		return B_ERROR;
+
+	status_t status = screen->GetConnectorName(name);
+	BPrivate::BPrivateScreen::Put(screen);
+	return status;
+}
+
+
+status_t
 ScreenMode::SetRotation(int32 rotation)
 {
 	BPrivate::BPrivateScreen* screen

@@ -8,6 +8,7 @@ Application(Screen
 	ScreenApplication.cpp
 	ScreenMode.cpp
 	ScreenSettings.cpp
+	ProfileNameWindow.cpp
 	ScreenWindow.cpp
 	Utility.cpp
 	LIBS localestub

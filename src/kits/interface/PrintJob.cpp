@@ -7,6 +7,8 @@
  *		Stefano Ceccherini (burton666@libero.it)
  *		Michael Pfeiffer
  *		julun <host.haiku@gmx.de>
+ *
+ * V\OS: BPrintJob talks to CUPS through private libprintcups, dlopen'd on first use.
  */
 
 
@@ -22,6 +24,7 @@
 #include <Debug.h>
 #include <Entry.h>
 #include <File.h>
+#include <Directory.h>
 #include <FindDirectory.h>
 #include <Messenger.h>
 #include <NodeInfo.h>
@@ -33,7 +36,9 @@
 #include <View.h>
 
 #include <AutoDeleter.h>
+#include <image.h>
 #include <pr_server.h>
+#include <printcups.h>
 #include <ViewPrivate.h>
 
 using BPrivate::gSystemCatalog;
@@ -87,9 +92,6 @@ using BPrivate::gSystemCatalog;
 
 	each page can consist of a collection of picture structures
 	remaining pages start at _page_header_.next_page of previous _page_header_
-
-	See also: "How to Write a BeOS R5 Printer Driver" for description of spool
-	file format: http://haiku-os.org/documents/dev/how_to_write_a_printer_driver
 */
 
 
@@ -109,44 +111,107 @@ ShowError(const char* message)
 }
 
 
-// #pragma mark -- PrintServerMessenger
+// #pragma mark - printcups loader
 
 
-namespace BPrivate {
+namespace {
 
 
-class PrintServerMessenger {
-public:
-							PrintServerMessenger(uint32 what, BMessage* input);
-							~PrintServerMessenger();
-
-			BMessage*		Request();
-			status_t		SendRequest();
-
-			void			SetResult(BMessage* result);
-			BMessage*		Result() const { return fResult; }
-
-	static	status_t		GetPrintServerMessenger(BMessenger& messenger);
-
-private:
-			void			RejectUserInput();
-			void			AllowUserInput();
-			void			DeleteSemaphore();
-	static	status_t		MessengerThread(void* data);
-
-			uint32			fWhat;
-			BMessage*		fInput;
-			BMessage*		fRequest;
-			BMessage*		fResult;
-			sem_id			fThreadCompleted;
-			BAlert*			fHiddenApplicationModalWindow;
+struct PrintCupsApi {
+	status_t	(*PageSetup)(BMessage* settings, bool* canceled);
+	status_t	(*JobSetup)(BMessage* settings, bool* canceled);
+	status_t	(*DefaultSettings)(BMessage* settings);
+	status_t	(*DefaultQueue)(char* name, size_t size);
+	status_t	(*SubmitSpool)(const char* spoolPath, BMessage* settings,
+					const char* jobName, int32* jobId);
+	int32		(*PrinterType)(const char* queue);
+	status_t	(*QueueInfoFor)(const char* name, void* info);
 };
 
 
-}	// namespace BPrivate
+PrintCupsApi gPrintCupsApi;
+image_id gPrintCupsImage = -2;	// -2 untried, -1 failed, >=0 loaded
 
 
-using namespace BPrivate;
+status_t
+_PrintCupsSymbol(const char* name, void** symbol)
+{
+	*symbol = NULL;
+	if (gPrintCupsImage < 0)
+		return B_ERROR;
+
+	return get_image_symbol(gPrintCupsImage, name, B_SYMBOL_TYPE_TEXT,
+		symbol) == B_OK ? B_OK : B_ERROR;
+}
+
+
+status_t
+LoadPrintCups()
+{
+	if (gPrintCupsImage >= 0)
+		return B_OK;
+	if (gPrintCupsImage == -1)
+		return B_ERROR;
+
+	static const char* kPaths[] = {
+		"/lib/libprintcups.so",
+		"/system/lib/libprintcups.so",
+		"libprintcups.so",
+		NULL
+	};
+
+	for (int32 i = 0; kPaths[i] != NULL; i++) {
+		gPrintCupsImage = load_add_on(kPaths[i]);
+		if (gPrintCupsImage >= 0)
+			break;
+	}
+
+	if (gPrintCupsImage < 0) {
+		gPrintCupsImage = -1;
+		return B_ERROR;
+	}
+
+	void* symbol = NULL;
+	if (_PrintCupsSymbol("printcups_page_setup", &symbol) != B_OK
+		|| _PrintCupsSymbol("printcups_job_setup", &symbol) != B_OK) {
+		unload_add_on(gPrintCupsImage);
+		gPrintCupsImage = -1;
+		return B_ERROR;
+	}
+
+	gPrintCupsApi.PageSetup = reinterpret_cast<status_t (*)(BMessage*, bool*)>(
+		symbol);
+	if (_PrintCupsSymbol("printcups_job_setup", &symbol) == B_OK)
+		gPrintCupsApi.JobSetup =
+			reinterpret_cast<status_t (*)(BMessage*, bool*)>(symbol);
+	if (_PrintCupsSymbol("printcups_default_settings", &symbol) == B_OK)
+		gPrintCupsApi.DefaultSettings =
+			reinterpret_cast<status_t (*)(BMessage*)>(symbol);
+	if (_PrintCupsSymbol("printcups_default_queue", &symbol) == B_OK)
+		gPrintCupsApi.DefaultQueue =
+			reinterpret_cast<status_t (*)(char*, size_t)>(symbol);
+	if (_PrintCupsSymbol("printcups_submit_spool", &symbol) == B_OK)
+		gPrintCupsApi.SubmitSpool = reinterpret_cast<status_t (*)(const char*,
+			BMessage*, const char*, int32*)>(symbol);
+	if (_PrintCupsSymbol("printcups_printer_type", &symbol) == B_OK)
+		gPrintCupsApi.PrinterType =
+			reinterpret_cast<int32 (*)(const char*)>(symbol);
+
+	if (gPrintCupsApi.PageSetup == NULL || gPrintCupsApi.JobSetup == NULL
+		|| gPrintCupsApi.DefaultSettings == NULL
+		|| gPrintCupsApi.DefaultQueue == NULL
+		|| gPrintCupsApi.SubmitSpool == NULL) {
+		unload_add_on(gPrintCupsImage);
+		gPrintCupsImage = -1;
+		memset(&gPrintCupsApi, 0, sizeof(gPrintCupsApi));
+		return B_ERROR;
+	}
+
+	return B_OK;
+}
+
+
+}	// anonymous namespace
 
 
 // #pragma mark -- BPrintJob
@@ -187,15 +252,24 @@ BPrintJob::~BPrintJob()
 status_t
 BPrintJob::ConfigPage()
 {
-	PrintServerMessenger messenger(PSRV_SHOW_PAGE_SETUP, fSetupMessage);
-	status_t status = messenger.SendRequest();
-	if (status != B_OK)
+	if (LoadPrintCups() != B_OK) {
+		ShowError(B_TRANSLATE("Printing is not available (libprintcups)."));
+		return B_ERROR;
+	}
+
+	if (fSetupMessage == NULL)
+		fSetupMessage = new BMessage;
+
+	bool canceled = false;
+	status_t status = gPrintCupsApi.PageSetup(fSetupMessage, &canceled);
+	if (status != B_OK && status != B_CANCELED) {
+		ShowError(B_TRANSLATE("Could not open the page setup."));
 		return status;
+	}
+	if (status == B_CANCELED || canceled)
+		return B_CANCELED;
 
-	delete fSetupMessage;
-	fSetupMessage = messenger.Result();
 	_HandlePageSetup(fSetupMessage);
-
 	return B_OK;
 }
 
@@ -203,13 +277,35 @@ BPrintJob::ConfigPage()
 status_t
 BPrintJob::ConfigJob()
 {
-	PrintServerMessenger messenger(PSRV_SHOW_PRINT_SETUP, fSetupMessage);
-	status_t status = messenger.SendRequest();
-	if (status != B_OK)
-		return status;
+	if (LoadPrintCups() != B_OK) {
+		ShowError(B_TRANSLATE("Printing is not available (libprintcups)."));
+		return B_ERROR;
+	}
 
-	delete fSetupMessage;
-	fSetupMessage = messenger.Result();
+	if (fSetupMessage == NULL)
+		fSetupMessage = new BMessage;
+
+	if (!fSetupMessage->HasString(PSRV_FIELD_CURRENT_PRINTER)) {
+		char printer[256];
+		printer[0] = '\0';
+		if (gPrintCupsApi.DefaultQueue(printer, sizeof(printer)) != B_OK
+			|| printer[0] == '\0') {
+			ShowError(B_TRANSLATE("No printer is configured."));
+			return B_ERROR;
+		}
+		fSetupMessage->AddString(PSRV_FIELD_CURRENT_PRINTER, printer);
+		fSetupMessage->AddString("printer_name", printer);
+	}
+
+	bool canceled = false;
+	status_t status = gPrintCupsApi.JobSetup(fSetupMessage, &canceled);
+	if (status != B_OK && status != B_CANCELED) {
+		ShowError(B_TRANSLATE("Could not open the print setup."));
+		return status;
+	}
+	if (status == B_CANCELED || canceled)
+		return B_CANCELED;
+
 	if (!_HandlePrintSetup(fSetupMessage))
 		return B_ERROR;
 
@@ -227,9 +323,10 @@ BPrintJob::BeginJob()
 	if (fSpoolFile != NULL || fCurrentPageHeader == NULL)
 		return;
 
-	// TODO show alert, setup message is required
-	if (fSetupMessage == NULL)
+	if (fSetupMessage == NULL) {
+		ShowError(B_TRANSLATE("Print settings are required."));
 		return;
+	}
 
 	// create spool file
 	BPath path;
@@ -237,12 +334,18 @@ BPrintJob::BeginJob()
 	if (status != B_OK)
 		return;
 
-	char *printer = _GetCurrentPrinterName();
+	char* printer = _GetCurrentPrinterName();
 	if (printer == NULL)
 		return;
 	MemoryDeleter _(printer);
 
+	// No print server creates the per-printer spool folder on V\OS.
 	path.Append(printer);
+	if (path.InitCheck() != B_OK
+		|| create_directory(path.Path(), 0755) != B_OK) {
+		ShowError(B_TRANSLATE("Could not create the print spool folder."));
+		return;
+	}
 
 	char mangledName[B_FILE_NAME_LENGTH];
 	_GetMangledName(mangledName, B_FILE_NAME_LENGTH);
@@ -251,19 +354,17 @@ BPrintJob::BeginJob()
 	if (path.InitCheck() != B_OK)
 		return;
 
-	// TODO: fSpoolFileName should store the name only (not path which can be
-	// 1024 bytes long)
 	strlcpy(fSpoolFileName, path.Path(), sizeof(fSpoolFileName));
 	fSpoolFile = new BFile(fSpoolFileName, B_READ_WRITE | B_CREATE_FILE);
 
 	if (fSpoolFile->InitCheck() != B_OK) {
+		ShowError(B_TRANSLATE("Could not create the print spool file."));
 		CancelJob();
 		return;
 	}
 
 	// add print_file_header
 	// page_count is updated in CommitJob()
-	// on BeOS R5 the offset to the first page was always -1
 	fSpoolFileHeader.version = 1 << 16;
 	fSpoolFileHeader.page_count = 0;
 	fSpoolFileHeader.first_page = (off_t)-1;
@@ -277,6 +378,8 @@ BPrintJob::BeginJob()
 	// add printer settings message
 	if (!fSetupMessage->HasString(PSRV_FIELD_CURRENT_PRINTER))
 		fSetupMessage->AddString(PSRV_FIELD_CURRENT_PRINTER, printer);
+	if (!fSetupMessage->HasString("printer_name"))
+		fSetupMessage->AddString("printer_name", printer);
 
 	_AddSetupSpec();
 	_NewPage();
@@ -308,7 +411,11 @@ BPrintJob::CommitJob()
 
 	// set file attributes
 	app_info appInfo;
-	be_app->GetAppInfo(&appInfo);
+	if (be_app != NULL)
+		be_app->GetAppInfo(&appInfo);
+	else
+		memset(&appInfo, 0, sizeof(appInfo));
+
 	const char* printerName = "";
 	fSetupMessage->FindString(PSRV_FIELD_CURRENT_PRINTER, &printerName);
 
@@ -317,30 +424,40 @@ BPrintJob::CommitJob()
 
 	fSpoolFile->WriteAttr(PSRV_SPOOL_ATTR_PAGECOUNT, B_INT32_TYPE, 0,
 		&fSpoolFileHeader.page_count, sizeof(int32));
-	fSpoolFile->WriteAttr(PSRV_SPOOL_ATTR_DESCRIPTION, B_STRING_TYPE, 0,
-		fPrintJobName, strlen(fPrintJobName) + 1);
+	if (fPrintJobName != NULL) {
+		fSpoolFile->WriteAttr(PSRV_SPOOL_ATTR_DESCRIPTION, B_STRING_TYPE, 0,
+			fPrintJobName, strlen(fPrintJobName) + 1);
+	}
 	fSpoolFile->WriteAttr(PSRV_SPOOL_ATTR_PRINTER, B_STRING_TYPE, 0,
 		printerName, strlen(printerName) + 1);
 	fSpoolFile->WriteAttr(PSRV_SPOOL_ATTR_STATUS, B_STRING_TYPE, 0,
 		PSRV_JOB_STATUS_WAITING, strlen(PSRV_JOB_STATUS_WAITING) + 1);
-	fSpoolFile->WriteAttr(PSRV_SPOOL_ATTR_MIMETYPE, B_STRING_TYPE, 0,
-		appInfo.signature, strlen(appInfo.signature) + 1);
+	if (appInfo.signature[0] != '\0') {
+		fSpoolFile->WriteAttr(PSRV_SPOOL_ATTR_MIMETYPE, B_STRING_TYPE, 0,
+			appInfo.signature, strlen(appInfo.signature) + 1);
+	}
 
 	delete fSpoolFile;
 	fSpoolFile = NULL;
-	fError = B_ERROR;
 
-	// notify print server
-	BMessenger printServer;
-	if (PrintServerMessenger::GetPrintServerMessenger(printServer) != B_OK)
+	if (LoadPrintCups() != B_OK) {
+		ShowError(B_TRANSLATE("Printing is not available (libprintcups)."));
+		fError = B_ERROR;
 		return;
+	}
 
-	BMessage request(PSRV_PRINT_SPOOLED_JOB);
-	request.AddString("JobName", fPrintJobName);
-	request.AddString("Spool File", fSpoolFileName);
+	int32 jobId = -1;
+	status_t status = gPrintCupsApi.SubmitSpool(fSpoolFileName, fSetupMessage,
+		fPrintJobName, &jobId);
+	// Nothing on V\OS reads the spool file after this.
+	BEntry(fSpoolFileName).Remove();
+	if (status != B_OK) {
+		ShowError(B_TRANSLATE("Could not submit the print job."));
+		fError = B_ERROR;
+		return;
+	}
 
-	BMessage reply;
-	printServer.SendMessage(&request, &reply);
+	fError = B_OK;
 }
 
 
@@ -498,19 +615,21 @@ BPrintJob::LastPage()
 int32
 BPrintJob::PrinterType(void*) const
 {
-	BMessenger printServer;
-	if (PrintServerMessenger::GetPrintServerMessenger(printServer) != B_OK)
-		return B_COLOR_PRINTER; // default
+	if (LoadPrintCups() != B_OK)
+		return B_COLOR_PRINTER;
 
-	BMessage reply;
-	BMessage message(PSRV_GET_ACTIVE_PRINTER);
-	printServer.SendMessage(&message, &reply);
+	char printer[256];
+	printer[0] = '\0';
+	if (fSetupMessage != NULL) {
+		const char* name = NULL;
+		if (fSetupMessage->FindString(PSRV_FIELD_CURRENT_PRINTER, &name) == B_OK
+			&& name != NULL)
+			strlcpy(printer, name, sizeof(printer));
+	}
+	if (printer[0] == '\0' && gPrintCupsApi.DefaultQueue != NULL)
+		gPrintCupsApi.DefaultQueue(printer, sizeof(printer));
 
-	int32 type;
-	if (reply.FindInt32("color", &type) != B_OK)
-		return B_COLOR_PRINTER; // default
-
-	return type;
+	return gPrintCupsApi.PrinterType(printer);
 }
 
 
@@ -588,7 +707,7 @@ BPrintJob::_HandlePageSetup(BMessage* setup)
 	setup->FindRect(PSRV_FIELD_PRINTABLE_RECT, &fUsableSize);
 	setup->FindRect(PSRV_FIELD_PAPER_RECT, &fPaperSize);
 
-	// TODO verify data type (taken from libprint)
+	// libprintcups stores resolution as int64; older code used int64 too.
 	int64 valueInt64;
 	if (setup->FindInt64(PSRV_FIELD_XRES, &valueInt64) == B_OK)
 		fXResolution = (short)valueInt64;
@@ -658,8 +777,8 @@ BPrintJob::_AddPicture(BPicture& picture, BRect& rect, BPoint& where)
 	ASSERT(fSpoolFile != NULL);
 
 	fCurrentPageHeader->number_of_pictures++;
-	fSpoolFile->Write(&where, sizeof(BRect));
-	fSpoolFile->Write(&rect, sizeof(BPoint));
+	fSpoolFile->Write(&where, sizeof(BPoint));
+	fSpoolFile->Write(&rect, sizeof(BRect));
 	picture.Flatten(fSpoolFile);
 }
 
@@ -671,35 +790,37 @@ BPrintJob::_AddPicture(BPicture& picture, BRect& rect, BPoint& where)
 char*
 BPrintJob::_GetCurrentPrinterName() const
 {
-	BMessenger printServer;
-	if (PrintServerMessenger::GetPrintServerMessenger(printServer) != B_OK)
+	if (fSetupMessage != NULL) {
+		const char* name = NULL;
+		if (fSetupMessage->FindString(PSRV_FIELD_CURRENT_PRINTER, &name) == B_OK
+			&& name != NULL && name[0] != '\0')
+			return strdup(name);
+	}
+
+	if (LoadPrintCups() != B_OK)
 		return NULL;
 
-	const char* printerName = NULL;
-
-	BMessage reply;
-	BMessage message(PSRV_GET_ACTIVE_PRINTER);
-	if (printServer.SendMessage(&message, &reply) == B_OK)
-		reply.FindString("printer_name", &printerName);
-
-	if (printerName == NULL)
+	char printer[256];
+	printer[0] = '\0';
+	if (gPrintCupsApi.DefaultQueue(printer, sizeof(printer)) != B_OK
+		|| printer[0] == '\0')
 		return NULL;
 
-	return strdup(printerName);
+	return strdup(printer);
 }
 
 
 void
 BPrintJob::_LoadDefaultSettings()
 {
-	BMessenger printServer;
-	if (PrintServerMessenger::GetPrintServerMessenger(printServer) != B_OK)
+	if (LoadPrintCups() != B_OK)
 		return;
 
-	BMessage message(PSRV_GET_DEFAULT_SETTINGS);
 	BMessage* reply = new BMessage;
-
-	printServer.SendMessage(&message, reply);
+	if (gPrintCupsApi.DefaultSettings(reply) != B_OK) {
+		delete reply;
+		return;
+	}
 
 	// Only override our settings if we don't have any settings yet
 	if (fSetupMessage == NULL)
@@ -714,170 +835,3 @@ void BPrintJob::_ReservedPrintJob1() {}
 void BPrintJob::_ReservedPrintJob2() {}
 void BPrintJob::_ReservedPrintJob3() {}
 void BPrintJob::_ReservedPrintJob4() {}
-
-
-// #pragma mark -- PrintServerMessenger
-
-
-namespace BPrivate {
-
-
-PrintServerMessenger::PrintServerMessenger(uint32 what, BMessage *input)
-	:
-	fWhat(what),
-	fInput(input),
-	fRequest(NULL),
-	fResult(NULL),
-	fThreadCompleted(-1),
-	fHiddenApplicationModalWindow(NULL)
-{
-	RejectUserInput();
-}
-
-
-PrintServerMessenger::~PrintServerMessenger()
-{
-	DeleteSemaphore();
-		// in case SendRequest could not start the thread
-	delete fRequest; fRequest = NULL;
-	AllowUserInput();
-}
-
-
-void
-PrintServerMessenger::RejectUserInput()
-{
-	fHiddenApplicationModalWindow = new BAlert("bogus", "app_modal", "OK");
-	fHiddenApplicationModalWindow->DefaultButton()->SetEnabled(false);
-	fHiddenApplicationModalWindow->SetDefaultButton(NULL);
-	fHiddenApplicationModalWindow->SetFlags(fHiddenApplicationModalWindow->Flags() | B_CLOSE_ON_ESCAPE);
-	fHiddenApplicationModalWindow->MoveTo(-65000, -65000);
-	fHiddenApplicationModalWindow->Go(NULL);
-}
-
-
-void
-PrintServerMessenger::AllowUserInput()
-{
-	fHiddenApplicationModalWindow->Lock();
-	fHiddenApplicationModalWindow->Quit();
-}
-
-
-void
-PrintServerMessenger::DeleteSemaphore()
-{
-	if (fThreadCompleted >= B_OK) {
-		sem_id id = fThreadCompleted;
-		fThreadCompleted = -1;
-		delete_sem(id);
-	}
-}
-
-
-status_t
-PrintServerMessenger::SendRequest()
-{
-	fThreadCompleted = create_sem(0, "print_server_messenger_sem");
-	if (fThreadCompleted < B_OK)
-		return B_ERROR;
-
-	thread_id id = spawn_thread(MessengerThread, "async_request",
-		B_NORMAL_PRIORITY, this);
-	if (id <= 0 || resume_thread(id) != B_OK)
-		return B_ERROR;
-
-	// Get the originating window, if it exists
-	BWindow* window = dynamic_cast<BWindow*>(
-		BLooper::LooperForThread(find_thread(NULL)));
-	if (window != NULL) {
-		status_t err;
-		while (true) {
-			do {
-				err = acquire_sem_etc(fThreadCompleted, 1, B_RELATIVE_TIMEOUT,
-					50000);
-			// We've (probably) had our time slice taken away from us
-			} while (err == B_INTERRUPTED);
-
-			// Semaphore was finally nuked in SetResult(BMessage *)
-			if (err == B_BAD_SEM_ID)
-				break;
-			window->UpdateIfNeeded();
-		}
-	} else {
-		// No window to update, so just hang out until we're done.
-		while (acquire_sem(fThreadCompleted) == B_INTERRUPTED);
-	}
-
-	status_t status;
-	wait_for_thread(id, &status);
-
-	return Result() != NULL ? B_OK : B_ERROR;
-}
-
-
-BMessage*
-PrintServerMessenger::Request()
-{
-	if (fRequest != NULL)
-		return fRequest;
-
-	if (fInput != NULL) {
-		fRequest = new BMessage(*fInput);
-		fRequest->what = fWhat;
-	} else
-		fRequest = new BMessage(fWhat);
-
-	return fRequest;
-}
-
-
-void
-PrintServerMessenger::SetResult(BMessage* result)
-{
-	fResult = result;
-	DeleteSemaphore();
-	// terminate loop in thread spawned by SendRequest
-}
-
-
-status_t
-PrintServerMessenger::GetPrintServerMessenger(BMessenger& messenger)
-{
-	messenger = BMessenger(PSRV_SIGNATURE_TYPE);
-	return messenger.IsValid() ? B_OK : B_ERROR;
-}
-
-
-status_t
-PrintServerMessenger::MessengerThread(void* data)
-{
-	PrintServerMessenger* messenger = static_cast<PrintServerMessenger*>(data);
-
-	BMessenger printServer;
-	if (messenger->GetPrintServerMessenger(printServer) != B_OK) {
-		ShowError(B_TRANSLATE("Print Server is not responding."));
-		messenger->SetResult(NULL);
-		return B_ERROR;
-	}
-
-	BMessage* request = messenger->Request();
-	if (request == NULL) {
-		messenger->SetResult(NULL);
-		return B_ERROR;
-	}
-
-
-	BMessage reply;
-	if (printServer.SendMessage(request, &reply) != B_OK
-		|| reply.what != 'okok' ) {
-		messenger->SetResult(NULL);
-		return B_ERROR;
-	}
-
-	messenger->SetResult(new BMessage(reply));
-	return B_OK;
-}
-
-
-}	// namespace BPrivate

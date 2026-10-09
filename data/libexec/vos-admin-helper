@@ -1,0 +1,266 @@
+#!/bin/sh
+# Account operations for the Administrator preflet, run via pkexec only.
+# Passwords arrive on stdin as one line, plaintext or "sha512:<hash>".
+set -eu
+
+die() {
+	echo "vos-admin-helper: $*" >&2
+	exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || die "must run as root (invoke via pkexec)"
+
+GROUPS_FILE="/usr/share/vos/user-default-groups"
+RESERVED="root daemon sys bin vos_login vos-live _vitruvian-login nobody"
+
+
+is_reserved() {
+	case " $RESERVED " in
+		*" $1 "*) return 0 ;;
+	esac
+	return 1
+}
+
+
+validate_name() {
+	_n=$1
+	is_reserved "$_n" && die "reserved username: $_n"
+	printf '%s' "$_n" | grep -Eq '^[a-z_][a-z0-9_-]{0,31}$' \
+		|| die "invalid username: $_n"
+}
+
+
+is_interactive_user() {
+	_line=$(getent passwd "$1") || return 1
+	_uid=$(printf '%s' "$_line" | cut -d: -f3)
+	_shell=$(printf '%s' "$_line" | cut -d: -f7)
+	case "$_uid" in ''|*[!0-9]*) return 1 ;; esac
+	[ "$_uid" -ge 1000 ] || return 1
+	case "$_shell" in */nologin|*/false|'') return 1 ;; esac
+	return 0
+}
+
+
+add_default_groups() {
+	_user=$1
+	[ -r "$GROUPS_FILE" ] || die "missing $GROUPS_FILE"
+	for _g in $(grep -v '^#' "$GROUPS_FILE"); do
+		if getent group "$_g" >/dev/null 2>&1; then
+			usermod -aG "$_g" "$_user" \
+				|| die "usermod $_g failed for $_user"
+		else
+			echo "vos-admin-helper: group $_g missing; skipping" >&2
+		fi
+	done
+}
+
+
+is_admin() {
+	_user=$1
+	id -nG "$_user" 2>/dev/null | tr ' ' '\n' | grep -qx sudo
+}
+
+
+count_admins() {
+	_count=0
+	for _u in $(getent group sudo | cut -d: -f4 | tr ',' ' '); do
+		[ -n "$_u" ] || continue
+		is_interactive_user "$_u" || continue
+		is_admin "$_u" || continue
+		_count=$((_count + 1))
+	done
+	echo "$_count"
+}
+
+
+caller_name() {
+	_uid="${PKEXEC_UID:-}"
+	[ -n "$_uid" ] || die "PKEXEC_UID not set"
+	getent passwd "$_uid" | cut -d: -f1
+}
+
+
+session_running() {
+	_uid=$1
+	[ -d "/run/user/$_uid" ] && return 0
+	for _d in /proc/[0-9]*; do
+		[ -r "$_d/status" ] || continue
+		_ouid=$(awk '/^Uid:/{print $2; exit}' "$_d/status" 2>/dev/null) \
+			|| continue
+		[ "$_ouid" = "$_uid" ] && return 0
+	done
+	return 1
+}
+
+
+read_password() {
+	_pass=$(head -n 1)
+	[ -n "$_pass" ] || die "empty password"
+}
+
+
+apply_password() {
+	_user=$1
+	_pass=$2
+	if printf '%s' "$_pass" | grep -q '^sha512:'; then
+		printf '%s:%s\n' "$_user" "${_pass#sha512:}" | chpasswd -e
+	else
+		printf '%s:%s\n' "$_user" "$_pass" | chpasswd
+	fi
+}
+
+
+cmd_create() {
+	_name=""
+	_full=""
+	_admin=0
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			--admin) _admin=1 ;;
+			--full-name=*) _full="${1#--full-name=}" ;;
+			--*) die "create: unknown flag $1" ;;
+			*) _name=$1 ;;
+		esac
+		shift
+	done
+	[ -n "$_name" ] || die "create: username required"
+	validate_name "$_name"
+	getent passwd "$_name" >/dev/null && die "user already exists: $_name"
+	[ -r "$GROUPS_FILE" ] || die "missing $GROUPS_FILE"
+	if [ -n "$_full" ]; then
+		case "$_full" in
+			*','*|*':') die "invalid characters in full name" ;;
+		esac
+	fi
+
+	set -- -m -s /bin/bash
+	if [ -n "$_full" ]; then
+		set -- "$@" -c "$_full"
+	fi
+	useradd "$@" -- "$_name"
+
+	add_default_groups "$_name"
+	if [ "$_admin" -eq 1 ]; then
+		getent group sudo >/dev/null || die "sudo group missing"
+		usermod -aG sudo "$_name" || die "usermod sudo failed"
+	fi
+
+	read_password
+	apply_password "$_name" "$_pass"
+	echo "created $_name"
+}
+
+
+cmd_delete() {
+	_name=""
+	_remove_home=0
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			--remove-home) _remove_home=1 ;;
+			--*) die "delete: unknown flag $1" ;;
+			*) _name=$1 ;;
+		esac
+		shift
+	done
+	[ -n "$_name" ] || die "delete: username required"
+	validate_name "$_name"
+	is_interactive_user "$_name" || die "not an interactive user: $_name"
+
+	_target_uid=$(getent passwd "$_name" | cut -d: -f3)
+	_caller=$(caller_name)
+	[ "$_name" != "$_caller" ] || die "cannot delete the current user"
+
+	if session_running "$_target_uid"; then
+		die "user $_name has a running session; log out first"
+	fi
+
+	if is_admin "$_name"; then
+		_left=$(count_admins)
+		if [ "$_left" -le 1 ]; then
+			die "refusing to remove the last administrator ($_name)"
+		fi
+	fi
+
+	if [ "$_remove_home" -eq 1 ]; then
+		userdel -r "$_name" || die "userdel -r failed"
+	else
+		userdel "$_name" || die "userdel failed"
+	fi
+	echo "deleted $_name"
+}
+
+
+cmd_grant_admin() {
+	[ $# -ge 1 ] || die "grant-admin: username required"
+	_name=$1
+	validate_name "$_name"
+	is_interactive_user "$_name" || die "not an interactive user: $_name"
+	getent group sudo >/dev/null || die "sudo group missing"
+	usermod -aG sudo "$_name" || die "usermod sudo failed"
+	echo "granted administrator to $_name"
+}
+
+
+cmd_revoke_admin() {
+	[ $# -ge 1 ] || die "revoke-admin: username required"
+	_name=$1
+	validate_name "$_name"
+	is_interactive_user "$_name" || die "not an interactive user: $_name"
+	is_admin "$_name" || die "$_name is not an administrator"
+	_caller=$(caller_name)
+	[ "$_name" != "$_caller" ] || die "cannot remove your own administrator rights"
+	_left=$(count_admins)
+	if [ "$_left" -le 1 ]; then
+		die "refusing to leave the system without an administrator"
+	fi
+	gpasswd -d "$_name" sudo >/dev/null 2>&1 \
+		|| die "gpasswd -d failed for $_name"
+	echo "revoked administrator from $_name"
+}
+
+
+cmd_set_password() {
+	[ $# -ge 1 ] || die "set-password: username required"
+	_name=$1
+	validate_name "$_name"
+	is_interactive_user "$_name" || die "not an interactive user: $_name"
+	read_password
+	apply_password "$_name" "$_pass"
+	echo "password set for $_name"
+}
+
+
+cmd_set_gecos() {
+	[ $# -ge 2 ] || die "set-gecos: username and full name required"
+	_name=$1
+	_full=$2
+	validate_name "$_name"
+	is_interactive_user "$_name" || die "not an interactive user: $_name"
+	case "$_full" in
+		*','*|*':') die "invalid characters in full name" ;;
+	esac
+	chfn -f "$_full" "$_name" || die "chfn failed for $_name"
+	echo "full name set for $_name"
+}
+
+
+cmd_unlock() {
+	# Prove admin credentials; the preflet enables write controls on exit 0.
+	echo "unlocked"
+}
+
+
+cmd="${1:-}"
+[ $# -gt 0 ] && shift
+case "$cmd" in
+	create)        cmd_create "$@" ;;
+	delete)        cmd_delete "$@" ;;
+	grant-admin)   cmd_grant_admin "$@" ;;
+	revoke-admin)  cmd_revoke_admin "$@" ;;
+	set-password)  cmd_set_password "$@" ;;
+	set-gecos)     cmd_set_gecos "$@" ;;
+	unlock)        cmd_unlock ;;
+	*)
+		die "usage: vos-admin-helper create|delete|grant-admin|revoke-admin|set-password|set-gecos|unlock [args]"
+		;;
+esac

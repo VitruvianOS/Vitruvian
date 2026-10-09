@@ -3472,6 +3472,53 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			break;
 		}
 
+		case AS_SCREEN_SET_TEMPERATURE:
+		{
+			STRACE(("ServerApp %s: AS_SCREEN_SET_TEMPERATURE\n", Signature()));
+			int32 id;
+			link.Read<int32>(&id);
+
+			float kelvin;
+			link.Read<float>(&kelvin);
+
+			status_t status = fDesktop->HWInterface()->SetTemperature(kelvin);
+			fLink.StartMessage(status);
+
+			fLink.Flush();
+			break;
+		}
+
+		case AS_SCREEN_GET_TEMPERATURE:
+		{
+			STRACE(("ServerApp %s: AS_SCREEN_GET_TEMPERATURE\n", Signature()));
+			int32 id;
+			link.Read<int32>(&id);
+
+			float kelvin;
+			status_t result = fDesktop->HWInterface()->GetTemperature(&kelvin);
+			fLink.StartMessage(result);
+			if (result == B_OK)
+				fLink.Attach<float>(kelvin);
+			fLink.Flush();
+			break;
+		}
+
+		case AS_SCREEN_GET_CONNECTOR_NAME:
+		{
+			STRACE(("ServerApp %s: AS_SCREEN_GET_CONNECTOR_NAME\n",
+				Signature()));
+			int32 id;
+			link.Read<int32>(&id);
+
+			BString name;
+			status_t result = fDesktop->HWInterface()->GetConnectorName(name);
+			fLink.StartMessage(result);
+			if (result == B_OK)
+				fLink.AttachString(name.String());
+			fLink.Flush();
+			break;
+		}
+
 		case AS_READ_BITMAP:
 		{
 			STRACE(("ServerApp %s: AS_READ_BITMAP\n", Signature()));

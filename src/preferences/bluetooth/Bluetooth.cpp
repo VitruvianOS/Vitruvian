@@ -4,15 +4,18 @@
  */
 
 
-#include <Alert.h>
 #include <Application.h>
-#include <Catalog.h>
-#include <Locale.h>
+#include <Message.h>
 #include <Window.h>
 
 #include "BluetoothWindow.h"
 
 
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Bluetooth"
+
+
+// Existing signature; do not change.
 static const char* kSignature = "application/x-vnd.Haiku-Bluetooth";
 
 
@@ -22,12 +25,21 @@ public:
 
 public:
 	virtual	void				ReadyToRun();
+	virtual	void				MessageReceived(BMessage* message);
+
+private:
+			void				_OpenInquiry();
+
+			BluetoothWindow*	fWindow;
+			bool				fPendingOpenInquiry;
 };
 
 
 Application::Application()
 	:
-	BApplication(kSignature)
+	BApplication(kSignature),
+	fWindow(NULL),
+	fPendingOpenInquiry(false)
 {
 }
 
@@ -35,16 +47,43 @@ Application::Application()
 void
 Application::ReadyToRun()
 {
-	BluetoothWindow* window = new BluetoothWindow();
-	window->Show();
+	fWindow = new BluetoothWindow();
+	fWindow->Show();
+
+	if (fPendingOpenInquiry) {
+		fPendingOpenInquiry = false;
+		fWindow->PostMessage(kMsgOpenInquiry);
+	}
 }
 
 
-// #pragma mark -
+void
+Application::MessageReceived(BMessage* message)
+{
+	if (message->what == kMsgOpenInquiry) {
+		_OpenInquiry();
+		return;
+	}
+
+	BApplication::MessageReceived(message);
+}
+
+
+void
+Application::_OpenInquiry()
+{
+	// On a cold start this arrives before ReadyToRun creates the window.
+	if (fWindow == NULL) {
+		fPendingOpenInquiry = true;
+		return;
+	}
+
+	fWindow->PostMessage(kMsgOpenInquiry);
+}
 
 
 int
-main()
+main(int /*argc*/, char** /*argv*/)
 {
 	Application* app = new Application();
 	app->Run();

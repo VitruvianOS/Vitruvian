@@ -48,13 +48,64 @@ _iso_cleanup() {
     sudo umount -l "$_chroot_dir/tmp/"  2>/dev/null || true
 }
 
+# Set a GPT partition's type GUID (parted can't). GUIDs are mixed-endian;
+# both headers' CRCs are rewritten so the table stays valid.
+_gpt_set_type_guid() {
+    _gpt_disk="$1"
+    _gpt_num="$2"
+    _gpt_guid="$3"
+    require_cmd python3 "python3"
+    python3 - "$_gpt_disk" "$_gpt_num" "$_gpt_guid" <<'PYEOF'
+import struct, sys, uuid, zlib
+disk, num, guid = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+SECTOR = 512
+with open(disk, "rb") as f:
+    f.seek(SECTOR)  # primary header
+    hdr = bytearray(f.read(SECTOR))
+    if hdr[:8] != b"EFI PART":
+        sys.exit("no GPT header at LBA 1")
+    entries_lba = struct.unpack_from("<Q", hdr, 72)[0]
+    count = struct.unpack_from("<I", hdr, 80)[0]
+    entry_size = struct.unpack_from("<I", hdr, 84)[0]
+    if num < 1 or num > count:
+        sys.exit("partition number out of range")
+    f.seek(entries_lba * SECTOR)
+    entries = bytearray(f.read(count * entry_size))
+off = (num - 1) * entry_size
+entries[off:off + 16] = uuid.UUID(guid).bytes_le
+crc = zlib.crc32(bytes(entries)) & 0xffffffff
+with open(disk, "r+b") as f:
+    f.seek(entries_lba * SECTOR)
+    f.write(entries)
+    # primary header at LBA 1; backup header is last LBA
+    f.seek(0, 2)
+    last_lba = f.tell() // SECTOR - 1
+    for hdr_lba in (1, last_lba):
+        f.seek(hdr_lba * SECTOR)
+        h = bytearray(f.read(SECTOR))
+        if h[:8] != b"EFI PART":
+            continue
+        struct.pack_into("<I", h, 88, crc)
+        h[16:20] = b"\x00\x00\x00\x00"
+        hcrc = zlib.crc32(bytes(h[:92])) & 0xffffffff
+        struct.pack_into("<I", h, 16, hcrc)
+        f.seek(hdr_lba * SECTOR)
+        f.write(h)
+print(f"set part {num} type {guid} (entries CRC {crc:#x})")
+PYEOF
+}
+
+# EFI raw image assembled without loop devices or partition mounts, so the
+# build runs in sandboxed/container environments: the root tree is staged as
+# a plain directory and written in one shot with mke2fs -d, the ESP with
+# mtools, the disk image as an sfdisk table plus dd writes at the partition
+# offsets. UUIDs/volume IDs are generated up front so fstab and the embedded
+# grub.cfg are written before any filesystem exists.
 create_raw() {
     _basedir="$1"
     _arch="$2"
     _efi_target="$(arch_to_efi_target "$_arch")"
-    if [ -z "$_efi_target" ]; then
-        die "EFI raw images not supported on $_arch. Use a board-specific image type instead."
-    fi
+    [ -n "$_efi_target" ] || die "EFI raw images not supported on $_arch."
 
     _chroot_dir="$_basedir/image_tree/chroot"
     [ -d "$_chroot_dir" ] || die "No chroot at $_chroot_dir. Run setupenv first."
@@ -68,9 +119,13 @@ create_raw() {
     fi
 
     require_cmd rsync rsync
+    require_cmd sfdisk fdisk
+    require_cmd mke2fs e2fsprogs
+    require_cmd mkfs.vfat dosfstools
+    require_cmd mcopy mtools
+    require_cmd mmd mtools
 
-    _raw="$_basedir/output/vitruvian.raw"
-    _mnt="/mnt/vitruvian"
+    _raw="$_basedir/output/vos-uefi.raw"
     _hostname="vitruvian"
     _user=""
     _pass=""
@@ -78,88 +133,76 @@ create_raw() {
     _host_shared="$_basedir/shared"
     _guest_mnt="/mnt/host_shared"
 
-    mkdir -p "$_basedir/output"
-    mkdir -p "$_host_shared"
+    # 4 GiB disk, nothing grows it on boot: 128 MiB ESP (GRUB loaders),
+    # the rest root.
+    _disk_mib=4096
+    _esp_start_mib=1
+    _esp_size_mib=128
+    _root_start_mib=129
+    _root_size_mib=$((_disk_mib - _root_start_mib - 1))  # -1MiB for GPT backup
 
-    # Detach any loop devices that previous runs left attached to the same
-    # raw file (kill -9 / closed terminal bypassing the EXIT trap, or
-    # udisks held it open). Writing through a fresh qemu-img create while
-    # a stale loop is still open silently corrupts the new FS.
-    if [ -f "$_raw" ]; then
-        for _stale in $(sudo losetup -j "$_raw" -O NAME --noheadings 2>/dev/null); do
-            log_warn "Detaching stale loop device $_stale"
-            # Unmount everything attached to this loop, including udisks's
-            # /run/media mounts. Sort reverse so children unmount first.
-            for _mp in $(awk -v dev="$_stale" '$1 ~ dev {print $2}' /proc/mounts \
-                    | sort -r); do
-                sudo umount -l "$_mp" 2>/dev/null || true
-            done
-            sudo losetup -d "$_stale" 2>/dev/null || true
-        done
-    fi
-    sudo umount -l "$_mnt/boot/efi" 2>/dev/null || true
-    sudo umount -l "$_mnt"          2>/dev/null || true
+    _root_dir="$_basedir/image_tree/raw_root"
+    _esp_dir="$_basedir/image_tree/raw_esp"
+    _root_img="$_basedir/image_tree/scratch/root.img"
+    _esp_img="$_basedir/image_tree/scratch/esp.img"
 
-    log_step "Creating RAW image..."
-    qemu-img create "$_raw" 4G
+    sudo rm -rf "$_root_dir" "$_esp_dir"
+    mkdir -p "$_basedir/output" "$_host_shared" "$_basedir/image_tree/scratch"
+    sudo mkdir -p "$_root_dir" "$_esp_dir"
 
-    _loop=$(sudo losetup --show -f -P "$_raw")
-    log_info "Loop device: $_loop"
-    trap '_loop_image_cleanup' EXIT INT TERM
+    # Pre-generate the identifiers the loop-based path read back from blkid
+    # after mkfs; here nothing is mkfs'd until the directory trees are
+    # complete, so fstab/grub.cfg need them first.
+    _root_uuid="$(cat /proc/sys/kernel/random/uuid)"
+    _esp_volid="$(od -An -tx4 -N4 /dev/urandom | tr -d ' \n' | tr 'a-f' 'A-F')"
+    _esp_uuid="${_esp_volid%????}-${_esp_volid#????}"
 
-    sudo parted --script "$_loop" mklabel gpt
-    sudo parted --script "$_loop" mkpart ESP fat32 1MiB 513MiB
-    sudo parted --script "$_loop" set 1 esp on
-    sudo parted --script "$_loop" mkpart primary ext4 513MiB 100%
-    sudo partprobe "$_loop"
-    sudo udevadm settle
-
-    _efi_part="${_loop}p1"
-    _root_part="${_loop}p2"
-
-    sudo mkfs.vfat -F32 "$_efi_part"
-    sudo mkfs.ext4 -F -I 512 \
-        -O ^ea_inode,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
-        -L vitruvian-root "$_root_part"
-
-    _esp_uuid=$(sudo blkid -s UUID -o value "$_efi_part")
-    _root_uuid=$(sudo blkid -s UUID -o value "$_root_part")
-    [ -n "$_esp_uuid" ]  || die "Could not read ESP UUID from $_efi_part"
-    [ -n "$_root_uuid" ] || die "Could not read root UUID from $_root_part"
-
-    sudo mkdir -p "$_mnt"
-    sudo mount "$_root_part" "$_mnt"
-    sudo mkdir -p "$_mnt/boot/efi"
-    sudo mount "$_efi_part" "$_mnt/boot/efi"
-
-    log_step "Copying chroot into RAW image (rsync)..."
+    log_step "Assembling root filesystem tree (no loop device)..."
     sudo rsync -aHAXx --numeric-ids \
         --exclude='/proc/*' --exclude='/sys/*' --exclude='/dev/*' \
         --exclude='/tmp/*'  --exclude='/run/*'  --exclude='/localdeb' \
         --exclude='/scratch' \
-        "$_chroot_dir/" "$_mnt/"
+        "$_chroot_dir/" "$_root_dir/"
 
-    sudo mkdir -p "$_mnt/proc" "$_mnt/sys" "$_mnt/dev" "$_mnt/run" "$_mnt/tmp"
-    sudo mount -t proc proc "$_mnt/proc"
-    sudo mount --rbind /sys "$_mnt/sys";  sudo mount --make-rslave "$_mnt/sys"
-    sudo mount --rbind /dev "$_mnt/dev";  sudo mount --make-rslave "$_mnt/dev"
-    sudo cp -L /etc/resolv.conf "$_mnt/etc/resolv.conf"
+    sudo mkdir -p "$_root_dir/proc" "$_root_dir/sys" "$_root_dir/dev" \
+        "$_root_dir/run" "$_root_dir/tmp" "$_root_dir/boot/efi"
+    sudo mount -t proc proc "$_root_dir/proc"
+    sudo mount --rbind /sys "$_root_dir/sys"; sudo mount --make-rslave "$_root_dir/sys"
+    sudo mount --rbind /dev "$_root_dir/dev"; sudo mount --make-rslave "$_root_dir/dev"
+    sudo cp -L /etc/resolv.conf "$_root_dir/etc/resolv.conf"
 
-    qemu_inject "$_mnt" "$_arch"
+    _assembly_cleanup() {
+        for _mp in "$_root_dir/var/cache/apt/archives" "$_root_dir/proc" \
+                   "$_root_dir/sys" "$_root_dir/dev"; do
+            sudo umount -l "$_mp" 2>/dev/null || true
+        done
+    }
+    trap '_assembly_cleanup' EXIT INT TERM
 
-    chroot_mount_deb_cache "$_mnt" "$(chroot_cache_dir "$_basedir")"
+    qemu_inject "$_root_dir" "$_arch"
+    chroot_mount_deb_cache "$_root_dir" "$(chroot_cache_dir "$_basedir")"
 
-    sudo mkdir -p "$_mnt/localdeb"
-    sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
+    sudo mkdir -p "$_root_dir/localdeb"
+    sudo cp "$_basedir"/*.deb "$_root_dir/localdeb/"
 
     log_step "Configuring system, installing Vitruvian, and setting up bootloader..."
 
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    _raw_dev_pkgs="$(get_dev_packages "$_arch")"
+    _raw_kver="$(ls -1 "$_root_dir/lib/modules" | sort -V | tail -1)"
+    sudo chroot "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+apt-get install -y --download-only --no-install-recommends $_raw_pkgs \
+    dkms build-essential linux-headers-$_raw_kver /localdeb/*.deb" \
+        || die "raw package download failed"
+    chroot_isolated "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 
 umount /sys/firmware/efi/efivars 2>/dev/null || true
 
 apt-get remove -y vos nexus-dkms 2>/dev/null || true
+
+# Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
 
 rm -f /usr/share/initramfs-tools/hooks/live*
 rm -f /usr/share/initramfs-tools/scripts/live*
@@ -170,36 +213,28 @@ apt-get -y autoremove --purge 2>/dev/null || true
 
 apt-get install -y --no-install-recommends $_raw_pkgs
 
-# Re-derive the running kernel version from /lib/modules. linux-image
-# metapackages can land a newer ABI than imagekernelversion.conf knew about.
 _kver=\$(ls -1 /lib/modules | sort -V | tail -1)
 apt-get install -y --no-install-recommends dkms build-essential \"linux-headers-\$_kver\"
 
-# dpkg -i is expected to fail when local debs pull deps the chroot doesn't
-# yet have — apt-get install -f resolves them on the next line.
-dpkg -i /localdeb/*.deb || true
-apt-get install -f -y --no-install-recommends
+apt-get install -y --no-install-recommends --reinstall /localdeb/*.deb
+
+# The root is a copy of the build chroot; drop its -dev packages, autoremove keeps what dkms needs.
+for _p in $_raw_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
+apt-get autoremove -y --purge
 
 depmod -v \"\$_kver\"
 
-# Ensure /vmlinuz and /initrd.img point at the installed kernel. linux-base
-# normally drops these via dpkg triggers, but when chroot apt activity is
-# weird (e.g. install order, dpkg triggers not fully processed) the
-# symlinks can be missing — and the standalone EFI bootloader resolves
-# (\$root)/vmlinuz, so a missing symlink means \"you need to load the kernel
-# first\" at the GRUB prompt.
 ln -sfn boot/vmlinuz-\$_kver /vmlinuz
 ln -sfn boot/initrd.img-\$_kver /initrd.img
 
 mkdir -p /etc/default
-cat > /etc/default/grub <<'GRUBEOF'
-GRUB_DEFAULT=0
-GRUB_TIMEOUT=0
-GRUB_DISTRIBUTOR=\"Vitruvian\"
-GRUB_CMDLINE_LINUX_DEFAULT=\"quiet splash loglevel=3 systemd.show_status=0 rd.udev.log_priority=3\"
-GRUB_CMDLINE_LINUX=\"\"
-GRUB_DISABLE_OS_PROBER=true
-GRUBEOF
+# update-grub's generated entries need rw root, or the installed system hangs at boot.
+# Safe Mode/Debug come from the vos package's /etc/grub.d/40_vos.
+if [ ! -f /usr/share/vos/grub/grub ]; then
+    echo missing packaged /usr/share/vos/grub/grub >&2
+    exit 1
+fi
+cp /usr/share/vos/grub/grub /etc/default/grub
 
 mkdir -p /boot/grub
 update-grub
@@ -213,31 +248,54 @@ FSTABEOF
 mkdir -p $_guest_mnt
 rm -rf /localdeb" || die "raw chroot bash-c failed"
 
-    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
+    # 9p over virtio has no suspend support: its queues die after S3 and the share hangs.
+    # Unmount before sleep, rebind the device for fresh queues and remount after.
+    sudo mkdir -p "$_root_dir/usr/lib/systemd/system-sleep"
+    sudo tee "$_root_dir/usr/lib/systemd/system-sleep/vos-host-shared" \
+        >/dev/null <<SLEEPEOF
+#!/bin/sh
+D=/sys/bus/virtio/drivers/9pnet_virtio
+case "\$1" in
+pre)
+    umount $_guest_mnt 2>/dev/null || umount -l $_guest_mnt 2>/dev/null
+    ;;
+post)
+    for d in "\$D"/virtio*; do
+        [ -e "\$d" ] || continue
+        n=\$(basename "\$d")
+        echo "\$n" > "\$D/unbind" && echo "\$n" > "\$D/bind"
+    done
+    mount $_guest_mnt 2>/dev/null
+    ;;
+esac
+exit 0
+SLEEPEOF
+    sudo chmod 0755 "$_root_dir/usr/lib/systemd/system-sleep/vos-host-shared"
+
+    _common_chroot_setup "$_root_dir" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
 
     case "$_arch" in
         amd64)   _boot_efi="BOOTX64.EFI" ;;
         arm64)   _boot_efi="BOOTAA64.EFI" ;;
         riscv64) _boot_efi="BOOTRISCV64.EFI" ;;
-        i386)    _boot_efi="BOOTIA32.EFI" ;;
     esac
 
     log_step "Building standalone EFI bootloader ($_efi_target)..."
-    mkdir -p "$_basedir/image_tree/scratch"
 
     BUILD_TYPE="Debug"
+    _sshdebug=0
     if [ -f "$_basedir/buildconfig.conf" ]; then
         . "$_basedir/buildconfig.conf"
         BUILD_TYPE="${CMAKE_BUILD_TYPE:-Debug}"
+        [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
     fi
-    _debug_menuentry=""
-    if [ "$BUILD_TYPE" = "Debug" ]; then
-        _debug_menuentry="menuentry \"Vitruvian (Debug)\" {
-    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    # The Debug GRUB entry boots with sshdebug; stage the SSH side to match.
+    _debug_ssh_setup "$_root_dir" || die "_debug_ssh_setup failed"
+    _debug_menuentry="menuentry \"Vitruvian (SSH Debug)\" {
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd (\$root)/initrd.img
 }"
-    fi
 
     cat > "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" <<EOF
 insmod part_gpt
@@ -251,12 +309,28 @@ insmod all_video
 insmod gfxterm
 search --no-floppy --fs-uuid --set=root $_root_uuid
 set timeout=1
+# One-shot next_entry from the ESP grubenv (vm-boot-recovery.sh sets it).
+search --no-floppy --fs-uuid --set=esp $_esp_uuid
+if [ -n "\$esp" -a -s "(\$esp)/boot/grub/grubenv" ]; then
+    load_env -f "(\$esp)/boot/grub/grubenv"
+    if [ -n "\$next_entry" ]; then
+        set default="\$next_entry"
+        set next_entry=
+        save_env -f "(\$esp)/boot/grub/grubenv" next_entry
+    fi
+fi
 menuentry "Vitruvian" {
-    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 fsck.mode=auto fsck.repair=preen console=ttyS0,115200 earlyprintk=ttyS0,115200
     initrd (\$root)/initrd.img
 }
 menuentry "Vitruvian (Safe Mode)" {
-    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw quiet splash loglevel=3 systemd.show_status=false rd.udev.log_priority=3 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons
+    insmod all_video
+    set gfxpayload=1024x768x32,1024x768,800x600,auto
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons
+    initrd (\$root)/initrd.img
+}
+menuentry "Vitruvian (Recovery)" {
+    linux (\$root)/vmlinuz root=UUID=$_root_uuid rw console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.recovery systemd.unit=rescue.target
     initrd (\$root)/initrd.img
 }
 $_debug_menuentry
@@ -267,88 +341,107 @@ if [ "\$grub_platform" = "efi" ]; then
 fi
 EOF
 
-    case "$_arch" in
-        amd64)
-            require_cmd grub-mkstandalone grub-common
-            grub-mkstandalone \
-                --format="$_efi_target" \
-                --output="$_basedir/image_tree/scratch/$_boot_efi" \
-                --locales="" --fonts="" \
-                "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
-            log_step "Building 32-bit EFI stub (BOOTIA32.EFI) for 32-bit UEFI firmware..."
-            sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
-                "$_mnt/tmp/grub_ia32.cfg"
-            sudo chroot "$_mnt" grub-mkstandalone \
-                --directory=/usr/lib/grub/i386-efi \
-                --format=i386-efi \
-                --output=/tmp/BOOTIA32.EFI \
-                --locales="" --fonts="" \
-                "boot/grub/grub.cfg=/tmp/grub_ia32.cfg"
-            sudo cp "$_mnt/tmp/BOOTIA32.EFI" \
-                "$_basedir/image_tree/scratch/BOOTIA32.EFI"
-            sudo rm -f "$_mnt/tmp/BOOTIA32.EFI" "$_mnt/tmp/grub_ia32.cfg"
-            ;;
-        arm64|riscv64)
-            sudo mkdir -p "$_mnt/scratch"
-            sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" "$_mnt/scratch/grub.cfg"
-            sudo chroot "$_mnt" /usr/bin/grub-mkstandalone \
-                --directory="/usr/lib/grub/$_efi_target" \
-                --format="$_efi_target" \
-                --output="/scratch/$_boot_efi" \
-                --locales="" --fonts="" \
-                "boot/grub/grub.cfg=/scratch/grub.cfg"
-            sudo cp "$_mnt/scratch/$_boot_efi" "$_basedir/image_tree/scratch/$_boot_efi"
-            sudo rm -rf "$_mnt/scratch"
-            ;;
-    esac
-
-    sudo mkdir -p "$_mnt/boot/efi/EFI/BOOT"
-    sudo cp "$_basedir/image_tree/scratch/$_boot_efi" "$_mnt/boot/efi/EFI/BOOT/$_boot_efi"
-    if [ "$_arch" = "amd64" ] && [ -f "$_basedir/image_tree/scratch/BOOTIA32.EFI" ]; then
-        sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_mnt/boot/efi/EFI/BOOT/BOOTIA32.EFI"
+    if [ "$_arch" = amd64 ]; then
+        require_cmd grub-mkstandalone grub-common
+        grub-mkstandalone \
+            --format="$_efi_target" \
+            --output="$_basedir/image_tree/scratch/$_boot_efi" \
+            --locales="" --fonts="" \
+            "boot/grub/grub.cfg=$_basedir/image_tree/scratch/raw_embedded_grub.cfg"
+        log_step "Building 32-bit EFI stub (BOOTIA32.EFI) for 32-bit UEFI firmware..."
+        sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
+            "$_root_dir/tmp/grub_ia32.cfg"
+        chroot_isolated "$_root_dir" grub-mkstandalone \
+            --directory=/usr/lib/grub/i386-efi \
+            --format=i386-efi \
+            --output=/tmp/BOOTIA32.EFI \
+            --locales="" --fonts="" \
+            "boot/grub/grub.cfg=/tmp/grub_ia32.cfg"
+        sudo cp "$_root_dir/tmp/BOOTIA32.EFI" \
+            "$_basedir/image_tree/scratch/BOOTIA32.EFI"
+        sudo rm -f "$_root_dir/tmp/BOOTIA32.EFI" "$_root_dir/tmp/grub_ia32.cfg"
+    else
+        # The host rarely carries foreign-arch grub modules; the configured
+        # root has them (grub-efi-arm64-bin etc. via get_raw_image_packages).
+        sudo mkdir -p "$_root_dir/scratch"
+        sudo cp "$_basedir/image_tree/scratch/raw_embedded_grub.cfg" \
+            "$_root_dir/scratch/grub.cfg"
+        chroot_isolated "$_root_dir" /usr/bin/grub-mkstandalone \
+            --directory="/usr/lib/grub/$_efi_target" \
+            --format="$_efi_target" \
+            --output="/scratch/$_boot_efi" \
+            --locales="" --fonts="" \
+            "boot/grub/grub.cfg=/scratch/grub.cfg"
+        sudo cp "$_root_dir/scratch/$_boot_efi" \
+            "$_basedir/image_tree/scratch/$_boot_efi"
+        sudo rm -rf "$_root_dir/scratch"
     fi
 
-    sudo rm -rf "$_mnt/boot/efi/EFI/debian" "$_mnt/boot/efi/EFI/Debian"
+    # These EFI binaries go into the separate ESP staging directory, not into
+    # $_root_dir; the ESP is a different filesystem that is never mounted
+    # underneath the root tree here.
+    sudo mkdir -p "$_esp_dir/EFI/BOOT"
+    sudo cp "$_basedir/image_tree/scratch/$_boot_efi" "$_esp_dir/EFI/BOOT/$_boot_efi"
+    if [ "$_arch" = amd64 ]; then
+        sudo cp "$_basedir/image_tree/scratch/BOOTIA32.EFI" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI"
+    fi
 
-    sudo tee "$_mnt/usr/local/sbin/vos-resize-root" >/dev/null <<'RSZEOF'
-#!/bin/sh
-# First-boot only: grow the root partition to fill the target disk and
-# resize the ext4 FS. Uses sfdisk (util-linux) and resize2fs (e2fsprogs),
-# both guaranteed on any Debian install.
-set -e
-_root=$(findmnt -no SOURCE /)
-_disk=$(lsblk -no PKNAME "$_root")
-[ -n "$_disk" ] || exit 0
-_partnum=$(echo "$_root" | sed 's|.*[^0-9]||')
-echo ", +" | sfdisk -N "$_partnum" "/dev/$_disk" || true
-partprobe "/dev/$_disk" 2>/dev/null || true
-resize2fs "$_root" || true
-systemctl disable vos-resize-root.service || true
-RSZEOF
-    sudo chmod +x "$_mnt/usr/local/sbin/vos-resize-root"
-    sudo tee "$_mnt/etc/systemd/system/vos-resize-root.service" >/dev/null <<'UNITEOF'
-[Unit]
-Description=Grow root filesystem to fill disk (first boot)
-DefaultDependencies=no
-After=systemd-remount-fs.service
-Before=local-fs-pre.target
-Wants=local-fs-pre.target
-ConditionPathExists=/usr/local/sbin/vos-resize-root
+    # Staged next to the EFI binaries; ESP assembly mcopy's it into the image.
+    sudo mkdir -p "$_esp_dir/boot/grub"
+    # GRUB only accepts a block of exactly 1024 bytes, padded with '#'.
+    { printf '# GRUB Environment Block\n'; head -c 999 /dev/zero | tr '\0' '#'; } \
+        | sudo tee "$_esp_dir/boot/grub/grubenv" >/dev/null
 
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/vos-resize-root
-RemainAfterExit=yes
+    qemu_eject "$_root_dir" "$_arch"
 
-[Install]
-WantedBy=multi-user.target
-UNITEOF
-    sudo chroot "$_mnt" systemctl enable vos-resize-root.service 2>/dev/null || true
-
-    qemu_eject "$_mnt" "$_arch"
-
-    _loop_image_cleanup
+    _assembly_cleanup
     trap - EXIT INT TERM
+
+    mountpoint -q "$_root_dir/var/cache/apt/archives" \
+        || sudo rm -f "$_root_dir"/var/cache/apt/archives/*.deb
+    sudo rm -f "$_root_dir"/var/cache/apt/*.bin
+    sudo rm -f "$_root_dir/var/lib/apt/lists/lock"
+    sudo rm -rf "$_root_dir/var/lib/apt/lists/partial"
+
+    log_step "Building populated filesystem images (no mount)..."
+    rm -f "$_esp_img" "$_root_img"
+
+    # ESP: build an empty FAT32 filesystem of the exact partition size, then
+    # inject files with mtools; mcopy/mmd operate on the image file
+    # directly and need no mount, no loop device, no root.
+    truncate -s "${_esp_size_mib}M" "$_esp_img"
+    mkfs.vfat -F32 -i "$_esp_volid" "$_esp_img" >/dev/null
+    mmd -i "$_esp_img" ::/EFI ::/EFI/BOOT ::/boot ::/boot/grub
+    mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/$_boot_efi" "::/EFI/BOOT/$_boot_efi"
+    if [ "$_arch" = amd64 ]; then
+        mcopy -i "$_esp_img" "$_esp_dir/EFI/BOOT/BOOTIA32.EFI" ::/EFI/BOOT/BOOTIA32.EFI
+    fi
+    mcopy -i "$_esp_img" "$_esp_dir/boot/grub/grubenv" ::/boot/grub/grubenv
+
+    # Root: mke2fs -d populates the filesystem from a directory in one shot,
+    # preserving ownership/permissions/xattrs/symlinks; no mount involved.
+    sudo mke2fs -F -t ext4 -I 512 \
+        -O ^ea_inode,^orphan_file,^metadata_csum_seed,^casefold,^encrypt,^verity \
+        -L vitruvian-root -U "$_root_uuid" \
+        -d "$_root_dir" "$_root_img" "${_root_size_mib}M" >/dev/null
+    sudo chown "$(id -u)":"$(id -g)" "$_root_img"
+
+    log_step "Writing partition table and assembling the disk image..."
+    rm -f "$_raw"
+    truncate -s "${_disk_mib}M" "$_raw"
+    sfdisk --quiet "$_raw" <<SFDISKEOF
+label: gpt
+unit: sectors
+
+start=$((_esp_start_mib * 2048)), size=$((_esp_size_mib * 2048)), type=U, name="ESP"
+start=$((_root_start_mib * 2048)), size=$((_root_size_mib * 2048)), type=L, name="primary"
+SFDISKEOF
+
+    dd if="$_esp_img"  of="$_raw" bs=1M seek="$_esp_start_mib"  conv=notrunc status=none
+    dd if="$_root_img" of="$_raw" bs=1M seek="$_root_start_mib" conv=notrunc status=none
+
+    rm -f "$_esp_img" "$_root_img"
+    sudo rm -rf "$_root_dir" "$_esp_dir"
 
     log_step "Copying OVMF vars..."
     if [ -f /usr/share/OVMF/OVMF_VARS_4M.fd ]; then
@@ -361,6 +454,7 @@ UNITEOF
     log_info "RAW image created: $_raw"
 }
 
+
 create_iso() {
     _basedir="$1"
     _arch="$2"
@@ -369,9 +463,11 @@ create_iso() {
     _imagekernelversion=$(cat "$_basedir/imagekernelversion.conf" 2>/dev/null || die "imagekernelversion.conf not found. Run setupenv first.")
 
     BUILD_TYPE="Debug"
+    _sshdebug=0
     if [ -f "$_basedir/buildconfig.conf" ]; then
         . "$_basedir/buildconfig.conf"
         BUILD_TYPE="${CMAKE_BUILD_TYPE:-Debug}"
+        [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
     fi
 
     _count=$(ls -1 "$_basedir"/*.deb 2>/dev/null | wc -l)
@@ -395,40 +491,29 @@ create_iso() {
     fi
 
     _iso_pkgs="$(get_iso_image_packages "$_arch")"
+    _iso_debs="$(cd "$_basedir" && ls *.deb | sed 's|^|/tmp/|' | tr '\n' ' ')"
+    _iso_dev_pkgs="$(get_dev_packages "$_arch")"
     log_step "Installing debs into chroot..."
-    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
-apt remove -y vos nexus-dkms || true
+    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+apt-get install -y --download-only dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs $_iso_debs" \
+        || die "iso package download failed"
+    chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+apt-get remove -y vos nexus-dkms || true
+# Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
 apt-get install -y dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs
-apt install -y -f --reinstall /tmp/*.deb
+apt-get install -y --reinstall $_iso_debs
+# Purge the build-only -dev packages, and what earlier vos versions pulled in
+# (e.g. fonts-noto-extra); dkms keeps what it needs. bake build reinstalls them.
+for _p in $_iso_dev_pkgs libpwquality-dev; do apt-mark auto \"\$_p\" >/dev/null 2>&1 || true; done
+apt-get autoremove -y --purge
 depmod -v $_imagekernelversion" || die "iso chroot bash-c failed (dpkg/kernel stage)"
 
-    _common_chroot_setup "$_chroot_dir" "vitruvian" "" "" \
+    _common_chroot_setup "$_chroot_dir" "vitruvian" "" "" 1 \
         || die "_common_chroot_setup failed"
 
-    if [ "$BUILD_TYPE" = "Debug" ]; then
-        log_step "Configuring SSH server for debug access..."
-        sudo chroot "$_chroot_dir" /bin/bash -eux <<'SSHEOF'
-export DEBIAN_FRONTEND=noninteractive
-mkdir -p /etc/ssh/sshd_config.d
-cat > /etc/ssh/sshd_config.d/debug.conf <<'EOF'
-PermitRootLogin yes
-PasswordAuthentication yes
-PermitEmptyPasswords no
-EOF
-chmod 0644 /etc/ssh/sshd_config.d/debug.conf
-chown root:root /etc/ssh/sshd_config.d/debug.conf
-mkdir -p /root/.ssh
-chmod 0700 /root/.ssh
-chown root:root /root/.ssh
-getent passwd vos-live >/dev/null && echo "vos-live:live" | chpasswd || true
-if command -v systemctl >/dev/null 2>&1; then
-    # ssh.service stays disabled; vos-sshdebug.service starts sshd for one
-    # boot when vitruvian.sshdebug is on the cmdline.
-    systemctl enable vos-sshdebug.service 2>/dev/null || true
-fi
-SSHEOF
-        log_info "SSH server configured."
-    fi
+    _debug_ssh_setup "$_chroot_dir" || die "_debug_ssh_setup failed"
 
     qemu_eject "$_chroot_dir" "$_arch"
 
@@ -448,10 +533,23 @@ SSHEOF
     done
 
     log_step "Compressing chroot..."
+    # zstd by default: a live ISO pays decompression on every file read for
+    # the whole session, and xz's ~19% smaller media is not worth the slower
+    # reads. Both compressors are supported by the shipped kernel
+    # (CONFIG_SQUASHFS_ZSTD=y) and mksquashfs, so this is a runtime choice.
+    case "${VOS_SQUASHFS_COMP:-zstd}" in
+        zstd) _sq_comp_args="-comp zstd -Xcompression-level ${VOS_SQUASHFS_LEVEL:-15}" ;;
+        xz)   _sq_comp_args="-comp xz -Xdict-size 100%" ;;
+        *)    die "VOS_SQUASHFS_COMP must be xz or zstd (got '${VOS_SQUASHFS_COMP}')" ;;
+    esac
+    log_info "squashfs compressor: ${VOS_SQUASHFS_COMP:-zstd}"
     sudo mksquashfs \
         "$_chroot_dir" \
         "$_basedir/image_tree/image/live/filesystem.squashfs" \
-        -b 1048576 -comp xz -Xdict-size 100% -xattrs
+        -b 1048576 $_sq_comp_args -xattrs \
+        -wildcards -e 'var/lib/apt/lists/lock' \
+        'var/lib/apt/lists/partial' 'var/cache/apt/*.bin' \
+        'var/cache/apt/archives/*.deb'
 
     log_step "Copying kernel and initramfs..."
     # riscv64's linux-image ships an uncompressed vmlinux-<ver> (no vmlinuz-);
@@ -477,19 +575,23 @@ menuentry "Vitruvian Live" {
     initrd /initrd
 }
 menuentry "Vitruvian Live (Safe Mode)" {
-    linux /vmlinuz boot=live noeject quiet splash nomodeset acpi=off noapic nosmp vitruvian.safemode vitruvian.disable_user_addons console=tty0 console=ttyS0,115200
+    insmod all_video
+    set gfxpayload=1024x768x32,1024x768,800x600,auto
+    linux /vmlinuz boot=live noeject nomodeset acpi=off noapic nosmp console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.safemode vitruvian.disable_user_addons
+    initrd /initrd
+}
+menuentry "Vitruvian Live (Recovery)" {
+    linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.recovery systemd.unit=rescue.target
     initrd /initrd
 }
 EOF
 
-    if [ "$BUILD_TYPE" = "Debug" ]; then
-        cat <<'EOF' >>"$_basedir/image_tree/scratch/grub.cfg"
-menuentry "Vitruvian Live (Debug)" {
-    linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel vitruvian.sshdebug
+    cat <<EOF >>"$_basedir/image_tree/scratch/grub.cfg"
+menuentry "Vitruvian Live (SSH Debug)" {
+    linux /vmlinuz boot=live noeject console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 ignore_loglevel systemd.show_status=true vitruvian.sshdebug
     initrd /initrd
 }
 EOF
-    fi
 
     cat <<'EOF' >>"$_basedir/image_tree/scratch/grub.cfg"
 if [ "$grub_platform" = "efi" ]; then
@@ -518,7 +620,7 @@ EOF
         log_step "Building 32-bit EFI bootloader (i386-efi) for 32-bit UEFI firmware..."
         sudo cp "$_basedir/image_tree/scratch/grub.cfg" \
             "$_chroot_dir/tmp/grub_ia32.cfg"
-        sudo chroot "$_chroot_dir" grub-mkstandalone \
+        chroot_isolated "$_chroot_dir" grub-mkstandalone \
             --directory=/usr/lib/grub/i386-efi \
             --format=i386-efi \
             --output=/tmp/bootia32.efi \
@@ -531,7 +633,7 @@ EOF
     else
         sudo mkdir -p "$_basedir/image_tree/chroot/scratch"
         sudo cp "$_basedir/image_tree/scratch/grub.cfg" "$_basedir/image_tree/chroot/scratch/"
-        sudo chroot "$_basedir/image_tree/chroot" /usr/bin/grub-mkstandalone \
+        chroot_isolated "$_basedir/image_tree/chroot" /usr/bin/grub-mkstandalone \
             --directory="/usr/lib/grub/$_efi_target" \
             --format="$_efi_target" \
             --output="/scratch/$_efi_name" \
@@ -557,8 +659,8 @@ EOF
         grub-mkstandalone \
             --format=i386-pc \
             --output="$_basedir/image_tree/scratch/core.img" \
-            --install-modules="linux normal iso9660 biosdisk memdisk search tar ls" \
-            --modules="linux normal iso9660 biosdisk search" \
+            --install-modules="linux normal iso9660 biosdisk memdisk search tar ls all_video" \
+            --modules="linux normal iso9660 biosdisk search all_video" \
             --locales="" \
             --fonts="" \
             "boot/grub/grub.cfg=$_basedir/image_tree/scratch/grub.cfg"
@@ -596,7 +698,7 @@ EOF
             -e '--interval:appended_partition_2:all::' \
             -no-emul-boot \
             -isohybrid-gpt-basdat \
-            -output "$_basedir/output/vitruvian-custom.iso" \
+            -output "$_basedir/output/vos-uefi.iso" \
             -graft-points \
                 "$_basedir/image_tree/image" \
                 /boot/grub/bios.img="$_basedir/image_tree/scratch/bios.img"
@@ -612,22 +714,24 @@ EOF
             -e '--interval:appended_partition_2:all::' \
             -no-emul-boot \
             -isohybrid-gpt-basdat \
-            -output "$_basedir/output/vitruvian-custom.iso" \
+            -output "$_basedir/output/vos-uefi.iso" \
             -graft-points \
                 "$_basedir/image_tree/image"
     fi
 
-    log_info "ISO created: $_basedir/output/vitruvian-custom.iso"
+    log_info "ISO created: $_basedir/output/vos-uefi.iso"
     log_info "Build type: $BUILD_TYPE"
-    if [ "$BUILD_TYPE" = "Debug" ]; then
-        log_info "Debug build - SSH: vos-live@<guest-ip> (password: live)"
+    if [ "$_sshdebug" = 1 ]; then
+        log_info "Debug entry staged - SSH: root or vos-live@<guest-ip> (password: live)"
     fi
 }
 
 _common_chroot_setup() {
     _mnt="$1"
     _hostname="$2"
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "set -e
+    # $5: 1 = live ISO (boots via boot=live), 0 = installed-like image.
+    _live="${5:-0}"
+    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 echo '$_hostname' > /etc/hostname
 
 # Rewrite /etc/hosts so it has the correct hostname.
@@ -641,6 +745,20 @@ ff02::1 ip6-allnodes
 ff02::2 ip6-allrouters
 HOSTSEOF
 chmod 0644 /etc/hosts
+
+# /proc/swaps is not namespaced, so the initramfs resume hook would record the build host's swap
+# and stall every boot 30 s. The setting is dropped again so installed systems use their own swap.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
+# Embed microcode for both CPU vendors, not only the build host's.
+if [ -f /etc/default/intel-microcode ]; then
+    sed -i 's/^#\?IUCODE_TOOL_INITRAMFS=.*/IUCODE_TOOL_INITRAMFS=early/' /etc/default/intel-microcode
+fi
+if [ -f /etc/default/amd64-microcode ]; then
+    sed -i 's/^#\?AMD64UCODE_INITRAMFS=.*/AMD64UCODE_INITRAMFS=early/' /etc/default/amd64-microcode
+fi
+update-initramfs -u -k all
+rm -f /etc/initramfs-tools/conf.d/resume
 
 # Root locked; Installer's Advanced mode is the only way to set a root
 # password on a target.
@@ -660,7 +778,7 @@ if ! getent passwd vos-live >/dev/null; then
         --shell /bin/bash --comment 'Vitruvian live/try persona' \\
         vos-live
     passwd -l vos-live
-    for g in sudo video render input plugdev nexus; do
+    for g in sudo video render input plugdev lpadmin nexus; do
         getent group \$g >/dev/null && adduser vos-live \$g || true
     done
     # shadow-utils useradd copy_tree does not preserve user.* xattrs on
@@ -670,6 +788,11 @@ if ! getent passwd vos-live >/dev/null; then
     # xattr-preserving cp to restore them.
     cp -a --preserve=all /etc/skel/. /home/vos-live/
     chown -R vos-live:vos-live /home/vos-live/
+fi
+# Live ISO only: postinst cannot see /etc/vos/live (it runs before this
+# function creates the marker), so enable the live persona's boot script here.
+if [ \"$_live\" = 1 ]; then
+    systemctl enable userbootscript@vos-live.service 2>/dev/null || true
 fi
 # vos_login needs /dev/nexus for the pre-auth chain.
 getent group nexus >/dev/null && \\
@@ -683,7 +806,6 @@ getent group nexus >/dev/null && \\
 systemctl mask getty@tty1.service 2>/dev/null || true
 
 # Mask units that are noisy on QEMU / Vitruvian and provide no value:
-#  - systemd-remount-fs: we boot rw via cmdline, nothing to remount.
 #  - systemd-ssh-generator: pokes AF_VSOCK CIDs that don't exist under
 #    qemu user-mode networking; emits an error every boot.
 #  - serial-getty@ttyS0: some hypervisors (e.g. VirtualBox) don't expose
@@ -694,7 +816,6 @@ systemctl mask getty@tty1.service 2>/dev/null || true
 #    recommendation when the FS isn't available.
 
 for _u in \\
-    systemd-remount-fs.service \\
     systemd-ssh-generator.service \\
     serial-getty@ttyS0.service \\
     dev-hugepages.mount \\
@@ -707,10 +828,82 @@ for _u in \\
     systemctl mask \"\$_u\" 2>/dev/null || true
 done
 
+# Only the live ISO boots ro via cmdline; installed-like images need systemd-remount-fs to bring root rw.
+if [ \"$_live\" = 1 ]; then
+    systemctl mask systemd-remount-fs.service 2>/dev/null || true
+else
+    systemctl unmask systemd-remount-fs.service 2>/dev/null || true
+fi
+
 # Generators run before any unit exists, so masking the .service above
 # never stops this one; systemd.generator(7) masks it via symlink.
 mkdir -p /etc/systemd/system-generators
 ln -sf /dev/null /etc/systemd/system-generators/systemd-ssh-generator" || die "_common_chroot_setup chroot bash-c failed"
+
+    # Build-time trade; every image path passes here so it never ships.
+    sudo rm -f "$_mnt/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io"
+}
+
+_debug_ssh_setup() {
+    # Stage the opt-in debug SSH path. _common_chroot_setup leaves exactly
+    # one way to start sshd at boot: vos-sshdebug.service, inert unless the
+    # Debug GRUB entry put vitruvian.sshdebug on the cmdline. The unit is
+    # shipped from staging because the vos deb only carries it when the deb
+    # itself was built Debug, which need not match this image.
+    local _chroot="$1"
+    chroot_isolated "$_chroot" /bin/bash -eux <<'SSHEOF'
+export DEBIAN_FRONTEND=noninteractive
+mkdir -p /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/debug.conf <<'EOF'
+PermitRootLogin yes
+PasswordAuthentication yes
+PermitEmptyPasswords no
+EOF
+chmod 0644 /etc/ssh/sshd_config.d/debug.conf
+chown root:root /etc/ssh/sshd_config.d/debug.conf
+mkdir -p /root/.ssh
+chmod 0700 /root/.ssh
+chown root:root /root/.ssh
+# root is locked by _common_chroot_setup; without a password the
+# PermitRootLogin above is dead config.
+echo 'root:live' | chpasswd
+getent passwd vos-live >/dev/null && echo 'vos-live:live' | chpasswd || true
+mkdir -p /etc/systemd/system
+cat > /etc/systemd/system/vos-sshdebug.service <<'EOF'
+[Unit]
+Description=Vitruvian debug SSH (opt-in via vitruvian.sshdebug on the kernel cmdline)
+ConditionKernelCommandLine=vitruvian.sshdebug
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# vos-install-helper generates host keys on the target at install time, so
+# this is a fallback for keys removed since
+ExecStartPre=/usr/bin/ssh-keygen -A
+# ssh.service is canonical (sshd.service is its alias); trying the alias
+# too makes unit-name drift a loud failure instead of a silent no-op.
+ExecStart=/bin/sh -c '/usr/bin/systemctl start ssh.service || /usr/bin/systemctl start sshd.service'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+chmod 0644 /etc/systemd/system/vos-sshdebug.service
+chown root:root /etc/systemd/system/vos-sshdebug.service
+# No "|| true": if the unit cannot be enabled the image must not build.
+systemctl enable vos-sshdebug.service
+# Config drift must fail the build, not the debug boot.
+# sshd -t needs its privilege separation dir, which only exists at runtime.
+if [ -x /usr/sbin/sshd ]; then
+    if [ -d /run/sshd ]; then
+        /usr/sbin/sshd -t
+    else
+        mkdir -p /run/sshd
+        /usr/sbin/sshd -t
+        rmdir /run/sshd
+    fi
+fi
+SSHEOF
 }
 
 create_raspberry() {
@@ -718,14 +911,7 @@ create_raspberry() {
     _board="${2:-raspberry}"
     _board_arch="$(board_config "$_board" arch)"
     _deb_arch="$(arch_to_deb "$_board_arch")"
-    # The fleet collector looks for "vos-raspberry.raw" specifically (legacy
-    # naming predating the vitruvian- rebrand of the other board outputs);
-    # every other board keeps the vitruvian-<board>.raw convention.
-    if [ "$_board" = "raspberry" ]; then
-        _raw="$_basedir/output/vos-raspberry.raw"
-    else
-        _raw="$_basedir/output/vitruvian-$_board.raw"
-    fi
+    _raw="$_basedir/output/vos-$_board.raw"
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
     _user=""
@@ -756,13 +942,27 @@ create_raspberry() {
     sudo mkfs.vfat -F32 "$_boot_part"
     sudo mkfs.ext4 -F -O ^ea_inode "$_root_part"
 
+    # The SD card is mmcblk0 or mmcblk1 depending on the board and kernel
+    # (mainline enumerates the Pi 4's SD as mmcblk1): name partitions by id.
+    _root_partuuid=$(sudo blkid -s PARTUUID -o value "$_root_part")
+    _root_fsuuid=$(sudo blkid -s UUID -o value "$_root_part")
+    _boot_fsuuid=$(sudo blkid -s UUID -o value "$_boot_part")
+    [ -n "$_root_partuuid" ] && [ -n "$_root_fsuuid" ] && [ -n "$_boot_fsuuid" ] \
+        || die "could not read partition ids of $_loop"
+
     sudo mkdir -p "$_mnt"
     sudo mount "$_root_part" "$_mnt"
     sudo mkdir -p "$_mnt/boot/firmware"
     sudo mount "$_boot_part" "$_mnt/boot/firmware"
 
-    log_step "Bootstrapping Debian trixie ($_deb_arch) for $(board_config "$_board" label)..."
-    sudo debootstrap --arch="$_deb_arch" --foreign trixie "$_mnt" http://deb.debian.org/debian
+    : "${VOS_BASE_SUITE:=trixie}"
+    log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) for $(board_config "$_board" label)..."
+    # Same debootstrap cache the base chroot uses.
+    _dbcache="$_basedir/deb/archives"
+    mkdir -p "$_dbcache"
+    sudo debootstrap --arch="$_deb_arch" --foreign --cache-dir="$_dbcache" \
+        --include=ca-certificates \
+        "$VOS_BASE_SUITE" "$_mnt" http://deb.debian.org/debian
 
     sudo mount --bind /dev "$_mnt/dev"
     sudo mount --bind /proc "$_mnt/proc"
@@ -771,28 +971,121 @@ create_raspberry() {
 
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
-    sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+    chroot_isolated "$_mnt" /debootstrap/debootstrap --second-stage
+    # The second stage unmounts /proc and /sys on exit; systemd >= 262
+    # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
+    for _m in dev proc sys; do
+        mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
+    done
+    # Downloads stay on the build host: the debs and the installed system
+    # together do not fit the image.
+    sudo mkdir -p "$_mnt/var/cache/apt/archives"
+    sudo mount --bind "$_dbcache" "$_mnt/var/cache/apt/archives"
+
+    # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
+    # ca-certificates); a copied bundle without that symlink does not verify.
+    sudo chroot "$_mnt" test -s /usr/lib/ssl/cert.pem \
+        || die "no usable CA trust in $_mnt (/usr/lib/ssl/cert.pem missing): the https VOS repo cannot verify"
 
     if ls "$_basedir"/*.deb >/dev/null 2>&1; then
         sudo mkdir -p "$_mnt/localdeb"
         sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
     fi
 
-    log_step "Configuring system..."
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "apt update && apt install -y $_board_pkgs
-if ls /localdeb/*.deb >/dev/null 2>&1; then
-    dpkg -i /localdeb/*.deb || apt-get -f install -y
-fi" || die "raspberry chroot bash-c failed"
+    # debootstrap writes a main-only sources.list, but raspi-firmware and
+    # several u-boot variants live in contrib/non-free/non-free-firmware.
+    sudo tee "$_mnt/etc/apt/sources.list" >/dev/null <<APTSRC
+deb http://deb.debian.org/debian $VOS_BASE_SUITE main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian $VOS_BASE_SUITE-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
+APTSRC
 
-    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
+    # Same key-gated VitruvianOS repo as chroot.sh; these paths run their
+    # own debootstrap and never went through it.
+    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
+    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        # No default suite; see chroot.sh.
+        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
+        sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
+        sudo install -m 644 "$VOS_REPO_KEY" \
+            "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"
+        sudo tee "$_mnt/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSSRC
+Types: deb
+URIs: $VOS_REPO_URL
+Suites: $VOS_REPO_SUITE
+Components: main
+Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
+VOSSRC
+        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
+    else
+        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
+    fi
+
+    # Opt-in unsafe I/O for the disposable rootfs; removed again by
+    # _common_chroot_setup so it never ships.
+    if [ "${VOS_UNSAFE_IO:-0}" = 1 ]; then
+        sudo install -d -m 755 "$_mnt/etc/dpkg/dpkg.cfg.d"
+        printf 'force-unsafe-io\n' | sudo tee "$_mnt/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io" >/dev/null
+    fi
+
+    log_step "Configuring system..."
+    # set -e: bash -c returns the status of its LAST command, so the old
+    # one-line form returned the trailing if-block and hid apt failures.
+    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+apt update
+# apt downgrades an unreachable source to a warning, so prove the repo
+# resolved a candidate instead of shipping without VitruvianOS.
+if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
+    apt-cache policy vos | grep Candidate | grep -qv none || {
+        echo refusing-empty-vos-repo >&2
+        echo VitruvianOS repo is configured but unusable: refusing to build a board image with no VitruvianOS packages in it. >&2
+        exit 1
+    }
+fi
+apt-get install -y --download-only $_board_pkgs \$(ls /localdeb/*.deb 2>/dev/null)" \
+        || die "raspberry chroot bash-c failed"
+    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+# Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
+apt-get install -y $_board_pkgs
+if ls /localdeb/*.deb >/dev/null 2>&1; then
+    apt-get install -y --reinstall /localdeb/*.deb
+fi
+rm -rf /localdeb
+# apt's package caches would otherwise ship in the image.
+apt-get clean" || die "raspberry chroot bash-c failed"
+
+    # Prove the firmware landed; the board cannot boot without it.
+    for _fw in start4.elf fixup4.dat; do
+        [ -f "$_mnt/boot/firmware/$_fw" ] \
+            || die "board firmware missing after install: $_fw (image would not boot)"
+    done
+
+    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
+
+    # Boards have no boot menu for a Debug entry, so a VOS_SSHDEBUG build puts vitruvian.sshdebug
+    # on the fixed cmdline, making a headless board reachable over SSH and verbose at boot.
+    _sshdebug=0
+    if [ -f "$_basedir/buildconfig.conf" ]; then
+        . "$_basedir/buildconfig.conf"
+        [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
+    fi
+    _rpi_cmdline_tail="quiet splash loglevel=3 fsck.mode=auto fsck.repair=preen"
+    if [ "$_sshdebug" = 1 ]; then
+        _debug_ssh_setup "$_mnt" || die "_debug_ssh_setup failed"
+        _rpi_cmdline_tail="systemd.show_status=true vitruvian.sshdebug fsck.mode=auto fsck.repair=preen"
+    fi
 
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
     log_info "Kernel version: $_kver"
 
     log_step "Copying device trees..."
     for _dtb in $_dtb_files; do
+        # trixie: /usr/lib/linux-image-<kver>/; testing: modules/<kver>/dtb/.
         _dtb_path="$_mnt/usr/lib/linux-image-$_kver/$_dtb"
+        [ -f "$_dtb_path" ] || _dtb_path="$_mnt/usr/lib/modules/$_kver/dtb/$_dtb"
         if [ -f "$_dtb_path" ]; then
             sudo cp "$_dtb_path" "$_mnt/boot/firmware/"
             log_info "  copied $_dtb"
@@ -811,14 +1104,7 @@ initramfs initrd.img followkernel
 disable_overscan=1
 hdmi_drive=2
 dtoverlay=vc4-kms-v3d
-
-[pi4]
-kernel=kernel7l.img
-initramfs initrd.img followkernel
-
-[pi5]
-kernel=kernel_2712.img
-initramfs initrd.img followkernel
+enable_uart=1
 RPICFG
     else
         sudo sh -c "cat > '$_mnt/boot/firmware/config.txt'" <<'RPICFG32'
@@ -828,6 +1114,7 @@ initramfs initrd.img followkernel
 disable_overscan=1
 hdmi_drive=2
 dtoverlay=vc4-kms-v3d
+enable_uart=1
 
 [pi1]
 kernel=kernel.img
@@ -848,7 +1135,7 @@ RPICFG32
     fi
 
     sudo sh -c "cat > '$_mnt/boot/firmware/cmdline.txt'" <<CMDLINE
-root=/dev/mmcblk0p2 rootfstype=ext4 rw rootwait console=serial0,115200 console=tty1 quiet splash loglevel=3
+root=PARTUUID=$_root_partuuid rootfstype=ext4 rw rootwait console=serial0,115200 console=ttyS1,115200 console=tty1 $_rpi_cmdline_tail
 CMDLINE
 
     log_step "Copying kernel and initrd to boot firmware..."
@@ -856,8 +1143,8 @@ CMDLINE
     sudo cp "$_mnt/boot/initrd.img-$_kver" "$_mnt/boot/firmware/initrd.img"
 
     sudo sh -c "cat > '$_mnt/etc/fstab'" <<FSTAB
-/dev/mmcblk0p2  /            ext4    defaults,noatime  0 1
-/dev/mmcblk0p1  /boot/firmware vfat   defaults          0 2
+UUID=$_root_fsuuid  /               ext4  defaults,noatime  0 1
+UUID=$_boot_fsuuid  /boot/firmware  vfat  defaults          0 2
 FSTAB
 
     qemu_eject "$_mnt" "$_board_arch"
@@ -883,13 +1170,27 @@ create_uboot_board() {
     _dtb_files=$(board_config "$_board" dtb_files)
     _board_pkgs="$(get_board_packages "$_board")"
 
-    _raw="$_basedir/output/vitruvian-$_board.raw"
+    _raw="$_basedir/output/vos-$_board.raw"
     _mnt="/mnt/vitruvian"
     _hostname="vitruvian"
     _user=""
     _pass=""
 
     mkdir -p "$_basedir/output"
+
+    # Need a blob source (package, fip_assemble or firmware/<board>/); fail
+    # now rather than after hours of image build.
+    if [ "$(board_config "$_board" bootloader)" = "u-boot" ]; then
+        _spl_blob_chk="$(board_config "$_board" spl_blob 2>/dev/null)"
+        _uboot_blob_chk="$(board_config "$_board" uboot_blob 2>/dev/null)"
+        _variants_chk="${VOS_UBOOT_VARIANT:-$(board_config "$_board" uboot_variant 2>/dev/null)}"
+        _extra_chk="$(board_config "$_board" extra_pkgs 2>/dev/null)"
+        _fip_chk="$(board_config "$_board" fip_assemble 2>/dev/null)"
+        if [ -z "$_variants_chk" ] && [ -z "$_extra_chk" ] \
+            && [ "$_fip_chk" != "1" ] && [ ! -d "$_basedir/firmware/$_board" ]; then
+            die "no U-Boot source for $_board: set uboot_variant/extra_pkgs, fip_assemble, or place blobs in $_basedir/firmware/$_board/ (boards.sh: spl_blob='$_spl_blob_chk' uboot_blob='$_uboot_blob_chk')"
+        fi
+    fi
 
     log_step "Creating $_label RAW image..."
     qemu-img create "$_raw" 4G
@@ -903,18 +1204,49 @@ create_uboot_board() {
     else
         sudo parted --script "$_loop" mklabel msdos
     fi
-    sudo parted --script "$_loop" mkpart primary fat32 4MiB "$_boot_size"MiB
-    if [ "$_part_fmt" = "gpt" ]; then
-        sudo parted --script "$_loop" set 1 esp on
+    # 16MiB gap: rockchip's u-boot.itb sits at sector 16384, and a 4MiB
+    # partition start overlapped the bootloader area with the FAT filesystem.
+    _part_start_mib=4
+    [ "$(board_config "$_board" bootloader)" = "u-boot" ] && _part_start_mib=16
+    # Typed bootloader partitions (JH7110 finds SPL by type GUID) take p1/p2;
+    # boot and root shift to p3/p4.
+    _spl_type_guid="$(board_config "$_board" spl_type_guid 2>/dev/null)"
+    _uboot_type_guid="$(board_config "$_board" uboot_type_guid 2>/dev/null)"
+    _boot_partnum=1
+    _root_partnum=2
+    if [ -n "$_spl_type_guid" ] && [ -n "$_uboot_type_guid" ] && [ "$_part_fmt" = "gpt" ]; then
+        _spl_start_mib=$(( _spl_off / 2048 ))
+        _uboot_start_mib=$(( _uboot_off / 2048 ))
+        [ "$_uboot_start_mib" -gt "$_spl_start_mib" ] || die "uboot_offset_sectors must follow spl_offset_sectors"
+        [ "$_uboot_start_mib" -lt "$_part_start_mib" ] || die "uboot partition would start at/after the boot partition"
+        sudo parted --script "$_loop" mkpart primary "${_spl_start_mib}MiB" "${_uboot_start_mib}MiB"
+        sudo parted --script "$_loop" mkpart primary "${_uboot_start_mib}MiB" "${_part_start_mib}MiB"
+        _boot_partnum=3
+        _root_partnum=4
+        sudo parted --script "$_loop" mkpart primary fat32 "${_part_start_mib}MiB" "${_boot_size}MiB"
+        sudo parted --script "$_loop" set 3 esp on
+        sudo parted --script "$_loop" mkpart primary "$_root_fs" "${_boot_size}MiB" 100%
     else
-        sudo parted --script "$_loop" set 1 boot on
+        sudo parted --script "$_loop" mkpart primary fat32 "${_part_start_mib}MiB" "${_boot_size}MiB"
+        if [ "$_part_fmt" = "gpt" ]; then
+            sudo parted --script "$_loop" set 1 esp on
+        else
+            sudo parted --script "$_loop" set 1 boot on
+        fi
+        sudo parted --script "$_loop" mkpart primary "$_root_fs" "${_boot_size}MiB" 100%
     fi
-    sudo parted --script "$_loop" mkpart primary "$_root_fs" "$_boot_size"MiB 100%
     sudo partprobe "$_loop"
     sudo udevadm settle
 
-    _boot_part="${_loop}p1"
-    _root_part="${_loop}p2"
+    if [ -n "$_spl_type_guid" ] && [ -n "$_uboot_type_guid" ] && [ "$_part_fmt" = "gpt" ]; then
+        _gpt_set_type_guid "$_loop" 1 "$_spl_type_guid" || die "failed to set SPL partition type GUID"
+        _gpt_set_type_guid "$_loop" 2 "$_uboot_type_guid" || die "failed to set U-Boot partition type GUID"
+        log_info "GPT: partition 1 type $_spl_type_guid (SPL), partition 2 type $_uboot_type_guid (U-Boot)"
+    fi
+
+    _boot_part="${_loop}p${_boot_partnum}"
+    _root_part="${_loop}p${_root_partnum}"
+    log_info "boot partition: $_boot_part (p${_boot_partnum}), root: $_root_part (p${_root_partnum})"
 
     sudo mkfs.vfat -F32 "$_boot_part"
     case "$_root_fs" in
@@ -927,8 +1259,14 @@ create_uboot_board() {
     sudo mkdir -p "$_mnt/boot"
     sudo mount "$_boot_part" "$_mnt/boot"
 
-    log_step "Bootstrapping Debian trixie ($_deb_arch) for $_label..."
-    sudo debootstrap --arch="$_deb_arch" --foreign trixie "$_mnt" http://deb.debian.org/debian
+    : "${VOS_BASE_SUITE:=trixie}"
+    log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) for $_label..."
+    # Reuse the tree's debootstrap cache; see create_raspberry for why.
+    _dbcache="$_basedir/deb/archives"
+    mkdir -p "$_dbcache"
+    sudo debootstrap --arch="$_deb_arch" --foreign --cache-dir="$_dbcache" \
+        --include=ca-certificates \
+        "$VOS_BASE_SUITE" "$_mnt" http://deb.debian.org/debian
 
     sudo mount --bind /dev "$_mnt/dev"
     sudo mount --bind /proc "$_mnt/proc"
@@ -937,21 +1275,100 @@ create_uboot_board() {
 
     qemu_inject "$_mnt" "$_board_arch"
     log_step "Running debootstrap second stage..."
-    sudo chroot "$_mnt" /debootstrap/debootstrap --second-stage
+    chroot_isolated "$_mnt" /debootstrap/debootstrap --second-stage
+    # The second stage unmounts /proc and /sys on exit; systemd >= 262
+    # postinsts (systemd-tmpfiles) then fail. Same as chroot.sh.
+    for _m in dev proc sys; do
+        mountpoint -q "$_mnt/$_m" || sudo mount --bind "/$_m" "$_mnt/$_m"
+    done
+    # Downloads stay on the build host: the debs and the installed system
+    # together do not fit the image.
+    sudo mkdir -p "$_mnt/var/cache/apt/archives"
+    sudo mount --bind "$_dbcache" "$_mnt/var/cache/apt/archives"
+
+    # apt reads /usr/lib/ssl/cert.pem (shipped by openssl, pulled in by
+    # ca-certificates); a copied bundle without that symlink does not verify.
+    sudo chroot "$_mnt" test -s /usr/lib/ssl/cert.pem \
+        || die "no usable CA trust in $_mnt (/usr/lib/ssl/cert.pem missing): the https VOS repo cannot verify"
 
     if ls "$_basedir"/*.deb >/dev/null 2>&1; then
         sudo mkdir -p "$_mnt/localdeb"
         sudo cp "$_basedir"/*.deb "$_mnt/localdeb/"
     fi
 
-    log_step "Configuring $_label system..."
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "apt update && apt install -y $_board_pkgs u-boot-menu
-if ls /localdeb/*.deb >/dev/null 2>&1; then
-    dpkg -i /localdeb/*.deb || apt-get -f install -y
-fi" || die "uboot chroot bash-c failed"
+    # Same sources.list fix as create_raspberry.
+    sudo tee "$_mnt/etc/apt/sources.list" >/dev/null <<APTSRC
+deb http://deb.debian.org/debian $VOS_BASE_SUITE main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian $VOS_BASE_SUITE-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
+APTSRC
 
-    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" \
+    # Same key-gated VitruvianOS repo as create_raspberry.
+    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
+    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        # No default suite; see chroot.sh.
+        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
+        sudo install -d -m 755 "$_mnt/etc/apt/keyrings" "$_mnt/etc/apt/sources.list.d"
+        sudo install -m 644 "$VOS_REPO_KEY" \
+            "$_mnt/etc/apt/keyrings/vitruvian-archive-keyring.asc"
+        sudo tee "$_mnt/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSSRC
+Types: deb
+URIs: $VOS_REPO_URL
+Suites: $VOS_REPO_SUITE
+Components: main
+Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
+VOSSRC
+        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
+    else
+        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
+    fi
+
+    # Opt-in unsafe I/O for the build only; see create_raspberry for why.
+    if [ "${VOS_UNSAFE_IO:-0}" = 1 ]; then
+        sudo install -d -m 755 "$_mnt/etc/dpkg/dpkg.cfg.d"
+        printf 'force-unsafe-io\n' | sudo tee "$_mnt/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io" >/dev/null
+    fi
+
+    log_step "Configuring $_label system..."
+    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+apt update
+# See create_raspberry: prove the VOS repo actually resolved a candidate.
+if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
+    apt-cache policy vos | grep Candidate | grep -qv none || {
+        echo refusing-empty-vos-repo >&2
+        echo VitruvianOS repo is configured but unusable: refusing to build a board image with no VitruvianOS packages in it. >&2
+        exit 1
+    }
+fi
+apt-get install -y --download-only $_board_pkgs u-boot-menu \$(ls /localdeb/*.deb 2>/dev/null)" \
+        || die "uboot chroot bash-c failed"
+    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+# Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
+mkdir -p /etc/initramfs-tools/conf.d
+echo RESUME=none > /etc/initramfs-tools/conf.d/resume
+apt-get install -y $_board_pkgs u-boot-menu
+if ls /localdeb/*.deb >/dev/null 2>&1; then
+    apt-get install -y --reinstall /localdeb/*.deb
+fi
+rm -rf /localdeb
+# apt's package caches would otherwise ship in the image.
+apt-get clean" || die "uboot chroot bash-c failed"
+
+    _common_chroot_setup "$_mnt" "$_hostname" "$_user" "$_pass" 0 \
         || die "_common_chroot_setup failed"
+
+    # No boot menu on boards: a VOS_SSHDEBUG build bakes sshdebug into the
+    # cmdline, as create_raspberry does. Normal images get no debug sshd.
+    _sshdebug=0
+    _append_tail="quiet splash fsck.mode=auto fsck.repair=preen"
+    if [ -f "$_basedir/buildconfig.conf" ]; then
+        . "$_basedir/buildconfig.conf"
+        [ "${VOS_SSHDEBUG:-0}" = 1 ] && _sshdebug=1
+    fi
+    if [ "$_sshdebug" = 1 ]; then
+        _debug_ssh_setup "$_mnt" || die "_debug_ssh_setup failed"
+        _append_tail="ignore_loglevel systemd.show_status=true vitruvian.sshdebug fsck.mode=auto fsck.repair=preen"
+    fi
 
     _kver=$(ls "$_mnt/lib/modules" | head -n1)
     log_info "Kernel version: $_kver"
@@ -959,20 +1376,45 @@ fi" || die "uboot chroot bash-c failed"
     log_step "Copying device trees..."
     sudo mkdir -p "$_mnt/boot/dtbs"
     for _dtb in $_dtb_files; do
-        _dtb_path="$_mnt/usr/lib/linux-image-$_kver/$_dtb"
-        if [ -f "$_dtb_path" ]; then
+        # trixie: /usr/lib/linux-image-<ver>/... (signed image pkg).
+        # testing (Debian 14 packaging): /usr/lib/modules/<ver>/dtb/...
+        _dtb_path=""
+        for _cand in \
+            "$_mnt/usr/lib/linux-image-$_kver/$_dtb" \
+            "$_mnt/usr/lib/modules/$_kver/dtb/$_dtb"; do
+            if [ -f "$_cand" ]; then
+                _dtb_path="$_cand"
+                break
+            fi
+        done
+        if [ -n "$_dtb_path" ]; then
             _dtb_dir=$(dirname "$_dtb")
             sudo mkdir -p "$_mnt/boot/dtbs/$_dtb_dir"
             sudo cp "$_dtb_path" "$_mnt/boot/dtbs/$_dtb"
             log_info "  copied $_dtb"
         else
-            log_warn "  dtb not found: $_dtb_path"
+            log_warn "  dtb not found: $_dtb (tried linux-image-$_kver and modules/$_kver/dtb)"
         fi
     done
 
     log_step "Writing U-Boot extlinux config..."
+    # Console, root device and DTB come from board_config; the defaults are
+    # the old Rockchip template (ttyS2 at 1.5 Mbaud, mmcblk0p2).
+    _ext_console="$(board_config "$_board" console 2>/dev/null)"
+    [ -n "$_ext_console" ] || _ext_console="ttyS2,1500000"
+    _ext_rootdev="$(board_config "$_board" rootdev 2>/dev/null)"
+    if [ -n "$_ext_rootdev" ]; then
+        # Board names the SD/eMMC device itself (e.g. BeaglePlay mmc1).
+        _ext_bootdev="$(printf '%s' "$_ext_rootdev" | sed 's/p[0-9][0-9]*$/p1/')"
+    else
+        _ext_bootdev="/dev/mmcblk0p${_boot_partnum}"
+        _ext_rootdev="/dev/mmcblk0p${_root_partnum}"
+    fi
+    _boot_dtb="$(board_config "$_board" boot_dtb 2>/dev/null)"
+    _fdt_line=""
+    [ -n "$_boot_dtb" ] && _fdt_line="    fdt /dtbs/$_boot_dtb"
     sudo mkdir -p "$_mnt/boot/extlinux"
-    sudo sh -c "cat > '$_mnt/boot/extlinux/extlinux.conf'" <<'EXTLINUX'
+    sudo sh -c "cat > '$_mnt/boot/extlinux/extlinux.conf'" <<EXTLINUX
 menu title Vitruvian Boot
 timeout 3
 default vitruvian
@@ -982,9 +1424,37 @@ label vitruvian
     linux /vmlinuz
     initrd /initrd.img
     fdtdir /dtbs/
-    append root=/dev/mmcblk0p2 rootfstype=EXTROOTFS rw rootwait console=ttyS2,1500000 quiet splash
+$_fdt_line
+    append root=$_ext_rootdev rootfstype=EXTROOTFS rw rootwait console=$_ext_console $_append_tail
 EXTLINUX
     sudo sed -i "s/EXTROOTFS/$_root_fs/" "$_mnt/boot/extlinux/extlinux.conf"
+
+    # Hardkernel's U-Boot has no extlinux support and loads boot.ini; write
+    # one with the same cmdline. The other boards' U-Boots read extlinux.
+    if [ "$_board" = "amlogic" ]; then
+        _dtb_bootini="${_boot_dtb}"
+        [ -n "$_dtb_bootini" ] || {
+            for _dtb in $_dtb_files; do
+                _dtb_bootini="$_dtb"
+                break
+            done
+        }
+        _dtb_bootini="${_dtb_bootini:-amlogic/meson-g12b-odroid-n2.dtb}"
+        sudo sh -c "cat > '$_mnt/boot/boot.ini'" <<BBOOTINI
+echo 'V\OS U-Boot boot.ini ($_board)'
+setenv bootargs root=$_ext_rootdev rootfstype=$_root_fs rw rootwait console=$_ext_console $_append_tail
+for dev in 0 1; do
+  if load mmc \${dev}:1 \${kernel_addr_r} /vmlinuz; then
+    if load mmc \${dev}:1 \${ramdisk_addr_r} /initrd.img; then
+      if load mmc \${dev}:1 \${fdt_addr_r} /dtbs/$_dtb_bootini; then
+        booti \${kernel_addr_r} \${ramdisk_addr_r} \${fdt_addr_r}
+      fi
+    fi
+  fi
+done
+BBOOTINI
+        log_info "  wrote /boot/boot.ini (Hardkernel boot_scripts path) dtb=$_dtb_bootini console=$_ext_console"
+    fi
 
     # riscv64's linux-image ships an uncompressed vmlinux-<ver> (no vmlinuz-);
     # see the same fallback in create_iso() above.
@@ -996,13 +1466,70 @@ EXTLINUX
     sudo cp "$_mnt/boot/initrd.img-$_kver" "$_mnt/boot/initrd.img"
 
     case "$_root_fs" in
-        xfs)  _root_mkfs="xfs" ;;
-        ext4) _root_mkfs="ext4" ;;
+        # passno 0: fsck.xfs is a no-op; do not schedule a fake check.
+        xfs)  _root_mkfs="xfs";   _root_pass=0 ;;
+        ext4) _root_mkfs="ext4";  _root_pass=1 ;;
     esac
     sudo sh -c "cat > '$_mnt/etc/fstab'" <<FSTAB
-/dev/mmcblk0p2  /        $_root_mkfs  defaults,noatime  0 1
-/dev/mmcblk0p1  /boot    vfat         defaults          0 2
+$_ext_rootdev  /        $_root_mkfs  defaults,noatime  0 $_root_pass
+$_ext_bootdev  /boot    vfat         defaults          0 2
 FSTAB
+
+    # Stage U-Boot out of the rootfs before unmounting: Debian's packages
+    # put per-board blobs under /usr/lib/u-boot/<variant>/. The old code
+    # looked only in firmware/<board>/ on the host, which no build populated.
+    #
+    # U-Boot is per-BOARD, not per-SoC-family, so a family image has to pick
+    # one. VOS_UBOOT_VARIANT overrides the board table's default for a build
+    # targeting a specific machine.
+    _uboot_stage=""
+    # uboot_variant may list several dirs, staged in order (k3: R5 and A53).
+    _variants="${VOS_UBOOT_VARIANT:-$(board_config "$_board" uboot_variant)}"
+    _uboot_fat="$(board_config "$_board" uboot_fat_files 2>/dev/null)"
+    if [ -n "$_variants" ]; then
+        _found_any=0
+        for _variant in $_variants; do
+            if [ -d "$_mnt/usr/lib/u-boot/$_variant" ]; then
+                [ -n "$_uboot_stage" ] || _uboot_stage="$(mktemp -d)"
+                sudo cp -a "$_mnt/usr/lib/u-boot/$_variant/." "$_uboot_stage/"
+                log_info "Staged U-Boot variant '$_variant' from the rootfs"
+                _found_any=1
+            fi
+        done
+        if [ "$_found_any" != 1 ] && [ -d "$_mnt/usr/lib/u-boot" ]; then
+            log_warn "U-Boot variants '${_variants}' not found in the rootfs."
+            log_warn "Available: $(ls "$_mnt/usr/lib/u-boot" 2>/dev/null | tr '\n' ' ')"
+            log_warn "Set VOS_UBOOT_VARIANT to one of these, or fix uboot_variant in boards.sh."
+        fi
+    fi
+
+    # FS-mode boot ROMs (AM62x) load the chain as files from the FAT boot
+    # partition; a raw dd there would land in the GPT.
+    _fat_chain_ok=0
+    if [ "$_uboot_fat" = 1 ]; then
+        _fat_src="$_uboot_stage"
+        # Hand-placed firmware/<board>/ wins, same as the raw-flash path.
+        if [ -d "$_basedir/firmware/$_board" ]; then
+            _fat_src="$_basedir/firmware/$_board"
+        fi
+        if [ -n "$_fat_src" ] && [ -d "$_fat_src" ]; then
+            for _bf in tiboot3.bin tispl.bin u-boot.img; do
+                if [ -f "$_fat_src/$_bf" ]; then
+                    sudo cp "$_fat_src/$_bf" "$_mnt/boot/$_bf"
+                    log_info "  FAT boot file $_bf copied to boot partition"
+                else
+                    log_warn "  FAT boot file $_bf not in $_fat_src"
+                fi
+            done
+        fi
+        # Debian does not ship tiboot3.bin/tispl.bin; refuse to publish a
+        # boot partition the BootROM cannot use.
+        if [ -f "$_mnt/boot/tiboot3.bin" ]; then
+            _fat_chain_ok=1
+        else
+            die "$_board uboot_fat_files: no tiboot3.bin on the boot partition (Debian u-boot-sitara-binaries ships u-boot-spl.bin/u-boot.img only; place a real k3 chain in firmware/$_board/ or build it with TI k3-image-gen)"
+        fi
+    fi
 
     qemu_eject "$_mnt" "$_board_arch"
 
@@ -1013,30 +1540,135 @@ FSTAB
     sudo umount -l "$_mnt"      2>/dev/null || true
 
     log_step "Flashing U-Boot/SPL..."
+    # A hand-placed firmware/<board>/ still wins: some SoCs need vendor blobs
+    # Debian does not ship (e.g. amlogic's FIP-signed image). Otherwise use
+    # what was staged from the rootfs above.
     _uboot_dir="$_basedir/firmware/$_board"
-    if [ -d "$_uboot_dir" ]; then
-        if [ -f "$_uboot_dir/idbloader.img" ]; then
-            sudo dd if="$_uboot_dir/idbloader.img" of="$_loop" bs=512 seek="$_spl_off" conv=notrunc
-            log_info "  SPL written at sector $_spl_off"
+     if [ ! -d "$_uboot_dir" ]; then
+         if [ -n "$_uboot_stage" ]; then
+             _uboot_dir="$_uboot_stage"
+         else
+             # No staged blobs either: give the pinned-upstream assembler a
+             # destination (licheerv/D1 ships no u-boot in Debian).
+             mkdir -p "$_uboot_dir"
+         fi
+     fi
+     # Some SoCs need a FIP-signed blob Debian cannot provide; assemble it
+     # from the pinned upstream when it is missing.
+     if [ -n "$(board_config "$_board" spl_blob 2>/dev/null)" ] && \
+        [ ! -f "$_uboot_dir/$(board_config "$_board" spl_blob)" ]; then
+         # Dispatch to the assembler for this board's SoC family.
+         [ "$(board_config "$_board" fip_assemble 2>/dev/null)" = "1" ] || {
+             [ -n "$_uboot_dir" ] || _uboot_dir="(unset)"
+             die "no U-Boot blobs for $_board: firmware/$_board absent and rootfs staging empty (boards.sh extra_pkgs: $(board_config "$_board" extra_pkgs 2>/dev/null); Debian pkg installed?)"
+         }
+         # image.sh is SOURCED by bake.sh, so $0 is bake.sh's path and
+         # dirname "$0" is wherever bake runs from (generated.<arch>/) --
+         # the helper actually lives in the source tree, 1-2 levels up.
+         # Measured 2026-09-27: odroid-n2 attempt 2 died after 2773 s with
+         # "FIP helper not found at ../fip.sh" on exactly this.
+         _fip_helper=""
+         for _fip_dir in "$_basedir" "$_basedir/.." "$_basedir/../.."; do
+             if [ -f "$_fip_dir/build/scripts/lib/fip.sh" ]; then
+                 _fip_helper="$_fip_dir/build/scripts/lib/fip.sh"
+                 break
+             fi
+         done
+         [ -n "$_fip_helper" ] || _fip_helper="$(dirname "$0")/fip.sh"
+         [ -f "$_fip_helper" ] || die "FIP helper not found (tried $_basedir, $_basedir/.., $_basedir/../.., dirname \"\$0\")"
+         # shellcheck disable=SC1090
+         . "$_fip_helper"
+        [ -n "$_uboot_dir" ] || die "FIP assembly for $_board: no destination dir (firmware/$_board and rootfs staging both empty)"
+        case "$_board" in
+            amlogic)
+                log_step "Assembling Amlogic FIP blob..."
+                if ! fip_amlogic_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
+                    log_error "FIP assembly failed (pinned hardkernel/u-boot $FIP_UBOOT_SHA)."
+                    log_error "Requires gcc-aarch64-linux-gnu and gcc-arm-none-eabi."
+                    die "Cannot assemble FIP blob for $_board (pinned $FIP_UBOOT_SHA)"
+                fi
+                ;;
+            licheerv)
+                log_step "Assembling Allwinner D1 (LicheeRV) FIP blob..."
+                if ! fip_licheerv_assemble "$_uboot_dir" "${VOS_FIP_CACHE:-$HOME/.cache/vos-fip}"; then
+                    log_error "FIP assembly failed (pinned smaeul/u-boot $FIP_LICHEERV_UBOOT_SHA)."
+                    log_error "Requires gcc-riscv64-linux-gnu and device-tree-compiler."
+                    die "Cannot assemble FIP blob for $_board (pinned $FIP_LICHEERV_UBOOT_SHA)"
+                fi
+                ;;
+            *)
+                die "FIP assembly not implemented for board: $_board"
+                ;;
+        esac
+    fi
+
+    # Per-SoC blob choice, not guessable: a first-match order picks the bare
+    # u-boot.bin on sunxi, which no BootROM can load. Boards name their blobs
+    # via boards.sh's spl_blob/uboot_blob fields.
+    _spl_blob="$(board_config "$_board" spl_blob)"
+    _uboot_blob="$(board_config "$_board" uboot_blob)"
+    _part_start_sectors=$(( ${_part_start_mib:-4} * 2048 ))
+    _flashed=0
+
+    # Refuse blobs reaching the first partition or, on GPT, LBA 0-33: a
+    # sector-1 write passes the partition check and still kills the table.
+    _flash_blob() {
+        _bf="$1"; _boff="$2"; _what="$3"
+        [ -n "$_bf" ] || return 0
+        if [ ! -f "$_uboot_dir/$_bf" ]; then
+            log_warn "  $_what blob '$_bf' not present in $_uboot_dir"
+            return 1
         fi
-        if [ -f "$_uboot_dir/u-boot.itb" ]; then
-            sudo dd if="$_uboot_dir/u-boot.itb" of="$_loop" bs=512 seek="$_uboot_off" conv=notrunc
-            log_info "  U-Boot written at sector $_uboot_off"
-        elif [ -f "$_uboot_dir/u-boot.bin" ]; then
-            sudo dd if="$_uboot_dir/u-boot.bin" of="$_loop" bs=512 seek="$_uboot_off" conv=notrunc
-            log_info "  U-Boot written at sector $_uboot_off"
-        elif [ -f "$_uboot_dir/u-boot.img" ]; then
-            sudo dd if="$_uboot_dir/u-boot.img" of="$_loop" bs=512 seek="$_uboot_off" conv=notrunc
-            log_info "  U-Boot written at sector $_uboot_off"
+        if [ "$_part_fmt" = "gpt" ] && [ "$_boff" -lt 34 ]; then
+            log_error "  $_what '$_bf' at sector $_boff lands in the GPT"
+            log_error "  metadata area (LBA 0-33); refusing."
+            return 1
         fi
-        if [ -f "$_uboot_dir/trust.bin" ]; then
-            sudo dd if="$_uboot_dir/trust.bin" of="$_loop" bs=512 seek=$(( _uboot_off + 2048 )) conv=notrunc
-            log_info "  trust.bin written"
+        _bsz=$(stat -c %s "$_uboot_dir/$_bf")
+        _bend=$(( _boff + (_bsz + 511) / 512 ))
+        if [ "$_bend" -gt "$_part_start_sectors" ]; then
+            log_error "  $_what '$_bf' ($_bsz bytes at sector $_boff) would overrun"
+            log_error "  the partition start at sector $_part_start_sectors; refusing."
+            return 1
+        fi
+        sudo dd if="$_uboot_dir/$_bf" of="$_loop" bs=512 seek="$_boff" conv=notrunc status=none
+        log_info "  $_what written at sector $_boff ($_bsz bytes, from $_bf)"
+        _flashed=$(( _flashed + 1 ))
+        return 0
+    }
+
+    if [ -n "$_uboot_dir" ] && [ -d "$_uboot_dir" ]; then
+        if [ "$_uboot_fat" = 1 ]; then
+            # FS-mode boards: the chain was copied to the FAT partition.
+            if [ "$_fat_chain_ok" = 1 ]; then
+                log_info "  U-Boot chain placed as FAT boot files (AM62x FS mode)"
+                _flashed=$(( _flashed + 1 ))
+            else
+                log_warn "  no tiboot3.bin available for FAT boot placement"
+            fi
+        else
+            _flash_blob "$_spl_blob"   "$_spl_off"   "SPL"    || true
+            _flash_blob "$_uboot_blob" "$_uboot_off" "U-Boot" || true
+            if [ -f "$_uboot_dir/trust.bin" ]; then
+                _flash_blob "trust.bin" $(( _uboot_off + 2048 )) "trust.bin" || true
+            fi
         fi
     else
-        log_warn "No firmware found at $_uboot_dir"
-        log_warn "U-Boot not flashed. Place idbloader.img + u-boot.itb in $_uboot_dir/"
+        log_warn "No U-Boot blobs available for $_board."
     fi
+
+    # An unbootable image that exits 0 is worse than a failed build: it gets
+    # published. Boards that declare a bootloader must actually get one.
+    if [ "$(board_config "$_board" bootloader)" = "u-boot" ] && [ "$_flashed" -eq 0 ]; then
+        log_error "No bootloader was written for '$_board'; this image cannot boot."
+        log_error "Place the required blobs in $_basedir/firmware/$_board/ and rebuild."
+        [ -n "$_uboot_stage" ] && sudo rm -rf "$_uboot_stage"
+        _loop_image_cleanup
+        trap - EXIT INT TERM
+        return 1
+    fi
+
+    [ -n "$_uboot_stage" ] && sudo rm -rf "$_uboot_stage"
 
     _loop_image_cleanup
     trap - EXIT INT TERM

@@ -176,6 +176,9 @@ AddOnManager::MessageReceived(BMessage* message)
 		case IS_CONTROL_DEVICES:
 			status = _HandleControlDevices(message, &reply);
 			break;
+		case IS_DEVICE_ADDON_CONTROL:
+			_ControlDeviceAddOns(message);
+			return;
 		case SYSTEM_SHUTTING_DOWN:
 			status = _HandleSystemShuttingDown(message, &reply);
 			break;
@@ -963,6 +966,21 @@ AddOnManager::_HandleControlDevices(BMessage* message, BMessage* reply)
 		reply->AddMessage("message", &controlMessage);
 
 	return status;
+}
+
+
+void
+AddOnManager::_ControlDeviceAddOns(BMessage* message)
+{
+	uint32 code = 0;
+	if (message->FindInt32("code", (int32*)&code) != B_OK)
+		return;
+
+	for (int32 i = 0; i < fDeviceAddOns.CountItems(); i++) {
+		DeviceAddOn* addOn = fDeviceAddOns.ItemAt(i);
+		if (addOn->Device() != NULL)
+			addOn->Device()->Control(NULL, NULL, code, NULL);
+	}
 }
 
 

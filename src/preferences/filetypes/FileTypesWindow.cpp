@@ -400,7 +400,8 @@ FileTypesWindow::FileTypesWindow(const BMessage& settings)
 
 	fTypeListView = new MimeTypeListView("typeview", NULL, showIcons, false);
 	fTypeListView->SetSelectionMessage(new BMessage(kMsgTypeSelected));
-	fTypeListView->SetExplicitMinSize(BSize(200, B_SIZE_UNSET));
+	fTypeListView->SetExplicitMinSize(BSize(
+		200 * be_plain_font->Size() / 12.0f, B_SIZE_UNSET));
 
 	BScrollView* typeListScrollView = new BScrollView("scrollview",
 		fTypeListView, B_FRAME_EVENTS | B_WILL_DRAW, false, true);

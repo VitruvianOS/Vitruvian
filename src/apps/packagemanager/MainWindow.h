@@ -5,6 +5,7 @@
 #ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
 
+#include <Message.h>
 #include <ObjectList.h>
 #include <String.h>
 #include <Window.h>
@@ -17,6 +18,8 @@ class BMenuBar;
 class BMenuItem;
 class BMenu;
 class BTabView;
+class BButton;
+class BGroupView;
 class AptLogView;
 class FilterView;
 class PackageInfo;
@@ -44,6 +47,8 @@ private:
 			int32				_CountMarked() const;
 			void				_UpdatePendingUI();
 			void				_HandleSimulateReady(BMessage* message);
+			void				_ConfirmApply();
+			void				_CancelApply();
 			void				_MarkSelected(package_mark mark);
 			void				_ClearMarks(BMessage* message);
 			void				_ApplyChanges();
@@ -54,6 +59,7 @@ private:
 
 			void				_WatchDpkgStatus();
 			void				_ShowStaleHint(bool show);
+			void				_ShowEmptyListsHint(bool show);
 
 		BMenuBar*			fMenuBar;
 		BMenuItem*			fApplyItem;
@@ -63,6 +69,9 @@ private:
 		BMenu*				fClearMarksMenu;
 		BMenuItem*			fClearMarksItem;
 			TruncatingStringView* fStaleHintView;
+			TruncatingStringView* fEmptyListsHintView;
+			BGroupView*			fEmptyListsHintGroup;
+			BButton*			fUpdateListsButton;
 			FilterView*			fFilterView;
 			BTabView*			fMainTabView;
 			PackageListView*	fListView;
@@ -73,6 +82,10 @@ private:
 
 			BObjectList<PackageInfo, true>	fPackages;
 			bool				fTransactionActive;
+
+			// The apply request rebuilt from the last simulate reply, held
+			// while ChangeSummaryWindow is up for the user to confirm.
+			BMessage			fPendingApply;
 };
 
 

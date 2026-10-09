@@ -10,7 +10,9 @@
 
 #include <Application.h>
 #include <Catalog.h>
+#include <CardLayout.h>
 #include <CheckBox.h>
+#include <ControlLook.h>
 #include <File.h>
 #include <FindDirectory.h>
 #include <GroupLayout.h>
@@ -50,6 +52,7 @@ MediaWindow::MediaWindow(BRect frame, int32 initialSection)
 		| B_NOT_ZOOMABLE),
 	fSidebar(NULL),
 	fContentPane(NULL),
+	fCards(NULL),
 	fCurrentSection(NULL),
 	fShownSection(kOutputSection),
 	fHasShownSection(false),
@@ -74,7 +77,8 @@ MediaWindow::MediaWindow(BRect frame, int32 initialSection)
 
 	fContentPane = new BView("content", B_WILL_DRAW | B_FRAME_EVENTS);
 	fContentPane->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-	fContentPane->SetLayout(new BGroupLayout(B_VERTICAL));
+	fCards = new BCardLayout();
+	fContentPane->SetLayout(fCards);
 
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL)
 		.SetInsets(B_USE_WINDOW_SPACING)
@@ -154,8 +158,22 @@ MediaWindow::_BuildSidebar()
 #endif
 	fSidebar->AddItem(new BStringItem(B_TRANSLATE("Sounds")));
 	fSidebarSections.push_back(kSoundsSection);
-	fSidebar->SetExplicitMinSize(BSize(180.0f, B_SIZE_UNSET));
-	fSidebar->SetExplicitMaxSize(BSize(220.0f, B_SIZE_UNLIMITED));
+
+	const float pad = 3 * be_control_look->DefaultItemSpacing();
+	float labelWidth = 0;
+	for (int32 i = 0; i < fSidebar->CountItems(); i++) {
+		BStringItem* item = dynamic_cast<BStringItem*>(fSidebar->ItemAt(i));
+		if (item == NULL)
+			continue;
+		const char* text = item->Text();
+		if (text == NULL)
+			continue;
+		labelWidth = std::max(labelWidth, be_plain_font->StringWidth(text));
+		labelWidth = std::max(labelWidth, be_bold_font->StringWidth(text));
+	}
+	const float sidebarMin = labelWidth + pad;
+	fSidebar->SetExplicitMinSize(BSize(sidebarMin, B_SIZE_UNSET));
+	fSidebar->SetExplicitMaxSize(BSize(sidebarMin * 1.25f, B_SIZE_UNLIMITED));
 	fSidebar->Select(0);
 
 	fStatusLabel = new BStringView("status", "");
@@ -172,43 +190,10 @@ MediaWindow::_RowForSection(int32 section) const
 	return -1;
 }
 
-	void
+void
 MediaWindow::_ShowSection(Section s)
 {
-	if (fCurrentSection != NULL && fHasShownSection
-			&& fShownSection == kHardwareSection) {
-		fCurrentSection->RemoveSelf();
-		fCurrentSection = NULL;
-
-	}
-
-	if (fCurrentSection != NULL) {
-		if (fHasShownSection) {
-			switch (fShownSection) {
-				case kOutputSection:
-					fOutputView = NULL;
-					break;
-				case kInputSection:
-					fInputView = NULL;
-					break;
-				case kStreamsSection:
-					fStreamsView = NULL;
-					break;
-				case kSoundsSection:
-					fSoundsView = NULL;
-					break;
-				case kHardwareSection:
-
-					break;
-				default:
-					break;
-			}
-		}
-
-		fCurrentSection->RemoveSelf();
-		delete fCurrentSection;
-		fCurrentSection = NULL;
-	}
+	BView* section = NULL;
 
 	switch (s) {
 		case kOutputSection:
@@ -221,31 +206,37 @@ MediaWindow::_ShowSection(Section s)
 				fInputView = new DeviceListView("in", false);
 			DeviceListView* lv = wantOutput ? fOutputView : fInputView;
 
-			BScrollView* scroller = new BScrollView("scroller", lv,
-				0, false, true);
-			scroller->SetExplicitMinSize(BSize(200.0f, B_SIZE_UNSET));
-			scroller->SetExplicitMaxSize(BSize(250.0f, B_SIZE_UNSET));
+			// Built once per list: list, scroller, wrap.
+			BView* wrap = lv->Parent() != NULL ? lv->Parent()->Parent() : NULL;
 
-			BGroupView* detail = new BGroupView("detail", B_VERTICAL);
-			detail->SetExplicitMinSize(BSize(350.0f, B_SIZE_UNSET));
-			detail->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
-				B_ALIGN_USE_FULL_HEIGHT));
-			BLayoutBuilder::Group<>(detail)
-				.AddGlue()
-				.Add(new BStringView("hint",
-					wantOutput
-					 ? B_TRANSLATE("Select an output device to configure.")
-					 : B_TRANSLATE("Select an input device to configure.")))
-				.AddGlue();
+			if (wrap == NULL) {
+				BScrollView* scroller = new BScrollView("scroller", lv,
+					0, false, true);
+				const float scale = be_plain_font->Size() / 12.0f;
+				scroller->SetExplicitMinSize(BSize(200 * scale, B_SIZE_UNSET));
+				scroller->SetExplicitMaxSize(BSize(250 * scale, B_SIZE_UNSET));
 
-			BGroupView* wrap = new BGroupView(B_HORIZONTAL);
-			BLayoutBuilder::Group<>(wrap, B_HORIZONTAL)
-				.Add(scroller, 0.3f)
-				.AddStrut(B_USE_DEFAULT_SPACING)
-				.Add(detail, 0.7f);
+				BGroupView* detail = new BGroupView("detail", B_VERTICAL);
+				detail->SetExplicitMinSize(BSize(350 * scale, B_SIZE_UNSET));
+				detail->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+					B_ALIGN_USE_FULL_HEIGHT));
+				BLayoutBuilder::Group<>(detail)
+					.AddGlue()
+					.Add(new BStringView("hint",
+						wantOutput
+						 ? B_TRANSLATE("Select an output device to configure.")
+						 : B_TRANSLATE("Select an input device to configure.")))
+					.AddGlue();
 
-			fCurrentSection = wrap;
+				BGroupView* group = new BGroupView(B_HORIZONTAL);
+				BLayoutBuilder::Group<>(group, B_HORIZONTAL)
+					.Add(scroller, 0.3f)
+					.AddStrut(B_USE_DEFAULT_SPACING)
+					.Add(detail, 0.7f);
+				wrap = group;
+			}
 
+			section = wrap;
 			lv->Refresh();
 			lv->SetTargetForMessages(this);
 			break;
@@ -255,70 +246,74 @@ MediaWindow::_ShowSection(Section s)
 			if (fStreamsView == NULL)
 				fStreamsView = new StreamListView();
 			((StreamListView*)fStreamsView)->Refresh();
-			fCurrentSection = fStreamsView;
+			section = fStreamsView;
 			break;
 
 		case kHardwareSection:
 		{
-			if (fHardwareView != NULL) {
-				fCurrentSection = fHardwareView;
+			if (fHardwareView == NULL) {
+				BGroupView* hw = new BGroupView(B_VERTICAL);
+				BLayoutBuilder::Group<>(hw)
+					.SetInsets(B_USE_SMALL_SPACING)
+					.Add(new BStringView("title",
+						B_TRANSLATE("Device profiles")))
+					.Add(new BStringView("desc",
+						B_TRANSLATE("Select a profile configuration for the audio device.")));
+
+				fHardwareDeviceMenu = new BPopUpMenu("device_menu");
+				BMenuField* deviceField = new BMenuField("device_field",
+					B_TRANSLATE("Device:"), fHardwareDeviceMenu);
+				deviceField->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
+					B_ALIGN_VERTICAL_CENTER));
+
+				fHardwareProfileList = new BListView("profile_list",
+					B_SINGLE_SELECTION_LIST);
+				fHardwareProfileList->SetInvocationMessage(
+					new BMessage(kMsgHardwareProfileSelected));
+				fHardwareProfileList->SetSelectionMessage(
+					new BMessage(kMsgHardwareProfileSelected));
+				fHardwareProfileList->SetTarget(this);
+				BScrollView* profileScroll = new BScrollView("profile_scroll",
+					fHardwareProfileList, 0, false, true, B_FANCY_BORDER);
+				const float scale = be_plain_font->Size() / 12.0f;
+				profileScroll->SetExplicitMinSize(BSize(200 * scale,
+					150 * scale));
+
+				fHardwareStatus = new BStringView("hardware_status", "");
+
+				BLayoutBuilder::Group<>(hw)
+					.Add(deviceField)
+					.Add(profileScroll)
+					.Add(fHardwareStatus)
+					.AddGlue();
+
+				fHardwareSelectedDevice = 0;
+				fHardwareActiveProfileIndex = -1;
+
 				_PopulateHardwareDeviceMenu();
-				break;
-			}
-
-			BGroupView* hw = new BGroupView(B_VERTICAL);
-			BLayoutBuilder::Group<>(hw)
-				.SetInsets(B_USE_SMALL_SPACING)
-				.Add(new BStringView("title",
-					B_TRANSLATE("Device profiles")))
-				.Add(new BStringView("desc",
-					B_TRANSLATE("Select a profile configuration for the audio device.")));
-
-			fHardwareDeviceMenu = new BPopUpMenu("device_menu");
-			BMenuField* deviceField = new BMenuField("device_field",
-				B_TRANSLATE("Device:"), fHardwareDeviceMenu);
-			deviceField->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
-				B_ALIGN_VERTICAL_CENTER));
-
-			fHardwareProfileList = new BListView("profile_list",
-				B_SINGLE_SELECTION_LIST);
-			fHardwareProfileList->SetInvocationMessage(
-				new BMessage(kMsgHardwareProfileSelected));
-			fHardwareProfileList->SetSelectionMessage(
-				new BMessage(kMsgHardwareProfileSelected));
-			fHardwareProfileList->SetTarget(this);
-			BScrollView* profileScroll = new BScrollView("profile_scroll",
-				fHardwareProfileList, 0, false, true, B_FANCY_BORDER);
-			profileScroll->SetExplicitMinSize(BSize(200.0f, 150.0f));
-
-			fHardwareStatus = new BStringView("hardware_status", "");
-
-			BLayoutBuilder::Group<>(hw)
-				.Add(deviceField)
-				.Add(profileScroll)
-				.Add(fHardwareStatus)
-				.AddGlue();
-
-			fHardwareSelectedDevice = 0;
-			fHardwareActiveProfileIndex = -1;
-
-			_PopulateHardwareDeviceMenu();
-			fHardwareView = hw;
-			fCurrentSection = hw;
+				fHardwareView = hw;
+			} else
+				_PopulateHardwareDeviceMenu();
+			section = fHardwareView;
 			break;
 		}
 
 		case kSoundsSection:
-
 			if (fSoundsView == NULL)
 				fSoundsView = new SoundsSectionView();
-			fCurrentSection = fSoundsView;
+			section = fSoundsView;
 			break;
 	}
 
-	if (fCurrentSection != NULL)
-		fContentPane->AddChild(fCurrentSection);
+	if (section == NULL)
+		return;
 
+	// Sections stay as cards: the pane keeps the largest one's minimum.
+	if (section->Parent() == NULL)
+		fCards->AddView(section);
+	fCards->SetVisibleItem(fCards->IndexOfView(section));
+
+	fCurrentSection = section;
 	fShownSection = s;
 	fHasShownSection = true;
 }

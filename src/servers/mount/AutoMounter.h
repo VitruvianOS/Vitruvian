@@ -43,13 +43,14 @@ private:
 			void				_MountVolume(const BMessage* message);
 	static	void				_NotifyMountError(const char* volumeName,
 									status_t status);
-			bool				_SuggestForceUnmount(const char* name,
-									status_t error);
-			void				_ReportUnmountError(const char* name,
-									status_t error);
-			void				_UnmountAndEjectVolume(BPartition* partition,
-									BPath& mountPoint, const char* name);
+			status_t			_UnmountAndEjectVolume(BPartition* partition,
+									BPath& mountPoint, uint32 unmountFlags);
 			void				_UnmountAndEjectVolume(BMessage* message);
+	static	void				_SendUnmountReply(BMessage* request,
+									status_t error, const char* name,
+									const char* mountPoint);
+	static	void				_AppendBusyProcesses(const char* mountPoint,
+									BMessage* reply);
 
 			void				_FromMode(mount_mode mode, bool& all,
 									bool& bfs, bool& restore);

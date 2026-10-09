@@ -105,7 +105,7 @@ AddOn(
 	RDEF TrackerIcons.rdef libtracker.rdef
 )
 
-UsePrivateHeaders(tracker interface shared tracker mount storage system support)
+UsePrivateHeaders(tracker interface shared tracker mount storage system support print)
 
 target_compile_definitions(tracker PRIVATE
 	_BUILDING_tracker=1

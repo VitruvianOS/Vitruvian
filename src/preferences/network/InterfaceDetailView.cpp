@@ -16,16 +16,27 @@
 #include <ControlLook.h>
 #include <GridLayout.h>
 #include <GridView.h>
+#include <GroupView.h>
 #include <GroupLayout.h>
 #include <LayoutBuilder.h>
 #include <ListView.h>
 #include <NetworkInterface.h>
 #include <ScrollView.h>
 #include <StringItem.h>
+#include <SpaceLayoutItem.h>
 #include <StringView.h>
+#include <TabView.h>
+#include <TextControl.h>
+#include <TextView.h>
+#include <Window.h>
 
 #include <algorithm>
+#include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 #include <vector>
 
 
@@ -41,6 +52,8 @@ static const uint32 kMsgForgetWiFi = 'iFwf';
 static const uint32 kMsgWiFiActionResult = 'iWar';
 static const uint32 kMsgConnectVPN = 'iCvp';
 static const uint32 kMsgDisconnectVPN = 'iDvp';
+static const uint32 kMsgRemoveVPN = 'iRvp';
+static const uint32 kMsgRemoveVPNResult = 'iRvr';
 
 static const uint32 kMsgSavedSelectionChanged = 'iSsc';
 static const uint32 kMsgSavedNetworksLoaded = 'iSnl';
@@ -52,6 +65,141 @@ static const uint32 kMsgSavedActionResult = 'iSar';
 static const uint32 kMsgProfilesLoaded = 'iPrl';
 static const uint32 kMsgSavedReordered = 'iSro';
 static const uint32 kMsgSavedItemDragged = 'iSid';
+
+static const uint32 kMsgStartHotspot = 'iHst';
+static const uint32 kMsgStopHotspot = 'iHsp';
+static const uint32 kMsgHotspotStateReply = 'iHsr';
+static const uint32 kMsgHotspotActionResult = 'iHar';
+static const uint32 kMsgHotspotSetupCommit = 'iHsc';
+static const uint32 kMsgHotspotFieldModified = 'iHfm';
+
+
+// Modal collector for hotspot name and password. Start stays disabled
+// until the name is non-empty and the password reaches the WPA2 minimum.
+class HotspotSetupWindow : public BWindow {
+public:
+	HotspotSetupWindow(const BMessenger& target, const char* defaultName,
+		const char* defaultPassword, bool willDisconnect)
+		:
+		BWindow(BRect(0, 0, 360, willDisconnect ? 280 : 220),
+			B_TRANSLATE("Turn On Wi-Fi Hotspot"), B_MODAL_WINDOW_LOOK,
+			B_MODAL_APP_WINDOW_FEEL,
+			B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_AUTO_UPDATE_SIZE_LIMITS),
+		fTarget(target)
+	{
+		fNameControl = new BTextControl(B_TRANSLATE("Network name:"),
+			defaultName, new BMessage(kMsgHotspotFieldModified));
+		const float fieldWidth = 200 * be_plain_font->Size() / 12.0f;
+		fNameControl->TextView()->SetExplicitMinSize(BSize(fieldWidth,
+			B_SIZE_UNSET));
+
+		fPasswordControl = new BTextControl(B_TRANSLATE("Password:"),
+			defaultPassword, new BMessage(kMsgHotspotFieldModified));
+		fPasswordControl->TextView()->SetExplicitMinSize(BSize(fieldWidth,
+			B_SIZE_UNSET));
+
+		BStringView* hint = new BStringView(NULL,
+			B_TRANSLATE("At least 8 characters."));
+		hint->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+			B_DARKEN_3_TINT));
+
+		BButton* cancelButton = new BButton(B_TRANSLATE("Cancel"),
+			new BMessage(B_QUIT_REQUESTED));
+		fStartButton = new BButton(B_TRANSLATE("Start"),
+			new BMessage(kMsgHotspotSetupCommit));
+		fStartButton->MakeDefault(true);
+
+		BLayoutBuilder::Group<> builder(this, B_VERTICAL,
+			B_USE_DEFAULT_SPACING);
+		builder.SetInsets(B_USE_WINDOW_INSETS)
+			.Add(fNameControl)
+			.Add(fPasswordControl)
+			.Add(hint);
+
+		if (willDisconnect) {
+			BString warn(B_TRANSLATE("Starting the hotspot disconnects "
+				"this Wi-Fi adapter from its current network."));
+			builder.Add(new BStringView(NULL, warn.String()));
+		}
+
+		builder
+			.AddGroup(B_HORIZONTAL)
+				.AddGlue()
+				.Add(cancelButton)
+				.Add(fStartButton)
+			.End();
+
+		_UpdateStartButton();
+		CenterOnScreen();
+	}
+
+	virtual void MessageReceived(BMessage* message)
+	{
+		if (message->what == kMsgHotspotFieldModified) {
+			_UpdateStartButton();
+			return;
+		}
+		if (message->what == kMsgHotspotSetupCommit) {
+			BString name(fNameControl->Text());
+			BString password(fPasswordControl->Text());
+			name.Trim();
+			password.Trim();
+			if (name.IsEmpty() || password.Length() < 8)
+				return;
+			BMessage commit(kMsgHotspotSetupCommit);
+			commit.AddString("ssid", name);
+			commit.AddString("password", password);
+			fTarget.SendMessage(&commit);
+			Quit();
+			return;
+		}
+		BWindow::MessageReceived(message);
+	}
+
+private:
+	void _UpdateStartButton()
+	{
+		BString name(fNameControl->Text());
+		BString password(fPasswordControl->Text());
+		name.Trim();
+		password.Trim();
+		fStartButton->SetEnabled(!name.IsEmpty() && password.Length() >= 8);
+	}
+
+	BMessenger		fTarget;
+	BTextControl*	fNameControl;
+	BTextControl*	fPasswordControl;
+	BButton*		fStartButton;
+};
+
+
+// WPA2-PSK keys must be 8..63 characters; this default is well above the
+// minimum and readable enough to retype onto another device.
+static BString
+_GenerateHotspotPassword()
+{
+	static const char kAlphabet[]
+		= "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+	BString password;
+	unsigned char bytes[12];
+	int fd = open("/dev/urandom", O_RDONLY);
+	if (fd >= 0) {
+		ssize_t n = read(fd, bytes, sizeof(bytes));
+		close(fd);
+		if (n != (ssize_t)sizeof(bytes)) {
+			srand((unsigned)time(NULL) ^ (unsigned)getpid());
+			for (size_t i = 0; i < sizeof(bytes); i++)
+				bytes[i] = (unsigned char)(rand() & 0xff);
+		}
+	} else {
+		srand((unsigned)time(NULL) ^ (unsigned)getpid());
+		for (size_t i = 0; i < sizeof(bytes); i++)
+			bytes[i] = (unsigned char)(rand() & 0xff);
+	}
+	for (size_t i = 0; i < sizeof(bytes); i++)
+		password << kAlphabet[bytes[i] % (sizeof(kAlphabet) - 1)];
+	return password;
+}
 
 
 static BString
@@ -89,7 +237,7 @@ _StateString(uint32 state)
 
 // Single row in the "Available networks" list. Text-only status line rather
 // than a signal-bar glyph -- no such art exists in this tree yet (see
-// DeviceListItem in NetworkWindowNM.cpp for the same programmatic-over-
+// DeviceListItem in NetworkWindow.cpp for the same programmatic-over-
 // authored-art approach).
 class WiFiNetworkItem : public BStringItem {
 public:
@@ -127,7 +275,7 @@ public:
 			owner->FillRect(bounds);
 		}
 
-		const float dotSize = 8.0f;
+		const float dotSize = ceilf(be_plain_font->Size() * 2 / 3);
 		BPoint dotOrigin = bounds.LeftTop()
 			+ BPoint(be_control_look->DefaultLabelSpacing(),
 				(bounds.Height() - dotSize) / 2.0f);
@@ -177,10 +325,12 @@ public:
 		font->GetHeight(&height);
 		float lineHeight = ceilf(height.ascent) + ceilf(height.descent)
 			+ ceilf(height.leading);
-		fFirstLineOffset = 2 + ceilf(height.ascent + height.leading / 2);
+		fFirstLineOffset = ceilf(height.ascent + height.leading / 2);
 		fLineOffset = lineHeight;
 
-		SetHeight(std::max(2 * lineHeight + 4, 8.0f + 4));
+		const float pad = 2 * be_control_look->DefaultLabelSpacing();
+		SetHeight(std::max(2 * lineHeight + pad,
+			std::max(6.0f, font->Size()) + pad));
 	}
 
 private:
@@ -408,6 +558,8 @@ InterfaceDetailView::InterfaceDetailView()
 	:
 	BView("interfaceDetail", B_WILL_DRAW),
 	fGridLayout(NULL),
+	fTabView(NULL),
+	fSelectedTab(0),
 	fMode(MODE_EMPTY),
 	fStaticIPView(NULL),
 	fWiFiListView(NULL),
@@ -419,7 +571,11 @@ InterfaceDetailView::InterfaceDetailView()
 	fSavedMoveUpButton(NULL),
 	fSavedMoveDownButton(NULL),
 	fVPNConnectButton(NULL),
-	fVPNDisconnectButton(NULL)
+	fVPNDisconnectButton(NULL),
+	fVPNRemoveButton(NULL),
+	fHotspotStartButton(NULL),
+	fHotspotStopButton(NULL),
+	fHotspotPage(NULL)
 {
 	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 	fEmptyMessage = B_TRANSLATE("Select a device");
@@ -671,6 +827,136 @@ InterfaceDetailView::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgRemoveVPN:
+		{
+			BString path;
+			BString name;
+			fDeviceInfo.FindString(kNMFieldVPNPath, &path);
+			fDeviceInfo.FindString(kNMFieldVPNName, &name);
+			if (path.IsEmpty())
+				break;
+
+			BString text;
+			if (name.IsEmpty())
+				text = B_TRANSLATE("Delete this VPN connection?");
+			else
+				text.SetToFormat(
+					B_TRANSLATE("Delete the VPN connection \"%s\"?"), name.String());
+			text << "\n" << B_TRANSLATE("This cannot be undone.");
+
+			BAlert* alert = new BAlert(B_TRANSLATE("Remove VPN"),
+				text.String(), B_TRANSLATE("Remove"),
+				B_TRANSLATE("Cancel"), NULL, B_WIDTH_AS_USUAL,
+				B_STOP_ALERT);
+			alert->SetShortcut(B_ESCAPE, 0);
+			if (alert->Go() == 0) {
+				NMBackend* backend = NMBackend::Instance();
+				if (backend != NULL) {
+					backend->RemoveVPNAsync(path.String(),
+						BMessenger(this), kMsgRemoveVPNResult);
+				}
+			}
+			break;
+		}
+
+		case kMsgRemoveVPNResult:
+		{
+			int32 status = B_ERROR;
+			message->FindInt32("status", &status);
+			if (status != B_OK) {
+				BString reason;
+				message->FindString("reason", &reason);
+				BString text(B_TRANSLATE("Could not remove the VPN "
+					"connection."));
+				if (!reason.IsEmpty())
+					text << "\n" << reason;
+				BAlert* alert = new BAlert(B_TRANSLATE("Not removed"),
+					text.String(), B_TRANSLATE("OK"));
+				alert->Go(NULL);
+			}
+			break;
+		}
+
+		case kMsgStartHotspot:
+		{
+			bool willDisconnect = false;
+			fHotspotState.FindBool(kNMFieldHotspotWillDisconnect,
+				&willDisconnect);
+			BString defaultName("V Hotspot");
+			// Reuse the saved profile password so devices that already
+			// joined keep working; mint one only when no profile exists.
+			BString defaultPassword;
+			if (fHotspotSettings.ProfileUUID().IsEmpty())
+				defaultPassword = _GenerateHotspotPassword();
+			else
+				fHotspotState.FindString(kNMFieldHotspotPassword,
+					&defaultPassword);
+			HotspotSetupWindow* window = new HotspotSetupWindow(
+				BMessenger(this), defaultName.String(),
+				defaultPassword.String(), willDisconnect);
+			window->Show();
+			break;
+		}
+
+		case kMsgHotspotSetupCommit:
+		{
+			BString ssid, password;
+			message->FindString("ssid", &ssid);
+			message->FindString("password", &password);
+			_StartHotspot(ssid, password);
+			break;
+		}
+
+		case kMsgStopHotspot:
+			_StopHotspot();
+			break;
+
+		case kMsgHotspotStateReply:
+		{
+			// Rebuilding the whole pane here re-requested this reply, so the
+			// pane rebuilt forever; only the Hotspot tab depends on it.
+			bool changed = false;
+			const char* boolFields[] = { kNMFieldHotspotActive,
+				kNMFieldHotspotCanStart };
+			for (const char* field : boolFields) {
+				bool oldValue = false;
+				bool newValue = false;
+				fHotspotState.FindBool(field, &oldValue);
+				message->FindBool(field, &newValue);
+				changed |= oldValue != newValue;
+			}
+			const char* stringFields[] = { kNMFieldHotspotSSID,
+				kNMFieldHotspotPassword };
+			for (const char* field : stringFields) {
+				BString oldValue;
+				BString newValue;
+				fHotspotState.FindString(field, &oldValue);
+				message->FindString(field, &newValue);
+				changed |= oldValue != newValue;
+			}
+
+			fHotspotState = *message;
+			if (changed)
+				_RebuildHotspotTab();
+			break;
+		}
+
+		case kMsgHotspotActionResult:
+		{
+			int32 status = B_ERROR;
+			message->FindInt32("status", &status);
+			if (status != B_OK)
+				_ShowHotspotError(message);
+			// Save a newly minted profile UUID so the next start reuses it.
+			BString uuid;
+			if (message->FindString(kNMFieldHotspotUUID, &uuid) == B_OK
+				&& !uuid.IsEmpty()) {
+				fHotspotSettings.SetProfileUUID(uuid);
+			}
+			_RequestHotspotState();
+			break;
+		}
+
 		default:
 			BView::MessageReceived(message);
 			break;
@@ -681,6 +967,13 @@ InterfaceDetailView::MessageReceived(BMessage* message)
 void
 InterfaceDetailView::SetToDevice(const BMessage& deviceInfo)
 {
+	// Same device again (refresh): keep the tab; another one starts over.
+	BString oldPath, newPath;
+	fDeviceInfo.FindString(kNMFieldPath, &oldPath);
+	deviceInfo.FindString(kNMFieldPath, &newPath);
+	if (fMode != MODE_DEVICE || oldPath != newPath)
+		fSelectedTab = 0;
+
 	fDeviceInfo = deviceInfo;
 	fMode = MODE_DEVICE;
 	_Rebuild();
@@ -706,6 +999,24 @@ InterfaceDetailView::ShowEmpty(const char* message)
 
 
 void
+InterfaceDetailView::ShowVPNSection(const BMessage& vpns)
+{
+	fMode = MODE_VPN_SECTION;
+	fDeviceInfo = vpns;
+	_Rebuild();
+}
+
+
+void
+InterfaceDetailView::ShowWiFiSection(const BMessage& adapters)
+{
+	fMode = MODE_WIFI_SECTION;
+	fDeviceInfo = adapters;
+	_Rebuild();
+}
+
+
+void
 InterfaceDetailView::_Rebuild()
 {
 	// Tear down and rebuild rather than mutate in place: the field set
@@ -724,6 +1035,11 @@ InterfaceDetailView::_Rebuild()
 			delete stale;
 	}
 
+	// Hotspot and saved-network replies rebuild the pane; keep the tab.
+	if (fTabView != NULL)
+		fSelectedTab = fTabView->Selection();
+	fTabView = NULL;
+
 	for (int32 i = ChildAt(0) ? CountChildren() : 0; i-- > 0;) {
 		BView* child = ChildAt(i);
 		RemoveChild(child);
@@ -740,6 +1056,10 @@ InterfaceDetailView::_Rebuild()
 	fSavedMoveDownButton = NULL;
 	fVPNConnectButton = NULL;
 	fVPNDisconnectButton = NULL;
+	fVPNRemoveButton = NULL;
+	fHotspotStartButton = NULL;
+	fHotspotStopButton = NULL;
+	fHotspotPage = NULL;
 
 	// Replace the layout wholesale rather than reusing it: deleting the child
 	// views leaves the old layout holding items that are not views (glue,
@@ -765,6 +1085,16 @@ InterfaceDetailView::_Rebuild()
 
 	if (fMode == MODE_VPN) {
 		_RebuildVPNView();
+		return;
+	}
+
+	if (fMode == MODE_VPN_SECTION) {
+		_RebuildVPNSectionView();
+		return;
+	}
+
+	if (fMode == MODE_WIFI_SECTION) {
+		_RebuildWiFiSectionView();
 		return;
 	}
 
@@ -835,25 +1165,45 @@ InterfaceDetailView::_RebuildDeviceView()
 
 	addRow(B_TRANSLATE("Status:"), _StateString(state));
 
-	// Live: BNetworkInterface reads straight from the kernel's own
-	// interface table (not NetworkManager), so this works even when NM's
-	// GetDeviceInfo() is stale or the interface is unmanaged.
+	// Live addresses via BNetworkInterface, which reads NMBackend's device snapshot; the stubs it
+	// replaced always returned empty, leaving this row at "None" (#236).
 	BNetworkInterface iface(interfaceName.String());
 	if (iface.Exists()) {
 		BNetworkInterfaceAddress addr;
 		bool haveIPv4 = false;
+		bool haveIPv6 = false;
+		BString ipv4Line;
+		BString ipv6Line;
 		for (int32 i = 0; i < iface.CountAddresses(); i++) {
-			if (iface.GetAddressAt(i, addr) == B_OK
-				&& addr.Address().Family() == AF_INET) {
-				BString ip;
-				ip << addr.Address().ToString();
-				addRow(B_TRANSLATE("IP Address:"), ip);
+			if (iface.GetAddressAt(i, addr) != B_OK)
+				continue;
+
+			int family = addr.Address().Family();
+			if (family != AF_INET && family != AF_INET6)
+				continue;
+
+			BString ip;
+			ip << addr.Address().ToString();
+			ssize_t prefix = addr.Mask().PrefixLength();
+			if (prefix > 0)
+				ip << "/" << prefix;
+
+			if (family == AF_INET) {
+				if (haveIPv4)
+					ipv4Line << ", ";
+				ipv4Line << ip;
 				haveIPv4 = true;
-				break;
+			} else {
+				if (haveIPv6)
+					ipv6Line << ", ";
+				ipv6Line << ip;
+				haveIPv6 = true;
 			}
 		}
-		if (!haveIPv4)
-			addRow(B_TRANSLATE("IP Address:"), B_TRANSLATE("None"));
+		addRow(B_TRANSLATE("IP Address:"),
+			haveIPv4 ? ipv4Line : BString(B_TRANSLATE("None")));
+		addRow(B_TRANSLATE("IPv6 Address:"),
+			haveIPv6 ? ipv6Line : BString(B_TRANSLATE("None")));
 
 		ifreq_stats stats;
 		if (iface.GetStats(stats) == B_OK) {
@@ -862,8 +1212,10 @@ InterfaceDetailView::_RebuildDeviceView()
 		}
 	} else {
 		addRow(B_TRANSLATE("IP Address:"), kNotYetAvailable);
+		addRow(B_TRANSLATE("IPv6 Address:"), kNotYetAvailable);
 	}
 
+	// Gateway/DNS come from the same live snapshot (IPv4 lease preferred, IPv6 fallback), not the profile.
 	BString gateway, dns;
 	fDeviceInfo.FindString(kNMFieldGateway, &gateway);
 	fDeviceInfo.FindString(kNMFieldDNS, &dns);
@@ -918,18 +1270,17 @@ InterfaceDetailView::_RebuildDeviceView()
 		}
 	}
 
-	BLayoutBuilder::Group<> builder((BGroupLayout*)GetLayout());
-	builder.SetInsets(B_USE_WINDOW_SPACING)
-		.Add(titleView)
-		.Add(grid);
+	// One section per tab: stacked, a Wi-Fi device's sections are taller
+	// than the screen and the window grows past its bottom edge.
+	fTabView = new BTabView("tabs", B_WIDTH_FROM_LABEL);
 
-	if (showStaticIP) {
-		builder.Add(new BStringView(NULL,
-			B_TRANSLATE("IPv4 configuration:")));
-		builder.Add(fStaticIPView);
-	}
+	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.Add(titleView)
+		.Add(fTabView);
 
 	if (isWiFi) {
+		BLayoutBuilder::Group<> builder(_AddTab(B_TRANSLATE("Networks")));
 		builder.Add(new BStringView(NULL,
 			B_TRANSLATE("Available networks:")));
 
@@ -937,28 +1288,11 @@ InterfaceDetailView::_RebuildDeviceView()
 		fWiFiListView->SetSelectionMessage(new BMessage(
 			kMsgWiFiSelectionChanged));
 		fWiFiListView->SetTarget(this);
+		// Min keeps a usable strip when the scan is empty; max stops the
+		// layout from giving this list every AP row in range.
 		fWiFiListView->SetExplicitMinSize(BSize(B_SIZE_UNSET, 120));
-
-		for (int32 i = 0; i < apCount; i++) {
-			char apName[32];
-			snprintf(apName, sizeof(apName), "ap_%d", (int)i);
-			BMessage apInfo;
-			if (networks.FindMessage(apName, &apInfo) != B_OK)
-				continue;
-
-			BString ssid;
-			if (apInfo.FindString(kNMFieldAPSSID, &ssid) != B_OK)
-				continue;
-			int32 strength = 0;
-			bool secured = false;
-			bool connected = false;
-			apInfo.FindInt32(kNMFieldAPStrength, &strength);
-			apInfo.FindBool(kNMFieldAPSecured, &secured);
-			apInfo.FindBool(kNMFieldAPConnected, &connected);
-
-			fWiFiListView->AddItem(new WiFiNetworkItem(ssid.String(),
-				strength, secured, connected, _HasSavedProfile(ssid)));
-		}
+		fWiFiListView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 200));
+		_FillWiFiList(networks);
 
 		BScrollView* scrollView = new BScrollView("wifiScroll",
 			fWiFiListView, 0, false, true);
@@ -969,12 +1303,17 @@ InterfaceDetailView::_RebuildDeviceView()
 			new BMessage(kMsgForgetWiFi));
 		fJoinButton->SetTarget(this);
 		fForgetButton->SetTarget(this);
+		BMessage* joinOther = new BMessage(kMsgJoinOtherWiFi);
+		joinOther->AddString("device", devicePath);
 
 		builder.Add(scrollView)
 			.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 				.Add(fJoinButton)
 				.Add(fForgetButton)
 				.AddGlue()
+				.Add(new BButton("joinOther",
+					B_TRANSLATE("Join other network" B_UTF8_ELLIPSIS),
+					joinOther))
 			.End();
 
 		_UpdateWiFiButtons();
@@ -987,6 +1326,7 @@ InterfaceDetailView::_RebuildDeviceView()
 			new BMessage(kMsgSavedSelectionChanged));
 		fSavedListView->SetTarget(this);
 		fSavedListView->SetExplicitMinSize(BSize(B_SIZE_UNSET, 100));
+		fSavedListView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 160));
 
 		BScrollView* savedScroll = new BScrollView("savedScroll",
 			fSavedListView, 0, false, true);
@@ -1015,10 +1355,62 @@ InterfaceDetailView::_RebuildDeviceView()
 			.End();
 
 		_UpdateSavedButtons();
-		_RequestSavedNetworks();
 	}
 
-	builder.AddGlue();
+	BLayoutBuilder::Group<>(_AddTab(B_TRANSLATE("Status")))
+		.Add(grid)
+		.AddGlue();
+
+	if (showStaticIP) {
+		BLayoutBuilder::Group<>(_AddTab(B_TRANSLATE("IPv4")))
+			.Add(fStaticIPView)
+			.AddGlue();
+	}
+
+	if (isWiFi) {
+		fHotspotPage = new BGroupView(B_TRANSLATE("Hotspot"), B_VERTICAL);
+		fTabView->AddTab(fHotspotPage);
+		_RebuildHotspotTab();
+
+		_RequestSavedNetworks();
+		_RequestHotspotState();
+	}
+
+	if (fSelectedTab > 0 && fSelectedTab < fTabView->CountTabs())
+		fTabView->Select(fSelectedTab);
+}
+
+
+void
+InterfaceDetailView::_RebuildHotspotTab()
+{
+	if (fHotspotPage == NULL)
+		return;
+
+	for (int32 i = fHotspotPage->CountChildren(); i-- > 0;) {
+		BView* child = fHotspotPage->ChildAt(i);
+		fHotspotPage->RemoveChild(child);
+		delete child;
+	}
+	fHotspotStartButton = NULL;
+	fHotspotStopButton = NULL;
+
+	// Fresh layout, as in _Rebuild(): the old one still holds the glue.
+	BGroupLayout* layout = new BGroupLayout(B_VERTICAL);
+	fHotspotPage->SetLayout(layout);
+	layout->SetInsets(B_USE_DEFAULT_SPACING);
+	_AddHotspotSection(layout);
+	BLayoutBuilder::Group<>(layout).AddGlue();
+}
+
+
+BGroupLayout*
+InterfaceDetailView::_AddTab(const char* label)
+{
+	BGroupView* page = new BGroupView(label, B_VERTICAL);
+	page->GroupLayout()->SetInsets(B_USE_DEFAULT_SPACING);
+	fTabView->AddTab(page);
+	return page->GroupLayout();
 }
 
 
@@ -1050,6 +1442,75 @@ InterfaceDetailView::_HasSavedProfile(const BString& ssid) const
 			return true;
 	}
 	return false;
+}
+
+
+void
+InterfaceDetailView::RefreshWiFiNetworks(const char* devicePath)
+{
+	BString shownPath;
+	if (fMode != MODE_DEVICE || fWiFiListView == NULL
+		|| fDeviceInfo.FindString(kNMFieldPath, &shownPath) != B_OK
+		|| shownPath != devicePath) {
+		return;
+	}
+
+	NMBackend* backend = NMBackend::Instance();
+	BMessage networks;
+	if (backend == NULL
+		|| backend->GetWiFiNetworks(devicePath, &networks) != B_OK) {
+		return;
+	}
+
+	BString selectedSSID;
+	WiFiNetworkItem* selected = dynamic_cast<WiFiNetworkItem*>(
+		fWiFiListView->ItemAt(fWiFiListView->CurrentSelection()));
+	if (selected != NULL)
+		selectedSSID = selected->SSID();
+
+	BListItem* stale;
+	while ((stale = fWiFiListView->RemoveItem((int32)0)) != NULL)
+		delete stale;
+	_FillWiFiList(networks);
+
+	for (int32 i = 0; i < fWiFiListView->CountItems(); i++) {
+		WiFiNetworkItem* item = dynamic_cast<WiFiNetworkItem*>(
+			fWiFiListView->ItemAt(i));
+		if (item != NULL && selectedSSID.Length() > 0
+			&& item->SSID() == selectedSSID) {
+			fWiFiListView->Select(i);
+			break;
+		}
+	}
+	_UpdateWiFiButtons();
+}
+
+
+void
+InterfaceDetailView::_FillWiFiList(const BMessage& networks)
+{
+	int32 apCount = 0;
+	networks.FindInt32(kNMFieldAPCount, &apCount);
+	for (int32 i = 0; i < apCount; i++) {
+		char apName[32];
+		snprintf(apName, sizeof(apName), "ap_%d", (int)i);
+		BMessage apInfo;
+		if (networks.FindMessage(apName, &apInfo) != B_OK)
+			continue;
+
+		BString ssid;
+		if (apInfo.FindString(kNMFieldAPSSID, &ssid) != B_OK)
+			continue;
+		int32 strength = 0;
+		bool secured = false;
+		bool connected = false;
+		apInfo.FindInt32(kNMFieldAPStrength, &strength);
+		apInfo.FindBool(kNMFieldAPSecured, &secured);
+		apInfo.FindBool(kNMFieldAPConnected, &connected);
+
+		fWiFiListView->AddItem(new WiFiNetworkItem(ssid.String(),
+			strength, secured, connected, _HasSavedProfile(ssid)));
+	}
 }
 
 
@@ -1171,37 +1632,78 @@ InterfaceDetailView::_UpdateSavedButtons()
 }
 
 
+static const char*
+_VPNStateLabel(const BMessage& info)
+{
+	bool connected = false;
+	bool activating = false;
+	info.FindBool(kNMFieldVPNConnected, &connected);
+	info.FindBool(kNMFieldVPNActivating, &activating);
+	if (connected)
+		return B_TRANSLATE("Connected");
+	if (activating)
+		return B_TRANSLATE("Connecting" B_UTF8_ELLIPSIS);
+	return B_TRANSLATE("Disconnected");
+}
+
+
 void
 InterfaceDetailView::_RebuildVPNView()
 {
 	BString name, path;
 	bool connected = false;
+	bool activating = false;
 	fDeviceInfo.FindString(kNMFieldVPNName, &name);
 	fDeviceInfo.FindString(kNMFieldVPNPath, &path);
 	fDeviceInfo.FindBool(kNMFieldVPNConnected, &connected);
+	fDeviceInfo.FindBool(kNMFieldVPNActivating, &activating);
 
-	BString title(B_TRANSLATE("VPN: %name%"));
-	title.ReplaceFirst("%name%", name);
-	BStringView* titleView = new BStringView(NULL, title.String());
+	BStringView* titleView = new BStringView(NULL, name.String());
 	titleView->SetFont(be_bold_font);
 
 	BGridView* grid = new BGridView(B_USE_HALF_ITEM_SPACING,
 		B_USE_HALF_ITEM_SPACING);
 	fGridLayout = grid->GridLayout();
-	fGridLayout->AddView(new BStringView(NULL, B_TRANSLATE("Status:")), 0, 0);
-	BStringView* statusValue = new BStringView(NULL, connected
-		? B_TRANSLATE("Connected") : B_TRANSLATE("Disconnected"));
-	statusValue->SetFont(be_bold_font);
-	fGridLayout->AddView(statusValue, 1, 0);
+	int32 row = 0;
+	auto addRow = [&](const char* label, const char* value, bool bold) {
+		BStringView* valueView = new BStringView(NULL, value);
+		if (bold)
+			valueView->SetFont(be_bold_font);
+		fGridLayout->AddView(new BStringView(NULL, label), 0, row);
+		fGridLayout->AddView(valueView, 1, row);
+		row++;
+	};
+
+	addRow(B_TRANSLATE("Status:"), _VPNStateLabel(fDeviceInfo), true);
+	BString value;
+	if (fDeviceInfo.FindString(kNMFieldVPNType, &value) == B_OK)
+		addRow(B_TRANSLATE("Type:"), value, false);
+	if (fDeviceInfo.FindString(kNMFieldVPNServer, &value) == B_OK)
+		addRow(B_TRANSLATE("Server:"), value, false);
+	if (fDeviceInfo.FindString(kNMFieldVPNUser, &value) == B_OK)
+		addRow(B_TRANSLATE("User:"), value, false);
+	for (int32 i = 0;
+			fDeviceInfo.FindString(kNMFieldVPNAddress, i, &value) == B_OK; i++)
+		addRow(i == 0 ? B_TRANSLATE("Address:") : "", value, false);
+	for (int32 i = 0;
+			fDeviceInfo.FindString(kNMFieldVPNDNS, i, &value) == B_OK; i++)
+		addRow(i == 0 ? B_TRANSLATE("DNS:") : "", value, false);
+	bool autoconnect = false;
+	fDeviceInfo.FindBool(kNMFieldVPNAutoconnect, &autoconnect);
+	addRow(B_TRANSLATE("Connect automatically:"),
+		autoconnect ? B_TRANSLATE("Yes") : B_TRANSLATE("No"), false);
 
 	fVPNConnectButton = new BButton("vpnConnect", B_TRANSLATE("Connect"),
 		new BMessage(kMsgConnectVPN));
 	fVPNDisconnectButton = new BButton("vpnDisconnect",
 		B_TRANSLATE("Disconnect"), new BMessage(kMsgDisconnectVPN));
-	fVPNConnectButton->SetEnabled(!connected);
-	fVPNDisconnectButton->SetEnabled(connected);
+	fVPNRemoveButton = new BButton("vpnRemove", B_TRANSLATE("Remove"),
+		new BMessage(kMsgRemoveVPN));
+	fVPNConnectButton->SetEnabled(!connected && !activating);
+	fVPNDisconnectButton->SetEnabled(connected || activating);
 	fVPNConnectButton->SetTarget(this);
 	fVPNDisconnectButton->SetTarget(this);
+	fVPNRemoveButton->SetTarget(this);
 
 	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
 		.SetInsets(B_USE_WINDOW_SPACING)
@@ -1210,9 +1712,251 @@ InterfaceDetailView::_RebuildVPNView()
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 			.Add(fVPNConnectButton)
 			.Add(fVPNDisconnectButton)
+			.Add(fVPNRemoveButton)
 			.AddGlue()
 		.End()
 		.AddGlue();
+}
+
+
+void
+InterfaceDetailView::_RebuildWiFiSectionView()
+{
+	BStringView* titleView = new BStringView(NULL, B_TRANSLATE("Wi-Fi"));
+	titleView->SetFont(be_bold_font);
+
+	BGroupLayout* layout = (BGroupLayout*)GetLayout();
+	BLayoutBuilder::Group<>(layout)
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.Add(titleView);
+
+	BString path;
+	if (fDeviceInfo.FindString("path", 0, &path) != B_OK) {
+		layout->AddView(new BStringView(NULL,
+			B_TRANSLATE("No Wi-Fi adapter found")));
+		layout->AddItem(BSpaceLayoutItem::CreateGlue());
+		return;
+	}
+
+	BGridView* grid = new BGridView(B_USE_DEFAULT_SPACING,
+		B_USE_HALF_ITEM_SPACING);
+	BGridLayout* gridLayout = grid->GridLayout();
+	BString name, status;
+	for (int32 i = 0; fDeviceInfo.FindString("name", i, &name) == B_OK; i++) {
+		fDeviceInfo.FindString("status", i, &status);
+		BStringView* nameView = new BStringView(NULL, name);
+		nameView->SetFont(be_bold_font);
+		gridLayout->AddView(nameView, 0, i);
+		gridLayout->AddView(new BStringView(NULL, status), 1, i);
+	}
+	layout->AddView(grid);
+
+	BStringView* hint = new BStringView(NULL, B_TRANSLATE("Select an adapter "
+		"to see the networks in range."));
+	hint->SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		B_DARKEN_2_TINT));
+	layout->AddView(hint);
+
+	BLayoutBuilder::Group<>(layout)
+		.AddGroup(B_HORIZONTAL)
+			.Add(new BButton("joinOther",
+				B_TRANSLATE("Join other network" B_UTF8_ELLIPSIS),
+				new BMessage(kMsgJoinOtherWiFi)))
+			.AddGlue()
+		.End()
+		.AddGlue();
+}
+
+
+void
+InterfaceDetailView::_RebuildVPNSectionView()
+{
+	BStringView* titleView = new BStringView(NULL, B_TRANSLATE("VPN"));
+	titleView->SetFont(be_bold_font);
+
+	BGroupLayout* layout = (BGroupLayout*)GetLayout();
+	BLayoutBuilder::Group<>(layout)
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.Add(titleView);
+
+	int32 count = 0;
+	fDeviceInfo.FindInt32(kNMFieldVPNCount, &count);
+	if (count == 0) {
+		BStringView* empty = new BStringView(NULL,
+			B_TRANSLATE("No VPN connections. Import the configuration file "
+				"your VPN provider gave you."));
+		layout->AddView(empty);
+	} else {
+		BGridView* grid = new BGridView(B_USE_DEFAULT_SPACING,
+			B_USE_HALF_ITEM_SPACING);
+		BGridLayout* gridLayout = grid->GridLayout();
+		const char* headings[] = { B_TRANSLATE("Name"), B_TRANSLATE("Type"),
+			B_TRANSLATE("Status") };
+		for (int32 column = 0; column < 3; column++) {
+			BStringView* heading = new BStringView(NULL, headings[column]);
+			heading->SetFont(be_bold_font);
+			gridLayout->AddView(heading, column, 0);
+		}
+		for (int32 i = 0; i < count; i++) {
+			char field[32];
+			snprintf(field, sizeof(field), "vpn_%" B_PRId32, i);
+			BMessage info;
+			if (fDeviceInfo.FindMessage(field, &info) != B_OK)
+				continue;
+			BString name, type;
+			info.FindString(kNMFieldVPNName, &name);
+			info.FindString(kNMFieldVPNType, &type);
+			gridLayout->AddView(new BStringView(NULL, name), 0, i + 1);
+			gridLayout->AddView(new BStringView(NULL, type), 1, i + 1);
+			gridLayout->AddView(new BStringView(NULL, _VPNStateLabel(info)),
+				2, i + 1);
+		}
+		layout->AddView(grid);
+	}
+
+	BLayoutBuilder::Group<>(layout)
+		.AddGroup(B_HORIZONTAL)
+			.Add(new BButton("importVPN",
+				B_TRANSLATE("Import VPN" B_UTF8_ELLIPSIS),
+				new BMessage(kMsgImportVPN)))
+			.AddGlue()
+		.End()
+		.AddGlue();
+}
+
+
+void
+InterfaceDetailView::_AddHotspotSection(BGroupLayout* layout)
+{
+	BLayoutBuilder::Group<> builder(layout);
+
+	bool active = false;
+	bool canStart = true;
+	fHotspotState.FindBool(kNMFieldHotspotActive, &active);
+	fHotspotState.FindBool(kNMFieldHotspotCanStart, &canStart);
+
+	if (active) {
+		BString ssid, password;
+		fHotspotState.FindString(kNMFieldHotspotSSID, &ssid);
+		fHotspotState.FindString(kNMFieldHotspotPassword, &password);
+
+		BGridView* grid = new BGridView(B_USE_HALF_ITEM_SPACING,
+			B_USE_HALF_ITEM_SPACING);
+		BGridLayout* layout = grid->GridLayout();
+		layout->AddView(new BStringView(NULL, B_TRANSLATE("Status:")), 0, 0);
+		BStringView* statusValue = new BStringView(NULL,
+			B_TRANSLATE("Active"));
+		statusValue->SetFont(be_bold_font);
+		layout->AddView(statusValue, 1, 0);
+		layout->AddView(new BStringView(NULL, B_TRANSLATE("Name:")), 0, 1);
+		BStringView* ssidValue = new BStringView(NULL, ssid.String());
+		ssidValue->SetFont(be_bold_font);
+		layout->AddView(ssidValue, 1, 1);
+		layout->AddView(new BStringView(NULL, B_TRANSLATE("Password:")),
+			0, 2);
+		BStringView* passwordValue = new BStringView(NULL,
+			password.String());
+		passwordValue->SetFont(be_bold_font);
+		layout->AddView(passwordValue, 1, 2);
+
+		fHotspotStopButton = new BButton("stopHotspot",
+			B_TRANSLATE("Stop"), new BMessage(kMsgStopHotspot));
+		fHotspotStopButton->SetTarget(this);
+
+		builder.Add(grid)
+			.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+				.Add(fHotspotStopButton)
+				.AddGlue()
+			.End();
+	} else {
+		fHotspotStartButton = new BButton("startHotspot",
+			B_TRANSLATE("Turn On Wi-Fi Hotspot"),
+			new BMessage(kMsgStartHotspot));
+		fHotspotStartButton->SetTarget(this);
+		fHotspotStartButton->SetEnabled(canStart);
+		builder.Add(fHotspotStartButton);
+	}
+}
+
+
+void
+InterfaceDetailView::_RequestHotspotState()
+{
+	BString devicePath;
+	fDeviceInfo.FindString(kNMFieldPath, &devicePath);
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL || devicePath.IsEmpty())
+		return;
+	backend->GetHotspotStateAsync(devicePath.String(),
+		fHotspotSettings.ProfileUUID().String(), BMessenger(this),
+		kMsgHotspotStateReply);
+}
+
+
+void
+InterfaceDetailView::_ShowHotspotError(BMessage* message)
+{
+	int32 status = B_ERROR;
+	message->FindInt32("status", &status);
+	BString reason;
+	message->FindString("reason", &reason);
+	BString text(B_TRANSLATE("Could not update the hotspot."));
+	if (status == B_NOT_SUPPORTED)
+		text = B_TRANSLATE("This Wi-Fi adapter cannot start a hotspot.");
+	else if (status == B_BAD_VALUE)
+		text = B_TRANSLATE("Hotspot name and password are required; "
+			"password must be at least 8 characters.");
+	else if (!reason.IsEmpty())
+		text << "\n" << reason;
+	BAlert* alert = new BAlert(B_TRANSLATE("Hotspot"), text.String(),
+		B_TRANSLATE("OK"));
+	alert->Go(NULL);
+}
+
+
+void
+InterfaceDetailView::_StartHotspot(const BString& ssid, const BString& password)
+{
+	BString devicePath;
+	fDeviceInfo.FindString(kNMFieldPath, &devicePath);
+	if (devicePath.IsEmpty() || ssid.IsEmpty() || password.Length() < 8)
+		return;
+
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return;
+
+	status_t status = backend->StartHotspotAsync(devicePath.String(),
+		fHotspotSettings.ProfileUUID().String(), ssid.String(),
+		password.String(), BMessenger(this), kMsgHotspotActionResult);
+	if (status != B_OK) {
+		BMessage failure(kMsgHotspotActionResult);
+		failure.AddInt32("status", (int32)status);
+		failure.AddString("reason", strerror(status));
+		BMessenger(this).SendMessage(&failure);
+	}
+}
+
+
+void
+InterfaceDetailView::_StopHotspot()
+{
+	if (fHotspotSettings.ProfileUUID().IsEmpty())
+		return;
+
+	NMBackend* backend = NMBackend::Instance();
+	if (backend == NULL)
+		return;
+
+	status_t status = backend->StopHotspotAsync(
+		fHotspotSettings.ProfileUUID().String(), BMessenger(this),
+		kMsgHotspotActionResult);
+	if (status != B_OK) {
+		BMessage failure(kMsgHotspotActionResult);
+		failure.AddInt32("status", (int32)status);
+		failure.AddString("reason", strerror(status));
+		BMessenger(this).SendMessage(&failure);
+	}
 }
 
 

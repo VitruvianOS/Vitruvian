@@ -85,6 +85,9 @@ public:
 			status_t			GetBrightness(float* brightness);
 			status_t			SetBrightness(float brightness);
 
+			status_t			GetTemperature(float* kelvin);
+			status_t			SetTemperature(float kelvin);
+
 private:
 	// Forbidden and deprecated methods
 								BScreen(const BScreen& other);

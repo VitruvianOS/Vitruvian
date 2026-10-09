@@ -85,12 +85,15 @@ public:
 	virtual	status_t			SetMode(const display_mode& mode);
 	virtual	void				GetMode(display_mode* mode);
 	virtual	status_t			GetPreferredMode(display_mode* mode);
+			// Same mode policy, no connector probe; for the poll.
+			status_t			GetPreferredModeCurrent(display_mode* mode);
 	virtual	int32				PanelOrientation() const;
 	virtual	status_t			SetPanelOrientation(int32 orientation);
 	virtual	int32				PanelReflection() const;
 	virtual	status_t			SetPanelReflection(int32 reflection);
 
 	virtual status_t			GetDeviceInfo(accelerant_device_info* info);
+	virtual status_t			GetMonitorInfo(monitor_info* info);
 	virtual status_t			GetFrameBufferConfig(
 									frame_buffer_config& config);
 
@@ -114,6 +117,10 @@ public:
 
 	virtual status_t			SetBrightness(float brightness);
 	virtual status_t			GetBrightness(float* brightness);
+
+	virtual status_t			SetTemperature(float kelvin);
+	virtual status_t			GetTemperature(float* kelvin);
+	virtual status_t			GetConnectorName(BString& name);
 
 	virtual	RenderingBuffer*	FrontBuffer() const;
 	virtual	RenderingBuffer*	BackBuffer() const;
@@ -147,11 +154,17 @@ private:
 	static	int32				_EventThreadEntry(void* data);
 			void				_EventThreadMain();
 			void				_RestoreDisplay();
+			void				_RepaintAfterDPMS();
 			void				_HandleHotplug();
+			bool				_RescanConnectors();
+			bool				_CheckResume();
+			void				_OnResume();
 			void				_DrainPendingFlip();
 			void				_ScheduleResize();
 	static	int32				_ResizeThreadEntry(void* data);
 			void				_ApplyResize();
+			status_t			_GetPreferredMode(display_mode* mode,
+									bool probe);
 	static	void				_FillModeInfo(display_mode& mode,
 									const drmModeModeInfo& m);
 
@@ -166,6 +179,10 @@ private:
 		void				_BlendCursor(RenderingBuffer* srcBg,
 								RenderingBuffer* dst,
 								IntRect area) const;
+
+		virtual	void				_CopyToFront(uint8* src, uint32 srcBPR,
+									int32 x, int32 y,
+									int32 right, int32 bottom) const;
 
 		void				_PushCursorTrackDirty(int32 oldX, int32 oldY,
 								int32 newX, int32 newY);
@@ -224,11 +241,18 @@ private:
 			thread_id			fResizeThread;
 			std::atomic<bool>	fResizeBusy;
 			std::atomic<bool>	fResizePending;
+			bigtime_t			fLastModeCheck;
+			// Written from SetMode() (app thread) and the event/resize
+			// threads; the poll reads them without the mode lock.
+			std::atomic<uint32_t>	fLastPreferredWidth;
+			std::atomic<uint32_t>	fLastPreferredHeight;
+			std::atomic<bool>	fUserSetMode;
 			sem_id				fSessionSem;
 
 			struct udev*		fUdev;
 			struct udev_monitor* fUdevMonitor;
 			int					fUdevFd;
+			bigtime_t			fLastSuspendCheck;
 
 #ifdef HAVE_GBM
 			struct gbm_device*  fGbmDevice;
@@ -255,6 +279,10 @@ private:
 			uint32				fDpmsState;
 
 			struct backlight*	fBacklight;
+
+			float				fTemperature;
+			// Cleared when gamma_size is 0 or drmModeCrtcSetGamma fails.
+			bool				fTemperatureSupported;
 
 			bool				fAtomicSupported;
 			uint32_t			fPrimaryPlaneId;

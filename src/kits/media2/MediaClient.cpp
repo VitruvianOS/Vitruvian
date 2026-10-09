@@ -13,6 +13,7 @@
 
 #include <ObjectList.h>
 
+#include <pipewire/loop.h>
 #include <pipewire/stream.h>
 
 #include "PipeWireBackend.h"
@@ -44,15 +45,23 @@ struct BMediaClient::Impl {
 
 	bool				needsFilter;
 
+	// Deferred fault handling: state_changed runs inside the stream's own emit, where destroying the
+	// stream would be a use-after-free, so it only flags fStreamFault and wakes this event source.
+	pw_loop*			faultLoop;
+	spa_source*			faultEvent;
+
 	static const pw_stream_events kStreamEvents;
 	static void _OnProcess(void* userdata);
 	static void _OnStateChanged(void* userdata, enum pw_stream_state old,
 		enum pw_stream_state state, const char* error);
+	static void _OnFaultEvent(void* userdata, uint64_t count);
 };
 
 
 const pw_stream_events BMediaClient::Impl::kStreamEvents = {
-	PW_VERSION_STREAM_EVENTS,
+	.version = PW_VERSION_STREAM_EVENTS,
+	.state_changed = &BMediaClient::Impl::_OnStateChanged,
+	.process = &BMediaClient::Impl::_OnProcess,
 };
 
 
@@ -73,6 +82,8 @@ BMediaClient::BMediaClient(const char* name, media_client_kinds kinds)
 	fImpl->outputs      = new(std::nothrow) OutputList();
 	fImpl->controllable = NULL;
 	fImpl->needsFilter  = (kinds & B_MEDIA_FILTER) == B_MEDIA_FILTER;
+	fImpl->faultLoop    = NULL;
+	fImpl->faultEvent   = NULL;
 }
 
 
@@ -258,6 +269,14 @@ BMediaClient::Start()
 	if (result != B_OK)
 		return result;
 
+	if (fImpl->faultEvent == NULL) {
+		backend->Lock();
+		fImpl->faultLoop = backend->GetMainLoop();
+		fImpl->faultEvent = pw_loop_add_event(fImpl->faultLoop,
+			&Impl::_OnFaultEvent, fImpl);
+		backend->Unlock();
+	}
+
 	fImpl->running = true;
 	HandleStart(0);
 	return B_OK;
@@ -269,8 +288,23 @@ BMediaClient::Stop()
 {
 	if (fImpl->running)
 		HandleStop(0);
-	_StopConnections();
+	// Clear before tearing streams down: destroying a pw_stream can reenter state_changed, which
+	// uses IsStarted() to tell an intentional stop from a graph-side drop.
 	fImpl->running = false;
+
+	if (fImpl->faultEvent != NULL) {
+		PipeWireBackend* backend = PipeWireBackend::GetInstance();
+		if (backend != NULL) {
+			// Locking waits out any fault-event dispatch in flight before the source is destroyed.
+			backend->Lock();
+			pw_loop_destroy_source(fImpl->faultLoop, fImpl->faultEvent);
+			backend->Unlock();
+		}
+		fImpl->faultEvent = NULL;
+		fImpl->faultLoop = NULL;
+	}
+
+	_StopConnections();
 	return B_OK;
 }
 
@@ -297,6 +331,12 @@ BMediaClient::_StartConnections(void*)
 
 void
 BMediaClient::_StopConnections()
+{
+}
+
+
+void
+BMediaClient::_StreamFault(BMediaConnection*)
 {
 }
 
@@ -398,6 +438,46 @@ BMediaClient::Impl::_OnStateChanged(void* userdata, enum pw_stream_state,
 	enum pw_stream_state state, const char*)
 {
 	BMediaConnection* conn = (BMediaConnection*)userdata;
-	if (conn != NULL && state == PW_STREAM_STATE_UNCONNECTED)
-		conn->Disconnected();
+	if (conn == NULL)
+		return;
+
+	if (state != PW_STREAM_STATE_UNCONNECTED && state != PW_STREAM_STATE_ERROR)
+		return;
+
+	conn->Disconnected();
+
+	// A drop while running means the far end went away, e.g. an ALSA reset across a suspend; Stop() clears
+	// running first. Rebuilding here would be a use-after-free, so flag it for _OnFaultEvent().
+	BMediaClient* client = conn->Client();
+	if (client == NULL || !client->IsStarted())
+		return;
+
+	conn->fStreamFault.store(true);
+	if (client->fImpl->faultEvent != NULL)
+		pw_loop_signal_event(client->fImpl->faultLoop, client->fImpl->faultEvent);
+}
+
+
+void
+BMediaClient::Impl::_OnFaultEvent(void* userdata, uint64_t)
+{
+	Impl* impl = (Impl*)userdata;
+	if (impl == NULL || impl->owner == NULL || !impl->running)
+		return;
+
+	// Re-check everything: this runs asynchronously, so the client may have stopped, restarted or reconnected.
+	for (int32 i = 0; i < impl->outputs->CountItems(); i++) {
+		BMediaOutput* output = impl->outputs->ItemAt(i);
+		if (output != NULL && output->fStreamFault.exchange(false)
+				&& impl->running) {
+			impl->owner->_StreamFault(output);
+		}
+	}
+	for (int32 i = 0; i < impl->inputs->CountItems(); i++) {
+		BMediaInput* input = impl->inputs->ItemAt(i);
+		if (input != NULL && input->fStreamFault.exchange(false)
+				&& impl->running) {
+			impl->owner->_StreamFault(input);
+		}
+	}
 }

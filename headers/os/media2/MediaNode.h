@@ -39,6 +39,7 @@ public:
 private:
 			status_t				_StartConnections(void* backend);
 			void					_StopConnections();
+			void					_StreamFault(BMediaConnection* connection) override;
 			status_t				_CreateLink(BMediaOutput* output,
 										BMediaInput* input, pw_core* core);
 			void					_DestroyLinks();

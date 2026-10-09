@@ -40,6 +40,7 @@ All rights reserved.
 #include <strings.h>
 
 #include <AppFileInfo.h>
+#include <Alert.h>
 #include <Autolock.h>
 #include <Bitmap.h>
 #include <Catalog.h>
@@ -48,6 +49,8 @@ All rights reserved.
 #include <Directory.h>
 #include <Dragger.h>
 #include <File.h>
+#include <LaunchDaemonDefs.h>
+#include <kernel/util/KMessage.h>
 #include <FindDirectory.h>
 #include <IconUtils.h>
 #include <Locale.h>
@@ -58,9 +61,7 @@ All rights reserved.
 #include <Roster.h>
 
 #include <DeskbarPrivate.h>
-#include <LaunchDaemonDefs.h>
 #include <RosterPrivate.h>
-#include <kernel/util/KMessage.h>
 #include "tracker_private.h"
 
 #include "BarView.h"
@@ -73,6 +74,10 @@ All rights reserved.
 #include "Switcher.h"
 
 #include "icons.h"
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "BarApp"
 
 
 BLocker TBarApp::sSubscriberLock;
@@ -690,26 +695,61 @@ TBarApp::MessageReceived(BMessage* message)
 			break;
 
 		case kSuspendSystem:
-			// TODO: Call BRoster?
+		case kHibernateSystem:
+		{
+			BRoster roster;
+			BRoster::Private rosterPrivate(roster);
+			status_t error = message->what == kSuspendSystem
+				? rosterPrivate.Suspend()
+				: rosterPrivate.Hibernate();
+			if (error != B_OK)
+				fprintf(stderr, "Sleep request failed: %s\n",
+					strerror(error));
 			break;
+		}
+
+		case kLockScreen:
+		{
+			// Ask janus to lock; it checks for a password, locks
+			// app_server and starts the unlock app.
+			port_id janus = find_port("system:launch_daemon");
+			if (janus < 0) {
+				BAlert* alert = new BAlert(B_TRANSLATE("Lock screen"),
+					B_TRANSLATE("V\\OS screen locking is unavailable "
+						"(janus is not running)."),
+					B_TRANSLATE("OK"));
+				alert->Go();
+				break;
+			}
+			BPrivate::KMessage req(BPrivate::B_JANUS_LOCK_SESSION);
+			BPrivate::KMessage reply;
+			status_t error = req.SendTo(janus, -1, &reply, 2000000LL,
+				2000000LL, getpid());
+			if (error != B_OK || reply.What() != (uint32)B_OK) {
+				bool cannotLock
+					= reply.What() == (uint32)B_NOT_ALLOWED;
+				const char* text = cannotLock
+					? B_TRANSLATE("The screen can only be locked by an "
+						"account with a password. This account has none, "
+						"or this is the live session.")
+					: B_TRANSLATE("Could not lock the screen.");
+				BAlert* alert = new BAlert(B_TRANSLATE("Lock screen"),
+					text, B_TRANSLATE("OK"));
+				alert->Go();
+			}
+			break;
+		}
 
 		case kLogOutUser:
 		{
-			// Send B_JANUS_LOGOUT (KMessage) to janus. Janus verifies
-			// sender_uid matches the session uid; if a system shutdown
-			// is in flight, the request is declined.
-			port_id janusPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
-			if (janusPort < 0) {
-				fprintf(stderr, "Deskbar: janus port not found; can't "
-					"log out\n");
-				break;
-			}
-			BPrivate::KMessage msg(BPrivate::B_JANUS_LOGOUT);
-			// Do NOT wait for reply — janus's handler blocks for
-			// several seconds SIGTERMing the post-auth chain (which
-			// includes us). Waiting here would freeze the Deskbar
-			// UI until we're SIGKILLed.
-			msg.SendTo(janusPort, -1, (BPrivate::KMessage*)NULL);
+			// Same path as shut down and restart: the registrar quits the
+			// apps with the status window, then asks janus to end the
+			// session.
+			BRoster roster;
+			BRoster::Private rosterPrivate(roster);
+			status_t error = rosterPrivate.LogOut(false);
+			if (error != B_OK)
+				fprintf(stderr, "Log out failed: %s\n", strerror(error));
 			break;
 		}
 

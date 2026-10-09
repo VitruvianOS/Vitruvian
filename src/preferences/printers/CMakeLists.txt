@@ -1,16 +1,12 @@
 Application(Printers
 	SOURCES
-	AddPrinterDialog.cpp
-	Globals.cpp
-	JobListView.cpp
-	PrinterListView.cpp
-	Printers.cpp
-	PrintersWindow.cpp
-	ScreenSettings.cpp
-	SpoolFolder.cpp
-	TestPageView.cpp
-	TransportMenu.cpp
-	LIBS translation localestub
+		AddPrinterDialog.cpp
+		PrintersApp.cpp
+		PrintersWindow.cpp
+		PrinterOptionsDialog.cpp
+		PrinterWorker.cpp
+	LIBS printcups ${CUPS_LIBRARIES} ${CAIRO_LIBRARIES} localestub
 	RDEF Printers.rdef
 )
+UsePrivateHeaders(Printers print interface support)
 DoCatalogs("x-vnd.Be-PRNT" preferences/printers)

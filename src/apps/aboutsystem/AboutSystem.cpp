@@ -1111,10 +1111,20 @@ SysInfoView::_GetCPUInfo()
 
 	delete[] topology;
 
+	// Either part can be unknown (ARM has no vendor id, for one).
 	BString cpuType;
-	cpuType << get_cpu_vendor_string(cpuVendor) << " "
-		<< get_cpu_model_string(platform, cpuVendor, cpuModel)
-		<< " @ " << _GetCPUFrequency();
+	const char* vendor = get_cpu_vendor_string(cpuVendor);
+	const char* model = get_cpu_model_string(platform, cpuVendor, cpuModel);
+	if (vendor != NULL)
+		cpuType << vendor;
+	if (model != NULL) {
+		if (!cpuType.IsEmpty())
+			cpuType << " ";
+		cpuType << model;
+	}
+	if (!cpuType.IsEmpty())
+		cpuType << " ";
+	cpuType << "@ " << _GetCPUFrequency();
 
 	return cpuType;
 }
@@ -1675,6 +1685,18 @@ AboutView::_CreateCreditsView()
 		"Dario Casalinuovo\n"
 		"Alberto Calamari\n"
 		"Maxim Kutnij\n"
+		"\n");
+
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuOrangeColor);
+	fCreditsView->Insert(B_TRANSLATE("Contributors:\n"));
+
+	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
+	fCreditsView->Insert(
+		"Ivan Gualandri\n"
+		"Vladislav Janeček\n"
+		"Adam Milner\n"
+		"Mas Ahmad Muhammad\n"
+		"Angelo Scarnà\n"
 		"\n");
 
 	// copyrights for various projects we use

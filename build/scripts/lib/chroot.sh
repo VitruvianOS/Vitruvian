@@ -21,12 +21,17 @@ qemu_eject() {
         return 0
     fi
     _qemu_name="$(arch_to_qemu_user "$_target_arch")"
-    sudo rm -f "$_chroot_dir/usr/bin/$_qemu_name" 2>/dev/null || true
+    sudo rm -f "$_chroot_dir/usr/bin/$_qemu_name" \
+        "$_chroot_dir/usr/bin/${_qemu_name%-static}" 2>/dev/null || true
 }
 
 # Debian mirror used by debootstrap and apt inside the chroot. Override
 # by exporting DEBIAN_MIRROR before invoking setupenv / bake.
 : "${DEBIAN_MIRROR:=http://deb.debian.org/debian/}"
+
+# Debian suite bootstrapped for the chroot and every board rootfs; trixie
+# is the only suite proven against so far.
+: "${VOS_BASE_SUITE:=trixie}"
 
 # Persistent .deb cache shared across chroot regenerations. Path is per
 # arch (laid down by setupenv); same arch == same cache.
@@ -58,6 +63,26 @@ chroot_mount() {
     sudo cp -L /etc/resolv.conf "$_chroot_dir/etc/resolv.conf"
 }
 
+# chroot_isolated ROOT CMD [ARGS...]
+# Runs CMD chrooted into ROOT with its own network, hostname, IPC, PID and mount namespaces and a
+# read-only /proc/sys and /sys, so maintainer scripts cannot touch the host. /dev stays the host's.
+_CHROOT_ISOLATED_INNER='r="$1"; shift
+ip link set lo up 2>/dev/null
+mount -t proc proc "$r/proc" || exit 1
+mount --bind "$r/proc/sys" "$r/proc/sys" || exit 1
+mount -o remount,bind,ro "$r/proc/sys" || exit 1
+if mountpoint -q "$r/sys"; then umount -R "$r/sys" || exit 1; fi
+mount -t sysfs -o ro sysfs "$r/sys" || exit 1
+exec chroot "$r" "$@"'
+
+chroot_isolated() {
+    _ci_root="$1"
+    shift
+    sudo mkdir -p "$_ci_root/proc" "$_ci_root/sys"
+    sudo unshare --net --uts --ipc --pid --fork --mount --propagation private \
+        /bin/sh -c "$_CHROOT_ISOLATED_INNER" sh "$_ci_root" "$@"
+}
+
 chroot_umount() {
     _chroot_dir="$1"
     [ -d "$_chroot_dir" ] || return 0
@@ -67,6 +92,38 @@ chroot_umount() {
     sudo umount -l "$_chroot_dir/sys" 2>/dev/null || true
     #sudo umount -l "$_chroot_dir/dev/pts" 2>/dev/null || true
     sudo umount -l "$_chroot_dir/dev" 2>/dev/null || true
+}
+
+# create_iso purges the -dev packages from the chroot it squashes; put
+# back whatever is missing before compiling. The .deb cache makes it an unpack.
+chroot_restore_dev_packages() {
+    _crd_basedir="$1"
+    _crd_arch="$2"
+    _crd_dir="$_crd_basedir/image_tree/chroot"
+    [ -d "$_crd_dir" ] || return 0
+    # Installed names plus what they provide (libfreetype6-dev is only provided).
+    _crd_have="$(dpkg-query --admindir="$_crd_dir/var/lib/dpkg" -W \
+        -f='${db:Status-Abbrev} ${Package},${Provides}\n' 2>/dev/null \
+        | awk '$1 == "ii" { sub(/^ii +/, ""); n = split($0, a, ","); \
+            for (i = 1; i <= n; i++) { sub(/^ +/, "", a[i]); sub(/ .*/, "", a[i]); \
+            if (a[i] != "") print a[i] } }')"
+    _crd_missing=""
+    for _p in $(get_dev_packages "$_crd_arch"); do
+        printf '%s\n' "$_crd_have" | grep -qx "$_p" || _crd_missing="$_crd_missing $_p"
+    done
+    [ -n "$_crd_missing" ] || return 0
+    log_step "Reinstalling build packages:$_crd_missing"
+    qemu_inject "$_crd_dir" "$_crd_arch"
+    chroot_mount "$_crd_dir"
+    chroot_mount_deb_cache "$_crd_dir" "$(chroot_cache_dir "$_crd_basedir")"
+    sudo chroot "$_crd_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 \
+        apt-get install -y --download-only --no-install-recommends $_crd_missing \
+        || die "build package download failed"
+    chroot_isolated "$_crd_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 \
+        apt-get install -y --no-install-recommends $_crd_missing \
+        || die "build package reinstall failed"
+    chroot_umount "$_crd_dir"
+    qemu_eject "$_crd_dir" "$_crd_arch"
 }
 
 # Bind the persistent .deb cache into the chroot. Idempotent.
@@ -85,6 +142,10 @@ chroot_mount_deb_cache() {
     sudo mkdir -p "$_chroot_dir/etc/apt/apt.conf.d"
     echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
         | sudo tee "$_chroot_dir/etc/apt/apt.conf.d/99-keep-debs" >/dev/null
+    cat <<'EOF' | sudo tee "$_chroot_dir/etc/apt/apt.conf.d/90-vos-gzip-indexes" >/dev/null
+Acquire::GzipIndexes "true";
+Acquire::CompressionTypes::Order { "gz"; };
+EOF
 }
 
 chroot_create() {
@@ -94,17 +155,7 @@ chroot_create() {
     _chroot_dir="$_basedir/image_tree/chroot"
 
     if [ -d "$_chroot_dir" ]; then
-        _ts=$(date +%Y%m%d-%H%M%S)
-        _backup="$_chroot_dir.old-$_ts"
-        log_info "Found existing chroot, moving to $_backup"
-        chroot_umount "$_chroot_dir"
-        # Keep only the most recent backup — older ones balloon disk usage.
-        for _stale in "$_chroot_dir".old-*; do
-            [ -e "$_stale" ] || continue
-            log_info "Removing stale chroot backup: $_stale"
-            sudo rm -rf "$_stale"
-        done
-        sudo mv "$_chroot_dir" "$_backup"
+        die "A chroot already exists at $_chroot_dir. Run bake.sh --regenerate-chroot to recreate it."
     fi
 
     mkdir -p "$_basedir/image_tree"
@@ -115,16 +166,16 @@ chroot_create() {
     log_info "Using package cache: $_cache_dir (mirror: $DEBIAN_MIRROR)"
 
     if is_cross_build "$_arch"; then
-        log_step "Bootstrapping Debian trixie ($_deb_arch) [foreign]..."
+        log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch) [foreign]..."
         sudo debootstrap --arch="$_deb_arch" --variant=minbase --foreign \
             --cache-dir="$_debootstrap_cache" \
-            trixie "$_chroot_dir" "$DEBIAN_MIRROR"
+            "$VOS_BASE_SUITE" "$_chroot_dir" "$DEBIAN_MIRROR"
         qemu_inject "$_chroot_dir" "$_arch"
     else
-        log_step "Bootstrapping Debian trixie ($_deb_arch)..."
+        log_step "Bootstrapping Debian $VOS_BASE_SUITE ($_deb_arch)..."
         sudo debootstrap --arch="$_deb_arch" --variant=minbase \
             --cache-dir="$_debootstrap_cache" \
-            trixie "$_chroot_dir" "$DEBIAN_MIRROR"
+            "$VOS_BASE_SUITE" "$_chroot_dir" "$DEBIAN_MIRROR"
     fi
 
     trap 'chroot_umount "$_chroot_dir"' EXIT
@@ -136,10 +187,35 @@ chroot_create() {
     # pointing at the mirror, but make it explicit and overridable.
     : "${DEBIAN_SECURITY_MIRROR:=http://security.debian.org/debian-security}"
     sudo tee "$_chroot_dir/etc/apt/sources.list" >/dev/null <<EOF
-deb $DEBIAN_MIRROR trixie main contrib non-free non-free-firmware
-deb $DEBIAN_MIRROR trixie-updates main contrib non-free non-free-firmware
-deb $DEBIAN_SECURITY_MIRROR trixie-security main contrib non-free non-free-firmware
+deb $DEBIAN_MIRROR $VOS_BASE_SUITE main contrib non-free non-free-firmware
+deb $DEBIAN_MIRROR $VOS_BASE_SUITE-updates main contrib non-free non-free-firmware
+deb $DEBIAN_SECURITY_MIRROR $VOS_BASE_SUITE-security main contrib non-free non-free-firmware
 EOF
+
+    # Written only when a key is supplied: an unverifiable repo fails the
+    # whole apt update, taking Debian access down with it.
+    : "${VOS_REPO_URL:=https://repo.v-os.dev}"
+    if [ -n "${VOS_REPO_KEY:-}" ] && [ -f "$VOS_REPO_KEY" ]; then
+        # No default suite on purpose. The retired trixie-testing sat here
+        # for months and kept resolving to a suite that no longer exists;
+        # with four suites now, defaulting to any one of them is the same
+        # bug one rename later.
+        [ -n "${VOS_REPO_SUITE:-}" ] || die "VOS_REPO_SUITE is unset and a repo key was supplied; name the suite to install from (trixie, testing, trixie-nightly, testing-nightly)"
+        sudo install -d -m 755 "$_chroot_dir/etc/apt/keyrings"
+        sudo install -m 644 "$VOS_REPO_KEY" \
+            "$_chroot_dir/etc/apt/keyrings/vitruvian-archive-keyring.asc"
+        sudo install -d -m 755 "$_chroot_dir/etc/apt/sources.list.d"
+        sudo tee "$_chroot_dir/etc/apt/sources.list.d/vitruvian.sources" >/dev/null <<VOSEOF
+Types: deb
+URIs: $VOS_REPO_URL
+Suites: $VOS_REPO_SUITE
+Components: main
+Signed-By: /etc/apt/keyrings/vitruvian-archive-keyring.asc
+VOSEOF
+        log_info "VitruvianOS repo enabled: $VOS_REPO_URL $VOS_REPO_SUITE"
+    else
+        log_warn "VOS_REPO_KEY unset or missing; image will NOT see the VitruvianOS repo"
+    fi
 
     log_step "Verifying mount points before second-stage..."
     log_info "Checking proc: mountpoint=$(mountpoint -q "$_chroot_dir/proc" 2>/dev/null && echo yes || echo no), stat=$([ -f "$_chroot_dir/proc/1/stat" ] && echo exists || echo missing)"
@@ -154,8 +230,12 @@ EOF
     mountpoint -q "$_chroot_dir/dev" || die "dev mount failed"
 
     if is_cross_build "$_arch"; then
+        # The second stage unpacks from /var/cache/apt/archives, which is
+        # bound to $_cache_dir/archives; debootstrap cached elsewhere.
+        sudo sh -c 'cp -n "$1"/*.deb "$2"/ 2>/dev/null || true' _ \
+            "$_debootstrap_cache" "$_cache_dir/archives"
         log_step "Running debootstrap second stage..."
-        sudo chroot "$_chroot_dir" /debootstrap/debootstrap --second-stage
+        chroot_isolated "$_chroot_dir" /debootstrap/debootstrap --second-stage
         log_step "Re-mounting after second-stage..."
         chroot_mount "$_chroot_dir"
     fi
@@ -185,9 +265,19 @@ EOF
     _dev_pkgs="$(get_dev_packages "$_arch")"
 
     log_step "Installing packages..."
-    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive /bin/bash -c "\
+    # dpkg's per-file fsyncs are pure overhead on a chroot that gets
+    # discarded; opt-in so it is never silently on for a local tree.
+    if [ "${VOS_UNSAFE_IO:-0}" = 1 ]; then
+        sudo install -d -m 755 "$_chroot_dir/etc/dpkg/dpkg.cfg.d"
+        printf 'force-unsafe-io\n' \
+          | sudo tee "$_chroot_dir/etc/dpkg/dpkg.cfg.d/vos-build-unsafe-io" >/dev/null
+    fi
+    # Download with the network, install isolated: cups-pdf's postinst ran lpadmin against the host's cupsd.
+    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "\
 echo 'vitruvian' > /etc/hostname && \
-apt update && apt install -y --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES && \
+apt update && apt install -y --download-only --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES"
+    chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "\
+apt install -y --no-install-recommends $_base_pkgs $_dev_pkgs \$DEBUG_PACKAGES && \
 echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \
 exit"
 
@@ -204,24 +294,15 @@ chroot_regenerate() {
     _arch="$2"
     _chroot_dir="$_basedir/image_tree/chroot"
 
-    if [ ! -d "$_chroot_dir" ]; then
-        log_info "No existing chroot at $_chroot_dir, creating fresh."
-        chroot_create "$_basedir" "$_arch"
-        return
+    if [ -d "$_chroot_dir" ]; then
+        log_step "Regenerating chroot..."
+        chroot_umount "$_chroot_dir"
+        # A bind mount still attached would let rm reach the host.
+        if findmnt -rn -o TARGET | grep -qF "$_chroot_dir/"; then
+            die "Still mounted under $_chroot_dir; unmount it and retry."
+        fi
+        sudo rm -rf --one-file-system "$_chroot_dir"
     fi
-
-    log_step "Regenerating chroot..."
-    chroot_umount "$_chroot_dir"
-
-    _ts=$(date +%Y%m%d-%H%M%S)
-    _backup="$_chroot_dir.old-$_ts"
-    # Keep only the most recent backup.
-    for _stale in "$_chroot_dir".old-*; do
-        [ -e "$_stale" ] || continue
-        log_info "Removing stale chroot backup: $_stale"
-        sudo rm -rf "$_stale"
-    done
-    sudo mv "$_chroot_dir" "$_backup"
 
     chroot_create "$_basedir" "$_arch"
 }

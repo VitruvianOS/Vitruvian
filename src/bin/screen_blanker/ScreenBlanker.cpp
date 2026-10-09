@@ -9,6 +9,7 @@
  *		Michael Phipps
  *		John Scipione, jscipione@gmail.com
  *		Puck Meerburg, puck@puckipedia.nl
+ *		Dario Casalinuovo
  */
 
 
@@ -18,11 +19,13 @@
 #include <Debug.h>
 #include <File.h>
 #include <FindDirectory.h>
+#include <LaunchDaemonDefs.h>
 #include <Path.h>
 #include <Screen.h>
 #include <StorageDefs.h>
 #include <SupportDefs.h>
 #include <image.h>
+#include <kernel/util/KMessage.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -43,7 +46,6 @@ ScreenBlanker::ScreenBlanker()
 	BApplication(SCREEN_BLANKER_SIG),
 	fWindow(NULL),
 	fSaverRunner(NULL),
-	fPasswordWindow(NULL),
 	fImmediateLock(false),
 	fTestSaver(false),
 	fResumeRunner(NULL),
@@ -72,7 +74,6 @@ ScreenBlanker::ReadyToRun()
 	// TODO: we need a window per screen...
 	BScreen screen(B_MAIN_SCREEN_ID);
 	fWindow = new ScreenSaverWindow(screen.Frame(), fTestSaver);
-	fPasswordWindow = new PasswordWindow();
 
 	BView* view = fWindow->ChildAt(0);
 	fSaverRunner = new ScreenSaverRunner(fWindow, view, fSettings);
@@ -122,24 +123,23 @@ ScreenBlanker::_SetDPMSMode(uint32 mode)
 }
 
 
+// Ask janus to lock; it starts vitruvian-login --unlock and locks app_server.
 void
-ScreenBlanker::_ShowPasswordWindow()
+ScreenBlanker::_RequestLock()
 {
-	_TurnOnScreen();
-
-	if (fWindow->Lock()) {
-		fSaverRunner->Suspend();
-
-		fWindow->Sync();
-			// TODO: is that needed?
-		ShowCursor();
-		if (fPasswordWindow->IsHidden())
-			fPasswordWindow->Show();
-
-		fWindow->Unlock();
+	port_id janus = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+	if (janus < 0) {
+		fprintf(stderr, "screen_blanker: janus is not running\n");
+		return;
 	}
 
-	_QueueResumeScreenSaver();
+	BPrivate::KMessage req(BPrivate::B_JANUS_LOCK_SESSION);
+	BPrivate::KMessage reply;
+	status_t error = req.SendTo(janus, -1, &reply, 2000000LL, 2000000LL,
+		getpid());
+	if (error != B_OK || reply.What() != (uint32)B_OK)
+		fprintf(stderr, "screen_blanker: lock request failed: %s\n",
+			strerror(error != B_OK ? error : (status_t)reply.What()));
 }
 
 
@@ -231,31 +231,12 @@ void
 ScreenBlanker::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
-		case kMsgUnlock:
-		{
-			// if the user has no password then just exit on any input
-			if (fSettings.Password()[0] != '\0'
-				&& strcmp(fSettings.Password(), crypt(fPasswordWindow->Password(),
-					fSettings.Password())) != 0) {
-				beep();
-				fPasswordWindow->SetPassword("");
-				_QueueResumeScreenSaver();
-			} else  {
-				PRINT(("Quitting!\n"));
-				_Shutdown();
-				Quit();
-			}
-			break;
-		}
-
 		case kMsgResumeSaver:
 		{
 			if (fWindow->Lock()) {
 				// ensure that our window and application are active before calling HideCursor()
 				fWindow->Activate();
 				HideCursor();
-				fPasswordWindow->SetPassword("");
-				fPasswordWindow->Hide();
 
 				fSaverRunner->Resume();
 				fWindow->Unlock();
@@ -294,25 +275,17 @@ ScreenBlanker::MessageReceived(BMessage* message)
 bool
 ScreenBlanker::QuitRequested()
 {
-	if (fSettings.LockEnable()) {
+	// Test mode and an explicit no-lock path never go through janus.
+	if (fSettings.LockEnable() && !fTestSaver) {
 		bigtime_t minTime = fSettings.PasswordTime() - fSettings.BlankTime();
 		if (minTime == 0)
 			minTime = 5000000;
-		if (fImmediateLock || system_time() - fBlankTime > minTime) {
-			_ShowPasswordWindow();
-			return false;
-		}
+		if (fImmediateLock || system_time() - fBlankTime > minTime)
+			_RequestLock();
 	}
 
 	_Shutdown();
 	return true;
-}
-
-
-bool
-ScreenBlanker::IsPasswordWindowShown() const
-{
-	return fPasswordWindow != NULL && !fPasswordWindow->IsHidden();
 }
 
 

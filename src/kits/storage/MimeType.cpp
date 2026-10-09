@@ -108,9 +108,10 @@ BMimeType::SetTo(const char* mimeType)
 		fCStatus = B_BAD_VALUE;
 	} else {
 		Unset();
-		fType = new(std::nothrow) char[strlen(mimeType) + 1];
+		size_t size = strlen(mimeType) + 1;
+		fType = new(std::nothrow) char[size];
 		if (fType) {
-			strlcpy(fType, mimeType, B_MIME_TYPE_LENGTH);
+			strlcpy(fType, mimeType, size);
 			fCStatus = B_OK;
 		} else {
 			fCStatus = B_NO_MEMORY;

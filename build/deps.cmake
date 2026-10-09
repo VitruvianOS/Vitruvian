@@ -48,7 +48,7 @@ DeclareDependency(
 	ICU
 	LIBRARIES	"icu"
 	PACKAGES	"libicu-dev"
-	RUNTIMES	"libicu76 (>= 76.1-4)"
+	RUNTIMES	"libicu76 (>= 76.1-4) | libicu78"
 )
 
 DeclareDependency(
@@ -80,7 +80,7 @@ DeclareDependency(
 
 DeclareDependency(
 	NOTO
-	RUNTIMES	"fonts-noto-core;fonts-noto-extra;fonts-noto-mono"
+	RUNTIMES	"fonts-noto-core;fonts-noto-mono;fonts-noto-cjk"
 )
 
 DeclareDependency(
@@ -260,19 +260,33 @@ DeclareDependency(
 DeclareDependency(
 	BLUETOOTH
 	PACKAGES   "libbluetooth-dev"
-	RUNTIMES   "bluez"
+	RUNTIMES   "bluez;bluez-obexd"
 )
 
 DeclareDependency(
 	NETWORKMANAGER
 	PACKAGES   "libnm-dev"
-	RUNTIMES   "network-manager"
+	RUNTIMES   "network-manager;modemmanager"
 )
 
 DeclareDependency(
 	GLIB
 	PACKAGES   "libglib2.0-dev"
 	RUNTIMES   "libglib2.0-0"
+)
+
+DeclareDependency(
+	CUPS
+	LIBRARIES  "cups"
+	PACKAGES   "libcups2-dev"
+	RUNTIMES   "libcups2t64"
+)
+
+DeclareDependency(
+	CAIRO
+	LIBRARIES  "cairo"
+	PACKAGES   "libcairo2-dev"
+	RUNTIMES   "libcairo2"
 )
 
 # Dependencies for Debug builds
@@ -283,7 +297,7 @@ DeclareDependency(
 	BACKTRACE
 	LIBRARIES  "backtrace"
 	PACKAGES  "libbacktrace-dev"
-	RUNTIMES  "libbacktrace-dev (>= 0.1-4)"
+	RUNTIMES  "libbacktrace0 (>= 0.1-4)"
 )
 
 DeclareDependency(

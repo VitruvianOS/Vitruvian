@@ -8,6 +8,9 @@
 #include <bluetooth/LocalDevice.h>
 #include <bluetooth/RemoteDevice.h>
 
+#include <ObexClient.h>
+#include <ObexTransferWindow.h>
+
 #include <cstring>
 
 #include <Alert.h>
@@ -19,10 +22,12 @@
 #include <ControlLook.h>
 #include <Deskbar.h>
 #include <Entry.h>
+#include <FilePanel.h>
 #include <LayoutBuilder.h>
 #include <ListItem.h>
-#include <OutlineListView.h>
 #include <Messenger.h>
+#include <OutlineListView.h>
+#include <Path.h>
 #include <Roster.h>
 #include <ScrollView.h>
 #include <String.h>
@@ -41,6 +46,7 @@
 static const uint32 kMsgToggleReplicant = 'trep';
 static const uint32 kMsgReplicantToggled = 'trpd';
 static const uint32 kMsgInitialScan = 'inis';
+static const bigtime_t kOpenInquiryTimeout = 10000000;
 static const uint32 kMsgStatusReady = 'btst';
 static const uint32 kMsgAdapterOpDone = 'btao';
 static const uint32 kMsgOperationDone = 'btod';
@@ -56,6 +62,9 @@ static const uint32 kMsgDisconnect = 'btDc';
 static const uint32 kMsgTrust = 'btTr';
 static const uint32 kMsgBlock = 'btBl';
 static const uint32 kMsgRefresh = 'btRf';
+static const uint32 kMsgSendFiles = 'btSf';
+static const uint32 kMsgAlwaysAccept = 'btAa';
+static const uint32 kMsgFilesChosen = 'btFc';
 
 // Must match BluetoothStatus.rdef's app_signature exactly (also mirrored as
 // kSignature in BluetoothStatus.cpp, which lives in a different binary and
@@ -78,7 +87,8 @@ BluetoothWindow::BluetoothWindow()
 			| B_AUTO_UPDATE_SIZE_LIMITS),
 	fReplicantOpPending(false),
 	fHasAdapter(false),
-	fAdapterPowered(false)
+	fAdapterPowered(false),
+	fOpenInquiryDeadline(0)
 {
 	fPoweredCheckBox = new BCheckBox("powered", B_TRANSLATE("Powered"),
 		new BMessage(kMsgTogglePowered));
@@ -100,6 +110,15 @@ BluetoothWindow::BluetoothWindow()
 	fScrollView = new BScrollView("device_scroll", fDeviceList, 0, false,
 		true);
 
+	// A few rows, so the minimum does not follow the device count.
+	font_height listFontHeight;
+	be_plain_font->GetHeight(&listFontHeight);
+	const float row = ceilf(listFontHeight.ascent + listFontHeight.descent
+		+ listFontHeight.leading) + 2 * be_control_look->DefaultItemSpacing();
+	fScrollView->SetExplicitMinSize(BSize(B_SIZE_UNSET, 5 * row));
+	fScrollView->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
+
 	fEmptyStateView = new BStringView("empty_state", "");
 	fEmptyStateView->SetAlignment(B_ALIGN_CENTER);
 	fEmptyStateView->SetHighUIColor(B_LIST_ITEM_TEXT_COLOR, B_DARKEN_2_TINT);
@@ -118,6 +137,11 @@ BluetoothWindow::BluetoothWindow()
 		new BMessage(kMsgBlock));
 	fRefreshButton = new BButton("refresh",
 		B_TRANSLATE("Refresh" B_UTF8_ELLIPSIS), new BMessage(kMsgRefresh));
+	fSendFilesButton = new BButton("sendfiles",
+		B_TRANSLATE("Send Files" B_UTF8_ELLIPSIS),
+		new BMessage(kMsgSendFiles));
+	fAlwaysAcceptCheckBox = new BCheckBox("alwaysAccept",
+		B_TRANSLATE("Always accept files"), new BMessage(kMsgAlwaysAccept));
 
 	fShowReplicantCheckBox = new BCheckBox("showReplicantCheckBox",
 		B_TRANSLATE("Show Bluetooth status in Deskbar"),
@@ -136,6 +160,11 @@ BluetoothWindow::BluetoothWindow()
 			.Add(fTrustButton)
 			.Add(fBlockButton)
 			.Add(fRefreshButton)
+		.End()
+		.Add(fAlwaysAcceptCheckBox)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+			.Add(fSendFilesButton)
+			.AddGlue()
 		.End()
 		.View();
 
@@ -223,6 +252,18 @@ BluetoothWindow::MessageReceived(BMessage* message)
 			_RequestStatusUpdate();
 			break;
 
+		case kMsgSendFiles:
+			_DoSendFiles();
+			break;
+
+		case kMsgAlwaysAccept:
+			_DoToggleAlwaysAccept();
+			break;
+
+		case kMsgFilesChosen:
+			_ApplyFilesChosen(message);
+			break;
+
 		case kMsgStatusReady:
 			_ApplyStatusUpdate(message);
 			break;
@@ -287,6 +328,11 @@ BluetoothWindow::MessageReceived(BMessage* message)
 
 		case kMsgAdd:
 			_DoAdd();
+			break;
+
+		case kMsgOpenInquiry:
+			fOpenInquiryDeadline = system_time() + kOpenInquiryTimeout;
+			_OpenInquiryIfPending();
 			break;
 
 		case kMsgRemove:
@@ -408,6 +454,28 @@ BluetoothWindow::_ApplyStatusUpdate(BMessage* message)
 	_RebuildDeviceList(&devicesReply);
 
 	_UpdateButtons();
+	_OpenInquiryIfPending();
+}
+
+
+void
+BluetoothWindow::_OpenInquiryIfPending()
+{
+	// The first status can predate BlueZ enumeration: keep the request
+	// until an adapter shows up or it expires.
+	if (fOpenInquiryDeadline == 0)
+		return;
+
+	if (system_time() > fOpenInquiryDeadline) {
+		fOpenInquiryDeadline = 0;
+		return;
+	}
+
+	if (!fHasAdapter)
+		return;
+
+	fOpenInquiryDeadline = 0;
+	_DoAdd();
 }
 
 
@@ -520,6 +588,14 @@ BluetoothWindow::_UpdateButtons()
 		? B_TRANSLATE("Unblock") : B_TRANSLATE("As blocked"));
 
 	fRefreshButton->SetEnabled(fHasAdapter);
+
+	// Send Files and always-accept both require a paired device.
+	bool paired = item != NULL && item->IsPaired();
+	fSendFilesButton->SetEnabled(paired);
+	fAlwaysAcceptCheckBox->SetEnabled(paired && item->IsTrusted());
+	fAlwaysAcceptCheckBox->SetValue(
+		paired && fSettings.AlwaysAccept(item->Address())
+			? B_CONTROL_ON : B_CONTROL_OFF);
 }
 
 
@@ -630,6 +706,67 @@ BluetoothWindow::_DoToggleBlock()
 	info.AddString("path", item->Path());
 	RemoteDevice device(info);
 	device.SetBlocked(!item->IsBlocked(), BMessenger(this), kMsgOperationDone);
+}
+
+
+void
+BluetoothWindow::_DoSendFiles()
+{
+	DeviceListItem* item = _SelectedDevice();
+	if (item == NULL || !item->IsPaired())
+		return;
+
+	// Remember which device the open panel is for; the refs come back in
+	// kMsgFilesChosen.
+	fPendingSendAddress = item->Address();
+	fPendingSendName = item->Name();
+
+	BMessage* message = new BMessage(kMsgFilesChosen);
+	BFilePanel* panel = new BFilePanel(B_OPEN_PANEL,
+		new BMessenger(this), NULL, B_FILE_NODE | B_DIRECTORY_NODE, true,
+		message, NULL, true, true);
+	panel->Show();
+}
+
+
+void
+BluetoothWindow::_ApplyFilesChosen(BMessage* message)
+{
+	BMessage refs;
+	if (message->FindMessage("refs", &refs) != B_OK) {
+		// BFilePanel posts the message with refs added directly.
+		refs = *message;
+	}
+
+	int32 count = 0;
+	uint32 type = 0;
+	refs.GetInfo("refs", &type, &count);
+	if (count <= 0 || fPendingSendAddress.IsEmpty())
+		return;
+
+	BMessage files;
+	for (int32 i = 0; i < count; i++) {
+		entry_ref ref;
+		if (refs.FindRef("refs", i, &ref) == B_OK)
+			files.AddRef("refs", &ref);
+	}
+
+	ObexTransferWindow* window = new ObexTransferWindow(
+		fPendingSendName.String(), fPendingSendAddress.String(), files);
+	window->Show();
+}
+
+
+void
+BluetoothWindow::_DoToggleAlwaysAccept()
+{
+	DeviceListItem* item = _SelectedDevice();
+	if (item == NULL || !item->IsPaired() || !item->IsTrusted())
+		return;
+
+	bool enable = fAlwaysAcceptCheckBox->Value() == B_CONTROL_ON;
+	fSettings.SetAlwaysAccept(item->Address(), enable);
+	fSettings.SaveSettings();
 }
 
 

@@ -1,0 +1,88 @@
+#!/bin/sh
+# Copyright 2026, Dario Casalinuovo. All rights reserved.
+# Distributed under the terms of the MIT License.
+# V\OS: ship the root fs checker into the initramfs. Debian's fsck hook
+# probes the root device by UUID, which is missing during raw-image builds.
+
+PREREQ=""
+prereqs()
+{
+	echo "$PREREQ"
+}
+
+case $1 in
+prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+
+. /usr/share/initramfs-tools/scripts/functions
+. /usr/share/initramfs-tools/hook-functions
+
+# Prefer the fstab type column; probing the device is only a fallback.
+root_fstype=""
+root_spec=""
+if [ -r /etc/fstab ]; then
+	while read -r _src _mp _type _opts _freq _pass _junk; do
+		case "$_mp" in
+		"")
+			continue
+			;;
+		/)
+			root_spec="$_src"
+			case "$_type" in
+			""|auto)
+				;;
+			*)
+				root_fstype="$_type"
+				;;
+			esac
+			break
+			;;
+		esac
+	done < /etc/fstab
+fi
+
+if [ -z "$root_fstype" ] && [ -n "$root_spec" ]; then
+	_resolved="$(resolve_device "$root_spec" 2>/dev/null || true)"
+	if [ -n "$_resolved" ]; then
+		root_fstype="$(get_fstype "$_resolved" 2>/dev/null || true)"
+	fi
+fi
+
+# Only ship checkers that can run unmounted and repair safely (or no-op).
+case "$root_fstype" in
+ext2|ext3|ext4)
+	fsck_tool="fsck.$root_fstype"
+	;;
+vfat|fat|msdos)
+	fsck_tool="fsck.vfat"
+	;;
+xfs)
+	fsck_tool="fsck.xfs"
+	;;
+*)
+	# btrfs and unknown: no automatic boot fsck; leave the initramfs alone.
+	exit 0
+	;;
+esac
+
+if ! command -v fsck >/dev/null 2>&1; then
+	echo "W: vos-fsck: /sbin/fsck missing; root will not be checked at boot" >&2
+	exit 0
+fi
+
+copy_exec /sbin/fsck
+# logsave is optional; checkfs still runs fsck without it.
+if command -v logsave >/dev/null 2>&1; then
+	copy_exec /sbin/logsave
+fi
+
+if command -v "$fsck_tool" >/dev/null 2>&1; then
+	copy_exec "$(command -v "$fsck_tool")"
+else
+	echo "W: vos-fsck: $fsck_tool missing; root will not be checked at boot" >&2
+fi
+
+exit 0

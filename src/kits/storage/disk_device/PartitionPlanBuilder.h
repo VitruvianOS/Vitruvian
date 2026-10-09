@@ -59,6 +59,8 @@ public:
 									off_t newStartMiB);
 			void				AddErase(const char* id,
 									const char* targetRef);
+			void				AddWipe(const char* id,
+									const char* targetRef, bool full);
 			void				AddRepair(const char* id,
 									const char* targetRef,
 									const char* filesystem, bool checkOnly);
@@ -74,6 +76,9 @@ public:
 
 	static	status_t			RunPlan(const BString& plan,
 									BMessage& result, bool allowReformatEsp);
+	static	status_t			QueryMoveRecovery(BMessage& result);
+	static	status_t			RunMoveRecovery(const char* action,
+									BMessage& result);
 
 private:
 			void				_AppendOptions(BString& out,

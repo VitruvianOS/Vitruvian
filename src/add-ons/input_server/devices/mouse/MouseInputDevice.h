@@ -45,6 +45,9 @@ private:
 			status_t		_UpdateScreenBounds(MouseDevice* device,
 								BMessage* message);
 			void			_RecursiveScan(const char* directory);
+			// Reconcile fDevices with /dev/input after resume; replaces
+			// same-path nodes whose inode changed and drops stale ones.
+			void			_RescanDevices();
 
 			MouseDevice*	_FindDevice(const char* path) const;
 			status_t		_AddDevice(const char* path);
@@ -59,6 +62,11 @@ private:
 			// pointer outside the lock, see _RemoveDevice() in the .cpp.
 			MouseDevice*	_DetachDevice(const char* path,
 								const int32* serial);
+			// A clickpad and its firmware mouse node report the same
+			// physical click; the touchpad owns buttons once it speaks.
+			void			_ClaimButtonOwnership(const BString& group,
+								MouseDevice* owner);
+			void			_ReleaseButtonOwnership(const BString& group);
 
 private:
 			BObjectList<MouseDevice, true> fDevices;

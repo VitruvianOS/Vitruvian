@@ -1,0 +1,239 @@
+#  Allocate a build number in VitruvianFactory, build, and archive there.
+#
+# The counter lives in VitruvianFactory, not here, so this repository's
+# history stays free of one tag per push. A rev is a release in Factory
+# whose body records the Vitruvian sha it was built from.
+#
+# Prerequisites, both outside this file:
+#   - VitruvianFactory has at least one commit, so a release has something
+#     to tag. An empty repository cannot hold one.
+#   - FACTORY_TOKEN: contents:write on VitruvianFactory. GITHUB_TOKEN is
+#     scoped to the repository running the workflow and cannot write to
+#     another one, so a PAT is the only option.
+
+name: Factory release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# A newer push supersedes this run. Cancelling is safe for the counter:
+# allocation reads the highest rev already PUBLISHED, so a cancelled
+# run's number is simply taken by the next one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FACTORY_REPO: VitruvianOS/VitruvianFactory
+  # The counter ran to rev-114 as tags in this repository before it moved
+  # to Factory. Numbering continues from there rather than restarting, so
+  # a rev still means one thing across the whole history. Only relevant
+  # until Factory passes it; after that the published maximum wins.
+  REV_FLOOR: "114"
+
+jobs:
+  allocate:
+    runs-on: ubuntu-latest
+    outputs:
+      rev: ${{ steps.next.outputs.rev }}
+    steps:
+      # Without this the failure surfaces as an opaque gh 404 three steps
+      # later, after a full build has already run.
+      - name: Check the Factory credentials are configured
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${GH_TOKEN:-}" ] || {
+            echo "FACTORY_TOKEN is not set. It needs contents:write on $FACTORY_REPO." >&2
+            exit 1
+          }
+          gh api "repos/$FACTORY_REPO" --jq '.full_name' >/dev/null || {
+            echo "Cannot read $FACTORY_REPO with FACTORY_TOKEN; check the token's scope covers it." >&2
+            exit 1
+          }
+
+      - name: Allocate the next rev from Factory
+        id: next
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$FACTORY_REPO/releases?per_page=100" --paginate \
+                     --jq '[.[] | .tag_name | select(test("^rev-[0-9]+$")) | ltrimstr("rev-") | tonumber] | max // 0')
+          if [ "$latest" -lt "$REV_FLOOR" ]; then
+            base="$REV_FLOOR"
+          else
+            base="$latest"
+          fi
+          echo "rev=$((base + 1))" >> "$GITHUB_OUTPUT"
+          echo "latest in Factory: $latest, floor: $REV_FLOOR, allocating $((base + 1))"
+
+  # testing-lane builds are disabled (operator: the testing base has no i915
+  # on its RT kernel, so Intel machines fall back to fbdev; issues #304/#298).
+  # amd64:
+  #   needs: allocate
+  #   uses: ./.github/workflows/factory-build.yml
+  #   with:
+  #     name: amd64
+  #     arch: amd64
+  #     runner: ubuntu-latest
+  #     build_dir: generated.x86
+  #     image_types: iso,raw
+  #     extra_pkgs: grub-efi-amd64-bin grub-pc-bin ovmf
+  #     native: true
+  #     lane: nightly-testing
+  #     rev: ${{ needs.allocate.outputs.rev }}
+
+  amd64-stable:
+    needs: allocate
+    uses: ./.github/workflows/factory-build.yml
+    with:
+      name: amd64-stable
+      arch: amd64
+      runner: ubuntu-latest
+      build_dir: generated.x86
+      image_types: iso,raw
+      extra_pkgs: grub-efi-amd64-bin grub-pc-bin ovmf
+      base_suite: trixie
+      repo_suite: trixie-nightly
+      lane: nightly-stable-rt
+      rev: ${{ needs.allocate.outputs.rev }}
+
+  # arm64 testing lane: disabled for the same reason as amd64 above.
+  # arm64:
+  #   needs: allocate
+  #   uses: ./.github/workflows/factory-build.yml
+  #   with:
+  #     name: arm64
+  #     arch: arm64
+  #     runner: ubuntu-24.04-arm
+  #     build_dir: generated.arm64
+  #     image_types: iso,raw
+  #     board_types: raspberry
+  #     extra_pkgs: grub-efi-arm64-bin qemu-efi-aarch64
+  #     lane: nightly-testing
+  #     rev: ${{ needs.allocate.outputs.rev }}
+
+  arm64-stable:
+    needs: allocate
+    uses: ./.github/workflows/factory-build.yml
+    with:
+      name: arm64-stable
+      arch: arm64
+      runner: ubuntu-24.04-arm
+      build_dir: generated.arm64
+      image_types: iso,raw
+      board_types: raspberry
+      extra_pkgs: grub-efi-arm64-bin qemu-efi-aarch64
+      base_suite: trixie
+      repo_suite: trixie-nightly
+      lane: nightly-stable
+      rev: ${{ needs.allocate.outputs.rev }}
+
+  # The two stable-rt/stable builds gate the rev; board images are left out
+  # when they fail and named in the release notes. The testing lane is
+  # disabled and does not gate (see the comment on the amd64 job).
+  publish:
+    needs: [allocate, amd64-stable, arm64-stable]
+    if: ${{ !cancelled() && needs.amd64-stable.result == 'success' && needs.arm64-stable.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect the built images
+        uses: actions/download-artifact@v4
+        with:
+          pattern: factory-*
+          merge-multiple: true
+          path: assets
+
+      # A release asset is capped at 2 GiB. Fail here rather than halfway
+      # through an upload that leaves the release incomplete.
+      - name: Reject oversized assets
+        run: |
+          set -euo pipefail
+          over=$(find assets -type f -size +2147483647c -printf '%p %s\n')
+          if [ -n "$over" ]; then
+            echo "$over" >&2
+            echo "asset exceeds the 2 GiB release limit" >&2
+            exit 1
+          fi
+          ls -la assets
+
+      - name: Publish rev to Factory
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_TOKEN }}
+          REV: ${{ needs.allocate.outputs.rev }}
+        run: |
+          set -euo pipefail
+          MISSING=""
+          for board in arm64-raspberry-nightly-stable; do
+            ls assets/*-"$board"-* >/dev/null 2>&1 \
+              || MISSING="$MISSING"$'\n'"$board: not built, not included"
+          done
+          gh release create "rev-$REV" \
+            --repo "$FACTORY_REPO" \
+            --title "rev-$REV" \
+            --notes "Built from ${{ github.repository }}@${{ github.sha }}. amd64 \`nightly-stable-rt\`: Debian trixie, RT kernel, follows trixie-nightly. arm64 \`nightly-stable\`: the same base with the generic kernel. The testing lane is disabled until its kernel carries i915 (issues #304/#298).${MISSING}" \
+            assets/*
+
+      # Off for now. Set the repository variable TELEGRAM_ENABLED to 'true'
+      # to turn announcements back on.
+      - name: Announce on Telegram
+        if: success() && vars.TELEGRAM_ENABLED == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          REV:                ${{ needs.allocate.outputs.rev }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
+            echo "Telegram not configured, skipping."
+            exit 0
+          fi
+          short=$(echo "${{ github.sha }}" | cut -c1-9)
+          msg=$(printf '<b>rev-%s</b> published to VitruvianFactory\nfrom %s@%s\nhttps://github.com/%s/releases/tag/rev-%s' \
+                  "$REV" "${{ github.repository }}" "$short" "$FACTORY_REPO" "$REV")
+          curl -sS --fail -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "parse_mode=HTML" \
+            --data-urlencode "text=${msg}"
+
+  # One table for the whole run, whatever failed: each arch, the step it
+  # stopped at, its board images, and whether the rev went out.
+  summary:
+    needs: [allocate, amd64-stable, arm64-stable, publish]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize the run
+        env:
+          ROWS: |
+            amd64|skipped|disabled (testing lane off)|-
+            amd64-stable|${{ needs.amd64-stable.result }}|${{ needs.amd64-stable.outputs.failed_step }}|${{ needs.amd64-stable.outputs.boards }}
+            arm64|skipped|disabled (testing lane off)|-
+            arm64-stable|${{ needs.arm64-stable.result }}|${{ needs.arm64-stable.outputs.failed_step }}|${{ needs.arm64-stable.outputs.boards }}
+          ALLOCATE: ${{ needs.allocate.result }}
+          PUBLISH: ${{ needs.publish.result }}
+          REV: ${{ needs.allocate.outputs.rev }}
+        run: |
+          {
+            echo "## rev-${REV:-?}"
+            echo
+            echo "| Build | Result | Stopped at | Board images |"
+            echo "|---|---|---|---|"
+            while IFS='|' read -r arch result at boards; do
+              [ -n "$arch" ] || continue
+              echo "| $arch | $result | ${at:--} | ${boards:--} |"
+            done <<< "$ROWS"
+            echo
+            echo "Rev allocation: $ALLOCATE. Publish: $PUBLISH."
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS='|' read -r arch result at boards; do
+            [ -n "$arch" ] || continue
+            [ -n "$at" ] && echo "::error title=$arch failed::stopped at: $at"
+            [ "$boards" = failure ] && echo "::warning title=$arch board images failed::see the $arch job"
+          done <<< "$ROWS"
+          [ "$PUBLISH" = success ] || echo "::error title=rev not published::publish: $PUBLISH"
+          true

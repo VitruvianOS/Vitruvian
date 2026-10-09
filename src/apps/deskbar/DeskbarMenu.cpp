@@ -44,6 +44,7 @@ All rights reserved.
 #include <Menu.h>
 #include <MenuItem.h>
 #include <Roster.h>
+#include <RosterPrivate.h>
 
 #include "BarApp.h"
 #include "BarView.h"
@@ -293,6 +294,20 @@ B_TRANSLATE_MARK_VOID("About this system")
 
 	AddSeparatorItem();
 
+	B_TRANSLATE_MARK_VOID("Lock screen");
+
+	item = new BMenuItem(B_TRANSLATE_NOCOLLECT("Lock screen"),
+		new BMessage(kLockScreen));
+	item->SetEnabled(!dragging);
+	item->SetTarget(be_app);
+	AddItem(item);
+
+	item = new BMenuItem(B_TRANSLATE("Log out"),
+		new BMessage(kLogOutUser));
+	item->SetEnabled(!dragging);
+	item->SetTarget(be_app);
+	AddItem(item);
+
 	BMenu* shutdownMenu = new BMenu(B_TRANSLATE("Shutdown" B_UTF8_ELLIPSIS));
 
 	item = new BMenuItem(B_TRANSLATE("Power off"),
@@ -305,21 +320,31 @@ B_TRANSLATE_MARK_VOID("About this system")
 	item->SetEnabled(!dragging);
 	shutdownMenu->AddItem(item);
 
-	item = new BMenuItem(B_TRANSLATE("Log out"),
-		new BMessage(kLogOutUser));
-	item->SetEnabled(!dragging);
-	shutdownMenu->AddItem(item);
+	// Suspend/Hibernate only when logind can actually do them.
+	// No confirmation; nothing in the session quits.
+	BRoster roster;
+	BRoster::Private rosterPrivate(roster);
+	bool canSuspend = false;
+	bool canHibernate = false;
+	rosterPrivate.CanSuspend(&canSuspend);
+	rosterPrivate.CanHibernate(&canHibernate);
 
 	B_TRANSLATE_MARK_VOID("Suspend");
+	B_TRANSLATE_MARK_VOID("Hibernate");
 
-#ifdef APM_SUPPORT
-	if (_kapm_control_(APM_CHECK_ENABLED) == B_OK) {
+	if (canSuspend) {
 		item = new BMenuItem(B_TRANSLATE_NOCOLLECT("Suspend"),
 			new BMessage(kSuspendSystem));
 		item->SetEnabled(!dragging);
 		shutdownMenu->AddItem(item);
 	}
-#endif
+
+	if (canHibernate) {
+		item = new BMenuItem(B_TRANSLATE_NOCOLLECT("Hibernate"),
+			new BMessage(kHibernateSystem));
+		item->SetEnabled(!dragging);
+		shutdownMenu->AddItem(item);
+	}
 
 	shutdownMenu->SetTargetForItems(be_app);
 
@@ -382,8 +407,11 @@ TDeskbarMenu::ResetTargets()
 				case kResizeTeamIcons:
 				case kSortRunningApps:
 				case kTrackerFirst:
+				case kLockScreen:
+				case kLogOutUser:
 				case kRebootSystem:
 				case kSuspendSystem:
+				case kHibernateSystem:
 				case kShutdownSystem:
 				case kRealignReplicants:
 				case kShowHideTime:

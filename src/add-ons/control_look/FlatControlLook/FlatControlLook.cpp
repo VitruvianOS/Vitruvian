@@ -33,7 +33,7 @@ static const float kEdgeBevelShadowTint = 1.0;
 static const float kHoverTintFactor = 0.55;
 static const float kRadius = 3.0f;
 
-static const float kButtonPopUpIndicatorWidth = 11;
+static const int32 kButtonPopUpIndicatorWidth = B_USE_ITEM_SPACING;
 
 
 FlatControlLook::FlatControlLook()
@@ -1734,7 +1734,7 @@ FlatControlLook::_DrawNonFlatButtonBackground(BView* view, BRect& rect,
 
 	if (popupIndicator) {
 		BRect indicatorRect(rect);
-		rect.right -= kButtonPopUpIndicatorWidth;
+		rect.right -= ComposeSpacing(kButtonPopUpIndicatorWidth);
 		indicatorRect.left = rect.right + 3;
 			// 2 pixels for the separator
 
@@ -1783,19 +1783,16 @@ FlatControlLook::_DrawPopUpMarker(BView* view, const BRect& rect,
 {
 	BPoint center(roundf((rect.left + rect.right) / 2.0),
 		roundf((rect.top + rect.bottom) / 2.0));
+	const float markerWidth = roundf(rect.Width() * 0.45);
+
 	BPoint triangle[3];
-	triangle[0] = center + BPoint(-2.5, -0.5);
-	triangle[1] = center + BPoint(2.5, -0.5);
-	triangle[2] = center + BPoint(0.0, 2.0);
+	GetArrowShape(center, BSize(markerWidth, markerWidth / 2), B_DOWN_ARROW,
+		triangle);
 
 	uint32 viewFlags = view->Flags();
 	view->SetFlags(viewFlags | B_SUBPIXEL_PRECISE);
 
-	rgb_color markColor;
-	if ((flags & B_DISABLED) != 0)
-		markColor = tint_color(base, 1.0);
-	else
-		markColor = tint_color(base, 1.0);
+	rgb_color markColor = tint_color(base, 1.0);
 
 	view->SetHighColor(markColor);
 	view->FillTriangle(triangle[0], triangle[1], triangle[2]);

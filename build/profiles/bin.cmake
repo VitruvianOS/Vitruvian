@@ -7,6 +7,7 @@
 	pc
 	query
 	rc
+	jam
 	catarea
 	chop
 	driveinfo
@@ -65,6 +66,7 @@
 	notify
 	translate
 	filepanel
+	screen_blanker
 	screenshot_cli
 )
 ImageInclude("/bin" ${BIN_DIRECTORY})

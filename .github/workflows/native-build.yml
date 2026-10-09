@@ -1,9 +1,16 @@
 name: Native amd64 build test
 
+# master runs this as the first step of the Factory amd64 build.
 on:
   push:
-    branches:
-      - '**'
+    branches-ignore: [master]
+
+# A newer push supersedes this run; there is no value in finishing a
+# build of code that is no longer the head. Keyed per ref so branches
+# do not cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   native-build:
@@ -23,7 +30,7 @@ jobs:
             bison build-essential cmake debootstrap debhelper \
             dh-dkms dkms elfutils flex git \
             grub-efi-amd64-bin grub-pc-bin \
-            libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
+            libcairo2-dev libcups2-dev libdrm-dev libelf-dev libfl-dev libfreetype6-dev \
             libgif-dev libicns-dev libicu-dev libinput-dev \
             libjpeg-dev libncurses-dev libopenexr-dev libpng-dev \
             libtiff-dev libudev-dev libwebp-dev libseat-dev \

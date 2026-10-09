@@ -27,6 +27,11 @@ struct backlight {
 struct backlight *backlight_init(struct udev_device *drm_device,
 				 uint32_t connector_type);
 
+/* Same selection as backlight_init, with an explicit sysfs class directory
+ * and PCI parent name so tests can supply a fake tree. */
+struct backlight *backlight_init_from_class(const char* class_dir,
+	const char* pci_name, uint32_t connector_type);
+
 /* Free backlight resources */
 void backlight_destroy(struct backlight *backlight);
 

@@ -34,6 +34,7 @@ Server(
 		DirectWindowInfo.cpp
 		DrawState.cpp
 		EventDispatcher.cpp
+		PowerManager.cpp
 		EventStream.cpp
 		InputManager.cpp
 		IntPoint.cpp
@@ -50,6 +51,7 @@ Server(
 		Screen.cpp
 		ScreenConfigurations.cpp
 		ScreenManager.cpp
+		ScreenRelayout.cpp
 		ServerApp.cpp
 		ServerBitmap.cpp
 		ServerCursor.cpp
@@ -138,7 +140,7 @@ Server(
 		stackandtile/Stacking.cpp
 		stackandtile/Tiling.cpp
 
-	LIBS localestub shared agg icon linprog ${FREETYPE_LIBRARY}
+	LIBS localestub shared agg icon linprog systemd ${FREETYPE_LIBRARY}
 		${UDEV_LIBRARIES} ${DRM_LIBRARIES} ${SEAT_LIBRARIES}
 		${LIBEVDEV_LIBRARIES} ${GBM_LIBRARIES} backlight
 
@@ -164,6 +166,9 @@ Server(
 )
 
 UsePrivateHeaders(app_server app interface graphics graphics/common kernel support)
+
+# Decorator add-ons subclass app_server classes and resolve them here.
+set_target_properties(app_server PROPERTIES ENABLE_EXPORTS ON)
 
 #TODO: we want a custom target_include_directories that does that:
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -iquote ${PROJECT_SOURCE_DIR}/src/servers/app/")

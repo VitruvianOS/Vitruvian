@@ -22,11 +22,11 @@ ImageInclude("/system/add-ons/input_server/devices" ${INPUT_SERVER_ADDONS})
 
 
 # Every filter runs on every input message, so this list is hot-path.
-# shortcut_catcher and screen_saver do per-message work (BMessage copy,
-# BAutolock) for features not wired up yet, so they stay out.
+# shortcut_catcher still stays out until its feature is wired up.
 set(INPUT_SERVER_FILTERS
 	switch_workspace
 	minimize_all
+	screen_saver
 #	shortcut_catcher
 )
 ImageInclude("/system/add-ons/input_server/filters" ${INPUT_SERVER_FILTERS})
@@ -44,6 +44,8 @@ set(SYSTEM_LIBS
 	game
 	media2
 	opengl
+	printcups
+	screensaver
 	textencoding
 	tracker
 	translation
@@ -83,10 +85,44 @@ set(TRACKER_ADDONS
 	IconVader
 	OpenTargetFolder
 	OpenTerminal
+	SendToBluetooth
 	ZipOMatic
 #	mark_as: needs libmail (not ported); skipped
 )
 ImageInclude("/system/add-ons/Tracker" ${TRACKER_ADDONS})
+
+set(DECORATORS
+	BeDecorator
+	FlatDecorator
+	MacDecorator
+	WinDecorator
+)
+ImageInclude("/system/add-ons/decorators" ${DECORATORS})
+
+set(CONTROL_LOOKS
+	BeControlLook
+	FlatControlLook
+)
+ImageInclude("/system/add-ons/control_look" ${CONTROL_LOOKS})
+
+# Menu label is the file name; the kit loads from .../Screen Savers/<name>.
+set(SCREEN_SAVERS
+	butterfly
+	debugnow
+	flurry
+	glife
+	gravity
+	icons
+	ifs
+	leaves
+	MessageSaver
+	nebula
+	shelf
+	simpleclock
+	slideshowsaver
+	spider
+)
+ImageInclude("/system/add-ons/Screen Savers" ${SCREEN_SAVERS})
 
 
 include(${CMAKE_CURRENT_LIST_DIR}/preferences.cmake)
@@ -179,7 +215,7 @@ add_custom_target(apps_attrs ALL
     COMMENT "Packaging app attrs"
 )
 
-install(FILES "${_TAR}" DESTINATION /usr/share/vos)
+install(FILES "${_TAR}" DESTINATION /usr/share/vos COMPONENT data)
 
 
 # Tracker "New" templates need BEOS:TYPE xattrs so Tracker's New submenu
@@ -221,4 +257,4 @@ add_custom_target(templates_attrs ALL
     COMMENT "Packaging Tracker template attrs"
 )
 
-install(FILES "${_TPL_TAR}" DESTINATION /usr/share/vos)
+install(FILES "${_TPL_TAR}" DESTINATION /usr/share/vos COMPONENT data)

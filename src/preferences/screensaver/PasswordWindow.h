@@ -5,6 +5,7 @@
  * Authors:
  *		Michael Phipps
  *		Jérôme Duval, jerome.duval@free.fr
+ *		Dario Casalinuovo
  */
 #ifndef PASSWORD_WINDOW_H
 #define PASSWORD_WINDOW_H
@@ -12,9 +13,6 @@
 
 #include <Window.h>
 
-
-class BRadioButton;
-class BTextControl;
 
 class ScreenSaverSettings;
 
@@ -29,11 +27,6 @@ public:
 
 private:
 			void				_Setup();
-
-			BRadioButton*		fUseCustom;
-			BRadioButton*		fUseSystem;
-			BTextControl*		fConfirmControl;
-			BTextControl*		fPasswordControl;
 
 			ScreenSaverSettings& fSettings;
 };

@@ -8,7 +8,10 @@
 #include <NetworkInterface.h>
 #include <NetworkRoute.h>
 #include <Messenger.h>
+#include <File.h>
+#include <Path.h>
 #include <String.h>
+#include <StringList.h>
 
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -28,13 +31,19 @@
 #include <nm-remote-connection.h>
 #include <nm-setting-connection.h>
 #include <nm-setting-wireless.h>
+#include <nm-setting-wireless-security.h>
 #include <nm-setting-wired.h>
 #include <nm-setting-vpn.h>
+#include <nm-vpn-plugin-info.h>
+#include <nm-vpn-editor-plugin.h>
 #include <nm-utils.h>
 #include <nm-setting-wireguard.h>
 #include <nm-setting-ip-config.h>
 #include <nm-setting-ip4-config.h>
 #include <nm-setting-ip6-config.h>
+#include <nm-setting-gsm.h>
+#include <nm-setting-cdma.h>
+#include <nm-device-modem.h>
 #include <nm-ip-config.h>
 #include <nm-active-connection.h>
 #include <nm-vpn-connection.h>
@@ -317,6 +326,8 @@ NMBackend::_HandleNMVanished()
 		return;
 
 	fDeviceStateHandlers.clear();
+	fDeviceIP4Handlers.clear();
+	fDeviceIP6Handlers.clear();
 	fAPAddedHandlers.clear();
 	fAPRemovedHandlers.clear();
 	fActiveAP = NULL;
@@ -370,6 +381,8 @@ NMBackend::_CleanupLibNM()
 	// along with it, which drops their signal handlers too -- no explicit
 	// g_signal_handler_disconnect needed. Just drop our own bookkeeping.
 	fDeviceStateHandlers.clear();
+	fDeviceIP4Handlers.clear();
+	fDeviceIP6Handlers.clear();
 	fActiveAP = NULL;
 	fActiveAPStrengthHandlerId = 0;
 	if (fNMClient != NULL) {
@@ -530,17 +543,71 @@ _FillConnectionIP4Fields(NMConnection* connection, BMessage* outInfo)
 // connection's configured NMSettingIPConfig, not the live lease). A device
 // with no active connection gets method "unknown" and empty profile fields
 // -- StaticIPView falls back to its DHCP-mode default in that case.
+//
+// Also fills the live IPv4/IPv6 address list from nm_ip_config_get_addresses(), since the profile's
+// ip4_* fields stay empty under DHCP while the lease is what the UI must show (#236).
+static void
+_FillIPConfigAddresses(NMIPConfig* ip4Config, NMIPConfig* ip6Config,
+	BMessage* outInfo)
+{
+	int32 count = 0;
+	int32 index = 0;
+	NMIPConfig* configs[2] = { ip4Config, ip6Config };
+
+	for (int c = 0; c < 2; c++) {
+		NMIPConfig* config = configs[c];
+		if (config == NULL)
+			continue;
+
+		GPtrArray* addresses = nm_ip_config_get_addresses(config);
+		if (addresses == NULL)
+			continue;
+
+		for (guint i = 0; i < addresses->len; i++) {
+			NMIPAddress* address
+				= (NMIPAddress*)g_ptr_array_index(addresses, i);
+			if (address == NULL)
+				continue;
+
+			const char* addressStr = nm_ip_address_get_address(address);
+			if (addressStr == NULL || addressStr[0] == '\0')
+				continue;
+
+			char key[32];
+			snprintf(key, sizeof(key), "address_%" B_PRId32, index);
+
+			BMessage entry;
+			entry.AddInt32(kNMFieldAddressFamily,
+				nm_ip_config_get_family(config));
+			entry.AddString(kNMFieldAddressString, addressStr);
+			entry.AddInt32(kNMFieldAddressPrefix,
+				(int32)nm_ip_address_get_prefix(address));
+			outInfo->AddMessage(key, &entry);
+			index++;
+			count++;
+		}
+	}
+
+	outInfo->AddInt32(kNMFieldAddressCount, count);
+}
+
+
 static void
 _FillIP4ConfigFields(NMDevice* device, BMessage* outInfo)
 {
 	BString gateway, dns;
 	NMIPConfig* ip4Config = nm_device_get_ip4_config(device);
-	if (ip4Config != NULL) {
-		const char* gw = nm_ip_config_get_gateway(ip4Config);
+	NMIPConfig* ip6Config = nm_device_get_ip6_config(device);
+	// Prefer the IPv4 lease's gateway/DNS; fall back to IPv6 so a v6-only
+	// link still shows something real instead of "Not yet available".
+	NMIPConfig* routeConfig = ip4Config != NULL ? ip4Config : ip6Config;
+	if (routeConfig != NULL) {
+		const char* gw = nm_ip_config_get_gateway(routeConfig);
 		if (gw != NULL)
 			gateway = gw;
 
-		const char* const* nameservers = nm_ip_config_get_nameservers(ip4Config);
+		const char* const* nameservers
+			= nm_ip_config_get_nameservers(routeConfig);
 		if (nameservers != NULL) {
 			for (int i = 0; nameservers[i] != NULL; i++) {
 				if (!dns.IsEmpty())
@@ -551,6 +618,8 @@ _FillIP4ConfigFields(NMDevice* device, BMessage* outInfo)
 	}
 	outInfo->AddString(kNMFieldGateway, gateway);
 	outInfo->AddString(kNMFieldDNS, dns);
+
+	_FillIPConfigAddresses(ip4Config, ip6Config, outInfo);
 
 	NMActiveConnection* active = nm_device_get_active_connection(device);
 	NMConnection* connection = active != NULL
@@ -586,6 +655,35 @@ _FillDeviceInfoMessage(NMDevice* device, BMessage* outInfo)
 	outInfo->AddString(kNMFieldDriver, driver != NULL ? driver : "");
 
 	outInfo->AddBool(kNMFieldManaged, nm_device_get_managed(device) != FALSE);
+
+	if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
+		guint32 caps = nm_device_wifi_get_capabilities(NM_DEVICE_WIFI(device));
+		outInfo->AddUInt32(kNMFieldWiFiCaps, (uint32)caps);
+
+		// Strength is an AP property; publish the active AP's on the device
+		// row the Deskbar tray reads, same source ConnectionInfoWindow uses.
+		NMAccessPoint* activeAP = nm_device_wifi_get_active_access_point(
+			NM_DEVICE_WIFI(device));
+		if (activeAP != NULL) {
+			outInfo->AddUInt32(kNMFieldDeviceSignalStrength,
+				nm_access_point_get_strength(activeAP));
+		}
+	}
+
+	// Modems are NM_DEVICE_TYPE_MODEM; GSM vs CDMA comes from the radio
+	// capability bits the preflet needs to pick the NMSettingGsm/Cdma type.
+	if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_MODEM
+			&& NM_IS_DEVICE_MODEM(device)) {
+		guint32 caps = nm_device_modem_get_modem_capabilities(
+			NM_DEVICE_MODEM(device));
+		outInfo->AddUInt32(kNMFieldModemCaps, caps);
+		outInfo->AddBool(kNMFieldModemIsGSM,
+			(caps & NM_DEVICE_MODEM_CAPABILITY_GSM_UMTS) != 0
+				|| (caps & NM_DEVICE_MODEM_CAPABILITY_LTE) != 0
+				|| (caps & NM_DEVICE_MODEM_CAPABILITY_5GNR) != 0);
+		outInfo->AddBool(kNMFieldModemIsCDMA,
+			(caps & NM_DEVICE_MODEM_CAPABILITY_CDMA_EVDO) != 0);
+	}
 
 	_FillIP4ConfigFields(device, outInfo);
 }
@@ -721,6 +819,14 @@ NMBackend::_HandleDeviceAdded(void* deviceRaw)
 			G_CALLBACK(_OnDeviceStateNotify), this);
 		fDeviceStateHandlers[path] = id;
 
+		// IP config is a separate property from state: DHCP can publish AddressData without a state transition.
+		gulong ip4Id = g_signal_connect(device, "notify::ip4-config",
+			G_CALLBACK(_OnDeviceIPConfigNotify), this);
+		gulong ip6Id = g_signal_connect(device, "notify::ip6-config",
+			G_CALLBACK(_OnDeviceIPConfigNotify), this);
+		fDeviceIP4Handlers[path] = ip4Id;
+		fDeviceIP6Handlers[path] = ip6Id;
+
 		if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
 			gulong addedId = g_signal_connect(device, "access-point-added",
 				G_CALLBACK(_OnAccessPointAdded), this);
@@ -754,6 +860,18 @@ NMBackend::_HandleDeviceRemoved(void* deviceRaw)
 			fDeviceStateHandlers.erase(it);
 		}
 
+		std::map<BString, gulong>::iterator ip4It = fDeviceIP4Handlers.find(path);
+		if (ip4It != fDeviceIP4Handlers.end()) {
+			g_signal_handler_disconnect(device, ip4It->second);
+			fDeviceIP4Handlers.erase(ip4It);
+		}
+
+		std::map<BString, gulong>::iterator ip6It = fDeviceIP6Handlers.find(path);
+		if (ip6It != fDeviceIP6Handlers.end()) {
+			g_signal_handler_disconnect(device, ip6It->second);
+			fDeviceIP6Handlers.erase(ip6It);
+		}
+
 		std::map<BString, gulong>::iterator addedIt = fAPAddedHandlers.find(path);
 		if (addedIt != fAPAddedHandlers.end())
 			fAPAddedHandlers.erase(addedIt);
@@ -781,6 +899,13 @@ NMBackend::_HandleDeviceStateChanged(void* deviceRaw)
 	NMDevice* device = (NMDevice*)deviceRaw;
 	const char* path = nm_device_get_path(device);
 
+	// Connect/disconnect moves the active AP without an access-point-added
+	// signal; refresh this device's snapshot so ScanWiFiNetworks sees it.
+	if (path != NULL
+			&& nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
+		_RefreshWiFiSnapshot(device, path);
+	}
+
 	BMessage message((uint32)NOTIFICATION_DEVICE_STATE_CHANGED);
 	if (path != NULL)
 		message.AddString(kNMFieldPath, path);
@@ -790,12 +915,48 @@ NMBackend::_HandleDeviceStateChanged(void* deviceRaw)
 
 
 void
+NMBackend::_HandleDeviceIPConfigChanged(void* deviceRaw)
+{
+	NMDevice* device = (NMDevice*)deviceRaw;
+	const char* path = nm_device_get_path(device);
+
+	// IP config can land after the activating state notification or change on renew, so refresh the
+	// snapshot and let the preflet re-read.
+	BMessage message((uint32)NOTIFICATION_DEVICE_IP_CHANGED);
+	if (path != NULL)
+		message.AddString(kNMFieldPath, path);
+	_RefreshSnapshotAndNotify(NOTIFICATION_DEVICE_IP_CHANGED, message);
+}
+
+
+void
 NMBackend::_HandleActiveConnectionChanged()
 {
 	_UpdateActiveAPWatch();
+	_RefreshWiFiSnapshots();
 
 	BMessage message((uint32)NOTIFICATION_CONNECTION_STATUS_CHANGED);
 	_RefreshSnapshotAndNotify(NOTIFICATION_CONNECTION_STATUS_CHANGED, message);
+}
+
+
+void
+NMBackend::_RefreshWiFiSnapshots()
+{
+	const GPtrArray* devices = nm_client_get_devices((NMClient*)fNMClient);
+	if (devices == NULL)
+		return;
+
+	for (guint i = 0; i < devices->len; i++) {
+		NMDevice* device = (NMDevice*)g_ptr_array_index(devices, i);
+		if (device == NULL
+				|| nm_device_get_device_type(device) != NM_DEVICE_TYPE_WIFI) {
+			continue;
+		}
+		const char* path = nm_device_get_path(device);
+		if (path != NULL)
+			_RefreshWiFiSnapshot(device, path);
+	}
 }
 
 
@@ -878,6 +1039,14 @@ NMBackend::_OnDeviceStateNotify(GObject* device, GParamSpec* pspec,
 
 
 void
+NMBackend::_OnDeviceIPConfigNotify(GObject* device, GParamSpec* pspec,
+	void* userData)
+{
+	((NMBackend*)userData)->_HandleDeviceIPConfigChanged(device);
+}
+
+
+void
 NMBackend::_OnActiveConnectionNotify(GObject* client, GParamSpec* pspec,
 	void* userData)
 {
@@ -933,6 +1102,13 @@ NMBackend::_ConnectClientSignals()
 			gulong id = g_signal_connect(device, "notify::state",
 				G_CALLBACK(_OnDeviceStateNotify), this);
 			fDeviceStateHandlers[path] = id;
+
+			gulong ip4Id = g_signal_connect(device, "notify::ip4-config",
+				G_CALLBACK(_OnDeviceIPConfigNotify), this);
+			gulong ip6Id = g_signal_connect(device, "notify::ip6-config",
+				G_CALLBACK(_OnDeviceIPConfigNotify), this);
+			fDeviceIP4Handlers[path] = ip4Id;
+			fDeviceIP6Handlers[path] = ip6Id;
 
 			if (nm_device_get_device_type(device) == NM_DEVICE_TYPE_WIFI) {
 				gulong addedId = g_signal_connect(device, "access-point-added",
@@ -1421,7 +1597,7 @@ NMBackend::_OnAccessPointRemoved(void* wifiDevice, void* ap, void* userData)
 
 
 status_t
-NMBackend::ScanWiFiNetworks(const char* devicePath, BMessage* outNetworks)
+NMBackend::GetWiFiNetworks(const char* devicePath, BMessage* outNetworks)
 {
 	if (devicePath == NULL || outNetworks == NULL)
 		return B_BAD_VALUE;
@@ -1429,17 +1605,24 @@ NMBackend::ScanWiFiNetworks(const char* devicePath, BMessage* outNetworks)
 	if (fNMClient == NULL)
 		return B_ERROR;
 
-	{
-		BAutolock lock(fLock);
-		std::map<BString, BMessage>::iterator it
-			= fWiFiSnapshot.find(devicePath);
-		if (it != fWiFiSnapshot.end()) {
-			*outNetworks = it->second;
-		} else {
-			outNetworks->MakeEmpty();
-			outNetworks->AddInt32(kNMFieldAPCount, 0);
-		}
+	BAutolock lock(fLock);
+	std::map<BString, BMessage>::iterator it = fWiFiSnapshot.find(devicePath);
+	if (it != fWiFiSnapshot.end()) {
+		*outNetworks = it->second;
+	} else {
+		outNetworks->MakeEmpty();
+		outNetworks->AddInt32(kNMFieldAPCount, 0);
 	}
+	return B_OK;
+}
+
+
+status_t
+NMBackend::ScanWiFiNetworks(const char* devicePath, BMessage* outNetworks)
+{
+	status_t status = GetWiFiNetworks(devicePath, outNetworks);
+	if (status != B_OK)
+		return status;
 
 	// Kick a fresh scan in the background so a repeated menu-open sees
 	// current results; never wait for it here.
@@ -1991,6 +2174,106 @@ NMBackend::SetWiFiPriorityAsync(const char* connectionPath, int32 priority,
 // #pragma mark - VPN
 
 
+static const char*
+_VPNTypeLabel(const char* serviceType)
+{
+	static const struct { const char* suffix; const char* label; } kTypes[] = {
+		{ ".openvpn", "OpenVPN" },
+		{ ".vpnc", "Cisco IPsec" },
+		{ ".l2tp", "L2TP/IPsec" },
+		{ ".openconnect", "OpenConnect" },
+		{ ".pptp", "PPTP" },
+		{ ".strongswan", "IPsec" },
+		{ ".fortisslvpn", "Fortinet SSL" },
+	};
+	if (serviceType == NULL)
+		return "VPN";
+	for (size_t i = 0; i < B_COUNT_OF(kTypes); i++) {
+		if (BString(serviceType).EndsWith(kTypes[i].suffix))
+			return kTypes[i].label;
+	}
+	const char* dot = strrchr(serviceType, '.');
+	return dot != NULL ? dot + 1 : serviceType;
+}
+
+
+// Plugins name the same thing differently.
+static const char*
+_VPNDataItem(NMSettingVpn* vpn, const char* const* keys)
+{
+	for (; *keys != NULL; keys++) {
+		const char* value = nm_setting_vpn_get_data_item(vpn, *keys);
+		if (value != NULL && value[0] != '\0')
+			return value;
+	}
+	return NULL;
+}
+
+
+static void
+_AddVPNDetails(NMConnection* connection, NMActiveConnection* active,
+	BMessage& info)
+{
+	static const char* const kServerKeys[]
+		= { "remote", "gateway", "IPSec gateway", "address", NULL };
+	static const char* const kUserKeys[]
+		= { "username", "user", "Xauth username", NULL };
+
+	NMSettingVpn* vpn = nm_connection_get_setting_vpn(connection);
+	if (vpn != NULL) {
+		info.AddString(kNMFieldVPNType,
+			_VPNTypeLabel(nm_setting_vpn_get_service_type(vpn)));
+		const char* server = _VPNDataItem(vpn, kServerKeys);
+		if (server != NULL)
+			info.AddString(kNMFieldVPNServer, server);
+		const char* user = nm_setting_vpn_get_user_name(vpn);
+		if (user == NULL || user[0] == '\0')
+			user = _VPNDataItem(vpn, kUserKeys);
+		if (user != NULL)
+			info.AddString(kNMFieldVPNUser, user);
+	} else {
+		info.AddString(kNMFieldVPNType, "WireGuard");
+		NMSettingWireGuard* wg = NM_SETTING_WIREGUARD(
+			nm_connection_get_setting(connection, NM_TYPE_SETTING_WIREGUARD));
+		if (wg != NULL && nm_setting_wireguard_get_peers_len(wg) > 0) {
+			const char* endpoint = nm_wireguard_peer_get_endpoint(
+				nm_setting_wireguard_get_peer(wg, 0));
+			if (endpoint != NULL)
+				info.AddString(kNMFieldVPNServer, endpoint);
+		}
+	}
+
+	NMSettingConnection* connSetting
+		= nm_connection_get_setting_connection(connection);
+	info.AddBool(kNMFieldVPNAutoconnect, connSetting != NULL
+		&& nm_setting_connection_get_autoconnect(connSetting));
+
+	if (active == NULL
+		|| nm_active_connection_get_state(active)
+			!= NM_ACTIVE_CONNECTION_STATE_ACTIVATED)
+		return;
+	NMIPConfig* ip4 = nm_active_connection_get_ip4_config(active);
+	NMIPConfig* ip6 = nm_active_connection_get_ip6_config(active);
+	NMIPConfig* configs[] = { ip4, ip6 };
+	for (NMIPConfig* config : configs) {
+		if (config == NULL)
+			continue;
+		GPtrArray* addresses = nm_ip_config_get_addresses(config);
+		for (guint i = 0; addresses != NULL && i < addresses->len; i++) {
+			NMIPAddress* address
+				= (NMIPAddress*)g_ptr_array_index(addresses, i);
+			BString text;
+			text.SetToFormat("%s/%u", nm_ip_address_get_address(address),
+				nm_ip_address_get_prefix(address));
+			info.AddString(kNMFieldVPNAddress, text);
+		}
+		const char* const* servers = nm_ip_config_get_nameservers(config);
+		for (; servers != NULL && *servers != NULL; servers++)
+			info.AddString(kNMFieldVPNDNS, *servers);
+	}
+}
+
+
 // Dispatch thread only -- walks NMClient's connection and active-connection
 // lists, both GObject-owned and mutated from D-Bus signals delivered there.
 static void
@@ -2036,7 +2319,7 @@ _FillVPNMessage(NMClient* nmClient, BMessage* outMessage)
 			if (id == NULL || path == NULL)
 				continue;
 
-			bool connected = false;
+			NMActiveConnection* matched = NULL;
 			if (activeConnections != NULL) {
 				for (guint j = 0; j < activeConnections->len; j++) {
 					NMActiveConnection* active = (NMActiveConnection*)
@@ -2046,14 +2329,16 @@ _FillVPNMessage(NMClient* nmClient, BMessage* outMessage)
 					const char* activeUUID = nm_active_connection_get_uuid(active);
 					const char* connUUID = nm_connection_get_uuid(connection);
 					if (activeUUID != NULL && connUUID != NULL
-							&& strcmp(activeUUID, connUUID) == 0
-							&& nm_active_connection_get_state(active)
-								== NM_ACTIVE_CONNECTION_STATE_ACTIVATED) {
-						connected = true;
+							&& strcmp(activeUUID, connUUID) == 0) {
+						matched = active;
 						break;
 					}
 				}
 			}
+			NMActiveConnectionState state = matched != NULL
+				? nm_active_connection_get_state(matched)
+				: NM_ACTIVE_CONNECTION_STATE_UNKNOWN;
+			bool connected = state == NM_ACTIVE_CONNECTION_STATE_ACTIVATED;
 
 			char vpnName[32];
 			snprintf(vpnName, sizeof(vpnName), "vpn_%" B_PRId32, count);
@@ -2062,6 +2347,9 @@ _FillVPNMessage(NMClient* nmClient, BMessage* outMessage)
 			vpnInfo.AddString(kNMFieldVPNName, id);
 			vpnInfo.AddString(kNMFieldVPNPath, path);
 			vpnInfo.AddBool(kNMFieldVPNConnected, connected);
+			vpnInfo.AddBool(kNMFieldVPNActivating,
+				state == NM_ACTIVE_CONNECTION_STATE_ACTIVATING);
+			_AddVPNDetails(connection, matched, vpnInfo);
 			outMessage->AddMessage(vpnName, &vpnInfo);
 			count++;
 		}
@@ -2232,6 +2520,466 @@ NMBackend::DisconnectVPN(const char* connectionPath)
 }
 
 
+struct _ImportVPNJob {
+	NMClient* nmClient;
+	BString filePath;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_ImportVPNFail(const BMessage& formats, BMessenger& replyTo, uint32 replyWhat,
+	const char* reason)
+{
+	BMessage reply(replyWhat);
+	reply.AddInt32("status", (int32)B_ERROR);
+	reply.AddString("reason", reason != NULL ? reason : "unknown error");
+	if (!formats.IsEmpty())
+		reply.AddMessage("supported_formats", &formats);
+	replyTo.SendMessage(&reply);
+}
+
+
+static BMessage
+_SupportedVPNImportFormats()
+{
+	BMessage formats;
+	formats.AddString("format", "wireguard");
+	GSList* plugins = nm_vpn_plugin_info_list_load();
+	for (GSList* p = plugins; p != NULL; p = p->next) {
+		NMVpnPluginInfo* info = (NMVpnPluginInfo*)p->data;
+		if (info == NULL)
+			continue;
+		// The info caches the plugin and keeps its reference.
+		GError* error = NULL;
+		NMVpnEditorPlugin* editor
+			= nm_vpn_plugin_info_load_editor_plugin(info, &error);
+		if (editor == NULL) {
+			if (error != NULL)
+				g_error_free(error);
+			continue;
+		}
+		if (nm_vpn_editor_plugin_get_capabilities(editor)
+				& NM_VPN_EDITOR_PLUGIN_CAPABILITY_IMPORT) {
+			const char* service = nm_vpn_plugin_info_get_service(info);
+			const char* name = nm_vpn_plugin_info_get_name(info);
+			if (service != NULL && service[0] != '\0')
+				formats.AddString("format", service);
+			else if (name != NULL)
+				formats.AddString("format", name);
+		}
+	}
+	if (plugins != NULL)
+		g_slist_free_full(plugins, g_object_unref);
+	return formats;
+}
+
+
+static void
+_SplitList(const BString& value, BStringList& list)
+{
+	BStringList items;
+	value.Split(",", true, items);
+	for (int32 i = 0; i < items.CountStrings(); i++) {
+		BString item = items.StringAt(i);
+		item.Trim();
+		if (!item.IsEmpty())
+			list.Add(item);
+	}
+}
+
+
+static NMWireGuardPeer*
+_NewWireGuardPeer(const BString& publicKey, const BString& presharedKey,
+	const BString& endpoint, const BString& keepalive,
+	const BStringList& allowedIPs)
+{
+	NMWireGuardPeer* peer = nm_wireguard_peer_new();
+	nm_wireguard_peer_set_public_key(peer, publicKey.String(), TRUE);
+	if (!presharedKey.IsEmpty())
+		nm_wireguard_peer_set_preshared_key(peer, presharedKey.String(), TRUE);
+	if (!endpoint.IsEmpty())
+		nm_wireguard_peer_set_endpoint(peer, endpoint.String(), TRUE);
+	if (!keepalive.IsEmpty())
+		nm_wireguard_peer_set_persistent_keepalive(peer,
+			(uint16)atoi(keepalive.String()));
+	for (int32 i = 0; i < allowedIPs.CountStrings(); i++) {
+		nm_wireguard_peer_append_allowed_ip(peer,
+			allowedIPs.StringAt(i).String(), FALSE);
+	}
+	return peer;
+}
+
+
+// WireGuard is a native NM connection type, not a VPN plugin, so its .conf
+// (the wg-quick format) is parsed here.
+static NMConnection*
+_ImportWireGuardConf(const char* path, GError** error)
+{
+	BFile file(path, B_READ_ONLY);
+	off_t size = 0;
+	if (file.InitCheck() != B_OK || file.GetSize(&size) != B_OK
+			|| size > 1024 * 1024) {
+		g_set_error(error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+			"cannot read %s", path);
+		return NULL;
+	}
+	BString text;
+	char* buffer = text.LockBuffer(size + 1);
+	ssize_t bytes = file.Read(buffer, size);
+	text.UnlockBuffer(bytes > 0 ? bytes : 0);
+
+	BString privateKey, listenPort, section;
+	BStringList addresses, dns;
+	BString peerKey, peerPsk, peerEndpoint, peerKeepalive;
+	BStringList peerAllowed;
+	std::vector<NMWireGuardPeer*> peers;
+
+	BStringList lines;
+	text.Split("\n", true, lines);
+	for (int32 i = 0; i <= lines.CountStrings(); i++) {
+		BString line = i < lines.CountStrings() ? lines.StringAt(i) : "[end]";
+		line.Trim();
+		if (line.IsEmpty() || line[0] == '#' || line[0] == ';')
+			continue;
+		if (line[0] == '[') {
+			if (!peerKey.IsEmpty()) {
+				peers.push_back(_NewWireGuardPeer(peerKey, peerPsk,
+					peerEndpoint, peerKeepalive, peerAllowed));
+			}
+			peerKey = peerPsk = peerEndpoint = peerKeepalive = "";
+			peerAllowed.MakeEmpty();
+			section = line;
+			section.RemoveAll("[").RemoveAll("]").Trim().ToLower();
+			continue;
+		}
+
+		int32 eq = line.FindFirst('=');
+		if (eq < 0)
+			continue;
+		BString key(line.String(), eq);
+		BString value(line.String() + eq + 1);
+		key.Trim().ToLower();
+		value.Trim();
+
+		if (section == "interface") {
+			if (key == "privatekey")
+				privateKey = value;
+			else if (key == "listenport")
+				listenPort = value;
+			else if (key == "address")
+				_SplitList(value, addresses);
+			else if (key == "dns")
+				_SplitList(value, dns);
+		} else if (section == "peer") {
+			if (key == "publickey")
+				peerKey = value;
+			else if (key == "presharedkey")
+				peerPsk = value;
+			else if (key == "endpoint")
+				peerEndpoint = value;
+			else if (key == "persistentkeepalive")
+				peerKeepalive = value;
+			else if (key == "allowedips")
+				_SplitList(value, peerAllowed);
+		}
+	}
+
+	if (privateKey.IsEmpty() && peers.empty()) {
+		g_set_error(error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+			"%s has neither a private key nor any peer", path);
+		return NULL;
+	}
+
+	BString id = BPath(path).Leaf();
+	if (id.EndsWith(".conf"))
+		id.Truncate(id.Length() - 5);
+	if (id.IsEmpty())
+		id = "WireGuard";
+
+	NMConnection* connection = nm_simple_connection_new();
+	char* uuid = nm_utils_uuid_generate();
+	NMSettingConnection* connSetting
+		= (NMSettingConnection*)nm_setting_connection_new();
+	g_object_set(connSetting,
+		NM_SETTING_CONNECTION_ID, id.String(),
+		NM_SETTING_CONNECTION_UUID, uuid,
+		NM_SETTING_CONNECTION_TYPE, NM_SETTING_WIREGUARD_SETTING_NAME,
+		NULL);
+	g_free(uuid);
+	nm_connection_add_setting(connection, NM_SETTING(connSetting));
+
+	NMSettingWireGuard* wg = (NMSettingWireGuard*)nm_setting_wireguard_new();
+	if (!privateKey.IsEmpty()) {
+		g_object_set(wg, NM_SETTING_WIREGUARD_PRIVATE_KEY,
+			privateKey.String(), NULL);
+	}
+	if (!listenPort.IsEmpty()) {
+		g_object_set(wg, NM_SETTING_WIREGUARD_LISTEN_PORT,
+			(guint)atoi(listenPort.String()), NULL);
+	}
+	for (size_t i = 0; i < peers.size(); i++) {
+		nm_setting_wireguard_append_peer(wg, peers[i]);
+		nm_wireguard_peer_unref(peers[i]);
+	}
+	nm_connection_add_setting(connection, NM_SETTING(wg));
+
+	NMSettingIPConfig* ip4 = (NMSettingIPConfig*)nm_setting_ip4_config_new();
+	NMSettingIPConfig* ip6 = (NMSettingIPConfig*)nm_setting_ip6_config_new();
+	bool haveIPv4 = false;
+	bool haveIPv6 = false;
+	for (int32 i = 0; i < addresses.CountStrings(); i++) {
+		BString host = addresses.StringAt(i);
+		int prefix = -1;
+		int32 slash = host.FindFirst('/');
+		if (slash >= 0) {
+			prefix = atoi(host.String() + slash + 1);
+			host.Truncate(slash);
+		}
+		bool v6 = host.FindFirst(':') >= 0;
+		if (prefix < 0)
+			prefix = v6 ? 128 : 32;
+		NMIPAddress* address = nm_ip_address_new(v6 ? AF_INET6 : AF_INET,
+			host.String(), (guint)prefix, NULL);
+		if (address == NULL)
+			continue;
+		nm_setting_ip_config_add_address(v6 ? ip6 : ip4, address);
+		nm_ip_address_unref(address);
+		if (v6)
+			haveIPv6 = true;
+		else
+			haveIPv4 = true;
+	}
+	for (int32 i = 0; i < dns.CountStrings(); i++) {
+		BString server = dns.StringAt(i);
+		nm_setting_ip_config_add_dns(server.FindFirst(':') >= 0 ? ip6 : ip4,
+			server.String());
+	}
+	g_object_set(ip4, NM_SETTING_IP_CONFIG_METHOD, haveIPv4
+		? NM_SETTING_IP4_CONFIG_METHOD_MANUAL
+		: NM_SETTING_IP4_CONFIG_METHOD_DISABLED, NULL);
+	g_object_set(ip6, NM_SETTING_IP_CONFIG_METHOD, haveIPv6
+		? NM_SETTING_IP6_CONFIG_METHOD_MANUAL
+		: NM_SETTING_IP6_CONFIG_METHOD_IGNORE, NULL);
+	nm_connection_add_setting(connection, NM_SETTING(ip4));
+	nm_connection_add_setting(connection, NM_SETTING(ip6));
+	return connection;
+}
+
+
+static NMConnection*
+_TryImportVPNPlugin(const char* path, BString& outFormat)
+{
+	GSList* plugins = nm_vpn_plugin_info_list_load();
+	NMConnection* connection = NULL;
+	for (GSList* p = plugins; p != NULL; p = p->next) {
+		NMVpnPluginInfo* info = (NMVpnPluginInfo*)p->data;
+		if (info == NULL)
+			continue;
+		GError* loadError = NULL;
+		NMVpnEditorPlugin* editor
+			= nm_vpn_plugin_info_load_editor_plugin(info, &loadError);
+		if (editor == NULL) {
+			if (loadError != NULL)
+				g_error_free(loadError);
+			continue;
+		}
+		if (!(nm_vpn_editor_plugin_get_capabilities(editor)
+				& NM_VPN_EDITOR_PLUGIN_CAPABILITY_IMPORT))
+			continue;
+		GError* importError = NULL;
+		connection = nm_vpn_editor_plugin_import(editor, path, &importError);
+		if (connection != NULL) {
+			const char* service = nm_vpn_plugin_info_get_service(info);
+			outFormat = service != NULL && service[0] != '\0'
+				? service : nm_vpn_plugin_info_get_name(info);
+			break;
+		}
+		if (importError != NULL)
+			g_error_free(importError);
+	}
+	if (plugins != NULL)
+		g_slist_free_full(plugins, g_object_unref);
+	return connection;
+}
+
+
+static void
+_OnImportVPNDone(GObject* source, GAsyncResult* result, gpointer userData)
+{
+	_ImportVPNJob* job = (_ImportVPNJob*)userData;
+
+	GError* error = NULL;
+	NMRemoteConnection* remote = nm_client_add_connection_finish(
+		NM_CLIENT(source), result, &error);
+
+	BMessage reply(job->replyWhat);
+	if (remote != NULL) {
+		const char* path = nm_connection_get_path(NM_CONNECTION(remote));
+		const char* id = nm_connection_get_id(NM_CONNECTION(remote));
+		reply.AddInt32("status", (int32)B_OK);
+		reply.AddString(kNMFieldProfilePath, path != NULL ? path : "");
+		reply.AddString(kNMFieldProfileID, id != NULL ? id : "");
+		g_object_unref(remote);
+	} else {
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+	}
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+static gboolean
+_RunImportVPN(gpointer data)
+{
+	_ImportVPNJob* job = (_ImportVPNJob*)data;
+
+	if (job->filePath.IsEmpty()) {
+		_ImportVPNFail(BMessage(), job->replyTo, job->replyWhat,
+			"no file given");
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	BString format;
+	NMConnection* connection = _TryImportVPNPlugin(
+		job->filePath.String(), format);
+	if (connection == NULL) {
+		GError* wgError = NULL;
+		connection = _ImportWireGuardConf(job->filePath.String(), &wgError);
+		if (connection == NULL) {
+			BMessage formats = _SupportedVPNImportFormats();
+			BString reason;
+			if (wgError != NULL) {
+				reason.SetToFormat("%s: %s", job->filePath.String(),
+					wgError->message);
+				g_error_free(wgError);
+			} else {
+				reason.SetToFormat(
+					"No VPN plugin can import %s", job->filePath.String());
+			}
+			_ImportVPNFail(formats, job->replyTo, job->replyWhat,
+				reason.String());
+			delete job;
+			return G_SOURCE_REMOVE;
+		}
+	}
+
+	// Saved, not activated: importing must not disturb a live tunnel.
+	nm_client_add_connection_async(job->nmClient, connection, TRUE, NULL,
+		_OnImportVPNDone, job);
+	g_object_unref(connection);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::ImportVPNAsync(const char* filePath, const BMessenger& replyTo,
+	uint32 replyWhat)
+{
+	if (filePath == NULL || filePath[0] == '\0')
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_ImportVPNJob* job = new _ImportVPNJob;
+	job->nmClient = (NMClient*)fNMClient;
+	job->filePath = filePath;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunImportVPN, job);
+	return B_OK;
+}
+
+
+struct _RemoveVPNJob {
+	NMClient* backendClient;
+	NMBackend* backend;
+	BString connectionPath;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_OnRemoveVPNDone(GObject* source, GAsyncResult* result, gpointer userData)
+{
+	_RemoveVPNJob* job = (_RemoveVPNJob*)userData;
+
+	GError* error = NULL;
+	gboolean ok = nm_remote_connection_delete_finish(
+		NM_REMOTE_CONNECTION(source), result, &error);
+
+	BMessage reply(job->replyWhat);
+	reply.AddInt32("status", ok ? (int32)B_OK : (int32)B_ERROR);
+	if (!ok) {
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+	}
+	job->replyTo.SendMessage(&reply);
+
+	// Deleting a profile raises no status event; refresh so lists drop it.
+	BMessage notify((uint32)NMBackend::NOTIFICATION_CONNECTION_STATUS_CHANGED);
+	notify.AddString(kNMFieldVPNPath, job->connectionPath);
+	job->backend->_RefreshSnapshotAndNotify(
+		NMBackend::NOTIFICATION_CONNECTION_STATUS_CHANGED, notify);
+	delete job;
+}
+
+
+static gboolean
+_RunRemoveVPN(gpointer data)
+{
+	_RemoveVPNJob* job = (_RemoveVPNJob*)data;
+
+	NMConnection* connection = (NMConnection*)nm_client_get_connection_by_path(
+		job->backendClient, job->connectionPath.String());
+	if (connection == NULL || !NM_IS_REMOTE_CONNECTION(connection)) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
+		reply.AddString("reason", "no such VPN connection");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	nm_remote_connection_delete_async(NM_REMOTE_CONNECTION(connection), NULL,
+		_OnRemoveVPNDone, job);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::RemoveVPNAsync(const char* connectionPath,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (connectionPath == NULL)
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_RemoveVPNJob* job = new _RemoveVPNJob;
+	job->backendClient = (NMClient*)fNMClient;
+	job->backend = this;
+	job->connectionPath = connectionPath;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunRemoveVPN, job);
+	return B_OK;
+}
+
+
 // Live-write, no Apply -- single atomic NMClient property writes.
 // nm_client_networking_set_enabled/nm_client_wireless_set_enabled are
 // themselves synchronous D-Bus calls in libnm, so route through the
@@ -2366,9 +3114,107 @@ struct _ConnectWiFiJob {
 	BString password;
 	BString security;
 	bool remember;
+	bool hidden;
 	BMessenger replyTo;
 	uint32 replyWhat;
+	NMActiveConnection* active;
+	gulong stateHandlerId;
 };
+
+
+// Plain text for a failed join. Device reasons are preferred: SSID_NOT_FOUND
+// and the supplicant codes are what the user can act on.
+static BString
+_JoinFailureReason(NMActiveConnection* active, NMDevice* device)
+{
+	NMActiveConnectionStateReason acReason = active != NULL
+		? nm_active_connection_get_state_reason(active)
+		: NM_ACTIVE_CONNECTION_STATE_REASON_UNKNOWN;
+	NMDeviceStateReason devReason = device != NULL
+		? nm_device_get_state_reason(device)
+		: NM_DEVICE_STATE_REASON_UNKNOWN;
+
+	if (devReason == NM_DEVICE_STATE_REASON_SSID_NOT_FOUND)
+		return "No network with this name was found";
+
+	switch (acReason) {
+		case NM_ACTIVE_CONNECTION_STATE_REASON_NO_SECRETS:
+		case NM_ACTIVE_CONNECTION_STATE_REASON_LOGIN_FAILED:
+		case NM_ACTIVE_CONNECTION_STATE_REASON_SERVICE_START_FAILED:
+			return "Wrong password";
+		case NM_ACTIVE_CONNECTION_STATE_REASON_USER_DISCONNECTED:
+			return "Disconnected before the join finished";
+		default:
+			break;
+	}
+
+	switch (devReason) {
+		case NM_DEVICE_STATE_REASON_NO_SECRETS:
+		case NM_DEVICE_STATE_REASON_SUPPLICANT_DISCONNECT:
+		case NM_DEVICE_STATE_REASON_SUPPLICANT_CONFIG_FAILED:
+		case NM_DEVICE_STATE_REASON_SUPPLICANT_FAILED:
+		case NM_DEVICE_STATE_REASON_SUPPLICANT_TIMEOUT:
+			return "Wrong password";
+		default:
+			break;
+	}
+
+	BString reason;
+	if (devReason != NM_DEVICE_STATE_REASON_NONE
+			&& devReason != NM_DEVICE_STATE_REASON_UNKNOWN) {
+		reason.SetToFormat("NetworkManager device reason %d",
+			(int32)devReason);
+		return reason;
+	}
+	if (acReason != NM_ACTIVE_CONNECTION_STATE_REASON_UNKNOWN
+			&& acReason != NM_ACTIVE_CONNECTION_STATE_REASON_NONE) {
+		reason.SetToFormat("NetworkManager connection reason %d",
+			(int32)acReason);
+		return reason;
+	}
+	return "The join did not complete";
+}
+
+
+static void
+_ConnectWiFiFinish(_ConnectWiFiJob* job, int32 status, const char* reason)
+{
+	BMessage reply(job->replyWhat);
+	reply.AddInt32("status", status);
+	if (status != B_OK && reason != NULL && reason[0] != '\0')
+		reply.AddString("reason", reason);
+	job->replyTo.SendMessage(&reply);
+
+	if (job->active != NULL) {
+		if (job->stateHandlerId != 0)
+			g_signal_handler_disconnect(job->active, job->stateHandlerId);
+		g_object_unref(job->active);
+		job->active = NULL;
+		job->stateHandlerId = 0;
+	}
+	delete job;
+}
+
+
+static void
+_OnWiFiActiveStateNotify(GObject* source, GParamSpec* pspec, gpointer userData)
+{
+	_ConnectWiFiJob* job = (_ConnectWiFiJob*)userData;
+	NMActiveConnection* active = NM_ACTIVE_CONNECTION(source);
+
+	NMActiveConnectionState state = nm_active_connection_get_state(active);
+	if (state == NM_ACTIVE_CONNECTION_STATE_ACTIVATED) {
+		_ConnectWiFiFinish(job, (int32)B_OK, NULL);
+		return;
+	}
+	if (state != NM_ACTIVE_CONNECTION_STATE_DEACTIVATED)
+		return;
+
+	NMDevice* device = _FindDeviceByPath(job->nmClient,
+		job->devicePath.String());
+	BString reason = _JoinFailureReason(active, device);
+	_ConnectWiFiFinish(job, (int32)B_ERROR, reason.String());
+}
 
 
 static void
@@ -2380,23 +3226,123 @@ _OnAddAndActivateDone(GObject* source, GAsyncResult* result, gpointer userData)
 	NMActiveConnection* active = nm_client_add_and_activate_connection_finish(
 		job->nmClient, result, &error);
 
-	BMessage reply(job->replyWhat);
-	if (active != NULL) {
-		// "Started activating" -- not "joined". If the profile has no
-		// inline secret, this is precisely the moment NM turns around and
-		// calls our SecretAgent.GetSecrets; the actual join completes
-		// asynchronously from there, not here.
-		reply.AddInt32("status", (int32)B_OK);
-		g_object_unref(active);
-	} else {
+	if (active == NULL) {
+		BMessage reply(job->replyWhat);
 		reply.AddInt32("status", (int32)B_ERROR);
 		reply.AddString("reason",
 			error != NULL ? error->message : "unknown error");
 		if (error != NULL)
 			g_error_free(error);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return;
 	}
-	job->replyTo.SendMessage(&reply);
-	delete job;
+
+	// "Started activating" is not "joined"; follow until activated or
+	// failed. Hidden-join failures only surface here.
+	job->active = active;
+	job->stateHandlerId = g_signal_connect(active, "notify::state",
+		G_CALLBACK(_OnWiFiActiveStateNotify), job);
+
+	NMActiveConnectionState state = nm_active_connection_get_state(active);
+	if (state == NM_ACTIVE_CONNECTION_STATE_ACTIVATED) {
+		_ConnectWiFiFinish(job, (int32)B_OK, NULL);
+		return;
+	}
+	if (state == NM_ACTIVE_CONNECTION_STATE_DEACTIVATED) {
+		NMDevice* device = _FindDeviceByPath(job->nmClient,
+			job->devicePath.String());
+		BString reason = _JoinFailureReason(active, device);
+		_ConnectWiFiFinish(job, (int32)B_ERROR, reason.String());
+		return;
+	}
+}
+
+
+static const char*
+_WiFiKeyMgmt(const BString& security)
+{
+	if (security == "none")
+		return NULL;
+	if (security == "sae")
+		return "sae";
+	if (security == "wep")
+		return "none";
+	return "wpa-psk";
+}
+
+
+// First saved 802-11-wireless profile whose SSID matches. Dispatch thread
+// only: walks NMClient's GObject-owned connection list.
+static NMConnection*
+_FindSavedWiFiConnection(NMClient* nmClient, const BString& ssid)
+{
+	const GPtrArray* connections = nm_client_get_connections(nmClient);
+	if (connections == NULL)
+		return NULL;
+
+	for (guint i = 0; i < connections->len; i++) {
+		NMConnection* connection
+			= (NMConnection*)g_ptr_array_index(connections, i);
+		if (connection == NULL)
+			continue;
+
+		NMSettingWireless* wireless
+			= nm_connection_get_setting_wireless(connection);
+		if (wireless == NULL)
+			continue;
+
+		GBytes* ssidBytes = nm_setting_wireless_get_ssid(wireless);
+		if (ssidBytes == NULL)
+			continue;
+
+		gsize len = 0;
+		gconstpointer bytes = g_bytes_get_data(ssidBytes, &len);
+		if (bytes == NULL || len == 0)
+			continue;
+
+		if (BString((const char*)bytes, len) == ssid)
+			return connection;
+	}
+
+	return NULL;
+}
+
+
+static void
+_ApplyWiFiJoinSettings(NMConnection* connection, _ConnectWiFiJob* job)
+{
+	NMSettingConnection* connSetting
+		= nm_connection_get_setting_connection(connection);
+	if (connSetting != NULL) {
+		g_object_set(connSetting, NM_SETTING_CONNECTION_AUTOCONNECT,
+			(gboolean)job->remember, NULL);
+	}
+
+	NMSettingWireless* wireless
+		= nm_connection_get_setting_wireless(connection);
+	if (wireless != NULL) {
+		g_object_set(wireless, NM_SETTING_WIRELESS_HIDDEN,
+			(gboolean)job->hidden, NULL);
+	}
+
+	const char* keyMgmt = _WiFiKeyMgmt(job->security);
+	if (keyMgmt == NULL)
+		return;
+
+	NMSettingWirelessSecurity* secSetting
+		= nm_connection_get_setting_wireless_security(connection);
+	if (secSetting == NULL) {
+		secSetting = (NMSettingWirelessSecurity*)
+			nm_setting_wireless_security_new();
+		nm_connection_add_setting(connection, NM_SETTING(secSetting));
+	}
+	g_object_set(secSetting, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT,
+		keyMgmt, NULL);
+	if (job->security == "wep") {
+		g_object_set(secSetting,
+			NM_SETTING_WIRELESS_SECURITY_WEP_TX_KEYIDX, 0, NULL);
+	}
 }
 
 
@@ -2431,14 +3377,98 @@ _RunConnectToWiFi(gpointer data)
 	NMSettingWireless* wirelessSetting
 		= (NMSettingWireless*)nm_setting_wireless_new();
 	GBytes* ssidBytes = g_bytes_new(job->ssid.String(), job->ssid.Length());
-	g_object_set(wirelessSetting, NM_SETTING_WIRELESS_SSID, ssidBytes, NULL);
+	g_object_set(wirelessSetting, NM_SETTING_WIRELESS_SSID, ssidBytes,
+		NM_SETTING_WIRELESS_HIDDEN, (gboolean)job->hidden, NULL);
 	g_bytes_unref(ssidBytes);
 	nm_connection_add_setting(connection, NM_SETTING(wirelessSetting));
 
-	// No password: an intentionally incomplete profile for a secured
-	// network, the case that forces NM to call our agent's GetSecrets on
-	// activation -- see 1.1's "control case vs agent-covered case" split.
-	if (!job->password.IsEmpty()) {
+	// The matching AP's path goes to AddAndActivate; its capabilities pick
+	// the key-mgmt when no password was typed.
+	NMAccessPoint* targetAP = NULL;
+	if (NM_IS_DEVICE_WIFI(device) && !job->hidden) {
+		const GPtrArray* aps = nm_device_wifi_get_access_points(
+			(NMDeviceWifi*)device);
+		int32 bestStrength = -1;
+		for (guint i = 0; aps != NULL && i < aps->len; i++) {
+			NMAccessPoint* ap = (NMAccessPoint*)g_ptr_array_index(aps, i);
+			GBytes* apSsidBytes = nm_access_point_get_ssid(ap);
+			if (apSsidBytes == NULL)
+				continue;
+
+			gsize len = 0;
+			gconstpointer ssidData = g_bytes_get_data(apSsidBytes, &len);
+			if (ssidData == NULL
+					|| BString((const char*)ssidData, len) != job->ssid)
+				continue;
+
+			int32 strength = nm_access_point_get_strength(ap);
+			if (strength > bestStrength) {
+				bestStrength = strength;
+				targetAP = ap;
+			}
+		}
+	}
+
+	// A saved profile with this SSID is updated and activated instead of
+	// adding a twin; ForgetWiFiNetwork() already had to delete every match.
+	NMConnection* existing = _FindSavedWiFiConnection(job->nmClient,
+		job->ssid);
+	if (existing != NULL) {
+		_ApplyWiFiJoinSettings(existing, job);
+		if (NM_IS_REMOTE_CONNECTION(existing)) {
+			// Fire-and-forget: activation runs on the in-memory
+			// connection; a failed commit is corrected on the next join.
+			nm_remote_connection_commit_changes_async(
+				NM_REMOTE_CONNECTION(existing), TRUE, NULL, NULL, NULL);
+		}
+		nm_client_activate_connection_async(job->nmClient, existing, device,
+			targetAP != NULL
+				? nm_object_get_path(NM_OBJECT(targetAP)) : NULL,
+			NULL, _OnAddAndActivateDone, job);
+		g_object_unref(connection);
+		return G_SOURCE_REMOVE;
+	}
+
+	// No secret here, so NM asks our agent; the preflet must not collect
+	// one for a hidden join even if an older caller passed a password.
+	const char* keyMgmt = NULL;
+	if (job->hidden) {
+		if (job->security != "none") {
+			if (job->security == "sae")
+				keyMgmt = "sae";
+			else if (job->security == "wep")
+				keyMgmt = "none";
+			else
+				keyMgmt = "wpa-psk";
+		}
+	} else if (job->password.IsEmpty() && targetAP != NULL
+			&& _APIsSecured(targetAP)) {
+		uint32 apSec = (uint32)nm_access_point_get_wpa_flags(targetAP)
+			| (uint32)nm_access_point_get_rsn_flags(targetAP);
+		if ((apSec & NM_802_11_AP_SEC_KEY_MGMT_PSK) != 0)
+			keyMgmt = "wpa-psk";
+		else if ((apSec & NM_802_11_AP_SEC_KEY_MGMT_SAE) != 0)
+			keyMgmt = "sae";
+		else if (apSec == NM_802_11_AP_SEC_NONE)
+			keyMgmt = "none";
+	}
+
+	if (keyMgmt != NULL) {
+		NMSettingWirelessSecurity* secSetting =
+			(NMSettingWirelessSecurity*)nm_setting_wireless_security_new();
+		g_object_set(secSetting, NM_SETTING_WIRELESS_SECURITY_KEY_MGMT,
+			keyMgmt, NULL);
+		if (job->security == "wep") {
+			g_object_set(secSetting,
+				NM_SETTING_WIRELESS_SECURITY_WEP_TX_KEYIDX, 0, NULL);
+		}
+		nm_connection_add_setting(connection, NM_SETTING(secSetting));
+	}
+
+	// Inline secret only for non-hidden joins that still pass one
+	// (NetworkStatus, BNetworkDevice::JoinNetwork). Hidden joins rely on
+	// the agent above.
+	if (!job->hidden && !job->password.IsEmpty()) {
 		NMSettingWirelessSecurity* secSetting =
 			(NMSettingWirelessSecurity*)nm_setting_wireless_security_new();
 
@@ -2451,7 +3481,8 @@ _RunConnectToWiFi(gpointer data)
 				NM_SETTING_WIRELESS_SECURITY_WEP_TX_KEYIDX, 0, NULL);
 		} else {
 			g_object_set(secSetting,
-				NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-psk",
+				NM_SETTING_WIRELESS_SECURITY_KEY_MGMT,
+				job->security == "sae" ? "sae" : "wpa-psk",
 				NM_SETTING_WIRELESS_SECURITY_PSK, job->password.String(),
 				NULL);
 		}
@@ -2459,7 +3490,9 @@ _RunConnectToWiFi(gpointer data)
 	}
 
 	nm_client_add_and_activate_connection_async(job->nmClient, connection,
-		device, NULL, NULL, _OnAddAndActivateDone, job);
+		device, targetAP != NULL
+			? nm_object_get_path(NM_OBJECT(targetAP)) : NULL,
+		NULL, _OnAddAndActivateDone, job);
 
 	g_object_unref(connection);
 	return G_SOURCE_REMOVE;
@@ -2469,7 +3502,7 @@ _RunConnectToWiFi(gpointer data)
 status_t
 NMBackend::ConnectToWiFiAsync(const char* devicePath, const char* ssid,
 	const char* password, const char* security, bool remember,
-	const BMessenger& replyTo, uint32 replyWhat)
+	const BMessenger& replyTo, uint32 replyWhat, bool hidden)
 {
 	if (devicePath == NULL || ssid == NULL)
 		return B_BAD_VALUE;
@@ -2485,8 +3518,11 @@ NMBackend::ConnectToWiFiAsync(const char* devicePath, const char* ssid,
 	job->password = password != NULL ? password : "";
 	job->security = security != NULL ? security : "";
 	job->remember = remember;
+	job->hidden = hidden;
 	job->replyTo = replyTo;
 	job->replyWhat = replyWhat;
+	job->active = NULL;
+	job->stateHandlerId = 0;
 
 	g_main_context_invoke((GMainContext*)fMainContext, _RunConnectToWiFi, job);
 	return B_OK;
@@ -2712,7 +3748,7 @@ _RunCreateWiredConnectionProfile(gpointer data)
 		reply.AddInt32("status", (int32)B_NOT_SUPPORTED);
 		reply.AddString("reason",
 			"profile creation is only supported for Ethernet devices; "
-			"join a WiFi network to create a wireless profile");
+			"join a Wi-Fi network to create a wireless profile");
 		job->replyTo.SendMessage(&reply);
 		delete job;
 		return G_SOURCE_REMOVE;
@@ -2793,6 +3829,915 @@ NMBackend::CreateWiredConnectionProfileAsync(const char* devicePath,
 
 	g_main_context_invoke((GMainContext*)fMainContext,
 		_RunCreateWiredConnectionProfile, job);
+	return B_OK;
+}
+
+
+// #pragma mark - Mobile broadband (GSM/CDMA)
+
+
+struct _MobileJob {
+	NMBackend* backend;
+	NMClient* nmClient;
+	BString devicePath;
+	BString name;
+	BString apn;
+	BString user;
+	BString password;
+	BString number;
+	bool remember;
+	bool disconnect;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_FillMobileFromConnection(NMConnection* connection, bool connected,
+	BMessage* reply)
+{
+	reply->AddBool(kNMFieldMobileConnected, connected);
+	reply->AddBool(kNMFieldMobileHasProfile, connection != NULL);
+	if (connection == NULL)
+		return;
+
+	const char* id = nm_connection_get_id(connection);
+	reply->AddString(kNMFieldMobileName, id != NULL ? id : "");
+
+	NMSettingGsm* gsm = nm_connection_get_setting_gsm(connection);
+	NMSettingCdma* cdma = nm_connection_get_setting_cdma(connection);
+	if (gsm != NULL) {
+		const char* apn = nm_setting_gsm_get_apn(gsm);
+		const char* user = nm_setting_gsm_get_username(gsm);
+		const char* password = nm_setting_gsm_get_password(gsm);
+		const char* number = nm_setting_gsm_get_number(gsm);
+		reply->AddString(kNMFieldMobileAPN, apn != NULL ? apn : "");
+		reply->AddString(kNMFieldMobileUser, user != NULL ? user : "");
+		reply->AddString(kNMFieldMobilePassword,
+			password != NULL ? password : "");
+		reply->AddString(kNMFieldMobileNumber,
+			number != NULL ? number : "");
+	} else if (cdma != NULL) {
+		const char* user = nm_setting_cdma_get_username(cdma);
+		const char* password = nm_setting_cdma_get_password(cdma);
+		const char* number = nm_setting_cdma_get_number(cdma);
+		reply->AddString(kNMFieldMobileAPN, "");
+		reply->AddString(kNMFieldMobileUser, user != NULL ? user : "");
+		reply->AddString(kNMFieldMobilePassword,
+			password != NULL ? password : "");
+		reply->AddString(kNMFieldMobileNumber,
+			number != NULL ? number : "");
+	}
+}
+
+
+// First GSM/CDMA profile bound to the device via interface name, or the
+// device's active connection if it already is a mobile profile.
+static NMConnection*
+_MobileConnectionForDevice(NMClient* client, NMDevice* device)
+{
+	const char* iface = nm_device_get_iface(device);
+	NMActiveConnection* active = nm_device_get_active_connection(device);
+	if (active != NULL) {
+		NMConnection* connection = NM_CONNECTION(
+			nm_active_connection_get_connection(active));
+		if (connection != NULL
+				&& (nm_connection_get_setting_gsm(connection) != NULL
+					|| nm_connection_get_setting_cdma(connection) != NULL))
+			return connection;
+	}
+
+	const GPtrArray* connections = nm_client_get_connections(client);
+	if (connections == NULL)
+		return NULL;
+
+	for (guint i = 0; i < connections->len; i++) {
+		NMRemoteConnection* remote = (NMRemoteConnection*)
+			g_ptr_array_index(connections, i);
+		NMConnection* connection = NM_CONNECTION(remote);
+		if (connection == NULL)
+			continue;
+		if (nm_connection_get_setting_gsm(connection) == NULL
+				&& nm_connection_get_setting_cdma(connection) == NULL)
+			continue;
+
+		NMSettingConnection* setting
+			= nm_connection_get_setting_connection(connection);
+		const char* profileIface = setting != NULL
+			? nm_setting_connection_get_interface_name(setting) : NULL;
+		if (profileIface != NULL && iface != NULL
+				&& strcmp(profileIface, iface) == 0)
+			return connection;
+	}
+
+	return NULL;
+}
+
+
+static void
+_OnMobileAddAndActivateDone(GObject* source, GAsyncResult* result,
+	gpointer userData)
+{
+	_MobileJob* job = (_MobileJob*)userData;
+
+	GError* error = NULL;
+	NMActiveConnection* active = nm_client_add_and_activate_connection_finish(
+		job->nmClient, result, &error);
+
+	BMessage reply(job->replyWhat);
+	if (active != NULL) {
+		reply.AddInt32("status", (int32)B_OK);
+		g_object_unref(active);
+	} else {
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+	}
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+static gboolean
+_RunMobileJob(gpointer data)
+{
+	_MobileJob* job = (_MobileJob*)data;
+
+	NMDevice* device = _FindDeviceByPath(job->nmClient, job->devicePath.String());
+	if (device == NULL) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
+		reply.AddString("reason", "no such device");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	if (nm_device_get_device_type(device) != NM_DEVICE_TYPE_MODEM) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_NOT_SUPPORTED);
+		reply.AddString("reason", "device is not a modem");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	if (job->disconnect) {
+		NMActiveConnection* active = nm_device_get_active_connection(device);
+		BMessage reply(job->replyWhat);
+		if (active == NULL) {
+			reply.AddInt32("status", (int32)B_OK);
+			job->replyTo.SendMessage(&reply);
+			delete job;
+			return G_SOURCE_REMOVE;
+		}
+
+		nm_device_disconnect_async(device, NULL, NULL, NULL);
+		reply.AddInt32("status", (int32)B_OK);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	bool isGSM = true;
+	if (NM_IS_DEVICE_MODEM(device)) {
+		guint32 caps = nm_device_modem_get_modem_capabilities(
+			NM_DEVICE_MODEM(device));
+		bool hasGSM = (caps & NM_DEVICE_MODEM_CAPABILITY_GSM_UMTS) != 0
+			|| (caps & NM_DEVICE_MODEM_CAPABILITY_LTE) != 0
+			|| (caps & NM_DEVICE_MODEM_CAPABILITY_5GNR) != 0;
+		bool hasCDMA = (caps & NM_DEVICE_MODEM_CAPABILITY_CDMA_EVDO) != 0;
+		isGSM = hasGSM || !hasCDMA;
+	}
+
+	const char* iface = nm_device_get_iface(device);
+	if (iface == NULL || iface[0] == '\0') {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason", "device has no interface name to bind to");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	NMConnection* connection = nm_simple_connection_new();
+
+	char* uuid = nm_utils_uuid_generate();
+	NMSettingConnection* connSetting
+		= (NMSettingConnection*)nm_setting_connection_new();
+	g_object_set(connSetting,
+		NM_SETTING_CONNECTION_ID,
+		!job->name.IsEmpty() ? job->name.String() : iface,
+		NM_SETTING_CONNECTION_UUID, uuid,
+		NM_SETTING_CONNECTION_TYPE,
+		isGSM ? NM_SETTING_GSM_SETTING_NAME : NM_SETTING_CDMA_SETTING_NAME,
+		NM_SETTING_CONNECTION_INTERFACE_NAME, iface,
+		NM_SETTING_CONNECTION_AUTOCONNECT, (gboolean)job->remember,
+		NULL);
+	g_free(uuid);
+	nm_connection_add_setting(connection, NM_SETTING(connSetting));
+
+	if (isGSM) {
+		NMSettingGsm* gsm = (NMSettingGsm*)nm_setting_gsm_new();
+		if (!job->apn.IsEmpty())
+			g_object_set(gsm, NM_SETTING_GSM_APN, job->apn.String(), NULL);
+		if (!job->user.IsEmpty())
+			g_object_set(gsm, NM_SETTING_GSM_USERNAME, job->user.String(),
+				NULL);
+		if (!job->password.IsEmpty())
+			g_object_set(gsm, NM_SETTING_GSM_PASSWORD,
+				job->password.String(), NULL);
+		if (!job->number.IsEmpty())
+			g_object_set(gsm, NM_SETTING_GSM_NUMBER, job->number.String(),
+				NULL);
+		nm_connection_add_setting(connection, NM_SETTING(gsm));
+	} else {
+		NMSettingCdma* cdma = (NMSettingCdma*)nm_setting_cdma_new();
+		if (!job->user.IsEmpty())
+			g_object_set(cdma, NM_SETTING_CDMA_USERNAME, job->user.String(),
+				NULL);
+		if (!job->password.IsEmpty())
+			g_object_set(cdma, NM_SETTING_CDMA_PASSWORD,
+				job->password.String(), NULL);
+		if (!job->number.IsEmpty())
+			g_object_set(cdma, NM_SETTING_CDMA_NUMBER, job->number.String(),
+				NULL);
+		nm_connection_add_setting(connection, NM_SETTING(cdma));
+	}
+
+	NMSettingIPConfig* ip4Setting
+		= (NMSettingIPConfig*)nm_setting_ip4_config_new();
+	g_object_set(ip4Setting, NM_SETTING_IP_CONFIG_METHOD,
+		NM_SETTING_IP4_CONFIG_METHOD_AUTO, NULL);
+	nm_connection_add_setting(connection, NM_SETTING(ip4Setting));
+
+	NMSettingIPConfig* ip6Setting
+		= (NMSettingIPConfig*)nm_setting_ip6_config_new();
+	g_object_set(ip6Setting, NM_SETTING_IP_CONFIG_METHOD,
+		NM_SETTING_IP6_CONFIG_METHOD_AUTO, NULL);
+	nm_connection_add_setting(connection, NM_SETTING(ip6Setting));
+
+	nm_client_add_and_activate_connection_async(job->nmClient, connection,
+		device, NULL, NULL, _OnMobileAddAndActivateDone, job);
+
+	g_object_unref(connection);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::ConnectMobileAsync(const char* devicePath, const char* name,
+	const char* apn, const char* user, const char* password,
+	const char* number, bool remember, const BMessenger& replyTo,
+	uint32 replyWhat)
+{
+	if (devicePath == NULL)
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_MobileJob* job = new _MobileJob;
+	job->backend = this;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath;
+	job->name = name != NULL ? name : "";
+	job->apn = apn != NULL ? apn : "";
+	job->user = user != NULL ? user : "";
+	job->password = password != NULL ? password : "";
+	job->number = number != NULL ? number : "";
+	job->remember = remember;
+	job->disconnect = false;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunMobileJob, job);
+	return B_OK;
+}
+
+
+status_t
+NMBackend::DisconnectMobileAsync(const char* devicePath,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (devicePath == NULL)
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_MobileJob* job = new _MobileJob;
+	job->backend = this;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath;
+	job->remember = false;
+	job->disconnect = true;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunMobileJob, job);
+	return B_OK;
+}
+
+
+struct _GetMobileCookie {
+	NMBackend* backend;
+	NMClient* nmClient;
+	BString devicePath;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static gboolean
+_RunGetMobileConnection(gpointer data)
+{
+	_GetMobileCookie* job = (_GetMobileCookie*)data;
+
+	BMessage reply(job->replyWhat);
+	NMDevice* device = _FindDeviceByPath(job->nmClient,
+		job->devicePath.String());
+	if (device == NULL) {
+		reply.AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
+		reply.AddString("reason", "no such device");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	bool connected = nm_device_get_state(device) == NM_DEVICE_STATE_ACTIVATED;
+	NMConnection* connection = _MobileConnectionForDevice(job->nmClient,
+		device);
+	reply.AddInt32("status", (int32)B_OK);
+	_FillMobileFromConnection(connection, connected, &reply);
+	job->replyTo.SendMessage(&reply);
+	delete job;
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::GetMobileConnectionAsync(const char* devicePath,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (devicePath == NULL)
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_GetMobileCookie* job = new _GetMobileCookie;
+	job->backend = this;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext,
+		_RunGetMobileConnection, job);
+	return B_OK;
+}
+
+
+// #pragma mark - Hotspot (AP mode)
+
+
+// Shared IPv6 method needs NetworkManager 1.42+; older daemons reject it.
+static bool
+_NMIPv6SharedSupported(NMClient* client)
+{
+	const char* version = client != NULL ? nm_client_get_version(client) : NULL;
+	if (version == NULL)
+		return false;
+	int major = 0;
+	int minor = 0;
+	if (sscanf(version, "%d.%d", &major, &minor) != 2)
+		return false;
+	return major > 1 || (major == 1 && minor >= 42);
+}
+
+
+// Writes the fixed hotspot profile shape onto connection. Always WPA2-PSK
+// with rsn/ccmp; never open. profileUUID is the stable settings key.
+static void
+_ApplyHotspotSettings(NMConnection* connection, NMClient* client,
+	const char* profileUUID, const char* ssid, const char* password)
+{
+	NMSettingConnection* connSetting
+		= (NMSettingConnection*)nm_connection_get_setting_connection(
+			connection);
+	if (connSetting == NULL) {
+		connSetting = (NMSettingConnection*)nm_setting_connection_new();
+		nm_connection_add_setting(connection, NM_SETTING(connSetting));
+	}
+	g_object_set(connSetting,
+		NM_SETTING_CONNECTION_ID, "Hotspot",
+		NM_SETTING_CONNECTION_UUID, profileUUID,
+		NM_SETTING_CONNECTION_TYPE, NM_SETTING_WIRELESS_SETTING_NAME,
+		NM_SETTING_CONNECTION_AUTOCONNECT, (gboolean)FALSE,
+		NULL);
+
+	NMSettingWireless* wirelessSetting
+		= (NMSettingWireless*)nm_connection_get_setting_wireless(connection);
+	if (wirelessSetting == NULL) {
+		wirelessSetting = (NMSettingWireless*)nm_setting_wireless_new();
+		nm_connection_add_setting(connection, NM_SETTING(wirelessSetting));
+	}
+	GBytes* ssidBytes = g_bytes_new(ssid, strlen(ssid));
+	g_object_set(wirelessSetting,
+		NM_SETTING_WIRELESS_SSID, ssidBytes,
+		NM_SETTING_WIRELESS_MODE, NM_SETTING_WIRELESS_MODE_AP,
+		NULL);
+	g_bytes_unref(ssidBytes);
+
+	NMSettingWirelessSecurity* secSetting
+		= (NMSettingWirelessSecurity*)
+			nm_connection_get_setting_wireless_security(connection);
+	if (secSetting == NULL) {
+		secSetting = (NMSettingWirelessSecurity*)
+			nm_setting_wireless_security_new();
+		nm_connection_add_setting(connection, NM_SETTING(secSetting));
+	}
+	g_object_set(secSetting,
+		NM_SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-psk",
+		NM_SETTING_WIRELESS_SECURITY_PSK, password,
+		NULL);
+	nm_setting_wireless_security_clear_protos(secSetting);
+	nm_setting_wireless_security_add_proto(secSetting, "rsn");
+	nm_setting_wireless_security_clear_pairwise(secSetting);
+	nm_setting_wireless_security_add_pairwise(secSetting, "ccmp");
+	nm_setting_wireless_security_clear_groups(secSetting);
+	nm_setting_wireless_security_add_group(secSetting, "ccmp");
+
+	NMSettingIPConfig* ip4Setting
+		= (NMSettingIPConfig*)nm_connection_get_setting_ip4_config(
+			connection);
+	if (ip4Setting == NULL) {
+		ip4Setting = (NMSettingIPConfig*)nm_setting_ip4_config_new();
+		nm_connection_add_setting(connection, NM_SETTING(ip4Setting));
+	}
+	g_object_set(ip4Setting, NM_SETTING_IP_CONFIG_METHOD,
+		NM_SETTING_IP4_CONFIG_METHOD_SHARED, NULL);
+
+	NMSettingIPConfig* ip6Setting
+		= (NMSettingIPConfig*)nm_connection_get_setting_ip6_config(
+			connection);
+	if (ip6Setting == NULL) {
+		ip6Setting = (NMSettingIPConfig*)nm_setting_ip6_config_new();
+		nm_connection_add_setting(connection, NM_SETTING(ip6Setting));
+	}
+	const char* ip6Method = _NMIPv6SharedSupported(client)
+		? NM_SETTING_IP6_CONFIG_METHOD_SHARED : "ignore";
+	g_object_set(ip6Setting, NM_SETTING_IP_CONFIG_METHOD, ip6Method, NULL);
+}
+
+
+// True when the adapter is on another network; libnm has no AP+STA bit,
+// so the UI warns that starting the hotspot drops it.
+static bool
+_WifiWillDropForHotspot(NMClient* client, NMDevice* device)
+{
+	if (device == NULL)
+		return false;
+	NMActiveConnection* active = nm_device_get_active_connection(device);
+	if (active == NULL)
+		return false;
+	NMConnection* connection = NM_CONNECTION(
+		nm_active_connection_get_connection(active));
+	if (connection == NULL)
+		return false;
+	NMSettingWireless* wireless = nm_connection_get_setting_wireless(
+		connection);
+	if (wireless == NULL)
+		return false;
+	const char* mode = nm_setting_wireless_get_mode(wireless);
+	return mode == NULL || strcmp(mode, "ap") != 0;
+}
+
+
+static bool
+_WifiCanStartHotspot(NMDevice* device)
+{
+	if (device == NULL
+		|| nm_device_get_device_type(device) != NM_DEVICE_TYPE_WIFI) {
+		return false;
+	}
+	guint32 caps = nm_device_wifi_get_capabilities(NM_DEVICE_WIFI(device));
+	return (caps & NM_WIFI_DEVICE_CAP_AP) != 0;
+}
+
+
+struct _StartHotspotJob {
+	NMClient* nmClient;
+	BString devicePath;
+	BString profileUUID;
+	BString ssid;
+	BString password;
+	bool willDisconnect;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_FinishStartHotspot(_StartHotspotJob* job, const char* connectionPath)
+{
+	BMessage reply(job->replyWhat);
+	reply.AddInt32("status", (int32)B_OK);
+	reply.AddString(kNMFieldHotspotUUID, job->profileUUID.String());
+	reply.AddString(kNMFieldHotspotSSID, job->ssid.String());
+	reply.AddString(kNMFieldHotspotPassword, job->password.String());
+	reply.AddString(kNMFieldHotspotConnectionPath,
+		connectionPath != NULL ? connectionPath : "");
+	reply.AddBool(kNMFieldHotspotWillDisconnect, job->willDisconnect);
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+static void
+_OnHotspotActivated(GObject* client, GAsyncResult* result, gpointer data)
+{
+	_StartHotspotJob* job = (_StartHotspotJob*)data;
+	GError* error = NULL;
+	NMActiveConnection* active = nm_client_activate_connection_finish(
+		job->nmClient, result, &error);
+	if (active == NULL) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return;
+	}
+	// The path string is owned by the active object; copy it out before
+	// the unref below frees it.
+	BString path(nm_object_get_path(NM_OBJECT(active)));
+	g_object_unref(active);
+	_FinishStartHotspot(job, path.String());
+}
+
+
+static void
+_OnHotspotProfileSaved(GObject* client, GAsyncResult* result, gpointer data)
+{
+	_StartHotspotJob* job = (_StartHotspotJob*)data;
+	GError* error = NULL;
+	NMRemoteConnection* remote = nm_client_add_connection_finish(
+		NM_CLIENT(client), result, &error);
+	if (remote == NULL) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return;
+	}
+	NMDevice* device = _FindDeviceByPath(job->nmClient,
+		job->devicePath.String());
+	nm_client_activate_connection_async(job->nmClient,
+		NM_CONNECTION(remote), device, NULL, NULL, _OnHotspotActivated, job);
+	g_object_unref(remote);
+}
+
+
+static void
+_OnHotspotProfileCommitted(GObject* client, GAsyncResult* result, gpointer data)
+{
+	_StartHotspotJob* job = (_StartHotspotJob*)data;
+	GError* error = NULL;
+	gboolean ok = nm_remote_connection_commit_changes_finish(
+		NM_REMOTE_CONNECTION(client), result, &error);
+	if (!ok) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ERROR);
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return;
+	}
+	NMDevice* device = _FindDeviceByPath(job->nmClient,
+		job->devicePath.String());
+	nm_client_activate_connection_async(job->nmClient,
+		NM_CONNECTION(client), device, NULL, NULL, _OnHotspotActivated, job);
+}
+
+
+static gboolean
+_RunStartHotspot(gpointer data)
+{
+	_StartHotspotJob* job = (_StartHotspotJob*)data;
+	NMClient* client = job->nmClient;
+
+	if (job->profileUUID.IsEmpty()) {
+		char* uuid = nm_utils_uuid_generate();
+		job->profileUUID = uuid;
+		g_free(uuid);
+	}
+
+	NMDevice* device = _FindDeviceByPath(client, job->devicePath.String());
+	if (!_WifiCanStartHotspot(device)) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)(device == NULL
+			? B_ENTRY_NOT_FOUND : B_NOT_SUPPORTED));
+		reply.AddString("reason", device == NULL
+			? "no such device"
+			: "this Wi-Fi adapter cannot start an access point");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	job->willDisconnect = _WifiWillDropForHotspot(client, device);
+
+	NMRemoteConnection* remote = nm_client_get_connection_by_uuid(client,
+		job->profileUUID.String());
+	if (remote != NULL) {
+		// Reuse the fixed profile: rewrite settings in place, then activate.
+		_ApplyHotspotSettings(NM_CONNECTION(remote), client,
+			job->profileUUID.String(), job->ssid.String(),
+			job->password.String());
+		nm_remote_connection_commit_changes_async(remote, TRUE, NULL,
+			_OnHotspotProfileCommitted, job);
+		return G_SOURCE_REMOVE;
+	}
+
+	NMConnection* connection = nm_simple_connection_new();
+	_ApplyHotspotSettings(connection, client, job->profileUUID.String(),
+		job->ssid.String(), job->password.String());
+	nm_client_add_connection_async(client, connection, TRUE, NULL,
+		_OnHotspotProfileSaved, job);
+	g_object_unref(connection);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::StartHotspotAsync(const char* devicePath, const char* profileUUID,
+	const char* ssid, const char* password, const BMessenger& replyTo,
+	uint32 replyWhat)
+{
+	if (devicePath == NULL || ssid == NULL || ssid[0] == '\0'
+		|| password == NULL || strlen(password) < 8) {
+		return B_BAD_VALUE;
+	}
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_StartHotspotJob* job = new _StartHotspotJob;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath;
+	job->profileUUID = profileUUID != NULL ? profileUUID : "";
+	job->ssid = ssid;
+	job->password = password;
+	job->willDisconnect = false;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunStartHotspot, job);
+	return B_OK;
+}
+
+
+struct _StopHotspotJob {
+	NMClient* nmClient;
+	BString profileUUID;
+	BMessenger replyTo;
+	uint32 replyWhat;
+};
+
+
+static void
+_OnHotspotDeactivated(GObject* client, GAsyncResult* result, gpointer data)
+{
+	_StopHotspotJob* job = (_StopHotspotJob*)data;
+	GError* error = NULL;
+	gboolean ok = nm_client_deactivate_connection_finish(job->nmClient,
+		result, &error);
+	BMessage reply(job->replyWhat);
+	reply.AddInt32("status", ok ? (int32)B_OK : (int32)B_ERROR);
+	if (!ok) {
+		reply.AddString("reason",
+			error != NULL ? error->message : "unknown error");
+		if (error != NULL)
+			g_error_free(error);
+	}
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+static gboolean
+_RunStopHotspot(gpointer data)
+{
+	_StopHotspotJob* job = (_StopHotspotJob*)data;
+	NMClient* client = job->nmClient;
+
+	NMActiveConnection* target = NULL;
+	const GPtrArray* activeConns = nm_client_get_active_connections(client);
+	if (activeConns != NULL) {
+		for (guint i = 0; i < activeConns->len; i++) {
+			NMActiveConnection* ac = (NMActiveConnection*)
+				g_ptr_array_index(activeConns, i);
+			const char* uuid = nm_active_connection_get_uuid(ac);
+			if (uuid == NULL || job->profileUUID != uuid)
+				continue;
+			target = ac;
+			break;
+		}
+	}
+
+	if (target == NULL) {
+		BMessage reply(job->replyWhat);
+		reply.AddInt32("status", (int32)B_ENTRY_NOT_FOUND);
+		reply.AddString("reason", "hotspot is not active");
+		job->replyTo.SendMessage(&reply);
+		delete job;
+		return G_SOURCE_REMOVE;
+	}
+
+	// Deactivate only. The saved profile stays for the next start.
+	nm_client_deactivate_connection_async(client, target, NULL,
+		_OnHotspotDeactivated, job);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::StopHotspotAsync(const char* profileUUID,
+	const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (profileUUID == NULL || profileUUID[0] == '\0')
+		return B_BAD_VALUE;
+
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_StopHotspotJob* job = new _StopHotspotJob;
+	job->nmClient = (NMClient*)fNMClient;
+	job->profileUUID = profileUUID;
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunStopHotspot, job);
+	return B_OK;
+}
+
+
+struct _HotspotStateJob {
+	NMClient* nmClient;
+	BString devicePath;
+	BString profileUUID;
+	BMessenger replyTo;
+	uint32 replyWhat;
+	bool active;
+	bool canStart;
+	bool willDisconnect;
+	BString ssid;
+	BString connectionPath;
+	BString password;
+};
+
+
+static void
+_FinishHotspotState(_HotspotStateJob* job)
+{
+	BMessage reply(job->replyWhat);
+	reply.AddBool(kNMFieldHotspotCanStart, job->canStart);
+	reply.AddBool(kNMFieldHotspotWillDisconnect, job->willDisconnect);
+	if (!job->profileUUID.IsEmpty())
+		reply.AddString(kNMFieldHotspotUUID, job->profileUUID.String());
+	if (!job->ssid.IsEmpty())
+		reply.AddString(kNMFieldHotspotSSID, job->ssid.String());
+	if (!job->connectionPath.IsEmpty())
+		reply.AddString(kNMFieldHotspotConnectionPath,
+			job->connectionPath.String());
+	if (!job->password.IsEmpty())
+		reply.AddString(kNMFieldHotspotPassword, job->password.String());
+	reply.AddBool(kNMFieldHotspotActive, job->active);
+	job->replyTo.SendMessage(&reply);
+	delete job;
+}
+
+
+// Cached connections carry no secrets; the PSK only comes back through
+// GetSecrets, whether the hotspot is up or merely saved.
+static void
+_OnHotspotSecrets(GObject* object, GAsyncResult* result, gpointer data)
+{
+	_HotspotStateJob* job = (_HotspotStateJob*)data;
+	GError* error = NULL;
+	GVariant* secrets = nm_remote_connection_get_secrets_finish(
+		NM_REMOTE_CONNECTION(object), result, &error);
+	if (error != NULL)
+		g_error_free(error);
+	if (secrets != NULL) {
+		GVariant* security = NULL;
+		if (g_variant_lookup(secrets, NM_SETTING_WIRELESS_SECURITY_SETTING_NAME,
+			"@a{sv}", &security) && security != NULL) {
+			const char* psk = NULL;
+			if (g_variant_lookup(security, "psk", "&s", &psk)
+				&& psk != NULL) {
+				job->password = psk;
+			}
+			g_variant_unref(security);
+		}
+		g_variant_unref(secrets);
+	}
+	_FinishHotspotState(job);
+}
+
+
+static gboolean
+_RunGetHotspotState(gpointer data)
+{
+	_HotspotStateJob* job = (_HotspotStateJob*)data;
+	NMClient* client = job->nmClient;
+
+	NMDevice* device = _FindDeviceByPath(client, job->devicePath.String());
+	job->canStart = _WifiCanStartHotspot(device);
+	job->willDisconnect = _WifiWillDropForHotspot(client, device);
+	job->active = false;
+
+	if (!job->profileUUID.IsEmpty()) {
+		const GPtrArray* activeConns = nm_client_get_active_connections(
+			client);
+		if (activeConns != NULL) {
+			for (guint i = 0; i < activeConns->len; i++) {
+				NMActiveConnection* ac = (NMActiveConnection*)
+					g_ptr_array_index(activeConns, i);
+				const char* uuid = nm_active_connection_get_uuid(ac);
+				if (uuid == NULL || job->profileUUID != uuid)
+					continue;
+				job->active = true;
+				const char* path = nm_object_get_path(NM_OBJECT(ac));
+				job->connectionPath = path != NULL ? path : "";
+
+				NMConnection* connection = NM_CONNECTION(
+					nm_active_connection_get_connection(ac));
+				NMSettingWireless* wireless = connection != NULL
+					? nm_connection_get_setting_wireless(connection)
+					: NULL;
+				if (wireless != NULL) {
+					GBytes* ssid = nm_setting_wireless_get_ssid(wireless);
+					if (ssid != NULL) {
+						gsize len = 0;
+						const char* bytes = (const char*)
+							g_bytes_get_data(ssid, &len);
+						if (bytes != NULL && len > 0)
+							job->ssid = BString(bytes, len);
+					}
+				}
+				break;
+			}
+		}
+
+		NMRemoteConnection* remote = nm_client_get_connection_by_uuid(
+			client, job->profileUUID.String());
+		if (remote != NULL) {
+			nm_remote_connection_get_secrets_async(remote,
+				NM_SETTING_WIRELESS_SECURITY_SETTING_NAME, NULL,
+				_OnHotspotSecrets, job);
+			return G_SOURCE_REMOVE;
+		}
+	}
+
+	_FinishHotspotState(job);
+	return G_SOURCE_REMOVE;
+}
+
+
+status_t
+NMBackend::GetHotspotStateAsync(const char* devicePath,
+	const char* profileUUID, const BMessenger& replyTo, uint32 replyWhat)
+{
+	if (fNMClient == NULL || fMainContext == NULL)
+		return B_ERROR;
+
+	_HotspotStateJob* job = new _HotspotStateJob;
+	job->nmClient = (NMClient*)fNMClient;
+	job->devicePath = devicePath != NULL ? devicePath : "";
+	job->profileUUID = profileUUID != NULL ? profileUUID : "";
+	job->replyTo = replyTo;
+	job->replyWhat = replyWhat;
+	job->active = false;
+	job->canStart = false;
+	job->willDisconnect = false;
+
+	g_main_context_invoke((GMainContext*)fMainContext, _RunGetHotspotState,
+		job);
 	return B_OK;
 }
 
@@ -3037,9 +4982,13 @@ NMBackend::_HandleGetSecrets(GVariant* parameters,
 			kind = SECRET_KIND_MISSING_CERTIFICATE;
 		else
 			kind = wired ? SECRET_KIND_WIRED_8021X : SECRET_KIND_ENTERPRISE;
+	} else if (strcmp(settingName, "vpn") == 0
+			|| strcmp(settingName, "wireguard") == 0) {
+		kind = strcmp(settingName, "vpn") == 0
+			? SECRET_KIND_VPN : SECRET_KIND_WIREGUARD;
+		keyName = "";
 	} else {
-		// Not one of the dialog cases (e.g. a VPN plugin's own secret) --
-		// this agent has no dialog for it; decline rather than guess.
+		// No dialog for this setting: decline rather than guess.
 		BString reason;
 		reason.SetToFormat("No dialog implemented for setting %s",
 			settingName);
@@ -3049,6 +4998,35 @@ NMBackend::_HandleGetSecrets(GVariant* parameters,
 		g_variant_unref(connection);
 		g_variant_unref(hints);
 		return;
+	}
+
+	BMessage secretKeys;
+	BMessage secretMessages;
+	BString connectionName;
+	if (kind == SECRET_KIND_VPN || kind == SECRET_KIND_WIREGUARD) {
+		connectionName = _ExtractStringProperty(connection, "connection",
+			"id");
+		if (hints != NULL) {
+			gsize nHints = 0;
+			const char** hintList = g_variant_get_strv(hints, &nHints);
+			for (gsize i = 0; i < nHints; i++) {
+				if (hintList[i] == NULL)
+					continue;
+				// Plugin prompt text, shown but not collected.
+				static const char* kVpnMessagePrefix = "x-vpn-message:";
+				if (strncmp(hintList[i], kVpnMessagePrefix,
+						strlen(kVpnMessagePrefix)) == 0) {
+					secretMessages.AddString("message",
+						hintList[i] + strlen(kVpnMessagePrefix));
+				} else {
+					secretKeys.AddString("key", hintList[i]);
+				}
+			}
+			g_free(hintList);
+		}
+		// Plugins that send no hints expect the standard password secret.
+		if (secretKeys.IsEmpty())
+			secretKeys.AddString("key", "password");
 	}
 
 	g_variant_unref(connection);
@@ -3066,6 +5044,12 @@ NMBackend::_HandleGetSecrets(GVariant* parameters,
 		request.AddString("method", method);
 	if (!missingFile.IsEmpty())
 		request.AddString("missing_file", missingFile);
+	if (kind == SECRET_KIND_VPN || kind == SECRET_KIND_WIREGUARD) {
+		if (!connectionName.IsEmpty())
+			request.AddString("connection_name", connectionName);
+		request.AddMessage("secret_keys", &secretKeys);
+		request.AddMessage("secret_messages", &secretMessages);
+	}
 
 	_SecretRequestContext* ctx = new _SecretRequestContext;
 	ctx->invocation = invocation;
@@ -3080,7 +5064,7 @@ NMBackend::_HandleGetSecrets(GVariant* parameters,
 		// standing between this and looking like broken WiFi.
 		g_dbus_method_invocation_return_dbus_error(invocation,
 			"org.freedesktop.NetworkManager.SecretAgent.Error.InternalError",
-			"No WiFi credential UI is registered");
+			"No Wi-Fi credential UI is registered");
 		delete ctx;
 		return;
 	}
@@ -3165,7 +5149,8 @@ NMBackend::_SecretAgentMethodCall(GDBusConnection* connection,
 
 void
 NMBackend::_CompleteSecretRequest(uint32 requestId, bool accepted,
-	const BString& password, const BString& identity, bool remember)
+	const BString& password, const BString& identity, bool remember,
+	const BMessage* secrets)
 {
 	void* cookieRaw = fSecretRouter.Take(requestId);
 	if (cookieRaw == NULL)
@@ -3193,7 +5178,10 @@ NMBackend::_CompleteSecretRequest(uint32 requestId, bool accepted,
 	// is the object path NM handed us in GetSecrets -- update-and-commit is
 	// fire-and-forget; a failure here does not block answering the secrets
 	// request, which must happen regardless.
-	if (fNMClient != NULL && !fPendingConnectionPath.IsEmpty()) {
+	// A tunnel's autoconnect is not the prompt's business.
+	bool tunnel = ctx->settingName == NM_SETTING_VPN_SETTING_NAME
+		|| ctx->settingName == NM_SETTING_WIREGUARD_SETTING_NAME;
+	if (fNMClient != NULL && !fPendingConnectionPath.IsEmpty() && !tunnel) {
 		NMConnection* connection = (NMConnection*)nm_client_get_connection_by_path(
 			(NMClient*)fNMClient, fPendingConnectionPath.String());
 		if (connection != NULL) {
@@ -3214,8 +5202,36 @@ NMBackend::_CompleteSecretRequest(uint32 requestId, bool accepted,
 
 	GVariantBuilder settingBuilder;
 	g_variant_builder_init(&settingBuilder, G_VARIANT_TYPE("a{sv}"));
-	g_variant_builder_add(&settingBuilder, "{sv}", ctx->keyName.String(),
-		g_variant_new_string(password.String()));
+	if (secrets != NULL) {
+		// VPN plugin secrets travel nested as vpn.secrets (a{ss}); other
+		// settings take each secret as a property of their own.
+		bool vpn = ctx->settingName == NM_SETTING_VPN_SETTING_NAME;
+		GVariantBuilder vpnSecrets;
+		g_variant_builder_init(&vpnSecrets, G_VARIANT_TYPE("a{ss}"));
+		BString key;
+		BString value;
+		for (int32 i = 0;
+				secrets->FindString("secret_key", i, &key) == B_OK; i++) {
+			if (secrets->FindString("secret_value", i, &value) != B_OK
+					|| key.IsEmpty())
+				continue;
+			if (vpn) {
+				g_variant_builder_add(&vpnSecrets, "{ss}", key.String(),
+					value.String());
+			} else {
+				g_variant_builder_add(&settingBuilder, "{sv}", key.String(),
+					g_variant_new_string(value.String()));
+			}
+		}
+		if (vpn) {
+			g_variant_builder_add(&settingBuilder, "{sv}",
+				NM_SETTING_VPN_SECRETS, g_variant_builder_end(&vpnSecrets));
+		} else
+			g_variant_builder_clear(&vpnSecrets);
+	} else {
+		g_variant_builder_add(&settingBuilder, "{sv}", ctx->keyName.String(),
+			g_variant_new_string(password.String()));
+	}
 
 	GVariantBuilder outerBuilder;
 	g_variant_builder_init(&outerBuilder, G_VARIANT_TYPE("a{sa{sv}}"));
@@ -3240,6 +5256,8 @@ struct _CompleteSecretCookie {
 	BString password;
 	BString identity;
 	bool remember;
+	BMessage secrets;
+	bool hasSecrets;
 };
 
 
@@ -3249,7 +5267,8 @@ _RunCompleteSecretRequest(gpointer data)
 	_CompleteSecretCookie* cookie = (_CompleteSecretCookie*)data;
 	cookie->backend->_CompleteSecretRequest(cookie->requestId,
 		cookie->accepted, cookie->password, cookie->identity,
-		cookie->remember);
+		cookie->remember,
+		cookie->hasSecrets ? &cookie->secrets : NULL);
 	delete cookie;
 	return G_SOURCE_REMOVE;
 }
@@ -3257,7 +5276,8 @@ _RunCompleteSecretRequest(gpointer data)
 
 void
 NMBackend::CompleteSecretRequest(uint32 requestId, bool accepted,
-	const BString& password, const BString& identity, bool remember)
+	const BString& password, const BString& identity, bool remember,
+	const BMessage* secrets)
 {
 	if (fMainContext == NULL || requestId == 0)
 		return;
@@ -3269,6 +5289,9 @@ NMBackend::CompleteSecretRequest(uint32 requestId, bool accepted,
 	cookie->password = password;
 	cookie->identity = identity;
 	cookie->remember = remember;
+	cookie->hasSecrets = secrets != NULL;
+	if (secrets != NULL)
+		cookie->secrets = *secrets;
 
 	// GDBusMethodInvocation completion is documented thread-safe from any
 	// thread, but routing through the dispatch thread keeps a single

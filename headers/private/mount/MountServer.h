@@ -14,6 +14,9 @@ const uint32 kSetAutomounterParams 	= 'pmst';
 const uint32 kGetAutomounterParams 	= 'gpms';
 const uint32 kVolumeMounted			= 'vmtd';
 const uint32 kUnmountVolume			= 'umnt';
+// Reply to kUnmountVolume: "error", "name", "mountPoint", "busyProcesses"
+// ("pid: name", when busy), and the request's "id"/"device_id" echoed.
+const uint32 kUnmountVolumeReply		= 'umnr';
 
 #define kMountServerSignature "application/x-vnd.Haiku-mount_server"
 

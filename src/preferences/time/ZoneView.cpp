@@ -13,11 +13,13 @@
  */
 
 
-#include <unicode/uversion.h>
 #include "ZoneView.h"
 
-#include <stdlib.h>
-#include <syscalls.h>
+#include <string.h>
+
+#include <Locale.h>
+#include <Messenger.h>
+#include <MutableLocaleRoster.h>
 
 #include <map>
 #include <new>
@@ -27,33 +29,22 @@
 #include <Button.h>
 #include <Catalog.h>
 #include <Collator.h>
-#include <ControlLook.h>
 #include <Country.h>
-#include <Directory.h>
-#include <Entry.h>
-#include <File.h>
-#include <FindDirectory.h>
 #include <ListItem.h>
-#include <Locale.h>
-#include <MutableLocaleRoster.h>
 #include <OutlineListView.h>
-#include <Path.h>
 #include <RadioButton.h>
 #include <ScrollView.h>
-#include <StorageDefs.h>
 #include <String.h>
 #include <StringView.h>
 #include <TimeZone.h>
 #include <View.h>
 #include <Window.h>
 
-#include <unicode/datefmt.h>
-#include <unicode/utmscale.h>
-#include <ICUWrapper.h>
-
 #include "TimeMessages.h"
 #include "TimeZoneListItem.h"
 #include "TimeZoneListView.h"
+#include "TimeWindow.h"
+#include "TimedatedAsync.h"
 #include "TZDisplay.h"
 
 
@@ -61,8 +52,12 @@
 #define B_TRANSLATION_CONTEXT "Time"
 
 
+using BPrivate::kTimedatedOpGetLocalRTC;
+using BPrivate::kTimedatedOpGetTimezone;
+using BPrivate::kTimedatedOpSetLocalRTC;
+using BPrivate::kTimedatedOpSetTimezone;
 using BPrivate::MutableLocaleRoster;
-using BPrivate::ObjectDeleter;
+using BPrivate::TimedatedAsyncRun;
 
 
 struct TimeZoneItemLess {
@@ -85,13 +80,15 @@ private:
 TimeZoneView::TimeZoneView(const char* name)
 	:
 	BGroupView(name, B_HORIZONTAL, B_USE_DEFAULT_SPACING),
-	fGmtTime(NULL),
+	fLastUpdateMinute(-1),
 	fUseGmtTime(false),
+	fOldUseGmtTime(false),
 	fCurrentZoneItem(NULL),
 	fOldZoneItem(NULL),
-	fInitialized(false)
+	fPendingZoneItem(NULL),
+	fInitialized(false),
+	fLocalRTCPending(false)
 {
-	_ReadRTCSettings();
 	_InitView();
 }
 
@@ -108,7 +105,6 @@ TimeZoneView::CheckCanRevert()
 
 TimeZoneView::~TimeZoneView()
 {
-	_WriteRTCSettings();
 }
 
 
@@ -123,6 +119,11 @@ TimeZoneView::AttachedToWindow()
 
 		fSetZone->SetTarget(this);
 		fZoneList->SetTarget(this);
+		fLocalTime->SetTarget(this);
+		fGmtTime->SetTarget(this);
+
+		_StartLoadSystemZone();
+		_StartLoadLocalRTC();
 	}
 }
 
@@ -174,11 +175,95 @@ TimeZoneView::MessageReceived(BMessage* message)
 			break;
 
 		case kRTCUpdate:
-			fUseGmtTime = fGmtTime->Value() == B_CONTROL_ON;
-			_UpdateGmtSettings();
-			_UpdateCurrent();
-			_UpdatePreview();
+			_StartSetLocalRTC();
 			break;
+
+		case kTimedatedResult:
+		{
+			int32 op;
+			if (message->FindInt32("op", &op) != B_OK)
+				break;
+
+			status_t status;
+			message->FindInt32("status", &status);
+			const char* error = NULL;
+			message->FindString("error", &error);
+
+			switch (op) {
+				case kTimedatedOpGetTimezone:
+				{
+					const char* zone = NULL;
+					message->FindString("zone", &zone);
+					_ApplySystemZone(zone);
+					break;
+				}
+
+				case kTimedatedOpGetLocalRTC:
+				{
+					// LocalRTC true: the RTC holds local time, not UTC.
+					bool localRTC = false;
+					message->FindBool("localRTC", &localRTC);
+					if (status == B_OK)
+						fUseGmtTime = !localRTC;
+					fOldUseGmtTime = fUseGmtTime;
+					if (fUseGmtTime)
+						fGmtTime->SetValue(B_CONTROL_ON);
+					else
+						fLocalTime->SetValue(B_CONTROL_ON);
+					_ShowOrHidePreview();
+					break;
+				}
+
+				case kTimedatedOpSetLocalRTC:
+				{
+					fLocalRTCPending = false;
+					fLocalTime->SetEnabled(true);
+					fGmtTime->SetEnabled(true);
+					if (status != B_OK) {
+						ShowTimeError(
+							B_TRANSLATE("Could not set the hardware "
+								"clock."),
+							status, error);
+						fUseGmtTime = fOldUseGmtTime;
+						if (fUseGmtTime)
+							fGmtTime->SetValue(B_CONTROL_ON);
+						else
+							fLocalTime->SetValue(B_CONTROL_ON);
+						_ShowOrHidePreview();
+					}
+					break;
+				}
+
+				case kTimedatedOpSetTimezone:
+				{
+					if (status != B_OK) {
+						ShowTimeError(
+							B_TRANSLATE("Could not set the time zone."),
+							status, error);
+						fPendingZoneItem = NULL;
+						break;
+					}
+
+					fCurrentZoneItem = fPendingZoneItem;
+					fPendingZoneItem = NULL;
+
+					// B_LOCALE_CHANGED lets running apps pick it up.
+					if (fCurrentZoneItem != NULL
+							&& fCurrentZoneItem->HasTimeZone())
+						MutableLocaleRoster::Default()->SetDefaultTimeZone(
+							fCurrentZoneItem->TimeZone());
+
+					fSetZone->SetEnabled(false);
+					fLastUpdateMinute = -1;
+					// just to trigger updating immediately
+					break;
+				}
+
+				default:
+					break;
+			}
+			break;
+		}
 
 		default:
 			BGroupView::MessageReceived(message);
@@ -204,12 +289,74 @@ TimeZoneView::_UpdateDateTime(BMessage* message)
 
 
 void
+TimeZoneView::_StartLoadSystemZone()
+{
+	BMessage args;
+	TimedatedAsyncRun(kTimedatedOpGetTimezone, args, BMessenger(this));
+}
+
+
+void
+TimeZoneView::_StartLoadLocalRTC()
+{
+	BMessage args;
+	TimedatedAsyncRun(kTimedatedOpGetLocalRTC, args, BMessenger(this));
+}
+
+
+void
+TimeZoneView::_StartSetLocalRTC()
+{
+	if (fLocalRTCPending)
+		return;
+
+	bool wantGmt = fGmtTime->Value() == B_CONTROL_ON;
+	fUseGmtTime = wantGmt;
+	_ShowOrHidePreview();
+
+	fLocalRTCPending = true;
+	fLocalTime->SetEnabled(false);
+	fGmtTime->SetEnabled(false);
+
+	BMessage args;
+	// LocalRTC true means the hardware clock holds local time. Keep the
+	// system clock and rewrite the RTC from it, as timedatectl does.
+	args.AddBool("local", !fUseGmtTime);
+	args.AddBool("fixSystem", false);
+	TimedatedAsyncRun(kTimedatedOpSetLocalRTC, args, BMessenger(this));
+}
+
+
+// timedated owns the system zone; locale settings must match so BeAPI
+// clients (Deskbar, BDateFormat) see the same zone without a relogin.
+void
+TimeZoneView::_ApplySystemZone(const char* systemZoneId)
+{
+	if (systemZoneId != NULL && *systemZoneId != '\0') {
+		BTimeZone localeZone;
+		BLocaleRoster::Default()->GetDefaultTimeZone(&localeZone);
+		if (localeZone.ID() != systemZoneId)
+			MutableLocaleRoster::Default()->SetDefaultTimeZone(
+				BTimeZone(systemZoneId));
+	}
+
+	_BuildZoneMenu(systemZoneId);
+	if (fCurrentZoneItem != NULL) {
+		fZoneList->Select(fZoneList->IndexOf(fCurrentZoneItem));
+		fCurrent->SetText(fCurrentZoneItem->Text());
+		fZoneList->ScrollToSelection();
+	}
+	_UpdateCurrent();
+	_UpdatePreview();
+}
+
+
+void
 TimeZoneView::_InitView()
 {
 	fZoneList = new TimeZoneListView();
 	fZoneList->SetSelectionMessage(new BMessage(H_CITY_CHANGED));
 	fZoneList->SetInvocationMessage(new BMessage(H_SET_TIME_ZONE));
-	_BuildZoneMenu();
 	BScrollView* scrollList = new BScrollView("scrollList", fZoneList,
 		B_FRAME_EVENTS | B_WILL_DRAW, false, true);
 	scrollList->SetExplicitMinSize(
@@ -260,10 +407,13 @@ TimeZoneView::_InitView()
 
 
 void
-TimeZoneView::_BuildZoneMenu()
+TimeZoneView::_BuildZoneMenu(const char* systemZoneId)
 {
 	BTimeZone defaultTimeZone;
-	BLocaleRoster::Default()->GetDefaultTimeZone(&defaultTimeZone);
+	if (systemZoneId != NULL && *systemZoneId != '\0')
+		defaultTimeZone.SetTo(systemZoneId);
+	else
+		BLocaleRoster::Default()->GetDefaultTimeZone(&defaultTimeZone);
 
 	BLanguage language;
 	BLocale::Default()->GetLanguage(&language);
@@ -404,7 +554,11 @@ TimeZoneView::_BuildZoneMenu()
 			}
 			zoneItemMap[fullZoneID] = zoneItem;
 
-			if (timeZone->ID() == defaultTimeZone.ID()) {
+			if (timeZone->ID() == defaultTimeZone.ID()
+					|| (timeZone->ID() == "UTC"
+						&& defaultTimeZone.ID() == "GMT")
+					|| (timeZone->ID() == "GMT"
+						&& defaultTimeZone.ID() == "UTC")) {
 				fCurrentZoneItem = zoneItem;
 				if (countryItem != NULL)
 					countryItem->SetExpanded(true);
@@ -478,8 +632,8 @@ TimeZoneView::_Revert()
 	else
 		fLocalTime->SetValue(B_CONTROL_ON);
 	_ShowOrHidePreview();
+	_StartSetLocalRTC();
 
-	_UpdateGmtSettings();
 	_SetSystemTimeZone();
 	_UpdatePreview();
 	_UpdateCurrent();
@@ -498,6 +652,7 @@ TimeZoneView::_UpdatePreview()
 	if (item == NULL || !item->HasTimeZone()) {
 		fPreview->SetText("");
 		fPreview->SetTime("");
+		fSetZone->SetEnabled(false);
 		return;
 	}
 
@@ -524,11 +679,6 @@ TimeZoneView::_UpdateCurrent()
 void
 TimeZoneView::_SetSystemTimeZone()
 {
-	/*	Set system timezone for all different API levels. How to do this?
-	 *	1) tell locale-roster about new default timezone
-	 *	2) tell kernel about new timezone offset
-	 */
-
 	int32 selection = fZoneList->CurrentSelection();
 	if (selection < 0)
 		return;
@@ -538,17 +688,18 @@ TimeZoneView::_SetSystemTimeZone()
 	if (item == NULL || !item->HasTimeZone())
 		return;
 
-	fCurrentZoneItem = item;
 	const BTimeZone& timeZone = item->TimeZone();
 
-	MutableLocaleRoster::Default()->SetDefaultTimeZone(timeZone);
+	// The legacy GMT sentinel is not an IANA id; timedated wants UTC.
+	const char* zoneId = timeZone.ID().String();
+	if (timeZone.ID() == BTimeZone::kNameOfGmtZone)
+		zoneId = "UTC";
 
-	_kern_set_timezone(timeZone.OffsetFromGMT(), timeZone.ID().String(),
-		timeZone.ID().Length());
+	fPendingZoneItem = item;
 
-	fSetZone->SetEnabled(false);
-	fLastUpdateMinute = -1;
-		// just to trigger updating immediately
+	BMessage args;
+	args.AddString("zone", zoneId);
+	TimedatedAsyncRun(kTimedatedOpSetTimezone, args, BMessenger(this));
 }
 
 
@@ -558,70 +709,9 @@ TimeZoneView::_FormatTime(const BTimeZone& timeZone)
 	BString result;
 
 	time_t now = time(NULL);
-	bool rtcIsGMT;
-	_kern_get_real_time_clock_is_gmt(&rtcIsGMT);
-	if (!rtcIsGMT) {
-		int32 currentOffset
-			= fCurrentZoneItem != NULL && fCurrentZoneItem->HasTimeZone()
-				? fCurrentZoneItem->OffsetFromGMT()
-				: 0;
-		now -= timeZone.OffsetFromGMT() - currentOffset;
-	}
 	fTimeFormat.Format(result, now, B_SHORT_TIME_FORMAT, &timeZone);
 
 	return result;
-}
-
-
-void
-TimeZoneView::_ReadRTCSettings()
-{
-	BPath path;
-	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) != B_OK)
-		return;
-
-	path.Append("RTC_time_settings");
-
-	BEntry entry(path.Path());
-	if (entry.Exists()) {
-		BFile file(&entry, B_READ_ONLY);
-		if (file.InitCheck() == B_OK) {
-			char buffer[6];
-			file.Read(buffer, 6);
-			if (strncmp(buffer, "gmt", 3) == 0)
-				fUseGmtTime = true;
-		}
-	}
-}
-
-
-void
-TimeZoneView::_WriteRTCSettings()
-{
-	BPath path;
-	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path, true) != B_OK)
-		return;
-
-	path.Append("RTC_time_settings");
-
-	BFile file(path.Path(), B_CREATE_FILE | B_ERASE_FILE | B_WRITE_ONLY);
-	if (file.InitCheck() == B_OK) {
-		if (fUseGmtTime)
-			file.Write("gmt", 3);
-		else
-			file.Write("local", 5);
-	}
-}
-
-
-void
-TimeZoneView::_UpdateGmtSettings()
-{
-	_WriteRTCSettings();
-
-	_ShowOrHidePreview();
-
-	_kern_set_real_time_clock_is_gmt(fUseGmtTime);
 }
 
 

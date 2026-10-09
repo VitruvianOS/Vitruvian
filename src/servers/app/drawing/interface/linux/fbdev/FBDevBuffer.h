@@ -5,11 +5,11 @@
 #ifndef ACCELERANT_BUFFER_H
 #define ACCELERANT_BUFFER_H
 
-#include "FBDevBuffer.h"
+#include "RenderingBuffer.h"
+
+#include "FBDevFormat.h"
 
 #include <linux/fb.h>
-
-#include "RenderingBuffer.h"
 
 
 #if DEBUG
@@ -36,6 +36,7 @@ public:
 
 private:
 			uint8_t*			fBuffer;
+			color_space			fSpace;
 			struct fb_var_screeninfo fVInfo;
 			struct fb_fix_screeninfo fInfo;
 };

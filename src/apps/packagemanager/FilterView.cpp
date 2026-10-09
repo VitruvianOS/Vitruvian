@@ -145,4 +145,16 @@ void
 FilterView::SetStatus(status_filter status)
 {
 	fStatus = status;
+	// Keep the marked item in step with the programmatic value, so the
+	// menu never shows "All packages" over an Installed filter.
+	fStatusMenu->SetLabelFromMarked(false);
+	for (int32 i = 0; i < fStatusMenu->CountItems(); i++) {
+		BMenuItem* item = fStatusMenu->ItemAt(i);
+		if (item == NULL)
+			continue;
+		int32 itemStatus = kFilterAll;
+		item->Message()->FindInt32("status", &itemStatus);
+		item->SetMarked(itemStatus == (int32)status);
+	}
+	fStatusMenu->SetLabelFromMarked(true);
 }

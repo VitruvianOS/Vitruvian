@@ -710,7 +710,8 @@ TermWindow::_GetPreferredFont(BFont& font)
 
 
 // BWindow eats Command+key combos that match no shortcut, so in ctrl mode
-// the control character the shell is owed never reaches the view.
+// the control character or Ctrl+arrow sequence the shell is owed never
+// reaches the view.
 void
 TermWindow::DispatchMessage(BMessage* message, BHandler* handler)
 {
@@ -718,11 +719,27 @@ TermWindow::DispatchMessage(BMessage* message, BHandler* handler)
 	int32 rawChar;
 	if (message->what == B_KEY_DOWN && command_is_control_key(fKeymap)
 		&& message->FindInt32("modifiers", &modifiers) == B_OK
-		&& (modifiers & (B_COMMAND_KEY | B_SHIFT_KEY)) == B_COMMAND_KEY
+		&& (modifiers & B_COMMAND_KEY) != 0
 		&& message->FindInt32("raw_char", &rawChar) == B_OK) {
 		TermView* view = _ActiveTermView();
-		if (view != NULL && view->WriteControlCharacter(rawChar))
+		bool shift = (modifiers & B_SHIFT_KEY) != 0;
+		if (view != NULL && !shift && view->WriteControlCharacter(rawChar))
 			return;
+
+		// Shift+Left/Right switch tabs and Option+Left/Right move them
+		// (see _UpdateShortcuts()), so those stay with BWindow.
+		const char* bytes;
+		bool option = (modifiers & B_OPTION_KEY) != 0;
+		bool toView = !option && (rawChar == B_UP_ARROW
+			|| rawChar == B_DOWN_ARROW
+			|| (!shift && (rawChar == B_LEFT_ARROW
+				|| rawChar == B_RIGHT_ARROW || rawChar == B_HOME
+				|| rawChar == B_END)));
+		if (view != NULL && toView
+			&& message->FindString("bytes", &bytes) == B_OK) {
+			static_cast<BView*>(view)->KeyDown(bytes, strlen(bytes));
+			return;
+		}
 	}
 
 	BWindow::DispatchMessage(message, handler);

@@ -1,9 +1,8 @@
 [Unit]
 Description=Vitruvian debug SSH (opt-in via vitruvian.sshdebug on the kernel cmdline)
-# Pulled into multi-user.target on Debug builds, but the Condition keeps it
-# inert unless the "Debug" GRUB entry was chosen, so a normal boot never
-# starts sshd. ssh.service stays disabled (commit-setup disables it); we only
-# `start` it here for this boot.
+# Enabled at image-build time by _debug_ssh_setup (configure --sshdebug), but
+# the Condition keeps it inert unless the "Vitruvian (SSH Debug)" entry was chosen,
+# so a normal boot never starts sshd.
 ConditionKernelCommandLine=vitruvian.sshdebug
 After=network.target
 
@@ -13,7 +12,9 @@ RemainAfterExit=yes
 # vos-install-helper generates host keys on the target at install time, so
 # this is a fallback for keys removed since
 ExecStartPre=/usr/bin/ssh-keygen -A
-ExecStart=/usr/bin/systemctl start ssh.service
+# ssh.service is canonical (sshd.service is its alias); trying the alias
+# too makes unit-name drift a loud failure instead of a silent no-op.
+ExecStart=/bin/sh -c '/usr/bin/systemctl start ssh.service || /usr/bin/systemctl start sshd.service'
 
 [Install]
 WantedBy=multi-user.target

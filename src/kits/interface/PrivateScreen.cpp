@@ -25,6 +25,7 @@
 #include <Bitmap.h>
 #include <Locker.h>
 #include <ObjectList.h>
+#include <String.h>
 #include <Window.h>
 
 #include <AutoLocker.h>
@@ -757,6 +758,57 @@ BPrivateScreen::SetBrightness(float brightness)
 	link.FlushWithReply(status);
 
 	return status;
+}
+
+
+status_t
+BPrivateScreen::GetTemperature(float* kelvin)
+{
+	if (kelvin == NULL)
+		return B_BAD_VALUE;
+
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SCREEN_GET_TEMPERATURE);
+	link.Attach<int32>(ID());
+
+	status_t status;
+	if (link.FlushWithReply(status) == B_OK && status == B_OK)
+		link.Read<float>(kelvin);
+
+	return status;
+}
+
+
+status_t
+BPrivateScreen::SetTemperature(float kelvin)
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SCREEN_SET_TEMPERATURE);
+	link.Attach<int32>(ID());
+	link.Attach<float>(kelvin);
+
+	status_t status = B_ERROR;
+	link.FlushWithReply(status);
+
+	return status;
+}
+
+
+status_t
+BPrivateScreen::GetConnectorName(BString& name)
+{
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_SCREEN_GET_CONNECTOR_NAME);
+	link.Attach<int32>(ID());
+
+	status_t status;
+	if (link.FlushWithReply(status) != B_OK || status != B_OK)
+		return status;
+
+	if (link.ReadString(name) != B_OK)
+		return B_ERROR;
+
+	return B_OK;
 }
 
 

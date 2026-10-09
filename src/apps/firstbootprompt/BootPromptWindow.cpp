@@ -429,10 +429,18 @@ BootPromptWindow::_InitCatalog(bool saveSettings)
 	if (!saveSettings)
 		return;
 
+	// English has no catalog: take the selected language, or the ID stays
+	// empty and the conventions fall back to the ICU root locale.
 	BMessage settings;
 	BString language;
-	if (BLocaleRoster::Default()->GetCatalog()->GetLanguage(&language) == B_OK)
-		settings.AddString("language", language.String());
+	if (BLocaleRoster::Default()->GetCatalog()->GetLanguage(&language) != B_OK
+		|| language.IsEmpty()) {
+		BMessage preferred;
+		BLocaleRoster::Default()->GetPreferredLanguages(&preferred);
+		if (preferred.FindString("language", &language) != B_OK)
+			language = "en";
+	}
+	settings.AddString("language", language.String());
 
 	MutableLocaleRoster::Default()->SetPreferredLanguages(&settings);
 

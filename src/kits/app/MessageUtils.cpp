@@ -96,12 +96,13 @@ entry_ref_swap(char *buffer, size_t size)
 	if (size < sizeof(dev_t) + sizeof(ino_t))
 		return B_BAD_VALUE;
 
+	// dev_t is 64-bit on this port; a 32-bit swap would corrupt it.
 	dev_t *dev = (dev_t *)buffer;
-	*dev = B_SWAP_INT32(*dev);
+	*dev = (dev_t)B_SWAP_INT64((uint64)*dev);
 	buffer += sizeof(dev_t);
 
 	ino_t *ino = (ino_t *)buffer;
-	*ino = B_SWAP_INT64(*ino);
+	*ino = (ino_t)B_SWAP_INT64((uint64)*ino);
 
 	return B_OK;
 }

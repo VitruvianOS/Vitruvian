@@ -2135,7 +2135,8 @@ MoveEntryToTrash(BEntry* entry, BPoint* loc, Undo &undo)
 				alert->Go();
 			} else {
 				BMessage message(kUnmountVolume);
-				message.AddInt32("device_id", volume.Device());
+				// volume.Device() is dev_t; post as Int64 for mount_server.
+				message.AddInt64("device_id", (int64)volume.Device());
 				be_app->PostMessage(&message);
 			}
 			return B_OK;
@@ -2837,6 +2838,23 @@ FSGetTrashDir(BDirectory* trashDir, dev_t dev)
 }
 
 
+bool
+FSRecordTrashDir(BObjectList<node_ref, true>* seen, const BDirectory* trashDir)
+{
+	node_ref nodeRef;
+	if (trashDir->GetNodeRef(&nodeRef) != B_OK)
+		return false;
+
+	for (int32 i = 0; i < seen->CountItems(); i++) {
+		if (*seen->ItemAt(i) == nodeRef)
+			return false;
+	}
+
+	seen->AddItem(new node_ref(nodeRef));
+	return true;
+}
+
+
 status_t
 FSGetDeskDir(BDirectory* deskDir)
 {
@@ -3169,13 +3187,16 @@ empty_trash(void*)
 
 	BVolumeRoster volumeRoster;
 	BVolume volume;
+	BObjectList<node_ref, true> counted(4);
 	while (volumeRoster.GetNextVolume(&volume) == B_OK) {
-		if (volume.IsReadOnly() || !volume.IsPersistent())
+		if (volume.IsReadOnly())
 			continue;
 
 		BDirectory trashDirectory;
-		if (FSGetTrashDir(&trashDirectory, volume.Device()) != B_OK)
+		if (FSGetTrashDir(&trashDirectory, volume.Device()) != B_OK
+			|| !FSRecordTrashDir(&counted, &trashDirectory)) {
 			continue;
+		}
 
 		entry_ref ref;
 		trashDirectory.GetRef(&ref);
@@ -3198,13 +3219,16 @@ empty_trash(void*)
 		loopControl.Init(totalCount, totalCount);
 
 		volumeRoster.Rewind();
+		BObjectList<node_ref, true> emptied(4);
 		while (volumeRoster.GetNextVolume(&volume) == B_OK) {
-			if (volume.IsReadOnly() || !volume.IsPersistent())
+			if (volume.IsReadOnly())
 				continue;
 
 			BDirectory trashDirectory;
-			if (FSGetTrashDir(&trashDirectory, volume.Device()) != B_OK)
+			if (FSGetTrashDir(&trashDirectory, volume.Device()) != B_OK
+				|| !FSRecordTrashDir(&emptied, &trashDirectory)) {
 				continue;
+			}
 
 			BEntry entry;
 			trashDirectory.GetEntry(&entry);

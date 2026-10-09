@@ -7,7 +7,6 @@
 
 #include "TestPanel.h"
 
-#include <Alert.h>
 #include <Application.h>
 #include <Button.h>
 #include <Catalog.h>
@@ -16,12 +15,11 @@
 #include <ListView.h>
 #include <MessageRunner.h>
 #include <Notification.h>
-#include <Path.h>
 #include <ScrollView.h>
+#include <Size.h>
 #include <Slider.h>
 #include <StringView.h>
 
-#include <stdio.h>
 #include <string.h>
 
 
@@ -91,6 +89,8 @@ JoystickWindow::JoystickWindow()
 	fDeviceList->SetSelectionMessage(new BMessage(kMsgSelection));
 
 	fStatusView = new BStringView("status", "");
+	fStatusView->SetTruncation(B_TRUNCATE_END);
+	fStatusView->SetExplicitMaxSize(BSize(220, B_SIZE_UNSET));
 	fRefreshButton = new BButton(B_TRANSLATE("Refresh"),
 		new BMessage(kMsgRefresh));
 

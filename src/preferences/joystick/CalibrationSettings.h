@@ -13,9 +13,6 @@
 #include <SupportDefs.h>
 
 
-class BString;
-
-
 struct CalibrationSettings {
 	float			deadZone;
 								// 0.0 .. 0.5, fraction of the axis range

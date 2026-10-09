@@ -19,19 +19,16 @@
 
 
 static const uint32 kSettingsMagic = 'JoyC';
-static const int32 kSettingsVersion = 1;
+static const char* kSettingsFile = "Joystick settings";
 
 
 static BString
-_SettingsFileName(const char* devicePath)
+_DeviceKey(const char* devicePath)
 {
-	// one file per device node; the node number is stable across boots
-	BString name(devicePath);
-	name.ReplaceAll('/', '_');
-
-	BString file("joysticks/");
-	file << name << ".settings";
-	return file;
+	// device nodes are unique; the key just has to be a flat name
+	BString key(devicePath);
+	key.ReplaceAll('/', '_');
+	return key;
 }
 
 
@@ -49,21 +46,25 @@ CalibrationSettings::Load(const char* devicePath)
 	BPath path;
 	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) != B_OK)
 		return B_ERROR;
-	path.Append(_SettingsFileName(devicePath).String());
+	path.Append(kSettingsFile);
 
 	BFile file(path.Path(), B_READ_ONLY);
 	if (file.InitCheck() != B_OK)
 		return B_FILE_NOT_FOUND;
 
 	BMessage archive;
-	if (archive.Unflatten(&file) != B_OK
-		|| archive.what != kSettingsMagic)
+	if (archive.Unflatten(&file) != B_OK || archive.what != kSettingsMagic)
 		return B_ERROR;
 
+	BMessage device;
+	if (archive.FindMessage(_DeviceKey(devicePath).String(), &device)
+		!= B_OK)
+		return B_ENTRY_NOT_FOUND;
+
 	float value;
-	if (archive.FindFloat("dead zone", &value) == B_OK)
+	if (device.FindFloat("dead zone", &value) == B_OK)
 		deadZone = std::min(std::max(value, 0.0f), 0.5f);
-	if (archive.FindFloat("curve", &value) == B_OK)
+	if (device.FindFloat("curve", &value) == B_OK)
 		curve = std::min(std::max(value, 0.0f), 1.0f);
 	return B_OK;
 }
@@ -75,14 +76,28 @@ CalibrationSettings::Save(const char* devicePath) const
 	BPath path;
 	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path, true) != B_OK)
 		return B_ERROR;
-	path.Append(_SettingsFileName(devicePath).String());
+	path.Append(kSettingsFile);
 
+	// keep the other devices' entries
 	BMessage archive(kSettingsMagic);
-	archive.AddFloat("dead zone", deadZone);
-	archive.AddFloat("curve", curve);
+	BFile existing(path.Path(), B_READ_ONLY);
+	if (existing.InitCheck() == B_OK) {
+		BMessage old;
+		if (old.Unflatten(&existing) == B_OK && old.what == kSettingsMagic)
+			archive = old;
+	}
 
-	BFile file(path.Path(), B_READ_ONLY | B_WRITE_ONLY | B_CREATE_FILE
-		| B_ERASE_FILE);
+	BString key = _DeviceKey(devicePath);
+	archive.RemoveName(key.String());
+
+	BMessage device;
+	device.AddFloat("dead zone", deadZone);
+	device.AddFloat("curve", curve);
+	if (archive.AddMessage(key.String(), &device) != B_OK)
+		return B_NO_MEMORY;
+
+	BFile file(path.Path(),
+		B_READ_ONLY | B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
 	status_t status = file.InitCheck();
 	if (status == B_OK)
 		status = archive.Flatten(&file);
@@ -103,6 +118,7 @@ CalibrationSettings::Apply(int16 raw) const
 
 	// rescale past the dead zone, then blend linear with cubic
 	magnitude = (magnitude - deadZone) / (1.0f - deadZone);
-	float shaped = (1.0f - curve) * magnitude + curve * magnitude * magnitude * magnitude;
+	float shaped = (1.0f - curve) * magnitude
+		+ curve * magnitude * magnitude * magnitude;
 	return value < 0.0f ? -shaped : shaped;
 }

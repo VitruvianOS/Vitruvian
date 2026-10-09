@@ -6,7 +6,7 @@ add_subdirectory(datatranslations)
 add_subdirectory(deskbar)
 add_subdirectory(filetypes)
 add_subdirectory(input)
-#add_subdirectory(joysticks)    # needs device kit
+add_subdirectory(joysticks)
 add_subdirectory(keymap)
 add_subdirectory(locale)
 add_subdirectory(network)

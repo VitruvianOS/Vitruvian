@@ -24,7 +24,8 @@
 #include "PrinterOptionsDialog.h"
 #include "PrinterWorker.h"
 #include "printcups.h"
-#include "pr_server.h"
+// See PrintersApp.cpp: the tracker kit's pr_server.h shadows the print one.
+#include <print/pr_server.h>
 
 
 #undef B_TRANSLATION_CONTEXT

@@ -33,6 +33,7 @@ using namespace Bluetooth;
 static const uint32 kMsgRescan = 'resc';
 static const uint32 kMsgPair = 'pair';
 static const uint32 kMsgPairDone = 'pdon';
+static const uint32 kMsgOperationDone = 'opdn';
 static const uint32 kMsgDeviceFound = 'dvfn';
 static const uint32 kMsgInquiryStarted = 'inst';
 static const uint32 kMsgInquiryFinished = 'infn';
@@ -210,6 +211,9 @@ InquiryPanel::MessageReceived(BMessage* message)
 				BMessage info;
 				info.AddString("path", item->Path());
 				RemoteDevice device(info);
+				// On success we connect it so its audio profiles come up
+				// without a second click.
+				fPendingConnectPath = item->Path();
 				device.Pair(BMessenger(this), kMsgPairDone);
 				fMessageView->SetText(B_TRANSLATE("Pairing" B_UTF8_ELLIPSIS));
 			}
@@ -222,6 +226,15 @@ InquiryPanel::MessageReceived(BMessage* message)
 			message->FindInt32("status", &status);
 			if (status == B_OK) {
 				fMessageView->SetText(B_TRANSLATE("Paired."));
+				// A freshly paired headset must also have its profiles
+				// (A2DP/HSP) activated or it never becomes an audio
+				// device; pairing alone does not do that.
+				if (!fPendingConnectPath.IsEmpty()) {
+					BMessage info;
+					info.AddString("path", fPendingConnectPath);
+					RemoteDevice(info).Connect(BMessenger(this),
+						kMsgOperationDone);
+				}
 			} else {
 				// The BluetoothStatus replicant, not this preflet, owns the
 				// org.bluez.Agent1 pairing agent; if it isn't running there
@@ -237,8 +250,14 @@ InquiryPanel::MessageReceived(BMessage* message)
 				alert->Go(NULL);
 				fMessageView->SetText(B_TRANSLATE("Pairing failed."));
 			}
+			fPendingConnectPath = "";
 			break;
 		}
+
+		case kMsgOperationDone:
+			// Connect completed; nothing to redraw here, the panel's list
+			// shows discovery state, not connection state.
+			break;
 
 		default:
 			BWindow::MessageReceived(message);

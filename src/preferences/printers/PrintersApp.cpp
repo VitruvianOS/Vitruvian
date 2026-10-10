@@ -10,7 +10,9 @@
 
 #include <AppDefs.h>
 
-#include "pr_server.h"
+// Explicit subdirectory: headers/private/tracker also ships a pr_server.h
+// and private/tracker precedes private/print on this target's include path.
+#include <print/pr_server.h>
 
 
 int

@@ -25,6 +25,7 @@
 #include <Dragger.h>
 #include <IconUtils.h>
 #include <Locale.h>
+#include <Menu.h>
 #include <MenuItem.h>
 #include <MessageRunner.h>
 #include <Messenger.h>
@@ -558,8 +559,10 @@ BluetoothStatusView::_ApplyStatusUpdate(BMessage* status)
 		fConnected = (deviceList.CountItems() > 0);
 
 		// Refresh the name cache an incoming Agent1 request resolves
-		// against -- see _CachedDeviceName().
+		// against -- see _CachedDeviceName(); the paired list feeds the
+		// menu's per-device Connect/Disconnect entries.
 		fDeviceNames.clear();
+		fPairedDevices.clear();
 		int32 deviceCount = 0;
 		devices.FindInt32("device_count", &deviceCount);
 		for (int32 i = 0; i < deviceCount; i++) {
@@ -575,12 +578,22 @@ BluetoothStatusView::_ApplyStatusUpdate(BMessage* status)
 				info.FindString("name", &name);
 			if (!name.IsEmpty())
 				fDeviceNames[path] = name;
+
+			bool paired = false;
+			info.FindBool("paired", &paired);
+			if (paired) {
+				bool connected = false;
+				info.FindBool("connected", &connected);
+				fPairedDevices.push_back(std::make_pair(path, connected));
+			}
 		}
 	} else {
 		fAdapterPath = "";
 		fPowered = false;
 		fConnected = false;
 		fDiscovering = false;
+		fDeviceNames.clear();
+		fPairedDevices.clear();
 	}
 
 	Invalidate();
@@ -735,6 +748,25 @@ BluetoothStatusView::_ShowMenu(BPoint where)
 	// Add scan option
 	item = new BMenuItem("Scan for devices", new BMessage(kMsgScanDevices));
 	menu->AddItem(item);
+
+	// Per-device connect control, so a paired headset can be activated
+	// (A2DP/HSP profiles up, PipeWire endpoint appears) from the tray.
+	if (!fPairedDevices.empty()) {
+		BMenu* devicesMenu = new BMenu("Devices");
+		for (size_t i = 0; i < fPairedDevices.size(); i++) {
+			const BString& path = fPairedDevices[i].first;
+			bool connected = fPairedDevices[i].second;
+			BString label = _CachedDeviceName(path.String());
+			if (connected)
+				label += " (connected)";
+			BMessage* deviceMessage = new BMessage(connected
+				? kMsgDisconnectDevice : kMsgConnectDevice);
+			deviceMessage->AddString("device_path", path);
+			devicesMenu->AddItem(new BMenuItem(label.String(), deviceMessage));
+		}
+		devicesMenu->SetTargetForItems(this);
+		menu->AddItem(new BMenuItem(devicesMenu));
+	}
 
 	// Add connected device if any
 	if (fConnected && !fConnectedDevice.IsEmpty()) {

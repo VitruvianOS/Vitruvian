@@ -17,6 +17,13 @@ done
 
 LAUNCH=/system/servers/janus_launch
 
+# WirePlumber registers the Bluetooth audio endpoints (A2DP/HSP) with
+# PipeWire; without it a connected headset never becomes an audio device
+# the media kit can see. Socket activation covers pipewire itself; this
+# makes both explicit for the session, no-op if already running.
+systemctl --user --no-block start pipewire.socket wireplumber.service \
+	2>/dev/null || true
+
 "$LAUNCH" registrar
 "$LAUNCH" app_server
 "$LAUNCH" input_server

@@ -15,7 +15,10 @@
 #ifndef BLUETOOTH_SETTINGS_VIEW_H
 #define BLUETOOTH_SETTINGS_VIEW_H
 
-#include "BluetoothSettings.h"
+// The kit's BluetoothSettings (headers/private/bluetooth), not any
+// same-named leftover in this directory: the settings class moved to the
+// kit when the Deskbar receive agent started reading it too.
+#include <BluetoothSettings.h>
 
 #include <ObjectList.h>
 #include <View.h>

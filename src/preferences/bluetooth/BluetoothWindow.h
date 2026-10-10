@@ -62,7 +62,9 @@ private:
 	void _DoAdd();
 	void _DoRemove();
 	void _DoPair();
+	void _DoConnect();
 	void _DoDisconnect();
+	void _DoToggleConnect();
 	void _DoToggleTrust();
 	void _DoToggleBlock();
 	void _DoSendFiles();
@@ -86,7 +88,9 @@ private:
 	BButton* fAddButton;
 	BButton* fRemoveButton;
 	BButton* fPairButton;
-	BButton* fDisconnectButton;
+	// One button, two actions: Connect for a paired idle device, Disconnect
+	// while it is connected. Label and target state follow the selection.
+	BButton* fConnectDisconnectButton;
 	BButton* fTrustButton;
 	BButton* fBlockButton;
 	BButton* fRefreshButton;
@@ -96,6 +100,10 @@ private:
 	// Device the open file panel is gathering refs for (Send Files).
 	BString fPendingSendAddress;
 	BString fPendingSendName;
+
+	// Device whose Pair() call is in flight; once it reports success we
+	// connect it so its audio profiles come up without a second click.
+	BString fPendingConnectPath;
 
 	BCheckBox* fShowReplicantCheckBox;
 

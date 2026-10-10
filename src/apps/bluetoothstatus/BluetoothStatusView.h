@@ -13,6 +13,8 @@
 #include <String.h>
 
 #include <map>
+#include <utility>
+#include <vector>
 
 #include "PairingDialogWindow.h"
 
@@ -123,6 +125,10 @@ private:
 	// name), so an incoming Agent1 request can resolve a friendly name
 	// without a synchronous D-Bus round trip from the dispatch thread.
 	std::map<BString, BString> fDeviceNames;
+
+	// Paired devices in snapshot order (path -> connected), for the menu's
+	// per-device Connect/Disconnect entries.
+	std::vector<std::pair<BString, bool> > fPairedDevices;
 
 	// Receive agent hosted here so it survives a login. Settings are
 	// reloaded on every push; the preflet switch only writes them.

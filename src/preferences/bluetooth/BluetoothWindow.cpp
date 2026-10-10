@@ -58,6 +58,7 @@ static const uint32 kMsgToggleDiscoverable = 'btdv';
 static const uint32 kMsgAdd = 'btAd';
 static const uint32 kMsgRemove = 'btRm';
 static const uint32 kMsgPair = 'btPr';
+static const uint32 kMsgConnect = 'btCn';
 static const uint32 kMsgDisconnect = 'btDc';
 static const uint32 kMsgTrust = 'btTr';
 static const uint32 kMsgBlock = 'btBl';
@@ -129,8 +130,8 @@ BluetoothWindow::BluetoothWindow()
 		new BMessage(kMsgRemove));
 	fPairButton = new BButton("pair", B_TRANSLATE("Pair" B_UTF8_ELLIPSIS),
 		new BMessage(kMsgPair));
-	fDisconnectButton = new BButton("disconnect", B_TRANSLATE("Disconnect"),
-		new BMessage(kMsgDisconnect));
+	fConnectDisconnectButton = new BButton("connectdisconnect",
+		B_TRANSLATE("Connect"), new BMessage(kMsgConnect));
 	fTrustButton = new BButton("trust", B_TRANSLATE("Trust"),
 		new BMessage(kMsgTrust));
 	fBlockButton = new BButton("block", B_TRANSLATE("As blocked"),
@@ -156,7 +157,7 @@ BluetoothWindow::BluetoothWindow()
 			.Add(fRemoveButton)
 			.AddGlue()
 			.Add(fPairButton)
-			.Add(fDisconnectButton)
+			.Add(fConnectDisconnectButton)
 			.Add(fTrustButton)
 			.Add(fBlockButton)
 			.Add(fRefreshButton)
@@ -301,7 +302,16 @@ BluetoothWindow::MessageReceived(BMessage* message)
 				BAlert* alert = new BAlert(B_TRANSLATE("Pairing failed"),
 					text, B_TRANSLATE("OK"));
 				alert->Go(NULL);
+			} else if (!fPendingConnectPath.IsEmpty()) {
+				// A freshly paired headset must also have its profiles
+				// (A2DP/HSP) activated or it never becomes an audio
+				// device; pairing alone does not do that.
+				BMessage info;
+				info.AddString("path", fPendingConnectPath);
+				RemoteDevice(info).Connect(BMessenger(this),
+					kMsgOperationDone);
 			}
+			fPendingConnectPath = "";
 			_RequestStatusUpdate();
 			break;
 		}
@@ -341,6 +351,10 @@ BluetoothWindow::MessageReceived(BMessage* message)
 
 		case kMsgPair:
 			_DoPair();
+			break;
+
+		case kMsgConnect:
+			_DoToggleConnect();
 			break;
 
 		case kMsgDisconnect:
@@ -572,7 +586,9 @@ BluetoothWindow::_UpdateButtons()
 
 	fRemoveButton->SetEnabled(item != NULL && item->IsPaired());
 	fPairButton->SetEnabled(item != NULL && !item->IsPaired());
-	fDisconnectButton->SetEnabled(item != NULL && item->IsConnected());
+	fConnectDisconnectButton->SetEnabled(item != NULL && item->IsPaired());
+	fConnectDisconnectButton->SetLabel(item != NULL && item->IsConnected()
+		? B_TRANSLATE("Disconnect") : B_TRANSLATE("Connect"));
 
 	// Trusting an unpaired stranger has no security meaning in BlueZ (trust
 	// only affects reconnection/authorization of an already-bonded device),
@@ -663,7 +679,38 @@ BluetoothWindow::_DoPair()
 	BMessage info;
 	info.AddString("path", item->Path());
 	RemoteDevice device(info);
+	// Remember who is pairing: on success we connect it right away so its
+	// audio profiles activate without a second trip through the list.
+	fPendingConnectPath = item->Path();
 	device.Pair(BMessenger(this), kMsgPairDone);
+}
+
+
+void
+BluetoothWindow::_DoConnect()
+{
+	DeviceListItem* item = _SelectedDevice();
+	if (item == NULL || !item->IsPaired() || item->IsConnected())
+		return;
+
+	BMessage info;
+	info.AddString("path", item->Path());
+	RemoteDevice device(info);
+	device.Connect(BMessenger(this), kMsgOperationDone);
+}
+
+
+void
+BluetoothWindow::_DoToggleConnect()
+{
+	DeviceListItem* item = _SelectedDevice();
+	if (item == NULL || !item->IsPaired())
+		return;
+
+	if (item->IsConnected())
+		_DoDisconnect();
+	else
+		_DoConnect();
 }
 
 

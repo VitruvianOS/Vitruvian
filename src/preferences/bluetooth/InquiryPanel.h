@@ -58,6 +58,10 @@ private:
 	BButton* fRescanButton;
 
 	BString fAdapterPath;
+	// Device whose Pair() call is in flight; on success we connect it so
+	// its audio profiles come up without a second click (same contract as
+	// BluetoothWindow's field of the same name).
+	BString fPendingConnectPath;
 	Bluetooth::DiscoveryAgent* fDiscoveryAgent;
 	Bluetooth::DiscoveryListener* fDiscoveryListener;
 	bigtime_t fInquirySeconds;

@@ -919,6 +919,7 @@ create_raspberry() {
     _boot_size=$(board_config "$_board" boot_size_mb)
     _dtb_files=$(board_config "$_board" dtb_files)
     _board_pkgs="$(get_board_packages "$_board")"
+    _kern_pkgs="$(printf '%s\n' $_board_pkgs | grep -E '^linux-(image|headers)-' | tr '\n' ' ')"
 
     mkdir -p "$_basedir/output"
 
@@ -1048,6 +1049,8 @@ apt-get install -y --download-only $_board_pkgs \$(ls /localdeb/*.deb 2>/dev/nul
 # Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
 mkdir -p /etc/initramfs-tools/conf.d
 echo RESUME=none > /etc/initramfs-tools/conf.d/resume
+# nexus-dkms refuses to unpack until the kernel headers are installed.
+apt-get install -y $_kern_pkgs
 apt-get install -y $_board_pkgs
 if ls /localdeb/*.deb >/dev/null 2>&1; then
     apt-get install -y --reinstall /localdeb/*.deb

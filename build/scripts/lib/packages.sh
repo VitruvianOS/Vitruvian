@@ -195,12 +195,12 @@ _board_extra_packages() {
         raspberry)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-arm64 raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
+                " linux-image-arm64 linux-headers-arm64 raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
             ;;
         rpi-arm32)
             printf '%s' \
                 "systemd systemd-sysv dbus-user-session polkitd pkexec sudo accountsservice libpam-pwquality libpwquality-tools libpwquality-dev systemd-timesyncd locales console-setup keyboard-configuration xdg-user-dirs ca-certificates iputils-ping vim net-tools iproute2 openssh-server" \
-                " linux-image-armmp raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
+                " linux-image-armmp linux-headers-armmp raspi-firmware dosfstools rsync firmware-brcm80211 bluez-firmware"
             ;;
         rockchip)
             printf '%s' \

@@ -146,7 +146,6 @@ private:
 	BMediaTrack*		fVideoTrack;
 	BView*				fVideoView;
 	BLooper*			fVideoLooper;
-	BMessenger			fVideoMessenger;
 	_VideoPump*			fVideoPump;
 	BMessageRunner*		fVideoRunner;
 	media_raw_video_format	fVideoFormat;
@@ -188,7 +187,6 @@ BMediaPlayer::Impl::Impl(BMediaPlayer* owner)
 	fVideoTrack(NULL),
 	fVideoView(NULL),
 	fVideoLooper(NULL),
-	fVideoMessenger(),
 	fVideoPump(NULL),
 	fVideoRunner(NULL),
 	fVideoFormat(),
@@ -555,39 +553,43 @@ void
 BMediaPlayer::Impl::SetVideoView(BView* view)
 {
 	_StopVideoRunner();
-	if (fVideoPump != NULL) {
-		if (fVideoLooper != NULL) {
-			// Add/RemoveHandler run under the looper lock; the pump
-			// executes there too, so this also waits it out.
-			BAutolock looperLock(fVideoLooper);
-			fVideoLooper->RemoveHandler(fVideoPump);
-		}
-		delete fVideoPump;
-		fVideoPump = NULL;
-	}
+	// Detach under fLock first: an in-flight pump that already holds
+	// the lock sees a NULL view and bails.
+	BLooper* oldLooper = fVideoLooper;
+	_VideoPump* oldPump = fVideoPump;
 	fVideoLooper = NULL;
+	fVideoPump = NULL;
 	{
 		std::lock_guard<std::mutex> _(fLock);
 		fVideoView = NULL;
-		fVideoMessenger = BMessenger();
+	}
+	if (oldPump != NULL) {
+		if (oldLooper != NULL) {
+			// Add/RemoveHandler run under the looper lock; the pump
+			// executes there too, so this also waits it out.
+			BAutolock looperLock(oldLooper);
+			oldLooper->RemoveHandler(oldPump);
+		}
+		delete oldPump;
 	}
 	if (view == NULL)
 		return;
 
-	fVideoLooper = view->Looper();
-	if (fVideoLooper == NULL)
+	BLooper* looper = view->Looper();
+	if (looper == NULL)
 		return;
-	fVideoPump = new _VideoPump(this);
-	if (fVideoPump == NULL)
+	_VideoPump* pump = new _VideoPump(this);
+	if (pump == NULL)
 		return;
 	{
-		BAutolock looperLock(fVideoLooper);
-		fVideoLooper->AddHandler(fVideoPump);
+		BAutolock looperLock(looper);
+		looper->AddHandler(pump);
 	}
 	{
 		std::lock_guard<std::mutex> _(fLock);
+		fVideoLooper = looper;
+		fVideoPump = pump;
 		fVideoView = view;
-		fVideoMessenger = BMessenger(view);
 	}
 	if (fState.load() == BMediaPlayer::B_PLAYER_PLAYING)
 		_StartVideoRunner();
@@ -604,94 +606,107 @@ BMediaPlayer::Impl::_VideoPump::MessageReceived(BMessage* /*message*/)
 void
 BMediaPlayer::Impl::_PumpVideoFrame()
 {
-	// SeekTo and SetTo touch the same track and buffer from caller
-	// threads; nothing here is safe outside the lock.
-	std::lock_guard<std::mutex> _(fLock);
-	if (fState.load() != BMediaPlayer::B_PLAYER_PLAYING)
-		return;
-	if (fVideoTrack == NULL || fVideoView == NULL || fVideoBuffer == NULL)
-		return;
-
-	const bool haveAudio = fTrack != NULL;
-	while (true) {
-		if (!fVideoFramePending) {
-			int64 frames = 1;
-			media_header mh;
-			memset(&mh, 0, sizeof(mh));
-			status_t err = fVideoTrack->ReadFrames(fVideoBuffer,
-				&frames, &mh);
-			if (err == B_LAST_BUFFER_ERROR) {
-				_SetState(BMediaPlayer::B_PLAYER_STOPPED);
-				_PostNotification(
-					BMediaPlayer::B_PLAYER_END_OF_STREAM);
-				return;
-			}
-			if (err != B_OK || frames < 1)
-				return;
-			fVideoPendingTime = mh.start_time;
-			fVideoFramePending = true;
-			if (mh.start_time == 0) {
-				// A second zero stamp means the stream carries
-				// no PTS at all: pace from field_rate instead.
-				if (fVideoZeroStamps > 0
-						&& fVideoFormat.field_rate > 0.0f) {
-					fVideoPaceNominal = true;
-					fVideoNominalInterval = (bigtime_t)
-						(1000000.0f
-							/ fVideoFormat.field_rate);
-				}
-				fVideoZeroStamps++;
-			} else
-				fVideoZeroStamps = 0;
-		}
-
-		bigtime_t clockNow;
-		bigtime_t due = fVideoPendingTime;
-		bool allowDrop = haveAudio;
-		if (fVideoPaceNominal) {
-			// No timestamps to judge: hold the nominal rate on
-			// the system clock instead of the audio clock.
-			due = fVideoLastDeliver + fVideoNominalInterval;
-			clockNow = system_time();
-			allowDrop = false;
-		} else if (haveAudio) {
-			clockNow = fTrack->CurrentTime();
-		} else {
-			// Timestamps are file-relative: map them onto the
-			// system clock from the first pull after Play/Seek.
-			if (!fVideoClockValid) {
-				fVideoClockBase = system_time() - fVideoPendingTime;
-				fVideoClockValid = true;
-			}
-			due = fVideoClockBase + fVideoPendingTime;
-			clockNow = system_time();
-		}
-
-		const BPrivate::media::video_sync_decision decision
-			= BPrivate::media::DecideVideoSync(due, clockNow,
-				kVideoSyncTolerance, allowDrop);
-		if (decision == BPrivate::media::VIDEO_SYNC_HOLD)
+	BMessage msg;
+	BLooper* looper = NULL;
+	BView* view = NULL;
+	{
+		// SeekTo and SetTo touch the same track and buffer from caller
+		// threads; nothing here is safe outside the lock.
+		std::lock_guard<std::mutex> _(fLock);
+		if (fState.load() != BMediaPlayer::B_PLAYER_PLAYING)
 			return;
-		if (decision == BPrivate::media::VIDEO_SYNC_DROP) {
-			fVideoFramePending = false;
-			continue;
-		}
+		if (fVideoTrack == NULL || fVideoView == NULL || fVideoBuffer == NULL)
+			return;
 
-		// Surface presentation replaces the B_RAW_TYPE payload below
-		// with a dma-buf descriptor; the geometry keys stay unchanged.
-		BMessage msg(BMediaPlayer::B_PLAYER_VIDEO_FRAME);
-		msg.AddInt32("width", (int32)fVideoFormat.width);
-		msg.AddInt32("height", (int32)fVideoFormat.height);
-		msg.AddInt32("stride", (int32)fVideoStride);
-		msg.AddInt64("start_time", (int64)fVideoPendingTime);
-		msg.AddInt64("audio_time", (int64)(haveAudio ? clockNow : -1));
-		msg.AddData("frame", B_RAW_TYPE, fVideoBuffer,
-			(uint32)fVideoBufferSize);
-		fVideoMessenger.SendMessage(&msg);
-		fVideoFramePending = false;
-		fVideoLastDeliver = system_time();
-		return;
+		const bool haveAudio = fTrack != NULL;
+		while (true) {
+			if (!fVideoFramePending) {
+				int64 frames = 1;
+				media_header mh;
+				memset(&mh, 0, sizeof(mh));
+				status_t err = fVideoTrack->ReadFrames(fVideoBuffer,
+					&frames, &mh);
+				if (err == B_LAST_BUFFER_ERROR) {
+					_SetState(BMediaPlayer::B_PLAYER_STOPPED);
+					_PostNotification(
+						BMediaPlayer::B_PLAYER_END_OF_STREAM);
+					return;
+				}
+				if (err != B_OK || frames < 1)
+					return;
+				fVideoPendingTime = mh.start_time;
+				fVideoFramePending = true;
+				if (mh.start_time == 0) {
+					// A second zero stamp means the stream
+					// carries no PTS: pace from field_rate.
+					if (fVideoZeroStamps > 0
+							&& fVideoFormat.field_rate > 0.0f) {
+						fVideoPaceNominal = true;
+						fVideoNominalInterval = (bigtime_t)
+							(1000000.0f
+								/ fVideoFormat.field_rate);
+					}
+					fVideoZeroStamps++;
+				} else
+					fVideoZeroStamps = 0;
+			}
+
+			bigtime_t clockNow;
+			bigtime_t due = fVideoPendingTime;
+			bool allowDrop = haveAudio;
+			if (fVideoPaceNominal) {
+				// No timestamps to judge: hold the nominal
+				// rate on the system clock instead.
+				due = fVideoLastDeliver + fVideoNominalInterval;
+				clockNow = system_time();
+				allowDrop = false;
+			} else if (haveAudio) {
+				clockNow = fTrack->CurrentTime();
+			} else {
+				// Timestamps are file-relative: map them onto
+				// the system clock at the first pull after
+				// Play or Seek.
+				if (!fVideoClockValid) {
+					fVideoClockBase = system_time() - fVideoPendingTime;
+					fVideoClockValid = true;
+				}
+				due = fVideoClockBase + fVideoPendingTime;
+				clockNow = system_time();
+			}
+
+			const BPrivate::media::video_sync_decision decision
+				= BPrivate::media::DecideVideoSync(due, clockNow,
+					kVideoSyncTolerance, allowDrop);
+			if (decision == BPrivate::media::VIDEO_SYNC_HOLD)
+				return;
+			if (decision == BPrivate::media::VIDEO_SYNC_DROP) {
+				fVideoFramePending = false;
+				continue;
+			}
+
+			// Surface presentation replaces the B_RAW_TYPE payload
+			// below with a dma-buf descriptor; the keys stay.
+			msg.what = BMediaPlayer::B_PLAYER_VIDEO_FRAME;
+			msg.AddInt32("width", (int32)fVideoFormat.width);
+			msg.AddInt32("height", (int32)fVideoFormat.height);
+			msg.AddInt32("stride", (int32)fVideoStride);
+			msg.AddInt64("start_time", (int64)fVideoPendingTime);
+			msg.AddInt64("audio_time", (int64)(haveAudio ? clockNow : -1));
+			msg.AddData("frame", B_RAW_TYPE, fVideoBuffer,
+				(uint32)fVideoBufferSize);
+			looper = fVideoLooper;
+			view = fVideoView;
+			fVideoFramePending = false;
+			fVideoLastDeliver = system_time();
+			break;
+		}
 	}
+
+	// The pump already runs on the view's looper, so the frame goes
+	// over in place: a SendMessage would bounce the payload through
+	// the looper port back to this same thread.
+	if (looper != NULL && view != NULL)
+		looper->DispatchMessage(&msg, view);
 }
 
 

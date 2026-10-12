@@ -80,7 +80,9 @@ public:
 			void				SetTarget(BMessenger target);
 
 			// B_PLAYER_VIDEO_FRAME to the view: width/height/stride (int32),
-			// start_time/audio_time (int64 us; -1 = no audio), frame (raw BGRx).
+			// start_time/audio_time (int64 us; -1 = no audio), frame (raw
+			// BGRx), delivered synchronously on the view's looper thread.
+			// Surface mode swaps the frame bytes for a dma-buf descriptor.
 			void				SetVideoView(BView* view);
 
 

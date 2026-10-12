@@ -63,6 +63,7 @@ public:
 private:
 			void				_EnterGraphicsMode();
 			void				_LeaveGraphicsMode();
+			void				_AdoptVar(const struct fb_var_screeninfo& var);
 
 			FBDevBuffer*		fFrontBuffer;
 			RenderingBuffer*	fMemBackBuffer;
@@ -74,6 +75,10 @@ private:
 
 			struct fb_fix_screeninfo	fInfo;
 			struct fb_var_screeninfo	fVInfo;
+
+			bool				fModeSetSupported;
+			bool				fBlankSupported;
+			uint32				fDPMSState;
 
 			EventStream*		fEventStream;
 };

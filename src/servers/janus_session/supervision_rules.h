@@ -46,4 +46,14 @@ cgroup_in_session(const char* cgroup, const char* session)
 }
 
 
+// A zero exit is the logout quit dance; only deaths and error exits
+// earn a supervised restart.
+static bool
+exit_warrants_restart(int status)
+{
+	return WIFSIGNALED(status)
+		|| (WIFEXITED(status) && WEXITSTATUS(status) != 0);
+}
+
+
 #endif // _JANUS_SESSION_SUPERVISION_RULES_H

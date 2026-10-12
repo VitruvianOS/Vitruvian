@@ -1869,9 +1869,13 @@ daemon_loop()
 		process_restarts();
 
 		pid_t reaped;
+		int status = 0;
 		char name[64];
-		while ((reaped = waitpid(-1, NULL, WNOHANG)) > 0) {
-			if (invalidate_app_by_pid(reaped, name, sizeof(name)))
+		while ((reaped = waitpid(-1, &status, WNOHANG)) > 0) {
+			// A zero exit is the registrar's logout quit dance; only
+			// deaths earn a supervised restart.
+			if (invalidate_app_by_pid(reaped, name, sizeof(name))
+					&& exit_warrants_restart(status))
 				schedule_restart(name);
 		}
 	}

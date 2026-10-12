@@ -115,27 +115,6 @@ static const struct {
 };
 
 
-// Only for callers that pass a negative value, the constructor default;
-// DrmHWInterface passes its own. Unrecognized input is left at the default
-// here rather than reported, since the compositor already complains about it.
-static int32
-DiscoverOrientationFromEnv()
-{
-	int32 orientation = B_PANEL_ORIENTATION_NORMAL;
-	parse_panel_orientation(getenv("VOS_PANEL_ORIENTATION"), orientation);
-	return orientation;
-}
-
-
-static int32
-DiscoverReflectionFromEnv()
-{
-	int32 reflection = B_PANEL_REFLECTION_NONE;
-	parse_panel_reflection(getenv("VOS_PANEL_REFLECTION"), reflection);
-	return reflection;
-}
-
-
 static uint32 MapMouseButton(uint32 linuxButton)
 {
 	switch (linuxButton) {
@@ -172,8 +151,8 @@ LibEvdevEventStream::LibEvdevEventStream(uint32 width, uint32 height,
 	fSuspended(false),
 	fWidth(width),
 	fHeight(height),
-	fOrientation(orientation >= 0 ? orientation : DiscoverOrientationFromEnv()),
-	fReflection(reflection >= 0 ? reflection : DiscoverReflectionFromEnv()),
+	fOrientation(orientation >= 0 ? orientation : B_PANEL_ORIENTATION_NORMAL),
+	fReflection(reflection >= 0 ? reflection : B_PANEL_REFLECTION_NONE),
 	fSeat(seat),
 	fEpollFd(-1)
 {
@@ -542,14 +521,6 @@ LibEvdevEventStream::_ProcessKeyEvent(EvdevDevice& dev, struct input_event& ev)
 
 
 void
-LibEvdevEventStream::_RotateDelta(float dx, float dy, float& outDx,
-	float& outDy) const
-{
-	rotate_panel_delta(fOrientation, dx, dy, outDx, outDy, fReflection);
-}
-
-
-void
 LibEvdevEventStream::_RotatePoint(float u, float v, float& outU,
 	float& outV) const
 {
@@ -575,8 +546,8 @@ LibEvdevEventStream::_ProcessRelEvent(EvdevDevice& dev, struct input_event& ev)
 		case REL_WHEEL_HI_RES:
 		{
 			float delta = ev.code == REL_WHEEL_HI_RES ? ev.value / 120.0f : (float)ev.value;
-			float wx, wy;
-			_RotateDelta(0.0f, -delta, wx, wy);
+			float wx = 0.0f;
+			float wy = -delta;
 
 			BMessage* event = new BMessage(B_MOUSE_WHEEL_CHANGED);
 			event->AddFloat("be:wheel_delta_x", wx);
@@ -597,8 +568,8 @@ LibEvdevEventStream::_ProcessRelEvent(EvdevDevice& dev, struct input_event& ev)
 		case REL_HWHEEL_HI_RES:
 		{
 			float delta = ev.code == REL_HWHEEL_HI_RES ? ev.value / 120.0f : (float)ev.value;
-			float wx, wy;
-			_RotateDelta(delta, 0.0f, wx, wy);
+			float wx = delta;
+			float wy = 0.0f;
 
 			BMessage* event = new BMessage(B_MOUSE_WHEEL_CHANGED);
 			event->AddFloat("be:wheel_delta_x", wx);
@@ -685,9 +656,9 @@ LibEvdevEventStream::_FlushPendingEvents()
 	if (fMouseMoved) {
 		// Apply pending delta for relative motion
 		if (fPendingMouseDelta.x != 0 || fPendingMouseDelta.y != 0) {
-			float dx, dy;
-			_RotateDelta(fPendingMouseDelta.x,
-				fPendingMouseDelta.y, dx, dy);
+			// Relative motion is never rotated; see MouseInputDevice.
+			float dx = fPendingMouseDelta.x;
+			float dy = fPendingMouseDelta.y;
 			fMousePosition.x += dx;
 			fMousePosition.y += dy;
 

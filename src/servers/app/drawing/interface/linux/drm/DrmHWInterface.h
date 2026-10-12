@@ -89,6 +89,7 @@ public:
 			status_t			GetPreferredModeCurrent(display_mode* mode);
 	virtual	int32				PanelOrientation() const;
 	virtual	status_t			SetPanelOrientation(int32 orientation);
+	virtual	int32				PanelScanoutOrientation() const;
 	virtual	int32				PanelReflection() const;
 	virtual	status_t			SetPanelReflection(int32 reflection);
 
@@ -300,8 +301,14 @@ private:
 
 			// Elaborated as "enum PanelOrientation": the PanelOrientation()
 			// accessor above hides the bare type name inside this class.
+			// What the scanout applies: fMountingOrientation composed with
+			// fUserOrientation. Every present path rotates by this.
 			enum PanelOrientation
 								fPanelOrientation;
+			// How the panel sits in the device (kernel property, DMI quirk,
+			// VOS_PANEL_ORIENTATION), and the user's rotation relative to it.
+			int32				fMountingOrientation;
+			int32				fUserOrientation;
 			// B_PANEL_REFLECTION_* from PanelOrientationTransform.h.
 			int32				fPanelReflection;
 };

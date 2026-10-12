@@ -617,13 +617,12 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 			fTVStandardField->Hide();
 	}
 
-	// The kernel's own names rather than degrees: the direction convention
-	// is not verified on hardware yet, so a degree label could lie.
+	// Relative to how the panel sits in the device, so "Normal" is upright
+	// as the device is held. The kernel's names rather than degrees.
 	static const struct {
 		const char*	name;
 		int32		rotation;
 	} kRotations[] = {
-		{ B_TRANSLATE_MARK("Auto"), -1 },
 		{ B_TRANSLATE_MARK("Normal"), 0 },
 		{ B_TRANSLATE_MARK("Upside down"), 1 },
 		{ B_TRANSLATE_MARK("Left side up"), 2 },
@@ -639,7 +638,7 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 	}
 
 	fOriginalRotation = fScreenMode.Rotation();
-	BMenuItem* rotationItem = fRotationMenu->ItemAt(fOriginalRotation + 1);
+	BMenuItem* rotationItem = fRotationMenu->ItemAt(fOriginalRotation);
 	if (rotationItem != NULL)
 		rotationItem->SetMarked(true);
 
@@ -647,8 +646,7 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 		B_TRANSLATE("Rotation:"), fRotationMenu);
 	fRotationField->SetAlignment(B_ALIGN_RIGHT);
 
-	// Unlike kRotations, there is no "Auto" entry: reflection has no
-	// hardware-detected state, so the values are the plain menu order.
+	// As with kRotations, the values are the plain menu order.
 	static const struct {
 		const char*	name;
 		int32		reflection;
@@ -1389,7 +1387,7 @@ ScreenWindow::MessageReceived(BMessage* message)
 				alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 				alert->Go(NULL);
 
-				BMenuItem* item = fRotationMenu->ItemAt(fOriginalRotation + 1);
+				BMenuItem* item = fRotationMenu->ItemAt(fOriginalRotation);
 				if (item != NULL)
 					item->SetMarked(true);
 			}
@@ -1502,7 +1500,7 @@ ScreenWindow::MessageReceived(BMessage* message)
 
 			fScreenMode.SetRotation(fOriginalRotation);
 			BMenuItem* rotationItem
-				= fRotationMenu->ItemAt(fOriginalRotation + 1);
+				= fRotationMenu->ItemAt(fOriginalRotation);
 			if (rotationItem != NULL)
 				rotationItem->SetMarked(true);
 

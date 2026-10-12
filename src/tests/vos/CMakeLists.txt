@@ -18,6 +18,11 @@ Application(test_screen_relayout
 	INCLUDES ${CMAKE_SOURCE_DIR}/src/servers/app)
 UsePrivateHeaders(test_screen_relayout interface)
 
+# Panel orientation rules (header only, no window server).
+Application(test_panel_orientation
+	SOURCES test_panel_orientation.cpp)
+UsePrivateHeaders(test_panel_orientation interface)
+
 # CUPS end-to-end test (V\OS printing, no print server).
 Application(test_printcups
 	SOURCES printcups/test_printcups.cpp

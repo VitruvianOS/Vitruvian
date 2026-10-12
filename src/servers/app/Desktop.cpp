@@ -72,6 +72,7 @@
 
 #include <LaunchDaemonDefs.h>
 #include <kernel/util/KMessage.h>
+#include <PanelOrientationTransform.h>
 
 #if TEST_MODE
 #	include "EventStream.h"
@@ -569,16 +570,26 @@ Desktop::Init()
 	}
 
 	// Before the screen is acquired, so SetConfiguration() sees the rotated
-	// geometry and the change notification has no listeners yet. -1 is auto,
-	// i.e. keep whatever the backend detected.
-	int32 rotation = fWorkspaces[0].StoredScreenConfiguration().Rotation(0);
-	if (rotation >= 0) {
-		gScreenManager->Lock();
-		Screen* rotated = gScreenManager->ScreenAt(0);
-		if (rotated != NULL)
-			rotated->HWInterface()->SetPanelOrientation(rotation);
-		gScreenManager->Unlock();
+	// geometry. The stored rotation is relative to the panel mounting; an
+	// absolute one from an older version is converted once here, while the
+	// scanout still shows the bare mounting.
+	ScreenConfigurations& storedScreens
+		= fWorkspaces[0].StoredScreenConfiguration();
+	gScreenManager->Lock();
+	Screen* rotated = gScreenManager->ScreenAt(0);
+	if (rotated != NULL) {
+		::HWInterface* hw = rotated->HWInterface();
+		int32 rotation = storedScreens.Rotation(0);
+		int32 legacy = storedScreens.LegacyRotation(0);
+		if (legacy >= 0) {
+			rotation = panel_relative_orientation(legacy,
+				hw->PanelScanoutOrientation());
+			storedScreens.SetRotation(0, rotation);
+		}
+		if (rotation != B_PANEL_ORIENTATION_NORMAL)
+			hw->SetPanelOrientation(rotation);
 	}
+	gScreenManager->Unlock();
 
 	// No auto state for reflection, unlike rotation above, so apply
 	// unconditionally rather than guarding on >= 0.
@@ -692,7 +703,8 @@ Desktop::Init()
 	// _ScreenChanged() normally does this, but nothing calls it at cold
 	// boot, only on later mode changes.
 	gInputManager->UpdateScreenBounds(fVirtualScreen.Frame(),
-		HWInterface()->PanelOrientation(), HWInterface()->PanelReflection());
+		HWInterface()->PanelScanoutOrientation(),
+		HWInterface()->PanelReflection());
 
 	BRegion stillAvailableOnScreen;
 	_RebuildClippingForAllWindows(stillAvailableOnScreen);
@@ -1079,7 +1091,8 @@ Desktop::SetRotation(int32 id, int32 rotation)
 			stored.Set(id, current->has_info ? &current->info : NULL,
 				current->frame, current->mode);
 		}
-		stored.SetRotation(id, rotation);
+		stored.SetRotation(id, rotation < 0
+			? B_PANEL_ORIENTATION_NORMAL : rotation);
 		StoreWorkspaceConfiguration(0);
 	}
 
@@ -4066,7 +4079,7 @@ Desktop::_ScreenChanged(Screen* screen)
 	// update our cached screen region
 	fScreenRegion.Set(newFrame);
 	gInputManager->UpdateScreenBounds(newFrame,
-		screen->HWInterface()->PanelOrientation(),
+		screen->HWInterface()->PanelScanoutOrientation(),
 		screen->HWInterface()->PanelReflection());
 
 	BRegion background;

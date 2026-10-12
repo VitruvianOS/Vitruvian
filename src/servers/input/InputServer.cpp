@@ -577,27 +577,12 @@ InputServer::MessageReceived(BMessage* message)
 				&& reflection == fScreenReflection)
 				return;
 
-			// An orientation change remaps the pointer old->new so it keeps
-			// its physical spot; a frame-only change rescales by ratio.
-			BPoint pos;
-			if (fFrame.Width() <= 0 || fFrame.Height() <= 0) {
-				// Nothing to map through yet; the constrain below handles it.
-				pos = fMousePos;
-			} else if (orientation == fScreenOrientation
-				&& reflection == fScreenReflection) {
-				pos.x = fMousePos.x * frame.Width()
-					/ fFrame.Width();
-				pos.y = fMousePos.y * frame.Height()
-					/ fFrame.Height();
-			} else {
-				float logicalX, logicalY;
-				remap_panel_point(fScreenOrientation,
-					fScreenReflection, orientation, reflection,
-					fMousePos.x / fFrame.Width(),
-					fMousePos.y / fFrame.Height(), logicalX,
-					logicalY);
-				pos.x = logicalX * frame.Width();
-				pos.y = logicalY * frame.Height();
+			// The pointer lives in logical space, so it only rescales, also
+			// across a rotation, as on other desktops.
+			BPoint pos = fMousePos;
+			if (fFrame.Width() > 0 && fFrame.Height() > 0) {
+				pos.x = fMousePos.x * frame.Width() / fFrame.Width();
+				pos.y = fMousePos.y * frame.Height() / fFrame.Height();
 			}
 			fFrame = frame;
 			fScreenOrientation = orientation;
@@ -1814,13 +1799,11 @@ InputServer::_SanitizeEvents(EventList& events)
 						"\n", where.x, where.y, x, y));
 				} else if (event->FindFloat("x", &absX) == B_OK
 					&& event->FindFloat("y", &absY) == B_OK) {
-					// Absolute 0..1 points are in physical panel space:
-					// rotate into logical space, then scale. The mouse
-					// add-on rotates itself and never gets here.
-					map_device_absolute_point(fScreenOrientation,
-						fScreenReflection, absX, absY,
-						fFrame.Width(), fFrame.Height(),
-						where.x, where.y);
+					// Tablet add-ons are external pen tablets, which keep
+					// their own orientation; panel digitizers come through
+					// the mouse add-on, which applies the panel transform.
+					where.x = absX * fFrame.Width();
+					where.y = absY * fFrame.Height();
 
 					event->RemoveName("x");
 					event->RemoveName("y");

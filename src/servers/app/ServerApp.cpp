@@ -525,7 +525,7 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// bounds and panel orientation on the next mode change.
 			if (stream != NULL) {
 				stream->UpdateScreenBounds(fDesktop->VirtualScreen().Frame(),
-					fDesktop->HWInterface()->PanelOrientation(),
+					fDesktop->HWInterface()->PanelScanoutOrientation(),
 					fDesktop->HWInterface()->PanelReflection());
 			}
 

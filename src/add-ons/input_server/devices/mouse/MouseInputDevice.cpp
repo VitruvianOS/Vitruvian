@@ -279,19 +279,19 @@ private:
 
 			// libinput event handling
 			void				_LibinputHandleEvent(struct libinput_event* ev);
-			// Normalizes, rotates by fOrientation and scales to screen.
-			void				_RotateDelta(float dx, float dy,
-									float& outDx, float& outDy) const
-								{
-									rotate_panel_delta(fOrientation,
-										dx, dy, outDx, outDy, fReflection);
-								}
-			// Normalizes and rotates by fOrientation.
+			// Relative motion is never rotated, as on other desktops: a
+			// rotated output means the screen itself was turned. Only
+			// absolute points from a device on the panel follow it.
 			void				_RotatePoint(float u, float v,
 									float& outU, float& outV) const
 								{
-									rotate_panel_point(fOrientation,
-										u, v, outU, outV, fReflection);
+									if (fFollowsPanel) {
+										rotate_panel_point(fOrientation,
+											u, v, outU, outV, fReflection);
+									} else {
+										outU = u;
+										outV = v;
+									}
 								}
 
 			BPoint				_TouchPoint(
@@ -353,6 +353,10 @@ private:
 			int32				fOrientation;
 			// B_PANEL_REFLECTION_*, see PanelOrientationTransform.h
 			int32				fReflection;
+			// Reports panel coordinates: a touchscreen or pen glued to the
+			// panel (INPUT_PROP_DIRECT) or a VM absolute pointer. False for
+			// pen tablets, which keep their own orientation.
+			bool				fFollowsPanel;
 
 			input_device_ref	fDeviceRef;
 			mouse_settings		fSettings;
@@ -445,6 +449,7 @@ MouseDevice::MouseDevice(MouseInputDevice& target, const char* driverPath)
 	fScreenH(800),
 	fOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fReflection(B_PANEL_REFLECTION_NONE),
+	fFollowsPanel(false),
 	fDeviceRemapsButtons(false),
 	fSerial(atomic_add(&sNextMouseDeviceSerial, 1)),
 	fDeviceInode(0),
@@ -507,6 +512,7 @@ MouseDevice::_Classify()
 			fDeviceInode = st.st_ino;
 
 		bool directTouch = _PropSet(fd, INPUT_PROP_DIRECT);
+		fFollowsPanel = directTouch;
 		fIsTouchpad = !directTouch && _IsTouchpadDevice(fd,
 			fPath.String());
 		close(fd);
@@ -606,6 +612,11 @@ MouseDevice::_Classify()
 			libevdev_has_property(evdev, INPUT_PROP_BUTTONPAD)
 			|| libevdev_has_event_code(evdev, EV_KEY,
 				BTN_TOOL_FINGER);
+
+		// A VM absolute pointer reports scanout coordinates, like a panel
+		// digitizer; a pen tablet off the panel does not.
+		fFollowsPanel = libevdev_has_property(evdev, INPUT_PROP_DIRECT)
+			|| !libevdev_has_event_code(evdev, EV_KEY, BTN_TOOL_PEN);
 	}
 
 	// Clickpads, synaptics absolute pads and udev-classified touchpads
@@ -1217,11 +1228,6 @@ MouseDevice::_ControlThread()
 				}
 
 				if (xdelta != 0 || ydelta != 0) {
-					float rx, ry;
-					_RotateDelta((float)xdelta,
-						(float)ydelta, rx, ry);
-					xdelta = (int32)rx;
-					ydelta = (int32)ry;
 
 					float histX = 0, histY = 0;
 					mouse_movement mv;
@@ -1309,9 +1315,8 @@ MouseDevice::_ControlThread()
 
 			// Scroll wheel
 			if (wheel_ydelta != 0 || wheel_xdelta != 0) {
-				float wx, wy;
-				_RotateDelta((float)wheel_xdelta,
-					(float)wheel_ydelta, wx, wy);
+				float wx = (float)wheel_xdelta;
+				float wy = (float)wheel_ydelta;
 
 				BMessage* message = new BMessage(B_MOUSE_WHEEL_CHANGED);
 				if (message != NULL) {
@@ -1728,9 +1733,8 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 
 			double rawDx = libinput_event_pointer_get_dx(pev);
 			double rawDy = libinput_event_pointer_get_dy(pev);
-			float dx, dy;
-			_RotateDelta((float)rawDx, (float)rawDy,
-				dx, dy);
+			float dx = (float)rawDx;
+			float dy = (float)rawDy;
 
 			// Sync from shared slot before applying delta
 			if (fTarget.fCursorLock.Lock()) {
@@ -1884,9 +1888,8 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				LIBINPUT_POINTER_AXIS_SCROLL_HORIZONTAL);
 			double rawDy = libinput_event_pointer_get_scroll_value(pev,
 				LIBINPUT_POINTER_AXIS_SCROLL_VERTICAL);
-			float scrollDx, scrollDy;
-			_RotateDelta((float)rawDx, (float)rawDy,
-				scrollDx, scrollDy);
+			float scrollDx = (float)rawDx;
+			float scrollDy = (float)rawDy;
 
 			fLibinputScrollAccX += scrollDx;
 			fLibinputScrollAccY += scrollDy;
@@ -1934,9 +1937,8 @@ MouseDevice::_LibinputHandleEvent(struct libinput_event* event)
 				LIBINPUT_POINTER_AXIS_SCROLL_HORIZONTAL);
 			double rawDy = libinput_event_pointer_get_scroll_value(pev,
 				LIBINPUT_POINTER_AXIS_SCROLL_VERTICAL);
-			float scrollDx, scrollDy;
-			_RotateDelta((float)rawDx, (float)rawDy,
-				scrollDx, scrollDy);
+			float scrollDx = (float)rawDx;
+			float scrollDy = (float)rawDy;
 
 			fLibinputScrollAccX += scrollDx;
 			fLibinputScrollAccY += scrollDy;

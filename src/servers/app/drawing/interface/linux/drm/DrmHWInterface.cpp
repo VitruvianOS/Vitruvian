@@ -129,6 +129,8 @@ DrmHWInterface::DrmHWInterface()
 	fVRRSupported(false),
 	fVRREnabled(false),
 	fPanelOrientation(PANEL_ORIENTATION_NORMAL),
+	fMountingOrientation(B_PANEL_ORIENTATION_NORMAL),
+	fUserOrientation(B_PANEL_ORIENTATION_NORMAL),
 	fPanelReflection(B_PANEL_REFLECTION_NONE)
 {
 	pthread_mutex_init(&fDirtyMutex, NULL);
@@ -2995,11 +2997,23 @@ DrmHWInterface::_DiscoverPanelOrientation()
 		case B_PANEL_ENV_UNSET:
 			break;
 	}
+
+	// Everything above found the mounting; the user's rotation goes on top.
+	fMountingOrientation = fPanelOrientation;
+	fPanelOrientation = (enum PanelOrientation)panel_compose_orientation(
+		fMountingOrientation, fUserOrientation);
 }
 
 
 int32
 DrmHWInterface::PanelOrientation() const
+{
+	return fUserOrientation;
+}
+
+
+int32
+DrmHWInterface::PanelScanoutOrientation() const
 {
 	return (int32)fPanelOrientation;
 }
@@ -3010,12 +3024,14 @@ DrmHWInterface::SetPanelOrientation(int32 orientation)
 {
 	if (orientation < -1 || orientation > PANEL_ORIENTATION_RIGHT_UP)
 		return B_BAD_VALUE;
+	if (orientation < 0)
+		orientation = B_PANEL_ORIENTATION_NORMAL;
 
 	enum PanelOrientation previous = fPanelOrientation;
-	if (orientation < 0)
-		_DiscoverPanelOrientation();
-	else
-		fPanelOrientation = (enum PanelOrientation)orientation;
+	int32 previousUser = fUserOrientation;
+	fUserOrientation = orientation;
+	fPanelOrientation = (enum PanelOrientation)panel_compose_orientation(
+		fMountingOrientation, fUserOrientation);
 
 	if (fPanelOrientation == previous)
 		return B_OK;
@@ -3023,6 +3039,7 @@ DrmHWInterface::SetPanelOrientation(int32 orientation)
 	struct modeset_dev* dev = get_dev();
 	if (dev == NULL) {
 		fPanelOrientation = previous;
+		fUserOrientation = previousUser;
 		return B_ERROR;
 	}
 
@@ -3038,6 +3055,7 @@ DrmHWInterface::SetPanelOrientation(int32 orientation)
 	status_t status = SetMode(mode);
 	if (status != B_OK) {
 		fPanelOrientation = previous;
+		fUserOrientation = previousUser;
 		return status;
 	}
 

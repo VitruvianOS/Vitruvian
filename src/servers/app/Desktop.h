@@ -34,6 +34,7 @@
 #include "DelayedMessage.h"
 #include "DesktopListener.h"
 #include "DesktopSettings.h"
+#include "DisplayChangeTracker.h"
 #include "EventDispatcher.h"
 #include "MessageLooper.h"
 #include "MultiLocker.h"
@@ -60,6 +61,19 @@ struct server_read_only_memory;
 
 namespace BPrivate {
 	class LinkSender;
+};
+
+
+// Live state captured when an unconfirmed display change begins; the
+// revert applies it wholesale when the deadline fires.
+struct screen_change_snapshot {
+			int32				rotation;
+			int32				reflection;
+			int32				columns;
+			int32				rows;
+			int32				modeCount;
+			display_mode		modes[kMaxWorkspaces];
+			bool				hasModes[kMaxWorkspaces];
 };
 
 
@@ -139,6 +153,13 @@ public:
 			int32				Reflection(int32 id) const;
 			status_t			SetTemperature(int32 id, float kelvin);
 			float				Temperature(int32 id) const;
+
+	// Unconfirmed display change: the deadline lives here so that the
+	// revert does not depend on the client surviving.
+			status_t			BeginScreenChange(team_id owner);
+			status_t			ConfirmScreenChange(team_id owner);
+			status_t			CancelScreenChange(team_id owner);
+			void				ScreenChangeOwnerDied(team_id owner);
 
 			MultiLocker&		ScreenLocker() { return fScreenLock; }
 
@@ -351,6 +372,17 @@ private:
 			void				_SetWorkspace(int32 index,
 									bool moveFocusWindow = false);
 
+			bool				_ScreenChangeStoreDeferred();
+			void				_StartScreenChangeTimer();
+			void				_StopScreenChangeTimer();
+			void				_TakeScreenChangeSnapshot(
+									screen_change_snapshot& snapshot);
+			void				_RestoreScreenChange();
+			void				_FinishScreenChangeRestore();
+			void				_StoreScreenChange();
+			static	int32			_ScreenChangeTimerEntry(void* data);
+			void				_ScreenChangeTimer(uint32 generation);
+
 private:
 	friend class DesktopSettings;
 	friend class LockedDesktopSettings;
@@ -416,6 +448,13 @@ private:
 			StackAndTile		fStackAndTile;
 
 			BMessage			fPendingColors;
+
+			DisplayChangeTracker	fScreenChangeTracker;
+			BLocker				fScreenChangeLock;
+			thread_id			fScreenChangeTimer;
+			sem_id				fScreenChangeWakeup;
+			bool				fScreenChangeStoreDeferred;
+			screen_change_snapshot	fScreenChangeSnapshot;
 };
 
 #endif	// DESKTOP_H

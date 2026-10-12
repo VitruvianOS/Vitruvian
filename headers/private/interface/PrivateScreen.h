@@ -95,6 +95,14 @@ public:
 			status_t			GetReflection(int32*);
 			status_t			SetReflection(int32);
 
+			// Unconfirmed display change. Begin snapshots the live state
+			// and starts the server-side deadline; Confirm keeps it and
+			// persists, Cancel reverts at once. Changes made between
+			// Begin and Confirm join the same window.
+			status_t			BeginScreenChange();
+			status_t			ConfirmScreenChange();
+			status_t			CancelScreenChange();
+
 			// Color temperature in Kelvin; 6500 is neutral, lower is warmer.
 			// B_NOT_SUPPORTED when the output cannot do it.
 			status_t			GetTemperature(float*);

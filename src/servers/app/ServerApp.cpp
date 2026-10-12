@@ -171,6 +171,7 @@ ServerApp::~ServerApp()
 	snooze(20000);
 
 	fDesktop->RevertScreenModes(fTemporaryDisplayModeChange);
+	fDesktop->ScreenChangeOwnerDied(fClientTeam);
 
 	fWindowListLock.Lock();
 	for (int32 i = fWindowList.CountItems(); i-- > 0;) {
@@ -3436,6 +3437,36 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			fLink.StartMessage(B_OK);
 			fLink.Attach<int32>(fDesktop->Reflection(id));
+
+			fLink.Flush();
+			break;
+		}
+
+		case AS_SCREEN_BEGIN_CHANGE:
+		{
+			STRACE(("ServerApp %s: AS_SCREEN_BEGIN_CHANGE\n", Signature()));
+			status_t status = fDesktop->BeginScreenChange(fClientTeam);
+			fLink.StartMessage(status);
+
+			fLink.Flush();
+			break;
+		}
+
+		case AS_SCREEN_CONFIRM_CHANGE:
+		{
+			STRACE(("ServerApp %s: AS_SCREEN_CONFIRM_CHANGE\n", Signature()));
+			status_t status = fDesktop->ConfirmScreenChange(fClientTeam);
+			fLink.StartMessage(status);
+
+			fLink.Flush();
+			break;
+		}
+
+		case AS_SCREEN_CANCEL_CHANGE:
+		{
+			STRACE(("ServerApp %s: AS_SCREEN_CANCEL_CHANGE\n", Signature()));
+			status_t status = fDesktop->CancelScreenChange(fClientTeam);
+			fLink.StartMessage(status);
 
 			fLink.Flush();
 			break;

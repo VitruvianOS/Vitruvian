@@ -15,6 +15,7 @@
 #include <Message.h>
 #include <MessageRunner.h>
 #include <Url.h>
+#include <OS.h>
 #include <View.h>
 
 #include <media2/MediaConnection.h>
@@ -22,11 +23,22 @@
 #include <media2/MediaTrack.h>
 #include <media2/SimpleMediaNode.h>
 
+#include "VideoSync.h"
+
 
 namespace {
 
 
 const uint32 kMsgVideoPump = 'vpmp';
+
+// Sync tolerance: against the audio clock a frame late past this is
+// dropped and early past it holds the previous frame up.
+const bigtime_t kVideoSyncTolerance = 20000;
+
+// The runner only wakes the pump; tick a quarter frame (clamped) when
+// the rate is known so a due frame is noticed inside the tolerance.
+const bigtime_t kVideoPumpQuantumMax = 10000;
+const bigtime_t kVideoPumpQuantumMin = 2000;
 
 
 class _OutputConnection : public BMediaOutput {
@@ -111,6 +123,7 @@ private:
 	void _PumpVideoFrame();
 	void _StartVideoRunner();
 	void _StopVideoRunner();
+	void _ResetVideoPacing();
 
 	void _SetState(BMediaPlayer::player_state s);
 	void _PostNotification(uint32 what);
@@ -139,7 +152,15 @@ private:
 	uint32				fVideoStride;
 	uint8*				fVideoBuffer;
 	size_t				fVideoBufferSize;
-	std::mutex			fLock;	// guards fTrack reads + fState transitions
+	bool				fVideoFramePending;
+	bigtime_t			fVideoPendingTime;
+	bigtime_t			fVideoClockBase;
+	bool				fVideoClockValid;
+	bigtime_t			fVideoLastDeliver;
+	int32				fVideoZeroStamps;
+	bool				fVideoPaceNominal;
+	bigtime_t			fVideoNominalInterval;
+	std::mutex			fLock;	// guards tracks, pull buffer, pacing state
 	std::atomic<BMediaPlayer::player_state>	fState;
 	std::atomic<bool>	fEOS;
 	uint32				fFrameStride;
@@ -173,6 +194,14 @@ BMediaPlayer::Impl::Impl(BMediaPlayer* owner)
 	fVideoStride(0),
 	fVideoBuffer(NULL),
 	fVideoBufferSize(0),
+	fVideoFramePending(false),
+	fVideoPendingTime(0),
+	fVideoClockBase(0),
+	fVideoClockValid(false),
+	fVideoLastDeliver(0),
+	fVideoZeroStamps(0),
+	fVideoPaceNominal(false),
+	fVideoNominalInterval(0),
 	fState(BMediaPlayer::B_PLAYER_STOPPED),
 	fEOS(false),
 	fFrameStride(0),
@@ -269,6 +298,7 @@ BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 	fVideoBufferSize = 0;
 	delete[] fVideoBuffer;
 	fVideoBuffer = NULL;
+	_ResetVideoPacing();
 
 	fFile = new(std::nothrow) BMediaFile(ref);
 	if (fFile == NULL)
@@ -404,6 +434,7 @@ BMediaPlayer::Impl::Play()
 			fTrack->SeekToTime(&t);
 		if (fVideoTrack != NULL)
 			fVideoTrack->SeekToTime(&t);
+		_ResetVideoPacing();
 		fEOS = false;
 	}
 	fHasData = true;
@@ -449,6 +480,7 @@ BMediaPlayer::Impl::Stop()
 		fTrack->SeekToTime(&t);
 	if (fVideoTrack != NULL)
 		fVideoTrack->SeekToTime(&t);
+	_ResetVideoPacing();
 	fEOS = false;
 	_SetState(BMediaPlayer::B_PLAYER_STOPPED);
 	return B_OK;
@@ -469,6 +501,8 @@ BMediaPlayer::Impl::SeekTo(bigtime_t position)
 		err = fVideoTrack->SeekToTime(&t);
 	if (err != B_OK)
 		return err;
+	// The pending frame, if any, is from before the seek.
+	_ResetVideoPacing();
 	fEOS = false;
 	_PostNotification(BMediaPlayer::B_PLAYER_POSITION_CHANGED);
 	return B_OK;
@@ -549,30 +583,86 @@ BMediaPlayer::Impl::_PumpVideoFrame()
 	if (fVideoTrack == NULL || fVideoView == NULL || fVideoBuffer == NULL)
 		return;
 
-	int64 frames = 1;
-	media_header mh;
-	memset(&mh, 0, sizeof(mh));
-	status_t err = fVideoTrack->ReadFrames(fVideoBuffer, &frames, &mh);
-	if (err == B_LAST_BUFFER_ERROR) {
-		_SetState(BMediaPlayer::B_PLAYER_STOPPED);
-		_PostNotification(BMediaPlayer::B_PLAYER_END_OF_STREAM);
+	const bool haveAudio = fTrack != NULL;
+	while (true) {
+		if (!fVideoFramePending) {
+			int64 frames = 1;
+			media_header mh;
+			memset(&mh, 0, sizeof(mh));
+			status_t err = fVideoTrack->ReadFrames(fVideoBuffer,
+				&frames, &mh);
+			if (err == B_LAST_BUFFER_ERROR) {
+				_SetState(BMediaPlayer::B_PLAYER_STOPPED);
+				_PostNotification(
+					BMediaPlayer::B_PLAYER_END_OF_STREAM);
+				return;
+			}
+			if (err != B_OK || frames < 1)
+				return;
+			fVideoPendingTime = mh.start_time;
+			fVideoFramePending = true;
+			if (mh.start_time == 0) {
+				// A second zero stamp means the stream carries
+				// no PTS at all: pace from field_rate instead.
+				if (fVideoZeroStamps > 0
+						&& fVideoFormat.field_rate > 0.0f) {
+					fVideoPaceNominal = true;
+					fVideoNominalInterval = (bigtime_t)
+						(1000000.0f
+							/ fVideoFormat.field_rate);
+				}
+				fVideoZeroStamps++;
+			} else
+				fVideoZeroStamps = 0;
+		}
+
+		bigtime_t clockNow;
+		bigtime_t due = fVideoPendingTime;
+		bool allowDrop = haveAudio;
+		if (fVideoPaceNominal) {
+			// No timestamps to judge: hold the nominal rate on
+			// the system clock instead of the audio clock.
+			due = fVideoLastDeliver + fVideoNominalInterval;
+			clockNow = system_time();
+			allowDrop = false;
+		} else if (haveAudio) {
+			clockNow = fTrack->CurrentTime();
+		} else {
+			// Timestamps are file-relative: map them onto the
+			// system clock from the first pull after Play/Seek.
+			if (!fVideoClockValid) {
+				fVideoClockBase = system_time() - fVideoPendingTime;
+				fVideoClockValid = true;
+			}
+			due = fVideoClockBase + fVideoPendingTime;
+			clockNow = system_time();
+		}
+
+		const BPrivate::media::video_sync_decision decision
+			= BPrivate::media::DecideVideoSync(due, clockNow,
+				kVideoSyncTolerance, allowDrop);
+		if (decision == BPrivate::media::VIDEO_SYNC_HOLD)
+			return;
+		if (decision == BPrivate::media::VIDEO_SYNC_DROP) {
+			fVideoFramePending = false;
+			continue;
+		}
+
+		// Surface presentation replaces the B_RAW_TYPE payload below
+		// with a dma-buf descriptor; the geometry keys stay unchanged.
+		BMessage msg(BMediaPlayer::B_PLAYER_VIDEO_FRAME);
+		msg.AddInt32("width", (int32)fVideoFormat.width);
+		msg.AddInt32("height", (int32)fVideoFormat.height);
+		msg.AddInt32("stride", (int32)fVideoStride);
+		msg.AddInt64("start_time", (int64)fVideoPendingTime);
+		msg.AddInt64("audio_time", (int64)(haveAudio ? clockNow : -1));
+		msg.AddData("frame", B_RAW_TYPE, fVideoBuffer,
+			(uint32)fVideoBufferSize);
+		fVideoMessenger.SendMessage(&msg);
+		fVideoFramePending = false;
+		fVideoLastDeliver = system_time();
 		return;
 	}
-	if (err != B_OK || frames < 1)
-		return;
-
-	bigtime_t audioTime = -1;
-	if (fTrack != NULL)
-		audioTime = fTrack->CurrentTime();
-
-	BMessage msg(BMediaPlayer::B_PLAYER_VIDEO_FRAME);
-	msg.AddInt32("width", (int32)fVideoFormat.width);
-	msg.AddInt32("height", (int32)fVideoFormat.height);
-	msg.AddInt32("stride", (int32)fVideoStride);
-	msg.AddInt64("start_time", (int64)mh.start_time);
-	msg.AddInt64("audio_time", (int64)audioTime);
-	msg.AddData("frame", B_RAW_TYPE, fVideoBuffer, (uint32)fVideoBufferSize);
-	fVideoMessenger.SendMessage(&msg);
 }
 
 
@@ -581,11 +671,17 @@ BMediaPlayer::Impl::_StartVideoRunner()
 {
 	if (fVideoPump == NULL || fVideoRunner != NULL)
 		return;
-	if (fVideoTrack == NULL || fVideoFormat.field_rate <= 0.0f)
+	if (fVideoTrack == NULL)
 		return;
-	bigtime_t interval = (bigtime_t)(1000000.0f / fVideoFormat.field_rate);
-	if (interval <= 0)
-		interval = 33333;
+	// The runner only wakes the pump: timestamps and the audio clock
+	// decide presentation, so a 0 field_rate (VFR) still runs.
+	bigtime_t interval = kVideoPumpQuantumMax;
+	if (fVideoFormat.field_rate > 0.0f) {
+		interval = (bigtime_t)(1000000.0f
+			/ fVideoFormat.field_rate / 4.0f);
+		if (interval < kVideoPumpQuantumMin)
+			interval = kVideoPumpQuantumMin;
+	}
 	BMessage msg(kMsgVideoPump);
 	fVideoRunner = new BMessageRunner(BMessenger(fVideoPump), msg, interval);
 }
@@ -596,6 +692,16 @@ BMediaPlayer::Impl::_StopVideoRunner()
 {
 	delete fVideoRunner;
 	fVideoRunner = NULL;
+}
+
+
+void
+BMediaPlayer::Impl::_ResetVideoPacing()
+{
+	fVideoFramePending = false;
+	fVideoClockValid = false;
+	fVideoZeroStamps = 0;
+	fVideoPaceNominal = false;
 }
 
 

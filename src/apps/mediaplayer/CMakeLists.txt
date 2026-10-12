@@ -4,6 +4,7 @@ Application(MediaPlayer
 		Controller.cpp
 		ControllerView.cpp
 		DurationToString.cpp
+		InfoWin.cpp
 		MainWin.cpp
 		MediaPlayerApp.cpp
 		MidiPlayback.cpp
@@ -28,5 +29,5 @@ target_include_directories(MediaPlayer PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CMAKE_CURRENT_SOURCE_DIR}/interface
 )
-UsePrivateHeaders(MediaPlayer interface)
+UsePrivateHeaders(MediaPlayer interface shared)
 DoCatalogs("x-vnd.Haiku-MediaPlayer" apps/mediaplayer)

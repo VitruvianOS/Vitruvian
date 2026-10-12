@@ -10,6 +10,7 @@
 #include <Catalog.h>
 #include <Entry.h>
 #include <FilePanel.h>
+#include <GroupLayout.h>
 #include <InterfaceDefs.h>
 #include <LayoutBuilder.h>
 #include <Locale.h>
@@ -18,11 +19,18 @@
 #include <MenuItem.h>
 #include <Message.h>
 #include <MessageRunner.h>
+#include <OS.h>
 #include <Path.h>
+#include <PopUpMenu.h>
+#include <Rect.h>
+#include <Screen.h>
 #include <String.h>
+#include <TextView.h>
 
 #include "Controller.h"
 #include "ControllerView.h"
+#include "InfoWin.h"
+#include "LocationStringView.h"
 #include "MediaMessages.h"
 #include "PlaybackState.h"
 #include "Playlist.h"
@@ -31,6 +39,7 @@
 #include "VideoView.h"
 
 #include <media2/MediaPlayer.h>
+#include <SettingsMessage.h>
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -39,6 +48,10 @@
 
 static const float kMinWidth = 360;
 static const float kMinHeight = 280;
+static const float kAudioMinWidth = 250;
+static const float kDefaultScale = 1.0f;
+// Full screen: hide the strip after the mouse has been idle this long.
+static const bigtime_t kIdleHideDelay = 2000000;
 
 
 MainWin::MainWin(BRect frame)
@@ -49,17 +62,36 @@ MainWin::MainWin(BRect frame)
 	fPlaylist(NULL),
 	fVideoView(NULL),
 	fControllerView(NULL),
+	fLocationView(NULL),
 	fPlaylistWindow(NULL),
+	fInfoWin(NULL),
 	fMenuBar(NULL),
 	fOpenPanel(NULL),
 	fPositionRunner(NULL),
-	fMuted(false)
+	fAlwaysOnTopItem(NULL),
+	fHideInterfaceItem(NULL),
+	fLoopItem(NULL),
+	fSettings(NULL),
+	fMuted(false),
+	fLoop(false),
+	fAlwaysOnTop(false),
+	fHideInterface(false),
+	fFullscreen(false),
+	fControlsVisible(false),
+	fVideoScale(kDefaultScale),
+	fStripHeight(0),
+	fControlY(0),
+	fLastRevealTime(0)
 {
 	fPlaylist = new Playlist();
 	fController = new Controller(BMessenger(this));
 
+	fSettings = new SettingsMessage(B_USER_SETTINGS_DIRECTORY, "MediaPlayer");
+	fSettings->Load();
+
 	_CreateMenu();
 	_SetupWindow();
+	_LoadSettings();
 
 	fPositionRunner = new BMessageRunner(BMessenger(this),
 		new BMessage(MSG_CONTROLLER_POSITION), 100000);
@@ -70,9 +102,11 @@ MainWin::~MainWin()
 {
 	delete fPositionRunner;
 	delete fOpenPanel;
+	delete fInfoWin;
 	delete fPlaylistWindow;
 	delete fController;
 	delete fPlaylist;
+	delete fSettings;
 }
 
 
@@ -81,21 +115,31 @@ MainWin::_SetupWindow()
 {
 	fVideoView = new VideoView(BRect(0, 0, 360, 200), "video", B_FOLLOW_ALL);
 
+	fLocationView = new LocationStringView("location", "");
+	fLocationView->SetExplicitMinSize(BSize(250,
+		be_plain_font->Size() + 8));
+	fLocationView->Hide();
+
 	fControllerView = new ControllerView(
 		BRect(0, 200, 360, 300), fController, fPlaylist);
 	fControllerView->SetVolume(fController->Volume());
+	fControllerView->SetDisabledString(B_TRANSLATE("Drop files to play"));
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.SetInsets(0)
 		.Add(fMenuBar)
 		.Add(fVideoView, 1.0)
+		.Add(fLocationView, 1.0)
 		.Add(fControllerView);
 
 	fController->SetVideoView(fVideoView);
 
 	SetSizeLimits(kMinWidth, kMinHeight, 4000, 3000);
-	ResizeTo(kMinWidth + 40, kMinHeight + 140);
+	if (!fSavedFrame.IsValid())
+		ResizeTo(kMinWidth + 40, kMinHeight + 140);
 	CenterOnScreen();
+	fVideoView->MakeFocus(true);
+	_UpdateTransport();
 }
 
 
@@ -111,9 +155,15 @@ MainWin::_CreateMenu()
 		new BMessage(MSG_OPEN_LOCATION), 'L'));
 	fileMenu->AddItem(new BMenuItem(B_TRANSLATE("Open MIDI…"),
 		new BMessage(MSG_OPEN_MIDI), 'M'));
-	fileMenu->AddSeparatorItem();
 	fileMenu->AddItem(new BMenuItem(B_TRANSLATE("Play Audio CD"),
 		new BMessage(MSG_PLAY_CD), 'D'));
+	fileMenu->AddSeparatorItem();
+	fileMenu->AddItem(new BMenuItem(B_TRANSLATE("File Info"),
+		new BMessage(MSG_FILE_INFO), 'I'));
+	fileMenu->AddItem(new BMenuItem(B_TRANSLATE("New Player"),
+		new BMessage(MSG_NEW_PLAYER), 'N'));
+	fileMenu->AddItem(new BMenuItem(B_TRANSLATE("Close"),
+		new BMessage(B_CLOSE_REQUESTED), 'W'));
 	fileMenu->AddSeparatorItem();
 	fileMenu->AddItem(new BMenuItem(B_TRANSLATE("Quit"),
 		new BMessage(B_QUIT_REQUESTED), 'Q'));
@@ -123,10 +173,49 @@ MainWin::_CreateMenu()
 	playlistMenu->AddItem(new BMenuItem(B_TRANSLATE("Show Playlist"),
 		new BMessage(MSG_PLAYLIST_SHOW), 'P'));
 	playlistMenu->AddItem(new BMenuItem(B_TRANSLATE("Add Files…"),
-		new BMessage(MSG_PLAYLIST_ADD), 'A'));
+		new BMessage(MSG_PLAYLIST_ADD)));
 	playlistMenu->AddItem(new BMenuItem(B_TRANSLATE("Clear"),
 		new BMessage(MSG_PLAYLIST_CLEAR)));
+	fLoopItem = new BMenuItem(B_TRANSLATE("Loop"),
+		new BMessage(MSG_TOGGLE_LOOP));
+	playlistMenu->AddItem(fLoopItem);
 	fMenuBar->AddItem(playlistMenu);
+
+	BMenu* videoMenu = new BMenu(B_TRANSLATE("Video"));
+	videoMenu->AddItem(new BMenuItem(B_TRANSLATE("Full Screen"),
+		new BMessage(MSG_TOGGLE_FULLSCREEN)));
+	videoMenu->AddSeparatorItem();
+	const float scales[] = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f };
+	for (uint32 i = 0; i < sizeof(scales) / sizeof(scales[0]); i++) {
+		BMessage* msg = new BMessage(MSG_VIDEO_SCALE);
+		msg->AddFloat("scale", scales[i]);
+		char label[16];
+		snprintf(label, sizeof(label), "%d%%", (int)(scales[i] * 100));
+		BMenuItem* item = new BMenuItem(B_TRANSLATE(label), msg);
+		if (scales[i] == kDefaultScale)
+			item->SetMarked(true);
+		videoMenu->AddItem(item);
+	}
+	videoMenu->AddSeparatorItem();
+	videoMenu->AddItem(new BMenuItem(B_TRANSLATE("Zoom In"),
+		new BMessage(MSG_ZOOM_IN), '+'));
+	videoMenu->AddItem(new BMenuItem(B_TRANSLATE("Zoom Out"),
+		new BMessage(MSG_ZOOM_OUT), '-'));
+	fMenuBar->AddItem(videoMenu);
+
+	BMenu* windowMenu = new BMenu(B_TRANSLATE("Window"));
+	fAlwaysOnTopItem = new BMenuItem(B_TRANSLATE("Always on Top"),
+		new BMessage(MSG_ALWAYS_ON_TOP), 'A');
+	windowMenu->AddItem(fAlwaysOnTopItem);
+	fHideInterfaceItem = new BMenuItem(B_TRANSLATE("Hide Interface"),
+		new BMessage(MSG_HIDE_INTERFACE), 'H');
+	windowMenu->AddItem(fHideInterfaceItem);
+	fMenuBar->AddItem(windowMenu);
+
+	BMenu* audioMenu = new BMenu(B_TRANSLATE("Audio"));
+	audioMenu->AddItem(new BMenuItem(B_TRANSLATE("Mute"),
+		new BMessage('mute')));
+	fMenuBar->AddItem(audioMenu);
 }
 
 
@@ -142,28 +231,31 @@ MainWin::_UpdateTitle(const char* name)
 }
 
 
+float
+MainWin::_ChromeHeight() const
+{
+	float menuH = fMenuBar != NULL ? fMenuBar->MinSize().height : 0;
+	float stripH = fControllerView != NULL
+		? fControllerView->GroupLayout()->MinSize().height : 0;
+	return menuH + stripH;
+}
+
+
 void
 MainWin::_SizeForVideo(uint32 width, uint32 height)
 {
-	if (width == 0 || height == 0 || fVideoView == NULL)
+	if (width == 0 || height == 0 || fVideoView == NULL || fFullscreen)
 		return;
 
-	float targetW = width;
-	float targetH = height;
+	float targetW = width * fVideoScale;
+	float targetH = height * fVideoScale;
 	if (targetW < kMinWidth)
 		targetW = kMinWidth;
 	if (targetH < 40)
 		targetH = 40;
 
-	float menuHeight = 22;
-	float transportHeight = 100;
-	float frameW = targetW;
-	float frameH = menuHeight + targetH + transportHeight;
-	if (frameW < Bounds().Width())
-		frameW = Bounds().Width();
-	if (frameH < Bounds().Height())
-		frameH = Bounds().Height();
-	ResizeTo(frameW, frameH);
+	// Chrome comes from the layout, not constants, so HiDPI scaling holds.
+	ResizeTo(targetW, targetH + _ChromeHeight());
 }
 
 
@@ -200,8 +292,23 @@ MainWin::_UpdateTransport()
 	}
 	fControllerView->SetPlaybackState(state);
 	fControllerView->SetAudioEnabled(true);
-	fControllerView->SetMuted(fMuted);
+	fControllerView->SetMuted(fController->IsMuted());
 	fControllerView->SetVolume(fController->Volume());
+
+	bool hasItem = fPlaylist->CurrentItem() != NULL;
+	uint32 buttons = VOLUME_ENABLED;
+	if (hasItem) {
+		buttons |= PLAYBACK_ENABLED | SEEK_BACK_ENABLED | SEEK_FORWARD_ENABLED;
+		int32 count = fPlaylist->CountItems();
+		int32 index = fPlaylist->CurrentItemIndex();
+		if (index > 0)
+			buttons |= SKIP_BACK_ENABLED;
+		if (index < count - 1)
+			buttons |= SKIP_FORWARD_ENABLED;
+		if (fController->Duration() > 0)
+			buttons |= SEEK_ENABLED;
+	}
+	fControllerView->SetEnabled(buttons);
 
 	bigtime_t position = fController->Position();
 	bigtime_t duration = fController->Duration();
@@ -209,6 +316,311 @@ MainWin::_UpdateTransport()
 		float value = (float)position / (float)duration;
 		fControllerView->SetPosition(value, position, duration);
 	}
+}
+
+
+void
+MainWin::_UpdateLocation()
+{
+	if (fLocationView == NULL)
+		return;
+	PlaylistItem* item = fPlaylist->CurrentItem();
+	BString text;
+	if (item != NULL) {
+		BPath path(&item->Ref());
+		// A file: URL lets the location line act as a reveal-in-Tracker link.
+		if (path.InitCheck() == B_OK && path.Path()[0] == '/')
+			text << "file://" << path.Path();
+		else
+			text = path.Path();
+	}
+	fLocationView->SetText(text.String());
+	fLocationView->CheckAndSetStyleForLink();
+}
+
+
+void
+MainWin::_UpdateVideoMode()
+{
+	bool hasVideo = fController != NULL && fController->HasVideo();
+	if (fVideoView != NULL) {
+		if (hasVideo)
+			fVideoView->Show();
+		else
+			fVideoView->Hide();
+	}
+	if (fLocationView != NULL) {
+		if (hasVideo)
+			fLocationView->Hide();
+		else
+			fLocationView->Show();
+	}
+
+	if (fFullscreen)
+		return;
+
+	if (hasVideo) {
+		SetSizeLimits(kMinWidth, kMinHeight, 4000, 3000);
+		_SizeForVideo(fController->VideoWidth(), fController->VideoHeight());
+	} else {
+		SetSizeLimits(kAudioMinWidth, _ChromeHeight() + 40, 4000, 3000);
+		float audioW = kAudioMinWidth;
+		if (fSettings != NULL)
+			audioW = fSettings->GetValue("audio_width", (float)kAudioMinWidth);
+		if (audioW < kAudioMinWidth)
+			audioW = kAudioMinWidth;
+		ResizeTo(audioW, _ChromeHeight() + 60);
+	}
+	_UpdateLocation();
+}
+
+
+void
+MainWin::_SeekRelative(bigtime_t delta)
+{
+	if (fController == NULL)
+		return;
+	bigtime_t position = fController->Position();
+	// At the ends the arrow keys skip item instead of seeking past it.
+	if (delta < 0 && position <= 0) {
+		fController->SkipBackward();
+		return;
+	}
+	bigtime_t duration = fController->Duration();
+	if (delta > 0 && duration > 0 && position >= duration - 1) {
+		fController->SkipForward();
+		return;
+	}
+	fController->SeekBy(delta);
+	_PollPosition();
+}
+
+
+bool
+MainWin::_ShouldHandleKey(BHandler* handler)
+{
+	if (handler == NULL || handler == this)
+		return true;
+	BView* view = dynamic_cast<BView*>(handler);
+	if (view == NULL)
+		return false;
+	for (BView* v = view; v != NULL; v = v->Parent()) {
+		if (dynamic_cast<BTextView*>(v) != NULL)
+			return false;
+		if (v == fVideoView || v == fControllerView)
+			return true;
+	}
+	return false;
+}
+
+
+void
+MainWin::_ToggleFullscreen()
+{
+	if (fFullscreen)
+		_ExitFullscreen();
+	else
+		_EnterFullscreen();
+}
+
+
+void
+MainWin::_EnterFullscreen()
+{
+	if (fFullscreen || fVideoView == NULL)
+		return;
+	// Full screen is refused until there is video to fill it with.
+	if (!fVideoView->HasVideo())
+		return;
+
+	fSavedFrame = Frame();
+	fFullscreen = true;
+	fStripHeight = fControllerView->Bounds().Height();
+
+	BLayout* layout = GetLayout();
+	if (layout != NULL)
+		layout->RemoveView(fControllerView);
+	fVideoView->AddChild(fControllerView);
+	fControllerView->SetResizingMode(B_FOLLOW_NONE);
+	fControllerView->SetSymbolScale(1.5f);
+	fStripHeight = fControllerView->Bounds().Height();
+
+	fMenuBar->Hide();
+	BRect screen = BScreen(this).Frame();
+	MoveTo(screen.left, screen.top);
+	ResizeTo(screen.Width(), screen.Height());
+
+	fControlsVisible = true;
+	fControlY = fVideoView->Bounds().bottom - fStripHeight + 1;
+	fLastRevealTime = system_time();
+	_PositionControls();
+	fVideoView->SetFullscreenMode(true);
+}
+
+
+void
+MainWin::_ExitFullscreen()
+{
+	if (!fFullscreen)
+		return;
+	fFullscreen = false;
+	fControlsVisible = false;
+	fVideoView->SetFullscreenMode(false);
+
+	fVideoView->RemoveChild(fControllerView);
+	fControllerView->SetSymbolScale(1.0f);
+	BGroupLayout* layout = dynamic_cast<BGroupLayout*>(GetLayout());
+	if (layout != NULL)
+		layout->AddView(fControllerView);
+	fMenuBar->Show();
+
+	if (fSavedFrame.IsValid()) {
+		MoveTo(fSavedFrame.LeftTop());
+		ResizeTo(fSavedFrame.Width(), fSavedFrame.Height());
+	}
+	BLayout* top = GetLayout();
+	if (top != NULL)
+		top->InvalidateLayout();
+}
+
+
+void
+MainWin::_PositionControls()
+{
+	if (!fFullscreen || fVideoView == NULL || fControllerView == NULL)
+		return;
+	BRect bounds = fVideoView->Bounds();
+	fControllerView->MoveTo(0, fControlY);
+	fControllerView->ResizeTo(bounds.Width(), fStripHeight);
+	fVideoView->Invalidate();
+}
+
+
+void
+MainWin::_ShowControls()
+{
+	if (!fFullscreen)
+		return;
+	fControlsVisible = true;
+	fLastRevealTime = system_time();
+}
+
+
+void
+MainWin::_HideControlsIdle()
+{
+	if (!fFullscreen || !fControlsVisible)
+		return;
+	if (system_time() - fLastRevealTime > kIdleHideDelay)
+		fControlsVisible = false;
+}
+
+
+void
+MainWin::_ToggleHideInterface()
+{
+	fHideInterface = !fHideInterface;
+	if (fFullscreen)
+		return;
+	if (fMenuBar != NULL) {
+		if (fHideInterface)
+			fMenuBar->Hide();
+		else
+			fMenuBar->Show();
+	}
+	if (fControllerView != NULL) {
+		if (fHideInterface)
+			fControllerView->Hide();
+		else
+			fControllerView->Show();
+	}
+	if (fHideInterfaceItem != NULL)
+		fHideInterfaceItem->SetMarked(fHideInterface);
+	BLayout* layout = GetLayout();
+	if (layout != NULL)
+		layout->InvalidateLayout();
+}
+
+
+void
+MainWin::_SetAlwaysOnTop(bool on)
+{
+	fAlwaysOnTop = on;
+	SetFeel(on ? B_FLOATING_ALL_WINDOW_FEEL : B_NORMAL_WINDOW_FEEL);
+	if (fAlwaysOnTopItem != NULL)
+		fAlwaysOnTopItem->SetMarked(on);
+}
+
+
+void
+MainWin::_SetLoop(bool on)
+{
+	fLoop = on;
+	if (fController != NULL)
+		fController->SetLoop(on);
+	if (fLoopItem != NULL)
+		fLoopItem->SetMarked(on);
+}
+
+
+void
+MainWin::_ShowInfo()
+{
+	PlaylistItem* item = fPlaylist->CurrentItem();
+	if (item == NULL)
+		return;
+	if (fInfoWin != NULL && !fInfoWin->IsHidden()) {
+		fInfoWin->Activate();
+		return;
+	}
+	delete fInfoWin;
+	BRect frame(100, 100, 460, 360);
+	fInfoWin = new InfoWin(frame, fController, item->Ref());
+}
+
+
+void
+MainWin::_Zoom(float factor)
+{
+	fVideoScale *= factor;
+	if (fVideoScale < 0.1f)
+		fVideoScale = 0.1f;
+	if (fVideoScale > 8.0f)
+		fVideoScale = 8.0f;
+	if (fController->HasVideo())
+		_SizeForVideo(fController->VideoWidth(), fController->VideoHeight());
+}
+
+
+void
+MainWin::_LoadSettings()
+{
+	if (fSettings == NULL)
+		return;
+	fSavedFrame = fSettings->GetValue("window_frame", BRect());
+	if (fSavedFrame.IsValid()) {
+		MoveTo(fSavedFrame.LeftTop());
+		ResizeTo(fSavedFrame.Width(), fSavedFrame.Height());
+		CenterOnScreen();
+	}
+	fVideoScale = fSettings->GetValue("video_scale", kDefaultScale);
+	_SetAlwaysOnTop(fSettings->GetValue("always_on_top", false));
+	_SetLoop(fSettings->GetValue("loop", false));
+}
+
+
+void
+MainWin::_SaveSettings()
+{
+	if (fSettings == NULL)
+		return;
+	fSettings->SetValue("window_frame", Frame());
+	fSettings->SetValue("video_scale", fVideoScale);
+	fSettings->SetValue("always_on_top", fAlwaysOnTop);
+	fSettings->SetValue("loop", fLoop);
+	if (fController != NULL && !fController->HasVideo())
+		fSettings->SetValue("audio_width", Frame().Width());
+	fSettings->Save();
 }
 
 
@@ -222,6 +634,12 @@ MainWin::_OpenRefs(BMessage* message)
 	int32 count = 0;
 	if (message->GetInfo("refs", &type, &count) != B_OK)
 		return;
+
+	uint32 modifiers = 0;
+	message->FindInt32("modifiers", (int32*)&modifiers);
+	bool append = (modifiers & B_SHIFT_KEY) != 0;
+	if (!append)
+		fPlaylist->Clear();
 
 	bool play = fPlaylist->CountItems() == 0;
 	int32 firstIndex = fPlaylist->CountItems();
@@ -240,6 +658,7 @@ MainWin::_OpenRefs(BMessage* message)
 	if (play && fPlaylist->CountItems() > 0)
 		fPlaylist->SetCurrentItemIndex(firstIndex, true);
 	_UpdateTransport();
+	_UpdateVideoMode();
 	_UpdateTitle(fPlaylist->CurrentItem() != NULL
 		? fPlaylist->CurrentItem()->Name().String() : NULL);
 }
@@ -273,6 +692,7 @@ MainWin::_PlayCd()
 		return;
 	fController->OpenCd(1);
 	_UpdateTransport();
+	_UpdateVideoMode();
 }
 
 
@@ -325,13 +745,17 @@ MainWin::MessageReceived(BMessage* message)
 			break;
 
 		case MSG_PLAYLIST_CLEAR:
-			if (fPlaylist != NULL)
+			if (fPlaylist != NULL) {
 				fPlaylist->Clear();
+				_UpdateTransport();
+				_UpdateLocation();
+			}
 			break;
 
 		case MSG_PLAYLIST_ITEMS_CHANGED:
 		case MSG_PLAYLIST_CURRENT_CHANGED:
 			_UpdateTransport();
+			_UpdateLocation();
 			break;
 
 		case MSG_CONTROLLER_POSITION:
@@ -346,10 +770,9 @@ MainWin::MessageReceived(BMessage* message)
 
 		case MSG_CONTROLLER_EOS:
 		case MSG_CONTROLLER_FINISHED:
-			if (fPlaylist != NULL && fPlaylist->CountItems() > 1)
-				fController->SkipForward();
-			else
-				_UpdateTransport();
+			if (fController != NULL)
+				fController->HandleEOS();
+			_UpdateTransport();
 			break;
 
 		case MSG_CONTROLLER_ERROR:
@@ -373,8 +796,7 @@ MainWin::MessageReceived(BMessage* message)
 			message->FindInt32("height", &height);
 			if (fVideoView != NULL)
 				fVideoView->SetVideoSize((uint32)width, (uint32)height);
-			if (hasVideo)
-				_SizeForVideo((uint32)width, (uint32)height);
+			_UpdateVideoMode();
 			break;
 		}
 
@@ -383,8 +805,111 @@ MainWin::MessageReceived(BMessage* message)
 			const char* name = NULL;
 			message->FindString("name", &name);
 			_UpdateTitle(name);
+			_UpdateLocation();
 			break;
 		}
+
+		case MSG_TOGGLE_FULLSCREEN:
+			_ToggleFullscreen();
+			break;
+
+		case MSG_REVEAL_CONTROLS:
+			_ShowControls();
+			break;
+
+		case MSG_FULLSCREEN_TICK:
+		{
+			if (!fFullscreen || fVideoView == NULL)
+				break;
+			float restY = fVideoView->Bounds().bottom - fStripHeight + 1;
+			float hiddenY = fVideoView->Bounds().bottom + 1;
+			float step = fStripHeight > 6 ? fStripHeight / 6 : 6;
+			if (fControlsVisible && fControlY > restY) {
+				fControlY -= step;
+				if (fControlY < restY)
+					fControlY = restY;
+				_PositionControls();
+			} else if (!fControlsVisible && fControlY < hiddenY) {
+				fControlY += step;
+				if (fControlY > hiddenY)
+					fControlY = hiddenY;
+				_PositionControls();
+			} else
+				_HideControlsIdle();
+			break;
+		}
+
+		case MSG_TOGGLE_LOOP:
+			_SetLoop(!fLoop);
+			break;
+
+		case MSG_FILE_INFO:
+			_ShowInfo();
+			break;
+
+		case MSG_NEW_PLAYER:
+		{
+			BRect frame = Frame().OffsetByCopy(20, 20);
+			MainWin* win = new MainWin(frame);
+			win->Show();
+			break;
+		}
+
+		case MSG_ALWAYS_ON_TOP:
+			_SetAlwaysOnTop(!fAlwaysOnTop);
+			break;
+
+		case MSG_HIDE_INTERFACE:
+			_ToggleHideInterface();
+			break;
+
+		case MSG_VIDEO_SCALE:
+		{
+			float scale = kDefaultScale;
+			if (message->FindFloat("scale", &scale) == B_OK) {
+				fVideoScale = scale;
+				if (fController->HasVideo())
+					_SizeForVideo(fController->VideoWidth(),
+						fController->VideoHeight());
+			}
+			break;
+		}
+
+		case MSG_ZOOM_IN:
+			_Zoom(1.1f);
+			break;
+
+		case MSG_ZOOM_OUT:
+			_Zoom(1.0f / 1.1f);
+			break;
+
+		case MSG_CONTEXT_MENU:
+		{
+			BPoint where;
+			fVideoView->GetMouse(&where, NULL, false);
+			fVideoView->ConvertToScreen(&where);
+			BPopUpMenu* menu = new BPopUpMenu("context");
+			menu->AddItem(new BMenuItem(B_TRANSLATE("Full Screen"),
+				new BMessage(MSG_TOGGLE_FULLSCREEN)));
+			menu->AddItem(new BMenuItem(B_TRANSLATE("Hide Interface"),
+				new BMessage(MSG_HIDE_INTERFACE)));
+			menu->AddItem(new BMenuItem(B_TRANSLATE("Always on Top"),
+				new BMessage(MSG_ALWAYS_ON_TOP)));
+			menu->AddSeparatorItem();
+			menu->AddItem(new BMenuItem(B_TRANSLATE("Quit"),
+				new BMessage(B_QUIT_REQUESTED)));
+			menu->SetTargetForItems(this);
+			menu->Go(where, true, true, true);
+			delete menu;
+			break;
+		}
+
+		case 'mute':
+			if (fController != NULL) {
+				fController->SetMute(!fController->IsMuted());
+				_UpdateTransport();
+			}
+			break;
 
 		default:
 			BWindow::MessageReceived(message);
@@ -396,27 +921,105 @@ MainWin::MessageReceived(BMessage* message)
 void
 MainWin::DispatchMessage(BMessage* message, BHandler* handler)
 {
-	if (message->what == B_KEY_DOWN) {
+	if (message->what == B_KEY_DOWN && _ShouldHandleKey(handler)) {
 		int32 key = 0;
+		int32 rawChar = 0;
 		int32 modifiers = 0;
-		if (message->FindInt32("key", &key) == B_OK
-				&& message->FindInt32("modifiers", &modifiers) == B_OK) {
-			// Space toggles play/pause, matching the legacy player.
-			if (key == 0x20 && !(modifiers & B_COMMAND_KEY)) {
+		message->FindInt32("key", &key);
+		message->FindInt32("raw_char", &rawChar);
+		message->FindInt32("modifiers", &modifiers);
+		bool cmd = (modifiers & B_COMMAND_KEY) != 0;
+		bool shift = (modifiers & B_SHIFT_KEY) != 0;
+
+		if (cmd) {
+			switch (rawChar) {
+				case B_ENTER:
+					_ToggleFullscreen();
+					return;
+				case B_LEFT_ARROW:
+					fController->SkipBackward();
+					return;
+				case B_RIGHT_ARROW:
+					fController->SkipForward();
+					return;
+				default:
+					break;
+			}
+			BWindow::DispatchMessage(message, handler);
+			return;
+		}
+
+		// Printable and space keys are matched on raw_char so non-US
+		// layouts keep working; navigation keys use the key code.
+		switch (rawChar) {
+			case B_SPACE:
 				fController->TogglePlaying();
 				_UpdateTransport();
 				return;
-			}
-			if (key == B_LEFT_ARROW) {
-				fController->Rewind();
-				_PollPosition();
+			case 'm':
+				fController->SetMute(!fController->IsMuted());
+				_UpdateTransport();
 				return;
-			}
-			if (key == B_RIGHT_ARROW) {
-				fController->Forward();
-				_PollPosition();
+			case 'f':
+				_ToggleFullscreen();
 				return;
-			}
+			case 'z':
+				fController->SkipBackward();
+				return;
+			case 'x':
+				fController->Play();
+				return;
+			case 'c':
+				fController->Pause();
+				return;
+			case 'v':
+				fController->Stop();
+				return;
+			case 'b':
+				fController->SkipForward();
+				return;
+			case '+':
+			case '=':
+				_Zoom(1.1f);
+				return;
+			case '-':
+				_Zoom(1.0f / 1.1f);
+				return;
+			default:
+				break;
+		}
+
+		switch (key) {
+			case B_UP_ARROW:
+				fController->VolumeStep(true);
+				_UpdateTransport();
+				return;
+			case B_DOWN_ARROW:
+				fController->VolumeStep(false);
+				_UpdateTransport();
+				return;
+			case B_LEFT_ARROW:
+				_SeekRelative(shift ? -30 * 1000000 : -5 * 1000000);
+				return;
+			case B_RIGHT_ARROW:
+				_SeekRelative(shift ? 30 * 1000000 : 5 * 1000000);
+				return;
+			case B_PAGE_UP:
+				fController->SkipBackward();
+				return;
+			case B_PAGE_DOWN:
+				fController->SkipForward();
+				return;
+			case B_ENTER:
+			case B_TAB:
+				_ToggleFullscreen();
+				return;
+			case B_ESCAPE:
+				if (fFullscreen)
+					_ExitFullscreen();
+				return;
+			default:
+				break;
 		}
 	}
 	BWindow::DispatchMessage(message, handler);
@@ -427,6 +1030,8 @@ void
 MainWin::FrameResized(float newWidth, float newHeight)
 {
 	BWindow::FrameResized(newWidth, newHeight);
+	if (fFullscreen)
+		_PositionControls();
 	_UpdateTransport();
 }
 
@@ -434,6 +1039,7 @@ MainWin::FrameResized(float newWidth, float newHeight)
 bool
 MainWin::QuitRequested()
 {
+	_SaveSettings();
 	if (fPlaylistWindow != NULL && !fPlaylistWindow->IsHidden())
 		fPlaylistWindow->Quit();
 	return true;

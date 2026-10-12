@@ -29,7 +29,22 @@ enum {
 	MSG_CONTROLLER_ERROR	= 'cerr',
 	MSG_CONTROLLER_FINISHED	= 'cfin',
 	MSG_CONTROLLER_VIDEO	= 'cvid',
-	MSG_CONTROLLER_ITEM		= 'citm'
+	MSG_CONTROLLER_ITEM		= 'citm',
+
+	// BeOS-shaped UX: fullscreen, loop, info, view options.
+	MSG_TOGGLE_FULLSCREEN	= 'tfsc',
+	MSG_FULLSCREEN_TICK		= 'fftk',
+	MSG_FULLSCREEN_HIDE		= 'ffhd',
+	MSG_REVEAL_CONTROLS		= 'rvcl',
+	MSG_TOGGLE_LOOP			= 'tlop',
+	MSG_FILE_INFO			= 'finf',
+	MSG_ALWAYS_ON_TOP		= 'atop',
+	MSG_HIDE_INTERFACE		= 'hint',
+	MSG_VIDEO_SCALE			= 'vscl',
+	MSG_ZOOM_IN				= 'zmin',
+	MSG_ZOOM_OUT			= 'zmou',
+	MSG_CONTEXT_MENU		= 'ctxm',
+	MSG_NEW_PLAYER			= 'npla'
 };
 
 

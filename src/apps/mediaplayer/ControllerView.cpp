@@ -15,7 +15,7 @@
 ControllerView::ControllerView(BRect frame, Controller* controller,
 		Playlist* playlist)
 	:
-	TransportControlGroup(frame, true, true, false),
+	TransportControlGroup(frame, true, true, true),
 	fController(controller),
 	fPlaylist(playlist)
 {
@@ -30,13 +30,7 @@ ControllerView::~ControllerView()
 void
 ControllerView::TogglePlaying()
 {
-	BAutolock _(fPlaylist);
-	if (fPlaylist->CurrentItemIndex() == fPlaylist->CountItems() - 1
-			&& Position() >= 0.999f) {
-		// End of last item: wrap like the legacy player.
-		fPlaylist->SetCurrentItemIndex(0, true);
-	} else
-		fController->TogglePlaying();
+	fController->TogglePlaying();
 }
 
 
@@ -54,9 +48,16 @@ ControllerView::Rewind()
 }
 
 
+// When paused on video the forward control steps a frame instead of
+// jumping five seconds, matching the legacy player's step behavior.
 void
 ControllerView::Forward()
 {
+	if (fController->State() == BMediaPlayer::B_PLAYER_PAUSED
+			&& fController->HasVideo()) {
+		fController->StepFrame(true);
+		return;
+	}
 	fController->Forward();
 }
 

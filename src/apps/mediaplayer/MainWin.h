@@ -8,17 +8,24 @@
 
 
 #include <Entry.h>
+#include <Rect.h>
 #include <Window.h>
 
 
 class Controller;
 class ControllerView;
+class InfoWin;
+class LocationStringView;
 class Playlist;
 class PlaylistWindow;
+class SettingsMessage;
 class VideoView;
+class BHandler;
 class BMenuBar;
 class BMenu;
+class BMessage;
 class BFilePanel;
+class BMenuItem;
 
 
 class MainWin : public BWindow {
@@ -41,19 +48,53 @@ private:
 			void				_ShowPlaylist();
 			void				_UpdateTransport();
 			void				_UpdateTitle(const char* name);
+			void				_UpdateLocation();
+			void				_UpdateVideoMode();
 			void				_SizeForVideo(uint32 width, uint32 height);
 			void				_PollPosition();
+			void				_SeekRelative(bigtime_t delta);
+			bool				_ShouldHandleKey(BHandler* handler);
+			void				_ToggleFullscreen();
+			void				_EnterFullscreen();
+			void				_ExitFullscreen();
+			void				_PositionControls();
+			void				_ShowControls();
+			void				_HideControlsIdle();
+			void				_ToggleHideInterface();
+			void				_SetAlwaysOnTop(bool on);
+			void				_SetLoop(bool on);
+			void				_ShowInfo();
+			void				_Zoom(float factor);
+			void				_LoadSettings();
+			void				_SaveSettings();
+			float				_ChromeHeight() const;
 
 private:
 			Controller*			fController;
 			Playlist*			fPlaylist;
 			VideoView*			fVideoView;
 			ControllerView*		fControllerView;
+			LocationStringView*	fLocationView;
 			PlaylistWindow*		fPlaylistWindow;
+			InfoWin*			fInfoWin;
 			BMenuBar*			fMenuBar;
 			BFilePanel*			fOpenPanel;
 			BMessageRunner*		fPositionRunner;
+			BMenuItem*			fAlwaysOnTopItem;
+			BMenuItem*			fHideInterfaceItem;
+			BMenuItem*			fLoopItem;
+			SettingsMessage*		fSettings;
 			bool				fMuted;
+			bool				fLoop;
+			bool				fAlwaysOnTop;
+			bool				fHideInterface;
+			bool				fFullscreen;
+			bool				fControlsVisible;
+			float				fVideoScale;
+			float				fStripHeight;
+			float				fControlY;
+			bigtime_t			fLastRevealTime;
+			BRect				fSavedFrame;
 };
 
 

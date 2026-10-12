@@ -43,16 +43,24 @@ public:
 			status_t			Stop();
 			status_t			TogglePlaying();
 			status_t			SeekTo(bigtime_t position);
+			status_t			SeekBy(bigtime_t delta);
 			status_t			SkipForward();
 			status_t			SkipBackward();
 			status_t			Rewind();
 			status_t			Forward();
+			status_t			StepFrame(bool forward);
+			void				HandleEOS();
 
 			status_t			SetVolume(float volume);
 			float				Volume() const;
+			status_t			VolumeStep(bool up);
 			status_t			SetMute(bool mute);
 			bool				IsMuted() const
 									{ return fMuted; }
+
+			void				SetLoop(bool loop);
+			bool				IsLooping() const
+									{ return fLoop; }
 
 			bigtime_t			Position() const;
 			bigtime_t			Duration() const;
@@ -72,6 +80,20 @@ public:
 									{ return fVideoWidth; }
 			uint32				VideoHeight() const
 									{ return fVideoHeight; }
+			float				VideoFrameRate() const
+									{ return fVideoFrameRate; }
+			float				AudioFrameRate() const
+									{ return fAudioFrameRate; }
+			uint32				AudioChannels() const
+									{ return fAudioChannels; }
+			uint32				AudioBits() const
+									{ return fAudioBits; }
+			float				AudioBitRate() const
+									{ return fAudioBitRate; }
+			const char*			VideoCodec() const
+									{ return fVideoCodec; }
+			const char*			AudioCodec() const
+									{ return fAudioCodec; }
 
 			// Playlist::Listener
 	virtual	void				ItemsChanged();
@@ -105,6 +127,14 @@ private:
 			uint32				fVideoHeight;
 			bool				fOpening;
 			BString				fPendingName;
+			bool				fLoop;
+			float				fVideoFrameRate;
+			float				fAudioFrameRate;
+			uint32				fAudioChannels;
+			uint32				fAudioBits;
+			float				fAudioBitRate;
+			char				fVideoCodec[96];
+			char				fAudioCodec[96];
 };
 
 

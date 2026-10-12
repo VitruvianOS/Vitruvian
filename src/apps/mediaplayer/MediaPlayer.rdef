@@ -35,3 +35,8 @@ resource file_types message {
 	"types" = "audio/x-midi",
 	"types" = "audio/midi"
 };
+
+resource vector_icon {
+	$"6E63696602011E50C8FF01FFFFFFFF020A0422223E223E3E223E0A03"
+	$"2B282B383930020A000100000A01010100"
+};

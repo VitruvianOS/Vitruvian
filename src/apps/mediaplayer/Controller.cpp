@@ -10,6 +10,7 @@
 #include <Message.h>
 #include <Path.h>
 #include <String.h>
+#include <string.h>
 
 #include <media2/MediaDefs.h>
 #include <media2/MediaFile.h>
@@ -32,8 +33,16 @@ Controller::Controller(const BMessenger& target)
 	fHasVideo(false),
 	fVideoWidth(0),
 	fVideoHeight(0),
-	fOpening(false)
+	fOpening(false),
+	fLoop(false),
+	fVideoFrameRate(0.0f),
+	fAudioFrameRate(0.0f),
+	fAudioChannels(0),
+	fAudioBits(0),
+	fAudioBitRate(0.0f)
 {
+	fVideoCodec[0] = '\0';
+	fAudioCodec[0] = '\0';
 	fPlaylist.AddListener(this);
 	fPlayer.SetTarget(fTarget);
 }
@@ -131,6 +140,13 @@ Controller::_ProbeTracks(const entry_ref* ref, const BUrl* url)
 	fHasVideo = false;
 	fVideoWidth = 0;
 	fVideoHeight = 0;
+	fVideoFrameRate = 0.0f;
+	fAudioFrameRate = 0.0f;
+	fAudioChannels = 0;
+	fAudioBits = 0;
+	fAudioBitRate = 0.0f;
+	fVideoCodec[0] = '\0';
+	fAudioCodec[0] = '\0';
 
 	delete fProbeFile;
 	fProbeFile = NULL;
@@ -154,18 +170,39 @@ Controller::_ProbeTracks(const entry_ref* ref, const BUrl* url)
 			continue;
 		BMediaFormat format;
 		if (track->EncodedFormat(&format) == B_OK) {
-			if (format.IsRawAudio() || format.IsEncodedAudio())
+			media_codec_info codecInfo;
+			bool haveCodec = track->GetCodecInfo(&codecInfo) == B_OK;
+			if (format.IsRawAudio() || format.IsEncodedAudio()) {
 				fAudioTrackCount++;
-			else if (format.IsRawVideo() || format.IsEncodedVideo()) {
+				if (fAudioCodec[0] == '\0' && haveCodec)
+					strlcpy(fAudioCodec, codecInfo.pretty_name,
+						sizeof(fAudioCodec));
+				const media_format& mf = format.format;
+				if (mf.type == B_MEDIA_RAW_AUDIO) {
+					fAudioFrameRate = mf.u.raw_audio.frame_rate;
+					fAudioChannels = mf.u.raw_audio.channel_count;
+					fAudioBits = (mf.u.raw_audio.format
+						& media_raw_audio_format::B_AUDIO_SIZE_MASK) * 8;
+				} else if (mf.type == B_MEDIA_ENCODED_AUDIO) {
+					fAudioFrameRate = mf.u.encoded_audio.output.frame_rate;
+					fAudioChannels = mf.u.encoded_audio.output.channel_count;
+					fAudioBitRate = mf.u.encoded_audio.bit_rate;
+				}
+			} else if (format.IsRawVideo() || format.IsEncodedVideo()) {
 				fVideoTrackCount++;
 				fHasVideo = true;
+				if (fVideoCodec[0] == '\0' && haveCodec)
+					strlcpy(fVideoCodec, codecInfo.pretty_name,
+						sizeof(fVideoCodec));
 				const media_format& mf = format.format;
 				if (mf.type == B_MEDIA_RAW_VIDEO) {
 					fVideoWidth = mf.u.raw_video.width;
 					fVideoHeight = mf.u.raw_video.height;
+					fVideoFrameRate = mf.u.raw_video.field_rate;
 				} else if (mf.type == B_MEDIA_ENCODED_VIDEO) {
 					fVideoWidth = mf.u.encoded_video.output.width;
 					fVideoHeight = mf.u.encoded_video.output.height;
+					fVideoFrameRate = mf.u.encoded_video.output.field_rate;
 				}
 			}
 		}
@@ -425,6 +462,54 @@ Controller::Forward()
 
 
 status_t
+Controller::SeekBy(bigtime_t delta)
+{
+	bigtime_t duration = Duration();
+	bigtime_t next = Position() + delta;
+	if (next < 0)
+		next = 0;
+	if (duration > 0 && next >= duration)
+		next = duration - 1;
+	return SeekTo(next);
+}
+
+
+// Frame step is a bounded SeekTo: media2 has no frame API, so move by one
+// frame period using the probed video rate. No-op without video.
+status_t
+Controller::StepFrame(bool forward)
+{
+	if (!fHasVideo || fVideoFrameRate <= 0.0f)
+		return B_ERROR;
+	bigtime_t frame = (bigtime_t)(1000000.0 / fVideoFrameRate);
+	if (frame <= 0)
+		frame = 1;
+	return SeekBy(forward ? frame : -frame);
+}
+
+
+void
+Controller::HandleEOS()
+{
+	if (fLoop) {
+		// Loop repeats the current media from the start.
+		if (fMidi != NULL) {
+			fMidi->SeekTo(0);
+			fMidi->Play();
+		} else {
+			fPlayer.SeekTo(0);
+			fPlayer.Play();
+		}
+		return;
+	}
+	if (fPlaylist.CountItems() > 1)
+		SkipForward();
+	else
+		_NotifyState();
+}
+
+
+status_t
 Controller::SetVolume(float volume)
 {
 	if (volume < 0.0f)
@@ -447,11 +532,34 @@ Controller::Volume() const
 
 
 status_t
+Controller::VolumeStep(bool up)
+{
+	// Match the volume slider granularity (roughly 5% per keyboard step).
+	float step = 0.05f;
+	float next = fVolume + (up ? step : -step);
+	if (next < 0.0f)
+		next = 0.0f;
+	if (next > 1.0f)
+		next = 1.0f;
+	if (next > 0.0f)
+		fWasMuted = false;
+	return SetVolume(next);
+}
+
+
+status_t
 Controller::SetMute(bool mute)
 {
 	fMuted = mute;
 	_ApplyVolume();
 	return B_OK;
+}
+
+
+void
+Controller::SetLoop(bool loop)
+{
+	fLoop = loop;
 }
 
 

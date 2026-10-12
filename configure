@@ -8,6 +8,9 @@
 #                                 (e.g. arm64_raspberry)
 #   --sshdebug                  Stage the Vitruvian (SSH Debug) boot entry and its
 #                                 SSH server in built images (off by default)
+#   --sanitize=NAME             Instrument the whole tree with a sanitizer:
+#                                 thread (TSan) or address (ASan). Not the
+#                                 default; intended for stress/debug builds.
 
 set -e
 
@@ -21,6 +24,7 @@ OVERRIDE_TOOLCHAIN=""
 SSHDEBUG=0
 BUILDTOOLS_ONLY=0
 BUILDTOOLS_DIR=""
+SANITIZE=""
 
 for arg in "$@"; do
     case "$arg" in
@@ -47,6 +51,9 @@ for arg in "$@"; do
             ;;
         --sshdebug)
             SSHDEBUG=1
+            ;;
+        --sanitize=*)
+            SANITIZE="${arg#*=}"
             ;;
         --help|-h)
             head -n 17 "$0" | grep "^#" | sed 's/^# \?//'
@@ -227,6 +234,14 @@ case "$BUILD_TYPE" in
         ;;
 esac
 
+case "$SANITIZE" in
+    ""|thread|address) ;;
+    *)
+        echo "Error: unknown --sanitize=$SANITIZE (expected thread or address)." >&2
+        exit 1
+        ;;
+esac
+
 # Build up cmake options
 CMAKE_OPTS="-DCMAKE_BUILD_TYPE=$BUILD_TYPE"
 CMAKE_OPTS="$CMAKE_OPTS -DBUILDTOOLS_DIR=$BUILDTOOLS_DIR"
@@ -236,6 +251,11 @@ CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_TARGET_ARCH=$TARGET_ARCH"
 
 if [ $SSHDEBUG -eq 1 ]; then
     CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_SSHDEBUG=1"
+fi
+
+if [ -n "$SANITIZE" ]; then
+    CMAKE_OPTS="$CMAKE_OPTS -DVITRUVIAN_SANITIZE=$SANITIZE"
+    echo "Note: $SANITIZE sanitizer instrumentation enabled for the whole tree."
 fi
 
 if [ $CHROOT_BUILD -eq 1 ]; then

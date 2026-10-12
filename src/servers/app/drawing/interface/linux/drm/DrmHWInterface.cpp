@@ -40,6 +40,19 @@
 int DrmHWInterface::fFd = -1;
 
 
+// Scoped fModesetMutex holder: SetMode() has many return paths and holds a
+// modeset_dev pointer across all of them, while a udev hotplug on the event
+// thread can free that node in _RescanConnectors().
+namespace {
+struct ModesetGuard {
+	ModesetGuard(pthread_mutex_t* mutex) : fMutex(mutex)
+		{ pthread_mutex_lock(fMutex); }
+	~ModesetGuard() { pthread_mutex_unlock(fMutex); }
+	pthread_mutex_t* fMutex;
+};
+}
+
+
 // New dumb and render buffers come back uninitialized, often holding the
 // previous rotation; fill opaque black (cursor blending assumes alpha 255).
 static void
@@ -134,6 +147,16 @@ DrmHWInterface::DrmHWInterface()
 	fPanelReflection(B_PANEL_REFLECTION_NONE)
 {
 	pthread_mutex_init(&fDirtyMutex, NULL);
+	pthread_mutex_init(&fFlipMutex, NULL);
+	// Recursive: SetMode() holds it and calls SetCursor(), which re-takes
+	// it to copy the cursor plane ids out of the modeset node.
+	pthread_mutexattr_t modesetAttr;
+	pthread_mutexattr_init(&modesetAttr);
+	pthread_mutexattr_settype(&modesetAttr, PTHREAD_MUTEX_RECURSIVE);
+	pthread_mutex_init(&fModesetMutex, &modesetAttr);
+	pthread_mutexattr_destroy(&modesetAttr);
+	pthread_cond_init(&fFlipCond, NULL);
+	fFlipGeneration = 0;
 
 	// Safe Mode and other nomodeset boots have no DRM device; janus_session
 	// sets JANUS_FBDEV so we fail at once and app_server falls back to fbdev.
@@ -418,18 +441,63 @@ DrmHWInterface::_OnSessionEnable()
 void
 DrmHWInterface::_DrainPendingFlip()
 {
-	// A flip already queued targets the buffer we're about to tear down.
-	for (int i = 0; i < 4 && fPageFlipPending; i++) {
-		struct pollfd pfd = { fFd, POLLIN, 0 };
-		if (poll(&pfd, 1, 16) > 0 && (pfd.revents & POLLIN)) {
+	if (!fPageFlipPending.load())
+		return;
+
+	// In standalone mode the libseat callbacks run on the event thread
+	// itself (libseat_dispatch), so waiting for that thread to deliver
+	// the flip would wait for ourselves. Service the fd inline instead;
+	// we are the only reader here.
+	if (find_thread(NULL) == fEventThread) {
+		for (int i = 0; i < 8 && fPageFlipPending.load(); i++) {
+			struct pollfd pfd = { fFd, POLLIN, 0 };
+			if (poll(&pfd, 1, 16) <= 0 || !(pfd.revents & POLLIN))
+				break;
 			drmEventContext evctx = {
 				.version           = DRM_EVENT_CONTEXT_VERSION,
 				.page_flip_handler = _PageFlipHandler,
 			};
 			drmHandleEvent(fFd, &evctx);
-		} else
+		}
+		if (fPageFlipPending.load()) {
+			pthread_mutex_lock(&fFlipMutex);
+			fFlipGeneration++;
+			fPageFlipPending = false;
+			pthread_mutex_unlock(&fFlipMutex);
+		}
+		return;
+	}
+
+	// The event thread is the only reader of the DRM fd: calling
+	// drmHandleEvent() here as a second reader races it and can split an
+	// event across two reads. Instead wake it and wait for the completion.
+	// A timeout abandons the flip: the generation bump below makes the
+	// late event a no-op, so the caller may tear the buffers down.
+	if (fWakeFd >= 0) {
+		uint64_t v = 1;
+		write(fWakeFd, &v, sizeof(v));
+	}
+
+	struct timespec deadline;
+	clock_gettime(CLOCK_REALTIME, &deadline);
+	deadline.tv_nsec += 250 * 1000 * 1000;
+	if (deadline.tv_nsec >= 1000 * 1000 * 1000) {
+		deadline.tv_sec += 1;
+		deadline.tv_nsec -= 1000 * 1000 * 1000;
+	}
+
+	pthread_mutex_lock(&fFlipMutex);
+	while (fPageFlipPending.load()) {
+		if (pthread_cond_timedwait(&fFlipCond, &fFlipMutex, &deadline) != 0)
 			break;
 	}
+	if (fPageFlipPending.load()) {
+		// Abandoned: a completion event that lands after the caller's
+		// teardown must not swap the replacement buffers.
+		fFlipGeneration++;
+		fPageFlipPending = false;
+	}
+	pthread_mutex_unlock(&fFlipMutex);
 }
 
 
@@ -441,7 +509,13 @@ DrmHWInterface::_OnSessionDisable()
 	_DrainPendingFlip();
 
 	fSessionActive = false;
+
+	// The VT owner is switching away: any completion that still lands is
+	// for buffers we are about to stop driving, so invalidate it.
+	pthread_mutex_lock(&fFlipMutex);
+	fFlipGeneration++;
 	fPageFlipPending = false;
+	pthread_mutex_unlock(&fFlipMutex);
 
 	pthread_mutex_lock(&fDirtyMutex);
 	fAccumulatedDirty.MakeEmpty();
@@ -475,11 +549,18 @@ DrmHWInterface::_RestoreDisplay()
 		return;
 	}
 
+	// Iterates the modeset list; a concurrent udev rescan can free nodes.
+	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev *iter;
 	for (iter = get_dev(); iter; iter = iter->next) {
 		// Not iter->fb: stale after any flip, zeroed by resize.
 		// fFrontBuffer is what the CRTC was actually scanning out.
-		uint32_t fb = fFrontBuffer != NULL ? fFrontBuffer->GetFbId() : iter->fb;
+		// Snapshot it under the flip mutex: the completion handler swaps
+		// the pointer there without holding the mode lock.
+		uint32_t fb;
+		pthread_mutex_lock(&fFlipMutex);
+		fb = fFrontBuffer != NULL ? fFrontBuffer->GetFbId() : iter->fb;
+		pthread_mutex_unlock(&fFlipMutex);
 
 		if (fAtomicSupported && fPrimaryPlaneId) {
 			status_t r = _AtomicModeset(fb, &iter->mode);
@@ -508,16 +589,42 @@ void
 DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	unsigned int sec, unsigned int usec, void* data)
 {
-	DrmHWInterface* hw = static_cast<DrmHWInterface*>(data);
+	// Runs on the event thread inside drmHandleEvent(). SetMode() may tear
+	// the buffers down concurrently: it holds the mode (write) lock and
+	// waits for us in _DrainPendingFlip(). So the swap is guarded by
+	// fFlipMutex and stamped with the flip generation; SetMode() bumps the
+	// generation before deleting, and a completion for an older generation
+	// is discarded instead of swapping the replacement buffers.
+	FlipToken* token = static_cast<FlipToken*>(data);
+	DrmHWInterface* hw = token->hw;
+	const uint64_t generation = token->generation;
+
+	pthread_mutex_lock(&hw->fFlipMutex);
+	for (size_t i = 0; i < hw->fFlipTokens.size(); i++) {
+		if (hw->fFlipTokens[i] == token) {
+			hw->fFlipTokens.erase(hw->fFlipTokens.begin() + i);
+			break;
+		}
+	}
+	delete token;
+
+	if (generation != hw->fFlipGeneration) {
+		// Stale completion for a flip whose buffers are already gone.
+		pthread_mutex_unlock(&hw->fFlipMutex);
+		return;
+	}
 
 	// Swap before clearing the flag, or CopyBackToFront() writes into the
 	// buffer the CRTC just started scanning out.
 	std::swap(hw->fFrontBuffer, hw->fBackBuffer);
 	hw->fWriteTarget = hw->fBackBuffer;
 	hw->fPageFlipPending = false;
+	pthread_cond_broadcast(&hw->fFlipCond);
 
-	if (hw->fRenderBuffer == NULL)
+	if (hw->fRenderBuffer == NULL) {
+		pthread_mutex_unlock(&hw->fFlipMutex);
 		return;
+	}
 
 	// Build the dirty region: union of this frame's accumulated damage
 	// with the previous frame's (covers double-buffer staleness). Then
@@ -535,9 +642,22 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	// just left the screen; ask for a follow-up flip.
 	hw->fNeedsFlip = (hw->fPreviousDirty.CountRects() > 0);
 	pthread_mutex_unlock(&hw->fDirtyMutex);
+	pthread_mutex_unlock(&hw->fFlipMutex);
 
 	if (toBlit.CountRects() > 0) {
 		bool locked = hw->LockExclusiveAccess();
+
+		// The mode lock wait above let SetMode() run: it bumps the
+		// generation before replacing the buffers, so a mismatch here
+		// means the pointers below would be the replacements for a
+		// frame we no longer own. Drop the blit; the full-frame
+		// re-present in SetMode() covers the screen instead.
+		if (generation != hw->fFlipGeneration) {
+			if (locked)
+				hw->UnlockExclusiveAccess();
+			return;
+		}
+
 		int32 count = toBlit.CountRects();
 		for (int32 i = 0; i < count; i++)
 			hw->_BlitRect(hw->fRenderBuffer, hw->fWriteTarget,
@@ -672,22 +792,50 @@ DrmHWInterface::_EventThreadMain()
 			pthread_mutex_unlock(&fDirtyMutex);
 
 			if (hasDirty) {
-				struct modeset_dev* dev = get_dev();
-				int r;
-				if (fAtomicSupported && fPrimaryPlaneId) {
-				r = (_AtomicFlip(fWriteTarget->GetFbId(),
-					NULL, 0) == B_OK) ? 0 : -1;
-				} else {
-					r = drmModePageFlip(fFd, dev->crtc,
-						fWriteTarget->GetFbId(),
-						DRM_MODE_PAGE_FLIP_EVENT, this);
+				// Issue under fFlipMutex: SetMode() tears the buffers
+				// down under the same mutex, so fWriteTarget cannot be
+				// deleted between the NULL check and GetFbId(), and the
+				// token is registered before any completion can land.
+				pthread_mutex_lock(&fFlipMutex);
+				bool attempted = false;
+				int r = -1;
+				if (fBackBuffer != NULL && fWriteTarget != NULL) {
+					attempted = true;
+					FlipToken* token = new FlipToken;
+					token->hw = this;
+					token->generation = fFlipGeneration;
+					fFlipTokens.push_back(token);
+
+					if (fAtomicSupported && fPrimaryPlaneId) {
+						r = (_AtomicFlip(fWriteTarget->GetFbId(),
+							token, NULL, 0) == B_OK) ? 0 : -1;
+					} else {
+						struct modeset_dev* dev = get_dev();
+						r = drmModePageFlip(fFd, dev->crtc,
+							fWriteTarget->GetFbId(),
+							DRM_MODE_PAGE_FLIP_EVENT, token);
+					}
+					if (r != 0) {
+						// Refused (EBUSY is routine): no event will
+						// arrive, so reap the token here.
+						for (size_t i = 0; i < fFlipTokens.size(); i++) {
+							if (fFlipTokens[i] == token) {
+								fFlipTokens.erase(
+									fFlipTokens.begin() + i);
+								break;
+							}
+						}
+						delete token;
+					} else
+						fPageFlipPending = true;
 				}
+				pthread_mutex_unlock(&fFlipMutex);
+
 				if (r == 0) {
-					fPageFlipPending = true;
 					pthread_mutex_lock(&fDirtyMutex);
 					fNeedsFlip = false;
 					pthread_mutex_unlock(&fDirtyMutex);
-				} else {
+				} else if (attempted) {
 					// EBUSY is routine on real hardware. Keep the
 					// damage and retry; dropping it here leaves that
 					// region alternating between the two buffers.
@@ -810,6 +958,12 @@ DrmHWInterface::~DrmHWInterface()
 	modeset_cleanup(fFd);
 
 	pthread_mutex_destroy(&fDirtyMutex);
+	pthread_mutex_destroy(&fFlipMutex);
+	pthread_mutex_destroy(&fModesetMutex);
+	pthread_cond_destroy(&fFlipCond);
+	for (size_t i = 0; i < fFlipTokens.size(); i++)
+		delete fFlipTokens[i];
+	fFlipTokens.clear();
 }
 
 
@@ -879,12 +1033,21 @@ DrmHWInterface::SetMode(const display_mode& mode)
 {
 	CALLED();
 
-	struct modeset_dev* dev = get_dev();
-	if (!dev || fFd < 0)
+	if (fFd < 0)
 		return B_ERROR;
 
 	if (!LockExclusiveAccess())
 		return B_ERROR;
+
+	// Held for the whole body: get_dev()'s node stays valid while a udev
+	// hotplug on the event thread walks the same list.
+	ModesetGuard modesetGuard(&fModesetMutex);
+
+	struct modeset_dev* dev = get_dev();
+	if (!dev) {
+		UnlockExclusiveAccess();
+		return B_ERROR;
+	}
 
 	drmModeConnector* conn = drmModeGetConnector(fFd, dev->conn);
 	if (!conn) { UnlockExclusiveAccess(); return B_ERROR; }
@@ -935,9 +1098,17 @@ DrmHWInterface::SetMode(const display_mode& mode)
 
 	_DrainPendingFlip();
 
+	// Bump the generation before the pointers change: a completion event
+	// that lands after the drain (abandoned flip) must not swap these.
+	// Publish the replacement buffers under the same mutex the flip path
+	// issues under, so it never sees a half-built pair.
+	pthread_mutex_lock(&fFlipMutex);
+	fFlipGeneration++;
 	delete fFrontBuffer; fFrontBuffer = NULL;
 	delete fBackBuffer;  fBackBuffer  = NULL;
 	delete fRenderBuffer; fRenderBuffer = NULL;
+	fWriteTarget = NULL;
+	pthread_mutex_unlock(&fFlipMutex);
 
 	if (dev->fb) {
 		drmModeRmFB(fFd, dev->fb);
@@ -959,6 +1130,7 @@ DrmHWInterface::SetMode(const display_mode& mode)
 		return B_ERROR;
 	}
 
+	pthread_mutex_lock(&fFlipMutex);
 	fFrontBuffer = new DrmBuffer(fFd, dev, false);
 	fBackBuffer = NULL;
 	fWriteTarget = fFrontBuffer;
@@ -984,6 +1156,7 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	uint32_t logW, logH;
 	_ApplyOrientationSwap(dev->width, dev->height, logW, logH);
 	fRenderBuffer = new MallocBuffer(logW, logH);
+	pthread_mutex_unlock(&fFlipMutex);
 
 	// The modeset below starts scanning out fFrontBuffer immediately;
 	// give it defined contents instead of recycled old-rotation pages.
@@ -1127,6 +1300,9 @@ DrmHWInterface::_GetPreferredMode(display_mode* mode, bool probe)
 {
 	CALLED();
 
+	// The node can be freed by a concurrent udev rescan; callers include
+	// the resize thread and the event thread's preferred-mode poll.
+	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev* dev = get_dev();
 	drmModeConnector* conn = NULL;
 	if (dev != NULL && fFd >= 0) {
@@ -1456,6 +1632,8 @@ DrmHWInterface::WaitForRetrace(bigtime_t timeout)
 status_t
 DrmHWInterface::SetDPMSMode(uint32 state)
 {
+	// The node can be freed by a concurrent udev rescan.
+	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev* dev = get_dev();
 	if (!dev || fFd < 0)
 		return B_ERROR;
@@ -1679,6 +1857,8 @@ DrmHWInterface::SetTemperature(float kelvin)
 	if (fFd < 0)
 		return B_ERROR;
 
+	// The node can be freed by a concurrent udev rescan.
+	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev* dev = get_dev();
 	if (!dev)
 		return B_ERROR;
@@ -2204,6 +2384,8 @@ DrmHWInterface::_DisableHardwareCursor()
 	if (fFd < 0)
 		return;
 
+	// The node can be freed by a concurrent udev rescan.
+	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev* dev = get_dev();
 	if (dev == NULL)
 		return;
@@ -2225,6 +2407,9 @@ DrmHWInterface::SetCursor(ServerCursor* cursor)
 
 	HWInterface::SetCursor(cursor);
 
+	// The node can be freed by a concurrent udev rescan. Taken after the
+	// base call so the lock order stays modeset-before-overlays everywhere.
+	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev* dev = get_dev();
 	if (!dev)
 		return;
@@ -2330,6 +2515,8 @@ DrmHWInterface::SetCursorVisible(bool visible)
 
 	HWInterface::SetCursorVisible(visible);
 
+	// The node can be freed by a concurrent udev rescan.
+	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev* dev = get_dev();
 	// fHardwareCursorEnabled, not just dev->cursor_ok: SetCursor() may
 	// have left a stale "ok" sprite armed-but-transparent for a rotated
@@ -2368,6 +2555,8 @@ void
 DrmHWInterface::SetDragBitmap(const ServerBitmap* bitmap,
 	const BPoint& offsetFromCursor)
 {
+	// The node can be freed by a concurrent udev rescan.
+	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev* dev = get_dev();
 
 	if (bitmap != NULL) {
@@ -2417,6 +2606,8 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 	if (!fHardwareCursorEnabled)
 		return;
 
+	// The node can be freed by a concurrent udev rescan.
+	ModesetGuard modesetGuard(&fModesetMutex);
 	struct modeset_dev* dev = get_dev();
 	if (!dev || !dev->cursor_ok)
 		return;
@@ -2567,7 +2758,13 @@ DrmHWInterface::_HandleHotplug()
 
 		// The uevent carries no CONNECTOR=, so every connector is
 		// rescanned; scope the resize reaction to the one we render to.
-		bool resizePrimary = _RescanConnectors();
+		// The rescan adds and frees modeset_dev nodes: hold the modeset
+		// mutex so a SetMode() on another thread cannot be left holding
+		// a pointer this loop just freed.
+		bool resizePrimary;
+		pthread_mutex_lock(&fModesetMutex);
+		resizePrimary = _RescanConnectors();
+		pthread_mutex_unlock(&fModesetMutex);
 
 		// Not master while inactive (VT-switched away); applying a mode
 		// here would fail or steal master from whoever now owns it.
@@ -2612,15 +2809,31 @@ DrmHWInterface::_OnResume()
 
 	fprintf(stderr, "[drm] resume detected, reconciling display state\n");
 
+	// The reconcile mutates the modeset list and re-commits buffers: it
+	// must not overlap a SetMode() on the resize or app thread. If a mode
+	// change is in flight the drain inside it bounds our wait at 250 ms,
+	// after which its generation bump makes our late restore a no-op.
+	if (!LockExclusiveAccess()) {
+		// Mode lock unusable: at least re-arm the flip so a pending
+		// damage does not sit on screen forever.
+		pthread_mutex_lock(&fDirtyMutex);
+		fNeedsFlip = true;
+		pthread_mutex_unlock(&fDirtyMutex);
+		if (fWakeFd >= 0) {
+			uint64_t v = 1;
+			write(fWakeFd, &v, sizeof(v));
+		}
+		return;
+	}
+
+	// Order matches SetMode(): mode lock, then modeset mutex.
+	ModesetGuard modesetGuard(&fModesetMutex);
+
 	// Monitors may change while asleep with no guaranteed HOTPLUG uevent, so rescan unconditionally.
 	// A changed mode on a known connector is not picked up (see modeset_add_connector()).
-	// Rescan and restore touch the device list and fFrontBuffer, which
-	// SetMode() replaces under the same lock.
-	bool locked = LockExclusiveAccess();
 	bool resizePrimary = _RescanConnectors();
 	if (resizePrimary) {
-		if (locked)
-			UnlockExclusiveAccess();
+		UnlockExclusiveAccess();
 		_ScheduleResize();
 		return;
 	}
@@ -2639,12 +2852,9 @@ DrmHWInterface::_OnResume()
 
 	// The driver resets gamma LUTs on some paths, so re-apply night light if one was active.
 	SetTemperature(fTemperature);
-	if (locked)
-		UnlockExclusiveAccess();
 
 	// Force a full repaint, unless DPMS had the display deliberately off before sleeping.
 	if (fDpmsState == B_DPMS_ON) {
-		LockExclusiveAccess();
 		Invalidate(BRect(0, 0, fDisplayMode.virtual_width - 1,
 				fDisplayMode.virtual_height - 1));
 		UnlockExclusiveAccess();
@@ -2656,7 +2866,10 @@ DrmHWInterface::_OnResume()
 			uint64_t v = 1;
 			write(fWakeFd, &v, sizeof(v));
 		}
+		return;
 	}
+
+	UnlockExclusiveAccess();
 }
 
 
@@ -3027,19 +3240,31 @@ DrmHWInterface::SetPanelOrientation(int32 orientation)
 	if (orientation < 0)
 		orientation = B_PANEL_ORIENTATION_NORMAL;
 
+	// The orientation must change under the mode lock: a page-flip blit
+	// between a bare field write and SetMode()'s teardown would run
+	// rotate_point() with the new orientation against the old buffer
+	// sizes, and _BlendCursor()'s transformed path writes where the
+	// unrotated destination does not reach. Nested write locks are
+	// supported, so SetMode() can take it again inside.
+	if (!LockExclusiveAccess())
+		return B_ERROR;
+
 	enum PanelOrientation previous = fPanelOrientation;
 	int32 previousUser = fUserOrientation;
 	fUserOrientation = orientation;
 	fPanelOrientation = (enum PanelOrientation)panel_compose_orientation(
 		fMountingOrientation, fUserOrientation);
 
-	if (fPanelOrientation == previous)
+	if (fPanelOrientation == previous) {
+		UnlockExclusiveAccess();
 		return B_OK;
+	}
 
 	struct modeset_dev* dev = get_dev();
 	if (dev == NULL) {
 		fPanelOrientation = previous;
 		fUserOrientation = previousUser;
+		UnlockExclusiveAccess();
 		return B_ERROR;
 	}
 
@@ -3056,11 +3281,16 @@ DrmHWInterface::SetPanelOrientation(int32 orientation)
 	if (status != B_OK) {
 		fPanelOrientation = previous;
 		fUserOrientation = previousUser;
+		UnlockExclusiveAccess();
 		return status;
 	}
 
+	UnlockExclusiveAccess();
+
 	// SetMode() stays silent for app-initiated callers; nothing else will
 	// tell Desktop that the frame and the input orientation just changed.
+	// Outside the mode lock: the listener takes the window lock, and that
+	// order must not invert against the drawing paths.
 	_NotifyScreenChanged();
 	return B_OK;
 }
@@ -3107,10 +3337,20 @@ DrmHWInterface::SetPanelReflection(int32 reflection)
 	if (reflection < 0 || reflection > B_PANEL_REFLECTION_BOTH)
 		return B_BAD_VALUE;
 
-	if (reflection == fPanelReflection)
+	// Same discipline as SetPanelOrientation: the blitters read this under
+	// the mode lock, so the write must take it too or a flip can present
+	// half the frame mirrored and half not.
+	if (!LockExclusiveAccess())
+		return B_ERROR;
+
+	if (reflection == fPanelReflection) {
+		UnlockExclusiveAccess();
 		return B_OK;
+	}
 
 	fPanelReflection = reflection;
+	UnlockExclusiveAccess();
+
 	_NotifyScreenChanged();
 	return B_OK;
 }
@@ -3343,8 +3583,8 @@ DrmHWInterface::_AtomicSetCursor(uint32_t fb_id, uint32_t crtc_id,
 
 
 status_t
-DrmHWInterface::_AtomicFlip(uint32_t fb_id, const BRect* /*dirty_rects*/,
-	uint32_t /*nrects*/)
+DrmHWInterface::_AtomicFlip(uint32_t fb_id, FlipToken* token,
+	const BRect* /*dirty_rects*/, uint32_t /*nrects*/)
 {
 	// TODO FB_DAMAGE_CLIPS comes back after dirty tracking + BRegion is stable.
 	if (!fPrimaryPlaneId)
@@ -3362,7 +3602,7 @@ DrmHWInterface::_AtomicFlip(uint32_t fb_id, const BRect* /*dirty_rects*/,
 	drmModeAtomicAddProperty(req, fPrimaryPlaneId, fPlaneProps.fb_id, fb_id);
 
 	int ret = drmModeAtomicCommit(fFd, req,
-		DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, this);
+		DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, token);
 	drmModeAtomicFree(req);
 
 	return ret == 0 ? B_OK : B_ERROR;

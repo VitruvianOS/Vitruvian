@@ -16,6 +16,7 @@ extern "C" {
 #include <Region.h>
 #include <pthread.h>
 #include <atomic>
+#include <vector>
 
 #include "DrmBuffer.h"
 #include "HWInterface.h"
@@ -152,6 +153,8 @@ public:
 			status_t			InitCheck() const;
 
 private:
+	struct FlipToken;
+
 	static	int32				_EventThreadEntry(void* data);
 			void				_EventThreadMain();
 			void				_RestoreDisplay();
@@ -216,6 +219,7 @@ private:
 			status_t			_AtomicModeset(uint32_t fb_id,
 									drmModeModeInfo* mode);
 		status_t			_AtomicFlip(uint32_t fb_id,
+								FlipToken* token,
 								const BRect* dirty_rects,
 								uint32_t nrects);
 			status_t			_AtomicSetCursor(uint32_t fb_id,
@@ -265,6 +269,33 @@ private:
 			bool				fPageFlipEnabled;
 			std::atomic<bool>	fPageFlipPending;
 
+			// Serializes buffer pointer swaps (page-flip completion) against
+			// the SetMode() teardown that deletes those same buffers, and
+			// guards fDisplayMode's virtual size while a flip blits. Never
+			// held across a LockExclusiveAccess: the flip handler runs on
+			// the event thread and must not block on the mode lock, which
+			// SetMode() holds while it waits for that very handler.
+			pthread_mutex_t		fFlipMutex;
+			// Bumped whenever buffers are torn down or a drain gives up on
+			// an in-flight flip; a completion event whose token generation
+			// no longer matches is stale and must not swap anything.
+			uint64_t			fFlipGeneration;
+			// One heap token per issued flip, freed by the completion
+			// handler. A token for an abandoned flip stays listed so the
+			// eventual late event can be recognised and dropped, and the
+			// destructor reaps any the kernel never delivered.
+			struct FlipToken {
+				DrmHWInterface*	hw;
+				uint64_t		generation;
+			};
+			std::vector<FlipToken*> fFlipTokens;
+			pthread_cond_t		fFlipCond;
+			// Guards the modeset_dev list against udev hotplug/rescan while
+			// the event thread's flip path and the cursor ioctls hold a
+			// pointer into it. Copy scalars under this lock; the long users
+			// (SetMode, resize) are already serialized by the mode lock.
+			pthread_mutex_t		fModesetMutex;
+
 			// Dirty-rect accumulator (replaces fixed fFlipDirtyRects array).
 			// fAccumulatedDirty collects damage between flips. On flip
 			// completion the union of accumulated + previous is blitted
@@ -277,7 +308,10 @@ private:
 
 			int					fWakeFd;
 
-			uint32				fDpmsState;
+			// Written by SetDPMSMode() on an app thread, read by the event
+			// thread's flip gate; atomic so the flip path can check it
+			// under fFlipMutex without the connector lock.
+			std::atomic<uint32>	fDpmsState;
 
 			struct backlight*	fBacklight;
 

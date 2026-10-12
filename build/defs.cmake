@@ -30,6 +30,29 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g0 -U_FORTIFY_SOURCE")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
+# Sanitizer builds (configure --sanitize=thread|address). Opt-in only: the
+# instrumented tree is for stress runs, not shipping. -g survives Release so
+# reports carry symbols; frame pointers keep TSan/ASan stacks honest.
+set(VITRUVIAN_SANITIZE "" CACHE STRING
+	"Sanitizer instrumentation: empty, thread or address")
+if(VITRUVIAN_SANITIZE)
+	if(NOT VITRUVIAN_SANITIZE STREQUAL "thread"
+			AND NOT VITRUVIAN_SANITIZE STREQUAL "address")
+		message(FATAL_ERROR
+			"VITRUVIAN_SANITIZE must be thread or address, got '${VITRUVIAN_SANITIZE}'")
+	endif()
+	set(_vos_san_flags "-fsanitize=${VITRUVIAN_SANITIZE} -fno-omit-frame-pointer -g")
+	set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${_vos_san_flags}")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_vos_san_flags}")
+	set(CMAKE_EXE_LINKER_FLAGS
+		"${CMAKE_EXE_LINKER_FLAGS} -fsanitize=${VITRUVIAN_SANITIZE}")
+	set(CMAKE_SHARED_LINKER_FLAGS
+		"${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=${VITRUVIAN_SANITIZE}")
+	set(CMAKE_MODULE_LINKER_FLAGS
+		"${CMAKE_MODULE_LINKER_FLAGS} -fsanitize=${VITRUVIAN_SANITIZE}")
+	message(STATUS "Sanitizer: ${VITRUVIAN_SANITIZE}")
+endif()
+
 # Set common flags
 set(COMMON_FLAGS "-Wall \
 	-Wpointer-arith -Wcast-align -Wsign-compare -Wstrict-aliasing \

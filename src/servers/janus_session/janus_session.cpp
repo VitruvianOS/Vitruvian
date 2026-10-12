@@ -761,9 +761,26 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 }
 
 
+// Resolved slots are drained from sPending[] under the lock, then
+// replied to outside it: a port send can block on a full queue.
+struct ResolvedLaunch {
+	int       app_idx;
+	port_id   port;
+	pid_t     pid;
+	port_id   reply_port;
+	int32     reply_token;
+	bool      restarted;
+	char      name[64];
+	char      signature[256];
+};
+
+
 static void
 check_pending_launches()
 {
+	ResolvedLaunch done[JANUS_MAX_PENDING];
+	int nDone = 0;
+
 	pthread_mutex_lock(&sPendingLock);
 	for (int i = 0; i < JANUS_MAX_PENDING; i++) {
 		if (!sPending[i].active)
@@ -784,8 +801,13 @@ check_pending_launches()
 			if (n != (ssize_t)sizeof(port))
 				port = -1;
 		} else if (system_time() > sPending[i].deadline) {
-			int idx = sPending[i].app_idx;
-			fprintf(stderr, "janus_session: readiness timeout for %s\n", sApps[idx].name);
+			char name[64];
+			pthread_mutex_lock(&sAppsLock);
+			strlcpy(name, sApps[sPending[i].app_idx].name,
+				sizeof(name));
+			pthread_mutex_unlock(&sAppsLock);
+			fprintf(stderr, "janus_session: readiness timeout for %s\n",
+				name);
 			resolved = true;
 		}
 
@@ -793,35 +815,60 @@ check_pending_launches()
 			continue;
 
 		close(sPending[i].ready_fd);
-		int idx = sPending[i].app_idx;
 
-		if (port >= 0) {
+		ResolvedLaunch* r = &done[nDone++];
+		r->app_idx     = sPending[i].app_idx;
+		r->port        = port;
+		r->pid         = sPending[i].pid;
+		r->reply_port  = sPending[i].reply_port;
+		r->reply_token = sPending[i].reply_token;
+		r->restarted   = sPending[i].restarted;
+		r->name[0]      = '\0';
+		r->signature[0] = '\0';
+
+		sPending[i].active = false;
+	}
+	pthread_mutex_unlock(&sPendingLock);
+
+	for (int d = 0; d < nDone; d++) {
+		ResolvedLaunch* doneEntry = &done[d];
+		int idx = doneEntry->app_idx;
+
+		if (doneEntry->port >= 0) {
 			pthread_mutex_lock(&sAppsLock);
-			bool stale = sApps[idx].pid != sPending[i].pid;
-			if (!stale)
-				sApps[idx].port = port;
+			bool stale = sApps[idx].pid != doneEntry->pid;
+			if (!stale) {
+				sApps[idx].port = doneEntry->port;
+				strlcpy(doneEntry->name, sApps[idx].name,
+					sizeof(doneEntry->name));
+				strlcpy(doneEntry->signature, sApps[idx].signature,
+					sizeof(doneEntry->signature));
+			}
 			pthread_mutex_unlock(&sAppsLock);
 			if (stale)
-				port = -1;
+				doneEntry->port = -1;
 		}
 
-		if (port >= 0) {
+		if (doneEntry->port >= 0) {
 			printf("janus_session: %s ready, pid=%d port=%d\n",
-				sApps[idx].name, (int)sApps[idx].pid, (int)port);
+				doneEntry->name, (int)doneEntry->pid,
+				(int)doneEntry->port);
 
 			char pidpath[128];
-			snprintf(pidpath, sizeof(pidpath), "%s/%s.pid", runtime_dir(), sApps[idx].name);
+			snprintf(pidpath, sizeof(pidpath), "%s/%s.pid",
+				runtime_dir(), doneEntry->name);
 			FILE* f = fopen(pidpath, "w");
 			if (f != NULL) {
-				fprintf(f, "%d\n", (int)sApps[idx].pid);
+				fprintf(f, "%d\n", (int)doneEntry->pid);
 				fclose(f);
 			}
 
-			register_app_with_supervisor(sApps[idx].name, sApps[idx].signature,
-				sApps[idx].pid, port);
+			register_app_with_supervisor(doneEntry->name,
+				doneEntry->signature, doneEntry->pid,
+				doneEntry->port);
 
-			if (sPending[i].restarted
-					&& strcmp(sApps[idx].name, "app_server") == 0) {
+			if (doneEntry->restarted
+					&& strcmp(doneEntry->name, "app_server") == 0) {
 				port_id supervisorPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
 				if (supervisorPort >= 0) {
 					BPrivate::KMessage msg(BPrivate::B_JANUS_APP_SERVER_RESTARTED);
@@ -830,14 +877,14 @@ check_pending_launches()
 			}
 		}
 
-		BPrivate::KMessage reply(port >= 0 ? B_OK : B_ERROR);
-		if (port >= 0)
-			reply.AddInt32("pid", (int32)sApps[idx].pid);
-		reply.SendTo(sPending[i].reply_port, sPending[i].reply_token);
+		if (doneEntry->reply_port < 0)
+			continue;
 
-		sPending[i].active = false;
+		BPrivate::KMessage reply(doneEntry->port >= 0 ? B_OK : B_ERROR);
+		if (doneEntry->port >= 0)
+			reply.AddInt32("pid", (int32)doneEntry->pid);
+		reply.SendTo(doneEntry->reply_port, doneEntry->reply_token);
 	}
-	pthread_mutex_unlock(&sPendingLock);
 }
 
 

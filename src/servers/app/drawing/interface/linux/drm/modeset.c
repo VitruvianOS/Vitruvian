@@ -28,6 +28,7 @@
  */
 
 #include "modeset.h"
+#include "DrmCompat.h"
 
 #define _GNU_SOURCE
 #include <errno.h>
@@ -1172,6 +1173,7 @@ modeset_create_gbm_fb(int fd, struct gbm_device* gbm,
 	uint32_t fb_id = 0;
 
 	int ret;
+#ifdef HAVE_DRM_ADDFB2_MODS
 	if (modifier != DRM_FORMAT_MOD_LINEAR && modifier != DRM_FORMAT_MOD_INVALID) {
 		uint32_t handles[4] = { handle };
 		uint32_t pitches[4] = { stride };
@@ -1180,7 +1182,9 @@ modeset_create_gbm_fb(int fd, struct gbm_device* gbm,
 		ret = drmModeAddFB2WithModifiers(fd, dev->width, dev->height,
 			DRM_FORMAT_XRGB8888, handles, pitches, offsets, modifiers,
 			&fb_id, DRM_MODE_FB_MODIFIERS);
-	} else {
+	} else
+#endif
+	{
 		uint32_t handles[4] = { handle };
 		uint32_t pitches[4] = { stride };
 		uint32_t offsets[4] = { 0 };
@@ -1246,6 +1250,7 @@ modeset_create_render_fb(int fd, struct gbm_device* gbm,
 	uint32_t fb_id = 0;
 
 	int ret;
+#ifdef HAVE_DRM_ADDFB2_MODS
 	if (modifier != DRM_FORMAT_MOD_LINEAR && modifier != DRM_FORMAT_MOD_INVALID) {
 		uint32_t handles[4] = { handle };
 		uint32_t pitches[4] = { stride };
@@ -1254,7 +1259,9 @@ modeset_create_render_fb(int fd, struct gbm_device* gbm,
 		ret = drmModeAddFB2WithModifiers(fd, dev->width, dev->height,
 			DRM_FORMAT_XRGB8888, handles, pitches, offsets, modifiers,
 			&fb_id, DRM_MODE_FB_MODIFIERS);
-	} else {
+	} else
+#endif
+	{
 		uint32_t handles[4] = { handle };
 		uint32_t pitches[4] = { stride };
 		uint32_t offsets[4] = { 0 };

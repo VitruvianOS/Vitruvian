@@ -14,6 +14,41 @@ if(GBM_FOUND)
 	add_definitions(-DHAVE_GBM)
 endif()
 
+# 2.4.97 is the committed floor: the last libdrm symbol the DRM backend
+# plans to need lands there. Below it, or on a builder with old kernel
+# headers, the HAVE_DRM_* guards turn the affected paths off and
+# app_server still builds, legacy-only.
+pkg_check_modules(LIBDRM libdrm>=2.4.97)
+if(NOT LIBDRM_FOUND)
+	message(STATUS "libdrm older than 2.4.97: DRM backend builds "
+		"legacy-only via the HAVE_DRM_* guards")
+endif()
+
+include(CheckSymbolExists)
+set(CMAKE_REQUIRED_INCLUDES ${DRM_INCLUDE_DIR} ${DRM_INCLUDE_DIR}/libdrm)
+# The probes link, so the library has to be on their link line too.
+set(CMAKE_REQUIRED_LIBRARIES ${DRM_LIBRARY})
+check_symbol_exists(drmModeAtomicCommit "xf86drmMode.h" HAVE_DRM_ATOMIC)
+check_symbol_exists(drmModeCreateLease "xf86drmMode.h" HAVE_DRM_LEASE)
+check_symbol_exists(drmModeFormatModifierBlobIterNext "xf86drmMode.h"
+	HAVE_DRM_FMTMOD_ITER)
+check_symbol_exists(drmModeAddFB2WithModifiers "xf86drmMode.h"
+	HAVE_DRM_ADDFB2_MODS)
+unset(CMAKE_REQUIRED_LIBRARIES)
+
+if(HAVE_DRM_ATOMIC)
+	add_definitions(-DHAVE_DRM_ATOMIC)
+endif()
+if(HAVE_DRM_LEASE)
+	add_definitions(-DHAVE_DRM_LEASE)
+endif()
+if(HAVE_DRM_FMTMOD_ITER)
+	add_definitions(-DHAVE_DRM_FMTMOD_ITER)
+endif()
+if(HAVE_DRM_ADDFB2_MODS)
+	add_definitions(-DHAVE_DRM_ADDFB2_MODS)
+endif()
+
 
 Server(
 	app_server

@@ -6,6 +6,7 @@
 #include "DrmHWInterface.h"
 
 #include "DrmBuffer.h"
+#include "DrmCompat.h"
 #include "LibEvdevEventStream.h"
 #include "PanelOrientationTransform.h"
 
@@ -3096,6 +3097,11 @@ status_t
 DrmHWInterface::CreateLease(uint32_t* connectors, int connCount,
 	uint32_t* crtcs, int crtcCount, int* leaseFd)
 {
+#ifndef HAVE_DRM_LEASE
+	// drmModeCreateLease needs libdrm >= 2.4.95; there is no caller
+	// inside app_server today, so declining is the whole fallback.
+	return B_UNSUPPORTED;
+#else
 	if (fFd < 0)
 		return B_ERROR;
 
@@ -3114,6 +3120,7 @@ DrmHWInterface::CreateLease(uint32_t* connectors, int connCount,
 		return B_ERROR;
 	}
 	return B_OK;
+#endif
 }
 
 
@@ -3129,8 +3136,10 @@ void
 DrmHWInterface::_ProbeAtomic()
 {
 	fAtomicSupported = false;
+#ifdef HAVE_DRM_ATOMIC
 	drmSetClientCap(fFd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
 	fAtomicSupported = (drmSetClientCap(fFd, DRM_CLIENT_CAP_ATOMIC, 1) == 0);
+#endif
 	printf("DRM: atomic modesetting %s\n",
 		fAtomicSupported ? "supported" : "not supported (legacy fallback)");
 }
@@ -3654,6 +3663,40 @@ DrmHWInterface::_DiscoverConnProps(uint32_t conn_id)
 }
 
 
+#ifndef HAVE_DRM_ATOMIC
+// Without the atomic API the backend builds legacy-only: _ProbeAtomic()
+// never sets the cap, so every caller keeps to the SetCrtc/PageFlip path.
+status_t
+DrmHWInterface::_AtomicModeset(uint32_t /*fb_id*/, drmModeModeInfo* /*mode*/)
+{
+	return B_UNSUPPORTED;
+}
+
+
+status_t
+DrmHWInterface::_AtomicSetCursor(uint32_t /*fb_id*/, uint32_t /*crtc_id*/,
+	int32 /*x*/, int32 /*y*/, uint32_t /*w*/, uint32_t /*h*/)
+{
+	return B_UNSUPPORTED;
+}
+
+
+status_t
+DrmHWInterface::_AtomicFlip(uint32_t /*fb_id*/, const BRect* /*dirty_rects*/,
+	uint32_t /*nrects*/)
+{
+	return B_UNSUPPORTED;
+}
+
+
+status_t
+DrmHWInterface::_AtomicCommitFrame(uint32_t /*fb_id*/,
+	const BRegion* /*damage*/, const CursorUpdate* /*cursor*/,
+	bool /*wantFlip*/)
+{
+	return B_UNSUPPORTED;
+}
+#else
 status_t
 DrmHWInterface::_AtomicModeset(uint32_t fb_id, drmModeModeInfo* mode)
 {
@@ -3883,3 +3926,4 @@ DrmHWInterface::_AtomicCommitFrame(uint32_t fb_id, const BRegion* damage,
 
 	return ret == 0 ? B_OK : B_ERROR;
 }
+#endif // HAVE_DRM_ATOMIC

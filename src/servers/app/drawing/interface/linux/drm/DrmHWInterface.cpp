@@ -2811,7 +2811,20 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 			update.h = dev->cursor_h;
 			// fb_id 0 leaves the primary plane out of the request;
 			// committing the back buffer's fb would scan it out early.
-			_AtomicCommitFrame(0, NULL, &update, NULL);
+			if (_AtomicCommitFrame(0, NULL, &update, NULL)
+					!= B_OK) {
+				// A flip became pending between the check and
+				// this commit; stage the move so the next frame
+				// commit carries it instead of dropping it.
+				pthread_mutex_lock(&fDirtyMutex);
+				fStagedCursor = update;
+				pthread_mutex_unlock(&fDirtyMutex);
+
+				if (fWakeFd >= 0) {
+					uint64_t v = 1;
+					write(fWakeFd, &v, sizeof(v));
+				}
+			}
 		} else {
 			_AtomicSetCursor(dev->cursor_fb, dev->crtc,
 				px, py, dev->cursor_w, dev->cursor_h);

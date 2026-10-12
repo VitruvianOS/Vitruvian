@@ -24,6 +24,9 @@ die() {
     exit 1
 }
 
+# sudo resets the environment; chroot apt sees a proxy only as an env argument.
+CHROOT_PROXY="${http_proxy:+http_proxy=$http_proxy}"
+
 arch_to_deb() {
     case "$1" in
         amd64)   printf 'amd64' ;;

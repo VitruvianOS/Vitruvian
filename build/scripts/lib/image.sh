@@ -190,11 +190,11 @@ create_raw() {
     _raw_pkgs="$(get_raw_image_packages "$_arch")"
     _raw_dev_pkgs="$(get_dev_packages "$_arch")"
     _raw_kver="$(ls -1 "$_root_dir/lib/modules" | sort -V | tail -1)"
-    sudo chroot "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+    sudo chroot "$_root_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt-get install -y --download-only --no-install-recommends $_raw_pkgs \
     dkms build-essential linux-headers-$_raw_kver /localdeb/*.deb" \
         || die "raw package download failed"
-    chroot_isolated "$_root_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+    chroot_isolated "$_root_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 
 umount /sys/firmware/efi/efivars 2>/dev/null || true
 
@@ -494,10 +494,10 @@ create_iso() {
     _iso_debs="$(cd "$_basedir" && ls *.deb | sed 's|^|/tmp/|' | tr '\n' ' ')"
     _iso_dev_pkgs="$(get_dev_packages "$_arch")"
     log_step "Installing debs into chroot..."
-    sudo chroot "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+    sudo chroot "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt-get install -y --download-only dkms build-essential linux-headers-$_imagekernelversion $_iso_pkgs $_iso_debs" \
         || die "iso package download failed"
-    chroot_isolated "$_chroot_dir" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+    chroot_isolated "$_chroot_dir" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt-get remove -y vos nexus-dkms || true
 # Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
 mkdir -p /etc/initramfs-tools/conf.d
@@ -731,7 +731,7 @@ _common_chroot_setup() {
     _hostname="$2"
     # $5: 1 = live ISO (boots via boot=live), 0 = installed-like image.
     _live="${5:-0}"
-    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+    chroot_isolated "$_mnt" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 echo '$_hostname' > /etc/hostname
 
 # Rewrite /etc/hosts so it has the correct hostname.
@@ -1032,7 +1032,7 @@ VOSSRC
     log_step "Configuring system..."
     # set -e: bash -c returns the status of its LAST command, so the old
     # one-line form returned the trailing if-block and hid apt failures.
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+    sudo chroot "$_mnt" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt update
 # apt downgrades an unreachable source to a warning, so prove the repo
 # resolved a candidate instead of shipping without VitruvianOS.
@@ -1045,7 +1045,7 @@ if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
 fi
 apt-get install -y --download-only $_board_pkgs \$(ls /localdeb/*.deb 2>/dev/null)" \
         || die "raspberry chroot bash-c failed"
-    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+    chroot_isolated "$_mnt" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 # Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
 mkdir -p /etc/initramfs-tools/conf.d
 echo RESUME=none > /etc/initramfs-tools/conf.d/resume
@@ -1333,7 +1333,7 @@ VOSSRC
     fi
 
     log_step "Configuring $_label system..."
-    sudo chroot "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+    sudo chroot "$_mnt" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 apt update
 # See create_raspberry: prove the VOS repo actually resolved a candidate.
 if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
@@ -1345,7 +1345,7 @@ if [ -f /etc/apt/sources.list.d/vitruvian.sources ]; then
 fi
 apt-get install -y --download-only $_board_pkgs u-boot-menu \$(ls /localdeb/*.deb 2>/dev/null)" \
         || die "uboot chroot bash-c failed"
-    chroot_isolated "$_mnt" /usr/bin/env DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
+    chroot_isolated "$_mnt" /usr/bin/env $CHROOT_PROXY DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 /bin/bash -c "set -e
 # Before anything builds an initramfs: /proc/swaps would hand it the build host's swap.
 mkdir -p /etc/initramfs-tools/conf.d
 echo RESUME=none > /etc/initramfs-tools/conf.d/resume

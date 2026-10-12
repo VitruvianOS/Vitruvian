@@ -95,6 +95,7 @@ private:
 			bool				fFullscreen;
 			bool				fControlsVisible;
 			float				fVideoScale;
+			int32				fStripLayoutIndex;
 			float				fStripHeight;
 			float				fControlY;
 			bigtime_t			fLastRevealTime;

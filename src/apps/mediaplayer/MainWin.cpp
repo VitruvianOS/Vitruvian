@@ -78,6 +78,7 @@ MainWin::MainWin(BRect frame)
 	fFullscreen(false),
 	fControlsVisible(false),
 	fVideoScale(kDefaultScale),
+	fStripLayoutIndex(-1),
 	fStripHeight(0),
 	fControlY(0),
 	fLastRevealTime(0)
@@ -436,9 +437,12 @@ MainWin::_EnterFullscreen()
 	fFullscreen = true;
 	fStripHeight = fControllerView->Bounds().Height();
 
-	BLayout* layout = GetLayout();
-	if (layout != NULL)
+	BGroupLayout* layout = dynamic_cast<BGroupLayout*>(GetLayout());
+	if (layout != NULL) {
+		// Remember the slot so leaving fullscreen restores the order.
+		fStripLayoutIndex = layout->IndexOfView(fControllerView);
 		layout->RemoveView(fControllerView);
+	}
 	fVideoView->AddChild(fControllerView);
 	fControllerView->SetResizingMode(B_FOLLOW_NONE);
 	fControllerView->SetSymbolScale(1.5f);
@@ -469,8 +473,13 @@ MainWin::_ExitFullscreen()
 	fVideoView->RemoveChild(fControllerView);
 	fControllerView->SetSymbolScale(1.0f);
 	BGroupLayout* layout = dynamic_cast<BGroupLayout*>(GetLayout());
-	if (layout != NULL)
-		layout->AddView(fControllerView);
+	if (layout != NULL) {
+		if (fStripLayoutIndex >= 0)
+			layout->AddView(fStripLayoutIndex, fControllerView);
+		else
+			layout->AddView(fControllerView);
+	}
+	fStripLayoutIndex = -1;
 	fMenuBar->Show();
 
 	if (fSavedFrame.IsValid()) {

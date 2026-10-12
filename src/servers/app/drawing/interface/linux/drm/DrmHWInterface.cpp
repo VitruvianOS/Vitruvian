@@ -62,15 +62,15 @@ _ClearBufferToBlack(RenderingBuffer* buffer)
 extern "C" void seat_enable_cb(struct libseat* seat, void* data)
 {
 	DrmHWInterface* hw = static_cast<DrmHWInterface*>(data);
-	hw->_OnSessionEnable();
+	// Through the locked wrapper: enable rebuilds and restores buffers.
+	hw->OnSeatEnabled();
 
 }
 
 extern "C" void seat_disable_cb(struct libseat* seat, void* data)
 {
 	DrmHWInterface* hw = static_cast<DrmHWInterface*>(data);
-
-	hw->_OnSessionDisable();
+	hw->OnSeatDisabled();
 
 }
 
@@ -652,8 +652,14 @@ DrmHWInterface::_EventThreadMain()
 		// SetMode() deletes and recreates the buffers under the exclusive
 		// lock; reading fWriteTarget outside it used a freed buffer (#303).
 		bool flipLocked = false;
-		if (active && fPageFlipEnabled && !fPageFlipPending)
-			flipLocked = LockExclusiveAccess();
+		if (active && fPageFlipEnabled && !fPageFlipPending) {
+			// Idle frames must not drain the drawing threads every poll.
+			pthread_mutex_lock(&fDirtyMutex);
+			bool wantFlip = fAccumulatedDirty.CountRects() > 0 || fNeedsFlip;
+			pthread_mutex_unlock(&fDirtyMutex);
+			if (wantFlip)
+				flipLocked = LockExclusiveAccess();
+		}
 
 		if (flipLocked && fPageFlipEnabled && !fPageFlipPending
 				&& fBackBuffer != NULL && fWriteTarget != NULL
@@ -2397,7 +2403,12 @@ DrmHWInterface::MoveCursorTo(float x, float y)
 	const int32 oldPx = (int32)floorf(fCursorLocation.x - hot.x);
 	const int32 oldPy = (int32)floorf(fCursorLocation.y - hot.y);
 
+	// The software cursor blits into fWriteTarget; SetMode() replaces it
+	// under the exclusive lock. HW lock first, then overlays, as SetMode().
+	if (!LockParallelAccess())
+		return;
 	HWInterface::MoveCursorTo(x, y);
+	UnlockParallelAccess();
 
 	// When the HW sprite is off (software composite / drag), the base
 	// MoveCursorTo already handled the cursor draw — no plane update.
@@ -2601,8 +2612,13 @@ DrmHWInterface::_OnResume()
 
 	// Monitors may change while asleep with no guaranteed HOTPLUG uevent, so rescan unconditionally.
 	// A changed mode on a known connector is not picked up (see modeset_add_connector()).
+	// Rescan and restore touch the device list and fFrontBuffer, which
+	// SetMode() replaces under the same lock.
+	bool locked = LockExclusiveAccess();
 	bool resizePrimary = _RescanConnectors();
 	if (resizePrimary) {
+		if (locked)
+			UnlockExclusiveAccess();
 		_ScheduleResize();
 		return;
 	}
@@ -2621,6 +2637,8 @@ DrmHWInterface::_OnResume()
 
 	// The driver resets gamma LUTs on some paths, so re-apply night light if one was active.
 	SetTemperature(fTemperature);
+	if (locked)
+		UnlockExclusiveAccess();
 
 	// Force a full repaint, unless DPMS had the display deliberately off before sleeping.
 	if (fDpmsState == B_DPMS_ON) {

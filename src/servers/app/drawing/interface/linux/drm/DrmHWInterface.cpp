@@ -47,8 +47,16 @@ _ClearBufferToBlack(RenderingBuffer* buffer)
 {
 	if (buffer == NULL || buffer->Bits() == NULL)
 		return;
-	memset(buffer->Bits(), 0xFF,
-		(size_t)buffer->BytesPerRow() * buffer->Height());
+	// B_RGB32 is B, G, R, A in memory: 0xFF000000 is opaque black, while
+	// a 0xFF byte fill is opaque white.
+	uint8* row = (uint8*)buffer->Bits();
+	const uint32 width = buffer->Width();
+	for (uint32 y = 0; y < buffer->Height(); y++) {
+		uint32* pixel = (uint32*)row;
+		for (uint32 x = 0; x < width; x++)
+			pixel[x] = 0xFF000000;
+		row += buffer->BytesPerRow();
+	}
 }
 
 extern "C" void seat_enable_cb(struct libseat* seat, void* data)
@@ -622,7 +630,12 @@ DrmHWInterface::_EventThreadMain()
 					.version           = DRM_EVENT_CONTEXT_VERSION,
 					.page_flip_handler = DrmHWInterface::_PageFlipHandler,
 				};
+				// The handler swaps the buffer pointers; SetMode() replaces
+				// them under the same lock.
+				bool locked = LockExclusiveAccess();
 				drmHandleEvent(fFd, &evctx);
+				if (locked)
+					UnlockExclusiveAccess();
 			}
 			if (wake_idx >= 0 && (pfds[wake_idx].revents & POLLIN)) {
 				uint64_t v;
@@ -636,8 +649,14 @@ DrmHWInterface::_EventThreadMain()
 		if (active && _CheckResume())
 			_OnResume();
 
-		if (active && fPageFlipEnabled && !fPageFlipPending
-				&& fBackBuffer != NULL
+		// SetMode() deletes and recreates the buffers under the exclusive
+		// lock; reading fWriteTarget outside it used a freed buffer (#303).
+		bool flipLocked = false;
+		if (active && fPageFlipEnabled && !fPageFlipPending)
+			flipLocked = LockExclusiveAccess();
+
+		if (flipLocked && fPageFlipEnabled && !fPageFlipPending
+				&& fBackBuffer != NULL && fWriteTarget != NULL
 				&& fDpmsState == B_DPMS_ON) {
 			pthread_mutex_lock(&fDirtyMutex);
 			bool hasDirty = (fAccumulatedDirty.CountRects() > 0)
@@ -675,6 +694,8 @@ DrmHWInterface::_EventThreadMain()
 				}
 			}
 		}
+		if (flipLocked)
+			UnlockExclusiveAccess();
 
 		// QEMU resize may not emit HOTPLUG=1: poll the preferred geometry (no
 		// reprobe), but not while a user-set mode is active or it would undo it.

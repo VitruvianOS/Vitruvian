@@ -27,6 +27,7 @@ class BSlider;
 class BSpinner;
 class BStringView;
 
+class AlertWindow;
 class RefreshWindow;
 class MonitorView;
 class ScreenSettings;
@@ -66,6 +67,12 @@ private:
 			void			_UpdateProfileMenu();
 
 			void			_Apply();
+
+			void			_BeginScreenChange();
+			void			_ShowChangeAlert();
+			void			_DropScreenChange();
+			void			_RevertScreenChange();
+			void			_KeepScreenChange();
 
 			status_t		_WriteVesaModeFile(const screen_mode& mode) const;
 			bool			_IsVesa() const { return fIsVesa; }
@@ -144,6 +151,9 @@ private:
 			int32			fOriginalRotation;
 			int32			fOriginalReflection;
 			bool			fModified;
+
+			AlertWindow*	fAlertWindow;
+				// countdown for the pending change; NULL when none
 };
 
 #endif	/* SCREEN_WINDOW_H */

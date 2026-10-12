@@ -538,7 +538,15 @@ Desktop::~Desktop()
 		BAutolock _(fScreenChangeLock);
 		fScreenChangeTracker.Timeout(fScreenChangeTracker.Generation());
 	}
-	delete_sem(fScreenChangeWakeup);
+
+	if (fScreenChangeWakeup >= B_OK) {
+		release_sem(fScreenChangeWakeup);
+		if (fScreenChangeTimer >= B_OK) {
+			status_t threadStatus;
+			wait_for_thread(fScreenChangeTimer, &threadStatus);
+		}
+		delete_sem(fScreenChangeWakeup);
+	}
 
 	delete fPowerManager;
 	delete_area(fSharedReadOnlyArea);
@@ -1380,6 +1388,12 @@ Desktop::_StartScreenChangeTimer()
 	{
 		BAutolock _(fScreenChangeLock);
 		args->generation = fScreenChangeTracker.Generation();
+	}
+
+	// Drain any permit left by an early stop so the new wait is full
+	// length; this also wakes an older timer, whose generation is stale.
+	while (acquire_sem_etc(fScreenChangeWakeup, 1, B_RELATIVE_TIMEOUT, 0)
+			== B_OK) {
 	}
 
 	// Older timers carry an older generation and exit without reverting.

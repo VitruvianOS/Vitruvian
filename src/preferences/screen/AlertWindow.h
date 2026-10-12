@@ -8,6 +8,7 @@
  *		Axel Dörfler, axeld@pinc-software.de
  *		Augustin Cavalier <waddlesplash>
  */
+
 #ifndef ALERT_WINDOW_H
 #define ALERT_WINDOW_H
 
@@ -27,10 +28,20 @@ class AlertWindow : public BAlert {
 		virtual void MessageReceived(BMessage* message);
 		virtual void DispatchMessage(BMessage* message, BHandler* handler);
 
+		// A new change joined the pending window; give it a full
+		// countdown again.
+		void ResetCountdown();
+
+		// Close without messaging the handler: the caller reverts the
+		// change itself.
+		void Dismiss();
+
 	private:
 		void UpdateCountdownView();
+		void Resolve(uint32 what);
 
 		int32			fSeconds;
+		bool			fResolved;
 		BMessenger		fHandler;
 		BFont			fOriginalFont;
 		BFont			fFont;

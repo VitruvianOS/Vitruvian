@@ -189,7 +189,8 @@ ScreenWindow::ScreenWindow(ScreenSettings* settings)
 	fOtherRefresh(NULL),
 	fScreenMode(this),
 	fUndoScreenMode(this),
-	fModified(false)
+	fModified(false),
+	fAlertWindow(NULL)
 {
 	BScreen screen(this);
 
@@ -1225,9 +1226,13 @@ ScreenWindow::ScreenChanged(BRect frame, color_space mode)
 	fModified = false;
 	fBootWorkspaceApplied = false;
 
-	// Adopt the new external state as the revert baseline.
-	_UpdateOriginal();
-	_UpdateActiveMode();
+	// Our own unconfirmed change reports here too; the countdown dialog
+	// owns the revert baseline until it resolves.
+	if (fAlertWindow == NULL) {
+		// Adopt the new external state as the revert baseline.
+		_UpdateOriginal();
+		_UpdateActiveMode();
+	}
 
 	// Keep the preflet fully on the new screen.
 	const BRect windowFrame = Frame();
@@ -1264,9 +1269,17 @@ ScreenWindow::MessageReceived(BMessage* message)
 		{
 			uint32 newColumns = (uint32)fColumnsControl->Value();
 
+			uint32 columns;
 			uint32 rows;
-			BPrivate::get_workspaces_layout(NULL, &rows);
+			BPrivate::get_workspaces_layout(&columns, &rows);
+			// Programmatic SetValue() invokes too; only real changes
+			// join the pending window.
+			if (newColumns == columns)
+				break;
+
+			_BeginScreenChange();
 			BPrivate::set_workspaces_layout(newColumns, rows);
+			_ShowChangeAlert();
 
 			_UpdateWorkspaceButtons();
 			fRowsControl->SetValue(rows);
@@ -1281,8 +1294,14 @@ ScreenWindow::MessageReceived(BMessage* message)
 			uint32 newRows = (uint32)fRowsControl->Value();
 
 			uint32 columns;
-			BPrivate::get_workspaces_layout(&columns, NULL);
+			uint32 rows;
+			BPrivate::get_workspaces_layout(&columns, &rows);
+			if (newRows == rows)
+				break;
+
+			_BeginScreenChange();
 			BPrivate::set_workspaces_layout(columns, newRows);
+			_ShowChangeAlert();
 
 			_UpdateWorkspaceButtons();
 			fColumnsControl->SetValue(columns);
@@ -1378,6 +1397,10 @@ ScreenWindow::MessageReceived(BMessage* message)
 
 			// Applied at once rather than on Apply: rotation does not go
 			// through the mode list, so there is nothing to negotiate.
+			// Kept only after the countdown: a wrong rotation leaves the
+			// pointer and the screen sideways.
+			bool wasPending = fAlertWindow != NULL;
+			_BeginScreenChange();
 			if (fScreenMode.SetRotation(rotation) != B_OK) {
 				BAlert* alert = new BAlert(B_TRANSLATE("Rotation"),
 					B_TRANSLATE("This graphics backend cannot rotate the "
@@ -1390,7 +1413,13 @@ ScreenWindow::MessageReceived(BMessage* message)
 				BMenuItem* item = fRotationMenu->ItemAt(fOriginalRotation);
 				if (item != NULL)
 					item->SetMarked(true);
-			}
+
+				// Nothing was applied; drop the window if this failure
+				// is what opened it.
+				if (!wasPending)
+					_DropScreenChange();
+			} else
+				_ShowChangeAlert();
 			break;
 		}
 
@@ -1402,6 +1431,8 @@ ScreenWindow::MessageReceived(BMessage* message)
 
 			// Applied at once rather than on Apply: reflection does not go
 			// through the mode list, so there is nothing to negotiate.
+			bool wasPending = fAlertWindow != NULL;
+			_BeginScreenChange();
 			if (fScreenMode.SetReflection(reflection) != B_OK) {
 				BAlert* alert = new BAlert(B_TRANSLATE("Reflection"),
 					B_TRANSLATE("This graphics backend cannot reflect the "
@@ -1412,7 +1443,11 @@ ScreenWindow::MessageReceived(BMessage* message)
 				alert->Go(NULL);
 
 				_MarkReflectionItem(fOriginalReflection);
-			}
+
+				if (!wasPending)
+					_DropScreenChange();
+			} else
+				_ShowChangeAlert();
 			break;
 		}
 
@@ -1470,14 +1505,18 @@ ScreenWindow::MessageReceived(BMessage* message)
 		}
 
 		case BUTTON_UNDO_MSG:
-			fUndoScreenMode.Revert();
-			_UpdateActiveMode();
+			// The countdown dialog reverted: roll the change back.
+			fAlertWindow = NULL;
+			_RevertScreenChange();
 			break;
 
 		case BUTTON_REVERT_MSG:
 		{
 			fModified = false;
 			fBootWorkspaceApplied = false;
+
+			// An unconfirmed change is abandoned, not kept.
+			_DropScreenChange();
 
 			// ScreenMode::Revert() assumes that we first set the correct
 			// number of workspaces
@@ -1517,8 +1556,8 @@ ScreenWindow::MessageReceived(BMessage* message)
 
 		case MAKE_INITIAL_MSG:
 			// user pressed "keep" in confirmation dialog
-			fModified = true;
-			_UpdateActiveMode();
+			fAlertWindow = NULL;
+			_KeepScreenChange();
 			break;
 
 		case UPDATE_DESKTOP_COLOR_MSG:
@@ -1745,6 +1784,8 @@ ScreenWindow::_UpdateOriginal()
 
 	fScreenMode.Get(fOriginal);
 	fScreenMode.UpdateOriginalModes();
+	fOriginalRotation = fScreenMode.Rotation();
+	fOriginalReflection = fScreenMode.Reflection();
 }
 
 
@@ -1856,6 +1897,9 @@ ScreenWindow::_Apply()
 	// make checkpoint, so we can undo these changes
 	fUndoScreenMode.UpdateOriginalModes();
 
+	bool wasPending = fAlertWindow != NULL;
+	_BeginScreenChange();
+
 	status_t status = fScreenMode.Set(fSelected);
 	if (status == B_OK) {
 		// use the mode that has eventually been set and
@@ -1880,10 +1924,13 @@ ScreenWindow::_Apply()
 
 		fActive = fSelected;
 
-		// TODO: only show alert when this is an unknown mode
-		BAlert* window = new AlertWindow(this);
-		window->Go(NULL);
+		_ShowChangeAlert();
 	} else {
+		// Nothing was applied; drop the window if this failure is
+		// what opened it.
+		if (!wasPending)
+			_DropScreenChange();
+
 		char message[256];
 		snprintf(message, sizeof(message),
 			B_TRANSLATE("The screen mode could not be set:\n\t%s\n"),
@@ -1894,6 +1941,99 @@ ScreenWindow::_Apply()
 		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 		alert->Go();
 	}
+}
+
+
+/*!	Opens a pending-change window in app_server, or joins the one that
+	is already counting down. Changes join one transaction: a single
+	snapshot, a single countdown, one keep or revert for all of them.
+	The caller shows the countdown with _ShowChangeAlert() once the
+	change is applied, so the dialog is placed in the new geometry.
+*/
+void
+ScreenWindow::_BeginScreenChange()
+{
+	if (fAlertWindow != NULL) {
+		fAlertWindow->ResetCountdown();
+		return;
+	}
+
+	BPrivate::BPrivateScreen* screen = BPrivate::BPrivateScreen::Get(this);
+	if (screen != NULL) {
+		screen->BeginScreenChange();
+		BPrivate::BPrivateScreen::Put(screen);
+	}
+}
+
+
+void
+ScreenWindow::_ShowChangeAlert()
+{
+	if (fAlertWindow != NULL) {
+		fAlertWindow->ResetCountdown();
+		fAlertWindow->Show();
+		return;
+	}
+
+	// Shown after the change, so it is placed in the new geometry.
+	fAlertWindow = new AlertWindow(this);
+	fAlertWindow->Go(NULL);
+}
+
+
+void
+ScreenWindow::_DropScreenChange()
+{
+	if (fAlertWindow != NULL) {
+		fAlertWindow->Dismiss();
+		fAlertWindow = NULL;
+	}
+
+	BPrivate::BPrivateScreen* screen = BPrivate::BPrivateScreen::Get(this);
+	if (screen != NULL) {
+		screen->CancelScreenChange();
+		BPrivate::BPrivateScreen::Put(screen);
+	}
+}
+
+
+void
+ScreenWindow::_RevertScreenChange()
+{
+	// The server restores the live state it snapshotted; nothing of the
+	// window was persisted, so the disk still holds the old values.
+	BPrivate::BPrivateScreen* screen = BPrivate::BPrivateScreen::Get(this);
+	if (screen != NULL) {
+		screen->CancelScreenChange();
+		BPrivate::BPrivateScreen::Put(screen);
+	}
+
+	// Re-sync the controls with the restored state.
+	fUndoScreenMode.Revert();
+
+	BMenuItem* rotationItem = fRotationMenu->ItemAt(fOriginalRotation + 1);
+	if (rotationItem != NULL)
+		rotationItem->SetMarked(true);
+
+	_MarkReflectionItem(fOriginalReflection);
+
+	_UpdateWorkspaceButtons();
+	_UpdateActiveMode();
+}
+
+
+void
+ScreenWindow::_KeepScreenChange()
+{
+	BPrivate::BPrivateScreen* screen = BPrivate::BPrivateScreen::Get(this);
+	if (screen != NULL) {
+		screen->ConfirmScreenChange();
+		BPrivate::BPrivateScreen::Put(screen);
+	}
+
+	fModified = true;
+	_UpdateActiveMode();
+	_CheckApplyEnabled();
 }
 
 

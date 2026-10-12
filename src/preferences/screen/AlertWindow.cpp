@@ -25,11 +25,16 @@
 #define B_TRANSLATION_CONTEXT "Screen"
 
 
+// Matches the app_server deadline minus its grace period: the dialog
+// always resolves first when it is alive.
+static const int32 kCountdownSeconds = 6;
+
+
 AlertWindow::AlertWindow(BMessenger handler)
 	: BAlert(B_TRANSLATE("Confirm changes"),
 			 "", B_TRANSLATE("Undo"), B_TRANSLATE("Keep")),
-	// we will wait 12 seconds until we send a message
-	fSeconds(12),
+	fSeconds(kCountdownSeconds),
+	fResolved(false),
 	fHandler(handler)
 {
 	SetType(B_WARNING_ALERT);
@@ -43,14 +48,29 @@ AlertWindow::AlertWindow(BMessenger handler)
 
 
 void
+AlertWindow::ResetCountdown()
+{
+	fSeconds = kCountdownSeconds;
+	UpdateCountdownView();
+}
+
+
+void
+AlertWindow::Dismiss()
+{
+	fResolved = true;
+	PostMessage(B_QUIT_REQUESTED);
+	Hide();
+}
+
+
+void
 AlertWindow::DispatchMessage(BMessage* message, BHandler* handler)
 {
 	if (message->what == B_PULSE) {
-		if (--fSeconds == 0) {
-			fHandler.SendMessage(BUTTON_UNDO_MSG);
-			PostMessage(B_QUIT_REQUESTED);
-			Hide();
-		} else
+		if (--fSeconds == 0)
+			Resolve(BUTTON_UNDO_MSG);
+		else
 			UpdateCountdownView();
 	}
 
@@ -67,22 +87,29 @@ AlertWindow::MessageReceived(BMessage* message)
 			int32 which;
 			if (message->FindInt32("which", &which) == B_OK) {
 				if (which == 1)
-					fHandler.SendMessage(MAKE_INITIAL_MSG);
+					Resolve(MAKE_INITIAL_MSG);
 				else if (which == 0)
-					fHandler.SendMessage(BUTTON_UNDO_MSG);
-				PostMessage(B_QUIT_REQUESTED);
-				Hide();
+					Resolve(BUTTON_UNDO_MSG);
 			}
 			break;
 		}
 
+		case B_QUIT_REQUESTED:
+			// The close button reverts; the quit posted by Resolve()
+			// comes back here resolved and must complete the close.
+			if (!fResolved) {
+				Resolve(BUTTON_UNDO_MSG);
+				break;
+			}
+			BAlert::MessageReceived(message);
+			break;
+
 		case B_KEY_DOWN:
 		{
 			int8 val;
-			if (message->FindInt8("byte", &val) == B_OK && val == B_ESCAPE) {
-				fHandler.SendMessage(BUTTON_UNDO_MSG);
-				PostMessage(B_QUIT_REQUESTED);
-				Hide();
+			if (message->FindInt8("byte", &val) == B_OK
+				&& val == B_ESCAPE) {
+				Resolve(BUTTON_UNDO_MSG);
 				break;
 			}
 			// fall through
@@ -92,6 +119,19 @@ AlertWindow::MessageReceived(BMessage* message)
 			BAlert::MessageReceived(message);
 			break;
 	}
+}
+
+
+void
+AlertWindow::Resolve(uint32 what)
+{
+	if (fResolved)
+		return;
+
+	fResolved = true;
+	fHandler.SendMessage(what);
+	PostMessage(B_QUIT_REQUESTED);
+	Hide();
 }
 
 

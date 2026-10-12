@@ -204,8 +204,9 @@ MainWin::_CreateMenu()
 	fMenuBar->AddItem(videoMenu);
 
 	BMenu* windowMenu = new BMenu(B_TRANSLATE("Window"));
+	// Cmd+A stays free for select-all; Always on Top takes T for top.
 	fAlwaysOnTopItem = new BMenuItem(B_TRANSLATE("Always on Top"),
-		new BMessage(MSG_ALWAYS_ON_TOP), 'A');
+		new BMessage(MSG_ALWAYS_ON_TOP), 'T');
 	windowMenu->AddItem(fAlwaysOnTopItem);
 	fHideInterfaceItem = new BMenuItem(B_TRANSLATE("Hide Interface"),
 		new BMessage(MSG_HIDE_INTERFACE), 'H');

@@ -61,6 +61,15 @@ struct ConnProps {
 	uint32_t dpms;
 };
 
+// A cursor-plane change held back until the next frame commit, so it
+// rides that commit instead of colliding with an in-flight flip (EBUSY).
+struct CursorUpdate {
+	bool		valid;
+	uint32_t	fb_id;
+	int32_t		x, y;
+	uint32_t	w, h;
+};
+
 // Values match the kernel's "panel orientation" connector property
 // (drm_connector.h, DRM_MODE_PANEL_ORIENTATION_*) so a property read casts
 // straight into this enum.
@@ -222,6 +231,11 @@ private:
 								FlipToken* token,
 								const BRect* dirty_rects,
 								uint32_t nrects);
+			// One request: primary fb (+damage clips) and cursor plane.
+			status_t			_AtomicCommitFrame(uint32_t fb_id,
+								const BRegion* damage,
+								const CursorUpdate* cursor,
+								FlipToken* token);
 			status_t			_AtomicSetCursor(uint32_t fb_id,
 									uint32_t crtc_id,
 									int32 x, int32 y,
@@ -336,6 +350,10 @@ private:
 			uint32_t			fCursorPlaneId;
 			// Which API armed the cursor plane; set once by _ProbeCursor().
 			bool				fCursorUsesAtomic;
+			// VOS_ATOMIC_BATCH: flip, cursor and damage ride one atomic
+			// request. Off keeps the legacy page-flip and cursor ioctls.
+			bool				fAtomicBatch;
+			CursorUpdate		fStagedCursor;
 			uint32_t			fModeBlobId;
 			struct PlaneProps	fPlaneProps;
 			struct PlaneProps	fCursorPlaneProps;

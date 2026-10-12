@@ -361,10 +361,14 @@ private:
 			// request. Off keeps the legacy page-flip and cursor ioctls.
 			bool				fAtomicBatch;
 			CursorUpdate		fStagedCursor;
-			// Set once a flip fails with anything but EBUSY often enough:
-			// the driver has dumb buffers but no working page flip.
-			bool				fVblankPacedFlip;
-			uint32_t			fFlipFailures;
+		// Armed once unsupported flip errors reach the limit: the
+		// driver has dumb buffers but no working page flip. Cleared
+		// on session enable; only flip-unsupported errnos count.
+		bool				fVblankPacedFlip;
+		uint32_t			fFlipFailures;
+		// Set while a modeset is in flight; a flip EINVAL during a
+		// modeset is transient, not proof the flip is broken.
+		std::atomic<bool>	fModesetActive;
 			uint32_t			fModeBlobId;
 			struct PlaneProps	fPlaneProps;
 			struct PlaneProps	fCursorPlaneProps;

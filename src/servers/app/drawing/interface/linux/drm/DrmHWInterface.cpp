@@ -7,6 +7,7 @@
 
 #include "DrmBuffer.h"
 #include "DrmCompat.h"
+#include "DrmFlipPolicy.h"
 #include "LibEvdevEventStream.h"
 #include "PanelOrientationTransform.h"
 
@@ -139,6 +140,7 @@ DrmHWInterface::DrmHWInterface()
 	fStagedCursor{},
 	fVblankPacedFlip(false),
 	fFlipFailures(0),
+	fModesetActive(false),
 	fModeBlobId(0),
 	fPlaneProps{},
 	fCursorPlaneProps{},
@@ -259,6 +261,11 @@ void
 DrmHWInterface::_OnSessionEnable()
 {
 	printf("Session enabled\n");
+
+	// The new session gets a fresh flip probe: whatever made the old
+	// one fall back left with the old DRM master.
+	fVblankPacedFlip = false;
+	fFlipFailures = 0;
 
 	if (fInitialized) {
 		fSessionActive = true;
@@ -566,6 +573,9 @@ DrmHWInterface::_RestoreDisplay()
 
 	// Iterates the modeset list; a concurrent udev rescan can free nodes.
 	ModesetGuard modesetGuard(&fModesetMutex);
+	// Same window as SetMode: a concurrent flip EINVAL here is the
+	// modeset, not a broken flip.
+	fModesetActive = true;
 	struct modeset_dev *iter;
 	for (iter = get_dev(); iter; iter = iter->next) {
 		// Not iter->fb: stale after any flip, zeroed by resize.
@@ -589,6 +599,7 @@ DrmHWInterface::_RestoreDisplay()
 				"failed for connector %u fb=%u: %s\n", iter->conn,
 				fb, strerror(errno));
 	}
+	fModesetActive = false;
 }
 
 
@@ -947,10 +958,13 @@ DrmHWInterface::_EventThreadMain()
 							"(%s); retrying\n", strerror(flipErr));
 						sReported = true;
 					}
-					// Anything but EBUSY, again and again, means the
-					// flip itself is broken; fall back to pacing a
-					// SetCrtc instead of freezing on this frame.
-					if (flipErr != EBUSY && ++fFlipFailures >= 8) {
+					// Only flip-unsupported errnos outside a modeset
+					// count; EACCES and EPERM around a VT switch or
+					// an EINVAL under a modeset are transient, and
+					// eight of those must not tear the session down.
+					if (drm_flip_failure_counts(flipErr,
+							fModesetActive.load(),
+							&fFlipFailures)) {
 						fVblankPacedFlip = true;
 						fprintf(stderr, "[drm] page flip unusable "
 							"(%s); pacing SetCrtc on vblank "
@@ -1275,9 +1289,14 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	_ClearBufferToBlack(fBackBuffer);
 	_ClearBufferToBlack(fRenderBuffer);
 
+	// A flip attempted while the CRTC is being reprogrammed fails
+	// with EINVAL; mark the window so that failure is not counted
+	// as proof the flip is unsupported.
+	fModesetActive = true;
 	int ret;
 	if (fAtomicSupported && fPrimaryPlaneId) {
 		if (_AtomicModeset(dev->fb, &dev->mode) != B_OK) {
+			fModesetActive = false;
 			UnlockExclusiveAccess();
 			return B_ERROR;
 		}
@@ -1285,10 +1304,11 @@ DrmHWInterface::SetMode(const display_mode& mode)
 	} else {
 		ret = drmModeSetCrtc(fFd, dev->crtc, dev->fb, 0, 0,
 		                     &dev->conn, 1, &dev->mode);
-		if (ret) {
-			UnlockExclusiveAccess();
-			return B_ERROR;
-		}
+	}
+	fModesetActive = false;
+	if (ret) {
+		UnlockExclusiveAccess();
+		return B_ERROR;
 	}
 
 	_FillModeInfo(fDisplayMode, dev->mode);

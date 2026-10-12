@@ -184,6 +184,13 @@ private:
 	static	void				_PageFlipHandler(int fd, unsigned int frame,
 									unsigned int sec, unsigned int usec,
 									void* data);
+			// Front/back swap + damage rotation, flip event or paced flip.
+			// Entered with fFlipMutex held; releases it.
+			void				_FinishFrameSwap(uint64_t generation);
+			// Fallback for drivers whose page flip never works: wait a
+			// vblank, drmModeSetCrtc the back fb, then swap as a flip
+			// completion would. Tearing possible, display usable.
+			void				_VblankPacedFlip();
 
 			void				_BlitRect(RenderingBuffer* src,
 									RenderingBuffer* dst,
@@ -354,6 +361,10 @@ private:
 			// request. Off keeps the legacy page-flip and cursor ioctls.
 			bool				fAtomicBatch;
 			CursorUpdate		fStagedCursor;
+			// Set once a flip fails with anything but EBUSY often enough:
+			// the driver has dumb buffers but no working page flip.
+			bool				fVblankPacedFlip;
+			uint32_t			fFlipFailures;
 			uint32_t			fModeBlobId;
 			struct PlaneProps	fPlaneProps;
 			struct PlaneProps	fCursorPlaneProps;

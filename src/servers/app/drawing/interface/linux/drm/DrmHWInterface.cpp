@@ -136,6 +136,8 @@ DrmHWInterface::DrmHWInterface()
 	fCursorUsesAtomic(false),
 	fAtomicBatch(false),
 	fStagedCursor{},
+	fVblankPacedFlip(false),
+	fFlipFailures(0),
 	fModeBlobId(0),
 	fPlaneProps{},
 	fCursorPlaneProps{},
@@ -626,15 +628,23 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 		return;
 	}
 
+	hw->_FinishFrameSwap(generation);
+}
+
+
+// Called with fFlipMutex held; releases it.
+void
+DrmHWInterface::_FinishFrameSwap(uint64_t generation)
+{
 	// Swap before clearing the flag, or CopyBackToFront() writes into the
 	// buffer the CRTC just started scanning out.
-	std::swap(hw->fFrontBuffer, hw->fBackBuffer);
-	hw->fWriteTarget = hw->fBackBuffer;
-	hw->fPageFlipPending = false;
-	pthread_cond_broadcast(&hw->fFlipCond);
+	std::swap(fFrontBuffer, fBackBuffer);
+	fWriteTarget = fBackBuffer;
+	fPageFlipPending = false;
+	pthread_cond_broadcast(&fFlipCond);
 
-	if (hw->fRenderBuffer == NULL) {
-		pthread_mutex_unlock(&hw->fFlipMutex);
+	if (fRenderBuffer == NULL) {
+		pthread_mutex_unlock(&fFlipMutex);
 		return;
 	}
 
@@ -642,37 +652,37 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 	// with the previous frame's (covers double-buffer staleness). Then
 	// rotate: previous <- accumulated, accumulated <- empty.
 	BRegion toBlit;
-	pthread_mutex_lock(&hw->fDirtyMutex);
-	if (hw->fPreviousDirty.CountRects() > 0) {
-		toBlit.Include(&hw->fPreviousDirty);
-		toBlit.Include(&hw->fAccumulatedDirty);
+	pthread_mutex_lock(&fDirtyMutex);
+	if (fPreviousDirty.CountRects() > 0) {
+		toBlit.Include(&fPreviousDirty);
+		toBlit.Include(&fAccumulatedDirty);
 	} else
-		toBlit.Include(&hw->fAccumulatedDirty);
-	hw->fPreviousDirty = hw->fAccumulatedDirty;
-	hw->fAccumulatedDirty.MakeEmpty();
+		toBlit.Include(&fAccumulatedDirty);
+	fPreviousDirty = fAccumulatedDirty;
+	fAccumulatedDirty.MakeEmpty();
 	// Damage copied while this flip was in flight reached the buffer that
 	// just left the screen; ask for a follow-up flip.
-	hw->fNeedsFlip = (hw->fPreviousDirty.CountRects() > 0);
-	pthread_mutex_unlock(&hw->fDirtyMutex);
-	pthread_mutex_unlock(&hw->fFlipMutex);
+	fNeedsFlip = (fPreviousDirty.CountRects() > 0);
+	pthread_mutex_unlock(&fDirtyMutex);
+	pthread_mutex_unlock(&fFlipMutex);
 
 	if (toBlit.CountRects() > 0) {
-		bool locked = hw->LockExclusiveAccess();
+		bool locked = LockExclusiveAccess();
 
 		// The mode lock wait above let SetMode() run: it bumps the
 		// generation before replacing the buffers, so a mismatch here
 		// means the pointers below would be the replacements for a
 		// frame we no longer own. Drop the blit; the full-frame
 		// re-present in SetMode() covers the screen instead.
-		if (generation != hw->fFlipGeneration) {
+		if (generation != fFlipGeneration) {
 			if (locked)
-				hw->UnlockExclusiveAccess();
+				UnlockExclusiveAccess();
 			return;
 		}
 
 		int32 count = toBlit.CountRects();
 		for (int32 i = 0; i < count; i++)
-			hw->_BlitRect(hw->fRenderBuffer, hw->fWriteTarget,
+			_BlitRect(fRenderBuffer, fWriteTarget,
 				toBlit.RectAt(i));
 
 		// Blend the software cursor while still holding the mode lock:
@@ -684,18 +694,52 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 		// those readers; the lock order write -> overlays is safe
 		// because no path takes fFloatingOverlaysLock and then the
 		// mode lock.
-		if (!hw->fHardwareCursorEnabled) {
-			bool cursorLocked = hw->fFloatingOverlaysLock.Lock();
-			IntRect cf = hw->_CursorFrame();
+		if (!fHardwareCursorEnabled) {
+			bool cursorLocked = fFloatingOverlaysLock.Lock();
+			IntRect cf = _CursorFrame();
 			if (cf.IsValid())
-				hw->_BlendCursor(hw->fRenderBuffer,
-					hw->fWriteTarget, cf);
+				_BlendCursor(fRenderBuffer,
+					fWriteTarget, cf);
 			if (cursorLocked)
-				hw->fFloatingOverlaysLock.Unlock();
+				fFloatingOverlaysLock.Unlock();
 		}
 		if (locked)
-			hw->UnlockExclusiveAccess();
+			UnlockExclusiveAccess();
 	}
+}
+
+
+// P1 fallback: dumb buffers exist but no page flip ever completes, so the
+// flip block would retry into eternity and the screen freezes on the boot
+// frame. Pacing a SetCrtc on vblank trades tearing for a usable display.
+void
+DrmHWInterface::_VblankPacedFlip()
+{
+	if (fFd < 0 || fWriteTarget == NULL)
+		return;
+
+	WaitForRetrace(B_INFINITE_TIMEOUT);
+
+	struct modeset_dev* dev = get_dev();
+	if (dev == NULL)
+		return;
+
+	int r = drmModeSetCrtc(fFd, dev->crtc, fWriteTarget->GetFbId(),
+		0, 0, &dev->conn, 1, &dev->mode);
+	if (r != 0) {
+		static bool sReported = false;
+		if (!sReported) {
+			fprintf(stderr, "[drm] vblank-paced SetCrtc failed "
+				"(%s)\n", strerror(errno));
+			sReported = true;
+		}
+		return;
+	}
+
+	// Event thread, exclusive lock held: SetMode() cannot run, but the swap
+	// contract wants fFlipMutex and the generation anyway.
+	pthread_mutex_lock(&fFlipMutex);
+	_FinishFrameSwap(fFlipGeneration);
 }
 
 
@@ -824,7 +868,9 @@ DrmHWInterface::_EventThreadMain()
 			}
 			pthread_mutex_unlock(&fDirtyMutex);
 
-			if (hasDirty) {
+			if (hasDirty && fVblankPacedFlip) {
+				_VblankPacedFlip();
+			} else if (hasDirty) {
 				// Issue under fFlipMutex: SetMode() tears the buffers
 				// down under the same mutex, so fWriteTarget cannot be
 				// deleted between the NULL check and GetFbId(), and the
@@ -832,6 +878,7 @@ DrmHWInterface::_EventThreadMain()
 				pthread_mutex_lock(&fFlipMutex);
 				bool attempted = false;
 				int r = -1;
+				int flipErr = 0;
 				if (fBackBuffer != NULL && fWriteTarget != NULL) {
 					attempted = true;
 					FlipToken* token = new FlipToken;
@@ -857,6 +904,7 @@ DrmHWInterface::_EventThreadMain()
 							DRM_MODE_PAGE_FLIP_EVENT, token);
 					}
 					if (r != 0) {
+						flipErr = errno;
 						// Refused (EBUSY is routine): no event will
 						// arrive, so reap the token here.
 						for (size_t i = 0; i < fFlipTokens.size(); i++) {
@@ -873,6 +921,7 @@ DrmHWInterface::_EventThreadMain()
 				pthread_mutex_unlock(&fFlipMutex);
 
 				if (r == 0) {
+					fFlipFailures = 0;
 					pthread_mutex_lock(&fDirtyMutex);
 					fNeedsFlip = false;
 					pthread_mutex_unlock(&fDirtyMutex);
@@ -894,8 +943,18 @@ DrmHWInterface::_EventThreadMain()
 					static bool sReported = false;
 					if (!sReported) {
 						fprintf(stderr, "[drm] page flip failed "
-							"(%s); retrying\n", strerror(errno));
+							"(%s); retrying\n", strerror(flipErr));
 						sReported = true;
+					}
+					// Anything but EBUSY, again and again, means the
+					// flip itself is broken; fall back to pacing a
+					// SetCrtc instead of freezing on this frame.
+					if (flipErr != EBUSY && ++fFlipFailures >= 8) {
+						fVblankPacedFlip = true;
+						fprintf(stderr, "[drm] page flip unusable "
+							"(%s); pacing SetCrtc on vblank "
+							"(tearing possible)\n",
+							strerror(flipErr));
 					}
 				}
 			}

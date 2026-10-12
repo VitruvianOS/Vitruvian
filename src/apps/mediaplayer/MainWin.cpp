@@ -64,7 +64,6 @@ MainWin::MainWin(BRect frame)
 	fControllerView(NULL),
 	fLocationView(NULL),
 	fPlaylistWindow(NULL),
-	fInfoWin(NULL),
 	fMenuBar(NULL),
 	fOpenPanel(NULL),
 	fPositionRunner(NULL),
@@ -102,7 +101,7 @@ MainWin::~MainWin()
 {
 	delete fPositionRunner;
 	delete fOpenPanel;
-	delete fInfoWin;
+	_QuitInfoWin();
 	delete fPlaylistWindow;
 	delete fController;
 	delete fPlaylist;
@@ -569,13 +568,37 @@ MainWin::_ShowInfo()
 	PlaylistItem* item = fPlaylist->CurrentItem();
 	if (item == NULL)
 		return;
-	if (fInfoWin != NULL && !fInfoWin->IsHidden()) {
-		fInfoWin->Activate();
+	// A closed info window frees itself, so only the messenger may be
+	// trusted to tell whether one is still alive.
+	if (fInfoMessenger.LockTarget()) {
+		BLooper* looper = NULL;
+		fInfoMessenger.Target(&looper);
+		BWindow* window = dynamic_cast<BWindow*>(looper);
+		if (window != NULL)
+			window->Activate();
+		if (looper != NULL)
+			looper->Unlock();
 		return;
 	}
-	delete fInfoWin;
 	BRect frame(100, 100, 460, 360);
-	fInfoWin = new InfoWin(frame, fController, item->Ref());
+	fInfoMessenger = BMessenger(new InfoWin(frame, fController, item->Ref()));
+}
+
+
+void
+MainWin::_QuitInfoWin()
+{
+	// Quit() deletes the window; deleting it here would race its thread.
+	if (fInfoMessenger.LockTarget()) {
+		BLooper* looper = NULL;
+		fInfoMessenger.Target(&looper);
+		BWindow* window = dynamic_cast<BWindow*>(looper);
+		if (window != NULL)
+			window->Quit();
+		else if (looper != NULL)
+			looper->Unlock();
+	}
+	fInfoMessenger = BMessenger();
 }
 
 

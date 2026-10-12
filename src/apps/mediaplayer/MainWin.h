@@ -8,6 +8,7 @@
 
 
 #include <Entry.h>
+#include <Messenger.h>
 #include <Rect.h>
 #include <Window.h>
 
@@ -64,6 +65,7 @@ private:
 			void				_SetAlwaysOnTop(bool on);
 			void				_SetLoop(bool on);
 			void				_ShowInfo();
+			void				_QuitInfoWin();
 			void				_Zoom(float factor);
 			void				_LoadSettings();
 			void				_SaveSettings();
@@ -76,7 +78,9 @@ private:
 			ControllerView*		fControllerView;
 			LocationStringView*	fLocationView;
 			PlaylistWindow*		fPlaylistWindow;
-			InfoWin*			fInfoWin;
+			// The info window deletes itself on close; the messenger
+			// reports when that happened instead of a raw pointer.
+			BMessenger			fInfoMessenger;
 			BMenuBar*			fMenuBar;
 			BFilePanel*			fOpenPanel;
 			BMessageRunner*		fPositionRunner;

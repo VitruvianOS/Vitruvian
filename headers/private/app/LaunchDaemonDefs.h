@@ -76,6 +76,9 @@ enum {
 	// janus_session -> supervisor when a child is reaped ("signature"
 	// string, "pid" int32): drops that row from the app registry.
 	B_JANUS_UNREGISTER_APP		= 'jnuA',
+	// janus_session -> supervisor after a supervised app_server relaunch
+	// became ready: replay the screen lock if one is active.
+	B_JANUS_APP_SERVER_RESTARTED	= 'jnar',
 };
 
 

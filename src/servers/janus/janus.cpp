@@ -1002,6 +1002,25 @@ handle_locker_died(BPrivate::KMessage& kmsg, uid_t sender_uid)
 }
 
 
+// A relaunched app_server comes up unlocked; replay the lock so the
+// display and janus's auth state agree again.
+static void
+handle_app_server_restarted(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	if (sender_uid != 0)
+		return;
+
+	if (!sScreenLocked)
+		return;
+
+	fprintf(stderr, "janus: app_server restarted while locked; re-locking\n");
+	// The locker survives a server death; launch_unlock_app() only
+	// relaunches it if it died too.
+	if (launch_unlock_app())
+		send_to_app_server(B_SESSION_LOCK, 2000000LL, (int32)sUnlockAppPid);
+}
+
+
 static void
 copy_attributes(int srcFd, int dstFd)
 {
@@ -1659,6 +1678,8 @@ launch_daemon_thread(void* /*data*/)
 					handle_unlock_auth(kmsg, mi.sender);
 			} else if (kmsg.What() == BPrivate::B_JANUS_LOCKER_DIED) {
 				handle_locker_died(kmsg, mi.sender);
+			} else if (kmsg.What() == BPrivate::B_JANUS_APP_SERVER_RESTARTED) {
+				handle_app_server_restarted(kmsg, mi.sender);
 			} else if (kmsg.What() == BPrivate::B_JANUS_SESSION_HELLO) {
 				handle_session_hello(kmsg, mi.sender_team);
 			} else if (kmsg.What() == BPrivate::B_JANUS_REGISTER_APP) {

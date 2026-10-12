@@ -52,20 +52,26 @@ struct KnownServer {
 	const char* name;
 	const char* signature;
 	bool        needs_drm;
+	bool        essential;
 };
 
 static const KnownServer kFanOutServers[] = {
-	{ "registrar",           B_REGISTRAR_SIGNATURE,                     false },
-	{ "app_server",          "application/x-vnd.Haiku-app_server",      true  },
-	{ "input_server",        "application/x-vnd.Be-input_server",       false },
-	{ "notification_server", "application/x-vnd.Haiku-notification_server", false },
-	{ "vos-polkit-agent",    "application/x-vnd.Vitruvian-polkit-agent", false },
-	{ "Deskbar",             "application/x-vnd.Be-TSKB",               false },
-	{ "Tracker",             "application/x-vnd.Be-TRAK",               false },
-	{ "vitruvian-login",     "application/x-vnd.Vitruvian-login",       false },
-	{ "FirstBootPrompt",     "application/x-vnd.Haiku-FirstBootPrompt", false },
-	{ NULL, NULL, false }
+	{ "registrar",           B_REGISTRAR_SIGNATURE,                     false, true  },
+	{ "app_server",          "application/x-vnd.Haiku-app_server",      true,  true  },
+	// Relaunching input_server mid-session strands the pointer: it cannot
+	// re-attach the cursor channel it inherited from app_server at login.
+	{ "input_server",        "application/x-vnd.Be-input_server",       false, false },
+	{ "notification_server", "application/x-vnd.Haiku-notification_server", false, true },
+	{ "vos-polkit-agent",    "application/x-vnd.Vitruvian-polkit-agent", false, false },
+	{ "Deskbar",             "application/x-vnd.Be-TSKB",               false, true  },
+	{ "Tracker",             "application/x-vnd.Be-TRAK",               false, false },
+	{ "vitruvian-login",     "application/x-vnd.Vitruvian-login",       false, false },
+	{ "FirstBootPrompt",     "application/x-vnd.Haiku-FirstBootPrompt", false, false },
+	{ NULL, NULL, false, false }
 };
+
+#define JANUS_FANOUT_COUNT \
+	((int)(sizeof(kFanOutServers) / sizeof(kFanOutServers[0])) - 1)
 
 
 static char  sUserName[64]       = "";
@@ -281,10 +287,14 @@ struct PendingLaunch {
 	port_id   reply_port;
 	int32     reply_token;
 	bigtime_t deadline;
+	bool      restarted;
 };
 
 #define JANUS_MAX_PENDING 8
 static PendingLaunch sPending[JANUS_MAX_PENDING];
+// Relaunches run on the daemon loop thread while the launch thread drains
+// readiness; sPending[] needs a lock now that two threads claim slots.
+static pthread_mutex_t sPendingLock = PTHREAD_MUTEX_INITIALIZER;
 static const bigtime_t kLaunchReadinessTimeoutUsec = 10 * 1000000LL;
 
 static port_id sLaunchPort = -1;
@@ -363,14 +373,18 @@ find_app_by_sig(const char* sig)
 static void unregister_app_with_supervisor(const char* signature, pid_t pid);
 
 
-static void
-invalidate_app_by_pid(pid_t pid)
+// Clears the row for pid and copies the server name out, so the reaper
+// can decide on a supervised restart before the row is reusable.
+static bool
+invalidate_app_by_pid(pid_t pid, char* nameOut, size_t nameSize)
 {
 	char signature[256] = "";
+	nameOut[0] = '\0';
 
 	pthread_mutex_lock(&sAppsLock);
 	for (int i = 0; i < sAppCount; i++) {
 		if (sApps[i].pid == pid) {
+			strlcpy(nameOut, sApps[i].name, nameSize);
 			strlcpy(signature, sApps[i].signature, sizeof(signature));
 			sApps[i].pid  = -1;
 			sApps[i].port = -1;
@@ -381,6 +395,7 @@ invalidate_app_by_pid(pid_t pid)
 
 	if (signature[0] != '\0')
 		unregister_app_with_supervisor(signature, pid);
+	return nameOut[0] != '\0';
 }
 
 
@@ -490,40 +505,23 @@ wait_for_server_ready(const char* name, int timeout_ms)
 }
 
 
-// Fork+exec with privilege drop; this process never runs anything as root.
 static void
-handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
+launch_reply(port_id replyPort, int32 replyToken, status_t error)
 {
-	// Not a public port: only our own fork()ed children learn its name, so
-	// accepting uid 0 here is the actual trust boundary.
-	if (sender_uid != 0) {
-		fprintf(stderr, "janus_session: B_LAUNCH_JOB rejected from uid=%u\n",
-			(unsigned)sender_uid);
-		BPrivate::KMessage reply(B_NOT_ALLOWED);
-		kmsg.SendReply(&reply);
+	if (replyPort < 0)
 		return;
-	}
+	BPrivate::KMessage reply(error);
+	reply.SendTo(replyPort, replyToken);
+}
 
-	const char* name = NULL;
-	if (kmsg.FindString("name", &name) != B_OK || name == NULL) {
-		BPrivate::KMessage reply(B_BAD_VALUE);
-		kmsg.SendReply(&reply);
-		return;
-	}
 
-	const KnownServer* ks = NULL;
-	for (int i = 0; kFanOutServers[i].name != NULL; i++) {
-		if (strcmp(kFanOutServers[i].name, name) == 0) {
-			ks = &kFanOutServers[i];
-			break;
-		}
-	}
-	if (ks == NULL) {
-		fprintf(stderr, "janus_session: unknown server: %s\n", name);
-		BPrivate::KMessage reply(B_NAME_NOT_FOUND);
-		kmsg.SendReply(&reply);
-		return;
-	}
+// Fork+exec with privilege drop; this process never runs anything as root.
+// replyPort < 0 marks a supervised relaunch: nobody waits on a reply.
+static void
+launch_fanout_server(const KnownServer* ks, port_id replyPort, int32 replyToken,
+	bool restarted)
+{
+	const char* name = ks->name;
 
 	char path[256];
 	snprintf(path, sizeof(path), "/system/servers/%s", name);
@@ -533,8 +531,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 			snprintf(path, sizeof(path), "/system/%s", name);
 			if (access(path, X_OK) != 0) {
 				fprintf(stderr, "janus_session: binary not found: %s\n", name);
-				BPrivate::KMessage reply(B_ERROR);
-				kmsg.SendReply(&reply);
+				launch_reply(replyPort, replyToken, B_ERROR);
 				return;
 			}
 		}
@@ -544,8 +541,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	int ngroups = 0;
 	if (!resolve_user_groups(&groups, &ngroups)) {
 		fprintf(stderr, "janus_session: cannot resolve groups for %s\n", sUserName);
-		BPrivate::KMessage reply(B_ERROR);
-		kmsg.SendReply(&reply);
+		launch_reply(replyPort, replyToken, B_ERROR);
 		return;
 	}
 
@@ -553,8 +549,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	if (pipe(fds) != 0) {
 		perror("janus_session: pipe");
 		free(groups);
-		BPrivate::KMessage reply(B_ERROR);
-		kmsg.SendReply(&reply);
+		launch_reply(replyPort, replyToken, B_ERROR);
 		return;
 	}
 	fcntl(fds[0], F_SETFD, FD_CLOEXEC);
@@ -565,8 +560,7 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 		close(fds[0]);
 		close(fds[1]);
 		free(groups);
-		BPrivate::KMessage reply(B_ERROR);
-		kmsg.SendReply(&reply);
+		launch_reply(replyPort, replyToken, B_ERROR);
 		return;
 	}
 
@@ -694,14 +688,11 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	if (app_idx < 0) {
 		fprintf(stderr, "janus_session: sApps[] full\n");
 		close(fds[0]);
-		BPrivate::KMessage reply(B_NO_MEMORY);
-		kmsg.SendReply(&reply);
+		launch_reply(replyPort, replyToken, B_NO_MEMORY);
 		return;
 	}
 
-	port_id replyPort  = kmsg.ReplyPort();
-	int32   replyToken = kmsg.ReplyToken();
-
+	pthread_mutex_lock(&sPendingLock);
 	for (int i = 0; i < JANUS_MAX_PENDING; i++) {
 		if (!sPending[i].active) {
 			sPending[i].active      = true;
@@ -711,23 +702,67 @@ handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
 			sPending[i].reply_port  = replyPort;
 			sPending[i].reply_token = replyToken;
 			sPending[i].deadline    = system_time() + kLaunchReadinessTimeoutUsec;
+			sPending[i].restarted   = restarted;
+			pthread_mutex_unlock(&sPendingLock);
 			printf("janus_session: launched %s pid=%d, awaiting readiness\n",
 				name, (int)pid);
 			return;
 		}
 	}
+	pthread_mutex_unlock(&sPendingLock);
 
 	fprintf(stderr, "janus_session: sPending[] full for %s\n", name);
 	close(fds[0]);
-	BPrivate::KMessage reply(B_OK);
-	reply.AddInt32("pid", (int32)pid);
-	reply.SendTo(replyPort, replyToken);
+	if (replyPort >= 0) {
+		BPrivate::KMessage reply(B_OK);
+		reply.AddInt32("pid", (int32)pid);
+		reply.SendTo(replyPort, replyToken);
+	}
+}
+
+
+static void
+handle_launch_job(BPrivate::KMessage& kmsg, uid_t sender_uid)
+{
+	// Not a public port: only our own fork()ed children learn its name, so
+	// accepting uid 0 here is the actual trust boundary.
+	if (sender_uid != 0) {
+		fprintf(stderr, "janus_session: B_LAUNCH_JOB rejected from uid=%u\n",
+			(unsigned)sender_uid);
+		BPrivate::KMessage reply(B_NOT_ALLOWED);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	const char* name = NULL;
+	if (kmsg.FindString("name", &name) != B_OK || name == NULL) {
+		BPrivate::KMessage reply(B_BAD_VALUE);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	const KnownServer* ks = NULL;
+	for (int i = 0; kFanOutServers[i].name != NULL; i++) {
+		if (strcmp(kFanOutServers[i].name, name) == 0) {
+			ks = &kFanOutServers[i];
+			break;
+		}
+	}
+	if (ks == NULL) {
+		fprintf(stderr, "janus_session: unknown server: %s\n", name);
+		BPrivate::KMessage reply(B_NAME_NOT_FOUND);
+		kmsg.SendReply(&reply);
+		return;
+	}
+
+	launch_fanout_server(ks, kmsg.ReplyPort(), kmsg.ReplyToken(), false);
 }
 
 
 static void
 check_pending_launches()
 {
+	pthread_mutex_lock(&sPendingLock);
 	for (int i = 0; i < JANUS_MAX_PENDING; i++) {
 		if (!sPending[i].active)
 			continue;
@@ -782,6 +817,15 @@ check_pending_launches()
 
 			register_app_with_supervisor(sApps[idx].name, sApps[idx].signature,
 				sApps[idx].pid, port);
+
+			if (sPending[i].restarted
+					&& strcmp(sApps[idx].name, "app_server") == 0) {
+				port_id supervisorPort = find_port(B_LAUNCH_DAEMON_PORT_NAME);
+				if (supervisorPort >= 0) {
+					BPrivate::KMessage msg(BPrivate::B_JANUS_APP_SERVER_RESTARTED);
+					msg.SendTo(supervisorPort, -1);
+				}
+			}
 		}
 
 		BPrivate::KMessage reply(port >= 0 ? B_OK : B_ERROR);
@@ -791,6 +835,7 @@ check_pending_launches()
 
 		sPending[i].active = false;
 	}
+	pthread_mutex_unlock(&sPendingLock);
 }
 
 
@@ -1582,6 +1627,133 @@ process_seat_request()
 }
 
 
+// Supervised restarts: an essential fan-out server is relaunched on
+// death, kRestartBudget times per name per kRestartWindowUsec, then
+// given up on.
+static const bigtime_t kRestartDelayUsec  = 1 * 1000000LL;
+static const bigtime_t kRestartWindowUsec = 60 * 1000000LL;
+static const int       kRestartBudget     = 3;
+
+static bigtime_t sRestartDue[JANUS_FANOUT_COUNT];
+static int       sRestartAttempts[JANUS_FANOUT_COUNT];
+static bigtime_t sRestartWindow[JANUS_FANOUT_COUNT];
+
+
+// comm is capped at 15 chars; a longer fan-out name still matches its
+// truncated form.
+static bool
+comm_matches(const char* comm, const char* name)
+{
+	size_t len = strlen(name);
+	if (len > 15)
+		len = 15;
+	if (strncmp(comm, name, len) != 0)
+		return false;
+	return comm[len] == '\0' || comm[len] == '\n';
+}
+
+
+// True when some process's /proc/<pid>/comm matches name; used to avoid
+// double-launching a server somebody else already revived.
+static bool
+process_running(const char* name)
+{
+	DIR* dir = opendir("/proc");
+	if (dir == NULL)
+		return false;
+
+	bool found = false;
+	struct dirent* de;
+	while (!found && (de = readdir(dir)) != NULL) {
+		// Pids only; also keeps the path below in bounds.
+		if (de->d_name[0] < '1' || de->d_name[0] > '9'
+				|| strlen(de->d_name) > 10)
+			continue;
+		char path[64];
+		snprintf(path, sizeof(path), "/proc/%s/comm", de->d_name);
+		int fd = open(path, O_RDONLY | O_CLOEXEC);
+		if (fd < 0)
+			continue;
+		char comm[32] = "";
+		ssize_t n = read(fd, comm, sizeof(comm) - 1);
+		close(fd);
+		if (n > 0) {
+			comm[n] = '\0';
+			found = comm_matches(comm, name);
+		}
+	}
+	closedir(dir);
+	return found;
+}
+
+
+static void
+schedule_restart(const char* name)
+{
+	if (sShuttingDown)
+		return;
+
+	for (int i = 0; kFanOutServers[i].name != NULL; i++) {
+		if (strcmp(kFanOutServers[i].name, name) != 0)
+			continue;
+		if (!kFanOutServers[i].essential)
+			return;
+
+		bigtime_t now = system_time();
+		if (sRestartWindow[i] == 0
+				|| now - sRestartWindow[i] > kRestartWindowUsec) {
+			sRestartWindow[i]  = now;
+			sRestartAttempts[i] = 0;
+		}
+		if (sRestartAttempts[i] >= kRestartBudget) {
+			fprintf(stderr, "janus_session: %s died %d times within "
+				"%" B_PRId64 " s; giving up\n", name, kRestartBudget,
+				kRestartWindowUsec / 1000000);
+			// A login without its window server is not a session: end
+			// it deliberately instead of limping headless.
+			if (strcmp(name, "app_server") == 0)
+				teardown_and_exit();
+			return;
+		}
+
+		sRestartAttempts[i]++;
+		sRestartDue[i] = now + kRestartDelayUsec;
+		printf("janus_session: %s died; restart %d/%d in %" B_PRId64 " s\n",
+			name, sRestartAttempts[i], kRestartBudget,
+			kRestartDelayUsec / 1000000);
+		return;
+	}
+}
+
+
+// Runs on the daemon loop thread, which owns the seat; the wait is spread
+// over its poll ticks so libseat stays responsive.
+static void
+process_restarts()
+{
+	if (sShuttingDown)
+		return;
+
+	bigtime_t now = system_time();
+	for (int i = 0; kFanOutServers[i].name != NULL; i++) {
+		if (sRestartDue[i] == 0 || now < sRestartDue[i])
+			continue;
+		sRestartDue[i] = 0;
+
+		// app_server relaunches input_server itself on a dead event
+		// stream; a user can restart the Deskbar by hand.
+		if (process_running(kFanOutServers[i].name)) {
+			printf("janus_session: %s is running again; no restart\n",
+				kFanOutServers[i].name);
+			continue;
+		}
+
+		printf("janus_session: restarting %s\n", kFanOutServers[i].name);
+		launch_fanout_server(&kFanOutServers[i], -1, -1, true);
+	}
+}
+
+
 static void
 daemon_loop()
 {
@@ -1622,10 +1794,14 @@ daemon_loop()
 		}
 
 		process_seat_request();
+		process_restarts();
 
 		pid_t reaped;
-		while ((reaped = waitpid(-1, NULL, WNOHANG)) > 0)
-			invalidate_app_by_pid(reaped);
+		char name[64];
+		while ((reaped = waitpid(-1, NULL, WNOHANG)) > 0) {
+			if (invalidate_app_by_pid(reaped, name, sizeof(name)))
+				schedule_restart(name);
+		}
 	}
 
 	pthread_mutex_lock(&sSeatReqLock);

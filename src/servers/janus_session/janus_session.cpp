@@ -58,6 +58,8 @@ struct KnownServer {
 };
 
 static const KnownServer kFanOutServers[] = {
+	// A relaunched registrar keeps no roster: live apps never re-register
+	// with it, so only future launches show up until they restart.
 	{ "registrar",           B_REGISTRAR_SIGNATURE,                     false, true  },
 	{ "app_server",          "application/x-vnd.Haiku-app_server",      true,  true  },
 	// Relaunching input_server mid-session strands the pointer: it cannot

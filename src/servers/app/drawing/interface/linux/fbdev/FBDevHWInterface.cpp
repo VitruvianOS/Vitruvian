@@ -7,6 +7,7 @@
 
 #include "FBDevBuffer.h"
 #include "FBDevFormat.h"
+#include "FBDevMode.h"
 #include "IntRect.h"
 #include "MallocBuffer.h"
 
@@ -82,16 +83,23 @@ FBDevHWInterface::FBDevHWInterface()
 	fDisplayMode.space = space;
 
 	// FB_ACTIVATE_TEST is a dry run: a driver that cannot change modes
-	// rejects it; the panel is never touched either way.
-	struct fb_var_screeninfo probe = fVInfo;
-	probe.activate = FB_ACTIVATE_TEST;
-	fModeSetSupported = ioctl(fFrameBuffer, FBIOPUT_VSCREENINFO, &probe) == 0;
+	// rejects it. Fixed-mode firmware framebuffers have no fb_check_var
+	// and answer 0 after copying the current var over the request, so
+	// probe with a changed field and treat an unchanged answer as the
+	// refusal it is.
+	struct fb_var_screeninfo probe;
+	fbdev_prepare_mode_probe(probe, fVInfo);
+	fModeSetSupported = fbdev_mode_probe_supported(
+		ioctl(fFrameBuffer, FBIOPUT_VSCREENINFO, &probe) == 0,
+		probe, fVInfo);
+	// The probe unblanks as a side effect, which is also what we want
+	// once the desktop is coming up.
 	fBlankSupported = ioctl(fFrameBuffer, FBIOBLANK, FB_BLANK_UNBLANK) == 0;
 	fprintf(stderr, "FBDevHWInterface: fb_set_var %s, blank %s\n",
 		fModeSetSupported ? "supported" : "rejected (fixed mode)",
 		fBlankSupported ? "supported" : "rejected");
 
-	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
+	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo);
 	if (fFrontBuffer == NULL || fFrontBuffer->InitCheck() != B_OK) {
 		fprintf(stderr, "FBDevHWInterface: framebuffer mmap failed\n");
 		delete fFrontBuffer;
@@ -244,9 +252,10 @@ FBDevHWInterface::SetMode(const display_mode& mode)
 		return B_ERROR;
 
 	if (!fModeSetSupported) {
-		// Fixed-mode panel: only the opened mode is real. Refuse the
-		// rest so the preflet shows its honest alert instead of a lie.
-		if (memcmp(&mode, &fDisplayMode, sizeof(mode)) == 0)
+		// Fixed-mode panel: only the opened mode is real. Compare
+		// timing, size and space, so an equal mode from the preflet
+		// with different flags or panning start is not refused.
+		if (fbdev_fixed_mode_equal(mode, fDisplayMode))
 			return B_OK;
 		return B_UNSUPPORTED;
 	}
@@ -312,6 +321,14 @@ FBDevHWInterface::SetMode(const display_mode& mode)
 		return B_ERROR;
 	}
 
+	// A driver that kept its own var answered 0 without programming
+	// anything; report that, not the old silent B_OK.
+	if (fbdev_mode_was_ignored(var, oldVInfo, readBack)) {
+		fprintf(stderr, "FBDevHWInterface: driver ignored "
+			"FBIOPUT_VSCREENINFO\n");
+		return B_UNSUPPORTED;
+	}
+
 	delete fMemBackBuffer;
 	fMemBackBuffer = NULL;
 	delete fFrontBuffer;
@@ -320,7 +337,13 @@ FBDevHWInterface::SetMode(const display_mode& mode)
 	fVInfo = readBack;
 	_AdoptVar(fVInfo);
 
-	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
+	// A different xres can move line_length; GetDeviceInfo and the
+	// smem_len guard read fInfo, so refresh it with the new var.
+	if (ioctl(fFrameBuffer, FBIOGET_FSCREENINFO, &fInfo) != 0)
+		fprintf(stderr, "FBDevHWInterface: FBIOGET_FSCREENINFO "
+			"failed: %m\n");
+
+	fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo);
 	if (fFrontBuffer == NULL || fFrontBuffer->InitCheck() != B_OK) {
 		// Remap died: put the old mode back rather than leave a dead
 		// mmap that SIGBUSes the next draw.
@@ -329,7 +352,10 @@ FBDevHWInterface::SetMode(const display_mode& mode)
 		ioctl(fFrameBuffer, FBIOPUT_VSCREENINFO, &oldVInfo);
 		fVInfo = oldVInfo;
 		_AdoptVar(fVInfo);
-		fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo, fInfo);
+		if (ioctl(fFrameBuffer, FBIOGET_FSCREENINFO, &fInfo) != 0)
+			fprintf(stderr, "FBDevHWInterface: "
+				"FBIOGET_FSCREENINFO failed: %m\n");
+		fFrontBuffer = new FBDevBuffer(fFrameBuffer, fVInfo);
 		if (fFrontBuffer == NULL || fFrontBuffer->InitCheck() != B_OK) {
 			delete fFrontBuffer;
 			fFrontBuffer = NULL;

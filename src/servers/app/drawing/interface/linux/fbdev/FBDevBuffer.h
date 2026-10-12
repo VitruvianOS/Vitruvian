@@ -22,8 +22,7 @@
 class FBDevBuffer : public RenderingBuffer {
 public:
 								FBDevBuffer(int fd,
-									struct fb_var_screeninfo vInfo,
-									struct fb_fix_screeninfo);
+									struct fb_var_screeninfo vInfo);
 	virtual						~FBDevBuffer();
 
 	virtual	status_t			InitCheck() const;

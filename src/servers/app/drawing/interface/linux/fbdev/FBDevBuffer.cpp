@@ -5,17 +5,24 @@
 
 #include "FBDevBuffer.h"
 
+#include <string.h>
+#include <sys/ioctl.h>
 #include <sys/mman.h>
 
 
-FBDevBuffer::FBDevBuffer(int fd, struct fb_var_screeninfo vInfo,
-	struct fb_fix_screeninfo finfo)
+FBDevBuffer::FBDevBuffer(int fd, struct fb_var_screeninfo vInfo)
 	:
 	fBuffer((uint8_t*)MAP_FAILED),
 	fSpace(B_RGB32)
 {
 	fVInfo = vInfo;
-	fInfo = finfo;
+	memset(&fInfo, 0, sizeof(fInfo));
+
+	// A mode change can move line_length, so the stride and the mmap
+	// size must come from the fix info as it is right now, not from
+	// whatever the caller last cached.
+	if (ioctl(fd, FBIOGET_FSCREENINFO, &fInfo) != 0)
+		memset(&fInfo, 0, sizeof(fInfo));
 
 	if (!fbdev_color_space(fVInfo.bits_per_pixel, &fSpace))
 		fSpace = B_RGB32;

@@ -45,6 +45,8 @@ extern "C" {
 #include <RegistrarDefs.h>
 #include <syscalls.h>
 
+#include "supervision_rules.h"
+
 
 // The login's own fan-out, direct children of this process. Excludes
 // mount_server, which the supervisor owns instead.
@@ -1512,33 +1514,51 @@ sig_handler(int)
 // cgroup membership, not parentage, pins a logind session open: a
 // user-started app reparents to init on logout but stays in this cgroup,
 // keeping the session (and user@<uid>.service) alive unless swept here too.
+static char sSessionCgroup[PATH_MAX] = "";
+
+
+// This login's cgroup as /proc prints it; "-" marks an unresolvable
+// environment, resolved once and never retried.
+static void
+resolve_session_cgroup()
+{
+	if (sSessionCgroup[0] != '\0')
+		return;
+
+	char line[PATH_MAX];
+	FILE* f = fopen("/proc/self/cgroup", "r");
+	if (f != NULL) {
+		while (fgets(line, sizeof(line), f) != NULL) {
+			if (strncmp(line, "0::", 3) != 0)
+				continue;
+			strlcpy(sSessionCgroup, line + 3, sizeof(sSessionCgroup));
+			size_t len = strlen(sSessionCgroup);
+			while (len > 0 && (sSessionCgroup[len - 1] == '\n'
+					|| sSessionCgroup[len - 1] == '\r'))
+				sSessionCgroup[--len] = '\0';
+			break;
+		}
+		fclose(f);
+	}
+	if (sSessionCgroup[0] == '\0')
+		strlcpy(sSessionCgroup, "-", sizeof(sSessionCgroup));
+}
+
+
 static void
 kill_session_cgroup()
 {
-	char line[PATH_MAX];
-	FILE* f = fopen("/proc/self/cgroup", "r");
-	if (f == NULL)
-		return;
-	char relative[PATH_MAX] = "";
-	while (fgets(line, sizeof(line), f) != NULL) {
-		if (strncmp(line, "0::", 3) != 0)
-			continue;
-		strlcpy(relative, line + 3, sizeof(relative));
-		size_t len = strlen(relative);
-		while (len > 0 && (relative[len - 1] == '\n' || relative[len - 1] == '\r'))
-			relative[--len] = '\0';
-		break;
-	}
-	fclose(f);
-	if (relative[0] != '/')
+	resolve_session_cgroup();
+	if (sSessionCgroup[0] != '/')
 		return;
 
 	char procsPath[PATH_MAX + 64];
 	if (snprintf(procsPath, sizeof(procsPath), "/sys/fs/cgroup%s/cgroup.procs",
-			relative) >= (int)sizeof(procsPath)) {
+			sSessionCgroup) >= (int)sizeof(procsPath)) {
 		return;
 	}
 
+	char line[PATH_MAX];
 	pid_t self = getpid();
 	for (int round = 0; round < 2; round++) {
 		int sig = round == 0 ? SIGTERM : SIGKILL;
@@ -1639,25 +1659,71 @@ static int       sRestartAttempts[JANUS_FANOUT_COUNT];
 static bigtime_t sRestartWindow[JANUS_FANOUT_COUNT];
 
 
-// comm is capped at 15 chars; a longer fan-out name still matches its
-// truncated form.
+// /proc/<pid>/cgroup is world-readable; membership beats a bare uid here
+// because two logins can share one uid.
 static bool
-comm_matches(const char* comm, const char* name)
+process_in_session(const char* pidName)
 {
-	size_t len = strlen(name);
-	if (len > 15)
-		len = 15;
-	if (strncmp(comm, name, len) != 0)
+	char path[64];
+	snprintf(path, sizeof(path), "/proc/%s/cgroup", pidName);
+	int fd = open(path, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
 		return false;
-	return comm[len] == '\0' || comm[len] == '\n';
+
+	char buf[512];
+	ssize_t n = read(fd, buf, sizeof(buf) - 1);
+	close(fd);
+	if (n <= 0)
+		return false;
+	buf[n] = '\0';
+
+	char* line = buf;
+	while (*line != '\0') {
+		char* nl = strchr(line, '\n');
+		if (nl != NULL)
+			*nl = '\0';
+		if (strncmp(line, "0::", 3) == 0)
+			return cgroup_in_session(line + 3, sSessionCgroup);
+		if (nl == NULL)
+			break;
+		line = nl + 1;
+	}
+	return false;
 }
 
 
-// True when some process's /proc/<pid>/comm matches name; used to avoid
+// Fallback when the cgroup cannot be resolved: uid at least separates
+// concurrent logins of different users.
+static bool
+process_is_session_user(const char* pidName)
+{
+	char path[64];
+	snprintf(path, sizeof(path), "/proc/%s/status", pidName);
+	int fd = open(path, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+		return false;
+
+	char buf[1024];
+	ssize_t n = read(fd, buf, sizeof(buf) - 1);
+	close(fd);
+	if (n <= 0)
+		return false;
+	buf[n] = '\0';
+
+	const char* field = strstr(buf, "Uid:");
+	if (field == NULL)
+		return false;
+	return (uid_t)strtoul(field + 4, NULL, 10) == sUserUid;
+}
+
+
+// True when a process of this login's own carries name; used to avoid
 // double-launching a server somebody else already revived.
 static bool
 process_running(const char* name)
 {
+	resolve_session_cgroup();
+
 	DIR* dir = opendir("/proc");
 	if (dir == NULL)
 		return false;
@@ -1677,10 +1743,16 @@ process_running(const char* name)
 		char comm[32] = "";
 		ssize_t n = read(fd, comm, sizeof(comm) - 1);
 		close(fd);
-		if (n > 0) {
-			comm[n] = '\0';
-			found = comm_matches(comm, name);
-		}
+		if (n <= 0)
+			continue;
+		comm[n] = '\0';
+		if (!comm_matches(comm, name))
+			continue;
+		// Another login's server with the same comm must not count
+		// against this one.
+		found = sSessionCgroup[0] == '-'
+			? process_is_session_user(de->d_name)
+			: process_in_session(de->d_name);
 	}
 	closedir(dir);
 	return found;

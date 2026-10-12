@@ -1,0 +1,970 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
+
+#include "CortexGraphView.h"
+
+#include <InterfaceDefs.h>
+#include <Menu.h>
+#include <MenuItem.h>
+#include <Message.h>
+#include <PopUpMenu.h>
+#include <Rect.h>
+#include <Window.h>
+
+#include <stdio.h>
+#include <string.h>
+
+#include "CortexWindow.h"
+
+
+static const float kNodeWidth = 172.0f;
+static const float kTitleHeight = 28.0f;
+static const float kPinRow = 16.0f;
+static const float kPinSize = 8.0f;
+static const float kColumnWidth = 240.0f;
+static const float kMargin = 24.0f;
+
+
+static rgb_color
+_PinColor(cortex_pin_kind kind)
+{
+	rgb_color color = { 128, 128, 128, 255 };
+	switch (kind) {
+		case kCortexPinAudio:
+			color = (rgb_color){ 70, 160, 70, 255 };
+			break;
+		case kCortexPinVideo:
+			color = (rgb_color){ 80, 120, 220, 255 };
+			break;
+		case kCortexPinMidi:
+			color = (rgb_color){ 200, 140, 40, 255 };
+			break;
+		case kCortexPinData:
+			color = (rgb_color){ 170, 80, 170, 255 };
+			break;
+		default:
+			break;
+	}
+	return color;
+}
+
+
+static rgb_color
+_LinkColor(cortex_link_state state)
+{
+	rgb_color color = { 90, 170, 90, 255 };
+	switch (state) {
+		case kCortexLinkNegotiating:
+			color = (rgb_color){ 210, 190, 60, 255 };
+			break;
+		case kCortexLinkError:
+			color = (rgb_color){ 210, 60, 60, 255 };
+			break;
+		case kCortexLinkPartial:
+			color = (rgb_color){ 220, 140, 40, 255 };
+			break;
+		case kCortexLinkRouting:
+			color = (rgb_color){ 100, 140, 200, 255 };
+			break;
+		default:
+			break;
+	}
+	return color;
+}
+
+
+static rgb_color
+_NodeTitleColor(cortex_node_kind kind)
+{
+	rgb_color color = { 220, 220, 220, 255 };
+	switch (kind) {
+		case kCortexNodeOwn:
+			color = (rgb_color){ 205, 235, 205, 255 };
+			break;
+		case kCortexNodeDevice:
+			color = (rgb_color){ 205, 220, 240, 255 };
+			break;
+		case kCortexNodeStream:
+			color = (rgb_color){ 240, 230, 200, 255 };
+			break;
+		default:
+			break;
+	}
+	return color;
+}
+
+
+const char*
+CortexKindLabel(cortex_node_kind kind)
+{
+	switch (kind) {
+		case kCortexNodeOwn:
+			return "Unit";
+		case kCortexNodeDevice:
+			return "Device";
+		case kCortexNodeStream:
+			return "Stream";
+		default:
+			return "Foreign";
+	}
+}
+
+
+static cortex_pin_kind
+_PinKindFromTypes(media_type_mask types)
+{
+	if ((types & B_MEDIA_TYPE_BIT(B_MEDIA_RAW_AUDIO)) != 0)
+		return kCortexPinAudio;
+	if ((types & B_MEDIA_TYPE_BIT(B_MEDIA_RAW_VIDEO)) != 0)
+		return kCortexPinVideo;
+	if ((types & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) != 0)
+		return kCortexPinMidi;
+	if ((types & B_MEDIA_TYPE_BIT(B_MEDIA_PARAMETERS)) != 0)
+		return kCortexPinData;
+	return kCortexPinUnknown;
+}
+
+
+static cortex_pin_kind
+_PinKindFromMediaClass(const BString& mediaClass)
+{
+	if (mediaClass.FindFirst("Video") >= 0)
+		return kCortexPinVideo;
+	if (mediaClass.FindFirst("Midi") >= 0 || mediaClass.FindFirst("MIDI") >= 0)
+		return kCortexPinMidi;
+	if (mediaClass.FindFirst("Dsp") >= 0)
+		return kCortexPinData;
+	return kCortexPinAudio;
+}
+
+
+static BString
+_FormatText(const BMediaFormat& format)
+{
+	BString text;
+	if (format.Type() == B_MEDIA_RAW_AUDIO) {
+		text.SetToFormat("%gHz %uch",
+			(double)format.format.u.raw_audio.frame_rate,
+			format.format.u.raw_audio.channel_count);
+	} else if (format.Type() == B_MEDIA_RAW_VIDEO) {
+		text.SetToFormat("%lux%lu",
+			(unsigned long)format.format.u.raw_video.width,
+			(unsigned long)format.format.u.raw_video.height);
+	} else if (format.Type() == B_MEDIA_NO_TYPE)
+		text.SetTo("none");
+	else
+		text.SetTo("typed");
+	return text;
+}
+
+
+BRect
+CortexNode::Frame() const
+{
+	float rows = pins.CountItems();
+	if (rows < 1)
+		rows = 1;
+	float height = kTitleHeight + rows * kPinRow + 10.0f;
+	return BRect(origin.x, origin.y, origin.x + kNodeWidth - 1.0f,
+		origin.y + height - 1.0f);
+}
+
+
+int32
+CortexNode::CountPins(bool outputs) const
+{
+	int32 count = 0;
+	for (int32 i = 0; i < pins.CountItems(); i++) {
+		if (pins.ItemAt(i)->isOutput == outputs)
+			count++;
+	}
+	return count;
+}
+
+
+CortexModel::CortexModel()
+	:
+	fNodes(true),
+	fLinks(true),
+	fOriginKeys(true),
+	fOriginValues(true)
+{
+}
+
+
+CortexModel::~CortexModel()
+{
+}
+
+
+status_t
+CortexModel::Rebuild(BObjectList<BMediaClient, true>* ownClients,
+	const void* foreignLinks)
+{
+	fNodes.MakeEmpty();
+	fLinks.MakeEmpty();
+
+	BMediaGraph* graph = BMediaGraph::Instance();
+	if (graph == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	if (ownClients != NULL) {
+		for (int32 i = 0; i < ownClients->CountItems(); i++) {
+			BMediaClient* client = ownClients->ItemAt(i);
+			if (client == NULL)
+				continue;
+
+			CortexNode* node = new(std::nothrow) CortexNode();
+			if (node == NULL)
+				continue;
+
+			node->kind = kCortexNodeOwn;
+			node->id = client->Id();
+			node->name.SetTo(client->Name());
+			node->mediaClass.SetTo("in-process client");
+			node->ownClient = client;
+			node->hasVolume = false;
+			node->volume = 0.0f;
+			node->muted = false;
+			node->defaultRole = 0;
+			node->hasProfiles = false;
+			node->activeProfile = -1;
+			node->hasPorts = false;
+			node->activePortId = -1;
+			node->peak = 0.0f;
+			node->metered = false;
+			node->isSink = false;
+			node->isSource = false;
+			node->description.SetTo("");
+
+			for (int32 p = 0; p < client->CountOutputs(); p++) {
+				BMediaOutput* output = client->OutputAt(p);
+				if (output == NULL)
+					continue;
+				CortexPin* pin = new(std::nothrow) CortexPin();
+				if (pin == NULL)
+					continue;
+				pin->name.SetTo(output->Name() != NULL
+					? output->Name() : "out");
+				pin->isOutput = true;
+				pin->kind = _PinKindFromTypes(output->AcceptedTypes());
+				pin->output = output;
+				pin->input = NULL;
+				pin->foreignPortId = 0;
+				pin->foreignNodeId = 0;
+				pin->connected = output->IsConnected();
+				if (pin->connected)
+					pin->formatText = _FormatText(output->Format());
+				node->pins.AddItem(pin);
+			}
+
+			for (int32 p = 0; p < client->CountInputs(); p++) {
+				BMediaInput* input = client->InputAt(p);
+				if (input == NULL)
+					continue;
+				CortexPin* pin = new(std::nothrow) CortexPin();
+				if (pin == NULL)
+					continue;
+				pin->name.SetTo(input->Name() != NULL
+					? input->Name() : "in");
+				pin->isOutput = false;
+				pin->kind = _PinKindFromTypes(input->AcceptedTypes());
+				pin->input = input;
+				pin->output = NULL;
+				pin->foreignPortId = 0;
+				pin->foreignNodeId = 0;
+				pin->connected = input->IsConnected();
+				if (pin->connected)
+					pin->formatText = _FormatText(input->Format());
+				node->pins.AddItem(pin);
+			}
+
+			BPoint origin;
+			if (LookupOrigin(node->id, node->kind, &origin))
+				node->origin = origin;
+			fNodes.AddItem(node);
+		}
+	}
+
+	media_client_id defaultOut = 0;
+	media_client_id defaultIn = 0;
+	graph->GetDefaultAudioOutput(&defaultOut);
+	graph->GetDefaultAudioInput(&defaultIn);
+
+	BObjectList<BMediaGraph::ForeignNode, true> foreignNodes;
+	graph->GetForeignNodes(&foreignNodes);
+
+	BObjectList<BMediaGraph::StreamInfo, true> streams;
+	graph->GetStreams(&streams);
+
+	for (int32 i = 0; i < foreignNodes.CountItems(); i++) {
+		BMediaGraph::ForeignNode* foreign = foreignNodes.ItemAt(i);
+		if (foreign == NULL)
+			continue;
+
+		CortexNode* node = new(std::nothrow) CortexNode();
+		if (node == NULL)
+			continue;
+
+		node->id = (media_client_id)foreign->id;
+		node->name.SetTo(foreign->name.Length() > 0
+			? foreign->name.String() : foreign->description.String());
+		node->description.SetTo(foreign->description);
+		node->mediaClass.SetTo(foreign->mediaClass);
+		node->ownClient = NULL;
+		node->isSink = false;
+		node->isSource = false;
+		node->hasVolume = false;
+		node->volume = 0.0f;
+		node->muted = false;
+		node->defaultRole = 0;
+		node->hasProfiles = false;
+		node->activeProfile = -1;
+		node->hasPorts = false;
+		node->activePortId = -1;
+		node->peak = 0.0f;
+		node->metered = false;
+
+		BMessage info;
+		bool isDevice = graph->GetClientInfo(node->id, &info) == B_OK;
+		if (isDevice) {
+			node->kind = kCortexNodeDevice;
+			info.FindBool("is.sink", &node->isSink);
+			info.FindBool("is.source", &node->isSource);
+			BString name;
+			if (info.FindString("name", &name) == B_OK
+				&& name.Length() > 0)
+				node->name.SetTo(name);
+
+			float master = 0.0f;
+			if (graph->GetDeviceVolume(node->id, &master,
+					&node->muted) == B_OK) {
+				node->hasVolume = true;
+				node->volume = master;
+			}
+
+			if (node->id == defaultOut)
+				node->defaultRole = 1;
+			else if (node->id == defaultIn)
+				node->defaultRole = 2;
+
+			BObjectList<BMediaGraph::DeviceProfileInfo, true> profiles;
+			if (graph->GetDeviceProfiles(node->id, &profiles,
+					&node->activeProfile) == B_OK)
+				node->hasProfiles = true;
+
+			BObjectList<BMediaGraph::DevicePortInfo, true> ports;
+			if (graph->GetDevicePorts(node->id, &ports) == B_OK)
+				node->hasPorts = true;
+		} else {
+			node->kind = kCortexNodeStream;
+			for (int32 s = 0; s < streams.CountItems(); s++) {
+				BMediaGraph::StreamInfo* stream = streams.ItemAt(s);
+				if ((uint32)stream->id == (uint32)node->id) {
+					node->hasVolume = true;
+					node->volume = stream->volume;
+					node->muted = stream->mute;
+					break;
+				}
+			}
+			if (foreign->mediaClass.FindFirst("Video") >= 0)
+				node->kind = kCortexNodeForeign;
+		}
+
+		BObjectList<BMediaGraph::ForeignPort, true> ports;
+		graph->GetForeignPorts((uint32)node->id, &ports);
+		for (int32 p = 0; p < ports.CountItems(); p++) {
+			BMediaGraph::ForeignPort* port = ports.ItemAt(p);
+			if (port == NULL)
+				continue;
+			CortexPin* pin = new(std::nothrow) CortexPin();
+			if (pin == NULL)
+				continue;
+			pin->name.SetTo(port->name.Length() > 0
+				? port->name.String() : port->direction.String());
+			pin->isOutput = port->direction == "out";
+			pin->kind = port->format.Length() > 0
+				? _PinKindFromMediaClass(port->format)
+				: _PinKindFromMediaClass(node->mediaClass);
+			pin->input = NULL;
+			pin->output = NULL;
+			pin->foreignPortId = port->id;
+			pin->foreignNodeId = port->nodeId;
+			pin->formatText.SetTo(port->format);
+			pin->connected = false;
+			node->pins.AddItem(pin);
+		}
+
+		if (node->pins.CountItems() == 0) {
+			cortex_pin_kind kind = _PinKindFromMediaClass(node->mediaClass);
+			const bool outputs = !node->isSink;
+			CortexPin* pin = new(std::nothrow) CortexPin();
+			if (pin != NULL) {
+				pin->name.SetTo(outputs ? "out" : "in");
+				pin->isOutput = outputs;
+				pin->kind = kind;
+				pin->input = NULL;
+				pin->output = NULL;
+				pin->foreignPortId = 0;
+				pin->foreignNodeId = (uint32)node->id;
+				pin->connected = false;
+				node->pins.AddItem(pin);
+			}
+		}
+
+		BPoint origin;
+		if (LookupOrigin(node->id, node->kind, &origin))
+			node->origin = origin;
+		fNodes.AddItem(node);
+	}
+
+	for (int32 i = 0; i < streams.CountItems(); i++) {
+		BMediaGraph::StreamInfo* stream = streams.ItemAt(i);
+		if (stream == NULL || stream->deviceId == 0)
+			continue;
+		int32 outIndex = FindNode(kCortexNodeStream,
+			(media_client_id)stream->id);
+		int32 inIndex = FindNode(kCortexNodeDevice,
+			(media_client_id)stream->deviceId);
+		if (outIndex < 0 || inIndex < 0)
+			continue;
+		cortex_pin_kind kind = stream->mediaClass.FindFirst("Video") >= 0
+			? kCortexPinVideo : kCortexPinAudio;
+		_AddLink(outIndex, -1, inIndex, -1, kCortexLinkRouting, kind,
+			"routing");
+	}
+
+	for (int32 n = 0; n < fNodes.CountItems(); n++) {
+		CortexNode* node = fNodes.ItemAt(n);
+		if (node == NULL || node->ownClient == NULL)
+			continue;
+		for (int32 p = 0; p < node->pins.CountItems(); p++) {
+			CortexPin* pin = node->pins.ItemAt(p);
+			if (pin == NULL || !pin->isOutput || pin->output == NULL)
+				continue;
+			if (!pin->output->IsConnected() || pin->output->Binding() == NULL)
+				continue;
+			BMediaConnection* binding = pin->output->Binding();
+			BMediaClient* target = binding->Client();
+			int32 inNode = -1;
+			int32 inPin = -1;
+			for (int32 n2 = 0; n2 < fNodes.CountItems(); n2++) {
+				CortexNode* other = fNodes.ItemAt(n2);
+				if (other == NULL || other->ownClient != target)
+					continue;
+				for (int32 p2 = 0; p2 < other->pins.CountItems(); p2++) {
+					if (other->pins.ItemAt(p2)->input == binding) {
+						inNode = n2;
+						inPin = p2;
+						break;
+					}
+				}
+				if (inNode >= 0)
+					break;
+			}
+			if (inNode < 0)
+				continue;
+			cortex_link_state state = pin->output->Format().Type()
+					!= B_MEDIA_NO_TYPE
+				? kCortexLinkActive : kCortexLinkNegotiating;
+			_AddLink(n, p, inNode, inPin, state, pin->kind);
+		}
+	}
+
+	_Layout();
+	return B_OK;
+}
+
+
+void
+CortexModel::_Layout()
+{
+	int32 columns[kCortexNodeForeign + 1];
+	for (int32 i = 0; i <= kCortexNodeForeign; i++)
+		columns[i] = 0;
+
+	for (int32 i = 0; i < fNodes.CountItems(); i++) {
+		CortexNode* node = fNodes.ItemAt(i);
+		if (node == NULL)
+			continue;
+		int32 column = node->kind;
+		if (column < 0 || column > kCortexNodeForeign)
+			column = kCortexNodeForeign;
+		float x = kMargin + column * kColumnWidth;
+		float y = kMargin;
+		for (int32 c = 0; c < columns[column]; c++) {
+			CortexNode* earlier = NULL;
+			int32 seen = 0;
+			for (int32 j = 0; j < i; j++) {
+				CortexNode* candidate = fNodes.ItemAt(j);
+				if (candidate == NULL || (int32)candidate->kind != column)
+					continue;
+				if (seen == c) {
+					earlier = candidate;
+					break;
+				}
+				seen++;
+			}
+			if (earlier != NULL)
+				y = earlier->Frame().bottom + 20.0f;
+		}
+		if (!LookupOrigin(node->id, node->kind, NULL))
+			node->origin = BPoint(x, y);
+		columns[column]++;
+	}
+
+	for (int32 i = 0; i < fNodes.CountItems(); i++) {
+		CortexNode* node = fNodes.ItemAt(i);
+		if (node == NULL)
+			continue;
+		int32 row = 0;
+		int32 outRow = 0;
+		int32 inRow = 0;
+		for (int32 p = 0; p < node->pins.CountItems(); p++) {
+			CortexPin* pin = node->pins.ItemAt(p);
+			if (pin == NULL)
+				continue;
+			float y = node->origin.y + kTitleHeight + 8.0f
+				+ (pin->isOutput ? outRow : inRow) * kPinRow;
+			float x = pin->isOutput
+				? node->origin.x + kNodeWidth - 1.0f
+				: node->origin.x;
+			pin->position = BPoint(x, y);
+			if (pin->isOutput)
+				outRow++;
+			else
+				inRow++;
+			row++;
+		}
+	}
+}
+
+
+void
+CortexModel::_AddLink(int32 outNode, int32 outPin, int32 inNode, int32 inPin,
+	cortex_link_state state, cortex_pin_kind kind, const char* label)
+{
+	CortexLink* link = new(std::nothrow) CortexLink();
+	if (link == NULL)
+		return;
+	link->outputNode = outNode;
+	link->outputPin = outPin;
+	link->inputNode = inNode;
+	link->inputPin = inPin;
+	link->state = state;
+	link->kind = kind;
+	if (label != NULL)
+		link->label.SetTo(label);
+	fLinks.AddItem(link);
+}
+
+
+int32
+CortexModel::CountNodes() const
+{
+	return fNodes.CountItems();
+}
+
+
+CortexNode*
+CortexModel::NodeAt(int32 index) const
+{
+	return fNodes.ItemAt(index);
+}
+
+
+int32
+CortexModel::CountLinks() const
+{
+	return fLinks.CountItems();
+}
+
+
+CortexLink*
+CortexModel::LinkAt(int32 index) const
+{
+	return fLinks.ItemAt(index);
+}
+
+
+int32
+CortexModel::FindNode(cortex_node_kind kind, media_client_id id) const
+{
+	for (int32 i = 0; i < fNodes.CountItems(); i++) {
+		CortexNode* node = fNodes.ItemAt(i);
+		if (node != NULL && node->kind == kind && node->id == id)
+			return i;
+	}
+	return -1;
+}
+
+
+void
+CortexModel::RememberOrigin(media_client_id id, cortex_node_kind kind,
+	const BPoint& origin)
+{
+	BString key;
+	key.SetToFormat("%d:%ld", (int)kind, (long)id);
+	for (int32 i = 0; i < fOriginKeys.CountItems(); i++) {
+		if (*fOriginKeys.ItemAt(i) == key) {
+			*fOriginValues.ItemAt(i) = origin;
+			return;
+		}
+	}
+	BString* storedKey = new(std::nothrow) BString(key);
+	BPoint* storedValue = new(std::nothrow) BPoint(origin);
+	if (storedKey == NULL || storedValue == NULL) {
+		delete storedKey;
+		delete storedValue;
+		return;
+	}
+	fOriginKeys.AddItem(storedKey);
+	fOriginValues.AddItem(storedValue);
+}
+
+
+bool
+CortexModel::LookupOrigin(media_client_id id, cortex_node_kind kind,
+	BPoint* outOrigin) const
+{
+	BString key;
+	key.SetToFormat("%d:%ld", (int)kind, (long)id);
+	for (int32 i = 0; i < fOriginKeys.CountItems(); i++) {
+		if (*fOriginKeys.ItemAt(i) == key) {
+			if (outOrigin != NULL)
+				*outOrigin = *fOriginValues.ItemAt(i);
+			return true;
+		}
+	}
+	return false;
+}
+
+
+CortexGraphView::CortexGraphView(BRect frame)
+	:
+	BView(frame, "cortex graph", B_FOLLOW_ALL, B_WILL_DRAW | B_PULSE_NEEDED),
+	fModel(NULL),
+	fDragNode(-1),
+	fDragOffset(0, 0),
+	fDragging(false),
+	fLinkFromNode(-1),
+	fLinkFromPin(-1),
+	fTrackingLink(false),
+	fTrackPoint(0, 0)
+{
+}
+
+
+void
+CortexGraphView::SetModel(CortexModel* model)
+{
+	fModel = model;
+	Invalidate();
+}
+
+
+void
+CortexGraphView::AttachedToWindow()
+{
+	BView::AttachedToWindow();
+	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+}
+
+
+int32
+CortexGraphView::_NodeAt(BPoint where, BPoint* outOffset) const
+{
+	if (fModel == NULL)
+		return -1;
+	for (int32 i = fModel->CountNodes() - 1; i >= 0; i--) {
+		CortexNode* node = fModel->NodeAt(i);
+		if (node == NULL)
+			continue;
+		if (node->Frame().Contains(where)) {
+			if (outOffset != NULL)
+				*outOffset = where - node->origin;
+			return i;
+		}
+	}
+	return -1;
+}
+
+
+int32
+CortexGraphView::_PinAt(BPoint where, int32* outNode, int32* outPin) const
+{
+	if (fModel == NULL)
+		return -1;
+	for (int32 i = 0; i < fModel->CountNodes(); i++) {
+		CortexNode* node = fModel->NodeAt(i);
+		if (node == NULL)
+			continue;
+		for (int32 p = 0; p < node->pins.CountItems(); p++) {
+			CortexPin* pin = node->pins.ItemAt(p);
+			if (pin == NULL)
+				continue;
+			float dx = pin->position.x - where.x;
+			float dy = pin->position.y - where.y;
+			if (dx * dx + dy * dy <= kPinSize * kPinSize) {
+				if (outNode != NULL)
+					*outNode = i;
+				if (outPin != NULL)
+					*outPin = p;
+				return i;
+			}
+		}
+	}
+	return -1;
+}
+
+
+void
+CortexGraphView::Draw(BRect updateRect)
+{
+	if (fModel == NULL)
+		return;
+
+	for (int32 i = 0; i < fModel->CountLinks(); i++) {
+		CortexLink* link = fModel->LinkAt(i);
+		if (link == NULL)
+			continue;
+		CortexNode* outNode = fModel->NodeAt(link->outputNode);
+		CortexNode* inNode = fModel->NodeAt(link->inputNode);
+		if (outNode == NULL || inNode == NULL)
+			continue;
+
+		BPoint from;
+		BPoint to;
+		if (link->outputPin >= 0) {
+			CortexPin* pin = outNode->pins.ItemAt(link->outputPin);
+			from = pin != NULL ? pin->position : outNode->Frame().RightTop();
+		} else
+			from = BPoint(outNode->Frame().right, outNode->Frame().top + 16.0f);
+		if (link->inputPin >= 0) {
+			CortexPin* pin = inNode->pins.ItemAt(link->inputPin);
+			to = pin != NULL ? pin->position : inNode->Frame().LeftTop();
+		} else
+			to = BPoint(inNode->Frame().left, inNode->Frame().top + 16.0f);
+
+		rgb_color color = _LinkColor(link->state);
+		SetHighColor(color);
+		SetPenSize(link->state == kCortexLinkRouting ? 1.0f : 2.0f);
+		BPoint control1(from.x + (to.x - from.x) * 0.5f, from.y);
+		BPoint control2(from.x + (to.x - from.x) * 0.5f, to.y);
+		BPoint bezier[4] = { from, control1, control2, to };
+		StrokeBezier(bezier);
+	}
+
+	for (int32 i = 0; i < fModel->CountNodes(); i++) {
+		CortexNode* node = fModel->NodeAt(i);
+		if (node == NULL)
+			continue;
+
+		BRect frame = node->Frame();
+		if (!frame.Intersects(updateRect))
+			continue;
+
+		SetHighColor(255, 255, 255);
+		SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+		FillRect(frame, B_SOLID_LOW);
+		SetHighColor(0, 0, 0);
+		StrokeRect(frame);
+
+		BRect title = BRect(frame.left + 1.0f, frame.top + 1.0f,
+			frame.right - 1.0f, frame.top + kTitleHeight - 2.0f);
+		SetHighColor(_NodeTitleColor(node->kind));
+		FillRect(title);
+		SetHighColor(0, 0, 0);
+		StrokeRect(title);
+
+		char label[128];
+		snprintf(label, sizeof(label), "%s  [%s]", node->name.String(),
+			CortexKindLabel(node->kind));
+		DrawString(label, BPoint(frame.left + 6.0f, frame.top + 12.0f));
+
+		if (node->mediaClass.Length() > 0) {
+			char sub[96];
+			snprintf(sub, sizeof(sub), "%s", node->mediaClass.String());
+			DrawString(sub, BPoint(frame.left + 6.0f, frame.top + 24.0f));
+		}
+
+		if (node->defaultRole != 0) {
+			DrawString(node->defaultRole == 1 ? "default out" : "default in",
+				BPoint(frame.right - 72.0f, frame.top + 12.0f));
+		}
+
+		if (node->hasVolume) {
+			BRect bar(frame.left + 4.0f, frame.bottom - 8.0f,
+				frame.right - 4.0f, frame.bottom - 4.0f);
+			SetHighColor(230, 230, 230);
+			FillRect(bar);
+			BRect fill = bar;
+			fill.right = fill.left + (bar.Width() - 1.0f)
+				* (node->muted ? 0.0f : node->volume);
+			SetHighColor(node->muted ? (rgb_color){ 180, 80, 80, 255 }
+				: (rgb_color){ 70, 140, 70, 255 });
+			FillRect(fill);
+		}
+
+		if (node->metered) {
+			BRect meter(frame.left + 4.0f, frame.bottom - 14.0f,
+				frame.right - 4.0f, frame.bottom - 10.0f);
+			SetHighColor(40, 40, 40);
+			FillRect(meter);
+			float level = node->peak;
+			if (level > 1.0f)
+				level = 1.0f;
+			if (level < 0.0f)
+				level = 0.0f;
+			BRect levelRect = meter;
+			levelRect.right = levelRect.left + (meter.Width() - 1.0f) * level;
+			SetHighColor(90, 200, 90);
+			FillRect(levelRect);
+		}
+
+		for (int32 p = 0; p < node->pins.CountItems(); p++) {
+			CortexPin* pin = node->pins.ItemAt(p);
+			if (pin == NULL)
+				continue;
+			BRect pinRect(pin->position.x - kPinSize * 0.5f,
+				pin->position.y - kPinSize * 0.5f,
+				pin->position.x + kPinSize * 0.5f,
+				pin->position.y + kPinSize * 0.5f);
+			SetHighColor(_PinColor(pin->kind));
+			FillRect(pinRect);
+			SetHighColor(pin->connected ? (rgb_color){ 0, 0, 0, 255 }
+				: (rgb_color){ 150, 150, 150, 255 });
+			StrokeRect(pinRect);
+
+			if (pin->formatText.Length() > 0 && pin->connected) {
+				DrawString(pin->formatText.String(),
+					BPoint(pin->position.x + (pin->isOutput ? -64.0f : 6.0f),
+						pin->position.y + 12.0f));
+			}
+		}
+	}
+
+	if (fTrackingLink && fModel != NULL) {
+		CortexNode* node = fModel->NodeAt(fLinkFromNode);
+		CortexPin* pin = node != NULL
+			? node->pins.ItemAt(fLinkFromPin) : NULL;
+		if (pin != NULL) {
+			SetHighColor(80, 80, 80);
+			StrokeLine(pin->position, fTrackPoint);
+		}
+	}
+}
+
+
+void
+CortexGraphView::MouseDown(BPoint where)
+{
+	if (fModel == NULL)
+		return;
+
+	BMessage* message = Window()->CurrentMessage();
+	int32 buttons = 0;
+	if (message != NULL)
+		message->FindInt32("buttons", &buttons);
+
+	int32 pinNode = -1;
+	int32 pinIndex = -1;
+	if (_PinAt(where, &pinNode, &pinIndex) >= 0) {
+		if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+			_ShowNodeMenu(pinNode, where);
+			return;
+		}
+		fLinkFromNode = pinNode;
+		fLinkFromPin = pinIndex;
+		fTrackingLink = true;
+		fTrackPoint = where;
+		SetMouseEventMask(B_PRIMARY_MOUSE_BUTTON | B_SECONDARY_MOUSE_BUTTON);
+		return;
+	}
+
+	BPoint offset;
+	int32 nodeIndex = _NodeAt(where, &offset);
+	if (nodeIndex < 0)
+		return;
+
+	if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+		_ShowNodeMenu(nodeIndex, where);
+		return;
+	}
+
+	fDragNode = nodeIndex;
+	fDragOffset = offset;
+	fDragging = true;
+	SetMouseEventMask(B_PRIMARY_MOUSE_BUTTON);
+}
+
+
+void
+CortexGraphView::MouseMoved(BPoint where, uint32 transit,
+	const BMessage* /*message*/)
+{
+	if (fDragging && fModel != NULL) {
+		CortexNode* node = fModel->NodeAt(fDragNode);
+		if (node != NULL) {
+			node->origin = where - fDragOffset;
+			Invalidate(node->Frame());
+		}
+		return;
+	}
+
+	if (fTrackingLink) {
+		fTrackPoint = where;
+		Invalidate();
+	}
+}
+
+
+void
+CortexGraphView::MouseUp(BPoint where)
+{
+	if (fDragging && fModel != NULL) {
+		CortexNode* node = fModel->NodeAt(fDragNode);
+		if (node != NULL) {
+			fModel->RememberOrigin(node->id, node->kind, node->origin);
+			Invalidate();
+		}
+	}
+
+	if (fTrackingLink && fModel != NULL) {
+		int32 targetNode = -1;
+		int32 targetPin = -1;
+		_PinAt(where, &targetNode, &targetPin);
+		if (targetNode >= 0 && targetPin >= 0
+			&& (targetNode != fLinkFromNode || targetPin != fLinkFromPin)) {
+			CortexWindow* window = dynamic_cast<CortexWindow*>(Window());
+			if (window != NULL)
+				window->TryConnectPins(fLinkFromNode, fLinkFromPin,
+					targetNode, targetPin);
+		}
+		Invalidate();
+	}
+
+	fDragging = false;
+	fDragNode = -1;
+	fTrackingLink = false;
+	fLinkFromNode = -1;
+	fLinkFromPin = -1;
+}
+
+
+void
+CortexGraphView::_ShowNodeMenu(int32 nodeIndex, BPoint where)
+{
+	CortexWindow* window = dynamic_cast<CortexWindow*>(Window());
+	if (window != NULL)
+		window->ShowNodeMenu(nodeIndex, ConvertToScreen(where));
+}
+
+
+void
+CortexGraphView::_TrackLink(BPoint where)
+{
+	fTrackPoint = where;
+}

@@ -411,6 +411,7 @@ function( UsePrivateHeaders target )
 		libroot
 		libroot2
 		locale
+		media2
 		mount
 		notification
 		print

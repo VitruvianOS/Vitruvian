@@ -32,6 +32,7 @@ public:
 										BMediaInput* input);
 
 
+	// Mask bits for StartWatching; the same values arrive as message what.
 	enum {
 		B_MEDIA_CLIENT_ADDED      = 1 << 0,
 		B_MEDIA_CLIENT_REMOVED    = 1 << 1,

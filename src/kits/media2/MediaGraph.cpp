@@ -69,7 +69,8 @@ _link_info(void* data, const struct pw_link_info* info)
 	if (info->state == PW_LINK_STATE_ERROR || info->state == PW_LINK_STATE_UNLINKED) {
 		PipeWireBackend* backend = PipeWireBackend::GetInstance();
 		if (backend != NULL)
-			backend->_Broadcast('PWLC', pw_proxy_get_bound_id(linkInfo->proxy));
+			backend->_Broadcast(BMediaGraph::B_MEDIA_LINKS_CHANGED,
+				pw_proxy_get_bound_id(linkInfo->proxy));
 	}
 }
 
@@ -382,12 +383,12 @@ BMediaGraph::SetDefaultAudioInput(media_client_id id)
 
 status_t
 BMediaGraph::StartWatching(const BMessenger& messenger,
-	int32)
+	int32 notificationMask)
 {
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
 	if (backend == NULL)
 		return B_DEVICE_NOT_FOUND;
-	backend->AddWatcher(messenger);
+	backend->AddWatcher(messenger, notificationMask);
 	return B_OK;
 }
 
@@ -708,7 +709,8 @@ _foreign_link_info(void* data, const struct pw_link_info* info)
 	if (info->state == PW_LINK_STATE_ERROR || info->state == PW_LINK_STATE_UNLINKED) {
 		PipeWireBackend* backend = PipeWireBackend::GetInstance();
 		if (backend != NULL)
-			backend->_Broadcast('PWLC', pw_proxy_get_bound_id(linkInfo->proxy));
+			backend->_Broadcast(BMediaGraph::B_MEDIA_LINKS_CHANGED,
+				pw_proxy_get_bound_id(linkInfo->proxy));
 	}
 }
 

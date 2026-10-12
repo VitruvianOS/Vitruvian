@@ -33,6 +33,8 @@
 
 #include <media2/MediaGraph.h>
 
+#include <MediaGraphPrivate.h>
+
 #include "DeviceListView.h"
 #include "DeviceMixerView.h"
 #include "MediaMessages.h"
@@ -467,23 +469,25 @@ MediaWindow::_OnPipeWireChanged(uint32 what, uint32 deviceId)
 	if (fInputView)   fInputView->Refresh();
 	if (fStreamsView) ((StreamListView*)fStreamsView)->Refresh();
 
-	if (what == kMsgPWDeviceVolumeChanged || what == kMsgPWDefaultChanged
-			|| what == kMsgPWDevicePortChanged) {
+	if (what == BMediaGraph::B_MEDIA_VOLUME_CHANGED
+			|| what == BMediaGraph::B_MEDIA_DEFAULTS_CHANGED
+			|| what == kMsgDevicePortChanged) {
 		if (fCurrentSection != NULL) {
 			DeviceMixerView* mixer = dynamic_cast<DeviceMixerView*>(
 				fCurrentSection->FindView("DeviceMixer"));
 			if (mixer != NULL
-					&& (what == kMsgPWDefaultChanged
+					&& (what == BMediaGraph::B_MEDIA_DEFAULTS_CHANGED
 						|| deviceId == 0 || mixer->DeviceId() == deviceId)) {
 				mixer->ExternalChangeHint();
 			}
 		}
 	}
 
-	if (what == kMsgPWDeviceProfileChanged || what == kMsgPWDevicePortChanged)
+	if (what == kMsgDeviceProfileChanged || what == kMsgDevicePortChanged)
 		_PopulateHardwareProfiles();
 
-	if (what == kMsgPWDevicesChanged) {
+	if (what == BMediaGraph::B_MEDIA_CLIENT_ADDED
+			|| what == BMediaGraph::B_MEDIA_CLIENT_REMOVED) {
 		_PopulateHardwareDeviceMenu();
 	}
 }
@@ -598,12 +602,13 @@ MediaWindow::MessageReceived(BMessage* msg)
 		break;
 		}
 
-		case kMsgPWDevicesChanged:
-		case kMsgPWStreamsChanged:
-		case kMsgPWDefaultChanged:
-		case kMsgPWDeviceVolumeChanged:
-		case kMsgPWDevicePortChanged:
-		case kMsgPWDeviceProfileChanged:
+		case BMediaGraph::B_MEDIA_CLIENT_ADDED:
+		case BMediaGraph::B_MEDIA_CLIENT_REMOVED:
+		case BMediaGraph::B_MEDIA_STREAMS_CHANGED:
+		case BMediaGraph::B_MEDIA_DEFAULTS_CHANGED:
+		case BMediaGraph::B_MEDIA_VOLUME_CHANGED:
+		case kMsgDevicePortChanged:
+		case kMsgDeviceProfileChanged:
 			_OnPipeWireChanged(msg->what,
 				msg->GetUInt32("device_id", 0));
 			break;

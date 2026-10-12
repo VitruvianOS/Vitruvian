@@ -4,6 +4,7 @@
  */
 
 #include <media2/MediaNode.h>
+#include <media2/MediaGraph.h>
 
 #include <new>
 #include <stdio.h>
@@ -47,7 +48,8 @@ BMediaNode::_OnLinkInfo(void* data, const struct pw_link_info* info)
 	if (info->state == PW_LINK_STATE_ERROR || info->state == PW_LINK_STATE_UNLINKED) {
 		PipeWireBackend* backend = PipeWireBackend::GetInstance();
 		if (backend != NULL)
-			backend->_Broadcast('PWLC', pw_proxy_get_bound_id(linkInfo->proxy));
+			backend->_Broadcast(BMediaGraph::B_MEDIA_LINKS_CHANGED,
+				pw_proxy_get_bound_id(linkInfo->proxy));
 	}
 }
 

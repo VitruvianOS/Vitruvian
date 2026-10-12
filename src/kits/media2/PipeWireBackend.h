@@ -137,16 +137,21 @@ public:
 		static const char* const kPeakMeterNodeName;
 
 		enum {
-			kMsgDevicesChanged      = 'PWDC',
-			kMsgStreamsChanged      = 'PWSC',
-			kMsgDefaultChanged      = 'PWDF',
-			kMsgDeviceVolumeChanged = 'PWVC',
-
-			kMsgDevicePortChanged   = 'PWPC',
-			kMsgDeviceProfileChanged= 'PWPF'
+			kMsgMidiNodesChanged    = 'PWMC'
 		};
 
-		void					AddWatcher(const BMessenger& target);
+		// MIDI-class registry nodes (media.class "Midi/..."). Ports for these
+		// nodes already live in fPorts; only the node list was missing.
+		struct MidiNodeInfo {
+			uint32			id;
+			std::string		name;
+			std::string		description;
+			std::string		mediaClass;
+		};
+		std::vector<MidiNodeInfo>	MidiNodes();
+
+		void					AddWatcher(const BMessenger& target,
+									int32 notificationMask);
 		void					RemoveWatcher(const BMessenger& target);
 
 		void					_Broadcast(uint32 what, uint32 deviceId = 0);
@@ -301,8 +306,12 @@ private:
 			std::string				fDefaultSinkName;
 			std::string				fDefaultSourceName;
 
+			struct Watcher {
+				BMessenger			messenger;
+				int32				mask;
+			};
 			std::mutex				fWatchersLock;
-			std::vector<BMessenger>	fWatchers;
+			std::vector<Watcher>	fWatchers;
 
 			struct TestTone {
 				pw_stream*			stream;

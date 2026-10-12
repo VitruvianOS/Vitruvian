@@ -31,12 +31,4 @@ const uint32 kMsgStreamMute     = 'MSsm';
 const uint32 kMsgStreamRouted   = 'MSsr';
 
 
-const uint32 kMsgPWDevicesChanged       = 'PWDC';
-const uint32 kMsgPWStreamsChanged       = 'PWSC';
-const uint32 kMsgPWDefaultChanged       = 'PWDF';
-const uint32 kMsgPWDeviceVolumeChanged  = 'PWVC';
-const uint32 kMsgPWDevicePortChanged    = 'PWPC';
-const uint32 kMsgPWDeviceProfileChanged = 'PWPF';
-
-
 #endif

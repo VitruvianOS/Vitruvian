@@ -32,8 +32,10 @@
 
 #include <OS.h>
 #include <Notification.h>
+#include <media2/MediaGraph.h>
 
 #include "FormatConversion.h"
+#include <MediaGraphPrivate.h>
 
 namespace BPrivate { namespace media {
 static PipeWireBackend* sInstance = NULL;
@@ -296,7 +298,7 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 				}
 			}
 		}
-		_Broadcast(kMsgDevicesChanged, id);
+		_Broadcast(BMediaGraph::B_MEDIA_CLIENT_ADDED, id);
 		return;
 	}
 
@@ -329,7 +331,7 @@ PipeWireBackend::_OnRegistryGlobal(uint32 id, uint32 /*perms*/,
 			std::lock_guard<std::mutex> _(fStreamsLock);
 			fStreams.push_back(s);
 		}
-		_Broadcast(kMsgStreamsChanged, id);
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, id);
 		return;
 	}
 }
@@ -377,7 +379,7 @@ PipeWireBackend::_OnRegistryGlobalRemove(uint32 id)
 	}
 
 	if (deviceChanged) {
-		_Broadcast(kMsgDevicesChanged, id);
+		_Broadcast(BMediaGraph::B_MEDIA_CLIENT_REMOVED, id);
 
 		if (wasSink) {
 			ShowNotification(kNotificationDeviceRemoved, "Audio Output Removed",
@@ -389,7 +391,10 @@ PipeWireBackend::_OnRegistryGlobalRemove(uint32 id)
 	}
 
 	if (streamChanged)
-		_Broadcast(kMsgStreamsChanged, id);
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, id);
+
+	if (midiChanged)
+		_Broadcast(kMsgMidiNodesChanged, id);
 }
 
 
@@ -531,7 +536,7 @@ PipeWireBackend::_MetadataPropertyThunk(void* data, uint32 /*subject*/,
 		}
 	}
 	if (changed)
-		self->_Broadcast(kMsgDefaultChanged);
+		self->_Broadcast(BMediaGraph::B_MEDIA_DEFAULTS_CHANGED);
 	return 0;
 }
 
@@ -801,10 +806,17 @@ PipeWireBackend::DestroyStream(pw_stream* stream)
 
 
 void
-PipeWireBackend::AddWatcher(const BMessenger& target)
+PipeWireBackend::AddWatcher(const BMessenger& target, int32 notificationMask)
 {
 	std::lock_guard<std::mutex> _(fWatchersLock);
-	fWatchers.push_back(target);
+	for (auto& watcher : fWatchers) {
+		if (watcher.messenger == target) {
+			watcher.mask = notificationMask;
+			return;
+		}
+	}
+	Watcher watcher = { target, notificationMask };
+	fWatchers.push_back(watcher);
 }
 
 
@@ -813,7 +825,7 @@ PipeWireBackend::RemoveWatcher(const BMessenger& target)
 {
 	std::lock_guard<std::mutex> _(fWatchersLock);
 	for (auto it = fWatchers.begin(); it != fWatchers.end(); ++it) {
-		if (*it == target) {
+		if (it->messenger == target) {
 			fWatchers.erase(it);
 			return;
 		}
@@ -821,10 +833,29 @@ PipeWireBackend::RemoveWatcher(const BMessenger& target)
 }
 
 
+// The public notification codes double as their own mask bit; private
+// codes carry no bit, so every watcher receives those.
+static bool
+_IsNotified(int32 mask, uint32 what)
+{
+	switch (what) {
+		case BMediaGraph::B_MEDIA_CLIENT_ADDED:
+		case BMediaGraph::B_MEDIA_CLIENT_REMOVED:
+		case BMediaGraph::B_MEDIA_DEFAULTS_CHANGED:
+		case BMediaGraph::B_MEDIA_VOLUME_CHANGED:
+		case BMediaGraph::B_MEDIA_STREAMS_CHANGED:
+		case BMediaGraph::B_MEDIA_LINKS_CHANGED:
+			return (mask & (int32)what) != 0;
+		default:
+			return true;
+	}
+}
+
+
 void
 PipeWireBackend::_Broadcast(uint32 what, uint32 deviceId)
 {
-	std::vector<BMessenger> snapshot;
+	std::vector<Watcher> snapshot;
 	{
 		std::lock_guard<std::mutex> _(fWatchersLock);
 		snapshot = fWatchers;
@@ -832,8 +863,10 @@ PipeWireBackend::_Broadcast(uint32 what, uint32 deviceId)
 	BMessage msg(what);
 	if (deviceId != 0)
 		msg.AddUInt32("device_id", deviceId);
-	for (auto& m : snapshot)
-		m.SendMessage(&msg);
+	for (const auto& watcher : snapshot) {
+		if (_IsNotified(watcher.mask, what))
+			watcher.messenger.SendMessage(&msg);
+	}
 }
 
 
@@ -860,7 +893,7 @@ PipeWireBackend::MoveStream(uint32 streamId, uint32 deviceId)
 		}
 	}
 	if (found)
-		_Broadcast(kMsgStreamsChanged, streamId);
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamId);
 	return found ? B_OK : B_BAD_VALUE;
 }
 
@@ -899,7 +932,7 @@ PipeWireBackend::SetStreamVolume(uint32 streamId, float volume, bool mute)
 		}
 	}
 	if (found)
-		_Broadcast(kMsgStreamsChanged, streamId);
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamId);
 	return found ? B_OK : B_BAD_VALUE;
 }
 
@@ -976,7 +1009,7 @@ PipeWireBackend::_OnLinkEvent(uint32 id, uint32,
 			std::lock_guard<std::mutex> _(fLinkToDeviceMapLock);
 			fLinkToDeviceMap[id] = deviceId;
 		}
-		_Broadcast(kMsgStreamsChanged, streamNodeId);
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamNodeId);
 
 		ShowNotification(kNotificationDeviceConnected, "Audio Stream Connected",
 			"Stream routed to audio device", streamNodeId);
@@ -1011,7 +1044,7 @@ PipeWireBackend::_OnLinkRemove(uint32 id)
 	}
 
 	if (streamNodeId != 0) {
-		_Broadcast(kMsgStreamsChanged, streamNodeId);
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, streamNodeId);
 
 		ShowNotification(kNotificationDeviceDisconnected, "Audio Stream Disconnected",
 			"Stream unlinked from audio device", streamNodeId);
@@ -1102,7 +1135,7 @@ PipeWireBackend::_OnNodeEvent(uint32 id, uint32,
 	}
 
 	if (volumeChanged || muteChanged)
-		_Broadcast(kMsgStreamsChanged, id);
+		_Broadcast(BMediaGraph::B_MEDIA_STREAMS_CHANGED, id);
 }
 
 
@@ -1859,10 +1892,82 @@ PipeWireBackend::SetDeviceVolume(uint32 deviceId,
 
 		RouteVolumeQuery rq;
 		status_t rs = _QueryActiveRoute(cardId, wantDirection, rq);
-		if (rs != B_OK) {
-			fprintf(stderr, "nexus: SetDeviceVolume(%u): could not query "
-				"active route (status=%s)\n", deviceId, strerror(rs));
-			return rs;
+		if (rs == B_TIMED_OUT)
+			return B_TIMED_OUT;
+		// Only ALSA-style cards carry routes; Bluetooth and other
+		// endpoint devices expose volume on the node itself, so fall
+		// through to the Props path below like GetDeviceVolume does.
+		if (rs == B_OK && rq.haveRoute) {
+			uint8_t buffer[512];
+			spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+			spa_pod_frame routeFrame, propsFrame;
+			spa_pod_builder_push_object(&b, &routeFrame,
+				SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
+			spa_pod_builder_add(&b,
+				SPA_PARAM_ROUTE_index,  SPA_POD_Int(rq.index),
+				SPA_PARAM_ROUTE_device, SPA_POD_Int(rq.device),
+				0);
+			spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props, 0);
+			spa_pod_builder_push_object(&b, &propsFrame,
+				SPA_TYPE_OBJECT_Props, SPA_PARAM_Props);
+			spa_pod_builder_add(&b,
+				SPA_PROP_channelVolumes, SPA_POD_Array(sizeof(float),
+					SPA_TYPE_Float, (uint32)count, volumes),
+				0);
+			spa_pod_builder_pop(&b, &propsFrame);
+			spa_pod_builder_add(&b, SPA_PARAM_ROUTE_save, SPA_POD_Bool(true),
+				0);
+			const spa_pod* routeParam
+				= (const spa_pod*)spa_pod_builder_pop(&b, &routeFrame);
+			if (routeParam == NULL)
+				return B_NO_MEMORY;
+
+			Lock();
+			struct pw_device* device = (struct pw_device*)pw_registry_bind(
+				fRegistry, cardId, PW_TYPE_INTERFACE_Device,
+				PW_VERSION_DEVICE, 0);
+			if (device == NULL) {
+				Unlock();
+				return B_DEVICE_NOT_FOUND;
+			}
+			pw_device_set_param(device, SPA_PARAM_Route, 0, routeParam);
+
+			RouteVolumeQuery verify;
+			spa_hook hook;
+			memset(&hook, 0, sizeof(hook));
+			static const pw_device_events kVerifyEvents = {
+				PW_VERSION_DEVICE_EVENTS,
+				NULL,
+				&PipeWireBackend::_RouteVolumeParamThunk
+			};
+			verify = { wantDirection, -1, -1, {}, false, false, false };
+			pw_device_add_listener(device, &hook, &kVerifyEvents, &verify);
+			pw_device_enum_params(device, 0, SPA_PARAM_Route, 0, UINT32_MAX,
+				NULL);
+			status_t rt = RoundtripLocked();
+			spa_hook_remove(&hook);
+			pw_proxy_destroy((struct pw_proxy*)device);
+			Unlock();
+
+			if (rt != B_OK) {
+				fprintf(stderr, "nexus: SetDeviceVolume(%u): route verify "
+					"timed out\n", deviceId);
+				return rt;
+			}
+
+			bool applied = !verify.volumes.empty()
+				&& fabsf(verify.volumes[0] - volumes[0]) < 0.01f;
+			if (!applied) {
+				fprintf(stderr, "nexus: SetDeviceVolume(%u): route not "
+					"applied (read back %zu ch, first %.3f, wanted %.3f)\n",
+					deviceId, verify.volumes.size(),
+					verify.volumes.empty() ? -1.0f : verify.volumes[0],
+					volumes[0]);
+				return B_ERROR;
+			}
+
+			_Broadcast(BMediaGraph::B_MEDIA_VOLUME_CHANGED, deviceId);
+			return B_OK;
 		}
 
 		uint8_t buffer[512];
@@ -1979,7 +2084,7 @@ PipeWireBackend::SetDeviceVolume(uint32 deviceId,
 		return B_ERROR;
 	}
 
-	_Broadcast(kMsgDeviceVolumeChanged, deviceId);
+	_Broadcast(BMediaGraph::B_MEDIA_VOLUME_CHANGED, deviceId);
 	return B_OK;
 }
 
@@ -2013,10 +2118,74 @@ PipeWireBackend::SetDeviceMute(uint32 deviceId, bool mute)
 
 		RouteVolumeQuery rq;
 		status_t rs = _QueryActiveRoute(cardId, wantDirection, rq);
-		if (rs != B_OK) {
-			fprintf(stderr, "nexus: SetDeviceMute(%u): could not query "
-				"active route (status=%s)\n", deviceId, strerror(rs));
-			return rs;
+		if (rs == B_TIMED_OUT)
+			return B_TIMED_OUT;
+		// Same route-less fallback as SetDeviceVolume: Bluetooth and
+		// other endpoint devices carry mute on the node Props.
+		if (rs == B_OK && rq.haveRoute) {
+			uint8_t buffer[256];
+			spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
+			spa_pod_frame routeFrame, propsFrame;
+			spa_pod_builder_push_object(&b, &routeFrame,
+				SPA_TYPE_OBJECT_ParamRoute, SPA_PARAM_Route);
+			spa_pod_builder_add(&b,
+				SPA_PARAM_ROUTE_index,  SPA_POD_Int(rq.index),
+				SPA_PARAM_ROUTE_device, SPA_POD_Int(rq.device),
+				0);
+			spa_pod_builder_prop(&b, SPA_PARAM_ROUTE_props, 0);
+			spa_pod_builder_push_object(&b, &propsFrame,
+				SPA_TYPE_OBJECT_Props, SPA_PARAM_Props);
+			spa_pod_builder_add(&b, SPA_PROP_mute, SPA_POD_Bool(mute), 0);
+			spa_pod_builder_pop(&b, &propsFrame);
+			spa_pod_builder_add(&b, SPA_PARAM_ROUTE_save, SPA_POD_Bool(true),
+				0);
+			const spa_pod* routeParam
+				= (const spa_pod*)spa_pod_builder_pop(&b, &routeFrame);
+			if (routeParam == NULL)
+				return B_NO_MEMORY;
+
+			Lock();
+			struct pw_device* device = (struct pw_device*)pw_registry_bind(
+				fRegistry, cardId, PW_TYPE_INTERFACE_Device,
+				PW_VERSION_DEVICE, 0);
+			if (device == NULL) {
+				Unlock();
+				return B_DEVICE_NOT_FOUND;
+			}
+			pw_device_set_param(device, SPA_PARAM_Route, 0, routeParam);
+
+			RouteVolumeQuery verify = { wantDirection, -1, -1, {}, false,
+				false, false };
+			spa_hook hook;
+			memset(&hook, 0, sizeof(hook));
+			static const pw_device_events kVerifyEvents = {
+				PW_VERSION_DEVICE_EVENTS,
+				NULL,
+				&PipeWireBackend::_RouteVolumeParamThunk
+			};
+			pw_device_add_listener(device, &hook, &kVerifyEvents, &verify);
+			pw_device_enum_params(device, 0, SPA_PARAM_Route, 0, UINT32_MAX,
+				NULL);
+			status_t rt = RoundtripLocked();
+			spa_hook_remove(&hook);
+			pw_proxy_destroy((struct pw_proxy*)device);
+			Unlock();
+
+			if (rt != B_OK) {
+				fprintf(stderr, "nexus: SetDeviceMute(%u): route verify "
+					"timed out\n", deviceId);
+				return rt;
+			}
+
+			if (!verify.haveMute || verify.mute != mute) {
+				fprintf(stderr, "nexus: SetDeviceMute(%u): route not "
+					"applied (haveMute=%d, mute=%d, wanted %d)\n",
+					deviceId, verify.haveMute, verify.mute, mute);
+				return B_ERROR;
+			}
+
+			_Broadcast(BMediaGraph::B_MEDIA_VOLUME_CHANGED, deviceId);
+			return B_OK;
 		}
 
 		uint8_t buffer[256];
@@ -2121,7 +2290,7 @@ PipeWireBackend::SetDeviceMute(uint32 deviceId, bool mute)
 		return B_ERROR;
 	}
 
-	_Broadcast(kMsgDeviceVolumeChanged, deviceId);
+	_Broadcast(BMediaGraph::B_MEDIA_VOLUME_CHANGED, deviceId);
 	return B_OK;
 }
 

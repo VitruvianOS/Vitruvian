@@ -4508,10 +4508,19 @@ ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 	STRACE(("HandleDirectConnection(bufferState = %" B_PRId32 ", driverState = "
 		"%" B_PRId32 ")\n", bufferState, driverState));
 
+	// FrontBuffer() can be deleted by a concurrent SetMode() (resize
+	// thread after a hotplug, or a rotation from another app): hold the
+	// parallel lock so the modeset's write lock waits out this call.
+	HWInterface* hwInterface = fDesktop->HWInterface();
+	if (!hwInterface->LockParallelAccess())
+		return;
+
 	status_t status = fDirectWindowInfo->SetState(
 		(direct_buffer_state)bufferState, (direct_driver_state)driverState,
-		fDesktop->HWInterface()->FrontBuffer(), fWindow->Frame(),
+		hwInterface->FrontBuffer(), fWindow->Frame(),
 		fWindow->VisibleContentRegion());
+
+	hwInterface->UnlockParallelAccess();
 
 	if (status != B_OK) {
 		char errorString[256];

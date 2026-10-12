@@ -87,6 +87,17 @@ DirectWindowInfo::SetState(direct_buffer_state bufferState,
 		&& (bufferState & B_DIRECT_MODE_MASK) != B_DIRECT_START)
 		return B_OK;
 
+	// A NULL buffer means the screen had none to hand out (teardown
+	// race); never dereference it, just stop the direct client.
+	if (buffer == NULL
+			&& (bufferState & B_DIRECT_MODE_MASK) != B_DIRECT_STOP) {
+		syslog(LOG_ERR, "DirectWindowInfo::SetState() called with a "
+			"NULL buffer; stopping the direct window\n");
+		fBufferInfo->buffer_state = (direct_buffer_state)
+			((bufferState & ~B_DIRECT_MODE_MASK) | B_DIRECT_STOP);
+		return _SyncronizeWithClient();
+	}
+
 	fBufferInfo->buffer_state = bufferState;
 
 	if ((int)driverState != -1)

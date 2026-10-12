@@ -10,6 +10,7 @@
 #include <mutex>
 #include <string.h>
 
+#include <Autolock.h>
 #include <Handler.h>
 #include <Looper.h>
 #include <Message.h>
@@ -240,8 +241,12 @@ BMediaPlayer::Impl::~Impl()
 {
 	_StopVideoRunner();
 	if (fVideoPump != NULL) {
-		if (fVideoLooper != NULL)
+		if (fVideoLooper != NULL) {
+			// RemoveHandler needs the looper lock; it also waits out
+			// any pump still running on that thread.
+			BAutolock looperLock(fVideoLooper);
 			fVideoLooper->RemoveHandler(fVideoPump);
+		}
 		delete fVideoPump;
 	}
 	if (fNode != NULL) {
@@ -282,6 +287,9 @@ BMediaPlayer::Impl::SetHooks(BMediaPlayer::BufferPlayerFunc fillFunc,
 status_t
 BMediaPlayer::Impl::SetTo(const entry_ref* ref)
 {
+	// Stop the pump before the track and buffer go away; one already
+	// blocked on fLock re-checks them once it wins the lock.
+	_StopVideoRunner();
 	std::lock_guard<std::mutex> _(fLock);
 
 	// Tear down any existing playback.
@@ -429,6 +437,7 @@ BMediaPlayer::Impl::Play()
 	if (s == BMediaPlayer::B_PLAYER_PLAYING)
 		return B_OK;
 	if (s == BMediaPlayer::B_PLAYER_STOPPED && fEOS.load()) {
+		std::lock_guard<std::mutex> _(fLock);
 		bigtime_t t = 0;
 		if (fTrack != NULL)
 			fTrack->SeekToTime(&t);
@@ -475,6 +484,10 @@ BMediaPlayer::Impl::Stop()
 		if (fNotifyFunc != NULL)
 			fNotifyFunc(fCookie, BMediaPlayer::B_STOPPED);
 	}
+	// Publish the state before seeking: the pump tests it under fLock,
+	// so it cannot deliver a frame from after the seek.
+	_SetState(BMediaPlayer::B_PLAYER_STOPPED);
+	std::lock_guard<std::mutex> _(fLock);
 	bigtime_t t = 0;
 	if (fTrack != NULL)
 		fTrack->SeekToTime(&t);
@@ -482,7 +495,6 @@ BMediaPlayer::Impl::Stop()
 		fVideoTrack->SeekToTime(&t);
 	_ResetVideoPacing();
 	fEOS = false;
-	_SetState(BMediaPlayer::B_PLAYER_STOPPED);
 	return B_OK;
 }
 
@@ -544,14 +556,21 @@ BMediaPlayer::Impl::SetVideoView(BView* view)
 {
 	_StopVideoRunner();
 	if (fVideoPump != NULL) {
-		if (fVideoLooper != NULL)
+		if (fVideoLooper != NULL) {
+			// Add/RemoveHandler run under the looper lock; the pump
+			// executes there too, so this also waits it out.
+			BAutolock looperLock(fVideoLooper);
 			fVideoLooper->RemoveHandler(fVideoPump);
+		}
 		delete fVideoPump;
 		fVideoPump = NULL;
 	}
 	fVideoLooper = NULL;
-	fVideoMessenger = BMessenger();
-	fVideoView = view;
+	{
+		std::lock_guard<std::mutex> _(fLock);
+		fVideoView = NULL;
+		fVideoMessenger = BMessenger();
+	}
 	if (view == NULL)
 		return;
 
@@ -561,8 +580,15 @@ BMediaPlayer::Impl::SetVideoView(BView* view)
 	fVideoPump = new _VideoPump(this);
 	if (fVideoPump == NULL)
 		return;
-	fVideoLooper->AddHandler(fVideoPump);
-	fVideoMessenger = BMessenger(view);
+	{
+		BAutolock looperLock(fVideoLooper);
+		fVideoLooper->AddHandler(fVideoPump);
+	}
+	{
+		std::lock_guard<std::mutex> _(fLock);
+		fVideoView = view;
+		fVideoMessenger = BMessenger(view);
+	}
 	if (fState.load() == BMediaPlayer::B_PLAYER_PLAYING)
 		_StartVideoRunner();
 }
@@ -578,6 +604,9 @@ BMediaPlayer::Impl::_VideoPump::MessageReceived(BMessage* /*message*/)
 void
 BMediaPlayer::Impl::_PumpVideoFrame()
 {
+	// SeekTo and SetTo touch the same track and buffer from caller
+	// threads; nothing here is safe outside the lock.
+	std::lock_guard<std::mutex> _(fLock);
 	if (fState.load() != BMediaPlayer::B_PLAYER_PLAYING)
 		return;
 	if (fVideoTrack == NULL || fVideoView == NULL || fVideoBuffer == NULL)

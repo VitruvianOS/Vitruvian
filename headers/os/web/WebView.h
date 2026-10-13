@@ -2,8 +2,8 @@
  * Copyright 2026, Dario Casalinuovo <b.vitruvio@gmail.com>.
  * Distributed under the terms of the LGPL License.
  */
-#ifndef _WEB_VIEW_H
-#define _WEB_VIEW_H
+#ifndef WEB_VIEW_H
+#define WEB_VIEW_H
 
 
 #include <View.h>
@@ -13,18 +13,13 @@
 
 class BWebView : public BView {
 public:
-								BWebView(BRect frame, const char* name,
-									uint32 resizingMode = B_FOLLOW_ALL_SIDES,
-									uint32 flags = B_WILL_DRAW | B_FRAME_EVENTS
-										| B_FULL_UPDATE_ON_RESIZE);
+								BWebView(BRect frame, const char* name);
 	virtual						~BWebView();
 
 	virtual void				AttachedToWindow();
 	virtual void				DetachedFromWindow();
 	virtual void				FrameResized(float width, float height);
 	virtual void				Draw(BRect updateRect);
-	virtual void				MessageReceived(BMessage* message);
-	virtual void				MakeFocus(bool focused = true);
 	virtual void				MouseDown(BPoint where);
 	virtual void				MouseUp(BPoint where);
 	virtual void				MouseMoved(BPoint where, uint32 transit,
@@ -36,17 +31,11 @@ public:
 			void				LoadURL(const char* url);
 			void				LoadHTML(const char* html,
 									const char* baseURL = nullptr);
-			void				Reload();
-			void				Stop();
 			void				GoBack();
 			void				GoForward();
-			bool				CanGoBack() const;
-			bool				CanGoForward() const;
+			void				Reload();
+			void				Stop();
 
-			// Target for notifications
-			void				SetTarget(const BMessenger& messenger);
-
-			// State
 	// Navigation state
 			bool				CanGoBack() const;
 			bool				CanGoForward() const;
@@ -54,22 +43,17 @@ public:
 	// State queries
 			const char*			CurrentURL() const;
 			const char*			Title() const;
-			float				LoadProgress() const;
+			double				LoadProgress() const;
 			bool				IsLoading() const;
 
-			// JavaScript
-			void				EvaluateJS(const char* script);
-
-	virtual	void				AttachedToWindow();
-	virtual	void				DetachedFromWindow();
-	virtual	void				FrameResized(float width, float height);
-	virtual	void				MessageReceived(BMessage* message);
+	// Messaging
+			void				SetTarget(const BMessenger& target);
 
 private:
-			class				Impl;
-			Impl*				fImpl;
+			struct				WebViewImpl;
+			WebViewImpl*		fImpl;
 			BMessenger			fTarget;
 };
 
 
-#endif /* _WEB_VIEW_H */
+#endif // WEB_VIEW_H

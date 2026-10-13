@@ -7,7 +7,6 @@
 #define VOS_URL_SCHEME_ADAPTER_H
 
 
-#include <string>
 #include <wpe/webkit.h>
 
 
@@ -17,9 +16,6 @@ public:
 						~UrlSchemeAdapter();
 
 			void		RegisterSchemes(WebKitWebContext* context);
-
-			void		SetPdfjsPath(const std::string& path)
-							{ fPdfjsPath = path; }
 
 private:
 	static void			_HandleVosPDF(WebKitURISchemeRequest* request,
@@ -31,8 +27,6 @@ private:
 
 	static void			_FinishWithHTML(WebKitURISchemeRequest* request,
 							const char* html);
-
-			std::string	fPdfjsPath;
 };
 
 

@@ -14,10 +14,6 @@
 
 UrlSchemeAdapter::UrlSchemeAdapter()
 {
-	const char* home = getenv("HOME");
-	fPdfjsPath = home
-		? std::string(home) + "/.local/share/netplus/pdfjs"
-		: "/usr/share/netplus/pdfjs";
 }
 
 

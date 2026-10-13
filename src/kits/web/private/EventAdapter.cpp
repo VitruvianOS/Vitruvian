@@ -42,7 +42,7 @@ dispatch_on_glib(struct wpe_view_backend* backend, const Event& event,
 //	#pragma mark - Constructor/Destructor
 
 
-EventAdapter::EventAdapter(struct _wpe_view_backend* backend)
+EventAdapter::EventAdapter(struct wpe_view_backend* backend)
 	:
 	fBackend(backend),
 	fPressedButton(0)
@@ -59,14 +59,35 @@ EventAdapter::~EventAdapter()
 //	#pragma mark - Private
 
 
+// V\OS hybrid keycode space: <=0x7f is the Haiku legacy keycode, not an
+// evdev code and not the ASCII byte constants in InterfaceDefs.h.
+// Values match the input_server mapping (see LinuxKeycodeMap.h).
+enum {
+	kHaikuEscKey		= 0x01,
+	kHaikuBackspaceKey	= 0x1e,
+	kHaikuInsertKey		= 0x1f,
+	kHaikuHomeKey		= 0x20,
+	kHaikuPageUpKey		= 0x21,
+	kHaikuTabKey		= 0x26,
+	kHaikuDeleteKey		= 0x34,
+	kHaikuEndKey		= 0x35,
+	kHaikuPageDownKey	= 0x36,
+	kHaikuEnterKey		= 0x47,
+	kHaikuUpKey		= 0x57,
+	kHaikuLeftKey		= 0x61,
+	kHaikuDownKey		= 0x62,
+	kHaikuRightKey		= 0x63
+};
+
+
 uint32_t
 EventAdapter::_HaikuModsToWPE(uint32 haikuMods)
 {
 	uint32_t wpe = 0;
 	if (haikuMods & B_SHIFT_KEY)    wpe |= wpe_input_keyboard_modifier_shift;
 	if (haikuMods & B_CONTROL_KEY)  wpe |= wpe_input_keyboard_modifier_control;
+	if (haikuMods & B_COMMAND_KEY)  wpe |= wpe_input_keyboard_modifier_control;
 	if (haikuMods & B_OPTION_KEY)   wpe |= wpe_input_keyboard_modifier_alt;
-	if (haikuMods & B_CAPS_LOCK)    wpe |= wpe_input_keyboard_modifier_capslock;
 	return wpe;
 }
 
@@ -89,35 +110,36 @@ uint32_t
 EventAdapter::_HaikuKeyToXKB(uint8 rawKey, const char* bytes, int32 numBytes)
 {
 	if (numBytes > 0 && bytes[0] >= 0x20 && bytes[0] < 0x7f)
-		return (uint32_t)bytes[0];
+		return wpe_unicode_to_key_code((uint32_t)(unsigned char)bytes[0]);
 
 	switch (rawKey) {
-		case B_LEFT_ARROW:   return 0xff51;
-		case B_UP_ARROW:     return 0xff52;
-		case B_RIGHT_ARROW:  return 0xff53;
-		case B_DOWN_ARROW:   return 0xff54;
-		case B_HOME:         return 0xff50;
-		case B_END:          return 0xff57;
-		case B_PAGE_UP:      return 0xff55;
-		case B_PAGE_DOWN:    return 0xff56;
-		case B_BACKSPACE:    return 0xff08;
-		case B_DELETE:       return 0xffff;
-		case B_RETURN:       return 0xff0d;
-		case B_ESCAPE:       return 0xff1b;
-		case B_TAB:          return 0xff09;
-		case B_F1_KEY:       return 0xffbe;
-		case B_F2_KEY:       return 0xffbf;
-		case B_F3_KEY:       return 0xffc0;
-		case B_F4_KEY:       return 0xffc1;
-		case B_F5_KEY:       return 0xffc2;
-		case B_F6_KEY:       return 0xffc3;
-		case B_F7_KEY:       return 0xffc4;
-		case B_F8_KEY:       return 0xffc5;
-		case B_F9_KEY:       return 0xffc6;
-		case B_F10_KEY:      return 0xffc7;
-		case B_F11_KEY:      return 0xffc8;
-		case B_F12_KEY:      return 0xffc9;
-		default:             return 0;
+		case kHaikuEscKey:       return 0xff1b;
+		case B_F1_KEY:           return 0xffbe;
+		case B_F2_KEY:           return 0xffbf;
+		case B_F3_KEY:           return 0xffc0;
+		case B_F4_KEY:           return 0xffc1;
+		case B_F5_KEY:           return 0xffc2;
+		case B_F6_KEY:           return 0xffc3;
+		case B_F7_KEY:           return 0xffc4;
+		case B_F8_KEY:           return 0xffc5;
+		case B_F9_KEY:           return 0xffc6;
+		case B_F10_KEY:          return 0xffc7;
+		case B_F11_KEY:          return 0xffc8;
+		case B_F12_KEY:          return 0xffc9;
+		case kHaikuBackspaceKey: return 0xff08;
+		case kHaikuInsertKey:    return 0xff63;
+		case kHaikuHomeKey:      return 0xff50;
+		case kHaikuPageUpKey:    return 0xff55;
+		case kHaikuTabKey:       return 0xff09;
+		case kHaikuDeleteKey:    return 0xffff;
+		case kHaikuEndKey:       return 0xff57;
+		case kHaikuPageDownKey:  return 0xff56;
+		case kHaikuEnterKey:     return 0xff0d;
+		case kHaikuUpKey:        return 0xff52;
+		case kHaikuLeftKey:      return 0xff51;
+		case kHaikuDownKey:      return 0xff54;
+		case kHaikuRightKey:     return 0xff53;
+		default:                 return 0;
 	}
 }
 
@@ -157,7 +179,7 @@ EventAdapter::TranslateKeyDown(const BMessage* msg)
 	event.modifiers = wpeMods;
 	event.pressed = true;
 
-	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_keyboard_event);
+	wpe_view_backend_dispatch_keyboard_event(fBackend, &event);
 }
 
 
@@ -193,7 +215,7 @@ EventAdapter::TranslateKeyUp(const BMessage* msg)
 	event.modifiers = wpeMods;
 	event.pressed = false;
 
-	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_keyboard_event);
+	wpe_view_backend_dispatch_keyboard_event(fBackend, &event);
 }
 
 
@@ -221,7 +243,7 @@ EventAdapter::TranslateMouseDown(const BMessage* msg)
 	fPressedButton = event.button;
 	event.modifiers = 0;
 
-	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_pointer_event);
+	wpe_view_backend_dispatch_pointer_event(fBackend, &event);
 }
 
 
@@ -248,7 +270,7 @@ EventAdapter::TranslateMouseUp(const BMessage* msg)
 	fPressedButton = 0;
 	event.modifiers = 0;
 
-	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_pointer_event);
+	wpe_view_backend_dispatch_pointer_event(fBackend, &event);
 }
 
 
@@ -269,7 +291,7 @@ EventAdapter::TranslateMouseMoved(const BMessage* msg)
 	event.state = 0;
 	event.modifiers = 0;
 
-	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_pointer_event);
+	wpe_view_backend_dispatch_pointer_event(fBackend, &event);
 }
 
 
@@ -299,10 +321,5 @@ EventAdapter::TranslateMouseWheel(const BMessage* msg)
 		event.axis = axis;
 		event.value = deltas[axis] > 0 ? -1 : 1;
 
-		int32 steps = (int32)(deltas[axis] > 0 ? deltas[axis] : -deltas[axis]);
-		if (steps < 1)
-			steps = 1;
-		for (int32 i = 0; i < steps; i++)
-			dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_axis_event);
-	}
+	wpe_view_backend_dispatch_axis_event(fBackend, &event);
 }

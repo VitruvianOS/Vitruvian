@@ -15,7 +15,7 @@ class BMessage;
 
 class EventAdapter {
 public:
-						EventAdapter(struct _wpe_view_backend* backend);
+						EventAdapter(struct wpe_view_backend* backend);
 						~EventAdapter();
 
 			void		TranslateKeyDown(const BMessage* msg);
@@ -32,7 +32,6 @@ private:
 							int32 numBytes);
 
 	struct wpe_view_backend* fBackend;
-	uint32_t				fPressedButton;
 };
 
 

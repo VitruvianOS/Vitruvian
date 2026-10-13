@@ -76,8 +76,11 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 		"Version/17.4 Safari/605.1.15 Net+/0.1");
 
 	// 4. WebKitWebViewBackend wrapping our FDO wpe_view_backend.
-	WebKitWebViewBackend* wkBackend =
-		webkit_web_view_backend_new(backend, nullptr, nullptr);
+	// WebKit owns the exportable from here and destroys it after it is done
+	// with the backend; destroying it ourselves first crashed on quit.
+	WebKitWebViewBackend* wkBackend = webkit_web_view_backend_new(backend,
+		(GDestroyNotify)wpe_view_backend_exportable_fdo_destroy,
+		compositor->ReleaseExportable());
 
 	// 5. Create the WebView, wiring in context, session, settings, backend.
 	WebKitNetworkSession* networkSession =

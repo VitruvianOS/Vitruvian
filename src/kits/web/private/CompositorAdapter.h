@@ -26,6 +26,8 @@ struct CompositorAdapter {
 			void				ReleaseFront();
 
 	struct	wpe_view_backend*	Backend() const { return fBackend; }
+	// Hands the fdo exportable to WebKit, which destroys it with the view.
+	struct	wpe_view_backend_exportable_fdo*	ReleaseExportable();
 
 			std::function<void()> onFrameReady;
 
@@ -36,6 +38,7 @@ private:
 			void				_SwapBuffersLocked();
 
 			struct wpe_view_backend_exportable_fdo* fExportable;
+			bool				fOwnsExportable;
 	struct	wpe_view_backend*	fBackend;
 
 			BBitmap*			frontBitmap;

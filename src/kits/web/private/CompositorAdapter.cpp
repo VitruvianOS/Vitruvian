@@ -43,6 +43,7 @@ init_fdo_backend()
 CompositorAdapter::CompositorAdapter(int w, int h)
 	:
 	fExportable(nullptr),
+	fOwnsExportable(true),
 	fBackend(nullptr),
 	frontBitmap(nullptr),
 	fBackBitmap(nullptr),
@@ -94,9 +95,19 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 }
 
 
+struct wpe_view_backend_exportable_fdo*
+CompositorAdapter::ReleaseExportable()
+{
+	// The frame callbacks keep using the pointer; only ownership moves.
+	fOwnsExportable = false;
+	return fExportable;
+}
+
+
 CompositorAdapter::~CompositorAdapter()
 {
-	if (fExportable)
+	// Owned by the WebView once ReleaseExportable() handed it over.
+	if (fExportable && fOwnsExportable)
 		wpe_view_backend_exportable_fdo_destroy(fExportable);
 	delete frontBitmap;
 	delete fBackBitmap;

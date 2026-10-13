@@ -41,13 +41,10 @@ set(OPENGL_RENDERERS
 ImageInclude("/system/add-ons/opengl" ${OPENGL_RENDERERS})
 
 
-# Web kit (WPE/WebKit-based rendering engine used by NetPlus).
-ImageInclude("/system/add-ons/web" web)
-
-
 set(SYSTEM_LIBS
 	root
 	be
+	web
 	game
 	media2
 	opengl
@@ -154,7 +151,6 @@ set(_ARRANGE_CMDS
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/preferences"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/add-ons/Tracker"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/add-ons/Translators"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${_FINAL}/system/add-ons/web"
 )
 
 foreach(_app ${SYSTEM_APPS})

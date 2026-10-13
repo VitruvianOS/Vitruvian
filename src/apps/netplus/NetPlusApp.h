@@ -9,10 +9,9 @@
 #include <Application.h>
 #include <String.h>
 
-#include "MainWindow.h"
-
 class BWebBookmarks;
 class BWebSettings;
+class MainWindow;
 
 
 // Application-wide NetPlus state: the profile settings, the open
@@ -24,13 +23,11 @@ public:
 	virtual						~NetPlusApp();
 
 	virtual void				ArgvReceived(int32 argc, char** argv);
-	virtual void				RefsReceived(BMessage* message);
 	virtual void				ReadyToRun();
 	virtual void				MessageReceived(BMessage* message);
 
 			void				OpenWindow(const char* url,
-									bool privateWindow,
-									const PwaLaunchInfo* pwa = NULL);
+									bool privateWindow);
 
 			// Called by MainWindow when it closes; the app quits
 			// when the last window is gone.
@@ -56,8 +53,6 @@ private:
 	BWebBookmarks*				fBookmarks;
 			int32				fWindowCount;
 			BString				fStartupURL;
-			PwaLaunchInfo		fPwa;
-			bool				fReady = false;
 };
 
 

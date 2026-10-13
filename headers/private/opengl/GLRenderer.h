@@ -47,6 +47,8 @@ public:
 	virtual void			DirectConnected(direct_buffer_info *info);
 	virtual void			EnableDirectMode(bool enabled);
 
+	virtual void*			GetGLProcAddress(const char* name);
+
 	inline	int32			ReferenceCount() const { return fRefCount; };
 	inline	ulong			Options() const { return fOptions; };
 	inline	BGLView*		GLView() { return fView; };

@@ -148,6 +148,8 @@ void*
 BGLView::GetGLProcAddress(const char* procName)
 {
 	// Delegate to renderer if available
+	if (fRenderer)
+		return fRenderer->GetGLProcAddress(procName);
 	return NULL;
 }
 

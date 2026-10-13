@@ -98,6 +98,13 @@ BGLRenderer::EnableDirectMode(bool /*enabled*/)
 }
 
 
+void*
+BGLRenderer::GetGLProcAddress(const char* /*name*/)
+{
+	return NULL;
+}
+
+
 status_t BGLRenderer::_Reserved_Renderer_0(int32, void*) { return B_ERROR; }
 status_t BGLRenderer::_Reserved_Renderer_1(int32, void*) { return B_ERROR; }
 status_t BGLRenderer::_Reserved_Renderer_2(int32, void*) { return B_ERROR; }

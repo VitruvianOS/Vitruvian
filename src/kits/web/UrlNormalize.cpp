@@ -61,6 +61,11 @@ hasScheme(const std::string& input)
 	size_t colon = input.find(':');
 	if (colon == std::string::npos || colon == 0)
 		return false;
+	// "host:8080" has a digit right after the colon; no scheme looks
+	// like that, and the classic browsers all use this heuristic.
+	if (colon + 1 < input.size()
+		&& std::isdigit((unsigned char)input[colon + 1]))
+		return false;
 	// A scheme is ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ).
 	for (size_t i = 0; i < colon; i++) {
 		unsigned char c = (unsigned char)input[i];
@@ -77,15 +82,15 @@ hasScheme(const std::string& input)
 static bool
 looksLikeHost(const std::string& input)
 {
-	if (input == "localhost")
-		return true;
-	// "example.com", "sub.example.co.uk:8080", "192.168.0.1".
 	size_t colon = input.find(':');
 	std::string host = colon != std::string::npos
 		? input.substr(0, colon) : input;
 	if (host.empty())
 		return false;
-	// A bare word with no dot is a search, not a host (except localhost).
+	if (host == "localhost")
+		return true;
+	// "example.com", "sub.example.co.uk:8080", "192.168.0.1".
+	// A bare word with no dot is a search, not a host.
 	return host.find('.') != std::string::npos;
 }
 

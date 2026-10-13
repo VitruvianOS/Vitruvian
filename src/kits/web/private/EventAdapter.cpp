@@ -205,11 +205,12 @@ EventAdapter::_LegacyModsToWPE(uint32 legacyMods)
 	uint32_t wpe = 0;
 	if (legacyMods & B_SHIFT_KEY)
 		wpe |= wpe_input_keyboard_modifier_shift;
-	// The V\OS default keymap puts Command on the physical Control key,
-	// so browser shortcuts (Ctrl+C) arrive as B_COMMAND_KEY.
-	if (legacyMods & (B_COMMAND_KEY | B_CONTROL_KEY))
+	// The V\OS default keymap puts Command on the physical Control key:
+	// browser shortcuts (Ctrl+C) arrive as B_COMMAND_KEY. The Control
+	// role sits on physical Alt, which browsers see as Alt (Alt+Left).
+	if (legacyMods & B_COMMAND_KEY)
 		wpe |= wpe_input_keyboard_modifier_control;
-	if (legacyMods & B_OPTION_KEY)
+	if (legacyMods & (B_CONTROL_KEY | B_OPTION_KEY))
 		wpe |= wpe_input_keyboard_modifier_alt;
 	return wpe;
 }
@@ -219,7 +220,9 @@ uint32_t
 EventAdapter::_LegacyPointerModsToWPE(uint32 legacyMods)
 {
 	uint32_t wpe = _LegacyModsToWPE(legacyMods);
-	if (legacyMods & B_CONTROL_KEY)
+	// Browsers treat Ctrl+click as a middle click (open in new window);
+	// on V\OS that chord arrives as Command on physical Control.
+	if (legacyMods & B_COMMAND_KEY)
 		wpe |= wpe_input_pointer_modifier_button2;
 	return wpe;
 }

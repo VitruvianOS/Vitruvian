@@ -179,11 +179,14 @@ public:
 			fPipeline = NULL;
 			return B_ERROR;
 		}
+		// Video drops its oldest frame when nobody is reading: a full video
+		// sink blocks the shared demuxer, which then starves the audio
+		// branch and freezes the whole pipeline. Audio never drops.
 		g_object_set(fVideoSink,
 			"caps",        videoCaps,
 			"sync",        FALSE,
 			"max-buffers", 4,
-			"drop",        FALSE,
+			"drop",        TRUE,
 			NULL);
 		gst_caps_unref(videoCaps);
 
@@ -391,9 +394,9 @@ public:
 		if (t == NULL || fPipeline == NULL || t->fWriteMode)
 			return;
 		if (t->fKind == kTrackAudio) {
-			g_object_set(fPipeline, "audio-stream", t->fStreamIndex, NULL);
+			g_object_set(fPipeline, "current-audio", t->fStreamIndex, NULL);
 		} else if (t->fKind == kTrackVideo) {
-			g_object_set(fPipeline, "video-stream", t->fStreamIndex, NULL);
+			g_object_set(fPipeline, "current-video", t->fStreamIndex, NULL);
 		}
 	}
 
@@ -966,10 +969,10 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 		// Point playbin at this track's demuxed branch before pulling.
 		if (fImpl->fPlayBin != NULL) {
 			if (fImpl->fKind == kTrackAudio) {
-				g_object_set(fImpl->fPlayBin, "audio-stream",
+				g_object_set(fImpl->fPlayBin, "current-audio",
 					fImpl->fStreamIndex, NULL);
 			} else {
-				g_object_set(fImpl->fPlayBin, "video-stream",
+				g_object_set(fImpl->fPlayBin, "current-video",
 					fImpl->fStreamIndex, NULL);
 			}
 		}

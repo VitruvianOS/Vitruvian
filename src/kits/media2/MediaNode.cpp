@@ -121,8 +121,12 @@ BMediaNode::_StartConnections(void* backendPtr)
 			continue;
 
 		BMediaFormat format = output->Format();
-		if (format.Type() == B_MEDIA_NO_TYPE)
+		if (format.Type() == B_MEDIA_NO_TYPE) {
 			format = fFormat;
+			// The process callback reads the connection's format; without
+			// this it saw no type and queued empty buffers forever.
+			output->fFormat = format;
+		}
 
 		if (!format.IsRawAudio() && !format.IsRawVideo())
 			return B_NOT_SUPPORTED;
@@ -143,8 +147,12 @@ BMediaNode::_StartConnections(void* backendPtr)
 			continue;
 
 		BMediaFormat format = input->Format();
-		if (format.Type() == B_MEDIA_NO_TYPE)
+		if (format.Type() == B_MEDIA_NO_TYPE) {
 			format = fFormat;
+			// The process callback reads the connection's format; without
+			// this it saw no type and queued empty buffers forever.
+			input->fFormat = format;
+		}
 
 		if (!format.IsRawAudio() && !format.IsRawVideo())
 			return B_NOT_SUPPORTED;

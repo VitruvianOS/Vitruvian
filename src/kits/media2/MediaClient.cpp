@@ -129,6 +129,9 @@ BMediaClient::RegisterInput(BMediaInput* input)
 {
 	if (input == NULL)
 		return B_BAD_VALUE;
+	// The process callback finds the node through Client(); it was never
+	// set, so every audio callback returned before producing data.
+	input->fOwner = this;
 	fImpl->inputs->AddItem(input);
 	return B_OK;
 }
@@ -139,6 +142,9 @@ BMediaClient::RegisterOutput(BMediaOutput* output)
 {
 	if (output == NULL)
 		return B_BAD_VALUE;
+	// The process callback finds the node through Client(); it was never
+	// set, so every audio callback returned before producing data.
+	output->fOwner = this;
 	fImpl->outputs->AddItem(output);
 	return B_OK;
 }
@@ -147,6 +153,8 @@ BMediaClient::RegisterOutput(BMediaOutput* output)
 status_t
 BMediaClient::UnregisterInput(BMediaInput* input)
 {
+	if (input != NULL && input->fOwner == this)
+		input->fOwner = NULL;
 	fImpl->inputs->RemoveItem(input);
 	return B_OK;
 }
@@ -155,6 +163,8 @@ BMediaClient::UnregisterInput(BMediaInput* input)
 status_t
 BMediaClient::UnregisterOutput(BMediaOutput* output)
 {
+	if (output != NULL && output->fOwner == this)
+		output->fOwner = NULL;
 	fImpl->outputs->RemoveItem(output);
 	return B_OK;
 }
@@ -413,9 +423,10 @@ BMediaClient::Impl::_OnProcess(void* userdata)
 	BMediaOutput* output = dynamic_cast<BMediaOutput*>(conn);
 	if (output != NULL) {
 		const size_t bytes = maxFrames * stride;
-		size_t filled = output->FillBuffer(data, bytes);
-		if (filled < bytes)
-			memset(data + filled, 0, bytes - filled);
+		// Through the node's virtual hook: process-hook nodes (the player,
+		// the synth) produce their data there; the default falls back to
+		// the output's FillBuffer.
+		conn->Client()->ProcessCallback(conn, data, bytes, maxFrames);
 		spaBuf->datas[0].chunk->offset = 0;
 		spaBuf->datas[0].chunk->stride = stride;
 		spaBuf->datas[0].chunk->size   = bytes;

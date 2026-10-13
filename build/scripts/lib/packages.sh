@@ -42,7 +42,7 @@ get_base_packages() {
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
-                " grub-common grub2-common grub-efi-arm64-bin"
+                " raspi-firmware grub-common grub2-common grub-efi-arm64-bin"
             ;;
         arm32)
             printf '%s' \

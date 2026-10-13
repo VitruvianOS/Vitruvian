@@ -10,6 +10,7 @@
 #include <wpe/webkit.h>
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -175,6 +176,10 @@ private:
 
 	mutable	std::mutex			fBlockedMutex;
 			std::vector<std::string> fBlockedDomains;
+
+			// GLib thread only: scripts in the content manager, keyed
+			// by content so a re-add replaces instead of stacking.
+			std::map<std::string, WebKitUserScript*> fUserScripts;
 
 			std::function<bool(const std::string&)>
 									fNotificationPermissionHandler;

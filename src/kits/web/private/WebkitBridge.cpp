@@ -811,12 +811,25 @@ WebKitBridge::EvaluateJS(const std::string& script,
 void
 WebKitBridge::AddUserScript(const std::string& js, bool atDocStart)
 {
-	struct Args { WebKitWebView* v; std::string js; bool atStart; };
-	auto* a = new Args{webView, js, atDocStart};
+	struct Args {
+		WebKitBridge* self;
+		WebKitWebView* v;
+		std::string js;
+		bool atStart;
+	};
+	auto* a = new Args{this, webView, js, atDocStart};
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
 		auto* a = static_cast<Args*>(d);
 		WebKitUserContentManager* ucm =
 			webkit_web_view_get_user_content_manager(a->v);
+		// Replace a previous copy of the same script: settings changes
+		// re-add it and one copy is enough.
+		auto it = a->self->fUserScripts.find(a->js);
+		if (it != a->self->fUserScripts.end()) {
+			webkit_user_content_manager_remove_script(ucm, it->second);
+			webkit_user_script_unref(it->second);
+			a->self->fUserScripts.erase(it);
+		}
 		WebKitUserScript* script = webkit_user_script_new(
 			a->js.c_str(),
 			WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
@@ -825,7 +838,7 @@ WebKitBridge::AddUserScript(const std::string& js, bool atDocStart)
 				: WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
 			nullptr, nullptr);
 		webkit_user_content_manager_add_script(ucm, script);
-		webkit_user_script_unref(script);
+		a->self->fUserScripts[a->js] = script;
 		delete a;
 		return G_SOURCE_REMOVE;
 	}, a);

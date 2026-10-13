@@ -1,0 +1,51 @@
+/*
+ * Copyright 2026, VitruvianOS Project.
+ * Distributed under the terms of the MIT License.
+ */
+#ifndef SETTINGS_WINDOW_H
+#define SETTINGS_WINDOW_H
+
+
+#include <Window.h>
+
+
+class BButton;
+class BCheckBox;
+class BMenuField;
+class BTextControl;
+
+
+class SettingsWindow : public BWindow {
+public:
+								SettingsWindow(BRect frame);
+	virtual						~SettingsWindow();
+
+	virtual void				MessageReceived(BMessage* message);
+	virtual bool				QuitRequested();
+
+	// Creates the window on first use and shows or activates it.
+	static	void				ShowWindow(BRect frame);
+
+private:
+			void				_LoadFromSettings();
+			void				_ApplyAndSave();
+			void				_UpdateCustomTemplateEnabled();
+
+			BTextControl*		fHomepage;
+			BMenuField*			fSearchEngine;
+			BTextControl*		fCustomTemplate;
+			BTextControl*		fDownloadDir;
+			BButton*			fBrowseButton;
+			BCheckBox*			fAskDownload;
+			BCheckBox*			fJavaScript;
+			BCheckBox*			fImages;
+			BTextControl*		fUserAgentSuffix;
+			BTextControl*		fBlockedDomains;
+			BCheckBox*			fPrivateBrowsing;
+			BTextControl*		fZoomDefault;
+			BCheckBox*			fRestoreSession;
+			BButton*			fClearDataButton;
+};
+
+
+#endif // SETTINGS_WINDOW_H

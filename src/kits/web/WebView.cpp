@@ -28,6 +28,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <atomic>
 #include <condition_variable>
 #include <cstdlib>
 #include <mutex>
@@ -122,10 +123,13 @@ struct BWebView::WebViewImpl {
 	bool				fOwnsSession;
 	BMessenger			fSelfMessenger;
 	BPoint				fLastMouse;
+	// Hover strings are written on the GLib thread and read on the
+	// window thread; the atomics carry cursor and full-screen state.
+	std::mutex			fHoverMutex;
 	std::string			fHoverLink;
 	std::string			fHoverImage;
-	int32				fCursorId;
-	bool				fFullScreen;
+	std::atomic<int32>	fCursorId;
+	std::atomic<bool>	fFullScreen;
 	bool				fDragPending;
 	BPoint				fDragStart;
 	std::string			fDragLink;
@@ -133,6 +137,7 @@ struct BWebView::WebViewImpl {
 	// thread owns each state and deletes it after the wait returns.
 	std::mutex			fDialogMutex;
 	std::set<DialogState*>	fDialogs;
+	std::mutex			fChooserMutex;
 	FileChooserState*	fPendingFileChooser;
 	BFilePanel*			fPendingAskPanel;
 	BFilePanel*			fPendingSavePanel;
@@ -395,8 +400,11 @@ BWebView::AttachedToWindow()
 
 	fImpl->fBridge->onHoverChanged = [this](const std::string& link,
 		const std::string& image) {
-		fImpl->fHoverLink = link;
-		fImpl->fHoverImage = image;
+		{
+			std::lock_guard<std::mutex> lock(fImpl->fHoverMutex);
+			fImpl->fHoverLink = link;
+			fImpl->fHoverImage = image;
+		}
 		if (fTarget.IsValid()) {
 			BMessage msg(B_WEB_PAGE_HOVER_CHANGED);
 			msg.AddString(B_WEB_URL_FIELD, link.c_str());
@@ -406,10 +414,12 @@ BWebView::AttachedToWindow()
 	};
 
 	fImpl->fBridge->onCursorChanged = [this](int32 cursorId) {
-		if (cursorId == fImpl->fCursorId)
+		if (cursorId == fImpl->fCursorId.load())
 			return;
-		fImpl->fCursorId = cursorId;
-		fImpl->fSelfMessenger.SendMessage(kMsgCursorChanged);
+		fImpl->fCursorId.store(cursorId);
+		BMessage msg(kMsgCursorChanged);
+		msg.AddInt32("cursor", cursorId);
+		fImpl->fSelfMessenger.SendMessage(&msg);
 	};
 
 	fImpl->fBridge->onContextMenu = [this](const std::string& link,
@@ -448,7 +458,7 @@ BWebView::AttachedToWindow()
 	};
 
 	fImpl->fBridge->onFullscreenChanged = [this](bool entered) {
-		fImpl->fFullScreen = entered;
+		fImpl->fFullScreen.store(entered);
 		BMessage msg(kMsgFullScreen);
 		msg.AddBool(B_WEB_FULLSCREEN_FIELD, entered);
 		fImpl->fSelfMessenger.SendMessage(&msg);
@@ -520,7 +530,16 @@ BWebView::AttachedToWindow()
 			request);
 		state->cancelled = true;
 		state->panel = NULL;
-		fImpl->fPendingFileChooser = state;
+		{
+			std::lock_guard<std::mutex> lock(fImpl->fChooserMutex);
+			if (fImpl->fPendingFileChooser != NULL) {
+				// One chooser at a time: a second request is
+				// cancelled instead of overwriting the first.
+				delete state;
+				return false;
+			}
+			fImpl->fPendingFileChooser = state;
+		}
 
 		BMessage msg(kMsgFileChooserDone);
 		fImpl->fSelfMessenger.SendMessage(&msg);
@@ -651,12 +670,16 @@ BWebView::DetachedFromWindow()
 	delete fImpl->fPendingSavePanel;
 	fImpl->fPendingSavePanel = NULL;
 
-	if (fImpl->fPendingFileChooser != NULL) {
-		FileChooserState* state = fImpl->fPendingFileChooser;
+	FileChooserState* chooser = NULL;
+	{
+		std::lock_guard<std::mutex> lock(fImpl->fChooserMutex);
+		chooser = fImpl->fPendingFileChooser;
 		fImpl->fPendingFileChooser = NULL;
-		delete state->panel;
-		if (state->request != NULL) {
-			WebKitFileChooserRequest* request = state->request;
+	}
+	if (chooser != NULL) {
+		delete chooser->panel;
+		if (chooser->request != NULL) {
+			WebKitFileChooserRequest* request = chooser->request;
 			ProcessManager::Instance().InvokeOnGLibThread(
 				[](void* d) -> gboolean {
 					webkit_file_chooser_request_select_files(
@@ -666,7 +689,7 @@ BWebView::DetachedFromWindow()
 					return G_SOURCE_REMOVE;
 				}, request);
 		}
-		delete state;
+		delete chooser;
 	}
 
 	if (fImpl->fBridge != NULL && fImpl->fBridge->downloadHandler != NULL) {
@@ -724,7 +747,8 @@ BWebView::MessageReceived(BMessage* message)
 		case kMsgCursorChanged:
 		{
 			static BCursor* sCursors[32] = { NULL };
-			int32 id = fImpl->fCursorId;
+			int32 id = B_CURSOR_ID_SYSTEM_DEFAULT;
+			message->FindInt32("cursor", &id);
 			if (id >= 0 && id < 32) {
 				if (sCursors[id] == NULL)
 					sCursors[id] = new BCursor((BCursorID)id);
@@ -930,7 +954,11 @@ BWebView::MessageReceived(BMessage* message)
 
 		case kMsgFileChooserDone:
 		{
-			FileChooserState* state = fImpl->fPendingFileChooser;
+			FileChooserState* state = NULL;
+			{
+				std::lock_guard<std::mutex> lock(fImpl->fChooserMutex);
+				state = fImpl->fPendingFileChooser;
+			}
 			if (state == NULL || Window() == NULL)
 				break;
 
@@ -949,7 +977,11 @@ BWebView::MessageReceived(BMessage* message)
 			message->FindPointer("chooser", (void**)&state);
 			if (state == NULL)
 				break;
-			fImpl->fPendingFileChooser = NULL;
+			{
+				std::lock_guard<std::mutex> lock(fImpl->fChooserMutex);
+				if (fImpl->fPendingFileChooser == state)
+					fImpl->fPendingFileChooser = NULL;
+			}
 
 			state->paths.clear();
 			entry_ref ref;
@@ -1155,24 +1187,30 @@ BWebView::MouseDown(BPoint where)
 #ifdef HAS_WPE
 	fImpl->fLastMouse = where;
 
+	std::string hoverLink;
+	{
+		std::lock_guard<std::mutex> lock(fImpl->fHoverMutex);
+		hoverLink = fImpl->fHoverLink;
+	}
+
 	// Middle click opens the link under the pointer in a new window.
 	if (fImpl->fBridge != NULL && fImpl->fBridge->IsValid()) {
 		int32 buttons = 0;
 		if (Window() != NULL && Window()->CurrentMessage() != NULL)
 			Window()->CurrentMessage()->FindInt32("buttons", &buttons);
 		if ((buttons & B_TERTIARY_MOUSE_BUTTON) != 0
-			&& !fImpl->fHoverLink.empty() && fTarget.IsValid()) {
+			&& !hoverLink.empty() && fTarget.IsValid()) {
 			BMessage msg(B_WEB_PAGE_NEW_WINDOW);
-			msg.AddString(B_WEB_URL_FIELD, fImpl->fHoverLink.c_str());
+			msg.AddString(B_WEB_URL_FIELD, hoverLink.c_str());
 			fTarget.SendMessage(&msg);
 			return;
 		}
 
 		// A drag starts over a link: remember it until the pointer
 		// moves far enough to hand the URL to DragMessage.
-		fImpl->fDragPending = !fImpl->fHoverLink.empty();
+		fImpl->fDragPending = !hoverLink.empty();
 		fImpl->fDragStart = where;
-		fImpl->fDragLink = fImpl->fHoverLink;
+		fImpl->fDragLink = hoverLink;
 
 		// Forward the window's own message (buttons, clicks, modifiers)
 		// with the position in view coordinates.
@@ -1259,9 +1297,9 @@ BWebView::KeyDown(const char* bytes, int32 numBytes)
 	// Escape leaves full-screen video even while the page keeps
 	// focus: the embedder owns the window, so the exit has to
 	// travel both to WebKit and to the window.
-	if (fImpl->fFullScreen && bytes != NULL && numBytes > 0
+	if (fImpl->fFullScreen.load() && bytes != NULL && numBytes > 0
 		&& bytes[0] == B_ESCAPE) {
-		fImpl->fFullScreen = false;
+		fImpl->fFullScreen.store(false);
 		if (fImpl->fBridge != NULL)
 			fImpl->fBridge->NotifyDidExitFullscreen();
 		if (fTarget.IsValid()) {

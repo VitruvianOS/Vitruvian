@@ -28,6 +28,7 @@ private:
 			BButton*			fBackButton;
 			BButton*			fForwardButton;
 			BButton*			fReloadStopButton;
+			BButton*			fHomeButton;
 			BTextControl*		fURLBar;
 			bool				fLoading;
 };

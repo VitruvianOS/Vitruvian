@@ -14,6 +14,7 @@ enum {
 	MSG_NAV_FORWARD		= 'navf',
 	MSG_NAV_RELOAD		= 'navr',
 	MSG_NAV_STOP		= 'navs',
+	MSG_NAV_HOME		= 'navh',
 	MSG_OPEN_URL		= 'ourl'
 };
 

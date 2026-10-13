@@ -21,6 +21,7 @@ ToolbarView::ToolbarView(BRect frame)
 	fBackButton(nullptr),
 	fForwardButton(nullptr),
 	fReloadStopButton(nullptr),
+	fHomeButton(nullptr),
 	fURLBar(nullptr),
 	fLoading(false)
 {
@@ -29,6 +30,7 @@ ToolbarView::ToolbarView(BRect frame)
 	fBackButton       = new BButton("\xe2\x86\x90", new BMessage(MSG_NAV_BACK));
 	fForwardButton    = new BButton("\xe2\x86\x92", new BMessage(MSG_NAV_FORWARD));
 	fReloadStopButton = new BButton("\xe2\x86\xba", new BMessage(MSG_NAV_RELOAD));
+	fHomeButton       = new BButton("\xe2\x8c\x82", new BMessage(MSG_NAV_HOME));
 
 	fURLBar = new BTextControl("", "", new BMessage(MSG_OPEN_URL));
 	fURLBar->SetExplicitMinSize(BSize(200, B_SIZE_UNSET));
@@ -39,6 +41,7 @@ ToolbarView::ToolbarView(BRect frame)
 		.Add(fBackButton)
 		.Add(fForwardButton)
 		.Add(fReloadStopButton)
+		.Add(fHomeButton)
 		.AddStrut(B_USE_SMALL_SPACING)
 		.Add(fURLBar, 1.0f);
 }
@@ -54,6 +57,7 @@ ToolbarView::AttachedToWindow()
 	fBackButton->SetTarget(Window());
 	fForwardButton->SetTarget(Window());
 	fReloadStopButton->SetTarget(Window());
+	fHomeButton->SetTarget(Window());
 	fURLBar->SetTarget(Window());
 	fBackButton->SetEnabled(false);
 	fForwardButton->SetEnabled(false);

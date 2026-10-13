@@ -24,6 +24,10 @@
 #include <View.h>
 
 
+// Built-in start page until the homepage becomes a setting.
+static const char* kHomePage = "vos-about:";
+
+
 MainWindow::MainWindow(BRect frame, const char* startupURL)
 	:
 	BWindow(frame, "NetPlus", B_TITLED_WINDOW, B_QUIT_ON_WINDOW_CLOSE),
@@ -74,7 +78,7 @@ MainWindow::MainWindow(BRect frame, const char* startupURL)
 
 	_ConnectNotifications();
 
-	const char* url = (startupURL && startupURL[0]) ? startupURL : "vos-about:";
+	const char* url = (startupURL && startupURL[0]) ? startupURL : kHomePage;
 	fWebView->LoadURL(url);
 }
 
@@ -132,6 +136,13 @@ MainWindow::MessageReceived(BMessage* message)
 			if (fWebView) {
 				fWebView->Stop();
 				if (fToolbar) fToolbar->SetLoading(false);
+			}
+			break;
+
+		case MSG_NAV_HOME:
+			if (fWebView) {
+				fWebView->LoadURL(kHomePage);
+				if (fToolbar) fToolbar->SetLoading(true);
 			}
 			break;
 

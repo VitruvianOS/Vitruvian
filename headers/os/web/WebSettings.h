@@ -23,6 +23,9 @@ public:
 			status_t			Load(const char* path);
 			status_t			Save() const;
 
+			// Points the settings at a file without reading it;
+			// Save then creates it with the current values.
+			void				SetPath(const char* path);
 			const std::string&	Path() const { return fPath; }
 
 			// Missing keys return the default; Set stores the value

@@ -71,6 +71,7 @@ public:
 	// view's (shared per profile) session.
 			void				SetDownloadDirectory(const char* path);
 			void				SetAskDownloadLocation(bool ask);
+			void				CancelDownload(uint64 id);
 
 	// Editing: routed through WebKit and mirrored to BClipboard.
 			void				Cut();
@@ -81,6 +82,12 @@ public:
 	// Downloads a URI; a non-empty destination pins the save path.
 			void				DownloadURI(const char* uri,
 									const char* destination = nullptr);
+
+	// Page scripts and styles: applied to every document the view
+	// loads (NetPlus injects the search template for the start page).
+			void				AddUserScript(const char* javascript,
+									bool atDocumentStart);
+			void				AddUserStyleSheet(const char* css);
 
 	// Full-screen video: the window calls this after it entered or
 	// left full-screen; the reply tells WebKit the transition done.

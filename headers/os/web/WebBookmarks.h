@@ -23,6 +23,10 @@ public:
 			status_t			Load(const char* path);
 			status_t			Save() const;
 
+			// Points the bookmarks at a file without reading it;
+			// Save then creates it with the current list.
+			void				SetPath(const char* path);
+
 			// Adding an URL that is already bookmarked replaces
 			// its title.
 			void				Add(const char* title, const char* url);

@@ -132,3 +132,33 @@ ProcessManager::InvokeOnGLibThread(GSourceFunc func, void* data)
 {
 	g_main_context_invoke(fContext, func, data);
 }
+
+
+void
+ProcessManager::InvokeOnGLibThreadSync(std::function<void()> func)
+{
+	if (g_main_context_is_owner(fContext)) {
+		func();
+		return;
+	}
+
+	struct Call {
+		std::function<void()>	func;
+		std::mutex				lock;
+		std::condition_variable	done;
+		bool					finished = false;
+	} call;
+	call.func = std::move(func);
+
+	g_main_context_invoke(fContext, [](void* data) -> gboolean {
+		Call* call = static_cast<Call*>(data);
+		call->func();
+		std::lock_guard<std::mutex> _(call->lock);
+		call->finished = true;
+		call->done.notify_one();
+		return G_SOURCE_REMOVE;
+	}, &call);
+
+	std::unique_lock<std::mutex> lock(call.lock);
+	call.done.wait(lock, [&call]() { return call.finished; });
+}

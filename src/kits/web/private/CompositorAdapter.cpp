@@ -52,7 +52,9 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 {
 	init_fdo_backend();
 
-	struct wpe_view_backend_exportable_fdo_client exportClient;
+	// fdo keeps this pointer for the exportable's lifetime: it must not
+	// live on the stack.
+	static struct wpe_view_backend_exportable_fdo_client exportClient;
 	memset(&exportClient, 0, sizeof(exportClient));
 
 	exportClient.export_shm_buffer =

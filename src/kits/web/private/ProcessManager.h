@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <mutex>
 
 
@@ -21,6 +22,10 @@ public:
 			void			StartGLibLoop();
 			void			StopGLibLoop();
 			void			InvokeOnGLibThread(GSourceFunc func, void* data);
+	// Runs func on the GLib thread and waits for it. WebKit binds itself
+	// to the thread that first uses it, so every WebKit call, including
+	// creating and destroying views, has to happen there.
+			void			InvokeOnGLibThreadSync(std::function<void()> func);
 
 			GMainLoop*		MainLoop() const { return fLoop; }
 			GMainContext*	Context() const { return fContext; }

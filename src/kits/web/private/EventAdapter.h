@@ -37,7 +37,6 @@ private:
 	static uint32_t		_LegacyButtonToWPE(int32 buttons);
 	static uint32_t		_LegacyKeyToXKB(int32 rawKey, const char* bytes,
 							int32 numBytes);
-	static uint32_t		_DecodeUTF8(const char* bytes, int32 numBytes);
 
 			void		_DispatchKey(uint32_t keyCode, uint32_t modifiers,
 							bool pressed);

@@ -7,6 +7,7 @@
 find_package(PkgConfig)
 
 set(WEB_SOURCES
+	UrlNormalize.cpp
 	WebView.cpp
 )
 
@@ -25,6 +26,8 @@ if(PKG_CONFIG_FOUND)
 
 	if(VOS_WEBKIT2_FOUND AND VOS_LIBWPE_FOUND AND VOS_WPE_FDO_FOUND)
 		set(WEB_PRIVATE_SOURCES
+			private/BookmarksParser.cpp
+			private/ClipboardDragdrop.cpp
 			private/CompositorAdapter.cpp
 			private/DomainFilter.cpp
 			private/DownloadHandler.cpp
@@ -32,7 +35,10 @@ if(PKG_CONFIG_FOUND)
 			private/EventAdapter.cpp
 			private/FocusAndCursor.cpp
 			private/FrameNotifier.cpp
+			private/KeyTables.cpp
 			private/Logging.cpp
+			private/NotificationsBridge.cpp
+			private/PdfLoader.cpp
 			private/ProcessManager.cpp
 			private/SessionAdapter.cpp
 			private/SettingsParser.cpp

@@ -5,6 +5,7 @@
 
 #include "event_adapter.h"
 
+#include "KeyTables.h"
 #include "logging.h"
 #include "process_manager.h"
 
@@ -62,143 +63,6 @@ EventAdapter::~EventAdapter()
 //	#pragma mark - Private
 
 
-// V\OS hybrid keycode space: <=0x7f is the legacy keycode, not an
-// evdev code and not the ASCII byte constants in InterfaceDefs.h.
-// Values match the input_server mapping (see LinuxKeycodeMap.h).
-enum {
-	kLegacyEscKey		= 0x01,
-	kLegacyPrintKey		= 0x0e,
-	kLegacyScrollLockKey	= 0x0f,
-	kLegacyPauseKey		= 0x10,
-	kLegacyBacktickKey	= 0x11,
-	kLegacyBackspaceKey	= 0x1e,
-	kLegacyInsertKey		= 0x1f,
-	kLegacyHomeKey		= 0x20,
-	kLegacyPageUpKey		= 0x21,
-	kLegacyNumLockKey	= 0x22,
-	kLegacyTabKey		= 0x26,
-	kLegacyDeleteKey		= 0x34,
-	kLegacyEndKey		= 0x35,
-	kLegacyPageDownKey	= 0x36,
-	kLegacyCapsLockKey	= 0x3b,
-	kLegacyEnterKey		= 0x47,
-	kLegacyLeftShiftKey	= 0x4b,
-	kLegacyRightShiftKey	= 0x56,
-	kLegacyUpKey			= 0x57,
-	kLegacyKPEnterKey	= 0x5b,
-	kLegacyLeftCtrlKey	= 0x5c,
-	kLegacyLeftAltKey	= 0x5d,
-	kLegacyRightAltKey	= 0x5f,
-	kLegacyRightCtrlKey	= 0x60,
-	kLegacyLeftKey		= 0x61,
-	kLegacyDownKey		= 0x62,
-	kLegacyRightKey		= 0x63,
-	kLegacyLeftMetaKey	= 0x66,
-	kLegacyRightMetaKey	= 0x67,
-	kLegacyMenuKey		= 0x68
-};
-
-
-// X11 keysyms (libwpe key_code space).
-enum {
-	kXK_Escape		= 0xff1b,
-	kXK_Space		= 0x0020,
-	kXK_BackSpace	= 0xff08,
-	kXK_Tab			= 0xff09,
-	kXK_Return		= 0xff0d,
-	kXK_KP_Enter	= 0xff8d,
-	kXK_Escape_		= 0xff1b,
-	kXK_Home		= 0xff50,
-	kXK_Left		= 0xff51,
-	kXK_Up			= 0xff52,
-	kXK_Right		= 0xff53,
-	kXK_Down		= 0xff54,
-	kXK_Page_Up		= 0xff55,
-	kXK_Page_Down	= 0xff56,
-	kXK_End			= 0xff57,
-	kXK_Insert		= 0xff63,
-	kXK_Delete		= 0xffff,
-	kXK_Print		= 0xff61,
-	kXK_Scroll_Lock	= 0xff14,
-	kXK_Pause		= 0xff13,
-	kXK_Num_Lock	= 0xff7f,
-	kXK_Caps_Lock	= 0xffe5,
-	kXK_Shift_L		= 0xffe1,
-	kXK_Shift_R		= 0xffe2,
-	kXK_Control_L	= 0xffe3,
-	kXK_Control_R	= 0xffe4,
-	kXK_Alt_L		= 0xffe9,
-	kXK_Alt_R		= 0xffea,
-	kXK_Super_L		= 0xffeb,
-	kXK_Super_R		= 0xffec,
-	kXK_Menu		= 0xff67,
-	kXK_F1			= 0xffbe,
-	kXK_F12			= 0xffc9
-};
-
-
-// Raw evdev codes the input server passes through untranslated (>=0x80)
-// plus media keys that have no legacy keycode.
-enum {
-	kEvdevPrintScreen	= 99,
-	kEvdevLeftCtrl		= 29,
-	kEvdevMenu			= 139,
-	kEvdevPlayPause		= 164,
-	kEvdevNextTrack		= 163,
-	kEvdevPrevTrack		= 165,
-	kEvdevStop			= 166,
-	kEvdevMute			= 113,
-	kEvdevVolumeDown	= 114,
-	kEvdevVolumeUp		= 115
-};
-
-enum {
-	kXK_XF86AudioPlay		= 0x1008ff14,
-	kXK_XF86AudioStop		= 0x1008ff15,
-	kXK_XF86AudioNext		= 0x1008ff17,
-	kXK_XF86AudioPrev		= 0x1008ff16,
-	kXK_XF86AudioMute		= 0x1008ff12,
-	kXK_XF86AudioLower		= 0x1008ff11,
-	kXK_XF86AudioRaise		= 0x1008ff13
-};
-
-
-uint32_t
-EventAdapter::_DecodeUTF8(const char* bytes, int32 numBytes)
-{
-	if (bytes == NULL || numBytes < 1)
-		return 0;
-
-	const unsigned char* p = (const unsigned char*)bytes;
-	uint32_t cp = p[0];
-	int32 len = 1;
-	if (cp < 0x80) {
-		return cp;
-	} else if ((cp & 0xe0) == 0xc0) {
-		cp &= 0x1f;
-		len = 2;
-	} else if ((cp & 0xf0) == 0xe0) {
-		cp &= 0x0f;
-		len = 3;
-	} else if ((cp & 0xf8) == 0xf0) {
-		cp &= 0x07;
-		len = 4;
-	} else {
-		return 0;
-	}
-
-	if (numBytes < len)
-		return 0;
-
-	for (int32 i = 1; i < len; i++) {
-		if ((p[i] & 0xc0) != 0x80)
-			return 0;
-		cp = (cp << 6) | (p[i] & 0x3f);
-	}
-	return cp;
-}
-
-
 uint32_t
 EventAdapter::_LegacyModsToWPE(uint32 legacyMods)
 {
@@ -219,12 +83,9 @@ EventAdapter::_LegacyModsToWPE(uint32 legacyMods)
 uint32_t
 EventAdapter::_LegacyPointerModsToWPE(uint32 legacyMods)
 {
-	uint32_t wpe = _LegacyModsToWPE(legacyMods);
-	// Browsers treat Ctrl+click as a middle click (open in new window);
-	// on V\OS that chord arrives as Command on physical Control.
-	if (legacyMods & B_COMMAND_KEY)
-		wpe |= wpe_input_pointer_modifier_button2;
-	return wpe;
+	// WebKit derives Ctrl+click (open in new window) from the control
+	// modifier alone; button2 would mean the middle button is down.
+	return _LegacyModsToWPE(legacyMods);
 }
 
 
@@ -247,11 +108,11 @@ EventAdapter::_LegacyKeyToXKB(int32 rawKey, const char* bytes, int32 numBytes)
 {
 	// Ctrl+letter arrives folded to 0x01-0x1a by xkb; expand it back so
 	// the page sees the real letter key with the control modifier.
-	uint32_t modifiers = 0;
 	if (numBytes > 0 && bytes != NULL) {
 		unsigned char b0 = (unsigned char)bytes[0];
-		if (b0 >= 0x01 && b0 <= 0x1a && numBytes == 1)
-			return wpe_unicode_to_key_code((uint32_t)('a' + b0 - 1));
+		uint32_t letter = web_unfold_ctrl_letter(b0);
+		if (letter != 0 && numBytes == 1)
+			return wpe_unicode_to_key_code(letter);
 	}
 
 	// Printable characters, including multi-byte UTF-8 text: xkb is the
@@ -261,77 +122,14 @@ EventAdapter::_LegacyKeyToXKB(int32 rawKey, const char* bytes, int32 numBytes)
 		if (b0 >= 0x20 && b0 < 0x7f)
 			return wpe_unicode_to_key_code((uint32_t)b0);
 		if (b0 >= 0x80) {
-			uint32_t cp = _DecodeUTF8(bytes, numBytes);
+			uint32_t cp = web_decode_utf8(bytes, numBytes);
 			if (cp != 0)
 				return wpe_unicode_to_key_code(cp);
 		}
 	}
 
-	// Special keys, keyed by the legacy keycode.
-	switch (rawKey) {
-		case kLegacyEscKey:			return kXK_Escape;
-		case kLegacyPrintKey:		return kXK_Print;
-		case kLegacyScrollLockKey:	return kXK_Scroll_Lock;
-		case kLegacyPauseKey:		return kXK_Pause;
-		case B_F1_KEY:				return kXK_F1;
-		case B_F2_KEY:				return kXK_F1 + 1;
-		case B_F3_KEY:				return kXK_F1 + 2;
-		case B_F4_KEY:				return kXK_F1 + 3;
-		case B_F5_KEY:				return kXK_F1 + 4;
-		case B_F6_KEY:				return kXK_F1 + 5;
-		case B_F7_KEY:				return kXK_F1 + 6;
-		case B_F8_KEY:				return kXK_F1 + 7;
-		case B_F9_KEY:				return kXK_F1 + 8;
-		case B_F10_KEY:				return kXK_F1 + 9;
-		case B_F11_KEY:				return kXK_F1 + 10;
-		case B_F12_KEY:				return kXK_F1 + 11;
-		case kLegacyBackspaceKey:	return kXK_BackSpace;
-		case kLegacyInsertKey:		return kXK_Insert;
-		case kLegacyHomeKey:			return kXK_Home;
-		case kLegacyPageUpKey:		return kXK_Page_Up;
-		case kLegacyNumLockKey:		return kXK_Num_Lock;
-		case kLegacyTabKey:			return kXK_Tab;
-		case kLegacyDeleteKey:		return kXK_Delete;
-		case kLegacyEndKey:			return kXK_End;
-		case kLegacyPageDownKey:		return kXK_Page_Down;
-		case kLegacyCapsLockKey:		return kXK_Caps_Lock;
-		case kLegacyEnterKey:		return kXK_Return;
-		case kLegacyLeftShiftKey:	return kXK_Shift_L;
-		case kLegacyRightShiftKey:	return kXK_Shift_R;
-		case kLegacyUpKey:			return kXK_Up;
-		case kLegacyKPEnterKey:		return kXK_KP_Enter;
-		case kLegacyLeftCtrlKey:		return kXK_Control_L;
-		case kLegacyLeftAltKey:		return kXK_Alt_L;
-		case kLegacyRightAltKey:		return kXK_Alt_R;
-		case kLegacyRightCtrlKey:	return kXK_Control_R;
-		case kLegacyLeftKey:			return kXK_Left;
-		case kLegacyDownKey:			return kXK_Down;
-		case kLegacyRightKey:		return kXK_Right;
-		case kLegacyLeftMetaKey:		return kXK_Super_L;
-		case kLegacyRightMetaKey:	return kXK_Super_R;
-		case kLegacyMenuKey:			return kXK_Menu;
-		default:
-			break;
-	}
-
-	// Keypad and misc keys arrive as raw evdev codes (>=0x80, or legacy
-	//-range values the legacy table does not cover).
-	switch (rawKey) {
-		case kEvdevPlayPause:	return kXK_XF86AudioPlay;
-		case kEvdevStop:		return kXK_XF86AudioStop;
-		case kEvdevNextTrack:	return kXK_XF86AudioNext;
-		case kEvdevPrevTrack:	return kXK_XF86AudioPrev;
-		case kEvdevMute:		return kXK_XF86AudioMute;
-		case kEvdevVolumeDown:	return kXK_XF86AudioLower;
-		case kEvdevVolumeUp:	return kXK_XF86AudioRaise;
-		default:
-			break;
-	}
-
-	(void)modifiers;
-	(void)kXK_Escape_;
-	(void)kXK_Space;
-	return 0;
+	// Special keys (Haiku legacy keycodes and raw evdev media keys).
+	return web_special_key_to_keysym(rawKey);
 }
 
 
@@ -460,9 +258,6 @@ EventAdapter::TranslateMouseDown(const BMessage* msg)
 
 	int32 buttons = 0;
 	msg->FindInt32("buttons", &buttons);
-
-	int32 clicks = 1;
-	msg->FindInt32("clicks", &clicks);
 
 	uint32 modifiers = 0;
 	msg->FindInt32("modifiers", (int32*)&modifiers);

@@ -13,6 +13,7 @@ public:
 			void		SetPdfjsPath(const std::string& path);
 	std::string			BuildViewerURL(const std::string& sourceURL) const;
 			bool		IsPDFContentType(const std::string& mimeType) const;
+			bool		HasViewer() const;
 
 private:
 			std::string	fPdfjsPath;

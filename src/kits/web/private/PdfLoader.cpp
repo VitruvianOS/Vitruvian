@@ -4,6 +4,8 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <system_error>
 
 
 //	#pragma mark - Constructor/Destructor
@@ -57,4 +59,15 @@ bool
 PdfLoader::IsPDFContentType(const std::string& mimeType) const
 {
 	return mimeType == "application/pdf";
+}
+
+
+bool
+PdfLoader::HasViewer() const
+{
+	// The viewer page is static HTML plus pdf.js; without the bundle it
+	// cannot render anything, so callers should download instead.
+	namespace fs = std::filesystem;
+	std::error_code ec;
+	return fs::exists(fPdfjsPath + "/viewer.html", ec);
 }

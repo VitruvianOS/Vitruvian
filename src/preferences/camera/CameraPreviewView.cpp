@@ -60,7 +60,8 @@ CameraPreviewView::SetCamera(BCameraSource* camera)
 		delete fBitmap;
 		fBitmap = NULL;
 	}
-	if (Window() != NULL)
+	// No camera attached is a normal state, not an error.
+	if (fCamera != NULL && Window() != NULL)
 		fCamera->SetFrameTarget(BMessenger(this));
 	Invalidate();
 }

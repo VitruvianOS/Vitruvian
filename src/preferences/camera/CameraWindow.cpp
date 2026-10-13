@@ -153,7 +153,8 @@ CameraWindow::_BuildInterface()
 		.View());
 	fControlsBox->Hide();
 
-	BView* content = BLayoutBuilder::Group<>(this, B_HORIZONTAL, 10)
+	// Building on the window installs and fills its layout.
+	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 10)
 		.SetInsets(10)
 		.AddGroup(B_VERTICAL, 5, 180)
 			.Add(new BStringView("title", B_TRANSLATE("Cameras")))
@@ -164,10 +165,7 @@ CameraWindow::_BuildInterface()
 			.Add(fPreview, 1.0f)
 			.Add(fEmptyView)
 			.Add(fControlsBox)
-		.End()
-		.View();
-	SetLayout(new BGroupLayout(B_HORIZONTAL));
-	AddChild(content);
+		.End();
 }
 
 

@@ -41,6 +41,14 @@ set(OPENGL_RENDERERS
 ImageInclude("/system/add-ons/opengl" ${OPENGL_RENDERERS})
 
 
+# Account provider add-ons, enumerated by BAccountRoster.
+set(ACCOUNT_PROVIDER_ADDONS
+	ImapProvider
+	Oauth2Provider
+)
+ImageInclude("/system/add-ons/accounts" ${ACCOUNT_PROVIDER_ADDONS})
+
+
 set(SYSTEM_LIBS
 	root
 	be

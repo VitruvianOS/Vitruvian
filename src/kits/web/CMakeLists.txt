@@ -74,8 +74,9 @@ if(WEB_PRIVATE_SOURCES)
 		${VOS_GLIB_CFLAGS_OTHER}
 		${VOS_WAYLAND_CFLAGS_OTHER}
 	)
+	# BFilePanel lives in the tracker kit, like in the legacy API.
 	target_link_libraries(web PRIVATE
-		be root pthread
+		be root pthread tracker
 		${VOS_WEBKIT2_LIBRARIES}
 		${VOS_LIBWPE_LIBRARIES}
 		${VOS_WPE_FDO_LIBRARIES}

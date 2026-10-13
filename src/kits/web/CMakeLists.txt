@@ -8,7 +8,17 @@ find_package(PkgConfig)
 
 set(WEB_SOURCES
 	UrlNormalize.cpp
+	WebBookmarks.cpp
+	WebSettings.cpp
 	WebView.cpp
+)
+
+# Pure key=value / bookmark parsers: no WebKit dependency, compiled
+# always so the public settings and bookmarks facades work even when
+# WPE is not linked.
+set(WEB_CORE_PRIVATE_SOURCES
+	private/BookmarksParser.cpp
+	private/SettingsParser.cpp
 )
 
 set(WEB_PRIVATE_SOURCES "")
@@ -24,10 +34,9 @@ if(PKG_CONFIG_FOUND)
 	pkg_check_modules(VOS_GLIB glib-2.0 QUIET)
 	pkg_check_modules(VOS_WAYLAND wayland-server QUIET)
 
-	if(VOS_WEBKIT2_FOUND AND VOS_LIBWPE_FOUND AND VOS_WPE_FDO_FOUND)
-		set(WEB_PRIVATE_SOURCES
-			private/BookmarksParser.cpp
-			private/ClipboardDragdrop.cpp
+		if(VOS_WEBKIT2_FOUND AND VOS_LIBWPE_FOUND AND VOS_WPE_FDO_FOUND)
+			set(WEB_PRIVATE_SOURCES
+				private/ClipboardDragdrop.cpp
 			private/CompositorAdapter.cpp
 			private/DomainFilter.cpp
 			private/DownloadHandler.cpp
@@ -40,9 +49,8 @@ if(PKG_CONFIG_FOUND)
 			private/NotificationsBridge.cpp
 			private/PdfLoader.cpp
 			private/ProcessManager.cpp
-			private/SessionAdapter.cpp
-			private/SettingsParser.cpp
-			private/UrlSchemeAdapter.cpp
+				private/SessionAdapter.cpp
+				private/UrlSchemeAdapter.cpp
 			private/WebkitBridge.cpp
 		)
 	else()
@@ -50,11 +58,16 @@ if(PKG_CONFIG_FOUND)
 	endif()
 endif()
 
-add_library(web SHARED ${WEB_SOURCES} ${WEB_PRIVATE_SOURCES})
+add_library(web SHARED ${WEB_SOURCES} ${WEB_CORE_PRIVATE_SOURCES}
+	${WEB_PRIVATE_SOURCES})
 
 target_include_directories(web PUBLIC
 	${PROJECT_SOURCE_DIR}/headers
 	${PROJECT_SOURCE_DIR}/headers/os
+)
+
+target_include_directories(web PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/private
 )
 
 if(WEB_PRIVATE_SOURCES)

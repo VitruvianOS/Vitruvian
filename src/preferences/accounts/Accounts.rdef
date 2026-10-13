@@ -1,0 +1,20 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
+
+resource(1, "BEOS:APP_SIG") #'MIMS' "application/x-vnd.vos-Accounts";
+
+resource app_flags B_SINGLE_LAUNCH;
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor = 0,
+
+	variety = B_APPV_DEVELOPMENT,
+	internal = 0,
+
+	short_info = "Accounts Preferences",
+	long_info = "Online accounts preferences"
+};

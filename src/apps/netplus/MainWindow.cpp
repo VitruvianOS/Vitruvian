@@ -67,8 +67,11 @@ MainWindow::MainWindow(BRect frame, const char* url, bool privateWindow)
 	fileMenu->AddItem(new BMenuItem("Show Downloads",
 		new BMessage(MSG_SHOW_DOWNLOADS), 'J'));
 	fileMenu->AddSeparatorItem();
-	fileMenu->AddItem(new BMenuItem("Quit",
-		new BMessage(B_QUIT_REQUESTED), 'Q'));
+	// Quit closes the whole application, like the legacy browser.
+	BMenuItem* quitItem = new BMenuItem("Quit",
+		new BMessage(B_QUIT_REQUESTED), 'Q');
+	quitItem->SetTarget(be_app);
+	fileMenu->AddItem(quitItem);
 	fMenuBar->AddItem(fileMenu);
 
 	BMenu* editMenu = new BMenu("Edit");
@@ -290,7 +293,8 @@ MainWindow::QuitRequested()
 	DownloadsWindow::DetachWebView(fWebView);
 
 	BWebSettings* settings = NetPlusApp::Settings();
-	if (settings->RestoreSession() && fWebView != NULL) {
+	if (settings->RestoreSession() && fWebView != NULL
+		&& !fPrivateWindow && !settings->PrivateBrowsing()) {
 		settings->SetValue("last_session_url", fWebView->CurrentURL());
 		settings->Save();
 	}

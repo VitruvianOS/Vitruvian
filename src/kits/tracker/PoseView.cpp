@@ -5400,7 +5400,8 @@ BPoseView::MoveSelectionInto(Model* destFolder, BContainerWindow* srcWindow,
 			moveMode = kCreateRelativeLink;
 		else if (createLink)
 			moveMode = kCreateLink;
-		else if (!CheckDevicesEqual(srcList->ItemAt(0), destFolder))
+		else if (!CheckDevicesEqual(srcList->ItemAt(0), destFolder)
+			|| IsSystemDragOutOfSystem(srcList, destFolder))
 			moveMode = kCopySelectionTo;
 		else
 			moveMode = kMoveSelectionTo;

@@ -465,6 +465,23 @@ CheckDevicesEqual(const entry_ref* srcRef, const Model* targetModel)
 }
 
 
+bool
+IsSystemDragOutOfSystem(const BObjectList<entry_ref, true>* srcList,
+	const Model* targetModel)
+{
+	BEntry target(targetModel->EntryRef());
+	if (DirectoryMatchesOrContains(&target, B_SYSTEM_DIRECTORY))
+		return false;
+
+	for (int32 i = 0; i < srcList->CountItems(); i++) {
+		BEntry entry(srcList->ItemAt(i));
+		if (DirectoryMatchesOrContains(&entry, B_SYSTEM_DIRECTORY))
+			return true;
+	}
+	return false;
+}
+
+
 // Persists the pose's parent-directory path in kAttrPoseInfoDir, separate
 // from the fixed-size PoseInfo blob, so ReadPoseInfo() can match it after
 // a reboot.
@@ -770,9 +787,9 @@ ConfirmChangeIfWellKnownDirectory(const BEntry* entry, DestructiveAction action,
 
 	struct utsname name;
 	if (uname(&name) == -1)
-		warning.ReplaceFirst("%osName", "Haiku");
+		warning.ReplaceFirst("%osName", "V\\OS");
 	else
-		warning.ReplaceFirst("%osName", name.sysname);
+		warning.ReplaceFirst("%osName", "V\\OS");
 
 	BString buttonLabel;
 	if (action == kRename) {

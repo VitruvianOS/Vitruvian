@@ -39,6 +39,7 @@ set(SYSTEM_APPS
 	StyledEdit
 	Terminal
 	#TextSearch
+	WebMail
 	Workspaces
 )
 ImageInclude("/system/apps" ${SYSTEM_APPS})

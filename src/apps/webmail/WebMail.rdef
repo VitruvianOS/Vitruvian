@@ -1,0 +1,24 @@
+/*
+ * Copyright 2026, Dario Casalinuovo. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ */
+
+resource app_signature "application/x-vnd.vos-webmail";
+
+resource app_flags B_SINGLE_LAUNCH;
+
+resource app_version {
+	major = 0,
+	middle = 1,
+	minor = 0,
+	variety = B_APPV_DEVELOPMENT,
+	internal = 0,
+	short_info = "Mail",
+	long_info = "Mail 0.1 \xc2\xa9 2026 Dario Casalinuovo"
+};
+
+resource vector_icon {
+	$"6E6369660401FFFFFFFF01184EA0FF0192BCF2FF04003C030A082A3256325A36"
+	$"5A4C56502A50264C26360A032935404757350A042C52545254562C56050A0301"
+	$"02000A000100000A020101000A0101001001178210040A010101100117811004"
+};

@@ -31,6 +31,7 @@
 #include <condition_variable>
 #include <cstdlib>
 #include <mutex>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -81,6 +82,27 @@ struct FileChooserState {
 
 static SessionAdapter* sDefaultSession = NULL;
 static std::string sDefaultProfileDir;
+
+
+static void
+waitForDialog(DialogState* state)
+{
+	std::unique_lock<std::mutex> lock(state->mutex);
+	state->cond.wait(lock, [state]() { return state->done; });
+}
+
+
+static void
+finishDialog(DialogState* state, bool accepted, const std::string& text)
+{
+	{
+		std::lock_guard<std::mutex> lock(state->mutex);
+		state->accepted = accepted;
+		state->text = text;
+		state->done = true;
+	}
+	state->cond.notify_all();
+}
 #endif
 
 
@@ -107,7 +129,10 @@ struct BWebView::WebViewImpl {
 	bool				fDragPending;
 	BPoint				fDragStart;
 	std::string			fDragLink;
-	DialogState*		fPendingDialog;
+	// DialogStates whose kMsgDialogReply may still be queued; the GLib
+	// thread owns each state and deletes it after the wait returns.
+	std::mutex			fDialogMutex;
+	std::set<DialogState*>	fDialogs;
 	FileChooserState*	fPendingFileChooser;
 	BFilePanel*			fPendingAskPanel;
 	BFilePanel*			fPendingSavePanel;
@@ -136,7 +161,6 @@ struct BWebView::WebViewImpl {
 		fFullScreen(false),
 		fDragPending(false),
 		fDragStart(BPoint(0, 0)),
-		fPendingDialog(NULL),
 		fPendingFileChooser(NULL),
 		fPendingAskPanel(NULL),
 		fPendingSavePanel(NULL),
@@ -146,30 +170,44 @@ struct BWebView::WebViewImpl {
 #endif
 	{
 	}
-};
-
 
 #ifdef HAS_WPE
-static void
-waitForDialog(DialogState* state)
-{
-	std::unique_lock<std::mutex> lock(state->mutex);
-	state->cond.wait(lock, [state]() { return state->done; });
-}
-
-
-static void
-finishDialog(DialogState* state, bool accepted, const std::string& text)
-{
+	// The GLib thread registers its state before the send and deletes it
+	// after the wait; the window thread only finishes states still in
+	// the set, so a reply queued behind a closing window is ignored.
+	void			RegisterDialog(DialogState* state)
 	{
-		std::lock_guard<std::mutex> lock(state->mutex);
-		state->accepted = accepted;
-		state->text = text;
-		state->done = true;
+		std::lock_guard<std::mutex> lock(fDialogMutex);
+		fDialogs.insert(state);
 	}
-	state->cond.notify_all();
-}
+
+	bool			HasDialog(DialogState* state)
+	{
+		std::lock_guard<std::mutex> lock(fDialogMutex);
+		return fDialogs.find(state) != fDialogs.end();
+	}
+
+	void			AbandonDialog(DialogState* state)
+	{
+		{
+			std::lock_guard<std::mutex> lock(fDialogMutex);
+			fDialogs.erase(state);
+		}
+		delete state;
+	}
+
+	void			DrainDialogs()
+	{
+		std::set<DialogState*> pending;
+		{
+			std::lock_guard<std::mutex> lock(fDialogMutex);
+			pending = fDialogs;
+		}
+		for (DialogState* state : pending)
+			finishDialog(state, false, "");
+	}
 #endif
+};
 
 
 BWebView::BWebView(BRect frame, const char* name)
@@ -419,38 +457,54 @@ BWebView::AttachedToWindow()
 	// Script dialogs block the GLib thread until the window thread
 	// answered through the DialogState.
 	fImpl->fBridge->onAlert = [this](const std::string& message) {
-		DialogState state;
+		DialogState* state = new DialogState;
+		fImpl->RegisterDialog(state);
 		BMessage msg(kMsgDialogReply);
 		msg.AddInt32("what", B_WEB_SCRIPT_ALERT);
 		msg.AddString(B_WEB_MESSAGE_FIELD, message.c_str());
-		msg.AddPointer("state", &state);
-		fImpl->fSelfMessenger.SendMessage(&msg);
-		waitForDialog(&state);
-		return true;
+		msg.AddPointer("state", state);
+		if (!fImpl->fSelfMessenger.SendMessage(&msg)) {
+			fImpl->AbandonDialog(state);
+			return;
+		}
+		waitForDialog(state);
+		fImpl->AbandonDialog(state);
 	};
 
 	fImpl->fBridge->onConfirm = [this](const std::string& message) {
-		DialogState state;
+		DialogState* state = new DialogState;
+		fImpl->RegisterDialog(state);
 		BMessage msg(kMsgDialogReply);
 		msg.AddInt32("what", B_WEB_SCRIPT_CONFIRM);
 		msg.AddString(B_WEB_MESSAGE_FIELD, message.c_str());
-		msg.AddPointer("state", &state);
-		fImpl->fSelfMessenger.SendMessage(&msg);
-		waitForDialog(&state);
-		return state.accepted;
+		msg.AddPointer("state", state);
+		if (!fImpl->fSelfMessenger.SendMessage(&msg)) {
+			fImpl->AbandonDialog(state);
+			return false;
+		}
+		waitForDialog(state);
+		bool accepted = state->accepted;
+		fImpl->AbandonDialog(state);
+		return accepted;
 	};
 
 	fImpl->fBridge->onPrompt = [this](const std::string& message,
 		const std::string& initial) {
-		DialogState state;
+		DialogState* state = new DialogState;
+		fImpl->RegisterDialog(state);
 		BMessage msg(kMsgDialogReply);
 		msg.AddInt32("what", B_WEB_SCRIPT_PROMPT);
 		msg.AddString(B_WEB_MESSAGE_FIELD, message.c_str());
 		msg.AddString(B_WEB_DIALOG_TEXT, initial.c_str());
-		msg.AddPointer("state", &state);
-		fImpl->fSelfMessenger.SendMessage(&msg);
-		waitForDialog(&state);
-		return state.text;
+		msg.AddPointer("state", state);
+		if (!fImpl->fSelfMessenger.SendMessage(&msg)) {
+			fImpl->AbandonDialog(state);
+			return std::string();
+		}
+		waitForDialog(state);
+		std::string text = state->text;
+		fImpl->AbandonDialog(state);
+		return text;
 	};
 
 	// The file chooser answers asynchronously: the request pointer
@@ -486,14 +540,20 @@ BWebView::AttachedToWindow()
 
 	fImpl->fBridge->SetNotificationPermissionHandler(
 		[this](const std::string& site) -> bool {
-		DialogState state;
+		DialogState* state = new DialogState;
+		fImpl->RegisterDialog(state);
 		BMessage msg(kMsgDialogReply);
 		msg.AddInt32("what", B_WEB_NOTIFICATION_ASK);
 		msg.AddString(B_WEB_URL_FIELD, site.c_str());
-		msg.AddPointer("state", &state);
-		fImpl->fSelfMessenger.SendMessage(&msg);
-		waitForDialog(&state);
-		return state.accepted;
+		msg.AddPointer("state", state);
+		if (!fImpl->fSelfMessenger.SendMessage(&msg)) {
+			fImpl->AbandonDialog(state);
+			return false;
+		}
+		waitForDialog(state);
+		bool accepted = state->accepted;
+		fImpl->AbandonDialog(state);
+		return accepted;
 	});
 
 	// Download events fan in from the shared per-session handler.
@@ -545,16 +605,21 @@ BWebView::AttachedToWindow()
 		// "Ask where to save" answers through a save panel on the
 		// window thread; the GLib thread waits on the DialogState.
 		fImpl->fBridge->downloadHandler->SetAskHandler(this,
-			[self](const std::string& suggested,
+			[this, self](const std::string& suggested,
 				const std::string& /*url*/) -> std::string {
-			DialogState state;
+			DialogState* state = new DialogState;
+			fImpl->RegisterDialog(state);
 			BMessage msg(kMsgAskDownload);
-			msg.AddPointer("state", &state);
+			msg.AddPointer("state", state);
 			msg.AddString(B_WEB_SUGGESTED_NAME, suggested.c_str());
-			if (!self.SendMessage(&msg))
+			if (!self.SendMessage(&msg)) {
+				fImpl->AbandonDialog(state);
 				return "";
-			waitForDialog(&state);
-			return state.text;
+			}
+			waitForDialog(state);
+			std::string text = state->text;
+			fImpl->AbandonDialog(state);
+			return text;
 		});
 	}
 
@@ -576,11 +641,9 @@ void
 BWebView::DetachedFromWindow()
 {
 #ifdef HAS_WPE
-	// Unblock any dialog waiter before tearing the bridge down: the
+	// Unblock every dialog waiter before tearing the bridge down: the
 	// window is going away and nobody will answer.
-	if (fImpl->fPendingDialog != NULL)
-		finishDialog(fImpl->fPendingDialog, false, "");
-	fImpl->fPendingDialog = NULL;
+	fImpl->DrainDialogs();
 
 	// Panels aimed at this view will never get their reply.
 	delete fImpl->fPendingAskPanel;
@@ -805,9 +868,8 @@ BWebView::MessageReceived(BMessage* message)
 			message->FindInt32("what", &what);
 			DialogState* state = NULL;
 			message->FindPointer("state", (void**)&state);
-			if (state == NULL)
+			if (state == NULL || !fImpl->HasDialog(state))
 				break;
-			fImpl->fPendingDialog = state;
 
 			const char* text = NULL;
 			message->FindString(B_WEB_MESSAGE_FIELD, &text);
@@ -863,7 +925,6 @@ BWebView::MessageReceived(BMessage* message)
 					finishDialog(state, false, "");
 					break;
 			}
-			fImpl->fPendingDialog = NULL;
 			break;
 		}
 
@@ -977,9 +1038,13 @@ BWebView::MessageReceived(BMessage* message)
 		{
 			DialogState* state = NULL;
 			message->FindPointer("state", (void**)&state);
-			if (state == NULL || Window() == NULL)
+			if (state == NULL || !fImpl->HasDialog(state))
 				break;
-			fImpl->fPendingDialog = state;
+			if (Window() == NULL) {
+				// Nobody can show a panel any more; cancel the save.
+				finishDialog(state, false, "");
+				break;
+			}
 
 			const char* suggested = NULL;
 			message->FindString(B_WEB_SUGGESTED_NAME, &suggested);
@@ -1001,8 +1066,7 @@ BWebView::MessageReceived(BMessage* message)
 			// the reply; the Save link as flow pins a URL instead.
 			DialogState* state = NULL;
 			message->FindPointer("state", (void**)&state);
-			if (state != NULL) {
-				fImpl->fPendingDialog = NULL;
+			if (state != NULL && fImpl->HasDialog(state)) {
 				delete fImpl->fPendingAskPanel;
 				fImpl->fPendingAskPanel = NULL;
 

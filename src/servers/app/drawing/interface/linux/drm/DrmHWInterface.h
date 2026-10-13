@@ -266,7 +266,11 @@ private:
 
 			MallocBuffer*		fRenderBuffer;
 
-			bool				fPageFlipEnabled;
+			// Written only under fFlipMutex (SetMode, _OnSessionEnable),
+			// read lock-free by the event thread's flip gate; atomic so
+			// the unlocked read is well-defined. The buffer pointers it
+			// gates are validated under fFlipMutex before use.
+			std::atomic<bool>	fPageFlipEnabled;
 			std::atomic<bool>	fPageFlipPending;
 
 			// Serializes buffer pointer swaps (page-flip completion) against
@@ -305,6 +309,14 @@ private:
 			BRegion				fPreviousDirty;
 			bool				fNeedsFlip;
 			pthread_mutex_t		fDirtyMutex;
+
+			// Serialises _BlendCursor's write to the scanout buffer
+			// (fWriteTarget) between the main thread (CopyBackToFront,
+			// under the parallel lock) and the DRM event thread
+			// (_PageFlipHandler, under the exclusive lock only when it
+			// has damage to present). A software cursor blended with no
+			// new damage races the main-thread blend otherwise.
+			mutable pthread_mutex_t	fCursorBlendMutex;
 
 			int					fWakeFd;
 

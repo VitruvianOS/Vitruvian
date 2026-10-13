@@ -148,6 +148,7 @@ DrmHWInterface::DrmHWInterface()
 {
 	pthread_mutex_init(&fDirtyMutex, NULL);
 	pthread_mutex_init(&fFlipMutex, NULL);
+	pthread_mutex_init(&fCursorBlendMutex, NULL);
 	// Recursive: SetMode() holds it and calls SetCursor(), which re-takes
 	// it to copy the cursor plane ids out of the modeset node.
 	pthread_mutexattr_t modesetAttr;
@@ -959,6 +960,7 @@ DrmHWInterface::~DrmHWInterface()
 
 	pthread_mutex_destroy(&fDirtyMutex);
 	pthread_mutex_destroy(&fFlipMutex);
+	pthread_mutex_destroy(&fCursorBlendMutex);
 	pthread_mutex_destroy(&fModesetMutex);
 	pthread_cond_destroy(&fFlipCond);
 	for (size_t i = 0; i < fFlipTokens.size(); i++)
@@ -2228,6 +2230,13 @@ DrmHWInterface::_BlendCursor(RenderingBuffer* srcBg, RenderingBuffer* dst,
 	crs += (top - (int32)floorf(cf.top))   * crsBPR
 		 + (left - (int32)floorf(cf.left)) * 4;
 
+	// The destination is the scanout buffer (fWriteTarget), blended from
+	// both the main thread (CopyBackToFront, parallel lock) and the event
+	// thread (_PageFlipHandler, exclusive lock only when it has damage).
+	// Serialise the write so a software cursor with no new damage cannot
+	// race the main-thread blend of the same buffer.
+	pthread_mutex_lock(&fCursorBlendMutex);
+
 	if (fPanelOrientation == PANEL_ORIENTATION_NORMAL
 			&& fPanelReflection == B_PANEL_REFLECTION_NONE) {
 		for (int32 y = top; y <= bottom; y++) {
@@ -2245,6 +2254,7 @@ DrmHWInterface::_BlendCursor(RenderingBuffer* srcBg, RenderingBuffer* dst,
 			dpx += dBPR;
 			crs += crsBPR;
 		}
+		pthread_mutex_unlock(&fCursorBlendMutex);
 		return;
 	}
 
@@ -2268,6 +2278,7 @@ DrmHWInterface::_BlendCursor(RenderingBuffer* srcBg, RenderingBuffer* dst,
 		bg  += bgBPR;
 		crs += crsBPR;
 	}
+	pthread_mutex_unlock(&fCursorBlendMutex);
 }
 
 
@@ -2277,24 +2288,37 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 	if (fFrontBuffer == NULL)
 		return B_ERROR;
 
-	if (fRenderBuffer == NULL)
-		return HWInterface::CopyBackToFront(frame);
-
 	if (fPageFlipEnabled) {
 		pthread_mutex_lock(&fDirtyMutex);
 		fAccumulatedDirty.Include(frame);
 		pthread_mutex_unlock(&fDirtyMutex);
 
+		// Snapshot the present targets under the flip mutex: the flip
+		// completion on the event thread swaps fWriteTarget between
+		// fBackBuffer and fFrontBuffer while this thread holds only the
+		// parallel lock, and a torn pair would blit the render buffer
+		// into the buffer the CRTC just started scanning out.
+		MallocBuffer* renderBuffer;
+		RenderingBuffer* writeTarget;
+		pthread_mutex_lock(&fFlipMutex);
+		renderBuffer = fRenderBuffer;
+		writeTarget = fWriteTarget;
+		const bool blitNow = !fPageFlipPending.load();
+		pthread_mutex_unlock(&fFlipMutex);
+
+		if (renderBuffer == NULL || writeTarget == NULL)
+			return HWInterface::CopyBackToFront(frame);
+
 		// When no flip is in flight, blit immediately so the back
 		// buffer is ready for the next page flip. When a flip IS
 		// pending, the flip handler will blit the accumulated region
 		// on completion.
-		if (!fPageFlipPending) {
-			_BlitRect(fRenderBuffer, fWriteTarget, frame);
+		if (blitNow) {
+			_BlitRect(renderBuffer, writeTarget, frame);
 
 			if (!fHardwareCursorEnabled) {
 				bool overlaysLocked = fFloatingOverlaysLock.Lock();
-				_BlendCursor(fRenderBuffer, fWriteTarget,
+				_BlendCursor(renderBuffer, writeTarget,
 					IntRect(frame));
 				if (overlaysLocked)
 					fFloatingOverlaysLock.Unlock();
@@ -2307,6 +2331,9 @@ DrmHWInterface::CopyBackToFront(const BRect& frame)
 		}
 		return B_OK;
 	}
+
+	if (fRenderBuffer == NULL)
+		return HWInterface::CopyBackToFront(frame);
 
 	_BlitRect(fRenderBuffer, fWriteTarget, frame);
 
@@ -2327,9 +2354,6 @@ DrmHWInterface::CopyBackToFront(const BRegion& region)
 	if (fFrontBuffer == NULL)
 		return B_ERROR;
 
-	if (fRenderBuffer == NULL)
-		return HWInterface::CopyBackToFront(region);
-
 	int32 count = region.CountRects();
 	if (count == 0)
 		return B_OK;
@@ -2339,17 +2363,29 @@ DrmHWInterface::CopyBackToFront(const BRegion& region)
 		fAccumulatedDirty.Include(&region);
 		pthread_mutex_unlock(&fDirtyMutex);
 
-		if (!fPageFlipPending) {
+		// Same torn-pair hazard as the BRect overload: fWriteTarget is
+		// swapped on the event thread without the parallel lock.
+		MallocBuffer* renderBuffer;
+		RenderingBuffer* writeTarget;
+		pthread_mutex_lock(&fFlipMutex);
+		renderBuffer = fRenderBuffer;
+		writeTarget = fWriteTarget;
+		const bool blitNow = !fPageFlipPending.load();
+		pthread_mutex_unlock(&fFlipMutex);
+
+		if (renderBuffer == NULL || writeTarget == NULL)
+			return HWInterface::CopyBackToFront(region);
+
+		if (blitNow) {
 			for (int32 i = 0; i < count; i++)
-				_BlitRect(fRenderBuffer, fWriteTarget,
+				_BlitRect(renderBuffer, writeTarget,
 					region.RectAt(i));
 
 			if (!fHardwareCursorEnabled) {
 				bool overlaysLocked = fFloatingOverlaysLock.Lock();
 				IntRect cf = _CursorFrame();
 				if (cf.IsValid())
-					_BlendCursor(fRenderBuffer,
-						fWriteTarget, cf);
+					_BlendCursor(renderBuffer, writeTarget, cf);
 				if (overlaysLocked)
 					fFloatingOverlaysLock.Unlock();
 			}
@@ -2361,6 +2397,9 @@ DrmHWInterface::CopyBackToFront(const BRegion& region)
 		}
 		return B_OK;
 	}
+
+	if (fRenderBuffer == NULL)
+		return HWInterface::CopyBackToFront(region);
 
 	for (int32 i = 0; i < count; i++)
 		_BlitRect(fRenderBuffer, fWriteTarget, region.RectAt(i));

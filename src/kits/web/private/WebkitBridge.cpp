@@ -398,6 +398,17 @@ WebKitBridge::_OnDecidePolicy(WebKitWebView*, WebKitPolicyDecision* decision,
 		const char* uri = webkit_uri_request_get_uri(request);
 
 		if (uri) {
+			// mailto: is not something a view can display; surface it
+			// through the new-window callback so the host can hand it
+			// to a mail client (WebMail builds its compose URL from
+			// it). Net+ has no mail client and drops the link.
+			if (g_str_has_prefix(uri, "mailto:")) {
+				if (self->onNewWindowRequested)
+					self->onNewWindowRequested(uri);
+				webkit_policy_decision_ignore(decision);
+				return TRUE;
+			}
+
 			// Extract host from URI for domain blocking.
 			GUri* parsed = g_uri_parse(uri, G_URI_FLAGS_NONE, nullptr);
 			if (parsed) {

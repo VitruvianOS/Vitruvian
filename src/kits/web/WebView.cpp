@@ -901,7 +901,9 @@ BWebView::MessageReceived(BMessage* message)
 			backItem->SetEnabled(CanGoBack());
 			forwardItem->SetEnabled(CanGoForward());
 
-			BMenuItem* selected = menu->Go(fImpl->fLastMouse, true);
+			// Go() wants screen coordinates, not view coordinates.
+			BMenuItem* selected
+				= menu->Go(ConvertToScreen(fImpl->fLastMouse), true);
 			if (selected != NULL) {
 				uint32 what = selected->Message()->what;
 				switch (what) {
@@ -1826,8 +1828,20 @@ BWebView::AddUserScript(const char* javascript, bool atDocumentStart)
 	if (javascript == NULL)
 		return;
 
-	fImpl->fUserScripts.push_back(
-		std::make_pair(std::string(javascript), atDocumentStart));
+	// One entry per script content: re-applying settings re-adds the
+	// same search template and it must not pile up.
+	bool found = false;
+	for (auto& script : fImpl->fUserScripts) {
+		if (script.first == javascript) {
+			script.second = atDocumentStart;
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		fImpl->fUserScripts.push_back(
+			std::make_pair(std::string(javascript), atDocumentStart));
+	}
 	if (fImpl->fBridge == NULL)
 		return;
 	fImpl->fBridge->AddUserScript(javascript, atDocumentStart);

@@ -5,6 +5,7 @@
 
 #include "MainWin.h"
 
+#include <Application.h>
 #include <Alert.h>
 #include <Autolock.h>
 #include <Catalog.h>
@@ -1075,5 +1076,7 @@ MainWin::QuitRequested()
 	_SaveSettings();
 	if (fPlaylistWindow != NULL && !fPlaylistWindow->IsHidden())
 		fPlaylistWindow->Quit();
+	// The main window is the app: closing it quits the player.
+	be_app->PostMessage(B_QUIT_REQUESTED);
 	return true;
 }

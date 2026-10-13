@@ -3,6 +3,7 @@ set(
 
 	"headers/"
 	"headers/os"
+	"headers/os/account"
 	"headers/os/app"
 	"headers/os/drivers"
 	"headers/os/kernel"

@@ -42,6 +42,7 @@ AddOn(
 
 UsePrivateHeaders(be_bootstrap interface app support)
 
+add_subdirectory(accounts)
 add_subdirectory(app)
 add_subdirectory(bluetooth)
 add_subdirectory(game)

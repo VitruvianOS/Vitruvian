@@ -63,8 +63,7 @@ static const uint32 kMsgFileChooserDone = '_wfd';
 static const uint32 kMsgAskDownload = '_wad';
 
 // State shared between the GLib thread (which waits) and the window
-// thread (which runs the dialog). std primitives only: the no-raw-
-// semaphore rule applies here.
+// thread (which runs the dialog); std primitives only.
 struct DialogState {
 	std::mutex				mutex;
 	std::condition_variable	cond;
@@ -616,11 +615,8 @@ BWebView::AttachedToWindow()
 		return text;
 	};
 
-	// The file chooser answers asynchronously: the request pointer
-	// (ref-held by the bridge handler) rides to the window thread,
-	// which shows a BFilePanel and calls back into CompleteFileChooser.
-	// WebKit calls stay on the GLib thread: the multiple flag is read
-	// here, not in MessageReceived.
+	// The file chooser answers asynchronously: the ref-held request
+	// rides to the window thread, which shows a BFilePanel.
 	fImpl->fBridge->onRunFileChooser
 		= [this](WebKitFileChooserRequest* request) {
 		FileChooserState* state = new FileChooserState;
@@ -1400,8 +1396,7 @@ BWebView::KeyDown(const char* bytes, int32 numBytes)
 
 #ifdef HAS_WPE
 	// Escape leaves full-screen video even while the page keeps
-	// focus: the embedder owns the window, so the exit has to
-	// travel both to WebKit and to the window.
+	// focus: the embedder owns the window.
 	if (fImpl->fFullScreen.load() && bytes != NULL && numBytes > 0
 		&& bytes[0] == B_ESCAPE) {
 		fImpl->fFullScreen.store(false);

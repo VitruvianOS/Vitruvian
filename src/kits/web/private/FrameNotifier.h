@@ -15,9 +15,8 @@ struct FrameNotifier {
 					FrameNotifier();
 					~FrameNotifier();
 
-		// Returns true when this write found the pipe empty: the
-		// caller then posts the one frame message the reader will
-		// drain. Later writes before the drain coalesce into it.
+		// True when this write found the pipe empty: the caller
+		// posts the one frame message the drain will consume.
 		bool		Notify();
 
 		void		Drain();

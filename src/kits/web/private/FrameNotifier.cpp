@@ -54,11 +54,8 @@ FrameNotifier::Notify()
 	if (fFds[1] < 0)
 		return false;
 
-	// Was the pipe empty before this write? The reader drains all
-	// bytes, so an empty pipe means no frame message is pending
-	// yet and this write must post one. The FIONREAD check races
-	// only with the reader draining, and a lost race costs one
-	// extra Invalidate at worst.
+	// An empty pipe means no frame message is pending yet, so this
+	// write must post one; a lost race costs one extra Invalidate.
 	int pending = 0;
 	if (fFds[0] >= 0)
 		ioctl(fFds[0], FIONREAD, &pending);

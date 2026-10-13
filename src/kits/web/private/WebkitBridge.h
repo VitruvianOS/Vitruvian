@@ -70,9 +70,8 @@ struct WebKitBridge {
 			void				Copy();
 			void				Paste();
 
-			// The BClipboard paste path: WPE WebKit has no system
-			// clipboard bridge of its own, so the text is inserted
-			// at the caret instead of asking WebKit to paste.
+			// WPE WebKit has no system clipboard bridge: the text is
+			// inserted at the caret instead of asking WebKit to paste.
 			void				PasteText(const std::string& text);
 
 			// Resolves with the page selection ("" on failure).
@@ -81,9 +80,8 @@ struct WebKitBridge {
 
 			void				SelectAll();
 
-			// Downloads a URI through the network session (Save link as,
-			// Save image as). A non-empty destination overrides the
-			// default Downloads directory for this URI.
+			// Downloads a URI through the network session; a non-empty
+			// destination overrides the default Downloads directory.
 			void				DownloadURI(const std::string& uri,
 									const std::string& destination);
 
@@ -122,9 +120,8 @@ struct WebKitBridge {
 			std::function<bool(const std::string&)>	onConfirm;
 			std::function<std::string(const std::string&,
 				const std::string&)>				onPrompt;
-			// Returns the URL to open in a new host window; the policy
-			// decision is always ignored because the host opens its own
-			// window instead of letting WebKit create a view.
+			// The host opens the URL in its own window; WebKit never
+			// creates the new view itself.
 			std::function<void(const std::string&)>	onNewWindowRequested;
 			// Hit-test driven: link URI ("" when not over a link), the
 			// image URI under the pointer ("" when none).
@@ -139,9 +136,7 @@ struct WebKitBridge {
 			std::function<void()>					onWebProcessCrashed;
 			std::function<void(bool)>				onFullscreenChanged;
 			// Script dialogs block the GLib thread until the host
-			// answers; the file chooser answers asynchronously through
-			// the ref-held request pointer. Host uses std primitives
-			// only.
+			// answers; std primitives only on both sides.
 			std::function<bool(WebKitFileChooserRequest*)>
 									onRunFileChooser;
 			std::function<void(const std::string& title,

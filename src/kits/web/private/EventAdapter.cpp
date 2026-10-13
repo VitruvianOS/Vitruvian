@@ -69,9 +69,8 @@ EventAdapter::_LegacyModsToWPE(uint32 legacyMods)
 	uint32_t wpe = 0;
 	if (legacyMods & B_SHIFT_KEY)
 		wpe |= wpe_input_keyboard_modifier_shift;
-	// The V\OS default keymap puts Command on the physical Control key:
-	// browser shortcuts (Ctrl+C) arrive as B_COMMAND_KEY. The Control
-	// role sits on physical Alt, which browsers see as Alt (Alt+Left).
+	// V\OS puts Command on physical Control (Ctrl+C arrives as
+	// B_COMMAND_KEY) and Control on physical Alt (Alt+Left).
 	if (legacyMods & B_COMMAND_KEY)
 		wpe |= wpe_input_keyboard_modifier_control;
 	if (legacyMods & (B_CONTROL_KEY | B_OPTION_KEY))
@@ -356,11 +355,8 @@ EventAdapter::TranslateMouseWheel(const BMessage* msg)
 	uint32 modifiers = 0;
 	msg->FindInt32("modifiers", (int32*)&modifiers);
 
-	// Legacy wheel deltas are float notches; libwpe wants pixels. Send
-	// one smooth-scroll axis event per axis: 15 pixels per notch matches
-	// the discrete wheel step other WPE embedders use. WPE counts
-	// positive values as scrolling up or left, the opposite sign of the
-	// legacy deltas.
+	// Legacy wheel deltas are float notches; libwpe wants pixels
+	// (15 per notch, sign flipped).
 	const float deltas[2] = { deltaY, deltaX };
 	for (uint32_t axis = 0; axis < 2; axis++) {
 		if (deltas[axis] == 0.0f)

@@ -73,10 +73,8 @@ public:
 							const Listener& listener);
 			void		RemoveListener(const void* owner);
 
-			// Blocks until the host returns a path ("" cancels). Runs on
-			// the GLib thread inside decide-destination. Keyed by owner
-			// so a closed window's handler is never called; the newest
-			// owner wins.
+			// Blocks the GLib thread in decide-destination until the
+			// host returns a path ("" cancels); newest owner wins.
 	using	AskHandler = std::function<std::string(const std::string&,
 				const std::string&)>;
 			void		SetAskHandler(const void* owner,

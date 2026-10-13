@@ -1,3 +1,4 @@
+add_subdirectory(accounts)
 add_subdirectory(control_look)
 add_subdirectory(decorators)
 add_subdirectory(input_server)

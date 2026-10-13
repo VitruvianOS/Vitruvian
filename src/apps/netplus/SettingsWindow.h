@@ -11,6 +11,7 @@
 
 class BButton;
 class BCheckBox;
+class BFilePanel;
 class BMenuField;
 class BTextControl;
 
@@ -45,6 +46,7 @@ private:
 			BTextControl*		fZoomDefault;
 			BCheckBox*			fRestoreSession;
 			BButton*			fClearDataButton;
+			BFilePanel*			fBrowsePanel;
 };
 
 

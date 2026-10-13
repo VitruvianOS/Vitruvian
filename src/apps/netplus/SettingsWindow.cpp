@@ -56,7 +56,7 @@ SettingsWindow::ShowWindow(BRect frame)
 SettingsWindow::SettingsWindow(BRect frame)
 	:
 	BWindow(frame, "NetPlus Settings", B_TITLED_WINDOW,
-		B_NOT_CLOSABLE | B_NOT_MINIMIZABLE | B_NOT_RESIZABLE),
+		B_NOT_MINIMIZABLE | B_NOT_RESIZABLE),
 	fHomepage(NULL),
 	fSearchEngine(NULL),
 	fCustomTemplate(NULL),
@@ -70,7 +70,8 @@ SettingsWindow::SettingsWindow(BRect frame)
 	fPrivateBrowsing(NULL),
 	fZoomDefault(NULL),
 	fRestoreSession(NULL),
-	fClearDataButton(NULL)
+	fClearDataButton(NULL),
+	fBrowsePanel(NULL)
 {
 	fHomepage = new BTextControl("Homepage", "", NULL);
 	fCustomTemplate = new BTextControl("Custom search URL (%s = query)", "", NULL);
@@ -139,6 +140,7 @@ SettingsWindow::SettingsWindow(BRect frame)
 SettingsWindow::~SettingsWindow()
 {
 	sInstance = NULL;
+	delete fBrowsePanel;
 }
 
 
@@ -249,15 +251,19 @@ SettingsWindow::MessageReceived(BMessage* message)
 
 		case kMsgBrowse:
 		{
+			if (fBrowsePanel != NULL)
+				delete fBrowsePanel;
 			BMessage panelMessage(kMsgBrowseDone);
-			BFilePanel* panel = new BFilePanel(B_OPEN_PANEL,
+			fBrowsePanel = new BFilePanel(B_OPEN_PANEL,
 				new BMessenger(this), NULL, 0, false, &panelMessage);
-			panel->Show();
+			fBrowsePanel->Show();
 			break;
 		}
 
 		case kMsgBrowseDone:
 		{
+			delete fBrowsePanel;
+			fBrowsePanel = NULL;
 			entry_ref ref;
 			if (message->FindRef("refs", &ref) == B_OK) {
 				BPath path(&ref);

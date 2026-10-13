@@ -76,6 +76,7 @@ struct FileChooserState {
 	bool						multiple;
 	std::vector<std::string>	paths;
 	bool						cancelled;
+	BFilePanel*					panel;
 };
 
 static SessionAdapter* sDefaultSession = NULL;
@@ -108,6 +109,8 @@ struct BWebView::WebViewImpl {
 	std::string			fDragLink;
 	DialogState*		fPendingDialog;
 	FileChooserState*	fPendingFileChooser;
+	BFilePanel*			fPendingAskPanel;
+	BFilePanel*			fPendingSavePanel;
 	float				fZoom;
 	bool				fJsEnabled;
 	bool				fImagesEnabled;
@@ -135,6 +138,8 @@ struct BWebView::WebViewImpl {
 		fDragStart(BPoint(0, 0)),
 		fPendingDialog(NULL),
 		fPendingFileChooser(NULL),
+		fPendingAskPanel(NULL),
+		fPendingSavePanel(NULL),
 		fZoom(1.0),
 		fJsEnabled(true),
 		fImagesEnabled(true)
@@ -455,6 +460,7 @@ BWebView::AttachedToWindow()
 		state->multiple = webkit_file_chooser_request_get_select_multiple(
 			request);
 		state->cancelled = true;
+		state->panel = NULL;
 		fImpl->fPendingFileChooser = state;
 
 		BMessage msg(kMsgFileChooserDone);
@@ -570,6 +576,30 @@ BWebView::DetachedFromWindow()
 	if (fImpl->fPendingDialog != NULL)
 		finishDialog(fImpl->fPendingDialog, false, "");
 	fImpl->fPendingDialog = NULL;
+
+	// Panels aimed at this view will never get their reply.
+	delete fImpl->fPendingAskPanel;
+	fImpl->fPendingAskPanel = NULL;
+	delete fImpl->fPendingSavePanel;
+	fImpl->fPendingSavePanel = NULL;
+
+	if (fImpl->fPendingFileChooser != NULL) {
+		FileChooserState* state = fImpl->fPendingFileChooser;
+		fImpl->fPendingFileChooser = NULL;
+		delete state->panel;
+		if (state->request != NULL) {
+			WebKitFileChooserRequest* request = state->request;
+			ProcessManager::Instance().InvokeOnGLibThread(
+				[](void* d) -> gboolean {
+					webkit_file_chooser_request_select_files(
+						static_cast<WebKitFileChooserRequest*>(d),
+						NULL);
+					g_object_unref(d);
+					return G_SOURCE_REMOVE;
+				}, request);
+		}
+		delete state;
+	}
 
 	if (fImpl->fBridge != NULL && fImpl->fBridge->downloadHandler != NULL) {
 		fImpl->fBridge->downloadHandler->SetAskHandler(this, nullptr);
@@ -840,10 +870,10 @@ BWebView::MessageReceived(BMessage* message)
 
 			BMessage panelMessage(B_WEB_FILE_PANEL_DONE);
 			panelMessage.AddPointer("chooser", state);
-			BFilePanel* panel = new BFilePanel(B_OPEN_PANEL,
+			state->panel = new BFilePanel(B_OPEN_PANEL,
 				new BMessenger(this), NULL, 0, state->multiple,
 				&panelMessage);
-			panel->Show();
+			state->panel->Show();
 			break;
 		}
 
@@ -890,6 +920,7 @@ BWebView::MessageReceived(BMessage* message)
 						return G_SOURCE_REMOVE;
 					}, args);
 			}
+			delete state->panel;
 			delete state;
 			break;
 		}
@@ -926,12 +957,14 @@ BWebView::MessageReceived(BMessage* message)
 			message->FindString("url", &url);
 			if (url == NULL || fImpl->fBridge == NULL)
 				break;
+			if (fImpl->fPendingSavePanel != NULL)
+				delete fImpl->fPendingSavePanel;
 			BMessage panelMessage(B_WEB_SAVE_PANEL_DONE);
 			panelMessage.AddString("url", url);
-			BFilePanel* panel = new BFilePanel(B_SAVE_PANEL,
+			fImpl->fPendingSavePanel = new BFilePanel(B_SAVE_PANEL,
 				new BMessenger(this), NULL, 0, false, &panelMessage);
 			if (Window() != NULL)
-			panel->Show();
+				fImpl->fPendingSavePanel->Show();
 			break;
 		}
 
@@ -948,11 +981,12 @@ BWebView::MessageReceived(BMessage* message)
 
 			BMessage panelMessage(B_WEB_SAVE_PANEL_DONE);
 			panelMessage.AddPointer("state", state);
-			BFilePanel* panel = new BFilePanel(B_SAVE_PANEL,
+			fImpl->fPendingAskPanel = new BFilePanel(B_SAVE_PANEL,
 				new BMessenger(this), NULL, 0, false, &panelMessage);
-			panel->SetSaveText(suggested != NULL && suggested[0] != '\0'
-				? suggested : "download");
-			panel->Show();
+			fImpl->fPendingAskPanel->SetSaveText(
+				suggested != NULL && suggested[0] != '\0'
+					? suggested : "download");
+			fImpl->fPendingAskPanel->Show();
 			break;
 		}
 
@@ -964,6 +998,8 @@ BWebView::MessageReceived(BMessage* message)
 			message->FindPointer("state", (void**)&state);
 			if (state != NULL) {
 				fImpl->fPendingDialog = NULL;
+				delete fImpl->fPendingAskPanel;
+				fImpl->fPendingAskPanel = NULL;
 
 				std::string path;
 				entry_ref ref;
@@ -975,6 +1011,9 @@ BWebView::MessageReceived(BMessage* message)
 				finishDialog(state, !path.empty(), path);
 				break;
 			}
+
+			delete fImpl->fPendingSavePanel;
+			fImpl->fPendingSavePanel = NULL;
 
 			const char* url = NULL;
 			message->FindString("url", &url);

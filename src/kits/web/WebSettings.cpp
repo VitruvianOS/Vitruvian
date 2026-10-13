@@ -69,6 +69,13 @@ BWebSettings::Save() const
 }
 
 
+void
+BWebSettings::SetPath(const char* path)
+{
+	fPath = path != NULL ? path : "";
+}
+
+
 std::string
 BWebSettings::_Get(const char* key) const
 {

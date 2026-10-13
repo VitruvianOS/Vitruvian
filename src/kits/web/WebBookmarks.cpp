@@ -65,6 +65,13 @@ BWebBookmarks::Save() const
 
 
 void
+BWebBookmarks::SetPath(const char* path)
+{
+	fPath = path != NULL ? path : "";
+}
+
+
+void
 BWebBookmarks::Add(const char* title, const char* url)
 {
 	if (url == NULL || url[0] == '\0')

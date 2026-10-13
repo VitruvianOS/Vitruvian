@@ -227,13 +227,17 @@ MediaConverterApp::_CreateOutputFile(BDirectory directory,
 	BEntry directoryEntry;
 	directory.GetEntry(&directoryEntry);
 	if (!directoryEntry.Exists()) {
-		BAlert* alert = new BAlert(B_TRANSLATE("Error"),
-			B_TRANSLATE("Selected directory not found. "
-				"Defaulting to /boot/home"),
+		BPath home;
+		if (find_directory(B_USER_DIRECTORY, &home) != B_OK)
+			return BEntry();
+		BString text(B_TRANSLATE("Selected directory not found. "
+			"Defaulting to %home"));
+		text.ReplaceFirst("%home", home.Path());
+		BAlert* alert = new BAlert(B_TRANSLATE("Error"), text.String(),
 			B_TRANSLATE("OK"));
 		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 		alert->Go();
-		directory.SetTo("/boot/home");
+		directory.SetTo(home.Path());
 	}
 
 	BEntry inEntry(ref);
@@ -308,6 +312,7 @@ MediaConverterApp::_RunConvert()
 				outEntry.GetPath(&path);
 				name.SetTo(path.Leaf());
 
+				outFile = NULL;
 				if (outEntry.InitCheck() == B_OK) {
 					entry_ref outRef;
 					outEntry.GetRef(&outRef);
@@ -328,7 +333,15 @@ MediaConverterApp::_RunConvert()
 					fWin->Unlock();
 				}
 
-				if (outFile != NULL) {
+				if (outFile == NULL || outFile->InitCheck() != B_OK) {
+					// Skip the file, or the loop retries it forever.
+					delete outFile;
+					outFile = NULL;
+					srcIndex++;
+					continue;
+				}
+
+				{
 					r = _ConvertFile(inFile, outFile, audioCodec, videoCodec,
 						audioQuality, videoQuality, start, end);
 

@@ -159,8 +159,7 @@ MediaConverterWindow::MediaConverterWindow(BRect frame)
 	fCancelling(false)
 {
 	BPath outputDir;
-	if (find_directory(B_USER_DIRECTORY, &outputDir) != B_OK)
-		outputDir.SetTo("/boot/home");
+	find_directory(B_USER_DIRECTORY, &outputDir);
 	fOutputDir.SetTo(outputDir.Path());
 
 	fMenuBar = new BMenuBar("menubar");
@@ -406,8 +405,8 @@ MediaConverterWindow::MessageReceived(BMessage* message)
 			// "SELECT" Button at Save Panel Pushed
 			fSaveFilePanel->GetNextSelectedRef(&inRef);
 			inEntry.SetTo(&inRef, true);
-			_SetOutputFolder(inEntry);
 			fOutputDirSpecified = true;
+			_SetOutputFolder(inEntry);
 			fSaveFilePanel->Rewind();
 			break;
 
@@ -416,8 +415,8 @@ MediaConverterWindow::MessageReceived(BMessage* message)
 			fSaveFilePanel->GetPanelDirectory(&inRef);
 			fSaveFilePanel->Hide();
 			inEntry.SetTo(&inRef, true);
-			_SetOutputFolder(inEntry);
 			fOutputDirSpecified = true;
+			_SetOutputFolder(inEntry);
 			break;
 
 		case OPEN_FILE_MESSAGE:
@@ -1023,14 +1022,21 @@ MediaConverterWindow::_SetOutputFolder(BEntry entry)
 	if (access(path.Path(), W_OK) != -1) {
 		fOutputDir.SetTo(&entry);
 	} else {
-		BString errorString(B_TRANSLATE("Error writing to location: %strPath%."
-			" Defaulting to location: /boot/home"));
-		errorString.ReplaceFirst("%strPath%", path.Path());
-		BAlert* alert = new BAlert(B_TRANSLATE("Error"),
-			errorString.String(), B_TRANSLATE("OK"));
-		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-		alert->Go();
-		fOutputDir.SetTo("/boot/home");
+		BPath home;
+		find_directory(B_USER_DIRECTORY, &home);
+		// Only complain about a folder the user picked; a read-only
+		// source folder silently falls back to home.
+		if (fOutputDirSpecified) {
+			BString errorString(B_TRANSLATE("Error writing to location: "
+				"%strPath%. Defaulting to location: %home%"));
+			errorString.ReplaceFirst("%strPath%", path.Path());
+			errorString.ReplaceFirst("%home%", home.Path());
+			BAlert* alert = new BAlert(B_TRANSLATE("Error"),
+				errorString.String(), B_TRANSLATE("OK"));
+			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+			alert->Go();
+		}
+		fOutputDir.SetTo(home.Path());
 	}
 	TruncateOutputFolderPath();
 }

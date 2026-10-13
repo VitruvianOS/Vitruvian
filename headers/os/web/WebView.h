@@ -51,6 +51,36 @@ public:
 	// Messaging
 			void				SetTarget(const BMessenger& target);
 
+	// Session: call before the view is shown. The default profile is
+	// shared by every view in the process (cookies, local storage);
+	// private views get an ephemeral session instead.
+			void				SetSession(const char* profileDir,
+									bool ephemeral);
+	static	void				SetDefaultProfileDir(const char* path);
+	static	void				ClearDefaultProfileData();
+
+	// Preferences: applied immediately, on the GLib thread.
+			void				SetBlockedDomains(const char* commaSeparated);
+			void				SetJavaScriptEnabled(bool enabled);
+			void				SetImagesEnabled(bool enabled);
+			void				SetUserAgentSuffix(const char* suffix);
+			void				SetZoomLevel(float zoom);
+			float				ZoomLevel() const;
+
+	// Editing: routed through WebKit and mirrored to BClipboard.
+			void				Cut();
+			void				Copy();
+			void				Paste();
+			void				SelectAll();
+
+	// Downloads a URI; a non-empty destination pins the save path.
+			void				DownloadURI(const char* uri,
+									const char* destination = nullptr);
+
+	// Full-screen video: the window calls this after it entered or
+	// left full-screen; the reply tells WebKit the transition done.
+			void				NotifyFullScreen(bool entered);
+
 private:
 			struct				WebViewImpl;
 			WebViewImpl*		fImpl;

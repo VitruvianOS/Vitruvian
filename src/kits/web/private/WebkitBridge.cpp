@@ -11,10 +11,13 @@
 #include "focus_and_cursor.h"
 #include "frame_notifier.h"
 #include "logging.h"
+#include "notifications_bridge.h"
+#include "pdf_loader.h"
 #include "process_manager.h"
 #include "session_adapter.h"
 #include "url_scheme_adapter.h"
 
+#include <Cursor.h>
 #include <wpe/webkit.h>
 #include <wpe/wpe.h>
 #include <wpe/fdo.h>
@@ -30,8 +33,10 @@
 WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session)
 	:
 	backend(nullptr),
+	downloadHandler(nullptr),
 	webView(nullptr),
 	context(nullptr),
+	settings(nullptr),
 	fValid(false),
 	fCachedProgress(0.0),
 	fCachedIsLoading(false),
@@ -67,9 +72,11 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 	schemeAdapter->RegisterSchemes(context);
 
 	// 3. Settings.
-	WebKitSettings* settings = webkit_settings_new();
+	settings = webkit_settings_new();
 	webkit_settings_set_enable_javascript(settings, TRUE);
 	webkit_settings_set_auto_load_images(settings, TRUE);
+	webkit_settings_set_enable_fullscreen(settings, TRUE);
+	webkit_settings_set_enable_smooth_scrolling(settings, TRUE);
 	webkit_settings_set_user_agent(settings,
 		"Mozilla/5.0 (Linux; X11) "
 		"AppleWebKit/605.1.15 (KHTML, like Gecko) "
@@ -93,7 +100,6 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 		"network-session", networkSession,
 		"settings",        settings,
 		nullptr));
-	g_object_unref(settings);
 	// wkBackend is now owned by the WebView (transfer-full via "backend" prop).
 
 	if (!webView) {
@@ -103,15 +109,36 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 		return;
 	}
 
-	// 6. Downloads.
-	downloadHandler = std::make_unique<DownloadHandler>();
-	downloadHandler->Attach(networkSession);
+	// 6. Downloads: one handler per session, this bridge listens.
+	downloadHandler = DownloadHandler::ForSession(networkSession);
+	{
+		DownloadHandler::Listener listener;
+		listener.onStarted = [this](const DownloadEntry& e) {
+			if (onDownloadStarted) onDownloadStarted(e);
+		};
+		listener.onProgress = [this](const DownloadEntry& e) {
+			if (onDownloadProgress) onDownloadProgress(e);
+		};
+		listener.onFinished = [this](const DownloadEntry& e) {
+			if (onDownloadFinished) onDownloadFinished(e);
+		};
+		listener.onFailed = [this](const DownloadEntry& e) {
+			if (onDownloadFailed) onDownloadFailed(e);
+		};
+		downloadHandler->AddListener(this, listener);
+	}
 
 	// 7. Focus adapter.
 	focusAdapter = std::make_unique<FocusAndCursorAdapter>();
 	focusAdapter->SetBackend(backend);
 
-	// 8. Initial size dispatch.
+	// 8. Web notifications.
+	notifications = std::make_unique<NotificationsBridge>();
+
+	// 9. PDF helper: decides between the vos-pdf viewer and a download.
+	pdfLoader = std::make_unique<PdfLoader>();
+
+	// 10. Initial size dispatch.
 	struct SizeArgs { wpe_view_backend* b; uint32_t w, h; };
 	auto* sa = new SizeArgs{backend, (uint32_t)width, (uint32_t)height};
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
@@ -121,7 +148,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 		return G_SOURCE_REMOVE;
 	}, sa);
 
-	// 9. Connect GObject signals.
+	// 11. Connect GObject signals.
 	_ConnectSignals();
 
 	fValid = true;
@@ -132,11 +159,15 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 WebKitBridge::~WebKitBridge()
 {
 	log_info("WebKitBridge: destroying");
+	if (downloadHandler != nullptr)
+		downloadHandler->RemoveListener(this);
 	ProcessManager::Instance().InvokeOnGLibThreadSync([this]() {
 		if (webView)
 			g_object_unref(webView);
 		if (context)
 			g_object_unref(context);
+		if (settings)
+			g_object_unref(settings);
 		notifier.reset();
 		compositor.reset();
 	});
@@ -151,6 +182,8 @@ WebKitBridge::_ConnectSignals()
 {
 	g_signal_connect(webView, "load-changed",
 		G_CALLBACK(_OnLoadChanged), this);
+	g_signal_connect(webView, "load-failed",
+		G_CALLBACK(_OnLoadFailed), this);
 	g_signal_connect(webView, "notify::title",
 		G_CALLBACK(_OnNotifyTitle), this);
 	g_signal_connect(webView, "notify::estimated-load-progress",
@@ -161,6 +194,24 @@ WebKitBridge::_ConnectSignals()
 		G_CALLBACK(_OnDecidePolicy), this);
 	g_signal_connect(webView, "script-dialog",
 		G_CALLBACK(_OnScriptDialog), this);
+	g_signal_connect(webView, "permission-request",
+		G_CALLBACK(_OnPermissionRequest), this);
+	g_signal_connect(webView, "mouse-target-changed",
+		G_CALLBACK(_OnMouseTargetChanged), this);
+	g_signal_connect(webView, "context-menu",
+		G_CALLBACK(_OnContextMenu), this);
+	g_signal_connect(webView, "web-process-crashed",
+		G_CALLBACK(_OnWebProcessCrashed), this);
+	g_signal_connect(webView, "web-process-terminated",
+		G_CALLBACK(_OnWebProcessTerminated), this);
+	g_signal_connect(webView, "enter-fullscreen",
+		G_CALLBACK(_OnEnterFullscreen), this);
+	g_signal_connect(webView, "leave-fullscreen",
+		G_CALLBACK(_OnLeaveFullscreen), this);
+	g_signal_connect(webView, "run-file-chooser",
+		G_CALLBACK(_OnRunFileChooser), this);
+	g_signal_connect(webView, "show-notification",
+		G_CALLBACK(_OnShowNotification), this);
 }
 
 
@@ -221,6 +272,24 @@ WebKitBridge::_OnLoadChanged(WebKitWebView* view, WebKitLoadEvent event,
 		default:
 			break;
 	}
+}
+
+
+void
+WebKitBridge::_OnLoadFailed(WebKitWebView* view, WebKitLoadEvent event,
+	const gchar* failingURI, GError* error, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+	if (event != WEBKIT_LOAD_FINISHED)
+		return;
+
+	std::string message = error != NULL ? error->message : "load failed";
+	{
+		std::lock_guard<std::mutex> lock(self->fStateMutex);
+		self->fCachedIsLoading = false;
+	}
+	if (self->onLoadFailed)
+		self->onLoadFailed(message);
 }
 
 
@@ -303,15 +372,14 @@ WebKitBridge::_OnDecidePolicy(WebKitWebView*, WebKitPolicyDecision* decision,
 			}
 		}
 
-		// For NEW_WINDOW_ACTION, give the host a chance to handle/refuse.
+		// Popups and target=_blank open in a host window: WebKit never
+		// creates the new view itself, so the decision is always ignored
+		// and the host is asked to open the URL.
 		if (type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
-			bool allow = true;
 			if (self->onNewWindowRequested && uri)
-				allow = self->onNewWindowRequested(uri);
-			if (!allow) {
-				webkit_policy_decision_ignore(decision);
-				return TRUE;
-			}
+				self->onNewWindowRequested(uri);
+			webkit_policy_decision_ignore(decision);
+			return TRUE;
 		}
 	}
 
@@ -331,6 +399,29 @@ WebKitBridge::_OnDecidePolicy(WebKitWebView*, WebKitPolicyDecision* decision,
 				"Content-Disposition");
 		bool attachment = disposition != NULL
 			&& g_ascii_strncasecmp(disposition, "attachment", 10) == 0;
+		const char* mimeType = webkit_uri_response_get_mime_type(uriResponse);
+
+		// PDFs open in the view when the bundled viewer exists, else they
+		// download: the vos-pdf viewer page cannot render without pdfjs.
+		if (self->pdfLoader != nullptr && mimeType != NULL
+			&& self->pdfLoader->IsPDFContentType(mimeType)
+			&& !attachment) {
+			if (self->pdfLoader->HasViewer()) {
+				WebKitURIRequest* req
+					= webkit_response_policy_decision_get_request(response);
+				const char* uri = req != NULL
+					? webkit_uri_request_get_uri(req) : NULL;
+				if (uri != NULL) {
+					std::string viewer
+						= self->pdfLoader->BuildViewerURL(uri);
+					webkit_policy_decision_ignore(decision);
+					self->LoadURL(viewer);
+					return TRUE;
+				}
+			}
+			// No viewer bundled: fall through to the download path.
+		}
+
 		if (attachment
 			|| !webkit_response_policy_decision_is_mime_type_supported(
 				response)) {
@@ -352,6 +443,8 @@ WebKitBridge::_OnScriptDialog(WebKitWebView*, WebKitScriptDialog* dialog,
 	const char* msg = webkit_script_dialog_get_message(dialog);
 	std::string message = msg ? msg : "";
 
+	// The handlers block the GLib thread until the host answered: WebKit
+	// needs the result before the handler returns.
 	switch (webkit_script_dialog_get_dialog_type(dialog)) {
 		case WEBKIT_SCRIPT_DIALOG_ALERT:
 			if (self->onAlert) self->onAlert(message);
@@ -383,6 +476,170 @@ WebKitBridge::_OnScriptDialog(WebKitWebView*, WebKitScriptDialog* dialog,
 }
 
 
+gboolean
+WebKitBridge::_OnPermissionRequest(WebKitWebView* view,
+	WebKitPermissionRequest* request, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+
+	if (WEBKIT_IS_NOTIFICATION_PERMISSION_REQUEST(request)) {
+		const char* uri = webkit_web_view_get_uri(view);
+		bool allow = false;
+		if (self->fNotificationPermissionHandler != nullptr)
+			allow = self->fNotificationPermissionHandler(
+				uri != NULL ? uri : "");
+		if (allow)
+			webkit_permission_request_allow(request);
+		else
+			webkit_permission_request_deny(request);
+		return TRUE;
+	}
+
+	// Everything else (geolocation, media devices, ...) is denied: the
+	// host has no UI for it yet.
+	webkit_permission_request_deny(request);
+	return TRUE;
+}
+
+
+void
+WebKitBridge::_OnMouseTargetChanged(WebKitWebView* view,
+	WebKitHitTestResult* hitTest, guint modifiers, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+	if (hitTest == NULL)
+		return;
+
+	guint context = webkit_hit_test_result_get_context(hitTest);
+	const char* link = webkit_hit_test_result_get_link_uri(hitTest);
+	const char* image = webkit_hit_test_result_get_image_uri(hitTest);
+
+	if (self->onHoverChanged)
+		self->onHoverChanged(link != NULL ? link : "",
+			image != NULL ? image : "");
+
+	if (self->onCursorChanged) {
+		int32 cursorId = B_CURSOR_ID_SYSTEM_DEFAULT;
+		if ((context & WEBKIT_HIT_TEST_RESULT_CONTEXT_EDITABLE) != 0)
+			cursorId = B_CURSOR_ID_I_BEAM;
+		else if ((context & WEBKIT_HIT_TEST_RESULT_CONTEXT_LINK) != 0)
+			cursorId = B_CURSOR_ID_FOLLOW_LINK;
+		else if ((context & WEBKIT_HIT_TEST_RESULT_CONTEXT_SCROLLBAR) != 0)
+			cursorId = B_CURSOR_ID_SYSTEM_DEFAULT;
+		self->onCursorChanged(cursorId);
+	}
+}
+
+
+gboolean
+WebKitBridge::_OnContextMenu(WebKitWebView*, WebKitContextMenu* menu,
+	WebKitHitTestResult* hitTest, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+
+	std::string link;
+	std::string image;
+	if (hitTest != NULL) {
+		const char* linkUri = webkit_hit_test_result_get_link_uri(hitTest);
+		const char* imageUri = webkit_hit_test_result_get_image_uri(hitTest);
+		if (linkUri != NULL)
+			link = linkUri;
+		if (imageUri != NULL)
+			image = imageUri;
+	}
+
+	// Suppress WebKit's own menu; the host shows a BPopUpMenu instead.
+	if (self->onContextMenu)
+		self->onContextMenu(link, image, 0, 0);
+	return TRUE;
+}
+
+
+gboolean
+WebKitBridge::_OnWebProcessCrashed(WebKitWebView*, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+	log_error("WebKitBridge: web process crashed");
+	{
+		std::lock_guard<std::mutex> lock(self->fStateMutex);
+		self->fCachedIsLoading = false;
+	}
+	if (self->onWebProcessCrashed)
+		self->onWebProcessCrashed();
+	return TRUE;
+}
+
+
+void
+WebKitBridge::_OnWebProcessTerminated(WebKitWebView* view,
+	WebKitWebProcessTerminationReason reason, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+	log_error("WebKitBridge: web process terminated (reason %d)", (int)reason);
+	{
+		std::lock_guard<std::mutex> lock(self->fStateMutex);
+		self->fCachedIsLoading = false;
+	}
+	if (self->onWebProcessCrashed)
+		self->onWebProcessCrashed();
+}
+
+
+gboolean
+WebKitBridge::_OnEnterFullscreen(WebKitWebView*, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+	if (self->onFullscreenChanged)
+		self->onFullscreenChanged(true);
+	return TRUE;
+}
+
+
+gboolean
+WebKitBridge::_OnLeaveFullscreen(WebKitWebView*, gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+	if (self->onFullscreenChanged)
+		self->onFullscreenChanged(false);
+	return TRUE;
+}
+
+
+gboolean
+WebKitBridge::_OnRunFileChooser(WebKitWebView*, WebKitFileChooserRequest* request,
+	gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+
+	// The host shows a BFilePanel on its window thread and answers
+	// asynchronously; returning TRUE takes the default away.
+	g_object_ref(request);
+	bool handled = false;
+	if (self->onRunFileChooser)
+		handled = self->onRunFileChooser(request);
+	if (!handled) {
+		webkit_file_chooser_request_select_files(request, NULL);
+		g_object_unref(request);
+	}
+	return TRUE;
+}
+
+
+gboolean
+WebKitBridge::_OnShowNotification(WebKitWebView*, WebKitNotification* notification,
+	gpointer data)
+{
+	auto* self = static_cast<WebKitBridge*>(data);
+	const char* title = webkit_notification_get_title(notification);
+	const char* body = webkit_notification_get_body(notification);
+	if (self->onShowNotification)
+		self->onShowNotification(title != NULL ? title : "",
+			body != NULL ? body : "");
+	// Keep the notification displayed; close would need a click handler.
+	return TRUE;
+}
+
+
 //	#pragma mark - Cached state getters
 
 
@@ -393,12 +650,14 @@ WebKitBridge::CanGoBack() const
 	return fCachedCanGoBack;
 }
 
+
 bool
 WebKitBridge::CanGoForward() const
 {
 	std::lock_guard<std::mutex> lock(fStateMutex);
 	return fCachedCanGoForward;
 }
+
 
 std::string
 WebKitBridge::CurrentURL() const
@@ -407,6 +666,7 @@ WebKitBridge::CurrentURL() const
 	return fCachedURL;
 }
 
+
 std::string
 WebKitBridge::Title() const
 {
@@ -414,12 +674,14 @@ WebKitBridge::Title() const
 	return fCachedTitle;
 }
 
+
 double
 WebKitBridge::LoadProgress() const
 {
 	std::lock_guard<std::mutex> lock(fStateMutex);
 	return fCachedProgress;
 }
+
 
 bool
 WebKitBridge::IsLoading() const
@@ -627,4 +889,168 @@ WebKitBridge::SetBlockedDomains(const std::vector<std::string>& domains)
 {
 	std::lock_guard<std::mutex> lock(fBlockedMutex);
 	fBlockedDomains = domains;
+}
+
+
+void
+WebKitBridge::SetJavaScriptEnabled(bool enabled)
+{
+	struct Args { WebKitSettings* s; bool enabled; };
+	auto* a = new Args{settings, enabled};
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* a = static_cast<Args*>(d);
+		webkit_settings_set_enable_javascript(a->s, a->enabled);
+		delete a;
+		return G_SOURCE_REMOVE;
+	}, a);
+}
+
+
+void
+WebKitBridge::SetImagesEnabled(bool enabled)
+{
+	struct Args { WebKitSettings* s; bool enabled; };
+	auto* a = new Args{settings, enabled};
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* a = static_cast<Args*>(d);
+		webkit_settings_set_auto_load_images(a->s, a->enabled);
+		delete a;
+		return G_SOURCE_REMOVE;
+	}, a);
+}
+
+
+void
+WebKitBridge::SetUserAgentSuffix(const std::string& suffix)
+{
+	struct Args { WebKitSettings* s; std::string suffix; };
+	auto* a = new Args{settings, suffix};
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* a = static_cast<Args*>(d);
+		if (a->suffix.empty()) {
+			webkit_settings_set_user_agent(a->s,
+				"Mozilla/5.0 (Linux; X11) "
+				"AppleWebKit/605.1.15 (KHTML, like Gecko) "
+				"Version/17.4 Safari/605.1.15 Net+/0.1");
+		} else {
+			std::string ua =
+				"Mozilla/5.0 (Linux; X11) "
+				"AppleWebKit/605.1.15 (KHTML, like Gecko) "
+				"Version/17.4 Safari/605.1.15 Net+/0.1 " + a->suffix;
+			webkit_settings_set_user_agent(a->s, ua.c_str());
+		}
+		delete a;
+		return G_SOURCE_REMOVE;
+	}, a);
+}
+
+
+void
+WebKitBridge::SetZoomLevel(double zoom)
+{
+	struct Args { WebKitWebView* v; double zoom; };
+	auto* a = new Args{webView, zoom};
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* a = static_cast<Args*>(d);
+		webkit_web_view_set_zoom_level(a->v, a->zoom);
+		delete a;
+		return G_SOURCE_REMOVE;
+	}, a);
+}
+
+
+void
+WebKitBridge::Cut()
+{
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		webkit_web_view_execute_editing_command(
+			static_cast<WebKitWebView*>(d), "Cut");
+		return G_SOURCE_REMOVE;
+	}, webView);
+}
+
+
+void
+WebKitBridge::Copy()
+{
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		webkit_web_view_execute_editing_command(
+			static_cast<WebKitWebView*>(d), "Copy");
+		return G_SOURCE_REMOVE;
+	}, webView);
+}
+
+
+void
+WebKitBridge::Paste()
+{
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		webkit_web_view_execute_editing_command(
+			static_cast<WebKitWebView*>(d), "Paste");
+		return G_SOURCE_REMOVE;
+	}, webView);
+}
+
+
+void
+WebKitBridge::SelectAll()
+{
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		webkit_web_view_execute_editing_command(
+			static_cast<WebKitWebView*>(d), "SelectAll");
+		return G_SOURCE_REMOVE;
+	}, webView);
+}
+
+
+void
+WebKitBridge::DownloadURI(const std::string& uri,
+	const std::string& destination)
+{
+	struct Args {
+		DownloadHandler* handler;
+		WebKitNetworkSession* session;
+		std::string uri;
+		std::string destination;
+	};
+	WebKitNetworkSession* session = webkit_web_view_get_network_session(webView);
+	auto* a = new Args{downloadHandler, session, uri, destination};
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* a = static_cast<Args*>(d);
+		if (!a->destination.empty())
+			a->handler->SetDestinationOverride(a->uri, a->destination);
+		webkit_network_session_download_uri(a->session, a->uri.c_str());
+		delete a;
+		return G_SOURCE_REMOVE;
+	}, a);
+}
+
+
+void
+WebKitBridge::NotifyDidEnterFullscreen()
+{
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		wpe_view_backend_dispatch_did_enter_fullscreen(
+			static_cast<wpe_view_backend*>(d));
+		return G_SOURCE_REMOVE;
+	}, backend);
+}
+
+
+void
+WebKitBridge::NotifyDidExitFullscreen()
+{
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		wpe_view_backend_dispatch_did_exit_fullscreen(
+			static_cast<wpe_view_backend*>(d));
+		return G_SOURCE_REMOVE;
+	}, backend);
+}
+
+
+void
+WebKitBridge::SetNotificationPermissionHandler(
+	std::function<bool(const std::string&)> fn)
+{
+	fNotificationPermissionHandler = std::move(fn);
 }

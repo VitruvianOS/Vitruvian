@@ -28,6 +28,8 @@ struct DownloadEntry {
 };
 
 
+// Per-session download fan-out: one WebKit "download-started" connection
+// per session, N window listeners. All callbacks run on the GLib thread.
 class DownloadHandler {
 public:
 						DownloadHandler();
@@ -35,19 +37,50 @@ public:
 
 			void		Attach(WebKitNetworkSession* session);
 
+			// One handler per network session: the "download-started"
+			// signal would fire once per attached handler otherwise.
+	static	DownloadHandler* ForSession(WebKitNetworkSession* session);
+
 			void		SetDownloadDir(const std::string& dir)
 							{ fDownloadDir = dir; }
 	const std::string&	DownloadDir() const { return fDownloadDir; }
 
+			// When true each download asks the user where to save
+			// through onAskDestination before it starts.
+			void		SetAskLocation(bool ask) { fAskLocation = ask; }
+			bool		AskLocation() const { return fAskLocation; }
+
+			// Pins the next download of this URI to a path chosen by
+			// the user (Save image as / Save link as).
+			void		SetDestinationOverride(const std::string& uri,
+							const std::string& destination);
+
+			void		Cancel(uint64_t id);
+
 			// Returns a snapshot copy — safe to call from any thread.
 			std::vector<DownloadEntry> ActiveDownloads() const;
 
-			std::function<void(const DownloadEntry&)> onDownloadStarted;
-			std::function<void(const DownloadEntry&)> onDownloadProgress;
-			std::function<void(const DownloadEntry&)> onDownloadFinished;
-			std::function<void(const DownloadEntry&)> onDownloadFailed;
+	using Listener = struct DownloadListener {
+		std::function<void(const DownloadEntry&)> onStarted;
+		std::function<void(const DownloadEntry&)> onProgress;
+		std::function<void(const DownloadEntry&)> onFinished;
+		std::function<void(const DownloadEntry&)> onFailed;
+	};
+
+			// The owner pointer keys the map so a listener can remove
+			// itself by identity when its window closes.
+			void		AddListener(const void* owner,
+							const Listener& listener);
+			void		RemoveListener(const void* owner);
+
+			// Blocks until the host returns a path ("" cancels). Runs on
+			// the GLib thread inside decide-destination.
+			std::function<std::string(const std::string& suggestedName,
+				const std::string& url)>	onAskDestination;
 
 private:
+			void		_Notify(std::function<void(const Listener&)> fn);
+
 	static void		_OnDownloadStarted(WebKitNetworkSession*, WebKitDownload*,
 							gpointer);
 	static gboolean _OnDecideDestination(WebKitDownload*, const char*,
@@ -58,8 +91,11 @@ private:
 
 	mutable std::mutex					fMutex;
 			std::map<WebKitDownload*, DownloadEntry> fDownloads;
+			std::map<std::string, std::string> fDestinationOverrides;
+			std::map<const void*, Listener>	fListeners;
 			uint64_t					fNextId;
 			std::string					fDownloadDir;
+			bool						fAskLocation;
 };
 
 

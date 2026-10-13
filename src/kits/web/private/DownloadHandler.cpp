@@ -15,7 +15,8 @@
 
 DownloadHandler::DownloadHandler()
 	:
-	fNextId(1)
+	fNextId(1),
+	fAskLocation(false)
 {
 	const char* home = getenv("HOME");
 	fDownloadDir = home ? std::string(home) + "/Downloads" : "/tmp";
@@ -28,12 +29,93 @@ DownloadHandler::~DownloadHandler()
 }
 
 
+DownloadHandler*
+DownloadHandler::ForSession(WebKitNetworkSession* session)
+{
+	// One handler per session: attaching twice would fire
+	// "download-started" once per attachment and duplicate every entry.
+	static std::map<WebKitNetworkSession*, DownloadHandler*> sHandlers;
+	static std::mutex sMutex;
+
+	std::lock_guard<std::mutex> lock(sMutex);
+	auto it = sHandlers.find(session);
+	if (it != sHandlers.end())
+		return it->second;
+
+	DownloadHandler* handler = new DownloadHandler();
+	handler->Attach(session);
+	sHandlers[session] = handler;
+	return handler;
+}
+
+
 void
 DownloadHandler::Attach(WebKitNetworkSession* session)
 {
 	g_signal_connect(session, "download-started",
 		G_CALLBACK(_OnDownloadStarted), this);
 	log_info("DownloadHandler: attached to network session");
+}
+
+
+void
+DownloadHandler::AddListener(const void* owner, const Listener& listener)
+{
+	std::lock_guard<std::mutex> lock(fMutex);
+	fListeners[owner] = listener;
+}
+
+
+void
+DownloadHandler::RemoveListener(const void* owner)
+{
+	std::lock_guard<std::mutex> lock(fMutex);
+	fListeners.erase(owner);
+}
+
+
+void
+DownloadHandler::_Notify(std::function<void(const Listener&)> fn)
+{
+	// Snapshot under the lock, invoke outside: a listener posting a
+	// BMessage is fine, one that takes our mutex again would not be.
+	std::vector<Listener> listeners;
+	{
+		std::lock_guard<std::mutex> lock(fMutex);
+		for (const auto& kv : fListeners)
+			listeners.push_back(kv.second);
+	}
+	for (const auto& listener : listeners)
+		fn(listener);
+}
+
+
+void
+DownloadHandler::SetDestinationOverride(const std::string& uri,
+	const std::string& destination)
+{
+	std::lock_guard<std::mutex> lock(fMutex);
+	fDestinationOverrides[uri] = destination;
+}
+
+
+void
+DownloadHandler::Cancel(uint64_t id)
+{
+	WebKitDownload* found = NULL;
+	{
+		std::lock_guard<std::mutex> lock(fMutex);
+		for (const auto& kv : fDownloads) {
+			if (kv.second.id == id) {
+				found = kv.first;
+				break;
+			}
+		}
+		if (found == NULL)
+			return;
+		fDownloads[found].cancelled = true;
+	}
+	webkit_download_cancel(found);
 }
 
 
@@ -66,17 +148,27 @@ DownloadHandler::_OnDownloadStarted(WebKitNetworkSession*, WebKitDownload* dl,
 	WebKitURIRequest* req = webkit_download_get_request(dl);
 	const char* uri = webkit_uri_request_get_uri(req);
 
-	std::lock_guard<std::mutex> lock(self->fMutex);
+	WebKitURIResponse* response = webkit_download_get_response(dl);
+	guint64 total = response != NULL
+		? webkit_uri_response_get_content_length(response) : 0;
+
 	DownloadEntry entry;
-	entry.id            = self->fNextId++;
-	entry.url           = uri ? uri : "";
-	entry.totalBytes    = 0;
-	entry.receivedBytes = 0;
-	entry.finished      = false;
-	entry.failed        = false;
-	entry.cancelled     = false;
-	self->fDownloads[dl] = entry;
+	{
+		std::lock_guard<std::mutex> lock(self->fMutex);
+		entry.id            = self->fNextId++;
+		entry.url           = uri ? uri : "";
+		entry.totalBytes    = total;
+		entry.receivedBytes = 0;
+		entry.finished      = false;
+		entry.failed        = false;
+		entry.cancelled     = false;
+		self->fDownloads[dl] = entry;
+	}
 	log_info("DownloadHandler: download started (%s)", entry.url.c_str());
+	self->_Notify([&entry](const Listener& listener) {
+		if (listener.onStarted)
+			listener.onStarted(entry);
+	});
 }
 
 
@@ -85,26 +177,61 @@ DownloadHandler::_OnDecideDestination(WebKitDownload* dl,
 	const char* suggestedFilename, gpointer data)
 {
 	auto* self = static_cast<DownloadHandler*>(data);
-	std::string filename = SanitizeDownloadFilename(
-		suggestedFilename ? suggestedFilename : "download");
-	std::string dest = SafeDownloadDestination(self->fDownloadDir,
-		suggestedFilename ? suggestedFilename : "download");
+	const char* suggested = suggestedFilename ? suggestedFilename : "download";
+	std::string filename = SanitizeDownloadFilename(suggested);
 
-	if (dest != UniqueDownloadDestination(self->fDownloadDir, filename)) {
-		log_error("DownloadHandler: destination escaped dir, using fallback");
-		filename = "download";
+	WebKitURIRequest* req = webkit_download_get_request(dl);
+	const char* uri = req != NULL ? webkit_uri_request_get_uri(req) : NULL;
+	std::string url = uri != NULL ? uri : "";
+
+	// A pinned destination (Save image as) wins over everything.
+	std::string dest;
+	{
+		std::lock_guard<std::mutex> lock(self->fMutex);
+		auto it = self->fDestinationOverrides.find(url);
+		if (it != self->fDestinationOverrides.end()) {
+			dest = it->second;
+			self->fDestinationOverrides.erase(it);
+		}
 	}
+
+	if (dest.empty() && self->fAskLocation
+		&& self->onAskDestination != nullptr) {
+		// Blocks the GLib thread until the host's save panel answered.
+		dest = self->onAskDestination(filename, url);
+		if (dest.empty()) {
+			{
+				std::lock_guard<std::mutex> lock(self->fMutex);
+				self->fDownloads.erase(dl);
+			}
+			log_info("DownloadHandler: cancelled by user (%s)",
+				url.c_str());
+			return FALSE;
+		}
+	}
+
+	if (dest.empty())
+		dest = SafeDownloadDestination(self->fDownloadDir, suggested);
 
 	webkit_download_set_destination(dl, dest.c_str());
 
-	std::lock_guard<std::mutex> lock(self->fMutex);
-	auto it = self->fDownloads.find(dl);
-	if (it != self->fDownloads.end()) {
-		it->second.filename    = filename;
-		it->second.destination = dest;
-		if (self->onDownloadStarted)
-			self->onDownloadStarted(it->second);
+	DownloadEntry updated;
+	{
+		std::lock_guard<std::mutex> lock(self->fMutex);
+		auto it = self->fDownloads.find(dl);
+		if (it != self->fDownloads.end()) {
+			size_t slash = dest.rfind('/');
+			it->second.filename    = slash != std::string::npos
+				? dest.substr(slash + 1) : dest;
+			it->second.destination = dest;
+			updated = it->second;
+		}
 	}
+	if (!updated.filename.empty())
+		self->_Notify([&updated](const Listener& listener) {
+			if (listener.onStarted)
+				listener.onStarted(updated);
+		});
 	return TRUE;
 }
 
@@ -114,12 +241,26 @@ DownloadHandler::_OnReceivedData(WebKitDownload* dl, guint64 dataLength,
 	gpointer data)
 {
 	auto* self = static_cast<DownloadHandler*>(data);
-	std::lock_guard<std::mutex> lock(self->fMutex);
-	auto it = self->fDownloads.find(dl);
-	if (it == self->fDownloads.end()) return;
-	it->second.receivedBytes += dataLength;
-	if (self->onDownloadProgress)
-		self->onDownloadProgress(it->second);
+	DownloadEntry updated;
+	{
+		std::lock_guard<std::mutex> lock(self->fMutex);
+		auto it = self->fDownloads.find(dl);
+		if (it == self->fDownloads.end())
+			return;
+		it->second.receivedBytes += dataLength;
+		WebKitURIResponse* response = webkit_download_get_response(dl);
+		if (response != NULL) {
+			guint64 total
+				= webkit_uri_response_get_content_length(response);
+			if (total > 0)
+				it->second.totalBytes = total;
+		}
+		updated = it->second;
+	}
+	self->_Notify([&updated](const Listener& listener) {
+		if (listener.onProgress)
+			listener.onProgress(updated);
+	});
 }
 
 
@@ -127,14 +268,21 @@ void
 DownloadHandler::_OnFinished(WebKitDownload* dl, gpointer data)
 {
 	auto* self = static_cast<DownloadHandler*>(data);
-	std::lock_guard<std::mutex> lock(self->fMutex);
-	auto it = self->fDownloads.find(dl);
-	if (it == self->fDownloads.end()) return;
-	it->second.finished = true;
-	log_info("DownloadHandler: finished '%s'", it->second.filename.c_str());
-	if (self->onDownloadFinished)
-		self->onDownloadFinished(it->second);
-	self->fDownloads.erase(it);
+	DownloadEntry updated;
+	{
+		std::lock_guard<std::mutex> lock(self->fMutex);
+		auto it = self->fDownloads.find(dl);
+		if (it == self->fDownloads.end())
+			return;
+		it->second.finished = true;
+		updated = it->second;
+		self->fDownloads.erase(it);
+	}
+	log_info("DownloadHandler: finished '%s'", updated.filename.c_str());
+	self->_Notify([&updated](const Listener& listener) {
+		if (listener.onFinished)
+			listener.onFinished(updated);
+	});
 }
 
 
@@ -142,13 +290,20 @@ void
 DownloadHandler::_OnFailed(WebKitDownload* dl, GError* error, gpointer data)
 {
 	auto* self = static_cast<DownloadHandler*>(data);
-	std::lock_guard<std::mutex> lock(self->fMutex);
-	auto it = self->fDownloads.find(dl);
-	if (it == self->fDownloads.end()) return;
-	it->second.failed = true;
+	DownloadEntry updated;
+	{
+		std::lock_guard<std::mutex> lock(self->fMutex);
+		auto it = self->fDownloads.find(dl);
+		if (it == self->fDownloads.end())
+			return;
+		it->second.failed = true;
+		updated = it->second;
+		self->fDownloads.erase(it);
+	}
 	log_error("DownloadHandler: failed '%s': %s",
-		it->second.filename.c_str(), error ? error->message : "unknown");
-	if (self->onDownloadFailed)
-		self->onDownloadFailed(it->second);
-	self->fDownloads.erase(it);
+		updated.filename.c_str(), error ? error->message : "unknown");
+	self->_Notify([&updated](const Listener& listener) {
+		if (listener.onFailed)
+			listener.onFailed(updated);
+	});
 }

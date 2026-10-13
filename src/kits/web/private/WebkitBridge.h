@@ -17,8 +17,11 @@
 
 struct CompositorAdapter;
 struct FrameNotifier;
+struct DownloadEntry;
 class DownloadHandler;
 class FocusAndCursorAdapter;
+class NotificationsBridge;
+class PdfLoader;
 class SessionAdapter;
 class UrlSchemeAdapter;
 
@@ -56,17 +59,51 @@ struct WebKitBridge {
 			void				SetBlockedDomains(
 									const std::vector<std::string>& domains);
 
+			// Settings applied from the profile preferences.
+			void				SetJavaScriptEnabled(bool enabled);
+			void				SetImagesEnabled(bool enabled);
+			void				SetUserAgentSuffix(const std::string& suffix);
+			void				SetZoomLevel(double zoom);
+
+			// Editing commands routed through WebKit.
+			void				Cut();
+			void				Copy();
+			void				Paste();
+			void				SelectAll();
+
+			// Downloads a URI through the network session (Save link as,
+			// Save image as). A non-empty destination overrides the
+			// default Downloads directory for this URI.
+			void				DownloadURI(const std::string& uri,
+									const std::string& destination);
+
+			// Full-screen video: called after the host window entered or
+			// left full-screen, on the GLib thread.
+			void				NotifyDidEnterFullscreen();
+			void				NotifyDidExitFullscreen();
+
+			// Resolves true when the user allowed notifications for this
+			// permission request; runs on the GLib thread.
+			void				SetNotificationPermissionHandler(
+									std::function<bool(const std::string&)> fn);
+
 	struct	wpe_view_backend*	backend;
 
 			std::unique_ptr<CompositorAdapter>		compositor;
 			std::unique_ptr<FrameNotifier>			notifier;
 			std::unique_ptr<UrlSchemeAdapter>		schemeAdapter;
-			std::unique_ptr<DownloadHandler>		downloadHandler;
+			// Shared per network session; not owned.
+			DownloadHandler*						downloadHandler;
 			std::unique_ptr<FocusAndCursorAdapter>	focusAdapter;
+			std::unique_ptr<NotificationsBridge>	notifications;
+			std::unique_ptr<PdfLoader>				pdfLoader;
 
 			WebKitWebView*		webView;
 			WebKitWebContext*	context;
+			WebKitSettings*		settings;
 
+			// All callbacks run on the GLib thread: post, never lock a
+			// BWindow from here.
 			std::function<void(const std::string&)>	onTitleChanged;
 			std::function<void(const std::string&)>	onURLChanged;
 			std::function<void(double)>				onProgressChanged;
@@ -76,7 +113,39 @@ struct WebKitBridge {
 			std::function<bool(const std::string&)>	onConfirm;
 			std::function<std::string(const std::string&,
 				const std::string&)>				onPrompt;
-			std::function<bool(const std::string&)>	onNewWindowRequested;
+			// Returns the URL to open in a new host window; the policy
+			// decision is always ignored because the host opens its own
+			// window instead of letting WebKit create a view.
+			std::function<void(const std::string&)>	onNewWindowRequested;
+			// Hit-test driven: link URI ("" when not over a link), the
+			// image URI under the pointer ("" when none).
+			std::function<void(const std::string&,
+				const std::string&)>				onHoverChanged;
+			// Cursor shape id (B_CURSOR_ID_*) for the current hit target.
+			std::function<void(int32)>				onCursorChanged;
+			// Context menu request with hit URIs; runs on the GLib
+			// thread, the receiver posts to its window thread.
+			std::function<void(const std::string& linkUri,
+				const std::string& imageUri, int32 x, int32 y)>	onContextMenu;
+			std::function<void()>					onWebProcessCrashed;
+			std::function<void(bool)>				onFullscreenChanged;
+			// Script dialogs block the GLib thread until the host
+			// answers; the file chooser answers asynchronously through
+			// the ref-held request pointer. Host uses std primitives
+			// only.
+			std::function<bool(WebKitFileChooserRequest*)>
+									onRunFileChooser;
+			std::function<void(const std::string& title,
+				const std::string& body)>			onShowNotification;
+			// Download fan-out from the shared per-session handler.
+			std::function<void(const struct DownloadEntry&)>
+									onDownloadStarted;
+			std::function<void(const struct DownloadEntry&)>
+									onDownloadProgress;
+			std::function<void(const struct DownloadEntry&)>
+									onDownloadFinished;
+			std::function<void(const struct DownloadEntry&)>
+									onDownloadFailed;
 
 private:
 			void				_Init(int width, int height,
@@ -97,6 +166,9 @@ private:
 	mutable	std::mutex			fBlockedMutex;
 			std::vector<std::string> fBlockedDomains;
 
+			std::function<bool(const std::string&)>
+									fNotificationPermissionHandler;
+
 	// GObject signal handlers
 	static void		_OnLoadChanged(WebKitWebView*, WebKitLoadEvent, gpointer);
 	static void		_OnNotifyTitle(WebKitWebView*, GParamSpec*, gpointer);
@@ -106,6 +178,23 @@ private:
 						WebKitPolicyDecisionType, gpointer);
 	static gboolean	_OnScriptDialog(WebKitWebView*, WebKitScriptDialog*,
 						gpointer);
+	static gboolean	_OnPermissionRequest(WebKitWebView*,
+						WebKitPermissionRequest*, gpointer);
+	static void		_OnMouseTargetChanged(WebKitWebView*,
+						WebKitHitTestResult*, guint, gpointer);
+	static gboolean	_OnContextMenu(WebKitWebView*, WebKitContextMenu*,
+						WebKitHitTestResult*, gpointer);
+	static gboolean	_OnWebProcessCrashed(WebKitWebView*, gpointer);
+	static void		_OnWebProcessTerminated(WebKitWebView*,
+						WebKitWebProcessTerminationReason, gpointer);
+	static gboolean	_OnEnterFullscreen(WebKitWebView*, gpointer);
+	static gboolean	_OnLeaveFullscreen(WebKitWebView*, gpointer);
+	static gboolean	_OnRunFileChooser(WebKitWebView*,
+						WebKitFileChooserRequest*, gpointer);
+	static gboolean	_OnShowNotification(WebKitWebView*, WebKitNotification*,
+						gpointer);
+	static void		_OnLoadFailed(WebKitWebView*, WebKitLoadEvent,
+						const gchar*, GError*, gpointer);
 };
 
 

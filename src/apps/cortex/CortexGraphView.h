@@ -83,6 +83,7 @@ public:
 	bool			metered;
 
 	BRect			Frame() const;
+	void			LayoutPins();
 	int32			CountPins(bool outputs) const;
 };
 

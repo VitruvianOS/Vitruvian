@@ -19,7 +19,7 @@
 #include "CortexWindow.h"
 
 
-static const float kNodeWidth = 172.0f;
+static const float kNodeWidth = 220.0f;
 static const float kTitleHeight = 28.0f;
 static const float kPinRow = 16.0f;
 static const float kPinSize = 8.0f;
@@ -169,6 +169,23 @@ CortexNode::Frame() const
 	float height = kTitleHeight + rows * kPinRow + 10.0f;
 	return BRect(origin.x, origin.y, origin.x + kNodeWidth - 1.0f,
 		origin.y + height - 1.0f);
+}
+
+
+void
+CortexNode::LayoutPins()
+{
+	int32 outRow = 0;
+	int32 inRow = 0;
+	for (int32 p = 0; p < pins.CountItems(); p++) {
+		CortexPin* pin = pins.ItemAt(p);
+		if (pin == NULL)
+			continue;
+		float y = origin.y + kTitleHeight + 8.0f
+			+ (pin->isOutput ? outRow++ : inRow++) * kPinRow;
+		float x = pin->isOutput ? origin.x + kNodeWidth - 1.0f : origin.x;
+		pin->position = BPoint(x, y);
+	}
 }
 
 
@@ -517,27 +534,8 @@ CortexModel::_Layout()
 
 	for (int32 i = 0; i < fNodes.CountItems(); i++) {
 		CortexNode* node = fNodes.ItemAt(i);
-		if (node == NULL)
-			continue;
-		int32 row = 0;
-		int32 outRow = 0;
-		int32 inRow = 0;
-		for (int32 p = 0; p < node->pins.CountItems(); p++) {
-			CortexPin* pin = node->pins.ItemAt(p);
-			if (pin == NULL)
-				continue;
-			float y = node->origin.y + kTitleHeight + 8.0f
-				+ (pin->isOutput ? outRow : inRow) * kPinRow;
-			float x = pin->isOutput
-				? node->origin.x + kNodeWidth - 1.0f
-				: node->origin.x;
-			pin->position = BPoint(x, y);
-			if (pin->isOutput)
-				outRow++;
-			else
-				inRow++;
-			row++;
-		}
+		if (node != NULL)
+			node->LayoutPins();
 	}
 }
 
@@ -726,6 +724,13 @@ CortexGraphView::Draw(BRect updateRect)
 	if (fModel == NULL)
 		return;
 
+	// Saved origins can be restored after the layout pass.
+	for (int32 i = 0; i < fModel->CountNodes(); i++) {
+		CortexNode* node = fModel->NodeAt(i);
+		if (node != NULL)
+			node->LayoutPins();
+	}
+
 	for (int32 i = 0; i < fModel->CountLinks(); i++) {
 		CortexLink* link = fModel->LinkAt(i);
 		if (link == NULL)
@@ -779,20 +784,22 @@ CortexGraphView::Draw(BRect updateRect)
 		SetHighColor(0, 0, 0);
 		StrokeRect(title);
 
-		char label[128];
-		snprintf(label, sizeof(label), "%s  [%s]", node->name.String(),
+		float textWidth = frame.Width() - 12.0f;
+		BString label;
+		label.SetToFormat("%s  [%s]", node->name.String(),
 			CortexKindLabel(node->kind));
-		DrawString(label, BPoint(frame.left + 6.0f, frame.top + 12.0f));
+		TruncateString(&label, B_TRUNCATE_MIDDLE, textWidth);
+		DrawString(label.String(), BPoint(frame.left + 6.0f, frame.top + 12.0f));
 
-		if (node->mediaClass.Length() > 0) {
-			char sub[96];
-			snprintf(sub, sizeof(sub), "%s", node->mediaClass.String());
-			DrawString(sub, BPoint(frame.left + 6.0f, frame.top + 24.0f));
-		}
-
+		BString sub(node->mediaClass);
 		if (node->defaultRole != 0) {
-			DrawString(node->defaultRole == 1 ? "default out" : "default in",
-				BPoint(frame.right - 72.0f, frame.top + 12.0f));
+			if (sub.Length() > 0)
+				sub << "  ";
+			sub << (node->defaultRole == 1 ? "default out" : "default in");
+		}
+		if (sub.Length() > 0) {
+			TruncateString(&sub, B_TRUNCATE_END, textWidth);
+			DrawString(sub.String(), BPoint(frame.left + 6.0f, frame.top + 24.0f));
 		}
 
 		if (node->hasVolume) {
@@ -909,7 +916,8 @@ CortexGraphView::MouseMoved(BPoint where, uint32 transit,
 		CortexNode* node = fModel->NodeAt(fDragNode);
 		if (node != NULL) {
 			node->origin = where - fDragOffset;
-			Invalidate(node->Frame());
+			node->LayoutPins();
+			Invalidate();
 		}
 		return;
 	}

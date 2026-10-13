@@ -7,24 +7,19 @@
 #define VOS_NOTIFICATIONS_BRIDGE_H
 
 
-#include <functional>
 #include <string>
 
 
+// Delivers web notifications through the notification server.
+// Permission is decided by the WebKit permission-request path in
+// WebKitBridge; by the time Show runs the site is already allowed.
 class NotificationsBridge {
 public:
 						NotificationsBridge();
 						~NotificationsBridge();
 
-			void		RequestPermission();
-			bool		HasPermission() const { return fPermissionGranted; }
-			void		Show(const std::string& title, const std::string& body);
-
-			std::function<void(const std::string& title,
-				const std::string& body)> onNotification;
-
-private:
-			bool		fPermissionGranted;
+			void		Show(const std::string& title,
+							const std::string& body);
 };
 
 

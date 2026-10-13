@@ -69,6 +69,16 @@ struct WebKitBridge {
 			void				Cut();
 			void				Copy();
 			void				Paste();
+
+			// The BClipboard paste path: WPE WebKit has no system
+			// clipboard bridge of its own, so the text is inserted
+			// at the caret instead of asking WebKit to paste.
+			void				PasteText(const std::string& text);
+
+			// Resolves with the page selection ("" on failure).
+			void				GetSelectedText(
+									std::function<void(const std::string&)> cb);
+
 			void				SelectAll();
 
 			// Downloads a URI through the network session (Save link as,

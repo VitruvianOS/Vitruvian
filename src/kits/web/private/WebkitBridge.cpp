@@ -993,6 +993,32 @@ WebKitBridge::Paste()
 
 
 void
+WebKitBridge::PasteText(const std::string& text)
+{
+	struct Args { WebKitWebView* v; std::string text; };
+	auto* a = new Args{webView, text};
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		auto* a = static_cast<Args*>(d);
+		webkit_web_view_execute_editing_command_with_argument(a->v,
+			"InsertText", a->text.c_str());
+		delete a;
+		return G_SOURCE_REMOVE;
+	}, a);
+}
+
+
+void
+WebKitBridge::GetSelectedText(std::function<void(const std::string&)> cb)
+{
+	EvaluateJS("String(window.getSelection())",
+		[cb](const std::string& value, bool /*error*/) {
+			if (cb)
+				cb(value);
+		});
+}
+
+
+void
 WebKitBridge::SelectAll()
 {
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {

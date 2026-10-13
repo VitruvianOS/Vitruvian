@@ -1043,6 +1043,22 @@ BWebView::KeyDown(const char* bytes, int32 numBytes)
 	BView::KeyDown(bytes, numBytes);
 
 #ifdef HAS_WPE
+	// Escape leaves full-screen video even while the page keeps
+	// focus: the embedder owns the window, so the exit has to
+	// travel both to WebKit and to the window.
+	if (fImpl->fFullScreen && bytes != NULL && numBytes > 0
+		&& bytes[0] == B_ESCAPE) {
+		fImpl->fFullScreen = false;
+		if (fImpl->fBridge != NULL)
+			fImpl->fBridge->NotifyDidExitFullscreen();
+		if (fTarget.IsValid()) {
+			BMessage msg(B_WEB_PAGE_FULLSCREEN);
+			msg.AddBool(B_WEB_FULLSCREEN_FIELD, false);
+			fTarget.SendMessage(&msg);
+		}
+		return;
+	}
+
 	if (fImpl->fEventAdapter && fImpl->fBridge
 		&& fImpl->fBridge->IsValid()) {
 		// The window message carries "bytes", "key", "raw_char" and
@@ -1358,7 +1374,17 @@ BWebView::Cut()
 {
 	if (fImpl->fBridge == NULL)
 		return;
-	fImpl->fBridge->Cut();
+
+	// Mirror the selection into BClipboard before WebKit deletes
+	// it: WPE WebKit never touches the system clipboard. The
+	// callback runs on the GLib thread, ahead of the queued Cut.
+	WebKitBridge* bridge = fImpl->fBridge;
+	ClipboardDragDrop* clipboard = fImpl->fClipboard;
+	bridge->GetSelectedText([bridge, clipboard](const std::string& text) {
+		if (clipboard != NULL && !text.empty())
+			clipboard->SetClipboardText(text);
+		bridge->Cut();
+	});
 }
 
 
@@ -1367,7 +1393,14 @@ BWebView::Copy()
 {
 	if (fImpl->fBridge == NULL)
 		return;
-	fImpl->fBridge->Copy();
+
+	WebKitBridge* bridge = fImpl->fBridge;
+	ClipboardDragDrop* clipboard = fImpl->fClipboard;
+	bridge->GetSelectedText([bridge, clipboard](const std::string& text) {
+		if (clipboard != NULL && !text.empty())
+			clipboard->SetClipboardText(text);
+		bridge->Copy();
+	});
 }
 
 
@@ -1376,7 +1409,16 @@ BWebView::Paste()
 {
 	if (fImpl->fBridge == NULL)
 		return;
-	fImpl->fBridge->Paste();
+
+	// BClipboard is the source of truth: hand its text to the
+	// caret. An empty clipboard falls back to WebKit's own paste.
+	std::string text;
+	if (fImpl->fClipboard != NULL)
+		text = fImpl->fClipboard->GetClipboardText();
+	if (text.empty())
+		fImpl->fBridge->Paste();
+	else
+		fImpl->fBridge->PasteText(text);
 }
 
 

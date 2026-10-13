@@ -18,6 +18,7 @@
 // process.
 #include <wayland-server.h>
 #include <wpe/fdo.h>
+#include <wpe/unstable/fdo-shm.h>
 #include <wpe/wpe.h>
 
 #include <algorithm>

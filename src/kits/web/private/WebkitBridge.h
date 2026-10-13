@@ -22,7 +22,6 @@ struct DownloadEntry;
 class DownloadHandler;
 class FocusAndCursorAdapter;
 class NotificationsBridge;
-class PdfLoader;
 class SessionAdapter;
 class UrlSchemeAdapter;
 
@@ -107,7 +106,6 @@ struct WebKitBridge {
 			DownloadHandler*						downloadHandler;
 			std::unique_ptr<FocusAndCursorAdapter>	focusAdapter;
 			std::unique_ptr<NotificationsBridge>	notifications;
-			std::unique_ptr<PdfLoader>				pdfLoader;
 
 			WebKitWebView*		webView;
 			WebKitWebContext*	context;

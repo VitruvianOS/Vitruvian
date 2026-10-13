@@ -47,7 +47,6 @@ if(PKG_CONFIG_FOUND)
 			private/KeyTables.cpp
 			private/Logging.cpp
 			private/NotificationsBridge.cpp
-			private/PdfLoader.cpp
 			private/ProcessManager.cpp
 				private/SessionAdapter.cpp
 				private/UrlSchemeAdapter.cpp

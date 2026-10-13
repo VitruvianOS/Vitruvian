@@ -70,7 +70,6 @@ SessionAdapter::_EnsureProfileDir()
 		fs::create_directories(fProfileDir + "/cookies");
 		fs::create_directories(fProfileDir + "/cache");
 		fs::create_directories(fProfileDir + "/localStorage");
-		fs::create_directories(fProfileDir + "/widevine");
 	} catch (const fs::filesystem_error& e) {
 		log_error("SessionAdapter: failed to create profile dir: %s", e.what());
 	}
@@ -106,19 +105,6 @@ SessionAdapter::ClearCache()
 			| WEBKIT_WEBSITE_DATA_MEMORY_CACHE),
 		0, nullptr, nullptr, nullptr);
 	log_info("SessionAdapter: cache cleared");
-}
-
-
-void
-SessionAdapter::DeleteCookiesForDomain(const std::string& domain)
-{
-	if (!fNetworkSession) return;
-	// Per-domain cookie deletion requires enumerating and deleting matching
-	// cookies. For v1.0, clear all cookies as a fallback.
-	(void)domain;
-	ClearCookies();
-	log_info("SessionAdapter: cookies cleared for domain %s (all cleared)",
-		domain.c_str());
 }
 
 

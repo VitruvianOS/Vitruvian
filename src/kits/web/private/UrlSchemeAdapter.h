@@ -18,8 +18,6 @@ public:
 			void		RegisterSchemes(WebKitWebContext* context);
 
 private:
-	static void			_HandleVosPDF(WebKitURISchemeRequest* request,
-							gpointer data);
 	static void			_HandleVosError(WebKitURISchemeRequest* request,
 							gpointer data);
 	static void			_HandleVosAbout(WebKitURISchemeRequest* request,

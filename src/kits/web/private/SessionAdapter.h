@@ -33,7 +33,6 @@ public:
 			void		ClearCookies();
 			void		ClearCache();
 			void		ClearHistory();
-			void		DeleteCookiesForDomain(const std::string& domain);
 
 	// Persists a page visit in the profile history file; ephemeral
 	// sessions keep nothing.

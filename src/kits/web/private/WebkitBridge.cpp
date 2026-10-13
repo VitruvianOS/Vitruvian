@@ -12,7 +12,6 @@
 #include "frame_notifier.h"
 #include "logging.h"
 #include "notifications_bridge.h"
-#include "pdf_loader.h"
 #include "process_manager.h"
 #include "session_adapter.h"
 #include "url_scheme_adapter.h"
@@ -136,10 +135,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 	// 8. Web notifications.
 	notifications = std::make_unique<NotificationsBridge>();
 
-	// 9. PDF helper: decides between the vos-pdf viewer and a download.
-	pdfLoader = std::make_unique<PdfLoader>();
-
-	// 10. Initial size dispatch.
+	// 9. Initial size dispatch.
 	struct SizeArgs { wpe_view_backend* b; uint32_t w, h; };
 	auto* sa = new SizeArgs{backend, (uint32_t)width, (uint32_t)height};
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
@@ -149,7 +145,7 @@ WebKitBridge::_Init(int width, int height, SessionAdapter* session)
 		return G_SOURCE_REMOVE;
 	}, sa);
 
-	// 11. Connect GObject signals.
+	// 10. Connect GObject signals.
 	_ConnectSignals();
 
 	fValid = true;
@@ -401,29 +397,9 @@ WebKitBridge::_OnDecidePolicy(WebKitWebView*, WebKitPolicyDecision* decision,
 				"Content-Disposition");
 		bool attachment = disposition != NULL
 			&& g_ascii_strncasecmp(disposition, "attachment", 10) == 0;
-		const char* mimeType = webkit_uri_response_get_mime_type(uriResponse);
 
-		// PDFs open in the view when the bundled viewer exists, else they
-		// download: the vos-pdf viewer page cannot render without pdfjs.
-		if (self->pdfLoader != nullptr && mimeType != NULL
-			&& self->pdfLoader->IsPDFContentType(mimeType)
-			&& !attachment) {
-			if (self->pdfLoader->HasViewer()) {
-				WebKitURIRequest* req
-					= webkit_response_policy_decision_get_request(response);
-				const char* uri = req != NULL
-					? webkit_uri_request_get_uri(req) : NULL;
-				if (uri != NULL) {
-					std::string viewer
-						= self->pdfLoader->BuildViewerURL(uri);
-					webkit_policy_decision_ignore(decision);
-					self->LoadURL(viewer);
-					return TRUE;
-				}
-			}
-			// No viewer bundled: fall through to the download path.
-		}
-
+		// No in-tree PDF viewer: anything WebKit cannot render,
+		// PDFs included, becomes a download.
 		if (attachment
 			|| !webkit_response_policy_decision_is_mime_type_supported(
 				response)) {

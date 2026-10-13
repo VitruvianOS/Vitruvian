@@ -25,8 +25,6 @@ UrlSchemeAdapter::~UrlSchemeAdapter()
 void
 UrlSchemeAdapter::RegisterSchemes(WebKitWebContext* context)
 {
-	webkit_web_context_register_uri_scheme(context, "vos-pdf",
-		_HandleVosPDF, this, nullptr);
 	webkit_web_context_register_uri_scheme(context, "vos-error",
 		_HandleVosError, this, nullptr);
 	webkit_web_context_register_uri_scheme(context, "vos-about",
@@ -35,13 +33,11 @@ UrlSchemeAdapter::RegisterSchemes(WebKitWebContext* context)
 	// Mark custom schemes as secure so mixed-content rules don't block them.
 	WebKitSecurityManager* sm =
 		webkit_web_context_get_security_manager(context);
-	webkit_security_manager_register_uri_scheme_as_secure(sm, "vos-pdf");
 	webkit_security_manager_register_uri_scheme_as_secure(sm, "vos-error");
 	webkit_security_manager_register_uri_scheme_as_secure(sm, "vos-about");
-	webkit_security_manager_register_uri_scheme_as_local(sm, "vos-pdf");
 	webkit_security_manager_register_uri_scheme_as_local(sm, "vos-about");
 
-	log_info("UrlSchemeAdapter: registered vos-pdf, vos-error, vos-about");
+	log_info("UrlSchemeAdapter: registered vos-error, vos-about");
 }
 
 
@@ -54,18 +50,6 @@ UrlSchemeAdapter::_FinishWithHTML(WebKitURISchemeRequest* request,
 		g_memdup2(html, len), len, g_free);
 	webkit_uri_scheme_request_finish(request, stream, (gint64)len, "text/html");
 	g_object_unref(stream);
-}
-
-
-void
-UrlSchemeAdapter::_HandleVosPDF(WebKitURISchemeRequest* request, gpointer)
-{
-	_FinishWithHTML(request,
-		"<!DOCTYPE html><html><head><title>PDF Viewer</title></head>"
-		"<body style='font-family:sans-serif;padding:2em'>"
-		"<h1>PDF.js Loading\xe2\x80\xa6</h1>"
-		"<p>PDF.js not yet bundled. Place pdfjs/ in the data directory.</p>"
-		"</body></html>");
 }
 
 

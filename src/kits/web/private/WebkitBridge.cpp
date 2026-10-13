@@ -38,6 +38,7 @@ WebKitBridge::WebKitBridge(int width, int height, SessionAdapter* session)
 	context(nullptr),
 	settings(nullptr),
 	fValid(false),
+	fCrashReported(false),
 	fCachedProgress(0.0),
 	fCachedIsLoading(false),
 	fCachedCanGoBack(false),
@@ -240,6 +241,7 @@ WebKitBridge::_OnLoadChanged(WebKitWebView* view, WebKitLoadEvent event,
 	switch (event) {
 		case WEBKIT_LOAD_STARTED:
 		{
+			self->fCrashReported = false;
 			const char* uri = webkit_web_view_get_uri(view);
 			std::string url = uri ? uri : "";
 			{
@@ -560,6 +562,9 @@ WebKitBridge::_OnWebProcessCrashed(WebKitWebView*, gpointer data)
 {
 	auto* self = static_cast<WebKitBridge*>(data);
 	log_error("WebKitBridge: web process crashed");
+	if (self->fCrashReported)
+		return TRUE;
+	self->fCrashReported = true;
 	{
 		std::lock_guard<std::mutex> lock(self->fStateMutex);
 		self->fCachedIsLoading = false;
@@ -576,6 +581,9 @@ WebKitBridge::_OnWebProcessTerminated(WebKitWebView* view,
 {
 	auto* self = static_cast<WebKitBridge*>(data);
 	log_error("WebKitBridge: web process terminated (reason %d)", (int)reason);
+	if (self->fCrashReported)
+		return;
+	self->fCrashReported = true;
 	{
 		std::lock_guard<std::mutex> lock(self->fStateMutex);
 		self->fCachedIsLoading = false;

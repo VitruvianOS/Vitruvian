@@ -165,6 +165,24 @@ finishDialog(DialogState* state, bool accepted, const std::string& text)
 	}
 	state->cond.notify_all();
 }
+
+
+static std::string
+escapeHtml(const std::string& in)
+{
+	std::string out;
+	for (char c : in) {
+		switch (c) {
+			case '&': out += "&amp;"; break;
+			case '<': out += "&lt;"; break;
+			case '>': out += "&gt;"; break;
+			case '"': out += "&quot;"; break;
+			case '\'': out += "&#39;"; break;
+			default: out += c; break;
+		}
+	}
+	return out;
+}
 #endif
 
 
@@ -514,7 +532,7 @@ BWebView::AttachedToWindow()
 	fImpl->fBridge->onWebProcessCrashed = [this]() {
 		// Show an error page with a Reload link instead of a dead
 		// view: the next load restarts the web process.
-		std::string url = fImpl->fBridge->CurrentURL();
+		std::string url = escapeHtml(fImpl->fBridge->CurrentURL());
 		std::string html =
 			"<!DOCTYPE html><html><head><title>Page crashed</title></head>"
 			"<body style='font-family:sans-serif;text-align:center;"

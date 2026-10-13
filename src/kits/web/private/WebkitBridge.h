@@ -165,6 +165,9 @@ private:
 			void				_UpdateCachedNavState();
 
 			bool				fValid;
+			// crash and terminated can both fire for one crash: the
+			// error page is loaded once, until the next navigation.
+			bool				fCrashReported;
 
 	mutable	std::mutex			fStateMutex;
 			std::string			fCachedURL;

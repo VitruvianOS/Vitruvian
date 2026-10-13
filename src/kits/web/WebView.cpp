@@ -226,6 +226,11 @@ BWebView::MakeFocus(bool focused)
 {
 	BView::MakeFocus(focused);
 #ifdef HAS_WPE
+	// Keys held when focus moves away (a game's arrow keys, Ctrl held
+	// into the URL bar) would stay pressed in the page forever.
+	if (!focused && fImpl->fEventAdapter != NULL)
+		fImpl->fEventAdapter->ReleaseAllKeys();
+
 	// WebKit only routes keys to page fields while the view is focused.
 	if (fImpl->fBridge != NULL)
 		fImpl->fBridge->HandleFocusChange(focused);

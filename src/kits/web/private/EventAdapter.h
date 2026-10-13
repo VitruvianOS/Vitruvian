@@ -6,6 +6,7 @@
 #define VOS_EVENT_ADAPTER_H
 
 
+#include <set>
 #include <stdint.h>
 #include <wpe/wpe.h>
 
@@ -25,14 +26,25 @@ public:
 			void		TranslateMouseMoved(const BMessage* msg);
 			void		TranslateMouseWheel(const BMessage* msg);
 
+			// Synthesizes key-up events for every key still held.
+			// Games keep arrow keys pressed across a focus change and
+			// never see the release otherwise.
+			void		ReleaseAllKeys();
+
 private:
 	static uint32_t		_LegacyModsToWPE(uint32 legacyMods);
+	static uint32_t		_LegacyPointerModsToWPE(uint32 legacyMods);
 	static uint32_t		_LegacyButtonToWPE(int32 buttons);
-	static uint32_t		_LegacyKeyToXKB(uint8 rawKey, const char* bytes,
+	static uint32_t		_LegacyKeyToXKB(int32 rawKey, const char* bytes,
 							int32 numBytes);
+	static uint32_t		_DecodeUTF8(const char* bytes, int32 numBytes);
+
+			void		_DispatchKey(uint32_t keyCode, uint32_t modifiers,
+							bool pressed);
 
 	struct wpe_view_backend* fBackend;
 	uint32_t				fPressedButton;
+	std::set<uint32_t>		fHeldKeys;
 };
 
 

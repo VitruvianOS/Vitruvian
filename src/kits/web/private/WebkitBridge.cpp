@@ -315,6 +315,30 @@ WebKitBridge::_OnDecidePolicy(WebKitWebView*, WebKitPolicyDecision* decision,
 		}
 	}
 
+	// A response WebKit cannot show (archives, installers, binaries) or one
+	// the server marks as an attachment becomes a download; "use" would try
+	// to render it in the page and nothing would happen.
+	if (type == WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
+		WebKitResponsePolicyDecision* response
+			= WEBKIT_RESPONSE_POLICY_DECISION(decision);
+		WebKitURIResponse* uriResponse
+			= webkit_response_policy_decision_get_response(response);
+		const char* disposition = NULL;
+		SoupMessageHeaders* headers
+			= webkit_uri_response_get_http_headers(uriResponse);
+		if (headers != NULL)
+			disposition = soup_message_headers_get_one(headers,
+				"Content-Disposition");
+		bool attachment = disposition != NULL
+			&& g_ascii_strncasecmp(disposition, "attachment", 10) == 0;
+		if (attachment
+			|| !webkit_response_policy_decision_is_mime_type_supported(
+				response)) {
+			webkit_policy_decision_download(decision);
+			return TRUE;
+		}
+	}
+
 	webkit_policy_decision_use(decision);
 	return TRUE;
 }

@@ -32,6 +32,7 @@
 #include <cstdlib>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <Entry.h>
@@ -112,6 +113,7 @@ struct BWebView::WebViewImpl {
 	bool				fImagesEnabled;
 	std::string			fUserAgentSuffix;
 	std::string			fBlockedDomains;
+	std::vector<std::pair<std::string, bool> > fUserScripts;
 #endif
 
 	WebViewImpl()
@@ -551,6 +553,8 @@ BWebView::AttachedToWindow()
 	fImpl->fBridge->SetUserAgentSuffix(fImpl->fUserAgentSuffix);
 	fImpl->fBridge->SetZoomLevel(fImpl->fZoom);
 	SetBlockedDomains(fImpl->fBlockedDomains.c_str());
+	for (const auto& script : fImpl->fUserScripts)
+		fImpl->fBridge->AddUserScript(script.first, script.second);
 
 	fImpl->fSelfMessenger = BMessenger(this);
 #endif
@@ -1593,6 +1597,33 @@ BWebView::DownloadURI(const char* uri, const char* destination)
 
 
 void
+BWebView::AddUserScript(const char* javascript, bool atDocumentStart)
+{
+#ifdef HAS_WPE
+	if (javascript == NULL)
+		return;
+
+	fImpl->fUserScripts.push_back(
+		std::make_pair(std::string(javascript), atDocumentStart));
+	if (fImpl->fBridge == NULL)
+		return;
+	fImpl->fBridge->AddUserScript(javascript, atDocumentStart);
+#endif
+}
+
+
+void
+BWebView::AddUserStyleSheet(const char* css)
+{
+#ifdef HAS_WPE
+	if (fImpl->fBridge == NULL || css == NULL)
+		return;
+	fImpl->fBridge->AddUserStyleSheet(css);
+#endif
+}
+
+
+void
 BWebView::NotifyFullScreen(bool entered)
 {
 	if (fImpl->fBridge == NULL)
@@ -1637,6 +1668,10 @@ void
 BWebView::SelectAll() {}
 void
 BWebView::DownloadURI(const char*, const char*) {}
+void
+BWebView::AddUserScript(const char*, bool) {}
+void
+BWebView::AddUserStyleSheet(const char*) {}
 void
 BWebView::NotifyFullScreen(bool) {}
 #endif

@@ -80,10 +80,13 @@ SettingsWindow::SettingsWindow(BRect frame)
 		"DuckDuckGo", "Startpage", "Brave Search", "Google", "Bing",
 		"Wikipedia", "Custom"
 	};
-	for (const char* name : kEngines)
-		engines->AddItem(new BMenuItem(name, NULL));
-	fSearchEngine = new BMenuField("Search engine", engines,
-		new BMessage(kMsgEngineChanged));
+	for (const char* name : kEngines) {
+		BMenuItem* item = new BMenuItem(name,
+			new BMessage(kMsgEngineChanged));
+		item->SetTarget(this);
+		engines->AddItem(item);
+	}
+	fSearchEngine = new BMenuField("Search engine", engines);
 
 	fDownloadDir = new BTextControl("Download folder", "", NULL);
 	fBrowseButton = new BButton("Browse", new BMessage(kMsgBrowse));

@@ -161,6 +161,17 @@ MainWindow::_ApplySettings()
 	const char* dir = settings->DownloadDir();
 	fWebView->SetDownloadDirectory(dir);
 	fWebView->SetAskDownloadLocation(settings->AskDownloadLocation());
+
+	// The start page search box follows the configured engine.
+	BString script("window.NETPLUS_SEARCH_TEMPLATE = '");
+	const char* templateURL = _SearchTemplate();
+	for (const char* c = templateURL; *c != '\0'; c++) {
+		if (*c == '\'' || *c == '\\')
+			script << '\\';
+		script << *c;
+	}
+	script << "';";
+	fWebView->AddUserScript(script.String(), true);
 }
 
 

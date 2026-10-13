@@ -87,11 +87,29 @@ UrlSchemeAdapter::_HandleVosError(WebKitURISchemeRequest* request, gpointer)
 void
 UrlSchemeAdapter::_HandleVosAbout(WebKitURISchemeRequest* request, gpointer)
 {
+	// The search box reads NETPLUS_SEARCH_TEMPLATE, which NetPlus
+	// injects as a user script so the page follows the engine from
+	// the settings.
 	_FinishWithHTML(request,
-		"<!DOCTYPE html><html><head><title>About Net+</title></head>"
-		"<body style='font-family:sans-serif;text-align:center;padding:2em'>"
+		"<!DOCTYPE html><html><head><title>About Net+</title>"
+		"<meta name='viewport' content='width=device-width'>"
+		"</head>"
+		"<body style='font-family:sans-serif;text-align:center;"
+		"padding:3em'>"
 		"<h1>Net+ Browser</h1>"
 		"<p>Version 0.1 \xc2\xa9 2026 V\\OS</p>"
 		"<p>WPE WebKit on V\\OS</p>"
+		"<form style='margin:2em auto;max-width:28em' "
+		"onsubmit=\"event.preventDefault();"
+		"var t = window.NETPLUS_SEARCH_TEMPLATE"
+		" || 'https://duckduckgo.com/?q=%s';"
+		"var q = encodeURIComponent(this.q.value);"
+		"if (!q) return;"
+		"location.href = t.indexOf('%s') >= 0"
+		" ? t.replace('%s', q) : t + q;\">"
+		"<input name='q' placeholder='Search the web' "
+		"style='width:70%;padding:.4em'>"
+		"<button style='padding:.4em .8em'>Search</button>"
+		"</form>"
 		"</body></html>");
 }

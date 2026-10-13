@@ -276,9 +276,9 @@ SettingsWindow::MessageReceived(BMessage* message)
 		case kMsgClearData:
 		{
 			BAlert* confirm = new BAlert("Clear browsing data",
-				"Delete cookies, cache and local storage for the\n"
-				"shared profile? Open pages keep working; sites\n"
-				"will ask to log in again.", "Cancel", "Clear");
+				"Delete cookies, cache, local storage and history\n"
+				"for the shared profile? Open pages keep working;\n"
+				"sites will ask to log in again.", "Cancel", "Clear");
 			if (confirm->Go() == 1) {
 				BWebView::ClearDefaultProfileData();
 				BAlert* done = new BAlert("Clear browsing data",

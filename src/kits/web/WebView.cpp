@@ -400,6 +400,7 @@ BWebView::ClearDefaultProfileData()
 		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
 			session->ClearCookies();
 			session->ClearCache();
+			session->ClearHistory();
 		});
 	}
 }
@@ -471,6 +472,13 @@ BWebView::AttachedToWindow()
 	fImpl->fBridge->onLoadFinished = [this]() {
 		fImpl->fLoading = false;
 		fImpl->fProgress = 1.0;
+		if (fImpl->fSession != NULL && !fImpl->fSession->IsEphemeral()) {
+			std::string url = fImpl->fBridge->CurrentURL();
+			if (!url.empty()) {
+				fImpl->fSession->RecordVisit(url,
+					fImpl->fBridge->Title());
+			}
+		}
 		if (fTarget.IsValid()) {
 			BMessage msg(B_WEB_PAGE_LOAD_FINISHED);
 			msg.AddBool("web:can_go_back", fImpl->fBridge->CanGoBack());

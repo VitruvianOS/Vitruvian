@@ -7,8 +7,17 @@
 #define VOS_SESSION_ADAPTER_H
 
 
+#include <mutex>
 #include <string>
+#include <vector>
 #include <wpe/webkit.h>
+
+
+struct WebHistoryEntry {
+	int64		timestamp;
+	std::string	title;
+	std::string	url;
+};
 
 
 class SessionAdapter {
@@ -23,14 +32,24 @@ public:
 
 			void		ClearCookies();
 			void		ClearCache();
+			void		ClearHistory();
 			void		DeleteCookiesForDomain(const std::string& domain);
+
+	// Persists a page visit in the profile history file; ephemeral
+	// sessions keep nothing.
+			void		RecordVisit(const std::string& url,
+							const std::string& title);
 
 private:
 			void		_EnsureProfileDir();
+			void		_LoadHistory();
+			void		_SaveHistory();
 
 			std::string			fProfileDir;
 			bool				fEphemeral;
 	WebKitNetworkSession*	fNetworkSession;
+	std::mutex				fHistoryMutex;
+	std::vector<WebHistoryEntry>	fHistory;
 };
 
 

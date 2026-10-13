@@ -1034,18 +1034,19 @@ WebKitBridge::DownloadURI(const std::string& uri,
 	const std::string& destination)
 {
 	struct Args {
+		WebKitWebView* view;
 		DownloadHandler* handler;
-		WebKitNetworkSession* session;
 		std::string uri;
 		std::string destination;
 	};
-	WebKitNetworkSession* session = webkit_web_view_get_network_session(webView);
-	auto* a = new Args{downloadHandler, session, uri, destination};
+	auto* a = new Args{webView, downloadHandler, uri, destination};
 	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
 		auto* a = static_cast<Args*>(d);
+		WebKitNetworkSession* session
+			= webkit_web_view_get_network_session(a->view);
 		if (!a->destination.empty())
 			a->handler->SetDestinationOverride(a->uri, a->destination);
-		webkit_network_session_download_uri(a->session, a->uri.c_str());
+		webkit_network_session_download_uri(session, a->uri.c_str());
 		delete a;
 		return G_SOURCE_REMOVE;
 	}, a);

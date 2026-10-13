@@ -7,6 +7,7 @@
 
 #include "DownloadSanitizer.h"
 #include "logging.h"
+#include "process_manager.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -133,7 +134,15 @@ DownloadHandler::Cancel(uint64_t id)
 			return;
 		fDownloads[found].cancelled = true;
 	}
-	webkit_download_cancel(found);
+	// webkit_download_cancel must run on the GLib thread; hold a ref so
+	// a finish racing this cancel cannot free the download first.
+	g_object_ref(found);
+	ProcessManager::Instance().InvokeOnGLibThread([](void* d) -> gboolean {
+		WebKitDownload* dl = static_cast<WebKitDownload*>(d);
+		webkit_download_cancel(dl);
+		g_object_unref(dl);
+		return G_SOURCE_REMOVE;
+	}, found);
 }
 
 

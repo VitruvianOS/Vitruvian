@@ -259,9 +259,14 @@ BWebView::SetSession(const char* profileDir, bool ephemeral)
 void
 BWebView::ClearDefaultProfileData()
 {
-	if (sDefaultSession != NULL) {
-		sDefaultSession->ClearCookies();
-		sDefaultSession->ClearCache();
+	// WebKit calls stay on the GLib thread; the settings window waits so
+	// its confirmation is truthful.
+	SessionAdapter* session = sDefaultSession;
+	if (session != NULL) {
+		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
+			session->ClearCookies();
+			session->ClearCache();
+		});
 	}
 }
 #endif

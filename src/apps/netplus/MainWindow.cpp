@@ -74,7 +74,7 @@ MainWindow::MainWindow(BRect frame, const char* startupURL)
 
 	_ConnectNotifications();
 
-	const char* url = (startupURL && startupURL[0]) ? startupURL : "about:blank";
+	const char* url = (startupURL && startupURL[0]) ? startupURL : "vos-about:";
 	fWebView->LoadURL(url);
 }
 

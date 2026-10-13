@@ -91,7 +91,7 @@ UrlSchemeAdapter::_HandleVosAbout(WebKitURISchemeRequest* request, gpointer)
 		"<!DOCTYPE html><html><head><title>About Net+</title></head>"
 		"<body style='font-family:sans-serif;text-align:center;padding:2em'>"
 		"<h1>Net+ Browser</h1>"
-		"<p>Version 0.1 \xc2\xa9 2026 VitruvianOS Project</p>"
-		"<p>WPE WebKit on Vitruvian</p>"
+		"<p>Version 0.1 \xc2\xa9 2026 V\\OS</p>"
+		"<p>WPE WebKit on V\\OS</p>"
 		"</body></html>");
 }

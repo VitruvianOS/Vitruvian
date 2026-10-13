@@ -177,11 +177,15 @@ BWebView::BWebView(BRect frame, const char* name)
 BWebView::~BWebView()
 {
 #ifdef HAS_WPE
+	if (fImpl->fOwnsSession) {
+		SessionAdapter* session = fImpl->fSession;
+		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
+			delete session;
+		});
+	}
 	delete fImpl->fBridge;
 	delete fImpl->fEventAdapter;
 	delete fImpl->fClipboard;
-	if (fImpl->fOwnsSession)
-		delete fImpl->fSession;
 #endif
 	delete fImpl;
 }
@@ -201,14 +205,26 @@ BWebView::SetSession(const char* profileDir, bool ephemeral)
 	if (fImpl->fBridge != NULL)
 		return;	// too late: the view is already attached
 
+	// The session is created on the GLib thread: make sure the
+	// loop is running before the first marshalled call.
+	ProcessManager::Instance().StartGLibLoop();
+
+	// WebKit objects live and die on the GLib thread.
 	if (fImpl->fOwnsSession) {
-		delete fImpl->fSession;
+		SessionAdapter* old = fImpl->fSession;
+		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
+			delete old;
+		});
 		fImpl->fSession = NULL;
 		fImpl->fOwnsSession = false;
 	}
 
 	if (ephemeral) {
-		fImpl->fSession = new SessionAdapter("", true);
+		SessionAdapter* session = NULL;
+		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
+			session = new SessionAdapter("", true);
+		});
+		fImpl->fSession = session;
 		fImpl->fOwnsSession = true;
 		return;
 	}
@@ -224,7 +240,9 @@ BWebView::SetSession(const char* profileDir, bool ephemeral)
 				? std::string(home) + "/config/settings/NetPlus/profile"
 				: "/tmp/netplus-profile";
 		}
-		sDefaultSession = new SessionAdapter(dir, false);
+		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
+			sDefaultSession = new SessionAdapter(dir, false);
+		});
 	}
 	fImpl->fSession = sDefaultSession;
 	fImpl->fOwnsSession = false;
@@ -1480,6 +1498,21 @@ BWebView::SetAskDownloadLocation(bool ask)
 }
 
 
+void
+BWebView::CancelDownload(uint64 id)
+{
+#ifdef HAS_WPE
+	if (fImpl->fSession == NULL
+		|| fImpl->fSession->NetworkSession() == NULL)
+		return;
+
+	DownloadHandler* handler = DownloadHandler::ForSession(
+		fImpl->fSession->NetworkSession());
+	handler->Cancel(id);
+#endif
+}
+
+
 float
 BWebView::ZoomLevel() const
 {
@@ -1590,6 +1623,8 @@ void
 BWebView::SetDownloadDirectory(const char*) {}
 void
 BWebView::SetAskDownloadLocation(bool) {}
+void
+BWebView::CancelDownload(uint64) {}
 float
 BWebView::ZoomLevel() const { return 1.0f; }
 void

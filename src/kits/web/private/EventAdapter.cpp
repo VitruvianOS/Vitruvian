@@ -143,8 +143,10 @@ EventAdapter::TranslateKeyDown(const BMessage* msg)
 	uint32 modifiers = 0;
 	msg->FindInt32("modifiers", (int32*)&modifiers);
 
-	uint8 rawKey = 0;
-	msg->FindInt8("key", (int8*)&rawKey);
+	// B_KEY_DOWN/UP carry the raw key as int32; reading int8 always failed
+	// and dropped every non-printable key (Enter, arrows, Backspace).
+	int32 rawKey = 0;
+	msg->FindInt32("key", &rawKey);
 
 	uint32_t keyCode = _HaikuKeyToXKB(rawKey, bytes, numBytes);
 	uint32_t wpeMods = _HaikuModsToWPE(modifiers);
@@ -177,8 +179,10 @@ EventAdapter::TranslateKeyUp(const BMessage* msg)
 	uint32 modifiers = 0;
 	msg->FindInt32("modifiers", (int32*)&modifiers);
 
-	uint8 rawKey = 0;
-	msg->FindInt8("key", (int8*)&rawKey);
+	// B_KEY_DOWN/UP carry the raw key as int32; reading int8 always failed
+	// and dropped every non-printable key (Enter, arrows, Backspace).
+	int32 rawKey = 0;
+	msg->FindInt32("key", &rawKey);
 
 	uint32_t keyCode = _HaikuKeyToXKB(rawKey, bytes, numBytes);
 	uint32_t wpeMods = _HaikuModsToWPE(modifiers);

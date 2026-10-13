@@ -9,6 +9,7 @@
 #include "StatusBarView.h"
 #include "ToolbarView.h"
 
+#include <TextControl.h>
 #include <WebDefs.h>
 #include <WebView.h>
 
@@ -136,9 +137,15 @@ MainWindow::MessageReceived(BMessage* message)
 
 		case MSG_OPEN_URL:
 		{
+			// The URL bar sends no text with its message: read it from the
+			// control. Other senders pass it as "url".
 			const char* url = nullptr;
-			if (message->FindString("_value", &url) != B_OK
-				&& message->FindString("url", &url) != B_OK)
+			BTextControl* source = nullptr;
+			if (message->FindString("url", &url) != B_OK
+				&& message->FindPointer("source", (void**)&source) == B_OK
+				&& source != nullptr)
+				url = source->Text();
+			if (url == nullptr || url[0] == '\0')
 				break;
 			if (fWebView && url) {
 				fWebView->LoadURL(url);

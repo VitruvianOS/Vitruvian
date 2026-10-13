@@ -847,7 +847,51 @@ BMediaTrack::DecodedFormat(BMediaFormat* format)
 
 
 status_t
-BMediaTrack::EncodedFormat(BMediaFormat* format)
+BMediaTrack::DecodedFormat(media_format* format, uint32 /*flags*/)
+{
+	// Media Kit 1.0 shape: caller supplies a raw type as a hint; we fill
+	// in what the decoder will actually emit. flags are accepted and
+	// ignored; the GStreamer path has no negotiation flags to honour.
+	if (format == NULL || fImpl == NULL || fImpl->fInitErr != B_OK)
+		return B_BAD_VALUE;
+	if (fImpl->fKind == kTrackText)
+		return B_NOT_SUPPORTED;
+	if (fImpl->fFormat.IsRawAudio() || fImpl->fFormat.IsRawVideo()) {
+		*format = fImpl->fFormat.format;
+		return B_OK;
+	}
+	// Track still holds the encoded view only; synthesise the raw side
+	// from the encoded output parameters.
+	if (fImpl->fEncodedFormat.IsEncodedAudio()) {
+		format->type = B_MEDIA_RAW_AUDIO;
+		format->u.raw_audio = fImpl->fEncodedFormat.format.u.encoded_audio.output;
+		return B_OK;
+	}
+	if (fImpl->fEncodedFormat.IsEncodedVideo()) {
+		format->type = B_MEDIA_RAW_VIDEO;
+		format->u.raw_video = fImpl->fEncodedFormat.format.u.encoded_video.output;
+		return B_OK;
+	}
+	return B_ERROR;
+}
+
+
+status_t
+BMediaTrack::EncodedFormat(BMediaFormat* format) const
+{
+	// Forwarding through const_cast picked this same overload again and
+	// recursed until the stack overflowed.
+	if (format == NULL || fImpl == NULL || fImpl->fInitErr != B_OK)
+		return B_BAD_VALUE;
+	if (fImpl->fKind == kTrackText)
+		return B_NOT_SUPPORTED;
+	*format = fImpl->fEncodedFormat;
+	return B_OK;
+}
+
+
+status_t
+BMediaTrack::EncodedFormat(media_format* format) const
 {
 	// Report the demuxed/encoded view. playbin sits after decoding, so
 	// codec id stays UNKNOWN; the raw output parameters still describe

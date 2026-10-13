@@ -84,8 +84,10 @@ MainWin::MainWin(BRect frame)
 	fControlY(0),
 	fLastRevealTime(0)
 {
-	fPlaylist = new Playlist();
 	fController = new Controller(BMessenger(this));
+	// A separate playlist here was never seen by the controller, so opened
+	// files never played.
+	fPlaylist = &fController->PlaylistRef();
 
 	fSettings = new SettingsMessage(B_USER_SETTINGS_DIRECTORY, "MediaPlayer");
 	fSettings->Load();
@@ -106,7 +108,6 @@ MainWin::~MainWin()
 	_QuitInfoWin();
 	delete fPlaylistWindow;
 	delete fController;
-	delete fPlaylist;
 	delete fSettings;
 }
 

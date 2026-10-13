@@ -134,7 +134,8 @@ BMediaNode::_StartConnections(void* backendPtr)
 		pw_direction direction = PW_DIRECTION_OUTPUT;
 		pw_stream* stream = backend->CreateAndConnectStream(
 			output->Name(), direction, format,
-			_GetStreamEvents(), output);
+			_GetStreamEvents(),
+			static_cast<BMediaConnection*>(output));
 		if (stream == NULL)
 			return B_ERROR;
 
@@ -160,7 +161,8 @@ BMediaNode::_StartConnections(void* backendPtr)
 		pw_direction direction = PW_DIRECTION_INPUT;
 		pw_stream* stream = backend->CreateAndConnectStream(
 			input->Name(), direction, format,
-			_GetStreamEvents(), input);
+			_GetStreamEvents(),
+			static_cast<BMediaConnection*>(input));
 		if (stream == NULL)
 			return B_ERROR;
 
@@ -245,6 +247,8 @@ BMediaNode::_StreamFault(BMediaConnection* conn)
 	// instead of trying to make up for however long we were gone.
 	pw_stream* stream = backend->CreateAndConnectStream(conn->Name(),
 		direction, format, _GetStreamEvents(), conn);
+	// conn is already the BMediaConnection*; callbacks cast userdata back
+	// to it, which is only valid for that exact pointer (virtual base).
 	if (stream == NULL)
 		return;
 

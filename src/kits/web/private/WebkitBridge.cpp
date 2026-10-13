@@ -497,6 +497,8 @@ WebKitBridge::_OnMouseTargetChanged(WebKitWebView* view,
 			image != NULL ? image : "");
 
 	if (self->onCursorChanged) {
+		// Resize cursors belong to the embedder's window chrome:
+		// WebKit's hit test reports page targets only.
 		int32 cursorId = B_CURSOR_ID_SYSTEM_DEFAULT;
 		if ((context & WEBKIT_HIT_TEST_RESULT_CONTEXT_EDITABLE) != 0)
 			cursorId = B_CURSOR_ID_I_BEAM;

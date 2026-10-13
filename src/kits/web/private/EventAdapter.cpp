@@ -128,7 +128,7 @@ EventAdapter::_LegacyKeyToXKB(int32 rawKey, const char* bytes, int32 numBytes)
 		}
 	}
 
-	// Special keys (Haiku legacy keycodes and raw evdev media keys).
+	// Special keys (legacy keycodes and raw evdev media keys).
 	return web_special_key_to_keysym(rawKey);
 }
 

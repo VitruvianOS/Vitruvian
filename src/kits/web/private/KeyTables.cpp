@@ -55,10 +55,10 @@ uint32_t
 web_special_key_to_keysym(int32 rawKey)
 {
 	switch (rawKey) {
-		case kWebHaikuEscKey:			return kWebXK_Escape;
-		case kWebHaikuPrintKey:			return kWebXK_Print;
-		case kWebHaikuScrollLockKey:	return kWebXK_Scroll_Lock;
-		case kWebHaikuPauseKey:			return kWebXK_Pause;
+		case kWebLegacyEscKey:			return kWebXK_Escape;
+		case kWebLegacyPrintKey:			return kWebXK_Print;
+		case kWebLegacyScrollLockKey:	return kWebXK_Scroll_Lock;
+		case kWebLegacyPauseKey:			return kWebXK_Pause;
 		case 0x02:						return kWebXK_F1;	// B_F1_KEY
 		case 0x03:						return kWebXK_F1 + 1;
 		case 0x04:						return kWebXK_F1 + 2;
@@ -71,31 +71,31 @@ web_special_key_to_keysym(int32 rawKey)
 		case 0x0b:						return kWebXK_F1 + 9;
 		case 0x0c:						return kWebXK_F1 + 10;
 		case 0x0d:						return kWebXK_F1 + 11;	// B_F12_KEY
-		case kWebHaikuBackspaceKey:		return kWebXK_BackSpace;
-		case kWebHaikuInsertKey:		return kWebXK_Insert;
-		case kWebHaikuHomeKey:			return kWebXK_Home;
-		case kWebHaikuPageUpKey:		return kWebXK_Page_Up;
-		case kWebHaikuNumLockKey:		return kWebXK_Num_Lock;
-		case kWebHaikuTabKey:			return kWebXK_Tab;
-		case kWebHaikuDeleteKey:		return kWebXK_Delete;
-		case kWebHaikuEndKey:			return kWebXK_End;
-		case kWebHaikuPageDownKey:		return kWebXK_Page_Down;
-		case kWebHaikuCapsLockKey:		return kWebXK_Caps_Lock;
-		case kWebHaikuEnterKey:			return kWebXK_Return;
-		case kWebHaikuLeftShiftKey:		return kWebXK_Shift_L;
-		case kWebHaikuRightShiftKey:	return kWebXK_Shift_R;
-		case kWebHaikuUpKey:			return kWebXK_Up;
-		case kWebHaikuKPEnterKey:		return kWebXK_KP_Enter;
-		case kWebHaikuLeftCtrlKey:		return kWebXK_Control_L;
-		case kWebHaikuLeftAltKey:		return kWebXK_Alt_L;
-		case kWebHaikuRightAltKey:		return kWebXK_Alt_R;
-		case kWebHaikuRightCtrlKey:		return kWebXK_Control_R;
-		case kWebHaikuLeftKey:			return kWebXK_Left;
-		case kWebHaikuDownKey:			return kWebXK_Down;
-		case kWebHaikuRightKey:			return kWebXK_Right;
-		case kWebHaikuLeftMetaKey:		return kWebXK_Super_L;
-		case kWebHaikuRightMetaKey:		return kWebXK_Super_R;
-		case kWebHaikuMenuKey:			return kWebXK_Menu;
+		case kWebLegacyBackspaceKey:		return kWebXK_BackSpace;
+		case kWebLegacyInsertKey:		return kWebXK_Insert;
+		case kWebLegacyHomeKey:			return kWebXK_Home;
+		case kWebLegacyPageUpKey:		return kWebXK_Page_Up;
+		case kWebLegacyNumLockKey:		return kWebXK_Num_Lock;
+		case kWebLegacyTabKey:			return kWebXK_Tab;
+		case kWebLegacyDeleteKey:		return kWebXK_Delete;
+		case kWebLegacyEndKey:			return kWebXK_End;
+		case kWebLegacyPageDownKey:		return kWebXK_Page_Down;
+		case kWebLegacyCapsLockKey:		return kWebXK_Caps_Lock;
+		case kWebLegacyEnterKey:			return kWebXK_Return;
+		case kWebLegacyLeftShiftKey:		return kWebXK_Shift_L;
+		case kWebLegacyRightShiftKey:	return kWebXK_Shift_R;
+		case kWebLegacyUpKey:			return kWebXK_Up;
+		case kWebLegacyKPEnterKey:		return kWebXK_KP_Enter;
+		case kWebLegacyLeftCtrlKey:		return kWebXK_Control_L;
+		case kWebLegacyLeftAltKey:		return kWebXK_Alt_L;
+		case kWebLegacyRightAltKey:		return kWebXK_Alt_R;
+		case kWebLegacyRightCtrlKey:		return kWebXK_Control_R;
+		case kWebLegacyLeftKey:			return kWebXK_Left;
+		case kWebLegacyDownKey:			return kWebXK_Down;
+		case kWebLegacyRightKey:			return kWebXK_Right;
+		case kWebLegacyLeftMetaKey:		return kWebXK_Super_L;
+		case kWebLegacyRightMetaKey:		return kWebXK_Super_R;
+		case kWebLegacyMenuKey:			return kWebXK_Menu;
 		case kWebEvdevPlayPause:		return kWebXK_XF86AudioPlay;
 		case kWebEvdevStop:				return kWebXK_XF86AudioStop;
 		case kWebEvdevNextTrack:		return kWebXK_XF86AudioNext;

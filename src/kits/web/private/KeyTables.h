@@ -13,40 +13,40 @@
 // keysym values libwpe expects in wpe_input_keyboard_event.key_code.
 // No libwpe, no BeAPI: unit-tested in src/tests/kits/web.
 
-// V\OS hybrid keycode space: <=0x7f is the Haiku legacy keycode, not an
+// V\OS hybrid keycode space: <=0x7f is the legacy keycode, not an
 // evdev code and not the ASCII byte constants in InterfaceDefs.h.
 // Values match the input_server mapping (see LinuxKeycodeMap.h).
 enum {
-	kWebHaikuEscKey		= 0x01,
-	kWebHaikuPrintKey	= 0x0e,
-	kWebHaikuScrollLockKey	= 0x0f,
-	kWebHaikuPauseKey	= 0x10,
-	kWebHaikuBacktickKey	= 0x11,
-	kWebHaikuBackspaceKey	= 0x1e,
-	kWebHaikuInsertKey	= 0x1f,
-	kWebHaikuHomeKey	= 0x20,
-	kWebHaikuPageUpKey	= 0x21,
-	kWebHaikuNumLockKey	= 0x22,
-	kWebHaikuTabKey		= 0x26,
-	kWebHaikuDeleteKey	= 0x34,
-	kWebHaikuEndKey		= 0x35,
-	kWebHaikuPageDownKey	= 0x36,
-	kWebHaikuCapsLockKey	= 0x3b,
-	kWebHaikuEnterKey	= 0x47,
-	kWebHaikuLeftShiftKey	= 0x4b,
-	kWebHaikuRightShiftKey	= 0x56,
-	kWebHaikuUpKey		= 0x57,
-	kWebHaikuKPEnterKey	= 0x5b,
-	kWebHaikuLeftCtrlKey	= 0x5c,
-	kWebHaikuLeftAltKey	= 0x5d,
-	kWebHaikuRightAltKey	= 0x5f,
-	kWebHaikuRightCtrlKey	= 0x60,
-	kWebHaikuLeftKey	= 0x61,
-	kWebHaikuDownKey	= 0x62,
-	kWebHaikuRightKey	= 0x63,
-	kWebHaikuLeftMetaKey	= 0x66,
-	kWebHaikuRightMetaKey	= 0x67,
-	kWebHaikuMenuKey	= 0x68
+	kWebLegacyEscKey		= 0x01,
+	kWebLegacyPrintKey	= 0x0e,
+	kWebLegacyScrollLockKey	= 0x0f,
+	kWebLegacyPauseKey	= 0x10,
+	kWebLegacyBacktickKey	= 0x11,
+	kWebLegacyBackspaceKey	= 0x1e,
+	kWebLegacyInsertKey	= 0x1f,
+	kWebLegacyHomeKey	= 0x20,
+	kWebLegacyPageUpKey	= 0x21,
+	kWebLegacyNumLockKey	= 0x22,
+	kWebLegacyTabKey		= 0x26,
+	kWebLegacyDeleteKey	= 0x34,
+	kWebLegacyEndKey		= 0x35,
+	kWebLegacyPageDownKey	= 0x36,
+	kWebLegacyCapsLockKey	= 0x3b,
+	kWebLegacyEnterKey	= 0x47,
+	kWebLegacyLeftShiftKey	= 0x4b,
+	kWebLegacyRightShiftKey	= 0x56,
+	kWebLegacyUpKey		= 0x57,
+	kWebLegacyKPEnterKey	= 0x5b,
+	kWebLegacyLeftCtrlKey	= 0x5c,
+	kWebLegacyLeftAltKey	= 0x5d,
+	kWebLegacyRightAltKey	= 0x5f,
+	kWebLegacyRightCtrlKey	= 0x60,
+	kWebLegacyLeftKey	= 0x61,
+	kWebLegacyDownKey	= 0x62,
+	kWebLegacyRightKey	= 0x63,
+	kWebLegacyLeftMetaKey	= 0x66,
+	kWebLegacyRightMetaKey	= 0x67,
+	kWebLegacyMenuKey	= 0x68
 };
 
 
@@ -94,7 +94,7 @@ enum {
 
 
 // Raw evdev codes the input server passes through untranslated plus
-// media keys that have no Haiku legacy keycode.
+// media keys that have no legacy keycode.
 enum {
 	kWebEvdevPlayPause	= 164,
 	kWebEvdevNextTrack	= 163,

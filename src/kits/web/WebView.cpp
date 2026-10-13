@@ -44,6 +44,7 @@ struct BWebView::WebViewImpl {
 	WebKitBridge*		fBridge;
 	FrameNotifier*		fNotifier;
 	BMessenger			fSelfMessenger;
+	BPoint				fLastMouse;
 #endif
 
 	WebViewImpl()
@@ -203,10 +204,32 @@ BWebView::MessageReceived(BMessage* message)
 		case kMsgFrameReady:
 			Invalidate();
 			break;
+#ifdef HAS_WPE
+		case B_MOUSE_WHEEL_CHANGED:
+			if (fImpl->fEventAdapter != NULL) {
+				BMessage wheel(*message);
+				wheel.RemoveName("where");
+				wheel.AddPoint("where", fImpl->fLastMouse);
+				fImpl->fEventAdapter->TranslateMouseWheel(&wheel);
+			}
+			break;
+#endif
 		default:
 			BView::MessageReceived(message);
 			break;
 	}
+}
+
+
+void
+BWebView::MakeFocus(bool focused)
+{
+	BView::MakeFocus(focused);
+#ifdef HAS_WPE
+	// WebKit only routes keys to page fields while the view is focused.
+	if (fImpl->fBridge != NULL)
+		fImpl->fBridge->HandleFocusChange(focused);
+#endif
 }
 
 
@@ -240,6 +263,8 @@ void
 BWebView::MouseDown(BPoint where)
 {
 	BView::MouseDown(where);
+	if (!IsFocus())
+		MakeFocus(true);
 
 #ifdef HAS_WPE
 	if (fImpl->fEventAdapter && fImpl->fBridge
@@ -295,6 +320,7 @@ BWebView::MouseMoved(BPoint where, uint32 transit,
 		msg.RemoveName("where");
 		msg.AddPoint("where", where);
 		msg.AddInt32("be:transit", transit);
+		fImpl->fLastMouse = where;
 		fImpl->fEventAdapter->TranslateMouseMoved(&msg);
 	}
 #endif

@@ -281,13 +281,24 @@ EventAdapter::TranslateMouseWheel(const BMessage* msg)
 	msg->FindFloat("be:wheel_delta_x", &deltaX);
 	msg->FindFloat("be:wheel_delta_y", &deltaY);
 
-	struct wpe_input_axis_event event;
-	memset(&event, 0, sizeof(event));
-	event.type = wpe_input_axis_event_type_motion;
-	event.x = (int32)where.x;
-	event.y = (int32)where.y;
-	event.axis = 0;
-	event.value = (int32)(deltaY * 120);
+	// One WPE axis event per wheel axis; WPE counts positive values as
+	// scrolling up or left, the opposite of the wheel deltas.
+	const float deltas[2] = { deltaY, deltaX };
+	for (uint32_t axis = 0; axis < 2; axis++) {
+		if (deltas[axis] == 0)
+			continue;
+		struct wpe_input_axis_event event;
+		memset(&event, 0, sizeof(event));
+		event.type = wpe_input_axis_event_type_motion;
+		event.x = (int32)where.x;
+		event.y = (int32)where.y;
+		event.axis = axis;
+		event.value = deltas[axis] > 0 ? -1 : 1;
 
-	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_axis_event);
+		int32 steps = (int32)(deltas[axis] > 0 ? deltas[axis] : -deltas[axis]);
+		if (steps < 1)
+			steps = 1;
+		for (int32 i = 0; i < steps; i++)
+			dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_axis_event);
+	}
 }

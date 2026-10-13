@@ -19,7 +19,19 @@ public:
 										| B_FULL_UPDATE_ON_RESIZE);
 	virtual						~BWebView();
 
-			// Navigation
+	virtual void				AttachedToWindow();
+	virtual void				DetachedFromWindow();
+	virtual void				FrameResized(float width, float height);
+	virtual void				Draw(BRect updateRect);
+	virtual void				MessageReceived(BMessage* message);
+	virtual void				MouseDown(BPoint where);
+	virtual void				MouseUp(BPoint where);
+	virtual void				MouseMoved(BPoint where, uint32 transit,
+									const BMessage* message);
+	virtual void				KeyDown(const char* bytes, int32 numBytes);
+	virtual void				KeyUp(const char* bytes, int32 numBytes);
+
+	// Navigation
 			void				LoadURL(const char* url);
 			void				LoadHTML(const char* html,
 									const char* baseURL = nullptr);

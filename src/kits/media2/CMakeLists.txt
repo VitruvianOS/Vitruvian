@@ -34,7 +34,7 @@ AddOn(media2
 	LIBS be root
 )
 
-UsePrivateHeaders(media2 app support storage)
+UsePrivateHeaders(media2 media2 app support storage shared)
 
 # PipeWire / SPA / GStreamer headers and libraries
 target_include_directories(media2 PRIVATE

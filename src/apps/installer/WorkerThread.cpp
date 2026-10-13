@@ -23,6 +23,7 @@
 #include <DiskDeviceRoster.h>
 #include <DiskDeviceTypes.h>
 #include <DiskDeviceVisitor.h>
+#include <DiskSystem.h>
 #include <Alert.h>
 #include <Locale.h>
 #include <Menu.h>
@@ -46,6 +47,17 @@ static const long      kWaitpidPollNsec        = 50 * 1000000L;
 static const int       kCancelPollMs           = 200;
 
 
+InstallSpec::InstallSpec()
+	:
+	efiMode("none"),
+	biosMode("none"),
+	allowReformatEsp(false),
+	allowClobberEfi(false),
+	nvram(false)
+{
+}
+
+
 class TargetVisitor : public BDiskDeviceVisitor {
 public:
 	TargetVisitor(BMenu* menu)
@@ -60,10 +72,11 @@ public:
 
 	// TODO: disable unsupported/mounted/boot partitions in the menu with a
 	// reason instead of silently skipping them (see Haiku's PartitionMenuItem).
+	// Ask the disk system, not the content type: a partition map has one too.
 	static bool _IsSupportedTargetFs(const char* contentType)
 	{
 		static const char* const kSupportedFs[] = {
-			"ext4", "ext3", "ext2"
+			"ext4", "ext3", "ext2", "xfs", "btrfs"
 		};
 		if (contentType == NULL)
 			return false;
@@ -83,6 +96,11 @@ public:
 			return false;
 		if (partition->IsMounted())
 			return false;
+		BDiskSystem diskSystem;
+		if (partition->GetDiskSystem(&diskSystem) != B_OK
+			|| !diskSystem.IsFileSystem()) {
+			return false;
+		}
 		const char* type = partition->Type();
 		if (type != NULL) {
 			if (strcmp(type, "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f") == 0
@@ -204,7 +222,7 @@ WorkerThread::MessageReceived(BMessage* message)
 			} else {
 				int64 rawTarget = -1;
 				message->FindInt64("target", &rawTarget);
-				_PerformInstall((partition_id)rawTarget);
+				_PerformInstall((partition_id)rawTarget, fInstallSpec);
 			}
 			break;
 		}
@@ -251,8 +269,10 @@ WorkerThread::Cancel()
 
 
 void
-WorkerThread::StartInstall(partition_id targetPartitionID)
+WorkerThread::StartInstall(partition_id targetPartitionID,
+	const InstallSpec& spec)
 {
+	fInstallSpec = spec;
 	BMessage msg(MSG_START_INSTALLING);
 	msg.AddInt64("target", targetPartitionID);
 	PostMessage(&msg);
@@ -455,27 +475,32 @@ WorkerThread::_DoBootloaderSetup()
 
 
 status_t
-WorkerThread::_PerformInstall(partition_id targetPartitionID)
+WorkerThread::_PerformInstall(partition_id targetPartitionID,
+	const InstallSpec& spec)
 {
-	if (targetPartitionID < 0)
+	BString devicePath;
+
+	// A planned target does not exist yet; the helper resolves it from
+	// the plan's role=root volume once the plan has been applied.
+	if (targetPartitionID != (partition_id)kPlannedPartitionId) {
+		BDiskDevice device;
+		BPartition* partition;
+		status_t err = fDDRoster.GetPartitionWithID(targetPartitionID, &device,
+			&partition);
+		if (err != B_OK)
+			return _InstallationError(err);
+
+		BPath path;
+		if (partition->GetPath(&path) != B_OK)
+			return _InstallationError(B_ERROR);
+		devicePath = path.Path();
+	} else if (spec.planText.IsEmpty()) {
 		return _InstallationError(B_BAD_VALUE);
-
-	_SetStatusMessage(B_TRANSLATE("Preparing target..."));
-
-	BDiskDevice device;
-	BPartition* partition;
-	status_t err = fDDRoster.GetPartitionWithID(targetPartitionID, &device,
-		&partition);
-	if (err != B_OK)
-		return _InstallationError(err);
-
-	BPath devicePath;
-	if (partition->GetPath(&devicePath) != B_OK)
-		return _InstallationError(B_ERROR);
+	}
 
 	_SetStatusMessage(B_TRANSLATE("Installing..."));
 	BString detail;
-	err = _RunFullInstall(devicePath.Path(), &detail);
+	status_t err = _RunFullInstall(devicePath.String(), spec, &detail);
 	if (err != B_OK)
 		return _InstallationError(err, detail);
 
@@ -502,10 +527,61 @@ WorkerThread::_PerformInPlaceInstall()
 
 
 status_t
-WorkerThread::_RunFullInstall(const char* devicePath, BString* detail)
+WorkerThread::_RunFullInstall(const char* devicePath, const InstallSpec& spec,
+	BString* detail)
 {
 	if (fSetupConf.Length() == 0)
 		return B_BAD_VALUE;
+	if ((devicePath == NULL || devicePath[0] == '\0')
+		&& spec.planText.IsEmpty()) {
+		return B_BAD_VALUE;
+	}
+
+	char planPath[64] = "";
+	if (!spec.planText.IsEmpty()) {
+		snprintf(planPath, sizeof(planPath), "/tmp/vos-install-plan-XXXXXX");
+		int fd = mkstemp(planPath);
+		if (fd < 0)
+			return B_ERROR;
+		ssize_t written = write(fd, spec.planText.String(),
+			spec.planText.Length());
+		close(fd);
+		if (written < 0 || (size_t)written != (size_t)spec.planText.Length()) {
+			unlink(planPath);
+			return B_ERROR;
+		}
+	}
+
+	// One helper run does plan, copy, config and bootloader, so the
+	// user's single confirmation covers every disk write.
+	const char* argv[24];
+	int argc = 0;
+	argv[argc++] = "pkexec";
+	argv[argc++] = kInstallHelper;
+	argv[argc++] = "--full-install";
+	if (devicePath != NULL && devicePath[0] != '\0')
+		argv[argc++] = devicePath;
+	if (planPath[0] != '\0') {
+		argv[argc++] = "--plan";
+		argv[argc++] = planPath;
+	}
+	if (spec.allowReformatEsp)
+		argv[argc++] = "--allow-reformat-esp";
+	if (spec.efiMode == "removable")
+		argv[argc++] = "--removable";
+	if (!spec.espPath.IsEmpty()) {
+		argv[argc++] = "--esp";
+		argv[argc++] = spec.espPath.String();
+	}
+	if (!spec.biosMode.IsEmpty()) {
+		argv[argc++] = "--bios";
+		argv[argc++] = spec.biosMode.String();
+	}
+	if (spec.allowClobberEfi)
+		argv[argc++] = "--allow-clobber-efi";
+	if (spec.nvram)
+		argv[argc++] = "--nvram";
+	argv[argc] = NULL;
 
 	int inPipe[2];
 	int outPipe[2];
@@ -533,8 +609,7 @@ WorkerThread::_RunFullInstall(const char* devicePath, BString* detail)
 		close(inPipe[1]);
 		close(outPipe[0]);
 		close(outPipe[1]);
-		execl("/usr/bin/pkexec", "pkexec", kInstallHelper, "--full-install",
-			devicePath, (char*)NULL);
+		execv("/usr/bin/pkexec", (char* const*)argv);
 		_exit(127);
 	}
 
@@ -651,6 +726,12 @@ WorkerThread::_RunFullInstall(const char* devicePath, BString* detail)
 
 	if (canceled)
 		return B_CANCELED;
+	if (planPath[0] != '\0' && getenv("VOS_KEEP_PLAN") == NULL) {
+		BString resultPath(planPath);
+		resultPath << ".result";
+		unlink(planPath);
+		unlink(resultPath.String());
+	}
 	if (writeErr != B_OK || readErr != B_OK) {
 		if (detail != NULL)
 			*detail = lastOutput;

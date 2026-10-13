@@ -1143,6 +1143,9 @@ _partlib_format() {
             fi
             ;;
         xfs)
+            # XFS labels are capped at 12 bytes; a longer one makes
+            # mkfs.xfs fail outright, so clamp instead of losing the fs.
+            _label="$(printf '%.12s' "$_label")"
             if [ -n "$_label" ]; then
                 mkfs.xfs -f -L "$_label" "$_devnode" >/dev/null 2>&1
             else

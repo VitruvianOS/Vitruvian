@@ -19,6 +19,7 @@ class BMenu;
 class BMenuBar;
 class BMenuField;
 class BMenuItem;
+class BPopUpMenu;
 class BStatusBar;
 class BStringView;
 class BTextControl;
@@ -51,6 +52,12 @@ private:
 			void				_SetCopyEngineCancelSemaphore(sem_id id,
 									bool alreadyLocked = false);
 			void				_QuitCopyEngine(bool askUser);
+			void				_LaunchDriveSetup();
+			void				_RebuildBootloaderMenu();
+			void				_ClearPlan();
+			BString				_ComposeSummary(const char* targetLabel,
+									bool inPlace);
+			void				_ReadBootloaderChoice();
 
 			BMenu*				fDestMenu;
 			BMenuField*			fDestMenuField;
@@ -59,6 +66,10 @@ private:
 			BMenu*				fToolsMenu;
 			BMenu*				fBootloaderMenu;
 			BMenuItem*			fBootloaderSetupItem;
+			BPopUpMenu*			fBootloaderChoiceMenu;
+			BMenuField*			fBootloaderField;
+			BButton*			fLaunchDriveSetupButton;
+			BButton*			fTargetSetupButton;
 
 			BTextControl*		fHostnameField;
 			BTextControl*		fFullNameField;
@@ -81,6 +92,11 @@ private:
 
 			WorkerThread*		fWorkerThread;
 			sem_id				fCopyEngineCancelSemaphore;
+
+			// Partition plan built by the target-setup dialog; applied
+			// by the helper only after the final confirmation.
+			BString				fPlanText;
+			BString				fBootloaderChoice;
 };
 
 

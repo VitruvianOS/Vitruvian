@@ -2,21 +2,17 @@
  * Copyright 2026, Dario Casalinuovo <b.vitruvio@gmail.com>.
  * Distributed under the terms of the LGPL License.
  */
-
 #include "event_adapter.h"
 
-#include "KeyTables.h"
 #include "logging.h"
 #include "process_manager.h"
 
 #include <AppDefs.h>
 #include <InterfaceDefs.h>
 #include <Message.h>
-#include <OS.h>
 #include <Point.h>
 #include <View.h>
 
-#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <wpe/wpe.h>
@@ -46,12 +42,10 @@ dispatch_on_glib(struct wpe_view_backend* backend, const Event& event,
 //	#pragma mark - Constructor/Destructor
 
 
-EventAdapter::EventAdapter(struct wpe_view_backend* backend)
+EventAdapter::EventAdapter(struct _wpe_view_backend* backend)
 	:
 	fBackend(backend),
-	fPressedButton(0),
-	fViewWidth(0),
-	fViewHeight(0)
+	fPressedButton(0)
 {
 	log_info("EventAdapter: created");
 }
@@ -59,7 +53,6 @@ EventAdapter::EventAdapter(struct wpe_view_backend* backend)
 
 EventAdapter::~EventAdapter()
 {
-	ReleaseAllKeys();
 }
 
 
@@ -67,40 +60,19 @@ EventAdapter::~EventAdapter()
 
 
 uint32_t
-EventAdapter::_LegacyModsToWPE(uint32 legacyMods)
+EventAdapter::_HaikuModsToWPE(uint32 haikuMods)
 {
 	uint32_t wpe = 0;
-	if (legacyMods & B_SHIFT_KEY)
-		wpe |= wpe_input_keyboard_modifier_shift;
-	// V\OS puts Command on physical Control (Ctrl+C arrives as
-	// B_COMMAND_KEY) and Control on physical Alt (Alt+Left).
-	if (legacyMods & B_COMMAND_KEY)
-		wpe |= wpe_input_keyboard_modifier_control;
-	if (legacyMods & (B_CONTROL_KEY | B_OPTION_KEY))
-		wpe |= wpe_input_keyboard_modifier_alt;
+	if (haikuMods & B_SHIFT_KEY)    wpe |= wpe_input_keyboard_modifier_shift;
+	if (haikuMods & B_CONTROL_KEY)  wpe |= wpe_input_keyboard_modifier_control;
+	if (haikuMods & B_OPTION_KEY)   wpe |= wpe_input_keyboard_modifier_alt;
+	if (haikuMods & B_CAPS_LOCK)    wpe |= wpe_input_keyboard_modifier_capslock;
 	return wpe;
 }
 
 
-static uint32_t
-_NowMs()
-{
-	// WebKit counts double clicks from the event timestamps.
-	return (uint32_t)(system_time() / 1000);
-}
-
-
 uint32_t
-EventAdapter::_LegacyPointerModsToWPE(uint32 legacyMods)
-{
-	// WebKit derives Ctrl+click (open in new window) from the control
-	// modifier alone; button2 would mean the middle button is down.
-	return _LegacyModsToWPE(legacyMods);
-}
-
-
-uint32_t
-EventAdapter::_LegacyButtonToWPE(int32 buttons)
+EventAdapter::_HaikuButtonToWPE(int32 buttons)
 {
 	// WPE wants one button number: 1 primary, 2 secondary, 3 middle.
 	if (buttons & B_PRIMARY_MOUSE_BUTTON)
@@ -114,78 +86,39 @@ EventAdapter::_LegacyButtonToWPE(int32 buttons)
 
 
 uint32_t
-EventAdapter::_LegacyKeyToXKB(int32 rawKey, const char* bytes, int32 numBytes,
-	uint32 modifiers)
+EventAdapter::_HaikuKeyToXKB(uint8 rawKey, const char* bytes, int32 numBytes)
 {
-	// Special keys first: Enter, Tab and Backspace also arrive as 0x0a,
-	// 0x09 and 0x08, which would unfold to j, i and h below.
-	uint32_t special = web_special_key_to_keysym(rawKey);
-	if (special != 0)
-		return special;
+	if (numBytes > 0 && bytes[0] >= 0x20 && bytes[0] < 0x7f)
+		return (uint32_t)bytes[0];
 
-	// Ctrl+letter arrives folded to 0x01-0x1a by xkb; expand it back so
-	// the page sees the real letter key with the control modifier.
-	if ((modifiers & B_CONTROL_KEY) != 0 && numBytes == 1 && bytes != NULL) {
-		uint32_t letter = web_unfold_ctrl_letter((unsigned char)bytes[0]);
-		if (letter != 0)
-			return wpe_unicode_to_key_code(letter);
+	switch (rawKey) {
+		case B_LEFT_ARROW:   return 0xff51;
+		case B_UP_ARROW:     return 0xff52;
+		case B_RIGHT_ARROW:  return 0xff53;
+		case B_DOWN_ARROW:   return 0xff54;
+		case B_HOME:         return 0xff50;
+		case B_END:          return 0xff57;
+		case B_PAGE_UP:      return 0xff55;
+		case B_PAGE_DOWN:    return 0xff56;
+		case B_BACKSPACE:    return 0xff08;
+		case B_DELETE:       return 0xffff;
+		case B_RETURN:       return 0xff0d;
+		case B_ESCAPE:       return 0xff1b;
+		case B_TAB:          return 0xff09;
+		case B_F1_KEY:       return 0xffbe;
+		case B_F2_KEY:       return 0xffbf;
+		case B_F3_KEY:       return 0xffc0;
+		case B_F4_KEY:       return 0xffc1;
+		case B_F5_KEY:       return 0xffc2;
+		case B_F6_KEY:       return 0xffc3;
+		case B_F7_KEY:       return 0xffc4;
+		case B_F8_KEY:       return 0xffc5;
+		case B_F9_KEY:       return 0xffc6;
+		case B_F10_KEY:      return 0xffc7;
+		case B_F11_KEY:      return 0xffc8;
+		case B_F12_KEY:      return 0xffc9;
+		default:             return 0;
 	}
-
-	// Printable characters, including multi-byte UTF-8 text: xkb is the
-	// character authority on V\OS, so the decoded codepoint is right.
-	if (numBytes > 0 && bytes != NULL) {
-		unsigned char b0 = (unsigned char)bytes[0];
-		if (b0 >= 0x20 && b0 < 0x7f)
-			return wpe_unicode_to_key_code((uint32_t)b0);
-		if (b0 >= 0x80) {
-			uint32_t cp = web_decode_utf8(bytes, numBytes);
-			if (cp != 0)
-				return wpe_unicode_to_key_code(cp);
-		}
-	}
-
-	return 0;
-}
-
-
-int32_t
-EventAdapter::_Clamp(float v, int size)
-{
-	int32_t i = (int32_t)floorf(v);
-	if (i < 0)
-		return 0;
-	if (size > 0 && i > size - 1)
-		return size - 1;
-	return i;
-}
-
-
-void
-EventAdapter::SetViewSize(int width, int height)
-{
-	fViewWidth = width;
-	fViewHeight = height;
-}
-
-
-void
-EventAdapter::_DispatchKey(uint32_t keyCode, uint32_t modifiers, bool pressed)
-{
-	if (keyCode == 0)
-		return;
-
-	if (pressed)
-		fHeldKeys.insert(keyCode);
-	else
-		fHeldKeys.erase(keyCode);
-
-	struct wpe_input_keyboard_event event;
-	memset(&event, 0, sizeof(event));
-	event.key_code = keyCode;
-	event.modifiers = modifiers;
-	event.pressed = pressed;
-
-	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_keyboard_event);
 }
 
 
@@ -193,100 +126,77 @@ EventAdapter::_DispatchKey(uint32_t keyCode, uint32_t modifiers, bool pressed)
 
 
 void
-EventAdapter::ReleaseAllKeys()
-{
-	for (uint32_t keyCode : fHeldKeys) {
-		struct wpe_input_keyboard_event event;
-		memset(&event, 0, sizeof(event));
-		event.key_code = keyCode;
-		event.pressed = false;
-		dispatch_on_glib(fBackend, event,
-			wpe_view_backend_dispatch_keyboard_event);
-	}
-	fHeldKeys.clear();
-}
-
-
-void
 EventAdapter::TranslateKeyDown(const BMessage* msg)
 {
-	if (!fBackend)
-		return;
+	if (!fBackend) return;
 
 	const char* bytes = nullptr;
 	int32 numBytes = 0;
 	msg->FindString("bytes", &bytes);
-	if (bytes != nullptr)
+	if (!bytes) {
+		bytes = "";
+		numBytes = 0;
+	} else {
 		numBytes = strlen(bytes);
+	}
 
 	uint32 modifiers = 0;
 	msg->FindInt32("modifiers", (int32*)&modifiers);
 
-	// B_KEY_DOWN/UP carry the raw key as int32; reading int8 always failed
-	// and dropped every non-printable key (Enter, arrows, Backspace).
-	int32 rawKey = 0;
-	msg->FindInt32("key", &rawKey);
+	uint8 rawKey = 0;
+	msg->FindInt8("key", (int8*)&rawKey);
 
-	// Raw chars back up the byte string for keys xkb folded or dropped.
-	if (numBytes == 0) {
-		int32 rawChar = 0;
-		if (msg->FindInt32("raw_char", &rawChar) == B_OK
-			&& rawChar >= 0x20 && rawChar < 0x7f) {
-			static char sChar[2];
-			sChar[0] = (char)rawChar;
-			sChar[1] = 0;
-			bytes = sChar;
-			numBytes = 1;
-		}
-	}
+	uint32_t keyCode = _HaikuKeyToXKB(rawKey, bytes, numBytes);
+	uint32_t wpeMods = _HaikuModsToWPE(modifiers);
 
-	_DispatchKey(_LegacyKeyToXKB(rawKey, bytes, numBytes, modifiers),
-		_LegacyModsToWPE(modifiers), true);
+	struct wpe_input_keyboard_event event;
+	memset(&event, 0, sizeof(event));
+	event.key_code = keyCode;
+	event.modifiers = wpeMods;
+	event.pressed = true;
+
+	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_keyboard_event);
 }
 
 
 void
 EventAdapter::TranslateKeyUp(const BMessage* msg)
 {
-	if (!fBackend)
-		return;
+	if (!fBackend) return;
 
 	const char* bytes = nullptr;
 	int32 numBytes = 0;
 	msg->FindString("bytes", &bytes);
-	if (bytes != nullptr)
+	if (!bytes) {
+		bytes = "";
+		numBytes = 0;
+	} else {
 		numBytes = strlen(bytes);
+	}
 
 	uint32 modifiers = 0;
 	msg->FindInt32("modifiers", (int32*)&modifiers);
 
-	int32 rawKey = 0;
-	msg->FindInt32("key", &rawKey);
+	uint8 rawKey = 0;
+	msg->FindInt8("key", (int8*)&rawKey);
 
-	// Release the key we pressed even if the mapping changed in between
-	// (layout switch while held): find it in the held set by the mapping
-	// of this release, else release everything that went down.
-	uint32_t keyCode = _LegacyKeyToXKB(rawKey, bytes, numBytes, modifiers);
-	if (keyCode != 0 && fHeldKeys.find(keyCode) != fHeldKeys.end()) {
-		_DispatchKey(keyCode, _LegacyModsToWPE(modifiers), false);
-		return;
-	}
+	uint32_t keyCode = _HaikuKeyToXKB(rawKey, bytes, numBytes);
+	uint32_t wpeMods = _HaikuModsToWPE(modifiers);
 
-	// The release may not map (bytes already consumed): synthesize a
-	// release for every held key so the page never sees a stuck key.
-	if (keyCode == 0 && !fHeldKeys.empty()) {
-		// Only when this looks like a real key release, not noise.
-		if (rawKey != 0 || numBytes > 0)
-			ReleaseAllKeys();
-	}
+	struct wpe_input_keyboard_event event;
+	memset(&event, 0, sizeof(event));
+	event.key_code = keyCode;
+	event.modifiers = wpeMods;
+	event.pressed = false;
+
+	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_keyboard_event);
 }
 
 
 void
 EventAdapter::TranslateMouseDown(const BMessage* msg)
 {
-	if (!fBackend)
-		return;
+	if (!fBackend) return;
 
 	BPoint where;
 	msg->FindPoint("where", &where);
@@ -294,19 +204,18 @@ EventAdapter::TranslateMouseDown(const BMessage* msg)
 	int32 buttons = 0;
 	msg->FindInt32("buttons", &buttons);
 
-	uint32 modifiers = 0;
-	msg->FindInt32("modifiers", (int32*)&modifiers);
+	int32 clicks = 1;
+	msg->FindInt32("clicks", &clicks);
 
 	struct wpe_input_pointer_event event;
 	memset(&event, 0, sizeof(event));
-	event.time = _NowMs();
 	event.type = wpe_input_pointer_event_type_button;
-	event.x = _Clamp(where.x, fViewWidth);
-	event.y = _Clamp(where.y, fViewHeight);
-	event.button = _LegacyButtonToWPE(buttons);
+	event.x = (int32)where.x;
+	event.y = (int32)where.y;
+	event.button = _HaikuButtonToWPE(buttons);
 	event.state = 1;
 	fPressedButton = event.button;
-	event.modifiers = _LegacyPointerModsToWPE(modifiers);
+	event.modifiers = 0;
 
 	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_pointer_event);
 }
@@ -315,28 +224,25 @@ EventAdapter::TranslateMouseDown(const BMessage* msg)
 void
 EventAdapter::TranslateMouseUp(const BMessage* msg)
 {
-	// No press reached the page (the context menu took it).
-	if (!fBackend || fPressedButton == 0)
-		return;
+	if (!fBackend) return;
 
 	BPoint where;
 	msg->FindPoint("where", &where);
 
-	uint32 modifiers = 0;
-	msg->FindInt32("modifiers", (int32*)&modifiers);
+	int32 buttons = 0;
+	msg->FindInt32("buttons", &buttons);
 
 	struct wpe_input_pointer_event event;
 	memset(&event, 0, sizeof(event));
-	event.time = _NowMs();
 	event.type = wpe_input_pointer_event_type_button;
-	event.x = _Clamp(where.x, fViewWidth);
-	event.y = _Clamp(where.y, fViewHeight);
+	event.x = (int32)where.x;
+	event.y = (int32)where.y;
 	// The release message carries the buttons still held: report the
 	// button that went down.
 	event.button = fPressedButton;
 	event.state = 0;
 	fPressedButton = 0;
-	event.modifiers = _LegacyPointerModsToWPE(modifiers);
+	event.modifiers = 0;
 
 	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_pointer_event);
 }
@@ -345,44 +251,19 @@ EventAdapter::TranslateMouseUp(const BMessage* msg)
 void
 EventAdapter::TranslateMouseMoved(const BMessage* msg)
 {
-	if (!fBackend)
-		return;
+	if (!fBackend) return;
 
 	BPoint where;
 	msg->FindPoint("where", &where);
 
-	int32 buttons = 0;
-	msg->FindInt32("buttons", &buttons);
-
-	uint32 modifiers = 0;
-	msg->FindInt32("modifiers", (int32*)&modifiers);
-
-	// Moves during a drag may not carry the buttons; the press we sent
-	// is still held until its release.
-	if (buttons == 0 && fPressedButton == 1)
-		buttons = B_PRIMARY_MOUSE_BUTTON;
-	else if (buttons == 0 && fPressedButton == 2)
-		buttons = B_SECONDARY_MOUSE_BUTTON;
-	else if (buttons == 0 && fPressedButton == 3)
-		buttons = B_TERTIARY_MOUSE_BUTTON;
-
-	uint32_t wpeMods = _LegacyPointerModsToWPE(modifiers);
-	if (buttons & B_PRIMARY_MOUSE_BUTTON)
-		wpeMods |= wpe_input_pointer_modifier_button1;
-	else if (buttons & B_SECONDARY_MOUSE_BUTTON)
-		wpeMods |= wpe_input_pointer_modifier_button2;
-	else if (buttons & B_TERTIARY_MOUSE_BUTTON)
-		wpeMods |= wpe_input_pointer_modifier_button3;
-
 	struct wpe_input_pointer_event event;
 	memset(&event, 0, sizeof(event));
-	event.time = _NowMs();
 	event.type = wpe_input_pointer_event_type_motion;
-	event.x = _Clamp(where.x, fViewWidth);
-	event.y = _Clamp(where.y, fViewHeight);
+	event.x = (int32)where.x;
+	event.y = (int32)where.y;
 	event.button = 0;
-	event.state = (buttons != 0) ? 1 : 0;
-	event.modifiers = wpeMods;
+	event.state = 0;
+	event.modifiers = 0;
 
 	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_pointer_event);
 }
@@ -391,8 +272,7 @@ EventAdapter::TranslateMouseMoved(const BMessage* msg)
 void
 EventAdapter::TranslateMouseWheel(const BMessage* msg)
 {
-	if (!fBackend)
-		return;
+	if (!fBackend) return;
 
 	BPoint where;
 	msg->FindPoint("where", &where);
@@ -401,28 +281,13 @@ EventAdapter::TranslateMouseWheel(const BMessage* msg)
 	msg->FindFloat("be:wheel_delta_x", &deltaX);
 	msg->FindFloat("be:wheel_delta_y", &deltaY);
 
-	uint32 modifiers = 0;
-	msg->FindInt32("modifiers", (int32*)&modifiers);
+	struct wpe_input_axis_event event;
+	memset(&event, 0, sizeof(event));
+	event.type = wpe_input_axis_event_type_motion;
+	event.x = (int32)where.x;
+	event.y = (int32)where.y;
+	event.axis = 0;
+	event.value = (int32)(deltaY * 120);
 
-	// Legacy wheel deltas are float notches; libwpe wants pixels
-	// (15 per notch, sign flipped).
-	const float deltas[2] = { deltaY, deltaX };
-	for (uint32_t axis = 0; axis < 2; axis++) {
-		if (deltas[axis] == 0.0f)
-			continue;
-
-		float pixels = -deltas[axis] * 15.0f;
-		struct wpe_input_axis_event event;
-		memset(&event, 0, sizeof(event));
-		event.type = wpe_input_axis_event_type_motion_smooth;
-		event.x = _Clamp(where.x, fViewWidth);
-		event.y = _Clamp(where.y, fViewHeight);
-		event.axis = axis;
-		event.value = (int32)lroundf(pixels);
-		if (event.value == 0)
-			event.value = pixels > 0 ? 1 : -1;
-		event.modifiers = _LegacyPointerModsToWPE(modifiers);
-
-		dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_axis_event);
-	}
+	dispatch_on_glib(fBackend, event, wpe_view_backend_dispatch_axis_event);
 }

@@ -244,8 +244,13 @@ BWebView::MouseDown(BPoint where)
 #ifdef HAS_WPE
 	if (fImpl->fEventAdapter && fImpl->fBridge
 		&& fImpl->fBridge->IsValid()) {
+		// Forward the window's own message (buttons, clicks, modifiers)
+		// with the position in view coordinates.
 		BMessage msg(B_MOUSE_DOWN);
-		msg.AddPoint("be:view_where", where);
+		if (Window() != NULL && Window()->CurrentMessage() != NULL)
+			msg = *Window()->CurrentMessage();
+		msg.RemoveName("where");
+		msg.AddPoint("where", where);
 		fImpl->fEventAdapter->TranslateMouseDown(&msg);
 	}
 #endif
@@ -260,8 +265,13 @@ BWebView::MouseUp(BPoint where)
 #ifdef HAS_WPE
 	if (fImpl->fEventAdapter && fImpl->fBridge
 		&& fImpl->fBridge->IsValid()) {
+		// Forward the window's own message (buttons, clicks, modifiers)
+		// with the position in view coordinates.
 		BMessage msg(B_MOUSE_UP);
-		msg.AddPoint("be:view_where", where);
+		if (Window() != NULL && Window()->CurrentMessage() != NULL)
+			msg = *Window()->CurrentMessage();
+		msg.RemoveName("where");
+		msg.AddPoint("where", where);
 		fImpl->fEventAdapter->TranslateMouseUp(&msg);
 	}
 #endif
@@ -277,8 +287,13 @@ BWebView::MouseMoved(BPoint where, uint32 transit,
 #ifdef HAS_WPE
 	if (fImpl->fEventAdapter && fImpl->fBridge
 		&& fImpl->fBridge->IsValid()) {
+		// Forward the window's own message (buttons, clicks, modifiers)
+		// with the position in view coordinates.
 		BMessage msg(B_MOUSE_MOVED);
-		msg.AddPoint("be:view_where", where);
+		if (Window() != NULL && Window()->CurrentMessage() != NULL)
+			msg = *Window()->CurrentMessage();
+		msg.RemoveName("where");
+		msg.AddPoint("where", where);
 		msg.AddInt32("be:transit", transit);
 		fImpl->fEventAdapter->TranslateMouseMoved(&msg);
 	}

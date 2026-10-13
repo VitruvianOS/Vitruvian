@@ -42,6 +42,9 @@ get_base_packages() {
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
+                " firmware-brcm80211 firmware-realtek firmware-atheros firmware-libertas firmware-mediatek firmware-iwlwifi" \
+                " firmware-ti-connectivity firmware-zd1211 firmware-ath9k-htc firmware-carl9170 bluez-firmware firmware-misc-nonfree" \
+                " firmware-amd-graphics firmware-nvidia-graphics firmware-samsung firmware-siano" \
                 " raspi-firmware grub-common grub2-common grub-efi-arm64-bin"
             ;;
         arm32)

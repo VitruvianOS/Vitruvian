@@ -15,6 +15,7 @@
 
 DownloadHandler::DownloadHandler()
 	:
+	fAskOwner(NULL),
 	fNextId(1),
 	fAskLocation(false)
 {
@@ -87,6 +88,23 @@ DownloadHandler::_Notify(std::function<void(const Listener&)> fn)
 	}
 	for (const auto& listener : listeners)
 		fn(listener);
+}
+
+
+void
+DownloadHandler::SetAskHandler(const void* owner, const AskHandler& handler)
+{
+	std::lock_guard<std::mutex> lock(fMutex);
+	if (handler == nullptr) {
+		// A closed window only clears its own slot.
+		if (fAskOwner == owner) {
+			fAskOwner = NULL;
+			fAskHandler = nullptr;
+		}
+		return;
+	}
+	fAskOwner = owner;
+	fAskHandler = handler;
 }
 
 
@@ -195,18 +213,24 @@ DownloadHandler::_OnDecideDestination(WebKitDownload* dl,
 		}
 	}
 
-	if (dest.empty() && self->fAskLocation
-		&& self->onAskDestination != nullptr) {
-		// Blocks the GLib thread until the host's save panel answered.
-		dest = self->onAskDestination(filename, url);
-		if (dest.empty()) {
-			{
-				std::lock_guard<std::mutex> lock(self->fMutex);
-				self->fDownloads.erase(dl);
+	if (dest.empty() && self->fAskLocation) {
+		AskHandler handler;
+		{
+			std::lock_guard<std::mutex> lock(self->fMutex);
+			handler = self->fAskHandler;
+		}
+		if (handler != nullptr) {
+			// Blocks the GLib thread until the host's save panel answered.
+			dest = handler(filename, url);
+			if (dest.empty()) {
+				{
+					std::lock_guard<std::mutex> lock(self->fMutex);
+					self->fDownloads.erase(dl);
+				}
+				log_info("DownloadHandler: cancelled by user (%s)",
+					url.c_str());
+				return FALSE;
 			}
-			log_info("DownloadHandler: cancelled by user (%s)",
-				url.c_str());
-			return FALSE;
 		}
 	}
 

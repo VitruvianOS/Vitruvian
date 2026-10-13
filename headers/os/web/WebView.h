@@ -67,6 +67,11 @@ public:
 			void				SetZoomLevel(float zoom);
 			float				ZoomLevel() const;
 
+	// Downloads: directory and ask-where-to-save apply to the
+	// view's (shared per profile) session.
+			void				SetDownloadDirectory(const char* path);
+			void				SetAskDownloadLocation(bool ask);
+
 	// Editing: routed through WebKit and mirrored to BClipboard.
 			void				Cut();
 			void				Copy();

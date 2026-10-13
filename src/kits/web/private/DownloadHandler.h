@@ -74,9 +74,13 @@ public:
 			void		RemoveListener(const void* owner);
 
 			// Blocks until the host returns a path ("" cancels). Runs on
-			// the GLib thread inside decide-destination.
-			std::function<std::string(const std::string& suggestedName,
-				const std::string& url)>	onAskDestination;
+			// the GLib thread inside decide-destination. Keyed by owner
+			// so a closed window's handler is never called; the newest
+			// owner wins.
+	using	AskHandler = std::function<std::string(const std::string&,
+				const std::string&)>;
+			void		SetAskHandler(const void* owner,
+							const AskHandler& handler);
 
 private:
 			void		_Notify(std::function<void(const Listener&)> fn);
@@ -93,6 +97,8 @@ private:
 			std::map<WebKitDownload*, DownloadEntry> fDownloads;
 			std::map<std::string, std::string> fDestinationOverrides;
 			std::map<const void*, Listener>	fListeners;
+			AskHandler					fAskHandler;
+			const void*					fAskOwner;
 			uint64_t					fNextId;
 			std::string					fDownloadDir;
 			bool						fAskLocation;

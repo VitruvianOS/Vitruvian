@@ -57,6 +57,7 @@ static const uint32 kMsgShowContextMenu = '_wcm';
 static const uint32 kMsgFullScreen = '_wfs';
 static const uint32 kMsgDialogReply = '_wdr';
 static const uint32 kMsgFileChooserDone = '_wfd';
+static const uint32 kMsgAskDownload = '_wad';
 
 // State shared between the GLib thread (which waits) and the window
 // thread (which runs the dialog). std primitives only: the no-raw-
@@ -503,6 +504,21 @@ BWebView::AttachedToWindow()
 			fTarget.SendMessage(&msg);
 		};
 		fImpl->fBridge->downloadHandler->AddListener(this, listener);
+
+		// "Ask where to save" answers through a save panel on the
+		// window thread; the GLib thread waits on the DialogState.
+		fImpl->fBridge->downloadHandler->SetAskHandler(this,
+			[self](const std::string& suggested,
+				const std::string& /*url*/) -> std::string {
+			DialogState state;
+			BMessage msg(kMsgAskDownload);
+			msg.AddPointer("state", &state);
+			msg.AddString(B_WEB_SUGGESTED_NAME, suggested.c_str());
+			if (!self.SendMessage(&msg))
+				return "";
+			waitForDialog(&state);
+			return state.text;
+		});
 	}
 
 	fImpl->fSelfMessenger = BMessenger(this);
@@ -520,8 +536,10 @@ BWebView::DetachedFromWindow()
 		finishDialog(fImpl->fPendingDialog, false, "");
 	fImpl->fPendingDialog = NULL;
 
-	if (fImpl->fBridge != NULL && fImpl->fBridge->downloadHandler != NULL)
+	if (fImpl->fBridge != NULL && fImpl->fBridge->downloadHandler != NULL) {
+		fImpl->fBridge->downloadHandler->SetAskHandler(this, nullptr);
 		fImpl->fBridge->downloadHandler->RemoveListener(this);
+	}
 
 	// Destroy bridge objects; order matters.
 	delete fImpl->fEventAdapter;
@@ -869,8 +887,47 @@ BWebView::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgAskDownload:
+		{
+			DialogState* state = NULL;
+			message->FindPointer("state", (void**)&state);
+			if (state == NULL || Window() == NULL)
+				break;
+			fImpl->fPendingDialog = state;
+
+			const char* suggested = NULL;
+			message->FindString(B_WEB_SUGGESTED_NAME, &suggested);
+
+			BMessage panelMessage(B_WEB_SAVE_PANEL_DONE);
+			panelMessage.AddPointer("state", state);
+			BFilePanel* panel = new BFilePanel(B_SAVE_PANEL,
+				new BMessenger(this), NULL, 0, false, &panelMessage);
+			panel->SetSaveText(suggested != NULL && suggested[0] != '\0'
+				? suggested : "download");
+			panel->Show();
+			break;
+		}
+
 		case B_WEB_SAVE_PANEL_DONE:
 		{
+			// The ask-where-to-save panel rides its DialogState in
+			// the reply; the Save link as flow pins a URL instead.
+			DialogState* state = NULL;
+			message->FindPointer("state", (void**)&state);
+			if (state != NULL) {
+				fImpl->fPendingDialog = NULL;
+
+				std::string path;
+				entry_ref ref;
+				if (message->FindRef("refs", &ref) == B_OK) {
+					BPath savePath(&ref);
+					if (savePath.InitCheck() == B_OK)
+						path = savePath.Path();
+				}
+				finishDialog(state, !path.empty(), path);
+				break;
+			}
+
 			const char* url = NULL;
 			message->FindString("url", &url);
 			entry_ref ref;
@@ -1362,6 +1419,36 @@ BWebView::SetZoomLevel(float zoom)
 }
 
 
+void
+BWebView::SetDownloadDirectory(const char* path)
+{
+#ifdef HAS_WPE
+	if (fImpl->fSession == NULL
+		|| fImpl->fSession->NetworkSession() == NULL)
+		return;
+
+	DownloadHandler* handler = DownloadHandler::ForSession(
+		fImpl->fSession->NetworkSession());
+	handler->SetDownloadDir(path != NULL ? path : "");
+#endif
+}
+
+
+void
+BWebView::SetAskDownloadLocation(bool ask)
+{
+#ifdef HAS_WPE
+	if (fImpl->fSession == NULL
+		|| fImpl->fSession->NetworkSession() == NULL)
+		return;
+
+	DownloadHandler* handler = DownloadHandler::ForSession(
+		fImpl->fSession->NetworkSession());
+	handler->SetAskLocation(ask);
+#endif
+}
+
+
 float
 BWebView::ZoomLevel() const
 {
@@ -1468,6 +1555,10 @@ void
 BWebView::SetUserAgentSuffix(const char*) {}
 void
 BWebView::SetZoomLevel(float) {}
+void
+BWebView::SetDownloadDirectory(const char*) {}
+void
+BWebView::SetAskDownloadLocation(bool) {}
 float
 BWebView::ZoomLevel() const { return 1.0f; }
 void

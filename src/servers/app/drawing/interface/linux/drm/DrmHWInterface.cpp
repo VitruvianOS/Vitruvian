@@ -663,9 +663,16 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 		for (int32 i = 0; i < count; i++)
 			hw->_BlitRect(hw->fRenderBuffer, hw->fWriteTarget,
 				toBlit.RectAt(i));
-		if (locked)
-			hw->UnlockExclusiveAccess();
 
+		// Blend the software cursor while still holding the mode lock:
+		// _BlendCursor reads fRenderBuffer as its source, and window
+		// draw threads paint into that buffer under the parallel (read)
+		// lock, so blending after the unlock raced
+		// Painter::FillRectNoClipping on the same bytes (the #303
+		// buffer-lifetime class, render side). The write lock excludes
+		// those readers; the lock order write -> overlays is safe
+		// because no path takes fFloatingOverlaysLock and then the
+		// mode lock.
 		if (!hw->fHardwareCursorEnabled) {
 			bool cursorLocked = hw->fFloatingOverlaysLock.Lock();
 			IntRect cf = hw->_CursorFrame();
@@ -675,6 +682,8 @@ DrmHWInterface::_PageFlipHandler(int fd, unsigned int frame,
 			if (cursorLocked)
 				hw->fFloatingOverlaysLock.Unlock();
 		}
+		if (locked)
+			hw->UnlockExclusiveAccess();
 	}
 }
 

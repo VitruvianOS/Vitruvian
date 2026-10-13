@@ -11,13 +11,32 @@
 #include <GraphicsDefs.h>
 #include <Rect.h>
 
-// wpe-backend-vos provides a Wayland-free frame-export path.
-// Rendered frames arrive as plain pixel buffers that we copy directly
-// into BBitmap for Vitruvian's app_server.
+// WPEBackend-FDO creates its own internal wl_display in-process — no external
+// Wayland compositor is required. The wl_shm_buffer below is a pure in-process
+// object; we use it only to access the raw pixel pointer and then copy into a
+// BBitmap for Vitruvian's app_server. No Wayland protocol traffic leaves this
+// process.
+#include <wayland-server.h>
+#include <wpe/fdo.h>
+#include <wpe/wpe.h>
 
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+
+
+// The web process loads its renderer backend through libwpe; without an
+// explicit loader init libwpe looks for libWPEBackend-default.so and aborts.
+static void
+init_fdo_backend()
+{
+	static bool sDone = false;
+	if (sDone)
+		return;
+	sDone = true;
+	wpe_loader_init("libWPEBackend-fdo-1.0.so.1");
+	wpe_fdo_initialize_shm();
+}
 
 
 CompositorAdapter::CompositorAdapter(int w, int h)
@@ -30,49 +49,52 @@ CompositorAdapter::CompositorAdapter(int w, int h)
 	fHeight(h),
 	fFrameReady(false)
 {
-	struct wpe_backend_vos_exportable_client exportClient;
+	init_fdo_backend();
+
+	struct wpe_view_backend_exportable_fdo_client exportClient;
 	memset(&exportClient, 0, sizeof(exportClient));
 
-	exportClient.export_buffer =
-		[](void* data, struct wpe_backend_vos_exported_buffer* buffer) {
+	exportClient.export_shm_buffer =
+		[](void* data, struct wpe_fdo_shm_exported_buffer* buffer) {
 			auto* self = static_cast<CompositorAdapter*>(data);
-			const uint8_t* pixels =
-				wpe_backend_vos_exported_buffer_get_data(buffer);
-			int32_t srcW = (int32_t)
-				wpe_backend_vos_exported_buffer_get_width(buffer);
-			int32_t srcH = (int32_t)
-				wpe_backend_vos_exported_buffer_get_height(buffer);
-			int32_t stride = (int32_t)
-				wpe_backend_vos_exported_buffer_get_stride(buffer);
-			if (pixels && srcW > 0 && srcH > 0)
+			struct wl_shm_buffer* shmBuf =
+				wpe_fdo_shm_exported_buffer_get_shm_buffer(buffer);
+			if (shmBuf) {
+				wl_shm_buffer_begin_access(shmBuf);
+				const uint8_t* pixels =
+					static_cast<const uint8_t*>(wl_shm_buffer_get_data(shmBuf));
+				int32_t srcW = (int32_t)wl_shm_buffer_get_width(shmBuf);
+				int32_t srcH = (int32_t)wl_shm_buffer_get_height(shmBuf);
+				int32_t stride = wl_shm_buffer_get_stride(shmBuf);
 				self->_BlitSHMFrame(pixels, stride, srcW, srcH);
-			wpe_backend_vos_exportable_release_buffer(
+				wl_shm_buffer_end_access(shmBuf);
+			}
+			wpe_view_backend_exportable_fdo_dispatch_release_shm_exported_buffer(
 				self->fExportable, buffer);
-			wpe_backend_vos_exportable_dispatch_frame_complete(
+			wpe_view_backend_exportable_fdo_dispatch_frame_complete(
 				self->fExportable);
 		};
 
-	fExportable = wpe_backend_vos_exportable_create(
+	fExportable = wpe_view_backend_exportable_fdo_create(
 		&exportClient, this, (uint32_t)w, (uint32_t)h);
 	if (!fExportable) {
-		log_error("CompositorAdapter: failed to create VOS exportable");
+		log_error("CompositorAdapter: failed to create FDO exportable");
 		return;
 	}
 
-	// VOS backend creates and owns the backend; do not call
-	// wpe_view_backend_initialize.
-	fBackend = wpe_backend_vos_exportable_get_view_backend(fExportable);
+	// FDO creates and owns the backend; do not call wpe_view_backend_initialize.
+	fBackend = wpe_view_backend_exportable_fdo_get_view_backend(fExportable);
 
 	_AllocateBitmaps();
 
-	log_info("CompositorAdapter: created %dx%d (VOS/SHM)", w, h);
+	log_info("CompositorAdapter: created %dx%d (FDO/SHM)", w, h);
 }
 
 
 CompositorAdapter::~CompositorAdapter()
 {
 	if (fExportable)
-		wpe_backend_vos_exportable_destroy(fExportable);
+		wpe_view_backend_exportable_fdo_destroy(fExportable);
 	delete frontBitmap;
 	delete fBackBitmap;
 }

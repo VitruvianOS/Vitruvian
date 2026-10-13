@@ -15,8 +15,6 @@ else()
 #
 # When WPE packages are available the compositor/event/bridge layer
 # from private/ is compiled in and BWebView delegates to it.
-# The wpe-backend-vos library replaces wpebackend-fdo, providing a
-# Wayland-free path for SHM frame export.
 # Otherwise a stub library is built so the netplus app still links.
 
 find_package(PkgConfig)
@@ -28,14 +26,18 @@ set(WEB_SOURCES
 set(WEB_PRIVATE_SOURCES "")
 
 if(PKG_CONFIG_FOUND)
-	pkg_check_modules(WPE_WEBKIT wpe-webkit-2.0 QUIET)
-	pkg_check_modules(WPE_FDO wpebackend-fdo-1.0 QUIET)
-	pkg_check_modules(GLIB glib-2.0 QUIET)
-	pkg_check_modules(WAYLAND wayland-server QUIET)
+	# wpebackend-fdo provides the web-process renderer backend until the
+	# in-tree wpe-backend-vos implements the WPE loader interface.
+	# Prefixes must not collide with the WPE_WEBKIT DeclareDependency in
+	# build/deps.cmake, which clobbers same-named variables at include time.
+	pkg_check_modules(VOS_WEBKIT2 wpe-webkit-2.0 QUIET)
+	pkg_check_modules(VOS_LIBWPE wpe-1.0 QUIET)
+	pkg_check_modules(VOS_WPE_FDO wpebackend-fdo-1.0 QUIET)
+	pkg_check_modules(VOS_GLIB glib-2.0 QUIET)
+	pkg_check_modules(VOS_WAYLAND wayland-server QUIET)
 
-	if(WPE_WEBKIT_FOUND)
+	if(VOS_WEBKIT2_FOUND AND VOS_LIBWPE_FOUND AND VOS_WPE_FDO_FOUND)
 		set(WEB_PRIVATE_SOURCES
-			backend-vos/wpe-backend-vos.cpp
 			private/CompositorAdapter.cpp
 			private/DomainFilter.cpp
 			private/DownloadHandler.cpp
@@ -64,25 +66,27 @@ target_include_directories(web PUBLIC
 if(WEB_PRIVATE_SOURCES)
 	target_include_directories(web PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/private
-		${CMAKE_CURRENT_SOURCE_DIR}/backend-vos
-		${WPE_WEBKIT_INCLUDE_DIRS}
-		${WPE_FDO_INCLUDE_DIRS}
-		${GLIB_INCLUDE_DIRS}
-		${WAYLAND_INCLUDE_DIRS}
+		${VOS_WEBKIT2_INCLUDE_DIRS}
+		${VOS_LIBWPE_INCLUDE_DIRS}
+		${VOS_WPE_FDO_INCLUDE_DIRS}
+		${VOS_GLIB_INCLUDE_DIRS}
+		${VOS_WAYLAND_INCLUDE_DIRS}
 	)
 	target_compile_definitions(web PRIVATE HAS_WPE=1)
 	target_compile_options(web PRIVATE
-		${WPE_WEBKIT_CFLAGS_OTHER}
-		${WPE_FDO_CFLAGS_OTHER}
-		${GLIB_CFLAGS_OTHER}
-		${WAYLAND_CFLAGS_OTHER}
+		${VOS_WEBKIT2_CFLAGS_OTHER}
+		${VOS_LIBWPE_CFLAGS_OTHER}
+		${VOS_WPE_FDO_CFLAGS_OTHER}
+		${VOS_GLIB_CFLAGS_OTHER}
+		${VOS_WAYLAND_CFLAGS_OTHER}
 	)
 	target_link_libraries(web PRIVATE
 		be root pthread
-		${WPE_WEBKIT_LIBRARIES}
-		${WPE_FDO_LIBRARIES}
-		${GLIB_LIBRARIES}
-		${WAYLAND_LIBRARIES}
+		${VOS_WEBKIT2_LIBRARIES}
+		${VOS_LIBWPE_LIBRARIES}
+		${VOS_WPE_FDO_LIBRARIES}
+		${VOS_GLIB_LIBRARIES}
+		${VOS_WAYLAND_LIBRARIES}
 	)
 	target_link_libraries(web PRIVATE be root pthread)
 endif()

@@ -19,6 +19,7 @@
 #include <Cursor.h>
 #include <wpe/webkit.h>
 #include <wpe/wpe.h>
+#include <wpe/fdo.h>
 
 #include <cstdlib>
 #include <cstring>

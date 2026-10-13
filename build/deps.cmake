@@ -320,6 +320,30 @@ DeclareDependency(
 	INCLUDES   "${HEADERS_PATH_BASE}/ladspa/"
 )
 
+# WPE WebKit2 dependencies (web kit / net+ browser)
+# wpebackend-fdo is the web-process renderer backend until the in-tree
+# wpe-backend-vos implements the WPE loader interface.
+DeclareDependency(
+	WPE_WEBKIT
+	LIBRARIES  "wpe-webkit-2.0"
+	PACKAGES   "libwpewebkit-2.0-dev;libwpe-1.0-dev;libwpebackend-fdo-1.0-dev"
+	RUNTIMES   "libwpewebkit-2.0-1;libwpe-1.0-1;libwpebackend-fdo-1.0-1"
+)
+
+DeclareDependency(
+	GLESV2
+	LIBRARIES  "GLESv2"
+	PACKAGES   "libgles-dev"
+	RUNTIMES   "libgles2"
+)
+
+DeclareDependency(
+	WAYLAND_SERVER
+	LIBRARIES  "wayland-server"
+	PACKAGES   "libwayland-dev"
+	RUNTIMES   "libwayland-server0"
+)
+
 # Dependencies for Debug builds
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

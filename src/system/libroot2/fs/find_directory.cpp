@@ -121,7 +121,7 @@ static const char *kCommonDirectories[] = {
 	COMMON "/develop",
 	SYSTEM "/var/log",						// B_SYSTEM_LOG_DIRECTORY
 	SYSTEM "/var/spool",					// B_SYSTEM_SPOOL_DIRECTORY
-	SYSTEM "/cache/tmp",					// B_SYSTEM_TEMP_DIRECTORY
+	"tmp",									// B_SYSTEM_TEMP_DIRECTORY: /system/cache is /tmp
 	SYSTEM "/var",							// B_SYSTEM_VAR_DIRECTORY
 	COMMON "/add-ons$a/Translators",
 	COMMON "/add-ons$a/media",

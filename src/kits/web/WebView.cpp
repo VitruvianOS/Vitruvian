@@ -335,11 +335,13 @@ BWebView::KeyDown(const char* bytes, int32 numBytes)
 #ifdef HAS_WPE
 	if (fImpl->fEventAdapter && fImpl->fBridge
 		&& fImpl->fBridge->IsValid()) {
+		// The window message carries "bytes", "key", "raw_char" and
+		// "modifiers", which the adapter needs to build the WPE event.
 		BMessage msg(B_KEY_DOWN);
-		msg.AddInt8("byte", bytes[0]);
-		if (numBytes > 1)
-			msg.AddData("bytes", B_INT8_TYPE, bytes + 1,
-				numBytes - 1);
+		if (Window() != NULL && Window()->CurrentMessage() != NULL)
+			msg = *Window()->CurrentMessage();
+		else
+			msg.AddString("bytes", BString(bytes, numBytes));
 		fImpl->fEventAdapter->TranslateKeyDown(&msg);
 	}
 #endif
@@ -354,11 +356,13 @@ BWebView::KeyUp(const char* bytes, int32 numBytes)
 #ifdef HAS_WPE
 	if (fImpl->fEventAdapter && fImpl->fBridge
 		&& fImpl->fBridge->IsValid()) {
+		// The window message carries "bytes", "key", "raw_char" and
+		// "modifiers", which the adapter needs to build the WPE event.
 		BMessage msg(B_KEY_UP);
-		msg.AddInt8("byte", bytes[0]);
-		if (numBytes > 1)
-			msg.AddData("bytes", B_INT8_TYPE, bytes + 1,
-				numBytes - 1);
+		if (Window() != NULL && Window()->CurrentMessage() != NULL)
+			msg = *Window()->CurrentMessage();
+		else
+			msg.AddString("bytes", BString(bytes, numBytes));
 		fImpl->fEventAdapter->TranslateKeyUp(&msg);
 	}
 #endif

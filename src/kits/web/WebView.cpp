@@ -108,6 +108,10 @@ struct BWebView::WebViewImpl {
 	DialogState*		fPendingDialog;
 	FileChooserState*	fPendingFileChooser;
 	float				fZoom;
+	bool				fJsEnabled;
+	bool				fImagesEnabled;
+	std::string			fUserAgentSuffix;
+	std::string			fBlockedDomains;
 #endif
 
 	WebViewImpl()
@@ -129,7 +133,9 @@ struct BWebView::WebViewImpl {
 		fDragStart(BPoint(0, 0)),
 		fPendingDialog(NULL),
 		fPendingFileChooser(NULL),
-		fZoom(1.0)
+		fZoom(1.0),
+		fJsEnabled(true),
+		fImagesEnabled(true)
 #endif
 	{
 	}
@@ -521,6 +527,13 @@ BWebView::AttachedToWindow()
 		});
 	}
 
+	// Preferences set before the bridge existed take effect now.
+	fImpl->fBridge->SetJavaScriptEnabled(fImpl->fJsEnabled);
+	fImpl->fBridge->SetImagesEnabled(fImpl->fImagesEnabled);
+	fImpl->fBridge->SetUserAgentSuffix(fImpl->fUserAgentSuffix);
+	fImpl->fBridge->SetZoomLevel(fImpl->fZoom);
+	SetBlockedDomains(fImpl->fBlockedDomains.c_str());
+
 	fImpl->fSelfMessenger = BMessenger(this);
 #endif
 }
@@ -693,11 +706,15 @@ BWebView::MessageReceived(BMessage* message)
 						SelectAll();
 						break;
 					default:
-						// Link/image actions and new-window open go to
-						// the window through the item's message.
-						if (Window() != NULL) {
+						// Open-in-new-window goes to the window;
+						// link and image actions belong to the view.
+						{
 							BMessage copy(*selected->Message());
-							Window()->PostMessage(&copy);
+							if (what == B_WEB_OPEN_LOCATION
+								&& Window() != NULL)
+								Window()->PostMessage(&copy);
+							else
+								BMessenger(this).SendMessage(&copy);
 						}
 						break;
 				}
@@ -870,6 +887,15 @@ BWebView::MessageReceived(BMessage* message)
 		case B_WEB_EDIT_SELECT_ALL:
 			SelectAll();
 			break;
+
+		case B_WEB_COPY_LINK:
+		{
+			const char* url = NULL;
+			message->FindString(B_WEB_URL_FIELD, &url);
+			if (url != NULL && fImpl->fClipboard != NULL)
+				fImpl->fClipboard->SetClipboardText(url);
+			break;
+		}
 
 		case B_WEB_SAVE_IMAGE_AS:
 		case B_WEB_SAVE_LINK_AS:
@@ -1362,10 +1388,12 @@ BWebView::SetTarget(const BMessenger& target)
 void
 BWebView::SetBlockedDomains(const char* commaSeparated)
 {
+	fImpl->fBlockedDomains = commaSeparated != NULL ? commaSeparated : "";
 	if (fImpl->fBridge == NULL)
 		return;
+
 	std::vector<std::string> domains;
-	std::string input = commaSeparated != NULL ? commaSeparated : "";
+	const std::string& input = fImpl->fBlockedDomains;
 	size_t start = 0;
 	while (start <= input.size()) {
 		size_t comma = input.find(',', start);
@@ -1389,6 +1417,7 @@ BWebView::SetBlockedDomains(const char* commaSeparated)
 void
 BWebView::SetJavaScriptEnabled(bool enabled)
 {
+	fImpl->fJsEnabled = enabled;
 	if (fImpl->fBridge != NULL)
 		fImpl->fBridge->SetJavaScriptEnabled(enabled);
 }
@@ -1397,6 +1426,7 @@ BWebView::SetJavaScriptEnabled(bool enabled)
 void
 BWebView::SetImagesEnabled(bool enabled)
 {
+	fImpl->fImagesEnabled = enabled;
 	if (fImpl->fBridge != NULL)
 		fImpl->fBridge->SetImagesEnabled(enabled);
 }
@@ -1405,8 +1435,9 @@ BWebView::SetImagesEnabled(bool enabled)
 void
 BWebView::SetUserAgentSuffix(const char* suffix)
 {
+	fImpl->fUserAgentSuffix = suffix != NULL ? suffix : "";
 	if (fImpl->fBridge != NULL)
-		fImpl->fBridge->SetUserAgentSuffix(suffix != NULL ? suffix : "");
+		fImpl->fBridge->SetUserAgentSuffix(fImpl->fUserAgentSuffix);
 }
 
 

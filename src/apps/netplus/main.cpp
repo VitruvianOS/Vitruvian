@@ -4,15 +4,18 @@
  */
 
 
+#include "DownloadsWindow.h"
 #include "MainWindow.h"
 #include "NetPlusApp.h"
 #include "NetPlusMessages.h"
 
 #include <Alert.h>
+#include <Messenger.h>
 #include <Path.h>
 #include <String.h>
 
 #include <web/UrlNormalize.h>
+#include <web/WebDefs.h>
 #include <web/WebView.h>
 #include <web/WebBookmarks.h>
 #include <web/WebSettings.h>
@@ -136,11 +139,33 @@ NetPlusApp::ArgvReceived(int32 argc, char** argv)
 
 
 void
+NetPlusApp::MessageReceived(BMessage* message)
+{
+	switch (message->what) {
+		case B_WEB_DOWNLOAD_STARTED:
+		case B_WEB_DOWNLOAD_PROGRESS:
+		case B_WEB_DOWNLOAD_FINISHED:
+		case B_WEB_DOWNLOAD_FAILED:
+			DownloadsWindow::HandleDownloadMessage(message, NULL);
+			break;
+
+		default:
+			BApplication::MessageReceived(message);
+			break;
+	}
+}
+
+
+void
 NetPlusApp::ReadyToRun()
 {
 	_CreateDirs();
 	_LoadSettings();
 	_LoadBookmarks();
+
+	// Every window shares one profile session: route its download
+	// events through the app so they arrive once, not once per window.
+	BWebView::SetDownloadTarget(BMessenger(this));
 
 	const char* url = fStartupURL.String();
 	BString restoreURL;

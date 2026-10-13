@@ -285,6 +285,10 @@ MainWindow::_SetFullScreen(bool enter)
 bool
 MainWindow::QuitRequested()
 {
+	// The downloads window may hold our view for cancel; clear it
+	// before the view dies with the window.
+	DownloadsWindow::DetachWebView(fWebView);
+
 	BWebSettings* settings = NetPlusApp::Settings();
 	if (settings->RestoreSession() && fWebView != NULL) {
 		settings->SetValue("last_session_url", fWebView->CurrentURL());

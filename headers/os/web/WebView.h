@@ -58,6 +58,9 @@ public:
 									bool ephemeral);
 	static	void				SetDefaultProfileDir(const char* path);
 	static	void				ClearDefaultProfileData();
+	// Single app-level sink for the shared profile's download events;
+	// with many windows open each event must arrive exactly once.
+	static	void				SetDownloadTarget(const BMessenger& target);
 
 	// Preferences: applied immediately, on the GLib thread.
 			void				SetBlockedDomains(const char* commaSeparated);

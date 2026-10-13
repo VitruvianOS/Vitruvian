@@ -83,6 +83,67 @@ struct FileChooserState {
 
 static SessionAdapter* sDefaultSession = NULL;
 static std::string sDefaultProfileDir;
+// One app-level download sink: the default session is shared by every
+// window, so its events must not fan out once per view.
+static BMessenger sDownloadTarget;
+static std::mutex sDownloadTargetMutex;
+static bool sDownloadListenerAttached = false;
+static const char sDownloadListenerKey;
+
+
+static void
+_PostDownloadEvent(uint32 what, const DownloadEntry& entry)
+{
+	BMessenger target;
+	{
+		std::lock_guard<std::mutex> lock(sDownloadTargetMutex);
+		target = sDownloadTarget;
+	}
+	if (!target.IsValid())
+		return;
+
+	BMessage msg(what);
+	msg.AddUInt64(B_WEB_DOWNLOAD_ID, entry.id);
+	msg.AddString(B_WEB_DOWNLOAD_FILENAME, entry.filename.c_str());
+	if (what == B_WEB_DOWNLOAD_STARTED) {
+		msg.AddString(B_WEB_DOWNLOAD_URL, entry.url.c_str());
+		msg.AddString(B_WEB_DOWNLOAD_DESTINATION, entry.destination.c_str());
+		msg.AddUInt64(B_WEB_DOWNLOAD_RECEIVED, entry.receivedBytes);
+		msg.AddUInt64(B_WEB_DOWNLOAD_TOTAL, entry.totalBytes);
+	} else if (what == B_WEB_DOWNLOAD_PROGRESS) {
+		msg.AddUInt64(B_WEB_DOWNLOAD_RECEIVED, entry.receivedBytes);
+		msg.AddUInt64(B_WEB_DOWNLOAD_TOTAL, entry.totalBytes);
+	} else if (what == B_WEB_DOWNLOAD_FINISHED) {
+		msg.AddString(B_WEB_DOWNLOAD_DESTINATION, entry.destination.c_str());
+	}
+	target.SendMessage(&msg);
+}
+
+
+static void
+_AttachDefaultDownloadListener(SessionAdapter* session)
+{
+	std::lock_guard<std::mutex> lock(sDownloadTargetMutex);
+	if (sDownloadListenerAttached || session == NULL)
+		return;
+	DownloadHandler* handler
+		= DownloadHandler::ForSession(session->NetworkSession());
+	DownloadHandler::Listener listener;
+	listener.onStarted = [](const DownloadEntry& e) {
+		_PostDownloadEvent(B_WEB_DOWNLOAD_STARTED, e);
+	};
+	listener.onProgress = [](const DownloadEntry& e) {
+		_PostDownloadEvent(B_WEB_DOWNLOAD_PROGRESS, e);
+	};
+	listener.onFinished = [](const DownloadEntry& e) {
+		_PostDownloadEvent(B_WEB_DOWNLOAD_FINISHED, e);
+	};
+	listener.onFailed = [](const DownloadEntry& e) {
+		_PostDownloadEvent(B_WEB_DOWNLOAD_FAILED, e);
+	};
+	handler->AddListener(&sDownloadListenerKey, listener);
+	sDownloadListenerAttached = true;
+}
 
 
 static void
@@ -250,6 +311,17 @@ BWebView::SetDefaultProfileDir(const char* path)
 
 
 void
+BWebView::SetDownloadTarget(const BMessenger& target)
+{
+	{
+		std::lock_guard<std::mutex> lock(sDownloadTargetMutex);
+		sDownloadTarget = target;
+	}
+	_AttachDefaultDownloadListener(sDefaultSession);
+}
+
+
+void
 BWebView::SetSession(const char* profileDir, bool ephemeral)
 {
 	if (fImpl->fBridge != NULL)
@@ -292,6 +364,7 @@ BWebView::SetSession(const char* profileDir, bool ephemeral)
 		}
 		ProcessManager::Instance().InvokeOnGLibThreadSync([&]() {
 			sDefaultSession = new SessionAdapter(dir, false);
+			_AttachDefaultDownloadListener(sDefaultSession);
 		});
 	}
 	fImpl->fSession = sDefaultSession;
@@ -575,8 +648,10 @@ BWebView::AttachedToWindow()
 		return accepted;
 	});
 
-	// Download events fan in from the shared per-session handler.
-	if (fImpl->fBridge->downloadHandler != NULL) {
+	// Download events: an ephemeral (private) view has its own session
+	// and forwards its own events; views on the shared profile stay
+	// silent because the app-level target already receives them once.
+	if (fImpl->fBridge->downloadHandler != NULL && fImpl->fOwnsSession) {
 		DownloadHandler::Listener listener;
 		listener.onStarted = [this](const DownloadEntry& e) {
 			if (!fTarget.IsValid())
@@ -620,9 +695,11 @@ BWebView::AttachedToWindow()
 			fTarget.SendMessage(&msg);
 		};
 		fImpl->fBridge->downloadHandler->AddListener(this, listener);
+	}
 
-		// "Ask where to save" answers through a save panel on the
-		// window thread; the GLib thread waits on the DialogState.
+	// "Ask where to save" answers through a save panel on the
+	// window thread; the GLib thread waits on the DialogState.
+	if (fImpl->fBridge->downloadHandler != NULL) {
 		fImpl->fBridge->downloadHandler->SetAskHandler(this,
 			[this, self](const std::string& suggested,
 				const std::string& /*url*/) -> std::string {

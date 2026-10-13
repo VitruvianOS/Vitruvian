@@ -153,6 +153,8 @@ ImageIncludeDir("data/system/data/joysticks" "/system/data/")
 ImageIncludeDir("data/system/data/network" "/system/data/")
 ImageIncludeDir("data/system/data/licenses" "/system/data/")
 ImageIncludeDir("data/system/data/fonts" "/system/data/")
+# Small synthetic media files for testing MediaPlayer and MediaConverter.
+ImageIncludeDir("data/system/data/samples" "/system/data/")
 ImageIncludeDir("data/system/data/KeyboardLayouts" "/system/data/")
 
 install(FILES "data/artwork/V_OS logo.png" DESTINATION "/system/data/artwork" COMPONENT data)

@@ -11,6 +11,7 @@
 #include <cstring>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 
@@ -47,19 +48,28 @@ FrameNotifier::~FrameNotifier()
 //	#pragma mark - Public
 
 
-void
+bool
 FrameNotifier::Notify()
 {
 	if (fFds[1] < 0)
-		return;
+		return false;
 
-	// Non-blocking write: if the pipe is full, a wakeup is already pending
-	// and the drop is intentional — the reader drains all bytes and posts
-	// exactly one MSG_NEW_FRAME, so coalescing is correct by design.
+	// Was the pipe empty before this write? The reader drains all
+	// bytes, so an empty pipe means no frame message is pending
+	// yet and this write must post one. The FIONREAD check races
+	// only with the reader draining, and a lost race costs one
+	// extra Invalidate at worst.
+	int pending = 0;
+	if (fFds[0] >= 0)
+		ioctl(fFds[0], FIONREAD, &pending);
+
 	uint8_t byte = 1;
 	ssize_t ret = write(fFds[1], &byte, 1);
-	if (ret < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+	if (ret < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
 		log_error("FrameNotifier::Notify write failed: %s", strerror(errno));
+		return false;
+	}
+	return pending == 0;
 }
 
 

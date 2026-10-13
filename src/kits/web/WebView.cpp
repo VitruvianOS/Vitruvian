@@ -92,7 +92,6 @@ struct BWebView::WebViewImpl {
 	CompositorAdapter*	fCompositor;
 	EventAdapter*		fEventAdapter;
 	WebKitBridge*		fBridge;
-	FrameNotifier*		fNotifier;
 	ClipboardDragDrop*	fClipboard;
 	SessionAdapter*		fSession;
 	bool				fOwnsSession;
@@ -120,7 +119,6 @@ struct BWebView::WebViewImpl {
 		fCompositor(NULL),
 		fEventAdapter(NULL),
 		fBridge(NULL),
-		fNotifier(NULL),
 		fClipboard(NULL),
 		fSession(NULL),
 		fOwnsSession(false),
@@ -172,7 +170,6 @@ BWebView::BWebView(BRect frame, const char* name)
 BWebView::~BWebView()
 {
 #ifdef HAS_WPE
-	delete fImpl->fNotifier;
 	delete fImpl->fBridge;
 	delete fImpl->fEventAdapter;
 	delete fImpl->fClipboard;
@@ -260,14 +257,16 @@ BWebView::AttachedToWindow()
 
 	fImpl->fCompositor = fImpl->fBridge->compositor.get();
 	fImpl->fEventAdapter = new EventAdapter(fImpl->fBridge->backend);
-	fImpl->fNotifier = new FrameNotifier();
 	fImpl->fClipboard = new ClipboardDragDrop();
 	fImpl->fClipboard->Attach(fImpl->fBridge->webView);
-	// Frames arrive on the GLib thread: ask the window thread to redraw
-	// instead of taking the window lock from there.
+	// Frames arrive on the GLib thread: the notifier pipe coalesces
+	// bursts and the first pending frame asks the window thread to
+	// redraw, instead of taking the window lock from here.
 	BMessenger self(this);
-	fImpl->fBridge->compositor->onFrameReady = [self]() {
-		self.SendMessage(kMsgFrameReady);
+	FrameNotifier* notifier = fImpl->fBridge->notifier.get();
+	fImpl->fBridge->compositor->onFrameReady = [self, notifier]() {
+		if (notifier->Notify())
+			self.SendMessage(kMsgFrameReady);
 	};
 
 	// Wire bridge callbacks to BWebView target messenger.
@@ -525,8 +524,6 @@ BWebView::DetachedFromWindow()
 		fImpl->fBridge->downloadHandler->RemoveListener(this);
 
 	// Destroy bridge objects; order matters.
-	delete fImpl->fNotifier;
-	fImpl->fNotifier = NULL;
 	delete fImpl->fEventAdapter;
 	fImpl->fEventAdapter = NULL;
 	delete fImpl->fBridge;
@@ -557,6 +554,10 @@ BWebView::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case kMsgFrameReady:
+			// Drain the coalescing pipe before redrawing so the
+			// next burst posts a fresh message.
+			if (fImpl->fBridge != NULL && fImpl->fBridge->notifier != NULL)
+				fImpl->fBridge->notifier->Drain();
 			Invalidate();
 			break;
 #ifdef HAS_WPE

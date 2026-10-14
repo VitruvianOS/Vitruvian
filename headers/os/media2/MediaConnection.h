@@ -33,7 +33,9 @@ public:
 			BMediaConnection*		Binding() const;
 
 			const BMediaFormat&		Format() const;
+			status_t				SetFormat(const BMediaFormat& format);
 			status_t				SetAcceptedFormat(const BMediaFormat& format);
+			const BMediaFormat&		AcceptedFormat() const;
 
 			media_type_mask			AcceptedTypes() const;
 			void					SetAcceptedTypes(media_type_mask types);

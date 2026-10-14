@@ -328,9 +328,14 @@ BMediaGraph::_ConnectInProcess(BMediaOutput* output, BMediaInput* input)
 	if (output->IsConnected() || input->IsConnected())
 		return B_NOT_ALLOWED;
 
-	BMediaFormat format = output->Format();
+	// Downstream request wins; the upstream offer is the fallback.
+	BMediaFormat format = input->AcceptedFormat();
+	if (format.Type() == B_MEDIA_NO_TYPE)
+		format = output->Format();
 	if (format.Type() == B_MEDIA_NO_TYPE)
 		format = input->Format();
+	if (format.Type() == B_MEDIA_NO_TYPE)
+		return B_BAD_VALUE;
 
 	status_t status = output->PrepareToConnect(&format);
 	if (status != B_OK)

@@ -154,6 +154,23 @@ BMediaConnection::SetAcceptedFormat(const BMediaFormat& format)
 }
 
 
+status_t
+BMediaConnection::SetFormat(const BMediaFormat& format)
+{
+	if (fConnected)
+		return B_NOT_ALLOWED;
+	fFormat = format;
+	return B_OK;
+}
+
+
+const BMediaFormat&
+BMediaConnection::AcceptedFormat() const
+{
+	return fAcceptedFormat;
+}
+
+
 media_type_mask
 BMediaConnection::AcceptedTypes() const
 {

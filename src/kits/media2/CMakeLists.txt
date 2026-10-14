@@ -24,6 +24,8 @@ AddOn(media2
 	MidiUnit.cpp
 	FilterUnitCore.cpp
 	VideoFilter.cpp
+	AudioFilter.cpp
+	FilterCatalog.cpp
 	MediaAutomation.cpp
 	MediaEncodeTables.cpp
 	MediaPlayer.cpp

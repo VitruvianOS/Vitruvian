@@ -858,7 +858,7 @@ pw_stream*
 PipeWireBackend::CreateAndConnectStream(const char* name,
 	pw_direction direction, const BMediaFormat& format,
 	const pw_stream_events* events, void* userdata,
-	const char* targetNodeName, bool captureSinkMonitor)
+	const char* targetNodeName, bool captureSinkMonitor, bool autoConnect)
 {
 	if (fLoop == NULL || events == NULL)
 		return NULL;
@@ -895,6 +895,9 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 		NULL);
 	if (targetNodeName != NULL)
 		pw_properties_set(props, PW_KEY_TARGET_OBJECT, targetNodeName);
+	// Graph-routed streams are linked explicitly; the session manager must not.
+	if (!autoConnect)
+		pw_properties_set(props, PW_KEY_NODE_AUTOCONNECT, "false");
 	if (captureSinkMonitor)
 		pw_properties_set(props, PW_KEY_STREAM_CAPTURE_SINK, "true");
 	pw_stream* stream = pw_stream_new_simple(fLoop,
@@ -931,7 +934,7 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 	Lock();
 	const int r = pw_stream_connect(stream,
 		direction, PW_ID_ANY,
-		(pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT
+		(pw_stream_flags)((autoConnect ? PW_STREAM_FLAG_AUTOCONNECT : 0)
 			| PW_STREAM_FLAG_MAP_BUFFERS
 			| PW_STREAM_FLAG_RT_PROCESS),
 		params, paramCount);

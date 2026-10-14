@@ -57,7 +57,8 @@ struct LinkInfo {
 
 
 static BLocker sLinksLock("media graph links");
-static std::map<uint32, LinkInfo> sLinks;
+// Keyed by proxy: the bound id is not known until after the roundtrip.
+static std::map<pw_proxy*, LinkInfo> sLinks;
 
 
 static void
@@ -164,9 +165,22 @@ BMediaGraph::Connect(BMediaOutput* output, BMediaInput* input)
 		pairs.push_back(std::make_pair((uint32)0, (uint32)0));
 	}
 
+	// An identical explicit link already exists: nothing to do.
+	{
+		BAutolock linksLock(sLinksLock);
+		for (const auto& entry : sLinks) {
+			if (entry.second.output == output && entry.second.input == input
+					&& entry.second.state != PW_LINK_STATE_ERROR
+					&& entry.second.state != PW_LINK_STATE_UNLINKED) {
+				_ReleaseReservedEdge(outNodeId, inNodeId);
+				return B_OK;
+			}
+		}
+	}
+
 	backend->Lock();
 
-	std::vector<uint32> createdKeys;
+	std::vector<pw_proxy*> createdKeys;
 	status_t result = B_OK;
 
 	for (size_t i = 0; i < pairs.size(); i++) {
@@ -192,7 +206,7 @@ BMediaGraph::Connect(BMediaOutput* output, BMediaInput* input)
 			break;
 		}
 
-		uint32 key = pw_proxy_get_bound_id(proxy);
+		pw_proxy* key = proxy;
 
 		BAutolock linksLock(sLinksLock);
 		LinkInfo& info = sLinks[key];
@@ -1468,7 +1482,7 @@ BMediaGraph::DumpGraph(BString& out) const
 	{
 		BAutolock _(sLinksLock);
 		for (const auto& entry : sLinks) {
-			out << "  id=" << entry.first
+			out << "  id=" << pw_proxy_get_bound_id(entry.first)
 				<< " outNode=" << entry.second.outputNodeId
 				<< " inNode=" << entry.second.inputNodeId
 				<< " state=" << _link_state_name(entry.second.state)

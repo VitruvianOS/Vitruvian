@@ -57,7 +57,8 @@ public:
 										const pw_stream_events* events,
 										void* userdata,
 										const char* targetNodeName = NULL,
-										bool captureSinkMonitor = false);
+										bool captureSinkMonitor = false,
+										bool autoConnect = true);
 
 			void					DestroyStream(pw_stream* stream);
 

@@ -135,7 +135,7 @@ BMediaNode::_StartConnections(void* backendPtr)
 		pw_stream* stream = backend->CreateAndConnectStream(
 			output->Name(), direction, format,
 			_GetStreamEvents(),
-			static_cast<BMediaConnection*>(output), NULL, false, true);
+			static_cast<BMediaConnection*>(output), NULL, false, false);
 		if (stream == NULL)
 			return B_ERROR;
 
@@ -162,7 +162,7 @@ BMediaNode::_StartConnections(void* backendPtr)
 		pw_stream* stream = backend->CreateAndConnectStream(
 			input->Name(), direction, format,
 			_GetStreamEvents(),
-			static_cast<BMediaConnection*>(input));
+			static_cast<BMediaConnection*>(input), NULL, false, false);
 		if (stream == NULL)
 			return B_ERROR;
 
@@ -246,8 +246,7 @@ BMediaNode::_StreamFault(BMediaConnection* conn)
 	// A brand new stream also means a brand new clock/latency estimate
 	// instead of trying to make up for however long we were gone.
 	pw_stream* stream = backend->CreateAndConnectStream(conn->Name(),
-		direction, format, _GetStreamEvents(), conn, NULL, false,
-		direction == PW_DIRECTION_OUTPUT);
+		direction, format, _GetStreamEvents(), conn, NULL, false, false);
 	// conn is already the BMediaConnection*; callbacks cast userdata back
 	// to it, which is only valid for that exact pointer (virtual base).
 	if (stream == NULL)

@@ -34,6 +34,12 @@ _DupString(const char* string)
 }
 
 
+// baresip reserves 16 bytes ahead of the payload: 12 for the RTP
+// header plus 4 for the SRTP auth tag, so rtp_send can prepend in
+// place without clobbering the payload.
+enum { kRtpPresz = 16 };
+
+
 // #pragma mark - G.711 codec (PCMU/PCMA)
 
 
@@ -205,6 +211,8 @@ private:
 
 	void _Run()
 	{
+		// libre requires an explicit init before any stack work.
+		libre_init();
 		mqueue_alloc(&fQueue, _OnJob, this);
 		{
 			std::lock_guard<std::mutex> guard(fReadyMutex);
@@ -394,8 +402,12 @@ _GuessIfaddr(const char* ifname, const struct sa* sa, void* arg)
 
 
 static void
-_MediaLaddr(struct sa* out)
+_MediaLaddr(SipBackend* backend, struct sa* out)
 {
+	if (backend != NULL && !backend->fSipBindAddress.IsEmpty()) {
+		sa_set_str(out, backend->fSipBindAddress.String(), 0);
+		return;
+	}
 	sa_set_str(out, "127.0.0.1", 0);
 	net_if_list(_GuessIfaddr, out);
 }
@@ -446,7 +458,7 @@ static int
 _BuildAudioSession(SipBackend::Call* call, bool includeVideo)
 {
 	struct sa laddr;
-	_MediaLaddr(&laddr);
+	_MediaLaddr(call->account->backend, &laddr);
 
 	if (call->sdp != NULL)
 		return 0;
@@ -516,17 +528,18 @@ _DecodeRemoteSdp(SipBackend::Call* call, struct mbuf* body, bool offer)
 		call->rtpAddrValid = true;
 	}
 
+	// srate/ch of -1 mean "any"; 0 would filter them out.
 	const struct sdp_format* fmt = sdp_media_format(call->audioMedia,
-		false, NULL, 0, NULL, 0, 0);
+		false, NULL, 0, NULL, -1, -1);
 	if (fmt == NULL)
 		fmt = sdp_media_format(call->audioMedia, false, NULL, 8,
-			NULL, 0, 0);
+			NULL, -1, -1);
 	if (fmt != NULL) {
 		call->audioPt = (uint16)fmt->pt;
 		call->audioNegotiated = true;
 	}
-	fmt = sdp_media_format(call->audioMedia, false, NULL, 101, NULL, 0,
-		0);
+	fmt = sdp_media_format(call->audioMedia, false, NULL, 101, NULL,
+		-1, -1);
 	if (fmt != NULL)
 		call->televPt = (uint16)fmt->pt;
 
@@ -560,7 +573,8 @@ _DecodeRemoteSdp(SipBackend::Call* call, struct mbuf* body, bool offer)
 
 	if (call->videoMedia != NULL)
 		call->videoNegotiated =
-			sdp_media_format(call->videoMedia, false, NULL, 96, NULL, 0, 0) != NULL;
+			sdp_media_format(call->videoMedia, false, NULL, 96,
+				NULL, -1, -1) != NULL;
 }
 
 
@@ -605,7 +619,15 @@ _OnRtpReceive(const struct sa* src, const struct rtp_header* hdr,
 	if (hdr->pt == call->televPt) {
 		int event = 0;
 		bool end = false;
-		if (telev_recv(call->telev, mb, &event, &end) == 0 && end) {
+		if (getenv("SIP_DEBUG") != NULL)
+			fprintf(stderr, "SIP: telev recv left=%zu pos=%zu "
+				"end=%zu\n", mbuf_get_left(mb), mb->pos,
+				mb->end);
+		int televErr = telev_recv(call->telev, mb, &event, &end);
+		if (getenv("SIP_DEBUG") != NULL)
+			fprintf(stderr, "SIP: telev pt=%u err=%d end=%d ev=%d\n",
+				hdr->pt, televErr, (int)end, event);
+		if (televErr == 0 && end) {
 			int digit = telev_code2digit(event);
 			if (digit >= 0 && call->dtmfLength
 					< (int)sizeof(call->lastDtmf) - 1) {
@@ -645,13 +667,21 @@ _AudioPump(void* arg)
 			|| !call->audioNegotiated || !call->rtpAddrValid)
 		return;
 
-	// One RFC 4733 packet per tick paces the event correctly.
+	// One RFC 4733 packet per tick paces the event correctly. The
+	// payload lands after RTP_HEADER_SIZE so rtp_send can prepend
+	// the header in place.
 	if (call->telev != NULL) {
 		bool marker = false;
-		struct mbuf* packet = mbuf_alloc(64);
-		if (packet != NULL
-				&& telev_poll(call->telev, &marker, packet) == 0) {
-			packet->pos = 0;
+		struct mbuf* packet = mbuf_alloc(kRtpPresz + 32);
+		if (packet != NULL) {
+			packet->pos = kRtpPresz;
+			packet->end = kRtpPresz;
+		}
+		int pollErr = telev_poll(call->telev, &marker, packet);
+		if (pollErr == 0 && packet != NULL) {
+			// rtp_send rewinds from pos, so point it back at
+			// the payload start.
+			packet->pos = kRtpPresz;
 			rtp_send(call->rtp, &call->rtpAddr, false, marker,
 				call->televPt, call->rtpTimestamp, packet);
 		}
@@ -666,15 +696,17 @@ _AudioPump(void* arg)
 	if (got == 0)
 		return;
 
-	struct mbuf* packet = mbuf_alloc(160);
+	struct mbuf* packet = mbuf_alloc(kRtpPresz + 160);
 	if (packet == NULL)
 		return;
+	packet->pos = kRtpPresz;
+	packet->end = kRtpPresz;
 	for (size_t i = 0; i < got; i++) {
 		uint8 byte = call->audioPt == 0
 			? _LinearToUlaw(pcm[i]) : _LinearToAlaw(pcm[i]);
 		mbuf_write_u8(packet, byte);
 	}
-	packet->pos = 0;
+	packet->pos = kRtpPresz;
 	rtp_send(call->rtp, &call->rtpAddr, false, false, call->audioPt,
 		call->rtpTimestamp, packet);
 	mem_deref(packet);
@@ -689,13 +721,27 @@ static int
 _OnSessionOffer(struct mbuf** descp, const struct sip_msg* msg, void* arg)
 {
 	SipBackend::Call* call = (SipBackend::Call*)arg;
-	(void)msg;
 
 	if (call->sdp == NULL)
 		return EINVAL;
+
+	// A re-INVITE (hold/resume) carries a new remote description;
+	// decode it before encoding our answer so direction bits and
+	// any changed media address take effect.
+	if (msg != NULL && mbuf_get_left(msg->mb) > 0) {
+		struct mbuf* clone = mbuf_alloc(mbuf_get_left(msg->mb));
+		if (clone != NULL) {
+			mbuf_write_mem(clone, mbuf_buf(msg->mb),
+				mbuf_get_left(msg->mb));
+			clone->pos = 0;
+			_DecodeRemoteSdp(call, clone, true);
+			mem_deref(clone);
+		}
+	}
+
 	sdp_media_set_ldir(call->audioMedia, call->localHold
 		? SDP_SENDONLY : SDP_SENDRECV);
-	return _EncodeSdp(call, descp, true);
+	return _EncodeSdp(call, descp, false);
 }
 
 
@@ -784,9 +830,6 @@ static void
 _OnSessionClosed(int err, const struct sip_msg* msg, void* arg)
 {
 	SipBackend::Call* call = (SipBackend::Call*)arg;
-	(void)err;
-	(void)msg;
-
 	call->state = kMMCallStateTerminated;
 
 	BMessage notification(SipBackend::NOTIFICATION_CALL_STATE_CHANGED);
@@ -1060,15 +1103,19 @@ _CreateAccountJob(void* arg)
 	SipBackend* backend = job->backend;
 	SipBackend::Account* account = job->account;
 
+	int err = 0;
 	if (backend->fSipStack == NULL) {
 		struct dnsc* dnsc = NULL;
-		dnsc_alloc(&dnsc, NULL, NULL, 0);
-		sip_alloc((struct sip**)&backend->fSipStack, dnsc, 0, 0, 0,
-			"VitruvianOS SipBackend", NULL, NULL);
+		dnsc_alloc(&dnsc, NULL, NULL, AF_INET);
+		// The hash tables behind these sizes want power-of-two
+		// bucket counts; zero would be EINVAL.
+		err = sip_alloc((struct sip**)&backend->fSipStack, dnsc, 32,
+			32, 32, "VitruvianOS SipBackend", NULL, NULL);
 
 		struct sa laddr;
-		sa_set_str(&laddr, "0.0.0.0", backend->fSipPort);
-		sip_transp_add((struct sip*)backend->fSipStack,
+		_MediaLaddr(backend, &laddr);
+		sa_set_port(&laddr, backend->fSipPort);
+		err = sip_transp_add((struct sip*)backend->fSipStack,
 			SIP_TRANSP_UDP, &laddr);
 
 		if (account->tls) {
@@ -1083,7 +1130,7 @@ _CreateAccountJob(void* arg)
 		}
 
 		sipsess_listen((struct sipsess_sock**)&backend->fSessionSock,
-			(struct sip*)backend->fSipStack, 7, &_OnIncomingInvite,
+			(struct sip*)backend->fSipStack, 8, &_OnIncomingInvite,
 			backend);
 
 		// MESSAGE requests ride a plain SIP listener next to the
@@ -1107,10 +1154,15 @@ _CreateAccountJob(void* arg)
 	char fromUri[256];
 	snprintf(fromUri, sizeof(fromUri), "%s", account->uri.String());
 
-	int err = sipreg_register((struct sipreg**)&account->reg, sip,
+	// sipreg wants a non-NULL instance id (cuser); the auth
+	// user is a stable choice.
+	err = sipreg_register((struct sipreg**)&account->reg, sip,
 		regUri.String(), fromUri, account->displayName.String(),
-		fromUri, 600, NULL, routev, routec, -1, &_OnAuthChallenge,
-		account, true, &_OnRegResponse, account, NULL, NULL);
+		fromUri, 600, account->authUser.String(), routev, routec,
+		-1, &_OnAuthChallenge, account, true, &_OnRegResponse,
+		account, NULL, NULL);
+	if (err != 0)
+		fprintf(stderr, "SipBackend: sipreg_register failed: %d\n", err);
 	job->result = err == 0 ? B_OK : B_ERROR;
 	job->complete = true;
 	job->done.notify_all();
@@ -1509,12 +1561,14 @@ SipBackend::SendVideoPayload(const char* callPath, const uint8* payload,
 
 	// RFC 7741 VP8 payload descriptor: the S bit marks a key frame
 	// start; the rest of the frame rides as one packet here.
-	struct mbuf* packet = mbuf_alloc(size + 2);
+	struct mbuf* packet = mbuf_alloc(kRtpPresz + size + 2);
 	if (packet == NULL)
 		return B_NO_MEMORY;
+	packet->pos = kRtpPresz;
+	packet->end = kRtpPresz;
 	mbuf_write_u8(packet, keyFrame ? 0x10 : 0x00);
 	mbuf_write_mem(packet, payload, size);
-	packet->pos = 0;
+	packet->pos = kRtpPresz;
 
 	struct sa addr;
 	sa_cpy(&addr, &call->rtpAddr);
@@ -1790,8 +1844,11 @@ SipBackend::HoldAsync(const char* modemPath,
 		for (std::map<BString, Call*>::iterator it = fCalls.begin();
 				it != fCalls.end(); it++) {
 			Call* call = it->second;
+			// Hold toggles: an Active call goes on hold, a Held
+			// call comes back.
 			if (call->account->path == modemPath
-					&& call->state == kMMCallStateActive) {
+					&& (call->state == kMMCallStateActive
+						|| call->state == kMMCallStateHeld)) {
 				activePath = call->path;
 				break;
 			}
@@ -2051,8 +2108,9 @@ SipBackend::_SendOffer(Call* call)
 
 	int err = sipsess_connect((struct sipsess**)&call->sess,
 		(struct sipsess_sock*)fSessionSock, call->peerUri.String(),
-		call->account->displayName.String(), fromUri.String(), NULL,
-		routev, routec, "application/sdp", offer, &_OnAuthChallenge,
+		call->account->displayName.String(), fromUri.String(),
+		call->account->authUser.String(), routev, routec,
+		"application/sdp", offer, &_OnAuthChallenge,
 		call->account, true, &_OnSessionOffer, &_OnSessionAnswer,
 		&_OnSessionProgress, &_OnSessionEstablished, NULL, NULL,
 		&_OnSessionClosed, call, "%s", "");
@@ -2212,8 +2270,9 @@ SipBackend::_IncomingCall(const void* sipMsg)
 	}
 
 	sipsess_accept((struct sipsess**)&call->sess,
-		(struct sipsess_sock*)fSessionSock, msg, 180, "Ringing", NULL,
-		NULL, NULL, NULL, NULL, false, &_OnSessionOffer,
+		(struct sipsess_sock*)fSessionSock, msg, 180, "Ringing",
+		account->authUser.String(), "application/sdp", NULL,
+		NULL, NULL, false, &_OnSessionOffer,
 		&_OnSessionAnswer, &_OnSessionEstablished, NULL, NULL,
 		&_OnSessionClosed, call, "%s", "");
 
@@ -2242,17 +2301,24 @@ SipBackend::_AnswerCall(Call* call)
 void
 SipBackend::_HangupCall(Call* call)
 {
-	// Dereferencing the session sends BYE (or CANCEL while ringing)
-	// and fires the close handler synchronously, which destroys the
-	// call; nothing may touch it afterwards.
+	// Dereferencing the session sends BYE (or CANCEL while ringing).
+	// The close handler may (or may not) fire synchronously and
+	// destroy the call, so check the live map before touching it.
+	BString path = call->path;
 	struct sipsess* sess = call->sess;
 	call->sess = NULL;
-	if (sess != NULL) {
+	if (sess != NULL)
 		mem_deref(sess);
-		return;
+
+	Call* live = NULL;
+	{
+		BAutolock lock(fLock);
+		std::map<BString, Call*>::iterator it = fCalls.find(path);
+		if (it != fCalls.end())
+			live = it->second;
 	}
-	if (call->state != kMMCallStateTerminated)
-		_OnSessionClosed(0, NULL, call);
+	if (live != NULL && live->state != kMMCallStateTerminated)
+		_OnSessionClosed(0, NULL, live);
 }
 
 

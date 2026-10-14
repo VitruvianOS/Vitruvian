@@ -50,11 +50,15 @@ public:
 									BString* accountPath = NULL);
 	status_t				RemoveAccount(const char* accountPath);
 
-	// Fixes the local SIP UDP/TLS port (0 = ephemeral); call
-	// before AddAccount. The host test uses it to give each of
-	// its two user agents a known port.
+	// Fixes the local SIP UDP/TLS port (0 = ephemeral) and the
+	// bind address; call before AddAccount. The host test uses
+	// them to give each of its two user agents a known loopback
+	// endpoint.
 	void					SetSipPort(uint16 port) { fSipPort = port; }
 	uint16					SipPort() { return fSipPort; }
+	void					SetSipBindAddress(const char* address)
+									{ fSipBindAddress = address != NULL
+										? address : ""; }
 
 	// Audio hooks: the backend pulls mic PCM with pull (returns
 	// the samples it wants encoded and sent) and pushes far-end
@@ -195,6 +199,7 @@ public:
 			void*			fMessageLsnr;
 			void*			fTlsConfig;
 			uint16			fSipPort;
+			BString			fSipBindAddress;
 			int32			fNextCallId;
 
 			SipAudioPullFunc	fAudioPull;

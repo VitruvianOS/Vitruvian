@@ -145,7 +145,7 @@ convert_encoding(const char* from, const char* to, const char* src,
 					// bytes with the next call of this method
 
 					// we just eat bad bytes, as part of robustness/best-effort
-					inputBuffer++;
+					(*inputBuffer)++;
 					inputLeft--;
 					break;
 

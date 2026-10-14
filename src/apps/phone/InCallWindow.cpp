@@ -5,6 +5,7 @@
 
 #include "InCallWindow.h"
 
+#include <Autolock.h>
 #include <Button.h>
 #include <GroupView.h>
 #include <Catalog.h>
@@ -23,6 +24,100 @@
 #include "DialerWindow.h"
 #include <telephony/Modem.h>
 #include <telephony/TelephonyRoster.h>
+
+
+// #pragma mark - CallVideoView
+
+
+CallVideoView::CallVideoView(const BRect& frame)
+	:
+	BView(frame, "video", B_FOLLOW_ALL, B_WILL_DRAW),
+	fBitmap(NULL)
+{
+	SetViewColor(0, 0, 0);
+}
+
+
+void
+CallVideoView::SetFrame(const uint8* const* data, const int* stride,
+	int width, int height)
+{
+	BAutolock lock(fLock);
+
+	if (fBitmap == NULL || fBitmap->Bounds().Width() + 1 != width
+			|| fBitmap->Bounds().Height() + 1 != height) {
+		delete fBitmap;
+		fBitmap = new BBitmap(BRect(0, 0, width - 1, height - 1),
+			B_RGB32);
+	}
+	if (fBitmap == NULL || fBitmap->InitCheck() != B_OK)
+		return;
+
+	// I420 to RGB32, nearest neighbor; fine for a self view.
+	uint8* bits = (uint8*)fBitmap->Bits();
+	int32 bpr = fBitmap->BytesPerRow();
+	const uint8* yPlane = data[0];
+	const uint8* uPlane = data[1];
+	const uint8* vPlane = data[2];
+	for (int row = 0; row < height; row++) {
+		uint8* out = bits + row * bpr;
+		for (int col = 0; col < width; col++) {
+			int y = yPlane[row * stride[0] + col];
+			int u = uPlane[(row / 2) * stride[1] + col / 2] - 128;
+			int v = vPlane[(row / 2) * stride[2] + col / 2] - 128;
+			int r = y + (int)(1.402 * v);
+			int g = y - (int)(0.344 * u) - (int)(0.714 * v);
+			int b = y + (int)(1.772 * u);
+			out[col * 4 + 0] = (uint8)(b < 0 ? 0 : b > 255 ? 255 : b);
+			out[col * 4 + 1] = (uint8)(g < 0 ? 0 : g > 255 ? 255 : g);
+			out[col * 4 + 2] = (uint8)(r < 0 ? 0 : r > 255 ? 255 : r);
+			out[col * 4 + 3] = 255;
+		}
+	}
+	// BView has no PostMessage of its own; route through the looper.
+	if (Looper() != NULL)
+		Looper()->PostMessage('cvFM', this);
+}
+
+
+void
+CallVideoView::MessageReceived(BMessage* message)
+{
+	if (message->what == 'cvFM') {
+		Invalidate();
+		return;
+	}
+	BView::MessageReceived(message);
+}
+
+
+void
+CallVideoView::Draw()
+{
+	BAutolock lock(fLock);
+	if (fBitmap == NULL) {
+		SetHighColor(0, 0, 0);
+		FillRect(Bounds());
+		return;
+	}
+	DrawBitmap(fBitmap, Bounds());
+}
+
+
+// #pragma mark - Frame hook
+
+
+static CallVideoView* sVideoView = NULL;
+
+
+static void
+_VideoFrameHook(void* cookie, const uint8* const* data, const int* stride,
+	int width, int height, bool local)
+{
+	CallVideoView* view = (CallVideoView*)cookie;
+	if (view != NULL)
+		view->SetFrame(data, stride, width, height);
+}
 
 
 static BMessage
@@ -106,10 +201,21 @@ InCallWindow::InCallWindow(const char* number)
 		new BMessage('phHU'));
 	hangUpButton->SetExplicitMinSize(BSize(B_SIZE_UNSET, 48));
 
+	fVideoView = new CallVideoView(BRect(0, 0, 160, 120));
+	fVideoView->SetExplicitSize(BSize(160, 120));
+	sVideoView = fVideoView;
+	BTelephonyRoster::Default()->SetVideoFrameHook(_VideoFrameHook,
+		fVideoView);
+
+	// SIP video calls bring their own camera pipeline; the roster
+	// answers B_UNSUPPORTED for modem lines and no-camera hosts.
+	BTelephonyRoster::Default()->StartVideo("/dev/video0");
+
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 		.SetInsets(B_USE_SMALL_INSETS)
 		.Add(fNumberLabel)
 		.Add(fStatusLabel)
+		.Add(fVideoView)
 		.Add(keypad)
 		.AddGrid()
 			.Add(fMuteButton, 0, 0)
@@ -124,6 +230,9 @@ InCallWindow::InCallWindow(const char* number)
 
 InCallWindow::~InCallWindow()
 {
+	BTelephonyRoster::Default()->SetVideoFrameHook(NULL, NULL);
+	BTelephonyRoster::Default()->StopVideo();
+	sVideoView = NULL;
 	CallAudioRouter::Default()->EndCall();
 }
 

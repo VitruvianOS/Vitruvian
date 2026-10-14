@@ -5,6 +5,7 @@ target_sources(be PRIVATE
 	libtelephony/Modem.cpp
 	libtelephony/TelephonyRoster.cpp
 	libtelephony/SipBackend.cpp
+	libtelephony/SipVideo.cpp
 )
 
 target_include_directories(be PRIVATE
@@ -14,10 +15,12 @@ target_include_directories(be PRIVATE
 )
 
 # gio/glib (the backend's D-Bus transport) is declared once in
-# src/kits/CMakeLists.txt. libre (the SIP stack) is only needed by
-# the telephony kit, so it is declared here.
+# src/kits/CMakeLists.txt. libre (the SIP stack) and libvpx (VP8 for
+# video calls) are only needed by the telephony kit.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBRE REQUIRED libre)
 target_include_directories(be PRIVATE ${LIBRE_INCLUDE_DIRS})
 target_link_libraries(be PRIVATE ${LIBRE_LIBRARIES})
 target_compile_options(be PRIVATE ${LIBRE_CFLAGS_OTHER})
+
+target_link_libraries(be PRIVATE vpx)

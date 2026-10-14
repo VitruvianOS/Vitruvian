@@ -10,9 +10,32 @@
 #include <Window.h>
 #include <String.h>
 
+#include <Bitmap.h>
+#include <Locker.h>
+#include <View.h>
+
 
 class BButton;
 class BStringView;
+
+
+// Self/far-end video surface for SIP video calls: the roster's frame
+// hook drops I420 planes here, converted to RGB32 for drawing.
+class CallVideoView : public BView {
+public:
+								CallVideoView(const BRect& frame);
+
+			void				SetFrame(const uint8* const* data,
+									const int* stride, int width,
+									int height);
+
+	virtual	void				Draw();
+	virtual	void				MessageReceived(BMessage* message);
+
+private:
+			BLocker				fLock;
+			BBitmap*			fBitmap;
+};
 
 
 // In-call UI: status, keypad for DTMF, mute/speaker/hold and hang up.
@@ -39,6 +62,7 @@ private:
 			BStringView*		fNumberLabel;
 			BButton*			fMuteButton;
 			BButton*			fSpeakerButton;
+			CallVideoView*		fVideoView;
 			bool				fMuted;
 			bool				fLoudspeaker;
 };

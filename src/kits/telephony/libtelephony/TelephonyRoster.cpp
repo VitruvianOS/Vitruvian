@@ -234,6 +234,37 @@ BTelephonyRoster::SetupSignalRate(const char* modemPath, uint32 rateSeconds,
 }
 
 
+status_t
+BTelephonyRoster::StartVideo(const char* devicePath)
+{
+	SipBackend* sip = SipBackend::Instance();
+	if (sip->VideoCallPath().IsEmpty())
+		return B_UNSUPPORTED;
+
+	sip->SetVideoCaptureDevice(devicePath);
+	SipBackend_StartVideoCapture(sip, devicePath);
+	return B_OK;
+}
+
+
+status_t
+BTelephonyRoster::StopVideo()
+{
+	SipBackend* sip = SipBackend::Instance();
+	SipBackend_StopVideoCapture(sip);
+	return B_OK;
+}
+
+
+status_t
+BTelephonyRoster::SetVideoFrameHook(VideoFrameHook hook, void* cookie)
+{
+	SipBackend* sip = SipBackend::Instance();
+	sip->SetVideoHooks(hook, hook, cookie);
+	return B_OK;
+}
+
+
 // #pragma mark - Watching
 
 

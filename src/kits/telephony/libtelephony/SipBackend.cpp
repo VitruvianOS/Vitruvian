@@ -379,6 +379,8 @@ static int _OnSessionAnswer(const struct sip_msg* msg, void* arg);
 static void _OnIncomingInvite(const struct sip_msg* msg, void* arg);
 static void _OnRtpReceive(const struct sa* src,
 	const struct rtp_header* hdr, struct mbuf* mb, void* arg);
+static void _OnVideoReceive(const struct sa* src,
+	const struct rtp_header* hdr, struct mbuf* mb, void* arg);
 
 
 // #pragma mark - Address helpers
@@ -511,6 +513,10 @@ _EncodeSdp(SipBackend::Call* call, struct mbuf** descp, bool offer)
 		const struct sa* local = rtp_local(call->rtp);
 		sdp_media_set_lport(call->audioMedia, sa_port(local));
 	}
+	if (call->videoMedia != NULL && call->vrtp != NULL) {
+		const struct sa* local = rtp_local(call->vrtp);
+		sdp_media_set_lport(call->videoMedia, sa_port(local));
+	}
 	return sdp_encode(descp, call->sdp, offer);
 }
 
@@ -593,6 +599,12 @@ _SetupRtp(SipBackend::Call* call)
 		&_OnRtpReceive, NULL, call);
 	telev_alloc(&call->telev, 20);
 
+	// Video rides the next port up when the account asked for it.
+	if (call->account->video) {
+		rtp_listen(&call->vrtp, IPPROTO_UDP, &any, 10000, 60000, false,
+			&_OnVideoReceive, NULL, call);
+	}
+
 	if (call->account->srtp && call->srtpActive) {
 		srtp_alloc(&call->srtpSession, SRTP_AES_CM_128_HMAC_SHA1_80,
 			call->srtpKey, 30, 0);
@@ -619,14 +631,7 @@ _OnRtpReceive(const struct sa* src, const struct rtp_header* hdr,
 	if (hdr->pt == call->televPt) {
 		int event = 0;
 		bool end = false;
-		if (getenv("SIP_DEBUG") != NULL)
-			fprintf(stderr, "SIP: telev recv left=%zu pos=%zu "
-				"end=%zu\n", mbuf_get_left(mb), mb->pos,
-				mb->end);
 		int televErr = telev_recv(call->telev, mb, &event, &end);
-		if (getenv("SIP_DEBUG") != NULL)
-			fprintf(stderr, "SIP: telev pt=%u err=%d end=%d ev=%d\n",
-				hdr->pt, televErr, (int)end, event);
 		if (televErr == 0 && end) {
 			int digit = telev_code2digit(event);
 			if (digit >= 0 && call->dtmfLength
@@ -651,6 +656,28 @@ _OnRtpReceive(const struct sa* src, const struct rtp_header* hdr,
 	if (count > 0)
 		call->backend->fAudioPush(call->backend->fAudioCookie, pcm,
 			count);
+}
+
+
+// Video RTP rides a second socket; received VP8 payloads go to the
+// decoder glue (SipVideo.cpp) through the payload handler hook.
+static void
+_OnVideoReceive(const struct sa* src, const struct rtp_header* hdr,
+	struct mbuf* mb, void* arg)
+{
+	SipBackend::Call* call = (SipBackend::Call*)arg;
+	(void)src;
+
+	if (call->backend->fVideoPayloadHandler == NULL)
+		return;
+
+	size_t size = mbuf_get_left(mb);
+	if (size == 0)
+		return;
+	const uint8* payload = mbuf_buf(mb);
+	bool keyFrame = size > 0 && (payload[0] & 0x10) != 0;
+	call->backend->fVideoPayloadHandler(
+		call->backend->fVideoPayloadCookie, payload, size, keyFrame);
 }
 
 
@@ -799,6 +826,12 @@ _OnSessionEstablished(const struct sip_msg* msg, void* arg)
 		SipBackend::NOTIFICATION_CALL_STATE_CHANGED, notification);
 
 	tmr_start(&call->audioTimer, 20, _AudioPump, call);
+
+	// Kick off the camera when this call negotiated video and the
+	// app pointed us at a capture device.
+	if (call->videoNegotiated && !call->backend->fVideoDevice.IsEmpty())
+		SipBackend_StartVideoCapture(call->backend,
+			call->backend->fVideoDevice.String());
 }
 
 
@@ -1586,6 +1619,20 @@ SipBackend::SetVideoPayloadHandler(void (*handler)(void* cookie,
 	fVideoPayloadHandler = handler;
 	fVideoPayloadCookie = cookie;
 	return B_OK;
+}
+
+
+BString
+SipBackend::VideoCallPath()
+{
+	BAutolock lock(fLock);
+	for (std::map<BString, Call*>::iterator it = fCalls.begin();
+			it != fCalls.end(); it++) {
+		Call* call = it->second;
+		if (call->state == kMMCallStateActive && call->videoNegotiated)
+			return call->path;
+	}
+	return BString("");
 }
 
 

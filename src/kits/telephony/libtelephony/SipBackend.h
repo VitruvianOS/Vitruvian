@@ -91,6 +91,10 @@ public:
 										const uint8* payload, size_t size,
 										bool keyFrame),
 									void* cookie);
+	// Path of the first active call with a negotiated video m-line,
+	// empty when there is none; the video capture thread uses it to
+	// route encoded frames.
+	BString					VideoCallPath();
 
 	// Queues a func onto the shared libre loop thread; the free
 	// job functions use it to marshal work off caller threads.
@@ -214,6 +218,17 @@ public:
 									bool keyFrame);
 			void*			fVideoPayloadCookie;
 };
+
+
+// Video capture glue (SipVideo.cpp): starts the V4L2/libvpx pipeline
+// that feeds SendVideoPayload, and injects received RTP payloads into
+// the decoder. Kept as free functions so vpx/v4l2 headers stay out
+// of the public surface.
+void SipBackend_StartVideoCapture(SipBackend* backend,
+	const char* device);
+void SipBackend_StopVideoCapture(SipBackend* backend);
+void SipBackend_InjectVideoPayload(SipBackend* backend,
+	const uint8* payload, size_t size, bool keyFrame);
 
 
 #endif // _TELEPHONY_SIP_BACKEND_H

@@ -39,16 +39,16 @@ DeviceTreeView::DeviceTreeView(Hardware::DeviceTab tab,
 	fList->SetTarget(this);
 	fList->SetSelectionMessage(new BMessage(kMsgListSelection));
 
+	rgb_color textColor = ui_color(B_LIST_ITEM_TEXT_COLOR);
+
 	fDetail = new BTextView("details", B_WILL_DRAW | B_PULSE_NEEDED);
 	fDetail->MakeEditable(false);
-	fDetail->SetFontAndColor(be_fixed_font, B_FONT_ALL,
-		&ui_color(B_LIST_ITEM_TEXT_COLOR));
+	fDetail->SetFontAndColor(be_fixed_font, B_FONT_ALL, &textColor);
 	fDetail->SetViewColor(ui_color(B_LIST_BACKGROUND_COLOR));
 
 	fAdvanced = new BTextView("advanced", B_WILL_DRAW | B_PULSE_NEEDED);
 	fAdvanced->MakeEditable(false);
-	fAdvanced->SetFontAndColor(be_fixed_font, B_FONT_ALL,
-		&ui_color(B_LIST_ITEM_TEXT_COLOR));
+	fAdvanced->SetFontAndColor(be_fixed_font, B_FONT_ALL, &textColor);
 	fAdvanced->SetViewColor(ui_color(B_LIST_BACKGROUND_COLOR));
 
 	fAdvancedCaption = new BStringView("advanced caption",
@@ -185,8 +185,13 @@ DeviceTreeView::_ItemRecord(BListItem* item) const
 void
 DeviceTreeView::_Rebuild()
 {
-	fList->MakeEmpty();
+	// Keep the selection stable across rescans.
 	fSelectedSyspath = std::string();
+	const Hardware::DeviceRecord* previous = SelectedRecord();
+	if (previous != NULL)
+		fSelectedSyspath = previous->syspath;
+
+	fList->MakeEmpty();
 
 	// Bucket the records of this tab by category, in enum order.
 	const int32 kCategoryCount = Hardware::kCategoryRemoteProc + 1;
@@ -230,6 +235,20 @@ DeviceTreeView::_Rebuild()
 		}
 
 		fList->Expand(categoryItem);
+	}
+
+	if (!fSelectedSyspath.empty()) {
+		int32 count = fList->FullListCountItems();
+		for (int32 i = 0; i < count; i++) {
+			DeviceItem* item = dynamic_cast<DeviceItem*>(
+				fList->FullListItemAt(i));
+			if (item != NULL
+				&& item->Record().syspath == fSelectedSyspath) {
+				fList->Select(fList->IndexOf(item));
+				fList->ScrollToSelection();
+				break;
+			}
+		}
 	}
 
 	if (deviceCount == 0)

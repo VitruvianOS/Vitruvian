@@ -86,6 +86,11 @@ install(PROGRAMS data/libexec/privilegedguy-helper
 install(FILES data/polkit-1/actions/org.vitruvian.privilegedguy.policy
   DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
 
+install(PROGRAMS data/libexec/vos-hardware-helper
+  DESTINATION /usr/libexec/)
+install(FILES data/polkit-1/actions/org.vitruvian.hardware.policy
+  DESTINATION /usr/share/polkit-1/actions/ COMPONENT data)
+
 install(PROGRAMS data/libexec/vos-apt-helper
   DESTINATION /usr/libexec/)
 install(FILES data/polkit-1/actions/org.vitruvian.packagemanager.policy

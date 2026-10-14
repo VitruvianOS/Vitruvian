@@ -1,0 +1,59 @@
+#!/bin/sh
+
+# Read-only helper for the Hardware preflet. Invoked only via pkexec
+# under org.vitruvian.hardware.read (auth_admin_keep). Takes no
+# arguments and reads a fixed allowlist of root-only nodes; it never
+# opens a path that comes from the caller. Prints key=value records.
+
+set -eu
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "vos-hardware-helper must run as root (invoke via pkexec)" >&2
+    exit 1
+fi
+
+DMI=/sys/class/dmi/id
+
+emit() {
+    _key="$1"
+    _file="$2"
+    if [ -r "$_file" ]; then
+        # first line only; strip control characters
+        _value=$(head -n 1 "$_file" | tr -d '\000-\037')
+        if [ -n "$_value" ]; then
+            printf '%s=%s\n' "$_key" "$_value"
+        fi
+    fi
+}
+
+emit dmi.product_serial "$DMI/product_serial"
+emit dmi.board_serial "$DMI/board_serial"
+emit dmi.chassis_serial "$DMI/chassis_serial"
+emit dmi.product_uuid "$DMI/product_uuid"
+emit dmi.product_name "$DMI/product_name"
+emit dmi.board_name "$DMI/board_name"
+emit dmi.sys_vendor "$DMI/sys_vendor"
+emit dmi.bios_vendor "$DMI/bios_vendor"
+emit dmi.bios_version "$DMI/bios_version"
+emit dmi.bios_date "$DMI/bios_date"
+emit dmi.ec_firmware_release "$DMI/ec_firmware_release"
+
+if [ -d /sys/firmware/efi ]; then
+    printf 'firmware.efi=yes\n'
+    emit firmware.efi_fw_platform_size /sys/firmware/efi/fw_platform_size
+else
+    printf 'firmware.efi=no\n'
+fi
+
+# First 256 bytes of each PCI device config space; enough for the
+# capability headers without dumping whole 4K spaces into a text file.
+for config in /sys/bus/pci/devices/*/config; do
+    [ -r "$config" ] || continue
+    _addr=$(basename "$(dirname "$config")")
+    _hex=$(od -An -tx1 -N256 "$config" | tr -d ' \n')
+    if [ -n "$_hex" ]; then
+        printf 'pci.config.%s=%s\n' "$_addr" "$_hex"
+    fi
+done
+
+exit 0

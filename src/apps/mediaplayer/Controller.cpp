@@ -210,6 +210,10 @@ Controller::_ProbeTracks(const entry_ref* ref, const BUrl* url)
 	}
 	if (fAudioTrackCount == 0 && count > 0)
 		fAudioTrackCount = 1;
+
+	// Probe only: a kept file leaves a second full pipeline running.
+	delete fProbeFile;
+	fProbeFile = NULL;
 }
 
 

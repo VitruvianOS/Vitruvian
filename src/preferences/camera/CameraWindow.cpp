@@ -154,18 +154,25 @@ CameraWindow::_BuildInterface()
 		.View());
 	fControlsBox->Hide();
 
-	// Building on the window installs and fills its layout.
-	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 10)
-		.SetInsets(10)
-		.AddGroup(B_VERTICAL, 5, 180)
+	// List and controls share a narrow sidebar; the preview takes the rest.
+	float sidebar = be_plain_font->StringWidth("M") * 18;
+	fDeviceScroll->SetExplicitMinSize(BSize(sidebar, B_SIZE_UNSET));
+	fDeviceScroll->SetExplicitMaxSize(BSize(sidebar, B_SIZE_UNLIMITED));
+	fControlsBox->SetExplicitMaxSize(BSize(sidebar, B_SIZE_UNSET));
+	fPreview->SetExplicitMinSize(BSize(320, 240));
+	fPreview->SetExplicitPreferredSize(BSize(640, 480));
+
+	BLayoutBuilder::Group<>(this, B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 0.0f)
 			.Add(new BStringView("title", B_TRANSLATE("Cameras")))
 			.Add(fDeviceScroll, 1.0f)
+			.Add(fControlsBox)
 		.End()
-		.AddGroup(B_VERTICAL, 8)
+		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1.0f)
 			.Add(fStatusLabel)
 			.Add(fPreview, 1.0f)
 			.Add(fEmptyView)
-			.Add(fControlsBox)
 		.End();
 }
 

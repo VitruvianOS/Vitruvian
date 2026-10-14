@@ -18,6 +18,8 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 
+#include <opengl/GlDeviceSelect.h>
+
 class BBitmap;
 
 
@@ -42,15 +44,25 @@ public:
 
 private:
 	status_t					_Init();
+	status_t					_TryInit();
+	status_t					_SelectDevice();
+	EGLDisplay					_BindDeviceDisplay();
 	status_t					_ChooseEglConfig();
 	status_t					_CreateContext();
 	bool						_TryCreateContext(int major, int minor);
 	void						_LogGlStrings();
+	void						_VerifyZink();
+	void						_PublishStatus();
 	void						_Cleanup();
 	void						_CreateFbo(int32 width, int32 height);
 	void						_DestroyFbo();
 
 private:
+	gl_device					fDevice;
+	const char*					fDeviceWhy;
+	int							fZinkMode;
+	const char*					fZinkWhy;
+
 	EGLDisplay					fDisplay;
 	EGLContext					fContext;
 	EGLConfig					fConfig;

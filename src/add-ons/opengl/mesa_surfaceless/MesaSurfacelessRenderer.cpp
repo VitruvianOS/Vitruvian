@@ -32,6 +32,9 @@ MesaSurfacelessRenderer::MesaSurfacelessRenderer(BGLView* view, ulong options,
 	BGLDispatcher* dispatcher)
 	:
 	BGLRenderer(view, options, dispatcher),
+	fDeviceWhy("no device"),
+	fZinkMode(kGlZinkNative),
+	fZinkWhy("native"),
 	fDisplay(EGL_NO_DISPLAY),
 	fContext(EGL_NO_CONTEXT),
 	fConfig(NULL),
@@ -49,6 +52,7 @@ MesaSurfacelessRenderer::MesaSurfacelessRenderer(BGLView* view, ulong options,
 	fFboReady(false),
 	fBitmap(NULL)
 {
+	memset(&fDevice, 0, sizeof(fDevice));
 	fDebug = getenv("VOS_GL_DEBUG") != NULL;
 
 	pthread_mutex_init(&fBitmapLock, NULL);
@@ -203,6 +207,7 @@ MesaSurfacelessRenderer::_LogGlStrings()
 {
 	const char* eglVendor = eglQueryString(fDisplay, EGL_VENDOR);
 	const char* eglVersion = eglQueryString(fDisplay, EGL_VERSION);
+	const char* glVendor = (const char*)glGetString(GL_VENDOR);
 	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
 	const char* glVersion = (const char*)glGetString(GL_VERSION);
 	const char* extensions = (const char*)glGetString(GL_EXTENSIONS);
@@ -212,8 +217,9 @@ MesaSurfacelessRenderer::_LogGlStrings()
 	printf("MesaSurfacelessRenderer: EGL %s vendor=%s\n",
 		eglVersion != NULL ? eglVersion : "?",
 		eglVendor != NULL ? eglVendor : "?");
-	printf("MesaSurfacelessRenderer: GL %s renderer=%s (%s%s)\n",
+	printf("MesaSurfacelessRenderer: GL %s vendor=%s renderer=%s (%s%s)\n",
 		glVersion != NULL ? glVersion : "?",
+		glVendor != NULL ? glVendor : "?",
 		glRenderer != NULL ? glRenderer : "?",
 		fIsGles ? "GLES" : "desktop GL",
 		hasCompat ? ", ARB_compatibility" : "");
@@ -229,13 +235,144 @@ MesaSurfacelessRenderer::_LogGlStrings()
 
 
 status_t
+MesaSurfacelessRenderer::_SelectDevice()
+{
+	gl_device devices[16];
+	int count = gl_enumerate_devices(devices, 16);
+	int policy = kGlPolicyAutomatic;
+	gl_load_policy(&policy);
+
+	const char* override = getenv("VOS_GL_DEVICE");
+	const char* why = NULL;
+	int pick = gl_select_device(devices, count, policy, override, &why);
+	if (pick < 0)
+		return B_ERROR;
+
+	fDevice = devices[pick];
+	fDeviceWhy = why;
+	printf("MesaSurfacelessRenderer: selected GPU %s (%s): %s\n",
+		fDevice.renderNode[0] != '\0' ? fDevice.renderNode
+			: fDevice.primaryNode,
+		fDevice.driver, why);
+
+	// Settle native versus zink before Mesa loads a driver; a quirk
+	// row may force zink for this GPU.
+	if (fZinkMode == kGlZinkNative) {
+		gl_zink_quirk quirks[GL_DEVICE_MAX_QUIRKS];
+		int quirkCount = gl_load_zink_quirk_table(quirks,
+			GL_DEVICE_MAX_QUIRKS);
+		gl_decide_zink(getenv("VOS_GL_ZINK"), quirks, quirkCount,
+			fDevice.vendorId, fDevice.deviceId, fDevice.driver,
+			false, &fZinkMode, &fZinkWhy);
+		if (fZinkMode != kGlZinkNative)
+			setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	}
+
+	return B_OK;
+}
+
+
+// Bind the EGL display to the selected GPU through
+// EGL_EXT_device_enumeration + EGL_EXT_platform_device. Returns
+// EGL_NO_DISPLAY when the extensions are missing or the device is not
+// among the enumerated ones; the caller falls back to surfaceless.
+EGLDisplay
+MesaSurfacelessRenderer::_BindDeviceDisplay()
+{
+	const char* extensions = eglQueryString(EGL_NO_DISPLAY,
+		EGL_EXTENSIONS);
+	if (extensions == NULL
+			|| strstr(extensions, "EGL_EXT_device_enumeration") == NULL
+			|| strstr(extensions, "EGL_EXT_platform_device") == NULL)
+		return EGL_NO_DISPLAY;
+
+	PFNEGLQUERYDEVICESEXTPROC queryDevices
+		= (PFNEGLQUERYDEVICESEXTPROC)eglGetProcAddress(
+			"eglQueryDevicesEXT");
+	PFNEGLQUERYDEVICESTRINGEXTPROC queryDeviceString
+		= (PFNEGLQUERYDEVICESTRINGEXTPROC)eglGetProcAddress(
+			"eglQueryDeviceStringEXT");
+	PFNEGLGETPLATFORMDISPLAYEXTPROC getPlatformDisplay
+		= (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress(
+			"eglGetPlatformDisplayEXT");
+	if (queryDevices == NULL || queryDeviceString == NULL
+			|| getPlatformDisplay == NULL)
+		return EGL_NO_DISPLAY;
+
+	EGLDeviceEXT eglDevices[16];
+	EGLint deviceCount = 0;
+	if (!queryDevices(16, eglDevices, &deviceCount) || deviceCount <= 0)
+		return EGL_NO_DISPLAY;
+
+	const char* want = fDevice.renderNode[0] != '\0'
+		? fDevice.renderNode : fDevice.primaryNode;
+	for (EGLint i = 0; i < deviceCount; i++) {
+		const char* file = queryDeviceString(eglDevices[i],
+			EGL_DRM_DEVICE_FILE_EXT);
+		if (file == NULL || strcmp(file, want) != 0)
+			continue;
+
+		EGLDisplay display = getPlatformDisplay(EGL_PLATFORM_DEVICE_EXT,
+			eglDevices[i], NULL);
+		if (display != EGL_NO_DISPLAY) {
+			printf("MesaSurfacelessRenderer: bound EGL to %s\n",
+				file);
+			return display;
+		}
+	}
+
+	return EGL_NO_DISPLAY;
+}
+
+
+status_t
 MesaSurfacelessRenderer::_Init()
 {
+	// VOS_GL_ZINK=1 forces zink before any EGL call; the quirk-table
+	// decision needs the device and runs in _TryInit once it is known.
+	const char* zinkEnv = getenv("VOS_GL_ZINK");
+	if (zinkEnv != NULL && strcmp(zinkEnv, "1") == 0) {
+		fZinkMode = kGlZinkEnv;
+		fZinkWhy = "env override";
+		setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	}
+
+	status_t status = _TryInit();
+	if (status == B_OK)
+		return B_OK;
+
+	// Native failed once: retry the same init with zink over Vulkan,
+	// unless VOS_GL_ZINK=0 vetoes the fallback or zink already ran.
+	if (fZinkMode != kGlZinkNative
+			|| (zinkEnv != NULL && strcmp(zinkEnv, "0") == 0))
+		return B_ERROR;
+
+	fprintf(stderr, "MesaSurfacelessRenderer: native path failed, "
+		"retrying with zink\n");
+	_Cleanup();
+	setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1);
+	fZinkMode = kGlZinkFallback;
+	fZinkWhy = "zink fallback";
+	return _TryInit();
+}
+
+
+status_t
+MesaSurfacelessRenderer::_TryInit()
+{
+	if (_SelectDevice() != B_OK)
+		return B_ERROR;
+
+	// Prefer binding the selected GPU explicitly; fall back to the
+	// platform surfaceless display when the EGL device extensions are
+	// missing or do not know the node.
+	fDisplay = _BindDeviceDisplay();
+
 	PFNEGLGETPLATFORMDISPLAYEXTPROC getPlatformDisplay =
 		(PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress(
 			"eglGetPlatformDisplayEXT");
 
-	if (getPlatformDisplay != NULL) {
+	if (fDisplay == EGL_NO_DISPLAY && getPlatformDisplay != NULL) {
 		fDisplay = getPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA,
 			EGL_DEFAULT_DISPLAY, NULL);
 	}
@@ -272,6 +409,8 @@ MesaSurfacelessRenderer::_Init()
 	}
 
 	_LogGlStrings();
+	_VerifyZink();
+	_PublishStatus();
 
 	_CreateFbo(fWidth, fHeight);
 
@@ -284,7 +423,41 @@ MesaSurfacelessRenderer::_Init()
 
 	fInitialized = true;
 	printf("MesaSurfacelessRenderer: ready %dx%d\n", fWidth, fHeight);
+	printf("MesaSurfacelessRenderer: driver path %s (%s) on %s (%s)\n",
+		fZinkMode == kGlZinkNative ? "native" : "zink", fZinkWhy,
+		fDevice.renderNode[0] != '\0' ? fDevice.renderNode
+			: fDevice.primaryNode,
+		fDeviceWhy);
 	return B_OK;
+}
+
+
+// Context must be current. Zink was chosen but the GL stack reported
+// something else: say so, and keep what we obtained either way.
+void
+MesaSurfacelessRenderer::_VerifyZink()
+{
+	if (fZinkMode == kGlZinkNative)
+		return;
+
+	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
+	if (glRenderer == NULL || strstr(glRenderer, "zink") == NULL) {
+		fprintf(stderr, "MesaSurfacelessRenderer: zink was requested "
+			"(%s) but GL_RENDERER is '%s'\n", fZinkWhy,
+			glRenderer != NULL ? glRenderer : "?");
+		syslog(LOG_ERR, "MesaSurfacelessRenderer: zink requested (%s), "
+			"got renderer '%s'", fZinkWhy,
+			glRenderer != NULL ? glRenderer : "?");
+	}
+}
+
+
+void
+MesaSurfacelessRenderer::_PublishStatus()
+{
+	const char* glRenderer = (const char*)glGetString(GL_RENDERER);
+	gl_publish_gl_status(&fDevice, glRenderer, fZinkMode, fZinkWhy,
+		fDeviceWhy);
 }
 
 

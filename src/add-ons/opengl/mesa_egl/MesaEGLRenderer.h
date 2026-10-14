@@ -15,6 +15,8 @@
 
 #include <gbm.h>
 
+#include <opengl/GlDeviceSelect.h>
+
 class BBitmap;
 struct gbm_device;
 struct gbm_surface;
@@ -41,13 +43,18 @@ public:
 
 private:
 	status_t					_Init();
+	status_t					_TryInit();
+	status_t					_SelectDevice();
 	status_t					_OpenDrmDevice();
+	bool						_TryOpenNode(const char* node);
 	bool						_ProbeGbmDevice();
 	status_t					_ChooseEglConfig();
 	status_t					_CreateContext();
 	bool						_CreateGbmSurface(int32 width, int32 height);
 	bool						_TryCreateContext(int major, int minor);
 	void						_LogGlStrings();
+	void						_VerifyZink();
+	void						_PublishStatus();
 	void						_Cleanup();
 	void						_RecreateSurface(int32 width, int32 height);
 
@@ -55,6 +62,10 @@ private:
 	int							fDrmFd;
 	bool						fOwnsDrmFd;
 	char						fDevicePath[128];
+	gl_device					fDevice;
+	const char*					fDeviceWhy;
+	int							fZinkMode;
+	const char*					fZinkWhy;
 	struct gbm_device*			fGbmDevice;
 	struct gbm_surface*			fGbmSurface;
 

@@ -56,10 +56,6 @@ private:
 	static void		_OnFinished(WebKitDownload*, gpointer);
 	static void		_OnFailed(WebKitDownload*, GError*, gpointer);
 
-	static std::string	_SanitizeFilename(const std::string& name);
-	static std::string	_UniqueDestination(const std::string& dir,
-							const std::string& filename);
-
 	mutable std::mutex					fMutex;
 			std::map<WebKitDownload*, DownloadEntry> fDownloads;
 			uint64_t					fNextId;

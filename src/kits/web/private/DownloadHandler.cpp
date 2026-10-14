@@ -5,6 +5,7 @@
 
 #include "download_handler.h"
 
+#include "download_sanitizer.h"
 #include "logging.h"
 
 #include <cstdlib>
@@ -48,48 +49,6 @@ DownloadHandler::ActiveDownloads() const
 }
 
 
-std::string
-DownloadHandler::_SanitizeFilename(const std::string& name)
-{
-	if (name.empty()) return "download";
-	if (name.find('/') != std::string::npos
-		|| name.find('\\') != std::string::npos
-		|| name.find("..") != std::string::npos
-		|| name[0] == '.')
-		return "download";
-
-	std::string safe;
-	safe.reserve(name.size());
-	for (unsigned char c : name) {
-		if (c < 0x20 || c == 0x7f) continue;
-		safe += (char)c;
-	}
-	return safe.empty() ? "download" : safe;
-}
-
-
-std::string
-DownloadHandler::_UniqueDestination(const std::string& dir,
-	const std::string& filename)
-{
-	std::string path = dir + "/" + filename;
-	if (!std::filesystem::exists(path)) return path;
-
-	std::string base = filename, ext;
-	auto dot = filename.rfind('.');
-	if (dot != std::string::npos) {
-		base = filename.substr(0, dot);
-		ext  = filename.substr(dot);
-	}
-	for (int i = 1; i < 1000; i++) {
-		std::string candidate =
-			dir + "/" + base + " (" + std::to_string(i) + ")" + ext;
-		if (!std::filesystem::exists(candidate)) return candidate;
-	}
-	return path;
-}
-
-
 void
 DownloadHandler::_OnDownloadStarted(WebKitNetworkSession*, WebKitDownload* dl,
 	gpointer data)
@@ -126,18 +85,14 @@ DownloadHandler::_OnDecideDestination(WebKitDownload* dl,
 	const char* suggestedFilename, gpointer data)
 {
 	auto* self = static_cast<DownloadHandler*>(data);
-	std::string filename = _SanitizeFilename(
+	std::string filename = SanitizeDownloadFilename(
+		suggestedFilename ? suggestedFilename : "download");
+	std::string dest = SafeDownloadDestination(self->fDownloadDir,
 		suggestedFilename ? suggestedFilename : "download");
 
-	std::string dest = _UniqueDestination(self->fDownloadDir, filename);
-
-	// Path traversal guard.
-	auto canon = std::filesystem::weakly_canonical(dest);
-	auto dir   = std::filesystem::weakly_canonical(self->fDownloadDir);
-	auto rel   = canon.lexically_relative(dir);
-	if (rel.empty() || rel.native()[0] == '.') {
+	if (dest != UniqueDownloadDestination(self->fDownloadDir, filename)) {
 		log_error("DownloadHandler: destination escaped dir, using fallback");
-		dest = self->fDownloadDir + "/download";
+		filename = "download";
 	}
 
 	webkit_download_set_destination(dl, dest.c_str());

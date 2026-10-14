@@ -14,6 +14,8 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin</allow_active>
     </defaults>
+    <!-- Always prompt, even while a remembered-admin grant is live. -->
+    <annotate key="org.vos.polkit.always-ask">true</annotate>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/vos-admin-helper</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>

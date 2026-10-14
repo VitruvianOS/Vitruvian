@@ -38,7 +38,6 @@ Application(test_printcups
 	LIBS be printcups ${CUPS_LIBRARIES})
 UsePrivateHeaders(test_printcups print interface support)
 
-
 #Application(test_node_monitor SOURCES test_node_monitor.cpp)
 #Application(test_node_monitor2 SOURCES test_node_monitor2.cpp)
 

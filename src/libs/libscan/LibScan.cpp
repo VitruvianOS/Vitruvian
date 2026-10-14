@@ -247,7 +247,9 @@ PickSourceWord(SANE_Handle handle, int32 source, char* out, size_t size)
 	const char* want = source == 2 ? "duplex" : source == 1 ? "adf"
 		: "flat";
 	for (int i = 0; words[i] != NULL; i++) {
-		if (strcasestr(words[i], want) != NULL) {
+		if (strcasestr(words[i], want) != NULL
+			|| (source == 1
+				&& strcasestr(words[i], "feeder") != NULL)) {
 			strncpy(out, words[i], size - 1);
 			out[size - 1] = '\0';
 			return true;
@@ -556,11 +558,27 @@ libscan_get_options(const char* name, BMessage* options)
 				}
 				if (quant <= 0)
 					quant = 1;
-				// Cap the list so a 1..12000 range stays usable.
+				// Offer common presets inside the range instead
+				// of every step.
+				static const int32 kPresets[] = {
+					50, 75, 100, 150, 200, 300, 400, 600,
+					800, 1200, 2400, 4800
+				};
 				int32 count = 0;
-				for (int32 dpi = min; dpi <= max && count < 32;
-						dpi += quant, count++) {
+				for (int32 i = 0; i < (int32)(sizeof(kPresets)
+						/ sizeof(kPresets[0])); i++) {
+					int32 dpi = kPresets[i];
+					if (dpi < min || dpi > max
+						|| (dpi - min) % quant != 0)
+						continue;
 					values.AddInt32("resolution-choices", dpi);
+					count++;
+				}
+				if (count == 0) {
+					values.AddInt32("resolution-choices", min);
+					if (max > min)
+						values.AddInt32("resolution-choices",
+							max);
 				}
 			}
 		} else if (TitleMatches(desc->title, "Mode")
@@ -570,7 +588,7 @@ libscan_get_options(const char* name, BMessage* options)
 			if (sane_control_option(session.handle, index,
 					SANE_ACTION_GET_VALUE, text, NULL)
 					== SANE_STATUS_GOOD) {
-				strncpy(opts.mode, text, sizeof(opts.mode) - 1);
+				strlcpy(opts.mode, text, sizeof(opts.mode));
 				if (strcasestr(text, "color") != NULL
 					|| strcasestr(text, "rgb") != NULL)
 					opts.format = LIBSCAN_RGB24;
@@ -594,8 +612,8 @@ libscan_get_options(const char* name, BMessage* options)
 			if (sane_control_option(session.handle, index,
 					SANE_ACTION_GET_VALUE, text, NULL)
 					== SANE_STATUS_GOOD) {
-				strncpy(opts.source_name, text,
-					sizeof(opts.source_name) - 1);
+				strlcpy(opts.source_name, text,
+					sizeof(opts.source_name));
 				if (strcasestr(text, "adf") != NULL
 					&& strcasestr(text, "duplex") != NULL)
 					opts.source = 2;

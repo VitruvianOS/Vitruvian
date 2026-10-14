@@ -34,7 +34,7 @@ get_base_packages() {
                 " firmware-sof-signed firmware-intel-sound firmware-cirrus intel-microcode amd64-microcode" \
                 " firmware-ti-connectivity firmware-intel-misc firmware-samsung firmware-siano firmware-zd1211 firmware-ath9k-htc firmware-carl9170" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
-                " grub-common grub2-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin"
+                " grub-common grub2-common grub-efi-amd64-bin grub-efi-ia32-bin grub-pc-bin hwdata"
             ;;
         arm64)
             printf '%s' \
@@ -53,7 +53,7 @@ get_base_packages() {
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
                 " firmware-brcm80211 firmware-misc-nonfree firmware-realtek firmware-atheros firmware-libertas bluez-firmware" \
-                " grub-common grub2-common grub-efi-arm64-bin"
+                " grub-common grub2-common grub-efi-arm64-bin hwdata"
             ;;
         arm32)
             printf '%s' \
@@ -70,7 +70,7 @@ get_base_packages() {
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
-                " grub-common"
+                " grub-common hwdata"
             ;;
         riscv64)
             printf '%s' \
@@ -87,7 +87,7 @@ get_base_packages() {
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " libsane1 libsane-common sane-utils sane-airscan ipp-usb" \
                 " libwpewebkit-2.0-1 libwpe-1.0-1 libwpebackend-fdo-1.0-1 libetpan20t64 libcurl3t64-gnutls" \
-                " grub-common grub2-common grub-efi-riscv64-bin"
+                " grub-common grub2-common grub-efi-riscv64-bin hwdata"
             ;;
         *)
             die "No package list for architecture: $_arch"

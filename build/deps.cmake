@@ -118,6 +118,11 @@ DeclareDependency(
 )
 
 DeclareDependency(
+	HWDATA
+	RUNTIMES	"hwdata | pci.ids"
+)
+
+DeclareDependency(
 	BLKID
 	LIBRARIES	"blkid"
 	PACKAGES	"libblkid-dev"

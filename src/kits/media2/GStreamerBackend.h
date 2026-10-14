@@ -37,6 +37,7 @@ public:
 
 	GstElement*					CreateDecodePipeline(const char* uri);
 
+	static bool					LinkEncodeSource(GstElement* pipeline);
 	GstElement*					CreateEncodePipeline(const char* path,
 									const BMediaFormat& outputFormat);
 

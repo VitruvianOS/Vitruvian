@@ -86,6 +86,8 @@ private:
 	GstElement*			fEncodePipeline;
 	GstElement*			fEncodeAppSrc;	// borrowed (owned by pipeline)
 	uint32				fFrameStride;
+	bool				fCapsWarned = false;
+	bool				fPushWarned = false;
 	uint64				fEncodeNextPts;	// ns
 };
 
@@ -184,8 +186,22 @@ BMediaRecorder::Impl::Stop()
 		gst_app_src_end_of_stream(GST_APP_SRC(fEncodeAppSrc));
 		GstBus* bus = gst_element_get_bus(fEncodePipeline);
 		if (bus != NULL) {
-			gst_bus_timed_pop_filtered(bus, 5 * GST_SECOND,
+			GstMessage* msg = gst_bus_timed_pop_filtered(bus, 5 * GST_SECOND,
 				(GstMessageType)(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+			if (msg == NULL) {
+				fprintf(stderr, "MediaRecorder: no EOS within 5s\n");
+			} else if (GST_MESSAGE_TYPE(msg) == GST_MESSAGE_ERROR) {
+				GError* e = NULL;
+				gst_message_parse_error(msg, &e, NULL);
+				fprintf(stderr, "MediaRecorder: encode error: %s\n",
+					e != NULL ? e->message : "?");
+				if (e != NULL)
+					g_error_free(e);
+				gst_message_unref(msg);
+			} else {
+				fprintf(stderr, "MediaRecorder: encode EOS\n");
+				gst_message_unref(msg);
+			}
 			gst_object_unref(bus);
 		}
 		gst_element_set_state(fEncodePipeline, GST_STATE_NULL);
@@ -286,6 +302,31 @@ BMediaRecorder::Impl::_ProcessHook(void* cookie, void* buffer, size_t size,
 	}
 
 	if (self->fEncodePipeline != NULL && self->fEncodeAppSrc != NULL
+			&& self->fFrameStride == 0) {
+		const media_raw_audio_format& raw = format.format.u.raw_audio;
+		GstCaps* inCaps
+			= BPrivate::media::GStreamerBackend::RawAudioToGstCaps(format);
+		if (inCaps != NULL) {
+			g_object_set(self->fEncodeAppSrc, "caps", inCaps, NULL);
+			gst_caps_unref(inCaps);
+			if (!BPrivate::media::GStreamerBackend::LinkEncodeSource(
+					self->fEncodePipeline)) {
+				fprintf(stderr, "MediaRecorder: cannot link encoder\n");
+				return;
+			}
+			self->fFrameStride = (raw.format
+				& media_raw_audio_format::B_AUDIO_SIZE_MASK) * raw.channel_count;
+		} else if (!self->fCapsWarned) {
+			self->fCapsWarned = true;
+			fprintf(stderr, "MediaRecorder: no GStreamer caps for input"
+				" (type %d fmt 0x%x ch %u rate %g order %u)\n",
+				(int)format.format.type, (unsigned)raw.format,
+				(unsigned)raw.channel_count, raw.frame_rate,
+				(unsigned)raw.byte_order);
+		}
+	}
+
+	if (self->fEncodePipeline != NULL && self->fEncodeAppSrc != NULL
 			&& self->fFrameStride > 0) {
 		// gst_buffer_new_wrapped takes ownership — copy first.
 		GstBuffer* gb = gst_buffer_new_allocate(NULL, size, NULL);
@@ -303,8 +344,14 @@ BMediaRecorder::Impl::_ProcessHook(void* cookie, void* buffer, size_t size,
 				GST_BUFFER_DURATION(gb) = durNs;
 				self->fEncodeNextPts += durNs;
 			}
-			gst_app_src_push_buffer(GST_APP_SRC(self->fEncodeAppSrc), gb);
+			GstFlowReturn r = gst_app_src_push_buffer(
+				GST_APP_SRC(self->fEncodeAppSrc), gb);
 				// push_buffer takes ownership on success
+			if (r != GST_FLOW_OK && !self->fPushWarned) {
+				self->fPushWarned = true;
+				fprintf(stderr, "MediaRecorder: push_buffer: %s\n",
+					gst_flow_get_name(r));
+			}
 		} else {
 			gst_buffer_unref(gb);
 		}

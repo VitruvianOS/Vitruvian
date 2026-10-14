@@ -330,6 +330,7 @@ public:
 				"is-live", FALSE,
 				NULL);
 			gst_caps_unref(inCaps);
+			GStreamerBackend::LinkEncodeSource(fPipeline);
 		}
 
 		BMediaTrack* track = new(std::nothrow) BMediaTrack();

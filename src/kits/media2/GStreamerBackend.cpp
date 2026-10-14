@@ -533,6 +533,22 @@ GStreamerBackend::_RestoreDecoderRanks()
 }
 
 
+// appsrc is linked to encodebin once its caps are known; without caps
+// encodebin finds no compatible stream profile and the link fails.
+bool
+GStreamerBackend::LinkEncodeSource(GstElement* pipeline)
+{
+	GstElement* src = gst_bin_get_by_name(GST_BIN(pipeline), "src");
+	GstElement* enc = gst_bin_get_by_name(GST_BIN(pipeline), "enc");
+	bool ok = src != NULL && enc != NULL && gst_element_link(src, enc);
+	if (src != NULL)
+		gst_object_unref(src);
+	if (enc != NULL)
+		gst_object_unref(enc);
+	return ok;
+}
+
+
 GstElement*
 GStreamerBackend::CreateEncodePipeline(const char* path,
 	const BMediaFormat& outputFormat)
@@ -553,7 +569,7 @@ GStreamerBackend::CreateEncodePipeline(const char* path,
 
 	GError* err = NULL;
 	GstElement* pipeline = gst_parse_launch(
-		"appsrc name=src ! encodebin name=enc ! filesink name=sink",
+		"appsrc name=src encodebin name=enc ! filesink name=sink",
 		&err);
 	if (err != NULL) {
 		g_error_free(err);

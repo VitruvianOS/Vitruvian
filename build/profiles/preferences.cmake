@@ -8,6 +8,7 @@ set(SYSTEM_PREFERENCES_TARGETS
 	DataTranslations
 	Deskbar_prefs
 	FileTypes
+	Hardware
 	Input
 	Joysticks
 	Keymap
@@ -35,6 +36,7 @@ set(SYSTEM_PREFERENCES
 	DataTranslations
 	Deskbar
 	FileTypes
+	Hardware
 	Input
 	Joysticks
 	Keymap

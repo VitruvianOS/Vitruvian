@@ -41,18 +41,30 @@ All rights reserved.
 #include <string.h>
 
 #include <AppFileInfo.h>
+#include <Alert.h>
+#include <Catalog.h>
 #include <Debug.h>
 #include <Directory.h>
+#include <Entry.h>
 #include <FilePanel.h>
 #include <FindDirectory.h>
 #include <List.h>
 #include <Mime.h>
 #include <NodeInfo.h>
+#include <Path.h>
+#include <Roster.h>
 #include <Screen.h>
+#include <String.h>
 #include <SymLink.h>
 #include <Window.h>
 
+#include <libroot/libroot_private.h>
+
 #include "BarMenuBar.h"
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "BarApp"
 
 
 const char* const kDeskbarMenuEntriesFileName = "menu_entries";
@@ -131,4 +143,49 @@ GetDeskbarDataDirectory(BPath& _path)
 		return error;
 
 	return _path.Append(kDeskbarDirectoryName);
+}
+
+
+void
+ShowLaunchAlert(const char* signature, status_t error)
+{
+	if (error == B_OK || error == B_ALREADY_RUNNING)
+		return;
+
+	// prefer the app's file name over its signature in the alert
+	const char* name = signature;
+	BPath path;
+	app_info info;
+	if (signature != NULL
+		&& be_roster->GetAppInfo(signature, &info) == B_OK) {
+		name = info.ref.name;
+		BEntry entry(&info.ref, true);
+		entry.GetPath(&path);
+	}
+
+	BString text;
+	if (error == B_MISSING_LIBRARY && path.Path() != NULL) {
+		char loaderError[256];
+		if (__loader_check_binary(path.Path(), loaderError,
+				sizeof(loaderError)) == B_MISSING_LIBRARY
+			&& loaderError[0] != '\0') {
+			text = B_TRANSLATE("Could not launch \"%name\" "
+				"(Missing library: %library).");
+			text.ReplaceFirst("%library", loaderError);
+		}
+	}
+
+	if (text.Length() == 0) {
+		text = B_TRANSLATE("Could not launch \"%name\" (%error).");
+		text.ReplaceFirst("%error", strerror(error));
+	}
+
+	if (name == NULL)
+		name = B_TRANSLATE("<unknown>");
+	text.ReplaceFirst("%name", name);
+
+	BAlert* alert = new BAlert("", text.String(), B_TRANSLATE("OK"), NULL,
+		NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+	alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+	alert->Go();
 }

@@ -29,7 +29,7 @@ public:
 	static int32		GetCPUCount();
 
 	static thread_id	LoadImage(int32 argc, const char** argv,
-							const char** envp);
+							const char** envp, int* _execStatusFd = NULL);
 
 	static void 		ReinitChildAtFork();
 };

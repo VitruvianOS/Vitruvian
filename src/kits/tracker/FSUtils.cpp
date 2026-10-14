@@ -3843,8 +3843,6 @@ LoaderErrorDetails(const entry_ref* app, BString &details)
 	if (result != B_OK)
 		return result;
 
-	char* argv[2] = { const_cast<char*>(path.Path()), 0};
-
 	port_id errorPort = create_port(1, "Tracker loader error");
 
 	// count environment variables
@@ -3853,6 +3851,8 @@ LoaderErrorDetails(const entry_ref* app, BString &details)
 		envCount++;
 
 	#ifndef __VOS__
+	char* argv[2] = { const_cast<char*>(path.Path()), 0};
+
 	char** flatArgs = NULL;
 	size_t flatArgsSize;
 	result = __flatten_process_args((const char**)argv, 1,
@@ -3868,9 +3868,17 @@ LoaderErrorDetails(const entry_ref* app, BString &details)
 	}
 
 	#else
-	UNIMPLEMENTED();
 	delete_port(errorPort);
-	return B_NOT_SUPPORTED;
+
+	// Re-run the loader's own check; its verdict names the library.
+	char loaderError[256];
+	result = __loader_check_binary(path.Path(), loaderError,
+		sizeof(loaderError));
+	if (result != B_MISSING_LIBRARY)
+		return result;
+
+	details = loaderError;
+	return B_OK;
 	#endif
 
 	ssize_t bufferSize;

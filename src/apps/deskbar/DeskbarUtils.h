@@ -52,5 +52,7 @@ void AddRefsToDeskbarMenu(const BMessage* m, entry_ref* subdirectory);
 status_t GetDeskbarSettingsDirectory(BPath& _path, bool create = false);
 status_t GetDeskbarDataDirectory(BPath& _path);
 
+void ShowLaunchAlert(const char* signature, status_t error);
+
 
 #endif	/* DB_UTILS_H */

@@ -23,6 +23,7 @@
 
 #include "KernelDebug.h"
 #include "syscalls.h"
+#include "exec_status.h"
 #include <syscall_process_info.h>
 
 #include "../kernel/nexus/nexus/nexus.h"
@@ -339,14 +340,30 @@ Team::ReinitChildAtFork()
 
 
 thread_id
-Team::LoadImage(int32 argc, const char** argv, const char** envp)
+Team::LoadImage(int32 argc, const char** argv, const char** envp,
+	int* _execStatusFd)
 {
 	if (argc < 1 || argv == NULL || argv[0] == NULL) {
 		TRACE("load_image: invalid arguments\n");
 		return B_BAD_VALUE;
 	}
 
+	if (_execStatusFd != NULL)
+		*_execStatusFd = -1;
+
 	TRACE("load_image: %s (argc=%d)\n", argv[0], argc);
+
+	// An unresolvable dependency is reported here, before the clone; the
+	// loader's list mode resolves libraries without running the app.
+	status_t loaderStatus = CheckDynamicLoader(argv[0], NULL, 0);
+	if (loaderStatus < B_OK) {
+		fprintf(stderr, "load_image: %s: missing library\n", argv[0]);
+		return loaderStatus;
+	}
+
+	int statusPipe[2] = { -1, -1 };
+	if (_execStatusFd != NULL && pipe2(statusPipe, O_CLOEXEC) != 0)
+		return -errno;
 
 	TRACE("LoadImage: about to clone(), gNexus=%d gNexusArea=%d gNexusNodeMonitor=%d\n",
 		gNexus, gNexusArea, gNexusNodeMonitor);
@@ -359,10 +376,14 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 	if (pid == -1) {
 		TRACE("load_image: clone failed: %s\n", strerror(errno));
 		fprintf(stderr, "load_image: clone failed: %s\n", strerror(errno));
+		CloseExecStatusPipe(statusPipe[0], statusPipe[1]);
 		return -errno;
 	}
 
 	if (pid == 0) {
+		if (statusPipe[0] >= 0)
+			close(statusPipe[0]);
+
 		TRACE("LoadImage CHILD: closing nexus fds gNexus=%d gNexusArea=%d gNexusNodeMonitor=%d\n",
 			gNexus, gNexusArea, gNexusNodeMonitor);
 
@@ -401,6 +422,16 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 		execvpe(argv[0], const_cast<char* const*>(argv),
 			envp ? const_cast<char* const*>(envp) : environ);
 
+		// The CLOEXEC write end closing on a successful exec is what tells
+		// the creator the image is up; a failure must carry its errno.
+		if (statusPipe[1] >= 0) {
+			// the creator may have given up on the pipe (suspended
+			// launch); the write must not kill us before the log line
+			signal(SIGPIPE, SIG_IGN);
+			status_t status = -errno;
+			write(statusPipe[1], &status, sizeof(status));
+		}
+
 		fprintf(stderr, "load_image child: exec failed for '%s': %s\n",
 			argv[0], strerror(errno));
 
@@ -408,12 +439,16 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 		_exit(127);
 	}
 
+	if (statusPipe[1] >= 0)
+		close(statusPipe[1]);
+
 	int nexus = BKernelPrivate::Team::GetNexusDescriptor();
 	// Creator-side registration: nexus pre-creates the child's team, so a
 	// resume_thread() that lands before the child opens /dev/nexus is kept.
 	thread_id id = nexus_io(nexus, NEXUS_THREAD_REGISTER, (void*)(intptr_t)pid);
 	if (id < 0) {
 		printf("Fork failed\n");
+		CloseExecStatusPipe(statusPipe[0], -1);
 		return B_BAD_THREAD_ID;
 	}
 
@@ -423,6 +458,9 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp)
 	if (gLoadedPids.size() < kMaxTrackedPids)
 		gLoadedPids.insert(pid);
 	pthread_mutex_unlock(&gLoadedPidsLock);
+
+	if (_execStatusFd != NULL)
+		*_execStatusFd = statusPipe[0];
 
 	TRACE("load_image: success\n");
 	return id;

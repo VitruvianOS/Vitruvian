@@ -1087,8 +1087,10 @@ TBarView::SendDragMessage(const char* signature, entry_ref* ref)
 		} else if (ref != NULL) {
 			FSLaunchItem((const entry_ref*)ref, (const BMessage*)fDragMessage,
 				true, true);
-		} else if (signature != NULL && *signature != '\0')
-			roster.Launch(signature, fDragMessage);
+		} else if (signature != NULL && *signature != '\0') {
+			err = roster.Launch(signature, fDragMessage);
+			ShowLaunchAlert(signature, err);
+		}
 	}
 
 	return err;

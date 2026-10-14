@@ -54,6 +54,7 @@ All rights reserved.
 #include "BarApp.h"
 #include "BarView.h"
 #include "BarWindow.h"
+#include "DeskbarUtils.h"
 #include "StatusView.h"
 #include "CalendarMenuWindow.h"
 #include "StatusView.h"
@@ -214,11 +215,15 @@ TTimeView::MessageReceived(BMessage* message)
 		case kChangeTime:
 		{
 			// launch the time prefs app
-			be_roster->Launch("application/x-vnd.Haiku-Time");
-			// tell Time preflet to switch to the clock tab
-			BMessenger messenger("application/x-vnd.Haiku-Time");
-			BMessage switchToClock('SlCk');
-			messenger.SendMessage(&switchToClock);
+			status_t error
+				= be_roster->Launch("application/x-vnd.Haiku-Time");
+			ShowLaunchAlert("Time preferences", error);
+			if (error == B_OK || error == B_ALREADY_RUNNING) {
+				// tell Time preflet to switch to the clock tab
+				BMessenger messenger("application/x-vnd.Haiku-Time");
+				BMessage switchToClock('SlCk');
+				messenger.SendMessage(&switchToClock);
+			}
 			break;
 		}
 

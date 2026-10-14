@@ -55,6 +55,7 @@ All rights reserved.
 #include "BarApp.h"
 #include "BarMenuBar.h"
 #include "BarView.h"
+#include "DeskbarUtils.h"
 #include "ExpandoMenuBar.h"
 #include "ResourceSet.h"
 #include "ShowHideMenuItem.h"
@@ -141,7 +142,8 @@ TTeamMenuItem::HandleMouseDown(BPoint where)
 	} else if ((modifiers & B_SHIFT_KEY) == 0
 		&& (buttons & B_TERTIARY_MOUSE_BUTTON) != 0) {
 		// launch new team
-		be_roster->Launch(Signature());
+		status_t error = be_roster->Launch(Signature());
+		ShowLaunchAlert(Signature(), error);
 		return true;
 	} else if ((modifiers & B_CONTROL_KEY) != 0) {
 		// control click - show all/hide all shortcut

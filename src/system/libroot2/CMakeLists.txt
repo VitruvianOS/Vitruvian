@@ -1,5 +1,6 @@
 target_sources(root PRIVATE
 	Team.cpp
+	exec_status.cpp
 
 	thread.cpp
 	port.cpp

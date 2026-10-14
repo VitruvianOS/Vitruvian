@@ -27,6 +27,8 @@
 #include "KernelDebug.h"
 #include "MutexLock.h"
 
+#include <libroot/libroot_private.h>
+
 
 #ifndef STT_GNU_IFUNC
 #define STT_GNU_IFUNC 10
@@ -1083,6 +1085,18 @@ thread_id
 load_image(int32 argc, const char** argv, const char** envp)
 {
 	return BKernelPrivate::Team::LoadImage(argc, argv, envp);
+}
+
+
+// Like load_image(), but hands back the exec status pipe's read end. A
+// successful exec closes it (CLOEXEC); the child reports a failed exec as a
+// negative status on it. Consume with __wait_exec_status() after resuming
+// the thread.
+thread_id
+__load_image_with_status(int32 argc, const char** argv, const char** envp,
+	int* execStatusFd)
+{
+	return BKernelPrivate::Team::LoadImage(argc, argv, envp, execStatusFd);
 }
 
 

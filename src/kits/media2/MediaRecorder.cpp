@@ -179,10 +179,11 @@ BMediaRecorder::Impl::Start()
 void
 BMediaRecorder::Impl::Stop()
 {
-	if (fNode == NULL || !fNode->IsStarted())
+	if (fNode == NULL)
 		return;
-	fNode->Stop();
-	if (fEncodePipeline != NULL) {
+	if (fNode->IsStarted())
+		fNode->Stop();
+	if (fEncodePipeline != NULL && fFrameStride > 0) {
 		gst_app_src_end_of_stream(GST_APP_SRC(fEncodeAppSrc));
 		GstBus* bus = gst_element_get_bus(fEncodePipeline);
 		if (bus != NULL) {
@@ -240,20 +241,10 @@ BMediaRecorder::Impl::SetOutputFile(const char* path,
 	}
 	gst_object_unref(fEncodeAppSrc);	// borrowed; bin owns
 
-	// Configure appsrc with our capture format (raw side of the encoder).
-	GstCaps* inCaps = GStreamerBackend::RawAudioToGstCaps(fFormat);
-	if (inCaps != NULL) {
-		g_object_set(fEncodeAppSrc,
-			"caps",     inCaps,
-			"format",   GST_FORMAT_TIME,
-			"is-live",  TRUE,
-			NULL);
-		gst_caps_unref(inCaps);
-	}
-
-	const media_raw_audio_format& raw = fFormat.format.u.raw_audio;
-	fFrameStride = (raw.format & media_raw_audio_format::B_AUDIO_SIZE_MASK)
-		* raw.channel_count;
+	// Caps come from the first real buffer; the format is not known yet.
+	g_object_set(fEncodeAppSrc, "format", GST_FORMAT_TIME, "is-live", TRUE,
+		NULL);
+	fFrameStride = 0;
 	fEncodeNextPts = 0;
 
 	if (gst_element_set_state(fEncodePipeline, GST_STATE_PLAYING)
@@ -309,20 +300,8 @@ BMediaRecorder::Impl::_ProcessHook(void* cookie, void* buffer, size_t size,
 		if (inCaps != NULL) {
 			g_object_set(self->fEncodeAppSrc, "caps", inCaps, NULL);
 			gst_caps_unref(inCaps);
-			if (!BPrivate::media::GStreamerBackend::LinkEncodeSource(
-					self->fEncodePipeline)) {
-				fprintf(stderr, "MediaRecorder: cannot link encoder\n");
-				return;
-			}
 			self->fFrameStride = (raw.format
 				& media_raw_audio_format::B_AUDIO_SIZE_MASK) * raw.channel_count;
-		} else if (!self->fCapsWarned) {
-			self->fCapsWarned = true;
-			fprintf(stderr, "MediaRecorder: no GStreamer caps for input"
-				" (type %d fmt 0x%x ch %u rate %g order %u)\n",
-				(int)format.format.type, (unsigned)raw.format,
-				(unsigned)raw.channel_count, raw.frame_rate,
-				(unsigned)raw.byte_order);
 		}
 	}
 

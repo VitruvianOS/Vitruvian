@@ -29,7 +29,9 @@ ScopeView::ScopeView(BRect rect, uint32 resizeFlags)
 	fThreadId(-1),
 	fBitmap(NULL),
 	fBitmapView(NULL),
+	fRenderSem(-1),
 	fIsRendering(false),
+	fQuitting(false),
 	fMediaTrack(NULL),
 	fMainTime(0),
 	fRightTime(1000000),
@@ -42,7 +44,8 @@ ScopeView::ScopeView(BRect rect, uint32 resizeFlags)
 
 ScopeView::~ScopeView()
 {
-	delete_sem(fRenderSem);
+	if (fRenderSem >= 0)
+		delete_sem(fRenderSem);
 }
 
 
@@ -87,6 +90,7 @@ ScopeView::Draw(BRect updateRect)
 void
 ScopeView::Run()
 {
+	fQuitting = false;
 	fRenderSem = create_sem(0, "scope rendering");
 	fThreadId = spawn_thread(&RenderLaunch, "Scope view", B_NORMAL_PRIORITY,
 		this);
@@ -98,9 +102,15 @@ ScopeView::Run()
 void
 ScopeView::Quit()
 {
+	fQuitting = true;
+	fIsRendering = false;
 	delete_sem(fRenderSem);
-	snooze(10000);
-	kill_thread(fThreadId);
+	fRenderSem = -1;
+	if (fThreadId >= 0) {
+		status_t result;
+		wait_for_thread(fThreadId, &result);
+		fThreadId = -1;
+	}
 }
 
 
@@ -174,7 +184,7 @@ ScopeView::ComputeRendering()
 void
 ScopeView::RenderLoop()
 {
-	while (acquire_sem(fRenderSem) == B_OK) {
+	while (acquire_sem(fRenderSem) == B_OK && !fQuitting) {
 		fIsRendering = true;
 
 		switch (fPlayFormat.u.raw_audio.format) {
@@ -206,10 +216,12 @@ ScopeView::RenderLoop()
 
 		fIsRendering = false;
 
-		if (Window()->LockWithTimeout(5000) == B_OK) {
+		BWindow* window = Window();
+		if (!fQuitting && window != NULL
+				&& window->LockWithTimeout(5000) == B_OK) {
 			Invalidate();
 			TRACE("invalidate done\n");
-			Window()->Unlock();
+			window->Unlock();
 		}
 	}
 }

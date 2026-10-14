@@ -43,6 +43,7 @@ private:
 	BView *fBitmapView;
 	sem_id fRenderSem;
 	bool fIsRendering;
+	volatile bool fQuitting;
 	BMediaTrack *fMediaTrack;
 	media_format fPlayFormat;
 	

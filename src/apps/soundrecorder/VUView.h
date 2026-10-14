@@ -34,7 +34,7 @@ private:
 	thread_id fThreadId;
 	BBitmap *fBitmap;
 	BView *fBitmapView;
-	bool fQuitting;
+	volatile bool fQuitting;
 	int32 fLevelCount;
 	int32 *fCurrentLevels;
 	int32 fChannels;

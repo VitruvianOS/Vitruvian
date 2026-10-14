@@ -88,8 +88,11 @@ void
 VUView::_Quit()
 {
 	fQuitting = true;
-	snooze(10000);
-	kill_thread(fThreadId);
+	if (fThreadId >= 0) {
+		status_t result;
+		wait_for_thread(fThreadId, &result);
+		fThreadId = -1;
+	}
 }
 
 
@@ -167,11 +170,13 @@ VUView::_RenderLoop()
 	
 		/* ask drawing */
 	
-		if (Window()->LockWithTimeout(5000) == B_OK) {
+		BWindow* window = Window();
+		if (!fQuitting && window != NULL
+				&& window->LockWithTimeout(5000) == B_OK) {
 			Invalidate();
-			Window()->Unlock();
-			snooze(50000);
+			window->Unlock();
 		}
+		snooze(50000);
 	}	
 }
 

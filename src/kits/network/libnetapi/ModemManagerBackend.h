@@ -25,11 +25,49 @@ static const char* const kMMFieldModemStateReason = "state_reason";
 static const char* const kMMFieldModemEquipmentId = "equipment_id";
 static const char* const kMMFieldModemSimPath = "sim_path";
 static const char* const kMMFieldModemOperatorName = "operator_name";
+static const char* const kMMFieldModemOperatorCode = "operator_code";
+static const char* const kMMFieldModemManufacturer = "manufacturer";
+static const char* const kMMFieldModemModel = "model";
 static const char* const kMMFieldModemSignalQuality = "signal_quality";
 static const char* const kMMFieldModemSignalBars = "signal_bars";
 static const char* const kMMFieldModemEnabled = "enabled";
 static const char* const kMMFieldModemCount = "modem_count";
 static const char* const kMMFieldMMAvailable = "mm_available";
+
+// 3GPP registration (Modem3gpp.RegistrationState plus the derived
+// access-technology class from Modem.AccessTechnologies).
+static const char* const kMMFieldModemRegistrationState
+	= "registration_state";
+static const char* const kMMFieldModemRegistrationName
+	= "registration_name";
+static const char* const kMMFieldModemIsRoaming = "is_roaming";
+static const char* const kMMFieldModemAccessTechMask = "access_tech_mask";
+static const char* const kMMFieldModemAccessType = "access_type";
+
+// Call objects (org.freedesktop.ModemManager1.Call).
+static const char* const kMMFieldCallPath = "call_path";
+static const char* const kMMFieldCallModemPath = "call_modem_path";
+static const char* const kMMFieldCallState = "call_state";
+static const char* const kMMFieldCallStateName = "call_state_name";
+static const char* const kMMFieldCallNumber = "call_number";
+static const char* const kMMFieldCallDirection = "call_direction";
+static const char* const kMMFieldCallDirectionName = "call_direction_name";
+static const char* const kMMFieldCallReason = "call_reason";
+static const char* const kMMFieldCallCount = "call_count";
+
+// SMS objects (org.freedesktop.ModemManager1.Sms).
+static const char* const kMMFieldSmsPath = "sms_path";
+static const char* const kMMFieldSmsModemPath = "sms_modem_path";
+static const char* const kMMFieldSmsNumber = "sms_number";
+static const char* const kMMFieldSmsText = "sms_text";
+static const char* const kMMFieldSmsState = "sms_state";
+static const char* const kMMFieldSmsStateName = "sms_state_name";
+static const char* const kMMFieldSmsTimestamp = "sms_timestamp";
+static const char* const kMMFieldSmsDeliveryState = "sms_delivery_state";
+static const char* const kMMFieldSmsPduType = "sms_pdu_type";
+static const char* const kMMFieldSmsReceived = "sms_received";
+static const char* const kMMFieldSmsPartCount = "sms_part_count";
+static const char* const kMMFieldSmsCount = "sms_count";
 
 // SIM lock state from the Modem UnlockRequired property (MMModemLock).
 static const char* const kMMFieldSimPinRequired = "sim_pin_required";
@@ -90,6 +128,45 @@ public:
 	status_t UnlockSimAsync(const char* modemPath, const char* pin,
 		const BMessenger& replyTo, uint32 replyWhat);
 
+	// PUK unlock via Sim.SendPuk(puk, newPin). Reply carries "status".
+	status_t UnlockSimPukAsync(const char* modemPath, const char* puk,
+		const char* newPin, const BMessenger& replyTo, uint32 replyWhat);
+
+	// Cached call objects of one modem: call_count plus call_0..call_N
+	// submessages with the kMMFieldCall* fields. Snapshot-only.
+	status_t GetCalls(const char* modemPath, BMessage* outCalls);
+
+	// Cached SMS objects of one modem: sms_count plus sms_0..sms_N
+	// submessages with the kMMFieldSms* fields. Snapshot-only.
+	status_t GetSmsMessages(const char* modemPath, BMessage* outMessages);
+
+	// Hold uses Voice.HoldAndAccept (MM 1.24 has no resume method).
+	// Hangup with a NULL callPath hangs up everything.
+	status_t DialAsync(const char* modemPath, const char* number,
+		const BMessenger& replyTo, uint32 replyWhat);
+	status_t AnswerAsync(const char* callPath,
+		const BMessenger& replyTo, uint32 replyWhat);
+	status_t HangupAsync(const char* modemPath, const char* callPath,
+		const BMessenger& replyTo, uint32 replyWhat);
+	status_t HoldAsync(const char* modemPath,
+		const BMessenger& replyTo, uint32 replyWhat);
+	status_t SendDtmfAsync(const char* callPath, const char* digits,
+		const BMessenger& replyTo, uint32 replyWhat);
+
+	// SMS. Create + Send on the Sms object; progress arrives as
+	// NOTIFICATION_SMS_STATE_CHANGED. Delete is Messaging.Delete.
+	// Replies carry "status", "reason" and, for SendMessage,
+	// kMMFieldSmsPath.
+	status_t SendMessageAsync(const char* modemPath, const char* number,
+		const char* text, const BMessenger& replyTo, uint32 replyWhat);
+	status_t DeleteSmsAsync(const char* modemPath, const char* smsPath,
+		const BMessenger& replyTo, uint32 replyWhat);
+
+	// Asks Modem.Signal to sample SignalQuality every rateSeconds so the
+	// PropertiesChanged stream carries live signal for the replicant.
+	status_t SetupSignalRateAsync(const char* modemPath,
+		uint32 rateSeconds, const BMessenger& replyTo, uint32 replyWhat);
+
 	// Service availability
 	bool IsServiceAvailable();
 
@@ -108,7 +185,14 @@ public:
 		NOTIFICATION_MODEM_STATE_CHANGED = 'MMSC',
 		NOTIFICATION_MODEM_SIGNAL_CHANGED = 'MMSI',
 		NOTIFICATION_SERVICE_APPEARED = 'MMSA',
-		NOTIFICATION_SERVICE_VANISHED = 'MMSV'
+		NOTIFICATION_SERVICE_VANISHED = 'MMSV',
+		NOTIFICATION_REGISTRATION_CHANGED = 'MRGC',
+		NOTIFICATION_CALL_ADDED = 'MCAD',
+		NOTIFICATION_CALL_REMOVED = 'MCRV',
+		NOTIFICATION_CALL_STATE_CHANGED = 'MCSC',
+		NOTIFICATION_SMS_ADDED = 'MSAD',
+		NOTIFICATION_SMS_REMOVED = 'MSRV',
+		NOTIFICATION_SMS_STATE_CHANGED = 'MSSC'
 	};
 
 	// Public only so the free dispatch-job functions in ModemManagerBackend.cpp
@@ -172,7 +256,11 @@ private:
 
 	// Snapshot cache: dispatch thread is the only writer (from signal
 	// callbacks); GetModems()/GetModemInfo() copy it under fLock.
+	// Call and SMS objects key by their own path and carry the owning
+	// modem path so GetCalls()/GetSmsMessages() can filter per modem.
 	std::map<BString, BMessage> fModemSnapshot;
+	std::map<BString, BMessage> fCallSnapshot;
+	std::map<BString, BMessage> fSmsSnapshot;
 	BMessage fModemListSnapshot;
 	bool fSnapshotPopulated;
 };

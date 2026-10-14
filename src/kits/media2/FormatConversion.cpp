@@ -239,7 +239,7 @@ ExtractFromSPAVideo(const spa_video_info_raw& spa, BMediaFormat* out)
 
 const spa_pod*
 BuildVideoEnumFormat(spa_pod_builder* builder,
-	const media_raw_video_format& preferred)
+	const media_raw_video_format& preferred, bool fixed)
 {
 	if (builder == NULL)
 		return NULL;
@@ -289,19 +289,27 @@ BuildVideoEnumFormat(spa_pod_builder* builder,
 		SPA_RECTANGLE(160, 120),
 		SPA_RECTANGLE(4096, 2160)
 	};
-	spa_pod_builder_add(builder,
-		SPA_FORMAT_VIDEO_size,
-		SPA_POD_CHOICE_RANGE_Rectangle(&sizes[0], &sizes[1], &sizes[2]),
-		0);
+	if (fixed)
+		spa_pod_builder_add(builder,
+			SPA_FORMAT_VIDEO_size, SPA_POD_Rectangle(&sizes[0]), 0);
+	else
+		spa_pod_builder_add(builder,
+			SPA_FORMAT_VIDEO_size,
+			SPA_POD_CHOICE_RANGE_Rectangle(&sizes[0], &sizes[1], &sizes[2]),
+			0);
 	const spa_fraction rates[3] = {
 		SPA_FRACTION(rateNum, 1),
 		SPA_FRACTION(1, 120),
 		SPA_FRACTION(120, 1)
 	};
-	spa_pod_builder_add(builder,
-		SPA_FORMAT_VIDEO_framerate,
-		SPA_POD_CHOICE_RANGE_Fraction(&rates[0], &rates[1], &rates[2]),
-		0);
+	if (fixed)
+		spa_pod_builder_add(builder,
+			SPA_FORMAT_VIDEO_framerate, SPA_POD_Fraction(&rates[0]), 0);
+	else
+		spa_pod_builder_add(builder,
+			SPA_FORMAT_VIDEO_framerate,
+			SPA_POD_CHOICE_RANGE_Fraction(&rates[0], &rates[1], &rates[2]),
+			0);
 	return (const spa_pod*)spa_pod_builder_pop(builder, &frame);
 }
 

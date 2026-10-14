@@ -41,7 +41,7 @@ void					ExtractFromSPAVideo(const spa_video_info_raw& spa,
 // EnumFormat pod for camera-style capture: YUY2, BGRx and I420 with size
 // and framerate ranges. preferred becomes the default choice value.
 const spa_pod*			BuildVideoEnumFormat(spa_pod_builder* builder,
-							const media_raw_video_format& preferred);
+							const media_raw_video_format& preferred, bool fixed = false);
 
 // Convert packed/planar webcam frames to BGRx (B_RGB32) for display.
 bool					ConvertYUY2ToRGB32(const uint8* src, uint32 width,

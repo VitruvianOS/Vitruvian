@@ -548,7 +548,9 @@ BCameraSource::_StartConnections(void* backendPtr)
 	BString streamName = Name();
 	streamName << "-capture";
 
-	pw_stream_events events = kCameraStreamEvents;
+	// Static: the stream keeps this pointer for its whole lifetime.
+	static pw_stream_events events;
+	events = kCameraStreamEvents;
 	events.process = &BCameraSource::_OnProcess;
 	events.param_changed = &BCameraSource::_OnParamChanged;
 

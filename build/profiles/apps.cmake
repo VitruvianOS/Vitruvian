@@ -102,6 +102,7 @@ set(DESKBAR_APPLETS
 	Clock
 	NetworkStatus
 	OverlayImage
+	PhoneSignal
 	PowerStatus
 	ProcessController
 	Pulse

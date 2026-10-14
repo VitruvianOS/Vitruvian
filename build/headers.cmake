@@ -29,6 +29,7 @@ set(
 	"headers/os/net"
 	"headers/os/storage"
 	"headers/os/support"
+	"headers/os/telephony"
 	"headers/os/posix/compat/sys"
 
 	"headers/os/add-ons/input_server"

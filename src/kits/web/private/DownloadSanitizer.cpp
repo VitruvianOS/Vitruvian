@@ -12,14 +12,8 @@
 std::string
 SanitizeDownloadFilename(const std::string& name)
 {
-	if (name.empty())
-		return "download";
-	if (name.find('/') != std::string::npos
-		|| name.find('\\') != std::string::npos
-		|| name.find("..") != std::string::npos
-		|| name[0] == '.')
-		return "download";
-
+	// Strip control characters before validating: stripping after the
+	// checks could re-introduce separators, e.g. "\x01/a" became "/a".
 	std::string safe;
 	safe.reserve(name.size());
 	for (unsigned char c : name) {
@@ -27,7 +21,13 @@ SanitizeDownloadFilename(const std::string& name)
 			continue;
 		safe += (char)c;
 	}
-	return safe.empty() ? "download" : safe;
+	if (safe.empty() || safe.find('/') != std::string::npos
+		|| safe.find('\\') != std::string::npos
+		|| safe.find("..") != std::string::npos
+		|| safe[0] == '.')
+		return "download";
+
+	return safe;
 }
 
 

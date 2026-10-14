@@ -5,7 +5,7 @@
 
 #include "download_handler.h"
 
-#include "download_sanitizer.h"
+#include "DownloadSanitizer.h"
 #include "logging.h"
 
 #include <cstdlib>

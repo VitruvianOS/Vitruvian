@@ -90,6 +90,7 @@ RecorderWindow::RecorderWindow()
 	fRecording = false;
 	fRecFrames = 0;
 	fLastReport = 0;
+	fBusy = false;
 	fTempCount = -1;
 	fButtonState = btnPaused;
 	fInputDeviceId = 0;
@@ -113,6 +114,7 @@ RecorderWindow::RecorderWindow()
 
 RecorderWindow::~RecorderWindow()
 {
+	_JoinWorker();
 	delete fRecorder;
 
 	delete fPlayer;
@@ -540,7 +542,13 @@ RecorderWindow::MessageReceived(BMessage * message)
 		StopPlaying();
 		break;
 	case STOP_RECORDING:
-		StopRecording();
+		_StopRecordingAsync();
+		break;
+	case RECORD_STARTED:
+		_RecordStarted(message);
+		break;
+	case RECORD_STOPPED:
+		_RecordStopped();
 		break;
 	case PLAY_PERIOD:
 		if (fPlayer) {
@@ -677,9 +685,11 @@ void
 RecorderWindow::Record(BMessage * message)
 {
 	//	User pressed Record button
+	if (fBusy)
+		return;
 	fRecording = true;
 	if (fButtonState != btnPaused) {
-		StopRecording();
+		_StopRecordingAsync();
 		return;			//	user is too fast on the mouse
 	}
 	SetButtonState(btnRecording);
@@ -745,28 +755,45 @@ RecorderWindow::Record(BMessage * message)
 		return;
 	}
 
-	// Hook up input
-	err = MakeRecordConnection(fInputDeviceId);
+	// Connect and start off the window thread; RECORD_STARTED reports back.
+	fBusy = true;
+	UpdateButtons();
+	_JoinWorker();
+	fWorker = std::thread([this]() {
+		status_t result = MakeRecordConnection(fInputDeviceId);
+		if (result >= B_OK)
+			result = fRecorder->Start();
+		BMessage reply(RECORD_STARTED);
+		reply.AddInt32("status", result);
+		PostMessage(&reply);
+	});
+}
+
+
+void
+RecorderWindow::_RecordStarted(BMessage* message)
+{
+	_JoinWorker();
+	fBusy = false;
+	status_t err = message->FindInt32("status");
 	if (err < B_OK) {
 		ErrorAlert(B_TRANSLATE("Cannot connect to the selected sound input"),
 			err);
-		if (fRecorder != NULL && fRecorder->IsRunning())
-			fRecorder->Stop(true);
+		BreakRecordConnection();
+		if (fRecorder != NULL) {
+			if (fRecorder->IsRunning())
+				fRecorder->Stop(true);
+			fRecorder->SetHooks(NULL, NULL, NULL);
+			fRecorder->ClearOutputFile();
+		}
 		fRecEntry.Remove();
 		fRecEntry.Unset();
+		fRecFile.Unset();
 		fRecording = false;
 		SetButtonState(btnPaused);
 		fRecordButton->SetStopped();
-		return;
 	}
-	err = fRecorder->Start();
-	if (err < B_OK) {
-		ErrorAlert(B_TRANSLATE("Cannot start the recorder"), err);
-		BreakRecordConnection();
-		fRecEntry.Remove();
-		fRecEntry.Unset();
-		return;
-	}
+	UpdateButtons();
 }
 
 
@@ -840,8 +867,11 @@ void
 RecorderWindow::Stop(BMessage * message)
 {
 	//	User pressed Stop button.
-	//	Stop recorder.
-	StopRecording();
+	if (fBusy)
+		return;
+	//	Stop recorder (finishes asynchronously).
+	if (fRecording)
+		_StopRecordingAsync();
 	//	Stop player.
 	StopPlaying();
 }
@@ -1041,6 +1071,8 @@ RecorderWindow::BreakRecordConnection()
 status_t
 RecorderWindow::StopRecording()
 {
+	_JoinWorker();
+	fBusy = false;
 	if (!fRecording)
 		return B_OK;
 	fRecording = false;
@@ -1055,6 +1087,51 @@ RecorderWindow::StopRecording()
 		fRecorder->ClearOutputFile();
 	}
 
+	_FinishRecording();
+	return B_OK;
+}
+
+
+void
+RecorderWindow::_StopRecordingAsync()
+{
+	if (!fRecording || fBusy)
+		return;
+	fRecording = false;
+	fBusy = true;
+	UpdateButtons();
+	_JoinWorker();
+	fWorker = std::thread([this]() {
+		BreakRecordConnection();
+		fRecorder->Stop(true);
+		fRecorder->SetHooks(NULL, NULL, NULL);
+		fRecorder->ClearOutputFile();
+		PostMessage(RECORD_STOPPED);
+	});
+}
+
+
+void
+RecorderWindow::_RecordStopped()
+{
+	_JoinWorker();
+	fBusy = false;
+	_FinishRecording();
+	UpdateButtons();
+}
+
+
+void
+RecorderWindow::_JoinWorker()
+{
+	if (fWorker.joinable())
+		fWorker.join();
+}
+
+
+void
+RecorderWindow::_FinishRecording()
+{
 	if (fRecSize > 0) {
 		AddSoundItem(fRecEntry, true);
 	} else
@@ -1068,8 +1145,6 @@ RecorderWindow::StopRecording()
 	fRecSize = 0;
 	SetButtonState(btnPaused);
 	fRecordButton->SetStopped();
-
-	return B_OK;
 }
 
 
@@ -1104,6 +1179,16 @@ void
 RecorderWindow::UpdateButtons()
 {
 	bool hasSelection = (fSoundList->CurrentSelection() >= 0);
+	if (fBusy) {
+		fRecordButton->SetEnabled(false);
+		fPlayButton->SetEnabled(false);
+		fRewindButton->SetEnabled(false);
+		fForwardButton->SetEnabled(false);
+		fStopButton->SetEnabled(false);
+		fSaveButton->SetEnabled(false);
+		fInputField->SetEnabled(false);
+		return;
+	}
 	fRecordButton->SetEnabled(fButtonState != btnPlaying);
 	fPlayButton->SetEnabled((fButtonState != btnRecording) && hasSelection);
 	fRewindButton->SetEnabled((fButtonState != btnRecording) && hasSelection);

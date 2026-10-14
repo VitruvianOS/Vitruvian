@@ -17,6 +17,8 @@
 #include <ObjectList.h>
 #include <Window.h>
 
+#include <thread>
+
 #include <media2/MediaDefs.h>
 #include <media2/MediaFile.h>
 #include <media2/MediaGraph.h>
@@ -67,6 +69,8 @@ public:
 			SOUND_SELECTED,
 			STOP_PLAYING,
 			STOP_RECORDING,
+			RECORD_STARTED,
+			RECORD_STOPPED,
 			RECORD_PERIOD,
 			PLAY_PERIOD,
 			UPDATE_TRACKSLIDER,
@@ -123,6 +127,8 @@ private:
 		BFile fRecFile;
 		off_t fRecSize;
 		int64 fRecFrames;
+		std::thread fWorker;
+		bool fBusy;
 		bigtime_t fLastReport;
 
 		media_client_id fInputDeviceId;
@@ -144,6 +150,11 @@ private:
 		status_t InitWindow();
 
 		void Record(BMessage * message);
+		void _RecordStarted(BMessage * message);
+		void _StopRecordingAsync();
+		void _RecordStopped();
+		void _FinishRecording();
+		void _JoinWorker();
 		void Play(BMessage * message);
 		void Stop(BMessage * message);
 		void Save(BMessage * message);

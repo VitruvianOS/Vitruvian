@@ -26,6 +26,7 @@
 #include <MenuItem.h>
 #include <Path.h>
 #include <PopUpMenu.h>
+#include <Roster.h>
 #include <String.h>
 #include <StringView.h>
 
@@ -180,6 +181,8 @@ PrintersWindow::PrintersWindow()
 	fScannerDefaultMenu = new BPopUpMenu("defaultScanner");
 	fScannerDefaultField = new BMenuField("defaultScannerField",
 		B_TRANSLATE("Default scanner:"), fScannerDefaultMenu);
+	fScanButton = new BButton("scan", B_TRANSLATE("Scan..."),
+		new BMessage(kMsgScanScanner));
 
 	fAddButton = new BButton("add", B_TRANSLATE("Add Printer..."),
 		new BMessage(kMsgAddPrinter));
@@ -239,7 +242,11 @@ PrintersWindow::PrintersWindow()
 		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
 			B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
 		.Add(fScannerList, 1)
-		.Add(fScannerDefaultField);
+		.AddGroup(B_HORIZONTAL)
+			.Add(fScannerDefaultField)
+			.AddGlue()
+			.Add(fScanButton)
+		.End();
 
 	BBox* jobBox = new BBox("jobBox");
 	jobBox->SetLabel(B_TRANSLATE("Jobs"));
@@ -451,6 +458,10 @@ PrintersWindow::MessageReceived(BMessage* message)
 			_UpdateButtons();
 			break;
 
+		case kMsgScanScanner:
+			_DoScan();
+			break;
+
 		case kMsgDefaultScanner:
 		{
 			const char* name = NULL;
@@ -653,6 +664,8 @@ PrintersWindow::_UpdateButtons()
 	fOptionsButton->SetEnabled(hasQueue && !fBusy);
 	fRefreshButton->SetEnabled(!fBusy);
 	fScannerDefaultField->SetEnabled(gScannerCount > 0 && !fBusy);
+	fScanButton->SetEnabled(fScannerList->CurrentSelection() >= 0
+		&& !fBusy);
 
 	JobRow* job = dynamic_cast<JobRow*>(fJobList->CurrentSelection());
 	bool hasJob = job != NULL;
@@ -733,6 +746,24 @@ PrintersWindow::_SaveDefaultScanner(const char* name)
 		settings.Flatten(&file);
 
 	_SetStatus(B_TRANSLATE("Default scanner saved"));
+}
+
+
+void
+PrintersWindow::_DoScan()
+{
+	int32 index = fScannerList->CurrentSelection();
+	if (index < 0 || index >= gScannerCount)
+		return;
+
+	// argv style launch so PrintOMatic opens on this device.
+	BMessage launch(B_ARGV_RECEIVED);
+	launch.AddString("argv", "PrintOMatic");
+	launch.AddString("argv", gScanners[index].name);
+	status_t status = be_roster->Launch(
+		"application/x-vnd.vos-PrintOMatic", &launch);
+	if (status != B_OK && status != B_ALREADY_RUNNING)
+		_SetStatus(B_TRANSLATE("Could not start PrintOMatic"));
 }
 
 

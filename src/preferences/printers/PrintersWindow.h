@@ -74,6 +74,7 @@ private:
 							const char* makeModel) const;
 	void				_SaveDefaultScanner(const char* name);
 	void				_LoadDefaultScanner();
+	void				_DoScan();
 
 	void				_LoadQueues();
 	void				_LoadJobs();
@@ -95,6 +96,7 @@ private:
 	BListView*			fScannerList;
 	BMenuField*			fScannerDefaultField;
 	BPopUpMenu*			fScannerDefaultMenu;
+	BButton*			fScanButton;
 	BStringView*		fStatusView;
 	BButton*			fAddButton;
 	BButton*			fRemoveButton;

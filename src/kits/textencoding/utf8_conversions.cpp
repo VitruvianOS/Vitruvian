@@ -69,6 +69,11 @@ discard_invalid_input_character(iconv_t* conversion, char** inputBuffer,
 		// should not reach here
 	};
 
+	// An all-EINVAL probe walk ends one past the buffer; clamping keeps
+	// the caller's inputLeft from underflowing to a huge size_t.
+	if (left > *inputLeft)
+		left = *inputLeft;
+
 	*inputBuffer += left;
 	*inputLeft -= left;
 }

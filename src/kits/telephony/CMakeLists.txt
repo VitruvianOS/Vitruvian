@@ -1,9 +1,10 @@
 # The telephony kit joins libbe like the network and bluetooth kits;
-# BTelephonyRoster/BModem ride on the ModemManager backend already
-# compiled into be from the network kit.
+# BTelephonyRoster/BModem ride on the ModemManager backend and the
+# SIP backend, both already compiled into be.
 target_sources(be PRIVATE
 	libtelephony/Modem.cpp
 	libtelephony/TelephonyRoster.cpp
+	libtelephony/SipBackend.cpp
 )
 
 target_include_directories(be PRIVATE
@@ -13,4 +14,10 @@ target_include_directories(be PRIVATE
 )
 
 # gio/glib (the backend's D-Bus transport) is declared once in
-# src/kits/CMakeLists.txt.
+# src/kits/CMakeLists.txt. libre (the SIP stack) is only needed by
+# the telephony kit, so it is declared here.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBRE REQUIRED libre)
+target_include_directories(be PRIVATE ${LIBRE_INCLUDE_DIRS})
+target_link_libraries(be PRIVATE ${LIBRE_LIBRARIES})
+target_compile_options(be PRIVATE ${LIBRE_CFLAGS_OTHER})

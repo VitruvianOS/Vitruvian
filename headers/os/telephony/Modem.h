@@ -15,7 +15,7 @@
 #include "TelephonyRoster.h"
 
 
-class ModemManagerBackend;
+class TelephonyBackend;
 
 
 // One cellular modem. Instances are owned by BTelephonyRoster; every
@@ -119,7 +119,7 @@ private:
 	friend class				BTelephonyRoster;
 
 								BModem(const char* path,
-									ModemManagerBackend* backend);
+									TelephonyBackend* backend);
 
 			const char*			_String(const char* key);
 			uint32				_UInt32(const char* key);
@@ -127,7 +127,7 @@ private:
 			void				_PickInterestingCall();
 
 			BString				fPath;
-			ModemManagerBackend* fBackend;
+			TelephonyBackend*	fBackend;
 			BMessage			fInfo;
 			BMessage			fCallInfo;
 			BString				fStringScratch;

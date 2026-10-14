@@ -17,5 +17,6 @@ Application(Network
 target_include_directories(Network PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CMAKE_SOURCE_DIR}/src/kits/network/libnetapi
+	${CMAKE_SOURCE_DIR}/src/kits/telephony/libtelephony
 )
 DoCatalogs("x-vnd.vos-Network" preferences/network)

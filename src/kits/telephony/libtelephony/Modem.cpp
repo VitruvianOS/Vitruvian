@@ -8,13 +8,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "ModemManagerBackend.h"
+#include "TelephonyBackend.h"
 
 
 // #pragma mark - Construction
 
 
-BModem::BModem(const char* path, ModemManagerBackend* backend)
+BModem::BModem(const char* path, TelephonyBackend* backend)
 	:
 	fPath(path != NULL ? path : ""),
 	fBackend(backend)

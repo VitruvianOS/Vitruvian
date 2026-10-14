@@ -17,7 +17,7 @@
 
 class BModem;
 class BMessage;
-class ModemManagerBackend;
+class TelephonyBackend;
 class _TelephonyNotifier;
 
 
@@ -159,7 +159,12 @@ private:
 									BMessage& message);
 			void			_Dispatch(BMessage& message, uint32 watchBit);
 
-			ModemManagerBackend*	fBackend;
+			// Every line (modem or SIP account) is owned by the
+			// backend that produced it; fBackendsByPath maps a
+			// line path to its backend so BModem operations
+			// reach the right implementation.
+			std::vector<TelephonyBackend*>	fBackends;
+			std::map<BString, TelephonyBackend*>	fBackendsByPath;
 
 			struct Watcher {
 				BMessenger	messenger;

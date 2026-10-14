@@ -13,14 +13,17 @@
 
 #include "Modem.h"
 #include "ModemManagerBackend.h"
+#include "SipBackend.h"
+#include "TelephonyBackend.h"
 
 
 // #pragma mark - Notifier
 
 
-// Hidden handler that receives the backend's notification stream on its
-// own looper and hands it to the roster; the roster itself is not a
-// BHandler so apps can hold the singleton without a loop of their own.
+// Hidden handler that receives the backend notification streams on
+// its own looper and hands them to the roster; the roster itself is
+// not a BHandler so apps can hold the singleton without a looper of
+// their own.
 class _TelephonyNotifier : public BHandler {
 public:
 								_TelephonyNotifier(BTelephonyRoster* roster)
@@ -56,10 +59,11 @@ BTelephonyRoster::Default()
 
 
 BTelephonyRoster::BTelephonyRoster()
-	:
-	fBackend(NULL)
 {
-	fBackend = ModemManagerBackend::Instance();
+	// Both line types ride the same seam: the ModemManager backend
+	// brings the cellular modems, the SIP backend the VoIP accounts.
+	fBackends.push_back(ModemManagerBackend::Instance());
+	fBackends.push_back(SipBackend::Instance());
 
 	_TelephonyNotifier* notifier = new _TelephonyNotifier(this);
 	BLooper* looper = new BLooper("telephony_notifier");
@@ -67,7 +71,8 @@ BTelephonyRoster::BTelephonyRoster()
 	looper->Run();
 
 	// One watcher for everyone; roster-side masks filter per target.
-	fBackend->StartWatching(BMessenger(notifier), (uint32)~0);
+	for (size_t i = 0; i < fBackends.size(); i++)
+		fBackends[i]->StartWatching(BMessenger(notifier), (uint32)~0);
 	_SyncModemList();
 }
 
@@ -83,52 +88,63 @@ BTelephonyRoster::~BTelephonyRoster()
 void
 BTelephonyRoster::_SyncModemList()
 {
-	BMessage modems;
-	fBackend->GetModems(&modems);
-
-	int32 count = 0;
-	modems.FindInt32(kMMFieldModemCount, &count);
-
 	BAutolock lock(fLock);
 
-	// Drop modems that vanished.
+	// Drop lines that vanished from every backend.
 	for (std::map<BString, BModem*>::iterator it = fModems.begin();
 			it != fModems.end();) {
+		TelephonyBackend* owner = fBackendsByPath[it->first];
+		BMessage modems;
 		bool found = false;
+		if (owner != NULL && owner->GetModems(&modems) == B_OK) {
+			int32 count = 0;
+			modems.FindInt32(kMMFieldModemCount, &count);
+			for (int32 i = 0; i < count; i++) {
+				char name[32];
+				snprintf(name, sizeof(name), "modem_%" B_PRId32, i);
+				BMessage info;
+				if (modems.FindMessage(name, &info) != B_OK)
+					continue;
+				BString path;
+				if (info.FindString(kMMFieldModemPath, &path) == B_OK
+						&& path == it->first) {
+					found = true;
+					break;
+				}
+			}
+		}
+		if (!found) {
+			delete it->second;
+			fBackendsByPath.erase(it->first);
+			fModems.erase(it++);
+		} else
+			it++;
+	}
+
+	// Adopt new lines from every backend.
+	for (size_t b = 0; b < fBackends.size(); b++) {
+		BMessage modems;
+		if (fBackends[b]->GetModems(&modems) != B_OK)
+			continue;
+
+		int32 count = 0;
+		modems.FindInt32(kMMFieldModemCount, &count);
 		for (int32 i = 0; i < count; i++) {
 			char name[32];
 			snprintf(name, sizeof(name), "modem_%" B_PRId32, i);
 			BMessage info;
 			if (modems.FindMessage(name, &info) != B_OK)
 				continue;
+
 			BString path;
-			if (info.FindString(kMMFieldModemPath, &path) == B_OK
-					&& path == it->first) {
-				found = true;
-				break;
-			}
+			if (info.FindString(kMMFieldModemPath, &path) != B_OK)
+				continue;
+			if (fModems.find(path) != fModems.end())
+				continue;
+
+			fModems[path] = new BModem(path.String(), fBackends[b]);
+			fBackendsByPath[path] = fBackends[b];
 		}
-		if (!found) {
-			delete it->second;
-			fModems.erase(it++);
-		} else
-			it++;
-	}
-
-	for (int32 i = 0; i < count; i++) {
-		char name[32];
-		snprintf(name, sizeof(name), "modem_%" B_PRId32, i);
-		BMessage info;
-		if (modems.FindMessage(name, &info) != B_OK)
-			continue;
-
-		BString path;
-		if (info.FindString(kMMFieldModemPath, &path) != B_OK)
-			continue;
-		if (fModems.find(path) != fModems.end())
-			continue;
-
-		fModems[path] = new BModem(path.String(), fBackend);
 	}
 }
 
@@ -136,6 +152,7 @@ BTelephonyRoster::_SyncModemList()
 int32
 BTelephonyRoster::CountModems()
 {
+	_SyncModemList();
 	BAutolock lock(fLock);
 	return (int32)fModems.size();
 }
@@ -144,6 +161,7 @@ BTelephonyRoster::CountModems()
 BModem*
 BTelephonyRoster::ModemAt(int32 index)
 {
+	_SyncModemList();
 	BAutolock lock(fLock);
 	if (index < 0 || index >= (int32)fModems.size())
 		return NULL;
@@ -161,6 +179,7 @@ BTelephonyRoster::ModemForPath(const char* path)
 	if (path == NULL)
 		return NULL;
 
+	_SyncModemList();
 	BAutolock lock(fLock);
 	std::map<BString, BModem*>::iterator it = fModems.find(path);
 	return it != fModems.end() ? it->second : NULL;
@@ -170,6 +189,7 @@ BTelephonyRoster::ModemForPath(const char* path)
 const char*
 BTelephonyRoster::DefaultModemPath()
 {
+	_SyncModemList();
 	BAutolock lock(fLock);
 	if (fModems.empty())
 		return NULL;
@@ -180,7 +200,11 @@ BTelephonyRoster::DefaultModemPath()
 bool
 BTelephonyRoster::IsServiceAvailable()
 {
-	return fBackend != NULL && fBackend->IsServiceAvailable();
+	for (size_t i = 0; i < fBackends.size(); i++) {
+		if (fBackends[i]->IsServiceAvailable())
+			return true;
+	}
+	return false;
 }
 
 
@@ -188,9 +212,18 @@ status_t
 BTelephonyRoster::SetupSignalRate(const char* modemPath, uint32 rateSeconds,
 	const BMessenger& replyTo, uint32 replyWhat)
 {
-	if (fBackend == NULL)
-		return B_NO_INIT;
-	return fBackend->SetupSignalRateAsync(modemPath, rateSeconds, replyTo,
+	// SIP lines have no sampled signal; they answer B_OK themselves.
+	TelephonyBackend* backend = NULL;
+	{
+		BAutolock lock(fLock);
+		std::map<BString, TelephonyBackend*>::iterator it
+			= fBackendsByPath.find(modemPath);
+		if (it != fBackendsByPath.end())
+			backend = it->second;
+	}
+	if (backend == NULL)
+		return B_ENTRY_NOT_FOUND;
+	return backend->SetupSignalRateAsync(modemPath, rateSeconds, replyTo,
 		replyWhat);
 }
 
@@ -254,54 +287,54 @@ BTelephonyRoster::_Dispatch(BMessage& message, uint32 watchBit)
 void
 BTelephonyRoster::_OnBackendNotification(uint32 type, BMessage& message)
 {
-	typedef ModemManagerBackend MM;
+	typedef TelephonyBackend TB;
 
-	if (type == MM::NOTIFICATION_MODEM_ADDED
-			|| type == MM::NOTIFICATION_MODEM_REMOVED)
+	if (type == TB::NOTIFICATION_MODEM_ADDED
+			|| type == TB::NOTIFICATION_MODEM_REMOVED)
 		_SyncModemList();
 
 	uint32 publicWhat = 0;
 	uint32 watchBit = kTelephonyWatchModems;
 
 	switch ((int32)type) {
-		case MM::NOTIFICATION_MODEM_ADDED:
+		case TB::NOTIFICATION_MODEM_ADDED:
 			publicWhat = kTelephonyMsgModemAdded;
 			break;
-		case MM::NOTIFICATION_MODEM_REMOVED:
+		case TB::NOTIFICATION_MODEM_REMOVED:
 			publicWhat = kTelephonyMsgModemRemoved;
 			break;
-		case MM::NOTIFICATION_MODEM_STATE_CHANGED:
-		case MM::NOTIFICATION_MODEM_SIGNAL_CHANGED:
-		case MM::NOTIFICATION_REGISTRATION_CHANGED:
+		case TB::NOTIFICATION_MODEM_STATE_CHANGED:
+		case TB::NOTIFICATION_MODEM_SIGNAL_CHANGED:
+		case TB::NOTIFICATION_REGISTRATION_CHANGED:
 			publicWhat = kTelephonyMsgModemChanged;
 			break;
-		case MM::NOTIFICATION_SERVICE_APPEARED:
+		case TB::NOTIFICATION_SERVICE_APPEARED:
 			publicWhat = kTelephonyMsgServiceAppeared;
 			break;
-		case MM::NOTIFICATION_SERVICE_VANISHED:
+		case TB::NOTIFICATION_SERVICE_VANISHED:
 			publicWhat = kTelephonyMsgServiceVanished;
 			break;
-		case MM::NOTIFICATION_CALL_ADDED:
+		case TB::NOTIFICATION_CALL_ADDED:
 			publicWhat = kTelephonyMsgCallAdded;
 			watchBit = kTelephonyWatchCalls;
 			break;
-		case MM::NOTIFICATION_CALL_REMOVED:
+		case TB::NOTIFICATION_CALL_REMOVED:
 			publicWhat = kTelephonyMsgCallRemoved;
 			watchBit = kTelephonyWatchCalls;
 			break;
-		case MM::NOTIFICATION_CALL_STATE_CHANGED:
+		case TB::NOTIFICATION_CALL_STATE_CHANGED:
 			publicWhat = kTelephonyMsgCallStateChanged;
 			watchBit = kTelephonyWatchCalls;
 			break;
-		case MM::NOTIFICATION_SMS_ADDED:
+		case TB::NOTIFICATION_SMS_ADDED:
 			publicWhat = kTelephonyMsgSmsAdded;
 			watchBit = kTelephonyWatchMessages;
 			break;
-		case MM::NOTIFICATION_SMS_REMOVED:
+		case TB::NOTIFICATION_SMS_REMOVED:
 			publicWhat = kTelephonyMsgSmsRemoved;
 			watchBit = kTelephonyWatchMessages;
 			break;
-		case MM::NOTIFICATION_SMS_STATE_CHANGED:
+		case TB::NOTIFICATION_SMS_STATE_CHANGED:
 			publicWhat = kTelephonyMsgSmsStateChanged;
 			watchBit = kTelephonyWatchMessages;
 			break;

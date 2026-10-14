@@ -664,6 +664,11 @@ BMidiStore::ReadChunk()
 	}
 
 	off_t trackEnd = fFile->Position() + (off_t)length;
+	off_t fileSize = 0;
+	// A truncated file must not spin forever: reads past EOF return no
+	// bytes and the loop below would never reach a declared trackEnd.
+	if (fFile->GetSize(&fileSize) == B_OK && trackEnd > fileSize)
+		trackEnd = fileSize;
 	uint32 savedTotal = fTotalTicks;
 	// Each track restarts its delta clock at 0; we convert to absolute
 	// time in one walk after merge via TicksToMilliseconds.

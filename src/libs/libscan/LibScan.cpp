@@ -178,6 +178,97 @@ SetOptionByTitle(SANE_Handle handle, const char* titleNeedle,
 }
 
 
+// Finds the first active string option whose title matches and that
+// carries a string list, so callers can pick a real device word.
+static const SANE_Option_Descriptor*
+FindStringListOption(SANE_Handle handle, const char* titleNeedle,
+	const SANE_String_Const** wordsOut)
+{
+	const SANE_Option_Descriptor* desc = NULL;
+	int index = 0;
+	for (desc = sane_get_option_descriptor(handle, index);
+			desc != NULL;
+			desc = sane_get_option_descriptor(handle, ++index)) {
+		if ((desc->cap & SANE_CAP_INACTIVE) != 0)
+			continue;
+		if (desc->type != SANE_TYPE_STRING)
+			continue;
+		if (desc->constraint_type != SANE_CONSTRAINT_STRING_LIST)
+			continue;
+		if (!TitleMatches(desc->title, titleNeedle))
+			continue;
+		*wordsOut = desc->constraint.string_list;
+		return desc;
+	}
+	return NULL;
+}
+
+
+// Picks the device word matching the requested colour format, falling
+// back to the first choice when nothing matches.
+static bool
+PickModeWord(SANE_Handle handle, int32 format, char* out, size_t size)
+{
+	const SANE_String_Const* words = NULL;
+	if (FindStringListOption(handle, "Mode", &words) == NULL
+		|| words == NULL)
+		return false;
+
+	const char* want = format == LIBSCAN_GRAY8 ? "gray"
+		: format == LIBSCAN_BINARY ? "lineart" : "color";
+	// String lists are NULL-terminated from index 0.
+	for (int i = 0; words[i] != NULL; i++) {
+		if (strcasestr(words[i], want) != NULL
+			|| (format == LIBSCAN_BINARY
+				&& strcasestr(words[i], "black") != NULL)
+			|| (format == LIBSCAN_BINARY
+				&& strcasestr(words[i], "binary") != NULL)) {
+			strncpy(out, words[i], size - 1);
+			out[size - 1] = '\0';
+			return true;
+		}
+	}
+	strncpy(out, words[1], size - 1);
+	out[size - 1] = '\0';
+	return true;
+}
+
+
+// Picks a Source word for the numeric source (0 flatbed, 1 ADF,
+// 2 ADF duplex).
+static bool
+PickSourceWord(SANE_Handle handle, int32 source, char* out, size_t size)
+{
+	const SANE_String_Const* words = NULL;
+	if (FindStringListOption(handle, "Source", &words) == NULL
+		|| words == NULL)
+		return false;
+
+	const char* want = source == 2 ? "duplex" : source == 1 ? "adf"
+		: "flat";
+	for (int i = 0; words[i] != NULL; i++) {
+		if (strcasestr(words[i], want) != NULL) {
+			strncpy(out, words[i], size - 1);
+			out[size - 1] = '\0';
+			return true;
+		}
+	}
+	// Duplex often is its own word without ADF in it; retry.
+	if (source == 2) {
+		for (int i = 0; words[i] != NULL; i++) {
+			if (strcasestr(words[i], "adf") != NULL) {
+				strncpy(out, words[i], size - 1);
+				out[size - 1] = '\0';
+				return true;
+			}
+		}
+	}
+	strncpy(out, words[1], size - 1);
+	out[size - 1] = '\0';
+	return true;
+}
+
+
 static status_t
 ApplyOptions(SANE_Handle handle, const libscan_options* opts)
 {
@@ -189,30 +280,24 @@ ApplyOptions(SANE_Handle handle, const libscan_options* opts)
 		// Some backends only expose a numeric resolution; ignore miss.
 	}
 
-	if (opts->format == LIBSCAN_RGB24)
-		SetOptionByTitle(handle, "Mode", "Color", 0, false);
-	else if (opts->format == LIBSCAN_BINARY)
-		SetOptionByTitle(handle, "Mode", "Binary", 0, false);
-	else if (opts->format == LIBSCAN_GRAY8)
-		SetOptionByTitle(handle, "Mode", "Gray", 0, false);
+	char word[64];
+	if (opts->mode[0] != '\0')
+		SetOptionByTitle(handle, "Mode", opts->mode, 0, false);
+	else if (PickModeWord(handle, opts->format, word, sizeof(word)))
+		SetOptionByTitle(handle, "Mode", word, 0, false);
 
-	if (opts->source == 1) {
-		SetOptionByTitle(handle, "Source", "ADF", 0, false);
-		SetOptionByTitle(handle, "source", "ADF", 0, false);
-	} else if (opts->source == 2) {
-		SetOptionByTitle(handle, "Source", "ADF Duplex", 0, false);
-		SetOptionByTitle(handle, "Source", "Duplex", 0, false);
-	} else {
-		SetOptionByTitle(handle, "Source", "Flatbed", 0, false);
-		SetOptionByTitle(handle, "source", "flatbed", 0, false);
-	}
+	if (opts->source_name[0] != '\0')
+		SetOptionByTitle(handle, "Source", opts->source_name, 0, false);
+	else if (PickSourceWord(handle, opts->source, word, sizeof(word)))
+		SetOptionByTitle(handle, "Source", word, 0, false);
 
-	// Area options are backend-specific; best effort.
+	// Area options are backend-specific; best effort. SANE geometry
+	// units are millimetres, so inches convert by 25.4.
 	if (opts->br_x > opts->tl_x) {
-		SANE_Fixed tlx = SANE_FIX((int)(opts->tl_x * 2540));
-		SANE_Fixed tly = SANE_FIX((int)(opts->tl_y * 2540));
-		SANE_Fixed brx = SANE_FIX((int)(opts->br_x * 2540));
-		SANE_Fixed bry = SANE_FIX((int)(opts->br_y * 2540));
+		SANE_Fixed tlx = SANE_FIX(opts->tl_x * 25.4f);
+		SANE_Fixed tly = SANE_FIX(opts->tl_y * 25.4f);
+		SANE_Fixed brx = SANE_FIX(opts->br_x * 25.4f);
+		SANE_Fixed bry = SANE_FIX(opts->br_y * 25.4f);
 		const char* areaTitles[] = {
 			"Top-left x", "Top-left y",
 			"Bottom-right x", "Bottom-right y", NULL
@@ -428,6 +513,9 @@ libscan_get_options(const char* name, BMessage* options)
 	libscan_options opts;
 	ResetOptionsDefaults(&opts);
 
+	// Choices are accumulated here; options is filled only at the end.
+	BMessage values;
+
 	const SANE_Option_Descriptor* desc = NULL;
 	for (int index = 0;
 			(desc = sane_get_option_descriptor(session.handle, index))
@@ -448,6 +536,33 @@ libscan_get_options(const char* name, BMessage* options)
 					value = (SANE_Int)(value >> 16);
 				opts.resolution_dpi = value;
 			}
+			if (desc->constraint_type == SANE_CONSTRAINT_WORD_LIST) {
+				const SANE_Word* words = desc->constraint.word_list;
+				for (int i = 1; i <= words[0]; i++) {
+					int32 dpi = words[i];
+					if (desc->type == SANE_TYPE_FIXED)
+						dpi = (int32)(words[i] >> 16);
+					values.AddInt32("resolution-choices", dpi);
+				}
+			} else if (desc->constraint_type == SANE_CONSTRAINT_RANGE) {
+				const SANE_Range* range = desc->constraint.range;
+				int32 min = range->min;
+				int32 max = range->max;
+				int32 quant = range->quant;
+				if (desc->type == SANE_TYPE_FIXED) {
+					min = (int32)(range->min >> 16);
+					max = (int32)(range->max >> 16);
+					quant = (int32)(range->quant >> 16);
+				}
+				if (quant <= 0)
+					quant = 1;
+				// Cap the list so a 1..12000 range stays usable.
+				int32 count = 0;
+				for (int32 dpi = min; dpi <= max && count < 32;
+						dpi += quant, count++) {
+					values.AddInt32("resolution-choices", dpi);
+				}
+			}
 		} else if (TitleMatches(desc->title, "Mode")
 			&& desc->type == SANE_TYPE_STRING) {
 			char text[64];
@@ -455,6 +570,7 @@ libscan_get_options(const char* name, BMessage* options)
 			if (sane_control_option(session.handle, index,
 					SANE_ACTION_GET_VALUE, text, NULL)
 					== SANE_STATUS_GOOD) {
+				strncpy(opts.mode, text, sizeof(opts.mode) - 1);
 				if (strcasestr(text, "color") != NULL
 					|| strcasestr(text, "rgb") != NULL)
 					opts.format = LIBSCAN_RGB24;
@@ -465,6 +581,12 @@ libscan_get_options(const char* name, BMessage* options)
 				else
 					opts.format = LIBSCAN_GRAY8;
 			}
+			if (desc->constraint_type == SANE_CONSTRAINT_STRING_LIST) {
+				const SANE_String_Const* words
+					= desc->constraint.string_list;
+				for (int i = 0; words[i] != NULL; i++)
+					values.AddString("mode-choices", words[i]);
+			}
 		} else if (TitleMatches(desc->title, "Source")
 			&& desc->type == SANE_TYPE_STRING) {
 			char text[64];
@@ -472,6 +594,8 @@ libscan_get_options(const char* name, BMessage* options)
 			if (sane_control_option(session.handle, index,
 					SANE_ACTION_GET_VALUE, text, NULL)
 					== SANE_STATUS_GOOD) {
+				strncpy(opts.source_name, text,
+					sizeof(opts.source_name) - 1);
 				if (strcasestr(text, "adf") != NULL
 					&& strcasestr(text, "duplex") != NULL)
 					opts.source = 2;
@@ -480,21 +604,36 @@ libscan_get_options(const char* name, BMessage* options)
 				else
 					opts.source = 0;
 			}
+			if (desc->constraint_type == SANE_CONSTRAINT_STRING_LIST) {
+				const SANE_String_Const* words
+					= desc->constraint.string_list;
+				for (int i = 0; words[i] != NULL; i++)
+					values.AddString("source-choices", words[i]);
+			}
+		} else if (TitleMatches(desc->title, "Bottom-right x")
+			&& desc->constraint_type == SANE_CONSTRAINT_RANGE
+			&& desc->type == SANE_TYPE_FIXED) {
+			// Page width from the area range, in inches.
+			float inches = (float)(desc->constraint.range->max >> 16)
+				/ 25.4f;
+			values.AddFloat("max-width", inches);
+		} else if (TitleMatches(desc->title, "Bottom-right y")
+			&& desc->constraint_type == SANE_CONSTRAINT_RANGE
+			&& desc->type == SANE_TYPE_FIXED) {
+			float inches = (float)(desc->constraint.range->max >> 16)
+				/ 25.4f;
+			values.AddFloat("max-height", inches);
 		}
 	}
 
 	CloseDevice(&session);
 
-	options->MakeEmpty();
+	*options = values;
 	options->AddInt32("resolution", opts.resolution_dpi);
-	const char* mode = "Color";
-	if (opts.format == LIBSCAN_GRAY8)
-		mode = "Gray";
-	else if (opts.format == LIBSCAN_BINARY)
-		mode = "Binary";
-	options->AddString("mode", mode);
+	options->AddString("mode", opts.mode[0] != '\0' ? opts.mode : "Color");
 	options->AddInt32("format", opts.format);
 	options->AddInt32("source", opts.source);
+	options->AddString("source-name", opts.source_name);
 	options->AddFloat("tl-x", opts.tl_x);
 	options->AddFloat("tl-y", opts.tl_y);
 	options->AddFloat("br-x", opts.br_x);
@@ -532,15 +671,29 @@ libscan_set_options(const char* name, const BMessage* options)
 
 	const char* mode = NULL;
 	if (options->FindString("mode", &mode) == B_OK && mode != NULL) {
+		strncpy(opts.mode, mode, sizeof(opts.mode) - 1);
 		if (strcasecmp(mode, "Gray") == 0
 			|| strcasecmp(mode, "Grey") == 0)
 			opts.format = LIBSCAN_GRAY8;
 		else if (strcasecmp(mode, "Binary") == 0
 			|| strcasecmp(mode, "B&W") == 0)
 			opts.format = LIBSCAN_BINARY;
+		else if (strcasestr(mode, "gray") != NULL
+			|| strcasestr(mode, "grey") != NULL)
+			opts.format = LIBSCAN_GRAY8;
+		else if (strcasestr(mode, "lineart") != NULL
+			|| strcasestr(mode, "black") != NULL
+			|| strcasestr(mode, "binary") != NULL)
+			opts.format = LIBSCAN_BINARY;
 		else
 			opts.format = LIBSCAN_RGB24;
 	}
+
+	const char* sourceName = NULL;
+	if (options->FindString("source-name", &sourceName) == B_OK
+		&& sourceName != NULL)
+		strncpy(opts.source_name, sourceName,
+			sizeof(opts.source_name) - 1);
 
 	status = ApplyOptions(session.handle, &opts);
 	CloseDevice(&session);
@@ -710,4 +863,74 @@ const char*
 libscan_last_error()
 {
 	return gLastError.String();
+}
+
+
+static ScanSession gBatchSession;
+static bool gBatchActive = false;
+
+
+status_t
+libscan_batch_start(const char* name, const libscan_options* opts)
+{
+	if (name == NULL || opts == NULL)
+		return B_BAD_VALUE;
+
+	BAutolock lock(&gLock);
+	if (gScanActive || gBatchActive)
+		return B_BUSY;
+
+	status_t status = OpenDevice(name, &gBatchSession);
+	if (status != B_OK)
+		return status;
+
+	ApplyOptions(gBatchSession.handle, opts);
+	gBatchActive = true;
+	return B_OK;
+}
+
+
+status_t
+libscan_batch_next_page(libscan_progress_cb cb, void* cookie,
+	BBitmap** out)
+{
+	if (out == NULL)
+		return B_BAD_VALUE;
+	*out = NULL;
+
+	BAutolock lock(&gLock);
+	if (!gBatchActive)
+		return B_NO_INIT;
+
+	SANE_Status start = sane_start(gBatchSession.handle);
+	if (start == SANE_STATUS_EOF || start == SANE_STATUS_JAMMED
+		|| start == SANE_STATUS_NO_DOCS) {
+		SetError("document feeder is empty");
+		return B_ERROR;
+	}
+	if (start != SANE_STATUS_GOOD) {
+		SetError(sane_strstatus(start));
+		return B_ERROR;
+	}
+
+	SANE_Parameters params;
+	memset(&params, 0, sizeof(params));
+	if (sane_get_parameters(gBatchSession.handle, &params)
+			!= SANE_STATUS_GOOD) {
+		SetError("could not read scan parameters");
+		return B_ERROR;
+	}
+
+	return ReadIntoBitmap(gBatchSession.handle, params, cb, cookie, out);
+}
+
+
+void
+libscan_batch_stop(void)
+{
+	BAutolock lock(&gLock);
+	if (!gBatchActive)
+		return;
+	CloseDevice(&gBatchSession);
+	gBatchActive = false;
 }

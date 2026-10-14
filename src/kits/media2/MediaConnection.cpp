@@ -181,7 +181,9 @@ BMediaConnection::_GetNodeId() const
 {
 	if (fStream != NULL) {
 		pw_stream* stream = (pw_stream*)fStream;
-		return pw_stream_get_node_id(stream);
+		uint32 id = pw_stream_get_node_id(stream);
+		// SPA_ID_INVALID until the stream is bound: not ready.
+		return id == SPA_ID_INVALID ? 0 : id;
 	}
 	if (fFilterPort != NULL) {
 		BMediaClient* client = Client();
@@ -197,7 +199,8 @@ BMediaConnection::_GetNodeId() const
 			return 0;
 
 		pw_filter* filterPtr = (pw_filter*)filter;
-		return pw_filter_get_node_id(filterPtr);
+		uint32 id = pw_filter_get_node_id(filterPtr);
+		return id == SPA_ID_INVALID ? 0 : id;
 	}
 	return 0;
 }

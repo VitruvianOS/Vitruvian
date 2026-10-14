@@ -1001,11 +1001,15 @@ RecorderWindow::MakeRecordConnection(media_client_id deviceId)
 	fConnectedSource = *source;
 	fHasConnectedSource = true;
 
-	err = graph->Connect(&fConnectedSource, fRecorder->Input());
+	err = graph->ConnectChannels(fConnectedSource.nodeId, fRecorder->Input());
 	if (err < B_OK) {
+		fprintf(stderr, "SoundRecorder: connect to node %u failed (0x%x)\n",
+			(unsigned)fConnectedSource.nodeId, (unsigned)err);
 		CONNECT((stderr, "RecorderWindow::MakeRecordConnection():"
 			" graph connect failed 0x%08" B_PRIx32 "\n", err));
 		fHasConnectedSource = false;
+		if (fRecorder->IsRunning())
+			fRecorder->Stop(true);
 		fRecorder->SetHooks(NULL, NULL, NULL);
 		return err;
 	}

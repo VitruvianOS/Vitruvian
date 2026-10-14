@@ -9,7 +9,11 @@
 #include <media2/CameraSource.h>
 #include <media2/MediaConnection.h>
 
+#include <algorithm>
+#include <ctype.h>
 #include <functional>
+#include <stdio.h>
+#include <string>
 #include <map>
 #include <mutex>
 #include <new>
@@ -1114,6 +1118,121 @@ BMediaGraph::Connect(BMediaOutput* output, const ForeignPort* foreignPort)
 status_t
 BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input)
 {
+	return Connect(foreignPort, input, 0);
+}
+
+
+// Channel order: FL/left first, FR/right second, anything else by name.
+static int
+_ChannelRank(const std::string& name)
+{
+	std::string n = name;
+	for (size_t i = 0; i < n.size(); i++)
+		n[i] = (char)tolower((unsigned char)n[i]);
+	size_t us = n.find_last_of('_');
+	std::string suffix = us == std::string::npos ? n : n.substr(us + 1);
+	if (suffix == "fl" || suffix == "left" || suffix == "mono")
+		return 0;
+	if (suffix == "fr" || suffix == "right")
+		return 1;
+	return 2;
+}
+
+
+static bool
+_ChannelLess(const PipeWireBackend::ForeignPortInfo& a,
+	const PipeWireBackend::ForeignPortInfo& b)
+{
+	int ra = _ChannelRank(a.name), rb = _ChannelRank(b.name);
+	if (ra != rb)
+		return ra < rb;
+	if (a.name != b.name)
+		return a.name < b.name;
+	return a.id < b.id;
+}
+
+
+status_t
+BMediaGraph::ConnectChannels(uint32 foreignNodeId, BMediaInput* input)
+{
+	if (input == NULL)
+		return B_BAD_VALUE;
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	// Wait for the stream to be bound to a node (2 s deadline).
+	const bigtime_t deadline = system_time() + 2000000;
+	uint32 inNodeId = input->_GetNodeId();
+	while (inNodeId == 0 && system_time() < deadline) {
+		backend->Lock();
+		backend->RoundtripLocked(500000);
+		backend->Unlock();
+		inNodeId = input->_GetNodeId();
+		if (inNodeId == 0)
+			snooze(20000);
+	}
+	if (inNodeId == 0) {
+		fprintf(stderr, "ConnectChannels: input stream has no node id\n");
+		return B_TIMED_OUT;
+	}
+
+	// Blocks (bounded) until the input ports are registered.
+	std::vector<uint32> inIds;
+	status_t err = backend->ResolveNodePorts(inNodeId, PW_DIRECTION_INPUT,
+		inIds, std::max<bigtime_t>(deadline - system_time(), 200000));
+	if (err != B_OK) {
+		fprintf(stderr, "ConnectChannels: node %u has no input ports (0x%x)\n",
+			(unsigned)inNodeId, (unsigned)err);
+		return err;
+	}
+
+	std::vector<PipeWireBackend::ForeignPortInfo> outs, ins;
+	std::vector<PipeWireBackend::ForeignPortInfo> all
+		= backend->ForeignPorts(foreignNodeId);
+	for (size_t i = 0; i < all.size(); i++)
+		if (all[i].direction == "out")
+			outs.push_back(all[i]);
+	all = backend->ForeignPorts(inNodeId);
+	for (size_t i = 0; i < all.size(); i++)
+		if (all[i].direction == "in")
+			ins.push_back(all[i]);
+	std::sort(outs.begin(), outs.end(), _ChannelLess);
+	std::sort(ins.begin(), ins.end(), _ChannelLess);
+	fprintf(stderr, "ConnectChannels: src node %u (%zu out), dst node %u"
+		" (%zu in)\n", (unsigned)foreignNodeId, outs.size(),
+		(unsigned)inNodeId, ins.size());
+	if (outs.empty() || ins.empty())
+		return B_ENTRY_NOT_FOUND;
+
+	// Mono source feeds every input; otherwise pair by position.
+	size_t count = outs.size() == 1 ? ins.size()
+		: std::min(outs.size(), ins.size());
+	int linked = 0;
+	status_t last = B_ERROR;
+	for (size_t i = 0; i < count; i++) {
+		const PipeWireBackend::ForeignPortInfo& o
+			= outs.size() == 1 ? outs[0] : outs[i];
+		ForeignPort fp;
+		fp.id = o.id;
+		fp.nodeId = o.nodeId;
+		fp.name = o.name.c_str();
+		fp.direction = "out";
+		last = Connect(&fp, input, ins[i].id);
+		if (last == B_OK)
+			linked++;
+		else
+			fprintf(stderr, "ConnectChannels: link %u -> %u failed (0x%x)\n",
+				(unsigned)o.id, (unsigned)ins[i].id, (unsigned)last);
+	}
+	return linked > 0 ? B_OK : last;
+}
+
+
+status_t
+BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input,
+	uint32 inPortId)
+{
 	if (foreignPort == NULL || input == NULL)
 		return B_BAD_VALUE;
 
@@ -1125,10 +1244,14 @@ BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input)
 		return B_DEVICE_NOT_FOUND;
 
 	uint32 inNodeId = input->_GetNodeId();
-	uint32 inPortId = input->_GetPortId();
+	if (inPortId == 0)
+		inPortId = input->_GetPortId();
 
-	if (inNodeId == 0 || inPortId == 0)
+	if (inNodeId == 0 || inPortId == 0) {
+		fprintf(stderr, "Connect: input not ready (node %u, port %u)\n",
+			(unsigned)inNodeId, (unsigned)inPortId);
 		return B_ERROR;
+	}
 
 	if (!_CheckAndReserveEdge(foreignPort->nodeId, inNodeId))
 		return B_NOT_SUPPORTED;
@@ -1185,8 +1308,12 @@ BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input)
 	if (result == B_OK) {
 		BAutolock linksLock(sForeignLinksLock);
 		auto it = sForeignLinks.find(key);
-		if (it != sForeignLinks.end() && it->second.state == PW_LINK_STATE_ERROR)
+		if (it != sForeignLinks.end()
+			&& it->second.state == PW_LINK_STATE_ERROR) {
+			fprintf(stderr, "Connect: link state ERROR (%u -> %u)\n",
+				(unsigned)foreignPort->id, (unsigned)inPortId);
 			result = B_ERROR;
+		}
 	}
 
 	if (result != B_OK) {
@@ -1253,17 +1380,17 @@ BMediaGraph::Disconnect(const ForeignPort* foreignPort, BMediaInput* input)
 	status_t result = B_ENTRY_NOT_FOUND;
 	{
 		BAutolock _(sForeignLinksLock);
-		for (auto it = sForeignLinks.begin(); it != sForeignLinks.end(); ++it) {
+		// A stereo source holds one link per channel: drop them all.
+		for (auto it = sForeignLinks.begin(); it != sForeignLinks.end();) {
 			if (it->second.input == input &&
 				it->second.foreignNodeId == foreignPort->nodeId &&
-				it->second.foreignPortId == foreignPort->id &&
 				it->second.outputIsForeign) {
 				spa_hook_remove(&it->second.listener);
 				pw_proxy_destroy(it->second.proxy);
-				sForeignLinks.erase(it);
+				it = sForeignLinks.erase(it);
 				result = B_OK;
-				break;
-			}
+			} else
+				++it;
 		}
 	}
 	backend->Unlock();

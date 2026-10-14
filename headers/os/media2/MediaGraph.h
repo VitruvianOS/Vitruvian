@@ -156,6 +156,12 @@ public:
 
 			status_t				Connect(const ForeignPort* foreignPort,
 										BMediaInput* input);
+			// inPortId 0 means the input's first port.
+			status_t				Connect(const ForeignPort* foreignPort,
+										BMediaInput* input, uint32 inPortId);
+			// Waits for the input to be bound, then links every channel.
+			status_t				ConnectChannels(uint32 foreignNodeId,
+										BMediaInput* input);
 
 			status_t				Disconnect(BMediaOutput* output,
 										const ForeignPort* foreignPort);

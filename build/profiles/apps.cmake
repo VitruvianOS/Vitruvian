@@ -30,6 +30,7 @@ set(SYSTEM_APPS
 	NetPlus
 	PackageManager
 	People
+	PrintOMatic
 	ResEdit
 	#Screenshot
 	ShowImage

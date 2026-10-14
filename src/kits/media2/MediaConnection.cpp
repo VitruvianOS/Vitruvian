@@ -383,9 +383,15 @@ BMediaOutput::~BMediaOutput()
 
 
 status_t
-BMediaOutput::SendBuffer(void* /*buffer*/, size_t /*size*/)
+BMediaOutput::SendBuffer(void* buffer, size_t size)
 {
-	// Filled in once pw_filter port handling lands.
+	// In-process clients push straight to the bound input; PipeWire clients
+	// move data on the realtime thread instead.
+	BMediaInput* input = dynamic_cast<BMediaInput*>(Binding());
+	if (input != NULL) {
+		input->HandleBuffer(buffer, size, Format());
+		return B_OK;
+	}
 	return B_NOT_SUPPORTED;
 }
 

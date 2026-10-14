@@ -102,6 +102,7 @@ media_client_id    BMediaClient::Id() const          { return fImpl->id; }
 const char*        BMediaClient::Name() const        { return fImpl->name.String(); }
 media_client_kinds BMediaClient::Kinds() const       { return fImpl->kinds; }
 status_t           BMediaClient::InitCheck() const   { return fImpl->initErr; }
+bool               BMediaClient::IsInProcessRouted() const { return false; }
 
 
 media_type_mask
@@ -272,14 +273,12 @@ BMediaClient::Start()
 		return B_BAD_VALUE;
 
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
-	if (backend == NULL)
-		return B_DEVICE_NOT_FOUND;
 
 	status_t result = _StartConnections(backend);
 	if (result != B_OK)
 		return result;
 
-	if (fImpl->faultEvent == NULL) {
+	if (backend != NULL && fImpl->faultEvent == NULL) {
 		backend->Lock();
 		fImpl->faultLoop = backend->GetMainLoop();
 		fImpl->faultEvent = pw_loop_add_event(fImpl->faultLoop,

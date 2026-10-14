@@ -28,6 +28,10 @@ public:
 			const char*				Name() const;
 			media_client_kinds		Kinds() const;
 
+	// True for GStreamer-backed clients that route buffers in-process through
+	// BMediaGraph instead of the PipeWire realtime backend.
+	virtual	bool					IsInProcessRouted() const;
+
 			media_type_mask			MediaTypes() const;
 			status_t				InitCheck() const;
 

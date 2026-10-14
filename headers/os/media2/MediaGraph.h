@@ -186,11 +186,29 @@ public:
 			status_t				ConnectChannels(uint32 foreignNodeId,
 										BMediaInput* input);
 
+			status_t				Connect(const ForeignPort* outputPort,
+										const ForeignPort* inputPort);
+
+
 			status_t				Disconnect(BMediaOutput* output,
 										const ForeignPort* foreignPort);
 
 			status_t				Disconnect(const ForeignPort* foreignPort,
 										BMediaInput* input);
+			status_t				Disconnect(const ForeignPort* outputPort,
+										const ForeignPort* inputPort);
+
+
+	struct Link {
+		bool			inProcess;
+		uint32			outputNodeId;
+		uint32			outputPortId;
+		uint32			inputNodeId;
+		uint32			inputPortId;
+		BMediaOutput*	output;
+		BMediaInput*	input;
+	};
+			status_t				GetLinks(BObjectList<Link, true>* outLinks);
 
 			// Dev tool: text dump of nodes, streams, foreign ports and links.
 			status_t				DumpGraph(BString& out) const;
@@ -200,6 +218,11 @@ private:
 									~BMediaGraph();
 									BMediaGraph(const BMediaGraph&) = delete;
 			BMediaGraph&			operator=(const BMediaGraph&) = delete;
+
+	static	status_t				_ConnectInProcess(BMediaOutput* output,
+										BMediaInput* input);
+	static	status_t				_DisconnectInProcess(BMediaOutput* output,
+										BMediaInput* input);
 };
 
 

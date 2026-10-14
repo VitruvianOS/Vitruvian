@@ -7,6 +7,7 @@
 
 #include <media2/CameraSettings.h>
 #include <media2/CameraSource.h>
+#include <media2/MediaClient.h>
 #include <media2/MediaConnection.h>
 
 #include <algorithm>
@@ -94,6 +95,16 @@ static std::map<uint32, PeakMeter*> sMeters;
 static std::once_flag sGraphOnce;
 
 
+struct InProcessLink {
+	BMediaOutput*	output;
+	BMediaInput*	input;
+};
+
+
+static BLocker sInProcessLock("media graph in-process links");
+static std::vector<InProcessLink> sInProcessLinks;
+
+
 BMediaGraph::BMediaGraph()  {}
 BMediaGraph::~BMediaGraph() {}
 
@@ -106,9 +117,9 @@ static void _ReleaseReservedEdge(uint32 outputNodeId, uint32 inputNodeId);
 BMediaGraph*
 BMediaGraph::Instance()
 {
+	// Always created: in-process (GStreamer-backed) clients route through the
+	// graph even when the PipeWire backend is unavailable.
 	std::call_once(sGraphOnce, [] {
-		if (PipeWireBackend::GetInstance() == NULL)
-			return;
 		sGraphInstance = new(std::nothrow) BMediaGraph();
 	});
 	return sGraphInstance;
@@ -120,6 +131,13 @@ BMediaGraph::Connect(BMediaOutput* output, BMediaInput* input)
 {
 	if (output == NULL || input == NULL)
 		return B_BAD_VALUE;
+
+	BMediaClient* outClient = output->Client();
+	BMediaClient* inClient = input->Client();
+	if (outClient != NULL && inClient != NULL
+		&& outClient->IsInProcessRouted() && inClient->IsInProcessRouted()) {
+		return _ConnectInProcess(output, input);
+	}
 
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
 	if (backend == NULL)
@@ -271,6 +289,13 @@ BMediaGraph::Disconnect(BMediaOutput* output, BMediaInput* input)
 	if (output == NULL || input == NULL)
 		return B_BAD_VALUE;
 
+	BMediaClient* outClient = output->Client();
+	BMediaClient* inClient = input->Client();
+	if (outClient != NULL && inClient != NULL
+		&& outClient->IsInProcessRouted() && inClient->IsInProcessRouted()) {
+		return _DisconnectInProcess(output, input);
+	}
+
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
 	if (backend == NULL)
 		return B_DEVICE_NOT_FOUND;
@@ -294,6 +319,66 @@ BMediaGraph::Disconnect(BMediaOutput* output, BMediaInput* input)
 	backend->Unlock();
 
 	return any ? B_OK : B_ENTRY_NOT_FOUND;
+}
+
+
+status_t
+BMediaGraph::_ConnectInProcess(BMediaOutput* output, BMediaInput* input)
+{
+	if (output->IsConnected() || input->IsConnected())
+		return B_NOT_ALLOWED;
+
+	BMediaFormat format = output->Format();
+	if (format.Type() == B_MEDIA_NO_TYPE)
+		format = input->Format();
+
+	status_t status = output->PrepareToConnect(&format);
+	if (status != B_OK)
+		return status;
+
+	status = input->AcceptFormat(&format);
+	if (status != B_OK)
+		return status;
+
+	{
+		BAutolock _(sInProcessLock);
+		InProcessLink link;
+		link.output = output;
+		link.input = input;
+		sInProcessLinks.push_back(link);
+	}
+
+	output->fBinding = input;
+	input->fBinding = output;
+	output->Connected(format);
+	input->Connected(format);
+	return B_OK;
+}
+
+
+status_t
+BMediaGraph::_DisconnectInProcess(BMediaOutput* output, BMediaInput* input)
+{
+	bool found = false;
+	{
+		BAutolock _(sInProcessLock);
+		for (size_t i = 0; i < sInProcessLinks.size(); i++) {
+			if (sInProcessLinks[i].output == output
+				&& sInProcessLinks[i].input == input) {
+				sInProcessLinks.erase(sInProcessLinks.begin() + i);
+				found = true;
+				break;
+			}
+		}
+	}
+	if (!found)
+		return B_ENTRY_NOT_FOUND;
+
+	output->fBinding = NULL;
+	input->fBinding = NULL;
+	output->Disconnected();
+	input->Disconnected();
+	return B_OK;
 }
 
 
@@ -806,6 +891,10 @@ struct ForeignLinkInfo {
 	uint32			outputNodeId;
 	uint32			inputNodeId;
 	bool			outputIsForeign;
+	// Both sides foreign: the input side lives in inputForeign*.
+	bool			inputIsForeign;
+	uint32			inputForeignNodeId;
+	uint32			inputForeignPortId;
 	enum pw_link_state	state;
 	spa_hook		listener;
 };
@@ -868,10 +957,18 @@ _WouldCreateCycle(uint32 outputNodeId, uint32 inputNodeId)
 
 	for (const auto& entry : sForeignLinks) {
 		const ForeignLinkInfo& link = entry.second;
-		uint32 outNode = link.outputIsForeign ? link.foreignNodeId :
-			link.outputNodeId;
-		uint32 inNode = link.outputIsForeign ? link.inputNodeId :
-			link.foreignNodeId;
+		uint32 outNode = 0;
+		uint32 inNode = 0;
+		if (link.output != NULL) {
+			outNode = link.outputNodeId;
+			inNode = link.foreignNodeId;
+		} else if (link.input != NULL) {
+			outNode = link.foreignNodeId;
+			inNode = link.inputNodeId;
+		} else {
+			outNode = link.foreignNodeId;
+			inNode = link.inputForeignNodeId;
+		}
 		if (outNode != 0 && inNode != 0)
 			graph[outNode].insert(inNode);
 	}
@@ -1167,6 +1264,9 @@ BMediaGraph::Connect(BMediaOutput* output, const ForeignPort* foreignPort)
 		info.outputNodeId = outNodeId;
 		info.inputNodeId = 0;
 		info.outputIsForeign = false;
+		info.inputIsForeign = true;
+		info.inputForeignNodeId = foreignPort->nodeId;
+		info.inputForeignPortId = foreignPort->id;
 		info.state = PW_LINK_STATE_INIT;
 		memset(&info.listener, 0, sizeof(info.listener));
 
@@ -1381,6 +1481,9 @@ BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input,
 		info.outputNodeId = 0;
 		info.inputNodeId = inNodeId;
 		info.outputIsForeign = true;
+		info.inputIsForeign = false;
+		info.inputForeignNodeId = 0;
+		info.inputForeignPortId = 0;
 		info.state = PW_LINK_STATE_INIT;
 		memset(&info.listener, 0, sizeof(info.listener));
 
@@ -1499,6 +1602,104 @@ _link_state_name(enum pw_link_state state)
 }
 
 
+
+status_t
+BMediaGraph::Connect(const ForeignPort* outputPort,
+	const ForeignPort* inputPort)
+{
+	if (outputPort == NULL || inputPort == NULL)
+		return B_BAD_VALUE;
+
+	if (strcmp(outputPort->direction.String(), "out") != 0
+		|| strcmp(inputPort->direction.String(), "in") != 0) {
+		return B_BAD_VALUE;
+	}
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	if (!_CheckAndReserveEdge(outputPort->nodeId, inputPort->nodeId))
+		return B_NOT_SUPPORTED;
+
+	pw_core* core = backend->GetCore();
+	if (core == NULL) {
+		_ReleaseReservedEdge(outputPort->nodeId, inputPort->nodeId);
+		return B_ERROR;
+	}
+
+	pw_properties* props = pw_properties_new(NULL, NULL);
+	if (props == NULL) {
+		_ReleaseReservedEdge(outputPort->nodeId, inputPort->nodeId);
+		return B_NO_MEMORY;
+	}
+
+	pw_properties_setf(props, PW_KEY_LINK_OUTPUT_NODE, "%u",
+		outputPort->nodeId);
+	pw_properties_setf(props, PW_KEY_LINK_OUTPUT_PORT, "%u", outputPort->id);
+	pw_properties_setf(props, PW_KEY_LINK_INPUT_NODE, "%u",
+		inputPort->nodeId);
+	pw_properties_setf(props, PW_KEY_LINK_INPUT_PORT, "%u", inputPort->id);
+
+	backend->Lock();
+
+	pw_proxy* proxy = (pw_proxy*)pw_core_create_object(core, "link-factory",
+		PW_TYPE_INTERFACE_Link, PW_VERSION_LINK, &props->dict, 0);
+	pw_properties_free(props);
+
+	if (proxy == NULL) {
+		backend->Unlock();
+		_ReleaseReservedEdge(outputPort->nodeId, inputPort->nodeId);
+		return B_ERROR;
+	}
+
+	pw_proxy* key = proxy;
+	{
+		BAutolock linksLock(sForeignLinksLock);
+		ForeignLinkInfo& info = sForeignLinks[key];
+		info.proxy = proxy;
+		info.output = NULL;
+		info.input = NULL;
+		info.foreignNodeId = outputPort->nodeId;
+		info.foreignPortId = outputPort->id;
+		info.outputNodeId = 0;
+		info.inputNodeId = 0;
+		info.outputIsForeign = true;
+		info.inputIsForeign = true;
+		info.inputForeignNodeId = inputPort->nodeId;
+		info.inputForeignPortId = inputPort->id;
+		info.state = PW_LINK_STATE_INIT;
+		memset(&info.listener, 0, sizeof(info.listener));
+
+		pw_link_add_listener((struct pw_link*)proxy, &info.listener,
+			&sForeignLinkEvents, &info);
+	}
+
+	status_t result = backend->RoundtripLocked();
+	if (result == B_OK) {
+		BAutolock linksLock(sForeignLinksLock);
+		auto it = sForeignLinks.find(key);
+		if (it != sForeignLinks.end() && it->second.state == PW_LINK_STATE_ERROR)
+			result = B_ERROR;
+	}
+
+	if (result != B_OK) {
+		BAutolock linksLock(sForeignLinksLock);
+		auto it = sForeignLinks.find(key);
+		if (it != sForeignLinks.end()) {
+			spa_hook_remove(&it->second.listener);
+			pw_proxy_destroy(it->second.proxy);
+			sForeignLinks.erase(it);
+		}
+	}
+
+	backend->Unlock();
+	_ReleaseReservedEdge(outputPort->nodeId, inputPort->nodeId);
+
+	return result;
+}
+
+
 status_t
 BMediaGraph::DumpGraph(BString& out) const
 {
@@ -1568,6 +1769,124 @@ BMediaGraph::DumpGraph(BString& out) const
 				<< " foreignPort=" << entry.second.foreignPortId
 				<< " state=" << _link_state_name(entry.second.state)
 				<< "\n";
+		}
+	}
+
+	return B_OK;
+}
+
+
+status_t
+BMediaGraph::Disconnect(const ForeignPort* outputPort,
+	const ForeignPort* inputPort)
+{
+	if (outputPort == NULL || inputPort == NULL)
+		return B_BAD_VALUE;
+
+	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend == NULL)
+		return B_DEVICE_NOT_FOUND;
+
+	backend->Lock();
+	status_t result = B_ENTRY_NOT_FOUND;
+	{
+		BAutolock _(sForeignLinksLock);
+		for (auto it = sForeignLinks.begin(); it != sForeignLinks.end(); ++it) {
+			ForeignLinkInfo& link = it->second;
+			if (link.output == NULL && link.input == NULL
+				&& link.inputIsForeign
+				&& link.foreignNodeId == outputPort->nodeId
+				&& link.foreignPortId == outputPort->id
+				&& link.inputForeignNodeId == inputPort->nodeId
+				&& link.inputForeignPortId == inputPort->id) {
+				spa_hook_remove(&link.listener);
+				pw_proxy_destroy(link.proxy);
+				sForeignLinks.erase(it);
+				result = B_OK;
+				break;
+			}
+		}
+	}
+	backend->Unlock();
+
+	return result;
+}
+
+
+status_t
+BMediaGraph::GetLinks(BObjectList<Link, true>* outLinks)
+{
+	if (outLinks == NULL)
+		return B_BAD_VALUE;
+	outLinks->MakeEmpty();
+
+	{
+		BAutolock _(sLinksLock);
+		for (const auto& entry : sLinks) {
+			const LinkInfo& info = entry.second;
+			Link* link = new(std::nothrow) Link();
+			if (link == NULL)
+				continue;
+			link->inProcess = false;
+			link->outputNodeId = info.outputNodeId;
+			link->outputPortId = info.output != NULL
+				? info.output->_GetPortId() : 0;
+			link->inputNodeId = info.inputNodeId;
+			link->inputPortId = info.input != NULL
+				? info.input->_GetPortId() : 0;
+			link->output = info.output;
+			link->input = info.input;
+			if (!outLinks->AddItem(link))
+				delete link;
+		}
+	}
+
+	{
+		BAutolock _(sForeignLinksLock);
+		for (const auto& entry : sForeignLinks) {
+			const ForeignLinkInfo& info = entry.second;
+			Link* link = new(std::nothrow) Link();
+			if (link == NULL)
+				continue;
+			link->inProcess = false;
+			link->output = info.output;
+			link->input = info.input;
+			if (info.output != NULL) {
+				link->outputNodeId = info.outputNodeId;
+				link->outputPortId = info.output->_GetPortId();
+				link->inputNodeId = info.foreignNodeId;
+				link->inputPortId = info.foreignPortId;
+			} else if (info.input != NULL) {
+				link->outputNodeId = info.foreignNodeId;
+				link->outputPortId = info.foreignPortId;
+				link->inputNodeId = info.inputNodeId;
+				link->inputPortId = info.input->_GetPortId();
+			} else {
+				link->outputNodeId = info.foreignNodeId;
+				link->outputPortId = info.foreignPortId;
+				link->inputNodeId = info.inputForeignNodeId;
+				link->inputPortId = info.inputForeignPortId;
+			}
+			if (!outLinks->AddItem(link))
+				delete link;
+		}
+	}
+
+	{
+		BAutolock _(sInProcessLock);
+		for (const auto& info : sInProcessLinks) {
+			Link* link = new(std::nothrow) Link();
+			if (link == NULL)
+				continue;
+			link->inProcess = true;
+			link->outputNodeId = 0;
+			link->outputPortId = 0;
+			link->inputNodeId = 0;
+			link->inputPortId = 0;
+			link->output = info.output;
+			link->input = info.input;
+			if (!outLinks->AddItem(link))
+				delete link;
 		}
 	}
 

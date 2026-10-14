@@ -110,6 +110,8 @@ protected:
 	friend class BMediaClient;
 	friend class BMediaUnit;
 	friend class BCameraSource;
+	friend class BMediaGraph;
+	friend class BMediaOutput;
 };
 
 
@@ -136,6 +138,7 @@ private:
 
 	friend class BMediaClient;
 	friend class BMediaUnit;
+	friend class BMediaGraph;
 };
 
 

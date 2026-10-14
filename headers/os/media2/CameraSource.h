@@ -94,6 +94,12 @@ private:
 	virtual	status_t			_StartConnections(void* backend) override;
 	virtual	void				_StopConnections() override;
 
+			void				_LinkCapture(void* backend);
+			void				_DiagFrame(const uint8* data, size_t size,
+									uint32 stride,
+									const media_raw_video_format& format);
+			uint32				fDiagFrames = 0;
+			bigtime_t			fDiagLast = 0;
 			void				_BuildParameterWeb();
 			void				_SaveControls();
 			void				_OnCaptureFrame(void* data, size_t size,
@@ -148,6 +154,7 @@ private:
 			camera_location		fLocation;
 
 			void*				fCaptureStream;
+			void*				fCaptureLink;
 			void*				fParameterWeb;
 };
 

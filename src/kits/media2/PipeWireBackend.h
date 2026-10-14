@@ -48,6 +48,8 @@ public:
 			pw_filter*				CreateFilter(const char* name,
 										pw_properties* props);
 
+			uint32					VideoNodeIdByName(const char* nodeName);
+
 			pw_stream*				CreateAndConnectStream(
 										const char* name,
 										pw_direction direction,

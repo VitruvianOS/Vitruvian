@@ -8,6 +8,8 @@
 #include <media2/MediaGraph.h>
 
 #include <new>
+#include <algorithm>
+#include <stdio.h>
 #include <string.h>
 
 #include <Autolock.h>
@@ -18,6 +20,7 @@
 
 #include <linux/v4l2-controls.h>
 #include <pipewire/pipewire.h>
+#include <pipewire/link.h>
 #include <spa/param/props.h>
 #include <spa/param/video/format-utils.h>
 
@@ -183,10 +186,11 @@ BCameraSource::BCameraSource(const char* name)
 	fNodeName(""),
 	fLocation(B_CAMERA_LOCATION_UNKNOWN),
 	fCaptureStream(NULL),
+	fCaptureLink(NULL),
 	fParameterWeb(NULL)
 {
 	memset(&fLastFormat, 0, sizeof(fLastFormat));
-	fLastFormat.color_space = B_RGB32;
+	fLastFormat.color_space = B_YCbCr422;
 	fLastFormat.field_rate = 30.0f;
 	fLastFormat.width = 640;
 	fLastFormat.height = 480;
@@ -372,14 +376,9 @@ BCameraSource::SetToDevice(const camera_device_info& info)
 		int32 width = 0;
 		int32 height = 0;
 		float rate = 0;
-		if (controls.FindInt32("width", &width) == B_OK
-			&& controls.FindInt32("height", &height) == B_OK
-			&& width > 0 && height > 0) {
-			fLastFormat.width = (uint32)width;
-			fLastFormat.height = (uint32)height;
-		}
-		if (controls.FindFloat("field_rate", &rate) == B_OK && rate > 0)
-			fLastFormat.field_rate = rate;
+		// Stored width/height/rate were negotiated, not chosen: keep the
+		// 640x480 at 30 default so the lowest mode never sticks.
+		(void)width; (void)height; (void)rate;
 	}
 
 	if (fLastFormat.width == 0)
@@ -555,11 +554,12 @@ BCameraSource::_StartConnections(void* backendPtr)
 
 	pw_stream* stream = backend->CreateAndConnectStream(
 		streamName.String(), PW_DIRECTION_INPUT, format,
-		&events, this, fNodeName.String());
+		&events, this, fNodeName.String(), false, false);
 	if (stream == NULL)
 		return B_ERROR;
 
 	fCaptureStream = stream;
+	_LinkCapture(backend);
 
 	// Device may only now be enumerable; apply stored controls on start.
 	_QueryDeviceControls();
@@ -569,10 +569,86 @@ BCameraSource::_StartConnections(void* backendPtr)
 }
 
 
+// The app routes its own stream: link camera out ports to our input ports.
+void
+BCameraSource::_LinkCapture(void* backendPtr)
+{
+	PipeWireBackend* backend = (PipeWireBackend*)backendPtr;
+	pw_stream* stream = (pw_stream*)fCaptureStream;
+	const uint32 camNode = backend->VideoNodeIdByName(fNodeName.String());
+	if (camNode == 0) {
+		fprintf(stderr, "Camera: node %s not found\n", fNodeName.String());
+		return;
+	}
+
+	const bigtime_t deadline = system_time() + 2000000;
+	uint32 inNode = SPA_ID_INVALID;
+	while (system_time() < deadline) {
+		backend->Lock();
+		backend->RoundtripLocked(500000);
+		inNode = pw_stream_get_node_id(stream);
+		backend->Unlock();
+		if (inNode != SPA_ID_INVALID)
+			break;
+		snooze(20000);
+	}
+	if (inNode == SPA_ID_INVALID) {
+		fprintf(stderr, "Camera: stream has no node id\n");
+		return;
+	}
+
+	std::vector<uint32> inIds;
+	if (backend->ResolveNodePorts(inNode, PW_DIRECTION_INPUT, inIds,
+			std::max<bigtime_t>(deadline - system_time(), 200000)) != B_OK
+		|| inIds.empty()) {
+		fprintf(stderr, "Camera: stream has no input port\n");
+		return;
+	}
+	std::vector<PipeWireBackend::ForeignPortInfo> ports
+		= backend->ForeignPorts(camNode);
+	uint32 outPort = 0;
+	for (size_t i = 0; i < ports.size(); i++) {
+		if (ports[i].direction == "out") {
+			outPort = ports[i].id;
+			break;
+		}
+	}
+	if (outPort == 0) {
+		fprintf(stderr, "Camera: no output port on node %u\n",
+			(unsigned)camNode);
+		return;
+	}
+
+	pw_core* core = backend->GetCore();
+	pw_properties* props = pw_properties_new(NULL, NULL);
+	if (core == NULL || props == NULL)
+		return;
+	pw_properties_setf(props, PW_KEY_LINK_OUTPUT_NODE, "%u", camNode);
+	pw_properties_setf(props, PW_KEY_LINK_OUTPUT_PORT, "%u", outPort);
+	pw_properties_setf(props, PW_KEY_LINK_INPUT_NODE, "%u", inNode);
+	pw_properties_setf(props, PW_KEY_LINK_INPUT_PORT, "%u", inIds[0]);
+	backend->Lock();
+	fCaptureLink = pw_core_create_object(core, "link-factory",
+		PW_TYPE_INTERFACE_Link, PW_VERSION_LINK, &props->dict, 0);
+	pw_properties_free(props);
+	backend->RoundtripLocked();
+	backend->Unlock();
+	if (fCaptureLink == NULL)
+		fprintf(stderr, "Camera: link creation failed\n");
+}
+
+
 void
 BCameraSource::_StopConnections()
 {
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
+	if (backend != NULL && fCaptureLink != NULL) {
+		pw_proxy* link = (pw_proxy*)fCaptureLink;
+		fCaptureLink = NULL;
+		backend->Lock();
+		pw_proxy_destroy(link);
+		backend->Unlock();
+	}
 	if (backend != NULL && fCaptureStream != NULL) {
 		pw_stream* stream = (pw_stream*)fCaptureStream;
 		fCaptureStream = NULL;
@@ -604,10 +680,49 @@ BCameraSource::_OnProcess(void* userdata)
 		? spaBuf->datas[0].chunk->size : spaBuf->datas[0].maxsize;
 
 	media_raw_video_format format = self->VideoFormat();
-	if (size > 0)
+	const uint32 stride = spaBuf->datas[0].chunk != NULL
+		? spaBuf->datas[0].chunk->stride : 0;
+	self->_DiagFrame(data, size, stride, format);
+	// Rows may be padded; repack to tight rows for the converters.
+	uint32 bpp = format.color_space == B_YCbCr422 ? 2
+		: (format.color_space == B_RGB32 ? 4 : 0);
+	const size_t tight = (size_t)format.width * bpp;
+	if (bpp != 0 && stride > tight && format.height > 0
+		&& size >= (size_t)stride * format.height) {
+		std::vector<uint8> packed(tight * format.height);
+		for (uint32 y = 0; y < format.height; y++)
+			memcpy(packed.data() + y * tight, data + (size_t)y * stride,
+				tight);
+		self->_OnCaptureFrame(packed.data(), packed.size(), format);
+	} else if (size > 0)
 		self->_OnCaptureFrame(data, size, format);
 
 	pw_stream_queue_buffer(stream, pb);
+}
+
+
+// Once per second: what arrived and in which negotiated format.
+void
+BCameraSource::_DiagFrame(const uint8* data, size_t size, uint32 stride,
+	const media_raw_video_format& format)
+{
+	fDiagFrames++;
+	const bigtime_t now = system_time();
+	if (now - fDiagLast < 1000000)
+		return;
+	fDiagLast = now;
+	uint32 lo = 255, hi = 0;
+	for (size_t i = 0; i < 64 && i < size; i++) {
+		if (data[i] < lo)
+			lo = data[i];
+		if (data[i] > hi)
+			hi = data[i];
+	}
+	fprintf(stderr, "Camera: frames=%u chunk=%zu cs=0x%x %ux%u stride=%u"
+		" first64 min=%u max=%u\n", (unsigned)fDiagFrames, size,
+		(unsigned)format.color_space, (unsigned)format.width,
+		(unsigned)format.height, (unsigned)stride, lo, hi);
+	fDiagFrames = 0;
 }
 
 

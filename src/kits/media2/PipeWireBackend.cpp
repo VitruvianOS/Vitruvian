@@ -899,14 +899,20 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 
 	// Connect under the same lock as create/destroy (L3). The unlocked gap
 	// above is only for building the pod; the stream is not yet in the graph.
-	uint8_t buf[1024];
+	uint8_t buf[2048];
 	spa_pod_builder b = SPA_POD_BUILDER_INIT(buf, sizeof(buf));
-	const spa_pod* params[1];
+	const spa_pod* params[2];
+	uint32 paramCount = 1;
 	// Video offers YUY2/BGRx/I420 with size and rate ranges; most UVC
 	// webcams do not do BGRx only, so a single fixed format never links.
-	if (isVideo)
-		params[0] = BuildVideoEnumFormat(&b, preferred);
-	else
+	if (isVideo) {
+		// Exact preferred mode first, the full range as fallback.
+		params[0] = BuildVideoEnumFormat(&b, preferred, true);
+		params[1] = BuildVideoEnumFormat(&b, preferred);
+		paramCount = 2;
+		if (params[1] == NULL)
+			params[0] = NULL;
+	} else
 		params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
 	if (params[0] == NULL) {
 		Lock();
@@ -921,7 +927,7 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 		(pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT
 			| PW_STREAM_FLAG_MAP_BUFFERS
 			| PW_STREAM_FLAG_RT_PROCESS),
-		params, 1);
+		params, paramCount);
 	Unlock();
 
 	if (r < 0) {
@@ -931,6 +937,20 @@ PipeWireBackend::CreateAndConnectStream(const char* name,
 		return NULL;
 	}
 	return stream;
+}
+
+
+uint32
+PipeWireBackend::VideoNodeIdByName(const char* nodeName)
+{
+	if (nodeName == NULL)
+		return 0;
+	std::lock_guard<std::mutex> _(fDevicesLock);
+	for (auto& d : fDevices) {
+		if (d.isVideo && d.nodeName == nodeName)
+			return d.id;
+	}
+	return 0;
 }
 
 

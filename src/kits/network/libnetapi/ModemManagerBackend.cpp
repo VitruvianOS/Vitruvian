@@ -1058,16 +1058,38 @@ ModemManagerBackend::_PropertiesChangedCallback(GDBusConnection* connection,
 {
 	ModemManagerBackend* backend = (ModemManagerBackend*)userData;
 
-	if (interfaceName == NULL)
+	if (interfaceName == NULL || parameters == NULL)
 		return;
+
+	// PropertiesChanged is emitted on the Properties interface; the
+	// interface that actually changed rides as the first payload
+	// element, not in the signal header.
+	const gchar* changedInterface = NULL;
+	GVariant* changedProps = NULL;
+	GVariant* invalidated = NULL;
+	g_variant_get(parameters, "(&s@a{sv}@as)", &changedInterface,
+		&changedProps, &invalidated);
+
+	if (changedInterface == NULL) {
+		if (changedProps != NULL)
+			g_variant_unref(changedProps);
+		if (invalidated != NULL)
+			g_variant_unref(invalidated);
+		return;
+	}
 
 	// Call and SMS objects change far more often than modems and carry
 	// their own notification types; update one snapshot entry in place.
-	if (strcmp(interfaceName, kMMCallInterface) == 0
-			|| strcmp(interfaceName, kMMSmsInterface) == 0) {
+	if (strcmp(changedInterface, kMMCallInterface) == 0
+			|| strcmp(changedInterface, kMMSmsInterface) == 0) {
+		if (changedProps != NULL)
+			g_variant_unref(changedProps);
+		if (invalidated != NULL)
+			g_variant_unref(invalidated);
+
 		backend->_RefreshSnapshot();
 
-		bool isCall = strcmp(interfaceName, kMMCallInterface) == 0;
+		bool isCall = strcmp(changedInterface, kMMCallInterface) == 0;
 		BMessage message((uint32)(isCall
 			? NOTIFICATION_CALL_STATE_CHANGED
 			: NOTIFICATION_SMS_STATE_CHANGED));
@@ -1111,12 +1133,21 @@ ModemManagerBackend::_PropertiesChangedCallback(GDBusConnection* connection,
 	}
 
 	// Only handle interfaces that carry modem state/signal/SIM data.
-	if (strcmp(interfaceName, kMMModemInterface) != 0
-			&& strcmp(interfaceName, kMMModemSignalInterface) != 0
-			&& strcmp(interfaceName, kMMModem3gppInterface) != 0
-			&& strcmp(interfaceName, kMMSimInterface) != 0) {
+	if (strcmp(changedInterface, kMMModemInterface) != 0
+			&& strcmp(changedInterface, kMMModemSignalInterface) != 0
+			&& strcmp(changedInterface, kMMModem3gppInterface) != 0
+			&& strcmp(changedInterface, kMMSimInterface) != 0) {
+		if (changedProps != NULL)
+			g_variant_unref(changedProps);
+		if (invalidated != NULL)
+			g_variant_unref(invalidated);
 		return;
 	}
+
+	if (changedProps != NULL)
+		g_variant_unref(changedProps);
+	if (invalidated != NULL)
+		g_variant_unref(invalidated);
 
 	// Refresh the snapshot and notify.
 	backend->_RefreshSnapshot();
@@ -1158,7 +1189,7 @@ ModemManagerBackend::_PropertiesChangedCallback(GDBusConnection* connection,
 	if (!backend->fWatchers.empty()) {
 		backend->_NotifyWatchers(NOTIFICATION_MODEM_STATE_CHANGED, message);
 		backend->_NotifyWatchers(NOTIFICATION_MODEM_SIGNAL_CHANGED, message);
-		if (strcmp(interfaceName, kMMModem3gppInterface) == 0)
+		if (strcmp(changedInterface, kMMModem3gppInterface) == 0)
 			backend->_NotifyWatchers(
 				NOTIFICATION_REGISTRATION_CHANGED, message);
 	}
@@ -1173,14 +1204,17 @@ ModemManagerBackend::_InterfacesAddedCallback(GDBusConnection* connection,
 {
 	ModemManagerBackend* backend = (ModemManagerBackend*)userData;
 
-	// What kind of object showed up? The second argument of
-	// InterfacesAdded is its full interface dictionary.
+	// What kind of object showed up? The signal is emitted at the
+	// manager path; the added object's path is the first argument of
+	// InterfacesAdded and the second is its interface dictionary.
+	const gchar* addedPath = NULL;
 	bool isModem = false;
 	bool isCall = false;
 	bool isSms = false;
 	if (parameters != NULL) {
 		GVariant* interfaces = NULL;
-		g_variant_get(parameters, "(&o@a{sa{sv}})", NULL, &interfaces);
+		g_variant_get(parameters, "(&o@a{sa{sv}})", &addedPath,
+			&interfaces);
 		if (interfaces != NULL) {
 			GVariant* val = g_variant_lookup_value(interfaces,
 				kMMModemInterface, G_VARIANT_TYPE("a{sv}"));
@@ -1213,22 +1247,28 @@ ModemManagerBackend::_InterfacesAddedCallback(GDBusConnection* connection,
 		type = NOTIFICATION_SMS_ADDED;
 
 	BMessage message(type);
-	if (objectPath != NULL) {
-		message.AddString(kMMFieldCallPath, objectPath);
-		message.AddString(kMMFieldSmsPath, objectPath);
+	if (addedPath != NULL) {
+		message.AddString(kMMFieldCallPath, addedPath);
+		message.AddString(kMMFieldSmsPath, addedPath);
 		if (isModem)
-			message.AddString(kMMFieldModemPath, objectPath);
+			message.AddString(kMMFieldModemPath, addedPath);
 	}
 
 	BAutolock lock(backend->fLock);
 	std::map<BString, BMessage>::iterator it = backend->fCallSnapshot.find(
-		objectPath != NULL ? objectPath : "");
-	if (isCall && it != backend->fCallSnapshot.end())
+		addedPath != NULL ? addedPath : "");
+	if (isCall && it != backend->fCallSnapshot.end()) {
 		_CopyStringField(it->second, message, kMMFieldCallModemPath);
+		_CopyStringField(it->second, message, kMMFieldCallNumber);
+		_CopyUInt32Field(it->second, message, kMMFieldCallState);
+		_CopyUInt32Field(it->second, message, kMMFieldCallDirection);
+	}
 
-	it = backend->fSmsSnapshot.find(objectPath != NULL ? objectPath : "");
+	it = backend->fSmsSnapshot.find(addedPath != NULL ? addedPath : "");
 	if (isSms && it != backend->fSmsSnapshot.end()) {
 		_CopyStringField(it->second, message, kMMFieldSmsModemPath);
+		_CopyStringField(it->second, message, kMMFieldSmsNumber);
+		_CopyUInt32Field(it->second, message, kMMFieldSmsState);
 		_CopyBoolField(it->second, message, kMMFieldSmsReceived);
 	}
 
@@ -1245,26 +1285,29 @@ ModemManagerBackend::_InterfacesRemovedCallback(GDBusConnection* connection,
 {
 	ModemManagerBackend* backend = (ModemManagerBackend*)userData;
 
-	// Classify by what we knew about the path: the snapshot still holds
-	// the entry until the refresh below drops it.
+	// The signal is emitted at the manager path; the removed object's
+	// path is the first argument of InterfacesRemoved.
+	const gchar* removedPath = NULL;
+	if (parameters != NULL)
+		g_variant_get(parameters, "(&o*)", &removedPath, NULL);
+
+	// Classify by object path; the snapshot may already have dropped
+	// the entry if a refresh raced the signal.
 	uint32 type = NOTIFICATION_MODEM_REMOVED;
-	{
-		BAutolock lock(backend->fLock);
-		BString path(objectPath != NULL ? objectPath : "");
-		if (backend->fCallSnapshot.find(path) != backend->fCallSnapshot.end())
+	if (removedPath != NULL) {
+		if (strstr(removedPath, "/Call") != NULL)
 			type = NOTIFICATION_CALL_REMOVED;
-		else if (backend->fSmsSnapshot.find(path)
-				!= backend->fSmsSnapshot.end())
+		else if (strstr(removedPath, "/Sms") != NULL)
 			type = NOTIFICATION_SMS_REMOVED;
 	}
 
 	backend->_RefreshSnapshot();
 
 	BMessage message(type);
-	if (objectPath != NULL) {
-		message.AddString(kMMFieldModemPath, objectPath);
-		message.AddString(kMMFieldCallPath, objectPath);
-		message.AddString(kMMFieldSmsPath, objectPath);
+	if (removedPath != NULL) {
+		message.AddString(kMMFieldModemPath, removedPath);
+		message.AddString(kMMFieldCallPath, removedPath);
+		message.AddString(kMMFieldSmsPath, removedPath);
 	}
 
 	BAutolock lock(backend->fLock);
@@ -1279,7 +1322,9 @@ ModemManagerBackend::_InterfacesRemovedCallback(GDBusConnection* connection,
 void
 ModemManagerBackend::_NotifyWatchers(uint32 type, BMessage& message)
 {
-	// Caller must hold fLock.
+	// Caller must hold fLock. The message's what is rewritten per type
+	// so one message object can fan out as several notification kinds.
+	message.what = type;
 	for (size_t i = 0; i < fWatchers.size();) {
 		Watcher& watcher = fWatchers[i];
 		if (!watcher.messenger.IsValid()) {
@@ -1927,7 +1972,7 @@ ModemManagerBackend::GetCalls(const char* modemPath, BMessage* outCalls)
 			it != fCallSnapshot.end(); it++) {
 		BString owner;
 		if (it->second.FindString(kMMFieldCallModemPath, &owner) != B_OK
-				|| owner != modemPath)
+				|| strcmp(owner.String(), modemPath) != 0)
 			continue;
 		char name[32];
 		snprintf(name, sizeof(name), "call_%" B_PRId32, count);
@@ -1955,7 +2000,7 @@ ModemManagerBackend::GetSmsMessages(const char* modemPath,
 			it != fSmsSnapshot.end(); it++) {
 		BString owner;
 		if (it->second.FindString(kMMFieldSmsModemPath, &owner) != B_OK
-				|| owner != modemPath)
+				|| strcmp(owner.String(), modemPath) != 0)
 			continue;
 		char name[32];
 		snprintf(name, sizeof(name), "sms_%" B_PRId32, count);

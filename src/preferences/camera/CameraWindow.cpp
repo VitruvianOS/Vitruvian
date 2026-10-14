@@ -8,6 +8,7 @@
 #include <new>
 
 #include <Alert.h>
+#include <Application.h>
 #include <Autolock.h>
 #include <Catalog.h>
 #include <LayoutBuilder.h>
@@ -441,5 +442,6 @@ CameraWindow::QuitRequested()
 	BMediaGraph* graph = BMediaGraph::Instance();
 	if (graph != NULL)
 		graph->StopWatching(BMessenger(this));
+	be_app->PostMessage(B_QUIT_REQUESTED);
 	return true;
 }

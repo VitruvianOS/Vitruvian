@@ -177,13 +177,12 @@ CortexWindow::MessageReceived(BMessage* message)
 			_Rebuild();
 			break;
 
-		case 'PWDC':
-		case 'PWSC':
-		case 'PWDF':
-		case 'PWVC':
-		case 'PWPC':
-		case 'PWPF':
-		case 'PWLC':
+		case BMediaGraph::B_MEDIA_CLIENT_ADDED:
+		case BMediaGraph::B_MEDIA_CLIENT_REMOVED:
+		case BMediaGraph::B_MEDIA_DEFAULTS_CHANGED:
+		case BMediaGraph::B_MEDIA_VOLUME_CHANGED:
+		case BMediaGraph::B_MEDIA_STREAMS_CHANGED:
+		case BMediaGraph::B_MEDIA_LINKS_CHANGED:
 			if (!fRebuildPending) {
 				fRebuildPending = true;
 				PostMessage(kMsgRebuild);

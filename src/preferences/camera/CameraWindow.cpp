@@ -428,11 +428,10 @@ CameraWindow::MessageReceived(BMessage* message)
 				RefreshDevices();
 			}
 			break;
-		case kMsgPWDevicesChanged:
 		case kMsgCameraRefresh:
-			RefreshDevices();
-			break;
-		case kMsgPWDefaultChanged:
+		case BMediaGraph::B_MEDIA_CLIENT_ADDED:
+		case BMediaGraph::B_MEDIA_CLIENT_REMOVED:
+		case BMediaGraph::B_MEDIA_DEFAULTS_CHANGED:
 			RefreshDevices();
 			break;
 		default:

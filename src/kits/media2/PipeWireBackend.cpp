@@ -155,6 +155,13 @@ PipeWireBackend::_Init()
 	}
 	pw_thread_loop_unlock(fThreadLoop);
 
+	// Populate the registry before the first Devices() call.
+	if (fCore != NULL) {
+		pw_thread_loop_lock(fThreadLoop);
+		RoundtripLocked(2000000);
+		pw_thread_loop_unlock(fThreadLoop);
+	}
+
 	if (fCore == NULL) {
 		const char* runtimeDir = getenv("PIPEWIRE_RUNTIME_DIR");
 		if (runtimeDir == NULL)

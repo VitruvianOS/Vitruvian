@@ -13,9 +13,7 @@ enum {
 	kMsgCameraRefresh        = 'CAdr',
 	kMsgCameraControlChanged = 'CAct',
 	kMsgCameraResetControls  = 'CArs',
-	kMsgCameraSetDefault     = 'CAcs',
-	kMsgPWDevicesChanged     = 'PWDC',
-	kMsgPWDefaultChanged     = 'PWDF'
+	kMsgCameraSetDefault     = 'CAcs'
 };
 
 

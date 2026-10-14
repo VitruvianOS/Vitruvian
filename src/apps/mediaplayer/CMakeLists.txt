@@ -21,7 +21,7 @@ Application(MediaPlayer
 		interface/SymbolButton.cpp
 		interface/TransportControlGroup.cpp
 		interface/VolumeSlider.cpp
-	LIBS be shared localestub media2 tracker
+	LIBS be shared localestub media2 midi tracker
 	RDEF MediaPlayer.rdef
 )
 

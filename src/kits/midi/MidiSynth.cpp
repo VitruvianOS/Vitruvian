@@ -34,6 +34,9 @@ BMidiSynth::~BMidiSynth()
 }
 
 
+extern void _midi_link_synth_to_device(BSoundFontSynth* synth);
+
+
 status_t
 BMidiSynth::EnableInput(bool enable, bool loadInstruments)
 {
@@ -49,11 +52,16 @@ BMidiSynth::EnableInput(bool enable, bool loadInstruments)
 	if (loadInstruments && synth->InstrumentFile() == NULL)
 		return B_BAD_INSTRUMENT;
 
+	_midi_link_synth_to_device(synth);
+
 	// Wire this façade's midi2 producer into the synth unit's MIDI input
 	// so events travel the graph, not a private engine call.
 	BMidiLocalProducer* producer = Producer();
 	if (producer != NULL && producer->Output() != NULL
 		&& synth->MidiInput() != NULL) {
+		BMediaClient* client = producer->Output()->Client();
+		if (client != NULL && !client->IsStarted())
+			client->Start();
 		MediaGraph()->Connect(producer->Output(), synth->MidiInput());
 	}
 	return B_OK;

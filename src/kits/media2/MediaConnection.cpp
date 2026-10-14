@@ -241,12 +241,44 @@ BMediaConnection::_GetPortIds(uint32* outIds, uint32 maxCount) const
 	}
 
 	if (fFilterPort != NULL) {
-		pw_proxy* portProxy = (pw_proxy*)fFilterPort;
-		uint32 id = pw_proxy_get_bound_id(portProxy);
-		if (id == 0)
+		// A filter port is user data, not a proxy: resolve the global id
+		// from the registry by the port's index among its direction.
+		BMediaClient* client = Client();
+		PipeWireBackend* backend = PipeWireBackend::GetInstance();
+		uint32 nodeId = _GetNodeId();
+		if (client == NULL || backend == NULL || nodeId == 0)
+			return 0;
+
+		const bool isOutput = dynamic_cast<const BMediaOutput*>(this) != NULL;
+		int32 index = -1;
+		if (isOutput) {
+			for (int32 i = 0; i < client->CountOutputs(); i++) {
+				if (client->OutputAt(i) == (const void*)dynamic_cast<
+						const BMediaOutput*>(this)) {
+					index = i;
+					break;
+				}
+			}
+		} else {
+			for (int32 i = 0; i < client->CountInputs(); i++) {
+				if (client->InputAt(i) == (const void*)dynamic_cast<
+						const BMediaInput*>(this)) {
+					index = i;
+					break;
+				}
+			}
+		}
+		if (index < 0)
+			return 0;
+
+		std::vector<uint32> ports;
+		if (backend->ResolveNodePorts(nodeId, isOutput
+				? PW_DIRECTION_OUTPUT : PW_DIRECTION_INPUT, ports) != B_OK)
+			return 0;
+		if ((size_t)index >= ports.size())
 			return 0;
 		if (maxCount > 0)
-			outIds[0] = id;
+			outIds[0] = ports[index];
 		return 1;
 	}
 

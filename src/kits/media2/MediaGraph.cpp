@@ -125,8 +125,14 @@ BMediaGraph::Connect(BMediaOutput* output, BMediaInput* input)
 	if (backend == NULL)
 		return B_DEVICE_NOT_FOUND;
 
+	// A started unit gets its node id from the server asynchronously.
 	uint32 outNodeId = output->_GetNodeId();
 	uint32 inNodeId = input->_GetNodeId();
+	for (int i = 0; (outNodeId == 0 || inNodeId == 0) && i < 100; i++) {
+		snooze(10000);
+		outNodeId = output->_GetNodeId();
+		inNodeId = input->_GetNodeId();
+	}
 	if (outNodeId == 0 || inNodeId == 0)
 		return B_ERROR;
 

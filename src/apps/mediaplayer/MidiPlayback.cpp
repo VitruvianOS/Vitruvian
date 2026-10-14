@@ -5,21 +5,20 @@
 
 #include "MidiPlayback.h"
 
+#include <OS.h>
 #include <Path.h>
 #include <String.h>
 
-#include <media2/MediaDefs.h>
-
-
-// The planned chain is BMidiStore (SMF parse) to the midi2 facade
-// scheduler to BMidiOutput to BSoundFontSynth. Every entry point fails
-// with a stated reason until that chain is wired in.
+#include <FindDirectory.h>
+#include <midi/MidiSynthFile.h>
 
 
 MidiPlayback::MidiPlayback()
 	:
-	fInitErr(B_OK),
+	fSynth(NULL),
+	fInitErr(B_NO_INIT),
 	fPlaying(false),
+	fStarted(0),
 	fPosition(0),
 	fDuration(0),
 	fVolume(1.0f)
@@ -29,6 +28,7 @@ MidiPlayback::MidiPlayback()
 
 MidiPlayback::~MidiPlayback()
 {
+	delete fSynth;
 }
 
 
@@ -48,11 +48,14 @@ MidiPlayback::SetTo(const entry_ref& ref)
 	name.ToLower();
 	if (!name.EndsWith(".mid") && !name.EndsWith(".midi"))
 		return B_BAD_VALUE;
-	BPath path(&ref);
-	if (path.InitCheck() != B_OK)
-		return path.InitCheck();
-	BUrl url(path);
-	return _Load(url);
+	delete fSynth;
+	fSynth = new BMidiSynthFile();
+	if (fSynth == NULL)
+		return fInitErr = B_NO_MEMORY;
+	fPlaying = false;
+	fPosition = 0;
+	fDuration = 0;
+	return fInitErr = fSynth->LoadFile(&ref);
 }
 
 
@@ -66,22 +69,22 @@ MidiPlayback::SetTo(const BUrl& url)
 status_t
 MidiPlayback::_Load(const BUrl& url)
 {
-	// The synth stack is not linked into this app yet; fail loudly so
-	// the UI can say so instead of hanging or going silent.
-	(void)url;
-	fPlaying = false;
-	fPosition = 0;
-	fDuration = 0;
-	fInitErr = B_NOT_SUPPORTED;
-	return fInitErr;
+	BPath path(url.Path().String());
+	entry_ref ref;
+	status_t err = get_ref_for_path(path.Path(), &ref);
+	return err == B_OK ? SetTo(ref) : err;
 }
 
 
 status_t
 MidiPlayback::Play()
 {
-	if (fInitErr != B_OK)
+	if (fInitErr != B_OK || fSynth == NULL)
 		return fInitErr;
+	status_t err = fPlaying ? B_OK : fSynth->Start();
+	if (err != B_OK)
+		return err;
+	fStarted = system_time() - fPosition;
 	fPlaying = true;
 	return B_OK;
 }
@@ -90,6 +93,10 @@ MidiPlayback::Play()
 status_t
 MidiPlayback::Pause()
 {
+	if (fPlaying && fSynth != NULL) {
+		fPosition = system_time() - fStarted;
+		fSynth->Stop();
+	}
 	fPlaying = false;
 	return B_OK;
 }
@@ -98,6 +105,8 @@ MidiPlayback::Pause()
 status_t
 MidiPlayback::Stop()
 {
+	if (fSynth != NULL)
+		fSynth->Stop();
 	fPlaying = false;
 	fPosition = 0;
 	return B_OK;
@@ -109,15 +118,22 @@ MidiPlayback::SeekTo(bigtime_t position)
 {
 	if (position < 0)
 		return B_BAD_VALUE;
-	fPosition = position;
-	return B_OK;
+	// The store only restarts from the top; other seeks keep playing.
+	if (position == 0 && fSynth != NULL && fInitErr == B_OK) {
+		bool wasPlaying = fPlaying;
+		fSynth->Stop();
+		fPlaying = false;
+		fPosition = 0;
+		return wasPlaying ? Play() : B_OK;
+	}
+	return B_NOT_SUPPORTED;
 }
 
 
 bigtime_t
 MidiPlayback::Position() const
 {
-	return fPosition;
+	return fPlaying ? system_time() - fStarted : fPosition;
 }
 
 

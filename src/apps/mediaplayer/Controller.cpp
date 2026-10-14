@@ -253,6 +253,11 @@ Controller::_SetToUrl(const BUrl& url)
 status_t
 Controller::OpenRef(const entry_ref& ref)
 {
+	// MIDI goes through the synth, never the media player.
+	BString lower(ref.name);
+	lower.ToLower();
+	if (lower.EndsWith(".mid") || lower.EndsWith(".midi"))
+		return OpenMidi(ref);
 	{
 		BAutolock _(fLock);
 		if (fOpening)
@@ -318,9 +323,9 @@ Controller::OpenMidi(const entry_ref& ref)
 		_StopMidi();
 		if (fTarget.IsValid()) {
 			BMessage msg(MSG_CONTROLLER_ERROR);
-			msg.AddString("message",
-				"MIDI playback needs the media2 synth (W17); "
-				"it is not in this build yet.");
+			BString text("Cannot play this MIDI file: ");
+			text << strerror(err);
+			msg.AddString("message", text.String());
 			msg.AddInt32("error", err);
 			fTarget.SendMessage(&msg);
 		}

@@ -60,6 +60,7 @@ public:
 										int32 count);
 
 private:
+	virtual	status_t				_StartConnections(void* backend) override;
 			status_t				_BuildFilter();
 			void					_TeardownFilter();
 			void					_Restart();

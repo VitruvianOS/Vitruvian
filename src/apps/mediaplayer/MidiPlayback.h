@@ -12,10 +12,10 @@
 #include <Url.h>
 
 
-// Seam onto the media2 MIDI chain: BMidiStore (SMF parse), the midi2
-// facade scheduler, BMidiOutput and BSoundFontSynth. Those pieces are
-// not wired into this app yet; SetTo fails rather than pretending to
-// play.
+class BMidiSynthFile;
+
+
+// MIDI playback through BMidiSynthFile (SMF store into the SoundFont synth).
 class MidiPlayback {
 public:
 								MidiPlayback();
@@ -41,8 +41,10 @@ private:
 			status_t			_Load(const BUrl& url);
 
 private:
+			BMidiSynthFile*		fSynth;
 			status_t			fInitErr;
 			bool				fPlaying;
+			bigtime_t			fStarted;
 			bigtime_t			fPosition;
 			bigtime_t			fDuration;
 			float				fVolume;

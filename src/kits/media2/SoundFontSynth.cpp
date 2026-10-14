@@ -161,13 +161,13 @@ BSoundFontSynth::_ApplySettingsToSynth()
 	if (fFluid == NULL || fFluid->settings == NULL)
 		return;
 	fluid_settings_setnum(fFluid->settings, "synth.gain", fGain);
-	fluid_settings_setnum(fFluid->settings, "synth.polyphony",
-		(double)fPolyphony);
+	fluid_settings_setint(fFluid->settings, "synth.polyphony",
+		(int)fPolyphony);
 	fluid_settings_setint(fFluid->settings, "synth.reverb.active",
 		fReverb ? 1 : 0);
-	// FLUID_INTERP_LINEAR is 1; map B_* modes onto fluidsynth's integers.
-	fluid_settings_setint(fFluid->settings, "synth.interpolation",
-		fInterpolation);
+	// Interpolation is a per-synth call in fluidsynth 2.x, not a setting.
+	if (fFluid->synth != NULL)
+		fluid_synth_set_interp_method(fFluid->synth, -1, fInterpolation);
 }
 
 
@@ -204,6 +204,8 @@ BSoundFontSynth::SynthReset(uint32 sampleRate)
 		fFluid = NULL;
 		return B_ERROR;
 	}
+
+	fluid_synth_set_interp_method(fFluid->synth, -1, fInterpolation);
 
 	if (fInstrumentFile.Length() == 0) {
 		const char* path = _FindDefaultSoundFont();

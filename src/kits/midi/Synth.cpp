@@ -14,12 +14,50 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <media2/MediaConnection.h>
+
 #include <Entry.h>
 #include <List.h>
+#include <ObjectList.h>
 #include <Path.h>
 
 
 BSynth* be_synth = NULL;
+
+
+// Link the synth's audio outs to the default output device, once.
+void
+_midi_link_synth_to_device(BSoundFontSynth* synth)
+{
+	static bool linked = false;
+	if (linked || synth == NULL)
+		return;
+	media_client_id deviceId = 0;
+	status_t err = MediaGraph()->GetDefaultAudioOutput(&deviceId);
+	if (err != B_OK || deviceId == 0)
+		return;
+	BObjectList<BMediaGraph::ForeignPort, true> ports;
+	err = MediaGraph()->GetForeignPorts((uint32)deviceId, &ports);
+	if (err != B_OK)
+		return;
+	for (int32 i = 0; i < synth->CountOutputs(); i++) {
+		BMediaOutput* output = synth->OutputAt(i);
+		if (output == NULL)
+			continue;
+		// Output i feeds the i-th input port of the device.
+		int32 seen = 0;
+		for (int32 p = 0; p < ports.CountItems(); p++) {
+			const BMediaGraph::ForeignPort* port = ports.ItemAt(p);
+			if (port != NULL && port->direction == "in" && seen++ == i) {
+				status_t c = MediaGraph()->Connect(output, port);
+				if (c == B_OK) {
+					linked = true;
+					break;
+				}
+			}
+		}
+	}
+}
 
 
 BSynth::BSynth()
@@ -58,11 +96,12 @@ BSynth::_Init()
 	fSynth = new(std::nothrow) BSoundFontSynth("softsynth", 2);
 	if (fSynth == NULL)
 		return;
-	if (fSynth->InitCheck() != B_OK) {
-		// Loud failure, not a silent stub.
-		fprintf(stderr, "BSynth: no soundfont found, synth will not render\n");
+	status_t err = fSynth->Start();
+	// InitCheck is only set by Start; report the real reason when it fails.
+	if (err != B_OK || fSynth->InitCheck() != B_OK) {
+		fprintf(stderr, "BSynth: synth not ready (start 0x%x, init 0x%x)\n",
+			(unsigned)err, (unsigned)fSynth->InitCheck());
 	}
-	fSynth->Start();
 }
 
 

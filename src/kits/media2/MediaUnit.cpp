@@ -226,6 +226,14 @@ BMediaUnit::Start()
 
 
 status_t
+BMediaUnit::_StartConnections(void*)
+{
+	// The filter built in Start() is the connection; no streams to open.
+	return B_OK;
+}
+
+
+status_t
 BMediaUnit::_BuildFilter()
 {
 	PipeWireBackend* backend = PipeWireBackend::GetInstance();
@@ -538,15 +546,12 @@ BMediaUnit::Impl::_OnProcess(void* data, struct spa_io_position* position)
 		if (input->_GetFilterPort() == NULL)
 			continue;
 
+		// MIDI DSP ports carry a POD sequence in the DSP buffer.
 		port_data* pd = (port_data*)input->_GetFilterPort();
-		pw_buffer* pb = pw_filter_dequeue_buffer(pd);
-		if (pb != NULL && pb->buffer != NULL && pb->buffer->datas != NULL
-			&& pb->buffer->datas[0].data != NULL && pb->buffer->datas[0].chunk != NULL) {
-			input->HandleBuffer(pb->buffer->datas[0].data,
-				pb->buffer->datas[0].chunk->size, input->Format());
-		}
-		if (pb != NULL)
-			pw_filter_queue_buffer(pd, pb);
+		void* seq = pw_filter_get_dsp_buffer(pd, impl->quantum);
+		if (seq != NULL)
+			input->HandleBuffer(seq, impl->quantum * sizeof(float),
+				input->Format());
 	}
 
 	impl->owner->ProcessCycle(impl->quantum);
@@ -559,16 +564,9 @@ BMediaUnit::Impl::_OnProcess(void* data, struct spa_io_position* position)
 			continue;
 
 		port_data* pd = (port_data*)output->_GetFilterPort();
-		pw_buffer* pb = pw_filter_dequeue_buffer(pd);
-		if (pb != NULL && pb->buffer != NULL && pb->buffer->datas != NULL
-			&& pb->buffer->datas[0].data != NULL && pb->buffer->datas[0].chunk != NULL) {
-			// MIDI POD sequences are small; chunk->size is the filled length.
-			output->FillBuffer(pb->buffer->datas[0].data,
-				pb->buffer->datas[0].chunk->size > 0
-					? pb->buffer->datas[0].chunk->size : 2048);
-		}
-		if (pb != NULL)
-			pw_filter_queue_buffer(pd, pb);
+		void* seq = pw_filter_get_dsp_buffer(pd, impl->quantum);
+		if (seq != NULL)
+			output->FillBuffer(seq, impl->quantum * sizeof(float));
 	}
 }
 

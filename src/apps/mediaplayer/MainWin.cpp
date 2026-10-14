@@ -685,9 +685,6 @@ MainWin::_OpenRefs(BMessage* message)
 		BString name(ref.name);
 		name.ToLower();
 		fPlaylist->AddItem(ref);
-		if ((name.EndsWith(".mid") || name.EndsWith(".midi"))
-				&& (play || i == 0))
-			_OpenMidiRef(ref);
 	}
 
 	if (play && fPlaylist->CountItems() > 0)

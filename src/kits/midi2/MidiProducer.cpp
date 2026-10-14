@@ -52,6 +52,12 @@ BMidiProducer::Connect(BMidiConsumer *cons)
 			return B_OK;
 	}
 
+	// Endpoint nodes only exist in the graph once started.
+	if (Unit() != NULL && !Unit()->IsStarted())
+		Unit()->Start();
+	if (cons->Unit() != NULL && !cons->Unit()->IsStarted())
+		cons->Unit()->Start();
+
 	// Real PipeWire link through the graph (W7/W8).
 	status_t status = B_OK;
 	BMidiOutput* output = Output();

@@ -8,6 +8,8 @@
 #include <midi2/MidiRoster.h>
 
 #include <new>
+#include <utility>
+#include <vector>
 #include <string.h>
 
 #include <Autolock.h>
@@ -90,8 +92,9 @@ private:
 static thread_id sDeliveryThread = -1;
 static volatile bool sDeliveryRunning = false;
 static sem_id sDeliveryWake = -1;
-static BMidiLocalConsumer* sDeliveryOwner = NULL;
-static BMidiInputBridge* sDeliveryBridge = NULL;
+// Every local consumer is served by the one delivery thread.
+static std::vector<std::pair<BMidiLocalConsumer*, BMidiInputBridge*> >
+	sDeliveryList;
 static BLocker sDeliveryLock("midi2 delivery state");
 
 
@@ -103,10 +106,12 @@ midi2_delivery_thread(void*)
 			acquire_sem_etc(sDeliveryWake, 1, B_TIMEOUT, 2000);
 
 		BAutolock lock(sDeliveryLock);
-		if (sDeliveryBridge != NULL)
-			sDeliveryBridge->DeliverPending();
-		if (sDeliveryOwner != NULL)
-			sDeliveryOwner->EventThread();
+		std::vector<std::pair<BMidiLocalConsumer*, BMidiInputBridge*> >
+			list = sDeliveryList;
+		for (size_t i = 0; i < list.size(); i++) {
+			list[i].second->DeliverPending();
+			list[i].first->EventThread();
+		}
 	}
 	return 0;
 }
@@ -465,8 +470,7 @@ BMidiLocalConsumer::BMidiLocalConsumer(const char *name)
 
 	{
 		BAutolock lock(sDeliveryLock);
-		sDeliveryOwner = this;
-		sDeliveryBridge = bridge;
+		sDeliveryList.push_back(std::make_pair(this, bridge));
 	}
 
 	if (sDeliveryThread < 0) {
@@ -484,13 +488,15 @@ BMidiLocalConsumer::~BMidiLocalConsumer()
 {
 	{
 		BAutolock lock(sDeliveryLock);
-		if (sDeliveryOwner == this)
-			sDeliveryOwner = NULL;
-		if (sDeliveryBridge == Input())
-			sDeliveryBridge = NULL;
+		for (size_t i = 0; i < sDeliveryList.size(); i++) {
+			if (sDeliveryList[i].first == this) {
+				sDeliveryList.erase(sDeliveryList.begin() + i);
+				break;
+			}
+		}
 	}
 
-	if (sDeliveryThread >= 0 && sDeliveryOwner == NULL) {
+	if (sDeliveryThread >= 0 && sDeliveryList.empty()) {
 		sDeliveryRunning = false;
 		if (sDeliveryWake >= 0)
 			release_sem(sDeliveryWake);

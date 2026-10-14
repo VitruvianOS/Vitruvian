@@ -597,16 +597,6 @@ PrintOMaticWindow::MessageReceived(BMessage* message)
 
 
 void
-PrintOMaticWindow::_LoadDevices()
-{
-	thread_id thread = spawn_thread(DeviceLoadEntry,
-		"printomatic:devices", B_NORMAL_PRIORITY, this);
-	if (thread >= B_OK)
-		resume_thread(thread);
-}
-
-
-void
 PrintOMaticWindow::_SelectDevice(int32 index)
 {
 	if (index < 0 || index >= fDeviceCount)
@@ -1034,32 +1024,7 @@ PrintOMaticWindow::_ScanDone(BBitmap* bitmap, bool preview)
 		return;
 	}
 
-	// Convert RGB24 to B_RGB32 once so print, PDF and the
-	// Translation Kit all see one pixel format.
-	BRect bounds = bitmap->Bounds();
-	BBitmap* converted = new BBitmap(bounds, B_BITMAP_NO_SERVER_LINK,
-		B_RGB32);
-	if (converted->InitCheck() == B_OK) {
-		for (int32 y = 0; y <= bounds.IntegerHeight(); y++) {
-			const uint8* src = static_cast<const uint8*>(
-				bitmap->Bits()) + (size_t)y
-					* bitmap->BytesPerRow();
-			uint8* dst = static_cast<uint8*>(converted->Bits())
-				+ (size_t)y * converted->BytesPerRow();
-			for (int32 x = 0; x <= bounds.IntegerWidth(); x++) {
-				dst[x * 4 + 0] = src[x * 3 + 2];
-				dst[x * 4 + 1] = src[x * 3 + 1];
-				dst[x * 4 + 2] = src[x * 3 + 0];
-				dst[x * 4 + 3] = 0xff;
-			}
-		}
-		delete bitmap;
-		bitmap = converted;
-	} else {
-		delete converted;
-	}
-
-	// Grey8 stays as-is; libscan already expanded line art to RGB32.
+	// libscan already delivers B_RGB32 or B_GRAY8 bitmaps.
 	_AppendPage(bitmap);
 	BString text;
 	text << B_TRANSLATE("Scanned page ") << fPages.CountItems();

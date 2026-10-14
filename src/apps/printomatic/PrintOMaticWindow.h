@@ -60,7 +60,6 @@ public:
 			void	_RunScan(bool preview);
 
 private:
-			void	_LoadDevices();
 			void	_SelectDevice(int32 index);
 			void	_LoadDeviceOptions();
 			void	_UpdateOptionMenus();

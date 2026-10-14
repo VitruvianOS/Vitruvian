@@ -25,6 +25,7 @@ get_base_packages() {
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
+                " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " firmware-iwlwifi firmware-atheros firmware-realtek firmware-libertas firmware-brcm80211 firmware-misc-nonfree" \
                 " firmware-intel-graphics firmware-amd-graphics firmware-nvidia-graphics firmware-mediatek bluez-firmware" \
@@ -43,6 +44,7 @@ get_base_packages() {
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
+                " swh-plugins x42-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " firmware-brcm80211 firmware-realtek firmware-atheros firmware-libertas firmware-mediatek firmware-iwlwifi" \
                 " firmware-ti-connectivity firmware-zd1211 firmware-ath9k-htc firmware-carl9170 bluez-firmware firmware-misc-nonfree" \
@@ -59,6 +61,7 @@ get_base_packages() {
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
+                " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " grub-common"
             ;;
@@ -72,6 +75,7 @@ get_base_packages() {
                 " fortune-mod ncurses-bin rsync" \
                 " pipewire-audio pipewire-bin wireplumber gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav" \
                 " libcamera-ipa libspa-0.2-libcamera libcamera-v4l2 v4l-utils" \
+                " swh-plugins frei0r-plugins" \
                 " cups cups-filters printer-driver-gutenprint printer-driver-cups-pdf" \
                 " grub-common grub2-common grub-efi-riscv64-bin"
             ;;

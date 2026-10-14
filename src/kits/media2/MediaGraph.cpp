@@ -792,7 +792,8 @@ struct ForeignLinkInfo {
 
 
 static BLocker sForeignLinksLock("media graph foreign links");
-static std::map<uint32, ForeignLinkInfo> sForeignLinks;
+// Keyed by proxy: the bound id is not known until after the roundtrip.
+static std::map<pw_proxy*, ForeignLinkInfo> sForeignLinks;
 
 
 static std::multiset<std::pair<uint32, uint32> > sPendingEdges;
@@ -1070,7 +1071,7 @@ BMediaGraph::Connect(BMediaOutput* output, const ForeignPort* foreignPort)
 		return B_ERROR;
 	}
 
-	uint32 key = pw_proxy_get_bound_id(proxy);
+	pw_proxy* key = proxy;
 
 	{
 		BAutolock linksLock(sForeignLinksLock);
@@ -1285,7 +1286,7 @@ BMediaGraph::Connect(const ForeignPort* foreignPort, BMediaInput* input,
 		return B_ERROR;
 	}
 
-	uint32 key = pw_proxy_get_bound_id(proxy);
+	pw_proxy* key = proxy;
 	{
 		BAutolock linksLock(sForeignLinksLock);
 		ForeignLinkInfo& info = sForeignLinks[key];
@@ -1477,7 +1478,7 @@ BMediaGraph::DumpGraph(BString& out) const
 	{
 		BAutolock _(sForeignLinksLock);
 		for (const auto& entry : sForeignLinks) {
-			out << "  id=" << entry.first
+			out << "  id=" << pw_proxy_get_bound_id(entry.first)
 				<< " outNode=" << entry.second.outputNodeId
 				<< " inNode=" << (entry.second.outputIsForeign
 					? entry.second.foreignNodeId : entry.second.inputNodeId)

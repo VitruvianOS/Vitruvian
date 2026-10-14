@@ -841,7 +841,12 @@ BMediaTrack::DecodedFormat(BMediaFormat* format)
 		return B_BAD_VALUE;
 	if (fImpl->fKind == kTrackText)
 		return B_NOT_SUPPORTED;
-	*format = fImpl->fFormat;
+	// Report the raw side like the legacy overload; encoded view is EncodedFormat.
+	media_format raw;
+	status_t err = DecodedFormat(&raw, 0);
+	if (err != B_OK)
+		return err;
+	format->format = raw;
 	return B_OK;
 }
 

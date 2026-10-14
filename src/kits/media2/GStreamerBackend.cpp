@@ -399,8 +399,8 @@ static const CodecMime kCodecMimeTable[] = {
 	{ B_CODEC_TYPE_OGG,  "audio/x-vorbis",                               "application/ogg" },
 	{ B_CODEC_TYPE_OPUS, "audio/x-opus",                                 "application/ogg" },
 	{ B_CODEC_TYPE_FLAC, "audio/x-flac",                                 "audio/x-flac" },
-	{ B_CODEC_TYPE_WAV,  "audio/x-raw",                                  "audio/x-wav" },
-	{ B_CODEC_TYPE_PCM,  "audio/x-raw",                                  "audio/x-wav" }
+	{ B_CODEC_TYPE_WAV,  "audio/x-raw, format=(string)S16LE",                                 "audio/x-wav" },
+	{ B_CODEC_TYPE_PCM,  "audio/x-raw, format=(string)S16LE",                                 "audio/x-wav" }
 };
 
 

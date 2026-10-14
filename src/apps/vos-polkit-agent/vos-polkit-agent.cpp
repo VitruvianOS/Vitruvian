@@ -3,13 +3,17 @@
  * Distributed under the terms of the MIT License.
  */
 
+#include <fcntl.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
+#include <syslog.h>
+#include <time.h>
 
 #include <new>
 #include <unistd.h>
@@ -20,12 +24,17 @@
 #include <Autolock.h>
 #include <Button.h>
 #include <Catalog.h>
+#include <CheckBox.h>
+#include <Directory.h>
+#include <FindDirectory.h>
 #include <Font.h>
 #include <LayoutBuilder.h>
 #include <Locker.h>
 #include <Menu.h>
 #include <MenuField.h>
 #include <Messenger.h>
+#include <Notification.h>
+#include <Path.h>
 #include <PopUpMenu.h>
 #include <Resources.h>
 #include <String.h>
@@ -37,6 +46,10 @@
 #include <Window.h>
 
 #include <IconView.h>
+
+#include <LaunchDaemonDefs.h>
+
+#include "grant_store.h"
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -52,6 +65,9 @@ static const char* kAuthorityPath   = "/org/freedesktop/PolicyKit1/Authority";
 static const char* kAuthorityIface  = "org.freedesktop.PolicyKit1.Authority";
 
 static const char* kHelperPath = "/usr/lib/polkit-1/polkit-agent-helper-1";
+static const char* kGrantHelperPath = "/usr/libexec/vos-polkit-grant-helper";
+static const char* kGrantStateDir = "/run/vos/polkit-grant";
+static const char* kLockWatchPortName = "vos-polkit-agent:session-lock";
 
 static const uint32 kMsgLogin  = 'lgin';
 static const uint32 kMsgCancel = 'cncl';
@@ -59,8 +75,26 @@ static const uint32 kMsgClosed = 'clsd';
 static const uint32 kMsgAttempt = 'attm';
 static const uint32 kMsgAuthResult = 'ares';
 static const uint32 kMsgIdentity = 'idnt';
+static const uint32 kMsgRemember = 'rmbr';
+static const uint32 kMsgDuration = 'durm';
+static const uint32 kMsgSaveDuration = 'sver';
+static const uint32 kMsgGrant = 'grnt';
+static const uint32 kMsgGrantResult = 'grrs';
 
 static const char* kIconResource = "PolkitLock";
+
+
+// Operator knobs; the settings file may override every field. Revokes
+// default on except the network one, which is the noisiest.
+struct AgentSettings {
+	int32		duration;		// minutes; 1, 5 or 15
+	bool		revokeSuspend;
+	bool		revokeLock;
+	bool		revokeSession;
+	bool		revokeNetwork;
+};
+
+static AgentSettings gSettings = { 5, true, true, true, false };
 
 
 struct AuthRequest {
@@ -97,11 +131,76 @@ private:
 			BTextView*		fDetailsView;
 			BMenuField*		fIdentityField;
 			BTextControl*	fPassword;
+			BCheckBox*		fRemember;
+			BMenuField*		fDurationField;
 			BStringView*	fStatus;
 			BButton*		fLogin;
 			bool			fSent;
 			bool			fBusy;
 };
+
+
+static void
+load_settings()
+{
+	BPath directory;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &directory) != B_OK)
+		return;
+	BPath folder(directory.Path(), "vos-polkit-agent");
+	BPath file(folder.Path(), "settings");
+
+	FILE* fp = fopen(file.Path(), "r");
+	if (fp == NULL)
+		return;
+
+	char line[256];
+	while (fgets(line, sizeof(line), fp) != NULL) {
+		char* value = strchr(line, '=');
+		if (value == NULL)
+			continue;
+		*value++ = '\0';
+		char* end = strchr(value, '\n');
+		if (end != NULL)
+			*end = '\0';
+
+		if (strcmp(line, "duration") == 0) {
+			int32 minutes = atoi(value);
+			if (minutes == 1 || minutes == 5 || minutes == 15)
+				gSettings.duration = minutes;
+		} else if (strcmp(line, "revoke-suspend") == 0)
+			gSettings.revokeSuspend = atoi(value) != 0;
+		else if (strcmp(line, "revoke-lock") == 0)
+			gSettings.revokeLock = atoi(value) != 0;
+		else if (strcmp(line, "revoke-session") == 0)
+			gSettings.revokeSession = atoi(value) != 0;
+		else if (strcmp(line, "revoke-network") == 0)
+			gSettings.revokeNetwork = atoi(value) != 0;
+	}
+	fclose(fp);
+}
+
+
+static void
+save_settings()
+{
+	BPath directory;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &directory) != B_OK)
+		return;
+	BPath folder(directory.Path(), "vos-polkit-agent");
+	create_directory(folder.Path(), 0755);
+	BPath file(folder.Path(), "settings");
+
+	FILE* fp = fopen(file.Path(), "w");
+	if (fp == NULL)
+		return;
+
+	fprintf(fp, "duration=%d\n", gSettings.duration);
+	fprintf(fp, "revoke-suspend=%d\n", gSettings.revokeSuspend ? 1 : 0);
+	fprintf(fp, "revoke-lock=%d\n", gSettings.revokeLock ? 1 : 0);
+	fprintf(fp, "revoke-session=%d\n", gSettings.revokeSession ? 1 : 0);
+	fprintf(fp, "revoke-network=%d\n", gSettings.revokeNetwork ? 1 : 0);
+	fclose(fp);
+}
 
 
 static BTextView*
@@ -138,6 +237,8 @@ AuthDialog::AuthDialog(const AuthRequest& req, BMessenger reply,
 	fDetailsView(NULL),
 	fIdentityField(NULL),
 	fPassword(NULL),
+	fRemember(NULL),
+	fDurationField(NULL),
 	fStatus(NULL),
 	fLogin(NULL),
 	fSent(false),
@@ -188,6 +289,26 @@ AuthDialog::AuthDialog(const AuthRequest& req, BMessenger reply,
 		"", new BMessage(kMsgLogin));
 	fPassword->TextView()->HideTyping(true);
 
+	fRemember = new BCheckBox("remember",
+		B_TRANSLATE("Don't ask for my password again for"),
+		new BMessage(kMsgRemember));
+
+	BPopUpMenu* durationMenu = new BPopUpMenu("duration");
+	static const int32 kDurations[] = { 1, 5, 15 };
+	for (int32 i = 0; i < 3; i++) {
+		BString label;
+		label << kDurations[i]
+			<< (kDurations[i] == 1 ? B_TRANSLATE(" minute")
+				: B_TRANSLATE(" minutes"));
+		BMessage* duration = new BMessage(kMsgDuration);
+		duration->AddInt32("minutes", kDurations[i]);
+		BMenuItem* item = new BMenuItem(label.String(), duration);
+		item->SetMarked(kDurations[i] == gSettings.duration);
+		durationMenu->AddItem(item);
+	}
+	durationMenu->SetTargetForItems(this);
+	fDurationField = new BMenuField(NULL, durationMenu);
+
 	fStatus = new BStringView("status", B_TRANSLATE("Wrong password, try again"));
 	fStatus->SetHighUIColor(B_FAILURE_COLOR);
 	fStatus->Hide();
@@ -211,6 +332,10 @@ AuthDialog::AuthDialog(const AuthRequest& req, BMessenger reply,
 		builder.Add(fIdentityField);
 	builder.Add(fPassword)
 		.Add(fStatus)
+		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fRemember)
+			.Add(fDurationField)
+		.End()
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 			.AddGlue()
 			.Add(cancel)
@@ -255,6 +380,10 @@ AuthDialog::_SetBusy(bool busy)
 		fPassword->SetEnabled(!busy);
 	if (fIdentityField != NULL)
 		fIdentityField->SetEnabled(!busy);
+	if (fRemember != NULL)
+		fRemember->SetEnabled(!busy);
+	if (fDurationField != NULL)
+		fDurationField->SetEnabled(!busy);
 }
 
 
@@ -298,9 +427,36 @@ AuthDialog::MessageReceived(BMessage* msg)
 			break;
 		}
 
+		case kMsgDuration:
+		{
+			BMenuItem* item = NULL;
+			if (msg->FindPointer("source", (void**)&item) == B_OK
+				&& item != NULL) {
+				int32 minutes = msg->GetInt32("minutes", 5);
+				if (minutes == 1 || minutes == 5 || minutes == 15) {
+					gSettings.duration = minutes;
+					BMessage save(kMsgSaveDuration);
+					save.AddInt32("minutes", minutes);
+					be_app->PostMessage(&save);
+				}
+			}
+			break;
+		}
+
 		case kMsgAuthResult:
 			_SetBusy(false);
 			if (msg->GetBool("ok", false)) {
+				if (fRemember != NULL
+					&& fRemember->Value() == B_CONTROL_ON
+					&& fPassword != NULL
+					&& fPassword->Text()[0] != '\0'
+					&& fCurrentUser.Length() > 0) {
+					BMessage grant(kMsgGrant);
+					grant.AddString("user", fCurrentUser.String());
+					grant.AddInt32("minutes", gSettings.duration);
+					grant.AddString("password", fPassword->Text());
+					be_app->PostMessage(&grant);
+				}
 				_Send(true);
 				PostMessage(B_QUIT_REQUESTED);
 				break;
@@ -425,6 +581,74 @@ run_helper(const char* user, const char* cookie, const char* password)
 }
 
 
+// Setuid root; the password goes down the pipe exactly like it does for
+// polkit-agent-helper-1, and the helper re-checks it with PAM.
+static bool
+run_grant_helper(const char* user, int32 minutes, const char* password)
+{
+	int inp[2];
+	if (pipe(inp) != 0)
+		return false;
+
+	pid_t pid = fork();
+	if (pid < 0)
+		return false;
+
+	if (pid == 0) {
+		dup2(inp[0], STDIN_FILENO);
+		close(inp[0]);
+		close(inp[1]);
+		char minutesArg[16];
+		snprintf(minutesArg, sizeof(minutesArg), "%d", minutes);
+		execl(kGrantHelperPath, "vos-polkit-grant-helper", "grant",
+			user, minutesArg, (char*)NULL);
+		_exit(127);
+	}
+
+	close(inp[0]);
+	FILE* wr = fdopen(inp[1], "w");
+	if (wr == NULL) {
+		close(inp[1]);
+		waitpid(pid, NULL, 0);
+		return false;
+	}
+	fprintf(wr, "%s\n", password);
+	fclose(wr);
+
+	int status;
+	waitpid(pid, &status, 0);
+	return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+
+static void
+run_forget_helper(const char* session)
+{
+	if (session == NULL || *session == '\0')
+		return;
+
+	pid_t pid = fork();
+	if (pid < 0)
+		return;
+
+	if (pid == 0) {
+		int nullFd = open("/dev/null", O_RDWR);
+		if (nullFd >= 0) {
+			dup2(nullFd, STDOUT_FILENO);
+			dup2(nullFd, STDERR_FILENO);
+			if (nullFd > STDERR_FILENO)
+				close(nullFd);
+		}
+		execl(kGrantHelperPath, "vos-polkit-grant-helper", "forget",
+			session, (char*)NULL);
+		_exit(127);
+	}
+
+	int status;
+	waitpid(pid, &status, 0);
+}
+
+
 struct HelperJob {
 	BString		user;
 	BString		cookie;
@@ -442,6 +666,31 @@ helper_thread(void* data)
 	BMessage result(kMsgAuthResult);
 	result.AddBool("ok", ok);
 	job->dialog.SendMessage(&result);
+	delete job;
+	return 0;
+}
+
+
+struct GrantJob {
+	BString		user;
+	BString		password;
+	int32		minutes;
+};
+
+
+static int32
+grant_thread(void* data)
+{
+	GrantJob* job = (GrantJob*)data;
+	bool ok = run_grant_helper(job->user.String(), job->minutes,
+		job->password.String());
+	explicit_bzero(const_cast<char*>(job->password.String()),
+		job->password.Length());
+
+	BMessage result(kMsgGrantResult);
+	result.AddBool("ok", ok);
+	result.AddInt32("minutes", job->minutes);
+	be_app->PostMessage(&result);
 	delete job;
 	return 0;
 }
@@ -596,17 +845,24 @@ public:
 	virtual ~AgentApp();
 
 	virtual void	ReadyToRun();
-	virtual void	MessageReceived(BMessage* msg);
+	virtual	void	MessageReceived(BMessage* msg);
 
 	bool	Authenticate(const AuthRequest& req);
+	void	Revoke(const char* reason);
 
 private:
 	static	int32	_BusThread(void* self);
 			int		_RunBus();
+			void	_Notify(const char* title, const char* content);
+			void	_CheckActiveGrant();
 
 			sd_bus*		fBus;
 			thread_id	fBusThread;
 			volatile bool fRunning;
+			BString		fSessionId;
+			bool		fGrantActive;
+			int32		fGrantMinutes;
+			port_id		fLockPort;
 };
 
 
@@ -615,7 +871,10 @@ AgentApp::AgentApp()
 	BApplication(kAppSignature),
 	fBus(NULL),
 	fBusThread(-1),
-	fRunning(true)
+	fRunning(true),
+	fGrantActive(false),
+	fGrantMinutes(0),
+	fLockPort(-1)
 {
 }
 
@@ -675,7 +934,230 @@ AgentApp::MessageReceived(BMessage* msg)
 		}
 		return;
 	}
+	if (msg->what == kMsgGrant) {
+		GrantJob* job = new(std::nothrow) GrantJob;
+		if (job == NULL)
+			return;
+		job->user = msg->GetString("user", "");
+		job->password = msg->GetString("password", "");
+		job->minutes = msg->GetInt32("minutes", 5);
+		thread_id worker = spawn_thread(grant_thread,
+			"polkit-agent-grant", B_NORMAL_PRIORITY, job);
+		if (worker < 0 || resume_thread(worker) != B_OK) {
+			if (worker >= 0)
+				kill_thread(worker);
+			delete job;
+		}
+		return;
+	}
+	if (msg->what == kMsgGrantResult) {
+		if (msg->GetBool("revoked", false)) {
+			_Notify(B_TRANSLATE("Admin access reminder cleared"),
+				B_TRANSLATE("Password prompts are required "
+					"again."));
+			return;
+		}
+		if (!msg->GetBool("ok", false)) {
+			syslog(LOG_AUTH | LOG_ERR, "vos-polkit-agent: grant "
+				"failed");
+			_Notify(B_TRANSLATE("Could not remember admin "
+				"access"),
+				B_TRANSLATE("The password was not saved; you "
+					"will be asked again."));
+			return;
+		}
+		fGrantActive = true;
+		fGrantMinutes = msg->GetInt32("minutes", 5);
+		BString content;
+		content << B_TRANSLATE("System administration tasks will not "
+				"ask for your password for the next ")
+			<< fGrantMinutes
+			<< B_TRANSLATE(" minutes. Click to forget now.");
+		_Notify(B_TRANSLATE("Admin access remembered"),
+			content.String());
+		syslog(LOG_AUTH | LOG_NOTICE, "vos-polkit-agent: grant "
+			"active for %d minutes", fGrantMinutes);
+		return;
+	}
+	if (msg->what == kMsgSaveDuration) {
+		int32 minutes = msg->GetInt32("minutes", 5);
+		if (minutes == 1 || minutes == 5 || minutes == 15) {
+			gSettings.duration = minutes;
+			save_settings();
+		}
+		return;
+	}
+	if (msg->what == B_ARGV_RECEIVED) {
+		const char* arg = NULL;
+		if (msg->FindString("argv", 1, &arg) == B_OK && arg != NULL
+			&& strcmp(arg, "forget") == 0)
+			Revoke("user request");
+		return;
+	}
 	BApplication::MessageReceived(msg);
+}
+
+
+void
+AgentApp::Revoke(const char* reason)
+{
+	if (!fSessionId.IsEmpty())
+		run_forget_helper(fSessionId.String());
+
+	syslog(LOG_AUTH | LOG_NOTICE, "vos-polkit-agent: grant revoked "
+		"(%s)", reason);
+
+	if (fGrantActive) {
+		fGrantActive = false;
+		fGrantMinutes = 0;
+		BMessage cleared(kMsgGrantResult);
+		cleared.AddBool("revoked", true);
+		cleared.AddString("reason", reason);
+		PostMessage(&cleared);
+	}
+}
+
+
+void
+AgentApp::_Notify(const char* title, const char* content)
+{
+	BNotification notification(B_INFORMATION_NOTIFICATION);
+	notification.SetTitle(title);
+	notification.SetContent(content);
+	notification.SetGroup("remembered-admin");
+	notification.SetOnClickApp(kAppSignature);
+	notification.AddOnClickArg("forget");
+	notification.Send();
+}
+
+
+// An agent restart must not lose track of a live grant: the rule and
+// its expiry live in /run, the helper owns the deadline.
+void
+AgentApp::_CheckActiveGrant()
+{
+	if (fSessionId.IsEmpty() || !grant_session_is_sane(fSessionId.String()))
+		return;
+
+	char path[256];
+	snprintf(path, sizeof(path), "%s/%s.state", kGrantStateDir,
+		fSessionId.String());
+
+	int fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return;
+	char text[512];
+	ssize_t length = read(fd, text, sizeof(text) - 1);
+	close(fd);
+	if (length <= 0)
+		return;
+	text[length] = '\0';
+
+	GrantRecord record;
+	if (!grant_parse_state(text, record))
+		return;
+
+	int64_t now = (int64_t)time(NULL);
+	if (record.expiresUnix <= now)
+		return;
+
+	int32 remaining = (int32)((record.expiresUnix - now + 59) / 60);
+	BMessage result(kMsgGrantResult);
+	result.AddBool("ok", true);
+	result.AddInt32("minutes", remaining);
+	PostMessage(&result);
+}
+
+
+// logind escapes anything outside [A-Za-z0-9_] as _xHH in object paths.
+static void
+session_object_path(const char* session, char* out, size_t outSize)
+{
+	size_t used = 0;
+	const char* prefix = "/org/freedesktop/login1/session/";
+	for (size_t i = 0; prefix[i] != '\0' && used + 1 < outSize; i++)
+		out[used++] = prefix[i];
+
+	for (size_t i = 0; session[i] != '\0' && used + 5 < outSize; i++) {
+		unsigned char c = (unsigned char)session[i];
+		bool plain = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+			|| (c >= '0' && c <= '9') || c == '_';
+		if (plain)
+			out[used++] = (char)c;
+		else {
+			static const char* kHex = "0123456789abcdef";
+			out[used++] = '_';
+			out[used++] = 'x';
+			out[used++] = kHex[(c >> 4) & 0xf];
+			out[used++] = kHex[c & 0xf];
+		}
+	}
+	out[used] = '\0';
+}
+
+
+// The revoke watcher's bus half: suspend, lock (logind path), session
+// switch and, when enabled, network changes. Janus's direct lock
+// notification arrives on fLockPort instead.
+static int
+logind_signal_method(sd_bus_message* message, void* userdata,
+	sd_bus_error*)
+{
+	AgentApp* app = (AgentApp*)userdata;
+	const char* member = sd_bus_message_get_member(message);
+	if (member == NULL)
+		return 0;
+
+	if (strcmp(member, "PrepareForSleep") == 0) {
+		int sleeping = 0;
+		if (sd_bus_message_read(message, "b", &sleeping) >= 0
+			&& sleeping && gSettings.revokeSuspend)
+			app->Revoke("suspend");
+	} else if (strcmp(member, "Lock") == 0) {
+		if (gSettings.revokeLock)
+			app->Revoke("screen lock");
+	} else if (strcmp(member, "PropertiesChanged") == 0) {
+		const char* interface = NULL;
+		if (sd_bus_message_read(message, "s", &interface) < 0
+			|| interface == NULL
+			|| strcmp(interface, "org.freedesktop.login1.Session") != 0)
+			return 0;
+
+		const char* key = NULL;
+		bool revoke = false;
+		const char* reason = NULL;
+		while (sd_bus_message_enter_container(message, 'e', "sv") > 0) {
+			if (sd_bus_message_read(message, "s", &key) < 0) {
+				sd_bus_message_exit_container(message);
+				break;
+			}
+			if (key != NULL && strcmp(key, "Active") == 0) {
+				int active = 1;
+				if (sd_bus_message_read(message, "v", "b", &active)
+						>= 0 && !active
+					&& gSettings.revokeSession) {
+					revoke = true;
+					reason = "session switched";
+				}
+			} else if (key != NULL && strcmp(key, "LockedHint") == 0) {
+				int locked = 0;
+				if (sd_bus_message_read(message, "v", "b", &locked)
+						>= 0 && locked && gSettings.revokeLock) {
+					revoke = true;
+					reason = "screen lock";
+				}
+			} else
+				sd_bus_message_skip(message, "v");
+			sd_bus_message_exit_container(message);
+		}
+		if (revoke)
+			app->Revoke(reason);
+	} else 	if (strcmp(member, "StateChanged") == 0) {
+		// NetworkManager flips state on any connectivity change.
+		if (gSettings.revokeNetwork)
+			app->Revoke("network change");
+	}
+	return 0;
 }
 
 
@@ -903,6 +1385,11 @@ AgentApp::_RunBus()
 	const char* session = getenv("XDG_SESSION_ID");
 	if (session == NULL || *session == '\0')
 		session = "auto";
+	fSessionId = session;
+
+	// janus writes here after locking the screen; the logind matches
+	// below cover the paths that do not go through janus.
+	fLockPort = create_port(1, kLockWatchPortName);
 
 	sd_bus_error err = SD_BUS_ERROR_NULL;
 	r = sd_bus_call_method(fBus, kAuthorityBus, kAuthorityPath,
@@ -920,8 +1407,55 @@ AgentApp::_RunBus()
 	sd_bus_error_free(&err);
 	printf("vos-polkit-agent: registered for session %s\n", session);
 
+	sd_bus_add_match(fBus, NULL,
+		"type='signal',sender='org.freedesktop.login1',"
+		"interface='org.freedesktop.login1.Manager',"
+		"member='PrepareForSleep'", logind_signal_method, this);
+	sd_bus_add_match(fBus, NULL,
+		"type='signal',sender='org.freedesktop.login1',"
+		"interface='org.freedesktop.login1.Manager',member='Lock'",
+		logind_signal_method, this);
+	if (gSettings.revokeNetwork)
+		sd_bus_add_match(fBus, NULL,
+			"type='signal',sender='org.freedesktop.NetworkManager',"
+			"interface='org.freedesktop.NetworkManager',"
+			"member='StateChanged'", logind_signal_method, this);
+
+	if (grant_session_is_sane(session)) {
+		char sessionPath[256];
+		session_object_path(session, sessionPath, sizeof(sessionPath));
+
+		BString lockMatch = "type='signal',sender='org.freedesktop.login1',"
+			"path='";
+		lockMatch << sessionPath
+			<< "',interface='org.freedesktop.login1.Session',"
+			"member='Lock'";
+		sd_bus_add_match(fBus, NULL, lockMatch.String(),
+			logind_signal_method, this);
+
+		BString propsMatch = "type='signal',sender='org.freedesktop.login1',"
+			"path='";
+		propsMatch << sessionPath
+			<< "',interface='org.freedesktop.DBus.Properties',"
+			"member='PropertiesChanged',"
+			"arg0='org.freedesktop.login1.Session'";
+		sd_bus_add_match(fBus, NULL, propsMatch.String(),
+			logind_signal_method, this);
+	}
+
+	// A grant that predates an agent restart still owns the window.
+	_CheckActiveGrant();
+
 	while (fRunning) {
 		flush_auth_replies();
+		if (fLockPort >= 0 && gSettings.revokeLock) {
+			int32 code = 0;
+			char byte = 0;
+			if (read_port_etc(fLockPort, &code, &byte, 1,
+					B_RELATIVE_TIMEOUT, 0) == B_OK
+				&& code == (int32)BPrivate::B_JANUS_SESSION_LOCKED)
+				Revoke("screen lock");
+		}
 		r = sd_bus_process(fBus, NULL);
 		if (r < 0)
 			break;
@@ -1002,6 +1536,8 @@ int
 main(int, char**)
 {
 	prctl(PR_SET_PDEATHSIG, SIGTERM);
+	openlog("vos-polkit-agent", LOG_PID, LOG_AUTH);
+	load_settings();
 	AgentApp app;
 	app.Run();
 	return 0;

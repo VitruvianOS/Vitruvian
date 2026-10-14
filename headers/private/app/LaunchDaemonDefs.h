@@ -59,6 +59,9 @@ enum {
 	B_JANUS_LOCK_SESSION		= 'jnLS',
 	B_JANUS_UNLOCK_AUTH			= 'jnUA',
 	B_JANUS_LOCKER_DIED			= 'jnLD',
+	// Written to the port named "vos-polkit-agent:session-lock" after the
+	// screen locks; listeners drop session-scoped remembered grants.
+	B_JANUS_SESSION_LOCKED		= 'jnLK',
 
 	// input_server asks janus to switch VT ("vt" int32); relayed to the
 	// current janus_session's control port, since that owns the seat.

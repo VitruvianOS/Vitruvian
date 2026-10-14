@@ -815,6 +815,17 @@ stop_unlock_app()
 
 
 static void
+notify_session_lock_watchers()
+{
+	port_id watchers = find_port("vos-polkit-agent:session-lock");
+	if (watchers < 0)
+		return;
+
+	write_port(watchers, BPrivate::B_JANUS_SESSION_LOCKED, NULL, 0);
+}
+
+
+static void
 handle_lock_session(BPrivate::KMessage& kmsg, uid_t sender_uid)
 {
 	pthread_mutex_lock(&sSessionLock);
@@ -878,6 +889,7 @@ handle_lock_session(BPrivate::KMessage& kmsg, uid_t sender_uid)
 	sScreenLocked = true;
 	sUnlockFailures = 0;
 	sUnlockLockedUntil = 0;
+	notify_session_lock_watchers();
 
 	BPrivate::KMessage reply(B_OK);
 	kmsg.SendReply(&reply);

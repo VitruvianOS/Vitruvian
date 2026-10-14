@@ -355,9 +355,13 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 
 	// An unresolvable dependency is reported here, before the clone; the
 	// loader's list mode resolves libraries without running the app.
-	status_t loaderStatus = CheckDynamicLoader(argv[0], NULL, 0);
+	char loaderDetail[256];
+	status_t loaderStatus = CheckDynamicLoader(argv[0], loaderDetail,
+		sizeof(loaderDetail));
 	if (loaderStatus < B_OK) {
-		fprintf(stderr, "load_image: %s: missing library\n", argv[0]);
+		fprintf(stderr, "load_image: %s: %s%s%s\n", argv[0],
+			strerror(loaderStatus), loaderDetail[0] != '\0' ? ": " : "",
+			loaderDetail);
 		return loaderStatus;
 	}
 
@@ -429,18 +433,20 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 				envp ? const_cast<char* const*>(envp) : environ);
 		}
 
+		int execErrno = errno;
+
 		// The CLOEXEC write end closing on a successful exec is what tells
 		// the creator the image is up; a failure must carry its errno.
 		if (statusPipe[1] >= 0) {
 			// the creator may have given up on the pipe (suspended
 			// launch); the write must not kill us before the log line
 			signal(SIGPIPE, SIG_IGN);
-			status_t status = -errno;
+			status_t status = -execErrno;
 			write(statusPipe[1], &status, sizeof(status));
 		}
 
 		fprintf(stderr, "load_image child: exec failed for '%s': %s\n",
-			argv[0], strerror(errno));
+			argv[0], strerror(execErrno));
 
 		 // command not found
 		_exit(127);

@@ -161,6 +161,10 @@ CameraWindow::_BuildInterface()
 	fControlsBox->SetExplicitMaxSize(BSize(sidebar, B_SIZE_UNSET));
 	fPreview->SetExplicitMinSize(BSize(320, 240));
 	fPreview->SetExplicitPreferredSize(BSize(640, 480));
+	// String views cap at their text width and would pin the column.
+	fPreview->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
+	fStatusLabel->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	fEmptyView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 		.SetInsets(B_USE_WINDOW_SPACING)

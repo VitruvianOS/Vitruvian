@@ -9,5 +9,6 @@ install_item() {
 install_item /system/apps/ProcessController -deskbar
 install_item /system/apps/NetworkStatus --deskbar
 install_item /system/apps/AudioMixer --deskbar
+install_item /system/apps/Camera --deskbar
 
 exit 0

@@ -153,11 +153,11 @@ DialerWindow::RefreshLines()
 		BMessage empty(kMsgLineSelected);
 		fLineMenu->AddItem(new BMenuItem(B_TRANSLATE("No lines"),
 			new BMessage(empty)));
-		fLineMenu->SetEnabledForItems(false);
+		fLineMenu->SetEnabled(false);
 		return;
 	}
 
-	fLineMenu->SetEnabledForItems(true);
+	fLineMenu->SetEnabled(true);
 	for (int32 i = 0; i < count; i++) {
 		BModem* modem = roster->ModemAt(i);
 		if (modem == NULL)

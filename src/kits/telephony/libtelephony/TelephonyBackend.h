@@ -122,6 +122,15 @@ static const uint32 kMMSmsStateSent = 5;
 
 static const uint32 kMMSmsPduTypeDeliver = 1;
 
+// SIM lock state from the Modem UnlockRequired property (MMModemLock);
+// SIP lines answer false / zero for every query.
+static const char* const kMMFieldSimPinRequired = "sim_pin_required";
+static const char* const kMMFieldSimPukRequired = "sim_puk_required";
+static const char* const kMMFieldSimUnlockRequired = "sim_unlock_required";
+static const char* const kMMFieldSimUnlockRetries = "sim_unlock_retries";
+static const char* const kMMFieldSimStatus = "sim_status";
+static const char* const kMMFieldSimLocked = "sim_locked";
+
 
 // The seam every telephony backend (ModemManager, SIP) implements; BTelephonyRoster
 // fans notifications out from all of them.

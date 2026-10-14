@@ -44,14 +44,6 @@ static const uint32 kMMAccessLte = 1 << 9;
 static const uint32 kMMAccessNr5g = 1 << 10;
 static const uint32 kMMAccessLteCa = 1 << 11;
 
-// SIM lock state from the Modem UnlockRequired property (MMModemLock).
-static const char* const kMMFieldSimPinRequired = "sim_pin_required";
-static const char* const kMMFieldSimPukRequired = "sim_puk_required";
-static const char* const kMMFieldSimUnlockRequired = "sim_unlock_required";
-static const char* const kMMFieldSimUnlockRetries = "sim_unlock_retries";
-static const char* const kMMFieldSimStatus = "sim_status";
-static const char* const kMMFieldSimLocked = "sim_locked";
-
 
 // Opaque GLib/GDBus forward declarations so this header doesn't force
 // gio/glib include paths onto every consumer; the .cpp includes

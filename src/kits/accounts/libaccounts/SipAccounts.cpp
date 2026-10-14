@@ -17,6 +17,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "SipBackend.h"
 
@@ -71,18 +73,13 @@ status_t
 BSipAccounts::_ReadPassword(const char* id, BString* password)
 {
 	BKeyStore store;
-	BKey key;
+	BPasswordKey key;
 	status_t status = store.GetKey(kSipKeyring, B_KEY_TYPE_PASSWORD, "sip",
 		id, key);
 	if (status != B_OK)
 		return status;
 
-	const BPasswordKey* passwordKey
-		= dynamic_cast<const BPasswordKey*>(&key);
-	if (passwordKey == NULL)
-		return B_ERROR;
-
-	*password = passwordKey->Password();
+	*password = key.Password();
 	return B_OK;
 }
 
@@ -123,12 +120,13 @@ BSipAccounts::AddAccount(const BMessage& settings, const char* password,
 	flat.AddString("account_type", "sip");
 
 	BString directory(path.String());
-	int32 slash = directory.LastIndexOf('/');
+	int32 slash = directory.FindLast('/');
 	if (slash >= 0)
 		directory.Truncate(slash);
 	create_directory(directory.String(), 0755);
 
-	BFile file(path.String(), B_WRITE_ONLY | B_CREATE_ONLY | B_TRUNCATE);
+	BFile file;
+	status = file.SetTo(path.String(), O_WRONLY | O_CREAT | O_TRUNC);
 	if ((status = file.InitCheck()) != B_OK)
 		return status;
 	if ((status = flat.Flatten(&file)) != B_OK)

@@ -433,12 +433,23 @@ BMediaClient::Impl::_OnProcess(void* userdata)
 	} else {
 		BMediaInput* input = dynamic_cast<BMediaInput*>(conn);
 		if (input != NULL) {
-			const uint32 actual = stride > 0
-				? spaBuf->datas[0].chunk->size / stride : 0;
+			// A silent buffer may carry chunk size 0; it still counts as
+			// maxFrames of zeros so recorders keep advancing.
+			const spa_chunk* chunk = spaBuf->datas[0].chunk;
+			uint32 actual = stride > 0 ? chunk->size / stride : 0;
+			if (actual == 0 || (chunk->flags & SPA_CHUNK_FLAG_EMPTY) != 0) {
+				if (pb->requested == 0 && actual == 0)
+					maxFrames = 0;
+				actual = maxFrames;
+				memset(data, 0, maxFrames * stride);
+			}
 			if (actual < maxFrames)
 				maxFrames = actual;
 			const size_t bytes = maxFrames * stride;
-			input->HandleBuffer(data, bytes, format);
+			// Through the node's virtual hook so process-hook nodes
+			// (the recorder) receive their buffers.
+			if (bytes > 0)
+				conn->Client()->ProcessCallback(conn, data, bytes, maxFrames);
 		}
 	}
 

@@ -88,6 +88,8 @@ RecorderWindow::RecorderWindow()
 	fInputField = NULL;
 	fRecorder = NULL;
 	fRecording = false;
+	fRecFrames = 0;
+	fLastReport = 0;
 	fTempCount = -1;
 	fButtonState = btnPaused;
 	fInputDeviceId = 0;
@@ -717,6 +719,8 @@ RecorderWindow::Record(BMessage * message)
 		return;
 	}
 	fRecSize = 0;
+	fRecFrames = 0;
+	fLastReport = system_time();
 
 	// Encode the take through the recorder's GStreamer output pipeline.
 	BPath recPath;
@@ -1278,6 +1282,17 @@ RecorderWindow::RecordFile(void* cookie, bigtime_t timestamp,
 	if (window->fRecording) {
 		window->fVUView->ComputeLevels(data, size, format.format);
 		window->fRecSize += size;
+		const uint32 stride = (format.format
+				& media_raw_audio_format::B_AUDIO_SIZE_MASK)
+			* format.channel_count;
+		if (stride > 0)
+			window->fRecFrames += size / stride;
+		const bigtime_t now = system_time();
+		if (now - window->fLastReport >= 1000000) {
+			window->fLastReport = now;
+			fprintf(stderr, "SoundRecorder: %lld frames received\n",
+				(long long)window->fRecFrames);
+		}
 	}
 }
 

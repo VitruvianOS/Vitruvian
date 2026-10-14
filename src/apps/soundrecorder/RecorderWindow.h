@@ -122,6 +122,8 @@ private:
 
 		BFile fRecFile;
 		off_t fRecSize;
+		int64 fRecFrames;
+		bigtime_t fLastReport;
 
 		media_client_id fInputDeviceId;
 		BMediaGraph::ForeignPort fConnectedSource;

@@ -138,7 +138,7 @@ CheckDynamicLoader(const char* path, char* detail, size_t detailSize)
 		detail[0] = '\0';
 
 	// bare names would need a PATH search here; execvpe() does its own
-	if (path == NULL || path[0] != '/')
+	if (path == NULL || strchr(path, '/') == NULL)
 		return B_OK;
 
 	char interpreter[PATH_MAX];
@@ -159,8 +159,10 @@ CheckDynamicLoader(const char* path, char* detail, size_t detailSize)
 	if (pid == 0) {
 		// async-signal-safe only: this parent may be multi-threaded
 		close(pipeFd[0]);
+		// the loader lists on stdout and diagnoses on stderr
+		dup2(pipeFd[1], STDOUT_FILENO);
 		dup2(pipeFd[1], STDERR_FILENO);
-		if (pipeFd[1] != STDERR_FILENO)
+		if (pipeFd[1] != STDOUT_FILENO && pipeFd[1] != STDERR_FILENO)
 			close(pipeFd[1]);
 		execl(interpreter, interpreter, "--list", path, (char*)NULL);
 		_exit(127);

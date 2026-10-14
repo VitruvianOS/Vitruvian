@@ -6,6 +6,7 @@
 // Standard Includes -----------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <utime.h>
 
 // System Includes -------------------------------------------------------------
@@ -19,9 +20,12 @@
 #include <Looper.h>
 #include <Message.h>
 #include <MessageQueue.h>
+#include <Mime.h>
 #include <Path.h>
 #include <Roster.h>
 #include <String.h>
+
+#include <libroot/libroot_private.h>
 
 // Project Includes ------------------------------------------------------------
 #include <TestShell.h>
@@ -3095,6 +3099,236 @@ void LaunchTester::LaunchTestF14()
 }
 
 
+//	474-byte ELF64 ET_EXEC with PT_INTERP and a single DT_NEEDED on
+//	libvostestmissing.so: the loader names that library and refuses to
+//	start it, which is what a broken install looks like.
+static const unsigned char kMissingLibApp[] = {
+	0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x3e, 0x00, 0x01, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x38, 0x00, 0x04, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+	0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x40, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0xe0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe0, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x20, 0x01, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x20, 0x01, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x20, 0x01, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+	0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0xda, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0xda, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00,
+	0x7a, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7a, 0x01, 0x40, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x7a, 0x01, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x60, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x2f, 0x6c, 0x69, 0x62, 0x36, 0x34, 0x2f, 0x6c, 0x64, 0x2d, 0x6c, 0x69,
+	0x6e, 0x75, 0x78, 0x2d, 0x78, 0x38, 0x36, 0x2d, 0x36, 0x34, 0x2e, 0x73,
+	0x6f, 0x2e, 0x32, 0x00, 0x00, 0x6c, 0x69, 0x62, 0x76, 0x6f, 0x73, 0x74,
+	0x65, 0x73, 0x74, 0x6d, 0x69, 0x73, 0x73, 0x69, 0x6e, 0x67, 0x2e, 0x73,
+	0x6f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x6a, 0x01, 0x40, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3c, 0x01,
+	0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x52, 0x01, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+
+
+// Marks filename executable and tags it as the app for signature, so the
+// roster resolves a Launch(ref) to the file itself (wasDocument false).
+static
+void
+mark_as_app(const char *filename, const char *signature)
+{
+	system((string("chmod a+x ") + filename).c_str());
+	BFile file;
+	CHK(file.SetTo(filename, B_READ_WRITE) == B_OK);
+	BAppFileInfo appFileInfo;
+	CHK(appFileInfo.SetTo(&file) == B_OK);
+	CHK(appFileInfo.SetSignature(signature) == B_OK);
+	CHK(appFileInfo.SetType(B_APP_MIME_TYPE) == B_OK);
+}
+
+// Writes size bytes of data (may be NULL for a 0-byte file) as an app.
+static
+void
+create_broken_app(const char *filename, const char *signature,
+	const void *data, size_t size)
+{
+	{
+		BFile file;
+		CHK(file.SetTo(filename,
+			B_READ_WRITE | B_CREATE_FILE | B_ERASE_FILE) == B_OK);
+		if (size > 0)
+			CHK(file.Write(data, size) == (ssize_t)size);
+	}
+	mark_as_app(filename, signature);
+}
+
+// Quits the team and waits until the roster forgets it.
+static
+void
+terminate_and_wait(team_id team)
+{
+	BRoster roster;
+	BMessenger messenger(NULL, team);
+	messenger.SendMessage(B_QUIT_REQUESTED);
+	for (int32 i = 0; i < 200; i++) {
+		app_info info;
+		if (roster.GetRunningAppInfo(team, &info) != B_OK)
+			return;
+		snooze(50000);
+	}
+	CHK(!"team did not terminate");
+}
+
+/*
+	status_t Launch(const entry_ref *ref, const BMessage *initialMessage,
+					team_id *appTeam) const
+	@case 1			launch a 0-byte file marked executable as an app
+	@results		Should return B_NOT_AN_EXECUTABLE and leave no stuck
+					registrar state: a good app of the same signature
+					launches right after.
+*/
+void LaunchTester::LaunchTestG1()
+{
+	BRoster roster;
+	create_app(appFile1, appType1);
+	CHK(truncate(appFile1, 0) == 0);
+	mark_as_app(appFile1, appType1);
+
+	entry_ref fileRef(ref_for_path(appFile1));
+	team_id team = -1;
+	CHK(roster.Launch(&fileRef, (BMessage*)NULL, &team)
+		== B_NOT_AN_EXECUTABLE);
+	CHK(team < 0);
+
+	// the pre-registration must be gone: same signature, good binary
+	remove(appFile1);
+	create_app(appFile1, appType1);
+	mark_as_app(appFile1, appType1);
+	fileRef = ref_for_path(appFile1);
+	CHK(roster.Launch(&fileRef, (BMessage*)NULL, &team) == B_OK);
+	CHK(team >= 0);
+	terminate_and_wait(team);
+}
+
+/*
+	status_t Launch(const entry_ref *ref, const BMessage *initialMessage,
+					team_id *appTeam) const
+	@case 2			launch a text file marked executable as an app
+	@results		Should return B_NOT_AN_EXECUTABLE and leave no stuck
+					registrar state.
+*/
+void LaunchTester::LaunchTestG2()
+{
+	BRoster roster;
+	const char *text = "this is not an executable\n";
+	create_broken_app(appFile1, appType1, text, strlen(text));
+
+	entry_ref fileRef(ref_for_path(appFile1));
+	team_id team = -1;
+	CHK(roster.Launch(&fileRef, (BMessage*)NULL, &team)
+		== B_NOT_AN_EXECUTABLE);
+	CHK(team < 0);
+
+	remove(appFile1);
+	create_app(appFile1, appType1);
+	mark_as_app(appFile1, appType1);
+	fileRef = ref_for_path(appFile1);
+	CHK(roster.Launch(&fileRef, (BMessage*)NULL, &team) == B_OK);
+	CHK(team >= 0);
+	terminate_and_wait(team);
+}
+
+/*
+	status_t Launch(const entry_ref *ref, const BMessage *initialMessage,
+					team_id *appTeam) const
+	@case 3			launch a binary whose shared library is missing
+	@results		Should return B_MISSING_LIBRARY, the loader check
+					names the library, and no stuck registrar state.
+*/
+void LaunchTester::LaunchTestG3()
+{
+	BRoster roster;
+	create_broken_app(appFile1, appType1, kMissingLibApp,
+		sizeof(kMissingLibApp));
+
+	// the loader's own verdict names the library for the alert
+	char detail[256];
+	BPath appPath(appFile1);
+	CHK(__loader_check_binary(appPath.Path(), detail, sizeof(detail))
+		== B_MISSING_LIBRARY);
+	CHK(strstr(detail, "libvostestmissing.so") != NULL);
+
+	entry_ref fileRef(ref_for_path(appFile1));
+	team_id team = -1;
+	CHK(roster.Launch(&fileRef, (BMessage*)NULL, &team)
+		== B_MISSING_LIBRARY);
+	CHK(team < 0);
+
+	remove(appFile1);
+	create_app(appFile1, appType1);
+	mark_as_app(appFile1, appType1);
+	fileRef = ref_for_path(appFile1);
+	CHK(roster.Launch(&fileRef, (BMessage*)NULL, &team) == B_OK);
+	CHK(team >= 0);
+	terminate_and_wait(team);
+}
+
+/*
+	status_t Launch(const entry_ref *ref, const BMessage *initialMessage,
+					team_id *appTeam) const
+	@case 4			launch a binary that exits before registering
+	@results		Launch itself succeeds (the exec did), and the
+					registrar does not stay stuck: a second launch of
+					the same app succeeds once the team is gone.
+*/
+void LaunchTester::LaunchTestG4()
+{
+	BRoster roster;
+	// /bin/true: a real dynamic executable that exits immediately
+	system((string("cp /bin/true ") + appFile1).c_str());
+	mark_as_app(appFile1, appType1);
+
+	entry_ref fileRef(ref_for_path(appFile1));
+	team_id team = -1;
+	CHK(roster.Launch(&fileRef, (BMessage*)NULL, &team) == B_OK);
+	CHK(team >= 0);
+
+	// the team dies without ever registering; wait it out
+	for (int32 i = 0; i < 200; i++) {
+		app_info info;
+		if (roster.GetRunningAppInfo(team, &info) != B_OK)
+			break;
+		snooze(50000);
+	}
+
+	// a second launch must not hang on stale registrar state
+	CHK(roster.Launch(&fileRef, (BMessage*)NULL, &team) == B_OK);
+	CHK(team >= 0);
+	for (int32 i = 0; i < 200; i++) {
+		app_info info;
+		if (roster.GetRunningAppInfo(team, &info) != B_OK)
+			return;
+		snooze(50000);
+	}
+	CHK(!"second team did not exit");
+}
+
+
 Test* LaunchTester::Suite()
 {
 	TestSuite* SuiteOfTests = new TestSuite;
@@ -3158,6 +3392,11 @@ Test* LaunchTester::Suite()
 	ADD_TEST4(BRoster, SuiteOfTests, LaunchTester, LaunchTestF12);
 	ADD_TEST4(BRoster, SuiteOfTests, LaunchTester, LaunchTestF13);
 	ADD_TEST4(BRoster, SuiteOfTests, LaunchTester, LaunchTestF14);
+
+	ADD_TEST4(BRoster, SuiteOfTests, LaunchTester, LaunchTestG1);
+	ADD_TEST4(BRoster, SuiteOfTests, LaunchTester, LaunchTestG2);
+	ADD_TEST4(BRoster, SuiteOfTests, LaunchTester, LaunchTestG3);
+	ADD_TEST4(BRoster, SuiteOfTests, LaunchTester, LaunchTestG4);
 
 	return SuiteOfTests;
 }

@@ -419,8 +419,15 @@ Team::LoadImage(int32 argc, const char** argv, const char** envp,
 			_exit(127);
 		}
 
-		execvpe(argv[0], const_cast<char* const*>(argv),
-			envp ? const_cast<char* const*>(envp) : environ);
+		// execvpe() would fall back to /bin/sh on ENOEXEC, launching a
+		// 0-byte or text file as a script; real paths get no such tail.
+		if (strchr(argv[0], '/') != NULL) {
+			execve(argv[0], const_cast<char* const*>(argv),
+				envp ? const_cast<char* const*>(envp) : environ);
+		} else {
+			execvpe(argv[0], const_cast<char* const*>(argv),
+				envp ? const_cast<char* const*>(envp) : environ);
+		}
 
 		// The CLOEXEC write end closing on a successful exec is what tells
 		// the creator the image is up; a failure must carry its errno.

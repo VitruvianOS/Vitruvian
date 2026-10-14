@@ -91,6 +91,11 @@ class LaunchTester : public BTestCase
 		void LaunchTestF13();
 		void LaunchTestF14();
 
+		void LaunchTestG1();
+		void LaunchTestG2();
+		void LaunchTestG3();
+		void LaunchTestG4();
+
 		static Test* Suite();
 
 private:

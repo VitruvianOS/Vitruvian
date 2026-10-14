@@ -179,14 +179,14 @@ public:
 			fPipeline = NULL;
 			return B_ERROR;
 		}
-		// Video drops its oldest frame when nobody is reading: a full video
-		// sink blocks the shared demuxer, which then starves the audio
-		// branch and freezes the whole pipeline. Audio never drops.
+		// Video holds frames until read: dropping here lost a short clip
+		// before the first pull. Audio-only readers flip it to drop (see
+		// ReadFrames) so an unread video sink cannot stall the demuxer.
 		g_object_set(fVideoSink,
 			"caps",        videoCaps,
 			"sync",        FALSE,
-			"max-buffers", 4,
-			"drop",        TRUE,
+			"max-buffers", 8,
+			"drop",        FALSE,
 			NULL);
 		gst_caps_unref(videoCaps);
 
@@ -1031,6 +1031,31 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 	*outFrameCount = 0;
 	if (requested <= 0)
 		return B_BAD_VALUE;
+
+	if (fImpl->fPlayBin != NULL) {
+		GstElement* vsink = NULL;
+		g_object_get(fImpl->fPlayBin, "video-sink", &vsink, NULL);
+		if (vsink != NULL) {
+			if (fImpl->fKind == kTrackVideo) {
+				g_object_set_data(G_OBJECT(vsink), "vos-read",
+					GINT_TO_POINTER(1));
+			} else if (g_object_get_data(G_OBJECT(vsink), "vos-read")
+					== NULL) {
+				// Nobody pulls video: after 3s of audio, drop instead of
+				// letting the full video sink block the audio branch.
+				gint64 now = g_get_monotonic_time();
+				gpointer first = g_object_get_data(G_OBJECT(vsink),
+					"vos-audio-first");
+				if (first == NULL) {
+					g_object_set_data(G_OBJECT(vsink), "vos-audio-first",
+						GSIZE_TO_POINTER((gsize)now));
+				} else if (now - (gint64)(gsize)first > 3000000) {
+					g_object_set(vsink, "drop", TRUE, NULL);
+				}
+			}
+			gst_object_unref(vsink);
+		}
+	}
 
 	if (fImpl->fEOS)
 		return B_LAST_BUFFER_ERROR;

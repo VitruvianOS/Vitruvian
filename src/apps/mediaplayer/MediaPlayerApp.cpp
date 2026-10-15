@@ -65,6 +65,9 @@ MediaPlayerApp::ArgvReceived(int32 argc, char** argv)
 		ReadyToRun();
 		fMainWin->PostMessage(&refs);
 	}
+	// Second launch hands the file to this instance; bring it forward.
+	if (fMainWin != NULL)
+		fMainWin->Activate();
 }
 
 

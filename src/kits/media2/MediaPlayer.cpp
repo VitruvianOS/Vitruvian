@@ -728,9 +728,13 @@ BMediaPlayer::Impl::_PumpVideoFrame(bool force)
 
 	// The pump already runs on the view's looper, so the frame goes
 	// over in place: a SendMessage would bounce the payload through
-	// the looper port back to this same thread.
-	if (looper != NULL && view != NULL)
-		looper->DispatchMessage(&msg, view);
+	// the looper port back to this same thread. A forced (paused seek)
+	// pull arrives from another thread and needs the looper lock.
+	if (looper != NULL && view != NULL) {
+		BAutolock lock(looper);
+		if (lock.IsLocked())
+			looper->DispatchMessage(&msg, view);
+	}
 }
 
 

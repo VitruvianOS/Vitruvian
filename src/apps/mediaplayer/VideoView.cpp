@@ -13,9 +13,11 @@
 #include <Window.h>
 #include <string.h>
 
+#include <media2/MediaDefs.h>
 #include <media2/MediaPlayer.h>
 
 #include "MediaMessages.h"
+#include "VideoDisplay.h"
 
 
 // Frames lagging the presented audio sample by more than this are dropped.
@@ -31,6 +33,9 @@ VideoView::VideoView(BRect frame, const char* name, uint32 resizeMask)
 		B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE | B_NAVIGABLE),
 	fVideoWidth(0),
 	fVideoHeight(0),
+	fParNum(0),
+	fParDen(0),
+	fRotation(0),
 	fBitmap(NULL),
 	fFullscreen(false),
 	fDragging(false),
@@ -47,10 +52,14 @@ VideoView::~VideoView()
 
 
 void
-VideoView::SetVideoSize(uint32 width, uint32 height)
+VideoView::SetVideoFormat(uint32 width, uint32 height, uint32 pixelWidthAspect,
+	uint32 pixelHeightAspect, uint32 rotation)
 {
 	fVideoWidth = width;
 	fVideoHeight = height;
+	fParNum = pixelWidthAspect;
+	fParDen = pixelHeightAspect;
+	fRotation = rotation;
 	if (width == 0 || height == 0)
 		_ClearFrame();
 	Invalidate();
@@ -67,10 +76,12 @@ VideoView::GetPreferredSize(float* width, float* height)
 			*height = 240;
 		return;
 	}
+	const video_display_size display = compute_video_display_size(
+		fVideoWidth, fVideoHeight, fParNum, fParDen, fRotation);
 	if (width != NULL)
-		*width = fVideoWidth;
+		*width = display.width;
 	if (height != NULL)
-		*height = fVideoHeight;
+		*height = display.height;
 }
 
 
@@ -224,15 +235,23 @@ VideoView::MessageReceived(BMessage* message)
 }
 
 
+// Rotation metadata is honoured here: the stored frame is rotated into
+// the bitmap so Draw only has to letterbox.
 void
 VideoView::_PresentFrame(const void* data, uint32 width, uint32 height,
 	uint32 stride)
 {
+	const bool swapAxes = fRotation == B_VIDEO_ROTATE_90
+		|| fRotation == B_VIDEO_ROTATE_270;
+	const uint32 bitmapWidth = swapAxes ? height : width;
+	const uint32 bitmapHeight = swapAxes ? width : height;
+
 	if (fBitmap == NULL
-			|| fBitmap->Bounds().IntegerWidth() + 1 != (int32)width
-			|| fBitmap->Bounds().IntegerHeight() + 1 != (int32)height) {
+			|| fBitmap->Bounds().IntegerWidth() + 1 != (int32)bitmapWidth
+			|| fBitmap->Bounds().IntegerHeight() + 1 != (int32)bitmapHeight) {
 		delete fBitmap;
-		fBitmap = new BBitmap(BRect(0, 0, width - 1, height - 1), B_RGB32);
+		fBitmap = new BBitmap(BRect(0, 0, bitmapWidth - 1, bitmapHeight - 1),
+			B_RGB32);
 		if (fBitmap == NULL || fBitmap->InitCheck() != B_OK) {
 			delete fBitmap;
 			fBitmap = NULL;
@@ -244,9 +263,31 @@ VideoView::_PresentFrame(const void* data, uint32 width, uint32 height,
 	const int32 bytesPerRow = fBitmap->BytesPerRow();
 	const uint8* src = (const uint8*)data;
 	const uint32 rowBytes = width * 4;
-	for (uint32 y = 0; y < height; y++)
-		memcpy(bits + (size_t)y * bytesPerRow, src + (size_t)y * stride,
-			rowBytes);
+	if (fRotation == B_VIDEO_TOP_LEFT_RIGHT) {
+		for (uint32 y = 0; y < height; y++)
+			memcpy(bits + (size_t)y * bytesPerRow, src + (size_t)y * stride,
+				rowBytes);
+	} else {
+		for (uint32 y = 0; y < bitmapHeight; y++) {
+			uint8* dstRow = bits + (size_t)y * bytesPerRow;
+			for (uint32 x = 0; x < bitmapWidth; x++) {
+				uint32 sx;
+				uint32 sy;
+				if (fRotation == B_VIDEO_ROTATE_90) {
+					sx = y;
+					sy = height - 1 - x;
+				} else if (fRotation == B_VIDEO_ROTATE_180) {
+					sx = width - 1 - x;
+					sy = height - 1 - y;
+				} else {
+					sx = width - 1 - y;
+					sy = x;
+				}
+				memcpy(dstRow + (size_t)x * 4,
+					src + (size_t)sy * stride + (size_t)sx * 4, 4);
+			}
+		}
+	}
 
 	fVideoWidth = width;
 	fVideoHeight = height;
@@ -277,13 +318,16 @@ VideoView::Draw(BRect updateRect)
 		return;
 	}
 
-	// Letterbox the decoded frame into the current bounds.
-	float scale = bounds.Width() / (float)fVideoWidth;
-	float scaleY = bounds.Height() / (float)fVideoHeight;
+	// Letterbox the frame into the current bounds at its display aspect:
+	// pixel aspect and rotation folded in (anamorphic and phone clips).
+	const video_display_size display = compute_video_display_size(
+		fVideoWidth, fVideoHeight, fParNum, fParDen, fRotation);
+	float scale = bounds.Width() / (float)display.width;
+	float scaleY = bounds.Height() / (float)display.height;
 	if (scaleY < scale)
 		scale = scaleY;
-	float targetW = fVideoWidth * scale;
-	float targetH = fVideoHeight * scale;
+	float targetW = display.width * scale;
+	float targetH = display.height * scale;
 	BRect videoFrame(0, 0, targetW, targetH);
 	videoFrame.OffsetTo(
 		(bounds.Width() - targetW) / 2.0f,

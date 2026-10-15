@@ -57,6 +57,9 @@ public:
 	virtual	void				VolumeChanged(float value);
 	virtual	void				ToggleMute();
 	virtual	void				PositionChanged(float value);
+	// Dragging ends: seek accurately here, previews went through
+	// PositionChanged.
+	virtual	void				PositionCommitted(float value);
 	virtual	bigtime_t			TimePositionFor(float value);
 
 			void				SetEnabled(uint32 whichButtons);
@@ -89,6 +92,7 @@ private:
 			void				_UpdateVolume();
 			void				_ToggleMute();
 			void				_UpdatePosition();
+			void				_CommitPosition();
 
 			float				_LinearToExponential(float db);
 			float				_ExponentialToLinear(float db);

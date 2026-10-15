@@ -30,6 +30,7 @@ public:
 	virtual	void				VolumeChanged(float value);
 	virtual	void				ToggleMute();
 	virtual	void				PositionChanged(float value);
+	virtual	void				PositionCommitted(float value);
 	virtual	bigtime_t			TimePositionFor(float value);
 
 private:
@@ -38,6 +39,7 @@ private:
 private:
 			Controller*			fController;
 			Playlist*			fPlaylist;
+			bigtime_t			fLastScrubTime;
 };
 
 

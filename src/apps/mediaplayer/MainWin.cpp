@@ -37,6 +37,7 @@
 #include "Playlist.h"
 #include "PlaylistItem.h"
 #include "PlaylistWindow.h"
+#include "VideoDisplay.h"
 #include "VideoView.h"
 
 #include <media2/MediaPlayer.h>
@@ -51,8 +52,6 @@ static const float kMinWidth = 360;
 static const float kMinHeight = 280;
 static const float kAudioMinWidth = 250;
 static const float kDefaultScale = 1.0f;
-// Full screen: hide the strip after the mouse has been idle this long.
-static const bigtime_t kIdleHideDelay = 2000000;
 
 
 MainWin::MainWin(BRect frame)
@@ -76,13 +75,14 @@ MainWin::MainWin(BRect frame)
 	fLoop(false),
 	fAlwaysOnTop(false),
 	fHideInterface(false),
-	fFullscreen(false),
-	fControlsVisible(false),
+	fCursorHidden(false),
 	fVideoScale(kDefaultScale),
 	fStripLayoutIndex(-1),
 	fStripHeight(0),
 	fControlY(0),
-	fLastRevealTime(0)
+	fVideoParNum(0),
+	fVideoParDen(0),
+	fVideoRotation(0)
 {
 	fController = new Controller(BMessenger(this));
 	// A separate playlist here was never seen by the controller, so opened
@@ -96,8 +96,9 @@ MainWin::MainWin(BRect frame)
 	_SetupWindow();
 	_LoadSettings();
 
+	// 30 Hz so the bar tracks short clips smoothly.
 	fPositionRunner = new BMessageRunner(BMessenger(this),
-		new BMessage(MSG_CONTROLLER_POSITION), 100000);
+		new BMessage(MSG_CONTROLLER_POSITION), 33333);
 }
 
 
@@ -198,6 +199,8 @@ MainWin::_CreateMenu()
 			item->SetMarked(true);
 		videoMenu->AddItem(item);
 	}
+	videoMenu->AddItem(new BMenuItem(B_TRANSLATE("Fit to Screen"),
+		new BMessage(MSG_VIDEO_FIT)));
 	videoMenu->AddSeparatorItem();
 	videoMenu->AddItem(new BMenuItem(B_TRANSLATE("Zoom In"),
 		new BMessage(MSG_ZOOM_IN), '+'));
@@ -247,18 +250,37 @@ MainWin::_ChromeHeight() const
 void
 MainWin::_SizeForVideo(uint32 width, uint32 height)
 {
-	if (width == 0 || height == 0 || fVideoView == NULL || fFullscreen)
+	if (width == 0 || height == 0 || fVideoView == NULL
+			|| fFullScreen.IsFullscreen()) {
 		return;
+	}
 
-	float targetW = width * fVideoScale;
-	float targetH = height * fVideoScale;
+	video_display_size display = compute_video_display_size(width, height,
+		fVideoParNum, fVideoParDen, fVideoRotation);
+
+	// HiDPI: the window works in logical units, video arrives in pixels.
+	const float backing = fVideoView->Scale();
+	if (backing > 1.0f) {
+		display.width = (uint32)(display.width / backing + 0.5f);
+		display.height = (uint32)(display.height / backing + 0.5f);
+	}
+
+	float targetW = display.width * fVideoScale;
+	float targetH = display.height * fVideoScale;
 	if (targetW < kMinWidth)
 		targetW = kMinWidth;
 	if (targetH < 40)
 		targetH = 40;
 
+	// Clamp to the screen the window is on, reserving the chrome.
+	BRect screen = BScreen(this).Frame();
+	video_display_size target = { (uint32)targetW, (uint32)targetH };
+	const video_display_size clamped = clamp_video_display_size(target,
+		screen.Width(), screen.Height() - _ChromeHeight());
+
 	// Chrome comes from the layout, not constants, so HiDPI scaling holds.
-	ResizeTo(targetW, targetH + _ChromeHeight());
+	ResizeTo(clamped.width, clamped.height + _ChromeHeight());
+	fLastFrame = Frame();
 }
 
 
@@ -359,7 +381,7 @@ MainWin::_UpdateVideoMode()
 			fLocationView->Show();
 	}
 
-	if (fFullscreen)
+	if (fFullScreen.IsFullscreen())
 		return;
 
 	if (hasVideo) {
@@ -420,24 +442,42 @@ MainWin::_ShouldHandleKey(BHandler* handler)
 void
 MainWin::_ToggleFullscreen()
 {
-	if (fFullscreen)
-		_ExitFullscreen();
-	else
+	_ApplyFullScreenResult(fFullScreen.Toggle(
+		fVideoView != NULL && fVideoView->HasVideo(), system_time()));
+}
+
+
+void
+MainWin::_ApplyFullScreenResult(const FullScreenState::Result& result)
+{
+	if (result.enter)
 		_EnterFullscreen();
+	else if (result.exit)
+		_ExitFullscreen();
+	_SetCursorHidden(result.cursorHidden);
+}
+
+
+void
+MainWin::_SetCursorHidden(bool hidden)
+{
+	if (hidden == fCursorHidden)
+		return;
+	fCursorHidden = hidden;
+	if (hidden)
+		be_app->HideCursor();
+	else
+		be_app->ShowCursor();
 }
 
 
 void
 MainWin::_EnterFullscreen()
 {
-	if (fFullscreen || fVideoView == NULL)
-		return;
-	// Full screen is refused until there is video to fill it with.
-	if (!fVideoView->HasVideo())
+	if (fVideoView == NULL || !fVideoView->HasVideo())
 		return;
 
 	fSavedFrame = Frame();
-	fFullscreen = true;
 	fStripHeight = fControllerView->Bounds().Height();
 
 	BGroupLayout* layout = dynamic_cast<BGroupLayout*>(GetLayout());
@@ -456,9 +496,7 @@ MainWin::_EnterFullscreen()
 	MoveTo(screen.left, screen.top);
 	ResizeTo(screen.Width(), screen.Height());
 
-	fControlsVisible = true;
 	fControlY = fVideoView->Bounds().bottom - fStripHeight + 1;
-	fLastRevealTime = system_time();
 	_PositionControls();
 	fVideoView->SetFullscreenMode(true);
 }
@@ -467,10 +505,6 @@ MainWin::_EnterFullscreen()
 void
 MainWin::_ExitFullscreen()
 {
-	if (!fFullscreen)
-		return;
-	fFullscreen = false;
-	fControlsVisible = false;
 	fVideoView->SetFullscreenMode(false);
 
 	fVideoView->RemoveChild(fControllerView);
@@ -488,6 +522,7 @@ MainWin::_ExitFullscreen()
 	if (fSavedFrame.IsValid()) {
 		MoveTo(fSavedFrame.LeftTop());
 		ResizeTo(fSavedFrame.Width(), fSavedFrame.Height());
+		fLastFrame = Frame();
 	}
 	BLayout* top = GetLayout();
 	if (top != NULL)
@@ -498,8 +533,10 @@ MainWin::_ExitFullscreen()
 void
 MainWin::_PositionControls()
 {
-	if (!fFullscreen || fVideoView == NULL || fControllerView == NULL)
+	if (!fFullScreen.IsFullscreen() || fVideoView == NULL
+			|| fControllerView == NULL) {
 		return;
+	}
 	BRect bounds = fVideoView->Bounds();
 	fControllerView->MoveTo(0, fControlY);
 	fControllerView->ResizeTo(bounds.Width(), fStripHeight);
@@ -508,30 +545,10 @@ MainWin::_PositionControls()
 
 
 void
-MainWin::_ShowControls()
-{
-	if (!fFullscreen)
-		return;
-	fControlsVisible = true;
-	fLastRevealTime = system_time();
-}
-
-
-void
-MainWin::_HideControlsIdle()
-{
-	if (!fFullscreen || !fControlsVisible)
-		return;
-	if (system_time() - fLastRevealTime > kIdleHideDelay)
-		fControlsVisible = false;
-}
-
-
-void
 MainWin::_ToggleHideInterface()
 {
 	fHideInterface = !fHideInterface;
-	if (fFullscreen)
+	if (fFullScreen.IsFullscreen())
 		return;
 	if (fMenuBar != NULL) {
 		if (fHideInterface)
@@ -628,6 +645,31 @@ MainWin::_Zoom(float factor)
 
 
 void
+MainWin::_FitToScreen()
+{
+	if (fController == NULL || !fController->HasVideo() || fVideoView == NULL)
+		return;
+	const video_display_size display = compute_video_display_size(
+		fController->VideoWidth(), fController->VideoHeight(),
+		fController->VideoPixelWidthAspect(),
+		fController->VideoPixelHeightAspect(), fController->VideoRotation());
+	BRect screen = BScreen(this).Frame();
+	const video_display_size fit = clamp_video_display_size(display,
+		screen.Width(), screen.Height() - _ChromeHeight());
+	if (display.width == 0)
+		return;
+	const float backing = fVideoView->Scale();
+	fVideoScale = (float)fit.width * (backing > 1.0f ? backing : 1.0f)
+		/ (float)display.width;
+	if (fVideoScale < 0.1f)
+		fVideoScale = 0.1f;
+	if (fVideoScale > 8.0f)
+		fVideoScale = 8.0f;
+	_SizeForVideo(fController->VideoWidth(), fController->VideoHeight());
+}
+
+
+void
 MainWin::_LoadSettings()
 {
 	if (fSettings == NULL)
@@ -636,8 +678,9 @@ MainWin::_LoadSettings()
 	if (fSavedFrame.IsValid()) {
 		MoveTo(fSavedFrame.LeftTop());
 		ResizeTo(fSavedFrame.Width(), fSavedFrame.Height());
+		fLastFrame = Frame();
+	} else
 		CenterOnScreen();
-	}
 	fVideoScale = fSettings->GetValue("video_scale", kDefaultScale);
 	_SetAlwaysOnTop(fSettings->GetValue("always_on_top", false));
 	_SetLoop(fSettings->GetValue("loop", false));
@@ -649,7 +692,10 @@ MainWin::_SaveSettings()
 {
 	if (fSettings == NULL)
 		return;
-	fSettings->SetValue("window_frame", Frame());
+	BRect frame = Frame();
+	if (fFullScreen.IsFullscreen() && fSavedFrame.IsValid())
+		frame = fSavedFrame;
+	fSettings->SetValue("window_frame", frame);
 	fSettings->SetValue("video_scale", fVideoScale);
 	fSettings->SetValue("always_on_top", fAlwaysOnTop);
 	fSettings->SetValue("loop", fLoop);
@@ -823,11 +869,22 @@ MainWin::MessageReceived(BMessage* message)
 			bool hasVideo = false;
 			int32 width = 0;
 			int32 height = 0;
+			int32 parNum = 0;
+			int32 parDen = 0;
+			int32 rotation = 0;
 			message->FindBool("has_video", &hasVideo);
 			message->FindInt32("width", &width);
 			message->FindInt32("height", &height);
-			if (fVideoView != NULL)
-				fVideoView->SetVideoSize((uint32)width, (uint32)height);
+			message->FindInt32("par_num", &parNum);
+			message->FindInt32("par_den", &parDen);
+			message->FindInt32("rotation", &rotation);
+			fVideoParNum = (uint32)parNum;
+			fVideoParDen = (uint32)parDen;
+			fVideoRotation = (uint32)rotation;
+			if (fVideoView != NULL) {
+				fVideoView->SetVideoFormat((uint32)width, (uint32)height,
+					fVideoParNum, fVideoParDen, fVideoRotation);
+			}
 			_UpdateVideoMode();
 			break;
 		}
@@ -846,28 +903,30 @@ MainWin::MessageReceived(BMessage* message)
 			break;
 
 		case MSG_REVEAL_CONTROLS:
-			_ShowControls();
+			fFullScreen.MouseMoved(system_time());
+			_SetCursorHidden(fFullScreen.CursorHidden());
 			break;
 
 		case MSG_FULLSCREEN_TICK:
 		{
-			if (!fFullscreen || fVideoView == NULL)
+			if (!fFullScreen.IsFullscreen() || fVideoView == NULL)
 				break;
+			_SetCursorHidden(fFullScreen.Tick(system_time()).cursorHidden);
+			const bool controlsVisible = fFullScreen.ControlsVisible();
 			float restY = fVideoView->Bounds().bottom - fStripHeight + 1;
 			float hiddenY = fVideoView->Bounds().bottom + 1;
 			float step = fStripHeight > 6 ? fStripHeight / 6 : 6;
-			if (fControlsVisible && fControlY > restY) {
+			if (controlsVisible && fControlY > restY) {
 				fControlY -= step;
 				if (fControlY < restY)
 					fControlY = restY;
 				_PositionControls();
-			} else if (!fControlsVisible && fControlY < hiddenY) {
+			} else if (!controlsVisible && fControlY < hiddenY) {
 				fControlY += step;
 				if (fControlY > hiddenY)
 					fControlY = hiddenY;
 				_PositionControls();
-			} else
-				_HideControlsIdle();
+			}
 			break;
 		}
 
@@ -906,6 +965,10 @@ MainWin::MessageReceived(BMessage* message)
 			}
 			break;
 		}
+
+		case MSG_VIDEO_FIT:
+			_FitToScreen();
+			break;
 
 		case MSG_ZOOM_IN:
 			_Zoom(1.1f);
@@ -1010,6 +1073,16 @@ MainWin::DispatchMessage(BMessage* message, BHandler* handler)
 			case 'b':
 				fController->SkipForward();
 				return;
+			case B_HOME:
+				fController->SeekTo(0);
+				_PollPosition();
+				return;
+			case B_END:
+				if (fController->Duration() > 0) {
+					fController->SeekTo(fController->Duration());
+					_PollPosition();
+				}
+				return;
 			case '+':
 			case '=':
 				_Zoom(1.1f);
@@ -1047,8 +1120,7 @@ MainWin::DispatchMessage(BMessage* message, BHandler* handler)
 				_ToggleFullscreen();
 				return;
 			case B_ESCAPE:
-				if (fFullscreen)
-					_ExitFullscreen();
+				_ApplyFullScreenResult(fFullScreen.Escape(system_time()));
 				return;
 			default:
 				break;
@@ -1062,9 +1134,58 @@ void
 MainWin::FrameResized(float newWidth, float newHeight)
 {
 	BWindow::FrameResized(newWidth, newHeight);
-	if (fFullscreen)
+	// A size we set ourselves is already aspect-correct; anything else
+	// was a user drag and gets snapped.
+	if (Frame().Width() != fLastFrame.Width()
+			|| Frame().Height() != fLastFrame.Height()) {
+		_KeepAspectOnResize();
+	}
+	fLastFrame = Frame();
+	if (fFullScreen.IsFullscreen())
 		_PositionControls();
 	_UpdateTransport();
+}
+
+
+// Window drags keep the video aspect; hold Shift while resizing for a
+// free aspect.
+void
+MainWin::_KeepAspectOnResize()
+{
+	if (fFullScreen.IsFullscreen() || fController == NULL
+			|| !fController->HasVideo() || fVideoView == NULL) {
+		return;
+	}
+	if ((modifiers() & B_SHIFT_KEY) != 0)
+		return;
+
+	const video_display_size display = compute_video_display_size(
+		fController->VideoWidth(), fController->VideoHeight(),
+		fVideoParNum, fVideoParDen, fVideoRotation);
+	if (display.width == 0 || display.height == 0)
+		return;
+
+	const float aspect = (float)display.width / (float)display.height;
+	const float chrome = _ChromeHeight();
+	const float contentW = Frame().Width();
+	const float contentH = Frame().Height() - chrome;
+	const float oldContentW = fLastFrame.Width();
+	const float oldContentH = fLastFrame.Height() - chrome;
+	if (contentW < 1 || contentH < 1)
+		return;
+
+	// Whichever edge moved furthest leads; the other follows the aspect.
+	float width = contentW;
+	float height = contentW / aspect;
+	if (fabs(contentH - oldContentH) > fabs(contentW - oldContentW)) {
+		width = contentH * aspect;
+		height = contentH;
+	}
+	if (height < 40) {
+		height = 40;
+		width = height * aspect;
+	}
+	ResizeTo(width, height + chrome);
 }
 
 

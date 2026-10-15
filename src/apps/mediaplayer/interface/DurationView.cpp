@@ -62,7 +62,7 @@ DurationView::MinSize()
 {
 	BSize size;
 	char string[64];
-	duration_to_string(int32(fDuration / -1000000LL), string, sizeof(string));
+	duration_to_string(int32(fDuration / -100000LL), string, sizeof(string));
 	size.width = StringWidth(string);
 	font_height fontHeight;
 	GetFontHeight(&fontHeight);
@@ -156,7 +156,8 @@ DurationView::_UpdateTextColor()
 void
 DurationView::_GenerateString(bigtime_t duration)
 {
-	duration /= 1000000;
+	// Deciseconds so a sub-10 s clip shows a tenth of a second.
+	duration /= 100000;
 	if (fDisplayDuration == duration)
 		return;
 

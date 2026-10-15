@@ -12,6 +12,8 @@
 #include <Rect.h>
 #include <Window.h>
 
+#include "FullScreenState.h"
+
 
 class Controller;
 class ControllerView;
@@ -58,6 +60,10 @@ private:
 			void				_ToggleFullscreen();
 			void				_EnterFullscreen();
 			void				_ExitFullscreen();
+			void				_ApplyFullScreenResult(
+									const FullScreenState::Result& result);
+			void				_SetCursorHidden(bool hidden);
+			void				_KeepAspectOnResize();
 			void				_PositionControls();
 			void				_ShowControls();
 			void				_HideControlsIdle();
@@ -67,6 +73,7 @@ private:
 			void				_ShowInfo();
 			void				_QuitInfoWin();
 			void				_Zoom(float factor);
+			void				_FitToScreen();
 			void				_LoadSettings();
 			void				_SaveSettings();
 			float				_ChromeHeight() const;
@@ -92,14 +99,17 @@ private:
 			bool				fLoop;
 			bool				fAlwaysOnTop;
 			bool				fHideInterface;
-			bool				fFullscreen;
-			bool				fControlsVisible;
+			FullScreenState		fFullScreen;
+			bool				fCursorHidden;
 			float				fVideoScale;
 			int32				fStripLayoutIndex;
 			float				fStripHeight;
 			float				fControlY;
-			bigtime_t			fLastRevealTime;
+			uint32				fVideoParNum;
+			uint32				fVideoParDen;
+			uint32				fVideoRotation;
 			BRect				fSavedFrame;
+			BRect				fLastFrame;
 };
 
 

@@ -42,8 +42,8 @@ public:
 			return;
 
 		if (position != -1) {
-			position /= 1000000L;
-			duration /= 1000000L;
+			position /= 100000L;
+			duration /= 100000L;
 			if (position == fPosition && duration == fDuration)
 				return;
 

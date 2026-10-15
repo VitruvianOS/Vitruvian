@@ -7,6 +7,7 @@
 
 #include <Autolock.h>
 #include <Message.h>
+#include <OS.h>
 
 #include "Controller.h"
 #include "Playlist.h"
@@ -17,7 +18,8 @@ ControllerView::ControllerView(BRect frame, Controller* controller,
 	:
 	TransportControlGroup(frame, true, true, true),
 	fController(controller),
-	fPlaylist(playlist)
+	fPlaylist(playlist),
+	fLastScrubTime(0)
 {
 }
 
@@ -91,10 +93,25 @@ ControllerView::ToggleMute()
 }
 
 
+// Scrubbing: a throttled key-unit seek per drag step so the preview
+// frame keeps up without flooding the pipeline; the accurate seek lands
+// on release in PositionCommitted.
 void
 ControllerView::PositionChanged(float value)
 {
-	(void)value;
+	bigtime_t now = system_time();
+	if (now - fLastScrubTime < 100000)
+		return;
+	fLastScrubTime = now;
+	fController->SeekTo(TimePositionFor(value), false);
+}
+
+
+void
+ControllerView::PositionCommitted(float value)
+{
+	fLastScrubTime = 0;
+	fController->SeekTo(TimePositionFor(value), true);
 }
 
 

@@ -41,6 +41,7 @@ enum {
 	MSG_ALWAYS_ON_TOP		= 'atop',
 	MSG_HIDE_INTERFACE		= 'hint',
 	MSG_VIDEO_SCALE			= 'vscl',
+	MSG_VIDEO_FIT			= 'vfit',
 	MSG_ZOOM_IN				= 'zmin',
 	MSG_ZOOM_OUT			= 'zmou',
 	MSG_CONTEXT_MENU		= 'ctxm',

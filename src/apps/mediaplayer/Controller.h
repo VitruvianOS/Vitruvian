@@ -42,7 +42,8 @@ public:
 			status_t			Pause();
 			status_t			Stop();
 			status_t			TogglePlaying();
-			status_t			SeekTo(bigtime_t position);
+			status_t			SeekTo(bigtime_t position,
+									bool accurate = true);
 			status_t			SeekBy(bigtime_t delta);
 			status_t			SkipForward();
 			status_t			SkipBackward();
@@ -80,6 +81,12 @@ public:
 									{ return fVideoWidth; }
 			uint32				VideoHeight() const
 									{ return fVideoHeight; }
+			uint32				VideoPixelWidthAspect() const
+									{ return fVideoParNum; }
+			uint32				VideoPixelHeightAspect() const
+									{ return fVideoParDen; }
+			uint32				VideoRotation() const
+									{ return fVideoRotation; }
 			float				VideoFrameRate() const
 									{ return fVideoFrameRate; }
 			float				AudioFrameRate() const
@@ -125,6 +132,9 @@ private:
 			bool				fHasVideo;
 			uint32				fVideoWidth;
 			uint32				fVideoHeight;
+			uint32				fVideoParNum;
+			uint32				fVideoParDen;
+			uint32				fVideoRotation;
 			bool				fOpening;
 			BString				fPendingName;
 			bool				fLoop;

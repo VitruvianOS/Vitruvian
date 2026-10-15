@@ -4,6 +4,7 @@ Application(MediaPlayer
 		Controller.cpp
 		ControllerView.cpp
 		DurationToString.cpp
+		FullScreenState.cpp
 		InfoWin.cpp
 		MainWin.cpp
 		MediaPlayerApp.cpp
@@ -11,6 +12,7 @@ Application(MediaPlayer
 		Playlist.cpp
 		PlaylistItem.cpp
 		PlaylistWindow.cpp
+		VideoDisplay.cpp
 		VideoView.cpp
 		interface/DurationView.cpp
 		interface/LocationStringView.cpp

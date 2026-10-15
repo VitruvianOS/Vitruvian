@@ -33,6 +33,9 @@ Controller::Controller(const BMessenger& target)
 	fHasVideo(false),
 	fVideoWidth(0),
 	fVideoHeight(0),
+	fVideoParNum(0),
+	fVideoParDen(0),
+	fVideoRotation(0),
 	fOpening(false),
 	fLoop(false),
 	fVideoFrameRate(0.0f),
@@ -140,6 +143,9 @@ Controller::_ProbeTracks(const entry_ref* ref, const BUrl* url)
 	fHasVideo = false;
 	fVideoWidth = 0;
 	fVideoHeight = 0;
+	fVideoParNum = 0;
+	fVideoParDen = 0;
+	fVideoRotation = 0;
 	fVideoFrameRate = 0.0f;
 	fAudioFrameRate = 0.0f;
 	fAudioChannels = 0;
@@ -199,10 +205,18 @@ Controller::_ProbeTracks(const entry_ref* ref, const BUrl* url)
 					fVideoWidth = mf.u.raw_video.width;
 					fVideoHeight = mf.u.raw_video.height;
 					fVideoFrameRate = mf.u.raw_video.field_rate;
+					fVideoParNum = mf.u.raw_video.pixel_width_aspect;
+					fVideoParDen = mf.u.raw_video.pixel_height_aspect;
+					fVideoRotation = mf.u.raw_video.orientation;
 				} else if (mf.type == B_MEDIA_ENCODED_VIDEO) {
-					fVideoWidth = mf.u.encoded_video.output.width;
-					fVideoHeight = mf.u.encoded_video.output.height;
-					fVideoFrameRate = mf.u.encoded_video.output.field_rate;
+					const media_raw_video_format& rv
+						= mf.u.encoded_video.output;
+					fVideoWidth = rv.width;
+					fVideoHeight = rv.height;
+					fVideoFrameRate = rv.field_rate;
+					fVideoParNum = rv.pixel_width_aspect;
+					fVideoParDen = rv.pixel_height_aspect;
+					fVideoRotation = rv.orientation;
 				}
 			}
 		}
@@ -233,6 +247,9 @@ Controller::_SetToRef(const entry_ref& ref)
 		msg.AddBool("has_video", fHasVideo);
 		msg.AddInt32("width", (int32)fVideoWidth);
 		msg.AddInt32("height", (int32)fVideoHeight);
+		msg.AddInt32("par_num", (int32)fVideoParNum);
+		msg.AddInt32("par_den", (int32)fVideoParDen);
+		msg.AddInt32("rotation", (int32)fVideoRotation);
 		fTarget.SendMessage(&msg);
 	}
 	return B_OK;
@@ -416,11 +433,12 @@ Controller::TogglePlaying()
 
 
 status_t
-Controller::SeekTo(bigtime_t position)
+Controller::SeekTo(bigtime_t position, bool accurate)
 {
 	if (fMidi != NULL)
 		return fMidi->SeekTo(position);
-	status_t err = fPlayer.SeekTo(position);
+	status_t err = fPlayer.SeekTo(position,
+		accurate ? 0 : B_MEDIA_SEEK_KEY_UNIT);
 	_NotifyPosition();
 	return err;
 }

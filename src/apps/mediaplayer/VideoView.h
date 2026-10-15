@@ -31,7 +31,10 @@ public:
 	virtual	void				MouseUp(BPoint point);
 	virtual	void				Pulse();
 
-			void				SetVideoSize(uint32 width, uint32 height);
+			void				SetVideoFormat(uint32 width, uint32 height,
+									uint32 pixelWidthAspect,
+									uint32 pixelHeightAspect,
+									uint32 rotation);
 			uint32				VideoWidth() const
 									{ return fVideoWidth; }
 			uint32				VideoHeight() const
@@ -51,6 +54,9 @@ private:
 
 			uint32				fVideoWidth;
 			uint32				fVideoHeight;
+			uint32				fParNum;
+			uint32				fParDen;
+			uint32				fRotation;
 			BBitmap*			fBitmap;
 			bool				fFullscreen;
 			bool				fDragging;

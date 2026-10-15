@@ -131,7 +131,7 @@ InfoWin::_Setup(Controller* controller, const entry_ref& ref)
 	bigtime_t duration = controller->Duration();
 	if (duration > 0) {
 		char buf[64];
-		duration_to_string((int32)(duration / 1000000), buf, sizeof(buf));
+		duration_to_string((int32)(duration / 100000), buf, sizeof(buf));
 		durationText = buf;
 	}
 

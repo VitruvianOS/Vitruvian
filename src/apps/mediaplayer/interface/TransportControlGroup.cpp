@@ -31,6 +31,7 @@
 
 enum {
 	MSG_SEEK				= 'seek',
+	MSG_SEEK_COMMIT			= 'skcm',
 	MSG_SEEK_HOVER			= 'hovr',
 	MSG_PLAY				= 'play',
 	MSG_STOP				= 'stop',
@@ -85,6 +86,9 @@ TransportControlGroup::TransportControlGroup(BRect frame, bool useSkipButtons,
 	// Seek slider
 	fSeekSlider = new SeekSlider("seek slider", new BMessage(MSG_SEEK),
 		new BMessage(MSG_SEEK_HOVER), 0, kPositionFactor);
+	// Modification message previews during the drag; the control's own
+	// message fires on release and commits with an accurate seek.
+	fSeekSlider->SetMessage(new BMessage(MSG_SEEK_COMMIT));
 	fSeekLayout->AddView(fSeekSlider);
 
 	fPositionToolTip = new PositionToolTip();
@@ -278,6 +282,10 @@ TransportControlGroup::MessageReceived(BMessage* message)
 			_UpdatePosition();
 			break;
 
+		case MSG_SEEK_COMMIT:
+			_CommitPosition();
+			break;
+
 		case MSG_DURATION_TOOLTIP:
 		{
 			BPoint tipPoint;
@@ -325,6 +333,10 @@ void TransportControlGroup::SkipForward() {}
 void TransportControlGroup::VolumeChanged(float value) {}
 void TransportControlGroup::ToggleMute() {}
 void TransportControlGroup::PositionChanged(float value) {}
+void TransportControlGroup::PositionCommitted(float value)
+{
+	PositionChanged(value);
+}
 bigtime_t TransportControlGroup::TimePositionFor(float value) { return 0; }
 
 // #pragma mark -
@@ -649,6 +661,16 @@ void
 TransportControlGroup::_UpdatePosition()
 {
 	PositionChanged(fSeekSlider->Value() / (float)kPositionFactor);
+
+	BMessage msg(MSG_DURATION_TOOLTIP);
+	Window()->PostMessage(&msg, this);
+}
+
+
+void
+TransportControlGroup::_CommitPosition()
+{
+	PositionCommitted(fSeekSlider->Value() / (float)kPositionFactor);
 
 	BMessage msg(MSG_DURATION_TOOLTIP);
 	Window()->PostMessage(&msg, this);

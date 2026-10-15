@@ -22,6 +22,8 @@ TrackSlider::TrackSlider(BRect rect, const char *title, BMessage *msg,
 	fRightTime(1000000),
 	fMainTime(0),
 	fTotalTime(1000000),
+	fSamplesMode(false),
+	fDisplayRate(44100.0f),
 	fLeftTracking(false),
 	fRightTracking(false), 
 	fMainTracking(false),
@@ -402,6 +404,11 @@ TrackSlider::_UpdatePosition(BPoint point)
 void 
 TrackSlider::_TimeToString(bigtime_t timestamp, char *string)
 {
+	if (fSamplesMode) {
+		double frames = (double)timestamp * fDisplayRate / 1000000.0;
+		sprintf(string, "%lld", (long long)(frames + 0.5));
+		return;
+	}
 	uint32 hours = timestamp / 3600000000LL;
 	timestamp -= hours * 3600000000LL;
 	uint32 minutes = timestamp / 60000000LL;
@@ -459,6 +466,22 @@ TrackSlider::ResetMainTime()
 	fBitmapView->fPositionX = 15 + (fBitmapView->fRight - 14) 
 		* ((double)fMainTime / fTotalTime);
 	Invalidate();
+}
+
+
+void
+TrackSlider::SetSamplesMode(bool samples)
+{
+	fSamplesMode = samples;
+	Invalidate();
+}
+
+
+void
+TrackSlider::SetSampleRate(float rate)
+{
+	if (rate > 0.0f)
+		fDisplayRate = rate;
 }
 
 

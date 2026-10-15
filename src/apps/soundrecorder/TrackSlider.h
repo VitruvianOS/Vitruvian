@@ -40,6 +40,8 @@ public:
 	virtual void MouseDown(BPoint point);
 	void SetMainTime(bigtime_t timestamp, bool reset);
 	void SetTotalTime(bigtime_t timestamp, bool reset);
+	void SetSamplesMode(bool samples);
+	void SetSampleRate(float rate);
 	bigtime_t * MainTime() { return &fMainTime; };
 	bigtime_t RightTime() { return fRightTime; };
 	bigtime_t LeftTime() { return fLeftTime; };
@@ -58,6 +60,8 @@ private:
 	bigtime_t fRightTime;
 	bigtime_t fMainTime;
 	bigtime_t fTotalTime;
+	bool fSamplesMode;
+	float fDisplayRate;
 	
 	bool fLeftTracking;
 	bool fRightTracking;

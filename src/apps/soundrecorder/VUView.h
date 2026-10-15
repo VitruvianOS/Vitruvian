@@ -22,6 +22,8 @@ public:
 	void DetachedFromWindow();
 	void Draw(BRect updateRect);
 	void ComputeLevels(const void* data, size_t size, uint32 format);
+	bool ClipActive() const { return fClipActive; }
+	void ResetClip() { fClipActive = false; }
 			
 private:
 	void _Run();
@@ -38,6 +40,7 @@ private:
 	int32 fLevelCount;
 	int32 *fCurrentLevels;
 	int32 fChannels;
+	volatile bool fClipActive;
 };
 
 #endif	/* VUVIEW_H */

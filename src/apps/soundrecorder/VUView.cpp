@@ -25,7 +25,8 @@ VUView::VUView(BRect rect, uint32 resizeFlags)
 	: BView(rect, "vumeter", resizeFlags, B_WILL_DRAW),
 	fThreadId(-1),
 	fBitmap(NULL),
-	fQuitting(false)
+	fQuitting(false),
+	fClipActive(false)
 {
 	rect.OffsetTo(B_ORIGIN);
 	fLevelCount = int(rect.Height()) / 2;
@@ -69,7 +70,13 @@ void
 VUView::Draw(BRect updateRect)
 {
 	DrawBitmap(fBitmap);
-		
+
+	// Latched clip indicator; clears when the recording restarts.
+	if (fClipActive) {
+		SetHighColor(255, 0, 0);
+		FillRect(BRect(3, 2, 35, 8));
+	}
+
 	Sync();
 }
 
@@ -249,5 +256,7 @@ VUView::ComputeLevels(const void* data, size_t size, uint32 format)
 		}
 		if (fCurrentLevels[channel] < 0)
 			fCurrentLevels[channel] = 0;
+		if (fCurrentLevels[channel] >= 127)
+			fClipActive = true;
 	}
 }

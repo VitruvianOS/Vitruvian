@@ -14,9 +14,11 @@
 #include <Button.h>
 #include <CheckBox.h>
 #include <TextControl.h>
+#include <Menu.h>
+#include <MenuBar.h>
+#include <MenuItem.h>
 #include <MenuField.h>
 #include <PopUpMenu.h>
-#include <MenuItem.h>
 #include <Box.h>
 #include <ScrollView.h>
 #include <Beep.h>
@@ -25,6 +27,7 @@
 #include <Slider.h>
 #include <Message.h>
 #include <Messenger.h>
+#include <Roster.h>
 
 #include <Path.h>
 #include <FindDirectory.h>
@@ -36,6 +39,7 @@
 #include <strings.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -59,6 +63,9 @@
 #define B_TRANSLATION_CONTEXT "RecorderWindow"
 
 
+static const char* _ExtensionForEncoding(int32 encoding);
+
+
 // default window positioning
 static const float MIN_WIDTH = 400.0f;
 static const float MIN_HEIGHT = 175.0f;
@@ -78,6 +85,8 @@ RecorderWindow::RecorderWindow()
 	fPlayFrames(0),
 	fLooping(false),
 	fSavePanel(NULL),
+	fOpenPanel(NULL),
+	fFolderPanel(NULL),
 	fInitCheck(B_OK)
 {
 	fRecordButton = NULL;
@@ -85,7 +94,6 @@ RecorderWindow::RecorderWindow()
 	fStopButton = NULL;
 	fSaveButton = NULL;
 	fLoopButton = NULL;
-	fInputField = NULL;
 	fRecorder = NULL;
 	fRecording = false;
 	fRecFrames = 0;
@@ -95,6 +103,49 @@ RecorderWindow::RecorderWindow()
 	fButtonState = btnPaused;
 	fInputDeviceId = 0;
 	fHasConnectedSource = false;
+	fMenuBar = NULL;
+	fInputMenu = NULL;
+	fFormatMenu = NULL;
+	fRateMenu = NULL;
+	fChannelsMenu = NULL;
+	fQualityMenu = NULL;
+	fAutoNameMenu = NULL;
+	fWav16Item = NULL;
+	fWav24Item = NULL;
+	fWav32Item = NULL;
+	fFlacItem = NULL;
+	fOggItem = NULL;
+	fOpusItem = NULL;
+	fMp3Item = NULL;
+	fRateDeviceItem = NULL;
+	fRate44Item = NULL;
+	fRate48Item = NULL;
+	fRate96Item = NULL;
+	fMonoItem = NULL;
+	fStereoItem = NULL;
+	fQualLowItem = NULL;
+	fQualMedItem = NULL;
+	fQualHighItem = NULL;
+	fPatternDateItem = NULL;
+	fPatternTimeItem = NULL;
+	fPatternDateTimeItem = NULL;
+	fScopeItem = NULL;
+	fMeterItem = NULL;
+	fTimeHmsItem = NULL;
+	fTimeSamplesItem = NULL;
+	fElapsedView = NULL;
+	fMenuHeight = 0;
+	fEncoding = B_CODEC_TYPE_WAV;
+	fSampleFormat = BMediaRecorder::B_SAMPLE_FORMAT_S16;
+	fRecordRate = 0;
+	fRecordChannels = 2;
+	fQuality = 0.5f;
+	fAutoName = 0;
+	fShowScope = true;
+	fShowMeter = true;
+	fTimeDisplay = 0;
+
+	_LoadSettings();
 
 	CalcSizes(MIN_WIDTH, MIN_HEIGHT);
 
@@ -146,6 +197,8 @@ RecorderWindow::~RecorderWindow()
 	fRecEntry.Unset();
 
 	delete fSavePanel;
+	delete fOpenPanel;
+	delete fFolderPanel;
 }
 
 
@@ -174,31 +227,23 @@ RecorderWindow::CalcSizes(float min_width, float min_height)
 
 
 void
-RecorderWindow::_PopulateInputMenu()
+RecorderWindow::_PopulateInputMenu(BMenu* menu)
 {
-	BPopUpMenu* popup = new BPopUpMenu(B_TRANSLATE("Input"));
-
 	BMediaGraph* graph = BMediaGraph::Instance();
 	if (graph == NULL) {
-		popup->AddItem(new BMenuItem(B_TRANSLATE("No inputs"), NULL));
-		fInputField = new BMenuField(BRect(0, 0, 100, 20), "Input",
-			B_TRANSLATE("Input:"), popup);
+		menu->AddItem(new BMenuItem(B_TRANSLATE("No inputs"), NULL));
 		return;
 	}
 
 	BObjectList<media_client_id, true> clients;
 	if (graph->GetClients(&clients) != B_OK) {
-		popup->AddItem(new BMenuItem(B_TRANSLATE("No inputs"), NULL));
-		fInputField = new BMenuField(BRect(0, 0, 100, 20), "Input",
-			B_TRANSLATE("Input:"), popup);
+		menu->AddItem(new BMenuItem(B_TRANSLATE("No inputs"), NULL));
 		return;
 	}
 
 	media_client_id defaultId = 0;
 	graph->GetDefaultAudioInput(&defaultId);
 
-	const char* selectedName = B_TRANSLATE("Default input");
-	BObjectList<media_client_id, true> sources(true);
 	for (int32 i = 0; i < clients.CountItems(); i++) {
 		media_client_id* idPtr = clients.ItemAt(i);
 		if (idPtr == NULL)
@@ -210,7 +255,6 @@ RecorderWindow::_PopulateInputMenu()
 		bool isSource = false;
 		if (info.FindBool("is.source", &isSource) != B_OK || !isSource)
 			continue;
-		sources.AddItem(new media_client_id(id));
 
 		BString name;
 		if (info.FindString("name", &name) != B_OK
@@ -222,20 +266,16 @@ RecorderWindow::_PopulateInputMenu()
 		BMessage* msg = new BMessage(INPUT_SELECTED);
 		msg->AddInt32("device", id);
 		BMenuItem* item = new BMenuItem(name.String(), msg);
-		popup->AddItem(item);
-		if (id == defaultId) {
-			selectedName = name.String();
+		menu->AddItem(item);
+		// The remembered device wins over the graph default.
+		media_client_id wanted = fInputDeviceId != 0
+			? fInputDeviceId : defaultId;
+		if (id == wanted)
 			item->SetMarked(true);
-		}
 	}
 
-	if (sources.CountItems() == 0)
-		popup->AddItem(new BMenuItem(B_TRANSLATE("No inputs"), NULL));
-
-	fInputField = new BMenuField(BRect(0, 0, 100, 20), "Input",
-		B_TRANSLATE("Input:"), popup);
-	if (fInputField->Menu() != NULL && fInputField->Menu()->Superitem() != NULL)
-		fInputField->Menu()->Superitem()->SetLabel(selectedName);
+	if (menu->CountItems() == 0)
+		menu->AddItem(new BMenuItem(B_TRANSLATE("No inputs"), NULL));
 }
 
 
@@ -268,8 +308,14 @@ RecorderWindow::InitWindow()
 		fRecordFormat.SetToDefault();
 		fRecorder->SetFormat(fRecordFormat);
 
+		//	The menu bar lives at the top; content follows below it.
+		fMenuBar = _BuildMenuBar();
+		AddChild(fMenuBar);
+		fMenuHeight = fMenuBar->Frame().Height() + 1;
+
 		//	Create the window header with controls
 		BRect r(Bounds());
+		r.top += fMenuHeight;
 		r.bottom = r.top + 175;
 		BBox *background = new BBox(r, "_background",
 			B_FOLLOW_LEFT_RIGHT	| B_FOLLOW_TOP, B_WILL_DRAW
@@ -286,9 +332,25 @@ RecorderWindow::InitWindow()
 
 		r = background->Bounds();
 		r.left = r.left + 40;
+		r.right -= 70;
 		r.bottom = r.top + 104;
 		fScopeView = new ScopeView(r, B_FOLLOW_LEFT_RIGHT|B_FOLLOW_TOP);
 		background->AddChild(fScopeView);
+		if (!fShowScope)
+			fScopeView->Hide();
+		if (!fShowMeter)
+			fVUView->Hide();
+
+		//	Elapsed recording time, driven by received frames.
+		r = background->Bounds();
+		r.left = r.right - 64;
+		r.right -= 2;
+		r.top = 2;
+		r.bottom = r.top + 14;
+		fElapsedView = new BStringView(r, "elapsed", "00:00:00",
+			B_FOLLOW_RIGHT | B_FOLLOW_TOP);
+		fElapsedView->SetAlignment(B_ALIGN_RIGHT);
+		background->AddChild(fElapsedView);
 
 		r = background->Bounds();
 		r.left = 2;
@@ -379,7 +441,7 @@ RecorderWindow::InitWindow()
 		background->AddChild(fUpDownButton);
 
 		r = Bounds();
-		r.top = background->Bounds().bottom + 1;
+		r.top = background->Frame().bottom + 1;
 		fBottomBox = new BBox(r, "bottomBox", B_FOLLOW_ALL);
 		fBottomBox->SetBorder(B_NO_BORDER);
 		AddChild(fBottomBox);
@@ -476,27 +538,19 @@ RecorderWindow::InitWindow()
 			r.bottom + fontHeight / 2.0f);
 		fDeployedHeight = MIN_HEIGHT + fFileInfoBox->Bounds().Height() + 40.0f;
 
-		//	Input selection lists physical sources from the media2 graph.
-		_PopulateInputMenu();
-
-		//	Create the actual widget
-		r = fFileInfoBox->Bounds();
-		r.top = r.bottom + 2;
-		r.bottom = r.top + 18;
-		r.InsetBy(10, 10);
-		fBottomBox->AddChild(fInputField);
-		fInputField->SetDivider(fInputField->StringWidth(B_TRANSLATE("Input:"))
-			+ 4.0f);
-
 		fBottomBox->AddChild(fFileInfoBox);
 
 		fBottomBox->Hide();
-		CalcSizes(MIN_WIDTH, MIN_HEIGHT);
-		ResizeTo(Frame().Width(), MIN_HEIGHT);
+		CalcSizes(MIN_WIDTH, MIN_HEIGHT + fMenuHeight);
+		ResizeTo(Frame().Width(), MIN_HEIGHT + fMenuHeight);
 
 		// Make sure the save panel is happy.
 		fSavePanel = new BFilePanel(B_SAVE_PANEL);
 		fSavePanel->SetTarget(this);
+
+		_UpdateRecordingMenus();
+		_UpdateElapsed();
+		_ApplyTimeDisplay();
 	}
 	catch (...) {
 		goto bad_mojo;
@@ -522,6 +576,7 @@ RecorderWindow::QuitRequested()	//	this means Close pressed
 {
 	StopRecording();
 	StopPlaying();
+	_SaveSettings();
 	be_app->PostMessage(B_QUIT_REQUESTED);
 	return true;
 }
@@ -580,12 +635,12 @@ RecorderWindow::MessageReceived(BMessage * message)
 	case VIEW_LIST:
 		if (fUpDownButton->Value() == B_CONTROL_ON) {
 			fBottomBox->Show();
-			CalcSizes(MIN_WIDTH, fDeployedHeight);
-			ResizeTo(Frame().Width(), fDeployedHeight);
+			CalcSizes(MIN_WIDTH, fDeployedHeight + fMenuHeight);
+			ResizeTo(Frame().Width(), fDeployedHeight + fMenuHeight);
 		} else {
 			fBottomBox->Hide();
-			CalcSizes(MIN_WIDTH, MIN_HEIGHT);
-			ResizeTo(Frame().Width(), MIN_HEIGHT);
+			CalcSizes(MIN_WIDTH, MIN_HEIGHT + fMenuHeight);
+			ResizeTo(Frame().Width(), MIN_HEIGHT + fMenuHeight);
 
 		}
 		break;
@@ -619,6 +674,137 @@ RecorderWindow::MessageReceived(BMessage * message)
 		}
 	case LOOP:
 		fLooping = fLoopButton->ButtonState();
+		break;
+	case MENU_NEW:
+		Record(message);
+		break;
+	case MENU_OPEN:
+		if (message->HasRef("refs")) {
+			RefsReceived(message);
+			break;
+		}
+		_OpenPanel();
+		break;
+	case MENU_SAVE_AS:
+		Save(message);
+		break;
+	case MENU_EXPORT:
+		_ExportSelected();
+		break;
+	case MENU_SHOW_TRACKER:
+		_ShowInTracker();
+		break;
+	case MENU_FILE_DELETE:
+	case MENU_EDIT_DELETE:
+		_DeleteSelected();
+		break;
+	case MENU_RENAME:
+		_RenameSelected();
+		break;
+	case MENU_SELECT_ALL:
+		if (fSoundList->CountItems() > 0)
+			fSoundList->Select(0, fSoundList->CountItems() - 1);
+		break;
+	case MENU_FORMAT:
+	{
+		int32 encoding;
+		if (message->FindInt32("encoding", &encoding) == B_OK) {
+			fEncoding = encoding;
+			int32 sampleFormat;
+			if (message->FindInt32("sample_format", &sampleFormat) == B_OK)
+				fSampleFormat = sampleFormat;
+			_UpdateRecordingMenus();
+			_SaveSettings();
+		}
+		break;
+	}
+	case MENU_RATE:
+	{
+		int32 rate;
+		if (message->FindInt32("rate", &rate) == B_OK) {
+			fRecordRate = (uint32)rate;
+			_UpdateRecordingMenus();
+			_SaveSettings();
+		}
+		break;
+	}
+	case MENU_CHANNELS:
+	{
+		int32 channels;
+		if (message->FindInt32("channels", &channels) == B_OK) {
+			fRecordChannels = (uint32)channels;
+			_UpdateRecordingMenus();
+			_SaveSettings();
+		}
+		break;
+	}
+	case MENU_QUALITY:
+	{
+		float quality;
+		if (message->FindFloat("quality", &quality) == B_OK) {
+			fQuality = quality;
+			_UpdateRecordingMenus();
+			_SaveSettings();
+		}
+		break;
+	}
+	case MENU_SAVE_FOLDER:
+	{
+		entry_ref ref;
+		if (message->FindRef("refs", &ref) == B_OK) {
+			BEntry entry(&ref, true);
+			BPath path;
+			if (entry.GetPath(&path) == B_OK) {
+				fSaveFolder = path;
+				_SaveSettings();
+			}
+			break;
+		}
+		_FolderPanel();
+		break;
+	}
+	case MENU_AUTONAME:
+	{
+		int32 pattern;
+		if (message->FindInt32("pattern", &pattern) == B_OK) {
+			fAutoName = pattern;
+			_UpdateRecordingMenus();
+			_SaveSettings();
+		}
+		break;
+	}
+	case MENU_TOGGLE_SCOPE:
+		fShowScope = fScopeItem->IsMarked();
+		if (fShowScope)
+			fScopeView->Show();
+		else
+			fScopeView->Hide();
+		_SaveSettings();
+		break;
+	case MENU_TOGGLE_METER:
+		fShowMeter = fMeterItem->IsMarked();
+		if (fShowMeter)
+			fVUView->Show();
+		else
+			fVUView->Hide();
+		_SaveSettings();
+		break;
+	case MENU_TIME_DISPLAY:
+	{
+		int32 mode;
+		if (message->FindInt32("mode", &mode) == B_OK) {
+			fTimeDisplay = mode;
+			_UpdateRecordingMenus();
+			_ApplyTimeDisplay();
+			_SaveSettings();
+		}
+		break;
+	}
+	case MENU_ABOUT:
+		_About();
+		break;
+	case UPDATE_ELAPSED:
+		_UpdateElapsed();
 		break;
 	case B_SIMPLE_DATA:
 	case B_REFS_RECEIVED:
@@ -731,6 +917,8 @@ RecorderWindow::Record(BMessage * message)
 	fRecSize = 0;
 	fRecFrames = 0;
 	fLastReport = system_time();
+	fVUView->ResetClip();
+	_UpdateElapsed();
 
 	// Encode the take through the recorder's GStreamer output pipeline.
 	BPath recPath;
@@ -741,10 +929,14 @@ RecorderWindow::Record(BMessage * message)
 		fRecEntry.Unset();
 		return;
 	}
-	BMediaFormat encoded;
-	encoded.format.type = B_MEDIA_ENCODED_AUDIO;
-	encoded.format.u.encoded_audio.encoding = B_CODEC_TYPE_WAV;
-	err = fRecorder->SetOutputFile(recPath.Path(), encoded);
+	// Sample format only applies to WAV; the lossy encoders pick theirs.
+	BMediaRecorder::sample_format sampleFormat
+		= (BMediaRecorder::sample_format)fSampleFormat;
+	if (fEncoding != B_CODEC_TYPE_WAV && fEncoding != B_CODEC_TYPE_PCM)
+		sampleFormat = BMediaRecorder::B_SAMPLE_FORMAT_DEFAULT;
+	BMediaFormat encoded = _MakeEncodedFormat();
+	err = fRecorder->SetOutputFile(recPath.Path(), encoded, fRecordRate,
+		fRecordChannels, sampleFormat, fQuality);
 	if (err < B_OK) {
 		ErrorAlert(B_TRANSLATE("Cannot set up the recording file"), err);
 		fRecEntry.Remove();
@@ -888,16 +1080,20 @@ RecorderWindow::Save(BMessage * message)
 		return;
 
 	// Update the save panel and show it.
-	char filename[B_FILE_NAME_LENGTH];
-	pItem->Entry().GetName(filename);
+	char automatic[B_FILE_NAME_LENGTH];
+	_AutoName(automatic, sizeof(automatic));
+	snprintf(automatic, sizeof(automatic), "%s.%s", automatic,
+		_ExtensionForEncoding(fEncoding));
 	BMessage saveMsg(B_SAVE_REQUESTED);
 	entry_ref ref;
 	pItem->Entry().GetRef(&ref);
 
 	if (saveMsg.AddPointer("sound list item", pItem) != B_OK)
 		fprintf(stderr, "failed to add pItem\n");
-	fSavePanel->SetSaveText(filename);
+	fSavePanel->SetSaveText(automatic);
 	fSavePanel->SetMessage(&saveMsg);
+	if (fSaveFolder.InitCheck() == B_OK)
+		fSavePanel->SetPanelDirectory(fSaveFolder.Path());
 	fSavePanel->Show();
 }
 
@@ -950,11 +1146,20 @@ RecorderWindow::DoSave(BMessage * message)
 void
 RecorderWindow::Input(BMessage * message)
 {
-	//	User selected input from pop-up
+	//	User selected input from the Recording menu
 	int32 id = 0;
 	if (message->FindInt32("device", &id) != B_OK)
 		return;
 	fInputDeviceId = (media_client_id)id;
+	for (int32 i = 0; i < fInputMenu->CountItems(); i++) {
+		BMenuItem* item = fInputMenu->ItemAt(i);
+		if (item == NULL || item->Message() == NULL)
+			continue;
+		int32 device;
+		if (item->Message()->FindInt32("device", &device) == B_OK)
+			item->SetMarked(device == id);
+	}
+	_SaveSettings();
 }
 
 
@@ -1186,7 +1391,12 @@ RecorderWindow::UpdateButtons()
 		fForwardButton->SetEnabled(false);
 		fStopButton->SetEnabled(false);
 		fSaveButton->SetEnabled(false);
-		fInputField->SetEnabled(false);
+		fInputMenu->Superitem()->SetEnabled(false);
+		fFormatMenu->Superitem()->SetEnabled(false);
+		fRateMenu->Superitem()->SetEnabled(false);
+		fChannelsMenu->Superitem()->SetEnabled(false);
+		fQualityMenu->Superitem()->SetEnabled(false);
+		fAutoNameMenu->Superitem()->SetEnabled(false);
 		return;
 	}
 	fRecordButton->SetEnabled(fButtonState != btnPlaying);
@@ -1195,7 +1405,13 @@ RecorderWindow::UpdateButtons()
 	fForwardButton->SetEnabled((fButtonState != btnRecording) && hasSelection);
 	fStopButton->SetEnabled(fButtonState != btnPaused);
 	fSaveButton->SetEnabled(hasSelection && (fButtonState != btnRecording));
-	fInputField->SetEnabled(fButtonState != btnRecording);
+	bool locked = fButtonState == btnRecording;
+	fInputMenu->Superitem()->SetEnabled(!locked);
+	fFormatMenu->Superitem()->SetEnabled(!locked);
+	fRateMenu->Superitem()->SetEnabled(!locked);
+	fChannelsMenu->Superitem()->SetEnabled(!locked);
+	fQualityMenu->Superitem()->SetEnabled(!locked);
+	fAutoNameMenu->Superitem()->SetEnabled(!locked);
 }
 
 
@@ -1286,6 +1502,7 @@ RecorderWindow::UpdatePlayFile(SoundListItem* item, bool updateDisplay)
 	fScopeView->RenderTrack(fPlayTrack, fPlayFormat.format);
 
 	fPlayFrames = fPlayTrack->CountFrames();
+	fTrackSlider->SetSampleRate(fPlayFormat.format.u.raw_audio.frame_rate);
 	return B_OK;
 }
 
@@ -1379,6 +1596,7 @@ RecorderWindow::RecordFile(void* cookie, bigtime_t timestamp,
 		const bigtime_t now = system_time();
 		if (now - window->fLastReport >= 1000000) {
 			window->fLastReport = now;
+			window->PostMessage(UPDATE_ELAPSED);
 			fprintf(stderr, "SoundRecorder: %lld frames received\n",
 				(long long)window->fRecFrames);
 		}
@@ -1507,4 +1725,631 @@ RecorderWindow::CopyTarget(BMessage *msg)
 
 		}
 	}
+}
+
+
+// #pragma mark - menu bar, settings, recording options
+
+
+static const char*
+_ExtensionForEncoding(int32 encoding)
+{
+	switch (encoding) {
+		case B_CODEC_TYPE_FLAC:	return "flac";
+		case B_CODEC_TYPE_OGG:	return "ogg";
+		case B_CODEC_TYPE_OPUS:	return "opus";
+		case B_CODEC_TYPE_MP3:	return "mp3";
+		default:			return "wav";
+	}
+}
+
+
+static void
+_FillFileFormat(media_file_format* fileFormat, int32 encoding)
+{
+	memset(fileFormat, 0, sizeof(*fileFormat));
+	const char* mime = "audio/x-wav";
+	switch (encoding) {
+		case B_CODEC_TYPE_FLAC:
+			mime = "audio/x-flac";
+			break;
+		case B_CODEC_TYPE_OGG:
+		case B_CODEC_TYPE_OPUS:
+			mime = "application/ogg";
+			break;
+		case B_CODEC_TYPE_MP3:
+			mime = "audio/mpeg";
+			break;
+		default:
+			break;
+	}
+	strncpy(fileFormat->mime_type, mime, sizeof(fileFormat->mime_type) - 1);
+}
+
+
+void
+RecorderWindow::_LoadSettings()
+{
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path, true) != B_OK)
+		return;
+	path.Append("SoundRecorder");
+
+	BFile file(path.Path(), B_READ_ONLY);
+	if (file.InitCheck() != B_OK)
+		return;
+
+	BMessage settings;
+	if (settings.Unflatten(&file) != B_OK)
+		return;
+
+	int32 value;
+	if (settings.FindInt32("encoding", &value) == B_OK)
+		fEncoding = value;
+	if (settings.FindInt32("sample_format", &value) == B_OK)
+		fSampleFormat = value;
+	if (settings.FindInt32("rate", &value) == B_OK)
+		fRecordRate = (uint32)value;
+	if (settings.FindInt32("channels", &value) == B_OK)
+		fRecordChannels = (uint32)value;
+	float quality;
+	if (settings.FindFloat("quality", &quality) == B_OK)
+		fQuality = quality;
+	const char* folder;
+	if (settings.FindString("save_folder", &folder) == B_OK)
+		fSaveFolder.SetTo(folder);
+	if (settings.FindInt32("autoname", &value) == B_OK)
+		fAutoName = value;
+	bool flag;
+	if (settings.FindBool("show_scope", &flag) == B_OK)
+		fShowScope = flag;
+	if (settings.FindBool("show_meter", &flag) == B_OK)
+		fShowMeter = flag;
+	if (settings.FindInt32("time_display", &value) == B_OK)
+		fTimeDisplay = value;
+	if (settings.FindInt32("input_device", &value) == B_OK)
+		fInputDeviceId = (media_client_id)value;
+}
+
+
+void
+RecorderWindow::_SaveSettings()
+{
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path, true) != B_OK)
+		return;
+	path.Append("SoundRecorder");
+
+	BMessage settings;
+	settings.AddInt32("encoding", fEncoding);
+	settings.AddInt32("sample_format", fSampleFormat);
+	settings.AddInt32("rate", (int32)fRecordRate);
+	settings.AddInt32("channels", (int32)fRecordChannels);
+	settings.AddFloat("quality", fQuality);
+	if (fSaveFolder.InitCheck() == B_OK)
+		settings.AddString("save_folder", fSaveFolder.Path());
+	settings.AddInt32("autoname", fAutoName);
+	settings.AddBool("show_scope", fShowScope);
+	settings.AddBool("show_meter", fShowMeter);
+	settings.AddInt32("time_display", fTimeDisplay);
+	settings.AddInt32("input_device", (int32)fInputDeviceId);
+
+	BFile file(path.Path(), O_WRONLY | O_CREAT | O_TRUNC);
+	if (file.InitCheck() == B_OK)
+		settings.Flatten(&file);
+}
+
+
+static BMenuItem*
+_AddOptionItem(BMenu* menu, const char* label, uint32 what,
+	const char* field, int32 value)
+{
+	BMessage* message = new BMessage(what);
+	message->AddInt32(field, value);
+	BMenuItem* item = new BMenuItem(label, message);
+	menu->AddItem(item);
+	return item;
+}
+
+
+BMenuBar*
+RecorderWindow::_BuildMenuBar()
+{
+	BMenuBar* bar = new BMenuBar(BRect(0, 0, 0, 0), "MenuBar");
+
+	BMenu* file = new BMenu(B_TRANSLATE("File"));
+	file->AddItem(new BMenuItem(B_TRANSLATE("New recording"),
+		new BMessage(MENU_NEW), B_COMMAND_KEY, 'n'));
+	file->AddItem(new BMenuItem(B_TRANSLATE("Open" B_UTF8_ELLIPSIS),
+		new BMessage(MENU_OPEN), B_COMMAND_KEY, 'o'));
+	file->AddItem(new BMenuItem(B_TRANSLATE("Save as" B_UTF8_ELLIPSIS),
+		new BMessage(MENU_SAVE_AS), B_COMMAND_KEY, 's'));
+	file->AddItem(new BMenuItem(B_TRANSLATE("Export"),
+		new BMessage(MENU_EXPORT), B_COMMAND_KEY, 'e'));
+	file->AddItem(new BMenuItem(B_TRANSLATE("Show in Tracker"),
+		new BMessage(MENU_SHOW_TRACKER), B_COMMAND_KEY, 't'));
+	file->AddItem(new BMenuItem(B_TRANSLATE("Delete"),
+		new BMessage(MENU_FILE_DELETE), B_COMMAND_KEY, B_BACKSPACE));
+	file->AddSeparatorItem();
+	file->AddItem(new BMenuItem(B_TRANSLATE("Quit"),
+		new BMessage(B_QUIT_REQUESTED), B_COMMAND_KEY, 'q'));
+	bar->AddItem(file);
+
+	BMenu* edit = new BMenu(B_TRANSLATE("Edit"));
+	edit->AddItem(new BMenuItem(B_TRANSLATE("Rename" B_UTF8_ELLIPSIS),
+		new BMessage(MENU_RENAME), B_COMMAND_KEY, 'r'));
+	edit->AddItem(new BMenuItem(B_TRANSLATE("Delete"),
+		new BMessage(MENU_EDIT_DELETE), B_COMMAND_KEY, B_BACKSPACE));
+	edit->AddItem(new BMenuItem(B_TRANSLATE("Select all"),
+		new BMessage(MENU_SELECT_ALL), B_COMMAND_KEY, 'a'));
+	bar->AddItem(edit);
+
+	BMenu* recording = new BMenu(B_TRANSLATE("Recording"));
+	fInputMenu = new BMenu(B_TRANSLATE("Input"));
+	_PopulateInputMenu(fInputMenu);
+	recording->AddItem(fInputMenu);
+
+	fFormatMenu = new BMenu(B_TRANSLATE("Format"));
+	fWav16Item = _AddOptionItem(fFormatMenu, B_TRANSLATE("WAV 16-bit"),
+		MENU_FORMAT, "encoding", B_CODEC_TYPE_WAV);
+	fWav16Item->Message()->AddInt32("sample_format",
+		BMediaRecorder::B_SAMPLE_FORMAT_S16);
+	fWav24Item = _AddOptionItem(fFormatMenu, B_TRANSLATE("WAV 24-bit"),
+		MENU_FORMAT, "encoding", B_CODEC_TYPE_WAV);
+	fWav24Item->Message()->AddInt32("sample_format",
+		BMediaRecorder::B_SAMPLE_FORMAT_S24);
+	fWav32Item = _AddOptionItem(fFormatMenu, B_TRANSLATE("WAV 32-bit float"),
+		MENU_FORMAT, "encoding", B_CODEC_TYPE_WAV);
+	fWav32Item->Message()->AddInt32("sample_format",
+		BMediaRecorder::B_SAMPLE_FORMAT_F32);
+	fFlacItem = _AddOptionItem(fFormatMenu, B_TRANSLATE("FLAC"),
+		MENU_FORMAT, "encoding", B_CODEC_TYPE_FLAC);
+	fOggItem = _AddOptionItem(fFormatMenu, B_TRANSLATE("Ogg Vorbis"),
+		MENU_FORMAT, "encoding", B_CODEC_TYPE_OGG);
+	fOpusItem = _AddOptionItem(fFormatMenu, B_TRANSLATE("Opus"),
+		MENU_FORMAT, "encoding", B_CODEC_TYPE_OPUS);
+	fMp3Item = _AddOptionItem(fFormatMenu, B_TRANSLATE("MP3"),
+		MENU_FORMAT, "encoding", B_CODEC_TYPE_MP3);
+	recording->AddItem(fFormatMenu);
+
+	fRateMenu = new BMenu(B_TRANSLATE("Sample rate"));
+	fRateDeviceItem = _AddOptionItem(fRateMenu,
+		B_TRANSLATE("Device default"), MENU_RATE, "rate", 0);
+	fRate44Item = _AddOptionItem(fRateMenu, B_TRANSLATE("44.1 kHz"),
+		MENU_RATE, "rate", 44100);
+	fRate48Item = _AddOptionItem(fRateMenu, B_TRANSLATE("48 kHz"),
+		MENU_RATE, "rate", 48000);
+	fRate96Item = _AddOptionItem(fRateMenu, B_TRANSLATE("96 kHz"),
+		MENU_RATE, "rate", 96000);
+	recording->AddItem(fRateMenu);
+
+	fChannelsMenu = new BMenu(B_TRANSLATE("Channels"));
+	fMonoItem = _AddOptionItem(fChannelsMenu, B_TRANSLATE("Mono"),
+		MENU_CHANNELS, "channels", 1);
+	fStereoItem = _AddOptionItem(fChannelsMenu, B_TRANSLATE("Stereo"),
+		MENU_CHANNELS, "channels", 2);
+	recording->AddItem(fChannelsMenu);
+
+	fQualityMenu = new BMenu(B_TRANSLATE("Quality"));
+	fQualLowItem = new BMenuItem(B_TRANSLATE("Low"),
+		new BMessage(MENU_QUALITY));
+	fQualLowItem->Message()->AddFloat("quality", 0.25f);
+	fQualityMenu->AddItem(fQualLowItem);
+	fQualMedItem = new BMenuItem(B_TRANSLATE("Medium"),
+		new BMessage(MENU_QUALITY));
+	fQualMedItem->Message()->AddFloat("quality", 0.5f);
+	fQualityMenu->AddItem(fQualMedItem);
+	fQualHighItem = new BMenuItem(B_TRANSLATE("High"),
+		new BMessage(MENU_QUALITY));
+	fQualHighItem->Message()->AddFloat("quality", 0.85f);
+	fQualityMenu->AddItem(fQualHighItem);
+	recording->AddItem(fQualityMenu);
+
+	recording->AddItem(new BMenuItem(
+		B_TRANSLATE("Default save folder" B_UTF8_ELLIPSIS),
+		new BMessage(MENU_SAVE_FOLDER)));
+
+	fAutoNameMenu = new BMenu(B_TRANSLATE("Auto-name pattern"));
+	fPatternDateTimeItem = _AddOptionItem(fAutoNameMenu,
+		B_TRANSLATE("Date and time"), MENU_AUTONAME, "pattern", 0);
+	fPatternDateItem = _AddOptionItem(fAutoNameMenu,
+		B_TRANSLATE("Date"), MENU_AUTONAME, "pattern", 1);
+	fPatternTimeItem = _AddOptionItem(fAutoNameMenu,
+		B_TRANSLATE("Time"), MENU_AUTONAME, "pattern", 2);
+	recording->AddItem(fAutoNameMenu);
+	bar->AddItem(recording);
+
+	BMenu* view = new BMenu(B_TRANSLATE("View"));
+	fScopeItem = new BMenuItem(B_TRANSLATE("Scope"),
+		new BMessage(MENU_TOGGLE_SCOPE));
+	view->AddItem(fScopeItem);
+	fMeterItem = new BMenuItem(B_TRANSLATE("Level meter"),
+		new BMessage(MENU_TOGGLE_METER));
+	view->AddItem(fMeterItem);
+	view->AddSeparatorItem();
+	fTimeHmsItem = _AddOptionItem(view, B_TRANSLATE("Time in hh:mm:ss"),
+		MENU_TIME_DISPLAY, "mode", 0);
+	fTimeSamplesItem = _AddOptionItem(view, B_TRANSLATE("Time in samples"),
+		MENU_TIME_DISPLAY, "mode", 1);
+	bar->AddItem(view);
+
+	BMenu* help = new BMenu(B_TRANSLATE("Help"));
+	help->AddItem(new BMenuItem(B_TRANSLATE("About"),
+		new BMessage(MENU_ABOUT)));
+	bar->AddItem(help);
+
+	bar->SetTargetForItems(this);
+	return bar;
+}
+
+
+void
+RecorderWindow::_UpdateRecordingMenus()
+{
+	fWav16Item->SetEnabled(BMediaRecorder::IsEncodingAvailable(
+		B_CODEC_TYPE_WAV));
+	fWav24Item->SetEnabled(fWav16Item->IsEnabled());
+	fWav32Item->SetEnabled(fWav16Item->IsEnabled());
+	fFlacItem->SetEnabled(BMediaRecorder::IsEncodingAvailable(
+		B_CODEC_TYPE_FLAC));
+	fOggItem->SetEnabled(BMediaRecorder::IsEncodingAvailable(
+		B_CODEC_TYPE_OGG));
+	fOpusItem->SetEnabled(BMediaRecorder::IsEncodingAvailable(
+		B_CODEC_TYPE_OPUS));
+	fMp3Item->SetEnabled(BMediaRecorder::IsEncodingAvailable(
+		B_CODEC_TYPE_MP3));
+
+	fWav16Item->SetMarked(fEncoding == B_CODEC_TYPE_WAV
+		&& fSampleFormat == BMediaRecorder::B_SAMPLE_FORMAT_S16);
+	fWav24Item->SetMarked(fEncoding == B_CODEC_TYPE_WAV
+		&& fSampleFormat == BMediaRecorder::B_SAMPLE_FORMAT_S24);
+	fWav32Item->SetMarked(fEncoding == B_CODEC_TYPE_WAV
+		&& fSampleFormat == BMediaRecorder::B_SAMPLE_FORMAT_F32);
+	fFlacItem->SetMarked(fEncoding == B_CODEC_TYPE_FLAC);
+	fOggItem->SetMarked(fEncoding == B_CODEC_TYPE_OGG);
+	fOpusItem->SetMarked(fEncoding == B_CODEC_TYPE_OPUS);
+	fMp3Item->SetMarked(fEncoding == B_CODEC_TYPE_MP3);
+
+	fRateDeviceItem->SetMarked(fRecordRate == 0);
+	fRate44Item->SetMarked(fRecordRate == 44100);
+	fRate48Item->SetMarked(fRecordRate == 48000);
+	fRate96Item->SetMarked(fRecordRate == 96000);
+
+	fMonoItem->SetMarked(fRecordChannels == 1);
+	fStereoItem->SetMarked(fRecordChannels == 2);
+
+	fQualLowItem->SetMarked(fQuality < 0.4f);
+	fQualMedItem->SetMarked(fQuality >= 0.4f && fQuality < 0.7f);
+	fQualHighItem->SetMarked(fQuality >= 0.7f);
+	bool lossy = fEncoding == B_CODEC_TYPE_OGG
+		|| fEncoding == B_CODEC_TYPE_OPUS
+		|| fEncoding == B_CODEC_TYPE_MP3;
+	fQualityMenu->Superitem()->SetEnabled(lossy);
+
+	fPatternDateTimeItem->SetMarked(fAutoName == 0);
+	fPatternDateItem->SetMarked(fAutoName == 1);
+	fPatternTimeItem->SetMarked(fAutoName == 2);
+
+	fScopeItem->SetMarked(fShowScope);
+	fMeterItem->SetMarked(fShowMeter);
+	fTimeHmsItem->SetMarked(fTimeDisplay == 0);
+	fTimeSamplesItem->SetMarked(fTimeDisplay == 1);
+}
+
+
+void
+RecorderWindow::_ApplyTimeDisplay()
+{
+	fTrackSlider->SetSamplesMode(fTimeDisplay == 1);
+	fTrackSlider->SetSampleRate(fPlayFormat.format.u.raw_audio.frame_rate);
+	_UpdateElapsed();
+}
+
+
+void
+RecorderWindow::_UpdateElapsed()
+{
+	if (fElapsedView == NULL)
+		return;
+
+	const media_raw_audio_format& raw = fRecordFormat.format.u.raw_audio;
+	bigtime_t elapsed = 0;
+	if (raw.frame_rate > 0.0f)
+		elapsed = (bigtime_t)((double)fRecFrames * 1000000.0
+			/ raw.frame_rate);
+
+	char text[64];
+	if (fTimeDisplay == 1) {
+		snprintf(text, sizeof(text), "%lld", (long long)fRecFrames);
+	} else {
+		uint32 seconds = (uint32)(elapsed / 1000000LL);
+		snprintf(text, sizeof(text), "%02" B_PRIu32 ":%02" B_PRIu32
+			":%02" B_PRIu32, seconds / 3600, (seconds / 60) % 60,
+			seconds % 60);
+	}
+	fElapsedView->SetText(text);
+}
+
+
+BMediaFormat
+RecorderWindow::_MakeEncodedFormat()
+{
+	BMediaFormat encoded;
+	encoded.format.type = B_MEDIA_ENCODED_AUDIO;
+	memset(&encoded.format.u.encoded_audio, 0,
+		sizeof(encoded.format.u.encoded_audio));
+	encoded.format.u.encoded_audio.encoding = fEncoding;
+	return encoded;
+}
+
+
+void
+RecorderWindow::_AutoName(char* name, size_t size)
+{
+	time_t now = time(NULL);
+	struct tm nowParts;
+	localtime_r(&now, &nowParts);
+	const char* format = "Recording %Y-%m-%d %H-%M-%S";
+	switch (fAutoName) {
+		case 1:
+			format = "Recording %Y-%m-%d";
+			break;
+		case 2:
+			format = "Recording %H-%M-%S";
+			break;
+		default:
+			break;
+	}
+	strftime(name, size, format, &nowParts);
+}
+
+
+void
+RecorderWindow::_OpenPanel()
+{
+	if (fOpenPanel == NULL) {
+		fOpenPanel = new BFilePanel(B_OPEN_PANEL, new BMessenger(this),
+			NULL, B_FILE_NODE, true, new BMessage(MENU_OPEN));
+	} else {
+		fOpenPanel->SetMessage(new BMessage(MENU_OPEN));
+	}
+	fOpenPanel->Show();
+}
+
+
+void
+RecorderWindow::_FolderPanel()
+{
+	if (fFolderPanel == NULL) {
+		fFolderPanel = new BFilePanel(B_OPEN_PANEL, new BMessenger(this),
+			NULL, B_DIRECTORY_NODE, false, new BMessage(MENU_SAVE_FOLDER));
+	} else {
+		fFolderPanel->SetMessage(new BMessage(MENU_SAVE_FOLDER));
+	}
+	fFolderPanel->Show();
+}
+
+
+void
+RecorderWindow::_DeleteSelected()
+{
+	int32 index = fSoundList->CurrentSelection();
+	SoundListItem* item
+		= dynamic_cast<SoundListItem*>(fSoundList->ItemAt(index));
+	if (item == NULL)
+		return;
+	if (fButtonState == btnPlaying)
+		StopPlaying();
+	item->Entry().Remove();
+	RemoveCurrentSoundItem();
+	UpdateButtons();
+}
+
+
+void
+RecorderWindow::_RenameSelected()
+{
+	int32 index = fSoundList->CurrentSelection();
+	SoundListItem* item
+		= dynamic_cast<SoundListItem*>(fSoundList->ItemAt(index));
+	if (item == NULL)
+		return;
+
+	char oldName[B_FILE_NAME_LENGTH];
+	item->Entry().GetName(oldName);
+
+	BAlert* alert = new BAlert(B_TRANSLATE("Rename"),
+		B_TRANSLATE("New name:"), B_TRANSLATE("Rename"),
+		B_TRANSLATE("Cancel"), NULL, B_WIDTH_AS_USUAL, B_IDEA_ALERT);
+	alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+	float width = alert->Bounds().Width() - 20;
+	BTextControl* text = new BTextControl(BRect(10, 35, 10 + width, 60),
+		"name", NULL, oldName, NULL);
+	text->ResizeTo(width, text->Bounds().Height());
+	alert->AddChild(text);
+
+	if (alert->Go() != 0)
+		return;
+
+	const char* newName = text->Text();
+	if (newName != NULL && newName[0] != '\0'
+			&& strcmp(newName, oldName) != 0) {
+		item->Entry().Rename(newName);
+		char name[B_FILE_NAME_LENGTH];
+		item->Entry().GetName(name);
+		item->SetText(name);
+		fSoundList->Invalidate();
+	}
+}
+
+
+void
+RecorderWindow::_ShowInTracker()
+{
+	int32 index = fSoundList->CurrentSelection();
+	SoundListItem* item
+		= dynamic_cast<SoundListItem*>(fSoundList->ItemAt(index));
+	if (item == NULL)
+		return;
+
+	entry_ref ref;
+	if (item->Entry().GetRef(&ref) != B_OK)
+		return;
+
+	BMessage message(B_REFS_RECEIVED);
+	message.AddRef("refs", &ref);
+	be_roster->Launch("application/x-vnd.Be-TRAK", &message);
+}
+
+
+void
+RecorderWindow::_ExportSelected()
+{
+	int32 index = fSoundList->CurrentSelection();
+	SoundListItem* item
+		= dynamic_cast<SoundListItem*>(fSoundList->ItemAt(index));
+	if (item == NULL || item->Entry().InitCheck() != B_OK)
+		return;
+
+	if (fSaveFolder.InitCheck() != B_OK) {
+		BPath home;
+		if (find_directory(B_USER_DIRECTORY, &home, true) == B_OK) {
+			home.Append("Music");
+			home.Append("Recordings");
+			fSaveFolder = home;
+		} else
+			fSaveFolder.SetTo("/tmp");
+	}
+	create_directory(fSaveFolder.Path(), 0755);
+	BDirectory dir(fSaveFolder.Path());
+	if (dir.InitCheck() != B_OK) {
+		ErrorAlert(B_TRANSLATE("Cannot open the save folder"),
+			dir.InitCheck());
+		return;
+	}
+
+	char name[B_FILE_NAME_LENGTH];
+	_AutoName(name, sizeof(name));
+	snprintf(name, sizeof(name), "%s.%s", name,
+		_ExtensionForEncoding(fEncoding));
+
+	status_t err = _ReEncode(item, dir, name);
+	if (err < B_OK) {
+		ErrorAlert(B_TRANSLATE("Cannot export the recording"), err);
+		return;
+	}
+
+	BEntry entry(&dir, name);
+	if (entry.InitCheck() == B_OK)
+		AddSoundItem(entry, false);
+	UpdateButtons();
+}
+
+
+status_t
+RecorderWindow::_ReEncode(SoundListItem* item, const BDirectory& dir,
+	const char* name)
+{
+	if (item == NULL || name == NULL)
+		return B_BAD_VALUE;
+
+	entry_ref ref;
+	if (item->Entry().GetRef(&ref) != B_OK)
+		return B_ERROR;
+
+	BMediaFile source(&ref);
+	status_t err = source.InitCheck();
+	if (err < B_OK)
+		return err;
+
+	BMediaTrack* in = NULL;
+	BMediaFormat raw;
+	for (int32 i = 0; i < source.CountTracks(); i++) {
+		BMediaTrack* track = source.TrackAt(i);
+		if (track == NULL)
+			continue;
+		raw.SetToDefault();
+		raw.format.type = B_MEDIA_RAW_AUDIO;
+		if (track->DecodedFormat(&raw) == B_OK
+				&& raw.format.type == B_MEDIA_RAW_AUDIO) {
+			in = track;
+			break;
+		}
+		source.ReleaseTrack(track);
+	}
+	if (in == NULL)
+		return B_STREAM_NOT_FOUND;
+
+	// Create the destination file first so it can be referenced.
+	BFile created;
+	if (dir.CreateFile(name, &created) != B_OK)
+		return B_ERROR;
+	created.Unset();
+	entry_ref outRef;
+	BEntry outEntry(&dir, name);
+	if (outEntry.GetRef(&outRef) != B_OK)
+		return B_ERROR;
+
+	media_file_format fileFormat;
+	_FillFileFormat(&fileFormat, fEncoding);
+	BMediaFile destination(&outRef, &fileFormat, 0);
+	err = destination.InitCheck();
+	if (err < B_OK)
+		return err;
+
+	BMediaFormat encoded = _MakeEncodedFormat();
+	encoded.format.u.encoded_audio.output
+		= raw.format.u.raw_audio;
+	BMediaTrack* out = destination.CreateTrack(encoded);
+	if (out == NULL)
+		return B_ERROR;
+
+	err = destination.CommitHeader();
+	if (err < B_OK)
+		return err;
+
+	const media_raw_audio_format& audio = raw.format.u.raw_audio;
+	const uint32 stride = (audio.format
+		& media_raw_audio_format::B_AUDIO_SIZE_MASK) * audio.channel_count;
+	if (stride == 0) {
+		destination.CloseFile();
+		return B_ERROR;
+	}
+
+	const int32 bufferFrames = 4096;
+	char* buffer = (char*)malloc((size_t)bufferFrames * stride);
+	if (buffer == NULL) {
+		destination.CloseFile();
+		return B_NO_MEMORY;
+	}
+
+	int64 remaining = in->CountFrames();
+	while (remaining > 0) {
+		int64 frames = MIN(remaining, (int64)bufferFrames);
+		err = in->ReadFrames(buffer, &frames);
+		if (err < B_OK || frames <= 0)
+			break;
+		err = out->WriteFrames(buffer, frames);
+		if (err < B_OK)
+			break;
+		remaining -= frames;
+	}
+	free(buffer);
+	out->Flush();
+	status_t closeErr = destination.CloseFile();
+	if (err >= B_OK)
+		err = closeErr;
+	return err;
+}
+
+
+void
+RecorderWindow::_About()
+{
+	BAlert* alert = new BAlert(B_TRANSLATE("About SoundRecorder"),
+		B_TRANSLATE("SoundRecorder\n\nRecords and plays audio files.\n"
+			"Part of V\\OS."),
+		B_TRANSLATE("OK"));
+	alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+	alert->Go();
 }

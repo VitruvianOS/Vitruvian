@@ -95,6 +95,7 @@ public:
 
 			bool			SupportsRumble();
 								// True when the open device reports FF_RUMBLE.
+								// Every rumbling pad driver exposes it; no hidraw.
 			status_t		StartRumble(uint16 strongMagnitude,
 								uint16 weakMagnitude, bigtime_t duration);
 								// Magnitudes are 0..65535, duration in

@@ -811,7 +811,9 @@ BJoystick::Open(const char* portName)
 	data->hatCount = count_hat_pairs(data);
 
 	// force feedback: EVIOCSFF/FF_RUMBLE on the same fd; playback is
-	// written as EV_FF events, which the read-only open cannot do
+	// written as EV_FF events, which the read-only open cannot do.
+	// xpad, hid-microsoft, hid-nintendo and hid-playstation bridge their
+	// vendor rumble reports to FF_RUMBLE in-kernel, so no hidraw path.
 	unsigned char ffBits[(FF_MAX + 7) / 8];
 	memset(ffBits, 0, sizeof(ffBits));
 	data->supportsRumble = ioctl(fd, EVIOCGBIT(EV_FF, sizeof(ffBits)),

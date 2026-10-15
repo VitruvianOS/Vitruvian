@@ -7,7 +7,6 @@
 
 
 #include <Handler.h>
-#include <String.h>
 
 
 class SystemInfoHandler : public BHandler {
@@ -29,9 +28,6 @@ public:
 			uint32		MediaConnections() const;
 			uint32		MediaBuffers() const;
 
-			float		Temperature() const;
-	const	BString&	ThermalZone() const;
-
 private:
 			void		_UpdateClipboardData();
 
@@ -41,9 +37,6 @@ private:
 	uint32				fMediaNodes;
 	uint32				fMediaConnections;
 	uint32				fMediaBuffers;
-
-	int					fThermalFD;
-	BString				fThermalZoneName;
 };
 
 #endif	// SYSTEM_INFO_HANDLER_H

@@ -34,8 +34,6 @@ SystemInfo::SystemInfo(SystemInfoHandler* handler)
 		fMediaNodes = handler->MediaNodes();
 		fMediaConnections = handler->MediaConnections();
 		fMediaBuffers = handler->MediaBuffers();
-		fTemperature = handler->Temperature();
-		fThermalZone = handler->ThermalZone();
 	}
 }
 

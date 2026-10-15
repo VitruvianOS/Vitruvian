@@ -297,7 +297,9 @@ private:
 
 class ThermalDataSource : public DataSource {
 public:
-						ThermalDataSource();
+						ThermalDataSource(const char* sensorId,
+							bool primary = false);
+						ThermalDataSource(const ThermalDataSource& other);
 	virtual				~ThermalDataSource();
 
 	virtual DataSource*	Copy() const;
@@ -311,7 +313,11 @@ public:
 	virtual const char*	ShortLabel() const;
 
 private:
+	BString				fSensorId;
+	BString				fInternalName;
 	BString				fLabel;
+	mutable BString		fName;
+	bool				fPrimary;
 };
 
 

@@ -10,11 +10,16 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include <map>
+#include <string>
+#include <vector>
+
 #include <Catalog.h>
 #include <OS.h>
 #include <String.h>
 #include <StringForRate.h>
 #include <StringForSize.h>
+#include <TemperatureSensors.h>
 
 #include "SystemInfo.h"
 
@@ -22,28 +27,87 @@
 #define B_TRANSLATION_CONTEXT "DataSource"
 
 
-const DataSource* kSources[] = {
-	new UsedMemoryDataSource(),
-	new CachedMemoryDataSource(),
-	new SwapSpaceDataSource(),
-	new PageFaultsDataSource(),
-	new CPUFrequencyDataSource(),
-	new CPUUsageDataSource(),
-	new CPUCombinedUsageDataSource(),
-	new ThermalDataSource(),
-	new NetworkUsageDataSource(true),
-	new NetworkUsageDataSource(false),
-	new BlockCacheDataSource(),
-	new SemaphoresDataSource(),
-	new PortsDataSource(),
-	new ThreadsDataSource(),
-	new TeamsDataSource(),
-	new RunningAppsDataSource(),
-	new ClipboardSizeDataSource(false),
-	new ClipboardSizeDataSource(true),
-	new MediaNodesDataSource()
-};
-const size_t kSourcesCount = sizeof(kSources) / sizeof(kSources[0]);
+//! True for per-core CPU entries ("Core 0", ...) of chips that also expose
+//! a package-level sensor; those are hidden to keep the menu small.
+static bool
+_IsHiddenPerCoreSensor(const TemperatureSensor& sensor,
+	const std::vector<TemperatureSensor>& sensors)
+{
+	if (sensor.label.compare(0, 5, "Core ") != 0)
+		return false;
+
+	for (size_t i = 0; i < sensors.size(); i++) {
+		const TemperatureSensor& other = sensors[i];
+		if (other.chip != sensor.chip
+			|| other.label.compare(0, 5, "Core ") == 0) {
+			continue;
+		}
+		return true;
+	}
+
+	return false;
+}
+
+
+static const TemperatureSensorReader&
+TemperatureReader()
+{
+	// discovered once per process; the sensor list is read-only afterwards
+	static TemperatureSensorReader* reader = new TemperatureSensorReader();
+	return *reader;
+}
+
+
+static std::vector<const DataSource*>*
+_CreateSources()
+{
+	std::vector<const DataSource*>* sources = new std::vector<const DataSource*>;
+
+	sources->push_back(new UsedMemoryDataSource());
+	sources->push_back(new CachedMemoryDataSource());
+	sources->push_back(new SwapSpaceDataSource());
+	sources->push_back(new PageFaultsDataSource());
+	sources->push_back(new CPUFrequencyDataSource());
+	sources->push_back(new CPUUsageDataSource());
+	sources->push_back(new CPUCombinedUsageDataSource());
+
+	// one temperature source per useful sensor (CPU package, GPU, NVMe, ...);
+	// hide cleanly when the machine has no sensor at all (e.g. most VMs)
+	const std::vector<TemperatureSensor>& sensors
+		= TemperatureReader().Sensors();
+	bool firstThermalSource = true;
+	for (size_t i = 0; i < sensors.size(); i++) {
+		if (_IsHiddenPerCoreSensor(sensors[i], sensors))
+			continue;
+
+		// the first shown sensor keeps the historical "Temperature" catalog key
+		sources->push_back(new ThermalDataSource(sensors[i].id.c_str(),
+			firstThermalSource));
+		firstThermalSource = false;
+	}
+
+	sources->push_back(new NetworkUsageDataSource(true));
+	sources->push_back(new NetworkUsageDataSource(false));
+	sources->push_back(new BlockCacheDataSource());
+	sources->push_back(new SemaphoresDataSource());
+	sources->push_back(new PortsDataSource());
+	sources->push_back(new ThreadsDataSource());
+	sources->push_back(new TeamsDataSource());
+	sources->push_back(new RunningAppsDataSource());
+	sources->push_back(new ClipboardSizeDataSource(false));
+	sources->push_back(new ClipboardSizeDataSource(true));
+	sources->push_back(new MediaNodesDataSource());
+
+	return sources;
+}
+
+
+static const std::vector<const DataSource*>&
+Sources()
+{
+	static const std::vector<const DataSource*>* sources = _CreateSources();
+	return *sources;
+}
 
 
 DataSource::DataSource(int64 initialMin, int64 initialMax)
@@ -233,25 +297,26 @@ DataSource::Primary() const
 /*static*/ int32
 DataSource::CountSources()
 {
-	return kSourcesCount;
+	return (int32)Sources().size();
 }
 
 
 /*static*/ const DataSource*
 DataSource::SourceAt(int32 index)
 {
-	if (index >= (int32)kSourcesCount || index < 0)
+	if (index >= (int32)Sources().size() || index < 0)
 		return NULL;
 
-	return kSources[index];
+	return Sources()[index];
 }
 
 
 /*static*/ const DataSource*
 DataSource::FindSource(const char* internalName)
 {
-	for (uint32 i = 0; i < kSourcesCount; i++) {
-		const DataSource* source = kSources[i];
+	const std::vector<const DataSource*>& sources = Sources();
+	for (size_t i = 0; i < sources.size(); i++) {
+		const DataSource* source = sources[i];
 		if (!strcmp(source->InternalName(), internalName))
 			return source;
 	}
@@ -265,9 +330,10 @@ DataSource::IndexOf(const DataSource* source)
 {
 	const char* name = source->Name();
 
-	for (uint32 i = 0; i < kSourcesCount; i++) {
-		if (!strcmp(kSources[i]->Name(), name))
-			return i;
+	const std::vector<const DataSource*>& sources = Sources();
+	for (size_t i = 0; i < sources.size(); i++) {
+		if (!strcmp(sources[i]->Name(), name))
+			return (int32)i;
 	}
 
 	return -1;
@@ -951,12 +1017,62 @@ CPUFrequencyDataSource::_SetCPU(int32 cpu)
 //	#pragma mark -
 
 
-ThermalDataSource::ThermalDataSource()
+ThermalDataSource::ThermalDataSource(const char* sensorId, bool primary)
+	:
+	fSensorId(sensorId),
+	fPrimary(primary)
 {
 	fMinimum = 0;
 	fMaximum = 100000000LL;
 
-	fColor = (rgb_color){200, 150, 0, 0};
+	// deterministic color per sensor from a warm palette
+	static const rgb_color kColors[] = {
+		{200, 150, 0, 0},
+		{200, 100, 0, 0},
+		{180, 60, 90, 0},
+		{150, 120, 40, 0},
+		{220, 180, 60, 0},
+		{170, 90, 30, 0}
+	};
+
+	uint32 hash = 0;
+	for (const char* c = fSensorId.String(); *c != '\0'; c++)
+		hash = hash * 31 + (uint8)*c;
+	fColor = kColors[hash % B_COUNT_OF(kColors)];
+
+	const TemperatureSensorReader& reader = TemperatureReader();
+	const TemperatureSensor* sensor = reader.FindSensor(fSensorId.String());
+
+	if (sensor == NULL) {
+		// should not happen: sources are only registered for discovered sensors
+		fInternalName = "Temperature";
+		fLabel = B_TRANSLATE("No thermal sensor");
+		return;
+	}
+
+	fInternalName = "Temperature";
+	if (!fPrimary)
+		fInternalName << ":" << sensor->id.c_str();
+	fLabel = sensor->DisplayName().c_str();
+
+	// sensible upper scale: temp*_crit or temp*_max when present, else 100 °C
+	// (some firmware exposes bogus huge limits; ignore those)
+	float limit = reader.ReadLimitCelsius(fSensorId.String());
+	if (isnan(limit) || limit <= 0 || limit > 300)
+		limit = 100;
+	fMaximum = (int64)ceilf(limit * 1000000);
+}
+
+
+ThermalDataSource::ThermalDataSource(const ThermalDataSource& other)
+	:
+	DataSource(other)
+{
+	fSensorId = other.fSensorId;
+	fInternalName = other.fInternalName;
+	fLabel = other.fLabel;
+	fName = other.fName;
+	fPrimary = other.fPrimary;
 }
 
 
@@ -968,28 +1084,35 @@ ThermalDataSource::~ThermalDataSource()
 DataSource*
 ThermalDataSource::Copy() const
 {
-	return new ThermalDataSource();
+	return new ThermalDataSource(*this);
 }
 
 
 const char*
 ThermalDataSource::InternalName() const
 {
-	return "Temperature";
+	return fInternalName.String();
 }
 
 
 const char*
 ThermalDataSource::Name() const
 {
-	return B_TRANSLATE("Temperature");
+	if (fPrimary)
+		return B_TRANSLATE("Temperature");
+
+	if (fName.IsEmpty()) {
+		fName = B_TRANSLATE("Temperature");
+		fName << " (" << fLabel << ")";
+	}
+	return fName.String();
 }
 
 
 const char*
 ThermalDataSource::Label() const
 {
-	return fLabel;
+	return fLabel.String();
 }
 
 
@@ -1012,9 +1135,7 @@ ThermalDataSource::Print(BString& text, int64 value) const
 int64
 ThermalDataSource::NextValue(SystemInfo& info)
 {
-	fLabel = info.ThermalZone();
-
-	float temperature = info.Temperature();
+	float temperature = TemperatureReader().ReadCelsius(fSensorId.String());
 	if (isnan(temperature))
 		return 0;
 

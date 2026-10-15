@@ -47,6 +47,7 @@ AddOn(
 	StringForRate.cpp
 	StringForSize.cpp
 	StripeView.cpp
+	TemperatureSensors.cpp
 	TextTable.cpp
 	Thread.cpp
 	ToolBar.cpp

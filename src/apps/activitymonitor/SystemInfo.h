@@ -63,8 +63,6 @@ public:
 			uint32		MediaConnections() const;
 			uint32		MediaBuffers() const;
 
-			float		Temperature() const { return fTemperature; }
-	const	BString&	ThermalZone() const { return fThermalZone; }
 private:
 			void		_RetrieveNetwork();
 
@@ -80,8 +78,6 @@ private:
 	uint32				fMediaNodes;
 	uint32				fMediaConnections;
 	uint32				fMediaBuffers;
-	float				fTemperature;
-	BString				fThermalZone;
 };
 
 #endif	// SYSTEM_INFO_H

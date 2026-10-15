@@ -124,6 +124,9 @@ enum command_code {
 	B_TRASH_TARGET				= 'DDRM',
 	B_LINK_TARGET				= 'DDLN',
 	B_INPUT_DEVICES_CHANGED		= 'IDCH',
+	// Joystick hotplug (Game Kit): "be:opcode" (joystick_device_notification),
+	// "be:device_name" (device path, as returned by GetDeviceName()).
+	B_JOYSTICK_DEVICES_CHANGED	= 'JDCH',
 	B_INPUT_METHOD_EVENT		= 'IMEV',
 	B_WINDOW_MOVE_TO			= 'WDMT',
 	B_WINDOW_MOVE_BY			= 'WDMB',

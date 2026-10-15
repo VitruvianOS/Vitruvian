@@ -12,6 +12,7 @@
 #define	_JOYSTICK_H
 
 
+#include <Messenger.h>
 #include <OS.h>
 #include <SupportDefs.h>
 
@@ -22,6 +23,16 @@ class _BJoystickTweaker;
 struct entry_ref;
 struct _extended_joystick;
 struct _joystick_info;
+
+
+enum joystick_device_notification {
+	B_JOYSTICK_DEVICE_ADDED		= 0x0001,
+	B_JOYSTICK_DEVICE_REMOVED	= 0x0002
+};
+
+
+status_t	watch_joystick_devices(BMessenger target, bool start);
+			// Posts B_JOYSTICK_DEVICES_CHANGED to target while watching.
 
 
 class BJoystick {
@@ -81,6 +92,14 @@ public:
 
 			bool			IsCalibrationEnabled();
 			status_t		EnableCalibration(bool calibrates = true);
+
+			bool			SupportsRumble();
+								// True when the open device reports FF_RUMBLE.
+			status_t		StartRumble(uint16 strongMagnitude,
+								uint16 weakMagnitude, bigtime_t duration);
+								// Magnitudes are 0..65535, duration in
+								// microseconds. Needs a read/write Open().
+			status_t		StopRumble();
 
 protected:
 	virtual	void			Calibrate(struct _extended_joystick*);

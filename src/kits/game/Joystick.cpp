@@ -35,8 +35,17 @@
 #include <dirent.h>
 
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 
+#include <AppDefs.h>
+#include <Autolock.h>
+#include <Handler.h>
 #include <List.h>
+#include <Locker.h>
+#include <Looper.h>
+#include <Message.h>
+#include <Node.h>
+#include <NodeMonitor.h>
 #include <String.h>
 
 #include <Joystick.h>
@@ -47,6 +56,51 @@
 #define JOYSTICK_DEVICE_PATH "/dev/input"
 #define MAX_AXIS_VALUE		32767
 #define MIN_AXIS_VALUE		(-32768)
+
+#ifndef EV_FF
+#define EV_FF					0x15
+#endif
+#ifndef FF_RUMBLE
+#define FF_RUMBLE				0x50
+#endif
+#ifndef FF_MAX
+#define FF_MAX					0x7f
+#endif
+#ifndef EVIOCSFF
+#define EVIOCSFF		_IOW('E', 0x80, struct _ff_effect)
+#endif
+#ifndef EVIOCRMFF
+#define EVIOCRMFF		_IOW('E', 0x81, int)
+#endif
+
+// kernel UAPI layout (linux/input.h); the shim carries no FF definitions
+struct _ff_trigger {
+	uint16		button;
+	uint16		interval;
+};
+
+struct _ff_replay {
+	uint16		length;
+	uint16		delay;
+};
+
+struct _ff_rumble_effect {
+	uint16		strong_magnitude;
+	uint16		weak_magnitude;
+};
+
+struct _ff_effect {
+	uint16		type;
+	int16		id;
+	uint16		direction;
+	_ff_trigger	trigger;
+	_ff_replay	replay;
+	uint8		_padding[16 - 14];
+	union {
+		uint8		_size[32];
+		_ff_rumble_effect rumble;
+	} u;
+};
 
 
 // current state of one opened joystick device
@@ -70,6 +124,10 @@ struct JoystickDeviceData {
 	// hats: ABS_HATnX/ABS_HATnY pairs
 	int32			hatCount;
 
+	// force feedback (FF_RUMBLE) on the same fd
+	bool			supportsRumble;
+	int32			rumbleEffectID;
+
 	// per-object flags that must survive Close() live in JoystickState
 };
 
@@ -78,10 +136,12 @@ struct JoystickDeviceData {
 struct JoystickState {
 	bool			calibrationEnabled;
 	JoystickDeviceData*	device;
+	int32			scanGeneration;
 
 	JoystickState()
 		: calibrationEnabled(false),
-		  device(NULL)
+		  device(NULL),
+		  scanGeneration(0)
 	{
 	}
 };
@@ -304,6 +364,263 @@ is_joystick_fd(int fd, char* nameBuffer, size_t nameBufferSize)
 }
 
 
+static bool
+probe_joystick_path(const char* path)
+{
+	int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+	if (fd < 0)
+		return false;
+
+	bool isJoystick = is_joystick_fd(fd, NULL, 0);
+	close(fd);
+	return isJoystick;
+}
+
+
+// fills paths with the strdup'd /dev/input/event* nodes that are joysticks
+static void
+scan_joystick_paths(BList* paths)
+{
+	DIR* dir = opendir(JOYSTICK_DEVICE_PATH);
+	if (dir == NULL)
+		return;
+
+	struct dirent* entry;
+	while ((entry = readdir(dir)) != NULL) {
+		if (strncmp(entry->d_name, "event", 5) != 0)
+			continue;
+
+		char path[PATH_MAX];
+		snprintf(path, sizeof(path), "%s/%s", JOYSTICK_DEVICE_PATH,
+			entry->d_name);
+
+		if (probe_joystick_path(path))
+			paths->AddItem(strdup(path));
+	}
+
+	closedir(dir);
+}
+
+
+// bumped on every joystick node add/remove; BJoystick rescans when its
+// recorded value falls behind
+static int32 sJoystickGeneration = 1;
+
+
+// Push half of hotplug: a kit-wide node watch on /dev/input, the same
+// kernel notification the input_server add-ons rely on, fanned out to
+// any messenger registered through watch_joystick_devices().
+class JoystickWatcher : public BLooper {
+public:
+								JoystickWatcher();
+	virtual						~JoystickWatcher();
+
+	virtual	void				DispatchMessage(BMessage* message,
+									BHandler* runner);
+
+			status_t			Register(const BMessenger& target);
+			status_t			Unregister(const BMessenger& target);
+
+private:
+			int32				_FindDevice(const char* path) const;
+			void				_Notify(int32 opcode, const char* path);
+			void				_HandleNodeMonitor(BMessage* message);
+
+			BLocker				fLock;
+			BList				fWatchers;	// BMessenger*
+			BList				fDevices;	// char*, known joystick paths
+};
+
+
+JoystickWatcher::JoystickWatcher()
+{
+	scan_joystick_paths(&fDevices);
+
+	struct stat st;
+	if (stat(JOYSTICK_DEVICE_PATH, &st) == 0) {
+		node_ref ref(st.st_dev, st.st_ino);
+		// B_WATCH_DIRECTORY is what delivers entry create/delete for a
+		// directory on this kernel; B_WATCH_NAME kept for moves.
+		watch_node(&ref, B_WATCH_NAME | B_WATCH_DIRECTORY, BMessenger(this));
+	}
+}
+
+
+JoystickWatcher::~JoystickWatcher()
+{
+	struct stat st;
+	if (stat(JOYSTICK_DEVICE_PATH, &st) == 0) {
+		node_ref ref(st.st_dev, st.st_ino);
+		watch_node(&ref, B_STOP_WATCHING, BMessenger(this));
+	}
+
+	for (int32 i = 0; i < fWatchers.CountItems(); i++)
+		delete (BMessenger*)fWatchers.ItemAt(i);
+	fWatchers.MakeEmpty();
+
+	for (int32 i = 0; i < fDevices.CountItems(); i++)
+		free(fDevices.ItemAt(i));
+	fDevices.MakeEmpty();
+}
+
+
+void
+JoystickWatcher::DispatchMessage(BMessage* message, BHandler* runner)
+{
+	if (message->what == B_NODE_MONITOR)
+		_HandleNodeMonitor(message);
+	else
+		BLooper::DispatchMessage(message, runner);
+}
+
+
+status_t
+JoystickWatcher::Register(const BMessenger& target)
+{
+	if (!target.IsValid())
+		return B_BAD_VALUE;
+
+	BAutolock lock(fLock);
+	for (int32 i = 0; i < fWatchers.CountItems(); i++) {
+		BMessenger* messenger = (BMessenger*)fWatchers.ItemAt(i);
+		if (messenger != NULL && *messenger == target)
+			return B_OK;
+	}
+
+	BMessenger* watcher = new(std::nothrow) BMessenger(target);
+	if (watcher == NULL)
+		return B_NO_MEMORY;
+
+	if (!fWatchers.AddItem(watcher)) {
+		delete watcher;
+		return B_NO_MEMORY;
+	}
+	return B_OK;
+}
+
+
+status_t
+JoystickWatcher::Unregister(const BMessenger& target)
+{
+	BAutolock lock(fLock);
+	for (int32 i = 0; i < fWatchers.CountItems(); i++) {
+		BMessenger* messenger = (BMessenger*)fWatchers.ItemAt(i);
+		if (messenger != NULL && *messenger == target) {
+			delete (BMessenger*)fWatchers.RemoveItem(i);
+			return B_OK;
+		}
+	}
+	return B_BAD_VALUE;
+}
+
+
+int32
+JoystickWatcher::_FindDevice(const char* path) const
+{
+	for (int32 i = 0; i < fDevices.CountItems(); i++) {
+		if (strcmp((const char*)fDevices.ItemAt(i), path) == 0)
+			return i;
+	}
+	return -1;
+}
+
+
+void
+JoystickWatcher::_Notify(int32 opcode, const char* path)
+{
+	// copy the list so a watcher may unregister from its handler
+	BList watchers;
+	{
+		BAutolock lock(fLock);
+		for (int32 i = 0; i < fWatchers.CountItems(); i++) {
+			watchers.AddItem(
+				new(std::nothrow) BMessenger(
+					*(BMessenger*)fWatchers.ItemAt(i)));
+		}
+	}
+
+	BMessage change(B_JOYSTICK_DEVICES_CHANGED);
+	change.AddInt32("be:opcode", opcode);
+	change.AddString("be:device_name", path);
+
+	for (int32 i = 0; i < watchers.CountItems(); i++) {
+		BMessenger* messenger = (BMessenger*)watchers.ItemAt(i);
+		if (messenger != NULL)
+			messenger->SendMessage(&change);
+		delete messenger;
+	}
+	watchers.MakeEmpty();
+}
+
+
+void
+JoystickWatcher::_HandleNodeMonitor(BMessage* message)
+{
+	int32 opcode;
+	const char* name;
+	if (message->FindInt32("opcode", &opcode) != B_OK
+		|| (opcode != B_ENTRY_CREATED && opcode != B_ENTRY_REMOVED)
+		|| message->FindString("name", &name) != B_OK)
+		return;
+
+	if (strncmp(name, "event", 5) != 0)
+		return;
+
+	char path[PATH_MAX];
+	snprintf(path, sizeof(path), "%s/%s", JOYSTICK_DEVICE_PATH, name);
+
+	BAutolock lock(fLock);
+
+	if (opcode == B_ENTRY_CREATED) {
+		if (_FindDevice(path) >= 0 || !probe_joystick_path(path))
+			return;
+		fDevices.AddItem(strdup(path));
+		_Notify(B_JOYSTICK_DEVICE_ADDED, path);
+	} else {
+		int32 index = _FindDevice(path);
+		if (index < 0)
+			return;
+		free(fDevices.RemoveItem(index));
+		_Notify(B_JOYSTICK_DEVICE_REMOVED, path);
+	}
+
+	atomic_add(&sJoystickGeneration, 1);
+}
+
+
+static JoystickWatcher*
+create_joystick_watcher()
+{
+	JoystickWatcher* watcher = new(std::nothrow) JoystickWatcher();
+	if (watcher == NULL)
+		return NULL;
+
+	watcher->Run();
+	return watcher;
+}
+
+
+static JoystickWatcher*
+get_joystick_watcher()
+{
+	static JoystickWatcher* sWatcher = create_joystick_watcher();
+	return sWatcher;
+}
+
+
+status_t
+watch_joystick_devices(BMessenger target, bool start)
+{
+	JoystickWatcher* watcher = get_joystick_watcher();
+	if (watcher == NULL)
+		return B_NO_INIT;
+
+	if (start)
+		return watcher->Register(target);
+	return watcher->Unregister(target);
+}
+
+
 BJoystick::BJoystick()
 	: timestamp(0),
 	  horizontal(0),
@@ -327,6 +644,9 @@ BJoystick::BJoystick()
 	fJoystickData->AddItem(new(std::nothrow) JoystickState);
 
 	ScanDevices();
+
+	// start the kit-wide node watch so CountDevices() tracks hotplug
+	get_joystick_watcher();
 }
 
 
@@ -363,46 +683,40 @@ BJoystick::ScanDevices(bool useDisabled)
 		free(fDevices->ItemAt(i));
 	fDevices->MakeEmpty();
 
-	DIR* dir = opendir(JOYSTICK_DEVICE_PATH);
-	if (dir == NULL)
-		return;
+	scan_joystick_paths(fDevices);
 
-	struct dirent* entry;
-	while ((entry = readdir(dir)) != NULL) {
-		if (strncmp(entry->d_name, "event", 5) != 0)
-			continue;
-
-		char path[PATH_MAX];
-		snprintf(path, sizeof(path), "%s/%s", JOYSTICK_DEVICE_PATH,
-			entry->d_name);
-
-		int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-		if (fd < 0)
-			continue;
-
-		char name[128];
-		if (is_joystick_fd(fd, name, sizeof(name)))
-			fDevices->AddItem(strdup(path));
-
-		close(fd);
-	}
-
-	closedir(dir);
+	JoystickState* state = fJoystickData != NULL
+		? (JoystickState*)fJoystickData->ItemAt(0) : NULL;
+	if (state != NULL)
+		state->scanGeneration = atomic_get(&sJoystickGeneration);
 }
 
 
 int32
 BJoystick::CountDevices()
 {
-	return fDevices != NULL ? fDevices->CountItems() : 0;
+	if (fDevices == NULL)
+		return 0;
+
+	JoystickState* state = fJoystickData != NULL
+		? (JoystickState*)fJoystickData->ItemAt(0) : NULL;
+	if (state != NULL
+		&& state->scanGeneration != atomic_get(&sJoystickGeneration))
+		ScanDevices();
+
+	return fDevices->CountItems();
 }
 
 
 status_t
 BJoystick::GetDeviceName(int32 index, char* name, size_t bufSize)
 {
-	if (fDevices == NULL || index < 0 || index >= fDevices->CountItems()
-		|| name == NULL || bufSize == 0)
+	if (fDevices == NULL || index < 0 || name == NULL || bufSize == 0)
+		return B_ERROR;
+
+	CountDevices();
+
+	if (index >= fDevices->CountItems())
 		return B_ERROR;
 
 	const char* path = (const char*)fDevices->ItemAt(index);
@@ -436,7 +750,11 @@ BJoystick::Open(const char* portName)
 	// only one device at a time
 	Close();
 
-	int fd = open(portName, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+	// force feedback needs a read/write fd; fall back to read-only so
+	// pads that refuse write access still list and read
+	int fd = open(portName, O_RDWR | O_NONBLOCK | O_CLOEXEC);
+	if (fd < 0)
+		fd = open(portName, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0)
 		return B_ERROR;
 
@@ -448,6 +766,7 @@ BJoystick::Open(const char* portName)
 
 	data->fd = fd;
 	data->isOpen = true;
+	data->rumbleEffectID = -1;
 	strlcpy(data->devicePath, portName, sizeof(data->devicePath));
 
 	// controller name via EVIOCGNAME
@@ -491,6 +810,14 @@ BJoystick::Open(const char* portName)
 
 	data->hatCount = count_hat_pairs(data);
 
+	// force feedback: EVIOCSFF/FF_RUMBLE on the same fd; playback is
+	// written as EV_FF events, which the read-only open cannot do
+	unsigned char ffBits[(FF_MAX + 7) / 8];
+	memset(ffBits, 0, sizeof(ffBits));
+	data->supportsRumble = ioctl(fd, EVIOCGBIT(EV_FF, sizeof(ffBits)),
+		ffBits) >= 0 && test_bit(ffBits, FF_RUMBLE)
+		&& (fcntl(fd, F_GETFL) & O_ACCMODE) == O_RDWR;
+
 	state->device = data;
 	fFD = fd;
 	fJoystickData->AddItem(data);
@@ -520,8 +847,11 @@ BJoystick::Close()
 
 	if (state->device != NULL) {
 		JoystickDeviceData* data = state->device;
-		if (data->isOpen && data->fd >= 0)
+		if (data->isOpen && data->fd >= 0) {
+			if (data->rumbleEffectID >= 0)
+				ioctl(data->fd, EVIOCRMFF, data->rumbleEffectID);
 			close(data->fd);
+		}
 		data->fd = -1;
 		data->isOpen = false;
 
@@ -838,6 +1168,98 @@ BJoystick::EnableCalibration(bool calibrates)
 		return B_NO_INIT;
 
 	state->calibrationEnabled = calibrates;
+	return B_OK;
+}
+
+
+bool
+BJoystick::SupportsRumble()
+{
+	JoystickState* state = fJoystickData != NULL
+		? (JoystickState*)fJoystickData->ItemAt(0) : NULL;
+	return state != NULL && state->device != NULL
+		&& state->device->supportsRumble;
+}
+
+
+status_t
+BJoystick::StartRumble(uint16 strongMagnitude, uint16 weakMagnitude,
+	bigtime_t duration)
+{
+	JoystickState* state = fJoystickData != NULL
+		? (JoystickState*)fJoystickData->ItemAt(0) : NULL;
+	if (state == NULL || state->device == NULL)
+		return B_NO_INIT;
+
+	JoystickDeviceData* data = state->device;
+	if (!data->supportsRumble)
+		return B_NOT_SUPPORTED;
+	if (duration <= 0)
+		return B_BAD_VALUE;
+
+	// replay.length is milliseconds in the UAPI; clamp to its uint16
+	uint32 lengthMs = (uint32)(duration / 1000);
+	if (lengthMs == 0)
+		lengthMs = 1;
+	else if (lengthMs > 65535)
+		lengthMs = 65535;
+
+	struct _ff_effect effect;
+	memset(&effect, 0, sizeof(effect));
+	effect.type = FF_RUMBLE;
+	effect.id = data->rumbleEffectID;
+	effect.replay.length = lengthMs;
+	effect.u.rumble.strong_magnitude = strongMagnitude;
+	effect.u.rumble.weak_magnitude = weakMagnitude;
+	if (ioctl(data->fd, EVIOCSFF, &effect) < 0)
+		return B_ERROR;
+	data->rumbleEffectID = effect.id;
+
+	struct input_event play;
+	memset(&play, 0, sizeof(play));
+	play.type = EV_FF;
+	play.code = data->rumbleEffectID;
+	play.value = 1;
+	if (write(data->fd, &play, sizeof(play)) != (ssize_t)sizeof(play))
+		return B_ERROR;
+
+	struct input_event sync;
+	memset(&sync, 0, sizeof(sync));
+	sync.type = EV_SYN;
+	sync.code = SYN_REPORT;
+	write(data->fd, &sync, sizeof(sync));
+
+	return B_OK;
+}
+
+
+status_t
+BJoystick::StopRumble()
+{
+	JoystickState* state = fJoystickData != NULL
+		? (JoystickState*)fJoystickData->ItemAt(0) : NULL;
+	if (state == NULL || state->device == NULL)
+		return B_NO_INIT;
+
+	JoystickDeviceData* data = state->device;
+	if (data->rumbleEffectID < 0)
+		return B_OK;
+
+	struct input_event stop;
+	memset(&stop, 0, sizeof(stop));
+	stop.type = EV_FF;
+	stop.code = data->rumbleEffectID;
+	stop.value = 0;
+	write(data->fd, &stop, sizeof(stop));
+
+	struct input_event sync;
+	memset(&sync, 0, sizeof(sync));
+	sync.type = EV_SYN;
+	sync.code = SYN_REPORT;
+	write(data->fd, &sync, sizeof(sync));
+
+	ioctl(data->fd, EVIOCRMFF, data->rumbleEffectID);
+	data->rumbleEffectID = -1;
 	return B_OK;
 }
 

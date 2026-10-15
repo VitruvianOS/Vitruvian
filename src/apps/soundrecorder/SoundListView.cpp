@@ -20,7 +20,7 @@ SoundListView::SoundListView(
 	const BRect & area,
 	const char * name,
 	uint32 resize) :
-	BListView(area, name, B_SINGLE_SELECTION_LIST, resize)
+	BListView(area, name, B_MULTIPLE_SELECTION_LIST, resize)
 {
 }
 

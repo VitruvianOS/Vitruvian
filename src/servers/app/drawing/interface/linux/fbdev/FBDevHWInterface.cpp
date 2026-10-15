@@ -257,6 +257,9 @@ FBDevHWInterface::_ProbePanning()
 	fPanningSupported = true;
 	fPageCount = caps.pageCount;
 	fFrontPage = 0;
+	// No buffer yet when this runs from Init or SetMode; the caller
+	// sets the view again once the mapping exists.
+	fFrontPageView.SetTo(fFrontBuffer, 0);
 
 	// Every page starts stale: the RAM shadow is the only current copy.
 	BRegion full(BRect(0, 0, fVInfo.xres - 1, fVInfo.yres - 1));
@@ -337,8 +340,11 @@ FBDevHWInterface::_PanTo(uint32 page)
 		// rewrite. Cache the failure: FB_ACTIVATE_VBL is all that is
 		// left then.
 		uint32 sequence = 0;
-		if (ioctl(fFrameBuffer, FBIO_WAITFORVSYNC, &sequence) != 0)
+		if (ioctl(fFrameBuffer, FBIO_WAITFORVSYNC, &sequence) != 0) {
 			fVsyncSupported = false;
+			fbdev_prepare_pan(var, fVInfo, page * fVInfo.yres,
+				fPageCount, false);
+		}
 	}
 
 	if (ioctl(fFrameBuffer, FBIOPAN_DISPLAY, &var) != 0) {

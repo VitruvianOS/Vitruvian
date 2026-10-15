@@ -49,6 +49,7 @@ int fluid_synth_pitch_bend(fluid_synth_t*, int, int);
 int fluid_synth_sysex(fluid_synth_t*, const char*, int, void*, void*, void*, int);
 int fluid_synth_system_reset(fluid_synth_t*);
 void fluid_synth_set_gain(fluid_synth_t*, double);
+int fluid_synth_set_interp_method(fluid_synth_t*, int, int);
 }
 #endif
 

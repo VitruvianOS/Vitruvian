@@ -39,7 +39,14 @@ public:
 
 	static bool					LinkEncodeSource(GstElement* pipeline);
 	GstElement*					CreateEncodePipeline(const char* path,
-									const BMediaFormat& outputFormat);
+									const BMediaFormat& outputFormat,
+									uint32 sampleRate = 0,
+									uint32 channelCount = 0,
+									const char* sampleFormatName = NULL);
+
+	static bool					IsEncoderAvailable(int32 encoding);
+	static int					ApplyEncoderQuality(GstElement* pipeline,
+									float quality);
 
 private:
 								GStreamerBackend();

@@ -23,6 +23,16 @@ public:
 		B_INPUT_DISCONNECTED
 	};
 
+	// Requested output sample format for SetOutputFile(). DEFAULT keeps
+	// the encoder's own preference (S16 for WAV).
+	enum sample_format {
+		B_SAMPLE_FORMAT_DEFAULT = 0,
+		B_SAMPLE_FORMAT_S16,
+		B_SAMPLE_FORMAT_S24,
+		B_SAMPLE_FORMAT_S32,
+		B_SAMPLE_FORMAT_F32
+	};
+
 	typedef void (*ProcessFunc)(void* cookie, bigtime_t timestamp,
 		void* data, size_t size, const media_raw_audio_format& format);
 	typedef void (*NotifyFunc)(void* cookie, notification what, ...);
@@ -61,11 +71,29 @@ public:
 			// created the recorder's stream before the connection is made.
 			BMediaInput*			Input() const;
 
-			status_t			SetOutputFile(const char* path,
-									const BMediaFormat& encodedFormat);
-			status_t			SetOutputFile(BFile* file,
-									const BMediaFormat& encodedFormat);
-			void				ClearOutputFile();
+		// sampleRate/channelCount of 0 keep the device's; sampleFormat
+		// DEFAULT keeps the encoder's; quality below 0 keeps the
+		// encoder default. Resampling and channel conversion happen
+		// inside the encode pipeline.
+		status_t			SetOutputFile(const char* path,
+									const BMediaFormat& encodedFormat,
+									uint32 sampleRate = 0,
+									uint32 channelCount = 0,
+									sample_format sampleFormat =
+										B_SAMPLE_FORMAT_DEFAULT,
+									float quality = -1.0f);
+		status_t			SetOutputFile(BFile* file,
+									const BMediaFormat& encodedFormat,
+									uint32 sampleRate = 0,
+									uint32 channelCount = 0,
+									sample_format sampleFormat =
+										B_SAMPLE_FORMAT_DEFAULT,
+									float quality = -1.0f);
+		void				ClearOutputFile();
+
+		// True when a GStreamer encoder for 'encoding' (media_codec_type)
+		// is present; menus can grey out the rest.
+		static	bool		IsEncodingAvailable(int32 encoding);
 
 			size_t				BufferSize() const;
 

@@ -65,7 +65,9 @@ public:
 	size_t BufferSize() const { return fFormat.format.u.raw_audio.buffer_size; }
 
 	status_t SetOutputFile(const char* path,
-		const BMediaFormat& encodedFormat);
+		const BMediaFormat& encodedFormat, uint32 sampleRate,
+		uint32 channelCount, BMediaRecorder::sample_format sampleFormat,
+		float quality);
 	void     ClearOutputFile();
 
 private:
@@ -89,6 +91,12 @@ private:
 	bool				fCapsWarned = false;
 	bool				fPushWarned = false;
 	uint64				fEncodeNextPts;	// ns
+	uint32				fEncodeSampleRate;
+	uint32				fEncodeChannels;
+	const char*			fEncodeFormatName;
+	float				fEncodeQuality;
+	bool				fQualityApplied;
+	int					fQualityTries;
 };
 
 
@@ -106,7 +114,13 @@ BMediaRecorder::Impl::Impl(BMediaRecorder* owner, const char* name,
 	fEncodePipeline(NULL),
 	fEncodeAppSrc(NULL),
 	fFrameStride(0),
-	fEncodeNextPts(0)
+	fEncodeNextPts(0),
+	fEncodeSampleRate(0),
+	fEncodeChannels(0),
+	fEncodeFormatName(NULL),
+	fEncodeQuality(-1.0f),
+	fQualityApplied(false),
+	fQualityTries(0)
 {
 	fFormat.SetToDefault();
 
@@ -214,7 +228,9 @@ BMediaRecorder::Impl::Stop()
 
 status_t
 BMediaRecorder::Impl::SetOutputFile(const char* path,
-	const BMediaFormat& encodedFormat)
+	const BMediaFormat& encodedFormat, uint32 sampleRate,
+	uint32 channelCount, BMediaRecorder::sample_format sampleFormat,
+	float quality)
 {
 	if (path == NULL)
 		return B_BAD_VALUE;
@@ -228,7 +244,17 @@ BMediaRecorder::Impl::SetOutputFile(const char* path,
 
 	ClearOutputFile();
 
-	fEncodePipeline = gst->CreateEncodePipeline(path, encodedFormat);
+	const char* formatName = NULL;
+	switch (sampleFormat) {
+		case BMediaRecorder::B_SAMPLE_FORMAT_S16: formatName = "S16LE"; break;
+		case BMediaRecorder::B_SAMPLE_FORMAT_S24: formatName = "S24LE"; break;
+		case BMediaRecorder::B_SAMPLE_FORMAT_S32: formatName = "S32LE"; break;
+		case BMediaRecorder::B_SAMPLE_FORMAT_F32: formatName = "F32LE"; break;
+		default: break;
+	}
+
+	fEncodePipeline = gst->CreateEncodePipeline(path, encodedFormat,
+		sampleRate, channelCount, formatName);
 	if (fEncodePipeline == NULL)
 		return B_ERROR;
 
@@ -246,6 +272,12 @@ BMediaRecorder::Impl::SetOutputFile(const char* path,
 		NULL);
 	fFrameStride = 0;
 	fEncodeNextPts = 0;
+	fEncodeSampleRate = sampleRate;
+	fEncodeChannels = channelCount;
+	fEncodeFormatName = formatName;
+	fEncodeQuality = quality;
+	fQualityApplied = false;
+	fQualityTries = 0;
 
 	if (gst_element_set_state(fEncodePipeline, GST_STATE_PLAYING)
 			== GST_STATE_CHANGE_FAILURE) {
@@ -265,6 +297,12 @@ BMediaRecorder::Impl::ClearOutputFile()
 	gst_object_unref(fEncodePipeline);
 	fEncodePipeline = NULL;
 	fEncodeAppSrc   = NULL;
+	fEncodeSampleRate = 0;
+	fEncodeChannels = 0;
+	fEncodeFormatName = NULL;
+	fEncodeQuality = -1.0f;
+	fQualityApplied = false;
+	fQualityTries = 0;
 }
 
 
@@ -307,6 +345,14 @@ BMediaRecorder::Impl::_ProcessHook(void* cookie, void* buffer, size_t size,
 
 	if (self->fEncodePipeline != NULL && self->fEncodeAppSrc != NULL
 			&& self->fFrameStride > 0) {
+		// The encoder elements appear once encodebin negotiates; retry
+		// until the quality knobs can be set.
+		if (self->fEncodeQuality >= 0.0f && !self->fQualityApplied
+				&& self->fQualityTries++ < 200) {
+			self->fQualityApplied
+				= BPrivate::media::GStreamerBackend::ApplyEncoderQuality(
+					self->fEncodePipeline, self->fEncodeQuality) > 0;
+		}
 		// gst_buffer_new_wrapped takes ownership — copy first.
 		GstBuffer* gb = gst_buffer_new_allocate(NULL, size, NULL);
 		if (gb == NULL)
@@ -411,14 +457,19 @@ BMediaRecorder::SetHooks(ProcessFunc recordFunc, NotifyFunc notifyFunc,
 
 
 status_t
-BMediaRecorder::SetOutputFile(const char* path, const BMediaFormat& fmt)
+BMediaRecorder::SetOutputFile(const char* path, const BMediaFormat& fmt,
+	uint32 sampleRate, uint32 channelCount, sample_format sampleFormat,
+	float quality)
 {
-	return fImpl ? fImpl->SetOutputFile(path, fmt) : B_NO_INIT;
+	return fImpl ? fImpl->SetOutputFile(path, fmt, sampleRate, channelCount,
+		sampleFormat, quality) : B_NO_INIT;
 }
 
 
 status_t
-BMediaRecorder::SetOutputFile(BFile* file, const BMediaFormat& fmt)
+BMediaRecorder::SetOutputFile(BFile* file, const BMediaFormat& fmt,
+	uint32 sampleRate, uint32 channelCount, sample_format sampleFormat,
+	float quality)
 {
 	if (file == NULL)
 		return B_BAD_VALUE;
@@ -435,7 +486,15 @@ BMediaRecorder::SetOutputFile(BFile* file, const BMediaFormat& fmt)
 	if (status != B_OK)
 		return status;
 
-	return SetOutputFile(resolved, fmt);
+	return SetOutputFile(resolved, fmt, sampleRate, channelCount,
+		sampleFormat, quality);
+}
+
+
+bool
+BMediaRecorder::IsEncodingAvailable(int32 encoding)
+{
+	return BPrivate::media::GStreamerBackend::IsEncoderAvailable(encoding);
 }
 
 

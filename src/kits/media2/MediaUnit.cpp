@@ -465,6 +465,12 @@ BMediaUnit::ProcessCycle(uint32 frameCount)
 		if (output == NULL)
 			continue;
 
+		// MIDI ports are serviced by _OnProcess() around this call. Pulling
+		// one of their pw_buffers here would strand it outside both queues
+		// and starve FillBuffer after a few cycles.
+		if ((output->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) != 0)
+			continue;
+
 		if (!output->HasBinding()) {
 			size_t size;
 			void* buffer = BufferFor(output, &size);
@@ -508,16 +514,11 @@ BMediaUnit::BufferFor(BMediaConnection* connection, size_t* outSize)
 		if (buffer != NULL && outSize != NULL)
 			*outSize = fImpl->quantum * sizeof(float);
 		return buffer;
-	} else if (connection->AcceptedTypes() & B_MEDIA_TYPE_BIT(B_MEDIA_MIDI)) {
-		pw_buffer* pb = pw_filter_dequeue_buffer(pd);
-		if (pb != NULL && pb->buffer != NULL && pb->buffer->datas != NULL
-			&& pb->buffer->datas[0].data != NULL) {
-			if (outSize != NULL)
-				*outSize = pb->buffer->datas[0].chunk->size;
-			return pb->buffer->datas[0].data;
-		}
 	}
 
+	// MIDI ports never come through here: _OnProcess() hands the cycle's
+	// sequence to FillBuffer/HandleBuffer directly. Dequeuing a pw_buffer
+	// for the caller would strand it outside both queues.
 	if (outSize != NULL)
 		*outSize = 0;
 	return NULL;

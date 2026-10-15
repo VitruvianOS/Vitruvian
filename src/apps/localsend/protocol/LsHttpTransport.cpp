@@ -22,14 +22,37 @@ static const int kConnectTimeoutMs = 5000;
 
 
 LsHttpResult
+LsHttpTransport::PostFileFromPath(const std::string& address, uint16_t port,
+	const std::string& path, const std::string& filePath, int64_t fileLength)
+{
+	FILE* file = fopen(filePath.c_str(), "rb");
+	if (file == NULL)
+		return LsHttpResult();
+
+	std::string data;
+	char buffer[65536];
+	while (true) {
+		size_t n = fread(buffer, 1, sizeof(buffer), file);
+		if (n == 0)
+			break;
+		data.append(buffer, n);
+	}
+	fclose(file);
+
+	if (fileLength > 0 && static_cast<int64_t>(data.size()) != fileLength)
+		return LsHttpResult();
+
+	return PostFile(address, port, path, data.data(), data.size());
+}
+
+
+LsHttpResult
 LsSocketTransport::PostJson(const std::string& address, uint16_t port,
 	const std::string& path, const std::string& jsonBody)
 {
 	return _Post(address, port, path, "application/json", jsonBody.c_str(),
 		jsonBody.size());
 }
-
-
 LsHttpResult
 LsSocketTransport::PostFile(const std::string& address, uint16_t port,
 	const std::string& path, const void* data, size_t length)

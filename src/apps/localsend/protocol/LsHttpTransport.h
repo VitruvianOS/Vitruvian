@@ -38,6 +38,15 @@ public:
 									uint16_t port,
 									const std::string& path,
 									const void* data, size_t length) = 0;
+
+	// POST |path| streaming |filePath| from disk. The default reads
+	// the file into memory and calls PostFile; transports backed by
+	// a real HTTP client override this to stream.
+	virtual	LsHttpResult	PostFileFromPath(const std::string& address,
+									uint16_t port,
+									const std::string& path,
+									const std::string& filePath,
+									int64_t fileLength);
 };
 
 

@@ -1,0 +1,24 @@
+resource app_signature "application/x-vnd.Vos-LocalSend";
+
+resource app_name_catalog_entry "x-vnd.Vos-LocalSend:System name:LocalSend";
+
+resource app_flags B_SINGLE_LAUNCH;
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor = 0,
+
+	variety = B_APPV_DEVELOPMENT,
+	internal = 0,
+
+	short_info = "LocalSend",
+	long_info = "LocalSend for V\\OS"
+};
+
+// Placeholder vector icon until dedicated artwork lands.
+resource vector_icon {
+	$"6E636966020200040269FF0000D000FF000200040308FF0000C700FF00FF0000"
+	$"FF020A0420204020406020600A044020602060604060020A000100000A010101"
+	$"00"
+};

@@ -87,25 +87,6 @@ LsSenderSession::UploadFile(LsHttpTransport* transport, const std::string& addre
 	if (tokenIt == fPrepared.files.end())
 		return false;
 
-	// Read the whole file; the transport streams it. Chunked
-	// streaming through BUrlRequest happens in the app layer.
-	FILE* file = fopen(fFiles[index].path.c_str(), "rb");
-	if (file == NULL)
-		return false;
-
-	std::string data;
-	data.resize(static_cast<size_t>(fFiles[index].item.size));
-	size_t total = 0;
-	while (total < data.size()) {
-		size_t n = fread(&data[total], 1, data.size() - total, file);
-		if (n == 0)
-			break;
-		total += n;
-	}
-	fclose(file);
-	if (static_cast<int64_t>(total) != fFiles[index].item.size)
-		return false;
-
 	if (fProgress)
 		fProgress(index, 0, fFiles[index].item.size);
 
@@ -119,8 +100,8 @@ LsSenderSession::UploadFile(LsHttpTransport* transport, const std::string& addre
 	path += tokenIt->second;
 
 	uint16_t port = target.port != 0 ? target.port : kDefaultPort;
-	LsHttpResult result = transport->PostFile(address, port, path,
-		data.data(), data.size());
+	LsHttpResult result = transport->PostFileFromPath(address, port, path,
+		fFiles[index].path, fFiles[index].item.size);
 	if (result.status != 200)
 		return false;
 

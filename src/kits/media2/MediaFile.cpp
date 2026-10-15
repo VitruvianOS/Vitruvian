@@ -456,7 +456,8 @@ public:
 				streamIndexes.push_back(audioIndex++);
 			} else if (GST_IS_DISCOVERER_VIDEO_INFO(si)) {
 				BMediaFormat fmt = _VideoFormatFromDiscoverer(
-					GST_DISCOVERER_VIDEO_INFO(si));
+					GST_DISCOVERER_VIDEO_INFO(si),
+					gst_discoverer_stream_info_get_tags(si));
 				encoded.push_back(fmt);
 				kinds.push_back(kTrackVideo);
 				streamIndexes.push_back(videoIndex++);
@@ -512,7 +513,30 @@ public:
 		return enc;
 	}
 
-	static BMediaFormat _VideoFormatFromDiscoverer(GstDiscovererVideoInfo* vi)
+	// Container rotation metadata: the degrees the stored image must be
+	// rotated clockwise for display (phone videos carry rotate-90).
+	static uint32 _OrientationFromTags(const GstTagList* tags)
+	{
+		if (tags == NULL)
+			return B_VIDEO_TOP_LEFT_RIGHT;
+		gchar* orientation = NULL;
+		if (!gst_tag_list_get_string(tags, GST_TAG_IMAGE_ORIENTATION,
+				&orientation) || orientation == NULL) {
+			return B_VIDEO_TOP_LEFT_RIGHT;
+		}
+		uint32 value = B_VIDEO_TOP_LEFT_RIGHT;
+		if (g_strcmp0(orientation, "rotate-90") == 0)
+			value = B_VIDEO_ROTATE_90;
+		else if (g_strcmp0(orientation, "rotate-180") == 0)
+			value = B_VIDEO_ROTATE_180;
+		else if (g_strcmp0(orientation, "rotate-270") == 0)
+			value = B_VIDEO_ROTATE_270;
+		g_free(orientation);
+		return value;
+	}
+
+	static BMediaFormat _VideoFormatFromDiscoverer(GstDiscovererVideoInfo* vi,
+		const GstTagList* tags)
 	{
 		BMediaFormat enc;
 		enc.format.type = B_MEDIA_ENCODED_VIDEO;
@@ -529,7 +553,7 @@ public:
 		guint parDen = gst_discoverer_video_info_get_par_denom(vi);
 		raw.pixel_width_aspect  = (uint16)parNum;
 		raw.pixel_height_aspect = (uint16)parDen;
-		raw.orientation = B_VIDEO_TOP_LEFT_RIGHT;
+		raw.orientation = _OrientationFromTags(tags);
 		raw.color_space = B_RGB32;
 		raw.interlace = gst_discoverer_video_info_is_interlaced(vi) ? 2 : 1;
 		raw.first_active = 0;
@@ -573,7 +597,11 @@ public:
 			media_encoded_video_format& ev = fmt.format.u.encoded_video;
 			memset(&ev, 0, sizeof(ev));
 			ev.encoding = B_CODEC_TYPE_UNKNOWN;
-			ev.output.orientation = B_VIDEO_TOP_LEFT_RIGHT;
+			GstTagList* tags = NULL;
+			g_object_get(fPipeline, "get-video-tags", i, &tags, NULL);
+			ev.output.orientation = _OrientationFromTags(tags);
+			if (tags != NULL)
+				gst_tag_list_unref(tags);
 			ev.output.color_space = B_RGB32;
 			encoded.push_back(fmt);
 			kinds.push_back(kTrackVideo);
@@ -1125,18 +1153,32 @@ BMediaTrack::ReadFrames(void* buffer, int64* outFrameCount, media_header* mh)
 
 
 status_t
-BMediaTrack::SeekToTime(bigtime_t* inOutTime, int32 /*flags*/)
+BMediaTrack::SeekToTime(bigtime_t* inOutTime, int32 flags)
 {
 	if (inOutTime == NULL || fImpl == NULL || fImpl->fPipeline == NULL)
 		return B_BAD_VALUE;
 	if (fImpl->fKind == kTrackText)
 		return B_NOT_SUPPORTED;
+	if (fImpl->fWriteMode)
+		return B_NOT_ALLOWED;
+
+	// FLUSH drops queued pre-seek buffers so no stale frame or audio
+	// burst follows the seek. Key-unit stops on the key frame for fast
+	// scrubbing; accurate refines onto the exact time so playback and
+	// paused seeks land at the right frame, not the previous key frame.
+	GstSeekFlags seekFlags = (GstSeekFlags)(GST_SEEK_FLAG_FLUSH
+		| GST_SEEK_FLAG_ACCURATE);
+	if ((flags & B_MEDIA_SEEK_KEY_UNIT) != 0)
+		seekFlags = (GstSeekFlags)(GST_SEEK_FLAG_FLUSH
+			| GST_SEEK_FLAG_KEY_UNIT);
+
 	const gint64 ns = (gint64)*inOutTime * 1000;
 	if (!gst_element_seek_simple(fImpl->fPipeline, GST_FORMAT_TIME,
-			(GstSeekFlags)(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT), ns)) {
+			seekFlags, ns)) {
 		return B_ERROR;
 	}
 	fImpl->fEOS = false;
+	*inOutTime = (bigtime_t)(ns / 1000);
 	return B_OK;
 }
 
@@ -1154,13 +1196,21 @@ BMediaTrack::SeekToFrame(int64* inOutFrame, int32 flags)
 			return B_BAD_VALUE;
 		bigtime_t t = (bigtime_t)((*inOutFrame * 1000000LL)
 			/ (int64)(rate + 0.5f));
-		return SeekToTime(&t, flags);
+		status_t err = SeekToTime(&t, flags);
+		if (err != B_OK)
+			return err;
+		*inOutFrame = (int64)((t * (int64)(rate + 0.5f)) / 1000000LL);
+		return B_OK;
 	}
 	const media_raw_audio_format& raw = fImpl->fFormat.format.u.raw_audio;
 	if (raw.frame_rate <= 0.0f)
 		return B_BAD_VALUE;
 	bigtime_t t = (bigtime_t)((*inOutFrame * 1000000LL) / (int64)raw.frame_rate);
-	return SeekToTime(&t, flags);
+	status_t err = SeekToTime(&t, flags);
+	if (err != B_OK)
+		return err;
+	*inOutFrame = (int64)((t * (int64)raw.frame_rate) / 1000000LL);
+	return B_OK;
 }
 
 

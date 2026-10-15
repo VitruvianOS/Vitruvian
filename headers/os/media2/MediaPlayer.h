@@ -67,7 +67,7 @@ public:
 			status_t			Pause();
 			status_t			Stop();
 
-			status_t			SeekTo(bigtime_t position);
+			status_t			SeekTo(bigtime_t position, int32 flags = 0);
 			bigtime_t			Position() const;
 			bigtime_t			Duration() const;
 

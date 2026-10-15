@@ -76,7 +76,7 @@ public:
 	status_t Pause();
 	status_t Stop();
 
-	status_t SeekTo(bigtime_t position);
+	status_t SeekTo(bigtime_t position, int32 flags);
 	bigtime_t Position() const;
 	bigtime_t Duration() const { return fDuration; }
 
@@ -121,7 +121,7 @@ private:
 	void _FillFromTrack(void* buffer, size_t size,
 		const media_raw_audio_format& format);
 
-	void _PumpVideoFrame();
+	void _PumpVideoFrame(bool force = false);
 	void _StartVideoRunner();
 	void _StopVideoRunner();
 	void _ResetVideoPacing();
@@ -498,22 +498,42 @@ BMediaPlayer::Impl::Stop()
 
 
 status_t
-BMediaPlayer::Impl::SeekTo(bigtime_t position)
+BMediaPlayer::Impl::SeekTo(bigtime_t position, int32 flags)
 {
-	std::lock_guard<std::mutex> _(fLock);
-	if (fTrack == NULL && fVideoTrack == NULL)
-		return B_NO_INIT;
-	bigtime_t t = position;
-	status_t err = B_OK;
-	if (fTrack != NULL)
-		err = fTrack->SeekToTime(&t);
-	if (err == B_OK && fVideoTrack != NULL)
-		err = fVideoTrack->SeekToTime(&t);
-	if (err != B_OK)
-		return err;
-	// The pending frame, if any, is from before the seek.
-	_ResetVideoPacing();
-	fEOS = false;
+	bool resume = false;
+	{
+		std::lock_guard<std::mutex> _(fLock);
+		if (fTrack == NULL && fVideoTrack == NULL)
+			return B_NO_INIT;
+		// A seek after end of stream resumes from the new point; the
+		// transport would otherwise sit stopped until Play.
+		resume = fEOS.load()
+			&& fState.load() == BMediaPlayer::B_PLAYER_STOPPED;
+		bigtime_t t = position;
+		status_t err = B_OK;
+		if (fTrack != NULL)
+			err = fTrack->SeekToTime(&t, flags);
+		if (err == B_OK && fVideoTrack != NULL) {
+			bigtime_t videoT = position;
+			err = fVideoTrack->SeekToTime(&videoT, flags);
+		}
+		if (err != B_OK)
+			return err;
+		// The pending frame, if any, is from before the seek.
+		_ResetVideoPacing();
+		fEOS = false;
+	}
+	if (resume) {
+		fHasData = true;
+		if (fNode != NULL && !fNode->IsStarted())
+			fNode->Start();
+		_StartVideoRunner();
+		_SetState(BMediaPlayer::B_PLAYER_PLAYING);
+	} else if (fState.load() == BMediaPlayer::B_PLAYER_PAUSED) {
+		// Paused: pull and deliver the frame at the new position so the
+		// seek is visible without resuming playback.
+		_PumpVideoFrame(true);
+	}
 	_PostNotification(BMediaPlayer::B_PLAYER_POSITION_CHANGED);
 	return B_OK;
 }
@@ -604,7 +624,7 @@ BMediaPlayer::Impl::_VideoPump::MessageReceived(BMessage* /*message*/)
 
 
 void
-BMediaPlayer::Impl::_PumpVideoFrame()
+BMediaPlayer::Impl::_PumpVideoFrame(bool force)
 {
 	BMessage msg;
 	BLooper* looper = NULL;
@@ -613,7 +633,7 @@ BMediaPlayer::Impl::_PumpVideoFrame()
 		// SeekTo and SetTo touch the same track and buffer from caller
 		// threads; nothing here is safe outside the lock.
 		std::lock_guard<std::mutex> _(fLock);
-		if (fState.load() != BMediaPlayer::B_PLAYER_PLAYING)
+		if (fState.load() != BMediaPlayer::B_PLAYER_PLAYING && !force)
 			return;
 		if (fVideoTrack == NULL || fVideoView == NULL || fVideoBuffer == NULL)
 			return;
@@ -674,14 +694,18 @@ BMediaPlayer::Impl::_PumpVideoFrame()
 				clockNow = system_time();
 			}
 
-			const BPrivate::media::video_sync_decision decision
-				= BPrivate::media::DecideVideoSync(due, clockNow,
-					kVideoSyncTolerance, allowDrop);
-			if (decision == BPrivate::media::VIDEO_SYNC_HOLD)
-				return;
-			if (decision == BPrivate::media::VIDEO_SYNC_DROP) {
-				fVideoFramePending = false;
-				continue;
+			// A forced pull delivers the frame at hand regardless of
+			// the clock; that is how a paused seek becomes visible.
+			if (!force) {
+				const BPrivate::media::video_sync_decision decision
+					= BPrivate::media::DecideVideoSync(due, clockNow,
+						kVideoSyncTolerance, allowDrop);
+				if (decision == BPrivate::media::VIDEO_SYNC_HOLD)
+					return;
+				if (decision == BPrivate::media::VIDEO_SYNC_DROP) {
+					fVideoFramePending = false;
+					continue;
+				}
 			}
 
 			// Surface presentation replaces the B_RAW_TYPE payload
@@ -776,6 +800,14 @@ BMediaPlayer::Impl::_FillFromTrack(void* buffer, size_t size,
 {
 	if (fEOS.load() || fTrack == NULL
 			|| fState.load() != BMediaPlayer::B_PLAYER_PLAYING) {
+		memset(buffer, 0, size);
+		return;
+	}
+
+	// A seek is mid-flight on the caller thread; silence for one buffer
+	// beats replaying pre-seek audio.
+	std::unique_lock<std::mutex> lock(fLock, std::try_to_lock);
+	if (!lock.owns_lock()) {
 		memset(buffer, 0, size);
 		return;
 	}
@@ -882,7 +914,8 @@ status_t   BMediaPlayer::SetTo(const BUrl& url) { return fImpl ? fImpl->SetTo(ur
 status_t   BMediaPlayer::Play()             { return fImpl ? fImpl->Play()  : B_NO_INIT; }
 status_t   BMediaPlayer::Pause()            { return fImpl ? fImpl->Pause() : B_NO_INIT; }
 status_t   BMediaPlayer::Stop()             { return fImpl ? fImpl->Stop()  : B_NO_INIT; }
-status_t   BMediaPlayer::SeekTo(bigtime_t p){ return fImpl ? fImpl->SeekTo(p) : B_NO_INIT; }
+status_t   BMediaPlayer::SeekTo(bigtime_t p, int32 f)
+	{ return fImpl ? fImpl->SeekTo(p, f) : B_NO_INIT; }
 bigtime_t  BMediaPlayer::Position() const   { return fImpl ? fImpl->Position() : 0; }
 bigtime_t  BMediaPlayer::Duration() const   { return fImpl ? fImpl->Duration() : 0; }
 BMediaPlayer::player_state BMediaPlayer::State() const { return fImpl ? fImpl->State() : B_PLAYER_STOPPED; }

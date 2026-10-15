@@ -65,7 +65,12 @@ struct media_raw_audio_format {
 
 enum {
 	B_VIDEO_TOP_LEFT_RIGHT = 0,
-	B_VIDEO_BOTTOM_LEFT_RIGHT = 1
+	B_VIDEO_BOTTOM_LEFT_RIGHT = 1,
+	// Degrees the stored image must be rotated clockwise for display
+	// (container rotation metadata, e.g. phone videos).
+	B_VIDEO_ROTATE_90 = 2,
+	B_VIDEO_ROTATE_180 = 3,
+	B_VIDEO_ROTATE_270 = 4
 };
 
 

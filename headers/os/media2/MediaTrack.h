@@ -14,6 +14,14 @@
 class BView;
 
 
+// SeekToTime/SeekToFrame flags. Default (no flags) is an accurate seek:
+// key frame plus refinement so the track lands at the requested time.
+enum media_seek_flags {
+	B_MEDIA_SEEK_ACCURATE	= 1 << 0,
+	B_MEDIA_SEEK_KEY_UNIT	= 1 << 1,
+};
+
+
 struct media_header {
 	bigtime_t	start_time;
 	uint32		size_used;

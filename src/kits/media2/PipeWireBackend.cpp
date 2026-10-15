@@ -34,6 +34,8 @@
 #include <spa/param/video/format-utils.h>
 #include <spa/utils/dict.h>
 
+#include <Application.h>
+#include <ApplicationPrivate.h>
 #include <OS.h>
 #include <Notification.h>
 #include <media2/MediaGraph.h>
@@ -2714,6 +2716,14 @@ void
 PipeWireBackend::ShowNotification(NotificationType type, const char* title,
 	const char* message, uint32 deviceId)
 {
+	// BNotification needs a live be_app with an app_server connection;
+	// during shutdown or in headless teams posting one crashes.
+	if (be_app == NULL || be_app->Thread() < B_OK
+		|| BApplication::Private::ServerLink() == NULL) {
+		fprintf(stderr, "media2: %s: %s\n", title, message);
+		return;
+	}
+
 	// Volume is a state change, not an operation with a progress bar;
 	// watchers already receive 'PWVC'. Progress type would need SetProgress.
 	notification_type haikuType;

@@ -543,28 +543,35 @@ GStreamerBackend::_RestoreDecoderRanks()
 
 
 // appsrc is linked to encodebin once its caps are known; without caps
-// encodebin finds no compatible stream profile and the link fails.
+// encodebin finds no compatible stream profile and the link fails. The
+// capsfilter in the conversion pipeline is the element that must be
+// linked for the same reason: encodebin picks its encoder from the
+// profile when the first caps arrive.
 bool
 GStreamerBackend::LinkEncodeSource(GstElement* pipeline)
 {
 	GstElement* src = gst_bin_get_by_name(GST_BIN(pipeline), "src");
 	GstElement* enc = gst_bin_get_by_name(GST_BIN(pipeline), "enc");
+	GstElement* filter = gst_bin_get_by_name(GST_BIN(pipeline), "outcaps");
+	GstElement* tail = filter != NULL ? filter : src;
 	if (src == NULL || enc == NULL) {
 		if (src != NULL)
 			gst_object_unref(src);
 		if (enc != NULL)
 			gst_object_unref(enc);
+		if (filter != NULL)
+			gst_object_unref(filter);
 		return false;
 	}
-	// With audioconvert/audioresample in between, parse-launch already
-	// linked appsrc; only the bare pipeline needs the delayed link.
-	GstPad* pad = gst_element_get_static_pad(src, "src");
+	GstPad* pad = gst_element_get_static_pad(tail, "src");
 	bool already = pad != NULL && gst_pad_is_linked(pad);
 	if (pad != NULL)
 		gst_object_unref(pad);
-	bool ok = already || gst_element_link(src, enc);
+	bool ok = already || gst_element_link(tail, enc);
 	gst_object_unref(src);
 	gst_object_unref(enc);
+	if (filter != NULL)
+		gst_object_unref(filter);
 	return ok;
 }
 
@@ -696,10 +703,11 @@ GStreamerBackend::CreateEncodePipeline(const char* path,
 	const bool convert = sampleRate != 0 || channelCount != 0
 		|| sampleFormatName != NULL;
 	// The conversion elements live in the encode pipeline; the app only
-	// states the target it wants.
+	// states the target it wants. capsfilter stays unlinked from
+	// encodebin until the caps are known (see LinkEncodeSource).
 	const char* launch = convert
 		? "appsrc name=src ! audioconvert ! audioresample"
-			" ! capsfilter name=outcaps ! encodebin name=enc"
+			" ! capsfilter name=outcaps encodebin name=enc"
 			" ! filesink name=sink"
 		: "appsrc name=src encodebin name=enc ! filesink name=sink";
 
@@ -717,7 +725,8 @@ GStreamerBackend::CreateEncodePipeline(const char* path,
 	}
 
 	if (convert) {
-		GstCaps* outCaps = gst_caps_new_simple("audio/x-raw", NULL);
+		GstCaps* outCaps = gst_caps_new_simple("audio/x-raw",
+			"layout", G_TYPE_STRING, "interleaved", NULL);
 		if (sampleFormatName != NULL)
 			gst_caps_set_simple(outCaps, "format", G_TYPE_STRING,
 				sampleFormatName, NULL);

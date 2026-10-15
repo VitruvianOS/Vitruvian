@@ -1982,7 +1982,13 @@ Window::EndUpdate()
 		if (dirty) {
 			dirty->IntersectWith(&VisibleContentRegion());
 
-			fDrawingEngine->CopyToFront(*dirty);
+			// CopyToFront blits the render buffer into the scanout
+			// buffer; SetMode rebuilds and unmaps those under the
+			// exclusive lock, so hold the parallel lock across it.
+			if (fDrawingEngine->LockParallelAccess()) {
+				fDrawingEngine->CopyToFront(*dirty);
+				fDrawingEngine->UnlockParallelAccess();
+			}
 			fRegionPool.Recycle(dirty);
 		}
 

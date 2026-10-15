@@ -7,6 +7,7 @@
 
 #include <Autolock.h>
 #include <Entry.h>
+#include <File.h>
 #include <Message.h>
 #include <Path.h>
 #include <String.h>
@@ -231,6 +232,28 @@ Controller::_ProbeTracks(const entry_ref* ref, const BUrl* url)
 }
 
 
+static bool
+_IsMidiRef(const entry_ref& ref)
+{
+	if (ref.name == NULL)
+		return false;
+	BString lower(ref.name);
+	lower.ToLower();
+	if (lower.EndsWith(".mid") || lower.EndsWith(".midi"))
+		return true;
+
+	// Extensionless (or oddly named) SMF files still identify by the
+	// four-byte header every MIDI file starts with.
+	BFile file(&ref, B_READ_ONLY);
+	if (file.InitCheck() != B_OK)
+		return false;
+	char magic[4];
+	if (file.Read(magic, sizeof(magic)) != (ssize_t)sizeof(magic))
+		return false;
+	return memcmp(magic, "MThd", 4) == 0;
+}
+
+
 status_t
 Controller::_SetToRef(const entry_ref& ref)
 {
@@ -274,10 +297,10 @@ Controller::_SetToUrl(const BUrl& url)
 status_t
 Controller::OpenRef(const entry_ref& ref)
 {
-	// MIDI goes through the synth, never the media player.
-	BString lower(ref.name);
-	lower.ToLower();
-	if (lower.EndsWith(".mid") || lower.EndsWith(".midi"))
+	// MIDI goes through the synth, never the media player: by extension,
+	// or by the SMF header for extensionless files the MIME system types
+	// as audio/midi (V\OS has no GuessType; "MThd" is the ground truth).
+	if (_IsMidiRef(ref))
 		return OpenMidi(ref);
 	{
 		BAutolock _(fLock);
@@ -344,14 +367,22 @@ Controller::OpenMidi(const entry_ref& ref)
 		_StopMidi();
 		if (fTarget.IsValid()) {
 			BMessage msg(MSG_CONTROLLER_ERROR);
-			BString text("Cannot play this MIDI file: ");
-			text << strerror(err);
+			BString text;
+			if (err == B_FILE_NOT_FOUND) {
+				text = "No soundfont (SF2/SF3) was found. Install one "
+					"in /usr/share/sounds/sf2 or /usr/share/soundfonts "
+					"and try again.";
+			} else {
+				text = "Cannot play this MIDI file: ";
+				text << strerror(err);
+			}
 			msg.AddString("message", text.String());
 			msg.AddInt32("error", err);
 			fTarget.SendMessage(&msg);
 		}
 		return err;
 	}
+	fMidi->SetFinishedTarget(fTarget);
 	fPlayer.Stop();
 	_ApplyVolume();
 	_NotifyState();

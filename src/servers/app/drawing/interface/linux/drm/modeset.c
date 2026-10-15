@@ -587,6 +587,21 @@ int modeset_create_fb(int fd, struct modeset_dev *dev)
 	struct drm_mode_map_dumb mreq;
 	int ret;
 
+	// A rebuild replaces the buffer; release the previous mapping and
+	// handle or every SetMode leaks them and the virtual mapping grows
+	// until the OOM killer takes the server.
+	if (dev->map != NULL && dev->map != MAP_FAILED) {
+		munmap(dev->map, dev->size);
+		dev->map = NULL;
+	}
+	if (dev->handle != 0) {
+		struct drm_mode_destroy_dumb dreq;
+		memset(&dreq, 0, sizeof(dreq));
+		dreq.handle = dev->handle;
+		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+		dev->handle = 0;
+	}
+
 	memset(&creq, 0, sizeof(creq));
 	creq.width = dev->width;
 	creq.height = dev->height;
@@ -664,6 +679,19 @@ int modeset_create_back_fb(int fd, struct modeset_dev *dev)
 	struct drm_mode_create_dumb creq;
 	struct drm_mode_map_dumb mreq;
 	int ret;
+
+	// Same rebuild leak as the front buffer; see modeset_create_fb().
+	if (dev->back_map != NULL && dev->back_map != MAP_FAILED) {
+		munmap(dev->back_map, dev->back_size);
+		dev->back_map = NULL;
+	}
+	if (dev->back_handle != 0) {
+		struct drm_mode_destroy_dumb dreq;
+		memset(&dreq, 0, sizeof(dreq));
+		dreq.handle = dev->back_handle;
+		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+		dev->back_handle = 0;
+	}
 
 	memset(&creq, 0, sizeof(creq));
 	creq.width = dev->width;

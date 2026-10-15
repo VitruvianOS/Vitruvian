@@ -1406,11 +1406,14 @@ RecorderWindow::UpdateButtons()
 	fStopButton->SetEnabled(fButtonState != btnPaused);
 	fSaveButton->SetEnabled(hasSelection && (fButtonState != btnRecording));
 	bool locked = fButtonState == btnRecording;
+	bool lossy = fEncoding == B_CODEC_TYPE_OGG
+		|| fEncoding == B_CODEC_TYPE_OPUS
+		|| fEncoding == B_CODEC_TYPE_MP3;
 	fInputMenu->Superitem()->SetEnabled(!locked);
 	fFormatMenu->Superitem()->SetEnabled(!locked);
 	fRateMenu->Superitem()->SetEnabled(!locked);
 	fChannelsMenu->Superitem()->SetEnabled(!locked);
-	fQualityMenu->Superitem()->SetEnabled(!locked);
+	fQualityMenu->Superitem()->SetEnabled(!locked && lossy);
 	fAutoNameMenu->Superitem()->SetEnabled(!locked);
 }
 

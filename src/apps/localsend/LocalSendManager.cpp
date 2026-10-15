@@ -7,13 +7,20 @@
 #include <OS.h>
 #include <String.h>
 
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <netinet/in.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "BeHttpTransport.h"
 #include "LocalSendMessages.h"
 #include "LsFingerprint.h"
+#include "LsHttpTransport.h"
+#include "LsJson.h"
 #include "LsProtocol.h"
 #include "LsSenderSession.h"
 #include "LsSha256.h"
@@ -93,6 +100,14 @@ LocalSendManager::Start()
 		fDiscovery.Announce(fDevice, true);
 		snooze(250000);
 	}
+
+	// HTTP fallback discovery (protocol section 3.2): probe the
+	// local subnets when multicast may be filtered.
+	thread_id scanThread = spawn_thread(&LocalSendManager::_ScanThreadEntry,
+		"LocalSend scan", B_NORMAL_PRIORITY, this);
+	if (scanThread >= B_OK)
+		resume_thread(scanThread);
+
 	return B_OK;
 }
 
@@ -259,6 +274,91 @@ LocalSendManager::_SendThreadEntry(void* data)
 {
 	static_cast<LocalSendManager*>(data)->_SendThread(NULL);
 	return 0;
+}
+
+
+int32_t
+LocalSendManager::_ScanThreadEntry(void* data)
+{
+	static_cast<LocalSendManager*>(data)->_ScanSubnets();
+	return 0;
+}
+
+
+void
+LocalSendManager::_ScanSubnets()
+{
+	// Protocol section 3.2: POST /register to every address of the
+	// local IPv4 subnets. A short timeout keeps dead addresses from
+	// stalling; the scan itself runs off the UI thread.
+	struct ifaddrs* interfaces = NULL;
+	if (getifaddrs(&interfaces) != 0)
+		return;
+
+	// Collect the /24 prefixes of up to 3 non-loopback IPv4
+	// interfaces, like the reference app's maxInterfaces.
+	std::vector<uint32_t> prefixes;
+	for (struct ifaddrs* current = interfaces; current != NULL
+		&& prefixes.size() < 3; current = current->ifa_next) {
+		if (current->ifa_addr == NULL
+			|| current->ifa_addr->sa_family != AF_INET)
+			continue;
+		if ((current->ifa_flags & IFF_UP) == 0
+			|| (current->ifa_flags & IFF_LOOPBACK) != 0)
+			continue;
+
+		uint32_t address = ntohl(reinterpret_cast<struct sockaddr_in*>(
+			current->ifa_addr)->sin_addr.s_addr);
+		uint32_t prefix = address & 0xffffff00;
+		bool duplicate = false;
+		for (size_t i = 0; i < prefixes.size(); i++) {
+			if (prefixes[i] == prefix)
+				duplicate = true;
+		}
+		if (!duplicate)
+			prefixes.push_back(prefix);
+	}
+	freeifaddrs(interfaces);
+
+	if (prefixes.empty())
+		return;
+
+	ls::LsSocketTransport transport;
+	transport.SetTimeoutMs(300);
+
+	std::string path = ls::kApiBase;
+	path += ls::kEndpointRegister;
+	std::string body = fDevice.ToJson().Serialize();
+
+	for (size_t p = 0; p < prefixes.size(); p++) {
+		for (uint32_t host = 1; host < 255; host++) {
+			uint32_t addressValue = prefixes[p] | host;
+			char address[INET_ADDRSTRLEN];
+			snprintf(address, sizeof(address), "%u.%u.%u.%u",
+				(addressValue >> 24) & 0xff,
+				(addressValue >> 16) & 0xff,
+				(addressValue >> 8) & 0xff,
+				addressValue & 0xff);
+
+			ls::LsHttpResult result = transport.PostJson(address,
+				ls::kDefaultPort, path, body);
+			if (result.status != 200 || result.body.empty())
+				continue;
+
+			// The legacy response omits port and protocol; a peer
+			// that answered plain HTTP on the probed port serves
+			// there, unencrypted.
+			ls::LsJson json;
+			if (!ls::LsJson::Parse(result.body, json))
+				continue;
+			ls::LsDevice device;
+			if (!ls::LsDevice::FromJson(json, device))
+				continue;
+			device.port = ls::kDefaultPort;
+			device.protocol = ls::kProtocolHttp;
+			DeviceAnnounced(device, address, false);
+		}
+	}
 }
 
 

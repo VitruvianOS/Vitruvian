@@ -18,7 +18,14 @@
 
 namespace LocalSend {
 
-static const int kConnectTimeoutMs = 5000;
+static const int kDefaultTimeoutMs = 5000;
+
+
+LsSocketTransport::LsSocketTransport()
+	:
+	fTimeoutMs(kDefaultTimeoutMs)
+{
+}
 
 
 LsHttpResult
@@ -97,8 +104,8 @@ LsSocketTransport::_Post(const std::string& address, uint16_t port,
 
 	// A short connect timeout keeps dead peers from stalling sends.
 	struct timeval timeout;
-	timeout.tv_sec = kConnectTimeoutMs / 1000;
-	timeout.tv_usec = (kConnectTimeoutMs % 1000) * 1000;
+	timeout.tv_sec = fTimeoutMs / 1000;
+	timeout.tv_usec = (fTimeoutMs % 1000) * 1000;
 	setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 	setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 

@@ -80,6 +80,9 @@ private:
 			static	int32_t	_SendThreadEntry(void* data);
 			void		_SendThread(SendArgs* args);
 
+			static	int32_t	_ScanThreadEntry(void* data);
+			void		_ScanSubnets();
+
 			LocalSendSettings*	fSettings;
 			mutable BLocker		fSendLock;
 			BMessenger	fWindowMessenger;

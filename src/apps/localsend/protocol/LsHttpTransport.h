@@ -54,6 +54,13 @@ public:
 // fallback when BUrlRequest is not available.
 class LsSocketTransport : public LsHttpTransport {
 public:
+						LsSocketTransport();
+
+			// Connect/read timeout; the subnet scan lowers this so
+			// dead addresses do not stall discovery.
+			void			SetTimeoutMs(int timeoutMs)
+								{ fTimeoutMs = timeoutMs; }
+
 	virtual	LsHttpResult	PostJson(const std::string& address,
 									uint16_t port,
 									const std::string& path,
@@ -69,6 +76,7 @@ private:
 									const std::string& path,
 									const char* contentType,
 									const void* body, size_t bodyLength);
+			int				fTimeoutMs;
 };
 
 } // namespace LocalSend

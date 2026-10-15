@@ -217,11 +217,13 @@ BSoundFontSynth::SynthReset(uint32 sampleRate)
 	}
 
 	if (fInstrumentFile.Length() == 0) {
-		// No soundfont: fail InitCheck. Never run a synth that renders
-		// silence and reports success.
+		// No soundfont: fail InitCheck with a distinguishable error so
+		// the UI can say "install a soundfont" instead of "general
+		// error". Never run a synth that renders silence and reports
+		// success.
 		SynthShutdown();
-		fInitStatus = B_ERROR;
-		return B_ERROR;
+		fInitStatus = B_FILE_NOT_FOUND;
+		return B_FILE_NOT_FOUND;
 	}
 
 	fFluid->soundFontId = fluid_synth_sfload(fFluid->synth,
